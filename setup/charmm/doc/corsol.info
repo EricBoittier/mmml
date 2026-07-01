@@ -1,0 +1,375 @@
+CHARMM Element doc/corsol.info $Revision: 1.1.1.1 $
+
+File: Corsol, Node: Top, Up: (doc/commands.info),  Next: Syntax
+
+
+                     Solvent Correlation Functions
+
+
+        CORSOL is inspired by the CORREL module and serves the compute
+(solvent-related) correlation functions. The difference between the
+two modules is that CORSOL is designed to calculate correlation
+functions for many atoms/groups/molecules simultaneously but to return only the
+sum/average of the individual correlation functions. This would be tedious to
+achieve with CORREL since it would require the entering of
+many (think of the typical number of water molecules in a solution
+study) identical CORREL series. Further, CORREL calculates the
+correlation functions only after the underlying time series has been
+accumulated. Thus, the calculation of summed/averaged correlation
+functions would either be limited to short time series or require to
+break up the problem into multiple processing sweeps over
+the same trajectorie(s).
+
+        While correlation functions in CORSOL can be computed by FFT
+after the complete acquisition for short series, the default mode of
+operation is to keep only a certain number of datapoints and to calculate the
+correlation functions after each addition of a datapoint by a rotating
+window algorithm. While this method is much more costly
+calculation-wise - and thus considerably slower - than the
+FFT-method, it has the advantage that the amount of memory required depends
+only on the number of atoms considered and the length
+requested for a particular correlation function (instead of the length of
+the full time-series!). Thus, even slowly converging properties,
+which require the analysis of long trajectories, can be handled in "one
+go" provided that not too man datapoints are requested for the final function.
+
+* Menu:
+
+* Syntax::          The syntax of the correlation command
+* General::         General information regarding the correlation section
+* Enter::           How to specify time series
+* Trajectory::      How to reference to trajectory files
+* IO::              Input/output guide to correlation functions and series
+* Examples::        Just what it says
+
+
+File: Corsol, Node: Syntax, Up: Top, Previous: Top, Next: General
+
+                Syntax for the CORSOL command and subcommands
+
+[SYNTAX CORrelate SOLvent]
+
+Syntax:
+
+CORSOL  [ MAXTimesteps int ]  [ MAXSeries int ]  [ MAXAtoms ] -
+             default 512         default 2        default 100
+
+            [ nonbond-spec ] [ hbond-spec ] [ image-spec ] [NOUPdate]
+            [  INBFrq 0    ] [  IHBFrq 0  ] [  IMGFrq 0  ]
+
+hbond-spec        *note Hbonds:(doc/hbonds.info).
+nonbond-spec      *note Nbonds:(doc/nbonds.info).
+image-spec        *note Images:(doc/images.info)Update.
+
+
+Subcommands:
+
+ENTEr  name { [ DDIP    repeat(2x(atom-spec)) ]             global-spec  } c
+            { [ WREO    atom-spec ] [ NORM ] [ P2 ]         global-spec  } c
+            { [ VACF    atom-spec ] [ CHARge ]              global-spec  } v
+            { [ SATM ] [ SHEL int ] atom-spec               global-spec  } c*
+            {          [ BULK ]                                          }
+            {                                                            }
+            { [ SATX ] [ SHL1 int ] [ SHL2 int ] atom-spec  global-spec  } c*
+            {          [ BULK ]     [ BULK ]                             }
+            {                                                            }
+            { [ MRTI ] [ SHEL int ] atom-spec               global-spec  } c*
+            {          [ BULK ]                                          }  
+            {                                                            }
+
+                    ( code: c-coordinates, v-velocities, e-either )
+
+      atom-spec::= { SELE atom-selection END}
+ 
+      global-spec::= all series support the following options:
+                     [ FFT ] or [ NCORr int ]
+                     [ IMAX unit-nr ] [ NMAX int ]
+
+      * needs a CHARMM executable with SHELL functionality
+        see *note Shell:(doc/shell.info)
+
+TRAJectory [ FIRStu int ] [ NUNIt int ] [ BEGIn int ] [ STOP int ] [ SKIP int ]
+             [ TSET real | RPICo ]  [ VELOcity ]  [first-atom-selection]
+                     [ ORIEnt  [MASS]  second-atom-selection  ]
+
+
+SHOW    { ALL                     } [P2] [UNIT int]
+        { time-series-name        }
+
+
+EDIT    { ALL                     }
+        { time-series-name        }  edit-spec
+
+        edit-spec::=  [INDEx int] [VECCod int] [CLASs int] [SECOnd int]
+                            [TOTAl int] [SKIP int] [DELTa real]
+                                [VALUe real] [NAME new-name] [OFFSet real]
+
+READ  { time-series-name  } unit-spec edit-spec { [FILE]              }
+                                                { CARD                }
+                                                { DUMB  [COLUmn int]  }
+
+WRITe   { ALL                     }             { [FILE]              }
+WRITe   { time-series-name        }  unit-spec  { CARD                }
+                                                { PLOT                }
+                                                { DUMB [ TIME ]       }
+
+
+END        ! return to main command parser
+
+
+File: Corsol, Node: General, Up: Top, Next: Enter, Previous: Syntax
+
+        General discussion regarding time series and correlation functions
+
+Discussion:
+
+        The CORSOL command invokes the CORSOL subcommand parser.  The
+keyword values MAXTimesteps, MAXSeries, and MAXAtoms may be specified
+for space allocation greater than the default options.
+
+        The MAXTimesteps value is the largest number of steps which
+will be kept for any series. The MAXSeries keyword is the largest
+number of timeseries that will be kept at any time within CORSOL
+(NOTE: A 'series' in this context is the resulting correlation
+function. I.e. if a function involving 10.000 solvent molecules is to
+be calculated, this implies only one 'series' with respect to
+MAXT). The MAXAtoms keyword allocates space for the atoms that are
+specified in the ENTER commands (also duplicating a time series
+requires more space for atoms).
+
+        The individual correlation functions to be computed are defined
+by the ENTEr command.
+
+        The TRAJectory command processes the specified trajectory
+file(s).  All defined functions are calculated. Here, multiple time
+series are kept in memory for each resulting function. After all files
+have been processed, the sum/average of all individual (single
+atom/group) correlation functions is calculated and stored as the
+final result of this 'series'.
+
+        The EDIT command allows the user to directly modify the time
+series specifications.
+
+        The SHOW command will display the specification data for all
+of the time series.
+
+
+File: Corsol, Node: Enter, Up: Top, Next: Trajectory, Previous: General
+
+                Specifying time series
+
+        The ENTER command defines a new series. Each series specified
+by different enter commands must have a unique name (up to 4
+characters). With this command, a series may be defined and then must
+be later filled with a TRAJectory command (or a READ series
+command).
+
+        The time series names "ALL" may not be used, and are reserved
+for selecting all of the time series.
+
+        Global options common to all series are:
+[ FFT ]          - if FFT should be used to calculate the single atom/group
+                   correlation functions rather than the windowing algorithm
+                   (requires enough memory to keep all time-series in memory
+                   simultaneously)
+[ NCOR int ]     - the number of datapoints to be kept if the windowing
+                   algorithm is to be used. The default is MAXTimesteps.
+[ IMAX unit-nr ] - a unit to which the maximum contributions to a single
+                   correlation function are written
+[ NMAX int ]     - the number of maximum contributions which are to be 
+                   written to IMAX
+
+The ENTER options are;
+
+-----------------------------------------------------------------------------
+DDIP repeat(2x(atom-spec))
+        This function calculates the dipole-dipole correlation between
+two atoms. The first atom-spec gives a set of atoms (e.g. hydrogen
+atoms of a protein). The second set are typically atoms from solvent
+molecules (e.g. all protons in the surrounding water). Then the
+cumulative dipole-dipole correlation of all atoms in the second
+selection to each individual atom in the first selection will be
+calculated. Finally the results for all atoms in the first selection
+are summed up and this constitutes the final result.
+This series will take up 3 result-series (MAXSer at least 3):
+the complete function as well radial and angular portion separately.
+-----------------------------------------------------------------------------
+WREO atom-spec [ NORM ] [ P2 ]
+        This will calculate the average of the water single-molecule
+dipole auto-correlation series. All atoms in the atom-spec are
+expected to be TIP3 OH2 (i.e. oxygen) atoms. If NORM is specified the
+normalized dipole moments will be used in the calculation. With P2 the
+second Legendre polynomial is calculated.
+-----------------------------------------------------------------------------
+VACF atom-spec
+        Calculates the average velocity auto-correlation function for
+all specified atoms. If the keyword CHARge is present, each datapoint
+will be multiplied with the charge of the respective atom, thus,
+effectively yielding the flux.
+The result uses two series where the second series holds the integral
+of the VACF.
+-----------------------------------------------------------------------------
+SATM [ SHEL int ] atom-spec
+     [ BULK ]
+        Enters a series analogous to the CORRel SATM series. For each
+atom specified its presence in the specified shell (NOTE: SHELL must
+be set up before CORSOL is called, see *note
+reorient:(doc/shell.info)) will be recorded. The resulting
+correlation function is the sum of the auto-correlation function for
+each specified atom. This resulting function can be used in the
+determination of the mean residence time of atoms in a given shell.
+-----------------------------------------------------------------------------
+SATX [ SHL1 int ] [ SHL2 int ] atom-spec
+     [ BULK ]     [ BULK ]
+        This ENTER command will yield sum of the cross-correlation
+functions of two SATM series for all selected atoms (again, SHELL must
+be set up before entering CORSOL).
+-----------------------------------------------------------------------------
+MRTI [ SHEL int ] atom-spec
+     [ BULK ]
+        MRTI offers the means to calculate an alternative definition
+of the mean residence time of an atom in a certain SHELL (which,
+again, needs to be set up prior to CORSOL). This series differs from
+all other series, insofar as it does not calculate correlation
+functions but rather produces a histogram. Here for each selected atom
+the number of times it has spent a given number of consecutive steps
+in the selected SHELL is recorded. Thus, each time an atom leaves this
+shell it 'forgets' this 'episode' and will start the step-count again
+when it reenters the SHELL. This lack of history yields a different
+mean residence time than calculated by the SATM series. (Especially
+for atom in the vicinity of the shell boundary, smaller residence
+times are more abundant as the atom fluctuates across the SHELL
+boundary back and forth).
+
+
+File: Corsol, Node: Trajectory, Up: Top, Next: Edit, Previous: Enter
+
+                 Specification of the Trajectory Files
+
+        The TRAJectory command reads a number of trajectory files whose
+Fortran unit numbers are specified sequentially. The first unit is given
+by the FIRSTU keyword and must be specified. NUNIT gives the number of
+units to be scanned, and defaults to 1.
+
+        BEGIN, STOP, and SKIP are used to specify which steps in the
+trajectory are actually used. BEGIN specifies the first step number to
+be used. STOP specifies the last. SKIP is used to select steps
+periodically as follows: only those steps whose step number is evenly
+divisible by STEP are selected. The default value for BEGIN is the first
+step in the trajectory; for STOP, it is the last step in the trajectory;
+and for SKIP, the default is 1.
+
+        These additional keywords influence the reading and writing of
+the timestep field (DELTA), useful when importing trajectories (DCD files)
+from other sources that do not set this value correctly in AKMA time units.
+
+TSET    real  Overrride the value in the file with this value (picosec)
+RPICo         Flag; convert file value to AKMA; assumes value is in picosec
+
+        If VELOcity is specified, a velocity trajectory will be looked
+for. Otherwise, a coordinate trajectory is expected.
+
+
+File: Corsol, Node: IO, Up: Top, Next: Examples, Previous: Trajectory
+
+        Input/Output of correlation functions.
+
+1) The SHOW command
+
+SHOW    { ALL                     }
+        { time-series-name        }
+
+The SHOW command displays to print unit various data regarding
+the specified time series. This command is automatically run after the
+ENTER and EDIT commands as a verification of the last action.
+
+
+2) The READ command
+
+READ  { time-series-name  } unit-spec edit-spec { [FILE]              }
+                                                { CARD                }
+                                                { DUMB  [COLUmn int]  }
+
+The READ command allows a time series or correlation function to be
+directly read. Currently this option is not of great use since no
+post-processing of the generated correlation functions is supported.
+
+3) The WRITe command
+
+WRITe   { ALL                     }              { [FILE]        }
+        { time-series-name        }  unit-spec   { CARD          }
+                                                 { PLOT          }
+                                                 { DUMB [ TIME ] }
+
+The WRITe command will write out time series or a correlation function.
+All of the write options expect a title to follow this command.
+There are several file formats; FILE (default), CARD, PLOT, and DUMB.
+The FILE and CARD options will write out all data regarding the specified
+time series with the expectation for later retrieval by Charmm or another
+program. The PLOT option will create a BINARY file for plotting by PLT2.
+The first line of the title is used as the plot title, but this may be
+reset in PLT2.
+        The DUMB options will simply write out the values with no title
+or header to a card file, one value to a line. If the TIME option is
+specified, the time value will precede the time series values (as needed
+for an X-Y plot). 
+
+
+File: Corsol, Node: Examples, Up: Top, Previous: IO, Next: Top
+
+                        Examples
+
+        These examples are meant to be a partial guide in setting up
+input files for CORSOL.
+
+Example 1: auto-reorientation function for all waters
+
+CORSOL MAXSERIES 1 MAXTIMESTEPS 500 MAXATOMS 10000
+ENTER AAAA  WREO NORM SELECT ATOM WAT * OH2 END
+TRAJECTORY FIRSTU 51 NUNIT 5
+WRITE AAAA UNIT 20 DUMB TIME
+* title
+*
+END
+
+
+Example 2: Mean residence time of water in shell 1
+
+SHELL NSHL 1 SHTHK 4.0 -
+      SOLUTE  SELECT SEGID @PROT .AND. .NOT. HYDROGEN END -
+      SOLVENT SELECT SEGID W* .AND. TYPE OH2 END
+CORSOL MAXSERIES 1 MAXTIMESTEPS 500 MAXATOMS 10000
+ENTER AAAA SATM SHEL 1 SELECT ATOM WAT * OH2 END
+TRAJECTORY FIRSTU 51 NUNIT 5
+WRITE AAAA UNIT 11 DUMB TIME
+* title
+*
+END
+
+
+Example 3: Mean residence time histogram (alternative definition)
+
+SHELL NSHL 1 SHTHK 4.0 -
+      SOLUTE  SELECT SEGID @PROT .AND. .NOT. HYDROGEN END -
+      SOLVENT SELECT SEGID W* .AND. TYPE OH2 END
+CORSOL MAXSERIES 1 MAXTIMESTEPS 500 MAXATOMS 10000
+ENTER AAAA MRTI SELECT ATOM WAT * OH2 END
+TRAJECTORY FIRSTU 51 NUNIT 5
+WRITE AAAA UNIT 11 DUMB TIME
+* title
+*
+END
+
+
+Example 4: shell crossover correlation function
+
+SHELL NSHL 2 SHTHK 4.0 -
+      SOLUTE  SELECT SEGID @PROT .AND. .NOT. HYDROGEN END -
+      SOLVENT SELECT SEGID W* .AND. TYPE OH2 END
+CORSOL MAXSERIES 1 MAXTIMESTEPS 500 MAXATOMS 10000
+ENTER AAAA SATX SHL1 1 SHL2 2 SELECT ATOM WAT * OH2 END
+TRAJECTORY FIRSTU 51 NUNIT 5
+WRITE AAAA UNIT 11 DUMB TIME
+* title
+*
+END

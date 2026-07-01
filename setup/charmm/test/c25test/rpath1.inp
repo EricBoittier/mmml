@@ -1,0 +1,110 @@
+* CHARMM 25 Testcase rpath1.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* a simple test case for Replica Path method
+*
+
+set pnode
+if ?NUMNODE .gt. 1 then set pnode node 0
+
+! nrap needs VIBRAN
+if ?novibran .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -2
+stream datadir.def
+
+open read form unit 11 name @0toph19.rtf
+read rtf  card unit 11
+close unit 11
+open read form unit 12 name @0param19.prm
+read parameter card unit   12
+close unit 12
+
+read      sequence  card
+*  FIRST SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE MAIN SETU
+
+READ COOR CARD
+* Initial coordinates for AMN-CBX
+*
+    6
+    1    1 AMN  CL     0.66165  -1.46652   0.00000 MAIN 1      0.00000
+    2    1 AMN  C      0.50411   0.04943   0.00000 MAIN 1      0.00000
+    3    1 AMN  O      1.49715   0.77115   0.00000 MAIN 1      0.00000
+    4    2 CBX  N     -0.68531   0.64870   0.00000 MAIN 2      0.00000
+    5    2 CBX  H     -0.68863   1.62692   0.00000 MAIN 2      0.00000
+    6    2 CBX  CA    -1.97294  -0.10700   0.00000 MAIN 2      0.00000
+
+mini nrap nstep 2 nprint 1
+coor orient mass
+print coor
+
+REPLIcate A NREPlica 5 SELEct ALL END
+delete atom sele segid main end
+
+! { set up an appropriate interaction matrix }
+BLOCK 2
+  CALL 2 SELEct segid a* end
+  COEF 1 1 1.0
+  COEF 2 2 0.2
+  COEF 2 1 0.2
+END
+
+!print psf
+!print coor
+
+ENERGY
+
+coor trans xdir 1.0 zdir 0.5 sele segid a2 end
+coor trans xdir 2.0 sele segid a3 end
+coor trans xdir 3.0 ydir 1.0 sele segid a4 end
+coor trans xdir 4.0 sele segid a5 end
+
+
+! invoke the path code
+RPATH KRMS 400.0 KANGle 400.0 COSMax 1.0 ! MASS ! WEIGHT
+
+
+energy
+!!skip all excl pang prms
+test first sele all end step 0.0001 tol 0.0001
+
+! { fix the endpoints }
+cons fix sele segid a1 .or. segid a5 end
+
+minimize abnr nstep 100 nprint 5
+
+print coor
+prnlev 6 @pnode
+gete print
+
+stop
+
+! {.... perhaps simulated annealing using MD ...}
+
+! { plot energy as a function of the path }
+open write card unit 20 name @9energy.dat
+set 1 1
+label eloop
+  BLOCK 2
+    CALL 1 sele all end
+    CALL 2 sele replicas .and. .not. segid A@1 end
+    COEF 1 1 1.0
+    COEF 2 1 0.0
+    COEF 2 2 0.0
+  END
+  ENERGY
+  write title unit 20
+* @1 ?energy  
+*
+  incr 1 by 1
+  if @1 .lt. 20.5 goto loop
+
+.... more analysis ...
+
+STOP

@@ -1,0 +1,85 @@
+* CHARMM Testcase c28test/hqbm.inp
+* Author: Unknown
+* Test : Increase RMSD from a reference structure by biased MD (HQBM)
+*
+
+if ?hqbm .ne. 1 then
+ echo "Test NOT performed."
+ echo hqbm TESTCASE RESULT: SKIP
+ stop
+endif
+
+SET ProtName  1aps     ! Name of the protein/domain
+SET Bias      5.0      ! Strenght of the bias 
+SET ActualRun hqbm
+
+stream datadir.def
+
+open read card unit 3 name @0toph19_eef1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0param19_eef1.inp
+read para unit 3 card 
+close unit 3
+!
+! read the topology and parameter file
+READ SEQUENCE CARDS
+98
+SER THR ALA ARG PRO LEU LYS SER VAL ASP TYR GLU VAL PHE GLY ARG VAL
+GLN GLY VAL CYS PHE ARG MET TYR ALA GLU ASP GLU ALA ARG LYS ILE GLY
+VAL VAL GLY TRP VAL LYS ASN THR SER LYS GLY THR VAL THR GLY GLN VAL
+GLN GLY PRO GLU GLU LYS VAL ASN SER MET LYS SER TRP LEU SER LYS VAL
+GLY SER PRO SER SER ARG ILE ASP ARG THR ASN PHE SER ASN GLU LYS THR
+ILE SER LYS LEU GLU TYR SER ASN PHE SER VAL ARG TYR
+generate @ProtName setup
+!
+! { Read coordinates }
+OPEN UNIT 1 READ FORMatted NAME @0@ProtName.crd
+READ COORD CARD UNIT 1
+COORdinate COPY COMParison
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+
+! EEF1 does not work in parallel !!!!!!!!!!!!!!!!!!!!!!!
+!EEF1 SETUP TEMP 298.15 UNIT 93 NAME @0solvpar.inp
+UPDATE CTONNB 7. CTOFNB 9. CUTNB 14. GROUP RDIE
+
+SHAKE BONH PARAM TOL 1E-7
+
+! The three following actions are necessary to define the HQBM perturbation
+!--------------------------------------------------------------------------
+
+! Read coordinates of the reference configuration
+OPEN UNIT 1 READ FORMATTED NAME @0@ProtName_mini.crd
+READ COOR CARD COMP UNIT 1 
+! 
+! The bias increases the "difference" between the actual
+! and the reference configuration
+HQBM AWAY IUNJUJ 44 ALPHA @Bias rc1 SELE ( TYPE CA ) END 
+!
+! A call to ENERGY is needed to set the previous value of the reaction 
+! coordinate needed to compute the bias at the first timestep of the dynamics
+ENERGY
+
+@qcheck ?ENER -1399.029 0.01 hqbm_1
+
+!{perform dynamics}
+OPEN WRITE FORMATTED UNIT 44 NAME @9@ActualRun.bmd
+
+! CPT HOOVER is parallel while NOSE it is not 
+! with CPT is compulsory to call ENERGY just after HQBM
+DYNA -
+    START -
+    CPT -
+    HOOVER      TMASS 4000   -
+    FIRSTT 300  FINALT 300   REFT 300     TSTRUC 300 -
+    LEAP        NSTEP 100    TIMESTEP 0.001 -
+    NPRINT 1 IHBFRQ 0 INBFRQ -1 -
+    ILBFRQ  0   IHTFRQ 0   IEQFRQ 0    NTRFRQ 0 -
+    IUNREA -1 IUNWRI -1 KUNIT -1 IUNCRD -1  
+
+STOP
+
+@qcheck ?ENER -617.014 0.01 hqbm_2

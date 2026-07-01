@@ -1,0 +1,142 @@
+* mctest02.inp
+* Author:   Aaron R. Dinner 
+* Date:     19 July 2004 (replacing that of 29 July 1998, modified 23 July 1999)
+* Version:  c32a1        (replacing that of c26a2)
+* Test:     Metropolis Monte Carlo with several different types of moves
+* Model:    Monte Carlo simulation of RGDS peptide in vacuum 
+*
+
+if ?mc .ne. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+if ?domdec eq 1 then
+  echo "Test NOT performed with DOMDEC."
+  stop
+endif
+
+BOMLev 0
+STREam datadir.def
+
+! Read standard topology and parameter files
+
+OPEN READ CARD UNIT 1 NAME @0/top_all22_prot.inp
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+OPEN READ CARD UNIT 2 NAME @0/par_all22_prot.inp
+READ PARA CARD UNIT 2
+CLOSE UNIT 2
+
+READ SEQUENCE CARD
+* RGDS
+*
+4
+ARG GLY ASP SER
+GENERATE MAIN FIRST NTER LAST CTER SETUP
+
+IC PARAM
+IC SEED MAIN 2 N MAIN 2 CA MAIN 2 C
+IC BUILD
+
+! Infinite cutoff for testing
+
+NBONDS  ATOM  FSHIFT CDIE  VDW VSHIFT  -
+        CUTNB 9999.0 CTOFNB 12.0 CTONNB 8.0  WMIN 1.5  EPS 1.0
+
+ENERgy
+
+! Create the MC move set by a series of calls to MOVE ADD
+
+! Single atom moves for the peptide atoms
+MOVE ADD MVTP CART WEIGht 1.0 DMAX 0.05 -
+        ARMP 0.40 ARMA 0.4 ARMB 0.4 DOMCf 3.0 ANISotropic 1 LABEL SING -
+        SELE (.NOT. RESNAME TIP3) END
+
+! Individual rotation of the peptide side chain torsions
+MOVE ADD MVTP TORS WEIGht  1.0 DMAX  70.0 FEWEr 1 LABEL SIDE -
+         ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+         SELE (.NOT.(TYPE C .OR. TYPE N))  END  -
+         SELE (.NOT.(TYPE C .OR. TYPE N))  END  
+
+! Individual rotation of the peptide psi torsions
+MOVE ADD MVTP TORS WEIGht    1.0 DMAX  15.0 FEWEr 1 LABEL PSI -
+         ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+         SELE (TYPE C) END SELE (TYPE CA) END  
+  
+! Individual rotation of the peptide phi torsions
+MOVE ADD MVTP TORS WEIGht    1.0 DMAX  15.0 FEWEr 1 LABEL PHI -
+         ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+         SELE (TYPE N) END SELE (TYPE CA) END  
+
+! Individual rotation of the peptide bonds
+MOVE ADD MVTP TORS WEIGht    1.0 DMAX  15.0 FEWEr 1 LABEL OMEG -
+         ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+         SELE (TYPE N) END SELE (TYPE C) END  
+
+! Concerted rotation of the main chain with rigid peptide bonds
+!
+! The first selection is the polymer "backbone" and the following
+! pairs of selections are the rigid bonds (degrees of freedom).
+!
+! Disulfides cannot be rotated freely and are eliminated from the "backbone".
+! Proline phi dihedrals must be treated as rigid.
+!
+! ARMP < 0 and DOMCf < 0 (defaults) suppress automatic optimization for 
+! these moves.
+MOVE ADD MVTP CROT WEIGht  1.0 DMAX  15.0 NLIMit 1 LABEL CRT1 - 
+         ARMP -1.0 DOMCf -1.0 -
+         SELE ((TYPE N .OR. TYPE CA .OR. TYPE C) .AND. .NOT. (RESNAME CYS)) END -
+         SELE (TYPE C) END SELE (TYPE N) END -
+         SELE (RESNAME PRO .AND. TYPE CA) END -
+         SELE (RESNAME PRO .AND. TYPE  N) END 
+
+! Concerted rotation of the main chain with flexible peptide bonds
+MOVE ADD MVTP CROT WEIGht  1.0 DMAX  15.0 NLIMIT 1 LABEL CRT2 - 
+         ARMP -1.0 DOMCf -1.0 -
+         SELE ((TYPE N .OR. TYPE CA .OR. TYPE C) .AND. .NOT. (RESNAME CYS)) END -
+         SELE (RESNAME PRO .AND. TYPE CA) END -
+         SELE (RESNAME PRO .AND. TYPE  N) END 
+
+! End creation of the move set
+
+! Save the unoptimized move set 
+
+OPEN WRITE CARD UNIT 35 NAME @9/mctest02.mcm
+MOVE WRITE UNIT 35
+
+! Open a file for trajectory writing
+
+OPEN WRITE UNFORMATTED UNIT 34 NAME @9/mctest02.trj
+
+! Run a short Monte Carlo simulation with the above move set.
+!
+! Numerical errors in the loop closure algorithm for the concerted
+! rotations introduce change the angles slightly, resulting in small
+! errors in the total energy (Delta-E values of order 0.0001).
+
+MC TEMPerature 300.00   NSTEps 100 ISEEd 518282 -
+   IDOMcfrq  5 INBFrq 0 IECHeck 10 IUNCrd 34 NSAVc 50
+
+! Save the optimized move set 
+
+OPEN WRITE CARD UNIT 35 NAME @9/mctest02.mco
+MOVE WRITE UNIT 35
+
+! Save the final coordinates
+
+OPEN WRITE CARD UNIT 36 NAME @9/mctest02.crd
+WRITE COOR CARD UNIT 36
+
+! Free the move set to check the memory usage
+
+MOVE DELEte LABEL SING  
+MOVE DELEte LABEL SIDE  
+MOVE DELEte LABEL PSI  
+MOVE DELEte LABEL PHI  
+MOVE DELEte LABEL OMEG  
+MOVE DELEte LABEL CRT1   
+MOVE DELEte LABEL CRT2   
+
+STOP

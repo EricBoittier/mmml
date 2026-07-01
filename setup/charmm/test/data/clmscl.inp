@@ -1,0 +1,96 @@
+* Test of MSCALE within REPDSTR environment
+* The following 4 replicas can be a starting template
+* for comparison of different QM/MM methods (with BAR).
+* For functionality testing QM claculations are replced by MM
+* Milan Hodoscek, April 2013
+*
+
+if ?mscale .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?repdstr .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+STREAM datadir.def
+
+read rtf card
+* chlorine
+*
+36  1
+
+MASS   352 NG331   14.00700  ! neutral ammonia nitrogen
+MASS   273 HGPAM3   1.00800  ! polar H, NEUTRAL ammonia (#)
+MASS   384 CLGA1   35.45300  ! CLET, DCLE, chloroethane, 1,1-dichloroethane
+
+auto angle dihe
+
+RESI nh4          1.00 ! NH4 Ammonia
+GROUP
+ATOM N1   NG331   -0.6
+ATOM H11  HGPAM3   0.4
+ATOM H12  HGPAM3   0.4
+ATOM H13  HGPAM3   0.4
+ATOM H14  HGPAM3   0.4
+BOND N1 H11 N1 H12 N1 H13 N1 H14
+IC  H11  H12 *N1 H13    0.0   0.0   120.   0.0  0.0
+IC  H13  H11 *N1 H12    0.0   0.0   120.   0.0  0.0 !redundant definition needed to enable seeding.
+
+
+resi klor -1.0
+atom cl clga1 -1.0
+
+patch first none last none
+
+end
+
+read param card flex
+* parameters...
+* 
+
+atoms
+MASS   352 NG331   14.00700  ! neutral ammonia nitrogen
+MASS   273 HGPAM3   1.00800  ! polar H, NEUTRAL ammonia (#)
+MASS   384 CLGA1   35.45300  ! CLET, DCLE, chloroethane, 1,1-dichloroethane
+
+bond
+NG331  HGPAM3  455.50     1.0140 ! AMINE aliphatic amines
+
+angle
+HGPAM3 NG331  HGPAM3   41.50    107.10 ! AMINE aliphatic amines kevo: 29.00 -> 41.50 based on MAM1 molvib & AMET scans
+
+dihe
+! none...
+
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+NG331    0.0       -0.0700     1.9800 ! aliphatic amines
+HGPAM3   0.0       -0.0120     0.8700 ! aliphatic amines
+CLGA1    0.0       -0.3430     1.9100 ! CLET, DCLE, chloroethane, 1,1-dichloroethane
+
+end
+
+
+read sequ klor 1
+generate cl 
+
+scalar x set 0.0 sele all end
+scalar y set 0.0 sele all end
+scalar z set 0.0 sele all end
+
+
+energy
+
+server 
+
+stop
+
+
+
+
+
+
+

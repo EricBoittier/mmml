@@ -1,0 +1,63 @@
+* Membrane Systeme : sys7.inp
+* Minimize the energy of the water box that was build in sys6.inp
+*
+
+stream param.str
+
+set LengthX @BoxSizeX                  
+set LengthY @BoxSizeY 
+set LengthZ 15.5516
+
+open read card unit 1 name @direcTp/@TopFile
+read rtf card unit 1
+close unit 1
+
+open read card unit 1 name @direcTp/@ParFile
+read para card unit 1
+close unit 1
+
+open read card unit 1 name @direcWork/sys6_box.crd
+read sequence coor unit 1
+generate BULK setup noangle nodihedrals 
+close unit 1
+
+open read coor card unit 1 name @direcWork/sys6_box.crd
+read coor card unit 1 
+close unit 1
+
+!Periodic boundery conditions
+open unit 8 read card name @direcCubic/cubic.img
+read imag print init unit 8
+close unit 8 
+
+imag byres sele resnam TIP3 end
+update ctonnb 8.0 ctofnb 9.0 cutnb 10.0 wmin 1.0 cutim 10.0
+
+mini sd nstep 250 nprint 50 
+
+scalar fbeta set 5.0 select .not. type H* end
+shake bonh param tol 1.0e-6
+
+DYNAMICS  start             nstep      5000  timestp   0.002  nprint   100 -
+          iasvel        1  firstt    300.0  finalt    300.0  -
+          langevin         tbath     300.0  iseed 987654433  -
+          inbfrq       10  ihbfrq        0  ilbfrq        0  -
+          iuncrd        -     
+
+mini abnr nstep 250 nprint 50
+
+open write card unit 1 name @direcWork/sys7_box.crd
+write coor card unit 1 
+* Equilibrated water 
+* with dynamic
+*
+
+open write card unit 2 name @direcWork/sys7_box.pdb
+write coor pdb card unit 2 
+* Equilibrated water 
+* with dynamic
+*
+
+stop
+
+

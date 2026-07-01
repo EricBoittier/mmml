@@ -1,0 +1,205 @@
+CHARMM Element doc/rtop.info 1.2
+
+File: Rtop, Node: Top, Up: (doc/commands.info), Previous: (doc/usage.info)Standard files, Next: Overview
+
+                            Residue Topology File
+
+                    By Alexander D. MacKerell Jr., Updated August 2015
+
+
+        This section of the documentation describes the contents of the
+topology file and a listing of the current topology files available to
+the users.  CHARMM topology files contain the information necessary to
+describe bond connectivity, angle, dihedral angle and improper
+dihedral angle content, charge distribution, hydrogen-bond donors and
+acceptors and internal coordinate information.  Thess data are required
+by CHARMM in order to determine energies, perform energy minimizations
+and molecular dynamics simulations as well as perform other various
+structural manipulations.  Documentation concerning implementation of
+a topology file in order to build a structure is contained in
+STRUCT.DOC.
+
+* Menu:
+
+* Overview::      Overview of CHARMM Topology File
+* RTFDATA::       Description of Topology Files available for general use
+
+File: Rtop, Node: Overview, Up: Top, Next: RTFDATA, Previous: Top
+
+                      Overview of CHARMM Topology File
+
+
+        An example of a topology file is given below followed by
+a description of the content of the various sections. Also see
+IO.DOC for information on the individual keywords.
+
+
+(A)   * CHARMM example topology file
+      *
+(B)      40    1
+(C)   MASS    1  H    1.00800 H
+      MASS    2  O   15.99900 O
+(D)   DECL -C
+      DECL -O
+      DECL +N
+      DECL +H
+      DECL +CA
+(E)   DEFA FIRS NTER LAST CTER
+(F)   AUTOGENERATE ANGLES DIHEDRAL PATCH
+(G)   RESI GLY      0.000
+(G1)  GROUP 
+(G2)  ATOM N    NH1    -0.35
+      ATOM H    H       0.25
+      ATOM CA   CH2E    0.10
+      GROU
+      ATOM C    C       0.55
+      ATOM O    O      -0.55
+(G3)  BOND N    CA        CA   C         C    +N        C    O         N    H
+      DOUBLE CA   CB
+      TRIPLE CB   CG
+(G4)  ANGL  N   CA   C  (and so on)
+(G5)  DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+(G6)  IMPH N    -C   CA   H
+(G7)  CMAP -C  N  CA  C   N  CA  C  +N
+(G8)  DONO  H   N
+(G9)  ACCE  O  C
+(G10) IC   -C   CA   *N   H      0.0000    0.00  180.00    0.00   0.0000
+      IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+      IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+      IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+      IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+      IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+(G11) PATCH  FIRST NONE  LAST NONE 
+(H)   PRES CTER      -1.000
+(H1)  DELE ATOM  O
+(H2)  ATOM C    C       0.14
+      ATOM OT1  OC     -0.57
+      ATOM OT2  OC     -0.57
+(H3)  BOND C    OT1       C    OT2
+      ANGL OT1  C   OT2  (and so on)
+      DIHE N    CA    C    OT2
+      IMPH C    CA    OT2  OT1
+(H4)  ACCE  OT1 C
+      ACCE  OT2 C
+      IC   N    CA    C    OT2    0.0  0.0  180.0  0.0  0.0
+      IC   OT2  CA    *C   OT1    0.0  0.0  180.0  0.0  0.0
+(I)   END
+
+        The topology file starts with the title (A) which contains
+information on the origins and applicability of that file.  This is
+directly followed by (B) the CHARMM version number under which that
+particular file was developed. Note that this must be on the line
+directly following the title.
+
+        Section (C) contains the various atom types used in the
+topology file and is signified by the keyword MASS.  Information
+includes a number associated with each atom type, the atom type
+followed by the mass of the atom.  The final column is the atomic type
+and is included for compatibility with the MMFF code.  The number of
+each atom type is used in conjunction with the parameter file (see
+PARMFILE.DOC) and is the marker for the various energy term arrays
+(bonds, angles etc.)
+
+        Section (D), signified by DECLare, prescribes which atoms will
+be selected from the previous or next residue when covalently linking
+residue together as in the connection of residues in a polypeptide via
+a peptide bond linkage.
+
+        Section (E) contains the DEFAult patches used on the FIRSt and
+LAST residues in a generated segment (i.e. the NTERminus and CTERminus
+of a polypeptide chain, see section (G10).  (F) Next are the
+AUTOgenerate default options to be used when building a sturcture.
+AUTO ANGLes specifies that all possible angles and DIHEdral specifies
+that all possible dihedral angles be generated when building a
+structure.  If these options are not included the angles and/or
+dihedrals must be listed explicitly in the topology file (see G4 and
+G5).  PATCh specifies that autogenerate be automatically performed
+after each patch command, thereby avoiding the need to specify
+AUTOGENERATE after each patch.
+
+        Designation of the various residues, nucleotides etc. is done
+using the (G) RESIdue keyword followed by the residue name (four
+characters) and the total charge of the residue.  A residue may then
+be subdivided into (G1) GROUps, which contain several atoms whose total
+charge is neutral or a unit charge.  This subdivision is used in the 
+calculation of nonbonded interactions using the group keyword and in
+the extended electrostatics options (see NBONDS.DOC).  Next are the
+individual ATOM specifications which include the IUPAC atom name, the
+atom type and the charge of that atom.  In certain cases 1 or more
+atom names will follow the charge which indicate atoms which are to be
+excluded from nonbond calculations with that particular atom (i.e.,
+used to exclude atoms in rings from seeing each other in topologies
+prior the CHARMM22 releases).
+
+        Following the various atoms are the (G3) BOND connectivites,
+the (G4) ANGLe, the (G5) DIHEdral and (G6) IMPRoper dihedral listings.
+The BOND listings are always required in order to define the
+connectivity of the molecule; BOND can be replaced by DOUBLE, TRIPLE
+or AROMATIC allowing for compatibility with MMFF.  The ANGLe and/or
+DIHEdral listings should be omitted if the AUTOgenerate ANGL and/or
+DIHEdral options are being used (This is now the default).  It should
+be remembered that autogeneration works in conjunction with the
+GENErate command. For PATChes invoked after the initial structure
+generation the AUTOGENERATE command must be invoked following the
+patch to create the angle and dihedral lists or the angles and
+dihedrals must listed explicitly in the patch.  Alternatively, the use
+of AUTOGENERATE ANGLE DIHEDRAL PATCH will automatically force
+autogenerate after each PATCh command.  As of c31b1 all angles and
+dihedrals have been removed from the PRESidues in the topoolgy and
+parameter files, EXCEPT in special cases where AUTOGENERATE generate
+should not be invoked following patching (eg. certain heme
+patches). Note that problems will be encountered if autogeneration is
+performed with water molecules present. IMPRoper dihedrals are only
+included in special cases and must be listed explicitly.  Note that
+the central atom should be placed first when defining an improper
+dihedral.  See parmfile.info for a rationale.
+
+        CMAP (G7), a dihedral crossterm energy correction map that
+allows for an explicit 2D energy correction surface to be applied to
+any two dihedrals, as specified by the 8 atoms following the CMAP
+keyword.  The first four atoms represent the first dihedral and the
+second four atoms the second dihedral (phi and psi in the present
+example).  This term is only used in special cases and must be listed
+explicitly.
+
+        For making hydrogen bond lists the (G8) DONOr and (G9) ACCEptors
+must be listed.  These listings include the donor and donor antecedent
+and the acceptor and acceptor antecedent atom names.  The antecedents
+are required if hydrogen bond angle cutoffs are being invoked (see
+HBONDS.DOC).  If only the hydrogen bond distance criteria are desired,
+as with the amber force field, the antecedents should be omitted and
+the BLNK inserted prior to the donor atom name (e.q. DONO BLNK H1 and
+ACCE O2).  Section (G10) contains the internal coordinate information
+(IC or BILD) which may be used to build a molecule or add missing 
+atoms, such as hydrogens to a crystal structure (see IO.DOC and
+INTCOR.DOC).
+
+        The next line (G11) contains the PATChes to the FIRSt and LAST
+atoms of the residue and is required on when the DEFAult (E) is to 
+be overridden.
+
+        Along with RESIdues the topology also contains patch residues,
+(H) PRES, which may be used at the termini of a structure, alter a
+RESIdue structure or form covalent links between residues (e.g.
+disulfide bridges).  PRESidues may be used in either a GENErate or
+PATCh statement (see STRUCT.DOC).  In addition to the contents of the
+standard RESIdue atoms may also be (H1) DELEted (see IO.DOC) from a
+residue.  Atoms already specified in the initial residue may be
+respecified in order to change the atom type or CHARGE.  The GROUp
+option may also be included to alter the group lists.  Again (H3) BOND
+and IMPRoper listings must be included.  The ANGLe and DIHEdral
+listings only need to be included if the AUTOgenerate option is not
+used OR if the PRES is used in a PATCh statement.  Finally, (H4) a
+PRES may specify new DONOrs and ACCEptors and new IC or BILD
+statements.
+
+        Exiting the topology file is done with the (I) END command.
+
+
+File: Rtop, Node: RTFDATA, Up: Top, Previous: Overview, Next: Top
+
+For a description of Topology, Parameter and Stream Files available in
+CHARMM see PARMFILE.info.
+
+
+

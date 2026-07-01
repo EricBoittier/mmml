@@ -1,0 +1,13 @@
+--- src/fortranscanner.l (doxygen-1.6.3)
++++ src/fortranscanner.l (CHARMM)
+@@ -794,8 +794,8 @@
+ <*><<EOF>>                              {
+                                           if ( include_stack_ptr <= 0 ) {
+                                             if (YY_START!=INITIAL && YY_START!=Start) {
+-                                              //fprintf(stderr,"==== Error: EOF reached in wrong state (end missing)");
+-                                              scanner_abort();
++                                              fprintf(stderr,"==== Error: EOF reached in wrong state (end missing)");
++                                              //scanner_abort();
+                                             }
+                                             yyterminate();
+                                           } else {

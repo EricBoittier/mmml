@@ -1,0 +1,8 @@
+/* -------------------------------------------------------------------------- *
+ *                                 OpenMMMSES                                 *
+ * -------------------------------------------------------------------------- */
+
+#include "CudaMSESKernelSources.h"
+
+using namespace OpenMMMSES;
+using namespace std;

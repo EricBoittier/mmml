@@ -1,0 +1,14 @@
+#ifndef KERNELS_H
+#define KERNELS_H
+#include <string>
+
+class Kernels {
+public:
+  static const std::string ${conj_mult_var};
+  static const std::string ${correct_energy_var};
+  static const std::string ${lig_var};
+  static const std::string ${prot_var};
+  static const std::string ${sum_grids_var};
+};
+
+#endif /* KERNELS_H */

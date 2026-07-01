@@ -1,0 +1,94 @@
+*  OpenMM energy for trialanine blocked in a cubic box of solvent
+*  using PBC w/ PME, removing and adding one water molecule.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+set tol = 1e-3
+
+!  box size: 24.534238 x 24.534238 x 24.534238
+
+read rtf card name @0/top_all22_prot.inp
+
+read param card name @0/par_all22_prot.inp
+
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+! Dimension of a box
+set size 24.534238
+set 7 = @size
+set theta = 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta
+crystal build cutoff 11 noper 0
+
+!  turn on faster options and set-up SHAKE
+faster on
+
+set cutoffs = cutnb 11 cutim 11 ctofnb 9 ctonnb 9 vswi
+
+set ewald = Ewald kappa 0.320 pmEwald order 4 fftx 24 ffty 24 fftz 24
+
+ener eps 1.0 @cutoffs @ewald
+set ech0 = ?ener
+
+ener eps 1.0 @cutoffs @ewald omm
+set eomm = ?ener
+
+set status = pass
+Calc diff = abs ( ( @eomm - @ech0 ) / @ech0 )
+if @diff gt @tol then
+  set status = fail
+endif
+echo testcase result: @status test 1
+
+! save a water molecule to delete and re-add
+write coor pdb name @9/1wat.pdb -
+     select segid wt00 .and. resid 465 end
+delete atoms select segid wt00 .and. resid 465 end
+
+ener eps 1.0 @cutoffs @ewald
+set ech = ?ener
+
+! OpenMM must rebuild context
+ener eps 1.0 @cutoffs @ewald omm
+set eomm = ?ener
+set status = pass
+Calc diff = abs ( ( @eomm - @ech ) / @ech )
+if @diff gt @tol then
+  set status = fail
+endif
+echo testcase result: @status test 2
+
+! restore deleted water molecule
+rename segid wt01 select segid wt00 end
+read sequence pdb name @9/1wat.pdb
+generate wt00 noangl nodihe
+read coor pdb name @9/1wat.pdb resi
+
+! OpenMM may rebuild context but could reinitialize existing context
+ener eps 1.0 @cutoffs @ewald omm
+set eomm = ?ener
+
+set status = pass
+Calc diff = abs ( ( @eomm - @ech0 ) / @ech0 )
+if @diff gt @tol then
+  set status = fail
+endif
+echo testcase result: @status test 3
+
+stop

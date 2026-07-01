@@ -1,0 +1,185 @@
+* CHARMM c36a1 testcase
+* TEST MOBILE BLOCK HESSIAN METHOD (MBH) IN VIBRAN
+* with an equilibrium structure
+* An Ghysels, June 2008
+* System: ethanol
+* 
+
+! VIBRAN and quasi are not parallel
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+if ?novibran .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+BOMLEV -1
+STREam datadir.def
+
+! -------------------------------------
+! READ DATA
+read rtf   card name @0/top_all22_model.inp
+read param card name @0/par_all22_prot.inp
+
+read sequence card
+*  Just an ethanol
+*
+  1
+ETOH
+generate main setup
+
+read coor card 
+* ETHANOL ENENRGY = -3.77086
+*  DATE:     1/15/ 8     14:34:55      CREATED BY USER: an
+*
+    9
+    1    1 ETOH C1     1.08975   0.07797   0.00000 MAIN 1     12.01100
+    2    1 ETOH O1    -0.27895   0.45462   0.00000 MAIN 1     15.99900
+    3    1 ETOH HO1   -0.80312  -0.35116   0.00000 MAIN 1      1.00800
+    4    1 ETOH H11    1.31770  -0.52800   0.90725 MAIN 1      1.00800
+    5    1 ETOH H12    1.31770  -0.52800  -0.90725 MAIN 1      1.00800
+    6    1 ETOH C2     1.91671   1.35548   0.00000 MAIN 1     12.01100
+    7    1 ETOH H21    3.00213   1.12337   0.00000 MAIN 1      1.00800
+    8    1 ETOH H22    1.68261   1.96491   0.89963 MAIN 1      1.00800
+    9    1 ETOH H23    1.68261   1.96491  -0.89963 MAIN 1      1.00800
+
+
+! -------------------------------------
+! WRITE SOME FILES
+
+write psf card name @9/ethanol.psf
+
+print coor 
+
+! -------------------------------------
+! GEOMETRY OPTIMIZATION
+
+   mini abnr nstep 5000 nprint 200 
+
+! get masses in cor file
+   scalar wmain copy mass
+   scalar mass show 
+
+   write coor card name @9/ethanol.opt.cor
+   * Ethanol Enenrgy = ?ENER
+   * 
+
+! -------------------------------------
+! VIBRATIONAL ANALYSIS
+calc k = 3 * ?natom
+vibran nmodes @k
+
+!!!!! 1. full Hessian
+diag
+
+! machine format :
+open write unit 22 file name @9/ethanol.hess.full.machine
+write second unit 22 
+! human format :
+open write unit 23 card name @9/ethanol.hess.full   ! write Hessian to file
+write second card unit 23 
+* full Cartesian Hessian
+*
+
+open write unit 24 card name @9/ethanol.modes.full    ! write modes to file
+write norm card unit 24  
+* full Cartesian, modes
+*
+
+if ?mynode .eq. 0 print norm
+!print norm dotproduct
+!print norm vectors
+!print norm intd !mode 1 thru 9
+
+end
+! -------------------------------------
+vibran nmodes @k
+
+!!!!! 2. MBH mobile block hessian approach
+! block is methyl group
+blks init
+
+blks addb sele bynumber 6:9 end
+
+mbh
+
+if ?mynode .eq. 0 print norm
+
+stop
+
+write second card name @9/ethanol.hess.mbh
+* MBH Hessian?
+*
+
+write norm card name @9/ethanol.modes.mbh
+* MBH modes
+*
+
+
+!!!!! 3. MBH mobile block hessian approach
+! block is empty 
+blks init
+blks addb sele bynumber 15 end
+mbh
+if ?mynode .eq. 0 print norm
+
+!!!!! 4. MBH mobile block hessian approach
+! no block specified
+blks init
+mbh
+if ?mynode .eq. 0 print norm
+
+!!!!! 5. MBH mobile block hessian approach
+! block includes all atoms
+blks init
+blks addb sele bynumber 1:9 end
+mbh
+if ?mynode .eq. 0 print norm
+
+!!!!! 6. MBH mobile block hessian approach
+! block is linear (OH group)
+blks init
+blks addb sele bynumber 4:5 end
+mbh
+if ?mynode .eq. 0 print norm
+
+!!!!! 7. MBH mobile block hessian approach
+! 2 blocks
+blks init
+blks addb sele bynumber 1:3 end
+blks addb sele bynumber 4:6 end
+mbh
+
+!!!!! 8. MBH mobile block hessian approach
+! 2 blocks, no atoms left
+blks init
+blks addb sele bynumber 1:3 end
+blks addb sele bynumber 4:9 end
+mbh
+
+!!!!! 9. MBH mobile block hessian approach
+! 3 blocks, no atoms left
+blks init
+blks addb sele bynumber 1:3 end
+blks addb sele bynumber 4:6 end
+blks addb sele bynumber 7:9 end
+mbh
+
+!!!!! 10. MBH mobile block hessian approach
+! 2 blocks, 2nd block includes atom that is already in 1st block
+blks init
+blks addb sele bynumber 1:4 end
+blks addb sele bynumber 4:6 end
+mbh
+
+!!!!! 11. MBH mobile block Hessian approach
+! check RAISE and ENTROPY option
+mbh raise
+mbh entropy
+mbh raise entropy
+
+end
+stop

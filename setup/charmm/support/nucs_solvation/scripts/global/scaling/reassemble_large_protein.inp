@@ -1,0 +1,46 @@
+* Re-assemble all the separately computed NUCS factors into one file.
+* By Sonja M. Schwarzl & Stefan Fischer
+*
+
+STREAM generate.str
+
+! read in coordinates in parts
+open read card unit 1 name "lambda_1-100.crd"
+read coor card unit 1 SELEct IRES 1:100 END
+close unit 1
+
+open read card unit 1 name "lambda_100-200.crd"
+read coor card unit 1 SELEct IRES 100:200 END
+close unit 1
+
+open read card unit 1 name "lambda_200-300.crd"
+read coor card unit 1 SELEct IRES 200:300 END
+close unit 1
+
+open read card unit 1 name "lambda_300-400.crd"
+read coor card unit 1 SELEct IRES 300:400 END
+close unit 1
+
+open read card unit 1 name "lambda_400-500.crd"
+read coor card unit 1 SELEct IRES 400:500 END
+close unit 1
+
+open read card unit 1 name "lambda_500-600.crd"
+read coor card unit 1 SELEct IRES 500:600 END
+close unit 1
+
+open read card unit 1 name "lambda_600-700.crd"
+read coor card unit 1 SELEct IRES 600:700 END
+close unit 1
+
+open read card unit 1 name "lambda_700-779.crd"
+read coor card unit 1 SELEct IRES 700:779 END
+close unit 1
+
+
+! write complete coordinate file
+open write card unit 1 name "lambda_1-779.crd"
+write coor card unit 1
+close unit 1
+
+STOP

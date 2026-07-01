@@ -1,0 +1,92 @@
+* CHARMM c38a2 testcase fastepdstr.inp.
+*
+
+stream datadir.def
+
+if ?repdstr .ne. 1 then
+  echo "Test NOT performed. REPD not compiled in."
+  stop
+endif
+
+if ?numnode .eq. 1 then
+  echo "Test NOT performed. REPD only works in parallel."
+  stop
+endif
+
+if ?numnode .ne. 4 then
+  echo "Test NOT performed. Test case requires 4 mpi processes."
+  stop
+endif
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+read sequence card
+3
+AMN ALA CBX
+generate ala2 setup warn
+
+ic para
+ic seed 1 C 2 N 2 CA
+ic build
+
+repd fast exch unit 30 freq 20 nrep 4 -
+  temp0 300. -
+  temp1 325. -
+  temp2 350. -
+  temp3 375.
+
+open unit 30 write card name @9fastrepd.exch
+open write file unit 50 name @9fastrepd.trj
+open write card unit 41 name @9fastrepd.res
+open write card unit 42 name @9fastrepd.out
+outu 42
+
+dyna verlet strt nstep 100 timestep 0.001  -
+    iprfrq 10000 ihtfrq 0 ieqfrq 1000 ntrfrq 10000  -
+    iuncrd 50 iunrea -1 iunwri 41 kunit -1 -
+    nprint 1 nsavc 1 nsavv 0 ihbfrq 0 ilbfrq 0 -
+    firstt 300.0 finalt 300.0 teminc 0.0  tstruc 307.0 -
+    iseed 98123 55012 102978 101300 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0
+
+set passprob = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 0.512481
+if ?myrep .eq. 0 set refener = -22.6473
+if ?myrep .eq. 1 set refprob = 0.639779
+if ?myrep .eq. 1 set refener = -20.1636
+if ?myrep .eq. 2 set refprob = 0.579657
+if ?myrep .eq. 2 set refener = -16.5099
+if ?myrep .eq. 3 set refprob = 0.572602
+if ?myrep .eq. 3 set refener = -22.1585
+
+! NOTE: repeated exchanges and replicas exchanging positions
+! (rather than temperatures), "up" vs. "down" exchanges are
+! a bit more complicated to track. As the doc file notes, it
+! is possible, but a bit unreliable. So, we're just going to
+! check overall exchange probability and final energy, which
+! are invariant to direction.
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?ener .ae. @refener set passener = 1
+
+calc result = @passprob + @passener
+
+repd sync
+outu 6
+prnlev 5 node 0
+
+repd ioreset
+
+if ?mynode .eq. 0 @testcheck ?reprob @refprob 0.0001 FASTREPDSTR_PROB
+if ?mynode .eq. 0 @testcheck ?ener   @refener 0.0001 FASTREPDSTR_ENER
+
+repd reset
+stop

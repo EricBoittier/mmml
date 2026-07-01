@@ -1,0 +1,129 @@
+* CHARMM 28 testcase mkpres.inp
+* Show how to write a formatted patch for alchemical mutation of residues 
+* Author: Benoit Roux
+*
+
+!illustrate with simple ala to val mutation
+
+set Residue1  = ALA
+set Residue2  = VAL
+
+set PatchName = MAV             !Mutate Alanine to Valine
+
+!----------------------------------------------------------------------------
+stream datadir.def
+
+open read card unit 1 name @0top_all22_prot.inp
+read RTF card unit 1
+close unit 1
+
+open card read unit 1 name @0par_all22_prot.inp
+read PARAM card unit 1
+close unit 1
+
+read sequence card
+*  residue1
+*
+  3
+ALA @Residue1 ALA 
+generate SEG1 setup 
+
+read sequence card
+*  residue2
+*
+  3
+ALA @Residue2 ALA
+generate SEG2 setup 
+
+define BACK select type CA .or. type HA* .or. type N .or. type HN .or. -
+       type C .or. type O .or. type HT* .or. type OT* .or. type CB show end
+
+ic seed 1 N 1 CA 1 C
+ic param
+ic build
+
+coor duplicate select back .and. segid SEG1 end -
+               select back .and. segid SEG2 end
+
+coor duplicate select (.not. resid 2 ) .and. segid SEG1 end -
+               select (.not. resid 2 ) .and. segid SEG2 end
+
+ic build
+print coor
+
+!---------------------------------------------------------------------------
+! show how to use the MKPRES command to write patch for alchemical mutations
+
+open write card unit 10 name @9mkpres.rtf
+write title unit 10
+** Patch for alchemical mutation of ALA to VAL
+**
+*
+
+MKPRES @PatchName unit 10 -
+       select segid SEG1 .and. back end -
+       select segid SEG1 .and. resid 2 .and. (.not. back ) end -
+       select segid SEG2 .and. back end -
+       select segid SEG2 .and. resid 2 .and. (.not. back ) end 
+
+close unit 10
+
+
+open read card unit 1 name @9mkpres.rtf
+read rtf card append unit 1
+close unit 1
+
+define MUT1 select segid SEG2 .and. resid 2 .and. -
+       (type HB .or. type CG* .or. type HG*) show end
+bomlev -1  !need to set bomlev because of non-integer charge
+delete atom select segid SEG2 .and. ( .not. MUT1 ) show end
+
+!---------------------------------------------------------------------------
+! parameters for new additions
+read param card append
+* MKPRES ALA to VAL parameters
+*
+
+ANGLE
+CT1  CT3  CT3   58.350    113.50   11.16   2.56100 ! from CT2 CT3 CT1
+CT3  CT3  CT3   58.350    113.50   11.16   2.56100 ! from CT2 CT3 CT1
+
+END
+
+!---------------------------------------------------------------------------
+! Lambda=0 : alanine
+
+!link the second side chain to the backbone
+PATCH MAV0 SEG1 2 SEG2 2 setup
+
+define DUM1 select segid SEG2 .and. resid 2 .and. -
+       (type HB .or. type CG* .or. type HG*) show end
+scalar rscale set 1.0 
+scalar rscale set 0.0 select DUM1 show end
+scalar charge show
+scalar rscale show
+
+faster off
+energy
+
+@qcheck ?ENER 58.16 0.01 mkpres_1
+
+PERT  select resid 2 end
+
+! Lambda=1 : valine
+PATCH MAV1 SEG1 2 SEG2 2 setup
+
+define DUM2 select resid 2 .and. (type HB1 .or. type HB2 .or. type HB3) end
+scalar rscale set 1.0
+scalar rscale set 0.0 select DUM2 show end
+scalar charge show
+scalar rscale show
+
+energy
+@qcheck ?ENER 58.16 0.01 mkpres_2
+
+! From here, one can perform normal PERT run...
+! please check the output from MKPRES carefully
+! (particularly for the dihedrals and groups)
+
+stop

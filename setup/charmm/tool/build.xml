@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   Ant buildfile for CHARMM
+   Mike Garrahan, 2009
+-->
+<project default="all" basedir="..">
+   <property name="platform" value="gnu" />
+   <property name="branch" value="master" />
+   <property name="keywords" value="" />
+
+   <target name="all" depends="clean,test" />
+
+   <target name="test" depends="compile">
+      <property name="outname" value="output_${platform}" />
+      <mkdir dir="${basedir}/test/scratch" />
+      <mkdir dir="${basedir}/test/${outname}" />
+      <delete failonerror="false">
+         <fileset dir="${basedir}/test">
+            <include name="${outname}.rpt" />
+            <include name="${outname}.xml" />
+            <include name="${outname}/*.out" />
+         </fileset>
+      </delete>
+      <!-- expects a "ref" symlink to a reference version's test directory -->
+      <exec executable="${basedir}/test/test.com" dir="${basedir}/test">
+         <arg value="${platform}" />
+         <arg value="${outname}" />
+         <arg value="ref/${outname}" />
+
+         <!-- CHARMM_PLUGIN_DIR: path to stand alone OpenMM plugins -->
+         <env
+           key="CHARMM_PLUGIN_DIR"
+           value="${basedir}/lib/${platform}/openmm_plugins" />
+
+         <redirector>
+            <outputfilterchain>
+               <linecontains negate="true">
+                  <contains value=".inp" />
+               </linecontains>
+            </outputfilterchain>
+         </redirector>
+      </exec>
+      <exec executable="${basedir}/test/rpt2xml.pl" dir="${basedir}/test"
+            failonerror="true">
+         <arg value="${outname}" />
+      </exec>
+   </target>
+
+   <target name="test-m" depends="compile-m">
+      <property name="outname" value="output_${platform}_M" />
+      <mkdir dir="${basedir}/test/scratch" />
+      <mkdir dir="${basedir}/test/${outname}" />
+      <delete failonerror="false">
+         <fileset dir="${basedir}/test">
+            <include name="${outname}.rpt" />
+            <include name="${outname}.xml" />
+            <include name="${outname}/*.out" />
+         </fileset>
+      </delete>
+      <!-- expects a "ref" symlink to a reference version's test directory -->
+      <exec executable="${basedir}/test/test.com" dir="${basedir}/test">
+         <arg value="M" />
+         <arg value="2" />
+         <arg value="${platform}" />
+         <arg value="${outname}" />
+         <arg value="ref/${outname}" />
+         <redirector>
+            <outputfilterchain>
+               <linecontains negate="true">
+                  <contains value=".inp" />
+               </linecontains>
+            </outputfilterchain>
+         </redirector>
+      </exec>
+      <exec executable="${basedir}/test/rpt2xml.pl" dir="${basedir}/test"
+            failonerror="true">
+         <arg value="${outname}" />
+      </exec>
+   </target>
+
+   <target name="test-q" depends="compile">
+      <property name="outname" value="output_${platform}" />
+      <mkdir dir="${basedir}/test/scratch" />
+      <mkdir dir="${basedir}/test/${outname}" />
+      <delete failonerror="false">
+         <fileset dir="${basedir}/test">
+            <include name="${outname}.rpt" />
+            <include name="${outname}.xml" />
+            <include name="${outname}/*.out" />
+         </fileset>
+      </delete>
+      <!-- expects a "ref" symlink to a reference version's test directory -->
+      <exec executable="${basedir}/test/test.com" dir="${basedir}/test">
+         <arg value="${platform}" />
+         <arg value="${outname}" />
+         <arg value="ref/${outname}" />
+         <arg value="quantum" />
+         <redirector>
+            <outputfilterchain>
+               <linecontains negate="true">
+                  <contains value=".inp" />
+               </linecontains>
+            </outputfilterchain>
+         </redirector>
+      </exec>
+      <exec executable="${basedir}/test/rpt2xml.pl" dir="${basedir}/test"
+            failonerror="true">
+         <arg value="${outname}" />
+      </exec>
+   </target>
+
+   <filterchain id="install.com.excludes">
+      <linecontains negate="true">
+         <contains value="Conditional keys" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="Line longer than" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="   &quot;" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="Keeping" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="tool/preflx" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="ar rucv" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="a - " />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="gfortran" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="gcc" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="ifort" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="icc" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="mpif90" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="mpicc" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="ranlib" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="mv " />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="cp " />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="rm " />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="COMPLETED" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="pgf95" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="extension: nonstandard" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="0 severes, 0 fatal" />
+      </linecontains>
+      <linecontains negate="true">
+         <contains value="completed with warnings" />
+      </linecontains>
+   </filterchain>
+
+   <target name="compile">
+      <exec executable="${basedir}/install.com" dir="${basedir}"
+            failonerror="true">
+         <arg line="${platform} ${keywords} debug nolog" />
+         <redirector>
+            <outputfilterchain refid="install.com.excludes" />
+            <errorfilterchain refid="install.com.excludes" />
+         </redirector>
+      </exec>
+   </target>
+
+   <target name="build">
+     <property name="build_dir" value="${basedir}/build/${platform}" />
+     <property name="install_dir" value="${build_dir}_install" />
+     <mkdir dir="${build_dir}" />
+     <exec executable="${basedir}/configure" dir="${build_dir}"
+           failonerror="true">
+       <arg line="-g --with-gnu --without-mpi --without-mkl -p ${install_dir}" />
+    </exec>
+   </target>
+
+   <target name="install" depends="build">
+     <property name="build_dir" value="${basedir}/build/${platform}" />
+     <exec executable="make" dir="${build_dir}" failonerror="true">
+       <arg line="install" />
+     </exec>
+   </target>
+
+   <target name="test-cmake" depends="install">
+     <property name="build_dir" value="${basedir}/build/${platform}" />
+     <property name="install_dir" value="${build_dir}_install" />
+     <property name="outname" value="output_${platform}" />
+     <mkdir dir="${install_dir}/test/scratch" />
+     <mkdir dir="${install_dir}/test/${outname}" />
+     <delete failonerror="false">
+         <fileset dir="${install_dir}/test">
+            <include name="${outname}.rpt" />
+            <include name="${outname}.xml" />
+            <include name="${outname}/*.out" />
+         </fileset>
+     </delete>
+     <!-- expects a "ref" symlink to a reference version's test directory -->
+     <exec executable="${install_dir}/test/test.com" dir="${install_dir}/test">
+       <arg value="cmake" />
+       <arg value="${outname}" />
+       <arg value="ref/${outname}" />
+       <redirector>
+         <outputfilterchain>
+           <linecontains negate="true">
+             <contains value=".inp" />
+           </linecontains>
+         </outputfilterchain>
+       </redirector>
+     </exec>
+     <exec executable="${install_dir}/test/rpt2xml.pl"
+           dir="${install_dir}/test"
+           failonerror="true">
+       <arg value="${outname}" />
+     </exec>
+   </target>
+
+   <target name="compile-m">
+      <exec executable="${basedir}/install.com" dir="${basedir}"
+            failonerror="true">
+         <arg line="${platform} M ${keywords} debug nolog" />
+         <redirector>
+            <outputfilterchain refid="install.com.excludes" />
+            <errorfilterchain refid="install.com.excludes" />
+         </redirector>
+      </exec>
+   </target>
+
+   <target name="clean">
+      <delete file="${basedir}/test/output_${platform}.xml" failonerror="false" />
+      <delete dir="${basedir}/exec/${platform}" failonerror="false" />
+      <delete dir="${basedir}/lib/${platform}" failonerror="false" />
+      <delete dir="${basedir}/build/${platform}" failonerror="false" />
+   </target>
+
+   <target name="clean-m">
+      <delete file="${basedir}/test/output_${platform}_M.xml" failonerror="false" />
+      <delete dir="${basedir}/exec/${platform}_M" failonerror="false" />
+      <delete dir="${basedir}/lib/${platform}_M" failonerror="false" />
+      <delete dir="${basedir}/build/${platform}_M" failonerror="false" />
+   </target>
+
+   <target name="clean-cmake">
+     <delete
+       dir="${basedir}/build/${platform}"
+       includeemptydirs='true'
+       followsymlinks='false'
+       removeNotFollowedSymlinks='true'
+       failonerror="false" />
+     <delete
+       dir="${basedir}/lib/${platform}_install"
+       includeemptydirs='true'
+       followsymlinks='false'
+       removeNotFollowedSymlinks='true'
+       failonerror="false" />
+   </target>
+
+   <target name="archive">
+      <basename property="chmroot" file="${basedir}" />
+      <dirname property="parent" file="${basedir}" />
+      <tar destfile="${parent}/${chmroot}.tar.gz" compression="gzip">
+         <tarfileset dir="${basedir}" prefix="${chmroot}" filemode="755">
+            <include name="install.com" />
+            <include name="test/test.com" />
+            <include name="tool/makemod.pl" />
+            <include name="tool/preflx" />
+            <include name="tool/setmk.com" />
+         </tarfileset>
+         <tarfileset dir="${basedir}" prefix="${chmroot}">
+            <include name="*" />
+            <!-- CVS dirs excluded by default -->
+            <exclude name="support.tar.gz" />
+            <exclude name="toppar.tar.gz" />
+            <include name="build/UNX/**" />
+            <exclude name="exec" />
+            <exclude name="lib" />
+            <include name="source/**" />
+            <include name="test/*" />
+            <exclude name="test/*core*" />
+            <exclude name="test/fort.*" />
+            <include name="test/c*test/*.inp" />
+            <include name="test/data/**" />
+            <exclude name="test/output*" />
+            <include name="tool/**" />
+            <exclude name="tool/prefx_*" />
+            <!-- other tarfileset includes these -->
+            <exclude name="install.com" />
+            <exclude name="test/test.com" />
+            <exclude name="tool/makemod.pl" />
+            <exclude name="tool/preflx" />
+            <exclude name="tool/setmk.com" />
+         </tarfileset>
+      </tar>
+   </target>
+
+   <target name="update-svn">
+      <exec executable="svn" failonerror="true">
+         <arg value="update" />
+      </exec>
+   </target>
+
+   <target name="update-git">
+      <exec executable="git" failonerror="true">
+         <arg value="pull" />
+      </exec>
+   </target>
+
+   <target name="branch">
+     <exec executable="git" failonerror="true">
+       <arg value="checkout" />
+       <arg value="${branch}" />
+     </exec>
+   </target>
+</project>

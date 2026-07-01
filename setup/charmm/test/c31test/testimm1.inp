@@ -1,0 +1,90 @@
+* CHARMM 32 testcase testimm1.inp
+* Themis Lazaridis, 18-Jul-04, c32a1
+* Example file for IMM1: Melittin on an anionic membrane
+*
+
+if ?aspener .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+!if ?numnode .ne. 1 then
+! echo "Test NOT performed in parallel."
+! stop
+!endif
+
+stream datadir.def
+
+open read card unit 3 name @0toph19_eef1.1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0param19_eef1.1.inp
+read para unit 3 card 
+close unit 3
+
+open read unit 3 card name @0testimm1.crd
+read seque coor unit 3
+close unit 3
+
+generate main setup
+
+open read unit 2 card name @0testimm1.crd
+read coor card unit 2 
+close unit 2
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+
+eef1 setup membrane slvt water slv2 chex nsmth 10 width 26.0 temp 298.15 -
+              unit 93 name @0solvpar.inp  aemp 0.85 -
+     gouy anfr 0.3 area 70. conc 0.1 offset 3.0 valence 1
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+!skip incl asp
+
+!prnlev 10
+energy
+
+!This is the correct answer:
+!ENER>        0   -734.25798      0.00000      0.60885
+!ENER INTERN>        5.95035     35.71728      0.00000     16.68183      5.12102
+!ENER EXTERN>     -132.10393   -413.58603      0.00000   -252.03851      0.00000
+
+calc a ?ENER + 734.26
+calc a abs(@a)
+if @a .gt. 0.01 then
+echo "testimm1: energy is wrong"
+stop
+endif
+
+eef1 setup membrane slvt water slv2 chex nsmth 10 width 26.0 temp 298.15 -
+              unit 93 name @0solvpar.inp  aemp 0.85 -
+   lat cmd 5.3 apl 70.0 pl 0.01 xpe 0.2 mdp 300.0 
+
+!prnlev 10
+energy
+
+!This is the correct answer:
+!ENER>        0   -728.19261     -6.06537      0.62056
+!ENER INTERN>        5.95035     35.71728      0.00000     16.68183      5.12102
+!ENER EXTERN>     -132.10393   -413.58603      0.00000   -245.97314      0.00000
+
+calc a ?ENER + 728.19
+calc a abs(@a)
+if @a .gt. 0.01 then
+echo "testimm1: energy is wrong"
+stop
+endif
+
+!prnlev 6
+mini sd nstep 300
+
+!This command prints out solvation free energy for each atom
+eef1 print
+
+dynamics verlet timestep 0.002 nstep 500 nprint 100 iprfrq 100 -
+      firstt 240 finalt 300 twindh 10.0 ieqfrq 200 ichecw 1 -
+      iasors 0 iasvel 1 inbfrq 20 iseed 54858769 3485955 7795875 7868697
+
+stop

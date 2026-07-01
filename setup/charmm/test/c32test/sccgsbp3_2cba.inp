@@ -1,0 +1,136 @@
+* CHARMM 31 testcase sccgsbp3_2cba.inp
+* .Test SCCGSBP, the QM/MM approach using SCC-DFTB and GSBP for CA
+* .setup constraints for Langevin dynamics
+*  sccgsbp2_2cba.inp must have previously been run
+* .Author:  P. Schaefer, Univ. Wisc. Madison    June 2004
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/sccgsbp3_2cba> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+IF ?GSBP .NE. 1 THEN
+ echo "c32test/sccgsbp3_2cba> GSBP Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+! variables
+stream datadir.def
+set temp 300.0
+set j 2cba
+set k 2cba_gsbp
+
+OPEN UNIT 21 NAME @0top_ca.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_ca.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @9@k_sb.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @9@k_sb.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @9@k_sb.reg READ FORM
+READ  COOR COMP CARD UNIT 3
+CLOSE UNIT 3
+
+! -------------------------------------------------------------
+
+! atoms beyond 18A will be held fixed, so only need to add constraints to 
+! buffer region atoms within that cutoff
+set 1 16.0    ! radius for fully mobile region
+set 2 20.0    ! radius of inner region
+set 3 18.0    ! radius of buffer region where Langevin dynamics will be used
+
+! Setting various boundary flags
+scalar xcomp store 1    ! initial md region
+scalar ycomp store 2    ! initial buffer region
+scalar zcomp store 3    ! initial Langevin atoms-proteins only
+scalar wcomp store 4    ! reservoir region atoms
+
+! Convert crystallographic thermal factors in wmain to constraint forces
+scalar wmain reci sele recall 3 end               ! get 1/B
+scalar wmain mult 0.001987191 sele recall 3 end   ! k(boltz)/B
+scalar wmain mult @temp sele recall 3 end            ! kT/B
+scalar wmain mult 4.0 sele recall 3 end           ! 4kT/B
+scalar wmain mult 9.87 sele recall 3 end          ! 4(pi**2)kT/B
+scalar wmain set 0.0 sele .not. recall 3 end      ! zero out the rest
+scalar wmain store 5
+
+scalar xcomp set 0.0 sele all end
+scalar ycomp set 0.0 sele all end
+scalar zcomp set 0.0 sele all end
+scalar wcomp set 0.0 sele all end
+
+scalar xcomp recall 3                    ! langevin region constraint flags
+scalar zcomp set 1.0 sele recall 3 .or. type OH2 end
+scalar zcomp mult 80.0 sele recall 3 end                     ! protein friction
+scalar zcomp mult 80.0 sele (resn TIP3 .and. type OH2) end   ! TIP3 friction
+scalar ycomp recall 5                    ! unscaled constraint force constants
+scalar wcomp recall 1
+
+open unit 15 write form name  @9@k_sb.cnu
+write coor comp card unit 15
+* title: 2OHX:solv:bulk sbmd
+* col. 1: langevin region constraint flags
+* col. 2: UNSCALED langevin region harmonic constraint forces
+* col. 3: langevin friction coefficients.
+* col. 4: MD region flags.
+*
+! ****** Scale the constraints based on where the atoms are ****** 
+! Values of S(r) for scaling the constraint forces
+
+set 4 0.00 !inner langevin region
+set 5 0.08 !next
+set 6 0.20 !next
+set 7 0.32 !next
+set 8 0.44 !next
+set 8b 0.50 !next
+
+!force constant scaling
+scalar xcomp store 1
+scalar ycomp mult @4 sele ( recall 1 .and. point 0. 0. 0. cut 16.0 ) end
+scalar ycomp mult @5 sele ( recall 1 .and. point 0. 0. 0. cut 16.5 -
+                            .and. .not. point 0. 0. 0. cut 16.0 ) end
+scalar ycomp mult @6 sele ( recall 1 .and. point 0. 0. 0. cut 17.0 -
+                            .and. .not. point 0. 0. 0. cut 16.5 ) end
+scalar ycomp mult @7 sele ( recall 1 .and. point 0. 0. 0. cut 17.5 -
+                            .and. .not. point 0. 0. 0. cut 17.0 ) end
+scalar ycomp mult @8 sele ( recall 1 .and. point 0. 0. 0. cut 18.0 -
+                            .and. .not. point 0. 0. 0. cut 17.5 ) end
+scalar ycomp mult @8b sele ( recall 1 .and. .not. point 0. 0. 0. cut 18.0 ) end
+
+!friction scaling
+scalar zcomp mult @4 sele (recall 1 .and. point 0.0 0.0 0.0 cut 16.0 -
+       .and. .not. resn TIP3) end
+scalar zcomp mult @5 sele (recall 1 .and. point 0.0 0.0 0.0 cut 16.5 -
+       .and. .not. (point 0.0 0.0 0.0 cut 16.0 .or. resn TIP3)) end
+scalar zcomp mult @6 sele (recall 1 .and. point 0.0 0.0 0.0 cut 17.0 -
+       .and. .not. (point 0.0 0.0 0.0 cut 16.5 .or. resn TIP3)) end
+scalar zcomp mult @7 sele (recall 1 .and. point 0.0 0.0 0.0 cut 17.5 -
+       .and. .not. (point 0.0 0.0 0.0 cut 17.0 .or. resn TIP3)) end
+scalar zcomp mult @8 sele (recall 1 .and. point 0.0 0.0 0.0 cut 18.0 -
+       .and. .not. (point 0.0 0.0 0.0 cut 17.5 .or. resn TIP3)) end
+scalar zcomp mult @8b sele (recall 1 .and. .not. -
+       (point 0.0 0.0 0.0 cut 18.0 .or. resn TIP3)) end
+
+open unit 14 write form name  @9@k_sb.cns
+write coor comp card unit 14
+* title: TIM:solv:bulk sbmd
+* col. 1: langevin region constraint flags
+* col. 2: SCALED langevin region harmonic constraint forces
+* col. 3: SCALED langevin friction coefficients.
+* col. 4: MD region flags.
+*
+
+STOP
+

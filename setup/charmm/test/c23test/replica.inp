@@ -1,0 +1,118 @@
+* test replica feature
+*
+
+if ?replica .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+! 0 - input data 
+! 9 - scratch
+
+! for ease use old extended atom sets
+open unit 1 read form name @0/toph19.rtf 
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/param19.prm 
+read param card unit 1
+close unit 1
+
+
+! BEGIN { build a simple molecule }
+read sequ card
+* test
+*
+2
+AMN CBX
+
+generate pep setup
+
+! generate some cartesian coordinates
+ic param
+ic seed 1 c 2 n 2 ca
+ic build
+print coor sele .not. init end
+! END { build a simple molecule }
+
+format (i4)
+! keep track of original PSF counters
+SET a NSEG=  ?NSEG  NRES=   ?NRES    NGRP= ?NGRP NATOM=  ?NATOM
+SET b NBOND= ?NBOND NTHETA= ?NTHETA  NPHI= ?NPHI NIMPHI= ?NIMPHI
+SET b @b NNB= ?NNB NACC= ?NACC NDON= ?NDON 
+format
+
+print psf
+
+energy
+
+! testcase result
+@testcheck ?ener -4.78399 0.00001 replica_1_ener
+@testcheck ?grms  2.41693 0.00001 replica_1_grms
+@testcheck ?elec -6.06581 0.00001 replica_1_elec
+@testcheck ?vdw   1.28182 0.00001 replica_1_vdw
+
+
+print ic
+! keep track of energy and forces
+SET c NNBA= ?NNBA ENERGY= ?ENER GRMS= ?GRMS
+
+define primary select ( SEGID pep ) end
+
+replica: nreplica= 2 selection= ( primary ) end setup.IC.table=T DEBUG=T
+print ic
+print psf
+
+define primary select ( SEGID pep ) end
+delete atom select ( primary ) end
+
+format (i4)
+! keep track of original PSF counters
+SET v NSEG=  ?NSEG  NRES=   ?NRES    NGRP= ?NGRP NATOM=  ?NATOM
+SET w NBOND= ?NBOND NTHETA= ?NTHETA  NPHI= ?NPHI NIMPHI= ?NIMPHI
+SET w @w NNB= ?NNB NACC= ?NACC NDON= ?NDON 
+format
+
+
+!print psf
+print ic
+energy
+
+! keep track of energy and forces
+SET x NNBA= ?NNBA ENERGY= ?ENER GRMS= ?GRMS
+
+WRITE TITLE UNIT 6
+* PSF counters
+* *
+* original system
+* @a
+* @b
+* replicated system
+* @v
+* @w
+* *
+* energy and forces 
+* *
+* original system
+* @c 
+* replicated system
+* @x
+*
+
+energy bycube
+
+! test result
+@testcheck ?ener  -9.56798 0.00001 replica_2_ener
+@testcheck ?grms   2.41693 0.00001 replica_2_grms
+@testcheck ?elec -12.13161 0.00001 replica_2_elec
+@testcheck ?vdw    2.56363 0.00001 replica_2_vdw
+
+!! faster 4
+! specify parallel ncpu 2
+! specify fnbl on
+!
+! energy bygr
+
+stop

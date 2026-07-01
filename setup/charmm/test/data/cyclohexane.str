@@ -1,0 +1,93 @@
+* test/data/cyclohexane.str: c29a2 testcase stream
+* Energy for cyclohexane, Copied input from travel.inp.
+* Paul Maragakis, June 20, 2002
+*
+
+READ RTF CARDS
+*  All-atom topology file of cyclohexane :
+*
+   20    1
+Mass   3  HA   1.00800
+Mass  16  CT  12.01100
+auto angle
+resi CYCL 0.0
+Atom h1 ha 0.0950
+Atom h2 ha 0.0950
+Atom h3 ha 0.0950
+Atom h4 ha 0.0950
+Atom h5 ha 0.0950
+Atom h6 ha 0.0950
+Atom h7 ha 0.0950
+Atom h8 ha 0.0950
+Atom h9 ha 0.0950
+Atom h10 ha 0.0950
+Atom h11 ha 0.0950
+Atom h12 ha 0.0950
+Atom c1 ct -0.190
+Atom c2 ct -0.190
+Atom c3 ct -0.190
+Atom c4 ct -0.190
+Atom c5 ct -0.190
+Atom c6 ct -0.190
+Bond c1 h1  c1 h2  c1 c2
+Bond c2 h3  c2 h4  c2 c3
+Bond c3 h5  c3 h6  c3 c4
+Bond c4 h7  c4 h8  c4 c5
+Bond c5 h9  c5 h10 c5 c6
+Bond c6 h11 c6 h12 c6 c1
+dihe c6  c1 c2 c3   c6  c1 c2 h3   c6  c1 c2 h4
+dihe h1  c1 c2 c3   h1  c1 c2 h3   h1  c1 c2 h4
+dihe h2  c1 c2 c3   h2  c1 c2 h3   h2  c1 c2 h4
+dihe c1  c2 c3 c4   c1  c2 c3 h5   c1  c2 c3 h6
+dihe h3  c2 c3 c4   h3  c2 c3 h5   h3  c2 c3 h6
+dihe h4  c2 c3 c4   h4  c2 c3 h5   h4  c2 c3 h6
+dihe c2  c3 c4 c5   c2  c3 c4 h7   c2  c3 c4 h8
+dihe h5  c3 c4 c5   h5  c3 c4 h7   h5  c3 c4 h8
+dihe h6  c3 c4 c5   h6  c3 c4 h7   h6  c3 c4 h8
+dihe c3  c4 c5 c6   c3  c4 c5 h9   c3  c4 c5 h10
+dihe h7  c4 c5 c6   h7  c4 c5 h9   h7  c4 c5 h10
+dihe h8  c4 c5 c6   h8  c4 c5 h9   h8  c4 c5 h10
+dihe c4  c5 c6 c1   c4  c5 c6 h11  c4  c5 c6 h12
+dihe h9  c5 c6 c1   h9  c5 c6 h11  h9  c5 c6 h12
+dihe h10 c5 c6 c1   h10 c5 c6 h11  h10 c5 c6 h12
+dihe c5  c6 c1 c2   c5  c6 c1 h1   c5  c6 c1 h2
+dihe h11 c6 c1 c2   h11 c6 c1 h1   h11 c6 c1 h2
+dihe h12 c6 c1 c2   h12 c6 c1 h1   h12 c6 c1 h2
+ic  c5  c6  c1 c2  0.00 0.00    0.0 0.00   0.0
+ic  c6  c1  c2 c3  0.00 0.00    0.0 0.00  0.0
+ic  c1  c2  c3 c4  0.00 0.00    0.0 0.00  0.0
+ic  c2  c3  c4 c5  0.00 0.00    0.0 0.00  0.0
+ic  c3  c4  c5 c6  0.00 0.00    0.0 0.00  0.0
+ic  c4  c5  c6 c1  0.00 0.00    0.0 0.00  0.0
+patc first none last none
+end
+
+READ PARAM CARDS
+* All-H alkane parameter-set # 430.
+*
+Bond
+HA  CT   317.13  1.111
+CT  CT   229.63  1.531
+Theta
+HA  CT  HA   36.00  108.4    5.20   1.802
+HA  CT  CT   33.43  110.1   22.53   2.179
+CT  CT  CT   58.35  113.5   11.16   2.561
+Phi
+X   CT  CT  X    0.157  3    0.0
+NONBONDED NBXMOD 5 ATOM CDIEL EPS 1.0 WMIN 1.5  switch  -
+       VATOM VDISTANCE VSWITCH ctonnb 900. ctofnb 998. cutnb 999. e14fac 1.0
+HA     0.00    -0.0045     1.468
+CT     0.00    -0.0903     1.8
+Hbond aexp 4 rexp 6 haex 4 aaex 0 noacceptors hbnoexclusions all -
+    cuthb 0.5 ctofhb 5.0 ctonhb 4.0 cutha 5.0 ctofha 90.0 ctonha 90.0
+End                                             
+
+READ SEQUENCE CARDS
+* Cyclohexane
+*
+1
+cycl
+
+GENERATE cycl SETUP WARN
+
+RETURN

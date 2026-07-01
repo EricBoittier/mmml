@@ -1,0 +1,13 @@
+* title
+*
+
+ensemble nensem @nens
+set enum = ?whoiam
+ensemble sync
+
+stream charmm_@enum.str
+
+ensemble sync
+
+
+stop

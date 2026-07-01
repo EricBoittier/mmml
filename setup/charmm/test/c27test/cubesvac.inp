@@ -1,0 +1,50 @@
+*================================================================
+*            BPTI vacuum
+*
+stream datadir.def
+OPEN READ FORM UNIT 1 NAME  @0top_all22_prot.inp
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+BOMLEV -2
+OPEN READ FORM UNIT 2 NAME  @0par_all22_prot.inp
+READ PARAMETER CARD UNIT 2
+CLOSE UNIT 2
+BOMLEV -1
+!
+READ SEQUENCE CARDS
+*PTI SEQUENCE
+*
+   58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+
+GENERATE  MAIN
+PATCH DISU MAIN  5 MAIN 55
+PATCH DISU MAIN 14 MAIN 38
+PATCH DISU MAIN 30 MAIN 51
+
+OPEN UNIT 3 READ CARD   NAME @0bpti.crd
+READ COORD card  UNIT 3
+CLOSE UNIT 3
+
+HBUILD SELECTION ATOM * * H* END
+energy atom vatom  -
+    CUTNB 14.00    WMIN  1.5 -
+    CTONNB 9   CTOFNB 12  
+set eat ?ener
+ 
+energy atom vatom bycu -
+    CUTNB 14.00    WMIN  1.5 -
+    CTONNB 9   CTOFNB 12   
+calc ediff @eat - ?ener
+
+energy atom vatom bycb -
+    CUTNB 14.00    WMIN  1.5 -
+    CTONNB 9   CTOFNB 12   
+calc ediff @eat - ?ener
+
+stop

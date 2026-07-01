@@ -1,0 +1,561 @@
+* OpenMM energy and dynamics for trialanine in vacuum,
+* nonperiodic boundaries.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+
+set name ala_3mer
+!read in the neccessary parameters
+goto toppar_sub
+
+label toppar_ret
+
+!build the tripeptide
+read sequ card
+* alanine tripeptide
+*
+3
+ALA ALA ALA
+
+generate aal first nter last cter
+autogenerate angles dihedrals
+
+ic gener
+ic param
+ic seed aal 1 N aal 1 CA aal 1 C
+ic build
+print coor
+
+faster on
+
+!minimize the structure
+coor copy compare
+mini sd nstep 100 nprint 20
+
+!save the coordinates
+write coor pdb name @9/@name.pdb
+read coor pdb name @9/@name.pdb
+scalar x store 1
+scalar y store 2
+scalar z store 3
+
+!skipe all excl angle
+cons harm force 0.5 comp select all end
+ener cutnb 999 ctofnb 998 ctonnb 997 switch
+
+format (f16.8)
+set echarmm = ?ener
+coor force comp
+
+set return fromCHARMM
+goto ncharmm
+label fromCHARMM
+
+open unit 15 name @9/ala3_charmm.txt write formatted
+frcd unit 15
+close unit 15
+
+omm on
+
+ener cutnb 999 ctofnb 998 ctonnb 997 switch
+
+set eopenmm = ?ener
+coor force comp
+
+set return fromOpenMM
+goto nopenmm
+label fromOpenMM
+
+Calc ediff = 100 * abs ( ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+echo Force dot product: @fsum Percent energy error: @ediff
+Calc diff = abs ( 1 - @fsum )
+
+if @ediff le 1e-3 then
+      echo passed TEST 1 - energy
+else
+      echo failed TEST 1 - energy
+endif
+if @diff le 1e-3 then
+      echo passed TEST 1 - forces
+else
+      echo failed TEST 1 - forces
+endif
+
+stop
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+goto @return
+
+! ----------------
+
+label toppar_sub
+
+read rtf card
+* excerpt from top_all27_prot_na.rtf
+*
+31 1
+
+MASS     1 H      1.00800 H ! polar H
+MASS     2 HC     1.00800 H ! N-ter H
+MASS     3 HA     1.00800 H ! nonpolar H
+MASS     6 HB     1.00800 H ! backbone H
+MASS    20 C     12.01100 C ! carbonyl C, peptide backbone
+MASS    22 CT1   12.01100 C ! aliphatic sp3 C for CH
+MASS    24 CT3   12.01100 C ! aliphatic sp3 C for CH3
+MASS    32 CC    12.01100 C ! carbonyl C, asn,asp,gln,glu,cter,ct2
+MASS    54 NH1   14.00700 N ! peptide nitrogen
+MASS    56 NH3   14.00700 N ! ammonium nitrogen
+MASS    70 O     15.99900 O ! carbonyl oxygen
+MASS    72 OC    15.99900 O ! carboxylate oxygen
+
+DECL -CA
+DECL -C
+DECL -O
+DECL +N
+DECL +HN
+DECL +CA
+
+DEFA FIRS NTER LAST CTER
+AUTO ANGLES DIHE
+
+RESI ALA          0.00
+GROUP
+ATOM N    NH1    -0.47  !     |
+ATOM HN   H       0.31  !  HN-N
+ATOM CA   CT1     0.07  !     |     HB1
+ATOM HA   HB      0.09  !     |    /
+GROUP                   !  HA-CA--CB-HB2
+ATOM CB   CT3    -0.27  !     |    \
+ATOM HB1  HA      0.09  !     |     HB3
+ATOM HB2  HA      0.09  !   O=C
+ATOM HB3  HA      0.09  !     |
+GROUP                   !
+ATOM C    C       0.51
+ATOM O    O      -0.51
+BOND CB CA  N  HN  N  CA
+BOND C  CA  C  +N  CA HA  CB HB1  CB HB2  CB HB3
+DOUBLE O  C
+IMPR N -C CA HN  C CA +N O
+CMAP -C  N  CA  C   N  CA  C  +N
+DONOR HN N
+ACCEPTOR O C
+IC -C   CA   *N   HN    1.3551 126.4900  180.0000 115.4200  0.9996
+IC -C   N    CA   C     1.3551 126.4900  180.0000 114.4400  1.5390
+IC N    CA   C    +N    1.4592 114.4400  180.0000 116.8400  1.3558
+IC +N   CA   *C   O     1.3558 116.8400  180.0000 122.5200  1.2297
+IC CA   C    +N   +CA   1.5390 116.8400  180.0000 126.7700  1.4613
+IC N    C    *CA  CB    1.4592 114.4400  123.2300 111.0900  1.5461
+IC N    C    *CA  HA    1.4592 114.4400 -120.4500 106.3900  1.0840
+IC C    CA   CB   HB1   1.5390 111.0900  177.2500 109.6000  1.1109
+IC HB1  CA   *CB  HB2   1.1109 109.6000  119.1300 111.0500  1.1119
+IC HB1  CA   *CB  HB3   1.1109 109.6000 -119.5800 111.6100  1.1114
+
+PRES CTER        -1.00 ! standard C-terminus
+GROUP                  ! use in generate statement
+ATOM C    CC      0.34 !   OT2(-)
+ATOM OT1  OC     -0.67 !  /
+ATOM OT2  OC     -0.67 ! -C
+DELETE ATOM O          !  \\
+BOND C OT2             !   OT1
+DOUBLE  C OT1
+IMPR C CA OT2 OT1
+ACCEPTOR OT1 C
+ACCEPTOR OT2 C
+IC N    CA   C    OT2   0.0000  0.0000  180.0000  0.0000  0.0000
+IC OT2  CA   *C   OT1   0.0000  0.0000  180.0000  0.0000  0.0000
+
+PRES NTER         1.00 ! standard N-terminus
+GROUP                  ! use in generate statement
+ATOM N    NH3    -0.30 !
+ATOM HT1  HC      0.33 !         HT1
+ATOM HT2  HC      0.33 !     (+)/
+ATOM HT3  HC      0.33 ! --CA--N--HT2
+ATOM CA   CT1     0.21 !   |    \
+ATOM HA   HB      0.10 !   HA    HT3
+DELETE ATOM HN
+BOND HT1 N HT2 N HT3 N
+DONOR HT1 N
+DONOR HT2 N
+DONOR HT3 N
+IC HT1  N    CA   C     0.0000  0.0000  180.0000  0.0000  0.0000
+IC HT2  CA   *N   HT1   0.0000  0.0000  120.0000  0.0000  0.0000
+IC HT3  CA   *N   HT2   0.0000  0.0000  120.0000  0.0000  0.0000
+
+end
+
+read param card
+* excerpt from par_all27_prot_na.prm
+*
+
+BONDS
+CT1  C     250.000     1.4900 ! ALLOW   ALI PEP POL ARO
+CT1  CC    200.000     1.5220 ! ALLOW   POL
+CT3  CT1   222.500     1.5380 ! ALLOW   ALI
+HA   CT3   322.000     1.1110 ! ALLOW   ALI
+HB   CT1   330.000     1.0800 ! ALLOW   PEP
+NH1  C     370.000     1.3450 ! ALLOW   PEP POL ARO
+NH1  CT1   320.000     1.4300 ! ALLOW   ALI PEP POL ARO
+NH1  H     440.000     0.9970 ! ALLOW   PEP POL ARO
+NH3  CT1   200.000     1.4800 ! ALLOW   ALI POL
+NH3  HC    403.000     1.0400 ! ALLOW   POL
+O    C     620.000     1.2300 ! ALLOW   PEP POL ARO
+OC   CC    525.000     1.2600 ! ALLOW   PEP POL ARO ION
+
+ANGLES
+CT1  NH1  C      50.000   120.0000 ! ALLOW   ALI PEP POL ARO
+CT3  CT1  C      52.000   108.0000 ! ALLOW   ALI PEP POL ARO
+CT3  CT1  CC     52.000   108.0000 ! ALLOW   ALI PEP POL ARO
+HA   CT3  CT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT3  HA    35.500    108.40    5.40   1.80200 ! ALLOW   ALI
+HB   CT1  C      50.000   109.5000 ! ALLOW  PEP
+HB   CT1  CC     50.000   109.5000 ! ALLOW  PEP POL
+HB   CT1  CT3    35.000   111.0000 ! ALLOW  PEP
+HC   NH3  CT1   30.000    109.50   20.00   2.07400 ! ALLOW   POL ALI
+HC   NH3  HC     44.000   109.5000 ! ALLOW   POL
+H    NH1  C      34.000   123.0000 ! ALLOW   PEP POL ARO
+H    NH1  CT1    35.000   117.0000 ! ALLOW   PEP POL ARO ALI
+NH1  C    CT1    80.000   116.5000 ! ALLOW   ALI PEP POL ARO
+NH1  CT1  C      50.000   107.0000 ! ALLOW   PEP POL ARO ALI
+NH1  CT1  CC     50.000   107.0000 ! ALLOW   PEP POL ARO ALI
+NH1  CT1  CT1    70.000   113.5000 ! ALLOW   ALI PEP POL ARO
+NH1  CT1  CT3    70.000   113.5000 ! ALLOW   ALI PEP POL ARO
+NH1  CT1  HB     48.000   108.0000 ! ALLOW PEP
+NH3  CT1  C      43.700   110.0000 ! ALLOW   PEP POL ARO ALI
+NH3  CT1  CC     43.700   110.0000 ! ALLOW   PEP POL ARO ALI
+NH3  CT1  CT1    67.700   110.0000 ! ALLOW   ALI POL
+NH3  CT1  CT3    67.700   110.0000 ! ALLOW   ALI POL
+NH3  CT1  HB     51.500   107.5000 ! ALLOW   ALI POL PEP
+OC   CC   CT1   40.000    118.00   50.00   2.38800 ! ALLOW   ALI PEP POL ARO ION
+OC   CC   OC   100.000    124.00   70.00   2.22500 ! ALLOW   POL ION PEP ARO
+O    C    CT1    80.000   121.0000 ! ALLOW   ALI PEP POL ARO
+O    C    NH1    80.000   122.5000 ! ALLOW   PEP POL ARO
+
+DIHEDRALS
+CC   CT1  NH1  C        0.2000  1   180.00 ! ALLOW PEP POL
+C    CT1  NH1  C        0.2000  1   180.00 ! ALLOW PEP
+CT1  C    NH1  CT1      1.6000  1     0.00 !  ALLOW PEP
+CT1  C    NH1  CT1      2.5000  2   180.00 !  ALLOW PEP
+CT3  CT1  NH1  C        1.8000  1     0.00 ! ALLOW PEP
+HB   CT1  NH1  C        0.0000  1     0.00 ! ALLOW PEP
+HB   CT1  NH1  H        0.0000  1     0.00 ! ALLOW PEP
+H    NH1  C    CT1      2.5000  2   180.00 !  ALLOW PEP
+H    NH1  CT1  C        0.0000  1     0.00 ! ALLOW PEP
+H    NH1  CT1  CC       0.0000  1     0.00 ! ALLOW PEP POL
+H    NH1  CT1  CT3      0.0000  1     0.00 ! ALLOW PEP
+NH1  C    CT1  CT3      0.0000  1     0.00 !   ALLOW PEP
+NH1  C    CT1  HB       0.0000  1     0.00 !   ALLOW PEP
+NH1  C    CT1  NH1      0.6000  1     0.00 !   ALLOW PEP
+NH3  CT1  C    NH1      0.6000  1     0.00 ! ALLOW PEP PRO
+O    C    CT1  CT3      1.4000  1     0.00 !   ALLOW PEP
+O    C    CT1  HB       0.0000  1     0.00 !   ALLOW PEP
+O    C    CT1  NH1      0.0000  1     0.00 !   ALLOW PEP
+O    C    CT1  NH3      0.0000  1     0.00 ! ALLOW PEP PRO
+O    C    NH1  CT1      2.5000  2   180.00 !  ALLOW PEP
+O    C    NH1  H        2.5000  2   180.00 !  ALLOW PEP
+X    CT1  CC   X        0.0500  6   180.00 ! ALLOW   POL PEP
+X    CT1  CT3  X        0.2000  3     0.00 ! ALLOW   ALI
+X    CT1  NH3  X        0.1000  3     0.00 ! ALLOW   ALI POL
+
+IMPROPER
+NH1  X    X    H      20.0000         0      0.0000 ! ALLOW   PEP POL ARO
+OC   X    X    CC     96.0000         0      0.0000 ! ALLOW   PEP POL ARO ION
+O    X    X    C     120.0000         0      0.0000 ! ALLOW   PEP POL ARO
+
+CMAP
+
+! alanine map
+C    NH1  CT1  C    NH1  CT1  C    NH1   24
+
+!-180
+0.126790 0.768700 0.971260 1.250970 2.121010
+2.695430 2.064440 1.764790 0.755870 -0.713470
+0.976130 -2.475520 -5.455650 -5.096450 -5.305850
+-3.975630 -3.088580 -2.784200 -2.677120 -2.646060
+-2.335350 -2.010440 -1.608040 -0.482250
+
+!-165
+-0.802290 1.377090 1.577020 1.872290 2.398990
+2.461630 2.333840 1.904070 1.061460 0.518400
+-0.116320 -3.575440 -5.284480 -5.160310 -4.196010
+-3.276210 -2.715340 -1.806200 -1.101780 -1.210320
+-1.008810 -0.637100 -1.603360 -1.776870
+
+!-150
+-0.634810 1.156210 1.624350 2.047200 2.653910
+2.691410 2.296420 1.960450 1.324930 2.038290
+-1.151510 -3.148610 -4.058280 -4.531850 -3.796370
+-2.572090 -1.727250 -0.961410 -0.282910 -0.479120
+-1.039340 -1.618060 -1.725460 -1.376360
+
+!-135
+0.214000 1.521370 1.977440 2.377950 2.929470
+2.893410 2.435810 2.162970 1.761500 1.190090
+-1.218610 -2.108900 -2.976100 -3.405340 -2.768440
+-1.836030 -0.957950 0.021790 -0.032760 -0.665880
+-1.321170 -1.212320 -0.893170 -0.897040
+
+!-120
+0.873950 1.959160 2.508990 2.841100 3.698960
+3.309330 2.614300 2.481720 2.694660 1.082440
+-0.398320 -1.761800 -2.945110 -3.294690 -2.308300
+-0.855480 -0.087320 0.439040 0.691880 -0.586330
+-1.027210 -0.976640 -0.467580 0.104020
+
+!-105
+1.767380 2.286650 2.818030 3.065500 3.370620
+3.397440 2.730310 2.878790 2.542010 1.545240
+-0.092150 -1.694440 -2.812310 -2.802430 -1.856360
+-0.306240 -0.122440 0.444680 0.810150 -0.058630
+-0.270290 -0.178830 0.202360 0.493810
+
+!-90
+1.456010 2.743180 2.589450 3.046230 3.451510
+3.319160 3.052900 3.873720 2.420650 0.949100
+0.008370 -1.382980 -2.138930 -2.087380 -1.268300
+-0.494370 0.267580 0.908250 0.537520 0.306260
+0.069540 0.097460 0.263060 0.603220
+
+!-75
+1.396790 3.349090 2.180920 2.942960 3.814070
+3.675800 3.555310 3.887290 2.101260 -0.190940
+-0.732240 -1.382040 -0.673880 -0.817390 -0.826980
+-0.111800 0.053710 0.296400 0.692240 0.428960
+-0.036100 -0.033820 -0.194300 0.400210
+
+!-60
+0.246650 1.229980 1.716960 3.168570 4.208190
+4.366860 4.251080 3.348110 0.997540 -1.287540
+-1.179900 -0.684300 -0.853660 -1.158760 -0.347550
+0.114810 0.242800 0.322420 0.370140 -0.374950
+-0.676940 -1.323430 -1.366650 -0.218770
+
+!-45
+-1.196730 0.078060 2.347410 4.211350 5.376000
+5.364940 4.355200 2.436510 0.408470 -0.590840
+-0.435960 -0.501210 -0.822230 -0.607210 0.057910
+0.246580 -0.070570 0.379430 0.247770 -0.571680
+-1.282910 -1.715770 -1.839820 -1.987110
+
+!-30
+-1.174720 1.067030 4.180460 6.741610 6.070770
+4.781470 2.758340 1.295810 0.571150 -0.196480
+0.251860 -0.732140 1.289360 1.497590 1.890550
+2.198490 0.169290 0.534000 0.331780 -1.276320
+-2.550070 -3.312150 -3.136670 -2.642260
+
+!-15
+0.293590 5.588070 3.732620 3.217620 3.272450
+2.492320 1.563700 1.356760 0.831410 0.630170
+1.591970 0.821920 0.486070 0.715760 0.996020
+1.591580 -0.367400 0.181770 -0.613920 -2.267900
+-3.516460 -3.597700 -3.043340 -1.765020
+
+!0
+2.832310 0.787990 0.323280 0.479230 0.628600
+0.976330 1.238750 1.671950 1.645480 2.520340
+1.606970 0.776350 0.119780 0.070390 0.121170
+-1.569230 -1.213010 -1.846360 -2.744510 -3.792530
+-3.934880 -3.615930 -2.675750 -0.924170
+
+!15
+-0.778340 -1.912680 -2.052140 -1.846280 -1.047430
+0.183400 1.682950 2.223500 1.358370 2.448660
+1.436920 0.678570 -0.237060 -0.535320 -0.790380
+-2.182580 -3.251140 -4.195110 -4.269270 -3.908210
+-3.455620 -2.773970 1.755370 0.313410
+
+!30
+-2.963810 -3.483730 -3.517080 -2.724860 -1.405510
+0.336200 1.428450 1.394630 0.970370 2.462720
+1.522430 0.553620 -0.407380 -1.482950 -3.613920
+-4.159810 -4.945580 -4.784040 -3.764540 -2.959140
+-1.963850 -1.071260 -1.599580 -2.445320
+
+!45
+-4.029070 -3.932660 -3.558480 -2.513980 -1.037320
+0.362000 0.814380 0.754110 0.502370 1.903420
+0.770220 -0.416420 -3.286310 -3.875270 -4.907800
+-5.704430 -5.645660 -4.396040 -2.865450 -2.368170
+-2.860490 -3.416560 -3.666490 -3.859070
+
+!60
+-3.338270 -2.960220 -2.311700 -1.272890 -0.246470
+0.722610 0.668070 0.438130 2.395330 1.632470
+-2.041450 -3.218100 -3.915080 -4.852510 -5.696500
+-6.314370 -5.683690 -4.170620 -3.141000 -3.508820
+-3.756430 -3.640810 -3.640430 -3.550690
+
+!75
+-2.244860 -1.632100 -1.000640 -0.170440 0.526440
+0.823710 0.517140 -0.013120 -0.370910 -1.213720
+-2.305650 -3.420580 -4.484960 -5.693140 -6.199150
+-6.253870 -5.211310 -4.174380 -3.685150 -4.151360
+-4.161970 -3.725150 -3.715310 -2.606760
+
+!90
+-1.720840 -1.177830 -0.428430 0.277730 0.807900
+0.803260 0.482510 -0.336900 -0.786270 -1.774070
+-2.793220 -3.828560 -5.211800 -6.636850 -6.989940
+-6.108800 -5.452410 -3.911450 -4.321000 -4.587240
+-4.102610 -3.772820 -3.157300 -2.648390
+
+!105
+-1.850640 -1.092420 -0.445020 0.128490 1.005520
+0.884820 0.485850 -0.218470 -0.857670 -1.682330
+-3.014400 -4.481110 -6.053510 -6.865400 -6.871130
+-5.728240 -3.912230 -4.802110 -5.034640 -4.715990
+-4.601080 -4.086220 -3.274630 -2.410940
+
+!120
+-1.969230 -1.116650 -0.540250 -0.150330 0.763520
+1.038890 0.758480 0.313530 -0.333050 -1.872770
+-3.366270 -5.008260 -6.124810 -7.034830 -6.724320
+-3.700200 -4.510620 -5.185650 -5.361620 -4.847490
+-4.444320 -4.004260 -3.415720 -2.751230
+
+!135
+-2.111250 -1.168960 -0.322790 -0.006920 0.316660
+1.086270 0.939170 0.625340 -0.166360 -1.830310
+-3.469470 -4.946030 -6.112560 -1.915580 -4.047310
+-4.996740 -4.996730 -4.842690 -4.886620 -4.300540
+-4.494620 -4.442210 -4.163570 -3.183510
+
+!150
+-1.757590 -0.403620 0.023920 0.362390 0.634520
+1.264920 1.361360 0.948420 -0.073680 -1.483560
+-3.152820 1.835120 -1.762860 -5.093660 -5.744830
+-5.390070 -4.783930 -4.190630 -4.115420 -4.042280
+-4.125570 -4.028550 -4.026100 -2.937910
+
+!165
+-0.810590 -0.071500 0.378890 0.543310 1.277880
+1.641310 1.698840 1.519950 0.631950 -1.088670
+-2.736530 -0.735240 -4.563830 -6.408350 -5.889450
+-5.141750 -4.194970 -3.666490 -3.843450 -3.818830
+-3.826180 -3.596820 -2.994790 -2.231020
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+C      0.000000  -0.110000     2.000000 ! ALLOW   PEP POL ARO
+CC     0.000000  -0.070000     2.000000 ! ALLOW   PEP POL ARO
+CT1    0.000000  -0.020000     2.275000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+CT3    0.000000  -0.080000     2.060000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+H      0.000000  -0.046000     0.224500 ! ALLOW PEP POL SUL ARO ALC
+HA     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+HB     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+HC     0.000000  -0.046000     0.224500 ! ALLOW POL
+NH1    0.000000  -0.200000     1.850000   0.000000  -0.200000     1.550000 ! ALLOW   PEP POL ARO
+NH3    0.000000  -0.200000     1.850000 ! ALLOW   POL
+O      0.000000  -0.120000     1.700000   0.000000  -0.120000     1.400000 ! ALLOW   PEP POL
+OC     0.000000  -0.120000     1.700000 ! ALLOW   POL ION
+
+end
+
+goto toppar_ret

@@ -1,0 +1,259 @@
+*  SGLD local spatial average
+*   by Xiongwu Wu, Ph.D.   at NIH (1/2023)
+*
+
+set test 0
+if ?numnode .eq. 1 incr test by 1
+if ?numnode .eq. 2 incr test by 1
+if ?numnode .eq. 4 incr test by 1
+if ?numnode .eq. 8 incr test by 1
+if @test .eq. 0 then
+  echo "The SGLDG test should only be run with 1,2,4,or 8  processes."
+  stop
+endif
+
+
+set u aq16
+
+stream datadir.def
+
+! read parameter and topology files
+
+open unit 10 read form name @0top_all22_prot.inp
+read rtf unit 10 card
+close unit 10
+
+open unit 10 read form name @0par_all22_prot.inp
+read param unit 10 card
+close unit 10
+
+READ SEQUENCE CARDS
+* a 16 residue helix peptide
+*
+   16
+ALA ALA GLN ALA ALA ALA ALA GLN ALA ALA ALA ALA GLN ALA ALA TYR 
+
+GENERATE PEP  FIRS ACE LAST CT2 SETUP 
+
+! Build up coordinate from IC parameter 
+IC PARA 
+
+IC SEED 1 HY1 1 CAY 1 CY
+
+IC BUILD
+!center the coordinates at original
+COOR ORIE
+
+!Minization using default force field parameters
+MINI ABNR NSTEP 100 TOLGRA 0.1 
+
+PRNLEV 5 NODE 0
+
+! Shake all bond length for large time steps
+SHAKE BONH PARA
+
+!SGMD simulation with default setting (TSGAVG=0.2ps, SGFT=0.2)
+open write unit 31 CARD name @9@u.rst
+!open write unit 32 file name @9@u.dcd
+
+
+DYNA  LEAP  STRT CPT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100 ISEED 314159 141593 415931 159314  -
+   SGMD  TSGAVG 0.2 SGFT 1.0 SGTYPE 1  -
+   TCON  TCOU  0.1  TREF  300 -
+   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+calc dgam abs ( ?sggam + 2.7814  )
+
+if @dgam gt 0.1 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+open read unit 21 CARD name @9@u.rst
+
+
+DYNA  LEAP  REST CPT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA 21 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100 ISEED 314159 141593 415931 159314  -
+   SGMD  TSGAVG 0.2 SGFT 0 TEMPSG 1000 SGTYPE 2  -
+   TCON  TCOU  0.1  TREF  300 -
+   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+calc dgam abs ( ?sggam + 1.9084  )
+
+if @dgam gt 0.1 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+open read unit 21 CARD name @9@u.rst
+
+DYNA  LEAP  REST CPT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA 21 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100 ISEED 314159 141593 415931 159314  -
+   SGMD  TSGAVG 0.2 SGFT 0 TEMPSG 1000 SGTYPE 3  -
+   TCON  TCOU  0.1  TREF  300 -
+   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+calc dgam abs ( ?sggam + 1.9008 )
+
+if @dgam gt 0.1 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+open read unit 21 CARD name @9@u.rst
+
+
+DYNA  LEAP  REST CPT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA 21 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100 ISEED 314159 141593 415931 159314  -
+   SGMD  TSGAVG 0.2 SGFT 0 TEMPSG 1000 SGTYPE 4 SGSIZE 4.0  -
+   TCON  TCOU  0.1  TREF  300 -
+   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+calc dgam abs ( ?sggam + 1.9210  )
+
+if @dgam gt 0.1 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+
+!SGLD simulation with default setting (TSGAVG=0.2 ps, SGFT=1)
+
+! Set friction forces
+SCAL FBETA SET 1.0 SELE ALL END
+
+open read unit 21 CARD name @9@u.rst
+
+
+DYNA LANG LEAP  REST  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA 21 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100   -
+   SGLD  TSGAVG 0.2 SGFT 1 SGTYPE 1 -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+   
+   
+if ?numnode eq 1 set sgg   -2.6891
+if ?numnode eq 2 set sgg   -2.6780
+if ?numnode eq 4 set sgg   -2.4970
+if ?numnode eq 8 set sgg   -2.7047
+
+@qcheck ?sggam @sgg 0.010  sgldavg_sggamma
+
+if @testfail ne 0 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+open read unit 21 CARD name @9@u.rst
+
+DYNA LANG LEAP  REST  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA 21 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100   -
+   SGLD  TSGAVG 0.2 SGFT 0 TEMPSG 1000  SGTYPE 2 -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+if ?numnode eq 1 set sgg   -1.6438
+if ?numnode eq 2 set sgg   -1.7797
+if ?numnode eq 4 set sgg   -1.7065
+if ?numnode eq 8 set sgg   -1.8588
+
+@qcheck ?sggam @sgg 0.010  sgldavg_sggamma
+
+if @testfail ne 0 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+open read unit 21 CARD name @9@u.rst
+
+DYNA LANG LEAP  REST  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA 21 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100   -
+   SGLD  TSGAVG 0.2 SGFT 0 TEMPSG 1000  SGTYPE 3 -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+if ?numnode eq 1 set sgg   -1.6501
+if ?numnode eq 2 set sgg   -1.7767
+if ?numnode eq 4 set sgg   -1.7025
+if ?numnode eq 8 set sgg   -1.8680
+
+@qcheck ?sggam @sgg 0.010  sgldavg_sggamma
+
+if @testfail ne 0 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+open read unit 21 CARD name @9@u.rst
+
+DYNA LANG LEAP  REST  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA 21 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100  -
+   SGLD  TSGAVG 0.2 SGFT 0 TEMPSG 1000  SGTYPE 4 SGSIZE 3 -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+if ?numnode eq 1 set sgg   -1.8043
+if ?numnode eq 2 set sgg   -1.9313
+if ?numnode eq 4 set sgg   -1.7779
+if ?numnode eq 8 set sgg   -1.9606
+
+@qcheck ?sggam @sgg 0.010  sgldavg_sggamma
+
+if @testfail ne 0 then
+   echo "Test FAILED for sgld_avg: c48test/sgldavg.inp "
+   stop
+endif
+
+           
+! Write the final coordinates to disk
+open writ unit 20 card name @9@u.end
+writ coor unit 20 card
+* simulation coordinate of a 16-residue helical peptide
+* 
+
+open writ unit 22 card name @9@u.pdb
+writ coor pdb unit 22 
+* simulation coordinate of  16-residue helical peptide
+* 
+
+echo sgldavg summary TESTCASE RESULT: PASS
+
+
+STOP

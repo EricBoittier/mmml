@@ -263,7 +263,7 @@ Usage: $(basename "$0") [--clean] [--use-nfs-build] [--debug] [--no-sync-patches
   --clean             Remove the cmake build directory and reconfigure from scratch.
   --use-nfs-build     Build in setup/charmm/build/cmake (default: \$HOME/.cache/mmml-charmm-build/<platform>).
   --debug             RelWithDebInfo + -g -fbacktrace (readable gdb/addr2line on segfaults).
-  --no-sync-patches   Skip copying setup/api/{api_func,api_psf,api_eval}.F90 into the CHARMM tree.
+  --no-sync-patches   Skip copying setup/api/api_*.F90 into the CHARMM tree.
   --no-domdec         CMake -Ddomdec=OFF (no DOMDEC send_coord_to_recip path; MPI MLpot SD).
   --skip-packmol      Skip rebuilding mmml/generate/packmol/packmol for this platform.
   --native-exec       Build charmm executable (as_library=OFF) for DOMDEC tier3 smoke; skips Packmol.
@@ -360,6 +360,15 @@ if [[ -f "$EVAL_F90" && -f "$PATCH_EVAL_F90" ]]; then
 elif [[ "$SYNC_PATCHES" == 1 && -f "$PATCH_EVAL_F90" ]]; then
   echo "rebuild_charmm_mlpot: warning: missing $EVAL_F90 (api_eval patch not applied)" >&2
 fi
+
+for _extra_patch in api_minimize.F90 api_dynamics.F90; do
+  _patch="$ROOT/setup/api/$_extra_patch"
+  _dest="$CHARMM_HOME/source/api/$_extra_patch"
+  if [[ -f "$_patch" && -f "$_dest" && "$SYNC_PATCHES" == 1 ]] && ! cmp -s "$_patch" "$_dest"; then
+    echo "Syncing $_extra_patch from setup/api"
+    cp -f "$_patch" "$_dest"
+  fi
+done
 
 echo "MLpot limits in source:"
 grep -E 'max_Nml|max_Npr' "$F90" || true

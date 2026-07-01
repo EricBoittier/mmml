@@ -1,0 +1,126 @@
+* resize.inp: Tests automatic array resizing. For this to run,
+* pref.dat must include the keword: RESIZE
+*  Wonmuk Hwang (hwm), April 2022
+*
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! maxb and maxaim affect arrays not handled by RESIZE thus cannot be made
+! too small for all tests below.
+! maxt,maxp,maximp,maxgrp should be of decent size for tests 2 and 3 below
+! that deal with image.
+
+DIMEnsion -
+ maxa   1  - ! (chsize) This controls the maximum number of atoms	 
+ maxb   1 - !50000 - ! (chsize)    Maximum number of bonds 
+ maxt   1 - !50000 - ! (chsize*2)   Maximum number of angles
+ maxp   1 - !50000 - ! (chsize*3)   Maximum number of proper dihedral angles
+ maximp 1 - !50000 - ! (chsize/2) Maximum number of improper dihedral angles
+ maxnb  1 - ! (chsize/4)  Maximum number of nonbond fixes		 
+ maxpad 1 - ! (chsize)   Maximum number of acceptors and donors	 
+ maxres 1 - ! (chsize/3) Maximum number of residues			 
+ maxseg 1 - ! (chsize/8) Maximum numebr of segments			 
+ maxcrt 1 - ! (chsize/3) Maximum number of CMAP dihedrals		 
+ maxaim 100000 - ! (chsize*2) Maximum number of atoms including images
+ maxgrp 1 ! 50000   ! (chsize*2/3) Maximum number of groups
+
+! The following have not be incorporated into RESIZE:
+! maxshk  ! (chsize)   Maximum number of SHAKE constraints		 
+! maxnbf  ! (chsize/360) Maximum number of non-bond fixes		 
+! maxitc  ! (chsize/360) Maximum number of atom type codes           
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+if ?resize .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+read rtf card name @{0}top_all36_prot.rtf
+read param card flex name @{0}par_all36_prot.prm
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test 1: First check if number of atoms, bonds, etc larger than those
+! specified by DIMEnsion can be handled
+
+read sequ card
+* sequence for tubulin
+*
+451
+MET ARG GLU CYS ILE SER ILE HSD VAL GLY GLN ALA GLY VAL GLN ILE GLY ASN ALA
+CYS TRP GLU LEU TYR CYS LEU GLU HSD GLY ILE GLN PRO ASP GLY GLN MET PRO SER
+ASP LYS THR ILE GLY GLY GLY ASP ASP SER PHE ASN THR PHE PHE SER GLU THR GLY
+ALA GLY LYS HSD VAL PRO ARG ALA VAL PHE VAL ASP LEU GLU PRO THR VAL ILE ASP
+GLU VAL ARG THR GLY THR TYR ARG GLN LEU PHE HSD PRO GLU GLN LEU ILE THR GLY
+LYS GLU ASP ALA ALA ASN ASN TYR ALA ARG GLY HSE TYR THR ILE GLY LYS GLU ILE
+ILE ASP LEU VAL LEU ASP ARG ILE ARG LYS LEU ALA ASP GLN CYS THR GLY LEU GLN
+GLY PHE LEU VAL PHE HSD SER PHE GLY GLY GLY THR GLY SER GLY PHE THR SER LEU
+LEU MET GLU ARG LEU SER VAL ASP TYR GLY LYS LYS SER LYS LEU GLU PHE SER ILE
+TYR PRO ALA PRO GLN VAL SER THR ALA VAL VAL GLU PRO TYR ASN SER ILE LEU THR
+THR HSD THR THR LEU GLU HSD SER ASP CYS ALA PHE MET VAL ASP ASN GLU ALA ILE
+TYR ASP ILE CYS ARG ARG ASN LEU ASP ILE GLU ARG PRO THR TYR THR ASN LEU ASN
+ARG LEU ILE SER GLN ILE VAL SER SER ILE THR ALA SER LEU ARG PHE ASP GLY ALA
+LEU ASN VAL ASP LEU THR GLU PHE GLN THR ASN LEU VAL PRO TYR PRO ARG ILE HSE
+PHE PRO LEU ALA THR TYR ALA PRO VAL ILE SER ALA GLU LYS ALA TYR HSD GLU GLN
+LEU SER VAL ALA GLU ILE THR ASN ALA CYS PHE GLU PRO ALA ASN GLN MET VAL LYS
+CYS ASP PRO ARG HSD GLY LYS TYR MET ALA CYS CYS LEU LEU TYR ARG GLY ASP VAL
+VAL PRO LYS ASP VAL ASN ALA ALA ILE ALA THR ILE LYS THR LYS ARG SER ILE GLN
+PHE VAL ASP TRP CYS PRO THR GLY PHE LYS VAL GLY ILE ASN TYR GLN PRO PRO THR
+VAL VAL PRO GLY GLY ASP LEU ALA LYS VAL GLN ARG ALA VAL CYS MET LEU SER ASN
+THR THR ALA ILE ALA GLU ALA TRP ALA ARG LEU ASP HSD LYS PHE ASP LEU MET TYR
+ALA LYS ARG ALA PHE VAL HSE TRP TYR VAL GLY GLU GLY MET GLU GLU GLY GLU PHE
+SER GLU ALA ARG GLU ASP MET ALA ALA LEU GLU LYS ASP TYR GLU GLU VAL GLY VAL
+ASP SER VAL GLU GLY GLU GLY GLU GLU GLU GLY GLU GLU TYR
+
+gene TA00 setup
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test 2: Building images
+
+dele atom sele all end ! clear the above
+
+! The following structure from ./c47test/blade_switch.inp
+read rtf card name @{0}top_all22_prot.inp
+read para card name @{0}par_all22_prot.inp
+
+open unit 1 read form name @{0}5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+read coor pdb resi name @{0}5dfr_solv-cube_equil.pdb
+
+faster on
+
+! Dimension of a box
+set 7 62.23
+
+set theta 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta    
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+! Note: As of April 2022, setting cutim 18 will result in residue number
+! overflow error. Although such a case does not arise when images are used
+! in practice, it will be fixed in the future.
+
+update cutim 16 ! change of cutoff will print array resize info.
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test 3: Atom deletion
+bomlev -1
+dele atom sele segi wat .and. resi 6000:7023 end
+
+! Note: As of April 2022, setting cutim 16 will result in overflow of image
+! atoms. Although such a case does not arise in practice, it will be fixed
+! in the future.
+
+ener cutim 13.5 ! this prints out new array size
+
+stop
+

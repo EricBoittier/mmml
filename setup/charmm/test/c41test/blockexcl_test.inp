@@ -1,0 +1,156 @@
+* test case to test functionality of new block exclusion key word which
+* sets up atom-atom exclusions based on pairs of specified blocks.
+*
+! Test to ensure the  Exclusion functionality works in block and ldm
+if ?block .ne. 1 then
+   echo LDM functionality absent: Test NOT performed
+   echo "TESTCASE RESULT blockexcl_test: SKIP"
+   stop
+endif
+
+stream datadir.def
+
+! Set tolerance to control flagged differences
+set tol = 1.0e-4
+
+label BEGINSETUP=0
+
+read rtf card name @0/top_all36_prot.rtf
+read param card name @0/par_all36_prot.prm
+
+read sequ card 
+* Peptide sequence
+*
+5
+ala glu val leu lys
+
+generate pept first ace last ct3 setup
+
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+print coor select .not. initialized end
+
+mini sd nstep 200
+
+define side2 select ires 2 .and. .not. -
+             ( type ca .or. type c .or. type o .or. type n .or. type hn ) end
+
+define side4 select ires 4 .and. .not. -
+             ( type ca .or. type c .or. type o .or. type n .or. type hn ) end
+
+define rest select .not. ( side2 .or. side4 ) end
+! Calculate the interaction energy between the two side chains and then use
+! BLOCK and exclusions to construct the same
+
+skipe all excl elec vdw
+inte select side2 end select side4 end
+set eint = ?ener
+energy
+set etot = ?ener
+
+label ENDSETUP=0
+
+label BEGINTEST=1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Test 1!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+set TEST=1 = PASSED
+set FAILED = 
+
+! First test, should be able to get the interaction energy by imposing the 
+! exclusions in block set-up from full energy calculation
+
+block 3
+    call 2 select side2 end
+    call 3 select side4 end
+    excl 1 1 1 2 1 3 2 2 3 3  !excude everything except block 2 w/ block 3
+end
+
+energy
+
+calc diff = abs ( ?ener - @eint )
+
+if @diff .ge. @tol then
+   set TEST=1 = FAILED
+   set FAILED = @FAILED + block_excl_ENER
+endif
+
+block 
+    clear
+end
+
+update
+
+energy
+
+calc diff = abs ( ?ener - @etot )
+
+if @diff .ge. @tol then
+   set TEST=1 = FAILED
+   set FAILED = @FAILED + block_clear_excl_ENER
+endif
+
+if TEST=1 ne PASSED then
+   echo TEST=1 FAILED MSLD dynamics
+   echo failed components: @failed
+else
+   echo TEST=1 PASSED
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=1 
+
+
+label BEGINTEST=2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!Test 2!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+inte select side2 end select .not. side2 end
+set eint = ?ener
+energy
+set etot = ?ener
+
+set TEST=2 = PASSED
+set FAILED = 
+
+! First test, should be able to get the interaction energy by imposing the 
+! exclusions in block set-up from full energy calculation
+
+block 2
+    call 2 select side2 end
+    excl 1 1 2 2  !excude everything except block 1 w/ block 2
+end
+
+energy
+
+calc diff = abs ( ?ener - @eint )
+
+if @diff .ge. @tol then
+   set TEST=2 = FAILED
+   set FAILED = @FAILED + block_excl_ENER
+endif
+
+block 
+    clear
+end
+
+energy
+
+calc diff = abs ( ?ener - @etot )
+
+if @diff .ge. @tol then
+   set TEST=2 = FAILED
+   set FAILED = @FAILED + block_clear_excl_ENER
+endif
+
+if TEST=2 ne PASSED then
+   echo TEST=2 FAILED BLOCK exclusions
+   echo failed components: @failed
+else
+   echo TEST=2 PASSED
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=2
+
+stop

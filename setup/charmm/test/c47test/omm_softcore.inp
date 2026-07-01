@@ -1,0 +1,218 @@
+* This input script checks the functionality of using
+* the softcore potential from Hayes et al, JPCB, 2017
+* w/BLOCK and OpenMM for fixed lambda simulations
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed. OPENMM must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+set tol = 1e-3
+
+read rtf card
+* rtf file
+*
+    36   2
+
+mass -1 a1 1
+mass -1 a2 1
+mass -1 a3 1
+mass -1 a4 1
+mass -1 a5 1
+
+resi a1 0
+atom a1 a1 0
+
+resi a2 0
+atom a2 a2 0
+
+resi a3 0
+atom a3 a3 0
+
+resi a4 0
+atom a4 a4 0
+
+resi a5 0
+atom a5 a5 0
+
+end
+
+read param card
+* parameters
+*
+
+atoms
+mass -1 a1 1
+mass -1 a2 1
+mass -1 a3 1
+mass -1 a4 1
+mass -1 a5 1
+
+nonbonded nbxmod 5 atom cdiel fshift vatom vdistance vfswitch -
+    cutnb 14 ctofnb 12 ctonnb 10 eps 1 ei4fac 1 wmin 1.5
+
+a1  0  -1     2
+a2  0  -1     2
+a3  0  -0     2
+a4  0  -1     2
+a5  0  -0     2
+
+nbfix
+a1 a4  -1     4
+
+end
+
+set iswitch = 0
+label doswitch
+
+   if @iswitch eq 0 then
+         set sequence = a1 a2 a3
+	 set test = vdw_norm
+	 set return fromgen
+	 goto gensys
+   endif
+   
+   if @iswitch eq 2 then
+         set sequence = a1 a4 a5
+	 set test = vdw_nbfix
+	 set return fromgen
+	 goto gensys
+   endif
+   
+   label fromgen
+   
+   set switch  = vswitch
+   if @iswitch eq 1 set switch = vfswitch
+   if @iswitch eq 3 set switch = vfswitch
+   set return fromswitch
+   goto setswitch
+   label fromswitch
+   
+! Testing of the vdW @test softcare
+   set ilam = 0
+   label dolambda
+         calc lambda = @ilam * 0.1
+         calc lammone = 1 - @lambda
+         block
+               clear
+         end
+         block 3
+               call 2 select bynu 2 end
+               call 3 select bynu 3 end
+               excl 2 3
+               coef 1 2 @lammone
+               coef 1 3 @lambda
+         end
+   
+         set ix = 18
+         label omor
+               calc x = @ix * 0.5
+   	    calc rl = 4 * @lambda
+   	    calc diff = @rl - @x
+   	    if @diff ge 0 then
+   	          calc ror = @x / @rl
+   		  calc rp = @rl * ( 0.5 + @ror * @ror * @ror )
+   		  calc rp = @rp - @rl * 0.5 * @ror * @ror * @ror * @ror
+   		  set x = @rp
+            endif
+            set r@ix = @x
+            scalar x set @x select bynu 1 end
+   
+   	    energy omm
+            set c@ix = ?ener
+   
+            decr ix by 3
+         if @ix gt 0 goto omor
+
+        block
+              somm
+        end
+   
+         set ix = 18
+         label chor
+               calc x = @ix * 0.5
+               scalar x set @x select bynu 1 end
+   
+               energy omm
+               set o@ix = ?ener
+   
+               decr ix by 3
+         if @ix gt 0 goto chor
+
+         prnlev 0
+         set ix = 3
+         label teste
+               calc x = @ix * 0.5
+   	    calc ae = abs ( @c@@{ix} )
+   	    if @ae gt 1e-2 then
+	             calc val =  @o@@{ix} / @c@@{ix}
+		     set ref = 1
+   	    else
+		  set val =  @o@@{ix}
+		  set ref =  @c@@{ix}
+   	    endif
+            @testcheck @val @ref @tol @{test}@{switch}@ix
+	    incr ix by 3
+       if @ix le 18 goto teste
+       prnlev 5
+   
+   incr ilam by 2
+   if ilam le 10 goto dolambda
+   bomlev -1
+   if @iswitch eq 1 delete atom select all end
+   bomlev 0
+   incr iswitch by 1
+ if @iswitch le 3 goto doswitch
+
+echo number of test failures = @testfail
+
+stop
+
+label setswitch
+      !! Energy Parameters
+      nbonds atom -
+      fswitch -           
+      cdie eps 1 -             
+      vdw @switch -           
+      cutnb 14.0 -             
+      cutim 14.0 -             
+      ctonnb 10.0 ctofnb 12.0 - 
+      Ewald -
+      kappa 0.320 -
+      pmEwald -    
+      order 6 -    
+      fftx 200 ffty 200 fftz 200  
+goto @return
+
+label gensys
+   read sequ card
+   * sequence
+   *
+   3
+   @sequence
+
+   generate hybr
+
+   scalar x set  0
+   scalar y set  0
+   scalar z set  0
+
+   print coor
+
+   set box = 200
+   crystal define cubic @box @box @box 90. 90. 90.
+   open unit 1 read form name @0/cubic.xtl
+   crystal read card unit 1
+   close unit 1
+   image byseg xcen 0 ycen 0 zcen 0 
+
+goto @return
+

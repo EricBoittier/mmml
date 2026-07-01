@@ -1,0 +1,191 @@
+* cmdpar.inp: test the command line parameter features
+*# <caves>-jan-18-1994 (leo caves)
+*
+
+
+stream datadir.def
+
+show parameters verbose
+
+! simple assignment 
+
+set token value
+set anothertoken @token 
+
+show parameters
+
+! substitution of the parameters
+ 
+write title unit 6 
+* token = @token anothertoken = @anothertoken
+*
+
+! test the "protection" of a token with the use of brackets
+
+! should fail
+bomlev -1
+set new = @token123
+bomlev 0
+
+! should not fail
+set new @{token}123
+
+show parameters
+
+
+! backward compatibility
+! this allows for the support of old-style single character (0-9,a-z) 
+! parameters embedded in strings.
+! the fall-back scheme is as follows.
+! get token as longest alphanumeric, look in parameter table. 
+! if its not there, try to look up first character of token 
+! if thats present then use appropriate value for substitution 
+
+set 1 oldstyle
+
+set test @1isasbefore.dat
+
+! to be perverse (this shows that the longer token, gets precedence)
+set 1isasbefore newstyle
+
+set test @1isasbefore.dat
+
+! of course one can always protect the symbol to be unambiguous
+
+set test @{1}isasbefore.dat
+
+! non-alphanumeric in token (requires brackets to be substituted)
+
+set max-temp = 300
+
+! should fail
+bomlev -1
+set fail = @max-temp
+bomlev 0
+
+! should not fail
+
+set success = @{max-temp}
+
+! try a very large token
+
+set abcdefghijklmnopqrstuvwxyz123456789abcdefghijklmnopqrstuvwxyz123456789 1
+
+! try a very ! large value
+set a abcdefghijklmnopqrstuvwxyz123456789abcdefghijklmnopqrstuvwxyz1234567891238763284763249876239487623487623498761081274365018274561408756243857682457654876
+
+! an empty value
+set test 
+set test2 @{test}1234
+
+! an empty statement
+bomlev -1
+set
+bomlev 0
+
+
+set test onunit1
+open unit 1 write form name @9/cmdpar.tmp
+write title unit 1
+* @test
+*
+
+set test 
+
+open unit 1 read form name @9/cmdpar.tmp
+get test unit 1
+
+! If we made it this far, things seem to be working
+echo "CMDPAR_SET TESTCASE RESULT: PASS"
+
+! trim command (god help us!)
+
+set test 12345
+trim test to 3
+trim test from 2 to 3
+
+! test the limits ! 
+trim test from -9 to -9
+
+show param
+
+echo "CMDPAR_TRIM TESTCASE RESULT: PASS"
+
+! old-style parameter manipulation
+set test 1
+
+incr test
+decr test
+mult test by 2
+divi test by 2
+expo test
+
+! new-style parameter manipulation
+
+let test = 1
+
+! some functions
+let test = acos -1 ! pi
+let test = sqrt 2
+let test = max @test 4
+let test = min 1 @test
+! more functions
+let test = @test * -1
+let test = abs @test
+let test += .1
+let test = int @test
+
+! some compound operators
+let test = 1
+let test *= 4
+let test /= 4
+let test += 3
+! mod
+let test = @test % 3
+
+! two parameters in an expression
+set arg1  1
+set arg2  2
+
+let test = @arg1 + @arg2
+let test *= @arg1 + @arg2
+
+
+echo "CMDPAR_LET TESTCASE RESULT: PASS"
+
+! test presence operator (?)
+set inthetable @?notinthetable
+set inthetable @?{notinthetable}
+set isinthetable @?inthetable
+set isinthetable @?{inthetable}
+
+! test based on presence operator
+if @?notinthetable .eq. 0 set notinthetable true
+! should now be in the table
+if @?notinthetable .eq. 1 set thatsfine
+
+echo "CMDPAR_PRESENCE TESTCASE RESULT: PASS"
+
+! error handling
+bomlev -1
+! bad arg (a string) is now a wrndie(0). LNI
+let test = test * 4
+
+! bad expression (can't mix functions and binary operators --- yet)
+let test = sqrt @arg1 ** @arg2
+
+! bad operator
+let test %= 2
+
+! bad argument range
+let test /= 0
+let test = sqrt -1
+let test = acos 1.1
+let test = asin 1.1
+
+echo "CMDPAR_ARGS TESTCASE RESULT: PASS"
+
+! 
+
+stop
+

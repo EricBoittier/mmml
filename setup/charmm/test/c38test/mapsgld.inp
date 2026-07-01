@@ -1,0 +1,137 @@
+* Testcase for MAPSGLD
+* Xiongwu Wu, Ph.D.   1/10/2013 
+*
+
+bomlev -2
+
+set u data/gb1v
+set y scratch/gb1v
+
+stream datadir.def
+
+if ?emap .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+OPEN READ FORM UNIT 11 NAME  @0/top_all22_prot.inp
+READ RTF  CARD UNIT 11
+close unit 11
+
+
+OPEN READ FORM UNIT 12 NAME  @0/par_all22_prot.inp
+READ PARAM  CARD UNIT 12
+close unit 12
+
+
+prnlev 5 node 0
+wrnlev 2
+
+!Read in PSF and COR files of thermosome in closed-state
+
+open read unit 12 card name @u.psf
+read psf card unit 12
+
+open read unit 16 card name @u.cor
+read coor unit 16 card
+
+coor copy comp
+
+! define map friction constant
+emap parm gamm 1
+! define map moving temperature limit
+emap parm temp 300
+
+! Generate map from structure
+emap gene map0 sele all end reso 5 dx 2 dy 2 dz 2
+
+! write out map to be used as an example of experimental EM map 
+open emap unformatted unit 51 name @y.ccp4
+emap write  map0 unit 51
+
+
+! read in experimental EM map
+open emap unformatted unit 52 name @y.ccp4
+emap read  mapt unit 52
+
+! define constrained atoms by this map
+emap refe mapt  sele all end
+
+! Generate map from the N-terminal b-hairpin
+emap gene map1 sele ires 2:19 end reso 3 dx 2 dy 2 dz 2
+! Generate map from the a-helix
+emap gene map2 sele ires 23:36 end reso 3 dx 2 dy 2 dz 2
+! Generate map from the C-terminal b-hairpin
+emap gene map3 sele ires 43:54 end reso 3 dx 2 dy 2 dz 2
+
+! define rigid domain as handles to the constraint maps
+emap assi mapt as rigt  sele all end
+emap assi map1 as rig1 sele ires 2:19 end
+emap assi map2 as rig2 sele ires 23:36 end
+emap assi map3 as rig3 sele ires 43:54 end
+
+! activate the map constraint for the whole protein.  It is not movable.
+emap cons 0.01 rigt
+
+! activate the map constraints to maintain secondary structures. 
+! They are movable to allow the constrained structures to search around.
+emap cons 0.1 rig1 rig2 rig3  move append
+
+! Shake all bonds with hydrogens
+ SHAKE BONH PARA
+
+! perform map-restrained SGMD simulation
+! using SGMD instead of SGLD for testing paralell runs
+
+
+open unit 31 write card name @y.res
+open unit 32 write file name @y.dcd
+
+! Perform SGLD simulation with TEMPSG=500K
+DYNA LEAP VERLET STRT  NSTE 1000 TIME 0.002 NTRFRQ 100 IUNREA -1 -
+   IPRFRQ 10000 ISVFRQ 10000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNWRI 31 IUNCRD 32 IUNVEL -1 KUNIT -1 -
+   NSAVC 10000 NSAVV 00 NPRINT 100 ISEED 314159 141592 415926 159265 -
+   TBATH  300 FIRST 300 -
+   SGMD TSGAVG 1.0  SGFT 1.0  -
+   IASORS 0 IASVEL 1 ICHECW 0 ECHECK 1000000.0 -
+   EIPS VIPS PXYZ  -
+   CUTNB 12  CTOFNB 10  EPS 1.0 E14FAC 1.0 WMIN 1.0
+
+
+
+!Write fitted coordinates
+open writ form unit 16 name @y.cor
+writ coor card unit 16
+* map-restrained structure
+*
+
+
+open writ form unit 16 name @y.pdb
+writ coor pdb unit 16
+* map-restrained structure
+*
+
+
+! write out initial movable maps
+open emap unformatted unit 51 name @y_n0.ccp4
+emap write  map1 unit 51
+open emap unformatted unit 52 name @y_h0.ccp4
+emap write  map2 unit 52
+open emap unformatted unit 53 name @y_c0.ccp4
+emap write  map3 unit 53
+
+! write out movable maps
+emap remap map4 from rig1
+open emap unformatted unit 54 name @y_n.ccp4
+emap write  map4 unit 54
+emap remap map5 from rig2
+open emap unformatted unit 55 name @y_h.ccp4
+emap write  map5 unit 55
+emap remap map6 from rig3
+open emap unformatted unit 56 name @y_c.ccp4
+emap write  map6 unit 56
+
+stop
+
+

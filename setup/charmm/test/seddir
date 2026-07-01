@@ -1,0 +1,82 @@
+/CMA: no RDMA devices found/d
+/Maximum number of ATOMS:/d
+/Current HEAP/d
+/Created on/d
+/Current operating system/d
+/CREATED BY USER/d
+/ELAPSED TIME:/d
+/CPU TIME:/d
+/CPU TIME=/d
+/ OPNLGU> /d
+/ Eigenvalue=/d
+/ energ=/d
+/ rnew=/d
+/ Improved step=/d
+/! input data directory/d
+/! scratch directory/d
+/RDCMND substituted parameter/d
+/TITLE> */d
+/CHARMM>/d
+/CHARMM.* Version /d
+/Parameter #/d
+/Processing passed argument /d
+/Parameter: /d
+/ Attempting to open/d
+/ Other: /d
+/ TIME= /d
+s/ \./0\./g
+s/ -\./-0\./g
+s/ +\./+0\./g
+/ALLHP: /d
+/ALLHP> /d
+/FREHP: /d
+/FREHP> /d
+/PRINHP> /d
+/SEEDS>/d
+/RANDOM NUM/d
+s/  *ISEED =  *1$//
+/MAKINB.*RESIZING/d
+/Total heap storage needed /d
+/^coor. length /d
+/FCTINI> Surface tension coeff/d
+/SA modulation: /d
+/random clcg/d
+/CLCG Random/d
+/reference distance/d
+/allocated space for coor/d
+/Number of lone-pairs/d
+/CGONNB = .* CGOFNB =/d
+/EANGLC: QANGTYPE =/d
+/EANGLE> FORCE: ANGLE NOT FLAT/d
+/PARRDR> ALL ANGLES HAVE POSITIVE MINIMA/d
+/EANGLE> Using CHARMM angle function/d
+/E[A-Z]*C: Using routine E[A-Z]*F/d
+/TORQ> No external forces defined/d
+/QM groups found: * 0/d
+/----------/d
+/Git commit ID/d
+/SVN revision/d
+/operation not performed/d
+/VALB CPUC/d
+/ EEMA$/d
+/^ *$/d
+/Splitting recip cores into (y by z):/d
+/Using FFTW/d
+/Using MKL/d
+/Using Pub FFT/d
+/Using Column FFT/d
+/NUMBER OF ENERGY EVALUATIONS/d
+/TOTAL NUMBER OF CYCLES/d
+/There are no .*straints/d
+/emapwrite> /d
+/OpenMM initiated with/d
+/In OpenMM plugin directory/d
+/libOpenMM/d
+/libOmmXml/d
+/Reaction field dielectric/d
+/COLLCT_FSTSHK/d
+/FSSHKINI/d
+/VCLOSE:/d
+/Parallel load balance/,$d
+/New timer profile/,$d
+/NBLIST_BUILDER Allocating grid/d

@@ -1,0 +1,30 @@
+* Merge by replica trajectories to by temperature trajectories
+*
+
+stream datadir.def
+
+read rtf card name @0/top_all27_prot_lipid_chiral.dat
+read para card name @0/par_all27_prot_lipid_chiral.dat
+read psf card name @0/ala3.psf
+read coor card name @0/ala3.min.cor
+
+open unit 80 read form name @0/frex1.exch
+
+set i = 0
+
+label loop
+
+calc inunum = 20 + @i
+calc otunum = 50 + @i
+
+open unit @inunum read unfo name @0/frex1.dcd_@i
+open unit @otunum writ unfo name @9/frex1-bytemp.dcd_@i
+
+incr i by 1
+if @i .lt. 8 then goto loop
+
+merge firstu 20 nunit 8 outp 50 -
+      rtot excu 80 nrplica 8 nrepeat 1 nexchange 50
+
+close unit 80
+stop

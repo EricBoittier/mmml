@@ -1,0 +1,1094 @@
+      SUBROUTINE EHBND(EHB, ECALLS, X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
+                       DD1, IUPT, QSECD)
+!-----------------------------------------------------------------------
+!     Calculate the hydrogen-bond energy.
+!
+  use chm_kinds
+  use dimens_fcm
+  use number
+  use code
+  use hbondm
+  use param
+  use psf
+  use stream
+      implicit none
+!     . Passed variables.
+      INTEGER ECALLS, IUPT(*)
+      LOGICAL QSECD
+      real(chm_real)  DD1(*), DX(*), DY(*), DZ(*), EHB, X(*), Y(*), Z(*)
+      LOGICAL QECONT
+      real(chm_real) ECONT(*)
+      real(chm_real),parameter :: DAT0(1) = (/ ZERO /)
+      integer,parameter :: ISK0(1) = (/ 0 /)
+!
+! . Local variables.
+!c      LOGICAL QUPDAT
+!cC   Update the HB lists if necessary.
+!c      IF (IHBFRQ .GT. 0) THEN
+!c        QUPDAT = (.NOT.QHBPRS) .OR. (MOD(ECALLS,IHBFRQ) .EQ. 0)
+!c      ELSE
+!c        QUPDAT = .NOT. QHBPRS
+!c      ENDIF
+!c      IF (QUPDAT) THEN
+!c      CALL HBONDS(OUTU, IDON, IHD1, NDON, IACC, IAC1, NACC,
+!c     &             IHB, JHB, KHB, LHB, ICH, NHB, MAXHB, CHBA,
+!c     &             CHBB, HBEXPN, CTONHB, CTOFHB, CTONHA, CTOFHA,
+!c     &             CUTHB, CUTHBA, LHBFG, NCH, KCH, IAC, ATC, NATC,
+!c     &             IMOVE, BEST, HBEXCL, IBLO, INB, NNB, X, Y, Z,
+!c     &             NATOM)
+!cC
+!c      ENDIF
+!     Calculate the energy.
+      CALL EHBOND(EHB, IHB, JHB, KHB, LHB, ICH, NHB, CHBA, CHBB, &
+           DX, DY, DZ, X, Y, Z, QECONT, ECONT, 0, DAT0, 0, ISK0, &
+           CTONHB, CTOFHB, CTONHA, CTOFHA, HBEXPN, DD1, IUPT, &
+           QSECD)
+!
+      RETURN
+      END
+
+      SUBROUTINE EHBOND(EHB,IHB,JHB,KHB,LHB,ICH,NHB,CHBA,CHBB, &
+                 DX,DY,DZ,X,Y,Z,QECONT,ECONT,ANALYS,DATA, &
+                 ICONHH,ISKH,CTONHB,CTOFHB,CTONHA,CTOFHA,HBEXPN, &
+                 DD1,IUPT,QSECD)
+!-----------------------------------------------------------------------
+!     CALCULATES HYDROGEN BOND ENERGY. IHB HOLDS THE ATOM
+!     NUMBERS OF THE DONORS. JHB HOLDS THE ATOM NUMBER OF THE ACCEPTORS.
+!     IF WE HAVE EXTENDED ATOMS, KHB IS FILLED WITH ZEROES. IF WE HAVE
+!     EXPLICIT HYDROGENS, KHB IS THE ANTECEDENT TO THE DONOR HYDROGENS
+!     STORED IN IHB.
+!
+!     THE VALUE OF ANALYS IS DECODED AS FOLLOWS:
+!     0) NO ANALYSIS - DO NORMAL CALCULATION OF ENERGY AND FORCES.
+!     > 0) DO NOT CALCULATE FORCES OR EVEN REFERENCE DX, DY, OR DZ.
+!     ALSO, DO NOT PRINT AS SPECIFIED BY IPRINT.
+!     1) RETURN DISTANCE BETWEEN DONOR AND ACCEPTOR IN DATA ARRAY.
+!     2) RETURN ANGLE OF DONOR ANTECEDENT - DONOR - ACCEPTOR.
+!     3) RETURN ENERGY OF INTERACTION.
+!
+!     By Bernard R. Brooks  (mostly)  1981-1983
+!
+!
+  use chm_kinds
+  use consta
+#if KEY_DIMB==1
+  use dimb  
+#endif
+      implicit none
+!
+      real(chm_real) EHB
+      INTEGER IHB(*),JHB(*),KHB(*),LHB(*),ICH(*)
+      INTEGER NHB
+      real(chm_real) CHBA(*),CHBB(*)
+      real(chm_real) DX(*),DY(*),DZ(*),X(*),Y(*),Z(*)
+      LOGICAL QECONT
+      real(chm_real) ECONT(*)
+      INTEGER ANALYS,ICONHH
+      INTEGER ISKH(*)
+      real(chm_real) DATA(*),CTONHB,CTOFHB,CTONHA,CTOFHA
+      INTEGER HBEXPN(4)
+      real(chm_real) DD1(*)
+      INTEGER IUPT(*)
+      LOGICAL QSECD
+!
+      real(chm_real) C2ONHB,C2OFHB,C2ONHA,C2OFHA,RUL3,RUL12,RUA3,RUA12
+      real(chm_real) RX,RY,RZ,S,ER,DER,DDER,R2,R10,R12,F1,F2, &
+           RIJL,RIJU,FUNCT
+      real(chm_real) DF,DDF,CST,EC,DEC,DDEC,DXIR,DYIR,DZIR, &
+           DXJR,DYJR,DZJR
+      real(chm_real) DXI,DYI,DZI,RI2,DXJ,DYJ,DZJ,RJ2,RI,RJ,RIR,RJR,CST2
+      real(chm_real) RIJLA,RIJUA,FUNCTA,DFA,DDFA,CSP,EP,DEP,DDEP,E
+      real(chm_real) DXLR,DYLR,DZLR,DXMR,DYMR,DZMR,DXL,DYL,DZL,RL2
+      real(chm_real) DXM,DYM,DZM,RL,RLR,RMR,CSP2
+      real(chm_real) DDERR,DDERC,DDECC,DDERP,DDECP,DDEPP
+      real(chm_real) DTXI,DTYI,DTZI,DTXJ,DTYJ,DTZJ
+      real(chm_real) DTXL,DTYL,DTZL,DTXM,DTYM,DTZM
+      real(chm_real) AI,AJ,AL,AM,A
+      real(chm_real) DDRXX,DDRYY,DDRZZ,DDRXY,DDRXZ,DDRYZ, &
+           RI2RF,RJ2RF,RIRJF
+      real(chm_real) DDXIXI,DDYIYI,DDZIZI,DDXJXJ,DDYJYJ,DDZJZJ,DDXIXJ
+      real(chm_real) DDYIYJ,DDZIZJ,DDXIYI,DDXIZI,DDYIZI,DDXJYJ,DDXJZJ
+      real(chm_real) DDYJZJ,DDXIYJ,DDYIXJ,DDXIZJ,DDZIXJ,DDYIZJ,DDZIYJ
+      real(chm_real) RL2RF,RM2RF,RLRMF
+      real(chm_real) DDXLXL,DDYLYL,DDZLZL,DDXMXM,DDYMYM,DDZMZM
+      real(chm_real) DDXLXJ,DDYLYJ,DDZLZJ,DDXLYL,DDXLZL,DDYLZL
+      real(chm_real) DDXMYM,DDXMZM,DDYMZM,DDXLYJ,DDYLXJ,DDXLZJ
+      real(chm_real) DDZLXJ,DDYLZJ,DDZLYJ,DDRX,DDRY,DDRZ
+      real(chm_real) DDXIXR,DDXIYR,DDXIZR,DDYIXR,DDYIYR,DDYIZR
+      real(chm_real) DDZIXR,DDZIYR,DDZIZR,DDXJXR,DDXJYR,DDXJZR
+      real(chm_real) DDYJXR,DDYJYR,DDYJZR,DDZJXR,DDZJYR,DDZJZR
+      real(chm_real) DDXLXR,DDXLYR,DDXLZR,DDYLXR,DDYLYR,DDYLZR
+      real(chm_real) DDZLXR,DDZLYR,DDZLZR,DDXIXL,DDYIYL,DDZIZL
+      real(chm_real) DDXIYL,DDXIZL,DDYIZL,DDYIXL,DDZIXL,DDZIYL
+      INTEGER I,MM,J,IC,K,L,JJ,II,KK,LL,IADD
+!
+      LOGICAL NOCONS
+      LOGICAL IJTEST,IKTEST,ILTEST,JKTEST,JLTEST,KLTEST
+      INTEGER EXPREP,EXPATT,EXPAAN,EXPDAN
+      real(chm_real) RXPREP,RXPATT,RXPAAN,RXPDAN,RXPRP2, &
+           RXPAT2,RXPAA2,RXPDA2
+!
+      EHB=0.0
+      IF (NHB.EQ.0) RETURN
+      NOCONS=(ICONHH.EQ.0)
+!
+      RXPREP=HBEXPN(1)
+      RXPATT=HBEXPN(2)
+      RXPAAN=HBEXPN(4)
+      RXPDAN=HBEXPN(3)
+      RXPRP2=RXPREP*(RXPREP+1.0)
+      RXPAT2=RXPATT*(RXPATT+1.0)
+      RXPAA2=RXPAAN*(RXPAAN-1.0)
+      RXPDA2=RXPDAN*(RXPDAN-1.0)
+      EXPREP=HBEXPN(1)/2
+      IF(2*EXPREP.NE.HBEXPN(1)) CALL DIEWRN(-3)
+      EXPATT=HBEXPN(2)/2
+      IF(2*EXPATT.NE.HBEXPN(2)) CALL DIEWRN(-3)
+      EXPAAN=HBEXPN(4)
+      EXPDAN=HBEXPN(3)
+      C2ONHB=CTONHB*CTONHB
+      C2OFHB=CTOFHB*CTOFHB
+      IF(C2OFHB.NE.C2ONHB) THEN
+        RUL3=1.0/(C2OFHB-C2ONHB)**3
+        RUL12=RUL3*12.0
+      ENDIF
+      C2ONHA=CTONHA*DEGRAD
+      C2ONHA=COS(C2ONHA)
+      IF(C2ONHA.LT.0.0) C2ONHA=0.0
+      C2ONHA=C2ONHA*C2ONHA
+      C2OFHA=CTOFHA*DEGRAD
+      C2OFHA=COS(C2OFHA)
+      IF(C2OFHA.LT.0.0) C2OFHA=0.0
+      C2OFHA=C2OFHA*C2OFHA
+      IF(C2OFHA.NE.C2ONHA) THEN
+        RUA3=1.0/(C2OFHA-C2ONHA)**3
+        RUA12=RUA3*12.0
+      ENDIF
+!
+!
+      IF (ANALYS .NE. 0) THEN
+        DO I=1,NHB
+          DATA(I)=0.0
+        ENDDO
+      ENDIF
+!
+      MM=0
+ 10   CONTINUE
+        MM=MM+1
+        IF (.NOT.(NOCONS)) THEN
+          IF(ISKH(MM).NE.0) GOTO 60
+        ENDIF
+        I=IHB(MM)
+!C      IF(I.LE.0) GOTO 60
+        J=JHB(MM)
+        IC=ICH(MM)
+        IF (ICH(MM).LE.0) THEN
+          CALL WRNDIE(-4,'<EHBOND>', &
+            'ICH array has zero or negative entries. Check code.')
+        ENDIF
+        RX=X(I)-X(J)
+        RY=Y(I)-Y(J)
+        RZ=Z(I)-Z(J)
+        S=RX*RX+RY*RY+RZ*RZ
+        IF(ANALYS.NE.0) THEN
+          IF (ANALYS.EQ.1) THEN
+            DATA(MM)=SQRT(S)
+            GOTO 60
+          ENDIF
+          IF(S.GT.C2OFHB) THEN
+            IF(ANALYS.EQ.3) GOTO 60
+!rcz..Bugfix 22-Aug-94, initialize R2 to 0.0
+            R2=0.0
+            ER=0.0
+            DER=0.0
+            DDER=0.0
+            GOTO 20
+          ENDIF
+        ENDIF
+!
+!
+        IF(S.GE.C2OFHB) GOTO 60
+        R2=1.0/S
+        R10=R2**EXPATT
+        R12=R2**EXPREP
+        F1=CHBA(IC)*R12
+        F2=CHBB(IC)*R10
+!
+        ER=F1-F2
+        DER=(RXPATT*F2-RXPREP*F1)*R2
+        DDER=(RXPRP2*F1-RXPAT2*F2)*R2
+!
+        IF(S.GT.C2ONHB) THEN
+          RIJL=C2ONHB-S
+          RIJU=C2OFHB-S
+          FUNCT=RIJU*RIJU*(RIJU-3*RIJL)*RUL3
+          DF=RIJL*RIJU*RUL12
+          DDF=DF-2.0*(RIJU+RIJL)*RUL12*S
+!
+          DDER=FUNCT*DDER+2.0*DER*DF*S+ER*DDF
+          DER=FUNCT*DER+ER*DF
+          ER=FUNCT*ER
+        ENDIF
+!
+ 20     CONTINUE
+        K=KHB(MM)
+        IF (K.EQ.0) THEN
+          K=J
+          CST=-1.0
+          EC=1.0
+!yw...05-Apr-91
+          RIR=0.0
+          RJR=0.0
+          DEC=0.0
+          DDEC=0.0
+          DXIR=0.0
+          DYIR=0.0
+          DZIR=0.0
+          DXJR=0.0
+          DYJR=0.0
+          DZJR=0.0
+          DXI=0.0
+          DYI=0.0
+          DZI=0.0
+          DXJ=0.0
+          DYJ=0.0
+          DZJ=0.0
+        ELSE
+!         SECTION FOR INCLUDED HYDROGEN ATOMS STORED IN KHB(MM)
+!
+          DXI=X(I)-X(K)
+          DYI=Y(I)-Y(K)
+          DZI=Z(I)-Z(K)
+          RI2=DXI*DXI+DYI*DYI+DZI*DZI
+          DXJ=X(J)-X(K)
+          DYJ=Y(J)-Y(K)
+          DZJ=Z(J)-Z(K)
+          RJ2=DXJ*DXJ+DYJ*DYJ+DZJ*DZJ
+!
+          RI=SQRT(RI2)
+          RJ=SQRT(RJ2)
+          RIR=1.0/RI
+          RJR=1.0/RJ
+          DXIR=DXI*RIR
+          DYIR=DYI*RIR
+          DZIR=DZI*RIR
+          DXJR=DXJ*RJR
+          DYJR=DYJ*RJR
+          DZJR=DZJ*RJR
+!
+          CST=DXIR*DXJR+DYIR*DYJR+DZIR*DZJR
+!
+          IF(CST.LE.-COSMAX) CST=-COSMAX
+          IF(ANALYS.GT.0) THEN
+            IF(ANALYS.EQ.2) THEN
+              DATA(MM)=ACOS(-CST)*RADDEG
+              GOTO 60
+            ENDIF
+            IF(ANALYS.NE.3) THEN
+              EC=0.0
+              DEC=0.0
+              DDEC=0.0
+              IF(CST.GT.0.0) GOTO 30
+              IF(CST*CST.LE.C2OFHA) GOTO 30
+            ENDIF
+          ENDIF
+!
+          IF(CST.GT.0.0) GOTO 60
+          CST2=CST*CST
+          IF(CST2.LE.C2OFHA) GOTO 60
+!
+          IF (EXPDAN.EQ.2) THEN
+            EC=CST2
+            DEC=CST+CST
+            DDEC=2.0
+          ELSE IF (EXPDAN.EQ.4) THEN
+            EC=CST2*CST2
+            DEC=4.0*CST*CST2
+            DDEC=12.0*CST2
+          ELSE IF (EXPDAN.EQ.3) THEN
+            EC=-CST*CST2
+            DEC=-3.0*CST2
+            DDEC=-6.0*CST
+          ELSE IF (EXPDAN.EQ.0) THEN
+            EC=1.0
+            DEC=0.0
+            DDEC=0.0
+          ELSE IF (EXPDAN.EQ.1) THEN
+            EC=-CST
+            DEC=-1.0
+            DDEC=0.0
+          ELSE
+            EC=CST**(EXPDAN-2)
+            IF(MOD(EXPDAN,2).NE.0) EC=-EC
+            DEC=RXPDAN*EC*CST
+            DDEC=RXPDA2*EC
+            EC=EC*CST2
+          ENDIF
+!
+          IF(CST2.LT.C2ONHA) THEN
+            RIJLA=C2ONHA-CST2
+            RIJUA=C2OFHA-CST2
+            FUNCTA=RIJUA*RIJUA*(RIJUA-3.0*RIJLA)*RUA3
+            DFA=RIJLA*RIJUA*RUA12
+            DDFA=DFA-2.0*(RIJLA+RIJUA)*RUA12*CST2
+            DFA=CST*DFA
+!
+            DDEC=FUNCTA*DDEC+2.0*DEC*DFA+EC*DDFA
+            DEC=FUNCTA*DEC+EC*DFA
+            EC=FUNCTA*EC
+          ENDIF
+        ENDIF
+!
+!
+!       SECTION TO TREAT ADITIONAL COS*COS TERM ON DA-D-H ANGLE
+!       IT IS ASSUMED FOR NOW THAT (DA)=(D)-1
+!
+  30    L=LHB(MM)
+        IF (L.EQ.0 .OR. K.EQ.J .OR. K.EQ.0) THEN
+          L=J
+          CSP=-1.0
+          EP=1.0
+          DEP=0.0
+          DDEP=0.0
+          DXLR=0.0
+          DYLR=0.0
+          DZLR=0.0
+          DXMR=0.0
+          DYMR=0.0
+          DZMR=0.0
+          RLR=0.0
+          RMR=0.0
+          DXL=0.0
+          DYL=0.0
+          DZL=0.0
+          DXM=0.0
+          DYM=0.0
+          DZM=0.0
+        ELSE
+!         SECTION FOR INCLUDED ACCEPTOR ANTECEDENT ATOMS STORED IN LHB(MM)
+!
+          DXL=X(J)-X(L)
+          DYL=Y(J)-Y(L)
+          DZL=Z(J)-Z(L)
+          RL2=DXL*DXL+DYL*DYL+DZL*DZL
+          DXM=DXJ
+          DYM=DYJ
+          DZM=DZJ
+!
+          RL=SQRT(RL2)
+          RLR=1.0/RL
+          DXLR=DXL*RLR
+          DYLR=DYL*RLR
+          DZLR=DZL*RLR
+          RMR=RJR
+          DXMR=DXJR
+          DYMR=DYJR
+          DZMR=DZJR
+!
+          CSP=DXLR*DXJR+DYLR*DYJR+DZLR*DZJR
+!
+          IF(CSP.LT.-COSMAX) CSP =-COSMAX
+          IF(ANALYS.GT.0) THEN
+            IF(ANALYS.EQ.4) THEN
+              DATA(MM)=ACOS(-CSP)*RADDEG
+              GOTO 60
+            ENDIF
+            IF(ANALYS.NE.3) GOTO 60
+          ENDIF
+!
+          CSP2=CSP*CSP
+!
+          IF (EXPAAN.EQ.0) THEN
+            EP=1.0
+            DEP=0.0
+            DDEP=0.0
+          ELSE IF (EXPAAN.EQ.2) THEN
+            IF(CSP.GT.0.0) GOTO 60
+            EP=CSP2
+            DEP=CSP+CSP
+            DDEP=2.0
+          ELSE IF (EXPAAN.EQ.1) THEN
+            IF(CSP.GT.0.0) GOTO 60
+            EP=-CSP
+            DEP=-1.0
+            DDEP=0.0
+          ELSE
+            IF(CSP.GT.0.0) GOTO 60
+            EP=CSP**(EXPAAN-2)
+            IF(MOD(EXPAAN,2).NE.0) EP=-EP
+            DEP=RXPAAN*EP*CSP
+            DDEP=RXPAA2*EP
+            EP=EP*CSP2
+          ENDIF
+!
+        ENDIF
+!
+!
+!
+        DDERR=EC*EP*(DDER-DER)*R2
+        DDERC=DEC*DER*EP
+        DDECC=ER*EP*DDEC
+        DDERP=DEP*DER*EC
+        DDECP=ER*DEC*DEP
+        DDEPP=ER*EC*DDEP
+        DER=EC*EP*DER
+        DEC=ER*EP*DEC
+        DEP=EC*ER*DEP
+        E=EC*ER*EP
+!
+        EHB=EHB+E
+!
+        DTXI=RIR*(DXJR-CST*DXIR)
+        DTYI=RIR*(DYJR-CST*DYIR)
+        DTZI=RIR*(DZJR-CST*DZIR)
+        DTXJ=RJR*(DXIR-CST*DXJR)
+        DTYJ=RJR*(DYIR-CST*DYJR)
+        DTZJ=RJR*(DZIR-CST*DZJR)
+        DTXL=RLR*(DXMR-CSP*DXLR)
+        DTYL=RLR*(DYMR-CSP*DYLR)
+        DTZL=RLR*(DZMR-CSP*DZLR)
+        DTXM=RMR*(DXLR-CSP*DXMR)
+        DTYM=RMR*(DYLR-CSP*DYMR)
+        DTZM=RMR*(DZLR-CSP*DZMR)
+!
+        IF(ANALYS.NE.0) THEN
+          IF(ANALYS.EQ.3) DATA(MM)=E
+          GOTO 60
+        ENDIF
+!
+        IF(QECONT) THEN
+          E=E*0.25
+          ECONT(I)=ECONT(I)+E
+          ECONT(J)=ECONT(J)+E
+          ECONT(K)=ECONT(K)+E
+          ECONT(L)=ECONT(L)+E
+        ENDIF
+!
+        AI=DTXI*DEC
+        AJ=DTXJ*DEC
+        AL=DTXL*DEP
+        AM=DTXM*DEP
+        A=RX*DER
+        DX(I)=DX(I)+AI+A
+        DX(J)=DX(J)+AJ-A+AM+AL
+        DX(K)=DX(K)-AI-AJ-AM
+        DX(L)=DX(L)-AL
+!
+#if KEY_IPRESS==1
+        IF (QIPRSS) THEN
+          PVIR(I)=PVIR(I)+AI*DXI+A*RX
+          PVIR(J)=PVIR(J)+(AJ+AM)*DXJ+A*RX+AL*DXL
+          PVIR(K)=PVIR(K)+(AJ+AM)*DXJ+AI*DXI
+          PVIR(L)=PVIR(L)+AL*DXL
+        ENDIF
+#endif 
+!
+        AI=DTYI*DEC
+        AJ=DTYJ*DEC
+        AL=DTYL*DEP
+        AM=DTYM*DEP
+        A=RY*DER
+        DY(I)=DY(I)+AI+A
+        DY(J)=DY(J)+AJ-A+AM+AL
+        DY(K)=DY(K)-AI-AJ-AM
+        DY(L)=DY(L)-AL
+!
+#if KEY_IPRESS==1
+        IF (QIPRSS) THEN
+          PVIR(I)=PVIR(I)+AI*DYI+A*RY
+          PVIR(J)=PVIR(J)+(AJ+AM)*DYJ+A*RY+AL*DYL
+          PVIR(K)=PVIR(K)+(AJ+AM)*DYJ+AI*DYI
+          PVIR(L)=PVIR(L)+AL*DYL
+        ENDIF
+#endif 
+!
+        AI=DTZI*DEC
+        AJ=DTZJ*DEC
+        AL=DTZL*DEP
+        AM=DTZM*DEP
+        A=RZ*DER
+        DZ(I)=DZ(I)+AI+A
+        DZ(J)=DZ(J)+AJ-A+AM+AL
+        DZ(K)=DZ(K)-AI-AJ-AM
+        DZ(L)=DZ(L)-AL
+!
+#if KEY_IPRESS==1
+        IF (QIPRSS) THEN
+          PVIR(I)=PVIR(I)+AI*DZI+A*RZ
+          PVIR(J)=PVIR(J)+(AJ+AM)*DZJ+A*RZ+AL*DZL
+          PVIR(K)=PVIR(K)+(AJ+AM)*DZJ+AI*DZI
+          PVIR(L)=PVIR(L)+AL*DZL
+        ENDIF
+#endif 
+!
+!       SECOND DERIVATIVE SECTION FOR EXPLICIT HYDROGENS
+!
+        IF(QSECD) THEN
+!
+          II=3*I-2
+          JJ=3*J-2
+          KK=3*K-2
+          LL=3*L-2
+          IJTEST=(J.LT.I)
+          IKTEST=(K.LT.I)
+          JKTEST=(K.LT.J)
+          ILTEST=(L.LT.I)
+          JLTEST=(L.LT.J)
+          KLTEST=(L.LT.K)
+!
+!         SECTION FOR RR DERIVATIVES
+          DDRXX=RX*RX*DDERR+DER
+          DDRYY=RY*RY*DDERR+DER
+          DDRZZ=RZ*RZ*DDERR+DER
+          DDRXY=RX*RY*DDERR
+          DDRXZ=RX*RZ*DDERR
+          DDRYZ=RY*RZ*DDERR
+!
+!
+!         SECTION FOR CC DERIVATIVES
+          RI2RF=RIR*RIR*DEC
+          RJ2RF=RJR*RJR*DEC
+          RIRJF=RIR*RJR*DEC
+!
+          DDXIXI=RI2RF*(CST*(DXIR*DXIR-1.)-2.*DXI*DTXI)+DDECC*DTXI*DTXI
+          DDYIYI=RI2RF*(CST*(DYIR*DYIR-1.)-2.*DYI*DTYI)+DDECC*DTYI*DTYI
+          DDZIZI=RI2RF*(CST*(DZIR*DZIR-1.)-2.*DZI*DTZI)+DDECC*DTZI*DTZI
+          DDXJXJ=RJ2RF*(CST*(DXJR*DXJR-1.)-2.*DXJ*DTXJ)+DDECC*DTXJ*DTXJ
+          DDYJYJ=RJ2RF*(CST*(DYJR*DYJR-1.)-2.*DYJ*DTYJ)+DDECC*DTYJ*DTYJ
+          DDZJZJ=RJ2RF*(CST*(DZJR*DZJR-1.)-2.*DZJ*DTZJ)+DDECC*DTZJ*DTZJ
+!
+          DDXIXJ=RIRJF*(1.-DXIR*DXIR-DXJR*DXJR+CST*DXIR*DXJR)+ &
+            DDECC*DTXI*DTXJ
+          DDYIYJ=RIRJF*(1.-DYIR*DYIR-DYJR*DYJR+CST*DYIR*DYJR)+ &
+            DDECC*DTYI*DTYJ
+          DDZIZJ=RIRJF*(1.-DZIR*DZIR-DZJR*DZJR+CST*DZIR*DZJR)+ &
+            DDECC*DTZI*DTZJ
+!
+          DDXIYI=RI2RF*(CST*DXIR*DYIR-DXI*DTYI-DYI*DTXI)+DDECC*DTXI &
+            *DTYI
+          DDXIZI=RI2RF*(CST*DXIR*DZIR-DXI*DTZI-DZI*DTXI)+DDECC*DTXI &
+            *DTZI
+          DDYIZI=RI2RF*(CST*DYIR*DZIR-DYI*DTZI-DZI*DTYI)+DDECC*DTYI &
+            *DTZI
+!
+!
+          DDXJYJ=RJ2RF*(CST*DXJR*DYJR-DXJ*DTYJ-DYJ*DTXJ)+DDECC*DTXJ &
+            *DTYJ
+          DDXJZJ=RJ2RF*(CST*DXJR*DZJR-DXJ*DTZJ-DZJ*DTXJ)+DDECC*DTXJ &
+            *DTZJ
+          DDYJZJ=RJ2RF*(CST*DYJR*DZJR-DYJ*DTZJ-DZJ*DTYJ)+DDECC*DTYJ &
+            *DTZJ
+!
+          A=DXIR*DYIR+DXJR*DYJR
+          DDXIYJ=RIRJF*(CST*DXIR*DYJR-A)+DDECC*DTXI*DTYJ
+          DDYIXJ=RIRJF*(CST*DYIR*DXJR-A)+DDECC*DTYI*DTXJ
+          A=DXIR*DZIR+DXJR*DZJR
+          DDXIZJ=RIRJF*(CST*DXIR*DZJR-A)+DDECC*DTXI*DTZJ
+          DDZIXJ=RIRJF*(CST*DZIR*DXJR-A)+DDECC*DTZI*DTXJ
+          A=DYIR*DZIR+DYJR*DZJR
+          DDYIZJ=RIRJF*(CST*DYIR*DZJR-A)+DDECC*DTYI*DTZJ
+          DDZIYJ=RIRJF*(CST*DZIR*DYJR-A)+DDECC*DTZI*DTYJ
+!
+!
+!         SECTION FOR PP DERIVATIVES
+          RL2RF=RLR*RLR*DEP
+          RM2RF=RMR*RMR*DEP
+          RLRMF=RLR*RMR*DEP
+!
+          DDXLXL=RL2RF*(CSP*(DXLR*DXLR-1.)-2.*DXL*DTXL)+DDEPP*DTXL*DTXL
+          DDYLYL=RL2RF*(CSP*(DYLR*DYLR-1.)-2.*DYL*DTYL)+DDEPP*DTYL*DTYL
+          DDZLZL=RL2RF*(CSP*(DZLR*DZLR-1.)-2.*DZL*DTZL)+DDEPP*DTZL*DTZL
+          DDXMXM=RM2RF*(CSP*(DXMR*DXMR-1.)-2.*DXM*DTXM)+DDEPP*DTXM*DTXM
+          DDYMYM=RM2RF*(CSP*(DYMR*DYMR-1.)-2.*DYM*DTYM)+DDEPP*DTYM*DTYM
+          DDZMZM=RM2RF*(CSP*(DZMR*DZMR-1.)-2.*DZM*DTZM)+DDEPP*DTZM*DTZM
+!
+          DDXLXJ=RLRMF*(1.-DXLR*DXLR-DXMR*DXMR+CSP*DXLR*DXMR)+ &
+            DDEPP*DTXL*DTXM
+          DDYLYJ=RLRMF*(1.-DYLR*DYLR-DYMR*DYMR+CSP*DYLR*DYMR)+ &
+            DDEPP*DTYL*DTYM
+          DDZLZJ=RLRMF*(1.-DZLR*DZLR-DZMR*DZMR+CSP*DZLR*DZMR)+ &
+            DDEPP*DTZL*DTZM
+!
+          DDXLYL=RL2RF*(CSP*DXLR*DYLR-DXL*DTYL-DYL*DTXL)+DDEPP*DTXL &
+            *DTYL
+          DDXLZL=RL2RF*(CSP*DXLR*DZLR-DXL*DTZL-DZL*DTXL)+DDEPP*DTXL &
+            *DTZL
+          DDYLZL=RL2RF*(CSP*DYLR*DZLR-DYL*DTZL-DZL*DTYL)+DDEPP*DTYL &
+            *DTZL
+!
+!
+          DDXMYM=RM2RF*(CSP*DXMR*DYMR-DXM*DTYM-DYM*DTXM)+DDEPP*DTXM &
+            *DTYM
+          DDXMZM=RM2RF*(CSP*DXMR*DZMR-DXM*DTZM-DZM*DTXM)+DDEPP*DTXM &
+            *DTZM
+          DDYMZM=RM2RF*(CSP*DYMR*DZMR-DYM*DTZM-DZM*DTYM)+DDEPP*DTYM &
+            *DTZM
+!
+          A=DXLR*DYLR+DXMR*DYMR
+          DDXLYJ=RLRMF*(CSP*DXLR*DYMR-A)+DDEPP*DTXL*DTYM
+          DDYLXJ=RLRMF*(CSP*DYLR*DXMR-A)+DDEPP*DTYL*DTXM
+          A=DXLR*DZLR+DXMR*DZMR
+          DDXLZJ=RLRMF*(CSP*DXLR*DZMR-A)+DDEPP*DTXL*DTZM
+          DDZLXJ=RLRMF*(CSP*DZLR*DXMR-A)+DDEPP*DTZL*DTXM
+          A=DYLR*DZLR+DYMR*DZMR
+          DDYLZJ=RLRMF*(CSP*DYLR*DZMR-A)+DDEPP*DTYL*DTZM
+          DDZLYJ=RLRMF*(CSP*DZLR*DYMR-A)+DDEPP*DTZL*DTYM
+!
+!
+!         SECTION FOR RC DERIVATIVES
+          DDRX=RX*DDERC
+          DDRY=RY*DDERC
+          DDRZ=RZ*DDERC
+!
+          DDXIXR=DTXI*DDRX
+          DDXIYR=DTXI*DDRY
+          DDXIZR=DTXI*DDRZ
+          DDYIXR=DTYI*DDRX
+          DDYIYR=DTYI*DDRY
+          DDYIZR=DTYI*DDRZ
+          DDZIXR=DTZI*DDRX
+          DDZIYR=DTZI*DDRY
+          DDZIZR=DTZI*DDRZ
+!
+          DDXJXR=DTXJ*DDRX
+          DDXJYR=DTXJ*DDRY
+          DDXJZR=DTXJ*DDRZ
+          DDYJXR=DTYJ*DDRX
+          DDYJYR=DTYJ*DDRY
+          DDYJZR=DTYJ*DDRZ
+          DDZJXR=DTZJ*DDRX
+          DDZJYR=DTZJ*DDRY
+          DDZJZR=DTZJ*DDRZ
+!
+!
+!         SECTION FOR RP DERIVATIVES
+          DDRX=RX*DDERP
+          DDRY=RY*DDERP
+          DDRZ=RZ*DDERP
+!
+          DDXLXR=DTXL*DDRX
+          DDXLYR=DTXL*DDRY
+          DDXLZR=DTXL*DDRZ
+          DDYLXR=DTYL*DDRX
+          DDYLYR=DTYL*DDRY
+          DDYLZR=DTYL*DDRZ
+          DDZLXR=DTZL*DDRX
+          DDZLYR=DTZL*DDRY
+          DDZLZR=DTZL*DDRZ
+!
+          DDXJXR=DDXJXR+DTXM*DDRX
+          DDXJYR=DDXJYR+DTXM*DDRY
+          DDXJZR=DDXJZR+DTXM*DDRZ
+          DDYJXR=DDYJXR+DTYM*DDRX
+          DDYJYR=DDYJYR+DTYM*DDRY
+          DDYJZR=DDYJZR+DTYM*DDRZ
+          DDZJXR=DDZJXR+DTZM*DDRX
+          DDZJYR=DDZJYR+DTZM*DDRY
+          DDZJZR=DDZJZR+DTZM*DDRZ
+!
+!         SECTION FOR CP DERIVATIVES
+          DDXJXJ=DDXJXJ+DDXMXM+DDECP*DTXJ*DTXM*2.0
+          DDYJYJ=DDYJYJ+DDYMYM+DDECP*DTYJ*DTYM*2.0
+          DDZJZJ=DDZJZJ+DDZMZM+DDECP*DTZJ*DTZM*2.0
+          DDXJYJ=DDXJYJ+DDXMYM+DDECP*(DTXJ*DTYM+DTYJ*DTXM)
+          DDXJZJ=DDXJZJ+DDXMZM+DDECP*(DTXJ*DTZM+DTZJ*DTXM)
+          DDYJZJ=DDYJZJ+DDYMZM+DDECP*(DTYJ*DTZM+DTZJ*DTYM)
+!
+          DDXLXJ=DDXLXJ+DDECP*DTXL*DTXJ
+          DDYLYJ=DDYLYJ+DDECP*DTYL*DTYJ
+          DDZLZJ=DDZLZJ+DDECP*DTZL*DTZJ
+          DDXLYJ=DDXLYJ+DDECP*DTXL*DTYJ
+          DDXLZJ=DDXLZJ+DDECP*DTXL*DTZJ
+          DDYLZJ=DDYLZJ+DDECP*DTYL*DTZJ
+          DDYLXJ=DDYLXJ+DDECP*DTYL*DTXJ
+          DDZLXJ=DDZLXJ+DDECP*DTZL*DTXJ
+          DDZLYJ=DDZLYJ+DDECP*DTZL*DTYJ
+!
+          DDXIXJ=DDXIXJ+DDECP*DTXI*DTXM
+          DDYIYJ=DDYIYJ+DDECP*DTYI*DTYM
+          DDZIZJ=DDZIZJ+DDECP*DTZI*DTZM
+          DDXIYJ=DDXIYJ+DDECP*DTXI*DTYM
+          DDXIZJ=DDXIZJ+DDECP*DTXI*DTZM
+          DDYIZJ=DDYIZJ+DDECP*DTYI*DTZM
+          DDYIXJ=DDYIXJ+DDECP*DTYI*DTXM
+          DDZIXJ=DDZIXJ+DDECP*DTZI*DTXM
+          DDZIYJ=DDZIYJ+DDECP*DTZI*DTYM
+!
+          DDXIXL=DDECP*DTXI*DTXL
+          DDYIYL=DDECP*DTYI*DTYL
+          DDZIZL=DDECP*DTZI*DTZL
+          DDXIYL=DDECP*DTXI*DTYL
+          DDXIZL=DDECP*DTXI*DTZL
+          DDYIZL=DDECP*DTYI*DTZL
+          DDYIXL=DDECP*DTYI*DTXL
+          DDZIXL=DDECP*DTZI*DTXL
+          DDZIYL=DDECP*DTZI*DTYL
+!
+!         update second derivative array
+!
+#if KEY_DIMB==1
+          IF(QCMPCT) THEN
+            CALL EHBCMP(II,JJ,KK,LL,DDRXX,DDRYY,DDRZZ,DDRXY,DDRXZ,DDRYZ, &
+         DDXIXI,DDYIYI,DDZIZI,DDXIYI,DDXIZI,DDYIZI, &
+         DDXIXR,DDYIYR,DDZIZR,DDXIYR,DDXIZR,DDYIXR,DDYIZR,DDZIXR,DDZIYR, &
+         DDXJXJ,DDYJYJ,DDZJZJ,DDXJYJ,DDXJZJ,DDYJZJ, &
+         DDXJXR,DDYJYR,DDZJZR,DDXJYR,DDXJZR,DDYJXR,DDYJZR,DDZJXR,DDZJYR, &
+         DDXLXL,DDYLYL,DDZLZL,DDXLYL,DDXLZL,DDYLZL, &
+         DDXLXR,DDYLYR,DDZLZR,DDXLYR,DDXLZR,DDYLXR,DDYLZR,DDZLXR,DDZLYR, &
+         DDXLXJ,DDYLYJ,DDZLZJ,DDXLYJ,DDXLZJ,DDYLXJ,DDYLZJ,DDZLXJ,DDZLYJ, &
+         DDXIXJ,DDYIYJ,DDZIZJ,DDXIYJ,DDXIZJ,DDYIXJ,DDYIZJ,DDZIXJ,DDZIYJ, &
+         DDXIXL,DDYIYL,DDZIZL,DDXIYL,DDXIZL,DDYIXL,DDYIZL,DDZIXL,DDZIYL, &
+         DD1,PINBCM,PJNBCM)
+
+          ELSE
+#endif /*  DIMB*/
+
+!         diagonal elements
+!
+          IADD=IUPT(II)+II
+          DD1(IADD)=DD1(IADD)+DDXIXI+DDRXX+DDXIXR+DDXIXR
+          IADD=IUPT(II+1)+II+1
+          DD1(IADD)=DD1(IADD)+DDYIYI+DDRYY+DDYIYR+DDYIYR
+          IADD=IUPT(II+2)+II+2
+          DD1(IADD)=DD1(IADD)+DDZIZI+DDRZZ+DDZIZR+DDZIZR
+          IADD=IUPT(II)+II+1
+          DD1(IADD)=DD1(IADD)+DDXIYI+DDRXY+DDXIYR+DDYIXR
+          IADD=IUPT(II)+II+2
+          DD1(IADD)=DD1(IADD)+DDXIZI+DDRXZ+DDXIZR+DDZIXR
+          IADD=IUPT(II+1)+II+2
+          DD1(IADD)=DD1(IADD)+DDYIZI+DDRYZ+DDYIZR+DDZIYR
+!
+          IADD=IUPT(JJ)+JJ
+          DD1(IADD)=DD1(IADD)+DDXJXJ+DDRXX-DDXJXR-DDXJXR &
+            -DDXLXR-DDXLXR+DDXLXL+DDXLXJ+DDXLXJ
+          IADD=IUPT(JJ+1)+JJ+1
+          DD1(IADD)=DD1(IADD)+DDYJYJ+DDRYY-DDYJYR-DDYJYR &
+            -DDYLYR-DDYLYR+DDYLYL+DDYLYJ+DDYLYJ
+          IADD=IUPT(JJ+2)+JJ+2
+          DD1(IADD)=DD1(IADD)+DDZJZJ+DDRZZ-DDZJZR-DDZJZR &
+            -DDZLZR-DDZLZR+DDZLZL+DDZLZJ+DDZLZJ
+          IADD=IUPT(JJ)+JJ+1
+          DD1(IADD)=DD1(IADD)+DDXJYJ+DDRXY-DDXJYR-DDYJXR &
+            -DDXLYR-DDYLXR+DDXLYL+DDXLYJ+DDYLXJ
+          IADD=IUPT(JJ)+JJ+2
+          DD1(IADD)=DD1(IADD)+DDXJZJ+DDRXZ-DDXJZR-DDZJXR &
+            -DDXLZR-DDZLXR+DDXLZL+DDXLZJ+DDZLXJ
+          IADD=IUPT(JJ+1)+JJ+2
+          DD1(IADD)=DD1(IADD)+DDYJZJ+DDRYZ-DDYJZR-DDZJYR &
+            -DDYLZR-DDZLYR+DDYLZL+DDYLZJ+DDZLYJ
+!
+          IADD=IUPT(KK)+KK
+          DD1(IADD)=DD1(IADD)+DDXIXI+DDXJXJ+DDXIXJ+DDXIXJ
+          IADD=IUPT(KK+1)+KK+1
+          DD1(IADD)=DD1(IADD)+DDYIYI+DDYJYJ+DDYIYJ+DDYIYJ
+          IADD=IUPT(KK+2)+KK+2
+          DD1(IADD)=DD1(IADD)+DDZIZI+DDZJZJ+DDZIZJ+DDZIZJ
+          IADD=IUPT(KK)+KK+1
+          DD1(IADD)=DD1(IADD)+DDXIYI+DDXJYJ+DDXIYJ+DDYIXJ
+          IADD=IUPT(KK)+KK+2
+          DD1(IADD)=DD1(IADD)+DDXIZI+DDXJZJ+DDXIZJ+DDZIXJ
+          IADD=IUPT(KK+1)+KK+2
+          DD1(IADD)=DD1(IADD)+DDYIZI+DDYJZJ+DDYIZJ+DDZIYJ
+!
+          IADD=IUPT(LL)+LL
+          DD1(IADD)=DD1(IADD)+DDXLXL
+          IADD=IUPT(LL+1)+LL+1
+          DD1(IADD)=DD1(IADD)+DDYLYL
+          IADD=IUPT(LL+2)+LL+2
+          DD1(IADD)=DD1(IADD)+DDZLZL
+          IADD=IUPT(LL)+LL+1
+          DD1(IADD)=DD1(IADD)+DDXLYL
+          IADD=IUPT(LL)+LL+2
+          DD1(IADD)=DD1(IADD)+DDXLZL
+          IADD=IUPT(LL+1)+LL+2
+          DD1(IADD)=DD1(IADD)+DDYLZL
+!
+!         off diagonal terms
+!
+          IF (IJTEST) THEN
+            IADD=IUPT(JJ)+II
+            DD1(IADD)=DD1(IADD)+DDXIXJ-DDRXX-DDXIXR+DDXJXR+DDXIXL &
+              +DDXLXR
+            IADD=IUPT(JJ+1)+II+1
+            DD1(IADD)=DD1(IADD)+DDYIYJ-DDRYY-DDYIYR+DDYJYR+DDYIYL &
+              +DDYLYR
+            IADD=IUPT(JJ+2)+II+2
+            DD1(IADD)=DD1(IADD)+DDZIZJ-DDRZZ-DDZIZR+DDZJZR+DDZIZL &
+              +DDZLZR
+            IADD=IUPT(JJ)+II+1
+            DD1(IADD)=DD1(IADD)+DDYIXJ-DDRXY+DDXJYR-DDYIXR+DDYIXL &
+              +DDXLYR
+            IADD=IUPT(JJ+1)+II
+            DD1(IADD)=DD1(IADD)+DDXIYJ-DDRXY+DDYJXR-DDXIYR+DDXIYL &
+              +DDYLXR
+            IADD=IUPT(JJ)+II+2
+            DD1(IADD)=DD1(IADD)+DDZIXJ-DDRXZ+DDXJZR-DDZIXR+DDZIXL &
+              +DDXLZR
+            IADD=IUPT(JJ+2)+II
+            DD1(IADD)=DD1(IADD)+DDXIZJ-DDRXZ+DDZJXR-DDXIZR+DDXIZL &
+              +DDZLXR
+            IADD=IUPT(JJ+1)+II+2
+            DD1(IADD)=DD1(IADD)+DDZIYJ-DDRYZ+DDYJZR-DDZIYR+DDZIYL &
+              +DDYLZR
+            IADD=IUPT(JJ+2)+II+1
+            DD1(IADD)=DD1(IADD)+DDYIZJ-DDRYZ+DDZJYR-DDYIZR+DDYIZL &
+              +DDZLYR
+          ELSE
+            IADD=IUPT(II)+JJ
+            DD1(IADD)=DD1(IADD)+DDXIXJ-DDRXX-DDXIXR+DDXJXR+DDXIXL &
+              +DDXLXR
+            IADD=IUPT(II+1)+JJ+1
+            DD1(IADD)=DD1(IADD)+DDYIYJ-DDRYY-DDYIYR+DDYJYR+DDYIYL &
+              +DDYLYR
+            IADD=IUPT(II+2)+JJ+2
+            DD1(IADD)=DD1(IADD)+DDZIZJ-DDRZZ-DDZIZR+DDZJZR+DDZIZL &
+              +DDZLZR
+            IADD=IUPT(II+1)+JJ
+            DD1(IADD)=DD1(IADD)+DDYIXJ-DDRXY+DDXJYR-DDYIXR+DDYIXL &
+              +DDXLYR
+            IADD=IUPT(II)+JJ+1
+            DD1(IADD)=DD1(IADD)+DDXIYJ-DDRXY+DDYJXR-DDXIYR+DDXIYL &
+              +DDYLXR
+            IADD=IUPT(II+2)+JJ
+            DD1(IADD)=DD1(IADD)+DDZIXJ-DDRXZ+DDXJZR-DDZIXR+DDZIXL &
+              +DDXLZR
+            IADD=IUPT(II)+JJ+2
+            DD1(IADD)=DD1(IADD)+DDXIZJ-DDRXZ+DDZJXR-DDXIZR+DDXIZL &
+              +DDZLXR
+            IADD=IUPT(II+2)+JJ+1
+            DD1(IADD)=DD1(IADD)+DDZIYJ-DDRYZ+DDYJZR-DDZIYR+DDZIYL &
+              +DDYLZR
+            IADD=IUPT(II+1)+JJ+2
+            DD1(IADD)=DD1(IADD)+DDYIZJ-DDRYZ+DDZJYR-DDYIZR+DDYIZL &
+              +DDZLYR
+          ENDIF
+!
+          IF (IKTEST) THEN
+            IADD=IUPT(KK)+II
+            DD1(IADD)=DD1(IADD)-DDXIXJ-DDXIXI-DDXIXR-DDXJXR
+            IADD=IUPT(KK+1)+II+1
+            DD1(IADD)=DD1(IADD)-DDYIYJ-DDYIYI-DDYIYR-DDYJYR
+            IADD=IUPT(KK+2)+II+2
+            DD1(IADD)=DD1(IADD)-DDZIZJ-DDZIZI-DDZIZR-DDZJZR
+            IADD=IUPT(KK)+II+1
+            DD1(IADD)=DD1(IADD)-DDXIYI-DDYIXJ-DDXJYR-DDXIYR
+            IADD=IUPT(KK+1)+II
+            DD1(IADD)=DD1(IADD)-DDXIYI-DDXIYJ-DDYJXR-DDYIXR
+            IADD=IUPT(KK)+II+2
+            DD1(IADD)=DD1(IADD)-DDXIZI-DDZIXJ-DDXJZR-DDXIZR
+            IADD=IUPT(KK+2)+II
+            DD1(IADD)=DD1(IADD)-DDXIZI-DDXIZJ-DDZJXR-DDZIXR
+            IADD=IUPT(KK+1)+II+2
+            DD1(IADD)=DD1(IADD)-DDYIZI-DDZIYJ-DDYJZR-DDYIZR
+            IADD=IUPT(KK+2)+II+1
+            DD1(IADD)=DD1(IADD)-DDYIZI-DDYIZJ-DDZJYR-DDZIYR
+          ELSE
+            IADD=IUPT(II)+KK
+            DD1(IADD)=DD1(IADD)-DDXIXJ-DDXIXI-DDXIXR-DDXJXR
+            IADD=IUPT(II+1)+KK+1
+            DD1(IADD)=DD1(IADD)-DDYIYJ-DDYIYI-DDYIYR-DDYJYR
+            IADD=IUPT(II+2)+KK+2
+            DD1(IADD)=DD1(IADD)-DDZIZJ-DDZIZI-DDZIZR-DDZJZR
+            IADD=IUPT(II+1)+KK
+            DD1(IADD)=DD1(IADD)-DDXIYI-DDYIXJ-DDXJYR-DDXIYR
+            IADD=IUPT(II)+KK+1
+            DD1(IADD)=DD1(IADD)-DDXIYI-DDXIYJ-DDYJXR-DDYIXR
+            IADD=IUPT(II+2)+KK
+            DD1(IADD)=DD1(IADD)-DDXIZI-DDZIXJ-DDXJZR-DDXIZR
+            IADD=IUPT(II)+KK+2
+            DD1(IADD)=DD1(IADD)-DDXIZI-DDXIZJ-DDZJXR-DDZIXR
+            IADD=IUPT(II+2)+KK+1
+            DD1(IADD)=DD1(IADD)-DDYIZI-DDZIYJ-DDYJZR-DDYIZR
+            IADD=IUPT(II+1)+KK+2
+            DD1(IADD)=DD1(IADD)-DDYIZI-DDYIZJ-DDZJYR-DDZIYR
+          ENDIF
+!
+          IF (JKTEST) THEN
+            IADD=IUPT(KK)+JJ
+            DD1(IADD)=DD1(IADD)-DDXIXJ-DDXJXJ+DDXIXR+DDXJXR-DDXIXL &
+              -DDXLXJ
+            IADD=IUPT(KK+1)+JJ+1
+            DD1(IADD)=DD1(IADD)-DDYIYJ-DDYJYJ+DDYIYR+DDYJYR-DDYIYL &
+              -DDYLYJ
+            IADD=IUPT(KK+2)+JJ+2
+            DD1(IADD)=DD1(IADD)-DDZIZJ-DDZJZJ+DDZIZR+DDZJZR-DDZIZL &
+              -DDZLZJ
+            IADD=IUPT(KK)+JJ+1
+            DD1(IADD)=DD1(IADD)-DDXJYJ-DDXIYJ+DDXJYR+DDXIYR-DDXIYL &
+              -DDYLXJ
+            IADD=IUPT(KK+1)+JJ
+            DD1(IADD)=DD1(IADD)-DDXJYJ-DDYIXJ+DDYJXR+DDYIXR-DDYIXL &
+              -DDXLYJ
+            IADD=IUPT(KK)+JJ+2
+            DD1(IADD)=DD1(IADD)-DDXJZJ-DDXIZJ+DDXJZR+DDXIZR-DDXIZL &
+              -DDZLXJ
+            IADD=IUPT(KK+2)+JJ
+            DD1(IADD)=DD1(IADD)-DDXJZJ-DDZIXJ+DDZJXR+DDZIXR-DDZIXL &
+              -DDXLZJ
+            IADD=IUPT(KK+1)+JJ+2
+            DD1(IADD)=DD1(IADD)-DDYJZJ-DDYIZJ+DDYJZR+DDYIZR-DDYIZL &
+              -DDZLYJ
+            IADD=IUPT(KK+2)+JJ+1
+            DD1(IADD)=DD1(IADD)-DDYJZJ-DDZIYJ+DDZJYR+DDZIYR-DDZIYL &
+              -DDYLZJ
+          ELSE
+            IADD=IUPT(JJ)+KK
+            DD1(IADD)=DD1(IADD)-DDXIXJ-DDXJXJ+DDXIXR+DDXJXR-DDXIXL &
+              -DDXLXJ
+            IADD=IUPT(JJ+1)+KK+1
+            DD1(IADD)=DD1(IADD)-DDYIYJ-DDYJYJ+DDYIYR+DDYJYR-DDYIYL &
+              -DDYLYJ
+            IADD=IUPT(JJ+2)+KK+2
+            DD1(IADD)=DD1(IADD)-DDZIZJ-DDZJZJ+DDZIZR+DDZJZR-DDZIZL &
+              -DDZLZJ
+            IADD=IUPT(JJ+1)+KK
+            DD1(IADD)=DD1(IADD)-DDXJYJ-DDXIYJ+DDXJYR+DDXIYR-DDXIYL &
+              -DDYLXJ
+            IADD=IUPT(JJ)+KK+1
+            DD1(IADD)=DD1(IADD)-DDXJYJ-DDYIXJ+DDYJXR+DDYIXR-DDYIXL &
+              -DDXLYJ
+            IADD=IUPT(JJ+2)+KK
+            DD1(IADD)=DD1(IADD)-DDXJZJ-DDXIZJ+DDXJZR+DDXIZR-DDXIZL &
+              -DDZLXJ
+            IADD=IUPT(JJ)+KK+2
+            DD1(IADD)=DD1(IADD)-DDXJZJ-DDZIXJ+DDZJXR+DDZIXR-DDZIXL &
+              -DDXLZJ
+            IADD=IUPT(JJ+2)+KK+1
+            DD1(IADD)=DD1(IADD)-DDYJZJ-DDYIZJ+DDYJZR+DDYIZR-DDYIZL &
+              -DDZLYJ
+            IADD=IUPT(JJ+1)+KK+2
+            DD1(IADD)=DD1(IADD)-DDYJZJ-DDZIYJ+DDZJYR+DDZIYR-DDZIYL &
+              -DDYLZJ
+          ENDIF
+!
+          IF (JLTEST) THEN
+            IADD=IUPT(LL)+JJ
+            DD1(IADD)=DD1(IADD)-DDXLXJ+DDXLXR-DDXLXL
+            IADD=IUPT(LL+1)+JJ+1
+            DD1(IADD)=DD1(IADD)-DDYLYJ+DDYLYR-DDYLYL
+            IADD=IUPT(LL+2)+JJ+2
+            DD1(IADD)=DD1(IADD)-DDZLZJ+DDZLZR-DDZLZL
+            IADD=IUPT(LL)+JJ+1
+            DD1(IADD)=DD1(IADD)-DDXLYJ+DDXLYR-DDXLYL
+            IADD=IUPT(LL+1)+JJ
+            DD1(IADD)=DD1(IADD)-DDYLXJ+DDYLXR-DDXLYL
+            IADD=IUPT(LL)+JJ+2
+            DD1(IADD)=DD1(IADD)-DDXLZJ+DDXLZR-DDXLZL
+            IADD=IUPT(LL+2)+JJ
+            DD1(IADD)=DD1(IADD)-DDZLXJ+DDZLXR-DDXLZL
+            IADD=IUPT(LL+1)+JJ+2
+            DD1(IADD)=DD1(IADD)-DDYLZJ+DDYLZR-DDYLZL
+            IADD=IUPT(LL+2)+JJ+1
+            DD1(IADD)=DD1(IADD)-DDZLYJ+DDZLYR-DDYLZL
+          ELSE
+            IADD=IUPT(JJ)+LL
+            DD1(IADD)=DD1(IADD)-DDXLXJ+DDXLXR-DDXLXL
+            IADD=IUPT(JJ+1)+LL+1
+            DD1(IADD)=DD1(IADD)-DDYLYJ+DDYLYR-DDYLYL
+            IADD=IUPT(JJ+2)+LL+2
+            DD1(IADD)=DD1(IADD)-DDZLZJ+DDZLZR-DDZLZL
+            IADD=IUPT(JJ+1)+LL
+            DD1(IADD)=DD1(IADD)-DDXLYJ+DDXLYR-DDXLYL
+            IADD=IUPT(JJ)+LL+1
+            DD1(IADD)=DD1(IADD)-DDYLXJ+DDYLXR-DDXLYL
+            IADD=IUPT(JJ+2)+LL
+            DD1(IADD)=DD1(IADD)-DDXLZJ+DDXLZR-DDXLZL
+            IADD=IUPT(JJ)+LL+2
+            DD1(IADD)=DD1(IADD)-DDZLXJ+DDZLXR-DDXLZL
+            IADD=IUPT(JJ+2)+LL+1
+            DD1(IADD)=DD1(IADD)-DDYLZJ+DDYLZR-DDYLZL
+            IADD=IUPT(JJ+1)+LL+2
+            DD1(IADD)=DD1(IADD)-DDZLYJ+DDZLYR-DDYLZL
+          ENDIF
+!
+          IF (KLTEST) THEN
+            IADD=IUPT(LL)+KK
+            DD1(IADD)=DD1(IADD)+DDXIXL+DDXLXJ
+            IADD=IUPT(LL+1)+KK+1
+            DD1(IADD)=DD1(IADD)+DDYIYL+DDYLYJ
+            IADD=IUPT(LL+2)+KK+2
+            DD1(IADD)=DD1(IADD)+DDZIZL+DDZLZJ
+            IADD=IUPT(LL)+KK+1
+            DD1(IADD)=DD1(IADD)+DDYIXL+DDXLYJ
+            IADD=IUPT(LL+1)+KK
+            DD1(IADD)=DD1(IADD)+DDXIYL+DDYLXJ
+            IADD=IUPT(LL)+KK+2
+            DD1(IADD)=DD1(IADD)+DDZIXL+DDXLZJ
+            IADD=IUPT(LL+2)+KK
+            DD1(IADD)=DD1(IADD)+DDXIZL+DDZLXJ
+            IADD=IUPT(LL+1)+KK+2
+            DD1(IADD)=DD1(IADD)+DDZIYL+DDYLZJ
+            IADD=IUPT(LL+2)+KK+1
+            DD1(IADD)=DD1(IADD)+DDYIZL+DDZLYJ
+          ELSE
+            IADD=IUPT(KK)+LL
+            DD1(IADD)=DD1(IADD)+DDXIXL+DDXLXJ
+            IADD=IUPT(KK+1)+LL+1
+            DD1(IADD)=DD1(IADD)+DDYIYL+DDYLYJ
+            IADD=IUPT(KK+2)+LL+2
+            DD1(IADD)=DD1(IADD)+DDZIZL+DDZLZJ
+            IADD=IUPT(KK+1)+LL
+            DD1(IADD)=DD1(IADD)+DDYIXL+DDXLYJ
+            IADD=IUPT(KK)+LL+1
+            DD1(IADD)=DD1(IADD)+DDXIYL+DDYLXJ
+            IADD=IUPT(KK+2)+LL
+            DD1(IADD)=DD1(IADD)+DDZIXL+DDXLZJ
+            IADD=IUPT(KK)+LL+2
+            DD1(IADD)=DD1(IADD)+DDXIZL+DDZLXJ
+            IADD=IUPT(KK+2)+LL+1
+            DD1(IADD)=DD1(IADD)+DDZIYL+DDYLZJ
+            IADD=IUPT(KK+1)+LL+2
+            DD1(IADD)=DD1(IADD)+DDYIZL+DDZLYJ
+          ENDIF
+!
+          IF (ILTEST) THEN
+            IADD=IUPT(LL)+II
+            DD1(IADD)=DD1(IADD)-DDXIXL-DDXLXR
+            IADD=IUPT(LL+1)+II+1
+            DD1(IADD)=DD1(IADD)-DDYIYL-DDYLYR
+            IADD=IUPT(LL+2)+II+2
+            DD1(IADD)=DD1(IADD)-DDZIZL-DDZLZR
+            IADD=IUPT(LL)+II+1
+            DD1(IADD)=DD1(IADD)-DDYIXL-DDXLYR
+            IADD=IUPT(LL+1)+II
+            DD1(IADD)=DD1(IADD)-DDXIYL-DDYLXR
+            IADD=IUPT(LL)+II+2
+            DD1(IADD)=DD1(IADD)-DDZIXL-DDXLZR
+            IADD=IUPT(LL+2)+II
+            DD1(IADD)=DD1(IADD)-DDXIZL-DDZLXR
+            IADD=IUPT(LL+1)+II+2
+            DD1(IADD)=DD1(IADD)-DDZIYL-DDYLZR
+            IADD=IUPT(LL+2)+II+1
+            DD1(IADD)=DD1(IADD)-DDYIZL-DDZLYR
+          ELSE
+            IADD=IUPT(II)+LL
+            DD1(IADD)=DD1(IADD)-DDXIXL-DDXLXR
+            IADD=IUPT(II+1)+LL+1
+            DD1(IADD)=DD1(IADD)-DDYIYL-DDYLYR
+            IADD=IUPT(II+2)+LL+2
+            DD1(IADD)=DD1(IADD)-DDZIZL-DDZLZR
+            IADD=IUPT(II+1)+LL
+            DD1(IADD)=DD1(IADD)-DDYIXL-DDXLYR
+            IADD=IUPT(II)+LL+1
+            DD1(IADD)=DD1(IADD)-DDXIYL-DDYLXR
+            IADD=IUPT(II+2)+LL
+            DD1(IADD)=DD1(IADD)-DDZIXL-DDXLZR
+            IADD=IUPT(II)+LL+2
+            DD1(IADD)=DD1(IADD)-DDXIZL-DDZLXR
+            IADD=IUPT(II+2)+LL+1
+            DD1(IADD)=DD1(IADD)-DDZIYL-DDYLZR
+            IADD=IUPT(II+1)+LL+2
+            DD1(IADD)=DD1(IADD)-DDYIZL-DDZLYR
+          ENDIF
+
+#if KEY_DIMB==1
+          ENDIF  
+#endif
+        ENDIF
+!
+  60    CONTINUE
+        IF (MM.LT.NHB) GOTO 10
+!
+      RETURN
+      END
+

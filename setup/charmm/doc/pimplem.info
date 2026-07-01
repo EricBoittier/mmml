@@ -1,0 +1,353 @@
+CHARMM Element doc/pimplem.info $Revision: 1.1.1.1 $
+
+File: PIMPLEM, Node: Top, Up: (doc/perturb.info), Next: Description
+ 
+        Implementation of the Thermodynamic Simulation Method
+ 
+
+* Menu:
+ 
+* Description::        How Chemical Perturbation works.
+* File Formats::       Output File Formats for Chemical Perturbation.
+* IC Implementation::  Implementation and File Formats for Internal
+                       Coordinate Perturbation
+
+
+File: PIMPLEM, Node: Description, Up: Top, Next: File Formats, Previous: Top
+ 
+ 
+         How the Chemical Perturbation Energy Calculation Works
+
+ 
+        For  thermodynamic  perturbation calculations the atoms making up
+the system described by the hybrid Hamiltonian, H(lambda), can be divided
+into four groups.  1) The environment part - all atoms that do not change
+during  the  perturbation.   E.g., for ethanol -> propane the solvent and
+the  terminal  methyl  group.  2) The reactant atoms - the atoms that are
+present  at  lambda  = 0 and absent at lambda = 1. 3) The product atoms -
+the  atoms  that  are absent at lambda = 0 and present at lambda = 1.  4)
+The  COLO atoms - atoms that are present in both the reactant and product
+but change charge in going from one to the other.
+ 
+        Certain  basic  premises underly our approach.  Energy values are
+factored  by  lambda  (or  functions thereof), never the energy functions
+themselves.  The standard energy routines are called unchanged and can be
+modified  without  requiring changes to the perturbation routines as long
+as  the  calling  sequence  remains the same.  Potential energy terms are
+written  to  output  during  a  trajectory  and in the case of the window
+method  trajectories  can  be combined.  Futhermore any lambda -> lambda'
+can  be  calculated post priori and additional lambda points can be added
+as  desired.   Most  other  implementations  do not appear to allow this.
+There  is, however, a price entailed namely a certain amount of redundant
+calculation.   Furthermore , purely as a matter of conceptual preference,
+the  entire  perturbation  part of the Hamiltonian is facter by lambda in
+the  same  way.  There has been some advocacy of factoring the attractive
+and  repulsive  part of the Lennard-Jones potential with different powers
+of lambda (see Cross).
+ 
+        We  want  to  calculate  the  potential energy U(lambda) = Uenv +
+(1-lambda)**N  Ureac  +  lambda**N  Uprod,  where  N  is positive integer
+exponent  and  Uenv  is  the energy of the common environment part of the
+system.   The  residue  topology  file  for  the  system  undergoing  the
+perturbation  has  all the internal coordinate terms for both the product
+and  reactant  parts  and the regular CHARMM energy routine calculates an
+energy  term that in it's sum contains part of Ureac and Uprod along with
+Uenv  and  in  certain cases, as will be discussed shortly, an additional
+term  that  needs  to  be  removed.  The residue description must contain
+non-bonded  exclusions between the product and reactant atoms. Of course,
+none of this is factored correctly, or at all, by lambda.
+ 
+        The  approach to obtaining a the correct U(lambda) is an indirect
+one.   Instead  of making it so that the normal energy routine calculates
+Uenv  only and having the perturbation energy routine calcuated determine
+(1-lambda)**N  Ureac  + lambda**N Uprod, we have it instead calculate the
+amount that must be subtracted from the normal energy routine value (here
+after  referred  to  as  Unorm) to get U(lambda).  The previous statement
+must  be  amended  for  the case where there are COLO atoms.  Then, Unorm
+contains  a  term  that must be totally removed and is missing some terms
+completely, which must be added.
+ 
+        For  the  internal coordinate energy terms and the non-bonded van
+der  Waals interactions, the amount that must be subtracted from Unorm to
+obtain U(lambda) is given by:
+ 
+            U(lambda) = Unorm + Ucorr
+ 
+since,
+ 
+            U(lambda) = U(env) + (1 - lambda)**N Ureac + lambda**N Uprod
+and
+ 
+            Unorm = U(env) + Ureac + Uprod
+then
+            -Ucorr = [1-(1-lambda)**N]Ureac + [1-lambda**N]Uprod .
+ 
+We  have currently ignored the electrostatic terms.  If there are no COLO
+atoms the above expressions hold true for those terms as well.
+ 
+        If  there  are  COLO  atoms , the  situation  becomes  a bit more
+complicated.  To discuss this the following nomenclature is introduced:
+ 
+   [reac| reac,colo-r,env]
+ 
+The  expression  above  indicates  the  calculation  of the electrostatic
+interaction  between  reactant  atoms and 1) other reactant atoms 2) COLO
+atoms with the reactant energy charges and 3) with environment atoms.
+ 
+   Unorm contains the following electrostatic terms:
+ 
+   [reac| reac, colo-r, env] + [color | prod, colo-r, env] +
+   [prod | prod, env]
+ 
+The  term  [ colo-r | prod ]  must  be  removed in it's entirety (product
+atoms  do  not  interact with reactant charges (colo-r).  And the missing
+interactions  involving  colo-p (product) charges must be added (suitably
+factored by lambda). To do this Ucorr must contain:
+ 
+    (1 - (1 - lambda)**N) { [reac | reac, colo-r, env] +
+                            [colo-r | colo-r, env] }
+    + (1 - lambda**N)[prod | prod, env] + 1[color|prod]
+    - lambda**N [colo-p | colo-p, prod, env]
+ 
+Note that -Ucorr is passed from the perturbation energy routine, thus the
+negative  term  (last  one)  actually  adds  what is totally missing from
+Unorm.  The electrostatic contribution to Ucorr is actually calculated in
+an even more round-about fashion than that which is given above.
+ 
+        First  both  the  van  der  Waal's and electrostatic interactions
+involving reactant and product atoms with everything (except interactions
+between  reactant and product atoms) are calculated.  The reactant colo-r
+charges are used for this.  This provides the term:
+ 
+     (1 -(1-lambda)**N)[reac | env, colo-r, reac ]
+and
+     (1 - lambda**N)[prod | env, colo-r, prod ].
+ 
+If  there  are no COLO atoms, this is all we need (absent the colo-r term
+in  the expressions).  Otherwise, three more calculations, involving only
+the  electrostatic energy, are required.  The first involves interactions
+between colo-r charges with environment and other colo-r charges:
+ 
+      (1-(1-lambda)**N)[colo-r | env, colo-r]
+ 
+Next  the colo-r product atom electrostatic interaction is calculated and
+factored  by  a function of lambda that compensates for the amount in the
+second     ([prod | colo-r ...] )    calculation.     In    that    term,
+1-lambda**N[prod | colo-r] is included so we must determine,
+ 
+      (lambda**N)[colo-r| prod]
+ 
+(Since the quantity (1-lambda**N) is calculated once we actually use,
+ 
+      (1 - (1 - lambda**N))[colo-r| prod]
+ 
+Following  this the colo-r charges are exchanged, temporarily, for colo-p
+and the last calculations is done.  The final expression is:
+ 
+    -lambda**N [colo-p | prod, env, colo-p]
+ 
+Which actually adds (see above) the missing interaction into the total
+potential energy.
+ 
+        The colo-r charges are restored after this.  The same procedure
+is done for the image atom calculation.
+ 
+        It   is   obvious  that  some  optimization  of  this  method  is
+achievable.   One  possibility  is  that by sorting the atom list so that
+COLO,  reactant  and  product atoms appear at the top of the list in that
+order,  most  of  the  non-bonded  list  checking  can be avoided and the
+copying of data structures on the heap eliminated.  A more radical change
+would  be  to edit the non-bonded lists so that the normal energy routine
+calculates  only  Uenv and the perturbation routines calculated Ureac and
+Uprod  directly.   The  presence  of the COLO atoms makes both procedures
+more  complicated.   However,  there  does  not  appear  to  be  a viable
+alternative to the COLO atoms that is consistant with our approach.
+
+
+
+File: PIMPLEM, Node: File Formats, Up: Top, Previous: Description, Next: IC Implementation
+
+ 
+                             File Formats
+ 
+        This  node  provides  information  on the FES output file format.
+The  data  file  created  during dynamics can only be written as an ASCII
+formatted  file.   It  starts  with  a  title  that  is written using the
+subroutine  WRITITL and thus has the standard CHARMM title format.  After
+terminating  the  title  with  a line containing an asterisk in the first
+column and nothing else, an information line follows, containing:
+ 
+    NSTEP, PERFRQ, NDEGF, NPUMB, LPOWER  -   5(I6,1X)
+ 
+The  first  two  numbers  are  not  currently used by the post-processor.
+NDEGF, the number of degrees of freedom is used if the CTEMp flag is set.
+Npumb is the number of umbrella dihedral angles.  If the UMBR flag is set
+in  the  PROCess  command  and  NPUMB  is non-zero, the umbrella sampling
+correction will be effected.  LPOWER is the exponent for lambda scaling.
+ 
+        Every  PFREQ  steps  the  FES information is written out the unit
+specified  in  the  SAVE statement.   If umbrella sampling is invoked the
+format is as follows:
+ 
+ 
+     NPRIV,AKMATI,LAMBDA,E,VPRTTR,VPRTTP,VPRTNR,VPRTNP,
+     VPRTVR,VPRTVP,VPRTER,VPRTEP,TOTE,TOTKE,PUMEP
+ 
+     FORMAT(I12,2(1X,1PG24.16E2),/,3(2(1PG24.16E2,1X),
+     1      1PG24.16E2,/),2(1PG24.16E2,1X),1PG24.16E2)
+ 
+If umbrella sampling is not invoked it is as follows:
+ 
+     NPRIV,AKMATI,LAMBDA,E,VPRTTR,VPRTTP,VPRTNR,VPRTNP,
+     VPRTVR,VPRTVP,VPRTER,VPRTEP,TOTE,TOTKE
+ 
+     FORMAT(I12,2(1X,1PG24.16E2),/,3(2(1PG24.16E2,1X),
+     1      1PG24.16E2,/),1PG24.16E2,1X,1PG24.16E2)
+ 
+Where:
+        NPRIV     step number
+        AKMATI    timestep in wierd CHARMM units
+        LAMBDA    value of lambda at timestep
+        E         total potential energy
+        VPRTTR    V(reactant) potential energy
+        VPRTTP    V(product)  ""
+        VPRTNR    V(reactant) potential energy vdw + electrostatic
+        VPRTNP    V(product)  ""
+        VPRTVR    V(reactant) potential energy vdw
+        VPRTVP    V(product)  ""
+        VPRTER    V(reactant) potential energy  electrostatic
+        VPRTEP    V(product)  ""
+        TOTE      Total energy (potential + kinetic)
+        TOTKE     Total kinetic energy.
+and with umbrella sampling:
+        PUMEP     The exp[-beta(Vsur - Vact)] term.
+
+
+File: PIMPLEM, Node: IC Implementation, Up: Top, Previous: File Formats, Next: Top
+
+
+            Internal Coordinate Implementation and File Formats
+
+	We describe how we have incorporated the double-wide, multiple-point, 
+window method for computing conformational free energy surfaces into 
+CHARMM.  The following brief summary describes the interface of the 
+internal coordinate constraint and perturbation code with other CHARMM 
+routines, and it also shows the order in which the tasks are carried out, 
+as well as the format of the perturbation data file.
+
+	The primary internal coordinate (i.c.) constraint, perturbation, and 
+post-processing commands, as well as other TSM commands, are parsed in the 
+subroutine TSMS.  When an i.c. constraint command is read, TSMS calls 
+ICFSET to parse the remainder of the command and to set-up the data needed 
+for the constraint resetting algorithm.  When an i.c. perturbation command 
+is read, TSMS calls ICPSET to parse the remainder of the command and to 
+set-up the data needed to do the i.c. perturbations.  Post-processing 
+command parsing and set-up is handled by the subroutine TSMP.
+
+	Some time after the constraints and perturbations are specified, a 
+dynamics command is issued and the dynamics is set up.  During the dynamics 
+set-up, a "header" is written to the i.c. perturbation data file (opened on 
+unit iunicp) using the following fortran write statement in the subroutine 
+DCNTRL:
+
+	write(iunicp,100) nicp,icpinc,ndegf,delta
+100	format(3i6,f12.6)
+
+The variable nicp is the number of internal coordinates that will be 
+perturbed, icpinc is the number of subintervals, ndegf is the number of 
+degrees of freedom, and delta is the timestep in AKMA units.  After the 
+dynamics is set-up, DCNTRL calls DYNAMC to integrate the equations of 
+motion.  The main dynamics loop in DYNAMC is summarized in the following 
+pseudo-fortran code:
+
+	do istep = istart,istop	* loop over number of steps
+		...
+		call ENERGY	* get U(z) and forces
+		take unconstrained dynamics step
+		call SHAKEA	* satisfy shake and i.c. cons.
+		...
+		call DYNICP	* do pert. and get int. EÕs;
+		...
+	end do
+
+The subroutine ENERGY calculates the total potential energy and the forces 
+needed to propagate the dynamics.  After an unconstrained dynamics step is 
+taken, SHAKEA is called to satisfy the SHAKE and i.c. constraints in an 
+iterative fashion.  We have to iterate the SHAKE and i.c. constraints 
+together, because the SHAKE constraint resetting may cause an ic constraint 
+to be violated, and vice versa.  This constraint resetting procedure is 
+illustrated with the following pseudo-code:
+
+	do while (.not.done)	* e.g. until shake has converged
+             perform iteration of shake cons. resetting
+             call icfcns	       * satisfy i.c. constraints
+             done = done.and..not.anyadj    * if any i.c. constraints
+                                            * were adjusted, anyadj = 
+.true.
+	end do while
+
+After the constraints are satisfied, DYNICP is called to do the double-
+wide, multiple-point perturbations and calculate the interaction energies.  
+In DYNICP, the subroutine EIICP is called first to compute the interaction 
+energy of the unperturbed system (esbnp).  Then the internal coordinate 
+values are obtained and some data is written to the perturbation data file:
+
+	call EIICP	* get E for unperturbed system (esbnp)
+	do i = 1,nicp
+		get icval(1,i)	* get unperturbed i.c. values
+	end do
+c	write data for unperturbed system:
+	write(iunicp,100) npriv,akmati,tote,totke,esbnp
+100	format(i7,f10.4,3d16.8)
+
+The two-dimensional array icval holds the internal coordinate values.  The 
+unperturbed values are held in the first row, the values from the forward 
+perturbation in the second row, and the values from the reverse 
+perturbation in the third row.  The data written to the data file includes 
+the number of the current dynamics step (npriv), the current simulation 
+time in AKMA units (akmati), the total energy (tote), total kinetic energy 
+(totke), and the interaction energy of the unperturbed system (esbnp).
+
+	Next, the unperturbed coordinates are copied into temporary arrays so 
+they can be restored after the perturbations have been carried out.  Then 
+the double-wide, multiple point perturbations are carried out in a loop 
+over subintervals.  The forward perturbation in each subinterval is done 
+first, followed by the reverse perturbation.  The subroutine MVICP moves 
+the atoms involved in the perturbations using the algorithms described 
+above, and EIICP computed the interaction energies.  The following pseudo-
+code shows how these tasks are dispatched:
+
+	copy coords. into temp. arrays
+	scale = 0.0
+	dscale = 1.0/icpinc
+	do inc = 1,icpinc	* loop over subintervals
+		scale = scale + dscale
+		call mvicp	* move atoms by scale*dz
+		call eiicp	* get int. E for forward pert. (esbfp)
+		do i = 1,nicp
+			get icval(2,i)	* get perturbed i.c. values
+		end do
+		restore coords. from temp. arrays
+		call mvicp	* move atoms by Ðscale*dz
+		call eiicp	* get E for reverse pert. (esbrp)
+		do i = 1,nicp
+			get icval(3,i)	* get perturbed i.c. values
+		end do
+
+After all of the atoms have been moved and the interaction energies have 
+been computed for the forward and reverse perturbations in a subinterval, 
+the interaction energies and internal coordinate values are written to the 
+data file, and the unperturbed coordinates are restored in preparation for 
+the next subinterval (or the next dynamics step):
+
+c	write interaction energies of perturbed systems
+		write(iunicp,101) scale,esbfp,esbrp
+101		format(7x,f10.4,2d16.8)
+c	write internal coordinate values
+		do i = 1,nicp
+			write(iunicp,102)
+				ic,icptyp(i),icval(1,i),icval(2,i),icval(3,i)
+102		format(9x,2i4,3d16.8)
+		end do
+		restore coordinates from temp. arrays
+	end do

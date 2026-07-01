@@ -1,0 +1,796 @@
+* Testcase for the double exponential PERT/PSSP code 
+* |
+* Build a box of water, mutate one water to a dummy molecule and 
+* calc. energy, forces, dU/dL for the supported nonbonded options.
+* |
+*
+
+! Author: Stefan Boresch (stefan@mdy.univie.ac.at)
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ echo pssp1 TESTCASE RESULT: SKIP
+ stop
+endif
+
+
+
+stream datadir.def
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Preliminaries: Set up the system and PERT                           !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+read rtf card
+* tips3p water topology file
+*
+   20    1
+mass     4 ht     1.00800  ! tips3p water hydrogen
+mass    58 ot    15.999940 ! tips3p water oxygen
+mass    94 dh     1.00800  ! dummy water hydrogen
+mass    98 do    15.999940 ! dummy water oxygen
+
+resi tip3    .000   ! tips3p water model
+group
+atom oh2  ot   -0.834 
+atom h1   ht    0.417
+atom h2   ht    0.417
+bond oh2 h1  oh2 h2  h1 h2 ! the last bond is needed for shake
+thet h1   oh2  h2 
+!                            note: no donors or acceptors for tips3p
+patc  firs none last none
+end
+
+read param card
+* tips3p water parameter file
+*
+bond
+ht  ot     450.0   0.9572 ! from tips3p geometry
+ht  ht       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+dh  do     450.0   0.9572 ! from tips3p geometry
+dh  dh       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+thetas
+ht  ot  ht  55.0 104.52   ! from tips3p geometry
+dh  do  dh  55.0 104.52   ! from tips3p geometry
+!
+nonbonded   atom cdiel switch vatom vdistance vswitch -
+     cutnb 8.0  ctofnb 7.5  ctonnb 6.5  eps 1.0  e14fac 1.0  wmin 1.5
+!
+ht       0.0440    1.0       0.8000  
+ot       0.8400    6.0       1.6000  
+
+nbfix
+ot ot -0.1521 3.5364
+ht ht -0.04598 0.4490
+ot ht -0.08363 1.9927
+
+end
+
+! read in 216 tip3 solvent molecules and their
+! equilibrated coordinates.
+
+read sequ tip3 216
+gene solv setu noangle
+
+open read unit 10 card name @0tip216.crd
+read coor unit 10 card
+close unit 10
+coor orient norot
+
+
+
+set rc 7.5 ! cutoff
+set ci 6.5 ! inner switching cutoff
+set ctl 9. ! list-cutoff
+set xo 14. ! cutoff for crystal
+
+
+      
+! define energy values to check
+goto testdata
+label fromtestdata
+set ind 1
+
+shake bonh para
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 dbexp
+
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+
+! Set up PERT
+
+define wat1 sele resi 1 show end
+pert sele wat1 end
+scalar char set 0. sele wat1 end
+scalar type set 94 sele wat1 .and. hydrogen end
+scalar type set 98 sele wat1 .and. .not. hydrogen end
+
+
+! setup crystal
+
+! set parameter 9 to 18.856 A, the length of one side
+! of the box of water.  this value will be used as a scale
+! factor for all image transformations.
+
+set 9 18.856
+
+! Some Ewald parameters
+
+set bxl @9 ! box-length
+calc kp = 5./(2.*@ci) ! Ewald Kappa
+calc kmx = @kp * @bxl ! kmax
+calc ksmx = 2.*@kmx**2 ! ksqm
+
+! open and read the image transformation file for creating
+! 26 image objects around the primary structure
+
+crystal define cubic @9 @9 @9 90.0 90.0 90.0
+crystal build cutoff @xo noperations 0
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+!------------------------------------------------------------------------
+
+
+
+! CASE I: ATOM SHIF VATO DBEXP
+
+! Ia) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    shif  dbexp lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     shif  dbexp  lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! Ib) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     shif  dbexp  lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      shif dbexp  lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! Ic) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     shif  dbexp  lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE II: ATOM EIPS VATO DBEXP
+
+! IIa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    eips pxyz dbexp     lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     eips pxyz dbexp    lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     eips pxyz dbexp   lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips pxyz dbexp   lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips pxyz dbexp  lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE III: GROU SWIT VGRO DBEXP
+
+! IIIa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    swit   dbexp  lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     swit  dbexp  lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIIb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     swit dbexp  lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    swit  dbexp  lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIIc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     swit  dbexp  lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE IV: GROU EIPS VGRO DBEXP
+
+! IVa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips pxyz dbexp   lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips pxyz dbexp   lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IVb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips pxyz dbexp   lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips pxyz dbexp   lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IVc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips pxyz dbexp   lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+! CASE V: ATOM SHIF VATO DBEXP VIPS
+
+! V a) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    shif vips pxyz dbexp lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     shif  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+!  vips pxyz  b) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     shif  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      shif  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! V c) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     shif  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE VI: ATOM EIPS VATO DBEXP VIPS
+
+! VIa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    eips  vips pxyz  dbexp     lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     eips  vips pxyz  dbexp    lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! VIb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     eips  vips pxyz  dbexp   lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips  vips pxyz  dbexp   lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! VIc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE III: GROU SWIT VGRO DBEXP VIPS
+
+! VIIa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    swit   vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     swit  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! VIIb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     swit  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+    swit  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! VIIc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+     swit  vips pxyz  dbexp  lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE IIX: GROU EIPS VGRO DBEXP VIPS
+
+! IIX a) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips  vips pxyz  dbexp   lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips  vips pxyz  dbexp   lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIX b) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips  vips pxyz  dbexp   lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips  vips pxyz  dbexp   lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIXc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+       eips  vips pxyz  dbexp   lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+if @testfail eq 0 then
+   set status PASS
+else
+   set status FAIL - @testfail failing tests
+endif
+
+echo dbexp_pssp summary TESTCASE RESULT: @status
+
+stop
+
+label testdata
+set e1  -1496.64279
+set e2  -2360.62262
+set e3  -2360.62262
+set e4  -2340.28474
+set e5  -2340.28474
+set e6  -2346.70010
+set e7  -2130.84396
+set e8  -2130.84396
+set e9  -2113.56268
+set e10  -2113.56268
+set e11  -2118.37893
+set e12  -2132.74045
+set e13  -2132.74045
+set e14  -2113.12601
+set e15  -2113.12601
+set e16  -2119.00715
+set e17  -2130.84396
+set e18  -2130.84396
+set e19  -2113.56268
+set e20  -2113.56268
+set e21  -2118.37893
+set e22  -2365.37334
+set e23  -2365.37334
+set e24  -2344.94946
+set e25  -2344.94946
+set e26  -2351.39057
+set e27  -2135.59468
+set e28  -2135.59468
+set e29  -2118.22739
+set e30  -2118.22739
+set e31  -2123.06941
+set e32  -2166.12192
+set e33  -2166.12192
+set e34  -2147.23585
+set e35  -2147.23585
+set e36  -2152.77095
+set e37  -2135.59468
+set e38  -2135.59468
+set e39  -2118.22739
+set e40  -2118.22739
+set e41  -2123.06941
+
+goto fromtestdata

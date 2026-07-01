@@ -1,0 +1,78 @@
+* TEST FOR DIMS
+* Author: Juan Roberto Perilla
+* This test case is for Protein-A (1BDC). From unfolded to folded.
+*
+
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+if ?DIMS .NE. 1 THEN
+  echo "Test NOT Performed."
+  STOP
+endif
+
+stream datadir.def
+
+OPEN READ FORM UNIT 11 NAME  @0top_all22_prot.inp
+READ RTF  CARD UNIT 11
+close unit 11
+
+OPEN READ FORM UNIT 12 NAME  @0par_all22_prot.inp 
+READ PARAM CARD UNIT 12
+close unit 12
+
+! READ SEQUENCE AND GENERATE PSF
+OPEN READ CARD UNIT 1 NAME @01bdc_dims_start.crd
+READ SEQUENCE COOR UNIT 1
+GENERATE 1BDC SETUP FIRST NTER LAST CTER
+CLOSE UNIT 1
+
+
+! READ TARGET STRUCTURE
+OPEN READ CARD UNIT 1 NAME @01bdc_dims_targ.pdb
+READ COORD PDB UNIT 1
+CLOSE UNIT 1
+
+! Test DIMS Soft Ratcheting
+SET DTOL = 0.5
+SET DWIDTH = 2.5e-4
+!      Progressmeter parameters and atom selections
+SET COFF = 2.2
+SET ORIENT = 10
+
+DIMS DTOL @{DTOL} DCAR @{DWIDTH} COFF @{COFF} ORIENT @{ORIENT} HALT  -
+	SELECT ALL END
+
+! DIMS GOES FROM "COOR" TO "DIMS" 
+COOR COPY DIMS
+
+! READ INITIAL STRUCTURE
+OPEN READ CARD UNIT 1 NAME @01bdc_dims_start.pdb
+READ COORD PDB UNIT 1
+CLOSE UNIT 1
+
+
+
+
+
+! Enable self avoidance
+SCALAR FBETA SET 25.0
+SCALAR FBETA SET 0.0  select type H* end
+
+OPEN WRITE UNIT 20 UNFORM NAME @91bdcsr.dcd
+
+DYNA LEAP	LANG	START	NSTEP   500	TIMESTEP 0.002 	 -
+	IPRFRQ  5000	IHTFRQ	0	IEQFRQ	0	NTRFQ	0 	 -
+	IUNREAD	-1	IUNWRI -1	IUNCRD	20	 -
+	IUNVEL	-1	KUNIT  	-1		ISEED  945762	 -
+	NPRINT  10		NSAVC  	50		NSAVV 0    -
+	IHBFRQ  -1		INBFRQ 	-1		ILBFRQ  10000 	 -
+	RBUFFER	0.0   		TBATH	300		FIRSTT 	300 -
+	FINALT 300 	 	ECHECK	-1		IASORS 	0  -
+	IASVEL 	1 ISCVEL 0 ICHECW 0 
+
+
+
+STOP

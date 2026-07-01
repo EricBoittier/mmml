@@ -1,0 +1,72 @@
+* CHARMM c35a2 testcase, 15-Jan-2008
+* gnntest.inp: testing Genetic Neural Network commands
+* Aaron Dinner
+* External data file: data/gnn.dat
+*
+
+if ?numnode  .gt. 1  then
+  echo "Parallel file I/O broken for this test"
+  echo "Test NOT performed."
+  STOP
+endif
+
+if ?GNN .ne. 1 then
+  echo "GNN code not compiled, test NOT Performed."
+  STOP
+endif
+
+if ?numnode .gt. 1 then
+  echo "GNN not parallel, test NOT Performed."
+  STOP
+endif
+
+stream datadir.def
+
+! open the data file
+
+open read card unit 18 name @0gnn.dat
+
+! Exhaustive enumeration + Cross-validation + 1:2:1 network
+
+gnn ndata 53 nprod 0 npara 5 unit 18 seed 123 -
+    ndes 1 nhidden 2 ntarg 1 nsweep 100 mu 0.5 eta 0.5 -
+    exhaust
+
+! close the data file
+
+close unit 18
+
+! open again
+
+open read card unit 18 name @0gnn.dat
+
+! Exhaustive enumeration + Test set residual rms error evaluated +
+! 2:3:2 network
+
+gnn ndata 43 nprod 10 npara 4 unit 18 seed 234 -
+    ndes 2 nhidden 3 ntarg 2 nsweep 100 mu 0.5 eta 0.5 -
+    exhaust
+
+close unit 18
+
+open read card unit 18 name @0gnn.dat
+
+! GFA + Cross-validation + 2:2:1 network
+
+gnn ndata 53 nprod 0 npara 5 unit 18 seed 345 -
+    ndes 2 nhidden 2 ntarg 1 nsweep 100 mu 0.5 eta 0.5 -
+    gfa npopu 3 ngen 5 fitness 5.0
+
+close unit 18
+
+open read card unit 18 name @0gnn.dat
+
+! EP + Test set residual rms error evaluated + 2:3:2 network
+
+gnn ndata 43 nprod 10 npara 4 unit 18 seed 456 -
+    ndes 2 nhidden 3 ntarg 2 nsweep 100 mu 0.5 eta 0.5 -
+    ep npopu 2 ngen 5 fitness 5.0
+
+close unit 18
+
+stop

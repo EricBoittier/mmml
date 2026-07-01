@@ -1,0 +1,198 @@
+* CHARMM Testcase c28test/replica_genborn2.inp
+* Author: Shinichi Banba & Charles L. Brooks, III
+* Files:  toph19.rtf, acepar19.inp
+* Tests:  replica with generalized Born energy (One side chain)
+*         (As shown in test3, multiple side chains can be chosen)
+*
+
+set pnode
+if ?NUMNODE .gt. 1 then set pnode node 0
+
+set me replica_genborn2
+
+if ?replica .ne. 1 then
+ echo "Test NOT performed."
+ echo @me TESTCASE RESULT: SKIP
+ stop
+endif
+
+if ?ace .ne. 1 then
+ echo "Test NOT performed."
+ echo @me TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+
+!!! --- START PREPARATION ----
+open read card unit 11 name @0toph19.rtf
+read rtf  card unit 11
+close unit 11
+
+open read unit 11 card name @0param19.prm
+read param unit 11 card
+close unit 11
+
+! read ACE parameters from file:
+open read unit 11 card name @0acepar19.inp
+read ACEParameters card unit 11
+close unit 11
+
+read sequence card
+* fragment of hairpin BH8 peptide
+*
+6
+THR VAL ASN GLY LYS THR
+
+generate bh8 setup
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+! minimize a few steps to eliminate bad contacts:
+mini sd  nstep 5  nprint  10
+
+prnlev 5 @pnode
+!!! --- FINISH PREPARATION ----
+
+define back sele type N .or. type CA .or. type C .or. type O end
+define prt1 sele resid 2 .and. .not. back end
+
+! Generalized Born energy term using the param19 parameters
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0 analysis
+
+! (1) Single molecule
+energy cdie eps 1.0 cutnb 12.0 ctonnb 8.0 ctofnb 10.0 switch vswitch atom vatom
+
+set E1 ?ENER
+coor force comp
+print coor comp
+
+! Save force to file
+OPEN WRITE CARD UNIT 60 NAME @9FOR060A.DAT
+WRITE COOR COMP CARD UNIT 60 sele .not. prt1 end
+* FORCE WITHOUT REPLICA & BLOCK FOR SINGLE PART
+*
+
+OPEN WRITE CARD UNIT 60 NAME @9FOR060B.DAT
+WRITE COOR COMP CARD UNIT 60 sele prt1 end
+* FORCE WITHOUT REPLICA & BLOCK FOR DOUBLE PART
+*
+
+GBorn Clear
+
+bombl -1
+! Replicate two side chains two times
+! replicate 
+replicate A nrep 2 select prt1 end
+
+! delete original molecule
+delete atom select prt1 end
+
+
+! (2) calculate energy using block module (GBType = 2)
+!! IF you want to use GBType=2 with replica (duplicated part of system),
+!! you must assign each replica to a different block.
+!! (Shown later, GBType=1, we can assign all replicas into one block)
+!! Therefore, GBType=1 is recommended
+
+block 3
+  call 2 select segid A1 end
+  call 3 select segid A2 end
+  coef 1 1 1.0 
+  coef 2 2 0.5 
+  coef 3 3 0.5 
+  coef 1 2 0.5
+  coef 1 3 0.5
+  coef 2 3 0.0 
+end
+
+! Generalized Born energy term using the param19 parameters (GBBLCK, Type 2) 
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0 GBtype 2 analysis
+
+energy cdie eps 1.0 cutnb 12.0 ctonnb 8.0 ctofnb 10.0 switch vswitch atom vatom
+
+set E2 ?ENER
+coor force comp
+! test energies
+@qcheck @E1 @E2 0.00001 @{me}_1
+
+SCALar XCOMP   MULT 2. sele segid A* end
+SCALar YCOMP   MULT 2. sele segid A* end
+SCALar ZCOMP   MULT 2. sele segid A* end
+
+OPEN WRITE CARD UNIT 80 NAME @9FOR080A.DAT
+WRITE COOR COMP CARD UNIT 80 sele .not. (segid A*) end
+* FORCE WITH REPLICA & BLOCK FOR SINGLE PART
+*
+
+OPEN WRITE CARD UNIT 80 NAME @9FOR080B.DAT
+WRITE COOR COMP CARD UNIT 80 sele segid A1 end
+* FORCE WITH REPLICA & BLOCK FOR DOUBLE PART
+*
+
+block
+  clear
+end
+
+GBorn Clear
+! Generalized Born energy term using the param19 parameters (GBBLCK, Type 2)
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0 GBtype 1
+
+! (3) calculate energy using block module (GBType = 1)
+! reassigned the block condition
+block 2
+  call 2 select segid A* end
+  coef 1 1 1.0 
+  coef 1 2 0.5
+  coef 2 2 0.5
+end
+
+energy cdie eps 1.0 cutnb 12.0 ctonnb 8.0 ctofnb 10.0 switch vswitch atom vatom
+
+set E3 ?ENER
+! test energies
+@qcheck @E1 @E3 0.00001 @{me}_2
+
+! compare with first calculation (1)
+coor force
+SCALar X   MULT 2. sele segid A* end
+SCALar Y   MULT 2. sele segid A* end
+SCALar Z   MULT 2. sele segid A* end
+
+OPEN READ FORM UNIT 60 NAME @9FOR060A.DAT
+READ COOR COMP IGNORE UNIT 60 sele .not. (segid A1) end
+CLOSE UNIT 60
+OPEN READ FORM UNIT 60 NAME @9FOR060B.DAT
+READ COOR COMP IGNORE UNIT 60 sele segid A1 end
+CLOSE UNIT 60
+
+! test rms (should be zero)
+coor rms
+@qcheck ?RMS 0 0.0001 @{me}_3
+coor diff
+print coor sele segid A1 end
+
+! compare with second calculation (2)
+coor force
+SCALar X   MULT 2. sele segid A* end
+SCALar Y   MULT 2. sele segid A* end
+SCALar Z   MULT 2. sele segid A* end
+
+OPEN READ FORM UNIT 80 NAME @9FOR080A.DAT
+READ COOR COMP IGNORE UNIT 80 sele .not. (segid A1) end
+CLOSE UNIT 80
+OPEN READ FORM UNIT 80 NAME @9FOR080B.DAT
+READ COOR COMP IGNORE UNIT 80 sele segid A1 end
+CLOSE UNIT 80
+
+! test rms (should be zero)
+coor rms
+@qcheck ?RMS 0 0.0001 @{me}_4
+coor diff
+print coor sele segid A1 end
+
+show @E1 @E2 @E3 
+
+STOP

@@ -1,0 +1,105 @@
+* settings2.str
+* By Sonja Schwarzl & Stefan Fischer
+* Last modified June/16/2008
+*
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! general settings
+
+SET FINALRESIDUE  62   ! Total number of residues, including waters, etc
+                       ! (get from coordinate file for ex.)
+
+     ! Residue-range for which NUCS factors should be calculated :
+SET FIRSTRESIDUE   1   ! If residue FIRSTRESIDUE-1 exists, scaling-factors
+                       ! will also be determined for its sidechain and BACK2.
+
+SET LASTRESIDUE   62   ! If residue LASTRESIDUE+1 exists, scaling-factor
+                       ! for its BACK1 will also be determined.
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! Define target-region, for which "global" scaling will be done, for ex:
+
+DEFINE fixed SELE SEGID 1BPI  .AND. -
+                  (RESID 1:6 .OR. RESID 23:31 .OR. RESID 48:58 ) END
+
+DEFIne targetregion SELEct .not. fixed END
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+! For each residue that is not an amino-acid or water (such as ATP, Mg,
+! Retinal, etc.), that residue must have ONE (and only one) atom (it does
+! not matter which one) listed in the selection called UATOMS :
+
+DEFINE uatoms SELECT NONE END
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! energy function settings
+
+SET PARAM   22         ! '19' or '22'
+SET ELECTR  cdiel      ! 'rdiel' or 'cdiel'
+SET UCTONNB 99.0       ! user defined CTONNB
+SET UCTOFNB 100.0      ! user defined CTOFNB
+SET UWMIN   0.0        ! user defined WMIN (0.0 recommended)
+SET UFUNCTION  switch  ! 'SWITCH' (recommended) or 'SHIFT'
+SET UVFUNCTION vswitch ! 'VSWITCH' (recommended) or 'VSHIFT'
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! PBEQ settings
+
+SET EPSWAT 80.0        ! solvent dielectric contant
+SET EPSPROT 1.0        ! protein dielectric constant
+SET CON 0.145          ! ion concentration (M)
+SET TEM 293.0          ! temperature
+set sw 1.5             ! smoothing window
+set offset 0.7         ! offset to be added to atomic radii
+
+
+! User defined setting for membrane proteins
+! If there is no membrane, set NTMEMB, NHEAD, NZMEMB, NVMEMB to 0.0
+!                              NEPSM, NEPSH to 1.0
+SET NTMEMB 0.0         !  thickness of the membrane
+SET NHEAD 0.0          !  thickness of the headgroup region
+SET NZMEMB 0.0         !  position (along Z) of the membrane center
+SET NEPSM 1.0          !  membrane dielectric constant
+SET NEPSH @NEPSM       !  membrane headgroup dielectric constant
+SET NVMEMB  0.0        !  potential difference across the membrane (Volts) 
+
+
+! Box-dimensions (grip-points, use odd numbers) and grid spacing,
+! in three steps.
+! Protein dimensions in X-direction approximately XMAX - XMIN + 6 A
+
+! For ex. for BPTI :
+! STATISTICS FOR  904 SELECTED ATOMS:
+!    XMIN =  -20.453580 XMAX =   19.599980 XAVE =    0.000000
+!    YMIN =  -12.824930 YMAX =   12.424300 YAVE =    0.000000
+!    ZMIN =  -10.845289 ZMAX =   16.592690 ZAVE =    0.000000
+!    WMIN =    0.224500 WMAX =    2.275000 WAVE =    1.512901
+!
+! X = 46.05356
+! Y = 31.24923
+! Z = 33.437979
+
+
+! first step: leaves 25 A around the protein:
+
+SET DCEL1 4.0        ! grid spacing 
+SET NCLX1 25         ! number of grid points in X-direction
+SET NCLY1 21         !                          Y
+SET NCLZ1 21         !                          Z
+
+! second step: leaves 10 A
+
+SET DCEL2 2.0
+SET NCLX2 33
+SET NCLY2 27
+SET NCLZ2 27
+
+! third step: leaves 5 A
+
+SET DCEL3 1.0
+SET NCLX3 57
+SET NCLY3 43
+SET NCLZ3 45
+
+RETURN

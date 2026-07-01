@@ -1,0 +1,52 @@
+* test hbanalysis facility with vdwr-dependent cutoff
+* Lennart Nilsson, May 2016
+*
+stream datadir.def
+set testfail 0
+
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+read rtf  card name @0top_all22_prot.inp
+read para card name @0par_all22_prot.inp
+
+read sequ tip3 2
+gene wat noangle nodihe 
+read coor card
+* one water molecule
+*
+    3
+    1    1 TIP3 OH2    2.53067   0.59634  -2.47655
+    2    1 TIP3 H1     2.61978   1.54016  -2.60884
+    3    1 TIP3 H2     1.89243   0.32098  -3.13461
+coor dupl sele resi 1 end sele resi 2 end
+
+coor orie sele resi 1 .and. .not. type h2 end
+coor orie noro sele resi 1 .and. type OH2 end
+coor dupl sele resi 1 end sele resi 2 end
+coor trans xdir 3.0 sele resi 2 end
+print coor
+coor hbond sele hydrogen end sele .not. hydrogen end verb
+coor hbond sele hydrogen end sele .not. hydrogen end
+set status pass
+if ?NHBOND .ne. 1 set status fail 
+scalar radius show sele type oh2 end
+coor hbond sele hydrogen end sele .not. hydrogen end verb vdwr
+coor hbond sele hydrogen end sele .not. hydrogen end vdwr
+if ?NHBOND .ne. 1 set status fail 
+coor hbond sele hydrogen end sele .not. hydrogen end vdwr cut 0.0
+if ?NHBOND .ne. 3 set status fail 
+coor hbond sele hydrogen end sele .not. hydrogen end vdwr cut -1.6 
+if ?NHBOND .ne. 0 set status fail 
+coor hbond sele hydrogen end sele .not. hydrogen end vdwr verb cut +1.0
+coor hbond sele hydrogen end sele .not. hydrogen end vdwr cut +1.0
+if ?NHBOND .ne. 4 set status fail 
+scalar type set 83 sele atom * 2 oh2 end
+scalar radius show sele type oh2 end
+coor hbond sele hydrogen end sele .not. hydrogen end vdwr cut -1.6 
+if ?NHBOND .ne. 1 set status fail 
+
+
+echo hba3 testcase result: @status

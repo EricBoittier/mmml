@@ -1,0 +1,226 @@
+* xtlala2 : Crystal testcase
+* xtl_ala[5-6].inp from Martin J. Field, 22-NOV-90
+*
+
+if ?novibran .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+Read rtf card
+* Alanine Topology File.
+*
+    19    1
+ MASS     2 HC     1.00800
+ MASS     3 HA     1.00800
+ MASS    11 C     12.01100
+ MASS    16 CT    12.01100
+ MASS    40 NH3   14.00700
+ MASS    52 OC    15.99900
+
+ AUTOGENERATE ANGLES
+ DEFA FIRS NONE LAST NONE
+
+ RESI ALA     0.00000
+ GROU
+ ATOM HT1  HC      0.44
+ ATOM HT2  HC      0.44
+ ATOM HT3  HC      0.44
+ ATOM N    NH3    -0.86
+ ATOM CA   CT      0.23
+ ATOM HA   HA      0.05
+ ATOM CB   CT     -0.28
+ ATOM HB1  HA      0.09
+ ATOM HB2  HA      0.09
+ ATOM HB3  HA      0.09
+ ATOM C    C       0.95
+ ATOM OT1  OC     -0.84
+ ATOM OT2  OC     -0.84
+
+ BOND   HT1  N     HT2  N     HT3  N
+ BOND   HB1  CB    HB2  CB    HB3  CB
+ BOND   N    CA    CA   C     CA   CB
+ BOND   CA   HA    OT1  C     OT2  C
+
+ DIHE  HT2  N    CA   C         HT1  N    CA   C         HT3  N    CA   C
+ DIHE  HT2  N    CA   HA        HT1  N    CA   HA        HT3  N    CA   HA
+ DIHE  HT2  N    CA   CB        HT1  N    CA   CB        HT3  N    CA   CB
+ DIHE  HB3  CB   CA   N         HB2  CB   CA   N         HB1  CB   CA   N
+ DIHE  HB3  CB   CA   HA        HB2  CB   CA   HA        HB1  CB   CA   HA
+ DIHE  HB3  CB   CA   C         HB2  CB   CA   C         HB1  CB   CA   C
+ DIHE  N    CA   C    OT2
+
+ IMPH  C    CA    OT2  OT1
+
+END
+
+Read param card
+* Parameter file for alanine.
+*
+
+ BONDS
+ HA   CT     330.0          1.10
+ HA   C      330.0          1.10
+ HC   NH3    405.0          1.04
+ C    CT     250.0          1.52! 185.0          1.52
+ C    OC     450.0          1.25! 450.0          1.26
+ CT   CT     235.5          1.53
+ CT   NH3    300.0          1.50! 235.5          1.45
+
+
+ THETAS
+ HC   NH3  HC      40.0     109.5
+ HC   NH3  CT      40.0     109.5
+ HA   CT   HA      38.0     108.5
+ HA   CT   C       60.0     109.0
+ HA   CT   CT      45.0     109.5
+ HA   CT   NH3     60.0     107.5! 51.5     109.5
+ C    CT   CT      50.0     111.0
+ C    CT   NH3     50.0     112.0!45.3 110.0
+ CT   C    OC      60.0     115.0!40.0 116.0
+ CT   CT   NH3     70.0     110.0!67.7 110.0
+ OC   C    OC      70.0     130.0! 50.0 128.0
+
+ PHI
+ X    C    CT   X        0.0       3 0.0000
+ X    CT   CT   X        0.157     3 0.0000
+ X    CT   NH3  X        0.138     3 0.0000 !0.138
+
+ IMPHI
+ C    X    X    CT       20.0      0 0.0 !5.75      0 0.0
+ C    X    X    OC       20.0      0 0.0 !5.75      0 0.0000
+ !
+ NONBONDED  CUTNB 21.0 CTOFNB 20.0 CTONNB 19.0 EPS 1.0  E14FAC 0.5
+ !
+  !           -eps   sigma/2 * [2^(1/6)] = RMIN
+  C    0.0   -0.0903   1.8
+  CT   0.0   -0.0903   1.8
+  HA   0.0   -0.0045   1.468
+  HC   0.0   -0.0045   0.8
+  NH3  0.0   -0.2384   1.6      !#
+  OC   0.0   -0.6469   1.6      !#  !!! -1.0244   1.482
+
+END
+
+Read sequence card
+* Alanine
+*
+   4
+ALA ALA ALA ALA
+Generate ALA setup
+
+Read coor card
+* OPTIMISED COORDINATES FOR THE FULL UNIT CELL OF CRYSTALLINE
+* ALANINE (4 MOLECULES). THE LATTICE IS OPTIMISED WITH A = 5.59967,
+* B = 12.19617 AND C = 5.40430 ANGSTROMS.
+*  DATE:    12/16/91     19:53:39      CREATED BY USER: chmgr
+*
+   52
+    1    1 ALA  HT1    4.22354   0.69044   1.14067 ALA  1      0.00000
+    2    1 ALA  HT2    4.68910   2.32521   1.16889 ALA  1      0.00000
+    3    1 ALA  HT3    3.52711   1.81136   0.04193 ALA  1      0.00000
+    4    1 ALA  N      3.88235   1.67827   1.01417 ALA  1      0.00000
+    5    1 ALA  CA     2.81475   1.95981   2.02455 ALA  1      0.00000
+    6    1 ALA  HA     2.55581   3.02204   1.91028 ALA  1      0.00000
+    7    1 ALA  CB     1.57890   1.10282   1.73405 ALA  1      0.00000
+    8    1 ALA  HB1    1.17650   1.35817   0.74283 ALA  1      0.00000
+    9    1 ALA  HB2    0.81087   1.29741   2.49509 ALA  1      0.00000
+   10    1 ALA  HB3    1.83685   0.03352   1.75617 ALA  1      0.00000
+   11    1 ALA  C      3.28934   1.73119   3.46075 ALA  1      0.00000
+   12    1 ALA  OT1    4.19504   0.89180   3.63382 ALA  1      0.00000
+   13    1 ALA  OT2    2.75487   2.43400   4.34589 ALA  1      0.00000
+   14    2 ALA  HT1    7.02337   5.40765  -1.14067 C  1 1      0.00000
+   15    2 ALA  HT2    7.48893   3.77288  -1.16889 C  1 1      0.00000
+   16    2 ALA  HT3    6.32694   4.28673  -0.04193 C  1 1      0.00000
+   17    2 ALA  N      6.68218   4.41982  -1.01417 C  1 1      0.00000
+   18    2 ALA  CA     5.61458   4.13828  -2.02455 C  1 1      0.00000
+   19    2 ALA  HA     5.35564   3.07605  -1.91028 C  1 1      0.00000
+   20    2 ALA  CB     4.37873   4.99527  -1.73405 C  1 1      0.00000
+   21    2 ALA  HB1    3.97633   4.73992  -0.74283 C  1 1      0.00000
+   22    2 ALA  HB2    3.61070   4.80068  -2.49509 C  1 1      0.00000
+   23    2 ALA  HB3    4.63668   6.06456  -1.75617 C  1 1      0.00000
+   24    2 ALA  C      6.08917   4.36690  -3.46075 C  1 1      0.00000
+   25    2 ALA  OT1    6.99487   5.20629  -3.63382 C  1 1      0.00000
+   26    2 ALA  OT2    5.55470   3.66409  -4.34589 C  1 1      0.00000
+   27    3 ALA  HT1   -4.22354   6.78852   1.56148 C  2 1      0.00000
+   28    3 ALA  HT2   -4.68910   8.42329   1.53326 C  2 1      0.00000
+   29    3 ALA  HT3   -3.52711   7.90944   2.66022 C  2 1      0.00000
+   30    3 ALA  N     -3.88235   7.77635   1.68798 C  2 1      0.00000
+   31    3 ALA  CA    -2.81475   8.05789   0.67760 C  2 1      0.00000
+   32    3 ALA  HA    -2.55581   9.12012   0.79187 C  2 1      0.00000
+   33    3 ALA  CB    -1.57890   7.20090   0.96810 C  2 1      0.00000
+   34    3 ALA  HB1   -1.17650   7.45625   1.95932 C  2 1      0.00000
+   35    3 ALA  HB2   -0.81087   7.39550   0.20706 C  2 1      0.00000
+   36    3 ALA  HB3   -1.83685   6.13161   0.94598 C  2 1      0.00000
+   37    3 ALA  C     -3.28934   7.82927  -0.75860 C  2 1      0.00000
+   38    3 ALA  OT1   -4.19504   6.98988  -0.93167 C  2 1      0.00000
+   39    3 ALA  OT2   -2.75487   8.53208  -1.64374 C  2 1      0.00000
+   40    4 ALA  HT1   -1.42370  -0.69044   3.84282 C  3 1      0.00000
+   41    4 ALA  HT2   -1.88926  -2.32521   3.87104 C  3 1      0.00000
+   42    4 ALA  HT3   -0.72727  -1.81136   2.74408 C  3 1      0.00000
+   43    4 ALA  N     -1.08251  -1.67827   3.71632 C  3 1      0.00000
+   44    4 ALA  CA    -0.01491  -1.95981   4.72670 C  3 1      0.00000
+   45    4 ALA  HA     0.24403  -3.02204   4.61243 C  3 1      0.00000
+   46    4 ALA  CB     1.22094  -1.10282   4.43620 C  3 1      0.00000
+   47    4 ALA  HB1    1.62334  -1.35817   3.44498 C  3 1      0.00000
+   48    4 ALA  HB2    1.98897  -1.29741   5.19724 C  3 1      0.00000
+   49    4 ALA  HB3    0.96298  -0.03352   4.45832 C  3 1      0.00000
+   50    4 ALA  C     -0.48950  -1.73119   6.16290 C  3 1      0.00000
+   51    4 ALA  OT1   -1.39520  -0.89180   6.33597 C  3 1      0.00000
+   52    4 ALA  OT2    0.04497  -2.43400   7.04804 C  3 1      0.00000
+
+!!!!! xtl_ala5.inp
+! P1 Crystal image file generation.
+
+! Define the crystal.
+Crystal Define orthorhombic 5.59967 12.19617 5.40430 90.0 90.0 90.0
+
+! Build the P1 crystal.
+Crystal Build cutoff 10.0 noperations 0
+
+! Write out the crystal.
+Open write card unit 14 name @9xtl_alap1.xtl
+Crystal Write card unit 14
+* Crystal file for the L-alanine vibrational analysis. P1 space group.
+* Cutoff is 10.0 angstroms.
+*
+
+! Calculate an energy to check the coordinates.
+Energy inbfrq 50 imgfrq 50 ihbfrq 50 cutim 99.0
+
+!!!!! xtl_ala6.inp
+! Vibration and Phonon analysis.
+
+! Read in an existing transformation file.
+Open read card unit 14 name @9xtl_alap1.xtl
+Crystal Read card unit 14
+
+! Calculate an energy with an update.
+Energy imgfrq 10 inbfrq 10 ihbfrq 0 cutim 999.0
+
+! Perform the vibration calculation.
+Crystal Vibration
+
+! Write out the vibration eigenvalues and eigenvectors.
+Open write unformatted unit 17 name @9xtl_ala.vib
+Crystal Write Vibrations unit 17
+* Vibrations for the fully optimised L-alanine crystal.
+*
+
+! Perform the phonon calculation.
+Crystal Phonon nkpoints 3 kvector 0.0 0.0 0.0 to 0.5 0.5 0.5
+
+! Print the results (the 24 lowest modes and the carbons only).
+Crystal Print Phonons fact 10.0 modes 1 thru 24 -
+                          kpts 1 to 3 select type C* end
+
+! Write out the phonon eigenvalues and eigenvectors.
+Open write unformatted unit 17 name @9xtl_ala.phn
+Crystal Write Phonons unit 17
+* Phonons for the fully optimised L-alanine crystal in the direction
+* 0.0 0.0 0.0 to 0.5 0.5 0.5 with 3 points on each dispersion curve.
+*
+
+Stop

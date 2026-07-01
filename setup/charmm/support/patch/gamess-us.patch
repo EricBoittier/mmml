@@ -1,0 +1,12 @@
+diff -Nur gamess-nofq/grd1.src gamess-fq/grd1.src
+--- gamess-nofq/grd1.src	Tue Nov 28 18:37:59 2000
++++ gamess-fq/grd1.src	Tue Nov 28 18:37:29 2000
+@@ -1393,6 +1393,8 @@
+       CALL HELFEY(X(LDA),X(LDERIV),L2)
+       CALL TVDER(X(LDA),X(LDERIV),X(LDERIV1),L2,0)
+       CALL DENDD1(X(LDA),X(LDB),L2)
++C Call to FlucQ
++      CALL FQQMMM(X(LDA))
+ C
+       IF(RMETHOD.NE.ANONE) THEN 
+ C

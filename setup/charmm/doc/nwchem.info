@@ -1,0 +1,235 @@
+CHARMM Element doc/nwchem.info 1.1
+
+File: Nwchem, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+   Combined Quantum Mechanical and Molecular Mechanics Method
+                  Based on NWChem in CHARMM
+
+                     by Milan Hodoscek
+                         July 2017
+            (milan@cmm.ki.si, hmilan@gmail.com)
+
+
+        Ab initio program NWChem (http://www.nwchem-sw.org) is
+connected to CHARMM program in a QM/MM method.  The implementation is
+based on the gukini.src source file which already works for other ab
+initio programs interfaced to CHARMM. Since this is more than 2 decades
+later than the first ab initio program interfaced to CHARMM (GAMESS in
+1993) some of the strategies are much cleaner and more easy to
+maintain for NWChem program interface than for others. Since both
+programs, NWCHem and CHARMM are linked into a single executable, we
+need to protect NWCHem library calls in CHARMM by #if KEY_NWCHEM==1,
+because the routines are not available when there are no NWChem
+libraries installed on a machine.
+
+
+* Menu:
+
+* Description::         Description of the NWCHem commands.
+* Using::               How to run NWChem in CHARMM.
+* Replica path::        How to run NWChem/CHARMM with REPLICA/PATH.
+* Installation::        How to install NWChem in CHARMM environment.
+* Status::              Status of the interface code.
+* Functionality::       Functionality of the interface code.
+* Implementation::      Implementation.
+
+File: Nwchem, Node: Description, Up: Top, Next: Usage, Previous: Top
+
+        The NWChem QM potential is initialized with the NWCHem command.
+
+[SYNTAX NWCHem]
+
+NWCHem  [REMOve] [EXGRoup] [QINPut] [BLURred] (atom selection)
+
+REMOve:  Classical energies within QM atoms are removed.
+
+EXGRoup: QM/MM Electrostatics for link host groups removed.
+
+QINPut:  Charges are taken from PSF for the QM atoms. Charges
+         may be non integer numbers. Use this with the REMOve!
+
+BLURred: MM charges are scaled by a gaussian function.
+         Width of the gaussian function is specified in WMAIN array 
+         (usually by SCALar command)
+         The value for charge is taken from PSF. Some values of WMAIN have
+         special meaning: 
+
+         WMAIN.GT.999.0 ignore this atom from the QM/MM interaction
+         WMAIN.EQ.0.0 treat this atom as point charge in the QM/MM potential
+                
+         The atoms in selection will be treated as QM atoms.
+
+        Link atom may be added between an QM and MM atoms with the
+following command:
+
+
+ADDLinkatom  link-atom-name  QM-atom-spec  MM-atom-spec
+
+      link-atom-name ::= a four(8? check) character descriptor starting with QQ.
+
+      atom-spec::= {residue-number atom-name}
+                   { segid  resid atom-name }
+                   { BYNUm  atom-number     }
+
+        When using link atoms to break a bond between QM and MM
+regions bond and angle parameters have to be added to parameter file
+or better use READ PARAm APPEnd command. Also note that QQH type has
+to be added in the RTF file (see test/cquantum/gmstst.inp).
+
+        If define is used for selection of QM region put it after all
+ADDLink commands so the numbers of atoms in the selections are not
+changed. Link atoms are always selected as QM atoms.
+
+        If you see the following error in your output script:
+FNIDEL> Cannot find element type for number....
+That means you either have wrong order in the ADDLink command or the atom
+that should be MM is in the QM selection.
+
+=======================================================================
+
+File: Nwchem, Node: Usage, Up: Top, Next: Replica Path , Previous: Description
+
+        In order to run NWChem and CHARMM on parallel machines I/O of
+NWChem and CHARMM was separated. This is now true even for scalar
+runs. CHARMM input scripts are the same as before except the addition of
+ENVIronment commands and NWCHem command itself. NWChem commands are in a
+separate file which is pointed to by NWCHEM_INPUT environment variable.
+
+        Names of the files for NWChem are specefied with environment
+variables as follows:
+
+     use ENVIronment command inside CHARMM
+     
+     envi NWCHEM_INPUT   "nwchem.nw"  ! quotes needed for lowercase names
+     envi NWCHEM_OUTPUT  "nwchem.out"
+     envi NWCHEM_RTDB    "ala.db"
+
+        For complete information about NWChem input see the
+documentation file in NWChem distribution.
+
+Example:
+--------
+
+NWChem commands have to be in a separate file. Example for the NWChem input
+follows:
+
+----------------------------------------------------------------------------
+title "the interface with charmm"
+
+# this input is because we don't want to parse
+# QM stuff in CHARMM
+
+# this name must match the envi command in CHARMM script:
+# envi NWCHEM_RTDB "ala.db"
+start ala
+
+basis
+ * library sto-3g
+end
+
+# anything goes here, but for practical reasons one
+# should make an atom (or more) with the same multiplicity & charge
+# as a QM region
+
+geometry noautosym
+Li 0 0 0
+end
+
+charge -1
+#scf
+#singlet
+#uhf
+#end
+
+#dft
+#xc b3lyp
+#end
+
+# We use the same task for real QM/MM run
+task scf gradient
+----------------------------------------------------------------------------
+
+        The above is for STO-3G calculation of a charged QM region. Geometry
+block cannot be empty, but it can contain as few as possible atoms.
+However keeping the original NWChem input scripting allows for
+independent development of both programs, and it is easy to work with
+the new features of NWChem within CHARMM interface, without additional
+devlopment in the interface code in the CHARMM program.
+
+[NOTE: For more examples look at test/cquantum/nwchemtst.inp]
+
+==========================================================
+
+
+File: Nwchem, Node: Replica Path, Up: Top, Next: Installation, Previous: Usage
+
+Replica/Path method (parallel/parallel setup)
+---------------------------------------------
+
+        Running NWChem/CHARMM interface with Replica/Path method needs
+few additional steps:
+
+        - NWChem/CHARMM must be compiled with the parallel
+          functionality. Make sure that the GENCOMM keyword is in
+          pref.dat. (Run CHARMM interactively and type pref).
+
+        - The number of processes must be equal to number of replicas
+          multiplied by an integer (1,2,3...). This ensures that each
+          replica is an independent process. If the factor is more
+          than 1, it means each replica will run itself in parallel
+          (parallel/parallel).
+
+        - NWChem control file (the one assigned to the INPUT environment
+          variable) must be linked the number of replica times. Each
+          symbolic link must have _<int> appended to the original
+          name:
+              ln -s test.gms test.gms_1
+              ln -s test.gms test.gms_2, etc
+          the number of links must be greater or equal to the number
+          of replicas
+
+        - The path to the above link must be absolute. This depends on
+          the way CHARMM is run in parallel. For example for MPICH
+          library one must use the following command:
+
+              charmm -p4wd /data/rpath/reaction -p4pg 20cpus < inp > out
+
+              The /data/rpath/reaction must be the same on all the
+              processes, either exact copies or NFS mounted.
+
+        - The nwchem output files have also _<int> appended to their names.
+
+
+
+File: Nwchem, Node: Installation, Up: Top, Next: Status, Previous: Replica Path
+
+Installation
+------------
+
+        Look at the NWChem home page for instructions how to obtain
+and compile the code. Currently it is tested with the following
+environment vriables (see the details about the environemnt in the
+nwchem web pages):
+
+export LARGE_FILES="TRUE"
+export USENOFSCHECK="TRUE"
+export NWCHEM_TOP="/home/milan/proj/nwchem/nwchem-6.6"
+export NWCHEM_TARGET="LINUX64"
+#export NWCHEM_MODULES="all"
+export NWCHEM_MODULES="qm"
+export USE_MPI="y"
+export FC="mpif90"
+export F77="mpif77"
+
+Then for CHARMM compilation of ~/c42b1 tree one can use:
+
+export NWCHEM_LIB_CHARMM="/home/milan/proj/nwchem/nwchem-6.6"
+mkdir ~/c42b1/build
+cd  ~/c42b1/build
+../configure --nwchem
+make -j 8
+
+
+
+

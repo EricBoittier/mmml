@@ -1,0 +1,184 @@
+*Test LONEPAIR statement in RTF
+*
+stream datadir.def
+read rtf card
+* Topology information
+*
+31  1
+
+MASS  1   H     1.00800  H ! polar H
+MASS  4   HT    1.008000 H ! TIPS3P WATER HYDROGEN
+MASS  5   HTP   1.008    H ! TIPnP (and TIP4P-Ewal, TIP4P-2005)
+MASS 72   OC   15.99900  O ! carboxylate oxygen
+MASS 73   OT   15.999400 O ! TIPS3P WATER OXYGEN
+MASS 75   OT3B 15.999400 O ! TIPS3P WATER OXYGEN, TIP3P-PME, model B
+MASS 76   OT3F 15.999400 O ! TIPS3P WATER OXYGEN, TIP3P-PME, model F
+MASS 77   OT4  15.999400 O ! TIP4P WATER OXYGEN
+MASS 78   OT4E 15.999400 O ! TIP4P-Ewald WATER OXYGEN
+MASS 79   OT45 15.999400 O ! TIP4P-2005 WATER OXYGEN
+MASS 80   OT5  15.999400 O ! TIP5P WATER OXYGEN
+MASS 81   OT5E 15.999400 O ! TIP5P-Ewald WATER OXYGEN
+MASS 90   SOD  22.989770 NA ! Sodium Ion
+MASS 91   MG   24.305000 MG ! Magnesium Ion
+MASS 92   POT  39.102000 K  ! Potassium Ion! check masses
+MASS 93   CES 132.900000 CS ! Cesium Ion
+MASS 94   CAL  40.080000 CA ! Calcium Ion
+MASS 95   CLA  35.450000 CL ! Chloride Ion
+MASS 96   ZN   65.370000 ZN ! zinc (II) cation
+MASS 113  LP    0.0      H  ! general lonepair
+default first none last none
+
+RESI TIP4         0.000 ! tip4p water model, generate using noangle nodihedral
+GROUP
+ATOM OH2  OT4     0.0
+ATOM OM   LP     -1.04
+ATOM H1   HTP     0.52
+ATOM H2   HTP     0.52
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+BOND OH2  OM
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2
+DONOR H1 OH2
+DONOR H2 OH2
+LONEPAIR bisector OM OH2 H1 H2  distance 0.15 angle 0.0 dihe 0.0
+IC   H1   OM   *OH2   H2    0.9572   52.26  180.00   52.26   0.9572
+IC   H2   H1    OH2   OM    0.0000    0.00    0.00   52.26   0.15
+PATCHING FIRS NONE LAST NONE
+
+end
+
+read para card 
+* Parameter information
+*
+
+BONDS
+!
+!V(bond) = Kb(b - b0)**2
+!
+!Kb: kcal/mole/A**2
+!b0: A
+!
+!atom type Kb          b0
+!
+HT    HT       0.0       1.5139  ! from TIPS3P geometry (for SHAKE w/PARAM)
+HT    OT     450.0       0.9572  ! from TIPS3P geometry
+HTP   OT3B   450.0       0.9572  ! from TIPS3P geometry
+HTP   OT3F   450.0       0.9572  ! from TIPS3P geometry
+HTP   HTP      0.0       1.5139  ! from TIP4P  geometry (for SHAKE w/PARAM)
+HTP   OT4    450.0       0.9572  ! from TIP4P  geometry
+HTP   OT4E   450.0       0.9572  ! from TIP4P  geometry
+HTP   OT45   450.0       0.9572  ! from TIP4P  geometry
+HTP   OT5    450.0       0.9572  ! from TIP4P  geometry
+HTP   OT5E   450.0       0.9572  ! from TIP4P  geometry
+OT4   LP       0.0       0.15    ! from TIP4P  geometry
+OT4E  LP       0.0       0.15    ! from TIP4P  geometry
+OT45  LP       0.0       0.15    ! from TIP4P  geometry
+OT5   LP       0.0       0.7     ! from TIP5P  geometry
+OT5E  LP       0.0       0.7     ! from TIP5P  geometry
+OC    H      545.0       0.9700  ! hydroxide ion
+
+ANGLES
+!
+!V(angle) = Ktheta(Theta - Theta0)**2
+!
+!V(Urey-Bradley) = Kub(S - S0)**2
+!
+!Ktheta: kcal/mole/rad**2
+!Theta0: degrees
+!Kub: kcal/mole/A**2 (Urey-Bradley)
+!S0: A
+!
+!atom types     Ktheta    Theta0   Kub     S0
+!
+HT   OT   HT     55.0      104.52   ! FROM TIP3P  GEOMETRY
+HTP  OT3B HTP    55.0      104.52   ! FROM TIP3P  GEOMETRY
+HTP  OT3F HTP    55.0      104.52   ! FROM TIP3P  GEOMETRY
+HTP  OT4  HTP    55.0      104.52   ! FROM TIP4P  GEOMETRY
+HTP  OT4E HTP    55.0      104.52   ! FROM TIP4P  GEOMETRY
+HTP  OT45 HTP    55.0      104.52   ! FROM TIP4P  GEOMETRY
+HTP  OT5  HTP    55.0      104.52   ! FROM TIP5P  GEOMETRY
+HTP  OT5E HTP    55.0      104.52   ! FROM TIP5P  GEOMETRY
+
+DIHEDRALS
+!
+!V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+!
+!Kchi: kcal/mole
+!n: multiplicity
+!delta: degrees
+!
+!atom types             Kchi    n   delta
+!
+
+
+!
+IMPROPER
+!
+!V(improper) = Kpsi(psi - psi0)**2
+!
+!Kpsi: kcal/mol/rad**2
+!psi0: degrees
+!note that the second column of numbers (0) is ignored
+!
+!atom types           Kpsi                   psi0
+!
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+!TIPnP LJ parameters
+HT       0.0       -0.046     0.2245
+HTP      0.0       -0.0       0.0
+OT       0.0       -0.1521    1.7682
+OT3B     0.0       -0.102     1.7892
+OT3F     0.0       -0.098     1.7926
+OT4      0.0       -0.155     1.7699
+OT4E     0.0       -0.16275   1.7759
+OT45     0.0       -0.1852    1.7726
+OT5      0.0       -0.16      1.7508
+OT5E     0.0       -0.16275   1.7379
+
+!for hydroxide
+OC     0.000000  -0.120000     1.700000 ! ALLOW   POL ION
+                ! JG 8/27/89
+H      0.000000  -0.046000     0.224500 ! ALLOW PEP POL SUL ARO ALC
+                ! same as TIP3P hydrogen, adm jr., 7/20/89
+!ions
+ZN     0.000000  -0.250000     1.090000 ! ALLOW  ION
+                   ! RHS March 18, 1990
+SOD      0.0       -0.0469    1.36375   ! sodium
+                   ! D. Beglovd and B. Roux, dA=-100.8 kcal/mol
+POT      0.0       -0.0870    1.76375   ! potassium
+                   ! D. Beglovd and B. Roux, dA=-82.36+2.8 = -79.56 kca/mol
+CLA      0.0       -0.150      2.27     ! chloride
+                   ! D. Beglovd and B. Roux, dA=-83.87+4.46 = -79.40 kcal/mol
+CAL      0.0       -0.120      1.367    ! Calcium
+                   ! S. Marchand and B. Roux, dA = -384.8 kcal/mol
+MG       0.0       -0.0150    1.18500   ! Magnesium
+                   ! B. Roux dA = -441.65
+CES      0.0       -0.1900    2.100
+                   ! Cesium, so far untested.
+LP       0.0       -0.0       0.0
+end
+
+
+read sequence TIP4 3
+gene wat noangle nodihe
+
+read coor card unit 5
+* 3 water molecules
+*
+    3
+    1    1 TIP4 OH2    9.11985 -14.53327   2.81312 WAT  1      0.00000
+    2    1 TIP4 H1     8.63312 -13.95255   3.39800 WAT  1      0.00000
+    3    1 TIP4 H2     8.84539 -15.41446   3.06688 WAT  1      0.00000
+coor dupl sele ires 1 end sele ires 2 end
+coor dupl sele ires 1 end sele ires 3 end
+coor trans xdir 4.0 sele ires 2 end
+coor trans ydir 4.0 sele ires 3 end
+
+coor shake
+energy
+
+@testcheck ?ener 1.82506 0.0001 lp-rtf
+

@@ -1,0 +1,188 @@
+*  TESTSEL2 : Test for atom and tag selection using
+*  the recursive selection routine SELRPN
+*
+
+stream datadir.def
+
+OPEN READ FORM UNIT 1 NAME  @0toph8.rtf
+read rtf card unit 1
+close unit 1
+bomlev -2
+OPEN READ FORM UNIT 2 NAME  @0param4.prm
+read parameter card unit 2
+close unit 2
+nobomb
+
+read sequence cards
+* PTI SEQUENCE
+*
+    6
+ARG PRO ASP PHE CYS LEU
+generate  M1
+
+read sequence cards
+* PTI SEQUENCE
+*
+    1
+CYS
+generate M2
+
+patch DISU  M1 5   M2 1
+
+read sequence water 1
+generate  SOLV
+
+!check error handling
+
+cons fix sele atom m1 1 *
+cons fix sele atom m1 1 end
+cons fix sele atom m1 1 * .around. 2.0 end
+
+read coor card
+* Part of BPTI CRYSTAL STRUCTURE
+*
+   60
+    1    1 ARG  N     26.52150  27.41672  -2.68671
+    2    1 ARG  CA    25.60287  26.90862  -1.66101
+    3    1 ARG  CB    24.61046  25.88466  -2.24845
+    4    1 ARG  CG    25.17139  24.45824  -2.37946
+    5    1 ARG  CD    24.12352  23.54053  -2.97928
+    6    1 ARG  NE    23.64449  24.05797  -4.26878
+    7    1 ARG  CZ    24.29851  23.86324  -5.43228
+    8    1 ARG  NH1   25.43401  23.15218  -5.47255
+    9    1 ARG  NH2   23.79744  24.37888  -6.53861
+   10    1 ARG  C     26.25638  26.21651  -0.46589
+   11    1 ARG  O     27.26772  25.51909  -0.61187
+   12    2 PRO  N     25.66904  26.42017   0.69830
+   13    2 PRO  CA    26.19135  25.80698   1.92573
+   14    2 PRO  CB    25.36400  26.40813   3.01440
+   15    2 PRO  CG    24.53110  27.55428   2.47990
+   16    2 PRO  CD    24.63936  27.41402   0.96379
+   17    2 PRO  C     26.24785  24.28339   1.83772
+   18    2 PRO  O     25.46158  23.66068   1.11164
+   19    3 ASP  N     27.17664  23.70667   2.57695
+   20    3 ASP  CA    27.29893  22.24541   2.63179
+   21    3 ASP  CB    28.50348  21.85178   3.50474
+   22    3 ASP  CG    29.77921  21.82889   2.71577
+   23    3 ASP  OD1   29.87929  22.17090   1.55080
+   24    3 ASP  OD2   30.75916  21.49547   3.31874
+   25    3 ASP  C     26.08385  21.48537   3.15454
+   26    3 ASP  O     25.83397  20.33794   2.76425
+   27    4 PHE  N     25.34766  22.13344   4.03218
+   28    4 PHE  CA    24.18735  21.49495   4.66362
+   29    4 PHE  CB    23.77361  22.29149   5.88510
+   30    4 PHE  CG    23.26056  23.67055   5.59363
+   31    4 PHE  CD1   22.05016  23.81339   5.00206
+   32    4 PHE  CD2   23.94266  24.79233   5.98042
+   33    4 PHE  CE1   21.50005  25.09502   4.71385
+   34    4 PHE  CE2   23.36017  26.08017   5.72515
+   35    4 PHE  CZ    22.18639  26.20490   5.07838
+   36    4 PHE  C     23.00620  21.36545   3.70627
+   37    4 PHE  O     22.03032  20.66125   3.99470
+   38    5 CYS  N     23.11101  22.04654   2.58873
+   39    5 CYS  CA    22.17365  21.82735   1.48223
+   40    5 CYS  CB    22.34247  22.86057   0.39972
+   41    5 CYS  SG    22.12032  24.59258   0.90514
+   42    5 CYS  C     22.20398  20.46100   0.80245
+   43    5 CYS  O     21.25899  20.08260   0.09890
+   44    6 LEU  N     23.28940  19.74193   1.02067
+   45    6 LEU  CA    23.41457  18.38097   0.48730
+   46    6 LEU  CB    24.88010  18.07779   0.12865
+   47    6 LEU  CG    25.59087  19.03078  -0.80516
+   48    6 LEU  CD1   26.95383  18.47829  -1.14227
+   49    6 LEU  CD2   24.79288  19.23479  -2.06846
+   50    6 LEU  C     22.96039  17.22452   1.36393
+   51    6 LEU  OT1   22.95406  16.06778   0.92698
+   52    6 LEU  OT2   22.58867  17.54677   2.58817
+   53    7 CYS  N     19.97078  27.74947  -0.85038
+   54    7 CYS  CA    20.61414  26.60506  -1.50844
+   55    7 CYS  CB    19.91544  25.34917  -1.03481
+   56    7 CYS  SG    20.13622  24.92038   0.72014
+   57    7 CYS  C     20.74779  26.45142  -3.02429
+   58    7 CYS  OT1   21.37006  25.49785  -3.51538
+   59    7 CYS  OT2   20.16176  27.39148  -3.74285
+   60    8 OH2  OH2   21.41498  27.23412  -7.18018
+
+cons fix sele initial show end
+
+hbuild selection ATOM * * H* end -
+       nbxm -3    cuthb  10.0 CUTHA  65.0 ctonnb 99.0 ctofnb 99.0
+
+cons fix sele (atom m1 1 ht1 .or. atom %2 1 * ) show end
+cons fix sele (resn ARG .and. type C).or.(resn PHE .and. type H) -
+              show end
+cons fix sele (resn ARG : ASP) show end
+cons fix sele (resid 1) .and. (type C*) show end
+cons fix sele (bynu 2 : 9) .and. .not. bynu 7  show end
+cons fix sele atom M1 2 C .around. 3.0  show end
+cons fix sele .byres. (atom M1 2 C .around. 3.0)  show end
+cons fix sele (atom M1 2 C .or. atom M1 3 H) .around. 0.5 show end
+cons fix sele point 2.0 3.0 4.0 cut 35.0 show end
+cons fix sele hydrogen .or. lone show end
+cons fix sele chemical CH2E show end
+cons fix sele user end
+cons fix sele .not. all end
+
+! test define command
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE XYZ SELE TYPE CA .OR. TYPE N END
+DEFINE XYZZ SELE TYPE CB END
+DEFINE XY SELE TYPE CB END
+DEFINE ABCDEFG SELE TYPE CA .OR. TYPE C END
+CONS FIX SELE XYZ SHOW END
+CONS FIX SELE ABCDEFG .AND. XYZ SHOW END
+CONS FIX SELE ABCD .AND. XYZ SHOW END
+! TEST FOR OVERFLOW ON NAME LIST
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+DEFINE ABCDEFG SELE TYPE S* END
+CONS FIX SELE ABCDEFG SHOW END
+! NOW CAUSE OVERFLOW
+DEFINE XXX1 SELE TYPE S* END
+DEFINE XXX2 SELE TYPE S* END
+DEFINE XXX3 SELE TYPE S* END
+DEFINE XXX4 SELE TYPE S* END
+DEFINE XXX5 SELE TYPE S* END
+CONS FIX SELE ABCDEFG SHOW END
+CONS FIX SELE XXX5 SHOW END
+
+
+!anal
+!  build bond number $ geometry $
+!  keep sele prop number .gt. 10 .and. prop number .le. 40  end
+!  print table column sort segid $ resid $ tag $ $$
+!  add stats all $ place segment $
+!  delete sele tag C* .or. prop geometry .lt. 1.01 show  end
+!  delete sele atom M1 2 * .around. 3.0 show end
+!  print table column sort segid $ resid $ tag $ $$
+!!
+!  build torsion number $ geometry $
+!  delete sele prop number .eq. 5 .or. prop number .ge. 30 show end
+!  keep sele prop number .ne. 7 show  end
+!  keep sele type C* show end
+!  print table column sort segid $ resid $ tag $ $$
+!!
+!  build bond number $
+!  keeponly selection hydrogen end
+!  print table column
+!!
+!  build atom number
+!  add stats all $ place residue $
+!  keeponly selection type O end
+!  print table column
+!!
+!  build atom number
+!  add stats sum $ place residue $
+!  keeponly sele tag O .around. 1.0 end
+!  print table column
+!end
+stop

@@ -1,0 +1,85 @@
+* c31test: ioformat.inp
+* test new extended coor & psf format, and ability to handle > 100000 atoms
+* 11-Aug-2004, Lennart Nilsson
+*
+
+stream datadir.def
+read rtf card name @0toph19.rtf
+read para  card name @0param19.prm
+
+read sequence tip3 1
+gene wat nodihe noangle
+coor set xdir 0.0 ydir 0.0 zdir 0.0 
+print coor
+write coor card name  @9ioform1.crd
+* one water molecule, standard format
+*
+
+rename segid bigwater sele segid wat end
+q 1 2
+print coor
+q 1 2
+coor trans xdir 1.0 
+read coor card name  @9ioform1.crd
+print coor
+write coor card name @9ioform2.crd
+* one water molecule, extended format
+*
+
+coor trans xdir 1.0 
+read coor card name  @9ioform2.crd
+print coor
+print coor sele atom bigwater * O*  end
+
+! see if a big set works
+
+! size removed from install.com
+! xxlarge is new default
+! if ?XXLARGE .ne. 1 then
+! ioform noext
+! write coor card name @9ioform3.crd
+! * one water molecule, forced standard format
+! *
+! print coor
+! ioform exte
+! print coor
+!  echo "c31test/ioformat> Remainder of Test not performed"
+!  stop
+! endif 
+
+delete atom sele all end
+read sequence tip3 35000
+gene wbig noangle nodihe
+coor set xdir 0.0 ydir 0.0 zdir 0.0 
+write coor card name  @9ioform3.crd
+* 35k water molecules extended format
+*
+
+write psf card name  @9ioform3.psf
+* 35k water molecules extended format
+*
+
+print coor sele bynum 1:5 end
+q 100001 100002
+coor trans xdir 1.0
+delet atom sele all end
+read psf card name  @9ioform3.psf
+read coor card name  @9ioform3.crd
+print coor sele bynum 1:5 end
+q 100001 100002
+rename segid bigwater sele segi wbig end
+rename resn tip3p sele bynum 1:6 end
+print coor sele atom bigwater * * .and. resn tip3p end
+
+ioform noext
+print coor sele bynum 1:5 end
+print coor sele bynum 100001:100002 end
+q 100001 100002
+
+quick 1 2
+print coor sele bynum 100001:100002 end
+
+ioform exte
+
+quick 1 2
+print coor sele bynum 100001:100002 end

@@ -1,0 +1,198 @@
+* CHARMM Testcase: hdgb.inp
+* Test HDGB for the first derivatives and show the example
+* of running HDGB molecular dynamics simulation.
+* (both default and fast option mode)
+* Author: S. Tanizaki/M. Feig, Michigan State University June 2005
+*
+
+stream datadir.def
+
+open unit 1 read card name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+read sequ cards
+* test peptide
+*
+   6 
+ ALA LEU GLY THR ALA LEU
+
+generate PRO0 first nter last cter setup warn
+
+read coor card 
+*
+   82
+    1    1 ALA  N     -1.31910   0.62962  -5.19370 PRO0 10     1.85000
+    2    1 ALA  HT1   -1.95924   1.22486  -4.61627 PRO0 10     0.22450
+    3    1 ALA  HT2   -1.77828   0.44679  -6.11449 PRO0 10     0.22450
+    4    1 ALA  HT3   -0.48050   1.20849  -5.40647 PRO0 10     0.22450
+    5    1 ALA  CA    -0.89920  -0.62372  -4.53845 PRO0 10     2.27500
+    6    1 ALA  HA    -1.77111  -1.26182  -4.48924 PRO0 10     1.32000
+    7    1 ALA  CB     0.18119  -1.26608  -5.43455 PRO0 10     2.06000
+    8    1 ALA  HB1    1.09855  -0.64232  -5.49332 PRO0 10     1.32000
+    9    1 ALA  HB2   -0.20619  -1.41180  -6.46946 PRO0 10     1.32000
+   10    1 ALA  HB3    0.46314  -2.26537  -5.03738 PRO0 10     1.32000
+   11    1 ALA  C     -0.42015  -0.42163  -3.10691 PRO0 10     2.00000
+   12    1 ALA  O     -0.99136  -0.98427  -2.17352 PRO0 10     1.70000
+   13    2 LEU  N      0.60307   0.43151  -2.86561 PRO0 11     1.85000
+   14    2 LEU  HN     1.05915   0.91983  -3.62140 PRO0 11     0.22450
+   15    2 LEU  CA     1.20020   0.63350  -1.54935 PRO0 11     2.27500
+   16    2 LEU  HA     1.55971  -0.32490  -1.20325 PRO0 11     1.32000
+   17    2 LEU  CB     2.38577   1.62947  -1.63612 PRO0 11     2.17500
+   18    2 LEU  HB1    2.45355   2.25531  -0.71755 PRO0 11     1.32000
+   19    2 LEU  HB2    2.20427   2.32234  -2.48580 PRO0 11     1.32000
+   20    2 LEU  CG     3.76150   0.95488  -1.81137 PRO0 11     2.27500
+   21    2 LEU  HG     3.69050   0.20960  -2.63767 PRO0 11     1.32000
+   22    2 LEU  CD1    4.81822   2.00006  -2.19633 PRO0 11     2.06000
+   23    2 LEU  HD11   4.86774   2.80242  -1.42938 PRO0 11     1.32000
+   24    2 LEU  HD12   4.57134   2.45670  -3.18034 PRO0 11     1.32000
+   25    2 LEU  HD13   5.82208   1.53011  -2.27943 PRO0 11     1.32000
+   26    2 LEU  CD2    4.19426   0.22849  -0.52611 PRO0 11     2.06000
+   27    2 LEU  HD21   3.49482  -0.59250  -0.26493 PRO0 11     1.32000
+   28    2 LEU  HD22   4.22362   0.94228   0.32508 PRO0 11     1.32000
+   29    2 LEU  HD23   5.20844  -0.20675  -0.64884 PRO0 11     1.32000
+   30    2 LEU  C      0.23254   1.11181  -0.47824 PRO0 11     2.00000
+   31    2 LEU  O      0.20274   0.57951   0.62634 PRO0 11     1.70000
+   32    3 GLY  N     -0.64712   2.08185  -0.78949 PRO0 12     1.85000
+   33    3 GLY  HN    -0.60785   2.52920  -1.69106 PRO0 12     0.22450
+   34    3 GLY  CA    -1.62515   2.57955   0.17571 PRO0 12     2.17500
+   35    3 GLY  HA1   -2.01400   3.50669  -0.21535 PRO0 12     1.32000
+   36    3 GLY  HA2   -1.14393   2.70383   1.13657 PRO0 12     1.32000
+   37    3 GLY  C     -2.81471   1.67559   0.38508 PRO0 12     2.00000
+   38    3 GLY  O     -3.65847   1.93297   1.23976 PRO0 12     1.70000
+   39    4 THR  N     -2.91958   0.58342  -0.39418 PRO0 13     1.85000
+   40    4 THR  HN    -2.24018   0.43927  -1.11014 PRO0 13     0.22450
+   41    4 THR  CA    -3.83488  -0.52012  -0.10978 PRO0 13     2.27500
+   42    4 THR  HA    -4.71755  -0.14224   0.38901 PRO0 13     1.32000
+   43    4 THR  CB    -4.28278  -1.27001  -1.36123 PRO0 13     2.27500
+   44    4 THR  HB    -3.40616  -1.71495  -1.88615 PRO0 13     1.32000
+   45    4 THR  OG1   -4.95624  -0.38718  -2.24863 PRO0 13     1.77000
+   46    4 THR  HG1   -4.32118   0.30068  -2.50465 PRO0 13     0.22450
+   47    4 THR  CG2   -5.30350  -2.36996  -1.02987 PRO0 13     2.06000
+   48    4 THR  HG21  -6.16764  -1.94246  -0.47818 PRO0 13     1.32000
+   49    4 THR  HG22  -4.85088  -3.17221  -0.41686 PRO0 13     1.32000
+   50    4 THR  HG23  -5.69023  -2.82590  -1.96550 PRO0 13     1.32000
+   51    4 THR  C     -3.17784  -1.50133   0.84347 PRO0 13     2.00000
+   52    4 THR  O     -3.80653  -2.02499   1.76026 PRO0 13     1.70000
+   53    5 ALA  N     -1.87378  -1.79089   0.64963 PRO0 14     1.85000
+   54    5 ALA  HN    -1.36843  -1.37786  -0.10589 PRO0 14     0.22450
+   55    5 ALA  CA    -1.11374  -2.67824   1.50973 PRO0 14     2.27500
+   56    5 ALA  HA    -1.65886  -3.60665   1.60038 PRO0 14     1.32000
+   57    5 ALA  CB     0.25486  -2.96128   0.85659 PRO0 14     2.06000
+   58    5 ALA  HB1    0.84648  -2.02690   0.75067 PRO0 14     1.32000
+   59    5 ALA  HB2    0.10775  -3.39734  -0.15455 PRO0 14     1.32000
+   60    5 ALA  HB3    0.83625  -3.68537   1.46960 PRO0 14     1.32000
+   61    5 ALA  C     -0.87301  -2.16132   2.92494 PRO0 14     2.00000
+   62    5 ALA  O     -1.03465  -2.89681   3.89936 PRO0 14     1.70000
+   63    6 LEU  N     -0.47375  -0.88569   3.06286 PRO0 15     1.85000
+   64    6 LEU  HN    -0.39519  -0.29323   2.25916 PRO0 15     0.22450
+   65    6 LEU  CA    -0.08939  -0.28446   4.32408 PRO0 15     2.27500
+   66    6 LEU  HA     0.58678  -0.95758   4.82745 PRO0 15     1.32000
+   67    6 LEU  CB     0.63456   1.06184   4.08138 PRO0 15     2.17500
+   68    6 LEU  HB1    0.79114   1.57605   5.05304 PRO0 15     1.32000
+   69    6 LEU  HB2   -0.03041   1.70341   3.46216 PRO0 15     1.32000
+   70    6 LEU  CG     2.00945   0.94192   3.38712 PRO0 15     2.27500
+   71    6 LEU  HG     1.88638   0.34026   2.45567 PRO0 15     1.32000
+   72    6 LEU  CD1    2.51590   2.33311   2.98038 PRO0 15     2.06000
+   73    6 LEU  HD11   2.63067   2.97298   3.88044 PRO0 15     1.32000
+   74    6 LEU  HD12   1.79618   2.81798   2.28684 PRO0 15     1.32000
+   75    6 LEU  HD13   3.49942   2.25981   2.46903 PRO0 15     1.32000
+   76    6 LEU  CD2    3.04740   0.24002   4.27677 PRO0 15     2.06000
+   77    6 LEU  HD21   2.73026  -0.79610   4.51632 PRO0 15     1.32000
+   78    6 LEU  HD22   3.17671   0.79870   5.22850 PRO0 15     1.32000
+   79    6 LEU  HD23   4.03070   0.19283   3.76235 PRO0 15     1.32000
+   80    6 LEU  C     -1.27251  -0.04638   5.29260 PRO0 15     2.00000
+   81    6 LEU  OT1   -1.09023  -0.23360   6.52639 PRO0 15     1.70000
+   82    6 LEU  OT2   -2.37515   0.34870   4.84416 PRO0 15     1.70000
+
+update atom CDIE eps 1 cutnb 20 ctofnb 18 ctonnb 16 switch vswitch
+
+!===============================================================================
+! Set up HDGB with CORR=3 (STANDARD)
+!===============================================================================
+
+! Open the dielectric profile input file.
+open unit 1 name @0/hdgb_eps.dat read form
+
+GBMV CORR 3 -
+     SLOPE 1. -
+     A1 0.3255 A3 1.085 A4 -0.14 A5 -0.15 -
+     SA 0.015 -
+     BETA -12 P3 0.65 -
+     WTYP 1 NPHI 5 -
+     UNEPS 1 -
+     ZS 0.5 ZM 9.2 ZT 25 ST0 0.32 
+
+!-------------------------------------------------------------------------------
+! Test First derivative
+!-------------------------------------------------------------------------------
+
+test first tol 0.00001 step 0.000001 select (type CA) end
+
+!-------------------------------------------------------------------------------
+! Molecular dynamics 
+!-------------------------------------------------------------------------------
+
+nbonds elec atom cdie switch -
+       vdw vatom vswitch -
+       bycu -
+       cutnb 20 ctofnb 18 ctonnb 16
+
+dyna leap - 
+     start nstep 10 timestep 0.001 -
+     firstt 300 finalt 300 tbath 300 tstruc 300 -
+     ichecw 0 ihtfrq 0 ieqfrq 0 twindl 0 twindh 0 -
+     iasors 0 iscvel 0 - 
+     ntrfrq 0 -
+     inbfrq -1 imgfreq -1 bycb - 
+     iunwri -1 iuncrd -1 iunrea -1 kunit -1 -
+     iprfrq 50 nprint 1 nsavc 0 nsavv 0  -
+     iseed 314159
+
+GBMV CLEA
+
+!===============================================================================
+! Set up HDGB  (FAST)
+!===============================================================================
+
+! Open the dielectric profile input file.
+open unit 1 name @0/hdgb_eps.dat read form
+
+GBMV CORR 3 -
+     SLOPE 1. -
+     A1 0.3255 A3 1.085 A4 -0.14 A5 -0.15 -
+     SA 0.015 -
+     BETA -12 P3 0.65 -
+     UNEPS 1 -
+     ZS 0.5 ZM 9.2 ZT 25 ST0 0.32 -
+     FAST 1 SXD 0.3 SGBFRQ 4
+
+!-------------------------------------------------------------------------------
+! Test First derivative
+!-------------------------------------------------------------------------------
+
+test first tol 0.00001 step 0.000001 select (type CA) end
+
+!-------------------------------------------------------------------------------
+! Molecular dynamics 
+!-------------------------------------------------------------------------------
+
+nbonds elec atom cdie switch -
+       vdw vatom vswitch -
+       bycu -
+       cutnb 20 ctofnb 18 ctonnb 16
+
+dyna leap - 
+     start nstep 10 timestep 0.001 -
+     firstt 300 finalt 300 tbath 300 tstruc 300 -
+     ichecw 0 ihtfrq 0 ieqfrq 0 twindl 0 twindh 0 -
+     iasors 0 iscvel 0 - 
+     ntrfrq 0 -
+     inbfrq -1 imgfreq -1 bycb - 
+     iunwri -1 iuncrd -1 iunrea -1 kunit -1 -
+     iprfrq 50 nprint 1 nsavc 0 nsavv 0 -
+     iseed 314159
+

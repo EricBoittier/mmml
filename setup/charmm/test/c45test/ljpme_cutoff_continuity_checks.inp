@@ -1,0 +1,165 @@
+* Test run for checking the continuity of the LJPME potential energy
+* function throughout the switching window and beyond the cutoff.
+*
+
+if ?ljpme .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+format (F20.10)
+
+stream datadir.def
+
+goto readrtfprm
+label backrtfprm
+
+goto readcoor
+label backcoor
+
+faster off
+
+set refenergy -0.0252166255
+
+set enginetype
+set smoothtype switch
+set listtype atom
+set testname @enginetype_@listtype_@smoothtype
+goto runtest
+label end__atom_switch
+
+set refenergy -0.0245701702
+
+set enginetype
+set smoothtype shift
+set listtype atom
+set testname @enginetype_@listtype_@smoothtype
+goto runtest
+label end__atom_shift
+
+if ?numnode .gt. 1 then stop ! This tiny toy system causes problems in domdec
+
+if ?domdec .ne. 1 then stop ! Only test domdec routines if it's been compiled in
+
+faster on
+
+set refenergy -0.0252166255
+
+set enginetype domdec
+set smoothtype switch
+set listtype atom
+set testname @enginetype_@listtype_@smoothtype
+goto runtest
+label end_domdec_atom_switch
+
+set refenergy -0.0245701702
+
+set enginetype domdec
+set smoothtype shift
+set listtype atom
+set testname @enginetype_@listtype_@smoothtype
+goto runtest
+label end_domdec_atom_shift
+
+stop
+
+!==============================================================
+label runtest
+crystal define cubic 16 16 16 90 90 90
+crystal build cutoff 30 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+set bondlength = 6980 ! in thousandths of A
+calc position = @bondlength/1000
+coor set zdir 1.0 dist @position select resid 2 end
+
+energy cutnb 10 cutim 14 ctofnb 8 ctonnb 7 -
+     ewald pme dpme dkappa 0.4 dorder 5 dftx 32 dfty 32 dftz 32 -
+     v@smoothtype @smoothtype @listtype v@listtype @enginetype
+set lastenergy = ?ENER
+@testcheck ?ENER @refenergy -0.00001 @testname_firstenergy
+label loop
+
+calc position = @bondlength/1000
+coor set zdir 1.0 dist @position select resid 2 end
+
+q 1 2
+gete
+calc delta = abs(?ENER - @lastenergy)
+@testcheck ?ENER @lastenergy -0.0015 @testname
+
+set lastenergy = ?ENER
+
+echo GREPME ?DIST @DELTA ?ENER
+
+calc bondlength = @bondlength + 10
+if @bondlength .lt. 8020 then
+  goto loop
+endif
+
+! Make sure the energy beyond the cutoff is nonzero
+@testcheck ?ENER -0.0179063453 -0.00001 @testname_firstenergy
+goto end_@testname
+
+!==============================================================
+label readrtfprm
+
+read rtf card
+* Fictitious topology for noble gasses
+*
+31  1
+MASS -1  AR  39.948  AR ! Argon atom
+MASS -1  KR  83.798  KR ! Krypton atom
+
+default first none last none
+
+RESI AR       0.00 ! Argon atom
+GROUP
+ATOM AR  AR  0.00
+PATCHING FIRST NONE LAST NONE
+
+RESI KR       0.00 ! Krypton atom
+GROUP
+ATOM KR  KR  0.00
+PATCHING FIRST NONE LAST NONE
+
+END
+
+read para card flex
+* Parameters for water and ions
+*
+
+ATOMS
+
+MASS -1  AR  39.948 ! Argon atom
+MASS -1  KR  83.798 ! Krypton atom
+
+NONBONDED nbxmod  5 atom cdiel atom vdistance -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+AR  0.0  -1.2  1.3 ! Argon
+KR  0.0  -1.3  1.8 ! Krypton
+
+END
+
+goto backrtfprm
+!========================================================================
+label readcoor
+
+READ      SEQUENCE  CARD
+* Ar and Kr dimer
+*
+    2
+AR KR
+
+GENERATE MAIN
+
+READ COOR CARDS
+* ar and kr
+*
+    2
+    1    1 AR   AR     0.00000   0.00000   0.00000 MAIN 1      0.00000
+    2    2 KR   KR     0.00000   0.00000   6.00000 MAIN 2      0.00000
+
+goto backcoor

@@ -1,0 +1,84 @@
+* initialize.str, last modified May/10/2004
+* By Sonja M. Schwarzl & Stefan Fischer
+* initialization for the verification of  scaling factors
+* 
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+
+BOMLev -1
+WRNLev -1
+PRNLev -1  
+FAST ON
+
+CALC UCUTNB =  @UCTOFNB + 1.1
+ 
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+
+
+IF @PARAM EQ 22 STREAM "defi22.str"
+IF @PARAM EQ 19 STREAM "defi19.str"
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+
+! read in coordinates with scaling factors in 4th column
+OPEN UNIT 3 READ CARD NAME @INPUTFAC
+READ COOR CARD UNIT 3
+CLOSE UNIT 3 
+
+! store scaling factor in SCA1
+SCAL SCA1 = WMAIN 	
+
+! modify factors using BACKFAC AND SIDEFAC
+SCAL SCA1 MULT @BACKFAC SELE BACK1 .OR. BACK2 END
+SCAL SCA1 MULT @SIDEFAC SELE SIDE END
+
+! modify charges and store them to SCA2 
+! (all charges are modified first, charges outside the target are then
+! set to zero in target.str)
+
+SCAL SCA2 = SCA1
+SCAL SCA2 RECI
+SCAL SCA2 PROD CHARGE SELECT ALL END
+
+! store unmodified charges in SCA3
+SCAL SCA3 = CHARGE
+
+! ! write coordinates with counterscaled factors in WMAIN
+! SCAL WMAIN = SCA1
+! open write unit 1 card name @OUTPUT
+! write coordinates card unit 1
+! close unit 1
+
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+
+! read in coordinates with E^solv in 4th column
+OPEN UNIT 3 READ CARD NAME @INPUTENER
+READ COOR CARD UNIT 3
+CLOSE UNIT 3 
+
+! store E^solv in SCA4
+SCAL SCA4 = WMAIN 	
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx 
+
+SCAL SCA5 SET 0.0 SELE ALL END ! used for storage of E^vac_I
+SCAL SCA6 SET 0.0 SELE ALL END ! used for storage of E^shield_I
+
+
+STREam target.str
+
+! Set all charges outside the targetregion to zero. Thereby,
+! these atoms are not included in the calculation of scaling 
+! factors
+SCAL SCA2 SET 0.0 SELEct .not. targetregion END
+SCAL SCA3 SET 0.0 SELEct .not. targetregion END ! Original charges
+
+! write coordinates with counterscaled factors in WMAIN
+SCAL WMAIN SET 1.0
+SCAL WMAIN = SCA1 SELEct targetregion END
+open write unit 1 card name @OUTPUT
+write coordinates card unit 1
+close unit 1
+ 
+RETURN

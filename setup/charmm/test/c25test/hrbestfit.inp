@@ -1,0 +1,168 @@
+* c25test/hrbestfit.inp: Bernard R. Brooks, 15-JUL-97, c25b1
+* Test : Harmonic restraints best-fit test case
+* Model: acetamide
+* Files: toph19.rtf, param19.prm
+
+set pnode
+if ?NUMNODE .gt. 1 set pnode node 0
+
+bomlev -2
+stream datadir.def
+
+! rtf and parameter
+open unit 11 read form name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+open unit 12 read form name @0param19.prm
+read param card unit 12
+close unit 12
+
+read sequence card
+* acetamide
+*
+    2
+AMN CBX
+
+generate a  setup
+generate b  duplicate a
+
+read coor card 
+* INITIAL COORDINATES FOR AMN-CBX *2
+*  DATE:    10/26/83      4:44:54      CREATED BY USER: BROOKSG
+*
+   12
+    1    1 AMN  CL    -3.33267  -1.67441   0.00000 A    1      0.00000
+    2    1 AMN  C     -2.19986  -0.66094   0.00000 A    1      0.00000
+    3    1 AMN  O     -1.02163  -1.01403   0.00000 A    1      0.00000
+    4    2 CBX  N     -2.52876   0.62775   0.00000 A    2      0.00000
+    5    2 CBX  H     -1.82759   1.31241   0.00000 A    2      0.00000
+    6    2 CBX  CA    -3.96329   1.03051   0.00000 A    2      0.00000
+    7    3 AMN  CL     3.33267   1.67441   0.00000 B    1      0.00000
+    8    3 AMN  C      2.19986   0.66094   0.00000 B    1      0.00000
+    9    3 AMN  O      1.02163   1.01403   0.00000 B    1      0.00000
+   10    4 CBX  N      2.52876  -0.62775   0.00000 B    2      0.00000
+   11    4 CBX  H      1.82759  -1.31241   0.00000 B    2      0.00000
+   12    4 CBX  CA     3.96329  -1.03051   0.00000 B    2      0.00000
+
+coor orient
+
+coor copy comp
+coor axis sele segid a end sele segid b end
+coor trans axis sele segid b end dist 2.0
+coor trans sele atom a 1 o end zdir -0.5
+
+print coor
+
+!prnlev 7
+coor rms mass
+coor orie rms mass
+
+coor copy
+coor axis sele segid a end sele segid b end
+coor trans axis sele segid b end dist 2.0
+coor trans sele atom a 1 o end zdir -0.5
+
+energy
+skip all excl harm
+!prnlev 9
+
+!!!!!!!! test absolute method !!!!!!!!
+
+cons harm absolute mass force 1.0 comp
+energy inbf 0 ihbf 0
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test bestfit method !!!!!!!!
+cons harm clear
+
+cons harm bestfit mass force 1.0 comp
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test relative method !!!!!!!!
+cons harm clear
+
+prnlev 9 @pnode
+cons harm relative mass force 1.0  sele segid a end sele segid b end
+energy
+prnlev 5 @pnode
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test absolute method high exponent !!!!!!!!
+
+cons harm absolute mass force 1.0 comp exponent 6
+energy inbf 0 ihbf 0
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test absolute method scaling !!!!!!!!
+
+cons harm absolute mass force 1.0 comp XSCALE 0.5 YSCALE 0.1 ZSCALE 0.0
+energy inbf 0 ihbf 0
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test bestfit method norot !!!!!!!!
+cons harm clear
+
+cons harm bestfit mass force 1.0 comp norot
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test bestfit method notrans !!!!!!!!
+cons harm clear
+
+cons harm bestfit mass force 1.0 comp notrans
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test bestfit method norot/notrans !!!!!!!!
+! note: energy and forces should match the absolute method
+cons harm clear
+
+cons harm bestfit mass force 1.0 comp notrans norot
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test relative method norot !!!!!!!!
+cons harm clear
+
+cons harm relative mass force 1.0  sele segid a end sele segid b end norot
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test relative method notrans !!!!!!!!
+cons harm clear
+
+cons harm relative mass force 1.0  sele segid a end sele segid b end notrans
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test relative method norot/notrans !!!!!!!!
+cons harm clear
+
+cons harm relative mass force 1.0  sele segid a end sele segid b end notrans norot
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! test absolute and relative method together !!!!!!!!
+
+cons harm absolute mass force 1.0 comp sele segid B end
+cons harm bestfit  mass force 1.0 comp sele segid A end
+energy
+test first step 0.00001 tol 0.0
+print cons
+
+!!!!!!!! end of tests !!!!!!!!
+cons harm clear
+stop
+

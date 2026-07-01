@@ -1,0 +1,73 @@
+* CHARMM c36a1 testcase
+* Test BLOCk module using PME
+* Author H Kamberaj, 2008 
+*
+
+!if ?qchem .ne. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+!if ?colfft eq 1 then
+!      echo "Test NOT performed with COLFFT."
+!      stop
+!endif
+stream datadir.def
+
+FASTER ON
+
+prnlev 5 @pnode
+
+! read topology
+
+OPEN READ UNIT 2 CARD NAME @0top_all22_prot.inp
+READ RTF UNIT 2 CARD
+CLOSE UNIT 2
+
+! read parameters
+
+OPEN READ UNIT 2 CARD NAME @0par_all22_prot.inp
+READ PARAM UNIT 2 CARD
+CLOSE UNIT 2
+
+! -- generate a water segment
+read sequ TIP3 216
+generate TIP3 warn setup noangle nodihedral
+
+
+! -- read coordinates
+OPEN UNIT 4 FORM READ NAME @0tip216.crd
+READ COOR CARD UNIT 4
+CLOSE UNIT 4
+
+CRYSTAL DEFINE CUBIC 18.856 18.856 18.856 90.0 90.0 90.0
+CRYSTAL BUILD CUTOFF 9.0 NOPERATIONS 0
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+NBONDS IMGFRQ -1 INBFRQ -1 -
+       ATOM EWALD PMEWALD KAPPA 0.34 FFTX 20 FFTY 20 FFTZ 20 ORDER 6 QCOR 0.0 -        ! electrostatic specification -> PMEWALD
+       FSWITCH CDIE E14FAC 1.0 EPS 1.0 -                                                 ! electrostatic - option - specification
+       VDW VATOM VSHIFT -                                                                ! Van der Waals specification
+       CUTNB 9.0  CTONNB 7.5 CTOFNB 8.0 CUTIM 9.0 -                                  ! Cutoff for non-bounded interactions
+       WMIN 1.5 WRNMXD 0.5
+
+energy
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ envi qchemcnt  "./data/qchem_ewald.inp"
+ envi qcheminp  "q1.inp"
+ envi qchemexe  "qchem"
+ envi qchemout  "q1.out"
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! See the Q-Chem manual for infomration about optimal values for QMALpha and MMAlpha 
+qchem remove QMALpha 1.0 MMALpha 1.0 omp para 4 ewald sele resid 2 show end
+
+! This command is essential. It is responsible for transfering CHARMM's 
+! force field to Q-Chem for use in the QM/MM EWALD calculation 
+write para qchem card used name usedpara.prm
+
+energy
+
+STOP
+
+

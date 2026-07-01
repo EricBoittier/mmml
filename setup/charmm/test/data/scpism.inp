@@ -1,0 +1,68 @@
+H     0.4906  0.6259  0.5000  0.7004  0.3700  0.0052 PH ! polar H
+HC    0.5300  9.6746  0.5000  0.7280  0.3700  0.0052 PH ! N-ter H
+HA    0.5300  0.5000  0.5000  0.7280  0.3700  0.0052    ! nonpolar H
+HT                                                      ! TIPS3P WATER HYDROGEN
+HP    0.5274  0.5000  0.5000  0.7262  0.3700  0.0052    ! aromatic H
+HB    0.4858  0.5000  0.5000  0.6970  0.3700  0.0052    ! backbone H
+HR1   0.4651  0.5000  0.5000  0.6820  0.3700  0.0052    ! his he1, (+) his HG,HD2
+HR2   0.4580  0.5000  0.5000  0.6768  0.3700  0.0052    ! (+) his HE1
+HR3   0.4893  0.5000  0.5000  0.6995  0.3700  0.0052    ! neutral his HG, HD2
+HS    0.4859  0.5000  0.5000  0.6971  0.3700  0.0052    ! thiol hydrogen
+HA1                                   0.3700  0.0052    ! for alkene; RHC=CR
+HA2                                   0.3700  0.0052    ! for alkene; H2C=CR
+C     0.5298  0.5000  0.5000  0.7273  0.7700  0.0052    ! polar C
+CA    0.5192  0.5000  0.5000  0.7206  0.7700  0.0052    ! aromatic C
+CT1   0.5209  0.5000  0.5000  0.7217  0.7700  0.0052    ! aliphatic sp3 C for CH
+CT2   0.5298  0.5000  0.5000  0.7273  0.7700  0.0052    ! aliphatic sp3 C for CH2
+CT3   0.5082  0.5000  0.5000  0.7129  0.7700  0.0052    ! aliphatic sp3 C for CH3 
+CPH1  0.4538  0.5000  0.5000  0.6736  0.7700  0.0052    ! his CG and CD2 carbons
+CPH2  0.4974  0.5000  0.5000  0.7053  0.7700  0.0052    ! his CE1 carbon
+CPT   0.5217  0.5000  0.5000  0.7229  0.7700  0.0052    ! trp C between rings
+CY    0.5240  0.5000  0.5000  0.7239  0.7700  0.0052    ! TRP C in pyrrole ring
+CP1   0.4763  0.5000  0.5000  0.6901  0.7700  0.0052    ! tetrahedral C (proline CA)
+CP2   0.4599  0.5000  0.5000  0.6782  0.7700  0.0052    ! tetrahedral C (proline CB/CG)
+CP3   0.4627  0.5000  0.5000  0.6802  0.7700  0.0052    ! tetrahedral C (proline CD)
+CC    0.4970  0.5000  0.5000  0.7050  0.7700  0.0052    ! carbonyl C for sidechains asn,asp,gln,glu
+CD                                    0.7700  0.0052    ! carbonyl C for none amides, asp,glu,cter
+CPA                                   0.7700  0.0052    ! heme alpha-C
+CPB                                   0.7700  0.0052    ! heme beta-C
+CPM                                   0.7700  0.0052    ! heme meso-C
+CM                                    0.7700  0.0052    ! heme CO carbon
+CS                                    0.7700  0.0052    ! thiolate carbon
+CE1                                   0.7700  0.0052    ! for alkene; RHC=CR
+CE2                                   0.7700  0.0052    ! for alkene; H2C=CR
+N     0.4894  0.5000  0.5000  0.6996  0.7400  0.0052    ! proline N
+NR1   0.4598  0.5000  0.5000  0.6781  0.7400  0.0052    ! neutral his protonated ring nitrogen
+NR2   0.4839 19.4824  0.6956  0.5000  0.7400  0.0052 PA ! neutral his unprotonated ring nitrogen
+NR3   0.4742  0.5000  0.5000  0.6886  0.7400  0.0052    ! charged his ring nitrogen
+NH1   0.5103  0.5000  0.5000  0.7144  0.7400  0.0052    ! peptide nitrogen
+NH2   0.5045  0.5000  0.5000  0.7103  0.7400  0.0052    ! amide nitrogen
+NH3   0.5300  0.5000  0.5000  0.7280  0.7400  0.0052    ! ammonium nitrogen
+NC2   0.5299  0.5000  0.5000  0.7279  0.7400  0.0052    ! guanidinium nitroogen
+NY    0.5284  0.5000  0.5000  0.7269  0.7400  0.0052    ! TRP N in pyrrole ring
+NP    0.4894  0.5000  0.5000  0.6996  0.7400  0.0052    ! Proline ring NH2+ (N-terminal)
+NPH                                   0.7400  0.0052    ! heme pyrrole N
+O     0.4810  4.0085  0.5000  0.6935  0.7400  0.0052 PA ! carbonyl oxygen
+OB                                    0.7400  0.0052    ! carbonyl oxygen in acetic acid
+OC    0.6000  8.1838  0.5000  0.7746  0.7400  0.0052 PA ! carboxylate oxygen
+OH1   0.4843  3.3433  0.5000  0.6959  0.7400  0.0052 PA ! hydroxyl oxygen
+OS                                    0.7400  0.0052    ! ester oxygen
+OT                                                      ! TIPS3P WATER OXYGEN
+OM                                    0.7400  0.0052    ! heme CO/O2 oxygen
+S     0.5054  5.0037  0.5000  0.7109  1.0400  0.0052 PA ! sulphur
+SM    0.5054  0.5000  0.5000  0.7109  1.0400  0.0052    ! sulfur C-S-S-C type
+SS                                    1.0400  0.0052    ! thiolate sulfur
+HE                                                      ! helium
+NE                                                      ! neon
+CAL                                                     ! calcium 2+
+ZN                                                      ! zinc (II) cation
+FE                                                      ! heme iron 56
+DUM                                                     ! dummy atom
+end 
+___________________________________________________________________________________
+parameters file SCPISM (complete for all residue atoms in all22_prot topology file)
+version v.1.1 (v.implementation.parameters)
+
+S A Hassan e-mail: mago at helix.nih.gov 
+CMM/DCB/CIT/ National Institutes of Health (NIH)
+Bethesda, Maryland 20892               

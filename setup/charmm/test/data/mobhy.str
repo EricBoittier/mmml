@@ -1,0 +1,265 @@
+* Themis Lazaridis: topology and parameters needed for MOBHY
+* To be read after toppar_water_ions.str
+*
+
+read rtf card append
+* Topology for hydronium, hydroxide etc
+*
+31  1
+
+MASS  -1  HHH   1.00800 H  ! H3O+ HYDROGEN
+MASS  -1  OXR   3.99940 O  ! For "ring" hydroxide
+MASS  -1  OR    3.00000 O  ! For "ring" hydroxide
+MASS  -1  DUM   0.00000 DUM! from stream/misc/toppar_dum_noble_gases.str.
+
+default first none last none
+AUTO ANGLE DIHE
+
+RESI H3O          1.000 NOANG NODIH
+GROUP
+ATOM OH2  OT     -0.755
+ATOM H1   HHH     0.585
+ATOM H2   HHH     0.585
+ATOM H3   HHH     0.585
+BOND OH2 H1 OH2 H2 OH2 H3 H1 H2 H1 H3 H2 H3   
+ANGLE H1 OH2 H2             ! required
+ANGLE H1 OH2 H3             ! required
+ANGLE H2 OH2 H3             ! required
+DONOR H1 OH2
+DONOR H2 OH2
+DONOR H3 OH2
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI HOH         0.000 NOANG NODIH ! same as TIP3, use for protonated hydroxide
+GROUP
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+DONOR H1 OH2
+DONOR H2 OH2
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+END
+
+read para card flex append
+* Parameters for hydronium etc
+*
+
+ATOMS
+MASS  -1  HHH   1.00800 ! H3O+ HYDROGEN
+MASS  -1  OXR   3.99940 ! For "ring" hydroxide
+MASS  -1  OR    3.00000 ! For "ring" hydroxide
+MASS  -1  DUM   0.00000 !
+
+BONDS
+!
+!V(bond) = Kb(b - b0)**2
+!
+!Kb: kcal/mole/A**2
+!b0: A
+!
+!atom type Kb          b0
+!
+OXR   HX    545.0       0.9488  ! ring hydroxide ion
+OXR   OR    545.0       0.7000  ! ring hydroxide ion
+OR    OR    545.0       0.9219  ! ring hydroxide ion
+HHH   HHH     0.0       1.56297 ! from TIPS3P geometry (for SHAKE w/PARAM)
+HHH   OT    400.0       0.9517  ! Sagnella-Voth 1996
+DUM   OT      0.0       0.9517  ! 
+DUM   OC      0.0       0.9517  ! 
+DUM   OX      0.0       0.9572  ! 
+DUM   NR2     0.0       0.9517  ! 
+DUM   HT      0.0       1.5139  ! 
+DUM   HX      0.0       1.5139  ! 
+DUM   DUM     0.0       0.9219  ! 
+
+ANGLES
+!
+!V(angle) = Ktheta(Theta - Theta0)**2
+!
+!V(Urey-Bradley) = Kub(S - S0)**2
+!
+!Ktheta: kcal/mole/rad**2
+!Theta0: degrees
+!Kub: kcal/mole/A**2 (Urey-Bradley)
+!S0: A
+!
+!atom types     Ktheta    Theta0   Kub     S0
+!
+HHH  OT   HHH    50.0      110.40   ! Sagnella-Voth
+DUM  OT   HT      0.0      110.40   ! 
+DUM  OX   HX      0.0      110.40   ! 
+OR   OXR  HX    158.63     110.40   ! 
+DUM  OC   CC      0.0      110.40   ! 
+DUM  NR2  CPH1    0.0      110.40   ! 
+DUM  NR2  CPH2    0.0      110.40   ! 
+DUM  DUM  DUM     0.0      110.40   ! 
+
+DIHEDRALS
+!
+!V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+!
+!Kchi: kcal/mole
+!n: multiplicity
+!delta: degrees
+!
+!atom types             Kchi    n   delta
+!
+DUM  OC  CC  CT2A      0.0000  3     0.00
+DUM  OC  CC  OC        0.0000  3     0.00
+DUM  OC  CC  CT2       0.0000  3     0.00
+DUM  NR2 CPH1 CPH1     0.0000  3     0.00
+DUM  NR2 CPH1 HR3      0.0000  3     0.00
+DUM  NR2 CPH2 NR1      0.0000  3     0.00
+DUM  NR2 CPH2 HR1      0.0000  3     0.00
+DUM  NR2 CPH1 CT2      0.0000  3     0.00
+
+!
+IMPROPER
+!
+!V(improper) = Kpsi(psi - psi0)**2
+!
+!Kpsi: kcal/mole/rad**2
+!psi0: degrees
+!note that the second column of numbers (0) is ignored
+!
+!atom types           Kpsi                   psi0
+!
+DUM  CPH2  CPH1  NR2   0.0            0      0.00
+DUM  CPH1  CPH2  NR2   0.0            0      0.00
+
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+!Hydronium
+HHH      0.0       -0.046     0.2245
+DUM      0.0        0.000     0.0000
+
+!Hydroxide
+OXR    0.000000  -0.020000     1.98 ! 
+OR     0.000000  -0.000000     1.700000 ! 
+
+HBOND AEXP 4 REXP 6 HAEX 4 AAEX 2
+!The values dont matter because no HBond energy is calculated
+!But the entries must be here, otherwise error is given. The order matters.
+!If something is missing, just add it here
+!N*+* N%      -3.00      3.0!  VALUES FROM VINOGRADOV AND LINELL FOR    data/param6.prm
+!N*+* O*      -3.50      2.9!  TYPICAL LENGTHS AND DEPTHS.
+!OH*  N%      -4.00      2.85
+!OH*  O*      -4.25      2.75
+NH1  O       -3.50      2.9  
+NH1  OH1     -3.50      2.9 
+NH1  OC      -3.50      2.9 
+NH1  OT      -3.50      2.9 
+NH1  OX      -3.50      2.9  
+NH1  OB      -3.50      2.9  
+NH1  OS      -3.50      2.9  
+NR1  OT      -3.50      2.9  
+NR1  OX      -3.50      2.9  
+NR2  OC      -3.50      2.9  
+NR2  OT      -3.50      2.9  
+NR3  OT      -3.50      2.9  
+NR3  OX      -3.50      2.9
+NC2  OT      -3.50      2.9  
+NC2  OX      -3.50      2.9  
+NC2  OC      -3.50      2.9  
+NC2  OB      -3.50      2.9  
+NC2  OS      -3.50      2.9  
+NRN1 OT      -3.50      2.9  
+NRN1 OX      -3.50      2.9 
+NRN1 OC      -3.50      2.9 
+NRN1 OS      -3.50      2.9  
+NRN1 OB      -3.50      2.9  
+NRN1 O       -3.50      2.9  
+NRN2 OT      -3.50      2.9  
+NRN2 OX      -3.50      2.9  
+NRN2 OH1     -3.50      2.9  
+NRN2 OC      -3.50      2.9  
+OC   NRN2    -3.50      2.9  
+NRN2 OS      -3.50      2.9  
+NRN2 OB      -3.50      2.9  
+NRN2 O       -3.50      2.9  
+OC   NRC4    -3.50      2.9  
+OT   NR1     -3.50      2.9  
+OT   NR2     -3.50      2.9  
+OT   NR3     -3.50      2.9 
+OT   NRN1    -3.50      2.9
+OT   NRN2    -3.50      2.9
+OT   NC2     -3.50      2.9
+OX   NR1     -3.50      2.9
+OX   NR2     -3.50      2.9
+OX   NR3     -3.50      2.9
+OX   NRN1    -3.50      2.9
+OX   NRN2    -3.50      2.9
+OX   NC2     -3.50      2.9
+NR1  O       -3.50      2.9
+NR2  O       -3.50      2.9
+NR3  O       -3.50      2.9
+NR1  OS      -3.50      2.9
+NR2  OS      -3.50      2.9
+NR3  OS      -3.50      2.9
+NR1  OB      -3.50      2.9
+NR2  OB      -3.50      2.9
+NR3  OB      -3.50      2.9
+NR1  NR1     -3.50      2.9
+NR1  NR2     -3.50      2.9
+NR1  NR3     -3.50      2.9
+NR2  NR1     -3.50      2.9
+NR2  NR2     -3.50      2.9
+NR2  NR3     -3.50      2.9
+NR3  NR1     -3.50      2.9
+NR3  NR2     -3.50      2.9
+NR3  NR3     -3.50      2.9
+NH1  NR3     -3.50      2.9
+NH1  NR2     -3.50      2.9
+NH1  NR1     -3.50      2.9
+NH1  NC2     -3.50      2.9
+NH1  NRN1    -3.50      2.9
+NH1  NRN2    -3.50      2.9
+NR1  NH1     -3.50      2.9
+NR2  NH1     -3.50      2.9
+NR3  NH1     -3.50      2.9
+NRN2 NRN2    -3.50      2.9
+NRN2 NRN1    -3.50      2.9
+NRN1 NRN2    -3.50      2.9
+NC2  NC2     -3.50      2.9
+NC2  O       -3.50      2.9
+NY   OT      -3.50      2.9
+NY   OX      -3.50      2.9
+OT   OB      -4.25      2.75
+OT   OC      -4.25      2.75
+OT   OS      -4.25      2.75
+OX   OB      -4.25      2.75
+OX   OC      -4.25      2.75
+OX   OS      -4.25      2.75
+OT   OT      -4.25      2.75
+OT   OX      -4.25      2.75
+OX   OT      -4.25      2.75
+OT   OH1     -4.25      2.75
+OX   OH1     -4.25      2.75
+OT   O       -4.25      2.75
+OX   O       -4.25      2.75
+OH1  OB      -4.25      2.75   
+OH1  OC      -4.25      2.75   
+OH1  OS      -4.25      2.75 
+OH1  OT      -4.25      2.75 
+OH1  OX      -4.25      2.75 
+OH1  OH1     -4.25      2.75  
+OH1  O       -4.25      2.75   
+OC   OB      -4.25      2.75
+OC   OC      -4.25      2.75
+OC   OS      -4.25      2.75
+OC   OT      -4.25      2.75
+OC   OX      -4.25      2.75
+OX   OX      -4.25      2.75
+OC   OH1     -4.25      2.75
+OC   O       -4.25      2.75
+OC   NC2     -4.25      2.75   
+
+END
+
+return

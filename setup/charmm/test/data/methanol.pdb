@@ -1,0 +1,8 @@
+ATOM      1  C   LIG A   1       0.986   0.015   0.101  1.00  0.00      LIGA
+ATOM      2  O   LIG A   1       2.402   0.010   0.091  1.00  0.00      LIGA
+ATOM      3  H1  LIG A   1       0.625   1.046   0.065  1.00  0.00      LIGA
+ATOM      4  H2  LIG A   1       0.625  -0.478   1.006  1.00  0.00      LIGA
+ATOM      5  H3  LIG A   1       0.623  -0.526  -0.776  1.00  0.00      LIGA
+ATOM      6  H4  LIG A   1       2.694   0.497   0.880  1.00  0.00      LIGA
+TER
+END

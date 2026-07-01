@@ -1,0 +1,217 @@
+*  CHARMM 35 testcase cross.inp
+*  Test: CROSS Module in c34. Rebinding of NO to Heme group
+*  Author: Jonas Danielsson
+*  Model: NO and Heme group
+*  Files: data/top_all22cross_prot.inp, par_all22cross.inp, 
+*         data/heme_no.psf,mbno_cross1.par,mbno_cross2.par
+*          
+
+
+if ?rmd  .ne. 1  then
+  echo "Test NOT performed."
+  STOP
+endif
+
+if ?numnode  .ne. 1  then
+  echo "RMD I/O does not work in parallel"
+  echo "Test NOT performed."
+  STOP
+endif
+
+stream datadir.def
+
+
+! { parameters passed }
+set 1 JOB: Test of CROSS module - 
+set j heme_no_cross
+set 5 1000 ! number of steps
+set 6 0.001 ! step size
+
+! Topology
+read rtf card  name @0top_all22cross_prot.inp
+
+! Parameters
+read parameter card name @0par_all22cross_prot.inp
+
+! {set Heme-N) system}
+SET p @0heme_no.psf
+
+
+READ PSF CARD  NAME @p
+goto readcoor
+label backreadcoor
+
+PRNLEV 6 @pnode
+BOMBLEV -1
+
+NBONd CUTNb 10.0 CTOFnb 9.0 CTONnb 6.5 -
+       VSWItch SHIFt E14Fac 1.0 -
+       CDIElectric -
+       WMIN 1.0 ! BYCUbe
+
+TIME DIFF
+ENER
+
+! Read parameters having energy set to surface 2
+OPEN UNIT 11 READ FORMATTED NAME @0mbno_cross2.par
+UPDATE
+
+RXMD UPAR 11 XTIM 9 UNIT 33 BVDW
+CLOSE UNIT 11
+
+OPEN UNIT 33 WRITE FORMATTED NAME @9cross.heme.pdb
+
+PRNLEV 4 @pnode
+! Calculate energy
+ENERGY
+
+! Compare analytical with numerical derivatives
+TEST FIRST STEP 0.0001
+TIME DIFF
+
+! Read parameters having energy set to surface 1
+OPEN UNIT 11 READ FORMATTED NAME @0mbno_cross1.par
+UPDATE
+
+RXMD UPAR 11 XTIM 9 UNIT 33 BVDW
+CLOSE UNIT 11
+
+OPEN UNIT 33 WRITE FORMATTED NAME @9cross.heme.pdb
+PRNLEV 4 @pnode
+
+! Calculate energy
+ENERGY
+
+! Compare analytical with numerical derivatives
+TEST FIRST STEP 0.0001
+TIME DIFF
+
+! Reset crossing for dynamics
+OPEN UNIT 11 READ FORMATTED NAME @0mbno_cross2.par
+PRNLEV 5 @pnode
+UPDATE
+
+RXMD UPAR 11 XTIM 9 UNIT 33 BVDW
+CLOSE UNIT 11
+
+
+OPEN UNIT 12 WRITE UNFORMATTED NAME @9cross_test.dcd
+
+DYNAmics LEAPfrog STRT  -
+NSTEp    @5 TIMEstep @6 -
+NPRInt    25	 IPRFrq     50 -
+ILBFrq    5  IEQFRQ 2000 -
+IASVel    1 FIRStt     50. FINALT  50.  - 
+INBFrq    1 IHBFrq       0 WMIN 1.2 -
+IUNCrd   12   NSAVC  100
+
+TIME DIFF
+
+STOP
+
+!================================================================
+label readcoor
+
+READ COOR CARD 
+*  HEME-NO ALL-ATOM.
+*  HBUILD: 2 ITERATIONS + ENERGY MINIMIZATION (HEAVY ATOMS FIXED).
+*  DATE:     4/29/ 5      8:59:34      CREATED BY USER: danielsson
+*
+   95
+    1    1 HSD  N      7.69200  -9.11200   2.27100 MB   1     35.00000
+    2    1 HSD  HT1    8.55994  -9.69665   2.17819 MB   1      0.00000
+    3    1 HSD  HT2    6.84279  -9.61871   1.95747 MB   1      0.00000
+    4    1 HSD  HT3    7.62332  -8.76986   3.24446 MB   1      0.00000
+    5    1 HSD  CA     7.99500  -7.97700   1.37500 MB   1     33.18000
+    6    1 HSD  HA     7.53875  -8.16658   0.41180 MB   1      0.00000
+    7    1 HSD  CB     7.42400  -6.69600   1.95500 MB   1     35.10000
+    8    1 HSD  HB1    7.89255  -5.81771   1.45005 MB   1      0.00000
+    9    1 HSD  HB2    7.63971  -6.58322   3.03799 MB   1      0.00000
+   10    1 HSD  ND1    4.89500  -7.19800   2.26600 MB   1     39.48000
+   11    1 HSD  HD1    4.93070  -7.93336   2.93712 MB   1      0.00000
+   12    1 HSD  CG     5.92700  -6.52400   1.65900 MB   1     38.65000
+   13    1 HSD  CE1    3.76100  -6.66300   1.88700 MB   1     39.36000
+   14    1 HSD  HE1    2.76458  -7.00772   2.18922 MB   1      0.00000
+   15    1 HSD  NE2    3.95100  -5.60700   1.13300 MB   1     37.62000
+   16    1 HSD  CD2    5.29200  -5.53700   0.91400 MB   1     36.37000
+   17    1 HSD  HD2    5.71505  -4.74506   0.30918 MB   1      0.00000
+   18    1 HSD  C      9.46400  -7.75300   1.07600 MB   1     44.83000
+   19    1 HSD  OT1   10.30064  -8.53445   1.60228 MB   1      0.00000
+   20    1 HSD  OT2    9.77393  -6.79672   0.31635 MB   1      0.00000
+   21    2 HEME FE     2.24400  -4.84500   0.00000 MB   2     36.75000
+   22    2 HEME NA     0.89400  -5.90100   0.91700 MB   2     35.45000
+   23    2 HEME NB     2.15700  -3.46300   1.27400 MB   2     32.04000
+   24    2 HEME NC     3.53500  -3.83800  -1.05400 MB   2     33.31000
+   25    2 HEME ND     2.39700  -6.31300  -1.39500 MB   2     33.67000
+   26    2 HEME C1A    0.59700  -7.26200   0.75900 MB   2     39.12000
+   27    2 HEME C2A   -0.29500  -7.71900   1.83000 MB   2     54.21000
+   28    2 HEME C3A   -0.65000  -6.62800   2.54700 MB   2     45.35000
+   29    2 HEME C4A    0.15400  -5.52400   2.04400 MB   2     31.70000
+   30    2 HEME C1B    1.29400  -3.38500   2.37000 MB   2     39.92000
+   31    2 HEME C2B    1.59100  -2.23900   3.24100 MB   2     43.28000
+   32    2 HEME C3B    2.55400  -1.56000   2.58000 MB   2     41.43000
+   33    2 HEME C4B    2.94400  -2.34300   1.41200 MB   2     37.48000
+   34    2 HEME C1C    4.07800  -2.62500  -0.72800 MB   2     31.69000
+   35    2 HEME C2C    4.93800  -2.09300  -1.79600 MB   2     39.45000
+   36    2 HEME C3C    4.92900  -3.01400  -2.80200 MB   2     49.35000
+   37    2 HEME C4C    4.08800  -4.10300  -2.30800 MB   2     38.24000
+   38    2 HEME C1D    3.23200  -6.35500  -2.49200 MB   2     39.46000
+   39    2 HEME C2D    3.06400  -7.67900  -3.20000 MB   2     64.62000
+   40    2 HEME C3D    2.11200  -8.33700  -2.54200 MB   2     41.99000
+   41    2 HEME C4D    1.73500  -7.50900  -1.40200 MB   2     59.44000
+   42    2 HEME CHA    0.91200  -8.00300  -0.36700 MB   2     34.01000
+   43    2 HEME HA     0.38931  -8.95374  -0.44097 MB   2      0.00000
+   44    2 HEME CHB    0.39600  -4.39200   2.74300 MB   2     30.91000
+   45    2 HEME HB    -0.19955  -4.22554   3.63407 MB   2      0.00000
+   46    2 HEME CHC    3.76200  -1.92200   0.42600 MB   2     45.80000
+   47    2 HEME HC     4.14563  -0.91094   0.43502 MB   2      0.00000
+   48    2 HEME CHD    4.00800  -5.34900  -2.90000 MB   2     32.88000
+   49    2 HEME HD     4.63541  -5.57008  -3.75612 MB   2      0.00000
+   50    2 HEME CMA   -1.63400  -6.54700   3.71700 MB   2     36.71000
+   51    2 HEME HMA1  -1.15863  -6.94888   4.63523 MB   2      0.00000
+   52    2 HEME HMA2  -2.53537  -7.15204   3.48130 MB   2      0.00000
+   53    2 HEME HMA3  -1.94884  -5.49646   3.88182 MB   2      0.00000
+   54    2 HEME CAA   -0.77700  -9.10100   2.12700 MB   2     40.97000
+   55    2 HEME HAA1  -1.16011  -9.54768   1.18235 MB   2      0.00000
+   56    2 HEME HAA2  -1.61340  -9.10004   2.85205 MB   2      0.00000
+   57    2 HEME CBA    0.38500 -10.07500   2.67500 MB   2     49.30000
+   58    2 HEME HBA1   0.67038  -9.77038   3.69434 MB   2      0.00000
+   59    2 HEME HBA2   1.25587  -9.98410   2.00009 MB   2      0.00000
+   60    2 HEME CGA    0.04100 -11.60500   2.71900 MB   2     80.00000
+   61    2 HEME O1A   -1.05800 -12.09600   2.34200 MB   2     56.41000
+   62    2 HEME O2A    0.91100 -12.36400   3.17700 MB   2     40.43000
+   63    2 HEME CMB    1.11000  -2.02700   4.60100 MB   2     47.11000
+   64    2 HEME HMB1   0.90913  -3.00296   5.08980 MB   2      0.00000
+   65    2 HEME HMB2   0.17290  -1.43260   4.57296 MB   2      0.00000
+   66    2 HEME HMB3   1.87355  -1.48351   5.19542 MB   2      0.00000
+   67    2 HEME CAB    2.99500  -0.24100   2.75300 MB   2     34.93000
+   68    2 HEME HAB    3.84575   0.04665   2.12261 MB   2      0.00000
+   69    2 HEME CBB    2.51400   0.77000   3.52800 MB   2     41.05000
+   70    2 HEME HBB1   1.63995   0.61969   4.17788 MB   2      0.00000
+   71    2 HEME HBB2   2.97686   1.76740   3.50906 MB   2      0.00000
+   72    2 HEME CMC    5.65800  -0.77300  -1.78000 MB   2     33.22000
+   73    2 HEME HMC1   5.78381  -0.41357  -0.73872 MB   2      0.00000
+   74    2 HEME HMC2   5.07334  -0.02362  -2.35380 MB   2      0.00000
+   75    2 HEME HMC3   6.66778  -0.88852  -2.22596 MB   2      0.00000
+   76    2 HEME CAC    5.33400  -2.94800  -4.19200 MB   2     33.49000
+   77    2 HEME HAC    5.17908  -3.83563  -4.82297 MB   2      0.00000
+   78    2 HEME CBC    5.80700  -1.81100  -4.75300 MB   2     36.08000
+   79    2 HEME HBC1   5.93636  -0.87155  -4.21093 MB   2      0.00000
+   80    2 HEME HBC2   6.05617  -1.79904  -5.82372 MB   2      0.00000
+   81    2 HEME CMD    3.63100  -8.05000  -4.48700 MB   2     39.15000
+   82    2 HEME HMD1   4.68913  -7.72596  -4.54837 MB   2      0.00000
+   83    2 HEME HMD2   3.04306  -7.56334  -5.29387 MB   2      0.00000
+   84    2 HEME HMD3   3.57487  -9.15069  -4.62418 MB   2      0.00000
+   85    2 HEME CAD    1.31700  -9.61200  -2.85600 MB   2     35.70000
+   86    2 HEME HAD1   1.08806 -10.16196  -1.91849 MB   2      0.00000
+   87    2 HEME HAD2   1.94156 -10.28391  -3.48180 MB   2      0.00000
+   88    2 HEME CBD   -0.02500  -9.35000  -3.62800 MB   2     33.43000
+   89    2 HEME HBD1   0.18266  -8.83606  -4.58640 MB   2      0.00000
+   90    2 HEME HBD2  -0.65994  -8.68276  -3.00486 MB   2      0.00000
+   91    2 HEME CGD   -0.80500 -10.59100  -3.91600 MB   2     43.12000
+   92    2 HEME O1D   -0.50000 -11.35800  -4.89500 MB   2     47.28000
+   93    2 HEME O2D   -1.84100 -10.81500  -3.19900 MB   2     51.99000
+   94    3 NO   N      0.85200  -4.13600  -0.50600 NO   3     45.49000
+   95    3 NO   O      0.06400  -3.75100  -1.45600 NO   3     42.45000
+
+goto backreadcoor

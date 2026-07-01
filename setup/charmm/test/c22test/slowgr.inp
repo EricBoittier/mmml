@@ -1,0 +1,206 @@
+* SLOWGR: Charlie L. Brooks, 09-Dec-91
+* Ethanol -> Propane
+* FES Setup and testing
+*
+
+if ?qtsm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+! Read topology file
+READ RTF CARD
+* TOPOLOGY FILE ethanol -> propane
+*
+   20    1                ! Version number
+MASS     1 H      1.00800 ! hydrogen which can h-bond to neutral atom
+MASS    13 CH2E  14.02700 !   -    "    -           two
+MASS    14 CH3E  15.03500 !   -    "    -           three
+MASS    53 OH1   15.99940 ! hydroxy oxygen
+
+! This is put in to force the necessity of using a GENERATE Noangles
+! in the input file.  The standard topology files use this statement.
+AUTOGENERATE ANGLEs
+
+RESI ETP 0.000
+GROU
+atom C1 CH3E 0.    ! environment atom
+atom C2 CH2E 0.265 ! COLO atom the charge is the reactant charge
+atom O1 OH1 -0.7   ! reactant atom
+atom H1 H    0.435 C3 ! reactant atom note the non-bonded exclusion with 
+GROU
+atom C3 CH3E 0.    ! product atom
+
+BOND C1 C2       !environment term
+BOND C2 O1 O1 H1 !reactant terms
+BOND C2 C3       !product term
+
+! the angles MUST be specified
+! note the absence of O1 C2 C3 between reactant and product atoms
+ANGLe  C1 C2 C3  !product term
+ANGLe  C1 C2 O1  C2 O1 H1  !reactant terms
+
+! this will be a V(R) term.
+DIHED C1 C2 O1 H1
+
+! don't really need it but what the heck.
+DONO H1 O1
+ACCE O1
+
+IC C1 C2 O1 H1  1.54 111. 180. 109.5 0.96
+IC C2 O1 H1 BLNK 0. 0. 0. 0. 0.
+IC C1 C2 C3 BLNK 0. 0. 0. 0. 0.
+IC C2 C3 BLNK BLNK 0. 0. 0. 0. 0.
+PATCH FIRST NONE LAST NONE
+!
+RESI PROP 0.000
+GROU
+atom C1 CH3E 0.    ! environment atom
+atom C2 CH2E 0. ! COLO atom the charge is the reactant charge
+atom C3 CH3E 0.    ! product atom
+
+BOND C1 C2       !environment term
+BOND C2 C3       !product term
+
+! the angles MUST be specified
+ANGLe  C1 C2 C3  !product term
+
+IC C1 C2 C3 BLNK 0. 0. 0. 0. 0.
+IC C2 C3 BLNK BLNK 0. 0. 0. 0. 0.
+PATCH FIRST NONE LAST NONE
+!
+RESI ETOH 0.000
+GROU
+atom C1 CH3E 0.    ! environment atom
+atom C2 CH2E 0.265 ! COLO atom the charge is the reactant charge
+atom O1 OH1 -0.7   ! reactant atom
+atom H1 H    0.435 ! reactant atom note the non-bonded exclusion with 
+
+BOND C1 C2       !environment term
+BOND C2 O1 O1 H1 !reactant terms
+
+! the angles MUST be specified
+! note the absence of O1 C2 C3 between reactant and product atoms
+ANGLe  C1 C2 O1  C2 O1 H1  !reactant terms
+
+! this will be a V(R) term.
+DIHED C1 C2 O1 H1
+
+! don't really need it but what the heck.
+DONO H1 O1
+ACCE O1
+
+IC C1 C2 O1 H1  1.54 111. 180. 109.5 0.96
+IC C2 O1 H1 BLNK 0. 0. 0. 0. 0.
+PATCH FIRST NONE LAST NONE
+!
+END
+
+! Read parameter file
+READ PARAM CARD
+* parameter file for ETP hybrid.
+*
+
+BOND
+CH2E CH3E  225.0  1.54
+CH2E OH1   400.0  1.42
+OH1  H     450.0  0.96
+
+THETA
+CH3E CH2E CH3E  45.0 112.5
+CH3E CH2E OH1   45.0 111.0
+CH2E OH1  H     35.0 109.5
+
+PHI
+CH3E CH2E OH1 H  0.5   3   0.0
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.0440    -0.0498    0.8000 
+CH2E     1.77      -0.1142    2.235  1.77 -0.1 1.9
+CH3E     2.17      -0.1811    2.165  1.77 -0.1 1.9 
+OH1      0.8400    -0.1591    1.6000
+
+HBOND AEXP 4 REXP 6 HAEX 0 AAEX 0   NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+   CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+!
+H*    N%      -0.00      2.0 ! WER potential adjustment
+H*    O*      -0.00      2.0
+
+END
+
+
+!*** SET-UP, RUN AND TEST THERMODYNAMIC SIMULATION METHOD (SLOW GROWTH)***
+
+
+! read the sequence of one residue
+read sequence card
+* ETP
+*
+1
+ETP
+
+! Generate the  hybrid molecule.  Note that we use the NOANGLE command
+! because of the AUTOGENERATE ANGLES command in the RTF file.
+
+GENERATE ETP SETUP NOANGLE
+
+read coor card
+* ETHANOL -> PROPANE
+* FES SETUP AND THERMALIZATION
+*  DATE:     5/ 3/88     10:55:28      CREATED BY USER: BROOKS
+*
+    5
+    1    1 ETP  C1     0.00000   0.00000   0.00000 ETP  1      0.00000
+    2    1 ETP  C2     1.54000   0.00000   0.00000 ETP  1      0.00000
+    3    1 ETP  O1     2.04888   1.32568   0.00000 ETP  1      0.00000
+    4    1 ETP  H1     3.00855   1.30055   0.00000 ETP  1      0.00000
+    5    1 ETP  C3     2.12933   1.42277   0.00000 ETP  1      0.00000
+
+! The Hybrid molecule is built. Now set up the FES stuff.
+
+tsm
+
+! Assign reactant list:
+REAC sele atom etp 1 O1 .or. atom etp 1 H1 end
+
+! Assign product list:
+PROD sele atom etp 1 C3 end
+
+! Set lambda range for slow growth
+! The lambda dependence of the Hamiltonian will be linear.
+! This is the default and the POWEr 1 command is actually unecessary.
+
+SLOW Temp 298.0 lfrom 0.0 lto 1.0 power 1
+! The common methyl group is a colo atom.  Since the charge in the
+! rtf was for the reactant the RCHArge command is actually unecessary.
+COLO ETp 1 C2  PCHArge 0. RCHArge 0.265
+!
+! Just terminate the FES setup with an END statement.
+END
+
+! Set up dynamics.
+!a simple expedient
+shake bond angle
+!
+!
+dynamics verlet timestep 0.001 nstep 200 nprint 2 iprfrq 2 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 0 ihtfrq 0 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri -1 nsavc 0 nsavv 0 iunvel 0 -
+     iunread -1		                  - !{* Nonbond options *}
+     inbfrq 10 -
+     eps 1.0 cutnb 8.0 ctofnb 7.75
+
+stop

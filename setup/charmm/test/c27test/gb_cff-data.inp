@@ -1,0 +1,1303 @@
+* script file to test the cff forcefield on a series of small molecules.
+* The first derivatives are tested for each molecule.
+* author:  Rick Lapp (Feb 1, 1999)
+*  Modified by C.L. Brooks, III to add calculation of geeneralized Born energy
+*
+
+
+set pnode
+if ?numnode .gt. 1 then 
+     set pnode node 0
+     echo "CFF Not Parallel: Test NOT Performed"
+     stop
+endif
+
+if ?cff .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -1
+
+stream datadir.def
+
+prnlev 0 @pnode
+USE CFF
+
+if ?mynode .ne. 0 then iolev 0 
+OPEN READ UNIT 2 CARD NAME @0cff93.frc
+READ PARA UNIT 2 CARD
+CLOSE UNIT 2
+if ?mynode .ne. 0 then iolev -1 
+
+
+OPEN READ FORM UNIT 1 NAME @0small_cff.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+open unit 85 write form name @9CFF95_GB.enr
+
+set next txan
+READ SEQUENCE CARD
+* 1,3,5,7-Tetroxacane
+*
+   1
+TXCN
+
+GENERATE TXCN SETUP FIRST NONE LAST NONE
+
+set current TXCN
+
+READ COOR CARD
+* CRD file for TEST01
+*
+16
+    1    1 TXCN O1     1.78323   1.10243   0.52777 TEST 1      0.00000
+    2    1 TXCN C1     0.65936   1.91850   0.64937 TEST 1      0.00000
+    3    1 TXCN O2    -0.24905   1.80181  -0.40184 TEST 1      0.00000
+    4    1 TXCN C2    -1.22867   0.81541  -0.29588 TEST 1      0.00000
+    5    1 TXCN O3    -0.84135  -0.43079  -0.78665 TEST 1      0.00000
+    6    1 TXCN C3    -0.19285  -1.29379   0.09571 TEST 1      0.00000
+    7    1 TXCN O4     1.19093  -1.13018   0.14296 TEST 1      0.00000
+    8    1 TXCN C4     1.69494  -0.19072   1.04144 TEST 1      0.00000
+    9    1 TXCN H1     0.15718   1.74095   1.61363 TEST 1      0.00000
+   10    1 TXCN H2     1.03602   2.94315   0.59681 TEST 1      0.00000
+   11    1 TXCN H3    -1.57583   0.72795   0.74591 TEST 1      0.00000
+   12    1 TXCN H4    -2.04439   1.14370  -0.94500 TEST 1      0.00000
+   13    1 TXCN H5    -0.62529  -1.20848   1.10527 TEST 1      0.00000
+   14    1 TXCN H6    -0.35423  -2.29719  -0.30640 TEST 1      0.00000
+   15    1 TXCN H7     2.72550  -0.49780   1.23686 TEST 1      0.00000
+   16    1 TXCN H8     1.10755  -0.19550   1.97335 TEST 1      0.00000
+
+goto cfftest
+label txan
+set next dxln
+READ SEQUENCE CARD
+* 1,3,5-Trioxane
+*
+   1
+TXAN
+
+GENERATE TXAN SETUP FIRST NONE LAST NONE
+
+set current TXAN
+
+READ COOR CARD
+* CRD file for TEST02
+*
+12
+    1    1 TXAN O1     1.77808   1.06522  -0.57025 TEST 1      0.00000
+    2    1 TXAN C1     0.74320   1.85461  -0.44702 TEST 1      0.00000
+    3    1 TXAN O2    -0.35571   1.18974  -0.65682 TEST 1      0.00000
+    4    1 TXAN C2    -0.42748   0.19919   0.18564 TEST 1      0.00000
+    5    1 TXAN O3     0.58669  -0.60042   0.00332 TEST 1      0.00000
+    6    1 TXAN C3     1.68728   0.05008   0.24511 TEST 1      0.00000
+    7    1 TXAN H1     0.72697   2.21931   0.41890 TEST 1      0.00000
+    8    1 TXAN H2     0.81087   2.57907  -1.09316 TEST 1      0.00000
+    9    1 TXAN H3    -0.40596   0.53770   1.07418 TEST 1      0.00000
+   10    1 TXAN H4    -1.22325  -0.27098   0.04311 TEST 1      0.00000
+   11    1 TXAN H5     2.44283  -0.53492   0.11446 TEST 1      0.00000
+   12    1 TXAN H6     1.68217   0.35667   1.13531 TEST 1      0.00000
+
+goto cfftest
+label dxln
+set next thet
+READ SEQUENCE CARD
+* 1,3-Dioxolane
+*
+   1
+DXLN
+
+GENERATE THET SETUP FIRST NONE LAST NONE
+
+set current THET
+
+READ COOR CARD
+* CRD file for TEST03
+*
+11
+    1    1 DXLN C1     1.17109   0.13301  -0.37019 TEST 1      0.00000
+    2    1 DXLN O1     0.10106   0.87148  -0.62415 TEST 1      0.00000
+    3    1 DXLN C2    -0.78190   0.45349   0.22550 TEST 1      0.00000
+    4    1 DXLN C3    -0.48710  -0.89576   0.26418 TEST 1      0.00000
+    5    1 DXLN O2     0.79091  -0.84040   0.43940 TEST 1      0.00000
+    6    1 DXLN H1     1.49494  -0.22868  -1.18929 TEST 1      0.00000
+    7    1 DXLN H2     1.84964   0.64800   0.04665 TEST 1      0.00000
+    8    1 DXLN H3    -0.61102   0.83475   1.06931 TEST 1      0.00000
+    9    1 DXLN H4    -1.68662   0.63229  -0.04870 TEST 1      0.00000
+   10    1 DXLN H5    -0.94547  -1.35615   0.96645 TEST 1      0.00000
+   11    1 DXLN H6    -0.67652  -1.28809  -0.57391 TEST 1      0.00000
+
+goto cfftest
+label thet
+set next imid
+READ SEQUENCE CARD
+* 112-TrihydroxyEthane
+*
+   1
+THET
+
+GENERATE THET SETUP FIRST NONE LAST NONE
+
+set current THET
+
+READ COOR CARD
+* CRD file for TEST04
+*
+11
+    1    1 THET C1    -0.41101   0.49212   0.46984 TEST 1      0.00000
+    2    1 THET C2     0.08644  -0.42960  -0.49844 TEST 1      0.00000
+    3    1 THET O1     0.91658  -1.37767   0.03680 TEST 1      0.00000
+    4    1 THET O2     0.82147   1.05523   1.27188 TEST 1      0.00000
+    5    1 THET O3    -1.09138   1.62989   0.26777 TEST 1      0.00000
+    6    1 THET H1    -0.99575  -0.15672   1.38526 TEST 1      0.00000
+    7    1 THET H2    -0.79267  -0.93202  -0.86196 TEST 1      0.00000
+    8    1 THET H3     0.68128   0.18354  -1.13676 TEST 1      0.00000
+    9    1 THET H4     1.53640  -1.07622   0.61019 TEST 1      0.00000
+   10    1 THET H5     0.47419   2.05984   1.00468 TEST 1      0.00000
+   11    1 THET H6    -1.91915   1.34326  -0.16272 TEST 1      0.00000
+
+goto cfftest
+label imid
+set next pryr
+READ SEQUENCE CARD
+* 2-NH2-SO2-Imid
+*
+   1
+IMID
+
+GENERATE IMID SETUP FIRST NONE LAST NONE
+
+set current IMID
+
+READ COOR CARD
+* CRD file for TEST05
+*
+14
+    1    1 IMID N1    -0.50571  -0.23623   0.06816 TEST 1      0.00000
+    2    1 IMID C1     0.45649   0.63910   0.40969 TEST 1      0.00000
+    3    1 IMID N2     1.69678   0.22095   0.08473 TEST 1      0.00000
+    4    1 IMID C2     1.49105  -0.98095  -0.49049 TEST 1      0.00000
+    5    1 IMID C3     0.14293  -1.26256  -0.50150 TEST 1      0.00000
+    6    1 IMID S1     0.12508   2.21222   1.21976 TEST 1      0.00000
+    7    1 IMID O1    -0.62554   2.04934   2.56324 TEST 1      0.00000
+    8    1 IMID O2    -0.85414   3.10214   0.41667 TEST 1      0.00000
+    9    1 IMID N3     1.49918   3.25455   1.58562 TEST 1      0.00000
+   10    1 IMID H1    -1.53493  -0.13962   0.21396 TEST 1      0.00000
+   11    1 IMID H2     2.27787  -1.61371  -0.87852 TEST 1      0.00000
+   12    1 IMID H3    -0.33065  -2.15162  -0.89638 TEST 1      0.00000
+   13    1 IMID H4     1.24170   4.22668   1.80670 TEST 1      0.00000
+   14    1 IMID H5     2.28197   3.15649   0.92424 TEST 1      0.00000
+
+goto cfftest
+label pryr
+set next pryd
+READ SEQUENCE CARD
+* 2-Ph-Pryrim
+*
+   1
+PRYR
+
+GENERATE PRYR SETUP FIRST NONE LAST NONE
+
+set current PRYR
+
+READ COOR CARD
+* CRD file for TEST06
+*
+20
+    1    1 PRYR C1     2.08979   0.48328   0.04180 TEST 1      0.00000
+    2    1 PRYR H1     3.19574   0.47928   0.01441 TEST 1      0.00000
+    3    1 PRYR C2     1.39663   1.60090   0.52370 TEST 1      0.00000
+    4    1 PRYR H2     1.95666   2.48590   0.88222 TEST 1      0.00000
+    5    1 PRYR C3    -0.00344   1.60689   0.55738 TEST 1      0.00000
+    6    1 PRYR H3    -0.52958   2.49799   0.95579 TEST 1      0.00000
+    7    1 PRYR C4    -0.73157   0.49347   0.11166 TEST 1      0.00000
+    8    1 PRYR C5    -0.03445  -0.62510  -0.36936 TEST 1      0.00000
+    9    1 PRYR H4    -0.58608  -1.51231  -0.74109 TEST 1      0.00000
+   10    1 PRYR C6     1.36558  -0.62922  -0.40501 TEST 1      0.00000
+   11    1 PRYR H5     1.90078  -1.51817  -0.79064 TEST 1      0.00000
+   12    1 PRYR C7    -2.20732   0.49880   0.14819 TEST 1      0.00000
+   13    1 PRYR N1    -2.92679   1.62664  -0.27475 TEST 1      0.00000
+   14    1 PRYR C8    -4.32687   1.63078  -0.24109 TEST 1      0.00000
+   15    1 PRYR H6    -4.88001   2.52718  -0.58151 TEST 1      0.00000
+   16    1 PRYR C9    -5.02868   0.50899   0.21805 TEST 1      0.00000
+   17    1 PRYR H7    -6.13463   0.51299   0.24544 TEST 1      0.00000
+   18    1 PRYR C10   -4.31312  -0.61791   0.64210 TEST 1      0.00000
+   19    1 PRYR H8    -4.85520  -1.51036   1.00964 TEST 1      0.00000
+   20    1 PRYR N2    -2.91310  -0.62389   0.60643 TEST 1      0.00000
+
+goto cfftest
+label pryd
+set next thph
+READ SEQUENCE CARD
+* 2-Ph-Pyrid
+*
+   1
+PYRD
+
+GENERATE PYRD SETUP FIRST NONE LAST NONE
+
+set current PYRD
+
+READ COOR CARD
+* CRD file for TEST07
+*
+21
+    1    1 PYRD C1     2.08979   0.48328   0.04180 TEST 1      0.00000
+    2    1 PYRD H1     3.19574   0.47928   0.01441 TEST 1      0.00000
+    3    1 PYRD C2     1.39663   1.60090   0.52370 TEST 1      0.00000
+    4    1 PYRD H2     1.95666   2.48590   0.88222 TEST 1      0.00000
+    5    1 PYRD C3    -0.00344   1.60689   0.55738 TEST 1      0.00000
+    6    1 PYRD H3    -0.52958   2.49799   0.95579 TEST 1      0.00000
+    7    1 PYRD C4    -0.73157   0.49347   0.11166 TEST 1      0.00000
+    8    1 PYRD C5    -0.03445  -0.62510  -0.36936 TEST 1      0.00000
+    9    1 PYRD H4    -0.58608  -1.51231  -0.74109 TEST 1      0.00000
+   10    1 PYRD C6     1.36558  -0.62922  -0.40501 TEST 1      0.00000
+   11    1 PYRD H5     1.90078  -1.51817  -0.79064 TEST 1      0.00000
+   12    1 PYRD C7    -2.20732   0.49880   0.14819 TEST 1      0.00000
+   13    1 PYRD C8    -2.92679   1.62664  -0.27475 TEST 1      0.00000
+   14    1 PYRD H6    -2.39375   2.52156  -0.65503 TEST 1      0.00000
+   15    1 PYRD C9    -4.32687   1.63078  -0.24109 TEST 1      0.00000
+   16    1 PYRD H7    -4.88001   2.52718  -0.58151 TEST 1      0.00000
+   17    1 PYRD C10   -5.02868   0.50899   0.21805 TEST 1      0.00000
+   18    1 PYRD H8    -6.13463   0.51299   0.24544 TEST 1      0.00000
+   19    1 PYRD C11   -4.31312  -0.61791   0.64210 TEST 1      0.00000
+   20    1 PYRD H9    -4.85520  -1.51036   1.00964 TEST 1      0.00000
+   21    1 PYRD N1    -2.91310  -0.62389   0.60643 TEST 1      0.00000
+
+goto cfftest
+label thph
+set next furn
+READ SEQUENCE CARD
+* 2-Ph-Thiophene
+*
+   1
+THPH
+
+GENERATE THPH SETUP FIRST NONE LAST NONE
+
+set current THPH
+
+READ COOR CARD
+* CRD file for TEST08
+*
+19
+    1    1 THPH C1     2.12870   0.30897   0.18016 TEST 1      0.00000
+    2    1 THPH H1     3.07245   0.20421   0.20133 TEST 1      0.00000
+    3    1 THPH C2     1.56241   1.58328   0.32557 TEST 1      0.00000
+    4    1 THPH H2     2.12218   2.34125   0.44517 TEST 1      0.00000
+    5    1 THPH C3     0.17278   1.73873   0.29457 TEST 1      0.00000
+    6    1 THPH H3    -0.21587   2.60007   0.39267 TEST 1      0.00000
+    7    1 THPH C4    -0.63855   0.61671   0.11817 TEST 1      0.00000
+    8    1 THPH C5    -0.07568  -0.65203  -0.02669 TEST 1      0.00000
+    9    1 THPH H4    -0.63746  -1.40884  -0.14624 TEST 1      0.00000
+   10    1 THPH C6     1.30760  -0.80896   0.00394 TEST 1      0.00000
+   11    1 THPH H5     1.69069  -1.67259  -0.09462 TEST 1      0.00000
+   12    1 THPH C7    -2.01891   0.72386   0.08130 TEST 1      0.00000
+   13    1 THPH C8    -2.79008   1.89626   0.20578 TEST 1      0.00000
+   14    1 THPH C9    -4.19163   1.63488   0.12001 TEST 1      0.00000
+   15    1 THPH C10   -4.48136   0.26494  -0.06933 TEST 1      0.00000
+   16    1 THPH S1    -3.03632  -0.58225  -0.12652 TEST 1      0.00000
+   17    1 THPH H6    -4.86380   2.30310   0.18237 TEST 1      0.00000
+   18    1 THPH H7    -2.42425   2.76519   0.33260 TEST 1      0.00000
+   19    1 THPH H8    -5.34593  -0.11654  -0.15097 TEST 1      0.00000
+
+goto cfftest
+label furn
+set next pyrr
+READ SEQUENCE CARD
+* 2-thien-2-yl-furan
+*
+   1
+FURN
+
+GENERATE FURN SETUP FIRST NONE LAST NONE
+
+set current FURN
+
+READ COOR CARD
+* CRD file for TEST09
+*
+16
+    1    1 FURN C1     1.72512   0.05589   0.15293 TEST 1      0.00000
+    2    1 FURN H1     2.51495  -0.71129   0.11921 TEST 1      0.00000
+    3    1 FURN C2     1.95484   1.37252   0.30569 TEST 1      0.00000
+    4    1 FURN H2     2.92802   1.87977   0.41749 TEST 1      0.00000
+    5    1 FURN S1     0.47128   2.28170   0.31285 TEST 1      0.00000
+    6    1 FURN C3    -0.49554   0.83701   0.10246 TEST 1      0.00000
+    7    1 FURN C4     0.28769  -0.25803   0.03376 TEST 1      0.00000
+    8    1 FURN H3    -0.10087  -1.28130  -0.09753 TEST 1      0.00000
+    9    1 FURN C5    -1.94594   0.87946   0.02013 TEST 1      0.00000
+   10    1 FURN C6    -2.81264   1.90378   0.07585 TEST 1      0.00000
+   11    1 FURN C7    -4.15836   1.30819  -0.06725 TEST 1      0.00000
+   12    1 FURN C8    -3.95186  -0.00760  -0.19308 TEST 1      0.00000
+   13    1 FURN O1    -2.62625  -0.28605  -0.14300 TEST 1      0.00000
+   14    1 FURN H4    -5.12272   1.83241  -0.06990 TEST 1      0.00000
+   15    1 FURN H5    -2.56484   2.96683   0.20231 TEST 1      0.00000
+   16    1 FURN H6    -4.62900  -0.86109  -0.32323 TEST 1      0.00000
+
+goto cfftest
+label pyrr
+set next but2
+READ SEQUENCE CARD
+* 22-biPyrrole
+*
+   1
+PYRR
+
+GENERATE PYRR SETUP FIRST NONE LAST NONE
+
+set current PYRR
+
+READ COOR CARD
+* CRD file for TEST10
+*
+18
+    1    1 PYRR C1     1.78314   0.34497   0.08272 TEST 1      0.00000
+    2    1 PYRR H1     2.74440  -0.17036  -0.04652 TEST 1      0.00000
+    3    1 PYRR C2     1.61585   1.61058   0.55034 TEST 1      0.00000
+    4    1 PYRR H2     2.34914   2.35599   0.88641 TEST 1      0.00000
+    5    1 PYRR N1     0.27191   1.87262   0.55383 TEST 1      0.00000
+    6    1 PYRR H3    -0.17477   2.71263   0.91951 TEST 1      0.00000
+    7    1 PYRR C3    -0.44746   0.79554   0.09131 TEST 1      0.00000
+    8    1 PYRR C4     0.45519  -0.18446  -0.20770 TEST 1      0.00000
+    9    1 PYRR H4     0.21399  -1.17568  -0.61587 TEST 1      0.00000
+   10    1 PYRR C5    -1.90464   0.79776   0.01734 TEST 1      0.00000
+   11    1 PYRR C6    -2.78251   1.82666  -0.17042 TEST 1      0.00000
+   12    1 PYRR C7    -4.12751   1.26355  -0.12588 TEST 1      0.00000
+   13    1 PYRR C8    -3.99529  -0.07131   0.09562 TEST 1      0.00000
+   14    1 PYRR N2    -2.65592  -0.34240   0.18214 TEST 1      0.00000
+   15    1 PYRR H5    -5.07606   1.80396  -0.24623 TEST 1      0.00000
+   16    1 PYRR H6    -2.51154   2.87670  -0.34734 TEST 1      0.00000
+   17    1 PYRR H7    -4.75107  -0.86116   0.20160 TEST 1      0.00000
+   18    1 PYRR H8    -2.23984  -1.24256   0.41747 TEST 1      0.00000
+
+goto cfftest
+label but2
+set next imd2
+READ SEQUENCE CARD
+* 23-Dimet-Butadiene
+*
+   1
+BUT2
+
+GENERATE BUT2 SETUP FIRST NONE LAST NONE
+
+set current BUT2
+
+READ COOR CARD
+* CRD file for TEST11
+*
+16
+    1    1 BUT2 C1     0.93425   1.16014   0.29709 TEST 1      0.00000
+    2    1 BUT2 C2     0.26530   0.07436  -0.14112 TEST 1      0.00000
+    3    1 BUT2 C3    -1.20939  -0.09129   0.06403 TEST 1      0.00000
+    4    1 BUT2 C4    -1.87834  -1.17708  -0.37419 TEST 1      0.00000
+    5    1 BUT2 C5     1.02798  -1.01536  -0.86510 TEST 1      0.00000
+    6    1 BUT2 C6    -1.97207   0.99843   0.78801 TEST 1      0.00000
+    7    1 BUT2 H1     0.44660   1.99184   0.83093 TEST 1      0.00000
+    8    1 BUT2 H2     2.02172   1.26374   0.13605 TEST 1      0.00000
+    9    1 BUT2 H3    -1.39070  -2.00877  -0.90803 TEST 1      0.00000
+   10    1 BUT2 H4    -2.96582  -1.28067  -0.21315 TEST 1      0.00000
+   11    1 BUT2 H5     0.95277  -1.98040  -0.33795 TEST 1      0.00000
+   12    1 BUT2 H6     0.64563  -1.16563  -1.88788 TEST 1      0.00000
+   13    1 BUT2 H7     2.09522  -0.75642  -0.94047 TEST 1      0.00000
+   14    1 BUT2 H8    -1.58972   1.14870   1.81078 TEST 1      0.00000
+   15    1 BUT2 H9    -1.89686   1.96346   0.26085 TEST 1      0.00000
+   16    1 BUT2 H10   -3.03932   0.73949   0.86337 TEST 1      0.00000
+
+goto cfftest
+label imd2
+set next tzol
+READ SEQUENCE CARD
+* 4-NH2-SO2-Imid
+*
+   1
+IMD2
+
+GENERATE IMD2 SETUP FIRST NONE LAST NONE
+
+set current IMD2
+
+READ COOR CARD 
+* CRD file for TEST12
+*
+14
+    1    1 IMD2 N1    -0.76542  -0.77028  -0.57171 TEST 1      0.00000
+    2    1 IMD2 C1    -1.11839  -0.98418   0.71051 TEST 1      0.00000
+    3    1 IMD2 N2    -0.69291  -0.00878   1.54153 TEST 1      0.00000
+    4    1 IMD2 C2    -0.04618   0.84495   0.72489 TEST 1      0.00000
+    5    1 IMD2 C3    -0.08649   0.38622  -0.56976 TEST 1      0.00000
+    6    1 IMD2 S1     0.74521   2.36367   1.27920 TEST 1      0.00000
+    7    1 IMD2 O1     1.68779   2.14196   2.48672 TEST 1      0.00000
+    8    1 IMD2 O2    -0.26418   3.38796   1.85087 TEST 1      0.00000
+    9    1 IMD2 N3     1.70090   3.27124   0.10796 TEST 1      0.00000
+   10    1 IMD2 H1    -0.97644  -1.37705  -1.39449 TEST 1      0.00000
+   11    1 IMD2 H2     0.34326   0.85604  -1.44460 TEST 1      0.00000
+   12    1 IMD2 H3     2.30178   3.99446   0.52759 TEST 1      0.00000
+   13    1 IMD2 H4     2.16695   2.68027  -0.59438 TEST 1      0.00000
+   14    1 IMD2 H5    -1.68337  -1.84582   1.04078 TEST 1      0.00000
+
+goto cfftest
+label tzol
+set next bphe
+READ SEQUENCE CARD
+* 4-Ph-1234-Tetrazole
+*
+   1
+TZOL
+
+GENERATE TZOL SETUP FIRST NONE LAST NONE
+
+set current TZOL
+
+READ COOR CARD 
+* CRD file for TEST13
+*
+17
+    1    1 TZOL C1     2.07661   0.30044   0.17727 TEST 1      0.00000
+    2    1 TZOL H1     3.02249   0.21156   0.20054 TEST 1      0.00000
+    3    1 TZOL C2     1.48643   1.56224   0.32035 TEST 1      0.00000
+    4    1 TZOL H2     2.03295   2.33003   0.44086 TEST 1      0.00000
+    5    1 TZOL C3     0.08804   1.69475   0.28599 TEST 1      0.00000
+    6    1 TZOL H3    -0.30907   2.55217   0.38327 TEST 1      0.00000
+    7    1 TZOL C4    -0.72345   0.56238   0.10819 TEST 1      0.00000
+    8    1 TZOL C5    -0.12618  -0.69899  -0.03445 TEST 1      0.00000
+    9    1 TZOL H4    -0.66990  -1.46847  -0.15494 TEST 1      0.00000
+   10    1 TZOL C6     1.27033  -0.82946  -0.00009 TEST 1      0.00000
+   11    1 TZOL H5     1.66934  -1.68622  -0.09734 TEST 1      0.00000
+   12    1 TZOL C7    -2.13069   0.68039   0.07163 TEST 1      0.00000
+   13    1 TZOL N1    -2.83020   1.82141   0.19454 TEST 1      0.00000
+   14    1 TZOL N2    -4.08036   1.46095   0.10143 TEST 1      0.00000
+   15    1 TZOL N3    -4.19345   0.16878  -0.07116 TEST 1      0.00000
+   16    1 TZOL N4    -2.98980  -0.34438  -0.09365 TEST 1      0.00000
+   17    1 TZOL H6    -4.77164   2.03567   0.15085 TEST 1      0.00000
+
+goto cfftest
+label bphe
+set next buta
+READ SEQUENCE CARD
+* Biphenyl
+*
+   1
+BPHE
+
+GENERATE BPHE SETUP FIRST NONE LAST NONE
+
+set current BPHE
+
+READ COOR CARD 
+* CRD file for TEST15
+*
+22
+    1    1 BPHE C1     2.08979   0.48328   0.04180 TEST 1      0.00000
+    2    1 BPHE H1     3.19574   0.47928   0.01441 TEST 1      0.00000
+    3    1 BPHE C2     1.39663   1.60090   0.52370 TEST 1      0.00000
+    4    1 BPHE H2     1.95666   2.48590   0.88222 TEST 1      0.00000
+    5    1 BPHE C3    -0.00344   1.60689   0.55738 TEST 1      0.00000
+    6    1 BPHE H3    -0.52958   2.49799   0.95579 TEST 1      0.00000
+    7    1 BPHE C4    -0.73157   0.49347   0.11166 TEST 1      0.00000
+    8    1 BPHE C5    -0.03445  -0.62510  -0.36936 TEST 1      0.00000
+    9    1 BPHE H4    -0.58608  -1.51231  -0.74109 TEST 1      0.00000
+   10    1 BPHE C6     1.36558  -0.62922  -0.40501 TEST 1      0.00000
+   11    1 BPHE H5     1.90078  -1.51817  -0.79064 TEST 1      0.00000
+   12    1 BPHE C7    -2.20732   0.49880   0.14819 TEST 1      0.00000
+   13    1 BPHE C8    -2.92679   1.62664  -0.27475 TEST 1      0.00000
+   14    1 BPHE H6    -2.39375   2.52156  -0.65503 TEST 1      0.00000
+   15    1 BPHE C9    -4.32687   1.63078  -0.24109 TEST 1      0.00000
+   16    1 BPHE H7    -4.88001   2.52718  -0.58151 TEST 1      0.00000
+   17    1 BPHE C10   -5.02868   0.50899   0.21805 TEST 1      0.00000
+   18    1 BPHE H8    -6.13463   0.51299   0.24544 TEST 1      0.00000
+   19    1 BPHE C11   -4.31312  -0.61791   0.64210 TEST 1      0.00000
+   20    1 BPHE H9    -4.85520  -1.51036   1.00964 TEST 1      0.00000
+   21    1 BPHE C12   -2.91310  -0.62389   0.60643 TEST 1      0.00000
+   22    1 BPHE H10   -2.36837  -1.52270   0.96002 TEST 1      0.00000
+
+goto cfftest
+label buta
+set next blct
+READ SEQUENCE CARD
+* Butadiene
+*
+   1
+BUTA
+
+GENERATE BUTA SETUP FIRST NONE LAST NONE
+
+set current BUTA
+
+READ COOR CARD 
+* CRD file for TEST16
+*
+10
+    1    1 BUTA C1     0.05594  -0.51869  -1.24595 TEST 1      0.00000
+    2    1 BUTA C2     0.94398  -0.01016  -0.37590 TEST 1      0.00000
+    3    1 BUTA C3     0.65234   0.60675   0.93976 TEST 1      0.00000
+    4    1 BUTA C4    -0.49081   0.51833   1.63947 TEST 1      0.00000
+    5    1 BUTA H1    -1.02894  -0.52556  -1.05017 TEST 1      0.00000
+    6    1 BUTA H2     0.39390  -0.95031  -2.20143 TEST 1      0.00000
+    7    1 BUTA H3     2.00984  -0.03616  -0.65477 TEST 1      0.00000
+    8    1 BUTA H4     1.47935   1.18903   1.37738 TEST 1      0.00000
+    9    1 BUTA H5    -1.36400  -0.05023   1.27948 TEST 1      0.00000
+   10    1 BUTA H6    -0.58918   1.02037   2.61504 TEST 1      0.00000
+
+goto cfftest
+label blct
+set next meph
+READ SEQUENCE CARD
+* Butyrolactam
+*
+   1
+BLCT
+
+GENERATE BLCT SETUP FIRST NONE LAST NONE
+
+set current BLCT
+
+READ COOR CARD 
+* CRD file for TEST17
+*
+10
+    1    1 BLCT C1    -0.04012   0.96627   0.14082 TEST 1      0.00000
+    2    1 BLCT N1    -0.82817   0.53171  -0.74274 TEST 1      0.00000
+    3    1 BLCT C2    -0.53477  -0.76952  -0.67541 TEST 1      0.00000
+    4    1 BLCT C3     0.53730  -0.23323   0.49918 TEST 1      0.00000
+    5    1 BLCT O1     0.16761   2.17907   0.57583 TEST 1      0.00000
+    6    1 BLCT H1    -1.48150   0.97825  -1.17420 TEST 1      0.00000
+    7    1 BLCT H2    -1.26591  -1.28263  -0.34946 TEST 1      0.00000
+    8    1 BLCT H3    -0.12129  -1.08119  -1.47300 TEST 1      0.00000
+    9    1 BLCT H4     1.45346  -0.27836   0.25133 TEST 1      0.00000
+   10    1 BLCT H5     0.31644  -0.49194   1.38613 TEST 1      0.00000
+
+goto cfftest
+label meph
+set next coct
+READ SEQUENCE CARD
+* CH3-PO4_2-
+*
+   1
+MEPH
+
+GENERATE MEPH SETUP FIRST NONE LAST NONE
+
+set current MEPH
+
+READ COOR CARD 
+* CRD file for TEST19
+*
+9
+    1    1 MEPH P1     0.03351   0.01800  -0.20914 TEST 1      0.00000
+    2    1 MEPH O1     0.13520   1.50857  -0.77958 TEST 1      0.00000
+    3    1 MEPH O2    -1.44155  -0.29712   0.32815 TEST 1      0.00000
+    4    1 MEPH O3     0.52097  -1.05456  -1.29203 TEST 1      0.00000
+    5    1 MEPH O4     1.00861   0.01028   1.02310 TEST 1      0.00000
+    6    1 MEPH C1     1.50886   1.20434   1.05079 TEST 1      0.00000
+    7    1 MEPH H1     1.94298   1.35242   1.89728 TEST 1      0.00000
+    8    1 MEPH H2     2.14515   1.30365   0.35737 TEST 1      0.00000
+    9    1 MEPH H3     0.81584   1.83819   0.94602 TEST 1      0.00000
+
+goto cfftest
+label coct
+set next dmoe
+READ SEQUENCE CARD
+* Cyclooctatetraene
+*
+   1
+COCT
+
+GENERATE COCT SETUP FIRST NONE LAST NONE
+
+set current COCT
+
+READ COOR CARD 
+* CRD file for TEST20
+*
+16
+    1    1 COCT C1    -0.84169   1.75267  -0.42516 TEST 1      0.00000
+    2    1 COCT C2     0.34921   1.30609   0.01066 TEST 1      0.00000
+    3    1 COCT C3     1.09648   0.13267  -0.49110 TEST 1      0.00000
+    4    1 COCT C4     0.65203  -1.13350  -0.57408 TEST 1      0.00000
+    5    1 COCT C5    -0.68300  -1.63458  -0.18206 TEST 1      0.00000
+    6    1 COCT C6    -1.87390  -1.18800  -0.61788 TEST 1      0.00000
+    7    1 COCT C7    -2.11381  -0.09632  -1.58626 TEST 1      0.00000
+    8    1 COCT C8    -1.66936   1.16985  -1.50328 TEST 1      0.00000
+    9    1 COCT H1    -1.23064   2.69173   0.00825 TEST 1      0.00000
+   10    1 COCT H2     0.87428   1.90240   0.77856 TEST 1      0.00000
+   11    1 COCT H3     2.15082   0.32793  -0.75795 TEST 1      0.00000
+   12    1 COCT H4     1.36526  -1.91004  -0.90462 TEST 1      0.00000
+   13    1 COCT H5    -0.67530  -2.51222   0.48925 TEST 1      0.00000
+   14    1 COCT H6    -2.78022  -1.72288  -0.28106 TEST 1      0.00000
+   15    1 COCT H7    -2.78690  -0.35300  -2.42414 TEST 1      0.00000
+   16    1 COCT H8    -2.00134   1.88497  -2.27747 TEST 1      0.00000
+
+goto cfftest
+label dmoe
+set next etph
+READ SEQUENCE CARD
+* Dimethoxymethane
+*
+   1
+DMOE
+
+GENERATE DMOE SETUP FIRST NONE LAST NONE
+
+set current DMOE
+
+READ COOR CARD 
+* CRD file for TEST21
+*
+13
+    1    1 DMOE C1     0.17521   1.42948  -0.59091 TEST 1      0.00000
+    2    1 DMOE O1    -0.00404   0.53956   0.33453 TEST 1      0.00000
+    3    1 DMOE C2    -0.82816  -0.39302  -0.05503 TEST 1      0.00000
+    4    1 DMOE O2    -0.28488  -1.03819  -1.05272 TEST 1      0.00000
+    5    1 DMOE H1    -0.60029   2.03056  -0.61863 TEST 1      0.00000
+    6    1 DMOE H2     0.93742   1.93394  -0.39016 TEST 1      0.00000
+    7    1 DMOE H3     0.26204   1.00974  -1.40848 TEST 1      0.00000
+    8    1 DMOE H4    -0.97674  -0.99370   0.65626 TEST 1      0.00000
+    9    1 DMOE H5    -1.66750  -0.00388  -0.32523 TEST 1      0.00000
+   10    1 DMOE C3     0.84950  -1.54861  -0.64321 TEST 1      0.00000
+   11    1 DMOE H6     1.43107  -0.84109  -0.35641 TEST 1      0.00000
+   12    1 DMOE H7     0.68703  -2.13118   0.09452 TEST 1      0.00000
+   13    1 DMOE H8     1.25312  -2.02447  -1.34129 TEST 1      0.00000
+
+goto cfftest
+label etph
+set next ethe
+READ SEQUENCE CARD
+* Eth-PO4_2-
+*
+   1
+ETPH
+
+GENERATE ETPH SETUP FIRST NONE LAST NONE
+
+set current ETPH
+
+READ COOR CARD 
+* CRD file for TEST22
+*
+12
+    1    1 ETPH P1    -0.60963   0.18840   0.23720 TEST 1      0.00000
+    2    1 ETPH O1    -1.28975   1.54061   0.27425 TEST 1      0.00000
+    3    1 ETPH O2    -1.40608  -0.91213   0.88485 TEST 1      0.00000
+    4    1 ETPH O3    -0.10833  -0.15482  -1.14847 TEST 1      0.00000
+    5    1 ETPH O4     0.73820   0.33935   1.20011 TEST 1      0.00000
+    6    1 ETPH C1     1.68016   1.31253   0.86948 TEST 1      0.00000
+    7    1 ETPH H1     2.10186   1.67463   1.82948 TEST 1      0.00000
+    8    1 ETPH C2     2.81766   0.77272  -0.00719 TEST 1      0.00000
+    9    1 ETPH H2     1.21791   2.18871   0.39378 TEST 1      0.00000
+   10    1 ETPH H3     3.58657   1.53934  -0.17480 TEST 1      0.00000
+   11    1 ETPH H4     3.27987  -0.10159   0.47452 TEST 1      0.00000
+   12    1 ETPH H5     2.42915   0.45008  -0.98666 TEST 1      0.00000
+
+goto cfftest
+label ethe
+set next phos
+READ SEQUENCE CARD
+* Ethene
+*
+   1
+ETHE
+
+GENERATE ETHE SETUP FIRST NONE LAST NONE
+
+set current ETHE
+
+READ COOR CARD 
+* CRD file for TEST23
+*
+6
+    1    1 ETHE C1    -0.72256   0.57938  -0.03291 TEST 1      0.00000
+    2    1 ETHE C2     0.37426  -0.18144   0.03029 TEST 1      0.00000
+    3    1 ETHE H1    -1.23246   0.92766   0.87902 TEST 1      0.00000
+    4    1 ETHE H2    -1.15432   0.88428  -0.99910 TEST 1      0.00000
+    5    1 ETHE H3     0.80602  -0.48634   0.99649 TEST 1      0.00000
+    6    1 ETHE H4     0.88416  -0.52972  -0.88163 TEST 1      0.00000
+
+goto cfftest
+label phos
+set next hmch
+READ SEQUENCE CARD
+* HPO4_2-
+*
+   1
+PHOS
+
+GENERATE PHOS SETUP FIRST NONE LAST NONE
+
+set current PHOS
+
+READ COOR CARD 
+* CRD file for TEST24
+*
+6
+    1    1 PHOS P1    -0.01328   0.01792  -0.25598 TEST 1      0.00000
+    2    1 PHOS O1     0.18357   1.45193  -0.68137 TEST 1      0.00000
+    3    1 PHOS O2    -1.35853  -0.28140   0.33261 TEST 1      0.00000
+    4    1 PHOS O3     0.51498  -0.99946  -1.22119 TEST 1      0.00000
+    5    1 PHOS O4     1.03436   0.05209   0.99140 TEST 1      0.00000
+    6    1 PHOS H1     1.29605   0.97740   0.87880 TEST 1      0.00000
+
+goto cfftest
+label hmch
+set next hmme
+READ SEQUENCE CARD
+* HexaMethCyclohexane
+*
+   1
+HMCH
+
+GENERATE HMCH SETUP FIRST NONE LAST NONE
+
+set current HMCH
+
+READ COOR CARD 
+* CRD file for TEST25
+*
+24
+    1    1 HMCH C1    -1.07919   1.19380  -0.77836 TEST 1      0.00000
+    2    1 HMCH C2    -0.93591  -0.20743  -0.77731 TEST 1      0.00000
+    3    1 HMCH C3     0.10276  -0.80863  -0.03984 TEST 1      0.00000
+    4    1 HMCH C4     0.95897  -0.01405   0.74724 TEST 1      0.00000
+    5    1 HMCH C5     0.79518   1.38472   0.77164 TEST 1      0.00000
+    6    1 HMCH C6    -0.20329   1.99074  -0.01572 TEST 1      0.00000
+    7    1 HMCH C7    -2.15685   1.83267  -1.58568 TEST 1      0.00000
+    8    1 HMCH C8    -1.87670  -1.05207  -1.56584 TEST 1      0.00000
+    9    1 HMCH C9     0.28965  -2.28627  -0.08275 TEST 1      0.00000
+   10    1 HMCH C10    2.03730  -0.65283   1.55372 TEST 1      0.00000
+   11    1 HMCH C11    1.68614   2.22339   1.62200 TEST 1      0.00000
+   12    1 HMCH C12   -0.34102   3.47429  -0.03382 TEST 1      0.00000
+   13    1 HMCH H1    -2.58865   1.34042  -2.47831 TEST 1      0.00000
+   14    1 HMCH H2    -2.57050   2.82642  -1.32681 TEST 1      0.00000
+   15    1 HMCH H3    -2.93317  -0.76055  -1.71665 TEST 1      0.00000
+   16    1 HMCH H4    -1.56655  -2.01464  -2.00884 TEST 1      0.00000
+   17    1 HMCH H5    -0.55795  -2.97822  -0.23045 TEST 1      0.00000
+   18    1 HMCH H6     1.29085  -2.74868   0.00558 TEST 1      0.00000
+   19    1 HMCH H7     1.96894  -1.70444   1.89301 TEST 1      0.00000
+   20    1 HMCH H8     2.95207  -0.10262   1.84701 TEST 1      0.00000
+   21    1 HMCH H9     2.08935   1.85345   2.58347 TEST 1      0.00000
+   22    1 HMCH H10    1.95881   3.25590   1.34176 TEST 1      0.00000
+   23    1 HMCH H11   -0.68758   4.01527  -0.93452 TEST 1      0.00000
+   24    1 HMCH H12   -0.07857   4.09601   0.84003 TEST 1      0.00000
+
+goto cfftest
+label hmme
+set next msop
+READ SEQUENCE CARD
+* Hydroxymethoxymethane
+*
+   1
+HMME
+
+GENERATE HMME SETUP FIRST NONE LAST NONE
+
+set current HMME
+
+READ COOR CARD 
+* CRD file for TEST26
+*
+10
+    1    1 HMME C1     0.26842   1.63411  -0.57108 TEST 1      0.00000
+    2    1 HMME O1    -0.02924   0.58106   0.33675 TEST 1      0.00000
+    3    1 HMME C2    -0.79612  -0.51868  -0.06995 TEST 1      0.00000
+    4    1 HMME O2    -0.15818  -1.25054  -1.06895 TEST 1      0.00000
+    5    1 HMME H1    -0.10652   2.57996  -0.15427 TEST 1      0.00000
+    6    1 HMME H2     1.35859   1.70244  -0.69819 TEST 1      0.00000
+    7    1 HMME H3    -0.18824   1.48755  -1.56296 TEST 1      0.00000
+    8    1 HMME H4    -0.91695  -1.09930   0.85264 TEST 1      0.00000
+    9    1 HMME H5    -1.75652  -0.20945  -0.49893 TEST 1      0.00000
+   10    1 HMME H6     0.68630  -1.49117  -0.66281 TEST 1      0.00000
+
+goto cfftest
+label msop
+set next mspr
+READ SEQUENCE CARD
+* Met-SO2-Ph
+*
+   1
+MSOP
+
+GENERATE MSOP SETUP FIRST NONE LAST NONE
+
+set current MSOP
+
+READ COOR CARD 
+* CRD file for TEST28
+*
+18
+    1    1 MSOP C1    -0.03778  -0.42903   0.62864 TEST 1      0.00000
+    2    1 MSOP H1     0.69160  -0.57856   1.41446 TEST 1      0.00000
+    3    1 MSOP C2    -0.34591   0.86483   0.18708 TEST 1      0.00000
+    4    1 MSOP C3    -1.29121   1.04640  -0.83027 TEST 1      0.00000
+    5    1 MSOP H2    -1.53513   2.04234  -1.17731 TEST 1      0.00000
+    6    1 MSOP C4    -1.92538  -0.06075  -1.40335 TEST 1      0.00000
+    7    1 MSOP H3    -2.65568   0.08120  -2.18946 TEST 1      0.00000
+    8    1 MSOP C5    -1.61645  -1.35101  -0.96125 TEST 1      0.00000
+    9    1 MSOP H4    -2.10760  -2.20724  -1.40519 TEST 1      0.00000
+   10    1 MSOP C6    -0.67295  -1.53499   0.05441 TEST 1      0.00000
+   11    1 MSOP H5    -0.43411  -2.53374   0.39631 TEST 1      0.00000
+   12    1 MSOP S1     0.46927   2.29740   0.92288 TEST 1      0.00000
+   13    1 MSOP O1     1.99348   2.03812   0.84735 TEST 1      0.00000
+   14    1 MSOP O2     0.28956   2.18146   2.45599 TEST 1      0.00000
+   15    1 MSOP C7     0.18035   4.04170   0.46143 TEST 1      0.00000
+   16    1 MSOP H6     0.82069   4.70309   1.08077 TEST 1      0.00000
+   17    1 MSOP H7     0.42771   4.18512  -0.61044 TEST 1      0.00000
+   18    1 MSOP H8    -0.88629   4.29565   0.63009 TEST 1      0.00000
+
+goto cfftest
+label mspr
+set next mspm
+READ SEQUENCE CARD
+* Met-SO2-Pyr
+*
+   1
+MSPR
+
+GENERATE MSPR SETUP FIRST NONE LAST NONE
+
+set current MSPR
+
+READ COOR CARD 
+* CRD file for TEST29
+*
+17
+    1    1 MSPR C1    -0.03778  -0.42903   0.62864 TEST 1      0.00000
+    2    1 MSPR H1     0.69160  -0.57856   1.41446 TEST 1      0.00000
+    3    1 MSPR C2    -0.34591   0.86483   0.18708 TEST 1      0.00000
+    4    1 MSPR N1    -1.29121   1.04640  -0.83027 TEST 1      0.00000
+    5    1 MSPR C3    -1.92538  -0.06075  -1.40335 TEST 1      0.00000
+    6    1 MSPR H2    -2.65568   0.08120  -2.18946 TEST 1      0.00000
+    7    1 MSPR C4    -1.61645  -1.35101  -0.96125 TEST 1      0.00000
+    8    1 MSPR H3    -2.10760  -2.20724  -1.40519 TEST 1      0.00000
+    9    1 MSPR C5    -0.67295  -1.53499   0.05441 TEST 1      0.00000
+   10    1 MSPR H4    -0.43411  -2.53374   0.39631 TEST 1      0.00000
+   11    1 MSPR S1     0.46927   2.29740   0.92288 TEST 1      0.00000
+   12    1 MSPR O1     1.99348   2.03812   0.84735 TEST 1      0.00000
+   13    1 MSPR O2     0.28956   2.18146   2.45599 TEST 1      0.00000
+   14    1 MSPR C6     0.18035   4.04170   0.46143 TEST 1      0.00000
+   15    1 MSPR H5     0.82069   4.70309   1.08077 TEST 1      0.00000
+   16    1 MSPR H6     0.42771   4.18512  -0.61044 TEST 1      0.00000
+   17    1 MSPR H7    -0.88629   4.29565   0.63009 TEST 1      0.00000
+
+goto cfftest
+label mspm
+set next nffo
+READ SEQUENCE CARD
+* Met-SO2-Pyrim
+*
+   1
+MSPM
+
+GENERATE MSPM SETUP FIRST NONE LAST NONE
+
+set current MSPM
+
+READ COOR CARD 
+* CRD file for TEST30
+*
+16
+    1    1 MSPM N1    -0.03778  -0.42903   0.62864 TEST 1      0.00000
+    2    1 MSPM C1    -0.34591   0.86483   0.18708 TEST 1      0.00000
+    3    1 MSPM N2    -1.29121   1.04640  -0.83027 TEST 1      0.00000
+    4    1 MSPM C2    -1.92538  -0.06075  -1.40335 TEST 1      0.00000
+    5    1 MSPM H1    -2.65568   0.08120  -2.18946 TEST 1      0.00000
+    6    1 MSPM C3    -1.61645  -1.35101  -0.96125 TEST 1      0.00000
+    7    1 MSPM H2    -2.10760  -2.20724  -1.40519 TEST 1      0.00000
+    8    1 MSPM C4    -0.67295  -1.53499   0.05441 TEST 1      0.00000
+    9    1 MSPM H3    -0.43411  -2.53374   0.39631 TEST 1      0.00000
+   10    1 MSPM S1     0.46927   2.29740   0.92288 TEST 1      0.00000
+   11    1 MSPM O1     1.99348   2.03812   0.84735 TEST 1      0.00000
+   12    1 MSPM O2     0.28956   2.18146   2.45599 TEST 1      0.00000
+   13    1 MSPM C5     0.18035   4.04170   0.46143 TEST 1      0.00000
+   14    1 MSPM H4     0.82069   4.70309   1.08077 TEST 1      0.00000
+   15    1 MSPM H5     0.42771   4.18512  -0.61044 TEST 1      0.00000
+   16    1 MSPM H6    -0.88629   4.29565   0.63009 TEST 1      0.00000
+
+goto cfftest
+label nffo
+set next nsph
+READ SEQUENCE CARD
+* N-FormylFormamide
+*
+   1
+NFFO
+
+GENERATE NFFO SETUP FIRST NONE LAST NONE
+
+set current NFFO
+
+READ COOR CARD 
+* CRD file for TEST32
+*
+8
+    1    1 NFFO O1    -0.42587   2.19190   0.02202 TEST 1      0.00000
+    2    1 NFFO C1    -0.55648   0.93336  -0.27583 TEST 1      0.00000
+    3    1 NFFO N1     0.30393   0.03493   0.24028 TEST 1      0.00000
+    4    1 NFFO C2     0.18452  -1.27477  -0.06061 TEST 1      0.00000
+    5    1 NFFO O2     1.02372  -2.12887   0.44216 TEST 1      0.00000
+    6    1 NFFO H1    -1.25492   0.65271  -0.85443 TEST 1      0.00000
+    7    1 NFFO H2     0.96548   0.30132   0.78903 TEST 1      0.00000
+    8    1 NFFO H3    -0.51120  -1.56770  -0.63866 TEST 1      0.00000
+
+goto cfftest
+label nsph
+set next nspy
+READ SEQUENCE CARD
+* NH2-SO2-Ph
+*
+   1
+NSPH
+
+GENERATE NSPH SETUP FIRST NONE LAST NONE
+
+set current NSPH
+
+READ COOR CARD 
+* CRD file for TEST33
+*
+17
+    1    1 NSPH C1     0.29222  -0.28518   0.73883 TEST 1      0.00000
+    2    1 NSPH C2    -0.36195   0.88760   0.33974 TEST 1      0.00000
+    3    1 NSPH C3    -1.08693   0.90681  -0.85891 TEST 1      0.00000
+    4    1 NSPH C4    -1.15276  -0.24049  -1.65631 TEST 1      0.00000
+    5    1 NSPH H1    -1.71284  -0.22413  -2.58233 TEST 1      0.00000
+    6    1 NSPH C5    -0.49645  -1.40908  -1.25732 TEST 1      0.00000
+    7    1 NSPH H2    -0.54809  -2.29651  -1.87477 TEST 1      0.00000
+    8    1 NSPH C6     0.22532  -1.43149  -0.05981 TEST 1      0.00000
+    9    1 NSPH H3     0.73198  -2.33654   0.24945 TEST 1      0.00000
+   10    1 NSPH S1    -0.27784   2.36502   1.37354 TEST 1      0.00000
+   11    1 NSPH O1     1.12200   2.59297   1.99397 TEST 1      0.00000
+   12    1 NSPH O2    -1.16788   2.25486   2.63474 TEST 1      0.00000
+   13    1 NSPH N1    -0.71836   3.91028   0.64705 TEST 1      0.00000
+   14    1 NSPH H4    -0.43694   3.99987  -0.33911 TEST 1      0.00000
+   15    1 NSPH H5    -0.49234   4.72681   1.23217 TEST 1      0.00000
+   16    1 NSPH H6    -1.60069   1.80597  -1.17329 TEST 1      0.00000
+   17    1 NSPH H7     0.85127  -0.30992   1.66551 TEST 1      0.00000
+
+goto cfftest
+label nspy
+set next nspm
+READ SEQUENCE CARD
+* NH2-SO2-Pyr
+*
+   1
+NSPY
+
+GENERATE NSPY SETUP FIRST NONE LAST NONE
+
+set current NSPY
+
+READ COOR CARD 
+* CRD file for TEST34
+*
+16
+    1    1 NSPY N1     0.30812  -0.24909   0.68709 TEST 1      0.00000
+    2    1 NSPY C1    -0.37435   0.87638   0.34212 TEST 1      0.00000
+    3    1 NSPY C2    -1.14134   0.89695  -0.82778 TEST 1      0.00000
+    4    1 NSPY C3    -1.19264  -0.24486  -1.63033 TEST 1      0.00000
+    5    1 NSPY H1    -1.78157  -0.24381  -2.53839 TEST 1      0.00000
+    6    1 NSPY C4    -0.48279  -1.38824  -1.25765 TEST 1      0.00000
+    7    1 NSPY H2    -0.51646  -2.27803  -1.87288 TEST 1      0.00000
+    8    1 NSPY C5     0.27065  -1.37094  -0.08117 TEST 1      0.00000
+    9    1 NSPY H3     0.82528  -2.24908   0.22129 TEST 1      0.00000
+   10    1 NSPY S1    -0.28922   2.33165   1.40127 TEST 1      0.00000
+   11    1 NSPY O1     1.06329   2.47282   2.14082 TEST 1      0.00000
+   12    1 NSPY O2    -1.29046   2.26133   2.57913 TEST 1      0.00000
+   13    1 NSPY N2    -0.58342   3.90499   0.66138 TEST 1      0.00000
+   14    1 NSPY H4    -0.28171   3.96407  -0.32110 TEST 1      0.00000
+   15    1 NSPY H5    -0.29910   4.70311   1.24646 TEST 1      0.00000
+   16    1 NSPY H6    -1.69212   1.78435  -1.11192 TEST 1      0.00000
+
+goto cfftest
+label nspm
+set next nh3
+READ SEQUENCE CARD
+* NH2-SO2-Pyrim
+*
+   1
+NSPM
+
+GENERATE NSPM SETUP FIRST NONE LAST NONE
+
+set current NSPM
+
+READ COOR CARD 
+* CRD file for TEST35
+*
+15
+    1    1 NSPM N1    -0.03778  -0.42903   0.62864 TEST 1      0.00000
+    2    1 NSPM C1    -0.34591   0.86483   0.18708 TEST 1      0.00000
+    3    1 NSPM N2    -1.29121   1.04640  -0.83027 TEST 1      0.00000
+    4    1 NSPM C2    -1.92538  -0.06075  -1.40335 TEST 1      0.00000
+    5    1 NSPM H1    -2.65568   0.08120  -2.18946 TEST 1      0.00000
+    6    1 NSPM C3    -1.61645  -1.35101  -0.96125 TEST 1      0.00000
+    7    1 NSPM H2    -2.10760  -2.20724  -1.40519 TEST 1      0.00000
+    8    1 NSPM C4    -0.67295  -1.53499   0.05441 TEST 1      0.00000
+    9    1 NSPM H3    -0.43411  -2.53374   0.39631 TEST 1      0.00000
+   10    1 NSPM S1     0.46927   2.29740   0.92288 TEST 1      0.00000
+   11    1 NSPM O1     1.99348   2.03812   0.84735 TEST 1      0.00000
+   12    1 NSPM O2     0.28956   2.18146   2.45599 TEST 1      0.00000
+   13    1 NSPM N3     0.18035   4.04170   0.46143 TEST 1      0.00000
+   14    1 NSPM H4     0.42771   4.18512  -0.61044 TEST 1      0.00000
+   15    1 NSPM H5    -0.88629   4.29565   0.63009 TEST 1      0.00000
+
+goto cfftest
+label nh3
+set next octt
+READ SEQUENCE CARD
+* NH3
+*
+   1
+NH3
+
+GENERATE NH3 SETUP FIRST NONE LAST NONE
+
+set current NH3 
+
+READ COOR CARD 
+* CRD file for TEST36
+*
+4
+    1    1 NH3  N1     0.48732   0.04907  -0.34040 TEST 1      0.00000
+    2    1 NH3  H1     0.00493  -0.07102   0.53420 TEST 1      0.00000
+    3    1 NH3  H2    -0.19437  -0.06396  -1.07153 TEST 1      0.00000
+    4    1 NH3  H3     0.80212   1.00391  -0.37527 TEST 1      0.00000
+
+goto cfftest
+label octt
+set next ptln
+READ SEQUENCE CARD
+* Octatetraene
+*
+   1
+OCTT
+
+GENERATE OCTT SETUP FIRST NONE LAST NONE
+
+set current OCTT
+
+READ COOR CARD 
+* CRD file for TEST37
+*
+18
+    1    1 OCTT C1     2.09614   2.33909   1.17585 TEST 1      0.00000
+    2    1 OCTT C2     1.47311   1.28224   0.62888 TEST 1      0.00000
+    3    1 OCTT C3     0.02170   1.12163   0.51817 TEST 1      0.00000
+    4    1 OCTT C4    -0.58547   0.04830  -0.03680 TEST 1      0.00000
+    5    1 OCTT C5    -2.03007  -0.11452  -0.14850 TEST 1      0.00000
+    6    1 OCTT C6    -2.63724  -1.18784  -0.70347 TEST 1      0.00000
+    7    1 OCTT H1     1.53715   3.19214   1.59575 TEST 1      0.00000
+    8    1 OCTT H2     3.19546   2.38610   1.22197 TEST 1      0.00000
+    9    1 OCTT H3     2.08887   0.46005   0.22575 TEST 1      0.00000
+   10    1 OCTT H4    -0.59680   1.94373   0.92121 TEST 1      0.00000
+   11    1 OCTT H5     0.03572  -0.77241  -0.43908 TEST 1      0.00000
+   12    1 OCTT H6    -2.65126   0.70620   0.25378 TEST 1      0.00000
+   13    1 OCTT C7    -4.08865  -1.34845  -0.81418 TEST 1      0.00000
+   14    1 OCTT C8    -4.71167  -2.40530  -1.36115 TEST 1      0.00000
+   15    1 OCTT H7    -2.01873  -2.00994  -1.10651 TEST 1      0.00000
+   16    1 OCTT H8    -4.70441  -0.52626  -0.41105 TEST 1      0.00000
+   17    1 OCTT H9    -4.15268  -3.25836  -1.78105 TEST 1      0.00000
+   18    1 OCTT H10   -5.81099  -2.45231  -1.40727 TEST 1      0.00000
+
+goto cfftest
+label ptln
+set next phpo
+READ SEQUENCE CARD
+* Pentalene
+*
+   1
+PTLN
+
+GENERATE PTLN SETUP FIRST NONE LAST NONE
+
+set current PTLN
+
+READ COOR CARD 
+* CRD file for TEST38
+*
+14
+    1    1 PTLN C1    -0.50024  -1.52422   0.08431 TEST 1      0.00000
+    2    1 PTLN C2     0.09964  -0.90087  -1.03316 TEST 1      0.00000
+    3    1 PTLN C3     0.36343   0.40618  -0.65256 TEST 1      0.00000
+    4    1 PTLN C4    -0.09261   0.57747   0.74163 TEST 1      0.00000
+    5    1 PTLN C5    -0.62162  -0.62996   1.17184 TEST 1      0.00000
+    6    1 PTLN C6     0.89244   1.61362  -1.08277 TEST 1      0.00000
+    7    1 PTLN C7     0.77105   2.50788   0.00477 TEST 1      0.00000
+    8    1 PTLN C8     0.17118   1.88452   1.12224 TEST 1      0.00000
+    9    1 PTLN H1    -0.83128  -2.57417   0.10502 TEST 1      0.00000
+   10    1 PTLN H2     0.29744  -1.39810  -1.99491 TEST 1      0.00000
+   11    1 PTLN H3    -1.05788  -0.88904   2.14851 TEST 1      0.00000
+   12    1 PTLN H4     1.32869   1.87269  -2.05944 TEST 1      0.00000
+   13    1 PTLN H5     1.10209   3.55783  -0.01595 TEST 1      0.00000
+   14    1 PTLN H6    -0.02662   2.38175   2.08399 TEST 1      0.00000
+
+goto cfftest
+label phpo
+set next prsm
+READ SEQUENCE CARD
+* Ph-PO4_2-
+*
+   1
+PHPO
+
+GENERATE PHPO SETUP FIRST NONE LAST NONE
+
+set current PHPO
+
+READ COOR CARD 
+* CRD file for TEST39
+*
+16
+    1    1 PHPO P1    -0.82402   0.04781   0.00104 TEST 1      0.00000
+    2    1 PHPO O1    -1.93405   1.05085  -0.18591 TEST 1      0.00000
+    3    1 PHPO O2    -1.29633  -1.31435   0.41943 TEST 1      0.00000
+    4    1 PHPO O3     0.15790   0.03153  -1.14298 TEST 1      0.00000
+    5    1 PHPO O4     0.05734   0.59597   1.34370 TEST 1      0.00000
+    6    1 PHPO C1     0.67110   1.76902   1.43593 TEST 1      0.00000
+    7    1 PHPO C2     1.36111   2.04855   2.64645 TEST 1      0.00000
+    8    1 PHPO H1     1.33712   1.26662   3.42678 TEST 1      0.00000
+    9    1 PHPO C3     2.03860   3.25482   2.84257 TEST 1      0.00000
+   10    1 PHPO H2     2.56271   3.43171   3.79979 TEST 1      0.00000
+   11    1 PHPO C4     2.05435   4.22938   1.83904 TEST 1      0.00000
+   12    1 PHPO H3     2.58717   5.18429   1.98668 TEST 1      0.00000
+   13    1 PHPO C5     1.38083   3.97586   0.63687 TEST 1      0.00000
+   14    1 PHPO H4     1.37974   4.73187  -0.17071 TEST 1      0.00000
+   15    1 PHPO C6     0.69944   2.77589   0.42549 TEST 1      0.00000
+   16    1 PHPO H5     0.16763   2.57819  -0.52638 TEST 1      0.00000
+
+goto cfftest
+label prsm
+set next prpn
+READ SEQUENCE CARD
+* Prismane
+*
+   1
+PRSM
+
+GENERATE PRSM SETUP FIRST NONE LAST NONE
+
+set current PRSM
+
+READ COOR CARD 
+* CRD file for TEST40
+*
+12
+    1    1 PRSM C1    -0.10848  -0.72516   0.16462 TEST 1      0.00000
+    2    1 PRSM C2    -0.02397   0.51840   1.03348 TEST 1      0.00000
+    3    1 PRSM C3    -1.35148   0.11150   0.41650 TEST 1      0.00000
+    4    1 PRSM C4     0.30674   1.39872  -0.25867 TEST 1      0.00000
+    5    1 PRSM C5     0.22223   0.15516  -1.12752 TEST 1      0.00000
+    6    1 PRSM C6    -1.02077   0.99183  -0.87564 TEST 1      0.00000
+    7    1 PRSM H1     0.13211  -1.76583   0.33328 TEST 1      0.00000
+    8    1 PRSM H2     0.29915   0.69223   2.05067 TEST 1      0.00000
+    9    1 PRSM H3    -2.32482  -0.11205   0.83115 TEST 1      0.00000
+   10    1 PRSM H4     0.90295   2.29948  -0.30847 TEST 1      0.00000
+   11    1 PRSM H5     0.73590  -0.15857  -2.02586 TEST 1      0.00000
+   12    1 PRSM H6    -1.72103   1.49520  -1.52799 TEST 1      0.00000
+
+goto cfftest
+label prpn
+set next last
+READ SEQUENCE CARD
+* Propene
+*
+   1
+PRPN
+
+GENERATE PRPN SETUP FIRST NONE LAST NONE
+
+set current PRPN
+
+READ COOR CARD 
+* CRD file for TEST41
+*
+9
+    1    1 PRPN C1    -0.87338   0.47963   0.12020 TEST 1      0.00000
+    2    1 PRPN C2     0.42399   0.16133   0.03869 TEST 1      0.00000
+    3    1 PRPN H1    -1.28018   0.96577   1.02103 TEST 1      0.00000
+    4    1 PRPN H2    -1.58021   0.27097  -0.70100 TEST 1      0.00000
+    5    1 PRPN H3     1.07834   0.39771   0.89683 TEST 1      0.00000
+    6    1 PRPN C3     1.09056  -0.50177  -1.13497 TEST 1      0.00000
+    7    1 PRPN H4     1.89417   0.13475  -1.54080 TEST 1      0.00000
+    8    1 PRPN H5     1.54713  -1.46006  -0.83687 TEST 1      0.00000
+    9    1 PRPN H6     0.36785  -0.69956  -1.93939 TEST 1      0.00000
+
+goto cfftest
+label last
+prnlev 5 @pnode
+
+stop
+
+label cfftest
+
+update inbfrq -1 CUTNB 999. CTOFNB 990 CTONNB 980 switch vswitch cdie
+prnlev 5 @pnode
+!  Now turn on the Generalized Born energy term 
+!  using the CFF95 general parameters
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7660 Epsilon 80.0
+
+energy
+
+test first step 0.00001 tol 0.0000001
+
+Calc TotE = ?ener - ?gben
+write title unit 85
+*  @current @Tote ?ener ?gben
+*
+
+prnlev 0 @pnode
+
+delete atom select all end
+GBorn Clear
+
+goto @next
+
+
+! energies and GRMS for molecules in the order
+! used in this input file
+!
+!                     ENERgy                      GRMS   molecule
+!
+!ENER>        0     31.85865      0.00000      0.16672 ! 1,3,5,7-Tetroxacane
+!ENER>        0    120.76714    -88.90849     84.61182 ! 1,3,5-Trioxane
+!ENER>        0    113.60289      7.16426     84.48369 ! 1,3-Dioxolane
+!ENER>        0     27.77292     85.82997     53.74087 ! 112-TrihydroxyEthane
+!ENER>        0     41.46955    -13.69663     40.64653 ! 2-NH2-SO2-Imid
+!ENER>        0      4.32715     37.14239     19.42393 ! 2-Ph-Pryrim
+!ENER>        0     -4.39980      8.72696     12.67747 ! 2-Ph-Pyrid
+!ENER>        0     75.84193    -80.24173    101.43498 ! 2-Ph-Thiophene
+!ENER>        0    -22.49029     98.33222      0.37152 ! 2-thien-2-yl-furan
+!ENER>        0    -14.25146     -8.23883      0.61655 ! 22-biPyrrole
+!ENER>        0    -15.98260      1.73114      0.34654 ! 23-Dimet-Butadiene
+!ENER>        0     33.01437    -48.99697     41.93018 ! 4-NH2-SO2-Imid
+!ENER>        0     35.65556     -2.64119     92.79732 ! 4-Ph-1234-Tetrazole
+!ENER>        0    114.80001    -79.14446      0.66000 ! AzaCycloPropanone
+!ENER>        0    -14.48348    129.28349      0.15432 ! Biphenyl
+!ENER>        0    -10.63054     -3.85294      0.46618 ! Butadiene
+!ENER>        0     95.11286   -105.74340     93.77551 ! Butyrolactam
+!ENER>        0    136.98850    -41.87564     87.77502 ! CH3-PO4_2-
+!ENER>        0    -14.95950    151.94800      0.32135 ! Cyclooctatetraene
+!ENER>        0    145.08772   -160.04722     86.99931 ! Dimethoxymethane
+!ENER>        0     28.75607    116.33165     21.94106 ! Eth-PO4_2-
+!ENER>        0     -2.89835     31.65442      0.66160 ! Ethene
+!ENER>        0      7.34202    -10.24037     35.27480 ! HPO4_2-
+!ENER>        0      9.30490     -1.96288      1.06271 ! HexaMethCyclohexane
+!ENER>        0      4.18250      5.12240      0.23303 ! Hydroxymethoxymethane
+!ENER>        0    209.26390   -205.08140    108.92188 ! Me-AzaCycloPropanone
+!ENER>        0     41.62882    167.63508     35.75284 ! Met-SO2-Ph
+!ENER>        0     53.70866    -12.07984     38.80765 ! Met-SO2-Pyr
+!ENER>        0     70.51664    -16.80799     44.76692 ! Met-SO2-Pyrim
+!ENER>        0    126.10380    -55.58715      0.37764 ! N-FormylAziridine
+!ENER>        0     17.02236    109.08143     99.53135 ! N-FormylFormamide
+!ENER>        0     15.02259      1.99977     36.75375 ! NH2-SO2-Ph
+!ENER>        0     31.07641    -16.05382     39.65058 ! NH2-SO2-Pyr
+!ENER>        0     69.35727    -38.28086     48.44088 ! NH2-SO2-Pyrim
+!ENER>        0      0.00000     69.35727      0.00283 ! Ammonia
+!ENER>        0    -30.48174     30.48174      0.46319 ! Octatetraene
+!ENER>        0      5.74624    -36.22797      0.24982 ! Pentalene
+!ENER>        0     10.90453     -5.15830     27.51110 ! Ph-PO4_2-
+!ENER>        0    195.77004   -184.86551      0.05132 ! Prismane
+!ENER>        0     -7.41107    203.18111      0.46529 ! Propene
+

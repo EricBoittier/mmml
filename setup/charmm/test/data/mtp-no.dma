@@ -1,0 +1,28 @@
+1		! number of molecules (or fragments)
+1		! number of types of molecules
+
+2		! number of MTP sites
+1 2 0 0 0	! reference atoms
+QFLC		! and QFLC
+1.151		! Re (in angstrom)
+NoLINT		! No Linear Triatomic
+0 0		! reference range
+
+1 		! reference atom
+2		! rank
+ 0.06475468	! charge Q0
+ 0.36863296	! charge Q'  Q = Q0 + Q' ( R - Re )  (R in angstrom)
+ 0.51392413	! qu10 Q0
+-1.13318384	! qu10 Q'
+ 0.37868642	! qu20 Q0
+-0.52044396	! qu20 Q'
+
+2 		! reference atom
+2		! rank
+-0.06475468	! charge Q0
+-0.36863296	! charge Q'
+-0.32302171	! qu10 Q0
+ 0.98114135	! qu10 Q'
+ 0.57160283	! qu20 Q0
+-0.13239196	! qu20 Q'
+

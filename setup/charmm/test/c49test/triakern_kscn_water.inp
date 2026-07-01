@@ -1,0 +1,380 @@
+* Based in input of Maryam and Luis
+* Heating and Equilibrium Run
+*
+
+prnlev 3 node 0
+bomlev -1
+wrnlev 1
+
+!#########################################
+! Tasks
+!#########################################
+
+! >=1 : Do it, or
+! = 0 : Do not
+set mini 0
+set equi 0
+set nve 0
+
+!#########################################
+! Setup System
+!#########################################
+
+stream datadir.def
+
+! Read topology and parameter
+read rtf card 
+* Topology for KSCN, TIP3 bonding and non-bonding
+*
+36  1
+
+MASS 1  POT   39.102000    ! k Potassium Ion! check masses
+MASS 2 CKSCN  12.01100     ! C for cyano group
+MASS 3 NKSCN  14.00700     ! N for cyano group
+MASS 4 SKSCN  32.06000     ! sulphur, SH, -S-
+MASS 5  HT     1.00800     ! TIPS3P WATER HYDROGEN
+MASS 6  OT    15.99940     ! TIPS3P WATER OXYGEN
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI POT       1.00 ! Potassium Ion
+GROUP
+ATOM K  POT  1.00
+PATCHING FIRST NONE LAST NONE
+
+RESI SCN       -1.000 ! param penalty= 446.000 ; charge penalty= 306.655
+GROUP            ! CHARGE   CH_PENALTY
+ATOM N3C    NKSCN  -0.910   ! Giulio Tesei*, Vidar Aspelin, and Mikael Lund
+ATOM C3N    CKSCN   0.483   ! 10.1021/acs.jpcb.8b02303
+ATOM S      SKSCN  -0.573                             
+               ! Bond order
+BOND C3N  N3C  ! 3
+BOND C3N  S    ! 1.5
+ANGL S C3N N3C
+PATCHING FIRS NONE LAST NONE 
+
+RESI TIP3         0.000 NOANG NODIH ! tip3p water model
+GROUP
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+DONOR H1 OH2
+DONOR H2 OH2
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+end
+
+read para card flex
+* additional parameters for KSCN bond and unbond
+*
+
+ATOMS
+MASS 800  POT   39.102000    ! k Potassium Ion! check masses
+MASS 801 CKSCN  12.01100     ! C for cyano group
+MASS 802 NKSCN  14.00700     ! N for cyano group
+MASS 803 SKSCN  32.06000     ! sulphur, SH, -S-
+MASS 804  HT     1.00800     ! TIPS3P WATER HYDROGEN
+MASS 805  OT    15.99940     ! TIPS3P WATER OXYGEN
+
+BONDS
+CKSCN  NKSCN   1053.00     1.1800 ! ACN, acetonitrile; 3CYP, 3-Cyanopyridine (PYRIDINE pyr-CN) (MP2 by kevo)
+CKSCN  SKSCN   400.000     1.6700 ! Molecu , from CG1N1 CG331, PENALTY= 446
+CKSCN  POT     516.232     2.6800 ! potassium Ion
+HT     HT        0.0       1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+HT     OT      450.0       0.9572 ! from TIPS3P geometry
+
+ANGLES
+SKSCN  CKSCN  NKSCN    21.20    169.95 ! Molecu , from CG331 CG1N1 NG1T1, PENALTY= 113.9
+HT     OT     HT       55.00    104.52 ! FROM TIPS3P GEOMETRY
+
+DIHEDRALS
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+SKSCN    0.0       -0.36400    2.2677 ! Giulio Tesei*, Vidar Aspelin, and Mikael Lund
+NKSCN    0.0       -0.07409    2.0969 ! 10.1021/acs.jpcb.8b02303
+CKSCN    0.0       -0.10158    1.8665 ! Kirkwood–Buff (KB) solution theory
+POT      0.0       -0.20316    2.2617 ! 
+HT       0.0       -0.046     0.2245  ! TIP3P
+OT       0.0       -0.1521    1.7682
+
+end
+
+
+! Read PSF
+open read unit 10 card name @0kscn_tip3.psf
+read psf  unit 10 card xplor
+
+!Read Coordinate
+open read unit 10 card name @0kscn_tip3.crd
+read coor unit 10 card
+
+!#########################################
+! Setup PBC (Periodic Boundary Condition)
+!#########################################
+
+coor stat sele all end
+
+calc xdim = int ( ( ?xmax - ?xmin + 0.0 ) ) + 1
+calc ydim = int ( ( ?ymax - ?ymin + 0.0 ) ) + 1
+calc zdim = int ( ( ?zmax - ?zmin + 0.0 ) ) + 1
+
+set bsiz = 0
+
+if @xdim .gt. @bsiz then
+   set bsiz = @xdim
+endif
+if @ydim .gt. @bsiz then
+   set bsiz = @ydim
+endif
+if @zdim .gt. @bsiz then
+   set bsiz = @zdim
+endif
+
+crystal defi cubic @bsiz @bsiz @bsiz 90. 90. 90.
+crystal build nope 0
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+!#########################################
+! Bonded/Non-bonded Options & Constraints
+!#########################################
+
+! Default energy
+energy
+
+! Copy csv file from data
+system "cp data/rkhs_scn_jdrz.csv ."
+system "cp data/rkhs_water_rddz.csv ."
+
+! RKHS potential for SCN
+set n 1
+label loop_trkn_scn
+
+  TKRN ACTI rkhs_scn_jdrz 0 0 16 jdrz -
+    ecnv 627.5094738898777 pcnv 1.8897261258369282 -
+    sele resid @n .and. resname SCN .and. type N3C end -
+    sele resid @n .and. resname SCN .and. type C3N end -
+    sele resid @n .and. resname SCN .and. type S end
+  
+  increase n by 1
+if n le 75 goto loop_trkn_scn
+
+energy
+
+TKRN CLEAR
+
+energy
+
+TKRN ACTI rkhs_scn_jdrz 0 0 16 jdrz -
+  ecnv 627.5094738898777 pcnv 1.8897261258369282 -
+  sele resname SCN .and. type N3C end -
+  sele resname SCN .and. type C3N end -
+  sele resname SCN .and. type S end
+
+energy
+
+TKRN CLEAR
+
+energy
+
+TKRN ACTI rkhs_scn_jdrz 0 0 16 jdrz -
+  hartree bohr -
+  sele resname SCN .and. type N3C end -
+  sele resname SCN .and. type C3N end -
+  sele resname SCN .and. type S end
+
+energy
+
+
+
+! RKHS potential for Water
+TKRN ACTI rkhs_water_rddz 0 0 16 rddz -
+  hartree bohr -
+  sele resname TIP3 .and. type H1 end -
+  sele resname TIP3 .and. type OH2 end -
+  sele resname TIP3 .and. type H2 end
+
+energy
+
+TKRN CLEAR
+
+energy
+
+set n 1
+label loop_trkn_wat
+
+   TKRN ACTI rkhs_water_rddz 0 0 16 rddz -
+    hartree bohr - 
+    sele resid @n .and. resname TIP3 .and. type H1 end -
+    sele resid @n .and. resname TIP3 .and. type OH2 end -
+    sele resid @n .and. resname TIP3 .and. type H2 end
+
+  increase n by 1
+if n le 685 goto loop_trkn_wat
+
+energy
+
+TKRN CLEAR
+
+energy
+
+
+
+! RKHS potential for SCN and Water
+TKRN ACTI rkhs_scn_jdrz 0 0 16 jdrz -
+  hartree bohr -
+  sele resname SCN .and. type N3C end -
+  sele resname SCN .and. type C3N end -
+  sele resname SCN .and. type S end
+TKRN ACTI rkhs_water_rddz 0 0 16 rddz -
+  hartree bohr -
+  sele resname TIP3 .and. type H1 end -
+  sele resname TIP3 .and. type OH2 end -
+  sele resname TIP3 .and. type H2 end
+
+energy
+
+! Non-bonding parameters
+nbonds atom ewald pmewald kappa 0.43  -
+  fftx 32 ffty 32 fftz 32 order 4 -
+  cutnb 14.0  ctofnb 12.0 ctonnb 10.0 -
+  lrc vdw vswitch -
+  inbfrq -1 imgfrq -1
+
+!#########################################
+! Minimization
+!#########################################
+
+if @mini .gt. 0 then
+
+  ! Constraints to avoid bond breaking
+  set n 1
+  label loop_edit
+
+    ic edit
+    dist @n N3C @n C3N 1.192
+    dist @n C3N @n S 1.689
+    angle @n N3C @n C3N @n S 180.0
+    end
+
+    increase n by 1
+  if n le 75 goto loop_edit
+
+  const ic bond 2000.0 angle 2000.0
+
+  shake bonh para sele all end
+
+  ! Constraint minimization 
+  mini abnr nstep 2000 nprint 100
+
+  ! Delete internal constraints
+  ic delete bond first sele type N3C end
+  ic delete bond first sele type C3N end
+  ic delete angle first sele type N3C end
+  const ic
+
+  shake off
+
+  open write unit 10 card name mini0.pdb
+  write coor unit 10 pdb
+  close unit 10
+
+  ! Unconstraint minimization
+  mini abnr nstep 1000 nprint 100
+
+  open write unit 10 card name mini1.pdb
+  write coor unit 10 pdb
+  close unit 10
+  
+endif
+
+!#########################################
+! Heating
+!#########################################
+
+if @equi .gt. 0 then
+
+! Heating with constraint X-H bonds
+shake bonh para sele all end
+
+open write unit 31 card name heat.res       ! Restart file
+open write unit 32 file name heat.dcd       ! Coordinates file
+
+dyna leap verlet start -
+   timestp 0.00025 nstep 4000 -
+   firstt 200 finalt 300 tbath 300 -
+   ihtfrq 100 teminc 10 ieqfrq 0 -
+   iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+   nprint 1000 nsavc 400 ntrfrq 200 -
+   iseed  609408 584966 509158 955922 -
+   echeck 100.0   -
+   iunrea -1 iunwri 31 iuncrd 32 iunvel -1
+
+! Next steps with flexible X-H bonds
+shake off
+
+open write unit 10 card name heat.pdb
+write coor unit 10 pdb
+close unit 10
+
+scalar mass stat
+calc pmass = int ( ?stot  /  50.0 )
+calc tmass = @pmass * 10
+
+open read  unit 30 card name heat.res       ! Restart file
+open write unit 31 card name equi.res       ! Restart file
+open write unit 32 file name equi.dcd       ! Coordinates file
+
+dyna leap cpt restart -
+   timestp 0.00025 nstep 4000 -
+   ihtfrq 0 teminc 0 ieqfrq 0 -
+   pint pconst pref 1 pgamma 5 pmass @pmass -
+   hoover reft 300 tmass @tmass firstt 300 -
+   nprint 1000 iprfeq 1000 nsavc 400 ntrfrq 200 -
+   echeck 100.0   -
+   iunrea 30 iunwri 31 iuncrd 32 iunvel -1
+
+open write unit 10 card name equi.pdb
+write coor unit 10 pdb
+close unit 10
+
+endif
+
+!#########################################
+! NVE
+!#########################################
+
+if @nve .gt. 0 then
+
+open read  unit 30 card name equi.res      ! Restart file
+open write unit 31 card name nve.res       ! Restart file
+open write unit 32 file name nve.dcd       ! Coordinates file
+
+dyna restart verlet nstep 4000 timestp 0.00025 -
+  nprint 100 nsavc 40 ntrfrq 200 -
+  iprfrq 4000 inbfrq 10 imgfrq 50 ixtfrq 1000 -
+  ihtfrq 0 ieqfrq 0 echeck -1 -
+  iunrea 30 iunwri 31 iuncrd 32 iunvel -1
+
+open unit 10 write card name nve.crd
+write coor card unit 10
+close unit 10
+
+open write unit 10 card name nve.pdb
+write coor unit 10 pdb
+close unit 10
+
+close unit 30
+close unit 31
+close unit 32
+
+endif
+
+! (Re)Move generated kernel files   
+system "mv rkhs_water_rddz.kernel rkhs_scn_jdrz.kernel scratch/."
+
+STOP

@@ -1,0 +1,174 @@
+* Testcase for using EMAP restraints 
+* Xiongwu Wu, Ph.D.   1/10/2013 
+*
+
+bomlev -2
+
+set u data/gb1v
+set y scratch/gb1v
+
+stream datadir.def
+
+if ?emap .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+OPEN READ FORM UNIT 11 NAME  @0/top_all22_prot.inp
+READ RTF  CARD UNIT 11
+close unit 11
+
+
+OPEN READ FORM UNIT 12 NAME  @0/par_all22_prot.inp
+READ PARAM  CARD UNIT 12
+close unit 12
+
+
+prnlev 5 node 0
+wrnlev 2
+
+!Read in PSF and COR files of thermosome in closed-state
+
+open read unit 12 card name @u.psf
+read psf card unit 12
+
+open read unit 16 card name @u.cor
+read coor unit 16 card
+
+
+coor copy comp
+
+! define map friction constant
+emap parm gamm 1
+! define map moving temperature limit
+emap parm temp 300
+
+!!!!!!! Begin demonstration of EMAP commands  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Generate map from structure
+emap gene map0 sele all end reso 5 dx 2 dy 2 dz 2
+
+
+! write out map to be used as an example of experimental EM map 
+open emap unformatted unit 51 name @y.ccp4
+emap write  map0 unit 51 form ccp4
+
+! write out map in "mrc" format
+open emap unformatted unit 51 name @y.mrc
+emap write  map0 unit 51 form mrc
+
+! directly write out map in "ccp4" format
+emap write  map0 name "scratch/gb1v.ccp4" 
+
+! directly write out map in "mrc" format
+emap write  map0 name "scratch/gb1v.mrc" 
+
+! read in experimental EM map
+open emap unformatted unit 52 name @y.ccp4
+emap read  mapt unit 52 form ccp4
+
+! direct read in EM map in ccp4 format
+emap read  map1 name "scratch/gb1v.ccp4" 
+
+! direct read in EM map in mrc format
+emap read  map2 name "scratch/gb1v.mrc" 
+
+! Generate map by read from a pdb file
+open write unit 16 card name @y.pdb
+write coor unit 16 pdb
+* pdb file
+*
+
+
+open read unit 20 form name @y.pdb
+emap read map3  unit 20 form pdb reso 3 dx 2 dy 2 dz 2
+
+! define constrained atoms by this map
+emap refe mapt  sele all end
+! define rigid domain as handles to the constraint maps
+emap assi mapt as rigt  sele all end
+
+! Using rigid domain rigt to define EMAP restraint
+cons emap force 0.01 rigid rigt 
+
+! Using map object mapt to define EMAP restraint
+cons emap force 0.01 sele all end mapid mapt
+
+! read in map file from a open unit to define EMAP restraint
+open emap unformatted unit 52 name @y.ccp4
+cons emap force 0.01 sele all end unit 52 form ccp4
+
+! directly read in map file to define EMAP restraint
+cons emap force 0.01 sele all end file "scratch/gb1v.ccp4" 
+
+! Read in map file from a opened unit to define EMAP restraint
+open emap unformatted unit 52 name @y.mrc
+cons emap force 0.01 sele all end unit 52 form mrc
+
+! Generate map  from coordinates to define a movable EMAP restraint
+cons emap force 0.1 sele ires 2:19 end move reso 3 dx 2 dy 2 dz 2
+
+
+! show currently defined EMAP constraints
+cons emap show
+
+! remove EMAP restraints defined by CONS EMAP
+cons emap reset
+
+! show the remain EMAP restraints, defined by EMAP CONS
+cons emap show
+
+!!!!!!!!!! End demonstration of EMAP commands!!!!!!!!!!!!!!!
+
+! define fixed EMAP restraints without predefined EMAP objects 
+cons emap force 0.01 sele all end  reso 5 dx 2 dy 2 dz 2
+! define movable EMAP restraints without predefined EMAP objects 
+cons emap force 0.1 sele ires 2:19 end move reso 3 dx 2 dy 2 dz 2
+cons emap force 0.1 sele ires 23:36 end move reso 3 dx 2 dy 2 dz 2
+cons emap force 0.1 sele ires 43:54 end move reso 3 dx 2 dy 2 dz 2
+
+cons emap show
+
+! Shake all bonds with hydrogens
+ SHAKE BONH PARA
+
+! perform map-restrained SGMD simulation
+! using SGMD instead of SGLD for testing paralell runs
+
+open unit 31 write card name @y.res
+open unit 32 write file name @y.dcd
+
+! Perform SGLD simulation with TEMPSG=500K
+DYNA LEAP VERLET STRT  NSTE 1000 TIME 0.001 NTRFRQ 100 IUNREA -1 -
+   IPRFRQ 10000 ISVFRQ 10000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNWRI 31 IUNCRD 32 IUNVEL -1 KUNIT -1 -
+   NSAVC 10000 NSAVV 00 NPRINT 100 ISEED 314159 141592 415926 159265 -
+   TBATH  300 FIRST 300 -
+   SGMD TSGAVG 1.0  SGFT 1.0  -
+   IASORS 0 IASVEL 1 ICHECW 0 ECHECK 1000000.0 -
+   EIPS VIPS PXYZ  -
+   CUTNB 12  CTOFNB 10  EPS 1.0 E14FAC 1.0 WMIN 1.0
+
+! clear EMAP restraints
+cons emap reset
+
+! show no more EMAP restraints
+cons emap show
+
+
+!Write fitted coordinates
+open writ form unit 16 name @y.cor
+writ coor card unit 16
+* map-restrained structure
+*
+
+
+open writ form unit 16 name @y.pdb
+writ coor pdb unit 16
+* map-restrained structure
+*
+
+
+stop
+
+

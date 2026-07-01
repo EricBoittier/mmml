@@ -1,0 +1,18 @@
+#! /bin/bash
+
+echo "#" > ltm-add.mk
+for i in `cat ltm-list`; do 
+    echo -e "\t\$(LIB)/ltm.a("${i/f90/o}") \\" >> ltm-add.mk
+done
+echo "#" >> ltm-add.mk
+echo "#" >> ltm-add.mk
+for i in `cat ltm-list`; do 
+    echo "\$(LIB)/ltm.a("${i/f90/o}")"  : "\$(SRC)/ltm/"${i/f90/src} >> ltm-add.mk
+    echo -e "\t\$(FLX) \$(SRC)/ltm/"${i/f90/src} >> ltm-add.mk
+    echo -e "\t\$(FC2)" ${i/f90/f} >> ltm-add.mk
+    echo -e "\t\$(AR_COMMAND) \$(LIB)/ltm.a " ${i/f90/o} >> ltm-add.mk
+    echo -e "\t\$(REMOVE_F)" ${i/f90/f} >> ltm-add.mk
+    echo -e "\t\$(REMOVE_O)" ${i/f90/o} >> ltm-add.mk
+    echo "#" >> ltm-add.mk
+    #exit
+done

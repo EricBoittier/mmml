@@ -1,0 +1,236 @@
+* minimization, and dynamics of malonaldehyde (MA)
+* Reference: J. Chem. Phys., 133, 064503 (2010) 
+
+stream datadir.def
+
+bomlevel -1
+prnl 5 @pnode
+
+! ===============================================================
+! set up the system of MA
+! ===============================================================
+
+! READ IN TOPOLOGY AND  PARAMETER FILES
+
+READ RTF CARD UNIT 5
+* ... 
+* rtf for protonated diglyme
+* ...
+*
+   22    0   
+MASS     1 HP      1.008
+MASS     2 H       1.008
+MASS     3 CAP    12.01100
+MASS     4 O      15.99900
+mass     5 hp2     1.008
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI MA   0.000
+GROUP
+ATOM C2  CAP -0.2159
+ATOM O4  O   -0.5088
+ATOM C3  CAP  0.2045
+ATOM C6  CAP  0.2045
+ATOM O7  O   -0.5088
+ATOM H1  HP2  0.1747
+ATOM H5  HP   0.14
+ATOM H8  HP   0.14
+ATOM H9  H    0.3698
+BOND C2 H1
+BOND C2 C3   
+BOND C3 O4
+BOND C3 H5
+BOND C2 C6
+BOND C6 H8
+BOND C6 O7
+BOND O4 H9
+imph c3 o4 c2 h5 
+imph c2 c3 c6 h1
+imph c6 o7 c2 h8
+PATCH FIRST NONE LAST NONE
+
+END
+
+READ PARA CARD UNIT 5
+*...
+*
+BOND
+O    CAP   525.0     1.2802
+O    H     450.000     1.1992
+CAP  CAP   370.000     1.4020
+CAP  HP    360.000     1.0874
+CAP  HP2   360.000     1.0874
+
+ANGLE
+H    O    CAP   57.000    101.0
+O    CAP  CAP   45.200    121.6
+CAP  CAP  CAP   90.000    115.9
+CAP  CAP  HP    30.000    122.0
+O    CAP  HP    50.000    117.0
+CAP  CAP  HP2   30.000    122.0
+O    CAP  HP2   50.000    117.0
+
+DIHEDRAL
+O    CAP  CAP  HP2    4.2000  2    180.000
+HP   CAP  CAP  HP2    1.9000  2    180.00  
+H    O    CAP  CAP    6.2000  2    180.000
+HP   CAP  O    H      6.2000  2    180.000 
+O    CAP  CAP  CAP    3.1000  2    180.000
+CAP  CAP  CAP  HP     4.2000  2    180.000
+
+IMPROPER
+CAP  O    CAP  HP     25.0000         0      0.0000
+CAP  CAP  CAP  HP2    25.0000         0      0.0000
+
+NONBONDED nbxmod 5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+                !adm jr., 5/08/91, suggested cutoff scheme
+CAP    0.000000  -0.070000     1.992400
+HP     0.000000  -0.030000     1.308200   0.000000  -0.030000     1.358200 ! ALLOW ARO
+                ! JES 8/25/89 values from Jorgensen fit to hydration energy
+HP2    0.000000  -0.030000     1.308200   0.000000  -0.030000     1.358200 ! ALLOW ARO
+                ! JES 8/25/89 values from Jorgensen fit to hydration energy
+O      0.000000  -0.120000     1.700000   0.000000  -0.120000     1.400000 ! ALLOW   PEP POL
+                ! This 1,4 vdW allows the C5 dipeptide minimum to exist.(LK)
+H      0.000000  -0.046000     0.224500
+
+end
+
+
+READ SEQUENCE CARDS 
+* MA
+*
+   1   
+MA
+
+GENERATE MADH SETUP
+
+! READ IN COORDINATES FROM PDB
+
+
+
+READ COOR PDB UNIT 5
+REMARK  MMPT PES SCAN, MINIMIZATION, AND DYNAMICS OF PROTONATED DIGLYME               
+REMARK   DATE:     1/24/11     17:20: 9      CREATED BY USER: yang                    
+ATOM      1  C2  MA      1      -0.027   1.987  -0.008  1.00  0.00      MADH
+ATOM      2  O4  MA      1       1.246  -0.036  -0.000  1.00  0.00      MADH
+ATOM      3  C3  MA      1       1.167   1.241  -0.005  1.00  0.00      MADH
+ATOM      4  C6  MA      1      -1.261   1.315  -0.005  1.00  0.00      MADH
+ATOM      5  O7  MA      1      -1.337   0.042  -0.000  1.00  0.00      MADH
+ATOM      6  H1  MA      1       0.002   3.071  -0.012  1.00  0.00      MADH
+ATOM      7  H5  MA      1       2.126   1.761  -0.007  1.00  0.00      MADH
+ATOM      8  H8  MA      1      -2.210   1.852  -0.007  1.00  0.00      MADH
+ATOM      9  H9  MA      1       0.294  -0.331   0.001  1.00  0.00      MADH
+TER      10      MA       1
+END
+
+
+! ==================================
+! set up MMPT
+! ==================================
+
+OPEN UNIT 11 CARD WRITE NAME @9/mmpt_nlm_ma.prm
+WRITE TITLE UNIT 11
+*     190.626408720000     
+*     1.43800000000000     
+*     1.99600000000000     
+*    0.510386580000000     
+*    0.137000000000000     
+*     1.10500000000000     
+*     151.973000000000     
+*     3.15900000000000     
+*    0.06448534438811303
+*      14.0500000000000     
+*      12.4230476700000     
+*      58.8370000000000     
+*     0.963000000000000     
+*     0.219857000000000 
+*
+
+CLOSE UNIT 11
+
+OPEN UNIT 13 CARD WRITE NAME @9/HBRIDGE.ma.DEF
+WRITE TITLE UNIT 13
+*     2    9      5   NLM    
+*
+
+CLOSE UNIT 13
+
+
+! OPEN PARAMETER FILES FOR HYDROGEN BOND
+OPEN UNIT 11 CARD READ NAME @9/mmpt_nlm_ma.prm
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+
+OPEN UNIT 13 FORMATTED READ NAME @9/HBRIDGE.ma.DEF
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+
+UPDATE
+
+! CALL MMPT ROUTINE, READ IN DATA
+
+MMPT UNLM 11 UHBR 13 
+
+CLOSE UNIT 11
+CLOSE UNIT 13
+
+
+! TURN OFF FAST ROUTINES, ONLY USE STANDARD 
+
+FAST -1 
+
+mini conj nstep 200 nprint 100 tolg 0.0001 
+
+!=========================================================
+! start dynamics 
+!=========================================================
+
+OPEN UNIT 40 WRITe FORMatted NAME @9/ma.heat.res
+
+DYNAmics VERLET  STart -
+  NSTEp   5000 TIMEstep 0.0001 -
+  iPRfrq   200 npri     200  -
+  FIRSTT 0.0 FINALT 300.0 teminc 3.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 50 IEQFRQ 500 -
+  ICHECW 77 TWINDL -2.0  TWINDH  2.0 -
+  INBFrq   10  nsavc 0 -
+  iunread -1 iunwrit 40 iuncrd -1 iseed 656570
+
+close unit 40
+
+open unit 41 read formatted name @9/ma.heat.res
+OPEN UNIT 40 WRITe FORMatted NAME @9/ma.equil.res
+
+DYNAmics VERLET  reSTart -
+  NSTEp   5000 TIMEstep 0.0001 -
+  iprfrq   200 nPRi     200  -
+  FIRSTT 300.0 FINALT 300.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 0 IEQFRQ 100 -
+  ICHECW 1 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread 41 iunwrit 40 iuncrd -1 
+
+close unit 41
+close unit 40
+
+open unit 63 read formatted name @9/ma.equil.res
+OPEN UNIT 75 WRITe FORMatted NAME @9/ma.dyna.NVE.300.res
+
+DYNAmics VERLET  reSTart -
+  NSTEp   10000 TIMEstep 0.0001 -
+  iprfrq   200 npri     2000  -
+  ihtfrq 0 IEQFRQ 0 -
+  IASORS 1 IASVEL 0 ISCVEL 0 -
+  ICHECW 1  -
+  INBFrq   10  nsavc 0 -
+  iunread 63 iunwrit 75 iuncrd -1
+
+
+stop
+
+

@@ -1,0 +1,12 @@
+#! /bin/csh
+
+set mchm = ~/charmm/goodens/mosxgf/exec/osx_M/charmm
+
+/bin/rm charmm.out* rest* prn* dhfr_?.crd
+foreach i (001 002 003 004 005 006 007 000)
+  touch prn$i
+end
+
+mpirun -np 8 $mchm -i charmm.inp nens=4
+
+

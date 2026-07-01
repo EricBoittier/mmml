@@ -1,0 +1,110 @@
+* CHARMM 25 Testcase vibwat25.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* water normal modes
+*
+
+if ?novibran .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! MFC VIBRAN not parallel?
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+set pnode
+if ?NUMNODE .gt. 1 then set pnode node 0
+
+bomlev -1
+stream datadir.def
+
+read rtf cards
+* water rtf
+*
+   18
+MASS 1 H 1.000
+MASS 2 O 16.00
+
+RESI WAT 0.0
+GROUP
+ATOM O O -0.4
+ATOM H1 H 0.2
+ATOM H2 H 0.2
+BOND O H1 O H2 !  H1 H2
+ANGLE H1 O H2
+
+END
+
+READ PARAM CARD
+* PARAMETERS FOR WATER
+*
+BOND
+H    O    450.0       1.00 ! from ST2 geometry
+H    H        0.0       1.6329931 ! from ST2 geometry (for SHAKE w/PARAM)
+ANGLE
+H    O  H       55.0     109.47122 ! TETRAHEDRAL FOR ST2'S
+END
+
+READ SEQU CARD
+* ONE WATER
+*
+    1
+WAT
+GENER WAT
+READ COOR CARD
+* WATER COORDINATES
+*
+    3
+    1    1 WAT  O      0.00000   0.06415   0.00000 WAT  1
+    2    1 WAT  H1     0.81650  -0.51321   0.00000 WAT  1
+    3    1 WAT  H2    -0.81650  -0.51321   0.00000 WAT  1
+
+READ IC
+* IC FOR WATER
+*
+  17
+    3
+    1   1 H1    1 O     1 H2    1 ??
+    1   1 O     1 H2    1 H1    1 ??
+    1   1 H2    1 H1    1 O     1 ??
+
+COOR COPY COMP
+IC FILL
+IC PRINT
+delete bond sele type h1 end sele type h2 end
+
+mini nrap nstep 5 nprint 1
+
+coor rotate xdir 0.5 ydir 0.3 zdir 0.6 phi 23.0
+energy
+
+
+fast off
+vibran  nmod 30
+diag finite step 0.001
+print norm
+open write card unit 22 name @9vibwat.nmd
+write norm card unit 22 
+diag
+print norm
+print norm dipo intd mrms 0.25 mode 7 thru 9
+
+open read card unit 22 name @9vibwat.nmd
+read norm card unit 22 append
+
+EDIT INCL ANGL 1 H1 1 O 1 H2
+EDIT INCL BOND 1 O 1 H2
+proj bond 1 O 1 H1
+PROJ BOND 1 H1 1 H2
+PROJ BOND 1 O 1 H2
+PRINT NORM DOTP mode 7 thru 20
+write seco card unit 6 finite step 0.000001 tol 0.0001 raise
+write seco card unit 6 finite step 0.000001 tol 0.0
+write seco card unit 6 finite step 0.0001   tol 0.0001
+prnlev 10 @pnode
+diag finite step 0.001
+end
+
+stop

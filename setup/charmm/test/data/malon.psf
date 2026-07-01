@@ -1,0 +1,60 @@
+PSF EXT CMAP CHEQ
+
+         3 !NTITLE
+* SET UP PSF FILE. NEED RESI=MALON                                              
+* TEST                                                                          
+*  DATE:     9/15/15     18:33:24      CREATED BY USER: ito5                    
+
+         9 !NATOM
+         1 MALON    1        MALON    C1        286  -0.195000       12.0110           0   0.00000     -0.301140E-02
+         2 MALON    1        MALON    C2        288  -0.186000       12.0110           0   0.00000     -0.301140E-02
+         3 MALON    1        MALON    C3        296   0.295000       12.0110           0   0.00000     -0.301140E-02
+         4 MALON    1        MALON    O1        379  -0.392000       15.9994           0   0.00000     -0.301140E-02
+         5 MALON    1        MALON    O2        366  -0.510000       15.9994           0   0.00000     -0.301140E-02
+         6 MALON    1        MALON    H1        266   0.420000       1.00800           0   0.00000     -0.301140E-02
+         7 MALON    1        MALON    H2        259   0.207000       1.00800           0   0.00000     -0.301140E-02
+         8 MALON    1        MALON    H3        259   0.230000       1.00800           0   0.00000     -0.301140E-02
+         9 MALON    1        MALON    H4        275   0.131000       1.00800           0   0.00000     -0.301140E-02
+
+         8 !NBOND: bonds
+         1         2         1         4         1         7         2         3
+         2         8         3         5         3         9         4         6
+
+        10 !NTHETA: angles
+         2         1         4         2         1         7         4         1         7
+         1         2         3         1         2         8         3         2         8
+         2         3         5         2         3         9         5         3         9
+         1         4         6
+
+        10 !NPHI: dihedrals
+         1         2         3         5         1         2         3         9
+         2         1         4         6         3         2         1         4
+         3         2         1         7         4         1         2         8
+         5         3         2         8         6         4         1         7
+         7         1         2         8         8         2         3         9
+
+         2 !NIMPHI: impropers
+         1         2         4         7         3         2         5         9
+
+         0 !NDON: donors
+
+
+         0 !NACC: acceptors
+
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0
+
+         1         0 !NGRP NST2
+         0         1         0
+
+         1 !MOLNT
+         1         1         1         1         1         1         1         1
+         1
+
+         0         0 !NUMLP NUMLPH
+
+         0 !NCRTERM: cross-terms
+

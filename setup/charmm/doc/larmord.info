@@ -1,0 +1,193 @@
+CHARMM Element doc/larmord.info $Revision: 1.1.1.1 $
+
+File: Larmord, Node: Top, Up: (doc/commands.info), Next: Syntax
+                 
+                     LARMORD: A Distance-based Chemical Shift Predictor 
+
+                      By Aaron T. Frank, Sean M. Law and Charles L. Brooks III
+
+LARMORD is a method to calculate chemical shifts based on inter-atomic distances 
+between a nucleus of interest and its neighboring atoms. The main reference 
+for the LARMORD method is:
+     
+(1) Frank, A.T, Law, S.M, and Brooks III, C.L., "A Simple and Fast Approach for Predicting
+ 1H and 13C Chemical Shifts: Toward Chemical Shift-Guided Simulations of RNA",
+Manuscript in Preparation.
+
+
+* Menu:
+
+* Syntax::              Syntax of the LARMORD  command
+* Background::          Description of LARMORD methods
+* Examples::            LARMORD usage examples
+
+
+File: Larmord, Node: Syntax, Up: Top, Previous: Top, Next: Background
+
+[Syntax LARMORD]
+
+!setup LARMORD
+
+LARMORD { larmord-spec } ! setup LARMORD
+        { CALCULATE    } ! calculate chemical shifts using current coordinates
+        { CLEAR        } ! clear LARMORD data structures
+        { ON/OFF       } ! turn LAMORD restraint calculation on/off
+        { RESET        } ! reset LARMORD option flags and optionally read in new parameters
+
+larmord-spec::= { SCALE real }{ CUNIT fortran unit }{ LUNIT fortran unit }{ HARM | LOG TEMP real }{ shape-spec }{ weight-spec } SELE {atom selection} END
+shape-spec::= [FLAT]
+weight-spec::= [WT1] [WT2]
+
+Keyword  Default  Purpose
+
+SCALE     1.0    Force constant for chemical shifts restraint to term
+
+CUNIT     false  Fortran unit from which to read in chemical shifts data
+
+LUNIT     false  Fortran unit from which to read in LARMORD parameters
+
+HARM      none   Use a harmonic (mean-squared-error) restraint
+
+LOG       none    Use the Bayesian inspired log-harmonic restraint term (see Habeck et. al PNAS 103 (2006): 1756-1761)
+
+TEMP      300.0   Temperature to be used in the pre-factor of the log-harmonic restraint term (see Habeck et. al PNAS 103 (2006): 1756-1761)
+
+FLAT      none    Use flat-bottom potential. No restraint forces are applied in error is less than the expected
+                  error as specified in the measured chemical shifts file (see below).
+
+WT1       none    Use a 1/MAE weighting factor used to account for the accuracy of the predictors for the various nuclei. Default use a constant weight (i.e. weight factor = 1.0).
+
+WT2       none    Use a R/MAE weighting factor used to account for the accuracy of the predictors for the various nuclei. Default use a constant weight (i.e. weight factor = 1.0).
+
+File: Sgld, Node: Background, Up: Top, Previous: Syntax, Next: Examples
+
+                   Background
+
+     LARMORD implements a simple and fast model for predicting chemical shifts. Specifically, the chemical shift, \delta_{i}^{pred}, for a given 
+nucleus i, is given by a polynomial expansion of inter-atomic distances, i.e.,
+     
+      \delta_{i}^{pred} = \delta_{i}^{rc}+ \sum_{j}^{N}α_{j} r_{ij}^{beta}  Eq.(1).
+
+Here, \delta_{i}^{rc} is the so-called “random coil” chemical shift for nucleus i, N is the total number of 
+heavy atoms in the RNA, r_{ij} is the inter-atomic distance between atoms i and j, and alpha_{j} and beta_{j} is parameter 
+that depends on the atom and residue type associated with j (Note: in ref XX beta = -3 for all j(s)). Since the module was 
+developed initially for RNA, the provided parameters (toppar/larmord.dat) are specifically for predicting 
+chemical shifts for non-exchangeable 1H (H1’, H2’, H3’, H4’, H5’, H5’’, H2, H5, H6, H8) and 
+protonated 13C (C1’, C2’, C3’, C4’, C5’, C2, C5, C6, C8) RNA nuclei. That being said the current implementation is general and so 
+LARMORD can in principle be used to predict chemcial shifts for any biomolecule, provided the parameters are available 
+(alphas and betas Eq. 1).
+
+
+The LARMORD parameter file contains the alpha and beta that are used in Eq. 1. For example, let say one wants to 
+calculate chemical shifts for a C1' the corresponding parameters may look like:
+      <integer, NLCS>  ! number of parameter records contained below
+      ...
+      C1' GUA C1' 0.428401203243 -3
+      C1' GUA C2' 0.982419947699 -3
+      C1' GUA C3' 2.76813085461 -3
+      C1' ADE C1' 1.51229359219 -3
+      C1' ADE C2' 1.72348040483 -3
+      C1' ADE C3' 0.288474060452 -3
+      C1' ADE N9 -0.0486718470351 -3
+      C1' URA C1' -0.0 -3
+      C1' URA C2' -0.189115925066 -3
+      C1' URA C3' 1.41917076395 -3
+      C1' CYT C1' 0.0223761113264 -3
+      C1' CYT C2' 0.468384222507 -3
+      C1' CYT C3' 2.66350021597 -3
+      C1' CYT C4' 2.52513704899 -3
+      ...
+For a given entry:
+Column 1: nucleus that the parameters correspond to (in this example, C1')
+Column 2-3: residue name and atom name, respectively of neighboring atom (atom j in Eq. 1)
+Column 4-5: alpha and beta corresponding to j (see Eq. 1)
+
+NOTE: This parameter file is stored in toppar/larmord/larmord_rna.dat
+
+In addition to the parameter file, LARMORD also requires the user to input chemical shift list file that specifies which 
+nuclei chemical shifts should be calculated for. For example:
+    <integer, NCS>    ! number of chemical shift records for restraint comparison
+      ...
+    ADE 9 C1' 87.754 93.1 0.85 0.53
+    ADE 20 C1' 93.647 93.1 0.85 0.53
+    ADE 21 C1' 92.688 93.1 0.85 0.53
+    ADE 17 C1' 91.571 93.1 0.85 0.53
+    ADE 26 C1' 92.508 93.1 0.85 0.53
+    ADE 15 C1' 91.785 93.1 0.85 0.53
+    ADE 12 C1' 93.037 93.1 0.85 0.53
+    ADE 9 C2 154.648 154.3 0.73 0.49
+    ...
+
+For a given entry:
+Column 1: CHARMM residue name 
+Column 2: CHARMM residue number
+Column 3: CHARMM atom name 
+Column 4: measured chemical shift
+Column 5: "random coil" chemical shifts
+Column 6: expected error for that particular kind of nucleus (MAE or RMSE)
+Column 7: expected correlation (Pearson correlation)
+
+NOTE: Though mandatory, column 6 and 7 are only important when using WT1 or WT2 keywords (see above and reference XX)
+
+
+
+File: Sgld, Node: Examples, Up: Top, Previous: Syntax, Next: Top
+
+                        Examples
+
+1) Setup and calculate chemical shifts using LARMORD
+...
+OPEN READ FORM UNIT 10 NAME "DATA/SHIFTS.DAT"
+OPEN READ FORM UNIT 11 NAME "DATA/LARMORD.DAT"
+
+LARMORD CUNIT 10 LUNIT 11 SCALE 1.0 HARM SELE SEGID RNA01 END
+LARMORD CALCULATE
+ENERGY
+SET CSERROR = ?CSRE
+
+NOTE: The chemical shift error (which is the same as the restraint energy when used in the context of MD simulations) is stored in ?csre.
+
+
+2) Setup and run CS-restrained MD simulations using a weighted log-harmonic restraint:
+...
+! LARMORD
+OPEN READ FORM UNIT 10 NAME "DATA/SHIFTS.DAT"
+OPEN READ FORM UNIT 11 NAME "DATA/LARMORD.DAT"
+LARMORD CUNIT 10 LUNIT 11 SCALE 1.0 LOG WT2 SELE SEGID RNA01 END
+
+
+! Dynamics
+OPEN UNIT 21 WRITE UNFORM NAME SCRATCH/HEAT.DCD
+OPEN UNIT 22 WRITE FORM NAME SCRATCH/HEAT.RES
+
+SHAKE BONH TOL 1E-09 PARAM
+
+DYNAMICS LEAP START -
+  TIMESTEP 0.002 -
+  NSTEP 10000 -
+  NPRINT 500 -
+  IPRFRQ 10000 -
+  NSAVC 500 -
+  ISVFRQ 1000 -
+  IUNREAD -1 -
+  IUNCRD 21 -
+  IUNWRI 22 -
+  FIRSTT 250 -
+  FINALT 325 -
+  TSTRUC 325 -
+  TBATH 325 -
+  ICHECW 0 -
+  IHTFRQ 100 -
+  IEQFRQ 0 -
+  IASORS 1 -
+  IASVEL 1 -
+  ISCVEL 0 -
+  INBFRQ -1 -
+  ILBFRQ 0 -
+  IMGFRQ -1 -
+  NTRFRQ 1000 -
+  ECHECK -1
+
+
+Finally, see test case c40test/lamord_test1.inp for additional examples.
+

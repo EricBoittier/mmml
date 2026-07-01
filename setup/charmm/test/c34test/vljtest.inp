@@ -1,0 +1,138 @@
+* CHARMM Testcase: c34test/vljtest.inp
+* Author: Ed O'Brien
+* Date: January 22, 2007
+* Version: c34a2
+* Test:  Example file for the variable LJ cutoff method
+* Command modified to required variable LJ cutoff be turned on or off
+* Charles L. Brooks III, March, 2011
+*
+
+! This script computes the van der Waals energy
+! as a function of the distance between 2 particles.
+! Use the 'scalar varc' command to apply different Lennard-Jones
+! cutoffs between different atoms.
+! Compare the energy profiles written to the output files.
+! See the documentation in scalar.doc for how
+! the LJ cutoffs are modified with the 'scalar varc' command.  
+!
+
+stream datadir.def
+Bomblev -1
+
+!! Set up temperature run
+set NMAX 300
+set dx 0.05
+
+! read parameter and topology files
+read rtf card
+* TOPH19 for variable Lennard-Jones parameters
+*
+   20    1
+MASS    12 CH1E  13.01900 ! extended atom carbon w/ one hydrogen
+MASS    93 CW1  247.88800 
+
+RESI CW1          0.00 ! Molecular crowder number 1, VDW radius =
+GROUP
+ATOM CW1  CW1     0.00
+PATCHING FIRST NONE LAST NONE
+
+RESI TEST         0.00
+GROU
+ATOM CA   CH1E    0.00
+PATCHING FIRST NONE LAST NONE
+
+END
+
+read param card
+* PARAM19 for variable Lennard-Jones parameters
+* 
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SWITCH VATOM VDISTANCE VSWITCH -
+     CUTNB 16.0  CTOFNB 15.0  CTONNB 11.  EPS 1.0  E14FAC 0.4  WMIN 1.5
+
+CH1E    1.35    -0.3    3.3  1.35 -0.1 1.9 ! \
+CW1     0.0000  -0.3    5.0
+
+END
+
+read sequence card
+* 
+    2
+CW1 TEST
+
+generate CW1
+
+coor set xdir 1.0 dist 0.0 ! place both particles at origin
+
+! Note that the nonbonded cutoff is 9 angstroms
+update ctonnb 7. ctofnb 9. cutnb 100. group rdie
+
+! use scalar command to fill up variable cutoff array,
+! allowing the use of larger nonbond cutoffs for select atoms
+! cb3 - turn on variable LJ cutoff command
+varcutoff on
+set varc 22.0
+scalar varc set @varc sele resname CW1 end ! select an atom, or set of atoms
+
+! print out the 
+scalar varc show
+
+! file to write to
+open write card unit 22 name @9vljcut_varc@varc_nocut.dat
+
+set count 0 
+label loop
+ 
+!!!!!! New Run
+increment count by 1
+calc dist @dx*@count
+
+!!! to translate the selection
+COOR translate XDIR @dx YDIR 0 ZDIR 0 sele ires 2 end
+
+energy
+if ?vdW .le. 2 then
+  write title unit 22
+  * @dist ?vdW
+endif
+
+if @count .lt. @NMAX goto loop
+close unit 22
+
+
+coor set xdir 1.0 dist 0.0 ! place both particles at origin
+! turn off variable LJ by setting scalar variable to zero
+! note varcut logical still true and array still exists
+
+set varc 0.0
+scalar varc set @varc sele resname CW1 end ! select an atom, or set of atoms
+
+! print out the
+scalar varc show
+
+! file to write to
+open write card unit 22 name @9vljcut_varc@varc_nocut.dat
+
+set count 0
+label loop2
+
+!!!!!! New Run
+increment count by 1
+calc dist @dx*@count
+
+!!! to translate the selection
+COOR translate XDIR @dx YDIR 0 ZDIR 0 sele ires 2 end
+
+energy
+if ?vdW .le. 2 then
+  write title unit 22
+  * @dist ?vdW
+endif
+
+if @count .lt. @NMAX goto loop2
+
+! now turn off varcut
+varcut off
+scalar varc show
+
+stop

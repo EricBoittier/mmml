@@ -1,0 +1,188 @@
+* EXAMPLE INPUT FILE FOR ENERGY MIMINIZATION AND DYNAMICS
+* OF MOLECULAR MECHANICS PROTON TRANSFER (MMPT) OF THE 
+* PROTONATED AMMONIA DIMER NH3...H+...NH3 
+*
+
+stream datadir.def
+
+BOMLEV 0
+
+PRNL 5 @pnode
+
+! ====================================================
+! set up system
+! ====================================================
+
+! READ IN TOPOLOGY AND  PARAMETER FILES
+
+READ RTF CARD UNIT 5
+* ... 
+* Build RTF for  
+* ...
+*
+   22    0 
+MASS     2 HC     1.00800 ! N-ter H
+MASS    56 NH3   14.00700 ! ammonium nitrogen
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI   N2H7   0.000
+GROUP
+ATOM N1 NH3 0.000
+ATOM N2 NH3 0.000
+ATOM H1 HC  0.000
+ATOM H2 HC  0.000
+ATOM H3 HC  0.000
+ATOM H4 HC  0.000
+ATOM H5 HC  0.000
+ATOM H6 HC  0.000
+ATOM H7 HC  0.000
+BOND N1 H1
+BOND N1 H2
+BOND N1 H3
+BOND N2 H4
+BOND N2 H5
+BOND N2 H6
+BOND N2 H7
+PATC FIRST NONE LAST NONE
+END
+
+
+OPEN UNIT 1 CARD READ NAME @0/par_all22_prot.inp
+READ PARA CARD UNIT 1
+CLOSE UNIT 1
+
+READ SEQUENCE  CARDS
+* N2H7+
+*
+   1
+N2H7
+
+GENERATE MAIN SETUP
+
+
+
+
+READ COOR PDB UNIT 5
+REMARK PROTANATED AMMONIA DIMER: TS STRUCTURE
+ATOM      1  N1  N2H7    1       0.000   0.000   2.700  1.00  2.00      MAIN
+ATOM      2  N2  N2H7    1       0.000   0.000   0.000  1.00  2.00      MAIN 
+ATOM      3  H1  N2H7    1       0.956   0.000   3.059  1.00  3.00      MAIN
+ATOM      4  H2  N2H7    1      -0.477   0.828   3.059  1.00  3.00      MAIN
+ATOM      5  H3  N2H7    1      -0.478  -0.827   3.061  1.00  3.00      MAIN
+ATOM      6  H4  N2H7    1       0.408  -0.846  -0.396  1.00  3.00      MAIN
+ATOM      7  H5  N2H7    1       0.529   0.773  -0.402  1.00  3.00      MAIN
+ATOM      8  H6  N2H7    1      -0.934   0.068  -0.401  1.00  1.00      MAIN
+ATOM      9  H7  N2H7    1       0.000   0.000   0.800  1.00  2.00      MAIN
+END	
+
+
+
+! ====================================================
+! set up MMPT
+! ====================================================
+
+OPEN UNIT 13 CARD WRITE NAME @9/mmpt_sdm_n2h7p.prm
+WRITE TITLE UNIT 13
+*      202.404752      
+*      1.859491      
+*      2.065129      
+*      8.158404      
+*      0.206868      
+*      0.863515      
+*      210.798809      
+*      3.001897      
+*      0.109427  
+*      0.010000 
+*      40.073220
+*
+
+CLOSE UNIT 13
+
+OPEN UNIT 14 CARD WRITE NAME @9/HBRIDGE.n2h7p.DEF
+WRITE TITLE UNIT 14
+*     2     9     1   SDM   
+*
+
+CLOSE UNIT 14
+
+
+! OPEN PARAMETER FILES FOR HYDROGEN BONDS
+
+OPEN UNIT 13 CARD READ NAME @9/mmpt_sdm_n2h7p.prm
+
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+
+OPEN UNIT 14 FORMATTED READ NAME @9/HBRIDGE.n2h7p.DEF
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+
+UPDATE
+
+! CALL MMPT ROUTINE, READ IN DATA
+
+!MMPT USDM 13 UHBR 14
+
+CLOSE UNIT 13
+CLOSE UNIT 14
+
+
+mini conj nstep 1000 nprint 100 tolg 0.0001
+
+!=========================================================
+! start dynamics 
+!=========================================================
+
+OPEN UNIT 40 WRITe FORMatted NAME @9/n2h7p.heat.res
+
+DYNAmics VERLET  STart -
+  NSTEp   5000 TIMEstep 0.0001 -
+  NPRInt   100 IPRFrq     100  -
+  FIRSTT 0.0 FINALT 300.0 teminc 5.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 50 IEQFRQ 0 -
+  ICHECW 77 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread -1 iunwrit 40 iuncrd -1 iseed 656570
+
+close unit 40
+
+open unit 41 read formatted name @9/n2h7p.heat.res
+OPEN UNIT 40 WRITe FORMatted NAME @9/n2h7p.equil.res
+
+DYNAmics VERLET  reSTart -
+  NSTEp   5000 TIMEstep 0.0001 -
+  NPRInt   1000 IPRFrq     100  -
+  FIRSTT 300.0 FINALT 300.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 0 IEQFRQ 100 -
+  ICHECW 1 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread 41 iunwrit 40 iuncrd -1 !
+
+close unit 41
+close unit 40
+
+
+open unit 41 read formatted name @9/n2h7p.equil.res
+
+
+OPEN UNIT 40 WRITe FORMatted NAME @9/n2h7p.dyna.res
+!open unit 42 write file name @9/n2h7p.dyna.dcd
+
+DYNAmics VERLET  reSTart -
+  NSTEp   10000 TIMEstep 0.0001 -
+  NPRInt   100 IPRFrq     100  -
+  IASORS 1 IASVEL 0 ISCVEL 0 -
+  ihtfrq 0 IEQFRQ 0 -
+  ICHECW 1 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread 41 iunwrit 40 iuncrd -1 
+
+
+stop
+
+
+

@@ -1,0 +1,85 @@
+* Test of 'clustr' routine (via CLUSTER command).
+* Dyson et al. turn, YPGDV:
+* These data are obtained from Doug Tobias's > 2nsec MD simulation
+* of the unblocked peptide.
+*
+
+stream datadir.def
+
+! Read in the residue topology file.
+open unit 1 read form name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+! Read in the parameter file.
+open unit 1 read form name @0param19.prm
+read param card unit 1
+close unit 1
+
+! Generate the blocked tripeptide.
+read sequ card
+* unblocked tyr-pro-gly-asp-val
+*
+5
+tyr pro gly asp val
+
+
+! Generate the protein structure file (psf) and the internal coordinate
+! table.
+
+generate turn setup
+
+ic parameter
+ic seed 1 n 1 ca 1 c
+ic build
+
+open unit 10 read form name @0clustst.hex
+open unit 20 write unform name @9clustst.crd
+dyna unform input 10 output 20
+close unit 10
+open unit 10 read unform name @9clustst.crd
+open unit 11 write unform name @9clustst.ts
+open unit 12 write form name @9clustst.cst
+
+correl maxseries 8 maxtimesteps 40 maxatom 40
+
+  enter psi1 dihe turn 1 n  turn 1 ca turn 1 c  turn 2 n
+  enter phi2 dihe turn 1 c  turn 2 n  turn 2 ca turn 2 c
+  enter psi2 dihe turn 2 n  turn 2 ca turn 2 c  turn 3 n
+  enter phi3 dihe turn 2 c  turn 3 n  turn 3 ca turn 3 c
+  enter psi3 dihe turn 3 n  turn 3 ca turn 3 c  turn 4 n
+  enter phi4 dihe turn 3 c  turn 4 n  turn 4 ca turn 4 c
+  enter psi4 dihe turn 4 n  turn 4 ca turn 4 c  turn 5 n
+  enter phi5 dihe turn 4 c  turn 5 n  turn 5 ca turn 5 c
+  trajectory firstunit 10 nunits 1 begin 100 skip 100
+  edit psi1 veccode 8
+  write psi1 unit 11
+* Time Series Data
+*
+  cluster psi1 angle maxcluster 20 radius 30.0 maxerror 0.01 -
+     maxiteration 50 unicst 12 unimember -1 uniinit -1 -
+     nfeature 8
+end
+
+open unit 11 read unform name @9clustst.ts
+open unit 12 read form name @9clustst.cst
+
+correl maxseries 8 maxtimesteps 40 maxatom 40
+
+  enter psi1 dihe turn 1 n  turn 1 ca turn 1 c  turn 2 n
+  enter phi2 dihe turn 1 c  turn 2 n  turn 2 ca turn 2 c
+  enter psi2 dihe turn 2 n  turn 2 ca turn 2 c  turn 3 n
+  enter phi3 dihe turn 2 c  turn 3 n  turn 3 ca turn 3 c
+  enter psi3 dihe turn 3 n  turn 3 ca turn 3 c  turn 4 n
+  enter phi4 dihe turn 3 c  turn 4 n  turn 4 ca turn 4 c
+  enter psi4 dihe turn 4 n  turn 4 ca turn 4 c  turn 5 n
+  enter phi5 dihe turn 4 c  turn 5 n  turn 5 ca turn 5 c
+  edit psi1 veccode 8
+  read psi1 unit 11
+
+  cluster psi1 angle maxcluster 40 radius 15.0 maxerror 0.01 -
+     maxiteration 50 unicst -1 unimember 6 uniinit 12 -
+     nfeature 8
+end
+
+stop

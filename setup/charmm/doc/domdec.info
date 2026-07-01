@@ -1,0 +1,372 @@
+CHARMM Element doc/domdec.info 1.2
+
+File: Domdec, Node: Top, Up: (doc/commands.info), Next: Description
+
+                           Domain Decomposition
+
+        Domain decomposition (abreviated "domdec") is a method of parallelizing
+Molecular Dynamics (MD) simulation. In Domain decomposition, the simulation box
+is divided into Nx x Ny x Nz sub-boxes. Each CPU (or core) is assigned a home
+sub-box. Each CPU is responsible for updating the coordinates of the atoms
+residing in its home sub-box. The non-bonded forces are calculated for all
+atom pairs in the home box plus around volume Rcut around the home box in
+the positive x, y, and z direction. After the force calculation, the required
+forces are communicated using MPI to the sub-boxes surrounding the home box.
+The communication between the sub-boxes is implemented using the "Eighth shell"
+method.
+
+Special Notice: 
+
+The DOMDEC code for doing molecular dynamics
+simulations with CHARMM is an evolving, highly scalable molecular
+dynamics engine that has been released in the distribution version,
+c37b1, without the usual year of the testing in the developmental
+version because of the important speed up it can provide via
+multiprocessor parallization relative to the previously available MD
+codes in CHARMM. (For a discussion and benchmarks, see the News item
+in www.charmm.org.) Although DOMDEC has been thoroughly tested, it is
+likely that input script configurations that work fine in conventional
+CHARMM may not function the same in DOMDEC, or additional bugs exist
+that will be found as more people use the code. It is suggested,
+therefore, that before doing long runs with DOMDEC, it be confirmed
+that DOMDEC gives the correct results by comparing the results of a
+test run with those obtained with one of the standard MD codes in
+CHARMM. We note also that DOMDEC uses conventional periodic boundary
+conditions rather than the image facility in CHARMM. We suggest that
+DOMDEC is the method of choice for long standard dynamics NVT or NPT
+runs with PME on up to 256 processors. Additional features will be
+announced in updates to the documentation.
+
+If you use DOMDEC in your research, please cite this manuscript:
+
+"New Faster CHARMM Molecular Dynamics Engine",
+A.-P. Hynninen, and M. F. Crowley,
+Journal of Computational Chemistry 2014, 35, 406-413
+
+* Menu:
+
+* Description::    Short description 
+* Limitations::    Which features are enabled and which not
+* Syntax::         Syntax of the domdec command
+* Examples::       Examples of using domdec
+* Installing::     Enabling domdec in charmm
+
+
+File: Domdec, Node: Description, Up: Top, Next: Limitations, Previous: Top
+
+In order to use the Particle-Mesh Ewald (PME) electrostatics, CHARMM must be
+compiled with pref keywords COLFFT. Domdec splits
+the CPUs given by the mpirun -command into direct and reciprocal CPUs. The
+direct CPUs are responsible for bonded and non-bonded force calculation,
+neighbor list search, etc. The reciprocal CPUs are responsible for calculating
+the reciprocal part of the PME sum.
+
+The Isotropic Periodic Sum (IPS) method has been implemented to work with
+DOMDEC and DOMDEC_GPU.  Using IPS can get ride of reciprocal calcuation and 
+improve the scaling for massive parellel computing.
+
+
+File: Domdec, Node: Limitations, Up: Top, Next: Syntax, Previous: Description
+
+Current limitations of DOMDec:
+- Must use COLFFT keyword in pref.dat in order to have correct Ewald
+  electrostatics.
+- In order to use SHAKE, must use "shake fast" and have FSSHK keyword in
+  pref.dat
+- Must use Leapfrog Verlet integrator (in module dynamc.src):
+  - LEAP, LANG, and CPT all work.
+  - PERT and TSM do not work.
+- Only supports orthogonal simulation boxes.
+- Only supports 3-atom solvent models (TIP3, SPC), e.g. no support for TIP4.
+- Heavy atoms with hydrogen bonds must be immediately before the hydrogens in the
+  topology.
+- Dynamic Load Balancing is in beta phase for Constant Pressure simulations,
+  if you have trouble, switch off Dynamic Load Balancing when performing constant
+  pressure simulations.
+- Minimization (mini -command) does not work with DOMDEC. The best way around this
+  is to first do minimization and then turn on DOMDEC for dynamics.
+- DOMDEC cannot be turned OFF within the script where the DOMDEC -command was
+  given. For example you cannot run dynamics with DOMDEC, turn it off, and run
+  dynamics without DOMDEC.
+- IMAGe recentering command only operates on molecules that are a single DOMDEC
+  group. For example, water molecules will be correctly recentered but most larger
+  molecule are not.
+
+- Currently supports following constraints:
+  * Distance matrix (DMCO)
+  * Umbrella potential (RXNC)
+  * Adaptive Umbrella Sampling (ADUMB)
+  * Restrained distances (RESD)
+  * Imposed distance restraints (NOE)
+  * Absolute harmonic constraints (CONS HARM ABSO)
+  * Dihedral constraints (CONS DIHE)
+  * Center of mass constraints (CONS HMCM)
+
+Tips for improving performance:
+- Saving trajectory (NSAVC, NSAVV) or restart file (ISVFRQ) during dynamics
+  requires a all-to-all communication which, when done often, slows down the
+  simulation. In most systems, setting NSAVC, NSAVV, and ISVFRQ to a value greater
+  than 100 is adviced.
+- Make sure the SSE instructions are being used. Look for
+  "Using SSE version of non-bonded force loops" in the output.
+- Use FFTW or MKL library.
+- Try a different number of reciprocal cores to find the optimal value.
+
+
+File: Domdec, Node: Syntax, Up: Top, Next: Examples, Previous: Description
+
+[SYNTAX DOMDec]
+
+Way to invoke domdec:
+
+--------------------1-----------------------------
+Add CHARMM script command
+
+DOMDec [NDIR NX NY NZ]
+       [GPU {ON | OFF}]
+       [DLB {ON | OFF}]
+       [SPLIt {ON | OFF}]
+       [PPANg N]
+       [SINGle]
+       [DOUBle]
+       [TEST]
+
+to ENERGY command.
+
+NDIR NX NY NZ
+     Defines the spatial division among processors/cores of the direct space
+     calculation into NX x NY x NZ sub-boxes where each core gets a sub-box.
+     In this way, NX x NY x NZ cores of the direct nonbond space calculation
+     and the remaining cores are reserved for the reciprocal space calculation
+     if PME is requested. For example, NDIR 2 2 2 will divide the simulation
+     box into 2 x 2 x 2 (=8) sub-boxes. If the mpirun command asked for 12
+     cores, then 4 cores would be reserved for simultaneous reciprocal-space
+     calculation
+
+GPU {ON | OFF}
+     Turns GPU computation on/off. In order to use GPU, CHARMM must be compiled
+     with domdec_gpu switch, see below.
+
+GPUId {ID}
+     Manually set the GPU ID to be used in GPU computations. Where
+     ID = 0..."Number of GPUS on node" - 1. Setting -1 (the default) results
+     in automatic picking of GPU.
+
+DLB {ON | OFF}
+     Turns on direct space dynamic load balancing.
+
+SPLIt {ON | OFF}
+     Turns direct/reciprocal split on/off. Turning split off can give better
+     performance with small CPU counts.
+
+PPANg N
+     Sets the number of points per Angstrom used for the lookup tables.
+     Default value is 200. Note that using a higher value will result in higher
+     precision, but slower simulation. This parameter is used mostly for
+     testing purposes, when one wants to compare results between DOMDEC and
+     traditional CHARMM.
+
+SINGle
+     Performs force calculation in single precision. This can be used to
+     get extra performance. Note that forces are accumulated in double
+     precision. For FFTW users: PME simulations in single precision require
+     FFTW that is compiled in single precision. If available, use MKL since
+     it contains both double and single precision libraries by default.
+
+DOUBle
+     Performs force calculation in double precision. This is the default
+     setting.
+
+TEST
+     Runs DOMDEC unit tests:
+     - Nonbonded lookup table build and functional correctness test.
+
+If NDIR is not defined, program will guess the values based on a simple
+algorithm where the number of reciprocal cores is set to 1/4th of the number
+of total cores.
+
+******************
+NOTES: 
+******************
+
+The sub-box sizes are limited by the cut-off and the number of
+sub-boxes as follows:
+
+BOXX    = system box size in X direction
+NX      = number of sub-boxes in X direction
+RCUT    = non-bonded cut-off + radius of the largest group
+BOXX/NX = sub-box size in X direction
+
+Then, for NX >= 2, the sub-box size in X direction must satisfy:
+BOXX/NX <= BOXX - 2*RCUT
+
+If your system violates this restriction, you can try reducing NX to 1 or by
+increasing NX.
+
+******************
+NOTES on using GPU: 
+******************
+
+DOMDec GPU support is enabled with "DOMDEC GPU ON" command.
+When using the GPU code, use as many or less MPI nodes as there are GPUs.
+That is, oversubscribing the GPUs is not currently allowed.
+
+For example, if you have 2 GPUs on each physical node, run it using:
+mpirun -n 2 ...
+
+This will use both GPUs on the node.
+
+You can also run it using:
+mpirun -n 1 ...
+
+This will just use one of the GPUs.
+
+For example, say you want to run on 4 nodes (called gpu1, 
+gpu2, gpu3, gpu4) where each has 2 GPUs. However, you only wish to use a
+single GPU on each node (which is usually optimal).
+In order to run on all 4 nodes, do:
+
+Intel MPI:
+----------
+mpirun -n 4 -machinefile machinefile.txt ...
+
+where machinefile.txt reads:
+
+gpu1:1
+gpu2:1
+gpu3:1
+gpu4:1
+
+OpenMPI:
+--------
+mpirun -n 4 -x OMP_NUM_THREADS=8 [--bind-to none] --hostfile machinefile.txt ...
+
+where machinefile.txt reads:
+
+gpu1 slots=1
+gpu2 slots=1
+gpu3 slots=1
+gpu4 slots=1
+
+The "--bind-to none" option is needed for OpenMPI 1.7.4 and newer. It makes sure
+that OpenMPI does not bind all OpenMP threads to a single core.
+Note, for OpenMPI you must set OMP_NUM_THREADS.
+
+For other MPI implementations, consult your documentation.
+
+On multi MPI node simulations, the performance bottleneck is the MPI communication.
+Therefore, it is usually optimal to use only a single GPU per node when running
+DOMDEC_GPU over multiple MPI nodes.
+
+On single MPI node simulations, using 2 GPUs vs 1 GPU (on that node) might give you
+better performance assuming you have a powerful enough CPU.
+
+For better performance, it is important that you do not use more CPU threads
+than you have physical cores in your CPU.
+
+
+File: Domdec, Node: Examples, Up: Top, Next: Installing, Previous: Syntax
+
+             Examples of using Domdec
+
+******************
+Example with PME:
+******************
+PME electrostatics is used (CHARMM compiled with COLFFT):
+CHARMM is run with "mpirun -n 10" and DOMDec is initialized with:
+
+ENERGY DOMD NDIR 2 2 2
+
+This command divides the simulation box into 2 x 2 x 2 (=8) sub-boxes. The
+remaining 2 CPUs are assigned as reciprocal CPUs responsible for the PME
+reciprocal calculation.
+
+******************
+Example without PME:
+******************
+No PME is used:
+CHARMM is run with "mpirun -n 8" and DOMDec is initialized with:
+
+ENERGY DOMD NDIR 2 2 2
+
+This command divides the simulation box into 2 x 2 x 2 (=8) sub-boxes, just
+like in the example 1. However, no reciprocal CPUs are assigned.
+
+DLB ON/OFF turns dynamic load balancing (DLB) on or off. Using DLB is adviced
+as it improves performance. By default DLB is ON.
+
+
+File: Domdec, Node: Examples, Up: Top, Next: , Previous: Syntax
+
+Examples using DOMDec:
+
+Example 1:
+----------
+
+! System setup (psf) is done here
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec ndir 2 2 2 dlb on
+
+shake fast bonh tol 1.0e-8 para
+
+dynamics leap start timestep 0.002 nstep 100
+
+
+Example 2:
+----------
+
+! Using IPS for nonbonded interaction calculation
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9  -
+     eips vips pxyz  netcg   -
+     domdec ndir 2 2 2 dlb on
+
+shake fast bonh tol 1.0e-8 para
+
+dynamics leap start timestep 0.002 nstep 100
+
+Example 3:
+----------
+
+! Using IPS for nonbonded interaction calculation with GPU
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9  -
+     eips vips pxyz  netcg   -
+     domdec ndir 2 2 2 dlb on gpu on
+
+shake fast bonh tol 1.0e-8 para
+
+dynamics leap start timestep 0.002 nstep 100
+
+
+File: Domdec, Node: Installing, Up: Top, Next: Top , Previous: Examples
+
+                      Installing CHARMM with DOMDEC enabled:
+
+     To get you a working executable,
+MPI libraries must be installed and mpif90 in your path. You can alter the
+executable limits at run time (using dimension script command,
+see dimension.info). If the correct MPI binaries
+occur first in your PATH, then to compile using the configure script,
+you usually do not need to add extra command line options to enable DOMDEC.
+Use the normal procedure given your compilers (see cmake.info).
+
+If you wish to compile DOMDEC with GPU support, add the '-u' option to the
+options that you normally use with the configure script. For example:
+$ ./configure -u ...
+The '-u' option is a synonym for the configure option '--with-domdec_gpu'.
+
+Notes on compiling with PGI:
+
+PGI C compiler cannot be used to compile the SSE force kernels in
+source/nbonds/enb_core_sse.c. If PGI compiler is used on this file, a warning
+is issued compile time and the code resorts using the slower Fortran versions 
+of the force kernels.
+
+Notes on compiling with Pathscale:
+
+FFTW3 include file fftw3.f03 does not compile correctly with Pathscale
+compiler version 3.2.99. This is why FFTW and PATHSCALE pref keywords are 
+declared mutually exclusive.

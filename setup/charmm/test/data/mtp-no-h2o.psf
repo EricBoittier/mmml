@@ -1,0 +1,45 @@
+PSF CMAP CHEQ
+
+       2 !NTITLE
+*  NO + WATER
+*  DATE:    11/25/ 9     15: 1:22      CREATED BY USER: mwlee                   
+
+       5 !NATOM
+       1 NO   1    NO   N      42    0.00000       14.0031           0   0.00000     -0.301140E-02
+       2 NO   1    NO   O      57    0.00000       15.9949           0   0.00000     -0.301140E-02
+       3 WAT1 1    TIP3 OH2    56  -0.834000       15.9994           0   0.00000     -0.301140E-02
+       4 WAT1 1    TIP3 H1      4   0.417000       1.00783           0   0.00000     -0.301140E-02
+       5 WAT1 1    TIP3 H2      4   0.417000       1.00783           0   0.00000     -0.301140E-02
+
+       4 !NBOND: bonds
+       1       2       3       4       3       5       4       5
+
+       1 !NTHETA: angles
+       4       3       5
+
+       0 !NPHI: dihedrals
+
+
+       0 !NIMPHI: impropers
+
+
+       0 !NDON: donors
+
+
+       0 !NACC: acceptors
+
+
+       0 !NNB
+
+       0       0       0       0       0
+
+       2       0 !NGRP NST2
+       0       0       0       2       1       0
+
+       2 !MOLNT
+       1       1       2       2       2
+
+       0       0 !NUMLP NUMLPH
+
+       0 !NCRTERM: cross-terms
+

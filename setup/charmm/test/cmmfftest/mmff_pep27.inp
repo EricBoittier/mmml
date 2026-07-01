@@ -1,0 +1,110 @@
+* mmff_pep27.inp
+* author: Thomas Halgren
+* external files: MMFFANG.PAR MMFFBOND.PAR MMFFCHG.PAR MMFFDEF.PAR
+*                 MMFFOOP.PAR MMFFSTBN.PAR MMFFSUP.PAR MMFFSYMB.PAR
+*                 MMFFTOR.PAR MMFFVDW.PAR
+*                 mmff_setup.STR, top_all22_prot_mmff.inp
+* UPDATED by Josh Buckner 18 April 2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+set tol = 1e-3
+set pass = 1
+set eref = 207493.53520
+set gref = 6776.31698
+
+stream datadir.def
+bomblev -1
+
+! Set up MMFF
+! ===========
+stream @0mmff_setup.str
+
+! Read Parameter and Topology from system file
+! --------------------------------------------
+OPEN UNIT 10 CARD READ NAME @0top_all22_prot_mmff.inp 
+READ RTF CARD UNIT 10
+CLOSe UNIT 10
+
+read sequence card
+* central tripeptide sequence
+*
+27
+GLY ALA SER CYS PRO THR VAL ILE ASP ASN MET LEU GLU GLN
+HSD PHE ARG TYR TRP ASP GLU ARG LYS HSP HSE CYS CYS
+
+generate P27 setup warn FIRST ACE LAST CT3
+
+patch ASPP P27 9
+patch GLUP P27 13
+patch DISU P27 26 P27 27 MMFF
+
+read ic card unit 5 append
+* patch ICs
+*
+  20   1   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0   0
+  16    1
+    1   1 CY    1 N     1 CA    1 C      1.3450  120.00  -60.00  107.00   1.4900
+    2   1 CY    1 CA    1 *N    1 HN     1.3450  120.00  180.00  117.00   0.9970
+    3   1 CAY   1 CY    1 N     1 CA     1.4900  116.50  180.00  120.00   1.4300
+    4   1 N     1 CAY   1 *CY   1 OY     1.3450  116.50  180.00  121.00   1.2300
+    5   1 OY    1 CY    1 CAY   1 HY1    1.2300  121.00  180.00  109.50   1.1110
+    6   1 OY    1 CY    1 CAY   1 HY2    1.2300  121.00   60.00  109.50   1.1110
+    7   1 OY    1 CY    1 CAY   1 HY3    1.2300  121.00  -60.00  109.50   1.1110
+  441  27 N    27 CA   27 C    27 O      1.4300  107.00  180.00  121.00   1.2300
+  442  27 NT   27 CA   27 *C   27 O      1.3450  116.50  180.00  121.00   1.2300
+  443  27 C    27 CAT  27 *NT  27 HNT    1.3450  120.00  180.00  117.00   0.9970
+  444  27 CA   27 C    27 NT   27 CAT    1.4900  116.50  180.00  120.00   1.4300
+  445  27 C    27 NT   27 CAT  27 HT1    1.3450  120.00   60.00  109.50   1.1110
+  446  27 C    27 NT   27 CAT  27 HT2    1.3450  120.00  180.00  109.50   1.1110
+  447  27 C    27 NT   27 CAT  27 HT3    1.3450  120.00  -60.00  109.50   1.1110
+  448   9 HD2   9 OD2   9 CG    9 OD1    0.9600  115.00    0.00  123.00   1.2200
+  449  13 HE2  13 OE2  13 CD   13 OE1    0.9600  115.00    0.00  123.00   1.2200
+
+TEST PSF
+PRINT PSF
+ 
+IC SEED  1 N  1 CA  1 C
+IC BUILD
+
+WRITE MERCK UNIT 6
+* PEP27 in the Merck Molecular Structure format
+* 
+
+! Energy Cutoffs & Update Parameters
+NBONDED  NBXMOD 5  ATOM CDIEL SWITCH VATOM VSWITCH -
+     CUTNB 100.0  CTOFNB 98.0  CTONNB 96.0  EPS 1.0  WMIN 1.0
+
+SHAKE OFF
+SKIPE EXCL BOND ANGL DIHE IMPR VDW ELEC HBON USER HARM CDIH CIC CDRO NOE 
+
+ENERGY
+
+calc ediff = abs ( ?ener - @eref )
+calc gdiff = abs ( ?grms - @gref )
+
+set epass = 0
+set gpass = 0
+
+if @ediff le @tol set epass = 1
+if @gdiff le @tol set gpass = 1
+
+calc egpass = @epass * @gpass
+calc pass = @pass * @egpass
+
+MINI SD   NSTEP 100 NPRINT 10
+MINI ABNR NSTEP 100 NPRINT 10
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+echo testcase result: @status
+
+stop

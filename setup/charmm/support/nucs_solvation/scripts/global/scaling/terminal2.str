@@ -1,0 +1,10 @@
+* stream file for terminal group of two protein segment
+* writen by danzhi, 7.11.01
+*
+
+Define group2 sele (BACK2 .and. IRES @COUNTER2) END
+stream calculation.str
+
+Define group2 sele (BACK1 .and. IRES @RESNEXT2) END
+
+return

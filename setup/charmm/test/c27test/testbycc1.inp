@@ -1,0 +1,137 @@
+* bycctest1.inp
+* Author:   Robert J. Petrella
+* Date:     1.12.00
+* Version:  c28a1
+* Test:     BYCC non-bonded list generation with various options
+*             clustering of atoms by rule (no cluster file)
+* Model:    BPTI in vacuum (4 buried waters) in PARAM22 representation
+*
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+BOMLev -2
+STREam datadir.def
+
+! Read topology and parameter files
+
+OPEN READ CARD UNIT 11 NAME @0top_all22_prot.inp    ! topology file
+READ RTF  CARD UNIT 11
+CLOSE UNIT 11
+
+OPEN READ CARD UNIT 12 NAME @0par_all22_prot.inp    ! parameter file
+READ PARA CARD UNIT 12
+CLOSE UNIT 12
+
+! Generate the PSF 
+
+READ SEQUENCE CARD
+* BPTI sequence
+*
+58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+GENERATE MAIN SETUP WARNING
+
+READ SEQUENCE CARD
+* Buried waters
+*
+4 
+TIP3 TIP3 TIP3 TIP3
+GENERATE WATE NOANGLE NODIHE
+
+! Read the coordinates
+
+OPEN UNIT 13 READ CARD NAME @0bpti_allh.crd              ! coordinate file
+READ COOR CARD UNIT 13
+CLOSE UNIT 13
+
+IC BUILD
+
+! make clusters
+MKCL CADL 3.5 CMAR 5
+
+!select whole molecule
+NBACtive SELE ALL END
+
+! atom-based non-bonded list generation
+! -------------------------
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SHIFt -
+    INBFreq 1 BYCC
+
+! check # of atom pairs against default method
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SHIFt -
+    INBFreq 1 BYGR
+
+! repeat for group-based 
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITCH -
+    INBFreq 1 BYCC GROUP
+
+! check # of group pairs against default method
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITCH -
+    INBFreq 1 BYGR GROUP
+
+! extended electrostatics
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITCH -
+    INBFreq 1 BYCC GROUP EXTE QUAD
+
+ENER
+
+! check against default
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITCH -
+    INBFreq 1 BYGR GROUP EXTE QUAD
+ENER
+
+! now do only part of the system
+! define interesting part
+DEFINE INTER SELE RESI 1:10 .AND. SEGI MAIN END
+
+! define active part = interesting + buffer of 12A
+DEFINE ACTIVE SELE INTER .AROUND. 12 END
+
+!activate the atoms 
+NBACtive SELE ACTIVE END
+
+!fix atoms in buffer region and inactive region
+CONS FIX SELE (ACTIVE .AND. .NOT. INTER) END
+
+! atom -based
+! -------------------------
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SHIFt -
+    INBFreq 1 BYCC ATOM NOEX
+
+! group-based
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITch -
+    INBFreq 1 BYCC GROUP
+
+! extended electrostatics
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITch -
+    INBFreq 1 BYCC GROUP EXTE
+
+ENER
+
+STOP

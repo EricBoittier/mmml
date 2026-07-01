@@ -1,0 +1,17 @@
+* settings1.str
+* By Sonja Schwarzl & Stefan Fischer
+* Last modified June/16/2008
+*
+
+
+     ! Coordinate-file with NUCS scaling-factors in WMAIN column:
+SET OUTPUT "./output/global_lambda_1-62.crd"
+
+     ! Coordinate-file with E^solv,cut_I in 4th column:
+SET OUTPUT1 "./output/global_e_solv_1-62.crd" 
+
+     ! Output file with PBEQ pairwise interaction energy in last column:
+SET OUTPUT2 "./output/global_pairwise_1-62.dat"
+
+
+RETURN

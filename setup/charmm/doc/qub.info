@@ -1,0 +1,253 @@
+CHARMM Element doc/qub.info $Revision: 1.4 $
+
+
+
+        Closed and Open Polymer Chain Path-Integral Methods for QM/MM
+
+   A path-integral (PI) method to account for nuclear quantum correction
+to a classical trajectory. The implementation is based on the derivation
+of Warshel et al. (Hwang, J.-K.;Chu, Z.T.; Yadav, A.; Warshel, A.
+J. Phys. Chem. 1991, 95, 8445). The method describes a subset of atoms
+in the system as quantum mechanical by replacing the classical particle
+with a ring of quasi-particles (beads). The current code may use several
+methods to sample the beads: standard Monte Carlo, the Bisection
+algorithm (Pollock, E.L.; Ceperley, D.M. Phys. Rev. B 1984, 30, 2555), and
+the staging algorithm (Sprik, M.; Klein, M. L.; Chandler, D. Phys. Rev. B
+1985, 31, 4234). Three different kinds of actions may be used: The primitive
+approximation (PA), Takahashi-Imada (TI - Takahashi, M.; Imada, M. J. Phys.
+Phys. Soc. Japan 1984, 53, 3765-3769), and Chin (CH - Chin, S. A.; Chen, C. R.
+J. Chem. Phys. 2002, 117, 1409-1415. Chin, S. A. Phys. Rev. E Stat. Nonlin. 
+Soft Matter Phys 2004, 69, 046118-7). Open chain path-integrals may also be 
+used to compute the momentum distribution of selected individual atoms.
+
+For specifics regarding this implementation, see the following papers:
+
+1) Major, D.T.; Gao, J. Implementation of the bisection sampling method in
+   path-integral simulations. J. Mol. Graphics Modell. 2005, 24, 121-127.
+2) Major, D.T.; Garcia-Viloca, M.; Gao, J. Path-integral simulations of proton 
+   transfer reactions in aqueous solution using combined QM/MM potentials.
+   J. Chem. Theory Comput. 2006, 2, 236-245.
+3) Major, D.T.; Gao, J. An Integrated Path-Integral and Free-Energy 
+   Perturbation-Umbrella Sampling Method for Computing Kinetic Isotope Effects
+   of Chemical Reactions in Solution and in Enzymes. J. Chem. Theory Comput.
+   2007, 3, 949-960.
+4) Azuri, Asaf; Engel, Hamutal; Doron, Dvir; Major, Dan T. Path-integral calculations
+   of nuclear quantum effects in model systems, small molecules, and enzymes via
+   gradient-based forward corrector algorithms. J. Chem. Theory Comput. 2011, 7, 
+   1273-1286.
+5) Engel, Hamutal; Doron, Dvir; Kohen, A.; Major, Dan T. Momentum Distribution as a 
+   Fingerprint of Quantum Delocalization in Enzymatic Reactions: Open-Chain Path-Integral 
+   Simulations of Model Systems and the Hydride Transfer in Dihydrofolate Reductase.
+   J. Chem. Theory Comput. 2012, http://dx.doi.org/10.1021/ct200874q.
+
+In the present code, only QM atoms (see qmmm.info) may be chosen as PI atoms,
+although this is not an inherent limitation.
+
+General Notes:
+QUB is implemented as serial and parallel. In the Parallel version,
+the number of processors cannot exceed the number of beads.
+Currently, the code has been implemented in serial for standard CHARMM MOPAC,
+SQUANTM, GAMESS-UK, QCHEM and SCCDFTB.
+The parallel version is implemented seperately for CHARMM MOPAC, SQUANTM,
+and SCCDFTB. With the SQUANTM module, the path-integral code takes charge of the
+parallelization (scales linearly with NPROC if MOD(NBEADS,NPROC)=0).
+For the other codes, the parallel part is mainly handled by the QM code.
+The code has also been implemented in parallel for GAMESS-UK
+and QCHEM, but not tested so this is disabled for now, although running QCHEM
+in parallel, with CHARMM in serial mode works. 
+
+* Menu:
+
+* Syntax::         Syntax of QUB Commands
+* Examples::       Input Examples
+
+
+File: qub, Node: Syntax, Up: Top, Previous: Top, Next: Examples
+
+                        Syntax for QUB Command
+
+QUB { QCP              }  [atom-selection] [other-spec] [unit-spec] [qrxn-spec]
+    { BQCP   bqcp-spec } 
+    { SQCP             }
+    { BFEP   bqcp-spec }
+    { SFEP             }
+    { QCOP             }
+
+bqcp-spec::=  [KLEVel int]    
+other-spec::= [BEADs int] [NBMOve int] [MCONfiguration int] 
+              [MCEQquilibration int] [TEMP real] [QRXN qrxn-spec]
+              [TIAC] [CHAC] [NOEW] [IRAN] [FAST] [FFOCK]
+unit-spec::=  [FIRST int] [OUNI int] [OUNJ int] [BDIN int] [BDOUT int]
+              [NUNI int] [BEGI int] [STOP int] [SKIP int]
+qrxn-spec::=  [RXNA int] [RXNB int] [RXNC int] [DELD real] [RESL real]
+
+Keyword  Deflt  Purpose
+-------  -----  ----------------------------------------------------------
+QCP      off    Use Quantized Classical Path method with Metropolis sampling.
+BQCP     off    Use Quantized Classical Path method with bisection sampling. 
+                KLEV must be specified.
+SQCP     off    Use Quantized Classical Path method with staging sampling.
+BFEP     off    Use PI-FEP/UM which entails BQCP with mass-perturbation.
+SFEP     off    Use PI-FEP/UM which entails SQCP with mass-perturbation.
+QCOP     off    Use open path-integrals with staging algorithm.
+BEADS    32     Number of quasiparticles (beads) per classical particle.
+NBMO     1      Number of beads to be changed in each MC move. Must be 1 
+                when using Bisection algorithm. When using Metropolis sampling
+                must be greater than 1 (due to centroid approximation).
+KLEV     5      Should be specified when using Bisection algorithm. In general,
+                BEADS => 2**KLEV. Optimal sampling is achieved when
+                BEADS = 2**KLEV,
+                i.e. BEADS 8 KLEV 3, BEADS 16 KLEV 4, BEADS 32 KLEV 5, etc.
+TIAC     off    Use Takahashi-Imada higher-order correction
+CHAC     off    Use Chin higher-order correction
+FAST     F      Use fast energy routines (avoids gradient calculation). Only 
+                QUANTUM module.
+FFOCK    F      Use fast Fock matrix updating. Only QUANTUM module.
+NOEW     F      Do not use Ewald summation
+MCON     10     Number of MC moves for averaging
+MCEQ     10     Number of MC moves for equilibration
+TEMP     298.15 Temperature (should be same as used for classical trajectory)
+QRXN     off    Use reaction coordinate analysis
+RXNA     99999  PSF number of atom A
+RXNB     99999  PSF number of atom B
+RXNC     99999  PSF number of atom C; if excluded reaction coordinate is A-B
+DELD     0.01   Bin width along reaction coordinate
+RESL     10.0   Resolution in bin analysis. Rarely needs to be adjusted.
+FIRS     -1     Unit number of first trajectory file
+OUNI     6      File unit for QUB output (Qcl->qm. Partition function qm
+                correction)
+OUNJ     6      File unit for QUB output for second isotope (w/QFEP)
+OUNK     6      File unit for end-to-end distribution in open path-integral simulation
+OUNL     6      File unit for end-to-end distribution, second isotope
+BDIN     0      File number for coordinates of all beads (from a previous job)
+BDOU     0      File number for coordinates of all beads to be written out
+                at the end of the current job
+NUNI     1      Numbero of trajectory files, beginning with FIRS
+BEGI     0      Beginning step number of trajectory file
+                (see READ TRAJECTORY FOR DETAIL)
+STOP     0      See read traj
+SKIP     1      See read traj
+IRAN     -1     Random number generator seed, default value switches on time
+                dependent random seed (recommended). For runs on the same
+                trajectory, but with different isotopes, the same random
+                number should be used (e.g. use -1 for "isotope 1" run and
+                the random number from the output of that run (printed at
+                beginning of QUB output) for "isotope 2" run.
+
+
+File: qub, Node: Examples, Up: Top, Previous: Syntax, Next: Top
+
+Assuming the following CHARMM variables have been set:
+! Path-integral settings
+set NSkip           1     ! 
+set NSave         100     ! 
+calc NSkip @NSave*@NSkip  ! Skip # of configurations from trj
+set NBeads         16 
+set T          298.15
+set Neq           100     ! Equilibration of beads not necessary
+                          ! when bisecting entire bead
+set Nav           100     ! Use ~ 1000
+set NMove           1
+set KLev            4     ! 2**KLev should equal number of beads
+set RNum           -1     ! Time-dependent randum number seed
+
+1) Add average QM effect
+
+...
+
+! read coordinates from trj file
+open read  unit 11 unfo name @scrDIR/@MOD.@d0.@j.trj
+open write unit 12 form name @resDIR/@MOD.@d0.N@NBeads.qub ! QUB output
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Run PI
+QUB BQCP SELE QMS .AND. (TYPE C5 .OR. TYPE H7 .OR. TYPE O16) SHOW END 
+    FAST FFOCK -
+    KLEV @KLev TEMP @T MCON @Nav MCEQ @Neq BEAD @NBeads NBMOVE @NMove -
+    IRAN @RNum -
+    FIRST 11 OUNI 12 BDIN -13 BDOUT -14 -
+    NUNI 1 BEGI -1 STOP -1 SKIP @NSkip
+
+...
+
+
+2) Add QM effect along a reaction coordinate of the type A-B---C, where B is 
+   transferred from A to C. Typically, this would be done seperately for each 
+   window of an umbrella sampling. 
+   If atom C is not defined in the input, the reaction coordinate is taken as 
+   the A-B distance. 
+   Typically, several different runs are done along a reaction coordinate and
+   the results (from *.qub output files) combined using a post-processing 
+   program (available upon request) to obtain average along reaction
+  coordinate. 
+
+...
+
+! read coordinates from trj file
+open read  unit 11 unfo name @scrDIR/@MOD.@d0.@j.trj
+open write unit 12 form name @resDIR/@MOD.@d0.N@NBeads.qub ! QUB output
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Run PI
+! Reaction coordinate is defined as A-B---C
+!                                   C5(5)-H7(7)---O16(16)
+QUB BQCP SELE QMS .AND. (TYPE C5 .OR. TYPE H7 .OR. TYPE O16) SHOW END 
+    FAST FFOCK -
+    KLEV @KLev TEMP @T MCON @Nav MCEQ @Neq BEAD @NBeads NBMOVE @NMove -
+    QRXN RXNA 5 RXNB 7 RXNC 16 DELD 0.01 RESL 10.0 -
+    IRAN @RNum -
+    FIRST 11 OUNI 12 BDIN -13 BDOUT -14 -
+    NUNI 1 BEGI -1 STOP -1 SKIP @NSkip
+
+...
+
+3) Same as 2, but using different isotope.
+Add the following lines prior to calling
+   the QUB command. Everything else is identical to exmape 2).
+
+...
+
+! Change mass of relevant atom
+set mass 2.0140
+
+scalar mass set @mass select QMS .AND. TYPE H7 show end
+
+! Section 2) comes here
+
+4) Mass perturbation.
+
+...
+
+! read coordinates from trj file
+open read  unit 11 unfo name @scrDIR/@MOD.@d0.@j.trj
+open write unit 12 form name @resDIR/@MOD.@d0.N@NBeads.h.qub ! isotope 1 QUB output
+open write unit 13 form name @resDIR/@MOD.@d0.N@NBeads.d.qub ! isotope 2 QUB output
+
+! D isotope
+! Change mass of relevant atom in WMAIN array
+set dmass 2.0140      ! Assign mass variable
+scalar 1 = wmain
+scalar wmain show
+scalar wmain = mass   ! Assign mass array to wmain
+scalar wmain show
+scalar wmain set @dmass select QMS .AND. TYPE H7 show end
+scalar wmain show
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Run PI
+! Reaction coordinate is defined as A-B---C
+!                                   C5(5)-H7(7)---O16(16)
+QUB BFEP SELE QMS .AND. (TYPE C5 .OR. TYPE H7 .OR. TYPE O16) SHOW END
+    FAST FFOCK -
+    KLEV @KLev TEMP @T MCON @Nav MCEQ @Neq BEAD @NBeads NBMOVE @NMove -
+    QRXN RXNA 5 RXNB 7 RXNC 16 DELD 0.01 RESL 10.0 -
+    IRAN @RNum -
+    FIRST 11 OUNI 12 OUNJ 13 BDIN -14 BDOUT -15 -
+    NUNI 1 BEGI -1 STOP -1 SKIP @NSkip
+
+! Reset wmain
+scalar wmain = 1
+scalar wmain show
+
+...
+

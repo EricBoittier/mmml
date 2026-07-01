@@ -1,0 +1,168 @@
+CHARMM Element doc/proto.info $Revision: 1.1.1.1 $
+
+File: PROTO, Node: Top, Up: (doc/commands.info),  Next: Syntax
+
+
+                         Prototypes
+
+
+        Often a system contains many identical groups/molecules, which
+during analysis should be treated uniformly; the most obvious example
+being solvent waters. While several analysis routines do handle water
+molecules separately, there are no provisions if another solvent is
+used or if a mixture is studied.  The PROTo facility provides a
+framework for other CHARMM-modules (such as SHELL or RDFSOL) to treat
+completely generic groups in a uniform, systematic manner.  At the
+moment a maximum of 10 prototype sets are supported simultaneously.
+
+* Menu:
+
+* Syntax::              The syntax of the PROTo commands
+* General::             General overview
+* Define::              Defining a new Prototype
+* Remove::              Delete a prototype
+* Image::               Adding image prototypes to the list
+* Info::                Printing prototype information
+* Caveats::             Some limitations/todos to keep in mind
+* Examples::
+
+
+File: PROTO, Node: Syntax, Previous: Top, Up: Top, Next: General
+
+                         Syntax for the PROTo commands
+
+[SYNTAX PROTO_types]
+
+Syntax:
+
+PROTO  [ DEFIne int ]  [ atom-selection atom-selection ]
+                       [ PNUM int       atom-selection ]
+
+       [ REMOve int ] 
+
+       [ IMAGe  int ]
+
+       [ INFO ]
+
+
+      atom-selection::= see *note Selection:(doc/select.info)
+
+
+File: PROTO, Node: General, Previous: Syntax, Up: Top, Next: Define
+
+                         General overview
+
+         The PROTO module allows the definition of a set of identical
+subtypes in a selection (e.g. all methanol molecules in a
+water/methanol mixture). These units can then be used in various other
+CHARMM analysis modules, such as CORRel or RDFSol, to analyze properties
+which are specific to these entities.
+
+
+
+
+File: PROTO, Node: Define, Previous: General, Up: Top, Next: Remove
+
+                         PROTOtype definition
+
+         PROTO must be called once to set up a prototyped set of
+entities before they can be used in other modules. Later this
+prototype set can be referenced by the number given after the DEFINE
+keyword. The command can be called in two ways:
+
+Either two atom selections are given or a single atom selection along
+with the number of atoms to bundle into a single entity is
+used. Usually PROTO is called with two atom selections where the first
+selection gives a single entity (the "prototype") while the second
+selection lists all atoms from which these entities are to be
+picked. This is done by using a "pivot atom" (usually the first atom
+of the prototype selection) and saving the relative atom numbers of
+the prototype atoms with respect to this pivot. In a second step then
+all occurances of this pivot atom are picked from the second atom
+selection are singled out and form the basis for the given prototype
+set. This means that the second selection need not (but should) hold
+the whole entities represented by this prototype set but only the
+picked pivot atom (although this should not be relied upon since the
+choice of the pivot atom may be changed in future versions).
+
+In the second case only a single atom selection together with the
+parameter PNUM is used. Here the first atom in the selection is used
+as pivot atom and all similar atoms picked from the selection
+list. The sets defined in this mode are the PNUM atoms following
+consecutively in the atom number list after these pivot atoms.
+
+
+File: PROTO, Node: Remove, Previous: Define, Up: Top, Next: Image
+
+                         Removing prototype sets
+
+         With the REMOve command the selected prototype set will be
+deactivated and all associated memory will be cleared. After this
+command the corresponding set will no longer be available to other
+modules.
+
+
+File: PROTO, Node: Image, Previous: Remove, Up: Top, Next: Info
+
+                         Images
+
+         This command will simply add all images of the selected pivot
+atoms to the selected prototype set. This procedure faces a simple
+problem: at the outer border of the generated image atoms the sets may
+be incomplete (i.e. some image atoms for a single entity may be
+missing since they are too far away from the primary atom space). To
+avoid having other modules use such incomplete sets (since they would
+probably generate wrong data) the algorithm checks each of these
+"image sets" for completeness. Thus some of the fringe image atoms may
+not be included although they are images of selected primary pivot
+atoms. This needs to be taken into account when CUTIM is specified in
+the image setup (see *note Images:(doc/images.info)). For instance
+if radial distribution functions for prototypes are to be calculated
+using RDFSOL, CUTIM must not only be at least as large as the largest
+distance the RDF is to be computed for, but has to be augmented such
+that all sets at this distance are still complete if they are pointing
+"outward" (this is of course dependent on the size of the prototype
+considered).
+
+
+File: PROTO, Node: Info, Previous: Image, Up: Top, Next: Caveats
+
+                         Info
+
+         The INFO command prints general informations about all
+defined prototype sets. This comprises the relative atom numbers with
+respect to the pivot atoms and the number of pivot atoms considered.
+
+         At print level 6 or higher the atom numbers for the selected
+pivot atoms will also be printed.
+
+
+File: PROTO, Node: Caveats, Previous: Info, Up: Top, Next: Examples
+
+                         Caveats
+
+- Only atoms similar to the pivot atom picked from the prototype
+  selection (or the first atom of the selection, if PNUM is used) will
+  be considered from the general atom selection. This mechanism should
+  not be relied upon to be robust but rather all sets to be considered
+  should be included in the second (or only) atom selection.
+
+- When image sets are to be used (e.g. in RDFSOL) it must be
+  considered, that fringe sets will be disregarded if they are
+  incomplete (see Images for further detail).
+
+
+File: PROTO, Node: Examples, Previous: Caveats, Up: Top
+
+                         Examples
+
+PROTO DEFINE 1 SELECT ATOM WAT 1 * END -
+               SELECT ALL END
+!Puts all TIP3 waters into the first prototype.
+
+
+! Suppose segment A contains all methanol molecules in a water/methanol
+! mixture. then
+PROTO DEFINE 2 SELECT ATOM A 1 * END -
+               SELECT ALL END
+!prototype set 2 contains all methanols present in the system

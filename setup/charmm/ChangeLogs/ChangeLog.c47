@@ -1,0 +1,4191 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+
+CHARMM 36.0
+     c36a1    Developmental     August    15, 2008
+     c36a2    Developmental     February  15, 2009
+     c36a3    Developmental     August    15, 2009
+     c36a4    Developmental     February  15, 2010
+     c36a4r1  Developmental     May        1, 2010
+     c36a5    Developmental     August    15, 2010
+     c36a6    Developmental     February  15, 2011
+     c36b1    Release           August    15, 2011
+     c36b2    Release           February  15, 2012
+
+CHARMM 37.0
+     c37a1    Developmental     August    15, 2011
+     c37a2    Developmental     February  15, 2012
+     c37b1    Release           September 30, 2012
+     c37b2    Release           February  15, 2013
+
+CHARMM 38.0
+     c38a1    Developmental     September 30, 2012
+     c38a2    Developmental     February  15, 2013
+     c38b1    Release           August    15, 2013
+     c38b2    Release           February  15, 2014
+
+CHARMM 39.0
+     c39a1    Developmental     August    15, 2013
+     c39a2    Developmental     February  15, 2014
+     c39b1    Release           August    15, 2014
+     c39b2    Release           February  15, 2015
+
+CHARMM 40.0
+     c40a1    Developmental     August    15, 2014
+     c40a2    Developmental     February  15, 2015
+     c40b1    Release           August    15, 2015
+     c40b2    Release           February  15, 2016
+
+CHARMM 41.0
+     c41a1    Developmental     August    15, 2015
+     c41a2    Developmental     February  15, 2016
+     c41b1    Release           August    15, 2016
+     c41b2    Release           February  15, 2017
+
+CHARMM 42.0
+     c42a1    Developmental     August    15, 2016
+     c42a2    Developmental     February  15, 2017
+     c42b1    Release           August    15, 2017
+     c42b2    Release           February  15, 2018
+
+CHARMM 43.0
+     c43a1    Developmental     August    15, 2017
+     c43a2    Developmental     February  15, 2018
+     c43b1    Release           August    15, 2018
+     c43b2    Release           February  15, 2019
+
+CHARMM 44.0
+     c44a1    Developmental     August    15, 2018
+     c44a2    Developmental     February  15, 2019
+     c44b1    Release           August    15, 2019
+
+CHARMM 45.0
+     c45a1    Developmental     August    15, 2019
+     c45a2    Developmental     February  15, 2020
+     c45b1    Release           August    15, 2020
+     c45b2    Release           February  15, 2021
+
+CHARMM 46.0
+     c46a1    Developmental     August    15, 2020
+     c46a2    Developmental     February  15, 2021
+     c46b1    Release           August    15, 2021
+     c46b2    Release           February  15, 2022
+
+CHARMM 47.0
+     c47a1    Developmental     August    15, 2021
+     c47a2    Developmental     February  15, 2022
+     c47b1    Release           August    15, 2022
+     c47b2    Release           March      1, 2023
+---------------------------------------------------------------------------
+
+[0] About CHARMM47 Development
+
+     At the 2021 CHARMM meeting (Michigan State virtual July 16-17, 2021)
+we decided to release CHARMM c46b1 incorporating enhancements and fixes
+from the development versions c46a1 and c46a2.
+
+The c46b1 release includes the enhancements and fixes to the development
+version c46a2 during the period of August 15, 2020 through August 15, 2021.
+
+==============================================================================
+
+[1] c47a1 Change Log
+
+1.1 Update build process for anaconda openmm
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 3 March 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/100
+Git commit: 107de246fb9ac76bd27a966686d4b987cc07bd8a
+
+On macOS, with anaconda python, to compile and link any code using openmm '-std=c++11' is needed. The necessary flags are automatically detected in using cmake and code in CMakeLists.txt. However, '-std=c++' is second in the tests for flags, so the first test always fails. The tests have been consolidated into a single test that tries all permutations of flags that might be required.
+
+Sample input to reproduce the problem (or testcase): compile time issue
+
+Files Involved:
+CMakeLists.txt
+source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+source/openmm/plugins/gbmv/CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+source/openmm/plugins/mses/CMakeLists.txt
+tool/cmake/omm_avx_test.cpp
+tool/cmake/omm_cxx11_test.cpp
+tool/cmake/omm_abi_test.cpp
+tool/cmake/omm_flags_test.cpp
+
+------------------------------------------------------------------------------
+1.2 remove the name of a harvard server from the documentation
+    Developer: Victor Ovchinnikov & Josh Buckner
+    Institution: Harvard & University of Michigan
+    Date: 12 March 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/101
+Git commit: 70326c22f29ec5fceb49ea344442be285a563c66
+
+A server at Harvard was named several times in the documentation
+Sample input to reproduce the problem (or testcase): doc/install.info
+Files Involved:
+
+doc/block.info
+doc/cadpac.info
+doc/changelog.info
+doc/install.info
+doc/pnm.info
+
+------------------------------------------------------------------------------
+1.3 Overhaul of DCM code with added support for Particle Mesh Ewald and residue patching
+    Developer: Mike Devereux
+    Institution: University of Basel
+    Date: 9.4.2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/102
+Git commit: b80e0b83346b97e032bca493247651ef18eb663d
+
+Various minor bugs fixed (e.g. to handle molecules with single charges etc.)
+Integration with particle mesh Ewald routines
+Automated handling of residue patching for DCM amino acids
+Improved compliance with CHARMM developer guidelines
+Restructured code for improved clarity and efficiency
+
+Files Involved: (module/file, e.g., source/dynamc/dcntrl.src)
+ source/energy/energy.F90  |   11 +-
+ source/energy/printe.F90  |    4 +
+ source/gener/genpsf.F90   |   62 +-
+ source/image/eimage.F90   |    9 +-
+ source/image/upimag.F90   |    6 +-
+ source/nbonds/dcm.F90     | 6432 ++++++++++++++++++++++++++++++++------------------------
+ source/nbonds/enbond.F90  |   27 +-
+ source/nbonds/ewald.F90   |    5 +-
+ source/nbonds/ewaldf.F90  |    1 +
+ source/nbonds/nbonds.F90  |    2 +
+ source/nbonds/pme.F90     |   34 +-
+ source/pert/epert.F90     |   73 +-
+ source/pert/pert.F90      |    2 +-
+ source/util/new_timer.F90 |    1 +
+
+------------------------------------------------------------------------------
+1.4 Spring 2021 BLaDE updates
+    Developer: Ryan Hayes
+    Institution: University of Michigan
+    Date: 21 April 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/103
+Git commit: 7117588bcf71a43af5c7acbb6176f67f095b3e8b
+
+Fixed a bug where BLaDE was taking double timesteps when using two GPUs
+Add fix lambda option, and debug charmm port multigpu
+Added to c30test/mmfp_test5 testcase to test recently added mmfp angle feature.
+intel compilers compatibility fixes
+BLaDE test case adjustments
+Fixed some bugs with non-flex parameters:
+
+put a bomlev guard on nonflex CMAP parameters
+updated test cases to pass CMAP guard
+allowed orthorhombic boxes
+initialized uninitialized theta velocities in lambdam
+rectified holonomic constraints after copying coordinates from charmm to blade
+fixed a bug where BLaDE didn't copy box back to xtcabc, so constant pressure crashed
+
+
+Added BLaDE documentation.
+Constant pressure simulation fixes
+Put in a bomb guard for fbeta=0 and fixed error when running on a non-alchemical system.
+New input format for BLOCK CATS (scaling of constrained atoms) seems to preserve functionality.
+Changed the way BLOCK accepts and stores SCAT and CATS input. (Scaling of constrained/restrained atoms.) Should improve compatibility with blade.
+atomrestraints library functions
+Updated blade API to interface with scaling of constrained atoms in BLOCK module
+Fixed several performance problems and bugs with BLaDE:
+
+BLaDE random number generator was running in the default stream killing performance
+blade_dynamics was not setting npriv, which resulted restart files being printed every ntrfrq steps at a substantial performance penalty
+
+
+Modified BLaDE port to not separate vdw and elec energy terms. 10% improvement in speed.
+Small changes to the blade api to adapt to changes in BLaDE source code
+BLaDE NOE guard
+A blade interface bugfix, velocities were not saved correctly between calls of blade_dynamics
+BLaDE input guard for unimplemented cons harm
+Fixed input guards to allow constant energy simulations with BLaDE.
+
+prefx Keys: no change
+
+Files Added:
+doc/blade.info
+source/blade/CompileIntel.sh
+source/blade/license
+source/blade/src/nbdirect/nbdirectfaster.txt
+source/blade/src/nbdirect/nbdirectslower.txt
+source/blade/test/dhfr/bench.crd
+source/blade/test/dhfr/blade_bench.psf
+source/blade/test/dhfr/blade_par_all27_prot_lipid.prm
+source/blade/test/dhfr/input
+source/blade/test/water216/input
+source/blade/test/water216/minimized.crd
+source/blade/test/water216/minimized.psf
+test/c46test/blade_msld.inp
+
+Files Modified:
+doc/block.info
+doc/commands.info
+doc/dynamc.info
+source/blade/doc/DevNotes.txt
+source/blade/doc/MAIN.txt
+source/blade/run/Profile.sh
+source/blade/run/input
+source/blade/src/CMakeLists.txt
+source/blade/src/bonded/bonded.cu
+source/blade/src/bonded/pair.cu
+source/blade/src/domdec/assign_blocks.cu
+source/blade/src/domdec/assign_domain.cu
+source/blade/src/domdec/assign_excl.cu
+source/blade/src/domdec/cull.cu
+source/blade/src/domdec/domdec.cu
+source/blade/src/domdec/recull.cu
+source/blade/src/holonomic/holonomic.cu
+source/blade/src/io/control.cxx
+source/blade/src/io/io.cxx
+source/blade/src/main/blade.cxx
+source/blade/src/main/real3.h
+source/blade/src/msld/msld.cu
+source/blade/src/msld/msld.h
+source/blade/src/nbdirect/nbdirect.cu
+source/blade/src/nbrecip/nbrecip.cu
+source/blade/src/rng/rng_gpu.cxx
+source/blade/src/rng/rng_gpu.h
+source/blade/src/run/run.cu
+source/blade/src/run/run.h
+source/blade/src/system/coordinates.cxx
+source/blade/src/system/parameters.cxx
+source/blade/src/system/potential.cxx
+source/blade/src/system/potential.h
+source/blade/src/system/state.cxx
+source/blade/src/system/state.h
+source/blade/src/system/structure.cxx
+source/blade/src/system/system.cxx
+source/blade/src/update/pressure.cu
+source/blade/src/update/rex.cxx
+source/blade/src/update/update.cu
+source/blade/test/T4L_peptide/input
+source/blade/test/ec2acc/input
+source/blade_api/blade.F90
+source/blade_api/blade_block.F90
+source/blade_api/blade_coords.F90
+source/blade_api/blade_main.F90
+source/blade_api/dynamics.cxx
+source/dynamc/dcntrl.F90
+source/energy/energy.F90
+source/pert/lambdadyn.F90
+test/c30test/mmfp_test5.inp
+test/c46test/blade_energy.inp
+test/data/prep14benz/full_ligand.prm
+test/data/prep14benz/par_all36_msld.prm
+
+Files Removed:
+source/blade/doc/name
+test/c46test/blade.inp
+test/c46test/blade_dynamics.inp
+
+------------------------------------------------------------------------------
+1.5 Blade merge bug fix
+    Developer: Ryan Hayes
+    Institution: University of Michgan
+    Date: 23 April 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/104
+Git commit: f0305a63b9309f49c85be6f5d7e1b01ab3a8247f
+
+The previous blade updates merge had some conflicts that were not resolved optimally.
+A dhfr test internal to BLaDe was updated
+
+Sample input to reproduce the problem (or testcase): compile time errors
+
+Files Involved:
+source/blade_api/blade.F90
+
+Files:
+source/blade/test/dhfr/5dfr.crd
+source/blade/test/dhfr/5dfr.psf
+D       source/blade/test/dhfr/bench.crd
+D       source/blade/test/dhfr/blade_bench.psf
+M       source/blade/test/dhfr/input
+source/blade/test/dhfr/blade_par_all27_prot_lipid.prm
+source/blade/test/dhfr/par_all22_prot.inp
+
+------------------------------------------------------------------------------
+1.6 Provided dynamic memory allocation routines for DCM residue patching
+    Developer: Mike Devereux
+    Institution: University of Basel
+    Date: 4 May 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/105
+Git commit: 5540b00d279bbeae483cc24973fdbdeb203cbb9b
+
+The DCM code lacked dynamic memory allocation for part of the residue-patching routine, causing crashes in unusual cases with many patched residues (specifically the test case "c40test/omm_gbsaobc_stream_test.inp"). Memory-allocation functions have been added and the test case is now passed. Some other OpenMM test cases still fail, but this seems to be a problem with our local OpenMM installation as backtraces are within OpenMM libraries, but please test with a stable installation...
+
+Files involved:
+source/gener/genpsf.F90
+source/nbonds/dcm.F90
+
+------------------------------------------------------------------------------
+1.7 opencl and fftdock protein grid potential
+    Developer: Yujin Wu and Josh Buckner
+    Institution: University of Michigan
+    Date: 26 May 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/106
+Git commit: 638f61141dc5fbff5627620100e2ce52e7735a1d
+
+We implemented a rudimentary opencl fortran module and backing C++ code. Then, we implemented protein grid potential generation using an OpenCL kernel for the fftdock module. The fftdock OpenCL support is only compiled in if CUDA is not found but OpenCL is found at configure time.
+See the test c46test/opencl.inp and c46test/fftdock.inp.
+One user has reported bad grid potential values generated by AMD GPUs on the macOS platform. This happens for this user about 1 in 100 times. Please run c46test/fftdock.inp several times if you have an AMD GPU and check the results for consistency.
+
+prefx Keys: none added
+
+Files Added:
+source/fftdock/cuda_grid_pot.cu
+source/fftdock/kernels.cpp.in
+source/fftdock/kernels.h.in
+source/fftdock/kernels/conjMult.cl
+source/fftdock/kernels/correctEnergy.cl
+source/fftdock/kernels/sumGrids.cl
+source/fftdock/ocl_grid_pot.cpp
+source/opencl/ocl_util.cpp
+source/opencl/ocl_util.h
+source/opencl/opencl_main.F90
+source/opencl/opencl_parse.F90
+test/c46test/opencl.inp
+tool/cmake/EncodeKernel.cmake
+tool/cmake/ommVersion.cpp
+tool/cmake/FindMyOpenCL.cmake
+
+Files Modified:
+CMakeLists.txt
+source/charmm/iniall.F90
+source/charmm/miscom.F90
+source/fftdock/GPUGridLig.cpp
+source/fftdock/GPUGridPot.cpp
+source/fftdock/fftdock.F90
+source/fftdock/openmm_dock.F90
+source/openmm/plugins/gbsw/platforms/cpu/CMakeLists.txt
+source/openmm/plugins/gbsw/platforms/cuda/CMakeLists.txt
+source/openmm/plugins/gbsw/platforms/cuda/CudaGBSWKernels.cpp
+test/c46test/fftdock.inp
+tool/cmake/c_files.cmake
+tool/cmake/cxx_files.cmake
+tool/cmake/fftdock_cuda_files.cmake
+tool/cmake/fortran_files.cmake
+tool/cmake/prefx_keywords.cmake
+
+Files Removed:
+source/fftdock/GPUGridProt.cpp
+tool/cmake/FindOpenCL.cmake
+
+------------------------------------------------------------------------------
+1.8 fix lite build and intel calloc not defined
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 26 May 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/107
+Git commit: 7258af6ba98ad07325db9ffe548908d4270b5869
+
+builds without OpenCL fail because some C++ code that requires OpenCL was added outside the HAS_OPENCL C preprocessing guards.
+builds with the Intel compiler fail because of the presence of calloc in the C++ code.
+
+Sample input to reproduce the problem (or testcase):
+configure with --lite and then compile
+compile with the Intel C++ compiler
+
+Files Involved:
+source/opencl/ocl_util.cpp
+source/opencl/ocl_util.h
+
+------------------------------------------------------------------------------
+1.9 gcc 10 and nvcc linking fix
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 1 June 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/108
+Git commit: 0f3557ca5b172144e9943a799a8ffce895914b27
+
+When using GCC 10 for a domdec_gpu or blade build, there are lots of 'undefined' errors for functions compiled by the C++ compiler but called by code in .cu files (code compiled by nvcc). Adding the flag '-std=c++11' to the C++ compiler flags fixes the problem.
+
+Sample input to reproduce the problem (or testcase):
+Configure with '--with-blade' or '--with-domdec_gpu' with GCC 10. Then compile.
+
+Files Involved: CMakeLists.txt
+
+------------------------------------------------------------------------------
+1.10 Biovia patches: domdec gpuid; call imcent if qcenter
+     Developer: Josh Buckner, David Zhang, and Rohith Mohan
+     Institution: University of Michigan and Biovia
+     Date: 7 June 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/109
+Git commit: f2a803d291037e543cf36470f1b7e7ff29950b6b
+
+1. If the domdec keyword gpuid is set to -1 or not specified, pick the gpu with highest compute number and then most processors available from the environment variable CUDA_VISIBLE_DEVICES. Otherwise, if gpuid is specified as n, pick the n-th gpu available from the environment variable CUDA_VISIBLE_DEVICES.
+
+2. Allow the output DCD to be processed and recentered around (0,0,0) for solvated systems when running through OpenMM. In terms of the actual code, it's a minor change that moves an IMCENT call outside the scope of an if statement so that recentering to a null selection can occur (in the MERGEO subroutine in dynasub.F90).
+
+Prefx keys: no change
+
+Files added: none added
+
+Files modified:
+source/domdec/domdec.F90 (1)
+source/domdec/domdec_gpu.cu (1)
+source/domdec_gpu/cuda_utils.cu (1)
+source/domdec_gpu/cuda_utils.h (1)
+source/dynamc/dynsub.F90 (2)
+
+Files Removed: none removed
+
+------------------------------------------------------------------------------
+1.11 Pycharmm api overhaul
+     Developer: Charlie Brooks and Josh Buckner
+     Institution: University of Michigan
+     Date: 14 June 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/110
+Git commit: 99e22eee4c514f9e72ce4a54dc6a2c7e3e5921d1
+
+read and write coor_card
+OpenMM minimization
+switch to using charmm script for coor.orient, read functions, and write functions
+name python atom selections for use in charmm scripts
+add selection argument to functions that use charmm script under the hood
+add residue and segment information to SelectAtoms objects
+ongoing documentation update
+switch all functions to take keyword arguments rather than dictionaries
+
+Prefx keys: no change
+
+Files added:
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+
+Files modified:
+.gitignore
+source/api/api_coor.F90
+source/api/api_init.F90
+source/api/api_psf.F90
+source/api/api_read.F90
+source/api/api_select.F90
+source/api/api_write.F90
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/atom_info.py
+tool/pycharmm/pycharmm/charmm_file.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/dynamics.py
+tool/pycharmm/pycharmm/energy.py
+tool/pycharmm/pycharmm/energy_func.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/minimize.py
+tool/pycharmm/pycharmm/nbonds.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/scalar.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/pycharmm/select.py
+tool/pycharmm/pycharmm/select_atoms.py
+tool/pycharmm/pycharmm/shake.py
+tool/pycharmm/pycharmm/write.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/testUserE.py
+
+Files removed:
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/tests/test_charmm.py
+tool/pycharmm/tests/test_select.py
+
+------------------------------------------------------------------------------
+1.12 Incorrect Qloc array element
+     Developer: Kai Töpfer
+     Institution: University of Basel
+     Date: 11 Jun 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/111
+Git commit: c5355bd210946875ef41a6865c0a5ae77b3bb2d9
+
+Indexing error produces wrong electrostatic potential
+that lead to potential jumps at certain system conformation.
+
+Sample input to reproduce the problem (or testcase):
+Error is intermittent and difficult to reproduce reliably
+(requires specific conformational transitions)
+
+Files Involved:
+source/nbonds/mtpl.F90
+
+------------------------------------------------------------------------------
+1.13 Sccdftb segfault quick fix
+     Developer: Joshua Buckner
+     Institution: University of Michigan
+     Date: 6 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/112
+Git commit: f2b3e36c123952c2218eb8b5644643c4c10cb5a3
+
+sccdftb optimized at O1 max
+allocate some arrays to work around segfault
+
+Sample input to reproduce the problem (or testcase):
+test/c30test/alanine_scc.inp
+
+Files Involved:
+CMakeLists.txt
+source/sccdftbint/sccdftbsrc/eglcao.F
+source/sccdftbint/sccdftbsrc/shift.f
+
+------------------------------------------------------------------------------
+1.14 Fix LJPME with MSLD and BLOCK
+     Developer: Andy Simmonett
+     Institution: NIH
+     Date: 7/8/21
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/113
+Git commit: 11fe3c0ad0036c845ba5de6972b3d7c68963c1f2
+
+The original LJPME implementation in DOMDEC only covered the non-BLOCK case, causing problems for binaries that compiled in LJPME and BLOCK, while activating the latter within a DOMDEC run.  This patch makes the necessary real space fixes in DOMDEC, while also implementing the reciprocal space terms in COLFFT to permit LJPME to be activated in jobs that also use BLOCK.  The LJPME test cases previously submitted assumed that DOMDEC was activated at compile time; this patch also relaxes this requirement.
+
+Sample input to reproduce the problem (or testcase):
+test/c39test/msldtest2.inp
+
+Files Involved:
+source/domdec/enb_core.F90
+source/energy/energy_util.F90
+source/nbonds/colfft.F90
+source/nbonds/colfft_func.F90
+source/nbonds/colfft_func.inc
+source/nbonds/colfft_kernel_precision.inc
+source/nbonds/pme.F90
+test/c45test/ljpme_argon_kappa_sweep.inp
+test/c45test/ljpme_cutoff_continuity_checks.inp
+test/c45test/ljpme_dhfr_energy_test.inp
+test/c45test/ljpme_domdec_solvent_solute.inp
+test/c39test/msldtest2.inp
+
+------------------------------------------------------------------------------
+1.15 Fix plugins for omm 75; fix openmp compile error
+     Developer: Xiping Gong and Josh Buckner
+     Institution: Univeristy of Massachusetts and University of Michigan
+     Date: 14 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/114
+Git commit: b49bff55be61e8aa5026ff4eb98b203700d04b88
+
+1. OpenMM 7.5 is not compatible with our plugins. For OpenMM 7.5, exclusion tiles must be int2 and cannot be ushort2.
+
+2. The GCC implementation of OpenMP throws an error for line 633 of source/nbonds/colfft_func.inc
+
+ 633 | !$omp do schedule(static) reduction(+:energy, virial)
+     |
+Error: reduction variable ‘energy’ is private in outer context
+
+Sample input to reproduce the problem (or testcase):
+1. test/c41test/omm_cphmdtest.inp,
+test/c41test/omm_gbsw_membrane.inp,
+test/c41test/omm_gbswtest.inp,
+test/c46test/omm_gbmvtest.inp,
+2. compile time error
+
+Files Involved:
+1. OpenMM plugin files:
+source/openmm/plugins/gbmv/platforms/cuda/CMakeLists.txt
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.cpp
+source/openmm/plugins/gbmv/platforms/cuda/kernels/gbmv1.cu
+source/openmm/plugins/gbsw/platforms/cuda/CudaGBSWKernels.cpp
+source/openmm/plugins/gbsw/platforms/cuda/kernels/gbsw1.cu
+2. source/nbonds/colfft_func.inc
+
+------------------------------------------------------------------------------
+1.16 Improvements to a pycharmm test script
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 15 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/115
+Git commit: 130c6e009b5e5783af7afc5e8c38d101f77bcae1
+
+some improvements to make running the aldidpep_build.py script easier; for example, directories to read and write from are created if they are missing, etc...
+
+prefx Keys: no change
+
+Files Added: none
+
+Files Modified:
+tool/pycharmm/tests/aldidpep_build.py
+
+Files Removed: none
+
+------------------------------------------------------------------------------
+1.17 Two block fixes for scaling with vdwa and vdwr
+     Developer: Arjan van der Vaart
+     Institution: University of South Florida
+     Date: 16 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/116
+Git commit: 0d778e8d28f898d272eacab14f510c81d724ef9d
+
+Issue in block that Eelec was not scaled properly when using vdwa or vdwr
+Issue in block that vdw scaling was ignored when both vdwa and vdwr are set to the same value
+
+Sample input to reproduce the problem (or testcase): none
+
+Files Involved:
+source/nbonds/enbaexp_subr_expand.inc
+source/nbonds/enbfast.F90
+source/pert/block.F90
+
+------------------------------------------------------------------------------
+1.18 BLaDE: fix botched merge and several bugs
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: Thursday 22 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/117
+Git commit: bdb15a2950060c46208c4b48f16c1aff2ac924ef
+
+Patched in a fix for holonomic constraints and a new hsp90 test case from BLaDE
+Added in absolute harmonic or power law position restraints AND Cleaned up a few bugs in harmonic restraints.
+Fixed a bug with the previous BLaDE merge, fixed a few other random BLaDE bugs, added BLOCK FFIX functionality, added a BLADE MD test case.
+slightly changed blade_msld test case
+added input guard for fbeta, fixed test cases to run with CLB recent changes, added a note on NVE ensemble to blade_md.inp, and wrote a new blade_energy routine that doesn't create superfluous output files.
+
+Sample input to reproduce the problem (or testcase):
+test/c46test/blade_energy.inp
+test/c46test/blade_msld.inp
+test/c46test/blade_md.inp
+
+Files Involved:
+source/blade/src/CMakeLists.txt
+source/blade/src/holonomic/holonomic.cu
+source/blade/src/io/io.cxx
+source/blade/src/msld/msld.cu
+source/blade/src/msld/msld.h
+source/blade/src/restrain/restrain.cu
+source/blade/src/restrain/restrain.h
+source/blade/src/system/coordinates.cxx
+source/blade/src/system/potential.cxx
+source/blade/src/system/potential.h
+source/blade/src/system/selections.cxx
+source/blade/src/system/state.cxx
+source/blade/src/system/structure.cxx
+source/blade/src/system/structure.h
+source/blade/src/update/pressure.cu
+source/blade/test/hsp90/cb7.inp
+source/blade/test/hsp90/input
+source/blade/test/hsp90/minimized.crd
+source/blade/test/hsp90/minimized.psf
+source/blade/test/hsp90/toppar/molecule_custom.prm
+source/blade/test/hsp90/toppar/par_all36_cgenff.prm
+source/blade/test/hsp90/toppar/par_all36m_prot.prm
+source/blade/test/hsp90/toppar/par_water_ions.prm
+source/blade/test/hsp90/variables112.inp
+source/blade_api/blade.F90
+source/blade_api/blade_block.F90
+source/blade_api/blade_main.F90
+source/blade_api/blade_psf.F90
+source/dynamc/dcntrl.F90
+source/energy/eutil.F90
+source/manip/fsshake.F90
+test/c46test/blade_md.inp
+test/c46test/blade_msld.inp
+tool/cmake/blade_cuda_files.cmake
+
+------------------------------------------------------------------------------
+1.19 Fix for several compiler warnings
+     Developer: Bernard Brooks
+     Institution: NIH
+     Date: 27 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/118
+Git commit: f91a4d460e5406081219fdeba55a6b9ce9a26ae1
+
+Removing unfinished (and never will be finished) drude code from from dynamc
+
+dcntrl.F90 and dynamc.F90
+This is straightforward code removal, but it's about 1200 lines of code.  Testcases run with this vestigial code gone.
+
+New long-range C6 reading in the parameter reader.
+
+param_ltm.F90    parmio.F90   update.F90
+This is simply the addition of a long-range c6 coefficient array with flexible specification that is used by LJ-PME codes.
+It allows us to avoid the usual combination rules.
+Or more specifically, it allows us to change the short range terms while preserving our long-range c6 coefficients.
+(e.g. replace the usual 6-12 terms with a double exponential)
+And this gives us more flexibility with the LJ when using the Wennberg mid-range switching method.
+
+Rewrite of the atom selection's   .around.  function.
+
+selcta.F90
+This improves it's speed by more than an order of magnitude.
+The current atom selection test cases continue to run.
+
+simple fixes for some compiler warnings
+
+Sample input to reproduce the problem (or testcase):
+code clean up and compiler warnings
+
+Files Involved:
+CMakeLists.txt
+source/dynamc/consph.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/dynamc/tamd.F90
+source/energy/energym.F90
+source/energy/eutil.F90
+source/gener/update.F90
+source/io/parmio.F90
+source/ltm/fourd_ltm.F90
+source/ltm/param_ltm.F90
+source/manip/fsshake.F90
+source/minmiz/minmiz.F90
+source/minmiz/tnpack.F90
+source/misc/msmmpt.F90
+source/pert/puic.F90
+source/util/selcta.F90
+test/c46test/blade_md.inp
+test/c46test/cpu_cdocker_h_2.inp
+test/data/methanol.ascii
+
+------------------------------------------------------------------------------
+1.20 Warning fixes that are real bugs
+     Developer: Milan Hodoscek
+     Institution: National Institute of Chemistry, Ljubljana, Slovenia
+     Date: July 26, 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/119
+Git commit: 460bb3be2e79074e09f59797bb827303ff62fa58
+
+I found these bugs, which are not related to the warning fixes, but
+are real bugs! So I think they need to be fixed for a and b versions.
+Later on we also take care of the warnings. I already got rid of about
+200 warnings, by introducing the interface to PSNDx routines in
+ltm/parallel_ltm.F90, and implemented the various combinations in the
+machedep/paral1.F90. Then there are few places in the source tree to
+add something like:
+use parallel,only:psnd8
+or
+use parallel,only:psnd4
+or both.
+
+Files involved:
+source/dynamc/dcntrl.F90
+source/flucq/fluqdyn.F90
+source/io/rtfio.F90
+source/misc/pbeq.F90
+
+------------------------------------------------------------------------------
+1.21 Fix two compiler errors for the ljpme build
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 29 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/120
+Git commit: 54b041a390da07906436cee80ea9462fb624ccd8
+
+Compiler error regarding 'call pme' arguments in source/nbonds/dcm.F90
+link time error
+
+Sample input to reproduce the problem (or testcase):
+configure with '--with-ljpme' and then compile
+
+Files Involved:
+source/nbonds/dcm.F90
+source/gener/update.F90
+
+------------------------------------------------------------------------------
+1.22 Pycharmm test updates
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 2 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/121
+Git commit: 3eed5373da2adb6a54d66ac10e2dc04fa5b8cc7c
+
+After updates in the python api, some tests were not running optimally and required slight adjustments.
+
+Sample input to reproduce the problem (or testcase):
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testUserE.py
+
+Files Involved:
+tool/pycharmm/tests/testUserE.py
+tool/pycharmm/tests/data/param19.inp
+tool/pycharmm/tests/data/toph19.inp
+tool/pycharmm/tests/testCardIO.py
+source/minmiz/minmiz.F90
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testUserE.py
+
+------------------------------------------------------------------------------
+1.23 2020 to 2021 charmm toppar updates
+     Developer: Alex MacKerell
+     Institution: University of Maryland, Baltimore
+     Date: 2 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/122
+Git commit: 81a3a2678b92fc523adb8d6808a1cc65df83d9f4
+
+See toppar/toppar_all.history for details.
+
+Prefx keys: no change
+
+Files added: none added
+
+Files modified:
+toppar/drude/drude_toppar_2019.tgz
+toppar/gbsw/radius_gbsw.str
+toppar/par_all36_cgenff.prm
+toppar/par_all36m_prot.prm
+toppar/stream/carb/toppar_all36_carb_glycolipid.str
+toppar/stream/carb/toppar_all36_carb_imlab.str
+toppar/stream/lipid/toppar_all36_lipid_model.str
+toppar/stream/prot/toppar_all36_prot_model.str
+toppar/stream/prot/toppar_all36_prot_modify_res.str
+toppar/top_all22_prot.rtf
+toppar/top_all36_cgenff.rtf
+toppar/top_all36_prot.rtf
+toppar/toppar_all.history
+
+Files Removed:
+toppar/non_charmm/gromacs/charmm36-mar2019.ff.tgz
+toppar/par_all36_prot.prm
+toppar/stream/prot/toppar_all36_prot_c36_d_aminoacids.str
+
+------------------------------------------------------------------------------
+1.24 Summer 2021 bug fixes
+
+Developers:
+Stefan Boresch
+Rick Venable
+Alex MacKerell
+Arjan van der Vaart
+Arnaud Blondel
+Charles Brooks
+Bernard Brooks
+Milan Hodoscek
+Lennart Nilsson
+Josh Buckner
+
+Institutions:
+University of Vienna
+NIH
+Univeristy of Maryland Baltimore
+University of South Florida
+Institut Pasteur
+University of Michigan
+NIH
+The National Institute of Chemistry of Slovenia
+Karolinska Institutet
+University of Michigan
+
+Date: 10 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/123
+Git commit: 848b1a673a80dab4ff78a802e8f3dd10469a489f
+
+1. fix for massive memory leak while reading rtfs
+2. add note to sccdftb to set ulimit to unlimited for stack problems
+3. fix segfault during parmio
+4. require OPENMM_OPENCL_FOUND to build mcbarostat2 OpenCL plugin
+5. fix mc mcener and move link segfaults
+6. fix non 0 charge correction for PME if PMEPLSMA inactive
+7. fix MTS build segfaults during nbonds
+
+Sample input to reproduce the problem (or testcase):
+1. one will be added soon
+2. any sccdftb test with ulimit set low
+3. test/c20test/brbtest.inp
+4. compile time error if OpenMM OpenCL plugin is missing but system has OpenCL
+5. test cases causing this segfault:
+c32test/argc_cbias.inp
+c32test/argc_grid.inp
+c32test/argc_rndm.inp
+c34test/mc_pert_pbc.inp
+c29test/mctest03.inp
+c29test/mctest04.inp
+6. unknown
+7. c20test/brbtest.inp when configured with '-a mts' before compiling
+
+Files Involved:
+1. source/io/rtfio.F90
+2. doc/sccdftb.info
+3. source/io/parmio.F90
+4. source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+5. files edited:
+source/mc/mcener.F90
+source/mc/mcimge.F90
+source/mc/moveln.F90
+6. source/nbonds/pme.F90
+7. source/nbonds/nbonds.F90
+
+------------------------------------------------------------------------------
+1.25 Remove install.com
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 11 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/124
+Git commit: b9735724c3b4ee0f1466e3fc7399450254a42462
+
+Remove deprecated and, in some situations broken, install.com.
+Replace it with a script that prints some helpful information.
+Put the old install.com in tool/ for die-hard fans.
+
+Sample input to reproduce the problem (or testcase): install.com
+
+Files Involved:
+install.com
+
+------------------------------------------------------------------------------
+1.26 Update version numbers
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 11 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/125
+Git commit: bcab0c2fdaf2e23243ca418d87bdc00daa9e6908
+
+Update version number from c46a2 to c47a1 in the CHARMM banner and CMakeLists.txt file.
+
+prefx Keys: no change
+
+Files Added: none
+
+Files Modified:
+CMakeLists.txt
+source/ltm/version_ltm.F90
+
+Files Removed: none
+
+==============================================================================
+[2] c47a2 Change Log
+
+    The following changes were committed from August 15, 2021 through
+February 15, 2022.
+
+------------------------------------------------------------------------------
+2.1 PCA restraints in CHARMM and OpenMM
+Developer: Charles L. Brooks III
+Institution: University of Michigan
+Date: 19 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/126
+Git commit: 061ddd954740e443a72df69e3f48b9c6f0e5566a
+
+PCAHARM positional restraints use a normalized PCA eigenvector (3 x NATOM) to
+project the displacement of the coordinates from the harmonic reference
+onto the PCA. For teh PCAHARM restraints one can add restraints in different
+PCA projected directions by call the command multiple times with an orthoganol
+PCA being added in each case. The form of this restraint is
+
+  EC = sum over selected atoms k(i) * [mass(i)]
+                                    * ((x(i)-refx(i))*pcax(i))**exponent
+
+
+Note: At present this restraint type allows only one set of atoms be restrained
+by the PCA-projected restraints, but as many PCA orghogonal directions as
+desired can be restrained.
+As an example, suppose one has two PCAs that dominate the motion being studied
+for some subset of atoms  and one would like to add harmonic restraints
+on the two PCA displacement directions. The following CHARMM commands would
+achieve this:
+Example:
+
+! read first normalized PCA eigenvector into comparison coordinate sets
+read coor pdb name pca1.pdb ! Note the dot product of these coordinaes with
+                            ! themselves should sum to unity
+! this is unnecessary if coordinates outside of the <atoms> set are already
+! zero.
+scalar xcomp set 0 select .not. <atoms> end
+scalar ycomp set 0 select .not. <atoms> end
+scalar zcomp set 0 select .not. <atoms> end
+
+cons harm pcaharm force 10 select <atoms> end
+
+! read second normalized PCA eigenvector into comparison coordinate sets
+read coor pdb name pca2.pdb ! Note the dot product of these coordinaes with
+                            ! themselves should sum to unity and the
+                           ! dot product PCA1*PCA2 = 0
+! this is unnecessary if coordinates outside of the <atoms> set are already
+! zero.
+scalar xcomp set 0 select .not. <atoms> end
+scalar ycomp set 0 select .not. <atoms> end
+scalar zcomp set 0 select .not. <atoms> end
+
+cons harm pcaharm force 10 select <atoms> end
+
+Note: The restraint energy for this restraint is reported in the energy
+column PCHA and the sike key is pcha.
+
+Files Added:
+test/c47test/omm_pcarestraints.inp
+
+Files Modified:
+doc/cons.info
+source/api/api_cons_harm.F90
+source/energy/ecnstr.F90
+source/energy/ediff.F90
+source/energy/energy.F90
+source/energy/energym.F90
+source/energy/eutil.F90
+source/energy/intere.F90
+source/energy/printe.F90
+source/ltm/cnst_ltm.F90
+source/manip/cstran.F90
+source/openmm/omm_ecomponents.F90
+source/openmm/omm_main.F90
+source/openmm/omm_restraint.F90
+source/pert/epert.F90
+source/pert/icfcnf.F90
+source/pert/icpert.F90
+source/pert/pert.F90
+source/pert/pert_ltm.F90
+
+------------------------------------------------------------------------------
+2.2 fixes: pycharmm title and lingo.charmm_script rewind/backspace
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 27 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/127
+Git commit: 229a288b4cf28e720c6594ffd6f5f98c575db7fc
+
+Compiler and options: --as-library
+
+Command(s) involved (including options):
+pycharmm.write functions
+pycharmm.lingo.charmm_script
+
+There were two bugs fixed here:
+1. each charmm_script run needs a title so that the old charmm routines work correctly.
+2. each charmm_script needs to end in a newline character "\n"
+
+The fixes for (1) appear in source/api/api_eval.F90
+The fixes for (2) appear in tool/pycharmm/pycharmm/script.py
+We add a stub
+tool/pycharmm/tests/testCharmmScript.py
+to help detect these problems.
+
+Sample input to reproduce the problem (or testcase):
+tool/pycharmm/tests/testCharmmScript.py
+
+Files Involved:
+source/api/api_eval.F90
+source/api/api_init.F90
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCharmmScript.py
+
+------------------------------------------------------------------------------
+2.3 initial implementation of pca constraints for pycharmm
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 20 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/128
+Git commit: b8ce83b9c521e566578675b2e75e206901e46f1c
+
+We implement a Fortran API for harmonic pca constraints and a corresponding Python API
+in pycharmm.cons_harm that uses the Fortran API.
+
+Files Added:
+tool/pycharmm/tests/testPcaHarm.py
+
+Files Modified:
+source/api/api_cons_harm.F90
+tool/pycharmm/pycharmm/cons_harm.py
+
+------------------------------------------------------------------------------
+2.4 fix for gpu protein grid generation
+Developer: Yujin Wu
+Institution: University of Michigan
+Date: 16 September 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/129
+Git commit: 303eca148e05ab2410a227fe2b5cc13b358009e4
+
+Platform (Hardware): CUDA and OpenCL platforms
+
+Compiler and options: --with-fftdock
+
+Command(s) involved (including options):
+fftg pgen
+
+There are two errors in GPU protein grid generation.
+
+CCELEC parameters are set to be an integer number for the electrostatic grid calculation.
+The soft-core potential for the VDW grids are incorrect.
+
+Sample input to reproduce the problem (or testcase):
+test/c46test/fftdock.inp
+
+Files Involved:
+source/fftdock/cuda_grid_pot.cu
+source/fftdock/kernels/generateProtGrid.cl
+
+------------------------------------------------------------------------------
+2.5 two features for eef1/imm1
+Developer: Themis Lazaridis
+Institution: CUNY
+Date: 10 November 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/130
+Git commit: 0c7b59d33e140a90fe7a4d9be1e7ed46820d0bde
+
+This incorporates two additions to the EEF1/IMM1 module:
+1. the ability to use a linear (instead of sigmoidal) switching function
+   for buried ionizable side chains
+2. the use of approximate analytical solutions to the Poisson-Boltzmann equation
+for curved membranes (better than the flat-membrane approximation that was used up to now)
+
+Files Added:
+test/c47test/testimm1-curv-2.inp
+test/data/testmaga.crd
+
+Files Modified:
+doc/eef1.inf
+source/misc/eef1.F90
+test/c43test/testimm1-curv.inp
+
+------------------------------------------------------------------------------
+2.6 Fall 2021 pycharmm updates
+Developer: Josh Buckner, Charlie Brooks, and Thanh Lai
+Institution: University of Michigan
+Date: 17 November 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/131
+Git commit: 3bd9fc7cfa6cf314f5487ed0311e3d7ab948fd59
+
+Pycharmm changes:
+- card io
+- minimization using OpenMM
+- improved options for read and write functions
+- sending atom selections to charmm for use in lingo.charmm_script
+- store and update atom info for each SelectAtom instance on the python side
+- improve cons_harm options
+- switch dynamics.run to keyword arguments from dictionary
+- switch minimize funcs to keyword arguments from dictionary
+- add psf.get_charges
+- implement most of charmm scalar functionality
+- rework OpenMM block to be pycharmm friendly (Charlie Brooks)
+- add select.around and select.whole_residues (Thanh Lai)
+- improve docstring documentation
+- allow users to easily implement command classes based on lingo.charmm_script
+
+Files added:
+tool/pycharmm/tests/data/water_cube.crd
+tool/pycharmm/tests/data/water_cube.psf
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/test_select_atoms.py
+
+Files modified:
+.gitignore
+doc/openmm.info
+source/api/api_coor.F90
+source/api/api_init.F90
+source/api/api_psf.F90
+source/api/api_read.F90
+source/api/api_scalar.F90
+source/api/api_select.F90
+source/api/api_write.F90
+source/openmm/omm_block.F90
+source/openmm/omm_nonbond.F90
+source/openmm/omm_switching.F90
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/atom_info.py
+tool/pycharmm/pycharmm/charmm_file.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/dynamics.py
+tool/pycharmm/pycharmm/energy.py
+tool/pycharmm/pycharmm/energy_func.py
+tool/pycharmm/pycharmm/generate.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/minimize.py
+tool/pycharmm/pycharmm/nbonds.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/scalar.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/pycharmm/select.py
+tool/pycharmm/pycharmm/select_atoms.py
+tool/pycharmm/pycharmm/shake.py
+tool/pycharmm/pycharmm/write.py
+tool/pycharmm/setup.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/testUserE.py
+
+Files removed:
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/tests/test_charmm.py
+tool/pycharmm/tests/test_select.py
+
+------------------------------------------------------------------------------
+2.7 Lonepair with openmm, NVTX CPP guards, stub Coordinates python class
+Developer: Charlie Brooks (1) and Josh Buckner (2 & 3)
+Institution: University of Michigan
+Date: 15 Dec 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/132
+Git commit: b85973db59755b6ebaf1473438adc41a13dcb8da
+
+1. Lonepair functionality has been added to charmm's openmm subsystem.
+2. Added --with-nvtx option and cpp guards to protect blade's nvtx function calls.
+This allows blade to compile without domdec_gpu. Previously there were compiler errors
+without domdec_gpu
+3. Added a Coordinates class that can update charmm and be updated from charmm.
+This is intended as a jumping off point to eventually encapsulate
+the functionality of charmm's coor command.
+
+Prefx keys: none added; however, the cpp macro HAS_NVTX is being used
+
+Files added:
+tool/pycharmm/tests/testCoordinates.py
+
+Files modified:
+source/openmm/omm_bonded.F90
+CMakeLists.txt
+source/blade_api/dynamics.cxx
+source/api/api_coor.F90
+source/openmm/omm_bonded.F90
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/tests/testCoordinates.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testPcaHarm.py
+tool/pycharmm/tests/testUserE.py
+
+------------------------------------------------------------------------------
+2.8 lite build fix
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 4 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/133
+Git commit: 6cb65ec39f37b2e19fead0e227aa565909577942
+
+Compiler and options: configure option --lite
+Command(s) involved (including options): compile time error
+
+When compiled after configuring with --lite, the pref.dat keyword COMP2 is left out.
+Some new features of source/api/api_coor.F90 depend on the presence of COMP2.
+The fix is to wrap these new features in #if KEY_COMP2 CPP guards.
+
+Sample input to reproduce the problem (or testcase):
+compile after giving configure --lite
+
+Files Involved:
+source/api/api_coor.F90
+
+------------------------------------------------------------------------------
+2.9 Fixes for the compiler warnings for PSND calls
+Developer: Milan Hodoscek
+Institution: National Institute of Chemistry, Ljubljana, Slovenia
+Date: January 7, 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/134
+Git commit: d4e9e7b9cb2b0fd68b03c560853d953ef40d7847
+
+As of CHARMM c47a1 there are over 250 compiler warnings regarding the
+PSND{C,4,8} calls, using recent gfortran compiler.
+This patch is to fix all the warnings to calls of PSND{C,4,8} routines.
+It works through F90 interface statements, basically defining the 3
+generic (overloading) PSND routines, so the changes to existing calls
+are minimal, or none.
+
+Files involved:
+source/adumb/umb.F90
+source/correl/corrio.F90
+source/dynamc/consph.F90
+source/dynamc/cvio.F90
+source/dynamc/dynio.F90
+source/emap/emapsubs.F90
+source/energy/multe.F90
+source/energy/phmd.F90
+source/flucq/fluqdyn.F90
+source/gener/genpsf.F90
+source/gener/hbonds.F90
+source/io/aceio.F90
+source/io/parmio.F90
+source/io/psfres.F90
+source/io/rtfio.F90
+source/ltm/parallel_ltm.F90
+source/machdep/paral1.F90
+source/manip/cstran.F90
+source/manip/intcor.F90
+source/manip/scalar.F90
+source/manip/solvmap.F90
+source/misc/grid_dock.F90
+source/misc/mmfp.F90
+source/misc/noe.F90
+source/misc/pbeq.F90
+source/misc/sbound.F90
+source/misc/scpism.F90
+source/misc/xray.F90
+source/nbonds/etable.F90
+source/nbonds/mtp.F90
+source/quantum/qmset.F90
+source/quantum/qub.F90
+source/rxncor/path.F90
+source/util/title.F90
+source/vibran/redbas.F90
+source/vibran/vibio.F90
+
+------------------------------------------------------------------------------
+2.10 Implement double exponential potential (DE) into non-bond calculation.
+Developer: Xiongwu Wu
+Institution:  NIH, NHLBI
+Date:  1/15/2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/135
+Git commit: 3e9bd5c106a611cd860b17bab2a8dc4587035a7c
+
+Double exponential potential for VDW interaction is implemented in nonbonded energy calculation routines, which can be turned on with key word DBEXP in NBONd command.
+
+Files Added:
+c48test/dbexp_nbond.inp
+
+Files Modified:
+test/c46test/dbexp_ips.inp
+c47test/dbexp_nbond.inp
+changed doc/nbonds.info
+source/ltm/inbnd_ltm.F90
+source/misc/hbuild.F90
+source/nbonds/enbaexp.F90
+source/nbonds/enbaexp2.inc
+source/nbonds/enbaexp_expand.inc
+source/nbonds/enbaexp_subr2.inc
+source/nbonds/enbaexp_subr_expand.inc
+source/nbonds/enbfast.F90
+source/nbonds/enbips.F90
+source/nbonds/enbond.F90
+source/nbonds/enbonda.F90
+source/nbonds/enbonda5.inc
+source/nbonds/enbonda_expand.inc
+source/nbonds/nbutil.F90
+
+------------------------------------------------------------------------------
+2.11 Changes needed to support new version of GAMESS (version 20210930R2)
+Developer: Milan Hodoscek
+Institution: National Institute of Chemistry, Ljubljana, Slovenia
+Date:  1/15/2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/136
+Git commit: 03a83a6a89c49f0813341357c09def1594a1a62f
+
+Some changes are needed in CHARMM to support the new version of GAMESS
+from September 30, 2021. There is new information also in the doc/gamess.info file.
+
+Files involved:
+CMakeLists.txt
+doc/gamess.info
+source/gamint/CMakeLists.txt
+source/gamint/ddi.F90
+test/cquantumtest/mndo97.inp
+test/data/ala.str
+test/parallel-tests
+tool/gmscomp
+
+------------------------------------------------------------------------------
+2.12 Fixes for the psnd4 and psnd8 generic routines
+Developer: Milan Hodoscek
+Institution: National Institute of Chemistry, Slovenia
+Date: 17 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/137
+Git commit: f20b69c5b3d5c918e3baa8d8db89fb898adffadb
+
+Compiler and options: parallel builds using mpi
+
+Fixes for the psnd4 and psnd8 generic routines. Because the two and
+more dimensional arrays are not supported some of the routines have to
+be used directly and not through the interface. This will probably
+change in the future, because the compilers might become more strict.
+
+Sample input to reproduce the problem (or testcase):
+Compile errors with '--with-gamus', '--with-mndo97', and '--with-stringm'
+
+Files Involved:
+source/gamus/gamus.F90
+source/gamus/gmmutil.F90
+source/io/parmio.F90
+source/ltm/parallel_ltm.F90
+source/machdep/paral1.F90
+source/mndint/qm1_diagonalization_module.F90
+source/stringm/cv_common.F90
+source/stringm/ftsm.F90
+source/stringm/ftsm_compute.F90
+source/stringm/ftsm_connect.F90
+source/stringm/ftsm_rep.F90
+source/stringm/ftsm_rex.F90
+source/stringm/ftsm_stats.F90
+source/stringm/ftsm_util.F90
+source/stringm/ftsm_voronoi.F90
+source/stringm/ftsmv2_compute.F90
+source/stringm/sm0k.F90
+source/stringm/smcv.F90
+source/stringm/smcv_master.F90
+
+------------------------------------------------------------------------------
+2.13 Fixes for traj timestep field in ps instead of AKMA
+Developer: Rick Venable
+Institution: NIH
+Date: 18 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/138
+Git commit: 30ea561f353ae7a1a9a499623e66a6d15cbf580c
+
+Added keywords TSET, RPICO, WPICO to read/write DELTA in ps units
+Intended for import/export when timestep field is ps, or trashed.
+Keywords parsed globally via TRJSPC.
+TRAJ WRIT will now write field in AKMA, unless WPICO flag used.
+RPICO will read files from e.g. vmdtools, convert timestep to AKMA.
+TSET expects a real value to follow, in picoseconds
+Pressure tensor output via IUPTEN modified, added IPTFRQ keyword to
+specify the save frequency; supported in LEAP/CPT and VV2/TPCONTROL
+
+Files Involved:
+doc/corman.info
+doc/correl.info
+doc/corsol.info
+doc/dynamc.info
+doc/intcor.info
+doc/nmr.info
+doc/pressure.info
+doc/rdfsol.info
+doc/tpcntrl.info
+doc/vibran.info
+source/dynamc/cvio.F90
+source/dynamc/dynamvv2.F90
+source/dynamc/dynutil.F90
+source/dynamc/tpcontrol.F90
+source/io/trajio.F90
+source/ltm/reawri_ltm.F90
+test/c24test/nptdyn.inp
+test/c25test/hba1.inp
+test/c31test/swm4_liquid.inp
+test/c47test/trjdelta.inp
+test/triage.csh
+
+------------------------------------------------------------------------------
+2.14 Add vswitch to BLaDE
+Developer: Charles L. Brooks III
+Institution: University of Michigan
+Date: 20 January 2022
+Version: c47a1
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/139
+Git commit: 445b35e3c53bd96e348270bd56abbbc03be50d7a
+
+Now BLaDE will implement energy options vswitch and vfswitch.
+
+Files Added: test/c47test/blade_switch.inp
+
+Files Modified:
+source/blade/src/bonded/pair.cu
+source/blade/src/msld/msld.cu
+source/blade/src/nbdirect/nbdirect.cu
+source/blade/src/run/run.cu
+source/blade/src/run/run.h
+source/blade_api/blade.F90
+source/blade_api/blade_options.F90
+source/blade_api/dynamics.cxx
+
+------------------------------------------------------------------------------
+2.15 Fix RXSGLD test case
+Developer: Dan Roe
+Institution: NIH
+Date: 31 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/140
+Git commit: f2a5aa9de1d0744434cc027f20191ff8d0b445df
+
+The current RXSGLD test case reference values were generated without the '-prevclcg' flag (causing the test to fail when run with test.com). Updated the reference values for '-prevclcg'.
+
+Files involved: test/c36test/rxsgld.inp
+
+------------------------------------------------------------------------------
+2.16 Bug fixes for CDOCKER on OpenCL platform and add pyCHARMM CDOCKER function
+Developer: Yujin Wu & Joshua Buckner
+Institution: University of Michigan, Ann Arbor
+Date: 02/01/2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/141
+Git commit: 190df32edd157460a08ae23be68736ec1b1fca1f
+
+Adds CDOCKER for OpenCL and for pyCHARMM. Fixes grid generation bugs on the OpenCL platform.
+
+Files Added:
+source/api/api_grid.F90
+source/fftdock/ocl_batch_fft.cpp
+source/fftdock/ocl_grid_lig.cpp
+tool/cmake/FindclFFT.cmake
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/pycharmm/grid.py
+tool/pycharmm/tests/data/benzene.pdb
+tool/pycharmm/tests/data/benzene.rtf
+tool/pycharmm/tests/data/benzene_read.str
+tool/pycharmm/tests/data/t4.pdb
+tool/pycharmm/tests/data/t4.psf
+tool/pycharmm/tests/testCDOCKER.py
+tool/pycharmm/tests/testOMMD.py
+tool/pycharmm/tests/toppar/fftdock_c36prot_cgenff_probes.txt
+tool/pycharmm/tests/toppar/par_all36_cgenff.prm
+tool/pycharmm/tests/toppar/par_all36m_prot.prm
+tool/pycharmm/tests/toppar/probes.prm
+tool/pycharmm/tests/toppar/probes.rtf
+tool/pycharmm/tests/toppar/top_all36_cgenff.rtf
+
+Files Modified:
+CMakeLists.txt
+source/api/api_param.F90
+source/energy/energy.F90
+source/energy/intere.F90
+source/fftdock/cuda_grid_pot.cu
+source/fftdock/fftdock.F90
+source/fftdock/kernels/conjMult.cl
+source/fftdock/kernels/correctEnergy.cl
+source/fftdock/kernels/generateLigGrid.cl
+source/fftdock/kernels/sumGrids.cl
+source/fftdock/ocl_grid_pot.cpp
+source/fftdock/openmm_dock.F90
+source/mc/mcener.F90
+source/misc/genetic.F90
+source/misc/grid_dock.F90
+source/opencl/ocl_util.cpp
+source/opencl/ocl_util.h
+source/opencl/opencl_main.F90
+test/c47test/cpu_cdocker_h_2.inp
+test/c47test/openmm_dock_h.inp
+test/data/grid_3ptb_h.ascii
+tool/cmake/cxx_files.cmake
+tool/cmake/fftdock_cuda_files.cmake
+tool/cmake/fortran_files.cmake
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/pycharmm/param.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/tests/toppar/top_all36_prot.rtf
+rename source/fftdock/GPULigGrid.cu to source/fftdock/cuda_grid_lig.cu
+rename source/fftdock/batchFFT.cu to source/fftdock/cuda_batch_fft.cu
+
+------------------------------------------------------------------------------
+2.17 Fixes to compile charmm on apple m1 machines
+Developer: Thanh Lai, Yujin Wu, Charlie Brooks, and Josh Buckner
+Institution: University of Michigan
+Date: 4 February 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/142
+Git commit: 194e4269e16b1d2996ee1367d16998a8611ef97b
+
+Platform (Hardware): Apple M1
+Operating System: MacOS
+Command(s) involved (including options): compile time problem
+
+The clang compiler suite does not accept -march=native on Apple M1 platforms.
+Header files for some versions of OpenMM's CPU platform contain Intel intrinsics that do not compile on Apple M1 platforms.
+
+Files Involved:
+CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+tool/cmake/omm_flags_test.cpp
+
+------------------------------------------------------------------------------
+2.18 More PSND4,PSND8 fixes for corrio.F90 and grid_dock.F90
+Developer: Milan Hodoscek
+Institution: National Institute of Chemistry, Slovenia
+Date: 5 February 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/143
+Git commit: 57b6ceea94a5924e214af753a71d4fdd2327b3a2
+
+There were some wrong argument specifications to PSND routines.
+Tested with test.com M 4 gnu
+
+Files involved:
+source/correl/corrio.F90
+source/misc/grid_dock.F90
+
+------------------------------------------------------------------------------
+2.19 AUTOGEN and other enhancements from BRB
+Developer: Bernard R. Brooks, Daniel R. Roe
+Institution: NHLBI/NIH
+Date: 25 February 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/145
+Git commit: cd1bdeef04e09a683fa839b1d1ccb2b11c327668
+
+Autogeneration in CHARMM has been overhauled with many new RTF options and PSF features. Also Crystal code enhancements, important PSF/RTF IO changes, and some miscellaneous other changes (see 'New features:').
+
+New features:
+
+1. Autogeneration overhaul
+
+New RTF commands: LINEar, NOANgle, NODIhedral
+
+New RTF keywords: ...many...  see io.info(RTF File format::) and struct.info(Autogen::)
+
+Atom selection is now allowed for autogenerate. Elements involving any unselected atoms, are protected from change. This also speeds up the GENErate command (now only new segment atoms are selected).
+
+New autogeneration arrays added to the PSF.
+
+This is a basically list of specific angles and dihedrals to be added or deleted after running autogen, (either via the AUTOgen command, or as part of the PATCh or GENErate process). For example, the LINEar command adds angles to be deleted (with associated dihedrals). Autogen PSF atom codes are also available to the SCALar command (can examine or edit), allowing even greater control over the autogenerate process (allows changing an atom's autogen code). For example, setting an atom's code to "96" will prevent autogen from changing any of its angles and dihedrals. NOTE: These new arrays are NOT needed for energy computation, and do not need to be communicated to GPUs.
+
+NEW RULE: Sorting angles and dihedrals, and removing duplicates, is now the default (user can suppress). Trying to create duplicates results in a warning message (some old testcases have such warnings now). Trying to delete an angle or dihedral via autogen that doesn't exist, also generates a warning. The new sorting changes some testcase outputs, but not the energies.
+
+NEW RULE: The AUTOgen command in the RTF reader ONLY affects RESI and PRES read after that command. In other words, it sets the default for residues that follow.  A file may have more then one AUTOgen command. An appended RTF need not match the original RTF, but if not specified, there is a warning. In the new autogen code, order of commands is important when reading the RTF. I added a two level 1 warnings to help future users with this change.
+
+New io.info text:
+
+The keywords ANGLes, NOANgles, DIHEdrals, NODIhedrals, and OFF are now local flags and apply only to subsequent RESI and PRES commands.  The order is important. There may be more than one AUTOgen command, allowing turning on and off autogeneration for different sets of residues and patches.
+
+Image autogenerate added, for when image atoms are bonded to primary atoms. Image atom autogeneration significantly extended for weird (non-biopolymer) materials.
+
+2. Crystal code enhancement
+
+Crystal image operation name changed to reflect actual image operation (the old C001, C002... style names are still available with an option). Also, image transformation names extended to 8 characters. For example, this:
+
+GROUP   45 OPERATED ON BY TRANSFORMATION C016
+
+becomes:
+
+GROUP   45 OPERATED ON BY TRANSFORMATION Z0Z0P1R1
+
+You now know that the group went out of the bottom of the unit cell without rotation.
+
+Extra symmetry related bonds are now added to the PSF at the end of the bond list (but not used for energy). These are used for image angle and dihedral autogenerating, and also for atom selections. The .BONDED. atom selection now allows all symmetry related image bonds to be considered.
+
+3. Important I/O changes
+
+Read, write and print PSF changes. Binary gone. Formats are enhanced, but backwards compatible. Autogeneration elements added at the end of the PSF file (other programs may ignore). New FULL keyword added to PRINT PSF, and XPLOR format is now the default (unless no param file).
+
+New binary RTF file format.  This is designed to greatly speed up charmm_gui type of runs, where now dozens of stable rtf files are appended with rather slow parsing code. Now all of that can be quickly done with a single binary read.
+
+4. Other changes
+
+New CLEAr command. Currently only "CLEAR RTF" is supported. More will be added, as deemed useful.
+
+New "ALL" option for the DELETE command. This only deletes an element if all atoms are selected and works with single atom selection only. Also fixed minor bug for deleting CMAP elements.
+
+Other minor bugs fixed (fourd_ltm, mcmini, delete command,...).
+
+The output of every nearly testcase has changed in some way, sometimes with many changes. In some cases, I needed to modify the input file to preserve an obsolete function, or override new defaults (e.g. autogen after PATCH command is new default).
+
+For example, some testcases have duplicate angles or duplicate dihedrals, and to preserve that, input file changes were necessary.  Lots of testcases have new warnings.
+
+prefx Keys: None.
+
+Files Added:
+test/c47test/alpha_infinite.inp
+test/c47test/autogen_backwards.inp
+test/c47test/autogen_psf.inp
+test/c47test/autogen_rtf.inp
+test/c47test/graphene.inp
+test/c47test/graphene_weird.inp
+test/c47test/nanomaterial.inp
+
+Files Modified:
+doc/crystl.info
+doc/drude.info
+doc/images.info
+doc/io.info
+doc/lonepair.info
+doc/scalar.info
+doc/select.info
+doc/struct.info
+source/api/api_generate.F90
+source/api/api_psf.F90
+source/api/api_read.F90
+source/charmm/miscom.F90
+source/dynamc/lonepair.F90
+source/emap/emapsubs.F90
+source/gener/genpsf.F90
+source/gener/makphi.F90
+source/gener/modpsf.F90
+source/gener/psfsum.F90
+source/gener/update.F90
+source/gukint/gukini.F90
+source/image/crystal.F90
+source/image/image_module.F90
+source/image/images.F90
+source/image/imagio.F90
+source/image/upimag.F90
+source/image/upimag_util.F90
+source/io/mainio.F90
+source/io/psfres.F90
+source/io/rtfio.F90
+source/ltm/dimens_ltm.F90
+source/ltm/psf_ltm.F90
+source/manip/corman.F90
+source/manip/scalar.F90
+source/mc/mcmini.F90
+source/misc/freene_calc.F90
+source/misc/mrmd.F90
+source/misc/testch.F90
+source/mndint/mndini.F90
+source/mscale/mscale.F90
+source/nbonds/grape.F90
+source/nbonds/nbexcl.F90
+source/nbonds/nbonds.F90
+source/quantum/addlnat.F90
+source/quantum/qmset.F90
+source/sccdftbint/sccdftbini.F90
+source/shapes/shapes.F90
+source/util/matrix.F90
+source/util/selcta.F90
+test/c20test/constest.inp
+test/c20test/djstest.inp
+test/c20test/hbuildst2.inp
+test/c20test/maatest.inp
+test/c20test/psftest.inp
+test/c20test/rtftest.inp
+test/c20test/tipstest.inp
+test/c20test/vibran.inp
+test/c22test/block2.inp
+test/c22test/ewh2oderiv.inp
+test/c22test/ewh2oexcl.inp
+test/c22test/exsg.inp
+test/c23test/nose2.inp
+test/c24test/bcdtest.inp
+test/c24test/block3.inp
+test/c24test/dyn4dtest.inp
+test/c30test/gbmv.inp
+test/c35test/qmmm_normal_modes.inp
+test/c36test/block_hybh.inp
+test/c36test/block_hybh_ew.inp
+test/c36test/msld_test1.inp
+test/c37test/domdec_dmcons.inp
+test/c37test/quasi-pca.inp
+test/c37test/valbond.inp
+test/c38test/omm_switch14.inp
+test/c41test/msld_test2.inp
+test/cbenchtest/ensem/R3
+test/test.com
+toppar/cheq/top_all30_cheq_prot.inp
+toppar/non_charmm/top_amber_cornell.inp
+toppar/non_charmm/top_bms_dec03.inp
+toppar/non_charmm/top_opls_aa.inp
+toppar/non_charmm/top_opls_aam.inp
+toppar/non_charmm/toppar_chloroform_dh.str
+toppar/non_charmm/toppar_water_ions_spc.str
+toppar/non_charmm/toppar_water_ions_spc_e.str
+toppar/non_charmm/toppar_water_ions_tip3p_pme_b.str
+toppar/non_charmm/toppar_water_ions_tip3p_pme_f.str
+toppar/non_charmm/toppar_water_ions_tip4p.str
+toppar/non_charmm/toppar_water_ions_tip4p_2005.str
+toppar/non_charmm/toppar_water_ions_tip4p_ew.str
+toppar/non_charmm/toppar_water_ions_tip5p.str
+toppar/non_charmm/toppar_water_ions_tip5p_ew.str
+toppar/rush/top_rush_058.inp
+toppar/silicates/toppar/top_silicates.inp
+toppar/stream/carb/toppar_all36_carb_glycolipid.str
+toppar/stream/carb/toppar_all36_carb_glycopeptide.str
+toppar/stream/carb/toppar_all36_carb_imlab.str
+toppar/stream/carb/toppar_all36_carb_model.str
+toppar/stream/cphmd/protpatch_protein_toppar36.str
+toppar/stream/lipid/toppar_all36_lipid_bacterial.str
+toppar/stream/lipid/toppar_all36_lipid_cardiolipin.str
+toppar/stream/lipid/toppar_all36_lipid_cholesterol.str
+toppar/stream/lipid/toppar_all36_lipid_detergent.str
+toppar/stream/lipid/toppar_all36_lipid_ether.str
+toppar/stream/lipid/toppar_all36_lipid_inositol.str
+toppar/stream/lipid/toppar_all36_lipid_miscellaneous.str
+toppar/stream/lipid/toppar_all36_lipid_model.str
+toppar/stream/lipid/toppar_all36_lipid_sphingo.str
+toppar/stream/lipid/toppar_all36_lipid_yeast.str
+toppar/stream/misc/toppar_dum_noble_gases.str
+toppar/stream/misc/toppar_ions_won.str
+toppar/stream/na/toppar_all36_na_model.str
+toppar/stream/na/toppar_all36_na_modifications.str
+toppar/stream/na/toppar_all36_na_nad_ppi.str
+toppar/stream/na/toppar_all36_na_reactive_rna.str
+toppar/stream/prot/toppar_all36_prot_aldehydes.str
+toppar/stream/prot/toppar_all36_prot_arg0.str
+toppar/stream/prot/toppar_all36_prot_heme.str
+toppar/stream/prot/toppar_all36_prot_model.str
+toppar/stream/prot/toppar_all36_prot_na_combined.str
+toppar/stream/prot/toppar_all36_prot_pyridines.str
+toppar/tamdfff/top_all22_prot_cmap.ahbb4.inp
+toppar/top_all36_carb.rtf
+toppar/top_all36_cgenff.rtf
+toppar/toppar_water_ions.str
+
+Files Removed: none
+
+==============================================================================
+[3] c47b1 Change Log
+
+     At the 2022 CHARMM meeting (Harvard, July 22-24, 2022),
+we decided to release CHARMM c47b1 incorporating enhancements and fixes
+from the developmental c47a1 and c47a2 versions into the stable version.
+
+The c47b1 release includes the following enhancements and fixes from the
+developmental versions c47a1 and c47a2 during the development period of
+August 15, 2021 through August 15, 2022. These have been added to the
+stable version c46b2 to create the stable version c47b1.
+
+3.1 Ips for DOMDEC GPU
+    Developer : Xiongwu Wu, Samar Samarjeet, and Bernard R. Brooks, NIH, NHLBI
+    Date : 8/3/2018
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/19
+Git commit: 3948db809
+
+The 3D IPS method is implemented to work with DOMDEC_GPU to achieve high scaling for massive parallel computing on GPU.
+
+Files Modified:
+source/domdec_gpu/CudaDirectForce14_util.h
+source/domdec_gpu/CudaDirectForceKernels.cu
+source/domdec_gpu/CudaDirectForceKernels.h
+source/domdec_gpu/CudaDirectForceTypes.h
+source/domdec_gpu/CudaDirectForce_util.h
+source/domdec_gpu/CudaPMEDirectForceBlock.cu
+source/domdec_gpu/CudaPMEDirectForce.cu
+source/domdec/enbfix14.src
+source/domdec/enbxfast.src
+source/energy/energy.src
+source/nbonds/enbips.src
+
+New/Modified Documentation: doc/domdec.doc
+New/Modified Testcase: test/c43test/domdec_ips_gpu.inp
+
+3.2 EXTBOND
+    Developer: Pierre-Andre Cazade, Marco Pezzella, Debasish Koner, Markus Meuwly, University of Basel
+    Date: 16/05/2019
+
+Merge requests:
+https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/2
+https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/4
+https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/5
+
+Git commits:
+c037a6c16fc620493d00d679b45f1a8684a899a5
+c5d5305b5a1c853350e78aa26b0c485e51e935bd
+b506e8a82d99046f7e9379ae8439c63413f4078e
+d06d312ed70cdce890cdb566c34b9f9b743b1e1e
+
+This module allows the user to modify/introduce bonds during a
+CHARMM run, without modifying the existing PSF file. It can be done using the
+classic Harmonic Oscillator formalism or more sofisticated description, i.e. a
+quartic potential, the MM3 force field, the Morse potential and various kernels
+representation. Analytical expression for the forces are included.
+
+Files Added:
+             doc/extbond.doc
+	     source/energy/extbond.src
+             test/c44atest/xtbd_nma.inp
+             test/data/xtbd_pes.csv
+             test/data/xtbd_nma.para
+
+Files Modified:
+                source/energy/energy.src
+                source/util/string.src
+                source/charmm/charmm_main.src
+
+3.3 umich brooks lab updates -- feb 2020
+    Developer: Xiping Gong, Charles L. Brooks III, Josh Buckner
+    Institution: UMass, UMich, UMich
+    Date: 15 February 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/51
+Git commit: 7517c9958007809dc3ce80b52f6e8d6d327af991
+
+Xiping Gong: GBMV plugin for OpenMM
+Please look at the README.md file in the plugins/gbmv directory
+for the details.
+an OpenMM plugin that accelerates the GBMV2/SA implicit solvent model using the GPU
+
+Tutorials: Please look at these examples for GBMV2/SA calculations
+
+Credits: This plugin is based on the implementation of GPU-GBSW OpenMM plugin,
+and is currently maintained by Jianhan Chen group.
+This work was supported by National Science Foundation (MCB 1817332).
+
+Charles L. Brooks III: softcore for OpenMM
+the soft core potentials, to eliminate endpoint problems
+in TI/TP has been add via the Hayes et al paper JPC B (2017)
+
+Josh Buckner: Compiling OpenMM plugins with newer versions of OpenMM
+may require '-std=c++11' and flags for avx instructions.
+
+prefx Keys: none added
+
+Files Added:
+source/openmm/omm_gbmv.F90
+source/openmm/omm_mses.F90
+source/openmm/plugins/gbmv/CMakeLists.txt
+source/openmm/plugins/gbmv/README.md
+source/openmm/plugins/gbmv/openmmapi/GBMVForce.cpp
+source/openmm/plugins/gbmv/openmmapi/GBMVForce.h
+source/openmm/plugins/gbmv/openmmapi/GBMVForceImpl.cpp
+source/openmm/plugins/gbmv/openmmapi/GBMVForceImpl.h
+source/openmm/plugins/gbmv/openmmapi/GBMVKernels.h
+source/openmm/plugins/gbmv/openmmapi/OpenMMGBMV.h
+source/openmm/plugins/gbmv/openmmapi/sfmt/SFMT.h
+source/openmm/plugins/gbmv/platforms/cuda/CMakeLists.txt
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernelFactory.cpp
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernelFactory.h
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernelSources.cpp.in
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernelSources.h.in
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.cpp
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.h
+source/openmm/plugins/gbmv/platforms/cuda/EncodeCUDAFiles.cmake
+source/openmm/plugins/gbmv/platforms/cuda/kernels/gbmv1.cu
+source/openmm/plugins/gbmv/platforms/cuda/kernels/vectorOps.cu
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVCWrapper.cpp
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVCWrapper.h
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVFortranModule.f90
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVFortranWrapper.cpp
+test/c44test/omm_softcore.inp
+test/c45test/omm_gbmvtest.inp
+test/data/contact.list
+test/data/gb1p_hybrid.crd
+test/data/gb1p_hybrid.psf
+test/data/go_gb1p.param
+test/data/go_gb1p.top
+test/data/par_all22new_prot.inp
+test/data/radii_c36gbmvop.str
+test/data/top_all22new_prot.inp
+tool/cmake/omm_avx_test.cpp
+
+Files Modified:
+CMakeLists.txt
+doc/block.info
+doc/openmm.info
+source/charmm/charmm_main.F90
+source/energy/energy.F90
+source/energy/gbmvmodule.F90
+source/ltm/inbnd_ltm.F90
+source/minmiz/minmiz.F90
+source/openmm/omm_block.F90
+source/openmm/omm_bonded.F90
+source/openmm/omm_ctrl.F90
+source/openmm/omm_nbopts.F90
+source/openmm/omm_nonbond.F90
+source/openmm/omm_switching.F90
+source/openmm/openmm_api.F90
+source/openmm/plugins/gbsw/CMakeLists.txt
+source/pert/block.F90
+source/pert/block_ltm.F90
+test/c34test/lookup.inp
+test/c44test/domdec_minimize.inp
+test/data/heh2.csv
+tool/cmake/fortran_files.cmake
+
+3.4 Xiping Gong's OpenMM Improvements
+    Developer: Xiping Gong
+    Institution: UMass
+    Date: 20 Feb 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/53
+Git commit: c51c25b22f8961fff22697987034b748fd47a355
+
+Improvements to OpenMM plugins and dynamics with OpenMM:
+
+GBMV2/SA Plugin:
+Add the switch function for GB energy calculations.
+GBMV2/SA ignore the contributions from these atoms with
+zero atomic input radii.
+
+Temperature in the omm dynamic simulations:
+when changing temperature, the expensive action tearing down the
+OpenMM context will be avoided, and the existing new_temperature
+subroutine will update the temperature with a cheaper cost.
+
+Files Modified:
+source/ltm/inbnd_ltm.F90
+source/openmm/omm_bonded.F90
+source/openmm/omm_ctrl.F90
+source/openmm/omm_dynopts.F90
+source/openmm/omm_gbmv.F90
+source/openmm/omm_main.F90
+source/openmm/omm_mses.F90
+source/openmm/omm_nbopts.F90
+source/openmm/omm_switching.F90
+source/openmm/plugins/gbmv/openmmapi/GBMVForce.cpp
+source/openmm/plugins/gbmv/openmmapi/GBMVForce.h
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.cpp
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.h
+source/openmm/plugins/gbmv/platforms/cuda/kernels/gbmv1.cu
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVCWrapper.cpp
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVCWrapper.h
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVFortranModule.f90
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVFortranWrapper.cpp
+test/data/contact.list
+
+3.5 implementation of triakern triatomic kernel module
+    Developer: Marco Pezzella, Debasish Koner, Markus Meuwly
+    Institution: University of Basel
+    Date: 10 December 2019
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/38
+Git commit: 49b7d77f65410ff28922305013f2dffa31c87f08
+
+TRIAKERN provides additional potential forms for three atomic systems, that substitutes the bond/bond/bending terms with three body potential derived from Kernels.
+
+prefx Keys: TRKN
+
+Files Added:
+source/energy/triakern.F90
+test/c45a1/triakern_heh2.inp
+test/data/heh2.csv
+doc/triakern.info
+
+Files Modified:
+source/energy/energy.F90: Added lines 379,1964-1966
+source/charmm/charmm_main.F90: Added lines 755, 1380-1381
+
+3.6 DIFF option added to RMSDyn command
+    Developer: Lennart Nilsson
+    Institution: Karolinska Institutet
+    Date: November 2019
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/39
+Git commit: d53c3762b3aba49a2064f4f2d62703602e9a016d
+
+Added option to RMSDYN command to use interatomic average coordinate difference, w/o superpositiion, as metric (DIFF)
+
+Files Modified: source/manip/rmsdyn.F90, doc/dynamc.info, test/c34test/lookup.inp
+
+3.7 ms-mmpt
+    Developer: Zhen-Hao Xu and Markus Meuwly
+    Institution: University of Basel
+    Date: 20.12.2019
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/merge_requests/40
+Git commit: 61b3af44c76012c8676b7505c8d71a1ce18ecbf2
+
+MS-MMPT has been developed, based on the established MMPT module, to
+investigate diffusive proton transport in the condensed phase. The
+MS-MMPT module extends the MMPT force field with multi-surface adiabatic
+reactive molecular dynamics (MS-ARMD) to describe multiple proton binding
+motifs. In the MS-MMPT method, a global potential energy for proton
+transport is built by mixing multiple bonding patterns of a proton bonded
+to a possible acceptor atom. This method has been applied to proton
+diffusion in water clusters and in bulk.
+
+prefx Keys: MSPT
+
+Files Added:
+source/misc/msmmpt.F90
+doc/msmmpt.info
+test/c45test/ms_cluster.inp
+test/data/par_wat_t2.inp
+test/data/nlm.prm
+test/data/msmmpt_input.cor
+test/data/hbridge.dat
+test/data/beta2.prm
+
+Files Modified:
+source/charmm/miscom.F90
+source/energy/energy.F90
+source/energy/eintern.F90
+source/energy/energym.F90
+source/energy/eutil.F90
+source/ltm/number_ltm.F90
+source/misc/mmpt.F90
+source/nbonds/enbonda_expand.inc
+doc/mmpt.info
+tool/cmake/prefx_keywords.cmake
+
+3.8 FULLK
+    Developer: Marco Pezzella, Debasish Koner, Markus Meuwly
+    Institution: University of Basel
+    Date: 11.07.2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/62
+Git commit: 008dd12e4c7461c3b4c090970f207aae252fcbce
+
+FULLKERN provides a way to flexibly implement RKHS based potentials for small molecules
+inside CHARMM. At the moment the interactions between atoms are set to zero, with the
+aim  of automatically setting to zero internally the intramolecular interactions.The
+PSF remains unchanged.The new interactions are not explicitly added to the PSF file and
+only exist for the duration of a CHARMM run. FULLKERN is called via the FLMK keyword.
+prefx Keys:FLMK
+Files Added:
+
+source/misc/fullkern.F90
+docs/fullkern.info
+test/c45/fullkern_aco.inp
+test/data/aco_coeff.dat
+
+Files Modified:
+
+source/energy/energy.F90 - line 383,1985-1987
+source/charmm/charmm_main.f90 - line 758, 1387-1388
+
+3.9 BLaDe, MSLD in parallel with GPUs
+    Developer: Ryan Hayes
+    Institution: University of Michigan
+    Date: 15 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/63
+Git commit: f23204adbefc870555fa51d9db7fc0e9c8e48a47
+
+The goal of this module is to implement MSLD in a manner similar to pre-existing methods but with better porting to GPU and better parallelization.
+
+Files added:
+source/blade
+source/blade_api
+source/domdec_gpu/CudaRandom.cpp
+test/c45test/blade.inp
+test/c45test/blade_dynamics.inp
+test/c45test/blade_energy.inp
+tool/cmake/blade_cuda_files.cmake
+tool/cmake/blade_cxx_files.cmake
+tool/cmake/domdec_cxx_files.cmake
+
+Files modified:
+.gitignore
+CMakeLists.txt
+source/charmm/charmm_main.F90
+source/charmm/iniall.F90
+source/domdec_gpu/CudaRandom.h
+source/dynamc/dcntrl.F90
+source/energy/eutil.F90
+source/util/new_timer.F90
+source/util/title.F90
+test/c44test/omm_softcore.inp
+tool/cmake/cxx_files.cmake
+tool/cmake/domdec_cuda_files.cmake
+tool/cmake/fortran_files.cmake
+tool/cmake/prefx_keywords.cmake
+
+Files removed:
+source/domdec_gpu/CudaRandom.cu
+
+3.10 config.py gui for building charmm
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 16 July 2020
+
+The python script config.py is a graphical user interface (GUI) for building CHARMM. The user can select features, run cmake, and run make to build CHARMM from the convenience of the GUI.
+
+Files Added:
+tool/config.py
+tool/config.pdf
+
+3.11 Overhaul of DCM code with added support for Particle Mesh Ewald and residue patching
+     Developer: Mike Devereux
+     Institution: University of Basel
+     Date: 9.4.2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/102
+Git commit: b80e0b83346b97e032bca493247651ef18eb663d
+
+Various minor bugs fixed (e.g. to handle molecules with single charges etc.)
+Integration with particle mesh Ewald routines
+Automated handling of residue patching for DCM amino acids
+Improved compliance with CHARMM developer guidelines
+Restructured code for improved clarity and efficiency
+
+Files Involved: (module/file, e.g., source/dynamc/dcntrl.src)
+ source/energy/energy.F90  |   11 +-
+ source/energy/printe.F90  |    4 +
+ source/gener/genpsf.F90   |   62 +-
+ source/image/eimage.F90   |    9 +-
+ source/image/upimag.F90   |    6 +-
+ source/nbonds/dcm.F90     | 6432 ++++++++++++++++++++++++++++++++------------------------
+ source/nbonds/enbond.F90  |   27 +-
+ source/nbonds/ewald.F90   |    5 +-
+ source/nbonds/ewaldf.F90  |    1 +
+ source/nbonds/nbonds.F90  |    2 +
+ source/nbonds/pme.F90     |   34 +-
+ source/pert/epert.F90     |   73 +-
+ source/pert/pert.F90      |    2 +-
+ source/util/new_timer.F90 |    1 +
+
+3.12 Generalized self-guiding molecular simulation method: SGMDg/SGLDg
+     Developer: Xiongwu Wu
+     Institution: NIH
+     Date: 21 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/60
+Git commit: cdec0eadab9e7af82ed12508391e111908484f4f
+
+This development implements SGMDg/SGLDg method to replace previous SGMD-SGLD related implementation. SGMDg/SGLDg stands for generalized self-guided simulation method.  This new method uses apparent friction constants from molecular interaction to define momentum guiding force and uses the deviation of local average force to define force guiding force.  The guiding factors are directly related to conformational distribution.  This new method makes the chose of guiding factors system independent and the bias effect from the guiding forces much smaller.
+
+Files Modified:
+test/c41test/sgld_vv2.inp
+source/dynamc/sglds.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/dynamc/dynavv2.F90
+source/gener/repdstr.F90
+source/image/image_util.F90
+source/manip/scalar.F90
+
+New/Modified Documentation:
+
+doc/sgld.info
+doc/scalar.info
+
+New/Modified Testcase:
+test/c41test/sgldg_vv2.inp
+
+3.13 charmm as shared object with python interface
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 11 Feb 2021
+
+Pycharmm is a python package for the pip package manager.
+Pycharmm implements a thin API for calling CHARMM routines from python.
+In many cases, a python module corresponds to a single command in charmm script.
+Pycharmm requires CHARMM to be compiled as a shared library rather than a binary.
+A new API has been implemented in Fortran for pycharmm functions to call.
+
+prefx Keys: KEY_LIBRARY
+
+Files Added:
+doc/pycharmm.info
+source/api/Dict.cpp
+source/api/Dict.h
+source/api/api_charmm_file.F90
+source/api/api_cons_fix.F90
+source/api/api_cons_harm.F90
+source/api/api_coor.F90
+source/api/api_crystal.F90
+source/api/api_custom.F90
+source/api/api_dynamics.F90
+source/api/api_energy.F90
+source/api/api_eval.F90
+source/api/api_func.F90
+source/api/api_generate.F90
+source/api/api_ic.F90
+source/api/api_image.F90
+source/api/api_init.F90
+source/api/api_minimize.F90
+source/api/api_nbonds.F90
+source/api/api_param.F90
+source/api/api_pbound.F90
+source/api/api_psf.F90
+source/api/api_read.F90
+source/api/api_scalar.F90
+source/api/api_select.F90
+source/api/api_shake.F90
+source/api/api_stream.F90
+source/api/api_types.F90
+source/api/api_util.F90
+source/api/api_write.F90
+source/api/charmm.h
+source/api/fict.f90
+source/energy/exporte.F90
+source/minmiz/minmiz_util.F90
+source/rxncor/lupcns.F90
+test/c46test/omm_minimize.inp
+tool/pycharmm/.gitignore
+tool/pycharmm/LICENSE
+tool/pycharmm/README.md
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/atom_info.py
+tool/pycharmm/pycharmm/charmm_file.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/dynamics.py
+tool/pycharmm/pycharmm/energy.py
+tool/pycharmm/pycharmm/energy_func.py
+tool/pycharmm/pycharmm/fict.py
+tool/pycharmm/pycharmm/generate.py
+tool/pycharmm/pycharmm/ic.py
+tool/pycharmm/pycharmm/image.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/lingo.py
+tool/pycharmm/pycharmm/minimize.py
+tool/pycharmm/pycharmm/nbonds.py
+tool/pycharmm/pycharmm/param.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/scalar.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/pycharmm/select.py
+tool/pycharmm/pycharmm/select_atoms.py
+tool/pycharmm/pycharmm/settings.py
+tool/pycharmm/pycharmm/shake.py
+tool/pycharmm/pycharmm/write.py
+tool/pycharmm/setup.py
+tool/pycharmm/tests/aldidpep_build.inp
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/data/par_all22_prot.inp
+tool/pycharmm/tests/data/par_all36_prot.prm
+tool/pycharmm/tests/data/sodium_oxygen_nbfixes.prm
+tool/pycharmm/tests/data/top_all22_prot.inp
+tool/pycharmm/tests/data/top_all36_prot.rtf
+tool/pycharmm/tests/data/water_ions.prm
+tool/pycharmm/tests/data/water_ions.rtf
+tool/pycharmm/tests/data/ws.psf
+tool/pycharmm/tests/data/ws0.pdb
+tool/pycharmm/tests/testCrystalImage.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testDynamics.py
+tool/pycharmm/tests/testSelect.py
+tool/pycharmm/tests/testUserE.py
+tool/pycharmm/tests/test_charmm.py
+tool/pycharmm/tests/test_select.py
+tool/pycharmm/tests/toppar/par_all22_prot.inp
+tool/pycharmm/tests/toppar/par_all36_prot.prm
+tool/pycharmm/tests/toppar/radii_c36gbmvop.str
+tool/pycharmm/tests/toppar/top_all22_prot.inp
+tool/pycharmm/tests/toppar/top_all36_prot.rtf
+tool/pycharmm/tests/toppar/toppar_water_ions.str
+
+Files Modified:
+CMakeLists.txt
+configure
+doc/minimiz.info
+doc/openmm.info
+source/blade_api/blade.F90
+source/blade_api/blade_coords.F90
+source/blade_api/blade_main.F90
+source/charmm/charmm_main.F90
+source/charmm/iniall.F90
+source/charmm/miscom.F90
+source/correl/anacor.F90
+source/correl/rdfsol.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/dynamc/dynsub.F90
+source/dynamc/nose.F90
+source/dynamc/tamd.F90
+source/energy/energy.F90
+source/energy/eutil.F90
+source/energy/intere.F90
+source/gener/genpsf.F90
+source/gener/modpsf.F90
+source/gener/psfsum.F90
+source/gener/repdstr.F90
+source/image/crystal.F90
+source/image/images.F90
+source/image/upimag.F90
+source/image/xtlfrq.F90
+source/io/mainio.F90
+source/io/parmio.F90
+source/io/trajio.F90
+source/ltm/exfunc_ltm.F90
+source/manip/corman.F90
+source/manip/cstran.F90
+source/mc/mcma.F90
+source/mc/mcmini.F90
+source/minmiz/abner.F90
+source/minmiz/conjug.F90
+source/minmiz/egrad1.F90
+source/minmiz/minmiz.F90
+source/minmiz/nraph.F90
+source/minmiz/steepd.F90
+source/misc/distrib.F90
+source/misc/fitcharge.F90
+source/misc/freene_calc.F90
+source/misc/nmr.F90
+source/misc/pbeq.F90
+source/misc/testch.F90
+source/mscale/mscale.F90
+source/nbonds/helpme_wrapper.F90
+source/nbonds/nbonds.F90
+source/openmm/omm_main.F90
+source/pert/epert.F90
+source/pert/icpert.F90
+source/pert/puic.F90
+source/pipf/pfdyn.F90
+source/rxncor/adiab.F90
+source/rxncor/lupopt.F90
+source/solvation/rism.F90
+source/util/parse.F90
+source/util/random.F90
+source/util/title.F90
+source/zerom/zerom1.F90
+tool/cmake/cxx_files.cmake
+tool/cmake/fortran_files.cmake
+tool/cmake/prefx_keywords.cmake
+
+3.14 Spring 2021 BLaDE updates
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: 21 April 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/103
+Git commit: 7117588bcf71a43af5c7acbb6176f67f095b3e8b
+
+Fixed a bug where BLaDE was taking double timesteps when using two GPUs
+Add fix lambda option, and debug charmm port multigpu
+Added to c30test/mmfp_test5 testcase to test recently added mmfp angle feature.
+intel compilers compatibility fixes
+BLaDE test case adjustments
+Fixed some bugs with non-flex parameters:
+
+put a bomlev guard on nonflex CMAP parameters
+updated test cases to pass CMAP guard
+allowed orthorhombic boxes
+initialized uninitialized theta velocities in lambdam
+rectified holonomic constraints after copying coordinates from charmm to blade
+fixed a bug where BLaDE didn't copy box back to xtcabc, so constant pressure crashed
+
+
+Added BLaDE documentation.
+Constant pressure simulation fixes
+Put in a bomb guard for fbeta=0 and fixed error when running on a non-alchemical system.
+New input format for BLOCK CATS (scaling of constrained atoms) seems to preserve functionality.
+Changed the way BLOCK accepts and stores SCAT and CATS input. (Scaling of constrained/restrained atoms.) Should improve compatibility with blade.
+atomrestraints library functions
+Updated blade API to interface with scaling of constrained atoms in BLOCK module
+Fixed several performance problems and bugs with BLaDE:
+
+BLaDE random number generator was running in the default stream killing performance
+blade_dynamics was not setting npriv, which resulted restart files being printed every ntrfrq steps at a substantial performance penalty
+
+Modified BLaDE port to not separate vdw and elec energy terms. 10% improvement in speed.
+Small changes to the blade api to adapt to changes in BLaDE source code
+BLaDE NOE guard
+A blade interface bugfix, velocities were not saved correctly between calls of blade_dynamics
+BLaDE input guard for unimplemented cons harm
+Fixed input guards to allow constant energy simulations with BLaDE.
+
+prefx Keys: no change
+
+Files Added:
+doc/blade.info
+source/blade/CompileIntel.sh
+source/blade/license
+source/blade/src/nbdirect/nbdirectfaster.txt
+source/blade/src/nbdirect/nbdirectslower.txt
+source/blade/test/dhfr/bench.crd
+source/blade/test/dhfr/blade_bench.psf
+source/blade/test/dhfr/blade_par_all27_prot_lipid.prm
+source/blade/test/dhfr/input
+source/blade/test/water216/input
+source/blade/test/water216/minimized.crd
+source/blade/test/water216/minimized.psf
+test/c46test/blade_msld.inp
+
+Files Modified:
+doc/block.info
+doc/commands.info
+doc/dynamc.info
+source/blade/doc/DevNotes.txt
+source/blade/doc/MAIN.txt
+source/blade/run/Profile.sh
+source/blade/run/input
+source/blade/src/CMakeLists.txt
+source/blade/src/bonded/bonded.cu
+source/blade/src/bonded/pair.cu
+source/blade/src/domdec/assign_blocks.cu
+source/blade/src/domdec/assign_domain.cu
+source/blade/src/domdec/assign_excl.cu
+source/blade/src/domdec/cull.cu
+source/blade/src/domdec/domdec.cu
+source/blade/src/domdec/recull.cu
+source/blade/src/holonomic/holonomic.cu
+source/blade/src/io/control.cxx
+source/blade/src/io/io.cxx
+source/blade/src/main/blade.cxx
+source/blade/src/main/real3.h
+source/blade/src/msld/msld.cu
+source/blade/src/msld/msld.h
+source/blade/src/nbdirect/nbdirect.cu
+source/blade/src/nbrecip/nbrecip.cu
+source/blade/src/rng/rng_gpu.cxx
+source/blade/src/rng/rng_gpu.h
+source/blade/src/run/run.cu
+source/blade/src/run/run.h
+source/blade/src/system/coordinates.cxx
+source/blade/src/system/parameters.cxx
+source/blade/src/system/potential.cxx
+source/blade/src/system/potential.h
+source/blade/src/system/state.cxx
+source/blade/src/system/state.h
+source/blade/src/system/structure.cxx
+source/blade/src/system/system.cxx
+source/blade/src/update/pressure.cu
+source/blade/src/update/rex.cxx
+source/blade/src/update/update.cu
+source/blade/test/T4L_peptide/input
+source/blade/test/ec2acc/input
+source/blade_api/blade.F90
+source/blade_api/blade_block.F90
+source/blade_api/blade_coords.F90
+source/blade_api/blade_main.F90
+source/blade_api/dynamics.cxx
+source/dynamc/dcntrl.F90
+source/energy/energy.F90
+source/pert/lambdadyn.F90
+test/c30test/mmfp_test5.inp
+test/c46test/blade_energy.inp
+test/data/prep14benz/full_ligand.prm
+test/data/prep14benz/par_all36_msld.prm
+
+Files Removed:
+source/blade/doc/name
+test/c46test/blade.inp
+test/c46test/blade_dynamics.inp
+
+3.15 Blade merge bug fix
+     Developer: Ryan Hayes
+     Institution: University of Michgan
+     Date: 23 April 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/104
+Git commit: f0305a63b9309f49c85be6f5d7e1b01ab3a8247f
+
+The previous blade updates merge had some conflicts that were not resolved optimally.
+A dhfr test internal to BLaDe was updated
+
+Sample input to reproduce the problem (or testcase): compile time errors
+
+Files Involved:
+source/blade_api/blade.F90
+
+Files:
+source/blade/test/dhfr/5dfr.crd
+source/blade/test/dhfr/5dfr.psf
+D       source/blade/test/dhfr/bench.crd
+D       source/blade/test/dhfr/blade_bench.psf
+M       source/blade/test/dhfr/input
+source/blade/test/dhfr/blade_par_all27_prot_lipid.prm
+source/blade/test/dhfr/par_all22_prot.inp
+
+3.16 Provided dynamic memory allocation routines for DCM residue patching
+     Developer: Mike Devereux
+     Institution: University of Basel
+     Date: 4 May 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/105
+Git commit: 5540b00d279bbeae483cc24973fdbdeb203cbb9b
+
+The DCM code lacked dynamic memory allocation for part of the residue-patching routine, causing crashes in unusual cases with many patched residues (specifically the test case "c40test/omm_gbsaobc_stream_test.inp"). Memory-allocation functions have been added and the test case is now passed. Some other OpenMM test cases still fail, but this seems to be a problem with our local OpenMM installation as backtraces are within OpenMM libraries, but please test with a stable installation...
+
+Files involved:
+source/gener/genpsf.F90
+source/nbonds/dcm.F90
+
+3.17 opencl and fftdock protein grid potential
+     Developer: Yujin Wu and Josh Buckner
+     Institution: University of Michigan
+     Date: 26 May 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/106
+Git commit: 638f61141dc5fbff5627620100e2ce52e7735a1d
+
+We implemented a rudimentary opencl fortran module and backing C++ code. Then, we implemented protein grid potential generation using an OpenCL kernel for the fftdock module. The fftdock OpenCL support is only compiled in if CUDA is not found but OpenCL is found at configure time.
+See the test c46test/opencl.inp and c46test/fftdock.inp.
+One user has reported bad grid potential values generated by AMD GPUs on the macOS platform. This happens for this user about 1 in 100 times. Please run c46test/fftdock.inp several times if you have an AMD GPU and check the results for consistency.
+
+prefx Keys: none added
+
+Files Added:
+source/fftdock/cuda_grid_pot.cu
+source/fftdock/kernels.cpp.in
+source/fftdock/kernels.h.in
+source/fftdock/kernels/conjMult.cl
+source/fftdock/kernels/correctEnergy.cl
+source/fftdock/kernels/sumGrids.cl
+source/fftdock/ocl_grid_pot.cpp
+source/opencl/ocl_util.cpp
+source/opencl/ocl_util.h
+source/opencl/opencl_main.F90
+source/opencl/opencl_parse.F90
+test/c46test/opencl.inp
+tool/cmake/EncodeKernel.cmake
+tool/cmake/ommVersion.cpp
+tool/cmake/FindMyOpenCL.cmake
+
+Files Modified:
+CMakeLists.txt
+source/charmm/iniall.F90
+source/charmm/miscom.F90
+source/fftdock/GPUGridLig.cpp
+source/fftdock/GPUGridPot.cpp
+source/fftdock/fftdock.F90
+source/fftdock/openmm_dock.F90
+source/openmm/plugins/gbsw/platforms/cpu/CMakeLists.txt
+source/openmm/plugins/gbsw/platforms/cuda/CMakeLists.txt
+source/openmm/plugins/gbsw/platforms/cuda/CudaGBSWKernels.cpp
+test/c46test/fftdock.inp
+tool/cmake/c_files.cmake
+tool/cmake/cxx_files.cmake
+tool/cmake/fftdock_cuda_files.cmake
+tool/cmake/fortran_files.cmake
+tool/cmake/prefx_keywords.cmake
+
+Files Removed:
+source/fftdock/GPUGridProt.cpp
+tool/cmake/FindOpenCL.cmake
+
+3.18 fix lite build and intel calloc not defined
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 26 May 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/107
+Git commit: 7258af6ba98ad07325db9ffe548908d4270b5869
+
+builds without OpenCL fail because some C++ code that requires OpenCL was added outside the HAS_OPENCL C preprocessing guards.
+builds with the Intel compiler fail because of the presence of calloc in the C++ code.
+
+Sample input to reproduce the problem (or testcase):
+configure with --lite and then compile
+compile with the Intel C++ compiler
+
+Files Involved:
+source/opencl/ocl_util.cpp
+source/opencl/ocl_util.h
+
+3.19 gcc 10 and nvcc linking fix
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 1 June 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/108
+Git commit: 0f3557ca5b172144e9943a799a8ffce895914b27
+
+When using GCC 10 for a domdec_gpu or blade build, there are lots of 'undefined' errors for functions compiled by the C++ compiler but called by code in .cu files (code compiled by nvcc). Adding the flag '-std=c++11' to the C++ compiler flags fixes the problem.
+
+Sample input to reproduce the problem (or testcase):
+Configure with '--with-blade' or '--with-domdec_gpu' with GCC 10. Then compile.
+
+Files Involved: CMakeLists.txt
+
+3.20 Pycharmm api overhaul
+     Developer: Charlie Brooks and Josh Buckner
+     Institution: University of Michigan
+     Date: 14 June 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/110
+Git commit: 99e22eee4c514f9e72ce4a54dc6a2c7e3e5921d1
+
+read and write coor_card
+OpenMM minimization
+switch to using charmm script for coor.orient, read functions, and write functions
+name python atom selections for use in charmm scripts
+add selection argument to functions that use charmm script under the hood
+add residue and segment information to SelectAtoms objects
+ongoing documentation update
+switch all functions to take keyword arguments rather than dictionaries
+
+Prefx keys: no change
+
+Files added:
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+
+Files modified:
+.gitignore
+source/api/api_coor.F90
+source/api/api_init.F90
+source/api/api_psf.F90
+source/api/api_read.F90
+source/api/api_select.F90
+source/api/api_write.F90
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/atom_info.py
+tool/pycharmm/pycharmm/charmm_file.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/dynamics.py
+tool/pycharmm/pycharmm/energy.py
+tool/pycharmm/pycharmm/energy_func.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/minimize.py
+tool/pycharmm/pycharmm/nbonds.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/scalar.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/pycharmm/select.py
+tool/pycharmm/pycharmm/select_atoms.py
+tool/pycharmm/pycharmm/shake.py
+tool/pycharmm/pycharmm/write.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/testUserE.py
+
+Files removed:
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/tests/test_charmm.py
+tool/pycharmm/tests/test_select.py
+
+3.21 Incorrect Qloc array element
+     Developer: Kai Töpfer
+     Institution: University of Basel
+     Date: 11 Jun 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/111
+Git commit: c5355bd210946875ef41a6865c0a5ae77b3bb2d9
+
+Indexing error produces wrong electrostatic potential
+that lead to potential jumps at certain system conformation.
+
+Sample input to reproduce the problem (or testcase):
+Error is intermittent and difficult to reproduce reliably
+(requires specific conformational transitions)
+
+Files Involved:
+source/nbonds/mtpl.F90
+
+3.22 Improvements to a pycharmm test script
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 15 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/115
+Git commit: 130c6e009b5e5783af7afc5e8c38d101f77bcae1
+
+some improvements to make running the aldidpep_build.py script easier; for example, directories to read and write from are created if they are missing, etc...
+
+prefx Keys: no change
+
+Files Added: none
+
+Files Modified:
+tool/pycharmm/tests/aldidpep_build.py
+
+Files Removed: none
+
+3.23 BLaDE: fix botched merge and several bugs
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: Thursday 22 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/117
+Git commit: bdb15a2950060c46208c4b48f16c1aff2ac924ef
+
+Patched in a fix for holonomic constraints and a new hsp90 test case from BLaDE
+Added in absolute harmonic or power law position restraints AND Cleaned up a few bugs in harmonic restraints.
+Fixed a bug with the previous BLaDE merge, fixed a few other random BLaDE bugs, added BLOCK FFIX functionality, added a BLADE MD test case.
+slightly changed blade_msld test case
+added input guard for fbeta, fixed test cases to run with CLB recent changes, added a note on NVE ensemble to blade_md.inp, and wrote a new blade_energy routine that doesn't create superfluous output files.
+
+Sample input to reproduce the problem (or testcase):
+test/c46test/blade_energy.inp
+test/c46test/blade_msld.inp
+test/c46test/blade_md.inp
+
+Files Involved:
+source/blade/src/CMakeLists.txt
+source/blade/src/holonomic/holonomic.cu
+source/blade/src/io/io.cxx
+source/blade/src/msld/msld.cu
+source/blade/src/msld/msld.h
+source/blade/src/restrain/restrain.cu
+source/blade/src/restrain/restrain.h
+source/blade/src/system/coordinates.cxx
+source/blade/src/system/potential.cxx
+source/blade/src/system/potential.h
+source/blade/src/system/selections.cxx
+source/blade/src/system/state.cxx
+source/blade/src/system/structure.cxx
+source/blade/src/system/structure.h
+source/blade/src/update/pressure.cu
+source/blade/test/hsp90/cb7.inp
+source/blade/test/hsp90/input
+source/blade/test/hsp90/minimized.crd
+source/blade/test/hsp90/minimized.psf
+source/blade/test/hsp90/toppar/molecule_custom.prm
+source/blade/test/hsp90/toppar/par_all36_cgenff.prm
+source/blade/test/hsp90/toppar/par_all36m_prot.prm
+source/blade/test/hsp90/toppar/par_water_ions.prm
+source/blade/test/hsp90/variables112.inp
+source/blade_api/blade.F90
+source/blade_api/blade_block.F90
+source/blade_api/blade_main.F90
+source/blade_api/blade_psf.F90
+source/dynamc/dcntrl.F90
+source/energy/eutil.F90
+source/manip/fsshake.F90
+test/c46test/blade_md.inp
+test/c46test/blade_msld.inp
+tool/cmake/blade_cuda_files.cmake
+
+3.24 Fix for several compiler warnings
+     Developer: Bernard Brooks
+     Institution: NIH
+     Date: 27 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/118
+Git commit: f91a4d460e5406081219fdeba55a6b9ce9a26ae1
+
+Removing unfinished (and never will be finished) drude code from from dynamc
+
+dcntrl.F90 and dynamc.F90
+This is straightforward code removal, but it's about 1200 lines of code.  Testcases run with this vestigial code gone.
+
+New long-range C6 reading in the parameter reader.
+
+param_ltm.F90    parmio.F90   update.F90
+This is simply the addition of a long-range c6 coefficient array with flexible specification that is used by LJ-PME codes.
+It allows us to avoid the usual combination rules.
+Or more specifically, it allows us to change the short range terms while preserving our long-range c6 coefficients.
+(e.g. replace the usual 6-12 terms with a double exponential)
+And this gives us more flexibility with the LJ when using the Wennberg mid-range switching method.
+
+Rewrite of the atom selection's   .around.  function.
+
+selcta.F90
+This improves it's speed by more than an order of magnitude.
+The current atom selection test cases continue to run.
+
+simple fixes for some compiler warnings
+
+Sample input to reproduce the problem (or testcase):
+code clean up and compiler warnings
+
+Files Involved:
+CMakeLists.txt
+source/dynamc/consph.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/dynamc/tamd.F90
+source/energy/energym.F90
+source/energy/eutil.F90
+source/gener/update.F90
+source/io/parmio.F90
+source/ltm/fourd_ltm.F90
+source/ltm/param_ltm.F90
+source/manip/fsshake.F90
+source/minmiz/minmiz.F90
+source/minmiz/tnpack.F90
+source/misc/msmmpt.F90
+source/pert/puic.F90
+source/util/selcta.F90
+test/c46test/blade_md.inp
+test/c46test/cpu_cdocker_h_2.inp
+test/data/methanol.ascii
+
+3.25 Pycharmm test updates
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 2 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/121
+Git commit: 3eed5373da2adb6a54d66ac10e2dc04fa5b8cc7c
+
+After updates in the python api, some tests were not running optimally and required slight adjustments.
+
+Sample input to reproduce the problem (or testcase):
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testUserE.py
+
+Files Involved:
+tool/pycharmm/tests/testUserE.py
+tool/pycharmm/tests/data/param19.inp
+tool/pycharmm/tests/data/toph19.inp
+tool/pycharmm/tests/testCardIO.py
+source/minmiz/minmiz.F90
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testUserE.py
+
+3.26 fixes: pycharmm title and lingo.charmm_script rewind/backspace
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 27 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/127
+Git commit: 229a288b4cf28e720c6594ffd6f5f98c575db7fc
+
+Compiler and options: --as-library
+
+Command(s) involved (including options):
+pycharmm.write functions
+pycharmm.lingo.charmm_script
+
+There were two bugs fixed here:
+1. each charmm_script run needs a title so that the old charmm routines work correctly.
+2. each charmm_script needs to end in a newline character "\n"
+
+The fixes for (1) appear in source/api/api_eval.F90
+The fixes for (2) appear in tool/pycharmm/pycharmm/script.py
+We add a stub
+tool/pycharmm/tests/testCharmmScript.py
+to help detect these problems.
+
+Sample input to reproduce the problem (or testcase):
+tool/pycharmm/tests/testCharmmScript.py
+
+Files Involved:
+source/api/api_eval.F90
+source/api/api_init.F90
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCharmmScript.py
+
+3.27 fix for gpu protein grid generation
+     Developer: Yujin Wu
+     Institution: University of Michigan
+     Date: 16 September 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/129
+Git commit: 303eca148e05ab2410a227fe2b5cc13b358009e4
+
+Platform (Hardware): CUDA and OpenCL platforms
+
+Compiler and options: --with-fftdock
+
+Command(s) involved (including options):
+fftg pgen
+
+There are two errors in GPU protein grid generation.
+
+CCELEC parameters are set to be an integer number for the electrostatic grid calculation.
+The soft-core potential for the VDW grids are incorrect.
+
+Sample input to reproduce the problem (or testcase):
+test/c46test/fftdock.inp
+
+Files Involved:
+source/fftdock/cuda_grid_pot.cu
+source/fftdock/kernels/generateProtGrid.cl
+
+3.28 two features for eef1/imm1
+     Developer: Themis Lazaridis
+     Institution: CUNY
+     Date: 10 November 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/130
+Git commit: 0c7b59d33e140a90fe7a4d9be1e7ed46820d0bde
+
+This incorporates two additions to the EEF1/IMM1 module:
+1. the ability to use a linear (instead of sigmoidal) switching function
+   for buried ionizable side chains
+2. the use of approximate analytical solutions to the Poisson-Boltzmann equation
+for curved membranes (better than the flat-membrane approximation that was used up to now)
+
+Files Added:
+test/c47test/testimm1-curv-2.inp
+test/data/testmaga.crd
+
+Files Modified:
+doc/eef1.inf
+source/misc/eef1.F90
+test/c43test/testimm1-curv.inp
+
+3.29 Fall 2021 pycharmm updates
+     Developer: Josh Buckner, Charlie Brooks, and Thanh Lai
+     Institution: University of Michigan
+     Date: 17 November 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/131
+Git commit: 3bd9fc7cfa6cf314f5487ed0311e3d7ab948fd59
+
+Pycharmm changes:
+- card io
+- minimization using OpenMM
+- improved options for read and write functions
+- sending atom selections to charmm for use in lingo.charmm_script
+- store and update atom info for each SelectAtom instance on the python side
+- improve cons_harm options
+- switch dynamics.run to keyword arguments from dictionary
+- switch minimize funcs to keyword arguments from dictionary
+- add psf.get_charges
+- implement most of charmm scalar functionality
+- rework OpenMM block to be pycharmm friendly (Charlie Brooks)
+- add select.around and select.whole_residues (Thanh Lai)
+- improve docstring documentation
+- allow users to easily implement command classes based on lingo.charmm_script
+
+Files added:
+tool/pycharmm/tests/data/water_cube.crd
+tool/pycharmm/tests/data/water_cube.psf
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/test_select_atoms.py
+
+Files modified:
+.gitignore
+doc/openmm.info
+source/api/api_coor.F90
+source/api/api_init.F90
+source/api/api_psf.F90
+source/api/api_read.F90
+source/api/api_scalar.F90
+source/api/api_select.F90
+source/api/api_write.F90
+source/openmm/omm_block.F90
+source/openmm/omm_nonbond.F90
+source/openmm/omm_switching.F90
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/atom_info.py
+tool/pycharmm/pycharmm/charmm_file.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/dynamics.py
+tool/pycharmm/pycharmm/energy.py
+tool/pycharmm/pycharmm/energy_func.py
+tool/pycharmm/pycharmm/generate.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/minimize.py
+tool/pycharmm/pycharmm/nbonds.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/scalar.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/pycharmm/select.py
+tool/pycharmm/pycharmm/select_atoms.py
+tool/pycharmm/pycharmm/shake.py
+tool/pycharmm/pycharmm/write.py
+tool/pycharmm/setup.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/testUserE.py
+
+Files removed:
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/tests/test_charmm.py
+tool/pycharmm/tests/test_select.py
+
+3.30 Lonepair with openmm, NVTX CPP guards, stub Coordinates python class
+     Developer: Charlie Brooks (1) and Josh Buckner (2 & 3)
+     Institution: University of Michigan
+     Date: 15 Dec 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/132
+Git commit: b85973db59755b6ebaf1473438adc41a13dcb8da
+
+1. Lonepair functionality has been added to charmm's openmm subsystem.
+2. Added --with-nvtx option and cpp guards to protect blade's nvtx function calls.
+This allows blade to compile without domdec_gpu. Previously there were compiler errors
+without domdec_gpu
+3. Added a Coordinates class that can update charmm and be updated from charmm.
+This is intended as a jumping off point to eventually encapsulate
+the functionality of charmm's coor command.
+
+Prefx keys: none added; however, the cpp macro HAS_NVTX is being used
+
+Files added:
+tool/pycharmm/tests/testCoordinates.py
+
+Files modified:
+source/openmm/omm_bonded.F90
+CMakeLists.txt
+source/blade_api/dynamics.cxx
+source/api/api_coor.F90
+source/openmm/omm_bonded.F90
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/tests/testCoordinates.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testUserE.py
+
+3.31 lite build fix
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 4 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/133
+Git commit: 6cb65ec39f37b2e19fead0e227aa565909577942
+
+Compiler and options: configure option --lite
+Command(s) involved (including options): compile time error
+
+When compiled after configuring with --lite, the pref.dat keyword COMP2 is left out.
+Some new features of source/api/api_coor.F90 depend on the presence of COMP2.
+The fix is to wrap these new features in #if KEY_COMP2 CPP guards.
+
+Sample input to reproduce the problem (or testcase):
+compile after giving configure --lite
+
+Files Involved:
+source/api/api_coor.F90
+
+3.32 Fixes for traj timestep field in ps instead of AKMA
+     Developer: Rick Venable
+     Institution: NIH
+     Date: 18 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/138
+Git commit: 30ea561f353ae7a1a9a499623e66a6d15cbf580c
+
+Added keywords TSET, RPICO to read DELTA in ps units
+Intended for import/export when timestep field is ps, or trashed.
+Keywords parsed globally via TRJSPC.
+TRAJ WRIT will now write field in AKMA.
+RPICO will read files from e.g. vmdtools, convert timestep to AKMA.
+TSET expects a real value to follow, in picoseconds
+Pressure tensor output via IUPTEN modified, added IPTFRQ keyword to
+specify the save frequency; supported in LEAP/CPT and VV2/TPCONTROL
+
+Files Involved:
+doc/corman.info
+doc/correl.info
+doc/corsol.info
+doc/dynamc.info
+doc/intcor.info
+doc/nmr.info
+doc/pressure.info
+doc/rdfsol.info
+doc/tpcntrl.info
+doc/vibran.info
+source/dynamc/cvio.F90
+source/dynamc/dynamvv2.F90
+source/dynamc/dynutil.F90
+source/dynamc/tpcontrol.F90
+source/io/trajio.F90
+source/ltm/reawri_ltm.F90
+test/c24test/nptdyn.inp
+test/c25test/hba1.inp
+test/c31test/swm4_liquid.inp
+test/c47test/trjdelta.inp
+test/triage.csh
+
+3.33 Add vswitch to BLaDE
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 20 January 2022
+     Version: c47a1
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/139
+Git commit: 445b35e3c53bd96e348270bd56abbbc03be50d7a
+
+Now BLaDE will implement energy options vswitch and vfswitch.
+
+Files Added: test/c47test/blade_switch.inp
+
+Files Modified:
+source/blade/src/bonded/pair.cu
+source/blade/src/msld/msld.cu
+source/blade/src/nbdirect/nbdirect.cu
+source/blade/src/run/run.cu
+source/blade/src/run/run.h
+source/blade_api/blade.F90
+source/blade_api/blade_options.F90
+source/blade_api/dynamics.cxx
+
+3.34 Fix RXSGLD test case
+     Developer: Dan Roe
+     Institution: NIH
+     Date: 31 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/140
+Git commit: f2a5aa9de1d0744434cc027f20191ff8d0b445df
+
+The current RXSGLD test case reference values were generated without the '-prevclcg' flag
+(causing the test to fail when run with test.com).
+Updated the reference values for '-prevclcg'.
+
+Files involved: test/c36test/rxsgld.inp
+
+3.35 Bug fixes for CDOCKER on OpenCL platform and add pyCHARMM CDOCKER function
+     Developer: Yujin Wu & Joshua Buckner
+     Institution: University of Michigan, Ann Arbor
+     Date: 02/01/2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/141
+Git commit: 190df32edd157460a08ae23be68736ec1b1fca1f
+
+Adds CDOCKER for OpenCL and for pyCHARMM. Fixes grid generation bugs on the OpenCL platform.
+
+Files Added:
+source/api/api_grid.F90
+source/fftdock/ocl_batch_fft.cpp
+source/fftdock/ocl_grid_lig.cpp
+tool/cmake/FindclFFT.cmake
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/pycharmm/grid.py
+tool/pycharmm/tests/data/benzene.pdb
+tool/pycharmm/tests/data/benzene.rtf
+tool/pycharmm/tests/data/benzene_read.str
+tool/pycharmm/tests/data/t4.pdb
+tool/pycharmm/tests/data/t4.psf
+tool/pycharmm/tests/testCDOCKER.py
+tool/pycharmm/tests/testOMMD.py
+tool/pycharmm/tests/toppar/fftdock_c36prot_cgenff_probes.txt
+tool/pycharmm/tests/toppar/par_all36_cgenff.prm
+tool/pycharmm/tests/toppar/par_all36m_prot.prm
+tool/pycharmm/tests/toppar/probes.prm
+tool/pycharmm/tests/toppar/probes.rtf
+tool/pycharmm/tests/toppar/top_all36_cgenff.rtf
+
+Files Modified:
+CMakeLists.txt
+source/api/api_param.F90
+source/energy/energy.F90
+source/energy/intere.F90
+source/fftdock/cuda_grid_pot.cu
+source/fftdock/fftdock.F90
+source/fftdock/kernels/conjMult.cl
+source/fftdock/kernels/correctEnergy.cl
+source/fftdock/kernels/generateLigGrid.cl
+source/fftdock/kernels/sumGrids.cl
+source/fftdock/ocl_grid_pot.cpp
+source/fftdock/openmm_dock.F90
+source/mc/mcener.F90
+source/misc/genetic.F90
+source/misc/grid_dock.F90
+source/opencl/ocl_util.cpp
+source/opencl/ocl_util.h
+source/opencl/opencl_main.F90
+test/c47test/cpu_cdocker_h_2.inp
+test/c47test/openmm_dock_h.inp
+test/data/grid_3ptb_h.ascii
+tool/cmake/cxx_files.cmake
+tool/cmake/fftdock_cuda_files.cmake
+tool/cmake/fortran_files.cmake
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/pycharmm/param.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/tests/toppar/top_all36_prot.rtf
+rename source/fftdock/GPULigGrid.cu to source/fftdock/cuda_grid_lig.cu
+rename source/fftdock/batchFFT.cu to source/fftdock/cuda_batch_fft.cu
+
+3.36 Fixes to compile charmm on apple m1 machines
+     Developer: Thanh Lai, Yujin Wu, Charlie Brooks, and Josh Buckner
+     Institution: University of Michigan
+     Date: 4 February 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/142
+Git commit: 194e4269e16b1d2996ee1367d16998a8611ef97b
+
+Platform (Hardware): Apple M1
+Operating System: MacOS
+Command(s) involved (including options): compile time problem
+
+The clang compiler suite does not accept -march=native on Apple M1 platforms.
+Header files for some versions of OpenMM's CPU platform contain Intel intrinsics that do not compile on Apple M1 platforms.
+
+Files Involved:
+CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+tool/cmake/omm_flags_test.cpp
+
+3.37 BLaDE developments March 2022
+     Developer: Ryan Lee Hayes
+     Institution: University of Michigan
+     Date: 2022-03-16
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/147
+Git commit: 552a963d
+
+Description:
+Added extensive new features to BLaDE to allow constant pH simulations and
+more general free energy calculations: vswitch is now an alternative to
+vfswitch van der waals interactions, fswitch is now an alternative to PME electrostatics,
+added lone pairs to BLaDE, added remaining MSLD biases (BLOCK LDBV),
+added limited NOE restraints, and added constant pH simulations with BLaDE in REPD.
+
+Files Added:
+source/blade/src/holonomic/virtual.cu
+source/blade/src/holonomic/virtual.h
+
+Files Modified:
+Almost everything in source/blade_api and source/blade/src
+
+Files Removed:
+Everything in source/blade outside of source/blade/src
+
+3.38 MSLD Restart File Reading Bug
+     Developer: Ryan Lee Hayes
+     Institution: University of Michigan
+     Date: 2022-03-16
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/148
+Git commit: adf69f01
+
+Description:
+Kwangho Nam observed that with FFIX in block,
+CHARMM would read the value of lambda from a restart file, and
+override the intended value in the CHARMM input script.
+A new RLFR option was added to BLOCK to correct this.
+
+Files Involved:
+source/pert/lambdadyn.F90
+source/pert/block.F90
+
+3.39 Added tip5p lone pairs to BLaDE
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: 2022-04-05
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/149
+Git commit: 0761a7e9
+
+Description:
+Added support of tip5p water to BLaDE lone pair functionality
+
+Files Modified:
+src/dynamc/lonepair.F90
+source/blade_api/blade.F90
+source/blade/src/system/structure.cxx
+source/blade/src/holonomic/virtual.cu
+
+3.40 Fix the test c47test/ms_cluster.inp
+     Developer: Wonmuk Hwang, Marco Pezzella, and Josh Buckner
+     Institution: Texas A&M University, University of Basel, Univeristy of Michigan
+     Date: 12 April 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/150
+Git commit: 6f21bb6a
+
+Description:
+The test c47test/ms_cluster.inp segfaults on some systems.
+
+Sample input to reproduce the problem (or testcase):
+test/c47test/ms_cluster.inp
+
+Files Involved:
+source/dynamc/dynamvv2.F90
+source/misc/msmmpt.F90
+test/c47test/ms_cluster.inp
+
+3.41 Don't write CHEQ to PSF when not in use
+     Developer: Bernard Brooks
+     Institution: NIH
+     Date: 14 April 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/151
+Git commit: d9324334
+
+Description:
+exclude CHEQ/MOLNT from output PSF files when CHEQ is not being used
+
+Files involved:
+source/io/psfres.F90
+
+3.42 Resize harmonic constraints arrays
+     Developer: Bernie Brooks, Nathan Kern, and Josh Buckner
+     Institution: NIH, Lehigh University, and University of Michigan
+     Date: 5 May 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/153
+Git commit: c5e5cb77
+
+Description:
+Array involved in implementing harmonic constraints are not reallocated
+when atoms are added to the simulation. This can result in array overruns in certain situations.
+Sample input to reproduce the problem (or testcase): Run test/c47test/alpha_infinite.inp with valgrind.
+
+Files Involved:
+source/emap/emapsubs.F90
+source/energy/rmsd.F90
+source/gener/drude.F90
+source/gener/genpsf.F90
+source/gener/modpsf.F90
+source/io/psfres.F90
+source/ltm/cnst_ltm.F90
+source/manip/cstran.F90
+source/mmff/datastruc.F90
+source/mmff/merckio.F90
+source/shapes/mdlio.F90
+
+3.43 Harmonic constraints and natom changes
+     Developer: Wonmuk Hwang
+     Institution: Texas A&M University
+     Date: 17 May 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/154
+Git commit: c9959390
+
+Description:
+Change the allocation routine for harmonic constraints data structures so that
+when atoms are deleted, the arrays are realloced and a level 0 warning message is printed.
+Sample input to reproduce the problem (or testcase): test/c47test/cons_harm.inp
+
+Files Involved:
+source/ltm/cnst_ltm.F90
+test/c47test/cons_harm.inp
+
+3.44 Fix harmonic constrain errors
+     Developer: Wonmuk Hwang
+     Institution: Texas A&M University
+     Date: 24 May 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/155
+Git commit: 5312a9f8
+
+Description:
+When the psf is changed after the command 'cons harm' has been given,
+the harmonic constraint data structures are resized. If the new size is bigger,
+it was possible that there would be some uninitialized values at the end of
+the newly resized data structures. This caused lots of warning messages and
+abnormal terminations in several test cases.
+
+Sample input to reproduce the problem (or testcase):
+test/c34test/chempert1.inp
+test/c36test/test_drude.inp
+and many more
+
+Files Involved:
+source/ltm/cnst_ltm.F90
+source/memory/realloc_mod.F90
+
+3.45 Fix drude reading and writing in psf files
+     Developer: Jing Huang
+     Institution: Westlake University, Hangzhou, Zhejiang, China
+     Date: 7 June 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/156
+Git commit: 39bccbd5
+
+Description:
+After modifying the psf writing routines to not write CHEQ info when CHEQ is not turned on,
+drude particles still appeared in the psf output, but after reading a psf with drude particles,
+it would be reported that 0 drude particles were read.
+The bug originates in the coupling between CHEQ and DRUDE in psf reading and writing,
+and is caused by the removal of CHEQ keywords in Drude-related files.
+
+Sample input to reproduce the problem (or testcase):
+c36test/test_drude.inp
+
+Files Involved: source/io/psfres.
+
+3.46 Modified BLaDE to accommodate non-orthogonal boxes
+     Developer: Ryan Lee Hayes
+     Institution: University of Michigan
+     Date: 2022-06-24
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/158
+Git commit: 5652c41e
+
+Description:
+Modified BLaDE to accommodate non-orthogonal boxes
+
+Files Modified:
+just about everything in source/blade_api/ and source/blade/,
+source/image/image_module.F90 and source/image/crystal.F90
+
+3.47 Title: fix for using cuda toolkit on Ubuntu boxes
+     Developer: Ziqiao Xu
+     Institution: University of Michigan
+     Date: 21 June 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/159
+Git commit: f7383b5a
+
+Description:
+A user was compiling CHARMM as a library to use in pyCHARMM with fftdock feature enabled.
+However, the nvcc compiler errored out with a message about an extra flag ",-fPIC" that
+is not recognizable.
+
+Ubuntu 20.04.4 LTS default c compiler gcc's version information does not actually contain
+the word "GNU". Instead, it only prints out the information below.
+
+cc (Ubuntu 9.4.0-1ubuntu1~20.04.1) 9.4.0
+Copyright (C) 2019 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Therefore, the CUDA_HOST_COMPILER variable in the CMakeLists.txt was set to UNKNOWN and
+the nvcc_host_flags would be empty in this case. When evaluating --as-library,
+it did not consider the case when the nvcc_host_flags being empty and set the flag to
+,-fPIC directly without the leading -Xcomplier flag.
+
+Files Involved:
+CMakeLists.txt
+
+3.48 Fix an array overrun in tamd
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 9 July 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/160
+Git commit: 4fd42b41
+
+Description:
+Adding atoms between two tamd calls would result in an array overrun and segfault.
+Sample input to reproduce the problem (or testcase): none
+
+Files Involved: source/dynamc/tamd.F90
+
+3.49 Remove ass4 and fix q-chem interface
+     Developer: Josh Buckner and H. Lee Woodcock
+     Institution: University of Michigan and University of South Florida
+     Date: 14 July 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/162
+Git commit: e5e8cb86
+
+Description:
+A vanilla build of charmm using Debian 11 default gcc compilers (10.2) fails at
+'source/dynamc/cvio.F90' with the error
+
+build/cmake/cvio.F90:875:18:
+
+875 | CALL ASS4(ICNTRL(10),DELTA4)
+| 1
+......
+1501 | CALL ASS4(DELTA4,ICNTRL(10))
+| 2
+Error: Type mismatch between actual argument at (1) and actual argument at (2) (INTEGER(4)/REAL(4)).
+
+Q-Chem removed an old keyword that the QM/MM interface was using and broke things.
+This keyword both in Q-Chem and CHARMM isn't really needed anymore.
+
+Files Involved:
+source/dynamc/cvio.F90
+source/dynamc/dynio.F90
+source/dynamc/dynsub.F90
+source/manip/corman2.F90
+source/manip/intcor.F90
+source/mc/mcio.F90
+source/util/util.F90
+source/gukint/gukini.F90
+
+3.50 Fixed some issues with using parallel variable in nonparallel builds
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 15 July 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/165
+Git commit: 9ca64c02
+
+Description: Serial builds of charmm fail to compile. Some routines in source/nbonds/dcm.F90
+try to import variables from the parallel module that are only available in parallel builds.
+
+Files Involved: source/nbonds/dcm.F90
+
+3.51 pyCHARMM CDOCKER and FACTS
+     Developer: Yujin Wu
+     Institution: University of Michigan, Ann Arbor
+     Date: 07/19/2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/166
+Git commit: 049f0acf
+
+Description:
+Remove redundant codes in the pyCHARMM CDOCKER functions
+Update the corresponding pyCHARMM CDOCKER test case
+Introduce the FACTS implicit solvent minimization functionality in pyCHARMM
+Write functions for rescoring docked poses in pyCHARMM
+
+Files Added:
+tool/pycharmm/tests/testFactsDockRescore.py
+tool/pycharmm/pycharmm/implicit_solvent.py
+
+Files Modified:
+tool/pycharmm/tests/testCDOCKER.py
+tool/pycharmm/tests/testOMMD.py
+tool/pycharmm/pycharmm/cdocker.py
+
+3.52 BLaDE non-orthogonal periodic boundary conditions fix
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: 22 July 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/168
+Git commit: 7804190f
+
+Description:
+Issues with how non-orthogonal periodic boundary conditions are handled in BLaDE,
+especially for the rhombic dodecahedron box type.
+
+Files Involved:
+source/blade/src/domdec/assign_excl.cu
+source/blade/src/domdec/cull.cu
+source/blade/src/io/calculate.cxx
+source/blade/src/io/io.cxx
+source/blade/src/main/blade.cxx
+source/blade/src/main/real3.h
+source/blade/src/system/coordinates.cxx
+source/blade/src/system/parameters.cxx
+source/blade/src/system/state.cxx
+source/blade/src/system/structure.cxx
+source/blade/src/update/pressure.cu
+source/blade_api/blade.F90
+source/image/crystal.F90
+
+3.53 init ic table after allocation; make avalue more efficient
+     Developer: Wonmuk Hwang
+     Institution: Texas A&M University
+     Date: 24 July 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/170
+Git commit: 74807135
+
+Description:
+In intcor.F90 AllocateIC() after allocation, the ic table is not initialized.
+In array.F90 AVALUE() near line 22,
+
+      IF (ARRAY(I) == MARK) THEN
+         ARRAY(I)=MARK
+      ELSE IF (ARRAY(I) > 0) THEN ....
+
+'ARRAY(I)=MARK' after the first IF condition is an unnecssary re-assignment
+and should be changed to 'continue'. Even though small, re-assignment is
+more resource consuming than continuing.
+Sample input to reproduce the problem (or testcase): none
+
+Files Involved:
+source/manip/intcor.F90
+source/util/array.F90
+
+3.54 Fix deleting atoms when image IC table elements already exist
+     Developer: Bernard Brooks
+     Institution: NIH
+     Date: 29 July 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/171
+Git commit: c8309c53
+
+Description:
+Deleting atoms when image IC table elements already exist sometimes causes a crash.
+
+Files Involved:
+source/gener/drude.F90
+source/gener/modpsf.F90
+source/misc/genetic.F90
+source/quantum/addlnat.F90
+
+3.55 Fix problems with previous merge request
+     Developer: Wonmuk Hwang
+     Institution: Texas A&M University
+     Date: 30 July 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/172
+Git commit: bbe391e2
+
+Description:
+Deleting atoms when image IC table elements already exist sometimes causes a crash.
+
+Files Involved:
+source/gener/drude.F90
+source/gener/modpsf.F90
+source/misc/genetic.F90
+source/quantum/addlnat.F90
+
+3.56 Restraints, generate (patch), and stream for pycharmm
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 16 August 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/173
+Git commit: 466e01aa
+
+Description:
+Improved pycharmm functionality:
+Functions to accomplish cons subcommands dihe, cldh, ic, dropet, and hmcm
+A patch function to apply patches to segments
+A stream function to accomplish the charmm stream command
+
+Files Added: tool/pycharmm/pycharmm/cons_methods.py
+
+Files Modified:
+tool/pycharmm/pycharmm/generate.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/script.py
+
+==============================================================================
+[4] c47b2 Change Log
+
+    The following changes were committed from August 15, 2022 through
+March 1, 2023.
+
+------------------------------------------------------------------------------
+4.1 MMPT Patch
+    Developer: Mike Devereux
+    Institution: University of Basel
+    Date: 26.8.2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/174
+Git commit: 8c1c1a63
+
+Description:
+Parts of the MMPT energy routine were called at every energy call for all
+run types, even when MMPT had not been requested in the input file. This behavior was
+only visible if the print level was >= 7, as part of the code then produced output along
+the lines of:
+
+AGLCORR >    0.0000000000000000
+AGLPENT >    0.0000000000000000
+NBCORR >    0.0000000000000000
+
+A new flag "QMMPT" was added to mmpt.F90,
+set .FALSE. by default and only made .TRUE. if the keyword "MMPT" is present in a CHARMM
+input file. The EMMPT routine is therefore still called whenever the energy routines are
+called, but it now exits immediately unless an MMPT run has been explicitly requested.
+This solution has the advantage of being self-contained within mmpt.F90,
+a solution in energy.F90 to avoid calling EMMPT at all unless specifically requested may
+marginally improve performance and code efficiency, though.
+
+Files involved: source/misc/mmpt.F90
+
+4.2 DCM module PBC memory allocation bug
+    Developer: Mike Devereux
+    Institution: University of Basel
+    Date: 19.10.2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/175
+Git commit: cb36cf5c
+
+Description:
+The bug appears when users choose nonbonded cut-offs that are significantly larger than hal
+f of the periodic box size. Memory allocation then becomes insufficient and needs to be dyn
+amically increased.
+
+Added new subroutine "IMGRESIZE" to increase the sizes of affected arrays,
+plus a check in the existing "IMGINIT" subroutine to see whether we are about
+to exceed the existing array bounds
+
+Files involved: source/nbonds/dcm.F90
+
+4.3 fix for ABPO build
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 29 November 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/176
+Git commit: d0ab5488
+
+Description:
+The configure script option '--with-abpo' does not add the pref.dat keyword ABPO
+to the list of keywords.
+
+Files involved:
+CMakeLists.txt
+tool/cmake/prefx_keywords.cmake
+
+4.4 GCOMB fixes
+    Developer: Milan Hodoscek
+    Institution: National Institute of Chemistry, Ljubljana, Slovenia
+    Date: January 15, 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/177
+Git commit: 42f4b320
+
+Description:
+Fortran compilers have become more strict about the types and ranks of
+subroutine parameters in the modules. Using interface blocks for
+communication routines can help reduce these problems. This type of
+cleaning in CHARMM continues with the fixing for the GCOMB subroutine
+as a continuation of the last year's fixes for PSND{C,4,8} routines.
+On branch milan_f23a
+
+Files involved:
+doc/io.info
+source/dynamc/dynutil.F90
+source/emap/emapsubs.F90
+source/image/images.F90
+source/image/xtlfrq.F90
+source/ltm/parallel_ltm.F90
+source/machdep/paral1.F90
+source/manip/corman2.F90
+source/minmiz/egrad1.F90
+source/minmiz/nraph.F90
+source/misc/fctblock.F90
+source/misc/fctblock.inc
+source/misc/hbuild.F90
+source/molvib/molvco.F90
+source/nbonds/dcm.F90
+source/nbonds/ewald.F90
+source/quantum/qmene.F90
+source/vibran/redbas.F90
+source/vibran/vibcom.F90
+source/vibran/vibsub.F90
+
+4.5 Local spatial average for SGLD/SGMD guiding force calculation
+    Developer: Xiongwu Wu
+    Institution: NIH
+    Date: 15 January 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/178
+Git commit: ef056928
+
+Local spatial average is implemented to average over certain nearby atoms.
+The nearby atoms can be bonded atoms and bond angle atoms(sgtype=2) or
+dihedral angleed atoms (sgtype=3), or all atoms within
+sgsize cutoff distances.
+
+Files involved:
+doc/sgld.info
+source/dynamc/dcntrl.F90
+source/dynamc/sglds.F90
+source/machdep/paral1.F90
+source/nbonds/enbips.F90
+test/c41test/sgldg_vv2.inp
+test/c48test/sgldavg.inp
+
+4.6 Gcomb fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 13 March 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/179
+Git commit:  286a72ca
+
+The PNM, quantum, and stringm builds were not updated to use
+the new gcomb routines. This lead to compile time errors.
+
+Files involved:
+source/misc/pnm.F90
+source/mndint/h4_correction.F90
+source/mndint/mndene.F90
+source/mndint/qm1_diagonalization_module.F90
+source/mndint/qmmm_interface.F90
+source/nbonds/qmmm_ewald_module.F90
+source/sccdftbint/sccdftbsrc/long_sccmm2.F
+source/squantm/sqnt_qmmm_util.F90
+source/squantm/sqnt_nbnd.F90
+source/squantm/sqnt_qm2_ewald.F90
+source/squantm/sqnt_qm2_mopac.F90
+source/squantm/sqnt_qmmm_int.F90
+source/misc/fctall.F90
+
+4.7 Anaconda GCC and CUDA 12 fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 February 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/180
+Git commit: b3b7c9f5
+
+Description:
+GCC compilers from anaconda identify themselves as '(gcc)' instead of 'GCC'.
+So during preparations to configure CUDA, the host compiler is misidentified.
+Then 'nvcc_host_flags' gets scrambled causing compile time errors from
+the nvcc compiler. Texture references used in domdec_gpu cause
+compile time error for nvcc version 12 and up.
+
+Files involved: CMakeLists.txt
+
+4.8 sgldg fixes
+    Developer: Xiongwu Wu
+    Institution: NHLBI of the NIH
+    Date: 13 February 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/181
+Git commit: df2cc4fa
+
+Description:
+Some regions of arrays critical to sgld were not initialized.
+This lead to the test 'c31test/sgld.inp' segfaulting and
+the test 'c41test/sgldg_vv2.inp' reporting two FAILED tests.
+
+Files involved: source/dynamc/sglds.F90
+
+4.9 Winter 2022 pycharmm updates
+    Developers: Josh Buckner, Xiaorong Liu, Arghya Chakravorty, Yujin Wu,
+                Luis Cervantes, Thanh Lai, and Charles L. Brooks III
+    Institution: University of Michigan
+    Date: 18 January 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/182
+Git commit: de5ed6e1
+
+Description:
+pycharmm has been updated to support dynamics, reading and writing files, and
+selecting atoms in a more straightforward manner. Support for newer versions
+of the cuda toolkit that no longer support ptx version 35 has been added.
+Documentation has been updated so that 'pdoc' can produce separate, beautiful
+html documentation files.
+
+Files involved:
+CMakeLists.txt
+configure
+source/api/Dict.cpp
+source/api/Dict.h
+source/api/api_dataframe.F90
+source/api/api_dynamics.F90
+source/api/api_energy.F90
+source/api/api_eval.F90
+source/api/api_ktable.F90
+source/api/api_lambdata.F90
+source/api/api_msldata.F90
+source/api/api_velos.F90
+source/api/charmm.h
+source/api/fict.f90
+source/blade_api/blade_main.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/energy/eutil.F90
+source/energy/exporte.F90
+source/ltm/param_store_ltm.F90
+tool/cmake/cmake-3.0.2.tar.gz
+tool/cmake/cmake-3.25.1.tar.gz
+tool/cmake/cxx_files.cmake
+tool/cmake/fortran_files.cmake
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/pycharmm/atom_info.py
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/pycharmm/charmm_file.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/cons_methods.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/cons_methods.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/dynamics.py
+tool/pycharmm/pycharmm/energy.py
+tool/pycharmm/pycharmm/energy_func.py
+tool/pycharmm/pycharmm/energy_mlpot.py
+tool/pycharmm/pycharmm/fict.py
+tool/pycharmm/pycharmm/generate.py
+tool/pycharmm/pycharmm/grid.py
+tool/pycharmm/pycharmm/ic.py
+tool/pycharmm/pycharmm/image.py
+tool/pycharmm/pycharmm/implicit_solvent.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/lingo.py
+tool/pycharmm/pycharmm/minimize.py
+tool/pycharmm/pycharmm/nbonds.py
+tool/pycharmm/pycharmm/param.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/scalar.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/pycharmm/select.py
+tool/pycharmm/pycharmm/select_atoms.py
+tool/pycharmm/pycharmm/settings.py
+tool/pycharmm/pycharmm/shake.py
+tool/pycharmm/pycharmm/write.py
+tool/pycharmm/setup.py
+tool/pycharmm/tests/testDynamics.py
+tool/pycharmm/tests/testEnergy.py
+tool/pycharmm/tests/testLingo.py
+
+4.10 Cuda ptx version fix
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 16 February 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/183
+Git commit: 83f68996
+
+Description:
+When nvcc_{ptx, arch}_target is specified, cuda code is compiled into only that specific architecture. This is a problem for clusters with a heterogeneous assortment of GPUs.
+
+Changes to CMakeLists.txt so that
+nvcc_ptx_target and nvcc_arch_target
+can be set to comma delimited lists.
+
+ptx is virtual so there will be some overhead at runtime when the driver compiles
+the ptx to device code.
+
+arch is actual -- there will be less overhead at runtime for the driver to
+translate the target code for the device.
+
+In any case, a minimum default ptx version will be present.
+For cuda toolkit < 11, ptx version 30 will always be produced.
+For cuda toolkit > 11 but < 12, ptx version 35 will always be produced.
+For cuda toolkit > 12, ptx version 50 will always be produced.
+
+Files Involved: CMakeLists.txt
+
+4.11 Sgldg tests updated to pass with '-prevclcg'
+     Developer: Xiongwu Wu
+     Institution: NHLBI of NIH
+     Date: 16 February 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/184
+Git commit: 8ab30e2e
+
+The tests c41test/sgldg_vv2.inp and c48test/sgldavg.inp were written to pass
+without the '-prevclcg'. They fail with the '-prevclcg' option.
+Reference values passed to testcheck were updated to fit '-prevclcg'
+
+Files Involved:
+c41test/sgldg_vv2.inp
+c48test/sgldavg.inp
+
+4.12 Pycharmm fixes
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 22 Feb 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/185
+Git commit: 7a0fb58c
+
+Description:
+1. Linking charmm as a shared object fails because of a missing 'gcomb' symbol.
+So added 'use parallel, only: gcomb' to subroutines containing call 'gcomb('
+
+2. In pycharmm, if fftdock is not compiled in, then the python functions
+associated with fftdock throw an obscure python error.
+So added '#else' with stubbs that call a wrapper around wrndie
+
+3. pycharmm dynamics contains debugging output so removed all
+'print *, 'DEBUG' lines from source/dynamc/dynamc.F90
+
+Files involved:
+source/gamint/ddi.F90
+source/machdep/async_util2.F90
+source/api/api_grid.F90
+source/dynamc/dynamc.F90
+
+4.13 Support for the latest version of GAMESS in CHARMM
+     Developer: Milan Hodoscek
+     Institution: National Institute of Chemistry, Ljubljana, Slovenia
+     Date: February 26, 2023
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/187
+Git commit: a6cbc2f7
+
+Description:
+The new version of GAMESS (20220930.2) requires an external BLAS library
+to be provided. BLAS (Basic Linear Algebra Subprograms) is a library of
+low-level linear algebra routines that are commonly used in
+scientific computing and at least one of such libraries is always available
+on the machines running CHARMM.
+
+The cmake procedure used to compile CHARMM and GAMESS allows users to
+choose from a variety of BLAS libraries, including
+netlib.org, MKL, OpenBLAS, libflame, and others.
+The documentation for compiling CHARMM and GAMESS provides
+detailed instructions on how to select and configure the appropriate
+BLAS library for your system.
+
+Files involved:
+CMakeLists.txt
+doc/gamess.info
+source/gamint/CMakeLists.txt
+source/gamint/ddi.F90
+tool/gmscomp

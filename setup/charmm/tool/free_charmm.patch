@@ -1,0 +1,125 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 484719e83..df752245a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,5 +1,8 @@
+ cmake_minimum_required(VERSION 2.8)
+ 
++set(domdec OFF)
++set(domdec_gpu OFF)
++
+ project(CHARMM C CXX Fortran)
+ 
+ # for the intel fortran compiler
+diff --git a/configure b/configure
+index 98449fc0f..91ffc11a6 100755
+--- a/configure
++++ b/configure
+@@ -330,7 +330,9 @@ while :; do
+       add_feature nwchem
+       ;;
+     -u|--domdec_gpu) # domdec_gpu also enables domdec
+-      add_feature domdec_gpu
++        echo "DOMDEC and DOMDEC_GPU are not supported in free charmm."
++        echo "Configure aborted."
++        exit 1
+       ;;
+     --without-?*) # remove named feature
+       remove_feature ${1#--without-}
+diff --git a/install.com b/install.com
+index 95e5c6bf1..503b7a1fc 100755
+--- a/install.com
++++ b/install.com
+@@ -382,16 +382,10 @@ else if ( $#argv >= 2 ) then
+     if ( "$opt" == 'gamus' || "$opt" == 'GAMUS' ) set gamus = 1
+     if ( "$opt" == 'openmm' || "$opt" == 'OPENMM' ) set openmm = 1
+     if ( "$opt" == 'domdec' || "$opt" == 'DOMDEC'  ) then
+-      set domdec = 1
+-      set pthread = 1
+-      set cmpi_ok = 0
++        echo " install.com> $opt is not supported in free charmm"
+     endif
+     if ( "$opt" == 'domdec_gpu' || "$opt" == 'DOMDEC_GPU'  ) then
+-      set domdec = 1
+-      set domdec_gpu = 1
+-      set openmp = 1
+-      set pthread = 1
+-      set cmpi_ok = 0
++        echo " install.com> $opt is not supported in free charmm"
+     endif
+ # MH 05/2011
+ # extra stuff for NERSC:
+@@ -2560,7 +2554,7 @@ setenv FCDEFINES `awk '{printf("-DKEY_%s=1 ",$1);}' < pref.dat | sed 's/ -DKEY_E
+ 
+ set go_make = "$MAKE_COMMAND -f Makefile -f charmm.mk -f adumb.mk"
+ set go_make = "$go_make -f cadint.mk -f cff.mk -f correl.mk -f csa.mk"
+-set go_make = "$go_make -f dimb.mk -f dynamc.mk -f domdec.mk -f domdec_gpu.mk"
++set go_make = "$go_make -f dimb.mk -f dynamc.mk -f domdec.mk"
+ set go_make = "$go_make -f energy.mk -f fftdock.mk"
+ set go_make = "$go_make -f gamint.mk -f gamus.mk -f gukint.mk"
+ set go_make = "$go_make -f gener.mk -f image.mk -f io.mk -f ltm.mk"
+diff --git a/source/charmm/iniall.src b/source/charmm/iniall.src
+index a14814188..fa36e49ee 100644
+--- a/source/charmm/iniall.src
++++ b/source/charmm/iniall.src
+@@ -640,7 +640,7 @@ SUBROUTINE HEADER
+   PRODUCT=' '
+   CALL CHEADER(PRODUCT)
+ #else /**/
+-  PRODUCT='(CHARMM) - Developmental Version '//VERNMC
++  PRODUCT='(CHARMM) - Free Version '//VERNMC
+ #endif 
+   WRITE (OUTU, 50) center_pad(PRODUCT, 80)
+ 50 FORMAT('1',/17x,'Chemistry at HARvard Macromolecular Mechanics',/,A)
+diff --git a/source/ltm/version_ltm.src b/source/ltm/version_ltm.src
+index 96e91a9c5..84d035b4f 100644
+--- a/source/ltm/version_ltm.src
++++ b/source/ltm/version_ltm.src
+@@ -9,6 +9,6 @@ module version
+   INTEGER, PARAMETER :: VERNUM=43
+   CHARACTER(len=24), PARAMETER :: VERNMC='43a1     August 15, 2017'
+   !                                       123456789+123456789+1234
+-  !
++  logical, parameter :: free_version = .true.
+ end module version
+ 
+diff --git a/tool/makemod.pl b/tool/makemod.pl
+index 3137687ea..c3c46b4d7 100755
+--- a/tool/makemod.pl
++++ b/tool/makemod.pl
+@@ -54,6 +54,35 @@ foreach my $modname ('multicom','multicom_aux','chirality','confcons','sm_config
+  $suppress_missing_warning{$modname}=1;
+ }
+ 
++# modules intentionally left out of free charmm
++foreach my $modname (
++    'bonded_gpu_mod'
++  , 'domdec'
++  , 'domdec_aniso'
++  , 'domdec_block'
++  , 'domdec_bonded'
++  , 'domdec_bonded_block'
++  , 'domdec_cons'
++  , 'domdec_d2d_comm'
++  , 'domdec_d2r_comm'
++  , 'domdec_dlb'
++  , 'domdec_dr_common'
++  , 'domdec_grouped'
++  , 'domdec_io'
++  , 'domdec_local'
++  , 'domdec_lonepair'
++  , 'domdec_r2d_comm'
++  , 'domdec_random'
++  , 'domdec_shake'
++  , 'domdec_util_gpu_mod'
++  , 'ebonded_domdec'
++  , 'enb_core_gpu_mod'
++  , 'enbxfast'
++  , 'groupxfast'
++  , 'nblist_builder'
++  , 'nbrecip_gpu_mod') {
++  $suppress_missing_warning{$modname} = 1;
++}
+ 
+ # Fix for automount sites; replace pwd with ampwd fxn
+ sub ampwd($) {

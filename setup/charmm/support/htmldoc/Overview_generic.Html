@@ -1,0 +1,120 @@
+<title>Documentation Overview</title>
+<center>
+<H1>Overview of CHARMM version XXXVERSIONXXX .doc Files</H1>
+
+<IMG SRC="p_A-animate.gif" ALT="Protein A animation"><P>
+</center>
+<H2>Scope</H2>
+
+The documentation presented here is that for the latest academic
+version of the <B>CHARMM</B> program (<B>C</B>hemistry at
+<B>HAR</B>vard <B>M</B>olecular <B>M</B>echanics</I>), as maintained
+at the TSRI development site.  Quite a few features are contained in
+this version that are <EM>NOT</EM> included in the <B>CHARMm</B>
+version distributed by MSI as part of the <B>Quanta</B> package.  The
+information in these .doc files has been contributed by CHARMM
+developers over the years, and hopefully reflects the current state of
+the program.  The Harvard designation for this version is
+<B>XXXVERSIONXXX</B>, where "c" refers to CHARMM, XXXVNUMXXX is the
+version number and the letters g, b or a indicate the release,
+i.e. <I>gamma</I>, <I>beta</I> or <I>alpha</I>; Note releases of
+<I>gamma</I> and <I>beta</I> codes at TSRI may contain a few bugfixes
+and other minor differences and <I>alpha</I> level codes are
+development versions.<P>
+
+<a href="/brooks/versions.html">The compiled program itself is available on several computer systems
+at TSRI</a> (HP clusters - hpux, SGI machines - sgi, and MPP machines -
+SPP1000, TMC/GWS/Sun) and this documentation is largely meant as an
+on-line usage guide for people using CHARMM on these systems.  At
+present it is more of a reference manual than a tutorial, although
+although someday material from the CHARMM lectures, developed initally
+in the Karplus Group in the early '80s and expanded by BR Brooks
+(DCRT/LSB), will be added to these WWW pages.  
+
+<P>
+
+CHARMM remains essentially a command line program, <I>i.e.</I> a
+command is read from the input stream (typed, or from a file) and
+acted upon.  Even the X11/GL graphics function this way, although that
+part may change over the next year or so.  In fact, several parts of
+CHARMM are under active development, and there are significant
+enhancements since the previous versions were released.  Consequently,
+there will be periodic changes and additions to the documentation
+offered here.  
+
+<P>
+
+<HR> <H2>Running CHARMM Under Unix</H2>
+
+While CHARMM may be run interactively, that is not usually
+recommended, except for <A HREF="graphx.html">graphics</A>; even then,
+a <A HREF="miscom.html">stream</A> file should be used for the initial
+setup (reading PSF, coords, etc.).  The general syntax for using the
+program (assuming /bin/csh) is:<P><KBD>
+
+charmm &lt; filename.inp &gt;&amp; filename.out  [[param:value] ...]  [ &amp; ]<P></KBD>
+
+<DL> 
+<DT>charmm 
+
+<DD>The actual name of the program (or script which
+runs the program) on the computer system being used; the name may not
+be the same on all systems.  
+
+<DT>filename.inp 
+
+<DD>A text file containing CHARMM input commands, using the command
+syntax described in <A HREF="usage.html">usage.doc.</A> The actual
+<I>filename</I> is up to the user, although it is useful to use short
+names which hint at the overall purpose, <I>e.g.</I> makpsf.inp
+<DT>filename.out <DD>The log file for the CHARMM run, containing
+echoed commands, and various amounts of command output.  The output <A
+HREF="miscom.html">print level</A> may be increased or decreased in
+general, and procedures such as <A HREF="minimiz.html">minimization</A> and 
+<A HREF="dynamc.html">dynamics</A> have printout frequency
+specifications.
+
+<DT>param:value 
+
+<DD>CHARMM <A
+HREF="miscom.html">script parameters</A> (essentially user defined
+variables) may optionally be defined on Unix shell command line, using
+the form <I>param:value</I>; the <I>value</I> is substituted for
+occurrences of <I>@param</I> in the input script.  <DT>&amp <DD>The
+optional ampersand will place the program in the <I>background</I>
+under most Unix shells; note that the computer system being used may
+have a batch job queueing system which should normally be used instead
+of running CHARMM as a background process via the above syntax.
+</DL><P> Consult the local system administrator to determine the
+actual program name (<I>e.g.</I> charmm, charmm24, etc.) and the
+policy for running compute intensive tasks (batch queue, background,
+etc.) on the computer system being used.  In general, CHARMM
+calculations are best limited to around 12 to 16 hours, to both
+promote resource sharing and to minimize data loss due to machine or
+network failures.  
+
+<P> For foreground usage, e.g. graphics, start the
+program by typing it's name alone, wait for the program "header" to be
+printed, and enter a title.  Then use a "stream" file, e.g.<P> <KBD>
+stream psf-crd.str </KBD> <P> will read CHARMM commands from the file
+named <B>psf-crd.str</B> as if they were being typed at the keyboard;
+as implied by the name, the stream file reads the PSF, PARAms,
+COORdinates, etc., the basic starting point for all work with
+CHARMM.<P> <HR> <H4><A HREF="CharmmXXXVNUMXXX.Html">CHARMM .doc</A>
+
+Homepage</H4> 
+<HR> 
+<P ALIGN=CENTER> 
+
+<CITE>Information and HTML pages provided by:</CITE><BR> 
+<P ALIGN=CENTER> NIH/DCRT Laboratory for Structural Biology<BR> 
+FDA/CBER/OVRR Biophysics Laboratory<BR>
+Modified, updated and generalized by C.L. Brooks, III<BR>
+The Scripps Research Institute<BR>
+
+<P ALIGN=CENTER>
+<ADDRESS>
+Documentation Overview / rvenable@deimos.cber.nih.gov / brooks@scripps.edu
+</ADDRESS>
+<P>
+<HR>

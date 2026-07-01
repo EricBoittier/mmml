@@ -1,0 +1,679 @@
+﻿CHARMM Element doc/gbmv.info $Revision: 1.1.1.1 $
+
+File: GBMV, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+                 Generalized Born using Molecular Volume (GBMV)
+                     Solvation Energy and Forces Module   
+                                    - and -
+                                  Surface Area 
+
+     Questions and comments regarding GBMV should be directed to 
+
+     Michael S. Lee or Michael Feig c/o 
+     Charles L. Brooks, III (brookscl@umich.edu)
+
+* Menu:
+
+* Description:: Description of GBMV and related commands
+* Syntax::      Syntax of the GBMV Commands
+* Function::    Purpose of each of the commands
+* Examples::    Usage examples of the GBMV module
+
+
+File: GBMV, Node: Description, Up: Top, Previous: Top, Next: Syntax
+
+
+Background:
+
+    The GBMV module is a Generalized Born method for 
+mimicking the Poisson-Boltzmann (PB) electrostatic solvation energy. The PB
+method for obtaining solvation energies is considered a benchmark for implicit 
+solvation calculations. However, the PB method is slow and the derivatives, 
+i.e. forces, are ill-defined unless one changes the definition of the 
+molecular volume.
+     The Generalized Born equation, as prescribed by Still, et. al. allows
+one to compute solvation energies very similar to the PB equations. 
+As it is an analytical expression, forces are available as well:
+
+                                                     q q
+                              N   N                   i j
+    G   =  -C  (1-1/eps){1/2 sum sum ------------------------------------ }
+     pol     el              i=1 j=1 [r^2 + alpha *alpha exp(-D  )]^(0.5)
+                                       ij        i      j      ij
+
+           
+    D   = r^2 / (K_s * alpha * alpha )
+     ij    ij               i       j
+
+where K_s = 4 for Still's original equation, or 8 for modified equation.
+     The only problem is that one needs to calculate the alpha's, a.k.a.
+Born radii for each atom, accurately. There are various methods available, 
+such as the GBORN, ACE, and GBSW modules in CHARMM. 
+     The GBMV method obtains the Born radii very accurately, 
+i.e, w/ greater than 0.99 correlation. It is available as three approaches:
+
+ 1)  grid-based (Most accurate)
+ 2)  analytical method I (Least accurate, fastest)
+ 2)  analytical method II (preferred for dynamics)
+
+The analytical method has derivatives and thus can be used in molecular 
+dynamics simulations. The grid-based method has no derivatives, however, 
+it is the most accurate and still can be used in energy ranking and 
+Monte-Carlo methods.
+
+When should you use GBMV?
+
+     Because the analytical and grid-based methods are quite accurate, the
+parameters change very little when optimized for a particular force-field. 
+Hence, forcefields besides those of CHARMM can be used with GBMV without 
+refitting of parameters. The GBMV method II approximates the molecular
+surface directly. The agreement with respect to electrostatic solvation 
+energies from standard Poisson theory is very good (<1% relative error). 
+The higher accuracy comes at a price, however, and GBMV is slower than 
+other GB methods in CHARMM.
+
+Papers related to GBMV method: 
+
+(1) M. S. Lee, F. R. Salsbury, Jr., and C. L. Brooks III. 
+    J. Chem. Phys.(2002),116, 10606 
+(2) M. S. Lee, M. Feig, F. R. Salsbury, Jr., and C. L. Brooks III. 
+    J. Comp. Chem. (2003), 24, 1348 
+(3) M. Feig, A. Onufriev, M. S. Lee, W. Im, D. A. Case, C. L. Brooks III,
+    J. Comp. Chem. (2004), 25, 265-284
+(4) S. Tanizaki, M. Feig, 
+    J. Chem. Phys. (2005), 122, 124706
+(5) J. Chocholousova, M. Feig,
+    J. Comp. Chem. (2006) 27, 719-729 
+(6) A. Panahi, M. Feig,
+    J. Chem. Theory Comput. (2013), 9, 1709-1719
+(7) B. Dutagaci, M. Sayadi and M. Feig,
+    J. Comp. Chem. (2017) 38, 1308-1320
+
+Surface Area
+
+     A solvent accessible surface area (SASA) calculation is implemented
+within the GB module. There is essentially no additional cost compared to the 
+GB calculation itself and about 5 times faster than an exact, analytical 
+calculation (e.g. from the ASP module). It is accurate to within 1% of the 
+exact surface and is much more accurate than the SASA module within CHARMM.
+ 
+
+File: GBMV, Node: Syntax, Up: Top, Previous: Description, Next: Function
+
+
+Syntax of Generalized Born Molecular Volume (GBMV) Solvation commands
+
+[SYNTAX: GBMV commands]
+
+[method I: faster but less accurate]
+
+GBMV { P1 <real> P2 <real> LAMBda1 <real> DN <real> SHIFT <real> 
+       WATR <real> BETA <real> EPSILON <real> 
+       SA <real> SB <real> SCUT <real>} 
+       [WEIGHT]
+       [GBVDW]
+       CORR <int> 
+        { ESHIFT <real> SHIFT <real> TT <real>   (CORR = 0) }             
+        { SHIFT <real> SLOPE <real>              (CORR = 1) }
+     }
+
+[method II: slower but more accurate (recommended)]
+
+GBMV { [GEOM] [ARITH] [WEIGHT] [FIXA]
+       BETA <real> EPSILON <real> DN <real> WATR <real> 
+       LAMBDA1 <real> TOL <real> BUFR <real> MEM <int> CUTA <int> 
+       HSX1 <real> HSX2 <real> ONX <real> OFFX <real> 
+       ALFRQ <int> EMP <real> 
+       P1 <real> P2 <real> P3 <real> P4 <real> P6 <real> 
+       SA <real> SB <real> SCUT <real>
+       KAPPA <real>
+       WTYP <int> NPHI <int> 
+       GBVDW
+       CORR <int> 
+        { ESHIFT <real> SHIFT <real> TT <real>   (CORR = 0,2) }             
+        { SHIFT <real> SLOPE <real>              (CORR = 1,2) } 
+        { A1 <real> A2 <real> A3 <real>          (CORR = 2) }
+       GCUT <int>
+       RADG <int> <real ...>
+       FAST 1|0 SGBFRQ <int> SXD <real>
+     }
+
+[HDGB method: heterogeneous dielectric / membrane model]
+
+GBMV { { GBMV II options }
+      CORR <int> (CORR = 3, 4, 5)
+      A1 <real> A3 <real> A4 <real> A5 <real>
+      UNEPS <int> 
+      ZS <real> ZM <real> ZT <real> ST0 <real>
+      HDGBRC HDNOSW
+     }
+
+[ grid-based method ]
+
+GBMV GRID { [GEOM] [ARITH] [CONV] [WEIGHT]
+            EPSILON <int> DN <real> WATR <real> 
+            P6 <real> 
+            KAPPA <real>
+            WTYP <int> NPHI <int> 
+            CORR <int> 
+            { SHIFT <real> SLOPE <real>     (CORR = 1) }
+            { ESHIFT <real> SHIFT <real>    (CORR = 0) }         }
+          }
+
+[ free-up memory and/or start over]
+
+GBMV CLEAr
+
+
+File: GBMV, Node: Function, Up: Top, Previous: Syntax, Next: Examples
+ 
+          ---------------------------------------------------------------
+          Parameters of the Generalized Born using Molecular Volume Model
+          common to all methods:
+          ---------------------------------------------------------------
+
+WTYP      Angular integration grid type: 
+
+            0 - Dodecahedron
+            1 - Spherical polar 
+            2 - Lebedev (DEFAULT)
+            3 - Alternating octahedron/cube
+
+NPHI      Used when WTYP equals 1 or 2. When WTYP=1, it corresponds to number
+          of phi angles. When WTYP=2, it corresponds to size of 
+          Lebedev grid, which can only have values of 6,26 (Default), and 38 
+          at the present time.
+
+CUTA      Extent of radial integration points in Angstroms. (Default 20)
+
+GCUT      radial spacing of integration grid
+
+            1 - default spacing:
+                0.1 0.2  0.3 0.4 0.5 0.75 1.0 1.25
+                1.5 1.75 2.0 2.5 3.0 3.5  4.0 5.0
+                6.0 7.0  8.0 10.0 12.0 16.0 20.0
+
+            2 - finer spacing for small radii
+                0.1  0.2  0.3  0.4  0.5  0.6  0.8  1.0 
+	        1.2  1.4  1.6  1.8  2.0  2.2  2.4  2.6
+        	2.8  3.0  3.2  3.7  4.1  5.1  6.1  7.1
+                8.1 10.1 12.1 16.1 20.1
+           
+            3 - custom grid, specify with RADG
+
+RADG      custom grid spacing, first argument is number of intervals
+          following arguments are interval limits
+
+CORR      Coloumb field correction method: 
+
+            0  for R^5 method.            use: SHIFT/ESHIFT/TT
+
+               alpha(i) = - 1/( r4 - TT * r5 + ESHIFT ) + SHIFT
+
+            1  for R^7 method (default)   use: SHIFT/SLOPE 
+ 
+               alpha(i) = SLOPE/( (1-1/sqrt(2)) * r4 + r7) + SHIFT
+
+            2  for R^5/R^7                use: A1/A2/A3/SHIFT/SLOPE/ESHIFT
+
+	       alpha(i) = SLOPE/( A1 * r4 + A2 * r5 + A3 * r7 + ESHIFT) + SHIFT
+
+               this mode is intended for the calculation of Born radii
+               in different dielectric environments
+
+            3  for R^5/R^7                use: A1/A3/A4/A5/SLOPE
+
+	       alpha(i) = SLOPE/( A1 * r4 + A3(i) * r7) + A4 + A5/(eps(i) + 1)
+               A3(i)    = A3 * 3 * eps(i) / (3 * eps(i) + 2 * EPS)
+
+               this mode is intended for the implicit membrane model(see below)
+
+            4  Same as CORR = 3 except that the local dielectric constant
+               is modulated spherically.
+
+            5  Same as CORR = 3 except that the local dielectric constant
+               is modulated cylindrically.
+
+          where r4 is volume integral over 1/r^4, r5 is square root
+          of integral over 1/r^5 and r7 is integral over 1/r^7 to the 
+          power of 1/4. 
+
+TT        Multiplicative factor for correction term (CORR = 0 only). 
+
+SHIFt     The shifting factor of Alpha(i).   MUST be set! 
+
+ESHIft    Energy shifting factor of the self-polarization 
+          energies: 1/Alpha(i). CORR=0 or 2 only. (Default 0.0)
+
+SLOPE     Multiplicative factor of the Alpha(i). CORR=1 or 2 only. (Default 1)
+
+A1,A2, A3 Multiplicative factors in calculation of Alpha(i). 
+
+WATR      The radius of the water probe. Usually this is set to 1.4 
+          Angstroms. If this were changed, other parameters would have 
+          to be modified.
+
+EPSILON   This is the value of the dielectric constant for the solvent medium.
+          The default value is 80.
+
+KAPPA     Debye-Huckel ionic term: Units of inverse length (Angs). Default
+          is 0 (no salt).
+
+GEOM      Select geometric cross-term in Still equation (default).
+
+ARITH     Select arithmetic cross-term in Still equation.
+
+P6        Exponent in exponential of Still equation. Default is 4, for
+          historical reasons. Value of 8 is RECOMMENDED for GEOM, 6.5 for
+          ARITH.
+ 
+WEIGHT    Use WMAIN array for radii. (Default uses vdW radii array)
+
+CLEAr     Clear all arrays and logical flags used in Generalized Born 
+          calculation. Use command by itself.
+
+          -----------------------------------------------------------
+          Parameters specific to GBMV I and II:
+          -----------------------------------------------------------
+
+FIXA      Update alphas only if coordinates have changed more
+          than expected for finite differences. Useful for
+          static pka calculations. With FIXA keyword, finite-difference
+          wouldn't work correctly, hence it must be specified. Not
+          on by default. 
+
+ALFRQ     Update frequency of Born radii. Use with great caution! 
+          One of LIMP,IMP, or EMP options must be selected. (Default 1)
+	  Values other 1 not generally recommended.
+
+LIMP      Use ALFRQ*(dE/dalpha)(dalpha/dx) part of GB force every ALFRQ
+          steps. For ALFRQ <= 5.
+
+EMP       Decay constant of the impulse force. Default is 1.5, which
+          is meant for ALFRQ of 5. Generally, EMP ~= ALFRQ/4. For 
+          ALFRQ <= 10. (Recommended option)
+
+IMP       Use (dE/dalpha)(dalpha/dx) part of GB force every ALFRQ
+          steps. Any ALFRQ can be used. Only meant for equilibrium
+          calculations.
+
+DN        The cell width of the lookup grid. Larger values make program
+          slower. Smaller values use up more memory. Default of 1.0 A is best
+          compromise between speed and memory.
+
+BETA      Smoothing factor for tailing off of volume. 
+          Values of around -100 are fine for GBMV I. Values between -8 to 
+          -50 are reasonable for GBMV II. (Default -20)
+
+	  Smaller values of beta lead to more stable dynamics, but compromise
+          the agreement with Poisson theory. In GBMV II the choice of BETA 
+          also affects P3. Good pairs of values for GBMV II are:
+
+             BETA = -20, P3 = 0.70
+             BETA = -12, P3 = 0.65  * recommended as best compromise
+             BETA = -10, P3 = 0.57
+             BETA =  -8, P3 = 0.35
+
+LAMBda    The threshold value for the atomic volumes. In GBMV I, smaller
+          values produces shorter Born radii and wide variance w/respect
+          to accurate PB radii. Large values produce larger radii but smaller 
+          variance. In GBMV II, value should be kept at 0.5.
+
+BUFR      Distance that any atom is allowed to move before lookup table
+          is rebuilt. Larger values lead to less lookup table update but larger
+          memory usage. Use 0.0 for static structure.
+          Values between 0.2 and 1.0 Angstrom. (Default 0.5)
+
+MEM       Percentage extra memory beyond hypothetical calculation of table
+          size. (Default 10)
+
+TOL       Accuracy of the switching function used to determine accuracy of the
+          first derivatives, i.e. forces. (Default 1e-8)
+
+SA        Surface area coefficient (KCAL/(MOL*A**2)). (Default 0.0)
+          SASA Energy term shows up under EXTERN/ASP.
+
+SB        Surface area constant (KCAL/MOL) (no effect on forces) (Default 0.0)
+
+SON       The startpoint for the switching function of each hard sphere.
+          (Default 1.2) Units in Angstroms
+
+SOFF      The endpoint for the switching function of each hard sphere.
+          (Default 1.5)
+
+P1        The multiplicative factor for the exponent of the 
+          quartic exponential atomic function:
+                
+                 Gamma(i) = P1 * log(lambda)/(Rad(i)^4)
+
+          Parameters specific to GBMV II:
+
+P1,P2     Variables which affect the shape of the VSA atomic function in the 
+          region of R to R+2. 
+ 
+                 F(x) = A^2 / (A + x^2 - R^2)^2
+
+             where
+
+                 A = P1 * R + P2 (Defaults: P1 = 1.25/P2 = 0.45)
+
+P3        Scaling factor of VSA function. Default = 0.7 
+          This factor depends on the value chosen for BETA 
+          (see description above)
+
+P4        Scaling coefficient for correction term to Still's equation.
+          (set to 0.0 for now)
+
+P5        Exponent to the Still correction term. (use default for now)
+
+HSX1/HSX2 Start and stop of hard-sphere tail with R(vdW) as origin.
+          (Defaults: -0.125/0.25).
+
+ONX/OFFX  Start and stop of VSA tail. Increasing values up to 2.8 A 
+          makes better accuracy, however slows calculation. Compromise
+          of 1.9/2.1 is default.
+
+FAST      Turns on fast GBMV routine.
+
+SGBFRQ    Update frequency of internal lookup list in fast GBMV mode 
+          (Default 1). Values between 1 and 10 are recommended.
+
+SXD       Delta used in fast GBMV mode lookup buffer. (Default 0). 
+          Recommended values between 0.1 and 0.5. Requires 'FAST 1'
+
+GBVDW     If present, the VDW dispersion term is turned on.
+
+GBASP     If present, variable surface area coefficients are turned on.
+          They are read from the ASPValue array that should be set
+          before calling GBMV with appropriate scalar commands.
+
+          -----------------------------------------------------------
+          Parameters specific to HDGB (CORR = 3, 4, 5):
+          -----------------------------------------------------------
+
+UNEPS     Unit number of an input file holding the dielectric profile
+          values (Use -1 for the default profile).  The format of this
+          input file is restricted.  Comments are not allowed in a file.
+          The dielectric profile must be sampled in equal intervals.
+          The first line needs the number of sampling points n and the
+          sampling interval h (Angstrom). Two columns of the z coordinates
+          (Angstrom) and dielectric constants. The example is given 
+          in test/data/hdgb_eps.dat.
+  
+A4,A5     Parameters in calculation of Alpha(i). A4 and A5 correspond
+          to the parameter D and E of Equation (15) in the reference (3)
+          respectively. 
+
+
+ZS,ZM,ZT  Parameters for a switching function for the nonpolar energy.
+ST0       ZS, ZM, ZT, and ST0 corresponds to Za, Zb, Zc, and C of
+          Equation (11) in the reference (4).
+
+UNNP      Unit number of a previously opened (formatted) input file for 
+          the non-polar profile. If this option is used the values given 
+          with ZS, ZM, ZT, and ST0 are ignored. The format is the same
+          as the format used for the dielectric profile (see UNEPS).
+
+HDGBRC    If this flag is specified, the radius will be corrected
+          upon insertion to an implicit membrane.
+          (Only availabe for CORR = 3)
+
+HDNOSW    Turn off switching function for non-polar part when in HDGB 
+          mode (CORR = 3,4,5)
+
+EXCLGB    Variable to exclude residues for HDGB to be used for inward facing
+          residue treatment. Used with atom selection.
+ 
+          -----------------------------------------------------------
+          Parameters specific to HDGBVDW (VDW dispersion term) (CORR = 3):
+          -----------------------------------------------------------
+
+GBVD      If present, the VDW dispersion term is turned on.
+
+UNDO      Unit number (81) of a previously opened density profile file for water
+          molecules. The format used for UNDO and other density profile files
+          (see below: UNDP, UNDC, UNDC2 and UNDN) is the same as the format
+          used for dielectric and non-polar profiles (see UNESP).           
+
+UNDP      Unit number (82) of a previously opened density profile for oxygen 
+          atoms of lipid molecules.
+
+UNDC      Unit number (83) of a previously opened density profiles for carbon 
+          atoms at the head group of the lipid molecules.
+
+UNDC2     Unit number (84) of a previously opened density profiles for carbon
+          atoms at the tail of the lipid molecules.
+
+UNDN      Unit number (85) of a previously opened density profiles for hydrogen 
+          atoms of lipid molecules.
+
+          -----------------------------------------------------------
+          Parameters specific to DHDGB (CORR=3)
+          -----------------------------------------------------------
+          PLEASE NOTE THAT DHDGB HAS ONLY BEEN TESTED WITH DEFAULT PREF.DAT
+          WE STRONGLY ADVISE AGAINST USING THIS KEY WORD ALONG NON-DEFUALT
+          ONES.
+          This is an extension of HDGB implicit membrane
+          with CORR=3 (planer membrane).
+          DHDGB will allow planer membranes local thickness to vary
+          dynamically. For more information about the DHDGB model please
+          refer to Panahi A., Feig M., JCTC 2013, 9, 1709-1719.
+          Attention:
+          Please note that this model is only developed to be used with
+          single-pass transmembrane helices with radius of 7.5 A
+          For now, DHDGB only works for energy calculations (using energy
+          command), minimizations using SD and ABNR methods and VVER
+          integrator with Nose-Hoover thermostate (NVT ensemble)
+
+QDHDGB    keyword for turning membrane local fluctuation on
+UNFHDGB   unit number of a binary coefficient file that includes the
+          coefficients of spline interpolation of deformation energy.
+          Please use test/data/small_lookup_coeffs.bin as an example 
+          for this unit. This file must meet specific criteria: 
+          1. it has to be a binary file with size of real 4
+          2. it contains spline coefficients for deformation energy values
+              that exhustively sample between 35 to 0 A (membrane thickness)
+              with 5 A intervals
+          3. Since there are 7 intervals and each have one cubic term 
+             (with 4 coefficients) the dimension of the number of coefficients
+             will be (4*7)^(ANGDIM) where ANGDIM can be either 3 or 5.  
+
+UNEPS_DEF_A,
+UNEPS_DEF_C,    adjustable a{epsilon}, c{epsilon} and e{epsilon}
+UNEPS_DEF_E     of equation 24 above reference. The format of these files
+                are the same as UNEPS and UNNP in HDGB. To see an example
+                please see test/data/coeff_a_eps.txt,
+                test/data/coeff_c_eps.txt,test/data/coeff_e_eps.txt
+
+UNNP_DEF_A,
+UNNP_DEF_C,     adjustable a{gamma}, c{gamma} and e{gamma}
+UNNP_DEF_E      of equation 27 above reference,The format of these files
+                are the same as UNEPS and UNNP in HDGB. To see an example
+                please see test/data/coeff_a_np.txt,
+                test/data/coeff_c_np.txt,test/data/coeff_e_np.txt
+
+
+CIRCLERAD       7.5 radius of the inclusion cylinder
+SMASS           mass of virtual particles that represent the local position
+                membrane around the inclusion
+
+ANGDIM          3 or 5 the number of S values on the contact circle. 
+                The smallest value allowed is 3 and the biggest value is 5.
+                Please note that the file that contains the 
+                cubic SPLINE coefficients must match the dimensions of 
+                the s values (4*27)^(ANGDIM). We recommend using 5 S values for
+                each leaflet. 
+
+SDEF(1),...     25 initial position of the virtual particles
+SDEF(10)
+
+Please Note that during minimization the values of SDEF will be written in
+units 120 for SD and 121 for ABNR respectively.
+For now DHDGB is NOT compatible with GBMVFA option.
+
+
+          -----------------------------------------------------------
+          Parameters specific to Grid-based GBMV:
+          -----------------------------------------------------------
+
+ML        Number of surface points to carve out re-entrant surface
+
+CONV      Smear grid with cross-shaped blur function to improve accuracy
+
+          -----------------------------------------------------------
+          Additional parameters added for use with CPHMD:
+          -----------------------------------------------------------
+HYBRID    Keyword to invoke hybrid-solvent CPHMD. Allows GB radii
+          to be calculated be considering only a subset of the entire
+          system. ie. Ignoring solvent atoms
+          Used in conjuction with atom-selection
+
+SELE      Use the SELE keyword to manually specify atoms which will be
+          considered in the calculation of Born radii for use with CPHMD  
+          *** note : GBMV does not currently support images,
+              therefore care should be used when attempting
+              to use GBMV with hybrid solvent PHMD using
+              periodic boundary conditions    
+
+
+File: GBMV, Node: Examples, Up: Top, Previous: Function, Next: Top
+
+
+                  Usage Examples and Compatibility
+
+
+The examples below illustrate some of the uses of the generalized Born
+Molecular Volume (GBMV) module.  See c29test/gbmvtest.inp for more examples.
+
+--------------------------------------
+THERE ARE TWO REQUIREMENTS TO RUN GBMV
+--------------------------------------
+1) Coordinates MUST be defined for all atoms before invoking the GBMV keyword.
+   Otherwise, "infinite" grid is established which uses too much memory.
+
+2) CUTOFF Parameters MUST be defined. 
+   For non-infinite cutoffs, "switch" in nonbonded parameters is NECESSARY.
+
+Example 1
+
+  !To perform a single-point energy calculation w/infinite cutoffs using
+  !GBMV I algorithm (any forcefield):
+
+  scalar wmain = radii 
+
+  GBMV BETA -100 EPSILON 80 DN 1.0 WATR 1.4 TT 2.92 -
+       SHIFT -0.5 ESHIFT 0.0 LAMBDA1 0.1 P1 0.44 -
+       BUFR 0.5 Mem 20 CUTA 20 WTYP 0 -
+       WEIGHT ! Radii from wmain
+
+  ENERGY ctonnb 979 ctofnb 989 cutnb 999
+
+Example 2
+
+  !To perform a single-point energy calculation w/infinite cutoffs using
+  !the GBMV II algorithm (any forcefield):
+
+  GBMV BETA -20 EPSILON 80 DN 1.0 watr 1.4 GEOM -
+       TOL 1e-8 BUFR 0.5 Mem 10 CUTA 20 HSX1 -0.125 HSX2 0.25 -
+       ALFRQ 1 EMP 1.5 P4 0.0 P6 8.0 P3 0.70 ONX 1.9 OFFX 2.1 -
+       WTYP 2 NPHI 38 SHIFT -0.102 SLOPE 0.9085 CORR 1
+
+  ENERGY ctonnb 979 ctofnb 989 cutnb 999
+ 
+  GBMV CLEAR ! Clear GB arrays
+
+Example 3
+
+  !Recommended setup for molecular dynamics simulations with
+  !the GBMV II algorithm:
+
+  UPDATE atom CDIE eps 1 cutnb 21 ctofnb 18 ctonnb 16 switch vswitch
+
+  GBMV EPSILON 80 BUFR 0.2 MEM 20 CUTA 20 ALFRQ 1 -
+       GEOM BETA -12 P1 0.45 P2 1.25 P3 0.65 P6 8.0 - 
+       CORR 1 SHIFT -0.1 SLOPE 0.9 WTYP 1 NPHI 5 -
+       FAST 1 SGBFRQ 4 SXD 0.3
+
+  !You should use Langevin dynamics and a 1.5 fs time step (with SHAKE)
+  !is recommended for optimal stability. Many applications will also
+  !tolerate 2 fs time step 
+  !(more info in: Chocholousova & Feig, JCC (2006) 27, 719-729) 
+
+  SHAKE BONH TOL 1E-08 PARAM
+
+  SCALAR FBETA SET 10 SELECT .not. TYPE H* END
+
+  DYNAMICS LEAP LANG START TIMESTEP 0.0015 NSTEP 1000 -
+        FIRSTT 298 FINALT 298 BYCB -
+        INBFREQ -1 IASORS 1 IASVEL 1 NPRINT 100 IPRFRQ 100 NSAVC 100 -
+	ECHECK 20 TBATH 298 RBUF 0 ILBFREQ 50 -
+        IUNVEL -1 IUNREA 11 IUNWRI 12 IUNCRD 13 KUNIT -1
+
+Example 5 
+
+  !Grid-based GBMV:
+
+  GBMV GRID EPSILON 80 DN 0.2 watr 1.4 GEOM P6 8.0 -
+       WTYP 0 NPHI 10 SHIFT -0.007998 SLOPE 0.9026 CORR 1 CONV
+
+  ENERGY ctonnb 979 ctofnb 989 cutnb 999
+
+Example 6
+
+  ! HDGB DPPC membrane
+  ! If you want the default DPPC profile used in the reference (4),
+  ! comment out the open file statement and set UNEPS to -1.
+
+  ! The input file will be closed automatically, so you don't need
+  ! the explicit close statement.
+  open unit 1 name eps.dat read form
+
+  GBMV A1 0.3255 A3 1.085 A4 -0.14 A5 -0.15 -
+       UNEPS 1 -
+       ZS 0.5 ZM 9.2 ZT 25 ST0 0.32 
+  
+  ENERGY ctonnb 979 ctofnb 989 cutnb 999
+
+Example 7
+
+  ! HDGBVDW DPPC membrane
+
+  open unit 89 name hdgbvdw_eps.dat read form
+  open unit 88 name hdgbvdw_np.dat read form
+
+  open unit 81 name hdgbvdw_water.txt read form
+  open unit 82 name hdgbvdw_o.txt read form
+  open unit 83 name hdgbvdw_c.txt read form
+  open unit 84 name hdgbvdw_cc.txt read form
+  open unit 85 name hdgbvdw_h.txt read form
+
+  GBMV GBVD -
+       CORR 3 -
+       UNEPS 89 UNNP 88 -
+       UNDO 81 UNDP 82 UNDC 83 UND2C 84 UNDN 85 -
+       SA 0.038 SB 0
+
+  ENERGY ctonnb 979 ctofnb 989 cutnb 999
+
+----------------------------------------------------------------------
+  <Known Compatible with>
+   - PARALLEL
+   - CONS FIX
+   - INTE
+   - PHMD
+   - VIBRAN (finite difference second derivatives)
+   - MMFF (WEIGHT keyword must be used)
+   
+  <Known Incompatible with (so far)> 
+   - VIBRAN (no analytic second derivatives)
+   - BLOCK (hence not compat. w/ PERT/PIMPLEM/PERTURB/REPLICA)
+   - IMAGE/CRYSTAL
+   - EWALD 
+   - multiple dielectric
+   - QUANTUM* (single energy with original charges is ok)
+   - FLUCQ
+   - GAMESS
+   - GENBORN
+   - GRID
+   - PRESSURE
+   - SBOUND

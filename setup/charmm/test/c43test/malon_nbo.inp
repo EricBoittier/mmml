@@ -1,0 +1,33 @@
+* A simple test for the NBO file generation
+*
+
+if ?sccdftb .ne. 1 then stop
+STREam datadir.def
+
+ioformat extended
+
+read rtf card name @0/top_all36_cgenff.rtf
+read para card flex name @0/par_all36_cgenff.prm
+read psf card name @0/malon.psf
+read coor card name @0/malon.crd
+stream @0/malon.str
+
+coor stat
+coor orient
+
+!SCC-DFTB
+define qm sele segid MALON show end
+
+scalar WMAIN set 1.0 sele (qm) .and. type C*  SHOW end
+scalar WMAIN set 2.0 sele (qm) .and. type H*  SHOW end
+scalar WMAIN set 3.0 sele (qm) .and. type O*  SHOW end
+
+SCCDFTB remove CHRG 0 SELE QM END TEMP 0.0 SCFT 0.00000001 D3RD HBOND NBO
+
+energy !value is -8300.99418 if use hh with the 3OB parameters
+       !will generate nbo.47 file, which can be read by the NBO program
+
+@testcheck ?ener -8300.99418 0.005 malon_nbo
+
+STOP
+

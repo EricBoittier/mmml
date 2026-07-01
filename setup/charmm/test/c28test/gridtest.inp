@@ -1,0 +1,306 @@
+* GRIDTEST.INP
+* This test-case demonstrates features of the grid-based potentials.
+* It utilizes the param19 force field and the
+* trypsin/benzamidine receptor/ligand pair.
+* Required files: param19.inp, toph19.inp
+*  3ptb_complex.psf, 3ptb_complex.pdb
+*
+
+if ?grid .ne. 1 then
+ echo "Test NOT performed."
+ echo gridtest TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+! Read in parameter and topology files.
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+read rtf card append
+* ...
+*
+   22    0
+MASS   301 P1    1.00    P1 ! 
+MASS   302 P2    1.00    P2 ! 
+MASS   303 P3    1.00    P3 ! 
+MASS   304 P4    1.00    P4 ! 
+MASS   305 P5    1.00    P5 ! 
+MASS   306 P6    1.00    P6 ! 
+MASS   307 P7    1.00    P7 ! 
+MASS   308 P8    1.00    P8 ! 
+MASS   309 P9    1.00    P9 ! 
+MASS   310 P10   1.00    P10 ! 
+MASS   311 P11   1.00    P11 ! 
+
+RESI PROB 11.000
+ATOM P1 P1 1.0 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 
+ATOM P2 P2 1.0 p3 p4 p5 p6 p7 p8 p9 p10 p11 
+ATOM P3 P3 1.0 p4 p5 p6 p7 p8 p9 p10 p11 
+ATOM P4 P4 1.0 p5 p6 p7 p8 p9 p10 p11 
+ATOM P5 P5 1.0 p6 p7 p8 p9 p10 p11 
+ATOM P6 P6 1.0 p7 p8 p9 p10 p11 
+ATOM P7 P7 1.0 p8 p9 p10 p11 
+ATOM P8 P8 1.0 p9 p10 p11 
+ATOM P9 P9 1.0 p10 p11 
+ATOM P10 P10 1.0 p11 
+ATOM P11 P11 1.0 
+PATCH FIRST NONE LAST NONE
+END
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+read param card  append
+* additional parameters for benzamidine
+*
+
+ANGL
+   C    C  NC2    70.000  120.00000  !<<<<<
+DIHE
+   CR1E C    C    NC2      2.5       2     180.0
+
+END
+
+read param card append
+* Test probes for grid potential set-up
+*
+
+NBONDED  NBXMOD 5  ATOM RDIEL SWITCH VATOM VDISTANCE VSWITCH -
+CUTNB 999 CTOFNB 999 CTONNB 999 EPS 3 E14FAC 0.5 WMIN 1.5
+!
+!                 EMIN         Rmin     These columns used for
+!              (kcal/mol)      (A)      1-4 interactions
+!
+P1       0.00     -1.0000       0.6
+P2       0.00     -1.0000       0.8
+P3       0.00     -1.0000       1.468
+P4       0.00     -1.0000       1.6
+P5       0.00     -1.0000       1.7398
+P6       0.00     -1.0000       1.89
+P7       0.00     -1.0000       2.1
+P8       0.00     -1.0000       2.165
+P9       0.00     -1.0000       2.235
+P10      0.00     -1.0000       2.365
+P11      0.00     -1.0000       2.59
+
+END
+
+open unit 1 read form name @03ptb_complex19.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read form name @03ptb_complex19.crd
+read coor card unit 1
+close unit 1
+
+coor stat select resname ben end
+set xcen = ?xave
+set ycen = ?yave
+set zcen = ?zave
+
+delete atom select resname ben end
+
+read sequ card
+* title
+*
+1
+prob
+generate prob
+
+! Delete all atoms but single representative for first grid test
+delete atom select .not. ( type p8 .or. segid 3ptb ) end
+
+scalar x set @xcen select segid prob end
+scalar y set @ycen select segid prob end
+scalar z set @zcen select segid prob end
+
+! define energy values to check
+goto testdata
+label fromtestdata
+set ind 1
+
+cons fix select segid 3ptb end
+energy
+
+@qcheck ?ENER @e@@ind 0.01 gridtest_@ind
+incr ind
+
+open unit 3 write form name @9grid.ascii
+title
+* Test grid for system
+*
+
+grid generate xmax 1 ymax 1 zmax 1 xcen @xcen ycen @ycen zcen @zcen -
+     force 300 dgrid 0.5 select segid prob end outu 3 formatted print
+
+grid clear
+
+open unit 3 write unform name @9grid.bin
+title
+* Test grid for system
+*
+
+grid generate xmax 1 ymax 1 zmax 1 xcen @xcen ycen @ycen zcen @zcen -
+     force 300 dgrid 0.5 select segid prob end outu 3 print
+close unit 3
+grid clear
+
+open unit 3 read form name @9grid.ascii
+grid read unit 3 formatted select type p8 end print
+close unit 3
+
+grid clear
+
+open unit 3 read unform name @9grid.bin
+grid read unit 3 select type p8 end print
+close unit 3
+
+! Generate positions on grid, vdW and elec should match grid terms
+energy inbfrq 0
+
+@qcheck ?ENER @e@@ind 0.01 gridtest_@ind
+incr ind
+
+Calc Xmax = @Xcen + .5
+Calc Ymax = @ycen + .5
+Calc zmax = @zcen + .5
+Calc Xmin = @Xcen - .5
+Calc Ymin = @ycen - .5
+Calc zmin = @zcen - .5
+
+set x = @xmax
+label ix
+  set y = @ymax
+  label iy
+     set z = @zmax
+     label iz
+
+       scalar x set @x select type p8 end
+       scalar y set @y select type p8 end
+       scalar z set @z select type p8 end
+       energy
+       @qcheck ?ENER @e@@ind 0.01 gridtest_@ind
+       incr ind
+       Calc dvdW = ( ?vdW - ?Grvd ) / ?vdw
+       Calc delec = ( ?elec - ?Grel ) / ?elec
+write title unit 6
+* ?Grvd ?Grel ?vdW ?elec @dvdw @delec
+*
+       Calc z = @z - 0.5
+     if z ge @zmin goto iz
+     Calc y = @y - 0.5
+  if y ge @ymin goto iy
+  Calc x = @x - 0.5
+if x ge @xmin goto ix
+
+! Test on/off components of grid energy terms
+grid off
+energy
+
+@qcheck ?ENER @e@@ind 0.01 gridtest_@ind
+incr ind
+
+grid on select type p8 end
+
+energy
+@qcheck ?ENER @e@@ind 0.01 gridtest_@ind
+incr ind
+
+skipe all excl grvd grel
+
+energy
+@qcheck ?ENER @e@@ind 0.01 gridtest_@ind
+incr ind
+
+
+! Generate energy curve along diagonal of cube to demonstrate interpolation
+! and extrapolation.
+
+label dodiagonal
+Calc xlow = @Xmin - 0.5
+Calc x = @xmax+0.5
+Calc y = @ymax+0.5
+Calc z = @zmax+0.5
+set cnt = 0
+skipe all excl elec vdw grel grvd
+label diagonal
+  scalar x set @x select type p8 end
+  scalar y set @y select type p8 end
+  scalar z set @z select type p8 end
+  energy
+  @qcheck ?ENER @e@@ind 0.01 gridtest_@ind
+  incr ind
+
+  incr cnt by 1
+
+write title unit 6
+* @cnt ?Grvd ?vdW ?Grel ?elec
+*
+  Calc z = @z - 0.1
+  Calc y = @y - 0.1
+  Calc x = @x - 0.1
+
+if x ge @xlow goto diagonal
+   
+grid clear
+
+stop	
+
+label testdata
+SET e1 -17.91780
+SET e2 202.25740
+SET e3 -28.01844
+SET e4 -31.42193
+SET e5 -34.79881
+SET e6 -30.82945
+SET e7 -31.82926
+SET e8 -30.07349
+SET e9 -20.15167
+SET e10 -10.72027
+SET e11 21.49814
+SET e12 -23.45499
+SET e13 -28.95735
+SET e14 -34.74325
+SET e15 -33.67054
+SET e16 -35.83560
+SET e17 -36.59885
+SET e18 -32.82118
+SET e19 -28.44924
+SET e20 -8.68680
+SET e21 -7.09588
+SET e22 -20.04793
+SET e23 -31.33967
+SET e24 -32.93391
+SET e25 -37.32220
+SET e26 -40.50889
+SET e27 -37.07245
+SET e28 -37.81652
+SET e29 -29.13216
+SET e30 -14.56608
+SET e31 -29.13216
+SET e32 -14.56608
+SET e33 202.25740
+SET e34 120.08389
+SET e35 55.97795
+SET e36 9.92948
+SET e37 -18.06818
+SET e38 -28.01844
+SET e39 -29.22559
+SET e40 -30.64596
+SET e41 -32.25030
+SET e42 -33.99937
+SET e43 -35.83560
+SET e44 -35.59928
+SET e45 -34.87014
+SET e46 -33.65744
+SET e47 -31.84615
+SET e48 -29.13216
+SET e49 -15.53480
+SET e50 19.44408
+SET e51 77.84385
+SET e52 163.23576
+SET e53 282.61176
+goto fromtestdata

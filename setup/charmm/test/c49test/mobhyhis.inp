@@ -1,0 +1,83 @@
+* Test for mobhy proton hopping simulations, one his in TIP3 box
+*
+
+stream datadir.def
+set testname mobhyhis
+
+open read unit 11 card name @0top_all36_prot.rtf
+read rtf card unit 11
+close unit 11
+
+open read unit 12 card name @0par_all36_prot.prm
+read para card flex unit 12
+close unit 12
+
+open read unit 11 card name @0toppar_water_ions.str
+stream unit 11
+
+open read unit 11 card name @0mobhy.str
+stream unit 11
+
+read para card flex append
+* these torsions are missing
+*
+
+DIHEDRALS
+HA2  CT2A CT1  CD       0.2000  3     0.00
+CPH1 CT2A CT1  CD       0.2000  3     0.00
+
+END
+
+
+read sequ hsp 1
+gene main setu first aced last ct1
+
+read sequ h3o 5
+gene hydr noangle nodihedral
+
+read sequence CLA 1
+gene ion noangle nodihedral
+
+read sequence tips 173
+gene wat noangle nodihedral
+
+open read unit 12 card name @0mobhyhis.crd
+read coor card unit 12
+
+crystal define cubi 18.856 18.856 18.856 90 90 90
+crystal build cutoff 10 nope
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+shake bonh param sele .not. resname H3O end
+shake bonh param nores sele atom hydr * OH2 end sele atom hydr * H3 end
+
+cons harm force 1.0 sele atom main 1 CA end
+
+donor remove sele atom WAT * H* end
+acceptor add sele atom main 1 ND1 end
+acceptor add sele atom main 1 NE2 end
+
+hbonds cuthb 3.1 ihbfrq 10
+skipe hbond imhb
+
+mobhy ihopfr 10 ntit 1 nh3o 0 ebbr @0mobhy.prm main 1 P acidic
+
+energy
+set refval -1987.08860
+@testcheck ?ener  @refval .000001 @testname
+
+mini abnr nstep 300
+
+! The energy after minimization depends on number of processors. For n=1 it should be -2139.52721
+
+dynamics CPT timestep 0.002 nstep 100 nprint 10 iprfrq 200 -
+      PCONST PINT pmass 400.0 PREF 1.0 PGAMMA 20.0 -
+      TCONS hoover TBATH 300.0 reft 300.0 tmass 1000. firstt 300.0 finalt 300.0 -
+      iasors 1 iasvel 1 ichecw 0 isvfrq 1000 iunre -1 iunwri -1 iuncrd -1 nsavc 0 -
+      inbfrq -1 imgfrq -1 ihtfrq 0 ieqfrq 0 echeck 0 twindh 100.0 twindl -100.0 -
+      EWALD PMEWald KAPPa 0.34 ORDEr 6 FFTX 32 FFTY 32 FFTZ 32 QCOR 0.0 NTRFRQ 1000 - 
+      CTOFNB 12.0 CUTNB 14.0 CUTIM 15.0 iseed 48587696 34859505 9795875 2768697
+
+! For one processor you should see 18 hop attempts with DELTAE around 40 to 60 kcal
+
+stop

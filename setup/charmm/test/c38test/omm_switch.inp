@@ -1,0 +1,355 @@
+*  OpenMM energy for trialanine blocked in a cubic box of solvent
+*  using various PBC methods.  Total system contains 1,437 atoms.
+*  This test case tests the implementation of CHARMM's switching
+*  and shifting functions through the CHARMM/OpenMM interface
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+
+set tol = 1e-3
+calc tol2 = @tol * @tol
+
+!  box size: 24.534238 x 24.534238 x 24.534238
+
+read rtf card name @0/top_all22_prot.inp
+
+read param card name @0/par_all22_prot.inp
+
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+! Dimension of a box
+set size 24.534238
+set 7 = @size
+set theta = 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta
+crystal build cutoff 11 noper 0
+image byres xcen 0 ycen 0 zcen 0 select resname tip3 end
+image byseg xcen 0 ycen 0 zcen 0 select segid pro0 end
+
+!  turn on faster options and set-up SHAKE
+faster on
+
+set case = 1
+set pme = 1
+set ron = 8
+set vcut = vswitch
+set ecut = switch
+
+label docase
+
+      echo Case @case: @pme ctonnb=@ron @vcut @ecut
+      set cutoffs = cutnb 11 cutim 11 ctofnb 10 ctonnb @ron vatom @vcut atom @ecut
+      set ewald = noewald
+      if @pme gt 0 set ewald = Ewald pme kappa 0.32 order 4 fftx 24 ffty 24 fftz 24
+
+      ener eps 1.0 @cutoffs @ewald
+
+!      format (f16.8)
+      set echarmm = ?ener
+      coor force comp
+
+      set return Case@{case}c
+      prnlev 0 @pnode
+      goto ncharmm
+      label Case1c
+      label Case2c
+      label Case3c
+      label Case4c
+      label Case5c
+      label Case6c
+      label Case7c
+      label Case8c
+      label Case9c
+      label Case10c
+      label Case11c
+      label Case12c
+      label Case13c
+      label Case14c
+      label Case15c
+      label Case16c
+      prnlev 5 @pnode
+      ener eps 1.0 @cutoffs @ewald omm
+      set eopenmm = ?ener
+      coor force comp
+
+      set return Case@{case}o
+      prnlev 0 @pnode
+      goto nopenmm
+      label Case1o
+      label Case2o
+      label Case3o
+      label Case4o
+      label Case5o
+      label Case6o
+      label Case7o
+      label Case8o
+      label Case9o
+      label Case10o
+      label Case11o
+      label Case12o
+      label Case13o
+      label Case14o
+      label Case15o
+      label Case16o
+      prnlev 5 @pnode
+
+      if case gt 14 goto skipfail  !Don't compare OMSW/OMRF w/ CHARMM
+            Calc ediff = abs ( 100 * ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+            echo Force dot product: @fsum Percent energy error: @ediff
+            Calc fdiff = abs ( 100 * ( 1 - @fsum ) )
+            Calc prod = @ediff * @fdiff
+
+            set status = pass
+            if @prod gt @tol2 then
+               set status = fail
+            endif
+            echo testcase result: @status Case @case
+
+       label skipfail
+
+      incr case by 1
+      if @case eq 2 then
+            set pme = 1
+            set ron = 10
+            set vcut = vswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 3 then
+            set pme = 1
+            set ron = 8
+            set vcut = vfswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 4 then
+            set pme = 1
+            set ron = 10
+            set vcut = vfswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 5 then
+            set pme = 0
+            set ron = 8
+            set vcut = vswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 6 then
+            set pme = 0
+            set ron = 10
+            set vcut = vswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 7 then
+            set pme = 0
+            set ron = 8
+            set vcut = vswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 8 then
+            set pme = 0
+            set ron = 10
+            set vcut = vswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 9 then
+            set pme = 0
+            set ron = 8
+            set vcut = vfswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 10 then
+            set pme = 0
+            set ron = 10
+            set vcut = vfswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 11 then
+            set pme = 0
+            set ron = 8
+            set vcut = vfswitch
+            set ecut = fswitch
+            goto docase
+      endif
+
+      if @case eq 12 then
+            set pme = 0
+            set ron = 10
+            set vcut = vfswitch
+            set ecut = fswitch
+            goto docase
+      endif
+
+      if @case eq 13 then
+            set pme = 0
+            set ron = 8
+            set vcut = vfswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 14 then
+            set pme = 0
+            set ron = 10
+            set vcut = vfswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 15 then
+            set pme = 1
+            set ron = 8
+            set vcut = vfswitch omsw
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 16 then
+            set pme = 0
+            set ron = 10
+            set vcut = vfswitch omsw
+            set ecut = fswitch omrf omrx 78.5
+            goto docase
+      endif
+
+if @case le 16 goto docase
+
+! Finally, compare the energy values for OMSW w/ VFSWITCH
+
+
+
+stop
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+goto @return
+
+Constructed box from following command:
+
+convpdb.pl -center -nsel A:29-31 -out charmm22 -renumber 1 ~/Desktop/Students/MRobertson_REU/M2TMP/M2_CD/M2_Monomer_images/CondDomain.pdb | awk '{sub(/SER/,"ALA",$0);print $0}' | minCHARMM.pl -par blocked,nter=ACE,cter=CT3 | convpdb.pl -out charmm22 -solvate -cutoff 8 -cubic -segnames | convpdb.pl -segnames -renumwatersegs > ala3_solv.pdb

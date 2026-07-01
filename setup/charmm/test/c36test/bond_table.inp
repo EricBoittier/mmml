@@ -1,0 +1,98 @@
+* Bond table (bond, angle, dihedral) test case
+*
+
+stream datadir.def
+
+read rtf card
+* Topology for bond test
+*
+31  1
+
+MASS     1 A      1.00000 H
+MASS     2 B      1.00000 H
+MASS     3 C      1.00000 H
+MASS     4 D      1.00000 H
+
+RESI ABCD               !  Polymer link
+GROUP
+ATOM A    A       0.00  !     B      D
+ATOM B    B       0.00  !   /   \   /
+ATOM C    C       0.00  !  A      C
+ATOM D    D       0.00  !
+BOND A B B C C D
+ANGLE A B C
+ANGLE B C D
+DIHE A B C D
+END
+
+read param card
+* Dummy parameter
+*
+
+BONDS
+!
+!V(bond) = Kb(b - b0)**2
+!
+!Kb: kcal/mole/A**2
+!b0: A
+!
+!atom type Kb          b0
+!
+A     B        0.00      1.0
+B     C        0.00      1.0
+C     D        0.00      1.0
+
+ANGLES
+!
+!V(angle) = Ktheta(Theta - Theta0)**2
+!
+!V(Urey-Bradley) = Kub(S - S0)**2
+!
+!Ktheta: kcal/mole/rad**2
+!Theta0: degrees
+!Kub: kcal/mole/A**2 (Urey-Bradley)
+!S0: A
+!
+!atom types     Ktheta    Theta0   Kub     S0
+!
+A    B    C       0.000    120.00            !
+B    C    D       0.000    120.00            !
+
+DIHEDRALS
+!
+! V(phi) = Kphi*[ 1 + cos(n*phi - delta) ]
+!
+! atom types    Kphi     n   delta
+!
+A   B   C   D   0.0      1   0.0
+END
+
+read sequence ABCD 1
+generate 1 noangle nodihe setup
+
+open unit 1 form read name @0bond_table.txt
+read btable unit 1
+close unit 1
+
+read coor pdb 
+REMARK  CREATED USING WRITE_PDB.M N=4
+REMARK  DATE: 17-Feb-2010
+ATOM      1    A ABCD    1       0.000   0.866   0.000  1.00  0.00      1
+ATOM      2    B ABCD    1      -0.250   0.433   0.000  1.00  0.00      1
+ATOM      3    C ABCD    1       0.250  -0.433   0.000  1.00  0.00      1
+ATOM      4    D ABCD    1      -0.250  -1.299  -0.000  1.00  0.00      1
+TER       5   ABCD    0
+END
+
+skipe urey
+energy
+coor force comp sele all end
+print coor comp sele all end
+
+mini sd nstep 200
+energy
+
+dyna start firstt 300 nstep 100000 nprint 200 -
+nsavc 10
+
+stop

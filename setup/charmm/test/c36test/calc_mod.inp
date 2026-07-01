@@ -1,0 +1,11 @@
+* Test for modulo arithmetic operator '%'
+* Mike Garrahan, 2011
+*
+
+calc remainder = 18 % 4  ! expect 2
+
+calc remainder = 18 % 3  ! expect 0
+
+calc remainder = 18 % 0  ! expect NaN
+
+stop

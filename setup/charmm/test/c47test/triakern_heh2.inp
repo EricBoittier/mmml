@@ -1,0 +1,88 @@
+*test
+*
+
+BOMLev -2
+PRNLEV 5
+
+stream datadir.def
+read rtf card
+*Topology file
+*
+36  1  ! get rid of warning...
+
+MASS   1    He      4.0027
+MASS   2    H       1.008
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+
+RESI HEH2       0.00000
+GROUP
+ATOM He  He     0.00000 !NBO Gaussian charge
+ATOM H1   H      0.00000
+ATOM H2   H      0.00000
+BOND He H1 H1 H2
+END
+
+read para card
+* params
+*
+BONDS
+He H       0.000     1.1867
+H  H       0.0000    1.00000
+
+ANGLES
+He H  H     0.000   180.00 !
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch  -
+cutnb 998.0 ctofnb 997.0 ctonnb 994.0 eps 1.0 e14fac 1.0 wmin 1.5
+!EWALD PMEWald KAPPa 0.34 ORDEr 6 -
+!FFTX intboxvx FFTY intboxvy FFTZ intboxvz -
+!CTOFNB 12.0 CUTNB 13.0 QCOR 0.05
+
+!adm jr., 5/08/91, suggested cutoff scheme
+He       0.0       -0.0000    1.00
+H        0.0       -0.0000    1.00
+
+HBOND CUTHB 0.5  ! If you want to do hbond analysis (only), then us
+                 ! to append hbond parameters from the file: par_hb
+END
+
+read sequ card
+* psf He H2
+*
+ 1
+HEH2
+GENErate HEH2  WARNing SETUp
+
+read coor card
+* test triakern
+*
+         3  EXT
+         1         1  HEH2      He             -1.3798393928        0.7295536460        0.1271091926  MATRIX    1               0.0000000000
+         2         1  HEH2      H1             -0.2364184869        0.8275180771       -0.1631506825  MATRIX    1               0.0000000000
+         3         1  HEH2      H2              0.9288320483        0.8503578526       -0.3864699746  MATRIX    1               0.0000000000
+
+
+
+system "cp data/heh2.csv  ."
+
+TKRN acti heh2 16 4 4   int1  sele bynu 1 end sele bynu 2 end sele bynum 3 end
+
+
+energy
+
+quicka 1 2
+quicka 2 3
+quicka 3 1
+
+mini sd nstep 150 nprint 250
+mini abnr nstep 50 nprint 25
+
+test first tol 0.000001
+@testcheck ?NOK 9 0 CONS?mynode
+
+system "mv heh2* scratch/"
+
+stop

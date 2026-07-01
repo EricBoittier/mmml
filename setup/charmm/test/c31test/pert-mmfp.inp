@@ -1,0 +1,236 @@
+* Testcase to demonstrate the new PERT-MMFP combination. 
+* It is now possible to introduce MMFP restraints during an alchemical mutation
+*
+!
+! This testcase calculates the free energy difference arising
+! from increasing the force constant of the bonded energy term in 
+! a diatomic molecule (2 atoms, no len.jones, no elec.)
+!
+! The alchemical mutation is performed by changing the topology 
+! ('the old way') and with the new PERT-MMFP combination 
+! by introducing, modifying and deleting the MMFP restraint
+!
+! The first 3 transitions must produce exactly the same result.
+! The backward transition (GEO RESET) should generate a result
+! within the statistical uncertainty
+! The analytical value for the transition is 0.413 kcal/mol 
+!
+! The PERT-MMFP combination is available by specifying the
+! new keyword MMFP after the PERT command.
+! The original behavior of MMFP during PERT 
+!(constant, independent of lambda) is still the default
+!---------------------------------------------------
+if ?NOMISC eq 1 STOP
+if ?PERT   eq 0 STOP
+
+stream datadir.def
+
+set num 4  ! set number of PERT dynamics (4...all variants 
+           ! of introducing/deleting a restraint during the alchemical mutation)
+           !
+set var 1  ! first variant
+!---------------------------------------------------
+! Topology of the A-A molecule
+
+read rtf cards
+* topology 
+*
+   21    1
+
+mass 1 A  10.0
+mass 2 B  10.0
+mass 3 C  10.0
+
+resi A2 0.0  
+atom x1  A     0.00
+atom x2  A     0.00
+bond x1 x2
+ic  BLNK  BLNK  x1  x2  0.00 0.00    0.0 0.0  0.0
+ic  BLNK  x1  x2  BLNK  0.00 0.00    0.0 0.0  0.0
+ic  x1  x2  BLNK  BLNK  0.00 0.00    0.0 0.0  0.0
+patch first none last none 
+
+end
+!---------------------------------------------------
+! Parameters of the A-A molecule
+
+read parameters cards
+* bond constants 
+*
+bond 
+A  A  100.0  1.0  ! This is our reference
+B  B  400.0  1.0  ! A new force constant requires new atom-types 
+                  ! in the current PERT implementation
+C  C    0.0  1.0  ! for modifying MMFP restraint only
+
+end
+!---------------------------------------------------
+
+
+
+!---------------------------------------------------
+! build the 2-atom molecule
+!---------------------------------------------------
+label build
+
+read sequ cards
+* molecule A2
+*
+1
+A2
+generate AA setup
+
+
+! coordinates
+
+read coor card free
+* initial positions
+* of A2
+*
+    2
+1 1 A2  x1  0.0   0.0   0.0
+2 1 A2  x2  1.0   0.0   0.0
+!---------------------------------------------------
+!---------------------------------------------------
+
+
+
+!---------------------------------------------------
+! PERT mutation
+!---------------------------------------------------
+if var eq 1 goto p1
+if var eq 2 goto p2
+if var eq 3 goto p3
+if var eq 4 goto p4
+!---------------------------------------------------
+label p1
+!---------------------------------------------------
+! PERT mutation by changing the atom-type
+
+pert sele all end
+
+scalar type set 2 sele atom AA 1 x1 end     ! force constant 100 -> 400
+scalar type set 2 sele atom AA 1 x2 end
+
+goto dyn
+!---------------------------------------------------
+
+
+!---------------------------------------------------
+label p2
+!---------------------------------------------------
+! PERT mutation by introducing MMFP restraints
+
+pert MMFP  sele all end
+
+MMFP
+GEO  sphere  dist  -                        
+     harmonic symmetric -                   ! force constant 100 -> 400
+     force 600.0 droff 1.0 -                ! force constant in MMFP = force constant/2
+     select bynu 1 end   select bynu 2 end 
+END
+
+goto dyn
+!---------------------------------------------------
+
+
+!---------------------------------------------------
+label p3
+!---------------------------------------------------
+! PERT mutation by modifying MMFP restraints
+
+scalar type set 3 select all end ! set Kbond=0
+
+MMFP
+GEO  MAXGEO 10 sphere  dist  -                        
+     harmonic symmetric -                   ! basic bond term 
+     force 200.0 droff 1.0 -                ! force constant in MMFP = force constant/2
+     select bynu 1 end   select bynu 2 end 
+END
+
+
+pert MMFP  sele all end
+
+
+MMFP
+GEO  MAXGEO 10 sphere  dist  -                        
+     harmonic symmetric -                   ! force constant 100 -> 400
+     force 600.0 droff 1.0 -                ! force constant in MMFP = force constant/2
+     select bynu 1 end   select bynu 2 end 
+END
+
+goto dyn
+!---------------------------------------------------
+
+
+!---------------------------------------------------
+label p4
+!---------------------------------------------------
+! PERT mutation by deleting MMFP restraints
+! This value is not expected to be identical with the introduction
+! of the restraint
+
+MMFP
+GEO  sphere  dist  -                        
+     harmonic symmetric -                   
+     force 600.0 droff 1.0 -                ! force constant in MMFP = force constant/2
+     select bynu 1 end   select bynu 2 end 
+END
+
+
+pert MMFP  sele all end
+
+
+MMFP
+GEO RESET      ! force constant 400 -> 100
+END
+
+goto dyn
+!---------------------------------------------------
+!---------------------------------------------------
+!---------------------------------------------------
+
+
+
+!---------------------------------------------------
+! Dynamic
+!---------------------------------------------------
+label dyn
+
+SCALAR FBETa SET  60.0 SELEct  ALL  END
+!dynamics langevin start -
+dynamics start -
+             nstep 46200 timestep 0.001 -
+             inbfrq 10000  ilbfrq 10 rbuffer 0.0 tbath 300 -
+             iseed 1 echeck 200.0 -
+             nprint 10000 iprfreq 50000 kunit -1 -
+             isvfrq 0  iunwrite -1 iunread -1 -
+             nsavc  0 iuncrd -1 wmin 1.2 -
+             LSTART 0.0  LAMBDA 0.0  LSTOP 0.025  PSTART  200 -
+             PSTOP  2000 PWIND PEQUIL 200 PINCR 2000 LINCR 0.05
+
+
+PERT RESET
+PERT OFF
+if var eq @num goto end
+delet atom select all end
+!---------------------------------------------------
+if var eq 1 goto nores
+MMFP
+GEO RESET
+END
+label nores
+
+incr var by 1
+if @var le @num goto build 
+!---------------------------------------------------
+!---------------------------------------------------
+label end
+STOP
+!---------------------------------------------------
+
+
+
+
+
+

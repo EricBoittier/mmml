@@ -1,0 +1,125 @@
+* CHARMM 31 testcase sccgsbp1_2cba.inp
+* .Test SCCGSBP, the QM/MM approach using SCC-DFTB and GSBP for 
+*  Carbonic Anhydrase
+* .Construct MIJ matrix without water
+* .Construct PHIX (external static field)
+* .Author:  P. Schaefer, Univ. Wisc. Madison  June 2004
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/sccgsbp1_2cba> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+IF ?GSBP .NE. 1 THEN
+ echo "c32test/sccgsbp1_2cba> GSBP Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+! variables
+stream datadir.def
+
+set j 2cba
+set k 2cba_gsbp
+
+! read topology and parameter files that have been modified for CA 
+OPEN UNIT 21 NAME @0top_ca.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_ca.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+! CA has previously been solvated in a 25A water sphere 
+! which we perform short minimizations on in order to relax the water configuration    
+! the resulting psf and crd files are used here
+OPEN UNIT 3 NAME @0@j.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @0@j.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+! DELETE all water molecules for purposes of generating the M and PHIX matrices
+delete atom sele .byres. type OH2 end
+
+! -------------------------------------------------------------
+
+! active site centered (approx) on the Zn atom
+! caution should be taken if putting any atom exactly at the origin, and subsequently 
+! centering the active site there.  Here, we put Zn near, but not exactly at the origin
+set xcen  0.0
+set ycen  0.0
+set zcen  0.0
+coor stat
+
+PBEQ
+
+prnlev 0
+! Set optimized set of atomic radii for solvation of proteins
+stream @0radius.str
+prnlev 5
+
+PRNLEV 8   ! print contributions of individual basis functions
+TIMER  2
+
+!MIJ MATRIX
+!
+GSBP G_ii SPHERE -
+     NMPOL     1  CGSCAL    1.0 NOSORT -
+     SRDIST 20.0  RRXCEN  @xcen RRYCEN @ycen RRZCEN @zcen -
+     -
+     EPSW   80.0 EPSP    1.0 NCEL    111 DCEL   0.4 INTBP -
+     XBCEN @xcen YBCEN @ycen ZBCEN @zcen - 
+     LBOX  FOCUS LNCEL   111 LDCEL   1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
+
+TIMER  0
+
+OPEN WRITE FILE UNIT 50 NAME @9@k_MIJ1.dat
+WRITE MIJ UNIT 50
+CLOSE UNIT 50
+
+RESET                 ! use reset before using GSBP each time
+stream @0radius.str   ! optimized atomic radii
+
+! PHIX (Static External Field)
+!
+GSBP G_io  SPHERE -
+     SRDIST 20.0 RRXCEN @xcen RRYCEN @ycen RRZCEN @zcen -
+     -
+     EPSW   80.0 EPSP    1.0 NCEL    111 DCEL   0.4 INTBP -
+     XBCEN @xcen YBCEN @ycen ZBCEN @zcen -
+     LBOX  FOCUS LNCEL   111 LDCEL   1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
+
+OPEN WRITE FILE UNIT 50 NAME @9@k_phix.dat
+WRITE PHIX UNIT 50
+CLOSE UNIT 50
+
+RESET                 ! use reset before using GSBP each time
+stream @0radius.str   ! optimized atomic radii
+
+
+! Illustrate MIJ matrix calculation restart
+! Use to calculate reaction field term with more basis functions.
+
+OPEN READ FILE UNIT 50 NAME @9@k_MIJ1.dat
+READ MIJ UNIT 50
+CLOSE UNIT 50
+
+GSBP SPHERE -
+     NMPOL  2    -
+     SRDIST 20.0 RRXCEN @xcen RRYCEN @ycen RRZCEN @zcen -
+     -
+     EPSW   80.0 EPSP    1.0 NCEL    111 DCEL   0.4 INTBP -
+     XBCEN @xcen YBCEN @ycen ZBCEN @zcen -
+     LBOX  FOCUS LNCEL   111 LDCEL   1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
+
+OPEN WRITE FILE UNIT 50 NAME @9@k_MIJ2.dat
+WRITE MIJ UNIT 50
+CLOSE UNIT 50
+
+STOP

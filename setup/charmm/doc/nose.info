@@ -1,0 +1,233 @@
+CHARMM Element doc/nose.info $Revision: 1.1.1.1 $
+The documentation of Nose-Hoover method - Masa Watanabe
+-----------------------------------------------------------------------
+
+File: Nose, Node: Top, Up: (doc/dynamc.info), Previous: (doc/dynamc.info), Next: Syntax
+
+
+             **********************************************
+             *   Nose-Hoover Molecular Dynamics command   *
+             **********************************************
+
+
+This module offers access to the Constant-Temperature molecular
+dynamics defined by Nose-Hoover equations of motion (described in
+S.Nose JCP, 81 P511 (1984) and W.G. Hoover, Phy. Rev. A31, p1695 (1985))
+This method has the advantage that it is a continuous dynamics with
+well defined conserved quantities. [Other temperature scaling methods,
+available in CHARMM (included Berendsen method in Leap-frog
+integrator) have discontinuous dynamics.]
+
+*Menu:
+
+* Syntax::     Syntax of the Nose-Hoover command
+* Main::       Nose-Hoover method main commands and descriptions
+* Exam::       Example of Nose-Hoover Method
+
+
+File: Nose, Node: Syntax, Up: Top, Next: Main, Previous: Top
+
+
+                 **************************************
+                 * Syntax for the Nose-Hoover Command *
+                 **************************************
+
+
+   The original Hamiltonian for Nose dynamics is defined as follow:
+
+               H = H0 + HB
+                 = H0(p/s,q) + P^2/2Q + (f+1)kTlns     (1)
+
+where f is a degree of freedom of the physical system. This Hamiltonian 
+was originally propoesed by Nose in his JCP paper. The equations of motions 
+defined by Eq. (1) are solved numerically in order to achieve the canonical
+ensemble MD simulation. Hoovers extended the Nose's analysis. He derives a 
+slightly different set of equations of motions which dispense with the 
+time-scaling parameter s by transforming p' = p/s, S = lns and dt' = dt/s. 
+Then he define the conserved quantity:
+
+               H = H0(p',q) + P^2/2Q + (f+1)kTS             (2)
+
+This is not Hamiltonian any more, but this energy is conserved thourghout
+simulation.
+    In Nose-Hoover method, two different types of constant temperature
+methods can be called: (1) simple method: system coupled to one heat
+bath (2) multi-bath method: different parts of system can be coupled to
+different heat baths.
+    In addtion, Nose-Hoover method in this release can be invoked under
+parallel platforms. To run Nose-Hoover dynamics in parallel machines, this
+dynamics has to be called under a velocity verlet integrator. In order to
+call the velocity verlet, please refer to "dynamics.info".
+
+
+Keywords in [...] are optional. Defaults values are given in (...).
+
+(1) Simple (one heat-bath) method:
+----------------------------------
+
+To call Nose-Hoover MD method, "nose" must be specified in usual dynamics
+command, such as
+
+    DYNamics NOSE [RSTN] TREF (300.0) QREF (1.0D+50) NCYC (10) - 
+             IUNO (-1)  NSNOS (10) etc
+
+Subcommands:
+------------
+     NOSE :== specification of Nose-Hoover method with one heat bath
+    [RSTN]:== reset command for S in Eq (2)
+     TREF :== Desired Temperature of the system (Defult = 300K)
+     QREF :== magnitured of Coupling, Q,  (Defult=1.0D+50 -> large QREF
+              leads the typical microcanonical ensembel MD simulation)
+     IUNO :== unit of file that output from Nose-Hoover can be
+              written. (describ more detail later section)
+    NSNOS :== Frequency of writing output from Nose-Hoover method
+    NCYC  :== number of recursive loop of kinetic energy in order to
+              achieve the convergence values.
+
+
+(2) Multi Heat-Bath Method
+--------------------------
+
+In order to call multi-heat bath method, you have to specify the
+following command before you call dynamics command.
+
+   NOSE  I
+   CALL J  atom-selection-option
+   COEF J  QREF (1.0D+50) TREF (300)  
+   TOL (1.0D-10) 
+   NCYC (10)
+   [CLEAR]
+   END
+
+   DYNamics  [RSTN] IUNO (-1)  NSNOS (10) etc -
+
+Subcommands:
+-----------
+      I     :== number of heat bath in the system (Maxmum 10)
+      CALL  :== assigns the specified atom into Jth heat bath
+      COEF  :== assignments of Jth heat bath's coupling and 
+                desired temperature (you can use the different
+                temperature in each heat bath.)
+      TOL   :== tolerance of kinetic energy convergence 
+      CLEAR :== clear all assignments in Nose-Hoover method
+
+
+File: Nose, Node: Main, Up: Top, Previous: Syntax, Next: Exam
+
+
+                 *****************************
+                 * Nose-Hoover Main Commands *
+                 *****************************
+
+
+NOSE
+----
+When entering the Nose-Hoover module for CHARMM, it is nessesary to
+specify the number of heat baths in the system. If you are going to
+use one heat bath, you can call Nose-Hoover module from DYNAmic
+module. But if you have a plan to use more than one, you have to
+specifiy it before calling DYNAmic module. Also Nose-Hoover methods 
+are working with Verlet and Velocity Verlet algorithms in this points.
+If you want to used a velocity Verlet, specifiy it in DYNAmic module.
+(DYNAmic VVER .....). Otherwise, Verlet algorithm is used in the MD 
+simulation. For parallel platforms, a velocity Verlet must be used in
+order to run Nose-Hoover dynamics.
+
+QREF
+----
+QREF is the thermal inertia parameter which controls the rate of
+temperature fluctuations. Too high value of QREF results in slow enegy
+flow between the system and heat bath, and the limit of QREF -->
+infinity we regain conventional MD. On the other hand, if QREF is too
+small, long-lived, weakly damped oscillations of the energy occur,
+resulting in poor equilibration. It is necessary to choose right QREF
+to achieve satisfactory damping of these correlations. QREF should be
+between 10 and 1000.
+
+NCYC and TOL
+------------
+Nose-Hoover equation of motion for scaling factor S shows that it
+depends on the kinetic energy of the system. In the same time,
+molecular velocity depends on scaling factor S. So in order to solve
+these equations of motion, it requires an iterative process to get
+convergence of kinetic energies. NCYC is a number of iteration of this
+process and TOL is a tolerance to reach convergence of kinetic
+energies. If SHAKE is used for molecules, NCYC is about 3 to 5 in order
+to reach convergence. 
+
+atom-selection-option
+---------------------
+If more than one heat bath are used in the MD simulation, you have to
+specify which atoms belong to which heat bath. In order to assign them
+in particular heat bath, you have to use atom-selection module in
+CHARMM. See select.info to use atom selection syntax.
+
+RSTN
+----
+Reset command to set S in Eq. (2) equl to zero. Reseting of scaling
+parameter S doesn't change the dynamics of physical system at all.
+Sometimes S may become very large numbers during equilibration MD
+simulations, so setting S to zero may be necesrry
+
+OUTPUT FILE
+-----------
+If you set IUNO a positive integer, the output of some quantities from
+Nose-Hoover method will be written in UNIT IUNO.  This output contains
+following:
+
+ 1st line: Number of step, Number of degree of freedom, NSNOS (defined
+           above) 
+ 
+ Then at every NSNOS times, following output will be written:
+         
+           Step, Time (ps), Total Energy
+           S value, Temperatue  for each heat bath
+
+By using this output file, you can calculate the average temperature
+of system in each heat bath. In addition to that, S value can be used 
+in order to get free energy of the system [Check Branka and
+Parrinello, Mol Phys, 58, 989 (1986)]
+
+
+File: Nose, Node: Exam, Up: Top, Previous: Main, Next: Top
+
+              *****************************************
+              * Examples for using Nose-Hoover Method *
+              *****************************************
+
+=== Example of Nose-Hoover input-file ==
+
+1) One-heat-bath Selection
+              .
+              .
+              .
+SHAKE BOND ANGLE TOL 1.0D-9
+
+UPDATE INBFRQ 5 IHBFRQ 0  -
+       CUTIM 8.0  IMGFRQ 5 -
+       ATOM SHIFT VATOM VSWITCH -
+       CUTNB 8.0  CTOFNB 7.5   CTONNB 6.5  EPS 1.0 CDIE
+
+OPEN WRITE UNIT 31 CARD NAME @9FOR015.RST
+
+DYNA NOSE QREF 50.0 TREF 300.0 NCYC 5 FIRSTT 200 -
+     STRT NSTEP 100  TIME 0.001 NPRINT 10 IPRFRQ 100 -
+     IUNREA -30 IUNWRI 31  IUNCRD -1  IUNVEL  -1 -
+     KUNIT -41  NSAVC 50  NSAVV 50 ISVFRQ 1000
+
+2) Two-heat-bath selection
+In this example, ethane (ETHA) in water system is used.
+
+NOSE 2                       ! two heat baths are used. First all
+                             ! molecules are assigned into heat bath #1
+CALL 2 SELE RESNAME ETHA END ! put ethane in heat bath #2
+COEF 1 QREF 50.0 TREF 300.0
+COEF 2 QREF 50.0 TREF 300.0
+NCYC 5
+END
+
+OPEN WRITE UNIT 31 CARD NAME @9FOR015.RST
+
+DYNA STRT NSTEP 100  TIME 0.001 NPRINT 10 IPRFRQ 100 -
+     IUNREA -30 IUNWRI 31  IUNCRD -1  IUNVEL -1 FIRSTT 100.0 -
+     KUNIT -41  NSAVC 50  NSAVV 50 ISVFRQ 1000

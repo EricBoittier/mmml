@@ -1,0 +1,733 @@
+C
+C **********************************************************************
+C
+C  This is a collection of subroutines designated to solve the real
+C  general symmetric eigenvalue problem with or without eigenvectors.
+C  The routines have been taken from different freeware FORTRAN
+C  libraries and optimized by hand (or eye ?! ;-)). Most of the
+C  optimizations have been done with respect to stride minimization
+C  for the innermost loops of the subroutines. Problems with
+C  bugs, roaches and other lifestock please report to
+C
+C  Dirk Porezag   porezag@physik.tu-chemnitz.de
+C
+C  or to your nearest pest control agency (I doubt they will help).
+C  Have fun !!
+C
+C  Copyright for this file by Dirk Porezag
+C  Washington, DC, Janurary 8th, 1995 
+C
+C **********************************************************************
+C 
+C     SUBROUTINE EWEVGE 
+C     ================= 
+C 
+C ********************************************************************** 
+C 
+C  Evevge calculates eigenvalues and eigenvectors of the general 
+C  symmetric eigenvalue problem.
+C 
+C  Method:  *  A*C = E*S*C 
+C           *  Choleski decomposition  S = R'*R
+C           *  A*C = E*R'*R*C  ->  INV(R')*A*C = E*R*C
+C           *  Transformation Y = R*C  ->  C = INV(R)*Y
+C           *  Solve INV(R')*A*INV(R)*Y = E*Y  (Householder + IQL) 
+C           *  Back transformation C = INV(R)*Y
+C           *  Sorting of eigenvalues and eigenvectors 
+C 
+C     Parameters: 
+C 
+C       NA      (I) :  Dimension of A 
+C       NB      (I) :  Dimension of B 
+C       N       (I) :  Dimension of Problem  
+C       A       (I) :  Matrix A (lower triangle)
+C               (O) :  Eigenvector matrix  
+C       B       (I) :  Matrix B (lower triangle)
+C               (O) :  R where B = R'*R (upper triangle) 
+C       EW      (O) :  Eigenvalues 
+C       H       (-) :  Auxiliary vector 
+C       IEV     (I) :  0: No eigenvectors  
+C       IORD    (I) :  1: Descending order of eigenvalues 
+C                     -1: Ascending order of eigenvalues
+C                      otherwise: no sorting 
+C       IER     (O) :  Error indication  
+C                      0: No error 
+C                      K: (K <= N)  B is not positive definite
+C                      K: (K > N) Convergence failure for eigenvalue
+C                                 (K-N), (K-N-1) eigenvalues are correct
+C 
+C ********************************************************************** 
+C
+      SUBROUTINE EWEVGE (NA,NB,N,A,B,EW,H,IEV,IORD,IER) 
+        IMPLICIT REAL*8 (A-H,O-Z)
+      INCLUDE 'maxima.inc' 
+        CHARACTER*1 JOBZ
+        DIMENSION  A(NA,N),B(NB,N),EW(N),H(N)
+C common needed to provide workspace for LAPACK DSYGV that can be counted by size...
+      COMMON /EWEWRK/WORK( 1 + 34*MDIM  ),
+     &               IW( 3 + 5 * MDIM )
+C
+        IER = 0 
+        EPS = 0.0
+        IF (IEV.EQ.0) THEN
+          JOBZ='N'
+        ELSE
+          JOBZ='V'
+        ENDIF
+        CALL DSYGV(1,JOBZ,'L',N,A,NA,B,NB,EW,
+     &              WORK,34*MDIM ,IER)
+        IF (IER .GT. 0) IER = IER+N 
+        IF (IER .NE. 0)  RETURN 
+        II = 0 
+        IF (IEV .NE. 0) II = 1 
+        CALL SORTVC(NA,N,N,EW,A,IORD,II,H)
+        RETURN 
+      END
+C
+C ******************************************************************
+C
+C     SUBROUTINE CHOLES
+C     =================
+C
+C ******************************************************************
+C
+C  Choles calculates the Choleski decomposition B = R' * R of B
+C  into an upper triangle matrix R for the symmetric positive
+C  definite Matrix B. The elements of the main diagonal are
+C  stored inverted.
+C
+C     Parameters:
+C
+C       N       (I) :  Dimension of problem 
+C       B       (I) :  Matrix B (lower triangle)
+C               (O) :  Matrix R (upper triangle), inverted main diagonal
+C       NB      (I) :  Dimension of B 
+C       ICHO    (I) :  ICHO - 1 is the dimension of the submatrix that
+C                      is available as Choleski decomposition ( < 1 = 1)
+C               (O) :  Row number where decomposition failed (0 if success)
+C
+C ******************************************************************
+C
+      SUBROUTINE CHOLES (N,B,NB,ICHO)
+        IMPLICIT REAL*8 (A-H,O-Z)
+        DIMENSION  B(NB,N)
+C
+        IF (ICHO .GT. N)  GOTO 200
+        IF (ICHO .LT. 1)  ICHO = 1
+        DO 80 I = ICHO,N
+          I1 = I - 1
+          DO 70 J = I,N
+            S = B(J,I)
+            DO 20 K = 1,I1
+              S = S - B(K,I) * B(K,J)
+   20       CONTINUE
+            IF (I .NE .J) GOTO 40
+            IF (S .LE. 0.0) GOTO 100
+            S = 1.0 / SQRT(S)
+            D = S
+            GOTO 60
+   40       S = S * D
+   60       B(I,J) = S
+   70     CONTINUE
+   80   CONTINUE
+        ICHO = 0
+        GOTO 200
+  100   ICHO = I
+  200   RETURN
+      END
+C
+C ******************************************************************
+C
+C     SUBROUTINE MATRAF
+C     =================
+C
+C ******************************************************************
+C
+C  Matraf calculates out of the symmetric matrix A and the 
+C  upper triangular matrix R the product INV(R') * A * INV(R), 
+C  where the main diagonal of R is given inverted.
+C
+C     Parameters:
+C
+C       N       (I) :  Dimension of problem
+C       A       (I) :  Matrix A (lower triangle)
+C               (O) :  Transformed matrix (lower triangle)
+C       NA      (I) :  Dimension of A
+C       B       (I) :  Matrix R (upper triangle), inverted main diagonal
+C       NB      (I) :  Dimension of B
+C
+C *********************************************************************
+C
+      SUBROUTINE MATRAF (N,A,NA,B,NB,H)
+        IMPLICIT REAL*8 (A-H,O-Z)
+        DIMENSION  A(NA,N),B(NB,N),H(N)
+C
+C  FILL MATRIX 
+C
+          DO 20 I = 1,N
+            DO 10 J = I+1,N
+               A(I,J) = A(J,I)
+   10       CONTINUE
+   20     CONTINUE
+C
+C  CALCULATION OF A = INV(R') * A
+C
+          DO 60 I = 1,N
+            I1 = I-1
+            D = B(I,I)
+            DO 50 J = 1,N
+              S = A(I,J)
+              DO 30 K = 1,I1
+                S = S - B(K,I) * A(K,J)
+   30         CONTINUE
+              A(I,J) = S * D
+   50       CONTINUE  
+   60     CONTINUE
+C
+C  CALCULATION OF A = A * INV(R) (USE BUFFER FOR STRIDE OPTIMIZATION)
+C
+          DO 160 I = 1,N
+            I1 = I-1
+            D = B(I,I)
+            DO 110 J = I,N
+              H(J) = A(J,I)
+  110       CONTINUE              
+            DO 130 K = 1,I1
+              S = B(K,I)
+              DO 120 J = I,N
+                H(J) = H(J) - S * A(J,K)
+  120         CONTINUE
+  130       CONTINUE
+            DO 140 J = I,N
+              A(J,I) = H(J) * D
+  140       CONTINUE              
+  160     CONTINUE
+          RETURN
+        END
+C
+C ******************************************************************
+C
+C     SUBROUTINE TRIDIA
+C     =================
+C
+C ******************************************************************
+C
+C  Tridiagonalization of a given symmetric matrix A using Householder
+C
+C     Parameters:
+C
+C       NM      (I) :  Dimension of A 
+C       N       (I) :  Dimension of problem
+C       D       (O) :  Diagonal of tridiagonal matrix
+C       E       (O) :  Subdiagonal of tridiagonal matrix (E(1) = 0.0)
+C       A       (I) :  Matrix A (lower triangle)
+C               (O) :  Transformation Matrix
+C       IEV     (I) :  0: No eigenvectors
+C
+C ******************************************************************
+C
+      SUBROUTINE TRIDIA (NM,N,D,E,A,IEV)
+        IMPLICIT REAL*8 (A-H,O-Z)
+        DIMENSION  A(NM,N),D(N),E(N)
+C
+        DO 100 I = 1,N
+          D(I) = A(N,I)
+  100   CONTINUE
+        IF (N .EQ. 1) GOTO 510
+C
+C  FOR I = N STEP -1 UNTIL 2 DO
+C
+        DO 300 II = 2,N
+          I = N + 2 - II
+          L = I - 1
+          H = 0.0
+          SCALE = 0.0
+          IF (L .LT. 2) GOTO 130
+C
+C  SCALE ROW
+C
+          DO 120 K = 1,L
+            SCALE = SCALE + ABS(D(K))
+  120     CONTINUE
+C
+          IF (SCALE .NE. 0.0) GOTO 140
+  130     E(I) = D(L)
+          DO 135 J = 1,L
+            D(J) = A(L,J)
+            A(I,J) = 0.0
+            A(J,I) = 0.0
+  135     CONTINUE
+          GOTO 290
+C
+  140     DO 150 K = 1,L
+            D(K) = D(K) / SCALE
+            H = H + D(K) * D(K)
+  150     CONTINUE 
+          F = D(L)
+          G = -SIGN(SQRT(H),F)
+          E(I) = SCALE * G
+          H = H - F * G
+          D(L) = F - G
+C
+C  FORM A * U
+C
+          DO 170 J = 1,L
+            E(J) = 0.0
+  170     CONTINUE
+          DO 240 J = 1,L
+            F = D(J)
+            A(J,I) = F
+            G = E(J) + A(J,J) * F
+            JP1 = J + 1
+            DO 200 K = JP1,L
+              G = G + A(K,J) * D(K)
+              E(K) = E(K) + A(K,J) * F
+  200       CONTINUE 
+            E(J) = G
+  240     CONTINUE
+C
+C  FORM P
+C
+          F = 0.0
+          DO 245 J = 1,L
+            E(J) = E(J) / H
+            F = F + E(J) * D(J)
+  245     CONTINUE
+          HH = F / (H + H)
+C
+C  FORM Q
+C
+          DO 250 J = 1,L
+            E(J) = E(J) - HH * D(J)
+  250     CONTINUE
+C
+C  FORM REDUCED A
+C
+          DO 280 J = 1,L
+            F = D(J)
+            G = E(J)
+            DO 260 K = J,L
+              A(K,J) = A(K,J) - F * E(K) - G * D(K)
+  260       CONTINUE
+            D(J) = A(L,J)
+            A(I,J) = 0.0 
+  280     CONTINUE 
+C
+C  DONE WITH THIS TRANSFORMATION
+C 
+  290     D(I) = H
+  300   CONTINUE 
+C
+C  ACCUMULATION OF TRANSFORMATION MATRICES
+C
+        IF (IEV .EQ. 0) GOTO 600
+        DO 500 I = 2,N
+          L = I - 1
+          A(N,L) = A(L,L)
+          A(L,L) = 1.0
+          H = D(I)
+          IF (H .EQ. 0.0) GOTO 380
+          DO 330 K = 1,L
+            D(K) = A(K,I) / H
+  330     CONTINUE
+          DO 360 J = 1,L
+            G = 0.0
+            DO 340 K = 1,L
+              G = G + A(K,I) * A(K,J)
+  340       CONTINUE
+            DO 350 K = 1,L
+              A(K,J) = A(K,J) - G * D(K)
+  350       CONTINUE
+  360     CONTINUE
+C        
+  380     DO 400 K = 1,L
+            A(K,I) = 0.0
+  400     CONTINUE
+  500   CONTINUE
+  510   DO 520 I = 1,N
+         D(I) = A(N,I)
+         A(N,I) = 0.0
+  520   CONTINUE
+        GOTO 700
+C
+C  DEAL WITH EIGENVALUES ONLY
+C
+  600   DO 610 I = 1,N
+          D(I) = A(I,I)
+  610   CONTINUE
+C
+  700   A(N,N) = 1.0
+        E(1) = 0.0
+        RETURN
+      END
+C
+C ******************************************************************
+C
+C     SUBROUTINE IQLDIA
+C     =================
+C
+C ******************************************************************
+C
+C  Iqldia calculates eigenvalues and eigenvectors of a tridiagonal
+C  matrix using the QL algorithm with implicit shifting.
+C
+C     Parameters:
+C
+C       NM      (I) :  Dimension of Z
+C       N       (I) :  Dimension of the problem 
+C       D       (I) :  Diagonal of tridiagonal matrix
+C               (O) :  Eigenvalues
+C       E       (I) :  Subdiagonal of tridiagonal matrix
+C       Z       (I) :  Transformation matrix 
+C               (O) :  Eigenvectors according to Z
+C       IEV     (I) :  0: No eigenvectors
+C       IER     (O) :  Error indication
+C                      0: no error
+C                      K: Convergence failure for the eigenvalue 
+C                         number k, k-1 eigenvalues are correct
+C
+C **********************************************************************
+C
+      SUBROUTINE IQLDIA (NM,N,D,E,Z,IEV,IER)
+        IMPLICIT REAL*8 (A-H,O-Z)
+        DIMENSION  D(N),E(N),Z(NM,N)
+C
+        IER = 0
+        IF (N .EQ. 1) RETURN
+C
+C  GET MACHINE EPSILON AND BIG
+C
+        EPS = 1.0E-2
+   10   IF ((1.0 + EPS) .EQ. 1.0) GOTO 20
+        EPS = 0.5 * EPS
+        GOTO 10
+   20   EPS = 2.0 * EPS
+        EPSS = SQRT(EPS)
+        EPS4 = EPS * 1.0E-4
+        BIG = 1.0/EPS4
+C
+        ANORM = 0.0  
+        R = 0.0
+        DO 30 I = 2, N
+          S = E(I)
+          E(I-1) = S
+          S = ABS(S)
+          P = ABS(D(I-1)) + R + S
+          IF (P .GT. ANORM) ANORM = P
+          R = S
+   30   CONTINUE
+        P = ABS(D(N)) + R
+        IF (P .GT. ANORM) ANORM = P
+        E(N) = 0.0
+        DO 250 L = 1, N
+          J = 0
+C
+C  LOOK FOR SMALL SUBDIAGONAL ELEMENT 
+C 
+   50     DO 60 M = L, N-1
+            DD = ABS(D(M)) + ABS(D(M+1))
+            IF (ABS(E(M)) .LE. (EPS * DD)) GOTO 70
+            IF (ABS(E(M)) .LE. (EPS4 * ANORM)) GOTO 70
+   60     CONTINUE
+          M = N
+   70     P = D(L)
+          MM1 = M - 1
+          IF (M .EQ. L) GOTO 250
+          IF (J .EQ. 30) GOTO 900
+          J = J + 1
+C
+C  FORM SHIFT. THIS IS A SLIGHTLY ADVANCED FORM OF SHIFTING MAKING
+C  THE ROUTINE ABOUT 20 PERCENT FASTER THAN THE USUAL STUFF.
+C
+          G = (D(L+1) - P) / (2.0 * E(L))
+          R = SQRT (G * G + 1.0)
+          S = P - E(L) / (G + SIGN (R, G))
+          IF (M .EQ. L+1) GOTO 120
+          T = S
+          R = MAX(ABS(S),(ANORM / N))
+          DO 100 I = 1, 6
+            PSI = D(M) - T
+            PSJ = -1.0
+            DO 90 KK = L, MM1
+              K = L + MM1 - KK
+              IF (ABS(PSI) .GE. (EPS * ABS(E(K)))) GOTO 80
+              PSI = BIG
+              PSJ = BIG * BIG
+              GOTO 90
+   80         P = E(K) / PSI
+              PSI = D(K) - T - P * E(K)
+              PSJ = P * P * PSJ - 1.0
+   90       CONTINUE
+            IF (ABS(PSJ) .LE. EPS4) GOTO 120
+            P = PSI / PSJ
+            C = P
+            IF (ABS(P) .GT. (0.5 * R)) C = SIGN(R,P)
+            T = T - C
+            IF (ABS(P) .LE. (EPSS * R)) GOTO 110
+  100     CONTINUE
+          GOTO 120
+  110     S = T
+  120     G = D(M) - S
+          S = 1.0
+          C = 1.0
+          P = 0.0
+          MML = M - L
+C
+C  FOR I = M - 1 STEP -1 UNTIL L DO 
+C
+          DO 200 II = 1, MML
+            I = M - II
+            F = S * E(I)
+            B = C * E(I)
+C
+C  SAFE CALCULATION OF SQRT(G * G + F * F) AND SIMILAR STUFF
+C
+            IF (ABS(F) .LT. ABS(G)) GOTO 150
+            C = G / F
+            R = SQRT(1.0 + C * C)
+            E(I+1) = F * R
+            S = 1.0 / R
+            C = C * S
+            GOTO 160
+  150       S = F / G
+            R = SQRT (1.0 + S * S)
+            E(I+1) = G * R
+            C = 1.0 / R
+            S = S * C
+  160       G = D(I+1) - P
+            R = (D(I) - G) * S + 2.0 * C * B
+            P = S * R
+            D(I+1) = G + P
+            G = C * R - B
+            IF (IEV .EQ. 0) GOTO 200
+C
+C  FORM VECTOR
+C
+            DO 180 K = 1,N
+              F = Z(K,I+1)
+              B = Z(K,I)
+              Z(K,I+1) = S * B + C * F
+              Z(K,I)   = C * B - S * F
+  180       CONTINUE
+  200     CONTINUE
+          D(L) = D(L) - P
+          E(L) = G
+          E(M) = 0.0
+          GOTO 50
+  250   CONTINUE
+        RETURN
+  900   IER = L
+        RETURN
+      END
+C
+C ******************************************************************
+C
+C  This is another version of Iqldia using a less sophisticated 
+C  shifting algorithm. It is much simpler but 20 percent slower.
+C
+C ******************************************************************
+C
+C     SUBROUTINE IQLDIA (NM,N,D,E,Z,IEV,IER)
+C       IMPLICIT REAL*8 (A-H,O-Z)
+C       DIMENSION  D(N),E(N),Z(NM,N)
+C
+C       IER = 0
+C       IF (N .EQ. 1) RETURN
+C       DO 10 I = 2, N
+C         E(I-1) = E(I)
+C  10   CONTINUE
+C       E(N) = 0.0
+C       DO 250 L = 1, N
+C         ITER = 0
+C
+C  LOOK FOR SMALL SUBDIAGONAL ELEMENT 
+C 
+C 100     DO 110 M = L, N-1
+C           DD = ABS(D(M)) + ABS(D(M+1))
+C           IF ((ABS(E(M)) + DD) .EQ. DD) GOTO 120
+C 110     CONTINUE
+C         M = N
+C 120     IF (M .EQ. L) GOTO 250
+C         IF (ITER .EQ. 30) GOTO 900
+C         ITER = ITER + 1
+C
+C  FORM SHIFT 
+C
+C         G = (D(L+1) - D(L)) / (2.0 * E(L))
+C         R = SQRT (G * G + 1.0)
+C         G = D(M) - D(L) + E(L) / (G + SIGN(R,G))
+C         S = 1.0
+C         C = 1.0
+C         P = 0.0
+C
+C  FOR I = M - 1 STEP -1 UNTIL L DO 
+C
+C         DO 200 II = 1, M-L
+C           I = M - II
+C           F = S * E(I)
+C           B = C * E(I)
+C
+C  SAFE CALCULATION OF SQRT(G * G + F * F) AND SIMILAR STUFF
+C
+C           IF (ABS(F) .LT. ABS(G)) GOTO 150
+C           C = G / F
+C           R = SQRT(1.0 + C * C)
+C           E(I+1) = F * R
+C           S = 1.0 / R
+C           C = C * S
+C           GOTO 160
+C 150       S = F / G
+C           R = SQRT (1.0 + S * S)
+C           E(I+1) = G * R
+C           C = 1.0 / R
+C           S = S * C
+C 160       G = D(I+1) - P
+C           R = (D(I) - G) * S + 2.0 * C * B
+C           P = S * R
+C           D(I+1) = G + P
+C           G = C * R - B
+C           IF (IEV .EQ. 0) GOTO 200
+C
+C  FORM VECTOR
+C
+C           DO 180 K = 1, N
+C             F = Z(K,I+1)
+C             Z(K,I+1) = S * Z(K,I) + C * F
+C             Z(K,I) =   C * Z(K,I) - S * F
+C 180       CONTINUE
+C 200     CONTINUE
+C         D(L) = D(L) - P
+C         E(L) = G
+C         E(M) = 0.0
+C         GOTO 100
+C 250   CONTINUE
+C       RETURN
+C 900   IER = L
+C       RETURN
+C     END
+C
+C ******************************************************************
+C
+C     SUBROUTINE BACKTR
+C     =================
+C
+C ******************************************************************
+C
+C  Backtr solves the system R * X = Y (R upper triangular matrix),
+C  where the main diagonal of R is given inverted.
+C
+C     Parameters:
+C       N       (I) :  Dimension of problem 
+C       M       (I) :  Number of columns in X and Y
+C       R       (I) :  Matrix R (upper triangle)
+C       NR      (I) :  Dimension of R
+C       X       (O) :  Matrix X (solution of system)
+C       NX      (I) :  Dimension of X 
+C       Y       (I) :  Matrix Y (right side)
+C       NY      (I) :  Dimension of Y
+C       H       (I) :  Auxiliary vector
+C
+C **********************************************************************
+C
+      SUBROUTINE BACKTR (N,M,R,NR,X,NX,Y,NY,H)
+        IMPLICIT REAL*8 (A-H,O-Z)
+        DIMENSION  R(NR,N),X(NX,M),Y(NY,M),H(N)
+C
+C  CALCULATION OF X = INV(R) * Y 
+C
+        DO 40 II = 1,N
+          I = N + 1 - II
+          I1 = I + 1
+          D = R(I,I)
+          DO 10 J= I,N
+            H(J)= R(I,J)
+   10     CONTINUE
+          DO 30 J = 1,M
+            S = Y(I,J)
+            DO 20 K = I1,N
+              S = S - H(K) * X(K,J)
+   20       CONTINUE
+            X(I,J) = S * D
+   30     CONTINUE
+   40   CONTINUE
+        RETURN
+      END
+C
+C ******************************************************************
+C
+C     SUBROUTINE SORTVC
+C     =================
+C
+C ******************************************************************
+C
+C  Sortvc sorts D and (if required) E and the columns of Q.
+C
+C     Prameters:
+C
+C       NM      (I) :  Dimension of Q
+C       N       (I) :  Dimension of problem (size of one vector in Q)
+C       NQ      (I) :  Number of elements in D (or columns in Q)
+C       D       (I) :  Vector to sort
+C               (O) :  Sorted vector 
+C       Q       (I) :  Matrix to sort (vectors in columns)
+C               (O) :  Sorted matrix (vectors in columns)
+C       M       (I) :  1: Descending order in D
+C                     -1: Ascending order in D
+C                      otherwise: no sorting
+C       IEV     (I) :  0: No sorting of Q and E
+C                      1: Sorting of Q, no sorting of E
+C                      2: Sorting of Q and E
+C       E       (I) :  Additional Vector to sort
+C               (O) :  Sorted additional vector
+C
+C **********************************************************************
+C
+      SUBROUTINE SORTVC (NM,N,NQ,D,Q,M,IEV,E)
+        IMPLICIT REAL*8 (A-H,O-Z)
+        LOGICAL    LMIN,LMAX
+        DIMENSION  D(NQ),E(NQ),Q(NM,NQ)
+C
+        IF (NQ .LT. 2) RETURN
+        LMAX = (M .EQ.  1)
+        LMIN = (M .EQ. -1)
+        IF (.NOT. (LMAX .OR. LMIN)) RETURN
+        DO 40 KK = 2,NQ
+          K = KK - 1
+          J = K
+          H = D(K)
+C
+C  FIND EXTREMUM
+C
+          DO 10 I = KK,NQ
+            S = D(I)
+            IF (LMIN .AND. (S .GE. H)) GOTO 10
+            IF (LMAX .AND. (S .LE. H)) GOTO 10
+            J = I
+            H = S
+   10     CONTINUE
+          IF (J .EQ. K) GOTO 40
+C
+C  SORT D
+C
+          D(J) = D(K)
+          D(K) = H
+          IF (IEV .EQ. 0) GOTO 40
+C
+C  SORT Q
+C
+          DO 20 I = 1,N
+            H = Q(I,K)
+            Q(I,K) = Q(I,J)
+            Q(I,J) = H
+   20     CONTINUE
+          IF (IEV .LT. 2) GOTO 40
+C
+C  SORT E
+C
+          H    = E(K)
+          E(K) = E(J)
+          E(J) = H
+   40   CONTINUE
+        RETURN
+      END
+

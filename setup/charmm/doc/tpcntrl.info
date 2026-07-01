@@ -1,0 +1,347 @@
+CHARMM Element doc/tpcntrl.info $Revision: 1.1.1.1 $
+
+File: TPCONTROL, Node: Top, Next: Syntax, Up: (doc/commands.info)
+
+
+                 Temperature and pressure control
+
+
+by   Guillaume Lamoureux  (Guillaume.Lamoureux@umontreal.ca)
+and  Wei Jiang            (wjiang@mcs.anl.gov)
+and  Benoit Roux          (Roux@uchicago.edu)
+
+
+The TPCONTROL command specifies the thermodynamic ensemble to be
+simulated with "DYNA VV2", using extended dynamics: Nose-Hoover
+equations for constant volume and constant temperature (the NVT
+ensemble) and Anderson-Hoover equations for constant pressure and
+temperature (the NPT ensemble).  It allows multiple thermostats.
+"DYNA VV2" is a velocity-Verlet algorithm created to simulate
+efficiently the motion of Drude oscillators (created by the DRUDE
+command), and it understand the special nature of the Drude
+oscillators.  The algorithm works for non-polarizable force fields as
+well.  It is totally distinct from "DYNA VVER".
+
+See J. Chem. Phys. 119, 3025-3039 (2003) for more details.
+
+
+* Menu:
+
+* Syntax::       Syntax of the TPCONTROL command
+* Description::  Description of the TPCONTROL command
+* Dynamics::     Molecular dynamics with TPCONTROL
+* Examples::     Usage examples of the TPCONTROL command
+
+
+File: TPCONTROL, Node: Syntax, Previous: Top, Next: Description, Up: Top
+
+
+            Syntax of the TPCONTROL command
+
+
+TPCOntrol [NTHErmostats integer] [CMDAmping real] [NSTEps integer]  -
+          [IUPTen int IPTFRQ int ] -
+          nther{ thermostat-spec }  -
+          [ barostat-spec ]
+
+TPCOntrol OFF
+
+
+thermostat-spec::= THERmostat integer [TREF real] <TAU real|QREF real>  -
+                   [TOLScf real] [MAXScf integer]  -
+                   atom-selection
+
+atom-selection::=  (see *note select:(doc/select.info).)
+
+barostat-spec::=   BAROstat [PREF real] <BTAU real|WREF real> <FULL|ZONLY>
+
+
+
+File: TPCONTROL, Node: Description, Previous: Syntax, Next: Dynamics, Up: Top
+
+
+            Description of the TPCONTROL command
+
+
+-------------------------------------------------------------------
+Keyword  Default    Purpose
+-------------------------------------------------------------------
+NTHErm     1        The number of separate thermostats (or heat baths).
+                    For each one, a "thermostat-spec" sequence should
+                    be given.
+
+CMDAmping  ZERO     The friction constant (in 1/ps) to damp the motion
+                    of the center of mass of the system.  Any nonzero
+                    value will create a separate thermostat (which
+                    will actually be a "heat sink" instead of a "heat
+                    bath") coupled to the three degrees of freedom
+                    associated with the motion of the center of mass
+                    of the whole system.
+
+NSTEPs     1 (20)   The number of sub-steps each timestep is divided to
+                    integrate the thermostat variables.  The default
+                    value is 1 for non-polarizable systems (that is,
+                    the multi-timestep approach is usually not needed),
+                    and 20 for polarizable systems (that is, whenever
+                    Drude oscillators are present).
+
+IUPTen int   -1     Trigger writing the pressure tensor on every IPTFRQ
+                    integration steps to a formatted file; required for
+                    viscosity calc.  *MUST* precede THER or BARO options.
+                    The file must be OPENed prior to the DYNA command.
+
+TREF       298.15   The temperature of each thermostat (in Kelvins).
+
+TAU/QREF            Either TAU or QREF can be specified.  TAU is the
+                    characteristic response time for each thermostat
+                    (in ps), and QREF is the inertia factor of the
+                    thermostat (in kcal*AKMA**2).  If the TAU keyword
+                    is used, QREF is computed from QREF = Nf*kT*TAU**2
+                    (where Nf is the number of degrees of freedom
+                    coupled to the thermostat and kT is the
+                    temperature of the thermostat).
+
+LANG/NHGAM/NHGAMD   Keyword LANG denotes Langevin theremostat is in use.
+                    Nose-Hoover keyword TAU can NOT appear with LANG in
+                    a TPCONTROL command line. NHGAM is friction strength on
+                    center of mass of a Drude pair and NHGAMD applies to
+                    relative motion of a Drude pair. CMDAMPING or NSTEPS
+                    keyword is NOT necessary either.  
+
+TOLSCF      1e-5    The tolerance on the root-mean-square force on the
+                    Drude oscillators (in kcal/Angstrom), used for the
+                    iterative solution of the induced dipoles (if TREF
+                    is zero for the thermostats coupled to Drude
+                    particles).
+
+MAXSCF      50      The maximum number of iterations for the iterative
+                    solution of the induced dipoles (if TREF is zero
+                    for the thermostats coupled to Drude particles).
+
+PREF         1.0    The pressure of the barostat (in Atmospheres).
+
+BTAU/WREF           The characteristic response time for the barostat
+                    (in ps).  WREF (in kcal*AKMA**2) can be specified
+                    directly, or computed from WREF = (sum_i
+                    Nf_i*kT_i)*BTAU**2, where index i identifies the
+                    thermostat, and runs from 1 to NTHER.  BTAU is
+                    size- and temperature-independent.
+
+FULL/ZONLY          To allow FULL relaxation of ALL the Crystal's degrees 
+                    of freedom or to allow scaling along the Z-direction 
+                    only (ZONLY)
+               
+OFF                 Turns the temperature and pressure control off.
+
+
+-------------------------------------------------------------------
+1) NTHER
+
+For a non-polarizable system, separate thermostats could be used for
+the fast-moving solvent (water molecules) and for the slower-moving
+solute (protein).  For a polarizable system generated with the DRUDE
+command, an additional thermostat, set at a very low temperature,
+should be used for the Drude oscillators.  The "DYNA VV2" command will
+recognize the special nature of the Drude particles and apply the
+thermostat to the atom-Drude vibrations instead of the Drude
+translations.
+
+
+-------------------------------------------------------------------
+2)  CMDAMPING
+
+To avoid any acceleration of the center of mass in "DYNA VV2", this
+procedure is preferable to the NTRFRQ keyword in DYNA.  Use a nonzero
+CMDAMPING only if necessary: provided the force calculation is
+accurate enough, the "DYNA VV2" should not induce any significant
+translation of the center of mass.
+
+CMDAMPING does not apply to the rotation around the center of mass
+that may develop for a vacuum simulation or for a system with with
+spherically symmetric boundary conditions (such as defined in SSBP).
+
+
+-------------------------------------------------------------------
+3) NSTEPS
+
+The multi-timestep approach this parameter refers to is different from
+the conventional MTS-RESPA approach.  It does not separate the fast
+and slow components of the forces on the particles, but instead uses a
+higher-oder integration scheme for the thermostat variables.  This
+approach is useful when fast degrees of freedom (such as Drude
+oscillators) are coupled to a low-temperature heat bath.  For properly
+chosen values for the mass of the Drude oscillators and the force
+constant of atom-Drude bonds, it allows to use 1 or 2 fs timesteps.
+The smaller the QREF is, the more such a multi-timestep approach is
+needed.
+
+The computational overhead of this multi-timestep integration scheme
+is small (and scales as O(N)), because the atomic forces do not need
+to be recomputed.  However, it is not negligible if the system is
+relatively small, and one may want to use NSTEPS as small as possible
+(as long as it has no systematic effect on the properties of the
+simulation).
+
+
+-------------------------------------------------------------------
+4) TREF
+
+TREF is set to the "real" temperature of the system for all
+thermostats coupled to "real" atoms, and should be set to a very low
+temperature (typically, 1.0 K) for a thermostat coupled to Drude
+particles.  Such a low temperature will maintain the oscillators close
+to the self-consistent field regime, and will improve the stability of
+the simulation.
+
+If TREF is zero (actually, if it's less than 1e-8 K) for a thermostat
+coupled to Drude oscillators, the "DYNA VV2" command will solve the
+positions of the Drude oscillators at every time step using an
+iterative procedure.  This procedure is very inefficient and should be
+used for testing purposes only.
+
+The TEMPerature output for the "DYNA VV2" command corresponds to the
+kinetic temperature of the first selection (coupled to the first
+thermostat).  For a complete output of the temperature, use the IUNO
+unit specified in DYNA.
+
+
+-------------------------------------------------------------------
+5) TAU/QREF
+
+The inertia factor QREF of each thermostat should be tuned so that the
+thermostat is following the natural temperature fluctuations of Nf
+degrees of freedom at temperature T.  If QREF is too small, the
+temperature of the system will be controlled on too short a time
+scale, and the temperature fluctuations will be abnormal (that is, not
+typical of the canonical ensemble).  If QREF is too large, the
+temperature control is inefficient, and some modes of motion of the
+system may not be properly thermalized.  The kinetic temperatures each
+thermostat is controlling are printed in the IUNO unit specified in
+"DYNA VV2", and their distribution should be checked to see if the
+QREF's are too small.
+
+If a thermostat is coupled to Drude oscillators, the QREF value can be
+as low as the order of the multi-timestep integration scheme (NSTEPS)
+allows it.  For the oscillators, as long as the temperature is low
+enough compared to the actual temperature of the system, the
+temperature fluctuations are meaningless.
+
+TAU is roughly size and temperature-independent, and is safer to use
+than QREF, which should be scaled with the size of the system and the
+temperature of the heat bath.
+
+-------------------------------------------------------------------
+6) LANG/NHGAM/NHGAMD
+
+Langevin thermostat can be used to replace Nose-Hoover thermostat. 
+Especially for thermodynamic simulation with Drude oscillators Dual Langevin
+thermostating is strongly recommended (see the following examples). It
+achieves more samplings and stability.
+
+-------------------------------------------------------------------
+7) TOLSCF, MAXSCF
+
+If the iterative procedure cannot meet the tolerance criterion on the
+gradient in less than MAXSCF iterations, it will print a short warning
+message.
+
+
+-------------------------------------------------------------------
+8) BTAU/WREF
+
+Similar to TAU/QREF, but for the barostat.  The volume fluctuations
+should be looked at to make sure BTAU is not too small.  It BTAU is
+too large, the volume will equilibrate too slowly and the volume
+fluctuations will be underestimated (which may have thermodynamic
+consequences if the volume of the system is relatively small).
+
+
+
+File: TPCONTROL, Node: Dynamics, Previous: Description, Next: Examples, Up: Top
+
+            Molecular dynamics with TPCONTROL
+
+
+The only molecular dynamics command using the information set by
+TPCONTROL is "DYNA VV2".
+
+TPCONTROL shares some data structures with the NOSE command, but
+should not be used with "DYNA NOSE".  The only two keywords "DYNA VV2"
+recognizes from "DYNA NOSE" are IUNO and NSNOS.  (What VV2 writes in
+unit IUNO every NSNOS steps is not the same, however.)  Similarly, the
+"DYNA VV2" command ignores the constant-pressure options of "DYNA
+CPT".  For "DYNA VV2", all the information concerning temperature and
+pressure control should come from TPCONTROL.
+
+With TPCONTROL on, the restart file written by "DYNA VV2" contains
+additional information about the constraint forces applied by "SHAKE".
+Such a restart file can be read back only by "DYNA VV2 RESTART" (and
+with TPCONTROL on).
+
+With TPCONTROL off, "DYNA VV2" is performing a constant energy,
+constant volume simulation (and it ignores the special nature of the
+Drude oscillators, if any).
+
+
+File: TPCONTROL, Node: Examples, Previous: Dynamics, Next: Top, Up: Top
+
+
+            Usage examples of the TPCONTROL command
+
+
+All the following examples should be called immediately before calling
+the "DYNA VV2" command:
+
+    OPEN WRITE CARD UNIT 62 NAME @name
+    DYNA VV2 ... -
+        IUNO 62  NSNOS 100
+
+
+For a NVT simulation of a non-polarizable system:
+
+    TPCONTROL NTHER 1  -
+        THER 1  TREF 298.15  TAU 0.1  SELECT ALL END
+
+For a NPT simulation of a non-polarizable system:
+
+    TPCONTROL NTHER 1  -
+        THER 1  TREF 298.15  TAU  0.1  SELECT ALL END  -
+        BARO    PREF   1.00  BTAU 0.2
+
+To use separate thermostats for solvent and solute:
+
+    TPCONTROL NTHER 2  -
+        THER 1  TREF 298.15  TAU  0.1  SELECT SEGID WATE END  -
+        THER 2  TREF 298.15  TAU  0.2  SELECT SEGID SOLU END  -
+        BARO    PREF   1.00  BTAU 0.2
+
+For a NPT simulation with dual Nose_Hoover for Drude oscillator systems:
+
+    TPCONTROL NTHER 2  NSTEP 50  -
+        THER 1  TREF 298.15  TAU  0.1    SELECT .NOT. TYPE D* END  -
+        THER 2  TREF   1.00  TAU  0.005  SELECT TYPE D* END  -
+        BARO    PREF   1.00  BTAU 0.2
+
+For a NPT simulation with dual Langevin for Drude oscillator systems:
+
+    TPCONTROL NTHER 2  NHGAM 5.0 NHGAMD 10.0 -
+        THER 1  TREF 298.15  LANG SELECT .NOT. TYPE D* END  -
+        THER 2  TREF   1.00  LANG SELECT TYPE D* END  -
+        BARO    PREF   1.00  BTAU 0.2
+
+For a NPT simulation with dual Nose-Hoover for Drude oscillators, using
+an iterative procedure to solve the induced dipoles (TREF=0):
+
+    TPCONTROL NTHER 2  NSTEP 50  -
+        THER 1  TREF 298.15  TAU  0.1    SELECT .NOT. TYPE D* END  -
+        THER 2  TREF   0.00  TAU  0.005  SELECT TYPE D* END  -
+        BARO    PREF   1.00  BTAU 0.2
+
+For a NPT Crystal simulation with dual Nose Hoover for Drude oscillators:
+
+    TPCONTROL NTHER 2  CMDAMP 10.0  NSTEP 20  -
+        THER 1 TREF 298.15   TAU  0.1    SELECT .NOT. TYPE D* END  -
+        THER 2 TREF   1.00   TAU  0.005  SELECT TYPE D* END  -
+        BARO   PREF   1.00   BTAU 0.2    DSCY   FULL
+
+

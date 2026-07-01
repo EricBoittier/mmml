@@ -1,0 +1,25 @@
+* testing against reference value
+*
+! stream @0tst.str VAL REF TOL NAME1 MSG NAME2! All arguments required
+! if |val-ref| > tol*|ref| set variable NAME1 to FAIL +MSG
+! and also set TSTSTAT to FAIL and NAME2 to FAILED
+! otherwise TSTSTAT and NAME1 are PASSED,  NAME2 is not modified
+! if tol < 0 or ref=0 an absolute test is performed vs |tol|
+! LNilsson, March 2011
+
+calc tst01 = abs( @IN1 - @IN2 )
+calc tst02 = abs (  @IN3 )
+
+if @tst01 .le. @tst02 then
+  set tststat passed
+  set IN4 pass
+else
+  set tststat failed
+  set IN6 failed
+  set IN4 fail @IN5
+endif
+return
+
+
+
+ 

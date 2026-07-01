@@ -1,0 +1,247 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! MFC 2012: Tests domdec functionality:
+!               vdw energies and forces for different cutoff methods
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+stream datadir.def
+
+set return bld1
+goto build
+label bld1
+
+format (f16.10)
+
+read coor card name  @0/5dfr_solv.crd
+
+skipe all excl vdw imnb
+
+! ############ Rererence energies ###########
+faster off
+set ddmeth 
+set d 1
+set e 1
+set vmeth vswi
+  set flag return_1@vmeth
+  goto get_energy
+    label return_1vswi
+
+set vmeth vshi
+  set flag return_1@vmeth
+  goto get_energy
+    label return_1vshi
+
+set vmeth vfsw
+  set flag return_1@vmeth
+  goto get_energy
+    label return_1vfsw
+
+!########### DOMDEC energies ############
+
+faster on
+
+! Run DOMDEC unit tests
+energy domdec test
+
+set ddmeth domdec dlb off
+set d 2
+read coor card name  @0/5dfr_solv.crd
+set vmeth vswi
+  set flag return_2@vmeth
+  goto get_energy
+    label return_2vswi
+
+read coor card name  @0/5dfr_solv.crd
+set vmeth vshi
+  set flag return_2@vmeth
+  goto get_energy
+    label return_2vshi
+
+read coor card name  @0/5dfr_solv.crd
+set vmeth vfsw
+  set flag return_2@vmeth
+  goto get_energy
+    label return_2vfsw
+
+echo @{ed_vswi}   @{fd_vswi}
+echo @{ed_vshi}   @{fd_vshi}
+echo @{ed_vfsw}   @{fd_vfsw}
+
+if @{ed_vswi} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC ed_vswi"
+   stop
+endif
+
+if @{fd_vswi} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC fd_vswi"
+   stop
+endif
+
+if @{ed_vshi} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC ed_vshi"
+   stop
+endif
+
+if @{fd_vshi} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC fd_vshi"
+   stop
+endif
+
+if @{ed_vfsw} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC ed_vfsw"
+   stop
+endif
+
+if @{fd_vfsw} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC fd_vfsw"
+   stop
+endif
+
+!########### DOMDEC_GPU energies ############
+
+if ?domdec_g .eq. 1 then
+
+set ddmeth domdec dlb off gpu on
+set d 3
+read coor card name  @0/5dfr_solv.crd
+set vmeth vswi
+  set flag greturn_2@vmeth
+  goto get_energy
+    label greturn_2vswi
+
+read coor card name  @0/5dfr_solv.crd
+set vmeth vshi
+  set flag greturn_2@vmeth
+  goto get_energy
+    label greturn_2vshi
+
+read coor card name  @0/5dfr_solv.crd
+set vmeth vfsw
+  set flag greturn_2@vmeth
+  goto get_energy
+    label greturn_2vfsw
+
+echo @{ed_vswi}   @{fd_vswi}
+echo @{ed_vshi}   @{fd_vshi}
+echo @{ed_vfsw}   @{fd_vfsw}
+
+if @{ed_vswi} gt 4.0e-3 then
+   echo "Test FAILED for DOMDEC_GPU ed_vswi"
+   stop
+endif
+
+if @{fd_vswi} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC_GPU fd_vswi"
+   stop
+endif
+
+if @{ed_vshi} gt 4.0e-3 then
+   echo "Test FAILED for DOMDEC_GPU ed_vshi"
+   stop
+endif
+
+if @{fd_vshi} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC_GPU fd_vshi"
+   stop
+endif
+
+if @{ed_vfsw} gt 4.0e-3 then
+   echo "Test FAILED for DOMDEC_GPU ed_vfsw"
+   stop
+endif
+
+if @{fd_vfsw} gt 1.0e-4 then
+   echo "Test FAILED for DOMDEC_GPU fd_vfsw"
+   stop
+endif
+
+endif
+
+echo "Test OK"
+
+stop
+
+
+
+! ************************************
+! ******* GET_ENERGY   ***************
+! ************************************
+
+label get_energy
+
+if @d .eq. 1 then
+energy bycb -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 @vmeth -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+else
+energy @ddmeth -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 @vmeth -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+endif
+
+set im 0
+if @d .eq. 1 set im ?imnb
+calc ee = ?vdw + @im
+coor force comp
+
+if @d .eq. 1 then
+  write coor card comp name @9/v1_@vmeth.cor
+  write title name @9/ener_@vmeth
+* set e1 @ee
+*
+
+else
+
+  read coor card name @9/v1_@vmeth.cor
+  coor rms comp
+  set fd_@vmeth ?rms
+  stream @9/ener_@vmeth
+  calc ed_@vmeth = abs ( @e1 - @ee )
+
+endif
+
+goto @flag
+
+
+!*****************************************************
+!             BUILD
+label build
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+goto @return
+

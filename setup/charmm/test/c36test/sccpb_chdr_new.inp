@@ -1,0 +1,123 @@
+* SCC-DFTB/PB CHARMM script.
+* test for charge-dependent radii
+* Xiao Zhu, Guanhua Hou, Qiang Cui
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/scc_ewald_triala> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+stream datadir.def
+
+OPEN UNIT 21 NAME @0top_all22_model.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+! ...... Same parameter file ...... 
+OPEN UNIT 22 NAME @0par_all22_prot.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+set b etoh
+
+read sequ etoh 1
+
+gene etoh SETUP NOANG NODIH
+
+READ COOR CARD 
+* TRAINING FOR N-BUTYLAMINE COMPUTATION
+*  DATE:     3/13/ 9     15:51:10      CREATED BY USER: guanhua
+*
+    9
+    1    1 ETOH C2    -1.01588  -0.14820   0.00000 ETOH 1      2.22673
+    2    1 ETOH H21   -1.71200   0.69827   0.00000 ETOH 1      0.00000
+    3    1 ETOH H22   -1.21542  -0.76037   0.88600 ETOH 1      0.00000
+    4    1 ETOH H23   -1.21542  -0.76037  -0.88600 ETOH 1      0.00000
+    5    1 ETOH C1     0.40568   0.33865   0.00000 ETOH 1      2.22673
+    6    1 ETOH H11    0.61807   0.96330  -0.89923 ETOH 1      0.00000
+    7    1 ETOH H12    0.61807   0.96330   0.89923 ETOH 1      0.00000
+    8    1 ETOH O1     1.29586  -0.80383   0.00000 ETOH 1      1.92875
+    9    1 ETOH HO1    2.22102  -0.49075   0.00000 ETOH 1      0.00000
+
+define qm sele segid @b end
+
+!refer select.doc
+scalar WMAIN set 1.0 sele (qm) .and. type O*  end
+scalar WMAIN set 2.0 sele (qm) .and. type N*  end
+scalar WMAIN set 3.0 sele (qm) .and. type C*  end
+scalar WMAIN set 4.0 sele (qm) .and. type H*  end
+
+SCCDftb remove CHRG 0 sele qm end TEMP 0.00 SCFT 0.00000001  
+
+mini abnr nstep 10000 tolgd 0.01
+
+prnlev 5
+
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+!scale the radius of non-hydrogen atoms for smoothing boundary calculation
+!Nina,Im,Roux, Biophysical Chemistry 78 (1999) 89-96
+!sw  0.1    0.2    0.3    0.4    0.5    0.6    0.7    0.8    0.9    1.0 
+!a   0.979  0.965  0.952  0.939  0.927  0.914  0.901  0.888  0.875  0.861
+set factor 0.952
+set sw     0.3
+
+scalar wmain = radius
+!stream @0PARM_SCCPB.DAT   !this is not really used in the charge dependent scheme 
+scalar wmain set     2.03900  sele type  C*          end 
+scalar wmain set     1.01500  sele type  H*          end 
+scalar wmain set     1.72600  sele type  O*          end 
+scalar wmain set     2.03900  sele type  N*          end 
+!!!!!!!!!!!!!!!!
+scalar wmain add  @sw
+scalar wmain mult @factor
+scalar wmain set 0.0 sele type H* end
+scalar wmain stat select .not. type H* end
+define check select (.not. type H*) .and. (prop wmain .eq. 0.0) show end
+if ?nsel ne 0  stop
+coor orient
+!-----------------------------------------------------------------------
+!-----------------------------------------------------------------------
+
+!Solvation Free Energy
+PBEQ
+   OPEN UNIT 21 name @0chrg_radius_scc.dat READ FORM
+   SOLVE bspl epsw 80.0 epsp 1.0 nclx 61 ncly 61 nclz 61 -
+!keep (if you want speed convergence use keep, not recommended for solvation free energy calculations)
+   dcel 0.2  maxi 20000 conc 0.0 temp 300.00  -
+!
+!pstl 0.1kcal/mol, 0.01/0.05 kcal/mol !pay attention!!!
+!mxps # of cycles of scc and pbeq  (eg .mxps  500)
+!IGAS to initiate calculation from gas phase every step, otherwise from last step(default)
+!IGAS is default for solvation free energy calculation 
+   pstl  0.001 urad 21 IGAS -
+   force smooth swin @sw npbe 1 sten 0.005 -
+   chdr !activate charge-dependence of atomic radii
+
+! This will only give a solvation free energy
+END
+   CLOSE UNIT 21
+PBEQ
+
+   OPEN UNIT 21 name @0chrg_radius_scc.dat READ FORM
+   SOLVE bspl epsw 80.0 epsp 1.0 nclx 61 ncly 61 nclz 61 -
+!keep (if you want speed convergence use keep, not recommended for solvation free energy calculations)
+   dcel 0.2  maxi 20000 conc 0.0 temp 300.00  -
+!
+   pstl  0.001 urad 21 igas -
+   force smooth swin @sw npbe 1 sten 0.005 -
+   chdr !activate charge-dependence of atomic radii 
+
+END
+   CLOSE UNIT 21
+energy
+
+test first step 0.001 sele bynu 1 end
+
+!before mini, you must initiate energy
+!mini abnr nstep 100 nprint 1
+
+STOP

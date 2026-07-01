@@ -1,0 +1,234 @@
+* Example of parameters needed to setup induced polarization with drude atoms
+* Author:  Benoit Roux
+*
+
+BONDS
+
+!Drude atoms:
+NH3   DN     500.000     0.000     ! I1 -- I2 BOND between  N    DN
+CT1   DCA    500.000     0.000     ! I1 -- I2 BOND between  CA   DCA  
+CT3   DCB    500.000     0.000     ! I1 -- I2 BOND between  CB   DCB  
+CT3   DCL    500.000     0.000     ! I1 -- I2 BOND between  CL   DCL  
+CT3   DCR    500.000     0.000     ! I1 -- I2 BOND between  CR   DCR  
+C     DC     500.000     0.000     ! I1 -- I2 BOND between  C    DC   
+O     DO     500.000     0.000     ! I1 -- I2 BOND between  O    DO   
+NH1   DN     500.000     0.000     ! I1 -- I2 BOND between  N    DN   
+CT2   DCB    500.000     0.000     ! I1 -- I2 BOND between  CB   DCB  
+CT2   DCG    500.000     0.000     ! I1 -- I2 BOND between  CG   DCG  
+CT2   DCD    500.000     0.000     ! I1 -- I2 BOND between  CD   DCD  
+NC2   DNE    500.000     0.000     ! I1 -- I2 BOND between  NE   DNE  
+C     DCZ    500.000     0.000     ! I1 -- I2 BOND between  CZ   DCZ  
+NC2   DNH1   500.000     0.000     ! I1 -- I2 BOND between  NH1  DNH1 
+NC2   DNH2   500.000     0.000     ! I1 -- I2 BOND between  NH2  DNH2 
+CC    DCG    500.000     0.000     ! I1 -- I2 BOND between  CG   DCG  
+O     DOD1   500.000     0.000     ! I1 -- I2 BOND between  OD1  DOD1 
+NH2   DND2   500.000     0.000     ! I1 -- I2 BOND between  ND2  DND2 
+OC    DOD1   500.000     0.000     ! I1 -- I2 BOND between  OD1  DOD1 
+OC    DOD2   500.000     0.000     ! I1 -- I2 BOND between  OD2  DOD2 
+S     DSG    500.000     0.000     ! I1 -- I2 BOND between  SG   DSG  
+CC    DCD    500.000     0.000     ! I1 -- I2 BOND between  CD   DCD  
+O     DOE1   500.000     0.000     ! I1 -- I2 BOND between  OE1  DOE1 
+NH2   DNE2   500.000     0.000     ! I1 -- I2 BOND between  NE2  DNE2 
+NR1   DND1   500.000     0.000     ! I1 -- I2 BOND between  ND1  DND1 
+CPH1  DCG    500.000     0.000     ! I1 -- I2 BOND between  CG   DCG  
+CPH2  DCE1   500.000     0.000     ! I1 -- I2 BOND between  CE1  DCE1 
+NR2   DNE2   500.000     0.000     ! I1 -- I2 BOND between  NE2  DNE2 
+CPH1  DCD2   500.000     0.000     ! I1 -- I2 BOND between  CD2  DCD2 
+NR2   DND1   500.000     0.000     ! I1 -- I2 BOND between  ND1  DND1 
+NR1   DNE2   500.000     0.000     ! I1 -- I2 BOND between  NE2  DNE2 
+NR3   DNE2   500.000     0.000     ! I1 -- I2 BOND between  NE2  DNE2 
+NR3   DND1   500.000     0.000     ! I1 -- I2 BOND between  ND1  DND1 
+CT1   DCB    500.000     0.000     ! I1 -- I2 BOND between  CB   DCB  
+CT3   DCG2   500.000     0.000     ! I1 -- I2 BOND between  CG2  DCG2 
+CT2   DCG1   500.000     0.000     ! I1 -- I2 BOND between  CG1  DCG1 
+CT3   DCD    500.000     0.000     ! I1 -- I2 BOND between  CD   DCD  
+CT1   DCG    500.000     0.000     ! I1 -- I2 BOND between  CG   DCG  
+CT3   DCD1   500.000     0.000     ! I1 -- I2 BOND between  CD1  DCD1 
+CT3   DCD2   500.000     0.000     ! I1 -- I2 BOND between  CD2  DCD2 
+CT2   DCE    500.000     0.000     ! I1 -- I2 BOND between  CE   DCE  
+NH3   DNZ    500.000     0.000     ! I1 -- I2 BOND between  NZ   DNZ  
+S     DSD    500.000     0.000     ! I1 -- I2 BOND between  SD   DSD  
+CT3   DCE    500.000     0.000     ! I1 -- I2 BOND between  CE   DCE  
+CA    DCG    500.000     0.000     ! I1 -- I2 BOND between  CG   DCG  
+CA    DCD1   500.000     0.000     ! I1 -- I2 BOND between  CD1  DCD1 
+CA    DCE1   500.000     0.000     ! I1 -- I2 BOND between  CE1  DCE1 
+CA    DCZ    500.000     0.000     ! I1 -- I2 BOND between  CZ   DCZ  
+CA    DCD2   500.000     0.000     ! I1 -- I2 BOND between  CD2  DCD2 
+CA    DCE2   500.000     0.000     ! I1 -- I2 BOND between  CE2  DCE2 
+N     DN     500.000     0.000     ! I1 -- I2 BOND between  N    DN   
+CP3   DCD    500.000     0.000     ! I1 -- I2 BOND between  CD   DCD  
+CP1   DCA    500.000     0.000     ! I1 -- I2 BOND between  CA   DCA  
+CP2   DCB    500.000     0.000     ! I1 -- I2 BOND between  CB   DCB  
+CP2   DCG    500.000     0.000     ! I1 -- I2 BOND between  CG   DCG  
+OH1   DOG    500.000     0.000     ! I1 -- I2 BOND between  OG   DOG  
+OH1   DOG1   500.000     0.000     ! I1 -- I2 BOND between  OG1  DOG1 
+CY    DCG    500.000     0.000     ! I1 -- I2 BOND between  CG   DCG  
+NY    DNE1   500.000     0.000     ! I1 -- I2 BOND between  NE1  DNE1 
+CPT   DCE2   500.000     0.000     ! I1 -- I2 BOND between  CE2  DCE2 
+CPT   DCD2   500.000     0.000     ! I1 -- I2 BOND between  CD2  DCD2 
+CA    DCE3   500.000     0.000     ! I1 -- I2 BOND between  CE3  DCE3 
+CA    DCZ3   500.000     0.000     ! I1 -- I2 BOND between  CZ3  DCZ3 
+CA    DCZ2   500.000     0.000     ! I1 -- I2 BOND between  CZ2  DCZ2 
+CA    DCH2   500.000     0.000     ! I1 -- I2 BOND between  CH2  DCH2 
+OH1   DOH    500.000     0.000     ! I1 -- I2 BOND between  OH   DOH  
+CT3   DCG1   500.000     0.000     ! I1 -- I2 BOND between  CG1  DCG1 
+OC    DOE1   500.000     0.000     ! I1 -- I2 BOND between  OE1  DOE1 
+OC    DOE2   500.000     0.000     ! I1 -- I2 BOND between  OE2  DOE2 
+CT2   DCA    500.000     0.000     ! I1 -- I2 BOND between  CA   DCA  
+CC    DC     500.000     0.000     ! I1 -- I2 BOND between  C    DC   
+OC    DOT1   500.000     0.000     ! I1 -- I2 BOND between  OT1  DOT1 
+OC    DOT2   500.000     0.000     ! I1 -- I2 BOND between  OT2  DOT2 
+
+
+CT3   DCAY   500.000     0.000     ! I1 -- I2 BOND between  CAY  DCAY 
+C     DCY    500.000     0.000     ! I1 -- I2 BOND between  CY   DCY  
+O     DOY    500.000     0.000     ! I1 -- I2 BOND between  OY   DOY  
+NH1   DNT    500.000     0.000     ! I1 -- I2 BOND between  NT   DNT  
+CT3   DCAT   500.000     0.000     ! I1 -- I2 BOND between  CAT  DCAT 
+
+OT    DOH2   500.000     0.000     ! I1 -- I2 BOND for TIP3P-DP OH2
+OW    DOH2   500.000     0.000     ! I1 -- I2 BOND for SWM4-DP OH2
+HW    DOH2     0.000     0.000
+LP    DOH2     0.000     0.000
+
+CT3   DC1    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT3   DC2    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT3   DC3    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT3   DC4    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT3   DC5    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT2   DC2    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT2   DC3    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT2   DC4    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT1   DCT    500.000     0.000     ! I1 -- I2 BOND for alkanes
+CT2   DCP    500.000     0.000     ! I1 -- I2 BOND for alkanes
+
+CT2   DC1    500.000     0.000     ! I1 -- I2 BOND for ethanol
+OH1   DO1    500.000     0.000     ! I1 -- I2 BOND for ethanol
+
+CT3   DCC    500.000     0.000     ! I1 -- I2 BOND for amides
+NH2   DN     500.000     0.000     ! I1 -- I2 BOND for amides
+
+C     DCLP   500.000     0.000     ! I1 -- I2 BOND for dipeptides
+O     DOL    500.000     0.000     ! I1 -- I2 BOND for dipeptides
+NH1   DNL    500.000     0.000     ! I1 -- I2 BOND for dipeptides
+C     DCRP   500.000     0.000     ! I1 -- I2 BOND for dipeptides
+O     DOR    500.000     0.000     ! I1 -- I2 BOND for dipeptides
+NH1   DNR    500.000     0.000     ! I1 -- I2 BOND for dipeptides
+
+!PL    DP1    500.000     0.000     ! I1 -- I2 BOND for phosphates
+!OSL   DO1    500.000     0.000     ! I1 -- I2 BOND for phosphates
+!OSL   DO2    500.000     0.000     ! I1 -- I2 BOND for phosphates
+!O2L   DO3    500.000     0.000     ! I1 -- I2 BOND for phosphates
+!O2L   DO4    500.000     0.000     ! I1 -- I2 BOND for phosphates
+!CTL3  DC1    500.000     0.000     ! I1 -- I2 BOND for phosphates
+!CTL3  DC2    500.000     0.000     ! I1 -- I2 BOND for phosphates
+
+!NE    DNE0   500.000     0.000
+
+!HAL3  DH11   500.000     0.000
+!HAL3  DH12   500.000     0.000
+!HAL3  DH13   500.000     0.000
+!HAL3  DH21   500.000     0.000
+!HAL3  DH22   500.000     0.000
+!HAL3  DH23   500.000     0.000
+
+DLIT LIT  500.000  0.000
+DSOD SOD  500.000  0.000
+DPOT POT  500.000  0.000
+DRUB RUB  500.000  0.000
+DCES CES  500.000  0.000
+DFLU FLU  500.000  0.000
+DCLA CLA  500.000  0.000
+DBRO BRO  500.000  0.000
+DIOD IOD  500.000  0.000
+!DMAG MAG  500.000  0.000
+!DCAL CAL  500.000  0.000
+!DSTR STR  500.000  0.000
+!DBAR BAR  500.000  0.000
+
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+
+!      0.0  -0.1  0.25000
+!      0.0  -0.0  0.00000
+
+DC     0.0  -0.0  0.00000 ! Drude
+DCA    0.0  -0.0  0.00000 ! Drude
+DCB    0.0  -0.0  0.00000 ! Drude
+DCD    0.0  -0.0  0.00000 ! Drude
+DCD1   0.0  -0.0  0.00000 ! Drude
+DCD2   0.0  -0.0  0.00000 ! Drude
+DCE    0.0  -0.0  0.00000 ! Drude
+DCE1   0.0  -0.0  0.00000 ! Drude
+DCE2   0.0  -0.0  0.00000 ! Drude
+DCE3   0.0  -0.0  0.00000 ! Drude
+DCG    0.0  -0.0  0.00000 ! Drude
+DCG1   0.0  -0.0  0.00000 ! Drude
+DCG2   0.0  -0.0  0.00000 ! Drude
+DCH2   0.0  -0.0  0.00000 ! Drude
+DCL    0.0  -0.0  0.00000 ! Drude
+DCR    0.0  -0.0  0.00000 ! Drude
+DCZ    0.0  -0.0  0.00000 ! Drude
+DCZ2   0.0  -0.0  0.00000 ! Drude
+DCZ3   0.0  -0.0  0.00000 ! Drude
+DN     0.0  -0.0  0.00000 ! Drude
+DND1   0.0  -0.0  0.00000 ! Drude
+DND2   0.0  -0.0  0.00000 ! Drude
+DNE    0.0  -0.0  0.00000 ! Drude
+DNE1   0.0  -0.0  0.00000 ! Drude
+DNE2   0.0  -0.0  0.00000 ! Drude
+DNH1   0.0  -0.0  0.00000 ! Drude
+DNH2   0.0  -0.0  0.00000 ! Drude
+DNZ    0.0  -0.0  0.00000 ! Drude
+DO     0.0  -0.0  0.00000 ! Drude
+DOD1   0.0  -0.0  0.00000 ! Drude
+DOD2   0.0  -0.0  0.00000 ! Drude
+DOE1   0.0  -0.0  0.00000 ! Drude
+DOE2   0.0  -0.0  0.00000 ! Drude
+DOG    0.0  -0.0  0.00000 ! Drude
+DOG1   0.0  -0.0  0.00000 ! Drude
+DOH    0.0  -0.0  0.00000 ! Drude
+DOT1   0.0  -0.0  0.00000 ! Drude
+DOT2   0.0  -0.0  0.00000 ! Drude
+DOH2   0.0  -0.0  0.00000 ! Drude
+DSD    0.0  -0.0  0.00000 ! Drude
+DSG    0.0  -0.0  0.00000 ! Drude
+DCAY   0.0  -0.0  0.00000 ! Drude 
+DCY    0.0  -0.0  0.00000 ! Drude 
+DOY    0.0  -0.0  0.00000 ! Drude 
+DNY    0.0  -0.0  0.00000 ! Drude 
+DCAT   0.0  -0.0  0.00000 ! Drude 
+DNT    0.0  -0.0  0.00000 ! Drude
+
+DC1    0.0  -0.0  0.00000 ! Drude
+DC2    0.0  -0.0  0.00000 ! Drude
+
+DP1    0.0  -0.0  0.00000 ! Drude
+DO1    0.0  -0.0  0.00000 ! Drude
+DO2    0.0  -0.0  0.00000 ! Drude
+DO3    0.0  -0.0  0.00000 ! Drude
+DO4    0.0  -0.0  0.00000 ! Drude
+
+DH11   0.0  -0.0  0.00000 ! Drude
+DH12   0.0  -0.0  0.00000 ! Drude
+DH13   0.0  -0.0  0.00000 ! Drude
+DH21   0.0  -0.0  0.00000 ! Drude
+DH22   0.0  -0.0  0.00000 ! Drude
+DH23   0.0  -0.0  0.00000 ! Drude
+
+DLIT     0.0       -0.00      0.00
+DSOD     0.0       -0.00      0.00
+DPOT     0.0       -0.00      0.00
+DRUB     0.0       -0.00      0.00
+DCES     0.0       -0.00      0.00
+DFLU     0.0       -0.00      0.00
+DCLA     0.0       -0.00      0.00
+DBRO     0.0       -0.00      0.00
+DIOD     0.0       -0.00      0.00
+!DMAG     0.0       -0.00      0.00
+!DCAL     0.0       -0.00      0.00
+!DSTR     0.0       -0.00      0.00
+!DBAR     0.0       -0.00      0.00
+
+END

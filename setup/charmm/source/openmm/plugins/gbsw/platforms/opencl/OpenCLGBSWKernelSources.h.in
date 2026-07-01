@@ -1,0 +1,25 @@
+#ifndef OPENMM_OPENCLGBSWKERNELSOURCES_H_
+#define OPENMM_OPENCLGBSWKERNELSOURCES_H_
+
+/* -------------------------------------------------------------------------- *
+ *                                 OpenMMGBSW                                 *
+ * -------------------------------------------------------------------------- */
+
+#include <string>
+
+namespace OpenMMGBSW {
+
+/**
+ * This class is a central holding place for the source code of OpenCL kernels.
+ * The CMake build script inserts declarations into it based on the .cu files in the
+ * kernels subfolder.
+ */
+
+class OpenCLGBSWKernelSources {
+public:
+@CL_FILE_DECLARATIONS@
+};
+
+} // namespace OpenMMGBSW
+
+#endif /*OPENMM_OPENCLGBSWKERNELSOURCES_H_*/

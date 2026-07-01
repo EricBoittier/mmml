@@ -1,0 +1,151 @@
+* Testcase for saddle point (transition state) optimization 
+* Author: H. Lee Woodcock III 
+* Only works with Newton-Rhapson minimizer 
+* SADD=0 optimizes to a minimum
+* SADD=1 optimizes to a first order saddle point
+* SADD=2 optimizes to a second order saddle point
+*
+
+READ RTF CARDS
+*  All-atom topology file of cyclohexane :
+*
+   20    1
+Mass   3  HA   1.00800
+Mass  16  CT  12.01100
+auto angle dihedral
+resi CYCL 0.0
+Group
+Atom h1 ha 0.0950
+Atom h2 ha 0.0950
+Atom h3 ha 0.0950
+Atom h4 ha 0.0950
+Atom h5 ha 0.0950
+Atom h6 ha 0.0950
+Atom h7 ha 0.0950
+Atom h8 ha 0.0950
+Atom h9 ha 0.0950
+Atom h10 ha 0.0950
+Atom h11 ha 0.0950
+Atom h12 ha 0.0950
+Atom c1 ct -0.190
+Atom c2 ct -0.190
+Atom c3 ct -0.190
+Atom c4 ct -0.190
+Atom c5 ct -0.190
+Atom c6 ct -0.190
+Bond c1 h1  c1 h2  c1 c2
+Bond c2 h3  c2 h4  c2 c3
+Bond c3 h5  c3 h6  c3 c4
+Bond c4 h7  c4 h8  c4 c5
+Bond c5 h9  c5 h10 c5 c6
+Bond c6 h11 c6 h12 c6 c1
+ic  c5  c6  c1 c2  0.00 0.00    0.0 0.00  0.0
+ic  c6  c1  c2 c3  0.00 0.00    0.0 0.00  0.0
+ic  c1  c2  c3 c4  0.00 0.00    0.0 0.00  0.0
+ic  c2  c3  c4 c5  0.00 0.00    0.0 0.00  0.0
+ic  c3  c4  c5 c6  0.00 0.00    0.0 0.00  0.0
+ic  c4  c5  c6 c1  0.00 0.00    0.0 0.00  0.0
+patc first none last none
+end
+
+READ PARAM CARDS
+* All-H alkane parameter-set # 430.
+*
+Bond
+HA  CT   317.13  1.111
+CT  CT   229.63  1.531
+Theta
+HA  CT  HA   36.00  108.4    5.20   1.802
+HA  CT  CT   33.43  110.1   22.53   2.179
+CT  CT  CT   58.35  113.5   11.16   2.561
+Phi
+X   CT  CT  X    0.157  3    0.0
+NONBONDED NBXMOD 5 ATOM CDIEL EPS 1.0 WMIN 1.5  switch  -
+       VATOM VDISTANCE VSWITCH ctonnb 900. ctofnb 998. cutnb 999. e14fac 1.0
+HA     0.00    -0.0045     1.468
+CT     0.00    -0.0903     1.8
+End                                             
+
+READ SEQUENCE CARDS
+* Cyclohexane
+*
+1
+cycl
+
+GENERATE cycl SETUP WARN
+
+READ COOR IGNORE
+* cyclohexane near minima
+*
+   18
+    1    1 CYCL H1    -1.83587   1.62866   0.37831 A5   1      1.00000
+    2    1 CYCL H2    -1.28592   1.15366  -1.25715 A5   1      1.00000
+    3    1 CYCL H3     0.38206   1.65922   1.26724 A5   1      1.00000
+    4    5 CYCL H4     0.53691   2.40465  -0.35277 A5   1      1.00000
+    5    1 CYCL H5     2.39095   0.74365   0.24709 A5   1      1.00000
+    6    1 CYCL H6     1.53707   0.38355  -1.28780 A5   1      1.00000
+    7    1 CYCL H7     0.95452  -0.96175   1.43090 A5   1      1.00000
+    8    1 CYCL H8     1.86783  -1.70348   0.07381 A5   1      1.00000
+    9    1 CYCL H9    -0.49956  -2.47693  -0.01889 A5   1      1.00000
+   10    1 CYCL H10   -0.18135  -1.38731  -1.40982 A5   1      1.00000
+   11    1 CYCL H11   -1.53221  -0.60500   1.25441 A5   1      1.00000
+   12    1 CYCL H12   -2.35594  -0.79711  -0.32549 A5   1      1.00000
+   13    1 CYCL C1    -1.10938   0.98843  -0.17158 A5   1      1.00000
+   14    1 CYCL C2     0.32479   1.44866   0.17663 A5   1      1.00000
+   15    1 CYCL C3     1.41687   0.42220  -0.18183 A5   1      1.00000
+   16    1 CYCL C4     1.05944  -0.98283   0.32196 A5   1      1.00000
+   17    1 CYCL C5    -0.26972  -1.42679  -0.30013 A5   1      1.00000
+   18    1 CYCL C6    -1.40052  -0.49147   0.15516 A5   1      1.00000
+
+
+energy 
+
+scalar mass set 1.0
+
+vibran nmode 60
+diag raise 
+end
+
+energy
+! Find the nearest first order saddle point
+mini nraph nstep 50 nprint 1 sadd 1 tolgrd 0.002 step 0.02 
+
+vibran nmode 60
+diag raise
+end
+
+! re-read in coordinates
+READ COOR IGNORE
+* cyclohexane near minima
+*
+   18
+    1    1 CYCL H1    -1.83587   1.62866   0.37831 A5   1      1.00000
+    2    1 CYCL H2    -1.28592   1.15366  -1.25715 A5   1      1.00000
+    3    1 CYCL H3     0.38206   1.65922   1.26724 A5   1      1.00000
+    4    5 CYCL H4     0.53691   2.40465  -0.35277 A5   1      1.00000
+    5    1 CYCL H5     2.39095   0.74365   0.24709 A5   1      1.00000
+    6    1 CYCL H6     1.53707   0.38355  -1.28780 A5   1      1.00000
+    7    1 CYCL H7     0.95452  -0.96175   1.43090 A5   1      1.00000
+    8    1 CYCL H8     1.86783  -1.70348   0.07381 A5   1      1.00000
+    9    1 CYCL H9    -0.49956  -2.47693  -0.01889 A5   1      1.00000
+   10    1 CYCL H10   -0.18135  -1.38731  -1.40982 A5   1      1.00000
+   11    1 CYCL H11   -1.53221  -0.60500   1.25441 A5   1      1.00000
+   12    1 CYCL H12   -2.35594  -0.79711  -0.32549 A5   1      1.00000
+   13    1 CYCL C1    -1.10938   0.98843  -0.17158 A5   1      1.00000
+   14    1 CYCL C2     0.32479   1.44866   0.17663 A5   1      1.00000
+   15    1 CYCL C3     1.41687   0.42220  -0.18183 A5   1      1.00000
+   16    1 CYCL C4     1.05944  -0.98283   0.32196 A5   1      1.00000
+   17    1 CYCL C5    -0.26972  -1.42679  -0.30013 A5   1      1.00000
+   18    1 CYCL C6    -1.40052  -0.49147   0.15516 A5   1      1.00000
+
+
+energy
+! Find the nearest second order saddle point
+mini nraph nstep 50 nprint 1 sadd 2 tolgrd 0.002 step 0.02
+
+vibran nmode 60
+diag raise
+end
+
+stop
+

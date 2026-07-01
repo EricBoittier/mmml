@@ -1,0 +1,173 @@
+* CHARMM *  test of 1fsv solvated in TIP4P-FQ water :  polarizable model
+*  short dynamics run  
+*
+if ?cheq .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+if ?colfft eq 1 then
+      echo "Test NOT performed with COLFFT."
+      stop
+endif
+
+! for this test, CHEQ + parallel do not mix 
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0top_all30_cheq_prot.inp 
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all30_cheq_prot.inp
+read param card unit 1
+close unit 1
+
+stream @01fsv2_dimens.stream
+if @?T eq 0 set T = 298
+
+set nwat 3531 
+
+read sequ card
+* 1fsv
+*
+28
+GLN GLN TYR THR ALA LYS ILE LYS GLY ARG THR PHE ARG
+ASN GLU LYS GLU LEU ARG ASP PHE ILE GLU LYS PHE LYS
+GLY ARG
+generate 1fsv first nter last cter  angle dihedral setup warn
+
+read sequ tip4 @nwat
+generate wat setup noangl nodihe
+
+open unit 1 read form name   @01fsv_min.crd !  1fsv2_solv-octa.crd
+read coor card unit 1
+close unit 1
+
+shake bonh param tol 1.0e-12 FAST
+
+lonepair bisector dist 0.15 angle 0.0 dihe 0.0 -
+       sele atom wat * OM end -
+       sele atom wat * OH2 end -
+        sele atom wat * H1 end -
+        sele atom wat * H2 end
+
+
+
+! Set up the normalization, mass, and molecule type assignments.
+cheq norm byres select all end
+cheq tip4  sele segid wat end
+cheq flex select segid 1fsv end
+cheq QMAS CGMA 0.007    TSTA 0.001 sele segid 1fsv end
+cheq QMAS CGMA 0.000070 TSTA 0.001 sele segid wat end
+
+!
+! Now set up the one-sided harmonic potential for the water molecules
+!  This prevents over-polarization of the waters, thus preventing 
+!  catastrophic over-polarization of the entire system
+!orig  cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0 sele (type OM) end 
+!orig  cheq WTYP PTYP 1 QRQ1 0.9 QRQ2 0.2 QRK 200.0  sele ( type H1 .or. type H2) end
+
+
+cheq wall
+cheq WTYP PTYP 1 QRQ1 0.9 QRQ2 0.2 QRK 200.0 sele ( type H* ) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele ( type OM ) end
+cheq WTYP PTYP 1 QRQ1 0.9 QRQ2 0.2 QRK 200.0  sele ( type H1 .or. type H2 ) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele ( type O* .and. .not. type OH2 ) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele ( type N* ) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele ( type S* ) end
+cheq WTYP PTYP 1 QRQ1 1.55 QRQ2 -1.55 QRK 100.0 sele ( type C* ) end
+cheq WTYP PTYP 1 QRQ1 1.55 QRQ2 -1.55 QRK 300.0 sele ( type C* .and. resi TRP ) end
+
+! Dimension of the solvent volume
+Calc 7 = @size
+set 8 @7
+set 9 @8
+
+set fft 64
+set cutoff 12
+set ctofnb = @cutoff
+Calc ctofnb = @ctofnb - 1.0
+set ctonnb = @ctofnb
+Calc ctonnb = @ctonnb - 1.0
+
+crystal define octa @7 @8 @9 @theta @theta @theta
+crystal build cutoff @cutoff noper 0
+crystal write card unit 6
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select .not. resname tip4 end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select resname tip4 end
+
+!  turn on faster options and set-up SHAKE
+faster on
+shake bonh tol 1.0e-8 para mxit 20000
+
+set seed 314159
+
+!  Harmonically restrain the backbone to permit the solvent to become
+!  "equilibrated" to the solute.
+cons harm force 5.0 mass select -
+           ( type c .or. type o .or. type ca .or. type n ) end
+
+
+! First minimize w/out CHEQ 
+! to initially relax the system
+cheq off
+
+
+mini sd nstep 10 nprint 1 -
+ELEC EWALD KAPPa 0.320  PMEWALD fftx @fft ffty @fft fftz @fft -
+atom vatom vdistance cdie eps 1.0 vswitch wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb cutimg @cutoff -
+e14fac 1.0
+
+!  Now minimize with CHEQ turned on 
+!   but w/out nuclear degrees of freedom 
+cheq on
+
+energy cheq cgmd 1 -
+atom vatom vdistance cdie eps 1.0 vswitch wmin 1.2 -
+ELEC EWALD KAPPa 0.320  PMEWALD fftx @fft ffty @fft fftz @fft -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb cutimg @cutoff  -
+nbxmod -5 e14fac 0.0
+
+mini sd cheq  cgmd 1 noco nstep 10  nprint 1 -
+atom vatom vdistance cdie eps 1.0 vswitch wmin 1.2 -
+ELEC EWALD KAPPa 0.320  PMEWALD fftx @fft ffty @fft fftz @fft -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb cutimg @cutoff  -
+nbxmod -5 e14fac 0.0
+
+! Relax entire system
+mini cheq cgmd 1 sd nstep 10  nprint 1 -
+ELEC EWALD KAPPa 0.320  PMEWALD fftx @fft ffty @fft fftz @fft -
+atom vatom vdistance cdie eps 1.0 vswitch wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb cutimg @cutoff - 
+nbxmod -5 e14fac 0.0
+
+! Set up thermostats.  Protein and solvent in separate blocks.
+FQBA 2
+CALL 1 sele atom 1fsv * * end
+COEF 1  QREF  0.003  TREF 1.0
+CALL 2 sele atom wat * * end
+COEF 2  QREF 0.005 TREF 1.0
+END
+
+
+! Run Dynamics
+dynamics cpt leap start timestep .00050 nstep 10 nprint 2 iprfrq 1000 -
+        cheq cgmd 1 cgeq 1 fqint 1 -
+        firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 iseed @seed -
+        ichecw 1 teminc 0.0 ihtfrq 0 ieqfrq 0 -
+        iasors 1 iasvel 1 iscvel 0 -
+        inbfrq -1 imgfrq -1 ilbfrq 0 nbscale 1.5 - 
+        e14fac 0 nbxmod -5 -
+        eps 1.0 cutnb @cutoff cutim @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+        Ewald kappa 0.320 pmEwald qcor 1 order 4 fftx @fft ffty @fft fftz @fft ntrfq 200 - !PME
+	pconstant pmass 150.0 pref 1.0 pgamma 10.0  - !  Constant pressure
+       Hoover tmass 100.0  reft 298.0
+
+
+stop

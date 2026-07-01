@@ -1,0 +1,390 @@
+===============================================================================
+CHARMM Element doc/gamus.info 1.2
+
+File: GAMUS, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+                Gaussian Mixture Adaptive Umbrella Sampling (GAMUS)
+
+    GAMUS is a hybrid of adaptive umbrella sampling (see
+*Note adumb::(doc/adumb.info)syntax ) and metadynamics which is suited to
+identifying free energy minima for multidimensional reaction coordinates.
+Like adaptive umbrella sampling this method attempts to calculate the free
+energy surface in terms of designated reaction coordinates, and uses the
+negative of this as a biasing potential to enhance the sampling.
+The distribution of reaction coordinates is expressed in terms of mixtures
+of Gaussians whose size and shape are optimized to fit the data as closely
+as possible.  This is similar to the use of Gaussians in metadynamics to fill
+free energy basins but is more flexible.  No grids or histograms are used,
+which reduces the memory and statistical requirements of the method and
+allows the efficient exploration of free energy surfaces in 3-5 dimensions.
+The method is described in 
+
+P. Maragakis, A. van der Vaart, and M. Karplus.  J. Phys. Chem. B 113, 4664
+(2009).  doi:10.1021/jp808381s
+
+Please report problems to Justin Spiriti at jspiriti@usf.edu and/or
+Arjan van der Vaart at avandervaart@usf.edu.
+
+
+* Menu:
+
+* Syntax::        Syntax of the GAMUS commands
+* Function::      Purpose of each of the commands
+* Caveats::       Some limitations of the GAMUS method
+* Installation::  Installation of GAMUS within CHARMM
+* Examples::      Usage example of the GAMUS module
+
+
+File: GAMUS, Node: Syntax, Up: Top, Previous: Top, Next: Function
+
+
+                                 Syntax
+
+[SYNTAX GAMUS functions]
+
+Syntax:
+
+GAMUs DIHE     4X(atom-spec)
+
+GAMUs INIT     [TEMP real] [RUNI int] [WUNI int] [IFRQ int]
+
+GAMUS FIT      DATA int NGAUSS int NREF int NITR int SIGMA real GAMMA real
+
+GAMUS REWEight NSIM int QUNI int PUNI int NGAUss int [NREF int] [NITR int]
+               [SIGMa real] [GAMMa real] [WEIGHT int]
+
+GAMUS WRITE    UNIT int
+
+GAMUS CLEAR 
+
+GAMUS INFO     [VERBose]
+
+where:      atom-spec ::= { segid resid iupac }
+                          { resnumber iupac   }
+
+
+
+File: GAMUS, Node: Function, Up: Top, Previous: Syntax, Next: Caveats
+ 
+
+
+
+0.  Introduction
+
+A GAMUS simulation cycles through three stages:
+1. Molecular dynamics with a biasing potential equal to minus the free energy 
+surface estimated from the previous simulation.
+2. Determination of the partition function ratios Z_i/Z_0 for each biased 
+simulation relative to the unbiased simulation. This is done using the 
+multistate acceptance ratio method (MARE), which optimizes the likelihood of 
+observing the work values associated with the transitions between biasing 
+potentials (see P. Maragakis et al. J. Phys. Chem. B 112, 6168 (2008))
+3. Reweighting of the data and fitting of a new mixture of Gaussians to the 
+distribution of reaction coordinates encountered in previous simulations.  
+This is done using the expectation-maximization (E-M) algorithm (see A. P. 
+Dempster et al.  J. R. Stat. Soc. B 39, 1 (1977) and Bowers et al. 
+Comput. Phys. Commun. 164, 311 (2008)).  Starting from an initial guess, this 
+algorithm iteratively refines the weights, means, and variance-covariance 
+matrices of the Gaussians in order to maximize the likelihood of observing the 
+data given the fitted distribution.  The E-M algorithm is started several
+times from randomly chosen starting points; the fit with the best likelihood
+is chosen. From this fit, the new free energy surface and biasing potential
+may be obtained.
+
+GAMUS produces three sets of input/output files.  GAMUS potential files contain
+the weights, means, and variance-covariance matrices of the Gaussians used to 
+define the biasing potential, as well as the value of the Bayesian knowledge 
+parameter gamma.  These files have the following format:
+
+34 5 ! Number of Gaussians, number of coordinates
+-25  ! log(gamma)
+
+then follows the natural logarithms of the weights, the means, and the
+inverses of the variance-covariance matrices, see subroutine READGAMUS in
+gamus/gamus.src
+Energy-coordinate files contain the values of the reaction coordinates
+encountered during the simulation, as well as the values of the biasing
+potential.  Weight files contain the values of the reaction coordinates
+as well as the natural logarithms of the weights needed to recover a canonical
+Boltzmann distribution. 
+
+
+1.  GAMUS DIHE 
+
+Define a dihedral angle as a reaction coordinate for GAMUS.
+
+
+2.  GAMUS INIT
+
+Initializes the GAMUS potential.  TEMP specifies the temperature of the 
+simulation.  RUNI and WUNI give unit numbers for the biasing potential to be 
+used and the energy-coordinate file to be written during the simulation.
+An initial potential file is needed for the first GAMUS simulation; this
+should specify 0 gaussians and a value of ln(gamma) equal to -D*ln(360)
+where D is the number of reaction coordinates.
+IFRQ gives the frequency of recording the values of the reaction coordinates.
+This should be infrequent enough that consecutive values are uncorrelated
+(about 0.2 ps in most cases).
+
+
+3. GAMUS CLEAR
+
+Turns GAMUS off and clears all associated data structures.  
+
+
+4. GAMUS REWEight
+
+Performs MARE and the E-M algorithm in order to calculate a new biasing
+potential from previous potentials and energy-coordinate files. The biasing
+potential files must be opened as a continuous sequence of NSIM units starting
+with unit PUNI; likewise, the energy-coordinate files must be opened as
+a continuous sequence of units starting with QUNI.
+
+Keyword  Default   Purpose
+
+NSIM     n/a       Number of previous simulations to include
+
+PUNI     n/a       Initial biasing potential unit 
+
+QUNI     n/a       Initial energy-coordinate file unit
+
+NGAUss   n/a       Number of Gaussians to be used (should gradually increase
+                   with the number of simulations.  It is suggested to add
+		   about 1-2 Gaussians to the fit per ns of simulation.)
+
+NREF     20        Number of refinements using the E-M algorithm from randomly
+                   chosen starting points. 
+
+NITR     200       Maximum number of iterations of the E-M algorithm per
+                   refinement
+
+SIGMa    5         Minimum size of a Gaussian in any direction (in degrees)
+
+SMAX     90        Maximum size of a Gaussian in any direction (in degrees)
+
+GAMMa    -1000     Cutoff for the Bayesian prior (see below)
+
+WEIGht   -1        Unit number for writing weights of the frames (as their
+                   natural logarithms) together with values of the reaction
+		   coordinates
+
+WORK     -1        Unit number for writing work values input into MARE
+                   (primarily for debugging purposes) 
+
+The E-M optimization can have a tendency for Gaussians to collapse around 
+individual data points. For this reason, a minimum size of the Gaussian 
+in each direction is imposed. When a Gaussian collapses to this minimum 
+in all directions, the message "gaussian number N is of minimum size in 
+all directions" is produced.  The SMAX option is used to impose a maximum size 
+of a Gaussian in order to prevent periodicity assumptions from being violated.
+If a large number of these messages appear, it may mean that too many
+Gaussians are being used for the fit, or that the cap on ln(gamma) is too
+small (see below).  
+
+The value of gamma is chosen based on the probability of obtaining the least 
+probable sampled data point.  A cap on the value of ln(gamma) can be used to 
+restrict the extrapolation of the free energy surface in order to avoid deep 
+artificial minima in the free energy surface (as described in Maragakis et al. 
+JPC B 113, 4664 (2009)).  This is recommended if more than two reaction 
+coordinates are used.  The value of the cap should be chosen so that the free 
+energy differences ln(Zi/Z0) average around zero.  It should be noted that 
+the biasing potential is limited to kT ln(gamma) so setting too low a cap 
+can limit the part of the free energy surface that is sampled.
+
+
+5. GAMUS FIT
+
+Uses the E-M algotithm to fit weighted values of the reaction coordinates
+found in the unit specified by DATA to a mixture of Gaussian distributions.
+The NGAUSS, NREF, NITR, SIGMA and GAMMA parameters are specified as described
+above for GAMUS REWEight. The first column in the file must be for the natural
+logarithms of the weights; the remaining columns are for the values of the
+reaction coordinates.
+
+
+6. GAMUS WRITE
+
+Writes the current GAMUS potential to a unit specified by UNIT. This usually
+follows a GAMUS REWEIGHT or GAMUS FIT command that generates a new GAMUS
+potential (see above).
+
+
+7. GAMUS INFO
+
+Prints out the weights and mean values of all the Gaussians in the current
+GAMUS potential. If the VERBose option is specified, each variance-covariance
+matrix will also be diagonalized to find the principal axes of each Gaussian
+and the width of the Gaussian along each axis.
+
+
+File: GAMUS, Node: Caveats, Up: Top, Previous: Function, Next: Installation
+
+
+                                Caveats
+
+1. The expectation-maximization algorithm fits the probability density, not 
+the free energy.  Since the probability density is lower near free energy 
+barriers, and since the free energy is proportional to the logarithm of 
+the probability density, the statistical errors in estimating the free energy 
+surface are greater near barriers.  Consequently, GAMUS does a much better job 
+of identifying and locating free energy basins and of determining their shapes 
+and relative free energies than it does of estimating free energy barriers.
+
+2. The time necessary to fit a set of Gaussians increases linearly with the
+number of Gaussians to be fitted.  Consequently, fitting can become very
+expensive if many Gaussians are used.  In addition, using too many Gaussians
+can result in some of the Gaussians collapsing around individual data points
+("gaussian number N is of minimum size in all directions" message).
+Consequently, it is suggested to add Gaussians slowly during the run;
+a rate of about 1-2 additional Gaussians per ns of 
+simulation is recommended.
+
+3. Because of the extrapolation involved in determining the biasing potential 
+from the free energy surface, it is possible for the fitting to introduce 
+artificial minima in the free energy surface.  These artificial minima 
+should go away in long enough simulations.  Adjusting the cap value of 
+ln(gamma) can help with this, as described above.
+
+
+File: GAMUS, Node: Installation, Up: Top, Previous: Caveats, Next: Examples
+
+                             Installation
+
+GAMUS requires an implementation of LAPACK in order to perform linear algebra 
+as part of the E-M and MARE algorithms.  
+
+To compile CHARMM with GAMUS included add the option '--with-gamus'
+to the configure command line, for example:
+
+./configure --with-gamus
+
+Since the name and path of the LAPACK library can vary from one system to
+another, cmake will attempt to find a suitable LAPACK installation
+and linker options. These options will be added to the link command line.
+If the options are not determined correctly, one may set the cmake variables
+LAPACK_LINKER_FLAGS and LAPACK_LIBRARIES to the required linker flags (excluding -l and -L) and to the libraries (using full path name) to link against to use LAPACK respectively. The cmake variables may be set using the '-D' option
+to the configure command. If all else fails, one may set
+the environment variable LDFLAGS before running the configure command
+with the correct options, such as -L and -l options.
+
+
+File: GAMUS, Node: Examples, Up: Top, Previous: Installation, Next: Top
+
+
+                                Examples
+
+The main loop for cycling through steps 1-3 above is encoded in the script. 
+During each cycle molecular dynamics is invoked twice: once for equilibration 
+and once for sampling.  GAMUS is also invoked twice: once for each section of 
+molecular dynamics.  At the end of the molecular dynamics simulations,
+the GAMUS REWEIGHT command is used to reweight the data from all previous
+simulations and fit this to a mixture of Gaussians using the E-M algorithm.
+This results in a new GAMUS potential, which is used for the next cycle of
+molecular dynamics simulation.
+
+The script structure is as follows:
+
+! first read in the force field, PSF, set up implicit or explicit solvent, etc.
+! write an initial GAMUS potential, specifying the number of reaction
+! coordinates (4 in this case)
+
+calc initgamma = -4 * ln( 360.0 )
+open unit 1 write formatted name @9gamus-1.dat
+write title unit 1
+* 0 4  
+* @initgamma
+*
+close unit 1
+
+
+set index = 1
+label gamusloop
+
+calc oldindex = @index - 1
+open unit 1 read formatted name @9restart-col-@oldindex.rst
+read coor dynr curr unit 1
+close unit 1
+
+  ! here we equilibrate
+    open unit 29 read card name @9restart-col-@oldindex.rst
+    open unit 30 write card name @9restart-eq-@index.rst
+    
+    !this file contains the GAMUS potential
+    open unit 44 read card name @9gamus-@index.dat
+    ! in this file CHARMM will record biasing potential and reaction
+    ! coordinate values encountered during the simulation.
+    ! We write to a different file from "gamuse..." to keep this from being
+    ! used later by the MARE and GMM fits
+    open unit 45 write card name @9gamusex-@INDEX-q-@INDEX.dat 
+    open unit 46 write unform name @9gamus-eq-@index.dcd
+    ! This activates the GAMUS biasing potential and specifies the reaction
+    ! coordinate (4 dihedral angles)
+    gamus init temp @temp runi 44 wuni 45 ifrq @gamusfreq
+    gamus dihe pep 1 c pep 2 n pep 2 ca pep 2 c  
+    gamus dihe pep 2 n pep 2 ca pep 2 c pep 3 n
+    gamus dihe pep 2 c pep 3 n pep 3 ca pep 3 c
+    gamus dihe pep 3 n pep 3 ca pep 3 c pep 4 n
+    dynamics ...  iunrea 29 iunwri 30 iuncrd 46 !perform dynamics for equilibration
+    close unit 29
+    close unit 30
+    close unit 44
+    close unit 45
+    close unit 46
+    gamus clear
+    ! and now we collect statistics 
+
+    open unit 29 read card name @9restart-eq-@index.rst
+    open unit 30 write card name @9restart-col-@index.rst
+    ! We do everything over again, this time writing in a file that is
+    ! used by the MARE and GMM fits.
+    ! The definition of the reaction coordinate must match the one given above.
+    open unit 44 read card name @9gamus-@index.dat
+    open unit 45 write card name @9gamuse-@INDEX-q-@INDEX.dat
+    open unit 46 write unform name @9gamus-col-@index.dcd
+    gamus init temp 300.0 runi 44 wuni 45 ifrq @gamusfreq
+    gamus dihe pep 1 c pep 2 n pep 2 ca pep 2 c  
+    gamus dihe pep 2 n pep 2 ca pep 2 c pep 3 n
+    gamus dihe pep 2 c pep 3 n pep 3 ca pep 3 c
+    gamus dihe pep 3 n pep 3 ca pep 3 c pep 4 n
+ !   prnlev -6
+    dynamics ... iunrea 29 iunwri 30 iuncrd 46  !perform dynamics for sampling
+    close unit 29
+    close unit 30
+    close unit 44
+    close unit 45
+    close unit 46
+
+
+	! now use the new commands to reweight the potential
+	calc newindex = @index + 1
+	calc ngauss = 4 + @index !This calculates the number of Gaussians to be used for the fit.
+	set i = 1
+	label loop
+     		calc u1 = 10 + @i
+     		calc u2 = 100 + @i
+     		open unit @u1 read formatted name @9gamus-@i.dat
+     		open unit @u2 read formatted name @9gamuse-@i-q-@i.dat
+	incr i by 1
+	if i .le. @index then goto loop
+
+	open unit 7 write formatted name @9weights-@index
+	open unit 8 write formatted name @9gamus-@newindex.dat
+	gamus reweight nsim @index puni 11 quni 101 ngauss @ngauss nref 4 nitr 200 sigma 5.0 gamma -25.0 weights 7
+	gamus write unit 8
+	close unit 8
+	close unit 7
+
+	set i = 1
+	label loop2
+     		calc u1 = 10 + @i
+     		calc u2 = 100 + @i
+     		close unit @u1
+     		close unit @u2
+	incr i by 1
+	if i .le. @index then goto loop2
+	gamus clear
+
+incr index by 1
+if index .le. 4 then goto gamusloop
+
+gamus clear

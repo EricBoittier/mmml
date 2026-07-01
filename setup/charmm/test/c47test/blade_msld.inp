@@ -1,0 +1,859 @@
+* Test case for msld on blade
+* See test/c43test/soft14benz.inp
+* Written by Ryan Hayes 2020-02-24
+*
+
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed. BLADE must be defined in pref.dat"
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed. BLOCK must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+! ! Hand copied contents of datadir.def
+! faster on
+! set pnode = 
+! if ?numnode .gt. 1 set pnode = node 0
+! set 0 "/home/rhaye/CHARMM/chv16/charmm/test/data     ! input data directory
+! trim 0 from 2
+! set 9 scratch/  ! scratch directory
+! set testcheck stream "@0/test.str"
+! set qcheck stream "@0/qtest.str"
+! set testfail 0
+! ! end datadir.def
+
+
+set sysname = 14benz
+set box = 32.964000
+
+! read the full topology and parameter files
+read rtf card name @0prep14benz/top_all36_msld.rtf
+read rtf append card name @0prep14benz/full_ligand.rtf
+read param card flex name @0prep14benz/par_all36_msld.prm
+read param append card flex name @0prep14benz/full_ligand.prm
+
+! read in ligand sequence and coordinates
+set ligseg = lig 
+set resnum = 1
+read sequ pdb name @0prep14benz/full_ligand.pdb
+generate @ligseg setup
+read coor pdb resid name @0prep14benz/full_ligand.pdb
+
+! MODIFY to read in water sequence and coords
+read sequ pdb name @0prep14benz/solvent.pdb
+generate WT00 first none last none setup noangl nodihe
+read coor pdb resid name @0prep14benz/solvent.pdb
+
+bomblev -1
+
+! Hybrid Ligand Setup
+! (1) read in patch files
+read rtf append card name @0prep14benz/site1_sub1_pres.rtf
+read rtf append card name @0prep14benz/site1_sub2_pres.rtf
+read rtf append card name @0prep14benz/site1_sub3_pres.rtf
+read rtf append card name @0prep14benz/site1_sub4_pres.rtf
+read rtf append card name @0prep14benz/site1_sub5_pres.rtf
+read rtf append card name @0prep14benz/site2_sub1_pres.rtf
+read rtf append card name @0prep14benz/site2_sub2_pres.rtf
+read rtf append card name @0prep14benz/site2_sub3_pres.rtf
+read rtf append card name @0prep14benz/site2_sub4_pres.rtf
+read rtf append card name @0prep14benz/site2_sub5_pres.rtf
+read rtf append card name @0prep14benz/site2_sub6_pres.rtf
+read rtf append card name @0prep14benz/site2_sub7_pres.rtf
+
+!  (3) add atoms for each substituent
+ic generate
+
+patch p1_1 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub1_frag.pdb
+ic param
+ic build
+
+patch p1_2 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub2_frag.pdb
+ic param
+ic build
+
+patch p1_3 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub3_frag.pdb
+ic param
+ic build
+
+patch p1_4 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub4_frag.pdb
+ic param
+ic build
+
+patch p1_5 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub5_frag.pdb
+ic param
+ic build
+
+patch p2_1 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub1_frag.pdb
+ic param
+ic build
+
+patch p2_2 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub2_frag.pdb
+ic param
+ic build
+
+patch p2_3 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub3_frag.pdb
+ic param
+ic build
+
+patch p2_4 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub4_frag.pdb
+ic param
+ic build
+
+patch p2_5 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub5_frag.pdb
+ic param
+ic build
+
+patch p2_6 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub6_frag.pdb
+ic param
+ic build
+
+patch p2_7 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub7_frag.pdb
+ic param
+ic build
+
+! (2) delete atoms in common core ligand 
+!    atoms taken from site1_sub1.txt site2_sub1.txt
+delete atom select ( -
+   atom @ligseg @resnum C4 .or. -
+   atom @ligseg @resnum C5 .or. -
+   atom @ligseg @resnum H4 .or. -
+   atom @ligseg @resnum H5 .or. -
+   none ) end
+
+! write psf card form name patch.psf
+! * patch psf file
+! *
+! write coor pdb form name patch.pdb 
+! * patch pdb file
+! *
+
+! MODIFY to set up periodic images or SBC
+coor stat
+crystal define cubic @box @box @box 90. 90. 90.   !! Need to use CRYSTAL in repdstr
+crystal build cutoff 15 nope 0
+image byseg xcen 0 ycen 0 zcen 0 sele .not. ( resn TIP3 ) end
+image byres xcen 0 ycen 0 zcen 0 sele resn TIP3 end
+
+
+! Hybrid Ligand Block
+! Substituent definitions
+define site1sub1 - 
+   select ( - 
+   atom @ligseg @resnum H101 .or. -
+   atom @ligseg @resnum C100 .or. -
+   none ) end
+
+define site1sub2 - 
+   select ( - 
+   atom @ligseg @resnum O103 .or. -
+   atom @ligseg @resnum H104 .or. -
+   atom @ligseg @resnum C102 .or. -
+   none ) end
+
+define site1sub3 - 
+   select ( - 
+   atom @ligseg @resnum H108 .or. -
+   atom @ligseg @resnum H109 .or. -
+   atom @ligseg @resnum C106 .or. -
+   atom @ligseg @resnum H107 .or. -
+   atom @ligseg @resnum C105 .or. -
+   none ) end
+
+define site1sub4 - 
+   select ( - 
+   atom @ligseg @resnum H117 .or. -
+   atom @ligseg @resnum H115 .or. -
+   atom @ligseg @resnum H116 .or. -
+   atom @ligseg @resnum H113 .or. -
+   atom @ligseg @resnum H114 .or. -
+   atom @ligseg @resnum C112 .or. -
+   atom @ligseg @resnum C111 .or. -
+   atom @ligseg @resnum C110 .or. -
+   none ) end
+
+define site1sub5 - 
+   select ( - 
+   atom @ligseg @resnum H127 .or. -
+   atom @ligseg @resnum H128 .or. -
+   atom @ligseg @resnum H129 .or. -
+   atom @ligseg @resnum H130 .or. -
+   atom @ligseg @resnum H131 .or. -
+   atom @ligseg @resnum H125 .or. -
+   atom @ligseg @resnum H126 .or. -
+   atom @ligseg @resnum H123 .or. -
+   atom @ligseg @resnum H124 .or. -
+   atom @ligseg @resnum C122 .or. -
+   atom @ligseg @resnum C121 .or. -
+   atom @ligseg @resnum C120 .or. -
+   atom @ligseg @resnum C119 .or. -
+   atom @ligseg @resnum C118 .or. -
+   none ) end
+
+define site2sub1 - 
+   select ( - 
+   atom @ligseg @resnum C132 .or. -
+   atom @ligseg @resnum H133 .or. -
+   none ) end
+
+define site2sub2 - 
+   select ( - 
+   atom @ligseg @resnum H136 .or. -
+   atom @ligseg @resnum C134 .or. -
+   atom @ligseg @resnum O135 .or. -
+   none ) end
+
+define site2sub3 - 
+   select ( - 
+   atom @ligseg @resnum H141 .or. -
+   atom @ligseg @resnum H140 .or. -
+   atom @ligseg @resnum C138 .or. -
+   atom @ligseg @resnum C137 .or. -
+   atom @ligseg @resnum H139 .or. -
+   none ) end
+
+define site2sub4 - 
+   select ( - 
+   atom @ligseg @resnum H145 .or. -
+   atom @ligseg @resnum C143 .or. -
+   atom @ligseg @resnum C142 .or. -
+   atom @ligseg @resnum O144 .or. -
+   none ) end
+
+define site2sub5 - 
+   select ( - 
+   atom @ligseg @resnum H151 .or. -
+   atom @ligseg @resnum H152 .or. -
+   atom @ligseg @resnum H150 .or. -
+   atom @ligseg @resnum C148 .or. -
+   atom @ligseg @resnum C147 .or. -
+   atom @ligseg @resnum C146 .or. -
+   atom @ligseg @resnum O149 .or. -
+   none ) end
+
+define site2sub6 - 
+   select ( - 
+   atom @ligseg @resnum H163 .or. -
+   atom @ligseg @resnum H164 .or. -
+   atom @ligseg @resnum H161 .or. -
+   atom @ligseg @resnum H162 .or. -
+   atom @ligseg @resnum H160 .or. -
+   atom @ligseg @resnum C157 .or. -
+   atom @ligseg @resnum C156 .or. -
+   atom @ligseg @resnum C159 .or. -
+   atom @ligseg @resnum C158 .or. -
+   atom @ligseg @resnum C155 .or. -
+   atom @ligseg @resnum C154 .or. -
+   atom @ligseg @resnum C153 .or. -
+   none ) end
+
+define site2sub7 - 
+   select ( - 
+   atom @ligseg @resnum H174 .or. -
+   atom @ligseg @resnum H175 .or. -
+   atom @ligseg @resnum H172 .or. -
+   atom @ligseg @resnum H173 .or. -
+   atom @ligseg @resnum H171 .or. -
+   atom @ligseg @resnum C168 .or. -
+   atom @ligseg @resnum C165 .or. -
+   atom @ligseg @resnum C167 .or. -
+   atom @ligseg @resnum C166 .or. -
+   atom @ligseg @resnum O170 .or. -
+   atom @ligseg @resnum O169 .or. -
+   none ) end
+
+calc lam1 = 1.0 / 5.0
+calc lam2 = 1.0 / 5.0
+calc lam3 = 1.0 / 5.0
+calc lam4 = 1.0 / 5.0
+calc lam5 = 1.0 / 5.0
+calc lam6 = 1.0 / 7.0
+calc lam7 = 1.0 / 7.0
+calc lam8 = 1.0 / 7.0
+calc lam9 = 1.0 / 7.0
+calc lam10 = 1.0 / 7.0
+calc lam11 = 1.0 / 7.0
+calc lam12 = 1.0 / 7.0
+
+set flag = initblock
+goto setup13
+label initblock
+
+read coor pdb resid name @0prep14benz/min14benz.pdb
+
+nbonds atom -
+cdie eps 1 -             !! Set constant dielectric value of 1
+vdw vfswitch -            !! Set nb VDW using switching function
+cutnb 12.0 -             !! Was 15.0 Set nb list cut off to 15A
+cutim 12.0 -             !! Was 15.0 Set image nb list cut off to 15A
+ctonnb 9.0 ctofnb 10.0 - !! Were 10.0 and 12.0 Switching function used from 10A to 12A for VDW interaction
+Ewald -                  !! Use Ewald electrostatics
+kappa 0.320 -            !! 0.320 makes direct space decay to 10^-5 at 10 A
+pmEwald -                !! Keyword
+order 6 -                !! Interpolation order
+fftx 32 ffty 32 fftz 32  !! Choose approximate box length
+
+! shake fast bonh param
+
+format (f16.6)
+
+! Check forces at some random position in lambda space
+calc lam1 = 0.1
+calc lam2 = 0.01
+calc lam3 = 0.1
+calc lam4 = 0.01
+calc lam5 = 0.78
+calc lam6 = 0.1
+calc lam7 = 0.01
+calc lam8 = 0.01
+calc lam9 = 0.1
+calc lam10 = 0.01
+calc lam11 = 0.01
+calc lam12 = 0.76
+
+if ?domdec .ne. 1 then
+   echo "Energy test NOT performed. DOMDEC must be defined in pref.dat"
+else
+set flag2 = return0
+goto testenergy
+label return0
+endif
+
+set flag2 = return1
+goto testfirst
+label return1
+
+! set flag2 = return2
+! goto testfirstlambda
+! label return2
+
+set flag2 = return3
+goto dynamics
+label return3
+
+! ! Return first for running interactively
+! return
+! stop
+
+
+
+echo "Test OK"
+
+stop
+
+! ************************************
+! ******* Check Energies *************
+! ************************************
+
+label testenergy
+
+energy domdec dlb off gpu off
+set enercharmm = ?ener
+energy blade
+set enerblade = ?ener
+
+echo @enercharmm
+echo @enerblade
+! echo @enerddcpu
+! echo @enerddgpu
+@qcheck @enerblade @enercharmm 0.02 MSLD_BLADE_SOFT_E_CONSISTENT
+
+goto @flag2
+
+! ************************************
+! ******* Check Spatial Forces *******
+! ************************************
+
+label testfirst
+
+set flag = testfirstreturn1
+goto setup13
+label testfirstreturn1
+
+define testselection select site1sub1 -
+   .or. site1sub2 -
+   .or. site1sub3 -
+   .or. site1sub4 -
+   .or. site1sub5 -
+   .or. site2sub1 -
+   .or. site2sub2 -
+   .or. site2sub3 -
+   .or. site2sub4 -
+   .or. site2sub5 -
+   .or. site2sub6 -
+   .or. site2sub7 end
+
+blade on
+test first tol 0.05 step 0.01 select testselection end
+! test first tol 0.01 step 0.01 select testselection end
+calc nviolations = abs ( ?nok - 3 * ?nsel )
+@qcheck @nviolations 0 0.5 MSLD_BLADE_SOFT_TESTFIRST
+blade off
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be compiled to compare with BLaDE forces"
+else
+energy domdec dlb off gpu off
+scalar 4 copy dx
+scalar 5 copy dy
+scalar 6 copy dz
+
+energy blade
+scalar 7 copy dx
+scalar 8 copy dy
+scalar 9 copy dz
+scalar 7 mult -1
+scalar 8 mult -1
+scalar 9 mult -1
+scalar 7 sum 4
+scalar 8 sum 5
+scalar 9 sum 6
+scalar 7 pow2
+scalar 8 pow2
+scalar 9 pow2
+scalar 7 sum 8
+scalar 7 sum 9
+scalar 7 sqrt
+scalar 7 stat
+
+@qcheck ?smax 0 0.01 MSLD_BLADE_SOFT_F_CONSISTENT_MAX
+@qcheck ?save 0 0.001 MSLD_BLADE_SOFT_F_CONSISTENT_MEAN
+
+endif
+
+goto @flag2
+
+! ************************************
+! ******* Check Lambda Forces ********
+! ************************************
+
+label testfirstlambda
+
+! Loop to set initial lambda value
+set ilam = 1
+label testfirstlambdaloop1
+if @ilam le 12 then
+
+set lam@{ilam}ref = @lam@@ilam
+
+format
+calc ilam = @ilam + 1
+format (f16.6)
+goto testfirstlambdaloop1
+endif
+
+
+! Loop to calculate forces
+set ilam = 1
+label testfirstlambdaloop2
+if @ilam le 12 then
+
+calc lam@{ilam} = @lam@@ilam - 0.0005
+set flag = testfirstlambdareturn1
+goto setup25
+label testfirstlambdareturn1
+set tag = @{ilam}m
+set flag = testfirstlambdareturn2
+goto energysave
+label testfirstlambdareturn2
+set lam@{ilam} = @lam@@{ilam}ref
+calc lam@{ilam} = @lam@@ilam + 0.0005
+set flag = testfirstlambdareturn3
+goto setup25
+label testfirstlambdareturn3
+set tag = @{ilam}p
+set flag = testfirstlambdareturn4
+goto energysave
+label testfirstlambdareturn4
+set lam@{ilam} = @lam@@{ilam}ref
+
+calc flam@ilam = ( @ener@@{ilam}p - @ener@@{ilam}m ) / 0.001
+
+format
+calc ilam = @ilam + 1
+format (f16.6)
+goto testfirstlambdaloop2
+endif
+
+
+set flag = testfirstlambdareturn5
+goto setup13
+label testfirstlambdareturn5
+set tag = 0
+set flag = testfirstlambdareturn6
+goto energysave
+label testfirstlambdareturn6
+set flag = testfirstlambdareturn7
+goto lambdaforce
+label testfirstlambdareturn7
+
+! Loop to check forces
+set ilam = 1
+label testfirstlambdaloop3
+if @ilam le 12 then
+
+format
+calc ilamp1 = @ilam + 1
+format (f16.6)
+
+@qcheck @fl@@ilamp1 @flam@@ilam 0.001 MSLD_SOFT_TESTFIRSTLAMBDA@ilam
+
+format
+calc ilam = @ilam + 1
+format (f16.6)
+goto testfirstlambdaloop3
+endif
+
+set flag = testfirstlambdareturn7hard
+goto hardlambdaforce
+label testfirstlambdareturn7hard
+@qcheck 0.004 0 @diffhard MSLD_SOFT_IS_NOT_HARD
+
+
+if ?domdec_g .eq. 1 then
+echo "Test NOT performed. DOMDEC_G must be defined in pref.dat"
+
+set flag = testfirstlambdareturn8
+goto setup13
+label testfirstlambdareturn8
+set tag = 0
+set flag = testfirstlambdareturn9
+goto energysavegpu
+label testfirstlambdareturn9
+set flag = testfirstlambdareturn10
+goto lambdaforce
+label testfirstlambdareturn10
+
+! Loop to check forces
+set ilam = 1
+label testfirstlambdaloop4
+if @ilam le 12 then
+
+format
+calc ilamp1 = @ilam + 1
+format (f16.6)
+
+@qcheck @fl@@ilamp1 @flam@@ilam 0.004 MSLD_DDGPU_SOFT_TESTFIRSTLAMBDA@ilam
+
+format
+calc ilam = @ilam + 1
+format (f16.6)
+goto testfirstlambdaloop4
+endif
+
+set flag = testfirstlambdareturn10hard
+goto hardlambdaforce
+label testfirstlambdareturn10hard
+@qcheck 0.004 0 @diffhard MSLD_DDGPU_SOFT_IS_NOT_HARD
+
+endif
+
+goto @flag2
+
+! ************************************
+! ******* Set up 13 block system ******
+! ************************************
+
+label setup13
+
+BLOCK
+   clear
+END
+
+BLOCK 13
+   Call 2 sele site1sub1 end
+   Call 3 sele site1sub2 end
+   Call 4 sele site1sub3 end
+   Call 5 sele site1sub4 end
+   Call 6 sele site1sub5 end
+   Call 7 sele site2sub1 end
+   Call 8 sele site2sub2 end
+   Call 9 sele site2sub3 end
+   Call 10 sele site2sub4 end
+   Call 11 sele site2sub5 end
+   Call 12 sele site2sub6 end
+   Call 13 sele site2sub7 end
+   qldm theta
+   lang temp 298.0
+   ldin 1 1.0 0.0 5.0 0.0 5.0
+   ldin 2 @lam1 0.0 5.0 0.0 5.0
+   ldin 3 @lam2 0.0 5.0 0.0 5.0
+   ldin 4 @lam3 0.0 5.0 0.0 5.0
+   ldin 5 @lam4 0.0 5.0 0.0 5.0
+   ldin 6 @lam5 0.0 5.0 0.0 5.0
+   ldin 7 @lam6 0.0 5.0 0.0 5.0
+   ldin 8 @lam7 0.0 5.0 0.0 5.0
+   ldin 9 @lam8 0.0 5.0 0.0 5.0
+   ldin 10 @lam9 0.0 5.0 0.0 5.0
+   ldin 11 @lam10 0.0 5.0 0.0 5.0
+   ldin 12 @lam11 0.0 5.0 0.0 5.0
+   ldin 13 @lam12 0.0 5.0 0.0 5.0
+   set excl1 = 2 3 2 4 2 5 2 6 3 4 3 5 3 6 4 5 4 6 5 6 7 8 7 9 7 10 7 11 7 12 7 13 
+   set excl2 =  8 9 8 10 8 11 8 12 8 13 9 10 9 11 9 12 9 13 10 11 10 12 10 13 11 
+   set excl3 =  12 11 13 12 13
+   excl @excl1 @excl2 @excl3
+   rmla bond thet dihe impr
+   msld 0 1 1 1 1 1 2 2 2 2 2 2 2 fnex 5.5
+   msma
+
+   pmel ex
+   soft on
+
+   ! Check block.doc for functional form of these biasing potentials
+   ldbi 0
+END
+
+goto @flag
+
+! ************************************
+! ******* Set up 25 block system ******
+! ************************************
+
+label setup25
+
+BLOCK
+   clear
+END
+
+BLOCK 25
+   Call 2 sele site1sub1 end
+   Call 3 sele none end
+   Call 4 sele site1sub2 end
+   Call 5 sele none end
+   Call 6 sele site1sub3 end
+   Call 7 sele none end
+   Call 8 sele site1sub4 end
+   Call 9 sele none end
+   Call 10 sele site1sub5 end
+   Call 11 sele none end
+   Call 12 sele site2sub1 end
+   Call 13 sele none end
+   Call 14 sele site2sub2 end
+   Call 15 sele none end
+   Call 16 sele site2sub3 end
+   Call 17 sele none end
+   Call 18 sele site2sub4 end
+   Call 19 sele none end
+   Call 20 sele site2sub5 end
+   Call 21 sele none end
+   Call 22 sele site2sub6 end
+   Call 23 sele none end
+   Call 24 sele site2sub7 end
+   Call 25 sele none end
+   qldm theta
+   lang temp 298.0
+   ldin 1 1.0 0.0 5.0 0.0 5.0
+   ldin 2 @lam1 0.0 5.0 0.0 5.0
+   calc rem1 = 1 - @lam1
+   ldin 3 @rem1 0.0 5.0 0.0 5.0
+   ldin 4 @lam2 0.0 5.0 0.0 5.0
+   calc rem2 = 1 - @lam2
+   ldin 5 @rem2 0.0 5.0 0.0 5.0
+   ldin 6 @lam3 0.0 5.0 0.0 5.0
+   calc rem3 = 1 - @lam3
+   ldin 7 @rem3 0.0 5.0 0.0 5.0
+   ldin 8 @lam4 0.0 5.0 0.0 5.0
+   calc rem4 = 1 - @lam4
+   ldin 9 @rem4 0.0 5.0 0.0 5.0
+   ldin 10 @lam5 0.0 5.0 0.0 5.0
+   calc rem5 = 1 - @lam5
+   ldin 11 @rem5 0.0 5.0 0.0 5.0
+   ldin 12 @lam6 0.0 5.0 0.0 5.0
+   calc rem6 = 1 - @lam6
+   ldin 13 @rem6 0.0 5.0 0.0 5.0
+   ldin 14 @lam7 0.0 5.0 0.0 5.0
+   calc rem7 = 1 - @lam7
+   ldin 15 @rem7 0.0 5.0 0.0 5.0
+   ldin 16 @lam8 0.0 5.0 0.0 5.0
+   calc rem8 = 1 - @lam8
+   ldin 17 @rem8 0.0 5.0 0.0 5.0
+   ldin 18 @lam9 0.0 5.0 0.0 5.0
+   calc rem9 = 1 - @lam9
+   ldin 19 @rem9 0.0 5.0 0.0 5.0
+   ldin 20 @lam10 0.0 5.0 0.0 5.0
+   calc rem10 = 1 - @lam10
+   ldin 21 @rem10 0.0 5.0 0.0 5.0
+   ldin 22 @lam11 0.0 5.0 0.0 5.0
+   calc rem11 = 1 - @lam11
+   ldin 23 @rem11 0.0 5.0 0.0 5.0
+   ldin 24 @lam12 0.0 5.0 0.0 5.0
+   calc rem12 = 1 - @lam12
+   ldin 25 @rem12 0.0 5.0 0.0 5.0
+   set excl1 = 2 4 2 6 2 8 2 10 4 6 4 8 4 10 6 8 6 10 8 10
+   set excl2 = 12 14 12 16 12 18 12 20 12 22 12 24 14 16 14 18 14 20 14 22 14 24
+   set excl3 = 16 18 16 20 16 22 16 24 18 20 18 22 18 24 20 22 20 24 22 24
+   excl @excl1 @excl2 @excl3
+   rmla bond thet dihe impr
+   msld 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 fnex 5.5
+   msma
+
+   pmel ex
+   soft on
+
+   ! Check block.doc for functional form of these biasing potentials
+   ldbi 0
+END
+
+goto @flag
+
+! ************************************
+! ******* Call energy ****************
+! ************************************
+
+label energysave
+
+energy eps 1.0 cutnb 15 cutim 15 ctofnb 12 ctonnb 10 vfsw -
+     fswi -
+     domdec dlb off gpu off
+
+set ener@tag = ?ener
+
+goto @flag
+
+! ************************************
+! ******* Call GPU energy ************
+! ************************************
+
+label energysavegpu
+
+energy eps 1.0 cutnb 15 cutim 15 ctofnb 12 ctonnb 10 vfsw -
+     fswi -
+     domdec dlb off gpu only
+
+set ener@tag = ?ener
+
+goto @flag
+
+! ************************************
+! ******* Save lambda forces *********
+! ************************************
+
+label lambdaforce
+
+BLOCK
+   flam fl1 1
+   flam fl2 2
+   flam fl3 3
+   flam fl4 4
+   flam fl5 5
+   flam fl6 6
+   flam fl7 7
+   flam fl8 8
+   flam fl9 9
+   flam fl10 10
+   flam fl11 11
+   flam fl12 12
+   flam fl13 13
+END
+
+echo @fl2
+echo @fl3
+echo @fl4
+echo @fl5
+echo @fl6
+echo @fl7
+echo @fl8
+echo @fl9
+echo @fl10
+echo @fl11
+echo @fl12
+echo @fl13
+
+goto @flag
+
+! ************************************
+! ******* Check hardcore forces ******
+! ************************************
+
+label hardlambdaforce
+
+BLOCK
+  soft off
+END
+
+energy
+
+BLOCK
+  flam fl12hard 12
+END
+
+calc diffhard = abs( @fl12 - @fl12hard )
+
+goto @flag
+
+! ************************************
+! ******* Run dynamics ***************
+! ************************************
+
+label dynamics
+
+scalar fbeta set 1.0 sele all end
+
+open unit 21 write unform name @{9}/"heat.dcd"
+open unit 22 write form name @{9}/"heat.res"
+open unit 24 write file name @{9}/"heat.lmd"
+
+dynamics leap start -
+  blade -
+  prmc -  ! use pressure monte carlo
+  iprs 10 - ! Monte carlo pressure frequency (50 is default)
+  pref 1 - ! reference pressure (atmospheres)
+  prdv 100 - ! RMS proposed volume change (A cubed)
+  timestep 0.001 - ! 0.002 -      !!timestep interval
+  nstep 100 -         !!no. of steps  (== 200 ps)
+  nprint 100 -         !!freq of printout
+  iprfrq 100 -         !!freq of calc avg/rms energy
+  nsavc 100 -          !!freq of writing coordinates
+  nsavl 10 -            !!freq of writing lambda histograms
+  isvfrq 100 -        !!freq of writing out restart files
+  iunread -1 -          !!read restart file
+  iuncrd 21 -           !!write out coordinates
+  iunwri 22 -           !!write out restart file
+  iunldm 24 -           !!write out lambda histograms and biasing potential
+  firstt 298 -          !!initial temp
+  finalt 298 -          !!final temp
+  tstruc 298 -          !!temp at which starting structure has been equilibrated
+  tbath 298 -           !!temp of langevin bath
+  ntrfrq 50
+
+open unit 21 write unform name @{9}/"heat2.dcd"
+open unit 22 write form name @{9}/"heat2.res"
+open unit 24 write file name @{9}/"heat2.lmd"
+
+dynamics leap start - 
+  blade -
+  prmc -  ! use pressure monte carlo
+  iprs 10 - ! Monte carlo pressure frequency (50 is default)
+  pref 1 - ! reference pressure (atmospheres)
+  prdv 100 - ! RMS proposed volume change (A cubed)
+  nstep 100 -
+  iunread -1 -          !!read restart file
+  iuncrd 21 -           !!write out coordinates
+  iunwri 22 -           !!write out restart file
+  iunldm 24 -           !!write out lambda histograms and biasing potential
+  ntrfrq 50
+
+goto @flag2

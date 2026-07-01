@@ -1,0 +1,56 @@
+* CHARMM 30 test case molvt1.inp
+* MOLVIB: test G matrix - redundancy anaylis level 1
+* Exercises G diagonalization, coordinate transformations
+* Author: Krzysztof Kuczera, Lawrence, KS 10-June-2003
+*===========================================================================
+* MOLVIB test file : test_g1.inp
+* TESTING G option: redundancy analysis at level 1
+* The system is an idealized 5-membered ring with unit bond lengths
+* and atomic masess of 12 amu (only the 5 ring atoms considered for
+* simplicity). In this test case, we generate the G matrix for
+* all bond and angle coordinates and diagonalize it to find the number
+* of redundancies (= no.of zero eigenvalues).
+* To simplify analysis, the coordinates are symmetrized according
+* to C2v symmetry by means of the U matrix. Only the A1 symmetry
+* coordinates are considered here; this case is interesting/hard
+* because we find two redundancies among the six coordinates.
+* The redundancy conditions are given by the first two eigenvectors of G
+* (printed in rows at the end of output file).
+*
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+! Use molvib module only without CHARMM top/para/RTF : 'NOTO' keyword
+MOLVIB NDI1 6  NDI2 6  NDI3 10 NATOM 5  NOTO
+G        1
+PRNT     1
+DIM      6    6   10
+CART     5    0                    ! Model coordinates
+   -0.500000    0.000000    0.000000   12.0
+   -0.809017    0.951056    0.000000   12.0
+    0.000000    1.538842    0.000000   12.0
+    0.809017    0.951056    0.000000   12.0
+    0.500000    0.000000    0.000000   12.0
+MASA
+IC
+1 5 1 0 0
+1 1 2 0 0
+1 2 3 0 0
+1 3 4 0 0
+1 4 5 0 0
+2 5 1 2 0
+2 1 2 3 0
+2 2 3 4 0
+2 3 4 5 0
+2 4 5 1 0
+UMAT     0    1    0           ! do row normalization for this matrix
+  1  1     1.       2  2      1.      2  5      1.
+  3  3     1.       3  4      1.
+  4  6     1.       4 10      1.      5  7      1.      5  9     1.
+  6  8     1.
+ -1
+END
+stop

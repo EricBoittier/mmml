@@ -1,0 +1,102 @@
+* dyn4Dtest.inp: c24a3 test of 4D dynamics calculations
+* July 27, 1995 by Elan Eiesenmesser (Carol B. Post's group at Purdue)
+*
+
+if ?fourd .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+
+stream datadir.def
+bomlev -1
+
+open read form unit 11 name  @0top_all22_prot.inp
+read rtf  card unit 11
+closed unit 11
+open read form unit 12 name  @0par_all22_prot.inp
+read param card unit 12
+close unit 12
+
+READ SEQUENCE CARDS
+* TRYPTOPHAN
+*
+    1
+TRP
+
+GENERATE TRYP SETUP
+
+open write unit 18 card name @9dyn4Dtest.psf
+write psf card unit 18
+
+IC PARAMETERS
+IC SEED 1 N 1 CA 1 C
+IC BUILD
+
+open write unit 17 card name @9dyn4Dtest.crd
+write coor unit 17 card
+* dyn4Dtest: initial TRYPTOPHAN coordinates
+*
+
+! set all initial 4th D coordinates and equilibrium
+! values to zero even though this is the default.
+SCALAR FDIM SET 0.0 sele all end
+SCALAR FDEQ SET 0.0 sele all end
+
+
+! First minimize TRYPTOPHAN in 4D before dynamics
+!
+fast -1
+mini sd nstep 50 nprint 10
+
+! Begin 4D dynamics with no initial coordinates in the 4th D (fil4 e4fil 0.0), 
+! but with initial velocities allowing exploration into the 4th D (fstt4 300
+! fnlt4 300).  Here there is no Back Projection, therefore the steps at which
+! it would occur are set larger than nstep (inc4 50001 dec4 60001).
+! Note: any number larger than nstep would have done as long as dec4 > inc4.
+!
+ 
+open write unit 91 form name @9dyn4Dtest.rst
+dynamics leap ver4 inc4 50001 dec4 60001 k4di - 
+50.0 start nstep 200 iseed 24675 -
+timestep .001 fil4 e4fil 8.0 fstt4 300.0 fnlt4 300.0 cutnb 8.0 -
+ihtfrq 0  ieqfrq 100 ieq4 100 multk4 10 iunrea -1 iunwri 91 iuncrd -1 -
+ihbfrq 25 firstt 1000.0 finalt 1000.0 teminc 0.0 nprint 20 
+
+
+@testcheck ?ener 82.6880051 0.0001  dyn4dtest_chk1
+
+! Continue 4D dynamics with a Back Projection from step 50 to 200 with an
+! increase in k4di from 50 to 10x50=500 (inc4 50 dec4 200 dec4 200 multk4 10).
+! while cooling the 4th D (fstt4 300.0 fnlt4 0.0 iht4 50 tin4 50.0).
+
+open read  unit 91 form name @9dyn4Dtest.rst
+open write unit 92 form name @9dyn4Dtest.rs2
+dynamics leap ver4 inc4 50 dec4 200 k4di 50.0 multk4 10 restart nstep 200 iseed 975432 -
+timestep .001 npre 0 fstt4 300.0 fnlt4 0.0 iht4 50 tin4 50.00 cutnb 8.0 -
+ihtfrq 0 ieqfrq 0 ieq4 100 multk4 10 iunrea 91 iunwri 92 iuncrd -1 -
+ihbfrq 25 firstt 1000.0 finalt 1000.0 teminc 0.0 nprint 20
+
+open write unit 3 card name @9dyn4Dtest1.crd
+write coor unit 3 card
+* dyn4Dtest: TRYPTOPHAN coordinates befor minimization
+*
+
+! minimize TRYPTOPHAN after 4D dynamics
+!
+
+mini conj nstep 500 nprint 20
+
+@testcheck ?ener 0.507505318 0.0001  dyn4dtest_chk2
+
+open write unit 9 card name @9dyn4Dtest2.crd
+write coor unit 9 card
+* dyn4Dtest: TRYPTOPHAN coordinates after minimization
+*
+
+stop

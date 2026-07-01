@@ -1,0 +1,91 @@
+* mctest05.inp
+* Author:   Aaron R. Dinner 
+* Date:     15 June 2001
+* Version:  c29a1
+* Test:     Hybrid Monte Carlo
+* Model:    Polar hydrogen representation of alanine dipeptide 
+*
+
+IF ?MC .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+BOMLev 0
+STREam datadir.def
+
+! Read standard topology and parameter files
+
+OPEN READ CARD UNIT 1 NAME @0/toph19.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+OPEN READ CARD UNIT 2 NAME @0/param19.prm
+READ PARA CARD UNIT 2
+CLOSE UNIT 2
+
+! Generate the PSF
+
+READ SEQUence CARD
+* Blocked alanine
+*
+   3
+ACE ALA CBX
+
+GENErate MAIN SETUP
+
+! Build the coordinates
+
+IC PARAM
+IC SEED 2 N     2 CA    2 C
+IC BUILD
+
+NBONDS  ATOM  SHIFT RDIE  VDW VSHIFT  -
+        CUTNB 999.0 CTOFNB 12.0 CTONNB 8.0  WMIN 1.5  EPS 3.0
+
+ENERgy
+
+! SHAKE the bonds involving hydrogens since dynamics will be used.
+
+SHAKE BONH PARA
+
+! Set up the Hybrid MC move set
+!
+! Note that the selection in the MOVE ADD command (not the fixed atom list) 
+! is employed to determine which atoms to move by HMC.
+
+MOVE ADD MVTP HMC TIME 0.004 NMDSteps 10 SELE ALL END LABEL HMC 
+
+! Issue a dummy dynamics command to suppress non-bond updates and output
+
+DYNA NSTEPS 0 INBFRQ 0 NSAVC 0
+
+! Run a canonical HMC simulation
+
+MC TEMP 300.0 IACCEPT 0 NSTEPS 1000 IECHECK 100 
+
+IF ?TSALLIS .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+! Test Tsallis (requires TSALLIS keyword during compilation)
+
+! Decrease the step size to obtain reasonable acceptance rate
+
+MOVE EDIT LABEL HMC TIME 0.001 NMDSteps 5
+
+! Issue a dummy dynamics command to adjust ECHECK since Tsallis conserves
+! the kinetic energy plus the TRANSFORMED potential.
+
+DYNA NSTEPS 0 INBFRQ 0 NSAVC 0 ECHECK 100.0
+
+! Run a Tsallis HMC simulation
+
+MC TEMP 300.0 IACCEPT 2 NSTEPS 1000 IECHECK 100 EMIN 0.0 QTSALLIS 1.1
+
+! Check memory usage
+
+MOVE DELE LABEL HMC
+
+STOP

@@ -1,0 +1,160 @@
+* EDS gas phase for 5-atomic benchmark systems
+*
+
+! Testcase for Enveloping Distribution Sampling with MSCALE
+! EDS allows the calculation of free energy differences between two states A and B 
+! from a single molecular dynamics simulation of a reference state R. 
+! The reference state is designed to contain the parts of phase space important to A and B,
+! thus allowing more accurate free energy simulations, relative to the exponential formula
+! (aka Thermodynamic Perturbation) without intermediate states. It's main advantage is the 
+! possibility of determining multiple free energy differences at the same time.
+! C.f. J. Chem. Phys. 126, 184110 (2007); doi:10.1063/1.2730508
+!
+! Here, MSCALE is used to obtain the potential energies two five atomic benchmark systems 
+! (called F1 and F2). Based on the energies of the subsystems, the main processor calculates
+! the energies of the EDS reference state R. The potential energies and momenta of R are used
+! in the MD simulation. At each step, the energies of the subsystems are saved into a file, 
+! called edstest.ene. This file can be used to calculate the free energy difference between 
+! the two subsystems. E.g. 
+! awk 'NR%100==2{kt=0.596;eds=-kt*log(exp(-1/kt*$1)+exp(-1/kt*$2)); count++; ave1=1/count*(exp(-($1-eds)/kt))+(count-1)/count*ave1; ave2=1/count*(exp(-($2-eds)/kt))+(count-1)/count*ave2}END{print -kt*log(ave2/ave1)}' edstest.ene
+!
+! The free energy difference between F1 and F2 should be 1.22 kcal/mol.     
+! C.f. J. Chem. Phys. 122, 084109 (2005); doi:10.1063/1.1850900
+!
+! In case of questions contact:
+! Gerhard Koenig (gerhard.koenig@nih.gov)
+! Tim Miller     (btmiller@nhlbi.nih.gov)
+
+if ?mscale .ne. 1 then
+ echo "eds.inp> Test NOT performed."
+ stop
+endif
+if ?qeds .ne. 1 then
+ echo "eds.inp> Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+! Number of MD steps
+set nstep 10  
+
+read rtf card 
+* Topology for a five atomic benchmark system
+*
+31  1
+
+MASS   101 D1     10.00000 H ! dummy atom                                           
+MASS   102 D2     10.00000 H ! dummy atom                                           
+MASS   103 D3     10.00000 H ! dummy atom                                           
+MASS   104 D4     10.00000 H ! dummy atom                                           
+MASS   105 D5     10.00000 H ! dummy atom                                           
+
+AUTO ANGLES DIHE   
+
+!reset default patches
+DEFA FIRS NONE LAST NONE
+
+RESI F1           0.00    ! Five-atomic test system 
+GROUP   
+ATOM D1   D1     0.0
+ATOM D2   D2     0.0
+ATOM D3   D3     0.0
+ATOM D4   D4     0.0
+ATOM D5   D5     0.0
+BOND D1 D2 D2 D3 D3 D4 D4 D5  
+IC D1   D2   D3   D4    1.53    111.00  180.00  111.00   1.53   
+IC D2   D3   D4   D5    1.53    111.00  180.00  111.00   1.53   
+
+END
+
+read param card 
+* Parameters for five atomic benchmark system
+*
+
+BONDS
+D1   D2   1000.00     1.53
+D2   D3   1000.00     1.53
+D3   D4   1000.00     1.53
+D4   D5   1000.00     1.53
+ANGLES
+D1   D2   D3   1000.000   111.00   100. 2.52183
+D2   D3   D4   1000.000   111.00   100. 2.52183 
+D3   D4   D5   1000.000   111.00   100. 2.52183
+DIHEDRALS
+D1   D2   D3   D4       2.5     3   0.00 !
+D2   D3   D4   D5       2.5     3   0.00 !
+
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+D1     0.000000  -0.000000     0.000000                      
+D2     0.000000  -0.000000     0.000000                      
+D3     0.000000  -0.000000     0.000000                      
+D4     0.000000  -0.000000     0.000000                      
+D5     0.000000  -0.000000     0.000000                      
+
+END
+
+read sequ card
+* f1
+*
+1
+f1 
+
+generate f1 setup
+
+ic para 
+
+ic seed 1 D1 1 D2 1 D3 
+
+ic build
+
+! remove the master processor's energy/force contribution - only the subsystems should contribute
+!block 1
+!coef 1 1 0.0
+!end
+skip all 
+
+! Save the energies of the subsystems in a file
+open unit 50 write form name edstest.ene
+
+! Set up the two subsystems with MSCALE
+lower
+mscale nsubs 2 upen 50
+
+subs one coef 1.0 prog "../bin/charmm" -
+     outp @9/eds-sub1.out inpu "@0/eds-sub1.str" -
+     nproc 1 sele all end
+
+subs two coef 1.0 prog "../bin/charmm" -
+     outp @9/eds-sub2.out inpu "@0/eds-sub2.str" -
+     nproc 1 sele all end
+
+end
+upper
+
+! Set up EDS 
+
+set e1 0.0 ! Energy offset of system 1 (should be the average potential energy of the subsystem - required for numerical stability)
+set e2 0.0 ! Energy offset of system 2 (if the energy fluctuations of the subsystem are to large, EDS will not work)
+
+! neds = number of subsystems
+! term one @e1 = define first subsystem for eds, named "one" in the MSCALE command above, @e1 is the energy offset 
+eds temp 300. neds 2 term one @e1 term two @e2
+
+
+! Dynamics
+
+! prepare Langevin dynamics
+scalar fbeta set 1.0 select all  end
+
+dynamics langevin start firstt 300. finalt 300. - ! former firstt 240
+             nstep @nstep timestep 0.002 -
+             inbfrq 0 ilbfrq 10 rbuffer 0.0 tbath 300. -
+             iseed 1 1 1 1 echeck 1000.0 -
+             nprint 10000 iprfreq 40000 kunit -1 -
+             isvfrq 0  iunwrite -1 iunread -9 -
+             nsavc  100 iuncrd -22
+
+stop

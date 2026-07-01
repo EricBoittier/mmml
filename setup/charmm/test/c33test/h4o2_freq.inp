@@ -1,0 +1,75 @@
+* CHARMM c33a1 Testcase h4o2_freq.inp
+* test case for the additional function in SCCDFTB
+* Vibrational frequency 
+* Author: Qiang Cui, June 2005, UW Madison
+
+if ?SCCDFTB .NE. 1 then
+  echo "Test NOT Performed."
+  STOP
+endif
+
+stream datadir.def
+
+OPEN UNIT 21 NAME @0top_all22_prot.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_all22_prot.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+read sequ TIP3 2
+generate N setup noangle nodihe
+
+READ COOR CARD
+*   WATER DIMER
+*
+    6
+    1    1 TIP3 OH2   -1.07861   0.77296  -0.76274 N    1      1.00000
+    2    1 TIP3 H1    -1.93957   0.46172  -0.44751 N    1      4.00000
+    3    1 TIP3 H2    -0.40091   0.27307  -0.26671 N    1      4.00000
+    4    2 TIP3 OH2    1.03836  -0.60758   0.60596 N    2      1.00000
+    5    2 TIP3 H1     1.57175   0.09760   1.00009 N    2      4.00000
+    6    2 TIP3 H2     1.56629  -1.00366  -0.10224 N    2      4.00000
+
+NBOND atom switch cdie vdw vswitch -
+       ctonnb 997 ctofnb 998 cutnb 999
+
+scalar WMAIN set 1.0 sele (all) .and. type O*  SHOW end
+scalar WMAIN set 2.0 sele (all) .and. type N*  SHOW end
+scalar WMAIN set 3.0 sele (all) .and. type C*  SHOW end
+scalar WMAIN set 4.0 sele (all) .and. type H*  SHOW end
+
+SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 
+
+MINI ABNR NSTEP 2000 TOLG 0.001
+
+! ...... A standard normal mode analysis ...... 
+VIBRAN
+DIAG FINITE STEP 0.001
+PRINT NORM VECT
+END
+
+! ...... NOW fix one water (high-freq not affected)...... 
+cons fix sele resi 1 end
+
+VIBRAN
+REDU FIX FINITE STEP 0.001
+PRINT NORM VECT
+END
+
+! ...... NOW fix the other water (high-freq not affected)...... 
+cons fix sele resi 2 end
+
+VIBRAN
+REDU FIX FINITE STEP 0.001
+PRINT NORM VECT
+END
+
+! ...... Test NOVEC (simply reduce memory cost) ...... 
+VIBRAN NOVC
+REDU FIX FINITE STEP 0.001
+END
+
+STOP
+

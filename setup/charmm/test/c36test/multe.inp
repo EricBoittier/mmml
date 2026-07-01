@@ -1,0 +1,265 @@
+* CHARMM c36a1 Testcase: tmulte.inp
+*
+
+if ?numnode  .gt. 1  then
+  echo "Parallel file I/O broken for this test"
+  echo "Test NOT performed."
+  STOP
+endif
+
+STREam datadir.def
+
+bomlev 0
+wrnlev 5
+prnlev 5 @pnode
+
+! Read topology and parameter files
+
+OPEN READ CARD UNIT 11 NAME @0top_all22_prot.inp    ! topology file
+READ RTF  CARD UNIT 11
+CLOSE UNIT 11
+
+OPEN READ CARD UNIT 12 NAME @0par_all22_prot.inp    ! parameter file
+READ PARA CARD UNIT 12
+CLOSE UNIT 12
+
+! Generate the PSF 
+
+READ SEQUENCE CARD
+* BPTI sequence
+*
+58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+GENERATE MAIN SETUP WARNING
+
+READ SEQUENCE CARD
+* Buried waters
+*
+4 
+TIP3 TIP3 TIP3 TIP3
+GENERATE WATE NOANGLE NODIHE
+
+PATCH DISU MAIN 5 MAIN 55
+PATCH DISU MAIN 14 MAIN 38
+PATCH DISU MAIN 30 MAIN 51
+
+! Read the coordinates
+
+OPEN UNIT 13 READ CARD NAME @0bpti_allh.crd        ! coordinate file
+READ COOR CARD UNIT 13
+CLOSE UNIT 13
+
+IC BUILD
+IC FILL  !fill the ic table
+
+coor copy comp ! copy coordinates to comparison set
+
+! Write out conformations of first position
+
+define group sele (segid MAIN .and. resid 47) end
+
+open write unit 2 card name @9rot1.out
+write title unit 2
+* ?NSEL 10
+*
+
+defi mobile sele (group -
+  .and. .not. type N - 
+  .and. .not. type CA -
+  .and. .not. type C -
+  .and. .not. type O -
+  .and. .not. type H -
+  .and. .not. type HN -
+  ) end
+
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG 60.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG 60.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 180.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG 60.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 -60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG 180.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG 180.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 180.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG 180.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 -60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG -60.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG -60.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 180.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 47 N MAIN 47 CA MAIN 47 CB MAIN 47 OG -60.0
+dihe MAIN 47 CA MAIN 47 CB MAIN 47 OG MAIN 47 HG1 -60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+close unit 2
+
+
+! Write out conformations of second position
+
+define group sele (segid MAIN .and. resid 40) end
+
+open write unit 2 card name @9rot2.out
+write title unit 2
+* ?NSEL 10
+*
+
+defi mobile sele (group -
+  .and. .not. type N - 
+  .and. .not. type CA -
+  .and. .not. type C -
+  .and. .not. type O -
+  .and. .not. type H -
+  .and. .not. type HN -
+  ) end
+
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG 60.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG 60.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 180.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG 60.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 -60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG 180.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG 180.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 180.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG 180.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 -60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG -60.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG -60.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 180.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+coor init sele mobile end
+ic edit
+dihe MAIN 50 N MAIN 50 CA MAIN 50 CB MAIN 50 CG -60.0
+dihe MAIN 50 CA MAIN 50 CB MAIN 50 CG MAIN 50 OD1 -60.0
+end
+ic build
+write coor dumb sele group end unit 2
+
+close unit 2
+
+! compute energies
+
+update inbfrq 1 atom rdiel switch eps 4.0 e14fac 1.0 -
+cutnb 299.0 ctofnb 298.0 ctonnb 297.0 -
+nbxmod 5 vswitch wmin 1.5 vatom vdistance 
+
+update inbfrq 0 ihbfrq 0
+inte keep sele resid 47 .or. resid 50 end
+
+mlte atni 745 atnj 781 fili @9rot1.out filj @9rot2.out outf @9multe.tab -
+eter bond eter angle eter urey eter dihe eter impr eter vdw eter elec
+
+stop

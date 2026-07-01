@@ -1,0 +1,46 @@
+* interaction.inp
+* Sonja Schwarzl & Stefan Fischer. 17/06/2008
+* 
+
+STREAM generate.str
+STREAM settings1.str
+STREAM settings2.str
+
+STREAM initialize.str
+
+     ! Compute only electrostatics :
+SKIP ALL EXCL ELEC
+ 
+     ! No bonded-exclusions (NBXMOD= -1 instead of 5),  cutoff :
+ENER  NBXMOD -1  VATOM ATOM  EPS 1.0  E14FAC 1.0  @ELECTR -
+      @UVFUNCTION @UFUNCTION CTONNB @UCTONNB CTOFNB @UCTOFNB CUTNB -
+      @UCUTNB WMIN @UWMIN    
+
+OPEN UNIT 20 WRITE FORM NAME @OUTPUT2
+WRITE TITLE UNIT 20
+* OUTPUT OF INTERCTION ENERGY IN VACUUM AND SOLUTION
+* GROUP           E^vac_I  E^solv_I    distance  lambda
+*
+
+
+DEFIne GROUP SELE targetregion END
+
+! calculate electrostatic potential due to charges of the target atoms (using
+! unscaled charges) and interpolate it to atom positions. Store in SCA9.
+STREAm pbeq.str
+
+! loop over all residues that do not belong to the target atoms and 
+! calculate interaction energies with PBEQ (uncaled charges) and with the
+! Coulomb law (globally scaled charges in target region, unscaled charges
+! outside) 
+STREAm loop_inter.str
+
+! write coordinate file with scaling factors in WMAIN
+
+SCAL WMAIN = SCA6
+
+open write unit 1 card name @OUTPUT
+write coordinates card unit 1
+close unit 1
+
+STOP

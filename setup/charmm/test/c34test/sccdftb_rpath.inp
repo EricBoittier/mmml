@@ -1,0 +1,164 @@
+* CHARMM Testcase 
+* Author: H. Lee Woodcock III 
+* Date: July 2006
+* Butane test case for performing SCCDFTB Replica Path Calculation
+*
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+
+bomblev -1
+STREam datadir.def
+
+open read card unit 1 name @0/top_all22_model.inp
+read rtf card unit 1
+
+open read card unit 2 name @0/par_all22_prot.inp
+read parameter card unit 2
+
+read sequence card
+*  Just a butane
+*
+  1
+BUTA
+GENERATE MAIN SETU
+
+set nrep 5
+
+
+ic param
+ic edit
+dihe 1 c1 1 c2 1 c3 1 c4 180.0
+end
+ic seed 1 c1 1 c2 1 c3
+ic build
+coor orie mass select type c* end
+
+mini abnr nstep 10 nprint 10
+
+ic delete sele type h* end
+print ic
+
+REPLIcate A NREPlica @nrep SELEct ALL END setup
+delete atom sele segid main end
+
+! { set up an appropriate interaction matrix }
+BLOCK 2
+  CALL 2 SELEct segid a* end
+  COEF 1 1 1.0
+  COEF 2 2 1.0
+  COEF 2 1 1.0
+END
+
+energy
+
+prnlev -1 @pnode
+set 1 1
+set phi 0.0
+
+define b0 sele type c3 end
+define b1 sele ( b0 .or. .bonded. b0 ) .and. .not. type c2 end
+define b2 sele ( b1 .or. .bonded. b1 ) .and. .not. type c2 end
+
+calc incphi 360.0 / @nrep
+label loop
+  coor axis sele atom A@1 1 c2 end sele atom A@1 1 c3 end 
+  coor rotate sele b2 .and. segid A@1 show end axis phi @phi
+  incr 1 by 1
+  incr phi by @incphi
+  trim 1
+if @1 .le. @nrep then goto loop
+
+prnlev 5 @pnode
+
+ic fill
+print ic
+
+prnlev -1 @pnode
+!
+!  DUMP INITIAL PATH
+!
+open write card unit 20 name @9/butane_path_initial.dat
+
+set i 1
+label loopi
+
+  define junk select atom A@i 1 C1 end
+  set 1 ?SELATOM
+  define junk select atom A@i 1 C2 end
+  set 2 ?SELATOM
+  define junk select atom A@i 1 C3 end
+  set 3 ?SELATOM
+  define junk select atom A@i 1 C4 end
+  set 4 ?SELATOM
+
+  quick @1 @2 @3 @4
+  set phi = ?PHI
+
+  write title unit 20
+* @i @phi
+*
+
+  incr i by 1.0
+  trim i
+
+if @i .le. @nrep then goto loopi
+
+close unit 20
+
+prnlev 5 @pnode
+
+scalar wmain set 1.0
+scalar wmain set 0.0 sele type h* end
+
+!
+! invoke the path code
+!
+
+ open write card unit 34 name @9/ref.psf
+ write psf card unit 34
+
+ open write card unit 43 name @9/ref.pdb
+ write coor pdb  unit 43
+
+! ------------------------------------------
+! Initialize Replica Path Method 
+  RPATh KRMS 5000.0 RMAX 0.25 KANGle 100.0 KMAX 500.0 COSMax 0.98 ROTA TRAN WEIGHT CYCLic 
+
+! -----------------------------------------------------------
+! Use the following to assign atom types (only need to do once
+! WMAIN will become available after the sccdftb command)
+! The sequence (C:1, H:2 has to be consistent with the sccdftb.dat 
+! file. For Example.... 
+!
+!'/path/to/slko/cc.spl'
+!'/path/to/slko/ch.spl'
+!'/path/to/slko/hc.spl'
+!'/path/to/slko/hh.spl'
+
+scalar WMAIN set 1.0 sele all .and. type C*  SHOW end
+scalar WMAIN set 2.0 sele all .and. type H*  SHOW end
+
+! Default SCF convergence is 1.d-7, which is fine.
+! 1.d-6 would give not so accurate forces
+sccdftb remove chrg 0 sele all end SCFT 0.00000001
+!
+! -----------------------------------------------------------
+
+  scalar wmain set 1.0
+  scalar wmain set 0.0 sele type h* end
+
+  energy 
+
+  cons fix select segid A1 .or. segid A@nrep end
+
+  test first tol 0.0 step 0.002
+
+stop
+

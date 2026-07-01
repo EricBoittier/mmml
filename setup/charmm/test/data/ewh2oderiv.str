@@ -1,0 +1,69 @@
+* STREAM FILE for Ewald derivatives, called by ewh2oderiv.inp.
+* Do energy calculation and then test first derivative command.
+*
+!
+!!!! First do the test using VSWITCH
+!
+!Must do an initial energy calculation before the test command.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 9 KSQMAX 83  KAPPA .45  NBXM 5 -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT
+set tt 1
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+!
+! Test some derivatives. The difference should be less than 0.008.
+! The tolerance is set very small so that all of the specified
+! derivatives will be printed out.
+TEST FIRST SELE RESID 1:3 END TOL 0.0000001
+TEST FIRST SELE RESID 1:3 END TOL 0.01
+@testcheck ?nok @nckcoor .000001 cuttest1_testfirst_@tt_slow
+
+!!!! Now do the test using VSHIFT
+!
+!Must do an initial energy calculation before the test command.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 9 KSQMAX 83  KAPPA .45  NBXM 5 -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSHIF
+set tt 2
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+!
+! Test some derivatives. The difference should be less than 0.008.
+! The tolerance is set very small so that all of the specified
+! derivatives will be printed out.
+TEST FIRST SELE RESID 1:3 END TOL 0.0000001
+TEST FIRST SELE RESID 1:3 END TOL 0.01
+@testcheck ?nok @nckcoor .000001 cuttest1_testfirst_@tt_slow
+
+!!!! Now do the test using Simple Truncation
+!
+!Must do an initial energy calculation before the test command.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 9 KSQMAX 83  KAPPA .45  NBXM 5 -
+CUTNB 8.0  CTONNB 7.75 CTOFNB 7.75 CUTIM 8.0 VSWIT
+set tt 3
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+! Test some derivatives. The difference should be less than 0.008.
+! The tolerance is set very small so that all of the specified
+! derivatives will be printed out.
+TEST FIRST SELE RESID 1:3 END TOL 0.0000001
+TEST FIRST SELE RESID 1:3 END TOL 0.01
+@testcheck ?nok @nckcoor .000001 cuttest1_testfirst_@tt_slow
+
+!!!! Now do the test using No VDW
+!
+SKIPE VDW
+!Must do an initial energy calculation before the test command.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 9 KSQMAX 83  KAPPA .45  NBXM 5 -
+CUTNB 8.0  CTONNB 7.75 CTOFNB 7.75 CUTIM 8.0 VSWIT
+set tt 4
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+! Test some derivatives. The difference should be less than 0.008.
+! The tolerance is set very small so that all of the specified
+! derivatives will be printed out.
+TEST FIRST SELE RESID 1:3 END TOL 0.0000001
+TEST FIRST SELE RESID 1:3 END TOL 0.01
+@testcheck ?nok @nckcoor .000001 cuttest1_testfirst_@tt_slow
+
+SKIP EXCL ALL
+!
+RETURN
+

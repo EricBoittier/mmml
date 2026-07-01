@@ -1,0 +1,114 @@
+* TI input for DCM water self-solvation energy lambda window
+* Mike DEVEREUX (2017)
+*
+
+BOMLEV 0
+PRNLEVEL 2 NODE 0
+
+!================================================================
+! Read parameters
+!================================================================
+
+stream datadir.def
+set PATH @0
+
+READ RTF CARD        NAME -
+ @PATH/zeroed.top  ! topology file with atomic charges set to zero 
+                   ! (DCM module will handle electrostatics)
+
+READ PARAM CARD        NAME -
+ @PATH/water-wpolwq.par  ! parameter file for DCM water model
+
+!================================================================
+! Read coordinates
+!================================================================
+
+OPEN UNIT 10 READ CARD NAME @PATH/wat512-1.pdb ! waterbox with one molecule removed
+READ SEQUENCE PDB UNIT 10
+GENERATE WAT NOANgle NODIhedral
+REWIND UNIT 10
+READ COOR PDB UNIT 10
+CLOSE UNIT 10
+
+OPEN UNIT 10 READ CARD NAME @PATH/water.solute.pdb ! "solute" water molecule
+READ SEQUENCE PDB UNIT 10
+GENERATE SOLU NOANgle NODIhedral
+REWIND UNIT 10
+READ COOR PDB APPEND UNIT 10
+CLOSE UNIT 10
+
+!================================================================
+! Initial T.I. state where the "solute" water has no electrostatics
+!================================================================
+
+OPEN UNIT 40 CARD READ NAME @PATH/lambda_0.0.dcm
+DCM IUDCM 40 TSHIFT ! DCM lambda=0.0 initial state
+CLOSE UNIT 40
+
+NBONDS NBXMOD 5 ATOM CDIEL EPS 1.0 SHIFT VATOM VDISTANCE -
+ VSWITCH CUTNB 14.0 CTOFNB 12.0 CTONNB 10. E14FAC 1.0
+
+ENERGY
+FAST OFF
+
+!================================================================
+! PERT T.I. calculation setup, saving the current state as lambda=0
+!================================================================
+
+! Make certain we have no charges on the solute atoms from the topology
+! file:
+SCALAR CHARGE SET 0. SELE SEGI SOLU END 
+PERT SELE SEGI SOLU END
+
+!================================================================
+! Crystal definition
+!================================================================
+
+COOR STAT
+CALC BOXX = (?XMAX - ?XMIN -1 )
+CRYSTAL DEFI CUBIC @BOXX @BOXX @BOXX 90. 90. 90.  
+CRYSTAL BUILD nope 0
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+SHAKE BOND TOL 1.0E-8 PARA
+
+!================================================================
+! T.I. final state where the "solute" water has full DCM electrostatics
+! and polarizabilities
+!================================================================
+
+OPEN UNIT 40 CARD READ NAME @PATH/lambda_1.0.dcm
+DCM S1 40  ! DCM lambda=1.0 endstate
+CLOSE UNIT 40
+ENERGY
+
+!================================================================
+! Diagnostic tests for developers
+!================================================================
+
+TEST FIRST CRYSTAL TOLER 0.001 SELE bynu 1:2 END
+@testcheck ?nok  7 0 TESTFIRST_1
+! HOMO test is incomplete as crystal is cubic...
+TEST FIRST CRYSTAL HOMO TOLER 0.001 SELE bynu 3:4 END
+@testcheck ?nok  7 0 TESTFIRST_2
+ENERGY
+@testcheck ?ENER -7550.70440 0.0001 ENERPOT_1
+
+!================================================================
+! T.I. slow growth dynamics
+!================================================================
+
+DYNA LEAP STRT NSTEP 100 TIMESTEP 0.001                   -
+ LSTART 0.000000 LAMBDA 0.0  LSTOP 1.0  PSTART  1       -
+   PSTOP   1  PSLOW PEQUIL 1 PINCR 1 LINCR 1.0          -
+   FIRSTT 298.0  FINALT 298.0  TSTRUC 298.0             -
+   IPRFRQ 1  NTRFRQ 5                                   -
+   IHBFRQ 0  INBFRQ -1                                  -
+   NPRINT 1                                             -
+   IASORS 0  ISCVEL 0                                   -
+   IEQFRQ 0  ICHECW 1  TWINDH 5.0  TWINDL -5.0          -
+   CPT PCONst PREF 1.0 PGAMMA 20.0 PMASs 500            -
+   TBATH 298.                                           -
+   IUNREAD -1  IUNWRITE -1  IUNCRD -1  NSAVCRD 0        
+
+
+STOP

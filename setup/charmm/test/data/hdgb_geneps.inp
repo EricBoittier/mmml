@@ -1,0 +1,236 @@
+* CHARMM c33a1 Testcase Data file generator : hdgb_geneps.inp
+* Generate the dielectric profile for the HDGB model
+* Three-dielectric model of an implicit membrane:
+* Author: S. Tanizaki, Michigan State University June 2005
+* (schematics)
+*     |        |      |
+*     |  eps1  | eps2 | eps3   
+*     |        |      |
+*     0        z1     z2
+*
+
+set  siz          2
+set  ep1          2
+set  ep2          7
+set  ep3         80
+set  z1          10
+set  z2          15
+calc mtk    2 * @z2
+calc htk  @z2 - @z1
+set  cnt   -166.036
+
+! Topology
+read rtf card
+* topology of an ion
+*
+   21    1
+
+mass 1 c 1.0
+
+resi ion 1.0
+atom c c 1.0
+patch first none last none
+
+end
+
+! Parameters
+read para card
+* parameter for an ion
+*
+nonbonded
+c 0. -0.1 @siz
+
+end
+
+read sequence card
+* Ion
+*
+1
+ion
+
+! Generate the PSF and also the IC table (SETUP option)
+! The setup option will cause any internal coordinate table entries
+! (IC) from the topology file to be appended to the main IC table.
+
+generate IONA setup
+
+read coor card
+* ion
+*
+    1
+    1    1 ION  C      0.00000   0.00000   0.00000 IONA 1      0.00000
+
+
+open write formatted unit 10 name eps.dat 
+
+PBEQ
+
+ format (f15.6)
+
+ ! Vacuum calculation
+
+ scalar charge set 1.0 select resname ION end
+ scalar wmain = radius
+ scalar wmain set @siz select resname ION end
+ scalar wmain show
+
+ SOLVE NCEL 101  DCEL  1.0 -
+       XBCE 0.0  YBCE  0.0 ZBCE 0.0 -
+       EPSP 1.0  EPSW  1.0 CONC 0.0 -
+       MAXI 10000 NPBC 
+ set ener11 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.8  -
+       XBCE 0.0  YBCE  0.0 ZBCE 0.0 -
+       EPSP 1.0  EPSW  1.0 CONC 0.0 -
+       MAXI 10000 FOCU
+ set ener12 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.4 -
+       XBCE 0.0  YBCE  0.0 ZBCE 0.0 -
+       EPSP 1.0  EPSW  1.0 CONC 0.0 -
+       MAXI 10000 FOCU
+ set ener13 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.2 -
+       XBCE 0.0  YBCE  0.0 ZBCE 0.0 -
+       EPSP 1.0  EPSW  1.0 CONC 0.0 -
+       MAXI 10000 FOCU
+ set ener14 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.1 -
+       XBCE 0.0  YBCE  0.0 ZBCE 0.0 -
+       EPSP 1.0  EPSW  1.0 CONC 0.0 -
+       MAXI 10000 FOCU
+ set ener15 = ?ENPB
+
+ ! Membrane calculations
+
+ ! Set normalization constant such that eps = 80 at z = 25.
+ ! This is necessary for the errors in the PB calculation.
+
+ set rz = 25.
+
+ COOR SET XDIR 0.0 YDIR 0.0 ZDIR @rz
+
+ scalar charge set 1.0 select resname ION end
+ scalar wmain = radius
+ scalar wmain set @siz select resname ION end
+ scalar wmain show
+
+ SOLVE NCEL 101  DCEL  1.0  -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk  ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 NPBC 
+ set ener81 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.8  -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener82 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.4 -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener83 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.2 -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener84 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.1 -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener85 = ?ENPB
+
+ calc g0    @cnt * ( 1 - 1 / 80 ) / @siz
+ calc ener5 @ener85 - @ener15
+ calc nrm   @g0 / @ener5
+ calc eps   @cnt / ( @cnt - @nrm * @ener5 * @siz)
+
+ set rz = 0.
+
+ prnlev 1
+ label doPB
+
+ COOR SET XDIR 0.0 YDIR 0.0 ZDIR @rz
+
+ scalar charge set 1.0 select resname ION end
+ scalar wmain = radius
+ scalar wmain set @siz select resname ION end
+ scalar wmain show
+
+ SOLVE NCEL 101  DCEL  1.0  -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk  ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 NPBC 
+ set ener81 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.8  -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener82 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.4 -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener83 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.2 -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener84 = ?ENPB
+
+ SOLVE NCEL 101  DCEL  0.1 -
+       XBCE 0.0  YBCE  0.0  ZBCE @rz  -
+       EPSP 1.0  EPSW  @ep3 CONC 0.0  -
+       TMEM @mtk ZMEM  0.0  EPSM @ep1 VMEM 0.0 -
+       EPSH @ep2 HEAD  @htk  -
+       MAXI 10000 FOCU
+ set ener85 = ?ENPB
+
+calc ener5 @nrm * ( @ener85 - @ener15 )
+calc eps   @cnt / ( @cnt - @ener5 * @siz)
+
+ write title unit 10
+ * @rz @eps
+ *
+
+ incr rz by 0.5
+ if rz .le. 24.6 goto doPB
+
+ write title unit 10
+ * 25 80
+ *
+
+ prnlev 5
+
+END
+
+STOP

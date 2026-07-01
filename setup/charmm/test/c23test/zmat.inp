@@ -1,0 +1,61 @@
+* file: zmat.inp
+* Test the ZMATRIX facility for the water dimer
+* (just a straight zmatrix "a la GAUSSIAN90") 
+* 
+
+stream datadir.def
+
+open read card unit 1 name @0toph19.rtf
+read RTF card unit 1
+close unit 1
+
+open read card unit 1 name @0param19.prm
+read PARAM card unit 1
+close unit 1
+
+read sequence tip3 2
+generate DIME  setup warning noangle nodihedral
+
+define O1 select type OH2 .and. resid 1 end 
+define H1 select type H1  .and. resid 1 end 
+define H2 select type H2  .and. resid 1 end 
+define O2 select type OH2 .and. resid 2 end 
+define H3 select type H1  .and. resid 2 end 
+define H4 select type H2  .and. resid 2 end 
+!----------------------------------------------------------------
+! Water dimer  
+ZMAT
+select O1 end
+select H1 end  select O1 end  dist    0.9572
+select H2 end  select O1 end  dist    0.9572 -
+               select H1 end  theta 104.5200
+select O2 end  select H1 end  dist    3.0000 -
+               select O1 end  theta 180.0000 -
+               select H2 end  dihe    0.0000
+select H3 end  select O2 end  dist    0.9572 -
+               select H1 end  theta 127.7400 -
+               select H2 end  dihe   90.0000
+select H4 end  select O2 end  dist    0.9572 -
+               select H3 end  theta 127.7400 -
+               select H2 end  dihe  -90.0000
+ZEND
+
+print coor
+coor dist cut 10.0 select all end select all end
+
+! test that the structure was built correctly
+! using substitution variables
+
+coor stat
+@testcheck ?xmin -0.239987  0.00005 zmat_xmin
+@testcheck ?ymin -0.729071  0.00005 zmat_ymin
+@testcheck ?zmin -0.338730  0.00005 zmat_zmin
+@testcheck ?xmax  4.543082  0.00005 zmat_xmax
+@testcheck ?ymax  0.926627  0.00005 zmat_ymax
+@testcheck ?zmax  0.756950  0.00005 zmat_zmax
+@testcheck ?xave  2.109188  0.00005 zmat_xave
+@testcheck ?yave  0.032926  0.00005 zmat_yave
+@testcheck ?zave  0.0697033 0.00005 zmat_zave
+
+stop
+

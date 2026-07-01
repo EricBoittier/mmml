@@ -1,0 +1,49 @@
+* c38 test case: Make basis set of all modes except t/r
+*
+
+stream datadir.def
+
+if ?parallel .eq. 1 then
+  if ?numnode .gt. 1 then
+    echo "VIBRAN is not parallel-output safe ... skipping"
+    echo "TESTCASE RESULT MKBASIS: SKIP"
+    stop
+  endif
+endif
+
+read rtf card name @0top_all27_prot_lipid_chiral.dat
+read param card name @0par_all27_prot_lipid_chiral.dat
+read psf card name @0ala3.psf
+read coor card name @0ala3.min.cor
+
+open unit 20 write unfo name @9ala3-basis.dat
+
+vibran nmode 300
+basis tr
+
+set i = 1
+set n = ?natom
+label loop
+
+edit incl trans x sele bynum @i show end
+edit incl trans y sele bynum @i show end
+edit incl trans z sele bynum @i show end
+
+incr i by 1
+if @i .le. @n then goto loop
+
+print norm vector
+print norm
+
+edit orth purge
+edit delete mode 1 thru 6
+
+print norm
+
+write norm unit 20
+* basis for ala3, excluding T/R
+*
+
+end
+
+stop

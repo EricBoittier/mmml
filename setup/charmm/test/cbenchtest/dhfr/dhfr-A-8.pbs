@@ -1,0 +1,26 @@
+#!/bin/csh -f
+#PBS -l nodes=1:ppn=8
+#PBS -l walltime=2:00:00
+#PBS -j oe
+#PBS -N "dhfr-c36a-8"
+#PBS -q ddr
+ 
+
+set DIR = $HOME/benchmarks/dhfr/
+
+cd $PBSREMOTEDIR
+
+cat $PBS_NODEFILE
+
+cp -a $DIR/* .
+
+
+#mpirun -np 64  /export/apps/CHARMM/intel/c35b_openmpi < 5cb.inp > charmm.$PBS_JOBNAME.$PBS_JOBID
+mpirun -np 8  /export/users/dlbraun/benchmarks/charmm/exec/em64t_M/charmm < 5cb.inp > charmm.$PBS_JOBNAME.$PBS_JOBID
+
+cat /proc/cpuinfo
+
+cp charmm.$PBS_JOBNAME.$PBS_JOBID $DIR/../output
+
+exit
+

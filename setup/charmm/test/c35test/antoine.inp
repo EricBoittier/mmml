@@ -1,0 +1,56 @@
+* Antoine coefficient fitting by using FITPARAM utility
+* Fitting to experimental data for vapor pressure - temperature dependence
+* See fitcharge.doc for FITPARAM format
+* Victor Anisimov, 2007
+*
+
+if ?FITCHG .NE. 1 THEN
+  echo "Test NOT Performed."
+  STOP
+endif
+
+stream datadir.def
+
+! NOTE: this test case does not work in parallel:
+! garbage is input into GETFNAME() in misc/fitcharge.src which results in runtime error
+if ?numnode .ne. 1 stop
+
+set fname antoine
+
+! input data
+open unit 11 read  form name @0@fname.ini     ! initial guess for parameters
+open unit 12 read  form name @0@fname.exp     ! experimental (target data)
+! output data
+open unit 13 write form name @9@fname.prm     ! optimized parameters will be stored here
+
+FITPARAM -
+  NITE 50 -     ! maximum number of iterations
+  TOLE 0.001 -  ! chi^2 convergence threshold
+  COUN 2 -      ! number of consecutive successful steps before convergence
+  NEXP 8 -      ! number of experimental data
+  NPAR 3 -      ! number of parameters to fit (2 or 3 if ANTOINE keyword is present)
+  ANTOINE -     ! Antoine coefficient fitting
+  GUES 11 -     ! input: initial guess for parameters
+  EXPD 12 -     ! input: data to fit to
+  PARM 13       ! output: file to store optimized parameters
+!
+! Perform self test
+!
+! Prepare a comparison set (expected results after fitting)
+set par1  17.84653436
+set par2  4706.72855137
+set par3  -61.45937595
+!
+! Compute differences
+set i 0
+set diff 0.0
+label loop
+  incr i by 1
+  @testcheck ?FPAR@@i @par@@i 0.0000001 antoinetest_@i
+  calc diff = @diff + abs( @par@@i - ?FPAR@@i ) 
+if i lt 3 goto loop
+!
+! Analyse the differences
+@testcheck @diff 0.0 0.00001 antoinetest_4
+!
+stop

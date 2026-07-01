@@ -1,0 +1,14 @@
+* punit file for pssp3.inp testcase
+*
+  lstart 0.0  lambda 0.0  lstop 0.05  pstart  14  pstop  20  pwind pssp
+  lstart 0.05 lambda 0.1  lstop 0.15  pstart  24  pstop  30  pwind pssp
+  lstart 0.15 lambda 0.2  lstop 0.25  pstart  34  pstop  40  pwind pssp
+  lstart 0.25 lambda 0.3  lstop 0.35  pstart  44  pstop  50  pwind pssp
+  lstart 0.35 lambda 0.4  lstop 0.45  pstart  54  pstop  60  pwind pssp
+  lstart 0.45 lambda 0.5  lstop 0.55  pstart  64  pstop  70  pwind pssp
+  lstart 0.55 lambda 0.6  lstop 0.65  pstart  74  pstop  80  pwind pssp
+  lstart 0.65 lambda 0.7  lstop 0.75  pstart  84  pstop  90  pwind pssp
+  lstart 0.75 lambda 0.8  lstop 0.85  pstart  94  pstop 100  pwind pssp
+  lstart 0.85 lambda 0.9  lstop 0.95  pstart 104  pstop 110  pwind pssp
+  lstart 0.95 lambda 1.0  lstop 1.0   pstart 114  pstop 120  pwind pssp
+  end

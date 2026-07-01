@@ -1,0 +1,161 @@
+* Using 3D IPS/PERT to calculate deprotonation free energy
+* Xiongwu Wu,   6/5/2014
+*
+
+bomlev -1  !need to set bomlev because of non-integer charge
+
+stream datadir.def
+
+
+set sys aspw
+set z @0/@sys
+set y @9/@sys
+
+
+! read topology and parameter files
+read rtf card name @0/top_all36_prot.rtf
+
+
+wrnlev 1
+read para card flex name @0/par_all36_prot.prm
+
+wrnlev 5
+
+stream @0/toppar_water_ions.str
+
+
+
+
+
+open unit 88 write form name scratch/pwind.punit
+write title unit 88
+** punit file for slow growth test cases
+**
+*  LSTART  0  LSTOP  0.01  PSTART  100    PSTOP  200    PSLOW
+*  LSTART  1E-02  LSTOP  2E-02  PSTART  200    PSTOP  300    PSLOW
+*  LSTART  2E-02  LSTOP  3E-02  PSTART  300    PSTOP  400    PSLOW
+*  LSTART  3E-02  LSTOP  4E-02  PSTART  400    PSTOP  500    PSLOW
+*  LSTART  4E-02  LSTOP  5E-02  PSTART  500    PSTOP  600    PSLOW
+*  LSTART  5E-02  LSTOP  0.15  PSTART  600    PSTOP  700    PSLOW
+*  LSTART  0.15  LSTOP  0.25  PSTART  700    PSTOP  800    PSLOW
+*  LSTART  0.25  LSTOP  0.35  PSTART  800    PSTOP  900    PSLOW
+*  LSTART  0.35  LSTOP  0.45  PSTART  900    PSTOP  1000    PSLOW
+*  LSTART  0.45  LSTOP  0.55  PSTART  1000    PSTOP  1100    PSLOW
+*  LSTART  0.55  LSTOP  0.65  PSTART  1100    PSTOP  1200    PSLOW
+*  LSTART  0.65  LSTOP  0.75  PSTART  1200    PSTOP  1300    PSLOW
+*  LSTART  0.75  LSTOP  0.85  PSTART  1300    PSTOP  1400    PSLOW
+*  LSTART  0.85  LSTOP  0.95  PSTART  1400    PSTOP  1500    PSLOW
+*  LSTART  0.95  LSTOP  0.96  PSTART  1500    PSTOP  1600    PSLOW
+*  LSTART  0.96  LSTOP  0.97  PSTART  1600    PSTOP  1700    PSLOW
+*  LSTART  0.97  LSTOP  0.98  PSTART  1700    PSTOP  1800    PSLOW
+*  LSTART  0.98  LSTOP  0.99  PSTART  1800    PSTOP  1900    PSLOW
+*  LSTART  0.99  LSTOP  1  PSTART  1900    PSTOP  2000    PSLOW
+*
+
+
+close unite 88
+
+
+!Read in PSF and COR files 
+
+open read unit 12 form name @z.psf_0
+read psf card unit 12
+
+open read unit 16 form name @z.cor_0
+read coor unit 16 card
+
+
+
+pert sele resid 1 end
+
+
+open read unit 12 form name @z.psf_1
+read psf card unit 12 
+
+open read unit 16 form name @z.cor_1
+read coor unit 16 card
+
+
+
+
+calc xl 31.10322 
+calc yl 31.10322
+calc zl 31.10322
+
+calc cl 31.10322
+calc nfx  32
+calc nfy  32
+calc nfz  32
+
+
+crystal define cubic @xl @yl @zl 90 90 90
+crystal build cutoff 20
+
+
+! Apply image centering to all water molecules
+
+IMAGE BYSEG XCEN 0 YCEN 0 ZCEN 0 SELE segi pep END
+IMAGE BYRES XCEN 0 YCEN 0 ZCEN 0 SELE .not. segi pep END
+
+
+
+
+! Set nonbonded Options: 3D IPS 
+! ---------------------
+nbonds elec atom cdie  vdw -
+       EIPS VIPS PXYZ -
+       ctonnb 10.0 ctofnb 12.0 cutnb 14.0 cutim 16 inbfrq 10 imgfrq 20 
+
+
+energy
+
+@qcheck ?ENER -9800.05 0.01  slowgr_ips_init 
+
+
+! Set collision frequency for Langevin dynamics
+SCAL FBETA SET 1 SELE ALL END
+open read  card unit 88 name scratch/pwind.punit
+open write  file unit 31 name @y.dcd
+open write  card unit 32 name @y.res
+
+SHAKE BONH PARA
+
+dyna  leap LANG strt nstep 200 timestep 0.0010 -
+    iprfrq 100 ihtfrq 0 ieqfrq 50 ntrfrq 0  -
+    iuncrd 31 iunwri 32 iseed 31459 24593 45927 59261 -
+    nprint 10 nsavc 100 nsavv 0 echeck 10 -
+    firstt 300 tbath 300  -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 5.0 twindl -5.0 -
+    punit 88  wmin 1.0
+
+print energy
+pert off
+
+
+
+!Write fitted coordinates
+open writ form unit 16 name @y.cor
+writ coor card unit 16 
+* x-ray structure
+*
+
+
+open writ form unit 16 name @y.pdb
+writ coor pdb unit 16 
+
+
+energy
+
+@qcheck ?ENER -9608.1 48.0  slowgr_ips_init 
+
+if @testfail eq 0 then
+   set status PASS
+else
+   set status FAIL - @testfail failing tests
+endif
+
+echo slowgr_ips summary TESTCASE RESULT: @status
+
+stop
+
+

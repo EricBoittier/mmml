@@ -1,0 +1,266 @@
+CHARMM Element doc/ewald.info 1.1
+
+File: Ewald, Node: Top, Up: (doc/commands.info), Next: Syntax, Previous: Top
+
+
+                      The Ewald Summation method 
+
+
+Invoking the Ewald summation for calculating the electrostatic interactions 
+can be specified any time the nbond specification parser is invoked.  See  
+the syntax section for a list of all commands that invoke this parser.  
+
+Prerequisite reading:  nbonds.info
+
+
+* Menu:
+
+* Syntax::          Syntax of the Ewald summation specification
+* Defaults::        Defaults used in the specification
+* Function::        Description of the options
+* Discussion::      More general discussion of the algorithm
+
+
+File: Ewald, Node: Syntax, Up: Top, Next: Defaults, Previous: Top
+
+[SYNTAX EWALD]
+
+{  NBONds          }        {  nonbond-spec                   }
+{  UPDAte          }        {                                 }
+{  ENERgy          }        {                                 }
+{  MINImize        }        {                                 }
+{  DYNAmics        }        {                                 }
+
+
+The keywords are:
+
+nonbond-spec::= [ method-spec ]
+
+               { [ NOEWald ]                                          }
+               {                                                      }
+method-spec::= {   EWALd [ewald-spec] { [ NOPMewald [std-ew-spec] ] } }
+               {                      {   PMEWald [pmesh-spec]      } } 
+
+ewald-spec::=   KAPPa real  [erfc-spec]
+ljpme-spec::=   DKAPpa real DFTX int DFTY int DFTZ int DORDer int
+
+std-ew-spec::= { [ KMAX integer ]                        } KSQMAX integer
+               { KMXX integer KMXY integer KMXZ integer  }
+
+pmesh-spec::=   FFTX int FFTY int FFTZ int  ORDEr integer [QCOR real (***) ]
+
+erfc-spec::=    { SPLIne      { [EWMIn real] [EWMAx real] [EWNPts int] } }
+                { INTErpolate {                                        } }
+                {                                                        }
+                { ABROmowitz                                             }
+                { CHEBychev                                              }
+                { EXACt_high_precision                                   }
+                { LOWPrecision_exact                                     }
+                { ERFMode int                                            }
+
+
+File: Ewald, Node: Defaults, Up: Top, Next: Function, Previous: Syntax
+
+The defaults for the ewald summation are set internally
+and are currently set to NOEWald, KAPPa=1.0, KMAX=5, KSQMax=27, and
+NOPMewald, KAPPa=1.0, FFTX=FFTY=FFTZ=32, ORDEr=4, QCOR=1.0
+
+Recommended values for Ewald are:
+   EWALD PMEWald KAPPa 0.34 ORDEr 6 - 
+   FFTX intboxvx FFTY intboxvy FFTZ intboxvz  -
+   CTOFNB 12.0 CUTNB 14.0 QCOR 1.0(***)
+
+Where intboxv* is an integer value similar to or larger than the corresponding
+unit cell dimension that has prime factors of 2,3, and 5 only (2,3 preferred).
+grid point spacing should be between 0.8 and 1.2 Angstroms.
+
+These recommended values should give relative force errors of roughly 10**-5.
+To reduce the total PME cost at the expense of accuracy, decrease the cutoff
+distances while increasing KAPPa (keep the product near 4) reduces the real
+space cost.  To reduce the K-space cost, either reduce ORDEr from 6 to 4 or
+increase the grid spacing up to perhaps 1.5 Angstroms.
+
+(***) The QCOR value should be 1.0 for vacuum, solid, or finite systems.
+For periodic systems in solution, it should be reduced (or set to zero) by an
+amount that depends on how the net charge is distributed and on the effective
+dielectric constant.  For a treatise on this correction term, see:
+S. Bogusz, T. Cheatham, and B. Brooks, JCP (1998) 108, 7070-7084 and references
+contained therein (esp. Hummer and Levy).
+
+
+File: Nbonds, Node: Function, Up: Top, Previous: Defaults, Next: Discussion
+
+
+i)   The EWALD keyword invokes the Ewald summation for calculation of 
+electrostatic interactions in periodic, neutral systems.  The formulation of 
+the Ewald summation dictates that the primary system must be neutral.  If 
+otherwise, the summation is not formally correct and some 
+convergence problems may result.  The NOEWald (default) suppresses the Ewald 
+method for calculating electrostatic interactions.  Van der waals 
+options VSHIFT and VSWITCH are supported with ewald.  The algorithm
+currently supports the atom and group nonbond lists and the CRYSTAL facilty 
+must be used.  The PMEWald keyword invokes the Particle Mesh Ewald algorithm
+for the reciprocal space summation.  For details on the PME method, see
+J. Chem. Phys. 103:8577 (1995).  The EWALd algorithm is limited to CUBIC,
+TETRAGONAL, and ORTHORHOMBIC unit cells.  The PMEWald algorithm supports
+all unit cells that are supported by the CRYSTAL facility. 
+
+ii)  The KAPPa keyword, followed by a real number governs the width of the 
+Gaussian distribution central to the Ewald method.  An approximate value
+of kappa can be chosen by taking KAPPa=5/CTOFNB.  This is fairly conservative.
+Values of 4/CTOFNB lead to small force errors (roughly 10**-5).  See
+discussion section for details on choosing an optimum value of KAPPa.
+
+iii) The KMAX key word is the number of kvectors (or images of the 
+primary unit cell) that will be summed in any direction.  It is the 
+radius of the Ewald summation.  For orthorombic cells, the value of 
+kmax may be independently specified in the x, y, and z directions with
+the keywords KMXX, KMXY, and KMXZ.  In the PME version, the number of 
+FFT grid points for the charge mesh is specified by FFTX, FFTY, and FFTZ. 
+
+iv) The KSQMax key word should be chosen between  KMAX squared and 3 times
+KMAX squared. 
+
+v) An appropriate, although not optimal, set of parameters can be 
+chosen by taking KAPPA=5/CTOFNB and KMAX=KAPPa*boxlength. The actual 
+values should then be performanced optimized for your particular system.
+For the PME method, FFTX should be approximately the box length in Angstroms.
+(for efficiency, FFTX should be a multiple of powers of 2,3, and 5).
+
+   IMPORTANT NOTE::: THE SUGGESTION THAT FFTX, FFTY, AND FFTZ HAVE
+   NO PRIME FACTORS OTHER THAN 2, 3, AND 5 SEEMS TO BE A REQUIREMENT.
+   LARGE ERRORS IN THE FORCE ARE OBSERVED WHEN THIS CONDITION IS NOT MET.
+   FUTURE VERSIONS OF CHARMM WILL FLAG THIS AS AN ERROR CONDITION.
+
+ORDEr specifies the order of the B-spline interpolation, e.g. cubic is
+order 4 (default), fifth degree is ORDEr 6.  The ORDEr must be an even
+number and at least 4. 
+
+vi) EWALd runs in parallel on both shared (PARVECT) and distributed
+memory parallel computers.  PME runs in parallel on distributed
+memory computers.
+
+vii) several algorithms are available for the calculation of the complimentary
+error function, erfc(x).  EXACt and LOWPrecision use an interative technique
+described in section 6.2 of Numerical Recipies.  ABRO and CHEB are polynomial
+approximations.  A lookup table (filled at the beginning of the simulation
+using the EXACt method) can be used with either a linear (INTE) of cubic 
+spline (SPLINe) interpolation.  SPLIne is recommended.
+
+viii) Ewald with MMFF
+
+A version of EWALD was developed for MMFF.  The usual MMFF electrostatic
+term: qq/(r+d)  is split into two terms:  qq/r -  qq*d/(r*(r+d))
+The first term is handled by the Ewald method in the usual manner
+(real-space and k-space parts) and the second term is truncated
+at the cutoff distance using a switching function (from CTONNB to CTOFNB).
+Since the second term is quite small at the cutoff distance, the use of a
+switching function should not introduce significant artificial forces.
+
+
+File: Ewald, Node: Discussion, Up: Top, Previous: Function, Next: Top
+
+
+         The Ewald Summation in Molecular Dynamics Simulation 
+
+The electrostatic energy of a periodic system can be expressed by a lattice  
+sum over all pair interactions and over all lattice vectors excluding
+the i=j term in the primary box.  Summations carried out in this simple 
+way have been shown to be conditionally convergent.  The method developed by 
+Ewald, in essence, mathematically transforms  this fairly straightforward  
+summation to two more complicated but rapidly convergent sums.  One summation 
+is carried out in reciporcal space while the other is carried out in real 
+space.  Based on the formulation by Ewald, the simple lattice sum can be
+reformulated to give absolutely convergent summations which define the
+principal value of the electrostatic potential, called the intrinsic potential.
+Given the periodicity present in both crystal calculations and in dynamics 
+simulations using periodic boundary conditions,  the Ewald formulation becomes 
+well suited for the calculation of the electrostatic energy and force. If we 
+consider a system of point charges in the unit or primary cell, we can specify 
+its charge density by  
+
+ro(r) = sum_i [ q_i * delta(r-r_i)]
+
+
+In the Ewald method  this distribution is replaced by two other distributions 
+
+ro_1(r) = sum_i [ q_i ( delta(r-r_i) - f(r-r_i)]
+
+and
+
+ro_2(r) = sum_i [q_i f(r-r_i)
+
+such that the sum of the two recovers the original.  The distribution,
+f(r), is a spherical distribution generally taken to be Gaussian, the
+width of the gaussian dictated by the parameter, KAPPa.  The charge
+distributions are situated on the ion lattice positions, but integrate
+to zero.  The potential from the distribution ro_1(r) is a short range
+potential evaluated in a direct real space summation (truncated at
+CTOFNB).  The diffuse charge distribution placed on the lattice sites
+reduces to the potential of the corresponding point charge at large r.
+ro_2(r), being a continuous distribution of Gaussians situated on the
+periodic lattice positions, is a smoothly varying function of r and thus
+is well approximated by a superposition of continuous functions.  This
+distribution is, therefore, expanded in a Fourier series and the
+potential is obtained by solving the Poisson equation.  The point of
+splitting the problem into two parts, is that by a suitable choice of
+the parameter KAPPa we can get very good convergence of both parts of
+the summation.
+
+For the real space part of the energy, we choose kappa so that the
+complementary error function term, erfc(kappa*r) decreases rapidly
+enough with r to make it a good approximation to take only nearest
+images in the sum and neglect the value for which r > CTOFNB.  The
+reciprocal space sums are rapidly convergent and a spherical cutoff in k
+space is applied so that the sum over k becomes a sum over {l,m,n}, with
+(l**2+m**2+n**2) < or = to KSQMAX A large value of KAPPa means that the
+real space sum is more rapidly convergent but the reciprocal space sum
+is less rapid.  In practice one chooses KAPPa to give good convergence
+at the cutoff radius, CTOFNB.  KMAX is then chosen to such that the
+reciprocal space calculation converges.  The equation (KMAX/(box
+length)=KAPPa may be used as a rough guide.  Optimization with respect
+to the timing trade offs, ie.  how much time is spent in real space vs
+k-space should be performed before a lengthy production run.
+
+The CCP5 notes in several articles in 1993 cover some possible
+optimization strategies and criteria although a simple line search will
+suffice.  Complete optimiztion of the ewald method for a particular
+application requires optimizing CTOFNB, KAPPa, and KMAX.  A discussion
+of optimization and error analysis can be found in Kolfka and Perram,
+Molecular Simulation, 9, 351 (1992).   For PME, see Feller, Pastor,
+Rojnuckarin, Bogusz, and Brooks. J. Phys. Chem., 100, 42, 17011 (1996)
+and some of Tom Darden's published work.
+
+
+         Using LJ-PME
+
+The ljpme-spec closely mirrors the pmesh-spec of its electrostatic counterpart.
+The DKAPpa keyword defaults to the value set by KAPPa and a value around 0.4
+(/Angstrom) is recommended.  The dispersion grid dimensions DFT{X,Y,Z} are
+analogous to FFT{X,Y,Z} and are defaulted to the same values.  As with
+electrostatic PME, the values should be around 1.2 times the box dimensions for
+tight energy and force convergence with the recommended DKAPpa.  Similarly the
+spline order for the dispersion term is controlled by the DORDer, which
+defaults to the value defined by ORDEr and can usually be relaxed to 4 or 5,
+still yielding precise energies and forces.  
+
+The LJ-PME code is implemented for the slow routines as well as for DOMDEC.
+One restriction of the DOMDEC implementation is the requirements FFTX==DFTX,
+FFTY==DFTY and FFTZ==DFTZ for parallel runs with more than one direct node;
+this is not much of a limitation in practice.  Only potential shifting (VSHIft)
+and potential switching (VSWItch) methods are implemented, and the latter is
+recommended.  The use of atom based lists (VATOm) is currently required for
+LJ-PME.
+
+Currently the LJ-PME feature is not activated in a default build.  To activate
+this feature, pass the "--with-ljpme" argument to the configure script before
+compiling.  The implementation of LJ-PME uses C++11, which prevents the use of
+very old compilers (e.g. GCC versions pre-4.9).  On some systems with native
+GCC toolchains that don't meet this requirement, newer GCC modules should be
+loaded.  The Intel C++ compiler uses GCC under the hood and on systems with an
+old GCC toolchain, this could potentially cause problems.  In this case, the
+Intel C++ simply needs to be made aware of the location of a suitable GCC
+installation on the machine by setting the CXXFLAGS environmental variable to
+"-gxx-name=/full/path/to/newer/gcc/version/bin/g++".  At runtime the
+corresponding /full/path/to/newer/gcc/version/lib folder should be added to the
+LD_LIBRARY_PATH environmental variable also.

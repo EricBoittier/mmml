@@ -1,0 +1,108 @@
+* Membrane System : sys16.inp
+* Dynamic Production!!!
+*
+
+stream param.str
+
+set LengthX @BoxSizeX
+set LengthY @BoxSizeY
+set LengthZ @BoxSizeZ
+
+!read topology
+open read card unit 10 name @direcTp/@TopFile 
+read rtf card unit 10
+close unit 10
+
+!read parameters
+open read card unit 10 name @direcTp/@ParFile
+read param card unit 10
+close unit 10
+
+stream @direcStruct/peptide.str
+
+read sequence DMPC @NLipid
+generate DMPC  setup
+
+read sequence TIP3 @NWaterMol
+generate BULK noangle nodihedral
+
+open read card unit 1 name @direcWork/sys15_5.crd
+read coor card unit 1
+close unit 1
+
+define BACK -
+       select ( type N .or. type HN .or. type CA .or. type HA* .or. type C .or. type O )  -
+       .and. segid PEPT end
+define SIDE select ( .not. BACK ) .and. segid PEPT end
+define HEAD select ( type P .or. type N .or. type C1* .or. type O1* ) .and. segid DMPC end
+
+coor stat mass select segid PEPT end
+coor stat mass select segid DMPC end
+set PlanZ ?zave
+
+!----------------------------------------------------------------------
+! Constraints on membrane
+
+MMFP
+
+! cylindrical potential function to prevent drift of PEPT
+GEO  cylinder RCM -
+     xref 0.0 yref 0.0 zdir 1.0 -
+     force 5.00 select segid PEPT end
+
+! planar function to prevent drift of DMPC 
+GEO  plane RCM -
+     zref @PlanZ zdir 1.0 -
+     force 5.00 select segid DMPC end
+
+END
+
+!----------------------------------------------------------------------
+
+open unit 8 read card name @direcCubic/cubic.img
+read imag print init unit 8
+close unit 8
+imag byres sele resnam TIP3 .or. resnam DMPC end
+
+energy group   switch cdiel -                 ! Electrostatics
+       vgroup  vswitch      -                 ! VDW
+       ctonnb 8.0 ctofnb 11.0 cutnb 12.0 cutim 12.0
+
+open read  card unit 50 name @direcWork/@RestartFile
+
+shake bonh param tol 1.0e-6
+
+set I @StartI
+label DO_1
+
+open write card unit 51 name @direcWork/sys16_@I.rst
+open write unform unit 52 name @direcWork/sys16_@I.trj
+
+coor stat mass select segid DMPC end
+coor stat mass select segid PEPT end
+
+DYNAMICS  restart          nstep      2500  timestp   0.002  nprint   100  -
+          iprfrq      500  inbfrq        5  imgfrq        5  ihbfrq     0  -
+          iunread      50  -
+          iunwrite     51  -
+          iuncrd       52  nsavcrd      50  -
+          iunvelo      -1  nsavvelo      0
+
+open write card unit 1 name @direcWork/sys16_@I.crd
+write coor card unit 1
+* Full system
+* after 5 psec dynamics
+*
+
+open read  card unit 50 name @direcWork/sys16_@I.rst
+
+incr I by 1
+if I le @LastI goto DO_1
+
+open write card unit 1 name @direcWork/sys16.pdb 
+write coor pdb unit 1
+* Full pdb system 
+* after dynamics production 
+*
+
+stop

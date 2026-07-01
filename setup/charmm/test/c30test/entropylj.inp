@@ -1,0 +1,188 @@
+* testing entropy calculation from quasiharmonic analysis on Argon
+* cf Andricioaei&Karplus, JCP 115, 6289 (2001)
+* L. Nilsson, september 2002
+* modified to use a prestored trajector with only 16 atoms, LNI October 08
+*
+if ?numnode .gt. 1 then
+   echo "Test NOT performed"
+   stop ! not parallel
+endif
+
+
+! passed argument MODES=NO don't do the quasiharmonic analysis
+! passed argument COVA=NO don't do the covariance analysis
+! passed argument SUBSET=NO don't do the subset analysis
+! passed argument TIME=1 (2) set timer level to 1 (2); default 0 (off)
+if @?traj .eq. 0 set traj no
+if @?modes .eq. 0 set modes yes
+if @?cova .eq. 0 set cova yes
+if @?subset .eq. 0 set subset yes
+if @?time .eq. 0 set time 0
+!boml -1 
+open unit 11 read form name datadir.def
+if ?iostat .eq. 1 stream unit 11
+if @?9 .eq. 0 set 9
+if @?0 .eq. 0 set 0
+
+read rtf card 
+* Ar (GROMOS - see JCP 113, 709 (2000))
+*
+27  1
+
+MASS    70 AR     39.95 
+
+RESI ARGO 0.0
+GROUP
+ATOM AR1 AR 0.0
+
+END
+
+read para card
+*  epsilon=0.2381 kcal/mol, sigma=3.41A
+*
+NONBonded
+AR 0.0 -0.2381 1.914
+END
+
+read sequence argo 16
+gene lj
+open unit 51 read form name @0entropylj.frm
+open unit 88 write unform name  @9entropylj.cor
+dynamics unformat input 51 output 88
+
+if @traj .eq. yes then
+
+! Try to spread out in (23A)**3 box
+scalar x  random
+scalar y  random
+scalar z  random
+scalar x mult 23.0
+scalar y mult 23.0
+scalar z mult 23.0
+coor transl xdir -11.5 ydir -11.5 zdir -11.5
+coor stat
+
+set 6 23.0
+set 7 23.0
+set 8 23.0
+open unit 11 read form name @0cubic.img
+read image card unit 11
+image byatom sele all end xcen 0.0 ycen 0.0 zcen 0.0
+
+minimize sd nstep 100 wmin 1.5
+
+open unit 21 write unform name @9entropylj.cor
+dynamics  start timestep 0.005 nstep 10000 -
+ inbfrq -1 imgfrq -1 ihbfrq 0 cdie vswitch -
+ cutnb 12.0 ctofnb 11.0 ctonnb 11.0 -
+ tconst tcoupl 1.0 tref 300.0 finalt 300 wmin 1.0 -
+ nprint 10 nsavc 50 iunc 21 
+
+open unit 51 read unform name @9entropylj.cor
+open unit 88 write form name @0entropylj.frm
+dynamics format firstu 51 output 88
+
+endif
+
+open unit 51 read unform name @9entropylj.cor
+if @subset .eq. yes then
+  open unit 88 write unform name @9entropylj-subset.cor
+  merge firstu 51 nunit 1 output 88 sele resi 1 end
+endif
+
+time @time
+ 
+if  @modes .eq. yes then
+  coor dyna firstu 51 nunit 1
+  coor copy comp
+if @subset .eq. yes write coor card comp name @9subset.crd sele resi 1 end
+
+  vibran nmode 768
+    quasi firstu 51 nunit 1 begin 100 temp 300.0 thermo
+    set s1 ?STOT
+    thermo temp 300.0 step -1.0
+    quasi firstu 51 nunit 1 begin 100 temp 300.0 thermo -
+       select resi 1 end
+    set s2 ?STOT
+    quasi firstu 51 nunit 1 begin 100 temp 300.0 thermo resi
+    set s3 ?STOT
+  end
+
+endif
+
+if @cova .eq. yes then
+ coor cova firstu 51 nunit 1 begin 100 entropy unit -1 temp 300.0
+    set s4 ?ENTROPY
+ coor cova firstu 51 nunit 1 begin 100 entropy unit -1 temp 300.0 diag
+    set s5 ?ENTROPY
+ coor cova firstu 51 nunit 1 begin 100 entropy unit -1 temp 300.0 schlitter
+    set s6 ?ENTROPY
+ coor cova firstu 51 nunit 1 begin 100 entropy unit -1 temp 300.0 resi schl
+    set s7 ?ENTROPY
+ coor cova firstu 51 nunit 1 begin 100 entropy unit -1 temp 300.0 resi
+    set s8 ?ENTROPY
+ coor cova firstu 51 nunit 1 begin 100 entropy unit -1 temp 300.0 -
+   sele resi 1 end
+     set s9 ?ENTROPY
+endif
+
+if @subset .eq. yes then
+
+delete atom sele .not. resi 1 end
+open unit 51 read unform name @9entropylj-subset.cor
+
+if @modes .eq. yes then
+read coor card comp name @9subset.crd 
+vibran nmode 48
+ quasi firstu 51 nunit 1 begin 100 temp 300.0 thermo
+    set s10 ?STOT
+end
+endif
+
+if @cova .eq. yes then
+ coor cova firstu 51 nunit 1 begin 100 entropy unit -1 temp 300.0
+    set s11 ?ENTROPY
+endif
+
+endif ! subset
+! correct values for c36a1x on em64t with ifort 9.1
+set c1 0.496925
+set c2 0.03375691
+set c3 0.496925
+set c4 0.403574
+set c5 0.440962
+set c6 0.496973
+set c7 0.496973
+set c8 0.403574
+set c9 0.02978565
+set c10 @c2
+set c11 @c9
+set status passed
+calc q = abs( @s1 - @c1 ) / @c1
+if @q .gt. 0.001 set status failed
+calc q = abs( @s2 - @c2 ) / @c2
+if @q .gt. 0.001 set status failed
+calc q = abs( @s3 - @c3 ) / @c3
+if @q .gt. 0.001 set status failed
+calc q = abs( @s4 - @c4 ) / @c4
+if @q .gt. 0.001 set status failed
+calc q = abs( @s5 - @c5 ) / @c5
+if @q .gt. 0.001 set status failed
+calc q = abs( @s6 - @c6 ) / @c6
+if @q .gt. 0.001 set status failed
+calc q = abs( @s7 - @c7 ) / @c7
+if @q .gt. 0.001 set status failed
+calc q = abs( @s8 - @c8 ) / @c8
+if @q .gt. 0.009 set status failed
+calc q = abs( @s9 - @c9 ) / @c9
+if @q .gt. 0.001 set status failed
+calc q = abs( @s10 - @c10 ) / @c10
+if @q .gt. 0.001 set status failed
+calc q = abs( @s11 - @c11 ) / @c11
+if @q .gt. 0.001 set status failed
+
+echo testsummary: entropylj @status
+
+
+stop
+

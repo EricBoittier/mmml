@@ -1,0 +1,1543 @@
+*   TOPnah1r
+*   RESIDUE TOPOLOGY FILE FOR RNA/DNA USING ALL HYDROGENS.
+*   CHARGES DERIVED FROM toprna10/ H charges set to 0.035 and slack taken on C
+*   SOME HINTS TAKEN FROM GELIN AND ROSSKY KARPLUS RAHMAN PAPER.
+*   GROUPING REMOVED. (ONE GROUP/RESIDUE PUT BACK).
+*   H-BOND CHARGES FOR R_DIEL & EPS=1.0
+*   REDUCED PHOSPHATE CHARGES. CH-stretches and bends from
+*   uracil normal mode fit. Sugar dihedrals adapted from W.Olson JACS (1982)
+*
+   18    1
+MASS     1 H      1.00800
+MASS     2 H2     1.00800
+MASS     3 HO     1.00800
+MASS     4 HT     1.00800 ! TIPS Hydrogen
+MASS     5 LP     0.0
+MASS    11 C     12.01100
+MASS    12 CH    12.01100
+MASS    13 C2    12.01100
+MASS    14 CA    12.01100
+MASS    15 CB    12.01100
+MASS    16 CE    12.01100
+MASS    17 CF    12.01100
+MASS    18 C3    12.01100
+MASS    19 CS    12.01100
+MASS    31 N2    14.00670
+MASS    32 NA    14.00670
+MASS    33 NB    14.00670
+MASS    34 NC    14.00670
+MASS    35 NS    14.00670
+MASS    36 NH2E  16.02270
+MASS    37 NH3   16.02270
+MASS    51 O     15.99940
+MASS    52 O2    15.99940
+MASS    53 OS    15.99940
+MASS    55 OSS   15.99940
+MASS    54 OH    15.99940
+MASS    56 OH2   15.99940
+MASS    57 OT    15.99940 ! TIPS OXYGEN
+MASS    61 SD    22.98980
+MASS    71 P     30.97400
+MASS    81 BR    79.90400
+MASS    91 MG    24.30500
+
+DECL  +P  
+DECL  +O1P 
+DECL  +O2P 
+DECL  +O5' 
+DECL  -O3' 
+
+DEFA FIRS 5PHO LAST 3TER
+AUTOGENERATE ANGLES
+! set H on C to .035 and take up slack on C (Kollman)
+RESI GUA         -0.32
+ATOM P    P       1.20 
+ATOM O1P  O2     -0.40
+ATOM O2P  O2     -0.40
+ATOM O5'  OS     -0.36  
+GROUP
+
+ATOM C5'  C2     -0.07 ! rationalized
+ATOM H5'  H       0.035! "
+ATOM H5'' H       0.035! "
+
+ATOM C4'  CH      0.065! "
+ATOM H4'  H       0.035!"
+ATOM O4'  OSS    -0.30 
+ATOM C1'  CH      0.165!"
+ATOM H1'  H       0.035 !"
+
+ATOM N9   NS     -0.19 
+ATOM C4   CB      0.19    N1
+
+ATOM N3   NC     -0.50     C6
+ATOM C2   CA      0.50     C5
+
+ATOM N2   N2     -0.42 !
+ATOM H21  H2      0.21 ! 
+ATOM H22  H2      0.21 !
+
+ATOM N1   NA     -0.26 
+ATOM H1   H       0.26 
+
+ATOM C6   C       0.30 
+ATOM O6   O      -0.30 
+
+ATOM C5   CB      0.02 
+ATOM N7   NB     -0.25 
+ATOM C8   CE      0.195
+ATOM H8   H       0.035!"
+
+ATOM C2'  CH      0.115!"
+ATOM H2'' H       0.035!"
+ATOM O2'  OH     -0.40 
+ATOM H2'  HO      0.25 
+
+ATOM C3'  CH     -0.035!"
+ATOM H3'  H       0.035!"
+GROUP
+ATOM O3'  OS     -0.36 
+BOND P    O1P       P    O2P       P     O5'
+BOND O5'  C5'       C5'  C4'       C4'  O4'       C4'  C3'       O4'  C1' 
+BOND C1'  N9        C1'  C2'       N9   C4        N9   C8        C4   N3  
+BOND C4   C5        N3   C2        C2   N2        C2   N1        N2   H21 
+BOND N2   H22       N1   H1        N1   C6        C6   O6        C6   C5  
+BOND C5   N7        N7   C8        C2'  C3'       C3'  O3'       O3'  +P  
+BOND C2'  O2'       O2'  H2'
+BOND C1'  H1'       C2'  H2''      C3'  H3'       C4'  H4'       C5'  H5'
+BOND C5'  H5''      C8   H8
+DIHE C4   N9   C8   H8
+DIHE -O3' P    O5'  C5'  !     -O3' P    O5'  C5'
+DIHE  P   O5'  C5'  C4'       O5'  C5'  C4'  O4'       O5'  C5'  C4'  C3' 
+DIHE C4'  C3'  O3'  +P        C3'  O3'  +P   +O5'  !    C3'  O3'  +P   +O5'
+DIHE O4'  C1'  N9   C4        N3   C2   N2   H21 
+! N O T E:  SUGAR RING TERMS SET UP AS W. OLSON DOES IT
+DIHE O4'  C1'  C2'  C3' ! O-C-C-C, twofold term
+!DIHE O4'  C1'  C2'  C3'
+DIHE C1'  C2'  C3'  C4'
+DIHE C2'  C3'  C4'  O4' ! O-C-C-C, twofold term
+DIHE C2'  C3'  C4'  O4'
+DIHE C3'  C4'  O4'  C1'
+DIHE C4'  O4'  C1'  C2'
+! AND THE SPECIAL GAUCHE TERMS
+DIHE C5'  C4'  C3'  O3'
+DIHE O4'  C4'  C3'  O3'
+DIHE O4'  C1'  C2'  O2'
+DIHE C1'  C2'  C3'  O3'
+DIHE C4'  C3'  C2'  O2'
+DIHE O3'  C3'  C2'  O2'
+DIHE C3'  C2'  O2'  H2'
+! SO THE ALLHYDROGEN TERMS
+DIHE O4'  C4'  C3'  H3'
+DIHE O4'  C1'  C2'  H2''
+DIHE C4'  O4'  C1'  H1'
+DIHE C1'  O4'  C4'  H4'
+DIHE C3'  C4'  C5'  H5'
+DIHE C3'  C4'  C5'  H5''
+! Dihedrals to keep the two purine rings parallel:
+DIHE C8   C4   C5   N1        C8   C5   C4   C2
+DIHE N3   C4   C5   N7        C6   C5   C4   N9
+! The ring-spanning impropers have been left out.
+! And the chiral impropers are not needed with all hydrogens present
+!IMPH C5'  O4'  C3'  C4'       O3'  C2'  C4'  C3'       N9   C2'  O4'  C1' 
+IMPH C1'  C4   C8   N9     ! THIS IS AN SP2 IMPROPER ABOUT N9
+IMPH N9   C4   C5   N7        C4   C5   N7   C8        C5   N7   C8   N9  
+IMPH N7   C8   N9   C4        C8   N9   C4   C5        N2   N3   N1   C2  
+IMPH H1   C2   C6   N1        O6   N1   C5   C6        C4   N3   C2   N1  
+IMPH N3   C2   N1   C6        C2   N1   C6   C5        N1   C6   C5   C4  
+IMPH C6   C5   C4   N3        C5   C4   N3   C2        H22  H21  C2   N2  
+!IMPH C2'  C3'  C1'  O2'
+DONO H21  N2   
+DONO H22  N2   
+DONO H1   N1   
+DONO H2'  O2'
+ACCE O6   C6         
+ACCE N3    
+ACCE N7    
+ACCE O1P  P
+ACCE O2P  P       
+ACCE O2'
+ACCE O3'
+ACCE O4'
+ACCE O5'
+BILD -O3' P     O5'  C5'   1.6001  101.45  -39.25  119.00   1.4401
+BILD -O3'  O5' *P   O1P    1.6001  101.45 -115.82  109.74   1.4802
+BILD -O3'  O5' *P   O2P    1.6001  101.45  115.90  109.80   1.4801
+BILD  P   O5'  C5'  C4'    1.5996  119.00 -151.39  110.04   1.5160
+BILD O5'  C5'  C4'  C3'    1.4401  108.83 -179.85  116.10   1.5284
+BILD C5'  C4'  C3'  O3'    1.5160  116.10   76.70  115.12   1.4212
+BILD C4'  C3'  O3'  +P     1.5284  111.92  159.13  119.05   1.6001
+BILD C3'  O3'  +P   +O5'   1.4212  119.05  -98.86  101.45   1.5996
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -120.04  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  100.16 -124.08  115.12   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  100.16   39.58  102.04   1.5251
+BILD C3'  C2'  C1'  N9     1.5284  101.97  144.39  113.71   1.4896
+BILD O4'  C1'  N9   C4     1.5251  113.71  -96.0   125.59   1.3783
+BILD C1'  C4   *N9  C8     1.4896  125.59 -179.99  105.19   1.3777
+BILD C4   N9   C8   N7     1.3783  105.19    0.02  114.02   1.3107
+BILD C8   N9   C4   C5     1.3777  105.19   -0.01  106.45   1.3749
+BILD N9   C5   *C4  N3     1.3783  106.45  179.96  128.52   1.3591
+BILD C5   C4   N3   C2     1.3749  128.52    0.04  112.23   1.3310
+BILD C4   N3   C2   N1     1.3591  112.23    0.00  123.30   1.3813
+BILD N1   N3   *C2  N2     1.3813  123.30  179.93  120.68   1.3350
+BILD N3   C2   N2   H21    1.3310  120.68  179.25  127.00   1.0100
+BILD H21  C2   *N2  H22    1.0100  127.00 -178.62  116.53   1.0100
+BILD N3   C2   N1   C6     1.3310  123.30   -0.04  125.24   1.4021
+BILD C6   C2   *N1  H1     1.4021  125.24  180.00  117.40   1.0000
+BILD C5   N1   *C6  O6     1.4188  111.38  179.92  119.80   1.2276
+BILD C1'  C3'  *C2' O2'    1.5284  102.04 -114.67  110.81   1.4212 !INFERENCE
+BILD H2'  O2'  C2'  C3'    0.9600  114.97  148.63  111.92   1.5284 !GUESS
+! the all hydrogen part (NOT TOO CAREFULLY DONE /LN)
+BILD O4'  C2'  *C1' H1'    0.0     0.0     -115.0  0.0      0.0
+BILD C1'  C3'  *C2' H2''   0.0     0.0      115.0  0.0      0.0
+BILD C2'  C4'  *C3' H3'    0.0     0.0      115.0  0.0      0.0
+BILD C3'  O4'  *C4' H4'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5''   0.0     0.0      115.0  0.0      0.0
+! THE BASE:
+BILD N9   N7   *C8  H8     0.0     0.0      180.0  0.0      0.0
+
+RESI ADE         -0.32 
+ATOM P    P       1.20
+ATOM O1P  O2     -0.40
+ATOM O2P  O2     -0.40
+ATOM O5'  OS     -0.36
+GROUP
+
+ATOM C5'  C2     -0.070!"
+ATOM H5'  H       0.035!"
+ATOM H5'' H       0.035!"
+
+ATOM C4'  CH      0.065! "
+ATOM H4'  H       0.035!"
+ATOM O4'  OSS    -0.30
+ATOM C1'  CH      0.165!"
+ATOM H1'  H       0.035 !"
+
+ATOM N9   NS     -0.19 
+ATOM C4   CB      0.19    N1
+
+ATOM N3   NC     -0.26    C6
+ATOM C2   CE      0.225   C5 !"
+ATOM H2   H       0.035!"
+
+ATOM N1   NC     -0.28 
+ATOM C6   CA      0.28 
+
+ATOM N6   N2     -0.42 !
+ATOM H61  H2      0.21 !
+ATOM H62  H2      0.21 !
+
+ATOM C5   CB      0.02 
+ATOM N7   NB     -0.25 
+ATOM C8   CE      0.195!"
+ATOM H8   H       0.035!"
+
+ATOM C2'  CH      0.115!"
+ATOM H2'' H       0.035!"
+ATOM O2'  OH      -0.40
+ATOM H2'  HO      0.25
+
+ATOM C3'  CH     -0.035!"
+ATOM H3'  H       0.035!"
+GROUP
+ATOM O3'  OS     -0.36
+BOND P    O1P       P    O2P       P     O5'
+BOND O5'  C5'       C5'  C4'       C4'  O4'       C4'  C3'       O4'  C1' 
+BOND C1'  N9        C1'  C2'       N9   C4        N9   C8        C4   N3  
+BOND C4   C5        N3   C2        C2   N1        N1   C6        C6   N6  
+BOND N6   H61       N6   H62       C6   C5        C5   N7        N7   C8  
+BOND C2'  C3'       C2'  O2'       O2'  H2'       C3'  O3'       O3'  +P  
+BOND C1'  H1'       C2'  H2''      C3'  H3'       C4'  H4'       C5'  H5'
+BOND C5'  H5''      C8   H8        C2   H2
+DIHE C4   N9   C8   H8        C4   N3   C2   H2
+DIHE -O3' P    O5'  C5'       -O3' P    O5'  C5'  
+DIHE  P   O5'  C5'  C4'       O5'  C5'  C4'  O4'       O5'  C5'  C4'  C3' 
+DIHE C4'  C3'  O3'  +P        C3'  O3'  +P   +O5'      C3'  O3'  +P   +O5'
+DIHE O4'  C1'  N9   C4        C5   C6   N6   H61
+! N O T E:  SUGAR RING TERMS SET UP AS W. OLSON DOES IT
+DIHE O4'  C1'  C2'  C3' ! O-C-C-C, twofold term
+DIHE O4'  C1'  C2'  C3'
+DIHE C1'  C2'  C3'  C4'
+DIHE C2'  C3'  C4'  O4' ! O-C-C-C, twofold term
+DIHE C2'  C3'  C4'  O4'
+DIHE C3'  C4'  O4'  C1'
+DIHE C4'  O4'  C1'  C2'
+! AND THE SPECIAL GAUCHE TERMS
+DIHE C5'  C4'  C3'  O3'
+DIHE O4'  C4'  C3'  O3'
+DIHE O4'  C1'  C2'  O2'
+DIHE C1'  C2'  C3'  O3'
+DIHE C4'  C3'  C2'  O2'
+DIHE O3'  C3'  C2'  O2'
+DIHE C3'  C2'  O2'  H2'
+! SO THE ALLHYDROGEN TERMS
+DIHE O4'  C4'  C3'  H3'
+DIHE O4'  C1'  C2'  H2''
+DIHE C4'  O4'  C1'  H1'
+DIHE C1'  O4'  C4'  H4'
+DIHE C3'  C4'  C5'  H5'
+DIHE C3'  C4'  C5'  H5''
+! Dihedrals to keep the two purine rings parallel:
+DIHE C8   C4   C5   N1        C8   C5   C4   C2
+DIHE N3   C4   C5   N7        C6   C5   C4   N9
+! The ring-spanning impropers have been left out.
+!IMPH C5'  O4'  C3'  C4'       O3'  C2'  C4'  C3'       N9   C2'  O4'  C1' 
+IMPH C1'  C4   C8   N9
+IMPH N9   C4   C5   N7        C4   C5   N7   C8        C5   N7   C8   N9  
+IMPH N7   C8   N9   C4        C8   N9   C4   C5        N6   N1   C5   C6  
+IMPH H62  C6   H61  N6        C4   N3   C2   N1        N3   C2   N1   C6  
+IMPH C2   N1   C6   C5        N1   C6   C5   C4        C6   C5   C4   N3  
+IMPH C5   C4   N3   C2  
+!IMPH C2'  C3'  C1'  O2'
+DONO H61  N6   
+DONO H62  N6   
+DONO H2'  O2'
+ACCE N3
+ACCE N7
+ACCE N1            
+ACCE O1P  P
+ACCE O2P  P
+ACCE O2'
+ACCE O3'
+ACCE O4'
+ACCE O5'
+BILD -O3' P     O5'  C5'   1.6001  101.45  -39.25  119.00   1.4401
+BILD -O3'  O5' *P   O1P    1.6001  101.45 -115.82  109.74   1.4802
+BILD -O3'  O5' *P   O2P    1.6001  101.45  115.90  109.80   1.4801
+BILD  P   O5'  C5'  C4'    1.5996  119.00 -151.39  110.04   1.5160
+BILD O5'  C5'  C4'  C3'    1.4401  108.83 -179.85  116.10   1.5284
+BILD C5'  C4'  C3'  O3'    1.5160  116.10   76.70  115.12   1.4212
+BILD C4'  C3'  O3'  +P     1.5284  111.92  159.13  119.05   1.6001
+BILD C3'  O3'  +P   +O5'   1.4212  119.05  -98.86  101.45   1.5996
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -120.04  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  100.16 -124.08  115.12   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  100.16   39.58  102.04   1.5251
+BILD C3'  C2'  C1'  N9     1.5284  101.97  144.39  113.71   1.4896
+BILD O4'  C1'  N9   C4     1.5251  113.71  -96.00  125.97   1.3703
+BILD C1'  C4   *N9  C8     1.4896  125.97 -179.94  105.00   1.3768
+BILD C4   N9   C8   N7     1.3703  105.00   -0.07  113.93   1.2970
+BILD C8   N9   C4   C5     1.3768  105.00    0.06  106.60   1.3650
+BILD N9   C5   *C4  N3     1.3703  106.60 -179.93  126.69   1.3486
+BILD C5   C4   N3   C2     1.3650  126.69   -0.04  111.18   1.3130
+BILD C4   N3   C2   N1     1.3486  111.18   -0.02  128.64   1.3399
+BILD N3   C2   N1   C6     1.3130  128.64    0.06  118.95   1.3456
+BILD C5   N1   *C6  N6     1.4034  117.43 -179.96  119.06   1.3410
+BILD N1   C6   N6   H61    1.3456  119.06  179.96  120.00   1.0100
+BILD H61  C6   *N6  H62    1.0100  120.00  180.00  120.00   1.0100
+BILD C1'  C3'  *C2' O2'    1.5284  102.04 -114.67  110.81   1.4212 !INFERENCE
+BILD H2'  O2'  C2'  C3'    0.9600  114.97  148.63  111.92   1.5284 !GUESS
+
+! the all hydrogen part (NOT TOO CAREFULLY DONE /LN)
+BILD O4'  C2'  *C1' H1'    0.0     0.0     -115.0  0.0      0.0
+BILD C1'  C3'  *C2' H2''   0.0     0.0      115.0  0.0      0.0
+BILD C2'  C4'  *C3' H3'    0.0     0.0      115.0  0.0      0.0
+BILD C3'  O4'  *C4' H4'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5''   0.0     0.0      115.0  0.0      0.0
+! THE BASE:
+BILD N9   N7   *C8   H8    0.0     0.0      180.0  0.0      0.0
+BILD N1   N3   *C2   H2    0.0     0.0      180.0  0.0      0.0
+
+RESI CYT         -0.320
+ATOM P    P       1.20
+ATOM O1P  O2     -0.40
+ATOM O2P  O2     -0.40
+ATOM O5'  OS     -0.36
+GROUP
+
+ATOM C5'  C2     -0.070! rationalized
+ATOM H5'  H       0.035! "
+ATOM H5'' H       0.035! "
+
+ATOM C4'  CH      0.065! "
+ATOM H4'  H       0.035!"
+ATOM O4'  OSS    -0.30
+ATOM C1'  CH      0.165!"
+ATOM H1'  H       0.035 !"
+
+ATOM N1   NS     -0.19    C4
+ATOM C6   CF      0.155     N3!"
+ATOM H6   H       0.035!"
+
+ATOM C2   C       0.30    C5
+ATOM O2   O      -0.30 
+
+ATOM N3   NC     -0.28 
+ATOM C4   CA      0.28 
+
+ATOM N4   N2     -0.42 ! 
+ATOM H41  H2      0.21 !
+ATOM H42  H2      0.21 !
+
+ATOM C5   CF     -0.035!"
+ATOM H5   H       0.035!"
+
+ATOM C2'  CH      0.115!"
+ATOM H2'' H       0.035!"
+ATOM O2'  OH      -0.40
+ATOM H2'  HO      0.25
+
+ATOM C3'  CH     -0.035!"
+ATOM H3'  H       0.035!"
+GROUP
+ATOM O3'  OS     -0.36
+BOND P    O1P       P    O2P       P     O5'
+BOND O5'  C5'       C5'  C4'       C4'  O4'       C4'  C3'       O4'  C1' 
+BOND C1'  N1        C1'  C2'       N1   C2        N1   C6        C2   O2  
+BOND C2   N3        N3   C4        C4   N4        N4   H41       N4   H42 
+BOND C4   C5        C5   C6        C2'  C3'       C3'  O3'       O3'  +P  
+BOND C2'  O2'       O2'  H2'
+BOND C1'  H1'       C2'  H2''      C3'  H3'       C4'  H4'       C5'  H5'
+BOND C5'  H5''      C5   H5        C6   H6
+DIHE C2   N1   C6   H6        N1  C6   C5   H5
+DIHE -O3' P     O5'  C5'     -O3' P     O5'  C5' 
+DIHE  P   O5'  C5'  C4'       O5'  C5'  C4'  O4'       O5'  C5'  C4'  C3' 
+DIHE C4'  C3'  O3'  +P        C3'  O3'  +P   +O5'      C3'  O3'  +P   +O5'
+DIHE O4'  C1'  N1   C2        C5   C4   N4   H41 
+! N O T E:  SUGAR RING TERMS SET UP AS W. OLSON DOES IT
+DIHE O4'  C1'  C2'  C3' ! O-C-C-C, twofold term
+DIHE O4'  C1'  C2'  C3'
+DIHE C1'  C2'  C3'  C4'
+DIHE C2'  C3'  C4'  O4' ! O-C-C-C, twofold term
+DIHE C2'  C3'  C4'  O4'
+DIHE C3'  C4'  O4'  C1'
+DIHE C4'  O4'  C1'  C2'
+! AND THE SPECIAL GAUCHE TERMS
+DIHE C5'  C4'  C3'  O3'
+DIHE O4'  C4'  C3'  O3'
+DIHE O4'  C1'  C2'  O2'
+DIHE C1'  C2'  C3'  O3'
+DIHE C4'  C3'  C2'  O2'
+DIHE O3'  C3'  C2'  O2'
+DIHE C3'  C2'  O2'  H2'
+! SO THE ALLHYDROGEN TERMS
+DIHE O4'  C4'  C3'  H3'
+DIHE O4'  C1'  C2'  H2''
+DIHE C4'  O4'  C1'  H1'
+DIHE C1'  O4'  C4'  H4'
+DIHE C3'  C4'  C5'  H5'
+DIHE C3'  C4'  C5'  H5''
+!IMPH C5'  O4'  C3'  C4'       O3'  C2'  C4'  C3'       N1   C2'  O4'  C1' 
+IMPH C1'  C2   C6   N1
+IMPH O2   N1   N3   C2        N4   N3   C5   C4  
+IMPH N1   C2   N3   C4        C2   N3   C4   C5        N3   C4   C5   C6  
+IMPH C4   C5   C6   N1        C5   C6   N1   C2        C6   N1   C2   N3  
+IMPH H42  C4   H41  N4  
+!IMPH C2'  C3'  C1'  O2'
+DONO H42  N4   
+DONO H2'  O2'
+DONO H41  N4   
+ACCE O2   C2
+ACCE N3     
+ACCE O1P  P
+ACCE O2P  P       
+ACCE O2'
+ACCE O3'
+ACCE O4'
+ACCE O5'
+BILD -O3' P     O5'  C5'   1.6001  101.45  -39.25  119.00   1.4401
+BILD -O3'  O5' *P   O1P    1.6001  101.45 -115.82  109.74   1.4802
+BILD -O3'  O5' *P   O2P    1.6001  101.45  115.90  109.80   1.4801
+BILD  P   O5'  C5'  C4'    1.5996  119.00 -151.39  110.04   1.5160
+BILD O5'  C5'  C4'  C3'    1.4401  108.83 -179.85  116.10   1.5284
+BILD C5'  C4'  C3'  O3'    1.5160  116.10   76.70  115.12   1.4212
+BILD C4'  C3'  O3'  +P     1.5284  111.92  159.13  119.05   1.6001
+BILD C3'  O3'  +P   +O5'   1.4212  119.05  -98.86  101.45   1.5996
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -120.04  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  100.16 -124.08  115.12   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  100.16   39.58  102.04   1.5251
+BILD C3'  C2'  C1'  N1     1.5284  101.97  144.39  113.71   1.4896
+BILD O4'  C1'  N1   C2     1.5251  113.71  -96.0   117.79   1.3923
+BILD C1'  C2   *N1  C6     1.4896  117.79 -179.99  121.13   1.3595
+BILD C2   N1   C6   C5     1.3923  121.13    0.02  121.13   1.3570
+BILD C6   N1   C2   N3     1.3595  121.13    0.01  118.71   1.3578
+BILD N1   N3   *C2  O2     1.3923  118.71  179.98  122.46   1.2378
+BILD N1   C2   N3   C4     1.3923  118.71   -0.03  120.61   1.3386
+BILD C5   N3   *C4  N4     1.4331  121.58  180.00  118.32   1.3246
+BILD N3   C4   N4   H41    1.3386  118.32  180.00  117.70   1.0100
+BILD H41  C4   *N4  H42    1.0100  117.70  180.00  120.27   1.0100
+BILD C1'  C3'  *C2' O2'    1.5284  102.04 -114.67  110.81   1.4212 !INFERENCE
+BILD H2'  O2'  C2'  C3'    0.9600  114.97  148.63  111.92   1.5284 !GUESS
+
+! the all hydrogen part (NOT TOO CAREFULLY DONE /LN)
+BILD O4'  C2'  *C1' H1'    0.0     0.0     -115.0  0.0      0.0
+BILD C1'  C3'  *C2' H2''   0.0     0.0      115.0  0.0      0.0
+BILD C2'  C4'  *C3' H3'    0.0     0.0      115.0  0.0      0.0
+BILD C3'  O4'  *C4' H4'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5''   0.0     0.0      115.0  0.0      0.0
+! THE BASE:
+BILD C6   C4   *C5  H5     0.0     0.0      180.0  0.0      0.0
+BILD N1   C5   *C6  H6     0.0     0.0      180.0  0.0      0.0
+
+RESI THY         -0.320
+ATOM P    P       1.20
+ATOM O1P  O2     -0.40
+ATOM O2P  O2     -0.40
+ATOM O5'  OS     -0.36
+GROUP
+
+ATOM C5'  C2     -0.070! rationalized
+ATOM H5'  H       0.035! "
+ATOM H5'' H       0.035! "
+
+ATOM C4'  CH      0.065! "
+ATOM H4'  H       0.035!"
+ATOM O4'  OSS    -0.30
+ATOM C1'  CH      0.165!"
+ATOM H1'  H       0.035 !"
+
+ATOM N1   NS     -0.19     C4
+ATOM C6   CF      0.155    N3
+ATOM H6   H       0.035
+
+ATOM C2   C       0.35    C5
+ATOM O2   O      -0.35 
+
+ATOM N3   NA     -0.26 
+ATOM H3   H       0.26 
+
+ATOM C4   C       0.30 
+ATOM O4   O      -0.30 
+
+ATOM C5   CS     -0.035 !  THESE CHARGES ?
+ATOM C5A  C3     -0.070!"
+ATOM H51  H       0.035!"
+ATOM H52  H       0.035!"
+ATOM H53  H       0.035!"
+
+ATOM C2'  CH      0.115!"
+ATOM H2'' H       0.035!"
+ATOM O2'  OH      -0.40
+ATOM H2'  HO      0.25
+
+ATOM C3'  CH     -0.035!"
+ATOM H3'  H       0.035!"
+
+GROUP
+ATOM O3'  OS     -0.36
+BOND P    O1P       P    O2P       P     O5'
+BOND O5'  C5'       C5'  C4'       C4'  O4'       C4'  C3'       O4'  C1' 
+BOND C1'  N1        C1'  C2'       N1   C2        N1   C6        C2   O2  
+BOND C2   N3        N3   H3        N3   C4        C4   O4        C4   C5  
+BOND C5   C5A       C5   C6        C2'  C3'       C3'  O3'       O3'  +P  
+BOND C2'  O2'       O2'  H2'
+BOND C1'  H1'       C2'  H2''      C3'  H3'       C4'  H4'       C5'  H5'
+BOND C5'  H5''      C6   H6        C5A  H51       C5A  H52       C5A  H53
+DIHE C2   N1   C6   H6        
+DIHE C6   C5   C5A  H51
+DIHE C6   C5   C5A  H52
+DIHE C6   C5   C5A  H53
+DIHE -O3' P    O5'  C5'       -O3' P    O5'  C5'
+DIHE  P   O5'  C5'  C4'       O5'  C5'  C4'  O4'       O5'  C5'  C4'  C3' 
+DIHE C4'  C3'  O3'  +P        C3'  O3'  +P   +O5'      C3'  O3'  +P   +O5'
+DIHE O4'  C1'  N1   C2  
+! N O T E:  SUGAR RING TERMS SET UP AS W. OLSON DOES IT
+DIHE O4'  C1'  C2'  C3' ! O-C-C-C, twofold term
+DIHE O4'  C1'  C2'  C3'
+DIHE C1'  C2'  C3'  C4'
+DIHE C2'  C3'  C4'  O4' ! O-C-C-C, twofold term
+DIHE C2'  C3'  C4'  O4'
+DIHE C3'  C4'  O4'  C1'
+DIHE C4'  O4'  C1'  C2'
+! AND THE SPECIAL GAUCHE TERMS
+DIHE C5'  C4'  C3'  O3'
+DIHE O4'  C4'  C3'  O3'
+DIHE O4'  C1'  C2'  O2'
+DIHE C1'  C2'  C3'  O3'
+DIHE C4'  C3'  C2'  O2'
+DIHE O3'  C3'  C2'  O2'
+DIHE C3'  C2'  O2'  H2'
+! SO THE ALLHYDROGEN TERMS
+DIHE O4'  C4'  C3'  H3'
+DIHE O4'  C1'  C2'  H2''
+DIHE C4'  O4'  C1'  H1'
+DIHE C1'  O4'  C4'  H4'
+DIHE C3'  C4'  C5'  H5'
+DIHE C3'  C4'  C5'  H5''
+!IMPH C5'  O4'  C3'  C4'       O3'  C2'  C4'  C3'       N1   C2'  O4'  C1' 
+IMPH C1'  C2   C6   N1
+IMPH O2   N1   N3   C2        H3   C2   C4   N3  
+IMPH O4   N3   C5   C4        C5A  C4   C6   C5        N1   C2   N3   C4  
+IMPH C2   N3   C4   C5        N3   C4   C5   C6        C4   C5   C6   N1  
+IMPH C5   C6   N1   C2        C6   N1   C2   N3  
+!IMPH C2'  C3'  C1'  O2'
+DONO H3   N3   
+DONO H2'  O2'
+ACCE O2   C2
+ACCE O4   C4
+ACCE O1P  P
+ACCE O2P  P       
+ACCE O2'
+ACCE O3'
+ACCE O4'
+ACCE O5'
+BILD -O3' P     O5'  C5'   1.6001  101.45  -39.25  119.00   1.4401
+BILD -O3'  O5' *P   O1P    1.6001  101.45 -115.82  109.74   1.4802
+BILD -O3'  O5' *P   O2P    1.6001  101.45  115.90  109.80   1.4801
+BILD  P   O5'  C5'  C4'    1.5996  119.00 -151.39  110.04   1.5160
+BILD O5'  C5'  C4'  C3'    1.4401  108.83 -179.85  116.10   1.5284
+BILD C5'  C4'  C3'  O3'    1.5160  116.10   76.70  115.12   1.4212
+BILD C4'  C3'  O3'  +P     1.5284  111.92  159.13  119.05   1.6001
+BILD C3'  O3'  +P   +O5'   1.4212  119.05  -98.86  101.45   1.5996
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -120.04  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  100.16 -124.08  115.12   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  100.16   39.58  102.04   1.5251
+BILD C3'  C2'  C1'  N1     1.5284  101.97  144.39  113.71   1.4896
+BILD O4'  C1'  N1   C2     1.5251  113.71  -96.0   117.06   1.3746
+BILD C1'  C2   *N1  C6     1.4896  117.06 -179.96  122.08   1.3704
+BILD C2   N1   C6   C5     1.3746  122.08   -0.02  121.23   1.3432
+BILD C6   N1   C2   N3     1.3704  122.08    0.06  115.38   1.3813
+BILD N1   N3   *C2  O2     1.3746  115.38 -179.95  121.70   1.2191
+BILD N1   C2   N3   C4     1.3746  115.38   -0.07  126.46   1.3795
+BILD C5   N3   *C4  O4     1.4439  114.07  179.98  120.59   1.2327
+BILD C2   C4   *N3  H3     1.3813  126.46  180.00  116.77   1.0900
+BILD C4   C6   *C5  C5A    1.4439  120.78 -179.94  121.63   1.5000
+BILD C1'  C3'  *C2' O2'    1.5284  102.04 -114.67  110.81   1.4212 !INFERENCE
+BILD H2'  O2'  C2'  C3'    0.9600  114.97  148.63  111.92   1.5284 !GUESS
+
+! the all hydrogen part (NOT TOO CAREFULLY DONE /LN)
+BILD O4'  C2'  *C1' H1'    0.0     0.0     -115.0  0.0      0.0
+BILD C1'  C3'  *C2' H2''   0.0     0.0      115.0  0.0      0.0
+BILD C2'  C4'  *C3' H3'    0.0     0.0      115.0  0.0      0.0
+BILD C3'  O4'  *C4' H4'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5''   0.0     0.0      115.0  0.0      0.0
+
+! THE BASE:
+BILD N1   C5   *C6  H6     0.0     0.0      180.0  0.0      0.0
+BILD C6   C5   C5A  H51    0.0     0.0       90.0  0.0      0.0
+BILD C6   C5   C5A  H52    0.0     0.0      -30.0  0.0      0.0
+BILD C6   C5   C5A  H53    0.0     0.0     -150.0  0.0      0.0
+
+RESI URI         -0.320
+ATOM P    P       1.20
+ATOM O1P  O2     -0.40
+ATOM O2P  O2     -0.40
+ATOM O5'  OS     -0.36
+GROUP
+
+ATOM C5'  C2     -0.070! rationalized
+ATOM H5'  H       0.035! "
+ATOM H5'' H       0.035! "
+
+ATOM C4'  CH      0.065! "
+ATOM H4'  H       0.035!"
+ATOM O4'  OSS    -0.30
+ATOM C1'  CH      0.165!"
+ATOM H1'  H       0.035 !"
+
+ATOM N1   NS     -0.19     C4
+ATOM C6   CF      0.155   N3
+ATOM H6   H       0.035
+
+ATOM C2   C       0.35    C5
+ATOM O2   O      -0.35 
+
+ATOM N3   NA     -0.26 
+ATOM H3   H       0.26 
+
+ATOM C4   C       0.30 
+ATOM O4   O      -0.30 
+
+ATOM C5   CF     -0.035
+ATOM H5   H       0.035
+
+ATOM C2'  CH      0.115!"
+ATOM H2'' H       0.035!"
+ATOM O2'  OH      -0.40
+ATOM H2'  HO      0.25
+
+ATOM C3'  CH     -0.035!"
+ATOM H3'  H       0.035!"
+GROUP
+ATOM O3'  OS     -0.36
+BOND P    O1P       P    O2P       P     O5'
+BOND O5'  C5'       C5'  C4'       C4'  O4'       C4'  C3'       O4'  C1' 
+BOND C1'  N1        C1'  C2'       N1   C2        N1   C6        C2   O2  
+BOND C2   N3        N3   H3        N3   C4        C4   O4        C4   C5  
+BOND C5   C6        C2'  C3'       C3'  O3'       O3'  +P  
+BOND C2'  O2'       O2'  H2'
+BOND C1'  H1'       C2'  H2''      C3'  H3'       C4'  H4'       C5'  H5'
+BOND C5'  H5''      C5   H5        C6   H6
+DIHE C2   N1   C6   H6        N1   C6   C5   H5
+DIHE -O3' P    O5'  C5'       -O3' P    O5'  C5'
+DIHE  P   O5'  C5'  C4'       O5'  C5'  C4'  O4'       O5'  C5'  C4'  C3' 
+DIHE C4'  C3'  O3'  +P        C3'  O3'  +P   +O5'      C3'  O3'  +P   +O5'     
+DIHE O4'  C1'  N1   C2  
+! N O T E:  SUGAR RING TERMS SET UP AS W. OLSON DOES IT
+DIHE O4'  C1'  C2'  C3' ! O-C-C-C, twofold term
+DIHE O4'  C1'  C2'  C3'
+DIHE C1'  C2'  C3'  C4'
+DIHE C2'  C3'  C4'  O4' ! O-C-C-C, twofold term
+DIHE C2'  C3'  C4'  O4'
+DIHE C3'  C4'  O4'  C1'
+DIHE C4'  O4'  C1'  C2'
+! AND THE SPECIAL GAUCHE TERMS
+DIHE C5'  C4'  C3'  O3'
+DIHE O4'  C4'  C3'  O3'
+DIHE O4'  C1'  C2'  O2'
+DIHE C1'  C2'  C3'  O3'
+DIHE C4'  C3'  C2'  O2'
+DIHE O3'  C3'  C2'  O2'
+DIHE C3'  C2'  O2'  H2'
+! SO THE ALLHYDROGEN TERMS
+DIHE O4'  C4'  C3'  H3'
+DIHE O4'  C1'  C2'  H2''
+DIHE C4'  O4'  C1'  H1'
+DIHE C1'  O4'  C4'  H4'
+DIHE C3'  C4'  C5'  H5'
+DIHE C3'  C4'  C5'  H5''
+!IMPH C5'  O4'  C3'  C4'       O3'  C2'  C4'  C3'       N1   C2'  O4'  C1' 
+IMPH C1'  C2   C6   N1        O2   N1   N3   C2        H3   C2   C4   N3  
+IMPH O4   N3   C5   C4        N1   C2   N3   C4  
+IMPH C2   N3   C4   C5        N3   C4   C5   C6        C4   C5   C6   N1  
+IMPH C5   C6   N1   C2        C6   N1   C2   N3  
+!IMPH C2'  C3'  C1'  O2'
+DONO H3   N3   
+DONO H2'  O2'
+ACCE O2   C2
+ACCE O4   C4
+ACCE O1P  P
+ACCE O2P  P
+ACCE O2'
+ACCE O3'
+ACCE O4'
+ACCE O5'
+BILD -O3' P     O5'  C5'   1.6001  101.45  -39.25  119.00   1.4401
+BILD -O3'  O5' *P   O1P    1.6001  101.45 -115.82  109.74   1.4802
+BILD -O3'  O5' *P   O2P    1.6001  101.45  115.90  109.80   1.4801
+BILD  P   O5'  C5'  C4'    1.5996  119.00 -151.39  110.04   1.5160
+BILD O5'  C5'  C4'  C3'    1.4401  108.83 -179.85  116.10   1.5284
+BILD C5'  C4'  C3'  O3'    1.5160  116.10   76.70  115.12   1.4212
+BILD C4'  C3'  O3'  +P     1.5284  111.92  159.13  119.05   1.6001
+BILD C3'  O3'  +P   +O5'   1.4212  119.05  -98.86  101.45   1.5996
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -120.04  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  100.16 -124.08  115.12   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  100.16   39.58  102.04   1.5251
+BILD C3'  C2'  C1'  N1     1.5284  101.97  144.39  113.71   1.4896
+BILD O4'  C1'  N1   C2     1.5251  113.71  -96.0   117.06   1.3746
+BILD C1'  C2   *N1  C6     1.4896  117.06 -179.96  122.08   1.3704
+BILD C2   N1   C6   C5     1.3746  122.08   -0.02  121.23   1.3432
+BILD C6   N1   C2   N3     1.3704  122.08    0.06  115.38   1.3813
+BILD N1   N3   *C2  O2     1.3746  115.38 -179.95  121.70   1.2191
+BILD N1   C2   N3   C4     1.3746  115.38   -0.07  126.46   1.3795
+BILD C5   N3   *C4  O4     1.4439  114.07  179.98  120.59   1.2327
+BILD C2   C4   *N3  H3     1.3813  126.46  180.00  116.77   1.0900
+BILD C1'  C3'  *C2' O2'    1.5284  102.04 -114.67  110.81   1.4212 !INFERENCE
+BILD H2'  O2'  C2'  C3'    0.9600  114.97  148.63  111.92   1.5284 !GUESS
+
+! the all hydrogen part (NOT TOO CAREFULLY DONE /LN)
+BILD O4'  C2'  *C1' H1'    0.0     0.0     -115.0  0.0      0.0
+BILD C1'  C3'  *C2' H2''   0.0     0.0      115.0  0.0      0.0
+BILD C2'  C4'  *C3' H3'    0.0     0.0      115.0  0.0      0.0
+BILD C3'  O4'  *C4' H4'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5'    0.0     0.0     -115.0  0.0      0.0
+BILD C4'  O5'  *C5' H5''   0.0     0.0      115.0  0.0      0.0
+
+! THE BASE:
+BILD C6   C4   *C5  H5     0.0     0.0      180.0  0.0      0.0
+BILD N1   C5   *C6  H6     0.0     0.0      180.0  0.0      0.0
+
+PRES 2END         0.00 ! Patch to put ribose in 2'endo conformation 
+BILD C5'  C4'  C3'  O3'    1.5160  116.10  150.88  115.12   1.4212
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -121.24  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  101.91 -114.59  110.88   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  101.78  -39.92  101.97   1.5251
+BILD C1'  C3'  *C2' O2'    1.5284  100.04 -124.67  115.81   1.4212 !INFERENCE
+
+
+PRES DEOX         0.000 ! Patch to make DEOXYribose of the ribose
+DELETE ATOM O2'
+
+ATOM C2'  C2     -0.070
+ATOM H2'  H       0.035
+ATOM H2'' H       0.035
+
+BOND C2'  H2'
+THET C1'  C2'  H2'
+THET C3'  C2'  H2'
+THET H2'  C2'  H2''
+DIHE O4'  C1'  C2'  H2' 
+
+BILD C1'  C3'  *C2' H2' 0.0 0.0 -115.0 0.0 0.0
+
+!>>>>>>>>>>>>>WHO KNOWS WHAT LURKS BENEATH HERE<<<<<<<<<<<<<<<<<<<<<<
+RESI RIBO         0.00   ! RIBOSE, ALMOST AS W.OLSON'S MODEL
+GROUP
+ATOM C5'  C3      0.000  ! Note: We fake the heavy ligands to be extended atoms
+!ATOM H51  H       0.035 ! but masses are not right for this, so is not good
+!ATOM H52  H       0.035 ! for dynamics......
+!ATOM H53  H       0.035
+GROUP
+ATOM C4'  CH      0.065
+ATOM H4'  H       0.035
+ATOM O4'  OSS    -0.30
+ATOM C1'  CH      0.215
+ATOM H1'  H       0.035
+ATOM N1   NH2E   -0.05
+GROUP
+ATOM C2'  CH      0.115
+ATOM H2'' H       0.035
+ATOM O2'  OH     -0.15
+!ATOM H2'  HO      0.25
+GROUP
+ATOM C3'  CH      0.115
+ATOM H3'  H       0.035
+ATOM O3'  OS     -0.15
+!ATOM H3T  HO      0.25
+
+BOND C5'  C4'       C4'  O4'       C4'  C3'       O4'  C1' 
+BOND C1'  N1        C1'  C2'
+BOND C2'  C3'       C3'  O3'  !    O3'  H3T 
+BOND C2'  O2'  !    O2'  H2'
+!BOND C5'  H51       C5'  H52       C5'  H53
+BOND C4'  H4'       C3'  H3'       C2'  H2''      C1'  H1'
+! N O T E:  SUGAR RING TERMS SET UP AS W. OLSON DOES IT
+DIHE O4'  C1'  C2'  C3' ! O-C-C-C, twofold term
+DIHE O4'  C1'  C2'  C3'
+DIHE C1'  C2'  C3'  C4'
+DIHE C2'  C3'  C4'  O4' ! O-C-C-C, twofold term
+DIHE C2'  C3'  C4'  O4'
+DIHE C3'  C4'  O4'  C1'
+DIHE C4'  O4'  C1'  C2'
+! AND THE SPECIAL GAUCHE TERMS
+DIHE C5'  C4'  C3'  O3'
+DIHE O4'  C4'  C3'  O3'
+DIHE O4'  C1'  C2'  O2'
+DIHE C1'  C2'  C3'  O3'
+DIHE C4'  C3'  C2'  O2'
+DIHE O3'  C3'  C2'  O2'
+!DIHE C3'  C2'  O2'  H2'
+!DIHE C4'  C3'  O3'  H3T
+! SO THE ALLHYDROGEN TERMS
+DIHE O4'  C4'  C3'  H3'
+DIHE O4'  C1'  C2'  H2''
+DIHE C4'  O4'  C1'  H1'
+DIHE C1'  O4'  C4'  H4'
+! LEAVE THE METHYL ALONE RIGHT NOW
+BILD C5'  C4'  C3'  O3'    1.5160  116.10   76.70  115.12   1.4212
+!BILD C4'  C3'  O3'  H3T    1.5284  111.92  159.13  114.97   0.9600
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -120.04  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  100.16 -124.08  115.12   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  100.16   39.58  102.04   1.5251
+BILD C3'  C2'  C1'  N1     1.5284  101.97  144.39  113.71   1.4896
+BILD C1'  C3'  *C2' O2'    1.5284  102.04 -114.67  110.81   1.4212 !INFERENCE
+!BILD H2'  O2'  C2'  C3'    0.9600  114.97  148.63  111.92   1.5284 !GUESS
+BILD C1'  C3'  *C2' H2''   1.5284  102.04  114.67  111.92   0.96  
+BILD C2'  C4'  *C3' H3'    1.5284  102.04  114.67  111.92   0.96  
+BILD O4'  C3'  *C4' H4'    1.4572  104.06  114.67  111.92   0.96  
+BILD O4'  C2'  *C1' H1'    1.4572  104.06 -114.67  111.92   0.96  
+!BILD O4'  C4'  C5'  H51    1.4572  104.06  -90.00  109.5    0.96
+!BILD O4'  C4'  C5'  H52    1.4572  104.06   30.00  109.5    0.96
+!BILD O4'  C4'  C5'  H53    1.4572  104.06  150.00  109.5    0.96
+
+RESI DRIB         0.00   ! DEOXYRIBOSE, ALMOST AS W.OLSON'S MODEL
+GROUP
+ATOM C5'  C3      0.000  ! HERE, as for ribose, heavy ligands are fake extended
+!ATOM H51  H       0.035 ! atoms..... (masses not OK)
+!ATOM H52  H       0.035
+!ATOM H53  H       0.035
+GROUP
+ATOM C4'  CH      0.065
+ATOM H4'  H       0.035
+ATOM O4'  OSS    -0.30
+ATOM C1'  CH      0.215
+ATOM H1'  H       0.035
+ATOM N1   NH2E   -0.05
+GROUP
+ATOM C2'  C2     -0.07 
+ATOM H2'' H       0.035
+ATOM H2'  H       0.035
+GROUP
+ATOM C3'  CH      0.115
+ATOM H3'  H       0.035
+ATOM O3'  OS     -0.15
+!ATOM H3T  HO      0.25
+
+BOND C5'  C4'       C4'  O4'       C4'  C3'       O4'  C1' 
+BOND C1'  N1        C1'  C2'
+BOND C2'  C3'       C3'  O3'  !    O3'  H3T 
+BOND C2'  H2'  !
+!BOND C5'  H51       C5'  H52       C5'  H53
+BOND C4'  H4'       C3'  H3'       C2'  H2''      C1'  H1'
+! N O T E:  SUGAR RING TERMS SET UP AS W. OLSON DOES IT
+DIHE O4'  C1'  C2'  C3' ! O-C-C-C, twofold term
+DIHE O4'  C1'  C2'  C3'
+DIHE C1'  C2'  C3'  C4'
+DIHE C2'  C3'  C4'  O4' ! O-C-C-C, twofold term
+DIHE C2'  C3'  C4'  O4'
+DIHE C3'  C4'  O4'  C1'
+DIHE C4'  O4'  C1'  C2'
+! AND THE SPECIAL GAUCHE TERMS
+DIHE C5'  C4'  C3'  O3'
+DIHE O4'  C4'  C3'  O3'
+DIHE C1'  C2'  C3'  O3'
+!DIHE C4'  C3'  O3'  H3T
+! SO THE ALLHYDROGEN TERMS
+DIHE O4'  C4'  C3'  H3'
+DIHE O4'  C1'  C2'  H2''
+DIHE O4'  C1'  C2'  H2' 
+DIHE C4'  O4'  C1'  H1'
+DIHE C1'  O4'  C4'  H4'
+! LEAVE THE METHYL ALONE RIGHT NOW
+BILD C5'  C4'  C3'  O3'    1.5160  116.10   76.70  115.12   1.4212
+!BILD C4'  C3'  O3'  H3T    1.5284  111.92  159.13  114.97   0.9600
+BILD O4'  C3'  *C4' C5'    1.4572  104.06 -120.04  116.10   1.5160
+BILD C2'  C4'  *C3' O3'    1.5284  100.16 -124.08  115.12   1.4212
+BILD C4'  C3'  C2'  C1'    1.5284  100.16   39.58  102.04   1.5251
+BILD C3'  C2'  C1'  N1     1.5284  101.97  144.39  113.71   1.4896
+BILD C1'  C3'  *C2' H2'    1.5284  102.04 -114.67  110.81   1.4212 !INFERENCE
+!BILD H2'  O2'  C2'  C3'    0.9600  114.97  148.63  111.92   1.5284 !GUESS
+BILD C1'  C3'  *C2' H2''   1.5284  102.04  114.67  111.92   0.96  
+BILD C2'  C4'  *C3' H3'    1.5284  102.04  114.67  111.92   0.96  
+BILD O4'  C3'  *C4' H4'    1.4572  104.06  114.67  111.92   0.96  
+BILD O4'  C2'  *C1' H1'    1.4572  104.06 -114.67  111.92   0.96  
+!BILD O4'  C4'  C5'  H51    1.4572  104.06  -90.00  109.5    0.96
+!BILD O4'  C4'  C5'  H52    1.4572  104.06   30.00  109.5    0.96
+!BILD O4'  C4'  C5'  H53    1.4572  104.06  150.00  109.5    0.96
+
+PRES PYR          0.00 ! Patch to add H1 to pyrimidines when using base only.
+                 !  The ribose & phosphate atoms have to be deleted
+ATOM N1   NA     -0.38 !  from CHARMM with the DELETE command.
+ATOM C6   CF      0.19
+ATOM H1   H       0.19
+
+BOND N1   H1
+ANGL C2   N1    H1      C6   N1   H1
+
+IMPH H1   C6   C2   N1
+BILD C6   C2   *N1  H1   0.0 0.0 180.0 0.0 0.0  ! To be filled from param
+
+PRES PUR          0.00 ! Patch for purine bases, similar to PRES PYR
+
+ATOM N9   NA     -0.38
+ATOM C4   CB      0.19
+ATOM H9   H       0.19
+
+BOND N9   H9
+ANGL C8   N9   H9     C4  N9  H9
+
+IMPH  H9  C8  C4  N9
+BILD  C8  C4  *N9 H9  0.0  0.0  180.0 0.0 0.0  ! To be filled from param
+
+PRES 5TER         0.00
+
+ATOM H5T  HO      0.25
+ATOM O5'  OH     -0.40
+ATOM C5'  C2      0.08
+ATOM H5'  H       0.035
+ATOM H5'' H       0.035
+!
+DELETE ATOM P
+DELETE ATOM O1P
+DELETE ATOM O2P
+!
+BOND H5T   O5'
+DIHE H5T   O5'  C5'  C4'
+DONO H5T   O5'
+BILD H5T  O5'   C5'  C4'   1.0000  110.00  180.00  110.04   1.5160
+
+PRES 5PHO      0.00
+
+ATOM H5T  HO    0.15
+ATOM O5T  OH   -0.15
+!PERHAPS ONE SHOULD CHANGE THE P CHARGE AS WELL????
+BOND H5T  O5T      O5T  P
+DIHE O5'  P   O5T   H5T
+DIHE C5'  O5'  P    O5T
+DONO H5T  O5T
+BILD H5T   O5T   P  O5'    1.0000  115.00  180.00   101.45   1.6001 !GUESS
+BILD C5'   O5'   P  O5T    1.4461  119.00  -39.52   101.45   1.6001 !GUESS  
+!    REPLACE UNUSEFUL  O1P & O2P DEFINITIONS
+BILD O5T   O5' *P   O1P    1.6001  101.45 -115.82  109.74   1.4802  !INFERENCE
+BILD O5T   O5' *P   O2P    1.6001  101.45  115.90  109.80   1.4801  !INFERENCE
+
+PRES 3TER         0.00
+
+ATOM C3'  CH      0.115
+ATOM H3'  H       0.035
+ATOM O3'  OH     -0.40
+ATOM H3T  HO      0.25
+BOND O3'  H3T
+DIHE C4'  C3'  O3'  H3T
+DONO H3T  O3'
+BILD H3T  O3'   C3'  C4'   0.9600  114.97  148.63  111.92   1.5284
+
+PRES FC          -1.00 ! patch for fully charged phosphate 
+
+ATOM 1O3' OS     -0.46
+ATOM 2P   P       1.36
+ATOM 2O1P O2     -0.72
+ATOM 2O2P O2     -0.72
+ATOM 2O5' OS     -0.46
+
+RESI OH2          0.00
+
+ATOM OH2  OH2    -0.80
+ATOM H1   H       0.40
+ATOM H2   H       0.40
+BOND OH2  H1        OH2  H2  
+THET H1   OH2  H2  
+DONO H1   OH2
+DONO H2   OH2
+ACCE OH2           
+PATC FIRS NONE LAST NONE
+
+RESI NAF          1.00 ! Fully charged Na; pure guess /LN
+ATOM NA  SD       1.00
+PATC FIRS NONE LAST NONE
+
+RESI NAH          0.50 ! Half charged Na; pure guess /LN
+ATOM NA  SD       0.50
+PATC FIRS NONE LAST NONE
+
+RESI SPER    4.00000 ! not yet allhydrogen
+ATOM N1   NH3     0.00
+ATOM C2   C2    0.22
+ATOM C3   C2    0.00
+ATOM C4   C2    0.23! Charge adjacent to secondary amine
+ATOM N5   NH3     0.00! estimated from primary amine by keeping
+ATOM C6   C2    0.23! H/C charge ratio constant.
+ATOM C7   C2    0.00
+ATOM C8   C2    0.00
+ATOM C9   C2    0.23
+ATOM NA   NH3     0.00
+ATOM CB   C2    0.23
+ATOM CC   C2    0.00
+ATOM CD   C2    0.22
+ATOM NE   NH3     0.00
+ATOM H11  H       0.26
+ATOM H12  H       0.26
+ATOM H13  H       0.26
+ATOM H51  H       0.27! see above re charge near secondary amine
+ATOM H52  H       0.27
+ATOM HA1  H       0.27
+ATOM HA2  H       0.27
+ATOM HE1  H       0.26
+ATOM HE2  H       0.26
+ATOM HE3  H       0.26
+BOND N1   C2        C2   C3        C3   C4        C4   N5        N5   C6
+BOND C6   C7        C7   C8        C8   C9        C9   NA        NA   CB
+BOND CB   CC        CC   CD        CD   NE        N1   H11       N1   H12
+BOND N1   H13       N5   H51       N5   H52       NA   HA1       NA   HA2
+BOND NE   HE1       NE   HE2       NE   HE3
+DIHE N1   C2   C3   C4        C2   C3   C4   N5        C3   C4   N5   C6
+DIHE C4   N5   C6   C7        N5   C6   C7   C8        C6   C7   C8   C9
+DIHE C7   C8   C9   NA        C8   C9   NA   CB        C9   NA   CB   CC
+DIHE NA   CB   CC   CD        CB   CC   CD   NE        H11  N1   C2   C3
+DIHE H12  N1   C2   C3        H13  N1   C2   C3        C3   C4   N5   H51
+DIHE C3   C4   N5   H52       C8   C9   NA   HA1       C8   C9   NA   HA2
+DIHE CC   CD   NE   HE1       CC   CD   NE   HE2       CC   CD   NE   HE3
+DONO H11  N1
+DONO H12  N1
+DONO H13  N1
+DONO H51  N5
+DONO H52  N5
+DONO HA1  NA
+DONO HA2  NA
+DONO HE1  NE
+DONO HE2  NE
+DONO HE3  NE
+
+! IC TABLE TO BE FILLED IN FROM PARAMFILE. DIHEDRALS SET UP FOR ALL TRANS.
+
+IC N1   C2   C3   C4     0.0  0.0 180.0 0.0 0.0
+IC C2   C3   C4   N5     0.0  0.0 180.0 0.0 0.0
+IC C3   C4   N5   C6     0.0  0.0 180.0 0.0 0.0
+IC C4   N5   C6   C7     0.0  0.0 180.0 0.0 0.0
+IC N5   C6   C7   C8     0.0  0.0 180.0 0.0 0.0
+IC C6   C7   C8   C9     0.0  0.0 180.0 0.0 0.0
+IC C7   C8   C9   NA     0.0  0.0 180.0 0.0 0.0
+IC C8   C9   NA   CB     0.0  0.0 180.0 0.0 0.0
+IC C9   NA   CB   CC     0.0  0.0 180.0 0.0 0.0
+IC NA   CB   CC   CD     0.0  0.0 180.0 0.0 0.0
+IC CB   CC   CD   NE     0.0  0.0 180.0 0.0 0.0
+IC CC   CD   NE   HE1    0.0  0.0 180.0 0.0 0.0
+IC CC   CD   NE   HE2    0.0  0.0  60.0 0.0 0.0
+IC CC   CD   NE   HE3    0.0  0.0 -60.0 0.0 0.0
+IC C3   C2   N1   H11    0.0  0.0 180.0 0.0 0.0
+IC C3   C2   N1   H12    0.0  0.0  60.0 0.0 0.0
+IC C3   C2   N1   H13    0.0  0.0 -60.0 0.0 0.0
+IC C3   C4   N5   H51    0.0  0.0 -60.0 0.0 0.0
+IC C3   C4   N5   H52    0.0  0.0  60.0 0.0 0.0
+IC C8   C9   NA   HA1    0.0  0.0 -60.0 0.0 0.0
+IC C8   C9   NA   HA2    0.0  0.0  60.0 0.0 0.0
+PATC FIRS NONE LAST NONE
+
+RESI MG     2.000
+ATOM MG MG  2.00
+PATC FIRS NONE LAST NONE
+ 
+
+! ST2 & TIPS waters taken from TOPH9 /LN
+RESI ST2     .000   ! NOW INCLUDES THE LONE PAIRS GIVING 5 ATOMS FOR ST2
+              ! Charges for eps=1.0; newq=oldq/neweps if neweps<>1.0
+ATOM OX2  OH2     .00 
+ATOM HX1  H       .24
+ATOM HX2  H       .24
+ATOM LX1  LP     -.24
+ATOM LX2  LP     -.24
+BOND OX2  HX1       OX2  HX2
+BOND OX2  LX1       OX2  LX2
+THET HX1  OX2  HX2
+!                          NOTE: NO DONORS OR ACCEPTORS FOR ST2
+PATC  FIRS NONE LAST NONE
+
+RESI TIP3   .000   ! TIPS WATER MODEL
+GROUP
+ATOM OH2  OT     -0.8
+ATOM H1   HT      0.4
+ATOM H2   HT      0.4
+BOND OH2  H1        OH2  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+THET H1   OH2  H2 
+!                          NOTE: NO DONORS OR ACCEPTORS FOR TIPS
+PATC  FIRS NONE LAST NONE
+! PATCHES TO BE APPENDED TO TOPRNA5 MAKING IT TOPTRNA5
+! All the modified nucleotides in tRNA are implemented
+! as patches ('TYPE II').
+! ------------ work in progress ----------------------
+!                   /LN
+!
+! No additional atomtypes seem to be necessary
+!
+!!!!  ****>>>>CHARGES NEED CHECKING (and atomtypes too)
+!             SUBDIVISIONS ARE STILL MISSING  
+!
+!-----------------------------------------------------------
+!
+
+PRES DHU        0.00 ! Make Dihydro-U out of U
+!    ===
+    
+ATOM C5   C2   -0.07 
+ATOM H51  H     0.035
+ATOM H52  H     0.035
+ATOM C6   C2   -0.07
+ATOM H61  H     0.035
+ATOM H62  H     0.035
+
+BOND C5 H51    C5 H52    C6 H61   C6 H62
+THET C4 C5 H51  C4 C5 H52
+THET C6 C5 H51  C6 C5 H52   H51 C5 H52
+THET C5 C6 H61  C5 C6 H62
+THET N1 C6 H61  N1 C6 H62   H61 C6 H62
+DELE IMPH  N1   C2   N3   C4  ! The ring is no longer aromatic
+DELE IMPH  C2   N3   C4   C5
+DELE IMPH  N3   C4   C5   C6
+DELE IMPH  C4   C5   C6   N1
+DELE IMPH  C5   C6   N1   C2
+DELE IMPH  C6   N1   C2   N3
+DIHE  N1   C2   N3   C4       ! So we use plain dihedrals instead
+DIHE  C2   N3   C4   C5
+DIHE  N3   C4   C5   C6
+DIHE  C4   C5   C6   N1
+DIHE  C5   C6   N1   C2
+DIHE  C6   N1   C2   N3
+! NO DIHEDRALS FOR OUR NEW HYDROGEN FRIENDS  (YET)
+!-----------------------------------------------------------
+
+PRES 7MG       +0.40 ! 7-Methyl guanosine ****>>> NOTE: Is charged at pH 7
+!    ===               chemistry unclear (CANTOR&SCHIMMEL have charged O)
+
+!DELE ATOM  H1!
+
+
+ATOM C5   CB    0.15
+ATOM C7   C3    0.045
+ATOM H71  H     0.035
+ATOM H72  H     0.035
+ATOM H73  H     0.035
+ATOM N7   NB   -0.15 ! Type?   All these charges are guesswork 
+ATOM C8   CE    0.25
+!
+!ATOM C6   C     0.30
+!ATOM O6   O    -0.40
+!ATOM N1   NC   -0.20
+
+BOND N7   C7    C7 H71  C7 H72  C7 H73
+
+THET C5   N7   C7         C8   N7   C7
+THET N7   C7   H71        N7   C7   H72      N7  C7   H73
+THET H71  C7   H72        H71  C7   H73      H72 C7   H73
+
+IMPH C7   C5   C8   N7
+DIHE C8   N7   C7   H71
+DIHE C8   N7   C7   H72
+DIHE C8   N7   C7   H73
+
+IC C5   C8   *N7  C7    1.378   000.00 -180.00  000.00  0.000
+!--------------------------------------------------------------
+
+PRES 2M2G       0.00 ! N2-Dimethyl guanosine       
+!    ====
+
+DELE ATOM  H21
+DELE ATOM  H22
+
+
+ATOM N2   N2   -0.42
+ATOM C2A  C3    0.105! Just replace the Hs with methyls
+ATOM H2A1 H     0.035
+ATOM H2A2 H     0.035
+ATOM H2A3 H     0.035
+ATOM C2B  C3    0.105
+ATOM H2B1 H     0.035
+ATOM H2B2 H     0.035
+ATOM H2B3 H     0.035
+
+BOND N2   C2B      N2   C2A
+BOND C2A  H2A1     C2A  H2A2    C2A H2A3
+BOND C2B  H2B1     C2B  H2B2    C2B H2B3
+
+THET C2   N2   C2B       C2   N2   C2A       C2B  N2   C2A  
+THET N2   C2A  H2A1      N2   C2A  H2A2      N2   C2A  H2A3
+THET H2A1 C2A  H2A2      H2A1 C2A  H2A2      H2A2 C2A  H2A3
+THET N2   C2B  H2B1      N2   C2B  H2B2      N2   C2B  H2B3
+THET H2B1 C2B  H2B2      H2B1 C2B  H2B2      H2B2 C2B  H2B3
+
+DIHE N3   C2   N2   C2B
+DIHE C2   N2   C2A  H2A1
+DIHE C2   N2   C2A  H2A2
+DIHE C2   N2   C2A  H2A3
+DIHE C2   N2   C2B  H2B1
+DIHE C2   N2   C2B  H2B2
+DIHE C2   N2   C2B  H2B3
+
+IMPH C2A  C2B  C2   N2
+
+IC N3   C2   N2   C2B    1.3310  120.68  179.25  127.00  0.00  
+IC C2B  C2   *N2  C2A    0.00    127.00 -178.12  116.53  0.00
+!--------------------------------------------------------------
+
+PRES M2G       0.00 ! N2-Methyl guanosine       
+!    ===
+
+DELE ATOM  H22
+
+
+ATOM N2   N2   -0.42
+ATOM H21  H2    0.21 
+ATOM C2A  C3    0.105! Just replace the H with a methyl
+ATOM H2A1 H     0.035
+ATOM H2A2 H     0.035
+ATOM H2A3 H     0.035
+
+BOND N2   C2A
+BOND C2A  H2A1     C2A  H2A2    C2A H2A3
+THET N2   C2A  H2A1      N2   C2A  H2A2      N2   C2A  H2A3
+THET H2A1 C2A  H2A2      H2A1 C2A  H2A2      H2A2 C2A  H2A3
+
+THET C2   N2   C2A       H21  N2   C2A  
+
+IMPH C2A  H21  C2   N2
+
+DIHE C2   N2   C2A  H2A1
+DIHE C2   N2   C2A  H2A2
+DIHE C2   N2   C2A  H2A3
+IC H21  C2   *N2  C2A    0.00    127.00 -178.12  116.53  0.00
+!--------------------------------------------------------------
+
+PRES 2'OM       0.00 ! 2'O-Methyl, to be applied to any nucleotide     
+!    ====
+
+DELE ATOM H2'
+
+
+ATOM O2'  OS   -0.30 
+ATOM C2A  C3    0.195
+ATOM H21' H     0.035
+ATOM H22' H     0.035
+ATOM H23' H     0.035
+
+BOND O2'  C2A    C2A  H21'   C2A  H22'   C2A  H23'
+
+THET C2'  O2'  C2A
+THET O2'  C2A  H21'    O2'   C2A  H22'   O2'  C2A  H23'
+THET H21' C2A  H22'    H21'  C2A  H23'   H22' C2A  H23'
+DIHE C2'  O2'  C2A    H21'
+DIHE C2'  O2'  C2A    H22'
+DIHE C2'  O2'  C2A    H23'
+
+DIHE C3'  C2'  O2'  C2A
+
+IC C2A  O2'  C2'  C3'    1.45    114.97  148.63  11.92  1.5284
+!---------------------------------------------------------------
+
+PRES PSI        0.00 ! Pseudouridine; U with ribose at C5, not N1
+!    ===
+
+DELE BOND C1'  N1
+DELE THET O4'  C1'  N1
+DELE THET N1   C1'  C2'
+DELE THET C1'  N1   C2
+DELE THET C1'  N1   C6
+DELE DIHE O4'  C1'  N1   C2
+DELE IMPH N1   C2'  O4'  C1'       
+DELE IMPH C1'  C2   C6   N1
+DELE IC   C1'  C2   *N1  C6
+DELE IC   C3'  C2'  C1'  N1
+DELE ATOM H5
+
+ATOM C5   CS    0.00  ! Just make this another kind of C
+
+ATOM C6   CF    0.165   N3
+ATOM H6   H     0.035
+ATOM N1   NA   -0.30    C4
+ATOM H11  H     0.10
+
+BOND C1'  C5        N1   H11 
+
+THET O4'  C1'  C5       C5  C1'  C2'       C1'  C5   C4        
+THET C1'  C5   C6       C2  N1   H11       C6   N1   H11
+
+DIHE O4'  C1'  C5   C6
+IMPH C5   C2'  O4'  C1'       C1'  C6   C4   C5
+IMPH H11  C2   C6   N1
+
+IC C4   C5   C6   N1    0.0000  000.00  000.00  000.00  0.000
+IC C3'  C2'  C1'  C5    1.5284  101.97  144.39  113.71  1.500
+IC C2'  C1'  C5   C6    1.5215  113.71  144.99  121.63  1.36
+IC C1'  C6   *C5  C4    1.5000  121.60  180.00  121.60  1.44
+IC H11  C2   *N1  C6    1.0900  117.06  180.00  122.08  1.37
+!---------------------------------------------------------------
+
+PRES 5MC        0.00  ! 5-Methyl cytosine
+!    ===
+
+!Inference from THY(=5MU):
+
+DELE ATOM H5
+ATOM C5   CS    0.00
+ATOM C5A  C3   -0.105
+ATOM H51  H     0.035
+ATOM H52  H     0.035
+ATOM H53  H     0.035
+
+BOND C5   C5A    C5A  H51     C5A  H52    C5A  H53
+
+THET C4   C5   C5A       C5A  C5   C6
+THET C5   C5A  H51       C5   C5A  H52      C5  C5A  H53
+THET H52  C5A  H51       H53  C5A  H52      H51 C5A  H53
+
+DIHE C6   C5   C5A  H51
+DIHE C6   C5   C5A  H52
+DIHE C6   C5   C5A  H53
+IMPH C5A  C4   C6   C5
+
+IC C4   C6   *C5  C5A   1.4439  120.78 -179.94  121.63  1.5000
+!---------------------------------------------------------------
+
+PRES 1MA        0.00  ! 1-Methyl adenine; (chemistry unclear)
+!    ===
+
+DELE ACCE N1
+
+
+ATOM N1   NA   -0.25    C4
+ATOM C1   C3   -0.005
+ATOM H11  H     0.035
+ATOM H12  H     0.035
+ATOM H13  H     0.035
+ATOM C6   CH    0.115   N3 ! Probably a CH
+ATOM H6   H     0.035
+ 
+BOND N1   C1    C6  H6   C1   H11   C1  H12   C1   H13
+
+THET C6   N1   C1        C2   N1   C1   N6    C6    H6
+THET N1   C6   H6        C5   C6   H6
+THET N1   C1   H11       N1   C1   H12     N1   C1  H13
+THET H12  C1   H11       H13  C1   H12     H11  C1  H13
+DIHE C2   N1   C1   H11
+DIHE C2   N1   C1   H12
+DIHE C2   N1   C1   H13
+
+IMPH C1   C2   C6   N1
+
+IC C6   C2   *N1  C1   1.4021  125.24  180.00  117.40  1.49
+!--------------------------------------------------------------   
+
+PRES WYE        0.00 ! Y-base (wyebutosine) as a patch to GUA
+!    ===               Atom numbers according to TRNAMIT.BHV
+
+DELE ACCE N3
+DELE ATOM H1
+DELE ATOM H21
+DELE ATOM H22
+
+
+
+ATOM C3   C3   -0.005
+ATOM H31  H     0.035
+ATOM H32  H     0.035
+ATOM H33  H     0.035
+ATOM N3   NA   -0.20    C6
+ATOM C2   CB    0.35    C5
+
+ATOM N2   NB   -0.25
+
+ATOM C11  CA    0.10
+ATOM C10  C3   -0.005
+ATOM H101 H     0.035
+ATOM H102 H     0.035
+ATOM H103 H     0.035
+ATOM C12  CA    0.05
+ATOM N1   NA   -0.25    C4
+
+ATOM C13  C2   -0.07
+ATOM H131 H     0.035
+ATOM H132 H     0.035
+ATOM C14  C2   -0.07
+ATOM H141 H     0.035
+ATOM H142 H     0.035
+ATOM C15  CH   -0.035
+ATOM H15  H     0.035
+
+ATOM C16  C     0.30 ! ?
+ATOM O18  OS   -0.20
+ATOM C19  C3   -0.005
+ATOM H191 H     0.035
+ATOM H192 H     0.035
+ATOM H193 H     0.035
+ATOM O17  O    -0.20
+
+ATOM N20  NA   -0.26 
+ATOM H20  H     0.26
+
+ATOM C21  C     0.30
+ATOM O23  O    -0.20
+ATOM O22  OS   -0.20
+ATOM C24  C3   -0.005
+ATOM H241 H     0.035
+ATOM H242 H     0.035
+ATOM H243 H     0.035
+
+BOND N1   C12       C12  C11       C11  C10
+BOND C11  N2        N3   C3        N20  H20
+BOND C12  C13       C13  C14       C14  C15
+BOND C15  C16       C16  O17       C16  O18
+BOND O18  C19       C15  N20       N20  C21
+BOND C21  O23       C21  O22       O22  C24
+BOND C3   H31       C3   H32       C3   H33
+BOND C10  H101      C10  H102      C10  H103
+BOND C13  H131      C13  H132
+BOND C14  H141      C14  H142
+BOND C15  H15
+BOND C19  H191      C19  H192    C19   H193
+BOND C24  H241      C24  H242    C24   H193
+
+THET C6   N1   C12       C12  N1   C2
+THET C2   N3   C3        C4   N3   C3
+THET C2   N2   C11       N2   C11  C10
+THET N2   C11  C12       C10  C11  C12
+THET N1   C12  C13       C11  C12  C13
+THET C12  C13  C14       C13  C14  C15
+THET C14  C15  N20       C14  C15  C16
+THET C15  C16  O17       C15  C16  O18
+THET C15  N20  H20       C15  N20  C21
+THET C16  O18  C19       H20  N20  C21
+THET N20  C21  O23       N20  C21  O22
+THET O23  C21  O22       C21  O22  C24
+THET N3   C3   H31       N3   C3   H32       N3   C3   H33
+THET H32  C3   H31       H33  C3   H32       H31  C3   H33
+THET C11  C10  H101      C11  C10  H102      C11  C10  H103
+THET H102 C10  H101      H103 C10  H102      H101 C10  H103
+THET O18  C19  H191      O18  C19  H192      O18  C19  H193
+THET H192 C19  H191      H193 C19  H192      H191 C19  H193
+THET O22  C24  H241      O22  C24  H242      O22  C24  H243
+THET H242 C24  H241      H243 C24  H242      H241 C24  H243
+THET C12  C13  H131      C12  C13  H132
+THET C14  C13  H131      C14  C13  H132      H131  C13  H132
+THET C13  C14  H141      C13  C14  H142
+THET C15  C14  H141      C15  C14  H142      H141  C14  H142
+THET C14  C15  H15       C16  C15  H15       N20   C15  H15
+ 
+DIHE  C2   N3   C3   H31
+DIHE  C2   N3   C3   H32
+DIHE  C2   N3   C3   H33
+DIHE  C12  C11  C10  H101
+DIHE  C12  C11  C10  H102
+DIHE  C12  C11  C10  H103
+DIHE  C17  O18  C19  H191
+DIHE  C17  O18  C19  H192
+DIHE  C17  O18  C19  H193
+DIHE  C21  O22  C24  H241
+DIHE  C21  O22  C24  H242
+DIHE  C21  O22  C24  H243
+! Special dihedrals to keep extra ring parallel. Cf Trp in PARAM7
+DIHE C11  C2   N1   C5        C11  N1   C2   C4
+DIHE N3   C2   N1   C12       C6   N1   C2   N2
+
+DIHE N1   C12  C13  C14       C12  C13  C14  C15  ! The protuberance
+DIHE C13  C14  C15  C16
+DIHE C14  C15  C16  O18       C15  C16  O18  C19
+DIHE C15  N20  C21  O22       C14  C15  N20  C21
+DIHE C15  N20  C21  O22       N20  C21  O22  C24
+IMPH C14  C16  N20  C15       H20  C15  C21  N20
+IMPH O17  C15  O18  C16       O23  O22  N20  C21
+
+IMPH C3   C4   C2   N3                            ! The methyl at N3
+
+IMPH                          C12  N1   C2   N2   ! The extra ring     
+IMPH C11  C12  N1   C2        N2   C11  C12  N1
+IMPH C2   N2   C11  C12       C11  N2   C2   N1
+IMPH C10  N2   C12  C11       C13  N1   C11  C12  ! Start of protuberance
+
+DONO H20  N20
+ACCE O17  C16
+ACCE O23  C21
+
+! IC-table is to be filled from parameters and/or crystal coordinates
+! The torsion angles are mostly guesswork so use      ---  "  --- 
+
+IC C2   C4   *N3  C3     0.0000  000.00  180.00  000.00  0.0000
+IC C12  N2   *C11 C10    0.0000  000.00  180.00  000.00  0.0000
+IC C6   C2   *N1  C12    0.0000  000.00  180.00  000.00  0.0000
+IC C2   N1   C12  C11    0.0000  000.00    0.00  000.00  0.0000
+IC C6   N1   C12  C13    0.0000  000.00    0.00  000.00  0.0000
+IC N1   C12  C13  C14    0.0000  000.00  180.00  000.00  0.0000
+IC C12  C13  C14  C15    0.0000  000.00  180.00  000.00  0.0000
+IC C13  C14  C15  C16    0.0000  000.00   60.00  000.00  0.0000
+IC C13  C14  C15  N20    0.0000  000.00  -60.00  000.00  0.0000
+IC C14  C15  C16  O18    0.0000  000.00  180.00  000.00  0.0000
+IC C15  C16  O18  C19    0.0000  000.00  180.00  000.00  0.0000
+IC O18  C15  *C16 O17    0.0000  000.00  180.00  000.00  0.0000
+IC C14  C15  N20  C21    0.0000  000.00    0.00  000.00  0.0000
+IC C15  N20  C21  O22    0.0000  000.00    0.00  000.00  0.0000
+IC N20  C21  O22  C24    0.0000  000.00  180.00  000.00  0.0000
+IC C21  C15  *N20 H20    0.0000  000.00  180.00  000.00  0.0000
+IC O22  N20  *C21 O23    0.0000  000.00  180.00  000.00  0.0000
+!--------------------------------------------------------------
+
+PRES 2AMP   0.54 ! 2-AMP patch to ADE. Move NH2 from C6 to C2
+!    ====
+
+DELE ATOM N6
+DELE ATOM H61
+DELE ATOM H62
+
+ATOM C2   CA   0.28
+ATOM C6   CE   0.26
+
+ATOM N2   N2  -0.42
+ATOM H21  H2   0.21
+ATOM H22  H2   0.21
+
+BOND C2   N2        N2   H20       N2   H22
+
+THET N1   C2   N2        N3   C2   N2        C2   N2   H21
+THET C2   N2   H22       H21  N2   H22
+
+DIHE N1   C2   N2   H21
+
+IMPH H22  C2   H21  N2        N2   N3   N1   C2
+
+DONO H21  N2
+DONO H22  N2
+
+IC N1   N3   *C2  N2     0.0000  000.00  180.00  000.00  0.0000
+IC N3   C2   N2   H21    0.0000  000.00  180.00  000.00  0.0000
+IC H21  C2   *N2  H22    0.0000  000.00  180.00  000.00  0.0000
+!--------------------------------------------------------------   
+END 

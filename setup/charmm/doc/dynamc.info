@@ -1,0 +1,1766 @@
+CHARMM Element doc/dynamc.info 1.1
+
+File: Dynamc, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+                  Dynamics:  Description and Discussion
+
+There are four separate dynamics integrators available in CHARMM:
+(This discussion does not apply to multi-body dynamics, which has a
+separate set of integrators).  See *note Mbond:(doc/mbond.info).
+
+Name              Keyword     Module
+Original Verlet   ORIG        dynamcv.src  
+Leapfrog Verlet   LEAP        dynamc.src   (default)
+Velocity Verlet   VVER        dynamvv.src
+4-D L-F  Verlet   VER4        dynam4.src
+New vel. Verlet   VV2         dynamvv2.src
+
+All methods are based on the Verlet scheme, and when used without
+any special features, provide identical trajectories for short
+simulations. All methods allow SHAKE.
+
+The ORIG integrator is a standard 3-step Verlet integrator
+with few frills.  It allows:
+      Langevin Dynamics (LANG)
+      Thermodynamic Simulation Method (TSM)
+
+The LEAP integrator is similar to the ORIG integrator, but does
+provide increased accuracy (esp. for single precision version of
+CHARMM).  It allows:
+      Langevin dynamics (LANG) (with accurate temperatures printed)
+      Constant Temperature and Pressure (CPT) (based on Berendsen's method)
+      Accurate pressures with SHAKE
+      High frequency correction to the total energy
+      Parallel code
+      Free energy equilibration indicator (deltaF*V) (with PERT)
+      Thermodynamic Simulation Method (TSM)
+
+The VVER integrator also provides increase accuracy. It allows:
+      Constant Temperature (NOSE) (Nose-Hoover method)
+      Multiple Time Step (MTS)
+
+The VER4 integrator enables the energy embedding technique that entails
+      placing a molecule into a higher spatial dimension [Crippen, G. M. &
+      Havel,T.F. (1990) J.Chem.Inf.Comput.Sci. Vol 30, 222-227].
+      The possibility of surmounting energy barriers with these added
+      degrees of freedom may lead to lower energy minima.  Here, this is
+      accomplished by molecular dynamics in four dimensions.  Specifically,
+      another cartesian coordinates was added to the usual X, Y, and Z
+      coordinates in the LEAPfrog VERLet algorithm.
+
+The VV2 is a velocity-Verlet integrator based on the
+      operator-splitting technique.  It works in conjunction with the
+      TPCONTROL command.  It allows temperature and pressure control
+      [G. J. Martyna, M. E. Tuckerman, D. J. Tobias and M. L. Klein,
+      Mol. Phys. 87, 1117 (1996)], and provides an efficient
+      integration algorithm for polarizable force fields based on
+      Drude oscillators [G. Lamoureux and B. Roux, J. Chem. Phys. 119,
+      ???  (2003)].  It uses a separate "SHAKE" algorithm, called
+      RATTLE/Roll.  See *note tpcontrol:(doc/tpcontrol.info)Dynamics.
+
+In order to generate a dynamics trajectory, all requirements
+for evaluating the energy must be met.
+See *note Energy:(doc/energy.info)Needs. 
+
+
+* Menu:
+
+* Syntax::              Syntax of the dynamics command
+* Description::         Description of the keywords and options
+* Recommended::         Recommended input options and values
+* Discussion::          Running dynamics
+* Output::              Output from a dynamics run
+* Trajectory::          Trajectory manipulation and I/O
+* Merge::               Merging or breaking up trajectory files into
+                        different size pieces. Resampling at a larger
+                        interval. Least squares fit to a reference.
+                        Recentering, or undoing image operations.
+* Reorient::            Reorienting a coordinate trajectory
+* RMSDyn::              Computes the RMS difference between two trajectories
+* Format::              formatting and unformatting a dynamics trajectory
+* CVELocity::           Constant velocity dynamics
+* TSALlis::             Molecular dynamics in the Tsallis ensemble
+* CENT::                The reCENTering command
+
+* Monitor:(doc/monitor.info).            Monitor dihedral transitions
+* CPT dynamics:(doc/pressure.info).      CPT dynamics
+* SGMD/SGLD:(doc/sgld.info).             Self-guided molecular/Langevin dynamics
+* 4-D dynamics:(doc/fourd.info).         4-D dynamics
+* Pressure:(doc/pressure.info)Pressure.  The pressure command
+* MTS:(doc/mts.info).                    Multiple Time Scales Method
+* Nose:(doc/nose.info).                  Nose-Hoover Dynamics
+* MBOND:(doc/mbond.info)Dynamic.         Multi-body Dynamics
+
+
+File: Dynamc, Node: Syntax, Up: Top, Previous: Top, Next: Description
+
+
+                      Syntax for the Dynamics Command
+
+
+DYNAmics { [ LEAP ] [ VERLet    ] }  ! Dynamics with the
+         { [ NEW  ] [ LANGevin  ] }  ! leap-frog integrator
+         { [ CPT  ] [ NOLAngevin] }
+         {          [ EULEr     ] } [sgmd-sgld-spec] [cpt-spec] other-specs
+         { [OMM]               } [openmm-spec] !dynamics w/ openmm gpu module
+
+         {  ORIG             }  ! Dynamics with the verlet integrator
+DYNAmics {  VVERlet [ NOSE ] }  ! Dynamics with the velocity verlet integrator
+         {                   }  other-specs
+
+
+DYNAmics { LEAPfrog  VER4  four-dim-spec }  !  Four dimensional dynamics
+         {                               }   other-specs
+
+DYNAmics { VV2                           } [sgmd-sgld-spec] other-specs
+
+DYNAmics { MBONd  mbond-spec } other-specs ! Multibody dynamics
+
+other-specs::=  [NSTEp integer] [nonbond-spec] [hbond-spec] [frequency-spec]
+
+    {[TIMEstp real]}  {STARt  } [unit-spec] [temperature-spec] [options-spec]
+    { AKMA    real }  {RESTart} [VSENd]
+
+hbond-spec::=           See *note Hbonds:(doc/hbonds.info).
+nonbond-spec::=         See *note Nbonds:(doc/nbonds.info).
+mbond-spec::=           See *note Mbond:(doc/mbond.info)DynDesc.
+sgmd-sgld-spec::=       See *note Sgld:(doc/sgld.info).
+domdec-spec::=          See *note Domdec:(doc/domdec.info).
+openmm-spec::=          See *note OpenMM:(doc/openmm.info).
+blade-spec::=           See *note BLaDE:(doc/blade.info).
+
+frequency-spec::=   [INBFrq integer] [IEQFrq integer] [IHBFrq integer]
+                     [IHTFrq integer] [IPRFrq integer] [NPRInt integer]
+                      [NSAVC integer]  [NSAVV integer]  [NTRFrq integer]
+                       [ILBFrq integer]  [ISVFRQ integer] [NSAVL integer]
+                        [IMGFrq integer]  [IXTFrq integer]
+                         [NLAT integer] [NSAVQ]
+                          [NBLCkfep integer] [NSAVXyz integer] [MXYZ integer]
+
+unit-spec::=        [IUNCrd integer] [IUNRea integer] [IUNVel integer]
+                     [IUNWri integer] [KUNIt integer]  [CRAShu integer]
+                      [BACKup integer] [IUNLdm integer] [IUNQ integer]
+                       [ILAT integer]  [IUNXyz integer]
+                        [IBLCkfep integer]  
+                          [ILAP integer]  [ILAF integer] 
+
+temperature-spec::=     [FINAlt real] [FIRStt real] [TEMInc real]
+                         [TSTRuc real] [TWINDH real] [TWINDL real]
+                          [TBATh real]
+
+options-spec::=         [IASOrs integer] [IASVel integer] [ICHEcw integer]
+                         [ISCAle integer] [ISCVel integer] [ISEEd repeat(integer)]
+                          [SCALe real] [NDEGg integer] [RBUFfer real]
+                           [AVERage] [ECHEck real] [TOL real]
+
+cpt-spec::=  See *note cpt:(doc/pressure.info)
+
+four-dim-spec::=   [FIL4dimension] [SKBOnd] [SKANgle]
+                     [SKDIhedral] [SKVDerWaals] [SKELectrostatics]
+                      [K4DInitial real] [INC4Dforce integer]
+                        [DEC4Dforce integer] [MULTK4di real]
+                          [E4FILLcoordinates real]
+                            [FNLT4 real] [FSTT4 real] [TIN4  real]
+                              [IHT4 integer] [IEQ4 integer] [ICH4 integer]
+                                [TWH4 real] [TWL4 real]
+
+
+File: Dynamc, Node: Description, Previous: Syntax, Up: Top, Next: Recommended
+
+                Options common to minimization and dynamics
+
+        The following table describes the keywords which apply to both
+minimization and dynamics.
+
+Keyword  Default  Purpose
+
+NSTEP     100     The number of steps to be taken. This is the number of
+                  dynamics steps which is also equal to the number of
+                  energy evaluations.
+
+INBFRQ     50     The frequency of regenerating the non-bonded list.
+                  The list is regenerated if the current step number
+                  modulo INBFRQ is zero and if INBFRQ is non-zero.
+                  Specifying zero prevents the non-bonded list from being
+                  regenerated at all.
+                  INBFRQ = -1 --> all lists are updated when necessary
+                  (heuristic test).
+
+IHBFRQ     50     The frequency of regenerating the hydrogen bond list.
+                  Analogous to INBFRQ
+
+ILBFRQ     50     The frequency for checking whether an atom is in the
+                  Langevin region, defined by RBUF, or not.
+
+IMGFrq      0     The frequency for the image update (only used if IMAGES
+                  or CRYSTAL is in use).  The image update creates image atoms
+                  needed for the energy computation from the list of allowed
+                  symmetry transformations.  Recommended value: 50, if a 2A
+                  buffer is used between CUTIM and CUTNB.
+
+IXTFrq      0     The frequency for the crystal update (only used of CRYSTAL
+                  is in use).  The crystal update generates a new list of
+                  allowed symmetry transformations.  This option is only
+                  required if the size or shape of the periodic box (i.e. CPT)
+                  can change during a simulation (or minimization).
+                  Recommended value: 1000 (if running CPT dynamics).
+
+non-bond-         The specifications for generating the non-bonded list.
+-spec             See *note Nbonds:(doc/nbonds.info).
+
+hbond-            The specifications for generating the hydrogen bond list.
+-spec             See *note Hbonds:(doc/hbonds.info).
+
+[ STRT ] STRT     The dynamics is assumed to start from the input
+[      ]          coordinates using an assignment of velocities given by
+[      ]          IASVEL. No restart file is read.
+[ REST ]          The dynamics is restarted by reading the restart file
+                  from unit IUNREA.
+
+TIMESTP   0.001   Time step for dynamics in picoseconds.  The default value
+                  is 0.001 picoseconds.
+
+VSENd     false   Flag to control brodcast of initial velocities from
+                  zeroth process (mainly to compare parallel results
+                  during development of the code)
+
+IUNREA     -1     Fortran unit from which the dynamics restart file should
+                  be read. A value of -1 means don't read any file
+
+IUNWRI     -1     Fortran unit on which the dynamics restart file for
+                  the present run is to be written. A value of -1 means
+                  don't write any file. Formatted output.
+
+IUNCRD     -1     Fortran unit on which the coordinates of the dynamics run
+                  are to be saved. A value of -1 means no coordinates should
+                  be written. Unformatted output.
+
+IUNXYZ     -1     Fortran unit on which the coordinates,velocities,
+                  and forces of the dynamics run are to be saved.
+                  A value of -1 means no coordinates should
+                  be written. Formatted output suitable for movies
+                  with MOLDEN. Also for other high precision
+                  debugging. Everything written to this unit is REAL*8
+
+IUNLDM     -1     Fortran unit on which the biasing potentials, the 
+                  histograms of the lambda variables of the dynamics 
+                  run are to be saved. A value of -1 means no histograms 
+                  should be written. Unformatted output (for details 
+                  see node: output).
+
+IUNVEL     -1     Fortran unit on which the velocities of the dynamics run
+                  are to be saved. -1 means don't write. Unformatted output.
+
+KUNIT      -1     Fortran unit on which the total energy and some of its
+                  components along with the temperature during the run are
+                  written using formatted output.
+
+CRASHU     -1     Fortran unit where a single DCL command file will be
+                  written. If the machine crashes before a restart file
+                  is written, this file won't be touched. If the crash
+                  occurs after a restart is written but before the run
+                  completes, this file will contain the line, "$
+                  @CRASH". If the run completes, the file will contain
+                  the line, "$ @COMPLET". This allows for an automatic
+                  recovery system after crashes.
+
+IUNQ       -1     Fortran unit on which values for charges (mostly QM/MM)
+                  are to be saved. Mulliken charges are stored on as
+                  X, Lowding charges as Y, and Merz-Kolman charges on Z
+
+
+NSAVC      10     The step frequency for writing coordinates.
+
+NSAVL       0     The step frequency for writing lambda histograms.
+
+NSAVV      10     The step frequency for writing velocities.
+
+NSAVQ      10     The step frequency for writing charges.
+
+NSAVX      10     The step frequency for writing XYZ format file.
+
+MXYZ       -1     What is in the XYZ file. -1=nothing,0=energy only,1=coor,
+                  2=coor+vel, 3=coor+vel+force,4=coor+force,5=coor,lambda,force.
+                  All data are formatted with xE25.15 (except step # w/ -1).
+
+NPRINT     10     The step frequency for storing on KUNIT as well as printing
+                  on unit 6, the energy data of the dynamics run.
+
+IPRFRQ    100     The step frequency for calculating averages and rms
+                  fluctuations of the major energy values. If this
+                  number is less than NTRFRQ and NTRFRQ is not equal to
+                  0, square root of negative number errors will occur.
+
+ISVFRQ   NSTEP    The step frequency for writing a restart file.
+
+IHTFRQ      0     The step frequency for heating the molecule in increments
+                  of TEMINC degrees in the heating portion of a dynamics
+                  run. Zero means do no heating.
+
+IEQFRQ      0     The step frequency for assigning or scaling velocities to
+                  FINALT temperature during the equilibration stage of the
+                  dynamics run.
+
+NTRFRQ      0     The step frequency for stopping the rotation and translation
+                  of the molecule during dynamics. This operation is done
+                  automatically after any heating.
+
+SEGSTR            Flag (if present) that rotation and translation is stopped
+                  based on segments. This is sometimes usefull for
+                  replica when the whole system is replicated. Check
+                  is provided for this.
+
+FIRSTT     0.0    The initial temperature at which the velocities have to be
+                  assigned at to begin the dynamics run. Important only
+                  for the initial stage of a dynamics run.
+
+FINALT   298.0    The desired final (equilibrium) temperature
+                  for the system. Important for all stages except initiation.
+
+TEMINC     5.0    The temperature increment to be given to the system every
+                  IHTFRQ steps. Important in the heating stage.
+
+TSTRUC   -999.    The temperature at which the starting structure has been
+                  equilibrated.  Used to assign velocities so that equal
+                  partition of energy will yield the correct equilibrated
+                  temperature.  -999. is a default which causes the
+                  program to assign velocities at T=1.25*FIRSTT.
+
+TWINDH    10.0    The temperature deviation from FINALT to be allowed on the
+                  high temperature side.(+ve). i.e. high side of the
+                  temperature window. Useful during equilibration.
+
+TWINDL   -10.0    The temperature deviation from FINALT to be allowed on the
+                  low temperature side.(-ve). i.e. low side of the
+                  temperature window. Useful during equilibration.
+
+TBATH     FINALT  The temperature of the heatbath in Langevin dynamics. When
+                  set to zero it allows one to do purely dissipative
+                  (quenched) dynamics.
+
+RBUF       0.0    Inner radius of the buffer, or Langevin, region sphere.  All
+                  atoms with radial positions greater than RBUF angstroms are
+                  propagated by Langevin dynamics, if the dynamics keyword
+                  LANGevin has been specified.
+
+IASORS      0     The option for scaling or assigning of velocities during
+                  heating (every IHTFRQ steps) or equilibration
+                  (every IEQFRQ steps). This keyword does not control
+                  the initial assignment of velocities.
+                  .eq. 0 - scale velocities.  (use ISCVEL option)
+                  .ne. 0 - assign velocities. (use IASVEL option)
+
+IASVEL      1     The option for the choice of method for the assignment of
+                  velocities during heating and equilibration when IASORS
+                  is nonzero.  This option also controls the initial
+                  assignment of velocities (when not RESTart)
+                  regardless of the IASORS value.
+
+                  .eq. 0 - Use the comparison coordinate values
+                        in AKMA units (sorry) with the STRT option.
+                        If NTRFRQ is positive,
+                        then net trans/rot will be removed first.
+                        This option supresses other assignments of velocity.
+                  .gt. 0 - gaussian distribution of velocity. (+ve)
+                  .lt. 0 - uniform distribution of velocity.  (-ve)
+                           kinetic energy of 3N velocity components are same.
+
+ISEED    random   The seed for the random number generator used for
+                  assigning velocities. If not specified a value based on 
+                  the system clock is used; this is the recommended mode, since
+                  it makes each run unique.
+                  One integer, or as many as required by the random number
+                  generator, may be specified. See*note Hbonds:(doc/random.info) 
+
+ISCVEL      0     The option for two ways of scaling velocities.
+                  .eq. 0 - single scale factor for all atoms
+                  .ne. 0 - a scale factor for each atom proportional to the
+                           kinetic energy average ratio between the system
+                           and along every degree of freedom for that atom.
+
+ICHECW      1     The option for checking to see if the average temperature
+                  of the system lies within the allotted temperature window
+                  (between FINALT+TWINDH and FINALT+TWINDL) every
+                  IEQFRQ steps.
+                  .eq. 0 - do not check
+                           i.e. assign or scale velocities.
+                  .ne. 0 - check window
+                           i.e. assign or scale velocities only if average
+                                temperature lies outside the window.
+
+ISCALE      0     This option is to allow the user to scale the velocities
+                  by a factor SCALE at the beginning of a restart run.
+                  This may be useful in changing the desired temperature.
+                  .eq. 0  no scaling done (usual input value)
+                  .ne. 0  scale velocities by SCALE.
+                  WARNING:
+                  Please use this option only when you are changing the
+                  temperature of the run.
+
+SCALE      1.     Scale factor for the previous option.
+
+NDEGF  computed   Number of degrees of freedom to use in computing the
+                  temperature. If not specified on any call, the value is
+                  computed. This specification is not remembered between
+                  successive calls to dynamics.
+
+AVERAGE    no     When saving coordinates every NSAVC steps, this option will
+                  cause the average structure of the last NSAVC dynamics steps
+                  to be written instead of the final snapshot coordinate set.
+                  This option is primarily used for making smooth movies.
+
+ECHECK    20.0    The maximum amount the total energy may change on any step.
+
+TOL     1.0E-10   The shake tolerance (if SHAKE is in use).
+
+
+    See *note pressure:(doc/pressure.info) for more information on these options:
+
+PCONst    false   Flag to indicate that constant pressure code will be used.
+
+PINTernal  true   Flag to indicate that the internal pressure will be coupled
+                  the reference pressure.
+
+PEXTernal false   Flag to indicate that the external pressure will be coupled
+                  to the reference pressure.
+
+PCOUpling  0.0    The coupling decay time in picoseconds for the pressure.
+                  A good value for this is 5 ps.  N.B. Berendsen barostat
+
+COMPress   0.0    The compressibility in atm**-1.  A good value for proteins
+                  is 4.63e-5   N.B. Berendsen barostat
+
+PREFerence 1.0    The reference pressure in atmospheres.
+
+VOLUme computed   The volume in Angstroms**3 to use for the pressure
+                  calculation denominator.  This value is calculated if
+                  the CRYStal feature is use.
+
+TCONst    false   Flag to indicate that constant temperature code will be used.
+                  WARNING: this keyword invokes the Berendsen thermostat
+
+TCOUpling  0.0    The coupling decay time in picoseconds for the temperature.
+                  A good value for this is 5 ps.  N.B. Berendsen thermostst
+
+TREFerence FINALT The reference temperature for constant temperature
+                  simulations.  N.B. Berendsen thermostst
+
+       End of Pressure options.
+
+SGLD     false    Turn on SGMD/SGLD simulation. 
+                  Other SGLD parameters, such as TSGAVG, SGFT, TEMPSG, etc, 
+                  can be set to other than default values.  
+                  See sgld.info for more information.
+
+SGBZ     false    Using SGMDfp/SGLDfp method for SGLD simulation to preserve 
+                  canonical ensemble.
+
+MBOND             Signifies that the dynamics run will be based on a
+                  multi-body simulation.  If no bodies have been
+                  defined, this produces an error.  Many of the
+                  standard dynamics options retain their meaning, in 
+                  this case, but the following options are NOT
+                  supported:  SHAKE, CONSTANT PRESSURE, NOSE,
+                  LEAPFROG, VER4, LANGEVIN.
+                  See *note Mbond:(doc/mbond.info)DynDesc for a 
+                  description of the MBOND dynamics options.
+
+NLAT        0     The step frequency for writing instantaneous lambda
+                  temperature trajectories in lambda-dynamics.
+
+NBLCkfep    0     The step frequency for writing the energy decompostion 
+                  trajectories in free energy calculation.
+
+ILAT       -1     Fortran unit on which the histograms of the lambda
+                  temperature are to be saved. A value of -1 means no 
+                  histograms should be written. 
+
+IBLCkfep   -1     Fortran unit on which the histograms of the energy
+                  decomposition are to be saved. A value of -1 means no
+                  histograms should be written. This file is used in post
+                  processing in TSM module.
+
+ILAP       -1     Fortran unit on which the histograms of (Vi - Fi)
+                  are to be saved. A value of -1 means no histograms
+                  should be written. NSAVL is used for step frequency of  
+                  printing (Vi - Fi) information.
+
+ILAF       -1     Fortran unit on which the histograms of the restraining
+                  potential are to be saved. A value of -1 means no histograms
+                  should be written. NSAVL is used for step frequency of
+                  printing the restraining potential.
+
+
+File: Dynamc, Node: Recommended, Previous: Description, Up: Top, Next: Discussion
+
+                  Recommended CHARMM input for dynamics.
+
+        This section is intended only as a guide in setting up
+a dynamics simulation input file. Changes should be made as necessary
+according to personal tastes and project requirements.
+
+1)    For heating and early equilibration:
+
+DYNAMICS LEAP VERLET RESTART(*)  NSTEP 20000 TIMESTEP 0.001(+) -
+    IPRFRQ 1000 IHTFRQ 1000 IEQFRQ 5000 NTRFRQ 5000  -
+    IUNREA 30 IUNWRI 31 IUNCRD 50 IUNVEL -1 KUNIT 70 -
+    NPRINT 100 NSAVC 100 NSAVV 0 INBFRQ 25  -
+    hbond-spec  nonbond-spec   -
+    FIRSTT 100.0 FINALT 300.0 TEMINC 100.0   -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0
+
+(*)   Except for first run, the use STRT in place of RESTART
+(+)   If bonds to hydrogen atoms are SHAKEd
+
+
+2)    For late equilibration and analysis runs:
+
+DYNAMICS LEAP VERLET RESTART  NSTEP 20000 TIMESTEP 0.001 -
+    IPRFRQ 1000 IHTFRQ 2000 IEQFRQ 5000(*) NTRFRQ 5000  -
+    IUNREA 30 IUNWRI 31 IUNCRD 50 IUNVEL -1 KUNIT 70 -
+    NPRINT 100 NSAVC 100 NSAVV 0 IHBFRQ 0 INBFRQ 25  -
+    hbond-spec  nonbond-spec   -
+    FIRSTT 100.0 FINALT 300.0 TEMINC 100.0   -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 1 TWINDH 10.0 TWINDL -10.0
+
+(*)   Window checking should be disabled for the analysis run (i.e. IEQFRQ=0)
+      if you want a real microcanonical ensemble.
+
+
+3)  For heating, equilibration and analysis runs using Langevin dynamics:(+)
+
+DYNA LEAP LANGEVIN STRT(*)  NSTEP 20000 TIMESTEP 0.001 -
+    IPRFRQ 1000 IHTFRQ 0 IEQFRQ 0 NTRFRQ 0  -
+    IUNREA 30 IUNWRI 31 IUNCRD 50 IUNVEL -1 KUNIT 70 -
+    NPRINT 100 NSAVC 100 NSAVV 0 IHBFRQ 0 INBFRQ 25  -
+    ILBFRQ 1000 RBUFFER 0.0 TBATH 300.0 -
+    hbond-spec  nonbond-spec   -
+    FIRSTT 300.0 FINALT 300.0  -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 0.0 TWINDL 0.0
+
+(+) Note that the friction coefficients, in units of 1/ps, must first
+be initialized by filling the array FBETA with the SCALAR command
+
+SCALAR FBETA SET <real> <optional atom selection>
+
+(*)   Except for first run, the use STRT in place of RESTART
+
+
+4)    For quenched molecular dynamics:
+
+For the first run (STRT), read velocities into the comparison
+coordinate set, or this should directly follow a former dynamics command.
+
+DYNA VERLET STRT(*)  NSTEP 10000 TIMESTEP 0.001 -
+    IPRFRQ 1000 IHTFRQ 200 IEQFRQ 200 NTRFRQ 400  -
+    IUNREA 30 IUNWRI 31 IUNCRD 50 IUNVEL -1 KUNIT 70 -
+    NPRINT 50 NSAVC 50 NSAVV 0 IHBFRQ 0 INBFRQ 25  -
+    hbond-spec  nonbond-spec   -
+    TSTRUC 300.0 FIRSTT 300.0 FINALT 0.0 TEMINC -30.0   -
+    IASORS 0 IASVEL 0 ISCVEL 0 ICHECW 1 TWINDH 0.0
+
+or equivalently with Langevin (dissipative) dynamics
+
+DYNA LANGEVIN STRT(*)  NSTEP 10000 TIMESTEP 0.001 -
+    IPRFRQ 1000 IHTFRQ 0 IEQFRQ 0 NTRFRQ 4000  -
+    IUNREA 30 IUNWRI 31 IUNCRD 50 IUNVEL -1 KUNIT 70 -
+    NPRINT 50 NSAVC 50 NSAVV 0 IHBFRQ 0 INBFRQ 25  -
+    hbond-spec  nonbond-spec   -
+    TSTRUC 300.0 FIRSTT 300.0 FINALT 300.0 -
+    ILBFRQ 1000 RBUFFER 0.0 TBATH 0.0 -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 0.0
+
+(*)   For first run, use RESTART otherwise
+      The IASVEL 0 option causes the comparison coordinates to be used
+for the initial velocities (AKMA units).
+      For subsequent runs the options IASORS 1 and IASVEL 1 may be used
+if random velocities are to be periodically assigned.
+
+5)  For constant temperature and/or pressure dynamics
+
+DYNA LEAP VERLET STRT(*)  NSTEP 20000 TIMESTEP 0.001 -
+    IPRFRQ 1000 IHTFRQ 0 IEQFRQ 0 NTRFRQ 0  -
+    IUNREA 30 IUNWRI 31 IUNCRD 50 IUNVEL -1 KUNIT 70 -
+    NPRINT 100 NSAVC 100 NSAVV 0 IHBFRQ 0 INBFRQ 25  -
+    PCONst PINTernal COMPress 4.63e-5 PCOUpling 5.0 PREFerence 1.0 -
+    TCONst  TCOUpling 5.0  TREFerence 300.0 -
+    hbond-spec  nonbond-spec   -
+    FIRSTT 300.0 FINALT 300.0  -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 0.0 TWINDL 0.0
+
+6)  For multi-body dynamics (assumes an atomistic equilibration has
+already been performed, substructures defined and modes generated):
+
+DYNA MBOND LOBA RESTART  NSTEP 20000 TIMESTEP 0.001 -
+    IPRFRQ 1000 IHTFRQ 0 IEQFRQ 0 NTRFRQ 0  -
+    IUNREA 30 IUNWRI 31 IUNCRD 50 IUNVEL -1 KUNIT 70 -
+    NPRINT 100 NSAVC 100 NSAVV 0 IHBFRQ 0 INBFRQ 25  -
+    TCONst  TCOUpling 5.0  TREFerence 300.0 -
+    hbond-spec  nonbond-spec   -
+    FIRSTT 300.0 FINALT 300.0 -
+    MBPRlev -1
+
+
+File: Dynamc, Node: Discussion, Previous: Recommended, Up: Top, Next: Output
+
+                      Running Molecular Dynamics
+
+        The theoretical basis for dynamical simulations is elementary
+physics. The force on a particle is equal to the negative gradient of
+the potential energy of the particle. CHARMM can solve this equation
+numerically for all atoms in the molecule. A simple second order predictor
+two step method due to Verlet is used for integration.
+
+        The choice of the integration step size is very important.
+One must weigh the increased accuracy of using a small step size against
+the longer real time that can be simulated with a given amount of
+execution time when a larger step size is used.  The time step may be
+entered in picoseconds (using the TIMESTP keyword).
+
+        CHARMM provides information on the accuracy of the numerical
+solution. Since the system has no external forces, the total energy
+should be conserved. Numerical errors will result in some fluctuations
+in the total energy so a good test is to compare the fluctuations in
+total energy to the fluctuations in kinetic energy as these fluctuations
+are proportional to the heat capacity of the system. See the next node
+for a description of dynamics output.
+
+        Because the force constants for the bonds and bond angles are
+fairly large, it is reasonable under certain circumstances to constrain
+their values during dynamics. Such constraints are applicable if the
+harmonic motions are weakly coupled to other motions. The advantage of
+such constraints is that the step size of the numerical integration may
+be increased without sacrificing accuracy as these terms have the
+largest gradients in macromolecules simulated at physiological
+temperatures. We use the SHAKE algorithm for applying the constraints,
+see *note shake:(doc/cons.info)SHAKE.  SHAKE can be applied to just
+the bonds involved with hydrogens, all bonds, all bonds and the angles
+involving hydrogens, or all bonds and angles.
+
+        A dynamics run has basically four parts; initialization,
+heating, equilibration, and the simulation itself. Initialization means
+providing an initial position and velocity for all the atoms. Heating is
+the process of increasing the kinetic energy of the system up to a final
+temperature at which the simulation will be conducted. Equilibration is
+the process where the kinetic energy and the potential energy of the
+system evenly distribute themselves throughout the system. Only when the
+average temperature of the system stabilizes can one collect the
+trajectory information for analysis.
+
+        The initial coordinates of a simulation are obtained after
+applying the minimization algorithm to a complete coordinate set. One
+cannot start with a system with a large potential energy as it will
+quickly heat up to unreasonable temperatures. For initializing the
+velocities, the user can specify velocities from the comparison coordinates
+(IASVEL 0), a uniform distribution of kinetic energy along each coordinate
+with random sign of the motion along each axis (IASVEL -1) or a
+Gaussian distribution of velocities (IASVEL 1 the default). The temperature
+at which velocities are assigned is determined by FIRSTT and TSTRUC
+by the algorithm:
+
+        Tassign = 2*(FIRSTT-TSTRUC) + TSTRUC.
+
+For a harmonic system equilibrated to TSTRUC equal partition of the
+energy will result in an equilibrated temperature of roughly FIRSTT.
+If TSTRUC is not specified 1.25*FIRSTT will be used for assignment.
+
+        Velocities may also be passed to dynamics in the comparison
+coordinate set (as opposed to assignment). This allows the user
+considerable flexibility in setting up the initial conditions.
+
+        The heating of system is performed gently by increasing the
+kinetic energy by a small amount periodically. The number of integration
+steps between heating applications, the final temperature, and the
+kinetic energy increment are all user specified. In addition, there is a
+choice in the method of increasing the kinetic energy of the system. One
+may scale existing velocities or reassign them. The velocities can be
+scaled by either one scale factor calculated for the kinetic energy of
+the system averaged over many time steps or by scale factors established
+for each atom base ed on the ratio of its time averaged kinetic energy
+with that of the system. If reassignment is chosen, the velocities can
+have either a uniform or Gaussian distribution.
+
+        To equilibrate the structure, one can specify a window around
+the final temperature where velocity adjustments will be made. The
+choice of velocity adjustments is the same as described above for
+heating.
+
+        For the actual run, CHARMM will output the position and
+velocities of all atoms at intervals specified by the user. The
+temperature window can be set larger so that any gross conformational
+changes which result in a different potential energy will cause the
+temperature to be maintained.
+
+         At any time energy is added to the system, the angular momentum
+of the system will be reduced to zero and translational motion will be
+stopped. One can also request that these operations be performed at any
+time during the dynamics run.
+
+        The use of a restart file is essential for running dynamics.
+The restart file contains information about the most recent coordinate
+sets necessary for the VERLET algorithm.  In addition the values of
+the energy accumulators are stored.  All other information (such as
+SHAKE, fixed atoms, harmonic constraints, friction coefficients) has
+to be regenerated before invoking a dynamics restart.
+        When the run is initiated, a restart file must be written using
+the IUNWRI keyword. As the dynamics routine complete NCYCLE, see *note
+Output::, steps of dynamics, the Fortran unit specified by IUNWRI will
+be rewound and a restart file will be written. In case of crashes, one
+has restart files corresponding to various points in the run. The CRASHU
+variable may prove valuable. Successive runs of CHARMM to continue the
+dynamics run must read the previous restart file using the IUNREA
+keyword and write it out for the next part of the run.
+Restarts may be done to reset various options, or to break up a long run
+into several shorter runs. Restart files will only run with the version
+of CHARMM they are created with.
+
+        There are many numbers giving the frequency of actions to be
+taken during dynamics such as updating the non-bonded list, heating the
+molecule etc. Some of these numbers are adjusted along with the number
+of steps to run so that numbers all have a common divisor. At the
+present time, there are combinations which result in errors. At some
+point an attempt may be made to catalog all the actions, and check for
+erroneous processing.
+
+        If one is interested in simulating the motion of part of the
+system with the rest of the system remaining fixed, it is possible to
+fix atoms in place, see *note fix:(doc/cons.info)fixed atom. If this
+is done, there are several effect on the dynamics. First, since the
+system is now anchored in space, the center of mass motion and total
+angular velocity is never stopped. Second, the number of degrees of
+freedom used for calculating the temperature is set to the number of
+free atoms times 3 minus 6. Third, the coordinate and velocity
+trajectory files will contain the position of the fixed atoms only
+once, and all other records will hold just the moving atoms. This
+saves a great deal of disk space.
+
+        Trajectory files can be merged, broken in smaller pieces, and
+sampled at different intervals.  Likewise, said operations can be
+performed on coordinate trajectories while rotating the coordinates to
+match a given coordinate set.
+
+        When the DYNAmics command exits, the main coordinate set
+contains the final coordinate positions from the last energy evaluation and
+the comparison coordinates will contain the final velocities In AKMA units.
+
+        Finally, a brief discussion of the Langevin dynamics algorithm is
+presented.  The Langevin dynamics algorithm presently in CHARMM was intented
+to be used primarily with the "Stochastic Boundary Molecular Dynamics" method
+and consequently has been restricted to an algorithm which is valid only for
+the case FBETA*TIMESTEP<<1.0.  That is for cases where relatively small
+friction coefficients are used.  Typically values of FBETA*TIMESTEP up to
+about 0.3 still produce a stable dynamics which also satisfy the
+fluctuation-dissipation theorem.
+        The algorithm itself reduces to the Verlet algorithm when FBETA is
+zero and consequently may be used to do regular dynamics, actually it is
+the same routine which does both dynamics.
+        In using Langevin dynamics care must be taken to first initialize
+the array FBETA by using the scalar commands e.g.,
+  CHARMM >SCALAR FBETA SET <real> <atom selection>
+Failure to do this just means you are doing regular dynamics so no warning is
+given by CHARMM.
+
+
+File: Dynamc, Node: Output, Previous: Discussion, Up: Top, Next: Trajectory
+
+                      Contents of a dynamics output
+
+        Note: This description of the output of a command is not
+normally going to be part of the documentation of commands. The dynamics
+output is sufficiently confusing that this description is necessary.
+
+        The first part of CHARMM's output after a dynamics command lists
+all of the options that apply to that part of the run. Then, any
+information about velocity assignments (temperature changes) follows.
+Any time the velocities are changed in an anisotropic way, the motion of
+and about the center of mass will be stopped. This results in a printout
+both before and after this operation of the "DETAILS ABOUT CENTRE OF
+MASS". Its position and velocity are output followed by the components
+of the angular momentum. The last line gives the translation kinetic
+energy of the system, and thus one should expect a drop in the total
+energy and temperature of the system afterwards.
+
+        Non-bonded interaction and hydrogen bond updates will appear
+intermittently and are cleared labeled.
+
+        Every NPRINT steps, the total energy and various contributions
+will be printed. This output is preceded by a title which gives the
+correspondence of numbers to energy names. After IPRFRQ steps will
+appear the averages and RMS fluctuations. After the second such printout
+of averages and RMS fluctuations, the averages and RMS fluctuations for
+the run upto the last turning of the molecule will be given. This gives
+you longer range statistics. Such a calculation will not be done if
+IPRFRQ equals NTRFRQ. The ratio of total energy to kinetic energy
+fluctuations is an excellent measure of the accuracy of the run.
+
+        After the averages are printed, a least squares fit of the total
+energy against the step number will be made to look for drift in the
+energy. Two such values are printed, one for the last IPRFRQ steps, and
+one to the previous turn. Next, the initial energy for the statistics,
+both short range and long, are printed. Finally, the correlation
+coefficient of the energy versus step is given for both ranges. A value
+close to zero indicates no systematic drift; a magnitude near 1 means
+you have a real problem with the dynamics.
+
+        This process of printout continues until the end of the run is
+reached. Just before the last energy is printed will appear a message
+about the writing of coordinates and velocities to their respective
+files.
+
+Output of the lambda dynamics and post-processing
+
+(a) Output
+
+        The output of the lambda dynamics, i.e. the histograms and
+the biasing potentials on the lambda variables, is written in a 
+separate file from the coordinate file.
+
+        To specify the output fortran unit and the writing frequency,
+keywords IUNLDM and NSAVL are used. They are treated in the same fashion
+as IUNCRD and NSAVC.
+
+        There is no separate restart file for the lambda dynamics. The
+information necessary for restarting a lambda dynamics is included
+at the end of a regular dynamic restart file. Thus, to restart the
+lambda dynamics is exactly same as restarting a regular dynamics run
+except you have to specify IUNLDM and NSAVL. E.g
+
+!input title for lambda i/o
+LDTITLE
+* This is a test
+* output for lambdas
+*
+
+open unit 11 writ form name output_file
+open unit 12 read form name input_file
+open unit 15 writ file name histogram
+
+     dyna rest leap time 0.001 -
+     nstep 10 nprint 1 iprfrq 10 -
+     iunrea 12 iunwri 11 iuncrd -1 nsavc 1 IUNLdm 15 NSAVL 5 -
+     first 300. -
+     inbfrq 40 nbxmod 5 atom cdie shif vatom vdist vshif -
+     cutnb 8. ctofnb 7.5 ctonnb 6.5 eps 1. e14fac 0.4 wmin 1.5 -
+     cutim 8. imgfrq 40
+
+      The file is in binary output, but the order of the standard
+lambda-dynamics output is very similar to a regular output file:
+
+      header information:
+      (1) header=LAMB, icntrl (automatically written)
+      (2) title
+      (3) total no. of biasing potentials
+      (4) form of each biasing potential (total = Nbias)  
+      (5) total no. of blocks
+      at each NSAVL:
+      (6) lambda**2 (total = No. of blocks)
+
+        Multi-Site lambda-dynamics output is also quite similar:
+      header information:
+      (1) header=MSLD, icntrl (automatically written)
+      (2) title
+      (3) total no. of biasing potentials
+      (4) form of each biasing potential
+          (total = no. of biasing potentials)
+      (5) value of each fixed bias (total = total no. of blocks)
+      (6) site number for each block
+          (total = total no. of blocks; Site(1)=1)
+      (7) lambda temperature
+          (assigned from LANG TEMP lam_temp in BLOCK setup)
+      at each NSAVL:
+      (8) lambda(i) (total = total no. of blocks)
+      (9) theta(i,j)
+          (if functional form F2EXp or F2SIn, total = total no. of sites)
+          (if functional form FNExp or FNSIn, total = total no. of blocks)
+
+        Parallel to a regular coordinate file of the dynamic run, the
+unformatted lambda dynamics output file will automatically include a
+header and an integer array providing information on the values of NSTEP,
+NSAVL, NPRIV etc. In Multi-Site lambda-dynamics (MSLD), this array also
+includes: the total number of blocks, degrees of freedom with respect to
+lambda, the total number of Sites and an identifier for the functional
+form of lambda used to generate the trajectory.
+
+Integer array values in lambda-dynamics and MSLD.
+(** indicates use in MSLD only)
+ICNTRL(1) = nfile, unit number for lambda file 
+ICNTRL(2) = npriv 
+ICNTRL(3) = nsavl, interval for saving lambda values 
+ICNTRL(4) = nstep, total no. of steps 
+ICNTRL(5) =  
+ICNTRL(6) = 
+ICNTRL(7) = total no. of blocks ** 
+ICNTRL(8) = lambda degrees of freedom ** 
+ICNTRL(9) =  
+ICNTRL(10) = 
+ICNTRL(11) = total no. of Sites **
+ICNTRL(12) = 2 (if F2SIn or F2EXp), 0 (if FNSIn or FNEXp) **
+ICNTRL(13)
+...
+ICNTRL(20)
+
+        To name a title for the output file (in complying with
+the CHARMM file requirement), the command LDTItle (similar to TITLE 
+command) can be used. E.g.
+
+LDTItle
+* mte: Methanol to ethane    
+* output for lambda dynamics
+*
+
+will write out a title before any other output data.
+
+        The information on biasing potentials will also be written out.
+It takes a similar form as they were read in (see BLOCK.DOC), i.e.
+
+        INTEGER : total No. of biasing potentials.
+        I  J  CLASS  REF  CFORCE NPOWER : the format for each biasing potential. 
+
+        The number of blocks are included here in standard lambda-dynamics,
+but was moved to ICNTRL(7) in Multi-Site lambda-dynamics:
+        INTEGER : the total no. of blocks.
+
+        If Multi-Site lambda-dynamics (MSLD) is used then the temperature 
+and the fixed biases on each block are also written:
+        INTEGER : Site(i)+1     (i=1, total no. of blocks; Site(1)=0)
+        REAL : temperature
+
+        The remaining output consists of the lambda values.
+        For standard lambda-dynamics and theta lambda-dynamics, the format is:
+        REAL : lambda(i)^2  (i=1, total no. of blocks)
+
+        For theta dynamics, theta values are included in the format:
+        REAL : theta 
+
+        For Multi-Site lambda-dynamics, lambda and theta values are included:
+        REAL : lambda(i)    (i=1, total no. of blocks)
+        REAL : theta(Site_a,Sub_j) (a=1, total no. of Sites;
+                                    j=1, total no. of Blocks on Site_a)
+
+(b) Post-processing MSLD lambda trajectory files
+        The Multi-Site lambda-dynamics output files can be analyzed by the 
+TRAJectory LAMBda command once the lambda trajectory file is opened:
+e.g. 
+     open unit 14 read file name prod.lmd
+     traj lamb print ctlo 0.8 cthi 0.90 first 14 nunit 1
+
+  TRAJectory LAMB {read-spec}
+  read-spec :=  [FIRST unit] [NUNIt int] [SKIP int]
+                   [BEGIN int] [STOP int] 
+  FIRStunit (IREAd) - first unit from which to read 
+  NUNIts    (NREAd) - number of units from which to read (default: 1)
+  SKIP              - skip value for both reading and writing (default: 1)
+
+        Other options are:
+  PRINt  - print lambda and theta values to output file 
+  CTLO   - first threshold for approximating lambda = 1 (default: 0.8)
+  CTHI   - second threshold for approximating lambda = 1 (default: 0.9) 
+  TEMP   - temperature for calculating relative free energies from
+           populations (default: read in from trajectory file) 
+  QUERy  - print header information only
+  NOSUb  - suppress the storage of internal CHARMM variables
+
+        The output provides a summary of statistics from the lambda
+populations for the two threshold values:
+(1)    Total Population Count for each Block (i.e. how often each
+       block i has lambda(i) > threshold)
+(2)    Total number of transitions between dominant blocks at each Site
+       as well as the overall transition rate (in units of 1/ps).
+(3)    Free energy differences between individual blocks at each Site
+       (with and without taking into account the fixed biases, lambdaF)
+
+For systems with two sites (ie. with multiple blocks at two Sites)
+(4)    Total Population Count for each Ligand (unique combination of
+       dominant blocks)
+(5)    Free energy differences between individual Ligands
+       (with and without taking into account the fixed biases, lambdaF)
+
+(6)    Fraction Physical Ligand represents the fraction of the snapshots
+       that represent a "physical ligand", that is, where
+       lambda(i) > threshold for one block i at every Site.
+
+        See testcase in: test/c36test/msld_test1.inp for examples of
+setting up and analyzing Multi-Site lambda-dynamics simulations and
+trajectories.
+
+END
+
+
+File: Dynamc, Node: Trajectory, Previous: Output, Up: Top, Next: Merge
+
+      Reading and writing trajectory frames with direct commands
+
+This facility allows the creation or manipulation of trajectory files
+The main uses of this facility are;
+
+1) creating artificial trajectory files from coordinate frames
+2) reading an existing trajectory frame by frame for analysis that
+requires access to a variety of CHARMM commands
+3) modifying an existing trajectory (copy with changes) such as
+minimizing each frame or other operations.
+
+Handling trajectories stored in multiple files
+----------------------------------------------
+All CHARMM commands and routines that can read trajectories use the same
+syntax to specify how the trajectory should be read. For trajectories stored
+in multiple files CHARMM checks that the files form a contiguous trajectory
+(no overlaps or missing pieces). A "normal" trajectory is also expected to 
+use the same timestep, frequency of saving frames, 4D-data, crystal data, fixed
+atoms and fluctuating charges in all its individual files.
+Trajectory files have to be opened, on consecutive unit numbers, before they
+can be read:
+
+open unform read unit 101 name traj1.trj 
+open unform read unit 102 name traj2.trj 
+open unform read unit 103 name traj3.trj 
+
+Negative numbers and units 5 and 6 cannot be used, and units in the approximate
+range 90-99 are used  internally by CHARMM. In FORTRAN 95/2003 there is no upper
+limit defined for a unit number.
+
+The trajectory is specified with these keywords:
+
+FIRStunit int  The unit number of the first file (101 in the example above)
+NUNIts    int  The number of files (3 in the example)
+BEGIn     int  The integration step number of the first frame to be used
+STOP      int  The integration step number of the last frame to be used
+SKIP      int  The number of integration steps to skip between frames to be read. If 
+               the value given is not a multiple of the saving interval in the file,
+               CHARMM will try to use an appropriate value.
+NOCHeck     Disable all checks on file consistency. This allows multiple trajectory
+            files to be analyzed together even if they do not form a regular 
+            time sequence of frames. BEGIn and STOP are not used in this case,
+            the files will be processed from beginning to end. If SKIP is specified
+            (>1) an attempt will be made to use every SKIP step in each file.
+            If SKIP is not specified, or if it is 1, all frames will be read. 
+            Warnings and error messages will be printed when mismatches are
+            detected. BOMLev does not have to be changed.
+          
+These additional keywords influence the reading and writing of the timestep
+field (DELTA), useful when importing trajectories (DCD files) from external
+sources that may not set this value correctly in AKMA time units.
+
+TSET    real  Overrride the value in the file with this value (picoseconds)
+RPICo         Flag; convert file value to AKMA; assumes value is in picoseconds
+ 
+Example. Assume that the three files traj1.trj, traj2.trj and traj3.trj  were
+created using the following dyanmics commands:
+dyna   start nstep  1000 nsavc 100  ! saves 10  frames (100, 200, ...1000)
+dyna restart nstep 10000 nsavc 100  ! saves 100 frames (1100, 1200, ...10100) 
+dyna restart nstep 10000 nsavc 100  ! saves 100 frames (10200, 10300, ...20100)
+
+To read every 500 stepes in the trajectory from step 5500 to 16000
+the following specifiaction should be used (after the files have been opened as above):
+FIRST 101 NUNIT 3 BEGIN 5500 SKIP 500 STOP 16000
+
+
+[Syntax TRAJectory command]
+
+===================================================================
+
+There are four commands that comprise this facility.
+
+1) Initializing trajectory I/O
+
+TRAJectory {read-spec} {write-spec}
+
+read-spec:==  [FIRST unit] [NUNITint] [SKIP int]
+                   [BEGIN INT] [STOP INT] [ RPICo | TSET real ]
+
+write-spec:== [IWRIte unit] [NWRIte int] [NFILE int] [EXPAnd] [VELOcity]
+                [NOTHer int] [DELTa real] [SKIP int]
+
+FIRStunit (IREAd) - first unit to read from  (default: do not read)
+NUNIts    (NREAd) - number of units to read from (default:1)
+SKIP              - skip value for both reading and writing (default:1)
+RPICo             - read timestep from header as ps, convert to AKMA
+TSET real         - override file timestep, set to this value (ps)
+
+IWRIte - first unit to write to (default: do not write)
+NWRIte - number of units to write to (default:1)
+NFILe  - number of frames on each output file (default: total)
+EXPAnd - flag to free fixed atoms in copying (only if reading)
+VELOcity - flag to write velocity (default: coordinate)
+NOTHer - number of frames in previous files (if not reading) (d:0)
+DELTa  - output delta value (if not reading) (default:0.001)
+
+2) Reading a frame
+
+TRAJectory READ [COMP]
+
+The reading command does not have any specifiers other than
+whether the comparison or main coordinates will be used.
+
+3) Writing a frame
+
+TRAJectory WRITe [COMP]
+
+The writing command does not have any specifiers other than
+whether the comparison or main coordinates will be used.
+
+4) Query a trajectory file
+
+TRAJectory QUERy UNIT integer
+
+The query command rewinds an open trajectory file and then reads the
+header information from this trajectory file.  It prints a summary
+and sets the following command line substitution parameters:
+      'NFILE' - Number of frames in the trajectory file
+      'START' - Step number for the first frame
+      'SKIP'  - Frequency at which frames were saved
+                (NSTEP=NFILE*SKIP when not using restart files)
+      'NSTEP' - Total number of steps from the simulation
+      'NDEGF' - Number of degrees of freedom from the simulation
+                (Can be use to get the temperature with velocity files).
+      'DELTA' - The dynamics step length (in picoseconds).
+This command, again, rewinds the trajectory file upon completion.
+
+===================================================================
+      There are three modes of operation; 
+
+1) Create a new trajectory.
+
+The IWRIte and NFILe keywords must be used.  The default
+values for the others are listed above.  If several files
+will be made in different CHARMM runs that will be linked together
+later, the NOTHer keyword value should be increased by NFILe on
+each subsequent run.
+
+EXAMPLE: Create a "movie" trajectory that involves the rotation
+of a single sidechain (residue 21).
+
+COOR AXIS SELE ATOM * 21 CA END SELE ATOM * 21 CB
+OPEN WRITE UNIT 22 FILE NAME TYR21.ROT
+TRAJECTORY IWRITE 22 NWRITE 1 NFILE 360 SKIP 1
+* trajectory showing the rotation of sidechain 21
+*
+SET 1 1
+LABEL LOOP
+COOR ROTATE AXIS PHI 1.0 SELE ATOM * 21 * .AND. .NOT. ( TYPE C -
+   .OR. TYPE N .OR. TYPE H ) END
+TRAJ WRITE
+INCR 1 BY 1
+IF 1 LT 360.5 GOTO LOOP
+STOP
+
+===================================================================
+
+2) Reading an existing trajectory
+
+      The FIRSTU (or IREAD) keyword must be used.  The default NFILe value
+is 1 and the remaining values if not specified will be read from the
+trajectory file.
+
+EXAMPLE: find the structure with the lowest energy and save it.
+
+OPEN READ UNIT 22 FILE NAME DYN1.TRJ
+OPEN READ UNIT 23 FILE NAME DYN2.TRJ
+TRAJECTORY FIRSTU 22 NUNIT 2 SKIP 100
+SET 1 1
+SET 9 9999.0
+CALC NTOT = ?NFILE * 2
+
+LABEL LOOP
+   TRAJ READ
+   UPDATE ... ! depending on how much your atoms move,
+              ! you may leave this outside the loop
+   GETE
+   IF 9 LT ?ENER GOTO NEXT
+      SET 8 @1
+      COOR COPY COMP
+      SET 9 ?ENER
+   LABEL NEXT
+   INCR 1 BY 1
+IF 1 LT @NTOT GOTO LOOP
+
+OPEN WRITE CARD UNIT 12 NAME LOWE.CRD
+WRITE COOR COMP CARD UNIT 12
+* structure with the lowest energy
+* frame number @8 with energy @9
+*
+STOP
+
+===================================================================
+
+3) Copying from one trajectory to another.
+
+      The operation of this command works in the same mode as
+the MERGE command, except a variety of CHARMM commands can
+be executed between reading and writing of frames.
+
+EXAMPLES: Create a new trajectory where every frame is minimized
+for 200 steps.
+
+OPEN READ  UNIT 22 FILE NAME DYN.TRJ
+OPEN WRITE UNIT 32 FILE NAME DYN.MIN
+TRAJECTORY NUNIT 22 SKIP 100 IWRITE 32 
+* minimized trajectory 
+*
+SET 1 1
+LABEL LOOP
+TRAJ READ
+MINI ABNR NSTEP 200 
+TRAJ WRITE
+INCR 1 BY 1
+IF 1 LT ?NFILE GOTO LOOP
+STOP
+
+
+File: Dynamc, Node: Merge, Previous: Trajectory, Up: Top, Next: Reorient
+
+      Merges or breaks up a trajectory into different numbers of files
+
+      Frequently, one generates a trajectory into small files to
+minimize the CPU time of one job. However, so many files are usually
+hard to manage so it is desirable to merge said files into larger units.
+This command provides that capacity. In addition, it is possible to
+break up the trajectory into smaller pieces and to sample the trajectory
+less frequently than originally generated.
+      Another option is to optionally rotate the structure at each
+frame to least squares fix a reference structure.
+
+[Syntax MERGE dynamics trajectories]
+
+     MERGE [ COOR ] [FIRSTU unit-number] [NUNIT integer] [SKIP integer]
+           [ VEL  ] [OUTPutu unit-number] [NFILE integer]
+           [ DRAW ] [BEGIN integer]   [STOP integer] [TSET real | RPICo]
+                                   [first-atom-selection]
+          [NOCRystal]  [NOCHeck]
+          [ XFLUct ] [ UNFOld ]
+          [ ORIEnt  [MASS] [WEIGht] [NOROt] [PRINT] second-atom-selection ]
+          [ RECEnter second-atom-selection] [ REPAck [IMAGes ] ]
+          [ SUBSset  MEMSSU integer  NUNSS integer ]
+          [ SIMPle ]
+          [ RTOTemp EXCU unit-number NEXChange integer NRPL integer NREPeat integer ]
+
+                       Keyword table
+
+Option      Default       Purpose
+
+[COOR]      COOR   Specification of the type of trajectory file. COOR is
+[VEL ]             coordinates; VEL is velocities.
+[DRAW]             Make a CHARMM movie (do not write any files, just display)
+
+FIRSTU      51     The first unit of the trajectory to be read.
+NUNIT        1     The number of units to be read starting with FIRSTU
+SKIP         1     Only those coordinate whose dynamics step number
+                   modulo SKIP will be reoriented and written out.
+OUTPUTU     61     The first unit number of the output trajectory
+NFILE              The number of coordinate sets written to each output
+                   merged file. If left out, this will be set to the number
+                   of coordinates in the first input file times the number of
+                   input files. WARNING: This default will generate a bad
+                   trajectory file if SKIP is not set to the interval
+                   actually present in the trajectories. Further, if you
+                   set its value to be larger than the number of
+                   coordinates that are actually written in any output
+                   file, you will have problems. The error that is
+                   generated results from the control array in the
+                   beginning specifying that there are more coordinates
+                   than actually exist in the file. EOF errors will result
+                   when the trajectory is read.
+BEGIN              First step number to start reading from
+STOP               Last step number to read
+RPICo              Read timestep from header as ps, convert to AKMA
+TSET real          Override file timestep, set to this value (ps)
+first-atom-sel     Selection of atoms to include in the output file.
+
+NOCRystal	   Suppress writing of crystal lattice data to output
+                   trajectory if there is lattice data in input trajectory 
+                   and crystal facility has not been setup.
+NOCHeck            Do not check that input files are contiguous. Allows merging
+                   of trajectory files from independent simulations. Output will
+                   be to a single file, in which the steps will be numbered 
+                   1,2,3,... If SKIP > 1 an attempt will be made to use SKIP 
+                   when reading the input files. 
+                   NB! Header and crystal information in the output file may be
+                   incorrect, and the file may be inappropriate for 
+                   timedependent analyses.
+RECEnter           Will re-center atoms based on the existing IMAGE
+                   transformations ("coor ... rece ..") thus HAS to be
+                   preceded by a normal image setup (read image, image 
+                   byresidue ..) for the atoms (usually solvent) that
+                   are to be transformed as if the center of the primary
+                   box coincided with the center of geometry of the 
+                   atoms in the second selection. In short: The second
+                   selection defines the origin of your lattice
+                   and the solvent molecules are put as close as possible to
+                   the solute, even if things drifted slightly out of the box
+                   during the simulation. Useful for calculation of solvation
+                   properties. Does not work with  XFLUct or UNFOld.
+                   The possibly large amounts of output reporting on
+                   all transformation operations being performed may
+                   be suppressed by setting PRNLev 4, or PRNLev 1 to
+                   get rid of the SELECTE IMAGES BEING CENTERED messages
+                   as well.
+                   NOTE: Uses SAME second-selection as ORIENt, so if
+                   both RECEnter and ORIEnt are specified there should only
+                   be one second selection, which will first be used
+                   to define the recentering, then for the orienting.
+
+REPAck             Repacks the unit cell; by default, image transformations
+                   are not used, and is therefore limited to orthogonal
+                   unit cells with only translation operations.  Intended
+                   for use with DOMDEC simulations run w/o image centering.
+                   Optional IMAGE keyword does standard image centering,
+                   using the defined image centering point; this should *not*
+                   be used to post-process uncentered DOMDEC trajectories.  
+                   Compatible with RECEnter and ORIEnt, and done first.
+
+UNFOld             removes the effects of image centering (not the same
+                   as RECEnter), ie will let a particle continue out to
+                   the right if that is what it was doing when PBC moved
+                   it back into the primary box during the simulation.
+
+XFLUct             removes the effects of the box size/shape changes from
+                   constant pressure simulations.  This allows an accurate
+                   calculation of transport properties (diffusion 
+                   constants,..) from CPT trajectories.
+
+ORIEnt             Flag to specify best fit rotation and translations.
+  MASS             Use mass weighting in best fit.
+  WEIGht           Use weighting array for best fit weights.
+  NOROt            Only translate in the best fit.
+  PRINT            Print the details of best fit
+  second-atom-sel  Selection of atoms to use in the best fit.
+                   NOTE: Uses SAME second-selection as RECEnter (see above)
+
+RTOTemp            Convert per-replica trajectories to per-temperature
+                   trajectories (for use with FAST replica exchange as
+                   described in repdstr.info). If this option is selected,
+                   NUNIT output files must be opened using consecutive
+                   unit numbers starting with OUTU. FIRSTU is expected to
+                   be the first of NUNIT consecutive unit numbers for each
+                   of the per-replica trajectories in order from lowest to
+                   highest. The following must also be given:
+   EXCU            The unit number of the exchange file from FAST rep. exch.
+   NEXC            The number of exchanges to process from EXCU.
+   NRPL            Number of replicas.
+   NREP            Number of repeats (set to 1 if not otherwise specified).
+
+SIMPle             Write the output in the simple trajectory format, suitable
+                   for use as a reservoir in reservoir replica exchange (see
+                   repdstr.info for details). In this case, OUTU must be opened
+                   for DIREct access.
+
+SUBSET             Creates up to 64 subset trajectory files from the input
+                   trajectories (COOR only, no FIXed atoms), using a list
+                   of subset members; the list file format is the same as
+                   the membership list produced by the CLUSter command
+                   within CORREL (see below).  Additional keywords are:
+
+  MEMSSU           Unit number for the subset membership list.
+  NUNSS            Number of subset units, starting with OUTPUTU; the
+                   unit numbers must be consecutive.
+
+   Additional notes on SUBSET:
+
+(1) The time base is lost, as the output subset trajectory files are written
+with SKIP 1 and a timestep of 1.0, for simple sequential numbering of frames.
+
+(2) Each subset starts with BEGIN 1, and NFILE will be the number of members.
+
+(3) Subsets w/o members are allowed; a file of zero length will be produced.
+
+(4) ORIENT, UNFOLD, XFLUCT, and RECENTER are not allowed with SUBSET.
+
+(5) The membership list file format is--
+
+1 Cluster Membership File
+2
+3 Time Series Frames Clustered:       0,  720000
+4 Maximum Cluster Radius      :  0.9500E+02
+5 Number of Patterns Clustered:  720001
+6 Number of Clusters          :     18
+7
+8 Cluster   Frame 1stSeries  Distance
+9     12       0       1  0.7416E+02
+:      8       1       1  0.3662E+02
+       8       2       1  0.4593E+02
+       8       3       1  0.4003E+02
+       8       4       1  0.3793E+02
+       :       :       :     :
+
+The first 8 lines must be present (but w/o the line numbers shown); lines
+3-6 describe the data in lines 9+ (but the cluster radius is ignored).  For
+use with MERGE COOR SUBSET, only the first two data columns (Cluster, Frame)
+are needed.  Note that 'frame 0' will be ignored, as it is not present in
+the trajectory files, but apparently represents the coordinates in MAIN when
+the CLUSTER command was run.
+
+      For all MERGE operations, the title of the output trajectory will be
+copied from the input trajectory.
+
+
+File: Dynamc, Node: Reorient, Previous: Merge,  Up: Top, Next: RMSDyn
+
+                   Reorienting a coordinate trajectory
+
+      If one is interested in reorienting every set of coordinates
+found in a dynamics trajectory with respect to some reference structure,
+one can use the ORIEnt option in conjunction with the MERGe command.
+
+      The process of reorienting a coordinate trajectory works as
+follows: A series of files containing the trajectory are assigned to
+successive units prior to a CHARMM run. The coordinates stored therein
+are presumed to have been written every NSAVC steps. CHARMM will read
+each coordinate, select some periodically, reorient them, and write them
+to successive units where each output file will have a user specified
+number of coordinates. The following table lists the options involved:
+
+Option      Default       Purpose
+
+ORIE        .false.     Specify that a least squares RMS fit will be done.
+MASS        .false.     Use a mass weighting in the fit
+WEIGH       .false.     Use the weighting array (wmain) in the fit
+NOROt       .false.     Just shift the centers to best fit.
+PRINt       .false.     Print what happened to each coordinate set.
+atom-selection all      Select which atom to use in the fit.
+
+      If atoms were fixed during the dynamics, the new trajectory
+produced will not have fixed atoms because the rotations applied to
+each coordinate set will be different thereby yielding different
+coordinates for the fixed atoms.  Fixing the coordinates leads to a
+large space reductions, so the reorientation process will therefore
+result in potentially much larger trajectory files.
+See *note fix: (doc/cons.info)Fixed Atom.
+
+
+File: Dynamc, Node: RMSDyn, Previous: Reorient, Up: Top, Next: Format
+
+      Computes the RMS difference between two trajectory files
+and make a matrix of results.  Large files should be reduced with the
+MERGe command before processing this command. 
+
+   RMSDynamics ORIEnt  [MASS] [WEIGht] [NOROt] [RMS|DIFF|DRMS [atom-selection]]
+                [atom-selection]
+               FIRSTU unit-number [NUNIT integer]  [ TSET real | RPICo ]
+               BEGIN integer [SKIP integer] STOP integer [IWRIte unit-number]
+               [SECU unit-number] [BEG2 integer] [SKP2 integer] [STP2 integer]
+                ( [IREAd unit-number] [JREAd unit-number]) 
+                ([IMAGes]) [MATRix]
+                [PQUNit unit-number [PQSEed integer] [IOPT int] [MAXFn int] [NSIG int] ]
+
+
+
+IWRIte int  - Unit for the output matrix.
+FIRSTu int  - Unit number for first file containing trajectory 1
+NUNIt  int  - Number of files for trajectory 1
+BEGIn  int  - Starting step number
+STOP   int  - Ending step number
+SKIP   int  - Number of steps to skip (default 1)
+  NB!  BEGIN, SKIP and STOP have to be specified to allow proper
+        memory allocation! The TRAJ QUERY command can retrieve these values
+       The trajectory(ies) are read into memory before calculations begin;
+       Memory usage may be reduced by decreasing the number of selected atoms,
+       and by reducing the number coordinate sets (frames) used - increase SKIP
+SECU   int  
+NUN2   int
+BEG2   int   Specifications for trajectory 2. Defaults to same values 
+SKP2   int   as used for trajectory 1.  If SECU is not given, or same as 
+STP2   int   FIRStu only one trajectory will be analyzed.
+
+(IREAd  int  - unit number of the first trajectory file.)
+              If only IREAd is specified, or if IREAd and JREAd are the same
+              the RMSDs will be between frames in same file
+(JREAd  int  - unit number of the second trajectory file.)
+   NB!  IREAD and JREAD are obsolete as of c30 (but still supported) 
+
+(IMAGes      - Use image atoms for the analysis (not implemented))
+ORIEnt      - Do best fit of structures
+MASS        - Use a mass weighting in best fit.
+WEIGht      - Use the weighting array in best fit.
+NOROt       - Best fit without letting the structures rotate.
+RMS         - Do RMS fit between structures, otherwise,
+                align structures with the axis.
+DIFF        - Compute RMSD between structures WITHOUT superposition
+                useful for characterization of subunit motion in traj where
+                a refernce part has been pre-aligned between frames
+DRMS        - Distance RMSD
+               For each frame, the RMS difference between interatomic
+               distances computed for the comparison coordinates and the
+               coordinates in the trajectory, using all atom pairs having
+               one atom in each selection. If no selection is given, all
+               atoms are used; if only one selection is given, all atom pairs 
+               within this selection are used. If an atom i appears in both 
+               selections the distance  r(i)-r(i)=0 will not be included in
+                the calculation.
+               No other corrections are made wrt connectivity.
+MATRix      - output just the RMSDvalues in matrix format
+                NOTE: You have to specify correct BEGIN and STOP values so that
+                the correct amount of memory can be allocated
+PQUNit int  - unit number for output of (P,Q)-values in a 2D-projection of 
+                the RSMD-map according to Levitt, M. J.Mol.Biol. (1983) 168,
+                621-657.  CHARMM variable PQRES is set to the final value of
+                the target fcn. This can be slow to converge. PRNL 6
+                (or greater) outputs the value of the target fcn for each
+                iteration, allowing judgement of the convergence.
+                If iterations stop due to maximum number of function
+                evaluations reached, you can increase this with the MAXFn
+                <integer> keyword, and see if it results in a qualitative
+                change of the p{p,q}-pattern. If not all is probably OK.
+                The RMSD-values can be printed also when this option is on.
+                This turns on the MATRix flag so BEGIN and STOP have to be
+                correct. Requires the same number of frames to be used from boths
+                trajectories.
+                Uses IMSL-routine ZXMIN; IOPT,MAXFN and NSIG can be specified
+                to tune the behavior of ZXMIN.
+PQSEed int  - seed for random generation of initial guesses for the (P,Q).
+                prnl 6 gives a little more information about initial guesses
+                etc.
+atom-selection
+            - Atoms to use in the fitting procedure, or in the DRMS calculation
+
+CHARMM variable TOTRMS is set to the sum of all pairwise RMSDs (for RMS or DRMS).
+
+
+File: Dynamc, Node: Format, Previous: RMSDyn, Up: Top, Next:  CVELocity
+
+
+              Format or unformat a dynamics trajectory
+
+
+     DYNAmics FORMat   FIRStunit <unit>  NUNIt <int> BEGIn <int>
+                       SKIP <int>  STOP <int>       OUTPut <unit>
+                       OFFSet <int>  SCALe <int>    MODE <FORTRAN-FORMAT>
+     DYNAmics UNFOrmat  INPUt <unit>  OUTPut <unit>
+
+
+        These commands allow to convert binary trajectory files into a machine
+independent yet compact format and to convert them back into binary files.
+The defaults for OFFSet, SCALe and MODE are:  OFFSet=600, SCALE=10000, and
+MODE=12Z6.  The trajectory is converted into positive integers according to
+the formula <integer>=INT(<real>+OFFSET)*SCALE).  The user has to make
+sure that all coordinates of the trajectory are within OFFSET angstroms.
+The precision may be increased by choosing a larger SCALE and FORTRAN-format,
+e.g. MODE=11Z7 OFFSET=100000. ("Z" is the hexadecimal format and is available
+on most machines.)
+
+File: Dynamc, Node: CVELocity, Previous: RMSDyn, Up: Top, Next: TSALlis
+
+
+                            CONSTANT VELOCITY
+
+
+The code for constant velocity was generalized in c34a1 code. Use
+single selection in CVELocity command. The comparison set is used for
+the refernce structure. When two selections are scpecified the
+folowing still works:
+
+A constant velocity method has been developed for use with DYNA (right
+now, it only works with LEAP [in charmm] and LOBATTO [in MBO(N)D] integrators).
+The main purpose of this facility is to run simulations similar to atomic force
+microscopy.  The constant velocity method, therefore, is used in
+conjunction with the NOE facility used to apply a 'spring' between two
+atoms.
+
+A constant velocity for an atom is entered via CVEL in CHARMM syntax:
+
+CVELocity <real> <sele first atom> <sele second atom>
+
+where <real> = constant velocity in Angst/ps; the constant velocity vector
+and direction is defined from <sele first atom> to <sele second atom>. the
+position of the <sele second atom>, typically a dummy atom, is moved to
+the position of <sele first atom> + 0.0001 Angstr. along the vector
+(because charmm does not like duplicate coordinates); <sele second atom>
+then traverses along the vector at the constant velocity rate.
+
+The second atom is not really needed, but it is helpful in analyzing
+the vector visually before running dynamics.
+
+Note: If you want to apply a spring between the constant velocity atom
+and the first atom in the vector, you must use (currently) the NOE facility
+in charmm.
+
+---
+Here are the relavent syntax from a sample input file (typical usage).
+---
+
+*afm.inp
+*Simulated Atomic Force Microscopy
+*Continually loops over 10ps segments of dynamics (NVT'ish)
+*
+
+...lots of typical charmm stufff...
+
+
+!--------DEFINITIONS
+!Two atoms, one is the near the end of myosin, the other is a dummy atom
+! to be cvel'ed
+define tip SELE atom dumm 1 dumm END
+define pp SELE atom hc 835 ca END  
+
+!Actin binding region
+define actb sele segid hc .and. (resi 405:415 .or. resi 529:550 .or. -
+     resi 626:647) end
+
+!----FORCES 
+set f 4.   !spring constant; See Grubmueller Science 1996, 271, 997
+set com 100  !force used to pin  actin binding site
+set max 80  !tot number of dyn runs--arbitrary right now
+
+!##CVEL <Angst/ps> <first_single_atom_selec> <second_single_atom_selec>
+!## These two atoms define the pulling vector; the first selection
+!## is the pull point, and the second selection is the atom that moves at 
+!## constant velocity along the pull point.  Currently, the 'spring' 
+!## between these two atoms is defined using the NOE facility below.
+
+cvel @{cv} SELE pp END SELE tip END 
+
+!set up spring between atoms in cvel
+noe
+ reset
+ assign SELE pp END SELE tip END -
+  kmin 0.0 rmin 0.0 kmax @f rmax .00001 fmax 1000
+ PRINT ANAL 
+end
+label skip
+
+!----Pin protein
+cons harm sele actb end force @{com}
+
+DYNAMICS MBOND (or LEAP) (re)START -
+ dynamics equilibration or constant temperature method.
+
+!lots of loops over the above
+stop
+
+References:
+
+1. Grubmueller Science 1996, 271, 997.
+
+2. "The Evaluation Of Multi-Body Dynamics For Studying Ligand-Protein
+Interactions.  Using MBO(N)D To Probe The Unbinding Pathways Of
+Cbz-Val-Phe-Phe-Val-Cbz From The Active Site Of Hiv-1 Protease"  Chin, D. 
+N.; Haney, D. N.; Delak, K.; Chun, H. M.; Padilla, C, In Rational Drug
+Design; Parrill, A., Reddy, R. Eds.;  ACS Washington, 1998, in press. 
+
+MODIFIED CODE IN CHARMM 26??
+------------------
+
+a build/sgi/newmk/charmm.mk 9 blocks
+a build/sgi/newmk/dynamc.mk 25 blocks
+a build/sgi/newmk/mbond.mk 17 blocks
+a source/fcm/newfcm/cveloci.fcm 2 blocks
+a source/dynamc/newsrc/cveloci.src 9 blocks
+a source/dynamc/newsrc/dcntrl.src 110 blocks
+a source/dynamc/newsrc/dynamc.src 104 blocks
+a source/charmm/newsrc/charmm_main.src 47 blocks
+a source/charmm/newsrc/iniall.src 57 blocks
+a source/moldyn/newsrc/compin.f 24 blocks
+a source/moldyn/newsrc/delta_v.f 19 blocks
+a source/moldyn/newsrc/engmom.f 21 blocks
+a source/moldyn/newsrc/engmom_ke.f 9 blocks
+a source/moldyn/newsrc/mbdyna.f 58 blocks
+a source/moldyn/newsrc/ydot.f 74 blocks
+a source/moldyn/newsrc/CHARMM.INC
+a source/mbond/newsrc/mbback.src 52 blocks
+a source/mbond/newsrc/mbdyn.src 40 blocks
+
+
+File: Dynamc, Node: TSALlis, Previous: CVELocity, Up: Top, Next: CENT
+
+
+        Molecular Dynamics in the Tsallis (Generalized) Ensemble
+
+
+Molecular dynamics that yield averages for a Tsallis (generalized) ensemble
+rather than a canonical one can now be performed.  At present, this method 
+is implemented only for the leapfrog Verlet integrator (dynamc.src); the
+TSALLIS keyword must be included in pref.dat when compiling.  The method is
+invoked by adding to the DYNAmics command the keywords:
+
+    TSALlis QTSAllis real EMIN real
+
+where QTSAllis is the Tsallis q and EMIN is the estimated minimum energy 
+of the system.  The default value of QTSAllis is 1, in which case the 
+method reduces to standard (canonical) dynamics.  Values of q larger than 
+1 effectively correspond to a smoothed potential in which the positions of 
+the extrema are preserved.  Estimates for EMIN should err lower than any 
+possible energy of the system encountered during the simulation.
+
+It is important to note that the scale factor for the forces involves 
+a temperature.  The temperature employed in the Tsallis transformation 
+corresponds to the one used to assign the velocities during heating and 
+equilibration (TSTRUC initially and then FIRSTT + int*TEMINC).  Thus, it 
+is important to set FIRSTT, FINALT and TEMINC appropriately even if one 
+is running Langevin dynamics at temperature TBATh (i.e., for equilibrium
+dynamics, set FIRSTT = FINALT = TBATh).
+
+Reference:  
+
+Andricioaei, I. and Straub, J. E. (1997) On Monte Carlo and molecular dynamics
+      methods inspired by Tsallis statistics:  Methodology, optimization, and 
+      application to atomic clusters.  J. Chem. Phys. 107, 9117-9124.
+
+
+
+     Molecular dynamics with Tsallis scaling of the CMAP and dihedral 
+     potential energy terms
+
+Molecular dynamics using Tsallis scaling of the CMAP and Dihedral potential 
+terms can now be performed. This method is implemented for all integrators 
+(dynamc.src). In additional, the Tsallis scaling of the total potential 
+energy is implemented for VV2 (dynamvv2.src) and VV (dynamvv.src) integrators. 
+The method for Tsallis scaling of the CMAP and Dihedral potential 
+terms is invoked by adding to the DYNAmics command the keywords:
+
+    TTSALlis QTSAllis real EMIN real
+
+where QTSAllis is the Tsallis q and EMIN is the estimated minimum energy 
+of the CMAP + Dihedral terms, having similar meaning as for TSALLIS. The 
+default value of QTSAllis is 1, in which case the method reduces to 
+standard dynamics (no scaling).  Values of q larger than 1 effectively 
+correspond to a smoothed potential in which the positions of the extrema are 
+preserved.  Estimates for EMIN should be lower than any possible energy of 
+the CMAP+Dihedral potential terms encountered during the simulation.
+
+It is important to note that the scale factor for the forces involves a 
+temperature. The temperature employed in the Tsallis transformation
+corresponds to the one used to assign the velocities during heating and
+equilibration (TSTRUC initially and then FIRSTT + int*TEMINC). Thus, it is
+important to set FIRSTT, FINALT and TEMINC appropriately even if one is
+running Langevin dynamics at temperature TBATh (i.e., for equilibrium
+dynamics, set FIRSTT = FINALT = TBATh).
+
+Furthermore, simple scaling of the CMAP and Dihedral potential terms can also 
+be performed by adding to the DYNAmics command the keywords:
+
+    POTSaling TSALpha
+
+where TSALpha is the scaling factor of the  CMAP + Dihedral terms.
+The default value of TSALpha is 1, in which case the method reduces to
+standard dynamics (no scaling).  Values of Alpha smaller than 1 correspond
+to a smoothed potential.
+
+
+Reference:  
+
+H. Kamberaj and A. van der Vaart (2007) Multiple Scaling Replica Exchange 
+for the Conformational Sampling of Biomolecules in Explicit Water.  
+J. Chem. Phys., 127, 234102-7.
+
+
+
+File: Dynamc, Node: CENT, Previous: TSALlis, Up: Top
+
+
+                 Description of the CENT Command
+
+
+[ CENT NCRES int ]
+
+Description:   The reCENTering command allows to recenter the system
+at the geometric center of the first NCRES residues in the psf file.
+This keyword is useful when modelling a protein/water system using the
+periodic boundary conditions to prevent the protein from driffting 
+outside of the primary unit cell.  It can be replaced by the IMAGe keyword 
+when the solute is a small organic molecule.
+
+Syntaxis: The Keyword CENT, which is specified in the DYNAmics command 
+line, turns on the recentering option for the system at the start of 
+a dynamics calculation (dcntrl.src) and at each update of the 
+nonbonded list (heuristic.src)
+
+          NCRES int - The first N (int) residues in the psf file,
+                      based on which the system will be centered.

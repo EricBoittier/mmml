@@ -1,0 +1,165 @@
+* CHARMM Testcase lambda_dynam.inp
+* Author: Charles L. Brooks, III
+* Files : top_all22_prot.inp, par_all22_prot.inp, hybrid.rtf, hybrid.prm
+* Tests : lambda dynamics with hybride molecules
+*
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ echo lmbda_dynam TESTCASE RESULT: SKIP
+ stop
+endif
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ echo lmbda_dynam TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+
+open unit 11 read form name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open unit 11 read form name @0hybrid.rtf
+read rtf card append unit 11
+close unit 11
+
+open read unit 11 card name @0par_all22_prot.inp
+read param unit 11 card
+close unit 11
+
+open unit 11 read form name @0hybrid.prm
+read param card append unit 11
+close unit 11
+
+read sequence card
+* hybrid residue
+*
+1
+hybr
+
+! generate the psf and set up ic tables
+gene solu setup first none last none
+
+! modify psf to delete unwanted angles and dihedrals
+dele angl sele atom solu 1 CA2 .or. atom solu 1 HA8 end -
+          sele atom solu 1 CB2 .or. atom solu 1 NB8 .or. -
+               atom solu 1 HB19 .or. atom solu 1 HB20 end
+dele dihe sele atom solu 1 CA2 .or. atom solu 1 HA8 end -
+          sele atom solu 1 CB2 .or. atom solu 1 NB8 .or. -
+               atom solu 1 HB19 .or. atom solu 1 HB20 end   ! R=H and R=NH2
+
+dele angl sele atom solu 1 CA2 .or. atom solu 1 HA8 end -
+          sele atom solu 1 CC2 .or. atom solu 1 CC8 .or. -
+               atom solu 1 HC19 .or. atom solu 1 HC20 .or. -
+               atom solu 1 HC21 end
+dele dihe sele atom solu 1 CA2 .or. atom solu 1 HA8 end -
+          sele atom solu 1 CC2 .or. atom solu 1 CC8 .or. -
+               atom solu 1 HC19 .or. atom solu 1 HC20 .or. -
+               atom solu 1 HC21 end                        ! R=H and R=CH3
+
+dele angl sele atom solu 1 CA2 .or. atom solu 1 HA8 end -
+          sele atom solu 1 CD2 .or. atom solu 1 CLD8 end
+dele dihe sele atom solu 1 CA2 .or. atom solu 1 HA8 end -
+          sele atom solu 1 CD2 .or. atom solu 1 CLD8 end   ! R=H and R=CL
+
+dele angl sele atom solu 1 CB2 .or. atom solu 1 NB8 .or. -
+               atom solu 1 HB19 .or. atom solu 1 HB20 end -
+          sele atom solu 1 CC2 .or. atom solu 1 CC8 .or. -
+               atom solu 1 HC19 .or. atom solu 1 HC20 .or. -
+               atom solu 1 HC21 end
+dele dihe sele atom solu 1 CB2 .or. atom solu 1 NB8 .or. -
+               atom solu 1 HB19 .or. atom solu 1 HB20 end -
+          sele atom solu 1 CC2 .or. atom solu 1 CC8 .or. -
+               atom solu 1 HC19 .or. atom solu 1 HC20 .or. -
+               atom solu 1 HC21 end                        ! R=NH2 and R=CH3
+
+dele angl sele atom solu 1 CB2 .or. atom solu 1 NB8 .or. -
+               atom solu 1 HB19 .or. atom solu 1 HB20 end -
+          sele atom solu 1 CD2 .or. atom solu 1 CLD8 end
+dele dihe sele atom solu 1 CB2 .or. atom solu 1 NB8 .or. -
+               atom solu 1 HB19 .or. atom solu 1 HB20 end -
+          sele atom solu 1 CD2 .or. atom solu 1 CLD8 end    ! R=NH2 and R=CL
+
+dele angl sele atom solu 1 CC2 .or. atom solu 1 CC8 .or. -
+               atom solu 1 HC19 .or. atom solu 1 HC20 .or. -
+               atom solu 1 HC21 end -
+          sele atom solu 1 CD2 .or. atom solu 1 CLD8 end
+dele dihe sele atom solu 1 CC2 .or. atom solu 1 CC8 .or. -
+               atom solu 1 HC19 .or. atom solu 1 HC20 .or. -
+               atom solu 1 HC21 end -
+          sele atom solu 1 CD2 .or. atom solu 1 CLD8 end    ! R=CH3 and R=CL
+
+ic seed 1 C4 1 C5 1 C6
+ic param
+ic build
+
+title
+*  Run w/ solute SHAKEN bonh
+*
+
+fast on
+
+shake bonh param tol 1.0e-6
+
+
+! now invoke the block facility
+
+block 5
+
+call 2 sele atom solu 1 CA2 .or. atom solu 1 HA8 end
+call 3 sele atom solu 1 CB2 .or. atom solu 1 NB8 .or. -
+            atom solu 1 HB19 .or. atom solu 1 HB20 end
+call 4 sele atom solu 1 CC2 .or. atom solu 1 CC8 .or. -
+            atom solu 1 HC19 .or. atom solu 1 HC20 .or. -
+            atom solu 1 HC21 end
+call 5 sele atom solu 1 CD2 .or. atom solu 1 CLD8 end
+
+
+!  blk lamb vel  mass ref_E
+LDIN 1 1.00 0.0  20.0  0.0
+LDIN 2 0.25 0.0  20.0  1.0
+LDIN 3 0.25 0.0  20.0  -7.0
+LDIN 4 0.25 0.0  20.0  -1.6
+LDIN 5 0.25 0.0  20.0  2.5
+
+!RMBOND 
+!RMANGLE
+RMLA BOND THETA
+LDMA               ! key word for convert lambdas into coefficient matrix
+LDBI 0          ! input the total no. of biasing potentials to set up heap
+end
+
+open unit 12 writ form name @9hybr_solv.rst
+open unit 15 writ file name @9hybr_solv.lmd1
+
+dynamics start leap timestep 0.0015 nstep 10 -
+     nprint 1 iprfrq 20 inbfrq 20 imgfrq 20 -
+     firstt 300.0 finalt 300.0 twindl -10.0 twindh 10.0 -
+     teminc 10.0 ihtfrq 200 ieqfrq 20 -
+     iunread -1 iunwri 12 iuncrd -1 iunvel -1 iunldm 15 -
+     nsavc 0 nsavv 0 nsavl 1 isvfrq 1000 -
+     eps 1.0 cutnb 12.4 ctofnb 10.0 ctonnb 8.5 cutim 12.4 -
+     iasors 0 iscvel 0 ichecw 1 vswitch fshift atom vatom
+
+open unit 11 read form name @9hybr_solv.rst
+open unit 12 writ form name @9hybr_solv.rst2
+open unit 15 writ file name @9hybr_solv.lmd2
+
+dynamics restart leap timestep 0.0015 nstep 10 -
+     nprint 1 iprfrq 20 inbfrq 20 imgfrq 20 -
+     firstt 300.0 finalt 300.0 twindl -10.0 twindh 10.0 -
+     teminc 10.0 ihtfrq 200 ieqfrq 50 -
+     iunread 11 iunwri 12 iuncrd -1 iunvel -1 iunldm 15 -
+     nsavc 0 nsavv 0 nsavl 1 isvfrq 1000 -
+     eps 1.0 cutnb 12.4 ctofnb 10.0 ctonnb 8.5 cutim 12.4 -
+     iasors 0 iscvel 0 ichecw 1 vswitch fshift atom vatom
+
+open unit 21 write form name @9hybr_solv.chr2
+write coor card unit 21
+
+@testcheck ?ener 11.5 -1 lambda_dynam
+
+stop

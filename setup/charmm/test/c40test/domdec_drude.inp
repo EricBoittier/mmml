@@ -1,0 +1,127 @@
+* DOMDEC Drude test case, Antti-Pekka Hynninen
+* Modified from input script by Alexey Savelyev
+* Fixes/corrections by Stefan Boresch
+*
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+if ?NUMNODE .lt. 2 then
+   echo "Test NOT performed. This test may take > 5 min. with 1 process."
+   stop
+endif
+
+stream datadir.def
+
+stream @0/toppar_drude_master_protein_2013b.str
+stream @0/toppar_drude_nucleic_acid_2013b_no_rna.str
+
+open read card unit 10 name @0/ecor1_equil_drude.psf
+read psf card unit 10
+close unit 10
+
+open read unit 10 card name @0/ecor1_equil_drude.crd
+read coor unit 10 card
+close unit 10
+
+format (f16.6)
+
+set cutim  13.0  ! cutim
+set cutnb  13.0  ! cutnb
+set ctonnb 9.0  ! ctonnb
+set ctofnb 12.0  ! ctofnb
+set eatom atom
+set etrun switch
+set vatom vatom
+set vtrun vswitch
+! Fixed energy value
+set enerc -48260.091567
+
+crystal define cubic 55  55  55  90.0 90.0 90.0
+crystal build noper 0 cutoff @cutim
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid DNA* end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select (segid SOD .or. segid CLA  .or. segid SOLV) end
+
+update inbfrq -1 imgfrq -1 ihbfrq 0 -
+ewald pmewald kappa 0.34 fftx 64 ffty 64 fftz 64 order 6 lrc -
+@eatom @etrun @vatom @vtrun cutnb @cutnb ctonnb @ctonnb ctofnb @ctofnb -
+cutim @cutim
+
+energy
+coor force comp
+!write coor comp card name force.crd
+calc eold = ?ener
+
+calc diff = abs(?ener - @enerc)
+if diff gt 0.000001 then
+   echo "Test failed, incorrect total in OLD charmm"
+   stop
+endif
+
+energy domdec
+coor force
+!write coor card name force_dd.crd
+coor rms comp
+
+calc diff = abs(?ener - @eold)
+if diff gt 0.0001 then
+   echo "Test failed, incorrect total energy"
+   stop
+endif
+
+if ?rms gt 0.0003 then
+   echo "Test failed, incorrect force"
+   stop
+endif
+
+!-----------------------------------------------------------
+! Test dynamics
+! NOTE: This part under development!
+!-----------------------------------------------------------
+
+scalar fbeta set  5. select ( .not. type D* ) end
+scalar fbeta set 10. select (       type D* ) end
+
+open read unit 10 card name @0/ecor1_equil_drude.crd
+read coor unit 10 card
+close unit 10
+
+SHAKE bonh param tolerance 1.0e-9 -
+      fast water swm4 -
+      select  .not. type D*  end -
+      select  .not. type D*  end
+
+DrudeHardWall L_WALL 0.2 ! set the hard wall at 0.2 Angstrom
+
+!SB: optional: if uncommented, parallel runs with the old code should
+!    reproducible for diff. numbers of cores
+!
+random para
+!
+
+domdec off
+dyna lang start  -
+     nstep 100 time 0.0005 -
+     nprint 10 iprfrq 100 -
+     firstt  240.0 finalt 300.0 iseed 1 2 3 4 -
+     rbuf 0.0 tbath 300. -
+     iunwri -1
+
+open read unit 10 card name @0/ecor1_equil_drude.crd
+read coor unit 10 card
+close unit 10
+
+domdec
+dyna lang start  -
+     nstep 100 time 0.0005 -
+     nprint 10 iprfrq 100 -
+     firstt  240.0 finalt 300.0 iseed 1 2 3 4 -
+     rbuf 0.0 tbath 300. -
+     iunwri -1
+
+echo "Test OK"
+
+stop

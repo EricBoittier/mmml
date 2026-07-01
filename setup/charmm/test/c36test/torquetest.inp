@@ -1,0 +1,204 @@
+* Test Torque Code
+* Author: Jeff Wereszczynski, L. Nilsson
+*
+!!! self-validating test
+! just two atoms, won't work in parallel
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endi
+set failed torquetest
+set status 0
+set tol 0.001
+! reference values
+set xp1  -9.574
+set yp1 -10.407
+set zp1   0.0
+set r1   13.708
+set f1    0.3192
+set xp2   9.780
+set yp2  -8.947  
+set zp2  -4.907
+set r2   13.675
+set f2    0.3668
+
+stream datadir.def
+
+read RTF  card name @0top_all22_na.inp
+read PARA card name @0par_all22_na.inp
+
+read sequence sod 2
+generate MAIN setup
+
+!Put atoms at intial positions in xy-plane
+coor set xdir 10 ydir 10 zdir 0  select bynum 1 end
+coor set xdir 0 ydir 0 zdir 0  select bynum 2 end
+! and fix one at origin
+cons fix sele bynum 2 end
+
+!Apply Torque, in units of pN * A
+pull torque 10 select bynum 1 end zdir 1.0
+pull list
+
+open unit 11 write unform name @9torque1.trj
+! No initial velocities
+coor set  xdir 0 ydir 0 zdir 0 comp
+! Tether moving atom, so we get motion in circle
+resd kval 5000 rval 10 1.0 main 1 sod main 2 sod
+dynamics verlet  strt nstep 100000 nprint 10000 iprfrq 10000 inbfrq 10000 -
+    first 300 finalt 300  nsavc 5000 iunc 11 iasors 1 iasvel 0
+
+!Show final coordinates
+coor print
+coor stat sele bynum 1 end
+calc dd = abs( @xp1 - ?XAVE ) / abs( @xp1 )
+if dd gt @tol then
+set failed x-pos 1
+incr status by 1
+endif
+calc dd = abs( @yp1 - ?YAVE ) / abs( @yp1 )
+if dd gt @tol then
+set failed @failed + y-pos 1
+incr status by 1
+endif
+! Absolute here since zp1=0.0; LNI
+calc dd = abs( @zp1 - ?ZAVE )
+if dd gt @tol then
+set failed @failed + z-pos 1
+incr status by 1
+endif
+
+open unit 10 read unform name @9torque1.trj
+correl maxseries 10
+enter r atom r sele bynum 1 end
+enter pos atom xyz sele bynum 1 end
+traj firstu 10 nunit 1
+show r
+calc dd = abs( @r1 - ?AVER ) / abs( @r1 )
+if dd gt @tol then
+set failed @failed + r-ave 1
+incr status by 1
+endif
+calc dd = abs( @f1 - ?FLUC ) / abs( @f1 )
+if dd gt @tol then
+set failed @failed + r-fluc 1
+incr status by 1
+endif
+
+write pos dumb time unit 6
+*hi
+*
+end
+
+! now use a coor axis definition
+
+pull off
+coor set xdir 0 ydir 0 zdir 25  select bynum 1 end
+coor axis select bynum 1 end
+pull torque 10 select bynum 1 end axis
+pull list
+coor set xdir 10 ydir 10 zdir 0  select bynum 1 end
+coor set  xdir 0 ydir 0 zdir 0 comp
+open unit 11 write unform name @9torque2.trj
+dynamics verlet  strt nstep 100000 nprint 10000 iprfrq 10000 inbfrq 10000 -
+    first 300 finalt 300  nsavc 5000 iunc 11 iasors 1 iasvel 0
+!Show final coordinates
+coor print
+coor stat sele bynum 1 end
+calc dd = abs( @xp1 - ?XAVE ) / abs( @xp1 )
+if dd gt @tol then
+set failed @failed + x-pos 2
+incr status by 1
+endif
+calc dd = abs( @yp1 - ?YAVE ) / abs( @yp1 )
+if dd gt @tol then
+set failed @failed + y-pos 2
+incr status by 1
+endif
+calc dd = abs( @zp1 - ?ZAVE )
+if dd gt @tol then
+set failed @failed + z-pos 2
+incr status by 1
+endif
+
+open unit 10 read unform name @9torque2.trj
+correl maxseries 10
+enter r atom r sele bynum 1 end
+enter pos atom xyz sele bynum 1 end
+traj firstu 10 nunit 1
+show r
+calc dd = abs( @r1 - ?AVER ) / abs( @r1 )
+if dd gt @tol then
+set failed @failed + r-ave 2
+incr status by 1
+endif
+calc dd = abs( @f1 - ?FLUC ) / abs( @f1 )
+if dd gt @tol then
+set failed @failed + r-fluc 2
+incr status by 1
+endif
+
+write pos dumb time unit 6
+*hi
+*
+end
+
+! Add a linear force. 
+pull force 10 zdir 1.0 sele bynum 1 end
+pull list
+coor set xdir 10 ydir 10 zdir 0  select bynum 1 end
+coor set  xdir 0 ydir 0 zdir 0 comp
+open unit 11 write unform name @9torque3.trj
+dynamics verlet  strt nstep 100000 nprint 10000 iprfrq 10000 inbfrq 10000 -
+    first 300 finalt 300  nsavc 5000 iunc 11 iasors 1 iasvel 0
+!Show final coordinates
+coor print
+coor stat sele bynum 1 end
+calc dd = abs( @xp2 - ?XAVE ) / abs( @xp2 )
+if dd gt @tol then
+set failed @failed + x-pos 3
+incr status by 1
+endif
+calc dd = abs( @yp2 - ?YAVE ) / abs( @yp2 )
+if dd gt @tol then
+set failed @failed + y-pos 3
+incr status by 1
+endif
+calc dd = abs( @zp2 - ?ZAVE ) / abs( @zp2 )
+if dd gt @tol then
+set failed @failed + z-pos 3
+incr status by 1
+endif
+
+open unit 10 read unform name @9torque3.trj
+correl maxseries 10
+enter r atom r sele bynum 1 end
+enter pos atom xyz sele bynum 1 end
+traj firstu 10 nunit 1
+show r
+calc dd = abs( @r2 - ?AVER ) / abs( @r2 )
+if dd gt @tol then
+set failed @failed + r-ave 3
+incr status by 1
+endif
+calc dd = abs( @f2 - ?FLUC ) / abs( @f2 )
+if dd gt @tol then
+set failed @failed + r-fluc 3
+incr status by 1
+endif
+
+write pos dumb time unit 6
+*hi
+*
+end
+
+if @status eq 0  then
+ echo torquetest: passed
+else
+ echo torquetest: failed
+ echo torquetest: @status failing tests:
+ echo torquetest: @failed
+endif
+
+
+stop

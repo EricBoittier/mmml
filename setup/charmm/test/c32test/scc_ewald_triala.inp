@@ -1,0 +1,103 @@
+* Trialanine in a water box
+* Illustrate SCC-DFTB/MM with eWald summation for QM/MM interaction
+* Qiang Cui, Univ. of Wisc., Madison, June 2004 
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/scc_ewald_triala> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+bomb -5 
+
+stream datadir.def
+set j triala
+
+OPEN UNIT 21 NAME @0top_qc27.inp" READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+! ...... Same parameter file ...... 
+OPEN UNIT 22 NAME @0par_qc27.inp" READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @0@j_solv.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @0@j_solv.crd READ  FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+NBONDS  ATOM  FSHIFT CDIE  VDW VSHIFT  -
+        CUTNB 13.0  CTOFNB 12.0 CTONNB 10.0  WMIN 1.5  EPS 1.0 -
+        inbfrq -1
+
+shake bonh tol 1.0e-06
+
+SET 6 32.000000
+set p 90.000000
+
+CRYSTAL DEFINE CUBIC @6 @6 @6 @p @p @p
+CRYSTAL BUILD CUTOFF 13.0 NOPERATIONS 0
+
+coor stat 
+
+IMAGE BYRESI XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE RESI TIP3 END
+IMAGE BYSEG  XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE SEGI PEPT END
+
+! ...... Use PME for MM/MM  ...... 
+update EWALD PMEWald KAPPa 0.34 ORDEr 8 - 
+FFTX 32 FFTY 32 FFTZ 32  -
+CTOFNB 12.0 CUTNB 14.0 QCOR 1.0
+
+! ...... Use imal for SCC ...... 
+update imal imgf -1 
+
+shake bonh tol 1.0e-06 
+
+define qm sele segid PEPT end
+
+scalar WMAIN set 1.0 sele (qm) .and. type O*  end 
+scalar WMAIN set 2.0 sele (qm) .and. type N*  end 
+scalar WMAIN set 3.0 sele (qm) .and. type C*  end 
+scalar WMAIN set 4.0 sele (qm) .and. type H*  end 
+
+SCCDFTB remove CHRG 0 SELE qm END TEMP 0.00 SCFT 0.00000001 EWAD - 
+CUTF Kappa 0.34 KMAX 4 KSQMAX 200 ! Use std cutoff for real space
+                                  ! and KMAX 4 for reciprocal (need to
+                                  ! be tested carefully in reality) 
+
+energy
+
+! ...... Some minimizations ...... 
+mini sd nstep 10
+
+! ...... Short MD ...... 
+open unit 25 form write name @9@j_scc_solv_equ.res
+open unit 26 file write name @9@j_scc_solv_equ.dcd
+
+DYNAMICS LEAP VERLET START  NSTEP 100 TIMESTEP 0.001 -
+    ISVFRQ 100 IPRFRQ 100 IHTFRQ 50 IEQFRQ 50 NTRFRQ 100  -
+    IUNREA -1 IUNWRI 25 IUNCRD 26 IUNVEL -1 KUNIT -1 -
+    NPRINT 100 NSAVC 100 NSAVV 0 IHBFRQ 0 INBFRQ -1 IMGFRQ -1 -
+    FIRSTT 100.0 FINALT 300.0 TEMINC 0.0  -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 1 TWINDH 10.0 TWINDL -10.0
+
+close unit 25
+close unit 26
+
+print coor sele segid pept end
+
+OPEN UNIT 3 NAME @9@j_scc_solv_equ.crd WRITe FORM
+WRITe COOR CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @9@j_scc_solv_equ.pdb WRITe FORM
+WRITe COOR PDB  UNIT 3
+CLOSE UNIT 3
+
+stop
+
+

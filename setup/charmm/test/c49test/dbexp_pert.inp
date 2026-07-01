@@ -1,0 +1,234 @@
+* Testcase for PERT with double exponential potential
+* |Xiongwu Wu,   6/28/2023
+* Mutate a residue from asp to ala
+*
+
+
+set test 0
+if ?numnode .eq. 1 incr test by 1
+if ?numnode .eq. 2 incr test by 1
+if ?numnode .eq. 4 incr test by 1
+if ?numnode .eq. 8 incr test by 1
+if @test .eq. 0 then
+  echo "TESTCASE RESULT: SKIP"
+  echo "The DBEXP_PERT test should only be run with 1,2,4,or 8  processes."
+  stop
+endif
+
+bomlev -1  !need to set bomlev because of non-integer charge
+
+stream datadir.def
+
+
+set sys aspw
+set z @0/@sys
+set y @9/@sys
+
+
+! read topology and parameter files
+read rtf card name @0/top_all36_prot.rtf
+
+
+wrnlev 1
+read para card flex name @0/par_all36_prot.prm
+
+wrnlev 5
+
+stream @0/toppar_water_ions.str
+
+
+
+read rtf cards flex append
+* mutation setup (from CHARMM22 protein all-hydrogen parameters)
+*
+   36     1
+
+mass    91 dha    1.00800 h ! ha-like dummy atom
+mass    92 doc    15.9990 c ! OC-like dummy atom
+
+END
+
+
+
+read parameters card  flex append
+* Subset of params, after CHARMM22 All-Hydrogen Parameter File
+*
+
+ATOMS
+mass    91 dha    1.00800 h ! ha-like dummy atom
+mass    92 doc    15.9990 c ! OC-like dummy atom
+
+BONDS
+DOC   HA3    525.000     1.2600 ! ALLOW   PEP POL ARO ION
+DOC   DHA     545.000     0.9600 ! ALLOW   ALC ARO
+
+ANGLES
+DOC   HA3   CT3  40.000    118.00   50.00   2.38800 ! from OC   CC   CT2
+DOC   HA3   CT2A  40.000    118.00   50.00   2.38800 ! from OC   CC   CT2
+DOC   HA3   DOC   100.000    124.00   70.00   2.22500 ! ALLOW   POL ION PEP ARO
+DHA   DOC   HA3     65.000   108.0000 ! ALLOW   ALC ARO
+
+DIHEDRALS
+DOC   HA3   CT2A  HA2      0.1600  3     0.00 ! ALLOW PEP PRO POL
+DOC   HA3   CT2A  CT1      0.1600  3     0.00 ! ALLOW PEP PRO POL
+DOC   HA3   CT3  CT1      0.1600  3     0.00 ! ALLOW PEP PRO POL
+CT3   HA3   DOC  DHA      0.1600  3     0.00 ! ALLOW PEP PRO POL
+DOC   HA3   CT3  HA3      0.1600  3     0.00 ! ALLOW PEP PRO POL
+DOC   HA3   DOC  DHA      0.1600  3     0.00 ! ALLOW PEP PRO POL
+
+IMPROPER
+HA3  CT3  DOC   DOC        0.0200  1     0.00
+
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+                !adm jr., 5/08/91, suggested cutoff scheme
+END
+
+
+!Read in PSF and COR files
+
+open read unit 12 form name @z.psf_0
+read psf card unit 12
+
+open read unit 16 form name @z.cor_0
+read coor unit 16 card
+
+
+
+pert sele resid 1 end
+
+coor print sele resid 1 end
+
+scalar type show sele resid 1 end
+
+scalar type set 92 sele resid 1 .and. type OD1 .or. type OD2 end
+scalar type set 52 sele resid 1 .and. type CB end
+scalar type set 45 sele resid 1 .and. type CG end
+scalar type set 45 sele resid 1 .and. type HB1 .or. type HB2 end
+scalar type set 91 sele resid 1 .and. type HD2 end
+scalar char set 0. sele resid 1 .and. type OD1 .or. type OD2 .or. type HD2 end
+scalar char set 0.09 sele resid 1 .and. type CG .or. type HB1 .or. TYPE HB2 end
+scalar char set -0.27 sele resid 1 .and. type CB end
+
+scalar type show sele resid 1 end
+
+
+calc xl 31.10322
+calc yl 31.10322
+calc zl 31.10322
+
+calc cl 31.10322
+calc nfx  32
+calc nfy  32
+calc nfz  32
+
+
+crystal define cubic @xl @yl @zl 90 90 90
+crystal build cutoff 20
+
+
+! Apply image centering to all water molecules
+
+IMAGE BYSEG XCEN 0 YCEN 0 ZCEN 0 SELE segi pep END
+IMAGE BYRES XCEN 0 YCEN 0 ZCEN 0 SELE .not. segi pep END
+
+
+
+
+! Set nonbonded Options: 3D IPS
+! ---------------------
+nbonds elec atom cdie  vdw -
+       EIPS VIPS PXYZ DBEXP -
+       ctonnb 10.0 ctofnb 12.0 cutnb 14.0 cutim 16 inbfrq 10 imgfrq 20
+
+
+energy
+
+set eng0 ?ENER
+
+
+! Set collision frequency for Langevin dynamics
+SCAL FBETA SET 1 SELE ALL END
+!open read  card unit 88 name scratch/pwind.punit
+open write  file unit 31 name @y.dcd
+open write  card unit 32 name @y.res
+
+SHAKE BONH PARA
+
+dyna  leap LANG strt nstep 120 timestep 0.0010 -
+    iprfrq 100 ihtfrq 0 ieqfrq 50 ntrfrq 0  -
+    iuncrd 31 iunwri 32 iseed 31459 24593 45927 59261 -
+    nprint 10 nsavc 100 nsavv 0 echeck 10 -
+    firstt 300 tbath 300  -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 5.0 twindl -5.0 -
+    wmin 1.0 PEQUIL 2 PINCR 10 LSTA 0 LSTOP 1  LINCR 0.1 LEXP 3
+
+
+set eng1  ?ENER
+
+
+dyna  reset leap LANG strt nstep 120 timestep 0.0010 -
+    iprfrq 100 ihtfrq 0 ieqfrq 50 ntrfrq 0  -
+    iuncrd 31 iunwri 32 iseed 31459 24593 45927 59261 -
+    nprint 10 nsavc 100 nsavv 0 echeck 10 -
+    firstt 300 tbath 300  -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 5.0 twindl -5.0 -
+    wmin 1.0 PEQUIL 2 PINCR 10 LSTA 1 LSTOP 0  LINCR -0.1 LEXP 0 pssp
+
+set eng2 ?ENER
+
+print energy
+
+pert off
+
+
+
+energy
+
+set eng3 ?ENER
+
+
+
+
+if ?numnode eq 1 then
+@qcheck @eng0 -9617.9143  0.1 dbexp_pert_init
+@qcheck @eng1 -9327.3027  0.1 dbexp_pert_dyn1
+@qcheck @eng2 -9174.4334  0.1 dbexp_pert_dyn2
+@qcheck @eng3 -9035.2995  0.1 dbexp_pert_final
+endif
+
+
+if ?numnode eq 2 then
+@qcheck @eng0 -9617.9143  0.1 dbexp_pert_init
+@qcheck @eng1 -9345.1415  0.1 dbexp_pert_dyn1
+@qcheck @eng2 -9228.2761  0.1 dbexp_pert_dyn2
+@qcheck @eng3 -9071.8410  0.1 dbexp_pert_final
+endif
+
+
+if ?numnode eq 4 then
+@qcheck @eng0 -9617.9143  0.1 dbexp_pert_init
+@qcheck @eng1 -9318.4651  0.1 dbexp_pert_dyn1
+@qcheck @eng2 -9220.1300  0.1 dbexp_pert_dyn2
+@qcheck @eng3 -9073.1294  0.1 dbexp_pert_final
+endif
+
+
+if ?numnode eq 8 then
+@qcheck @eng0 -9617.9143  0.1 dbexp_pert_init
+@qcheck @eng1 -9328.9670  0.1 dbexp_pert_dyn1
+@qcheck @eng2 -9176.0846  0.1 dbexp_pert_dyn2
+@qcheck @eng3 -9037.1273  0.1 dbexp_pert_final
+endif
+
+
+if @testfail eq 0 then
+   set status PASS
+else
+   set status FAIL - @testfail failing tests
+endif
+
+echo dbexp_perts summary TESTCASE RESULT: @status
+
+stop

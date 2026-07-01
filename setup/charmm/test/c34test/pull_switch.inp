@@ -1,0 +1,129 @@
+* testing the linearly time-dependent external force
+* Aurore Zyto, June 2006
+*
+
+stream datadir.def
+
+! Topology, parameters and data
+! =============================
+
+open read card unit 10 name @0toph19_eef1.inp
+read rtf  card unit 10
+close unit 10
+
+open read card unit 10 name @0param19_eef1.inp
+read para card unit 10
+close unit 10
+
+
+read sequence card
+* sequence of vpu ( 2-81 ) M66L and M70L 
+* QPIQIAIVAL VVAIIIAIVV WSIVIIEYRK ILRQRKIDRL 
+* IDRLIERAED SGNESEGEIS ALVELGVELG HHAPWDVDDL
+*
+ 36
+! 1   2   3   4   5   6   7   8   9  10
+ GLN PRO ILE GLN ILE ALA ILE VAL ALA LEU 
+ VAL VAL ALA ILE ILE ILE ALA ILE VAL VAL 
+ TRP SER ILE VAL ILE ILE GLU GLY ARG GLY
+ GLY LYS LYS LYS LYS MET
+
+generate PEPA setup warn first NTER last CTER
+
+!
+! Make a Helix
+!
+
+coor stat select type CA end
+set ntot = ?nsel
+
+set i = 1
+
+label ic_edit
+
+calc j = @i - 1
+calc k = @i + 1
+
+if j .ge.  1 then
+IC EDIT
+DIHE @j  C  @i  N  @i CA  @i  C -57.8  ! PHI
+END
+endif
+
+if k .le. @ntot then
+IC EDIT
+DIHE @i  N  @i CA  @i  C  @k  N -47.0  ! PSI
+END
+endif
+
+incr i by 1
+if i .le. @ntot goto ic_edit
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+hbuild
+
+coor stat
+coor orie
+coor stat
+coor rotate ydir  1.0 phi 90.0
+coor stat
+coor trans zdir -?zmin
+coor trans zdir  -30.0
+coor stat
+
+coor trans xdir 1.0 ydir 1.0 dist 10.0
+
+
+! Energy specifications
+! =====================
+
+eef1 setup temp 298.15 unit 1 name @0solvpar.inp
+update ctonnb 7. ctofnb 9. cutnb 12. group rdie inbfrq -1
+
+set fbc 5
+scalar fbeta set @fbc sele .not. hydrogen end
+
+! Pulling specifications
+! ======================
+
+set f 200
+
+! selection by atom number
+set a1 5
+set a2 325
+
+q @a1
+set x1 ?xval
+set y1 ?yval
+set z1 ?zval
+q @a2
+set x2 ?xval
+set y2 ?yval
+set z2 ?zval
+calc xd ( @x2 - @x1 )
+calc yd ( @y2 - @y1 )
+calc zd ( @z2 - @z1 )
+
+pull force @f sforce 0 swit 1 xdir  @xd ydir  @yd zdir  @zd sele bynu @a1 end
+pull force @f sforce 0 swit 1 xdir -@xd ydir -@yd zdir -@zd sele bynu @a2 end
+
+pull list
+
+! Dynamics
+! ========
+
+open write unit 31 card name @9run.rst
+open write unit  1 file name @9run.dcd
+open write unit  7 card name @9run.ene
+
+dynamics start leap langevin nstep 1000 time 0.002 -
+   iprfrq 1000 ihtfrq 0 ieqfrq 0 inbfrq -1 ihbfrq 0 -
+   iunrea -1 iunwri 31 iuncrd 1 kunit 7 -
+   ntrfrq 250 nprint 50 nsavc 1000  -
+   firstt 300.0 finalt 300.0 -
+  ilbfrq 1000 rbuffer 0.0 tbath 300 
+
+stop

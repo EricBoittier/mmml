@@ -1,0 +1,39 @@
+#!/bin/csh 
+
+if ( $1 == "" ) then
+   set newtree="NEWtree"
+else
+   set newtree=$1
+endif
+pushd `dirname $0` >& /dev/null
+cd ..
+setenv myroot `pwd`
+popd >& /dev/null
+
+mkdir $newtree
+pushd $newtree >&/dev/null
+
+ln -s $myroot/install.com .
+ln -s $myroot/configure .
+ln -s $myroot/CMakeLists.txt .
+if ( -d $myroot/.git ) ln -s $myroot/.git .
+mkdir exec lib build test
+echo "Making link $newtree/build/UNX"
+ln -s $myroot/build/UNX build/
+
+foreach i (source tool)
+   echo "Making link $newtree/$i"
+   ln -s $myroot/$i .
+end
+
+echo "Making links in $newtree/test"
+foreach i ($myroot/test/*)
+   if ($i:t != "scratch" && $i:t !~ "output*" && $i:t !~ "fort.*" \
+         && $i:t !~ "*.out" && $i:t !~ "*core*") then
+      ln -s $i test/
+   endif
+end
+
+popd >&/dev/null
+
+exit 0

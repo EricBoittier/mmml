@@ -1,0 +1,90 @@
+#!/bin/csh -f
+# preflx
+# CHARMM source processing utility with prefx
+#
+# Change log:
+# 01-Jan-92 version for CHARMM22
+#           The environmental variable c22host must be set.
+#           The -k switch keeps .fli files.
+# 20-Oct-92 HPUX version support
+# 21-Feb-93 CHARMM 23 version
+# 13-Jan-94 CHARMM23f3/CHARMM24a1 version: remove flexfort and new prefx
+#           
+# Inquiries to Youngdo Won, chmgr@tammy.harvard.edu (617)495-1782
+#-----------------------------------------------------------------------
+#
+if ($?chmhost == 0) then
+  echo " " 
+  echo "preflx> Environment variable chmhost is not defined."
+  exit 1 
+endif
+#
+if ($#argv == 2) then
+  switch ( $1 )
+    case -k:
+      set del = 0
+      shift
+    breaksw
+    default:
+      echo "unknown option: $1"
+      exit 1
+    breaksw
+  endsw
+else
+   set del = 1
+endif
+#
+set source = $1
+set file = $source:r
+set name = $file:t
+#set name = $name:r # Not working with HP-UX 10.20
+set ext = $source:e
+if ($ext != "src") then
+   echo "Extension not .src"
+   exit 1
+endif
+#
+if( -e FOR021.DAT) /bin/rm FOR*.DAT
+
+set rc = 0
+
+# Indicate original .src filename - mkg 2009
+if ( $?GFORTRAN || $?GNU_GFORTRAN ) then
+   # mimic cpp from gcc 4
+   cat > $name.F90 << EOT
+# 1 "$source"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 1 "$source"
+EOT
+else
+   cat > $name.F90 << EOT
+# 1 "$source"
+EOT
+endif
+
+# Temporary directory enables concurrency
+set tmpdir = `mktemp -d prefx.XXXXXX`
+cd "$tmpdir"
+ln -s ../pref.dat ./pref.dat
+
+# Capture any STOP message from prefx
+if ($chmhost == "xt4" ) then
+   (prefx_$chmhost < $source >> ../$name.F90) \
+         |& grep -iv "fortran stop" | grep -iv prefx >& $name.err
+else
+   (prefx_$chmhost < $source >> ../$name.F90) \
+        >& $name.err
+endif
+
+if (! -z $name.err) then
+   set rc = 1
+   echo -n "${source:t}: "
+   cat $name.err
+endif
+
+cat prefx.msg
+cd ..
+/bin/rm -rf "$tmpdir"
+#
+exit $rc

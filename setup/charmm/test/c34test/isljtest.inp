@@ -1,0 +1,114 @@
+* CHARMM Testcase: c34test/isljtest.inp
+* Author: Ed O'Brien
+* Date: January 22, 2007
+* Version: c34a2
+* Test: Example file for independent scaling of Lennard-Jones terms
+*
+ 
+! This script computes the van Der Waals energy
+! as a function of the distance between 2 particles.
+! Use svdwr and svdwa variables to indepently scale
+! the repulsive and attractive terms in the Lennard-Jones
+! equation, and see the energy profile written to datafile
+! '@9vdwr@svdwr_vdwa@svdwa.dat'
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+Bomblev -1
+
+!! Set up temperature run
+set NMAX 300
+set dx 0.05  
+set svdwr 0.5 ! scaling factor for lennard jones repulsive term
+set svdwa 0.5 ! scaling factor for lennard jones attractive term
+
+! read parameter and topology files
+read rtf card
+* Topology file for 4-helix bundle of Guo and Thirumalai
+* modeled after DeGrado et al.
+*
+   28    4
+
+
+MASS    1 B     301.107
+MASS    5 CNT   301.107 ! bogus carbon nanotube atom
+
+RESI ALA 0.00
+GROU
+ATOM CA B       0.00
+PATCHING FIRST NONE LAST NONE
+
+RESI CNT          0.00 ! Bogus carbon nano-tube atom
+GROUP
+ATOM CNT  CNT     0.00
+PATCHING FIRST NONE LAST NONE
+
+END
+
+read param card
+* Parameter file for 3 letter code structure
+*
+
+NBONDed CUTNB 16.0 CTOFNB 14.0 CTONNB 12.0 WMIN 1.5 E14Fac 1.0 EPS 1.0 -
+    ATOM CDIE SWITCH VSWITCH VATOM BYGROUP ! non-bonded potential 
+!                  Special 1-4 columns
+!atom        e_min    r_min/2
+B    0.00    -1       4.0
+CNT  0.00    -1       2.0 !W. A. Steele Surf. Sci vol 36, 317 (1973), sp2 carbon
+
+END
+ 
+read sequence card
+* ALA-CNT
+*
+    2
+ALA CNT
+
+generate CW1
+
+coor set xdir 1.0 dist 0.0  ! place both particles at origin
+
+update CUTNB 999.0 CTOFNB 997.0 CTONNB 995.0
+
+! scale the interaction parameters!
+block 2
+call 2 sele resname CNT end
+! turn off the interactions for atoms in block 1
+! (usually only if atoms are fixed in space)
+coeff 1  1 0.0
+! scaling ratio to scale interactions between block 1 and block 2
+coeff 1  2 1.0 vdwa @svdwa vdwr @svdwr
+! leave interactions within block 2 unchanged
+coeff 2  2 1.0
+end
+
+! file to write to
+open write card unit 22 name @9vdwr@svdwr_vdwa@svdwa.dat
+
+! reset print level
+prnlev 3 @pnode
+
+!==========  start loop to run trajectory  ============
+
+set count 0 
+label loop
+ 
+!!!!!! New Run
+increment count by 1
+calc dist @dx*@count
+ 
+!!! to translate the selection
+COOR translate XDIR @dx YDIR 0 ZDIR 0 sele resname CNT end
+energy
+if ?vdW .le. 2 then
+  write title unit 22
+  * @dist ?vdW
+endif
+
+if @count .lt. @NMAX goto loop
+
+stop

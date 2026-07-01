@@ -1,0 +1,358 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! APH 2012: Tests domdec functionality
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+if ?NUMNODE .lt. 2 then
+   echo "Test NOT performed. This test may take > 5 min. with 1 process."
+   stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+format (f16.6)
+
+! ********* Run old parallel **********
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn1
+goto run_dynamics
+label return_dyn1
+
+shake off
+
+calc eold = ?ener
+calc viriold = ?viri
+calc pressiold = ?prsi
+
+! ********* Run domdec without DLB **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+! **** First, calculate energy once with TEST ****
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb off test
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb off
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn2
+goto run_dynamics
+label return_dyn2
+
+calc edd = ?ener
+calc diff = abs(@eold - @edd)
+echo @diff
+if diff gt 0.000180 then
+   echo "Test failed (Run domdec without DLB)"
+   stop
+endif
+
+calc viridd = ?viri
+calc pressidd = ?prsi
+
+calc diff = abs(@viriold - @viridd)
+echo @diff
+if diff gt 0.0006 then
+   echo "Test failed (Run domdec without DLB)"
+   stop
+endif
+
+calc diff = abs(@pressiold - @pressidd)
+echo @diff
+if diff gt 0.00016 then
+   echo "Test failed (Run domdec without DLB)"
+   stop
+endif
+
+! ********* Run domdec with DLB **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb on
+
+set flag return_dyn3
+goto run_dynamics
+label return_dyn3
+
+calc edlb = ?ener
+calc diff = abs(@eold - @edlb)
+echo @diff
+if diff gt 0.000180 then
+   echo "Test failed"
+   stop
+endif
+
+calc diff = abs(@edd - @edlb)
+echo @diff
+if diff gt 0.0 then
+   echo "Test failed (Run domdec with DLB)"
+   stop
+endif
+
+calc viridlb = ?viri
+calc pressidlb = ?prsi
+
+calc diff = abs(@viridd - @viridlb)
+echo @diff
+if diff gt 0.000002 then
+   echo "Test failed (Run domdec with DLB)"
+   stop
+endif
+
+calc diff = abs(@pressidd - @pressidlb)
+echo @diff
+if diff gt 0.000002 then
+   echo "Test failed (Run domdec with DLB)"
+   stop
+endif
+
+! ********* Translate coorinates and run domdec with DLB **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+! Translate coordinates by 10 FFT box sizes
+coor trans xdir 9.7234375 ydir -9.7234375 zdir 9.7234375
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb on
+
+set flag return_dyn4
+goto run_dynamics
+label return_dyn4
+
+calc edlb = ?ener
+calc diff = abs(@eold - @edlb)
+echo @diff
+if diff gt 0.000180 then
+   echo "Test failed"
+   stop
+endif
+
+calc diff = abs(@edd - @edlb)
+echo @diff
+if diff gt 0.0 then
+   echo "Test failed (Translate coorinates and run domdec with DLB)"
+   stop
+endif
+
+calc viridlb = ?viri
+calc pressidlb = ?prsi
+
+calc diff = abs(@viridd - @viridlb)
+echo @diff
+if diff gt 0.000002 then
+   echo "Test failed (Translate coorinates and run domdec with DLB)"
+   stop
+endif
+
+calc diff = abs(@pressidd - @pressidlb)
+echo @diff
+if diff gt 0.000002 then
+   echo "Test failed (Translate coorinates and run domdec with DLB)"
+   stop
+endif
+
+! ********* Run domdec without direct/recip split **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb off double split off
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn5
+goto run_dynamics
+label return_dyn5
+
+calc edd = ?ener
+calc diff = abs(@eold - @edd)
+echo @diff
+if diff gt 0.000180 then
+   echo "Test failed (Run domdec without direct/recip split)"
+   stop
+endif
+
+calc viridd = ?viri
+calc pressidd = ?prsi
+
+calc diff = abs(@viriold - @viridd)
+echo @diff
+if diff gt 0.0006 then
+   echo "Test failed (Run domdec without direct/recip split)"
+   stop
+endif
+
+calc diff = abs(@pressiold - @pressidd)
+echo @diff
+if diff gt 0.00016 then
+   echo "Test failed (Run domdec without direct/recip split)"
+   stop
+endif
+
+! ********* Run domdec in single precision **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb off single split on
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn6
+goto run_dynamics
+label return_dyn6
+
+calc edd = ?ener
+calc diff = abs(@eold - @edd)
+echo @diff
+if diff gt 0.005 then
+   echo "Test failed (Run domdec in single precision)"
+   stop
+endif
+
+calc viridd = ?viri
+calc pressidd = ?prsi
+
+calc diff = abs(@viriold - @viridd)
+echo @diff
+if diff gt 0.03 then
+   echo "Test failed (Run domdec in single precision)"
+   stop
+endif
+
+calc diff = abs(@pressiold - @pressidd)
+echo @diff
+if diff gt 0.02 then
+   echo "Test failed (Run domdec in single precision)"
+   stop
+endif
+
+! ********* Run domdec on GPU (if available) **********
+if ?domdec_g .eq. 1 then
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb off gpu on
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn7
+goto run_dynamics
+label return_dyn7
+
+calc edd = ?ener
+calc diff = abs(@eold - @edd)
+echo @diff
+if diff gt 0.009 then
+   echo "Test failed (Run domdec on GPU)"
+   stop
+endif
+
+calc viridd = ?viri
+calc pressidd = ?prsi
+
+calc diff = abs(@viriold - @viridd)
+echo @diff
+if diff gt 0.003 then
+   echo "Test failed (Run domdec on GPU)"
+   stop
+endif
+
+calc diff = abs(@pressiold - @pressidd)
+echo @diff
+if diff gt 0.001 then
+   echo "Test failed (Run domdec on GPU)"
+   stop
+endif
+
+endif
+
+echo "Test OK"
+
+stop
+
+! ************************************
+! ******* Run dynamics ***************
+! ************************************
+
+label run_dynamics
+
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 nstep 100 nprint 10 iprfrq 1000 -
+     iseed 123456 nsavc 0 nsavv 0 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 20 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 -
+     hoover reft 298 tmass 250 tbath 298     ! Constant temperature
+
+goto @flag
+

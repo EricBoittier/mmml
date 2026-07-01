@@ -1,0 +1,400 @@
+* CHARMM c35a1 Testcase: facts_p19.inp
+* Author:  Urs Haberthuer/Francois Marchand
+* Date:    18 December 2007
+* Version: c35a1
+* Revised: 12 July 2010
+* Version: c36a4
+* Test:    FACTS
+*
+
+if ?FACTS .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+! --- Begin set definitions ---
+
+stream   datadir.def
+
+set isee 473829
+
+set temp 330.0
+set tcpl 5.0
+
+set psid chan
+
+set frtf toph19.rtf
+set fpar param19.prm
+set fhrs hot.rst
+set fers equ.rst
+set fprs prd.rst
+
+set dtpf @0
+set dhot @9
+set dequ @9
+set dprd @9
+
+! --- End set definitions ---
+
+! --- Begin generation procedure ---
+
+open read card name @dtpf/@frtf unit 30
+read rtf card unit 30
+close unit 30
+
+open read card name @dtpf/@fpar unit 30
+read parameter card unit 30
+close unit 30
+
+read sequence card
+* chan
+*
+21
+ala  arg  asn  asp  cys  gln  glu  gly  his  hsd  ile
+leu  lys  met  phe  pro  ser  thr  trp  tyr  val
+
+generate @psid warn setup
+
+! --- End generation procedure ---
+
+! --- Begin constructing coordinates ---
+
+!ic parameters
+!ic seed 2 ca 2 c 3 n
+!ic build
+
+!mini sd nsteps 500
+!write coor card name fct.crd
+
+!stop
+read coor card
+* CHARMM C35A1 TESTCASE: FACTS_P19.INP
+* AUTHOR:  URS HABERTHUER/FRANCOIS MARCHAND
+* DATE:    18 DECEMBER 2007
+* VERSION: C35A1
+* REVISED: 12 JULY 2010
+* VERSION: C36A4
+* TEST:    FACTS
+*  DATE:     9/ 2/10     15:27:51      CREATED BY USER: brookscl
+*
+  218
+    1    1 ALA  HT1   -4.03115  -3.88505  -0.10721 CHAN 1      0.00000
+    2    1 ALA  HT2   -3.79713  -2.30452  -0.77135 CHAN 1      0.00000
+    3    1 ALA  N     -3.55241  -2.97352  -0.00599 CHAN 1      0.00000
+    4    1 ALA  HT3   -3.81068  -2.48178   0.87108 CHAN 1      0.00000
+    5    1 ALA  CA    -2.10615  -3.05453  -0.06137 CHAN 1      0.00000
+    6    1 ALA  CB    -1.67196  -3.73304  -1.35067 CHAN 1      0.00000
+    7    1 ALA  C     -1.68956  -1.59338  -0.14031 CHAN 1      0.00000
+    8    1 ALA  O     -2.57401  -0.77326  -0.40035 CHAN 1      0.00000
+    9    2 ARG  N     -0.42626  -1.24488   0.08668 CHAN 2      0.00000
+   10    2 ARG  H      0.27130  -1.92133   0.25096 CHAN 2      0.00000
+   11    2 ARG  CA     0.05297   0.13191   0.07271 CHAN 2      0.00000
+   12    2 ARG  CB    -0.41754   0.86013   1.33921 CHAN 2      0.00000
+   13    2 ARG  CG    -0.11883   2.35133   1.35826 CHAN 2      0.00000
+   14    2 ARG  CD    -0.49807   2.95903   2.69165 CHAN 2      0.00000
+   15    2 ARG  NE     0.07840   4.28954   2.81661 CHAN 2      0.00000
+   16    2 ARG  HE     0.72914   4.55003   2.11900 CHAN 2      0.00000
+   17    2 ARG  CZ    -0.23039   5.12392   3.81714 CHAN 2      0.00000
+   18    2 ARG  NH1    0.40952   6.29888   3.88737 CHAN 2      0.00000
+   19    2 ARG  HH11   0.24476   6.97246   4.60890 CHAN 2      0.00000
+   20    2 ARG  HH12   1.14445   6.52756   3.23048 CHAN 2      0.00000
+   21    2 ARG  NH2   -1.16394   4.78170   4.72549 CHAN 2      0.00000
+   22    2 ARG  HH21  -1.42757   5.36820   5.49400 CHAN 2      0.00000
+   23    2 ARG  HH22  -1.63062   3.89343   4.65562 CHAN 2      0.00000
+   24    2 ARG  C      1.57947   0.04382   0.06483 CHAN 2      0.00000
+   25    2 ARG  O      2.12475  -1.02232   0.36436 CHAN 2      0.00000
+   26    3 ASN  N      2.27695   1.12230  -0.28514 CHAN 3      0.00000
+   27    3 ASN  H      1.81298   1.93725  -0.57983 CHAN 3      0.00000
+   28    3 ASN  CA     3.73222   1.21792  -0.23950 CHAN 3      0.00000
+   29    3 ASN  CB     4.34930   0.52223  -1.45840 CHAN 3      0.00000
+   30    3 ASN  CG     5.87118   0.55842  -1.50376 CHAN 3      0.00000
+   31    3 ASN  OD1    6.46172   0.77719  -2.55353 CHAN 3      0.00000
+   32    3 ASN  ND2    6.59649   0.36571  -0.41052 CHAN 3      0.00000
+   33    3 ASN  HD21   6.16678   0.14059   0.43838 CHAN 3      0.00000
+   34    3 ASN  HD22   7.56465   0.47451  -0.52168 CHAN 3      0.00000
+   35    3 ASN  C      4.07874   2.70742  -0.22832 CHAN 3      0.00000
+   36    3 ASN  O      3.18024   3.51604  -0.49254 CHAN 3      0.00000
+   37    4 ASP  N      5.31739   3.08421   0.09804 CHAN 4      0.00000
+   38    4 ASP  H      6.02053   2.41732   0.24722 CHAN 4      0.00000
+   39    4 ASP  CA     5.78233   4.46551   0.21622 CHAN 4      0.00000
+   40    4 ASP  CB     5.36635   5.01404   1.58793 CHAN 4      0.00000
+   41    4 ASP  CG     5.45005   6.52326   1.80118 CHAN 4      0.00000
+   42    4 ASP  OD1    4.80243   6.99507   2.73526 CHAN 4      0.00000
+   43    4 ASP  OD2    6.13889   7.22523   1.05974 CHAN 4      0.00000
+   44    4 ASP  C      7.31462   4.40016   0.14007 CHAN 4      0.00000
+   45    4 ASP  O      7.86551   3.29417   0.30371 CHAN 4      0.00000
+   46    5 CYS  N      8.04877   5.48872  -0.10555 CHAN 5      0.00000
+   47    5 CYS  H      7.58092   6.35989  -0.12028 CHAN 5      0.00000
+   48    5 CYS  CA     9.50923   5.48772  -0.23722 CHAN 5      0.00000
+   49    5 CYS  CB     9.94090   4.72224  -1.48885 CHAN 5      0.00000
+   50    5 CYS  SG    11.73142   4.46282  -1.58712 CHAN 5      0.00000
+   51    5 CYS  C     10.05029   6.91436  -0.32842 CHAN 5      0.00000
+   52    5 CYS  O      9.37083   7.80355  -0.82996 CHAN 5      0.00000
+   53    6 GLN  N     11.30236   7.18544   0.09524 CHAN 6      0.00000
+   54    6 GLN  H     11.91803   6.45525   0.31861 CHAN 6      0.00000
+   55    6 GLN  CA    11.84560   8.53977   0.15468 CHAN 6      0.00000
+   56    6 GLN  CB    11.34228   9.21133   1.42902 CHAN 6      0.00000
+   57    6 GLN  CG    11.45352  10.72955   1.45582 CHAN 6      0.00000
+   58    6 GLN  CD    11.08282  11.35232   2.79496 CHAN 6      0.00000
+   59    6 GLN  OE1   11.62941  12.37266   3.18873 CHAN 6      0.00000
+   60    6 GLN  NE2   10.15475  10.81990   3.57952 CHAN 6      0.00000
+   61    6 GLN  HE21   9.66723  10.02292   3.28730 CHAN 6      0.00000
+   62    6 GLN  HE22  10.01265  11.27448   4.43198 CHAN 6      0.00000
+   63    6 GLN  C     13.37467   8.44835   0.20996 CHAN 6      0.00000
+   64    6 GLN  O     13.88048   7.41251   0.64627 CHAN 6      0.00000
+   65    7 GLU  N     14.10997   9.49612  -0.17348 CHAN 7      0.00000
+   66    7 GLU  H     13.68338  10.34721  -0.41050 CHAN 7      0.00000
+   67    7 GLU  CA    15.57296   9.51063  -0.19859 CHAN 7      0.00000
+   68    7 GLU  CB    16.05870   8.94730  -1.52813 CHAN 7      0.00000
+   69    7 GLU  CG    17.48590   8.41471  -1.47382 CHAN 7      0.00000
+   70    7 GLU  CD    18.14970   8.27293  -2.83370 CHAN 7      0.00000
+   71    7 GLU  OE1   19.22771   8.83691  -3.00609 CHAN 7      0.00000
+   72    7 GLU  OE2   17.59674   7.61434  -3.71326 CHAN 7      0.00000
+   73    7 GLU  C     16.02308  10.97367  -0.08027 CHAN 7      0.00000
+   74    7 GLU  O     15.16064  11.86385  -0.09063 CHAN 7      0.00000
+   75    8 GLY  N     17.31615  11.29752   0.02997 CHAN 8      0.00000
+   76    8 GLY  H     17.99569  10.58547  -0.00893 CHAN 8      0.00000
+   77    8 GLY  CA    17.79201  12.67281   0.14814 CHAN 8      0.00000
+   78    8 GLY  C     19.30747  12.72132   0.32026 CHAN 8      0.00000
+   79    8 GLY  O     19.88616  11.78326   0.86875 CHAN 8      0.00000
+   80    9 HIS  N     19.98058  13.80741  -0.08251 CHAN 9      0.00000
+   81    9 HIS  H     19.49607  14.62585  -0.32298 CHAN 9      0.00000
+   82    9 HIS  CA    21.44145  13.87667  -0.12910 CHAN 9      0.00000
+   83    9 HIS  CB    21.91306  13.21660  -1.43074 CHAN 9      0.00000
+   84    9 HIS  CG    23.42302  13.09848  -1.57152 CHAN 9      0.00000
+   85    9 HIS  ND1   24.24389  13.96023  -2.15504 CHAN 9      0.00000
+   86    9 HIS  HD1   24.00333  14.77108  -2.64664 CHAN 9      0.00000
+   87    9 HIS  CD2   24.16626  12.05444  -1.07524 CHAN 9      0.00000
+   88    9 HIS  NE2   25.40027  12.35521  -1.38529 CHAN 9      0.00000
+   89    9 HIS  CE1   25.45688  13.49455  -2.02903 CHAN 9      0.00000
+   90    9 HIS  C     21.88253  15.34351  -0.10486 CHAN 9      0.00000
+   91    9 HIS  O     21.06715  16.21218  -0.41882 CHAN 9      0.00000
+   92   10 HSD  N     23.14134  15.66119   0.23304 CHAN 10     0.00000
+   93   10 HSD  H     23.78990  14.95175   0.44058 CHAN 10     0.00000
+   94   10 HSD  CA    23.66970  17.02543   0.26041 CHAN 10     0.00000
+   95   10 HSD  CB    23.24912  17.73143   1.55608 CHAN 10     0.00000
+   96   10 HSD  CG    23.60490  19.21151   1.58100 CHAN 10     0.00000
+   97   10 HSD  ND1   24.71711  19.62391   2.15756 CHAN 10     0.00000
+   98   10 HSD  CE1   24.73061  20.91683   1.91883 CHAN 10     0.00000
+   99   10 HSD  CD2   22.89966  20.21484   0.98638 CHAN 10     0.00000
+  100   10 HSD  NE2   23.66024  21.25097   1.22196 CHAN 10     0.00000
+  101   10 HSD  HE2   23.49483  22.15253   0.87959 CHAN 10     0.00000
+  102   10 HSD  C     25.19983  16.95007   0.17320 CHAN 10     0.00000
+  103   10 HSD  O     25.74682  15.85685   0.34098 CHAN 10     0.00000
+  104   11 ILE  N     25.91892  18.04568  -0.10667 CHAN 11     0.00000
+  105   11 ILE  H     25.47141  18.91818  -0.17009 CHAN 11     0.00000
+  106   11 ILE  CA    27.37718  18.08147  -0.22592 CHAN 11     0.00000
+  107   11 ILE  CB    27.84238  17.37909  -1.54333 CHAN 11     0.00000
+  108   11 ILE  CG2   27.32271  18.09747  -2.79132 CHAN 11     0.00000
+  109   11 ILE  CG1   29.35671  17.17522  -1.58066 CHAN 11     0.00000
+  110   11 ILE  CD    29.87902  16.34440  -2.77094 CHAN 11     0.00000
+  111   11 ILE  C     27.82073  19.55080  -0.16475 CHAN 11     0.00000
+  112   11 ILE  O     26.99721  20.43708  -0.42954 CHAN 11     0.00000
+  113   12 LEU  N     29.07460  19.86149   0.17417 CHAN 12     0.00000
+  114   12 LEU  H     29.72247  19.14656   0.36447 CHAN 12     0.00000
+  115   12 LEU  CA    29.59737  21.22559   0.25285 CHAN 12     0.00000
+  116   12 LEU  CB    29.15011  21.85547   1.58364 CHAN 12     0.00000
+  117   12 LEU  CG    29.31073  23.34983   1.87583 CHAN 12     0.00000
+  118   12 LEU  CD1   28.13976  23.83201   2.71268 CHAN 12     0.00000
+  119   12 LEU  CD2   30.62849  23.67591   2.56654 CHAN 12     0.00000
+  120   12 LEU  C     31.12194  21.12972   0.17668 CHAN 12     0.00000
+  121   12 LEU  O     31.67073  20.05008   0.41806 CHAN 12     0.00000
+  122   13 LYS  N     31.83732  22.20673  -0.16598 CHAN 13     0.00000
+  123   13 LYS  H     31.38268  23.04948  -0.38864 CHAN 13     0.00000
+  124   13 LYS  CA    33.29652  22.24499  -0.18835 CHAN 13     0.00000
+  125   13 LYS  CB    33.83120  21.59724  -1.47351 CHAN 13     0.00000
+  126   13 LYS  CG    35.33908  21.37495  -1.46638 CHAN 13     0.00000
+  127   13 LYS  CD    35.84086  20.83116  -2.78938 CHAN 13     0.00000
+  128   13 LYS  CE    37.35797  20.76874  -2.73073 CHAN 13     0.00000
+  129   13 LYS  NZ    37.89618  20.22268  -3.96013 CHAN 13     0.00000
+  130   13 LYS  HZ1   38.93416  20.21356  -3.89953 CHAN 13     0.00000
+  131   13 LYS  HZ2   37.54615  19.25256  -4.09062 CHAN 13     0.00000
+  132   13 LYS  HZ3   37.60241  20.81222  -4.76463 CHAN 13     0.00000
+  133   13 LYS  C     33.71504  23.71640  -0.14826 CHAN 13     0.00000
+  134   13 LYS  O     32.89111  24.58597  -0.44990 CHAN 13     0.00000
+  135   14 MET  N     34.95564  24.03439   0.22430 CHAN 14     0.00000
+  136   14 MET  H     35.58290  23.33519   0.50782 CHAN 14     0.00000
+  137   14 MET  CA    35.49122  25.39046   0.18085 CHAN 14     0.00000
+  138   14 MET  CB    35.18447  26.11525   1.49285 CHAN 14     0.00000
+  139   14 MET  CG    34.99258  27.61485   1.30401 CHAN 14     0.00000
+  140   14 MET  SD    34.73663  28.50882   2.85638 CHAN 14     0.00000
+  141   14 MET  CE    36.14869  29.57520   2.80603 CHAN 14     0.00000
+  142   14 MET  C     37.00546  25.26983  -0.01614 CHAN 14     0.00000
+  143   14 MET  O     37.52372  24.14760  -0.08838 CHAN 14     0.00000
+  144   15 PHE  N     37.72188  26.39134  -0.13829 CHAN 15     0.00000
+  145   15 PHE  H     37.26044  27.25775  -0.15949 CHAN 15     0.00000
+  146   15 PHE  CA    39.17739  26.46716  -0.25931 CHAN 15     0.00000
+  147   15 PHE  CB    39.60932  25.99371  -1.66342 CHAN 15     0.00000
+  148   15 PHE  CG    41.10357  25.73852  -1.83936 CHAN 15     0.00000
+  149   15 PHE  CD1   41.72750  24.72385  -1.13419 CHAN 15     0.00000
+  150   15 PHE  CD2   41.84153  26.54104  -2.68981 CHAN 15     0.00000
+  151   15 PHE  CE1   43.08889  24.53509  -1.26437 CHAN 15     0.00000
+  152   15 PHE  CE2   43.20169  26.34370  -2.81352 CHAN 15     0.00000
+  153   15 PHE  CZ    43.82733  25.34546  -2.09912 CHAN 15     0.00000
+  154   15 PHE  C     39.53031  27.95121  -0.06551 CHAN 15     0.00000
+  155   15 PHE  O     38.61650  28.78338  -0.13660 CHAN 15     0.00000
+  156   16 PRO  N     40.76197  28.37754   0.26757 CHAN 16     0.00000
+  157   16 PRO  CD    41.70508  27.63379   1.09206 CHAN 16     0.00000
+  158   16 PRO  CA    41.19281  29.77361   0.17592 CHAN 16     0.00000
+  159   16 PRO  CB    42.62057  29.74186   0.70419 CHAN 16     0.00000
+  160   16 PRO  CG    43.01571  28.28555   0.69839 CHAN 16     0.00000
+  161   16 PRO  C     41.10279  30.38127  -1.22410 CHAN 16     0.00000
+  162   16 PRO  O     40.98057  29.66986  -2.22109 CHAN 16     0.00000
+  163   17 SER  N     41.20588  31.70579  -1.31233 CHAN 17     0.00000
+  164   17 SER  H     41.55505  32.23328  -0.56352 CHAN 17     0.00000
+  165   17 SER  CA    40.91856  32.44514  -2.52916 CHAN 17     0.00000
+  166   17 SER  CB    39.39668  32.58582  -2.64193 CHAN 17     0.00000
+  167   17 SER  OG    38.95432  33.20259  -3.84320 CHAN 17     0.00000
+  168   17 SER  HG    38.00200  33.08592  -3.91798 CHAN 17     0.00000
+  169   17 SER  C     41.60137  33.80758  -2.40120 CHAN 17     0.00000
+  170   17 SER  O     42.21487  34.09296  -1.36483 CHAN 17     0.00000
+  171   18 THR  N     41.51548  34.65215  -3.43009 CHAN 18     0.00000
+  172   18 THR  H     40.96186  34.40584  -4.20764 CHAN 18     0.00000
+  173   18 THR  CA    42.11594  35.97948  -3.46261 CHAN 18     0.00000
+  174   18 THR  CB    43.67275  35.89323  -3.48579 CHAN 18     0.00000
+  175   18 THR  OG1   44.15989  37.22093  -3.32052 CHAN 18     0.00000
+  176   18 THR  HG1   45.10044  37.19404  -3.12155 CHAN 18     0.00000
+  177   18 THR  CG2   44.25345  35.25688  -4.74675 CHAN 18     0.00000
+  178   18 THR  C     41.55774  36.69917  -4.69291 CHAN 18     0.00000
+  179   18 THR  O     40.95084  36.06393  -5.56345 CHAN 18     0.00000
+  180   19 TRP  N     41.75560  38.01474  -4.78217 CHAN 19     0.00000
+  181   19 TRP  H     42.30632  38.45972  -4.09711 CHAN 19     0.00000
+  182   19 TRP  CA    41.28458  38.83727  -5.88696 CHAN 19     0.00000
+  183   19 TRP  CB    39.75823  39.03205  -5.81818 CHAN 19     0.00000
+  184   19 TRP  CG    39.16880  39.74600  -7.03021 CHAN 19     0.00000
+  185   19 TRP  CD2   39.09333  39.28559  -8.31786 CHAN 19     0.00000
+  186   19 TRP  CE2   38.57888  40.35247  -8.97755 CHAN 19     0.00000
+  187   19 TRP  CE3   39.23045  38.05212  -8.90617 CHAN 19     0.00000
+  188   19 TRP  CD1   38.70202  41.04356  -6.94437 CHAN 19     0.00000
+  189   19 TRP  NE1   38.34907  41.38895  -8.16583 CHAN 19     0.00000
+  190   19 TRP  HE1   38.05525  42.28137  -8.44470 CHAN 19     0.00000
+  191   19 TRP  CZ2   38.15892  40.30752 -10.28218 CHAN 19     0.00000
+  192   19 TRP  CZ3   38.82966  37.97511 -10.23248 CHAN 19     0.00000
+  193   19 TRP  CH2   38.30702  39.07803 -10.90650 CHAN 19     0.00000
+  194   19 TRP  C     41.98540  40.18854  -5.77900 CHAN 19     0.00000
+  195   19 TRP  O     42.45134  40.56791  -4.70207 CHAN 19     0.00000
+  196   20 TYR  N     42.07396  40.92345  -6.88545 CHAN 20     0.00000
+  197   20 TYR  H     41.70894  40.58976  -7.73474 CHAN 20     0.00000
+  198   20 TYR  CA    42.62357  42.26868  -6.92814 CHAN 20     0.00000
+  199   20 TYR  CB    44.15898  42.22014  -6.99784 CHAN 20     0.00000
+  200   20 TYR  CG    44.83415  43.58581  -6.94492 CHAN 20     0.00000
+  201   20 TYR  CD1   44.78624  44.34199  -5.78838 CHAN 20     0.00000
+  202   20 TYR  CE1   45.31542  45.61598  -5.77650 CHAN 20     0.00000
+  203   20 TYR  CD2   45.44922  44.08417  -8.07722 CHAN 20     0.00000
+  204   20 TYR  CE2   45.97431  45.35858  -8.07087 CHAN 20     0.00000
+  205   20 TYR  CZ    45.88594  46.11931  -6.92567 CHAN 20     0.00000
+  206   20 TYR  OH    46.34185  47.41980  -6.94664 CHAN 20     0.00000
+  207   20 TYR  HH    45.89431  47.83212  -7.69914 CHAN 20     0.00000
+  208   20 TYR  C     42.05510  42.90366  -8.19316 CHAN 20     0.00000
+  209   20 TYR  O     41.67064  42.18531  -9.12388 CHAN 20     0.00000
+  210   21 VAL  N     41.94036  44.22703  -8.16988 CHAN 21     0.00000
+  211   21 VAL  H     42.18527  44.74106  -7.37129 CHAN 21     0.00000
+  212   21 VAL  CA    41.63322  45.06996  -9.31323 CHAN 21     0.00000
+  213   21 VAL  CB    40.15845  45.57341  -9.33506 CHAN 21     0.00000
+  214   21 VAL  CG1   39.92131  46.53785 -10.49203 CHAN 21     0.00000
+  215   21 VAL  CG2   39.16440  44.43477  -9.48809 CHAN 21     0.00000
+  216   21 VAL  C     42.59366  46.23728  -9.07404 CHAN 21     0.00000
+  217   21 VAL  OT1   42.61551  46.77988  -7.96498 CHAN 21     0.00000
+  218   21 VAL  OT2   43.36767  46.54978  -9.97205 CHAN 21     0.00000
+
+! --- End constructing coordinates ---
+
+! --- Begin setting up FACTS ---
+
+! Use the FACTS standard setup for PARAM19.
+
+set diele 2.0
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vshift -
+      cutnb 9.0 ctofnb 7.5 ctonnb 6.5 e14fac 0.4 wmin 1.5
+
+scalar wmain = radius
+scalar wmain set 1.0 selection (type h*) end
+
+facts tcps 19 teps @diele gamm 0.015
+
+! --- End setting up FACTS ---
+
+! --- Begin minimization ---
+
+minimize sd   nstep 100 nprint 20 tolgrad 0.1
+minimize conj nstep 100 nprint 20 tolgrad 0.1
+
+! --- End minimization ---
+
+! --- Begin testing energy and its gradient ---
+
+test first step 0.000005 tolerance 0.0000000001
+
+! --- End testing energy and its gradient ---
+
+! --- Begin heating procedure ---
+
+open write card name @dhot/@fhrs unit 11
+
+shake bonh parameters tol 1.0e-10
+
+dynamics leap start timestp 0.002 nstep 100 -
+         inbfrq 10 ihbfrq 0 -
+         ihtfrq 5  ieqfrq 0 -
+         iprfrq 50 -
+         iunrea -1 iunwri 11 iuncrd -1 iunvel -1 kunit -1 -
+         isvfrq 1000 nsavc 0 nsavv 0 nprint 10 -
+         firstt 100.0 finalt @temp teminc 5.0 -
+         ichecw 0 twindl -10.0 twindh 10.0 -
+         iasors 1 iasvel 1 -
+         iseed @isee
+
+close unit 11
+
+! --- End heating procedure ---
+
+! --- Begin equilibration procedure ---
+
+open read  card name @dhot/@fhrs unit 10
+
+open write card name @dequ/@fers unit 11
+
+shake bonh parameters tol 1.0e-10
+
+dynamics leap restart timestp 0.002 nstep 100 -
+         inbfrq 10 ihbfrq 0 -
+         ihtfrq 0  ieqfrq 5 -
+         iprfrq 50 -
+         iunrea 10 iunwri 11 iuncrd -1 iunvel -1 kunit -1 -
+         isvfrq 200 nsavc 0 nsavv 0 nprint 10 -
+         firstt @temp finalt @temp teminc 0.0 -
+         ichecw 1 twindl -10.0 twindh 10.0 -
+         iasors 1 iasvel 1
+
+close unit 10
+close unit 11
+
+! --- End equilibration procedure ---
+
+! --- Begin production procedure ---
+
+open read  card name @dequ/@fers unit 10
+
+open write card name @dprd/@fprs unit 11
+
+shake bonh parameters tol 1.0e-10
+
+dynamics leap restart timestp 0.002 nstep 100 -
+         inbfrq 10 ihbfrq 0 -
+         ihtfrq 0  ieqfrq 0 -
+         iprfrq 50 -
+         iunrea 10 iunwri 11 iuncrd -1 iunvel -1 kunit -1 -
+         isvfrq 100 nsavc 0 nsavv 0 nprint 10 -
+         firstt @temp finalt @temp teminc 0.0 -
+         ichecw 0 twindl -10.0 twindh 10.0 -
+         iasors 1 iasvel 1 -
+         tconst tcoupling @tcpl treference @temp
+
+close unit 10
+close unit 11
+
+! --- End production procedure ---
+
+
+stop

@@ -1,0 +1,276 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! APH March 2014: Tests domdec functionality in NPT simulation
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+if ?NUMNODE .lt. 2 then
+   echo "Test NOT performed. This test may take > 5 min. with 1 process."
+   stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+Crystal define ortho 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+format (f16.6)
+
+! ********* Reference results ******************
+open write card unit 51 name @9domdec_npt_refbasic.str
+write title unit 51
+* SET EREF    -68670.958293
+* SET VIRIREF    -10477.359321
+* SET PRESSIREF      -250.094435
+* SET AREF        61.421526
+* SET BREF        61.883556
+* SET CREF        61.726411
+*
+
+close unit 51
+
+open write card unit 51 name @9domdec_npt_refarea.str
+write title unit 51
+* SET EREF    -68907.440717
+* SET VIRIREF     -8721.919807
+* SET PRESSIREF       258.449517
+* SET AREF        62.230000
+* SET BREF        62.230000
+* SET CREF        60.098975
+*
+
+close unit 51
+
+
+! ********* Run old parallel **********
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+shake fast bonh tol 1.0e-8 para
+
+! *** Basic constant pressure
+set name oldbasic
+set psetup pconstant pmass 400.0 pref 1.0 pgamma 20.0
+
+set flag return_odyn1
+goto run_dynamics
+label return_odyn1
+
+set name basic
+calc etol = 0.0001
+calc vtol = 0.0001
+calc ptol = 0.0001
+calc atol = 0.0001
+calc btol = 0.0001
+calc ctol = 0.0001
+set flag return_ocheck1
+goto check_results
+label return_ocheck1
+
+! *** Constant normal pressure, constant area
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+crystal define ortho 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+set name oldarea
+set psetup pconstant pmzz 225.0 pmxx 0.0 pmyy 0.0 pref 1.0
+
+set flag return_odyn2
+goto run_dynamics
+label return_odyn2
+
+set name area
+set flag return_ocheck2
+goto check_results
+label return_ocheck2
+
+shake off
+
+! ********* Run domdec **********
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+crystal define ortho 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec
+
+shake fast bonh tol 1.0e-8 para
+
+! *** Basic constant pressure
+set name basic
+set psetup pconstant pmass 400.0 pref 1.0 pgamma 20.0
+
+set flag return_dyn1
+goto run_dynamics
+label return_dyn1
+
+calc etol = 0.0003
+calc vtol = 0.0002
+calc ptol = 0.0001
+set flag return_check1
+goto check_results
+label return_check1
+
+! *** Constant normal pressure, constant area
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+crystal define ortho 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+set name area
+set psetup pconstant pmzz 225.0 pmxx 0.0 pmyy 0.0 pref 1.0
+
+set flag return_dyn2
+goto run_dynamics
+label return_dyn2
+
+calc etol = 0.003
+calc vtol = 0.002
+calc ptol = 0.001
+set flag return_check2
+goto check_results
+label return_check2
+
+echo "Test OK"
+
+stop
+
+! ************************************
+! ******* Run dynamics ***************
+! ************************************
+
+label run_dynamics
+
+! Run dynamics in periodic box
+dynamics cpt leap start timestep 0.002 nstep 100 nprint 10 iprfrq 1000 -
+     iseed 123456 nsavc 0 nsavv 0 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 20 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 -
+     hoover reft 298 tmass 250 tbath 298 -
+     echeck -1 @psetup
+
+! Save results to a file
+!open write card unit 51 name @9domdec_npt_@name.str
+!write title unit 51
+!* set eold ?ener
+!* set viriold ?viri
+!* set pressiold ?prsi
+!* set aold ?xtla
+!* set bold ?xtlb
+!* set cold ?xtlc
+!*
+!
+!close unit 51
+
+goto @flag
+
+! ************************************
+! ******* Check results **************
+! ************************************
+
+label check_results
+
+stream @9domdec_npt_ref@name.str
+
+calc val = ?ener
+calc diff = abs(@eref - @val)
+echo @diff
+if diff gt @etol then
+   echo "Test failed"
+   stop
+endif
+
+calc val = ?viri
+calc diff = abs(@viriref - @val)
+echo @diff
+if diff gt @vtol then
+   echo "Test failed"
+   stop
+endif
+
+calc val = ?prsi
+calc diff = abs(@pressiref - @val)
+echo @diff
+if diff gt @ptol then
+   echo "Test failed"
+   stop
+endif
+
+calc val = ?xtla
+calc diff = abs(@aref - @val)
+echo @diff
+if diff gt @atol then
+   echo "Test failed"
+   stop
+endif
+
+calc val = ?xtlb
+calc diff = abs(@bref - @val)
+echo @diff
+if diff gt @btol then
+   echo "Test failed"
+   stop
+endif
+
+calc val = ?xtlc
+calc diff = abs(@cref - @val)
+echo @diff
+if diff gt @ctol then
+   echo "Test failed"
+   stop
+endif
+
+goto @flag

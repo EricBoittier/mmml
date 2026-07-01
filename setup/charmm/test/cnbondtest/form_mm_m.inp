@@ -1,0 +1,129 @@
+* form_mm_m.inp
+* Bernard R. Brooks, 14-Jul-1997
+* calculate group-group energy (nonbonded) of 2 formamides
+*
+
+bomlev -4
+stream datadir.def
+
+open read unit 11 card name @0amino3h.rtf
+read rtf card unit 11
+close unit 11
+open read unit 12 card name @0param20.prm
+read param card unit 12
+close unit 12
+
+stream  @0mmff_setup.str
+
+read sequence card
+* formamide
+*
+2
+amn cbx
+
+generate frm1 setup       nodi ! noan ! mmff
+generate frm2 duplicate frm1 setup  
+
+open read form unit 19 name @0form_mm.crd
+read coor card unit 19
+close unit 19
+
+prnlev 6
+
+!!!!!!!!!!!!
+! First do CDIE tests
+        
+                    set 1  ATOM  CDIE  SWITCH   VSWITCH CTONNB  5.0  
+set 7 form_cdie_sw
+stream @0form_mm.str
+        
+                    set 1  ATOM  CDIE  SWITCH   VSWITCH CTONNB 10.0  
+set 7 form_cdie_tr
+stream @0form_mm.str
+        
+                    set 1  ATOM  CDIE  SHIFT   VSHIFT  CTONNB  5.0  
+set 7 form_cdie_sh
+stream @0form_mm.str
+
+                    set 1  ATOM  CDIE  FSHIFT   VSHIFT  CTONNB  5.0  
+set 7 form_cdie_fsh
+stream @0form_mm.str
+       
+                    set 1  ATOM  CDIE  TRUNC    VTRNC   CTONNB  5.0  
+set 7 form_cdie_trnc
+stream @0form_mm.str
+       
+                    set 1  ATOM  CDIE  MSHIFT   VSHIFT  CTONNB  5.0  
+set 7 form_cdie_msh
+stream @0form_mm.str
+       
+                    set 1  ATOM  CDIE  FSHIFT   VSHIFT  CTONNB  5.0  
+set 7 form_cdie_fsh
+stream @0form_mm.str
+       
+!!!!!!!!!!!!!!!
+! Now do RDIE tests
+
+                    set 1  ATOM  RDIE  SWITCH   VSWITCH CTONNB  5.0  
+set 7 form_rdie_sw
+stream @0form_mm.str
+        
+                    set 1  ATOM  RDIE  SWITCH   VSWITCH CTONNB 10.0  
+set 7 form_rdie_tr
+stream @0form_mm.str
+        
+                    set 1  ATOM  RDIE  SHIFT   VSHIFT  CTONNB  5.0  
+set 7 form_rdie_sh
+stream @0form_mm.str
+       
+                    set 1  ATOM  RDIE  TRUNC    VTRNC   CTONNB  5.0  
+set 7 form_rdie_trnc
+stream @0form_mm.str
+       
+                    set 1  ATOM  RDIE  MSHIFT   VSHIFT  CTONNB  5.0  
+set 7 form_rdie_msh
+stream @0form_mm.str
+
+stop
+
+!!!   NO GROUP CODE FOR MMFF
+
+!!!!!!!!!
+! do group-group CDIE tests
+        
+                    set 1  GROUP CDIE  SWITCH   VSWIT CTONNB  5.0  
+set 7 form_cdie_gr_sw
+stream @0form_mm.str
+        
+                    set 1  GROUP CDIE  SWITCH   VSWITCH CTONNB 10.0  
+set 7 form_cdie_gr_tr
+stream @0form_mm.str
+        
+                    set 1  GROUP CDIE  FSWITCH  VSWIT  CTONNB  5.0  
+set 7 form_cdie_gr_fsw
+stream @0form_mm.str
+       
+                    set 1  GROUP CDIE  FSWITCH  VSWIT CTONNB 10.0  
+set 7 form_cdie_gr_ftr
+stream @0form_mm.str
+
+!!!!!!!!!
+! do group-group RDIE tests
+        
+                    set 1  GROUP RDIE  SWITCH   VSWIT CTONNB  5.0  
+set 7 form_rdie_gr_sw
+stream @0form_mm.str
+        
+                    set 1  GROUP RDIE  SWITCH   VSWITCH CTONNB 10.0  
+set 7 form_rdie_gr_tr
+stream @0form_mm.str
+        
+                    set 1  GROUP RDIE  FSWITCH  VSWIT  CTONNB  5.0  
+set 7 form_rdie_gr_fsw
+stream @0form_mm.str
+       
+                    set 1  GROUP RDIE  FSWITCH  VSWIT CTONNB 10.0  
+set 7 form_rdie_gr_ftr
+stream @0form_mm.str
+
+stop

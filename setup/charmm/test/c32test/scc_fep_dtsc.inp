@@ -1,0 +1,142 @@
+* Redox potential calculations for FAD in Cholesterol oxidase
+* using the dual-topology-single-coordinate QM/MM-FEP  approach
+* This test case was made using a simple FSHIFT for MM interactions
+* which is NOT the recommended approach for actual computation of 
+* redox potentials. However, the script is useful for illustrating 
+* SCC-DFTB/MM FEP with DTSC (J. Phys. Chem. B 107, 8643-8653 (2003))
+* Guohui Li and Qiang Cui, Univ. of Wisc., Madison, June 2003
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/scc_fep_dtsc> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+stream datadir.def
+fast off ! made automatic in new implementation
+
+set 3 300.0
+set j chox
+
+set la  ONE
+set lam 1.0
+
+! ...... Used special top/par because of FAD ...... 
+OPEN UNIT 21 NAME @0top_qc27.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_qc27.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @0@j_sb_scal_q.psf READ FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @0@j_minimized.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+NBONDS  ATOM  FSHIFT CDIE  VDW VSHIFT  -
+        CUTNB 13.0  CTOFNB 12.0 CTONNB 8.0  WMIN 1.5  EPS 1.0 -
+        inbfrq -1
+
+! ...... Constrain file in the stochastic boundary framework ...... 
+OPEN UNIT 3 NAME @0@j_sb_q.cns READ FORM
+READ  COOR COMP CARD UNIT 3
+CLOSE UNIT 3
+
+scalar xcomp store 4
+scalar ycomp store 5
+scalar zcomp store 6
+
+!friction for Langevin dynamics
+scalar FBETA recall 6
+
+! ...... Reference structure (x-ray) for harminc constraint - for the
+! ...... buffer region only ...... 
+OPEN UNIT 3 NAME @0@j_sb_q-min.crd READ  FORM
+READ  COOR COMP CARD UNIT 3
+CLOSE UNIT 3
+
+! ...... Set up harmonic cons for boundary atoms ......
+cons harmonic force 1.0 exponent 2 sele recall 4 end COMP
+scalar CONST recall 5
+
+! Replicate the FAD portion
+define qm1 sele segid COFA .and. (type FC1 .or. type FC2 .or. type FC3 .or. -
+        type FC4 .or. type FC5 .or. type FC6 .or. -
+        type FC8 .or. type FC9 .or. type FC11 .or. -
+        type FC13 .or. type FC15 .or. type FC16 .or. -
+        type FN7 .or. type FN10 .or. type FN12 .or. -
+        type FN14 .or. type FO17 .or. type FO18 .or. -
+        type FH19 .or. type FH20 .or. type FH21 .or. -
+        type FH22 .or. type FH23 .or. type FH24 .or. -
+        type FH25 .or. type FH26 .or. type FH27 .or. -
+        type FC28 .or. type FH30 .or. type FH31 .or. type qq*)  end
+
+replicate R NREP 1 select qm1 end
+delete atom select qm1 end
+
+open unit 15 form read name @0wat25.pot
+sbound read unit 15
+! stochastic boundary conditions
+! note that we HAVE to do this AFTER replica/deletion because SBOUND
+! does NOT update indices if psf is changed
+sbound set xref 0.0 yref 0.0 zref 0.0 -
+       assign 1 sele (segid bul* .and. resn tip3 .and. type OH2 ) end
+close unit 15
+
+define qm select segid R1 end
+
+scalar WMAIN set 1.0 sele (qm) .and. type O*  SHOW end
+scalar WMAIN set 2.0 sele (qm) .and. type N*  SHOW end
+scalar WMAIN set 3.0 sele (qm) .and. type C*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type H*  SHOW end
+! ...... Fix for FAD ......
+scalar WMAIN set 1.0 sele (qm) .and. type FO*  SHOW end
+scalar WMAIN set 2.0 sele (qm) .and. type FN*  SHOW end
+scalar WMAIN set 3.0 sele (qm) .and. type FC*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type FH*  SHOW end
+! ...... Fix for QQ ......
+scalar WMAIN set 4.0 sele (qm) .and. type QQ*  SHOW end
+
+print coor sele qm end
+
+open unit 31 form writ name @9chox_dvdl.dat
+
+SCCDFTB lamd outp 31 STOP -
+  remove SELE qm END TEMP 0.00 SCFT 0.00000001 chrg  0 -! oxidized state
+  init @lam pass 0 step 20 -
+  tico 0.1 tiav 5 -                                     
+                     TEMP 0.00 SCFT 0.00000001 chrg -1 -! reduced  state
+  sele segid R1 end -
+  sele segid R1 end
+
+energy
+
+! ---------------- Run MD/LD ------------------
+
+shake bonh tolerance 1.0e-06 MXIT 1500
+
+! ...... Now run it ......
+open unit 24 form read  name @0@j_st_equ_@la.res
+open unit 25 form write name @9@j_st_dyn0_@la.res
+open unit 26 file write name @9@j_st_dyn0_@la.dcd
+
+dynamics lang rest timestep 0.001 nstep 100 nprint 10 iprfrq 10 -
+    tstruc @3 finalt @3 TEMINC 0.0 twindl -10.0 twindh 10.0 -
+    IHTFRQ 0 IEQFRQ 0 NTRFRQ 0 ISVFRQ 100 -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 1 -
+    iunrea 24 iunwri 25 iuncrd 26 iunvel -1 kunit -1 nsavc 50 nsavv 0 -
+    inbfrq -1 imgfrq 0 ilbfrq 20 ihbfrq 0 tbath @3 rbuffer 22.0
+
+close unit 24
+close unit 25
+close unit 26
+
+stop
+

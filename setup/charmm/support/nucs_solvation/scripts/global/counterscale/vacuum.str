@@ -1,0 +1,11 @@
+* vacuum.str, last modified May/10/2004
+* By Sonja M. Schwarzl & Stefan Fischer
+* Calculation of electrostatic interaction energy in vacuum
+*
+
+SCAL CHARGE = SCA3
+INTEraction SELE group END SELE .NOT. group END
+SET EVAC = ?ELEC
+SCAL SCA5 SET @EVAC SELECT group END
+
+RETURN

@@ -1,0 +1,123 @@
+* Based in input of Maryam and Luis
+* Heating and Equilibrium Run
+*
+prnlev 5 node 0
+bomlev -1
+wrnlev 1
+
+!#########################################
+! Tasks
+!#########################################
+
+! >=1 : Do it, or
+! = 0 : Do not
+set mini 0
+set equi 0
+set nve 0
+
+!#########################################
+! Setup System
+!#########################################
+
+stream datadir.def
+
+! Read topology and parameter files
+open read card unit 10 name @0top_all36_cgenff.rtf
+read  rtf card unit 10
+
+open read card unit 20 name @0par_all36_cgenff.prm
+read para card unit 20
+
+! Read PSF
+open read unit 10 card name @0mescn.psf
+read psf  unit 10 card xplor
+
+!Read Coordinate
+open read unit 10 card name @0mescn.crd
+read coor unit 10 card
+
+!#########################################
+! Bonded/Non-bonded Options & Constraints
+!#########################################
+
+! Default energy
+energy
+
+! Copy csv file from data
+system "cp data/scnlig.csv ."
+
+! RKHS potential for MeSCN
+TKRN ACTI scnlig 16 0 0 jzrd -
+  hartree bohr - ! equivalent to: ecnv 627.50947388 pcnv 1.88972612 -
+  sele resname LIG .and. type N end -
+  sele resname LIG .and. type C2 end -
+  sele resname LIG .and. type S end
+
+energy
+
+! H-bond constraint
+shake bonh para sele all end
+
+!#########################################
+! Minimization
+!#########################################
+
+if @mini .gt. 0 then
+
+  mini abnr nstep 1000 nprint 100
+
+endif
+
+!#########################################
+! Heating
+!#########################################
+
+if @equi .gt. 0 then
+
+shake bonh para sele all end
+
+open write unit 31 card name heat.res       ! Restart file
+
+dyna leap verlet start -
+   timestp 0.001 nstep 1000 -
+   firstt 200 finalt 300 tbath 300 -
+   ihtfrq 100 teminc 10 ieqfrq 0 -
+   iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+   nprint 1000 ntrfrq 200 -
+   iseed  609408 584966 509158 955922 -
+   iunrea -1 iunwri 31 iuncrd -1 iunvel -1
+
+open read  unit 30 card name heat.res       ! Restart file
+open write unit 31 card name equi.res       ! Restart file
+
+dyna leap verlet restart -
+   timestp 0.001 nstep 1000 -
+   ihtfrq 0 teminc 0 ieqfrq 0 -
+   nprint 1000 iprfeq 1000 nsavc 400 ntrfrq 200 -
+   iunrea 30 iunwri 31 iuncrd -1 iunvel -1
+
+endif
+
+!#########################################
+! NVE
+!#########################################
+
+if @nve .gt. 0 then
+
+open read  unit 30 card name equi.res      ! Restart file
+
+dyna restart verlet nstep 1000 timestp 0.001 -
+  nprint 100 nsavc 10 ntrfrq 100 -
+  iprfrq 4000 inbfrq 10 imgfrq 50 ixtfrq 1000 -
+  ihtfrq 0 ieqfrq 0 -
+  iunrea 30 iunwri -1 iuncrd -1 iunvel -1
+
+close unit 30
+
+endif
+
+! (Re)Move generated kernel files 
+system "mv scnlig.kernel scratch/."
+
+STOP
+

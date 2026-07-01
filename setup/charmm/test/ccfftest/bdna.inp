@@ -1,0 +1,23 @@
+* Script file to test calculation of DNA fragment with CFF forcefield
+*
+
+stream datadir.def
+bomlev -1
+
+USE CFF
+
+OPEN READ UNIT 20 CARD NAME @0cff93.frc
+READ PARA UNIT 20 CARD
+CLOSE UNIT 20
+
+OPEN READ UNIT 20 CARD NAME @0bdna.psf
+READ PSF UNIT 20 CARD
+CLOSE UNIT 20
+
+OPEN READ UNIT 20 CARD NAME @0bdna.crd
+READ COOR UNIT 20 CARD
+CLOSE UNIT 20
+
+energy CUTNB 200.0 CTONNB 199.0 CTOFNB 199.5 CDIE
+
+STOP

@@ -1,0 +1,8 @@
+ iop=-2 jop=-2 iform=2 igeom=1 kitscf=1000 idiis=0 nprint=-3 +
+ kharge=0 mprint=-5 mminp=2 numatm=3 mmcoup=2 mmpot=7 mmfile=-1 ipsana=-1 
+qmmm
+
+ 8   4.99681 1   3.71685 1  -2.10958 1
+ 1   5.77191 1   3.40235 1  -1.64423 1
+ 1   5.31729 1   3.94655 1  -2.98179 1
+   0     0.0000000000 0     0.0000000000 0     0.0000000000 0

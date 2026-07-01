@@ -1,0 +1,164 @@
+* Testcase for MRMD module
+* Decomposition of H2SO4 after vibrational excitation
+* Author: Tibor Nagy (22.01.14)
+*
+if ?MRMD .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode gt 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+BOMBlevel -5
+PRNLevel 8 NODE 0
+
+!=====================================================================
+! READ TOPOLOGY
+!=====================================================================
+READ RTF CARD
+* H2SO4 topology
+*
+22     1
+MASS     1 H      1.00800 
+MASS     2 S     32.06000 
+MASS     3 O1    15.99940  ! S=O
+MASS     4 O2    15.99940  ! S-O-H
+
+AUTOgenerate ANGLes DIHEdral
+
+RESI  SULF    0.00000   
+GROUp   ! charges are reparameterized in mrmd_h2so4.par  
+ATOM  S    S    1.602962  
+ATOM O1   O1   -0.631022 
+ATOM O2   O1   -0.631023 
+ATOM O3   O2   -0.465146 
+ATOM H1    H    0.294679 
+ATOM O4   O2   -0.465121 
+ATOM H2    H    0.294671 
+BOND  S   O1     
+BOND  S   O2
+BOND  S   O3
+BOND  S   O4 
+BOND O3   H1
+BOND O4   H2 
+PATCHing FIRSt NONE LAST NONE 
+END
+
+!=====================================================================
+! READ PARAMETERS
+!=====================================================================
+READ PARAmeter CARD
+* custom H2SO4 parameter file
+*
+BONDs     ! bonds are (re)parameterized in mrmd_h2so4.par
+S    O1  0.000  1.439633  
+S    O2  0.000  1.619838  
+O2   H   0.000  0.978391  
+
+ANGLes    ! angles are (re)parameterized in mrmd_h2so4.par
+S  O2 H     0.000  130.722533
+O1 S  O2    0.000  101.440918 
+O1 S  O1    0.000  126.811990 
+O2 S  O2    0.000   90.598171 
+                          
+DIHEdrals ! dihedrals are (re)parameterized in mrmd_h2so4.par
+O1 S O2 H      0.000  1     0.00 
+O1 S O2 H      0.000  2   180.00
+O1 S O2 H      0.000  3     0.00
+O2 S O2 H      0.000  1     0.00
+O2 S O2 H      0.000  2   180.00
+O2 S O2 H      0.000  3     0.00
+                          
+IMPRopers ! impropers are defined in mrmd_h2so4.par
+                          
+NBONded       -  
+NBXMod 5      - ! 1-4 special vdW, 1-(>4) vdW
+ATOM          - ! atom based electrostatic interaction
+CDIElec       - ! constant dielectric 
+SHIFted       - ! shifted electrostatic potential
+VATOM         - ! atom based vdW interaction
+VSWItched     - ! switched vdW interaction 
+CUTNB 999     - ! inclusion into non-bonded list cutoff at 999A
+CTOFNB 989    - ! non-bonded cutoff, complete switch off at 989A
+CTONNB 979    - ! non-bonded cutoff, complete switch on at 979A
+EPS 1.000     - ! relative permitivity with respect to vacuum
+E14Factor 1.0 - ! 1.0 scaling factor for 1-4 electrostatic interaction
+WMIN 1.0        ! warning cutoff for minimum atom to atom distance
+
+!ATOM  IGNORED    EPSILON     RMIN/2   IGNORED   EPS,1-4  RMIN/2,1-4
+H     0.000000   -0.0000      0.225
+S     0.000000   -0.0000      2.0
+O1    0.000000   -0.0000      1.77
+O2    0.000000   -0.0000      1.700
+END
+
+!=====================================================================
+! GENERATE PSF 
+!=====================================================================
+READ SEQUence CARD
+* H2SO4 residues                                                      
+* 
+1
+SULF
+
+GENErate MAIN SETUp
+
+!=====================================================================
+! READ INITIAL COORDINATES  
+!=====================================================================
+READ COOR CARD
+* H2SO4 coordinates
+*
+    7
+    1    1 SULF S      0.01449  -0.01401  -0.04300 MAIN 1      0.00000
+    2    1 SULF O1     0.67926  -1.01632   0.77473 MAIN 1      0.00000
+    3    1 SULF O2     0.09322   0.09972  -1.48006 MAIN 1      0.00000
+    4    1 SULF O3     0.17284   1.24228   0.69363 MAIN 1      0.00000
+    5    1 SULF H1     0.57586   1.90810   0.18236 MAIN 1      0.00000
+    6    1 SULF O4    -1.63201  -0.35006  -0.29449 MAIN 1      0.00000
+    7    1 SULF H2    -2.11912  -1.07910  -0.21527 MAIN 1      0.00000
+    
+!=====================================================================
+! READ INITIAL VELOCITIES  
+!======================================================================
+READ COOR CARD COMP
+* H2SO4 velocities
+*
+    7
+    1    1 SULF S      0.02376  -0.58810   0.23402 MAIN 1      0.00000
+    2    1 SULF O1     0.34775   0.04040  -0.00857 MAIN 1      0.00000
+    3    1 SULF O2    -0.35388   0.05227  -0.04802 MAIN 1      0.00000
+    4    1 SULF O3    -0.46474   0.13506  -0.43154 MAIN 1      0.00000
+    5    1 SULF H1    -3.17141   0.05590   2.44049 MAIN 1      0.00000
+    6    1 SULF O4     0.56120   0.72970  -0.08588 MAIN 1      0.00000
+    7    1 SULF H2     0.98188   3.45230  -0.77250 MAIN 1      0.00000
+
+!=====================================================================
+! LOAD REACTIVE PES
+!=====================================================================
+UPDAte
+OPEN UNIT 11 READ  CARD NAME @0mrmd_h2so4.par
+OPEN UNIT 12 WRITe CARD NAME @9mrmd_h2so4.pdb
+MRMD UPAR 11 UCRG 12 PRDY 100
+
+!=====================================================================
+! RUN FREE DYNAMICS
+!=====================================================================
+OPEN UNIT 13 WRITe UNFOrmatted NAME @9mrmd_h2so4.dcd       
+
+DYNA LEAPfrog VERLet -  ! run dynamics with Leapfrog Verlet integrator
+STARt                -  ! start new simulation 
+NSTEp 1000           -  ! number of integration step   
+TIMEstp 0.0001       -  ! integrator time step
+NPRInt 20            -  ! print energy after every 20 integrator step
+NSAVc 20             -  ! save geometry after every 20 integrator step
+IUNCrd 13            -  ! save geometry to unit 13
+IPRFrq 20            -  ! print energy after every 20 integrator step 
+IASOrs 1             -  ! assign velocities
+IASVel 0                ! take velocities from comparison coordinate
+
+stop

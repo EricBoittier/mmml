@@ -1,0 +1,127 @@
+* CHARMM 29 testcase eef1_2ndderiv.inp
+* Ioan Andricioaei, April 2002
+* Test of the analytical 2nd derivatives of EEF1
+* Note that, in order for test second (as well as test first) the
+* lookup table has to be replaced by exact formula in misc/eef1.src
+*
+
+! MFC eef1 not parallel ?
+! if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+! endif
+
+stream datadir.def
+
+open read card unit 3 name @0toph19_eef1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0param19_eef1.inp
+read para unit 3 card 
+close unit 3
+
+! Generate the PSF
+read sequence card
+* blocked alanine
+*
+   3
+ACE ALA CBX
+
+generate main setup
+
+! Build the missing coordinates
+
+ic param
+ic print
+
+ic seed 2 n     2 ca    2 C       
+ic build
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+!
+eef1 setup temp 298.15 unit 93 name @0solvpar.inp
+update ctonnb 7. ctofnb 9. cutnb 11. group rdie
+
+skip none
+
+mini sd   nstep 1000  nprint 500
+mini abnr nstep 500  nprint 50
+
+skip all excl asp
+energy
+!test first  step 1.0E-8 tol 1.0E-8
+test second step 1.0E-8 tol -1.0E-8 !negativ tol forces all diffs to be printd
+
+skip none 
+skip all excl vdw
+energy
+!test first  step 1.0E-8 tol 1.0E-8
+test second step 1.0E-8 tol -1.0E-8
+
+skip none
+skip asp
+energy
+!test first  step 1.0E-8 tol 1.0E-8
+test second step 1.0E-8 tol -1.0E-8
+
+skip none
+
+!This command prints out solvation free energy for each atom
+eef1 print
+
+!shake bonh
+
+dynamics verlet timestep 0.001 nstep 3000 nprint 100 iprfrq 100 -
+      firstt 100 finalt 300 twindh 10.0 ieqfrq 200 ichecw 1 -
+      iasors 0 iasvel 1 inbfrq 10 iseed 54858769 3485955 7795875 7868697 
+
+energy
+!test first  step 1.0E-8 tol 1.0E-8
+test second step 1.0E-8 tol -1.0E-8
+
+!test 2nd deriv only for EEF1 again (after dyna)
+skip none
+skip all excl asp
+energy
+!test first  step 1.0E-8 tol 1.0E-8
+test second step 1.0E-8 tol -1.0E-8
+
+skip none
+mini sd nsteps 100
+mini abnr nsteps 200
+
+!test 2nd deriv of all terms again (after dyna+mini)
+energy
+!test first  step 1.0E-8 tol 1.0E-8
+test second step 1.0E-8 tol -1.0E-8
+
+!test 2nd deriv only for EEF1 again (after dyna+mini)
+skip none
+skip all excl asp
+energy
+!test first  step 1.0E-8 tol 1.0E-8
+test second step 1.0E-8 tol -1.0E-8
+
+
+inte sele resid 1 end sele resid 2 end
+
+!the command below is not equivalent to energy 
+inte sele all end
+
+!the command below is not equivalent to energy 
+inte sele all end
+
+energy
+skip asp
+energy
+
+stop
+
+
+
+
+
+
+

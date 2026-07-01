@@ -1,0 +1,299 @@
+* Beta Harpin in implicit solvent
+*                   by H. Lee Woodcock, 08/2006
+* modified for standard CHARMM test of replica exchange with REPDSTR
+*                   by  Milan Hodoscek, Xiongwu Wu, 03/2010
+* modified for standard CHARMM test of self-guiding replica exchange (RXSGLD)
+*                   by Xiongwu Wu, 07/2011
+* It uses implicit solvent: See a note on that below.
+* it needs the following external files:
+* shared by other testcases: scpism.inp,top...,par...
+* special for this test: NONE
+*
+
+
+if ?repdstr .ne. 1 then
+ echo "rxsgld.inp> Test NOT performed."
+ echo "See repdstr.doc for proper compile procedure."
+ stop
+endif
+
+if ?numnode .ne. 4 then
+ echo "rxsgld.inp> Test NOT performed."
+ echo "This test only is reproducable with exactly 4 processors"
+ stop
+endif
+
+stre datadir.def
+
+set nreps ?numnode
+
+open read card unit 1 name @0top_all22_prot.inp
+read rtf card unit 1
+
+open read card unit 2 name @0par_all22_prot.inp
+read parameter card unit 2
+
+open read unit 10 card name @0scpism.inp
+
+
+read sequ card
+* sequence
+*
+    9
+tyr gln asn pro asp gly ser gln ala
+
+generate pep setup
+
+read coor card
+* PROTEIN COORDINATE
+*  DATE:     9/20/ 1     10: 3: 0      CREATED BY USER: xiongwu
+*
+  126
+    1    1 TYR  N    -12.55678  -3.65868   0.15395 PEP  1      0.00000
+    2    1 TYR  HT1  -13.49999  -3.65893   0.58745 PEP  1      0.00000
+    3    1 TYR  HT2  -11.97641  -4.42850   0.55665 PEP  1      0.00000
+    4    1 TYR  HT3  -12.62956  -3.83757  -0.86903 PEP  1      0.00000
+    5    1 TYR  CA   -11.82522  -2.36584   0.39697 PEP  1      0.00000
+    6    1 TYR  HA   -12.32990  -1.58218  -0.15443 PEP  1      0.00000
+    7    1 TYR  CB   -11.82321  -2.06368   1.92966 PEP  1      0.00000
+    8    1 TYR  HB1  -12.86248  -2.02398   2.32307 PEP  1      0.00000
+    9    1 TYR  HB2  -11.27237  -2.85016   2.49094 PEP  1      0.00000
+   10    1 TYR  CG   -11.19674  -0.72625   2.25052 PEP  1      0.00000
+   11    1 TYR  CD1  -11.86575   0.46425   1.91836 PEP  1      0.00000
+   12    1 TYR  HD1  -12.83976   0.44279   1.45501 PEP  1      0.00000
+   13    1 TYR  CE1  -11.29133   1.70776   2.21139 PEP  1      0.00000
+   14    1 TYR  HE1  -11.80582   2.62876   1.97312 PEP  1      0.00000
+   15    1 TYR  CZ   -10.04885   1.77818   2.83709 PEP  1      0.00000
+   16    1 TYR  OH    -9.54767   3.05358   3.15132 PEP  1      0.00000
+   17    1 TYR  HH    -8.58670   2.98391   3.30815 PEP  1      0.00000
+   18    1 TYR  CD2   -9.93647  -0.64483   2.87632 PEP  1      0.00000
+   19    1 TYR  HD2   -9.40632  -1.54472   3.15427 PEP  1      0.00000
+   20    1 TYR  CE2   -9.35834   0.60451   3.16149 PEP  1      0.00000
+   21    1 TYR  HE2   -8.39988   0.66463   3.65835 PEP  1      0.00000
+   22    1 TYR  C    -10.42069  -2.51070  -0.16424 PEP  1      0.00000
+   23    1 TYR  O     -9.98215  -3.63848  -0.35936 PEP  1      0.00000
+   24    2 GLN  N     -9.71785  -1.40854  -0.46407 PEP  2      0.00000
+   25    2 GLN  HN   -10.03628  -0.47069  -0.29423 PEP  2      0.00000
+   26    2 GLN  CA    -8.34659  -1.44093  -0.91860 PEP  2      0.00000
+   27    2 GLN  HA    -7.78311  -2.15898  -0.33591 PEP  2      0.00000
+   28    2 GLN  CB    -8.25839  -1.75998  -2.43652 PEP  2      0.00000
+   29    2 GLN  HB1   -8.81168  -2.71343  -2.59710 PEP  2      0.00000
+   30    2 GLN  HB2   -8.77771  -0.95875  -3.00792 PEP  2      0.00000
+   31    2 GLN  CG    -6.81799  -1.94769  -2.98325 PEP  2      0.00000
+   32    2 GLN  HG1   -6.25962  -0.98721  -2.95493 PEP  2      0.00000
+   33    2 GLN  HG2   -6.26148  -2.67628  -2.35483 PEP  2      0.00000
+   34    2 GLN  CD    -6.73250  -2.46098  -4.42727 PEP  2      0.00000
+   35    2 GLN  OE1   -5.64887  -2.62859  -4.97608 PEP  2      0.00000
+   36    2 GLN  NE2   -7.88290  -2.72999  -5.07984 PEP  2      0.00000
+   37    2 GLN  HE21  -7.77879  -3.06596  -6.01222 PEP  2      0.00000
+   38    2 GLN  HE22  -8.75622  -2.57371  -4.63968 PEP  2      0.00000
+   39    2 GLN  C     -7.81349  -0.05994  -0.59910 PEP  2      0.00000
+   40    2 GLN  O     -8.60175   0.86652  -0.42272 PEP  2      0.00000
+   41    3 ASN  N     -6.49459   0.11799  -0.48452 PEP  3      0.00000
+   42    3 ASN  HN    -5.82440  -0.60738  -0.66344 PEP  3      0.00000
+   43    3 ASN  CA    -5.89051   1.40193  -0.22207 PEP  3      0.00000
+   44    3 ASN  HA    -6.41598   2.15228  -0.79422 PEP  3      0.00000
+   45    3 ASN  CB    -5.89418   1.66325   1.31554 PEP  3      0.00000
+   46    3 ASN  HB1   -6.36562   0.79776   1.83490 PEP  3      0.00000
+   47    3 ASN  HB2   -4.85548   1.73353   1.70207 PEP  3      0.00000
+   48    3 ASN  CG    -6.65921   2.90951   1.77473 PEP  3      0.00000
+   49    3 ASN  OD1   -6.91016   3.03914   2.97187 PEP  3      0.00000
+   50    3 ASN  ND2   -7.07753   3.83556   0.88004 PEP  3      0.00000
+   51    3 ASN  HD21  -7.51327   4.65709   1.23633 PEP  3      0.00000
+   52    3 ASN  HD22  -7.11661   3.60292  -0.08789 PEP  3      0.00000
+   53    3 ASN  C     -4.49090   1.28692  -0.83265 PEP  3      0.00000
+   54    3 ASN  O     -4.18598   0.19888  -1.31577 PEP  3      0.00000
+   55    4 PRO  N     -3.64022   2.30556  -0.91087 PEP  4      0.00000
+   56    4 PRO  CD    -3.89243   3.65593  -0.41224 PEP  4      0.00000
+   57    4 PRO  HD1   -4.72643   4.11149  -0.98642 PEP  4      0.00000
+   58    4 PRO  HD2   -4.12275   3.62017   0.67687 PEP  4      0.00000
+   59    4 PRO  CA    -2.26203   2.12540  -1.35308 PEP  4      0.00000
+   60    4 PRO  HA    -2.22761   1.46110  -2.20589 PEP  4      0.00000
+   61    4 PRO  CB    -1.84938   3.57054  -1.68515 PEP  4      0.00000
+   62    4 PRO  HB1   -2.21767   3.82294  -2.70440 PEP  4      0.00000
+   63    4 PRO  HB2   -0.75068   3.72645  -1.65585 PEP  4      0.00000
+   64    4 PRO  CG    -2.58282   4.41419  -0.63516 PEP  4      0.00000
+   65    4 PRO  HG1   -2.73471   5.46342  -0.95497 PEP  4      0.00000
+   66    4 PRO  HG2   -2.00023   4.39221   0.31543 PEP  4      0.00000
+   67    4 PRO  C     -1.37848   1.53604  -0.25181 PEP  4      0.00000
+   68    4 PRO  O     -1.78189   1.52875   0.91148 PEP  4      0.00000
+   69    5 ASP  N     -0.17383   1.07088  -0.62202 PEP  5      0.00000
+   70    5 ASP  HN     0.12707   1.12750  -1.56790 PEP  5      0.00000
+   71    5 ASP  CA     0.84938   0.52513   0.24709 PEP  5      0.00000
+   72    5 ASP  HA     0.79647   1.00295   1.21861 PEP  5      0.00000
+   73    5 ASP  CB     0.65555  -1.01727   0.36011 PEP  5      0.00000
+   74    5 ASP  HB1   -0.39307  -1.23254   0.65270 PEP  5      0.00000
+   75    5 ASP  HB2    0.85221  -1.50868  -0.61206 PEP  5      0.00000
+   76    5 ASP  CG     1.54336  -1.67279   1.40613 PEP  5      0.00000
+   77    5 ASP  OD1    1.53630  -2.92679   1.46198 PEP  5      0.00000
+   78    5 ASP  OD2    2.26188  -0.93547   2.12726 PEP  5      0.00000
+   79    5 ASP  C      2.18169   0.92076  -0.41343 PEP  5      0.00000
+   80    5 ASP  O      2.18250   1.50170  -1.50363 PEP  5      0.00000
+   81    6 GLY  N      3.34791   0.64134   0.20031 PEP  6      0.00000
+   82    6 GLY  HN     3.28430   0.12793   1.07689 PEP  6      0.00000
+   83    6 GLY  CA     4.63713   0.97949  -0.39967 PEP  6      0.00000
+   84    6 GLY  HA1    4.67003   2.05508  -0.49356 PEP  6      0.00000
+   85    6 GLY  HA2    4.69233   0.46477  -1.34721 PEP  6      0.00000
+   86    6 GLY  C      5.85090   0.58366   0.41548 PEP  6      0.00000
+   87    6 GLY  O      6.00002   0.95945   1.57006 PEP  6      0.00000
+   88    7 SER  N      6.80311  -0.16306  -0.19454 PEP  7      0.00000
+   89    7 SER  HN     6.73829  -0.39540  -1.15904 PEP  7      0.00000
+   90    7 SER  CA     7.97143  -0.67595   0.52477 PEP  7      0.00000
+   91    7 SER  HA     8.12718  -0.08791   1.41965 PEP  7      0.00000
+   92    7 SER  CB     7.74331  -2.15284   0.94996 PEP  7      0.00000
+   93    7 SER  HB1    6.73512  -2.21232   1.42623 PEP  7      0.00000
+   94    7 SER  HB2    7.73470  -2.81545   0.05500 PEP  7      0.00000
+   95    7 SER  OG     8.72498  -2.59825   1.88910 PEP  7      0.00000
+   96    7 SER  HG1    8.43120  -3.45005   2.22972 PEP  7      0.00000
+   97    7 SER  C      9.25780  -0.54514  -0.29044 PEP  7      0.00000
+   98    7 SER  O      9.22119  -0.29607  -1.49503 PEP  7      0.00000
+   99    8 GLN  N     10.42953  -0.68499   0.36509 PEP  8      0.00000
+  100    8 GLN  HN    10.42378  -0.98942   1.32043 PEP  8      0.00000
+  101    8 GLN  CA    11.75847  -0.52965  -0.20592 PEP  8      0.00000
+  102    8 GLN  HA    11.80270  -1.05167  -1.15198 PEP  8      0.00000
+  103    8 GLN  CB    12.10147   0.97933  -0.38508 PEP  8      0.00000
+  104    8 GLN  HB1   11.24854   1.43251  -0.94061 PEP  8      0.00000
+  105    8 GLN  HB2   12.14073   1.44683   0.62342 PEP  8      0.00000
+  106    8 GLN  CG    13.40383   1.30787  -1.16873 PEP  8      0.00000
+  107    8 GLN  HG1   14.30266   1.01419  -0.58489 PEP  8      0.00000
+  108    8 GLN  HG2   13.42950   0.74201  -2.12374 PEP  8      0.00000
+  109    8 GLN  CD    13.54387   2.79238  -1.53072 PEP  8      0.00000
+  110    8 GLN  OE1   14.23865   3.18698  -2.46346 PEP  8      0.00000
+  111    8 GLN  NE2   12.84073   3.67542  -0.78634 PEP  8      0.00000
+  112    8 GLN  HE21  12.94748   4.63309  -1.02962 PEP  8      0.00000
+  113    8 GLN  HE22  12.25933   3.33671  -0.05594 PEP  8      0.00000
+  114    8 GLN  C     12.73475  -1.20486   0.75492 PEP  8      0.00000
+  115    8 GLN  O     12.39782  -1.40230   1.92299 PEP  8      0.00000
+  116    9 ALA  N     13.93648  -1.58462   0.29598 PEP  9      0.00000
+  117    9 ALA  HN    14.30578  -1.39424  -0.61602 PEP  9      0.00000
+  118    9 ALA  CA    14.98457  -2.15969   1.09702 PEP  9      0.00000
+  119    9 ALA  HA    15.04949  -1.64738   2.04642 PEP  9      0.00000
+  120    9 ALA  CB    14.78375  -3.67726   1.28609 PEP  9      0.00000
+  121    9 ALA  HB1   13.82801  -3.87367   1.81188 PEP  9      0.00000
+  122    9 ALA  HB2   14.77046  -4.17289   0.29316 PEP  9      0.00000
+  123    9 ALA  HB3   15.62378  -4.09312   1.88252 PEP  9      0.00000
+  124    9 ALA  C     16.30898  -1.90120   0.33304 PEP  9      0.00000
+  125    9 ALA  OT1   16.22711  -1.45144  -0.84608 PEP  9      0.00000
+  126    9 ALA  OT2   17.39667  -2.14585   0.91810 PEP  9      0.00000
+
+
+
+! SCPISM is OK to use with replica exchange. Other implicit solvent
+! methods might have a problem since they would need to be initialized
+! when the exchange happens. But there is no control for that. It
+! needs the change in the implicit solvent program to flag the
+! initialization. Maybe the easiest would be if there is a frequency
+! for initialization in the solvent implementation and then use the
+! same freequency as exchange frequency ???  
+
+!request SCPISM 
+SCPI HYDR UISM 10
+
+energy cutnb 14.0 ctofnb 12.0 ctonnb 10.0 atom fshift cdie vdw vshift 
+
+! Setting the Replica Exchange.... (RXSGLD)
+! temperature from 300 K to 400 K and self-guiding temperature from 300 K to 600 K
+repd nrep @nreps EXCHange FREQuency 50 STEMp 300 MTEMp 400 sump unit 17 -
+            sgld sgte 300 msgt 600
+
+open write form unit 17 name @9rxsgld.out
+if ?MYNODE ne 0 outu 17
+
+open write card unit 31 name @9rxsgld.rst
+open write file unit 32 name @9rxsgld.dcd
+
+SCAL FBETA SET 1.0 SELE ALL END
+
+energy cutnb 14.0 ctofnb 12.0 ctonnb 10.0 atom fshift cdie vdw vshift 
+update
+
+! NOTE: Because of lang this will not produce the same results in parallel/parallel
+dynamics lang leap start -
+        timestep 0.001        - ! timestep in picoseconds
+        nstep 200             - ! number of steps and energy evaluations
+        nprint 50             - ! step frequency for writing in kunit and printing energy on unit 6
+        iunwri 31             - ! unit to write restart file
+        iunrea -1             - ! unit to read restart file
+        iuncrd 32             - ! unit to write coordinates (unformatted)
+        iunvel -1             - ! unit to write velocities out to
+        kunit -1              - ! unit to write energy and temp inforamtion out to file
+        iprfrq 5000           - ! frequency for avg and rms energy
+        firstt 300.           - ! initial T for velocity assignments
+        finalt 300.           - ! final T
+        tbath 300.            - ! temperature of heat bath
+        iasors 1              - ! assign (NOT scale) velocities during heating/equil(.ne.0=assign;.eq.0=scale)
+        iasvel 1              - ! use gaussian distrib of velocities (.gt. 0 = gaussian ; .lt. 0 = uniform)
+        nsavc 1000            - ! freq for writing coordinates
+        nsavv 0               - ! freq for writing velocities
+        isvfrq 500000         - ! frequency for writing restart files
+        ihtfrq 0              - ! frequency for heating steps during the dynamics
+        ieqfrq 0              - ! frequency for scaling velocities during heating
+        inbfrq 0              - ! lists updated when necessary (heuristic test)
+        ihbfrq 0              - ! frequency for updating hydrogen bond list
+        ntrfrq 0              - ! step freq for stopping rotation and translation
+        cutnb  14.0           - ! distance cutoff for neighbor list
+        ctofnb 12.0           - ! max distance for pair to consider in energy calc
+        ctonnb 10.0           - ! distance at which smoothing function reduces pair's contrib
+        wmin 1.0              - ! warning cutoff for minimum atom-atom distance
+        atom                  - ! electrostatics calculation (default) is done on atom-atom basis
+        cdie                  - ! energy ~ 1/r
+        fshift                - ! Use Force Shift
+        vdw                   - ! compute van der Waals energy
+        vshift                - ! Use Shift for van der Waals interactions
+        echeck 10000.0        - ! max variation of energy step-to-step
+        ichecw 0              - ! check to see if avg. temp. lies within temp range (0 = do not check)
+        sgld                  - ! Turn on SGLD
+        tsgavg 0.2            - ! Local average time (larger values will enhance slower motion)
+        iseed 314 1234 81 992 - ! Fix the random seed for reproducability
+        sgft 0                  ! guiding factor must set to 0 for RXSGLD
+
+
+!save last coordinate set 
+open unit 28 write card name @9rxsgld.cor
+write coor unit 28 card
+
+!save velocities in last state, found in the comparison set
+open unit 29 write card name @9rxsgld.vel
+write coor comp unit 29 card
+
+! Test whether the case succeeded or failed. It is easiest
+! to do this when we know exactly how many processors there
+! were.
+
+set passprob = 0
+set passexup = 0
+set passexdn = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 0.59757
+if ?myrep .eq. 0 set referup = 0.5
+if ?myrep .eq. 0 set referdn = 0.0
+if ?myrep .eq. 0 set refener = -961.30213
+if ?myrep .eq. 1 set refprob = 0.35049
+if ?myrep .eq. 1 set referup = 0.0
+if ?myrep .eq. 1 set referdn = 0.5
+if ?myrep .eq. 1 set refener = -945.31205
+if ?myrep .eq. 2 set refprob = 0.47214
+if ?myrep .eq. 2 set referup = 0.5
+if ?myrep .eq. 2 set referdn = 0.0
+if ?myrep .eq. 2 set refener = -925.58003
+if ?myrep .eq. 3 set refprob = 0.84088
+if ?myrep .eq. 3 set referup = 0.0
+if ?myrep .eq. 3 set referdn = 0.5
+if ?myrep .eq. 3 set refener = -922.60311
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?exrup .ae. @referup set passexup = 1
+if ?exrdn .ae. @referdn set passexdn = 1
+if ?ener .ae. @refener set passener = 1
+
+calc passed = @passprob + @passexup + @passexdn + @passener
+
+label endrepd
+repd reset
+
+prnlev 5 node 0
+
+@testcheck @passed 4 0 RXSGLD
+
+stop

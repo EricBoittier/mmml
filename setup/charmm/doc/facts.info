@@ -1,0 +1,598 @@
+CHARMM Element doc/facts.info $Revision: 1.1.1.1 $
+
+File: FACTS, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+     FACTS: Fast Analytical Continuum Treatment of Solvation
+     -------------------------------------------------------
+
+
+     Questions and comments regarding FACTS should be directed to 
+     ------------------------------------------------------------
+     Amedeo Caflisch (caflisch@bioc.uzh.ch)
+
+     Reference for FACTS:
+     --------------------
+     [1]Haberthuer and Caflisch, J. Comput. Chem., 29(5): 701-715, 2008
+        DOI: 10.1002/jcc.20832
+
+* Menu:
+
+* Description:: Description of FACTS
+* Syntax::      Syntax of the FACTS Commands
+* Function::    Description of the FACTS keywords and options
+* Examples::    Usage examples of the FACTS module
+* Examples-II:: Usage examples of the FACTS energy decomposition
+
+
+File: FACTS, Node: Description, Up: Top, Previous: Top, Next: Syntax
+
+
+FACTS is an efficient generalized Born implicit solvent model [1].Because
+of its speed it is particularly useful for MD simulations. It is based on
+the fully analytical evaluation of the volume and spatial symmetry of the
+solvent that is displaced from around a solute atom by its neighboring 
+atoms. The two measures of solvent displacement are combined in empirical
+equations to approximate the atomic (or self) electrostatic solvation
+energy and the solvent accessible surface area. The former directly yields
+the effective Born radius of each atom, which is used in the generalized 
+Born formula to calculate the screening of the pairwise interactions.
+(Note that the effective pairwise interactions are the sum of
+the low-dielectric Coulombic energy and the generalized Born energy.)
+The solvent accessible surface area is used to approximate the non-polar
+contribution to solvation. FACTS is only 3 to 5 times slower than using the
+vacuum energy in molecular dynamics simulations of peptides and proteins.
+
+
+1) Force field and further parameterization.
+FACTS can be used with either force field "param19" or "param22/27".
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  IMPORTANT  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!  FACTS with param22 should be used with the special GBSW CMAP parameter !
+!  file "par_all22_prot_gbsw.inp", which is in  ~charmm/toppar/gbsw/      !
+!  The GBSW CMAP is necessary for a correct conformational equilibrium    !
+!  of the peptide backbone.                                               !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+It is important to note that MD simulations of miniprotein folding
+and peptide aggregation suggest (as of today, i.e., June 2011) that
+param22 should be used with TEPS 1.0  
+and
+param19 should be used with TEPS 2.0
+(TEPS is the dielectric constant of the solute, see below).  
+
+FACTS parameters were derived for protein atoms only. Parameters for unknown
+atom types can be interpolated from known ones with the "TAVW" option
+(see below).
+
+2) Periodic boundary conditions.
+The FACTS module works with the IMAGE facility, the image setup should
+precede the call to FACTS command.
+
+3) Ionic strength.
+The influence of salt can be taken into account on the Debye-Huckel
+level based on the formalism described in [J. Srinivasan, M.W. Trevathan,
+P. Beroza, and D.A. Case, Theor. Chem. Acc., 101, 426-434 (1999)].
+The default is without salts.
+
+4) Constraints and rigid atoms.
+FACTS can correctly treat fixed atoms (CONS FIX).  They are taken into account
+as low dielectric region for the evaluation of the effective Born radii,
+and for calculation of the accessible surface.  Moreover, the screening of the 
+pairwise interactions between fixed and flexible atoms is taken into account
+by the generalized Born formula.  
+
+5) Energy decomposition.
+FACTS is compatible with the BLOCK module. 
+The INTE command can be used to evaluate FACTS energy between two
+subsets of atoms.  
+The flag SLFO (SeLF-Only) calculates only the self-energy which is the 
+sum of electrostatic self-polarization (1st term on the right hand side of 
+Equation (8) in ref. [1]) and the non-polar solvation energy 
+(Sum_i GAMMa * SASA_i).
+The flag SCRO (SCReen-Only) calculates only the electrostatic screening energy
+(2nd term on the right hand side of Equation (8) in ref. [1]). 
+
+6) FACTS energy variables
+The FACTS polar and non-polar energy of the latest energy evaluation can be
+accessed with ?FCTP and ?FCTN, respectively.
+
+7) Parallel code.
+The FACTS algorithm has been parallelized in 2007 by F.Marchand
+(fmarchand@bioc.uzh.ch).
+
+
+
+File: FACTS, Node: Syntax, Up: Top, Previous: Description, Next: Function
+
+
+                    Syntax of the FACTS Command
+                    ---------------------------
+
+FACTs { TCPS < 19 | 22 > } { TEPS < 1.0 | 2.0 > } 
+      [TKPS real] [GAMM real] -
+      [CONC real] [TEMP real] -
+      [TAVW] [TPSL] -
+      [TCIL real] [TCIC real] -
+      [ < SLFO | SCRO > ] -
+      [SLFU integer] [SCRU integer] [NPOU integer]
+
+
+
+File: FACTS, Node: Function, Up: Top, Previous: Syntax, Next: Examples
+
+            Description of the FACTS keywords and options
+            ---------------------------------------------
+
+Keyword  Default  Purpose
+-------  -------  -------
+
+TCPS        22    Choice of force field:  all-atom (22) or polar hydrogens, 
+                  i.e., extended carbon and sulfur atoms (19).
+                  Note that TCPS 22 also works
+                  with param27, although only protein atoms are parameterized.
+
+TEPS       1.0    Solute dielectric constant. One can specify only TEPS = 1.0
+                  or TEPS = 2.0, since only these values were used as interior
+                  dielectric constant for the finite-difference Poisson
+                  calculation of atomic solvation energies which are the 
+                  reference values employed to parameterize FACTS.
+
+TKPS       4.0    Kappa, the factor in the denominator of the exponential
+                  function in the Generalized Born formula. It usually
+                  ranges between 4.0 (Still's original equation) and 8.0.
+
+GAMM      0.015   Nonpolar surface tension coefficients in [kcal/(molxA^2)].
+                  Ideally one should start test simulations with different
+                  values of GAMM (e.g., 0.0075, 0.010, 0.015, and 0.020)  
+                  but see also the values suggested in the examples below.
+
+CONC       0.0    Monovalent salt concentration in [M].
+
+TEMP       298    Temperature in [K] of the  Debye-Huckel screening parameter
+                  (only necessary with CONC).
+
+TAVW      false   FACTS distinguishes atoms solely based on their VdW radius
+                  and only atoms found in proteins are currently parameterized.
+                  If a system contains atoms whose radii are not among those
+                  already parameterized in FACTS, then the "TAVW" option will
+                  interpolate new parameters from already parameterized atoms.
+
+TPSL      false   Flag to print detailed information about the atomic
+                  self-electrostatic contribution to the energy.
+
+TCIC   7.5 {param 19} Cutoff for the SHIFT function of pairwise screening
+      12.0 {param 22} interactions. It corresponds to the CTOFNB of non-bond
+                      interactions and must have the same value for 
+                      consistency.
+
+TCIL   9.0 {param 19} Cutoff for the list of pairwise screening interactions.
+      14.0 {param 22} It corresponds to the CUTNB of non-bond interactions
+                      and must have the same value for consistency.
+
+
+Keywords for FACTS energy (post-)analysis and decomposition:
+(more explanation in the example below)
+
+
+SLFO      false   (SeLF-Only) Flag to compute self-energy (self-polarization)
+                  and non-polar energy only. The electrostatic screening 
+                  energy (i.e., pairwise generalized Born term) is NOT computed.
+                  Mutually exclusive with SCRO.
+
+SCRO      false   (SCReen-Only) Flag to compute the electrostatic screening 
+                  energy. Note that this is the pairwise generalized Born term,
+                  i.e., the 2nd term on the right hand side of Equation (8) in
+                  ref. [1].  It is usually positive, i.e., unfavorable, because
+                  it is dominated by pairs of charges of opposite sign
+                  which have more favorable electrostatic interaction in vacuo
+                  than in a high-dielectric solvent. 
+                  Self-energy and non-polar energy are NOT computed.
+                  Mutually exclusive with SLFO.
+
+SLFU       -1     Fortran unit on which the atomic self-energy values are
+                  written. Each line contains NATOM self-energy values 
+                  (order from 1 to NATOM).
+
+SCRU       -1     Fortran unit on which the "atomic sums" of screening energies
+                  are written. Each line contains NATOM "atomic sum" values.
+                  (order from 1 to NATOM).
+
+NPOU       -1     Fortran unit on which the atomic non-polar contributions are
+                  written.  Each line contains NATOM non-polar energies.
+                  (order from 1 to NATOM).
+
+
+File: FACTS, Node: Examples, Up: Top, Previous: Function, Next: Top
+
+                           Examples
+                           --------
+
+PARAM 19
+--------
+
+REMARK: It was observed that (for param19) FACTS performs better with
+        the solute dielectric constant (TEPS) set to 2.0 rather than to 1.0.
+
+! ------------------------------------------------------------------
+!
+!  large, globular systems (e.g., protein in folded state)
+!  epsilon=2.0 and GAMMa=0.025
+
+set diele 2.0
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vshift -
+      cutnb 9.0 ctofnb 7.5 ctonnb 6.5 e14fac 0.4 wmin 1.5
+
+scalar wmain = radius
+scalar wmain set 1.0 selection (type h*) end
+
+facts tcps 19 teps @diele gamm 0.025
+
+! ------------------------------------------------------------------
+!
+!  Reversible folding simulations of structured peptides
+!  epsilon=2.0 and GAMMa=0.015
+
+set diele 2.0
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vshift -
+      cutnb 9.0 ctofnb 7.5 ctonnb 6.5 e14fac 0.4 wmin 1.5
+
+scalar wmain = radius
+scalar wmain set 1.0 selection (type h*) end
+
+facts tcps 19 teps @diele gamm 0.015
+
+! ------------------------------------------------------------------
+!
+!  Unstructured peptides and peptide aggregation 
+!  epsilon=2.0 and GAMMa=0.0075
+
+set diele 2.0
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vshift -
+      cutnb 9.0 ctofnb 7.5 ctonnb 6.5 e14fac 0.4 wmin 1.5
+
+scalar wmain = radius
+scalar wmain set 1.0 selection (type h*) end
+
+facts tcps 19 teps @diele gamm 0.0075
+
+! ------------------------------------------------------------------
+!
+!  Print detailed informations about the atomic self-electrostatic 
+!  contributions to the energy with the 'TPSL' option
+
+set diele 2.0
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vshift -
+      cutnb 9.0 ctofnb 7.5 ctonnb 6.5 e14fac 0.4 wmin 1.5
+
+scalar wmain = radius
+scalar wmain set 1.0 selection (type h*) end
+
+facts tcps 19 teps @diele TPSL
+
+! ------------------------------------------------------------------
+
+
+PARAM 22
+--------
+
+REMARK: Use the special GBSW CMAP parameter file "par_all22_prot_gbsw.inp"
+        (~charmm/toppar/gbsw/par_all22_prot_gbsw.inp)
+
+! ------------------------------------------------------------------
+
+!  epsilon=1.0 and GAMMa=0.015
+!  Interpolate parameters for non-parameterized
+!  radii with the 'TAVW' option
+
+! read in the CMAP topology file (standard)
+open read card unit 10 name @toppar/top_all22_prot_cmap.inp
+read rtf  card unit 10
+close unit 10
+
+!read in the parameter file that contains GBSW specific CMAP
+open read card unit 11 name @topar/par_all22_prot_gbsw.inp
+read para card unit 11
+close unit 11
+
+...
+...
+
+set diele 1.0
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vswitch -
+      cutnb 14.0 ctofnb 12.0 ctonnb 10.0 e14fac 1.0 wmin 1.5
+
+scalar wmain = radius
+
+facts tcps 22 teps @diele gamm 0.015 TAVW
+
+! ------------------------------------------------------------------
+
+See also: test cases ~/charmm/test/c35test/facts_p19.inp
+                     ~/charmm/test/c35test/facts_p22.inp
+
+
+
+File: FACTS, Node: Examples-II, Up: Top, Previous: Examples, Next: Top
+
+
+         Keywords for FACTS energy (post-)analysis and decomposition:
+         ------------------------------------------------------------
+
+
+Sometimes it is useful and informative to decompose the solvation energy
+into its different contributions or to determine which part of a system
+contribute most to a given process (for example, which groups of a ligand
+contribute most to binding affinity).  A serie of keywords was introduced
+to decompose the FACTS solvation energy. Also, FACTS can now be used with
+the INTEraction command. These keyword are designed for post-processing
+(of MD trajectories for example) rather than dynamics or minimization.
+
+
+The FACTS solvation energy is
+
+dG = FCTPOL1 + FCTPOL2 + FCTNPL
+
+with
+
+FCTPOL1  = Sum of atomic self-energies (self-polarizations).
+FCTPOL2  = Sum of pairs of screening interactions (usually positive because
+           dominated by pairs of charges of opposite sign).
+FCTNPL   = Sum of non-polar contributions (= Sum_i GAMMa * SASA_i ;
+           GAMMa is surface tension, SASA is the Solvent Accessible
+           Surface Area).
+
+Note that FCTPOL1 and FCTPOL2 correspond to the first and second term,
+respectively, on the right hand side of Equation (8) in ref. [1].
+
+FCTPOL1 and FCTPOL2 are both electrostatic contributions and their sum is given
+by the "FCTPOL>" field in CHARMM output.  FCTNPL is given by the "FCTNPL>"
+field.  FCTPOL1 and FCTNPL are both atomic contributions, in contrast to
+FCTPOL2 which is the pairwise screening.
+
+It is important to note that
+the effective electrostatic interaction (or screenED interaction) between two
+atoms i and j is the sum of the vacuo Coulombic energy and the GB screening
+interaction (FCTPOL2(i,j)). Contrary to the Coulombic interactions, the GB
+screening interactions involve also the 1-2 and 1-3 pairs (i.e., pairs of
+atoms separated by a single covalent bond or two covalent bonds).
+Without them the hydration free energy (related to the transfer from vacuo
+to water) would be far too favorable for any molecule.  Note also that 
+with FACTS both the Coulombic and screening interactions
+use a SHIFT cutoff function. The value of these cutoffs must be the same,
+as they are with the default settings.
+
+A detailed decomposition of the different contributions can be obtained by 
+using the INTE command.
+
+
+Let's consider a system composed of two interacting segments, S1 and S2
+which could be protein and small-molecule ligand, respectively.
+
+Example 1:
+----------
+
+! Compute the screening interaction (i.e., the generalized Born term) 
+! between segments S1 and S2.
+! The value will be returned in the "INTE FCTPOL>" field in the output
+! (use SCRO and INTE command)
+
+
+   ! FACTS command:
+   facts tcps 22 teps @diele gamm @gamma  SCRO
+
+   ...
+
+   open read file unit 21 name  ./dcd/@dcdfile
+   trajectory query unit 21
+   set nstop ?nfile
+   traj iread 21 iwrite -1 nfile @nstop
+
+   ! Starting frame
+   set  n    1
+   label looptrj
+
+      traj read
+
+      ! INTE command:
+      inte sele  segid S1 end sele segid S2 end
+
+   incr n
+   if @n .le. @nstop goto looptrj
+
+
+Example 2 (only the FACTS and INTE command are given):
+------------------------------------------------------
+
+! Compute the self-energy of segment S2 only (but still in the presence of
+! segment S1). This will give the sum of atomic self-energies belonging 
+! only to segment S2 in the "INTE FCTPOL>" field and the sum of atomic
+! non-polar contributions belonging only to segment S2 in the "INTE FCTNPL>" 
+! field.
+! Note: by setting the surface tension (GAMMa) to 1.0 the "INTE FCTNPL>" value
+! will be equal to the SASA (as approximated by FACTS)
+
+
+   ! FACTS command:
+   facts tcps 22 teps @diele gamm @gamma  SLFO
+
+   ! INTE command:
+   inte sele  segid S2 end sele segid S2 end
+
+
+
+Example 3:
+----------
+
+! Compute the screening interactions within segment S2 only
+
+   ! FACTS command:
+   facts tcps 22 teps @diele gamm @gamma SCRO
+
+   ! INTE command:
+   inte sele  segid S2 end sele segid S2 end
+
+
+
+Example 4: (effective electrostatic interaction) 
+------------------------------------------------
+
+! Compute the effective electrostatic interaction between S1 and S2
+! which is the sum of the low-dielectric Coulombic energy 
+! and the generalized Born energy:
+! Effective(S1-S2) = Coulomb(S1-S2) + Screening(S1-S2)
+
+!    ELEC(S1-S2), FCTPOL2(S1-S2), and EFFECTIVE are all written to a file
+!    EFFECTIVE =  ELEC(S1-S2) + FCTPOL2(S1-S2)
+!    ELEC(S1-S2) < 0.0 usually
+!    FCTPOL2(S1-S2) > 0.0 usually
+! -----------------
+
+   ...
+   facts tcps 22 teps @diele gamm @gamma  SCRO
+   ...
+
+   set seg1 S1
+   set seg2 S2
+   open write card unit 30 name ./data/@system.screen.@seg1.@seg2.dat
+
+   open read file unit 21 name  ./dcd/@dcdfile
+   trajectory query unit 21
+   set nstop ?nfile
+   traj iread 21 iwrite -1 nfile @nstop
+
+   ! Starting frame
+   set  n    1
+   label looptrj
+
+      traj read
+
+      ! INTE command:
+      inte sele  segid @seg1 end sele segid @seg2 end
+      calc effect = ?elec + ?fctp
+      write title unit 30
+      * ?elec ?fctp @effect
+      *
+
+   incr n
+   if @n .le. @nstop goto looptrj
+! -----------------
+
+
+
+Example 5:
+----------
+
+Further, time series of atomic contributions can be written to files with the
+SLFU, SCRU, and NPOU keywords:
+
+! -----------------
+   ! FACTS command:
+   facts tcps 22 teps @diele gamm @gamma  SLFU 43  NPOU 44  SCRU 45
+
+   ...
+
+   ! The files are opened only here, as a line is written at
+   ! each energy evaluation (twice during FACTS initialization)
+
+   open write card unit 43 name  ./data/@system.self.dat
+   open write card unit 44 name  ./data/@system.npl.dat
+   open write card unit 45 name  ./data/@system.scr.dat
+
+
+   open read file unit 21 name  ./dcd/@dcdfile
+   trajectory query unit 21
+   set nstop ?nfile
+   traj iread 21 iwrite -1 nfile @nstop
+
+   ! Starting frame
+   set  n    1
+   label looptrj
+
+      traj read
+      ener
+
+   incr n
+   if @n .le. @nstop goto looptrj
+
+! --------------
+
+The resulting files, *.self.dat, *.npl.dat, *.scr.dat will contain ?nfile lines
+with NATOM fields (the atomic contributions for each frame). 
+
+For the atomic screening sums (SCRU), half of the screening interaction between
+atom I and J is given to atom I and the other half to atom J. Thus, field I is
+equal to half the sum all screening interactions involving atom I.
+
+
+
+Example 6:  (binding energy)
+-----------------------------
+
+! Compute the binding energy between segment S1 and S2 (useful for docking).
+! This can be done with the BLOCK module by setting the intra-block
+! coefficients (S1-S1 and S2-S2) to 0.0 and the inter-block coefficients
+! (S1-S2) to 1.0.
+! The binding energy is the sum of VdW, Coulombic, and FACTS interactions
+! between the two segments.
+!
+! The total FACTS/BLOCK interactions between segment S1 and S2 is the sum of
+! 1) the changes of atomic self-energies due to the presence of the other
+!    segment
+! 2) the GB screening interactions between segments S1 and S2
+! 3) the changes in the GB screening interactions within segment S1 due to 
+!    the presence of S2, and within segment S2 due to the presence of S1
+! 4) the changes in the atomic non-polar contributions due to the presence
+!    of the other segment
+! --------------
+   ...
+
+   set seg1  S1
+   set seg2  S2
+
+   ! Enter BLOCK module
+   ! Define number of subsystems (2)
+   block 2
+
+      ! Decompose the system into subsystems
+      call 2 sele segid @seg2 end
+
+      ! Set the interaction coefficient matrix
+      coef 1 1 0.0
+      coef 1 2 1.0
+      coef 2 2 0.0
+
+   end
+
+   ...
+   facts tcps 22 teps @diele gamm @gamma
+   ...
+
+   open write card unit 30 name ./data/@system.inter.@seg1.@seg2.dat
+
+   open read file unit 21 name  ./dcd/@dcdfile
+   trajectory query unit 21
+   set nstop ?nfile
+   traj iread 21 iwrite -1 nfile @nstop
+
+   ! Starting frame
+   set  n    1
+   label looptrj
+
+      traj read
+      ener
+
+      calc dgtot = ?vdw + ?elec + ?fctp + ?fctn
+
+      write title unit 30
+      * ?vdw ?elec ?fctp ?fctn  @dgtot
+      *
+
+   incr n
+   if @n .le. @nstop goto looptrj
+
+! --------------
+

@@ -1,0 +1,51 @@
+* Structure Generation
+*
+
+stream datadir.def
+
+! read the topology and parameter files
+stream @0/toppar_drude.str
+bomlev 0
+
+read sequence BENX 1
+generate benx first none last none setup warn drude dmass 0.4
+auto angle dihedral
+define a select type lpbx show end
+set status = fail
+if ?nsel .eq. 1 then
+  set status = pass
+endif
+echo testcase result: @status -- reading
+
+print coor
+ic param
+ic seed 1 CD1 1 CE1 1 CZ
+ic build
+ic purge
+coor sdrude
+coor shake
+print coor
+
+open write unit 10 card name @9/lpcent.pdb
+write coor unit 10 pdb
+
+open write unit 10 card name @9/lpcent.psf
+write psf card unit 10
+
+!======== Resetting ==========
+delete atom sele resn benx end
+!=============================
+open unit 11 form read name @9/lpcent.psf
+read psf card append unit 11
+close unit 11
+
+open read unit 11 card name @9/lpcent.pdb
+read coor unit 11 pdb
+close unit 11
+
+define a select type lpbx show end
+set status = fail
+if ?nsel .eq. 1 then
+  set status = pass
+endif
+echo testcase result: @status -- writing

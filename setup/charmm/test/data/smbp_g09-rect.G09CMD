@@ -1,0 +1,26 @@
+$method
+b3lyp
+
+$basis
+sto-3g
+
+$title
+test input for g09
+
+$charge
+-3
+
+$spin
+1
+
+$pop
+
+
+$extra
+
+
+$nproc
+1
+
+$mem
+200MB

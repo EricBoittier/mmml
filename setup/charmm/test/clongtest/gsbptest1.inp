@@ -1,0 +1,158 @@
+* CHARMM 28 testcase gsbptest1.inp
+* .Test the Generalized Solvent Boundary Potential for Aspartyl-tRNAse
+* .Construct MIJ matrix without water
+* .Construct PHIX (external static field)
+* .Author: Benoit Roux
+*
+
+if ?pbeq .ne. 1 then stop
+
+stream datadir.def
+
+open read card unit 1 name @0top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open read card unit 1 name @0par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! RS1 domain
+read sequence card
+* RNase
+*
+590 
+MET ARG THR GLU TYR CYS GLY GLN LEU ARG LEU SER HSP VAL GLY GLN GLN VAL THR LEU
+CYS GLY TRP VAL ASN ARG ARG ARG ASP LEU GLY SER LEU ILE PHE ILE ASP MET ARG ASP
+ARG GLU GLY ILE VAL GLN VAL PHE PHE ASP PRO ASP ARG ALA ASP ALA LEU LYS LEU ALA
+SER GLU LEU ARG ASN GLU PHE CYS ILE GLN VAL THR GLY THR VAL ARG ALA ARG ASP GLU
+LYS ASN ILE ASN ARG ASP MET ALA THR GLY GLU ILE GLU VAL LEU ALA SER SER LEU THR
+ILE ILE ASN ARG ALA ASP VAL LEU PRO LEU ASP SER ASN HSD VAL ASN THR GLU GLU ALA
+ARG LEU LYS TYR ARG TYR LEU ASP LEU ARG ARG PRO GLU MET ALA GLN ARG LEU LYS THR
+ARG ALA LYS ILE THR SER LEU VAL ARG ARG PHE MET ASP ASP HSD GLY PHE LEU ASP ILE
+GLU THR PRO MET LEU THR LYS ALA THR PRO GLU GLY ALA ARG ASP TYR LEU VAL PRO SER
+ARG VAL HSE LYS GLY LYS PHE TYR ALA LEU PRO GLN SER PRO GLN LEU PHE LYS GLN LEU
+LEU MET MET SER GLY PHE ASP ARG TYR TYR GLN ILE VAL LYS CYS PHE ARG ASP GLU ASP
+LEU ARG ALA ASP ARG GLN PRO GLU PHE THR GLN ILE ASP VAL GLU THR SER PHE MET THR
+ALA PRO GLN VAL ARG GLU VAL MET GLU ALA LEU VAL ARG HSD LEU TRP LEU GLU VAL LYS
+GLY VAL ASP LEU GLY ASP PHE PRO VAL MET THR PHE ALA GLU ALA GLU ARG ARG TYR GLY
+SER ASP LYS PRO ASP LEU ARG ASN PRO MET GLU LEU THR ASP VAL ALA ASP LEU LEU LYS
+SER VAL GLU PHE ALA VAL PHE ALA GLY PRO ALA ASN ASP PRO LYS GLY ARG VAL ALA ALA
+LEU ARG VAL PRO GLY GLY ALA SER LEU THR ARG LYS GLN ILE ASP GLU TYR GLY ASN PHE
+VAL LYS ILE TYR GLY ALA LYS GLY LEU ALA TYR ILE LYS VAL ASN GLU ARG ALA LYS GLY
+LEU GLU GLY ILE ASN SER PRO VAL ALA LYS PHE LEU ASN ALA GLU ILE ILE GLU ASP ILE
+LEU ASP ARG THR ALA ALA GLN ASP GLY ASP MET ILE PHE PHE GLY ALA ASP ASN LYS LYS
+ILE VAL ALA ASP ALA MET GLY ALA LEU ARG LEU LYS VAL GLY LYS ASP LEU GLY LEU THR
+ASP GLU SER LYS TRP ALA PRO LEU TRP VAL ILE ASP PHE PRO MET PHE GLU ASP ASP GLY
+GLU GLY GLY LEU THR ALA MET HSE HSE PRO PHE THR SER PRO LYS ASP MET THR ALA ALA
+GLU LEU LYS ALA ALA PRO GLU ASN ALA VAL ALA ASN ALA TYR ASP MET VAL ILE ASN GLY
+TYR GLU VAL GLY GLY GLY SER VAL ARG ILE HSE ASN GLY ASP MET GLN GLN THR VAL PHE
+GLY ILE LEU GLY ILE ASN GLU GLU GLU GLN ARG GLU LYS PHE GLY PHE LEU LEU ASP ALA
+LEU LYS TYR GLY THR PRO PRO HSE ALA GLY LEU ALA PHE GLY LEU ASP ARG LEU THR MET
+LEU LEU THR GLY THR ASP ASN ILE ARG ASP VAL ILE ALA PHE PRO LYS THR THR ALA ALA
+ALA CYS LEU MET THR GLU ALA PRO SER PHE ALA ASN PRO THR ALA LEU ALA GLU LEU SER
+ILE GLN VAL VAL LYS LYS ALA GLU ASN ASN
+
+generate RS1 setup warning
+
+! RS2 domain
+gene RS2 setup duplicate RS1
+
+! RS1 ligand : ASP1 (OT2 from OH in ADE)
+read sequence ASP 1
+generate ASP1 setup warning
+
+! Water sphere inside a sphere of 20 A centered 
+! around the center of active site
+read sequence TIP3 384
+generate SOLV noangle nodihedral setup warning
+
+! read coordinates (from bigmodel.pdb)
+open read card unit 1 name @0rs12_asp1.crd
+read coor card unit 1 
+close unit 1
+
+! center of active site (from read_pdb.out)
+set xcen   1.0305  
+set ycen -18.289
+set zcen   4.071
+coor stat
+
+! DELETE all water molecules
+delete atom sele .byres. type OH2 end
+
+PBEQ
+
+prnlev 0
+stream @0radius.str ! Set optimized set of atomic radii for solvation of proteins
+prnlev 5
+
+PRNLEV 8   ! print contributions of individual basis functions
+TIMER  2 
+
+! MIJ matrix 
+! It can be done separately with different grid parameters 
+! from PHIX calculation.             
+
+GSBP G_ii SPHERE -
+     NMPOL     1 CGSCAL   1.2 NOSORT -
+     SRDIST 17.0 RRXCEN @xcen RRYCEN @ycen RRZCEN @zcen -
+     -
+     EPSW 80.0 EPSP  1.0 NCEL  111 DCEL  0.4 INTBP -
+     XBCEN @xcen YBCEN @ycen ZBCEN @zcen -
+     LBOX FOCUS LNCEL  111 LDCEL  1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
+
+TIMER  0 
+
+OPEN WRITE FILE UNIT 50 NAME @9gsbptest_MIJ1.dat
+WRITE MIJ UNIT 50
+CLOSE UNIT 50
+
+RESET             ! use reset before using GSBP each time
+prnlev 0
+stream @0radius.str ! Set optimized set of atomic radii for solvation of proteins
+prnlev 5          
+
+! PHIX (Static External Field) 
+! Here, we use the same grid parameters as those above.
+! (PHIX can also be calculated using the SOLVE command)
+
+GSBP G_io  SPHERE -
+     SRDIST 17.0 RRXCEN @xcen RRYCEN @ycen RRZCEN @zcen -
+     -     
+     EPSW 80.0 EPSP  1.0 NCEL  111 DCEL  0.4 INTBP -
+     XBCEN @xcen YBCEN @ycen ZBCEN @zcen -
+     LBOX FOCUS LNCEL  111 LDCEL  1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
+
+OPEN WRITE FILE UNIT 50 NAME @9gsbptest_phix.dat
+WRITE PHIX UNIT 50
+CLOSE UNIT 50
+
+RESET             ! use reset before using GSBP each time
+prnlev 0
+stream @0radius.str ! Set optimized set of atomic radii for solvation of proteins
+prnlev 5
+PRNLEV 8   ! print contributions of individual basis functions
+
+! Illustrate MIJ matrix calculation restart 
+! When the user wants to calculate more basis functions for reaction field.
+
+OPEN READ FILE UNIT 50 NAME @9gsbptest_MIJ1.dat
+READ MIJ UNIT 50
+CLOSE UNIT 50
+
+GSBP SPHERE -
+     NMPOL     2 -
+     SRDIST 17.0 RRXCEN @xcen RRYCEN @ycen RRZCEN @zcen -
+     -
+     EPSW 80.0 EPSP  1.0 NCEL  111 DCEL  0.4 INTBP -
+     XBCEN @xcen YBCEN @ycen ZBCEN @zcen -
+     LBOX FOCUS LNCEL  111 LDCEL  1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
+
+OPEN WRITE FILE UNIT 50 NAME @9gsbptest_MIJ2.dat
+WRITE MIJ UNIT 50
+CLOSE UNIT 50
+
+END
+
+STOP

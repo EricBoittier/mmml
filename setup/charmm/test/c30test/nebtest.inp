@@ -1,0 +1,141 @@
+* nebtest.inp: NEB test input file 
+* By Paul Maragakis, Harvard Physics, May 2002
+* Boat chair transition for cyclohexane (TRAVEL test).
+*
+
+stream datadir.def
+stream @0cyclohexane.str
+
+! Number of replicas
+set nrpl 21
+! 1 / nrpl
+set ninv .04761904761904761904
+! 1 / (nrpl-1)
+set ninv1 0.05
+
+! Read in one end point configuration.
+OPEN UNIT 13 READ FORM NAME @0chair.crd
+READ COOR CARDS UNIT 13
+CLOSE UNIT 13
+
+! Prepare the replica.
+REPLIcate A NREPlica @nrpl SELEct all END
+
+! This is the final replica
+DEFIne active SELE segid cycl END
+
+! linear interpolation path
+coor duplicate sele active end sele segid A@nrpl end
+OPEN UNIT 13 READ FORM NAME @0boat.crd
+READ COOR CARDS UNIT 13
+CLOSE UNIT 13
+coor duplicate sele active end sele segid A1 end
+coor copy comp
+set a 1.0
+set q 2
+label loop1
+  coor comp duplicate sele active end sele segid A@q end
+  decr a by @ninv1
+  coor duplicate sele segid A@nrpl end sele segid A@q end
+  coor average fact @a sele segid A@q end
+  incr q by 1
+  if q .ne. @nrpl goto loop1
+
+! Get rid of the "active" set.
+DELEte ATOM SELEct active END
+
+! Replica interaction coefficients
+define replicas select segid A* end
+block 2
+  call 2 select replicas end
+  coef 1 1 1.0
+  coef 2 2 @ninv
+  coef 2 1 @ninv
+  end
+
+scalar wmain set 1.0
+
+! Replica path: NEB with some angular force.
+RPATH KNEB 30.0 KMAX 0.0 KRMS 0.0 KANGLE 3.0 COSMax 0.0 NEBA
+cons fix sele segid a1 .or. segid a@nrpl end
+
+! Quick and dirty sd
+mini sd nstep 100
+
+! Write the full replica path coordinates.
+open write unit 15 name @9rp.crd form
+write coor card unit 15
+* final replica path for neb relaxation
+*
+
+!end of basic test
+stop
+
+! { plot energy as a function of the path index }
+
+CONS FIX SELE NONE END
+RPATH OFF
+open write card unit 20 name energy.dat
+set 1 1
+label eloop
+  BLOCK 2
+    CALL 1 sele all end
+    CALL 2 sele replicas .and. .not. segid A@1 end
+    COEF 1 1 1.0
+    COEF 2 1 0.0
+    COEF 2 2 0.0
+  END
+  ENERGY
+  write title unit 20
+* @1 ?ENER
+*
+  incr 1 by 1
+  if @1 .le. @nrpl goto eloop
+
+stop
+
+! Convert the output of the replica path into a trajectory
+!
+
+DELEte ATOM SELEct all END
+
+stream datadir.def
+stream cyclohexane.str
+
+! Number of replicas.
+set nrpl 21
+! Number of residues
+set nres 1
+
+! Read in one end point configuration.
+OPEN UNIT 13 READ FORM NAME @0chair.crd
+READ COOR CARDS UNIT 13
+CLOSE UNIT 13
+
+! Read one frame out of the replica path coordinates
+open read card unit 14 name @9rp.crd
+
+! Save the output into the trajectory file
+open write unit 15 name @9out.rp.dcd 
+trajectory iwrite 15 nfile @nrpl
+
+! loop over the images and add them to the trajectory
+set i 1
+set res 0
+label loop2
+  read coor card unit 14 offset @res
+  coor orien rms
+  traj write
+  open write unit 16 name @9frame.crd form
+  write coor card unit 16
+  close unit 16
+  incr i by 1
+  decr res by @nres
+  if i .le. @nrpl goto loop2
+
+! Save everything
+close unit 15
+
+stop
+
+

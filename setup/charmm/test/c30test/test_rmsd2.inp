@@ -1,0 +1,287 @@
+* CHARMM 30 testcase test_rmsd2.inp
+* test 1-D RMSD restraint constraining the relative RMSD difference
+* between two reference sets of coordinates.
+* Author: Benoit Roux, Dec, 2002
+*
+
+stream datadir.def
+
+open read unit 1 form name @0top_all22_prot_na.inp
+read rtf card unit 1
+close unit 1
+
+open read unit 1 form name @0par_all22_prot_na.inp
+read para card unit 1
+close unit 1
+
+read sequence ALA 2
+generate MOL1 first ACE last CT3 setup
+
+! read first reference structure
+read coor cards
+*  REFERENCE STATE 1, DIPEPTIDE
+*
+   32
+    1    1 ALA  CAY   -2.15972  -1.07384   0.00000 MOL1 1      0.00000
+    2    1 ALA  HY1   -2.46595  -0.00588   0.00000 MOL1 1      0.00000
+    3    1 ALA  HY2   -2.56186  -1.57386   0.90697 MOL1 1      0.00000
+    4    1 ALA  HY3   -2.56186  -1.57386  -0.90697 MOL1 1      0.00000
+    5    1 ALA  CY    -0.67250  -1.16480   0.00000 MOL1 1      0.00000
+    6    1 ALA  OY    -0.10455  -2.25583   0.00000 MOL1 1      0.00000
+    7    1 ALA  N      0.00000   0.00000   0.00000 MOL1 1      0.00000
+    8    1 ALA  HN    -0.45263   0.88833   0.00000 MOL1 1      0.00000
+    9    1 ALA  CA     1.45920   0.00000   0.00000 MOL1 1      0.00000
+   10    1 ALA  HA     1.81245  -0.49652   0.89651 MOL1 1      0.00000
+   11    1 ALA  CB     1.94870  -0.83356  -1.20665 MOL1 1      0.00000
+   12    1 ALA  HB1    1.51374  -1.85447  -1.15533 MOL1 1      0.00000
+   13    1 ALA  HB2    1.62795  -0.37311  -2.16656 MOL1 1      0.00000
+   14    1 ALA  HB3    3.05570  -0.93210  -1.21396 MOL1 1      0.00000
+   15    1 ALA  C      2.09595   1.40110   0.00000 MOL1 1      0.00000
+   16    1 ALA  O      1.42548   2.43194   0.00000 MOL1 1      0.00000
+   17    2 ALA  N      3.45056   1.45787   0.00000 MOL1 2      0.00000
+   18    2 ALA  HN     3.95353   0.59403   0.00000 MOL1 2      0.00000
+   19    2 ALA  CA     4.27551   2.66404   0.00000 MOL1 2      0.00000
+   20    2 ALA  HA     4.06510   3.23593  -0.89651 MOL1 2      0.00000
+   21    2 ALA  CB     3.86383   3.53865   1.20665 MOL1 2      0.00000
+   22    2 ALA  HB1    2.77560   3.75597   1.15533 MOL1 2      0.00000
+   23    2 ALA  HB2    4.06281   3.01397   2.16656 MOL1 2      0.00000
+   24    2 ALA  HB3    4.40743   4.50801   1.21396 MOL1 2      0.00000
+   25    2 ALA  C      5.79146   2.39865   0.00000 MOL1 2      0.00000
+   26    2 ALA  O      6.23365   1.25089   0.00000 MOL1 2      0.00000
+   27    2 ALA  NT     6.59017   3.48081   0.00000 MOL1 2      0.00000
+   28    2 ALA  HNT    6.23987   4.41425   0.00000 MOL1 2      0.00000
+   29    2 ALA  CAT    8.01118   3.32067   0.00000 MOL1 2      0.00000
+   30    2 ALA  HT1    8.32106   2.75879  -0.90697 MOL1 2      0.00000
+   31    2 ALA  HT2    8.49699   4.31982   0.00000 MOL1 2      0.00000
+   32    2 ALA  HT3    8.32106   2.75879   0.90697 MOL1 2      0.00000
+
+! read second reference structure
+read coor comp cards
+*  REFERENCE STATE 2, DIPEPTIDE
+*
+   32
+    1    1 ALA  CAY   -1.06160  -0.46212   0.81522 MOL1 1      0.00000
+    2    1 ALA  HY1   -1.21622  -0.61281   1.90623 MOL1 1      0.00000
+    3    1 ALA  HY2   -1.49047  -1.32976   0.27123 MOL1 1      0.00000
+    4    1 ALA  HY3   -1.58513   0.46671   0.50542 MOL1 1      0.00000
+    5    1 ALA  CY     0.38661  -0.35003   0.54086 MOL1 1      0.00000
+    6    1 ALA  OY     1.21053  -0.43095   1.44046 MOL1 1      0.00000
+    7    1 ALA  N      0.74040  -0.15051  -0.73335 MOL1 1      0.00000
+    8    1 ALA  HN     0.02818  -0.12081  -1.42664 MOL1 1      0.00000
+    9    1 ALA  CA     2.12304  -0.07254  -1.18576 MOL1 1      0.00000
+   10    1 ALA  HA     2.68143  -0.85487  -0.68681 MOL1 1      0.00000
+   11    1 ALA  CB     2.16637  -0.34597  -2.70345 MOL1 1      0.00000
+   12    1 ALA  HB1    1.69556  -1.32541  -2.93059 MOL1 1      0.00000
+   13    1 ALA  HB2    1.62393   0.44796  -3.26004 MOL1 1      0.00000
+   14    1 ALA  HB3    3.21618  -0.37134  -3.06789 MOL1 1      0.00000
+   15    1 ALA  C      2.84816   1.24663  -0.86089 MOL1 1      0.00000
+   16    1 ALA  O      3.33307   1.96824  -1.73419 MOL1 1      0.00000
+   17    2 ALA  N      2.97373   1.57764   0.43596 MOL1 2      0.00000
+   18    2 ALA  HN     2.57042   0.97279   1.12625 MOL1 2      0.00000
+   19    2 ALA  CA     3.60628   2.78933   0.91696 MOL1 2      0.00000
+   20    2 ALA  HA     3.34617   3.60202   0.25137 MOL1 2      0.00000
+   21    2 ALA  CB     3.05893   3.11297   2.32221 MOL1 2      0.00000
+   22    2 ALA  HB1    1.95372   3.21037   2.28974 MOL1 2      0.00000
+   23    2 ALA  HB2    3.31971   2.30189   3.03612 MOL1 2      0.00000
+   24    2 ALA  HB3    3.48784   4.06446   2.70307 MOL1 2      0.00000
+   25    2 ALA  C      5.13538   2.70826   0.93939 MOL1 2      0.00000
+   26    2 ALA  O      5.77580   2.74371   1.98735 MOL1 2      0.00000
+   27    2 ALA  NT     5.75680   2.61036  -0.24995 MOL1 2      0.00000
+   28    2 ALA  HNT    5.18979   2.54538  -1.07344 MOL1 2      0.00000
+   29    2 ALA  CAT    7.19396   2.54212  -0.37087 MOL1 2      0.00000
+   30    2 ALA  HT1    7.59074   1.65491   0.17332 MOL1 2      0.00000
+   31    2 ALA  HT2    7.49351   2.46313  -1.43899 MOL1 2      0.00000
+   32    2 ALA  HT3    7.66709   3.45296   0.06172 MOL1 2      0.00000
+
+! orient reference structures
+coor orient rms select .not. type H* end
+set rms = ?rms
+
+! -----------------------------------------------------------------------------------------
+! The targetted molecular dynamics trajectory takes the initial coordinates in ref1 and 
+! moves toward ref2 in nsteps
+
+set nstep =  100
+set force  =  1000.0
+calc drmsd = 2 * ( @rms / @nstep ) 
+
+energy
+
+calc num 2*?NATOM
+! set up 1d rmsd relative restraint
+cons rmsd relative mass offset -@rms force @force drmsd @drmsd -
+     select .not. type H* end MAXR @num
+cons rmsd show
+
+skip all excl harm
+energy
+test first tol 0.0 step 0.0001
+skip none
+
+shake bonh param tol 1.0e-9
+scalar fbeta set 1.0 select .not. type H* end
+open unit 10 write form name @9rmsd_tmd.tim
+
+!DYNA nstep  @nstep timestep 0.001 nprint  500 inbfrq 500 langevin tbath 300.0 urmsd 10 RMSD -
+DYNA nstep  @nstep timestep 0.001 nprint  500 inbfrq 500 tbath 300.0 urmsd 10 RMSD -
+     echeck 100000
+
+open unit 1 write form name @9rmsd_tmd.crd
+write coor cards unit 1
+close unit 1
+
+! clear constraint
+cons rmsd reset
+shake off
+
+! check constraint for regular dynamics
+
+! read first reference structure
+read coor cards
+*  REFERENCE STATE 1, DIPEPTIDE
+*
+   32
+    1    1 ALA  CAY   -2.15972  -1.07384   0.00000 MOL1 1      0.00000
+    2    1 ALA  HY1   -2.46595  -0.00588   0.00000 MOL1 1      0.00000
+    3    1 ALA  HY2   -2.56186  -1.57386   0.90697 MOL1 1      0.00000
+    4    1 ALA  HY3   -2.56186  -1.57386  -0.90697 MOL1 1      0.00000
+    5    1 ALA  CY    -0.67250  -1.16480   0.00000 MOL1 1      0.00000
+    6    1 ALA  OY    -0.10455  -2.25583   0.00000 MOL1 1      0.00000
+    7    1 ALA  N      0.00000   0.00000   0.00000 MOL1 1      0.00000
+    8    1 ALA  HN    -0.45263   0.88833   0.00000 MOL1 1      0.00000
+    9    1 ALA  CA     1.45920   0.00000   0.00000 MOL1 1      0.00000
+   10    1 ALA  HA     1.81245  -0.49652   0.89651 MOL1 1      0.00000
+   11    1 ALA  CB     1.94870  -0.83356  -1.20665 MOL1 1      0.00000
+   12    1 ALA  HB1    1.51374  -1.85447  -1.15533 MOL1 1      0.00000
+   13    1 ALA  HB2    1.62795  -0.37311  -2.16656 MOL1 1      0.00000
+   14    1 ALA  HB3    3.05570  -0.93210  -1.21396 MOL1 1      0.00000
+   15    1 ALA  C      2.09595   1.40110   0.00000 MOL1 1      0.00000
+   16    1 ALA  O      1.42548   2.43194   0.00000 MOL1 1      0.00000
+   17    2 ALA  N      3.45056   1.45787   0.00000 MOL1 2      0.00000
+   18    2 ALA  HN     3.95353   0.59403   0.00000 MOL1 2      0.00000
+   19    2 ALA  CA     4.27551   2.66404   0.00000 MOL1 2      0.00000
+   20    2 ALA  HA     4.06510   3.23593  -0.89651 MOL1 2      0.00000
+   21    2 ALA  CB     3.86383   3.53865   1.20665 MOL1 2      0.00000
+   22    2 ALA  HB1    2.77560   3.75597   1.15533 MOL1 2      0.00000
+   23    2 ALA  HB2    4.06281   3.01397   2.16656 MOL1 2      0.00000
+   24    2 ALA  HB3    4.40743   4.50801   1.21396 MOL1 2      0.00000
+   25    2 ALA  C      5.79146   2.39865   0.00000 MOL1 2      0.00000
+   26    2 ALA  O      6.23365   1.25089   0.00000 MOL1 2      0.00000
+   27    2 ALA  NT     6.59017   3.48081   0.00000 MOL1 2      0.00000
+   28    2 ALA  HNT    6.23987   4.41425   0.00000 MOL1 2      0.00000
+   29    2 ALA  CAT    8.01118   3.32067   0.00000 MOL1 2      0.00000
+   30    2 ALA  HT1    8.32106   2.75879  -0.90697 MOL1 2      0.00000
+   31    2 ALA  HT2    8.49699   4.31982   0.00000 MOL1 2      0.00000
+   32    2 ALA  HT3    8.32106   2.75879   0.90697 MOL1 2      0.00000
+
+! read second reference structure
+read coor comp cards
+*  REFERENCE STATE 2, DIPEPTIDE
+*
+   32
+    1    1 ALA  CAY   -1.06160  -0.46212   0.81522 MOL1 1      0.00000
+    2    1 ALA  HY1   -1.21622  -0.61281   1.90623 MOL1 1      0.00000
+    3    1 ALA  HY2   -1.49047  -1.32976   0.27123 MOL1 1      0.00000
+    4    1 ALA  HY3   -1.58513   0.46671   0.50542 MOL1 1      0.00000
+    5    1 ALA  CY     0.38661  -0.35003   0.54086 MOL1 1      0.00000
+    6    1 ALA  OY     1.21053  -0.43095   1.44046 MOL1 1      0.00000
+    7    1 ALA  N      0.74040  -0.15051  -0.73335 MOL1 1      0.00000
+    8    1 ALA  HN     0.02818  -0.12081  -1.42664 MOL1 1      0.00000
+    9    1 ALA  CA     2.12304  -0.07254  -1.18576 MOL1 1      0.00000
+   10    1 ALA  HA     2.68143  -0.85487  -0.68681 MOL1 1      0.00000
+   11    1 ALA  CB     2.16637  -0.34597  -2.70345 MOL1 1      0.00000
+   12    1 ALA  HB1    1.69556  -1.32541  -2.93059 MOL1 1      0.00000
+   13    1 ALA  HB2    1.62393   0.44796  -3.26004 MOL1 1      0.00000
+   14    1 ALA  HB3    3.21618  -0.37134  -3.06789 MOL1 1      0.00000
+   15    1 ALA  C      2.84816   1.24663  -0.86089 MOL1 1      0.00000
+   16    1 ALA  O      3.33307   1.96824  -1.73419 MOL1 1      0.00000
+   17    2 ALA  N      2.97373   1.57764   0.43596 MOL1 2      0.00000
+   18    2 ALA  HN     2.57042   0.97279   1.12625 MOL1 2      0.00000
+   19    2 ALA  CA     3.60628   2.78933   0.91696 MOL1 2      0.00000
+   20    2 ALA  HA     3.34617   3.60202   0.25137 MOL1 2      0.00000
+   21    2 ALA  CB     3.05893   3.11297   2.32221 MOL1 2      0.00000
+   22    2 ALA  HB1    1.95372   3.21037   2.28974 MOL1 2      0.00000
+   23    2 ALA  HB2    3.31971   2.30189   3.03612 MOL1 2      0.00000
+   24    2 ALA  HB3    3.48784   4.06446   2.70307 MOL1 2      0.00000
+   25    2 ALA  C      5.13538   2.70826   0.93939 MOL1 2      0.00000
+   26    2 ALA  O      5.77580   2.74371   1.98735 MOL1 2      0.00000
+   27    2 ALA  NT     5.75680   2.61036  -0.24995 MOL1 2      0.00000
+   28    2 ALA  HNT    5.18979   2.54538  -1.07344 MOL1 2      0.00000
+   29    2 ALA  CAT    7.19396   2.54212  -0.37087 MOL1 2      0.00000
+   30    2 ALA  HT1    7.59074   1.65491   0.17332 MOL1 2      0.00000
+   31    2 ALA  HT2    7.49351   2.46313  -1.43899 MOL1 2      0.00000
+   32    2 ALA  HT3    7.66709   3.45296   0.06172 MOL1 2      0.00000
+
+! set up constraint to get at midpoint between two reference structures
+cons rmsd relative mass offset -@rms force @force -
+     select .not. type h* end MAXR @num
+cons rmsd show
+
+! read in random coordinates in main set
+read coor cards
+* RANDOM COODINATES, DIPEPTIDE
+*
+   32
+    1    1 ALA  CAY   -1.63124  -1.44883   0.12819 MOL1 1      0.00000
+    2    1 ALA  HY1   -1.62107  -1.09676   1.21920 MOL1 1      0.00000
+    3    1 ALA  HY2   -1.68051  -2.43327   0.08810 MOL1 1      0.00000
+    4    1 ALA  HY3   -2.49110  -0.88893  -0.38959 MOL1 1      0.00000
+    5    1 ALA  CY    -0.53652  -0.88466  -0.56462 MOL1 1      0.00000
+    6    1 ALA  OY    -0.16890  -1.07136  -1.72463 MOL1 1      0.00000
+    7    1 ALA  N      0.35514  -0.15971   0.10280 MOL1 1      0.00000
+    8    1 ALA  HN     0.33855   0.03957   1.14580 MOL1 1      0.00000
+    9    1 ALA  CA     1.59430   0.38557  -0.36865 MOL1 1      0.00000
+   10    1 ALA  HA     2.09624  -0.43872  -0.80512 MOL1 1      0.00000
+   11    1 ALA  CB     1.19352   1.35901  -1.46323 MOL1 1      0.00000
+   12    1 ALA  HB1    0.61572   0.62229  -2.27914 MOL1 1      0.00000
+   13    1 ALA  HB2    0.49010   2.06271  -1.19535 MOL1 1      0.00000
+   14    1 ALA  HB3    2.05590   1.57421  -1.99604 MOL1 1      0.00000
+   15    1 ALA  C      2.55004   1.21028   0.75754 MOL1 1      0.00000
+   16    1 ALA  O      2.21472   1.16876   1.83427 MOL1 1      0.00000
+   17    2 ALA  N      3.58592   1.70487   0.09411 MOL1 2      0.00000
+   18    2 ALA  HN     3.74427   1.43696  -0.82031 MOL1 2      0.00000
+   19    2 ALA  CA     4.63457   2.34786   0.80785 MOL1 2      0.00000
+   20    2 ALA  HA     4.27397   3.22285   1.40063 MOL1 2      0.00000
+   21    2 ALA  CB     4.99849   1.60758   2.17773 MOL1 2      0.00000
+   22    2 ALA  HB1    4.24138   1.24758   2.82368 MOL1 2      0.00000
+   23    2 ALA  HB2    5.61151   0.63812   1.69381 MOL1 2      0.00000
+   24    2 ALA  HB3    5.80039   2.08748   2.77287 MOL1 2      0.00000
+   25    2 ALA  C      5.79400   2.77674  -0.01671 MOL1 2      0.00000
+   26    2 ALA  O      5.97611   2.57076  -1.22490 MOL1 2      0.00000
+   27    2 ALA  NT     6.85836   3.51631   0.83258 MOL1 2      0.00000
+   28    2 ALA  HNT    6.64867   3.93327   1.59868 MOL1 2      0.00000
+   29    2 ALA  CAT    8.01668   4.11740  -0.03880 MOL1 2      0.00000
+   30    2 ALA  HT1    7.69007   4.74973  -0.69487 MOL1 2      0.00000
+   31    2 ALA  HT2    8.54592   4.73504   0.71219 MOL1 2      0.00000
+   32    2 ALA  HT3    8.49187   3.09903  -0.36320 MOL1 2      0.00000
+
+skip all excl harm
+energy 
+test first tol 0.0 step 0.0001
+skip none
+
+shake bonh param tol 1.0e-9
+scalar fbeta set 1.0 select .not. type H* end
+open unit 10 write form name @9rmsd_dyn.tim
+
+! production trajectory
+DYNAMICS  start           nstep   @nstep  timestp   0.002  iprfrq    5000  -
+          nprint     100  -
+ -
+          iasvel       1  firstt   300.0  finalt    300.0  tstruc    300.0  -
+!          langevin        tbath    300.0  rbuf        0.0  -
+           -
+          inbfrq      -1  imgfrq      -1  ihbfrq        0  ilbfrq        0  -
+ -
+          iunread     -1  -
+          iunwrite    -1  -
+          iuncrd      -1  nsavcrd      0  echeck   100000                   -
+          urmsd       10     RMSD
+
+cons rmsd reset
+
+open unit 1 write form name @9rmsd_dyn.crd
+write coor cards unit 1
+close unit 1
+
+stop

@@ -1,0 +1,406 @@
+* file mmfptest3.inp
+* test of MMFP primary hydration shell with betha-turn and 50 waters
+*
+
+stream datadir.def
+
+read RTF card
+* TOPOLOGY FILE FOR PROTEINS USING EXPLICIT HYDROGEN ATOMS: VERSION 19
+* RESIDUES ADDED:  FOR formyl group in gramicidin A (with new atom type CFOR)
+*                  EAM  ethanolamine tail (-NH-CH2-CH2-OH) is attached to the C terminus.
+*                  NMA N-methylacetamide
+*                  PALI, a 16 carbon aldehyde, is palmitolic acid minus the oh group  
+*                  PCGL  phosphocholine-glycerol polar head
+*                  WPOL  H2O Water Stillinger polarization model
+*                  OPOL  Oxygen Stillinger polarization model
+*                  HPOL  hydrogen Stillinger polarization model
+*                  HPAT  Path integral for Stillinger polarization model
+*
+   20    1                ! Version number
+MASS     1 H      1.00800 ! hydrogen which can h-bond to neutral atom
+MASS     2 HC     1.00800 !   -    "     -               charged atom
+MASS     3 HA     1.00800 ! aliphatic hydrogen
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS     5 LP     0.0     ! ST2 LONE PAIR
+MASS    10 CT    12.01100 ! aliphatic carbon
+MASS    11 C     12.01100 ! carbonyl carbon
+MASS    12 CH1E  13.01900 ! extended atom carbon w/ one hydrogen
+MASS    13 CH2E  14.02700 !   -    "    -           two
+MASS    14 CH3E  15.03500 !   -    "    -           three
+MASS    15 CR1E  13.01900 !   -    "    -        in aromatic ring w/ one H
+MASS    16 CM    12.01100 ! carbon in carbonmonoxide
+MASS    17 CFOR  13.01900 ! CH1E carbon for the formyl group of gramicidin A
+MASS    31 N     14.00670 ! peptide nitrogen with no hydrogens attached
+MASS    32 NR    14.00670 ! nitrogen in aromatic ring with no hydrogens
+MASS    33 NP    14.00670 ! pyrole nitrogen
+!MASS    34 NH1E  15.01470 ! extended atom peptide nitrogen with one hydrogen
+!MASS    35 NH2E  16.02270 !  -       "        -                 two   -"-
+!MASS    36 NH3E  17.03070 !  -       "        -                 three -"-
+!MASS    37 NC2E  16.02270 ! extended atom charged guanidinium nitrogen w/ 2 H
+MASS    38 NH1   14.00670 ! peptide nitrogen bound to one hydrogen
+MASS    39 NH2   14.00670 !  -       "        -       two -"-
+MASS    40 NH3   14.00670 ! nitrogen bound to three hydrogens
+MASS    41 NC2   14.00670 ! charged guanidinuim nitrogen bound to two hydrogens
+MASS    42 NT    14.00670 ! for choline head of DPPC 
+MASS    51 O     15.99940 ! carbonyl oxygen
+MASS    52 OC    15.99940 ! carboxy oxygen
+!MASS    53 OH1E  17.00740 ! extended atom hydroxy oxygen
+!MASS    54 OH2E  18.01540 ! extended atom water
+MASS    53 OPOL  16.00000 ! Oxygen in polarization model PM1
+MASS    54 HPOL   1.00000 ! Hydrogen in polarization model PM1
+MASS    55 OH1   15.99940 ! hydroxy oxygen
+MASS    56 OH2   15.99940 ! ST2 water oxygen
+MASS    57 OM    15.99940 ! oxygen in carbonmonoxide
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+MASS    59 OS    15.99940 ! ester oxygen
+MASS    60 O2    15.99940 ! Phosphate group P=O
+!---------------------------------------------------------------------------
+MASS    71 P     30.97400 ! phosphate group from RNA
+MASS    81 S     32.06000 ! sulphur
+MASS    82 SH1E  33.06800 ! extended atom sulphur with one hydrogen
+MASS    91 FE    55.84700 ! iron
+
+DECL -C
+DECL -O
+DECL +N
+DECL +H
+DECL +CA
+
+!MAKE THE OUT OF RESIDUE DECLARATIONS
+DECL -C1
+DECL -C2
+DECL -C3
+DECL -C4
+
+DECL +C1
+DECL +C2
+DECL +C3
+DECL +C4
+DECL -O2
+DECL +O2
+
+AUTOGENERATE ANGLES
+DEFA FIRS NTER LAST CTER
+
+RESI ALA     0.00000
+GROU
+ATOM N    NH1    -0.35
+ATOM H    H       0.25
+ATOM CA   CH1E    0.10
+GROU
+ATOM CB   CH3E    0.00
+GROU
+ATOM C    C       0.55
+ATOM O    O      -0.55
+BOND N    CA        CA   C         C    +N        C    O         N    H
+BOND CA   CB
+DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+IMPH N    -C   CA   H         C    CA   +N   O         CA   N    C    CB
+DONO  H  N
+ACCE O  C
+IC   -C   CA   *N   H      0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+
+RESI NEND    0.00000    !
+GROU                    !      \
+ATOM N    NH1    -0.35  !       N - CA
+ATOM H    H       0.25  !      /
+ATOM CA   CH3E    0.10  !     H
+BOND N    CA        N    H
+IMPH N    -C   CA   H
+
+RESI CFIR    0.00000    !           /
+GROU                    !    CA - C
+ATOM CA   CH3E    0.00  !          \\
+ATOM C    C       0.55  !            O
+ATOM O    O      -0.55
+BOND CA   C    C    +N     C    O
+DIHE CA   C    +N   +CA
+IMPH C    CA   +N   O
+
+
+RESI TIP3    .000   ! TIPS3P WATER MODEL
+GROUP
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2  H1        OH2  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+ACCE OH2
+PATC  FIRS NONE LAST NONE
+
+
+END
+
+open read card unit 1 name @0param19.prm
+read PARAM card unit 1
+close unit 1
+
+read sequence TIP3 50 
+generate BULK setup noangle nodihe
+
+read sequence card
+* BETT
+*
+  4
+CFIR  ALA  ALA NEND
+
+generate BETT warning setup first none last none
+
+! NBONds and HBONds specification
+! -------------------------------
+NBOND  ATOM FSWITCH CDIEL VATOM VDISTANCE VSHIFT -
+      CUTNB 13.0  CTOFNB 11.5  CTONNB 9.0  EPS 1.0  E14FAC 1.0  WMIN 1.5
+
+
+
+
+read coor card
+* 50000 STEPS PRODUCTION DYNAMICS OF BETT IN 50 WATERS
+* WITH DRSH EQUAL 4
+*  DATE:     7/ 2/94      8:52:15      CREATED BY USER:
+*
+  168
+    1    1 TIP3 OH2   -4.91736  -1.73136   2.05049 BULK 1      0.00000
+    2    1 TIP3 H1    -4.77835  -1.18414   2.82344 BULK 1      0.00000
+    3    1 TIP3 H2    -4.98894  -1.10976   1.32611 BULK 1      0.00000
+    4    2 TIP3 OH2    5.84540  -3.59129   2.88944 BULK 2      0.00000
+    5    2 TIP3 H1     6.66272  -3.21106   2.56750 BULK 2      0.00000
+    6    2 TIP3 H2     5.33058  -3.75742   2.09976 BULK 2      0.00000
+    7    3 TIP3 OH2    6.51328  -0.95102  -0.68313 BULK 3      0.00000
+    8    3 TIP3 H1     5.73053  -0.48959  -0.98416 BULK 3      0.00000
+    9    3 TIP3 H2     6.63048  -1.66148  -1.31380 BULK 3      0.00000
+   10    4 TIP3 OH2    1.14879   1.15433  -6.02066 BULK 4      0.00000
+   11    4 TIP3 H1     0.70134   1.14649  -5.17452 BULK 4      0.00000
+   12    4 TIP3 H2     2.04213   1.43138  -5.81716 BULK 4      0.00000
+   13    5 TIP3 OH2    0.55519   5.11489  -2.10521 BULK 5      0.00000
+   14    5 TIP3 H1    -0.15052   4.71834  -1.59438 BULK 5      0.00000
+   15    5 TIP3 H2     0.82998   5.87180  -1.58770 BULK 5      0.00000
+   16    6 TIP3 OH2    7.28347   1.60790  -0.29997 BULK 6      0.00000
+   17    6 TIP3 H1     6.43781   1.64716  -0.74668 BULK 6      0.00000
+   18    6 TIP3 H2     7.40632   0.67995  -0.09984 BULK 6      0.00000
+   19    7 TIP3 OH2   -0.59198  -3.97116  -5.90631 BULK 7      0.00000
+   20    7 TIP3 H1    -1.37564  -3.53514  -5.57166 BULK 7      0.00000
+   21    7 TIP3 H2    -0.88243  -4.40378  -6.70924 BULK 7      0.00000
+   22    8 TIP3 OH2    7.17928   5.53702   0.98266 BULK 8      0.00000
+   23    8 TIP3 H1     7.99549   5.99457   1.18435 BULK 8      0.00000
+   24    8 TIP3 H2     7.34142   5.11837   0.13728 BULK 8      0.00000
+   25    9 TIP3 OH2    2.51592   3.98700  -3.71116 BULK 9      0.00000
+   26    9 TIP3 H1     3.22023   4.33748  -3.16586 BULK 9      0.00000
+   27    9 TIP3 H2     1.71829   4.37554  -3.35192 BULK 9      0.00000
+   28   10 TIP3 OH2    3.67156   1.95138   6.97507 BULK 10     0.00000
+   29   10 TIP3 H1     3.30860   1.07932   6.82013 BULK 10     0.00000
+   30   10 TIP3 H2     3.66655   2.04767   7.92740 BULK 10     0.00000
+   31   11 TIP3 OH2    7.89673  -2.30168   1.62777 BULK 11     0.00000
+   32   11 TIP3 H1     7.41401  -1.91059   0.89957 BULK 11     0.00000
+   33   11 TIP3 H2     8.81023  -2.06784   1.46325 BULK 11     0.00000
+   34   12 TIP3 OH2   -3.17972   5.76338   2.12857 BULK 12     0.00000
+   35   12 TIP3 H1    -2.78087   6.42149   1.55932 BULK 12     0.00000
+   36   12 TIP3 H2    -2.43781   5.28661   2.50073 BULK 12     0.00000
+   37   13 TIP3 OH2    1.82252  -3.29944  -4.79609 BULK 13     0.00000
+   38   13 TIP3 H1     1.41308  -2.68247  -4.18950 BULK 13     0.00000
+   39   13 TIP3 H2     1.08949  -3.69234  -5.26993 BULK 13     0.00000
+   40   14 TIP3 OH2    3.40299   1.81634  -4.89407 BULK 14     0.00000
+   41   14 TIP3 H1     4.35017   1.92562  -4.80958 BULK 14     0.00000
+   42   14 TIP3 H2     3.04047   2.66811  -4.65052 BULK 14     0.00000
+   43   15 TIP3 OH2   -0.53692  -1.05679  -5.90553 BULK 15     0.00000
+   44   15 TIP3 H1     0.05943  -0.35712  -6.17212 BULK 15     0.00000
+   45   15 TIP3 H2     0.02795  -1.70813  -5.48971 BULK 15     0.00000
+   46   16 TIP3 OH2   -2.15594   6.99392  -0.33106 BULK 16     0.00000
+   47   16 TIP3 H1    -2.36346   7.77914  -0.83761 BULK 16     0.00000
+   48   16 TIP3 H2    -1.43093   6.58698  -0.80540 BULK 16     0.00000
+   49   17 TIP3 OH2   -4.31664   2.16920  -0.03165 BULK 17     0.00000
+   50   17 TIP3 H1    -4.72341   2.49857   0.76978 BULK 17     0.00000
+   51   17 TIP3 H2    -3.60609   1.60540   0.27407 BULK 17     0.00000
+   52   18 TIP3 OH2   -3.13368  -3.43682  -4.63249 BULK 18     0.00000
+   53   18 TIP3 H1    -3.38669  -2.65177  -5.11819 BULK 18     0.00000
+   54   18 TIP3 H2    -3.86252  -3.59274  -4.03189 BULK 18     0.00000
+   55   19 TIP3 OH2   -5.31929   1.93317  -2.83872 BULK 19     0.00000
+   56   19 TIP3 H1    -5.13890   2.77934  -3.24822 BULK 19     0.00000
+   57   19 TIP3 H2    -5.05689   2.04778  -1.92535 BULK 19     0.00000
+   58   20 TIP3 OH2   -1.78404  -3.94964  -2.14511 BULK 20     0.00000
+   59   20 TIP3 H1    -2.67767  -4.28114  -2.05700 BULK 20     0.00000
+   60   20 TIP3 H2    -1.54019  -4.15398  -3.04789 BULK 20     0.00000
+   61   21 TIP3 OH2   -3.54659  -4.31322   0.03822 BULK 21     0.00000
+   62   21 TIP3 H1    -2.67408  -4.67379   0.19612 BULK 21     0.00000
+   63   21 TIP3 H2    -3.88324  -4.10872   0.91062 BULK 21     0.00000
+   64   22 TIP3 OH2    3.02937  -3.94510  -2.16640 BULK 22     0.00000
+   65   22 TIP3 H1     2.63393  -4.06311  -3.03008 BULK 22     0.00000
+   66   22 TIP3 H2     2.28660  -3.80145  -1.57998 BULK 22     0.00000
+   67   23 TIP3 OH2    4.44280  -1.97738  -4.95631 BULK 23     0.00000
+   68   23 TIP3 H1     4.76151  -1.65407  -5.79900 BULK 23     0.00000
+   69   23 TIP3 H2     3.66392  -2.48915  -5.17463 BULK 23     0.00000
+   70   24 TIP3 OH2    5.00167   1.45240  -1.89405 BULK 24     0.00000
+   71   24 TIP3 H1     4.45647   0.73812  -2.22388 BULK 24     0.00000
+   72   24 TIP3 H2     4.53222   2.24805  -2.14464 BULK 24     0.00000
+   73   25 TIP3 OH2    3.93295   6.20224   0.23936 BULK 25     0.00000
+   74   25 TIP3 H1     4.09366   5.47881   0.84522 BULK 25     0.00000
+   75   25 TIP3 H2     4.44669   6.92898   0.59171 BULK 25     0.00000
+   76   26 TIP3 OH2    0.54916  -1.74933  -3.00198 BULK 26     0.00000
+   77   26 TIP3 H1     0.53156  -2.17193  -2.14330 BULK 26     0.00000
+   78   26 TIP3 H2     0.03401  -0.95080  -2.88705 BULK 26     0.00000
+   79   27 TIP3 OH2    4.75261  -4.59555   0.44334 BULK 27     0.00000
+   80   27 TIP3 H1     4.39084  -4.47862  -0.43511 BULK 27     0.00000
+   81   27 TIP3 H2     5.17915  -5.45200   0.41518 BULK 27     0.00000
+   82   28 TIP3 OH2    7.62886   4.28381  -1.32973 BULK 28     0.00000
+   83   28 TIP3 H1     8.10583   4.18969  -2.15427 BULK 28     0.00000
+   84   28 TIP3 H2     7.84784   3.49457  -0.83437 BULK 28     0.00000
+   85   29 TIP3 OH2   -0.98274  -2.43978   0.83343 BULK 29     0.00000
+   86   29 TIP3 H1    -1.82402  -2.29795   0.39941 BULK 29     0.00000
+   87   29 TIP3 H2    -0.36189  -1.91126   0.33200 BULK 29     0.00000
+   88   30 TIP3 OH2   -4.72203  -3.55646  -2.33183 BULK 30     0.00000
+   89   30 TIP3 H1    -4.39640  -3.85339  -1.48210 BULK 30     0.00000
+   90   30 TIP3 H2    -5.57197  -3.16102  -2.13827 BULK 30     0.00000
+   91   31 TIP3 OH2   -2.17340   0.59655   0.46401 BULK 31     0.00000
+   92   31 TIP3 H1    -1.61539   0.44529   1.22688 BULK 31     0.00000
+   93   31 TIP3 H2    -1.98724  -0.13930  -0.11918 BULK 31     0.00000
+   94   32 TIP3 OH2    1.95377   3.48231   2.46362 BULK 32     0.00000
+   95   32 TIP3 H1     2.07148   3.77662   3.36682 BULK 32     0.00000
+   96   32 TIP3 H2     2.83394   3.50258   2.08797 BULK 32     0.00000
+   97   33 TIP3 OH2    4.64312   4.68016  -1.85107 BULK 33     0.00000
+   98   33 TIP3 H1     5.53389   4.48403  -1.56074 BULK 33     0.00000
+   99   33 TIP3 H2     4.36079   5.40151  -1.28878 BULK 33     0.00000
+  100   34 TIP3 OH2   -5.15630   3.89840   1.95546 BULK 34     0.00000
+  101   34 TIP3 H1    -5.89792   4.45322   1.71378 BULK 34     0.00000
+  102   34 TIP3 H2    -4.40458   4.49096   1.95952 BULK 34     0.00000
+  103   35 TIP3 OH2    3.25925  -0.55713  -2.47375 BULK 35     0.00000
+  104   35 TIP3 H1     3.46524  -1.05038  -3.26779 BULK 35     0.00000
+  105   35 TIP3 H2     2.46479  -0.96938  -2.13446 BULK 35     0.00000
+  106   36 TIP3 OH2   -5.71826  -0.72577  -3.50924 BULK 36     0.00000
+  107   36 TIP3 H1    -5.62531   0.16014  -3.15888 BULK 36     0.00000
+  108   36 TIP3 H2    -5.12463  -0.75055  -4.25972 BULK 36     0.00000
+  109   37 TIP3 OH2   -5.40401  -0.31934  -0.36275 BULK 37     0.00000
+  110   37 TIP3 H1    -5.34054  -0.76584  -1.20705 BULK 37     0.00000
+  111   37 TIP3 H2    -5.06422   0.55974  -0.53003 BULK 37     0.00000
+  112   38 TIP3 OH2    5.57167  -2.72531  -2.48270 BULK 38     0.00000
+  113   38 TIP3 H1     5.37412  -2.07294  -3.15473 BULK 38     0.00000
+  114   38 TIP3 H2     4.73840  -3.17014  -2.32774 BULK 38     0.00000
+  115   39 TIP3 OH2    4.70221   4.57232   2.44190 BULK 39     0.00000
+  116   39 TIP3 H1     5.60087   4.29357   2.26600 BULK 39     0.00000
+  117   39 TIP3 H2     4.55592   4.34528   3.36021 BULK 39     0.00000
+  118   40 TIP3 OH2    4.36071  -2.73462   4.82284 BULK 40     0.00000
+  119   40 TIP3 H1     5.04708  -2.76667   5.48925 BULK 40     0.00000
+  120   40 TIP3 H2     4.77876  -3.07357   4.03127 BULK 40     0.00000
+  121   41 TIP3 OH2   -1.07679   3.68753   2.50617 BULK 41     0.00000
+  122   41 TIP3 H1    -0.12735   3.59663   2.42534 BULK 41     0.00000
+  123   41 TIP3 H2    -1.36885   2.84811   2.86157 BULK 41     0.00000
+  124   42 TIP3 OH2    1.74150  -3.14703   4.57838 BULK 42     0.00000
+  125   42 TIP3 H1     2.64164  -2.85212   4.44051 BULK 42     0.00000
+  126   42 TIP3 H2     1.82918  -4.04768   4.89041 BULK 42     0.00000
+  127   43 TIP3 OH2   -2.84107  -1.12696  -1.93866 BULK 43     0.00000
+  128   43 TIP3 H1    -3.51830  -0.87145  -2.56500 BULK 43     0.00000
+  129   43 TIP3 H2    -2.53061  -1.97578  -2.25385 BULK 43     0.00000
+  130   44 TIP3 OH2   -1.51256   4.14542  -0.38914 BULK 44     0.00000
+  131   44 TIP3 H1    -2.14706   4.85887  -0.32108 BULK 44     0.00000
+  132   44 TIP3 H2    -1.78643   3.51622   0.27819 BULK 44     0.00000
+  133   45 TIP3 OH2    1.35553   7.22998  -0.40203 BULK 45     0.00000
+  134   45 TIP3 H1     0.98570   7.90213   0.17040 BULK 45     0.00000
+  135   45 TIP3 H2     2.22663   7.06157  -0.04278 BULK 45     0.00000
+  136   46 TIP3 OH2    4.46671   3.88331   5.21497 BULK 46     0.00000
+  137   46 TIP3 H1     4.35640   3.12743   5.79178 BULK 46     0.00000
+  138   46 TIP3 H2     4.69748   4.60237   5.80313 BULK 46     0.00000
+  139   47 TIP3 OH2   -4.76436  -4.53730   2.71015 BULK 47     0.00000
+  140   47 TIP3 H1    -5.19932  -3.71841   2.47252 BULK 47     0.00000
+  141   47 TIP3 H2    -5.46162  -5.08233   3.07485 BULK 47     0.00000
+  142   48 TIP3 OH2    2.96106  -0.66645   6.35113 BULK 48     0.00000
+  143   48 TIP3 H1     3.47752  -1.13050   5.69222 BULK 48     0.00000
+  144   48 TIP3 H2     2.16773  -1.19306   6.44882 BULK 48     0.00000
+  145   49 TIP3 OH2    0.58592  -3.95232  -0.63246 BULK 49     0.00000
+  146   49 TIP3 H1     0.25365  -3.62022   0.20153 BULK 49     0.00000
+  147   49 TIP3 H2    -0.19563  -4.07004  -1.17241 BULK 49     0.00000
+  148   50 TIP3 OH2   -3.57099  -0.61222  -5.31048 BULK 50     0.00000
+  149   50 TIP3 H1    -2.63102  -0.60497  -5.49114 BULK 50     0.00000
+  150   50 TIP3 H2    -3.91280   0.14427  -5.78705 BULK 50     0.00000
+  151   51 CFIR CA    -1.75637   2.31802  -3.04372 BETT 1      0.00000
+  152   51 CFIR C     -0.38912   1.76702  -2.73692 BETT 1      0.00000
+  153   51 CFIR O      0.21567   0.95462  -3.50845 BETT 1      0.00000
+  154   52 ALA  N      0.15114   2.13092  -1.54200 BETT 2      0.00000
+  155   52 ALA  H     -0.41848   2.66833  -0.95283 BETT 2      0.00000
+  156   52 ALA  CA     1.41597   1.68243  -1.05717 BETT 2      0.00000
+  157   52 ALA  CB     2.09396   2.93833  -0.37395 BETT 2      0.00000
+  158   52 ALA  C      1.06263   0.57276  -0.10307 BETT 2      0.00000
+  159   52 ALA  O      0.64301  -0.50308  -0.48014 BETT 2      0.00000
+  160   53 ALA  N      1.25737   0.83987   1.20838 BETT 3      0.00000
+  161   53 ALA  H      1.31103   1.75018   1.56735 BETT 3      0.00000
+  162   53 ALA  CA     1.21348  -0.21648   2.15944 BETT 3      0.00000
+  163   53 ALA  CB     2.22946   0.02340   3.22045 BETT 3      0.00000
+  164   53 ALA  C     -0.06111  -0.17627   2.93576 BETT 3      0.00000
+  165   53 ALA  O     -0.78756   0.79136   2.93132 BETT 3      0.00000
+  166   54 NEND N     -0.44138  -1.19488   3.71751 BETT 4      0.00000
+  167   54 NEND H      0.10243  -2.00009   3.84522 BETT 4      0.00000
+  168   54 NEND CA    -1.73808  -1.30924   4.44015 BETT 4      0.00000
+
+
+MMFP
+
+!constraint on center of mass of peptide at origin
+GEO sphere RCM force 5.0 select segid BETT show end
+
+!setup the reference peptide atoms
+BHEL select segid BETT .and. ( .not. type H* ) end
+
+!setup the solvent potential on water
+SHEL select type OH2 end DRSH 4 CHFR 100 CUT 2.8 RWEL 0.25 PFINAL 1.0 -
+SCO 0.0 RELA 0.0 UPDF 10 SPACE 1000000 CHCO 0.0 FOCO1 15 FOCO2 10
+
+END
+
+MINI SD NSTEP 20 NPRINT 10
+
+@testcheck ?ener -495.263508 0.0001 mmfptest3_chk1
+
+MMFP
+
+!constraint on center of mass of peptide at origin
+GEO sphere RCM force 5.0 select segid BETT show end
+
+!setup the reference peptide atoms
+BHEL select segid BETT .and. ( .not. type H* ) end
+
+!setup the solvent potential on water
+SHEL select type OH2 end DRSH 4 CHFR 100 CUT 2.8 RWEL 0.25 PFINAL 1.0 -
+SCO 0.0 RELA 0.00001 UPDF 10 SPACE 1000000 CHCO 0.00001 FOCO1 15 FOCO2 10
+
+END
+
+
+
+!dynamics
+shake tolerance 1.0e-06 bonh param
+scalar fbeta set 25.0 select .not. type H* end
+
+open write unfor unit 52 name @9primsh.trj 
+title
+* 500 steps production of the betha-turn in 50 vaters
+* starting from primsh_0.crd
+*
+
+DYNAMICS  strt            nstep      1000  timestp   0.001  iprfrq   1000  iseed 43276 -
+          nprint    100 ntrf 500  -
+ -
+          iasvel       1  firstt   300.0  finalt    300.0  tstruc    300.0  -
+!          langevin        tbath    300.0  rbuf        0.0  -
+ -
+          inbfrq       5  ihbfrq       0  ilbfrq        0  -
+ -
+          iunread     -1  -
+          iunwrite    -1  -
+          iuncrd      52  nsavcrd      5  -
+          iunvelo     -1  nsavvelo     0  -
+          kunit       -1
+
+
+@testcheck ?ener -456.520432 0.0001 mmfptest3_chk2
+
+open write card unit 1 name @9primsh_1.crd
+write coor card unit 1
+* after one psec
+* steps production dynamics of BETT in 50 waters
+* with drsh equal ?DRSH
+*
+
+stop

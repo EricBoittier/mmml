@@ -1,0 +1,94 @@
+#! /bin/sh
+# newfile: create header for file and check into rcs
+#
+# =========================
+# Stephen Fleischman 5-89
+# =========================
+#
+#
+if [ $# -eq 0 ]
+then
+   echo "Usage: newfile  <files>"
+   exit 2
+fi
+ftemp=f$$.tmp
+for i in $@
+do
+   rm -f $ftemp
+   EXT=`echo $i | sed 's/.*\.\([^.]*\)$/\1/'`
+   if [ -s RCS/$i,v ]
+   then
+         echo "The rcs file for $i already exists."
+	 exit 2
+   fi
+   case $EXT in
+      src | flx | f | ftn | fcm )  # fortran, flecs and include files for CHARMM
+	 echo "C************************************************************************" >> $ftemp
+	 echo "C" >> $ftemp
+	 echo "C "$i >> $ftemp
+         echo "C" >> $ftemp
+	 echo "C \$Header\$" >> $ftemp
+	 echo "C" >> $ftemp
+	 echo "C \$Date\$" >> $ftemp
+	 echo "C" >> $ftemp
+	 echo "C Change record:" >> $ftemp
+	 echo "C" >> $ftemp
+	 echo "C \$Log\$" >> $ftemp
+	 echo "C************************************************************************" >> $ftemp
+         ctype="fort"
+	 ;;
+      s )  # assembler
+	 echo ";************************************************************************" >> $ftemp
+	 echo ";" >> $ftemp
+	 echo "; "$i >> $ftemp
+         echo ";" >> $ftemp
+	 echo "; \$Header\$" >> $ftemp
+	 echo ";" >> $ftemp
+	 echo "; \$Date\$" >> $ftemp
+	 echo ";" >> $ftemp
+	 echo "; Change record:" >> $ftemp
+	 echo ";" >> $ftemp
+	 echo "; \$Log\$" >> $ftemp
+	 echo ";************************************************************************" >> $ftemp
+         ctype="as"
+	 ;;
+      c | h ) # C and header files.
+         echo " " >> $ftemp
+	 echo "/* "$i" */" > $ftemp
+         echo " " >> $ftemp
+	 echo "#ifdef RCSID" >> $ftemp
+	 echo "   static char rcsid[] = \"\$Header\$\"" >> $ftemp
+	 echo "#endif" >> $ftemp
+         echo " " >> $ftemp
+         echo "/*" >> $ftemp
+	 echo "  \$Date\$" >> $ftemp
+         echo " " >> $ftemp
+	 echo "  Change Record: " >> $ftemp
+         echo " " >> $ftemp
+	 echo "  \$Log\$" >> $ftemp
+         echo " " >> $ftemp
+	 echo "************************************************************************/" >> $ftemp
+         ctype="none"
+	 ;;
+      * ) #otherwise
+	 echo "Unknown extension: "$EXT
+	 exit 2
+	 ;;
+   esac
+   if [ -s $i ]
+   then
+      cat $i >> $ftemp
+   fi
+   mv $ftemp $i
+   if [ $ctype = "fort" ]
+   then
+       rcs -i -t'/dev/null' -L -c"C       " $i
+   elif [ $ctype = "as" ] 
+   then
+       rcs -i -t'/dev/null' -L -c";       " $i
+   else
+       rcs -i -t'/dev/null' -L  $i
+   fi
+   ci -u -t'/dev/null' $i
+done
+exit

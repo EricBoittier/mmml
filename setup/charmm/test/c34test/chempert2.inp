@@ -1,0 +1,1139 @@
+* CHARMM testcase chempert2.inp : Stefan Boresch, June 2006
+* test experimental chempert facility 
+*
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?chempert .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+stream datadir.def
+
+! The CHEM options of PERT modifies the calculation of nonbonded options.
+! All nonbonded interactions in the modified region (selected in PERT statement)
+! are computed normally. This facilitates the transition of 
+! (solute)_water -> water + solute (not interacting with water)
+! For details see the documentation
+
+! The only tricky case is Ewald. While this is already tested in chempert1.inp,
+! a separate test cannot hurt, and it is based on a direct comparison
+! of normal pert vs. CHEM PERT
+
+! We have solute u in solvent v; lambda = 0 means normal interaction,
+! lambda = 1 means solute and solvent are decoupled. (This corresponds to
+! how decoupling/annihilation is to be set up in CHEM PERT)
+!
+! normal PERT: U(lambda)=U_const+(1-lambda)[ U_uv + U_uu]
+! CHEM PERT  : U(lambda)=U_const+(1-lambda) U_uv  + U_uu
+!---------------------------------------------------------
+! diff:                                   -lambda * U_uu
+!
+! where U_const consists of the solvent-solvent interactions plus the 
+! bonded interactions in the solute, which are also not touched. Note that
+! U_uu only refers to the nonbonded, intramolecular solute interactions!!
+!
+! In this testcase the validity of the above relation is tested; for
+! electrostatic interactions using Ewald only!!! Note: Based on U(lambda)
+! we need at one point U(1-lambda). This is easy to do in linear coupling,
+! but not with PSSP. Thus, this test cannot be used to validate Ewald in
+! combination with PSSP, but it SHOULD WORK !!!
+
+
+! let's get started
+
+! IMPORTANT!! We need to push the precision of internal calcs
+format (f20.12)
+
+! some params 
+
+set nwater 250
+set xtl 21.6506
+set rcon 9
+set rc  10
+set grids 32
+set kap = 0.45 ! Ewald Kappa
+
+set lamb = 0.7 ! (or whatever)
+calc lambm1 = 1 - @lamb
+
+! setup the system (methanol in truncated octahedron of 250 waters)
+
+prnlev 0 @pnode
+wrnlev 0
+set pass a
+goto setup
+label from_setup_a
+prnlev 5 @pnode
+wrnlev 2
+
+! I. normal PERT, full system
+!============================
+
+pert sele segi meoh end
+
+set rcl 28.
+set theta 109.4712206344907
+! setup p.b.c. - truncated octahedron
+crystal define octa @xtl @xtl @xtl @theta @theta @theta
+crystal build cutoff @rcl noperations 0
+image byresidue xcen 0.0 ycen 0.0 zcen 0.0 sele all end ! meoh is just
+      ! one residue
+
+shake bond sele segi wat end para  
+                                
+scalar char set 0. sele segi meoh end
+
+nbonds atom vatom cdiel ewal pmew vswitch -
+        kappa          @kap -
+        fftx         @grids  ffty         @grids  fftz         @grids -
+        cutnb          @rcl  ctofnb          @rc  ctonnb        @rcon -
+        cutim          @rcl  spli                 order             6 -
+        qcor              0
+
+energy lsta 0. lsto 1. lamb @lamb
+
+set enpert ?ener ! save energy ...
+! the energies are extra, we need all elec energy terms ....
+calc eelp = ?elec + ?imel + ?ewks + ?ewse + ?ewex
+
+! done with pass I; reinitialize the system
+
+pert off
+crystal free
+shake off
+dele atom sele all end
+
+! setup the system (methanol in truncated octahedron of 250 waters)
+
+prnlev 0 @pnode
+wrnlev 0
+set pass b
+goto setup
+label from_setup_b
+prnlev 5 @pnode
+wrnlev 2
+
+
+!II. CHEM PERT, full system
+!==========================
+
+pert sele segi meoh end chem
+
+set rcl 28.
+set theta 109.4712206344907
+! setup p.b.c. - truncated octahedron
+crystal define octa @xtl @xtl @xtl @theta @theta @theta
+crystal build cutoff @rcl noperations 0
+image byresidue xcen 0.0 ycen 0.0 zcen 0.0 sele all end ! meoh is just
+      ! one residue
+
+shake bond sele segi wat end para  
+                                
+scalar char set 0. sele segi meoh end
+
+nbonds atom vatom cdiel ewal pmew vswitch -
+        kappa          @kap -
+        fftx         @grids  ffty         @grids  fftz         @grids -
+        cutnb          @rcl  ctofnb          @rc  ctonnb        @rcon -
+        cutim          @rcl  spli                 order             6 -
+        qcor              0
+
+energy lsta 0. lsto 1. lamb @lamb
+
+set ecpert ?ener ! save energy ...
+! the energies are extra, we need all elec energy terms ....
+calc eelc = ?elec + ?imel + ?ewks + ?ewse + ?ewex
+
+! done with pass II; reinitialize the system
+
+pert off
+crystal free
+shake off
+dele atom sele all end
+
+! setup the system (methanol in truncated octahedron of 250 waters)
+
+prnlev 0 @pnode
+wrnlev 0
+set pass c
+goto setup
+label from_setup_c
+prnlev 5 @pnode
+wrnlev 2
+
+! and throw away the waters
+
+dele atom sele segi wat end
+
+!III. normal PERT, just solute
+!=============================
+
+pert sele segi meoh end
+
+set rcl 28.
+set theta 109.4712206344907
+! setup p.b.c. - truncated octahedron
+crystal define octa @xtl @xtl @xtl @theta @theta @theta
+crystal build cutoff @rcl noperations 0
+image byresidue xcen 0.0 ycen 0.0 zcen 0.0 sele all end ! meoh is just
+      ! one residue
+
+!!!shake bond sele segi wat end para  !! (no shake on solute)
+                                
+scalar char set 0. sele segi meoh end
+
+nbonds atom vatom cdiel ewal pmew vswitch -
+        kappa          @kap -
+        fftx         @grids  ffty         @grids  fftz         @grids -
+        cutnb          @rcl  ctofnb          @rc  ctonnb        @rcon -
+        cutim          @rcl  spli                 order             6 -
+        qcor              0
+
+!! This is the tricky part. The difference between I and II is lamb*U_uu.
+!! However, calling energy lamb @lamb = 0.7 would give me (1-lamb)*U_uu.
+!! Hence, we call it with lamb=@lambm1=1-@lamb !!!
+
+energy lsta 0. lsto 1. lamb @lambm1
+
+! the energies are extra, we need all elec energy terms ....
+calc eelso = ?elec + ?imel + ?ewks + ?ewse + ?ewex
+
+writ titl unit 6
+* PERT  CHEM  SOLUTE-ONLY
+* @eelp @eelc @eelso
+*
+
+calc diff = abs ( @eelp - @eelc + @eelso )
+
+if @diff .lt. 0.001 then
+! looks OK
+else
+goto problem
+endif
+
+stop
+
+label setup
+
+!! All the boring stuff (rtf,para,psf,crd) follows in this section
+
+read rtf card 
+* topology for all-atom methanol; from
+* top_all22_model.inp; dated june 1992
+* 
+   22    1
+
+! mass-weighted hydrogens...
+
+mass    1 h      10.00   ! polar hydrogen
+mass    3 ha     10.00   ! aliphatic hydrogen
+mass    4 ht      1.008  ! TIP3 water hydrogen
+mass   15 ct3    12.011  ! sp3 carbon for CH3
+mass   54 oh1    15.999  ! hydroxyl oxygen
+mass   56 ot     15.9994 ! TIP3 water oxygen
+mass   98 d1     10.00   ! dummy atom; full bond-length
+mass   99 d2     10.00   ! dummy atom; reduced bond-length
+
+defa firs none last none
+! depending on what we do this may have to be removed...
+auto angles dihe
+
+RESI MEOH        0.00 ! methanol, adm jr.
+GROUP  ! order of atoms to match that used in ab initio
+ATOM CB   CT3   -0.04 !  HB1
+ATOM OG   OH1   -0.66 !     \
+ATOM HG1  H      0.43 ! HB2--CB--OG
+ATOM HB1  HA     0.09 !     /      \
+ATOM HB2  HA     0.09 !  HB3        HG1
+ATOM HB3  HA     0.09 !
+BOND CB  OG  OG HG1  
+BOND CB HB1  CB HB2  CB  HB3
+DONO HG1 OG
+ACCE OG
+! only for analysis
+IC HG1  OG   CB   HB1   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB3   0.0000  0.0000 180.0000  0.0000  0.0000
+IC OG   CB   HB1  HB2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB1   0.0000  0.0000 180.0000  0.0000  0.0000
+
+Resi ETHA        0.00 ! ethane, S. Fischer
+Group
+ Atom h1 ha      0.09 !   H1      H4
+ Atom h2 ha      0.09 !    \      /
+ Atom h3 ha      0.09 !  H2-C1--C2-H5
+ Atom c1 ct3    -0.27 !    /      \
+Group                 !   H3       H6
+ Atom h4 ha      0.09
+ Atom h5 ha      0.09
+ Atom h6 ha      0.09
+ Atom c2 ct3    -0.27
+Bond c1 h1  c1 h2  c1 h3
+Bond c1 c2  c2 h4  c2 h5  c2 h6 
+ic  h1  c1 c2 h4   0.00 0.00    0.0 0.0  0.0
+ic  h1  c1 c2 h5   0.00 0.00  120.0 0.0  0.0
+ic  h1  c1 c2 h6   0.00 0.00  240.0 0.0  0.0
+ic  h2  c1 c2 h6   0.00 0.00  120.0 0.0  0.0
+ic  h3  c1 c2 h6   0.00 0.00  240.0 0.0  0.0
+!sb patch
+ic  c1  c2 h3 h4   0.00 0.00  240.0 0.0  0.0
+
+RESI TIP3        0.00 ! TIPS3P WATER MODEL, adm jr.
+GROUP                 ! Generate noangle nodihedral
+ATOM OH2  OT    -0.834
+ATOM H1   HT     0.417
+ATOM H2   HT     0.417
+BOND OH2  H1   OH2  H2   H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+ACCE OH2
+
+end
+
+read para card
+* parameters for methanol <-> ethane, gas phase and solution
+* based on par_all22_prot.inp; dated May 1993
+*
+
+! this file should contain the parameters for all simulations;
+! gas phase and solution, pure methanol/ethane as well as hybrid.
+
+bonds
+
+ha   ct3    322.0      1.111
+ct3  oh1    428.0      1.42
+oh1  h      545.0      0.96
+ct3  ct3    222.5      1.53
+ht   ht       0.0      1.5139
+ht   ot     450.0      0.9572
+!bond definitions for dummy atoms
+oh1  d1     322.0      1.111
+oh1  d2     322.0      0.2222
+
+angles
+
+ha   ct3  ha      35.5     108.4     5.4     1.802
+ha   ct3  oh1     45.9     108.89
+ct3  oh1  h       57.5     106.0
+ct3  ct3  ha      37.5     110.1    22.53    2.179
+ht   ot   ht      55.      104.52
+!angle definitions for dummy atoms
+ct3  oh1  d1      37.5     110.1    22.53    2.08208
+ct3  oh1  d2      37.5     110.1    22.53    1.51084
+h    oh1  d1      35.5     108.4     5.4     1.68203
+h    oh1  d2      35.5     108.4     5.4     1.05149
+d1   oh1  d1      35.5     108.4     5.4     1.802
+d2   oh1  d2      35.5     108.4     5.4     0.36044
+
+dihe
+
+ha   ct3  oh1  h     0.14  3   0.0
+ha   ct3  ct3  ha    0.155 3   0.0
+! dummy dihedral definitions for dummy atoms
+ha   ct3  oh1  d1    0.0   3   0.0
+ha   ct3  oh1  d2    0.0   3   0.0
+
+nonbonded nbxmod 5 atom cdie shif vatom vdist vswit -
+cutnb 8.5 ctofnb 7.5 ctonnb 6.5 eps 1. e14fac 1. wmin 1.5
+
+ha     0.0     -0.022   1.32
+h      0.0     -0.046   0.2245
+ct3    0.0     -0.08    2.06      0.0    -0.01    1.9
+oh1    0.0     -0.1521  1.77
+d*     0.0      0.0     0.0
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+                !TIP3P HYDROGEN PARAMETERS, adm jr., NBFIX obsolete
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+                !TIP3P OXYGEN PARAMETERS, adm jr., NBFIX obsolete
+end
+
+read sequence card
+* Solute
+*
+  1
+meoh
+generate meoh setup first none last none
+
+read sequence tips @nwater
+generate wat setup noangle nodihedral
+
+read coor card
+* COORDS FOR METH
+* IN 250 WATERS IN A OCTAHEDRAL BOX WITH XTL = 21.6506
+* WATERS MINIMIZED FOR 25 STEPS SD
+*  DATE:     6/15/ 4     10:43:15      CREATED BY USER: stefan
+*
+  756
+    1    1 MEOH CB     0.36500  -0.00631   0.00000 MEOH 1      0.00000
+    2    1 MEOH OG    -0.95039  -0.56049   0.00001 MEOH 1      0.00000
+    3    1 MEOH HG1   -1.58744   0.16272   0.00000 MEOH 1      0.00000
+    4    1 MEOH HB1    0.52907   0.61686  -0.90762 MEOH 1      0.00000
+    5    1 MEOH HB2    0.52907   0.61689   0.90760 MEOH 1      0.00000
+    6    1 MEOH HB3    1.11469  -0.82967   0.00001 MEOH 1      0.00000
+    7    2 TIP3 OH2   -0.35100  10.28270  -0.29556 WAT  1      0.00000
+    8    2 TIP3 H1     0.25135  10.58587   0.38377 WAT  1      0.00000
+    9    2 TIP3 H2     0.12762   9.58821  -0.74815 WAT  1      0.00000
+   10    3 TIP3 OH2    0.64897   9.83999   2.96232 WAT  2      0.00000
+   11    3 TIP3 H1     0.71056   9.58767   3.88359 WAT  2      0.00000
+   12    3 TIP3 H2    -0.26017  10.11751   2.84976 WAT  2      0.00000
+   13    4 TIP3 OH2    1.45998   8.25564   0.86603 WAT  3      0.00000
+   14    4 TIP3 H1     1.19281   8.81919   1.59216 WAT  3      0.00000
+   15    4 TIP3 H2     0.67413   7.75354   0.65021 WAT  3      0.00000
+   16    5 TIP3 OH2   -3.68589   6.71231   4.32184 WAT  4      0.00000
+   17    5 TIP3 H1    -3.37708   7.07574   3.49191 WAT  4      0.00000
+   18    5 TIP3 H2    -2.88757   6.54822   4.82381 WAT  4      0.00000
+   19    6 TIP3 OH2   -0.61628   4.99741   2.86096 WAT  5      0.00000
+   20    6 TIP3 H1    -0.75756   5.46228   3.68568 WAT  5      0.00000
+   21    6 TIP3 H2     0.03841   4.33118   3.07011 WAT  5      0.00000
+   22    7 TIP3 OH2   -6.58707   7.43225   6.55630 WAT  6      0.00000
+   23    7 TIP3 H1    -6.18725   6.62264   6.23865 WAT  6      0.00000
+   24    7 TIP3 H2    -5.88117   8.07784   6.52258 WAT  6      0.00000
+   25    8 TIP3 OH2   -5.65940   8.92303   0.08918 WAT  7      0.00000
+   26    8 TIP3 H1    -4.76541   9.26459   0.07109 WAT  7      0.00000
+   27    8 TIP3 H2    -5.81039   8.69428   1.00630 WAT  7      0.00000
+   28    9 TIP3 OH2   -5.84566   7.92204   2.67776 WAT  8      0.00000
+   29    9 TIP3 H1    -5.23389   7.66245   3.36666 WAT  8      0.00000
+   30    9 TIP3 H2    -6.70221   7.63989   2.99863 WAT  8      0.00000
+   31   10 TIP3 OH2   -2.77898   7.80164   2.03402 WAT  9      0.00000
+   32   10 TIP3 H1    -2.80818   8.70989   1.73326 WAT  9      0.00000
+   33   10 TIP3 H2    -2.04554   7.41413   1.55638 WAT  9      0.00000
+   34   11 TIP3 OH2    2.54583   6.71225   5.28765 WAT  10     0.00000
+   35   11 TIP3 H1     2.38892   6.55128   4.35723 WAT  10     0.00000
+   36   11 TIP3 H2     1.75707   7.16268   5.58963 WAT  10     0.00000
+   37   12 TIP3 OH2   -5.47672  10.87846   4.60808 WAT  11     0.00000
+   38   12 TIP3 H1    -6.00607  11.44230   4.04409 WAT  11     0.00000
+   39   12 TIP3 H2    -4.88635  10.42410   4.00704 WAT  11     0.00000
+   40   13 TIP3 OH2   -9.13768   7.98391  -2.68712 WAT  12     0.00000
+   41   13 TIP3 H1    -8.72186   8.77092  -2.33508 WAT  12     0.00000
+   42   13 TIP3 H2    -9.35694   8.21199  -3.59052 WAT  12     0.00000
+   43   14 TIP3 OH2   -2.06353  10.37834   3.07316 WAT  13     0.00000
+   44   14 TIP3 H1    -1.96695  11.12715   3.66155 WAT  13     0.00000
+   45   14 TIP3 H2    -2.26638   9.64319   3.65165 WAT  13     0.00000
+   46   15 TIP3 OH2   -2.92813   6.47303  -1.20481 WAT  14     0.00000
+   47   15 TIP3 H1    -3.83903   6.29117  -0.97372 WAT  14     0.00000
+   48   15 TIP3 H2    -2.98425   7.03745  -1.97584 WAT  14     0.00000
+   49   16 TIP3 OH2    0.21115   8.83902  -2.67652 WAT  15     0.00000
+   50   16 TIP3 H1     0.64100   9.43427  -3.29063 WAT  15     0.00000
+   51   16 TIP3 H2    -0.68794   8.77088  -2.99780 WAT  15     0.00000
+   52   17 TIP3 OH2   -0.77914   6.71628   0.53281 WAT  16     0.00000
+   53   17 TIP3 H1    -0.60555   5.90992   1.01849 WAT  16     0.00000
+   54   17 TIP3 H2    -1.40499   6.45872  -0.14409 WAT  16     0.00000
+   55   18 TIP3 OH2   -2.97558   4.11528   1.81920 WAT  17     0.00000
+   56   18 TIP3 H1    -3.59983   4.81851   1.64034 WAT  17     0.00000
+   57   18 TIP3 H2    -2.23922   4.55135   2.24798 WAT  17     0.00000
+   58   19 TIP3 OH2   -3.91048   3.29088  -0.67360 WAT  18     0.00000
+   59   19 TIP3 H1    -4.34034   4.10296  -0.94190 WAT  18     0.00000
+   60   19 TIP3 H2    -3.39847   3.53389   0.09777 WAT  18     0.00000
+   61   20 TIP3 OH2    2.38826   6.20160   2.43409 WAT  19     0.00000
+   62   20 TIP3 H1     2.25467   5.45434   1.85100 WAT  19     0.00000
+   63   20 TIP3 H2     2.15753   6.96420   1.90359 WAT  19     0.00000
+   64   21 TIP3 OH2   -1.07559   4.78838  -2.38238 WAT  20     0.00000
+   65   21 TIP3 H1    -0.98540   4.02182  -1.81630 WAT  20     0.00000
+   66   21 TIP3 H2    -1.78837   5.29328  -1.99091 WAT  20     0.00000
+   67   22 TIP3 OH2   -7.94050   6.70456   4.00291 WAT  21     0.00000
+   68   22 TIP3 H1    -7.79220   5.75897   3.99322 WAT  21     0.00000
+   69   22 TIP3 H2    -7.89120   6.94574   4.92792 WAT  21     0.00000
+   70   23 TIP3 OH2    2.64673  11.82185   3.42287 WAT  22     0.00000
+   71   23 TIP3 H1     3.41697  11.61769   2.89253 WAT  22     0.00000
+   72   23 TIP3 H2     1.98801  11.18573   3.14421 WAT  22     0.00000
+   73   24 TIP3 OH2   -7.63977   5.14048   1.00812 WAT  23     0.00000
+   74   24 TIP3 H1    -7.73443   4.73966   0.14406 WAT  23     0.00000
+   75   24 TIP3 H2    -8.19561   5.91900   0.97374 WAT  23     0.00000
+   76   25 TIP3 OH2   -2.80473   5.71759  -6.37923 WAT  24     0.00000
+   77   25 TIP3 H1    -2.43978   6.04653  -7.20072 WAT  24     0.00000
+   78   25 TIP3 H2    -3.58549   5.23001  -6.64171 WAT  24     0.00000
+   79   26 TIP3 OH2   -3.56940   8.30497  -5.72421 WAT  25     0.00000
+   80   26 TIP3 H1    -3.50050   7.37629  -5.94562 WAT  25     0.00000
+   81   26 TIP3 H2    -4.51059   8.46748  -5.66126 WAT  25     0.00000
+   82   27 TIP3 OH2   -2.65280   8.40632  -3.14087 WAT  26     0.00000
+   83   27 TIP3 H1    -2.81403   8.18134  -4.05718 WAT  26     0.00000
+   84   27 TIP3 H2    -3.04546   9.27269  -3.03381 WAT  26     0.00000
+   85   28 TIP3 OH2   -5.90192   7.99985  -2.47443 WAT  27     0.00000
+   86   28 TIP3 H1    -5.86041   7.04454  -2.43142 WAT  27     0.00000
+   87   28 TIP3 H2    -5.87309   8.28272  -1.56044 WAT  27     0.00000
+   88   29 TIP3 OH2   -5.47307   5.27510  -2.11258 WAT  28     0.00000
+   89   29 TIP3 H1    -6.35897   4.96238  -1.92923 WAT  28     0.00000
+   90   29 TIP3 H2    -5.17934   4.74369  -2.85256 WAT  28     0.00000
+   91   30 TIP3 OH2   -5.49326   5.09128   5.53877 WAT  29     0.00000
+   92   30 TIP3 H1    -6.01700   4.63778   4.87826 WAT  29     0.00000
+   93   30 TIP3 H2    -4.82180   5.55333   5.03689 WAT  29     0.00000
+   94   31 TIP3 OH2    0.45376   7.86900   6.70270 WAT  30     0.00000
+   95   31 TIP3 H1    -0.21251   8.55274   6.63361 WAT  30     0.00000
+   96   31 TIP3 H2     0.70537   7.87155   7.62622 WAT  30     0.00000
+   97   32 TIP3 OH2   -2.99906   9.53371  -0.36983 WAT  31     0.00000
+   98   32 TIP3 H1    -2.78004   8.72405  -0.83103 WAT  31     0.00000
+   99   32 TIP3 H2    -2.15845   9.97463  -0.24658 WAT  31     0.00000
+  100   33 TIP3 OH2   -4.93312   5.81797   0.99045 WAT  32     0.00000
+  101   33 TIP3 H1    -5.83765   5.50564   0.96823 WAT  32     0.00000
+  102   33 TIP3 H2    -4.98762   6.68229   1.39813 WAT  32     0.00000
+  103   34 TIP3 OH2   -1.62008   9.61517   6.44742 WAT  33     0.00000
+  104   34 TIP3 H1    -1.92510  10.52232   6.43143 WAT  33     0.00000
+  105   34 TIP3 H2    -2.21797   9.17153   7.04902 WAT  33     0.00000
+  106   35 TIP3 OH2   -7.16359   4.03178   3.62821 WAT  34     0.00000
+  107   35 TIP3 H1    -7.29991   4.17563   2.69175 WAT  34     0.00000
+  108   35 TIP3 H2    -7.35880   3.10394   3.75941 WAT  34     0.00000
+  109   36 TIP3 OH2   -0.55125   3.48585   0.11699 WAT  35     0.00000
+  110   36 TIP3 H1    -0.85075   3.40219   1.02226 WAT  35     0.00000
+  111   36 TIP3 H2     0.33874   3.83063   0.18955 WAT  35     0.00000
+  112   37 TIP3 OH2   -6.03225  -1.32476  -8.11176 WAT  36     0.00000
+  113   37 TIP3 H1    -6.48652  -0.89288  -7.38834 WAT  36     0.00000
+  114   37 TIP3 H2    -5.90143  -0.63293  -8.76020 WAT  36     0.00000
+  115   38 TIP3 OH2   -5.09208  -1.77107  -4.92078 WAT  37     0.00000
+  116   38 TIP3 H1    -5.53578  -2.16920  -4.17189 WAT  37     0.00000
+  117   38 TIP3 H2    -5.73502  -1.16263  -5.28499 WAT  37     0.00000
+  118   39 TIP3 OH2   -5.96505   1.30499  -3.43267 WAT  38     0.00000
+  119   39 TIP3 H1    -5.47514   2.11704  -3.56233 WAT  38     0.00000
+  120   39 TIP3 H2    -6.69917   1.55463  -2.87142 WAT  38     0.00000
+  121   40 TIP3 OH2   -4.20442  -3.12104  -7.17761 WAT  39     0.00000
+  122   40 TIP3 H1    -4.31404  -2.69274  -6.32863 WAT  39     0.00000
+  123   40 TIP3 H2    -4.83059  -2.67984  -7.75163 WAT  39     0.00000
+  124   41 TIP3 OH2   -9.23438  -4.51030  -4.35987 WAT  40     0.00000
+  125   41 TIP3 H1    -9.17925  -5.01124  -5.17365 WAT  40     0.00000
+  126   41 TIP3 H2    -8.53684  -4.86766  -3.81038 WAT  40     0.00000
+  127   42 TIP3 OH2   -6.41230  -6.71499  -5.03510 WAT  41     0.00000
+  128   42 TIP3 H1    -6.86975  -6.36288  -4.27157 WAT  41     0.00000
+  129   42 TIP3 H2    -5.72630  -6.07375  -5.22066 WAT  41     0.00000
+  130   43 TIP3 OH2   -6.09616   0.66700 -10.01508 WAT  42     0.00000
+  131   43 TIP3 H1    -6.19276   1.44192 -10.56861 WAT  42     0.00000
+  132   43 TIP3 H2    -6.67324   0.01481 -10.41240 WAT  42     0.00000
+  133   44 TIP3 OH2   -3.65287  -4.75344  -2.85600 WAT  43     0.00000
+  134   44 TIP3 H1    -3.89879  -4.95083  -3.75976 WAT  43     0.00000
+  135   44 TIP3 H2    -4.40555  -4.28116  -2.50016 WAT  43     0.00000
+  136   45 TIP3 OH2   -9.22331  -0.63452  -4.56168 WAT  44     0.00000
+  137   45 TIP3 H1    -8.45294  -0.40231  -5.08017 WAT  44     0.00000
+  138   45 TIP3 H2    -9.75059  -1.17926  -5.14605 WAT  44     0.00000
+  139   46 TIP3 OH2   -9.42952   2.43417  -4.09253 WAT  45     0.00000
+  140   46 TIP3 H1    -9.53824   1.59918  -4.54770 WAT  45     0.00000
+  141   46 TIP3 H2    -9.69597   2.25267  -3.19126 WAT  45     0.00000
+  142   47 TIP3 OH2   -6.83991   0.26497  -5.81975 WAT  46     0.00000
+  143   47 TIP3 H1    -7.01170   1.01319  -6.39147 WAT  46     0.00000
+  144   47 TIP3 H2    -6.54336   0.65452  -4.99724 WAT  46     0.00000
+  145   48 TIP3 OH2   -4.11454  -5.27874  -5.50546 WAT  47     0.00000
+  146   48 TIP3 H1    -3.49119  -5.94555  -5.79357 WAT  47     0.00000
+  147   48 TIP3 H2    -4.13897  -4.64666  -6.22386 WAT  47     0.00000
+  148   49 TIP3 OH2   -7.94909   4.23883  -1.56834 WAT  48     0.00000
+  149   49 TIP3 H1    -8.76751   4.61782  -1.88894 WAT  48     0.00000
+  150   49 TIP3 H2    -8.07541   3.29328  -1.64711 WAT  48     0.00000
+  151   50 TIP3 OH2   -1.29848   3.80972  -5.01525 WAT  49     0.00000
+  152   50 TIP3 H1    -1.62518   4.63207  -5.38026 WAT  49     0.00000
+  153   50 TIP3 H2    -1.15389   3.99930  -4.08822 WAT  49     0.00000
+  154   51 TIP3 OH2   -2.29295   2.16057  -2.61224 WAT  51     0.00000
+  155   51 TIP3 H1    -2.64126   1.35344  -2.99099 WAT  51     0.00000
+  156   51 TIP3 H2    -2.91182   2.38638  -1.91783 WAT  51     0.00000
+  157   52 TIP3 OH2   -7.12738   7.48124  -5.97807 WAT  52     0.00000
+  158   52 TIP3 H1    -6.82623   8.18365  -5.40173 WAT  52     0.00000
+  159   52 TIP3 H2    -8.08243   7.53567  -5.94396 WAT  52     0.00000
+  160   53 TIP3 OH2   -3.14019   0.04697  -4.13832 WAT  53     0.00000
+  161   53 TIP3 H1    -2.99630   0.57690  -4.92234 WAT  53     0.00000
+  162   53 TIP3 H2    -3.75522  -0.63156  -4.41683 WAT  53     0.00000
+  163   54 TIP3 OH2   10.59741  -0.70844   8.11179 WAT  54     0.00000
+  164   54 TIP3 H1    10.34111  -1.00834   8.98392 WAT  54     0.00000
+  165   54 TIP3 H2     9.96892  -0.01789   7.90116 WAT  54     0.00000
+  166   55 TIP3 OH2  -10.23609   5.51549  -2.29958 WAT  55     0.00000
+  167   55 TIP3 H1   -11.13974   5.78021  -2.12765 WAT  55     0.00000
+  168   55 TIP3 H2    -9.77707   6.33482  -2.48457 WAT  55     0.00000
+  169   56 TIP3 OH2   -5.12190   4.26446  -6.73084 WAT  56     0.00000
+  170   56 TIP3 H1    -5.95026   4.62007  -7.05270 WAT  56     0.00000
+  171   56 TIP3 H2    -4.90152   3.57001  -7.35165 WAT  56     0.00000
+  172   57 TIP3 OH2   -4.50156   3.60141  -4.05746 WAT  57     0.00000
+  173   57 TIP3 H1    -3.56966   3.38820  -4.00907 WAT  57     0.00000
+  174   57 TIP3 H2    -4.64669   3.83650  -4.97391 WAT  57     0.00000
+  175   58 TIP3 OH2   -4.23680   2.32142  -8.42806 WAT  58     0.00000
+  176   58 TIP3 H1    -4.45586   1.55458  -8.95741 WAT  58     0.00000
+  177   58 TIP3 H2    -3.57904   2.00547  -7.80860 WAT  58     0.00000
+  178   59 TIP3 OH2   -5.70875  -3.49820  -1.51024 WAT  59     0.00000
+  179   59 TIP3 H1    -5.58613  -2.55231  -1.59056 WAT  59     0.00000
+  180   59 TIP3 H2    -5.53714  -3.68492  -0.58726 WAT  59     0.00000
+  181   60 TIP3 OH2   -7.94646   1.52354  -1.49613 WAT  60     0.00000
+  182   60 TIP3 H1    -7.29978   1.52675  -0.79044 WAT  60     0.00000
+  183   60 TIP3 H2    -8.18514   0.60228  -1.59875 WAT  60     0.00000
+  184   61 TIP3 OH2   -8.95207   4.88382  -5.34726 WAT  61     0.00000
+  185   61 TIP3 H1    -8.13221   5.13599  -4.92246 WAT  61     0.00000
+  186   61 TIP3 H2    -9.25737   4.12582  -4.84881 WAT  61     0.00000
+  187   62 TIP3 OH2   -5.91714   1.62646   0.25469 WAT  62     0.00000
+  188   62 TIP3 H1    -5.59996   1.17221   1.03526 WAT  62     0.00000
+  189   62 TIP3 H2    -5.18782   2.18723  -0.00962 WAT  62     0.00000
+  190   63 TIP3 OH2  -10.91720   0.82078  -2.22270 WAT  63     0.00000
+  191   63 TIP3 H1   -10.96982   0.58849  -1.29561 WAT  63     0.00000
+  192   63 TIP3 H2   -10.47780   0.07554  -2.63227 WAT  63     0.00000
+  193   64 TIP3 OH2   -8.41965  -1.14317  -1.96001 WAT  64     0.00000
+  194   64 TIP3 H1    -8.65710  -1.20309  -2.88534 WAT  64     0.00000
+  195   64 TIP3 H2    -8.55741  -2.02696  -1.61919 WAT  64     0.00000
+  196   65 TIP3 OH2   -5.11221  -0.82192  -1.74085 WAT  65     0.00000
+  197   65 TIP3 H1    -5.43578  -0.10581  -2.28739 WAT  65     0.00000
+  198   65 TIP3 H2    -4.16918  -0.66974  -1.67946 WAT  65     0.00000
+  199   66 TIP3 OH2    1.99310   0.73980  10.77413 WAT  66     0.00000
+  200   66 TIP3 H1     2.68212   0.88855  11.42170 WAT  66     0.00000
+  201   66 TIP3 H2     2.36209   0.08989  10.17606 WAT  66     0.00000
+  202   67 TIP3 OH2   -0.57875   3.58160  10.10587 WAT  67     0.00000
+  203   67 TIP3 H1    -0.89064   4.48602  10.07464 WAT  67     0.00000
+  204   67 TIP3 H2     0.06182   3.52403   9.39694 WAT  67     0.00000
+  205   68 TIP3 OH2   -6.56789   4.64364   8.08724 WAT  68     0.00000
+  206   68 TIP3 H1    -6.11355   4.87090   7.27597 WAT  68     0.00000
+  207   68 TIP3 H2    -6.48256   5.42294   8.63647 WAT  68     0.00000
+  208   69 TIP3 OH2    3.11295   4.90940   7.25471 WAT  69     0.00000
+  209   69 TIP3 H1     2.27036   4.47777   7.39596 WAT  69     0.00000
+  210   69 TIP3 H2     2.96397   5.48762   6.50658 WAT  69     0.00000
+  211   70 TIP3 OH2    0.90831   3.28091   7.68848 WAT  70     0.00000
+  212   70 TIP3 H1     1.23151   2.61176   7.08516 WAT  70     0.00000
+  213   70 TIP3 H2     0.02671   3.48166   7.37430 WAT  70     0.00000
+  214   71 TIP3 OH2   -5.12581   2.72027   9.47262 WAT  71     0.00000
+  215   71 TIP3 H1    -5.79027   3.20863   8.98660 WAT  71     0.00000
+  216   71 TIP3 H2    -5.38667   1.80387   9.38109 WAT  71     0.00000
+  217   72 TIP3 OH2    2.94374   3.32686   9.98750 WAT  72     0.00000
+  218   72 TIP3 H1     2.56041   3.43791   9.11747 WAT  72     0.00000
+  219   72 TIP3 H2     2.58658   2.49671  10.30294 WAT  72     0.00000
+  220   73 TIP3 OH2  -11.49939  -4.70921  -2.83651 WAT  73     0.00000
+  221   73 TIP3 H1   -10.64377  -4.67760  -3.26443 WAT  73     0.00000
+  222   73 TIP3 H2   -11.32905  -4.42604  -1.93816 WAT  73     0.00000
+  223   74 TIP3 OH2   -4.14968   2.59800   6.30095 WAT  74     0.00000
+  224   74 TIP3 H1    -4.95381   2.08342   6.37022 WAT  74     0.00000
+  225   74 TIP3 H2    -4.44976   3.48957   6.12406 WAT  74     0.00000
+  226   75 TIP3 OH2    2.02003   1.45079   5.94782 WAT  75     0.00000
+  227   75 TIP3 H1     2.88099   1.37935   6.35999 WAT  75     0.00000
+  228   75 TIP3 H2     1.97691   0.70363   5.35107 WAT  75     0.00000
+  229   76 TIP3 OH2   -6.42186  -0.73392   8.64089 WAT  76     0.00000
+  230   76 TIP3 H1    -5.65699  -1.30082   8.54170 WAT  76     0.00000
+  231   76 TIP3 H2    -6.48990  -0.27411   7.80412 WAT  76     0.00000
+  232   77 TIP3 OH2   -0.31473  -3.13286   9.57673 WAT  77     0.00000
+  233   77 TIP3 H1    -1.23150  -3.33797   9.39318 WAT  77     0.00000
+  234   77 TIP3 H2    -0.14979  -2.32105   9.09716 WAT  77     0.00000
+  235   78 TIP3 OH2    2.72037  -0.86441   8.59977 WAT  78     0.00000
+  236   78 TIP3 H1     3.17917  -0.23128   8.04763 WAT  78     0.00000
+  237   78 TIP3 H2     1.80689  -0.81013   8.31902 WAT  78     0.00000
+  238   79 TIP3 OH2    1.91478  -4.67932   8.75581 WAT  79     0.00000
+  239   79 TIP3 H1     2.17559  -5.19221   9.52076 WAT  79     0.00000
+  240   79 TIP3 H2     1.16395  -4.16665   9.05524 WAT  79     0.00000
+  241   80 TIP3 OH2   -3.66773   1.85844   3.20505 WAT  80     0.00000
+  242   80 TIP3 H1    -2.99077   1.84692   3.88168 WAT  80     0.00000
+  243   80 TIP3 H2    -3.48686   2.64996   2.69808 WAT  80     0.00000
+  244   81 TIP3 OH2    1.07945   2.84924   3.38411 WAT  81     0.00000
+  245   81 TIP3 H1     1.57316   2.48539   2.64918 WAT  81     0.00000
+  246   81 TIP3 H2     1.71691   2.90809   4.09574 WAT  81     0.00000
+  247   82 TIP3 OH2   -1.65212   3.88267   6.95675 WAT  82     0.00000
+  248   82 TIP3 H1    -2.14304   3.23133   6.45579 WAT  82     0.00000
+  249   82 TIP3 H2    -2.28402   4.22559   7.58868 WAT  82     0.00000
+  250   83 TIP3 OH2   -6.40602   1.08766   6.48398 WAT  83     0.00000
+  251   83 TIP3 H1    -6.99269   1.49939   7.11844 WAT  83     0.00000
+  252   83 TIP3 H2    -6.88378   1.12576   5.65543 WAT  83     0.00000
+  253   84 TIP3 OH2   -0.18207  -3.40891   5.02220 WAT  84     0.00000
+  254   84 TIP3 H1     0.24498  -3.32285   4.16988 WAT  84     0.00000
+  255   84 TIP3 H2    -0.87863  -4.04941   4.87803 WAT  84     0.00000
+  256   85 TIP3 OH2   -2.82404   7.64926   8.17077 WAT  85     0.00000
+  257   85 TIP3 H1    -2.09550   7.27234   8.66411 WAT  85     0.00000
+  258   85 TIP3 H2    -3.37221   6.89884   7.94133 WAT  85     0.00000
+  259   86 TIP3 OH2   -0.86671  -0.82461   5.63470 WAT  86     0.00000
+  260   86 TIP3 H1    -0.77120  -1.76789   5.50298 WAT  86     0.00000
+  261   86 TIP3 H2    -1.80667  -0.69365   5.75925 WAT  86     0.00000
+  262   87 TIP3 OH2   -3.40536  -0.13672   6.29961 WAT  87     0.00000
+  263   87 TIP3 H1    -3.53487  -0.41490   7.20629 WAT  87     0.00000
+  264   87 TIP3 H2    -3.57122   0.80591   6.31178 WAT  87     0.00000
+  265   88 TIP3 OH2   -7.70880   1.27763   4.04420 WAT  88     0.00000
+  266   88 TIP3 H1    -8.60679   0.99710   4.22071 WAT  88     0.00000
+  267   88 TIP3 H2    -7.40445   0.68811   3.35422 WAT  88     0.00000
+  268   89 TIP3 OH2   -0.04209  -0.69984   8.28873 WAT  89     0.00000
+  269   89 TIP3 H1    -0.31219  -0.63354   7.37283 WAT  89     0.00000
+  270   89 TIP3 H2    -0.24739   0.15727   8.66213 WAT  89     0.00000
+  271   90 TIP3 OH2   -1.24077   6.31108  10.05023 WAT  90     0.00000
+  272   90 TIP3 H1    -1.61289   6.69848  10.84249 WAT  90     0.00000
+  273   90 TIP3 H2    -0.40357   6.76028   9.93388 WAT  90     0.00000
+  274   91 TIP3 OH2   -7.87679   2.04830   8.54183 WAT  91     0.00000
+  275   91 TIP3 H1    -7.85917   2.90297   8.97246 WAT  91     0.00000
+  276   91 TIP3 H2    -8.17952   1.44418   9.21977 WAT  91     0.00000
+  277   92 TIP3 OH2   -3.63974  -1.28136   8.78066 WAT  92     0.00000
+  278   92 TIP3 H1    -3.33376  -2.16422   8.98836 WAT  92     0.00000
+  279   92 TIP3 H2    -3.92302  -0.92159   9.62122 WAT  92     0.00000
+  280   93 TIP3 OH2   -3.04350  -3.95842   9.29297 WAT  93     0.00000
+  281   93 TIP3 H1    -3.98047  -4.10640   9.42106 WAT  93     0.00000
+  282   93 TIP3 H2    -2.79543  -4.57397   8.60320 WAT  93     0.00000
+  283   94 TIP3 OH2   -1.26916   1.86165   4.68283 WAT  94     0.00000
+  284   94 TIP3 H1    -0.48619   2.22260   4.26703 WAT  94     0.00000
+  285   94 TIP3 H2    -0.99489   1.00384   5.00710 WAT  94     0.00000
+  286   95 TIP3 OH2   -1.15750   6.06065   5.34152 WAT  95     0.00000
+  287   95 TIP3 H1    -0.65079   6.69126   5.85319 WAT  95     0.00000
+  288   95 TIP3 H2    -1.29242   5.32255   5.93585 WAT  95     0.00000
+  289   96 TIP3 OH2   -3.59709   4.93695   8.64156 WAT  96     0.00000
+  290   96 TIP3 H1    -3.48190   5.42507   9.45685 WAT  96     0.00000
+  291   96 TIP3 H2    -4.06345   4.14245   8.90138 WAT  96     0.00000
+  292   97 TIP3 OH2   -3.80841 -10.81169   3.18571 WAT  98     0.00000
+  293   97 TIP3 H1    -3.84971 -10.09542   3.81932 WAT  98     0.00000
+  294   97 TIP3 H2    -3.03255 -11.31178   3.43904 WAT  98     0.00000
+  295   98 TIP3 OH2   -3.21165  -8.33375   7.52117 WAT  99     0.00000
+  296   98 TIP3 H1    -2.98131  -7.43799   7.76774 WAT  99     0.00000
+  297   98 TIP3 H2    -3.70224  -8.67043   8.27097 WAT  99     0.00000
+  298   99 TIP3 OH2   -6.70886  -7.77514   2.77642 WAT  100    0.00000
+  299   99 TIP3 H1    -6.96217  -6.92786   2.41010 WAT  100    0.00000
+  300   99 TIP3 H2    -5.79674  -7.88900   2.50943 WAT  100    0.00000
+  301  100 TIP3 OH2   -3.36490  -6.01219  -0.44207 WAT  101    0.00000
+  302  100 TIP3 H1    -3.87590  -6.81847  -0.51264 WAT  101    0.00000
+  303  100 TIP3 H2    -3.37809  -5.64165  -1.32453 WAT  101    0.00000
+  304  101 TIP3 OH2   -4.92606  -8.26313  -0.69950 WAT  102    0.00000
+  305  101 TIP3 H1    -4.65029  -8.98426  -1.26531 WAT  102    0.00000
+  306  101 TIP3 H2    -5.85759  -8.15179  -0.88943 WAT  102    0.00000
+  307  102 TIP3 OH2   -4.11605  -8.30747   1.93441 WAT  103    0.00000
+  308  102 TIP3 H1    -4.32630  -8.30432   1.00060 WAT  103    0.00000
+  309  102 TIP3 H2    -4.03374  -9.23436   2.15874 WAT  103    0.00000
+  310  103 TIP3 OH2   -4.95816  -4.31479   1.04621 WAT  104    0.00000
+  311  103 TIP3 H1    -4.34755  -4.94338   0.66118 WAT  104    0.00000
+  312  103 TIP3 H2    -4.45674  -3.88771   1.74077 WAT  104    0.00000
+  313  104 TIP3 OH2   -3.79621 -10.37750  -2.07359 WAT  105    0.00000
+  314  104 TIP3 H1    -3.01076 -10.59973  -1.57366 WAT  105    0.00000
+  315  104 TIP3 H2    -3.62041 -10.70598  -2.95530 WAT  105    0.00000
+  316  105 TIP3 OH2   -3.50736  -8.70884   4.84493 WAT  106    0.00000
+  317  105 TIP3 H1    -4.09565  -7.97059   4.68645 WAT  106    0.00000
+  318  105 TIP3 H2    -3.31123  -8.66283   5.78069 WAT  106    0.00000
+  319  106 TIP3 OH2  -11.37277  -3.85133  -0.06058 WAT  107    0.00000
+  320  106 TIP3 H1   -11.63111  -3.10692   0.48286 WAT  107    0.00000
+  321  106 TIP3 H2   -10.42918  -3.74462  -0.18087 WAT  107    0.00000
+  322  107 TIP3 OH2    1.41410  -5.56382   6.17499 WAT  108    0.00000
+  323  107 TIP3 H1     1.10099  -4.73951   5.80258 WAT  108    0.00000
+  324  107 TIP3 H2     1.57641  -5.36431   7.09698 WAT  108    0.00000
+  325  108 TIP3 OH2   -0.43894  -7.12357   8.55734 WAT  109    0.00000
+  326  108 TIP3 H1    -0.30783  -8.02154   8.86178 WAT  109    0.00000
+  327  108 TIP3 H2    -0.23292  -6.57988   9.31772 WAT  109    0.00000
+  328  109 TIP3 OH2   -5.19790  -1.59093   4.76155 WAT  110    0.00000
+  329  109 TIP3 H1    -4.65773  -1.05193   5.33942 WAT  110    0.00000
+  330  109 TIP3 H2    -6.01002  -1.72658   5.24970 WAT  110    0.00000
+  331  110 TIP3 OH2   -5.38995  -0.08194   2.49652 WAT  111    0.00000
+  332  110 TIP3 H1    -5.41112  -0.67247   3.24955 WAT  111    0.00000
+  333  110 TIP3 H2    -4.79260   0.61886   2.75785 WAT  111    0.00000
+  334  111 TIP3 OH2   -4.67480  -8.75608  -4.53802 WAT  112    0.00000
+  335  111 TIP3 H1    -5.42403  -8.20081  -4.75380 WAT  112    0.00000
+  336  111 TIP3 H2    -3.93970  -8.14789  -4.46086 WAT  112    0.00000
+  337  112 TIP3 OH2   -7.60686  -7.77753  -1.20056 WAT  113    0.00000
+  338  112 TIP3 H1    -8.17375  -8.34846  -1.71911 WAT  113    0.00000
+  339  112 TIP3 H2    -8.19854  -7.35004  -0.58139 WAT  113    0.00000
+  340  113 TIP3 OH2   -8.66644  -3.41719  -0.32057 WAT  114    0.00000
+  341  113 TIP3 H1    -7.98423  -2.91603   0.12626 WAT  114    0.00000
+  342  113 TIP3 H2    -8.44739  -4.33194  -0.14314 WAT  114    0.00000
+  343  114 TIP3 OH2   -3.57190  -3.04121   3.07888 WAT  115    0.00000
+  344  114 TIP3 H1    -4.17346  -2.59723   3.67657 WAT  115    0.00000
+  345  114 TIP3 H2    -3.00859  -2.34379   2.74344 WAT  115    0.00000
+  346  115 TIP3 OH2   -7.55094  -4.68174   4.73746 WAT  116    0.00000
+  347  115 TIP3 H1    -7.16140  -4.45131   5.58088 WAT  116    0.00000
+  348  115 TIP3 H2    -8.17962  -3.98108   4.56404 WAT  116    0.00000
+  349  116 TIP3 OH2   -7.55170  -2.01504   6.11427 WAT  117    0.00000
+  350  116 TIP3 H1    -7.79857  -2.38288   6.96279 WAT  117    0.00000
+  351  116 TIP3 H2    -8.34157  -2.09425   5.57942 WAT  117    0.00000
+  352  117 TIP3 OH2   -7.38504  -5.17371   2.03878 WAT  118    0.00000
+  353  117 TIP3 H1    -7.38238  -4.96981   2.97400 WAT  118    0.00000
+  354  117 TIP3 H2    -6.57061  -4.79470   1.70822 WAT  118    0.00000
+  355  118 TIP3 OH2   -8.03377  -3.59627   8.34405 WAT  120    0.00000
+  356  118 TIP3 H1    -7.97465  -3.68757   9.29503 WAT  120    0.00000
+  357  118 TIP3 H2    -7.30095  -4.11192   8.00745 WAT  120    0.00000
+  358  119 TIP3 OH2   -2.37016  -5.02998   4.60388 WAT  121    0.00000
+  359  119 TIP3 H1    -2.85779  -4.43497   4.03430 WAT  121    0.00000
+  360  119 TIP3 H2    -2.11006  -5.75132   4.03094 WAT  121    0.00000
+  361  120 TIP3 OH2   -8.63088  -7.22170   5.69483 WAT  122    0.00000
+  362  120 TIP3 H1    -8.05002  -6.59420   5.26463 WAT  122    0.00000
+  363  120 TIP3 H2    -9.48898  -7.06315   5.30143 WAT  122    0.00000
+  364  121 TIP3 OH2   -2.35547  -5.64758   7.30083 WAT  123    0.00000
+  365  121 TIP3 H1    -1.54664  -6.09773   7.54455 WAT  123    0.00000
+  366  121 TIP3 H2    -2.25723  -5.46689   6.36600 WAT  123    0.00000
+  367  122 TIP3 OH2   -1.56716  -7.10831   3.04278 WAT  124    0.00000
+  368  122 TIP3 H1    -2.28258  -7.73872   2.95918 WAT  124    0.00000
+  369  122 TIP3 H2    -0.96423  -7.51102   3.66768 WAT  124    0.00000
+  370  123 TIP3 OH2   -5.78370  -4.78010   7.11132 WAT  125    0.00000
+  371  123 TIP3 H1    -5.07455  -4.31010   6.67264 WAT  125    0.00000
+  372  123 TIP3 H2    -5.67248  -5.69095   6.83890 WAT  125    0.00000
+  373  124 TIP3 OH2   -7.24620  -5.47246  -2.73217 WAT  126    0.00000
+  374  124 TIP3 H1    -6.77146  -4.83510  -2.19869 WAT  126    0.00000
+  375  124 TIP3 H2    -7.35572  -6.23116  -2.15891 WAT  126    0.00000
+  376  125 TIP3 OH2   -9.25740  -6.18403   0.31994 WAT  127    0.00000
+  377  125 TIP3 H1    -8.76576  -5.95679   1.10917 WAT  127    0.00000
+  378  125 TIP3 H2   -10.17377  -6.04716   0.56033 WAT  127    0.00000
+  379  126 TIP3 OH2   -8.92962  -0.69708   2.13626 WAT  128    0.00000
+  380  126 TIP3 H1    -8.25134  -0.99657   1.53089 WAT  128    0.00000
+  381  126 TIP3 H2    -9.46873  -0.10076   1.61665 WAT  128    0.00000
+  382  127 TIP3 OH2   -6.78471  -1.52651   0.57969 WAT  129    0.00000
+  383  127 TIP3 H1    -6.50310  -1.15135  -0.25467 WAT  129    0.00000
+  384  127 TIP3 H2    -6.22175  -1.11008   1.23227 WAT  129    0.00000
+  385  128 TIP3 OH2   -9.38372  -2.63513   4.05151 WAT  130    0.00000
+  386  128 TIP3 H1    -9.16901  -1.87155   3.51574 WAT  130    0.00000
+  387  128 TIP3 H2   -10.07323  -3.08481   3.56305 WAT  130    0.00000
+  388  129 TIP3 OH2    4.84012  10.93192   1.98160 WAT  131    0.00000
+  389  129 TIP3 H1     4.62515  10.26036   1.33429 WAT  131    0.00000
+  390  129 TIP3 H2     5.36909  10.47459   2.63526 WAT  131    0.00000
+  391  130 TIP3 OH2    1.91392   4.74999  -0.01921 WAT  132    0.00000
+  392  130 TIP3 H1     2.27978   4.01317  -0.50857 WAT  132    0.00000
+  393  130 TIP3 H2     1.78839   5.43534  -0.67552 WAT  132    0.00000
+  394  131 TIP3 OH2   10.41883   2.82447  -1.41966 WAT  133    0.00000
+  395  131 TIP3 H1    10.57542   3.25344  -2.26090 WAT  133    0.00000
+  396  131 TIP3 H2    11.26782   2.84507  -0.97806 WAT  133    0.00000
+  397  132 TIP3 OH2    6.20108   4.92624   0.27068 WAT  134    0.00000
+  398  132 TIP3 H1     7.05065   4.73389   0.66745 WAT  134    0.00000
+  399  132 TIP3 H2     5.72202   5.40292   0.94854 WAT  134    0.00000
+  400  133 TIP3 OH2    8.26368   6.75706  -5.96687 WAT  135    0.00000
+  401  133 TIP3 H1     8.80515   7.50999  -5.72998 WAT  135    0.00000
+  402  133 TIP3 H2     8.23570   6.22244  -5.17337 WAT  135    0.00000
+  403  134 TIP3 OH2    8.07743   5.19641  -3.66315 WAT  136    0.00000
+  404  134 TIP3 H1     8.41062   5.66411  -2.89732 WAT  136    0.00000
+  405  134 TIP3 H2     7.12532   5.25919  -3.58720 WAT  136    0.00000
+  406  135 TIP3 OH2    5.62602  10.04873  -3.93323 WAT  137    0.00000
+  407  135 TIP3 H1     5.17630  10.83050  -3.61257 WAT  137    0.00000
+  408  135 TIP3 H2     5.18298   9.83702  -4.75487 WAT  137    0.00000
+  409  136 TIP3 OH2   11.30014   3.73045  -3.85121 WAT  138    0.00000
+  410  136 TIP3 H1    11.67191   4.52062  -4.24316 WAT  138    0.00000
+  411  136 TIP3 H2    10.67213   3.41327  -4.50024 WAT  138    0.00000
+  412  137 TIP3 OH2    8.13941   6.88326  -1.45669 WAT  139    0.00000
+  413  137 TIP3 H1     8.09569   7.77876  -1.79192 WAT  139    0.00000
+  414  137 TIP3 H2     7.28204   6.73412  -1.05807 WAT  139    0.00000
+  415  138 TIP3 OH2    3.73444   5.65539  -8.97347 WAT  140    0.00000
+  416  138 TIP3 H1     4.59331   5.30071  -9.20320 WAT  140    0.00000
+  417  138 TIP3 H2     3.64372   6.43668  -9.51897 WAT  140    0.00000
+  418  139 TIP3 OH2    1.23145   6.28296  -2.22530 WAT  141    0.00000
+  419  139 TIP3 H1     0.93554   7.18941  -2.30887 WAT  141    0.00000
+  420  139 TIP3 H2     0.44503   5.75883  -2.37706 WAT  141    0.00000
+  421  140 TIP3 OH2    1.73313   4.68012  -7.38400 WAT  142    0.00000
+  422  140 TIP3 H1     1.39756   5.52440  -7.08270 WAT  142    0.00000
+  423  140 TIP3 H2     2.50183   4.90119  -7.90979 WAT  142    0.00000
+  424  141 TIP3 OH2    5.42018   5.54446  -3.11718 WAT  143    0.00000
+  425  141 TIP3 H1     4.67559   5.63535  -3.71179 WAT  143    0.00000
+  426  141 TIP3 H2     5.09487   4.98957  -2.40832 WAT  143    0.00000
+  427  142 TIP3 OH2    5.14006   2.52301  -0.46510 WAT  144    0.00000
+  428  142 TIP3 H1     5.78697   2.02995  -0.96970 WAT  144    0.00000
+  429  142 TIP3 H2     5.57830   3.34724  -0.25341 WAT  144    0.00000
+  430  143 TIP3 OH2    4.13594   8.86343   0.39100 WAT  145    0.00000
+  431  143 TIP3 H1     3.21903   8.58873   0.38383 WAT  145    0.00000
+  432  143 TIP3 H2     4.48019   8.57264  -0.45348 WAT  145    0.00000
+  433  144 TIP3 OH2    5.88670   2.01125  -4.62972 WAT  146    0.00000
+  434  144 TIP3 H1     5.96677   1.85465  -5.57062 WAT  146    0.00000
+  435  144 TIP3 H2     5.14715   2.61353  -4.54875 WAT  146    0.00000
+  436  145 TIP3 OH2    3.23847   8.60819  -5.65609 WAT  147    0.00000
+  437  145 TIP3 H1     3.23651   7.80268  -5.13902 WAT  147    0.00000
+  438  145 TIP3 H2     3.56395   8.34082  -6.51563 WAT  147    0.00000
+  439  146 TIP3 OH2   -1.55822   9.39387  -7.18433 WAT  148    0.00000
+  440  146 TIP3 H1    -2.30484   9.04198  -6.69961 WAT  148    0.00000
+  441  146 TIP3 H2    -1.39356   8.74929  -7.87255 WAT  148    0.00000
+  442  147 TIP3 OH2    5.06708   8.08368  -2.05117 WAT  149    0.00000
+  443  147 TIP3 H1     5.29788   8.73645  -2.71212 WAT  149    0.00000
+  444  147 TIP3 H2     5.25987   7.24310  -2.46649 WAT  149    0.00000
+  445  148 TIP3 OH2    8.17817   5.62993  -8.43479 WAT  150    0.00000
+  446  148 TIP3 H1     9.09576   5.78085  -8.66167 WAT  150    0.00000
+  447  148 TIP3 H2     8.08072   6.01171  -7.56245 WAT  150    0.00000
+  448  149 TIP3 OH2    8.45871   2.34006  -8.65015 WAT  151    0.00000
+  449  149 TIP3 H1     7.67027   2.20162  -8.12534 WAT  151    0.00000
+  450  149 TIP3 H2     8.31987   1.81136  -9.43591 WAT  151    0.00000
+  451  150 TIP3 OH2    3.00292   6.20697  -4.37246 WAT  152    0.00000
+  452  150 TIP3 H1     2.98663   5.28384  -4.62505 WAT  152    0.00000
+  453  150 TIP3 H2     2.39592   6.26464  -3.63460 WAT  152    0.00000
+  454  151 TIP3 OH2    0.83095   7.13544  -6.55177 WAT  153    0.00000
+  455  151 TIP3 H1     0.05394   7.66615  -6.72728 WAT  153    0.00000
+  456  151 TIP3 H2     1.42652   7.72677  -6.09149 WAT  153    0.00000
+  457  152 TIP3 OH2    2.02356  10.66712  -4.24571 WAT  154    0.00000
+  458  152 TIP3 H1     2.74802  11.02463  -3.73231 WAT  154    0.00000
+  459  152 TIP3 H2     2.41769   9.96064  -4.75735 WAT  154    0.00000
+  460  153 TIP3 OH2    3.47278   3.40498  -4.29325 WAT  155    0.00000
+  461  153 TIP3 H1     3.14738   3.24557  -3.40728 WAT  155    0.00000
+  462  153 TIP3 H2     2.75403   3.13534  -4.86502 WAT  155    0.00000
+  463  154 TIP3 OH2    8.24436   1.58256  -0.37777 WAT  156    0.00000
+  464  154 TIP3 H1     7.71336   1.32990  -1.13301 WAT  156    0.00000
+  465  154 TIP3 H2     8.94785   2.11652  -0.74685 WAT  156    0.00000
+  466  155 TIP3 OH2    8.62734   2.74856  -4.83139 WAT  157    0.00000
+  467  155 TIP3 H1     7.72855   2.41937  -4.82474 WAT  157    0.00000
+  468  155 TIP3 H2     8.56024   3.63669  -4.48076 WAT  157    0.00000
+  469  156 TIP3 OH2    2.76748   2.67881  -1.76249 WAT  158    0.00000
+  470  156 TIP3 H1     3.60517   2.61893  -1.30322 WAT  158    0.00000
+  471  156 TIP3 H2     2.44934   1.77681  -1.80000 WAT  158    0.00000
+  472  157 TIP3 OH2    5.11687   5.99330   2.64096 WAT  159    0.00000
+  473  157 TIP3 H1     4.18596   6.18712   2.53110 WAT  159    0.00000
+  474  157 TIP3 H2     5.43323   6.66801   3.24171 WAT  159    0.00000
+  475  158 TIP3 OH2    3.67223  -0.16857  -1.45851 WAT  160    0.00000
+  476  158 TIP3 H1     3.64760   0.04853  -0.52659 WAT  160    0.00000
+  477  158 TIP3 H2     4.54621   0.09771  -1.74396 WAT  160    0.00000
+  478  159 TIP3 OH2    6.34527   0.65993  -2.23737 WAT  161    0.00000
+  479  159 TIP3 H1     6.27985   1.01827  -3.12255 WAT  161    0.00000
+  480  159 TIP3 H2     6.58642  -0.25727  -2.36697 WAT  161    0.00000
+  481  160 TIP3 OH2   -0.76033  -0.43082  -6.64986 WAT  162    0.00000
+  482  160 TIP3 H1    -1.18040  -1.02321  -7.27344 WAT  162    0.00000
+  483  160 TIP3 H2    -0.83200  -0.87922  -5.80723 WAT  162    0.00000
+  484  161 TIP3 OH2    1.64417   0.56879  -8.78449 WAT  163    0.00000
+  485  161 TIP3 H1     1.89759  -0.15091  -8.20653 WAT  163    0.00000
+  486  161 TIP3 H2     1.56935   0.16667  -9.64988 WAT  163    0.00000
+  487  162 TIP3 OH2    7.17449  -1.64085  -9.83860 WAT  164    0.00000
+  488  162 TIP3 H1     8.07573  -1.41835  -9.60516 WAT  164    0.00000
+  489  162 TIP3 H2     6.67992  -1.52051  -9.02795 WAT  164    0.00000
+  490  163 TIP3 OH2    0.65071  -6.12562  -7.37268 WAT  165    0.00000
+  491  163 TIP3 H1     1.36909  -6.23813  -6.75020 WAT  165    0.00000
+  492  163 TIP3 H2    -0.03343  -5.68136  -6.87190 WAT  165    0.00000
+  493  164 TIP3 OH2    0.04616  -5.78716 -11.20825 WAT  166    0.00000
+  494  164 TIP3 H1     0.93612  -6.13698 -11.25124 WAT  166    0.00000
+  495  164 TIP3 H2    -0.51178  -6.56034 -11.12377 WAT  166    0.00000
+  496  165 TIP3 OH2    1.89863  -4.07894  -8.85329 WAT  167    0.00000
+  497  165 TIP3 H1     1.20326  -3.70445  -9.39407 WAT  167    0.00000
+  498  165 TIP3 H2     1.48468  -4.81849  -8.40838 WAT  167    0.00000
+  499  166 TIP3 OH2    4.69716  -4.17285  -9.64702 WAT  168    0.00000
+  500  166 TIP3 H1     4.67327  -3.21596  -9.64499 WAT  168    0.00000
+  501  166 TIP3 H2     3.79020  -4.43589  -9.49062 WAT  168    0.00000
+  502  167 TIP3 OH2    4.06946  -1.46812  -9.97360 WAT  169    0.00000
+  503  167 TIP3 H1     4.08187  -0.54106 -10.21158 WAT  169    0.00000
+  504  167 TIP3 H2     3.79470  -1.47688  -9.05673 WAT  169    0.00000
+  505  168 TIP3 OH2    6.10984   1.54277  -7.33093 WAT  170    0.00000
+  506  168 TIP3 H1     5.31901   1.91900  -7.71726 WAT  170    0.00000
+  507  168 TIP3 H2     6.00855   0.59827  -7.44879 WAT  170    0.00000
+  508  169 TIP3 OH2   -0.65628  -1.38003  -4.13596 WAT  172    0.00000
+  509  169 TIP3 H1    -0.67341  -2.18514  -3.61855 WAT  172    0.00000
+  510  169 TIP3 H2    -1.34077  -0.83274  -3.75100 WAT  172    0.00000
+  511  170 TIP3 OH2   -0.12971  -8.62338  -8.19037 WAT  173    0.00000
+  512  170 TIP3 H1     0.45389  -8.85463  -8.91298 WAT  173    0.00000
+  513  170 TIP3 H2     0.08005  -7.71003  -7.99537 WAT  173    0.00000
+  514  171 TIP3 OH2   -1.96595  -2.07137  -8.42375 WAT  174    0.00000
+  515  171 TIP3 H1    -2.66098  -2.63125  -8.07778 WAT  174    0.00000
+  516  171 TIP3 H2    -1.44223  -2.65222  -8.97561 WAT  174    0.00000
+  517  172 TIP3 OH2    0.23866   4.47281  -9.76089 WAT  175    0.00000
+  518  172 TIP3 H1     0.68528   4.50279  -8.91482 WAT  175    0.00000
+  519  172 TIP3 H2     0.66955   5.14889 -10.28383 WAT  175    0.00000
+  520  173 TIP3 OH2   -0.75050   1.82750  -9.44914 WAT  176    0.00000
+  521  173 TIP3 H1    -0.67919   2.77840  -9.36586 WAT  176    0.00000
+  522  173 TIP3 H2     0.03630   1.48945  -9.02145 WAT  176    0.00000
+  523  174 TIP3 OH2   -1.46731   6.89472  -8.56188 WAT  177    0.00000
+  524  174 TIP3 H1    -1.70031   7.13547  -9.45853 WAT  177    0.00000
+  525  174 TIP3 H2    -0.79240   6.22329  -8.66134 WAT  177    0.00000
+  526  175 TIP3 OH2   -4.29815   4.13944 -10.55269 WAT  179    0.00000
+  527  175 TIP3 H1    -3.56850   3.79936 -11.07057 WAT  179    0.00000
+  528  175 TIP3 H2    -4.30683   3.59619  -9.76462 WAT  179    0.00000
+  529  176 TIP3 OH2   -0.46434  -3.28548 -10.37750 WAT  180    0.00000
+  530  176 TIP3 H1    -1.01513  -2.90879 -11.06376 WAT  180    0.00000
+  531  176 TIP3 H2    -0.38468  -4.20959 -10.61396 WAT  180    0.00000
+  532  177 TIP3 OH2    3.79827   2.26033  -8.54182 WAT  181    0.00000
+  533  177 TIP3 H1     2.95440   1.81277  -8.48026 WAT  181    0.00000
+  534  177 TIP3 H2     3.95124   2.35586  -9.48188 WAT  181    0.00000
+  535  178 TIP3 OH2   -2.84605   0.12572  -9.90532 WAT  182    0.00000
+  536  178 TIP3 H1    -2.59170  -0.61699  -9.35767 WAT  182    0.00000
+  537  178 TIP3 H2    -2.15219   0.77137  -9.77139 WAT  182    0.00000
+  538  179 TIP3 OH2    2.69775  -1.76316  -3.68789 WAT  183    0.00000
+  539  179 TIP3 H1     2.84880  -1.20406  -2.92578 WAT  183    0.00000
+  540  179 TIP3 H2     2.27814  -1.18824  -4.32790 WAT  183    0.00000
+  541  180 TIP3 OH2    1.17417   2.62577  -5.77114 WAT  184    0.00000
+  542  180 TIP3 H1     0.37943   2.96395  -5.35851 WAT  184    0.00000
+  543  180 TIP3 H2     1.41372   3.29354  -6.41372 WAT  184    0.00000
+  544  181 TIP3 OH2    5.82071  -1.19574  -7.47086 WAT  185    0.00000
+  545  181 TIP3 H1     6.47291  -1.39733  -6.79987 WAT  185    0.00000
+  546  181 TIP3 H2     5.00997  -1.58384  -7.14179 WAT  185    0.00000
+  547  182 TIP3 OH2   -2.46522   1.72189  -6.36175 WAT  186    0.00000
+  548  182 TIP3 H1    -2.00134   2.42826  -5.91222 WAT  186    0.00000
+  549  182 TIP3 H2    -1.78552   1.07891  -6.56380 WAT  186    0.00000
+  550  183 TIP3 OH2    8.03751  -1.42565  -5.86986 WAT  187    0.00000
+  551  183 TIP3 H1     8.67720  -2.06724  -6.17872 WAT  187    0.00000
+  552  183 TIP3 H2     8.56522  -0.68389  -5.57400 WAT  187    0.00000
+  553  184 TIP3 OH2    3.00598  -1.81087  -7.47353 WAT  188    0.00000
+  554  184 TIP3 H1     2.59694  -1.44313  -6.69014 WAT  188    0.00000
+  555  184 TIP3 H2     2.55768  -2.64568  -7.60895 WAT  188    0.00000
+  556  185 TIP3 OH2   -1.08320  -4.93776  -5.51133 WAT  189    0.00000
+  557  185 TIP3 H1    -1.69865  -4.32237  -5.11288 WAT  189    0.00000
+  558  185 TIP3 H2    -0.21927  -4.58460  -5.29887 WAT  189    0.00000
+  559  186 TIP3 OH2    6.14100  -4.81285  -7.31797 WAT  190    0.00000
+  560  186 TIP3 H1     5.71469  -4.60586  -8.14962 WAT  190    0.00000
+  561  186 TIP3 H2     5.77343  -5.65939  -7.06405 WAT  190    0.00000
+  562  187 TIP3 OH2    1.43208  -4.02492  -5.03714 WAT  191    0.00000
+  563  187 TIP3 H1     1.79666  -3.36653  -4.44567 WAT  191    0.00000
+  564  187 TIP3 H2     2.02521  -4.77217  -4.95932 WAT  191    0.00000
+  565  188 TIP3 OH2    1.77649  -0.05650  -5.72113 WAT  192    0.00000
+  566  188 TIP3 H1     1.83093   0.89767  -5.66801 WAT  192    0.00000
+  567  188 TIP3 H2     0.86318  -0.23256  -5.94720 WAT  192    0.00000
+  568  189 TIP3 OH2    7.79167   1.32347   2.36087 WAT  193    0.00000
+  569  189 TIP3 H1     7.85242   1.54690   1.43210 WAT  193    0.00000
+  570  189 TIP3 H2     7.55829   2.14619   2.79084 WAT  193    0.00000
+  571  190 TIP3 OH2    8.13305   0.27549   5.18136 WAT  194    0.00000
+  572  190 TIP3 H1     8.15129   0.82659   4.39894 WAT  194    0.00000
+  573  190 TIP3 H2     8.82292  -0.37175   5.03515 WAT  194    0.00000
+  574  191 TIP3 OH2    5.20876   3.34999   6.06569 WAT  195    0.00000
+  575  191 TIP3 H1     4.92327   2.60093   6.58882 WAT  195    0.00000
+  576  191 TIP3 H2     4.95800   4.11443   6.58433 WAT  195    0.00000
+  577  192 TIP3 OH2    8.74165   1.22978   7.67804 WAT  196    0.00000
+  578  192 TIP3 H1     8.38198   2.11664   7.69647 WAT  196    0.00000
+  579  192 TIP3 H2     8.46645   0.87673   6.83198 WAT  196    0.00000
+  580  193 TIP3 OH2    9.36388  -0.91465   0.06834 WAT  197    0.00000
+  581  193 TIP3 H1     8.59166  -1.34930   0.43022 WAT  197    0.00000
+  582  193 TIP3 H2     9.12452   0.01155   0.03519 WAT  197    0.00000
+  583  194 TIP3 OH2    7.35214  -4.26452   2.52274 WAT  198    0.00000
+  584  194 TIP3 H1     8.20484  -4.22212   2.95557 WAT  198    0.00000
+  585  194 TIP3 H2     7.28159  -3.43532   2.04979 WAT  198    0.00000
+  586  195 TIP3 OH2    3.97018  -3.00378   9.65425 WAT  199    0.00000
+  587  195 TIP3 H1     3.54905  -2.20048   9.34837 WAT  199    0.00000
+  588  195 TIP3 H2     3.41163  -3.70793   9.32498 WAT  199    0.00000
+  589  196 TIP3 OH2    4.78392  -4.97561   3.54064 WAT  200    0.00000
+  590  196 TIP3 H1     4.40821  -4.27071   4.06806 WAT  200    0.00000
+  591  196 TIP3 H2     5.69052  -4.70699   3.39189 WAT  200    0.00000
+  592  197 TIP3 OH2    7.54173  -4.19386   8.58531 WAT  201    0.00000
+  593  197 TIP3 H1     7.04832  -5.00955   8.49912 WAT  201    0.00000
+  594  197 TIP3 H2     7.50694  -3.98996   9.51989 WAT  201    0.00000
+  595  198 TIP3 OH2    8.25430   4.41339   2.07026 WAT  202    0.00000
+  596  198 TIP3 H1     7.86099   4.10892   2.88808 WAT  202    0.00000
+  597  198 TIP3 H2     8.65929   5.25082   2.29593 WAT  202    0.00000
+  598  199 TIP3 OH2    9.98710  -1.11926  -2.64549 WAT  203    0.00000
+  599  199 TIP3 H1     9.84180  -1.09736  -1.69965 WAT  203    0.00000
+  600  199 TIP3 H2    10.36230  -0.26287  -2.85055 WAT  203    0.00000
+  601  200 TIP3 OH2    6.68085  -0.85668  11.28328 WAT  205    0.00000
+  602  200 TIP3 H1     5.79713  -0.92523  11.64463 WAT  205    0.00000
+  603  200 TIP3 H2     6.96281  -1.76372  11.16504 WAT  205    0.00000
+  604  201 TIP3 OH2    7.02284  -2.09279   0.87190 WAT  206    0.00000
+  605  201 TIP3 H1     6.45452  -1.55553   1.42380 WAT  206    0.00000
+  606  201 TIP3 H2     6.65272  -2.00916  -0.00688 WAT  206    0.00000
+  607  202 TIP3 OH2    3.20815   2.01526   1.49929 WAT  207    0.00000
+  608  202 TIP3 H1     3.53235   2.44364   2.29151 WAT  207    0.00000
+  609  202 TIP3 H2     3.90088   2.15050   0.85272 WAT  207    0.00000
+  610  203 TIP3 OH2   11.07391   4.44429   1.80227 WAT  208    0.00000
+  611  203 TIP3 H1    11.11181   4.13265   2.70653 WAT  208    0.00000
+  612  203 TIP3 H2    10.22728   4.13729   1.47791 WAT  208    0.00000
+  613  204 TIP3 OH2    5.65974  -0.80812   5.50543 WAT  209    0.00000
+  614  204 TIP3 H1     5.70721  -1.59718   6.04520 WAT  209    0.00000
+  615  204 TIP3 H2     6.56644  -0.50888   5.43756 WAT  209    0.00000
+  616  205 TIP3 OH2    1.71789  -0.92575   4.51128 WAT  210    0.00000
+  617  205 TIP3 H1     0.84056  -0.91618   4.89391 WAT  210    0.00000
+  618  205 TIP3 H2     1.63366  -1.47449   3.73152 WAT  210    0.00000
+  619  206 TIP3 OH2    4.04932   3.54104   3.59634 WAT  211    0.00000
+  620  206 TIP3 H1     4.44817   4.34948   3.27454 WAT  211    0.00000
+  621  206 TIP3 H2     4.41975   3.42228   4.47094 WAT  211    0.00000
+  622  207 TIP3 OH2   10.46999  -3.37098   0.71619 WAT  212    0.00000
+  623  207 TIP3 H1    10.35301  -3.50940   1.65607 WAT  212    0.00000
+  624  207 TIP3 H2    10.24778  -2.44998   0.57977 WAT  212    0.00000
+  625  208 TIP3 OH2    6.62339  -2.15964  -1.90454 WAT  213    0.00000
+  626  208 TIP3 H1     5.97051  -2.68373  -2.36855 WAT  213    0.00000
+  627  208 TIP3 H2     7.38382  -2.73601  -1.82844 WAT  213    0.00000
+  628  209 TIP3 OH2    7.41315   3.24527   4.38621 WAT  214    0.00000
+  629  209 TIP3 H1     6.69140   3.29632   5.01286 WAT  214    0.00000
+  630  209 TIP3 H2     8.20274   3.28159   4.92608 WAT  214    0.00000
+  631  210 TIP3 OH2    5.67519  -0.55231   2.63523 WAT  215    0.00000
+  632  210 TIP3 H1     6.31355   0.16067   2.65433 WAT  215    0.00000
+  633  210 TIP3 H2     5.42769  -0.67745   3.55137 WAT  215    0.00000
+  634  211 TIP3 OH2    9.96306  -3.73309   3.47541 WAT  216    0.00000
+  635  211 TIP3 H1    10.61211  -4.28549   3.91106 WAT  216    0.00000
+  636  211 TIP3 H2     9.90637  -2.95096   4.02431 WAT  216    0.00000
+  637  212 TIP3 OH2   10.12170  -1.62579   5.27379 WAT  217    0.00000
+  638  212 TIP3 H1    10.46116  -1.64928   6.16846 WAT  217    0.00000
+  639  212 TIP3 H2    10.72767  -1.05436   4.80210 WAT  217    0.00000
+  640  213 TIP3 OH2    5.47009  -2.91208   7.26063 WAT  218    0.00000
+  641  213 TIP3 H1     6.29878  -3.35160   7.45119 WAT  218    0.00000
+  642  213 TIP3 H2     5.00209  -2.90978   8.09560 WAT  218    0.00000
+  643  214 TIP3 OH2    3.60712  -3.08105   5.10545 WAT  219    0.00000
+  644  214 TIP3 H1     3.14401  -2.24541   5.04693 WAT  219    0.00000
+  645  214 TIP3 H2     4.14228  -3.00405   5.89533 WAT  219    0.00000
+  646  215 TIP3 OH2    6.05554   1.13820   9.35617 WAT  220    0.00000
+  647  215 TIP3 H1     6.27874   0.45431   9.98761 WAT  220    0.00000
+  648  215 TIP3 H2     6.74382   1.79516   9.46063 WAT  220    0.00000
+  649  216 TIP3 OH2    4.39630   0.91596   7.20911 WAT  221    0.00000
+  650  216 TIP3 H1     4.95335   0.99335   7.98365 WAT  221    0.00000
+  651  216 TIP3 H2     4.88223   0.33803   6.62080 WAT  221    0.00000
+  652  217 TIP3 OH2    5.97758  -6.40026   7.97139 WAT  222    0.00000
+  653  217 TIP3 H1     6.32148  -7.28938   7.88517 WAT  222    0.00000
+  654  217 TIP3 H2     5.31566  -6.33121   7.28341 WAT  222    0.00000
+  655  218 TIP3 OH2   10.33559   0.45539   3.26818 WAT  223    0.00000
+  656  218 TIP3 H1    11.01619   0.99651   2.86794 WAT  223    0.00000
+  657  218 TIP3 H2     9.54234   0.66351   2.77456 WAT  223    0.00000
+  658  219 TIP3 OH2    3.94622  -8.80648   1.74957 WAT  225    0.00000
+  659  219 TIP3 H1     3.82221  -9.45126   2.44606 WAT  225    0.00000
+  660  219 TIP3 H2     3.90830  -9.31674   0.94062 WAT  225    0.00000
+  661  220 TIP3 OH2    1.34727 -10.06874  -6.37327 WAT  226    0.00000
+  662  220 TIP3 H1     0.74922  -9.57477  -6.93413 WAT  226    0.00000
+  663  220 TIP3 H2     1.38831  -9.56272  -5.56180 WAT  226    0.00000
+  664  221 TIP3 OH2   -0.43599  -7.99427  -2.58677 WAT  227    0.00000
+  665  221 TIP3 H1    -0.89041  -8.32055  -1.81005 WAT  227    0.00000
+  666  221 TIP3 H2    -0.08797  -7.14301  -2.32131 WAT  227    0.00000
+  667  222 TIP3 OH2    3.00053 -10.22466  -0.47248 WAT  228    0.00000
+  668  222 TIP3 H1     2.08931  -9.94797  -0.37583 WAT  228    0.00000
+  669  222 TIP3 H2     3.05240 -10.57314  -1.36248 WAT  228    0.00000
+  670  223 TIP3 OH2    4.23878  -3.81593  -0.24083 WAT  229    0.00000
+  671  223 TIP3 H1     4.22844  -3.84353  -1.19757 WAT  229    0.00000
+  672  223 TIP3 H2     4.05963  -2.90070  -0.02518 WAT  229    0.00000
+  673  224 TIP3 OH2   -1.09475  -3.70998  -2.82315 WAT  230    0.00000
+  674  224 TIP3 H1    -0.49838  -4.32545  -2.39684 WAT  230    0.00000
+  675  224 TIP3 H2    -1.96649  -4.07295  -2.66654 WAT  230    0.00000
+  676  225 TIP3 OH2    2.61180  -6.57054  -5.47168 WAT  231    0.00000
+  677  225 TIP3 H1     2.45809  -7.26126  -4.82711 WAT  231    0.00000
+  678  225 TIP3 H2     3.50471  -6.72459  -5.78022 WAT  231    0.00000
+  679  226 TIP3 OH2    2.49067  -8.55479   9.13523 WAT  232    0.00000
+  680  226 TIP3 H1     3.11257  -7.83448   9.03228 WAT  232    0.00000
+  681  226 TIP3 H2     1.92743  -8.28381   9.86017 WAT  232    0.00000
+  682  227 TIP3 OH2    8.55282  -4.21461  -1.19613 WAT  233    0.00000
+  683  227 TIP3 H1     9.23249  -4.03124  -0.54755 WAT  233    0.00000
+  684  227 TIP3 H2     7.89494  -4.71956  -0.71816 WAT  233    0.00000
+  685  228 TIP3 OH2    9.44701  -3.58567  -3.69265 WAT  234    0.00000
+  686  228 TIP3 H1     9.07552  -3.96916  -2.89819 WAT  234    0.00000
+  687  228 TIP3 H2     9.63631  -2.67795  -3.45510 WAT  234    0.00000
+  688  229 TIP3 OH2   -2.61082  -9.02255  -6.96196 WAT  235    0.00000
+  689  229 TIP3 H1    -2.48244  -8.60578  -6.10986 WAT  235    0.00000
+  690  229 TIP3 H2    -1.73855  -9.03714  -7.35584 WAT  235    0.00000
+  691  230 TIP3 OH2    5.14462  -7.23325  -6.37567 WAT  236    0.00000
+  692  230 TIP3 H1     5.68928  -7.60430  -5.68148 WAT  236    0.00000
+  693  230 TIP3 H2     5.14552  -7.89921  -7.06323 WAT  236    0.00000
+  694  231 TIP3 OH2    2.65882  -4.93649   1.76617 WAT  237    0.00000
+  695  231 TIP3 H1     3.31451  -5.07453   2.44972 WAT  237    0.00000
+  696  231 TIP3 H2     3.16700  -4.69877   0.99064 WAT  237    0.00000
+  697  232 TIP3 OH2    1.57509  -7.53474   1.35628 WAT  238    0.00000
+  698  232 TIP3 H1     1.62722  -6.59180   1.51246 WAT  238    0.00000
+  699  232 TIP3 H2     2.45926  -7.85640   1.53239 WAT  238    0.00000
+  700  233 TIP3 OH2   -2.10059  -7.39680  -4.72896 WAT  239    0.00000
+  701  233 TIP3 H1    -1.66777  -6.58034  -4.97852 WAT  239    0.00000
+  702  233 TIP3 H2    -1.57964  -7.73118  -3.99888 WAT  239    0.00000
+  703  234 TIP3 OH2    6.25245  -7.72567  -1.65643 WAT  240    0.00000
+  704  234 TIP3 H1     6.12555  -8.50151  -1.11040 WAT  240    0.00000
+  705  234 TIP3 H2     6.40490  -7.01564  -1.03285 WAT  240    0.00000
+  706  235 TIP3 OH2    6.46209  -5.45310   0.18799 WAT  241    0.00000
+  707  235 TIP3 H1     6.79076  -5.11682   1.02173 WAT  241    0.00000
+  708  235 TIP3 H2     5.64656  -4.97409   0.04076 WAT  241    0.00000
+  709  236 TIP3 OH2    0.94104  -2.89945   2.54350 WAT  242    0.00000
+  710  236 TIP3 H1     0.43382  -2.74760   1.74607 WAT  242    0.00000
+  711  236 TIP3 H2     1.51821  -3.63117   2.32511 WAT  242    0.00000
+  712  237 TIP3 OH2    6.67925  -8.46779  -4.37402 WAT  243    0.00000
+  713  237 TIP3 H1     6.44622  -8.23268  -3.47589 WAT  243    0.00000
+  714  237 TIP3 H2     7.63524  -8.42366  -4.39329 WAT  243    0.00000
+  715  238 TIP3 OH2    1.88350  -8.85929  -3.94276 WAT  244    0.00000
+  716  238 TIP3 H1     1.13590  -8.55660  -3.42732 WAT  244    0.00000
+  717  238 TIP3 H2     2.14920  -9.67731  -3.52267 WAT  244    0.00000
+  718  239 TIP3 OH2   -0.89916  -5.62766   0.77928 WAT  245    0.00000
+  719  239 TIP3 H1    -1.76027  -5.72332   0.37239 WAT  245    0.00000
+  720  239 TIP3 H2    -0.95020  -6.15575   1.57601 WAT  245    0.00000
+  721  240 TIP3 OH2    0.21282 -12.73140  -6.09338 WAT  246    0.00000
+  722  240 TIP3 H1     0.46682 -11.80853  -6.08831 WAT  246    0.00000
+  723  240 TIP3 H2    -0.43755 -12.80515  -5.39496 WAT  246    0.00000
+  724  241 TIP3 OH2    6.30118  -7.58200   2.35557 WAT  247    0.00000
+  725  241 TIP3 H1     5.44690  -8.00322   2.26071 WAT  247    0.00000
+  726  241 TIP3 H2     6.12602  -6.65082   2.21973 WAT  247    0.00000
+  727  242 TIP3 OH2    0.30403  -9.91768   1.20352 WAT  248    0.00000
+  728  242 TIP3 H1     0.15352 -10.10879   2.12930 WAT  248    0.00000
+  729  242 TIP3 H2     0.63298  -9.01882   1.19443 WAT  248    0.00000
+  730  243 TIP3 OH2   -1.70096 -11.16645  -0.40585 WAT  249    0.00000
+  731  243 TIP3 H1    -1.82188 -11.77606   0.32214 WAT  249    0.00000
+  732  243 TIP3 H2    -1.02650 -10.55945  -0.10108 WAT  249    0.00000
+  733  244 TIP3 OH2    4.07815  -6.44596   5.90884 WAT  250    0.00000
+  734  244 TIP3 H1     3.16096  -6.17910   5.97028 WAT  250    0.00000
+  735  244 TIP3 H2     4.36629  -6.12013   5.05618 WAT  250    0.00000
+  736  245 TIP3 OH2    8.37741  -8.55596   0.96352 WAT  251    0.00000
+  737  245 TIP3 H1     8.93629  -7.77889   0.96505 WAT  251    0.00000
+  738  245 TIP3 H2     7.66764  -8.34230   1.56917 WAT  251    0.00000
+  739  246 TIP3 OH2    0.27191  -7.85594   4.98789 WAT  252    0.00000
+  740  246 TIP3 H1     0.61632  -7.07724   5.42523 WAT  252    0.00000
+  741  246 TIP3 H2     0.87584  -8.55646   5.23437 WAT  252    0.00000
+  742  247 TIP3 OH2    4.13433 -10.14323  -5.79412 WAT  253    0.00000
+  743  247 TIP3 H1     4.18839  -9.72511  -4.93477 WAT  253    0.00000
+  744  247 TIP3 H2     3.19788 -10.16704  -5.99093 WAT  253    0.00000
+  745  248 TIP3 OH2    4.47914  -3.71831  -3.01905 WAT  254    0.00000
+  746  248 TIP3 H1     5.12167  -3.85635  -3.71497 WAT  254    0.00000
+  747  248 TIP3 H2     3.88790  -3.05091  -3.36724 WAT  254    0.00000
+  748  249 TIP3 OH2    6.51803  -3.87041  -4.77922 WAT  255    0.00000
+  749  249 TIP3 H1     6.43311  -4.17738  -5.68186 WAT  255    0.00000
+  750  249 TIP3 H2     7.39066  -3.47900  -4.73993 WAT  255    0.00000
+  751  250 TIP3 OH2    3.20679  -6.07636  -2.22521 WAT  256    0.00000
+  752  250 TIP3 H1     3.65380  -5.31678  -2.59866 WAT  256    0.00000
+  753  250 TIP3 H2     3.89944  -6.72516  -2.10063 WAT  256    0.00000
+  754  251 TIP3 OH2    0.50499  -5.59241  -1.62953 WAT  257    0.00000
+  755  251 TIP3 H1     0.28455  -5.59865  -0.69808 WAT  257    0.00000
+  756  251 TIP3 H2     1.45042  -5.74008  -1.65340 WAT  257    0.00000
+
+goto  from_setup_@{pass}
+
+label problem
+
+!! something's fishy, so we die here
+
+die
+
+stop

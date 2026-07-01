@@ -1,0 +1,29 @@
+* Extra parameters for hybrid molecules of lambda_dynamc and lambda_energy
+* Charles L. Brooks, III  20-Jan-98
+*
+BONDS
+!..........................................................
+CA    C     250.000     1.460 ! KB from CT3-C. B0 from msi
+CA    NH2     240.000     1.3550 ! KB from CT3-NH2
+CA    XCL     232.000     1.730 ! C6R-XCL from msi charmm22.2 PARM.PRM
+!...........................................................
+ANGLES
+!........................................................................
+CA   CA   C    45.0    120.0  ! modified on 11-21-96 due to sp2 in C10
+CA   C   NC2   45.0    120.0  ! modified on 11-21-96 due to sp2 in C
+NH2   CA   CA  45.0    120.0  ! ~OH1-CA-CA? Charlie chose ~NH2-CC-CT1, why
+CA   NH2   H   50.0    120.0  ! ~H-NH2-CC
+XCL   CA   CA  65.0    120.0  ! C6R-C6R-XCL from msi PARM.PRM 115->120
+!..........................................................................
+DIHEDRALS
+!........................................................................
+NC2   C    CA   CA     3.1  2  180.0  ! modified on 11-21-96 due to partial dble bond
+X    CA   CA    X      3.1  2  180.0  ! X-C6R-C6R-X from quanta charmm22.2 PARM.PRM
+X    CA   NH2   X      0.5  2  180.0  ! X-C6R-NP-X from quanta charmm22.2 PARM.PRM
+X    C    CA    X      0.5  2  180.0  ! X-C-C6R-X from PARM.PRM above
+!........................................................................
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vswitch -
+cutnb 12.4 ctofnb 10.0 ctonnb 8.5 eps 1.0 e14fac 1.0 wmin 1.5
+!.........................................................................
+XCL      1.91    -0.2600       2.060  ! from quanta charmm22.2 PARM.PRM
+!.........................................................................

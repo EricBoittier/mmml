@@ -1,0 +1,111 @@
+* CHARMM Testcase enum.inp
+* Author: Christian Bartels 
+* Files:  top_all22_prot.inp, par_all22_prot.inp   
+* Tests:  adaptive umbrella sampling of the potential energy
+*
+
+! --- MFC parallel seems to be broken
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+if ?adumb .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 11 read form name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0par_all22_prot.inp
+read param unit 11 card
+close unit 11
+
+! SETUP
+read sequence card
+* blocked Thr residue
+*
+1
+thr
+
+generate pept setup first ace last ct2
+
+! { coordinates }
+ic param
+ic seed 1 n 1 ca 1 c
+ic build
+
+SCALAR FBETa SET  60.0 SELEct ( ALL )  END
+
+energy atom rdie shif vdis vswi cutnb 10.0
+
+SHAKE BONH TOLErance 1.0e-6 PARAMeter
+
+MINImize SD nstep 50 nprint 10 inbfrq -1 ihbfrq 0
+
+!dynamics langevin start -
+dynamics start -
+             nstep 300 timestep 0.001 -
+             ihbfrq 0 inbfrq 10  ilbfrq 5 rbuffer 0.0 tbath 1000 -
+             iseed 1 -
+             nprint 100  iprfreq 100 -
+             isvfrq 100 wmin 1.2
+
+! BEGIN { setup umbrella }
+umbrella ener nresol 200 trig 20 poly 20 mine -50 maxe 100.0 mint 280 maxt 2000
+
+open write formatted   unit 9 name  @9enum.umb
+open write formatted   unit 10 name @9enum.uco
+open write unformatted unit 11 name  @9enum.cor 
+
+umbrella init nsim 100 update 10000 equi 1000 temp 1000 thres 10 -
+              wuni 9 ucun 10
+
+! PRODUCTION
+
+!dynamics langevin start -
+dynamics start -
+             nstep 5000 timestep 0.001 -
+             inbfrq 10  ilbfrq 10 rbuffer 0.0 tbath 1000 -
+             iseed 12 -
+             nprint 100  iprfreq 100 -
+             isvfrq 100  iunwrite -1 iunread -1 -
+             nsavc  100 iuncrd 11  -
+             wmin 1.2
+
+close unit 11
+close unit 9
+close unit 10
+ 
+! calculate probability factors
+ 
+open read formatted   unit 20 name @9enum.uco
+open write formatted  unit 21 name @9enumT303K.pfa
+umbrella prob ucun 20 puni 21 temp 303
+close unit 21
+close unit 20
+
+! calculate histograms using probability factors
+ 
+correl maxseries 12 maxtimesteps 1000 maxatoms 20
+  enter chi1 DIHED 1 N  1 CA 1 CB  1 OG1
+  enter p zero
+  open read formatted unit 22 name @9enumT303K.pfa
+  READ p unit 22 dumb 
+  EDIT ALL SKIP 100 DELTA 0.001 OFFSET 0.1
+  
+  open read unformatted unit 23 name @9enum.cor
+  trajectory firstu 23 
+
+  mantime chi1 whist -180 180 18 p
+  mantime chi1 log 
+  open write formatted unit 11 name @9enumT303Kchi1.hist
+  write chi1 unit 11 card
+end
+
+
+STOP

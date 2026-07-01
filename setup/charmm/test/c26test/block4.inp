@@ -1,0 +1,246 @@
+* block4.inp
+* Thomas Simonson [24-JUL-97, c26a1]
+* Test : BLOCK enhancement that allows different coefficients for different
+*        energy terms in free energy simulations
+* Model: hybrid Asn-Asp in vacuum
+*
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ echo block4 testcase result: skip
+ stop
+endif
+
+bomlev -2
+stream datadir.def
+
+SET STEPF  6   ! count steps starting from Asp end     
+SET 5      0.5 ! lambda, multiplies Asp
+SET STEPI  7
+
+SET 6      @5  ! lambda, multiplies Asp 
+
+SET EQST 100   ! Number of steps for equilibration
+
+! read topology with hybrid residue ASPN, parameters
+!----------------------------------------------------
+open unit 11 read form name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open unit 12 read form name @0par_all22_prot.inp
+read parameter card unit 12
+close unit 12
+
+read rtf card append
+* Residue ASPN and a patch HYB are defined
+*
+   26    1
+
+DECL -C  
+DECL -O  
+DECL +N  
+DECL +HN  
+DECL +CA  
+DEFA FIRS NTER LAST CTER   
+AUTO ANGLES DIHE   
+
+RESI ASPN        -1.00
+GROUP   
+ATOM N    NH1    -0.47  !     |       
+ATOM HN   H       0.31  !  HN-N       
+ATOM CA   CT1     0.07  !     |   HB1   OD1
+ATOM HA   HB      0.09  !     |   |    //
+GROUP                   !  HA-CA--CB--CG
+ATOM CBA  CT2    -0.28  !     |   |    \\
+ATOM HB1A HA      0.09  !     |   HB2   OD2
+ATOM HB2A HA      0.09  !   O=C           
+ATOM CGA  CC      0.62  !     |           
+ATOM OD1A OC     -0.76
+ATOM OD2A OC     -0.76
+GROUP                   ! ASN PART OF SIDE CHAIN  HA-CA--CB--CG--ND2
+ATOM CBB  CT2    -0.18  !                         |   |      /
+ATOM HB1B HA      0.09  !                         |   HB2   HD22 (trans to OD1)
+ATOM HB2B HA      0.09  !                         O=C           
+GROUP                   !                         |           
+ATOM CGB  CC      0.55
+ATOM OD1B O      -0.55
+GROUP   
+ATOM ND2B NH2    -0.62
+ATOM HD21 H       0.32
+ATOM HD22 H       0.30
+GROUP   
+ATOM C    C       0.51
+ATOM O    O      -0.51
+BOND CBA CA  CGA CBA   OD1A CGA  OD2A CGA   
+BOND N  HN  N  CA   O   C   C   CA  C +N   
+BOND CA HA  CBA HB1A  CBA HB2A   
+BOND CBB CA  CGB CBB   OD1B CGB   ND2B CGB   
+BOND CBB HB1B  CBB  HB2B  ND2B HD21  ND2B HD22
+IMPR N   -C CA  HN  C CA +N O   
+IMPR OD1A CBA OD2A CGA   
+IMPR CGB  ND2B CBB   OD1B   CGB  CBB ND2B  OD1B   
+IMPR ND2B CGB  HD21 HD22  ND2B CGB HD22 HD21   
+DONOR HN N   
+DONOR HD21 ND2B   
+DONOR HD22 ND2B   
+ACCEPTOR OD1A CGA   
+ACCEPTOR OD2A CGA 
+ACCEPTOR OD1B CGB     
+ACCEPTOR O C   
+IC N    C    *CA  CBA   1.4490 105.6300  122.3300 114.1000  1.5619
+IC N    C    *CA  HA    1.4490 105.6300 -116.4000 106.7700  1.0841
+IC N    CA   CBA  CGA   1.4490 111.1000  180.0000 112.6000  1.5218
+IC CGA  CA   *CBA HB1A  1.5218 112.6000  119.2200 109.2300  1.1086
+IC CGA  CA   *CBA HB2A  1.5218 112.6000 -121.6100 110.6400  1.1080
+IC CA   CBA  CGA  OD1A  1.5619 112.6000  180.0000 117.9900  1.2565
+IC OD1A CBA  *CGA OD2A  1.2565 117.9900 -170.2300 117.7000  1.2541
+IC N    C    *CA  CBB   1.4510 105.2300  121.1800 113.0400  1.5627
+IC N    CA   CBB   CGB  1.4510 110.9100  180.0000 114.3000  1.5319
+IC CGB  CA  *CBB  HB1B  1.5319 114.3000  119.1700 107.8200  1.1120
+IC CGB  CA  *CBB  HB2B  1.5319 114.3000 -123.7400 110.3400  1.1091
+IC CA  CBB  CGB   OD1B  1.5627 114.3000  180.0000 122.5600  1.2323
+IC OD1B CBB *CGB  ND2B  1.2323 122.5600 -179.1900 116.1500  1.3521
+IC CBB  CGB  ND2B  HD21 1.5319 116.1500 -179.2600 117.3500  0.9963
+IC HD21 CGB  *ND2B HD22 0.9963 117.3500  178.0200 120.0500  0.9951
+
+PRES HYB          0.00  ! patch residue to delete the angle between
+DELE ANGLE CBA  CA CBB  ! side chains in the hybrid residue ASPN
+
+END
+
+read param card append
+* for the hybrid ASP/ASN system  11/95
+*
+ANGLE
+CT2  CT1  CT2   53.350      0.00    0.00   0.00000 ! From Georgios
+END
+
+! Build hybrid Asp-Asn
+!---------------------------------------
+read sequence cards
+* EColi RS SEQUENCE
+*
+    1
+ASPN
+generate ASPN  setup warn 
+
+! delete the ANGLE between the Cb atoms of the two sidechains
+PATCH HYB ASPN 1
+
+! define the two blocks to be used in the mutation
+!--------------------------------------------------
+define block2 select segid aspn .and. -
+  (type cba .or. type hb1a .or. type hb2a .or. type cga .or. -
+   type od1a .or. type od2a) end 
+define block3 select segid aspn .and. -
+  (type cbb .or. type hb1b .or. type hb2b .or. type cgb .or. -
+   type od1b .or. type nd2b .or. type hd2*) end 
+
+! read coordinates
+!------------------------------------------
+READ COOR pdb
+ATOM   5118  N   ASPN    1      26.961 -15.476  -2.954  0.00  4.00      ASPN
+ATOM   5119  HT1 ASPN    1      27.852 -15.652  -3.460  0.00  0.00      ASPN
+ATOM   5120  HT2 ASPN    1      27.099 -15.116  -1.988  0.00  0.00      ASPN
+ATOM   5121  HT3 ASPN    1      26.383 -14.732  -3.394  0.00  0.00      ASPN
+ATOM   5122  CA  ASPN    1      26.331 -16.835  -2.666  0.00  4.00      ASPN
+ATOM   5123  HA  ASPN    1      25.964 -17.263  -3.588  0.00  0.00      ASPN
+ATOM   5124  CBA ASPN    1      27.393 -17.741  -1.997  0.00  4.00      ASPN
+ATOM   5125 HB1A ASPN    1      26.883 -18.646  -1.605  0.00  0.00      ASPN
+ATOM   5126 HB2A ASPN    1      28.027 -17.177  -1.280  0.00  0.00      ASPN
+ATOM   5127  CGA ASPN    1      28.282 -18.179  -3.125  0.00  0.00      ASPN
+ATOM   5128 OD1A ASPN    1      28.164 -19.327  -3.615  0.00  0.00      ASPN
+ATOM   5129 OD2A ASPN    1      29.182 -17.408  -3.459  0.00  0.00      ASPN
+ATOM   5130  CBB ASPN    1      27.406 -17.788  -2.075  0.00  4.00      ASPN
+ATOM   5131 HB1B ASPN    1      26.940 -18.796  -2.033  0.00  0.00      ASPN
+ATOM   5132 HB2B ASPN    1      27.507 -17.478  -1.013  0.00  0.00      ASPN
+ATOM   5133  CGB ASPN    1      28.743 -17.773  -2.734  0.00  0.00      ASPN
+ATOM   5134 OD1B ASPN    1      28.957 -18.572  -3.635  0.00  0.00      ASPN
+ATOM   5135 ND2B ASPN    1      29.657 -16.860  -2.328  0.00  0.00      ASPN
+ATOM   5136 HD21 ASPN    1      30.565 -16.832  -2.745  0.00  0.00      ASPN
+ATOM   5137 HD22 ASPN    1      29.503 -16.553  -1.388  0.00  0.00      ASPN
+ATOM   5138  C   ASPN    1      25.079 -16.790  -1.738  0.00  4.00      ASPN
+ATOM   5139  OT1 ASPN    1      24.586 -17.818  -1.246  0.00  0.00      ASPN
+ATOM   5140  OT2 ASPN    1      24.465 -15.706  -1.729  0.00  0.00      ASPN
+END
+
+! electrostatics options
+!-----------------------
+NBONDS  atom  Shift CDIE  VDW VSWI   -
+        CUTNB 20.0  CTOFNB 16.0 CTONNB 15.  WMIN 1.5  EPS 1.0
+faster on
+
+! setup boundary potential for 10 A sphere
+! solvent boundary sphere centered at 24.800 -18.289  4.071
+!------------------------------------------
+open unit 88 form read name @0wat10.pot
+sbound read unit 88
+SBOUnd SET XREF 24.80 YREF -18.29 ZREF 4.07 assign 1 select all end
+
+! assign friction coefficients 
+!-----------------------------
+scalar fbeta set 10.  select all end  
+
+! energy flags
+!-------------
+skip include all exclude bond angle urey dihe impr vdw elec sbou !  cdih
+
+! partition the system into blocks
+! --------------------------------
+SET  7  1.0          ! initialize 7
+SET  8  1.0          ! initialize 8
+DECR 7  BY  @5       ! 1 - lambda, multiplies Asn
+DECR 8  BY  @6       ! 1 - lambda, multiplies Asn
+
+! now declare blocks
+! --------------------------------
+BLOCK 3
+
+CALL 2 SELE block2 END     ! Asp part
+CALL 3 SELE block3 END     ! Asn part
+CALL 1 SELE .not. (block2 .OR. block3) END  ! the rest
+
+! define the interaction coefficients
+! -----------------------------------
+! Define everything to be 1.0, so that the bonded-energy coefficients
+! are set to 1.0; then redefine VDW
+!
+COEFF 1  1  1.0
+COEFF 2  1  1.0  VDW @5  ELEC @5
+COEFF 2  2  1.0
+COEFF 3  1  1.0  VDW @7  ELEC @7
+COEFF 3  2  0.0
+COEFF 3  3  1.0
+
+END
+
+! ========================================
+! quench the system slightly
+minimize sd nstep 10 
+
+! do @EQST steps of equilibration 
+! (start with random velocities)
+! --------------------------------------------
+
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+!DYNA ORIG LANGEVIN STRT NSTEP @EQST TIMESTEP 0.001 -
+DYNA STRT NSTEP @EQST TIMESTEP 0.001 -
+     IUNREAD -1  IUNCRD -1 NSAVC 0 -
+     IUNVEL  -1  NSAVV  0  -
+     IPRFRQ 10 NPRINT 100 -
+     INBFRQ 20 ILBFRQ 20 -
+     FIRSTT 295. FINALT 295. -
+     TBATH 298.  RBUFFER  8.0 -
+     xbuf 25.79 ybuf -16.00 zbuf -2.28 - 
+     IEQFRQ  500  IASVEL 1
+
+set e0 ?ener
+
+@testcheck ?ener -157 -1 block4
+
+stop

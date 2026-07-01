@@ -1,0 +1,103 @@
+* CHARMM Testcase ace-adumb.inp
+* Author: Christian Bartels & Michael Schaefer
+* Files:  toph19.rtf, param19.inp, acepar19.inp   
+* Tests:  ACE + adaptive umbrella sampling of the potential energy
+*         (peptide folding simulations)
+*
+
+if ?ace .ne. 1 then
+ echo "Test NOT performed."
+ echo ace-adumb TEST CASE RESULT: SKIP
+ stop
+endif
+
+if ?adumb .ne. 1 then
+ echo "Test NOT performed."
+ echo ace-adumb TEST CASE RESULT: SKIP
+ stop
+endif
+
+! setup system
+stream datadir.def
+
+open unit 11 read form name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0param19.prm
+read param unit 11 card
+close unit 11
+
+! read ACE parameters from file:
+open read unit 11 card name @0acepar19.inp
+read ACEParameters card unit 11
+close unit 11
+
+read sequence card
+* hairpin BH8 peptide
+*
+12
+ARG GLY ILE THR VAL ASN GLY LYS THR TYR GLY ARG
+
+generate bh8 setup
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+! define energy parameters (activate ace)
+energy atom ace ieps 1.0 seps 80.0 alpha 1.2 sigma 3 switch -
+       vdis vswi cutnb 13.0 ctonnb 8.0 ctofnb 12.0
+
+! minimize structure
+mini sd  nstep 50  nprint  10
+
+SHAKE BONH TOLErance 1.0e-6 PARAMeter
+
+! Langevin friction coefficients 
+SCALAR FBETa SET  1.0 
+
+! to warm up (5000 steps would be appropriate):
+!dynamics langevin start -
+dynamics start -
+             rbuffer 0.0 ilbfrq 10000 tbath 1000 -
+             firstt 1000 finalt 1000 teminc 0.5 ihtfrq 0 -
+             nstep 50 timestep 0.001 -
+             inbfrq 10 -
+             ihbfrq 0 -
+             iseed  12 -
+             nprint   500  iprfreq  500 -
+             isvfrq 10000  iunwrite -1 iunread -1 -
+             nsavc  10000  iuncrd -1  -
+             wmin 1.2
+
+! increase sig fig
+format (1PG14.7)
+
+@testcheck ?TOTE -335.31624 0.000001 ace-adumb-tote1
+@testcheck ?EHFC    0.72061 0.0001   ace-adumb-ehfc1
+
+! set up adaptive umbrella sampling of the potential energy
+umbrella ener nresol 500 trig 50 poly 3 mine -1200 maxe -200 mint 250 maxt 1100
+
+umbrella init nsim 1000 update 10000 equi 1000 temp 1000 -
+	aging 0.98 threshold 200.
+
+! start folding simulation (e.g., for 2 ns)
+!dynamics langevin start -
+dynamics start -
+             rbuffer 0.0 ilbfrq 10000 tbath 000 -
+             firstt 1000 finalt 1000 teminc 0.5 ihtfrq 0 -
+             nstep 200 timestep 0.001 -
+             inbfrq 10 -
+             ihbfrq 0 -
+             iseed  12 -
+             nprint   500  iprfreq   500 -
+             isvfrq 10000  iunwrite -1 iunread -1 -
+             nsavc    500  iuncrd   -1  -
+             wmin 1.2
+
+@testcheck ?TOTE -166.76918 0.000001 ace-adumb-tote2
+@testcheck ?EHFC    0.76930 0.0001   ace-adumb-ehfc2
+
+STOP

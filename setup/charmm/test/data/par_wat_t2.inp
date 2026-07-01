@@ -1,0 +1,13 @@
+
+BOND
+O   H    592.23  0.9657
+
+ANGLE
+H   O   H   59.26   106.56
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 999.0 ctofnb 997.0 ctonnb 995.0 eps 1.0 e14fac 1.0 wmin 1.5
+H     0.000000  -0.000000     0.000000 ! ALLOW WAT
+O     0.000000  -0.1554253    1.776572 ! ALLOW   WAT
+END
+

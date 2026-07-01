@@ -1,0 +1,169 @@
+* EXSG   : Ryszard Czerminski (March 26, 1992)
+* purpose: to test EXSG keyword (UPDATE subcomand)
+*          see energy.doc for description
+* external files: none
+*
+stream datadir.def
+set testname exsg
+format (F20.7)
+
+BOMLEV 5
+!prnlev 2
+
+READ RTF CARD
+* ...
+*
+   20    1
+MASS     1 H      1.008
+
+DEFA FIRS NONE LAST NONE
+
+AUTO OFF
+
+RESI H   0.
+ATOM H H 0.
+END
+
+READ PARAMETER CARD
+* ...
+*
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 9.0  CTOFNB 7.0  CTONNB 5.0  WMIN 0.9
+!
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.0440    -0.0498    0.8000 
+END
+
+
+READ SEQUENCE CARDS
+* H
+*
+   2
+H H
+GENERATE  MAIN
+
+READ SEQUENCE CARDS
+* H
+*
+   2
+H H
+GENERATE  SECO
+
+READ COORD CARD
+* ...
+*
+    4
+    1    1 H    H     -1.0       0.        0.      MAIN 1      0.00000
+    2    2 H    H     +1.0       0.        0.      MAIN 1      0.00000
+    3    3 H    H     -1.0       1.        0.      SECO 1      0.00000
+    4    4 H    H     +1.0       1.        0.      SECO 1      0.00000
+
+fast off
+update ihbfrq 0
+ener
+set tt 1
+set sp noexsg
+set refval1 24.62274
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg main
+set tt 2
+set sp exsg
+set refval2 -0.02266
+@testcheck ?ener  @refval@@tt .0001 @testname_e_@tt_@sp
+
+ener exof
+set tt 3
+set sp exof
+set refval3 24.62274
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg seco
+set tt 4
+set sp seco
+set refval4 -0.02266
+@testcheck ?ener  @refval@@tt .0001 @testname_e_@tt_@sp
+
+ener exof
+set tt 5
+set sp exof
+set refval5 24.62274
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg main seco
+set tt 6
+set sp seco
+set refval6 0.00000
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exof
+set tt 7
+set sp exof
+set refval7 24.62274
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg
+set tt 8
+set sp exsg
+set refval8 -0.04532
+@testcheck ?ener  @refval@@tt .0001 @testname_e_@tt_@sp
+
+ener exof
+set tt 9
+set sp exof
+set refval9 24.62274
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+
+! the same with fast energy routines
+
+fast on
+ener
+set tt 1
+set sp fastnoexsg
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg main
+set tt 2
+set sp fastexsg
+@testcheck ?ener  @refval@@tt .0001 @testname_e_@tt_@sp
+
+ener exof
+set tt 3
+set sp fastexof
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg seco
+set tt 4
+set sp fastseco
+@testcheck ?ener  @refval@@tt .0001 @testname_e_@tt_@sp
+
+ener exof
+set tt 5
+set sp fastexof
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg main seco
+set tt 6
+set sp fastseco
+@testcheck ?ener  @refval@@tt .0001 @testname_e_@tt_@sp
+
+ener exof
+set tt 7
+set sp fastexof
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+ener exsg
+set tt 8
+set sp fastexsg
+@testcheck ?ener  @refval@@tt .0001 @testname_e_@tt_@sp
+
+ener exof
+set tt 9
+set sp fastexof
+@testcheck ?ener  @refval@@tt .000001 @testname_e_@tt_@sp
+
+
+stop

@@ -1,0 +1,117 @@
+* CHARMM c33a1 Testcase ensemble_rex.inp
+* Test replica exchange
+* Robert Best
+* 
+
+!==============  Check whether test can run =======================!
+if ?ensemble .ne. 1 then					   !
+   echo "This test NOT run"					   !
+   stop								   !
+endif								   !
+if ?numnode .lt. 4 then						   !
+   echo "This test NOT run"					   !
+   echo " Need multiple of 4 processors for this test"		   !
+   stop								   !
+endif								   !
+calc n = int ( ?numnode / 4 )					   !
+calc nn = @n * 4						   !
+if ?numnode .ne. @nn then					   !
+   echo "This test NOT run"					   !
+   echo " Need multiple of 4 processors for this test"		   !
+   stop								   !
+endif								   !
+!==============  Check Done =======================================!
+
+stream datadir.def 
+
+set prot 1ypa
+set t 300.0
+set seed 27041994
+
+open unit 1 read card name @0/toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/param19_eef1.inp
+read para card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+faster on
+
+eef1 setup temp @T unit 95 name @0/solvpar.inp
+update ctonnb 7.0 ctofnb 9.0 cutnb 10.0 group rdie
+!eef1 print
+nbonds elec  switch  group  rdie vdw  vswitch vgroup - 
+       cutnb 13.0 ctofnb 9.0 ctonnb 7.0 -
+       wmin 1.2 eps 1.0 e14f 0.4 nbxm 5 
+shake bonh param tol 1e-7
+energy
+
+ensemble nensem 4 
+! replica variables
+set nrep ?nensem
+set myrep ?whoiam
+
+! random seeds
+set iseed0 21422150
+set iseed1 5490565
+set iseed2 1265980
+set iseed3 1999290
+set iseed4 27041994
+set iseed5 2061999
+set iseed6 1238721
+set iseed7 2430748
+
+calc seed1 = @iseed0 + @iseed1 * @myrep + @iseed2 * @myrep 
+calc seed2 = @iseed1 + @iseed2 * @myrep + @iseed3 * @myrep 
+calc seed3 = @iseed2 + @iseed3 * @myrep + @iseed4 * @myrep 
+calc seed4 = @iseed3 + @iseed4 * @myrep + @iseed5 * @myrep 
+
+
+! ======================================================================
+!             replica exchange test
+! ======================================================================
+
+set test "ensemble_rex"
+
+if ?whoiam .eq. 0  then
+  open unit 50 write card name @9/@TEST_rep2t.dat
+  open unit 51 write card name @9/@TEST_t2rep.dat
+endif
+
+! this swap freq way too freq but this is a test...
+ensemble exchange freq 50 rep2to 50 t2repo 51 -
+        280.0 300.0 320.0 340.0
+
+ensemble info
+
+set t ?ensmyt
+set mtest @TEST_nd@myrep
+
+open unit 20 write card name -
+@9/@MTEST.rst
+open unit 21 write file name -
+@9/@MTEST.dcd
+open unit 23 write card name -
+@9/@MTEST.ene
+dynamics leap verlet start nstep 1000 timestep 0.002 - 
+	iseed @seed1 @seed2 @seed3 @seed4 -
+	iprfrq 200 ihtfrq 0 ieqfrq 100 ntrfrq 0 ihbfrq 0 -
+	inbfrq -1 ilbfrq 0 -
+	iunwri 20 iuncrd 21 kunit 23 - ! iunvel 22 
+	nprint 50 nsavc 500 nsavv 0 -
+	iasors 0 iasvel 1 iscvel 0 ichecw 1 teminc 0.0 twindh 10.0 -
+	twindl -10.0 -
+	firstt @T finalt @T 
+
+stop
+
+

@@ -1,0 +1,34 @@
+CHARMM Element doc/charmm.info 1.1
+
+File: CHARMM,  Node: Top
+
+             Chemistry at HARvard Macromolecular Mechanics
+             -            ---     -              -
+
+                     Version 24b1 -  August 15, 1995
+
+                  Copyright(c) 1984,1987,1991,1994,1995
+                President and Fellows of Harvard College
+
+                           All rights reserved
+
+        You are now using the INFO facility to view CHARMM 24
+documentation.  The paper; CHARMM: A Program for Macromolecular
+Energy, Minimization, and Dynamics Calculations. J. Comp. Chem., Vol.
+4, p187 (1983), is considered to be an integral part of this
+documentation.  In places, this documentation and the paper will
+conflict.  In all such cases, the documentation presented here should
+take precedence.
+
+* Menu:
+
+* Commands: (doc/commands.info).    Discription and syntax of CHARMM commands
+* Install:  (doc/install.info).     Release notes
+                                      How to install CHARMM on a user site
+* Usage:    (doc/usage.info).       How to use CHARMM
+* Support:  (doc/support.info).     Supporting data files and utilities
+* Testcase: (doc/testcase.info).    CHARMM testcases
+* Develop:  (doc/developer.info).   Notes for CHARMM developers
+* News:     (doc/changelog.info).   New features and Modifications
+* Parallel: (doc/parallel.info).    CHARMM on parallel platforms
+* Info:     (Info).                   A description of the INFO facility.

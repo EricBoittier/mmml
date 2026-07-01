@@ -1,0 +1,25 @@
+* CHARMM 36 testcase (c36a1x) random.inp
+* Test the random number generators in CHARMM
+* See doc/random.doc for details
+* Author: Milan Hodoscek, September 2009, NIH
+* requires no input files
+*
+
+stre datadir.def
+
+echo ?nrand
+set x1 ?rand
+stream @0test.str @x1 0.805 -0.001 random_1
+random clcg iseed 1 2 3 4
+set x2 ?rand
+stream @0test.str @x2 0.805 -0.001 random_2
+random oldr unifo scale 2 offset -1 iseed 567
+set x3 ?rand
+echo ?nrand
+stream @0test.str @x3 -0.991 -0.001 random_3
+random clcg gauss 2 scale 5 offset -1 iseed 345 333 222 121
+set x4  ?rand
+echo ?nrand
+stream @0test.str @x4 0.002009 -0.000001 random_4
+
+

@@ -1,0 +1,7 @@
+REMARK  PDB                                                                           
+REMARK   DATE:    10/13/17     11:11:55      CREATED BY USER: devereux                
+ATOM      1  H1  DTIP    1       6.610 -11.022   4.841  1.00  0.00      SOLU
+ATOM      2  OH2 DTIP    1       5.679 -10.963   5.054  1.00  0.00      SOLU
+ATOM      3  H2  DTIP    1       5.614 -11.300   5.947  1.00  0.00      SOLU
+TER       4      DTIP    1 
+END

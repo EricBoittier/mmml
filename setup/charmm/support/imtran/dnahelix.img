@@ -1,0 +1,39 @@
+* Image file to generate infinite DNA-helix.
+* Helix axis is along z, and the second strand is generated
+* from the first thur a 180 deg rotation around x.
+* Coordinates from the HELIX program have these symmetry properties.
+* Parameter 1 is the translation/unit cell along z
+* Parameter 2 is the rotation/unit cell around z ('helical twist'), degrees.
+*
+! Transformations on strand A:
+IMAGE UP
+TRANS 0.0 0.0 @1
+ROTA  0.0 0.0 1.0 @2
+
+IMAGE DN
+DEFINE INVE UP
+
+IMAGE UP2
+DEFINE UP UP
+
+IMAGE DN2
+DEFINE INVE UP2
+
+! Strand 2:
+IMAGE B
+ROTA 1.0 0.0 0.0 180.0
+
+! and its images
+IMAGE BUP
+DEFINE B UP
+
+IMAGE BDN
+DEFINE B DN
+
+IMAGE BUP2
+DEFINE B UP UP
+
+IMAGE BDN2
+DEFINE B DN DN
+
+END

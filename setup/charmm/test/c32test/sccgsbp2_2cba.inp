@@ -1,0 +1,108 @@
+* CHARMM 31 testcase sccgsbp2_ca.inp
+* .Test SCCGSBP, the QM/MM approach using SCC-DFTB and GSBP for CA
+* .partition the system in preparation for dynamics
+* .Author:  P. Schaefer, Univ. Wisc. Madison    June 2004
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/sccgsbp2_2cba> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+IF ?GSBP .NE. 1 THEN
+ echo "c32test/sccgsbp2_2cba> GSBP Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+! variables
+stream datadir.def
+set j 2cba
+set k 2cba_gsbp
+
+OPEN UNIT 21 NAME @0top_ca.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_ca.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @0@j.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @0@j.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+! add link atoms
+addl qqh1 2cba 92  cb 2cba 92  ca
+addl qqh2 2cba 94  cb 2cba 94  ca
+addl qqh3 2cba 117 cb 2cba 117 ca
+
+! -------------------------------------------------------------
+
+set 1 16.0    ! radius for fully mobile region
+set 2 20.0    ! radius of inner region
+set 3 18.0    ! radius of buffer region where Langevin dynamics will be used
+
+! delete solvent atoms outside 18 angstroms.
+! we want to delete outer region waters, but we also delete a 2A layer
+! in the inner region to account for the water exclusion radius.
+! (see test case /clongtest/gsbptest2.inp)
+dele atom sele .byres. (resname TIP3 .and. .not. - 
+                        ( point 0. 0. 0. cut @3 )) end
+
+scalar xcomp set 0.0
+scalar ycomp set 0.0
+scalar zcomp set 0.0
+scalar wcomp set 0.0
+
+! INNER, MOBILE REGION
+! residues with at least one atom within 16-A and
+!   with no main chain atoms outside of 18-A 
+scalar xcomp set 1.0 -
+        sele  ( .byres. ( point 0. 0. 0. cut @1 ) ) -
+        .and. .not. ( ( type C  .or. type O  .or. type N .or. - 
+                        type CA .or. type HA .or. type HN) -
+        .and. .not. ( point 0. 0. 0. cut @3 ) ) end
+scalar xcomp store 1
+
+! INITIAL BUFFER REGION
+! residues with at least one atom within 20-A,  but not already 
+!  included in the inner, mobile region
+scalar ycomp set 1.0 sele ( .byres. ( point 0. 0. 0. cut @2 ) ) -
+        .and. .not. recall 1 end
+scalar ycomp store 2
+
+! PROTEIN LANGEVIN ATOMS
+! all atoms, except hydrogens and waters in the buffer region
+scalar zcomp set 1.0 sele recall 2 .and. .not. -
+        ( hydrogen .or. lone .or. resname tip3 ) end
+scalar zcomp store 3
+
+! OUTER REGION ATOMS
+! any atom not in the inner or buffer regions
+scalar wcomp set 1.0 sele .not. (recall 1 .or. recall 2 ) end
+scalar wcomp store 4
+
+!write out the new psf and crd, as well as partition.
+open unit 11 write form name @9@k_sb.psf
+write psf unit 11 card
+
+open unit 12 write form name @9@k_sb.crd
+write coor unit 12 card
+
+open unit 13 write form name @9@k_sb.reg
+write coor card comp unit 13
+* 2cba:solv:bulk:16 A
+* column 1: reaction region 16 A by residue partioning
+* column 2: Buffer region atoms, any atoms (byres) within 20 A but
+*           not in 16 A plus all main chain atoms outside 18 A  
+* column 3: Protein Langenvin atoms (same as col. 2 but no H or tip3).
+* column 4: Outer region atoms
+*
+
+STOP

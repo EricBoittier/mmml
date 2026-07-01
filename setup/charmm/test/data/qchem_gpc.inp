@@ -1,0 +1,21 @@
+$comment
+qchem control file needed for the 
+alanine_qchem.inp test case
+$end
+
+$rem
+exchange              hf
+basis                 sto-3g
+qm_mm                 true
+jobtype               force
+symmetry              off
+sym_ignore            true
+print_input           true 
+qmmm_print            true
+gaussian_blur         true
+$end
+
+$molecule
+0 1
+$end
+

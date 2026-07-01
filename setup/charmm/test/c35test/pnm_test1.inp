@@ -1,0 +1,106 @@
+* CHARMM c35a1 testcase, 15-Aug-2007
+* pnm_test1.inp -  beta_E to beta_TP of F1-ATPase (PDB:1BMF)
+* modified Aug-2014 after PNM overhaul;
+* perform MD but not TMD (which is not compiled by default)
+*
+
+set me pnm_test1
+
+stream datadir.def
+
+if ?pnm .ne. 1 then
+      echo "Test NOT performed."
+      echo @me TESTCASE RESULT: SKIP
+      stop
+endif
+
+!
+! Topology file
+! -------------
+! Use CHARMM charges on boundary atoms
+OPEN READ FORMatted UNIT 1 NAME @0bmfe.top
+READ RTF CARD UNIT 1
+CLOSe UNIT 1
+
+!
+! Parameter file
+! --------------
+OPEN READ FORMatted UNIT 1 NAME @0bmfe.par
+READ PARAmeter CARD UNIT 1
+CLOSe UNIT 1
+
+! read in the psf file
+!----------------------
+open read form unit 1 name @0bmfe.psf
+read psf card unit 1
+close unit 1
+
+! read in coordinate file (initial state)
+!----------------------------------------
+open read form unit 1 name @0bmfe.crd
+read coord card unit 1
+close unit 1
+
+! read in coordinate file (final state)
+!------------------------------------
+open read form unit 1 name @0bmff.crd
+read coord comp card unit 1
+close unit 1
+
+! define some commonly used selections
+!--------------------------------------
+define prot sele segid BMFE end
+
+! use a longer cut off
+!-------------------------------------------------------------
+nbonded nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 13.0 ctonnb 12.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+! skip everything else
+!---------------------
+skip all exclude pnme
+! PNM for a3b3
+pnm help ! short syntax summary
+!---------------------
+pnm init 2
+pnm add force 2 cut 12 zero 0 pmix 1       ! first enm
+pnm add force 2 cut 12 zero 0 pmix 1  comp ! second enm
+!pnmi para off ! to turn off parallel force computation
+! old syntax
+!PNMI coea 2.0 coeb 2.0 cuta 12.0 cutb 12.0 -
+!     zera 0.0 zerb 0.0 pmix 1.0 sele prot end 
+!perturb coordinates before FD test
+scalar X add 1 sele bynu 1 end
+
+set eref 9.97774
+set etol 1e-4
+
+energy
+@qcheck ?ener @eref @etol @{me}_1
+
+test FIRST tol 0 step @etol sele bynu 1:5 end
+
+open write form unit 10 name @9e1.rsto    ! write restart file
+open write unfo unit 11 name @9e1.dcd    ! write coordinates
+
+scalar fbeta set 10 select all end
+
+set nsteps 1000
+set pfreq 500
+
+! short dynamics test
+dyna strt nstep @nsteps timestep 0.01 -
+    iprfrq 5000 ihtfrq 0 ieqfrq 0 -
+    iuncrd 11 iunrea -9 iunwri 10 iunvel -1 kunit -1 -
+    nprint @pfreq nsavc 20 nsavv 0 ihbfrq 0 -
+    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+    twindh 10.0 twindl -10.0 ntrfrq 500 -
+    tconstant tcoupling 0.1 trefer 50.0 -
+    firstt 50.0 finalt 50.0 teminc 5.0  -
+    eche 10000.0 -
+    iseed 1
+
+set eref 71.601
+set etol 1
+energy
+@qcheck ?ener @eref @etol @{me}_2

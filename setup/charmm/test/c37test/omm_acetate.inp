@@ -1,0 +1,183 @@
+* OpenMM nonbonded energy for sodium and acetate ions in vacuum
+* with PBC and NBFIxes exploiting a bug in c37b1.
+* Mike Garrahan and Shuai Wei, Jan 2013
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+GOTO toppar
+LABEL buildmol
+
+read sequ acet 1
+generate ion0 setup
+ic param
+! puts oxygens near (2, +-1, 0)
+ic seed ion0 1 C1 ion0 1 C2 ion0 1 O1
+ic build
+
+read sequ sod 1
+generate ion1 setup
+read coor card
+* to interact with oxygens across periodic boundary
+*
+    1
+    1    2 SOD  SOD  -15.000     0.000     0.000
+
+print coor
+
+set size 25.0
+set theta 90.0
+crystal define cubic @size @size @size @theta @theta @theta
+crystal build noper 0
+
+set testct 0
+set failct 0
+
+set testname vdw
+skipe all excl vdw imnb
+ener cutnb 12 ctofnb 12 ctonnb 12 atom vatom cdie -
+     ewald pmewald kappa 0.32 order 4 fftx 24 ffty 24 fftz 24
+set expected ?ener
+ener omm
+set actual ?ener
+set tol 4e-3
+GOTO dotest
+LABEL postvdw
+
+set testname elec
+skipe all excl elec imel ewks ewse ewex
+ener
+set expected ?ener
+
+ener omm
+
+set actual ?ener
+set tol 1e-1
+GOTO dotest
+LABEL postelec
+
+if @failct .gt. 0 then
+   echo failed @failct OF @testct TESTS
+   die
+else
+   echo passed ALL @testct TESTS
+endif
+
+STOP
+
+LABEL dotest
+calc relerr abs(@actual / @expected - 1)
+if @relerr .lt. @tol then
+   echo passed TEST @testname
+else
+   echo failed TEST @testname
+   calc failct @failct + 1
+endif
+calc testct @testct + 1
+GOTO post@testname
+
+LABEL toppar
+
+read rtf card
+* from top_all36_cgenff.rtf and toppar_water_ions.str
+*
+36  1
+
+MASS     1 HT       1.00800  ! TIPS3P WATER HYDROGEN
+MASS     2 OT      15.99940  ! TIPS3P WATER OXYGEN
+MASS     3 SOD     22.98977  ! Sodium Ion
+MASS     4 HGA3     1.00800  ! alphatic proton, CH3
+MASS     5 CG2O3   12.01100  ! carbonyl C: [negative] carboxylates
+MASS     6 CG331   12.01100  ! aliphatic C for methyl group (-CH3)
+MASS     7 OG2D2   15.99940  ! carbonyl O: negative groups: carboxylates, carbonate
+
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE
+
+RESI TIP3         0.000 ! tip3p water model, generate using noangle nodihedral
+GROUP
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+DONOR H1 OH2
+DONOR H2 OH2
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI SOD       1.00 ! Sodium Ion
+GROUP
+ATOM SOD  SOD  1.00
+PATCHING FIRST NONE LAST NONE
+
+RESI ACET         -1.00 ! C2H3O2 acetate, K. Kuczera
+GROUP
+ATOM  C1  CG331   -0.37 !
+ATOM  C2  CG2O3    0.62 !     H1    O1 (-)
+ATOM  H1  HGA3     0.09 !     |    /
+ATOM  H2  HGA3     0.09 ! H2--C1--C2
+ATOM  H3  HGA3     0.09 !     |    \\
+ATOM  O1  OG2D2   -0.76 !     H3    O2
+ATOM  O2  OG2D2   -0.76 !
+BOND C1 H1  C1 H2  C1 H3
+BOND C1 C2  C2 O1
+DOUBLE  C2 O2
+IMPR C2 C1 O2 O1
+IC  O1  C2 C1  H1  0.00 0.00    0.0  0.00 0.00
+IC  C2  H1 *C1 H2  0.00 0.00  120.0  0.00 0.00
+IC  C2  H1 *C1 H3  0.00 0.00 -120.0  0.00 0.00
+IC  C1  O1 *C2 O2  0.00 0.00  180.0  0.00 0.00
+PATC FIRS NONE LAST NONE
+END
+
+read param card
+* from par_all36_cgenff.prm and toppar_water_ions.str
+*
+BONDS
+HT     HT        0.0      1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+HT     OT      450.0      0.9572 ! from TIPS3P geometry
+CG2O3  CG331   200.00     1.5220 ! PROT adm jr. 4/05/91, for asn,asp,gln,glu and cters
+CG2O3  OG2D2   525.00     1.2600 ! PROT adm jr. 7/23/91, acetic acid
+CG331  HGA3    322.00     1.1110 ! PROT alkane update, adm jr., 3/2/92
+
+ANGLES
+HT     OT     HT       55.0     104.52                   ! FROM TIPS3P GEOMETRY
+HGA3   CG331  HGA3     35.50    108.40    5.40   1.80200 ! PROT alkane update, adm jr., 3/2/92
+CG2O3  CG331  HGA3     33.00    109.50   30.00   2.16300 ! PROT adm jr. 4/05/91, for asn,asp,gln,glu and cters
+CG331  CG2O3  OG2D2    40.00    116.00   50.00   2.35300 ! PROT adm jr. 7/23/91, correction, ACETATE (KK)
+OG2D2  CG2O3  OG2D2   100.00    128.00   70.00   2.25870 ! PROT adm jr. 7/23/91, correction, ACETATE (KK)
+
+DIHEDRALS
+OG2D2  CG2O3  CG331  HGA3       0.0500  6   180.00 ! PROT For side chains of asp,asn,glu,gln, (n=6) from KK(LK)
+
+IMPROPERS
+CG2O3  X      X      OG2D2     96.0000  0     0.00 ! PROT 90.0->96.0 acetate, single impr (KK)
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+HT       0.0       -0.046      0.2245
+OT       0.0       -0.1521     1.7682
+SOD      0.0       -0.0469     1.41075 ! new CHARMM Sodium
+HGA3     0.0       -0.0240     1.3400 ! alkane, yin and mackerell, 4/98
+OG2D2    0.0       -0.1200     1.7000 ! PROT
+CG331    0.0       -0.0780     2.0500   0.0 -0.01 1.9 ! alkane (CT3), 4/98, yin, adm jr; Rmin/2 modi
+CG2O3    0.0       -0.0700     2.0000 ! acetate heat of solvation
+
+NBFIX
+SOD    OG2D2    -0.075020   3.190 ! For CGenFF carboxylate groups
+
+END
+
+GOTO buildmol

@@ -1,0 +1,69 @@
+* but0.inp - Generalized Hybrid Orbital Testcase
+* Jiali Gao: c28a1 15-Aug-99
+*  MINIMIZATION OF LIGAN PLUS ENZIME 
+*  start on sbmd_6.pdb  
+*
+  
+stream datadir.def
+
+!
+! Topology file
+! -------------
+OPEN READ FORMatted UNIT 1 NAME @0but.topo
+READ RTF CARD UNIT 1
+CLOSe UNIT 1
+  
+!
+! Parameter file
+! --------------
+OPEN READ FORMatted UNIT 1 NAME @0qmlalk.para
+READ PARAmeter CARD UNIT 1
+CLOSe UNIT 1
+
+!
+! sequence 
+! ----------------
+READ SEQUence CARD 
+* test butane
+*
+ 1
+BUTB
+
+GENERATE BUTN SETUP
+
+IC PARAM
+IC SEED 1 H11 1 C1 1 C2
+IC BUILD
+IC FILL
+IC PURGE
+PRINT IC
+PRINT COORD
+
+
+bomblev -10 
+! -------------------------------------------
+! let's define the quantum part of the system
+! -------------------------------------------
+define qms sele BYNU 1:8 end
+
+define mms sele .not. qms end
+
+!prnlev 4
+
+nbonds atom cutnb 12.0 ctofnb 11.0 ctonnb 10. 
+
+quantum sele qms end glnk sele bynu 8 end -
+!quantum sele qms end glnk sele bynu 10 end -
+     am1 charge 0 scfc 0.00001 
+
+energy
+
+test first step 0.001
+
+!mini abnr nstep 2   tolgrd 0.001 nprint 10
+
+mulli
+
+print coor
+
+stop

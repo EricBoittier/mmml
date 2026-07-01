@@ -1,0 +1,200 @@
+CHARMM Element doc/hbonds.info 1.1
+
+File: Hbonds, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+                    Generation of Hydrogen Bonds
+
+
+        The generation of hydrogen bonds is one of the major steps in
+analyzing the energy of a system.  This energy term is not usually used
+in minimization or dynamics because modern parameter sets compute
+hydrogen bond contributions as a balance between electrostatic attraction
+and van der Waal repulsion terms.  This facility remains useful for the
+purpose of enery and structural analysis.  The process of hydrogen bond
+generation involves looking at all possible pairs of hydrogen bond
+donors and acceptors and selecting those which are "good". The meaning
+of "good" is determined by parameters to be described below. In
+addition, the generation routine is responsible for constructing the
+positions of all uncoordinated hydrogens and adding them into the
+coordinate list.
+
+        The selection of hydrogen bonds involves three checks. First,
+any good hydrogen bond has a length less than some cutoff. Second, the
+angle off linearity has a value less than some cutoff. This angle is 180
+- D--H...A.  Finally, if a hydrogen donor has more than one acceptor
+which satisfies the above constraints and BEST is specified, the routine
+will select the one with the lowest energy (normally it will take ALL
+and let the minimization or dynamics adjust there strengths).
+
+        To obtain a more detailed description of the selection process
+and the process of constructing hydrogen coordinates, the CHARMM paper
+should be consulted.
+
+        Because there are cutoff's involved with the selection of
+hydrogen bonds, and because the hydrogen bond list must be updated
+during dynamics, and because energy must be conserved, switching
+functions are needed to smooth the transition over a cutoff. Therefore,
+the specification of hydrogen bond generation also allows the
+specification of switching function parameters.
+
+        One should note that particular choices for the selection
+process will never conserve energy in a dynamics run. First, one must fix
+the hydrogen bond list if one uses the extended atom representation.
+This is necessary as one cannot apply a switching function to the
+hydrogen bond angle as it is not calculated if the hydrogens are not
+present. Second, the selection of the best hydrogen bond for a given
+donor can't be used, because there is no switching function to smooth
+the transition between two possible and mutually exclusive hydrogen
+bonds.
+
+        The generation is performed by CHARMM at several different
+points. One can request the hydrogen bonds be generated explicitly using
+a hydrogen bond command. This is useful prior to analyzing the system.
+The hydrogen bonds can be generated during any energy manipulation, see
+*note Energy:(doc/energy.info).
+
+* Menu:
+
+* Syntax::              Syntax of the Hydrogen bond specification
+* Function::            Purpose of each of the keywords
+
+File: Hbonds, Node: Syntax, Up: Top, Next: Function, Previous: Top
+
+                Syntax of the Hydrogen Bond Command
+
+[SYNTAX HBONd]
+
+{ HBONds       }        { [IHBFrq integer]  hbond-spec  }
+{ UPDAte ...   }        { [IHBFrq  0     ]              }
+{ MINImize ... }        {                               }
+{ DYNAmics ... }        {                               }
+{ ENERgy ...   }        {                               }
+
+hbond-spec ::= [BEST] [DUMMy] [CUTHB real] [CUTHBA real] [ACCE] [INIT]
+               [ALL ]                                    [NOAC]
+
+        [HBEXclude] [CTONHB real] [CTOFHB real] [CTONHA real] [CTOFHA real]
+        [HBNOexcl ]
+
+NOTE:: The IHBFrq value is remembered. If its value is zero,
+interpretation of [hbond-spec] will be supressed as well as any
+modifications to the hbond list.
+
+
+[SYNTAX HBTRim]
+
+HBTRim  real
+
+[SYNTAX DONOr]
+[SYNTAX ACCEptor]
+
+
+[ DONOr    ]  [ REMOve ] atom-selection [NOANtecedents] [SHOW]
+[ ACCeptors]  [ ADD    ]
+              [ SET    ]
+
+
+
+
+File: Hbonds, Node: Function, Up: Top, Previous: Syntax, Next: HBTRim
+
+            Purpose of the various hydrogen bond variables.
+
+Variable  Default      Function
+
+ACCE/NOAC ACCE         ACCE specifies that acceptor anticedents will be
+                       used in an (H-A-AA) angle factor where present in the
+                       structure file (from the RTF).
+
+HBEX/HBNOexclude       HBEXclude causes all hydrogen bonds between excluded
+                       atoms to be removed in the hbond edit facility.
+                       This also includes 1-4 interaction if appropriate
+                       as determined by the NBXMode nonbond value.
+                       This option is needed for systems where no angle
+                       cutoff is applied (as in the AMBER potential).
+
+BEST/ALL    ALL        BEST turns on selection of best hydrogen bond for
+                       a given donor. ALL takes all hydrogen bonds for
+                       given donor which satisfy the other conditions.
+
+DUMMy                  Sets CUTHB and CUTHBA to zero. This will result in
+                       no hydrogen bonds which is desirable when one is
+                       not interested in the hydrogen bond energy. The
+                       selection will be done very quickly in this case.
+
+CUTHB       4.5        Maximum distance allowed for a hydrogen bond. This
+                       distance is measured between the heavy atoms
+                       NOTE: a CUTHB value less than 1.0 will disable
+                       the HBOND generation code (for efficiency).
+
+CTOFHB    CUTHB-0.5    Distance where distance switching function is off
+                       Once specified, it will only change if respecified.
+
+CTONHB    CTOFHB-0.5   Distance where distance switching function is on.
+                       Once specified, it will only change if respecified.
+
+CUTHBA     90.0        Maximum out of line angle allowed for a hydrogen
+                       bond. The angle is 180 - D--H...A angle
+CTOFHA    CUTHBA-20.0  Angle where angle switching function is off
+                       Once specified, it will only change if respecified.
+
+CTONHA    CTOFHA-20.0  Angle where angle switching function is on.
+                       Once specified, it will only change if respecified.
+
+INIT      do not       INIT specifies that all values and conditions return
+                       to the original defaults.
+
+
+File: Hbonds, Node: HBTRim, Up: Top, Previous: Function, Next: DONOr
+
+
+The HBTRim command deletes all hydrogen bonds that have an energy
+of interaction that is higher than the specified cutoff.  This
+command is used to reduce a list of all hydrogen bonds to that of
+important hydrogen bonds.
+
+The syntax is;
+
+HBTRim  real
+
+where the real value is the energy cutoff and should usually be
+negative.
+
+
+File: Hbonds, Node: DONOr, Up: Top, Previous: HBTRim, Next: Top
+
+[ DONOr    ]  [ REMOve ] atom-selection [NOANtecedents] [SHOW]
+[ ACCeptors]  [ ADD    ]
+              [ SET    ]
+
+These commands modify the list of donors or acceptors contained
+in the structure file (PSF).  By invoking this command before
+the generation of a hydrogen bond list, the content of this
+list can be manipulated.  The REMOve suboption will delete
+any current donors/acceptors contained in the selected atoms.
+The ADD suboption will create additional donors/acceptors based
+on the selected atoms.  The SET suboption will remove all current
+donors/acceptors and replace the list with the selected set of
+atoms.  
+      By default, any single atom bonded to a selected atom
+will be included as the donor/acceptor antecedent.  To prevent
+this, the NOAN keyword can be used to generate simple (radial only)
+hydrogen bonds.  The SHOW keyword causes the new list of
+donors/acceptors to be displayed.
+ 
+NB! All modifications listed above are strictly based on the atom-selection,
+without taking into account any DONOr/ACCeptor specifications in either the PSF
+or the RTF. If your selection includes aliphatic carbons they may end up as
+donors/acceptors...
+To add water hydrogens as hydrogen bond donors a command like this would be
+used:
+
+DONOR ADD SELECT RESN TIP3 .AND. HYDROGEN END 
+
+To remove all backbone carbonyls as acceptors:
+ACCEPTOR REMOVE SELECT ATOM PROTA * O END
+
+Substitution variables NDON/NACC are set to the resulting number of
+donors/acceptors.
+
+See io.info for commands that input/output HBONd information.

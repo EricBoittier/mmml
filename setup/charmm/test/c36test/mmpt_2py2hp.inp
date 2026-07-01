@@ -1,0 +1,564 @@
+* MMPT DYNAMICS AND ANALYSIS OF DOUBLE PROTON TRANSFER OF 2PY2HP
+*
+
+stream datadir.def
+
+PRNLEV  5 @pnode
+BOMLEV -5
+
+! ====================================================
+! set up system
+! ====================================================
+
+! GENERAL TOPOLOGY FILE / APPEND SPECIFIC TOPOLOGIES
+
+OPEN UNIT 1 CARD READ NAME @0/TOP_ALL22_PROT_NA.INP
+READ RTF CARD UNIT 1
+CLOSE UNIT 1
+
+
+READ RTF CARD UNIT 5 APPEND
+* ... 
+* Build RTF for 2p2hp.pdb 
+* ...
+*
+   22    0 
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI 2PY   0.000
+GROUP
+ATOM N1 NR2  -.70000  
+ATOM C1 CA   0.0500 
+ATOM C2 CA   0.0500 
+ATOM C3 CA   0.0500 
+ATOM C4 CA   0.0500 
+ATOM C5 CA   0.0500 
+ATOM O1 OH1  -.5000 
+ATOM O2 OC   -.7000 
+ATOM C6 CA   0.0500 
+ATOM N2 NR1  -.5000 
+ATOM C7 CA   0.0500 
+ATOM C8 CA   0.0500 
+ATOM C9 CA   0.0500 
+ATOM C10 CA  0.0500 
+ATOM H1 HP   0.1200 
+ATOM H2 HP   0.1200 
+ATOM H3 HP   0.1200 
+ATOM H4 HP   0.1200 
+ATOM H5 H    0.4700 
+ATOM H6 HP   0.1200 
+ATOM H7 HP   0.1200 
+ATOM H8 HP   0.1200 
+ATOM H9 HP   0.1200 
+ATOM H10 H   0.4700
+BOND N1 C1
+BOND N1 C5
+BOND C1 C2
+BOND C1 O1
+BOND C2 C3
+BOND C2 H9
+BOND C3 C4
+BOND C3 H8
+BOND C4 C5
+BOND C4 H7
+BOND C5 H6
+BOND O1 H10
+BOND O2 C6
+BOND C6 N2
+BOND C6 C10
+BOND N2 C7
+BOND N2 H5
+BOND C7 C8
+BOND C7 H1
+BOND C8 C9
+BOND C8 H2
+BOND C9 C10
+BOND C9 H3
+BOND C10 H4
+IMPH C1 N1 C2 O1
+IMPH C2 C1 C3 H9
+IMPH C3 C2 C4 H8
+IMPH C4 C3 C5 H7
+IMPH C5 N1 C4 H6
+IMPH C6 O2 N2 C10
+IMPH N2 C6 C7 H5
+IMPH C7 N2 C8 H1
+IMPH C8 C7 C9 H2
+IMPH C9 C8 C10 H3
+IMPH C10 C6 C9 H4
+IMPH C1 N1 C2 O1
+IMPH C2 C1 C3 H9
+IMPH C3 C2 C4 H8
+IMPH C4 C3 C5 H7
+IMPH C5 N1 C4 H6
+IMPH C6 O2 N2 C10
+IMPH N2 C6 C7 H5
+IMPH C7 N2 C8 H1
+IMPH C8 C7 C9 H2
+IMPH C9 C8 C10 H3
+IMPH C10 C6 C9 H4
+IC N1 C1  C2 C3   1.34  122.02    0.00  118.74   1.38
+IC N1 C1  C2 H9   1.34  122.02  180.00  118.79   1.08
+IC N1 C1  O1 H10   1.34  120.24    0.00  113.59   1.00
+IC N1 C5  C4 C3   1.35  123.86    0.00  117.61   1.40
+IC N1 C5  C4 H7   1.35  123.86  180.00  120.64   1.08
+IC C1 N1  C5 C4   1.34  118.20    0.00  123.86   1.38
+IC C1 N1  C5 H6   1.34  118.20  180.00  115.78   1.09
+IC C1 C2  C3 C4   1.41  118.74    0.00  119.57   1.40
+IC C1 C2  C3 H8   1.41  118.74  180.00  120.03   1.08
+IC C2 C1  N1 C5   1.41  122.02    0.00  118.20   1.35
+IC C2 C1  O1 H10   1.41  117.74  180.00  113.59   1.00
+IC C2 C3  C4 C5   1.38  119.57    0.00  117.61   1.38
+IC C2 C3  C4 H7   1.38  119.57  180.00  121.75   1.08
+IC C3 C2  C1 O1   1.38  118.74  180.00  117.74   1.33
+IC C3 C4  C5 H6   1.40  117.61  180.00  120.36   1.09
+IC C4 C3  C2 H9   1.40  119.57  180.00  122.47   1.08
+IC C5 N1  C1 O1   1.35  118.20  180.00  120.24   1.33
+IC C5 C4  C3 H8   1.38  117.61  180.00  120.40   1.08
+IC O1 C1  C2 H9   1.33  117.74    0.00  118.79   1.08
+IC O2 C6  N2 C7   1.24  120.09  180.00  124.24   1.36
+IC O2 C6  N2 H5   1.24  120.09    0.00  115.08   1.04
+IC O2 C6  C10 C9   1.24  125.04  180.00  120.91   1.37
+IC O2 C6  C10 H4   1.24  125.04    0.00  116.84   1.08
+IC C6 N2  C7 C8   1.39  124.24    0.00  120.95   1.36
+IC C6 N2  C7 H1   1.39  124.24  180.00  115.91   1.08
+IC C6 C10  C9 C8   1.44  120.91    0.00  121.19   1.42
+IC C6 C10  C9 H3   1.44  120.91  180.00  119.54   1.09
+IC N2 C6  C10 C9   1.39  114.87    0.00  120.91   1.37
+IC N2 C6  C10 H4   1.39  114.87  180.00  116.84   1.08
+IC N2 C7  C8 C9   1.36  120.95    0.00  117.85   1.42
+IC N2 C7  C8 H2   1.36  120.95  180.00  120.46   1.08
+IC C7 N2  C6 C10   1.36  124.24    0.00  114.87   1.44
+IC C7 C8  C9 C10   1.36  117.85    0.00  121.19   1.37
+IC C7 C8  C9 H3   1.36  117.85  180.00  119.27   1.09
+IC C8 C7  N2 H5   1.36  120.95  180.00  120.69   1.04
+IC C8 C9  C10 H4   1.42  121.19  180.00  122.26   1.08
+IC C9 C8  C7 H1   1.42  117.85  180.00  123.14   1.08
+IC C10 C6  N2 H5   1.44  114.87  180.00  115.08   1.04
+IC C10 C9  C8 H2   1.37  121.19  180.00  121.69   1.08
+IC H1 C7  N2 H5   1.08  115.91    0.00  120.69   1.04
+IC H1 C7  C8 H2   1.08  123.14    0.00  120.46   1.08
+IC H2 C8  C9 H3   1.08  121.69    0.00  119.27   1.09
+IC H3 C9  C10 H4   1.09  119.54    0.00  122.26   1.08
+IC H6 C5  C4 H7   1.09  120.36    0.00  120.64   1.08
+IC H7 C4  C3 H8   1.08  121.75    0.00  120.40   1.08
+IC H8 C3  C2 H9   1.08  120.03    0.00  122.47   1.08
+IC N1 C2 *C1 O1   1.34  122.02  180.00  117.74   1.33
+IC C1 C3 *C2 H9   1.41  118.74  180.00  122.47   1.08
+IC C2 C4 *C3 H8   1.38  119.57  180.00  120.40   1.08
+IC C3 C5 *C4 H7   1.40  117.61  180.00  120.64   1.08
+IC N1 C4 *C5 H6   1.35  123.86  180.00  120.36   1.09
+IC O2 N2 *C6 C10   1.24  120.09  180.00  114.87   1.44
+IC C6 C7 *N2 H5   1.39  124.24  180.00  120.69   1.04
+IC N2 C8 *C7 H1   1.36  120.95  180.00  123.14   1.08
+IC C7 C9 *C8 H2   1.36  117.85  180.00  121.69   1.08
+IC C8 C10 *C9 H3   1.42  121.19  180.00  119.54   1.09
+IC C6 C9 *C10 H4   1.44  120.91  180.00  122.26   1.08
+IC N1 C2 *C1 O1   1.34  122.02  180.00  117.74   1.33
+IC C1 C3 *C2 H9   1.41  118.74  180.00  122.47   1.08
+IC C2 C4 *C3 H8   1.38  119.57  180.00  120.40   1.08
+IC C3 C5 *C4 H7   1.40  117.61  180.00  120.64   1.08
+IC N1 C4 *C5 H6   1.35  123.86  180.00  120.36   1.09
+IC O2 N2 *C6 C10   1.24  120.09  180.00  114.87   1.44
+IC C6 C7 *N2 H5   1.39  124.24  180.00  120.69   1.04
+IC N2 C8 *C7 H1   1.36  120.95  180.00  123.14   1.08
+IC C7 C9 *C8 H2   1.36  117.85  180.00  121.69   1.08
+IC C8 C10 *C9 H3   1.42  121.19  180.00  119.54   1.09
+IC C6 C9 *C10 H4   1.44  120.91  180.00  122.26   1.08
+PATCH FIRST NONE LAST NONE
+
+END
+
+OPEN UNIT 1 CARD READ NAME @0/PAR_ALL22_PROT.INP
+READ PARA CARD UNIT 1
+CLOSE UNIT 1
+
+read para card append
+* additional parameters for 2py2hp
+*
+
+BONDS
+NR2  CA    400.000     1.3800 ! like NR2  CPH1
+NR1  CA    400.000     1.3800 ! like NR2  CPH1
+
+ANGLES
+NR2  CA   CA    40.000    120.00   35.00   2.41620  ! like CA   CA   CA
+                                                    ! SL, 22.07.2003
+CA   NR2  CA    40.000    120.00   35.00   2.41620  ! like CA   CA   CA
+                                                    ! SL, 22.07.2003
+NR1  CA   CA    40.000    120.00   35.00   2.41620  ! like CA   CA   CA
+                                                    ! SL, 22.07.2003
+CA   NR1  CA    40.000    120.00   35.00   2.41620  ! like CA   CA   CA
+                                                    ! SL, 22.07.2003
+OH1  CA   NR2   45.200    120.0000                  ! like OH1  CA   CA
+                                                    ! SL, 22.07.2003   
+OH1  CA   NR1   45.200    120.0000                  ! like OH1  CA   CA
+                                                    ! SL, 22.07.2003   
+HP   CA   NR2   30.000    120.00   22.00   2.15250  ! like HP   CA   CA  
+                                                    ! SL, 22.07.2003   
+OC   CA   NR1   40.000    120.0000                  ! like OC   CA   CA    
+                                                    ! SL, 22.07.2003   
+HP   CA   NR1   30.000    120.00   22.00   2.15250  ! like HP   CA   CA    
+                                                    ! SL, 22.07.2003    
+H    NR1  CA    30.000    120.00   22.00   2.15250  ! like HP   CA   CA    
+                                                    ! SL, 22.07.2003  
+
+DIHEDRALS
+NR2  CA   CA   CA       3.1000  2   180.00     ! like CA   CA   CA   CA  
+                                               ! SL 22/07/2003
+CA   NR2  CA   CA       3.1000  2   180.00     ! like CA   CA   CA   CA  
+                                               ! SL 22/07/2003
+CA   NR1  CA   CA       3.1000  2   180.00     ! like CA   CA   CA   CA  
+                                               ! SL 22/07/2003
+NR1  CA   CA   CA       3.1000  2   180.00     ! like CA   CA   CA   CA  
+                                               ! SL 22/07/2003
+H    OH1  CA   NR2      0.9900  2   180.00     ! like H  OH1  CA   CA  
+                                               ! SL 22/07/2003
+H    OH1  CA   NR1      0.9900  2   180.00     ! like H  OH1  CA   CA  
+                                               ! SL 22/07/2003
+HP   CA   CA   NR2      4.2000  2   180.00     ! like HP   CA   CA   CA  
+                                               ! SL 22/07/2003
+HP   CA   NR2  CA       4.2000  2   180.00     ! like HP   CA   CA   CA  
+                                               ! SL 22/07/2003
+H    NR1  CA   CA       4.2000  2   180.00     ! like HP   CA   CA   CA  
+                                               ! SL 22/07/2003
+OH1  CA   NR2  CA       3.1000  2   180.00     ! like OH1   CA   CA   CA  
+                                               ! SL 22/07/2003
+OH1  CA   NR1  CA       3.1000  2   180.00     ! like OH1   CA   CA   CA  
+                                               ! SL 22/07/2003
+OC   CA   NR1  CA       3.1000  2   180.00     ! like OC   CA   CA CA 
+                                               ! SL 22/07/2003
+OH1  CA   NR1  CA       3.1000  2   180.00     ! like OC   CA   CA CA 
+                                               ! SL 22/07/2003
+OC   CA   NR1  H        4.2000  2   180.00     ! like OC   CA   CA   HP
+                                               ! SL 22/07/2003
+OH1  CA   NR1  H        4.2000  2   180.00     ! like OC   CA   CA   HP
+                                               ! SL 22/07/2003
+HP   CA   CA   NR1      4.2000  2   180.00     ! like HP   CA   CA   CA 
+                                               ! SL 22/07/2003
+HP   CA   NR1  CA       4.2000  2   180.00     ! like HP   CA   CA   CA 
+                                               ! SL 22/07/2003 
+HP   CA   NR1  H        2.4000  2   180.00     ! like HP   CA   CA   HP 
+                                               ! SL 22/07/2003 
+IMPROPER
+CA   X    X    CA    96.0000         0      0.0000 ! like CC   X    X    CT1
+                                                   ! SL 22/07/2003
+NR1  X    X    H     96.0000         0      0.0000 ! like CC   X    X    CT1
+                                                   ! SL 22/07/2003
+CA   X    X    HP    96.0000         0      0.0000 ! like CC   X    X    CT1
+                                                   ! SL 22/07/2003
+CA   X    X    OH1   96.0000         0      0.0000 ! like CC   X    X    CT1
+                                                   ! SL 22/07/2003
+END
+
+
+! READ IN PSF AND COORDINATE FILE
+
+
+READ PSF CARD UNIT 5
+PSF 
+
+       2 !NTITLE
+* PSF  FOR 2PY DIMER FULL SCC                                                   
+*  DATE:     7/22/ 3     15: 7:21      CREATED BY USER: lammers                 
+
+      24 !NATOM
+       1 MAIN 1    2PY  N1     51  -0.250000       14.0070           0
+       2 MAIN 1    2PY  C1     21  -0.050000       12.0110           0
+       3 MAIN 1    2PY  C2     21  -0.050000       12.0110           0
+       4 MAIN 1    2PY  C3     21  -0.050000       12.0110           0
+       5 MAIN 1    2PY  C4     21  -0.050000       12.0110           0
+       6 MAIN 1    2PY  C5     21  -0.050000       12.0110           0
+       7 MAIN 1    2PY  O1     73  -0.250000       15.9990           0
+       8 MAIN 1    2PY  O2     73  -0.250000       15.9990           0
+       9 MAIN 1    2PY  C6     21  -0.050000       12.0110           0
+      10 MAIN 1    2PY  N2     51  -0.250000       14.0070           0
+      11 MAIN 1    2PY  C7     21  -0.050000       12.0110           0
+      12 MAIN 1    2PY  C8     21  -0.050000       12.0110           0
+      13 MAIN 1    2PY  C9     21  -0.050000       12.0110           0
+      14 MAIN 1    2PY  C10    21  -0.050000       12.0110           0
+      15 MAIN 1    2PY  H1      5   0.062500       1.00800           0
+      16 MAIN 1    2PY  H2      5   0.062500       1.00800           0
+      17 MAIN 1    2PY  H3      5   0.062500       1.00800           0
+      18 MAIN 1    2PY  H4      5   0.062500       1.00800           0
+      19 MAIN 1    2PY  H5      1   0.500000       1.00800           0
+      20 MAIN 1    2PY  H6      5   0.062500       1.00800           0
+      21 MAIN 1    2PY  H7      5   0.062500       1.00800           0
+      22 MAIN 1    2PY  H8      5   0.062500       1.00800           0
+      23 MAIN 1    2PY  H9      5   0.062500       1.00800           0
+      24 MAIN 1    2PY  H10     1   0.500000       1.00800           0
+
+      24 !NBOND: bonds
+       1       2       1       6       2       3       2       7
+       3       4       3      23       4       5       4      22
+       5       6       5      21       6      20       7      24
+       8       9       9      10       9      14      10      11
+      10      19      11      12      11      15      12      13
+      12      16      13      14      13      17      14      18
+
+      35 !NTHETA: angles
+       2       1       6       1       2       3       1       2       7
+       3       2       7       2       3       4       2       3      23
+       4       3      23       3       4       5       3       4      22
+       5       4      22       4       5       6       4       5      21
+       6       5      21       1       6       5       1       6      20
+       5       6      20       2       7      24       8       9      10
+       8       9      14      10       9      14       9      10      11
+       9      10      19      11      10      19      10      11      12
+      10      11      15      12      11      15      11      12      13
+      11      12      16      13      12      16      12      13      14
+      12      13      17      14      13      17       9      14      13
+       9      14      18      13      14      18
+
+      46 !NPHI: dihedrals
+       1       2       3       4       1       2       3      23
+       1       2       7      24       1       6       5       4
+       1       6       5      21       2       1       6       5
+       2       1       6      20       2       3       4       5
+       2       3       4      22       3       2       1       6
+       3       2       7      24       3       4       5       6
+       3       4       5      21       4       3       2       7
+       4       5       6      20       5       4       3      23
+       6       1       2       7       6       5       4      22
+       7       2       3      23       8       9      10      11
+       8       9      10      19       8       9      14      13
+       8       9      14      18       9      10      11      12
+       9      10      11      15       9      14      13      12
+       9      14      13      17      10       9      14      13
+      10       9      14      18      10      11      12      13
+      10      11      12      16      11      10       9      14
+      11      12      13      14      11      12      13      17
+      12      11      10      19      12      13      14      18
+      13      12      11      15      14       9      10      19
+      14      13      12      16      15      11      10      19
+      15      11      12      16      16      12      13      17
+      17      13      14      18      20       6       5      21
+      21       5       4      22      22       4       3      23
+
+      11 !NIMPHI: impropers
+       2       1       3       7       4       3       5      22
+       6       1       5      20      12      11      13      16 
+      10       9      11      19       3       2       4      23
+      14       9      13      18       9       8      10      14         
+       5       4       6      21      13      12      14      17  
+      11      10      12      15      
+
+       0 !NDON: donors
+
+
+       0 !NACC: acceptors
+
+
+       0 !NNB
+
+       0       0       0       0       0       0       0       0
+       0       0       0       0       0       0       0       0
+       0       0       0       0       0       0       0       0
+
+       1       0 !NGRP NST2
+       0       1       0
+
+       0       0 !NUMLP NUMLPH
+
+
+
+READ COOR PDB UNIT 5
+REMARK  MMPT OPTIMIZED                                                                
+REMARK   DATE:     9/ 7/ 5      7:39:49      CREATED BY USER: lammers                 
+ATOM      1  N1  2PY     1       1.103   0.000   4.865  1.00  2.00      MAIN
+ATOM      2  C1  2PY     1      -0.086   0.000   5.602  1.00  3.00      MAIN
+ATOM      3  C2  2PY     1      -0.043   0.000   7.005  1.00  3.00      MAIN
+ATOM      4  C3  2PY     1       1.193   0.000   7.671  1.00  3.00      MAIN
+ATOM      5  C4  2PY     1       2.385   0.000   6.929  1.00  3.00      MAIN
+ATOM      6  C5  2PY     1       2.340   0.000   5.526  1.00  3.00      MAIN
+ATOM      7  O1  2PY     1      -1.329   0.000   4.936  1.00  1.00      MAIN
+ATOM      8  O2  2PY     1      -1.036   0.000   2.195  1.00  1.00      MAIN
+ATOM      9  C6  2PY     1       0.118   0.000   1.388  1.00  3.00      MAIN
+ATOM     10  N2  2PY     1       1.364   0.000   2.015  1.00  2.00      MAIN
+ATOM     11  C7  2PY     1       2.542   0.000   1.254  1.00  3.00      MAIN
+ATOM     12  C8  2PY     1       2.462   0.000  -0.149  1.00  3.00      MAIN
+ATOM     13  C9  2PY     1       1.208   0.000  -0.784  1.00  3.00      MAIN
+ATOM     14  C10 2PY     1       0.034   0.000  -0.013  1.00  3.00      MAIN
+ATOM     15  H1  2PY     1       3.509   0.000   1.738  1.00  4.00      MAIN
+ATOM     16  H2  2PY     1       3.365   0.000  -0.741  1.00  4.00      MAIN
+ATOM     17  H3  2PY     1       1.146   0.000  -1.862  1.00  4.00      MAIN
+ATOM     18  H4  2PY     1      -0.931   0.000  -0.499  1.00  4.00      MAIN
+ATOM     19  H5  2PY     1       1.361   0.000   3.182  1.00  4.00      MAIN
+ATOM     20  H6  2PY     1       3.260   0.000   4.960  1.00  4.00      MAIN
+ATOM     21  H7  2PY     1       3.337   0.000   7.438  1.00  4.00      MAIN
+ATOM     22  H8  2PY     1       1.226   0.000   8.751  1.00  4.00      MAIN
+ATOM     23  H9  2PY     1      -0.959   0.000   7.578  1.00  4.00      MAIN
+ATOM     24  H10 2PY     1      -1.160   0.000   3.862  1.00  4.00      MAIN
+END
+
+
+
+! ====================================================
+! set up MMPT
+! ====================================================
+
+OPEN UNIT 11 CARD WRITE NAME @9/mmpt_sdm_2py2hp_nhn.prm
+WRITE TITLE UNIT 11
+*    161.593375   
+*      1.913428   
+*      2.192999   
+*     -0.986537   
+*     -0.101133   
+*      1.017599   
+*    198.052047   
+*      2.808170   
+*      0.114284
+*      0.010000     
+*     27.482766    
+*        
+
+CLOSE UNIT 11
+
+OPEN UNIT 12 CARD WRITE NAME @9/mmpt_sdm_2py2hp_oho.prm
+WRITE TITLE UNIT 12
+*    161.593375   
+*      2.160022   
+*      2.016843   
+*     -0.986537   
+*      0.534987   
+*      0.889931   
+*    229.064043   
+*      3.095393   
+*      0.113593
+*      0.010000     
+*     23.510782    
+*        
+
+CLOSE UNIT 12
+
+OPEN UNIT 13 CARD WRITE NAME @9/HBRIDGE.2PY2HP.DEF
+WRITE TITLE UNIT 13
+*     7    24     8   SSM   
+*    10    19     1   SDM
+*
+
+CLOSE UNIT 13
+
+
+
+! OPEN PARAMETER FILES FOR HYDROGEN BONDS
+
+OPEN UNIT 11 CARD READ NAME @9/mmpt_sdm_2py2hp_nhn.prm
+OPEN UNIT 12 CARD READ NAME @9/mmpt_sdm_2py2hp_oho.prm
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+
+OPEN UNIT 13 FORMATTED READ NAME @9/HBRIDGE.2PY2HP.DEF
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+
+UPDATE
+
+
+! CALL MMPT ROUTINE, READ IN DATA
+
+MMPT USDM 11 USSM 12 UHBR 13
+
+CLOSE UNIT 11
+CLOSE UNIT 12
+CLOSE UNIT 13
+
+
+! TURN OFF FAST ROUTINES, ONLY USE STANDARD 
+
+FAST -1 
+
+
+!=========================================================
+! run dynamics 
+!=========================================================
+
+
+OPEN WRITE UNIT 31 CARD NAME @9/2PY2HP.HEAT300K.RST
+
+DYNAMICS LEAP VERLET START  NSTEP 5000 TIMESTEP 0.0002 -
+    IPRFRQ 0 IHTFRQ 50 IEQFRQ 0 NTRFRQ 100  -
+    IUNREA -1 IUNWRI 31 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+    NPRINT 100 NSAVC 5 NSAVV 0 INBFRQ 25  -
+    FIRSTT 100.0 FINALT 300.0 TEMINC 3.0 -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0
+
+CLOSE UNIT 31
+
+OPEN READ  UNIT 30 CARD NAME @9/2PY2HP.HEAT300K.RST
+OPEN WRITE UNIT 31 CARD NAME @9/2PY2HP.EQUI300K.RST
+
+DYNAMICS LEAP VERLET RESTART  NSTEP 5000 TIMESTEP 0.0002 -
+    IPRFRQ 0 IHTFRQ 0 IEQFRQ 200 NTRFRQ 500  -
+    IUNREA 30 IUNWRI 31 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+    NPRINT 100 NSAVC 5 NSAVV 0 INBFRQ 25  -
+    FIRSTT 300.0 FINALT 300.0 TEMINC 0.0 -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0
+
+CLOSE UNIT 30
+CLOSE UNIT 31
+
+OPEN READ  UNIT 30 CARD NAME @9/2PY2HP.EQUI300K.RST
+OPEN WRITE UNIT 31 CARD NAME @9/2PY2HP.DYNA300K.RST
+OPEN WRITE UNIT 32 FILE NAME @9/2PY2HP.DYNA300K.DCD
+
+DYNAMICS LEAP VERLET RESTART  NSTEP 10000 TIMESTEP 0.0002 -
+    IPRFRQ 0 IHTFRQ 0 IEQFRQ 0 NTRFRQ 500  -
+    IUNREA 30 IUNWRI 31 IUNCRD 32 IUNVEL -1 KUNIT -1 -
+    NPRINT 100 NSAVC 100 NSAVV 0 INBFRQ 25  -
+    FIRSTT 300.0 FINALT 300.0 TEMINC 0.0  ECHECK 1000  -
+    IASORS 1 IASVEL 0 ISCVEL 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0
+
+CLOSE UNIT 30
+CLOSE UNIT 31
+CLOSE UNIT 32
+
+
+!=========================================================
+! run analysis: prints out hydrogen bond conformations
+!=========================================================
+
+OPEN UNIT 29 READ FILE NAME @9/2py2hp.dyna300k.dcd
+OPEN UNIT 30 WRITE FORMATTED NAME  @9/2PY2HP.ANAL300K.dat
+
+
+
+ENERGY E14FAC 1.0 RDIE CUTNB 999. CTOFNB 25. ! IMAX 12 IPRI 1
+UPDATE IHBFRQ 0 INBFRQ 0
+
+
+CORREL MAXSERIES 6 MAXTIMESTEPS 500000 MAXATOM 30
+ENTER R1   BOND  MAIN 1 N1 MAIN 1 N2
+ENTER R2   BOND  MAIN 1 O1 MAIN 1 O2
+ENTER R3   BOND  MAIN 1 N1 MAIN 1 H5
+ENTER R4   BOND  MAIN 1 N2 MAIN 1 H5
+ENTER R5   BOND  MAIN 1 O2 MAIN 1 H10
+ENTER R6   BOND  MAIN 1 O1 MAIN 1 H10
+
+
+
+
+TRAJECTORY FIRSTU 29 NUNIT 1
+SHOW ALL
+EDIT R1   VECCODE 1
+EDIT R2   VECCODE 1
+EDIT R3   VECCODE 1
+EDIT R4   VECCODE 1
+
+
+WRITE ALL UNIT 30 DUMB TIME
+* INTERESTING BOND LENGTHS
+*
+
+END
+
+STOP
+
+
+
+
+
+
+

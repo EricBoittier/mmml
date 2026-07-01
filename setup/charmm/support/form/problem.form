@@ -1,0 +1,55 @@
+CHARMM Problem Report Form
+Please use this form to report problems you have found in using CHARMM.
+Send your problem report to charmm-bugs@tammy.harvard.edu
+Post to an appropriate CHARMM bulletin board of www.charmm.org
+=========================================================================
+
+Name             :
+Email Address    :
+Institution      :
+Date             :       
+
+CHARMM version   :
+Machine          :
+Operating System :
+FORTRAN version  :
+Optimization     :
+
+Command(s) involved (including options used):
+
+
+One-line summary :
+
+
+Detailed description:
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sample input to reproduce the problem:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Other Comments:
+

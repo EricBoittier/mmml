@@ -1,0 +1,64 @@
+#! /bin/csh 
+
+if ( $# == 0 ) goto usage
+
+set prefix = $1
+shift
+
+set cmps = $1
+if ( $1 == "all" ) then
+   set cmps = `ls -1d c[0-9][0-9]test | cut -c2-3`
+endif
+   shift 
+
+if ( X$1 == X-diff || $1 == diff ) then
+
+   if ( $?CMPDIR ) then
+       echo comparing against $CMPDIR
+   else
+       if ( ! -d Testoutput ) then
+          echo No output directory to compare against, set env variable CMPDIR
+          exit 1
+       else
+           setenv CMPDIR Testoutput
+       endif
+   endif
+
+   set xdiff=NONE
+   foreach i ( gdiff tkdiff xdiff)
+      which $i >& /dev/null
+      if($status == 0) then
+         set xdiff=$i
+      endif
+   end
+   if ( $xdiff == NONE) then
+       echo "Cannot do graphical diff, cannot fine xdiff, gdiff, or tkdiff"
+       exit 1
+   endif
+
+   foreach test ( $cmps )
+     echo $prefix$test   
+     foreach i ( `awk -f compare.awk $prefix$test.rpt | grep FAILED | sed s/FAILED\<\<\<\<\<// | cut -c10-80` )
+        echo $prefix$test/$i.out
+        $xdiff -w $prefix$test/$i.out $CMPDIR
+     end
+   end
+   exit
+
+endif
+
+set verbose_compare
+
+if( X$1 == X-v || $1 == v ) set verbose_compare="verbose=1"
+
+foreach test ($cmps)
+   awk -f compare.awk $verbose_compare $prefix$test.rpt
+end
+
+exit
+
+usage:
+echo " "
+echo 'Usage: Compare <prefix> < ## | all > [diff|v]'
+echo " "
+

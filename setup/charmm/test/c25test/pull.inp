@@ -1,0 +1,182 @@
+* PULLTEST.INP Lennart Nilsson
+* This input file tests application of external forces to the system
+*
+
+if ?nocorrel .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card
+* Single atom topology file
+*
+   20    1
+MASS     4 X     10.0
+
+RESI TEST       2.0
+GROUP
+ATOM A    X     2.0
+PATC  FIRS NONE LAST NONE
+END
+
+read param card
+* dummy parameters for testing
+*
+!
+NONBONDED   ATOM CDIEL SWITCH VATOM VDISTANCE VSWITCH -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 1.0  WMIN 1.5
+!
+X        0.0440    1.0       0.8000  
+
+END
+
+read sequence test 1
+generate test
+read coor card
+* Just one test atom 
+*
+    1
+    1    1 TEST A      0.0       0.0       0.0
+
+skipe elec vdw
+nbonds inbfrq 0
+! pull with constant force along x-axis
+
+pull force 500.0 xdir 1.0 sele atom test 1 A end
+energy
+! simple test
+test first
+coor force comp
+print coor comp
+
+coor trans xdir 10.0 sele atom test 1 A end
+energy
+
+test first
+coor force comp
+print coor comp
+coor trans xdir -10.0 sele atom test 1 A end
+cons harm force 20.0 sele atom test 1 A end
+pull off
+coor trans xdir 10.0 sele atom test 1 a end
+energy
+print coor ! where are we?
+coor force comp
+print coor comp
+pull force 500.0 ydir 1.0  sele atom test 1 A end
+energy
+coor force comp
+print coor comp
+
+coor trans xdir -10.0 sele atom test 1 A end
+mini sd nstep 100
+print coor
+! turn off harmonic constraint
+cons harm force 0.0
+! what if we apply an electric field. 5MV/m=0.5 mV/A
+pull off
+pull efield 5E6 zdir 1.0 sele atom test 1 a end
+energy
+coor force comp
+print coor comp
+
+! add x & z components of force
+pull force 500 xdir 1.0 ydir 0.0 zdir 0.0 sele atom test 1 a end
+energy
+coor force comp
+print coor comp
+
+pull force 100 xdir 0.0 ydir 0.0 zdir -2.0 sele atom test 1 a end
+energy
+coor force comp
+print coor comp
+pull list
+scalar wmain set 15.0
+pull force 50 ydir 1.0 weig 
+coor force comp
+print coor comp
+pull list
+
+pull off
+pull list
+pull force 100 xdir 1.0 ydir 1.0 sele atom test 1 a end
+energy
+coor force comp
+print coor comp
+pull force 200 zdir -1.0 sele atom test 1 a end
+energy
+coor force comp
+print coor comp
+!now do some dynamics...
+read coor card
+* Just one test atom 
+*
+    1
+    1    1 TEST A      0.0       0.0       0.0
+coor copy comp ! to get zero starting velocity
+
+open unit 10 write unform name @9pull.cor
+dynamics start nstep 100 timestep 0.002 -
+     iasors 1 iasvel 0 iuncrd 10 nsavc 1
+!distance  x,y directions should be 1/(2sqrt(2)) of distance in z-direction
+! and with opposite sign.
+! z-distance after 200pN on 10amu (16.6 10^-27 kg) for 0.2ps is 2.4088 10^-10m
+print coor
+
+!now do some more complicated dynamics...
+
+read coor card
+* Just one test atom 
+*
+    1
+    1    1 TEST A      0.0       0.0       0.0
+pull off
+pull force 50  ydir 1.0 period 0.2
+pull force 500 xdir 1.0 period 0.1
+pull force 50  zdir 1.0 period 0.2
+pull force 10  zdir 1.0
+energy
+coor force comp
+print coor comp
+coor copy comp ! to get zero starting velocity
+print coor comp
+open unit 10 write unform name @9pull.cor
+dynamics start nstep 1000 timestep 0.002 -
+     iasors 1 iasvel 0 iuncrd 10 nsavc 10 nprint 100
+open unit 10 read unform name @9pull.cor
+open unit 11 write form name @9pull.dat
+correl maxseries 10
+enter a atom xyz sele atom test 1 a end
+traj firstu 10 nunit 1
+write a dumb time  unit 11
+*hi
+*
+end
+! add two more atoms
+read sequence test 2
+generate t2
+read coor card
+* Just one test atom 
+*
+    3
+    1    1 TEST A      0.0       0.0       0.0
+    2    2 TEST A      0.0      10.0       0.0
+    3    3 TEST A      0.0       0.0      20.0
+skipe elec vdw
+pull off
+pull force 50.0 xdir 1.0
+pull efield 5E7 ydir 1.0  sele segid test end
+pull force 200.0 zdir 1.0  sele segid t2 end
+scalar wmain set 10.0
+pull force 75.0 xdir 1.0 zdir -1.0 period 50.0 weig
+pull efield 1E8 ydir -1.0 period 3.0 weig sele atom test 1 a end
+
+pull list
+energy
+coor force comp
+print coor comp
+test first
+pull off
+pull list

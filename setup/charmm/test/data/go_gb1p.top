@@ -1,0 +1,106 @@
+* title
+*
+   20   1
+MASS 201 G1 57.000000
+MASS 202 G2 128.000000
+MASS 203 G3 186.000000
+MASS 204 G4 101.000000
+MASS 205 G5 163.000000
+MASS 206 G6 114.000000
+MASS 207 G7 114.000000
+MASS 208 G8 71.000000
+MASS 209 G9 101.000000
+MASS 210 G10 128.000000
+MASS 211 G11 101.000000
+MASS 212 G12 147.000000
+MASS 213 G13 101.000000
+MASS 214 G14 99.000000
+MASS 215 G15 101.000000
+MASS 216 G16 128.000000
+
+DECL +CA
+
+AUTOGENERATE ANGLES DIHEDRAL
+
+RESI G1         0.0
+GROU
+Atom  CA  G1       0.0
+Bond CA +CA
+
+RESI G2         0.0
+GROU
+Atom  CA  G2       0.0
+Bond CA +CA
+
+RESI G3         0.0
+GROU
+Atom  CA  G3       0.0
+Bond CA +CA
+
+RESI G4         0.0
+GROU
+Atom  CA  G4       0.0
+Bond CA +CA
+
+RESI G5         0.0
+GROU
+Atom  CA  G5       0.0
+Bond CA +CA
+
+RESI G6         0.0
+GROU
+Atom  CA  G6       0.0
+Bond CA +CA
+
+RESI G7         0.0
+GROU
+Atom  CA  G7       0.0
+Bond CA +CA
+
+RESI G8         0.0
+GROU
+Atom  CA  G8       0.0
+Bond CA +CA
+
+RESI G9         0.0
+GROU
+Atom  CA  G9       0.0
+Bond CA +CA
+
+RESI G10        0.0
+GROU
+Atom  CA  G10      0.0
+Bond CA +CA
+
+RESI G11        0.0
+GROU
+Atom  CA  G11      0.0
+Bond CA +CA
+
+RESI G12        0.0
+GROU
+Atom  CA  G12      0.0
+Bond CA +CA
+
+RESI G13        0.0
+GROU
+Atom  CA  G13      0.0
+Bond CA +CA
+
+RESI G14        0.0
+GROU
+Atom  CA  G14      0.0
+Bond CA +CA
+
+RESI G15        0.0
+GROU
+Atom  CA  G15      0.0
+Bond CA +CA
+
+RESI G16        0.0
+GROU
+Atom  CA  G16      0.0
+Bond CA +CA
+
+END
+

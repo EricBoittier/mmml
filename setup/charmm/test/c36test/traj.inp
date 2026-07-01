@@ -1,0 +1,439 @@
+* C36 TEST: traj.inp
+* A SIMPLE TEST CASE, including start and restart of dynamics
+* arg: M=nodyn to skip simulations and just do the I/O
+*
+
+stream datadir.def
+!BOMLEV -2
+
+READ RTF  CARD NAME  @0toph9.rtf
+READ PARA CARD NAME  @0param5.prm
+
+
+READ SEQUENCE  CARD
+*  FIRST SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE A   SETU
+
+READ      SEQUENCE  CARD
+*  SECOND SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE B  SETU
+
+READ COOR CARD
+* INITIAL COORDINATES FOR AMN-CBX *2
+*  DATE:    10/26/83      4:44:54      CREATED BY USER: BROOKSG
+*
+   12
+    1    1 AMN  CL    -3.33267  -1.67441   0.00000 A    1      0.00000
+    2    1 AMN  C     -2.19986  -0.66094   0.00000 A    1      0.00000
+    3    1 AMN  O     -1.02163  -1.01403   0.00000 A    1      0.00000
+    4    2 CBX  N     -2.52876   0.62775   0.00000 A    2      0.00000
+    5    2 CBX  H     -1.82759   1.31241   0.00000 A    2      0.00000
+    6    2 CBX  CA    -3.96329   1.03051   0.00000 A    2      0.00000
+    7    3 AMN  CL     3.33267   1.67441   0.00000 B    1      0.00000
+    8    3 AMN  C      2.19986   0.66094   0.00000 B    1      0.00000
+    9    3 AMN  O      1.02163   1.01403   0.00000 B    1      0.00000
+   10    4 CBX  N      2.52876  -0.62775   0.00000 B    2      0.00000
+   11    4 CBX  H      1.82759  -1.31241   0.00000 B    2      0.00000
+   12    4 CBX  CA     3.96329  -1.03051   0.00000 B    2      0.00000
+
+if @?M .eq. 0 then
+
+! Generate three consecutive trajectory pieces
+! Use small timestep so we can have an idea of what each frame looks like
+
+open unit 21 write unform name @9traj1.cor
+open unit 51 write form name   @9traj1.res
+dynamics start nstep 100 time 0.00001 nsavc 10 iunc 21 iunwr 51
+
+open unit 50 read form name   @9traj1.res
+open unit 21 write unform name @9traj2.cor
+open unit 51 write form name   @9traj2.res
+dynamics restart nstep 100 time 0.00001 nsavc 10 iunc 21 iunwr 51 iunr 50
+open unit 50 read form name   @9traj2.res
+open unit 21 write unform name @9traj3.cor
+open unit 51 write form name   @9traj3.res
+dynamics restart nstep 100 time 0.00001 nsavc 10 iunc 21 iunwr 51 iunr 50
+
+! and one with a different nsavc
+open unit 50 read form name   @9traj1.res
+open unit 21 write unform name @9traj2-20.cor
+dynamics restart nstep 100 time 0.00001 nsavc 20 iunc 21 iunwr -1 iunr 50
+
+! and one with a different, less commensurate nsavc
+open unit 50 read form name   @9traj1.res
+open unit 21 write unform name @9traj2-25.cor
+dynamics restart nstep 100 time 0.00001 nsavc 25 iunc 21 iunwr -1 iunr 50
+
+! now we can use a different timestep, just for fun
+open unit 21 write unform name @9traj1-dt2.cor
+open unit 51 write form name   @9traj1-dt2.res
+dynamics start nstep 100 time 0.00002 nsavc 10 iunc 21 iunwr 51
+! and move segment B so we can see later if this trajectory has been read
+coor transl zdir +10 sele segid b end
+
+open unit 21 write unform name @9traj1-b.cor
+open unit 51 write form name   @9traj1-b.res
+dynamics start nstep 100 time 0.00001 nsavc 10 iunc 21 iunwr 51
+
+! make one starting at 130, with skip 20
+open unit 21 write unform name @9traj1-110.cor
+open unit 51 write form name   @9traj1-110.res
+dynamics start nstep 110 time 0.00001 nsavc 10 iunc 21 iunwr 51
+open unit 21 write unform name @9traj2-110.cor
+open unit 50 read  form name   @9traj1-110.res
+dynamics restart nstep 110 time 0.00001 nsavc 20 iunc 21 iunr 50
+
+! Need one with fix atoms also
+cons fix sele segid a end
+open unit 21 write unform name @9traj1-fix.cor
+open unit 51 write form name   @9traj1-fix.res
+dynamics start nstep 100 time 0.00001 nsavc 10 iunc 21 iunwr 51
+cons fix sele none end
+
+! and with PBC
+cryst define orthorhombic 25. 25. 25. 90 90 90
+cryst build cutoff 20
+open unit 21 write unform name @9traj1-pbc.cor
+open unit 51 write form name   @9traj1-pbc.res
+dynamics start nstep 100 time 0.00001 nsavc 10 iunc 21 iunwr 51
+open unit 50 read form name   @9traj1-pbc.res
+open unit 21 write unform name @9traj2-pbc.cor
+dynamics restart nstep 100 time 0.00001 nsavc 10 iunc 21 iunwr -51 iunr 50
+
+endif
+
+label nodyn
+
+!NOW TRY TO READ VARIOUS COMBINATIONS OF THESE TRAJECTORY PIECES
+! simple interface to variable checking
+set chk stream @0tst.str
+!!test R1
+set REGSTAT passed
+! Read the regular three pieces. Should always work.
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2.cor
+open unit 53 read unform name   @9traj3.cor
+coor dyna firstu 51 nunit 3
+close unit 51
+close unit 52
+close unit 53
+@chk ?NTOT 30 0 r1 ntot regstat
+coor stat sele atom b 1 c end
+@chk ?xave 2.20 0.001 r1x xave regstat
+@chk ?zave 0.0 -0.001 r1z zave regstat
+
+
+! Now we mix with the second piece where seg b is shifted
+open unit 51 read unform name   @9traj1-b.cor
+open unit 52 read unform name   @9traj2.cor
+coor dyna firstu 51 nunit 2 
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end 
+
+! Now we mix with the second piece where seg b is shifted
+open unit 51 read unform name   @9traj1-b.cor
+open unit 52 read unform name   @9traj2.cor
+coor dyna firstu 51 nunit 2  NOCH ! just to make sure
+close unit 51
+close unit 52
+
+coor stat sele atom b 1 c end 
+
+
+! Now the noncontiguous stuff  BEGIN STOP perhaps also needs testing???
+!============================
+! COOR DYNA
+!!test R2
+
+open unit 51 read unform name   @9traj2.cor
+open unit 52 read unform name   @9traj1-b.cor
+coor dyna firstu 51 nunit 2 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 20 0 r2 ntot regstat
+@chk ?zave 5.0 0.001 r2z zave regstat
+
+!!test R3
+open unit 51 read unform name   @9traj1-b.cor
+open unit 52 read unform name   @9traj3.cor
+open unit 53 read unform name   @9traj1.cor
+coor dyna firstu 51 nunit 3 NOCH
+close unit 51
+close unit 52
+close unit 53
+coor stat sele atom b 1 c end
+@chk ?NTOT 30 0 r3 ntot regstat
+@chk ?zave 3.333 0.001 r3z zave regstat
+
+!!test R4
+! change timestep
+open unit 51 read unform name   @9traj1-dt2.cor
+open unit 52 read unform name   @9traj2.cor
+coor dyna firstu 51 nunit 2 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 20 0 r4 ntot regstat
+@chk ?zave 0.0 -0.001 r4z zave regstat
+
+!!test R5
+! change NSAVC, and read with variations in skip
+! skip=1 should read all available frames
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-20.cor
+coor dyna firstu 51 nunit 2 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 15 0 r5 ntot regstat
+@chk ?zave 0.0 -0.001 r5z zave regstat
+
+!!test R6
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-20.cor
+coor dyna firstu 51 nunit 2 skip 20 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 10 0 r6 ntot regstat
+@chk ?zave 0.0 -0.001 r6z zave regstat
+
+!!test R7
+open unit 51 read unform name   @9traj2-20.cor
+open unit 52 read unform name   @9traj2-25.cor
+coor dyna firstu 51 nunit 2 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 9 0 r7 ntot regstat
+@chk ?zave 0.0 -0.001 r7z zave regstat
+
+!!test R8
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-20.cor
+coor dyna firstu 51 nunit 2 skip 10 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 15 0 r8 ntot regstat
+@chk ?zave 0.0 -0.001 r8z zave regstat
+
+!!test R9
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-20.cor
+coor dyna firstu 51 nunit 2 skip 20 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 10 0 r9 ntot regstat
+@chk ?zave 0.0 0.001 r9z zave regstat
+
+!!test R10
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-110.cor
+coor dyna firstu 51 nunit 2 skip 20 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 10 0 r10 ntot regstat
+@chk ?zave 5.0 -0.001 r10z zave regstat
+
+!!test R11
+open unit 51 read unform name   @9traj2-20.cor
+open unit 52 read unform name   @9traj2-25.cor
+coor dyna firstu 51 nunit 2 NOCH skip 25
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 5 0 r11 ntot regstat
+@chk ?zave 0.0 0.001 r11z zave regstat
+
+!!test R12
+! mix all-free with fixed
+open unit 51 read unform name   @9traj1-fix.cor
+open unit 52 read unform name   @9traj2.cor
+coor dyna firstu 51 nunit 2 skip 20 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 10 0 r12 ntot regstat
+@chk ?zave 5.0 0.001 r12z zave regstat
+
+!!test R13
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj1-fix.cor
+coor dyna firstu 51 nunit 2 skip 20 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 10 0 r13 ntot regstat
+@chk ?zave 5.0 0.001 r13z zave regstat
+
+!!test R14
+! mix PBC and non-PBC. Should give a warning
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-pbc.cor
+coor dyna firstu 51 nunit 2 skip 20 NOCH
+close unit 51
+close unit 52
+coor stat sele atom b 1 c end
+@chk ?NTOT 10 0 r14 ntot regstat
+@chk ?zave 5.0 0.001 r14z zave regstat
+
+!!test R15
+open unit 51 read unform name   @9traj1-pbc.cor
+open unit 52 read unform name   @9traj2.cor
+open unit 53 read unform name   @9traj1.cor
+coor dyna firstu 51 nunit 3 skip 20 NOCH
+close unit 51
+close unit 52
+close unit 53
+coor stat sele atom b 1 c end
+@chk ?NTOT 15 0 r15 ntot regstat
+@chk ?zave 3.33 0.005 r15z zave regstat
+
+!!test R16
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-pbc.cor
+open unit 53 read unform name   @9traj2-25.cor
+coor dyna firstu 51 nunit 3  NOCH
+coor stat sele atom b 1 c end
+close unit 51
+close unit 52
+close unit 53
+@chk ?NTOT 24 0 r16 ntot regstat
+@chk ?zave 4.17 0.005 r16z zave regstat
+
+
+! MERGE
+!! test M1
+
+set MRGSTAT passed
+open unit 88 write unform name @9merge.cor
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-pbc.cor
+open unit 53 read unform name   @9traj2-25.cor
+merge firstu 51 nunit 3 NOCH output 88
+close unit 51
+close unit 52
+close unit 53
+@chk ?NTOT 24 0 M1 NTOT MRGSTAT
+
+!! test M2
+open unit 88 write unform name @9merge.cor
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-110.cor
+merge firstu 51 nunit 2 skip 20 NOCH output 88
+@chk ?NTOT 10 0 M2 NTOT MRGSTAT
+
+!! test M3
+open unit 88 write unform name  @9merge.cor
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-110.cor
+merge firstu 51 nunit 2 skip 20 NOCH output 88 NTOT 7
+close unit 51
+close unit 52
+
+@chk ?NTOT 10 0 M3 NTOT MRGSTAT
+
+!! test M4
+open unit 88 write unform name  @9merge1.cor
+open unit 51 read unform name   @9merge.cor
+open unit 52 read unform name   @9traj2-110.cor
+merge firstu 51 nunit 2 skip 20 NOCH output 88
+close unit 51
+close unit 52
+@chk ?NTOT 5 0 M4 NTOT MRGSTAT 
+
+!!test M5
+open unit 88 write unform name  @9merge.cor
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-110.cor
+merge firstu 51 nunit 2 skip 20 NOCH output 88 NTOT 1000
+close unit 51
+close unit 52
+@chk ?NTOT 10 0 M5 NTOT MRGSTAT 
+open unit 88 read unform name  @9merge.cor
+traj query unit 88
+@chk ?NFILE 10 0 M5Q NTOT MRGSTAT 
+
+!!test M6
+open unit 88 write unform name @9merge.cor
+open unit 51 read unform name   @9traj1.cor
+open unit 52 read unform name   @9traj2-pbc.cor
+merge firstu 51 nunit 2 NOCH output 88 nocrys
+close unit 51
+close unit 52
+@chk ?NTOT 20 0 M6 NTOT MRGSTAT 
+
+!!test M7
+open unit 88 write unform name @9merge.cor
+open unit 51 read unform name   @9traj2-pbc.cor
+open unit 52 read unform name   @9traj2-25.cor
+merge firstu 51 nunit 2 NOCH output 88 nocrys
+close unit 51
+close unit 52
+@chk ?NTOT 14 0 M7 NTOT MRGSTAT 
+open unit 88 read unform name  @9merge.cor
+traj query unit 88
+@chk ?NFILE 14 0 M7Q NTOT MRGSTAT 
+
+set status @regstat
+if  @mrgstat eq fail set status failed
+echo testsummary: trajectory i/o test (traj.inp) @status 
+if @mrgstat .ne. passed then
+echo testsummary: merge @mrgstat
+echo test: m1 @m1
+echo test: m2 @m2
+echo test: m3 @m3
+echo test: m4 @m4
+echo test: m5 @m5
+echo test: m5q @m5q
+echo test: m6 @m6
+echo test: m7 @m7
+echo test: m7q @m7q
+endif
+if @regstat .ne. passed then
+echo testsummary: coor dyna @regstat
+echo test: r1 @r1
+echo test: r1x @r1x
+echo test: r1z @r1z
+echo test: r2 @r2
+echo test: r2z @r2z
+echo test: r3 @r3
+echo test: r3z @r3z
+echo test: r4 @r4
+echo test: r4z @r4z
+echo test: r5 @r5
+echo test: r5z @r5z
+echo test: r6 @r6
+echo test: r6z @r6z
+echo test: r7 @r7
+echo test: r7z @r7z
+echo test: r8 @r8
+echo test: r8z @r8z
+echo test: r9 @r9
+echo test: r9z @r9z
+echo test: r10 @r10
+echo test: r10z @r10z
+echo test: r11 @r11
+echo test: r11z @r11z
+echo test: r12 @r12
+echo test: r12z @r12z
+echo test: r13 @r13
+echo test: r13z @r13z
+echo test: r14 @r14
+echo test: r14z @r14z
+echo test: r15 @r15
+echo test: r15z @r15z
+echo test: r16 @r16
+echo test: r16z @r16z
+endif

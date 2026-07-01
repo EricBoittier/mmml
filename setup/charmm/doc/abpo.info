@@ -1,0 +1,392 @@
+CHARMM Element doc/abpo.info $Revision: 1.1.1.1 $
+
+File: Abpo, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+    Adaptively Biased Path Optimization (ABPO) Method
+
+              He Huang
+              Bradley M. Dickson 
+              Carol B. Post 
+* Menu:
+
+* Description::           Introduction and algorithm
+* Syntax::                Description of commands and options
+* Remarks::               Implementation remarks
+* Examples::              Usage examples
+* References::            References
+
+
+File: Abpo, Node: Description, Up: Top, Previous: Top, Next: Syntax
+
+Introduction and Algorithm.
+
+ABPO is a path optimization method that works in collective variable (CV) space.  
+It combines the optimization algorithm of the finite temperature string (FTS) 
+method and the sampling power of an adaptive biasing potential (ABP) scheme.
+In a multi-dimensional CV space, it finds transition paths between two 
+meta-stable regions, and provides the potential of mean force (PMF) along the 
+path. When applied to a one-dimensional CV space, it can be used as a pure 
+sampling approach to evaluate the PMF associated with the single CV. 
+
+For path optimization, ABPO uses the iterative scheme of the FTS method to 
+evolve an initial path to the principal curve associated with the system. In 
+each iteration, the vicinity of the current path is sampled, and the mean 
+positions of the sampling on the hyperplanes perpendicular to the path are 
+calculated. The path is then updated to the curve connecting these mean 
+positions. At convergence, the path recovers the principal curve. 
+
+Within each iteration, sampling is carried out with an ABP scheme which is both 
+flexible and efficient. Unlike the original FTS method, which performs 
+independent samplings each restricted to a discrete hyperplane or cell 
+perpendicular to the path, ABPO allows dynamics trajectories to diffuse along 
+the path. It only restricts the sampling dynamics within the tube-shaped space 
+around the path by applying a one-sided harmonic tube-wall potential.
+Moreover, the diffusion in the direction of the path is accelerated by the 
+following adaptive biasing potential:
+
+        Vb = kb * T * b / (1 - b) * ln[c * h(lambda, t) + 1],           (1)
+
+where h is a mollified/smoothed histogram counting the samples that fall around 
+each slice of the path tube parameterized by lambda, the arc-length along the 
+path. Vb learns from the sampling history recorded in h to offset the original 
+potential of mean force (PMF) of lambda. The parameter b ranges from 0.0 to 1.0 
+and controls the bias strength. At convergence, Vb approaches -b times the PMF 
+of lambda. The parameter c controls how tightly Vb and h are coupled. Specifying 
+a finite number for c is equivalent to 'pre-deposit' some visits or time evenly 
+into all bins of the histogram to avoid fast change of Vb at the beginning of 
+the sampling. 
+
+The sampling is further aided by running multiple dynamics trajectories/replicas 
+in parallel. At the beginning of each iteration, ABPO launches a number of 
+independent adaptively biased dynamics trajectories, which proceed in blocks of 
+timesteps. At the end of each block, the histograms from all trajectories are 
+pooled together to check whether all tube slices have been sampled for at least 
+a certain amount of time. When the sampling threshold is reached, the path is 
+updated to the combined mean positions and the PMF is calculated from the 
+combined histogram.
+
+As in FTS, ABPO treats the collective variable space as a skewed space in which 
+distance is measured with respect to the inverse of a pseudo-diffusion tensor D. 
+Such a treatment allows the principal curve to be invariant upon a change of 
+variable within the collective variable space. In the current scheme, we assume 
+D as constant and evaluate it with unbiased dynamics before initiating any path 
+optimization.
+
+The following flow chart summarizes the optimization algorithm:
+
+    1. Current path = initial path.
+    2. While not converged, repeat:
+        2.1. Launch n independent ABP trajectories in the current path tube.
+        2.2. While sampling threshold not reached, repeat:
+                2.2.1. Run N steps of biased dynamics with each trajectory.     
+        2.3. Pool samples from all trajectories together, calculate PMF from the 
+             combined histogram, update the current path to the mean sampling 
+             positions on the tube slices.
+        
+
+
+File: Abpo, Node: Syntax, Up: Top, Previous: Description, Next: Remarks
+
+Description of Commands and Options
+
+As mentioned above, multiple trajectories/replicas may be used to enhance the
+sampling process. ABPO takes use of the communication layer provided by the
+ensemble module to realize inter-replica communication. It is therefore
+implemented as a subcommand of the ENSEmble command. When compiling CHARMM, the
+ABPO method is built by adding the option '--with-abpo', e.g.
+
+    $> ./configure --with-abpo
+    $> make -C build/cmake install
+
+The ABPO options activate ENSEmble automatically, and therefore requires MPI.
+
+Before running ABPO, the NENSem keyword of the ENSEemble command needs to be 
+called to specify the number of replicas. Note that NENSem has to be a factor of 
+the total number of processes. 
+
+Following is the Syntax of the ABPO command:
+
+ENSEmble ABPO { SETCv repeat ( cv-spec ) }
+              { DTNS dtns-spec }
+              { OPTI opti-spec }
+
+It has three sub-commands, each associated with one of the following three steps 
+involved in a complete optimization process: (1) Define collective variables.  
+(2) Evaluate the D tensor. (3) Optimize the path. These sub-commands and 
+available options are describe below:
+                		       
+---------------------------------------------------------------------------
+ENSEmble ABPO SETCv repeat ( cv-spec )
+
+        cv-spec = { DIST NP int repeat ( real atom-spec x 2 ) }
+                  { DSEL atom-selection x 2 }
+                  { ASEL atom-selection x 3 }
+                  { TSEL atom-selection x 4 }
+
+        atom-spec = { segid resid iupac }
+---------------------------------------------------------------------------
+
+This command defines the collective variables (CVs), each specified with a 
+cv-spec statement. In the current version, a CV can be one of the following 
+types: 
+
+[DIST] specifies a CV as a linear combination of a set of internal distances: 
+               CV_dist = sum_i c_i * d_i 
+       [NP int] specifies the number of distances that go into the linear 
+       combination.  Each individual distance is specified by a [real atom-spec 
+       x 2] statement, which gives the coefficient c_i as a real number, and 
+       specifies the two atoms that define d_i. 
+
+[DSEL] specifies a CV as the distance between the centers-of-mass of two 
+       atom-selections. The distance is represented in the unit of angstroms.
+
+[ASEL] specifies a CV as the angle formed by the centers-of-mass of three 
+       atom-selections. The angle is represented in radius and ranges from zero 
+       to pi.
+
+[TSEL] specifies a CV as the torsion angle formed by the centers-of-mass of four
+       atom-selections. The torsion angle is represented in radius and ranges 
+       from -pi to pi.
+
+
+---------------------------------------------------------------------------
+ENSEmble ABPO DTNS dtns-spec
+
+        dtns-spec = [DSTEps int] [DFRQ int]
+---------------------------------------------------------------------------
+
+This command sets up options for evaluating the D tensor. Before invoking
+DTNS, at least one CV has to be defined.
+
+The following table describes the options that apply to DTNS:
+
+Keyword  Default  Purpose
+
+DSTEps     1000   Length of dynamics in timesteps for evaluating D.
+
+DFRQ       100    Interval in timesteps at which the instantaneous value of D 
+                  is evaluated. 
+
+While the DTNS command sets up D evaluation options, it does not trigger any
+dynamics run. The dynamics run will be triggered by the next DYNAmics command
+(see dynamc.info). The NSTE option of the DYNA command will be ignored and the
+number specified by DSTEps in the DTNS command will be used as the number of
+timesteps. The IUNC and IUNW options will also be ignored. When the dynamics
+run finishes, a file named invd.dat will be generated under the current
+directory, which stores the inverse of the evaluated D tensor. 
+
+Running the DTNS command generates the following data under the current
+directory:
+   - [FILE] invd.dat: inverse of the D tensor
+   - [DIR] eval_d: directory that includes:
+        - [FILE] repXXX.dcd: trajectory file for replica XXX
+        - [FILE] repXXX.rst: restart file for replica XXX
+
+---------------------------------------------------------------------------
+ENSEmble ABPO OPTI opti-sepc
+
+        opti-spec = [REST] [BCYC int] [ECYC int] [TEMP real] -
+                    [MNBL int] [BSTE int] [MINC real] [SMOO real] -
+                    [NPNT int] [MOLL real] [RTUB real] [FTUB real] [LOOP] - 
+                    [BFCT real] [CFCT real] [CVFR int]
+---------------------------------------------------------------------------
+
+This command sets up options for path optimization. Before invoking OPTI, the 
+CVs have to be defined and the invd.dat file has to be present under the current
+directory. 
+
+The following table describes the options that apply to OPTI:
+
+Keyword  Default      Purpose
+
+BCYC       1          Index of the starting cycle. 
+
+ECYC       BCYC       Index of the ending cycle.
+
+REST       false      When present, restart a previous optimization run. Load 
+                      restarting information from the path.snap file under the 
+                      directory for BCYC.
+
+TEMP       300.0      Temperature. Should be the same as the dynamics 
+                      temperature.
+
+MNBL       20         Maximal number of dynamics blocks to run in each 
+                      optimization cycle.
+
+BSTE       1000       Number of timesteps to run in each dynamics block.  
+
+MINC       100        Sampling threshold in timesteps. Update the path and enter 
+                      the next cycle when the histogram reaches this value 
+                      everywhere along the path.
+
+NPNT       100        Number of points the path is discretized into.
+
+MOLL       0.05       Ratio of the standard deviation of the Gaussian mollifier 
+                      used to smooth the histogram to total path length.
+
+RTUB       1.0        Radius of the path tube in (angstrom g^{1/2}). 
+                      Note that distance is measured with respect to D^{-1}.  
+
+FTUB       1.0        Force constant of the tube wall potential in (kcal/g/angstrom^2).
+                      Again, note that distance is measured with respect to D^{-1}, 
+                      therefore FTUB should be adjusted according to D^{-1} to achieve 
+                      desired restraining strength. Rule of thumb is to use a smaller 
+                      FTUB when the norm of D^{-1} is large, and vise versa. 
+
+LOOP       false      When present, treat the path as a loop, i.e., treat the 
+                      two end points as neighbors.
+
+BFCT       0.8        Strength of the adaptive bias, which ranges from 0.0 to 1.0.  
+                      Same as the parameter b in Eqn (1). The dynamics is 
+                      unbiased with value 0.0, analogous to metadynamics with 
+                      value 1.0, and analogous to well-tempered metadynamics 
+                      with values in between. (see Ref [2])
+
+PRED       1000       Total timesteps that are 'pre-deposited' into the histogram. 
+                      This number divided by NPNT is the time deposited into 
+                      each tube-slice at the beginning of each cycle.
+
+SMOO       0.05       Ratio of the standard deviation of the Gaussian mollifier 
+                      used to smooth the path to total path length. 
+
+CVFR       100        Frequency for outputing the positions in the collective variable 
+                      space
+
+Like the DTNS command, the OPTI command does not trigger any dynamics run.  
+Instead, the dynamics run will be triggered by the next DYNAmics command.
+The NSTE option of the DYNA command will be ignored and the length of the 
+dynamics will be controlled by options specified with the OPTI command. 
+
+Running the OPTI command generates the following data under the current directory: 
+    - [DIR] cycXXX: directory for cycle XXX, includes:
+       - [FILE] mean.dat: mean sampling positions on all tube slices
+       - [FILE] smean.dat: mean.dat after smoothing, initial path for next cycle
+       - [FILE] pmf.dat: PMF with respect to path arc length
+       - [DIR] repXXX: directory for replica XXX, includes:
+           - [FILE] blockXXX.dcd: trajectory file for dynamics block XXX
+           - [FILE] blockXXX.rst: restart file for dynamics block XXX
+           - [FILE] blockXXX.cv: trajectory in the collective variable space
+
+
+File: Abpo, Node: Remarks, Up: Top, Previous: Syntax, Next: Examples
+
+Implementation Remarks 
+
+The ABPO module does not supply a standard mechanism to detect convergence of 
+the optimization process. The user may monitor the progress by plotting any 
+meaningful metric of the distance between the current path and each previous 
+path (For example, see Ref [1]). Ideally, such distance curve should go to zero 
+while convergence is approached. In practice with the presence of sampling 
+error, the distance curve approaches a non-zero plateau, the height of which 
+depends on the specific system as well as sampling accuracy.
+
+In the current version, the OPTI command can only be called for once in a single 
+CHARMM run. If there is a need to use multiple OPTI commands, for example, when 
+optimization with first a larger then a smaller RTUB is desired, do it in two 
+seperate runs.
+
+
+File: Abpo, Node: Examples, Up: Top, Previous: Remarks, Next: References
+
+Usage Examples 
+
+Note: to keep things easy, ABPO always assumes the current directory, i.e, the
+directory where CHARMM is launched as the working directory. Input files
+(init.dat and invd.dat) will be searched there, and all output files will be
+directed there. Make sure to 'cd' into the desired working directory before
+running CHARMM.
+
+1) Optimize a path for the transition of the alanine dipeptide between
+   its configurations C7eq and C7ax with four replicas. init.dat specifies 
+   a straight line, and reads:
+        -1.45  1.30
+         1.22 -1.22
+!-----------------------------------------------------------------------------------
+! Load parameter, topology, psf and coornidate files
+! Setup nonbond interactions
+ 
+set temp 300
+scalar fbeta set 5 sele all end
+ensemble nensem 4 
+
+ensemble abpo setcv -
+        tsel sele type clp end sele type nl end sele type ca end sele type crp end -
+        tsel sele type nl end sele type ca end sele type crp end sele type nr end
+
+! Evaluate the D 
+ensemble abpo dtns dsteps 50000
+dyna leap lang tbath @temp timestep 0.001 -
+        nsavc 100 nprint 1000 IPRFrq 10000
+
+! Run path optimization
+ensemble abpo opti -
+        temp @temp bcyc 1 ecyc 10 npnt 500 moll 0.05 bfct 0.90 pred 500 -
+        rtube 0.2 ftube 50.0 smooth 0.05 -
+        mnblock 40 bstep 10000 minc 50
+dyna leap lang tbath @temp timestep 0.001 -
+        nsavc 100 nprint 1000 IPRFrq 10000
+
+
+2) Restart the calculation of 1) and optimize for ten more cycles 
+!-----------------------------------------------------------------------------------
+! Load parameter, topology, psf 
+! Coornidate will be loaded from the .rst files saved under cyc010/repXXX
+! Setup nonbond interactions 
+
+set temp 300
+scalar fbeta set 5 sele all end
+ensemble nensem 4 
+
+ensemble abpo setcv -
+        tsel sele type clp end sele type nl end sele type ca end sele type crp end -
+        tsel sele type nl end sele type ca end sele type crp end sele type nr end
+
+! No need to run dtns again because invd.dat is already generated in the previous run
+
+ensemble abpo opti rest bcyc 10 ecyc 20 
+dyna leap lang tbath @temp timestep 0.001 -
+        nsavc 100 nprint 1000 iprfrq 10000
+
+
+3) Calculate the pmf of two sodium ions in vacuum as a function of the distance
+   between them. Use ten replicas. init.dat specifies the distance range, and reads:
+       2.00  10.00
+!-----------------------------------------------------------------------------------
+! Load parameter, topology, psf and coornidate files
+! Setup nonbond interactions
+ 
+set temp 300
+scalar fbeta set 5 sele all end
+ensemble nensem 4 
+
+ensemble abpo setcv -
+        tsel sele type clp end sele type nl end sele type ca end sele type crp end -
+        tsel sele type nl end sele type ca end sele type crp end sele type nr end
+
+! For one-dimensional CV space, 'ensemble abpo dtns' may be ommitted by
+! manually creating a file named invd.dat that holds a single number 1.0.
+
+ensemble abpo opti -
+        temp @temp bcyc 1 ecyc 1 npnt 500 moll 0.05 bfct 0.90 pred 500 -
+        rtube 0.0 ftube 10.0 smooth 0.05 -
+        mnblock 40 bstep 100000 minc 500 
+dyna leap lang tbath @temp timestep 0.001 -
+        nsavc 100 nprint 1000 iprfrq 10000
+
+
+Testcase: c38test/abpo.inp
+
+
+File: Abpo, Node: References, Up: Top, Previous: Examples, Next: Top
+
+References
+
+[1] Dickson, B. M.; Huang, H. & Post, C. B. 
+    Unrestrained computation of free energy along a path. 
+    J Phys Chem B, 2012, 116, 11046-11055 
+
+[2] Dickson, B. M. 
+    Approaching a parameter-free metadynamics. 
+    Phys Rev E, 2011, 84, 037701 
+

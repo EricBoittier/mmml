@@ -1,0 +1,129 @@
+* CHARMM Testcase: c34test/testzero.inp
+* Author:   Robert J. Petrella
+* Date:     1.7.07
+* Version:  c34a2
+* Test:     Zero module; search 2 out of 3 interacting sidechains
+*           in all possible combinations
+* Model:    BPTI in vacuum (4 buried waters) in PARAM22 representation
+*
+
+if ?zerom .ne. 1 then stop
+
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+!BOMLev -2
+STREam datadir.def
+
+! Read topology and parameter files
+
+OPEN READ CARD UNIT 11 NAME @0top_all22_prot.inp    ! topology file
+READ RTF  CARD UNIT 11
+CLOSE UNIT 11
+
+OPEN READ CARD UNIT 12 NAME @0par_all22_prot.inp    ! parameter file
+READ PARA CARD UNIT 12
+CLOSE UNIT 12
+
+! Generate the PSF 
+
+READ SEQUENCE CARD
+* BPTI sequence
+*
+58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+GENERATE MAIN SETUP WARNING
+
+READ SEQUENCE CARD
+* Buried waters
+*
+4 
+TIP3 TIP3 TIP3 TIP3
+GENERATE WATE NOANGLE NODIHE
+
+! Read the coordinates
+
+OPEN UNIT 13 READ CARD NAME @0bpti_allh.crd        ! coordinate file
+READ COOR CARD UNIT 13
+CLOSE UNIT 13
+
+IC BUILD
+
+IC FILL  !fill the ic table
+
+coor copy comp ! copy coordinates to comparison set
+
+!define backbone 
+define back sele type N .or. type C .or. type CA. .or. type O -
+ .or. type HN .or. type HA end
+
+!specify the non-bonded command, with BYCC option (required)
+nbonds ctonnb 12. ctofnb 13. cutnb 14. atom rdie bycc inbf 5 eps 1 -
+ vswitch fswitch
+
+! the residues being searched are PHE 4, ARG 42 and PHE 45
+! Their sidechain dihedrals constitute the three subspaces
+! being searched.  
+
+ZMOD
+!allocate memory
+ZMEMOry NDOF 10 NSUB 3 NATOM 1000 NCONF 50 NVAL 200
+
+!define degrees of freedome
+ZDEFine DOFR  1 DIHE 4 N 4 CA 4 CB 4 CG ! PHE
+ZDEFine DOFR  2 DIHE 4 CA 4 CB 4 CG 4 CD1 ! PHE
+ZDEFine DOFR  3 DIHE 42 N 42 CA 42 CB 42 CG ! ARG
+ZDEFine DOFR  4 DIHE 42 CA 42 CB 42 CG 42 CD ! ARG
+ZDEFine DOFR  5 DIHE 42 CB 42 CG 42 CD 42 NE ! ARG
+ZDEFine DOFR  6 DIHE 42 CG 42 CD 42 NE 42 CZ ! ARG
+ZDEFine DOFR  7 DIHE 45 N 45 CA 45 CB 45 CG ! PHE
+ZDEFine DOFR  8 DIHE 45 CA 45 CB 45 CG 45 CD1 ! PHE
+
+!convenient definition for later atom selections
+define searched sele ires 4 .or. ires 42 .or. ires 45 end
+
+!define 3 substructures; in each case, take a 7-ang radius
+!around the residue of interest; include also the others
+!involved in the search
+ZDEFINE SUBStruct 1 sele (ires 4 .around. 7) .or. searched end -
+        sele ires 4 .and. .not. back end
+ZDEFINE SUBStruct 2 sele (ires 42 .around. 7) .or. searched end -
+        sele ires 42 .and. .not. back end
+ZDEFINE SUBStruct 3 sele (ires 45 .around. 7) .or. searched end -
+        sele ires 45 .and. .not. back end
+
+!read in the conformers for the 3 subspaces and write out
+!the data as a check (it will come out compressed)
+open unit 12 write card name @9/zero.compressdata.conf
+open unit 10 read card name @0/zero.conf
+ZREAD CONF RUNI 10 WUNI 12
+
+ZSET  !"finalize" the input data
+
+!load subspaces
+ZLOAD SUBS CLEAR 1 2 3  
+
+!search the 3 subspaces 2 at a time and write out results to output
+! conformer file. minimize each structure with 5 steps SD
+! fix atoms not being rebuilt and assign
+! structure to minimum of search at end
+! calculate MSD's (mean square deviations)
+! throw out conformers with energies > 100 kcal/mol
+open unit 13 write card name @9/zero.product.conf
+ZSEArch TAKE 2 WRUN 13 MINAssign CFIX MSD ECUT 100 SD 5 
+
+END  !exit zero module
+
+!write out the optimized structure
+open unit 29 write card name @9/bpti.zerosearch.crd
+write coor card unit 29 sele ires 4 .or. ires 42 .or. ires 45 end
+close unit 29
+
+stop

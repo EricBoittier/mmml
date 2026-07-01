@@ -1,0 +1,80 @@
+* Membrane System : sys6.inp
+* Make a rectangular water box any size
+*
+
+stream param.str
+
+set L  15.5516    ! This is the length of the cubic box
+
+open read card unit 1 name @direcTp/@TopFile
+read rtf card unit 1
+close unit 1
+
+open read card unit 1 name @direcTp/@ParFile
+read para card unit 1
+close unit 1
+
+set J2  1
+label DO_2
+set J1  1
+label DO_1
+
+read sequence TIP3 125   ! there is 125 water molecules in the elementary box
+generate W@J1@J2 setup noangle nodihedral
+
+incr J1 by 1
+if J1 le 4 goto DO_1
+incr J2 by 1
+if J2 le 4 goto DO_2
+
+open read coor card unit 1 name @direcTip/tip125.crd  
+read coor card unit 1
+close unit 1
+
+set J2  1
+label LO_2
+set J1  1
+label LO_1
+
+if W@J1@J2 ne W11 coor duplicate select segid W11 end select segid  W@J1@J2 end
+set  X  @L
+mult X by @J1
+
+set  Y  @L
+mult Y by @J2
+
+coor trans xdir @X  ydir @Y   select segid  W@J1@J2 end
+
+incr J1 by 1
+if J1 le 4 goto LO_1
+incr J2 by 1
+if J2 le 4 goto LO_2
+
+coor orient norotation 
+
+set LimX @BoxSizeX
+Divi LimX by 2
+set LimY @BoxSizeY
+Divi LimY by 2
+scalar wmain = x
+define xxxx select (( prop 1 .le. @LimX  ) .and. ( prop 1 .gt. -@LimX ) ) .and. type OH2 end
+scalar wmain = y
+define yyyy select (( prop 1 .le. @LimY ) .and. ( prop 1 .gt. -@LimY ) ) .and. type OH2 end
+define rectangl select xxxx .and. yyyy end
+print coor select rectangl end
+
+define keep select .byres. rectangl end
+delete atom select .not. keep end
+
+open write card unit 1 name @direcWork/sys6_box.crd
+write coor card unit 1 
+* Equilibrated water       
+*
+
+open write card unit 2 name @direcWork/sys6_box.pdb
+write coor pdb card unit 2 
+* Equilibrated water 
+*
+
+stop
+

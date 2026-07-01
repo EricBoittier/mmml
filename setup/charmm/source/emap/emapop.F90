@@ -1,0 +1,1322 @@
+#if KEY_EMAP==1 /*emap*/
+SUBROUTINE EMAPOPT(COMLYN,COMLEN)
+  !-----------------------------------------------------------------------
+  !     Operations to manipulate electonic density map
+  !     THIS Subroutine PARSES EMAP COMMAND.
+  !
+  !     By XIONGWU WU  Nov, 2001
+  !          Enhanced  Dec, 2004
+  !
+  use chm_kinds
+#if KEY_EMAP==1
+  use memory
+  use dimens_fcm
+  use exfunc
+  use number
+  use psf
+  use coord
+  use coordc
+  use stream
+  use emapmod
+#endif 
+  use param_store, only: set_param
+  use select
+  use string
+  implicit none
+  INTEGER COMLEN
+  character(len=*) COMLYN
+  !
+  !
+  character(len=80) FNAME,NAME,FMAP
+  INTEGER FLEN,LENGTH
+  !
+  !
+  character(len=4) WRD,WRD1
+  INTEGER I,ii,IUNIT,IDEMP,IDEMP1,IDEMP2,IDRIG,IDRIG1
+  INTEGER,allocatable,dimension(:) :: ISLCT,ISLCT1,islct2
+  integer IMODE,NDATA,NDATA1,NXYZ,ICORE,NSKIP
+  INTEGER NRIG,IDRIGS(MXNRIG),NCORR
+  INTEGER MEMPX,MEMPY,MEMPZ,LEMPX,LEMPY,LEMPZ
+  real(chm_real) RESO,DEMPX,DEMPY,DEMPZ
+  real(chm_real) PHI,XDIR,YDIR,ZDIR,XCEN,YCEN,ZCEN
+  real(chm_real) CORRO,CORRT,AKW,RRXYZ
+  real(chm_real) T0(3),U0(9)
+  real(chm_real) BASE,SCALE,RHOCUT
+  real(chm_real) EMCORE,EMELE,EMSOLV,EMCONS,SCORE
+  LOGICAL NEWEMP,NEWRIG,LCORE,LDDR,LFIX,LFMAP,LPRINT
+  LOGICAL LGRIDCG
+  !      DATA EMSET/.FALSE./  ! MH08: moved to iniall.src
+  DATA T0/0.0,0.0,0.0/
+  DATA U0/1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0/
+  !
+  IF(.NOT.EMSET)THEN
+     !  Setup default parameters at the first EMAP call
+     EMSET=.TRUE.
+     EMRESO=FIFTN
+     EMRCUT=ZERO
+     EMDX=THREE
+     EMDY=THREE
+     EMDZ=THREE
+     EMICORE=2
+     ACORE=TWO
+     BCORE=TWO
+     CCORE=ONE
+     LCORE=.FALSE.
+     LDDR=.FALSE.
+     NEMCOMP=0
+     !  Field map parameters
+     EMAX=TEN*TEN
+     EMAY=TEN*TEN
+     EMAZ=TEN*TEN
+     EMDIELC=80.0D0
+     EMAPEPC=0.14D0
+     EMAPEPS=70.0D0
+     EMAPEPE=330.0D0
+     LGRIDCG=.FALSE.
+     !  Docking parameters
+     REMBIND=4.0D0
+!  Map guiding parameters
+     EMGUID=0.05D0
+!  Map movtion parameters
+     EMGAMMA=1.0D0
+     EMTEMP=300.0D0
+  ENDIF
+  !  Parsing command
+  WRD=NEXTA4(COMLYN,COMLEN)
+  !
+
+  IMODE=0
+  RESO=EMRESO
+  RHOCUT=EMRCUT
+  !-----------------------------------------------------------------------
+  !
+  IF(WRD == 'PARM') THEN
+     !   Set up parameters
+     EMICORE=GTRMI(COMLYN,COMLEN,'ICOR',EMICORE)
+     EMRCUT=GTRMF(COMLYN,COMLEN,'RCUT',EMRCUT)
+     EMRESO=GTRMF(COMLYN,COMLEN,'RESO',EMRESO)
+     EMDX=GTRMF(COMLYN,COMLEN,'DX',EMDX)
+     EMDY=GTRMF(COMLYN,COMLEN,'DY',EMDY)
+     EMDZ=GTRMF(COMLYN,COMLEN,'DZ',EMDZ)
+     EMAX=GTRMF(COMLYN,COMLEN,'AX',EMAX)
+     EMAY=GTRMF(COMLYN,COMLEN,'AY',EMAY)
+     EMAZ=GTRMF(COMLYN,COMLEN,'AZ',EMAZ)
+     EMDIELC=GTRMF(COMLYN,COMLEN,'EPS',EMDIELC)
+     EMAPEPS=GTRMF(COMLYN,COMLEN,'PSOLV',EMAPEPS)
+     EMAPEPE=GTRMF(COMLYN,COMLEN,'PSELE',EMAPEPE)
+     EMAPEPC=GTRMF(COMLYN,COMLEN,'PCORE',EMAPEPC)
+     REMBIND=GTRMF(COMLYN,COMLEN,'RBIND',REMBIND)
+     EMGUID=GTRMF(COMLYN,COMLEN,'GUID',EMGUID)
+     EMGAMMA=GTRMF(COMLYN,COMLEN,'GAMM',EMGAMMA)
+     EMTEMP=GTRMF(COMLYN,COMLEN,'TEMP',EMTEMP)
+  ELSE IF(WRD == 'READ') THEN
+     !   Read in a map file
+     CALL GTRMWD(COMLYN,COMLEN,'NAME',4,FNAME,80,FLEN)
+     IUNIT=GTRMI(COMLYN,COMLEN,'UNIT',-1)
+     ! parameters for generating a map
+     EMDX=GTRMF(COMLYN,COMLEN,'DX',EMDX)
+     EMDY=GTRMF(COMLYN,COMLEN,'DY',EMDY)
+     EMDZ=GTRMF(COMLYN,COMLEN,'DZ',EMDZ)
+     RESO=(DEMPX+DEMPY+DEMPZ)/2.0
+     EMRESO=GTRMF(COMLYN,COMLEN,'RESO',RESO)
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAME SPECIFIED!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(.NOT.NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','ALREADY EXISTS EMAP NAMED:'//NAME)
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL GTRMWA(COMLYN,COMLEN,'FORM',4,FMAP,80,LENGTH)
+     IF(LENGTH.EQ.0)THEN
+       FMAP='CCP4'
+       IF(INDEX(fname,'.ccp4')>0.or.INDEX(fname,'.CCP4')>0)FMAP='CCP4'
+       IF(INDEX(fname,'.map')>0.or.INDEX(fname,'.MAP')>0)FMAP='CCP4'
+       IF(INDEX(fname,'.mrc')>0.or.INDEX(fname,'.MRC')>0)FMAP='MRC'
+     ENDIF
+     CALL RDEMAP(FNAME(1:FLEN),IUNIT,IDEMP,FMAP)
+  ELSE IF(WRD == 'WRIT')THEN
+     !  Write a map object to a map file
+     CALL GTRMWD(COMLYN,COMLEN,'NAME',4,FNAME,80,FLEN)
+     IUNIT=GTRMI(COMLYN,COMLEN,'UNIT',-1)
+     LCORE = INDXA(COMLYN,COMLEN,'CORE')  >  0
+     LDDR = INDXA(COMLYN,COMLEN,'DDR')  >  0
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAME SPECIFIED!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAMED:'//NAME)
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL GTRMWA(COMLYN,COMLEN,'FORM',4,FMAP,80,LENGTH)
+     IF(LENGTH.EQ.0)THEN
+       FMAP='CCP4'
+       IF(INDEX(fname,'.ccp4')>0.or.INDEX(fname,'.CCP4')>0)FMAP='CCP4'
+       IF(INDEX(fname,'.map')>0.or.INDEX(fname,'.MAP')>0)FMAP='CCP4'
+       IF(INDEX(fname,'.mrc')>0.or.INDEX(fname,'.MRC')>0)FMAP='MRC'
+     ENDIF
+     CALL WRTEMAP(FNAME(1:FLEN),IUNIT,IDEMP,LCORE,LDDR,FMAP)
+  ELSE IF(WRD == 'GENE')THEN
+     !   Generate map object from selected atoms
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAME SPECIFIED!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(.NOT.NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','Already EXIST EMAP NAMED:'//NAME)
+        RETURN
+     ENDIF
+     LFMAP = INDXA(COMLYN,COMLEN,'FMAP')  >  0
+     LGRIDCG = INDXA(COMLYN,COMLEN,'GRID')  >  0
+     MEMAPX(IDEMP)=GTRMI(COMLYN,COMLEN,'MX',-999999)
+     MEMAPY(IDEMP)=GTRMI(COMLYN,COMLEN,'MY',-999999)
+     MEMAPZ(IDEMP)=GTRMI(COMLYN,COMLEN,'MZ',-999999)
+     LEMAPX(IDEMP)=GTRMI(COMLYN,COMLEN,'LX',-999999)
+     LEMAPY(IDEMP)=GTRMI(COMLYN,COMLEN,'LY',-999999)
+     LEMAPZ(IDEMP)=GTRMI(COMLYN,COMLEN,'LZ',-999999)
+     ! define allowable region
+     LOWEMAP(1,IDEMP)=GTRMF(COMLYN,COMLEN,'XLOW',-RBIG)
+     LOWEMAP(2,IDEMP)=GTRMF(COMLYN,COMLEN,'YLOW',-RBIG)
+     LOWEMAP(3,IDEMP)=GTRMF(COMLYN,COMLEN,'ZLOW',-RBIG)
+     UPEMAP(1,IDEMP)=GTRMF(COMLYN,COMLEN,'XUP',RBIG)
+     UPEMAP(2,IDEMP)=GTRMF(COMLYN,COMLEN,'YUP',RBIG)
+     UPEMAP(3,IDEMP)=GTRMF(COMLYN,COMLEN,'ZUP',RBIG)
+     TRNEMAP(1,IDEMP)=1.0D0
+     TRNEMAP(2,IDEMP)=1.0D0
+     TRNEMAP(3,IDEMP)=1.0D0
+     ROTEMAP(1,IDEMP)=1.0D0
+     ROTEMAP(2,IDEMP)=1.0D0
+     ROTEMAP(3,IDEMP)=1.0D0
+     IF(INDXA(COMLYN,COMLEN,'NOX')  >  0 )TRNEMAP(1,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NOY')  >  0 )TRNEMAP(2,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NOZ')  >  0 )TRNEMAP(3,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NORX')  >  0 )ROTEMAP(1,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NORY')  >  0 )ROTEMAP(2,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NORZ')  >  0 )ROTEMAP(3,IDEMP)=0.0D0
+           
+     IF(PRNLEV > 3)WRITE(OUTU,1010)NAME,IDEMP,(TRNEMAP(I,IDEMP),I=1,3),(ROTEMAP(I,IDEMP),I=1,3)
+1010    FORMAT(" <EMAPGEN> ",A10, &
+             " ID:",I6," Trans. X,Y,Z: ",3F4.1," Rotat. X,Y,Z: ",3F4.1)
+    
+     EMAX=GTRMF(COMLYN,COMLEN,'AX',EMAX)
+     EMAY=GTRMF(COMLYN,COMLEN,'AY',EMAY)
+     EMAZ=GTRMF(COMLYN,COMLEN,'AZ',EMAZ)
+     DEMPX=GTRMF(COMLYN,COMLEN,'DX',EMDX)
+     DEMPY=GTRMF(COMLYN,COMLEN,'DY',EMDY)
+     DEMPZ=GTRMF(COMLYN,COMLEN,'DZ',EMDZ)
+     RESO=(DEMPX+DEMPY+DEMPZ)/2.0
+     RESO=GTRMF(COMLYN,COMLEN,'RESO',RESO)
+     CALL GTRMWD(COMLYN,COMLEN,'AS',2,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP1)
+        IF(NEWEMP)THEN
+           CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAMED:'//NAME)
+           CALL RMEMAP(IDEMP1)
+           RETURN
+        ENDIF
+        DEMPX=DEMAPX(IDEMP1)
+        DEMPY=DEMAPY(IDEMP1)
+        DEMPZ=DEMAPZ(IDEMP1)
+     ENDIF
+     call chmalloc('emapop.src','EMAPOPT','ISLCT a',NATOM,intg=ISLCT)
+     IF(INDXA(COMLYN,COMLEN,'COMP')  >  0)THEN
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,XCOMP,YCOMP,ZCOMP,.TRUE.,1,WCOMP)
+        IF(LFMAP)THEN
+           !  Generate force field map
+           CALL EMAPFGEN(NATOM,XCOMP,YCOMP,ZCOMP,AMASS,CG, &
+                ISLCT,IDEMP,DEMPX,DEMPY,DEMPZ,EMAX,EMAY,EMAZ,LGRIDCG)
+        ELSE
+           !  Generate density map
+           CALL EMAPGEN(NATOM,XCOMP,YCOMP,ZCOMP,AMASS, &
+                ISLCT,IDEMP,DEMPX,DEMPY,DEMPZ,RESO)
+        ENDIF
+     ELSE
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+        IF(LFMAP)THEN
+           !  Generate force field map
+           CALL EMAPFGEN(NATOM,X,Y,Z,AMASS,CG,ISLCT, &
+                IDEMP,DEMPX,DEMPY,DEMPZ,EMAX,EMAY,EMAZ,LGRIDCG)
+        ELSE
+           !  Generate density map
+           CALL EMAPGEN(NATOM,X,Y,Z,AMASS,ISLCT, &
+                IDEMP,DEMPX,DEMPY,DEMPZ,RESO)
+        ENDIF
+     ENDIF
+     call chmDEalloc('emapop.src','EMAPOPT','ISLCT a',NATOM,intg=ISLCT)
+  ELSE IF(WRD == 'MOVE')THEN
+     !   Generate map object from selected atoms
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAME SPECIFIED!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','No EMAP NAMED:'//NAME)
+        RETURN
+     ENDIF
+     ! define allowable region
+     LOWEMAP(1,IDEMP)=GTRMF(COMLYN,COMLEN,'XLOW',-RBIG)
+     LOWEMAP(2,IDEMP)=GTRMF(COMLYN,COMLEN,'YLOW',-RBIG)
+     LOWEMAP(3,IDEMP)=GTRMF(COMLYN,COMLEN,'ZLOW',-RBIG)
+     UPEMAP(1,IDEMP)=GTRMF(COMLYN,COMLEN,'XUP',RBIG)
+     UPEMAP(2,IDEMP)=GTRMF(COMLYN,COMLEN,'YUP',RBIG)
+     UPEMAP(3,IDEMP)=GTRMF(COMLYN,COMLEN,'ZUP',RBIG)
+     TRNEMAP(1,IDEMP)=1.0D0
+     TRNEMAP(2,IDEMP)=1.0D0
+     TRNEMAP(3,IDEMP)=1.0D0
+     ROTEMAP(1,IDEMP)=1.0D0
+     ROTEMAP(2,IDEMP)=1.0D0
+     ROTEMAP(3,IDEMP)=1.0D0
+     IF(INDXA(COMLYN,COMLEN,'NOX')  >  0 )TRNEMAP(1,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NOY')  >  0 )TRNEMAP(2,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NOZ')  >  0 )TRNEMAP(3,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NORX')  >  0 )ROTEMAP(1,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NORY')  >  0 )ROTEMAP(2,IDEMP)=0.0D0
+     IF(INDXA(COMLYN,COMLEN,'NORZ')  >  0 )ROTEMAP(3,IDEMP)=0.0D0
+           
+     IF(PRNLEV > 3)WRITE(OUTU,1010)NAME,IDEMP,(TRNEMAP(I,IDEMP),I=1,3),(ROTEMAP(I,IDEMP),I=1,3)
+    
+  ELSE IF(WRD == 'REMA')THEN
+     !   Generate map object from a rigid domain
+     !  EMAP REMA mapid FROM rigid
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAME SPECIFIED!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(.NOT.NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','Already EXIST EMAP NAMED:'//NAME)
+        RETURN
+     ENDIF
+     CALL GTRMWA(COMLYN,COMLEN,'FROM',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>', 'Must specify a rigid?')
+        return
+     ENDIF
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+  !
+     CALL EMAPREMAP(IDRIG,TEMRIG(1,IDRIG),REMRIG(1,IDRIG),IDEMP)
+  ELSE IF(WRD == 'ASSI')THEN
+     !  Define a rigid domain a map at selected atoms
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'There is NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL GTRMWD(COMLYN,COMLEN,'AS',2,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(.NOT.NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'Overlapping existing rigid ID:'//NAME(1:LENGTH))
+     ENDIF
+     call chmalloc('emapop.src','EMAPOPT','ISLCT b',NATOM,intg=ISLCT)
+     IF(INDXA(COMLYN,COMLEN,'COMP')  >  0)THEN
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,XCOMP,YCOMP,ZCOMP,.TRUE.,1,WCOMP)
+        CALL EMAPASN(NATOM,XCOMP,YCOMP,ZCOMP, &
+             AMASS,ISLCT,IDEMP,IDRIG)
+     ELSE
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+        CALL EMAPASN(NATOM,X,Y,Z,AMASS,ISLCT,IDEMP,IDRIG)
+     ENDIF
+     call chmdealloc('emapop.src','EMAPOPT','ISLCT b',NATOM,intg=ISLCT)
+  ELSE IF(WRD == 'DUPL')THEN
+     !  Duplication a map or rigid domain, which are identical to original
+     CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)GOTO 500
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL GTRMWD(COMLYN,COMLEN,'TO',2,NAME,80,LENGTH)
+     IF(LENGTH == 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO TO EMAP specified')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP1)
+     IF(NEWEMP)THEN
+        IF(PRNLEV > 3)WRITE(OUTU,'("<EMAPDUP> Create New MAP ID:",A)') &
+             NAME(1:LENGTH)
+     ELSE
+        NDATA1=LEMAPX(IDEMP1)*LEMAPY(IDEMP1)*LEMAPZ(IDEMP1)
+        IF(NDATA /= NDATA1)THEN
+           CALL WRNDIE(0,'<EMAP>', &
+                'Cannot duplicate to a existing EMAP:'//NAME(1:LENGTH))
+           return
+        ENDIF
+     endif
+     CALL EMAPDUP(IDEMP,IDEMP1)
+     RETURN
+500  CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'Must specify Object type:MAPID or RIGID?')
+        return
+     ENDIF
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     CALL GTRMWD(COMLYN,COMLEN,'TO',2,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG1)
+     IF(NEWRIG)THEN
+        IF(PRNLEV > 3)WRITE(OUTU,'("<EMAPDUP> Create New rigid ID:",A)') &
+             NAME(1:LENGTH)
+     ENDIF
+     CALL EMAPRIGDUP(IDRIG,IDRIG1)
+  ELSE IF(WRD == 'COPY')THEN
+     !  COPY a map or rigid domain, which have similar distribution or position
+     CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)GOTO 510
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     NDATA=LEMAPX(IDEMP)*LEMAPY(IDEMP)*LEMAPZ(IDEMP)
+     CALL GTRMWD(COMLYN,COMLEN,'TO',2,NAME,80,LENGTH)
+     IF(LENGTH == 0)THEN
+        CALL WRNDIE(0,'<EMAPOPY>','NO TO EMAP specified')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP1)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP1)
+        RETURN
+     ENDIF
+     CALL EMAPCOPY(IDEMP,IDEMP1)
+     RETURN
+510  CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'Must specify Object type:MAPID or RIGID?')
+        return
+     ENDIF
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     CALL GTRMWD(COMLYN,COMLEN,'TO',2,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG1)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG1)
+        RETURN
+     ENDIF
+     CALL EMAPRIGCPY(IDRIG,IDRIG1)
+  ELSE IF(WRD == 'REFE')THEN
+     !   Set reference atoms for a map object 
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAME SPECIFIED!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAPOPT>','NO MAP NAMED:'//NAME)
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+
+     call chmalloc('emapop.src','EMAPOPT','ISLCT c',NATOM,intg=ISLCT)
+     IF(INDXA(COMLYN,COMLEN,'COMP')  >  0)THEN
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,XCOMP,YCOMP,ZCOMP,.TRUE.,1,WCOMP)
+        CALL EMAPREF(NATOM,XCOMP,YCOMP,ZCOMP,AMASS,ISLCT, &
+             IDEMP)
+     ELSE
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+        CALL EMAPREF(NATOM,X,Y,Z,AMASS,ISLCT,IDEMP)
+     ENDIF
+     call chmdealloc('emapop.src','EMAPOPT','ISLCT c',NATOM,intg=ISLCT)
+
+  ELSE IF(WRD == 'DDR')THEN
+     !  Explicitly recalculate the Laplacian density of a map object
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL EMAPDDR(IDEMP)
+  ELSE IF(WRD == 'CORE')THEN
+     !  Explicitly build the core of a map object
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     RHOCUT=GTRMF(COMLYN,COMLEN,'RCUT',EMRCUT)
+     ICORE=EMICORE
+     IF(INDXA(COMLYN,COMLEN,'DENS')  >  0)ICORE=1
+     IF(INDXA(COMLYN,COMLEN,'DDR')  >  0)THEN
+        ICORE=2
+        CALL EMAPDDR(IDEMP)
+     ENDIF
+     CALL EMAPCORE(IDEMP,RHOCUT,ICORE)
+  ELSE IF(WRD == 'INIT')THEN
+     !  Initialize a map object
+     BASE=GTRMF(COMLYN,COMLEN,'BASE',ZERO)
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     NDATA=LEMAPX(IDEMP)*LEMAPY(IDEMP)*LEMAPZ(IDEMP)
+     CALL EMAPINIT(IDEMP,BASE)
+  ELSE IF(WRD == 'STAT')THEN
+     !  Update statistic properties of a map object
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL EMAPSTAT(IDEMP)
+     IF(PRNLEV > 3)WRITE(OUTU,'(" Statistic properties updated for: ",A)') &
+          NAME(1:LENGTH)
+  ELSE IF(WRD == 'QUER')THEN
+     !  Query statistic properties of a map object or rigid domain
+     CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+        IF(NEWEMP)THEN
+           CALL WRNDIE(0,'<EMAPOPT>','NO EMAP NAMED:'//NAME)
+           CALL RMEMAP(IDEMP)
+           RETURN
+        ENDIF
+        CALL set_param('EMMX',MEMAPX(IDEMP))
+        CALL set_param('EMMY',MEMAPY(IDEMP))
+        CALL set_param('EMMZ',MEMAPZ(IDEMP))
+        CALL set_param('EMLX',LEMAPX(IDEMP))
+        CALL set_param('EMLY',LEMAPY(IDEMP))
+        CALL set_param('EMLZ',LEMAPZ(IDEMP))
+        call set_param('EMDX',DEMAPX(IDEMP))
+        call set_param('EMDY',DEMAPY(IDEMP))
+        call set_param('EMDZ',DEMAPZ(IDEMP))
+        call set_param('EMCX',CEMAPX(IDEMP))
+        call set_param('EMCY',CEMAPY(IDEMP))
+        call set_param('EMCZ',CEMAPZ(IDEMP))
+        call set_param('EMMM',RMXEMAP(IDEMP))
+        call set_param('EMMN',RMNEMAP(IDEMP))
+        CALL set_param('EMNC',NCREMAP(IDEMP))
+        IF(PRNLEV > 3)THEN
+        WRITE(OUTU,'(" Map ID, name : ",I5,5X,A)') &
+             IDEMP,NAME(1:LENGTH)
+        WRITE(OUTU,'(" Starting grid: EMMX,EMMY,EMMZ= ",3I10)') &
+             MEMAPX(IDEMP),MEMAPY(IDEMP),MEMAPZ(IDEMP)
+        WRITE(OUTU,'(" Grid number  : EMLX,EMLY,EMLZ= ",3I10)') &
+             LEMAPX(IDEMP),LEMAPY(IDEMP),LEMAPZ(IDEMP)
+        WRITE(OUTU,'(" Grid size    : EMDX,EMDY,EMDZ= ",3F10.4)') &
+             DEMAPX(IDEMP),DEMAPY(IDEMP),DEMAPZ(IDEMP)
+        WRITE(OUTU,'(" Map center   : EMCX,EMCY,EMCZ= ",3F10.4)') &
+             CEMAPX(IDEMP),CEMAPY(IDEMP),CEMAPZ(IDEMP)
+        WRITE(OUTU,'(" Map limit    : EMMX,EMMN,EMNC= ",2F10.4,I10)') &
+             RMXEMAP(IDEMP),RMNEMAP(IDEMP),NCREMAP(IDEMP)
+        WRITE(OUTU,1011)(TRNEMAP(I,IDEMP),I=1,3),(ROTEMAP(I,IDEMP),I=1,3)
+1011    FORMAT(" Motion Trans. X,Y,Z: ",3F4.1," Rotat. X,Y,Z: ",3F4.1)   
+        WRITE(OUTU,1012)(LOWEMAP(I,IDEMP),I=1,3),(UPEMAP(I,IDEMP),I=1,3)
+1012    FORMAT(" Allowable region. lower X,Y,Z: ",3E14.6,/18X," upper  X,Y,Z: ",3E16.6)   
+        ENDIF
+     ELSE
+        CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+        IF(LENGTH <= 0)THEN
+           CALL WRNDIE(0,'<EMAPOPT>', &
+                'NO EMAP OR RIGID NAME SPECIFIED!')
+           RETURN
+        ENDIF
+        NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+        IF(NEWRIG)THEN
+           CALL WRNDIE(0,'<EMAP>', &
+                'NO rigid ID:'//NAME(1:LENGTH))
+           CALL RMEMRIG(IDRIG)
+           RETURN
+        ENDIF
+        call set_param('EMTX',TEMRIG(1,IDRIG))
+        call set_param('EMTY',TEMRIG(2,IDRIG))
+        call set_param('EMTZ',TEMRIG(3,IDRIG))
+        call set_param('EMXX',REMRIG(1,IDRIG))
+        call set_param('EMYX',REMRIG(2,IDRIG))
+        call set_param('EMZX',REMRIG(3,IDRIG))
+        call set_param('EMXY',REMRIG(4,IDRIG))
+        call set_param('EMYY',REMRIG(5,IDRIG))
+        call set_param('EMZY',REMRIG(6,IDRIG))
+        call set_param('EMXZ',REMRIG(7,IDRIG))
+        call set_param('EMYZ',REMRIG(8,IDRIG))
+        call set_param('EMZZ',REMRIG(9,IDRIG))
+        IF(PRNLEV > 3)THEN
+        WRITE(OUTU,'(" Rigid Domain  ID, name:",I5,5X,A)') &
+             IDRIG,NAME(1:LENGTH)
+        WRITE(OUTU,'(" Reference map ID, name:",I5,5X,A40)') &
+             IDEMRIG(IDRIG),EMAPID(IDEMRIG(IDRIG))
+        WRITE(OUTU,'(" Translation vector: EMTX,EMTY,EMTZ= ",3F10.4)') &
+             TEMRIG(1,IDRIG),TEMRIG(2,IDRIG),TEMRIG(3,IDRIG)
+        WRITE(OUTU,'(" Rotation Maxtrix  : EMXX,EMXY,EMXZ= ",3F10.4)') &
+             REMRIG(1,IDRIG),REMRIG(4,IDRIG),REMRIG(7,IDRIG)
+        WRITE(OUTU,'("                     EMYX,EMYY,EMYZ= ",3F10.4)') &
+             REMRIG(2,IDRIG),REMRIG(5,IDRIG),REMRIG(8,IDRIG)
+        WRITE(OUTU,'("                     EMZX,EMZY,EMZZ= ",3F10.4)') &
+             REMRIG(3,IDRIG),REMRIG(6,IDRIG),REMRIG(9,IDRIG)
+        ENDIF
+     ENDIF
+  ELSE IF(WRD == 'RESI')THEN
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'There is NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     !  Resize a map object 
+     MEMPX=GTRMI(COMLYN,COMLEN,'MX',MEMAPX(IDEMP))
+     MEMPY=GTRMI(COMLYN,COMLEN,'MY',MEMAPY(IDEMP))
+     MEMPZ=GTRMI(COMLYN,COMLEN,'MZ',MEMAPZ(IDEMP))
+     LEMPX=GTRMI(COMLYN,COMLEN,'LX',LEMAPX(IDEMP))
+     LEMPY=GTRMI(COMLYN,COMLEN,'LY',LEMAPY(IDEMP))
+     LEMPZ=GTRMI(COMLYN,COMLEN,'LZ',LEMAPZ(IDEMP))
+     DEMPX=GTRMF(COMLYN,COMLEN,'DX',DEMAPX(IDEMP))
+     DEMPY=GTRMF(COMLYN,COMLEN,'DY',DEMAPY(IDEMP))
+     DEMPZ=GTRMF(COMLYN,COMLEN,'DZ',DEMAPZ(IDEMP))
+     RESO=GTRMF(COMLYN,COMLEN,'RESO',RESO)
+     CALL GTRMWD(COMLYN,COMLEN,'AS',2,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP1)
+        IF(NEWEMP)THEN
+           CALL WRNDIE(0,'<EMAP>', &
+                'There is NO EMAP:'//NAME(1:LENGTH))
+           CALL RMEMAP(IDEMP)
+           RETURN
+        ENDIF
+        MEMPX=MEMAPX(IDEMP1)
+        MEMPY=MEMAPY(IDEMP1)
+        MEMPZ=MEMAPZ(IDEMP1)
+        LEMPX=LEMAPX(IDEMP1)
+        LEMPY=LEMAPY(IDEMP1)
+        LEMPZ=LEMAPZ(IDEMP1)
+        DEMPX=DEMAPX(IDEMP1)
+        DEMPY=DEMAPY(IDEMP1)
+        DEMPZ=DEMAPZ(IDEMP1)
+     ENDIF
+     IF(INDXA(COMLYN,COMLEN,'GRID')  >  0)THEN
+        MEMPX=NINT(MEMAPX(IDEMP)*DEMAPX(IDEMP)/DEMPX)
+        MEMPY=NINT(MEMAPY(IDEMP)*DEMAPY(IDEMP)/DEMPY)
+        MEMPZ=NINT(MEMAPZ(IDEMP)*DEMAPZ(IDEMP)/DEMPZ)
+        LEMPX=NINT(LEMAPX(IDEMP)*DEMAPX(IDEMP)/DEMPX)
+        LEMPY=NINT(LEMAPY(IDEMP)*DEMAPY(IDEMP)/DEMPY)
+        LEMPZ=NINT(LEMAPZ(IDEMP)*DEMAPZ(IDEMP)/DEMPZ)
+     ELSE IF(INDXA(COMLYN,COMLEN,'BOUN')  >  0)THEN
+        MEMPX=NINT(MEMPX*DEMPX/DEMAPX(IDEMP))
+        MEMPY=NINT(MEMPY*DEMPY/DEMAPY(IDEMP))
+        MEMPZ=NINT(MEMPZ*DEMPZ/DEMAPZ(IDEMP))
+        LEMPX=NINT(LEMPX*DEMPX/DEMAPX(IDEMP))
+        LEMPY=NINT(LEMPY*DEMPY/DEMAPY(IDEMP))
+        LEMPZ=NINT(LEMPZ*DEMPZ/DEMAPZ(IDEMP))
+     ENDIF
+     CALL EMAPRESIZE(IDEMP,MEMPX,MEMPY,MEMPZ, &
+          LEMPX,LEMPY,LEMPZ,DEMPX,DEMPY,DEMPZ)
+  ELSE IF(WRD == 'ADD ')THEN
+     !  Add a rigid domain to a map object
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     CALL GTRMWD(COMLYN,COMLEN,'TO',2,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     IDEMP1=IDEMRIG(IDRIG)
+     CALL EMAPADD(IDEMP,IDRIG)
+  ELSE IF(WRD == 'SUBS')THEN
+     !  Substract a rigid domain to a map object
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL RMEMRIG(IDRIG)
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO rigid ID:'//NAME(1:LENGTH))
+     ENDIF
+     CALL GTRMWD(COMLYN,COMLEN,'TO',2,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     IDEMP1=IDEMRIG(IDRIG)
+     CALL EMAPMINUS(IDEMP,IDRIG)
+  ELSE IF(WRD == 'SCAL')THEN
+     !  Scal the distribution properties of a map object
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     SCALE=GTRMF(COMLYN,COMLEN,'BY',ONE)
+     CALL EMAPSCALE(IDEMP,SCALE)
+  ELSE IF(WRD == 'REDU')THEN
+     !  Reduce a map object according to a rigid domain
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPRED>','NO EMAP NAME SPECIFIED!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL GTRMWD(COMLYN,COMLEN,'BY',2,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAPRED>','NO REDUCE EMAP NAME!')
+        RETURN
+     ENDIF
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP1)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP1)
+        RETURN
+     ENDIF
+     IDEMP2=IDEMP
+     CALL GTRMWD(COMLYN,COMLEN,'TO',2,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP2)
+        IF(NEWEMP)THEN
+           CALL WRNDIE(0,'<EMAP>', &
+                'NO EMAP:'//NAME(1:LENGTH))
+           CALL RMEMAP(IDEMP2)
+           RETURN
+        ENDIF
+     ENDIF
+     CALL EMAPREDUCE(IDEMP,IDEMP1,IDEMP2)
+  ELSE IF(WRD == 'SAVE')THEN
+     !  Save the current position and orientation of a rigid domain to 
+     !   rigid domain storage
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     CALL EMAPSAVE(IDRIG)
+  ELSE IF(WRD == 'REST')THEN
+     !  Restore the stored position and orientation of a rigid domain
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     CALL EMAPRESTORE(IDRIG)
+  ELSE IF(WRD == 'TRAN')THEN
+     !  Translate a rigid domain
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     XDIR=GTRMF(COMLYN,COMLEN,'XDIR',ZERO)
+     YDIR=GTRMF(COMLYN,COMLEN,'YDIR',ZERO)
+     ZDIR=GTRMF(COMLYN,COMLEN,'ZDIR',ZERO)
+     CALL EMAPTRN(IDRIG,XDIR,YDIR,ZDIR)
+  ELSE IF(WRD == 'ROTA')THEN
+     !  Rotate a rigid domain
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     XDIR=GTRMF(COMLYN,COMLEN,'XDIR',ONE)
+     YDIR=GTRMF(COMLYN,COMLEN,'YDIR',ZERO)
+     ZDIR=GTRMF(COMLYN,COMLEN,'ZDIR',ZERO)
+     PHI=GTRMF(COMLYN,COMLEN,'PHI',ZERO)
+     CALL EMAPROT(IDRIG,XDIR,YDIR,ZDIR,PHI)
+  ELSE IF(WRD == 'DIFF')THEN
+     !  Calculate the difference between two rigid domains
+     !  the difference is stored for query
+     !C>  EMAP DIFF RIGId cc RIGID cc
+     CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'Must specify RIGIDs!')
+        return
+     ENDIF
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG1)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG1)
+        RETURN
+     ENDIF
+     CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'Must specify two RIGIDs!')
+        return
+     ENDIF
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     CALL EMAPSAVE(IDRIG)
+     CALL EMAPRTRN(IDRIG,IDRIG1)
+     call set_param('EMTX',TEMRIG(1,IDRIG))
+     call set_param('EMTY',TEMRIG(2,IDRIG))
+     call set_param('EMTZ',TEMRIG(3,IDRIG))
+     call set_param('EMXX',REMRIG(1,IDRIG))
+     call set_param('EMYX',REMRIG(2,IDRIG))
+     call set_param('EMZX',REMRIG(3,IDRIG))
+     call set_param('EMXY',REMRIG(4,IDRIG))
+     call set_param('EMYY',REMRIG(5,IDRIG))
+     call set_param('EMZY',REMRIG(6,IDRIG))
+     call set_param('EMXZ',REMRIG(7,IDRIG))
+     call set_param('EMYZ',REMRIG(8,IDRIG))
+     call set_param('EMZZ',REMRIG(9,IDRIG))
+     CALL EMAPRESTORE(IDRIG)
+  ELSE IF(WRD == 'TRAJ')THEN
+     !C>  EMAP TRAJ OPEN [READ|WRITE] UNIT nn NAME cc
+     !C>  EMAP TRAJ READ UNIT nn RIGId cc
+     !C>  EMAP TRAJ WRITE UNIT nn RIGId cc [EMNST nn EMNSR nn EMENG rr EMENGM rr]
+     !C>  
+     WRD1=NEXTA4(COMLYN,COMLEN)
+     IF (WRD1 == 'OPEN') THEN
+        CALL OPNLGU(COMLYN,COMLEN,UEMPTRJ)
+        IF(UEMPTRJ <= 0)THEN
+           CALL WRNDIE(-5,'<EMAPOPT>', &
+                'NO TRAJECTORY UNIT SPECIFIED!')
+           RETURN
+        ENDIF
+        NTEMAP=0
+        NREMAP=0
+        EMAPENG=RBIG
+        EMAPENGM=RBIG
+     ELSE IF (WRD1 == 'CLOS') THEN
+        CALL CLOLGU(COMLYN,COMLEN,UEMPTRJ)
+        IF(UEMPTRJ <= 0)THEN
+           CALL WRNDIE(-5,'<EMAPOPT>', &
+                'NO TRAJECTORY UNIT SPECIFIED!')
+           RETURN
+        ENDIF
+     ELSE IF (WRD1 == 'READ') THEN
+        CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+        IF(LENGTH <= 0)THEN
+           CALL WRNDIE(0,'<EMAPOPT>', &
+                'NO EMAP OR RIGID NAME SPECIFIED!')
+           RETURN
+        ENDIF
+        NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+        IF(NEWRIG)THEN
+           CALL WRNDIE(0,'<EMAP>','NO RIGID:'//NAME(1:LENGTH))
+           CALL RMEMRIG(IDRIG)
+           RETURN
+        ENDIF
+        IUNIT=GTRMI(COMLYN,COMLEN,'UNIT',-1)
+        IF(IUNIT /= -1)UEMPTRJ=IUNIT
+        CALL EMAPTRAJ(IDRIG,NTEMAP,NREMAP,EMAPENG,EMAPENGM,1)
+        CALL set_param('EMNST',NTEMAP)
+        CALL set_param('EMNSR',NREMAP)
+        call set_param('EMENG',EMAPENG)
+        call set_param('EMENGM',EMAPENGM)
+     ELSE IF (WRD1 == 'WRIT') THEN
+        CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+        IF(LENGTH <= 0)THEN
+           CALL WRNDIE(0,'<EMAPOPT>', &
+                'NO EMAP OR RIGID NAME SPECIFIED!')
+           RETURN
+        ENDIF
+        NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+        IF(NEWRIG)THEN
+           CALL WRNDIE(0,'<EMAP>','NO RIGID:'//NAME(1:LENGTH))
+           CALL RMEMRIG(IDRIG)
+           RETURN
+        ENDIF
+        IUNIT=GTRMI(COMLYN,COMLEN,'UNIT',-1)
+        IF(IUNIT /= -1)UEMPTRJ=IUNIT
+        NTEMAP=NTEMAP+1
+        NREMAP=IDRIG
+        NTEMAP=GTRMI(COMLYN,COMLEN,'EMNST',NTEMAP)
+        NREMAP=GTRMI(COMLYN,COMLEN,'EMNSR',NREMAP)
+        EMAPENGM=GTRMF(COMLYN,COMLEN,'EMENGM',EMAPENGM)
+        EMAPENG=GTRMF(COMLYN,COMLEN,'EMENG',EMAPENG)
+        CALL EMAPTRAJ(IDRIG,NTEMAP,NREMAP,EMAPENG,EMAPENGM,0)
+     ELSE IF (WRD1 == 'EXPA') THEN
+        !  Expand a EMAP trajectory to CHARMM trajectory
+        CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+        IF(LENGTH <= 0)THEN
+           CALL WRNDIE(0,'<EMAPOPT>', &
+                'NO EMAP OR RIGID NAME SPECIFIED!')
+           RETURN
+        ENDIF
+        NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+        IF(NEWRIG)THEN
+           CALL WRNDIE(0,'<EMAP>','NO RIGID:'//NAME(1:LENGTH))
+           CALL RMEMRIG(IDRIG)
+           RETURN
+        ENDIF
+        CALL WRNDIE(0,'<EMAP>','EXPANSION IS NOT IMPLEMENTED!')
+     ENDIF
+  ELSE IF(WRD == 'PROJ')THEN
+     !  Project rigid domain to atom coordinates
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     IDEMP=IDEMRIG(IDRIG)
+     call chmalloc('emapop.src','EMAPOPT','ISLCT d',NATOM,intg=ISLCT)
+     CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+          .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+          .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+     IF(INDXA(COMLYN,COMLEN,'COMP')  >  0)THEN
+        CALL EMAPPROJ(NATOM,ISLCT,NATEMAP(IDEMP), &
+          CEMAPX(IDEMP),CEMAPY(IDEMP),CEMAPZ(IDEMP), &
+          empcrd(IDEMP)%x,empcrd(IDEMP)%y,empcrd(IDEMP)%z, &
+          XCOMP,YCOMP,ZCOMP,TEMRIG(1,IDRIG),REMRIG(1,IDRIG))
+     ELSE
+        CALL EMAPPROJ(NATOM,ISLCT,NATEMAP(IDEMP), &
+          CEMAPX(IDEMP),CEMAPY(IDEMP),CEMAPZ(IDEMP), &
+          empcrd(IDEMP)%x,empcrd(IDEMP)%y,empcrd(IDEMP)%z, &
+          X,Y,Z,TEMRIG(1,IDRIG),REMRIG(1,IDRIG))
+     ENDIF
+     call chmdealloc('emapop.src','EMAPOPT','ISLCT d',NATOM,intg=ISLCT)
+
+  ELSE IF(WRD == 'DELE')THEN
+     !  Delete a map or rigid domain
+     CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+        IF(NEWEMP)THEN
+           CALL WRNDIE(0,'<EMAP>','NO EMAP:'//NAME(1:LENGTH))
+           CALL RMEMAP(IDEMP)
+           RETURN
+        ENDIF
+        DO I=1,NEMRIG
+           IF(IDEMRIG(I) == IDEMP)THEN
+              CALL WRNDIE(0,'<EMAP>','THIS MAP is used by:'//EMRIGID(I))
+           ENDIF
+        ENDDO
+        CALL RMEMAP(IDEMP)
+     ELSE
+        CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+        IF(LENGTH > 0)THEN
+           NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+           IF(NEWRIG)THEN
+              CALL WRNDIE(0,'<EMAP>','NO RIGID:'//NAME(1:LENGTH))
+              CALL RMEMRIG(IDRIG)
+              RETURN
+           ENDIF
+           CALL RMEMRIG(IDRIG)
+        ELSE
+           CALL WRNDIE(0,'<EMAP>', &
+                'Must specify object type: MAPId or EIGId!')
+        ENDIF
+     ENDIF
+  ELSE IF(WRD == 'CORR')THEN
+     !  Calculate correlation function between two objects
+     IDEMP=-1
+     IDEMP1=-1
+     IDRIG=-1
+     IDRIG1=-1
+     II=0
+     CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        II=II+1
+        NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+        IF(NEWEMP)THEN
+           CALL WRNDIE(0,'<EMAP>','NO EMAP:'//NAME(1:LENGTH))
+           CALL RMEMAP(IDEMP)
+           RETURN
+        ENDIF
+        CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+        IF(LENGTH > 0)THEN
+           II=II+1
+           NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP1)
+           IF(NEWEMP)THEN
+              CALL WRNDIE(0,'<EMAP>','NO EMAP:'//NAME(1:LENGTH))
+              CALL RMEMAP(IDEMP1)
+              RETURN
+           ENDIF
+        ENDIF
+     ENDIF
+     CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        II=II+1
+        NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+        IF(NEWRIG)THEN
+           CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+           CALL RMEMRIG(IDRIG)
+           RETURN
+        ENDIF
+        CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+        IF(LENGTH > 0)THEN
+           II=II+1
+           NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG1)
+           IF(NEWRIG)THEN
+              CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+              CALL RMEMRIG(IDRIG1)
+              RETURN
+           ENDIF
+        ENDIF
+     ENDIF
+     IF(II < 2)CALL WRNDIE(0,'<EMAP>','MUST SPECIFY TWO OBJECTS!')
+     LCORE=INDXA(COMLYN,COMLEN,'CORE')  >  0
+     LDDR=INDXA(COMLYN,COMLEN,'DDR')  >  0
+     IF(IDEMP > 0)THEN
+        IF(IDEMP1 > 0)THEN
+           IF(IDRIG > 0)THEN
+              NCORR=GTRMI(COMLYN,COMLEN,'NCOR',0)
+              CALL EMAPCMMR(IDEMP,IDEMP1,IDRIG,LDDR,LCORE,CORRT,NCORR)
+              IF(PRNLEV > 3)WRITE(OUTU,1240)EMAPID(IDEMP),EMAPID(IDEMP1), &
+                   EMRIGID(IDRIG),CORRT,LDDR
+           ELSE
+              CALL EMAPCMM(IDEMP,IDEMP1,LDDR,LCORE,CORRT)
+              IF(PRNLEV > 3)WRITE(OUTU,1220)EMAPID(IDEMP),EMAPID(IDEMP1), &
+                   CORRT,LDDR,LCORE
+           ENDIF
+        ELSE 
+           IF(IDRIG > 0)THEN
+              IDEMP1=IDEMRIG(IDRIG)
+              CALL EMAPCRM(IDEMP,IDRIG,LDDR,LCORE,CORRT)
+              IF(PRNLEV > 3)WRITE(OUTU,1210)EMAPID(IDEMP),EMRIGID(IDRIG), &
+                   CORRT,LDDR,LCORE
+           ELSE
+              CALL WRNDIE(0,'<EMAP>','NEED to specify two EMIDs')
+           ENDIF
+        ENDIF
+     ELSE IF(IDRIG1 > 0)THEN
+        IDEMP=IDEMRIG(IDRIG)
+        IDEMP1=IDEMRIG(IDRIG1)
+        CALL EMAPCRR(IDRIG,IDRIG1,LDDR,LDDR,CORRT)
+        IF(PRNLEV > 3)WRITE(OUTU,1230)EMRIGID(IDRIG),EMRIGID(IDRIG1), &
+             CORRT,LDDR,LCORE
+     ELSE
+        CALL WRNDIE(0,'<EMAP>','NEED to specify two RIGIds')
+     ENDIF
+     call set_param('EMCT',CORRT)
+1210 FORMAT("Corr: map ",A10," and rigid ",A10, &
+          " IS ",F7.4," at LDDR LCORE=",2L4)
+1220 FORMAT("Corr: map ",A10," and map ",A10, &
+          " IS ",F7.4," at LDDR LCORE=",2L4)
+1230 FORMAT("Corr. rigid ",A10," and rigid ",A10, &
+          " IS ",F7.4," at LDDR LCORE=",2L2)
+1240 FORMAT("Corr: map ",A10," and map ",A10,"+rigid ",A10, &
+          " IS ",F7.4," at LDDR=",L4)
+  ELSE IF(WRD == 'COMP')THEN
+     !  Define components in a complex
+     IF(INDXA(COMLYN,COMLEN,'APPE')  <=  0 )NEMCOMP=0
+     LFIX=INDXA(COMLYN,COMLEN,'FIX')  >  0
+400  CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        NEMCOMP=NEMCOMP+1
+        NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+        IF(NEWRIG)THEN
+           CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+           CALL RMEMRIG(IDRIG)
+           RETURN
+        ENDIF
+        IDCOMPS(NEMCOMP)=IDRIG
+        LCOMPFIX(NEMCOMP)=LFIX
+        GOTO 400
+1310    FORMAT(" <EMAPCOMP> ",A10, &
+             " added. ID:",I6," Trans. X,Y,Z: ",3F4.1," Rotat. X,Y,Z: ",3F4.1)
+1320    FORMAT(" <EMAPCOMP> ",A10, &
+             " added as a fixed component.  ID:",I6)
+     ENDIF
+      ELSE IF(WRD.EQ.'CONS'.OR.WRD.EQ.'ACTI')THEN
+!  Active rigid domains for atom energy cacluation
+        IF(WRD.EQ.'CONS')EMGUID=NEXTF(COMLYN,COMLEN)
+        IF(WRD.EQ.'ACTI')EMGUID=GTRMF(COMLYN,COMLEN,'GUID',EMGUID)
+        IF(INDXA(COMLYN,COMLEN,'APPE') .LE. 0 )THEN
+          NEMCOMP=0
+          LEMAPLD=.false.
+        ENDIF
+        LEMAPENG=.TRUE.
+        LFIX=INDXA(COMLYN,COMLEN,'MOVE') .LE.  0
+        LEMAPLD=LEMAPLD.OR..NOT.LFIX
+1400    CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+        IF(LENGTH.GT.0)THEN
+          NEMCOMP=NEMCOMP+1
+          NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+          IF(NEWRIG)THEN
+            CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+            CALL RMEMRIG(IDRIG)
+            RETURN
+          ENDIF
+          IDCOMPS(NEMCOMP)=IDRIG
+          LCOMPFIX(NEMCOMP)=LFIX
+          IDEMP=IDEMRIG(IDRIG)
+          CALL EMAPGUIDPRM(IDRIG,IDEMP,AMASS,     &
+            NATEMAP(IDEMP),EMPCRD(IDEMP)%IATOM)
+          IF(LFIX)THEN
+            IF(PRNLEV > 3)WRITE(OUTU,1410)NEMCOMP,TRIM(EMRIGID(IDRIG)),EMGUID
+          ELSE
+            IF(PRNLEV > 3)WRITE(OUTU,1420)NEMCOMP,TRIM(EMRIGID(IDRIG)),EMGUID
+          ENDIF
+          GOTO 1400
+1410      FORMAT(" <EMAPCONS> No. ",I4," map-constraint: ",A10,     &
+         " is FIXED   with FMAP=",F10.4," kcal/g")
+1420      FORMAT(" <EMAPCONS> No. ",I4," map-constraint: ",A10,     &
+         " is MOVABLE with FMAP=",F10.4," kcal/g")
+        ENDIF
+  ELSE IF(WRD == 'SUM ')THEN
+    !  Calculate distribution properties from all complex components
+     CALL NEXTWD(COMLYN,COMLEN,NAME,80,LENGTH)
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'There is NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL EMAPSUM(IDEMP,NEMCOMP,IDCOMPS)
+  ELSE IF(WRD == 'PRIN')THEN
+     !  Print out an emap or  a rigid domain parameters
+     CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)GOTO 600
+     NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+     IF(NEWEMP)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'NO EMAP:'//NAME(1:LENGTH))
+        CALL RMEMAP(IDEMP)
+        RETURN
+     ENDIF
+     CALL PRINTMAP(IDEMP)
+     GOTO 610
+600  CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+     IF(LENGTH <= 0)THEN
+        CALL WRNDIE(0,'<EMAP>', &
+             'Must specify Object type:MAPID or RIGID?')
+        return
+     ENDIF
+     NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+     IF(NEWRIG)THEN
+        CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+        CALL RMEMRIG(IDRIG)
+        RETURN
+     ENDIF
+     CALL PRINTRIG(IDRIG)
+610  CONTINUE
+  ELSE IF(WRD == 'DOCK')THEN
+     !   Dock COMPlexed rigid domains into a map
+     CALL EMAPDOCK(COMLYN,COMLEN)
+  ELSE IF(WRD == 'INTE')THEN
+     !  Calculate interaction energy between two objects
+     IDEMP=-1
+     IDEMP1=-1
+     IDRIG=-1
+     IDRIG1=-1
+     EMCORE=ZERO
+     EMSOLV=ZERO
+     EMELE=ZERO
+     EMCONS=ZERO
+     II=0
+     CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        II=II+1
+        NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP)
+        IF(NEWEMP)THEN
+           CALL WRNDIE(0,'<EMAP>','NO EMAP:'//NAME(1:LENGTH))
+           CALL RMEMAP(IDEMP)
+           RETURN
+        ENDIF
+        CALL GTRMWA(COMLYN,COMLEN,'MAPI',4,NAME,80,LENGTH)
+        IF(LENGTH > 0)THEN
+           II=II+1
+           NEWEMP=CHKEMPNM(NAME,LENGTH,IDEMP1)
+           IF(NEWEMP)THEN
+              CALL WRNDIE(0,'<EMAP>','NO EMAP:'//NAME(1:LENGTH))
+              CALL RMEMAP(IDEMP1)
+              RETURN
+           ENDIF
+        ENDIF
+     ENDIF
+     CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+     IF(LENGTH > 0)THEN
+        II=II+1
+        NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG)
+        IF(NEWRIG)THEN
+           CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+           CALL RMEMRIG(IDRIG)
+           RETURN
+        ENDIF
+        CALL GTRMWA(COMLYN,COMLEN,'RIGI',4,NAME,80,LENGTH)
+        IF(LENGTH > 0)THEN
+           II=II+1
+           NEWRIG=CHKRIGNM(NAME,LENGTH,IDRIG1)
+           IF(NEWRIG)THEN
+              CALL WRNDIE(0,'<EMAP>','NO rigid ID:'//NAME(1:LENGTH))
+              CALL RMEMRIG(IDRIG1)
+              RETURN
+           ENDIF
+        ENDIF
+     ENDIF
+     IF(II < 2)CALL WRNDIE(0,'<EMAP>','MUST SPECIFY TWO OBJECTS!')
+     ! Check to see if any change in force field parameters
+     EMDIELC=GTRMF(COMLYN,COMLEN,'EPS',EMDIELC)
+     EMAPEPS=GTRMF(COMLYN,COMLEN,'PSOLV',EMAPEPS)
+     EMAPEPE=GTRMF(COMLYN,COMLEN,'PSELE',EMAPEPE)
+     EMAPEPC=GTRMF(COMLYN,COMLEN,'PCORE',EMAPEPC)
+     !  Begin calculation of interaction
+     IF(IDEMP > 0)THEN
+        IF(IDEMP1 > 0)THEN
+           IF(IDRIG > 0)THEN
+              NCORR=GTRMI(COMLYN,COMLEN,'NCOR',0)
+              !              CALL EMAPEMMR(IDEMP,IDEMP1,IDRIG,LDDR,CORRT,NCORR)
+              !              WRITE(OUTU,1240)EMAPID(IDEMP),EMAPID(IDEMP1),
+              !     &                     EMRIGID(IDRIG),CORRT,LDDR
+           ELSE
+              !              CALL EMAPEMM(IDEMP,IDEMP1,LDDR,LCORE,CORRT)
+              !              WRITE(OUTU,1220)EMAPID(IDEMP),EMAPID(IDEMP1),
+              !     &              CORRT,LDDR,LCORE
+           ENDIF
+        ELSE 
+           IF(IDRIG > 0)THEN
+              IDEMP1=IDEMRIG(IDRIG)
+              CALL EMAPERM(IDEMP,IDRIG,EMCORE,EMELE,EMSOLV,EMCONS)
+              IF(PRNLEV > 3)WRITE(OUTU,2210)EMAPID(IDEMP),EMRIGID(IDRIG), &
+                   EMCORE,EMELE,EMSOLV,EMCONS
+           ELSE
+              CALL WRNDIE(0,'<EMAP>','NEED to specify two EMIDs')
+           ENDIF
+        ENDIF
+     ELSE IF(IDRIG1 > 0)THEN
+        CALL EMAPERR(IDRIG,IDRIG1,EMCORE,EMELE,EMSOLV,EMCONS)
+        IF(PRNLEV > 3)WRITE(OUTU,2220)EMRIGID(IDRIG),EMRIGID(IDRIG1), &
+             EMCORE,EMELE,EMSOLV,EMCONS
+     ELSE
+        CALL WRNDIE(0,'<EMAP>','NEED to specify two RIGIds')
+     ENDIF
+     EMAPENG=EMCORE+EMELE+EMSOLV+EMCONS
+     IF(EMAPENGM >= EMAPENG)EMAPENGM=EMAPENG
+     call set_param('EMENG',EMAPENG)
+     call set_param('EMENGM',EMAPENGM)
+     call set_param('EMCORE',EMCORE)
+     call set_param('EMELE',EMELE)
+     call set_param('EMSOLV',EMSOLV)
+     call set_param('EMCONS',EMCONS)
+2210 FORMAT("EMENG: map ",A10," and rigid ",A10, &
+          " CORE ",F10.4," ELE ",F10.4," SOLV ",F10.4," CONS ",F10.4)
+2220 FORMAT("EMENG: RIGID ",A10," and rigid ",A10, &
+          " CORE ",F10.4," ELE ",F10.4," SOLV ",F10.4," CONS ",F10.4)
+  ELSE IF(WRD == 'SCOR') THEN
+     IUNIT=GTRMI(COMLYN,COMLEN,'DBUNIT',-1)
+     REMBIND=GTRMF(COMLYN,COMLEN,'RBIND',REMBIND)
+     !   Read in a database file if specified
+     CALL EMAPDBIN(IUNIT)
+     call chmalloc('emapop.src','EMAPOPT','ISLCT e',NATOM,intg=ISLCT)
+     call chmalloc('emapop.src','EMAPOPT','ISLCT1',NATOM,intg=ISLCT1)
+     call chmalloc('emapop.src','EMAPOPT','Islct2',NRES,intg=Islct2)
+     LPRINT = INDXA(COMLYN,COMLEN,'SHOW')  >  0
+     IF(INDXA(COMLYN,COMLEN,'COMP')  >  0)THEN
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,XCOMP,YCOMP,ZCOMP,.TRUE.,1,WCOMP)
+        CALL SELRPN(COMLYN,COMLEN,ISLCT1,NATOM,0,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,XCOMP,YCOMP,ZCOMP,.TRUE.,1,WCOMP)
+        CALL EMAPSCORE(SCORE,XCOMP,YCOMP,ZCOMP, &
+             ISLCT,ISLCT1,Islct2,LPRINT)
+     ELSE
+        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+        CALL SELRPN(COMLYN,COMLEN,ISLCT1,NATOM,0,IMODE, &
+             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
+             .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+        CALL EMAPSCORE(SCORE,X,Y,Z, &
+             ISLCT,ISLCT1,Islct2,LPRINT)
+     ENDIF
+     call chmdealloc('emapop.src','EMAPOPT','ISLCT e',NATOM,intg=ISLCT)
+     call chmdealloc('emapop.src','EMAPOPT','ISLCT1',NATOM,intg=ISLCT1)
+     call chmdealloc('emapop.src','EMAPOPT','Islct2',NRES,intg=Islct2)
+     call set_param('EMSCORE',SCORE)
+  ELSE
+     CALL WRNDIE(0,'<MAINIO>','Unrecognized write command:'//WRD)
+  ENDIF
+  RETURN
+END SUBROUTINE EMAPOPT
+#endif /* (emap)*/
+
+subroutine emapop_dummy()
+  return
+end subroutine emapop_dummy
+

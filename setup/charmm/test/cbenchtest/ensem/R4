@@ -1,0 +1,15 @@
+#! /bin/csh
+
+set mchm = ~/charmm/goodens/mosxgf/exec/osx_M/charmm
+
+/bin/rm charmm.out* rest*, prn*
+set i = 0
+while ( $i < $2 )
+  if ( $i < 10 ) touch prn00$i
+  if ( $i < 100 && $i > 9 ) touch prn0$i
+  @ i = $i + 1
+end
+
+mpirun -np $1 $mchm -i e4.inp numens=$2  verbose=verb
+
+

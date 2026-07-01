@@ -1,0 +1,75 @@
+* mmff.INP
+* author:  Ryszard Czerminski (May 11, 1993)
+* purpose: to test new MMFF ring perception code
+* external files: MMFFANG.PAR MMFFBOND.PAR MMFFCHG.PAR MMFFDEF.PAR
+*                 MMFFOOP.PAR MMFFSTBN.PAR MMFFSUP.PAR MMFFSYMB.PAR
+*                 MMFFTOR.PAR MMFFVDW.PAR
+* UPDATED by Josh Buckner 4/17/2019
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+! energies and GRMS for *.mrk files in the order
+! used in this input file
+!
+!                     ENERgy                      GRMS
+!
+!ENER>        0   4484.58441      0.00000    823.47900
+
+stream datadir.def
+
+bomlev 5
+read rtf  card unit  5
+* TOPOLOGY FILE FOR H2
+*
+   20    1                ! Version number
+MASS     1 H      1.00800 ! Hydrogen bonding hydrogen (neutral group)
+
+AUTOGENERATE ANGLES
+DEFA FIRS NTER LAST CTER
+
+RESI H2  0.0
+ATOM H1 H  0.0
+ATOM H2 H  0.0
+
+END
+
+!
+! energies and GRMS for *.mrk files in the order
+! used in this input file
+!
+stream @0mmff_setup.str
+
+read merck name @0amino.mrk
+generate
+energy inbfrq 1 ihbfrq 0 CUTNB 15. CTOFNB 12. CTONNB 9. -
+       cdie e14fac 0.75 vswitch switch
+
+set tol = 1e-3
+set pass = 1
+set e = 4484.58441
+set grms = 823.47900
+
+echo enew  ?ener  ?grms
+calc ediff = abs ( ?ener - @e )
+calc grmsd = abs ( ?grms - @grms )
+
+set epass = 0
+set gpass = 0
+if @ediff le @tol set epass = 1
+if @grmsd le @tol set gpass = 1
+calc egpass = @epass * @gpass
+calc pass = @pass * @egpass
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+
+stop

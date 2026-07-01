@@ -1,0 +1,157 @@
+* Test file for Mobhy. Voltage runs in the M2 channel
+*
+
+! This test is a bit slow, sorry. Large system.
+
+stream datadir.def
+set testname mobhym2
+
+open read card unit 10 name @0top_all36_prot.rtf
+read  rtf card unit 10
+
+open read card unit 20 name @0par_all36_prot.prm
+read para card unit 20 flex
+
+open read card unit 10 name @0top_all36_lipid.rtf
+read  rtf card unit 10 append
+
+open read card unit 20 name @0par_all36_lipid.prm
+read para card unit 20 append flex
+
+open read unit 11 card name @0toppar_water_ions.str
+stream unit 11
+
+open read unit 11 card name @0mobhy.str
+stream unit 11
+
+! generate psf 
+
+open read unit 10 card name @0m2proa.crd
+read sequ coor unit 10
+
+gene proa warn setup first nneu last cneu
+gene prob dupl proa setup
+gene proc dupl proa setup
+gene prod dupl proa setup
+
+read sequence popc 138
+generate MEMB warn first none last none
+
+read sequence TIP3 4008
+generate TIP3 warn noangle nodihedral
+
+read sequence h3o 15
+gene hydr noangle nodihedral
+
+read sequence TIP3 37
+generate wata warn noangle nodihedral
+
+ic purge
+ic param
+
+!the icr file should be read back in in a different run that reads the psf
+!open write unit 10 card name m2.icr
+!write ic unit 10 card
+!open write unit 10 card name m2.psf
+!write psf unit 10 card xplor
+
+! coordinates etc
+
+open read unit 10 card name @0m2.crd
+read coor unit 10 card
+
+CRYSTAL DEFINE TETRAGONAL 70.0886 70.0886 62.7782 90.0 90.0 90.0
+crystal read card
+* crystal
+*
+ SYMMETRY
+ (X,Y,Z)                                 
+ END
+
+ IMAGES
+ ! Operation     A     B     C
+           1    -1    -1    -1
+           1    -1     0    -1
+           1    -1     1    -1
+           1     0    -1    -1
+           1     0     0    -1
+           1     0     1    -1
+           1    -1    -1     0
+           1    -1     0     0
+           1    -1     1     0
+           1     0    -1     0
+           1     0     1     0
+           1    -1    -1     1
+           1    -1     0     1
+           1    -1     1     1
+           1     0    -1     1
+           1     0     0     1
+           1     0     1     1
+           1     1     1     1
+           1     1     0     1
+           1     1    -1     1
+           1     1     1     0
+           1     1     0     0
+           1     1    -1     0
+           1     1     1    -1
+           1     1     0    -1
+           1     1    -1    -1
+ END
+
+IMAGE BYRESID XCEN 0.0 YCEN 0.0 ZCEN 0.0 sele resname TIP3 .or. -
+  resname H3O .or. segid MEMB end
+
+! Nonbonded Options
+
+set fftx 80
+set ffty 80
+set fftz 72
+
+nbonds atom vatom vfswitch bygr -
+       ctonnb 10.0 ctofnb 12.0 cutnb 16.0 cutim 16.0 -
+       inbfrq -1 imgfrq -1 wmin 1.0 cdie eps 1.0 -
+       ewald pmew fftx @fftx ffty @ffty fftz @fftz  kappa .34 spline order 6
+
+define prot sele segid PRO* end
+
+MMFP
+GEO rcm planar zref 0.0 zdir 1.0 force 100.0 droff 0.0 sele PROT .or. resn POPC end 
+GEO rcm cylinder Xref -4.34 Yref 7.0 Zref 0.0 XDIR 0.0 YDIR 0.0 ZDIR 1.0 -
+    harmonic FORCE 1.0 select .not. hydrogen .and. PROT end
+GEO planar zref 0.0 zdir 1.0 force 10.0 droff 27.0 sele resn H3O end
+GEO cylinder harm force 2.0 droff 5 Xref -4.34 Yref 7.0 Zref 0.0 XDIR 0.0 YDIR 0.0 ZDIR 1.0 -
+        sele resn H3O end
+END
+
+shake bonh param sele .not. resname H3O end
+shake bonh param nores sele atom hydr * OH2 end sele atom hydr * H3 end
+
+donor remove sele .not. (atom HYDR * H*) end show
+acceptor remove sele .not. (resn TIP3 .or. resn H3O) end
+
+hbonds ihbfrq 10 cuthb 3.1 
+skipe hbond imhb
+mobhy ihopfr 10 ntit 4 nh3o 1 ebbr @0mobhy.prm PROA 16 U2 PROB 16 U2 PROC 16 U2 -
+      PROD 16 U2 maft nstep 40 volt 5.0 width 55 sele resn H3O end
+
+energy
+
+set refval -57930.08345
+@testcheck ?ener  @refval .000001 @testname
+
+! estimate Pmass from SYSmass (total system mass)
+scalar mass stat
+calc Pmass = int ( ?stot  /  50.0 )
+
+set temp = 303.15
+
+DYNA CPT leap nstep 50 timestep 0.002 echeck -1 -
+     nprint 10 iprfrq 1000 ntrfrq 5000 -
+     iunrea -1 iunwri -1 iuncrd -1 iunvel -1 kunit -1 nsavc 0 nsavv 0 -
+     PCONS pint pref 1.0 pmass @Pmass pgamma 20.0 - 
+     HOOVER reft @temp tmass 2000.0 tbath @temp firstt @temp -
+     iseed 548587696 134859505 970795875 78686970
+
+! For one processor you should see 9 hop attempts with two acceptances
+
+stop

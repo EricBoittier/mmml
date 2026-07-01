@@ -1,0 +1,250 @@
+* Finite temperature string method (FTSM) test case
+* alanine dipeptide isomerization in vacuum
+* part of molecule fixed with no orientation
+*
+!SUMMARY : generate initial path by linear interpolation
+! in phi/psi dihedral angles; perform optimization
+! compute the path and free energy along the path
+! Note : the simulation time here is much _too short_ to obtain
+! a converged path & FE (note that we are starting from a linear interpolant
+! in dihedral space); in addition, fewer than 16 replicas will not give a very
+! smooth path ; this is the price you pay when using Cartesian coordinates
+
+if ?stringm .ne. 1 then
+   echo "String method code not compiled."
+   echo "Test NOT performed."
+   stop
+endif
+!
+if ?numnode  .lt. 3  then
+  echo "At least three cpu cores are required to run this test."
+  echo "Test NOT performed."
+  STOP
+endif
+!
+if ?numnode  .ne. 8  then
+  echo "Internal PASS/FAIL test only available for 8 cpu cores b/c result depends on # cores."
+  echo "Internal PASS/FAIL test check will be omitted."
+endif
+!
+set myname ftsm-fix.inp
+!
+stream datadir.def
+!**********************************************************
+set nrun 0
+set toppar  @0
+set outdir  @9
+set datadir @outdir
+set outputdir @outdir
+! read parameter and topology files
+!
+open unit 1 read form name @TOPPAR/top_all22_model.inp
+read rtf card unit 1
+close unit 1
+!
+open unit 1 read form name @TOPPAR/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! ***************************** generate alanine dipeptide
+read sequence card
+* alanine dipeptide in vacuum
+*
+1
+ALAD
+
+generate dial setup warn
+write psf card name @outdir/diala.psf
+!
+if @?nlocal eq 0 set nlocal 1
+calc nrep = ?numnode / @nlocal
+!
+mcom string @nlocal by @nrep ! set up communication
+string ftsm init ! initialize ftsm
+!**************************** replica variables ***********
+set ncpu ?nstring
+set me ?mestring
+!
+! set dihedral angles for this replica
+! (1) define range of angles
+calc phis -90.
+calc psis 90.0
+calc phie @phis+180.0
+calc psie @psis-180.0
+
+if @ncpu .gt. 1 then 
+ calc mypsi = @psis + ( @psie - @psis ) * @me / ( @ncpu - 1 )
+ calc myphi = @phis + ( @phie - @phis ) * @me / ( @ncpu - 1 )
+else
+ calc mypsi = @psis
+ calc myphi = @phis
+endif 
+!
+ic edit
+dihe  dial 1 clp   dial 1 nl   dial 1 ca   dial 1 crp @myphi
+dihe  dial 1 nl   dial 1 ca   dial 1 crp   dial 1 nr @mypsi
+end
+!
+! generate coordinates
+IC PARA
+IC SEED 1 CLP 1 NL 1 CA
+IC BUILD
+!
+! specify infinite cutoff
+update cutnb 1000.0
+! gently minimize to avoid instability during MD
+mini sd nstep 20
+! ***************************** DONE generating alanine dipeptide
+! adding "angstrom" sets the length scale to Ang for input; the values are renormalized before MD
+set ang
+set ang angstrom
+string ftsm set kpar 200 @ang ! force constant for hyperplanes restraints
+string ftsm set kprp 200 @ang ! force constant f[or tube restraints
+string ftsm set dprp 0.5 @ang ! distance away from string at which tube restraint becomes active
+!
+! fix part of molecule
+define fixed sele type CL .or. type OL .or. type NL end
+! orient inst string once based on rest(rained) coords
+string ftsm orient sele fixed end mass
+cons fix sele fixed end
+!
+! add string atoms using com notation
+!
+define forcing sele .not. (fixed .or. hydrogen) end
+label floop
+ define com sele bynum ?selatom end
+ string ftsm add rmsd sele com end
+ define forcing sele forcing .and. .not. com end
+ if ?nsel gt 0 -
+goto floop
+! show string coords
+string ftsm list
+!
+string ftsm set mass on ! turn on mass weighting in RMSD computation and orientation
+string ftsm set proj on ! forces restrain distance to hyperplane, but not position in the hyperplane (this is needed to compute 1D FE)
+string ftsm fill col main   ! assign coordinates of the string from instantaneous coordinates in the main set ("main" is optional)
+string ftsm print dcd name @outputdir/string_init.dcd
+!
+string ftsm test grad step 0.00001 ! test gradients
+!string ftsm test para ! will fail for 1-processor groups
+mcom barrier global ! barrier on global communicator (optional)
+!
+! set up statistics
+string ftsm stat -
+                  rmsd rnam @datadir/rmsd.dat  - ! compute rmsd from coordinate in col 8
+                  arcl anam @datadir/arcl.dat  - ! compute arclength
+                  curv cvnm @datadir/curv.dat  - ! compute curvature
+                  free fenm @datadir/fe.dat  -   ! compute free energy
+                  forc fcnm @datadir/force.dat  - ! output forces
+                  rexl rexm rxnm @datadir/rex - ! output replica exchange map/log
+                  cent cnam @datadir/path.dcd  ! output the instantaneous string
+
+!set fbeta for langevin
+scalar fbeta set 10 select all end
+!
+set tstep 0.001
+set temp 300
+!
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+!
+string ftsm copy main ref ! save center as reference coords
+! real reparameterization
+string ftsm repa iter 1 defi 1.02 line  ! use iterative linear interpolation; maximum of one iteration
+!
+!string ftsm stat ! test statistics manually (optional)
+!string ftsm repa ! test reparametrization manually (optional)
+!
+!!!!!!!!!!!!!!!!!!! string options
+!set nsteps 500000
+set nsteps 100000
+set nsteps 50000
+set evof 10      ! frequency of string evolution
+set reqfreq 100  ! steps to adjust to new restraints
+set dcdfreq 1000 ! trajectory output frequency
+set freq 1000    ! misc frequency
+!
+!*********************************************************
+! test projection dynamics
+string ftsm dyna -
+ rstr reeq @reqfreq - ! restrained dynamics 
+-! stat staf @freq -   ! statistics output
+- stat staf @nsteps -   ! produce 1 stats entry for easy checking
+-! rex rexf 100 rext @Temp - ! Hamiltonian replica exchange frequency and temperature 
+-! evolve evof @evof aver nave 100 - ! frequency of image evolution & evolution option: simple averaging
+ evolve evof @evof expo memo 0.995 - ! frequency of image evolution & evolution option: exponentially decaying kernel
+ upda updf @freq repa - ! frequency of updating string images
+ evos @reqfreq - ! statistics slices to skip when computing average force/smoothing
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea 67 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+! final coordinates
+string open card write unit 1 name @outputdir/diala@nrun_@me.cor
+write coor card unit 1
+! write final string file : all coordinates present in first frame; only string coordinates present in subsequent frames
+string ftsm print dcd name @outputdir/string_final.dcd
+! also write in charmm coordinate format
+string ftsm print cor name @outputdir/string_final@me.cor
+!
+!
+string ftsm done ! stop string
+bomlev -1 ! mcom done generates level 0 warning
+mcom done ! reset communicators
+!
+!=================== check free energy ==================================
+if ?numnode eq 8 then ! internal PASS/FAIL :  compare free energy profile
+!
+label fecheck
+! read fe.dat file and check that free energy looks reasonable
+! reference free energy
+set FR1 0.000000000000000E+00
+set FR2 0.621035578375852E+00
+set FR3 0.378429597687915E+01
+set FR4 0.741488540809626E+01
+set FR5 0.726134315726962E+01
+set FR6 0.452194566867953E+01
+set FR7 0.298657322464558E+01
+set FR8 0.342692659635291E+01
+!
+! change file to one entry per line : 
+if ?mynode eq 0 system "cat scratch/fe.dat | awk '{start = NF - 7; for (i = start; i <= NF; ++i) print $i}' > scratch/_tmp"
+open read card name scratch/_tmp unit 1
+set i 0
+set mue 0
+set muetol 0.5 ! kcal/mol
+label feloop
+  incr i
+  get unit 1 F@@i
+  calc mue = @mue + abs ( @FR@@i - @F@@i )
+  if @i lt ?numnode -
+goto feloop
+calc mue = @mue / ?numnode ! mean unsigned error
+if @mue le @muetol then
+ echo @myname TESTCASE RESULT: PASS
+else
+ echo @myname TESTCASE RESULT: FAIL
+ incr testfail
+endif 
+endif
+
+stop
+

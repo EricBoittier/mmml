@@ -1,0 +1,178 @@
+
+File: Consph, Node: Top, Up: (doc/commands.info), Next: Introduction
+
+        Monte-carlo method for constant pH simulations
+
+      Tim Miller, Ana Damjanovic, Satoru Itoh, and Bernard R. Brooks
+
+If you use this code, please cite:
+
+Itoh SG, Damjanovic A, Brooks BR. Proteins. 79, 3420-3436 (2011).
+
+* Menu:
+
+* Introduction::        Overview of the constant pH Monte Carlo method
+* Syntax::              Syntax of the Constant pH code
+* Notes::               Usage notes
+
+
+File: Consph, Node: Introduction, Up: Top, Previous: Top, Next: Syntax
+
+     The constant pH code is designed to allow the running of a molecular
+dynamics simulation with a fixed pH. What this means is that titratable
+groups can protonate and deprotonate over the course of the simulation in
+a manner dictated by the specified pH value. In order to accomplish this, the
+dynamics simulation is periodically interrupted (the frequency can be
+determined by the user), and at least one Monte Carlo trial is run that
+attempts to change the protonation state of one of the titratable
+residues. In this implementation, the user must indicate to CHARMM which
+residues may have their protonation state change, which allows for
+completely flexibility (e.g. if it is known that a particular residue
+never changes its protonation state). This is done via the CNSPh
+command (see below).
+
+     The code has been tested with standard MD and Langevin dynamics
+using the LEAPfrog and VVER integrators. Other integrators have not 
+been tested, but should work. It is compatible with the existing 
+CPT code in CHARMM, but image support has not been tested and may 
+have issues. We have tested with the GBSW and GBMV implicit solvent 
+methods.  The implementation has been parallelized.
+
+     The discrete state constant pH is now included by default in
+CHARMM with no pref.dat key-word required. If the "REPDSTR" key word 
+used, then code allowing for replica exchange in pH space will also be
+compiled (see repdstr.info for further details). The constant pH Monte
+Carlo procedure will *not* be applied on time steps where a pH replica
+exchange occurs.
+
+
+File: Consph, Node: Syntax, Up: Top, Previous: Introduction, Next: Notes
+
+Command syntax:
+
+I/O:
+
+READ CPH CARD UNIT <int> ! Read constant pH parameter file.
+
+Defining titratable groups:
+
+CNSPh {ADD   [atom-selection]}
+      {DEL   [atom-selection]}
+      {CLEAr                 }
+
+ADD   -- Any residue returned by the selection is added to the list
+         of titratable residues.
+DEL   -- Any residue returned by the selection is removed from the
+         list of titratable residues, if present.
+CLEAr -- The list of titratable residues is emptied.
+
+Running dynamics with constant pH:
+
+DYNAmics ... PHCONS consph-spec
+
+consph-spec::= PHEXCF <int> PHMCTR <int> [PHUNUM <int>] PHVAL <real>
+               [ IUNPHR <int> ] [ IUNPHw <int> ] [ PHTEMP <real> ]
+               [ IPHRSV <int> ]
+
+keyword       explanation
+-------       -----------
+
+PHEXCF        Frequency at which to attempt to change the titration state
+              of the system. Every PHEXCF steps, the dynamics will be
+              interrupted and the monte carlo procedure run.
+
+PHMCTR        The number of Monte Carlo trials to run. As of the current
+              implementation, the code picks a random residue of those
+              marked titratable to modify at each step.
+
+PHUNUM        The unit to write the current state of the system to at 
+              each step. The syntax of the resulting file is given below.
+              The default is to not write any file.
+
+PHVAL         The pH value at which the simulation is performed.
+
+PHTEMP        Temperature to use in the pH exchange equation. If left
+              unset or if the value given is less than 0, the instantaneous
+              temperature of the system is used.
+
+IUNPHR        Unit to read a restart file from for use with constant pH (NB
+              the restart file for constant pH is kept separately from the
+              dynamics restart file).
+
+IUNPHW        Unit to write a restart file to for use with constant pH.
+
+IPHRSV        Writes a constant pH reservoir file to the specified unit number
+              for later use with pH reservoir replica exchange (see
+              repdstr.info for details). An entry will be written every
+              NSAVC time steps. Note this is only implemented for the
+              verlet and leapfrog verlet integrators.
+
+Parameter file syntax:
+
+The Constant pH parameter file follows regular CHARMM syntax conventions
+(i.e. it must start with a title, and comment lines must begin with an
+exclamation mark). Within the parameter file, the possibly titration
+states of various individual residues may be defined. The syntax for 
+defining a titratable residue is:
+
+RESI <resname> <nstate> ! nstate is the number of possible titration states.
+RFPK <float> [<float>] ! reference pKa, of model compound
+RFDG <float> [<float>] ! See notes section.
+ATOM <type>  <charge at state 1> <charge at state 2> [<charge at state 3>]
+.
+.
+.
+
+The file must end with "END" on a line by itself.
+
+The parameter file containing the values used in the reference work may be
+found in the support/parameters directory of the CHARMM distribution. Its name is
+ph_param.prm.
+
+
+File: Consph, Node: Notes, Up: Top, Previous: Syntax, Next: Top
+
+In the current implementation, each titratable residue can have at most
+three different protonation states, of which only one is considered
+"protonated." This is to accommodate Histidine, which has two different
+deprotonated states. The first state listed in the parameter file should
+be the fully protonated state (this is not enforced by the code, but is
+how the equations are written).
+
+The format of the PHUNUM state file is as follows for a system with N
+titratable groups:
+
+<timestep>:   <group 1 start>-><group 1 end> ... <group N start>-><group N end>
+
+At each timestep where a pH Monte Carlo trial is done, a new line is
+appended to the file showing the starting and ending state of each titratable
+group, separated by "->". The states are numbered, from one, in the order
+that they appear in the parameter file. The residues appear in numerical
+order (i.e. the first titratable residue by number will appear first, etc.).
+Note that if a Monte Carlo trial is skipped at a particular time step due
+to the use of pH replica exchange, no corresponding line will be added
+to the PHUNUM file.
+
+In order to protonate or deprotonate a residue, the charges on the
+individual atoms are changed according to the charge values given in
+the constant pH parameter file. Currently, no parameters other than the
+charges are modified. Future work will expand this scheme to also modify
+the van der Waal radii. Because of the way that this is implemented,
+it is important that the PSF contain entries for all atoms. For this
+reason, we suggest starting each simulation with all residues whose
+titrations may change fully protonated.
+
+Creating constant pH parameters:
+
+The syntax of the parameter file is described above. Residues may
+have two states or three states. If there are three states, only
+the first one can be considered protonated; the other two are deprotonated.
+If there are three states then two RFPK and RFDG values must be given.
+
+The RFPK value(s) correspond to pKa,w and the RFDG value(s) correspond 
+to delta(Fele,w) in equation 1 of Itoh et al. (see reference). The
+latter is the electrostatic component of the free energy differences
+between the protonated and deprotonated states of the model compound.
+This value can be obtained from free energy perturbation simulations 
+(see pert.info for details) or by running pH replica exchange at 
+different values until thew correct titration curve is achieved.

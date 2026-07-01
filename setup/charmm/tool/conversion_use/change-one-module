@@ -1,0 +1,13 @@
+#! /bin/bash
+
+# this is to quickly remove the name conflict in use statements
+# But be CAREFULL not to mix everything. For example, originaly
+# there were two module names:  use path and use pathint.
+# When renaming path be carfull that it
+# doesn't change also the use pathint statements
+
+for i in `grep -l '##USE cnst' source/*/*.src` ; do
+ echo $i 
+ sed -e "s@##USE cnst@##USE cnst_fcm@" $i >  $i.tmp
+ mv $i.tmp $i
+done

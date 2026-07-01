@@ -1,0 +1,90 @@
+* - parameter file PARAM19 - Flexible version
+* - Only hydrogen stuff is here (for testing only)
+*
+
+ATOMS
+
+MASS     1 H      1.00800 ! hydrogen which can h-bond to neutral atom
+MASS     2 HC     1.00800 !   -    "     -               charged atom
+MASS     3 HA     1.00800 ! aliphatic hydrogen
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+
+!--------------------------------------------------------------------
+! Define a few convenient equivalences
+EQUIVALENCES
+
+HALL  10   H*
+
+!--------------------------------------------------------------------
+BOND
+! more general bonds...
+HALL NALL   405.0       0.98
+! specific bonds
+
+H    OH1    450.0       0.96!  FROM IR STRETCH 3400 CM 1
+H    OH2    450.0       1.00 ! from ST2 geometry
+H    H        0.0       1.6329931 ! from ST2 geometry (for SHAKE w/PARAM)
+HT   OT     450.0       0.9572 ! from TIPS3P geometry
+HT   HT       0.0       1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+HA   C      350.0       1.08
+HA   CT     300.0       1.08
+HC   NC2    405.0       1.00
+HC   NH3    405.0       1.04
+!--------------------------------------------------------------------
+THETAS
+! more general angles
+HA   C    X       40.0     120.0
+HA   CT   X       50.0     109.5
+CALL NALL HALL    35.0     120.0
+
+! Specific angles
+NH1  CR1E NH1     70.0     109.0
+C    CT   HA      70.0     109.5
+CT   CT   HA      40.0     109.50
+HA   CT   HA      40.0     109.5
+HA   CT   S       40.0     109.5
+HC   NC2  HC      40.0     120.0
+C    NH1  H       30.0     120.0
+C    NH2  H       30.0     120.0
+H    NH2  H       40.0     125.0
+HC   NH3  HC      40.0     109.5
+C    OH1  H       50.0     109.5
+HT   OT   HT      55.0     104.52    ! FROM TIPS3P GEOMETRY
+!--------------------------------------------------------------------
+PHI
+! none here...
+!--------------------------------------------------------------------
+IMPHI
+! Specific improper dihedrals
+C    H    H    NH2     45.0    0     0.0! PRIMARY AMIDES (ASN AND GLN) OOP
+C    X    X    H       75.0    0     0.0! FROM BENZENE NORMAL MODE ANALYSIS
+C    X    X    HA      75.0    0     0.0!
+H    X    X    O       45.0    0     0.0
+!
+!--------------------------------------------------------------------
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.0440    -0.0498    0.8000 
+HC       0.0440    -0.0498    0.6000 ! charged group. Reduced vdw radius
+HA       0.1000    -0.0450    1.4680
+HT       0.0440    -0.0498    0.8000 !TIP3P water hydrogen, see NBFIX below
+!
+!--------------------------------------------------------------------
+NBFIX
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+!
+!	We're gonna NBFIX the TIP3P water-water interactions
+!	here to make them more like Jorgensen's.  The vdW parameters
+!	specified above will be in effect, therefore, for ONLY
+!	protein (read, protein OR nucleic acid)-water interactions.
+!	OT-OT is exactly Jorgensen's; HT interactions are added
+!	here.
+!
+HT   HT      -0.04598   0.4490
+HT   OT      -0.08363   1.9927
+!
+END

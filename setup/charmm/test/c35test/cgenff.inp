@@ -1,0 +1,42 @@
+* Larger arrays and atom names for the CHARMM General Force Field (CGenFF)
+* Kenno Vanommeslaeghe, 2008
+*
+
+if ?CGENFF ne 1 then
+  echo TEST NOT PERFORMED
+  STOP
+endif
+
+stream datadir.def
+
+set residue azul
+set zeed 1 C4  1 C10 1 C1
+
+bomlev 5
+open unit 10 read card name @{0}top_cgenff_all_1g5merge.inp
+read rtf card unit 10
+close unit 10
+open unit 10 read card name @{0}par_cgenff_all_1g5merge.inp
+read para card flex unit 10
+close unit 10
+
+read sequence card
+* @residue
+*
+1
+@residue
+
+generate @residue first none last none setup warn
+ic param
+ic seed @zeed
+ic build
+update cutnb 99.0 ctofnb 98.0 ctonnb 97.0 switch vswitch inbfrq 100
+energy
+
+@testcheck ?ener 37.98617 0.000001 cgenff_1
+
+mini conj nstep 200 tolgrd 0.001
+mini nraph nstep 50 tolgrd 0.000001
+
+@testcheck ?ener 11.476 0.000001 cgenff_2
+

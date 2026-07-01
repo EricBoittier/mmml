@@ -1,0 +1,124 @@
+* c25test/mtsm3.inp: Masa Watanabe, 09-Feb-96
+* Met-enkephalin mode
+* Multiple time scaled method
+*
+
+if ?mts .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+STREam datadir.def
+! New MTS selection doesn't work with PARVEC and VECTOR selection.
+faster on
+
+! rtf and parameter
+OPEN UNIT 1 READ FORM NAME @0toph19.rtf
+READ RTF CARD UNIT 1
+CLOSE UNIT 1
+
+OPEN UNIT 1 READ FORM NAME @0param19.prm
+READ PARAM CARD UNIT 1
+CLOSE UNIT 1
+
+READ SEQU CARD
+* Protein
+*
+5
+TYR GLY GLY PHE MET
+
+GENERAGE ENKP SETUP
+
+READ COORDINATES CARD
+* COORDINATES FOR ENKP
+*  DATE:    12/ 1/94     12:59:53      CREATED BY USER: watanabe
+*
+   48
+    1    1 TYR  HT1   -2.22613  -6.79278   1.66328 ENKP 1       .00000
+    2    1 TYR  HT2   -1.30038  -5.90497   2.76358 ENKP 1       .00000
+    3    1 TYR  N     -1.60830  -5.92543   1.79188 ENKP 1       .00000
+    4    1 TYR  HT3    -.74698  -6.06344   1.16661 ENKP 1       .00000
+    5    1 TYR  CA    -2.30144  -4.67704   1.52472 ENKP 1       .00000
+    6    1 TYR  CB    -3.14348  -4.23837   2.77288 ENKP 1       .00000
+    7    1 TYR  CG    -4.24623  -3.30319   2.54689 ENKP 1       .00000
+    8    1 TYR  CD1   -5.35293  -3.24647   3.46583 ENKP 1       .00000
+    9    1 TYR  CE1   -6.24477  -2.19555   3.34264 ENKP 1       .00000
+   10    1 TYR  CD2   -4.14098  -2.32348   1.55478 ENKP 1       .00000
+   11    1 TYR  CE2   -5.01219  -1.26592   1.43363 ENKP 1       .00000
+   12    1 TYR  CZ    -6.05938  -1.19070   2.34090 ENKP 1       .00000
+   13    1 TYR  OH    -6.92008   -.09995   2.35412 ENKP 1       .00000
+   14    1 TYR  HH    -6.68841    .65085   1.73224 ENKP 1       .00000
+   15    1 TYR  C     -1.14754  -3.69928   1.35638 ENKP 1       .00000
+   16    1 TYR  O      -.46227  -3.45037   2.37211 ENKP 1       .00000
+   17    2 GLY  N      -.76200  -3.18704    .16118 ENKP 2       .00000
+   18    2 GLY  H     -1.20803  -3.32448   -.72989 ENKP 2       .00000
+   19    2 GLY  CA      .51266  -2.48253    .00621 ENKP 2       .00000
+   20    2 GLY  C       .95267  -2.37166  -1.46321 ENKP 2       .00000
+   21    2 GLY  O       .14121  -2.26421  -2.43045 ENKP 2       .00000
+   22    3 GLY  N      2.24730  -2.48485  -1.70256 ENKP 3       .00000
+   23    3 GLY  H      2.73696  -3.07797  -1.05164 ENKP 3       .00000
+   24    3 GLY  CA     2.86345  -1.85215  -2.86417 ENKP 3       .00000
+   25    3 GLY  C      4.07921  -1.03540  -2.52663 ENKP 3       .00000
+   26    3 GLY  O      4.39881   -.84899  -1.34749 ENKP 3       .00000
+   27    4 PHE  N      4.91534   -.54803  -3.46488 ENKP 4       .00000
+   28    4 PHE  H      4.71908   -.72801  -4.35207 ENKP 4       .00000
+   29    4 PHE  CA     6.04316    .27297  -3.10461 ENKP 4       .00000
+   30    4 PHE  CB     7.31157   -.11212  -3.87112 ENKP 4       .00000
+   31    4 PHE  CG     8.56185    .06828  -3.00195 ENKP 4       .00000
+   32    4 PHE  CD1    8.85167   -.92515  -2.06084 ENKP 4       .00000
+   33    4 PHE  CD2    9.35984   1.20340  -3.08453 ENKP 4       .00000
+   34    4 PHE  CE1   10.02410   -.85610  -1.33729 ENKP 4       .00000
+   35    4 PHE  CE2   10.52825   1.29996  -2.30683 ENKP 4       .00000
+   36    4 PHE  CZ    10.81898    .32323  -1.48413 ENKP 4       .00000
+   37    4 PHE  C      5.56436   1.70573  -3.21698 ENKP 4       .00000
+   38    4 PHE  O      5.36671   2.24905  -4.31368 ENKP 4       .00000
+   39    5 MET  N      5.48553   2.34915  -1.98076 ENKP 5       .00000
+   40    5 MET  H      5.52456   1.75486  -1.23018 ENKP 5       .00000
+   41    5 MET  CA     5.34157   3.75365  -1.72739 ENKP 5       .00000
+   42    5 MET  CB     4.10554   4.44775  -2.33280 ENKP 5       .00000
+   43    5 MET  CG     4.23531   5.92307  -2.31038 ENKP 5       .00000
+   44    5 MET  SD     3.05682   6.91748  -3.18481 ENKP 5       .00000
+   45    5 MET  CE     2.09556   7.28735  -1.71078 ENKP 5       .00000
+   46    5 MET  C      5.42067   3.87687   -.21719 ENKP 5       .00000
+   47    5 MET  OT1    4.44617   3.86487    .54194 ENKP 5       .00000
+   48    5 MET  OT2    6.53427   3.73152    .24582 ENKP 5       .00000
+
+NBOND ctonnb 10.0  ctofnb 15.0  cutnb 20.0 -
+      eps 1.0  cdie 
+
+!
+! Image 
+!
+READ IMAGE CARD
+* IMAGE FILE
+*
+! THE 2ND SYSTEM
+IMAGE UP
+ROTATE 0.0  0.0  1.0  120.0
+! THE 3RD SYSTEM
+IMAGE DN
+DEFINE INVE UP
+END
+
+PRINT IMAGE TRANS
+
+UPDATE INBFRQ 10 IHBFRQ 0 IMGFRQ 10 CUTIM 20.0
+
+!
+! Short-long range selection of MTS
+!
+MTS 2  3
+BOND  1
+ANGLE 1
+DIHE  2
+SLFG  RSCUT  6.0   RHEA 2.0  BUFF 1.0
+END
+
+
+DYNA VVER STRT NSTEP 200 TIME 0.0005 -
+     NPRINT 10   IPRFRQ  200   -
+     FIRSTT 300.0  IUNREA -30  IUNWRI -31  IUNCRD -1  -
+     IUNVEL -1  KUNIT -1  IUNO -1 NSAVC 5  NSAVV 5  NSNOS 10 -
+     TSTRUC 300 
+
+STOP

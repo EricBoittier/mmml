@@ -1,0 +1,39 @@
+* file: vap_to_wat_honig.surf
+*
+!       Note:  These are asp's from Wolfendon water to vapor numbers, as
+!              corrected by Sharp et al (Biochemistry, in press)
+!              They are in units of cal/(mol A**2).  
+!              Table of ASP's
+!
+!  Notes: -ANY refers to any residue type
+!         -A negative radius causes the atom to be ignored
+!               (such as hydrogens,...)
+!         -Atom name can use CHARMM wildcard rules (not residue names).
+!         -These commands ar eprocessed sequentially.  If an
+!           atom is matched by more then one line the LAST line is used.
+!         -This file is free field format.
+!
+   1.400000 ! the probe radius
+!
+! residue-type  atom-name  asp-value  radius  reference-area  swap-pairs
+ANY  H*       0.0    -1.0     0.0  ! ignore hydrogens
+ANY  C*      12.3     1.9     0.0
+ANY  O*    -115.7     1.4     0.0
+ANY  N*    -115.7     1.7     0.0
+ANY  S*     -18.3     1.8     0.0
+LYS  NZ    -185.5     1.7     0.0  
+ANY  NT    -185.5     1.7     0.0  
+ASP  OD1   -115.7     1.4     0.0   OD2
+ASP  OD2   -175.4     1.4     0.0   OD1
+GLU  OE2   -175.4     1.4     0.0   OE1
+ANY  OT1   -175.4     1.4     0.0   OT2
+ANY  OT2   -115.7     1.4     0.0   OT1
+HIS  ND1   -115.7     1.7     0.0   NE2
+HIS  NE2   -185.5     1.7     0.0   ND1
+ARG  NH1   -115.7     1.7     0.0   NH2
+ARG  NH2   -185.5     1.7     0.0   NH1
+SO4  O1    -175.4     1.4     0.0   O2
+SO4  O2    -115.7     1.4     0.0   O1
+SO4  O3    -175.4     1.4     0.0   O4
+SO4  O4    -115.7     1.4     0.0   O3
+END

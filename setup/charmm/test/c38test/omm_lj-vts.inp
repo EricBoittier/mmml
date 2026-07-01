@@ -1,0 +1,206 @@
+* Dynamics for model LJ fluid, using variable timestep integrators
+* and various temperature controls.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+
+if @?nsteps eq 0 set nsteps = 100
+if @?openmm eq 0 set openmm = 1
+if @openmm gt 0 then
+   omm on
+else
+   omm off
+endif
+
+set eps = 120
+set sigma = 3.4
+Calc emin = @eps * ?kblz
+Calc rmin2 = @sigma * ( 2 ) ** ( 1 / 6 ) / 2
+
+set Nd = 8
+Calc N = ( @Nd ) ** 3
+set T* = 1.0
+set density = 0.8
+Calc d = ( 1 / @density ) ** ( 1 / 3 ) * @sigma
+Calc d2 = @d / 2
+
+Calc Tref = @{T*} * @eps
+
+Calc L = @d * @Nd
+
+Calc cutoff = 1.5 * @sigma
+Calc ctofnb = 1.2 * @sigma
+Calc ctonnb = 1.1 * @sigma
+Calc cutim  = @cutoff
+
+read rtf card
+* rtf file
+*
+33   0
+mass 1 lj 40
+
+resi lj 0
+atom lj lj 0
+
+end
+
+read param card
+* parameter file
+*
+nonbonded nbxmod 5 atom vatom cdiel switch vswitch -
+          cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+          eps 1 e14fac 1 wmin 1.5
+lj 0 -@emin @rmin2
+
+end
+
+read sequ lj @N
+generate Ar
+
+Calc Nd2 = @Nd / 2 - 0.5
+set i = 1
+set iz = -@Nd2
+label doiz
+      Calc zd = @iz * @d
+      set iy = -@Nd2
+      label doiy
+            Calc yd = @iy * @d
+            set ix = -@Nd2
+            label doix
+                  Calc xd = @ix * @d
+                  scalar x set @xd select bynu @i end
+                  scalar y set @yd select bynu @i end
+                  scalar z set @zd select bynu @i end
+
+                  incr i by 1
+                  incr ix by 1
+             if ix le @Nd2 goto doix
+             incr iy by 1
+       if iy le @Nd2 goto doiy
+       incr iz by 1
+if iz le @Nd2 goto doiz
+
+print coor
+
+! Dimension of a box
+set size  = @L
+set theta = 90.0
+crystal define cubic @size @size @size @theta @theta @theta
+crystal build cutoff @cutim noper 0
+
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid Ar end
+
+!  turn on faster options and set-up SHAKE
+faster on
+nbonds eps 1.0 cutnb @cutoff cutim @cutim -
+        ctofnb @ctofnb ctonnb @ctonnb cutim @cutim vswi
+
+omm off
+energy
+write coor card name @9/test.crd
+omm on
+energy
+
+set echeck = echeck -1
+
+calc nwrite = int ( @nsteps / 10 )
+calc nave = int ( @nsteps / 5 )
+
+
+!!!!**************STAGE 1*************************!!!!
+read coor card name @9/test.crd
+open unit 10 write form name @9/openmm.res
+
+!!!!!!!!!!!!!!Constant temperature - Andersen - variable timestep
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nave -
+     firstt @tref finalt @tref twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck -
+     iunread 10 iunwrite 10 -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     - !ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh -
+     ntrfq @nsteps - !PME
+     andersen colfreq 10 variable vtol 5e-3
+
+open unit 10 write form name @9/openmm.res
+
+!  Energies at step 100 should match step 0 here
+!!!!!!!!!!!!!!Constant temperature - Andersen - variable timestep
+! Run dynamics in periodic box
+dynamics leap restart timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nave -
+     firstt @tref finalt @tref twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck -
+     iunread 10 iunwrite 10 -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     - !ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh -
+     ntrfq @nsteps - !PME
+     andersen colfreq 10 variable vtol 5e-3
+
+! Variable timestep Langevin dynamics
+!!!!**************STAGE 2*************************!!!!
+read coor card name @9/test.crd
+open unit 10 write form name @9/openmm.res
+
+!!!!!!!!!!!!!!Constant temperature - Langevin
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nave -
+     firstt @tref finalt @tref twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck -
+     iunread 10 iunwrite 10 -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     - !ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh -
+     ntrfq @nsteps - !PME
+     langevin gamma 6 variable vtol 5e-3
+
+open unit 10 write form name @9/openmm.res
+
+!  Energies at step 100 should match step 0 here
+!!!!!!!!!!!!!!Constant temperature - Langevin
+! Run dynamics in periodic box
+dynamics leap restart timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nave -
+     firstt @tref finalt @tref twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck -
+     iunread 10 iunwrite 10 -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     - !ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh -
+     ntrfq @nsteps - !PME
+     langevin gamma 6 variable vtol 5e-3
+
+
+if @openmm gt 0 then
+   omm clear
+endif
+
+stop
+
+! awk script to compute energy fluctuations from long MD run with OpenMM
+! interface:
+
+awk '{if($1~/ISTEP/ && $3 >0){i++;T+=$11;getline;Etot+=$3;EKtot+=$6;EPtot+=$9;E2tot+=$3*$3;EK2tot+=$6*$6;EP2tot+=$9*$9}}END{print Etot/i"+/-"sqrt(E2tot/i - (Etot/i)^2),EKtot/i"+/-"sqrt(EK2tot/i-(EKtot/i)^2),EPtot/i"+/-"sqrt(EP2tot/i-(EPtot/i)^2),sqrt(E2tot/i - (Etot/i)^2)/Etot/i;}' long_NVE/out_Openmm_LongNVE
+
+! awk script to compute energy fluctuations from long MD run with regular
+! CHARMM:
+
+awk '{if($1~/DYNA>/&&$2>0){i++;Etot+=$4;EKtot+=$5;EPtot+=$6;Temp+=$7;E2tot+=$4*$4;EK2tot+=$5*$5;EP2tot+=$6*$6;Temp2+=$7*$7}}END{print Etot/i"+/-"sqrt(E2tot/i - (Etot/i)^2),EKtot/i"+/-"sqrt(EK2tot/i-(EKtot/i)^2),EPtot/i"+/-"sqrt(EP2tot/i-(EPtot/i)^2),Temp/i"+/-"sqrt(Temp2/i-(Temp/i)^2),sqrt(E2tot/i - (Etot/i)^2)/Etot/i;}' out_CHARMM_LongNVE

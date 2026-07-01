@@ -1,0 +1,127 @@
+* Run all-atom CpHMD with GRF electrostatics
+* Shen lab, University of Maryland School of Pharmacy
+*
+
+stream datadir.def
+
+set top @0top_all22_prot.rtf
+set par @0par_all22_prot.prm
+set phmdtoppar @0toppar_phmd_c22.str
+
+set phmdin @0phmd_grf_c22.in
+set phmdout @9phmd_grf_lys.lamb
+
+! Read topology and parameter files
+open unit 1 read card name @top
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @par
+read param card unit 1 flex
+close unit 1
+
+stream @{phmdtoppar}
+
+read sequ card 
+1
+LYS
+
+gene LYS first ACE last CT3 setup
+
+ic para all
+ic seed 1 n 1 ca 1 c
+ic gene sele segid LYS end
+
+read coor card
+*
+   34
+    1    1 LYS  CAY   -2.22348   0.24086   0.94946 LYS  1      2.67000
+    2    1 LYS  HY1   -2.49337  -0.37577   0.06805 LYS  1      0.00000
+    3    1 LYS  HY2   -2.69104   1.24445   0.85365 LYS  1      0.00000
+    4    1 LYS  HY3   -2.62636  -0.24604   1.86495 LYS  1      0.00000
+    5    1 LYS  CY    -0.75629   0.38071   1.07931 LYS  1      2.04000
+    6    1 LYS  OY    -0.25340   0.80737   2.10588 LYS  1      1.52000
+    7    1 LYS  N     -0.01179   0.05256   0.00939 LYS  1      2.03000
+    8    1 LYS  HN    -0.45707  -0.30687  -0.80141 LYS  1      0.00000
+    9    1 LYS  CA     1.44465   0.15770  -0.01532 LYS  1      2.86000
+   10    1 LYS  HA     1.82397  -0.29825   0.89028 LYS  1      0.00000
+   11    1 LYS  CB     2.01486  -0.61424  -1.24587 LYS  1      2.67000
+   12    1 LYS  HB1    1.55207  -1.62620  -1.25886 LYS  1      0.00000
+   13    1 LYS  HB2    1.70223  -0.08773  -2.17390 LYS  1      0.00000
+   14    1 LYS  CG     3.54816  -0.78699  -1.23784 LYS  1      2.46000
+   15    1 LYS  HG1    4.02436   0.21779  -1.17377 LYS  1      0.00000
+   16    1 LYS  HG2    3.84083  -1.34786  -0.32101 LYS  1      0.00000
+   17    1 LYS  CD     4.11949  -1.47711  -2.48702 LYS  1      2.44000
+   18    1 LYS  HD1    3.74067  -2.52316  -2.51917 LYS  1      0.00000
+   19    1 LYS  HD2    3.73142  -0.93768  -3.38141 LYS  1      0.00000
+   20    1 LYS  CE     5.65388  -1.44894  -2.48740 LYS  1      2.80000
+   21    1 LYS  HE1    6.01754  -0.39808  -2.44686 LYS  1      0.00000
+   22    1 LYS  HE2    6.04992  -2.00037  -1.60636 LYS  1      0.00000
+   23    1 LYS  NZ     6.19146  -2.07841  -3.71425 LYS  1      1.80000
+   24    1 LYS  HZ1    7.23135  -2.04261  -3.70336 LYS  1      0.00000
+   25    1 LYS  HZ2    5.88214  -3.07032  -3.76140 LYS  1      0.00000
+   26    1 LYS  HZ3    5.83967  -1.56841  -4.54973 LYS  1      0.00000
+   27    1 LYS  C      1.94499   1.61064  -0.01368 LYS  1      2.04000
+   28    1 LYS  O      3.12703   1.88741   0.17764 LYS  1      1.52000
+   29    1 LYS  NT     1.04059   2.58571  -0.22009 LYS  1      2.03000
+   30    1 LYS  HNT    0.07955   2.34765  -0.30602 LYS  1      0.00000
+   31    1 LYS  CAT    1.39082   3.98348  -0.16178 LYS  1      2.06000
+   32    1 LYS  HT1    2.13716   4.23643  -0.94831 LYS  1      0.00000
+   33    1 LYS  HT2    0.49116   4.62002  -0.31262 LYS  1      0.00000
+   34    1 LYS  HT3    1.83182   4.23668   0.82997 LYS  1      0.00000
+
+read sequ TIPP 1
+generate TIPP setup noangle nodihedra
+
+read coor card append
+*
+    4
+    1    1 TIPP OH2   -0.00000  -0.00000  -0.04807 TIPP 1      0.00000
+    2    1 TIPP H1     0.90237   0.00479   0.25432 TIPP 1      0.00000
+    3    1 TIPP H2    -0.44704  -0.78387   0.25432 TIPP 1      0.00000
+    4    1 TIPP H3    -0.45533   0.77908   0.25432 TIPP 1      0.00000
+
+
+coor trans xdir 1 ydir 1 zdir 1 dist 10 sele resn TIPP end
+
+coor orient sele all end
+
+! Test 1 : first derivatives of generalized reaction field
+! --------------------------------------------------------
+energy elec cdie atom grfe temr 300.0 trunc -
+       ctonnb 999.0 ctofnb 999.0 cutnb 999.0 -
+
+
+test first step 0.00001 tol 0.00001
+
+
+! Test 2 : an example showing that titration is coupled
+! ----------------------------------------------------------
+
+! Setup PHMD : Lysine coupled to H3O+
+! ----------------------------------
+open unit 23 read form name @{phmdin}
+open unit 25 write form name @{phmdout}
+PHMD PAR 23 wri 25 PH 10.4 NPRI 1 mass 10 -
+     BETA 5.0 TEMP 300.0 LAM -
+     sele resn LYS .or. resn TIPP end -
+     qcouple 1 -
+     resi 1 resc 2
+
+! Dynamics
+! --------------
+DYNA LEAP START time 0.002 nstep 100 -
+     nprint 1 iprfrq 1 ntrfrq 1000  -
+     iuncrd -1 iunvel -1 kunit -1 -
+     nsavc 0 nsavv 0 IMGfrq -1 -
+     firstt 300.0 finalt 300.0 tstruc 300.0 -
+     hoover tbath 300.0 reft 300.0 tmass 1000.0 - 
+     elec atom cdie grfe temr 300.0 trunc -
+     ctonnb 14.0 ctofnb 14.0 cutnb 14.0 inbfrq 10
+
+! Print Lambda values from last step
+! -------------
+PHMD LAMBP
+
+stop
+

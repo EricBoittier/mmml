@@ -1,0 +1,107 @@
+* CHARMM Testcase: c34test/block_softcore.inp
+* Author:   Wei Yang
+* Date:     December 30, 2006
+* Version:  c34a2
+* Test:     BLOCK_SOFTCORE.INP Test of softcore in BLOCK
+*
+
+! A simple BLOCK testcase using DNA all-h parameter and topology set
+! Originated from c22test/block1.inp
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+Bomblev -2
+
+!recommend FAST OFF
+FAST OFF
+
+OPEN READ FORM UNIT 1 NAME @0topnah1r.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+OPEN READ FORM UNIT 2 NAME @0parnah1r.prm
+READ PARAMETER CARD UNIT 2
+CLOSE UNIT 2
+
+READ SEQUENCE CARD
+* 11-MER SEQUENCE
+*
+   11
+ADE ADE GUA THY GUA THY GUA ADE CYT ADE THY
+
+GENERATE  A  FIRST 5PHO LAST 3TER
+
+READ SEQUENCE CARD
+* 11-MER SEQUENCE
+*
+   11
+ADE THY GUA THY CYT ADE CYT ADE CYT THY THY
+
+GENERATE  B  FIRST 5PHO LAST 3TER
+
+PATCH DEOX A 1
+PATCH DEOX A 2
+PATCH DEOX A 3
+PATCH DEOX A 4
+PATCH DEOX A 5
+PATCH DEOX A 6
+PATCH DEOX A 7
+PATCH DEOX A 8
+PATCH DEOX A 9
+PATCH DEOX A 10
+PATCH DEOX A 11
+
+PATCH DEOX B 1
+PATCH DEOX B 2
+PATCH DEOX B 3
+PATCH DEOX B 4
+PATCH DEOX B 5
+PATCH DEOX B 6
+PATCH DEOX B 7
+PATCH DEOX B 8
+PATCH DEOX B 9
+PATCH DEOX B 10
+PATCH DEOX B 11
+
+
+OPEN READ FORM UNIT 3 NAME @0gal11.crd
+READ COORD CARD RESID UNIT 3
+CLOSE UNIT 3
+
+nbonds -
+     atom  Cdie   SHIFT  vswitch eps 1.0    nbxm 3  -
+     cutnb 11.5   ctofnb 999.9 ctonnb 998.9  e14fac 1.0
+
+UPDATE INBFRQ 0 IHBFRQ 0
+
+INTER SELE SEGID B END
+
+BLOCK 2
+CALL 2 SELE SEGID B  END
+COEF 1 1 0.0
+COEF 1 2 0.0
+COEF 2 2 1.0
+END
+
+!BLOCK softcore setup
+BLOCK
+PSSP ALAM 5.0  DLAM 5.0
+END
+
+UPDATE INBFRQ 1
+ENERGY 
+
+coor force comp
+coor stat comp
+!print coor comp
+
+!BLOCK softcore clea-rup
+BLOCK
+NOPSsp
+END
+
+
+STOP

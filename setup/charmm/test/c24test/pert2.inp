@@ -1,0 +1,303 @@
+* Testcase to check the interaction between PERT and SHAKE
+* One bond-length of a symmetric triatomic molecule (gas phase) is changed 
+* from 1 to 2 A.  (Analytical results are given at the end of the script)
+* into c24a3 by Stefan Boresch, June 30, 1995
+*
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+!  ---- MFC not bothering with the setup, dyna uses old integrator-not parallel
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+! Note: This script also gives the integrators and their combination with
+! PERT a pretty good workout
+
+! In order for this to work, PERT has to be reset after each pass, i.e.
+! I'm changing back and forth between initial and final state of the
+! system (results change sign).  In the passes where SHAKE is used, this
+! causes a -2 level warning as the PERT RESEt command apparently completely
+! reinitializes the PERT module and does not just reset the counters.  Hence, 
+! the program thinks that PERT is called after a SHAKE command.  However,
+! this is one of the rare cases where this is actually permissible, so 
+! I set the bomlev to -3!
+
+! topology
+read rtf card 
+* topology file for triatomic model compounds
+*
+   22    1
+mass     1   d1     15.
+mass     2   d2     15.
+resi 3ato 0.0
+group
+atom a1     d1   0.0
+atom a2     d1   0.0
+atom a3     d1   0.0
+bond a1 a2  a2 a3
+thet a1 a2 a3
+end
+
+! parameters
+read para card
+* parameter file for triatomic model compounds
+*
+bond
+d1   d1   200.0    1.0
+d1   d2   200.0    2.0
+thetas
+d1   d1   d1    50.0    105.0
+d1   d1   d2    50.0    105.0
+nbond
+d1   0.0   -0.0   2.0
+d2   0.0   -0.0   2.0
+end
+
+read sequence card
+* triatomic model compound
+*
+1
+3ato
+
+gene 3ato
+
+! coordinates
+read coor card free
+* Dummy coordinates for triatomic model compound, need to be
+* minimized!
+*
+ 3
+ 1 1 3ato a1 -1.0  0.0  0.0
+ 2 1 3ato a2  0.0  0.0  0.0
+ 3 1 3ato a3  0.0  1.0  0.0
+
+pert sele all end
+scalar type set 2 sele atom 3ato 1 a3 end
+
+!              A2               A2
+!             /  \      ->     /  \
+!            A1   A3           A1  \
+!                                   A3
+
+
+! minimize starting coordinates, lamb=0.0
+energy inbfrq 1   lambda 0.0
+mini sd nstep 200 inbfrq 0 nprint 500  lambda 0.0
+
+! 1st pass: flexible molecule, free energy change is a bond contribution
+! ======================================================================
+
+open unit 12 write form name scratch/pertin
+write title card unit 12
+** pert script file
+**
+*lstart 0.0  lstop 0.05 pstart  250  pstop  500  pwind lamb 0.025
+*lstart 0.05 lstop 0.1  pstart  750  pstop 1000  pwind lamb 0.075
+*lstart 0.10 lstop 0.15 pstart 1250  pstop 1500  pwind lamb 0.125
+*lstart 0.15 lstop 0.2  pstart 1750  pstop 2000  pwind lamb 0.175
+*lstart 0.2  lstop 0.25 pstart 2250  pstop 2500  pwind lamb 0.225
+*lstart 0.25 lstop 0.3  pstart 2750  pstop 3000  pwind lamb 0.275
+*lstart 0.3  lstop 0.35 pstart 3250  pstop 3500  pwind lamb 0.325
+*lstart 0.35 lstop 0.4  pstart 3750  pstop 4000  pwind lamb 0.375
+*lstart 0.4  lstop 0.45 pstart 4250  pstop 4500  pwind lamb 0.425
+*lstart 0.45 lstop 0.5  pstart 4750  pstop 5000  pwind lamb 0.475
+*lstart 0.5  lstop 0.55 pstart 5250  pstop 5500  pwind lamb 0.525
+*lstart 0.55 lstop 0.6  pstart 5750  pstop 6000  pwind lamb 0.575
+*lstart 0.6  lstop 0.65 pstart 6250  pstop 6500  pwind lamb 0.625
+*lstart 0.65 lstop 0.7  pstart 6750  pstop 7000  pwind lamb 0.675
+*lstart 0.7  lstop 0.75 pstart 7250  pstop 7500  pwind lamb 0.725
+*lstart 0.75 lstop 0.8  pstart 7750  pstop 8000  pwind lamb 0.775
+*lstart 0.8  lstop 0.85 pstart 8250  pstop 8500  pwind lamb 0.825
+*lstart 0.85 lstop 0.9  pstart 8750  pstop 9000  pwind lamb 0.875
+*lstart 0.9  lstop 0.95 pstart 9250  pstop 9500  pwind lamb 0.925
+*lstart 0.95 lstop 1.0  pstart 9750  pstop 10000 pwind lamb 0.975
+*end
+open unit 12 read form name scratch/pertin
+open unit 11 writ form name scratch/null_file
+dyna start nose nstep 10000 firstt 240. finalt 300. timest .001 -
+      	punit 12 iuncrd -1 iseed 2 iunrea 10 iunwri 11 iprfrq 500 -
+	nprint 1000 qref 10. tref 300. ! noxr noyr nozr 
+
+@testcheck ?ener 5.9462329 0.0001 pert2_chk1
+
+! 2nd pass: flexible molecule; hence bond-contribution; full rotation/trans
+! =========================================================================
+	
+! restore initial state
+! minimize starting coordinates, lamb=0.0
+! coordinates
+
+pert reset
+scalar type set 1 sele atom 3ato 1 a3 end
+!              A2               A2
+!             /  \     <-      /  \
+!            A1   A3           A1  \
+!                                   A3
+
+read coor card free ! reread them
+* Dummy coordinates for triatomic model compound, need to be
+* minimized!
+*
+ 3
+ 1 1 3ato a1 -1.0  0.0  0.0
+ 2 1 3ato a2  0.0  0.0  0.0
+ 3 1 3ato a3  0.0  1.0  0.0
+
+energy inbfrq 1 lamb 0.0
+mini sd nstep 200 inbfrq 0 nprint 500 lamb 0.0
+
+nose 3
+call 1 sele atom 3ato 1 a1 end
+call 2 sele atom 3ato 1 a2 end
+call 3 sele atom 3ato 1 a3 end
+coef 1 qref 10. tref 300.
+coef 2 qref 10. tref 300.
+coef 3 qref 10. tref 300.
+end
+
+open unit 12 read form name scratch/pertin
+open unit 11 writ form name scratch/null_file
+dyna start nstep 10000 firstt 240. finalt 300. timest .001 -
+	punit 12 iuncrd -1 iseed 2 iunrea 10 iunwri 11 iprfrq 500 -
+	nprint 1000 noxr noyr nozr noxt noyt nozt
+
+@testcheck ?ener 5.130523 0.0001 pert2_chk2
+
+! 3rd pass: rigid molecule; hence constraint-contribution; no rot./trans.
+! =======================================================================
+
+pert reset
+scalar type set 2 sele atom 3ato 1 a3 end
+!              A2               A2
+!             /  \   ->        /  \
+!            A1   A3           A1  \
+!                                   A3
+
+! now turn on SHAKE	
+shake bond para
+
+! restore initial state
+! minimize starting coordinates, lamb=0.0
+
+read coor card free ! reread them
+* Dummy coordinates for triatomic model compound, need to be
+* minimized!
+*
+ 3
+ 1 1 3ato a1 -1.0  0.0  0.0
+ 2 1 3ato a2  0.0  0.0  0.0
+ 3 1 3ato a3  0.0  1.0  0.0
+
+energy inbfrq 1 lamb 0.0
+mini sd nstep 200 inbfrq 0 nprint 500 lamb 0.0
+
+open unit 12 read form name scratch/pertin
+open unit 11 writ form name scratch/null_file
+dyna start nose nstep 100000 firstt 240. finalt 300. timest .001 -
+	punit 12 iuncrd -1 iseed 2 iunrea 10 iunwri 11 iprfrq 5000 -
+	nprint 1000 qref 10. tref 300. !noxr noyr nozr noxt noyt nozt
+
+@testcheck ?ener 5.43650691 0.0001 pert2_chk3
+
+! 4th pass: rigid molecule; hence constraint-contribution; no rot./trans.
+! =======================================================================
+! Berendsen const temp.; will give worse results than Nose methods!	
+
+bomlev -3 ! otherwise we would bomb at next statement; see explanation
+          ! at beginning of script
+pert reset
+bomlev 0
+
+scalar type set 1 sele atom 3ato 1 a3 end
+!              A2               A2
+!             /  \   <-        /  \
+!            A1   A3           A1  \
+!                                   A3
+
+! restore initial state
+! minimize starting coordinates, lamb=0.0
+
+read coor card free ! reread them
+* Dummy coordinates for triatomic model compound, need to be
+* minimized!
+*
+ 3
+ 1 1 3ato a1 -1.0  0.0  0.0
+ 2 1 3ato a2  0.0  0.0  0.0
+ 3 1 3ato a3  0.0  1.0  0.0
+
+energy inbfrq 1 lamb 0.0
+mini sd nstep 200 inbfrq 0 nprint 500 lamb 0.0
+
+open unit 12 read form name scratch/pertin
+open unit 11 writ form name scratch/null_file
+dyna start leap tcon nstep 10000 firstt 240. finalt 300. timest .001 -
+	punit 12 iuncrd -1 iseed 2 iunrea 10 iunwri 11 iprfrq 500 -
+	nprint 1000 tcoup 0.5 tref 300. !noxr noyr nozr noxt noyt nozt
+
+@testcheck ?ener 5.0418328 0.0001 pert2_chk4
+
+! 5th pass: flexible molecule; hence constraint-contribution; rot./trans.
+! =======================================================================
+! protocol somewhat short, will most likely give worse result than
+! Nose methods
+
+bomlev -3 ! otherwise we would bomb at next statement; see explanation
+          ! at beginning of script
+pert reset
+bomlev 0
+
+scalar type set 2 sele atom 3ato 1 a3 end
+!              A2               A2
+!             /  \   ->        /  \
+!            A1   A3           A1  \
+!                                   A3
+	
+! restore initial state
+! minimize starting coordinates, lamb=0.0
+
+read coor card free ! reread them
+* Dummy coordinates for triatomic model compound, need to be
+* minimized!
+*
+ 3
+ 1 1 3ato a1 -1.0  0.0  0.0
+ 2 1 3ato a2  0.0  0.0  0.0
+ 3 1 3ato a3  0.0  1.0  0.0
+
+energy inbfrq 1 lamb 0.0
+mini sd nstep 200 inbfrq 0 nprint 500 lamb 0.0
+
+scalar fbeta set 20. sele all end
+
+open unit 12 read form name scratch/pertin
+open unit 11 writ form name scratch/null_file
+!dyna start lang leap nstep 10000 firstt 240. finalt 300. timest .001 -
+dyna start leap nstep 10000 firstt 240. finalt 300. timest .001 -
+	punit 12 iuncrd -1 iseed 2 iunrea 10 iunwri 11 iprfrq 500 -
+	nprint 1000 rbuf 0. tbath 300. noxr noyr nozr noxt noyt nozt 
+
+@testcheck ?ener 5.0332068 0.0001 pert2_chk5
+
+!Note:  Analytical results are
+!	dA = -0.147 kcal/mole (without rotation related moment of inertia
+!                              contribution)
+!       dA = -0.826 kcal/mole (including rotation related m.o.i. contr.)
+!
+! so ideally, one would expect: // results on one of our HPs: 
+!
+! 1st pass:     -0.15                            -0.13
+! 2nd pass:     +0.83                            +0.93
+! 3rd pass:     -0.15                            -0.14
+! 4th pass:     +0.15                            +0.10
+! 5th pass:     -0.83                            -0.65
+!
+
+stop

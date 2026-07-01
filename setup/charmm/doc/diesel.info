@@ -1,0 +1,167 @@
+CHARMM Element doc/diesel.info $Revision: 1.1.1.1 $
+
+File: Diesel, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+        Combined Quantum Mechanical and Molecular Mechanics Method
+                     Based on DIESEL(GAMESS) in CHARMM
+
+                             by Milan Hodoscek
+                  (milan@helix.nih.gov,milan@cmm.ki.si)
+
+
+        Multi reference CI program DIESEL is connected to CHARMM
+program in a QM/MM method. To obtain the integrals for input to
+DIESEL program it is run from the GAMEss command. 
+
+* Menu:
+
+* Description::         Description of the gamess commands.
+* Using::               How to run GAMESS in CHARMM.
+* Installation::        How to install GAMESS in CHARMM environment.
+* Status::              Status of the interface code.
+* Functionality::       Functionality of the interface code.
+
+File: Diesel, Node: Description, Up: Top, Next: Usage, Previous: Top
+
+        The DIESEL QM potential is initialized with the GAMEss command.
+
+[SYNTAX GAMEss]
+
+GAMEss   DIESel <int> <int> ... / for the rest of options see gamess.info /
+
+        In order to run DIESEL the standard GAMEss command must be used
+with the added DIESel keyword. The integer numbers after this keyword
+represent which energy is used in the CHARMM code for further
+processing.
+
+        DIESEL is the program to perform multi reference CI calculations.
+
+
+File: Diesel, Node: Usage, Up: Top, Next: Installation, Previous: Description
+
+
+        In order to run DIESEL with CHARMM one has provide separate
+input files for GAMESS (see gamess.info) and for DIESEL. The
+information provided by GAMESS for DIESEL is the file which contains
+MO one and two electron integrals. In order to obtain such integrals
+one must specify RUNTYPE=MCSF in GAMESS control input. The follwing is
+an example for water with 3-21g basis set:
+
+ $CONTRL COORD=UNIQUE NOSYM=1 ICHARG=0 SCFTYP=mcscf $END
+ $SYSTEM MEMORY=1400000 TIMLIM=100000 $END
+ $BASIS  GBASIS=N21 NGAUSS=3  $END
+ $DET    NCORE=1 NACT=6 NELS=8 $END
+ $MCSCF  maxit=1 micit=1 $end
+ $DATA
+
+
+ $END
+
+This produces the necessary moints file which can be read by DIESEL
+input. This should be improved because we really don't need to run
+MCSCF, especially because it is very memory demanding. But it is
+currently the cheapest way to produce integrals over MO basis, without
+extensive modification of GAMESS. ???
+
+Typical DIESEL script would be for example:
+
+#! /bin/sh
+
+export DIESEL_EXE_DIR=/software/qc/diesel/1.14pre/Binaries/Intel
+
+cat <<! >diesel.in
+MOIntegralFileFormat             = GAMESSC1
+MOLCASRootDir                    = `pwd`
+TempDir                          = `pwd`
+
+NumberOfElectrons                = 8
+Multiplicities                   = { 1 }
+IrReps                           = { 0 }
+Roots                            = { 1 2 3 4  }
+
+SelectionThresholds              = { 1 1e-3 1e-5 }
+MaxDavidsonIters                 = 40
+MaxHamiltonStorageMem            = 100MB
+
+!
+
+$DIESEL_EXE_DIR/diesel <diesel.in >diesel.out 2>diesel.prot.out
+
+        For complete information about DIESEL input see its own user's
+guide. In order to provide the correct input files for GAMESS and
+DIESEL one has to spcify the following ENVIronment comands in CHARMM
+input script.
+
+
+envi input   "h2o.str"
+envi output  "h2o.gms"
+envi punch   "test.dat"
+envi aoints  "test.f8"
+envi moints  "test.f9"
+envi dictnry "test.f10"
+envi work15  "test.f15"
+envi dasort  "test.f20"
+envi dafl30  "test.f30"
+envi jkfile  "test.f23"
+envi casints "test.f13"
+envi civectr "test.f12"
+
+! For DIESEL
+envi dieselscript "CI.job"
+envi dieselout    "dies.out"
+
+DIESEL provides many energies (for various multiplicities and roots)
+in the same run. In order to get one of them for further processing
+(minimization for example; but be careful: no derivatives are
+available so one has to do very costly numerical calculation) the two
+integers after DIESEL keyword are for multiplicity and root,
+respectively.
+
+
+
+[NOTE: For complete example look at test/c28test/dieseltst.inp]
+
+
+File: Diesel, Node: Installation, Up: Top, Next: Status, Previous: Usage
+
+Installation
+------------
+
+To obtain the program write to Michael Hanrath
+(michael.hanrath@uni-koeln.de). Since the program is written in C++ it was
+not practical to put it under CHARMM tree and compile them
+together. CHARMM only knows how to execute the script which runs
+DIESEL. DIESEL itsel is also just a driver for other programs. The
+only input it needs from GAMESS is the one and two electron binary
+file. 
+
+
+
+File: Diesel, Node: Status, Up: Top, Next: Functionality, Previous: Installation
+
+
+DIESEL/CHARMM interface status (February 2001)
+
+- no derivatives in DIESEL
+
+- C1 symetry 
+
+
+Problems to be solved:
+
+- avoid running MCSCF
+
+- cleanup the file name mess.
+
+
+File: Diesel, Node: Implementation, Up: Top, Next: Top, Previous: Functionality
+
+Implementation
+--------------
+
+C++ is not very practical to compile with fortran programs so
+CHARMM/GAMESS and DIESEL are completely separated. When the integrals
+are transformed to MO basis by GAMESS, CHARMM calls system routine to
+run shell script for DIESEL. In it one has to specify the path to
+DIESEL distribution.

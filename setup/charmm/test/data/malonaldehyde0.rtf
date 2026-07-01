@@ -1,0 +1,35 @@
+*Topology for o1 malonaldehyde
+
+MASS 1 HOR     1.00794  H !H-O, ALCOHOLS
+MASS 2 HC      1.00794  H !H attached to carbon
+MASS 3 OC=C   15.99943  O !ALDEHYDE OXYGEN    
+MASS 4 O=CR   15.99943  O !ENOL OR PHEMOLIC O
+MASS 5 C=C    12.00000  C !vinyl carbon
+MASS 6 C=OR   12.00000  C !aldehyde carbon
+
+RESI MAL 0.0 !             Charges automatically generated
+GROUP
+ATOM H     HOR             0.0          
+ATOM O1    OC=C            0.0          
+ATOM C1    C=C             0.0          
+ATOM H1    HC              0.0          
+ATOM O2    O=CR	           0.0          
+ATOM C2    C=OR	           0.0          
+ATOM H2    HC              0.0          
+ATOM C3    C=C             0.0          
+ATOM H3    HC              0.0          
+          	      	                
+          	      	                
+
+BOND   O1    H    
+BOND   C1   O1    
+BOND   H1   C1    
+DOUBLE C3   C1
+DOUBLE C2   O2    
+BOND   H2   C2    
+BOND   C3   C2    
+BOND   H3   C3
+
+END
+
+

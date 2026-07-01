@@ -1,0 +1,128 @@
+* Test scrips for CHARMM's GBSW routine with Images
+* Written by Wonpil Im (12/05)
+*
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+stream datadir.def
+
+
+! read parameter and topology files
+
+open unit 10 read form name @0top_all22_prot.inp
+read rtf unit 10 card
+close unit 10
+
+open unit 10 read form name @0par_all22_prot.inp
+read param unit 10 card
+close unit 10
+
+
+read sequence card
+* sequence of vpu ( 2-81 ) M66L and M70L 
+* QPIQIAIVAL VVAIIIAIVV WSIVIIEYRK ILRQRKIDRL 
+* IDRLIERAED SGNESEGEIS ALVELGVELG HHAPWDVDDL
+*
+ 36
+! 1   2   3   4   5   6   7   8   9  10
+ GLN PRO ILE GLN ILE ALA ILE VAL ALA LEU 
+ VAL VAL ALA ILE ILE ILE ALA ILE VAL VAL 
+ TRP SER ILE VAL ILE ILE GLU GLY ARG GLY
+ GLY LYS LYS LYS LYS MET
+
+generate PEPA setup warn first NTER last CTER
+
+!
+! Make a Helix
+!
+
+coor stat select type CA end
+set ntot = ?nsel
+
+set i = 1
+
+label ic_edit
+
+calc j = @i - 1
+calc k = @i + 1
+
+if j .ge.  1 then
+IC EDIT
+DIHE @j  C  @i  N  @i CA  @i  C -57.8  ! PHI
+END
+endif
+
+if k .le. @ntot then
+IC EDIT
+DIHE @i  N  @i CA  @i  C  @k  N -47.0  ! PSI
+END
+endif
+
+incr i by 1
+if i .le. @ntot goto ic_edit
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+hbuild
+
+coor stat
+coor orie
+coor stat
+coor rotate ydir  1.0 phi 90.0
+coor stat
+coor trans zdir -?zmin
+coor trans zdir  -30.0
+coor stat
+
+coor trans xdir 1.0 ydir 1.0 dist 10.0
+
+!
+! Image Setup
+!
+
+READ IMAGE
+* 4-fold symmetry
+*
+
+IMAGE RT2
+ROTATE 0.0 0.0 1.0  90.0
+
+IMAGE RT3
+ROTATE 0.0 0.0 1.0 180.0
+
+IMAGE RT4
+ROTATE 0.0 0.0 1.0 270.0
+
+END
+
+
+calc ctonnb = 20.0 
+calc ctofnb = @ctonnb
+calc cutnb  = @ctofnb + 4.0
+calc cutim  = @cutnb
+
+NBOND atom switch cdie vdw vswitch - ! imall - !bycb 
+      ctonnb @ctonnb ctofnb @ctofnb cutnb @cutnb cutim @cutim
+
+prnlev 0 @pnode
+stream @0radius.str
+prnlev 5 @pnode
+scalar wmain statistics select .not. type H* end
+define check select (.not type H* ) .and. ( property wmain .eq. 0.0 ) show end
+if ?nsel ne 0  stop       !some heavy atom have a zero radius
+
+GBSW sw 0.3 rmax 20.0 nang 38 nrad 0 sgamma 0.030 dgp 1.5 tmemb 35.0 msw 2.5
+
+ENERGY
+
+MINI   SD nstep  20 nprint 5 step 0.005 inbfrq -1 imgfrq -1
+MINI ABNR nstep  20 nprint 5 step 0.005 inbfrq -1 imgfrq -1
+
+ENERGY
+TEST FIRST STEP 0.001 TOL 0.0 sele type CA .and. resid 1:5 end
+
+stop
+

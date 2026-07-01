@@ -1,0 +1,226 @@
+* CHARMM 40 Testcase drms.inp
+* Test of COOR RMS DRMS, RMS of intersystem distances between MAIN and COMP coordinates
+* Written by Lennart Nilsson, March 2015
+*
+
+stream datadir.def
+bomlev -1
+set tol = 1e-6
+
+read rtf cards
+* dihedral rtf
+*
+   18
+MASS 3 AR 39
+
+RESI a4 0
+GROUP
+atom a1 ar 0
+atom a2 ar 0
+atom a3 ar 0
+atom a4 ar 0
+bond a1 a2  a2 a3  a3 a4 
+angle a1 a2 a3  a2 a3 a4
+END
+
+READ PARAM CARD
+* PARAMETERS FOR dihedral
+*
+BOND
+ar ar   0  2
+ANGLE
+ar ar ar 0 109
+dihedral
+ar ar ar ar 0 2 180
+
+nonbonded nbxmod 4 atom cdiel switch vswitch cutnb 9999 ctonnb 9999 ctofnb 9999
+ar 0 -0 1
+
+END
+
+READ SEQU a4 1
+
+generate a
+coor set xdir 0.0 ydir 0.0 zdir 0.0 sele all end
+coor transl xdir 1.0 sele BYNU 2:4 end
+coor transl xdir 1.0 sele BYNU 3:4 end
+coor transl xdir 1.0 sele BYNU 4 end
+print coor
+coor copy comp
+!!!!!!!!
+!!!!!!!! COOR DRMS
+coor drms 
+@qcheck ?nbpair  12 0.0001 drms_1
+@qcheck ?drms   0.0 0.0001 drms_2
+coor drms sele BYNU 1:3 end sele BYNU 4 end
+@qcheck ?nbpair  3 0.0001 drms_3
+@qcheck ?drms   0.0 0.0001 drms_4
+coor drms sele BYNU 1:3 end
+@qcheck ?nbpair   6 0.0001 drms_5
+@qcheck ?drms   0.0 0.0001 drms_6
+coor drms sele BYNU 1:3 end sele BYNU 1:3 end
+@qcheck ?nbpair   6 0.0001 drms_7
+@qcheck ?drms   0.0 0.0001 drms_8
+
+! now change the comparison set a little
+coor transl xdir 1.0 sele BYNU 4 end comp
+coor drms 
+coor drms sele BYNU 1:3 end sele BYNU 4 end
+coor drms sele BYNU 1:3 end
+coor drms sele BYNU 1:3 end sele BYNU 1:3 end
+! should be translation invariant
+coor transl zdir 5.0 sele all end
+coor drms 
+coor drms sele BYNU 1:3 end sele BYNU 4 end
+coor drms sele BYNU 1:3 end
+coor drms sele BYNU 1:3 end sele BYNU 1:3 end
+@qcheck ?nbpair   6 0.0001 drms_9
+@qcheck ?drms   0.0 0.0001 drms_10
+
+! and rotation invariant
+coor rota xdir 1.0 ydir 1.0 zdir 1.0 phi 30.0 sele all end
+coor drms 
+coor drms sele BYNU 1:3 end sele BYNU 4 end
+coor drms sele BYNU 1:3 end
+coor drms sele BYNU 1:3 end sele BYNU 1:3 end
+!
+coor copy 
+coor trans xdir 2.0 sele bynum 3:4 end
+coor drms
+coor drms sele bynum 1:2 end sele bynum 3:4 end
+coor drms sele bynum 1:3 end sele bynum 3:4 end
+@qcheck ?nbpair   5  0.0001  drms_11
+@qcheck ?drms   1.789 0.001 drms_12
+
+coor rota ydir 1.0 phi 30.0
+coor trans zdir 10.0
+coor drms sele bynum 1:2 end sele bynum 3:4 end
+coor drms sele bynum 1:3 end sele bynum 3:4 end
+@qcheck ?nbpair     5 0.0001  drms_13
+@qcheck ?drms   1.789 0.001 drms_14
+
+coor init sele bynum 3 end
+coor drms
+@qcheck ?nbpair   6 0.0001  drms_15
+@qcheck ?drms   1.633 0.001 drms_16
+coor drms sele bynum 1:2 end sele bynum 3:4 end
+@qcheck ?nbpair   2 0.0001  drms_17
+@qcheck ?drms   2.0 0.001 drms_18
+
+coor drms sele bynum 1:3 end sele bynum 3:4 end
+
+coor copy
+coor init sele bynum 3 end comp
+coor drms
+coor drms sele bynum 1:2 end sele bynum 3:4 end
+coor drms sele bynum 1:3 end sele bynum 3:4 end
+@qcheck ?nbpair   2 0.0001  drms_19
+@qcheck ?drms   0.0 0.001 drms_20
+!!!!!
+!!!!! CORREL
+! Generate simple "trajectory" 
+coor set xdir 0.0 ydir 0.0 zdir 0.0 sele all end
+coor transl xdir 1.0 sele BYNU 2:4 end
+coor transl xdir 1.0 sele BYNU 3:4 end
+coor transl xdir 1.0 sele BYNU 4 end
+print coor
+coor copy comp
+open unit 202 write unform name @9drms.trj
+traj iwrite 202 nfile 3
+traj write
+print coor
+coor dist sele bynumn 4 end sele bynum 1:3 end exclu 14excl
+coor transl xdir 1.0 sele BYNU 4 end
+traj write
+print coor
+coor dist sele bynumn 4 end sele bynum 1:3 end exclu 14excl
+coor transl ydir 5.0 sele all end
+coor rota zdir 1.0 phi 45.0 sele all end
+traj write
+print coor
+coor dist sele bynumn 4 end sele bynum 1:3 end exclu 14excl
+!GOTO RMSDYN
+open unit 101 read unform name @9drms.trj
+correl maxa 100 maxser 20 maxtime 10 noupdate
+enter d1 drms
+enter d2 drms sele bynum 1:4 end
+enter d3 drms sele bynum 1:3 end
+enter d4 drms sele bynum 1:3 end sele bynum 1:3 end
+enter d5 drms sele bynum 1:3 end sele bynum 3:4 end
+enter d6 drms sele bynum 1:3 end sele bynum 4 end
+enter d7 drms sele bynum 1:2 end sele bynum 4 end
+traj firstu 101 
+show d1
+@qcheck ?AVER 0.4714 0.0001 drms_20
+show d2
+@qcheck ?AVER 0.4714 0.0001 drms_21
+show d3
+@qcheck ?AVER 0.0000 0.0001 drms_22
+show d4
+@qcheck ?AVER 0.0000 0.0001 drms_23
+show d5
+@qcheck ?AVER 0.5164 0.0001 drms_24
+show d6
+@qcheck ?AVER 0.66667 0.0001 drms_25
+show d7
+@qcheck ?AVER 0.66667 0.0001 drms_26
+write d1 unit 6 dumb
+*hi
+*
+write d2 unit 6 dumb
+*hi
+*
+write d3 unit 6 dumb
+*hi
+*
+write d4 unit 6 dumb
+*hi
+*
+write d5 unit 6 dumb
+*hi
+*
+write d6 unit 6 dumb
+*hi
+*
+write d7 unit 6 dumb
+*hi
+*
+end
+coor init comp
+correl  maxa 100 maxser 20 maxtime 10 noupdate
+enter d8 drms
+enter d9 drms sele bynum 1:4 end
+enter d10 drms sele bynum 1:3 end
+enter d11 drms sele bynum 1:3 end sele bynum 1:3 end
+enter d12 drms sele bynum 1:3 end sele bynum 3:4 end
+enter d13 drms sele bynum 1:3 end sele bynum 4 end
+enter d14 drms sele bynum 1:2 end sele bynum 4 end
+traj firstu 101 sele all end orient sele bynum 1:2 end
+end
+
+!!!!!
+LABEL RMSDYN
+!
+open unit 101 read unform name @9drms.trj
+if ?mynode .eq. 0 system "cp scratch/drms.trj scratch/drms2.trj"
+open unit 102 read unform name @9drms2.trj
+rmsdyn orient firstu 101 drms begin 1 stop 3 iwrite 6
+@qcheck ?totrms 1.414 0.001 drms_27
+rmsdyn orient firstu 101 drms begin 1 stop 3 iwrite 6 sele bynum 1:4 end
+@qcheck ?totrms  1.414 0.001 drms_28
+rmsdyn orient firstu 101 drms begin 1 stop 3 iwrite 6 sele bynum 1:2 end sele bynum 3:4 end
+@qcheck ?totrms  1.414 0.001 drms_29
+rmsdyn orient firstu 101 drms begin 1 stop 3 iwrite 6 sele bynum 1:3 end sele bynum 4 end
+@qcheck ?totrms  2.0000 0.0001 drms_30
+rmsdyn orient firstu 101 drms begin 1 stop 3 iwrite 6  secu 102 beg2 1 stp2 2 -
+  sele bynum 1:3 end sele bynum 4 end
+@qcheck ?totrms  3.0000 0.0001 drms_31
+if @testfail gt 0 then
+      echo drms testcase result: failed
+else
+      echo drms testcase result: passed
+endif
+
+stop
+
+

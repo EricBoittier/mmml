@@ -1,0 +1,297 @@
+* CHARMM c37a2 Testcase sccdftb_cdko.inp
+* test case for Charge-Dependent Klopman-Ohno QM/MM electrostatic interaction
+* simple cluster model of methanol (QM) and a few water (MM)
+* Guanhua Hou, Michael Gaus, Qiang Cui, July 2012, UW Madison
+
+bomb 0
+
+if ?SCCDFTB .NE. 1 then
+  echo "Test NOT Performed."
+  STOP
+endif
+
+
+read rtf card
+* title  
+*
+31 1
+MASS     1 H      1.00800 H ! uniformed H 
+MASS     4 HT     1.00800 H ! TIPS3P WATER HYDROGEN
+MASS    20 C     12.01100 C ! uniformed C
+MASS    70 O     15.99900 O ! uniformed O
+MASS    75 OT    15.99940 O ! TIPS3P WATER OXYGEN
+
+DEFA FIRS NTER LAST CTER   
+AUTO ANGLES DIHE   
+
+RESI MEOH        0.00 ! methanol, adm jr.
+GROUP  ! order of ATOMs to match that used in ab initio
+ATOM CB   C   -0.040  
+ATOM OG   O   -0.660 
+ATOM HG1  H      0.430
+ATOM HB1  H    0.090   
+ATOM HB2  H    0.090   
+ATOM HB3  H    0.090   
+BOND CB  OG  OG HG1
+BOND CB HB1  CB HB2  CB  HB3
+DONO HG1 OG
+ACCE OG
+! only for analysis
+IC HG1  OG   CB   HB1   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB3   0.0000  0.0000 180.0000  0.0000  0.0000
+IC OG   CB   HB1  HB2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB1   0.0000  0.0000 180.0000  0.0000  0.0000
+PATC FIRS NONE LAST NONE
+
+RESI TIP3         0.000 ! tip3p water model, generate using noangle nodihedral
+GROUP   
+ATOM OH2  O     -0.834
+ATOM H1   H      0.417
+ATOM H2   H      0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2   
+PATCHING FIRS NONE LAST NONE 
+
+END
+
+read para card
+* title
+*
+
+BONDS
+C    C     600.000     1.3350 ! ALLOW ARO HEM
+HT   HT      0.000     1.5139 ! ALLOW WAT
+O    C     620.000     1.2300 ! ALLOW   PEP POL ARO
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+O   H    450.000     0.9572 
+H   H      0.000     1.5139 
+
+ANGLES
+O    C    H      50.000   121.7000 ! ALLOW   PEP POL ARO
+HT       OT       HT         55.00     104.52 ! TIP3P GEOMETRY
+H       O       H         55.00     104.52 
+
+DIHEDRALS
+
+IMPROPER
+O    X    X    C     120.0000         0      0.0000 ! ALLOW   PEP POL ARO
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+O  0.0       -0.015439  1.954677  
+C  0.0       -0.048650  2.161172  
+P  0.0       -0.819839  2.033346 
+H  0.0       -0.066146  0.710702 
+
+ HBOND CUTHB 0.5 
+
+END
+
+! Guanhua: Note the addition of the last 4 lines in the 
+! VdW part for OCPH in the para card! 
+! (compare to the upcoming publication of Hou and Cui)
+
+read psf card
+PSF EXT CMAP CHEQ
+
+         2 !NTITLE
+* SOLVATE THE PROTEIN SYSTEM                                                    
+*  DATE:     6/ 1/10     11:26:23      CREATED BY USER: guanhua                 
+
+        45 !NATOM
+         1 MEOH     1        MEOH     CB         20  -0.400000E-01   12.0110           1   0.00000     -0.301140E-02
+         2 MEOH     1        MEOH     OG         70  -0.660000       15.9990           1   0.00000     -0.301140E-02
+         3 MEOH     1        MEOH     HG1         1   0.430000       1.00800           1   0.00000     -0.301140E-02
+         4 MEOH     1        MEOH     HB1         1   0.900000E-01   1.00800           1   0.00000     -0.301140E-02
+         5 MEOH     1        MEOH     HB2         1   0.900000E-01   1.00800           1   0.00000     -0.301140E-02
+         6 MEOH     1        MEOH     HB3         1   0.900000E-01   1.00800           1   0.00000     -0.301140E-02
+         7 BULK     22       TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+         8 BULK     22       TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+         9 BULK     22       TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        10 BULK     26       TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        11 BULK     26       TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        12 BULK     26       TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        13 BULK     32       TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        14 BULK     32       TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        15 BULK     32       TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        16 BULK     67       TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        17 BULK     67       TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        18 BULK     67       TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        19 BULK     75       TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        20 BULK     75       TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        21 BULK     75       TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        22 BULK     96       TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        23 BULK     96       TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        24 BULK     96       TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        25 BULK     123      TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        26 BULK     123      TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        27 BULK     123      TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        28 BULK     137      TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        29 BULK     137      TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        30 BULK     137      TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        31 BULK     139      TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        32 BULK     139      TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        33 BULK     139      TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        34 BULK     180      TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        35 BULK     180      TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        36 BULK     180      TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        37 BULK     263      TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        38 BULK     263      TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        39 BULK     263      TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        40 BULK     330      TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        41 BULK     330      TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        42 BULK     330      TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        43 BULK     499      TIP3     OH2        75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+        44 BULK     499      TIP3     H1          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+        45 BULK     499      TIP3     H2          4   0.417000       1.00800           0   0.00000     -0.301140E-02
+
+        44 !NBOND: bonds
+         1         2         2         3         1         4         1         5
+         1         6         7         8         7         9         8         9
+        10        11        10        12        11        12        13        14
+        13        15        14        15        16        17        16        18
+        17        18        19        20        19        21        20        21
+        22        23        22        24        23        24        25        26
+        25        27        26        27        28        29        28        30
+        29        30        31        32        31        33        32        33
+        34        35        34        36        35        36        37        38
+        37        39        38        39        40        41        40        42
+        41        42        43        44        43        45        44        45
+
+        20 !NTHETA: angles
+         2         1         4         2         1         5         2         1         6
+         4         1         5         4         1         6         5         1         6
+         1         2         3         8         7         9        11        10        12
+        14        13        15        17        16        18        20        19        21
+        23        22        24        26        25        27        29        28        30
+        32        31        33        35        34        36        38        37        39
+        41        40        42        44        43        45
+
+         3 !NPHI: dihedrals
+         3         2         1         4         3         2         1         5
+         3         2         1         6
+
+         0 !NIMPHI: impropers
+
+
+         1 !NDON: donors
+         2         3
+
+        14 !NACC: acceptors
+         2         0         7         0        10         0        13         0
+        16         0        19         0        22         0        25         0
+        28         0        31         0        34         0        37         0
+        40         0        43         0
+
+         0 !NNB
+
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0         0         0         0
+         0         0         0         0         0
+
+        14         0 !NGRP NST2
+         0         1         1         6         1         0         9         1         0
+        12         1         0        15         1         0        18         1         0
+        21         1         0        24         1         0        27         1         0
+        30         1         0        33         1         0        36         1         0
+        39         1         0        42         1         0
+
+        14 !MOLNT
+         1         1         1         1         1         1         2         2
+         2         3         3         3         4         4         4         5
+         5         5         6         6         6         7         7         7
+         8         8         8         9         9         9        10        10
+        10        11        11        11        12        12        12        13
+        13        13        14        14        14
+
+         0         0 !NUMLP NUMLPH
+
+         0 !NCRTERM: cross-terms
+
+
+read coor card
+* meoh+13h2o
+* x
+* x
+* x
+*  DATE:     5/11/10     22:23:47      CREATED BY USER: guanhua
+*
+        45  EXT
+         1         1  MEOH      CB              0.0468599983        0.6609600186        0.0000000000  MEOH      1               0.0000000000
+         2         1  MEOH      OG              0.0468599983       -0.7576799989        0.0000000000  MEOH      1               0.0000000000
+         3         1  MEOH      HG1            -0.8762500286       -1.0513800383        0.0000000000  MEOH      1               0.0000000000
+         4         1  MEOH      HB1            -0.4369899929        1.0860899687        0.8930299878  MEOH      1               0.0000000000
+         5         1  MEOH      HB2             1.0941900015        0.9748899937        0.0000000000  MEOH      1               0.0000000000
+         6         1  MEOH      HB3            -0.4369899929        1.0860899687       -0.8930299878  MEOH      1               0.0000000000
+         7         2  TIP3      OH2             0.7069102526        2.5761792660        3.0237333775  BULK      22              0.0000000000
+         8         2  TIP3      H1             -0.1334662139        2.2723445892        3.4245715141  BULK      22              0.0000000000
+         9         2  TIP3      H2              1.2601300478        2.6673970222        3.8266062737  BULK      22              0.0000000000
+        10         3  TIP3      OH2            -2.1156902313       -0.1424813867        4.1116046906  BULK      26              0.0000000000
+        11         3  TIP3      H1             -2.6203136444       -0.7868025303        3.5649280548  BULK      26              0.0000000000
+        12         3  TIP3      H2             -1.1966474056       -0.3703113794        3.8561143875  BULK      26              0.0000000000
+        13         4  TIP3      OH2             3.3646194935        1.4441677332        1.6158741713  BULK      32              0.0000000000
+        14         4  TIP3      H1              2.4968569279        1.8340029716        1.8451532125  BULK      32              0.0000000000
+        15         4  TIP3      H2              3.2987520695        0.5752044916        2.0660333633  BULK      32              0.0000000000
+        16         5  TIP3      OH2            -3.8982419968        2.7059657574       -0.7606530786  BULK      67              0.0000000000
+        17         5  TIP3      H1             -3.5883004665        1.8326511383       -0.4382449389  BULK      67              0.0000000000
+        18         5  TIP3      H2             -3.1817197800        2.8901827335       -1.4074318409  BULK      67              0.0000000000
+        19         6  TIP3      OH2            -3.9086835384       -1.0420221090       -2.2689681053  BULK      75              0.0000000000
+        20         6  TIP3      H1             -3.4304885864       -0.2034729570       -2.1402935982  BULK      75              0.0000000000
+        21         6  TIP3      H2             -3.1654598713       -1.6628867388       -2.1154155731  BULK      75              0.0000000000
+        22         7  TIP3      OH2            -1.2695523500        0.2169303596       -4.1798949242  BULK      96              0.0000000000
+        23         7  TIP3      H1             -0.3631233871        0.2414061427       -3.7944605350  BULK      96              0.0000000000
+        24         7  TIP3      H2             -1.4677506685       -0.7419565916       -4.1658978462  BULK      96              0.0000000000
+        25         8  TIP3      OH2            -1.4422998428       -2.3826048374       -2.3264584541  BULK      123             0.0000000000
+        26         8  TIP3      H1             -1.7310340405       -3.2902061939       -2.0967526436  BULK      123             0.0000000000
+        27         8  TIP3      H2             -0.4743765891       -2.5393147469       -2.3800790310  BULK      123             0.0000000000
+        28         9  TIP3      OH2            -3.1812331676        0.6506528258        1.0703383684  BULK      137             0.0000000000
+        29         9  TIP3      H1             -2.9370341301       -0.2904634178        0.9533442855  BULK      137             0.0000000000
+        30         9  TIP3      H2             -3.8891613483        0.5483181477        1.7399566174  BULK      137             0.0000000000
+        31        10  TIP3      OH2            -2.6629498005       -1.8724480867        0.4995885789  BULK      139             0.0000000000
+        32        10  TIP3      H1             -2.3137402534       -2.4784920216        1.1846332550  BULK      139             0.0000000000
+        33        10  TIP3      H2             -3.3956112862       -2.4161937237        0.1470047235  BULK      139             0.0000000000
+        34        11  TIP3      OH2             2.6908526421        4.1960611343       -1.4763447046  BULK      180             0.0000000000
+        35        11  TIP3      H1              2.2448942661        4.2422780991       -0.6035276055  BULK      180             0.0000000000
+        36        11  TIP3      H2              1.9311645031        4.0868201256       -2.0853855610  BULK      180             0.0000000000
+        37        12  TIP3      OH2             2.8192446232       -1.6557170153        0.9264919758  BULK      263             0.0000000000
+        38        12  TIP3      H1              2.8369696140       -1.9718264341        0.0049826326  BULK      263             0.0000000000
+        39        12  TIP3      H2              1.8664000034       -1.4037551880        1.0167235136  BULK      263             0.0000000000
+        40        13  TIP3      OH2             4.0762767792        1.9177807570       -0.9777395725  BULK      330             0.0000000000
+        41        13  TIP3      H1              3.8871626854        1.6960666180       -0.0524909943  BULK      330             0.0000000000
+        42        13  TIP3      H2              3.7407052517        2.8341474533       -1.0335788727  BULK      330             0.0000000000
+        43        14  TIP3      OH2             1.2560772896       -0.5026612282       -3.0219295025  BULK      499             0.0000000000
+        44        14  TIP3      H1              1.9441416264        0.1889664531       -2.9931375980  BULK      499             0.0000000000
+        45        14  TIP3      H2              1.0840467215       -0.5847659707       -2.0587055683  BULK      499             0.0000000000
+
+
+define qm sele .not. resname tip3 end
+
+! for a successful execution a file named sccdftb.dat
+! needs to be located at the current working directory,
+! the corresponding example sccdftb.dat file can be found
+! at data/sccdftb_cdko.sccdftbdat, the SCCDFTB parameter files
+! can be downloaded from the www.dftb.org webpage (mio-1-1)
+
+! for a successful execution a file named ko_para.inp
+! needs to be located at the current working directory,
+! the corresponding example ko_para.inp file can be found
+! at data/sccdftb_cdko.kopara
+
+scalar WMAIN set 1.0 sele (qm) .and. type O*  end
+scalar WMAIN set 2.0 sele (qm) .and. type C*  end
+scalar WMAIN set 3.0 sele (qm) .and. type P*  end
+scalar WMAIN set 4.0 sele (qm) .and. type H*  end
+
+SCCDftb remove chrg 0 sele qm end TEMP 0.00 scft 0.00000001 dhga cdko
+
+!energy
+mini sd nstep 100 nprint 10
+
+stop

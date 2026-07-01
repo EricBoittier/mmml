@@ -1,0 +1,74 @@
+* form_simp_m.inp
+* Bernard R. Brooks, 14-Jul-1997
+* calculate group-group energy (nonbonded) of 2 formamides
+*
+
+stream datadir.def
+
+open read unit 11 card name @0amino3h.rtf
+read rtf card unit 11
+close unit 11
+open read unit 12 card name @0param20.prm
+read param card unit 12
+close unit 12
+
+stream  @0mmff_setup.str
+
+read sequence card
+* formamide
+*
+2
+amn cbx
+
+generate frm1 setup       nodi ! noan ! mmff
+generate frm2 duplicate frm1 setup  
+
+open read form unit 19 name @0form_mm.crd
+read coor card unit 19
+close unit 19
+
+coor trans xdir 1.8 sele segid frm2 end
+coor rotate xdir 1.0 phi 180.0 sele segid frm2 end
+
+set 1  ATOM  CDIE  SWITCH   VSWITCH CTONNB  5.0  
+
+FAST OFF
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip all excl vdw
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip all excl elec
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip all excl bond
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip all excl angl
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip all excl dihe
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip all excl strb 
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip all excl oopl
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+skip none
+skip oopl strb dihe angl bond vdw elec
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+test first tol 0.000001 step 0.00002
+
+stop
+
+

@@ -1,0 +1,130 @@
+* CHARMM c37a2 Testcase sccdftb_pme.inp
+* Water dimer using the PMEW kewword for QM/MM and QM/QM interactions
+* Michael Gaus, Peng Zhang, Jiali Gao, Qiang Cui
+
+bomb 0
+
+if ?SCCDFTB .NE. 1 then
+  echo "Test NOT Performed."
+  STOP
+endif
+
+OPEN UNIT 21 NAME data/top_all22_prot_na.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME data/par_all22_prot_na.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+read psf card
+PSF CMAP CHEQ
+
+       2 !NTITLE
+* WATER DIMER USING PME FROM PENG ZHANG AND MODIFIED BY MICHAEL GAUS            
+*  DATE:     7/ 7/12     16: 7:37      CREATED BY USER: mgaus                   
+
+       6 !NATOM
+       1 SOLV 1    TIP3 OH2    75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+       2 SOLV 1    TIP3 H1      4   0.417000       1.00800           0   0.00000     -0.301140E-02
+       3 SOLV 1    TIP3 H2      4   0.417000       1.00800           0   0.00000     -0.301140E-02
+       4 SOLV 2    TIP3 OH2    75  -0.834000       15.9994           0   0.00000     -0.301140E-02
+       5 SOLV 2    TIP3 H1      4   0.417000       1.00800           0   0.00000     -0.301140E-02
+       6 SOLV 2    TIP3 H2      4   0.417000       1.00800           0   0.00000     -0.301140E-02
+
+       6 !NBOND: bonds
+       1       2       1       3       2       3       4       5
+       4       6       5       6
+
+       2 !NTHETA: angles
+       2       1       3       5       4       6
+
+       0 !NPHI: dihedrals
+
+
+       0 !NIMPHI: impropers
+
+
+       0 !NDON: donors
+
+
+       2 !NACC: acceptors
+       1       0       4       0
+
+       0 !NNB
+
+       0       0       0       0       0       0
+
+       2       0 !NGRP NST2
+       0       1       0       3       1       0
+
+       1 !MOLNT
+       1       1       1       1       1       1
+
+       0       0 !NUMLP NUMLPH
+
+       0 !NCRTERM: cross-terms
+
+
+read coor card
+*  WATER DIMER 
+*  DATE:     7/ 7/12     16: 7:37      CREATED BY USER: mgaus
+*
+    6
+    1    1 TIP3 OH2    0.00383   1.51352   0.00000 SOLV 1      0.00000
+    2    1 TIP3 H1     0.07008   0.54699   0.00000 SOLV 1      0.00000
+    3    1 TIP3 H2     0.91405   1.81984   0.00000 SOLV 1      0.00000
+    4    2 TIP3 OH2    0.00383  -1.39648   0.00000 SOLV 2      0.00000
+    5    2 TIP3 H1    -0.52273  -1.65157   0.76401 SOLV 2      0.00000
+    6    2 TIP3 H2    -0.52273  -1.65157  -0.76401 SOLV 2      0.00000
+
+
+NBONDS  ATOM FSHIFT CDIE VDW VSHIFT  -
+        CUTNB 14.0 CTOFNB 12.0 CTONNB 10.0 WMIN 1.5 EPS 1.0 -
+        inbfrq -1
+
+set 6  6.000000
+set p 90.000000
+
+CRYSTAL DEFINE CUBIC @6 @6 @6 @p @p @p
+CRYSTAL BUILD CUTOFF 13.0 NOPERATIONS 0
+
+coor stat 
+
+IMAGE BYRESI XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE RESI TIP3 END
+!IMAGE BYSEG  XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE SEGI PEPT END
+
+! ...... Use PME for MM/MM  ...... 
+update EWALD PMEWald KAPPa 0.34 ORDEr 8 - 
+       FFTX 32 FFTY 32 FFTZ 32 QCOR 1.0 
+
+! ...... Use imal for SCC ...... 
+update imal imgf -1 
+
+shake bonh tol 1.0e-06 
+
+
+define qm sele resid 1 end ! define qm sele (resid 1 .or. resid 2) end
+
+! for a successful execution a file named sccdftb.dat
+! needs to be located at the current working directory,
+! the corresponding example sccdftb.dat file can be found
+! at data/sccdftb_pme.sccdftbdat, the SCCDFTB parameter files
+! can be downloaded from the www.dftb.org webpage (mio-1-1)
+
+scalar WMAIN set 1.0 sele (qm) .and. type O*  end
+scalar WMAIN set 2.0 sele (qm) .and. type H*  end
+
+
+SCCDFTB remove CHRG 0 SELE qm END TEMP 0.00 SCFT 0.00000001 EWAD d3rd hbon - 
+CUTF Kappa 0.5 KMAX 4 KSQMAX 200 PMEW FFTX 16 FFTY 16 FFTZ 16 ORDE 6! Use std cutoff for real space
+
+energy
+
+! mini sd nstep 10
+! mini abnr nstep 200
+! test first step 0.00002 tol 0.0000005 sele all end
+
+stop
+
+

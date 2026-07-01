@@ -1,0 +1,24 @@
+  5.0           ! delta_E, set it -1.0 (negative) to deactivate ms-mmpt
+  0.2213        ! force_constant of dihedral (X-D....A-Y)
+ 10.985         ! force_constant of special angle (i.e. X-D....H)
+128.432         ! equilibrium of special angle (i.e. X-D....H)
+  0.66          ! partial charge of excess proton H* (and cg(O,H3O) = 1 - 3 x CG(H*)
+ 552.94         ! force_constant of OH bond in H3O+
+   0.9726       ! equilibrium of OH bond in H3O+, turn it negative to deactivate the resonance struture for bonds
+  31.18         ! force_constant of HOH bend in H3O+
+ 112.73         ! equilibrium of HOH bend in H3O+, turn it negative to deactivate the resonance struture for angles
+ 592.23         ! force_constant of OH bond in H2O (same to charmm input)
+   0.9657       ! equilibrium of OH bond in H2O (same to charmm input), turn it negative to deactivate the resonance struture for bonds
+  59.26         ! force_constant of HOH bend in H2O (same to charmm input)
+ 106.56         ! equilibrium of HOH bend in H2O (same to charmm input), turn it negative to deactivate the resonance struture for angles
+   -0.198       ! EPSI_Oxy (H3O)
+    1.734       ! RMIN_Oxy (H3O), a negative value deactivates resonance strutures for vdW
+   -0.000       ! EPSI_Hyd (H3O)  
+    0.001       ! RMIN_Hyd (H3O), a negative value deactivates resonance strutures for vdW
+   -0.1554253   ! EPSI_Oxy (H2O)
+    1.776572    ! RMIN_Oxy (H2O)
+   -0.000       ! EPSI_Hyd (H2O)
+  -99.00        ! RMIN_Hyd (H2O)
+  -999.0        ! Size of periodic box (X, same to charmm input), a negative value stands for simulations without PBC 
+  -999.0        ! Size of periodic box (Y, same to charmm input), a negative value stands for simulations without PBC 
+  -999.0        ! Size of periodic box (Z, same to charmm input), a negative value stands for simulations without PBC

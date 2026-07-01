@@ -1,0 +1,27 @@
+ $CONTRL COORD=UNIQUE NOSYM=1 ICHARG=-1
+         SCFTYP=RHF
+ !        dfttyp=b3lyp
+ !        runtyp=prop
+ !        nprint=-5
+          RUNTYP=GRADIENT
+ !        RUNTYP=OPTIMIZE
+ !        EXETYP=CHECK
+ !        MOLPLT=.TRUE.
+ $END
+ $SYSTEM MEMORY=1500000 TIMLIM=100000 $END
+ $BASIS  
+ !         GBASIS=AM1
+          GBASIS=STO NGAUSS=3
+ !         GBASIS=N31 NGAUSS=6 
+ !         NDFUNC=3 NPFUNC=3
+ !         DIFFSP=.TRUE. DIFFS=.TRUE.
+ $END
+ $SCF     DIRSCF=.True. diis=.true. $END
+ $STATPT  NSTEP=100 OPTTOL=0.00000001 $END
+ !$dft sg1=.t. $end
+ $DATA
+
+
+ $END
+ !$ELPOT IEPOT=1 where=pdc $END
+

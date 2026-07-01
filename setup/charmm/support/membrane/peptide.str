@@ -1,0 +1,14 @@
+!---------------------------------------------------------------
+! TO BE MODIFIED  -  KEEP NAME "PEPT" FOR THE PROTEIN 
+
+read sequence card
+* sequence of melittin protein
+*
+ 26
+! 1  2   3   4   5   6   7   8   9  10
+GLY ILE GLY ALA VAL LEU LYS VAL LEU THR
+THR GLY LEU PRO ALA LEU ILE SER TRP ILE
+LYS ARG LYS ARG GLN GLN
+generate PEPT setup first GLYQ last CTER
+
+!-------------------------------------------------------------

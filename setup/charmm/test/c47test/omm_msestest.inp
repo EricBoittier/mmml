@@ -1,0 +1,295 @@
+* Test scrips for MSES in OpenMM through the CHARMM-OpenMM gpu interface
+*
+
+if ?numnode .gt. 1 then 
+   echo "Test NOT performed."
+   stop
+endif
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+!stream datadir.def
+set 0  = data
+!-------------------------------------------------------------------------------
+!    USER INPUTS
+
+read rtf  card name @0/go_gb1p.top
+read rtf  card append name @0/top_all22new_prot.inp
+read para card name @0/go_gb1p.param
+read para card append name @0/par_all22new_prot.inp
+read psf  card name @0/gb1p_hybrid.psf
+read coor card name @0/gb1p_hybrid.crd
+
+
+! NONBOND setup
+! ------------------------------------------------------------------
+ NBOND atom switch cdie vdw vswitch -
+       ctonnb 16.0 ctofnb 18.0 cutnb 20.0
+
+! Harmonic restrict
+! -------------------------------------------------------------------
+ cons harm clear
+ cons harm force 5.0 sele segid AT .and. resid 2 .and. type CA end
+ cons harm force 5.0 sele segid CG .and. resid 2 .and. type CA end
+
+! BLOCK AT and CG system
+! -------------------------------------------------------------------
+block
+    clear  ! clear any prevous block setup as a safte guard
+end
+block 2  ! requesting blocks
+  call 1 select segid CG end  ! this is a special case,
+  call 2 select segid AT end  ! omm block actually does not work in MSES calculations
+  coef 1 1 1.0                ! for most cases
+  coef 2 2 1.0 
+  coef 1 2 0.0
+end
+
+! MSES setup
+! -------------------------------------------------------------------
+ open read card unit 10 name @0/contact.list
+ MSES SCAL 1.0 iunlist 10
+
+! ENERGY TEST (CPU vs. CUDA)
+! ---------------------------------------------------------------------
+ omm platform cpu 
+ energy omm 
+ set eomm_cpu = ?ener
+ coor force comp
+ set return fromCPUENER
+ goto ommcpu
+ label fromCPUENER
+
+ omm platform cuda
+ energy omm
+ set eomm_cuda = ?ener
+ coor force comp
+ set return fromCUDAENER
+ goto ommcuda
+ label fromCUDAENER
+
+ calc ediff = abs ( @{eomm_cpu} - @{eomm_cuda} )
+ calc error = abs ( @ediff / @{eomm_cpu} )
+ calc prdiff = 100 * @{ediff} / sqrt ( @{eomm_cpu} * @{eomm_cuda} )
+ echo
+ echo comparing default "mses" between OPENMM CPU and CUDA
+ echo
+ echo OMM CPU  energy with MSES: @{eomm_cpu}  kcal/mol
+ echo OMM CUDA energy with MSES: @{eomm_cuda}  kcal/mol
+ echo absolute unsigned difference: @ediff  kcal/mol  kcal/mol
+ echo
+ echo Force dot product: @fsum
+ echo Percent energy error: @prdiff
+ echo
+ set return fromTestENER
+ set test = energytest
+ goto prresults
+ label fromTestENER
+
+ !stop
+
+! NVE DYNAMIC TEST (CPU vs. CUDA)
+! ---------------------------------------------------------------------
+ set temp  = 300.0
+ set nsteps = 50
+ set fbeta = 0.1
+ scalar fbeta set @fbeta
+ scalar fbeta set 0.0 select type H* end
+ shake  tolerance 1.0e-06 bonh param
+
+ omm platform cpu 
+ read coor card name @0/gb1p_hybrid.crd
+ dynamics leap start -
+ timestep 0.002 -      !!timestep interval
+ nstep @nsteps -       !!no. of steps
+ iseed 234234399 -     !!random seed for integrator
+ nprint 10 -           !!freq of printout
+ inbfrq -1 -
+ ilbfrq 0 -
+ tstruct @temp -
+ firstt @temp -
+ echeck -1 omm             !!energy tolerance check before crashing
+ energy omm 
+ set eomm_cpu = ?ener
+ coor force comp
+ set return fromCPUDYNA
+ goto ommcpu
+ label fromCPUDYNA
+
+ omm platform cuda
+ read coor card name @0/gb1p_hybrid.crd
+ dynamics leap start -
+ timestep 0.002 -      !!timestep interval
+ nstep @nsteps -       !!no. of steps
+ iseed 234234399 -     !!random seed for integrator
+ nprint 10 -           !!freq of printout
+ inbfrq -1 -
+ ilbfrq 0 -
+ tstruct @temp -
+ firstt @temp -
+ echeck -1 omm             !!energy tolerance check before crashing
+ energy omm 
+ set eomm_cuda = ?ener
+ coor force comp
+ set return fromCUDADYNA
+ goto ommcuda
+ label fromCUDADYNA
+
+ calc ediff = abs ( @{eomm_cpu} - @{eomm_cuda} )
+ calc error = abs ( @ediff / @{eomm_cpu} )
+ calc prdiff = 100 * @{ediff} / sqrt ( @{eomm_cpu} * @{eomm_cuda} )
+ echo
+ echo comparing default "mses" between OPENMM CPU and CUDA
+ echo
+ echo OMM CPU  energy with MSES: @{eomm_cpu}  kcal/mol
+ echo OMM CUDA energy with MSES: @{eomm_cuda}  kcal/mol
+ echo absolute unsigned difference: @ediff  kcal/mol  kcal/mol
+ echo
+ echo Force dot product: @fsum
+ echo Percent energy error: @prdiff
+ echo
+ set return fromTestDYNA
+ set test = dynamictest
+ goto prresults
+ label fromTestDYNA
+
+stop
+
+
+
+!-------------------------------------------------------------------------------
+! AUX ROUTINES FOR NORMALIZATION AND DOT PRODUCTS
+!-------------------------------------------------------------------------------
+
+label prresults
+  set estat = fail
+  if @prdiff le 5e-1 then
+    set estat = pass
+  endif
+    
+  calc diff = abs ( 1 - @fsum )
+  set fstat = fail
+  if @diff le 1e-2 then
+    set fstat = pass  
+  endif
+
+  echo testcase result: @estat @test - energy 
+  echo testcase result: @fstat @test - forces 
+goto @return
+
+
+!-------------------------------------------------------------------------------
+
+label ommcpu  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+   
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+   
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+   
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+   
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+   
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+   
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+   
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   
+   echo @fsum
+   
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+!-------------------------------------------------------------------------------
+
+label ommcuda   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+   
+   scalar 4 store 1
+   scalar 5 store 2
+   scalar 6 store 3
+   
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+   
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+   
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+   
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+   
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+   
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+   
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   
+   scalar 1 store 4
+   scalar 2 store 5
+   scalar 3 store 6
+   
+goto @return
+
+
+
+

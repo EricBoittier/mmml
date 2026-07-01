@@ -1,0 +1,284 @@
+Charmm Element doc/umbrel.info $Revision: 1.1.1.1 $
+
+File: Umbrel, Node: Top, Up: (doc/commands.info), Next: RXNCOR
+
+
+                               Order Parameters
+
+The RXNCOR module in CHARMM was initially implemented by J. Kottalam in 
+December 1990 for molecular dynamics simulations with an umbrella potential.  
+The code and this documentation are currently being updated by Aaron R. Dinner 
+and co-workers for use in all situations in which sampling based on (single 
+or multiple) (scalar or vector) order parameters are desired.  See tps.info
+for additional notes.
+
+* Menu:
+
+* Syntax::       Syntax of RXNCOR and its subcommands
+* Examples::     Examples of specifying a reaction coordinate in CHARMM and
+                 interpreting the results
+
+File: Umbrel, Node: Syntax, Up: Top, Next: Examples, Previous: Top
+
+                                  Syntax
+
+All the commands invoking this module are prefixed by the keyword RXNCord.  
+The geometrical elements such as points, lines and planes are referenced by 
+names selected by the user.  
+
+[Syntax RXNCoor]
+
+RXNCoor < set-spec | bas-spec | wri-spec | umbr-spec | defi-spec >
+
+set-spec  ::= SET [ NRXN     1 ] NRXN{ name }
+
+              where NRXN{ name } is an NRXN-long list of the names of
+              the order parameters to calculate.
+
+bas-spec  ::= BASIn NRXN{ name alo ahi blo bhi } (for TPS and/or SMD)
+
+wri-spec  ::= < WRITe      [ UNIT unit (default is outu) ] |
+                TRACe name [ UNIT unit (default is outu) ] >
+
+umbr-spec ::= UMBRella FORM form KUMB ku DEL0 del0 PERIod period SMDDel smddel
+
+stat-spec ::= STATistics LOWDelta lowdel HIDElta hidel DELDelta deldel -
+              START start
+
+defi-spec ::= DEFIne name geom-spec
+
+geom-spec ::= POINt [MASS] atom_selection
+              DIREction    point1       point2
+                           direction1   direction2
+              LINE         THROugh point1 THROugh point2
+                                          PARAllel_to line1
+                                          PERPend line1 PERP line2
+                                          NORMal_to   plane1
+              PLANe        THROugh point1 THRO point2 THRO point3
+                                          CONTaining line1
+                                          PERPendic  line1
+                                          PARAllel   line1 PARA line2
+                                                     plane1
+              DISTance     point1       point2
+                                        line
+                                        plane
+              ANGLe        direction1   direction2   direction3
+                           line1        line2        direction3
+                           line1        plane2       direction3
+                           plane1       plane2       direction3
+              CECM         atom_selection atom_selection rsw dsw
+              RATIo        distance1    distance2
+              COMBination  name1 weight1 name2 weight2 ...
+              SCOMbination name1 mult1 name2 mult2 ...
+              VCOMbination name1 mult1 name2 mult2 ...
+
+
+Notes on geom-spec:
+
+A distance can be between two points or the perpendicular distance of a 
+point from a plane or a line.  An angle can be between two (intersecting or 
+non-intersecting) lines and so on.  Planes and lines are ultimately defined 
+in terms of points and points can be defined as the centres of geometry (or 
+mass) of a groups of atoms in the macromolecule.  Thus we have in CHARMM a 
+general algorithm to define any order parameter (of the above form) in terms 
+of the cartesian coordinates of arbitrary sets of atoms.
+
+The name immediately following the DEFIne keyword is the name of the object 
+being defined.  Names referenced towards the right side are names of objects 
+already defined.  
+
+If the MASS keyword appears in the POINt definition, then the point is the 
+centre of mass, otherwise it is the centre of geometry.
+
+The order of points in DIREction definition is important, unlike in DISTance 
+definition.  When two directions are used to define a third direction, the 
+third direction is perpendicular to the other two.  
+
+The ANGLe is the one subtended by the first two arguments measured anti-
+clockwise when viewed along direction3. The angle defined with a line and 
+plane is the one between the line and the plane normal, NOT the plane itself.  
+
+The CECM is the modified center of excess charge coordinate useful for studying
+proton transfer reactions. It requires two selections, the first contains the heavy
+atoms that can participate in proton transfers; the second contains hydrogen atoms. The 
+parameters rsw and dsw define the switching function used to define bond connectivity
+during the proton transfers. The weights of the heavy atoms should be specified by 
+the WMAIN array. For more detailed discussions, see Koenig et al., J. Phys. Chem. A
+110, 548-563 (2006). See test/c43test for a very simple example.
+
+RATIo is distance1/distance2.
+
+COMBination is the weighted mean of all names; SCOMbination is the simple 
+sum mult1*name1+mult2*name2...; VCOMbination is a vector analog of 
+SCOMbination, where three-dimensional vectors can be combined with arbitrary
+weighting to define another vector.
+
+The SET command sets a particular geometric element as the reaction coordinate.
+This element must be already defined.  If a name is referenced and not defined,
+the program will stop.  If a name is defined but not referenced, no message is 
+issued, but this will result in some unnecessary computations without affecting
+the results.
+
+Notes on umbr-spec:
+
+The UMBR commad specifies the form and parameters for an umbrella potential:  
+
+              form          functional form of potential
+              ----          ----------------------------
+               1               ku*(delta-del0)**2
+               5               ku*(delta-del0)**2 + Ubias(delta)
+
+In form 5, Ubias is a biasing potential, used in addition to the harmonic
+restraining potential, to truncate high barriers of activated processes.  
+Ideally, Ubias(Rc) would be the negative of the potential of mean force g(Rc), 
+where Rc is the reaction coordinate.  Ubias is implemented as a cubic spline 
+function based on a tabulated data to be read prior to the call of RXNC.  
+
+Order parameters can be periodic.  To ensure correct calculation of the energy
+and forces, set the PERIod keyword to a non-zero value.
+
+Notes on stat-spec:
+
+The STAT subcommand specifies the range of a coordinate and when to collect 
+statistics.  Starting from the 'start'-th step of dynamics, the number of 
+occurences of delta (the value of each reaction coordinate) will be counted 
+in each interval 'deldel' long.  This counting will be done in the range 
+'lowdel' to 'hidel'.  The statistics collected by the STAT subcommand are 
+printed out at the end of dynamics when the WRITe subcommand has been invoked.
+
+WRITe will print out a table without any header.  The header is left out on 
+purpose to enable this file to be read by any plotting program.  The meanings 
+of the numbers are therefore explained here.  Recall that the STAT subcommand 
+essentially setup a range of the reaction coordinate (delta) and divided this 
+range into small pieces.  For each piece the following information is printed 
+out in one line:
+
+    the midpoint of the delta interval
+    the free energy at this midpoint (after subtracting the umbrella potential)
+    the number of observations for which delta fell in this interval.  
+        (One observation is made at every step of the dynamics)
+
+Apart from the cumulative statistics, it may be useful to have a print out 
+of the delta values versus time.  The time series of any quantity defined by 
+the DEFIne subcommand can be printed by using the TRACe subcommand.  This 
+command should appear before the dynamics command.
+
+
+File: Umbrel, Node: Examples, Up: Top, Next: Roll Angles, Previous: Top
+
+As an example, consider the interconversion between the chair and boat 
+forms of cyclohexane.  This process can be described in terms of three 
+rotation angles.  These angles rotate carbons 2, 4 and 6 respectively about 
+the plane of carbons 1, 3 and 5.  
+
+Let us number the carbon atoms in cyclohexane as C1,...,C6.  Consider the 
+plane of atoms c1, c3 and c5 and the plane of atoms c1, c2 and c3.  Let us 
+call the angle between these two planes as a rotation angle.  There are two 
+other rotation angles about the c1-c3-c5 central plane.  The mean of these 
+three rotation angles serves as a reaction coordinate for the chair-boat 
+conversion.
+
+     rxncor: define c1 point select atom cycl 1 c1 end
+     rxncor: define c2 point select atom cycl 1 c2 end
+     rxncor: define c3 point select atom cycl 1 c3 end
+     rxncor: define c4 point select atom cycl 1 c4 end
+     rxncor: define c5 point select atom cycl 1 c5 end
+     rxncor: define c6 point select atom cycl 1 c6 end
+     rxncor: define d13 direction c1 c3
+     rxncor: define d35 direction c3 c5
+     rxncor: define d51 direction c5 c1
+     rxncor: define d12 direction c1 c2
+     rxncor: define d34 direction c3 c4
+     rxncor: define d56 direction c5 c6
+     rxncor: define norc direction d35 d13
+     rxncor: define nor1 direction d13 d12
+     rxncor: define nor2 direction d35 d34
+     rxncor: define nor3 direction d51 d56
+     rxncor: define alf1 angle norc nor1 d13
+     rxncor: define alf2 angle norc nor2 d35
+     rxncor: define alf3 angle norc nor3 d51
+     rxncor: define mean combi alf1 1.0 alf2 1.0 alf3 1.0
+     rxncor: set mean
+
+An example of the use of FORM 5 is shown below: 
+
+     ...
+     rxncor: define RC  distance PCC PCO
+     rxncor: set RC
+     
+     open read unit 33 form name bias.pot
+     rxncor: bias unit 33
+     close unit 33
+     
+     rxncor: umbrella kumb  20. del0 1.50 form 5   
+     ...
+
+     WHERE bias.pot contains:
+
+     * Trial Biasing Potential 
+     * example, 1200
+     *
+         5                   ! number of points (up to 25)
+     1.0 -28.0               ! Rc  Ubias(Rc)
+     1.3 -18.0
+     1.4 -8.0
+     1.5  0.0
+     1.6  -2.0
+
+     END description of FORM 5                             JG 12/00
+
+In each case, dynamics is run by invoking the DYNAmics command.  See tps.info 
+for notes on using RXNCOR with transition path sampling and steered molecular 
+dynamics.
+
+To extract results from umbrella sampling simulations, return to the example
+of cyclohexane
+
+    rxncor: trace alf1 unit 22
+    rxncor: trace alf2 unit 23
+    rxncor: trace alf3 unit 24
+    rxncor: trace mean unit 25
+ 
+    rxncor: umbrella kumb 15.0 form 1 del0 -0.4
+    rxncor: statistics lowdelta -0.6 hidelta -0.4 deldel 0.002 start 5000
+ 
+    dynamics rest nstep 15000 firstt 300.0 finalt 300.0 ihtfrq 0 -
+         teminc 0.0 iunwrite 19 kunit 20 iunread 17
+ 
+    rxncor: write unit 21
+    close unit 21
+
+Here, the essential results are the first and second columns of the output 
+from the WRITe subcommand, which plot free energy versus the order parameter
+in the covered range of the order parameter values (delta values).  In order
+to cover the full range of delta the procedure is repeated by constraining 
+delta around a particular value by using an umbrella potential centered at 
+that value.  
+
+For theory and practice of umbrella sampling, see Kottalam and Case in Journal 
+of American Chemical Society, 110, 7690 (1988)
+
+
+File: Umbrel, Node: Roll Angles, Up: Top, Next: Top, Previous: Examples
+
+The RXNCOR module has been modified to make it possible to define
+a "pseudoroll angle" for nucleic acids that correlates closely with the roll
+angle between adjacent base pairs, as determined by programs such as 3DNA.
+The modifications are enabled by compiling CHARMM with the ROLLRXNCOR
+preprocessor key.  The roll-angles.str stream file (in the support/stream
+directory) can then be used to define the coordinate.  The stream file assumes
+that the nucleic acid occupies two segments labeled "A" and "B" and defines
+the roll angle as Rn where n is the base pair step number.  The script
+requires two variables, "A1" and "B1", which are the residue numbers for
+the first base pair of the roll angle for strands A and B, respectively.
+For example to define the roll angle for the central base pair step of
+a Drew-Dickerson dodecamer (12 base pairs total), use the following:
+
+set a1 = 6
+set b1 = 7
+stream ~/charmm/c38a1/support/stream/roll-angles.str
+rxncor set nrxn 1 r6
+
+The pseudoroll angle defined in this way be used for adaptive umbrella
+sampling (see *note top:(doc/adumb.info)) as described in Spiriti and
+van der Vaart, JCTC 8, 2145 (2012).

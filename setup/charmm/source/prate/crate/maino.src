@@ -1,0 +1,347 @@
+CHARMM Element source/prate/crate/maino.src $Revision: 1.2 $
+C-----------------------------------------------------------------------
+C   This is the Main Program of POLYRATE that has been changed
+C   into a subroutine for integration into CHARMM.
+C   To deactivate CHARMMRATE capabilities, i.e., to run a stand-alone
+C   POLYRATE, comment out the first line below, and
+C   set the logical variable, CHRATE = .FALSE.
+C-----------------------------------------------------------------------
+      SUBROUTINE ChaRate(IDUMMY)
+      IMPLICIT REAL*8 (A-H,O-Z)                                         
+      LOGICAL ChRate
+      DATA ChRate/.true./
+      SAVE ChRate
+c***********************************************************************
+c                                                                       
+c     This routine was completely rewritten in January 1994 for         
+c     version 6.0.  The input is now in a keyword format and is         
+c     handled in 'read5.f'. Calculations that were done within this     
+c     routine have now been moved so that this is just a calling        
+c     routine.                                                          
+c                                                                       
+c     PROGRAM FOR POLYATOMIC VARIATIONAL TST CALCULATIONS               
+c                                                                       
+c     CALLS:                                                            
+c          dorest,dorph,dorepr,dosage,dosafr,dopnm                      
+c          elrph,headr,option,fiopen,initze,restor,dattim,title,setup,  
+c          rphwrt,rphset,react,saddle,center,trans,normod,path,         
+c          restrt,nextpt,rate,tsrate,fcinpt,fcmep,fcrate,               
+c          read5,setlgs,setvar                                          
+c                                                                       
+c                                                                       
+      include 'param.inc'                                   
+      include 'percon.inc'                                  
+      include 'common.inc'                                  
+c                                                                       
+      character*20 finame                                               
+      character*7  fistat                                               
+      logical lexit                                                     
+c                                                                       
+c     Open the input and output files (fu5 and fu6).  All other         
+c     files will be opened later in fiopen.                             
+c                                                                       
+c   Use the character variables FISTAT (file status), FINAME (filename),
+c   the subprogram OPENFI to open the input data file and the long outpu
+c   which are linked to FORTRAN units fu5 and fu6, respectively.        
+c                                                                       
+      lexit  = .false.                                                  
+c
+c//////////////////////////////////////////////////////////////////////////
+car Charmm/Polyrate
+      If (.Not.ChRate) Then
+      fistat = 'unknown'                                                
+      finame = 'poly.fu6'                                               
+                                                                        
+      call openfi (fu6, fistat, finame, lexit)                          
+      if (lexit) go to 3000                                             
+                                                                        
+      fistat = 'old'                                                    
+      finame = 'poly.inp'                                               
+                                                                        
+      call openfi (fu5, fistat, finame, lexit)                          
+      call openfi (10, fistat, finame, lexit)
+      Else
+car Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+c                                                                       
+c     Write out program header to unit fu6                              
+      call headr                                                        
+c                                                                       
+c                                                                       
+c     this call needs to be integrated into the new format -- init routi
+      call initze                                                       
+c                                                                       
+c     Read in all input from unit 5 and write out the summary table     
+      call read5                                                        
+c                                                                       
+c     Using keywords - set LGS flags to their correct values.  Here all 
+c     that do not depend on a stationary point will be set.             
+c     Later they will be altered for each successive reactant, product  
+c     and for the saddle point.                                         
+c                                                                       
+      call setlgs                                                       
+c                                                                       
+c     Using the keywords set the variables to their correct values.  Thi
+c     is a translator from the new interface to the old internal structu
+c     Here just the global parameters will be set (setvar).  Later they 
+c     be altered for each successive reactant, product and saddle point 
+c     stvarj.                                                           
+c                                                                       
+      call setvar                                                       
+C
+      ENDIF
+c                                                                       
+c     This subroutine was added to allow all files to be opened internal
+c     This is for compability with other machines and operating systems.
+c                                                                       
+c//////////////////////////////////////////////////////////////////////////
+car Charmm/Polyrate
+car---------------------------------------------------------------------- 
+car  This is deactivated to allow control of the io from the charmm main
+car input stream. It is advised that any unit that had to be open in fiopen,
+car depending on the original specifications in the polyrate input deck, 
+car should match with the unit number provided by the user in the charmm 
+car input open statement.
+car i.e., All files are opened by CHARMM, and ALL file unit numbers
+car       matches those used by FIOPEN.  See Documentation for assignment
+car       of these units.
+car----------------------------------------------------------------------
+car
+      IF(.Not.ChRate) call fiopen                                                       
+car
+car Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+c                                                                       
+c     Check options and read in fu50 for alll calculations except       
+c     restart runs.  This is to allow a restart calculation where       
+c     VTST/IC was not requested in the original run but is desired      
+c     using the MEP stored on fu1.                                      
+c     This was modified on 1/4/96 by R. Steckler                        
+c                                                                       
+      if (lgs(8).le.0) then                                             
+c                                                                       
+c        Read in unit fu50 for VTST/IC calculations                     
+         if (lgs2(11) .ne. 0) call cr_readic                               
+c                                                                       
+c        Do IVTST calculations                                          
+c                                                                       
+         if (lgs2(38) .ge. 0 .and. lgs(8) .le. 0) then                  
+           if (ipot.eq.3) then                                          
+            call givtst(nfcvt,isct,izct,                                
+     >      ivtst,slpg,slmg,slp,slm,del,nedeg,elec,                     
+     >      nratom,iatsv,xr,icode,nq12,nq22,ntemp,temp,natom,           
+     >      redm,sigmaf,sigmar,xmass,iclasv)                            
+            write(fu6,4500)                                             
+c//////////////////////////////////////////////////////////////////////////
+c Charmm/Polyrate
+c Charmm will close later all the unit that were open during the execution
+            If (.Not.ChRate) then 
+            CALL FCRATE                                                 
+            stop 'IVTST DONE'                                           
+            endif
+c Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+           else                                                         
+            write (fu6,*) 'Fatal error: IVTST required unit29 as ',     
+     >           'POTENTIAL'                                            
+
+c//////////////////////////////////////////////////////////////////////////
+c Charmm/Polyrate
+            If (.Not.ChRate) then
+            CALL FCRATE                                                 
+            stop 'IVTST ERROR'                                          
+            endif
+c Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+           endif                                                        
+         endif                                                          
+c                                                                       
+c        Check for consistencies between chosen options                 
+         call option                                                    
+c                                                                       
+c        Close the input data files which have been used up to this poin
+         call fcinpt                                                    
+      end if                                                            
+c                                                                       
+c   **** POLYRATE calculations begin here: ********                     
+c                                                                       
+c                                                                       
+c     Determine if it is a restart calculation: lgs(8)>0 for restart    
+c     If so, make sure lgs and variables are set at the value used      
+c     in the previous path calculations.                                
+c                                                                       
+c
+      IF (LGS(8).GT.0) THEN                                             
+         call dorest                                                    
+         call option                                                    
+         call fcinpt                                                    
+         call prepj(5)                                                  
+      else                                                              
+C                                                                       
+C     Do the zero-order IVTST calculation                               
+C                                                                       
+         if (lgsic(10) .eq. 1) then                                     
+            call prepj(5)                                               
+            call zocupd                                                 
+            call rate                                                   
+            write(fu6,4500)                                             
+c//////////////////////////////////////////////////////////////////////////
+c Charmm/Polyrate
+c Charmm will close later all the unit that were open during the execution
+            If (.Not.ChRate) then
+            call fcrate                                                 
+            stop 'main 1'                                               
+            endif
+c Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+         endif                                                          
+c                                                                       
+c                       Set up RPH information or potential surface     
+         call dorph                                                     
+c                                                                       
+c                       Optionally compute reactant and product properti
+         call dorepr                                                    
+c                                                                       
+c                       Compute saddle point and its energetics         
+c                                                                       
+c
+c
+c        bath mode // we do not correct for reactants and products
+c
+         if (ibathm.eq.1) then                                        
+           LBATH = .true.                                             
+           if (LGS2(39).GE.3) numint = numint + 1                     
+         endif                                                       
+c
+         if (irepr(5).eq.1) then                                        
+         call prepj(5)                                                  
+                                                                        
+         call sadeng                                                    
+c                                                                       
+c                      Calculate the parameters in the zero order ivtst 
+c                      correction for the classical energies and vibrati
+c                      frequencies along the mep                        
+c                                                                       
+        endif                                                           
+        if (lgs2(11).ne.0) then                                         
+           call zoc3p                                                   
+           if (lgs(3) .ne. 0) call zocpar                               
+           call zocprn                                                  
+        endif                                                           
+c                                                                       
+        if (lgs(3).ne.0) write (fu6,2900)                               
+c                                                                       
+c                                                                       
+c                       compute steepest descents path and              
+c                       projected normal modes along the path.          
+c                                                                       
+         call prepj(6)                                                  
+         call dopnm                                                     
+         if (ipath.ne.0.and.lgs2(11).eq.0) call findl                   
+      endif                                                             
+c                                                                       
+c   Close the input and output data files used up to this point.        
+c                                                                       
+      call fcmep                                                        
+c                                                                       
+c   The path is now computed.  Here the rate constants are computed     
+c   without and optionally using the zero-order IVTST option.           
+c        lgs2(11) = 0   do not use VTST/IC-0                            
+c        lgs2(11) = 1   do the corrected calculation only               
+c        lgs2(11) = 2   do the uncorrected first then the coorected     
+                                                                        
+      if (lgs2(11).ge.1) then                                           
+          if (lgs2(11).eq.2) then                                       
+             if (lgs(7).gt.0.or.lgs(9).ne.0) call rate                  
+             if (lgs(7).le.-1) call tsrate                                         
+c//////////////////////////////////////////////////////////////////////////
+c Charmm/Polyrate
+c Charmm will close later all the unit that were open during the execution
+                    If (.Not.ChRate) then
+                    CALL FCRATE                                         
+                    stop 'main 2'                                       
+                    endif
+c Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+          endif                                                         
+c                                                                       
+c     Update the information at each gts to include the zero order corre
+          call zocupd                                                   
+          lzoc = .true.                                                 
+      endif                                                             
+c                                                                       
+c                                                                       
+      if (lgs(7).gt.0.or.lgs(9).ne.0) call rate                         
+      if (lgs(7).le.-1) call tsrate                                              
+c//////////////////////////////////////////////////////////////////////////
+c Charmm/Polyrate
+c Charmm will close later all the unit that were open during the execution
+               If (.Not.ChRate) then
+               CALL FCRATE                                              
+               stop 'main 3'                                            
+               endif
+c Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+      write(fu6,4500)                                                   
+C                                                                       
+      if (lgs2(13) .ne.0 .or. lgs2(14) .ne. 0) call prmep               
+C                                                                       
+C   Close all remaining input and output data files.                    
+C                                                                       
+c//////////////////////////////////////////////////////////////////////////
+c Charmm/Polyrate
+c Charmm will close later all the unit that were open during the execution
+c
+      If (.Not.ChRate) then
+      call fcrate                                                       
+      stop 'main 4'
+      endif
+c Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+ctrace numstep                                                          
+c               open (unit=99,file='polyout')                           
+c               ishft = n3-nf(5)                                        
+c               write (99,*) dlx, conf(1),freq(ishft+1)*autocm,         
+c     *              wer(1)*AUTOCM,wer(nf(1)+nf(2)+1)*AUTOCM            
+c               close (99)                                              
+cend trace                                                              
+c     stop 'exit polyrate'                                              
+c
+ 2900 FORMAT(//1X,78(1H*),                                              
+     * /1X,'After this, all energies are given w/re to classical'       
+     * /1X,'reactants and output is in a.u. unless stated otherwise.',  
+     * /1X,78(1H*))                                                     
+C                                                                       
+c//////////////////////////////////////////////////////////////////////////
+c Charmm/Polyrate
+c Charmm will close later all the unit that were open during the execution
+c
+c  The error statement for units fu5 and fu6 are written to unit 6      
+c  (assumed to be standard out) because if there is a problem           
+C  with units fu5 or fu6 then the code cannot use fu6 for its output    
+c  and the following error message may not be written.                  
+      If (.Not.ChRate) goto 3000
+c
+c Charmm/Polyrate
+c\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+ 3200 FORMAT(/1x,'Anharmonicity is not allowed in the TST only',        
+     *  ' calculation,',/,1x,'try to use CVT keyword in RATE',          
+     *  ' section.')                                                    
+ 4500 FORMAT(//1X,25('*'),' END OF POLYRATE LONG OUTPUT ',25('*'))      
+C                                                                       
+c return to the CHARMM drives
+c 
+      If (ChRate) then
+         WRITE(6,9876) 
+ 9876    FORMAT(//1X,' RETURNING TO THE CHARMM DRIVER ',/)
+c
+         RETURN                                                            
+      endif
+C
+      STOP 
+ 3000 WRITE (6, *) 'Error opening the long output file'                 
+      CALL FCRATE
+      STOP 'MAIN 5'
+      END                                                               
+

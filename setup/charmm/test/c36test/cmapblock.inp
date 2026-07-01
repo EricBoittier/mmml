@@ -1,0 +1,64 @@
+* Test of CMAP with BLOCK
+* this test works with c35a1 and c35a2,
+*   c35b1,c35b2,c35b3,c35b4,
+*   but fails with c36a1 and beyond
+* Milan Hodoscek, March 2010
+*
+
+STREAM datadir.def
+
+if ?cmapset .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+open read unit 1 card name @0/top_all22_prot_cmap.inp
+read rtf card unit 1
+
+open read unit 1 card name @0/par_all22_prot_chen_cmap_phmd.inp
+read para card unit 1
+
+read sequ ala 4
+
+generate tetr setup
+
+ic param
+ic seed tetr 1 n tetr 1 ca tetr 1 c
+ic build
+
+energy
+
+set cro1 ?cmap
+
+set fact 2
+set rfac 1
+divi rfac by @fact
+
+block 2
+call 2 sele resi 2 end
+coef 1 1 1.0
+coef 2 2 @rfac
+coef 1 2 @rfac
+end
+
+energy
+set cro2 ?cmap
+
+set x @cro1
+divi x by @cro2
+
+incr fact by 0.01
+if x .gt. @fact then goto erro
+decr fact by 0.02
+if x .lt. @fact then goto erro
+
+stop
+
+label erro
+
+echo test failed :-(
+
+calc y = sqrt(-1)
+
+stop
+

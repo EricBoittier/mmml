@@ -1,0 +1,40 @@
+#! /bin/sh
+
+cd lib/ibmlnxmp
+
+ld -shared -o charmm.so *.o
+
+ld -shared -o  adumb.so         --whole-archive   adumb.a		
+ld -shared -o  cadint.so	--whole-archive   cadint.a		
+ld -shared -o  cff.so		--whole-archive   cff.a		
+ld -shared -o  cheq.so		--whole-archive   cheq.a		
+ld -shared -o  correl.so	--whole-archive   correl.a		
+ld -shared -o  dimb.so		--whole-archive   dimb.a		
+ld -shared -o  dynamc.so	--whole-archive   dynamc.a		
+ld -shared -o  emap.so		--whole-archive   emap.a		
+ld -shared -o  energy.so	--whole-archive   energy.a
+ld -shared -o  gamint.so	--whole-archive   gamint.a		
+ld -shared -o  gener.so		--whole-archive   gener.a		
+ld -shared -o  graphics.so	--whole-archive   graphics.a	
+ld -shared -o  gukint.so	--whole-archive   gukint.a		
+ld -shared -o  image.so		--whole-archive   image.a		
+ld -shared -o  io.so		--whole-archive   io.a		
+ld -shared -o  machdep.so	--whole-archive   machdep.a	
+ld -shared -o  manip.so		--whole-archive   manip.a		
+ld -shared -o  mbond.so		--whole-archive   mbond.a		
+ld -shared -o  mc.so		--whole-archive   mc.a		
+ld -shared -o  minmiz.so	--whole-archive   minmiz.a		
+ld -shared -o  misc.so		--whole-archive   misc.a		
+ld -shared -o  mmff.so		--whole-archive   mmff.a		
+ld -shared -o  moldyn.so	--whole-archive   moldyn.a		
+ld -shared -o  molvib.so	--whole-archive   molvib.a		
+ld -shared -o  nbonds.so	--whole-archive   nbonds.a		
+ld -shared -o  pert.so		--whole-archive   pert.a		
+ld -shared -o  prate.so		--whole-archive   prate.a		
+ld -shared -o  quantum.so	--whole-archive   quantum.a	
+ld -shared -o  rxncor.so	--whole-archive   rxncor.a		
+ld -shared -o  sccdftbint.so	--whole-archive   sccdftbint.a	
+ld -shared -o  shapes.so	--whole-archive   shapes.a		
+ld -shared -o  solvation.so	--whole-archive   solvation.a	
+ld -shared -o  util.so		--whole-archive   util.a		
+ld -shared -o  vibran.so        --whole-archive   vibran.a          

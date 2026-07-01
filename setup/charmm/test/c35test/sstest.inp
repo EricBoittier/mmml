@@ -1,0 +1,123 @@
+* CHARMM c35a1 Testcase: sstest.inp
+* Author:   Wei Yang
+* Date:     January 1, 2008
+* Version:  c35a1
+* Test:     Simulated Scaling
+*
+
+stream datadir.def
+bomb -5
+fast off
+
+set 3 300.0
+set ndyn 1000
+
+
+read rtf  card
+* TOPOLOGY FILE FOR METHANOL TO METHANOL
+*
+   27     1
+MASS   1 DA    12.01100 C ! wei
+MASS   2 DB    12.01100 C ! wei
+MASS   3 DC    12.01100 C ! wei
+
+DEFA FIRS NONE LAST NONE
+
+RESI ABC         0.00 !
+ATOM  DA1  DA    0.00 !
+ATOM  DB1  DB    0.00 !    DA1       DA2
+ATOM  DB2  DB    0.00 !      \      /
+ATOM  DA2  DA    0.00 !       DB1--DB2---DA3
+ATOM  DA3  DC    0.00
+BOND  DA1  DB1  DB1  DB2  DB2  DA2
+BOND  DB2  DA3
+ANGL  DA1  DB1  DB2  DB1  DB2  DA2
+ANGL  DB1  DB2  DA3
+DIHE  DA1  DB1  DB2  DA2
+DIHE  DA1  DB1  DB2  DA3
+END
+
+read parameter card
+*>>>> CHARMM22 All-Hydrogen Parameter File for Proteins <<<<<<<<<<
+*
+BONDS
+DA   DB    225.000     1.5200 ! wei
+DC   DB    225.000     1.5200 ! wei
+DB   DB    225.000     1.5200 ! wei
+ANGLES
+DA   DB   DB    45.000    117.00
+DB   DB   DB    45.000    117.00
+DC   DB   DB    45.000    117.00
+DIHEDRALS
+DA   DB   DB   DA       90.000  1     0.00 ! wei
+DA   DB   DB   DA       90.000  2     0.00 ! wei
+DA   DB   DB   DB       7.0000  1   180.00 ! wei
+DA   DB   DB   DB       1.2000  2  -110.00 ! wei
+DA   DB   DB   DC       1.000   1   180.00 ! wei
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+DA     0.000000  -0.000000     0.000000 !
+DB     0.000000  -0.000000     0.000000 !
+DC     0.000000  -0.000000     0.000000 !
+HBOND CUTHB 0.5  ! If you want to do hbond analysis (only), then use
+                 ! READ PARAM APPEND CARD
+                 ! to append hbond parameters from the file: par_hbond.inp
+END
+
+read sequence ABC 1
+generate METH
+
+read COOR CARD 
+* ABC coordinate
+*
+    5
+    1    1 ABC  DA1    0.54478  -1.11130  -0.55984 METH 1      0.00000
+    2    1 ABC  DB1   -0.53430  -0.18133  -0.02962 METH 1      0.00000
+    3    1 ABC  DB2   -0.58366   0.03167   1.47458 METH 1      0.00000
+    4    1 ABC  DA2    0.28659   1.14048   2.04344 METH 1      0.00000
+    5    1 ABC  DA3    0.28659   1.14048   2.04344 METH 1      0.00000
+
+
+BLOCK 3
+CALL 2 SELE bynum 4 show END
+CALL 3 SELE bynum 5 show END
+RMLA BOND THET
+LDMA
+END
+
+BLOCK
+QLDM
+LANG temp 300.0
+!LDIN BLOCKnum LAMBda LamVelocity LamMass ReferenceE
+LDIN 1 1.00    0.0 1.0    0.0
+LDIN 2 0.49999 0.0 1.0    0.0   !last col (6) is reference energy
+LDIN 3 0.50001 0.0 1.0    0.0 !@referE   !last col (6) is reference energy
+
+!-----------  Simulated Scaling Input ------!
+  QLMC MCTE 300.0 FREQ 10 MCST 1 MAX 1.0
+  MCRS  !ignores the force for lambda from the restraining potential. A must!
+  MCFRee EXFReq 10 FINI 2.71828 FFIN 1.001 FLAT 0.8 WRFR 88
+
+  MCDIV @MCDIV  !must call after MCFR
+
+MCLAmd 11 LAMD0 0.0 LAMD1 0.1 LAMD2 0.2 LAMD3 0.3 -
+          LAMD4 0.4 LAMD5 0.5 LAMD6 0.6 LAMD7 0.7 -
+          LAMD8 0.8 LAMD9 0.9 LAMD10 1.0
+!----------- End for SS ---------------------!
+END
+
+!--------------------------DYNAMIC---------
+SCALAR FBETa SET 60.0
+
+open unit 25 writ form name @9/abc.res
+open unit 26 file writ name @9/abc.dcd
+open unit 88 writ form name @9/abc.fre ! free energy
+
+dynamics start langevin timestep 0.001 nstep @ndyn -
+     firstt @3 finalt @3 twindl -10.0 twindh 10.0 -
+     iasvel 5 iasors 5 iunr -1 iunwri 25 -
+     nsavc 1000 nsavv 0  nprint 10000 -
+     iuncrd 26  iunvel -1 isvfrq 1000 
+
+STOP
+

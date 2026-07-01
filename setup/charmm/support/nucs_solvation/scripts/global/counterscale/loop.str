@@ -1,0 +1,85 @@
+* loop.str, last modified May/10/2004
+* By Sonja M. Schwarzl & Stefan Fischer
+* calculation of interaction energies in vacuum E^vac_I.
+* calculation of scaled interaction energies in vacuum E^shield_I.
+* Each between 
+* -backbone or sidechain of each residue and rest of system
+* -loop proline as a particular residue
+* Loop over all residues.
+* 
+
+! loop over all residues from firstresidue to lastresidue
+
+SET COUNTER @FIRSTRESIDUE
+DECRement COUNTER BY 2
+
+LABEL LOOP
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+  INCRement COUNTER BY 1
+   
+  SET SELECTION BACK
+ 
+  SET RESNEXT @COUNTER
+  INCRement RESNEXT BY 1
+  
+  ! check, if next residue is Proline
+  DEFINE foo SELEct IRES @RESNEXT END
+  IF ?SELRESN EQ PRO GOTO PROLABEL
+  
+  LABEL ONCEAGAIN
+
+       ! Define group of target atoms.
+  IF SELECTION EQ BACK DEFI GROUP SELE (BACK2 .and. IRES @COUNTER) .or. -
+                                       (BACK1 .and. IRES @RESNEXT) END
+  IF SELECTION EQ SIDE DEFI GROUP SELE SIDE .and. IRES @COUNTER END
+
+  STREam calenergy.str
+    
+  IF SELECTION EQ SIDE GOTO NEXTRESIDUE
+    ! else:
+      SET SELECTION SIDE
+      GOTO ONCEAGAIN
+
+
+  
+!calculate energies when the residue is proline  
+ LABEL PROLABEL 
+    !  Calculate energy for SIDE of residue i
+    SET SELECTION SIDE  
+    DEFI GROUP SELE SIDE .and. IRES @COUNTER END 
+    STREam calenergy.str
+   
+    ! Calculate interaction energy for Proline (i,i+1)   
+    SET SELECTION BACK  
+    DEFI GROUP SELE (BACK2 .and. IRES @COUNTER) .or. - 
+              (BACK1 .and. IRES @RESNEXT)  .or. -
+	      (SIDE .and. IRES @RESNEXT) END
+    STREam calenergy.str
+     
+    ! Calculate interaction energy for BACK of residue (i+1,i+2)
+    INCRement COUNTER BY 1
+    INCREMENT RESNEXT BY 1
+
+     DEFI GROUP SELE (BACK2 .and. IRES @COUNTER) .or. -
+     (BACK1 .and. IRES @RESNEXT) END     
+    STREam calenergy.str
+    
+    !go back to normal loop by doing nothing
+ 
+  LABEL NEXTRESIDUE
+IF COUNTER .LT. @LASTRESIDUE GOTO LOOP
+
+RETURN
+
+
+
+
+
+
+
+
+
+
+
+

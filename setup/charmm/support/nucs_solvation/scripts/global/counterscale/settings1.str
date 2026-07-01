@@ -1,0 +1,43 @@
+* settings3.str for "verifying".
+* By Sonja M. Schwarzl & Stefan Fischer.
+*
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! From the run of ./scaling/scaling.inp :
+
+! Input coordinate-file, with raw scaling-factors in WMAIN:
+SET INPUTFAC   "../scaling/output/global_lambda_1-62.crd"
+
+! Input coordinate-file, with E^solv(I) in WMAIN:
+SET INPUTENER  "../scaling/output/global_e_solv_1-62.crd" 
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! Counterscaling.
+! Set first to 1.0 for the least-square fit, then run again with the actual
+! conterscaling weights (obtained from the least-square fit) :
+
+SET BACKFAC 1.0
+SET SIDEFAC 1.0
+
+! output-file, with raw scaling-factors in WMAIN
+SET OUTPUT "./output/global_lambda_1-62_raw.crd"
+
+! Output-file for E^solv and E^shield :
+SET OUTPUTBACK "./output/back_cdiel_raw.dat"
+SET OUTPUTSIDE "./output/side_cdiel_raw.dat"
+
+
+! ! Counterscaling weights (obtained from the least-square fit):
+! SET BACKFAC 0.85
+! SET SIDEFAC 0.81
+! 
+! ! output-file, with final counterscaled-factors in WMAIN
+! SET OUTPUT "./output/global_lambda_1-62_counterscaled.crd"
+! 
+! ! Output-file for E^solv and E^shield :
+! SET OUTPUTBACK "./output/back_cdiel_counterscaled.dat"
+! SET OUTPUTSIDE "./output/side_cdiel_counterscaled.dat"
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+RETURN

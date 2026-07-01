@@ -1,0 +1,293 @@
+* autogen_rtf testcase; test a number of autogen rtf options
+*  Test most RTF commands parsed features for autogen control
+*
+
+STREam datadir.def
+
+!
+! Topology file
+! -------------
+READ RTF CARD
+* All-hydrgen model alanine topology from c24a2/toppar/top_all22_prot.inp
+*
+   22     1
+MASS     1 H      1.00800 ! polar H
+MASS     2 HC     1.00800 ! N-ter H
+MASS     3 HA     1.00800 ! nonpolar H
+MASS     6 HB     1.00800 ! backbone H
+MASS    11 C     12.01100 ! carbonyl C, peptide backbone
+MASS    13 CT1   12.01100 ! aliphatic sp3 C for CH
+MASS    15 CT3   12.01100 ! aliphatic sp3 C for CH3
+MASS    23 CC    12.01100 ! carbonyl C, asn,asp,gln,glu,cter,ct2
+MASS    35 NH1   14.00700 ! peptide nitrogen
+MASS    37 NH3   14.00700 ! ammonium nitrogen
+MASS    51 O     15.99900 ! carbonyl oxygen
+MASS    53 OC    15.99900 ! carboxylate oxygen
+
+DECL -CA  
+DECL -C  
+DECL -O  
+DECL +N  
+DECL +HN  
+DECL +CA  
+DEFA FIRS NTER LAST CTER   
+AUTO  ANGLES DIHE  NOPCheck ! specify RTF based autogeneration
+
+RESI ALA          0.00
+GROUP   
+ATOM N    NH1    -0.47  !     |
+ATOM HN   H       0.31  !  HN-N
+ATOM CA   CT1     0.07  !     |     HB1
+ATOM HA   HB      0.09  !     |    /
+GROUP                   !  HA-CA--CB-HB2
+ATOM CB   CT3    -0.27  !     |    \
+ATOM HB1  HA      0.09  !     |     HB3
+ATOM HB2  HA      0.09  !   O=C
+ATOM HB3  HA      0.09  !     |
+GROUP                   !
+ATOM C    C       0.51
+ATOM O    O      -0.51
+BOND CB CA  N  HN  N  CA  O  C   
+BOND C  CA  C  +N  CA HA 
+BOND CB HB1  CB HB2  CB HB3   NODIHEDRALS ! turn off dihedrals for aliphatic hydrogens     *****
+DIHE  N CA CB HB1                         ! but add this one back in                       *****
+
+
+IMPR N -C CA HN  C CA +N O   
+DONOR HN N   
+ACCEPTOR O C   
+IC -C   CA   *N   HN    1.3551 126.4900  180.0000 115.4200  0.9996
+IC -C   N    CA   C     1.3551 126.4900  180.0000 114.4400  1.5390
+IC N    CA   C    +N    1.4592 114.4400  180.0000 116.8400  1.3558
+IC +N   CA   *C   O     1.3558 116.8400  180.0000 122.5200  1.2297
+IC CA   C    +N   +CA   1.5390 116.8400  180.0000 126.7700  1.4613
+IC N    C    *CA  CB    1.4592 114.4400  123.2300 111.0900  1.5461
+IC N    C    *CA  HA    1.4592 114.4400 -120.4500 106.3900  1.0840
+IC C    CA   CB   HB1   1.5390 111.0900  177.2500 109.6000  1.1109
+IC HB1  CA   *CB  HB2   1.1109 109.6000  119.1300 111.0500  1.1119
+IC HB1  CA   *CB  HB3   1.1109 109.6000 -119.5800 111.6100  1.1114
+
+RESI ALX          0.00
+GROUP   
+ATOM N    NH1    -0.47  !     |
+ATOM HN   H       0.31  !  HN-N
+ATOM CA   CT1     0.07  !     |     HB1
+ATOM HA   HB      0.09  !     |    /
+GROUP                   !  HA-CA--CB-HB2
+ATOM CB   CT3    -0.27  !     |    \
+ATOM HB1  HA      0.09  !     |     HB3
+ATOM HB2  HA      0.09  !   O=C
+ATOM HB3  HA      0.09  !     |
+GROUP                   !
+ATOM C    C       0.51
+ATOM O    O      -0.51
+BOND CB CA  N  HN  N  CA  O  C   
+BOND C  CA  C  +N  CA HA 
+BOND CB HB1  CB HB2  CB HB3   NOANGLES ! turn off angles for aliphatic hydrogens via bonds *****
+ANGLE  CA CB HB1    CA CB HB2          ! but add these two back in                         *****
+
+
+IMPR N -C CA HN  C CA +N O   
+DONOR HN N   
+ACCEPTOR O C   
+IC -C   CA   *N   HN    1.3551 126.4900  180.0000 115.4200  0.9996
+IC -C   N    CA   C     1.3551 126.4900  180.0000 114.4400  1.5390
+IC N    CA   C    +N    1.4592 114.4400  180.0000 116.8400  1.3558
+IC +N   CA   *C   O     1.3558 116.8400  180.0000 122.5200  1.2297
+IC CA   C    +N   +CA   1.5390 116.8400  180.0000 126.7700  1.4613
+IC N    C    *CA  CB    1.4592 114.4400  123.2300 111.0900  1.5461
+IC N    C    *CA  HA    1.4592 114.4400 -120.4500 106.3900  1.0840
+IC C    CA   CB   HB1   1.5390 111.0900  177.2500 109.6000  1.1109
+IC HB1  CA   *CB  HB2   1.1109 109.6000  119.1300 111.0500  1.1119
+IC HB1  CA   *CB  HB3   1.1109 109.6000 -119.5800 111.6100  1.1114
+
+PRES NTER         1.00 ! standard N-terminus
+GROUP                  ! use in generate statement
+ATOM N    NH3    -0.30 !
+ATOM HT1  HC      0.33 !         HT1	
+ATOM HT2  HC      0.33 !        /
+ATOM HT3  HC      0.33 ! --CA--N--HT2
+ATOM CA   CT1     0.21 !   |    \
+ATOM HA   HB      0.10   NOAE  !   HA    HT3       Remove angles from this atom      *****
+LINEAR N CA C          !               pretend linear: Remove angles and dihedral    *****
+
+DELETE ATOM HN   
+BOND HT1 N HT2 N HT3 N  
+
+ 
+DONOR HT1 N   
+DONOR HT2 N   
+DONOR HT3 N   
+IC HT1  N    CA   C     0.0000  0.0000  180.0000  0.0000  0.0000
+IC HT2  CA   *N   HT1   0.0000  0.0000  120.0000  0.0000  0.0000
+IC HT3  CA   *N   HT2   0.0000  0.0000  120.0000  0.0000  0.0000
+
+PRES CTER        -1.00 ! standard C-terminus
+GROUP                  ! use in generate statement
+ATOM C    CC      0.34 !   OT2
+ATOM OT1  OC     -0.67 !  //
+ATOM OT2  OC     -0.67 ! -C
+DELETE ATOM O          !  \\
+BOND C OT1 C OT2       !   OT1
+NOANG  OT1 C OT2                                      ! turn off specific angle      *****
+IMPR OT1 CA OT2 C   
+ACCEPTOR OT1 C   
+ACCEPTOR OT2 C   
+IC N    CA   C    OT2   0.0000  0.0000  180.0000  0.0000  0.0000
+IC OT2  CA   *C   OT1   0.0000  0.0000  180.0000  0.0000  0.0000
+
+END
+
+!
+! Parameter file
+! --------------
+READ PARAmeter CARD
+* All-hydrgen model alanine parameter from c24a2/toppar/par_all22_prot.inp
+*
+BOND
+CT1  C     250.000     1.4900
+CT1  CC    200.000     1.5220
+CT3  CT1   222.500     1.5380
+HA   CT3   322.000     1.1110
+HB   CT1   330.000     1.0800
+NH1  C     370.000     1.3450
+NH1  CT1   320.000     1.4300
+NH1  H     440.000     0.9970
+NH3  CT1   200.000     1.4800
+NH3  HC    403.000     1.0400
+O    C     620.000     1.2300
+OC   CC    525.000     1.2600
+
+ANGLES
+CT1  NH1  C      50.000   120.0000
+CT3  CT1  C      52.000   108.0000
+CT3  CT1  CC     52.000   108.0000
+H    NH1  C      34.000   123.0000
+H    NH1  CT1    35.000   117.0000
+HA   CT3  CT1    33.430   110.10     22.53   2.17900
+HA   CT3  HA     35.500   108.40     5.40   1.80200
+HB   CT1  C      50.000   109.5000
+HB   CT1  CC     50.000   109.5000
+HB   CT1  CT3    35.000   111.0000
+HC   NH3  CT1    30.000   109.50     20.00   2.07400
+HC   NH3  HC     44.000   109.5000
+NH1  C    CT1    80.000   116.5000
+NH1  CT1  C      50.000   107.0000
+NH1  CT1  CC     50.000   107.0000
+NH1  CT1  CT3    70.000   113.5000
+NH1  CT1  HB     48.000   108.0000
+NH3  CT1  C      43.700   110.0000
+NH3  CT1  CT3    67.700   110.0000
+NH3  CT1  HB     51.500   107.5000
+O    C    CT1    80.000   121.0000
+O    C    NH1    80.000   122.5000
+OC   CC   CT1    40.000   118.00    50.00   2.38800
+OC   CC   OC    100.000   124.00    70.00   2.22500
+
+DIHEDRALS
+C    CT1  NH1  C        0.2000  1   180.00
+CC   CT1  NH1  C        0.2000  1   180.00
+CT1  C    NH1  CT1      1.6000  1     0.00
+CT3  CT1  NH1  C        1.8000  1     0.00
+H    NH1  C    CT1      2.5000  2   180.00
+H    NH1  CT1  C        0.0000  1     0.00
+H    NH1  CT1  CC       0.0000  1     0.00
+H    NH1  CT1  CT3      0.0000  1     0.00
+HB   CT1  NH1  C        0.0000  1     0.00
+HB   CT1  NH1  H        0.0000  1     0.00
+NH1  C    CT1  CT3      0.0000  1     0.00
+NH1  C    CT1  HB       0.0000  1     0.00
+NH1  C    CT1  NH1      0.6000  1     0.00
+NH3  CT1  C    NH1      0.6000  1     0.00
+O    C    CT1  CT3      1.4000  1     0.00
+O    C    CT1  HB       0.0000  1     0.00
+O    C    CT1  NH1      0.0000  1     0.00
+O    C    CT1  NH3      0.0000  1     0.00
+O    C    NH1  CT1      2.5000  2   180.00
+O    C    NH1  H        2.5000  2   180.00
+X    CT1  CC   X        0.0500  6   180.00
+X    CT1  CT3  X        0.2000  3     0.00
+X    CT1  NH3  X        0.1000  3     0.00
+
+IMPROPER
+NH1  X    X    H      20.0000         0      0.0000 ! ALLOW   PEP POL ARO
+O    X    X    C     120.0000         0      0.0000 ! ALLOW   PEP POL ARO
+OC   X    X    CC     96.0000         0      0.0000 ! ALLOW   PEP POL ARO ION
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+C      0.000000  -0.110000     2.000000
+CC     0.000000  -0.070000     2.000000
+CT1    0.000000  -0.020000     2.275000   0.000000  -0.010000     1.900000
+CT3    0.000000  -0.080000     2.060000   0.000000  -0.010000     1.900000
+H      0.000000  -0.046000     0.224500
+HA     0.000000  -0.022000     1.320000
+HB     0.000000  -0.022000     1.320000
+HC     0.000000  -0.046000     0.224500
+NH1    0.000000  -0.200000     1.850000   0.000000  -0.200000     1.550000
+NH3    0.000000  -0.200000     1.850000
+O      0.000000  -0.120000     1.700000   0.000000  -0.120000     1.400000
+OC     0.000000  -0.120000     1.700000
+
+END
+
+! ---------------------
+print rtf
+print param
+! ---------------------
+READ SEQUence CARD
+* tetra-alanine
+*
+ 4
+ALA ALA ALX ALA
+
+GENErate TETR SETUp WARN
+
+PRINT PSF
+OPEN UNIT 12 CARD WRITE NAME @9ala4.psf5
+WRITE PSF CARD UNIT 12
+* PSF BEFORE AUTOGEN
+*
+
+TEST PSF ! sort the bond list
+
+set np ?NPHI
+set nt ?NTHE
+
+delete angles sele all end
+delete dihedrals sele all end
+
+AUTOgen ANGLes DIHEdrals  sele all end
+
+
+PRINT PSF
+OPEN UNIT 12 CARD WRITE NAME @9ala4.psf6
+WRITE PSF CARD UNIT 12
+* PSF AFTER AUTOGEN
+*
+
+if @nt .ne. ?NTHE then BLABLABLA bad number of angles
+
+if @np .ne. ?NPHI then BLABLABLA bad number of dihedrals
+
+
+
+!delete angles sele all end
+!delete dihedrals sele all end
+
+AUTOgen ANGLes DIHEdrals  sele resid 3 end
+
+
+PRINT PSF
+OPEN UNIT 12 CARD WRITE NAME @9ala4.psf7
+
+WRITE PSF CARD UNIT 12
+* PSF AFTER AUTOGEN
+*
+
+if @nt .ne. ?NTHE then BLABLABLA bad number of angles
+
+if @np .ne. ?NPHI then BLABLABLA bad number of dihedrals
+
+
+

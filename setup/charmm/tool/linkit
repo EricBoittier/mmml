@@ -1,0 +1,31 @@
+#! /bin/csh -f
+
+set mecho=0
+
+echo "Directory `pwd`"
+ls -1 .SRC/ >& /dev/null
+if ( $status ) then
+   echo "     directory empty"
+   exit
+endif
+foreach i (.SRC/*)
+ if ( -d $i ) then
+  if ( $i:t != "RCS" ) then
+  if ( $i:t != "CVS" ) then
+   set ii=$i:t
+   if( ! -e $ii ) mkdir $ii
+   if ( $mecho == 1 ) echo cd $ii
+   cd $ii
+   if( ! -e .SRC ) ln -s ../.SRC/$ii .SRC
+   $myroot/tool/linkit
+   cd ..
+  endif
+  endif
+ else
+   if ( $i:e != "o" ) then
+     echo "        linking $i"
+     ln -s $i .
+   endif
+ endif
+end
+

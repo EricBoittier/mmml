@@ -1,0 +1,50 @@
+title "the interface with charmm"
+
+# this input is because we don't want to parse
+# QM stuff in CHARMM (but we could, hehe)
+
+#this name must match the envi command in the CHARMM script
+start ala
+
+basis
+ * library sto-3g
+end
+
+# anything goes here, but for practical reasons one
+# should make an atom (or more) with the same multiplicity and the charge
+# as the QM region
+
+# noautosym is important!
+geometry noautosym
+Li 0 0 0
+he 2 0 0
+end
+
+charge -1
+
+# maybe a good idea for QM/MM (recomputes everything ??)
+scf
+direct
+end
+
+#scf
+#singlet
+#uhf
+#end
+
+#dft
+#xc b3lyp
+#end
+
+set int:cando_txs f
+
+#mp2
+#freeze atomic
+#end
+
+#intgrl
+#hondo on
+#end
+
+# We use the same task for real QM/MM run
+task scf gradient

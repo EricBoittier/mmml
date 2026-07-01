@@ -1,0 +1,342 @@
+* Testcase I for the NBIPS code 
+* |
+* Calculate energy a box of 216 tips3p water
+* using ENBFAST,ENBFSG, EVDW,EGROUP, ENBIPS3D, or ENBIPS
+* and using ENBIPS for 3D, 2D, and 1D IPS systems
+* |
+*
+
+! Author: Xiongwu Wy (wuxw@nhlbi.nih.gov)  7/2004
+
+IF ?NBIPS .NE. 1 THEN
+ echo "TESTCASE RESULT IPS_TIP216: SKIP"
+ STOP
+endif
+
+! as per A-P this test is not compatible with COLFFT
+if ?colfft .eq. 1 then
+ echo "TESTCASE RESULT IPS_TIP216: SKIP"
+ STOP
+endif
+
+stream datadir.def
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Preliminaries: Set up the water box                         !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+read rtf card
+* tips3p water topology file
+*
+   20    1
+mass     4 ht     1.00800  ! tips3p water hydrogen
+mass    58 ot    15.999940 ! tips3p water oxygen
+mass    94 dh     1.00800  ! dummy water hydrogen
+mass    98 do    15.999940 ! dummy water oxygen
+
+resi tip3    .000   ! tips3p water model
+group
+atom oh2  ot   -0.834 
+atom h1   ht    0.417
+atom h2   ht    0.417
+bond oh2 h1  oh2 h2  h1 h2 ! the last bond is needed for shake
+thet h1   oh2  h2 
+!                           
+patc  firs none last none
+end
+
+read param card
+* tips3p water parameter file
+*
+bond
+ht  ot     450.0   0.9572 ! from tips3p geometry
+ht  ht       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+dh  do     450.0   0.9572 ! from tips3p geometry
+dh  dh       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+thetas
+ht  ot  ht  55.0 104.52   ! from tips3p geometry
+dh  do  dh  55.0 104.52   ! from tips3p geometry
+!
+nonbonded   atom cdiel switch vatom vdistance vswitch -
+     cutnb 10.0  ctofnb 8  ctonnb 6  eps 1.0  e14fac 1.0  wmin 1.5
+!
+ht       0.0440    1.0       0.8000  
+ot       0.8400    6.0       1.6000  
+
+nbfix
+ot ot -0.1521 3.5364
+ht ht -0.04598 0.4490
+ot ht -0.08363 1.9927
+
+end
+
+! read in 216 tip3 solvent molecules and their equilibrated coordinates.
+
+read sequ tip3 216
+gene solv setu noangle
+
+open read unit 10 card name @0tip216.crd
+read coor unit 10 card
+close unit 10
+coor orient norot
+coor copy comp
+
+! setup crystal
+
+! set parameter 9 to 18.856 A, the length of one side
+! of the box of water. 
+
+set 9 18.856
+
+set rc 10 ! cutoff
+set ci 8  ! inner switching cutoff
+set ctl 12. ! list-cutoff
+set xo 14. ! cutoff for crystal
+
+
+prnlev 5 @pnode
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!   1. Bulk Water system 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!  A cubic PBC for bulk water
+crystal define cubic @9 @9 @9 90.0 90.0 90.0
+crystal build cutoff @xo noperations 0
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+
+! CASE I:  using EWALD 
+
+fast on
+energy inbfrq 1 imgfrq 1 ihbfrq 0  ATOM VATOM -
+   EWALD PMEWald KAPPa 0.34 ORDEr 6 FFTX 16 FFTY 16 FFTZ 16  -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+            
+
+! CASE II:  IPS using ENBAEXP
+
+fast on
+energy EIPS VIPS ATOM VATOM -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+! CASE III:  IPS using ENBFAST
+
+fast 1
+energy EIPS VIPS ATOM VATOM -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+! CASE IV:  IPS using ENBFSG
+
+fast on
+energy EIPS VIPS GROUP VGROUP  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+      
+! CASE V: IPS using EVDW
+
+fast off
+energy  EIPS VIPS ATOM VATOM  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+! CASE VI:  IPS using EGROUP
+
+fast off
+energy EIPS VIPS GROUP VGROUP  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+! CASE VII:  IPS using ENBIPS
+
+
+energy  IPS ATOM VATOM  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+
+! CASE VIII:  IPS using ENBIPS with fully homogenouse assumption.  
+
+energy IPS PXYZ ATOM VATOM  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+
+! CASE IX:  VIPS for L-J and Ewald for electrostatic interaction.  
+
+energy VIPS  ATOM VATOM  -
+   EWALD PMEWald KAPPa 0.34 ORDEr 6 FFTX 16 FFTY 16 FFTZ 16  -
+   cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+
+! CASE X:  Dynamic simulation of bulk water with IPS  
+
+DYNA LEAP CPT STRT  NSTE 10 TIME 0.001 -
+   EIPS VIPS -
+   cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 imgfrq 10 inbfrq 10
+
+
+! CASE XI:  Dynamic simulation of bulk water with VIPS + PME 
+
+open read unit 10 card name @0tip216.crd
+read coor unit 10 card
+close unit 10
+coor orient norot
+
+DYNA LEAP CPT STRT  NSTE 10 TIME 0.001 -
+   VIPS  -
+   EWALD PMEWald KAPPa 0.34 ORDEr 6 FFTX 16 FFTY 16 FFTZ 16  -
+   cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 NTRFRQ 100 imgfrq 10 inbfrq 10
+
+open read unit 10 card name @0tip216.crd
+read coor unit 10 card
+close unit 10
+coor orient norot
+coor copy comp
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!    2. Interfacial Water system 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Enlarge the height of the PBC box to create a 2D system
+crystal free
+
+calc zl 2 * @9
+
+crystal define orth @9 @9 @zl 90.0 90.0 90.0
+crystal build cutoff @zl noperations 0
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+
+
+
+! CASE XII:  using IPS for interfacial systems.  
+
+energy  EIPS VIPS ATOM VATOM  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+! CASE XIII:  using 1+2D IPS for interfacial systems.  
+
+energy  EIPS VIPS PXY ATOM VATOM  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+! CASE XIV:  using 1+2D VIPS for L-J and Ewald for charge interaction.  
+
+energy  VIPS PXY ATOM VATOM -
+   EWALD PMEWald KAPPa 0.34 ORDEr 6 FFTX 16 FFTY 16 FFTZ 32  -
+      cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+
+! CASE XV:  Dynamic simulation of water membrane with 1+2D IPS .  
+
+
+DYNA LEAP CPT STRT  NSTE 10 TIME 0.001 -
+   EIPS VIPS PXY -
+   cutnb @ctl cutim @ctl ctofnb @rc eps 1.0 imgfrq 10 inbfrq 10
+
+open read unit 10 card name @0tip216.crd
+read coor unit 10 card
+close unit 10
+coor orient norot
+coor copy comp
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!    3. Water droplet in vacuum 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Delete PBC box
+crystal free
+
+! CASE XVI:  using IPS for finite systems 
+
+
+energy IPS ATOM VATOM  -
+      cutnb @ctl  ctofnb @rc eps 1.0 -
+      
+coor forc 
+print coor  sele resi 1:3 end ! check force on an arb. residue
+coor copy
+
+
+! CASE XVIII:  Dynamic simulation of water droplet using IPS
+
+
+DYNA LEAP CPT STRT  NSTE 10 TIME 0.001 -
+   EIPS VIPS  -
+   cutnb @ctl ctofnb @rc eps 1.0 imgfrq 10 inbfrq 10
+
+! CASE X IIX:  using 3D-IPS  with secondary derivatives
+
+open read unit 10 card name @0tip216.crd
+read coor unit 10 card
+close unit 10
+coor orient norot
+coor copy comp
+
+
+energy IPS PXYZ ATOM VATOM  -
+      cutnb @ctl  ctofnb @rc eps 1.0 -
+      
+test first sele bynu 1:3 end
+test second sele bynu 1:3 end
+
+
+! CASE X IX:  using 3D-IPS  with r-dependent dielectric constant
+
+energy EIPS VIPS PXYZ ATOM VATOM  -
+      cutnb @ctl  ctofnb @rc eps 4.0 rdie -
+      
+test first sele bynu 1:3 end
+
+stop
+
+

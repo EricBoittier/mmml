@@ -1,0 +1,120 @@
+* CHARMM c38a1 testcase
+* Test link between adaptive umbrella and domain decomposition
+* Author J Spiriti, 2013
+*
+
+!the command parser only accomodates an 8-letter variable name
+if ?ADUMB  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?DOMDEC  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+
+stream datadir.def
+
+open unit 1 read formatted name @0/top_all22_prot_cmap.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read formatted name @0/par_all22_prot_chen_cmap_phmd.inp
+read para card unit 1
+close unit 1
+!open unit 1 read formatted name @0/triala_solv.psf
+!read psf card unit 1
+!close unit 1
+!open unit 1 read formatted name @0/triala_solv.crd
+!read coor card unit 1
+!close unit 1
+read sequ alad 1
+generate protein warn angle dihedral
+read sequ tips 6695
+generate water warn noangle nodihedral
+open unit 1 read formatted name @0/ala-solvated.cor
+read coor card unit 1
+close unit 1
+set boxsize = 58.5
+calc cryscut = @boxsize * 0.5
+crystal define cubic @boxsize @boxsize @boxsize 90 90 90
+crystal build cutoff @cryscut noper 0
+image byres select all end
+NBONDS ATOM EWALD PMEWALD KAPPA 0.32  FFTX 64 FFTY 64 FFTZ 64 ORDER 6 -
+        CUTNB 12.0  CTOFNB 10.0  VDW  VSHIFT nbscale 0.7 imscale 0.7 inbfrq -1 imgfrq -1
+energy domdec dlb on
+
+set status = strt
+set temp = 300
+set timestep = 2
+calc ts = @timestep / 1000
+!calc steps = 100 / @ts
+set iunrea = -1
+calc nsavc = 10
+set update = -1
+!
+! setup umbrella potential (see adumb.doc; note that the commands should
+! start with umbr not with adum)
+! we'll do a 2 dimensional umbrella sampling of the phi and psi dihedral
+! angles
+!
+! note that this code automatically uses WHAM to combine the data of
+! all runs so far (to calculate the free energy and the new umbrella potential)
+!
+! for the very first run, this umbrella is set to zero
+!
+! need to open a file to store temporary information
+open unit 44 write card name @9/adumb-ace-wuni.dat
+open unit 50 write card name @9/umbcor
+! here we define the biasing coordinates. These are the phi and psi dihedral
+! angles. These coordinates need to be setup by the UMBRella command.
+! This command also needs to the bin width for the angles, the number of
+! trigonometric functions and the number of polynomials for the interpolations.
+! Let's use bins of 5 degrees, 12 trigonometric functions, and a polynomial
+! function of degree 1. Add the appropriate commands (1 for each angle) below:
+
+        ! setup the phi dihedral
+umbrella dihedral nresol 72 trig 12 poly 1 protein 1 clp protein 1 nl protein 1 ca protein 1 crp
+
+        ! setup the psi dihedral
+umbrella dihedral nresol 72 trig 12 poly 1 protein 1 nl protein 1 ca protein 1 crp protein 1 nr
+
+! set the number of runs for the umbrella sampling
+SET NRUN 2
+
+! set the number of steps per run
+!SET UPDATE 200
+calc update = 50
+!calc update = 10 / @ts
+! each run should have EQ steps of equilibration
+!SET EQ   50000
+calc eq = 1
+!calc eq = 2 / @ts
+! specify the adaptive umbrella
+umbr init nsim @NRUN update @UPDATE equi @EQ thresh 10 temp 300 wuni 44 ucun 50
+
+! since we do NRUN simulations each consisting of UPDATE steps, we need
+! to calculate the total number of MD steps
+
+CALC NSTEP @NRUN * @UPDATE
+
+
+
+open unit 7 write unformatted name @9/umbrella.dcd
+open unit 9 write formatted name @9/umbrella.res
+
+shake fast bonh parameter 
+!scalar fbeta set 1.0 select .not. type h* end
+
+   dynamics cpt leap start -
+        pconst pmass 20000 -
+        pref 1.0 pgamma 10.0 tbath @temp -
+        hoover tmass 10000 reft @temp -
+        timestep @ts nsteps @nstep  -
+        firstt @temp finalt @temp teminc 0.0 tstruc @temp -
+        iprfrq 10000 isvfrq @update ihtfrq 0 ntrfrq @nsavc ixtfrq 1000 -
+        iunread -1 iunwri 9 iuncrd 7 -
+        nprint @nsavc nsavc @nsavc echeck 100.0  -
+        iasors 1 iasvel 1 iscvel 1 ichecw 0
+

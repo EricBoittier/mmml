@@ -1,0 +1,252 @@
+* HYDOGEN BOND TEST
+*
+
+!  VIBRAN not parallel
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+BOMLEV -3
+FASTER OFF
+
+READ RTF CARDS
+*  RTF for hbond testing
+*
+   18    1
+MASS     1 H      1.00800
+MASS    11 C     12.01100
+MASS    38 NH1   14.00670
+MASS    51 O     15.99940
+
+RESI CO      0.0000
+GROUP
+ATOM C    C       0.36
+ATOM O    O      -0.36
+BOND   C    O
+ACCE O C
+IC   C    O    +H   +N    1.200    180.0  180.0    180.0   0.9800
+IC   +N   C    O    +H     0.000    0.00  180.0    180.0   4.0000
+
+RESI NH     -0.080
+GROUP
+ATOM N    NH1    -0.20
+ATOM H    H       0.12
+BOND     N    H
+DONO H    N
+END
+
+READ PARAM CARDS
+* PARAMETER INPUT FILE TITLE
+*
+BOND
+C    O      580.0       1.23
+H    NH1    405.0       0.98!  GELIN AND IR STRETCH 3200 CM 1
+NONBONDED
+C        1.6500    -0.1200       2.100 1.65 -0.1 1.9
+H        0.0440    1.0       0.8000
+NH1      1.1000    6.0       1.6000
+O        0.8400    6.0       1.6000
+NBFIX
+H    O       -0.05       1.0
+HBOND AEXP 4 REXP 6 HAEX 4 AAEX 2
+NH1  O       -3.50      2.9
+END
+
+read sequ card
+* HYDOGEN BOND TEST
+*
+2
+CO  NH
+generater MAIN SETU
+
+
+ic edit
+DIHE 1 C 1 O 2 H 2 N  115.0
+ANGLE 1 O 2 H 2 N  161.0
+DIST 1 O 2 H  2.0
+ANGLE 1 C 1 O 2 H 157.0
+END
+ic seed 1 C 1 O 2 H
+IC BILD
+PRINT IC
+COOR ROTATE XDIR 1.0 YDIR 2.0 ZDIR 2.7 PHI 22.0
+PRINT COOR
+COOR COPY COMP
+NBONDS
+
+!GOTO GROUP
+!!!!! 1 first section. Test hydrogen bond energy functions
+
+SKIP ALL EXCL   HBON
+! no switching, no acceptor angle factor
+VIBRAN INBFRQ 0 IHBFRQ 50 CUTHA 90.0 CTONHA 40.0 CTOFHA 65.0   -
+       CUTHB 8.0 CTONHB 5.8 CTOFHB 7.0 noacce
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.000001
+* list of elements with difference greater than tol
+*
+END
+
+! no switching, an acceptor angle factor
+VIBRAN CUTHA 90.0 CTONHA 40.0 CTOFHA 65.0   -
+       CUTHB 8.0 CTONHB 5.8 CTOFHB 7.0 acce
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.000001
+* list of elements with difference greater than tol
+*
+END
+
+! radial switching, no acceptor angle factor
+VIBRAN CUTHA 90.0 CTONHA 40.0 CTOFHA 65.0   -
+       CUTHB 8.0 CTONHB 1.8 CTOFHB 4.0 noacce
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.000001
+* list of elements with difference greater than tol
+*
+END
+
+! angle switching, no acceptor angle factor
+VIBRAN CUTHA 90.0 CTONHA 10.0 CTOFHA 30.0   -
+       CUTHB 8.0 CTONHB 5.8 CTOFHB 7.0 noacce
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.000001
+* list of elements with difference greater than tol
+*
+END
+
+! radial and angle switching, no acceptor angle factor
+VIBRAN CUTHA 90.0 CTONHA 10.0 CTOFHA 30.0   -
+       CUTHB 8.0 CTONHB 1.8 CTOFHB 4.0 noacce
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.000001
+* list of elements with difference greater than tol
+*
+END
+
+! radial and angle switching, an acceptor angle factor
+VIBRAN CUTHA 90.0 CTONHA 10.0 CTOFHA 30.0   -
+       CUTHB 8.0 CTONHB 1.8 CTOFHB 4.0 acce
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.000001
+* list of elements with difference greater than tol
+*
+END
+
+!!!!! 2 second section, van der Waal testing
+
+SKIP ALL EXCL VDW
+! no switching region distance function
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 7.5 CTONNB 6.5  VSWI VDIS
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+!  switching region distance function
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTONNB 1.8 CTOFNB 4.5  VSWI VDIS
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! shifted distance function
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 4.5 CTONNB 3.5  VSHI VDIS
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! shifted distance function long limit
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 100.0 CTOFNB 99.0 CTONNB 98.0 VSHI VDIS
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+
+!!!!! 3 third atom electrostatics
+
+SKIP ALL EXCL ELEC
+
+! no switching region constant dielectric
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 7.5 CTONNB 6.5  swit cdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! no switching region R dielectric
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 7.5 CTONNB 6.5  swit rdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! switching region constant dielectric
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 5.5 CTONNB 2.1  swit cdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! switching region R dielectric
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 5.5 CTONNB 2.1  swit rdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! shifted potential constant dielectric
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 5.5 CTONNB 4.5  shif cdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! shifted potential R dielectric
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 5.5 CTONNB 4.5  shif rdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! shifted potential constant dielectric long limit
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 100.0 CTOFNB 99.0 CTONNB 98.0  shif cdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+! shifted potential R dielectric long limit
+VIBRAN INBF 1 IHBF 0 ATOM  CUTNB 100.0 CTOFNB 99.0 CTONNB 98.0  shif rdie
+WRITE SECO CARD UNIT 6 FINIT  STEP 0.00001 TOL 0.0000001
+* list of elements with difference greater than tol
+*
+END
+
+!!!!! 4 fourth, group electrostatics
+
+LABEL GROUP
+SKIP ALL EXCL ELEC
+! no switching region constant dielectric
+ENERGY INBF 1 IHBF 0 ATOM  CUTNB 8.0 CTOFNB 7.5 CTONNB 7.0  swit cdie
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! no switching constant dielectric
+ENERGY INBF 1 IHBF 0 GROUP  CUTNB 8.0 CTOFNB 7.5 CTONNB 7.0  SWIT CDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! no switching distance dielectric
+ENERGY INBF 1 IHBF 0 GROUP  CUTNB 8.0 CTOFNB 7.5 CTONNB 7.0  SWIT RDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! switching constant dielectric
+ENERGY INBF 1 IHBF 0 GROUP  CUTNB 8.0 CTOFNB 4.0 CTONNB 2.1  SWIT CDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! switching distance dielectric
+ENERGY INBF 1 IHBF 0 GROUP  CUTNB 8.0 CTOFNB 4.0 CTONNB 2.1  SWIT RDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+
+!!!!! 5 fifth, extended electrostatics
+SKIP EXCL EXTE
+! no switching constant dielectric
+ENERGY INBF 1 IHBF 0 GROUP EXTEND -
+       CUTNB 8.0 CTOFNB 7.5 CTONNB 7.0  SWIT CDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! Extended region, nograd, noquad
+ENERGY INBF 1 IHBF 0 GROUP EXTEND  NOGRAD NOQUAD -
+       CUTNB 0.5 CTOFNB 7.5 CTONNB 7.0  SWIT CDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! Extended region, grad, noquad
+ENERGY INBF 1 IHBF 0 GROUP EXTEND  GRAD NOQUAD -
+       CUTNB 0.5 CTOFNB 7.5 CTONNB 7.0  SWIT CDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! Extended region, nograd, quad
+ENERGY INBF 1 IHBF 0 GROUP EXTEND  NOGRAD QUAD -
+       CUTNB 0.5 CTOFNB 7.5 CTONNB 7.0  SWIT CDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001
+! Extended region, grad, quad
+ENERGY INBF 1 IHBF 0 GROUP EXTEND  GRAD QUAD -
+       CUTNB 0.5 CTOFNB 7.5 CTONNB 7.0  SWIT CDIE
+TEST FIRST   STEP 0.00001 TOL 0.0000001

@@ -1,0 +1,575 @@
+module powell_mod
+
+contains
+
+SUBROUTINE POWELL(COMLYN,COMLEN,X,Y,Z)
+!--mfc-- ##ENDIF
+  !-----------------------------------------------------------------------
+  !     This is the Powell-method [1] conjugate gradient minimizer.
+  !     Parts of the code were was extracted from the IMSL [2] library.
+  !     The SHAKE method [3] has been added in a straightforward way.
+  !     This allows to use this minimizer under strict constraints
+  !     (see routines SHAKE...).
+  !     The routine was implemented in CHARMM and tested by
+  !     Axel Brunger, 3-JUN-83.
+  !
+  !     References:
+  !     [1] M.J.D. Powell, "Restart Procedures for the Conjugate Gradient
+  !         Method", Mathematical Programming 12 (1977), pp. 241 - 254
+  !     [2] IMSL Inc. library manual (1982), Houston, Texas.
+  !     [3] W.F. v. Gunsteren, M.Karplus, "A Method for Constrained
+  !         Energy Minimization of Macromolecules, J. Comp. Chem. 1
+  !         (1980), 266-274.
+  !-----------------------------------------------------------------------
+
+#if KEY_FLUCQ==1
+  use flucqm, only: fqseln       
+#endif
+  use chm_kinds
+  use dimens_fcm
+  use exfunc
+  use number
+  use contrl
+  use egrad
+  use energym
+  use fourdm
+  use image
+  use psf
+  use bases_fcm
+  use stream
+#if KEY_TSM==1
+  use tsms_mod  
+#endif
+#if KEY_FLUCQ==1
+  use flucq     
+#endif
+#if KEY_DHDGB==1
+  use dhdgb,only:totals
+#endif
+  use memory
+  use string
+  implicit none
+
+  real(chm_real),allocatable,dimension(:) :: XCURR
+  real(chm_real),allocatable,dimension(:) :: GCURR
+  real(chm_real),allocatable,dimension(:) :: W
+  real(chm_real),allocatable,dimension(:) :: WXOPT
+  real(chm_real),allocatable,dimension(:) :: WGOPT
+  real(chm_real),allocatable,dimension(:) :: WGINIT
+  real(chm_real),allocatable,dimension(:) :: WRSDG
+  real(chm_real),allocatable,dimension(:) :: WRSDX
+  real(chm_real),allocatable,dimension(:) :: refv
+
+  character(len=*) COMLYN
+  INTEGER COMLEN
+  real(chm_real) X(*),Y(*),Z(*)
+
+  real(chm_real)  DFPRED, ACC, STEPSZ
+  INTEGER IER, NDIM, I, MAXFN, NCALLS
+  LOGICAL QDEBUG
+#if KEY_DHDGB==1
+  real(chm_real) DUM_FHDGB(TOTALS)
+#endif
+#if KEY_TSM==1
+  IF(QTSM.AND.PIGSET) THEN
+     CALL WRNDIE(-5,'<POWELL>', &
+          'TSM PIGGyBACK support has not been implemented yet.')
+     RETURN
+  ENDIF
+#endif 
+
+  LMINUC = (INDXA(COMLYN,COMLEN,'LATT')  >  0)
+  MINXYZ = (INDXA(COMLYN,COMLEN,'NOCO')  <=  0)
+
+  !     NDIM is the dimension of the problem
+  CALL CALCNVAR(.FALSE.,(/0/),NDIM)
+
+  MAXFN=GTRMI(COMLYN,COMLEN,'NSTE',500)
+  DFPRED=GTRMF(COMLYN,COMLEN,'STEP',PT001)
+  ACC=GTRMF(COMLYN,COMLEN,'TOLG',ZERO)**2 *NDIM
+  QDEBUG=(INDXA(COMLYN,COMLEN,'DEBU') > 0)
+  NPRINT=GTRMI(COMLYN,COMLEN,'NPRI',NPRINT)
+  !
+  IF(PRNLEV < 2) QDEBUG=.FALSE.
+  !
+  IF(PRNLEV >= 2) WRITE(OUTU,25) MAXFN, DFPRED, SQRT(ACC/NDIM)
+25 FORMAT(/' POWELL>  NSTEp=',I7,'  STEP=',F12.9, &
+       '  TOLGradient=',F12.9,/)
+  !
+  call chmalloc('powell.src','POWELL','REFV',NDIM,crl=REFV)
+  call chmalloc('powell.src','POWELL','XCURR',NDIM,crl=XCURR)
+  call chmalloc('powell.src','POWELL','GCURR',NDIM,crl=GCURR)
+  call chmalloc('powell.src','POWELL','W',NDIM,crl=W)
+  call chmalloc('powell.src','POWELL','WXOPT',NDIM,crl=WXOPT)
+  call chmalloc('powell.src','POWELL','WGOPT',NDIM,crl=WGOPT)
+  call chmalloc('powell.src','POWELL','WGINIT',NDIM,crl=WGINIT)
+  call chmalloc('powell.src','POWELL','WRSDG',NDIM,crl=WRSDG)
+  call chmalloc('powell.src','POWELL','WRSDX',NDIM,crl=WRSDX)
+
+  CALL GETVR1(MINXYZ,NATOM,XCURR,IMOVE,X,Y,Z, &
+       LMINUC, &
+#if KEY_CHEQ==1
+       .FALSE.,CG, &             
+#endif
+       XTLTYP,XTLABC,XTLREF, &
+#if KEY_FLUCQ==1
+       QFLUC,CG,FQSELN, &        
+#endif
+#if KEY_FOURD==0
+       .FALSE.,(/ZERO/),(/0/) &  
+#endif
+#if KEY_FOURD==1
+       DIM4,FDIM,IMOVE4 &        
+#endif
+#if KEY_DHDGB==1
+!AP/MF
+     ,.FALSE.,(/ZERO/),TOTALS &
+#endif
+       )
+
+  CALL POWEL2(NDIM,ACC,MAXFN,DFPRED, &
+       XCURR,REFV,GCURR,W, &
+       WXOPT,WGOPT,WGINIT,WRSDG, &
+       WRSDX,IER,QDEBUG,NPRINT,OUTU,NCALLS,STEPSZ)
+
+  CALL PUTVR1(MINXYZ,NATOM,WXOPT,IMOVE,X,Y,Z, &
+#if KEY_CHEQ==1
+       .FALSE.,CG,CG,CG, &       
+#endif
+       LMINUC,XTLTYP,XTLABC,XTLREF,.TRUE., &
+#if KEY_FLUCQ==1
+       QFLUC,CG,FQSELN, &        
+#endif
+#if KEY_FOURD==0
+       .FALSE.,(/ZERO/),(/0/) &  
+#endif
+#if KEY_FOURD==1
+       DIM4,FDIM,IMOVE4 &        
+#endif
+#if KEY_DHDGB==1
+       ,QFHDGB=.FALSE.,SDEF=DUM_FHDGB, TOTALS=TOTALS &
+#endif
+       )
+  !
+  IF(NPRINT /= 0 .AND. PRNLEV >= 2) THEN
+     IF (IER == 0 ) THEN
+        IF(WRNLEV > 0 ) WRITE(OUTU,115)
+     ELSE IF (IER == 129) THEN
+        CALL WRNDIE(0,'POWELL','Line search abandoned')
+     ELSE IF (IER == 130) THEN
+        CALL WRNDIE(0,'POWELL','Search direction uphill')
+     ELSE IF (IER == 131) THEN
+         IF(WRNLEV > 0 ) WRITE(OUTU,125)
+     ELSE IF (IER == 132) THEN
+        CALL WRNDIE(0,'POWELL', &
+             'Two consecutive iterations failed to reduce E')
+     ELSE IF (IER == -1) THEN
+        WRITE (OUTU,145)
+     ELSE
+        WRITE (OUTU,'(/,A,I5,A,/)') &
+             ' POWELL> Unknown convergence status (',IER,').'
+     ENDIF
+115  FORMAT(' POWELL> Gradient converged. Normal termination.')
+125  FORMAT(' POWELL> Number of STEPs limit. Normal termination.')
+     IF(PRNLEV >= 2) WRITE(OUTU,135)
+135  FORMAT(' POWELL> Current coordinates set to least ', &
+          'calculated energy point')
+145  FORMAT(' POWELL> Termination due to time limit')
+     !
+     !yw   11-May-91 Save the last step characteristics
+     !     EPROP(PJNK1)=NCALLS
+     !     EPROP(PJNK2)=STEPSZ
+     !     when minimization exits because of the number of steps limit reached,
+     !     it updates the coordinates AFTER the last step, so the final energy
+     !     may be different. So, let's calculate it
+     !RCZ    CALL GETE(X, Y, Z, X, Y, Z, 0)
+  ENDIF
+  CALL PRINTE(OUTU, EPROP, ETERM, 'POWE', 'MIN', .TRUE., &
+       NCALLS, ZERO, STEPSZ, .TRUE.)
+  ! <- mikem --
+  call chmdealloc('powell.src','POWELL','XCURR',NDIM,crl=XCURR)
+  call chmdealloc('powell.src','POWELL','GCURR',NDIM,crl=GCURR)
+  call chmdealloc('powell.src','POWELL','W',NDIM,crl=W)
+  call chmdealloc('powell.src','POWELL','WXOPT',NDIM,crl=WXOPT)
+  call chmdealloc('powell.src','POWELL','WGOPT',NDIM,crl=WGOPT)
+  call chmdealloc('powell.src','POWELL','WGINIT',NDIM,crl=WGINIT)
+  call chmdealloc('powell.src','POWELL','WRSDG',NDIM,crl=WRSDG)
+  call chmdealloc('powell.src','POWELL','WRSDX',NDIM,crl=WRSDX)
+  call chmdealloc('powell.src','POWELL','refv',NDIM,crl=refv)
+
+  RETURN
+END SUBROUTINE POWELL
+
+SUBROUTINE POWEL2(N,ACC,MAXFN,DFPRED,XCURR,REFV,GCURR, &
+     W,WXOPT,WGOPT,WGINIT,WRSDG,WRSDX,IER,QDEBUG, &
+     NPRINT,OUTU,NCALLS,STEPCH)
+  !-----------------------------------------------------------------------
+  !     See comments in routine POWELL. Original comments were compressed.
+  !     The work array was split into 6 individual arrays. Debugging
+  !     information was added.
+  !
+  !     DFPRED - A ROUGH ESTIMATE OF THE EXPECTED REDUCTION IN F, WHICH IS
+  !     USED TO DETERMINE THE SIZE OF THE INITIAL CHANGE TO X.
+  !     NOTE THAT DFPRED IS THE EXPECTED REDUCTION ITSELF, AND DOES NOT
+  !     DEPEND ON ANY RATIOS. A BAD VALUE OF DFPRED CAUSES AN ERROR
+  !     MESSAGE, WITH IER=129, AND A RETURN ON THE FIRST ITERATION.
+  !     IER    - ERROR PARAMETER. IER = 0 IMPLIES THAT CONVERGENCE
+  !     WAS ACHIEVED AND NO ERRORS OCCURRED. TERMINAL ERROR IER = 129 IMPLIES
+  !     THAT THE LINE SEARCH OF AN INTEGRATION WAS ABANDONED. THIS ERROR MAY
+  !     BE CAUSED BY AN ERROR IN THE GRADIENT. IER = 130 IMPLIES THAT THE
+  !     CALCULATION CANNOT CONTINUE BECAUSE THE SEARCH DIRECTION IS UPHILL.
+  !     IER = 131 IMPLIES THAT THE ITERATION WAS TERMINATED BECAUSE MAXFN WAS
+  !     EXCEEDED. IER = 132 IMPLIES THAT THE CALCULATION WAS TERMINATED
+  !     BECAUSE TWO CONSECUTIVE ITERATIONS FAILED TO REDUCE F.
+  !
+  !     REMARKS:
+  !     1.  THE ROUTINE INCLUDES NO THOROUGH CHECKS ON THE PART OF
+  !     THE USER PROGRAM THAT CALCULATES THE DERIVATIVES OF THE OBJECTIVE
+  !     FUNCTION. THEREFORE, BECAUSE DERIVATIVE CALCULATION IS A FREQUENT
+  !     SOURCE OF ERROR, THE USER SHOULD VERIFY INDEPENDENTLY THE CORRECTNESS
+  !     OF THE DERIVATIVES THAT ARE GIVEN TO THE ROUTINE.
+  !     2.  BECAUSE OF THE CLOSE RELATION BETWEEN THE CONJUGATE GRADIENT
+  !     METHOD AND THE METHOD OF STEEPEST DESCENTS, IT IS VERY HELPFUL TO
+  !     CHOOSE THE SCALE OF THE VARIABLES IN A WAY THAT BALANCES THE
+  !     MAGNITUDES OF THE COMPONENTS OF A TYPICAL DERIVATE VECTOR. IT CAN BE
+  !     PARTICULARLY INEFFICIENT IF A FEW COMPONENTS OF THE GRADIENT ARE MUCH
+  !     LARGER THAN THE REST.
+  !     3.  IF THE VALUE OF THE PARAMETER ACC IN THE ARGUMENT LIST OF THE
+  !     ROUTINE IS SET TO ZERO, THEN THE ROUTINE WILL CONTINUE ITS
+  !     CALCULATION UNTIL IT STOPS REDUCING THE OBJECTIVE FUNCTION. IN THIS
+  !     CASE THE USUAL BEHAVIOUR IS THAT CHANGES IN THE OBJECTIVE FUNCTION
+  !     BECOME DOMINATED BY COMPUTER ROUNDING ERRORS BEFORE PRECISION IS LOST
+  !     IN THE GRADIENT VECTOR. THEREFORE, BECAUSE THE POINT OF VIEW HAS BEEN
+  !     TAKEN THAT THE USER REQUIRES THE LEAST POSSIBLE VALUE OF THE
+  !     FUNCTION, A VALUE OF THE OBJECTIVE FUNCTION THAT IS SMALL DUE TO
+  !     COMPUTER ROUNDING ERRORS CAN PREVENT FURTHER PROGRESS. HENCE THE
+  !     PRECISION IN THE FINAL VALUES OF THE VARIABLES MAY BE ONLY ABOUT HALF
+  !     THE NUMBER OF SIGNIFICANT DIGITS IN THE COMPUTER ARITHMETIC, BUT THE
+  !     LEAST VALUE OF F IS USUALLY FOUND TO QUITE HIGH ACCURACY.
+  !
+  use chm_kinds
+  use dimens_fcm
+  use number
+  use egrad
+  use timerm
+  implicit none
+!
+  INTEGER  N, OUTU
+  real(chm_real)   REFV(*)
+  INTEGER  MAXFN, IER
+  real(chm_real)   ACC, DFPRED, XCURR(*), GCURR(*)
+  real(chm_real)   W(*), WXOPT(*), WGOPT(*), WGINIT(*), WRSDG(*),  &
+       WRSDX(*)
+  LOGICAL  QDEBUG
+  INTEGER  NPRINT
+  !
+  INTEGER  MAXLIN, MXFCON, I, IRETRY, ICALL
+  INTEGER  ITERC, ITERFM, ITERRS, NCALLS, NFBEG, NFOPT
+  real(chm_real)   BETA, DDSPLN, DFPR, FCH, FINIT, FMIN, GAMDEN,GAMA
+  real(chm_real)   GINIT, GMIN, GNEW, GSPLN, GSQRD, SBOUND, STEP,  &
+       STEPCH
+  real(chm_real)   STMIN, SUM, WORK, F, EDIF
+  !
+  DATA     MAXLIN/5/,MXFCON/2/
+  !
+  IER = 0
+  !
+  !     W(*) IS USED FOR THE SEARCH DIRECTION OF AN ITERATION. WRSDX(*) AND
+  !     WRSDG(*) CONTAIN THE INFORMATION THAT IS REQUIRED BY THE CONJUGACY
+  !     CONDITIONS OF THE RESTART PROCEDURE. WGINIT(*) CONTAINS THE GRADIENT
+  !     AT THE START OF AN ITERATION. WXOPT(*) CONTAINS THE GRADIENT VECTOR
+  !     WHERE F IS LEAST.
+  !
+  !
+  !     SET SOME PARAMETERS TO BEGIN THE CALCULATION. ITERC AND NCALLS COUNT
+  !     THE NUMBER OF ITERATIONS AND CALLS OF ENERGY. ITERFM IS THE NUMBER OF
+  !     THE MOST RECENT ITERATION THAT DECREASES F.
+  !
+  ITERC = 0
+  NCALLS = 0
+  ICALL=0
+  ITERFM = ITERC
+  STEPCH=0.0
+  EDIF=0.0
+
+  refv(1:n) = xcurr(1:n)
+  !
+  !     CALL ENERGY. LET THE INITIAL SEARCH DIRECTION BE MINUS THE GRADIENT
+  !     VECTOR. USUALLY THE PARAMETER ITERRS GIVES THE ITERATION NUMBER OF
+  !     THE MOST RECENT RESTART, BUT IT IS SET TO ZERO WHEN THE STEEPEST
+  !     DESCENT DIRECTION IS USED.
+  !
+10 CONTINUE
+  CALL EGRAD1(N,XCURR,REFV,F,GCURR,NCALLS,ICALL,IER)
+  IF(ATLIM) THEN
+     IER=-1
+     RETURN
+  ENDIF
+  ICALL=1
+  IF (NPRINT > 0) THEN
+     IF (MOD(NCALLS,NPRINT) == 0) CALL ENEOUT(OUTU,NCALLS,STEPCH,F)
+  ENDIF
+  NCALLS = NCALLS+1
+  !
+  IF (NCALLS >= 2) GOTO 220
+20 CONTINUE
+  W(1:n) = -GCURR(1:n)
+  ITERRS = 0
+  IF (ITERC > 0) GOTO 380
+  !
+  !     SET SUM TO G SQUARED. GMIN AND GNEW ARE THE OLD AND THE NEW
+  !     DIRECTIONAL DERIVATIVES ALONG THE CURRENT SEARCH DIRECTION. LET FCH
+  !     BE THE DIFFERENCE BETWEEN F AND THE PREVIOUS BEST VALUE OF THE
+  !     OBJECTIVE FUNCTION.
+  !
+220 CONTINUE
+  GNEW = 0.0
+  SUM = 0.0
+  DO I=1,N
+     GNEW = GNEW+W(I)*GCURR(I)
+     SUM = SUM+GCURR(I)**2
+  enddo
+  IF (QDEBUG) WRITE(OUTU,235) GNEW,F
+235 FORMAT(' POWELL> New search point. GNEW=',G17.10,' Fnew=',G17.10)
+  IF (NCALLS == 1) GOTO 270
+  FCH = F-FMIN
+  !
+  !     STORE THE VALUES OF XCURR, F AND GCURR, IF  THEY ARE THE BEST THAT
+  !     HAVE BEEN CALCULATED SO FAR, AND NOTE GCURR  SQUARED AND THE VALUE OF
+  !     NCALLS. TEST FOR CONVERGENCE.
+  !
+  IF (FCH > 0) GOTO 330
+  IF (FCH < 0) GOTO 270
+  IF (GNEW/GMIN < -1.0) GOTO 300
+270 CONTINUE
+  FMIN = F
+  GSQRD = SUM
+  NFOPT = NCALLS
+  IF (QDEBUG) WRITE(OUTU,285)
+285 FORMAT(' POWELL> least energy point set to current point.')
+  WXOPT(1:n) = XCURR(1:n)
+  WGOPT(1:n) = GCURR(1:n)
+  xcurr(1:n) = refv(1:n)
+300 CONTINUE
+  IF (SUM <= ACC) GOTO 950
+  !
+  !     CHECK IF THE VALUE OF MAXFN ALLOWS ANOTHER CALL OF ENERGY.
+  !
+330 CONTINUE
+  IF (NCALLS /= MAXFN) GOTO 350
+  IER = 131
+  GOTO 900
+350 CONTINUE
+  IF (NCALLS > 1) GOTO 420
+  !
+  !     SET DFPR TO THE ESTIMATE OF THE  REDUCTION IN F GIVEN IN THE
+  !     ARGUMENT LIST, IN ORDER THAT THE  INITIAL CHANGE TO THE PARAMETERS
+  !     IS OF A SUITABLE SIZE. THE VALUE  OF STMIN IS USUALLY THE
+  !     STEP-LENGTH OF THE MOST RECENT  LINE SEARCH THAT GIVES THE LEAST
+  !     CALCULATED VALUE OF F.
+  !
+  DFPR = DFPRED
+  STMIN = DFPRED/GSQRD
+  !
+  !     BEGIN THE ITERATION
+  !
+380 CONTINUE
+  ITERC = ITERC+1
+  !
+  !     STORE THE INITIAL ENERGY VALUE AND GRADIENT, CALCULATE THE INITIAL
+  !     DIRECTIONAL DERIVATIVE, AND BRANCH IF ITS VALUE IS NOT NEGATIVE. SET
+  !     SBOUND TO MINUS ONE TO INDICATE THAT A BOUND ON THE STEP IS NOT KNOWN
+  !     YET, AND SET NFBEG TO THE CURRENT VALUE OF NCALLS. THE PARAMETER
+  !     IRETRY SHOWS THE NUMBER OF ATTEMPTS AT SATISFYING THE BETA CONDITION.
+  !
+  FINIT = F
+  GINIT = 0.0
+  DO I=1,N
+     WGINIT(I) = GCURR(I)
+     GINIT = GINIT+W(I)*GCURR(I)
+  enddo
+  IF (GINIT >= 0.0) GOTO 750
+  GMIN = GINIT
+  SBOUND = -1.0
+  NFBEG = NCALLS
+  IRETRY = -1
+  !
+  !     SET STEPCH SO THAT THE INITIAL STEP-LENGTH IS CONSISTENT WITH THE
+  !     PREDICTED REDUCTION IN F, SUBJECT TO THE CONDITION THAT IT DOES NOT
+  !     EXCEED THE STEP-LENGTH OF THE PREVIOUS ITERATION. LET STMIN BE THE
+  !     STEP TO THE LEAST CALCULATED VALUE OF F.
+  !
+  STEPCH = MIN(STMIN,ABS(DFPR/GINIT))
+  STMIN = 0.0
+  !
+  !     CALL ENERGY AT THE VALUE OF X THAT IS DEFINED BY THE NEW CHANGE TO
+  !     THE STEP-LENGTH, AND LET THE NEW STEP-LENGTH BE STEP. THE VARIABLE
+  !     WORK IS USED AS WORK SPACE.
+  !
+400 CONTINUE
+  STEP = STMIN+STEPCH
+  WORK = 0.0
+  DO I=1,N
+     XCURR(I) = WXOPT(I)+STEPCH*W(I)
+     WORK = MAX(WORK,ABS(XCURR(I)-WXOPT(I)))
+  enddo
+  IF (WORK > 0.0) GOTO 10
+  !
+  !     TERMINATE THE LINE SEARCH IF STEPCH IS EFFECTIVELY ZERO.
+  !
+  IF (NCALLS > NFBEG+1) GOTO 480
+  IF (ABS(GMIN/GINIT) > 0.2) GOTO 480
+  GOTO 780
+  !
+  !     LET SPLN BE THE QUADRATIC SPLINE THAT INTERPOLATES THE CALCULATED
+  !     ENERGY VALUES AND DIRECTIONAL DERIVATIVES AT THE POINTS STMIN AND
+  !     STEP OF THE LINE SEARCH, WHERE THE KNOT OF THE SPLINE IS AT
+  !     0.5*(STMIN+STEP). REVISE STMIN, GMIN AND SBOUND, AND SET DDSPLN TO
+  !     THE SECOND DERIVATIVE OF SPLN AT THE NEW STMIN. HOWEVER, IF FCH IS
+  !     ZERO, IT IS ASSUMED THAT THE MAXIMUM ACCURACY IS ALMOST ACHIEVED, SO
+  !     DDSPLN IS CALCULATED USING ONLY THE CHANGE IN THE GRADIENT.
+  !
+420 CONTINUE
+  WORK = (FCH+FCH)/STEPCH-GNEW-GMIN
+  DDSPLN = (GNEW-GMIN)/STEPCH
+  IF (NCALLS > NFOPT) SBOUND = STEP
+  IF (NCALLS > NFOPT) GOTO 440
+  IF (GMIN*GNEW <= 0.0) SBOUND = STMIN
+  STMIN = STEP
+  GMIN = GNEW
+  STEPCH = -STEPCH
+440 CONTINUE
+  IF (FCH /= 0.0) DDSPLN = DDSPLN+(WORK+WORK)/STEPCH
+  !
+  !     TEST FOR CONVERGENCE OF THE LINE SEARCH, BUT FORCE AT LEAST TWO STEPS
+  !     TO BE TAKEN IN ORDER NOT TO LOSE QUADRATIC TERMINATION.
+  !
+  IF (GMIN == 0.0) GOTO 780
+  IF (NCALLS <= NFBEG+1) GOTO 520
+  IF (ABS(GMIN/GINIT) <= 0.2) GOTO 780
+  !
+  !     APPLY THE TEST THAT DEPENDS ON THE PARAMETER MAXLIN.
+  !
+460 CONTINUE
+  IF (NCALLS < NFOPT+MAXLIN) GOTO 520
+480 CONTINUE
+  IER = 129
+  GOTO 780
+  !
+  !     SET STEPCH TO THE GREATEST CHANGE TO THE CURRENT VALUE OF STMIN THAT
+  !     IS ALLOWED BY THE BOUND ON THE LINE SEARCH. SET GSPLN TO THE GRADIENT
+  !     OF THE QUADRATIC SPLINE AT (STMIN+STEPCH). HENCE CALCULATE THE VALUE
+  !     OF STEPCH THAT MINIMIZES THE SPLINE FUNCTION, AND THEN OBTAIN THE NEW
+  !     FUNCTION AND GRADIENT VECTOR, FOR THIS VALUE OF THE CHANGE TO THE
+  !     STEP-LENGTH.
+  !
+520 CONTINUE
+  STEPCH = 0.5*(SBOUND-STMIN)
+  IF (SBOUND < -0.5) STEPCH = 9.0*STMIN
+  GSPLN = GMIN+STEPCH*DDSPLN
+  IF (GMIN*GSPLN < 0.0) STEPCH = STEPCH*GMIN/(GMIN-GSPLN)
+  GOTO 400
+  !
+  !     CALCULATE THE VALUE OF BETA THAT OCCURS IN THE NEW SEARCH
+  !     DIRECTION.
+  !
+550 CONTINUE
+  SUM = 0.0
+  DO I=1,N
+     SUM = SUM+GCURR(I)*WGINIT(I)
+  enddo
+  BETA = (GSQRD-SUM)/(GMIN-GINIT)
+  !
+  !     TEST THAT THE NEW SEARCH DIRECTION CAN BE MADE DOWNHILL. IF IT
+  !     CANNOT, THEN MAKE ONE ATTEMPT TO IMPROVE THE ACCURACY OF THE LINE
+  !     SEARCH.
+  !
+  IF (ABS(BETA*GMIN) <= 0.2*GSQRD) GOTO 600
+  IRETRY = IRETRY+1
+  IF (IRETRY <= 0) GOTO 460
+  !
+  !     APPLY THE TEST THAT DEPENDS ON THE PARAMETER MXFCON. SET DFPR TO THE
+  !     PREDICTED REDUCTION IN F ON THE NEXT ITERATION.
+  !
+600 CONTINUE
+  IF (F < FINIT) ITERFM = ITERC
+  IF (ITERC < ITERFM+MXFCON) GOTO 640
+  IER = 132
+  GOTO 900
+640 CONTINUE
+  DFPR = STMIN*GINIT
+  !
+  !     BRANCH IF A RESTART PROCEDURE IS REQUIRED DUE TO THE ITERATION NUMBER
+  !     OR DUE TO THE SCALAR PRODUCT OF CONSECUTIVE GRADIENTS.
+  !
+  IF (IRETRY > 0) GOTO 20
+  IF (ITERRS == 0) GOTO 700
+  IF (ITERC-ITERRS >= N) GOTO 700
+  IF (ABS(SUM) >= 0.2*GSQRD) GOTO 700
+  !
+  !     CALCULATE THE VALUE OF GAMA THAT OCCURS IN THE NEW SEARCH DIRECTION,
+  !     AND SET SUM TO A SCALAR PRODUCT FOR THE TEST BELOW. THE VALUE OF
+  !     GAMDEN IS SET BY THE RESTART PROCEDURE.
+  !
+  GAMA = 0.0
+  SUM = 0.0
+  DO I=1,N
+     GAMA = GAMA+GCURR(I)*WRSDG(I)
+     SUM = SUM+GCURR(I)*WRSDX(I)
+  enddo
+  GAMA = GAMA/GAMDEN
+  !
+  !     RESTART IF THE NEW SEARCH DIRECTION IS NOT SUFFICIENTLY DOWNHILL.
+  !
+  IF (ABS(BETA*GMIN+GAMA*SUM) >= 0.2*GSQRD) GOTO 700
+  !
+  !     CALCULATE THE NEW SEARCH DIRECTION.
+  !
+  IF (QDEBUG) WRITE(OUTU,685) BETA,GAMA
+685 FORMAT(' POWELL> New search direction. BETA=',G17.10, &
+       ' GAMA=',G17.10)
+  W(1:n) = -GCURR(1:n)+BETA*W(1:n)+GAMA*WRSDX(1:n)
+  CALL CHECKP(N,W,REFV)
+  GOTO 380
+  !
+  !     APPLY THE RESTART PROCEDURE.
+  !
+700 CONTINUE
+  GAMDEN = GMIN-GINIT
+  IF (QDEBUG) WRITE(OUTU,715) BETA
+715 FORMAT(' POWELL> Applying restart procedure. BETA=',G17.10)
+  DO I=1,N
+     WRSDX(I) = W(I)
+     WRSDG(I) = GCURR(I)-WGINIT(I)
+     W(I) = -GCURR(I)+BETA*W(I)
+  enddo
+  CALL CHECKP(N,W,REFV)
+  ITERRS = ITERC
+  GOTO 380
+  !
+  !     SET IER TO INDICATE THAT THE SEARCH DIRECTION IS UPHILL.
+  !
+750 CONTINUE
+  IER = 130
+  !
+  !     ENSURE THAT F, X AND G ARE OPTIMAL.
+  !
+780 CONTINUE
+  IF (NCALLS == NFOPT) GOTO 800
+  IF (QDEBUG) WRITE(OUTU,785)
+785 FORMAT(' POWELL> Current point set to optimal point.')
+  F = FMIN
+  DO  I=1,N
+     XCURR(I) = WXOPT(I)
+     GCURR(I) = WGOPT(I)
+  enddo
+800 CONTINUE
+  IF (IER == 0) GOTO 550
+900 CONTINUE
+950 CONTINUE
+  !
+  RETURN
+END SUBROUTINE POWEL2
+
+end module powell_mod
+

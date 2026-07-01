@@ -1,0 +1,121 @@
+* CHARMM c36a4r1 testcase: mtp-no-h2o.inp
+* Test input file for atomic multipole module MTP
+* NO + H2O
+*
+
+bomlev -1
+
+stream datadir.def
+
+SET outfile no-h2o
+
+read rtf card unit 5
+* rtf for NO and water
+*
+   22     0
+MASS     4 HT    1.007825  !
+MASS    42 NM   14.003074  !
+MASS    56 OT   15.994915  !
+MASS    57 OM   15.994915  !
+
+DEFA FIRS NTER LAST CTER   
+AUTO ANGLES DIHE   
+
+RESI TIP3     0.00000 ! tips3p water model, generate using noangle nodihedral
+GROUP   
+ATOM OH2  OT     -0.83400  ! ALLOW WAT
+ATOM H1   HT      0.41700  ! ALLOW WAT
+ATOM H2   HT      0.41700  ! ALLOW WAT
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2    ! required
+ACCEPTOR OH2   
+PATCHING FIRS NONE LAST NONE   
+
+RESI NO       0.00000 ! NO ligand; charge included in MTP
+GROUP    ! NO ligand
+ATOM N    NM      0.00000
+ATOM O    OM      0.00000
+BOND N O    ! NO ligand for heme
+PATCHING FIRS NONE LAST NONE    ! NO ligand for heme
+
+END
+
+
+read para card unit 5
+* param for NO and water
+*
+BOND
+HT   HT      0.000     1.5139 ! FROM TIPS3P GEOMETRY (FOR SHAKE/W PARAM)
+OT   HT    450.000     0.9572 ! FROM TIPS3P GEOM
+OM   NM   1060.34      1.151  ! 
+
+ANGLE
+HT   OT   HT     55.000   104.5200 ! TIP3P GEOMETRY, ADM JR.
+
+DIHEDRAL
+
+IMPROPER
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 900.0 ctofnb 890.0 ctonnb 880.0 eps 1.0 e14fac 1.0 wmin 1.5
+HT     0.000000  -0.046000     0.224500 ! TIP3P HYDROGEN PARAMETERS
+OT     0.000000  -0.152000     1.768200 ! TIP3P OXYGEN PARAMETERS
+
+! Nitrogen monoxide
+NM     0.000000  -0.2000     2.000  ! (OMB 03/07/92)
+OM     0.000000  -0.1591     2.050  ! (OMB 03/07/92)
+
+END
+
+
+! PSF
+READ  PSF  CARD NAME @0/mtp-no-h2o.psf
+
+
+READ COOR CARD UNIT 5
+* NO + H2O 
+* 
+    5 
+    1    1 NO   N      0.00000   0.00000   3.16000 NO   1      0.00000 
+    2    1 NO   O      0.00000   0.00000   4.31000 NO   1      0.00000 
+    3    2 TIP3 OH2    0.00000   0.00000   0.00000 WAT1 1      0.00000 
+    4    2 TIP3 H1     0.00000   0.75900   0.58800 WAT1 1      0.00000 
+    5    2 TIP3 H2     0.00000  -0.75900   0.58800 WAT1 1      0.00000 
+
+
+!============initialize user module====================
+
+open unit 40 card read name @0/mtp-no.dma
+MTP MTPUNIT 40
+close unit 40
+
+
+!============define nonbonded parameters====================
+
+ENERGY CUTNB 14.0 CTONNB 10.0 CTOFNB 12.0 -
+	VSWITCH SHIFT CDIE EPS 1.0
+
+!=================short minimisation=======================
+
+MINImisation SD NSTEP 200 NPRINT 100 inbfrq 1
+
+WRITE COOR CARD NAME @9/@outfile.opt.cor
+WRITE COOR PDB  NAME @9/@outfile.opt.pdb
+
+!============ equilibration =========================
+
+OPEN UNIT 11 WRITE FORM NAME @9/@outfile.eq.res
+OPEN UNIT 12 WRITE FILE NAME @9/@outfile.eq.dcd
+
+DYNA LEAP VERLET STRT NSTEP 2000 TIMESTEP 0.0005 -
+    IPRFRQ 100 IHTFRQ 0 IEQFRQ 0 NTRFRQ 0 IUNWRI 11 IUNCRD 12 -
+    NPRINT 100 NSAVC 100 INBFrq 5 -
+    ISEED 317778 317778 317778 317778 -
+    FIRSTT 300.0 FINALT 300.0 -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 0
+
+WRITE COOR PDB  NAME @9/@outfile.eq.pdb
+WRITE COOR CARD NAME @9/@outfile.eq.cor
+
+STOP
+

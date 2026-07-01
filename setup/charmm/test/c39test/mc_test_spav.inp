@@ -1,0 +1,87 @@
+* Example file showing how to use the Spatial Averaging module added to the MC module
+* Blocked alanine dipeptide with ACE implicit solvent model
+
+IF ?SAMC .NE. 1 THEN
+ echo "Test NOT performed: please recompile with SAMC module enabled"
+ STOP
+endif
+
+stream datadir.def
+
+! Read standard topology and parameter files
+open read card unit 11 name @0/toph19.rtf
+read rtf  card unit 11
+close unit 11
+
+open read unit 11 card name @0/param19.prm
+read param unit 11 card
+close unit 11
+
+! read ACE parameters from file:
+open read unit 11 card name @0/acepar19.inp
+read ACEParameters card unit 11
+close unit 11
+
+! Generate the PSF
+READ SEQUence CARD
+* Blocked alanine
+*
+   3
+ACE ALA CBX
+
+GENErate MAIN SETUP
+
+! save PSF structure file
+OPEN UNIT 1 FORMatted WRITE NAME @9/struct.psf
+WRITE PSF CARD UNIT 1
+CLOSE UNIT 1
+
+! Build the coordinates
+IC PARAM
+IC SEED 2 N     2 CA    2 C
+IC BUILD
+
+! non bonded parameters
+ENERGY  ATOM ACE  IEPS 1.0 SEPS 80.0 ALPHA 1.3 SIGMA 3.0 SWITCH -
+    VDIS VSWI CUTNB 999.0 CTONNB 997.0 CTOFNB 999.0  IDEAL
+
+UPDATE
+
+! Create the MC move set by a series of calls to MOVE ADD.
+! Add a line like 'SAMC WEPS 0.15 MEPS 5 NEPS 5 -'
+! for enabling spatial averaging for a given move type. 
+MOVE ADD MVTP RTRN BYATom WEIGht 2.0 DMAX 0.10 LABEL TR -
+    ARMP 0.40 ARMA 0.4 ARMB 0.4 DOMCf 3.0 -
+!    SAMC WEPS 0.15 MEPS 5 NEPS 5 -
+    SELE ALL END
+
+MOVE ADD MVTP TORS WEIGht 8.0 DMAX 25.0 FEWEr 1 LABEL DIHE -
+    ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+    SAMC WEPS 0.25 MEPS 5 NEPS 5 -
+    SELE ALL END SELE ALL END
+
+OPEN UNIT 1 WRITe CARD NAME @9/init.cor
+WRITe COOR CARD UNIT 1
+CLOSE UNIT 1
+
+OPEN WRITE UNFOrmatted UNIT 2  NAME @9/samc.dcd
+
+! File where the unbiasing data is going to be saved
+OPEN WRITE FORMatted   UNIT 10 NAME @9/unbiasing.dat
+
+MC TEMPerature 300.0 NSTEps 1000 IECHeck 10 IACC 4 PICK 0 -
+    ISEED 99211423 222456522 11143255 62214940 -
+    IUNCrd 2 NSAVc 10 ACECut 0.0 -
+    IDOM 10 -
+    SAMC UNB IUNB 10 !this line enables spatial averaging ('SAMC') with unbiasing ('UNB')
+
+MOVE DELETE LABEL TR
+MOVE DELETE LABEL DIHE
+
+OPEN UNIT 1 WRITe CARD NAME @9/final_cl.cor
+WRITe COOR CARD UNIT 1
+CLOSE UNIT 1
+
+STOP
+
+

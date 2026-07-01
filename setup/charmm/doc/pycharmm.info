@@ -1,0 +1,128 @@
+CHARMM Element doc/pycharmm.info $Revision: 0.1 $
+
+File: pycharmm,  Node: Top, Up: (doc/charmm.info),  Next: Setup
+
+
+             The pycharmm Python interface to CHARMM
+
+
+     This module describes the interface of CHARMM with the Python
+programming language. The pycharmm Python package for CHARMM is
+compatible with Python versions 3.6 and greater. The package requires
+Python installed on the machine. Please see Python documentation for
+the basic procedures to set-up and install Python.
+
+     The pycharmm interface is under continuing development with
+new CHARMM features being added all of the time. The current
+implementation supports dynamics and energy calculations.
+
+Special Notice: The pycharmm interface is an evolving interface.
+The interface and associated modules have been well
+tested, but are likely to contain yet undiscovered limitations,
+compared with the full functionality in CHARMM. Users are forewarned to
+carry out some pre-testing on their system prior to initiating long
+runs. As new features and methods are added to the interface they will be
+described in the updated documentation.
+
+* Menu:
+
+* Setup::               Building CHARMM and installing pycharmm
+* Use::                 Use and functional support of pycharmm
+* Examples::            Examples of pycharmm use
+
+
+File: pycharmm, Node: Setup, Up: Top, Next: Use, Previous: Top
+
+
+BUILDING CHARMM AND INSTALLING PYCHARMM
+===========================================
+
+
+There are two steps to setup pycharmm and CHARMM for use in Python programming.
+The first step is to build CHARMM as a shared object. Next, pycharmm must be
+installed as a python package using pip.
+
+To interface with pycharmm, CHARMM must be built as shared object.
+Add '--as-library' to the configure command and then build as usual.
+For example,
+$ ./configure --as-library
+$ make -j 2 -C build/cmake install
+
+After a build completes successfully, the shared object should be in the lib
+subdirectory of the install directory as libcharmm.so or libcharmm.dylib.
+
+To install pycharmm, Python and the Python package installer pip must be
+present. Please see Python documentation for the basic procedures to setup and
+install Python.
+
+To install pycharmm, use the path to the pycharmm directory as an argument to
+pip. For example, from the root of the CHARMM source directory,
+$ pip install tool/pycharmm
+
+At run time, set the environment variable CHARMM_LIB_DIR to the path of the
+CHARMM shared object.
+
+For example,
+bash shell: export CHARMM_LIB_DIR=/usr/local/charmm/lib
+csh shell: setenv CHARMM_LIB_DIR /usr/local/charmm/lib
+
+This can be added to your .bashrc or .cshrc so that the variable is always
+set.
+
+
+
+File: pycharmm, Node: Use, Up: Top, Next: Examples, Previous: Setup
+
+
+USE
+===
+
+Before running a Python script or starting a Python environment, set the
+environment variable CHARMM_LIB_DIR to the path of the directory containing
+the CHARMM shared object (See the Setup section).
+
+In a python interpreter or script, pycharmm modules must be loaded.
+In most cases, for each CHARMM command, there is a corresponding Python module
+containing a set of functions to do the task of the original command
+but from the Python environment.
+
+For example, to do an energy calculation, a portion of a script might look like the
+following.
+
+#!/bin/env python3
+import os
+import sys
+
+try:
+    charmm_lib_dir = os.environ['CHARMM_LIB_DIR']
+    charmm_data_dir = os.environ['CHARMM_DATA_DIR']
+except KeyError:
+    print('please set environment variables',
+          'CHARMM_LIB_DIR and CHARMM_DATA_DIR',
+          file=sys.stderr)
+    sys.exit(1)
+
+import pycharmm.energy as energy
+import pycharmm.read as read
+
+rtf_fn = charmm_data_dir + '/top_all36_prot.rtf'
+read.rtf(rtf_fn)
+
+prm_fn = charmm_data_dir + '/par_all36_prot.prm'
+read.prm(prm_fn, flex=True)
+
+.
+.
+.
+
+energy.show()
+
+
+File: OpenMM, Node: Examples, Up: Top, Next: Top, Previous: Use
+
+Examples
+========
+
+In the tool/pycharmm/tests directory, there is an example script aldidpep_build.inp
+written in traditional CHARMM commands that has been ported to Python as aldidpep_build.py.
+This pair of files serves as an extended example of using pycharmm.

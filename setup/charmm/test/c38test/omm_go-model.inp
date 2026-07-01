@@ -1,0 +1,325 @@
+* Charmm input script for running Go-like model simulation of HdeA dimer
+* WITH nopbc boundaries
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+
+if @?nstep eq 0 set nstep = 1000
+if @?print eq 0 set print = 100
+set tol = 1e-3
+Calc tol2 = @tol * @tol
+
+set T = 300
+set finlT = 300
+set timestep = 0.010
+
+! Stream in the Go model parameters
+stream @0/"GO_1bgd-CC-new.top"
+read rtf card append
+* Patch for Go-based disufide bonds
+*
+
+! Add specific patches to represent disulfide bonds
+pres disa 0
+atom 1ca g9 0
+atom 2ca g57 0
+bond 1ca 2ca
+
+pres disb 0
+atom 1ca g85 0
+atom 2ca g133 0
+bond 1ca 2ca
+
+end
+
+! Note: Commented out nbfix interactions between g9 =- g57 and g85 - g133
+stream @0/"GO_1bgd-CC-new.param"
+read param card append
+* parameters for Go-based disulfide
+*
+
+! Add additional bonds to represent disulfide bonds
+bond
+g9 g57 378 4.8
+g85 g133 378 4.8
+
+end
+
+stream @0/"GO_1bgd-CC-new.seq"
+
+patch disa proa 9 proa 57 noangl nodihe
+patch disb prob 9 prob 57 noangl nodihe
+
+! Read in the protein coordinates
+read coor pdb name @0/GO_1bgd-CC-new.pdb
+
+eten on ! Turn on the special interaction term for Go models
+energy
+
+label nocut
+!!!!!!!!!!!!!Case 1, cutoff = 1000
+calc cutnb = 1000
+
+energy cutnb @cutnb ctofnb @cutnb
+set echarmm = ?ener
+coor force comp
+
+set return Case1c
+goto ncharmm
+label case1c
+
+
+energy omm
+set eopenmm = ?ener
+coor force comp
+omm clear
+
+set return case1o
+goto nopenmm
+label case1o
+
+Calc ediff = abs ( 100 * ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+echo Force dot product: @fsum Percent energy error: @ediff
+Calc fdiff = abs ( 100 * ( 1 - @fsum ) )
+Calc prod = @ediff * @fdiff
+if @prod gt @tol2 then
+      echo failed: Case 1
+else
+      echo passed: Case 1
+endif
+
+! Now do some dynamics to make sure it works
+shake bond tol 1.0E-6 param
+
+! Production dynamics
+dynamics leap start timestep @timestep -
+     nstep @nstep nprint @print iprfrq @print -
+     firstt @T finalt @T twindl -50.0 twindh 50.0 -
+     ichecw 1 teminc 1 ihtfrq 0 ieqfrq 0 ntrfrq 0 -
+     iasors 1 iasvel 1 iscvel 0 isvfrq 0 -
+     iunwri 33 nsavc 1000 nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 32 kunit 0   - !{* Nonbond options *}
+     inbfrq -1 ilbfrq 0 Tbath @T echeck -1 -
+     omm langevin gamma 1.358
+
+shake off
+
+label cutoff
+!!!!!!!!!!!!!!!!!!!Case 2, cutoff = 20
+! Read in the protein coordinates
+read coor pdb name @0/GO_1bgd-CC-new.pdb
+calc cutnb = 20
+
+energy cutnb @cutnb ctofnb @cutnb
+set echarmm = ?ener
+coor force comp
+
+set return Case2c
+goto ncharmm
+label case2c
+
+
+energy omm
+set eopenmm = ?ener
+coor force comp
+omm clear
+
+set return case2o
+goto nopenmm
+label case2o
+
+Calc ediff = abs ( 100 * ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+echo Force dot product: @fsum Percent energy error: @ediff
+Calc fdiff = abs ( 100 * ( 1 - @fsum ) )
+Calc prod = @ediff * @fdiff
+if @prod gt @tol2 then
+      echo failed: Case 2
+else
+      echo passed: Case 2
+endif
+
+shake bond tol 1.0E-6 param
+
+! Production dynamics
+dynamics leap start timestep @timestep -
+     nstep @nstep nprint @print iprfrq @print -
+     firstt @T finalt @T twindl -50.0 twindh 50.0 -
+     ichecw 1 teminc 1 ihtfrq 0 ieqfrq 0 ntrfrq 0 -
+     iasors 1 iasvel 1 iscvel 0 isvfrq 0 -
+     iunwri 33 nsavc 1000 nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 32 kunit 0   - !{* Nonbond options *}
+     inbfrq -1 ilbfrq 0 Tbath @T echeck -1 -
+     omm langevin gamma 1.358
+
+
+shake off
+
+label pbc
+!!!!!!!!!!!!!!!!!!!Case 3, pbc, cutoff = 20
+! Read in the protein coordinates
+read coor pdb name @0/GO_1bgd-CC-new.pdb
+calc cutnb = 20
+
+set boxsize = 90
+crystal define cubic @boxsize @boxsize @boxsize 90 90 90
+open unit 1 read form name @0/cubic.xtl
+crystal read card unit 1
+close unit 1
+calc bo2 = @boxsize / 2
+! Set molecule center and image centering to coincide with OpenMM
+coor trans xdir @bo2 ydir @bo2 zdir @bo2
+image bysegid xcen @bo2 ycen @bo2 zcen @bo2
+
+energy cutnb @cutnb ctofnb @cutnb cutim @cutnb
+set echarmm = ?ener
+coor force comp
+
+set return Case3c
+goto ncharmm
+label case3c
+
+
+energy omm
+set eopenmm = ?ener
+coor force comp
+omm clear
+
+set return case3o
+goto nopenmm
+label case3o
+
+Calc ediff = abs ( 100 * ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+echo Force dot product: @fsum Percent energy error: @ediff
+Calc fdiff = abs ( 100 * ( 1 - @fsum ) )
+Calc prod = @ediff * @fdiff
+if @prod gt @tol2 then
+      echo failed: Case 3
+else
+      echo passed: Case 3
+endif
+
+scalar fbeta set 1.358
+shake bond tol 1.0E-6 param
+
+! Production dynamics
+dynamics leap start timestep @timestep -
+     nstep @nstep nprint @print iprfrq @print -
+     firstt @T finalt @T twindl -50.0 twindh 50.0 -
+     ichecw 1 teminc 1 ihtfrq 0 ieqfrq 0 ntrfrq 0 -
+     iasors 1 iasvel 1 iscvel 0 isvfrq 0 -
+     iunwri 33 nsavc @print nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 32 kunit 0   - !{* Nonbond options *}
+     inbfrq -1 imgfrq -1 ilbfrq 0 Tbath @T echeck -1 -
+     omm langevin gamma 1.358
+
+stop
+
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+goto @return

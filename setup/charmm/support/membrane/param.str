@@ -1,0 +1,59 @@
+* Membrane system: parameters.str
+* Parameters for sys1.inp to sys16.inp
+*
+
+set direcTp        .                         ! Directory for top_all and par_all files
+set TopFile        top_all22_prot_lipmod.inp ! Topology file 
+set ParFile        par_all22_prot_lipmod.inp ! Parameters File
+set direcCubic     .                         ! Directory for cubic.img
+set direcLip       ./lipids/dmpc             ! Directory for lipids directoties conf1 and conf2
+set direcTip       .                         ! Directory for tip125.crd
+set direcSequence  .                         ! Directory for peptide sequence (peptide.str)
+set direcStruct    .                         ! Directory for peptide structure (*.crd) 
+set Struct         melittin.crd              ! File containing the peptide structure
+set direcStr       .                         ! Directory for input stream (systrans.str, sysrot.str)
+set direcWork      .                         ! Directory for result files
+
+
+!For sys2.inp
+set BoxSizeX      48      ! X dimension of the central unit
+set BoxSizeY      32      ! Y dimension of the central unit
+set NPoloBot      24      ! Number of lipids on bottom layer
+set ZPosBot      -17      ! Position of the bottom layer (for DPPC use -18)
+set RdomISEED2 2674365555 ! Random number generation for POLO position
+
+!For sys3.inp
+set NPoloTop      17      ! Number of lipids on top layer
+set ZPosTop       17      ! Position of the top layer (for DPPC use 18)
+set FirstResNum    1      ! Number of the first peptide residue
+set LastResNum    26      ! Number of the last peptide residue
+set RdomISEED3 3277122934 ! Random number generation for POLO position
+
+!For sys4.inp
+set RdomISEED4 6754524189 !Random number generation for picking lipids
+
+!For sys8.inp
+set FirstRes      GLYQ    ! Patch to be done on the first residue
+set LastRes       CTER    ! Patch to be done on the last residue
+set HalfZ         36      ! Initial value of L, will be decreased to get the exact number
+	                  ! of water molecules (2*L=height of the central unit)
+set WaterNum      1350    ! Number of water molecules to be added
+
+! Ex1: 1 melittin + 17 DMPC + 24 DMPC ~ 2 x 24 DMPC = 48 DMPC
+!      40 water molecules/DMPC x 48 DMPC = 1920 water molecules
+!      1920 - 545 water molecules associated to DMPC = 1375 water molecules to be added
+! Ex2: 0,0333 water molecules/Angs^3 x box aera (Angs^2) x desired box height (Angs)
+!      0,0333 x 48 x 32 x 13 = 665 water molecules
+!      665 x 2 slabs ( top and bottom ) = 1330 water molecules to be added
+
+!For sys9.inp
+set NWaterMol     1888    ! See sys8.out or sys8.crd for the exact number of water molecules
+set BoxSizeZ      71.0    ! See sys8.out for the value of "LengthZ"
+
+!For sys16.inp
+set RestartFile    sys15_5.rst     ! Restart file 
+set StartI         1               ! First iteration number for restart
+set LastI          120             ! Last iteration number (1 iteration = 5 psec)
+
+!Calculation of other parameters
+calc NLipid @NPoloTop + @NPoloBot

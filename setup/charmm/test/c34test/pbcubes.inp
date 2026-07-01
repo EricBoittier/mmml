@@ -1,0 +1,72 @@
+* CHARMM c34a1 testcase, 15-Aug-2006
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+if ?imcubes .ne. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+stream datadir.def
+
+set lister bycb
+
+open unit 1 read form name @0top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+read sequence card
+**
+*
+159
+MET ILE SER LEU ILE ALA ALA LEU ALA VAL ASP ARG VAL ILE GLY MET GLU ASN ALA MET
+PRO TRP ASN LEU PRO ALA ASP LEU ALA TRP PHE LYS ARG ASN THR LEU ASP LYS PRO VAL
+ILE MET GLY ARG HSD THR TRP GLU SER ILE GLY ARG PRO LEU PRO GLY ARG LYS ASN ILE
+ILE LEU SER SER GLN PRO GLY THR ASP ASP ARG VAL THR TRP VAL LYS SER VAL ASP GLU
+ALA ILE ALA ALA CYS GLY ASP VAL PRO GLU ILE MET VAL ILE GLY GLY GLY ARG VAL TYR
+GLU GLN PHE LEU PRO LYS ALA GLN LYS LEU TYR LEU THR HSD ILE ASP ALA GLU VAL GLU
+GLY ASP THR HSD PHE PRO ASP TYR GLU PRO ASP ASP TRP GLU SER VAL PHE SER GLU PHE
+HSD ASP ALA ASP ALA GLN ASN SER HSD SER TYR CYS PHE GLU ILE LEU GLU ARG ARG
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @05dfr_solv-cube_equil.pdb
+read coor pdb unit 1 resi
+close unit 1
+
+! Dimension of a box
+set size 62.23
+Calc 7 = @size 
+set  theta = 90.0
+ Crystal define cubic @7 @7 @7 @theta @theta @theta    
+crystal build cutoff 11 noper 0
+
+ image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+ image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+ calc nwat = ?nsel / 3
+
+!  turn on faster options and set-up SHAKE
+faster on
+
+shake fast bonh tol 1.0e-8 para 
+
+prnlev 5 node 0
+! Run dynamics in periodic box
+dynamics @lister leap start timestep 0.001 nstep 1 nprint 1  iprfrq 100 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 200 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 
+
+stop
+

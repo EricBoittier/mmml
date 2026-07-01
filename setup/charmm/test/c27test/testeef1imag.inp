@@ -1,0 +1,70 @@
+* testcase testeef1imag.inp
+* Themis Lazaridis, 11-Jul-98
+* EEF1 with images
+*
+
+! MFC eef1 not parallel ?
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+if ?aspener .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open read card unit 3 name @0toph19_eef1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0param19_eef1.inp
+read para unit 3 card
+close unit 3
+
+open read unit 2 card name @0testeef1imag.crd
+read sequ coor unit 2
+close unit 2
+
+generate 2sn3 setup
+
+patch disu warn 2sn3 12 2sn3 65 setup
+patch disu warn 2sn3 16 2sn3 41 setup
+patch disu warn 2sn3 25 2sn3 46 setup
+patch disu warn 2sn3 29 2sn3 48 setup
+
+open read unit 2 card name @0testeef1imag.crd
+read coor card unit 2
+close unit 2
+
+eef1 setup temp 298.15 unit 93 name @0solvpar.inp
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+!energy without images
+energy
+
+crystal define ortho  52.070   41.940   28.320  90.00  90.00  90.00
+
+! P212121 space group
+crystal build noper 3 cutoff 50.0
+(X+1/2,-Y+1/2,-Z)
+(-X,Y+1/2,-Z+1/2)
+(-X+1/2,-Y,Z+1/2)
+
+update inbfrq 20 ihbfrq 0 imgfrq 20 -
+cutim 10 cutnb 10 ctonnb 7 ctofnb 9 
+
+!energy with images
+energy
+
+mini abnr nstep 50
+
+shake bonh tole 1.0e-6
+
+dynamics verlet timestep 0.002 nstep 100 nprint 100 iprfrq 100 -
+      firstt 240 finalt 300 twindh 10.0 ieqfrq 200 ichecw 1 -
+      iasors 0 iasvel 1 iunwri -1 iuncrd -1 -
+      inbfrq 20 iseed 54858769 3485955 7795875 7868697
+
+stop

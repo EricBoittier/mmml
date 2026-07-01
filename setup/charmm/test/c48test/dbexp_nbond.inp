@@ -1,0 +1,80 @@
+*  Test Double exponential-IPS calculation with DHFR in a cubic box of WATER
+*  Total system contains 2589 protein atoms and 21,069 water atoms  
+*
+
+
+stream datadir.def
+
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+format (f16.6)
+
+! ********* Run old parallel **********
+fast off
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9   -
+     dbexp  aexppot 17.470 cexppot 4.099
+
+fast on
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9   -
+    dbexp   aexppot 17.470 cexppot 4.099
+
+!prnlev 8
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9   -
+   pxyz netcg dbexp  eips vips aexppot 17.470 cexppot 4.099
+
+
+faster off
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9   -
+   pxyz netcg dbexp  eips vips aexppot 17.470 cexppot 4.099
+
+calc delt abs ( ?ener + 64020.07213  )
+
+if @delt gt 0.01 then
+   echo "Test FAILED for double exponential IPS: c49test/dbexp_nbond.inp "
+!   stop
+endif
+
+test first step 0.00001 sele bynu 1:10 end
+
+calc nvoil ?nok - ?nsel * 3
+
+if @nvoil lt 0 then
+   echo "Test FAILED for double exponential IPS: c49test/dbexp_nbond.inp "
+   stop
+endif
+
+
+echo "Test OK"
+
+stop
+

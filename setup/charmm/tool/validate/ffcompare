@@ -1,0 +1,227 @@
+#!/usr/bin/perl -w
+# $Header: /export/cvs/ffvalidate/tool/ffcompare,v 1.1 2009/05/20 20:22:53 mgarraha Exp $
+# Compares CHARMM 'FRCD' force dumps to similarly formatted
+# outputs of other MD programs.
+# Mike Garrahan, May 2009
+#
+use strict;
+
+# Converts '3.14159D+00' to '3.14159e+00'
+# so Perl can recognize it as a number
+sub str2dbl($) {
+    my $arg = shift;
+    $arg =~ s/[Dd]/e/;
+    return $arg;
+}
+
+# Returns the sum of values in the given array,
+# adding smaller terms first for numerical stability.
+sub stableSum(\@) {
+    my $arg = shift;
+    my $sum = 0;
+    my @vals = sort { abs $a <=> abs $b } @$arg;
+    for my $x (@vals) {
+        $sum += $x;
+    }
+    return $sum;
+}
+
+# Returns the square of the magnitude of the given vector.
+sub magSquared(\@) {
+    my $arg = shift;
+    my @vals;
+    for my $x (@$arg) {
+        push @vals, $x * $x;
+    }
+    return stableSum @vals;
+}
+
+# Returns the square of the magnitude of the difference
+# between the two given vectors.
+sub deltaSquared(\@\@) {
+    my ($u, $v) = @_;
+    if (scalar @$u != scalar @$v) {
+        warn "deltaSquared: argument dimension mismatch\n";
+        return;
+    }
+    my @diff;
+    for (my $i = 0; $i < @$u; ++$i) {
+        push @diff, @$u[$i] - @$v[$i];
+    }
+    return magSquared @diff;
+}
+
+# Returns the square root of the mean of the values
+# in the given array.
+sub rootMean(\@) {
+    my $arg = shift;
+    unless (@$arg) {
+        warn "rootMean: empty list argument\n";
+        return;
+    }
+    return sqrt(stableSum(@$arg) / scalar @$arg);
+}
+
+# Reads a file in CHARMM FRCD format into a hash of
+# NATOM (scalar), ENERGY (hash), FORCE (hash of vectors).
+sub readFrcd($) {
+    my $floatPat = '-?\d+\.\d+[DEde][+\-]\d+';
+
+    my $filename = shift;
+    unless (open FILE, "<$filename") {
+        warn "$filename: $!\n";
+        return;
+    }
+
+    my %frcd;
+    $frcd{'FILE'} = $filename;
+
+    my $nAtoms = 0;
+    while (<FILE>) {
+        if (/NATOM\s+(\d+)/) {
+            $nAtoms = $1;
+        }
+        last if (/ENERGY/);
+    }
+    $frcd{'NATOM'} = $nAtoms;
+
+    my %energies;
+    while (<FILE>) {
+        if (/(\w+)\s+($floatPat)/) {
+            $energies{uc $1} = str2dbl $2;
+        }
+        last if (/FORCE/);
+    }
+    unless (%energies) {
+        warn "$filename: no energies\n";
+    }
+    $frcd{'ENERGY'} = { %energies };
+
+    my %forces;
+    while (<FILE>) {
+        if (/(\d+)\s+($floatPat)\s+($floatPat)\s+($floatPat)/) {
+            $forces{$1} = [ str2dbl $2, str2dbl $3, str2dbl $4 ];
+        }
+    }
+    unless (%forces) {
+        warn "$filename: no forces\n";
+    }
+    $frcd{'FORCE'} = { %forces };
+    close FILE;
+
+    my $nForces = keys %forces;
+    if ($nAtoms != $nForces) {
+        warn "$filename: read $nForces forces but NATOM = $nAtoms\n";
+    }
+
+    if (%energies && %forces) {
+        return \%frcd;
+    }
+    else {
+        return;
+    }
+}
+
+# Writes the given hash of
+# NATOM (scalar), ENERGY (hash), FORCE (hash of vectors)
+# to standard output in CHARMM FRCD format.
+sub writeFrcd(\%) {
+    my $frcd = shift;
+
+    my $nAtoms = $frcd->{'NATOM'};
+    printf "NATOM %11d\n", $nAtoms;
+
+    print "ENERGY\n";
+    my $energies = $frcd->{'ENERGY'};
+    for my $energyId (sort keys %$energies) {
+        printf "  %-4s %25.16e\n",
+                $energyId, $energies->{$energyId};
+    }
+
+    print "FORCE\n";
+    my $forces = $frcd->{'FORCE'};
+    for my $atomId (sort { $a <=> $b} keys %$forces) {
+        my $force = $forces->{$atomId};
+        printf "%10d %25.16e %25.16e %25.16e\n",
+                $atomId, @$force[0], @$force[1], @$force[2];
+    }
+}
+
+# Returns a list of keys found in the first hash but not in the second.
+sub keydiff(\%\%) {
+    my ($first, $second) = @_;
+    my @onlyFirst;
+    for my $key (keys %$first) {
+        unless (exists $second->{$key}) {
+            push @onlyFirst, $key;
+        }
+    }
+    return sort @onlyFirst;
+}
+
+# Reports discrepancies between two FRCD data structures
+# to standard output.
+sub diffFrcd(\%\%) {
+    my ($frcd1, $frcd2) = @_;
+
+    my $fn1 = $frcd1->{'FILE'};
+    my $fn2 = $frcd2->{'FILE'};
+
+    if ($frcd1->{'NATOM'} != $frcd2->{'NATOM'}) {
+        print "$fn1 and $fn2 have different numbers of atoms!\n";
+    }
+
+    my $energies1 = $frcd1->{'ENERGY'};
+    my $energies2 = $frcd2->{'ENERGY'};
+    my @only1 = keydiff %$energies1, %$energies2;
+    if (@only1) {
+        print "Energies found only in $fn1: @only1\n";
+    }
+    my @only2 = keydiff %$energies2, %$energies1;
+    if (@only2) {
+        print "Energies found only in $fn2: @only2\n";
+    }
+    print "Relative error in energy:\n";
+    for my $enkey (sort keys %$energies1) {
+        if (exists $energies2->{$enkey}) {
+            my $e1 = $energies1->{$enkey};
+            my $e2 = $energies2->{$enkey};
+            if ($e1 == 0) {
+                warn "$enkey = 0 in $fn1, $e2 in $fn2\n";
+                next;
+            }
+            my $eerr = ($e2 - $e1) / abs $e1;
+            # TODO better reporting threshold
+            if (abs($eerr) > 1e-16) {
+                printf "  %-4s %14.6e\n", $enkey, $eerr;
+            }
+        }
+    }
+
+    my $forces1 = $frcd1->{'FORCE'};
+    my $forces2 = $frcd2->{'FORCE'};
+    my @ferrs;
+    for my $atomId (keys %$forces1) {
+        my $force1 = $forces1->{$atomId};
+        my $force2 = $forces2->{$atomId};
+        push @ferrs, deltaSquared(@$force1, @$force2);
+    }
+    my $rms = rootMean @ferrs;
+    printf "RMSD of forces on all atoms: %.6e\n", $rms;
+}
+
+#
+# Main program
+#
+if (@ARGV < 2) {
+    die "Usage: $0 file1 file2\n";
+}
+
+my $frcd1 = readFrcd $ARGV[0];
+my $frcd2 = readFrcd $ARGV[1];
+if (defined $frcd1 and defined $frcd2) {
+    diffFrcd %$frcd1, %$frcd2;
+}
+else {
+    exit 1;
+}

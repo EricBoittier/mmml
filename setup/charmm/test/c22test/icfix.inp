@@ -1,0 +1,260 @@
+* ICFIX: Charlie L. Brooks III, 09-Dec-91
+* Test the TSM ic constraint commands.
+* Test 1: maintain rigid triangle of 3 methane molecules
+*         using three distance constraints
+* Test 2: constrain the angle between 3 methane molecules, allowing
+*         the distances to fluctuate
+* Test 3: constrain the dihedral angle in butane, allowing the bonds
+*         and bond angles to fluctuate
+*
+
+! uses tsm, not parallel
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?qtsm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+set testname icfix
+format (F20.7)
+
+! topology
+read rtf card
+* some extended atom hydrocarbons
+*
+   19    1
+MASS    13 CH2E   14.02700
+MASS    14 CH3E   15.03500
+MASS    91 CH4    16.03200
+
+RESI CH4   0.00000
+GROUP
+ATOM CH4  CH4     0.00000
+
+PATC  FIRS NONE LAST NONE
+
+RESI BUT   0.00000
+GROUP
+ATOM C1   CH3E    0.00000
+ATOM C2   CH2E    0.00000
+ATOM C3   CH2E    0.00000
+ATOM C4   CH3E    0.00000
+BOND C1  C2        C2  C3        C3  C4
+THET C1  C2  C3    C2  C3  C4
+DIHE C1  C2  C3  C4 
+IC   C1  C2  C3  C4    0.00  0.00  180.00  0.00  0.00
+IC   C2  C3  C4  BLNK  0.00  0.00    0.00  0.00  0.00
+IC  BLNK C1  C2  C3    0.00  0.00    0.00  0.00  0.00
+
+PATC  FIRS NONE LAST NONE
+
+END
+
+! parameters
+read param card
+* some extended atom hydrocarbons
+*
+
+BOND
+CH3E CH2E   225.0       1.5400
+CH2E CH2E   225.0       1.5200
+
+THETAS
+CH2E CH2E CH3E    45.0     111.00
+
+DIHEDRALS
+X CH2E CH2E X      1.6     3    0.0
+
+NONBONDED   ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+
+CH4      0.0000    -0.2940    2.0934
+CH2E  1.77  -0.1142  2.235  1.77  -0.1  1.9
+CH3E  2.17  -0.1811  2.165  1.77  -0.1  1.9
+
+END
+
+! ***************** Test 1 ******************
+                        
+read sequ card
+* 3 methane molecules
+*
+3
+ch4 ch4 ch4
+
+generate me3
+
+read coor card
+* coordinates for 3 methane molecules
+*
+  3   
+  1    1   CH4  CH4    0.00000   0.00000   0.00000 ME3  1      0.00000
+  2    2   CH4  CH4    3.00000   0.00000   0.00000 ME3  1      0.00000
+  3    3   CH4  CH4    0.00000   3.00000   0.00000 ME3  1      0.00000
+
+! Set up an ic table with some distances and angles so we can
+! see if the constraints are working (the ic table is not
+! necessary for the constraints)
+
+ic edit
+ dist 1 ch4 2 ch4 0.0
+ dist 1 ch4 3 ch4 0.0
+ dist 2 ch4 3 ch4 0.0
+ angl 3 ch4 1 ch4 2 ch4 0.0
+end         
+ic fill
+ic print
+
+! Set up ic constraints to fix the distances
+! (NOTE: the current values of the distances are used as references);
+! tolerance (toli) = 1.0e-8 Angstroms; maximum number of 
+! iterations (maxi) = 100
+
+tsm
+ fix dist me3 1 ch4 me3 2 ch4 toli 1.0e-8
+ fix dist me3 1 ch4 me3 3 ch4 toli 1.0e-8
+ fix dist me3 2 ch4 me3 3 ch4 toli 1.0e-8
+ maxi 100
+end
+
+! run 10 steps dynamics with the constraints intact
+
+dynamics verlet strt nstep 10 timestep 0.0015 -
+ iprfrq 10 ihtfrq 0 ieqfrq 0 ntrfrq 0 -
+ iasors 1 ichecw 0 iasvel 1 -
+ iunrea -1 iunwri -1 iuncrd -1 iunvel -1 kunit -1 -
+ nprint 1 nsavc 0 nsavv 0 ihbfrq 0 inbfrq 10 imgfrq 0 -
+ atom cdie shif vdis vswi cutnb 8.0 -
+ firstt 300.0 finalt 300.0 twindh 10.0 twindl -10.0
+
+! Check to see if the constraints worked
+ic fill
+ic print
+quick 1 2
+set tt 1
+set sp icdist12
+set refval 3.0
+@testcheck ?dist @refval .00001 @testname_@tt_@sp
+quick 1 3
+set sp icdist13
+set refval 3.0
+@testcheck ?dist @refval .00001 @testname_@tt_@sp
+quick 2 3
+set sp icdist23
+set refval 4.2426
+@testcheck ?dist @refval .00001 @testname_@tt_@sp
+
+! ***************** Test 2 ******************
+
+! clear the existing constraints (and perturbations, if any
+! have been set up)
+
+tsm clear
+
+! Set up an ic constraint to fix the 3-1-2 angle
+! (NOTE: the current value of the angle is used as the reference);
+! tolerance (toli) = 1.0e-8 degrees; maximum number of 
+! iterations (maxi) = 100
+
+tsm
+ fix angl me3 3 ch4 me3 1 ch4 me3 2 ch4 toli 1.0e-8
+ maxi 100
+end
+quick 3 1 2
+set angleref ?thet
+
+! run 10 steps dynamics with the constraint intact
+
+dynamics verlet strt nstep 10 timestep 0.0015 -
+ iprfrq 10 ihtfrq 0 ieqfrq 0 ntrfrq 0 -
+ iasors 1 ichecw 0 iasvel 1 -
+ iunrea -1 iunwri -1 iuncrd -1 iunvel -1 kunit -1 -
+ nprint 1 nsavc 0 nsavv 0 ihbfrq 0 inbfrq 10 imgfrq 0 -
+ atom cdie shif vdis vswi cutnb 8.0 -
+ firstt 300.0 finalt 300.0 twindh 10.0 twindl -10.0
+
+! Check to see if the constraint worked
+ic fill
+ic print
+
+set tt 2
+quick 3 1 2
+set sp icang312
+set refval @angleref
+@testcheck ?thet @refval .00001 @testname_@tt_@sp
+
+! ***************** Test 3 ******************
+
+! clear the existing constraints (and perturbations, if any
+! have been set up)
+
+tsm clear
+
+! delete the methanes and build butane
+
+ic dele sele all end
+dele atom sele all end
+
+read sequence card
+* butane
+*
+1
+but
+
+generate but setup
+
+ic param
+
+! set dihedral to cis (0 degrees) for the heck of it
+
+ic edit
+ dihe 1 c1 1 c2 1 c3 1 c4 90.0
+end
+ic print
+
+! build the coordinates
+
+ic seed 1 c1 1 c2 1 c3
+ic build
+
+! Make sure shake works with the ic constraints.
+shake bonds tol 1.0e-8
+
+! Set up an ic constraint to fix the dihedral angle
+! (NOTE: the current value of the angle is used as the reference);
+! tolerance (toli) = 1.0e-8 degrees; maximum number of 
+! iterations (maxi) = 100
+
+tsm
+ fix dihe but 1 c1 but 1 c2 but 1 c3 but 1 c4 toli 1.0e-8
+ maxi 100
+end
+quick 1 2 3 4
+set diheref ?phi
+
+! run 10 steps dynamics with the constraint intact
+
+dynamics verlet strt nstep 10 timestep 0.0015 -
+ iprfrq 10 ihtfrq 0 ieqfrq 0 ntrfrq 0 -
+ iasors 1 ichecw 0 iasvel 1 -
+ iunrea -1 iunwri -1 iuncrd -1 iunvel -1 kunit -1 -
+ nprint 1 nsavc 0 nsavv 0 ihbfrq 0 inbfrq 10 imgfrq 0 -
+ atom cdie shif vdis vswi cutnb 8.0 -
+ firstt 300.0 finalt 300.0 twindh 10.0 twindl -10.0
+
+! Check to see if the constraint worked
+ic fill
+ic print
+
+set tt 3
+quick 1 2 3 4
+set sp icdihe
+set refval @diheref
+@testcheck ?phi @refval .00001 @testname_@tt_@sp
+
+stop

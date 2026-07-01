@@ -1,0 +1,72 @@
+* THIS FILE TESTS THE 10-12-6 POTENTIAL IN CHARMM, FOR MINIMIZATION AND
+* NORMAL MODE ANALYSIS
+* John Karanicolas, C.L.Brooks group, TSRI
+*
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+STREAM datadir.def
+
+READ RTF CARD
+* Topology info
+*
+   20   1
+MASS 1   G1       1.000000
+MASS 2   G2       1.000000
+
+
+resi test 0.0
+atom g1 g1 0.0
+atom g2 g2 0.0
+
+END
+
+
+READ PARAM CARD print nbonds
+* Parameters
+*
+
+
+NONBONDED NBXMOD 3 ATOM CDIEL SHIFT VATOM VDISTANCE VSWITCH -
+  CUTNB 399.0 CTOFNB 398.5 CTONNB 395.5 EPS 1.0 WMIN 1.5
+
+G1       0.0  -0.000000  4.816877
+G2       0.0  -0.000000  4.896729
+
+NBFIX
+G1      G2         -2.000000    5.000000
+
+END
+
+read sequ test 1
+generate test
+scalar x set 0
+scalar y set 0
+scalar z set 0
+scalar x set 4 select bynu 2 end
+print coor
+
+eten on
+
+mini conj tolgrd 1E-7 nstep 10000 inbfrq -1
+! The distance after minimization should be 5.000
+print coor
+! The energy after minimization should be -2.000
+energy
+
+
+
+! There should be 5 zero eigenvalues (with all the rot/trans deg. freedom),
+! and one eigenvalue with magnitude 0.501779. This eigenvalue should
+! correspond with an eigenvector in the x-direction.
+prnl 9 @pnode
+calc nummodes = ?NATOM * 3
+vibran nmodes @nummodes
+diag finite step .00001
+if ?mynode .eq. 0 print norm vect
+end
+
+stop
+
+

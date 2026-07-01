@@ -1,0 +1,180 @@
+*  Test vdW nonbonded options VSWITCH and VFSWITCH for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed. BLADE must be defined in pref.dat"
+   stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @{0}top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+! NOTE: if using CMAP terms, parameters must be loaded with FLEX
+open unit 1 read form name @{0}par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @{0}5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+read coor pdb resi name @{0}5dfr_solv-cube_equil.pdb
+
+faster on
+
+! Dimension of a box
+set 7 62.23
+
+set theta 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta    
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+set pass = 1
+set test = 1
+
+! Remove electrostatic and bonded forces - just vdW
+scalar charge set 0.0
+skipe bond angl urey dihe impr
+label dotest
+
+   if @test eq 1 set switch = vfswitch
+   if @test eq 2 set switch = vswitch
+
+   energy -
+      eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 @switch -
+      Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 0 !PME
+     
+   set charmm = ?ener
+   scalar dx store 1
+   scalar dy store 2
+   scalar dz store 3
+
+   energy -
+      eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 @switch -
+      Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 0 -!PME
+      blade
+     
+   set blade = ?ener
+   scalar dx store 4
+   scalar dy store 5
+   scalar dz store 6
+
+   set return = fromtest
+   goto calcdev
+   label fromtest
+
+   calc Edev = abs ( @blade - @charmm ) / sqrt ( @blade * @charmm )
+
+   if @Edev le 1e-3 then
+      calc pass = @pass * 1
+      echo test@test energy passed with @switch
+   else
+      calc pass = @pass * 0
+      echo test@test energy failed with @switch
+   endif
+
+   if @FDot le 1e-3 then
+      calc pass = @pass * 1
+      echo test@test forces passed with @switch
+   else
+      calc pass = @pass * 0
+      echo test@test forces failed with @switch
+   endif
+
+   incr test by 1
+if test le 2 goto dotest
+
+if @pass eq 1 then
+   echo testcase passed
+else
+   echo testcase failed
+endif
+
+stop
+      
+
+
+label calcdev
+  ! Calulate the dot product of the normalized forces from CHARMM and BLaDE
+  ! CHARMM first
+  scalar dx recall 1
+  scalar dx pow2
+  scalar dx store 7
+  scalar dy recall 2
+  scalar dy pow2
+  scalar dy +store 7
+  scalar dz recall 3
+  scalar dz pow2
+  scalar dz +store 7
+  scalar wmain recall 7
+  scalar wmain stat
+  calc norm = 1 / sqrt ( ?stot )
+  scalar dx recall 1
+  scalar dx mult @norm
+  scalar dx store 1
+  scalar dy recall 2
+  scalar dy mult @norm
+  scalar dy store 2
+  scalar dz recall 3
+  scalar dz mult @norm
+  scalar dz store 3
+  ! Now BLaDE  
+  scalar dx recall 4
+  scalar dx pow2
+  scalar dx store 7
+  scalar dy recall 5
+  scalar dy pow2
+  scalar dy +store 7
+  scalar dz recall 6
+  scalar dz pow2
+  scalar dz +store 7
+  scalar wmain recall 7
+  scalar wmain stat
+  calc norm = 1 / sqrt ( ?stot )
+  scalar dx recall 4
+  scalar dx mult @norm
+  scalar dx store 4
+  scalar dy recall 5
+  scalar dy mult @norm
+  scalar dy store 5
+  scalar dz recall 6
+  scalar dz mult @norm
+  scalar dz store 6
+
+  ! Now construct the inner-product (dot product)
+  scalar dx recall 1
+  scalar dx store 7
+  scalar dx recall 4
+  scalar dx *store 7
+  scalar dy recall 2
+  scalar dy store 8
+  scalar dy recall 5
+  scalar dy *store 8
+  scalar dz recall 3
+  scalar dz store 9
+  scalar dz recall 6
+  scalar dz *store 9
+  scalar wmain recall 8
+  scalar wmain +store 7
+  scalar wmain recall 9
+  scalar wmain +store 7
+  scalar wmain recall 7
+  scalar wmain stat
+  calc FDot = 1 - ?stot
+
+goto @return
+
+stop

@@ -1,0 +1,67 @@
+* CHARMM c35a2 testcase
+* VSA Testcase
+* Author: H. Lee Woodcock, Dec. 2007
+* Classical VSA Testcase: butane
+* Note: Will work with Q-Chem for Quantum and QM/MM VSA 
+*
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+bomblev -1
+STREam datadir.def
+
+open read card unit 1 name @0/top_all22_model.inp
+read rtf card unit 1
+
+open read card unit 2 name @0/par_all22_prot.inp
+read parameter card unit 2
+
+read sequence card
+*  Just a butane
+*
+  1
+BUTA
+GENERATE MAIN SETU
+
+print coor 
+
+READ COOR CARD
+* CHARMM TESTCASE
+* AUTHOR: H. LEE WOODCOCK)
+* BUTANE TEST CASE FOR PERFORMING VSA CALCULATION
+*  DATE:     8/15/ 7     16:55:25      CREATED BY USER: hlwood
+*
+   14
+    1    1 BUTA H11   -1.86974   1.29384   0.78240 MAIN 1      0.00000
+    2    1 BUTA H12   -2.11576   0.69118  -0.89838 MAIN 1      0.00000
+    3    1 BUTA H13   -2.78258  -0.23487   0.49775 MAIN 1      0.00000
+    4    1 BUTA C1    -1.92479   0.38075   0.15142 MAIN 1      0.00000
+    5    1 BUTA H21   -0.45876  -0.73232   1.30090 MAIN 1      0.00000
+    6    1 BUTA H22   -0.70107  -1.33764  -0.37242 MAIN 1      0.00000
+    7    1 BUTA C2    -0.61867  -0.41432   0.24513 MAIN 1      0.00000
+    8    1 BUTA H31    0.66200   1.32414   0.37716 MAIN 1      0.00000
+    9    1 BUTA H32    0.46083   0.67421  -1.28393 MAIN 1      0.00000
+   10    1 BUTA C3     0.60564   0.38385  -0.21818 MAIN 1      0.00000
+   11    1 BUTA H41    1.90381  -1.31109  -0.67920 MAIN 1      0.00000
+   12    1 BUTA H42    2.77767   0.24525  -0.42265 MAIN 1      0.00000
+   13    1 BUTA H43    2.10279  -0.65378   0.98725 MAIN 1      0.00000
+   14    1 BUTA C4     1.92654  -0.37873  -0.07493 MAIN 1      0.00000
+
+  mini nraph nstep 20
+
+   define sub1 - 
+   select - 
+      type c* - 
+   end 
+   calc a ?NSEL * 3 
+
+  vibran nmode 42 
+    diag 
+    thermo mode 7 thru 42 temp 300.0 
+
+    VSA sele sub1 end 
+    thermo mode 8 thru @a temp 300.0
+  end
+stop
+

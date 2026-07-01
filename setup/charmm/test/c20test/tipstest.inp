@@ -1,0 +1,87 @@
+* TIPSTEST.INP By Charles Brooks
+* This input file tests the minimum image periodic
+* boundaries for TIP3P moleules.
+*
+stream datadir.def
+
+read rtf card
+* TIPS3P WATER TOPOLOGY FILE
+*
+   20    1
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+
+AUTOGEN OFF
+RESI TIP3    .000   ! TIPS3P WATER MODEL
+GROUP
+ATOM OH2  OT   -0.834 
+ATOM H1   HT    0.417
+ATOM H2   HT    0.417
+BOND OH2 H1  OH2 H2  H1 H2 ! THE LAST BOND IS NEEDED FOR SHAKE
+THET H1   OH2  H2 
+!                            NOTE: NO DONORS OR ACCEPTORS FOR TIPS3P
+PATC  FIRS NONE LAST NONE
+END
+
+bomlev -2
+read param card
+* TIPS3P WATER PARAMETER FILE
+*
+BOND
+HT  OT     450.0   0.9572 ! from TIPS3P geometry
+HT  HT       0.0   1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+THETAS
+HT  OT  HT  55.0 104.52   ! FROM TIPS3P GEOMETRY
+!
+NONBONDED   ATOM CDIEL SWITCH VATOM VDISTANCE VSWITCH -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 1.0  WMIN 1.5
+!
+HT       0.0440    1.0       0.8000  
+OT       0.8400    6.0       1.6000  
+
+NBFIX
+!OT  OT -0.152073  3.5365 ! TIPS3P VDW INTERACTION
+!HT  OT -0.05      1.0    ! MODIFIED TIPS3P WITH CATASTROPHY ZONE REMOVED
+!                           FOR NOW, USE CHARLIE'S PARAMETERS
+OT OT -0.1521 3.5364
+HT HT -0.04598 0.4490
+OT HT -0.08363 1.9927
+
+END
+bomlev  0
+
+!  Set up a box of 125 water molecules
+
+read sequence tips 125
+generate wat
+open unit 4 form read name @0tip125.crd
+read coor card unit 4
+close unit 4
+
+!  Get the energy of this box without minimum image periodic boundaries
+!  Use the correct cutoff for TIP3P model.
+
+skip angle bond
+
+energy cutnb 44.0 ctofnb 40.0 ctonnb 36.0  eps 1.0 -
+       sigon 8.0 sigoff 8.0 cdie atom vatom
+
+energy ctofnb 40.0 ctonnb 36.0  eps 1.0 group vgroup
+
+!  Now turn on minimum image convention
+!  Use the correct cutoff for TIP3P model.
+
+set 6 15.5516
+set 7 15.5516
+set 8 15.5516
+open read unit 9 card name @0cubic.img
+read image unit 9
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+!  Finally get energy with minimum image convention
+!  Use the correct cutoff for TIP3P model.
+
+energy inbfrq 1 ihbfrq 1 group vgroup  cutim 9.5 -
+      cutnb 8.5 ctofnb 7.5 ctonnb 7.5  eps 1.0
+
+stop

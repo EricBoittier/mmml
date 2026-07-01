@@ -1,0 +1,27 @@
+* Parameter file for TIP4P/FQ and quantum water, for FlucQ
+* 
+BOND
+HP   OP     450.0       0.9572  ! from TIP4P geometry
+HP   HP       0.0       1.5139  ! from TIP4P geometry (for SHAKE w/PARAM)
+MP   HP       0.0       0.8735
+HTQ  OWQ      0.0       0.9572   ! zero bond term for exclusion of vdw on QM
+HTQ  HTQ      0.0       1.5139
+THETAS
+HP   OP   HP      55.0    104.52  ! FROM TIP4P GEOMETRY
+! Fluctuating charge parameters, after Rick et. al.
+FLUCQ
+HP   10.00 0.9000   1    6.0d-5
+MP   78.49 1.6335   2    6.0d-5
+!
+NBONDS ATOM FSWITCH CDIE VSWITCH -
+       CUTNB 14.0 CTOFNB 13.0 CTONNB 12.0 WMIN 1.5 EPS 1.0
+
+! Modified VDW interactions for FlucQ
+HP     0.00     0.0    0.00
+MP     0.00     0.0    0.00
+OP     0.00    -0.2862 1.7729
+! Standard TIP4P VDW parameters for quantum water
+OWQ    0.00    -0.1550 1.7701
+HTQ    0.00     0.0    0.00
+
+END

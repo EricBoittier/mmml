@@ -1,0 +1,96 @@
+*  ASPENR.INP
+*  This input file is a test case and example for calculations
+*  using the Atomic Solvation Potential model.
+*  Files used: toph19.rtf, param19.prm
+
+if ?aspener .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open read unit 1 card name @0param19.prm
+read param unit 1 card
+close unit 1
+
+! Read in the sequence
+Read sequ card
+* maa
+*
+3
+AMN ALA CBX
+
+Generate maa setu
+ic param
+ic seed 2 n 2 ca 2 c
+ic build
+print coor
+coor orie
+
+ic fill
+print ic
+
+!  Build and write out the surf file for ASP calculations
+open unit 1 write form name @9test.surf
+write title unit 1
+** Test file for ASP calculations, all atoms w/ vdW radii and unit
+** solvation parameters
+**
+*  1.4  !Probe radius
+Calc atom = 1
+label donextatom
+   define thisone select bynu @atom end
+   set ResNm = ?selresn
+   set AtmNm = ?seltype
+   scalar radius stats select thisone end
+   set RadAtm = ?stot
+
+   write title unit 1
+* @ResNm   @AtmNm  1000.0  @RadAtm  0.0
+*
+
+   incr atom by 1
+if atom le ?natom goto donextatom
+
+close unit 1
+
+!  Now open this file and read it
+open unit 1 read form name @9test.surf
+read surf unit 1
+close unit 1
+
+!  First calculate the accessable surface area and verify that this
+!  is the same as the ASP energy term when all radii are the vdW radii and
+!  the solvation parameter is 1.0
+
+coor surf acce rprobe 1.4  ! Analytical SA calculation
+
+Calc ASA = ?Area
+
+!  Now do ASP energy calculation and compare values
+skipe all excl asp
+
+energy
+
+Calc ASA' = ?ASP
+Calc Diff = @ASA - @{ASA'}
+
+!  Now verify that the first derivitives satisfy numerical differentiation
+
+test first  step 0.0001 tol 0.000001
+
+!  Now check that minimizaton works with ASP energy function
+skipe none
+
+mini abnr nstep 300 nprint 50 tolgrd 0.001
+
+Calc Diff = ?ASP - @{ASA'}
+coor force
+print coor
+
+stop

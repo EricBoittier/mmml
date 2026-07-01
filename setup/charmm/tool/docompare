@@ -1,0 +1,21 @@
+#!/bin/csh -f
+if ( $#argv <= 1 ) then
+   echo "Usage: docompare <chm_host> <newtest-prefix> [<reftest-prefix>]"
+   exit
+set parallel = 0
+else if ($#argv == 2) then
+     set chm_host = $argv[1]
+     set new = $argv[2]
+     set old = $argv[2]
+else if ($#argv == 3) then
+     set chm_host = $argv[1]
+     set new = $argv[2]
+     set old = $argv[3]
+endif
+
+foreach t (20 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38)
+    echo "Comparing against ${old}$t"
+      setenv CMPDIR ${old}$t
+      ../tool/Compare $new $t diff
+end
+

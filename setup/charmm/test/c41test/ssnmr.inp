@@ -1,0 +1,98 @@
+* CHARMM 40 Testcase ssnmr.inp
+* Jinhyuk Lee, c40a1
+* Test various SSNMR restraint
+*
+
+if ?ssnmr .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+open read form unit 1 name @0top_all27_prot_na.rtf
+read rtf  card unit 1
+close unit 1
+
+open read form unit 1 name @0par_all27_prot_na.prm
+read parameter card unit 1
+close unit 1
+
+read sequence cards
+* sequence
+*
+   1
+ALAD
+generate ALAD setup
+
+ic param
+ic seed alad 1 NL alad 1 CA alad 1 CRP
+ic build
+prnlev 0
+hbuild
+prnlev 5
+
+! Use your own nonbond options for your own practical applications
+update cutnb 50.0 ctofnb 47.0 ctonnb 45.0
+
+set status pass
+
+!-----------------------------------------------------------------------
+! DC Restraint Potential
+
+set dcforc 1.0
+
+coor print
+
+ccs
+exps   nudc 19.86 DCCO
+ASSI sele segid alad .and. ( ( resid 1 .and. type HL ) .or. ( resid 1 .and. type NL ) )  show end -
+     forc @dcforc exp -7.8 DIPC
+END
+
+skipe all excl ECS
+ENERGY
+set ener = ?ECS
+if ener .eq. 0 set status fail
+
+test first tol 0.0 sele resi 1 .and. ( type HL .or. type NL ) end
+mini sd nstep 60 nprint 10
+
+set nener = ?ECS
+calc dener = @nener - @ener
+if dener .gt. 0 set status fail
+
+ccs
+reset
+end
+
+write coor pdb name junk.pdb
+
+!-----------------------------------------------------------------------
+! CS Restraint
+
+ccs
+exps   s11 64.0 s22 77.0 s33 222.0 phi 108.5
+ASSI sele ( resid 1 .and. type CRP .or. type NR .or. type HR )  show end -
+     forc @dcforc exp 82.430
+END
+
+skipe all excl ECS
+ENERGY
+set ener = ?ECS
+if ener .eq. 0 set status fail
+
+test first tol 0.0 sele resi 1 .and. ( type HR .or. type NR .or. type CRP ) end
+mini sd nstep 60 nprint 10
+
+set nener = ?ECS
+calc dener = @nener - @ener
+if dener .gt. 0 set status fail
+
+ccs
+reset
+end
+
+echo ssnmr testcase result: @status
+
+stop

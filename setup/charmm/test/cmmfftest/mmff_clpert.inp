@@ -1,0 +1,177 @@
+* CLPERT.INP
+* author:  jay banks 2 may 94, from Ryszard Czerminski (December 11, 1991)
+* purpose: to test PERT command (slow growth method)
+* problem: calculates free energy perturbation for migrating -Cl atom
+*          in chloromethane (CH3-Cl -> Cl-CH3)
+* external files: none
+*
+
+echo "mmff not compatible with pert"
+echo "testcase result: skip"
+stop
+
+stream datadir.def
+bomlev 5
+stream @0mmff_setup.str
+
+read merck card unit 5
+* CLPERT.INP                                                                    
+MOL CLMETH   O  E =       0.0000   G =  0.00E+00  MMFF                          
+    5     4
+    0.0000     0.0000     0.0000     6 10 0     1 C   1   CLM   -0.2000     CLMT
+   -0.3800     0.5200    -0.8800     1  3 0     2 HA  1   CLM    0.2000     CLMT
+   -0.3800     0.5200     0.8800     1  3 0     3 HB  1   CLM    0.2000     CLMT
+    1.7800     0.0000     0.0000    17 93 0     4 CL1 1   CLM   -0.4000     CLMT
+   -0.3300    -1.0400     0.0000     1  3 0     5 H1  1   CLM    0.2000     CLMT
+    1     2  1      1     3  1      1     4  1      1     5  1
+END
+
+generate CLMT setup warn first none last none mmff
+write merck unit 6
+* test mol
+*
+print psf
+
+update inbfrq 10000 ihbfrq 0 cdie cutnb 999.
+mini sd nstep 100 nprint 10 tolg 1.
+mini nrap nstep 100 nprint 100 step 0.1 tolg 0.0000001 tols 0.0000001
+coor orie mass
+
+write coor card unit 6
+
+vibran
+diag
+thermo temp 300.0 mode 7 thru 21
+end
+
+pert
+read merck card unit 5
+* CLPERT.INP                                                                    
+MOL CLMETH   O  E =       0.0000   G =  0.00E+00  MMFF                          
+    5     4
+    0.0000     0.0000     0.0000     6 10 0     1 C   1   CLM   -0.2000     CLMT
+   -0.3800     0.5200    -0.8800     1  3 0     2 HA  1   CLM    0.2000     CLMT
+   -0.3800     0.5200     0.8800     1  3 0     3 HB  1   CLM    0.2000     CLMT
+    1.7800     0.0000     0.0000     1  3 0     4 CL1 1   CLM    0.2000     CLMT
+   -0.3300    -1.0400     0.0000    17 93 0     5 H1  1   CLM   -0.4000     CLMT
+    1     2  1      1     3  1      1     4  1      1     5  1
+END
+
+generate CLMT setup warn first none last none mmff
+print psf
+
+set 1 31459
+
+bomlev 0
+!open read  card unit 88 name slow15.punit
+dyna verlet leap strt nstep 15000 timestep 0.001 -
+    iprfrq 1000 ihtfrq 0 ieqfrq 500 ntrfrq 0  -
+    iuncrd -31 iseed @1 -
+    nprint 1000 nsavc 0 nsavv 0 -
+    firstt 300.0 finalt 300.0 teminc 30.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 5.0 twindl -5.0 -
+    punit 5 wmin 1.0
+* punit file for slow growth test cases
+*                                                                
+  LSTART  0.00000  LSTOP  0.01000  PSTART  3400    PSTOP  3600    PSLOW
+  LSTART  0.01000  LSTOP  0.02000  PSTART  3600    PSTOP  3800    PSLOW
+  LSTART  0.02000  LSTOP  0.04000  PSTART  3800    PSTOP  4000    PSLOW
+  LSTART  0.04000  LSTOP  0.06000  PSTART  4000    PSTOP  4200    PSLOW
+  LSTART  0.06000  LSTOP  0.08000  PSTART  4200    PSTOP  4400    PSLOW
+  LSTART  0.08000  LSTOP  0.10000  PSTART  4400    PSTOP  4600    PSLOW
+  LSTART  0.10000  LSTOP  0.12000  PSTART  4600    PSTOP  4800    PSLOW
+  LSTART  0.12000  LSTOP  0.14000  PSTART  4800    PSTOP  5000    PSLOW
+  LSTART  0.14000  LSTOP  0.16000  PSTART  5000    PSTOP  5200    PSLOW
+  LSTART  0.16000  LSTOP  0.18000  PSTART  5200    PSTOP  5400    PSLOW
+  LSTART  0.18000  LSTOP  0.20000  PSTART  5400    PSTOP  5600    PSLOW
+  LSTART  0.20000  LSTOP  0.22000  PSTART  5600    PSTOP  5800    PSLOW
+  LSTART  0.22000  LSTOP  0.24000  PSTART  5800    PSTOP  6000    PSLOW
+  LSTART  0.24000  LSTOP  0.26000  PSTART  6000    PSTOP  6200    PSLOW
+  LSTART  0.26000  LSTOP  0.28000  PSTART  6200    PSTOP  6400    PSLOW
+  LSTART  0.28000  LSTOP  0.30000  PSTART  6400    PSTOP  6600    PSLOW
+  LSTART  0.30000  LSTOP  0.32000  PSTART  6600    PSTOP  6800    PSLOW
+  LSTART  0.32000  LSTOP  0.34000  PSTART  6800    PSTOP  7000    PSLOW
+  LSTART  0.34000  LSTOP  0.36000  PSTART  7000    PSTOP  7200    PSLOW
+  LSTART  0.36000  LSTOP  0.38000  PSTART  7200    PSTOP  7400    PSLOW
+  LSTART  0.38000  LSTOP  0.40000  PSTART  7400    PSTOP  7600    PSLOW
+  LSTART  0.40000  LSTOP  0.42000  PSTART  7600    PSTOP  7800    PSLOW
+  LSTART  0.42000  LSTOP  0.44000  PSTART  7800    PSTOP  8000    PSLOW
+  LSTART  0.44000  LSTOP  0.46000  PSTART  8000    PSTOP  8200    PSLOW
+  LSTART  0.46000  LSTOP  0.48000  PSTART  8200    PSTOP  8400    PSLOW
+  LSTART  0.48000  LSTOP  0.50000  PSTART  8400    PSTOP  8600    PSLOW
+  LSTART  0.50000  LSTOP  0.52000  PSTART  8600    PSTOP  8800    PSLOW
+  LSTART  0.52000  LSTOP  0.54000  PSTART  8800    PSTOP  9000    PSLOW
+  LSTART  0.54000  LSTOP  0.56000  PSTART  9000    PSTOP  9200    PSLOW
+  LSTART  0.56000  LSTOP  0.58000  PSTART  9200    PSTOP  9400    PSLOW
+  LSTART  0.58000  LSTOP  0.60000  PSTART  9400    PSTOP  9600    PSLOW
+  LSTART  0.60000  LSTOP  0.62000  PSTART  9600    PSTOP  9800    PSLOW
+  LSTART  0.62000  LSTOP  0.64000  PSTART  9800    PSTOP 10000    PSLOW
+  LSTART  0.64000  LSTOP  0.66000  PSTART 10000    PSTOP 10200    PSLOW
+  LSTART  0.66000  LSTOP  0.68000  PSTART 10200    PSTOP 10400    PSLOW
+  LSTART  0.68000  LSTOP  0.70000  PSTART 10400    PSTOP 10600    PSLOW
+  LSTART  0.70000  LSTOP  0.72000  PSTART 10600    PSTOP 10800    PSLOW
+  LSTART  0.72000  LSTOP  0.74000  PSTART 10800    PSTOP 11000    PSLOW
+  LSTART  0.74000  LSTOP  0.76000  PSTART 11000    PSTOP 11200    PSLOW
+  LSTART  0.76000  LSTOP  0.78000  PSTART 11200    PSTOP 11400    PSLOW
+  LSTART  0.78000  LSTOP  0.80000  PSTART 11400    PSTOP 11600    PSLOW
+  LSTART  0.80000  LSTOP  0.82000  PSTART 11600    PSTOP 11800    PSLOW
+  LSTART  0.82000  LSTOP  0.84000  PSTART 11800    PSTOP 12000    PSLOW
+  LSTART  0.84000  LSTOP  0.86000  PSTART 12000    PSTOP 12200    PSLOW
+  LSTART  0.86000  LSTOP  0.88000  PSTART 12200    PSTOP 12400    PSLOW
+  LSTART  0.88000  LSTOP  0.90000  PSTART 12400    PSTOP 12600    PSLOW
+  LSTART  0.90000  LSTOP  0.92000  PSTART 12600    PSTOP 12800    PSLOW
+  LSTART  0.92000  LSTOP  0.94000  PSTART 12800    PSTOP 13000    PSLOW
+  LSTART  0.94000  LSTOP  0.96000  PSTART 13000    PSTOP 13200    PSLOW
+  LSTART  0.96000  LSTOP  0.97000  PSTART 13200    PSTOP 13400    PSLOW
+  LSTART  0.97000  LSTOP  0.98000  PSTART 13400    PSTOP 13600    PSLOW
+  LSTART  0.98000  LSTOP  0.98500  PSTART 13600    PSTOP 13800    PSLOW
+  LSTART  0.98500  LSTOP  0.99000  PSTART 13800    PSTOP 14000    PSLOW
+  LSTART  0.99000  LSTOP  0.99100  PSTART 14000    PSTOP 14100    PSLOW
+  LSTART  0.99100  LSTOP  0.99200  PSTART 14100    PSTOP 14200    PSLOW
+  LSTART  0.99200  LSTOP  0.99300  PSTART 14200    PSTOP 14300    PSLOW
+  LSTART  0.99300  LSTOP  0.99400  PSTART 14300    PSTOP 14400    PSLOW
+  LSTART  0.99400  LSTOP  0.99500  PSTART 14400    PSTOP 14500    PSLOW
+  LSTART  0.99500  LSTOP  0.99600  PSTART 14500    PSTOP 14600    PSLOW
+  LSTART  0.99600  LSTOP  0.99700  PSTART 14600    PSTOP 14700    PSLOW
+  LSTART  0.99700  LSTOP  0.99800  PSTART 14700    PSTOP 14800    PSLOW
+  LSTART  0.99800  LSTOP  0.99900  PSTART 14800    PSTOP 14900    PSLOW
+  LSTART  0.99900  LSTOP  0.99950  PSTART 14900    PSTOP 14950    PSLOW
+  LSTART  0.99950  LSTOP  1.00000  PSTART 14950    PSTOP 15000    PSLOW
+
+bomlev 5
+print energy
+pert off
+
+mini sd   nstep 100 nprint 20 tolg  0.5
+mini nrap nstep 100 nprint 100 step 0.1 tolg 0.0000001 tols 0.0000001
+coor orie mass
+vibran
+diag
+thermo temp 300.0 mode 7 thru 24
+end
+
+ic fill
+ic print
+
+write coor card unit 6
+
+format (F9.5)
+write title unit 6
+* final chloromethane structure ENERGY=?ener
+* BOND=?BOND
+* ANGL=?ANGL
+* DIHE=?DIHE
+* ELEC=?ELEC
+* VDW =?VDW
+*
+print coor
+
+! results for future reference (Sep 23, 1992, RCZ)
+! SGI     : IRIX 4.0.5D 08061552 IP20 50 MHZ IP20 Processor
+! IBMRIOS : AIX Version 3.2.2  FORTRAN 2.2.100.16
+! HP700   : HP-UX
+!SGI >    PERTURBATION> Slow growth result, EPRTOT=   -0.473191
+!IBMRIOS> PERTURBATION> Slow growth result, EPRTOT=    -.084432
+!HP700>   PERTURBATION> Slow growth result, EPRTOT=    -.188384
+
+stop

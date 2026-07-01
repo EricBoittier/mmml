@@ -1,0 +1,73 @@
+* additional residues and patches for use with aminoh.rtf
+* created by Rick Venable, FDA Biophysics Lab
+*           <PUBLIC DOMAIN>
+* blocking groups (acetyl and methylamine), patches for
+* protonated ASP, C=O reduced to CH2
+*   20    1                ! Version number
+* copied from //rjl/rdisk/charmm/toppar/polygen/amino3h.rtf and re-added version number PJS Sep-5-91
+*
+   20    1                ! Version number
+MASS     1 H      1.00800  H   ! Hydrogen bonding hydrogen (part of neutral group)
+MASS     3 HA     1.00800  H   ! Aliphatic or aromatic non-hydrogen bonding hydrogen
+MASS    10 CT    12.01100  C   ! Aliphatic carbon  -sp3
+MASS    14 C     12.01100  C   ! Carbonyl or Guanidinium carbon
+MASS    32 NP    14.00670  N   ! Peptide/amide nitrogen
+MASS    40 O     15.99940  O   ! Carbonyl oxygen for acids and their derivatives
+
+DECL -C
+DECL -CA
+DECL -O
+DECL +N
+DECL +H
+DECL +CA
+
+AUTOGENERATE ANGLES
+DEFA FIRS NTER LAST CTER
+                                                                                
+RESI AMN     0.00000     !   acetyl group for N terminal cap
+GROU
+ ATOM CA   CT     -0.30
+ ATOM HA1  HA      0.10
+ ATOM HA2  HA      0.10
+ ATOM HA3  HA      0.10
+GROU
+ ATOM C    C       0.55
+ ATOM O    O      -0.55
+BOND CA   C         C    +N   
+DOUBLE C  O
+BOND CA  HA1    CA  HA2     CA  HA3
+DIHE CA   C    +N   +CA     HA1  CA  C  +N
+IMPH C    CA   +N   O
+DIHE HA2  CA   C   +N      HA3   CA  C  +N
+ACCE O ! C
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   HA1  CA    C   +N     0.0000    0.00  180.00    0.00   0.0000
+IC   HA2  CA   C   +N      0.00      0.00   60.0     0.00   0.00
+IC   HA3  CA   C   +N      0.00      0.00  -60.0     0.00   0.00
+PATC  FIRS NONE LAST NONE
+
+RESI CBX     0.00000    !    methylamine group for C terminal cap
+GROU
+ ATOM N    NP     -0.35
+ ATOM H    H       0.35
+GROUP
+ ATOM CA   CT     -0.30
+ ATOM HA1  HA      0.10
+ ATOM HA2  HA      0.10
+ ATOM HA3  HA      0.10
+BOND N    CA        N    H
+BOND CA  HA1    CA  HA2     CA  HA3
+DIHE -CA  -C  N  CA     -C  N  CA  HA1
+IMPH  N  -C  CA  H
+DIHE  -C  N  CA  HA2     -C  N  CA  HA3
+DONO   H  N
+IC   -C   CA   *N   H      0.0000    0.00  180.00    0.00   0.0000
+IC   -CA  -C  N  CA        0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N   CA  HA1      0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N   CA  HA2      0.00      0.00   60.0     0.00   0.00
+IC   -C   N   CA  HA3      0.00      0.00  -60.0     0.00   0.00
+PATC  FIRS NONE LAST NONE
+
+
+END

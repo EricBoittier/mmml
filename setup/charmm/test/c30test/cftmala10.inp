@@ -1,0 +1,475 @@
+* CHARMM 30 testcase cftmala10.inp
+* Testing CFTM protocol:
+*  (a) Perform MD with holonomic constraints, save gradient file
+*  (b) Perform elementary analysis
+* Author: Krzysztof Kuczera, Lawrence, KS 28-Jan-2003
+* System: ALA10 with all phi and psi constrained, vacuum
+* External Files: top_all22_prot.inp and par_all22_prot.inp
+* Replaces cftmgas.inp
+*
+
+if ?qtsm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! Multinode execution has file I/O problems.
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+stream datadir.def
+
+set t 10-ALA helix in vacuum  ! title
+set 3 a10h                    ! PSF prefix
+set s a10h                    ! solute segid
+set n 1000                   ! number of MD steps
+set x -60                     ! phi
+set y -41                     ! psi
+set 1  300.0                  ! temperature [K]
+
+! read in topology, parameter and PSF files
+!===========================================
+open read card unit 11 name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read card  unit 11 name @0par_all22_prot.inp
+read para card unit 11
+close unit 11
+
+read sequence ALA 10
+generate A10H first ACE last CT2 setup warn
+
+! read in prepared coordinates : should have correct phi/psi
+!  from equilibration phase
+!=======================================================
+read coor card
+* A10H: 10-ALA HELIX IN VACUUM
+* COORDS AFTER 20PS EQUIL + 40PS MD WITH PHI=-60 AND PSI=-41
+*  DATE:    16/ 1/96      3:44:43      CREATED BY USER: kuczera
+*
+  109
+    1    1 ALA  CAY   -6.96149   1.73359  -5.13359 A10H 1       .00000
+    2    1 ALA  HY1   -7.61480   1.33750  -4.32698 A10H 1       .00000
+    3    1 ALA  HY2   -7.24723   1.13799  -6.02687 A10H 1       .00000
+    4    1 ALA  HY3   -7.29162   2.76689  -5.37364 A10H 1       .00000
+    5    1 ALA  CY    -5.55118   1.67885  -4.84657 A10H 1       .00000
+    6    1 ALA  OY    -5.09132   1.44484  -3.73328 A10H 1       .00000
+    7    1 ALA  N     -4.83968   2.06053  -5.90608 A10H 1       .00000
+    8    1 ALA  HN    -5.28964   2.21335  -6.78255 A10H 1       .00000
+    9    1 ALA  CA    -3.39148   2.07852  -5.91098 A10H 1       .00000
+   10    1 ALA  HA    -3.03741   1.07376  -5.73351 A10H 1       .00000
+   11    1 ALA  CB    -2.86562   2.55522  -7.21539 A10H 1       .00000
+   12    1 ALA  HB1   -3.03668   1.75616  -7.96809 A10H 1       .00000
+   13    1 ALA  HB2   -3.35890   3.44702  -7.65776 A10H 1       .00000
+   14    1 ALA  HB3   -1.75977   2.65422  -7.17522 A10H 1       .00000
+   15    1 ALA  C     -2.70251   2.86997  -4.78246 A10H 1       .00000
+   16    1 ALA  O     -1.68263   2.52668  -4.24185 A10H 1       .00000
+   17    2 ALA  N     -3.25689   4.04213  -4.45908 A10H 2       .00000
+   18    2 ALA  HN    -4.06843   4.45583  -4.86438 A10H 2       .00000
+   19    2 ALA  CA    -2.71621   4.68023  -3.32899 A10H 2       .00000
+   20    2 ALA  HA    -1.68650   4.95937  -3.49684 A10H 2       .00000
+   21    2 ALA  CB    -3.47971   5.98077  -3.13085 A10H 2       .00000
+   22    2 ALA  HB1   -3.66215   6.44830  -4.12204 A10H 2       .00000
+   23    2 ALA  HB2   -4.46046   5.89148  -2.61658 A10H 2       .00000
+   24    2 ALA  HB3   -2.79075   6.63182  -2.55139 A10H 2       .00000
+   25    2 ALA  C     -2.75769   3.96312  -1.94519 A10H 2       .00000
+   26    2 ALA  O     -1.67912   4.00625  -1.33409 A10H 2       .00000
+   27    3 ALA  N     -3.84981   3.25733  -1.51408 A10H 3       .00000
+   28    3 ALA  HN    -4.75542   3.39692  -1.90702 A10H 3       .00000
+   29    3 ALA  CA    -3.80982   2.33288   -.45379 A10H 3       .00000
+   30    3 ALA  HA    -3.46603   2.86843    .41879 A10H 3       .00000
+   31    3 ALA  CB    -5.27287   1.89722   -.24482 A10H 3       .00000
+   32    3 ALA  HB1   -5.69625   1.49080  -1.18815 A10H 3       .00000
+   33    3 ALA  HB2   -5.34124   1.08641    .51164 A10H 3       .00000
+   34    3 ALA  HB3   -5.97032   2.67758    .12790 A10H 3       .00000
+   35    3 ALA  C     -2.85044   1.16609   -.67528 A10H 3       .00000
+   36    3 ALA  O     -2.23761    .68756    .31040 A10H 3       .00000
+   37    4 ALA  N     -2.84397    .67363  -1.86787 A10H 4       .00000
+   38    4 ALA  HN    -3.49291   1.04332  -2.52833 A10H 4       .00000
+   39    4 ALA  CA    -1.99297   -.44306  -2.18399 A10H 4       .00000
+   40    4 ALA  HA    -2.24412  -1.21008  -1.46635 A10H 4       .00000
+   41    4 ALA  CB    -2.29009   -.85311  -3.69024 A10H 4       .00000
+   42    4 ALA  HB1   -3.34106  -1.17749  -3.84694 A10H 4       .00000
+   43    4 ALA  HB2   -1.99944    .02587  -4.30443 A10H 4       .00000
+   44    4 ALA  HB3   -1.60601  -1.63735  -4.07924 A10H 4       .00000
+   45    4 ALA  C      -.46916   -.21230  -1.98559 A10H 4       .00000
+   46    4 ALA  O       .22225  -1.06909  -1.44710 A10H 4       .00000
+   47    5 ALA  N       .08785    .96014  -2.35301 A10H 5       .00000
+   48    5 ALA  HN     -.42738   1.62910  -2.88314 A10H 5       .00000
+   49    5 ALA  CA     1.40085   1.45951  -2.06476 A10H 5       .00000
+   50    5 ALA  HA     1.96968    .61648  -2.42825 A10H 5       .00000
+   51    5 ALA  CB     1.60544   2.83129  -2.80862 A10H 5       .00000
+   52    5 ALA  HB1    1.21087   3.73533  -2.29740 A10H 5       .00000
+   53    5 ALA  HB2    2.69585   2.97553  -2.96521 A10H 5       .00000
+   54    5 ALA  HB3    1.18176   2.72990  -3.83064 A10H 5       .00000
+   55    5 ALA  C      1.63871   1.58699   -.57916 A10H 5       .00000
+   56    5 ALA  O      2.67391   1.18284   -.04862 A10H 5       .00000
+   57    6 ALA  N       .58333   2.08039    .15918 A10H 6       .00000
+   58    6 ALA  HN     -.27050   2.49989   -.13917 A10H 6       .00000
+   59    6 ALA  CA      .53412   2.06389   1.59705 A10H 6       .00000
+   60    6 ALA  HA     1.33447   2.67815   1.98244 A10H 6       .00000
+   61    6 ALA  CB     -.79953   2.74409   2.13127 A10H 6       .00000
+   62    6 ALA  HB1   -1.70270   2.12235   1.95225 A10H 6       .00000
+   63    6 ALA  HB2    -.71041   2.84279   3.23428 A10H 6       .00000
+   64    6 ALA  HB3   -1.08556   3.70950   1.66169 A10H 6       .00000
+   65    6 ALA  C       .60732    .69807   2.23234 A10H 6       .00000
+   66    6 ALA  O      1.24931    .50523   3.24858 A10H 6       .00000
+   67    7 ALA  N      -.08192   -.33101   1.67290 A10H 7       .00000
+   68    7 ALA  HN     -.75225   -.10098    .97165 A10H 7       .00000
+   69    7 ALA  CA     -.07837  -1.69757   2.19717 A10H 7       .00000
+   70    7 ALA  HA     -.34119  -1.66423   3.24417 A10H 7       .00000
+   71    7 ALA  CB    -1.12082  -2.58224   1.39690 A10H 7       .00000
+   72    7 ALA  HB1   -2.12741  -2.11515   1.45106 A10H 7       .00000
+   73    7 ALA  HB2    -.85007  -2.56392    .31955 A10H 7       .00000
+   74    7 ALA  HB3   -1.24285  -3.63978   1.71479 A10H 7       .00000
+   75    7 ALA  C      1.31846  -2.35402   2.24430 A10H 7       .00000
+   76    7 ALA  O      1.59262  -3.05893   3.17958 A10H 7       .00000
+   77    8 ALA  N      2.10147  -2.10763   1.15756 A10H 8       .00000
+   78    8 ALA  HN     1.65285  -1.56288    .45330 A10H 8       .00000
+   79    8 ALA  CA     3.44633  -2.60706    .84997 A10H 8       .00000
+   80    8 ALA  HA     3.45390  -3.68646    .88524 A10H 8       .00000
+   81    8 ALA  CB     3.91792  -2.05831   -.54726 A10H 8       .00000
+   82    8 ALA  HB1    3.18269  -2.45632  -1.27893 A10H 8       .00000
+   83    8 ALA  HB2    3.91221   -.94866   -.49271 A10H 8       .00000
+   84    8 ALA  HB3    4.90143  -2.47645   -.85092 A10H 8       .00000
+   85    8 ALA  C      4.49062  -2.19876   1.91714 A10H 8       .00000
+   86    8 ALA  O      5.30773  -3.06272   2.25983 A10H 8       .00000
+   87    9 ALA  N      4.42124   -.92612   2.41889 A10H 9       .00000
+   88    9 ALA  HN     3.76624   -.29773   2.00645 A10H 9       .00000
+   89    9 ALA  CA     5.15994   -.44226   3.55940 A10H 9       .00000
+   90    9 ALA  HA     6.21609   -.63705   3.44541 A10H 9       .00000
+   91    9 ALA  CB     4.81793   1.02506   3.71535 A10H 9       .00000
+   92    9 ALA  HB1    3.73444   1.21776   3.86776 A10H 9       .00000
+   93    9 ALA  HB2    5.32715   1.43182   4.61511 A10H 9       .00000
+   94    9 ALA  HB3    5.16835   1.58615   2.82276 A10H 9       .00000
+   95    9 ALA  C      4.80755  -1.26199   4.83300 A10H 9       .00000
+   96    9 ALA  O      5.70238  -1.56289   5.61396 A10H 9       .00000
+   97   10 ALA  N      3.51201  -1.63128   5.08760 A10H 10      .00000
+   98   10 ALA  HN     2.79404  -1.44439   4.42156 A10H 10      .00000
+   99   10 ALA  CA     3.05051  -2.47637   6.20329 A10H 10      .00000
+  100   10 ALA  HA     3.51826  -2.11565   7.10744 A10H 10      .00000
+  101   10 ALA  CB     1.49611  -2.61398   6.43693 A10H 10      .00000
+  102   10 ALA  HB1    1.37043  -3.30607   7.29689 A10H 10      .00000
+  103   10 ALA  HB2     .96775  -1.67816   6.71871 A10H 10      .00000
+  104   10 ALA  HB3    1.10722  -3.09604   5.51459 A10H 10      .00000
+  105   10 ALA  C      3.73284  -3.87490   6.11451 A10H 10      .00000
+  106   10 ALA  O      4.03816  -4.49743   7.12730 A10H 10      .00000
+  107   10 ALA  NT     3.67115  -4.45822   4.90568 A10H 10      .00000
+  108   10 ALA  HT1    4.36351  -5.17486   4.82160 A10H 10      .00000
+  109   10 ALA  HT2    3.32246  -3.95221   4.11677 A10H 10      .00000
+
+coor copy comp
+open write unit 11 form name @9a10h.crd
+write coor card unit 11
+* A10H: 10-ALA HELIX IN VACUUM
+* COORDS AFTER 20PS EQUIL + 40PS MD WITH PHI=-60 AND PSI=-41
+*
+
+ic fill
+ic print
+
+! Define some atom selections
+define back sele show type CA  .or. type C .or. type N end
+
+! Use TSM 
+! fix: keep coordinates fixed using holonomic constraint algorithm
+! savi: setup saving of data (every 10th step)
+! cftm: calculate energy gradient wrt fixed coordinates
+! move: define which atoms are moved by coordinate changes
+!=================================================================
+tsm
+! phi
+  fix dihe @s  1 C   @s  2 N   @s  2 CA  @s  2 C    toli 1.0e-3
+  fix dihe @s  2 C   @s  3 N   @s  3 CA  @s  3 C    toli 1.0e-3
+  fix dihe @s  3 C   @s  4 N   @s  4 CA  @s  4 C    toli 1.0e-3
+  fix dihe @s  4 C   @s  5 N   @s  5 CA  @s  5 C    toli 1.0e-3
+  fix dihe @s  5 C   @s  6 N   @s  6 CA  @s  6 C    toli 1.0e-3
+  fix dihe @s  6 C   @s  7 N   @s  7 CA  @s  7 C    toli 1.0e-3
+  fix dihe @s  7 C   @s  8 N   @s  8 CA  @s  8 C    toli 1.0e-3
+  fix dihe @s  8 C   @s  9 N   @s  9 CA  @s  9 C    toli 1.0e-3
+  fix dihe @s  9 C   @s 10 N   @s 10 CA  @s 10 C    toli 1.0e-3
+! psi
+  fix dihe @s  1 N   @s  1 CA  @s  1 C   @s  2 N    toli 1.0e-3
+  fix dihe @s  2 N   @s  2 CA  @s  2 C   @s  3 N    toli 1.0e-3
+  fix dihe @s  3 N   @s  3 CA  @s  3 C   @s  4 N    toli 1.0e-3
+  fix dihe @s  4 N   @s  4 CA  @s  4 C   @s  5 N    toli 1.0e-3
+  fix dihe @s  5 N   @s  5 CA  @s  5 C   @s  6 N    toli 1.0e-3
+  fix dihe @s  6 N   @s  6 CA  @s  6 C   @s  7 N    toli 1.0e-3
+  fix dihe @s  7 N   @s  7 CA  @s  7 C   @s  8 N    toli 1.0e-3
+  fix dihe @s  8 N   @s  8 CA  @s  8 C   @s  9 N    toli 1.0e-3
+  fix dihe @s  9 N   @s  9 CA  @s  9 C   @s 10 N    toli 1.0e-3
+  maxi 1000
+  savi icun 10 icfr 10 nwin 1
+  cftm
+!
+! repeat of all "fix"ed coordinates with "move"
+! "inte" is needed by TSM parser and is not used by CFTM
+!  CFTM does not actually perform any perturabtions, so size of step
+!  is immaterial, here it is set to 1
+!  Note: the atom selections given here give correct singns of
+!  derivatives dU/dphi, dU/dpsi: atoms connected to end of each 
+!  dihedral are in selection #1
+! phi
+move dihe @s  1 C   @s  2 N   @s  2 CA  @s  2 C    by 1.0  inte -
+ sele show .not.(resi 1 .or. ( resi 2 .and. ( type HN .or. type N ))) end -
+ sele show resi 1 .or. ( resi 2 .and. ( type HN .or. type N ))  end 
+move dihe @s  2 C   @s  3 N   @s  3 CA  @s  3 C    by 1.0  inte -
+ sele show .not.(resi 1:2 .or. (resi 3 .and. (type HN .or. type N))) end -
+ sele show resi 1:2 .or. ( resi 3 .and. ( type HN .or. type N ))  end
+move dihe @s  3 C   @s  4 N   @s  4 CA  @s  4 C    by 1.0  inte -
+ sele show .not.(resi 1:3 .or. (resi 4 .and. (type HN .or. type N))) end -
+ sele show resi 1:3 .or. ( resi 4 .and. ( type HN .or. type N ))  end
+move dihe @s  4 C   @s  5 N   @s  5 CA  @s  5 C    by 1.0  inte -
+ sele show .not.(resi 1:4 .or. (resi 5 .and. (type HN .or. type N))) end -
+ sele show resi 1:4 .or. ( resi 5 .and. ( type HN .or. type N ))  end
+move dihe @s  5 C   @s  6 N   @s  6 CA  @s  6 C    by 1.0  inte -
+ sele show .not.(resi 1:5 .or. (resi 6 .and. (type HN .or. type N))) end -
+ sele show resi 1:5 .or. ( resi 6 .and. ( type HN .or. type N ))  end
+move dihe @s  6 C   @s  7 N   @s  7 CA  @s  7 C    by 1.0  inte -
+ sele show resi 8:10 .or. (resi 7 .and.(.not.(type HN .or. type N))) end -
+ sele show .not.(resi 8:10 .or.(resi 7 .and.(.not.(type HN .or. type N)))) end
+move dihe @s  7 C   @s  8 N   @s  8 CA  @s  8 C    by 1.0  inte -
+ sele show resi 9:10 .or. (resi 8 .and.(.not.(type HN .or. type N))) end -
+ sele show .not.(resi 9:10 .or.(resi 8 .and.(.not.(type HN .or. type N)))) end
+move dihe @s  8 C   @s  9 N   @s  9 CA  @s  9 C    by 1.0  inte -
+ sele show resi 10 .or. ( resi 9 .and.(.not.(type HN .or. type N))) end -
+ sele show .not.(resi 10 .or.( resi 9 .and.(.not.(type HN .or. type N)))) end
+move dihe @s  9 C   @s 10 N   @s 10 CA  @s 10 C    by 1.0  inte -
+  sele show  resi 10 .and. (.not.(type HN .or. type N )) end -
+  sele show  .not.(resi 10 .and. (.not.(type HN .or. type N ))) end
+! psi
+move dihe @s  1 N   @s  1 CA  @s  1 C   @s  2 N    by 1.0  inte -
+  sele show .not.(resi 1 .and.(.not.( type C .or. type O ))) end -
+  sele show  resi 1 .and.(.not.( type C .or. type O )) end
+move dihe @s  2 N   @s  2 CA  @s  2 C   @s  3 N    by 1.0  inte -
+ sele show .not.(resi 1 .or. (resi 2 .and.(.not.(type C .or. type O)))) end -
+ sele show resi 1 .or. ( resi 2 .and.(.not.(type C .or. type O))) end
+move dihe @s  3 N   @s  3 CA  @s  3 C   @s  4 N    by 1.0  inte -
+ sele show .not.(resi 1:2 .or. (resi 3 .and.(.not.(type C .or. type O)))) end -
+ sele show resi 1:2 .or. (resi 3 .and.(.not.(type C .or. type O))) end
+move dihe @s  4 N   @s  4 CA  @s  4 C   @s  5 N    by 1.0  inte -
+ sele show .not.(resi 1:3 .or. (resi 4 .and.(.not.(type C .or. type O)))) end -
+ sele show resi 1:3 .or. (resi 4 .and.(.not.(type C .or. type O))) end
+move dihe @s  5 N   @s  5 CA  @s  5 C   @s  6 N    by 1.0  inte -
+ sele show resi 6:10 .or. ( resi 5 .and. (type C .or. type O ) ) end -
+ sele show .not.(resi 6:10 .or. (resi 5 .and. (type C .or. type O ))) end
+move dihe @s  6 N   @s  6 CA  @s  6 C   @s  7 N    by 1.0  inte -
+  sele show  resi 7:10 .or. ( resi 6 .and. (type C .or. type O ) ) end -
+  sele show .not.(resi 7:10 .or. (resi 6 .and. (type C .or. type O ))) end
+move dihe @s  7 N   @s  7 CA  @s  7 C   @s  8 N    by 1.0  inte -
+ sele show resi 8:10 .or. ( resi 7 .and. ( type C .or. type O ) ) end -
+ sele show .not.(resi 8:10 .or. (resi 7 .and. (type C .or. type O ))) end
+move dihe @s  8 N   @s  8 CA  @s  8 C   @s  9 N    by 1.0  inte -
+ sele show resi 9:10 .or. ( resi 8 .and. (type C .or. type O ) ) end -
+ sele show .not.(resi 9:10 .or. (resi 8 .and. (type C .or. type O ))) end
+move dihe @s  9 N   @s  9 CA  @s  9 C   @s 10 N    by 1.0  inte -
+  sele show resi 10 .or. ( resi 9 .and. ( type C .or. type O ) ) end -
+  sele show .not.(resi 10 .or. (resi 9 .and. (type C .or. type O))) end
+end
+
+! set up efficient energy routines
+!----------------------------------
+faster 1
+
+! SHAKE bonds to hydrogen atoms
+!----------------------------------
+SHAKE BONH tolerance 1.0e-6 para
+
+Update inbfrq 1 imgfrq 1 wmin 1.3
+
+
+! Open files for dynamics
+
+open unit 10 form write name @9@3d@x_@y.icp
+open unit 30 unfo write name @9@3d@x_@y.cor
+
+title
+* @3: @t  at @1 K
+* Dynamics with phi=@x and psi=@y
+*
+
+DYNAMICS  -
+  VERLET STRT  NSTEP @n TIMESTEP 0.002  - 
+  inbfrq -1 imgfrq -1 ihbfrq 0 ilbfrq 0 -
+  ctonnb 10.0 ctofnb 12.0 cutnb 14.00 -
+  IUNCRD 30 IUNVEL -1 KUNIT -1 IUNWRI -1 IUNREA -1 -
+  IPRFRQ 100  NPRINT 100  NSAVC 20 NSAVV  0 ISVFRQ 100 -
+  FIRSTT 300.0 FINALT 300.0 TEMINC 0.00 TSTRUC 300.0 -
+  IHTFRQ 100 IEQFRQ 100 ICHECKW 1  TWINDH 10.0 TWINDL -10.0
+
+
+
+!write coor card unit 31
+!* @3: @t
+!* Coords after 20ps equil + 40ps MD with phi=@x and psi=@y
+!*
+
+tsm clear
+
+! look at difference from starting point
+! ======================================
+open read unit 11 form name @9a10h.crd
+read coor card unit 11 comp
+close unit 11
+
+coor orie rms sele back end
+coor rms  sele segid @s end
+coor rms sele segid @s .and. .not. back end
+
+ic fill
+ic print
+ic diff
+ic print
+
+! Perform elementary analysis : read in trajectory file, average
+! each component and group components into phi,psi
+!================================================================
+
+! set up energy evaluation
+! large cutnb allows list to be evaluated only once
+!==================================================
+Faster 1
+Update inbfrq 1 ihbfrq 0 wmin 1.3 cutnb 99.0 ctonnb 10.0 ctofnb 12.0
+
+
+open unit 30 unfo write name @9@3d@x_@y.cor
+prnl 1
+
+! Analysis step #1 : just get average of total free energy gradient
+! ---This is a repeat of the set-up before dynamics-----
+! Use TSM to fix phi and psi dihedrals and to define them
+! as "perturbation coordinates" for CFTM
+! This is the general analysis method, suitable for both total free
+! energy and components -
+! selecting energy terms to be calculated leads to gradients
+! that reflect the free energy components
+!=================================================
+tsm
+! phi
+  fix dihe @s  1 C   @s  2 N   @s  2 CA  @s  2 C    toli 1.0e-3
+  fix dihe @s  2 C   @s  3 N   @s  3 CA  @s  3 C    toli 1.0e-3
+  fix dihe @s  3 C   @s  4 N   @s  4 CA  @s  4 C    toli 1.0e-3
+  fix dihe @s  4 C   @s  5 N   @s  5 CA  @s  5 C    toli 1.0e-3
+  fix dihe @s  5 C   @s  6 N   @s  6 CA  @s  6 C    toli 1.0e-3
+  fix dihe @s  6 C   @s  7 N   @s  7 CA  @s  7 C    toli 1.0e-3
+  fix dihe @s  7 C   @s  8 N   @s  8 CA  @s  8 C    toli 1.0e-3
+  fix dihe @s  8 C   @s  9 N   @s  9 CA  @s  9 C    toli 1.0e-3
+  fix dihe @s  9 C   @s 10 N   @s 10 CA  @s 10 C    toli 1.0e-3
+! psi
+  fix dihe @s  1 N   @s  1 CA  @s  1 C   @s  2 N    toli 1.0e-3
+  fix dihe @s  2 N   @s  2 CA  @s  2 C   @s  3 N    toli 1.0e-3
+  fix dihe @s  3 N   @s  3 CA  @s  3 C   @s  4 N    toli 1.0e-3
+  fix dihe @s  4 N   @s  4 CA  @s  4 C   @s  5 N    toli 1.0e-3
+  fix dihe @s  5 N   @s  5 CA  @s  5 C   @s  6 N    toli 1.0e-3
+  fix dihe @s  6 N   @s  6 CA  @s  6 C   @s  7 N    toli 1.0e-3
+  fix dihe @s  7 N   @s  7 CA  @s  7 C   @s  8 N    toli 1.0e-3
+  fix dihe @s  8 N   @s  8 CA  @s  8 C   @s  9 N    toli 1.0e-3
+  fix dihe @s  9 N   @s  9 CA  @s  9 C   @s 10 N    toli 1.0e-3
+  maxi 1000
+!
+! repeat of all "fix"ed coordinates with "move"
+! "inte" is needed by TSM parser and is not used by CFTM
+!  CFTM does not actually perform any perturabtions, so size of step
+!  is immaterial, here it is set to 1
+! 
+! phi
+move dihe @s  1 C   @s  2 N   @s  2 CA  @s  2 C    by 1.0  inte -
+ sele show .not.(resi 1 .or. ( resi 2 .and. ( type HN .or. type N ))) end -
+ sele show resi 1 .or. ( resi 2 .and. ( type HN .or. type N ))  end 
+move dihe @s  2 C   @s  3 N   @s  3 CA  @s  3 C    by 1.0  inte -
+ sele show .not.(resi 1:2 .or. (resi 3 .and. (type HN .or. type N))) end -
+ sele show resi 1:2 .or. ( resi 3 .and. ( type HN .or. type N ))  end
+move dihe @s  3 C   @s  4 N   @s  4 CA  @s  4 C    by 1.0  inte -
+ sele show .not.(resi 1:3 .or. (resi 4 .and. (type HN .or. type N))) end -
+ sele show resi 1:3 .or. ( resi 4 .and. ( type HN .or. type N ))  end
+move dihe @s  4 C   @s  5 N   @s  5 CA  @s  5 C    by 1.0  inte -
+ sele show .not.(resi 1:4 .or. (resi 5 .and. (type HN .or. type N))) end -
+ sele show resi 1:4 .or. ( resi 5 .and. ( type HN .or. type N ))  end
+move dihe @s  5 C   @s  6 N   @s  6 CA  @s  6 C    by 1.0  inte -
+ sele show .not.(resi 1:5 .or. (resi 6 .and. (type HN .or. type N))) end -
+ sele show resi 1:5 .or. ( resi 6 .and. ( type HN .or. type N ))  end
+move dihe @s  6 C   @s  7 N   @s  7 CA  @s  7 C    by 1.0  inte -
+ sele show resi 8:10 .or. (resi 7 .and.(.not.(type HN .or. type N))) end -
+ sele show .not.(resi 8:10 .or.(resi 7 .and.(.not.(type HN .or. type N)))) end
+move dihe @s  7 C   @s  8 N   @s  8 CA  @s  8 C    by 1.0  inte -
+ sele show resi 9:10 .or. (resi 8 .and.(.not.(type HN .or. type N))) end -
+ sele show .not.(resi 9:10 .or.(resi 8 .and.(.not.(type HN .or. type N)))) end
+move dihe @s  8 C   @s  9 N   @s  9 CA  @s  9 C    by 1.0  inte -
+ sele show resi 10 .or. ( resi 9 .and.(.not.(type HN .or. type N))) end -
+ sele show .not.(resi 10 .or.( resi 9 .and.(.not.(type HN .or. type N)))) end
+move dihe @s  9 C   @s 10 N   @s 10 CA  @s 10 C    by 1.0  inte -
+  sele show  resi 10 .and. (.not.(type HN .or. type N )) end -
+  sele show  .not.(resi 10 .and. (.not.(type HN .or. type N ))) end
+! psi
+move dihe @s  1 N   @s  1 CA  @s  1 C   @s  2 N    by 1.0  inte -
+  sele show .not.(resi 1 .and.(.not.( type C .or. type O ))) end -
+  sele show  resi 1 .and.(.not.( type C .or. type O )) end
+move dihe @s  2 N   @s  2 CA  @s  2 C   @s  3 N    by 1.0  inte -
+ sele show .not.(resi 1 .or. (resi 2 .and.(.not.(type C .or. type O)))) end -
+ sele show resi 1 .or. ( resi 2 .and.(.not.(type C .or. type O))) end
+move dihe @s  3 N   @s  3 CA  @s  3 C   @s  4 N    by 1.0  inte -
+ sele show .not.(resi 1:2 .or. (resi 3 .and.(.not.(type C .or. type O)))) end -
+ sele show resi 1:2 .or. (resi 3 .and.(.not.(type C .or. type O))) end
+move dihe @s  4 N   @s  4 CA  @s  4 C   @s  5 N    by 1.0  inte -
+ sele show .not.(resi 1:3 .or. (resi 4 .and.(.not.(type C .or. type O)))) end -
+ sele show resi 1:3 .or. (resi 4 .and.(.not.(type C .or. type O))) end
+move dihe @s  5 N   @s  5 CA  @s  5 C   @s  6 N    by 1.0  inte -
+ sele show resi 6:10 .or. ( resi 5 .and. (type C .or. type O ) ) end -
+ sele show .not.(resi 6:10 .or. (resi 5 .and. (type C .or. type O ))) end
+move dihe @s  6 N   @s  6 CA  @s  6 C   @s  7 N    by 1.0  inte -
+  sele show  resi 7:10 .or. ( resi 6 .and. (type C .or. type O ) ) end -
+  sele show .not.(resi 7:10 .or. (resi 6 .and. (type C .or. type O ))) end
+move dihe @s  7 N   @s  7 CA  @s  7 C   @s  8 N    by 1.0  inte -
+ sele show resi 8:10 .or. ( resi 7 .and. ( type C .or. type O ) ) end -
+ sele show .not.(resi 8:10 .or. (resi 7 .and. (type C .or. type O ))) end
+move dihe @s  8 N   @s  8 CA  @s  8 C   @s  9 N    by 1.0  inte -
+ sele show resi 9:10 .or. ( resi 8 .and. (type C .or. type O ) ) end -
+ sele show .not.(resi 9:10 .or. (resi 8 .and. (type C .or. type O ))) end
+move dihe @s  9 N   @s  9 CA  @s  9 C   @s 10 N    by 1.0  inte -
+  sele show resi 10 .or. ( resi 9 .and. ( type C .or. type O ) ) end -
+  sele show .not.(resi 10 .or. (resi 9 .and. (type C .or. type O))) end
+! -----these are the actual analysis commands---
+!    define coordinate groups:
+!    - specify that group analysis will be used, with two groups
+!    - assign coordinates to groups
+!      here coordinates 1-9 will be in group 1, and 10-18 in group 2
+!    - give each group a tag, here the tags are 'PHI ' and 'PSI '
+cftg ngrup 2
+1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2
+PHI PSI 
+!
+!  run analysis :
+! cont 100 would be more appropriate in a real simulation
+cftb first 30 nunit 1 temp @1 skip 1 cont 10 -
+   inbf 1 ihbf 0
+end
+
+open unit 30 unfo write name @9@3d@x_@y.cor
+
+! Analysis step #2. Perform energy-entropy decomposition
+! setup from step #1 carried over
+tsm
+cfts first 30 nunit 1 temp @1 skip 1 cont 10 -
+   inbf 1 ihbf 0
+end
+
+prnl 4
+open unit 10 form write name @9@3d@x_@y.icp
+
+! Analysis step #3
+!  Do alternative analysis using the gradient file (.icp)
+!    this only works for the total free energy, since gradients
+!    are not recalculated.
+!    Set-up from step #1 is carried over here
+tsm
+cftc uicp 10 temp @1 cont 10
+end
+
+tsm clear
+
+! The 2-D free energy gradient should be about [+95,+75] kcal/(mol*rad)
+! KK Jan 2003
+stop

@@ -1,0 +1,82 @@
+* graphics test; requires APOLLO pref.dat keyword at compile time
+* read BPTI coords and make several display motifs
+* RM Venable :: July 1995 :: FDA Biophysics Lab :: NIH Bldg 29
+* E-mail to rvenable at deimos.cber.nih.gov
+*
+
+stream datadir.def
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+open unit 2 read card name @0bpti.crd
+read sequ coor unit 2
+close unit 2
+
+gener main setup first nter last none
+patch cter main 58 setup
+delete atom sele resn OH2 end
+read sequ OH2 4
+gener solv noang nodihe
+
+open unit 2 read card name @0bpti.crd
+read coor card unit 2
+close unit 2
+
+! CENTER AND CREATE 90 DEG ROTATED COPY
+coor orient
+coor copy comp
+coor rota ydir 1. phi 90. comp
+
+graphics
+! CENTER IN DISPLAY WINDOW, MAKE LONG AXIS VERTICAL
+center
+rot 0 0 90
+! REDUCE SIZE, BROADER LINES, INVOKE STEREO AND DEPTH CUEING
+scale 0.4
+line 3
+stereo 14.
+text bpti side-by-side stereo view
+zcue 15.
+lbl resid sele type CA .and. ( resid *0 .or. resid *5 ) end size medium
+axes xlim -10. 10. ylim -10. 10. zlim -10. 10.
+display labels axes
+rot 0 4 0 rep 90
+
+! REVERT TO MONO VIEW, DISPLAY 90 ROTATED COORDS IN COMP SET; LABELING CHANGE
+stereo off
+display axes off
+text bpti two orthogonal views
+coor tran ydir -20.
+coor tran ydir  20. comp
+display comp
+rot 4 0 0 rep 90
+
+! PARAMATER RADII VIEW
+text "BPTI using PARAM19 radii"
+disp comp label off
+coor tran ydir 20.
+center
+rad param
+display atom
+rot 0 0 90
+zcue auto
+sca 1.05 rep 8
+rot 4 0 0 rep 90
+
+! HEAVILY LABELED BACKBONE
+display label
+display atom off
+line 4
+colo dkbl sele type N end
+draw sele type N .or. type CA .or. type C .or. type O end
+text "BPTI: backbone only"
+lbl resid sele type CA .and. ( resid *0 .or. resid *5 ) end size large
+lbl resn sele type N end color white
+rot 3 0 0 rep 120
+

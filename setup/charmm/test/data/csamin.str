@@ -1,0 +1,50 @@
+* CHARMM 36 testcase csamin.inp
+* Test the CSA module
+* this input script is called from csatest.inp
+* Author: Milan Hodoscek
+* the system obtained from:
+* Wikipedia: tetrapeptide -> the first on the list
+*
+
+if ?distene .ne. 1 then
+ echo "csatest.inp> Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open read unit 1 card name @0top_all22_prot.inp
+read rtf unit 1 card
+
+open read unit 1 card name @0par_all22_prot.inp
+read param unit 1 card
+
+read sequ card
+* tuftsin
+    4
+thr lys pro arg
+
+generate tuft setup
+
+open read unit 1 card name @9tuftsin.cor
+read coor card unit 1
+
+stream radius.str
+GBSW sw 0.3 sgamma 0.03 dgp 1.5 GBenergy
+
+ener cdie inbfrq 25 cutnb 14.0 ctofnb 12.0 fshift vshift -
+     wmin 1.5 e14fac 0.4 atom
+
+label loop
+
+receive ifdone next
+
+mini abnr nstep 10000 nprint 1000 tolgrd 0.001
+
+transmit ! coordinates or anything specified on master flag
+
+goto loop
+
+label next
+
+stop

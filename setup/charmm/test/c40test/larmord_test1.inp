@@ -1,0 +1,915 @@
+* CHARMM 39 Testcase larmord_test_1.inp
+* This test evaluates the implementation of LARMORD
+* Written by Aaron T. Frank and Charles L. Brooks III, 3-July-2014
+* Calculates Chemical Shifts Using LARMORD
+* Compares the Analytic and Finite Difference Chemical Shift Restraint Forces 
+*
+
+if ?parallel .eq. 1 then
+  echo "test not performed."
+  stop
+endif
+
+if ?larmord .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+set alltests = 1
+!-------------------------------------------------------------------------------------
+! Read topology and parameter files
+!-------------------------------------------------------------------------------------
+read rtf card name @0/top_all36_na_mod.rtf
+read para card name @0/par_all36_na_mod.prm
+
+!-------------------------------------------------------------------------------------
+! Read reference coordinates from PSF and PDB
+!-------------------------------------------------------------------------------------
+
+set return fromsetup
+goto setup
+label fromsetup
+
+nbonds atom -
+   elec ewald pme kappa 0.50 spline order 4 fftx @fft ffty @fft fftz @fft -
+   cdie eps 1 -
+   vdw vswitch -
+   cutnb 12.0 -
+   cutim 12.0 -
+   ctonnb 8.0  ctofnb 10.0
+
+!-------------------------------------------------------------------------------------
+! Setup LARMORD
+!-------------------------------------------------------------------------------------
+open read form unit 10 name @0/measured_shifts.dat
+open read form unit 11 name @0/larmord.dat
+larmord cunit 10 lunit 11 scale 1 harm select segid n01x end
+
+! calculate chemical shifts
+larmord calculate
+
+! print out chemical shifts
+scalar wmain show select property wmain .gt. 0 end
+
+!******************** TEST 1 CALCULATE ********************
+set return fromt1
+goto t1
+label fromt1
+if @err .gt. 1e-4 then
+      echo test 1 failed
+      set alltests = 0
+else
+      echo test 1 passed
+endif
+
+!******************** TEST 2 ENERGY ********************
+skipe all excl csre
+energy
+
+set eref =  1.53627
+calc err = abs ( ( @eref - ?ener ) / @eref )
+if @err .gt. 1e-4 then
+      echo test 2a failed
+      set alltests = 0
+else
+      echo test 2a passed
+endif
+
+scalar xcomp set 0
+scalar ycomp set 0
+scalar zcomp set 0
+scalar wcomp set 0
+coor force comp
+
+set return fromt2
+goto t2
+label fromt2
+if @err .gt. 1e-4 then
+      echo test 2b failed
+      set alltests = 0
+else
+      echo test 2b passed
+endif
+
+!******************** TEST 3 LarmorD off ENERGY ********************
+larmord off
+energy
+
+if ?ener .gt. 1e-4 then
+      echo test 3a failed
+      set alltests = 0
+else
+      echo test 3a passed
+endif
+
+larmord on
+energy
+calc err = abs ( ( @eref - ?ener ) / @eref )
+if @err .gt. 1e-4 then
+      echo test 3b failed
+      set alltests = 0
+else
+      echo test 3b passed
+endif
+
+!******************** TEST 4 RESET AND RELOAD ********************
+open read form unit 10 name @0/measured_shifts.dat
+open read form unit 11 name @0/larmord.dat
+larmord reset cunit 10 lunit 11 scale 1 harm select segid n01x end
+
+! calculate chemical shifts
+larmord calculate
+
+! print out chemical shifts
+scalar wmain show select property wmain .gt. 0 end
+
+set return fromt3
+goto t1
+label fromt3
+if @err .gt. 1e-4 then
+      echo test 4a failed
+      set alltests = 0
+else
+      echo test 4a passed
+endif
+
+skipe all excl csre
+energy
+
+set eref =  1.53627
+calc err = abs ( ( @eref - ?ener ) / @eref )
+if @err .gt. 1e-4 then
+      echo test 4b failed
+      set alltests = 0
+else
+      echo test 4b passed
+endif
+
+scalar xcomp set 0
+scalar ycomp set 0
+scalar zcomp set 0
+scalar wcomp set 0
+coor force comp
+set return fromt4
+goto t2
+label fromt4
+if @err .gt. 1e-4 then
+      echo test 4c failed
+      set alltests = 0
+else
+      echo test 4c passed
+endif
+
+!******************** TEST 5 FINITE DIFFERENCE AND OTHER FUNCTIONAL FORMS ********************
+define rna select type p end
+set nres = ?nsel
+define active select ( property wmain .gt. 0 ) end
+set firstres = ?selires
+calc lm3 = @firstres + @nres - 4
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5a failed
+      set alltests = 0
+else
+      echo test 5a passed
+endif
+
+larmord reset harm flat
+
+energy
+calc err = abs ( ( 1.50474 - ?ener ) / 1.50474 )
+if @err .gt. 1e-4 then
+      echo test 5b failed
+      set alltests = 0
+else
+      echo test 5b passed
+endif
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5c failed
+      set alltests = 0
+else
+      echo test 5c passed
+endif
+
+larmord reset log
+
+energy
+calc err = abs ( ( 311.55079 - ?ener ) / 311.55079 )
+if @err .gt. 1e-4 then
+      echo test 5d failed
+      set alltests = 0
+else
+      echo test 5d passed
+endif
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5e failed
+      set alltests = 0
+else
+      echo test 5e passed
+endif
+
+larmord reset harm wt1
+
+energy
+calc err = abs ( ( 1.52343 - ?ener ) / 1.52343 )
+if @err .gt. 1e-4 then
+      echo test 5f failed
+      set alltests = 0
+else
+      echo test 5f passed
+endif
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5h failed
+      set alltests = 0
+else
+      echo test 5h passed
+endif
+
+larmord reset harm flat wt1
+
+energy
+calc err = abs ( ( 1.49105 - ?ener ) / 1.49105 )
+if @err .gt. 1e-4 then
+      echo test 5i failed
+      set alltests = 0
+else
+      echo test 5i passed
+endif
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5k failed
+      set alltests = 0
+else
+      echo test 5k passed
+endif
+
+larmord reset log wt1
+
+energy
+calc err = abs ( ( 311.08801 - ?ener ) / 311.08801   )
+if @err .gt. 1e-4 then
+      echo test 5l failed
+      set alltests = 0
+else
+      echo test 5l passed
+endif
+
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5m failed
+      set alltests = 0
+else
+      echo test 5m passed
+endif
+
+larmord reset harm wt2
+
+energy
+calc err = abs ( ( 4.67257 - ?ener ) / 4.67257 )
+if @err .gt. 1e-4 then
+      echo test 5n failed
+      set alltests = 0
+else
+      echo test 5n passed
+endif
+
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5o failed
+      set alltests = 0
+else
+      echo test 5o passed
+endif
+
+larmord reset harm flat wt2
+
+energy
+calc err = abs ( ( 4.57023 - ?ener ) / 4.57023 )
+if @err .gt. 1e-4 then
+      echo test 5p failed
+      set alltests = 0
+else
+      echo test 5p passed
+endif
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5q failed
+      set alltests = 0
+else
+      echo test 5q passed
+endif
+
+larmord reset log wt2
+
+energy
+calc err = abs ( ( 372.89099 - ?ener ) / 372.89099 )
+if @err .gt. 1e-4 then
+      echo test 5r failed
+      set alltests = 0
+else
+      echo test 5r passed
+endif
+! compare analytic and finite difference chemical shift restraint force
+! select random three residues
+calc n1 = int ( @nres * ?rand ) + @firstres
+if @n1 .lt. 1 set n1 = 1
+if @n1 .gt. @lm3 set n1 = @lm3
+calc n2 = @n1 + 2
+test first step 0.001 select active .and. ires @n1:@n2 end tol 1e-4
+
+calc err = abs ( ?nok - 3 * ?nsel )
+if @err .gt. 1e-4 then
+      echo test 5s failed
+      set alltests = 0
+else
+      echo test 5s passed
+endif
+
+!******************** TEST 6 CONTROL ********************
+larmord clear
+
+label testit
+bomlev -10
+
+larmord on
+larmord off
+
+open read form unit 10 name @0/measured_shifts.dat
+open read form unit 11 name @0/larmord.dat
+larmord cunit 10 lunit 11 scale 1 harm select segid n01x end
+
+larmord reset harm log
+
+larmord reset harm wt1 wt2
+
+larmord reset log flat
+
+larmord reset 
+
+!******************** TEST 7 RUN DYNAMICS ********************
+bomlev 0
+skipe none
+larmord reset harm flat
+energy
+
+scalar fbeta set 5 select .not. hydrogen end
+
+dynamics leap langevin start timestep 0.002 -
+     nstep 40 nprint 1 iprfrq 20 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 echeck -1 
+
+if @alltests gt 0 then
+      echo passed all tests
+else
+      echo some tests failed
+endif
+
+stop
+
+label setup
+
+read psf card name @0/mole.psf
+read coor card name @0/mole.crd
+
+!-------------------------------------------------------------------------------------
+! Setup periodic image and cut-offs
+!-------------------------------------------------------------------------------------
+
+coor stat
+calc x = ?xmax - ?xmin
+calc y = ?ymax - ?ymin
+calc z = ?zmax - ?zmin
+calc r = ( @x + @y + @z ) / 3
+calc i = @r / 2
+crystal define cubic @r @r @r 90. 90. 90.
+crystal build cutoff @i nope 0
+
+!! Image solvent, ions and biomolecule
+image byres xcen ?xave ycen ?yave zcen ?zave sele resn tip3 .or. resn sod .or. resn cla end
+image byseg xcen ?xave ycen ?yave zcen ?zave sele .not. ( resn tip3 .or. resn sod .or. resn cla ) end
+
+if @r ge 40 then set fft = 48
+if @r ge 50 then set fft = 54
+if @r ge 60 then set fft = 64
+if @r ge 70 then set fft = 72
+if @r ge 80 then set fft = 80
+if @r ge 90 then set fft = 96
+if @r ge 100 then set fft = 108
+if @r ge 115 then set fft = 128
+
+goto @return
+
+label t1
+
+scalar wcomp set 0
+read coor card comp
+* CHARMM 39 TESTCASE LARMORD_TEST_1.INP
+* THIS TEST EVALUATES THE IMPLEMENTATION OF LARMORD
+* WRITTEN BY AARON T. FRANK AND CHARLES L. BROOKS III, 3-JULY-2014
+* CALCULATES CHEMICAL SHIFTS USING LARMORD
+* COMPARES THE ANALYTIC AND FINITE DIFFERENCE CHEMICAL SHIFT RESTRAINT FORCES
+*  DATE:     8/14/14     12:40: 3      CREATED BY USER: brookscl
+*
+  185
+    6    1 URA  C4'   -9.04300   8.94800  -3.03900 N01X 1     82.43442
+    7    1 URA  H4'  -10.00100   9.46700  -3.09600 N01X 1      4.37974
+    9    1 URA  C1'   -7.69800   9.90500  -4.69000 N01X 1     92.71658
+   10    1 URA  H1'   -7.86600  10.91600  -5.07100 N01X 1      5.57370
+   13    1 URA  H6    -5.78700   8.92000  -2.99000 N01X 1      7.81420
+   20    1 URA  C5    -4.11800   8.78400  -4.28700 N01X 1    105.64583
+   21    1 URA  H5    -3.45900   8.43300  -3.50900 N01X 1      5.68731
+   22    1 URA  C2'   -8.69700   8.94100  -5.35900 N01X 1     76.15236
+   25    1 URA  H2'   -9.64883  10.23458  -6.49570 N01X 1      4.19465
+   26    1 URA  C3'   -8.94600   7.96100  -4.20100 N01X 1     72.50974
+   36    2 CYT  C4'   -7.56400   5.81300  -8.00000 N01X 2     79.99725
+   37    2 CYT  H4'   -8.35100   6.39700  -8.48000 N01X 2      4.32607
+   39    2 CYT  C1'   -5.73400   6.00700  -9.37600 N01X 2     93.01198
+   40    2 CYT  H1'   -5.79000   6.82200 -10.10300 N01X 2      5.70114
+   42    2 CYT  C6    -3.46100   5.88800 -10.31200 N01X 2    142.84661
+   43    2 CYT  H6    -3.85000   6.38900 -11.19400 N01X 2      7.60009
+   44    2 CYT  C5    -2.16500   5.50100 -10.27600 N01X 2    101.26944
+   53    2 CYT  C2'   -6.57600   4.85300  -9.92100 N01X 2     75.70422
+   56    2 CYT  H2'   -6.70767   5.51507 -11.76969 N01X 2      4.12059
+   57    2 CYT  C3'   -7.45600   4.46200  -8.72300 N01X 2     71.21725
+   58    2 CYT  H3'   -6.90000   3.77100  -8.08300 N01X 2      4.17556
+   67    3 ADE  C4'   -5.58100   1.13500 -11.27000 N01X 3     82.56465
+   68    3 ADE  H4'   -5.34200   1.14700 -12.33600 N01X 3      4.48879
+   70    3 ADE  C1'   -3.47400   1.04800 -10.31400 N01X 3     92.34283
+   71    3 ADE  H1'   -2.66600   1.33400 -10.99100 N01X 3      6.10173
+   75    3 ADE  C8    -1.64100   1.31200  -8.52700 N01X 3    138.47861
+   76    3 ADE  H8    -0.81600   1.25900  -9.22600 N01X 3      7.86828
+   78    3 ADE  C2    -5.45000   1.38400  -6.36800 N01X 3    150.60873
+   79    3 ADE  H2    -6.51800   1.31300  -6.19900 N01X 3      7.58925
+   89    3 ADE  H2'   -2.33649  -0.92638 -11.75715 N01X 3      4.27136
+   90    3 ADE  C3'   -5.41300  -0.30200 -10.77100 N01X 3     73.71037
+   91    3 ADE  H3'   -5.84000  -0.38200  -9.77100 N01X 3      4.08192
+  100    4 GUA  C4'   -2.94100  -4.64000 -11.28800 N01X 4     83.19579
+  101    4 GUA  H4'   -2.40600  -5.14200 -12.09600 N01X 4      4.46420
+  104    4 GUA  H1'   -0.32500  -3.95400  -9.78000 N01X 4      5.55765
+  118    4 GUA  C8    -3.04500  -2.90800  -8.01600 N01X 4    137.16963
+  119    4 GUA  H8    -3.94700  -3.19400  -8.54300 N01X 4      7.40354
+  120    4 GUA  C2'   -1.73000  -5.55900  -9.49000 N01X 4     75.01209
+  123    4 GUA  H2'    0.10947  -6.22006  -9.70509 N01X 4      4.23796
+  125    4 GUA  H3'   -3.86500  -5.25200  -9.44500 N01X 4      4.42648
+  134    5 URA  C4'   -1.15700  -8.85300  -6.84200 N01X 5     83.45685
+  135    5 URA  H4'   -0.62800  -9.61500  -7.41700 N01X 5      4.34607
+  137    5 URA  C1'    0.44700  -7.40800  -5.97500 N01X 5     92.79142
+  138    5 URA  H1'    1.44600  -7.28400  -6.39800 N01X 5      5.44813
+  140    5 URA  C6    -1.18700  -5.73500  -5.03600 N01X 5    141.49595
+  141    5 URA  H6    -1.99200  -6.23200  -5.56700 N01X 5      7.66412
+  148    5 URA  C5    -1.47000  -4.65500  -4.25800 N01X 5    102.64560
+  149    5 URA  H5    -2.48800  -4.29800  -4.17000 N01X 5      5.23311
+  153    5 URA  H2'    2.28809  -9.24875  -5.36706 N01X 5      4.17426
+  154    5 URA  C3'   -1.01100  -9.20100  -5.35500 N01X 5     72.68909
+  155    5 URA  H3'   -1.69300  -8.59500  -4.75100 N01X 5      4.45140
+  164    6 ADE  C4'    0.34900 -12.17800  -2.11800 N01X 6     83.77641
+  165    6 ADE  H4'    0.98700 -13.02300  -2.38100 N01X 6      4.47551
+  167    6 ADE  C1'    1.68000 -10.27500  -1.94300 N01X 6     91.08068
+  168    6 ADE  H1'    2.63600 -10.06500  -2.43100 N01X 6      6.03300
+  172    6 ADE  C8    -0.27900  -8.62000  -1.61200 N01X 6    141.46448
+  173    6 ADE  H8    -1.06400  -9.30600  -1.90700 N01X 6      8.19786
+  175    6 ADE  C2     3.40100  -6.51200  -0.54500 N01X 6    155.03764
+  176    6 ADE  H2     4.45400  -6.34500  -0.35900 N01X 6      7.92058
+  183    6 ADE  C2'    1.91000 -11.13600  -0.69800 N01X 6     76.13399
+  186    6 ADE  H2'    3.83667 -11.45155  -0.94264 N01X 6      4.19336
+  187    6 ADE  C3'    0.56800 -11.89000  -0.63100 N01X 6     74.19020
+  188    6 ADE  H3'   -0.21800 -11.21700  -0.28300 N01X 6      4.62198
+  197    7 CYT  C4'    2.65300 -10.21400   3.59800 N01X 7     83.01157
+  198    7 CYT  H4'    3.59100 -10.76400   3.68800 N01X 7      4.28388
+  200    7 CYT  C1'    3.13700  -8.01100   2.99500 N01X 7     92.70472
+  201    7 CYT  H1'    4.03000  -7.66300   2.46900 N01X 7      5.40168
+  203    7 CYT  C6     0.74500  -7.35200   2.55300 N01X 7    141.18203
+  204    7 CYT  H6     0.48900  -8.39300   2.38300 N01X 7      7.50567
+  205    7 CYT  C5    -0.22300  -6.40500   2.50500 N01X 7     98.32660
+  206    7 CYT  H5    -1.24400  -6.68800   2.29900 N01X 7      5.51005
+  214    7 CYT  C2'    3.45900  -8.19100   4.49000 N01X 7     76.21397
+  217    7 CYT  H2'    5.38227  -7.78064   4.42519 N01X 7      4.10575
+  218    7 CYT  C3'    2.49100  -9.33000   4.83600 N01X 7     73.18669
+  219    7 CYT  H3'    1.47900  -8.91800   4.84000 N01X 7      4.38458
+  228    8 GUA  C4'    1.68900  -6.59500   9.10200 N01X 8     83.73535
+  229    8 GUA  H4'    2.34100  -6.29600   9.92500 N01X 8      4.31094
+  231    8 GUA  C1'    0.66800  -4.61700   8.47600 N01X 8     91.87689
+  232    8 GUA  H1'    1.07000  -3.61900   8.65600 N01X 8      5.48314
+  246    8 GUA  C8    -0.65200  -5.57800   6.49500 N01X 8    136.63054
+  247    8 GUA  H8    -0.17000  -6.54800   6.51800 N01X 8      7.56835
+  248    8 GUA  C2'    0.00000  -5.14500   9.76500 N01X 8     75.06166
+  251    8 GUA  H2'   -1.43986  -3.84748  10.05539 N01X 8      4.44011
+  252    8 GUA  C3'    0.25700  -6.65700   9.64900 N01X 8     74.63554
+  253    8 GUA  H3'   -0.39900  -7.08000   8.89000 N01X 8      4.49018
+  262    9 ADE  C4'   -4.26500  -6.47900  12.95900 N01X 9     83.64116
+  263    9 ADE  H4'   -5.26700  -6.84800  13.18200 N01X 9      4.43975
+  265    9 ADE  C1'   -3.48600  -5.01900  14.59600 N01X 9     91.70926
+  266    9 ADE  H1'   -3.83900  -4.93100  15.62700 N01X 9      5.94876
+  270    9 ADE  C8    -1.13700  -4.61400  13.57500 N01X 9    141.37478
+  271    9 ADE  H8    -1.33300  -5.06900  12.61400 N01X 9      7.84352
+  273    9 ADE  C2    -1.16700  -2.86100  17.58400 N01X 9    154.86421
+  274    9 ADE  H2    -1.55400  -2.53100  18.54000 N01X 9      7.93787
+  281    9 ADE  C2'   -4.42800  -4.23400  13.68500 N01X 9     75.75360
+  284    9 ADE  H2'   -5.64329  -3.62849  15.10991 N01X 9      4.26669
+  285    9 ADE  C3'   -4.41300  -5.05800  12.38500 N01X 9     74.33853
+  286    9 ADE  H3'   -3.52600  -4.80700  11.80100 N01X 9      4.66729
+  295   10 GUA  C4'   -5.51400  -0.43100  12.95300 N01X 10    83.30455
+  296   10 GUA  H4'   -6.21700  -0.01300  13.67500 N01X 10     4.39346
+  298   10 GUA  C1'   -3.30400   0.08300  13.48700 N01X 10    91.86876
+  299   10 GUA  H1'   -2.92800   0.40100  14.46300 N01X 10     5.42423
+  313   10 GUA  C8    -2.17400  -1.31400  11.61600 N01X 10   137.35723
+  314   10 GUA  H8    -3.07300  -1.52000  11.05200 N01X 10     7.48621
+  315   10 GUA  C2'   -3.89400   1.30300  12.77700 N01X 10    75.49109
+  318   10 GUA  H2'   -3.48959   2.73446  14.05850 N01X 10     4.25812
+  319   10 GUA  C3'   -5.08600   0.70100  12.01200 N01X 10    73.37884
+  320   10 GUA  H3'   -4.72800   0.27300  11.07400 N01X 10     4.50476
+  329   11 ADE  C4'   -3.28600   5.55300  11.09800 N01X 11    83.00559
+  330   11 ADE  H4'   -3.65700   6.39100  11.69000 N01X 11     4.47412
+  332   11 ADE  C1'   -1.18000   4.67300  11.58000 N01X 11    92.30142
+  333   11 ADE  H1'   -0.54300   4.71800  12.46800 N01X 11     5.96463
+  337   11 ADE  C8    -1.69000   2.59400  10.12500 N01X 11   141.42367
+  338   11 ADE  H8    -2.73500   2.81300   9.95500 N01X 11     8.13504
+  340   11 ADE  C2     2.51800   2.39700  11.29300 N01X 11   155.83701
+  341   11 ADE  H2     3.45500   2.68700  11.75100 N01X 11     8.04225
+  348   11 ADE  C2'   -0.93900   5.91500  10.71600 N01X 11    76.35487
+  351   11 ADE  H2'    0.31777   6.83359  11.91732 N01X 11     4.15588
+  352   11 ADE  C3'   -2.30900   6.09700  10.03900 N01X 11    74.34003
+  353   11 ADE  H3'   -2.33500   5.44100   9.17200 N01X 11     4.74876
+  362   12 GUA  C4'   -0.99500   5.88800   6.86700 N01X 12    83.11752
+  363   12 GUA  H4'   -0.70800   6.30600   7.83100 N01X 12     4.45987
+  365   12 GUA  C1'   -0.39600   3.65800   7.00900 N01X 12    90.78733
+  366   12 GUA  H1'   -0.24200   3.13400   7.94800 N01X 12     4.37968
+  380   12 GUA  C8    -1.72200   2.54600   5.09900 N01X 12   140.11292
+  381   12 GUA  H8    -2.46400   3.33000   5.01400 N01X 12     7.91997
+  382   12 GUA  C2'    0.85800   4.48800   6.73500 N01X 12    76.32633
+  385   12 GUA  H2'    1.88092   3.96381   8.32582 N01X 12     4.09519
+  386   12 GUA  C3'    0.32200   5.76300   6.07900 N01X 12    74.91741
+  396   13 GUA  C4'    3.87900   4.70400   3.68800 N01X 13    83.28850
+  397   13 GUA  H4'    4.45600   5.15400   4.49800 N01X 13     4.41570
+  399   13 GUA  C1'    3.51200   2.43600   4.07400 N01X 13    91.83335
+  400   13 GUA  H1'    3.50400   1.90500   5.02800 N01X 13     5.56058
+  414   13 GUA  C8     1.58900   2.03600   2.39600 N01X 13   137.86465
+  415   13 GUA  H8     1.18600   3.04300   2.43900 N01X 13     7.75532
+  416   13 GUA  C2'    4.95800   2.60100   3.58800 N01X 13    75.64843
+  419   13 GUA  H2'    5.85469   1.83176   5.15958 N01X 13     4.25594
+  420   13 GUA  C3'    4.83300   3.91000   2.79700 N01X 13    74.14679
+  421   13 GUA  H3'    4.33200   3.70700   1.84700 N01X 13     4.52967
+  430   14 ADE  C4'    8.18200   0.69600   1.16400 N01X 14    83.23166
+  431   14 ADE  H4'    9.02900   0.24500   1.68200 N01X 14     4.41622
+  433   14 ADE  C1'    6.63000  -0.92600   0.51100 N01X 14    91.88666
+  434   14 ADE  H1'    6.48300  -1.92500   0.92800 N01X 14     5.92354
+  438   14 ADE  C8     4.68300   0.67400  -0.04700 N01X 14   139.19352
+  439   14 ADE  H8     5.04300   1.50700   0.54100 N01X 14     7.74239
+  441   14 ADE  C2     3.91800  -3.09400  -2.12600 N01X 14   154.89797
+  442   14 ADE  H2     4.08200  -4.10400  -2.47900 N01X 14     7.99133
+  449   14 ADE  C2'    7.78600  -0.95500  -0.49600 N01X 14    76.11733
+  453   14 ADE  C3'    8.37700   0.45900  -0.35000 N01X 14    73.65389
+  454   14 ADE  H3'    7.73600   1.15400  -0.88900 N01X 14     4.56149
+  463   15 ADE  C4'    8.85400   2.76800  -3.37700 N01X 15    83.78822
+  464   15 ADE  H4'    9.51700   1.93700  -3.62500 N01X 15     4.49815
+  466   15 ADE  C1'    6.91200   1.88900  -4.23600 N01X 15    91.53803
+  467   15 ADE  H1'    7.00100   0.80600  -4.36400 N01X 15     5.72497
+  471   15 ADE  C8     4.74200   2.92400  -3.27300 N01X 15   140.01632
+  472   15 ADE  H8     5.20500   3.38200  -2.40700 N01X 15     8.16522
+  474   15 ADE  C2     3.66400   0.75200  -6.91500 N01X 15   154.57168
+  475   15 ADE  H2     3.78300   0.15400  -7.80900 N01X 15     7.99732
+  482   15 ADE  C2'    7.66000   2.57500  -5.39600 N01X 15    75.54157
+  485   15 ADE  H2'    7.76715   1.01152  -6.58198 N01X 15     4.12462
+  486   15 ADE  C3'    8.57100   3.56600  -4.64700 N01X 15    74.84265
+  487   15 ADE  H3'    7.97300   4.43600  -4.36400 N01X 15     4.64701
+  496   16 CYT  C4'    7.71000   4.19000  -9.40100 N01X 16    82.47931
+  497   16 CYT  H4'    8.02600   3.65000 -10.29500 N01X 16     4.35961
+  499   16 CYT  C1'    5.40500   3.93600  -9.32000 N01X 16    93.48567
+  500   16 CYT  H1'    4.90100   3.11300  -9.83600 N01X 16     5.40357
+  502   16 CYT  C6     5.00000   4.95000  -7.06200 N01X 16   140.95388
+  503   16 CYT  H6     6.07100   5.04600  -6.92600 N01X 16     7.43327
+  504   16 CYT  C5     4.15300   5.31600  -6.06800 N01X 16    97.71119
+  505   16 CYT  H5     4.54300   5.69300  -5.13600 N01X 16     5.14902
+  513   16 CYT  C2'    5.73600   5.03500 -10.34100 N01X 16    75.85136
+  516   16 CYT  H2'    4.88121   4.19436 -11.89984 N01X 16     4.10959
+  517   16 CYT  C3'    7.10600   5.52600  -9.84200 N01X 16    72.45316
+  518   16 CYT  H3'    6.95600   6.15100  -8.95900 N01X 16     4.40131
+  527   17 CYT  C4'    4.14800   8.01900 -12.70300 N01X 17    82.12993
+  528   17 CYT  H4'    3.83300   7.84400 -13.73300 N01X 17     4.37419
+  530   17 CYT  C1'    2.21400   7.64000 -11.46100 N01X 17    93.30011
+  531   17 CYT  H1'    1.40800   7.00100 -11.82800 N01X 17     5.58569
+  533   17 CYT  C6     3.11300   7.92600  -9.12700 N01X 17   141.47994
+  534   17 CYT  H6     4.12200   7.81300  -9.50900 N01X 17     7.66292
+  535   17 CYT  C5     2.90400   8.18700  -7.81200 N01X 17    99.82541
+  536   17 CYT  H5     3.74500   8.26900  -7.14100 N01X 17     5.52213
+  544   17 CYT  C2'    2.11100   9.00800 -12.14700 N01X 17    76.54519
+  547   17 CYT  H2'    0.49764   8.57714 -13.17132 N01X 17     4.08504
+  548   17 CYT  C3'    3.60700   9.37500 -12.24900 N01X 17    69.58424
+  549   17 CYT  H3'    3.95800   9.51200 -11.22500 N01X 17     4.35317
+
+scalar wmain store 1
+scalar wcomp mult -1
+scalar wcomp +store 1
+scalar wcomp recall 1
+scalar wcomp pow2
+scalar wcomp stat select property wmain .gt. 0 end
+set err = ?stot
+goto @return
+
+label t2
+scalar xcomp set 0 select .not. (property wmain .gt. 0) end
+scalar ycomp set 0 select .not. (property wmain .gt. 0) end
+scalar zcomp set 0 select .not. (property wmain .gt. 0) end
+scalar xcomp mult -1
+scalar ycomp mult -1
+scalar zcomp mult -1
+
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+scalar xcomp set 0
+scalar ycomp set 0
+scalar zcomp set 0
+
+read coor comp card
+* CHARMM 39 TESTCASE LARMORD_TEST_1.INP
+* THIS TEST EVALUATES THE IMPLEMENTATION OF LARMORD
+* WRITTEN BY AARON T. FRANK AND CHARLES L. BROOKS III, 3-JULY-2014
+* CALCULATES CHEMICAL SHIFTS USING LARMORD
+* COMPARES THE ANALYTIC AND FINITE DIFFERENCE CHEMICAL SHIFT RESTRAINT FORCES
+*  DATE:     8/14/14     12:40: 4      CREATED BY USER: brookscl
+*
+  185
+    6    1 URA  C4'    0.00690   0.00596   0.00900 N01X 1      0.00000
+    7    1 URA  H4'    0.00062  -0.00082  -0.00090 N01X 1      0.00000
+    9    1 URA  C1'   -0.03099  -0.01032  -0.00787 N01X 1      0.00000
+   10    1 URA  H1'   -0.00017   0.00003  -0.00016 N01X 1      0.00000
+   13    1 URA  H6    -0.00028  -0.00007   0.00016 N01X 1      0.00000
+   20    1 URA  C5    -0.00576   0.02213  -0.04038 N01X 1      0.00000
+   21    1 URA  H5     0.00026  -0.00031   0.00105 N01X 1      0.00000
+   22    1 URA  C2'   -0.02836  -0.01289   0.00932 N01X 1      0.00000
+   25    1 URA  H2'    0.00006  -0.00008   0.00013 N01X 1      0.00000
+   26    1 URA  C3'   -0.00527   0.01025   0.00916 N01X 1      0.00000
+   36    2 CYT  C4'    0.04559  -0.01604  -0.01931 N01X 2      0.00000
+   37    2 CYT  H4'    0.00047  -0.00017   0.00049 N01X 2      0.00000
+   39    2 CYT  C1'    0.13802   0.01312  -0.01822 N01X 2      0.00000
+   40    2 CYT  H1'    0.00052  -0.00118   0.00066 N01X 2      0.00000
+   42    2 CYT  C6     0.00188  -0.01193   0.00598 N01X 2      0.00000
+   43    2 CYT  H6     0.00017   0.00009  -0.00015 N01X 2      0.00000
+   44    2 CYT  C5    -0.09932  -0.03148   0.06126 N01X 2      0.00000
+   53    2 CYT  C2'    0.06020   0.00413  -0.00034 N01X 2      0.00000
+   56    2 CYT  H2'   -0.00000   0.00001  -0.00001 N01X 2      0.00000
+   57    2 CYT  C3'    0.08852   0.05859   0.08176 N01X 2      0.00000
+   58    2 CYT  H3'    0.00057  -0.00044   0.00007 N01X 2      0.00000
+   67    3 ADE  C4'    0.03040   0.01898   0.02054 N01X 3      0.00000
+   68    3 ADE  H4'    0.00029   0.00039  -0.00142 N01X 3      0.00000
+   70    3 ADE  C1'    0.03887   0.06077  -0.06579 N01X 3      0.00000
+   71    3 ADE  H1'   -0.01204  -0.00498   0.00868 N01X 3      0.00000
+   75    3 ADE  C8     0.05214   0.04281   0.04553 N01X 3      0.00000
+   76    3 ADE  H8    -0.00322   0.00132   0.00336 N01X 3      0.00000
+   78    3 ADE  C2    -0.10464   0.06608  -0.17744 N01X 3      0.00000
+   79    3 ADE  H2     0.00416   0.00009  -0.00195 N01X 3      0.00000
+   89    3 ADE  H2'   -0.00043  -0.00024   0.00021 N01X 3      0.00000
+   90    3 ADE  C3'    0.19665   0.20629   0.14525 N01X 3      0.00000
+   91    3 ADE  H3'   -0.00175   0.00178   0.01130 N01X 3      0.00000
+  100    4 GUA  C4'    0.06343  -0.02021   0.03576 N01X 4      0.00000
+  101    4 GUA  H4'   -0.00015  -0.00004   0.00019 N01X 4      0.00000
+  104    4 GUA  H1'    0.00541   0.00079  -0.00080 N01X 4      0.00000
+  118    4 GUA  C8    -0.09564   0.02386  -0.08532 N01X 4      0.00000
+  119    4 GUA  H8    -0.00181  -0.00198  -0.00278 N01X 4      0.00000
+  120    4 GUA  C2'   -0.00801   0.05707  -0.03765 N01X 4      0.00000
+  123    4 GUA  H2'    0.00060  -0.00052  -0.00027 N01X 4      0.00000
+  125    4 GUA  H3'   -0.00045   0.00174   0.00145 N01X 4      0.00000
+  134    5 URA  C4'   -0.00277   0.00700  -0.02286 N01X 5      0.00000
+  135    5 URA  H4'    0.00006  -0.00021  -0.00109 N01X 5      0.00000
+  137    5 URA  C1'    0.03610  -0.01836   0.00196 N01X 5      0.00000
+  138    5 URA  H1'   -0.00013   0.00023   0.00011 N01X 5      0.00000
+  140    5 URA  C6    -0.02003  -0.03341  -0.01953 N01X 5      0.00000
+  141    5 URA  H6     0.00001   0.00044   0.00018 N01X 5      0.00000
+  148    5 URA  C5    -0.01133   0.01763   0.02076 N01X 5      0.00000
+  149    5 URA  H5     0.00353   0.00116  -0.00139 N01X 5      0.00000
+  153    5 URA  H2'    0.00080  -0.00008   0.00017 N01X 5      0.00000
+  154    5 URA  C3'    0.13508   0.27487   0.04858 N01X 5      0.00000
+  155    5 URA  H3'   -0.00195   0.00194   0.00057 N01X 5      0.00000
+  164    6 ADE  C4'   -0.00198   0.00403  -0.01007 N01X 6      0.00000
+  165    6 ADE  H4'   -0.00003   0.00005   0.00003 N01X 6      0.00000
+  167    6 ADE  C1'   -0.09270   0.01977   0.02346 N01X 6      0.00000
+  168    6 ADE  H1'   -0.00909  -0.00322   0.00453 N01X 6      0.00000
+  172    6 ADE  C8     0.07196  -0.01709  -0.02979 N01X 6      0.00000
+  173    6 ADE  H8    -0.00406  -0.00217  -0.00140 N01X 6      0.00000
+  175    6 ADE  C2    -0.05453   0.03026   0.01022 N01X 6      0.00000
+  176    6 ADE  H2     0.03275   0.01063   0.00823 N01X 6      0.00000
+  183    6 ADE  C2'    0.00250   0.00556  -0.00202 N01X 6      0.00000
+  186    6 ADE  H2'    0.00078   0.00018  -0.00013 N01X 6      0.00000
+  187    6 ADE  C3'   -0.00432  -0.08862   0.05837 N01X 6      0.00000
+  188    6 ADE  H3'    0.00138  -0.00125  -0.00082 N01X 6      0.00000
+  197    7 CYT  C4'   -0.00333  -0.00917  -0.02503 N01X 7      0.00000
+  198    7 CYT  H4'   -0.00046   0.00008   0.00001 N01X 7      0.00000
+  200    7 CYT  C1'    0.01701  -0.00591  -0.00416 N01X 7      0.00000
+  201    7 CYT  H1'   -0.00310  -0.00072   0.00397 N01X 7      0.00000
+  203    7 CYT  C6    -0.00064  -0.00183  -0.01167 N01X 7      0.00000
+  204    7 CYT  H6     0.00002   0.00002  -0.00003 N01X 7      0.00000
+  205    7 CYT  C5    -0.01908  -0.00627  -0.02146 N01X 7      0.00000
+  206    7 CYT  H5     0.00166   0.00049  -0.00005 N01X 7      0.00000
+  214    7 CYT  C2'    0.01806  -0.01801   0.00790 N01X 7      0.00000
+  217    7 CYT  H2'    0.00003  -0.00002  -0.00000 N01X 7      0.00000
+  218    7 CYT  C3'   -0.03033  -0.02063   0.06162 N01X 7      0.00000
+  219    7 CYT  H3'    0.00008  -0.00013   0.00011 N01X 7      0.00000
+  228    8 GUA  C4'    0.03236  -0.04124  -0.01000 N01X 8      0.00000
+  229    8 GUA  H4'   -0.00014  -0.00010  -0.00006 N01X 8      0.00000
+  231    8 GUA  C1'    0.00163  -0.01812   0.03532 N01X 8      0.00000
+  232    8 GUA  H1'    0.00062   0.00194   0.00040 N01X 8      0.00000
+  246    8 GUA  C8    -0.03737   0.01684  -0.06619 N01X 8      0.00000
+  247    8 GUA  H8    -0.00048   0.00053  -0.00056 N01X 8      0.00000
+  248    8 GUA  C2'   -0.02712   0.04302   0.00026 N01X 8      0.00000
+  251    8 GUA  H2'    0.00013   0.00012  -0.00006 N01X 8      0.00000
+  252    8 GUA  C3'   -0.03279  -0.07119   0.09614 N01X 8      0.00000
+  253    8 GUA  H3'   -0.00003   0.00004  -0.00012 N01X 8      0.00000
+  262    9 ADE  C4'   -0.00081   0.00531   0.00158 N01X 9      0.00000
+  263    9 ADE  H4'    0.00216   0.00142  -0.00083 N01X 9      0.00000
+  265    9 ADE  C1'   -0.01282  -0.00071   0.03377 N01X 9      0.00000
+  266    9 ADE  H1'    0.00183  -0.00091  -0.00942 N01X 9      0.00000
+  270    9 ADE  C8     0.00033   0.00617  -0.03952 N01X 9      0.00000
+  271    9 ADE  H8    -0.00036   0.00168   0.00071 N01X 9      0.00000
+  273    9 ADE  C2     0.01869   0.00460  -0.00595 N01X 9      0.00000
+  274    9 ADE  H2    -0.00011   0.00021   0.00053 N01X 9      0.00000
+  281    9 ADE  C2'    0.00247   0.00165   0.00128 N01X 9      0.00000
+  284    9 ADE  H2'   -0.00018  -0.00007   0.00079 N01X 9      0.00000
+  285    9 ADE  C3'    0.08257  -0.01229   0.05597 N01X 9      0.00000
+  286    9 ADE  H3'   -0.00497  -0.00172   0.00346 N01X 9      0.00000
+  295   10 GUA  C4'    0.00814   0.01217  -0.00207 N01X 10     0.00000
+  296   10 GUA  H4'    0.00027   0.00015  -0.00089 N01X 10     0.00000
+  298   10 GUA  C1'   -0.00611   0.01232   0.02877 N01X 10     0.00000
+  299   10 GUA  H1'   -0.00247  -0.00094  -0.00513 N01X 10     0.00000
+  313   10 GUA  C8    -0.07666  -0.00255  -0.01247 N01X 10     0.00000
+  314   10 GUA  H8    -0.00041   0.00008  -0.00006 N01X 10     0.00000
+  315   10 GUA  C2'   -0.01396  -0.00658  -0.01370 N01X 10     0.00000
+  318   10 GUA  H2'    0.00000  -0.00003  -0.00004 N01X 10     0.00000
+  319   10 GUA  C3'    0.08593  -0.05733   0.03760 N01X 10     0.00000
+  320   10 GUA  H3'   -0.00026   0.00027   0.00012 N01X 10     0.00000
+  329   11 ADE  C4'   -0.00436  -0.00044   0.00076 N01X 11     0.00000
+  330   11 ADE  H4'    0.00033  -0.00047  -0.00055 N01X 11     0.00000
+  332   11 ADE  C1'    0.00645   0.00434   0.01289 N01X 11     0.00000
+  333   11 ADE  H1'    0.00176  -0.00024   0.00227 N01X 11     0.00000
+  337   11 ADE  C8    -0.01192  -0.01302   0.00440 N01X 11     0.00000
+  338   11 ADE  H8    -0.00002   0.00000  -0.00001 N01X 11     0.00000
+  340   11 ADE  C2     0.00407  -0.01196  -0.00215 N01X 11     0.00000
+  341   11 ADE  H2    -0.00373  -0.00048  -0.00136 N01X 11     0.00000
+  348   11 ADE  C2'    0.01020  -0.00465  -0.00217 N01X 11     0.00000
+  351   11 ADE  H2'    0.00029   0.00010   0.00021 N01X 11     0.00000
+  352   11 ADE  C3'   -0.01378   0.02262  -0.00882 N01X 11     0.00000
+  353   11 ADE  H3'    0.00030  -0.00138  -0.00193 N01X 11     0.00000
+  362   12 GUA  C4'    0.00752  -0.00664   0.00121 N01X 12     0.00000
+  363   12 GUA  H4'   -0.00043   0.00001  -0.00107 N01X 12     0.00000
+  365   12 GUA  C1'    0.02635   0.02832  -0.10827 N01X 12     0.00000
+  366   12 GUA  H1'   -0.00286   0.00835  -0.01255 N01X 12     0.00000
+  380   12 GUA  C8     0.05804  -0.04645   0.03975 N01X 12     0.00000
+  381   12 GUA  H8     0.00090  -0.00121   0.00014 N01X 12     0.00000
+  382   12 GUA  C2'   -0.05226  -0.03225   0.02869 N01X 12     0.00000
+  385   12 GUA  H2'    0.00037  -0.00050   0.00100 N01X 12     0.00000
+  386   12 GUA  C3'    0.01937   0.07678  -0.00485 N01X 12     0.00000
+  396   13 GUA  C4'   -0.02887   0.05944  -0.00451 N01X 13     0.00000
+  397   13 GUA  H4'   -0.00000  -0.00002  -0.00010 N01X 13     0.00000
+  399   13 GUA  C1'   -0.10242  -0.00641  -0.01807 N01X 13     0.00000
+  400   13 GUA  H1'    0.00038   0.00250  -0.00457 N01X 13     0.00000
+  414   13 GUA  C8     0.02016  -0.05481   0.01239 N01X 13     0.00000
+  415   13 GUA  H8     0.00016  -0.00052  -0.00019 N01X 13     0.00000
+  416   13 GUA  C2'    0.07219  -0.04089  -0.02001 N01X 13     0.00000
+  419   13 GUA  H2'    0.00002   0.00000   0.00003 N01X 13     0.00000
+  420   13 GUA  C3'    0.03117   0.01108   0.00856 N01X 13     0.00000
+  421   13 GUA  H3'   -0.00092  -0.00051  -0.00032 N01X 13     0.00000
+  430   14 ADE  C4'   -0.00749  -0.00815  -0.01715 N01X 14     0.00000
+  431   14 ADE  H4'    0.00263  -0.00149   0.00265 N01X 14     0.00000
+  433   14 ADE  C1'   -0.02334   0.01145  -0.01104 N01X 14     0.00000
+  434   14 ADE  H1'   -0.00062  -0.00219   0.00084 N01X 14     0.00000
+  438   14 ADE  C8     0.02091   0.00383   0.00048 N01X 14     0.00000
+  439   14 ADE  H8     0.00046   0.00078   0.00001 N01X 14     0.00000
+  441   14 ADE  C2    -0.00940   0.00896  -0.00224 N01X 14     0.00000
+  442   14 ADE  H2    -0.00003  -0.00139  -0.00051 N01X 14     0.00000
+  449   14 ADE  C2'    0.00572   0.00880   0.00461 N01X 14     0.00000
+  453   14 ADE  C3'   -0.17208  -0.05783   0.00172 N01X 14     0.00000
+  454   14 ADE  H3'    0.00330  -0.00289   0.00338 N01X 14     0.00000
+  463   15 ADE  C4'    0.00115  -0.00342   0.00777 N01X 15     0.00000
+  464   15 ADE  H4'   -0.00047   0.00068   0.00004 N01X 15     0.00000
+  466   15 ADE  C1'   -0.01794   0.04185   0.01848 N01X 15     0.00000
+  467   15 ADE  H1'    0.00038   0.00532   0.00042 N01X 15     0.00000
+  471   15 ADE  C8     0.03164  -0.03285  -0.03192 N01X 15     0.00000
+  472   15 ADE  H8     0.00076   0.00111   0.00173 N01X 15     0.00000
+  474   15 ADE  C2    -0.01943   0.00048  -0.00023 N01X 15     0.00000
+  475   15 ADE  H2    -0.00014  -0.00284  -0.00426 N01X 15     0.00000
+  482   15 ADE  C2'   -0.00162  -0.00745  -0.00483 N01X 15     0.00000
+  485   15 ADE  H2'   -0.00011  -0.00021  -0.00016 N01X 15     0.00000
+  486   15 ADE  C3'    0.07042   0.04894  -0.01951 N01X 15     0.00000
+  487   15 ADE  H3'   -0.00018   0.00025   0.00006 N01X 15     0.00000
+  496   16 CYT  C4'    0.00405  -0.00234   0.00884 N01X 16     0.00000
+  497   16 CYT  H4'   -0.00000  -0.00002  -0.00004 N01X 16     0.00000
+  499   16 CYT  C1'   -0.01594  -0.00167   0.00997 N01X 16     0.00000
+  500   16 CYT  H1'   -0.00051  -0.00127  -0.00034 N01X 16     0.00000
+  502   16 CYT  C6    -0.00124  -0.00299   0.00088 N01X 16     0.00000
+  503   16 CYT  H6    -0.00002  -0.00020   0.00001 N01X 16     0.00000
+  504   16 CYT  C5     0.02029  -0.00766   0.00808 N01X 16     0.00000
+  505   16 CYT  H5    -0.00012  -0.00072  -0.00051 N01X 16     0.00000
+  513   16 CYT  C2'   -0.01494   0.00602   0.00044 N01X 16     0.00000
+  516   16 CYT  H2'    0.00002  -0.00006  -0.00018 N01X 16     0.00000
+  517   16 CYT  C3'    0.02443  -0.00122  -0.00438 N01X 16     0.00000
+  518   16 CYT  H3'    0.00003  -0.00002  -0.00007 N01X 16     0.00000
+  527   17 CYT  C4'   -0.02235   0.05332   0.01931 N01X 17     0.00000
+  528   17 CYT  H4'   -0.00004  -0.00000  -0.00006 N01X 17     0.00000
+  530   17 CYT  C1'   -0.02234  -0.02264   0.03238 N01X 17     0.00000
+  531   17 CYT  H1'   -0.00003  -0.00004  -0.00002 N01X 17     0.00000
+  533   17 CYT  C6    -0.00826   0.00687  -0.03176 N01X 17     0.00000
+  534   17 CYT  H6     0.00012   0.00009   0.00011 N01X 17     0.00000
+  535   17 CYT  C5    -0.00824  -0.00233   0.00593 N01X 17     0.00000
+  536   17 CYT  H5    -0.00065  -0.00038  -0.00062 N01X 17     0.00000
+  544   17 CYT  C2'    0.00229  -0.00907   0.01011 N01X 17     0.00000
+  547   17 CYT  H2'    0.00003   0.00004  -0.00032 N01X 17     0.00000
+  548   17 CYT  C3'   -0.01354  -0.03198   0.00057 N01X 17     0.00000
+  549   17 CYT  H3'   -0.00002  -0.00013  -0.00006 N01X 17     0.00000
+
+scalar xcomp set 0 select .not. (property wmain .gt. 0) end
+scalar ycomp set 0 select .not. (property wmain .gt. 0) end
+scalar zcomp set 0 select .not. (property wmain .gt. 0) end
+
+scalar xcomp +store 1
+scalar ycomp +store 2
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalar zcomp recall 3
+
+scalar xcomp pow2
+scalar ycomp pow2
+scalar zcomp pow2
+
+scalar wcomp = xcomp
+scalar wcomp sum ycomp
+scalar wcomp sum zcomp
+
+scalar wcomp stat select property wmain .gt. 0 end
+set err = ?stot
+
+goto @return

@@ -1,0 +1,128 @@
+CHARMM Element doc/commands.info 1.1
+
+File: Commands, Node: Top, Up: (doc/charmm.info), Previous: (doc/parallel.info), Next: (doc/install.info)
+
+                             CHARMM commands
+
+        The commands available for use in CHARMM are classified in
+several groups.
+
+* Menu:
+
+* ABPO:        (doc/abpo.info    ). Adaptively Biased Path Optimization
+* ACE:         (doc/ace.info     ). Analytical Continuum Electrostatics
+* ADUMB:       (doc/adumb.info   ). ADaptive UMBrella sampling simulation
+* AFM:         (doc/afm.info     ). Atomic Force Microscopy Simulation
+* Analysis:    (doc/analys.info  ). Analysis facility
+* APBS:        (doc/apbs.info    ). Adaptive Poisson-Boltzmann Solver
+* ASPENER:     (doc/aspenr.info  ). Atomic Solvation Parameter Based Energy
+* ASPENERMB:   (doc/aspenrmb.info). ASP Model with Implicit Membrane
+* AXD:         (doc/axd.info     ). Accelerated Dynamics module
+* BLaDE:       (doc/blade.info   ). BLaDE GPU Basic Lambda Dynamics Engine module
+* Block:       (doc/block.info   ). BLOCK free energy simulation
+* CCA:         (doc/cca.info     ). Common Component Architecture
+* CFF:         (doc/cff.info     ). Consistent Force Field (CFF)
+* CHEQ:        (doc/cheq.info    ). CHarge EQuilibration Methods
+* Cons:        (doc/cons.info    ). Harmonic and other constraints or SHAKE
+* CHARMMrate:  (doc/charmmrate.info). CHARMM-POLYRATE Interface
+* Coordinates: (doc/corman.info  ). Commands to manipulate coordinates
+* Correl:      (doc/correl.info  ). Time series and correlation functions
+* Corsol:      (doc/corsol.info  ). Solvent Correlation Functions
+* Cross:       (doc/cross.info   ). Reactive MD with Surface Crossing
+* Crystl:      (doc/crystl.info  ). Crystal facility
+* CSA:         (doc/csa.info     ). Conformational Space Annealing
+* Dimension:   (doc/dimens.info  ). Set maximum dimension parameters for this charmm run.
+* DIMS:        (doc/dims.info    ). Dynamic IMportance Sampling
+* Drude:       (doc/drude.info   ). Drude oscillator commands
+* Dynamics:    (doc/dynamc.info  ). Dynamics commands
+* DIESEL:      (doc/diesel.info  ). QM/MM method interface to DIESEL(GAMESS)
+* Domdec:      (doc/domdec.info  ). Domain Decomposition Code
+* EEF1:        (doc/eef1.info    ). Effective Energy Function 1
+* EMAP:        (doc/emap.info    ). The MAP Object Manipulation Commands
+* Energy:      (doc/energy.info  ). Energy evaluation
+* Ensemble:    (doc/ensemble.info). Run communicating copies of CHARMM
+* EPMF:        (doc/epmf.info    ). Distance and angle based energy terms
+* Ewald:       (doc/ewald.info   ). Ewald summation
+* FACTS:       (doc/facts.info   ). Fast Analytical Continuum Solvation Model
+* FitCharge:   (doc/fitcharge.info). Charge and Drude Polarizability Fitting
+* FitParam:    (doc/fitparam.info). Parameter Fitting Procedure
+* FlucQ:       (doc/flucq.info   ). QM/MM Fluctuating Charge Potential
+* FMM:         (doc/fmm.info     ). Fast Multipole Method for Nonbond Interactions
+* G09:         (doc/g09.info     ). QM/MM Based on Gaussian09
+* Gamus:       (doc/gamus.info   ). Gaussian Mixture Adaptive Umbrella Sampling
+* GBorn:       (doc/genborn.info ). Generalized Born Solvation Energy
+* GBIM:        (doc/gbim.info    ). Generalized Born with Implicit Membrane
+* GBMV:        (doc/gbmv.info    ). Generalized Born Using Molecular Volume
+* GBSW:        (doc/gbsw.info    ). Generalized Born with a simple SWitching
+* Genetic:     (doc/galgor.info  ). The genetic algorithm commands
+* GNN:         (doc/gnn.info     ). Genetic Neural Network
+* Graphx:      (doc/graphx.info  ). The graphics subsection for workstations
+* H-bond:      (doc/hbonds.info  ). Generation of hydrogen bonds
+* H-build:     (doc/hbuild.info  ). Construction of hydrogen positions
+* HQBM:        (doc/hqbm.info    ). Biased Molecular Dyanmics
+* Images:      (doc/images.info  ). Use of periodic or crystal environment
+* Internal:    (doc/intcor.info  ). Manipulation of internal coordinates
+* I/O :        (doc/io.info      ). I/O of data structures and files
+* LonePair :   (doc/lonepair.info). Lone-Pair Facility
+* LUPOPT :     (doc/lupopt.info  ). Low Energy Path OPTimization
+* MC:          (doc/mc.info      ). Monte Carlo simulation program
+* MCMA:        (doc/mcma.info    ). Monte Carlo Minimization / Annealing
+* Minimiz:     (doc/minimiz.info ). Description of the minimization methods
+* Miscellany:  (doc/miscom.info  ). Miscellaneous commands
+* MMFF:        (doc/mmff.info    ). Merck Molecular Force Field
+* MMFP:        (doc/mmfp.info    ). Miscelaneous Mean Field Potential
+* MMPT:        (doc/mmpt.info    ). Molecular Mechanics with Proton Transfer
+* MNDO97       (doc/mndo97.info  ). QM/MM method based on MNDO97
+* Molvib:      (doc/molvib.info  ). Molecular vibrational analysis facility
+* MRMD:        (doc/mrmd.info    ). Multi-Surface Adiabatic Reactive MD
+* MS-EVB:      (doc/ms-evb.info  ). Multi-State Empirical Valence Bond
+* Mscale:      (doc/mscale.info  ). Multi Scale Command: MSCALE
+* MTP:         (doc/mtp.info     ). Distributed Multipole facility
+* NMR:         (doc/nmr.info     ). NMR analysis facility
+* Non-bonded:  (doc/nbonds.info  ). Generation of the non-bonded interaction
+* Overlap:     (doc/overlap.info ). Overlap of Molecular Similarity
+* Parameters:  (doc/parmfile.info). CHARMM energy parameters
+* PBEQ:        (doc/pbeq.info    ). Poisson-Boltzmann Equation Solver
+* Perturb:     (doc/pert.info    ). Free energy perturbation simulations
+* PHMD:        (doc/phmd.info    ). Continuous constant pH Molecular Dynamics
+* PIPF:        (doc/pipf.info    ). Polarizable Intermolecular Pot Functions
+* PNM:         (doc/pnm.info     ). Plastic network mode commands
+* Pressure:    (doc/pressure.info). Pressure calculation and usage
+* PRIMO:       (doc/primo.info   ). PRIMO potential terms
+* PROTO:       (doc/proto.info   ). Prototype commands
+* QCHEM:       (doc/qchem.info   ). QMMM method using Q-CHEM interface
+* Qturbo:      (doc/qturbo.info  ). QMMM method using TURBOMOL interface
+* Quantum:     (doc/qmmm.info    ). Quantum and Molecular Mechanical FF
+* Qub:         (doc/qub.info     ). Quantized Classical Path Sampling
+* RDC:         (doc/rdc.info     ). Residual Dipolar coupling (RDC) module
+* RDFSol:      (doc/rdfsol.info  ). Radial correlation functions
+* Repdstr:     (doc/repdstr.info ). The Parallel Distributed Replica
+* Replica:     (doc/replica.info ). REPLICA: molecular system replication
+* RISM:        (doc/rism.info    ). Reference Interaction Site Model
+* RUSH:        (doc/rush.info    ). A simple implicit solvent force field
+* RXNCONS:     (doc/rxncons.info ). Reaction coordinate constraints
+* SASA:        (doc/sasa.info    ). The SASA implicit solvation model
+* Sbound:      (doc/sbound.info  ). Stoichastic boundary
+* Scalar:      (doc/scalar.info  ). Scalar command for atom properties
+* SCCDFTB:     (doc/sccdftb.info ). QM/MM method interface to SCCDFTB
+* SCPISM:      (doc/scpism.info  ). SCP Implicit Solvent Model
+* Select:      (doc/select.info  ). Use of the atom selection facility
+* Shell:       (doc/shell.info   ). Shell decomposition
+* SGLD:        (doc/sgld.info    ). Self-Guided Langevin Dynamics
+* SSNMR:       (doc/ssnmr.info   ). Solid State NMR (SSNMR) Energy Functions
+* Stringm:     (doc/stringm.info ). 0-K String Method
+* Structure:   (doc/struct.info  ). Structure manipulation (PSF generation)
+* Substitute:  (doc/subst.info   ). Command line substitution parameters
+* TAMD:        (doc/tamd.info    ). Torsion Angle Molecular Dynamics
+* Test:        (doc/test.info    ). Commands to test various things
+* TMD:         (doc/tmd.info     ). Targeted Molecular Dynamics
+* Topology:    (doc/rtop.info    ). Residue Topology File
+* TORQue:      (doc/torque.info  ). Manipulate torques
+* TPCONTROL:   (doc/tpcntrl.info ). Temperature and pressure control
+* TPS:         (doc/tps.info     ). Transition Path Sampling
+* Travel:      (doc/trek.info    ). Reaction coordinate refinement command
+* TSM:         (doc/perturb.info ). Thermodynamic Simulation Method
+* Umbrella:    (doc/umbrel.info  ). Umbrella Sampling
+* Valbond:     (doc/valbond.info ). VALBOND-trans force field
+* Vibration:   (doc/vibran.info  ). Vibrational analysis facility
+* Zerom:       (doc/zerom.info   ). Zero-Order Minimization

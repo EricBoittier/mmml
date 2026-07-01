@@ -1,0 +1,125 @@
+* CHARMM c40a1 testcase omm_fastepd.inp.
+* This test case tests the GPU (CHARMM/OpenMM) based TREX
+* replica exchange methodology.
+* Written by Charles L. Brooks III, November, 2014.
+*
+
+stream datadir.def
+
+if ?openmm .ne. 1 then
+  echo "OpenMM not compiled in"
+  echo "Test NOT performed."
+  stop
+endif
+
+if ?repdstr .ne. 1 then
+  echo "REPD not compiled in"
+  echo "Test NOT performed"
+  stop
+endif
+
+if ?numnode .eq. 1 then
+  echo "REPD only works in parallel"
+  echo "Test NOT performed"
+  stop
+endif
+
+if ?numnode .ne. 2 then
+  echo "Test reference results and tolerances calibrated for two MPI processes"
+  echo "Test NOT performed"
+  stop
+endif
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+read sequence card
+3
+AMN ALA CBX
+generate ala2 setup warn
+
+ic para
+ic seed 1 C 2 N 2 CA
+ic build
+
+set nreplica = ?numnode
+
+
+repd fast exch unit 30 freq 200 omm nrep @nreplica -
+       stemp 300 dtemp 25 !mtemp 375
+!  temp0 300. -
+!  temp1 325. -
+!  temp2 350. -
+!  temp3 375.
+
+open unit 30 write card name @9fastrepd.exch
+open write file unit 50 name @9fastrepd.trj
+open write card unit 41 name @9fastrepd.res
+open write card unit 42 name @9fastrepd.out
+outu 42
+
+! calc mod = ( ?myrep + 1 )  - 2 * int (  ( ?myrep + 1 ) / 2 )
+! omm platform CUDA deviceid @mod
+! omm platform cpu
+set temp = 300
+set dt = 25
+mult dt by ?myrep
+incr temp by @dt
+
+dyna verlet strt nstep 100000 timestep 0.002  -
+    iprfrq 1000 ihtfrq 0 ieqfrq 1000 ntrfrq 10000  -
+    iuncrd 0 iunrea -1 iunwri 0 kunit -1 -
+    nprint 0 nsavc 0 nsavv 0 ihbfrq 0 ilbfrq 0 -
+    firstt @temp finalt @temp teminc 0.0  tstruc @temp -
+    iseed 98123 55012 102978 101300 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0 -
+    switch vswitch omm langevin gamma 5
+
+set passprob = 0
+set passener = 0
+
+! if ?myrep .eq. 0 set refprob = 0.516512
+! if ?myrep .eq. 0 set refener = -36.4095
+! if ?myrep .eq. 1 set refprob = 0.64156
+! if ?myrep .eq. 1 set refener = -33.9784
+
+if ?myrep .eq. 0 set refprob = 0.401577684
+if ?myrep .eq. 0 set refener = -34.7142191
+if ?myrep .eq. 1 set refprob = 0.401577684
+if ?myrep .eq. 1 set refener = -32.0254629
+if ?myrep .eq. 2 set refprob = 0.581446
+if ?myrep .eq. 2 set refener = -30.5235
+if ?myrep .eq. 3 set refprob = 0.576626
+if ?myrep .eq. 3 set refener = -35.8317
+
+! NOTE: repeated exchanges and replicas exchanging positions
+! (rather than temperatures), "up" vs. "down" exchanges are
+! a bit more complicated to track. As the doc file notes, it
+! is possible, but a bit unreliable. So, we're just going to
+! check overall exchange probability and final energy, which
+! are invariant to direction.
+
+set tol = 1e-4
+
+Calc dev = abs ( @refprob - ?reprob ) / @refprob
+if @dev le @tol set passprob = 1
+
+Calc dev = abs ( ( @refener - ?ener ) / @refener )
+if @dev le @tol set passener = 1
+
+calc result = @passprob + @passener
+
+repd reset
+outu 6
+prnlev 5 node 0
+
+set status pass
+if @result .ne. 2 set status fail
+
+echo TESTCASE RESULT: @status
+stop

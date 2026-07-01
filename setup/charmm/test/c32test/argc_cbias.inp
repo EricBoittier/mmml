@@ -1,0 +1,128 @@
+* argc_cbias.inp
+* Author:   Aaron R. Dinner
+* Date:     3 July 2003
+* Version:  c30a2x
+* Test:     Grand canonical MC with cavity biased insertion
+* Model:    Ar in periodic box
+*
+
+IF ?MC .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+if ?domdec eq 1 then
+  echo "Test NOT performed with DOMDEC."
+  stop
+endif
+
+IF ?GCMC .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+BOMLev 0
+STREam datadir.def
+PRNLev 3 @pnode
+
+READ RTF  CARD 
+*
+27 1
+MASS    85 AR    20.17970 
+RESI AR1       0.00 ! argon
+GROUP
+ATOM AR01  AR  0.00
+PATCHING FIRST NONE LAST NONE
+END
+
+READ PARA CARD
+*
+NONBonded
+AR     0.000000  -0.238065     1.9110
+END
+
+READ SEQUENCE AR1 34
+GENERATE ARGO NOANGLE NODIHE
+
+read coor card
+   *
+   34
+    1    1 AR1  AR01   4.26320  -2.30554  -1.16978 ARGO 1      0.00000
+    2    2 AR1  AR01  -2.82552  -2.52596   2.27758 ARGO 2      0.00000
+    3    3 AR1  AR01  -3.94820   0.62245  -0.51074 ARGO 3      0.00000
+    4    4 AR1  AR01   0.41134  -0.55685  -5.00083 ARGO 4      0.00000
+    5    5 AR1  AR01  -4.58968   3.22941   2.81643 ARGO 5      0.00000
+    6    6 AR1  AR01  -6.34698   0.41112   1.69147 ARGO 6      0.00000
+    7    7 AR1  AR01   3.16939  -5.99646  -0.46607 ARGO 7      0.00000
+    8    8 AR1  AR01   1.64878  -2.96817   1.97307 ARGO 8      0.00000
+    9    9 AR1  AR01   2.18821   3.32793   4.46987 ARGO 9      0.00000
+   10   10 AR1  AR01  -0.98775  -5.11433  -0.47248 ARGO 10     0.00000
+   11   11 AR1  AR01   3.20097  -3.24084  -4.68096 ARGO 11     0.00000
+   12   12 AR1  AR01   0.56280   0.99771   0.57725 ARGO 12     0.00000
+   13   13 AR1  AR01  -3.12331   6.52983   6.94994 ARGO 13     0.00000
+   14   14 AR1  AR01  -3.96566   1.19892  -3.75173 ARGO 14     0.00000
+   15   15 AR1  AR01  -0.82072   2.23721  -3.27528 ARGO 15     0.00000
+   16   16 AR1  AR01  -0.06294  -1.75113  -1.16068 ARGO 16     0.00000
+   17   17 AR1  AR01   2.73650   0.30079  -2.56268 ARGO 17     0.00000
+   18   18 AR1  AR01   4.26320  -2.30554  -1.16978 ARGO 18     0.00000
+   19   19 AR1  AR01  -2.82552  -2.52596   2.27758 ARGO 19     0.00000
+   20   20 AR1  AR01  -3.94820   0.62245  -0.51074 ARGO 20     0.00000
+   21   21 AR1  AR01   0.41134  -0.55685  -5.00083 ARGO 21     0.00000
+   22   22 AR1  AR01  -4.58968   3.22941   2.81643 ARGO 22     0.00000
+   23   23 AR1  AR01  -6.34698   0.41112   1.69147 ARGO 23     0.00000
+   24   24 AR1  AR01   3.16939  -5.99646  -0.46607 ARGO 24     0.00000
+   25   25 AR1  AR01   1.64878  -2.96817   1.97307 ARGO 25     0.00000
+   26   26 AR1  AR01   2.18821   3.32793   4.46987 ARGO 26     0.00000
+   27   27 AR1  AR01   5.00000   5.00004   5.00000 ARGO 27     0.00000
+   28   28 AR1  AR01  -5.00000   5.00004   5.00000 ARGO 28     0.00000
+   29   29 AR1  AR01   5.00000   5.00004  -5.00000 ARGO 29     0.00000
+   30   30 AR1  AR01  -5.00000   5.00004  -5.00000 ARGO 30     0.00000
+   31   31 AR1  AR01   5.00000  -5.00004   5.00000 ARGO 31     0.00000
+   32   32 AR1  AR01  -5.00000  -5.00004   5.00000 ARGO 32     0.00000
+   33   33 AR1  AR01   5.00000  -5.00004  -5.00000 ARGO 33     0.00000
+   34   34 AR1  AR01  -5.00000  -5.00004  -5.00000 ARGO 34     0.00000
+
+!  Set the first 17 molecules to be active and the remainder to be inactive
+scalar gcmc set 1.0 sele ires   1:7 end
+scalar gcmc set 0.0 sele ires  8:34 end
+!  Set all molecules to be blockers
+scalar gcblocker set 1.0 sele all end
+
+CRYStal DEFIne CUBIC 10.0 10.0 10.0 90.0 90.0 90.0
+CRYStal BUILd CUTOFF 7.0
+
+!  Use IMALL  with a big cutoff to ensure that images exist regardless
+!  of insertion point.
+NBONDS atom cdie eps 1.0 fSWITCH VDW Vatom -
+   CUTNB  7.81 CTOFNB 6.81 CTONNB 6.81 imall cutim 999.0
+
+energy
+
+!  Define the move set
+move add mvtp rtrn byatom weight 0.5 sele all end dmax 1.00 label disp
+move add mvtp gcmc        weight 0.5 sele all end label gcmc 
+!  Link the translations with the GCMC keyword to avoid moving inactive Ar
+move link gcmc lab1 disp lab2 gcmc
+
+energy
+
+!  Perform a brief simulation.  
+!  Delta-E should be 0 since images and non-bond are updated every step here.  
+!  For a real simulation, set them to larger numbers (and tolerate some error).
+
+!  Up to at least version c32a1, the first energy call will have a non-zero Delta-E
+!  due to the fact that the image atom activities are only set in MC
+mc nsteps 100 temp 239.3  inbfrq 100 iecheck 1 imgfrq 1 iseed 302430 -
+   gcbf 2.0 xmin -5.0 ymin -5.0 zmin -5.0 xmax 5.0 ymax 5.0 zmax 5.0 -
+   ngctry 100 gccut 2.5
+
+energy
+
+open write card unit 44 name @9ar_rndm.crd
+write coor card  unit 44 sele gcmc end
+
+!  Free the move set to check heap usage (should be 0 in the end).
+move dele label disp
+move dele label gcmc
+
+stop

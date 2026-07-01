@@ -1,0 +1,180 @@
+CHARMM Element doc/axd.info $Revision: 1.1.1.1 $
+
+File: axd,  Node: Top,  Up: (doc/commands.info),  Next: Syntax
+
+                          The AXD Module of CHARMM
+
+                   David Glowacki and Emanuele Paci, 2010
+
+     AXD provides an efficient method for determining simultaneously the
+potential of mean force and rates associated to a slow collective variable
+of the system (reaction coordinate).
+
+     Presently it has only been implemented and tested for the distance
+between two atoms, which is the default. Work is in progress to generalize
+the method to a number of reaction coordinates (Yew, Glowacki, Paci,
+work in progress).
+
+     The reaction coordinate is kept within a perfectly reflecting "box" for
+a time interval sufficient to thoroughly sample the associated values of the
+reaction coordinate.  This is done by reversing the velocity of the particles
+involved in the reaction coordinate.  After a given number of collisions with
+the boundaries the reaction coordinate is allowed to increase or decrease so
+that a neighbouring box can be sampled. From the number of collision with the
+boundaries the potential of mean force over the whole range of reaction
+coordinate values can be reconstructed, as well as the absolute rate of
+entering or exiting a specific "box". 
+
+     The method is related to Ron Elber's milestoning but with some crucial 
+differences. Its application is simpler and requires a single simulation with
+a rather simple input to determine the potential of mean force.
+
+* Menu:
+
+* Syntax::              Syntax of the AXD command
+* Description::         Description of the command
+* References::          References
+* Example::             Usage Example
+* Comments::            The current status
+
+
+File: axd,  Node: Syntax,  Up: Top, Previous: Top,  Next: Description
+
+[COMMAND SYNTAX]
+
+AXD  RC atom-selection [MIN real] [MAX real]  
+     [NBOUND integer EVENTS integer BOUNDS sequence-of-reals]
+     [IUNJ integer] PRINT_OPTIONS 
+
+
+File: axd,  Node: Description,  Up: Top,  Previous: Syntax, Next: References
+
+[DESCRIPTION OF COMMANDS]
+
+[IUNJ integer]
+specifies the file in which the value of the rc will be written.  The file
+contains three columns: 1) timestep; 2) rc value; 3) the inversion boundary
+(if velocity inversion occurred at that timestep)
+
+RC   
+the reaction coordinate definition with which to use AXD. Reaction coordinates
+presently available include: 1) DIS (distance between two atoms; this is
+the default if no RC is specified)
+        
+MIN (real)
+the minimum allowed value of the reaction coordinate. When the rc first
+becomes greater than MIN, the dynamics will be subsequently constrained so
+that the rc does not become smaller than MIN.
+
+MAX (real) 
+the maximum allowed value of the reaction coordinate.  When the rc first
+becomes smaller than MAX, the dynamics will be subsequently constrained
+so that the rc does not become larger than MAX.
+
+note 1: specification of both MIN and MAX values will, upon first arrival
+of the rc in the boundaries, "lock" the reaction coordinate between MIN and MAX
+
+note2: if MIN and/or MAX are not specified, then AXD will expect input for
+NBOUND. if MIN and/or MAX are specified in addition to NBOUND, AXD will give
+an error.
+
+NBOUND
+must be followed by an integer which tells how many real numbers follow BOUNDS 
+
+BOUNDS 
+is followed by a sequence of real values, in ascending or descending order.
+These values are the boundaries within which the dynamics will be
+consecutively constrained. The order at which the system oscillates through
+the bounded boxes is determined by whether the bounds are specified in
+ascending or descending order
+
+EVENTS 
+is followed by an integer that tells the program how many total inversion
+events to count (the total on both box boundaries) before progressing to the
+next box
+
+PRINT_OPTIONS
+control print frequency in unit IUNJ.  If PRINT_OPTIONS is not specified, 
+the default is to print at the frequency specified in the dynamics section of
+the input. PRINT_OPTIONS (only one of which may be specified) include:
+
+    PRNALL (print to unit IUNJ at every timestep)
+    PRANGE (real real) which prints to the unit IUNJ at every timestep
+           when the reaction coordinate is between some range of real numbers.
+	   Note that the real number immediately following PRANGE must be
+	   less than the second value    
+
+
+File: axd,  Node: References,  Up: Top,  Previous: Description, Next: Example
+
+REFERENCES:
+
+(1) Glowacki, Paci & Shalashilin, J. Phys. Chem. B 2009, 113, 16603-16611
+    http://pubs.acs.org/doi/abs/10.1021/jp9074898
+
+
+
+File: axd,  Node: Example,  Up: Top,  Previous: References, Next: Comments
+
+* CHARMM c36a1 Testcase test/c36test/axd1.inp
+* Author: David Glowacki and Emanuele Paci
+* Date  : June 24, 2010
+*
+
+stream datadir.def
+
+open unit 1 read card name @0toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0param19_eef1.inp
+read param card unit 1
+close unit 1
+
+READ SEQUENCE CARDS
+* 13-mer
+*
+13
+THR TRP ILE GLN ASN GLY SER THR LYS TRP 
+TYR GLN ASN 
+
+GENERATE PEPT WARN SETUP 
+
+! { Do not read coordinates }
+
+IC PARAMETERS
+IC SEED 1 N 1 CA 1 C
+IC BUILD
+
+MINI SD 
+
+OPEN WRITE UNIT 43 UNFORM NAME @9axd1.dcd
+OPEN WRITE UNIT 44 FORM NAME @9axd1.axd
+
+AXD IUNJ 44 PRANGE 19 21 SELE ((ATOM PEPT 1 N) .OR. (ATOM PEPT 13 C)) END MAX 28 MIN 19  
+
+! Test AXD using VV2 integration
+DYNAMICS VV2 START NSTEP 2000000 TIMESTEP 0.001 IUNREA -1 IUNWRI -1 KUNIT -1 IUNCRD 43   -
+         IPRFRQ  100 NPRINT 100 NSAVC 500 INBFRQ -1 ICHECW 0 IEQFRQ 0 
+
+STOP
+
+
+
+File: axd,  Node: Comments,  Up: Top,  Previous: Example, Next: Top
+
+COMMENTS
+
+There are essentially four modes in which AXD may be run:
+
+1) the reaction coordinate (rc) cannot cross an upper boundary (requires
+   specification of MAX) 
+2) the rc cannot cross a lower boundary (requires specification of MIN)
+3) the rc is maintained between some maximum and minimum value (requires
+   specification of both MAX and MIN)
+4) the rc is confined within a series of boundaries located along the
+   reaction coordinate (requires specification of NBOUND)
+
+Presently, the method may be used in conjunction with the LEAP and VV2
+integration algorithms, and with Langevin dynamics.  It works with SHAKE, but
+we recommend the SHAKE is not applied to those atoms involvel in the
+definition of the reaction coordinate.

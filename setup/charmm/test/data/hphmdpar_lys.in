@@ -1,0 +1,16 @@
+* States file for Hybrid-PHMD
+* Syntax:
+* RESNAME MODEL_PKA PARA PARB
+*  ATOM_TYPE CHARGE(1) CHARGE(2) [RAD(1) RAD(2)]
+*
+
+LYS   10.4 -75.8231 0.769208 2.0
+CE    0.21   0.40
+HE1   0.05  -0.05
+HE2   0.05  -0.05
+NZ   -0.30  -0.98
+HZ1   0.33   0.34
+HZ2   0.33   0.34
+HZ3   0.33   0.00 1.0 0.0
+
+END

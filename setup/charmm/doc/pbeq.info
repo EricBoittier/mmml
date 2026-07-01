@@ -1,0 +1,1005 @@
+CHARMM Element doc/pbeq.info 1.2
+
+File: PBEQ, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+                 Poisson-Bolztmann Equation Module   
+
+    The PBEQ module allows the setting up and the numerical solution of
+the Poisson-Boltzmann equation on a discretized grid for a solute molecule.
+
+Attention: Problems should be reported to
+         . Benoit Roux    at Benoit.Roux@med.cornell.edu, phone (212) 746-6018
+         . Wonpil Im      at Wonpil.Im@cornell.edu
+         . Dmitrii Beglov at beglovd@moldyn.com
+
+* Menu:
+
+* Syntax::      Syntax of the PBEQ commands
+* Function::    Purpose of each of the commands
+* Examples::    Usage examples of the PBEQ module
+
+
+File: PBEQ, Node: Syntax, Up: Top, Previous: Top, Next: Function
+
+
+                                 Syntax
+
+[SYNTAX PBEQ functions]
+
+Syntax:
+
+PBEQ          enter the PBEQ module
+END           exit the PBEQ module
+
+Subcommands:
+
+SOLVe          PB-theory-specifications
+               solver-specifications         grid-specifications
+               iteration-specifications      charge interpolation-spec.
+               boundary potential-spec.      dielectric boundary-spec.
+               physical variable-spec.       membrane-specifications
+               spherical droplet-spec.       orthorhombic box-spec.
+               cylinder-specifications       solvation force-spec.
+               atoms-selection
+
+ITERate        PB-theory-specifications      solver-specifications         
+               iteration-specifications 
+
+ENPB           [INTE  atoms-selection] 
+
+CAPAcitance 
+
+COUNTERION
+
+WRITE          property [[CARD] [write-range]] [UNIT  integer]
+
+READ           [PHI] [PHIX] [FKAP] [MIJ] [UNIT  integer]
+
+COOR           coordinate-manipulation-command
+
+SCALar         scalar-manipulation-command
+
+PBAVerage      [PHI] [ATOM atom-selection] [UPDATE] [units]
+               grid-specifications
+
+HELP 
+
+RESET
+
+PB-theory-specifications::= [NONLinear] [PARTlinear] 
+default             : linear PB by default (no need to specify)
+NONLin	[.FALSE.]   : non-linear PBEQ solver
+PARTlin	[.FALSE.]   : partially linearized PBEQ solver
+
+solver-specifications::=[OLDPB] 
+[OSOR] [UNDER] [[FMGR] [NCYC integer] [NPRE integer] [NPOS integer]]
+default             : SOR (Successive OverRelaxation) method for linearized PB
+OLDPB	[.FALSE.]   : old PBEQ solver (used in c26a2)
+OSOR	[.FALSE.]   : optimization of the over-relaxation parameter
+UNDER	[.FALSE.]   : Under-relaxation for non-linear and partially linearized
+                      PBEQ solvers with fixed LAMBda value
+FMGR	[.FALSE.]   : full multigrid method
+NCYC	[100]       : maximum number of cycles (in FMGR)
+NPRE	[2]         : number of relaxation for PRE-smoothing (in FMGR)
+NPOS	[2]         : number of relaxation for POST-smoothing (in FMGR)
+
+grid-specifications::= [NCEL integer] [DCEL real] 
+                       [NCLX integer] [NCLY integer] [NCLZ integer] 
+                       [XBCEN real]   [YBCEN real]   [ZBCEN real]
+NCEL	[65]        : number of grid point in 1D for a cubic
+DCEL	[0.1]       : size of grid unit cell
+NCLX    [NCEL]      : number of grid point in X for general parallelepiped
+NCLY    [NCEL]      : number of grid point in Y for general parallelepiped
+NCLZ    [NCEL]      : number of grid point in Z for general parallelepiped
+XBCEN   [0.0]       : the center of a box in X
+YBCEN   [0.0]       : the center of a box in Y
+ZBCEN   [0.0]       : the center of a box in Z
+
+iteration-specifications::=[MAXIter integer] [DEPS real] 
+                           [DOMEga real]     [LAMBda real]  [KEEPphi]
+MAXIter	[2000]	    : number of iterations
+DEPS	[0.000002]  : parameter (tolerance) of convergence 
+DOMEga	[1.0]       : initial mixing factor
+LAMBda	[1.0]       : initial mixing factor (LAMBda = DOMEga)
+KEEPphi	[.FALSE.]   : Use the potential from previous calculation
+                      as a initial guess for current calculation
+
+charge interpolation-spec.::= [BSPLine]
+default             : the trilinear interpolation method
+BSPLine [.FALSE.]   : the Cardinal B-spline method is used?
+
+boundary potential-specifications::= [ZERO] [INTBP] [FOCUS] [PBC] [NPBC]
+                                     [NIMGB integer] 
+default             : use the Debye-Huckel approximation at each boundary point
+                      use XY periodic boundary conditions in membrane
+                      calculation 
+INTBP   [.FALSE.]   : INTerpolation of Boundary Potential is used?
+ZERO    [.FALSE.]   : boundary potential is set to ZERO ?
+                      (metallic conductor boundary conditions)
+FOCUS   [.FALSE.]   : previous potential is used to set up boundary potential?
+PBC	[.FALSE.]   : 3d periodic boundary condition
+NPBC	[.FALSE.]   : supress XY periodic boundary conditions in membrane
+                      calculations
+NIMGB	[0]         : use the image atoms for boundary potential 
+                      in membrane calculation 
+                     (NIMGB=1 means the 8 nearest image cells)
+                     (NIMGB=2 means the 24 nearest image cells, i.e.,
+                      2 shells of images)
+
+dielectric boundary-specifications::= [SMOOTH] [SWIN real] [REEN]
+default             : the vdW surface is used for the dielectric boundary
+SMOOth	[.FALSE.]   : invoke smoothing dielectric boundary
+SWIN	[0.5]       : solute-solvent dielectric boundary Smoothing WINdow
+REEN	[.FALSE.]   : the molecular (contact+reentrant) surface is created 
+                      with WATRadius for the dielectric boundary
+
+physical variable-specifications::= [EPSW real] [EPSP real] 
+                                    [WATR real] [IONR real] 
+                                    [CONC real] [TEMP real] 
+EPSW	[80.0]      : bulk solvent dielectric constant
+EPSP	[1.0]       : protein interior dielectric constant
+WATR	[0.0]       : solvent probe radius
+IONR	[0.0]       : ion exclusion radius (Stern layer)
+CONC	[0.0]       : salt concentration [moles/liter]
+TEMP	[300.0]     : Temperature [K]
+
+membrane-specifications:: [TMEMb real] [HTMEmb real] [ZMEMb real] [EPSM	real]
+                          [EPSH	real]  [VMEMB real]
+TMEMB	[0.0]	    : thickness of membrane (along Z) 
+HTMEMB	[0.0]	    : thickness of headgroup region
+ZMEMB	[0.0]	    : membrane position  (along Z)
+EPSM	[1.0]	    : membrane dielectric constant
+EPSH	[EPSM]	    : membrane headgroup dielectric constant (optional)
+VMEMB	[0.0]	    : potential difference across membrane (entered in [volts])
+
+spherical droplet-spec.::= [DROPlet real]  [EPSD real]
+                           [XDROplet real] [YDROplet real] [ZDROplet real]
+                           [DTOM] [DKAP]
+DROPlet	[0.0]      : radius of spherical droplet
+EPSD   	[1.0]      : dielectric constant of spherical droplet
+XDROp	[0.0]      : position of spherical droplet in X
+YDROp	[0.0]      : position of spherical droplet in Y
+ZDROp	[0.0]      : position of spherical droplet in Z
+DTOM	[.FALSE.]  : the dielectric constant of the overlapped region 
+                     with membrane is set to EPSM ?
+DKAP	[.FALSE.]  : the Debye-Huckel factor inside sphere is set to KAPPA ?
+
+orthorhombic box-spec.::= [LXMAx real] [LYMAx real] [LZMAx real] 
+                          [LXMIn real] [LYMIn real] [LZMIn real] 
+                          [BTOM]       [BKAP]
+LXMAx	[0.0]       : maximum position of a box along X-axis
+LYMAx	[0.0]       : maximum position of a box along Y-axis
+LZMAx	[0.0]       : maximum position of a box along Z-axis
+LXMIn	[0.0]       : minimum position of a box along X-axis
+LYMIn	[0.0]       : minimum position of a box along Y-axis
+LZMIn	[0.0]       : minimum position of a box along Z-axis
+EPSB    [1.0]       : dielectric constant inside box
+BTOM	[.FALSE.]   : the dielectric constant of the overlapped region 
+                      with membrane is set to EPSM ?
+BKAP	[.FALSE.]   : the Debye-Huckel factor inside box is set to KAPPA?
+
+cylinder-specifications::= [RCYLN real] [HCYLN real] [EPSC real]
+                           [XCYLN real] [YCYLN real] [ZCYLN real]
+                           [CTOM]       [CKAP]
+RCYLN	[0.0]       : radius of cylinder
+HCYLN	[0.0]       : height of cylinder
+EPSC	[1.0]       : dielectric constant inside cylinder
+XCYLN	[0.0]       : position of cylinder in X
+YCYLN	[0.0]       : position of cylinder in Y
+ZCYLN	[0.0]       : position of cylinder in Z
+CTOM	[.FALSE.]   : the dielectric constant of the overlapped region 
+                      with membrane is set to EPSM ?
+CKAP	[.FALSE.]   : the Debye-Huckel factor inside cylinder is set to KAPPA?
+
+solvation force-spec.::= [FORCE] [STEN real] [NPBEQ integer]
+FORCe	[.FALSE.]   : invoke solvation force calculation
+STEN	[0.0]       : surface tension coefficient (in kcal/mol/A^2)
+NPBEQ   [1]	    : the frequency for calculating solvation forces 
+                      during minimizations and MD simulations
+
+EPSU    [-1]        : unit to read given epsilon grid from
+                         xval yval zval epsx epsy epsz
+                         ...
+EPSG    [-1]        : unit to read given epsilon grid from
+                         nx ny nz
+                         xmin ymin zmin
+                         dx dy dz
+                         epsx epsy epsz
+                         ...
+
+write-range::= [XFIRST real] [YFIRST real] [ZFIRST real]
+               [XLAST  real] [YLAST  real] [ZLAST  real]
+ 
+property::=  [[PHI] [KCAL] [VOLTS]]    [[PHIX] [KCAL] [VOLTS]]
+             [FKAPPA2]
+             [CHRG]
+             [EPSX] [EPSY] [EPSZ]
+             [MIJ]
+             [TITLE]
+PHI     : electrostatic potential [ KCAL/MOL ] [ VOLTS ]
+          (default  [UNIT CHARGE]/[ANGS])
+PHIX    : external static electrostatic Potential [ KCAL/MOL ] [ VOLTS ]
+          (default  [UNIT CHARGE]/[ANGS])
+FKAPPA2 : Debye screening factor
+CHRG    : charges on the lattice
+EPSX    : X sets of dielectric constant
+EPSY    : Y sets of dielectric constant
+EPSZ    : Z sets of dielectric constant
+MIJ     : MIJ matrix
+TITLE   : formatted title line
+
+atoms-selection::= a selection of a group of atoms 
+
+
+
+File: PBEQ, Node: Function, Up: Top, Previous: Syntax, Next: GSBP
+ 
+
+        General discussion regarding the PBEQ module
+
+1.  SOLVE 
+    Prepare grids and solve PB equation for the selected atoms and return the 
+electrostatic free energy in ?enpb = (1/2)*Sum Q_i PHI_i over the lattice.
+The factor of 1/2 is there for the linear response free energy of charging.
+The atomic contributions are returned in WMAIN (destroying the radii).  
+
+NOTE: At the first stage of PBEQ or after "RESET", WMAIN should be set to 
+      the atomic radii for the calculation.  After a call to SOLVE the atomic
+      radii are saved in a special array.  The atomic contribution to the 
+      electrostatic free energy are returned in WMAIN (destroying the radii).
+      To modify the value of the radii, the keyword RESET must be issued.
+
+  1) PB SOLVERs 
+     (Reference: Klapper et al.  Proteins 1, 47 (1986)
+                 A. Nicholls et al; J. Comput. Chem, 12(4),435-445 (1991))
+     Currently, PBEQ module supports various PB equation solvers. 
+     The default solver uses the SOR (Successive OverRelaxation) method for 
+     the linearized PB equation.  
+     This is much faster than the old PBEQ solver which was used in c26a2.
+     With OSOR keyword, the relaxation parameter will be optimized.  This is
+     especially useful when the system contains a salt concentration.
+     Solvers for non-linear and partially linearized PB equations for
+     1:1 charge-paired salt are now available. Both use the SOR method as a 
+     default. In many cases, the direct use of both solvers may cause some 
+     convergence problems. So, it is the best way to use the potential from 
+     the linearized PB equation as a initial guess. Though, you may want to 
+     use the under-relaxation by adjusting the mixing factor (LAMBda).  
+     The partially linearized PB equation means that the linearized form of
+     one of two exponential function is used like
+              phi > 0 --> exp(phi)  = 1 + phi
+              phi < 0 --> exp(-phi) = 1 - phi
+     Full multigrid (FMG) method is efficient for the uniform dielectric
+     medium.  When there is a discontinuity in the dielectric function,
+     the method could be slower than the SOR method.  You can improve the
+     calculation speed using the smoothing dielectric boundary.  Cubic grid
+     should be used and number of grid points should be 2**(n+1) where n is
+     a integer upto 9.  Currently, FMG does not support MEMBRANE and PBC.
+     (see ~chmtest/c28/pbeqtest5.inp and pbeqtest6.inp)
+
+  2) Grid
+     The number of grid points in X, Y, and Z (NCEL,NCLX,NCLY,NCLZ) must
+     be odd.  Otherwise, the number of grid points will be increased by ONE
+     without any WARNING message.
+
+  3) Iteration
+     The maximum number of iterations (MAXIter) can be specified.  
+     The convergence parameters DEPS should not be modified.
+     One could use the potential from previous calculation as a initial 
+     guess for current calculation using KEEPphi keyword.  This is useful for
+     the nonlinear (or partially linearized) PB equation.  See also ITERate.
+
+  4) Charge Distribution Method
+     The default is the trilinear method to distribute a charge over
+     nearest 8 grid points. BSPLINE keyword will invoke the 3rd-order 
+     B-splines interpolation over nearest 27 grid points. 
+     B-splines method removes discontinuities in the reaction field forces.
+
+  5) Boundary Potential
+     By default, boundary potential is calculated using the Debye-Huckel
+     approximation for every boundary point.  However, the computational 
+     time increases prohibitively as the number of grid points and of atoms 
+     in the system increases.
+     INTBP keyword uses the bilinear interpolation to construct
+     boundary potential in a box with DCEL and (NCLx,NCLy,NCLz) from those 
+     in the same box with 2*DCEL and (NCLx/2+1,NCLy/2+1,NCLz/2+1).  
+     ZERO keyword sets boundary potential at the edge of the grid to zero.
+     FOCUS keyword uses previously calculated potentials to set up boundary 
+     potential. 
+     (Reference: M.K. Gilson et al; J. Comput. Chem. 9(4),327-335 (1987)) 
+     (see also an example below)
+     PBC keyword invokes the full 3d periodic boundary condition so that
+     no boundary potential is calculated directly using the Debye-Huckel
+     approximation.
+     (Reference: P.H. Hunenberger and J.A. McCammon JCP v.110(4) p.1856 (1999))
+     (alos, see ~chmtest/c28/pbeqtest4.inp)
+     NPBC keyword surpress XY periodic boundary conditions in membrane 
+     calculations.
+     Boundary potential of XY plane in membrane calculations can be constructed
+     using the image atoms. When NIMGB=1, boundary potential includes the 
+     influence of the 8 nearest image cells.    
+
+
+  6) Dielectric boundary
+     SMOOTH and REEN change the attribute of the solute-solvent boundary.  
+     By default (NO SMOOTH), the boundary is defined by the van der Waals 
+     surface or the molecular surface (with WATR).  SMOOTH keyword changes 
+     the boundary as a region having +/- SWIN (Smoothing WINdow) from the 
+     surface of the solute.  Within the solute-solvent boundary, 
+     the dielectric constant and the Debye screening factor will be changed 
+     continuously from EPSP and zero to EPSW and the screening factor 
+     at bulk solvent.
+     REEN keyword with WATR creates the molecular (contact+reentrant) surface
+     as the dielectric boundary.
+     
+     NOTE: WATR without REEN just increases the atomic radii by it.   
+
+  7) Various geometric objects
+     PBEQ module supports three geometric objects with various options
+     (see spherical droplet-, orthorhombic box-, and cylinder-spec. above)
+     When using more than one geometry at the same time, the order of creating
+     geometries is as follows: first is a droplet, second is a cylinder, and 
+     the last is a box.
+
+  4) Solvation force
+     This keyword invokes the calculation of the solvation free energy and 
+     forces and must be followed by SMOOTH keyword.  The solvation energy is
+     taken as a sum of electrostatic and nonpolar solvation energy.  
+     The former is calculated from the PB equation and the latter by using 
+     the surface tension coefficient (STEN) that relates free energy with 
+     surface area.  Note that the calculated surface is approximately the 
+     van der Waals surface.  If membrane is considered, the surface of the 
+     membrane is also approximately included. The corresponding forces are 
+     also calculated and will be used in minimizations and MD simulations 
+     where NPBEQ can be used to specify the frequency for calculating the 
+     solvation forces.  Note that SWIN must be equal or greater to DCEL to 
+     get correct solvation free energy and forces. 
+     (Reference: W. Im, D. Beglov and B. Roux 
+                 Continuum Solvation Model: computation of electrostatic
+                 forces from numerical solutions to the PB equation,
+                 Comput. Phys. Commun. 109,1-17 (1998))
+     NOTE:To print out the force of each atom, PRNLEV should be greater
+          than 6.
+
+2.  ITERATE 
+    Pursue the iteration on the grid. SOLVE must have been called first.
+    The main difference with the keyword KEEPphi (see above) is that the
+    physical specifications (e.g., dielectric interface, membrane, etc...)
+    must remain the same with ITERate.  However, it is possible to change 
+    from linear to non-linear PB using ITERate. (see pbeqtest5.inp)
+
+3.  ENPB    
+    Compute the electrostatic PB energy Sum Q_i PHI_i over the lattice.
+Notice that the electrostatic energy is twice as much as the electrostatic
+free energy (see above).  The value of the electrostatic energy is passed
+through the substitution parameter enpb.  With INTE keyword, you can specify
+the atoms of interest.
+
+4.  CAPACITANCE
+    Compute the capacitance based on the net induced charge in the double 
+layer.  The induced charge beyond the limits of the box are estimated based on
+the analytical solution to a planar membrane.
+
+5.  COUNTERION
+    Compute the counter-ion (1:1 salt) distribution along Z-axis.
+
+6.  WRITE
+    The WRITE command is used to write out the grid properties.  By default, 
+a binary file of the property will be written for the whole grid.  The keyword 
+CARD implies that a formatted output will be produced.  In that case, the 
+spatial range can be specified for the output.  By default, the electrostatic 
+potential PHI is given in [UNIT CHARGE]/[ANGS].  If specified, the PHI can be 
+given in [VOLTS] or in [KCAL/MOL].
+
+7.  READ
+    The READ command is used to read the electrostatic potential PHI or PHIX
+    in [UNIT CHARGE]/[ANGS], Debye screening factor FKAPPA2, and 
+    the generalized reaction field MIJ matrix written in a binary file.
+
+8.  RESET
+    Resets all assignments of the PBEQ module and free the HEAP array.  
+Destroys all lists and grids.  By default, the grids and arrays remain assigned
+when exiting and re-entering the PBEQ module.  This is to allow multiple call 
+to PBEQ without having to free the HEAP and other arrays if they are going 
+to be used again. The RESET keyword must be used to re-assign new values for
+the atomic radii.  
+
+9.  Miscellaneous command manipulations
+*note misc: (doc/miscom.info) are supported within the PBEQ module,
+allowing opening and closing of files, streaming of files, label assignments
+(e.g., LABEL), and repeated loops (e.g., GOTO), parameter substitutions
+(e.g., @1,@2, etc...) control (e.g., IF 1 eq 10.0 GOTO LOOP) and CALC
+(e.g., CALC energy = ?enpb).
+
+NOTE: TIMER 2 gives the times of various components in PBEQ module;
+      the grid parameter preparation (subroutine MAYER),
+      iterative solution (subroutine PBEQ1), and,
+      force calculation (subroutine RFORCE and BFORCE).
+
+10.  COORMAN and SCALAR commands 
+*note misc: (doc/corman.info) and (doc/scalar.info) are supported within 
+the PBEQ module, allowing the easy manipulation of charges, radii, rotation
+and translations of molecules, etc...
+
+11. A set of "ATOMIC BORN RADII"
+    Atomic radii derived from solvent electrostatic charge distribution may be 
+used. (test/data/radius.str) These radii were tested with free energy 
+perturbation with explicit solvent. 
+(Reference: M. Nina, D. Beglov and B. Roux.
+            Atomic Radii for Continuum Electrostatics Calculations based on 
+            Molecular Dynamics Free Energy Simulations. 
+            J. Phys. Chem. 101(26),5239-5248,1997).
+
+NOTE:  A typo for residue HSD was present in the original set of radii.
+       Check with M. Nina for new updated file.
+ 
+To get the set of appropriate radii when using SWIN, 
+the commands are as follows;
+
+        STREAM RADIUS.STR
+        SCALAR WMAIN ADD {SWIN}
+        SCALAR WMAIN MULT {FACTOR}
+        SCALAR WMAIN SET 0.0 SELE TYPE H* END
+
+The factor has a linear relationship with SWIN.
+-----------------------------------------------------------------------------
+SWIN    0.1   0.2    0.3    0.4    0.5    0.6    0.7    0.8    0.9    1.0
+FACTOR  0.979 0.965  0.952  0.939  0.927  0.914  0.901  0.888  0.875  0.861
+-----------------------------------------------------------------------------
+** FACTOR = -0.1296 x SWIN + 0.9914 (a least-square fit)
+
+12.  PBAVerage subcommand
+
+This subcommand allows for the averaging of the (precalculated) electrostatic
+potential (PHI values) over specified regions of the grid.  The region is 
+specified as a rectangular box, with or without an atom selection.  The units
+may be specified as KCAL (kcal/mol), VOLT (volts), or not at all, in which 
+case the default units (charge/angs) are used.  The calculated average may
+be assigned to a CHARMM parameter through the symbol ?AVPH.  The PBAV PHI
+subcommand does not calculate the PHI values themselves; hence the electro-
+static potential should have already been calculated before this subcommand
+is given.
+
+The following calculates the average PHI value over a rectangular-box region
+of the grid:
+
+PBAV PHI KCAL xfirst [real] xlast [real] -
+              yfirst [real] ylast [real] -
+	      zfirst [real] zlast [real]
+
+The grid limits must be specified the first time the PBAV PHI subcommand is
+invoked.  For subsequent invocations, the command will use the stored limits
+unless the limits are respecified.
+
+The following calculates the average PHI values over the grid points that are 
+both within the grid limits and within the van der Waals radii of the selected
+atoms:
+
+PBAV PHI KCAL UPDAte xfirst [real] xlast [real] -
+                     yfirst [real] ylast [real] -
+                     zfirst [real] zlast [real] -
+ATOM SELE [selection] END
+
+The UPDAte keyword updates the atom-based grid, so that when the
+PBAV PHI ATOM subcommand is given for the first time, the UPDATE keyword
+must be used and an atom selection given.  For subsequent invocations, 
+the atom selection (for defining the set of atoms over which the
+calculation is to be done) and the UPDATE command (for updating the
+grid, based on the position of the selected atoms) are optional.
+If UPDATE is specified but the atom selection (or grid limits) are not,
+the algorithm will use the atom selection (or grid limits) that were 
+last specified.  If the PBAV PHI subcommand has not been
+previously given, the grid limits must be specified.
+
+
+File: PBEQ, Node: GSBP, Up: Top, Previous: Function, Next: Examples
+
+
+              Generalized Solvent Boundary Potential (GSBP)
+
+    GSBP is a boundary potential for simulating a reduced system while 
+incorporating implicitly the dominant electrostatic forces of the surrounding
+atoms.  It has been developed in the same spirit as the SBOUND and the SSBP,
+see *note sbound:(doc/sbound.info) and ssbp:(doc/mmfp.info).  
+
+The current implementation of the method is described in W. IM, S. Berneche, 
+and B. Roux. J. Chem. Phys. (2000, in preparation).  Briefly, the system is
+partitioned in two regions: an inner region of interest and an outer region.
+The inner region includes all atom explicitly.  
+
+GSBP represents the electrostatic forces from the outer region as the sum of 
+two components.  One is the static external field (PHIX) which arises from 
+the charge distribution in the outer region (taking into consideration the
+solvent as a featureless dielectric medium). The second contribution is
+the reaction field which is created by the charge distribution inside the
+inner region considering the whole molecular configuration and the dielectric
+solvent.  In the GSBP, the reaction field is calculated through a generalized
+multipolar expansion of the instantaneous charge density in the inner system
+coupled with a generalized reaction field matrix MIJ. 
+
+    The numerical implementation of the GSBP can be divided into two parts;  
+SETUP and UPDATE parts. In the SETUP part,  the static external field and the 
+MIJ matrix are calculated once and stored before a simulation. The SETUP part
+mostly uses the PBEQ module.  In UPDATE part, the energy and forces are 
+updated using the stored external field and the MIJ matrix in each step of 
+the molecular dynamics.
+
+1. GSBP Syntax
+   GSBP is a subcommand inside PBEQ module like SOLVe and uses all options 
+(except solvation force-spec.) in SOLVe.
+
+
+   GSBP           decomposition-spec.           inner region-specifications 
+                  basis functions-spec.         large box-specifications
+                  cavity potential-spec.        all options in SOLVE
+
+   decomposition-spec.::= [GTOT] [G_oo] [G_io] [G_ii] 
+   GTOT      [.FALSE.]   : total electrostatic solvation free energy
+   G_oo      [.FALSE.]   : electrostatic solvation free energy in outer region
+   G_io      [.FALSE.]   : electrostatic free energy due to the interactions
+                           between inner and outer regions
+   G_ii      [.FALSE.]   : electrostatic solvation free energy in inner region
+
+   inner region-specifications:: [ [RECTbox] 
+                                   [XMAX real]  [YMAX real]  [YMAX real]  
+                                   [XMIN real]  [YMIN real]  [YMIN real] ] 
+                                 [ [SPHEre]
+                                   [SRDIst real]
+                                   [RRXCen real] [RRYCen real] [RRZCen real] ]
+   RECTbox   [.FALSE.]   : rectangular (box) inner region
+   XMAX	     [0.0]       : maximum position of inner region along X-axis
+   YMAX	     [0.0]       : maximum position of inner region along Y-axis
+   ZMAX	     [0.0]       : maximum position of inner region along Z-axis
+   XMIN	     [0.0]       : minimum position of inner region along X-axis
+   YMIN	     [0.0]       : minimum position of inner region along Y-axis
+   ZMIN	     [0.0]       : minimum position of inner region along Z-axis
+   SPHEre    [.FALSE.]   : spherical inner region
+   SRDIst    [0.0]       : radius of spherical inner region
+   RRXCen    [0.0]       : X position of spherical inner region 
+   RRYCen    [0.0]       : Y position of spherical inner region 
+   RRZCen    [0.0]       : Z position of spherical inner region 
+ 
+   basis function-spec.:: [ [XNPOl integer] [YNPOl integer] [ZNPOl integer] ]
+                          [NMPOl integer] 
+                          [MAXNpol integer] [NLISt integer] [NOSOrt]
+                          [CGSCal real]
+   XNPOl     [0]         : number of Legendre polynomials in X direction
+   YNPOl     [0]         : number of Legendre polynomials in Y direction
+   ZNPOl     [0]         : number of Legendre polynomials in Z direction
+   NMPOl     [0]         : number of multipoles with spherical harmonics
+   MAXNpol   [NTPOL]     : maximum number of basis functions which are used in
+                           the energy and forces calculations
+   NLISt     [1]         : updating frequency for the ordered list of basis
+                           functions during molecular dynamics
+   NOSOrt    [.FALSE.]   : surpress the ordering of basis functions
+   CGSCale   [1.0]       : charge scaling factor for the monopole basis
+                           function
+   
+   large box-specifications:: [LBOX] [LDCEl real] [LNCEl integer] [FOCUS]
+                                     [LXBCen real] [LYBCen real] [LZBCen real]
+   LBOX      [.FALSE.]   : invoke large box calculation (see below)
+   LDCEL     [4*DCEL]    : grid spacing of large box
+   LNCEL     [33]        : number of grid point in 1D for a cubic large box
+                         : this should be smaller than or equal to NCEL
+   LXBCEN    [0.0]       : the center of a large box in X
+   LYBCEN    [0.0]       : the center of a large box in Y
+   LZBCEN    [0.0]       : the center of a large box in Z
+   FOCUS     [.FALSE.]   : use the potential from a large box calculation for
+                           the boundary potential in finer calculation
+
+  cavity potential spec ::= CAVI atom-selection [DRDI real] [DRCA real]
+
+2. Free energy decomposition
+   The total electrostatic solvation energy is decomposed into G_oo, G_io, and
+G_ii.  All decomposition calculations are performed using the PB solver.  
+With G_io keyword we can calculate the static external field and save it using 
+WRITE PHIX.  G_ii gives the exact reaction field energy with which we can 
+compare the basis-set reaction field energy.
+
+
+3. Inner region & Basis functions
+   Currently, GSBP supports two shapes for the inner regions: an orthorhombic
+rectangular box and a sphere.  For the rectangular box, Legendre polynomials
+are used as a basis-set. The number of function along each cartesian axis can
+be specified using XNPOL, YNPOL, and ZNPOL.  The resulting total number of
+basis functions (NTPOL) is XNPOL*YNPOL*ZNPOL.  For the spherical inner region,
+spherical harmonics are used.  The number of electric multipoles is specified
+as NMPOL, and the resulting total number of basis functions (NTPOL) is
+NMPOL*NMPOL (e.g., with NMPOL = 2 one is including the reaction field for the
+monopole and dipole of the inner system).
+
+   The calculation of the MIJ matrix can be done in a single job but can also
+be restarted. This is convenient since one does not always know how many basis
+functions would yield accurate results.  For example, one could calculate the
+MIJ matrix with NMPOL=11 spherical harmonics.  After comparing the result with
+exact PB reaction field, one may decide to increase the number of multipoles
+in NMPOL.  This procedure is illustrated in the test case gsbptest1.inp.
+The list of basis functions can be ordered and sorted such that the number of
+multipole basis function used for the energy and force (MAXNpol) calculations
+is reduced.  
+
+The focussing method with a large initial box and interpolating boundary
+condition (INTBP) is a necessary procedure for computing the MIJ matrix
+because the charge distribution corresponding to a given basis function
+involves a large number of lattice point charges. All grid points inside the
+inner region contain a partial charge assigned by a basis function.
+Therefore, it would take a long time to set the boundary potential directly.
+In practice, the charges density from a basis function are interpolated onto
+a large (coarse) grid to reduce the number of grid-point charges which 
+increase the computational cost of setting up the boundary conditions.
+In this case, the focussing method is much more useful because the boundary
+potential can be obtained from the coarse grid calculation.
+
+4.  Cavity Potential
+  The GSBP cavity potential is a restrictive potential that keeps
+water molecules from escaping the simulation region.  Usually it is
+applied only on the oxgen atom of the water molecules.  The DRDI option
+specifies the offset where the restrictive potential is placed
+from the dielectic boundary for the spherical geometry.
+The DRCA option gives the offset of the quartic potential (same form
+as the one in MMFP module) for the orthorombic geometry.
+
+
+File: PBEQ, Node: SMBP, Up: Top, Previous: GSBP, Next: Examples
+
+
+              Solvent Macromolecule Boundary Potential (SMBP)
+
+    The SMBP is a boundary potential that is analogous to the GSBP, yet 
+can be used in conjunction with ab-initio QM/MM setups. As, in contrast 
+to the GSBP, the PB equations have to be solved for every step, it is 
+targeted for use in geometry optimizations. The SMBP is especially useful 
+for higher-level QM/MM optimizations of MD snapshots obtained with the 
+GSBP using a lower-level QM/MM or pure MM setup. The original method is 
+described in T. Benighaus and W. Thiel, J. Chem. Theory Comput. 5, 3114 (2009). 
+
+The current implementation of the method is described in J. Zienau and 
+and Q. Cui (2012, in preparation). In the SMBP, the electrostatic
+interactions between the QM part and all other entities (except for the
+inner region MM charges) are handled via a surface charge projection approach,
+where the virtual surface charges are situated on the boundary between
+the inner and outer regions. As no GSBP type basis set is used, the SMBP
+can be viewed as the basis set limit of the GSBP, although divergence
+effects when atoms are close at the boundary can still occur even for very
+large GSBP basis sets.
+
+    As in the GSBP the numerical implementation is divided into SETUP and
+UPDATE parts; in the SETUP part, however, only the static external field is
+calculated. The UPDATE part is fully analogous to the GSBP.
+
+The SMBP has been interfaced with the Gaussian 09 and Q-Chem codes, 
+although the Q-Chem interface is currently NOT functional due to problems with
+the ESP charge approach implemented in Q-Chem. Therefore, only Gaussian 09 
+can be used as ab-initio QM method with the SMBP at the present stage.
+For benchmark purposes, an interface with the semi-empirical SCC-DFTB method 
+is provided as well.
+
+IMPORTANT: 
+  (i)   It is necessary to source a radius file in the PBEQ module
+        for BOTH SETUP and UPDATE parts!
+
+   (ii) For SMBP/Q-Chem geometry optimizations (future implementation),
+        the jobtype in the qchem.inp file must be set to "SP" (single point)!
+
+
+1. SMBP Syntax
+   SMBP is a subcommand inside PBEQ module like SOLVe and uses all options 
+(except solvation force-spec.) in SOLVe. It supports all inner region and
+large box options of the GSBP. Special or additional options are described below.
+
+
+   SMBP   decomposition-spec. inner region-specifications (GSBP and additional)
+          large box-specifications (GSBP)  all options in SOLVE
+
+   decomposition-spec.::= [PHIX] 
+   PHIX      [.FALSE.]   : calculate static outer potential 
+
+   inner region-specifications:: [ RECTbox (all GSBP options)
+                                   [INCX real] [INCY real] [INCZ real] ]
+                                 [ SPHEre  (all GSBP options) 
+                                   [NSPT integer] [SPAL integer] ]
+                                 [ [IGUE integer] [QCCH integer] 
+                                   [CGTH real] [CGMX integer] [SCTH real] [SCMX integer] ]
+   INCX      [1.0]       : Spacing of surface charges along X for RECTbox
+   INCY      [1.0]       : Spacing of surface charges along Y for RECTbox
+   INCZ      [1.0]       : Spacing of surface charges along Z for RECTbox
+   NSPT      [90]        : Number of surface charges for SPHEre
+   SPAL      [2]         : Algorithm for placing surface charges on SPHEre 
+                           "1" uses a distribution along circles 
+                           "2" uses a distribution along spirals (recommended)
+   IGUEss    [1]         : Initial guess for QM atomic charges
+                           "1" uses charges from the previous step if possible
+                           "2" uses zero guess charges always (not recommended)
+   QCCH      [1]         : atomic charge representation from QM calculation
+                           (ab-initio only)
+                           "1" uses ESP charges
+			   (default for Gaussian09: Merz-Kollmann)
+                           "2" uses "charges.dat" file from Q-Chem. By default 
+                           these are Mulliken, but both ESP and ChelpG charges 
+                           are available in Q-Chem using the $rem variables 
+                           "esp_charges = true" or "chelpg = true". 
+   CGTH      [1.e-6]     : Numerical threshold for Conjugate Gradient (CG)
+                           optimizer of the surface charges
+   CGMX      [2000]      : Maximum number of iterations for the CG optimizer
+   SCTH      [5.e-4]     : Numerical threshold for the Self Consistent
+                           Reaction Field (SCRF) calculation
+   SCMX      [50]        : Maximum number of SCRF iterations
+
+2. Free energy decomposition
+   This part is analogous to the GSBP G_io option, as only the static outer
+field is calculated. The option is renamed to PHIX in the SMBP.
+
+3. Inner region 
+   The same geometric shapes as for the GSBP (sphere and box) are currently
+supported. As a "perfectly even" distribution of points on a sphere does not
+exist, two approximate surface charge distributions are implemented for the
+spherical boundary. With a reasonable large number of charges (about 30 and
+more), the difference between both algorithms was found to be negligible,
+so that the default setting is recommended, as it allows for an arbitrary
+number of charges to be specified. The default setting for the number of
+charges NSPT (90) should be sufficient for most cases. For the rectangular
+box shaped boundary, the NSPT and SPAL options are ignored, as the surface
+charges are arranged on a rectangular grid on the box surface and their number
+is calculated from the INCX, INCY, and INCZ values. The default settings are
+recommended for the other options. If the SCRF calculation does not converge,
+the SCRF threshold SCTH can be set to a (slightly) larger value.
+
+Concerning the focussing method with interpolating boundary potential
+condition, the same remarks as mentioned for the GSBP apply for the SMBP.
+No cavity potential has been implemented for the SMBP, but, e.g., MMFP
+constraints can be used.
+
+
+File: PBEQ, Node: Examples, Up: Top, Previous: SMBP, Next: Top
+
+
+                                Examples
+
+        This examples are meant to be a partial guide in setting up 
+an input file for PBEQ. There are two test files, pbeqtest1.inp,
+pbeqtest2.inp, pbeqtest3.inp, and pbeqtest7.inp.
+
+Example (1) 
+-----------
+This example shows how to perform two PB calculations, one for a surrounding
+dielectric of 80 (water) and one for a surrounding of 1.0 (vacuum).  The
+difference between the two energies then corresponds to the electrostatic
+contribution to the solvation free energy.  The salt concentration was zero
+in this calculation.
+
+
+PBEQ
+ scalar wmain = radius
+
+ SOLVE epsw 80.0 conc 0.0 ncel 30 dcel 0.4
+ set ener80 = ?ENPB
+
+ SOLVE epsw 1.0 
+ set ener1 = ?ENPB
+
+ CALC total = @ener80 - @ener1
+
+ RESET
+END
+
+
+Example(2)
+----------
+This example shows how to use a set of atomic Born radii with a smoothing
+window. 
+
+set sw 0.4
+set factor 0.939
+
+PBEQ
+ stream radius.str
+ scalar wmain add @sw
+ scalar wmain mult @factor
+ scalar wmain set 0.0 sele type H* end
+ scalar wmain show
+
+ SOLVE epsw 80.0 ncel 100 dcel 0.3 -
+       smooth swin @sw force sten 0.03 npbeq 1
+
+ RESET          !! If you consider a minimization or dynamics with PB forces,
+                !! don't use RESET here.
+END
+
+
+Example(3)
+----------
+This example shows how to set up a membrane potential and how to get 
+the electrostatic contribution to the solvation free energy in the membrane 
+environment.  Note that a non-zero concentration is required for a sensible
+system with a membrane potential.
+
+PBEQ
+ scalar wmain = radius
+
+ SOLVE epsw  80.0  ncel  150  dcel 0.5  conc  0.150  -
+       Tmemb 25.0  Zmemb 0.0  epsm 2.0  vmemb 0.100
+ set ener80 = ?ENPB
+      
+ SOLVE epsw 1.0    conc  0.000  -
+       Tmemb 25.0  Zmemb 0.0  epsm 1.0  vmemb 0.000
+ set ener1 = ?ENPB
+
+ CALC total = @ener80 - @ener1
+
+ RESET
+END
+
+Example(4)
+----------
+This example shows how to set up boundary potentials using FOCUS keyword,
+how to read the saved potential, and how to calculate the electrostatic 
+contribution to the solvation free energy using FOCUS.
+
+PBEQ
+ scalar wmain = radius
+ 
+ SOLVE epsw 1.0 ncel 60 dcel 0.4
+ open write file unit 40 name phi.dat
+ write phi  unit 40
+
+ SOLVE epsw 1.0 dcel 0.2 focus  ! boundary potentials from DCEL 0.4 potentials 
+
+! NOTE: YOU CAN CHANGE NCEL IN THE FOCUSSED SYSTEM AS FOLLOWS;
+!       SOLVE epsw 1.0 ncel 80 dcel 0.2 focus
+
+ SOLVE epsw 1.0 dcel 0.1 focus  ! boundary potentials from DCEL 0.2 potentials
+
+ open read  file unit 41 name phi.dat
+ read  phi  unit 41
+
+ SOLVE epsw 1.0 dcel 0.1 focus  ! boundary potentials from DCEL 0.4 potentials 
+
+ RESET
+END
+
+
+PBEQ
+ scalar wmain = radius
+
+ SOLVE epsw 80.0 ncel 60 dcel 0.4
+ set ener81 = ?ENPB
+
+ SOLVE epsw 80.0 dcel 0.2 focus
+ set ener82 = ?ENPB
+
+ SOLVE epsw 80.0 dcel 0.1 focus
+ set ener83 = ?ENPB
+
+ SOLVE epsw 80.0 dcel 0.05 focus
+ set ener84 = ?ENPB
+
+ SOLVE epsw 1.0 dcel 0.4
+ set ener11 = ?ENPB
+
+ SOLVE epsw 1.0 dcel 0.2 focus
+ set ener12 = ?ENPB
+
+ SOLVE epsw 1.0 dcel 0.1 focus
+ set ener13 = ?ENPB
+
+ SOLVE epsw 1.0 dcel 0.05 focus
+ set ener14 = ?ENPB
+
+ calc total = @ener81 - @ener11
+ calc total = @ener82 - @ener12
+ calc total = @ener83 - @ener13
+ calc total = @ener84 - @ener14
+
+ SOLVE epsw 80.0 ncel 120 dcel 0.2
+ set ener80 = ?ENPB
+
+ SOLVE epsw 1.0
+ set ener1 = ?ENPB
+ calc total = @ener80 - @ener1      
+
+ RESET
+END
+
+
+Example(5)
+----------
+This example shows pKa Poisson-Bolztmann calculations which
+deals with explicit charge distribution on the ionizable site.
+(see also ~chmtest/c28/pbeqtest7.inp)
+
+! set residue for pKa calculation and the patch for the ionizable sidechain
+set segid    = syst
+set resid    = 2
+set patch    = GLUP
+
+!Miscelaneous variables 
+set    Dcel   =  0.5 ! initial value for the mesh size in the finite-difference
+set    Ncel   =   65 ! maximum number of grid points
+set    EpsP   =  1.0 ! dielectric constant for the protein interior
+set    EpsW   = 80.0 ! solvent dielectric constant  
+set    Conc   =  0.0 ! salt concentration
+set    Focus  = Yes
+
+!Note that the resid must be set before streaming into this file
+
+scalar wcomp = charge 
+
+patch @patch @Segid @resid setup 
+
+hbuild  !build any missing hydrogens
+
+scalar wcomp  store 1
+scalar charge store 2
+
+define SITE select  .bygroup.  ( resid @resid ) show end
+define REST select .not. site end
+
+! Charges of the unprotonated state
+scalar wmain recall 1 
+scalar wmain show
+scalar wmain stat select SITE end
+
+! Charges of the protonated state
+scalar wmain recall 2 
+scalar wmain show
+scalar wmain stat select SITE end
+
+! Estimate the grid dimensions
+format (f15.5)
+
+coor orient norotate
+coor stat select all end
+calc DcelX = ( ?Xmax - ?Xmin ) / @Ncel
+calc DcelY = ( ?Ymax - ?Ymin ) / @Ncel
+calc DcelZ = ( ?Zmax - ?Zmin ) / @Ncel
+if @DcelX gt @Dcel  set Dcel   = @DcelX
+if @DcelY gt @Dcel  set Dcel   = @DcelY
+if @DcelZ gt @Dcel  set Dcel   = @DcelZ
+
+coor stat select SITE end
+set Xcen = ?xave
+set Ycen = ?yave
+set Zcen = ?zave
+
+
+PBEQ
+
+stream @0radii.str
+
+scalar charge recall 2    ! Protonated charge distribution
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  
+if Focus eq yes -
+SOLVE ncel @Ncel Dcel 0.25 EpsP @EpsP EpsW @EpsW  focus -
+      XBcen @Xcen YBcen @Ycen ZBcen @Zcen
+
+set EnerPs = ?enpb        ! Protonated side chain in structure
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  select SITE end 
+if Focus eq yes -
+SOLVE ncel @Ncel Dcel  0.25 EpsP @EpsP EpsW @EpsW  focus -
+      XBcen @Xcen YBcen @Ycen ZBcen @Zcen select SITE end
+
+set EnerPi = ?enpb        ! Protonated side chain isolated 
+
+scalar charge recall 1    ! Unprotonated charge distribution
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  
+if Focus eq yes -
+SOLVE ncel @Ncel Dcel  0.25 EpsP @EpsP EpsW @EpsW  focus -
+      XBcen @Xcen YBcen @Ycen ZBcen @Zcen
+
+set EnerUs = ?enpb        ! Unprotonated side chain in structure
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  select SITE end 
+if Focus eq yes 
+SOLVE ncel @Ncel Dcel  0.25 EpsP @EpsP EpsW @EpsW  focus -
+      XBcen @Xcen YBcen @Ycen ZBcen @Zcen select SITE end
+
+set EnerUi = ?enpb        ! Unprotonated side chain isolated
+
+calc Energy = ( @EnerPs - @EnerUs ) - ( @EnerPi - @EnerUi )
+
+calc pKa = -@Energy/( ?KBLZ * 300.0 ) * log10(exp(1)) != log10(exp(-@Energy/(?KBLZ*300)))
+
+END

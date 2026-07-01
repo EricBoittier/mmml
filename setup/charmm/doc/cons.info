@@ -1,0 +1,1901 @@
+CHARMM Element doc/cons.info 1.1
+
+File: Cons, Node: Top, Up: (doc/commands.info), Next: Harmonic Atom
+
+                            CONSTRAINTS
+
+        The following forms of constraints are available in CHARMM:
+
+* Menu:                          command
+
+* Harmonic Atom::       "CONS HARM" Hold atoms in place
+* Dihedral::            "CONS DIHE" Hold dihedrals near selected values
+* Puckering::           "CONS PUCK" Hold puckering near selected values
+* Internal Coord::      "CONS IC"   Holds bonds, angles and
+                                    dihedrals near table values
+* Quartic Droplet::     "CONS DROP" Puts the entire molecule in a cage
+                                    about the center of mass
+* RMSD restraints::     "CONS RMSD" Holds atoms in place relative to
+                                    reference structure/structures
+* EMAP restraints::     "CONS EMAP" Soft restraint to induce a group of atoms 
+                                    to a shape defined by structures or maps
+* Fixed Atom::          "CONS FIX"  Fix atoms rigidly (sets the IMOVE array)
+* Center of Mass::      "CONS HMCM" Constrain center of mass of selected atoms
+* SHAKE::               "SHAKE"     Fix bond lengths during dynamics.
+* NOE::                 "NOE"       Impose distance restraints from NOE data
+* Restrained Distances:: "RESD"     Impose general distance restraints
+* External Forces::     "PULL"      Impose externally applied (pulling) force
+* Rg/RMSD restraint::   "RGYR"      Impose radius of gyration or rmsd restraint
+* Distance Matrix restraint:: "DMCO" Impose a distance matrix restraint
+* COFM along path::     "CONS PATH" Constrain center of mass along 3D path
+* Helix Restraint::     "CONS HELI" Impose helix restraint
+* Sbound: (doc/sbound.info).      Solvent boundary potential
+
+File: Cons, Node: Harmonic Atom, Up: Top, Next: Dihedral, Previous: Top
+
+                        Holding atoms in place
+
+------------------------------------------------------------------------------
+[SYNTAX CONS HARMonic]
+
+Syntax:
+
+CONS HARMonic {[ABSOlute] absolute-specs force-const-spec   coordinate-spec }
+              { PCAHarm   absolute-specs  force-const-spec   coordinate-spec }
+              { BESTfit   bestfit-specs  force-const-spec   coordinate-spec }
+              { RELAtive  bestfit-specs  force-const-spec 2nd-atom-selection}
+              { CLEAr                                                       }
+
+force-const-spec ::=  { FORCE real } atom-selection [MASS]
+                      { WEIGhting  }
+
+absolute-specs ::=  [EXPOnent int] [XSCAle real] [YSCAle real] [ZSCAle real]
+
+bestfit-specs  ::=  [ NOROtation ] [ NOTRanslation ]
+
+Note PCAHARM uses both main and comparison coordinate sets
+coordinate-spec::= { [MAIN] } 
+                   {  COMP  } 
+                   {  KEEP  } 
+
+
+        The potential energy has a harmonic restraint term which allows
+one to prevent large motions of individual atoms.  There are four forms
+for this restraint, ABSOLUTE, PCAHRM, BESTFIT, and RELATIVE.  It is possible to
+combine multiple restraints in one energy calculation, but no atom may
+participate in more than one harmonic restraint set.
+
+------------------------------------------------------------------------------
+ABSOLUTE positional restraints.
+
+Absolute positional restraints specify a location a cartesian space where
+an atom must remain proximal.  This is the original positional restraint
+in CHARMM.  The form for this potential is as follows for coordinates:
+
+  EC = sum over selected atoms of k(i)* [mass(i)] * (x(i)-refx(i))**exponent
+
+where refx is a reference set of coordinates.  If MASS is specified in
+the command line, then k is multiplied by the mass of the atom
+resulting in a natural frequency of oscillation for the restraint 
+of sqrt(k) in AKMA units.   An atom restrained with MASS FORCE 1.0
+will oscillate at 8 cycles/picosecond if free of other interactions.
+For most operations involving harmonic restraints, mass weighting is
+recommended. There are three reasons for this. First, the results obtained
+will be similar regardless of what atom representation is used
+(extended vs. explicit) for hydrogen atoms. Second, Hydrogen atoms
+are allowed greater relative freedom if present. And third, The character
+of the normal modes of a molecule are unperturbed with mass weighting
+(essential if normal modes or low frequency motions are of interest).
+
+        Note, there is no longer a prefactor of 0.5 on the force
+constant specification. This is appropriate in that exponent values
+other than "2" are allowed. This differs from the earlier versions of
+CHARMM (up to version 16).
+
+       The restraint force constant can be set to any positive
+value (specified by the FORCE keyword followed by the desired value).
+The force constants may also be obtained from the weight array, in
+which case the FORCe keyword is not read.  When using this option,
+a negative values may be used for some atoms, however, the total weight
+must be positive. 
+
+      The reference coordinates can be the current set at the point when
+restraints are specified (the default) or a set can be the comparison
+set (COMP keyword).  When multiple CONS HARM commands are used, the
+KEEP option preserves the reference coordinates from the previous
+restraints.  This is useful in cases where the force constant is
+to be modified, but no other changes are desired.
+
+      The variables XSCAle, YSCAle, and ZSCAle are global scale factors
+for ABSOLUTE harmonic restraint terms.  The default scale factor is 1.0 for
+all terms.  If multiple harmonic restraint sets are used, they may have
+different scale factors.  The RELATIVE and BESTFIT types do not allow a
+scale factor at present.
+
+Example:   CONS HARM FORCE 1.0 MASS SELE atom * * CA  END  COMP
+
+This command harmonically restrains all alpha-carbons to the current
+positions in the comparison coordinates with a force constant of
+24 Kcals/mol/A**2 (assuming a mass of 12).
+
+------------------------------------------------------------------------------
+PCAHARM positional restraints
+
+      This restraints uses a normalized PCA eigenvector (3 x NATOM) to
+project the displacement of the coordinates from the harmonic reference
+onto the PCA. For teh PCAHARM restraints one can add restraints in different
+PCA projected directions by call the command multiple times with an orthoganol
+PCA being added in each case. The form of this restraint is
+
+  EC = sum over selected atoms k(i)* [mass(i)] * ((x(i)-refx(i))*pcax(i))**exponent
+
+Note: At present this restraint type allows only one set of atoms be restrained
+by the PCA-projected restraints, but as many PCA orghogonal directions as
+desired can be restrained.
+
+As an example, suppose one has two PCAs that dominate the motion being studied
+for some subset of atoms <atoms> and one would like to add harmonic restraints
+on the two PCA displacement directions. The following CHARMM commands would
+achieve this:
+
+Example:
+! read first normalized PCA eigenvector into comparison coordinate sets
+read coor pdb name pca1.pdb ! Note the dot product of these coordinaes with
+                            ! themselves should sum to unity
+! this is unnecessary if coordinates outside of the <atoms> set are already
+! zero.
+scalar xcomp set 0 select .not. <atoms> end			      
+scalar ycomp set 0 select .not. <atoms> end			      
+scalar zcomp set 0 select .not. <atoms> end
+
+cons harm pcaharm force 10 select <atoms> end			    
+
+! read second normalized PCA eigenvector into comparison coordinate sets
+read coor pdb name pca2.pdb ! Note the dot product of these coordinaes with
+                            ! themselves should sum to unity and the
+			    ! dot product PCA1*PCA2 = 0
+! this is unnecessary if coordinates outside of the <atoms> set are already
+! zero.
+scalar xcomp set 0 select .not. <atoms> end			      
+scalar ycomp set 0 select .not. <atoms> end			      
+scalar zcomp set 0 select .not. <atoms> end
+
+cons harm pcaharm force 10 select <atoms> end
+
+Note: The restraint energy for this restraint is reported in the energy
+column PCHA and the sike key is pcha.
+
+------------------------------------------------------------------------------
+BESTFIT positional restraints
+
+      This restraint is similar to the absolute restraints except that
+the reference coordinates are (implicitly) rotated and translated so
+as to bestfit the selected atoms.  This best fit is done in a manner that
+minimizes the restraint energy.  Due to the nature of the best fit, this
+restraint term does not add any net force or torque to the system.
+
+Note 1: An exponent may not be specified (it is set to 2)
+Note 2: Global scale factors do not apply
+Note 3: At present, there is no Hessian code for this restrain
+Note 4: There is no energy partition (ANAL command) for this restraint
+
+Example:  CONS HARM BESTFIT  MASS FORCE 1.0 COMP SELE SEGID A END
+          CONS HARM BESTFIT  MASS FORCE 1.0 COMP SELE SEGID B END
+
+These commands will restrain segments A and B to the geometries they have
+in the current comparison coordinates.  This restraint will not add a net
+force or torque to the system (unlike the ABSOLUTE restraint type).  Segments
+A and B can move (rotate/translate) independently with no change in the
+restraint energy.  See also CONS RMSD below.
+
+------------------------------------------------------------------------------
+RELATIVE positional restraints.
+
+      The relative positional restraints are similar to the bestfit
+restraint except there is no reference coordinates.  In this case,
+one part of the system is restrained to have the same shape as another
+part of the system.  The two restraint sets are implicitly bestfit
+by an optimal rotation/translation (minimizing the restraint energy).
+Both sets of atoms 
+
+Note 1: An exponent may not be specified (it is set to 2)
+Note 2: Global scale factors do not apply
+Note 3: At present, there is no Hessian code for this restrain
+Note 4: There is no energy partition (ANAL command) for this restraint
+Note 5: The atoms of the two sets are matched on-to-one in sequential order.
+Note 6: If the two sets do not have the same number of atoms, an
+            error will be issued and the set lists will be truncated.
+Note 7: Both sets must be specified and must not use set number 1.
+
+Example:
+  CONS HARM RELATIVE WEIGHT SELE segid a1 END SELE segid a2 END NOROT NOTRAN
+
+This command will force two replicas (A1 and A2) to have the same coordinates
+based on the values in the weighting array (as best fit weights).
+
+Example: CONS HARM RELATIVE MASS FORCE 10.0 SELE SEGID A END SELE SEGID B END
+
+This command will force two segments (A and B) to have the same shape, but
+they may have very different locations and orientations.  Atoms are matched
+one-to-one by selected atom number.
+
+------------------------------------------------------------------------------
+GENERAL INFORMATION 
+
+      It is important to understand some aspects of how the restraints are
+set in order to get the most flexibility out of this command. When CHARMM
+is loaded, each atom has associated with it a harmonic force constant
+initially set to zero. Each call to the CONS HARM command changes the value
+of this constant for only those atoms specified.  When this command is
+invoked with an atom selection (and KEPP is not specified), only the
+reference coordinates (XREF,YREF,ZREF) for selected atoms are modified.
+
+IMPORTANT NOTE:
+Each atom may participate in AT MOST one harmonic restraint term.
+This is a coding limitation designed to maximize compatibility with older
+CHARMM scripts (i.e. doing a series of minimizations with a decreasing
+series of force constants).  This could be easily modified with a bit of
+work to increase the capability (at the expense of script compatibility).
+
+      When multiple restraint sets are used, it is important to note
+that all selections should be exclusive.  When they are not exclusive,
+then atoms will be assigned to the restraint of the most recent
+CONS HARM command which selected that atom.  In other words, the restraint
+set number is an atomic property.  If restraint sets are broken up, then an
+error message will be issued.  If an entire set is replaced, then the new
+restraint replaces the old one (without a warning message).
+
+------------------------------------------------------------------------------
+OTHER COMMANDS:
+
+        The harmonic restraints may no longer be read and written to files.
+The PRINT command still functions for harmonic restraints for information.
+To examine or modify the internal harmonic restrain data, the SCALar
+command (arrays: CONStraints,XREF,YREF, and ZREF) may be used
+(see *Note scalar::(doc/scalar) ).   In addition, one may look at
+the contributions to the energy in detail using the ANALysis command,
+see *note anal:(doc/analys).
+
+-----------------------------------------------------------------------------
+
+File: Cons, Node: Dihedral, Up: Top, Next: Internal Coord, Previous: Harmonic Atom
+
+                  Holding dihedrals near selected values
+
+        Using this form of the CONS command, one may put restraints on
+the dihedral angles formed by sets of any four atoms. The improper
+torsion potential is used to maintain said angles.
+
+        The command for setting the dihedral restraints is as follows:
+
+Syntax:
+
+[SYNTAX CONS DIHEdral]
+
+CONS DIHEdral [BYNUM int int int int] [FORCe real] [MIN real] [PERIod int] 
+              [   atom-selection    ]              [ COMP   ]   [WIDTh real]
+              [     4X(atom-spec)   ]              [ MAIN   ]
+
+                    
+CONS CLDH
+
+Syntactic ordering:  DIHE or CLDH must follow CONS, and FORCE, MIN and
+PERIod  must follow DIHE.
+
+where:      atom-spec ::= { segid resid iupac }
+                          { resnumber iupac   }
+
+
+        DIHEdral adds a torsion angle to the list of restrained angles
+using the specified atoms, force constant, minimum and periodicity.
+If an atom selection is used, then the first 4 selected atoms (in order)
+will define the dihedral angle.  If either MAIN or COMP is specified and
+[MIN real] is not, then the minimum angle value will be determined by
+the current dihedral angle value in the corresponding coordinate set.
+
+WIDTh is specified in degrees.
+
+If the PERIodicity is zero (improper type), then the force constant
+has units of kcal/mol/radian/radian, else it has units of kcal/mol.
+
+   Ecdih = FORCE * max(0, abs( phi - MIN*pi/180) - WIDTH)**2  [ PERIod = 0 ]
+   Ecdih = FORCE * (1-cos( PERIod* (phi - MIN*pi/180 )) )     [ PERIod > 0 ]
+
+CLDH clears the list of restrained dihedrals so that different angles
+or new restraint parameters can be specified.
+
+Other commands:
+
+        The PRINT CONS command, see *note print:(doc/io.info)print,
+will work for restraints.
+
+-----------------------------------------------------------------------------
+
+
+File: Cons, Node: Puckering, Up: Top, Next: Internal Coord, Previous: Dihedral
+
+             Holding puckering coordinates near selected values
+
+        Using this form of the CONS command, one may put restraints on
+the puckering coordinates formed by sets of any six atoms. Harmonic potential
+is used to for the restraint.
+
+        The command for setting the puckering restraints is as follows:
+
+Syntax:
+
+[SYNTAX CONS PUCKering]
+
+CONS PUCKering  6-atom-spec restraint-spec [output-spec]
+      6-atom-spec::=    { [ BYNUM 6x(int) ] }
+                        { [ atom-selection ]}
+                        { [ 6X(atom-spec) ] }
+      restraint-spec::= [ KCONst 3x(real) ] [ VALUe 3x(real) ] [ EXPOnent 3x(real) ]
+      output-spec:==    [OUTUnit integer] [PKFRQ integer]
+                    
+CONS CLPC
+
+Syntactic ordering:  
+     * PUCK or CLPC must directly follow CONS (must be the next word), 
+     * atom selection or spec must directly follow PUCK (must next information after PUCK), 
+     * KCONst, VALUe and EXPOnent must follow selection or spec of atoms
+
+Arguments and options:
+----------------------
+Keyword         Default        Purpose
+
+BYNYM           none           Specify 6 atoms as numbered in the psf for the pucker as 6 integers
+
+atom-selection  none           Use atom selection to select 6 atoms 
+
+6X(atom-spec)   none           Use atom-specs six times to specify atoms
+
+KCONst          0.0 0.0 0.0    Force constants for restraints on Q, theta, phi
+
+VALUe           0.0 0.0 0.0    Potential minimum location for restraints on Q, theta, phi
+
+EXPOnent        0.0 0.0 0.0    Exponents on harmonic potential for Q, theta, phi
+
+
+Output:
+-------
+	During dynamics only, the output of the value of Q, theta, and phi
+        for each restraint applied are written to the output unit at the specified frequency 
+        (PKFRQ) in the following ascii format
+         step-number  Q1 theta1 phi1 Q2 theta2 phi2 ...
+	 Example output for two pucker constraints, 20 steps, pkfrq=10:
+        10       2.161181       0.707060       2.306795       0.375264       0.799902       3.412435
+        20       2.287641       0.610042       2.177232       0.531637       0.182914       3.255958
+
+
+
+Functional form
+---------------
+PUCKering adds harmonic restraint to the puckering coordinates of the
+selected six atoms. The puckering coordinates are given by Q, theta, and phi as
+defined by Cremer & Pople, see: D. Cremer and J. A. Pople, 
+JACS 97:6, page 1354, 1975. NCSU variable is set that is equal to the total
+number of puckering restraints.
+
+The restraining potential energy is given by
+
+   Epuck = EQ + Etheta + Ephi
+
+where EQ, Etheta, and Ephi are potentials given by
+
+   EQ     = KCON(1)*(Q -     VALU(1))**EXPO(1)
+   Etheta = KCON(2)*(theta - VALU(2))**EXPO(2)
+   Ephi   = KCON(3)*(phi -   VALU(3))**EXPO(3)
+
+
+        CLPC clears the list of restrained puckering coordinates.
+
+Other commands:
+--------------
+        The PRINT CONS command, see *note print:(doc/io.info)print,
+will work for restraints.
+
+        QUICK command can be used to calculate the puckering coordinates,
+        see *note print:(doc/miscom.info)
+
+        CORREL command has an ENTER option to calculat pucker
+
+Examples:
+---------
+1) Specifying atoms by the atom-spec method, specifies a quadratic harmonic potential
+   on Q, theta, and phi centered on 0.6, 0.2, and 3.3, respectively, and with force 
+   constants all 10 kcal/mol/Angstrom**2. Output of the values of Q, theta, and phi 
+   will be written to unit 21 every 10 steps.
+ 
+cons puck sugar 1 o5 sugar 1 c1 sugar 1 c2 sugar 1 c3 sugar 1 c4 sugar 1 c5 -
+     kcon 10.0 10.0 10.0 valu 0.6 0.2 3.3 expo 2.0 2.0 2.0 outu 21 pkfrq 10
+
+1) Specifying atoms by the BYNUM method, otherwise same as above except there will be 
+   no pucker output during dynamics.
+
+cons puck bynum 7 1 8 12 16 5 kcon 10.0 10.0 10.0 valu 0.6 0.2 3.3 expo 2.0 2.0 2.0
+
+
+-----------------------------------------------------------------------------
+
+
+File: Cons, Node: Internal Coord, Up: Top, Next: Quartic Droplet, Previous: Puckering
+
+                Holding Internal Coordinates near selected values
+
+[SYNTAX CONS IC]
+
+Syntax:
+
+CONStraint IC  [BOND real [EXPOnent integer] [UPPEr]]
+                   [ANGLe real] [DIHEdral real] [IMPRoper real]
+
+        Using this form of the CONS command, one may put restraints on
+any internal coordinate. For this energy term, the IC table is
+used.  At each energy call, the reference (zero-force) value of each IC
+is set to the value currently in the IC table.
+All nonzero bond entries are restrained with the bond constant,
+using the optional EXPOnent (default 2) in the potential K*(S-S0)**EXPOnent.
+Second derivatives are currently supported only with EXPOnent=2.
+The angle, dihedral, and improper terms are only harmonic.
+The DIHEdral term only applies to IC's of normal type, and the
+IMPRoper term only applies to the improper IC type (those with a "*")
+
+If UPPEr is specified the reference bond length is taken as an upper
+limit and the restraint potential is applied only if S>S0; this is
+intended for use with distance restraints from NMR NOE data.
+All nonzero angle entries are restrained with the angle constant. All
+dihedrals are restrained with the dihedral constant using the improper
+dihedral energy potential. If any IC entry contains an undefined atom
+(zeroes), then the associated bonds,angles, and dihedral will not be
+restrained.
+
+      The force constant has units of kcal/mol/radian/radian for both
+angle and dihedral restraints.  The bond force constant has units of
+kcal/mol/angstrom**EXPOnent.
+
+        This restraint term is very flexible in that the user may
+chose which bonds... to restrain by editing an IC table. The major
+drawback is that all bonds must have the same force constant. The same is
+true for angles and dihedrals. By listing some IC's several times, the
+effective force constant is increased. Also, if only angle restraints are
+desired, then the bond and dihedral constants can be set to zero eliminating
+their contribution.
+
+File: Cons, Node: Quartic Droplet, Up: Top, Next: Fixed Atom, Previous: Internal Coord
+
+                        The Quartic Droplet Potential
+
+[SYNTAX CONS DROPlet]
+Syntax:
+
+CONStraint DROPlet [FORCe real] [EXPOnent integer] [NOMAss]
+
+        This restraint term is designed to put the entire molecule
+in a cage. Is is based on the center of mass (or center of geometry if
+NOMAss is specified) so that no net force or torque is introduced by this
+restraint term. The potential function is;
+
+        Edroplet= FORC* sum over atoms (( r-rcm )**EXPO )*mass(i))
+
+File:Cons, Node: Fixed Atom, Up:Top, Next: Center of Mass, Previous: Quartic Droplet
+
+                    How to fix atoms rigidly in place
+
+[SYNTAX CONS FIX]
+
+Syntax: CONS FIX atom-selection-spec { [PURG]                     }
+                                     { [BOND] [THET] [PHI] [IMPH] }
+
+        This command will fix all selected atoms and unfix all non-selected
+atoms.  For example, the command; CONS FIX SELE NONE END 
+will remove all fixing of atoms (except for lonepairs).
+
+        This command fixes atoms in place by setting flags in an array
+(IMOVE) which tells the minimization and dynamics alogrithms which atoms
+are free to move. If atoms are fixed, it is possible to save
+computer time by not calculating energy terms which involve only fixed
+atoms. The nonbond and hydrogen bond algorithms in CHARMM check IMOVE
+and delete pairs of atoms that are fixed in place from the nbond and
+hbond lists respectively. In addition the PURG or individual energy term
+options specified with the CONS FIX command allow all or some of the
+internal coordinate energies associated with fixed atoms to be deleted.
+Interactions between fixed and moving atoms are maintained.
+
+*** NOTE *** because some energy terms are deleted from fixed systems,
+the total energy calculated with fixed atoms will be different from the
+total energy of the same system with all atoms free. The forces on the
+moveable atoms will however be identical.  The purpose of this feature is
+to remove the computational cost of energy terms that do not change for
+simulations where a large fraction of the atoms are fixed.  It is not
+recommended for any other purpose.
+
+        The way CHARMM keeps track of fixed atoms is by the IMOVE array
+in the PSF. The IMOVE array is 0 if the atom is free to move, and has
+the value 1 if it is fixed.  A value of -1 indicates that this atom 
+is a lonepair. 
+
+***** WARNING ***** The purge options modify the PSF. The effects of
+this command cannot be undone by the subsequent releasing of atoms.
+
+***** WARNING ***** The fixing of atoms does not work for constant
+pressure simulations.
+
+File:Cons, Node: Center of Mass, Up:Top, Next: SHAKE, Previous: Fixed Atom
+
+                  Constrain centers of mass for selected atoms
+
+[SYNTAX CONS HMCM]
+
+Syntax: CONS HMCM FORCe real RDISt real [WEIGhting or MASS] 
+             reference-spec atom-selection
+ 
+where:
+        reference-spec ::= [REFX real] [REFY real] [REFZ real]
+                            at least one must be specified.
+                               
+        This command will harmonically restrain centers of mass from
+the selected atoms to the absolute reference point specified with
+REFX, REFY and REFZ, or to a line specifying REFX, REFY or REFZ, or to
+a plane specifying any two of REFX, REFY, and REFZ. The force constant
+of the harmonic potential is set with the FORCe keyword. A reference
+distance can be given with RDISt (default: ZERO).  Mass weighting is
+switched off by default but can be selected by using the WEIG key.
+
+        The primary use of this command is during the reconstruction of
+all-atom representations from low resolution models with virtual particles
+at side chain centers.
+
+Example 1:
+
+        CONS HMCM FORCE 50.0 WEIG REFX 10.4 REFY 12.1 REFZ 1.3 -
+             SELECT RESID 21 .AND. .NOT. -
+             ( TYPE H* .OR. TYPE N .OR. TYPE C .OR. TYPE O ) -
+             END
+
+        This will create a harmonic restraint with a force constant
+of 50 kcal/mol that holds the side chain center of mass at residue 21
+of a protein near (10.4, 12.1, 1.3).
+
+Example 2:
+
+        cons hmcm force 100.0 mass refx 10.0 -
+             select segid ligand end
+
+        This will create a harmonic restraint with a force constant of
+100 kcal/mol that keeps the center of mass of segment "ligand" on a
+line with x value 10.0 but no restraints on the y or z values.
+
+
+
+File: Cons, Node: SHAKE, Up: Top, Next: NOE, Previous: Center of Mass
+
+                Fixing bond lengths or angles during dynamics.
+
+        SHAKE is a method of fixing bond lengths and, optionally, bond
+angles during dynamics, minimization (not ABNR and Newton-Raphson methods),
+coordinate modification (COOR SHAKe command), and vibrational analysis
+(explore command). The method was brought to CHARMM by Wilfred Van
+Gunsteren (WFVG), and is referenced in J. Comp. Phys. 23:327 (1977).
+When hydrogens are present in a structure, it will allow a two-fold
+increase in the dynamics step size if SHAKE is used on the bonds.
+
+        To use SHAKE, one specifies the SHAKE command before any
+SHAKE constraints usage. The SHAKE command has the following syntax:
+
+[SYNTAX SHAKe constraints]
+
+
+SHAKE { OFF                                               } 
+      { shake-opt  fast-opt  2x(atom-selection) [NOREset] }
+
+shake-opt:== [BONH]  { [MAIN]     } [TOL real] [MXITer integer]
+             [BOND]  { COMP       }
+             [ANGH]  { PARAmeters }        [SHKScale real] 
+             [ANGL] 
+
+fast-opt:== { [ FAST  [ WATEr water-resn ] ] }
+            {   NOFAst                       }
+
+        BONH specifies that all bonds involving hydrogens are to be
+fixed. BOND specifies all bonds. ANGH specifies that all angles
+involving hydrogen must be fixed. ANGL specifies that all angles must be
+shaken. BOND is implied if any angles are fixed, otherwise, only the 1-3
+distances would be fixed. Coordinates must be read in before the SHAKE
+command is issued, unless the PARAmeter option is specified.
+
+      SHAKE constraints are applied only for atom pairs where one atom
+is in the first atom selection and one atom in the second atom selection.
+The default atom selection is ALL for both sets.  
+
+        TOL specifies the allowed relative deviations from the reference
+values (default: 10**-10). MXITer is the maximum number of iterations
+SHAKE tries before giving up (default: 500).
+
+        When the SHAKE command is used, it will check that there are
+degrees of freedom available for all atoms to satisfy all their
+constraints. Angles cannot be fixed with SHAKE if one has explicit
+hydrogen arginines in the structure as the CZ carbon has too many
+constraints. This is a general problem for any structure which has too
+many branches close together.
+
+        SHAKE is not recommended for fixing angles. The algorithm
+converges very slowly in the case where one has three angles centered on
+a tetravalent atom and the constraints are satisfiable only using out of
+plane motions.
+
+        The use of SHAKE modifies the output of the dynamics command.
+The number appearing to the right of the step number is the number of
+iterations SHAKE required to satisfy all the constraints. This number
+should generally be small.
+
+        When ST2's are present, SHAKE constraints are automatically
+applied for the O-H bonds and H-O-H angles.
+
+        There is a PARAmeter option for the SHAKe command. This option
+causes the shake bond distances to be found from the parameter table
+rather than from the current set of coordinates. This option is
+NOT compatible with the use on angle SHAKE constraints, and it will
+give an error if this is tried.
+
+        With these commands, the bond energy may be zeroed without
+any minimization with the command sequence;
+        SHAKE BOND PARA
+        COOR SHAKE [MASS]
+
+[SYNTAX SHAKe FAST constraints]
+SHAKe FAST [WATEr water-resn] [OLDWatershake]
+         [ MXITer <iterations> TOL <tolerance> ] [PARAmeter] [COMP]
+   This command specifies the use of the new vector/parallel and analagous
+   scalar fast SHAKE constraint routines (implemented Aug 2000). 
+   Certain assumptions are made when
+   this command is issued: The only bonds involved are between heavy atoms
+   and hydrogens, except for water molecules specified by the 
+   WATEr water-resn sub-command.
+   This selection is used to indicate the water molecules
+   that have an H-H bond. It is assumed that the selection will include
+   all atoms in the water molecule and that said molecule contains exactly
+   two X-H bonds and one H-H bond where X is any heavy atom.  Testing
+   for "hydrogen-ness" is done via the CHARMM hydrog() function which
+   makes it's choice based on atomic mass.  
+
+   By default, water molecules selected with the WATEr sub-command will
+   be constrained via the use of a special water-SHAKE routine which
+   uses the direct inversion method. This algorithm is from 25 to 30 %
+   faster than the normal iterative, scalar SHAKE routine. For the rest
+   of the heavy atom -hydrogen bonds, a vector/parallel version of
+   the original SHAKE routine is used.  This is about 5X the scalar SHAKE.
+   If the optional keyword OLDWatershake is used, the vector/parallel
+   (not the watershake) routines are used.
+
+   The rest of the keywords are the same as in the original SHAKE command.
+   Note: that FAST has to be the second word in command line.
+
+File: Cons, Node: NOE, Up: Top, Previous: SHAKE, Next: Restrained Distances
+
+[SYNTAX NOE constraints]
+
+
+NOE
+            Invoke the module
+
+   RESEt 
+            Reset all NOE restraint lists. This command clears all
+            existing NOE restraints. Resets scale factor to 1.0
+
+   PNOE     
+            Turn on the restraint between a given atom specified
+            by ASSIgn and a point specified by CNOX, CNOY and CNOZ
+            intead of a restraint between two atoms.
+            The use of this restraint is desirable for docking, 
+            and loop refinements. CAVE: PNOE itself is NOT a
+            command -- the PNOE feature is invoked implicitely by
+            the presence of the CNOX, CNOY, CNOZ point specification.
+
+ ASSIgn [KMIN real] [RMIN real] [KMAX real] [RMAX real] [FMAX real]
+		 {MINDIST} {RSWI real [SEXP real]} {SUMR} 
+                 [TCON real] [REXP real] {2X(atom_selection)}
+                {[CNOX real] [CNOY real] [CNOZ real] 1X(atom selection) } 
+
+            Assign a restraining potential between the atoms of the
+            first selection and the atoms of the second selection.
+
+            Where multiple atoms are selected, 
+                     R = [ average( Rij**(1/REXP) ) ]**REXP
+            where (i) runs over the first atom selection and (j)
+            runs over the second atom selection.
+            The default REXP value is 1.0 (a simple average).
+            An REXP value of 3.0 may be optimal for NOE averaging.
+
+	    If SUMR keyword is present, R is computed as following,
+		     R = [ Sum_ij ( Rij**(1/REXP) ) ]**REXP
+            In this case, REXP=-1/6 might be typically used.
+
+            If the key work MINDIST is specified, then the NOE constraint
+            will be active only between the pair of atoms from the two selected
+            set of atoms that happend to be  the nearest at all time during 
+            the dynamics (useful to resolve ambiguous distance restraints).
+
+
+                   /  0.5*KMIN*(RAVE-RMIN)**2    R<RMIN
+                  /
+                 /    0.0                        RMIN<R<RMAX
+            E(R)=
+                 \    0.5*KMAX*(RAVE-RMAX)**2    RMAX<RAVE<RLIM
+                  \
+                   \  FMAX*(RAVE-(RLIM+RMAX)/2)  RAVE>RLIM
+
+
+	    If RSWItch is specified, a soft-square NOE potential will be used,
+            where the square-well function is used for distances within a
+            specified "switching" region (specified by the RSWItch keyword),
+            whereas outside this region a "soft" asymptote is used: 
+
+ 
+                   / 0.5*KMIN*(RAVE-RMIN)**2                    R<=RMIN
+            E(NOE)=  0.0                                   RMIN<R< RMAX
+                   \ 0.5*KMAX*(RAVE-RMAX)**2               RMAX<R<=RMAX+RSWITCH
+                   \ A+B/(RAVE-RMAX)**SEXP+FMAX*(RAVE-RMAX)     R> RMAX+RSWITCH
+
+            where,
+             
+                A,B  are determined such that both E and force are continuous.
+                FMAX defines the final asymptote slope (default 1.0)
+                RSWI defines the switching start point (default 1.0)    
+                SEXP exponent of the soft asymptote    (default 1.0)
+
+            and
+                     RAVE=R                     TCON=0
+
+                     RAVE=RRAVE**(-1/3)         TCON>0
+                     
+                     RRAVE=RRAVE*(1-DELTA/TCON)+R**(-3)*DELTA/TCON
+
+            for initial conditions, RRAVE=RMAX**(-3)
+            DELTA is the integration time step.  For minimization,
+            the value is either 0.001ps or the previous simulation value.
+
+            Where: RLIM = RMAX+FMAX/KMAX (the value of RAVE where the
+                                          force equals FMAX)
+
+            Defaults for each entry: KMIN=0.0, RMIN=0.0,
+                                     KMAX=0.0, RMAX=9999.0, FMAX=9999.0
+                                     TCON=0.0, REXP=1.0
+
+Also, the old sytax is supported:
+
+ ASSIgn rminvalue  minvariance  maxvariance  2X(atom_selection) 
+
+For this format, KMAX=0.5*Kb*TEMP/(maxvariance**2)
+                 KMIN=0.5*Kb*TEMP/(minvariance**2)
+                 RMIN=rminvalue
+                 RMAX=rminvalue
+
+   MPNOe INOE <integer> {[TNOX real] [TNOY real] [TNOZ real]}
+            Define INOE as a moving point-NOE with target position
+            TNOX, TNOY, TNOZ -- the initial position is that given
+            in the previous assign statement of the NOE (CNOX...).
+
+   NMPNoe <integer>
+            No of steps over which the point-NOE's are moved from
+            their initial points (CNOX...) to the target points (TNOX...).
+
+   READ UNIT <integer>
+            Reads restraint data structure from card
+            file previously written.
+   WRITe UNIT <integer> [ANAL]
+            Writes out the restraint data in card format to a file on the
+            specified unit. A CHARMM title should follow the command.
+            SCALE are saved together with the lists in the NOE common block.
+            The ANAL option will print out the distances and energy data
+            computed with the current main coordinates.
+   PRINT [ANAL [CUT real]]
+            Same as the WRITe command except to the output file and slightly
+            more user friendly form. A positive CUT value will list only
+            those that have a distance that exceeds RMAX by more than DCUT.
+   SCALe [real]
+            Set the scale factor for the NOE energy and forces.
+            Default value: 1.0
+   TEMPerature real
+            Specify the temperature for the old format.
+   END
+            Return to main command parser.
+
+No other commands (I/O or loops) are supported inside the NOE module.
+Looping can be performed outside if necessary.  The units are Kcal/mol/A/A
+for force constants and Angstroms for all distances.
+
+EXAMPLE. Set up some NOE restraints for one strand of a DNA-hexamer
+in a file to be streamed to from CHARMM.
+
+*  SOME NOE RESTRAINTS FOR DNA. ASSUME PSF, COORD ETC ARE ALREADY PRESENT
+*
+! First clear the lists
+NOE
+   RESET
+   END
+! Since there are many identical atom pairs we use a loop
+set 1 1
+label loop
+NOE
+!   Sugar protons, same in all six sugars (don't pay any attention to
+!     the numeric values)
+    ASSIgn  SELE ATOM A @1 H1' END SELE ATOM A @1 H2'' END -
+            KMIN 1.0 RMIN 2.7 KMAX 1.0 RMAX 3.0 FMAX 2.0
+    ASSIgn  SELE ATOM A @1 H3' END SELE ATOM A @1 H2'' END -
+            KMIN 1.0 RMIN 2.7 KMAX 1.0 RMAX 3.0 FMAX 2.0
+    END
+incr 1 by 1
+if 1 le 6 goto loop
+! Now do some more specific things
+
+OPEN WRITE UNIT 10 CARD NAME NOE.DAT
+NOE
+   SCALE 3.0  ! Multiply all energies and forces by 3
+   WRITE UNIT 10
+* NOE RESTRAINT DATA FROM DOCUMENTATION EXAMPLE
+*
+   PRINT ANAL  ! See what we have so far
+   PRINT ANAL CUT 2.0 ! list 
+   END
+RETURN
+
+EXAMPLE2. Set up some NOE restraints with soft asymptote (protein G)
+
+...
+
+if @?rexp eq 0   set rexp = -0.166666666666667
+if @?kmin eq 0   set kmin = 1
+if @?kmax eq 0   set kmax = 1
+if @?fmax eq 0   set fmax = 1
+if @?rswi eq 0   set rswi = 3
+if @?sexp eq 0   set sexp = 1
+NOE
+  RESET
+  ASSI rmin 1.8 rmax 5.5 -
+       SELE resid 39 .AND. type HG1# end SELE resid 34 .AND. type HB# end -
+       rexp @rexp fmax @fmax rswi @rswi sexp @sexp kmin @kmin kmax @kmax SUMR
+  ASSI rmin 1.8 rmax 6.5 -
+       SELE resid 39 .AND. type HG2# end SELE resid 34 .AND. type HB# end -
+       rexp @rexp fmax @fmax rswi @rswi sexp @sexp kmin @kmin kmax @kmax SUMR
+  ASSI rmin 1.8 rmax 5 -
+       SELE resid 34 .AND. type HA end SELE resid 39 .AND. type HN end -
+       rexp @rexp fmax @fmax rswi @rswi sexp @sexp kmin @kmin kmax @kmax SUMR
+
+  PRINT ANAL
+END
+
+EXAMPLE3. Set up moving point-NOE restraints for docking of a ligand
+
+...
+
+NOE
+RESET
+assign kmax 10.0 rmax 2.0 fmax     10.0 -
+  CNOX   -7.899 CNOY   40.864 CNOZ   50.967 -
+  sele atom LGND     1 H27  end
+assign kmax 10.0 rmax 2.0 fmax     10.0 -
+  CNOX  -10.033 CNOY   38.295 CNOZ   50.258 -
+  sele atom LGND     1 N16  end
+assign kmax 10.0 rmax 2.0 fmax     10.0 -
+  CNOX  -11.621 CNOY   36.654 CNOZ   48.924 -
+  sele atom LGND     1 H28  end
+assign kmax 10.0 rmax 2.0 fmax     10.0 -
+  CNOX  -17.948 CNOY   39.618 CNOZ   60.275 -
+  sele atom LGND     1 H42  end
+print anal
+NMPNoe      40000
+MPNOe INOE      1 -
+  TNOX   13.177 TNOY   45.357 TNOZ   49.337
+MPNOe INOE      2 -
+  TNOX   11.043 TNOY   42.788 TNOZ   48.628
+MPNOe INOE      3 -
+  TNOX    9.455 TNOY   41.146 TNOZ   47.294
+MPNOe INOE      4 -
+  TNOX    3.128 TNOY   44.111 TNOZ   58.645
+END
+
+...
+
+
+File: Cons, Node: Restrained Distances, Up: Top, Previous: NOE, Next: External Forces
+
+      Apply general restrained distances allowing multiple distances to
+be specified.  This restraint term has been added to allow for facile
+searching of a reaction coordinate, where the reaction coordinate is
+estimated to be a linear combination of several distances.
+
+      By Bernard R. Brooks - NIH - March, 1995
+
+[SYNTAX Restrained Distances]
+
+RESDistance [ RESEt ] [ SCALE real ] [ KVAL real  RVAL real [EVAL integer] -
+       [ POSItive ] [ IVAL integer ]  repeat( real first-atom second-atom ) ]
+       [ NEGAtive ]
+
+
+   E = 1/EVAL *  Kval * Dref**EVAL
+
+   Where:
+
+   Dref =  K1*R1**Ival + K2*R2**Ival + ... + Kn*Rn**Ival - Rval
+
+   Where K1,K2,...Kn are the real values in the repeat section and
+   R1,R2,...Rn are the distances between specified pair of atoms.
+
+
+
+   RESEt       Reset the restraint lists. This command clears the
+               existing restraints. Resets the scale factor to 1.0
+
+   SCALe real  Set the scale factor for the energy and forces.
+               Default value: 1.0
+
+   POSITIVE    Include this restraint only when Dref is positive.
+   NEGATIVE    Include this restraint only when Dref is negative.
+
+If anything else is on the command line then a new restraint is added to the
+list of distance restraints.
+      KVAL real     The force harmonic constant
+      RVAL real     The target distance
+      IVAL integer  The exponent for individual distances.
+      EVAL integer  The exponent (default 2). EVAL must be positive.
+      repeat( real first-atom second-atom )
+            The real value is a scale factor for the distance between
+            the first and second specified atoms in the pair.
+
+EXAMPLES:
+1. Create a reaction coordinate for QM/MM 
+2. Set up some restraints to force three atoms to make an equilateral triangle.
+
+
+!!! 1 !!!  Create a reaction coordinate for QM/MM 
+
+OPEN WRITE CARD UNIT 21 name reaction.energy
+OPEN WRITE FILE UNIT 22 name reaction.path
+TRAJECTORY IWRITE 22 NWRITE 1 NFILE 40 SKIP 1
+* trajectory of a minimized reaction path
+*
+
+SET ATOM1  MAIN 11 OG
+SET ATOM2  MAIN 11 HG
+SET ATOM3  MAIN 23 OD1
+
+SET 1 1
+SET V -5.0
+LABEL LOOP
+
+SKIP NONE             ! make sure all energy terms are enabled
+RESDistance  RESET KVAL 2000.0  RVAL @v - 
+   1.0   @atom1  @atom2    -1.0   @atom2  @atom3 
+
+MINI ABNR NSTEP 200 NPRINT 10
+PRINT RESDistances    ! print a check of distances
+TRAJ WRITE            ! write out the new minimized frame
+
+SKIP RESD             ! turn off the restraint energy term
+ENERGY                ! recompute the energy without restraints
+WRITE TITLE UNIT 21   ! write out the current restraint distance and energy
+* @V ?ENER
+*
+
+INCR 1 BY 1           ! increment the step counter
+INCR V BY 0.25        ! increment the restraint value
+IF 1 LT 40.5 GOTO LOOP
+
+RETURN
+
+!!! 2 !!! Make a water nearly an equilateral triangle
+
+set atom1  WAT 1 O
+set atom2  WAT 1 H1
+set atom3  WAT 1 H2
+
+RESDistance  RESEt
+
+RESDistance  KVAL 1000.0  RVAL 0.0 - 
+        1.0   @atom1  @atom2  -
+        1.0   @atom1  @atom3  -
+       -2.0   @atom2  @atom3
+RESDistance  KVAL 1000.0  RVAL 0.0 - 
+        1.0   @atom1  @atom2  -
+       -2.0   @atom1  @atom3  -
+        1.0   @atom2  @atom3
+RESDistance  KVAL 1000.0  RVAL 0.0 - 
+       -2.0   @atom1  @atom2  -
+        1.0   @atom1  @atom3  -
+        1.0   @atom2  @atom3
+
+print resdistances
+mini abnr nstep 200 nprint 10
+print resdistances
+stop
+
+!!! 3 !!! Prevent an atom from moving more than 20A from the others,
+! but have no restraint energy when no distance is large.
+
+set atom1 SOLV 1 OH2 
+set atom2 SOLV 2 OH2  
+set atom3 SOLV 3 OH2  
+set atom4 SOLV 4 OH2  
+set atom5 SOLV 5 OH2  
+
+RESDistance  RESEt
+
+RESDistance  KVAL 1.5E-12  RVAL 6.4E7 IVAL 6 POSITIVE - 
+        1.0   @atom1  @atom2  -
+        1.0   @atom1  @atom3  -
+        1.0   @atom1  @atom4  -
+        1.0   @atom1  @atom5  -
+        1.0   @atom2  @atom3  -
+        1.0   @atom2  @atom4  -
+        1.0   @atom2  @atom5  -
+        1.0   @atom3  @atom4  -
+        1.0   @atom3  @atom5  -
+        1.0   @atom4  @atom5   
+
+print resdistances
+mini abnr nstep 200 nprint 10
+print resdistances
+stop
+
+
+File: Cons, Node: External Forces, Up: Top, Previous: Distance Matrix restraint, Next: RMSD restraints
+
+[SYNTAX External Forces]
+
+  PULL { FORCe  <real> } XDIR <real> YDIR <real> ZDIR <real> [PERIod <real>]
+       { EFIEld <real> }
+                        [SWITch <int>] [SFORce <real>]
+                         [WEIGht] [atom-selection]
+       { TORQue <real> } [PERIod <real>] 
+                         [AXIS | XDIR <real> YDIR <real> ZDIR <real> -
+                                 XORI <real> YORI <real> ZORI <real>]
+       { OFF       }
+       { LIST      }
+ 
+  A force will be applied in the specified direction on the selected atoms
+  either as a constant: FORCe <value> specified in picoNewtons (pN)
+  or oscillating in time: FORCe*COS(TWOPI*TIME/PERIod), FORCe <pN> PERIod <ps>
+  time is counted from the start of the dynamcis run.
+  or forces due to an electrical EFIEld (V/m) (possibly also oscillating).
+  Partial charges are then taken from the PSF and used to calculate the force.
+  If WEIGht is specified the forces are multiplied by the wmain array.
+ 
+  The invocation of a non-zero SWITch value will result in a linearly
+  time-varying force. This command must be used in conjunction with a
+  dynamics routine (using leap-frog integrator). The force is switched
+  linearly between SFORce <pN> (starting force) and FORCe <pN> (end force)
+  over the course of the simulation.
+ 
+  TORQue <pN/A> either uses the axis defined by a prior COOR AXIS command
+  (or any COOR command which sets the corman axis) or an axis has to be
+  specified with the *DIR and *ORI keywords.
+  Torque code fromi J Wereszczynski & I Andricioae: PNAS (2006)103:16200
+ 
+  Each invocation of this command adds a set of forces to the previously
+  defined set.
+   
+  PULL OFF turns off all these forces.
+  PULL LIST produces a listing.
+  NB! Forces defined by PULL will move atoms in the specified direction,
+  which is opposite to that listed by the forces from the COOR FORCE command.
+  
+
+File: Cons, Node: RMSD restraints, Up: Top, Previous: External Forces, Next: EMAP restraint
+
+The RMSD restraint is useful to manipulate and control macromolecular
+conformations.  The restraint is related to the CONS HARM BestFit, which sets
+up harmonic restraints with respect of a reference structure.  However,
+because all the reference data structure is stored in XREF, YREF, ZREF,
+this command allows only a single bestfit restraint.  In addition, it allows
+only a restraint to zero value of RMSD.  It is useful to allow multiple such
+bestfit RMSD restraint to progress from one conformation to a second
+conformation of a molecular system.  The new command CONS RMSD allows such
+multiple bestfit restraint.   In fact, that is principally the advantage over
+the BESTfit method (only the data structure is changed, the energy subroutines
+themselves are the same).  The method can also be used to performed targetted
+trajectories.
+
+The form of the new restraint energy is:
+
+                 E   =   Sum_i   KFORCE_i * [RMSD  - OFFSET_i]**2
+
+Where RMSD is the (possibly mass-weighted) root-mean-square-deviation (RMSD)
+of the current coordinates with respect to a reference structure, KFORCE_i
+is a force constant, and OFFSET_i is a constant value setting a relative
+distance with respect to the RMSD of the structure. The restraint energy is
+equivalent the normal BestFit energy.  The forces have been checked with the
+TEST FIRST command.
+
+All the data structure is stored dynamically on the HEAP and thus, no extra
+permanent (static) storage is introduced.  The size of initial HEAP storage
+is set by the MAXRmsd integer the first time that the command is issued
+(by default this is set to the number of atoms if nothing is specified).
+
+By specifying the RELATIVE keyword, it is possible to impose a 1-D
+constraint to simultaneously constrain a given structure with respect to
+two end-point structures. This is achieved by constraining the difference
+(RMSD2 - RMSD1) instead of just the RMSD1 or RMSD2 values individually, where
+RMSD1 and RMSD2 are the RMSD values of given structure from endpoint structure
+1 and 2 respectively. This allow full freedom of movements orthogonal to the
+relative axis.  For the relative RMSD constraint, the form of the
+new restraint energy is:
+
+                 E   =   Sum_i   KFORCE_i * [(RMSD2-RMSD1) - OFFSET_i]**2
+
+Additionally to the RMSD RELAtive option, a HPLAne keyword can be
+specified, which switch to the formula:
+
+                 E_hp = Sum_i KFORCE_i * [(RMSD2**2-RMSD1**2) - OFFSET_i]**2
+
+and creates a constraints within hyperplanes rather than hyper-hyperbolas.
+As a consequence iso-potential surfaces are equidistant and should not
+introduce a bias towards conformations away from the ref1 - ref2 axis.
+Note that this formula looks quartic, but is in fact quadratic due to
+elimination of quadratic terms in the inner parenthesis. The NORM
+keyword divides RMSD1, RMSD2 and OFFSET by 2.dist(Ref1-Ref2)=2.R_1,2
+so that E_hp is effectively:
+
+         E_hp = Sum_i KFORCE_i * [ (R-R_m).N - OFFSET_i/(2.R_1,2)]**2
+
+where R is the current position, R_m=(Ref2+Ref1)/2 is the midpoint
+between Ref1 and Ref2, and N=(Ref2-Ref1)/|Ref2-Ref1|, the normalized
+vector between Ref1 and Ref2.
+
+The syntax is very similar to all current restraints in CHARMM:
+
+CONS RMSD { RELAtive [HPLAne [NORM]] } {MAXN integer} {NPRT} orient-specs -
+                      force-const-spec  coordinate-spec atom-selection
+CONS RMSD  SHOW
+CONS RMSD  CLEAR
+
+orient-specs     ::=  [ NOROtation ] [ NOTRanslation ]
+
+force-const-spec ::=  { FORCE real } [MASS]  {OFFSet real} { BOFFset real}
+
+coordinate-spec::= { [MAIN] } 
+                   {  COMP  } 
+
+CONS CLEAR 
+
+removes all multiple RMSD restraints
+
+CONS RMSD SHOW
+
+prints all current RMSD restraints with all parameters.
+
+The specific terms are:
+
+RELAtive         -  Employ relative RMSD restraint using two reference 
+                    structures as defined above
+HPLAne           -  With RELAtive, use hyperplane formula (see above).
+NORM             -  With RELAtive HPLAne normalize the formula (see above).
+NPRT             -  This suppresses the printout of the RMSD to URMSD
+                    unit in a dynamics simulation.  The default is to print
+                    all RMSD.
+MAXN             -  Maximum number of RMSD restraints (replaces MAXRMSD
+                    used in previous versions) default setting = 10
+COMP             -  Use comparison cordinate set as reference 
+                    (default uses main).
+FORCE <real>     -  Force constant for RMSD term in kcal/mol/A^2
+OFFSet <real>    -  RMSD value in A^ at which the structure is restrained
+BOFFset <real>   -  This offset only applies the harmonic RMSD restraint, 
+		    when RMSD is above BOFFset.  This is useful in specifying 
+		    a flat-bottom RMSD potential around the reference 
+		    structure.  If a negative value is used, this uses the 
+		    restraint only if the RMSD is below |BOFFset|,  This is
+		    useful for applying a purely repulsive RMSD restraint.
+
+IMPORTANT NOTES:
+1. The MAXRMSD variable specifying total number of restrained atoms used 
+before has been replaced by the variable MAXN specifying the number of 
+RMSD restraints. This allows dynamic allocation of memory for storing
+reference structures during atom selection for the RMSD restraint, which
+reduces memory usage significantly
+2. The c32 release contained additions including the ZETA potential and
+the ability to fit one set of atoms using RMSD and apply the forces to 
+another set of atoms. These are not included in the present version due
+to their inability to pass TEST FIRST
+3.  RMSD restraints can be used with DYNAmics command.
+   DYNAmics ... [ RMSD URMSD integer ]  This will cause the RMSD values
+for each of the RMSD restraints to be written to the unit specified by URMSD,
+unless the NPRT option is pecified when the RMSD restraint is defined.
+
+-------------------------------------------------------------------------
+
+File: Cons, Node: EMAP restraint, Up: Top, Previous: CONS RMSD, Next: Rg/RMSD restraint
+
+The EMAP restraint is useful to maintain a selection of atom to given shapes. 
+The restraint is related to the EMAP functions that use map objects for energy
+calculation and simulation.  A restraint map is either generated from a selection
+of atoms, or an existing map object defined with EMAP, or readin from an external 
+file. An EMAP restraint is non-invasive or non-restricted and permit restrained atoms
+to be far away from their restrained positions.  Therefore, EMAP restraints can be 
+used to bias certain conformations or to induce a simulation system to change to 
+desired conformations, which we term as "targeted conformational search" (see reference:
+Wu, X., Subramaniam, S., Case, D.A., Wu, K. W., Brooks, B.R., "Targeted
+conformational search with map-restrained self-guided Langevin dynamics: 
+application to flexible fitting into electron microscopic density maps", 
+J Struct. Biol., 183, 429-440 (2013)).
+
+The form of the EMAP restraint energy is:
+
+                 E   =     KEMAP * Sum_i [AMASS_i * MAP_Norm_at_i]
+
+Where KEMAP is the restraint constant, kcal/g, AMASS_i is atomic mass of atom i, g/mol.
+MAP_Norm_i is the normalized vaule of the restraint map at atom i, which is interpolated
+with b-spline.
+The atom-selection defines the atoms to be restrained.  The map definition defines
+the restraint map.  The map can be either generated from the coordinates of the selected 
+atoms, either in the main or the comparison set, or using existing map objects, or read
+in from a map file.  The restraint map object is fixed in space by default.  A keyword,
+MOVE, will make the restraint map movable during simulation.
+
+The syntax is :
+
+CONS EMAP FORCe real  {atom-selection map-definition [MOVE]}
+CONS EMAP  SHOW
+CONS EMAP  [RESEt|CLEAR]
+
+map-definition ::= {MAPId string     }
+                   {FILEname string      }
+                   {[DX real][DY real][DZ real][RESO real][COMP]}
+
+CONS EMAP CLEAR 
+
+removes all EMAP restraints defined with CONS EMAP
+
+CONS EMAP SHOW
+
+prints all current EMAP restraints with all parameters, including those defined with EMAP CONS (See emap.info).
+
+The specific terms are:
+
+FORCE <real>     -  Force constant for EMAP restraint in kcal/g
+DX,DY,DZ <real>  -  grid size of generated map in x, y, and z directions, 
+                    Default: 3 angstroms.
+RESOlution <real>   -  Resolution of the generated map.  Default: 3 angstroms. 
+RIGId  <string>     Rigid ID define with EMAP commands.  Using  
+MAPId  <string>     MAP ID define with EMAP commands.  Using a map object 
+FILEname <string>   A map filename in either .map, .ccp4, or .mrc format.
+MOVE                A flag to make the restraint map movable.
+
+
+
+-------------------------------------------------------------------------
+
+
+File: Cons, Node: Rg/RMSD restraint, Up: Top, Previous: CONS EMAP, Next: Distance Matrix restraint
+
+
+[SYNTAX Rg/RMSD restraint]
+
+RGYRation { FORCe <real> } REFErence <real> [RMSD] [COMParison] [ORIEnt] 
+                         OUTPut_unit <integer> NSAVe_output <integer>
+                         SELEction <atom selection> END
+          { RESEt      }
+
+
+  This restraint force restraints the central moment of the selected
+  atoms about 1) the center of geometry of the selected atoms (Rg
+  restraint) or 2) a specified reference structure structure (RMSD).
+  The form of the restraint term is:
+
+                                0  2
+       E= 1/2 * CONST * (R   - R  )
+                          GY    GY
+ 
+   where
+       2                      2
+      R  = 1/N SUM ( r  - R  )       (Rg restraint)
+       GY       i     i    CG
+ 
+   and
+ 
+      R  = 1/N SUM ( r )
+       CG       i     i
+ 
+   or
+       2                   ref 2
+      R  = 1/N SUM ( r  - R   )       (RMSD restraint)
+       GY       i     i    i
+
+  The specific terms are:
+  
+  RGYR             -  Invoke the Rg/RMSD restraint term parser in CHARMM
+  FORCe <real>     -  Use a restraint force constant (CONST above) of <real>
+                      kcal/mol/A^2
+  REFErence <real> -  Use a target Rg/RMSD value of <real>, in A.
+  RMSD             -  Employ RMSD based restraint instead of Rg restraint.
+  COMP             -  Use comparison cordinate set as reference 
+                      (default uses main).
+  ORIEnt           -  Do a coor orie on coordinates before computing RMSD.
+  
+  OUTPut <integer> -  During dynamics write Rg/RMSD history to unit <integer>.
+  NSAVe  <integer> -  Save Rg/RMSD history every <integer> steps.
+  RESEt            -  CLear Rg/RMSD restraint flags, release memory.
+  
+  Usage:
+  
+  The following examples illustrate the use of this restraint term.
+  
+  1) Add an Rg restraint potential to dynamics run, save trajectory
+  information to unit.  Base Rg calculation on Ca positions only.
+  
+  open unit 12 write form name traj.rgd
+  
+  RGYRestraint Force 50 Reference 12.9 -
+      output 12 nsave 50 select type ca end
+  
+  
+  2) Add an RMSD based restraint to target a conformational change in a loop.
+  
+  
+  open unit 1 read form name open.crd
+  read coor card unit 1
+  close unit 1
+  
+  open unit 1 read form name closed.crd
+  read coor card compare unit 1
+  close unit 1
+  
+  coor orie rms select type ca end
+  coor rms select ( ires 12:24 .and. .not. hydrogen ) end
+  
+  Calc drms = ?rms / 6
+  Calc rmsd = ?rms - @drms
+  set count 1
+  label domini
+  
+      rgyr force 50 reference @rmsd rmsd comp -
+           select ( ires 12:24 .and. .not. hydrogen ) end
+  
+      mini conj nstep 400 tolenr 0.00001 cutnb 12 ctofnb 10 ctonnb 8 -
+           inbfrq -1 atom cdie vatom vswitch fshift bycb
+  
+      rgyr reset
+  
+      coor rms select ( ires 12:24 .and. .not. hydrogen ) end
+  
+      open unit 1 write form name o2c_@count.pdb
+      write coor pdb unit 1
+  *  Coordinates from frame @count of open to closed path.
+  *  Current loop rmsd (residues 12-24 ca only) is ?rms A.
+  *
+  
+      incr count by 1
+      Calc rmsd = @rmsd - @drms
+  
+  if rmsd gt 0.1  goto domini
+  
+  
+  3) Use RMSD restraint to unfold a helical peptide with RMSD computed
+  based minimum RMSD at each step (Oriented).
+  
+  set rmsd 2
+  label unfold
+  
+      rgyr force 100 reference @rmsd rmsd comp orient select type ca end
+  
+      mini conj nstep 400 tolenr 0.00001
+  
+      rgyr reset
+  
+      coor orie rms select type ca end
+  
+      open unit 1 write form name frame@rmsd.pdb
+      write coor pdb unit 1
+  *  Coordiantes from frame with reference rmsd = @rmsd, current rmsd= ?rms
+  *
+  
+     incr rmsd by 2
+  if rmsd le 10 goto unfold
+ __________________________________________________________________________
+
+
+File: Cons, Node: Distance Matrix restraint, Up: Top, Next: PATH, Previous: Rg/RMSD restraint
+
+
+[SYNTAX Distance Matrix restraint]
+
+DMCOnstrain FORCe real REFErence real OUTPut_unit integer 
+            NSAVe_output integer CUTOff real NCONtact integer
+            {SELE {atom selection} WEIGt real [ CUTOff real ]}(ncontact times) 
+
+
+         THIS COMMAND ADDS A Quadratic POTENTIAL to restrain the
+         reaction coordinate. The reaction coordinate is defined
+         as a weighted sum of contacts.  Multiple sets of DMCO
+	 constraints can be applied, using multiple DMCO commands,
+	 each given its own specifications.  
+	 
+   
+                                       2
+         E= 1/2 * CONST * (RHO - DMC0 )
+          j            j      j      j   
+     where
+                                 
+     RHO  = SUM (Weigt * (1-STATE );
+        j    i        ij         ij
+   
+                           1
+     STATE = ----------------------------
+          ij  1 + EXP(20*(DIST - (CUTOff +0.25)))
+                              ij       ij
+     DIST - distance between centers of geometry of residues 
+         i
+            forming contact i 
+     
+     CUTOff - contact-specific cutoff for contact i, in DMCO restraint j 
+	  ij
+
+DMCOnstrain CLEAR
+
+	 This clears all sets of DMCO restraints that have been defined.
+   
+  Example:
+
+  The following examples illustrate the use of DMCO restraint terms.
+  
+  1) Add a distance matrix restraint potential to dynamics run, save 
+  trajectory information to unit.  This example applies a distance 
+  restraint of the form given above between pairs of side chain 
+  centers-of-mass for a set of 54 contacts and restrains the system
+  to a fractional value of the overall reaction coordinate of 0.625.
+  Each restraint term is given a weight based on the amount of time
+  the given contact was formed in the native state simulation, and
+  each contact has the same cutoff, which is defined in the DMCO line.
+  For details of the method used here, the reader is referred to:
+  [Sheinerman and Brooks, JMB, 278, 439 (1998).]
+
+  open unit 25 write form name "dmc/GB1H.rho"       
+
+  define bb -
+  sele segid agb1 .and. -
+  (type ca .or. type c .or. type n .or. type o ) end
+  define sd -
+  sele segid agb1 .and. .not. (bb .or. hydrogen) end
+  
+  set dmforce 2000.
+  set dmref  0.625
+  set dmsave 100
+  DMCO FORCe @dmforce     REFE @dmref OUTPut 25 NSAVe @dmsave -
+  CUTOff 6.5 NCONtact  54 
+  sele sd .and. (resi   2  .or. resi   4 ) end WEIGht  0.8158139980007818  
+  sele sd .and. (resi   4  .or. resi  21 ) end WEIGht  0.9665094391591674 
+  sele sd .and. (resi   4  .or. resi  24 ) end WEIGht  0.9879192119842544 
+  sele sd .and. (resi   4  .or. resi  27 ) end WEIGht  0.9895819946415852 
+  sele sd .and. (resi   4  .or. resi  51 ) end WEIGht  0.9408263780596178 
+  sele sd .and. (resi   5  .or. resi  18 ) end WEIGht  0.9415959785662404 
+  sele sd .and. (resi   6  .or. resi   8 ) end WEIGht  0.9999909781703169  
+  sele sd .and. (resi   6  .or. resi  17 ) end WEIGht  0.9995401666453647 
+  sele sd .and. (resi   6  .or. resi  31 ) end WEIGht  0.9999999999999796
+  sele sd .and. (resi   7  .or. resi  16 ) end WEIGht  0.9796513289404690 
+  sele sd .and. (resi   7  .or. resi  52 ) end WEIGht  0.7780795300785477 
+  sele sd .and. (resi   7  .or. resi  54 ) end WEIGht  0.6905994027412474 
+  sele sd .and. (resi   8  .or. resi  17 ) end WEIGht  0.8323463051907218 
+  sele sd .and. (resi   8  .or. resi  35 ) end WEIGht  0.9731361885884368 
+  sele sd .and. (resi   8  .or. resi  38 ) end WEIGht  0.9174238684004473 
+  sele sd .and. (resi   8  .or. resi  40 ) end WEIGht  0.9754236727233426 
+  sele sd .and. (resi   8  .or. resi  55 ) end WEIGht  0.9151151195555089 
+  sele sd .and. (resi   9  .or. resi  14 ) end WEIGht  0.6645390074837504 
+  sele sd .and. (resi   9  .or. resi  56 ) end WEIGht  0.7285333256999120 
+  sele sd .and. (resi  17  .or. resi  19 ) end WEIGht  0.8912444191627017 
+  sele sd .and. (resi  17  .or. resi  34 ) end WEIGht  0.8920438869599703 
+  sele sd .and. (resi  19  .or. resi  21 ) end WEIGht  0.7259406753340431 
+  sele sd .and. (resi  19  .or. resi  30 ) end WEIGht  0.6711322572172727 
+  sele sd .and. (resi  19  .or. resi  34 ) end WEIGht  0.7844587325555364 
+  sele sd .and. (resi  21  .or. resi  27 ) end WEIGht  0.9999999531742481 
+  sele sd .and. (resi  23  .or. resi  25 ) end WEIGht  0.9999999994693732 
+  sele sd .and. (resi  23  .or. resi  26 ) end WEIGht  0.9999999999991671 
+  sele sd .and. (resi  24  .or. resi  27 ) end WEIGht  0.9979691873576392 
+  sele sd .and. (resi  24  .or. resi  51 ) end WEIGht  0.6964187937040895 
+  sele sd .and. (resi  25  .or. resi  28 ) end WEIGht  0.8927269972864454 
+  sele sd .and. (resi  25  .or. resi  29 ) end WEIGht  0.8210307146883757 
+  sele sd .and. (resi  26  .or. resi  29 ) end WEIGht  0.8905543107011445 
+  sele sd .and. (resi  27  .or. resi  30 ) end WEIGht  0.9612292542758489 
+  sele sd .and. (resi  27  .or. resi  31 ) end WEIGht  0.9999999983165117 
+  sele sd .and. (resi  28  .or. resi  53 ) end WEIGht  0.9290808245024628 
+  sele sd .and. (resi  30  .or. resi  33 ) end WEIGht  0.9273633852785603 
+  sele sd .and. (resi  30  .or. resi  34 ) end WEIGht  0.9852961901326586 
+  sele sd .and. (resi  31  .or. resi  53 ) end WEIGht  0.9960510555412353 
+  sele sd .and. (resi  32  .or. resi  44 ) end WEIGht  0.9811553525890055 
+  sele sd .and. (resi  35  .or. resi  40 ) end WEIGht  0.9996382371796980 
+  sele sd .and. (resi  35  .or. resi  44 ) end WEIGht  0.9529057898756480 
+  sele sd .and. (resi  35  .or. resi  55 ) end WEIGht  0.9921250365257495 
+  sele sd .and. (resi  38  .or. resi  40 ) end WEIGht  0.9469272633832431 
+  sele sd .and. (resi  40  .or. resi  55 ) end WEIGht  0.9855702226874301 
+  sele sd .and. (resi  40  .or. resi  57 ) end WEIGht  0.7830957174831968 
+  sele sd .and. (resi  44  .or. resi  55 ) end WEIGht  0.9999950887381377 
+  sele sd .and. (resi  45  .or. resi  54 ) end WEIGht  0.9994979068986675 
+  sele sd .and. (resi  47  .or. resi  49 ) end WEIGht  0.9878049213251836 
+  sele sd .and. (resi  47  .or. resi  50 ) end WEIGht  0.9999916748639699 
+  sele sd .and. (resi  47  .or. resi  52 ) end WEIGht  0.9881469299868514 
+  sele sd .and. (resi  50  .or. resi  52 ) end WEIGht  0.9973918765679025 
+  sele sd .and. (resi  51  .or. resi  53 ) end WEIGht  0.8168211946297691 
+  sele sd .and. (resi  52  .or. resi  54 ) end WEIGht  0.8871232193909784 
+  sele sd .and. (resi  54  .or. resi  56 ) end WEIGht  0.8700639041799975 
+ __________________________________________________________________________
+
+  2)  Multiple DMCO terms are used, one for inter- and one for intramolecular 
+  contacts.  Contact-specific cutoffs are used that override the CUTOff 
+  command in the DMCO line.  Weights are not specified, so all contacts are
+  treated equally.
+
+  open unit 25 write form name "intra.rho"       
+  open unit 26 write form name "inter.rho"       
+  set fintra 1
+  set finter 1
+  DMCO clear
+
+  DMCO FORCe 300 REFE @fintra OUTPut 25 NSAVe 1000 -
+  CUTOff 10 NCONtact  3
+  sele (segid PROA .and. resid 67) .or. (segid PROA .and. resid 71) end cutoff 7.090416
+  sele (segid PROA .and. resid 67) .or. (segid PROA .and. resid 70) end cutoff 6.073682
+  sele (segid PROA .and. resid 33) .or. (segid PROA .and. resid 36) end cutoff 8.320749
+
+  DMCO FORCe 300 REFE @finter OUTPut 26 NSAVe 1000 -
+  CUTOff 10 NCONtact 3
+  sele (segid PROA .and. resid 35) .or. (segid PROB .and. resid 5) end cutoff 11.023944
+  sele (segid PROA .and. resid 33) .or. (segid PROB .and. resid 33) end cutoff 14.76199
+  sele (segid PROA .and. resid 33) .or. (segid PROB .and. resid 30) end cutoff 9.794055
+
+ __________________________________________________________________________
+
+
+File: Cons, Node: PATH, Up: Top, Previous: Distance Matrix restraint, Next: top
+
+[SYNTAX CONS PATH]
+
+Syntax: CONS PATH spline-pts [COMP] [TEST unit]
+             FORCe real TZERo real atom-selection
+                              :
+                              :
+                              :
+             FORCe real TZERo real atom-selection
+
+
+        CONS PATH CLEAR
+
+	CONS PATH POST
+
+
+where:
+	spline-pts ::= { SPLUnit unit           }
+		       { SPLIne  atom-selection }
+
+	This command will harmonically restrain the projections of centers 
+of mass onto an arbitrary three-dimensional path. The path is specified with 
+cubic splines.  Essentially, this is achieved by first projecting each 
+center of mass (COM) onto a cubic spline interpolated path to establish 
+an initial projection position (TINI).  Then a restraint is applied to 
+the COM with respect to its TINI.  For N spline points, 
+
+		1.0 <= TINI <= N
+
+	where, for example, if TINI = 3.48 then the COM is projected onto 
+the spline piece between spline point 3 and spline point 4 while the digits
+to the right of the decimal place corresponds to the cubic spline parameter 
+that gives the X, Y, Z coordinates that lie on spline piece 3.
+
+	The initial reference coordinates (used for determining TINI) can 
+be the current set (default) or a comparison set (COMP keyword).
+
+	The spline-pts are selected either from an atom selection if
+SPLIne is given or read from a previously opened unit given 
+with the SPLUnit keyword.  By default, the spline-pts are taken from the 
+main set.  If the COMP key is specified in the absence of the SPLUnit 
+keyword then the spline-pts are taken from the COMP set.  However, 
+if both the COMP and SPLUnit keys are used then the spline-pts are 
+taken from the coordinates that are read from the external file.  Thus, 
+it is possible to define the initial coordinates separately from the 
+spline points by using the COMP key along with SPLUnit.  
+
+        The reference point (relative to TINI) is specified by TZERo 
+and is recommended to have a value that is near TINI (usually, 
+within 1.0 of TINI).  A negative TZERo value specifies a reference point
+to the "left" of TINI while a positive TZERo value speficies a reference
+point to the "right" of TINI.
+
+ 	The restraint force constant can be set to any positive
+value (specified by the FORCE keyword followed by the desired value).
+Multiple centers of mass can be defined for a given path by repeating 
+the FORCe, TZERo, and atom-selection.
+
+        The functional form of the restraint potential is:
+
+                                             2
+        U(T) = FORCE * [ (T - TINI) - TZERO ] 
+
+where T is the instantaneous projection onto the spline of a given 
+center of mass.
+
+	The spline interpolation (derived from user defined spline points)
+and COM projections can be visualized by specifying the TEST key followed
+immediately by a user defined output unit.  The output data structure
+is shown in Example 4 below.
+
+	Using CONS PATH POST will output infornation to OUTU. This is
+convenient when used in conjunction with analyzeCHARMM.pl (MMTSB Toolset).
+The output takes on the form:
+
+	PATH =  1 COM =   1 TINIT =   1.36523799 TZERO =   -0.10000000 ABSTZERO =   1.26523799 TPRIME =   1.26773721
+
+Each COM is written while specifying which path the COM corresponds with,
+the COM number, the initial T-value from the first simulation window,
+the relative TZERO (relative to the initial T-value), the absolute TZERO,
+and TPRIME (the COM projection onto the path).
+
+	The primary use of this command is to restrain the movement of
+a specific center of mass parallel to a user defined path.  For instance,
+DNA can be restrained to translocate along its phosphate backbone while
+resembling a screwing motion.
+
+	Example 1:
+
+	CONS PATH SPLINE SELECT TYPE P .AND. SEGID N01F END -
+	FORCE 5 TZERO 0.35 SELECT SEGID N01F .AND. RESID 18 END -
+	FORCE 5 TZERO 0.35 SELECT SEGID N01F .AND. RESID 19 END -
+	FORCE 5 TZERO 0.35 SELECT SEGID N01F .AND. RESID 20 END 
+
+	This will use the phosphorous atoms to generate a cubic spline.
+Then it will create a harmonic restraint with a force constant of 
+5 kcal/mol that holds the centers of mass at residues 18, 19, and 20 to
+its corresponding TINI+0.35 position.
+
+	Example 2:
+
+	CONS PATH COMP SPLINE SELECT TYPE P .AND. SEGID N01F END -
+	FORCE 2 TZERO 0.27 SELECT SEGID N01E .AND. RESID 5 END -
+	FORCE 2 TZERO 0.27 SELECT SEGID N01E .AND. RESID 6 END -
+	FORCE 2 TZERO 0.27 SELECT SEGID N01E .AND. RESID 7 END
+
+	This will use the phosphorous atoms to generate a cubic spline.
+Then it will create a harmonic restraint with a force constant of 
+2 kcal/mol that holds the centers of mass at residues 5, 6, and 7 to
+its corresponding TINI+0.27 position.  However, TINI is determined from
+the comparison set and not the default main set.  Note that COM at 
+residues 5-7 from segid N01E are restrained with respect to the 
+phosphorus atoms of segid N01F (and not segid N01E).
+
+	Example 3:
+
+	OPEN UNIT 77 READ FORM NAME "SPLINE.PTS"
+	
+	CONS PATH COMP SPLUNIT 77 -
+	FORCE 10 TZERO -0.5 SELECT SEGID N01E .AND. RESID 8 END -
+	FORCE 10 TZERO -0.5 SELECT SEGID N01E .AND. RESID 9 END -
+	FORCE 10 TZERO -0.5 SELECT SEGID N01E .AND. RESID 10 END
+
+	This will use the coordinates contained in the file "SPLINE.PTS"
+(and not from the comparison set) to generate a cubic spline.  The name of 
+the file containing the spline points is irrelevant but the format must be 
+arranged as follows:
+
+-48.847 75.201 8.114
+-68.551 73.231 9.000
+-55.690 77.369 8.591
+48.049 74.225 10.388
+
+Then it will create a harmonic restraint with a force constant of 
+10 kcal/mol that holds the centers of mass at residues 8, 9, and 10 to
+its corresponding TINI+(-0.5) position.  However, TINI is determined
+from the comparison set and not the default main set.
+
+	Example 4:
+
+	OPEN UNIT 88 WRITE FORM NAME "VISUALIZE.PDB"
+	
+	CONS PATH TEST 88 SPLINE SELECT TYPE P .AND. SEGID N01F END -
+	FORCE 1 TZERO -0.19 SELECT SEGID N01F .AND. RESID 14 END - 
+	FORCE 1 TZERO -0.19 SELECT SEGID N01F .AND. RESID 12 END -
+	FORCE 1 TZERO -0.19 SELECT SEGID N01F .AND. RESID 13 END
+
+	This will use the phosphorous atoms to generate a cubic spline.
+Then it will create a harmonic restraint with a force constant of 
+1.0 kcal/mol that holds the centers of mass at residues 14, 12, and 13 to
+its corresponding TINI+(-0.19) position.  Furthermore, the spline interpolation
+and COM projections can be visualized from the file "VISUALIZE.PDB" where
+the contents of the file are arranged as follows:
+
+ATOM      1  P     1 S   1      20.356  13.969  16.245     1 0.000
+ATOM      2  O1P   1 S   1      18.599  13.199  16.040     1 0.271
+ATOM      3  O2P   1 S   1      17.720  12.850  15.920     1 0.407
+ATOM      4  O5*   1 S   1      16.840  12.543  15.780     1 0.543
+ATOM      5  C5*   1 S   1      15.959  12.292  15.612     1 0.679
+ATOM      6  C4*   1 S   1      15.076  12.112  15.409     1 0.814
+ATOM      7  C3*   1 S   1      14.192  12.017  15.165     1 0.950
+ATOM      8  P     2 S   2      13.866  12.006  15.063     2 0.000
+ATOM      9  O1P   2 S   2      12.107  12.179  14.397     2 0.271
+ATOM     10  O2P   2 S   2      11.254  12.395  14.000     2 0.407
+ATOM     11  O5*   2 S   2      10.435  12.684  13.567     2 0.543
+ATOM     12  C5*   2 S   2       9.661  13.034  13.104     2 0.679
+ATOM     13  C4*   2 S   2       8.946  13.436  12.615     2 0.814
+ATOM     14  C3*   2 S   2       8.299  13.879  12.107     2 0.950
+ATOM     15  P     3 S   3       8.081  14.050  11.915     3 0.000
+ATOM     16  O1P   3 S   3       7.084  15.038  10.846     3 0.271
+ATOM     17  O2P   3 S   3       6.684  15.562  10.296     3 0.407
+ATOM     18  O5*   3 S   3       6.336  16.103   9.738     3 0.543
+ATOM     19  C5*   3 S   3       6.027  16.655   9.174     3 0.679
+ATOM     20  C4*   3 S   3       5.746  17.216   8.605     3 0.814
+ATOM     21  C3*   3 S   3       5.480  17.781   8.035     3 0.950
+ATOM     22  P     4 S   4       5.384  17.990   7.824     3 0.000
+ATOM     23  COM   1 C   1       6.747  15.474  10.388     3 0.385
+ATOM     24  COM   2 C   2      18.152  13.017  15.981     1 0.340
+ATOM     25  COM   3 C   3      11.047  12.460  13.896     2 0.441
+
+Similar to the PDB Format:
+
+     Column 1 = RECORD NAME
+     Column 2 = ATOM NUMBER
+     Column 3 = ATOM TYPE (Points along a spline path have spline points
+                represented as a DNA backbone while COM points are 
+                represented as type "COM").
+     Column 4 = RESIDUE NAME (Numbered according to either spline piece
+                number for splines or COM numbers for COM).
+     Column 5 = CHAINID (S = Spline and C = COM)
+     Column 6 = RESIDUE NUMBER (Same as Column 4)
+     Column 7 = X-COOR   |  These X, Y, Z-COOR are interpolated points
+     Column 8 = Y-COOR   |  for splines and projection points for COM
+     Column 9 = Z-COOR   |
+     Column 10= Spline Piece (Represents the spline piece that the point
+                was taken from).
+     Column 11= TVAL (Represents the T-value from a specific spline piece
+                identified in Column 10).  If this TVAL is substituted
+	        into its corresponding spline piece (from Column 10 which
+	        will look like At^3+Bt^2+Ct+D), this will give the
+                corresponding X-COOR, Y-COOR, and Z-COOR.
+
+
+------------------------------------------------------------------------------
+                  Helix Restraint Potential (CONS HELIx)
+
+ Questions and comments regarding CONS HELIx should be directed to
+ ----------------------------------------------------------------------------
+ Wonpil Im (wonpil@ku.edu);  Jinhyuk Lee (mack97hyuk@gmail.com);
+ Taehoon Kim (comboy94@gmail.com);  Sunhwan Jo (sunhwanj@gmail.com)
+ Center for Bioinformatics/Dept. of molecular biosciences, Univ. of Kansas
+
+References:
+1. Jinhyuk Lee and Wonpil Im, J. Comput. Chem., 28, 669(2007)
+2. Jinhyuk Lee and Wonpil Im, Chem. Phys. Lett., 441, 132(2007)
+3. C.Chothia, J.Mol.Biol. 145, 215(1981)
+
+------------------------------------------------------------------------------
+[SYNTAX CONS HELIx]
+
+Syntax:
+
+CONS { HELIx } DISTance <real> FORCe <real> -
+     { BHG   } [SELE 1st-atom-selection END] [SELE 2nd-atom-selection END] -
+               UDISt <int> STEP <int>
+
+CONS { HELIx } { [CROSs] [HINGe] } ANGLe <real> FORCe <real> -
+     { BHG   } [SELE  1st-atom-selection END] [SELE 2nd-atom-selection END] -
+               UANG <int> STEP <int>
+
+CONS { HELIx } { TilX } ANGLe <real> FORCe <real> -
+     { BHG   } { TilY } [SELE atom-selection END] -
+               { TilZ } UANG <int> STEP <int>
+
+CONS { HELIx } ROTH { RotX } ANGLe <real> FORCe <real> REFA <int> -
+     { BHG   }      { RotY } [SELE atom-selection END] -
+                    { RotZ } UANG <int> STEP <int>
+
+   Single selection - Tilt angle constraint or Rotation angle constraint
+   Double selection - Cross angle constraint or Hinge angle constraint
+
+   CROSs : default option - Crossing angle constraint
+   HINGe : Hinge angle constraint
+
+   HELIx : for helix
+   BHG   : for beta-hairpin
+
+CONS HELIx RESEt     ! reset CONS HELIx
+
+------------------------------------------------------------------------------
+                       Details of CONS HELIx commands
+
+1) The DISTannce command
+
+      The CONS HELIx DISTance command will setup a helix-helix distance 
+restraint between two selected helices. The detail formalizm and description 
+are in J. Comput. Chem., 28:669-680(2007).
+
+2) The CROSs/HINGe command
+
+      The CONS HELIx CROSs command will setup a helix-helix crossing angle
+restraint between two selected helices. The detail formalizm and description 
+are in J. Comput. Chem., 28:669-680(2007).
+      The CONS HELIx HINGe command will setup a helix-helix hinge angle
+restraint between two selected helices.
+
+3) The ANGLe command
+
+      The CONS HELIx ANGLe command will setup a helix tilt angle restraint 
+of selected helix. The helix tilt (tau) is defined as the angle between helical 
+principal axis and Z-axis (default). The reference axis can be changed by extra 
+keywords: (TilX (X-axis),TilY (Y-axis), and TilZ (Z-axis)).
+
+4) The ROTH ANGLe command
+
+      The CONS HELIx ROTH ANGLe command will setup a helix rotation angle 
+restraint of selected helix. The helix rotation (rho) is defined as the angle 
+between the perpendicular vector (rs) from the helical axis to the selected Ca 
+atom (keyword: REFA) and the projection vector (zp) of the Z-axis (default) onto 
+the plane made by the second and third principal axes (see Figure 1, Biophys. J., 
+99:175-183 (2010)). The default Z-axis can be changed by extra keywords: 
+(RotX (X-axis), RotY (Y-axis), and RotZ (Z-axis)).
+
+5) Energy related properties:
+
+   'ECHD' - Helix-helix distance restraint energy
+   'ECHA' - Helix-helix cross/hinge angle restraint energy
+   'ECHT' - Helix tilt restraint energy
+   'ECHR' - Helix rotation restraint energy
+
+6) COOR HELIx substitution parameters
+
+      Since CONS HELIx incoperate with COOR HELIx command, the following 
+substitution parameters are specified:
+
+   'MIND' - Helix-helix distance
+   'OMEG' - Helix-helix cross angle
+   'HANG' - Helix-helix hinge angle
+   'TANG' - Helix tilt angle
+   'ROTA' - Helix rotation angle
+
+7) Examples of usage
+
+7-1) To setup a restraint with a force constant of 200.0 kcal/(mol Ang^2) for 
+a helix-helix distance of 10 angstroms between two helices and to print the 
+distance to a file linked to a fortran unit 11 every 100 step during simulation:
+
+define helixa sele segid PROA .and. type CA end
+define helixb sele segid PROB .and. type CA end
+
+open write card unit 11 name dist.dat
+
+cons helix dist 10.0 force 100.0 select helixa end select helixb end -
+     udist 11 step 100
+
+7-2) To setup a restraint with a force constant of 70.0 kcal/(mol rad^2) for 
+a helix-helix crossing angle of 45 degree between two helices and to print the 
+angle to a file linked to a fortran unit 11 every 100 step during simulation:
+
+define helixa sele segid PROA .and. type CA end
+define helixb sele segid PROB .and. type CA end
+
+open write card unit 11 name dist.dat
+
+cons helix cross 45.0 force 35.0 select helixa end select helixb end -
+     uang 11 step 100
+
+7-3) To setup a restraint with a force constant of 6000.0 kcal/(mol rad^2) for 
+a helix tilt angle of 45 degree respect to Z-axis (defalut) and to print the 
+angle to a file linked to a fortran unit 11 every 100 step during simulation:
+
+define helixa sele segid PROA .and. type CA end
+
+open write card unit 11 name angle.dat
+
+cons helix angle 45.0 force 3000.0 select helixa end -
+     uang 11 step 100
+
+7-4) To setup a restraint with a force constant of 200.0 kcal/(mol rad^2) for
+a helix rotation angle of 30 degree using Ca atom in 10th residue as an internal 
+reference (Biophys. J., 99:175-183 (2010)) and to print the angle to a file 
+plinked to a fortran unit 11 every 100 step during simulation:
+
+define helixa sele segid PROA .and. type CA end
+
+open write card unit 11 name rotation.dat
+
+cons helix roth angle 30.0 force 100.0 refa 10 select helixa end -
+     uang 11 step 100
+
+
+NOTE: The helix restraint does not have one-half in the harmonic form, so
+the force constants must be a half of real value if a one-half harmonic form 
+is considered for any post-analysis.

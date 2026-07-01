@@ -1,0 +1,202 @@
+* continue from pc-schumann surftest3
+* starts at 16 ns and finishes at 20 ns
+*
+
+
+stream datadir.def
+
+PRNLEVEL 5 @pnode
+
+
+! Topology
+read rtf card 
+* ---- 
+* Built RTF for nma.mol2 
+*    by user vzoete     Fri Apr 12 15:26:51 CEST 2019 
+* ---- 
+*
+   22    0
+
+MASS   201 CR    12.011000
+MASS   202 NC=O  14.006700
+MASS   203 C=O   12.011000
+MASS   204 O=C   15.999400
+MASS   205 HCMM   1.007940
+MASS   206 HNCO   1.007940
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI LIG   0.000 
+GROUP
+ATOM C    CR    0.3001
+ATOM N    NC=O -0.7301
+ATOM C1   C=O   0.5690
+ATOM C2   CR    0.0610
+ATOM O    O=C  -0.5700
+ATOM H    HCMM  0.0000
+ATOM H1   HCMM  0.0000
+ATOM H2   HCMM  0.0000
+ATOM H3   HNCO  0.3700
+ATOM H4   HCMM  0.0000
+ATOM H5   HCMM  0.0000
+ATOM H6   HCMM  0.0000
+BOND C    N   
+BOND N    C1  
+BOND C1   C2  
+BOND C1   O   
+BOND C    H   
+BOND C    H1  
+BOND C    H2  
+BOND N    H3  
+BOND C2   H4  
+BOND C2   H5  
+BOND C2   H6  
+IMPH C    H    N    H1   
+IMPH C    H    N    H2   
+IMPH N    C1   C    H3   
+IMPH C1   O    N    C2   
+IMPH C2   H4   C1   H5   
+IMPH C2   H4   C1   H6   
+IC C    N     C1   C2    1.45   121.68    0.00  120.50  1.50  
+IC C    N     C1   O     1.45   121.68    0.00  120.38  1.22  
+IC N    C1    C2   H4    1.36   120.50    0.00  111.50  1.11  
+IC N    C1    C2   H5    1.36   120.50 -120.20  109.55  1.11  
+IC N    C1    C2   H6    1.36   120.50  120.20  109.55  1.11  
+IC C1   N     C    H     1.36   121.68    0.00  109.91  1.11  
+IC C1   N     C    H1    1.36   121.68   60.35  110.02  1.11  
+IC C1   N     C    H2    1.36   121.68  -60.35  110.02  1.11  
+IC C2   C1    N    H3    1.50   120.50    0.00  119.69  1.03  
+IC O    C1    N    H3    1.22   120.38    0.00  119.69  1.03  
+IC O    C1    C2   H4    1.22   119.12    0.00  111.50  1.11  
+IC O    C1    C2   H5    1.22   119.12   59.80  109.55  1.11  
+IC O    C1    C2   H6    1.22   119.12  -59.80  109.55  1.11  
+IC H    C     N    H3    1.11   109.91    0.00  118.63  1.03  
+IC H1   C     N    H3    1.11   110.02 -119.65  118.63  1.03  
+IC H2   C     N    H3    1.11   110.02  119.65  118.63  1.03  
+IC H    N    *C    H1    0.00     0.00  120.00    0.00  0.00  
+IC H    N    *C    H2    0.00     0.00 -120.00    0.00  0.00  
+IC C1   C    *N    H3    0.00     0.00  180.00    0.00  0.00  
+IC O    N    *C1   C2    0.00     0.00  180.00    0.00  0.00  
+IC H4   C1   *C2   H5    0.00     0.00  120.00    0.00  0.00  
+IC H4   C1   *C2   H6    0.00     0.00 -120.00    0.00  0.00  
+
+END
+
+read para card 
+* ---- 
+* Built parameters for nma.mol2 
+*    by user vzoete     Fri Apr 12 15:26:51 CEST 2019 
+* ---- 
+*
+
+BONDS
+CR   NC=O  335.651     1.4360 
+NC=O C=O   419.491     1.3690 
+C=O  CR    301.539     1.4920 
+C=O  O=C   931.963     1.2220 
+CR   HCMM  342.991     1.0930 
+NC=O HNCO  479.511     1.0150 
+
+ANGLES
+NC=O CR   HCMM   53.255    107.6460 
+HCMM CR   HCMM   37.134    108.8360 
+CR   NC=O C=O    59.084    119.6000 
+CR   NC=O HNCO   39.725    120.0660 
+C=O  NC=O HNCO   41.380    120.2770 
+NC=O C=O  CR     70.814    112.7350 
+NC=O C=O  O=C    65.273    127.1520 
+CR   C=O  O=C    67.504    124.4100 
+C=O  CR   HCMM   46.778    108.3850 
+
+DIHEDRALS
+CR   NC=O C=O  CR       0.324  1     0.00 
+CR   NC=O C=O  CR       3.079  2   180.00 
+CR   NC=O C=O  CR       0.254  3     0.00 
+CR   NC=O C=O  O=C     -0.160  1     0.00 
+CR   NC=O C=O  O=C      3.147  2   180.00 
+CR   NC=O C=O  O=C     -0.073  3     0.00 
+NC=O C=O  CR   HCMM    -0.206  1     0.00 
+NC=O C=O  CR   HCMM     0.346  2   180.00 
+NC=O C=O  CR   HCMM     0.043  3     0.00 
+C=O  NC=O CR   HCMM    -1.050  1     0.00 
+C=O  NC=O CR   HCMM     0.681  2   180.00 
+C=O  NC=O CR   HCMM     0.011  3     0.00 
+CR   C=O  NC=O HNCO    -0.147  1     0.00 
+CR   C=O  NC=O HNCO     2.902  2   180.00 
+CR   C=O  NC=O HNCO     0.671  3     0.00 
+O=C  C=O  NC=O HNCO     0.718  1     0.00 
+O=C  C=O  NC=O HNCO     2.487  2   180.00 
+O=C  C=O  NC=O HNCO    -0.227  3     0.00 
+O=C  C=O  CR   HCMM     0.330  1     0.00 
+O=C  C=O  CR   HCMM    -0.704  2   180.00 
+O=C  C=O  CR   HCMM     0.154  3     0.00 
+HCMM CR   NC=O HNCO    -0.308  1     0.00 
+HCMM CR   NC=O HNCO     0.137  3     0.00 
+
+IMPROPER
+CR   HCMM NC=O HCMM     0.000  0     0.00 
+NC=O C=O  CR   HNCO    -1.439  0     0.00 
+C=O  O=C  NC=O CR       9.284  0     0.00 
+CR   HCMM C=O  HCMM     0.000  0     0.00 
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch - 
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+CR      0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000    
+NC=O    0.000000  -0.200000     1.850000    
+C=O     0.000000  -0.110000     2.000000    
+O=C     0.000000  -0.120000     1.700000   0.000000  -0.120000     1.400000    
+HCMM    0.000000  -0.022000     1.320000    
+HNCO    0.000000  -0.046000     0.224500    
+
+end 
+
+read sequ card 
+* NMA 
+* 
+1 
+LIG 
+GENErate NMA WARNing SETUp
+
+read coor card 
+*  DATE:     4/12/19     15:26:51      CREATED BY USER: vzoete
+*
+   12
+    1    1 LIG  C     -4.61250   2.51570   0.00000 LIG  1      0.00000
+    2    1 LIG  N     -3.30260   3.13010  -0.00000 LIG  1      0.00000
+    3    1 LIG  C1    -2.16380   2.38480  -0.00000 LIG  1      0.00000
+    4    1 LIG  C2    -0.81850   3.04970  -0.00000 LIG  1      0.00000
+    5    1 LIG  O     -2.22350   1.16310   0.00000 LIG  1      0.00000
+    6    1 LIG  H     -5.39800   3.30080   0.00000 LIG  1      0.00000
+    7    1 LIG  H1    -4.73750   1.88730   0.90740 LIG  1      0.00000
+    8    1 LIG  H2    -4.73750   1.88730  -0.90740 LIG  1      0.00000
+    9    1 LIG  H3    -3.23980   4.15950  -0.00000 LIG  1      0.00000
+   10    1 LIG  H4    -0.91230   4.15610  -0.00000 LIG  1      0.00000
+   11    1 LIG  H5    -0.25260   2.74270  -0.90440 LIG  1      0.00000
+   12    1 LIG  H6    -0.25260   2.74270   0.90440 LIG  1      0.00000
+
+!-----------EXTBOND MODULE-----------------------------------------------!
+
+energy 
+
+! 1- naive subistute the original values with themselves
+!xtbd repl HARM 931.963 1.222  sele bynu 3 end sele bynu 5 end 
+! 2- Example of Morse potential  (roughly estimated)
+!xtbd repl mors 222.6704 1.200 1.7035 sele bynu 3 end sele bynu 5 end
+! 3- Kernel implementation
+ xtbd repl RKHS @0xtbd_pes 0  222.6704 sele bynu 3 end sele bynu 5 end
+! 4- xtbd reading an external file 
+!open unit 40 read card name @0xtbd_nma.para
+!xtbd read  unit 40 
+
+energy
+
+mini sd nstep 100 
+mini abnr nstep 10
+
+
+VIBRAN NMOD
+DIAG
+ 
+stop 
+

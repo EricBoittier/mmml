@@ -1,0 +1,12 @@
+! Ebbreak   Fhop    Bhop     (Fhop: from s.ch to H2O, Bhop: from H3O to s.ch)
+! These are "fast" parameters, i.e. they allow unphysically fast deprotonation of sidechains.
+! AR* for arginine and H2O for hydroxide are experimental and untested 
+H3O   165.0    20.0    20.0
+ASP   299.0    24.0    20.0
+GLU   312.0    25.0    20.0
+HSD   264.0    22.0    30.0
+HSE   245.0    22.0    30.0
+AR1   140.0    31.0    80.0
+AR2   136.0    31.0    80.0
+AR3   150.0    31.0    80.0
+H2O   315.0    10.0    10.0

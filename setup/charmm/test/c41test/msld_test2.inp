@@ -1,0 +1,991 @@
+* Testcase for Multi-site l-dynamics
+* testing: memory allocation and deallocation calls
+* testing: reading patches and computing energies
+* testing: reading restart files and lambda trajectory files
+* Hybrid model represents multiple, identical methoxybenzene molecules
+*
+
+! Test to ensure the LDM functionality exists in this build of CHARMM.
+if ?block .ne. 1 then
+   echo LDM functionality absent: Test NOT performed
+   echo "TESTCASE RESULT msld_test1: SKIP"
+   stop
+endif
+
+stream datadir.def
+
+! Set tolerance to control flagged differences
+set tol = 1.0e-4
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! read the topology and parameter files
+goto read_toppar_data
+label return_read_toppar_data
+
+! read in patches for multi-site l-dynamics
+! three methoxy groups in para-positions on a benzene molecule
+goto read_patches
+label return_read_patches
+
+set l = 0
+set p = s
+
+label BEGINSETUP=@l
+
+label excld
+if @l eq 1 set p = r
+! prepare core benzene molecule
+read sequ card
+* title
+*
+1
+benz
+generate BEN setup first none last none
+
+! replace carbon and hydrogen atoms at para-positions 
+! on benzene core with carbon and methoxy groups
+patch @{p}1oc1 ben 1 setup
+patch @{p}2oc1 ben 1 setup
+dele atom select atom ben 1 cg .or. atom ben 1 hg end
+dele atom select atom ben 1 cz .or. atom ben 1 hz end
+
+goto read_coordinates
+label return_read_coordinates
+
+! add additional carbon and methoxy groups at the para-positions
+! (site0 = environment; site1=s1; site2=s2)
+patch @{p}1oc2 ben 1 setup
+patch @{p}1oc3 ben 1 setup
+patch @{p}2oc2 ben 1 setup
+patch @{p}2oc3 ben 1 setup
+
+ic generate
+ic param
+ic build
+ 
+print coor
+
+coor stat
+coor orient
+coor stat
+
+! Defining substituents/blocks for each of 2 sites on benzene core
+define site1sub1 select -
+   (     atom ben 1 c201 -
+   .or. atom ben 1 o202 .or. atom ben 1 c203 -
+   .or. atom ben 1 h204 .or. atom ben 1 h205 -
+   .or. atom ben 1 h206 ) end
+
+define site1sub2 select -
+   (     atom ben 1 c401 -
+   .or. atom ben 1 o402 .or. atom ben 1 c403 -
+   .or. atom ben 1 h404 .or. atom ben 1 h405 -
+   .or. atom ben 1 h406 ) end
+
+define site1sub3 select -
+   (     atom ben 1 c601 -
+   .or. atom ben 1 o602 .or. atom ben 1 c603 -
+   .or. atom ben 1 h604 .or. atom ben 1 h605 -
+   .or. atom ben 1 h606 ) end
+
+define site2sub1 select -
+   (     atom ben 1 c101 -
+   .or. atom ben 1 o102 .or. atom ben 1 c103 -
+   .or. atom ben 1 h104 .or. atom ben 1 h105 -
+   .or. atom ben 1 h106 ) end
+
+define site2sub2 select -
+   (     atom ben 1 c301 -
+   .or. atom ben 1 o302 .or. atom ben 1 c303 -
+   .or. atom ben 1 h304 .or. atom ben 1 h305 -
+   .or. atom ben 1 h306 ) end
+
+define site2sub3 select -
+   (     atom ben 1 c501 -
+   .or. atom ben 1 o502 .or. atom ben 1 c503 -
+   .or. atom ben 1 h504 .or. atom ben 1 h505 -
+   .or. atom ben 1 h506 ) end
+
+calc diff = abs ( ?xmax -4.55347 ) 
+if @diff .ge. @tol then
+   echo SETUP=@l FAILED
+   echo "TESTCASE RESULT msld_test2: FAIL"
+   stop
+else
+   echo SETUP=@l PASSED
+endif
+
+goto read_minimized_pdb
+      !if @l eq 0 then
+      !mini sd nstep 1000
+      !write psf card name test.psf
+      !write coor pdb name test.pdb
+      !endif
+      !read coor pdb name test.pdb resid
+label return_read_minimized_pdb
+
+ener
+
+label ENDSETUP=@l
+label BEGINTEST=@l
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+set TEST=@l = PASSED
+set FAILED = 
+
+! set atom exclusions to test block exclusion selection
+set excl = 
+if l eq 1 set excl = excl 2 3 2 4 3 4 5 6 5 7 6  7
+
+! testing memory allocation among MSLD and LDM and BLOCK commands
+! testing energies for FNEXp and FNSIn functional forms of lambda
+
+BLOCK 7
+   Call 2 sele site1sub1 end
+   Call 3 sele site1sub2 end
+   Call 4 sele site1sub3 end
+   Call 5 sele site2sub1 end
+   Call 6 sele site2sub2 end
+   Call 7 sele site2sub3 end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.50    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   ldin 5 0.30    0.0  12.0  0.0 5.0 
+   ldin 6 0.10    0.0  12.0  0.0 5.0 
+   ldin 7 0.20    0.0  12.0  0.0 5.0 
+   @excl                        ! test exclusion generation
+   rmla bond thet               ! all bond and angle energy terms are treated at full strength
+   msld 0 1 1 1 2 2 2 fnex 5.5  ! msld selects multi-site l-dynamics
+                                !   numbers assign each block to the specified site on the core
+   msma                         ! msma constructs the interaction matrix and assigns l and theta values
+                                !   for each block
+END
+! Change the block coefficients to ensure that the pairs of atoms will interact if
+! they are not excluded.
+block 7
+   coef 2 3 1
+   coef 2 4 1
+   coef 3 4 1
+   coef 5 6 1
+   coef 5 7 1
+   coef 6 7 1
+end
+
+ener
+if @l eq 0 set eref = ?ener
+
+calc diff = abs ( ?ener - 41.6911327 )
+
+if @l eq 1 calc diff = abs ( ?ener - @eref )
+if @diff .ge. @tol then
+   set TEST=@l = FAILED
+   set FAILED = @FAILED + msld_fnexp_ENER
+endif
+
+BLOCK
+  clear
+END
+
+if TEST=@l ne PASSED then
+   echo TEST=@l FAILED MSLD Block exclusions
+   echo failed components: @failed
+else
+   echo TEST=@l PASSED
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=@l 
+
+delete atom select all end
+incr l by 1
+if l lt 3 goto excld
+
+stop
+
+!--------------------------------------------------------------------------------------
+
+label read_patches
+
+read rtf card append
+* parameters estimated by MATCH/pdb2rtf.pl charmm22_extended
+* Charmm rtf built by pdb2rtf
+*
+   22    0
+
+AUTO NOANGLES NODIHE NOPATCH
+
+PRES s1oc1   0.0
+ATOM C201 CG2R61 0.22     cg hg
+ATOM O202 OG301 -0.39     cg hg
+ATOM C203 CG331 -0.10     cg hg
+ATOM H204 HGA3   0.090    cg hg
+ATOM H205 HGA3   0.090    cg hg
+ATOM H206 HGA3   0.090    cg hg
+BOND C201 O202
+BOND C201 CD1
+BOND C201 CD2
+BOND O202 C203
+BOND C203 H204
+BOND C203 H205
+BOND C203 H206
+ANGLE CD2 C201 O202
+ANGLE CD1 C201 O202
+ANGLE C201 O202 C203
+ANGLE O202 C203 H204
+ANGLE O202 C203 H205
+ANGLE O202 C203 H206
+ANGLE H204 C203 H205
+ANGLE H204 C203 H206
+ANGLE H205 C203 H206
+ANGLE CE2 CD2 C201
+ANGLE HD2 CD2 C201
+ANGLE CE1 CD1 C201
+ANGLE HD1 CD1 C201
+ANGLE CD2 C201 CD1
+DIHE C201 O202 C203 H204
+DIHE C201 O202 C203 H205
+DIHE C201 O202 C203 H206
+DIHE CD2 C201 O202 C203
+DIHE CD1 C201 O202 C203
+DIHE CE2 CD2 C201 O202
+DIHE HE1 CD2 C201 O202
+DIHE CE1 CD1 C201 O202
+DIHE HD1 CD1 C201 O202
+DIHE HE2 CE2 CD2 C201
+DIHE CZ  CE2 CD2 C201
+DIHE CZ  CE1 CD1 C201
+DIHE HE1 CE1 CD1 C201
+DIHE CD2 C201 CD1 CE1
+DIHE CD2 C201 CD1 HD1
+DIHE CD1 C201 CD2 CE2
+DIHE CD1 C201 CD2 HD2
+
+PRES s2oc1   0.0
+ATOM C301 CG2R61 0.22     cz hz
+ATOM O302 OG301 -0.39     cz hz
+ATOM C303 CG331 -0.10     cz hz
+ATOM H304 HGA3   0.090    cz hz
+ATOM H305 HGA3   0.090    cz hz
+ATOM H306 HGA3   0.090    cz hz
+BOND C301 O302
+BOND C301 CE1
+BOND C301 CE2
+BOND O302 C303
+BOND C303 H304
+BOND C303 H305
+BOND C303 H306
+ANGLE CE2 C301 O302
+ANGLE CE1 C301 O302
+ANGLE C301 O302 C303
+ANGLE O302 C303 H304
+ANGLE O302 C303 H305
+ANGLE O302 C303 H306
+ANGLE H304 C303 H305
+ANGLE H304 C303 H306
+ANGLE H305 C303 H306
+ANGLE CD2 CE2 C301
+ANGLE HE2 CE2 C301
+ANGLE CD1 CE1 C301
+ANGLE HE1 CE1 C301
+ANGLE CE2 C301 CE1
+DIHE C301 O302 C303 H304
+DIHE C301 O302 C303 H305
+DIHE C301 O302 C303 H306
+DIHE CE2 C301 O302 C303
+DIHE CE1 C301 O302 C303
+DIHE CD2 CE2 C301 O302
+DIHE HE2 CE2 C301 O302
+DIHE CD1 CE1 C301 O302
+DIHE HE1 CE1 C301 O302
+DIHE HD2 CD2 CE2 C301
+DIHE CG CD2 CE2 C301
+DIHE CG CD1 CE1 C301
+DIHE C201 CD2 CE2 C301
+DIHE C201 CD1 CE1 C301
+DIHE HD1 CD1 CE1 C301
+DIHE CE2 C301 CE1 CD1
+DIHE CE2 C301 CE1 HE1
+DIHE CE1 C301 CE2 CD2
+DIHE CE1 C301 CE2 HE2
+
+PRES s1oc2   0.0
+ATOM C401 CG2R61 0.22    c201 o202 c203 h204 h205 h206
+ATOM O402 OG301 -0.39    c201 o202 c203 h204 h205 h206
+ATOM C403 CG331 -0.10    c201 o202 c203 h204 h205 h206
+ATOM H404 HGA3   0.09    c201 o202 c203 h204 h205 h206
+ATOM H405 HGA3   0.09    c201 o202 c203 h204 h205 h206
+ATOM H406 HGA3   0.09    c201 o202 c203 h204 h205 h206
+BOND C401 O402
+BOND C401 CD1
+BOND C401 CD2
+BOND O402 C403
+BOND C403 H404
+BOND C403 H405
+BOND C403 H406
+ANGLE CD2 C401 O402
+ANGLE CD1 C401 O402
+ANGLE C401 O402 C403
+ANGLE O402 C403 H404
+ANGLE O402 C403 H405
+ANGLE O402 C403 H406
+ANGLE H404 C403 H405
+ANGLE H404 C403 H406
+ANGLE H405 C403 H406
+ANGLE CE2 CD2 C401
+ANGLE HD2 CD2 C401
+ANGLE CE1 CD1 C401
+ANGLE HD1 CD1 C401
+ANGLE CD2 C401 CD1
+DIHE C401 O402 C403 H404
+DIHE C401 O402 C403 H405
+DIHE C401 O402 C403 H406
+DIHE CD2 C401 O402 C403
+DIHE CD1 C401 O402 C403
+DIHE CE2 CD2 C401 O402
+DIHE HE1 CD2 C401 O402
+DIHE CE1 CD1 C401 O402
+DIHE HD1 CD1 C401 O402
+DIHE HE2 CE2 CD2 C401
+DIHE C301 CE2 CD2 C401
+DIHE C301 CE1 CD1 C401
+DIHE HE1 CE1 CD1 C401
+DIHE CD2 C401 CD1 CE1
+DIHE CD2 C401 CD1 HD1
+DIHE CD1 C401 CD2 CE2
+DIHE CD1 C401 CD2 HD2
+
+PRES s1oc3   0.0
+ATOM C601 CG2R61 0.22     c201 o202 c203 h204 h205 h206 c401 o402 c403 h404 h405 h406
+ATOM O602 OG301 -0.39     c201 o202 c203 h204 h205 h206 c401 o402 c403 h404 h405 h406
+ATOM C603 CG331 -0.10     c201 o202 c203 h204 h205 h206 c401 o402 c403 h404 h405 h406
+ATOM H604 HGA3   0.090    c201 o202 c203 h204 h205 h206 c401 o402 c403 h404 h405 h406
+ATOM H605 HGA3   0.090    c201 o202 c203 h204 h205 h206 c401 o402 c403 h404 h405 h406
+ATOM H606 HGA3   0.090    c201 o202 c203 h204 h205 h206 c401 o402 c403 h404 h405 h406
+BOND C601 O602
+BOND C601 CD1
+BOND C601 CD2
+BOND O602 C603
+BOND C603 H604
+BOND C603 H605
+BOND C603 H606
+ANGLE CD2 C601 O602
+ANGLE CD1 C601 O602
+ANGLE C601 O602 C603
+ANGLE O602 C603 H604
+ANGLE O602 C603 H605
+ANGLE O602 C603 H606
+ANGLE H604 C603 H605
+ANGLE H604 C603 H606
+ANGLE H605 C603 H606
+ANGLE CE2 CD2 C601
+ANGLE HD2 CD2 C601
+ANGLE CE1 CD1 C601
+ANGLE HD1 CD1 C601
+ANGLE CD2 C601 CD1
+DIHE C601 O602 C603 H604
+DIHE C601 O602 C603 H605
+DIHE C601 O602 C603 H606
+DIHE CD2 C601 O602 C603
+DIHE CD1 C601 O602 C603
+DIHE CE2 CD2 C601 O602
+DIHE HE1 CD2 C601 O602
+DIHE CE1 CD1 C601 O602
+DIHE HD1 CD1 C601 O602
+DIHE HE2 CE2 CD2 C601
+DIHE C301  CE2 CD2 C601
+DIHE C301  CE1 CD1 C601
+DIHE HE1 CE1 CD1 C601
+DIHE CD2 C601 CD1 CE1
+DIHE CD2 C601 CD1 HD1
+DIHE CD1 C601 CD2 CE2
+DIHE CD1 C601 CD2 HD2
+
+PRES s2oc2   0.0
+ATOM C101 CG2R61 0.22     c301 o302 c303 h304 h305 h306
+ATOM O102 OG301 -0.39     c301 o302 c303 h304 h305 h306
+ATOM C103 CG331 -0.10     c301 o302 c303 h304 h305 h306
+ATOM H104 HGA3   0.090    c301 o302 c303 h304 h305 h306
+ATOM H105 HGA3   0.090    c301 o302 c303 h304 h305 h306
+ATOM H106 HGA3   0.090    c301 o302 c303 h304 h305 h306
+BOND C101 O102
+BOND C101 CE1
+BOND C101 CE2
+BOND O102 C103
+BOND C103 H104
+BOND C103 H105
+BOND C103 H106
+ANGLE CE2 C101 O102
+ANGLE CE1 C101 O102
+ANGLE C101 O102 C103
+ANGLE O102 C103 H104
+ANGLE O102 C103 H105
+ANGLE O102 C103 H106
+ANGLE H104 C103 H105
+ANGLE H104 C103 H106
+ANGLE H105 C103 H106
+ANGLE CD2 CE2 C101
+ANGLE HE2 CE2 C101
+ANGLE CD1 CE1 C101
+ANGLE HE1 CE1 C101
+ANGLE CE2 C101 CE1
+DIHE C101 O102 C103 H104
+DIHE C101 O102 C103 H105
+DIHE C101 O102 C103 H106
+DIHE CE2 C101 O102 C103
+DIHE CE1 C101 O102 C103
+DIHE CD2 CE2 C101 O102
+DIHE HE2 CE2 C101 O102
+DIHE CD1 CE1 C101 O102
+DIHE HE1 CE1 C101 O102
+DIHE HD2 CD2 CE2 C101
+DIHE C201 CD2 CE2 C101
+DIHE C201 CD1 CE1 C101
+DIHE C401 CD2 CE2 C101
+DIHE C401 CD1 CE1 C101
+DIHE C601 CD2 CE2 C101
+DIHE C601 CD1 CE1 C101
+DIHE HD1 CD1 CE1 C101
+DIHE CE2 C101 CE1 CD1
+DIHE CE2 C101 CE1 HE1
+DIHE CE1 C101 CE2 CD2
+DIHE CE1 C101 CE2 HE2
+
+PRES s2oc3   0.0
+ATOM C501 CG2R61 0.22     c301 o302 c303 h304 h305 h306 c101 o102 c103 h104 h105 h106
+ATOM O502 OG301 -0.39     c301 o302 c303 h304 h305 h306 c101 o102 c103 h104 h105 h106
+ATOM C503 CG331 -0.10     c301 o302 c303 h304 h305 h306 c101 o102 c103 h104 h105 h106
+ATOM H504 HGA3   0.090    c301 o302 c303 h304 h305 h306 c101 o102 c103 h104 h105 h106
+ATOM H505 HGA3   0.090    c301 o302 c303 h304 h305 h306 c101 o102 c103 h104 h105 h106
+ATOM H506 HGA3   0.090    c301 o302 c303 h304 h305 h306 c101 o102 c103 h104 h105 h106
+BOND C501 O502
+BOND C501 CE1
+BOND C501 CE2
+BOND O502 C503
+BOND C503 H504
+BOND C503 H505
+BOND C503 H506
+ANGLE CE2 C501 O502
+ANGLE CE1 C501 O502
+ANGLE C501 O502 C503
+ANGLE O502 C503 H504
+ANGLE O502 C503 H505
+ANGLE O502 C503 H506
+ANGLE H504 C503 H505
+ANGLE H504 C503 H506
+ANGLE H505 C503 H506
+ANGLE CD2 CE2 C501
+ANGLE HE2 CE2 C501
+ANGLE CD1 CE1 C501
+ANGLE HE1 CE1 C501
+ANGLE CE2 C501 CE1
+DIHE C501 O502 C503 H504
+DIHE C501 O502 C503 H505
+DIHE C501 O502 C503 H506
+DIHE CE2 C501 O502 C503
+DIHE CE1 C501 O502 C503
+DIHE CD2 CE2 C501 O502
+DIHE HE2 CE2 C501 O502
+DIHE CD1 CE1 C501 O502
+DIHE HE1 CE1 C501 O502
+DIHE HD2 CD2 CE2 C501
+DIHE C201 CD2 CE2 C501
+DIHE C201 CD1 CE1 C501
+DIHE C401 CD2 CE2 C501
+DIHE C401 CD1 CE1 C501
+DIHE C601 CD2 CE2 C501
+DIHE C601 CD1 CE1 C501
+DIHE HD1 CD1 CE1 C501
+DIHE CE2 C501 CE1 CD1
+DIHE CE2 C501 CE1 HE1
+DIHE CE1 C501 CE2 CD2
+DIHE CE1 C501 CE2 HE2
+
+!!!!!!!!!!!!!PATCHES W/O EXCLUSIONS
+
+PRES r1oc1   0.0
+ATOM C201 CG2R61 0.22  
+ATOM O202 OG301 -0.39  
+ATOM C203 CG331 -0.10  
+ATOM H204 HGA3   0.090 
+ATOM H205 HGA3   0.090 
+ATOM H206 HGA3   0.090 
+BOND C201 O202
+BOND C201 CD1
+BOND C201 CD2
+BOND O202 C203
+BOND C203 H204
+BOND C203 H205
+BOND C203 H206
+ANGLE CD2 C201 O202
+ANGLE CD1 C201 O202
+ANGLE C201 O202 C203
+ANGLE O202 C203 H204
+ANGLE O202 C203 H205
+ANGLE O202 C203 H206
+ANGLE H204 C203 H205
+ANGLE H204 C203 H206
+ANGLE H205 C203 H206
+ANGLE CE2 CD2 C201
+ANGLE HD2 CD2 C201
+ANGLE CE1 CD1 C201
+ANGLE HD1 CD1 C201
+ANGLE CD2 C201 CD1
+DIHE C201 O202 C203 H204
+DIHE C201 O202 C203 H205
+DIHE C201 O202 C203 H206
+DIHE CD2 C201 O202 C203
+DIHE CD1 C201 O202 C203
+DIHE CE2 CD2 C201 O202
+DIHE HE1 CD2 C201 O202
+DIHE CE1 CD1 C201 O202
+DIHE HD1 CD1 C201 O202
+DIHE HE2 CE2 CD2 C201
+DIHE CZ  CE2 CD2 C201
+DIHE CZ  CE1 CD1 C201
+DIHE HE1 CE1 CD1 C201
+DIHE CD2 C201 CD1 CE1
+DIHE CD2 C201 CD1 HD1
+DIHE CD1 C201 CD2 CE2
+DIHE CD1 C201 CD2 HD2
+
+PRES r2oc1   0.0
+ATOM C301 CG2R61 0.22  
+ATOM O302 OG301 -0.39  
+ATOM C303 CG331 -0.10  
+ATOM H304 HGA3   0.090 
+ATOM H305 HGA3   0.090 
+ATOM H306 HGA3   0.090 
+BOND C301 O302
+BOND C301 CE1
+BOND C301 CE2
+BOND O302 C303
+BOND C303 H304
+BOND C303 H305
+BOND C303 H306
+ANGLE CE2 C301 O302
+ANGLE CE1 C301 O302
+ANGLE C301 O302 C303
+ANGLE O302 C303 H304
+ANGLE O302 C303 H305
+ANGLE O302 C303 H306
+ANGLE H304 C303 H305
+ANGLE H304 C303 H306
+ANGLE H305 C303 H306
+ANGLE CD2 CE2 C301
+ANGLE HE2 CE2 C301
+ANGLE CD1 CE1 C301
+ANGLE HE1 CE1 C301
+ANGLE CE2 C301 CE1
+DIHE C301 O302 C303 H304
+DIHE C301 O302 C303 H305
+DIHE C301 O302 C303 H306
+DIHE CE2 C301 O302 C303
+DIHE CE1 C301 O302 C303
+DIHE CD2 CE2 C301 O302
+DIHE HE2 CE2 C301 O302
+DIHE CD1 CE1 C301 O302
+DIHE HE1 CE1 C301 O302
+DIHE HD2 CD2 CE2 C301
+DIHE CG CD2 CE2 C301
+DIHE CG CD1 CE1 C301
+DIHE C201 CD2 CE2 C301
+DIHE C201 CD1 CE1 C301
+DIHE HD1 CD1 CE1 C301
+DIHE CE2 C301 CE1 CD1
+DIHE CE2 C301 CE1 HE1
+DIHE CE1 C301 CE2 CD2
+DIHE CE1 C301 CE2 HE2
+
+PRES r1oc2   0.0
+ATOM C401 CG2R61 0.22  
+ATOM O402 OG301 -0.39  
+ATOM C403 CG331 -0.10  
+ATOM H404 HGA3   0.09
+ATOM H405 HGA3   0.09  
+ATOM H406 HGA3   0.09  
+BOND C401 O402
+BOND C401 CD1
+BOND C401 CD2
+BOND O402 C403
+BOND C403 H404
+BOND C403 H405
+BOND C403 H406
+ANGLE CD2 C401 O402
+ANGLE CD1 C401 O402
+ANGLE C401 O402 C403
+ANGLE O402 C403 H404
+ANGLE O402 C403 H405
+ANGLE O402 C403 H406
+ANGLE H404 C403 H405
+ANGLE H404 C403 H406
+ANGLE H405 C403 H406
+ANGLE CE2 CD2 C401
+ANGLE HD2 CD2 C401
+ANGLE CE1 CD1 C401
+ANGLE HD1 CD1 C401
+ANGLE CD2 C401 CD1
+DIHE C401 O402 C403 H404
+DIHE C401 O402 C403 H405
+DIHE C401 O402 C403 H406
+DIHE CD2 C401 O402 C403
+DIHE CD1 C401 O402 C403
+DIHE CE2 CD2 C401 O402
+DIHE HE1 CD2 C401 O402
+DIHE CE1 CD1 C401 O402
+DIHE HD1 CD1 C401 O402
+DIHE HE2 CE2 CD2 C401
+DIHE C301 CE2 CD2 C401
+DIHE C301 CE1 CD1 C401
+DIHE HE1 CE1 CD1 C401
+DIHE CD2 C401 CD1 CE1
+DIHE CD2 C401 CD1 HD1
+DIHE CD1 C401 CD2 CE2
+DIHE CD1 C401 CD2 HD2
+
+PRES r1oc3   0.0
+ATOM C601 CG2R61 0.22  
+ATOM O602 OG301 -0.39  
+ATOM C603 CG331 -0.10  
+ATOM H604 HGA3   0.090 
+ATOM H605 HGA3   0.090 
+ATOM H606 HGA3   0.090 
+BOND C601 O602
+BOND C601 CD1
+BOND C601 CD2
+BOND O602 C603
+BOND C603 H604
+BOND C603 H605
+BOND C603 H606
+ANGLE CD2 C601 O602
+ANGLE CD1 C601 O602
+ANGLE C601 O602 C603
+ANGLE O602 C603 H604
+ANGLE O602 C603 H605
+ANGLE O602 C603 H606
+ANGLE H604 C603 H605
+ANGLE H604 C603 H606
+ANGLE H605 C603 H606
+ANGLE CE2 CD2 C601
+ANGLE HD2 CD2 C601
+ANGLE CE1 CD1 C601
+ANGLE HD1 CD1 C601
+ANGLE CD2 C601 CD1
+DIHE C601 O602 C603 H604
+DIHE C601 O602 C603 H605
+DIHE C601 O602 C603 H606
+DIHE CD2 C601 O602 C603
+DIHE CD1 C601 O602 C603
+DIHE CE2 CD2 C601 O602
+DIHE HE1 CD2 C601 O602
+DIHE CE1 CD1 C601 O602
+DIHE HD1 CD1 C601 O602
+DIHE HE2 CE2 CD2 C601
+DIHE C301  CE2 CD2 C601
+DIHE C301  CE1 CD1 C601
+DIHE HE1 CE1 CD1 C601
+DIHE CD2 C601 CD1 CE1
+DIHE CD2 C601 CD1 HD1
+DIHE CD1 C601 CD2 CE2
+DIHE CD1 C601 CD2 HD2
+
+PRES r2oc2   0.0
+ATOM C101 CG2R61 0.22  
+ATOM O102 OG301 -0.39  
+ATOM C103 CG331 -0.10  
+ATOM H104 HGA3   0.090 
+ATOM H105 HGA3   0.090 
+ATOM H106 HGA3   0.090 
+BOND C101 O102
+BOND C101 CE1
+BOND C101 CE2
+BOND O102 C103
+BOND C103 H104
+BOND C103 H105
+BOND C103 H106
+ANGLE CE2 C101 O102
+ANGLE CE1 C101 O102
+ANGLE C101 O102 C103
+ANGLE O102 C103 H104
+ANGLE O102 C103 H105
+ANGLE O102 C103 H106
+ANGLE H104 C103 H105
+ANGLE H104 C103 H106
+ANGLE H105 C103 H106
+ANGLE CD2 CE2 C101
+ANGLE HE2 CE2 C101
+ANGLE CD1 CE1 C101
+ANGLE HE1 CE1 C101
+ANGLE CE2 C101 CE1
+DIHE C101 O102 C103 H104
+DIHE C101 O102 C103 H105
+DIHE C101 O102 C103 H106
+DIHE CE2 C101 O102 C103
+DIHE CE1 C101 O102 C103
+DIHE CD2 CE2 C101 O102
+DIHE HE2 CE2 C101 O102
+DIHE CD1 CE1 C101 O102
+DIHE HE1 CE1 C101 O102
+DIHE HD2 CD2 CE2 C101
+DIHE C201 CD2 CE2 C101
+DIHE C201 CD1 CE1 C101
+DIHE C401 CD2 CE2 C101
+DIHE C401 CD1 CE1 C101
+DIHE C601 CD2 CE2 C101
+DIHE C601 CD1 CE1 C101
+DIHE HD1 CD1 CE1 C101
+DIHE CE2 C101 CE1 CD1
+DIHE CE2 C101 CE1 HE1
+DIHE CE1 C101 CE2 CD2
+DIHE CE1 C101 CE2 HE2
+
+PRES r2oc3   0.0
+ATOM C501 CG2R61 0.22  
+ATOM O502 OG301 -0.39  
+ATOM C503 CG331 -0.10  
+ATOM H504 HGA3   0.090 
+ATOM H505 HGA3   0.090 
+ATOM H506 HGA3   0.090 
+BOND C501 O502
+BOND C501 CE1
+BOND C501 CE2
+BOND O502 C503
+BOND C503 H504
+BOND C503 H505
+BOND C503 H506
+ANGLE CE2 C501 O502
+ANGLE CE1 C501 O502
+ANGLE C501 O502 C503
+ANGLE O502 C503 H504
+ANGLE O502 C503 H505
+ANGLE O502 C503 H506
+ANGLE H504 C503 H505
+ANGLE H504 C503 H506
+ANGLE H505 C503 H506
+ANGLE CD2 CE2 C501
+ANGLE HE2 CE2 C501
+ANGLE CD1 CE1 C501
+ANGLE HE1 CE1 C501
+ANGLE CE2 C501 CE1
+DIHE C501 O502 C503 H504
+DIHE C501 O502 C503 H505
+DIHE C501 O502 C503 H506
+DIHE CE2 C501 O502 C503
+DIHE CE1 C501 O502 C503
+DIHE CD2 CE2 C501 O502
+DIHE HE2 CE2 C501 O502
+DIHE CD1 CE1 C501 O502
+DIHE HE1 CE1 C501 O502
+DIHE HD2 CD2 CE2 C501
+DIHE C201 CD2 CE2 C501
+DIHE C201 CD1 CE1 C501
+DIHE C401 CD2 CE2 C501
+DIHE C401 CD1 CE1 C501
+DIHE C601 CD2 CE2 C501
+DIHE C601 CD1 CE1 C501
+DIHE HD1 CD1 CE1 C501
+DIHE CE2 C501 CE1 CD1
+DIHE CE2 C501 CE1 HE1
+DIHE CE1 C501 CE2 CD2
+DIHE CE1 C501 CE2 HE2
+
+END
+
+goto return_read_patches
+
+!--------------------------------------------------------------------------------------
+
+label read_coordinates
+
+!read coor pdb resid name prep/mbenzene_oc_oc.pdb
+read coor pdb resid
+* The coordinates for the multi-methoxybenzene hybrid model
+*
+
+ATOM      1 C201 BENZ    1       1.027   0.660   0.404  1.00  0.00      BEN
+ATOM      2 CD1  BENZ    1       2.401   0.939   0.558  1.00  0.00      BEN
+ATOM      3 CE1  BENZ    1       3.010   1.989  -0.153  1.00  0.00      BEN
+ATOM      4 C301 BENZ    1       2.253   2.793  -1.040  1.00  0.00      BEN
+ATOM      5 CE2  BENZ    1       0.880   2.512  -1.195  1.00  0.00      BEN
+ATOM      6 CD2  BENZ    1       0.271   1.460  -0.486  1.00  0.00      BEN
+ATOM      7 O302 BENZ    1       2.721   3.770  -1.718  1.00  0.00      BEN
+ATOM      8 O202 BENZ    1       0.556  -0.308   1.093  1.00  0.00      BEN
+ATOM      9 C203 BENZ    1      -0.672  -0.839   1.136  1.00  0.00      BEN
+ATOM     10 C303 BENZ    1       3.966   4.250  -1.821  1.00  0.00      BEN
+ATOM     11 HD1  BENZ    1       3.001   0.334   1.238  1.00  0.00      BEN
+ATOM     12 HE1  BENZ    1       4.074   2.182  -0.016  1.00  0.00      BEN
+ATOM     13 HE2  BENZ    1       0.279   3.117  -1.874  1.00  0.00      BEN
+ATOM     14 HD2  BENZ    1      -0.792   1.263  -0.628  1.00  0.00      BEN
+ATOM     15 H204 BENZ    1      -0.975  -0.969   2.175  1.00  0.00      BEN
+ATOM     16 H205 BENZ    1      -1.373  -0.172   0.634  1.00  0.00      BEN
+ATOM     17 H206 BENZ    1      -0.667  -1.806   0.634  1.00  0.00      BEN
+ATOM     18 H304 BENZ    1       4.377   4.408  -0.824  1.00  0.00      BEN
+ATOM     19 H305 BENZ    1       4.587   3.535  -2.361  1.00  0.00      BEN
+ATOM     20 H306 BENZ    1       3.947   5.196  -2.361  1.00  0.00      BEN
+END
+
+goto return_read_coordinates
+
+!--------------------------------------------------------------------------------------
+
+label read_toppar_data
+
+read rtf card
+*  --------------------------------------------------------------------------  *
+*          CGenFF: Topology for the Charmm General Force Field v. 2b4          *
+*                    for Small Molecule Drug Design                            *
+*  --------------------------------------------------------------------------  *
+*
+36  1
+
+MASS     3 HGA3     1.00800  ! alphatic proton, CH3
+MASS    23 HGR61    1.00800  ! aromatic H
+MASS    61 CG2R61  12.01100  ! 6-mem aromatic C
+MASS    79 CG331   12.01100  ! aliphatic C for methyl group (-CH3)
+MASS   159 OG301   15.99940  ! ether -O- !SHOULD WE HAVE A SEPARATE ENOL ETHER??? IF YES, SHOULD WE MERGE IT WITH OG3R60???
+
+DEFA FIRS NTER LAST CTER
+AUTO ANGLES DIHE
+
+RESI BENZ          0.00 ! C6H6 benzene, adm jr.
+GROUP
+ATOM CG   CG2R61  -0.115 !
+ATOM HG   HGR61    0.115 !      HD1  HE1
+GROUP                    !       |    |
+ATOM CD1  CG2R61  -0.115 !      CD1--CE1
+ATOM HD1  HGR61    0.115 !      /      \
+GROUP                    ! HG--CG      CZ--HZ
+ATOM CD2  CG2R61  -0.115 !      \      /
+ATOM HD2  HGR61    0.115 !      CD2--CE2
+GROUP                    !       |    |
+ATOM CE1  CG2R61  -0.115 !      HD2  HE2
+ATOM HE1  HGR61    0.115 !
+GROUP
+ATOM CE2  CG2R61  -0.115
+ATOM HE2  HGR61    0.115
+GROUP
+ATOM CZ   CG2R61  -0.115
+ATOM HZ   HGR61    0.115
+BOND CD1 CG CD2 CG CE1 CD1
+BOND CE2 CD2 CZ CE1 CZ CE2
+BOND CG HG CD1 HD1 CD2 HD2 CE1 HE1
+BOND CE2 HE2 CZ HZ
+IC CG   CD1  CE1  CZ    0.0000  0.0000   0.0000  0.0000  0.0000
+IC CD1  CE1  CZ   CE2   0.0000  0.0000   0.0000  0.0000  0.0000
+IC CE1  CZ   CE2  CD2   0.0000  0.0000   0.0000  0.0000  0.0000
+IC CD1  CD2  *CG  HG    0.0000  0.0000 180.0000  0.0000  0.0000
+IC CE1  CG   *CD1 HD1   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CE2  CG   *CD2 HD2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CZ   CD1  *CE1 HE1   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CZ   CD2  *CE2 HE2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CE1  CE2  *CZ  HZ    0.0000  0.0000 180.0000  0.0000  0.0000
+
+
+end
+
+read param card
+*  --------------------------------------------------------------------------  *
+*         CGenFF: Parameters for the Charmm General Force Field v. 2b4         *
+*                    for Small Molecule Drug Design                            *
+*  --------------------------------------------------------------------------  *
+*
+
+BONDS
+CG2R61 CG2R61  305.00     1.3750 ! PROT benzene, JES 8/25/89
+CG2R61 HGR61   340.00     1.0800 ! PROT phe,tyr JES 8/25/89
+CG2R61 OG301   230.00     1.3820 ! COMPDS peml
+CG331  OG301   360.00     1.4150 ! diethylether, alex
+CG331  HGA3    322.00     1.1110 ! PROT alkane update, adm jr., 3/2/92
+
+ANGLES
+HGA3   CG331  HGA3     35.50    108.40    5.40   1.80200 ! PROT alkane update, adm jr., 3/2/92
+OG301  CG331  HGA3     45.90    108.89 ! MEOB, Methoxybenzene, cacha
+CG2R61 OG301  CG331    65.00    108.00 ! MEOB, Methoxybenzene, cacha
+CG2R61 CG2R61 OG301   110.00    120.00 ! BIPHENYL ANALOGS, peml
+CG2R61 CG2R61 CG2R61   40.00    120.00   35.00   2.41620 ! PROT JES 8/25/89
+CG2R61 CG2R61 HGR61    30.00    120.00   22.00   2.15250 ! PROT JES 8/25/89 benzene
+
+DIHE
+HGA3   CG331  OG301  CG2R61     0.0850  3     0.00 ! MEOB, Methoxybenzene, cacha
+CG2R61 CG2R61 OG301  CG331      1.7400  2   180.00 ! MEOB, Methoxybenzene, cacha
+OG301  CG2R61 CG2R61 HGR61      2.4000  2   180.00 ! BIPHENYL ANALOGS, peml. Kenno: 4.2 -> 2.4
+CG2R61 CG2R61 CG2R61 OG301      3.1000  2   180.00 ! BIPHENYL ANALOGS, peml
+CG2R61 CG2R61 CG2R61 CG2R61     3.1000  2   180.00 ! PROT JES 8/25/89
+CG2R61 CG2R61 CG2R61 HGR61      4.2000  2   180.00 ! PROT JES 8/25/89 benzene
+HGR61  CG2R61 CG2R61 HGR61      2.4000  2   180.00 ! PROT JES 8/25/89 benzene
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+CG2R61   0.0       -0.0700     1.9924 ! INDO/TRP
+HGR61    0.0       -0.0300     1.3582 ! benzene
+OG301    0.0       -0.1000     1.6500 ! ether; LJ from THP, sng 1/06 !SHOULD WE HAVE A SEPARATE ENOL ETHER??? IF YES, SHOULD WE MERGE IT WITH OG3R60???
+CG331    0.0       -0.0780     2.0500   0.0 -0.01 1.9 ! alkane (CT3), 4/98, yin, adm jr; Rmin/2 modified from 2.04 to 2.05
+HGA3     0.0       -0.0240     1.3400 ! alkane, yin and mackerell, 4/98
+
+end
+
+goto return_read_toppar_data 
+
+!--------------------------------------------------------------------------------------
+
+label read_minimized_pdb
+!read coor pdb name test.pdb resid
+read coor pdb resid
+REMARK  TESTCASE FOR MULTI-SITE L-DYNAMICS                                            
+REMARK  TESTING: MEMORY ALLOCATION AND DEALLOCATION CALLS                             
+REMARK  TESTING: READING PATCHES AND COMPUTING ENERGIES                               
+REMARK  TESTING: READING RESTART FILES AND LAMBDA TRAJECTORY FILES                    
+REMARK  HYBRID MODEL REPRESENTS MULTIPLE, IDENTICAL METHOXYBENZENE MOLECULES          
+REMARK   DATE:     9/ 1/15     17:44:45      CREATED BY USER: brookscl                
+ATOM      1  CD1 BENZ    1      -0.672  -0.674  -1.200  1.00  0.00      BEN 
+ATOM      2  HD1 BENZ    1      -1.028  -1.306  -1.998  1.00  0.00      BEN 
+ATOM      3  CD2 BENZ    1      -0.908   0.282   0.965  1.00  0.00      BEN 
+ATOM      4  HD2 BENZ    1      -1.468   0.418   1.876  1.00  0.00      BEN 
+ATOM      5  CE1 BENZ    1       0.601  -0.017  -1.348  1.00  0.00      BEN 
+ATOM      6  HE1 BENZ    1       1.155  -0.160  -2.265  1.00  0.00      BEN 
+ATOM      7  CE2 BENZ    1       0.365   0.938   0.817  1.00  0.00      BEN 
+ATOM      8  HE2 BENZ    1       0.716   1.552   1.625  1.00  0.00      BEN 
+ATOM      9 C201 BENZ    1      -1.442  -0.523  -0.041  1.00  0.00      BEN 
+ATOM     10 O202 BENZ    1      -2.644  -1.207   0.167  1.00  0.00      BEN 
+ATOM     11 C203 BENZ    1      -3.605  -1.058  -0.879  1.00  0.00      BEN 
+ATOM     12 H204 BENZ    1      -4.439  -1.771  -0.697  1.00  0.00      BEN 
+ATOM     13 H205 BENZ    1      -4.025  -0.028  -0.866  1.00  0.00      BEN 
+ATOM     14 H206 BENZ    1      -3.190  -1.274  -1.887  1.00  0.00      BEN 
+ATOM     15 C301 BENZ    1       1.130   0.802  -0.363  1.00  0.00      BEN 
+ATOM     16 O302 BENZ    1       2.320   1.497  -0.625  1.00  0.00      BEN 
+ATOM     17 C303 BENZ    1       3.095   1.913   0.492  1.00  0.00      BEN 
+ATOM     18 H304 BENZ    1       3.287   1.060   1.180  1.00  0.00      BEN 
+ATOM     19 H305 BENZ    1       4.076   2.275   0.111  1.00  0.00      BEN 
+ATOM     20 H306 BENZ    1       2.607   2.749   1.037  1.00  0.00      BEN 
+ATOM     21 C401 BENZ    1      -1.444  -0.515  -0.055  1.00  0.00      BEN 
+ATOM     22 O402 BENZ    1      -2.728  -1.048   0.013  1.00  0.00      BEN 
+ATOM     23 C403 BENZ    1      -3.730  -0.037   0.136  1.00  0.00      BEN 
+ATOM     24 H404 BENZ    1      -4.726  -0.490  -0.062  1.00  0.00      BEN 
+ATOM     25 H405 BENZ    1      -3.743   0.394   1.161  1.00  0.00      BEN 
+ATOM     26 H406 BENZ    1      -3.579   0.781  -0.606  1.00  0.00      BEN 
+ATOM     27 C601 BENZ    1      -1.416  -0.559  -0.029  1.00  0.00      BEN 
+ATOM     28 O602 BENZ    1      -2.447  -1.446   0.246  1.00  0.00      BEN 
+ATOM     29 C603 BENZ    1      -1.936  -2.603   0.916  1.00  0.00      BEN 
+ATOM     30 H604 BENZ    1      -1.122  -3.089   0.330  1.00  0.00      BEN 
+ATOM     31 H605 BENZ    1      -1.546  -2.343   1.926  1.00  0.00      BEN 
+ATOM     32 H606 BENZ    1      -2.752  -3.347   1.044  1.00  0.00      BEN 
+ATOM     33 C101 BENZ    1       1.148   0.762  -0.333  1.00  0.00      BEN 
+ATOM     34 O102 BENZ    1       2.472   1.200  -0.410  1.00  0.00      BEN 
+ATOM     35 C103 BENZ    1       3.216   0.970   0.791  1.00  0.00      BEN 
+ATOM     36 H104 BENZ    1       4.301   0.986   0.554  1.00  0.00      BEN 
+ATOM     37 H105 BENZ    1       3.013   1.766   1.541  1.00  0.00      BEN 
+ATOM     38 H106 BENZ    1       2.985  -0.025   1.238  1.00  0.00      BEN 
+ATOM     39 C501 BENZ    1       1.140   0.780  -0.330  1.00  0.00      BEN 
+ATOM     40 O502 BENZ    1       2.417   1.338  -0.387  1.00  0.00      BEN 
+ATOM     41 C503 BENZ    1       3.421   0.439  -0.857  1.00  0.00      BEN 
+ATOM     42 H504 BENZ    1       3.246  -0.606  -0.511  1.00  0.00      BEN 
+ATOM     43 H505 BENZ    1       3.475   0.460  -1.967  1.00  0.00      BEN 
+ATOM     44 H506 BENZ    1       4.405   0.763  -0.453  1.00  0.00      BEN 
+TER      45      BENZ     1
+END
+
+goto return_read_minimized_pdb

@@ -1,0 +1,83 @@
+* CHARMM c34a1 testcase, 15-Aug-2006
+* testing TAMD module
+*   1) generate a tree representation
+*   2) steepest decent energy minimization in torsion space
+*   3) molecular dynamics simu
+*
+
+if ?tamd .ne. 1 then 
+  echo "Test NOT performed."
+  stop
+endif
+
+stream datadir.def
+
+open read card unit 10 name @0top_all22_prot.inp
+read rtf  card unit 10
+close unit 10
+
+open read card unit 10 name @0par_all22_prot.inp
+read para card unit 10
+close unit 10
+
+read sequence card
+* ALA10
+*
+10
+ALA ALA ALA ALA ALA  ALA ALA ALA ALA ALA 
+
+generate PEPT first ACE last CT3 setup
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+coor copy comp
+
+NBOND atom shift cdie vdw vswitch bycb -
+      ctonnb 14.0 ctofnb 16.0 cutnb 18.0 -
+
+energy
+faster on
+
+tamd
+
+  reset
+
+! setup the tree topology automatically
+   tree setup   
+! check the self-consistency of the tree toplogy
+   tree check
+! write out the tree (not really necessary, but why not?)
+!   open write unit 10 card name tree.dat
+!   tree write unit 10
+!   * this is a tamd tree file
+!   *
+
+! some quick minimization (remember that minimization in torsion space is 
+! less efficient due to the non-canonical coordinates)   
+   mini sd nstep 200 step 0.01 nprint 20 maxt 0.1 tole 0.0001 tolgrd 0 tolstp 0
+
+! a short constant-temperature MD
+!   open write unit 30 card name tamd.rest 
+!   open write unit 31 file name tamd.dcd
+   dyna start iseed 231234 echeck 2000 -
+       nstep 1000 timestep 0.005 qref 20 tref 300 first 0 -
+       nsavc 100 nprint 200 iprfrq 100000 nsavv 0 isvfrq -1 -
+       iunrea -29 iunwri -30 iuncrd -31 iunvel -1 -
+       ntrfrq 2000 iasors 1
+
+! compute heavy atom rmsd from initial structure (the comparision cooridinates 
+! are not overwritten during TAMD)
+   coor orient rms select .not. hydrogen end
+
+! write out the final pdb
+!   open write unit 10 card name tamd.pdb
+!   coor write pdb unit 10
+!   * after a short tamd, heavy atom rmsd is now: ?rms
+!   *
+
+   coor write pdb unit 6
+
+end
+
+stop

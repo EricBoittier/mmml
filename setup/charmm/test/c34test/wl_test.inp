@@ -1,0 +1,116 @@
+* CHARMM c34a1 testcase, 15-Aug-2006
+* test of Wang-Landau MC
+* Model:    Alanine dipeptide with polar hydrogens
+*
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+if ?domdec eq 1 then
+      echo "Test NOT performed with DOMDEC."
+      stop
+endif
+stream datadir.def
+
+if ?mc .ne. 1 then 
+ echo "Test NOT performed"
+ stop
+endif
+
+BOMLev 0  !Warning level
+PRNLev 3  @pnode !Print level
+
+!Read in the RTF (Residue Topology File) file
+open read card unit 3 name @0toph19.rtf
+read rtf unit 3 card
+close unit 3
+
+!Read in the parameter file
+open read card unit 3 name @0param19.prm
+read para unit 3 card 
+close unit 3
+
+! Generate the PSF
+read sequence card
+* blocked alanine
+*
+   3
+ACE ALA CBX
+
+generate main setup
+
+!Read in the initial configuration
+read coor card 
+*
+12
+    1    1 ACE  CH3    1.11993   2.78035   2.95903 MAIN 1      0.00000
+    2    1 ACE  C      1.06698   1.44457   2.33290 MAIN 1      0.00000
+    3    1 ACE  O      1.46098   0.43546   2.91896 MAIN 1      0.00000
+    4    2 ALA  N      0.56075   1.49032   1.04378 MAIN 2      0.00000
+    5    2 ALA  H      0.17727   2.33881   0.73816 MAIN 2      0.00000
+    6    2 ALA  CA     0.69498   0.39409   0.01089 MAIN 2      0.00000
+    7    2 ALA  CB    -0.35905   0.54068  -0.96897 MAIN 2      0.00000
+    8    2 ALA  C      2.09151   0.53582  -0.62517 MAIN 2      0.00000
+    9    2 ALA  O      2.56290  -0.38191  -1.23995 MAIN 2      0.00000
+   10    3 CBX  N      2.70694   1.77121  -0.49033 MAIN 3      0.00000
+   11    3 CBX  H      2.44215   2.49294   0.11745 MAIN 3      0.00000
+   12    3 CBX  CA     3.89569   2.05538  -1.23486 MAIN 3      0.00000
+!Energy calculation specification
+NBONDS  ATOM  FSHIFT CDIE  VDW VSHIFT  -
+        CUTNB 999.0  CTOFNB 998.0 CTONNB 997.0  WMIN 1.5  EPS 1.0
+!Perform a energy calculation
+energy 
+
+!Specify SHAKE parameters
+coor copy comp
+shake bonh para
+coor shake
+
+! Set up phi and psi dihedrals as order parameters
+
+rxncor: define c1 point select atom main 1 C  end
+rxncor: define c2 point select atom main 2 N  end
+rxncor: define c3 point select atom main 2 CA end
+rxncor: define c4 point select atom main 2 C  end
+rxncor: define c5 point select atom main 3 N  end
+rxncor: define c6 point select atom main 2 O  end
+rxncor: define c7 point select atom main 3 CA end
+
+rxncor: define d1 direction c1 c2 !1C-2N
+rxncor: define d2 direction c2 c3 !2N-2CA
+rxncor: define d3 direction c3 c4 !2CA-2C
+rxncor: define d4 direction c4 c5 !2C-3N
+rxncor: define d8 direction c6 c4 !2O-2C
+rxncor: define d9 direction c5 c7 !3N-3CA
+
+rxncor: define d5  direction d1 d2
+rxncor: define d6  direction d2 d3
+rxncor: define d7  direction d3 d4
+
+rxncor: define a1 angle d5  d6  d2
+rxncor: define a2 angle d6  d7  d3
+
+rxncor: define s1 scomb a2 -57.29578 a1 0.0
+
+rxncor: set nrxn 1 s1
+
+rxncor: stat -
+        name s1 lowdelta -180.0 hidelta 180.0 deldel 1.0
+
+!move add mvtp tors sele all end sele all end dmax 30.0 
+MOVE ADD MVTP RTRN BYATom WEIGht 12.0 DMAX 0.075 LABEL SING -
+         SELE ALL END
+
+! Individual rotation of the peptide torsions
+MOVE ADD MVTP TORS WEIGht 4.0 DMAX  30.0 FEWEr 1 LABEL DIHE -
+         SELE ALL END
+
+open write formatted   unit 21 name @9wl.hf
+
+! Tolerance value set to be large for test.  
+! See mc.doc for recommended value.
+mc nsteps 500000 WLIN 0.5 WLTO 0.1 WLUP 0.08 iacc 3 IWLW 21 -
+   NWLF 10000 IECH 50000
+
+
+stop

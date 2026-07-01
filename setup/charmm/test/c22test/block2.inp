@@ -1,0 +1,248 @@
+* BLOCK2.INP
+* author:  Ryszard Czerminski (December 11, 1991)
+* purpose: to test BLOCK command
+* problem: calculates free energy perturbation for migrating -OH group
+*          in methanol (CH3-OH -> OH-CH3)
+* external files: none
+*
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+set node 
+if ?parallel .eq. 1 set node node 0
+
+BOMLEV +5
+stream datadir.def
+
+READ RTF CARD ! PRINT
+* ...
+*
+   20    1
+MASS     1 H     1.00800
+MASS     8 HO    1.00800 ! Hydrogen on an alcohol oxygen
+MASS    10 CT   12.01100
+MASS    55 OH   15.99940
+
+!AUTOGENERATE DIHEDRALS
+DEFA FIRS NONE LAST NONE
+AUTO OFF
+RESI METM    0. ! Methanol with migrating OH group
+GROU
+ATOM H1   H   0.2
+ATOM H2   H   0.2
+ATOM C    CT -0.2
+ATOM H3A  H   0.2
+ATOM H3B  H   0.2
+ATOM HOA  HO +0.4
+ATOM HOB  HO +0.4
+ATOM OHA  OH -0.8
+ATOM OHB  OH -0.8
+BOND H1 C   H2 C   H3A C   H3B C   OHA C   OHB C   HOA OHA   HOB OHB 
+ANGL H1 C H3A  H2 C H3A  H1 C OHA  H2 C  OHA  H3A C OHA   C OHA HOA 
+ANGL H1 C H3B  H2 C H3B  H1 C OHB  H2 C  OHB  H3B C OHB   C OHB HOB 
+ANGL H1 C H2
+DIHE H1 C OHA HOA   H2 C OHA HOA   H3A C OHA HOA
+DIHE H1 C OHB HOB   H2 C OHB HOB   H3B C OHB HOB
+IC   H1  C   OHA  HOA   1.0800  109.46  -60.00  105.00   0.9600
+IC   H2  C   OHA  HOA   1.0800  109.46   60.00  105.00   0.9600
+IC   H3B C   OHA  HOA   1.0800  109.46  180.00  105.00   0.9600
+IC   H1  C   OHB  HOB   1.0800  109.46  -60.00  105.00   0.9600
+IC   H2  C   OHB  HOB   1.0800  109.46   60.00  105.00   0.9600
+IC   H3A C   OHB  HOB   1.0800  109.46  180.00  105.00   0.9600
+IC   OHA C   OHB  HOB   1.5800  109.46  180.00  105.00   0.9600
+IC   C   OHA HOA  BLNK  1.5800  105.00    0.00    0.00   0.0000
+IC   C   OHB HOB  BLNK  1.5800  105.00    0.00    0.00   0.0000
+
+END
+
+READ PARA CARD ! PRINT
+* ...
+*
+
+BOND
+CT   CT     200.0       1.53
+CT   OH     400.0       1.42
+H    CT     300.0       1.08
+HO   OH     300.0       0.96
+THETAS
+CT   CT   H       40.0     109.5
+H    CT   H       40.0     109.5
+H    CT   OH      40.0     109.5
+CT   OH   HO      50.0     109.5
+PHI
+X    CT   OH   X        1.6       3       0.0
+NONBONDED NBXMOD 5  ATOM RDIEL SWITCH VATOM VDISTANCE VSWITCH -
+     CUTNB 99.0 CTOFNB 98.0 CTONNB 97. EPS 1.0 E14FAC 0.5 WMIN 1.5
+!
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.044   -0.0498    0.800 
+HO       0.044   -0.0498    0.920 
+C%       1.65    -0.0262    2.490    1.65 -0.1 1.9 ! includes CT and CM
+O*       0.840   -0.1591    1.600   ! includes O, OH1, OM, and OS
+
+END
+
+READ SEQUENCE CARD
+* METHANOL with migrating OH group
+*
+   1
+METM
+
+bomlev -1
+GENERATE METM SETUP
+bomlev +5
+
+READ COOR CARD 
+* INITIAL COORDINATES FOR FREE ENERGY CALCULATION LAMBDA =
+*  DATE:    10/28/91     17: 5:14      CREATED BY USER: ryszard
+*
+    9
+    1    1 METM H1     1.98087  -0.40031   0.88509 METM 1      0.00000
+    2    1 METM H2     1.82427  -0.56062  -0.84727 METM 1      0.00000
+    3    1 METM C      1.65679   0.10443  -0.01299 METM 1      0.00000
+    4    1 METM H3A    2.25454   0.99166  -0.15862 METM 1      0.00000
+    5    1 METM H3B    1.90887  -0.52423  -0.91284 METM 1      0.00000
+    6    1 METM HOA    1.65094   1.84196   0.90504 METM 1      0.00000
+    7    1 METM HOB   -0.30623  -0.98047   0.02641 METM 1      0.00000
+    8    1 METM OHA    2.00937   1.47687   0.09029 METM 1      0.00000
+    9    1 METM OHB   -0.02990  -0.01725  -0.05393 METM 1      0.00000
+
+UPDATE RDIE
+UPDATE INBFRQ 0 IHBFRQ 0
+
+! Define three blocks
+! 3 - *B ( H3B, OHB-HOB)     H1   H3A  OHB-HOB
+! 2 - *A ( H3A, OHA-HOA)       \  /   /
+! 1 - -CH2                      CCCCCC
+!                              /  \   \
+!                            H2   H3B  OHA-HOA
+
+BLOCK 3
+CALL 2 SELE TYPE *A SHOW END
+CALL 3 SELE TYPE *B SHOW END
+LAMBDA 0.1
+END
+
+!MINI POWE NSTEP 1000 TOLG 0.0001 NPRINT 100
+!MINI NRAP NSTEP 100  TOLG 0.0001 NPRINT 100
+
+!PRINT COOR
+
+SET 1 0.0  ! previous LAMBDA value
+SET 2 0.1  ! current  LAMBDA value
+SET 3 0.2  ! next     LAMBDA value
+SET 4 0    ! previous run index
+SET 5 1    ! current  run index
+SET 6 10   ! NSAVC
+set 7 100 ! number of steps in heating & equilibration	
+set 8 200 ! number of steps in production
+
+! initial equilibration
+random clcg iseed 345 333 222 121
+
+
+OPEN WRIT UNIT 31 CARD NAME @9BLK@4P.RST
+DYNA STRT VERL NSTEP @7 TIME 0.001 -
+     IPRFRQ 100 IHTFRQ 20 IEQFRQ 0 -
+     IUNREA -1 IUNWRI 31 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+     NPRINT 500 NSAVC 0 NSAVV 0 ISVFRQ 1000 -
+     FIRSTT 300. FINALT 300. TEMINC 10.0 TWINDH 10.0 TWINDL -10.0 -
+     ILBFRQ 0 TBATH 300. RBUF 0. -
+     IASORS 1 ISCVEL 1 ICHECW 1 ISEED 314159
+
+LABEL START
+
+BLOCK 3
+LAMBDA @2
+END
+
+! equilibration
+
+OPEN READ UNIT 30 CARD NAME @9BLK@4P.RST
+OPEN WRIT UNIT 31 CARD NAME @9BLK@5E.RST
+!PEN WRIT UNIT 32 FILE NAME @9BLK@5E.DCD
+DYNA REST        VERL        NSTEP @7   TIME 0.001 -
+     IPRFRQ 100  IHTFRQ 0    IEQFRQ 100 ISVFRQ 1000 - 
+     IUNREA 30   IUNWRI 31   IUNCRD -32 IUNVEL -33 KUNIT -34 -
+     NPRINT 500  NSAVC 0     NSAVV 0    -
+     FIRSTT 300. FINALT 300. TEMINC 5.0 TWINDH 10.0 TWINDL -10.0 -
+     IASORS 0    ISCVEL 0    ICHECW 1   ISEED 314159
+
+! production
+
+OPEN READ UNIT 30 CARD NAME @9BLK@5E.RST
+OPEN WRIT UNIT 31 CARD NAME @9BLK@5P.RST
+OPEN WRIT UNIT 32 FILE NAME @9BLK@5P.DCD
+DYNA REST        VERL        NSTEP @8   TIME 0.001 - 
+     IPRFRQ 100  IHTFRQ 0    IEQFRQ 100 ISVFRQ 1000 - 
+     IUNREA 30   IUNWRI 31   IUNCRD 32  IUNVEL -33  KUNIT -34 -
+     NPRINT 500  NSAVC @6    NSAVV 0  -
+     FIRSTT 300. FINALT 300. TEMINC 5.0 TWINDH 10.0 TWINDL -10.0 -
+     IASORS 0    ISCVEL 0    ICHECW 0
+
+write title unit 6
+* coordinates after @8 steps of simulation with lambda = @2
+*
+print coor
+
+! free energy difference is calculated between lambda @2 and @1
+
+OPEN READ UNIT 32 FILE NAME @9BLK@5P.DCD
+
+BLOCK 3
+NOFORCE
+FREE TEMP 300. FIRST 32 OLDL @2 NEWL @1 CONT 5
+END
+
+! free energy difference is calculated between lambda @2 and @3
+
+OPEN READ UNIT 32 FILE NAME @9BLK@5P.DCD
+
+BLOCK 3
+FREE TEMP 300. FIRST 32 OLDL @2 NEWL @3 CONT 5
+FORCE
+END
+
+INCR 1 by 0.2
+INCR 2 by 0.2
+INCR 3 by 0.2
+INCR 4 by 1
+INCR 5 by 1
+IF 1 LT 1 GOTO START
+
+set pass 0
+
+@testcheck ?deltaa -3.08459  .0001 block2_deltaa
+@testcheck ?stddev  0.586522 .0001 block2_stddev
+@testcheck ?blsum   176.642  .001  block2_blsum
+
+prnl 2 @node
+echo deltaa ?deltaa  reference -3.08459 
+echo stddev ?stddev reference   0.586522
+echo blsum  ?blsum  reference   176.642 
+prnl 5 @node
+
+
+STOP
+
+Reference output:
+DELTAA -0.776264 
+STDDEV 0.368276 
+BLSUM 3.67705 
+  
+ BLOCK> The free energy change is    -2.89225 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is     1.04932 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is    -0.59613 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is     0.34902 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is    -0.07004 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is    -0.06787 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is    -0.08445 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is    -0.05533 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is     0.44235 kcal/mole at  300.00 K.
+ BLOCK> The free energy change is    -0.71815 kcal/mole at  300.00 K.
+
+      TOTAL free energy change is    -3.75751

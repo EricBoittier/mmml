@@ -1,0 +1,117 @@
+* file: pbeqtest2.inp
+* (1) Test the Poisson Boltzmann Equation solver with membrane
+* (2) Test the Solvation Forces with membrane
+* external files: top_all22_prot.inp, par_all22_prot.inp and radius.str
+*
+
+if ?pbeq .ne. 1 then
+ echo pbeqtest2 testcase result: skip
+ stop
+endif
+
+stream datadir.def
+
+open read card unit 11 name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read card  unit 11 name @0par_all22_prot.inp
+read para card unit 11
+close unit 11
+
+read sequence ALA 1
+generate ALAD first ACE last CT3 setup warning
+
+read coor card 
+* ALAD
+*
+   22
+    1    1 ALA  CAY    4.07676   3.03415  -3.82644 ALAD 1      0.00000
+    2    1 ALA  HY1    3.38014   2.34546  -3.30049 ALAD 1      0.00000
+    3    1 ALA  HY2    5.00882   3.05721  -3.22489 ALAD 1      0.00000
+    4    1 ALA  HY3    4.15907   2.82692  -4.91542 ALAD 1      0.00000
+    5    1 ALA  CY     3.38897   4.27061  -3.53138 ALAD 1      0.00000
+    6    1 ALA  OY     3.49052   4.78172  -2.38252 ALAD 1      0.00000
+    7    1 ALA  N      2.53822   4.73538  -4.36448 ALAD 1      0.00000
+    8    1 ALA  HN     2.01149   4.10166  -4.91496 ALAD 1      0.00000
+    9    1 ALA  CA     1.67556   5.89668  -4.06707 ALAD 1      0.00000
+   10    1 ALA  HA     1.59111   6.09020  -3.00284 ALAD 1      0.00000
+   11    1 ALA  CB     2.53016   7.09556  -4.41434 ALAD 1      0.00000
+   12    1 ALA  HB1    2.52615   7.11846  -5.52371 ALAD 1      0.00000
+   13    1 ALA  HB2    2.15839   8.07814  -4.05285 ALAD 1      0.00000
+   14    1 ALA  HB3    3.51494   7.05372  -3.90013 ALAD 1      0.00000
+   15    1 ALA  C      0.34175   5.90615  -4.74842 ALAD 1      0.00000
+   16    1 ALA  O      0.17979   5.47884  -5.92042 ALAD 1      0.00000
+   17    1 ALA  NT    -0.70645   6.40667  -4.13872 ALAD 1      0.00000
+   18    1 ALA  HNT   -0.54290   6.65017  -3.19244 ALAD 1      0.00000
+   19    1 ALA  CAT   -1.88322   6.64491  -4.83560 ALAD 1      0.00000
+   20    1 ALA  HT1   -2.72804   6.10066  -4.35910 ALAD 1      0.00000
+   21    1 ALA  HT2   -2.08533   6.27265  -5.86664 ALAD 1      0.00000
+   22    1 ALA  HT3   -1.93591   7.75719  -4.86951 ALAD 1      0.00000
+
+coor orient
+coor trans zdir 1.0 dist 3.0 sele all end
+
+! -------------------------------------------------
+PBEQ
+
+ ! Old PBEQ
+ ! ########
+   stream @0radius.str
+   SOLVE epsw 80.0 ncel 40 dcel 0.4 Tmemb 6.0 Zmemb 0.0 epsm 2.0
+   set ener80 = ?ENPB
+
+   SOLVE epsw 1.00 Tmemb 6.0 Zmemb 0.0 epsm 1.0
+   set ener1 = ?ENPB
+
+   ! Electrostatic solvation free energy
+   calc total = @ener80 - @ener1
+
+   ! save and then cancel charges for getting the influence of applied 
+   ! membrane voltage
+   scalar charge store 5
+   scalar charge set 0.0
+
+   SOLVE epsw 80.0 conc 0.15 temp 300.0 -
+         Tmemb 6.0 Zmemb 0.0 epsm 2.0 Vmemb 0.100
+
+   CAPACITY
+   if ?mynode .eq. 0 write phi volts card zfirst -20.0 zlast 20.0 unit 6
+   if ?mynode .eq. 0 write phi volts card zfirst -20.0 zlast 20.0 xfirst 20.0 unit 6
+
+   !recall charges for getting the influence of applied membrane voltage
+   scalar charge recall 5
+   ENPB
+
+@testcheck ?enpb 0.09821 -0.1 pbeqtest1_1
+
+   RESET
+
+ ! UPDATE PBEQ with Membrane
+ ! #########################
+   set factor 0.939
+   set sw     0.4
+
+   stream @0radius.str
+   scalar wmain add  @sw
+   scalar wmain mult @factor
+   scalar wmain set 0.0 sele type H* end
+   SOLVE epsw 80.0 ncel 40 dcel 0.4 Tmemb 6.0 Zmemb 0.0 epsm 2.0 -
+         smooth swin @sw force npbeq 1 sten 0.03 
+   if ?mynode .eq. 0 write epsx  card xfirst -20.0 xlast 20.0 unit 6
+   if ?mynode .eq. 0 write epsy  card yfirst -20.0 ylast 20.0 unit 6
+   if ?mynode .eq. 0 write epsz  card zfirst -20.0 zlast 20.0 unit 6
+
+END
+
+! To compare the analytical forces (from PBEQ) with finite difference forces
+ENER
+SKIP All Excl PBELEC PBNP
+ENER
+
+@testcheck ?ener 6.93844 -0.1 pbeqtest1_2
+
+TEST FIRST STEP 0.001 TOL 0.0 SELE .NOT. TYPE H* END
+
+
+STOP

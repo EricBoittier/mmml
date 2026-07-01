@@ -1,0 +1,97 @@
+		Full Kernel Module 
+
+VERSON 1  06.07.2020 	
+by 
+Marco Pezzella 
+Debasish Koner 
+Markus Meuwly
+
+FULLKERN provides a way to flexibly implement RKHS based potentials for small molecules
+inside CHARMM. At the moment the interactions between atoms are set to zero, with the 
+aim  of automatically setting to zero internally the intramolecular interactions.The 
+PSF remains unchanged.The new interactions are not explicitly added to the PSF file and 
+only exist for the duration of a CHARMM run. FULLKERN is called via the FLMK keyword.
+
+References: 
+[1] D. Koner and M. Meuwly arXiv prepint https://arxiv.org/abs/2005.04667v2
+
+Syntax ::  Syntax of the FULLKERN module.
+Description :: A brief description of the module and how it works.
+Generation of the potential :: How to generate the new potential. 
+How to run with your potential :: Shows how to compile charmm with the desired 
+                                   potential and run it.
+How to to generate the coefficents :: Brief description of how to store the coefficients.
+Example  :: Description of the example: Acetone.
+
+!--------------------------------Syntax--------------------------------! 
+
+FLMK  { READ {UNIT (integer) NATOMS (integer) DIMSYS (integer) DIMKERN (integer)  
+        NCOEFF (integer) ATOM1 (integer) ATOMN  (integer)  DATAFILE (char)} }
+
+READ option will activate the module, reading all the parameters needed for 
+storing and usage of the module. 
+
+UNIT: units needed for reading the data file;
+NATOMS: number of atoms treated with the kernels;
+DIMSYS: number of interatomic distances in the system;
+DIMKERN: number of 1D kernel basis functions; 
+NCOEFF: number of the coefficients in datafile;
+ATOM1: index of the first atom treated by kernels;
+ATOMN: index of the last atom treated by kernels;
+DATAFILEe: name of the data file containing the coefficients.
+
+!--------------------------------Description-------------------------------!
+
+FULLKERN is invoked by the FLMK command. At first the module reads the parameters for
+ the molecules and the atoms involved. These information will be considered only for 
+the present run of CHARMM, no modifications will be applied to the PSF file.
+
+Under the current implementation, force field parameters need to be set to zero. 
+
+No compatibility issues with other modules in CHARMM are registered.
+
+!-----------------------------Generation of the potential -----------------------------!
+
+The fortran code for the RKHS potential and calculation of the coefficients are
+generated using a python script which takes care of the permutationally invariant
+symmetry of the molecule. Information regrading this will be made available in github.
+
+!-------------------------How to run with your potential-------------------------!
+
+TOOO (NEED TO BE DISCUSSED)
+
+!------------------------- How to to generate the coefficents -------------------------!
+
+Calculate ab initio energies and cartesian gradients of the system for sample structures
+using normal mode sampling (randomly displacing the cordinates along the normal mode
+vectors). The coordinates, energy and gradients are then used to calculate the coefficients
+for the kernal polynomial using a least square fit. Corresponding codes for this will be
+made available in github
+
+!-----------------------------------Example-----------------------------------!
+
+Acetone dynamics.
+
+
+
+
+
+----------------------------------------- Needed improvements 
+
+1- Remove properly the intratomic interactions inside the subroutine.
+2- Include the keywords for better recognition  of the variable and make the code more general.
+3- Make a flexible implementation?
+
+I would say that for point 1 and point 4 we can ask advise to Joshua.
+
+1- Optional flag for the installation of FULLKERN, via the  "-a FLMK".
+2- Make the module verbose.
+3- Insert the deallocation module.
+
+
+                                                                                                                                                 
+
+
+
+
+

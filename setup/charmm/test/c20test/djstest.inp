@@ -1,0 +1,122 @@
+* This test checks the abner minimization and various electrostatic
+* options, using PTI extended atom and explicit hydrogen model
+*
+
+stream datadir.def
+bomblev -2
+
+open read form unit 1 name @0toph10.rtf
+read rtf  card unit 1
+open read form unit 2 name @0param7.prm
+read parameter card unit 2
+
+read sequence card
+*PTI SEQUENCE
+*
+   58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+
+GENERATE  MAIN
+PATCH DISU MAIN  5 MAIN 55
+PATCH DISU MAIN 14 MAIN 38
+PATCH DISU MAIN 30 MAIN 51
+
+READ      SEQUENCE            WATER    4
+GENERATE  SOLV
+
+!!!!! 1 van der Waals only nonbond option, no electrostatics.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3
+HBONDS IHBFRQ 50 CUTHB 6.0 BEST ctonha 55. ctofha 60. CUTHA 65.0
+MINI ABNR strict 0.1 NSTEP 10 STEP 0.2 EIGRNG 0.0001 MINDIM 2 STPLIM 1.0 -
+    NOELEC CUTNB 6.0 ctofnb 5.5 ctonnb 5.0 INBFRQ 5 IHBFRQ 5  NBXM -3 NPRINT 1
+
+!!!!! 2 shift electrostatics.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+HBONDS
+MINI ABNR strict 0.1 NSTEP 10 STEP 0.2 EIGRNG 0.0001 MINDIM 2 STPLIM 1.0 -
+ ELEC ATOM SHIFT RDIE CUTNB 6.0 ctofnb 5.5 ctonnb 5.0 INBFRQ 5 IHBFRQ 5 NPRINT 1
+
+!!!!! 3 EXFL electrostatics.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+HBONDS
+MINI ABNR NSTEP 10 STEP 0.1 EIGRNG 0.0001 MINDIM 4 STPLIM 1.0  NPRINT 1 -
+   ELEC GROUP EXTEND NOGRAD NOQUAD CDIE SWIT -
+   EPS 2.5 CUTNB 6.0 CTOFNB 7.0 CTONNB 7.5
+
+!!!!! 4 EXEL electrostatics.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+HBOND
+MINI ABNR NSTEP 10 STEP 0.08 EIGRNG 0.00005 MINDIM 6 STPLIM 1.0 NPRINT 1 -
+   ELEC GROUP EXTEND GRAD NOQUAD CDIE SWIT -
+    CUTNB 6.5 CTOFNB 7.0 CTONNB 7.5 INBFRQ 10 IHBFRQ 10
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+HBOND
+MINI ABNR MASS NSTEP 10 STEP 0.08 EIGRNG 0.00005 MINDIM 6 STPLIM 1.0 NPRINT 1 -
+   ELEC GROUP EXTEND GRAD NOQUAD CDIE SWIT -
+     CUTNB 6.5 CTOFNB 7.0 CTONNB 7.5 INBFRQ 10 IHBFRQ 10
+
+!!!!! 5 check imove handling in ABNR.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+CONS fix sele bynu 1 : 64 .or. bynu 75 : 77 end
+
+open write unit 21 file name @9djstest.dat
+WRITE COORD FILE UNIT 21
+* BEFORE FIX
+*
+MINI ABNR NSTEP 10 STEP 0.05 NPRINT 1
+open write unit 22 card name @9djstest.psf ! BRB-changed from file to card
+WRITE PSF CARD UNIT 22
+* TEST CASE PSF
+*
+REWIND UNIT 2
+!ANAL
+!COMPARE PARM 2 COOR unit 21 $ PSF 22
+!BUILD DIFF ATOM X $ Y $ Z $
+!delete sele prop x .eq. 0.0 .or. prop y .eq. 0.0 .or. prop z .eq. 0.0 end
+!LINESZ 80 $
+!PRINT TABLE COLUMN FRAC 5
+!END
+cons fix sele none end
+
+!!!!! 6 constant dielectric option.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+HBONDS
+MINI ABNR NSTEP 10 STEP 0.2 EIGRNG 0.0001 MINDIM 2 STPLIM 1.0 NPRINT 1 -
+   ELEC GROUP EXTEND GRAD NOQUAD CDIE SWIT -
+    EPS 1.0 CUTNB 6.0 ctofnb 5.5 ctonnb 5.0 INBFRQ 5 IHBFRQ 5
+
+!!!!! 7 reaction fields with exel update with each energy.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+HBONDS
+MINI ABNR NSTEP 10 STEP 0.1 EIGRNG 0.0001 MINDIM 4 STPLIM 1.0 NPRINT 1 -
+   ELEC GROUP EXTEND GRAD NOQUAD CDIE SWIT -
+     eps 1.0 RXNFLD ORDER 4 CUTNB 6.0 CTOFNB 7.0 CTONNB 7.5
+
+!!!!! 8 reaction fields with exel update at nonbond update.
+
+open read unit 3 card name @0bpti.crd
+READ COORD card UNIT 3 init
+HBONDS
+MINI ABNR NSTEP 10 STEP 0.1 EIGRNG 0.0001 MINDIM 4 STPLIM 1.0 NPRINT 1 -
+   ELEC GROUP EXTEND GRAD NOQUAD CDIE SWIT -
+    eps 1.0 RXNNB ORDER 10 CUTNB 6.0 CTOFNB 7.0 CTONNB 7.5

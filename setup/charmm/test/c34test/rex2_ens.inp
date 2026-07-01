@@ -1,0 +1,112 @@
+* CHARMM Testcase: c34test/rex2_ens.inp
+* Author:   Robert Best
+* Date:     December 14, 2006
+* Version:  c34a2
+* Test:     replica exchange
+*
+
+! this test gives a contrived example of specifying an
+! exchange map for replica exchange. The example is of
+! 2D replica exchange between two force-fields and two 
+! temperatures (arrows are allowed exchanges listed in 
+! the unit specified with RULEs (see below)
+!
+! Replica_3 (FF1,T2)    <---->     Replica_4 (FF2,T2)
+!   /\                                  /\
+!    |                                   |
+!    |                                   |
+!   \/                                  \/
+! Replica_1 (FF1,T1)    <---->     Replica_2 (FF2,T1)
+!
+! T1=300;	T2=320
+! FF1=EEF1; 	FF2=EEF1 with charges scaled by 0.95
+!
+! the exchange frequency and length of simulation here
+! are not sensible for real applications!!
+
+if ?ensemble .ne. 1 then
+   echo "This test NOT run"
+   stop
+endif
+
+! replica variables
+set nrep ?nensem
+set node ?whoiam
+
+stream datadir.def 
+
+set prot 1ypa
+
+set t 300.0
+
+open unit 1 read card name @0/toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/param19_eef1.inp
+read para card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+faster on
+
+if @NODE .eq. 1 scalar charge mult 0.95
+if @NODE .eq. 3 scalar charge mult 0.95
+
+eef1 setup temp @T unit 95 name @0/solvpar.inp
+update ctonnb 7.0 ctofnb 9.0 cutnb 10.0 group rdie
+
+nbonds elec  switch  group  rdie vdw  vswitch vgroup - 
+       cutnb 13.0 ctofnb 9.0 ctonnb 7.0 -
+       wmin 1.2 eps 1.0 e14f 0.4 nbxm 5 
+shake bonh param tol 1e-7
+energy
+
+! random seeds
+if @NODE .eq. 0  set seed 21422150
+if @NODE .eq. 1  set seed 5490565
+if @NODE .eq. 2  set seed 1265980
+if @NODE .eq. 3  set seed 1999290
+
+
+! ======================================================================
+!             replica exchange test
+! ======================================================================
+
+set test "ensemble_rex2"
+
+open unit 50 write card name @9/@TEST_rep2t.dat
+open unit 51 write card name @9/@TEST_t2rep.dat
+open unit 52 read card name @0/swap_rules.dat
+
+! this swap freq way too freq but this is a test...
+ensemble exchange freq 20 rep2to 50 t2repo 51 rule 52 -
+        300.0 300.0 320.0 320.0
+ensemble info
+
+set t ?ensmyt
+set mtest @TEST_nd@NODE
+
+ensemble open unit 20 write card name -
+@9/@MTEST.rst
+ensemble open unit 21 write file name -
+@9/@MTEST.dcd
+ensemble open unit 23 write card name -
+@9/@MTEST.ene
+dynamics leap verlet start nstep 400 timestep 0.002 iseed @SEED -
+	iprfrq 2000 ihtfrq 0 ieqfrq 4000 ntrfrq 0 ihbfrq 0 -
+	inbfrq -1 ilbfrq 0 -
+	iunwri 20 iuncrd 21 kunit 23 - ! iunvel 22 
+	nprint 100 nsavc 500 nsavv 0 -
+	iasors 0 iasvel 1 iscvel 0 ichecw 1 teminc 0.0 twindh 10.0 -
+	twindl -10.0 -
+	firstt @T finalt @T 
+
+stop

@@ -1,0 +1,91 @@
+*  DPME DOMDEC test for DHFR; long cutoffs vs.  DPME with 10A cutoffs
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+if ?ljpme .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @05dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+
+! Set this to 1 to generate the long cutoff benchmark data
+set longcut 0
+
+if longcut .eq. 1 then
+    faster on
+    ! Cutoffs
+    set mycut 57
+    calc xtcut = @mycut+4
+    calc imcut = @mycut+3
+    calc nbcut = @mycut+2
+    ! Dimension of a box
+    crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+    crystal build cutoff @xtcut noper 0
+    image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+    image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+    format (f16.6)
+    energy e14fac 1.5 eps 1.0 cutnb @nbcut cutim @imcut ctofnb @mycut ctonnb @mycut vswi -
+         Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+else
+
+    ! Cutoffs
+    set mycut 10
+    calc xtcut = @mycut+4
+    calc imcut = @mycut+3
+    calc nbcut = @mycut+2
+    ! Dimension of a box
+    crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+    crystal build cutoff @xtcut noper 0
+    image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+    image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+    format (f16.6)
+    if ?domdec .eq. 1 then
+      faster on
+      set DOMD domdec
+    else
+      faster off
+    endif
+    energy e14fac 1.5 eps 1.0 cutnb @nbcut cutim @imcut ctofnb @mycut ctonnb @mycut -
+         domdec dlb off split on vswi -
+         ljpme dkappa 0.4 dorder 4 dftx 64 dfty 64 dftz 64 -
+         Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+    calc vdwtot = ?VDW + ?LJRE + ?LJEX + ?LJSE
+
+    ! Energy w.r.t. cutoff from the above calculation
+    !
+    !       Cutoff |    Energy
+    !      ----------------------
+    !         10   | -63748.54261
+    !         20   | -64102.12554
+    !         30   | -64137.23309
+    !         40   | -64145.76295
+    !         50   | -64148.80449
+    !         57   | -64149.84170
+    !
+    calc diff = abs(?ENER + 64150)
+    if @diff .gt. 24 then print test_energy_failed
+endif

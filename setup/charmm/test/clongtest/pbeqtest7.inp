@@ -1,0 +1,42 @@
+* CHARMM 28 testcase pbeqtest7.inp
+* Demonstrate the use of the pka.str file for pKa calculations
+*   with the PBEQ module
+* Author: Benoit Roux
+*
+
+if ?pbeq .ne. 1 then stop
+
+stream datadir.def
+
+open read card unit 1 name @0top_all22_prot.inp
+read RTF card unit 1
+close unit 1
+
+open card read unit 1 name @0par_all22_prot.inp
+read PARAM card unit 1
+close unit 1
+
+set Segid    = Syst
+
+read sequence card
+*  residue1
+*
+  3
+ASP GLU ASP 
+generate @segid setup 
+
+ic seed 1 N 1 CA 1 C
+ic param
+ic build
+
+mini abnr nstep 100 nprint 100
+
+print coor
+
+! set residue for pKa calculation and the patch for the ionizable sidechain
+set resid    = 2
+set patch    = GLUP
+
+stream @0pka.str
+
+stop

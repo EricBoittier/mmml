@@ -1,0 +1,131 @@
+*  test of NMA-Water (Dilute solution) System
+*  1 NMA molecule in center of box of 216 TIP4P-FQ molecules
+*
+
+!  Constant Temperature / Pressure molecular dynamics of NMA in TIP4P-FQ 
+!    water
+
+if ?cheq .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+if ?colfft eq 1 then
+      echo "Test NOT performed with COLFFT."
+      stop
+endif
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0top_all30_cheq_prot.inp 
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all30_cheq_prot.inp
+read param card unit 1
+close unit 1
+
+read sequ NMA 1
+generate nma setup angle dihedral
+
+read sequ tip4 216
+generate wat setup noangle nodihedral
+
+open unit 1 read form name @0nmatip4p.crd
+READ COOR CARD unit 1
+close unit 1
+
+! Set up the lonepair facility
+lonepair bisector dist 0.15 angle 0.0 dihe 0.0 -
+       sele atom wat * OM end -
+       sele atom wat * OH2 end -
+        sele atom wat * H1 end -
+        sele atom wat * H2 end
+
+! Assign initial fluctuating charge / charge equilibration parameters
+
+
+cheq on ! note: this is redundant since specifying the normalization and  
+        ! and molecule type flags turns on CHEQ
+
+cheq norm byres select all end
+cheq flex select segid nma end
+cheq tip4 select segid wat end
+cheq QMAS CGMA 0.000069 TSTA 0.1 sele segid nma end
+cheq QMAS CGMA 0.000069 TSTA 0.1 sele segid wat end
+
+! Set-up image information for cubic periodic boundaries
+set 6 22.115
+set 7 22.115
+set 8 22.115
+
+set fft 25
+
+calc boxcut @6/2.0
+
+calc volu = @6 * @7 * @8
+set ang 90
+crystal defi cubic @6 @7 @8 @ang @ang @ang
+crystal build cutoff @boxcut Noper 0
+open read card unit 10 name @0cubic.xtl
+crystal read card unit 10
+close unit 10
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select .not. resname tip4 end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select resname tip4 end
+
+fast ON
+
+set cutoff 10.22075 
+Calc ctofnb = @cutoff - 1.0
+Calc ctonnb = @cutoff - 1.5
+
+set seed 314159
+
+shake bonh param tol 1.0e-8 
+
+! Minimize initially for a few steps
+!  NOTE to use the E14FAC 0.0  statement to be consistent
+!  with the intramolecular 1-4 electrostatics included via the
+!  shielded interaction
+
+mini sd cheq cgmd 1 nstep 100 nprint 50 -
+        inbfrq -1 imgfrq -1 ilbfrq 0 e14fac 0 nbxmod -5 -
+        eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7 vswi -
+        Ewald kappa 0.320 pmEwald order 4 fftx 32 ffty 32 fftz 32
+
+! Set up the parameters for the associated charge temperature baths
+
+! In this case, there is one bath for the NMA charges and a second for 
+!  the TIP4P-FQ charges; both blocks of charges are maintained at 1 Kelvin.
+
+FQBA 2
+CALL 1 sele atom nma * * end
+COEF 1  QREF  0.005  TREF 1.0
+CALL 2 sele atom wat * * end
+COEF 2  QREF 0.005 TREF 1.0
+END
+
+!  Note to use E14FAC 0.0 for fq dynamics
+!  use FQINT 1 for charge dynamics coupled to baths
+!  use FQINT 2 for no baths on charges
+!  
+
+title 
+* NMA in water - Dynamics
+*
+dynamics cpt leap start timestep .0005 nstep 50 nprint 25 iprfrq 1000 -
+        cheq cgmd 1 cgeq 1 fqint 1 -
+        firstt 298 finalt 298  twindl -5.0 twindh 5.0 -
+        ichecw 1 teminc 0.0 ihtfrq 0 ieqfrq 0 -
+        iasors 1 iasvel 1 iscvel 0 -
+        inbfrq -1 imgfrq -1 ilbfrq 0 e14fac 0 nbxmod -5 -
+        echeck 10000 -
+        eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7 vswi -
+        Ewald kappa 0.320 pmEwald qcor 1 order 4 fftx 32 ffty 32 fftz 32 ntrfq 2000 -
+       pconstant pmass 100.0 pref 1.0 pgamma 20.0  - !  Constant pressure
+        Hoover tmass 50  refT 298
+
+stop

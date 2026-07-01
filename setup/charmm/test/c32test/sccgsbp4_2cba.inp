@@ -1,0 +1,199 @@
+* CHARMM 31 testcase sccgsbp4_2cba.inp
+* .Test SCCGSBP, the QM/MM approach using SCC-DFTB and GSBP for CA
+* .do some dynamics with region around Zn teated with QM and remainder 
+* .with MM
+* .sccgsbp3_2cba.inp must have previously been run
+* .Author:  P. Schaefer, Univ. Wisc. Madison June 2004
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/sccgsbp4_2cba> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+IF ?GSBP .NE. 1 THEN
+ echo "c32test/sccgsbp4_2cba> GSBP Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+! variables
+stream datadir.def
+set j    2cba
+set k    2cba_gsbp
+set temp 300.0
+
+OPEN UNIT 21 NAME @0top_ca.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_ca.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @9@k_sb.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @9@k_sb.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+
+NBONDS  GROUP  SWITCH CDIE  VDW VSWI  EXTEND GRAD QUAD -
+        CUTNB 13.0  CTOFNB 12.0 CTONNB 8.0  WMIN 1.5  EPS 1.0 -
+        inbfrq -1
+
+! ===================== Buffer region set-up =========================
+OPEN UNIT 3 NAME @9@k_sb.cns READ FORM
+READ  COOR COMP CARD UNIT 3
+CLOSE UNIT 3
+
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+OPEN UNIT 3 NAME @9@k_sb.crd READ  FORM
+READ  COOR COMP CARD UNIT 3
+CLOSE UNIT 3
+
+! ...... Set up harmonic cons ......
+cons harmonic force 1.0 exponent 2 sele recall 1 end COMP
+scalar CONST recall 2
+
+! ...... Set up friction ......
+scalar FBETA recall 3
+! ===================== Buffer region DONE   =========================
+
+set rsphere 20.0              ! radius of the spherical region of interest
+set rexcl    2.0              ! water exclusion radius 
+set rgeo     4.5              ! to setup the MMFP potential
+
+calc rwater   = @rsphere - @rexcl
+calc rdroff   = @rsphere - @rgeo
+
+! center of active site (at zinc atom)
+set xcen   0.0  
+set ycen   0.0
+set zcen   0.0
+coor stat
+
+! FIND protein atoms which have 1-3 connections from atoms outside 
+! the intended simulation sphere
+define INNER   sele POINT @xcen @ycen @zcen CUT @rsphere end
+define OUTER   sele .not. INNER end
+define BONDOR  sele OUTER .and. .bonded. INNER end
+define BONDIR1 sele INNER .and. .bonded. BONDOR end
+define BONDIR2 sele INNER .and. .bonded. BONDIR1 end
+define FIX13   sele .bygroup. ( BONDIR1 .or. BONDIR2 ) end
+
+! FIND protein atoms near the boundary between r=18 and r=20.
+define EXCLAT  sele ( INNER .and. .not. ( POINT @xcen @ycen @zcen CUT @rwater ) -
+                      .and. .not. resname tip3 ) end
+define EXCLAT  sele .bygroup. EXCLAT end
+
+! FIX protein atom defined above and in outer region
+CONS FIX  sele OUTER .or. ( INNER .and. ( EXCLAT .or. FIX13 )) end
+
+! We don't need to consider the bare Coulombic interactions between IR and OR 
+! because it is already incorporated into PHIX.
+! note that the explict Coulombic interactions with the inner region must be kept
+SCALAR CHARGE SET 0.0 sele .not. INNER end 
+
+! Constrain the water molecules so that they cannot go out the simulation region 
+MMFP
+GEO SPHERE -
+    Xref @xcen Yref @ycen Zref @zcen XDIR 1.0 YDIR 1.0 ZDIR 1.0 -
+    QUARtic FORCE 0.5 P1 2.25 DROFF @rdroff select type oh2 end
+END
+
+! -------------- SCC section ----------------
+define qm sele (segid 2CBA .and. -
+! imidazole groups from nearby histidine residues
+       (resid 94 .or. resid 92 .or. resid 117) .and. .not. -
+       (type CA .or. type C .or. type N .or. type O -
+        .or. type HN .or. type HA)) -
+! link atoms
+       .or. (segid 2CBA .and. type QQ*) .or. -
+! Zn and Zn-bound water
+       (segid SOLV .and. resid 1) .or. (segid ZNAT .and. type ZN) SHOW end
+
+define h64 sele segid 2CBA .and. resi 62 end !H64 is 62nd in the psf:-)
+
+scalar WMAIN set 1.0 sele (qm) .and. type O*  SHOW end
+scalar WMAIN set 2.0 sele (qm) .and. type N*  SHOW end
+scalar WMAIN set 3.0 sele (qm) .and. type C*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type H*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type QQ*  SHOW end
+scalar WMAIN set 5.0 sele (qm) .and. type ZN*  SHOW end
+
+! YOU HAVE TO HAVE a sccdftb.dat FILE!
+
+SCCDFTB remove CHRG +2 SELE qm END TEMP 0.00 SCFT 0.00000001 mull
+
+! Single point energy must be performed in order to use sorting 
+! with SCCGSBP.  With 'mull' keyword above, the calculation will
+! make a set up mulliken charges available to the sorting function
+! without this step, the sorting will be incorrect as it will include
+! MM atom contributions only
+energy
+
+!Now setup the Generalized Solvent Boundary Potential (GSBP)
+PBEQ
+
+! read in M and PHIX files
+OPEN READ FILE UNIT 50 NAME @9@k_MIJ2.dat
+READ MIJ UNIT 50
+CLOSE UNIT 50
+
+OPEN READ FILE UNIT 50 NAME @9@k_PHIX.dat
+READ PHIX UNIT 50
+CLOSE UNIT 50
+
+! One can define the maximum number of basis functions (MAXNPOL) 
+!         which can be used for reaction field and
+!         the step frequency (NLIST) for updating basis functions 
+!         according to their contributions.
+
+PRNLEV 8
+GSBP SPHERE -
+     NMPOL  2        MAXNPOL 4     -
+     SRDIST @rsphere RRXCEN  @xcen RRYCEN @ycen RRZCEN @zcen
+PRNLEV 5
+END
+
+! do quick energy and force checks before dyn
+SKIP All Excl QMEL ELEC GSBP
+ENER
+! You should see small differences for the MM atoms and slightly larger
+! differences for the QM atoms - due to inherent issues related to SCC
+! (tablet matrix elements and spline fit of the repulsive potential)
+TEST FIRST STEP 0.005 TOL 0.0 SELE qm .or. h64 end 
+SKIP NONE
+
+!From here, just run normal energy minimization or simulation
+! extended Coulombic interactions
+
+!extended electrostatics
+UPDA  GROUP  SWITCH CDIE  VDW VSWI  EXTEND GRAD QUAD -
+      CUTNB 13.0  CTOFNB 12.0 CTONNB 8.0  WMIN 1.5  EPS 1.0     
+
+shake bonh
+
+MINI SD   NSTEP 100
+
+open unit 25 form write name @9@k_dyn1.res
+open unit 26 file write name @9@k_dyn1.dcd
+
+dynamics lang timestep 0.002 nstep 50 nprint 5 iprfrq 10 -
+    firstt 50.0 finalt @temp TEMINC 50.0 twindl -10.0 twindh 10.0 -
+    IHTFRQ 0 IEQFRQ 0 NTRFRQ 0 ISVFRQ 50 -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 0 ISEED 314159 -
+    iunwri 25 iuncrd 26 iunvel -1 kunit -1 nsavc 5 nsavv 0 -
+    inbfrq -1 imgfrq 0 ilbfrq 20 ihbfrq 0 tbath @temp rbuffer 16.0
+
+close unit 25
+close unit 26
+
+STOP

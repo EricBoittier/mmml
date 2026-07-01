@@ -1,0 +1,591 @@
+* This test case is aiming to enable the relatively automated
+* evaluation  of test case output for the HFB method under TReK.
+* By Ilja V. Khavrutskii 01/30/2007 (Adv: Charles L. Brooks III)
+*
+
+! Test to ensure the functionality exists in this build of CHARMM.
+! Use exctly this format so that it can be parsed by test facilities.
+if ?hfb .ne. 1 then
+ echo HFB functionality absent: Test NOT performed
+ stop
+endif
+
+! In datadir.def we define a variable pnode that should be
+! used to "protect" all calls to prnlev
+! additionally, the variable tol is defined to control
+! differences in computed and reference variables.
+set tol = 1.0e-4
+stream datadir.def
+
+! Format for prnlev shown here
+prnlev 5 @pnode
+
+label BEGINSETUP=0 ! This demarks the beginning of the setup region
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! In general use standard topology/parameter files, or include these
+! directly in the input script to eliminate an abundance of files in
+! the data directory. Test cases should be as self-contained as possible
+
+! read parameter and topology files
+open unit 10 read form name @0top_all22_prot.inp
+read rtf unit 10 card
+close unit 10
+
+open unit 10 read form name @0par_all22_prot.inp
+read param unit 10 card
+close unit 10
+
+set tolermsd 5e-3
+set tolenerg 8e-2
+set name ala
+set nbpar atom cdie eps 1.0 cutnb 21 ctofnb 18 ctonnb 16 switch vswitch
+set nbeads 32
+set print 10
+set sdstep 20
+set abstep 100
+
+read sequ card
+* Sequence of ala
+*
+1
+ALA
+generate ala first ACE last CT3 setup warn
+
+define rcs select type n .or. type c .or. type ca .or. type nt .or. type cy end
+
+set return fromeq
+goto alac7eq
+label fromeq
+write coor card name @9/ala_c7eq.chr
+
+set return fromax
+goto alac7ax
+label fromax
+write coor card name @9/ala_c7ax.chr
+
+! ready to start trek run #1
+! Check generation of initial path
+trek maxpoint @nbeads select rcs end mass
+   traj read
+     @9/ala_c7eq.chr !reactant
+     @9/ala_c7ax.chr !product
+   done
+   fp trnc 24 init
+   ! writing the path to a trajectory file
+   traj write name @9/@name_init.dcd restart @9/@name.cpr 
+quit
+
+! ready to start trek run #2
+! Generate interpoation path with dens sub-command
+trek maxpoint @nbeads select rcs end mass
+   traj read
+     @9/ala_c7eq.chr !reactant
+     @9/ala_c7ax.chr !product
+   done
+   fp trnc 24 dens
+   ! writing the path to a trajectory file
+   traj write name @9/@name_dens.dcd restart @9/@name.cpr 
+quit
+
+!write out charmm coordinates from the generated trajectory
+!with just reactant and product, dens gives the same result as init
+open unit 11 read unform name @9/@name_init.dcd
+traj iread 11 nunits 1 nfile @nbeads skip 1
+
+set f 1
+label tloop1
+ traj read
+
+ write coor card name @9/@name_init_r@{f}.chr
+
+ incr f by 1
+if @f .le. @nbeads then goto tloop1
+close unit 11
+
+!write out charmm coordinates from the generated trajectory
+!with just reactant and product, dens gives the same result as init
+open unit 11 read unform name @9/@name_dens.dcd
+traj iread 11 nunits 1 nfile @nbeads skip 1
+
+set meanrmsd 0.0
+set f 1
+label tloop2
+ read coor card comp name @9/@name_init_r@{f}.chr
+
+ traj read
+
+ coor orient rms mass sele rcs end comp
+ incr meanrmsd by ?rms
+
+ write coor card name @9/@name_dens_r@{f}.chr
+
+ incr f by 1
+if @f .le. @nbeads then goto tloop2
+close unit 11
+
+calc meanrmsd = @meanrmsd/@nbeads
+
+!Insert test here with some tolerance.
+if @meanrmsd .gt. @tolermsd then
+   echo TEST=1 FAILED
+   stop
+else
+   echo TEST=1 PASSED
+endif
+
+!Removing a few random points from the path of 32 beads
+!to demonstrate the robustness of the interpolation.
+calc nfil = @nbeads - 4
+
+open unit 11 write unform name @9/@name_trunc.dcd
+traj iwrite 11 nwrite 1 nfile @nfil skip 1
+
+set f 1
+label wloop1
+
+ if @f .eq. 5 then goto skip
+ if @f .eq. 10 then goto skip
+ if @f .eq. 17 then goto skip
+ if @f .eq. 26 then goto skip
+
+ read coor card name @9/@name_dens_r@{f}.chr
+ traj write
+
+ label skip
+
+ incr f by 1
+if @f .le. @nbeads then goto wloop1
+
+! ready to start trek run #3
+trek maxpoint @nbeads select rcs end mass
+   ! reading the truncated initial-guess path
+   traj read name @9/@name_trunc.dcd begin 1 skip 1
+   fp trnc 24 dens
+   ! writing the path to a trajectory file
+   traj write name @9/@name_full.dcd restart @9/@name.cpr 
+quit
+
+!write out charmm coordinates from the generated trajectory
+!with just reactant and product, dens gives the same result as init
+open unit 11 read unform name @9/@name_full.dcd
+traj iread 11 nunits 1 nfile @nbeads skip 1
+
+set meanrmsd 0.0
+set f 1
+label tloop3
+ read coor card comp name @9/@name_init_r@{f}.chr
+
+ traj read
+
+ coor orient rms mass select rcs end comp
+
+ incr meanrmsd by ?rms
+
+ incr f by 1
+if @f .le. @nbeads then goto tloop3
+close unit 11
+
+calc meanrmsd = @meanrmsd/@nbeads
+
+!Insert test here with some tolerance.
+if @meanrmsd .gt. @tolermsd then
+   echo TEST=2 FAILED
+   stop
+else
+   echo TEST=2 PASSED
+endif
+
+!Now let's test the optimization with the primitive FP option
+!We will use the evolution engine that is a slight modification 
+!of the one written by Charles L. Brooks III.
+
+! Format for prnlev shown here
+prnlev 0 @pnode
+
+set stp 1
+set hfbstp 10
+
+label fphfbloop
+
+if stp .eq. 1 then
+ set reference @name_init
+ set evolution @name_mini
+else
+ set reference @name_refe
+ set evolution @name_mini
+endif
+
+open unit 11 read unform name @9/@reference.dcd
+open unit 12 write unform name @9/@evolution.dcd
+traj iread 11 iwrite 12 nunit 1 nfile @nbeads skip 1
+
+set f 1
+label loopbeads1
+    traj read
+    coor copy comp
+    cons harm force 10 mass select rcs end comp
+    mini sd nstep @sdstep nprint @print @nbpar
+    mini abnr nstep @abstep nprint @print @nbpar tolgrd 1.0e-5
+    cons harm clear
+    traj write
+    incr f by 1
+if f .le. @nbeads goto loopbeads1
+
+set reference @name_refe
+
+! ready to start trek run #4
+trek maxpoint @nbeads select rcs end mass
+   ! reading the truncated initial-guess path
+   traj read name @9/@evolution.dcd begin 1 skip 1
+   fp trnc 24
+   ! writing the path to a trajectory file
+   traj write name @9/@reference.dcd restart @9/@name.cpr
+quit
+
+ incr stp by 1
+if stp .le. @hfbstp then goto fphfbloop
+
+! Format for prnlev shown here
+prnlev 5 @pnode
+
+! Testing the progress in terms of mean rmsd
+open unit 11 read unform name @9/@reference.dcd
+traj iread 11 nunits 1 nfile @nbeads skip 1
+
+set meanrmsd 0.0
+set f 1
+label tloop4
+ read coor card comp name @9/@name_init_r@{f}.chr
+ traj read
+
+ coor orient rms mass select rcs end comp
+ incr meanrmsd by ?rms
+
+ incr f by 1
+if @f .le. @nbeads then goto tloop4
+close unit 11
+
+calc meanrmsd = @meanrmsd/@nbeads
+
+!Insert test here with some tolerance.
+calc diff = abs(@meanrmsd - 7.591781E-02)
+if @diff .gt. @tolermsd then
+   echo TEST=3 FAILED
+   stop
+else
+   echo TEST=3 PASSED
+endif
+
+!Now let's test the optimization with the gradient enhanced WRKP option
+!We will use the evolution engine that is a slight modification 
+!of the one written by Charles L. Brooks III.
+
+! Format for prnlev shown here
+prnlev 0 @pnode
+
+set stp 1
+set hfbstp 10
+set evolution @name_mini
+set newref @name_refe
+calc maxbeads = @nbeads * 2
+
+label wrkphfbloop
+
+if stp .eq. 1 then
+ set oldref @name_init
+endif
+
+open unit 11 read unform name @9/@oldref.dcd
+open unit 12 write unform name @9/@evolution.dcd
+traj iread 11 iwrite 12 nunit 1 nfile @nbeads skip 1
+
+set f 1
+label loopbeads2
+    traj read
+    coor copy comp
+    cons harm force 10 mass select rcs end comp
+    mini sd nstep @sdstep nprint @print @nbpar
+    mini abnr nstep @abstep nprint @print @nbpar tolgrd 1.0e-5
+    cons harm clear
+    traj write
+    incr f by 1
+if f .le. @nbeads goto loopbeads2
+
+! ready to start trek run #5
+trek maxpoint @maxbeads select rcs end mass
+   ! reading the truncated initial-guess path
+   traj read name @9/@evolution.dcd begin 1 skip 1
+   traj read name @9/@oldref.dcd begin 1 skip 1
+   wrkp trnc 24 bead @nbeads grid @maxbeads rtyp 1 rfrc 10.0 step 0.0
+   ! writing the path to a trajectory file
+   traj write name @9/@newref.dcd restart @9/@name.cpr
+quit
+
+set oldref @newref
+
+ incr stp by 1
+if stp .le. @hfbstp then goto wrkphfbloop
+
+! Format for prnlev shown here
+prnlev 5 @pnode
+
+! Testing the progress in terms of mean rmsd
+open unit 11 read unform name @9/@newref.dcd
+traj iread 11 nunits 1 nfile @nbeads skip 1
+
+set meanrmsd 0.0
+set f 1
+label tloop5
+ read coor card card name @9/@name_init_r@{f}.chr
+ traj read
+
+ coor orient rms mass select rcs end comp
+ incr meanrmsd by ?rms
+
+ incr f by 1
+if @f .le. @nbeads then goto tloop5
+close unit 11
+
+calc meanrmsd = @meanrmsd/@nbeads
+
+!Insert test here with some tolerance.
+calc diff = abs(@meanrmsd - 0.238345)
+if @diff .gt. @tolermsd then
+   echo TEST=4 FAILED
+   stop
+else
+   echo TEST=4 PASSED
+endif
+
+!Now let's test the optimization with the gradient enhanced WRKP 
+!and the SD option (non-zero step size parameter)
+!We will use the evolution engine that is a slight modification 
+!of the one written by Charles L. Brooks III.
+
+! Format for prnlev shown here
+prnlev 0 @pnode
+
+set stp 1
+set hfbstp 10
+calc maxbeads = @nbeads * 2
+
+label wrkphfbloop2
+
+calc nxt = @stp + 1
+set evolution @name_mini_s@stp
+set newref @name_refe_s@nxt
+if stp .eq. 1 then
+ set oldref @name_init
+else
+ set oldref @name_refe_s@stp
+endif
+
+open unit 11 read unform name @9/@oldref.dcd
+open unit 12 write unform name @9/@evolution.dcd
+traj iread 11 iwrite 12 nunit 1 nfile @nbeads skip 1
+
+set f 1
+label loopbeads3
+    traj read
+    coor copy comp
+    cons harm force 10 mass select rcs end comp
+    mini sd nstep @sdstep nprint @print @nbpar
+    mini abnr nstep @abstep nprint @print @nbpar tolgrd 1.0e-5
+    cons harm clear
+    traj write
+    incr f by 1
+if f .le. @nbeads goto loopbeads3
+
+! ready to start trek run #6
+trek maxpoint @maxbeads select rcs end mass
+   ! reading the truncated initial-guess path
+   traj read name @9/@evolution.dcd begin 1 skip 1
+   traj read name @9/@oldref.dcd begin 1 skip 1
+   wrkp trnc 24 rtyp 1 rfrc 10.0 step 0.0000125
+   ! writing the path to a trajectory file
+   traj write name @9/@newref.dcd restart @9/@name.cpr
+quit
+
+ incr stp by 1
+if stp .le. @hfbstp then goto wrkphfbloop2
+
+! Format for prnlev shown here
+prnlev 5 @pnode
+
+! Testing the progress in terms of mean rmsd
+open unit 11 read unform name @9/@newref.dcd
+traj iread 11 nunits 1 nfile @nbeads skip 1
+
+set meanrmsd 0.0
+set f 1
+label tloop6
+ read coor card comp name @9/@name_init_r@{f}.chr
+ traj read
+
+ coor orient rms mass select rcs end comp
+ incr meanrmsd by ?rms
+
+ incr f by 1
+if @f .le. @nbeads then goto tloop6
+close unit 11
+
+calc meanrmsd = @meanrmsd/@nbeads
+
+!Insert test here with some tolerance.
+calc diff = abs(@meanrmsd - 7.569437E-02)
+if @diff .gt. @tolermsd then
+   echo TEST=5 FAILED
+   stop
+else
+   echo TEST=5 PASSED
+endif
+
+!Finally let's test the energy profile. We'll use correl for comparison
+!of the two profiles (from energy optimization with rcs fixed and 
+!from the reversible work line integral)
+
+open write card unit 14 name @9/reversible_work.dat
+
+calc maxbeads = @nbeads * 8 !just for test, 4 otherwise
+calc ngrid = @nbeads * 4
+! ready to start trek run #6
+trek maxpoint @maxbeads select rcs end mass
+   ! reading the truncated initial-guess path
+   traj read name @9/@evolution.dcd begin 1 skip 1
+   traj read name @9/@oldref.dcd begin 1 skip 1
+   wrkp trnc 24 bead @nbeads grid @ngrid rtyp 1 rfrc 10.0 step 0.0000125 iprf 14 ptrj
+   ! writing the path to a trajectory file
+   traj write name @9/@name_profile.dcd restart @9/@name.cpr
+quit
+
+!write out charmm coordinates from the generated trajectory
+!with just reactant and product, dens gives the same result as init
+open write card unit 15 name @9/energy_profile.dat
+open unit 11 read unform name @9/@name_profile.dcd
+traj iread 11 nunits 1 nfile @ngrid skip 1
+
+! Format for prnlev shown here
+prnlev 0 @pnode
+
+set f 1
+label tloop7
+ traj read
+ cons fix sele rcs end
+ mini sd nstep @sdstep nprint @print @nbpar
+ mini abnr nstep @abstep nprint @print @nbpar tolgrd 1.0e-5
+ cons fix sele none end
+ energy @nbpar
+ if f .eq. 1 then
+  set eref ?ener
+ endif
+ calc erel = ?ener - @eref
+
+write title unit 15
+* @f @erel
+*
+ incr f by 1
+if @f .le. @ngrid then goto tloop7
+close unit 11
+
+! Format for prnlev shown here
+prnlev 5 @pnode
+
+open unit 14 read formatted name @9/reversible_work.dat
+open unit 15 read formatted name @9/energy_profile.dat
+set  mxts 10
+set  mxat @maxbeads
+set  mxtt @maxbeads
+set average 0.0
+correl maxtime @mxtt maxseries @mxts maxatoms @mxat noupdate
+     enter wrk ener
+     enter prf ener
+     read wrk unit 14 dumb column 2
+     read prf unit 15 dumb column 2
+     mantime wrk mult -1
+     mantime prf add wrk
+     mantime prf square
+  if ?mynode .eq. 0 set average ?aver
+     show all
+end
+
+!set average @tolenerg
+
+!Insert a simple test here with some tolerance.
+calc ermsd = sqrt(@average)
+if @ermsd .gt. @tolenerg then
+   echo TEST=6 FAILED
+   stop
+else
+   echo TEST=6 PASSED
+endif
+
+!This is it.
+stop
+
+
+label alac7eq
+read coor card
+* THIS TEST CASE IS AIMING TO ENABLE THE RELATIVELY AUTOMATED
+* EVALUATION  OF TEST CASE OUTPUT FOR THE HFB METHOD UNDER TREK.
+* BY ILJA V. KHAVRUTSKII 01/30/2007 (ADV: CHARLES L. BROOKS III)
+*  DATE:     8/30/10     14:44:37      CREATED BY USER: brookscl
+*
+   22
+    1    1 ALA  CAY   -3.12024   0.49634  -0.80068 ALA  1      0.00000
+    2    1 ALA  HY1   -3.78247  -0.38432  -0.66359 ALA  1      0.00000
+    3    1 ALA  HY2   -2.86053   0.60033  -1.87536 ALA  1      0.00000
+    4    1 ALA  HY3   -3.66574   1.40869  -0.47440 ALA  1      0.00000
+    5    1 ALA  CY    -1.89168   0.34501   0.01022 ALA  1      0.00000
+    6    1 ALA  OY    -1.59521   1.15962   0.87467 ALA  1      0.00000
+    7    1 ALA  N     -1.12254  -0.71716  -0.25838 ALA  1      0.00000
+    8    1 ALA  HN    -1.37639  -1.35292  -0.97692 ALA  1      0.00000
+    9    1 ALA  CA     0.09611  -1.01929   0.46513 ALA  1      0.00000
+   10    1 ALA  HA    -0.04501  -0.76385   1.50781 ALA  1      0.00000
+   11    1 ALA  CB     0.38963  -2.53091   0.37102 ALA  1      0.00000
+   12    1 ALA  HB1   -0.46562  -3.11290   0.77388 ALA  1      0.00000
+   13    1 ALA  HB2    0.55881  -2.83235  -0.68494 ALA  1      0.00000
+   14    1 ALA  HB3    1.29775  -2.79089   0.95659 ALA  1      0.00000
+   15    1 ALA  C      1.29231  -0.20954  -0.03462 ALA  1      0.00000
+   16    1 ALA  O      2.21448  -0.73108  -0.65723 ALA  1      0.00000
+   17    1 ALA  NT     1.29176   1.10746   0.24310 ALA  1      0.00000
+   18    1 ALA  HNT    0.49205   1.49853   0.70280 ALA  1      0.00000
+   19    1 ALA  CAT    2.36821   1.98249  -0.15497 ALA  1      0.00000
+   20    1 ALA  HT1    2.48727   1.97844  -1.26226 ALA  1      0.00000
+   21    1 ALA  HT2    2.16424   3.02553   0.17288 ALA  1      0.00000
+   22    1 ALA  HT3    3.33005   1.65227   0.29907 ALA  1      0.00000
+
+goto @return
+
+label alac7ax
+read coor card
+* THIS TEST CASE IS AIMING TO ENABLE THE RELATIVELY AUTOMATED
+* EVALUATION  OF TEST CASE OUTPUT FOR THE HFB METHOD UNDER TREK.
+* BY ILJA V. KHAVRUTSKII 01/30/2007 (ADV: CHARLES L. BROOKS III)
+*  DATE:     8/30/10     14:44:37      CREATED BY USER: brookscl
+*
+   22
+    1    1 ALA  CAY   -3.25219   0.46210   0.36709 ALA  1      0.00000
+    2    1 ALA  HY1   -3.25265   0.44286   1.47738 ALA  1      0.00000
+    3    1 ALA  HY2   -3.86031  -0.38286  -0.01892 ALA  1      0.00000
+    4    1 ALA  HY3   -3.70941   1.41672   0.02619 ALA  1      0.00000
+    5    1 ALA  CY    -1.86692   0.37407  -0.14616 ALA  1      0.00000
+    6    1 ALA  OY    -1.39437   1.27862  -0.82303 ALA  1      0.00000
+    7    1 ALA  N     -1.18831  -0.73684   0.18413 ALA  1      0.00000
+    8    1 ALA  HN    -1.64352  -1.41476   0.74818 ALA  1      0.00000
+    9    1 ALA  CA     0.17603  -1.05351  -0.21180 ALA  1      0.00000
+   10    1 ALA  HA     0.36373  -2.04751   0.16895 ALA  1      0.00000
+   11    1 ALA  CB     0.34250  -1.12866  -1.74759 ALA  1      0.00000
+   12    1 ALA  HB1   -0.40373  -1.83098  -2.17464 ALA  1      0.00000
+   13    1 ALA  HB2    0.18603  -0.13340  -2.21444 ALA  1      0.00000
+   14    1 ALA  HB3    1.35848  -1.48880  -2.01560 ALA  1      0.00000
+   15    1 ALA  C      1.25227  -0.18843   0.44073 ALA  1      0.00000
+   16    1 ALA  O      2.04228  -0.67387   1.24631 ALA  1      0.00000
+   17    1 ALA  NT     1.30211   1.11347   0.10754 ALA  1      0.00000
+   18    1 ALA  HNT    0.58047   1.47394  -0.48844 ALA  1      0.00000
+   19    1 ALA  CAT    2.29013   2.01733   0.64511 ALA  1      0.00000
+   20    1 ALA  HT1    2.14264   3.04166   0.23773 ALA  1      0.00000
+   21    1 ALA  HT2    2.21380   2.06565   1.75505 ALA  1      0.00000
+   22    1 ALA  HT3    3.31712   1.67726   0.38114 ALA  1      0.00000
+
+goto @return

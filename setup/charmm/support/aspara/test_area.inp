@@ -1,0 +1,71 @@
+* This input file builds N-methyl alanyl acetamide
+*
+
+open read file unit 1 name ~/c22pt/toph19.mod
+read rtf file unit 1
+open read file unit 1 name ~/c22pt/param19.mod
+read param file unit 1
+
+! Read in the sequence
+Read sequ card
+* maa
+*
+3
+AMN ALA CBX
+
+Generate maa setu
+ic param
+ic seed 2 n 2 ca 2 c
+ic build
+print coor
+coor orie
+
+ic fill
+print ic
+scal wmain = charge
+!
+Nbonds cdie eps 1.0 cutnb 99.0 ctofnb 90.0 wrnmxd 99.0 swit vswit
+energy
+!
+read surf unit 5
+*  test_area.surf file
+*
+   1.400000 ! the probe radius
+! residue-type  atom-name  asp-value  radius  reference-area  swap-pairs
+ANY  H*       0.0    -1.0   0.0  ! ignore hydrogens
+ANY  C*       4.0     1.9   0.0
+ANY  O*    -112.0     1.4   0.0
+ANY  N*    -112.0     1.7   0.0
+END
+
+skip all excl asp
+prnlev 10
+energy
+prnlev 5
+
+scalar wmain set 1.9 sele type c* end
+scalar wmain set 1.4 sele type o* end
+scalar wmain set 1.7 sele type n* end
+scalar wmain set 0.1 sele type h* end
+scalar wcomp = wmain
+coor surf acce weight sele .not. type h* end  rprobe 1.4 accur 0.0
+scalar wmain show
+scalar wmain stat
+
+scalar wmain store 1
+scalar wmain set    4.0 sele type c* end
+scalar wmain set -112.0 sele type o* end
+scalar wmain set -112.0 sele type n* end
+scalar wmain set    0.0 sele type h* end
+scalar wmain *store 1
+scalar wmain recall 1
+scalar wmain mult 0.001
+scalar wmain show
+scalar wmain stat
+
+scalar wmain = wcomp
+coor surf cont weight sele .not. type h* end  rprobe 0.0 accur 0.0
+scalar wmain show
+scalar wmain stat
+
+STOP

@@ -1,0 +1,102 @@
+6		! number of molecules (or fragments)
+3		! number of reference sites
+
+3		! number of charge sites
+1 2 3 0 0	!reference atoms
+NoQFLC
+LINT
+4 6           !reference range
+	
+1 			!reference atoms
+2			! rank
+
+0.0			!qu10
+0.0			!qu11s
+0.0			!qu12
+0.509873		!qu20
+0.0			!qu21c
+0.0			!qu21s
+0.0			!qu22c
+0.0			!qu22s
+
+
+2 			!reference atoms 
+2			! rank
+
+-0.673825		!qu10
+0.0			!qu11s
+0.0			!qu12
+0.848992		!qu20
+0.0			!qu21c
+0.0			!qu21s
+0.0			!qu22c
+0.0			!qu22s
+
+
+3 			!reference atoms 
+2			! rank
+
+0.673825		!qu10
+0.0			!qu11s
+0.0			!qu12
+0.848992		!qu20
+0.0			!qu21c
+0.0			!qu21s
+0.0			!qu22c
+0.0			!qu22s
+
+
+3		! number of charge sites
+7 8 9 0 0	!reference atoms
+NoQFLC
+NoLINT
+10 12           !reference range
+	
+7		!reference atoms
+2			! rank
+
+-0.418741		!qu10
+0.0			!qu11s
+0.0			!qu12
+0.028448		!qu20
+0.0			!qu21c
+0.0			!qu21s
+-1.687540		!qu22c
+0.0			!qu22s
+
+
+
+8		!reference atoms
+0			! rank
+
+
+
+9		!reference atoms
+0			! rank
+
+
+
+2		! number of charge sites
+13 14 0 0 0	! reference atoms
+QFLC		! and QFLC
+1.128
+NoLINT		! Not linear triatomic
+15 16		! reference range
+
+13 		! reference atoms
+1			! rank
+0.270293		!charge
+0.0			!no charge fluctuation
+0.818143		!qu10
+0.0			!no qu10 fluctuation
+
+14 		! reference atoms 
+2			! rank
+-0.270293		!charge
+0.0			!no charge fluctuation
+-0.180268		!qu10
+0.0			!no qu10 fluctuation
+0.562133		!qu20
+0.0			!no qu20 fluctuation
+
+

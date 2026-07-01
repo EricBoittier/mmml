@@ -1,0 +1,33 @@
+* test to build ethanol molecule with cff forcefield
+*
+
+stream datadir.def
+
+USE CFF
+
+open unit 1 read form name @0"top_all22_model_cff.inp"
+read rtf card unit 1
+close unit 1
+
+open unit 2 read form name @0"cff93.frc"
+read param card unit 2
+close unit 2
+
+read sequ card
+* title
+*
+ 1
+etoh
+
+generate etoh setup
+
+ic param
+
+set 1 1
+label build
+ic seed 1 c2 1 c1 1 o1
+ic build
+
+energy
+
+stop

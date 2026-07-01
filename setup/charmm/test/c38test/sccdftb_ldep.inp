@@ -1,0 +1,195 @@
+* CHARMM c38a1 Testcase sccdftb_ldep.inp
+* test case for DFTB3 with the extension of l-dependent-Hubbard parameters
+* in the small gas phase system: [Cu(NH3)4]2+
+* Michael Gaus & Qiang Cui, July 2012, UW Madison 
+
+bomlev 0
+
+if ?sccdftb .NE. 1 then
+  echo 'For running this test sccdftb needs to be not availabe, compile charmm with flag "T".'
+  stop
+endif
+
+read rtf card
+* generic top file for "cuII_nh3-4_P2.xyz"
+*
+37 2
+
+mass      1 H      1.00800 H  ! standard H
+mass      6 C     12.01100 C  ! standard C
+mass      7 N     14.00700 N  ! standard N
+mass      8 O     15.99940 O  ! standard O
+mass     12 Mg    24.30500 Mg ! standard Mg
+mass     15 P     30.97376 P  ! standard P
+mass     16 S     32.06500 S  ! standard S
+mass     29 Cu    63.54600 Cu ! standard Cu
+
+default first none last none
+autogenerate angles dihedral
+
+resi auto         0.000 ! generic for qm!
+group 
+atom Cu1   Cu       0.000
+atom N2   N       0.000
+atom N3   N       0.000
+atom N4   N       0.000
+atom N5   N       0.000
+atom H6   H       0.000
+atom H7   H       0.000
+atom H8   H       0.000
+atom H9   H       0.000
+atom H10   H       0.000
+atom H11   H       0.000
+atom H12   H       0.000
+atom H13   H       0.000
+atom H14   H       0.000
+atom H15   H       0.000
+atom H16   H       0.000
+atom H17   H       0.000
+bond Cu1 N2 N2 N3 N3 N4 N4 N5 N5 H6  
+bond H7 H8 H8 H9 H9 H10 H10 H11 H11 H12  
+bond H13 H14 H14 H15 H15 H16 H16 H17  
+    
+end 
+    
+    
+read para card
+* generic prm file for"cuII_nh3-4_P2".xyz* 
+bonds
+X     X     0.000      0.000   ! generic for qm!
+    
+angles
+X   X   X   0.000  0.000  0.000  0.000
+    
+dihedrals
+X   X   X   X   0.000 1 0.000
+    
+nonbonded nbxmod  5 atom cdiel shift vatom vdistance vswitch - 
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+H   0.0 0.0 0.0 0.0 0.0 0.0
+C   0.0 0.0 0.0 0.0 0.0 0.0
+N   0.0 0.0 0.0 0.0 0.0 0.0
+O   0.0 0.0 0.0 0.0 0.0 0.0
+P   0.0 0.0 0.0 0.0 0.0 0.0
+S   0.0 0.0 0.0 0.0 0.0 0.0
+Mg  0.0 0.0 0.0 0.0 0.0 0.0
+Cu  0.0 0.0 0.0 0.0 0.0 0.0
+    
+END 
+    
+read psf card 
+PSF CMAP CHEQ
+
+       3 !NTITLE
+*  cuII_nh3-4_P2.psf
+*  asdf                                        
+*  DATE:    10/19/12     18:44:59      CREATED BY USER: mgaus                   
+
+      17 !NATOM
+       1 SOLV 1    AUTO CU1    29    0.00000       63.5460           0   0.00000     -0.301140E-02
+       2 SOLV 1    AUTO N2      7    0.00000       14.0070           0   0.00000     -0.301140E-02
+       3 SOLV 1    AUTO N3      7    0.00000       14.0070           0   0.00000     -0.301140E-02
+       4 SOLV 1    AUTO N4      7    0.00000       14.0070           0   0.00000     -0.301140E-02
+       5 SOLV 1    AUTO N5      7    0.00000       14.0070           0   0.00000     -0.301140E-02
+       6 SOLV 1    AUTO H6      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       7 SOLV 1    AUTO H7      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       8 SOLV 1    AUTO H8      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       9 SOLV 1    AUTO H9      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      10 SOLV 1    AUTO H10     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      11 SOLV 1    AUTO H11     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      12 SOLV 1    AUTO H12     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      13 SOLV 1    AUTO H13     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      14 SOLV 1    AUTO H14     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      15 SOLV 1    AUTO H15     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      16 SOLV 1    AUTO H16     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      17 SOLV 1    AUTO H17     1    0.00000       1.00800           0   0.00000     -0.301140E-02
+
+      14 !NBOND: bonds
+       1       2       2       3       3       4       4       5
+       5       6       7       8       8       9       9      10
+      10      11      11      12      13      14      14      15
+      15      16      16      17
+
+       0 !NTHETA: angles
+
+
+       0 !NPHI: dihedrals
+
+
+       0 !NIMPHI: impropers
+
+
+       0 !NDON: donors
+
+
+       0 !NACC: acceptors
+
+
+       0 !NNB
+
+       0       0       0       0       0       0       0       0
+       0       0       0       0       0       0       0       0
+       0
+
+       1       0 !NGRP NST2
+       0       0       0
+
+       1 !MOLNT
+       1       1       1       1       1       1       1       1
+       1       1       1       1       1       1       1       1
+       1
+
+       0       0 !NUMLP NUMLPH
+
+       0 !NCRTERM: cross-terms
+
+
+read coor card 
+*  cuII_nh3-4_P2.ini.cor
+*  asdf
+*  DATE:    10/19/12     18:44:59      CREATED BY USER: mgaus
+*
+   17
+    1    1 AUTO CU1    0.00000   0.00000   0.00000 SOLV 1      0.00000
+    2    1 AUTO N2    -0.41406  -1.43311  -1.43297 SOLV 1      0.00000
+    3    1 AUTO N3     0.41406  -1.43297   1.43311 SOLV 1      0.00000
+    4    1 AUTO N4    -0.41406   1.43311   1.43297 SOLV 1      0.00000
+    5    1 AUTO N5     0.41406   1.43297  -1.43311 SOLV 1      0.00000
+    6    1 AUTO H6    -0.96005  -2.21232  -1.06679 SOLV 1      0.00000
+    7    1 AUTO H7     0.42002  -1.84870  -1.84794 SOLV 1      0.00000
+    8    1 AUTO H8     0.95942  -2.21264   1.06696 SOLV 1      0.00000
+    9    1 AUTO H9    -0.95942  -1.06696  -2.21264 SOLV 1      0.00000
+   10    1 AUTO H10   -0.96005   2.21232   1.06679 SOLV 1      0.00000
+   11    1 AUTO H11   -0.42002   1.84794  -1.84870 SOLV 1      0.00000
+   12    1 AUTO H12   -0.42002  -1.84794   1.84870 SOLV 1      0.00000
+   13    1 AUTO H13    0.96005   1.06679  -2.21232 SOLV 1      0.00000
+   14    1 AUTO H14   -0.95942   1.06696   2.21264 SOLV 1      0.00000
+   15    1 AUTO H15    0.96005  -1.06679   2.21232 SOLV 1      0.00000
+   16    1 AUTO H16    0.95942   2.21264  -1.06696 SOLV 1      0.00000
+   17    1 AUTO H17    0.42002   1.84870   1.84794 SOLV 1      0.00000
+
+
+nbonds atom fshift cdie vdw vshift -
+       cutnb 14.0 ctofnb 12.0 ctonnb 10.0 wmin 1.5 eps 1.0 -
+       inbfrq -1
+
+!define qm sele resid 1 end
+define qm sele all end
+
+scalar wmain set 1.0 sele (qm) .and. type Cu* end
+scalar wmain set 2.0 sele (qm) .and. type H* end
+scalar wmain set 3.0 sele (qm) .and. type N* end
+
+sccdftb remove d3rd hbon ldep chrg 2.0 unpe 1.0 sele qm end scft 1.0d-10 temp=0.0 
+
+!open unit 30 write file name trj.dcd
+!energy
+!test first step 0.0002 tol 1d-10 sele all end
+mini abnr tolgrd 0.001 nstep 100 nprint 1 ! nsavc 1 iuncrd 30
+!mini abnr nstep 200
+
+!open unit 3 name ./cuII_nh3-4_P2.opt.cor write form
+!write coor card unit 3
+!close unit 3
+
+stop

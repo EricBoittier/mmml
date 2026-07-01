@@ -1,0 +1,160 @@
+* repd_rpath1.inp: rpath test case to be compared with replica-rpath
+* By Paul Maragakis and Milan Hodoscek, Harvard Chemistry, March 2005
+* Rotate the ala2 
+*
+
+if ?repdstr .ne. 1 then
+ echo "rexc.inp> Test NOT performed."
+ stop
+endif
+
+! Read in the standard test definitions
+stream datadir.def
+
+! Check for the same number of frames as rpath test
+set nframes 4
+if ?numnode .ne. @nframes then
+  echo REXC test case needs @nframes processes
+  set result SKIP
+  goto finish
+endif
+
+! Use the polar hydrogen set of parameters
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+! Create ala2
+read sequence card
+*
+3
+AMN ALA CBX
+
+generate ala2 setup warn
+ic para
+ic seed 1 C 2 N 2 CA
+ic build
+
+write coor card unit 1 name @9ala2.crd_0
+
+set j 1
+set phi1 0
+set delta 360.0
+divi delta by @nframes
+label geo
+incr phi1 by @delta
+set phi2 @phi1
+incr phi2 by 180.0
+coor init sele bynu 9 : 12 end
+ic edit
+dihe ala2 2 n ala2 2 ca ala2 2 c ala2 2 o @phi1
+dihe ala2 2 n ala2 2 ca ala2 2 c ala2 3 n @phi2
+end
+ic build
+write coor card unit 1 name @9ala2.crd_@j
+incr j by 1
+
+if j .lt. @nframes then goto geo
+
+repd nrep @nframes exch freq 50 unit 51 -
+     temp0 350 temp1 375 temp2 400 temp3 425 temp4 450
+
+open unit 55 write card name @9rexc.out
+outu 55
+
+open unit 51 write card name @9rexc.exch
+
+! Read the coordinates
+open unit 1 read card name @9ala2.crd
+read coor card unit 1
+
+mini abnr nstep 100 nprint 100
+
+shake bonh param
+
+open write card unit 1 name @9ene
+write energy unit 1
+
+open write file unit 50 name @9dyn.trj
+open write card unit 41 name @9dyn.res
+
+scalar fbeta set 20.0
+
+dyna lang strt nstep 100 timestep 0.001  -
+    iprfrq 10000 ihtfrq 0 ieqfrq 0 ntrfrq 10000  -
+    iuncrd 50 iunrea -1 iunwri 41 kunit -1 -
+    nprint 100 nsavc 100 nsavv 0 inbfrq 10  ihbfrq 0  -
+    firstt 300.0 finalt 300.0 tbath 300.0 teminc 0.0  tstruc 307.0 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0 -
+    iseed 12345 34567 56789 678910 -
+    echeck 10000.0
+
+
+! Test whether the case passed or failed; this logic looks a little
+! bulky because multi-line conditionals do not work with REPD, thanks
+! to the way that input is parsed.
+
+set passprob = 0
+set passexup = 0
+set passexdn = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 0.468726
+if ?myrep .eq. 0 set referup = 1
+if ?myrep .eq. 0 set referdn = 0
+if ?myrep .eq. 0 set refener = -11.0065
+if ?myrep .eq. 1 set refprob = 0.568202
+if ?myrep .eq. 1 set referup = 1
+if ?myrep .eq. 1 set referdn = 1
+if ?myrep .eq. 1 set refener = -18.9118
+if ?myrep .eq. 2 set refprob = 0.833839
+if ?myrep .eq. 2 set referup = 1
+if ?myrep .eq. 2 set referdn = 1
+if ?myrep .eq. 2 set refener = -21.673
+if ?myrep .eq. 3 set refprob = 1.00
+if ?myrep .eq. 3 set referup = 0
+if ?myrep .eq. 3 set referdn = 1
+if ?myrep .eq. 3 set refener = -17.4186
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?exrup .ae. @referup set passexup = 1
+if ?exrdn .ae. @referdn set passexdn = 1
+if ?ener .ae. @refener set passener = 1
+
+calc passed = @passprob + @passexup + @passexdn + @passener
+if @passed .eq. 4 echo PER-REPLICA TESTS PASSED
+
+repdstr sync
+outu 6
+
+
+! currently the test harness does not work with
+! replica exchange well, so we're only testing the
+! first replica here. Please check the individual
+! output of other replicas.
+
+repdstr iores
+
+if ?myrep .eq. 0 @testcheck ?reprob @refprob 1e-3 REXC_1
+if ?myrep .eq. 0 @testcheck ?exrup @referup 1e-3 REXC_2
+if ?myrep .eq. 0 @testcheck ?exrdn @referdn 1e-3 REXC_3
+if ?myrep .eq. 0 @testcheck ?ener @refener 1e-3 REXC_4
+
+repdstr reset
+
+outu 6
+
+echo "Results are for replica 0."
+echo "Please check @9rexc.out_{1,2,3} for passage of other replicas"
+
+if @passed .eq. 4 set result PASSED
+if @passed .ne. 4 set result FAILED
+
+label finish
+
+echo REXC TESTCASE RESULT: @result
+
+stop

@@ -1,0 +1,329 @@
+This is flucq, produced by makeinfo version 4.0 from flucq.texi.
+CHARMM Element doc/flucq.info $Revision: 1.1.1.1 $
+
+File: flucq,  Node: Top,  Next: Syntax,  Up: (doc/commands.info)
+
+        Combined QM/MM Fluctuating Charge Potential for CHARMM
+
+          Ben Webb, ben@bellatrix.pcl.ox.ac.uk, and Paul Lyne
+
+   The fluctuating charge potential (FlucQ or FQ) is based on the method
+developed by Rick, Stuart and Berne (Rick et. al., J. Chem. Phys. 101
+(7) 1994 p6141) for molecular dynamics, and extended for hybrid QM/MM
+simulations (Bryce et. al., Chem. Phys. Lett. 279 1997, p367). It is
+designed primarily for computationally efficient (approx. 10% overhead)
+modelling of solvent polarisation in hybrid QM/MM systems, and as such
+is implemented for QUANTUM, CADPAC and GAMESS codes, although the
+current implementation is easily extensible to any atom type and bond.
+
+* Menu:
+
+* Syntax::                Syntax of the FLUCQ command
+* Activation::            Starting FlucQ from a CHARMM input file
+* Charge solution::       Solving for exact charges
+* Reference energy::      Setting the ``zero'' for FlucQ polarisation
+* Caveats::               Changes to be aware of; known limitations
+* Using FlucQ with QM::   Necessary changes for use with CADPAC or GAMESS
+* Examples::              Simple uses of the FLUCQ command
+* Implementation::        Mathematical and computational details
+
+
+File: flucq,  Node: Syntax,  Next: Activation,  Prev: Top,  Up: Top
+
+   [SYNTAX FLUCq]
+
+     FLUCq    { ON init-spec (atom selection)      }
+              { OFF                                }
+              { PRINt                              }
+              { EXACt exac-spec                    }
+              { REFErence { GAS     exac-spec  }   }
+              {           { SOLVent exac-spec  }   }
+              {           { CURRent            }   }
+              {           { ENERgy real        }   }
+
+     DYNAmics ... thermo-spec
+     
+
+     init-spec::=   [GROUp] [NOFIxed]
+     
+     exac-spec::=   [TIMEstep real] [ZETA real]
+                    [TQDEsired real] [PRINt]
+
+     thermo-spec::= [FQTEmp real] [FQUNit integer]
+                    { FQTCoupling real }       ! weak coupling
+                    { FQMAss real nose-spec }  ! Nose-Hoover
+                    { FQSCale integer }        ! velocity scaling
+
+     nose-spec::=   [FQTOlerance real] [FQITerations integer]
+
+
+File: flucq,  Node: Activation,  Next: Charge solution,  Prev: Syntax,  Up: Top
+
+   FlucQ code is enabled within CHARMM by means of the FLUCQ ON
+command. Future energy calculations will then include an extra energy
+term - FQPO, the FlucQ polarisation energy, while dynamics simulations
+involve a new energy property - FQKI, the FlucQ charge kinetic energy.
+Once FlucQ is active, the selected atoms are treated as extra degrees
+of freedom, free to fluctuate under the charge forces in the system,
+and, by assigning each atom type a fictional charge "mass", these
+charges can be accelerated in a conventional dynamics simulation, in a
+completely analogous way to the Cartesian degrees of freedom.
+
+   If atoms are selected by the FLUCQ command which cannot be modelled
+(i.e. they are QM atoms, or have no FlucQ parameters defined for them)
+they will be automatically removed from the selection.
+
+   The FlucQ polarisation energy, FQPO, is an intramolecular
+interaction; in full electronegativity equalisation, every atom
+interacts through space, by means of a modified Coulomb-type
+interaction, with every other atom in the molecule. In this
+implementation, the only interactions calculated are those along
+defined CHARMM bonds (even those with zero force constants).
+
+   [GROUp] conserves charge within groups, rather than the default
+behaviour of conserving charge within residues; this prohibits charge
+transfer between groups. Note that the FlucQ model makes no restriction
+on the degree of charge transfer within each residue or group, or the
+distance over which this transfer can occur.
+
+   [NOFIxed] instructs FlucQ that some or all of the bond lengths
+between FlucQ-selected atoms are free to change during a simulation.
+This forces the FlucQ code to recalculate the intramolecular
+interaction at each step; since this is a costly calculation, the
+default is to use interactions parameterised for equilibrium bond
+lengths, with which it is strongly recommended to combine constraint
+methods such as SHAKE BONH PARA.
+
+   The FLUCq PRINt command simply prints the current values of all
+charges and charge forces (from the last energy calculation). A similar
+effect can also be achieved with the standard SCALAR command (see
+scalar.info for information on other FlucQ parameters available with the
+SCALAR command).
+
+   The FLUCQ OFF command disables the FlucQ code. Further energy
+calculations will not include FlucQ terms. Note, however, that if the
+charges have been modified by FlucQ, they will remain at their altered
+values.
+
+   Default behaviour during dynamics is to allow the charge degrees of
+freedom to fluctuate freely; however they can be thermostatted at a given
+charge "temperature" by passing extra options to the DYNAmics command:-
+
+   [FQTEmp <real>] specifies the charge temperature (default 0).
+
+   [FQTCoupling <real>] (default 0) if set, uses the Berendsen weak
+coupling algorithm to thermostat the charges. The coupling parameter
+is given in 1/ps, and is analagous to the TCONS/TCOU dynamics options.
+
+   [FQMAss <real>] (default 0) if set, uses Nose-Hoover thermostatting,
+with the given mass.  The tolerance of the Nose-Hoover iterations can be
+set with FQTOlerance (default 1.0d-7), and the maximum number of
+iterations with FQITerations (default 100).
+
+    Thermostatting parameters (number of iterations, scale factor, etc.)
+can be written out to a given unit number at every dynamics step by using
+the FQUNit (default -1: no write) option.
+
+   [FQSCal <integer>] (default 0) if set, performs simple charge velocity
+scaling every FQSCal dynamics steps.
+
+
+   The initialization process dimensions FlucQ with the current state
+of the system. The QM region, if any, is detected, and the FlucQ atom
+selection will then interact with the QM region. Thus, the FLUCQ
+command should be placed after any QUANTUM, CADPAC, or GAMESS command,
+and if the total number of atoms in the system is modified, FlucQ
+should be disabled prior to this change and reinitialized afterwards.
+
+   To skip FlucQ energy calculations entirely, use the SKIP FQPOL FQKIN
+command.  The QM/MM FlucQ interaction is calculated in line with the
+standard QM/MM electrostatic interaction, and as such is suppressed
+with the SKIP QMEL command.  Finally, the intermolecular contribution
+to FlucQ is calculated in line with the standard electrostatic
+interaction, and so is disabled with the SKIP ELEC command.
+
+   No FlucQ interaction energies are calculated between atoms
+constrained with the CONS FIX command, as electrostatic energies are
+not calculated for these atoms.
+
+   FlucQ parameters are specified in the parameter file, with the FLUCQ
+keyword.  The section should look like the following:-
+
+     FLUCQ
+      atom chi zeta prin mass
+
+   Here, chi is an electronegativity measure (in Kcal/mol/e), zeta a
+Slater orbital exponent (in 1/Angstrom), prin the Slater orbital
+principal quantum number, and mass the charge mass (in (ps/e)**2
+Kcal/mol) from the FlucQ model.  For example, Rick's original
+parameters for TIP4P hydrogen and M-site would be written as:-
+
+     FLUCQ
+     HP   10.00    0.90    1  6.0d-5
+     MP   78.49    1.63    2  6.0d-5
+
+
+File: flucq,  Node: Charge solution,  Next: Reference energy,  Prev: Activation,  Up: Top
+
+   The FlucQ model relies on keeping charge kinetic energy at a
+temperature close to zero Kelvin, to maintain Born-Oppenheimer
+separation between it and the other degrees of freedom. Thus, it is
+best to acquire a minimum energy charge configuration for your system
+before any dynamics simulation.
+
+   Two methods are available for such "charge solution". The first is
+to use a standard CHARMM minimisation; FlucQ charges will be minimised
+concurrently with the Cartesian coordinates. The second method is to
+apply dissipative Langevin dynamics to the charges only, to achieve
+minimum energy charges for fixed atomic coordinates; this is performed
+by means of the FLUCq EXACt command.  The code prints a running count
+of the number of iterations required to quench the kinetic energy.
+
+   [TIMEstep real] sets the timestep to be used in Langevin dynamics,
+by default 0.001ps.
+
+   [ZETA real] sets the frictional coefficient, by default 1600.
+
+   [TQDEsired real] sets the desired final temperature, by default
+1.0d-6 K.
+
+   [PRINt] if set, prints the final charges.
+
+
+File: flucq,  Node: Reference energy,  Next: Caveats,  Prev: Charge solution,  Up: Top
+
+   By default, the charge polarisation energy FQPOL reported by FlucQ
+is given relative to all atomic charges being zero. More generally, it
+is useful to define this term relative to an arbitrary zero. This
+reference energy can be set with the FLUCQ REFErence command.
+
+   FLUCQ REFE GAS disables all intermolecular interactions, solves for
+exact charges, and then uses the resultant energy as the reference.
+This essentially defines the polarisation energy relative to the energy
+that the system would have in the gas phase, with all residues or
+groups infinitely separated.
+
+   FLUCQ REFE SOLVENT merely disables the QM/MM interaction, and then
+sets the reference energy similarly. This shows polarisation as a
+function purely of the QM system.
+
+   FLUCQ REFE CURRent defines the current polarisation energy (from the
+last energy calculation) to be zero - i.e.  the reference energy is
+increased by the current energy.
+
+   FLUCQ REFE ENERgy real sets the reference energy to a user-specified
+value.
+
+   Bear in mind that REFE GAS exac-spec is essentially identical to the
+series of CHARMM commands:-
+
+     FLUCQ REFER ENER 0
+     SKIP ALL EXCL FQPOL BOND ANGL UREY DIHE IMPR
+     FLUCQ EXACT exac-spec
+     FLUCQ REFER ENER ?FQPO
+     SKIP EXCL ALL
+
+   (The only difference is that any SKIP command in force before REFE
+GAS will remain in force afterwards, whereas the above example will
+re-include calculation of all energy terms at completion. Also, by
+changing the second line in the above example to SKIP QMEL QMVDW, the
+action of the REFE SOLVENT command can be reproduced.)
+
+
+File: flucq,  Node: Caveats,  Next: Using FlucQ with QM,  Prev: Reference energy,  Up: Top
+
+   The fluctuating charge code alters the atomic charges during
+dynamics runs.  Thus, the charges cannot be treated as constant and
+restart and trajectory files must include atomic charges. Files read or
+written during FlucQ-enabled dynamics runs will be assumed to contain
+charge information, and so will be a) somewhat larger and b)
+incompatible with non-FQ files. (If FlucQ is compiled in but not
+activated with FLUCQ ON, the restart and trajectory file formats are
+unchanged from standard CHARMM.)
+
+   The FlucQ model is implemented primarily for the study of QM/MM
+systems, with a fluctuating charge SHAKE-constrained MM solvent. Hence,
+intramolecular interactions are restricted to those between FlucQ atoms
+along bonds. This complicates the application of the model to large systems,
+as for full electronegativity equalisation, every atom must interact with
+every other atom in the group.
+
+   FlucQ is not implemented for all nonbond routines, in particular the
+CFF, MMFF, CRAYVEC and PARVECT codes. FlucQ also works only with standard
+Ewald, and not PME.
+
+
+File: flucq,  Node: Using FlucQ with QM,  Next: Examples,  Prev: Caveats,  Up: Top
+
+   In order for the QM/MM calculation to be properly calculated, FlucQ
+requires data to be passed back to it from the QM codes (in particular
+the density matrix and one-electron integrals). Changes have been made
+to the QUANTUM interface for this to be carried out correctly; however,
+the GAMESS(US) and CADPAC codes, not being distributed with CHARMM, will
+require modification. These modifications will not affect the
+functioning of standard QM/MM calculations, when FlucQ is disabled.
+GAMESS-UK (versions 6.3.1 and later) should incorporate the required
+modifications.
+
+   Patches for GAMESS(US), and CADPAC can be found in the 
+source/flucq/ directory in the main CHARMM distribution. They should be
+applied in the top directory of the relevant QM code distributionm
+i.e. gamess-us.patch and cadpac.patch should be applied in the
+source/gamint/gamess/ and source/cadint/cadpac/ directories,
+respectively. The patch files are standard unified diffs, and so should
+be applied with a command similar to "patch -p1 < gamess-us.patch"
+
+
+File: flucq,  Node: Examples,  Next: Implementation,  Prev: Using FlucQ with QM,  Up: Top
+
+   The following example initialises the FlucQ code for a system of SPC
+waters, before calculating the gas phase energy, and then calculating
+the self-polarisation of the solvent. Finally, the total energy,
+including the self-polarisation relative to the gas phase, is printed,
+and the charge forces from this energy calculation are displayed.
+
+     FLUCQ ON SELE RESN SPC END
+     FLUCQ REFER GAS
+     FLUCQ EXACT
+     ENERGY
+     SCALAR FQCFOR SHOW SELE ALL END
+
+   See the testcase test/c28test/fqam1.inp for an example of a FlucQ
+dynamics simulation.
+
+
+File: flucq,  Node: Implementation,  Prev: Examples,  Up: Top
+
+   The standard CHARMM nonbond routines and QM codes have been modified
+so as to sum the interaction electrostatic interaction energy between
+charge "I" and all other nonbond pairs or QM atoms into index "I" of
+the fluctuating charge array FQCFOR. The FlucQ model actually requires
+the term dE/dQ, so these totals are divided by charge by the FlucQ
+energy routine (as all such interactions are linear in charge). Note
+that this gives erroneous results for FlucQ sites with exactly zero
+charge; however, the CHARMM nonbond routines calculate no interactions
+for such systems anyway.
+
+   Finally, the intramolecular terms, as contributions to dE/dQ, are
+summed into the FQCFOR array, and charge forces are calculated from
+these electronegativities by mass-weighted averaging over residues or
+groups.  These forces are then used by the standard minimisers, or by a
+standard Verlet integrator during dynamics.
+
+   For further information, see the following:-
+MM system; (Rick et. al., J. Chem. Phys. 101 (7) 1994 p6141)
+QM/MM interaction; (Bryce et. al., Chem. Phys. Lett. 279 1997, p367)
+
+
+Tag Table:
+Node: Top103
+Node: Syntax1371
+Node: Activation2114
+Node: Charge solution6634
+Node: Reference energy7793
+Node: Caveats9466
+Node: Using FlucQ with QM10631
+Node: Examples15843
+Node: Implementation16424
+
+End Tag Table

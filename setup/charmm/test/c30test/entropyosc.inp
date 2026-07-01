@@ -1,0 +1,127 @@
+* testing entropy calculation according to Schlitter, Andicioaei&Karplus 
+* 100 independent 3Dharmonic oscillators with mass 15.994
+*  harmonically restrained
+* (1 ns Langevin dynamics at 300 K)
+*
+if ?numnode .gt. 1 then
+!   echo "Test NOT performed"
+!   stop ! not parallel
+! VO: conditionals are evaluated on each node when string method is compiled
+! so "if iostat" below will not work because the file is only open on the
+! root node
+if ?stringm .eq. 1 then
+ set TRAJ YES
+endif
+endif
+
+if @?TRAJ .eq. 0 set TRAJ MAYBE ! Redo trajectory only if file not there
+if @?COVA .eq. 0 set COVA YES
+if @?QUASI .eq. 0 set QUASI YES
+if @?STEP .eq. 0 set STEP 10000
+bomlev -1
+open unit 11 read form name datadir.def
+if ?iostat .eq. 1 stream unit 11
+if @?9 .eq. 0 set 9
+
+read rtf card 
+* single particle for harmonic oscillator
+*
+27  1
+
+MASS    70 O     15.994 O
+
+
+RESI OSC 0.0
+ATOM O O 0.0
+END
+
+read para card
+* non-interacting particle
+*
+NONBonded
+O 0.0 0.0 0.0
+END
+
+read sequence osc 100
+gene ens 
+set nsavc 10
+if @STEP .gt. 20000 set nsavc 50
+
+if @TRAJ .eq. MAYBE then
+  ! check if we already have trajectory
+  bomblev -1
+  open unit 51 read unform name @9entropyosc.cor
+  if ?IOSTAT .eq. -1 then
+     set TRAJ YES
+  else
+     close unit 51
+  endif
+
+endif
+
+if @TRAJ .eq. YES then
+
+ ! The particles don't interact and could equally well all sit 
+ ! at the same point
+ scalar x  random
+ scalar y  random
+ scalar z  random
+
+ ! van Gunsteren used k= 25 kJ/mol/nm**2 
+ calc k = 25 / 4.184 / 100.0  / 2.0
+ cons harm force @k
+ scalar fbeta set 10.0
+ open unit 21 write unform name @9entropyosc.cor
+
+
+ update
+! dynamics langevin start timestep 0.01 inbfrq 0 ihbfrq 0 finalt 300 -
+ dynamics start timestep 0.01 inbfrq 0 ihbfrq 0 finalt 300 -
+ tbath 300 -
+ nstep @STEP nprint 500 nsavc @nsavc iunc 21
+
+endif
+
+open unit 51 read unform name @9entropyosc.cor
+
+if @COVA .eq. YES then
+  open unit 61 write form name @9entropyosc.mat
+  !  S' according to Schlitter
+  coor cova firstu 51 nunit 1 entropy matrix unit 61 temp 300.0 schlitter
+  set eschl ?entropy
+  ! S'' according to Andricioaei&Karplus
+  coor cova firstu 51 nunit 1 entropy unit -1 temp 300.0 
+  set eak ?entropy
+
+  ! a subset of atoms, no saving of matrix, default temperature (298.1) 
+  coor cova firstu 51 nunit 1 entropy  unit -1 sele bynum 7:77 end 
+  !just the diagonal elements and without saving the covar matrix
+  coor cova firstu 51 nunit 1 entropy unit -1 diag temp 300.0 schlitter 
+  set ediag ?entropy
+
+
+! WF van Gunsteren (JCP,113, 7809 (2000), Table 1) gets
+! 33.449  J/mol/K for the full matrix and 
+! 36.897 for the diagonal elements only. These values are per degree of
+! freedom, and correspond to
+! 2.398 kcal/mol/K and 2.646 kcal/mol/K respectively (for the whole system)
+! since the off-diagonals introduce spurious correlations the diagonal only
+! calculation should give the more reliable number. With 1 ns sampled every
+! 50 steps this input file gives  2.39546  and  2.64561
+
+title
+*          full     diag        exact analytical for harm. osc.
+* wfvg     2.398    2.646       2.651
+*  S'      @eschl   @ediag
+*  S''     @eak 
+*
+
+endif
+
+if @QUASI .eq. YES then
+vibran nmodes 300
+  quasi first 51 nunit 1 temp 300.0 thermo
+  thermo temp 300.0
+  end
+endif
+

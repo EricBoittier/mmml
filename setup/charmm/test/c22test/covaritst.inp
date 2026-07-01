@@ -1,0 +1,250 @@
+* COVARITST: by Charlie L Brooks III, 09-Dec-91
+* Test cross correlation calculation
+*
+
+set testname covaritst
+format (F20.7)
+! SHAKE trying to constrain across pll prtn bdy
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+bomlev -1
+
+goto getrtfpar
+label backrtfpar
+
+read sequ card
+* deca-ala
+*
+10
+ala ala ala ala ala ala ala ala ala ala
+
+! now generate the psf for this structure use setup to set up the interal
+! coordinate table
+!
+generate pept setup
+
+! build the protein coordinates 
+!
+ic param
+ic seed 1 n 1 ca 1 c
+ic build
+
+faster on
+shake bond tol 1.0e-8
+
+open unit 20 write unform name @9pept.crd
+
+! Run dynamics
+dynamics verlet strt timestep 0.002 nstep 50 nprint 10  iprfrq 10 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 60 ihtfrq 20 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri -1 nsavc 1 nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 20                 - !{* Nonbond options *}
+     inbfrq 10 -
+     eps 1.0 cutnb 7.00 cutim 7.00 shift vshift
+
+open UNIT_for_input 20 read unform name @9pept.crd
+
+COORdinates COVAriance -
+FIRSt_unit 20 NUNIt 1 BEGIn 1 SKIP 1 STOP 50 -
+sele resid 1 : 2 end -
+sele resid 5 : 6 end -
+UNIT_for_output 6 
+
+
+open UNIT_for_input 20 read unform name @9pept.crd
+
+COORdinates COVAriance -
+FIRSt_unit 20 NUNIt 1 BEGIn 1 SKIP 1 STOP 50 -
+sele resid 1 : 2 end -
+sele resid 5 : 6 end -
+UNIT_for_output 6 -
+RESIdue_average 1
+
+open UNIT_for_input 20 read unform name @9pept.crd
+
+COORdinates COVAriance -
+FIRSt_unit 20 NUNIt 1 BEGIn 1 SKIP 1 STOP 50 -
+sele resid 1 : 2 end -
+sele resid 5 : 6 end -
+UNIT_for_output 6 -
+RESIdue_average 2
+
+open UNIT_for_input 20 read unform name @9pept.crd
+open UNIT_for_output 10 write form name @9pept.dist
+title
+*  Distance matrix for first and last two CAs in ala peptide
+*
+
+COORdinates COVAriance -
+FIRSt_unit 20 NUNIt 1 BEGIn 1 SKIP 10 STOP 50 -
+sele ( resid 1 : 2 .and. ( type CA ) ) end -
+sele ( resid 9 : 10 .and. ( type CA ) ) end -
+UNIT_for_output 10
+
+set 1 10
+
+label loop
+
+open UNIT_for_input 20 read unform name @9pept.crd
+
+coor dynamics FIRSt_unit 20 NUNIt 1 BEGIn @1 SKIP 1 STOP @1
+coor dist sele ( resid 1 : 2 .and. ( type CA ) ) end -
+          sele ( resid 9 : 10 .and. ( type CA ) ) end
+show
+
+incr 1 by 10
+if 1 le 50 goto loop
+
+@testcheck 1. 1. .001 @testname_end
+stop
+
+
+
+!====================================================================
+label getrtfpar
+
+read rtf card
+* Alanine Topology File. (TOPH19.RTF)
+*
+    19    1
+  MASS     1 H      1.00800 ! hydrogen which can h-bond to neutral atom
+  MASS     2 HC     1.00800 !   -    "     -               charged atom
+  MASS    11 C     12.01100 ! carbonyl carbon
+  MASS    12 CH1E  13.01900 ! extended atom carbon w/ one hydrogen
+  MASS    14 CH3E  15.03500 !   -    "    -           three
+  MASS    38 NH1   14.00670 ! peptide nitrogen bound to one hydrogen
+  MASS    40 NH3   14.00670 ! nitrogen bound to three hydrogens
+  MASS    51 O     15.99940 ! carbonyl oxygen
+  MASS    52 OC    15.99940 ! carboxy oxygen
+
+  DECL -C
+  DECL -O
+  DECL +N
+  DECL +H
+  DECL +CA
+
+  AUTOGENERATE ANGLES
+  DEFA FIRS NTER LAST CTER
+
+  RESI ALA     0.00000
+  GROU
+  ATOM N    NH1    -0.35
+  ATOM H    H       0.25
+  ATOM CA   CH1E    0.10
+  GROU
+  ATOM CB   CH3E    0.00
+  GROU
+  ATOM C    C       0.55
+  ATOM O    O      -0.55
+  BOND N    CA        CA   C         C    +N        C    O         N    H
+  BOND CA   CB
+  DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+  IMPH N    -C   CA   H         C    CA   +N   O         CA   N    C    CB
+  DONO  H  N
+  ACCE O  C
+  IC   -C   CA   *N   H      0.0000    0.00  180.00    0.00   0.0000
+  IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+  IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+  IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+  IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+  IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+
+  PRES NTER    1.00000
+  GROU
+  ATOM HT1  HC      0.35
+  ATOM HT2  HC      0.35
+  ATOM N    NH3    -0.30
+  ATOM HT3  HC      0.35
+  DELETE ATOM H
+  ATOM CA   CH1E    0.25
+  BOND HT1  N         HT2  N    HT3  N
+  DIHE HT2  N    CA   C         HT1  N    CA   C         HT3  N    CA   C
+  DONO  HT1   N
+  DONO  HT2   N
+  DONO  HT3   N
+  IC   HT1  N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+  IC   HT2  CA   *N   HT1    0.0000    0.00  120.00    0.00   0.0000
+  IC   HT3  CA   *N   HT2    0.0000    0.00  120.00    0.00   0.0000
+
+  PRES CTER   -1.00000
+  GROU
+  ATOM C    C       0.14
+  ATOM OT1  OC     -0.57
+  ATOM OT2  OC     -0.57
+  DELETE ATOM O
+  BOND C    OT1       C    OT2
+  DIHE N    CA    C    OT2
+  IMPH C    CA    OT2  OT1
+  ACCE OT1 C
+  ACCE OT2 C
+  IC   N    CA    C    OT2    0.0  0.0  180.0  0.0  0.0
+  IC   OT2  CA    *C   OT1    0.0  0.0  180.0  0.0  0.0
+
+END
+
+Read param card
+* Parameter file for alanine. (PARAM19.PRM)
+*
+
+ BONDS
+  C    CH1E   405.0       1.52
+  C    NH1    471.0       1.33
+  C    O      580.0       1.23
+  C    OC     580.0       1.23!  FORCE DECREASE AND LENGTH INCREASE FROM C O
+  CH1E CH3E   225.0       1.52
+  CH1E NH1    422.0       1.45
+  CH1E NH3    422.0       1.45
+  H    NH1    405.0       0.98!  GELIN AND IR STRETCH 3200 CM 1
+  HC   NH3    405.0       1.04
+ THETAS
+  CH1E C    NH1     20.0     117.5
+  CH1E C    O       85.0     121.5
+  CH1E C    OC      85.0     117.5
+  NH1  C    O       65.0     121.0
+  OC   C    OC      85.0     122.5
+  C    CH1E CH3E    70.0     106.5
+  C    CH1E NH1     45.0     111.6
+  C    CH1E NH3     45.0     111.6
+  CH3E CH1E NH1     65.0     108.5
+  CH3E CH1E NH3     65.0     109.5
+  C    NH1  CH1E    77.5     120.0
+  C    NH1  H       30.0     120.0
+  CH1E NH1  H       35.0     120.0
+  CH1E NH3  HC      35.0     109.5
+  HC   NH3  HC      40.0     109.5
+ PHI
+  X    C    CH1E X        0.0       3       0.0! FROM GELIN THESIS AMIDES
+  X    C    NH1  X        8.2       2     180.0! THE EXPERIMENTAL BARRIER.
+  X    CH1E NH1  X        0.3       3       0.0
+  X    CH1E NH3  X        0.6       3       0.0
+ IMPHI
+  C    X    X    O      100.0    0     0.0
+  C    X    X    OC     100.0    0     0.0
+  CH1E X    X    CH3E    55.0    0   35.26439
+  NH1  X    X    H       45.0    0     0.0! AMIDES PROTON OOP
+ NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!
+!                    Emin      Rmin
+!                 (kcal/mol)    (A)
+  H        0.0440  -0.0498    0.8000 
+  HC       0.0440  -0.0498    0.6000
+  C        1.65    -0.1200    2.100   1.65 -0.1 1.9
+  CH1E     1.35    -0.0486    2.365   1.35 -0.1 1.9
+  CH3E     2.17    -0.1811    2.165   1.77 -0.1 1.9
+  N*       1.1000  -0.2384    1.6000   ! includes N,NC2,NH1,NH2,NH3,NP,and NR
+  O*       0.8400  -0.1591    1.6000   ! includes O, OH1, OM, and OS
+  OC       2.1400  -0.6469    1.6000  
+ HBOND AEXP 4 REXP 6 HAEX 0 AAEX 0   NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+     CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+  N*+* O*          -0.00      2.9
+
+END
+
+goto backrtfpar

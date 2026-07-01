@@ -1,0 +1,206 @@
+* CHARMM 25 Testcase helix.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* Test helix analysis code
+*
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! This program makes a duplicate of the perfect octamer of CA atoms
+!   and performs coordinates transformations to align it as a helix
+!   in a parallel fashion.
+
+
+bomlev -1
+
+read PSF CARD !unit 99
+PSF 
+
+       2 !NTITLE
+* HELIX.PSF: CA HELIX USED TO TEST HELIX ANALYSIS PROGRAM
+*  DATE:     3/13/91     14:35:26      CREATED BY USER: f_carson.non
+
+       8 !NATOM
+       1 HLX1 1    CAB  CA     10   0.150000       12.0110           0
+       1 HLX1 2    CAB  CA     10   0.150000       12.0110           0
+       1 HLX1 3    CAB  CA     10   0.150000       12.0110           0
+       1 HLX1 4    CAB  CA     10   0.150000       12.0110           0
+       1 HLX1 5    CAB  CA     10   0.150000       12.0110           0
+       1 HLX1 6    CAB  CA     10   0.150000       12.0110           0
+       1 HLX1 7    CAB  CA     10   0.150000       12.0110           0
+       1 HLX1 8    CAB  CA     10   0.150000       12.0110           0
+
+       7 !NBOND: bonds
+       1       2       2       3       3       4       4       5
+       5       6       6       7       7       8
+
+      21 !NTHETA: angles
+       1       3       2       1       3       4       1       3       5
+       2       3       4       2       3       5       4       3       5
+       5       7       8       5       7       9       5       7      10
+       7       5      11       3       5       7       3       5      11
+       3       5       6       5      11      12       5      11      13
+       6       5       7       6       5      11       8       7       9
+       8       7      10       9       7      10      12      11      13
+
+       7 !NPHI: dihedrals
+       2       3       5      11       1       3       5      11
+       4       3       5      11      10       7       5       3
+       9       7       5       3       8       7       5       3
+       3       5      11      13
+
+       1 !NIMPHI: impropers
+      11      13      12       5
+
+       3 !NDON: donors
+       3       1       3       2       3       4
+
+       2 !NACC: acceptors
+      12      11      13      11
+
+       0 !NNB
+
+       0       0       0       0       0       0       0       0
+       0       0       0       0       0
+
+       4       0 !NGRP NST2
+       0       0       0       0       0       0       0       0       0
+       0       0       0
+
+read coor CARD
+* HELIX.CRD: CA HELIX USED TO TEST HELIX ANALYSIS PROGRAM
+*  DATE:     3/13/91     14:35:26      CREATED BY USER: f_carson.non
+*
+    8
+    1    1 CAB  CA     1.00000   0.00000   3.50000 HLX1 1      0.00000
+    2    2 CAB  CA     0.00000  -1.00000   2.50000 HLX1 1      0.00000
+    3    3 CAB  CA    -1.00000   0.00000   1.50000 HLX1 1      0.00000
+    4    4 CAB  CA     0.00000   1.00000   0.50000 HLX1 1      0.00000
+    5    5 CAB  CA     1.00000   0.00000  -0.50000 HLX1 1      0.00000
+    6    6 CAB  CA     0.00000  -1.00000  -1.50000 HLX1 1      0.00000
+    7    7 CAB  CA    -1.00000   0.00000  -2.50000 HLX1 1      0.00000
+    8    8 CAB  CA     0.00000   1.00000  -3.50000 HLX1 1      0.00000
+
+generate hlx2 dupl hlx1
+
+!!!!! copy coordinates from hlx1 to hlx2
+coor dupl sele segid hlx1 end sele segid hlx2 end
+
+!!!!! translate along y-axis to separate helices.
+coor tran xdir 0.0 ydir 1.0 zdir 0.0 dist 4.0 sele segid hlx1 end
+coor copy comp
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+!!!!!  test for a twist of 24 degrees and no tilt
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi -12. sele segid hlx1 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi  12. sele segid hlx2 end
+
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+!!!!!  test for a tilt of 20 degrees and no twist
+coor copy
+!!! rotate about x-axis to "tilt" helix 1.
+coor rota xdir 1.0 phi  20. sele segid hlx2 end
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+!!!!!  test for a tilt of 20 degrees and a 4 degree twist
+coor copy
+!!! rotate about x-axis to "tilt" helix 1.
+coor rota xdir 1.0 phi  20. sele segid hlx2 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi -2. sele segid hlx1 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi  2. sele segid hlx2 end
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+coor copy
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi -2. sele segid hlx1 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi  2. sele segid hlx2 end
+!!! rotate about x-axis to "tilt" helix 1.
+coor rota xdir 1.0 phi  20. sele segid hlx2 end
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+!!!!!  test for a tilt of 2 degrees and 24 degree twist
+!      note: final twist should be zero.
+coor copy
+!!! rotate about x-axis to "tilt" helix 1.
+coor rota xdir 1.0 phi  2. sele segid hlx2 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi -12. sele segid hlx1 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi  12. sele segid hlx2 end
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+coor copy
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi -12. sele segid hlx1 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi  12. sele segid hlx2 end
+!!! rotate about x-axis to "tilt" helix 1.
+coor rota xdir 1.0 phi  2. sele segid hlx2 end
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+!!!!!  test for a shift from closest contact points
+coor copy
+!!! rotate about x-axis to "tilt" helix 1.
+coor rota xdir 1.0 phi  2. sele segid hlx2 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi -2. sele segid hlx1 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi  2. sele segid hlx2 end
+coor trans zdir 10.0  sele segid hlx1 end 
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+!!!!!  test randomly perturbed atoms
+random gaussian 0.5 iseed 314159 
+scalar x random
+scalar y random
+scalar z random
+coor stat
+coor add
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+!!!!!  test randomly perturbed atoms with a 24 degree twist
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi -12. sele segid hlx1 end
+!!! rotate about y-axis to "cross" helices.
+coor rota ydir 1.0 phi  12. sele segid hlx2 end
+
+coor helix sele segid hlx1 end  sele segid hlx2 end
+coor helix sele segid hlx1 end 
+coor helix sele segid hlx2 end 
+
+stop
+
+

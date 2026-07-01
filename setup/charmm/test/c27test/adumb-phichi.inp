@@ -1,0 +1,86 @@
+* CHARMM Testcase enum.inp
+* Author: Christian Bartels 
+* Files:  top_all22_prot.inp, par_all22_prot.inp   
+* Tests:  2D adaptive umbrella sampling of dihedral angles
+*
+
+! ---- MFC uses non-parallel integrator
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+if ?adumb .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 11 read form name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0par_all22_prot.inp
+read param unit 11 card
+close unit 11
+
+! { psf }
+read sequence card
+* blocked Thr residue
+*
+1
+thr
+
+generate pept setup first ace last ct2
+
+! { coordinates }
+ic param
+ic seed 1 n 1 ca 1 c
+ic build
+
+SCALAR FBETa SET  6.0 SELEct ( ALL )  END
+
+energy atom rdie shif vdis vswi cutnb 10.0
+
+SHAKE BONH TOLErance 1.0e-6 PARAMeter
+
+MINImize SD nstep 500 nprint 10 inbfrq -1 ihbfrq 0
+
+!dynamics langevin start -
+dynamics start -
+             nstep 200 timestep 0.001 -
+             ihbfrq 0 inbfrq 10  ilbfrq 5 rbuffer 0.0 tbath 1000 -
+             iseed 2 -
+             iasvel 1 ichecw 0 iasors 1 -
+             firstt 1000 finalt 1000 teminc 0.5 ihtfrq 0 -
+             ieqfrq 0   twindh 10.0 twindl -10.0 -
+             nprint 100  iprfreq 100 -
+             isvfrq 100 wmin 1.2
+
+!dynamics langevin start -
+dynamics start -
+             nstep 200 timestep 0.001 -
+             ihbfrq 0 inbfrq 10  ilbfrq 5 rbuffer 0.0 tbath 300 -
+             iseed 2 -
+             iasvel 1 ichecw 0 iasors 1 -
+             firstt 1000 finalt 300 teminc 0.5 ihtfrq 0 -
+             ieqfrq 0   twindh 10.0 twindl -10.0 -
+             nprint 100  iprfreq 100 -
+             isvfrq 100 wmin 1.2
+             
+ ! BEGIN { setup umbrella potential }
+umbrella dihe nresol 36 trig  6 poly 1 pept 1 N  pept 1 CA pept 1 CB pept 1 OG1
+umbrella dihe nresol 36 trig  6 poly 1 pept 1 CY  pept 1 N pept 1 CA pept 1 C
+
+umbrella init nsim 100 update 10000 equi 1000 thresh 10 temp 300
+
+dynamics tref 300 qref 20 start -
+             nstep 200 timestep 0.001 -
+             ihbfrq 0 inbfrq 10  ilbfrq 5 -
+             iseed 12 -
+             nprint 100  iprfreq 100 -
+             isvfrq 100  iunwrite -1 iunread -1 -
+             wmin 1.2
+
+STOP

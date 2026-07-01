@@ -1,0 +1,104 @@
+* alanine dipeptide
+*
+
+if ?repdstr .ne. 1 then
+   echo "repdstr code not compiled. Test NOT performed"
+   stop
+endif
+if ?numnode .ne. 4 then
+   echo "This test case must run on exactly four processors. Test NOT performed"
+   stop
+endif
+
+stream datadir.def
+
+read rtf card name @0top_all22_prot_na.inp
+read param card name @0par_all22_prot_na.inp
+read sequ ala 1
+generate dala setup first ace last ct3
+
+ic para
+ic seed 1 N 1 CA 1 C
+ic build
+hbuild
+
+coor orient
+shake bonh param
+
+nbond nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+      cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 -
+      inbfrq -1
+
+! you need the iolev statement otherwise only proc 0 will
+! open the reservoir
+iolev 1
+open unit 34 dire recl 88 unfo name @0dipeptide.strj ! reservoir input
+
+energy
+
+! repd command process
+repd nrep 4 exch unit 33 freq 25 -
+  rsrvoir reshigh rhunit 34 rhsz 50 boltzmann rhtemp 335 -
+  temp0 290. -
+  temp1 298. -
+  temp2 310. -
+  temp3 325.
+
+
+open unit 20 write form name @9rrex_boltzmann.out
+if ?MYNODE ne 0 outu 20
+
+open unit 31 write unfo name @9rrex_boltzmann.dcd
+open unit 32 write form name @9rrex_boltzmann.rst
+open unit 33 write form name @9rrex_boltzmann.exch
+
+scalar mass stat
+calc tmass = ?stot / 5.0
+
+dyna leap start nstep 100 timestep 0.001 nprint 100 -
+  nsavc 10000 iuncrd 31 iunwri 32 iprfrq 1000 -
+  ieqfrq 1000 ntrfrq 5000 twindh 10.0 twindl 10.0 -
+  firstt 300. finalt 300. tstruct 300. -
+  iseed 7826363 213987 100912 5674002 -
+  iasors 1 iasvel 1 iscvel 0 ichecw 0 
+
+! Test whether the case succeeded or failed. It is easiest
+! to do this when we know exactly how many processors there
+! were.
+
+set passprob = 0
+set passexup = 0
+set passexdn = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 0.996
+if ?myrep .eq. 0 set referup = 1.0
+if ?myrep .eq. 0 set referdn = 0.0
+if ?myrep .eq. 0 set refener = 0.929541
+if ?myrep .eq. 1 set refprob = 0.99801
+if ?myrep .eq. 1 set referup = 1.0
+if ?myrep .eq. 1 set referdn = 1.0
+if ?myrep .eq. 1 set refener = 8.53614
+if ?myrep .eq. 2 set refprob = 1.0
+if ?myrep .eq. 2 set referup = 1.0
+if ?myrep .eq. 2 set referdn = 1.0
+if ?myrep .eq. 2 set refener = 1.46407
+if ?myrep .eq. 3 set refprob = 1.0
+if ?myrep .eq. 3 set referup = 1.0
+if ?myrep .eq. 3 set referdn = 1.0
+if ?myrep .eq. 3 set refener = 7.8565
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?exrup .ae. @referup set passexup = 1
+if ?exrdn .ae. @referdn set passexdn = 1
+if ?ener .ae. @refener set passener = 1
+
+calc result = @passprob + @passexup + @passexdn + @passener
+
+repd reset
+outu 6
+prnlev 5 node 0
+
+@testcheck @result 4 0 RREXBOLTZ
+
+stop

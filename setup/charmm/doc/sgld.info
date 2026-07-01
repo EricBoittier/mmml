@@ -1,0 +1,336 @@
+CHARMM Element doc/sgld.info $Revision: 1.1.1.1 $
+
+File: Sgld, Node: Top, Up: (doc/commands.info), Next: Syntax
+                 
+                     Self-Guided Langevin Dynamics (SGLD) 
+                                   and
+        Self-Guided Molecular Dynamics (SGMD) Simulation Methods
+                                
+
+                      By Xiongwu Wu and Bernard R. Brooks
+
+SGMD/SGLD is a method to enhance conformational searching and sampling
+through enhancing the low frequency motion.  The main references for the
+SGLD simulation method are:
+     
+(1) Wu, X., Brooks, B.R., "Self-guided Langevin dynamics simulation method", Chem. Phys. Letter, 381, 512-518(2003).
+(2) Wu, X., Brooks, B.R., "Toward Canonical Ensemble Distribution from Self-guided Langevin dynamics simulation", J. Chem. Phys., 134, 134108 (2011).
+(3) Wu, X., Brooks, B.R., "Force-momentum based self-guided Langevin dynamics: a rapid sampling method that approaches the canonical ensemble", J. Chem. Phys., 135, 204101 (2011)
+(4) Wu, X., Damjanovic, A., Brooks, B.R., "Efficient and unbiased sampling of biomolecular systems in the canonical ensemble: a review of self-guided Langevin dynamics", Adv. Chem. Phys., Vol.150, 255-326 (2012)
+(5) Wu, X., Hodoscek, M., Brooks, B.R., "Replica exchange of self-guided Langevin dynamics simulation", J. Chem. Phys., 137, 044106 (2012).
+(6) Wu, X., Subramaniam,S., Case, D.A.,Wu,K., Brooks, B.R., "Targeted Conformational Search with Map-Restrained Self-Guided Langevin Dynamics: Application to Flexible Fitting of Electron microscopic density maps", J. Struct. Biol., 183, 429-440 (2013).
+(7) Wu, X., Brooks, B.R., Vanden-Ejinden,E. "Self-Guided Langevin Dynamics via Generalized Langevin Equation", J. Comput. Chem., 37(6),595-601(2016).
+(8) Wu, X., Brooks, B.R., "Reformulation of the Self-Guided molecular simulation method", J. Chem. Phys., 153(9), 094112(2020).
+
+
+* Menu:
+
+* Syntax::              Syntax of the SGLD dynamics command
+* Background::          Description of SGMD/SGLD methods
+* Examples::            SGLD usage examples
+
+
+File: Sgld, Node: Syntax, Up: Top, Previous: Top, Next: Background
+
+[Syntax SGLD]
+
+SCALar SGWT SET 0.0                   ! clean guiding weight array: SGWT
+
+SCALar SGWT SET 1.0  atom-selection   ! select atoms to set guiding weights
+
+! Using leap-frog integrator
+DYNAmics {LEAP {[LANG        SGLD]}        }  ! SGLD simulation
+         {     {[HOOVER|CPT] SGMD]}        }  ! SGMD for a NVT/NPT ensemble
+         {     {[            SGMD]} sg-spec}  ! SGMD for a NVE ensemble
+         {                                       }  other-dynamic-spec 
+
+! Using velocity-Verlet integrator
+DYNAmics { VV2  {[SGLD]}         } ! SGLD
+         {      {[SGMD]} sg-spec } ! SGMD
+         {                             }  other-specs
+
+sg-spec::= {[SGFT   real]}[TSGAVG real] other-sg-spec 
+           {[TEMPSG real]      }   
+      
+other-sg-spec::= [SGFF real] [SGFD real]
+                 [SGBZ] [TSGAVP real]  [ISGSTA int] [ISGEND int]
+                 [SGSIZE int] [SGGRID real]
+
+Keyword  Default  Purpose
+
+SGLD     false    Turn on SGLD simulation (for Langevin dynamics, LANG). 
+                  Friction constants, FBETA, must be set at first. 
+                  It is equivalent to SGMD for non-Langevin dynamics.
+
+SGMD     false    Turn on SGMD simulation (for MD simulations). 
+                  It is equivalent to SGLD for Langevin dynamics.
+
+
+
+SGFT    0.2(SGMD) Momentum guiding factor. 
+                  
+SGFF     0.0      Force guiding factor. 
+                  
+SGFD     0.0      SGLD-GLE momentum guiding factor. Only works when friction constants FBETA>0, i.e., SGLD.
+
+TEMPSG   0 K      Target self-guiding temperature. Used to set SGFT or SGFF if SGFT is not set
+                  
+TSGAVG   0.2 ps   Local average time. A larger TSGAVG will result in slower 
+                  motion to be enhanced. All motions with periods larger than
+                  TSGAVG will be enhanced.
+
+SGBZ     false    Automatically set SGFT/SGFF to maintain a Boltzmann conformational. 
+                  distribution. 
+SGCOM     false   Allow guiding forces on center of mass. 
+
+ISGSTA   1        The index of the first atom of the region to apply the 
+                  guiding force
+
+ISGEND   natom    The index of the last atom of the region to apply the 
+                  guiding force.  If reweighting is to be performed and ISGSTA>1 or 
+                  ISGEND<natom, one need turn on analysis with "anal on" before 
+                  running dynamics.
+
+TSGAVP 10*TSGAVG  Long average time. This time is used to calculate
+                  running averages to estimate instaneous parameters like apparent friction constants.
+
+SGTYPE   1        SG structure for local spatial average. 
+                      1-individual atom
+                      2-bond and bond angle atoms; 
+                      3-also dihedral angle atoms; 
+                      4-atoms within SGGRID cutoff distance.
+
+SGSIZE   3 angstroms       Cutoff range for local spatial average. 
+
+SGWT    {1.0}     Self-guiding weight array for atoms. Using SCALAR to set SGWT.
+                  SGWT can be used to set atom dependent guiding factors.
+
+
+File: Sgld, Node: Background, Up: Top, Previous: Syntax, Next: Examples
+
+                   Backgrounds
+                   
+     
+     
+   SGMD/SGLD simulation enhances conformational search efficiency through
+acceleration of low frequency motions in a molecular system.  The low frequency 
+motion represents the slow conformational change that contributes the most 
+in conformational search.  A guiding force resonant with the low freuqency
+motion, which is calculated based on a local average of momentums and/or forces, is introduced 
+into the equation of motion to enhance the low frequency motion.  It has been
+demonstrated that within the suggested parameter range, a SGLD simulation 
+has a dramatically enhanced conformational search efficiency while has little
+perturbation on conformational distribution.  
+
+Recently, based on the generalized Langevin equation, we developed the SGLD-GLE method
+ that restores the detailed-balance property of the dynamics. This
+permits to sample the NVT and NPT ensembles exactly, without the reweighting needed 
+in SGLD. Compared with other sampling enhancement methods, SGLD-GLE has several unique characters. First, SGLD-GLE is size
+extensive. The guiding force is calculated from momentum
+and random forces, independent of system size. Reweighting is no longer needed which allows the method to be cast in a manner that is size extensive, making it a possible method of choice for million atom systems that may benefit from enhanced sampling. Second, the method can be applied to a part of a simulation system. In other words, the guiding factor can be defined for individual atoms, just like the friction con-
+stant can be atom specific. Third, the motion mode to be
+enhanced can be controlled by the local averaging time.
+Because of these features, we expect that SGLD-GLE, like
+SGLD, will be useful in a wide variety of contexts, such as phase transition, ligand docking, and protein folding.  It is an excellent alternative to LD.  SGFD is the guiding factor that activate SGLD-GLE.
+
+Most recently a generalized self-guided simulation method, SGMDg/SGLDg, is developed, which has both momentum based and force based guiding forces and works equally well for both MD and LD.  quantitative relations between guiding factors, SGFT and SGFF, with the conformational distribution.
+
+To speed up SGMD/SGLD simulation, many previous optional input parameters are obsoleted.  The obsoleted parameters are: 
+SGMDG
+SGLDG
+SGSTOPT
+SGSTOPR
+SGCOM
+TREFLF
+
+     In CHARMM input script, only a key word, SGMD/SGLD, in a "DYNA ..." 
+simulation command line is needed to turn on SGMD/SGLD with default values 
+for all parameters.  For LD or SGLD simulation, the friction constant, FBETA, 
+need be set.  Whether to use SGMD or SGLD is automatically decided depending on 
+whether the friction constant is zero or not.
+
+     SGMD/SGLD has two primary input parameters, the guiding factors, SGFT,SGFF, and/or SGFD, and 
+the local average time, TSGAVG, which define the guiding effect in a SGMD/SGLD 
+simulation. SGFT/SGFF/SGFD set the strength of the guiding force and TSGAVG defines the 
+slow motion mode to be enhanced. A larger TSGAVG will result in a slower 
+motion (with period longer than TSGAVG) to be enhanced.  A larger SGFT, a more negative SGFF, or a larger SGFD, will 
+introduce stronger guiding forces and result in a larger energy barrier 
+overcoming ability.  When SGFT/SGFF/SGFD=0, a SGMD/SGLD simulation reduces to a normal MD/LD simulation.  
+In addition to local average over time, TSGAVG, a spatial average can be defined with SGTYPE.  SGTYPE default valuse is 1, which is defined for individual atoms.  When SGTYPE=2, for any atom, its bonded atoms, including bond and bond angles, are averaged together.  When SGTYPE=3, all bonded atoms including dihedral atoms are included in the local average.  When SGTYPE=4, atoms within a cutoff distance of SGSIZE will be included in local spatial average.
+A scalar array SGWT can be used to define atomic specific guiding factors. the actual guiding factor of atom i will be SGFT*SGWT(I).
+
+     To avoid the difficulty in choosing the value of SGFT, a parameter 
+called guiding temperature (TEMPSG) is introduced. TEMPSG, as an alternate 
+to SGFT, specifies the conformational searching ability that is comparable to 
+a simulation at temperature TEMPSG. When TEMPSG=0, SGFT will be used to calculate
+the guiding force.  If TEMPSG>0, SGFT will be calculated from TEMPSG.  
+
+    The Key word, SGBZ, will turn set balanced SGFF from SGFT or verse versa, so that the bias effects will cancel from each other and the simulation will sample the canonical ensemble.  Otherwise, conformaton distribution need be reweighted to produce canonial ensemble properties.
+
+    The guiding range, ISGSTA and ISGEND, define the starting and ending atom indexes
+to apply the guiding forces.  By default, all atoms are included in the guiding range.
+Within the range, the guiding weight array, SGWT, can be set with the SCALAR command.
+The actual guiding factor is SGFT*SGWT(I) for atom I.  By default, SGWT=1.
+
+    SGMD/SGLD can be used for replica exchange, abbreviated as RXSGLD, to obtain 
+accelerated conformational search while preserves the canonical ensemble.  The guiding
+effect, SGFT or TEMPSG, is used to define different replicas, with or without 
+temperature changes.  Without temperature changes, RXSGLD can achieve very high
+exchange efficiency and can be applied to much larger systems than temperature-based
+replica exchange simulations.  More details can be found in repdstr.info. 
+
+When SGMD or SGLD is turned on, DYNA simulation output will contain 
+a line with the following quantities:
+DYNA SGMD>  SGGAMMA  TEMPLF TEMPHF EPOTLF EPOTLLF SGEXP
+
+These quantities are instaneouse values defined as below:
+    SGGAMMA:       apparent friction constant
+    TEMPLF:       local average movement in temperature unit
+    TEMPHF:       Thermo movement in termperature unit. 
+    EPOTLF:     Local average potential energy. 
+    EPOTLLF:    local average of local average potential energy. 
+    SGEXP:      Weighting exponent.  exp(SGEXP) is the weighting factor of current frame.
+
+  The weight of a conformation is calculated by 
+
+Weight= exp(SGEXP)
+      =exp(((SGFF-SGFFT)*(EPOTLF-EPOTLLF)/(KBOLTZ*Temp))
+
+The averages of above variables can be queried by the following
+parameters:
+
+?SGGAM=SGGAMMA,?TEMPLF=TEMPLF,?TEMPHF=TEMPHF,?EPOTLF=TEMPLF,?EPOTLLF=TEMPLLF,?SGEXP=SGEXP,
+
+In addition to the DYNA output, for each trajectory frame, there is a
+SGMD/SGLD output marked by "TRAJ SGMD>" or "TRAJ SGLD>", which can be used for 
+post-processing ensemble distributions.
+
+SGMD/SGLD simulation results can be weighted to produce canonical ensemble
+properties. The weighting information can be extracted from simulation outputs.
+A simple command line awk script is provided here to get a weighted average
+from a SGMD/SGLD simulation:
+
+%> awk 'BEGIN{n=0;if(N0==0)N0=1000;} \
+{if($1=="DYNA>"){ep=$6;n++;} if(n<N0)next; \
+if($1=="DYNA"&& ( $2=="SGMD>" ||$2=="SGLD>" )){wt=exp($8);aw+=wt;ae+=ep;aew+=wt*ep;m++;}} \
+END{printf("Ep and weighted Ep: %10.4f %10.4f\n",ae/m,aew/aw);}'  sgmd-sgld.out
+
+
+The following awk script will print weighting factors for every frame in
+a SGMD/SGLD trajectory:
+
+%> awk '{if($1=="TRAJ"&& ( $2=="SGMD>" ||$2=="SGLD>" )){printf(" %10d %10.4f\n",++i,exp($8));}'  sgmd-sgld.out
+
+
+Run awk with above script can produce weighting factor for each frame in the trajectory file:
+
+%> awk -f sgwt.awk sgmd-sgld.out
+
+
+
+File: Sgld, Node: Examples, Up: Top, Previous: Syntax, Next: Top
+
+                        Examples
+
+1) SGMD simulation with a given force guiding factor.
+
+! Perform SGMD simulation
+DYNA  LEAP  STRT  CPT NSTE 1000000 TIME 0.002  -
+   IPRFRQ 10000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 1000 ISEED 314159 -
+   SGMD SGFF -0.3  -
+   TCON  TCOU  0.1  TREF  300 FIRST 260 -
+   NBXMOD 5  ATOM CDIEL VATOM VDISTANCE EIPS VIPS PXYZ  -
+   CUTNB 12.0  CTOFNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+2) SGLD simulation with a given momentum guiding factor.
+
+! Set friction forces
+SCAL FBETA SET 1.0 SELE ALL END
+
+! Perform SGLD simulation
+DYNA LANG LEAP  STRT  NSTE 1000000 TIME 0.002  -
+   IPRFRQ 10000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 1000 ISEED 314159 -
+   SGLD  SGFT 1.0 -
+   TBATH 300   FIRST 260 -
+   NBXMOD 5  ATOM CDIEL VATOM VDISTANCE EIPS VIPS PXYZ  -
+   CUTNB 12.0  CTOFNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+3) SGLD-GLE simulation by setting SGFD
+! Set friction forces
+SCAL FBETA SET 1.0 SELE ALL END
+
+! Perform SGLD simulation
+DYNA LANG LEAP  STRT  NSTE 1000000 TIME 0.002  -
+   IPRFRQ 10000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 1000 ISEED 314159 -
+   SGLD  TSGAVG 0.2 SGFD 1.0 -
+   TBATH 300   FIRST 260 -
+   NBXMOD 5  ATOM CDIEL VATOM VDISTANCE EIPS VIPS PXYZ  -
+   CUTNB 12.0  CTOFNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+4) SGLD simulation with a guiding temperature of 500 K (to reach a searching ability comparable to
+a 500 K high temperature simulation).
+
+! Set friction forces
+SCAL FBETA SET 1.0 SELE ALL END
+
+! clean self-guiding weights.  
+SCAL SGWT SET 0.0 SELE ALL END
+! apply guiding force to only segment 1
+SCAL SGWT SET 1.0 SELE iseg 1 end
+
+! Perform SGLD simulation
+DYNA LANG LEAP  STRT  NSTE 1000000 TIME 0.002  -
+   IPRFRQ 10000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 1000 ISEED 314159 -
+   SGLD  TSGAVG 0.2 TEMPSG 500 -
+   TBATH 300   FIRST 260 -
+   NBXMOD 5  ATOM CDIEL VATOM VDISTANCE EIPS VIPS PXYZ  -
+   CUTNB 12.0  CTOFNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+5) SGMD simulation with both guiding factors 
+
+
+DYNA  LEAP  STRT  CPT NSTE 1000000 TIME 0.002  -
+   IPRFRQ 10000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 1000 ISEED 314159 -
+   SGMD SGFT 1.0 SGFF -0.3  -
+   TCON  TCOU  0.1  TREF  300 FIRST 260 -
+   NBXMOD 5  ATOM CDIEL VATOM VDISTANCE EIPS VIPS PXYZ  -
+   CUTNB 12.0  CTOFNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+6> SGLD simulation with VV2 integrator to sample canonical ensemble 
+
+DYNA VV2 START  NSTEP  10000  TIME  0.001   -
+     SGMD SGFT 1.0 SGBZ
+
+7) SGMD simulation with  guiding force averaged over bonded structures 
+
+
+DYNA  LEAP  STRT  CPT NSTE 1000000 TIME 0.002  -
+   IPRFRQ 10000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 1000 ISEED 314159 -
+   SGMD TEMPSG 1000 SGTYPE  3  -
+   TCON  TCOU  0.1  TREF  300 FIRST 260 -
+   NBXMOD 5  ATOM CDIEL VATOM VDISTANCE EIPS VIPS PXYZ  -
+   CUTNB 12.0  CTOFNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+8) SGMD simulation with  guiding force from local spatial average 
+
+
+DYNA  LEAP  STRT  CPT NSTE 1000000 TIME 0.002  -
+   IPRFRQ 10000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 1000 ISEED 314159 -
+   SGMD TEMPSG 1000 SGTYPE 4 SGSIZE 3  -
+   TCON  TCOU  0.1  TREF  300 FIRST 260 -
+   NBXMOD 5  ATOM CDIEL VATOM VDISTANCE EIPS VIPS PXYZ  -
+   CUTNB 12.0  CTOFNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.0

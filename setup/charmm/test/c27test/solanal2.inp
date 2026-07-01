@@ -1,0 +1,334 @@
+* peptide in water, 100 steps of dynamics
+* PBC in (29A)**3 cubic box 
+* for the post c26a2 simplified syntax 
+* test/examples of some common uses of the coor anal command around a peptide:
+* solvent MSD, solvent VAC, g(r) of solvent, g(r) solute-solvent,
+* solvent MSD in shell around peptide, solute MSD
+* Kirkwood gfactor related dipole correlation analysis
+*
+stream datadir.def
+open unit 1 read form name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0param19.prm
+read param card unit 1
+close unit 1
+
+read sequence card
+* ypgdv
+*
+5
+tyr pro gly asp val
+
+generate pept setup
+
+read sequence tip3 756
+
+generate wat noangles nodihedrals
+
+open unit 1 read form name @0turnwat14.chr
+read coor card unit 1
+close unit 1
+
+set 6 29.0
+set 7 29.0
+set 8 29.0
+
+open unit 1 read form name @0cubic.img
+read image card unit 1
+close unit 1
+
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele segid wat end
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 sele segid pept end
+
+faster on 
+
+!GOTO ANALYZE
+
+! to simplify things keep peptide fairly rigid
+cons harm force 10.0 sele type ca end
+shake para bonh tol 1.0e-8 
+open unit 21 write unform name @9pept100.cor
+open unit 22 write unform name @9pept100.vel
+!!!! N O T E: dynamics options are not necessarily optimal
+dyna leap  strt nstep 100 timestep 0.002 -
+ firstt 295.0 finalt 295.0 twindh 10.0 twindl -10.0 -
+ iasors 1 iasvel 1 ichecw 1 ieqfrq 0 -
+ iunr -1 iunw -1 iunc 21 iunv 22 kuni -1 - 
+ inbfrq 25 imgfrq 25 nsavc 5 nsavv 5 nprint 25 iprfrq 25 -
+ atom cdie fshif vdis vshif  ctofnb 9.0 cutnb 10.0 cutim 10.0
+
+LABEL ANALYZE
+! All examples use the trajectory above which was run using images (PBC)
+! To analyze a trajectory without PBC the line with the XBOX .. keywords
+! should be removed. 
+! The analyses using keyword WATEr assume a three site water model
+! with the oxygen coordinates immediately preceding the 2 sets of hydrogen 
+! coordinates in the trajectory. In these cases only the oxygens should be
+! specified as the solvent species to be used. 
+
+! MeanSquareDisplacement of all watermolecules to estimate diffusion coeff
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.msd
+coor anal select type oh2 end  -     ! what atoms to look at
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      imsd 31 -                      ! flag to do the MSD analysis
+      rspin 0.0 rspout 999.9 -       ! we are interested in ALL waters
+      ncors 20 -                     ! compute MSD to NCORS*SKIP (0.04ps)steps
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! Velocity AutoCorrelation of all watermolecules to estimate diffusion coeff
+
+open unit 21 read unform name @9pept100.vel
+open unit 31 write form name @9pept100.vac
+coor anal select type oh2 end  -     ! what atoms to look at
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      ivac 31 ncors 20 -             ! flag to do the VAC analysis
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r) for the waters; the program defaults are used to calculate the density
+! using selected atoms within 10A (RDSP keyword) of the reference point (0,0,0)
+! (REF keyword)
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.goo
+open unit 32 write form name @9pept100.goh
+open unit 33 write form name @9pept100.ghh
+! specify WATEr to get all three g(r) functions computed
+coor anal water select type OH2 end - 
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      igdist 31 ioh 32 ihh 33 -      ! flag to do the solvent-solvent g(r)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! use ALL waters for rdf calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r) for the water oxygens only
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.goo1
+coor anal select type oh2 end     -  ! NB! No WATEr keyword here
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      igdist 31  -                   ! flag to do the solvent-solvent g(r)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r) for the water oxygens only - with a user specified density [atoms/A^3]
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.goo1a
+coor anal select type oh2 end     -  ! NB! No WATEr keyword here
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      igdist 31 -                    ! flag to do the solvent-solvent g(r)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      dens 0.03  -                   ! use this density to normalize the rdf
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r) for the water oxygens only - specified radius for density calculation
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.goo1b
+coor anal select type oh2 end     -  ! NB! No WATEr keyword here
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      igdist 31  -                   ! flag to do the solvent-solvent g(r)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      rdsp 14.0   -                  ! but only those within 14A of REF for dens
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r)  water oxygens - water hydrogens
+! this variant gives a g(r) which contains also the INTRamolecular O-H peak
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.goh1
+coor anal select type oh2 end  -     ! Water oxygens 
+      site select hydrogen .and. segid wat  end multi - ! and the water hydrogens
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      isdist 31  -                   ! do the g(r) (here solute-solvent)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r)  water oxygens - water hydrogens
+! this variant gives a g(r) without the INTRamolecular O-H peak
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.goh2
+coor anal select type oh2 end  -     ! Water oxygens 
+      site select hydrogen .and. segid wat  end multi - ! and the water hydrogens
+      byresidue -                    ! don't use INTRAresidue distances
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      isdist 31  -                   ! do the g(r) (here solute-solvent)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+
+! g(r) backbone amide hydrogen -  water oxygens 
+! if a single solute atom is looked at the MULTi keyword is not necessary
+! when several solute atoms are specified as the site, their average position
+! will be used as the reference position if MULTi is not present
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.gonh
+coor anal select type oh2 end  -     ! Water oxygens 
+      site select type H end multi - ! and the amide hydrogens
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      isdist 31  -                   ! do the g(r) (here solute-solvent)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r) backbone amide hydrogen -  water oxygens
+! reversed order as compared to previous example, but should give same result
+! except for a scalefactor due to the inaccuracy of the density estimate
+! for the amide hydrogens (there are three of them here, and the density will
+! be entirely dependent on the choice of volume - default is 10A radius sphere) 
+! if a single solute atom is looked at the MULTi keyword is not necessary
+! when several solute atoms are specified as the site, their average position
+! will be used as the reference position if MULTi is not present
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.gonh_b
+coor anal select type h end  -       ! the amide hydrogens
+      site select type OH2 end multi - ! and the water oxygens 
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      isdist 31  -                   ! do the g(r) (here solute-solvent)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r) backbone amide hydrogen -  water oxygens
+! with excluded volume correction estimated from 1000 MonteCarloPoints
+! evenly distributed in 10 shells out to 10A (MGN*DR), using a 1.4A probe 
+! radius  and the CHARMM vdw radii for the excluding atoms
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.gonh_c
+coor anal select type OH2 end  -     ! the water oxygens 
+      site select type H end multi - ! and the amide hydrogens
+      exvc select segid pept end -   ! excluded volume by peptide
+      mcp 1000 mcshells 10  rprobe 1.4 - ! MonteCarlo params for ex.vol calc  
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      isdist 31  -                   ! do the g(r) (here solute-solvent)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! g(r) water oxygen-water oxygen, backbone amide hydrogen-water oxygens 
+! and backbone amide hydrogen-backbone amide hydrogen
+! all at the same time using the CROSS keyword
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.goo2
+open unit 32 write form name @9pept100.gonh1
+open unit 33 write form name @9pept100.nhnh
+coor anal select type oh2 end -      ! Water oxygens, and
+      cross select type H end  -     ! the amide hydrogens
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      igdist 31 ioh 32 ihh 33 -      ! do "these" g(r) (a-a,a-b,b-b)
+      mgn 100 dr 0.1 -               ! comp. g(r) at MGN points separated by DR
+      rsph 999.9  -                  ! we use ALL waters for the calculation
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+!MSD for water oxygens within the shell between 3A and 6A of the peptide 
+! it is also possible to do kind this analysis with
+! respect to a fixed point instead of wrt to some atoms;
+! in this case use XREF value YREF value ZREF value instead of the SITE spec.
+! or leave out MULTi to get the average position of the peptide as the
+! point around which the shell is placed
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.msd1
+coor anal select type oh2 end     - ! Water oxygens 
+      site select segid pept end multi - ! the whole peptide
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      imsd 31  ncors 20 -            ! do the MSD 
+      rspin 3.0 rspout 6.0 -         ! we want in waters in this shell
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+!MSD for the PEPTIDE; use atom in the middle to represent peptide position
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.msd2
+coor anal select atom pept 3 ca end  - ! GLY 3 Calpha is somwhat in the middle
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      imsd 31  ncors 20 -            ! do the "peptide" MSD
+      rspin 0.0 rspout 999.9 -       ! we want the peptide wherever it goes
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+!Kirkwood g-factor related dipole correlation analysis of waters around
+! backbone amides. Note that the radius here is defined by the rDsp keyword
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.g
+coor anal water -                    ! Notice WATEr keyword and OH2 selection
+      select type OH2 end fini -     ! since we need  O- and H-atoms
+      site select type H end multi - ! around backbone amide hydrogens 
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      ikirk 31 rDsp 12.0  -          ! dipole correlations out to 12A
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! Some calculations may be combined to speed things up if the trajectory is large.
+! Here we will do solvent MSD, solvent g(r), solute-solvent g(r) in one go
+! using all watermolecules (rsphere=rspout= 999.9) for the computations
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.msd3
+open unit 32 write form name @9pept100.goo3
+open unit 33 write form name @9pept100.gonh2
+coor anal select type OH2 end  -     ! we need  only water oxygens
+      site select type H end multi - ! around backbone amide hydrogens 
+      firstu 21 nunit 1 skip 10 -    ! trajectory specification
+      imsd 31  ncors 10 -            ! water MSD w/ 10 points in the MSD curve
+      rspin 0.0 rspout 999.9 -       !   
+      mgn 100 dr 0.1 rsph 999.9 -    ! g(r) calculation 0-10A in 0.1 intervals
+      igdist 32 -                    ! water oxygen-oxygen g(r)
+      isdist 33 -                    ! amide H - water oxygen g(r)
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! Rotational Correlation Time of Water
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.rcor
+coor anal sele .byres. (type oh2 -   ! select all three atoms of water 
+.and. (resn asp .and. type od1)  -
+.around. 3.5) show end  -
+      firstu 21 nunit 1 skip 10 -    
+      rcor 1                    -    ! rot corr time calculation
+      timl 0.01 timu 0.04       - ! lower and upper time limits for linear fit(0.2ps total time here)
+      rout 31                   -    ! corr coef to unit 31
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+!P1 Rotational Correlation Time of Water
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.p1
+coor anal sele .byres. (type oh2 -   ! select all three atoms of water 
+.and. (resn asp .and. type od1)  -
+.around. 3.5) show end  -
+      firstu 21 nunit 1 skip 10 -    
+      rcor 1 P1 ncors 5 rspin 0.0 rspout 10.0  -    ! rot corr time calculation
+      rout 31                   -    ! corr coef to unit 31
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+!P2 Rotational Correlation Time of Water
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.p2
+coor anal sele .byres. (type oh2 -   ! select all three atoms of water 
+.and. (resn asp .and. type od1)  -
+.around. 3.5) show end  -
+      firstu 21 nunit 1 skip 10 -    
+      rcor 1 P2 ncors 5 rspin 0.0 rspout 99.9 -  ! rot corr time calculation
+      rout 31                   -    ! corr coef to unit 31
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+!P2 Rotational Correlation Time of Water in shell
+open unit 21 read unform name @9pept100.cor
+open unit 31 write form name @9pept100.p2s
+coor anal sele .byres. (type oh2 -   ! select all three atoms of water 
+.and. (resn asp .and. type od1)  -
+.around. 3.5) show end  -
+      firstu 21 nunit 1 skip 10 -    
+      rcor 1   P2 ncors 5       -    ! rot corr time calculation
+      rout 31                   -    ! corr coef to unit 31
+      rspin 2.0 rspout 5.0      -
+      xbox @6 ybox @7 zbox @8        ! and we did use PBC
+
+! Calculate hydration no
+open unit 21 read unform name @9pept100.cor
+open unit 61 write  form name @9pept100.isd
+open unit 11 write  form name @9pept100.hyd
+
+coor anal sele resn tip3 .and. type oh2 end -
+      site select resn asp .and. type od1 show end multi -
+      firstu 21 nunit 1 skip 5 -     
+      isdist 61 mgn 50 dr 0.2 rsph 999.9  - ! required because hyd no calculae
+!                                           ! within solvent-site g(r) routine
+      ihydn 11 rhyd 3.0 -                   ! calculate hyd no at 3.0A
+      xbox @6 ybox @7 zbox @8

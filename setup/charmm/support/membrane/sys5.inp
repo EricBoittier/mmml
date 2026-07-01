@@ -1,0 +1,140 @@
+*  Membrane System : sys5.inp 
+*  Gradually minimizing the system by slowing increasing the vdW size of atoms 
+* 
+
+stream param.str
+
+set LengthX @BoxSizeX
+set LengthY @BoxSizeY
+set LengthZ 200.0 
+
+!read topology
+open read card unit 10 name @direcTp/@TopFile
+read rtf card unit 10
+close unit 10
+
+!read parameters
+open read card unit 10 name @direcTp/@ParFile
+read param card unit 10
+close unit 10
+
+stream @direcSequence/peptide.str
+
+read sequence DMPC @NLipid
+generate DMPC setup
+
+open read card unit 1 name @direcWork/temp_water.crd
+read sequence coor unit 1
+generate BULK nodihedrals noangles
+close unit 1
+
+open read card unit 1 name @direcWork/sys4_4.crd 
+read coor card unit 1
+close unit 1
+
+!save coordinates for later comparison
+coor copy comp
+
+!--------------------------------------------------------------------------
+! Fix the peptide and constraints on polar head region
+
+cons fix sele segid PEPT end
+coor stat select segid PEPT end
+
+define HEAD select ( type P .or. type N .or. type C1* .or. type O1* ) .and. segid DMPC end
+
+set i 1
+label DO_1
+
+coor stat mass select ( head .and. resi @i ) end
+if ?zave gt 0 set zref = @ZposTop
+if ?zave le 0 set zref = @ZPosBot
+
+MMFP
+GEO plane  RCM -
+        xref 0.0  yref 0.0  zref @zref   zdir 1.0 -
+        force  5.0   select head .and. resi @i show end
+END
+
+incr i by 1
+if i le @NLipid goto DO_1
+
+!----------------------------------------------------------------------------
+! Gradually minimizing the system by slowing increasing the vdW size of atoms 
+
+open unit 8 read card name @direcCubic/cubic.img 
+read imag print init unit 8
+close unit 8
+
+imag byres select resnam TIP3 .or. resnam DMPC end
+update  ctonnb  8.0   ctofnb  9.0   cutnb  10.0   wmin  1.0   cutim 10.0
+
+set CUTON  0.8  !on
+set CUTOF  1.0  !off
+set CUT    1.2  !cut
+set I      1.2  !increment
+
+label DO_2
+
+skip HBOND
+mini sd nstep      100   nprint      25  inbfrq   30   STEP   0.005  -
+        ctonnb  @CUTON   ctofnb  @CUTOF  cutnb  @CUT   cutim   @CUT  wmin     1.0  -
+        elec             shift           atom          cdie          eps      1.0  -
+        vdw              vswitch         vatom
+
+mult CUTON by @I
+mult CUTOF by @I 
+mult CUT   by @I 
+
+if CUT le 8.0 goto DO_2
+
+!------------------------------------------------------------------------------
+! Now do some further minimization 
+
+skip HBOND
+mini abnr nstep    500 nprint     10 inbfrq    20  STEP    0.02  -
+          ctonnb   8.0 ctofnb   10.0 cutnb   11.0  cutim   11.0  wmin     1.0  -
+          elec         shift         atom          cdie          eps      1.0  -
+          vdw          vswitch       vatom
+ 
+!compare coordinates before and after
+coor diff comp
+coor stat comp sele segid DMPC end
+coor stat comp sele segid BULK end
+coor stat comp sele segid PEPT end
+coor stat comp sele segid DMPC .and. type P* end
+coor stat comp sele segid DMPC .and. type C3* end
+coor stat comp sele segid DMPC .and. type C2* end
+
+open write card unit 1 name @direcWork/sys5.crd
+write coor card unit 1
+* minimized with switching loop melittin/lipids
+* energy:  ?TOTE ?ENER ?ELEC ?VDW ?BOND ?ANGL ?GRMS 
+*
+
+open write card unit 1 name @direcWork/sys5.pdb
+write coor pdb unit 1
+* minimized with switching loop melittin/lipids
+* energy:  ?TOTE ?ENER ?ELEC ?VDW ?BOND ?ANGL ?GRMS 
+*
+
+!---------------------------------------------------------------
+! write out the main system with surrounding images to do final overlay
+!---------------------------------------------------------------
+
+imag byres select resnam TIP3 .or. resnam DMPC end
+update imall cutnb 5.0 ctonnb 2.0 ctofnb 4.0 cutim 5.0 
+
+open write card unit 1 name @direcWork/sys5_imag.crd
+write coor card image select segid PEPT .or. resnam TIP3 -
+ .or. resnam DMPC end unit 1
+* sys5.crd with its nearest images
+*
+
+open write card unit 1 name @direcWork/sys5_imag.pdb
+write coor pdb image select segid PEPT .or. resnam TIP3 -
+ .or. resnam DMPC end unit 1
+* sys5.crd with its nearest images
+*
+
+stop

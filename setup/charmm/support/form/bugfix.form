@@ -1,0 +1,73 @@
+CHARMM Bugfix Report Form
+Please use this form to report a bug you have fixed.
+Send your bugfix report to won@hanyang.ac.kr
+Post to the CHARMM bulletin board: Prerelease bugs and testing
+=========================================================================
+
+Developer        :
+Email Address    :
+Institution      :
+Date             :
+
+CHARMM version   :
+Machine          :
+Operating System :
+FORTRAN version  :
+Optimization     :
+
+BUG REPORT
+----------
+Command(s) involved (including options used):
+
+
+One-line summary :
+
+
+Detailed description:
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sample input to reproduce the problem (or testcase):
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+FIX(es)
+-------
+Files involved:
+
+
+Detailed description of fixes per each file:
+
+
+
+
+
+
+
+
+
+
+
+Other Comments:
+

@@ -1,0 +1,318 @@
+* EXAMPLE INPUT FILE FOR ENERGY MIMINIZATION AND DYNAMICS
+* OF MOLECULAR MECHANICS PROTON TRANSFER (MMPT) OF THE 
+* PROTONATED WATER DIMER H2O...H+...H2O 
+*
+
+BOMLEV -1
+PRNL 5
+
+stream datadir.def
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed. Test not compatible with PARALLEL."
+ stop
+endif
+
+! ====================================================
+! set up system
+! ====================================================
+
+! READ IN TOPOLOGY AND  PARAMETER FILES
+
+READ RTF CARD UNIT 5
+* ... 
+* rtf for protonated water dimer H2O...H+...H2O 
+* ...
+*
+   22    0 
+MASS     1 H       1.00800
+MASS     2 O      15.99900
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI PWD   1.000
+GROUP
+ATOM  O1  O  -0.82
+ATOM  H2  H  0.41
+ATOM  H3  H  0.41
+ATOM  H4  H  0.41
+ATOM  O5  O  -0.82
+ATOM  H6  H  0.41
+ATOM  H7  H  0.41
+ATOM  O8  O  -0.82
+ATOM  H9  H  0.41
+ATOM  H10  H  0.41
+ATOM  O11  O  -0.82
+ATOM  H12  H  0.41
+ATOM  H13  H  0.41
+ATOM  O14  O  -0.82
+ATOM  H15  H  0.41
+ATOM  H16  H  0.41
+ATOM  O17  O  -0.82
+ATOM  H18  H  0.41
+ATOM  H19  H  0.41
+ATOM  O20  O  -0.82
+ATOM  H21  H  0.41
+ATOM  H22  H  0.41
+ATOM  O23  O  -0.82
+ATOM  H24  H  0.41
+ATOM  H25  H  0.41
+ATOM  O26  O  -0.82
+ATOM  H27  H  0.41
+ATOM  H28  H  0.41
+ATOM  O29  O  -0.82
+ATOM  H30  H  0.41
+ATOM  H31  H  0.41
+ATOM  O32  O  -0.82
+ATOM  H33  H  0.41
+ATOM  H34  H  0.41
+ATOM  O35  O  -0.82
+ATOM  H36  H  0.41
+ATOM  H37  H  0.41
+ATOM  O38  O  -0.82
+ATOM  H39  H  0.41
+ATOM  H40  H  0.41
+ATOM  O41  O  -0.82
+ATOM  H42  H  0.41
+ATOM  H43  H  0.41
+ATOM  O44  O  -0.82
+ATOM  H45  H  0.41
+ATOM  H46  H  0.41
+ATOM  O47  O  -0.82
+ATOM  H48  H  0.41
+ATOM  H49  H  0.41
+ATOM  O50  O  -0.82
+ATOM  H51  H  0.41
+ATOM  H52  H  0.41
+ATOM  O53  O  -0.82
+ATOM  H54  H  0.41
+ATOM  H55  H  0.41
+ATOM  O56  O  -0.82
+ATOM  H57  H  0.41
+ATOM  H58  H  0.41
+ATOM  O59  O  -0.82
+ATOM  H60  H  0.41
+ATOM  H61  H  0.41
+ATOM  O62  O  -0.82
+ATOM  H63  H  0.41
+ATOM  H64  H  0.41
+ATOM  O65  O  -0.82
+ATOM  H66  H  0.41
+ATOM  H67  H  0.41
+ATOM  O68  O  -0.82
+ATOM  H69  H  0.41
+ATOM  H70  H  0.41
+ATOM  O71  O  -0.82
+ATOM  H72  H  0.41
+ATOM  H73  H  0.41
+ATOM  O74  O  -0.82
+ATOM  H75  H  0.41
+ATOM  H76  H  0.41
+ATOM  O77  O  -0.82
+ATOM  H78  H  0.41
+ATOM  H79  H  0.41
+ATOM  O80  O  -0.82
+ATOM  H81  H  0.41
+ATOM  H82  H  0.41
+ATOM  O83  O  -0.82
+ATOM  H84  H  0.41
+ATOM  H85  H  0.41
+ATOM  O86  O  -0.82
+ATOM  H87  H  0.41
+ATOM  H88  H  0.41
+ATOM  O89  O  -0.82
+ATOM  H90  H  0.41
+ATOM  H91  H  0.41
+ATOM  O92  O  -0.82
+ATOM  H93  H  0.41
+ATOM  H94  H  0.41
+BOND   O1   H2   O1   H3   O1   H4
+BOND   O5   H6   O5   H7   O8   H9   O8   H10
+BOND   O11   H12   O11   H13   O14   H15   O14   H16
+BOND   O17   H18   O17   H19   O20   H21   O20   H22
+BOND   O23   H24   O23   H25   O26   H27   O26   H28
+BOND   O29   H30   O29   H31   O32   H33   O32   H34
+BOND   O35   H36   O35   H37   O38   H39   O38   H40
+BOND   O41   H42   O41   H43   O44   H45   O44   H46
+BOND   O47   H48   O47   H49   O50   H51   O50   H52
+BOND   O53   H54   O53   H55   O56   H57   O56   H58
+BOND   O59   H60   O59   H61   O62   H63   O62   H64
+BOND   O65   H66   O65   H67   O68   H69   O68   H70
+BOND   O71   H72   O71   H73   O74   H75   O74   H76
+BOND   O77   H78   O77   H79   O80   H81   O80   H82
+BOND   O83   H84   O83   H85   O86   H87   O86   H88
+BOND   O89   H90   O89   H91  O92   H93   O92   H94
+ANGLE   H2   O1   H3   H3   O1   H4   H2   O1   H4
+ANGLE   H6   O5   H7   H9   O8   H10
+ANGLE   H12   O11   H13   H15   O14   H16
+ANGLE   H18   O17   H19   H21   O20   H22
+ANGLE   H24   O23   H25   H27   O26   H28
+ANGLE   H30   O29   H31   H33   O32   H34
+ANGLE   H36   O35   H37   H39   O38   H40
+ANGLE   H42   O41   H43   H45   O44   H46
+ANGLE   H48   O47   H49   H51   O50   H52
+ANGLE   H54   O53   H55   H57   O56   H58
+ANGLE   H60   O59   H61   H63   O62   H64
+ANGLE   H66   O65   H67   H69   O68   H70
+ANGLE   H72   O71   H73   H75   O74   H76
+ANGLE   H78   O77   H79   H81   O80   H82
+ANGLE   H84   O83   H85   H87   O86   H88
+ANGLE   H90   O89   H91   H93   O92   H94
+PATCH FIRST NONE LAST NONE
+END
+
+
+OPEN UNIT 1 CARD READ NAME @0par_wat_t2.inp
+READ PARA CARD UNIT 1
+CLOSE UNIT 1
+
+READ SEQUENCE  CARDS
+* PWD - Protonated Water Dimer
+*
+   1
+PWD
+
+GENERATE MAIN SETUP NOANGLE NODIHEDRAL
+
+print psf
+
+! READ IN COORDINATES FROM PDB
+
+OPEN UNIT 12 READ CARD NAME @0msmmpt_input.cor
+READ COOR CARD UNIT 12
+CLOSE UNIT 12
+
+
+! ====================================================
+! set up MMPT
+! ====================================================
+
+OPEN UNIT 14 CARD WRITE NAME @9HBRIDGE.DAT
+WRITE TITLE UNIT 14
+*     1     4     5   NLM 
+*
+
+CLOSE UNIT 14
+
+
+! OPEN PARAMETER FILES FOR HYDROGEN BONDS
+
+OPEN UNIT 13 CARD READ NAME @0nlm.prm
+
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+
+OPEN UNIT 14 FORMATTED READ NAME @9HBRIDGE.DAT 
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+! CALL MMPT ROUTINE, READ IN DATA
+
+OPEN UNIT 15 CARD READ NAME @0beta2.prm
+
+UPDATE
+
+! CALL MMPT ROUTINE, READ IN DATA
+
+MSPT UNLM 13 UHBR 14 UMUL 15
+
+CLOSE UNIT 13
+CLOSE UNIT 14
+CLOSE UNIT 15
+
+
+! TURN OFF FAST ROUTINES, ONLY USE STANDARD 
+
+FAST -1 
+
+!External force to COM
+cons drop force 0.001 expo 2
+update
+
+!GOTO P2
+! =========================================================
+! start minimization
+! =========================================================
+
+mini conj nstep 100 nprint 200 tolg 0.0001
+!OPEN UNIT 1 CARD WRITe NAME h5o2p.mini.pdb
+!WRITe COOR pdb UNIT 1
+!CLOSE UNIT 1
+!stop
+
+!=========================================================
+! start dynamics 
+!=========================================================
+
+OPEN UNIT 40 WRITe FORMatted NAME @9h5o2p.heat.res
+
+DYNAmics VERLET  STart -
+  NSTEp   1000 TIMEstep 0.00025 -
+  NPRInt   100 IPRFrq     200  -
+  FIRSTT 0.0 FINALT 300.0 teminc 3.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 200 IEQFRQ 0 -
+  ICHECW 77 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread -1 iunwrit 40 iuncrd -1 iseed 22675523 906173281 514109570 420205472 
+
+close unit 40
+
+open unit 41 read formatted name @9h5o2p.heat.res
+OPEN UNIT 40 WRITe FORMatted NAME @9h5o2p.equi.res
+
+DYNAmics VERLET  reSTart -
+  NSTEp   4000 TIMEstep 0.00025 -
+  NPRInt   200 IPRFrq     200  -
+  FIRSTT 300.0 FINALT 300.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 0 IEQFRQ 1000 -
+  ICHECW 1 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread 41 iunwrit 40 iuncrd -1 !
+
+close unit 41
+close unit 40
+
+LABEL P2
+
+open unit 41 read formatted name @9h5o2p.equi.res
+OPEN UNIT 40 WRITe FORMatted NAME @9h5o2p.dyna.res
+!open unit 42 write file name dyna.dcd
+
+DYNAmics VERLET  reSTart -
+  NSTEp  5000 TIMEstep 0.00025 -
+  NPRInt   100 NSAVC 40 IPRFrq 500  -
+  IASORS 1 IASVEL 0 ISCVEL 0 IEQFRQ 0 -
+  INBFrq   -1 -
+  iunread 41 iunwrit 40 iuncrd -42 
+ close unit 40
+ close unit 41
+! close unit 42
+
+!OPEN UNIT 1 CARD WRITe NAME h5o2p.dyna.crd
+!WRITe COOR CARD UNIT 1
+!CLOSE UNIT 1
+
+
+
+
+
+system " grep '^     DRIFT/STEP (LAST-TOTAL):' output/ms_cluster.out |tail -n1 | awk '{print $3}' >  @9ms_tmp"
+system "cons=$(cat  @9ms_tmp ); echo 'set cons' $cons  > @918 "
+stream @918
+  
+@qcheck  @cons  -2.17672506E-07  1.0E-4 CONS
+
+
+
+
+
+
+
+
+
+
+stop
+
+

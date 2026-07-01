@@ -1,0 +1,242 @@
+* PATH.INP
+* author:    Ryszard Czerminski (December 11, 1991)
+* purpose:   to test PATH command
+* system:    ALA dipeptide (AD)
+* problem:   in this test path between minima D and A is calculated
+*            compare results with Fig.4 and Table II.
+* reference: R. Czerminski, R. Elber J. Chem. Phys. 92(9), 5580 (1990)
+* external files: none
+*
+
+if ?rxncor .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+bomlev 5
+
+READ RTF CARD
+*...
+*
+   18    1                ! CLASSIFICATION FROM AB
+MASS     1 H      1.00800 ! HYDROGEN WHICH CAN H-BOND TO NEUTRAL ATOM
+MASS    11 C     12.01100 ! CARBONYL CARBON
+MASS    12 CH1E  13.01900 ! EXTENDED ATOM CARBON W/ ONE HYDROGEN
+MASS    14 CH3E  15.03500 !   -    "    -           THREE
+MASS    38 NH1   14.00670 ! PEPTIDE NITROGEN BOUND TO ONE HYDROGEN
+MASS    51 O     15.99940 ! CARBONYL OXYGEN
+
+AUTOGENERATE ANGLES
+DEFA FIRS NONE LAST NONE
+
+RESI AD  0.00000
+GROU
+ATOM ME1  CH3E    0.06
+ATOM C1   C       0.48
+ATOM O1   O      -0.54
+GROU
+ATOM N1   NH1    -0.321
+ATOM H1   H       0.296
+ATOM CA   CH1E    0.085
+GROU
+ATOM CB   CH3E    0.00
+GROUP
+ATOM C2   C       0.48
+ATOM O2   O      -0.54
+GROU
+ATOM N2   NH1    -0.321
+ATOM H2   H       0.296
+GROUP
+ATOM ME2  CH3E    0.025
+
+BOND  ME1 C1     C1  O1      C1  N1     N1  H1
+BOND  ME2 N2     C2  O2      C2  N2     N2  H2
+BOND  CA  N1     CA  C2      CA  CB
+
+DIHE C1  N1  CA  C2       N1  CA  C2  N2       CA  C2  N2  ME2
+DIHE ME1 C1  N1  CA       O1  C1  N1  CA
+DIHE CA  C2  N2  ME2      CA  C2  N2  H2
+IMPH N1  C1  CA  H1       C2  CA  N2  O2       CA  N1  C2  CB
+IC   C1   N1   CA   C2     0.0000    0.00  180.00    0.00   0.0000
+IC   N1   CA   C2   N2     0.0000    0.00  180.00    0.00   0.0000
+IC   ME1  C1   N1   CA     0.0000    0.00  180.00    0.00   0.0000
+IC   O1   C1   N1   CA     0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C2   N2   ME2    0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C2   N2   H2     0.0000    0.00  180.00    0.00   0.0000
+IC   C1   CA  *N1   H1     0.0000    0.00  180.00    0.00   0.0000
+IC   N2   CA  *C2   O2     0.0000    0.00  180.00    0.00   0.0000
+IC   N1   C2  *CA   CB     0.0000    0.00  120.00    0.00   0.0000
+PATC FIRST NONE LAST NONE
+END
+
+READ PARAMETER CARD
+*...
+*
+BOND
+C    CH1E   405.0       1.52
+C    CH3E   405.0       1.52
+C    NH1    471.0       1.33
+C    O      580.0       1.23
+CH1E CH3E   225.0       1.52
+CH1E NH1    422.0       1.45
+CH3E NH1    422.0       1.49
+H    NH1    405.0       0.98
+
+THETAS
+CH1E C    NH1     20.0     117.5
+CH1E C    O       85.0     121.5
+CH3E C    NH1     20.0     117.5
+CH3E C    O       85.0     121.5
+NH1  C    O       65.0     121.0
+C    CH1E CH3E    70.0     106.5
+C    CH1E NH1     45.0     111.6
+CH3E CH1E NH1     65.0     108.5
+C    NH1  CH1E    77.5     120.0
+C    NH1  CH3E    77.5     120.0
+C    NH1  H       30.0     120.0
+CH1E NH1  H       35.0     120.0
+CH3E NH1  H       35.0     120.0
+
+PHI
+O    C    NH1  H       20.0       2     180. 
+X    C    CH1E X        0.0       3       0.0
+X    C    NH1  X        8.2       2     180.0
+X    CH1E NH1  X        0.3       3       0.0
+
+IMPHI
+C    X    X    O      100.0    0    0.0
+CH1E X    X    CH3E    55.0    0   35.26439
+NH1  X    X    H       45.0    0    0.0
+
+NONBONDED NBXMOD 5 ATOM RDIEL SHIFT VATOM VDISTANCE VSHIFT CUTNB 999. -
+       CTOFNB 980.0  CTONNB 970.0  EPS 1.0  E14FAC 1.0  WMIN 1.5
+
+H        0.0440  -0.0498    0.800
+C        1.65    -0.1200    2.100  1.65 -0.1 1.9 
+CH1E     1.35    -0.0486    2.365  1.35 -0.1 1.9 
+CH3E     2.17    -0.1811    2.165  1.77 -0.1 1.9 
+N*       1.1000  -0.2384    1.600   
+O*       0.8400  -0.1591    1.600   
+
+END
+
+READ SEQUENCE  CARDS
+* AD
+*
+   1
+AD
+
+GENERATE MAIN SETUP
+
+! first structure
+
+read coor card
+* A2.A0   ENERGY  = -7.60838  GRAD=5.805311E-13
+*  DATE:     8/12/1990     21:11: 6      CREATED BY USER: ryszard
+*
+   12
+    1    1 AD   ME1   -3.21938   0.65087   0.65077 MAIN 1     15.03500
+    2    1 AD   C1    -1.84702   0.34415   0.07238 MAIN 1     12.01100
+    3    1 AD   O1    -1.31947   1.10339  -0.73906 MAIN 1     15.99940
+    4    1 AD   N1    -1.24757  -0.77091   0.50784 MAIN 1     14.00670
+    5    1 AD   H1    -1.73495  -1.30802   1.16340 MAIN 1      1.00800
+    6    1 AD   CA     0.07306  -1.24672   0.08049 MAIN 1     13.01900
+    7    1 AD   CB     0.04878  -1.69891  -1.38116 MAIN 1     15.03500
+    8    1 AD   C2     1.31273  -0.37027   0.28676 MAIN 1     12.01100
+    9    1 AD   O2     2.24972  -0.78937   0.96515 MAIN 1     15.99940
+   10    1 AD   N2     1.35370   0.84278  -0.26939 MAIN 1     14.00670
+   11    1 AD   H2     0.56789   1.14089  -0.77578 MAIN 1      1.00800
+   12    1 AD   ME2    2.52363   1.75854  -0.11493 MAIN 1     15.03500
+
+ener e14fac 1.0 rdie cutnb 999. ! imax 12 ipri 1
+update ihbfrq 0 inbfrq 0
+
+!mini powel nstep 1000 tolg 0.1   npri 100
+!mini nrap  nstep 20   tolg 0.001 npri 2
+coor orie mass
+
+! save first structure in comparison set
+
+coor copy comp
+
+! second structure
+
+coor init
+read coor card
+* A2.D0   ENERGY  = -5.49297  GRAD=8.392456E-13
+*  DATE:     8/12/1990     21:11: 8      CREATED BY USER: ryszard
+*
+   12
+    1    1 AD   ME1    3.37883   1.13015  -0.02936 MAIN 1     15.03500
+    2    1 AD   C1     2.28557   0.09862  -0.25867 MAIN 1     12.01100
+    3    1 AD   O1     2.49952  -0.91794  -0.91617 MAIN 1     15.99940
+    4    1 AD   N1     1.08866   0.35906   0.26950 MAIN 1     14.00670
+    5    1 AD   H1     0.94935   1.19988   0.75257 MAIN 1      1.00800
+    6    1 AD   CA    -0.04711  -0.54545   0.12565 MAIN 1     13.01900
+    7    1 AD   CB    -0.09233  -1.50068   1.31206 MAIN 1     15.03500
+    8    1 AD   C2    -1.38208   0.19434   0.09373 MAIN 1     12.01100
+    9    1 AD   O2    -1.50927   1.28128   0.65937 MAIN 1     15.99940
+   10    1 AD   N2    -2.38049  -0.38066  -0.57830 MAIN 1     14.00670
+   11    1 AD   H2    -2.21405  -1.23741  -1.01662 MAIN 1      1.00800
+   12    1 AD   ME2   -3.73300   0.24480  -0.68109 MAIN 1     15.03500
+
+ener
+
+!mini powel nstep 1000 tolg 0.1   npri 100
+!mini nrap  nstep 20   tolg 0.001 npri 2
+coor orie rms mass
+print coor
+print coor comp
+
+! path start from linear guess (rest=0)
+! optimized path will be written to path.bin file
+! path optimization info will be written to path.inf file
+
+open write file unit 17 name @9path.bin
+open write card unit 18 name @9path.inf
+path mode 2 rest 0 nstep 200 unit 17 ipath 18 npri 40 nstr 10 savp 5 -
+     ifpen 0 
+stop
+
+restart does not work for this version
+
+! path restart from binary file (rest=1)
+
+!open read  file unit 17 name @9path.bin
+!open write file unit 18 name @9path1.bin
+!open write card unit 19 name @9path1.inf
+!path mode 2 rest 1 nstep 10 suni 18 sold 17 ipath 19 npri 5 nstr 9 savp 5 -
+!     ifpen 0 
+
+! writing intermediate structures as CRD files
+
+set 1 1
+label ppp                
+
+open read  file unit 18 name @9path.bin
+path mode 1 nstr @1 unit 18 
+open write card unit 19 name @9path@1.crd
+write coor card unit 19
+* path intermediate structure # @1
+*
+print coor
+
+incr 1 by 1
+if 1 lt 10 goto ppp
+
+! path restart from formatted files (rest=-1)
+
+path mode 2 rest -1 nstep 10 suni 18 npri 5 nstr 19 ifpen 0
+@9path1.crd
+@9path2.crd
+@9path3.crd
+@9path4.crd
+@9path5.crd
+@9path6.crd
+@9path7.crd
+@9path8.crd
+@9path9.crd
+END
+
+stop

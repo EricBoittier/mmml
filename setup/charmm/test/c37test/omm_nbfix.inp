@@ -1,0 +1,131 @@
+* This input script tests the use of NBFIX with OpenMM
+*
+
+! When this script is run both calls to energy should produce
+! ?ener = -1 regardless of whether addnbond=1 is used at runtime
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card
+* title
+*
+    35   1
+
+mass 1 a 1
+mass 2 b 1
+mass 3 c 1
+
+resi a 0
+atom a a 0
+
+resi b 0
+atom b b 0
+
+resi c 0
+atom c c 0
+
+end
+
+read param card
+* title
+*
+
+nonbonds cutnb 9999 ctofnb 9999 ctonnb 9999 cdie atom vatom shift vswitch
+a 0 -8 2
+b 0 -8 2
+c 0 -9 2.5
+
+end
+
+!!!!!!!!!TEST 1 - normal nb mixing rules!!!!!!!!
+set return ret1
+goto gensys
+label ret1
+energy
+
+set ecnbrule = ?ener
+
+energy omm
+
+set eommnbrule = ?ener
+
+calc diff = abs ( @ecnbrule - @eommnbrule )
+
+if @diff le 1e-3 then
+      echo passed TEST 1
+else
+      echo failed TEST 1
+endif
+
+delete atom select all end
+
+goto nbfix
+label second
+
+set return ret2
+goto gensys
+label ret2
+energy
+
+set ecnbfix = ?ener
+
+energy omm
+
+set eommnbfix = ?ener
+
+calc diff = abs ( @ecnbfix - @eommnbfix )
+calc diff2 = abs ( @ecnbrule - @eommnbfix )
+
+if @diff le 1e-3 then
+      if @diff2 le 1e-3 then
+            echo passed TEST 2
+      else
+           echo failed TEST 2
+      endif
+endif
+
+stop
+
+label nbfix
+read param card append
+* title
+*
+
+nbfix
+a b -8 4
+a c -8.48528 4.5
+b c -8.48528 4.5
+
+end
+
+goto second
+
+label gensys
+
+read sequ card
+* sequence
+*
+6
+a b c a b c
+generate 6p
+
+scalar x set 0
+scalar y set 0
+scalar z set 0
+scalar x set 9 select bynu 2 end
+scalar y set 8 select bynu 3 end
+scalar z set 7 select bynu 4 end
+scalar x set -8 select bynu 5 end
+scalar y set -9 select bynu 6 end
+
+goto @return

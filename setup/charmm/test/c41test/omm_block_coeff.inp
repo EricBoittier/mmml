@@ -1,0 +1,393 @@
+*  OpenMM energy for trialanine blocked in a cubic box of solvent
+*  using various coefficients with BLOCK, and use of BLOCK EXCLude;
+*  comparing CPU with CPU 
+*  Total system contains 1,437 atoms. Based on c38test/omm_block_periodic.inp
+*  LNI May 2016
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   echo omm_block_coeff testcase result: SKIP
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+if ?colfft .eq. 1 then
+   echo "Test NOT performed."
+   echo omm_block_coeff testcase result: SKIP
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   echo omm_block_coeff testcase result: SKIP
+   stop
+endif
+
+stream datadir.def
+
+set tol = 2e-4   ! Tolerance for test variation
+
+!  box size: 24.534238 x 24.534238 x 24.534238
+
+read rtf card name @0/top_all22_prot.inp
+read rtf card append
+* Patch for serine on alanine mutation
+*
+
+pres s2a 0
+group
+atom cbp  ct2  0.14 cb hb1 hb2 hb3
+atom hbp ha   0.09 cb hb1 hb2 hb3
+atom og1p  oh1 -0.66 cb hb1 hb2 hb3 
+atom hg1p h    0.43 cb hb1 hb2 hb3
+group
+atom cg2p ct3 -0.27 cb hb1 hb2 hb3
+atom hc1p ha   0.09 cb hb1 hb2 hb3
+atom hc2p ha   0.09 cb hb1 hb2 hb3
+atom hc3p ha   0.09 cb hb1 hb2 hb3
+
+bond ca cbp 
+bond cbp hbp
+bond cbp og1p og1p hg1p
+bond cbp cg2p cg2p hc1p cg2p hc2p cg2p hc3p
+donor hg1p og1p
+acceptor og1p
+
+pres s2b 0
+group
+atom cbp  ct2  0.14 
+atom hbp ha   0.09 
+atom og1p  oh1 -0.66
+atom hg1p h    0.43 
+group
+atom cg2p ct3 -0.27 
+atom hc1p ha   0.09 
+atom hc2p ha   0.09 
+atom hc3p ha   0.09 
+
+bond ca cbp 
+bond cbp hbp
+bond cbp og1p og1p hg1p
+bond cbp cg2p cg2p hc1p cg2p hc2p cg2p hc3p
+donor hg1p og1p
+acceptor og1p
+
+end
+
+read param card name @0/par_all22_prot.inp
+
+!prnlev 0 @pnode
+set return fromhybrid
+goto hybrid
+label fromhybrid
+
+!First generate PSF without the internal non-bond exclusions
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+
+patch s2b pro0 2
+autogenerate angle dihedral
+
+delete angle - 
+      select ires 2 .and. ( type *p ) end -
+      select ires 2 .and. ( type cb .or.  -
+      type hb1 .or. type hb2 .or. type hb3 ) end 
+delete dihedral - 
+      select ires 2 .and. ( type *p ) end -
+      select ires 2 .and. ( type cb .or.  -
+      type hb1 .or. type hb2 .or. type hb3 ) end 
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+write psf card name @9/hybrid-noexcl.psf
+
+! and now the psf with the internal exclusion
+delete atom sele all end
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+
+patch s2a pro0 2
+autogenerate angle dihedral
+
+delete angle - 
+      select ires 2 .and. ( type *p ) end -
+      select ires 2 .and. ( type cb .or.  -
+      type hb1 .or. type hb2 .or. type hb3 ) end 
+delete dihedral - 
+      select ires 2 .and. ( type *p ) end -
+      select ires 2 .and. ( type cb .or.  -
+      type hb1 .or. type hb2 .or. type hb3 ) end 
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+write psf card name @9/hybrid.psf
+! done with PSF
+
+!read coor pdb name @0/ala3_solv-equil.pdb resi
+read coor card name thrp.chr
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+set return = def1
+goto define
+label def1
+set return crys1
+goto setcrystal
+label crys1
+
+!  turn on faster options and set-up SHAKE
+faster on
+
+! PME
+set cutoffs = cutnb 11 cutim 11 ctofnb 9.9 ctonnb 9.9 vswitch switch
+set ewald = Ewald kappa 0.320 pmEwald order 4 fftx 24 ffty 24 fftz 24
+mini sd nstep 100
+write coor card name @9/minhybrid.chr
+
+prnlev 5 @pnode
+set case = 1
+set pme = 1
+set ron = 8
+set vcut = vswitch
+set ecut = switch
+set testfail 0
+
+      set cutoffs = cutnb 11 cutim 11 ctofnb 10 ctonnb @ron vatom @vcut atom @ecut
+      set ewald = noewald
+      if @pme gt 0 then
+            set ewald = Ewald pme kappa 0.32 order 4 fftx 24 ffty 24 fftz 24
+            set clhh = clhh
+      endif
+      block 3
+         call 2 select resid 2 .and. -
+            ( type cb .or. type hb1 .or. type hb2 .or. type hb3 ) end
+         call 3 select resid 2 .and. -
+            ( type *p ) end
+      end
+
+      block
+         lambda 0
+      end
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-lambda0 
+     
+      block
+         lambda 1
+      end
+      
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-lambda1
+
+      block
+         lambda 0.5
+      end
+
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-lambda0.5
+     block 
+     clear
+     end
+     block 3
+         call 2 select resid 2 .and. -
+            ( type cb .or. type hb1 .or. type hb2 .or. type hb3 ) end
+         call 3 select resid 2 .and. -
+            ( type *p ) end
+     end
+
+     block
+      coeff 1 1 1 
+      coeff 1 2 0.5
+      coeff 1 3 0.5
+      coeff 2 3 0.0
+      coeff 2 2 0.5
+      coeff 3 3 0.5
+     end 
+
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-A
+     block
+      coeff 1 1 1 
+      coeff 1 2 0.5
+      coeff 1 3 0.5
+      coeff 2 3 0.0
+      coeff 2 2 1.0
+      coeff 3 3 1.0
+     end 
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-B
+     block
+      coeff 1 1 1 
+      coeff 1 2 0.5  elec 0.0
+      coeff 1 3 0.5
+      coeff 2 3 0.0
+      coeff 2 2 0.5 
+      coeff 3 3 0.5
+     end 
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-C
+     block
+      coeff 1 1 1 
+      coeff 1 2 0.5  vdw 0.0
+      coeff 1 3 0.5
+      coeff 2 3 0.0
+      coeff 2 2 0.5 
+      coeff 3 3 0.5
+     end 
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-D
+     block
+      coeff 1 1 1 
+      coeff 1 2 0.5  
+      coeff 1 3 0.5
+      coeff 2 3 0.0
+      coeff 2 2 0.5  angl 0.0
+      coeff 3 3 0.5  angl 0.0
+     end 
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-E
+
+     block
+      coeff 1 1 1  bond 0.0
+      coeff 1 2 0.5  
+      coeff 1 3 0.5
+      coeff 2 3 0.0
+      coeff 2 2 0.5 
+      coeff 3 3 0.5  
+     end 
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-F
+     block
+      coeff 1 1 1 
+      coeff 1 2 0.5  
+      coeff 1 3 0.5
+      coeff 2 3 0.0
+      coeff 2 2 0.5 
+      coeff 3 3 0.5  dihe 0.0
+     end 
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-G
+! And now use EXCL instead of RTF-based exclusions between blocks 2 and 3
+    bomlev -1
+    delete atom sele all end
+    read psf card name @9/hybrid-noexcl.psf
+    read coor card name @9/minhybrid.chr
+
+     block 3
+         call 2 select resid 2 .and. -
+            ( type cb .or. type hb1 .or. type hb2 .or. type hb3 ) end
+         call 3 select resid 2 .and. -
+            ( type *p ) end
+      end
+
+      block
+         lambda 0.5
+      end
+      ener eps 1.0 @cutoffs @ewald
+      set CE ?ENER
+      block 
+       coeff 1 1 1 
+       coeff 1 2 0.5  
+       coeff 1 3 0.5
+       coeff 2 2 0.5 
+       coeff 3 3 0.5 
+       excl 2 3
+      end
+      ener eps 1.0 @cutoffs @ewald
+@testcheck ?ENER @CE @TOL omm_block_coeff-H
+      ener eps 1.0 @cutoffs @ewald omm
+@testcheck ?ENER @CE @TOL omm_block_coeff-I
+if @testfail ne 0 then
+ echo omm_block_coeff testcase summary result: fail
+else
+ echo omm_block_coeff testcase summary result: pass
+endif
+
+STOP
+
+!=======================================================
+label hybrid
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+rename atom hb select ires 2 .and. type hb1 end
+rename resname thr select ires 2 end
+write coor pdb name asa_solv.pdb
+
+delete atom select all end
+read sequ card
+* tite
+*
+3 
+ala thr ala
+generate pro0 first ace last ct3 setup
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+read coor pdb name asa_solv.pdb resi
+ic param
+ic build
+
+rename atom cbp select resname thr .and. type cb end
+rename atom hbp select resname thr .and. type hb end
+rename atom og1p select resname thr .and. type og1 end
+rename atom hg1p select resname thr .and. type hg1 end
+rename atom cg2p select resname thr .and. type cg2 end
+rename atom hc1p select resname thr .and. type hg21 end
+rename atom hc2p select resname thr .and. type hg22 end
+rename atom hc3p select resname thr .and. type hg23 end
+rename resname ala select ires 2 end
+write coor card name thrp.chr select ires 2 .and. -
+      (type *p ) end
+
+delete atom select all end
+if ?mynode .eq. 0 system "rm asa_solv.pdb"
+
+goto @return
+
+!=======================================================
+label define
+   define reactant select ires 2 .and. ( type cb .or.  -
+         type hb1 .or. type hb2 .or. type hb3 ) end
+
+   define product select ires 2 .and. type *p end
+goto @return
+
+!=======================================================
+label setcrystal
+   !! Dimension of a box
+   set size 24.534238 
+   set 7 = @size 
+   set theta = 90.0
+   Crystal define cubic @7 @7 @7 @theta @theta @theta    
+   crystal build cutoff 11 noper 0
+   image byres xcen 0 ycen 0 zcen 0 select resname tip3 end
+   image byseg xcen 0 ycen 0 zcen 0 select segid pro0 end
+goto @return
+
+
+   

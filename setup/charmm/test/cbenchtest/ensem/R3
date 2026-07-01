@@ -1,0 +1,11 @@
+#! /bin/csh
+
+set mchm = /projects/Biology/charmm/REPD2/crepd/charmm
+
+/bin/rm charmm.out* rest*, prn*
+
+mpirun -np $1 $mchm -i e3.inp numens=$2  \
+
+# verbose=verb
+
+

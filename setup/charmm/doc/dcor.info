@@ -1,0 +1,153 @@
+CHARMM Element doc/dcor.info $Revision: 1.1.1.1 $
+
+File: dcor,  Node: Top, Up: (doc/charmm.info),  Next: Commands
+
+Distance Correlation (DCOR)
+
+Distance correlation coefficient is a very useful and elegant alternative to the standard measures 
+of correlation and is based on several deep and non-trivial theoretical calculations developed by 
+Székely, Rizzo and Bakirov [1].  The main result is that a single, simple statistic DCOR(X,Y) can 
+be used to assess whether two random vectors X and Y, of possibly different respective dimensions, 
+are dependent, linearly or non-linearly, based on an independent and identically distributed 
+(i.i.d.) sample.
+
+* Menu:
+
+* Commands::            Invoking DCOR
+* Background::          An introduction to distance correlation
+* References::          Relevant citations
+* Example::             Outline of an example input script
+
+
+File: dcor, Node: Commands, Up: Top, Next: Background, Previous: Top
+
+DCOR Commands
+
+DCOR can be invoked from CORREL using the keyword DCOR to calculate dependence between two time 
+series, which can be of different respective dimensions. Time series can contain any variable. The 
+only requirement is both the time series should be of equal length.
+
+setup trajectory file
+
+correl maxt ... maxa ... maxs …
+  setup first time series
+  setup second time series
+  traj trajectory sepcifications
+  dcor time-series1 time-series2
+end
+
+DCOR can also be invoked from CORMAN as a part of “COORdinate COVAariance”, using the keyword DCOR 
+(DCOV), to calculate distance correlation (covariance) between positional fluctuation of two 
+selection of atoms. 
+
+
+COORdinates COVAriance traj-spec 2x(atom_selection) [UNIT_for_output int] -
+                       [RESIdue_average_nsets integer] [MATRix] -
+                       [ENTRopy [TEMP <real>] [DIAG] [RESI] [SCHL] ]-
+                       [DCOR] [DCOV]
+
+If DCOR or DCOV has been requested with ENTRopy, ENTRopy command will be ignored. If both DCOR and 
+DCOV have been requested, then DCOR will be ignored.
+
+
+Parallel:
+When using CORREL parallelization in calculating distance correlations can be achieved by submitting 
+multiple serial jobs. Using COORdinate COVAriance distance correlations between positional 
+fluctuations of multiple atoms can be calculated using parallel version of CHARMM.
+
+Benchmark for 352x352 atoms, 500 steps dynamics, using 32 core AMD box:
+
+CPUs           DCOR (charmm c40)
+                    time (sec)    speedup    efficiency
+
+     1                1443.0         1.00         100%
+     2                 750.0         1.92          96%
+     4                 366.6         3.94          98%
+     8                 189.6         7.61          95%
+    16                  93.9        15.37          96%  
+
+For better parallelization of DCOR using COORdinate COVAriance, select the larger number of atoms using 
+the second selection. Time requirement for DCOR calculation between two time series increases as N*N 
+where N is the length of the time series.
+
+
+File: dcor, Node: Background, Up: Top, Next: References, Previous: Commands
+
+Introduction to Distance Correlation
+
+Among Pearson’s correlation coefficient (PCC), a generalized correlation coefficient (GCC) 16 and 
+distance correlation coefficient (DCOR), DCOR is the most appropriate parameter to find association 
+in atomic motions because it is least sensitive to angular dependence while reflecting variability in
+covariance. [2] Calculation of DCOR between two vector series is straightforward to implement. Let {A} 
+and {B} be two vector series with m entries each and the ith entry in {A} is denoted by A_i . To 
+calculate distance covariance between {A} and {B} the following five steps are needed.
+
+1) Calculate the m x m matrix, a, from {A}, where a_ij is the Euclidean distance between the ith
+and jth entries of {A}: a_ij = a_ji =| A i − A j |
+2)  Average the rows of a: a_i. = 1/m sum_j(a_ij)
+3)  Average the columns of a: a_.j = 1/m sum_i(a_ij)
+4) Average all elements of a: a_.. = 1/(m*m) sum_ij(a_ij)
+5) Build the m x m matrix alpha from a where alpha_ij = a_ij − a_i. − a_. j + a_..
+
+Then the distance covariance is
+DCOV(A, B) ≡ sqrt(1/(m*m) sum_ij(alpha_ij * beta_ij))
+where beta_ij is defined similarly from B.
+
+The distance correlation coefficient, DCOR, is defined as
+DCOR = DCOV(A,B)/sqrt(DCOV(A,A) * DCOV (B,B))
+
+DCOR was found to capture both linear and non-linear correlation between positional vectors [2] and 
+was able to reveal long-distance concerted motions in a protein that was not revealed by PCC or GCC. [2]
+
+
+File: dcor, Node: References, Up: Top, Next: Example, Previous: Background
+
+                               References
+
+ [1]  Measuring and testing dependence by correlation of distances
+        GJ Székely, ML Rizzo, NK Bakirov
+        The Annals of Statistics 35.6 (2007): 2769-2794.
+
+[2]  Detection of Long-Range Concerted Motions in Protein by a Distance Covariance
+        Amitava Roy and Carol Beth Post
+        J. Chem. Theory Comput., 2012, 8 (9), pp 3009–3014
+ 
+
+File: dcor, Node: Example, Up: Top, Next: Top, Previous: References
+
+Input File
+
+1) CORREL input for DCOR between positional fluctuation between 2 CA atoms:
+
+open read file unit 31 name traj1_file
+open read file unit 32 name traj2_file
+
+correl maxt 5000 maxa 4 maxs 6
+enter a atom XYZ sele ires 1 .and. type CA end
+enter b atom XYZ sele ires 20 .and. type CA end
+traj firstu 31 nunit 2
+dcor a b
+end 
+
+
+Output:
+CORREL>    dcor a b
+ DCOR>      VAR1 =       19.868    VAR2 =      18.500    COVAR =       14.777    CORR =  0.771
+
+ CORREL>    end
+
+
+VAR1,VAR2 – distance variances
+COVAR – distance covariance between time series “a” and “b”
+CORR – distance correlation between time series “a” and “b”
+
+
+2) COORdinate COVAriance input for DCOR between positional fluctuations between all CA atoms:
+
+open read file unit 31 name traj1_file
+open read file unit 32 name traj2_file
+
+open write card unit 41 name matrix_file
+coor cova firstu 31 nunit 2 sele type CA end sele type CA end unit 41 dcor
+
+Output options are identical with COOR COVA output options.

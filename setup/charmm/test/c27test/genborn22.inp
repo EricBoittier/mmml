@@ -1,0 +1,94 @@
+* CHARMM Testcase c26test/genborn.inp
+* Author: Charles L. Brooks, III
+* Date  : August 1, 1998
+* Test  : Generalized Born Solvation energy term
+*
+
+!  Uses files: top_all22_prot_na.inp , par_all22_prot_na.inp, 
+
+bomlev -2
+stream datadir.def
+
+set cutnb 15
+
+!  CHECK DNA PARAMETERS
+open unit 1 read form name @0top_all22_prot_na.inp
+read rtf unit 1 card
+close unit 1
+ 
+!
+open unit 1 read form name @0par_all22_prot_na.inp
+read param unit 1 card 
+close unit 1
+
+label do22
+
+open unit 1 read form name @0radius-296d.pdb
+read sequ pdb unit 1
+close unit 1
+
+! now generate the psf for this structure use setup to set up the interal
+! coordinate table
+!
+generate 296d setup first 5pho last 3pho
+
+! read coordinates
+open unit 1 read form name @0radius-296d.pdb
+read coor pdb unit 1
+close unit 1
+
+faster on
+
+skipe all excl GBEnr
+!***Optimized GB parameters for version 22 DNA parameters w/ polar hydrogen radii
+!***set to 0.8 A
+define polarH select property radii .le. 0.5 end !  Select all hydrogen atoms w/
+                                                 ! vdW radii .le. 0.5 A
+scalar wmain = radii
+scalar wmain set 0.8 select polarH end
+
+GBorn P1 0.5323 P2 0.1650 P3 0.3533 P4 9.8940 P5 0.90 Lambda 0.5702 Epsilon 80.0 Weight
+energy cutnb @cutnb 
+GBorn Clear
+
+delete atom select all end
+
+!  CHECK version 22 PROTEIN PARAMETERS
+open unit 1 read form name @0radius-1FXD.pdb
+read sequ pdb unit 1
+close unit 1
+
+! now generate the psf for this structure use setup to set up the interal
+! coordinate table
+!
+generate 1FXD setup first none last none
+
+! read coordinates
+open unit 1 read form name @0radius-1FXD.pdb
+read coor pdb unit 1
+close unit 1
+
+faster on
+
+skipe all excl GBEnr
+!***Optimized GB parameters for version 22 protein parameters w/ polar hydrogen radii
+!***set to 0.8 A
+define polarH select property radii .le. 0.5 end !  Select all hydrogen atoms w/
+                                                 ! vdW radii .le. 0.5 A
+scalar wmain = radii
+scalar wmain set 0.8 select polarH end
+scalar wmain show select polarH end
+
+GBorn P1 0.4380 P2 0.1664 P3 0.0138 P4 8.84109 P5 1.0 Lambda 0.7160 Epsilon 80.0 Weight
+energy cutnb @cutnb
+
+GBorn Clear
+
+delete atom select all end
+
+if cutnb eq 999 goto quit
+set cutnb 999
+goto do22
+
+label quit
+stop

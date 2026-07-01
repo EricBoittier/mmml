@@ -1,0 +1,383 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! MFC 2012: Tests domdec functionality:
+!               electrostatics energies and forces for different cutoff methods
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+stream datadir.def
+
+set return bld1
+goto build
+label bld1
+
+format (f20.10)
+
+read coor card name  @0/5dfr_solv.crd
+
+skipe bond angle ureyb dihe impr
+! ############ Rererence energies ###########
+set vmeth vswitch
+set dielec cdie
+  set ddmeth 
+  set d 1
+  set emeth switch
+    set flag return_1@emeth
+    goto get_energy
+      label return_1switch
+  
+  set emeth shift
+    set flag return_1@emeth
+    goto get_energy
+      label return_1shift
+  
+  set emeth fswitch
+    set flag return_1@emeth
+    goto get_energy
+      label return_1fswitch
+  
+  set emeth fshift
+    set flag return_1@emeth
+    goto get_energy
+      label return_1fshift
+  
+  set emeth gshift
+    set flag return_1@emeth
+    goto get_energy
+      label return_1gshift
+
+!-------- dist dielec energies ------------------
+set dielec rdie
+  set e 1
+  set emeth switch
+    set flag return_3@emeth
+    goto get_energy
+      label return_3switch
+  
+  set emeth shift
+    set flag return_3@emeth
+    goto get_energy
+      label return_3shift
+  
+  set emeth fswitch
+    set flag return_3@emeth
+    goto get_energy
+      label return_3fswitch
+  
+  !set emeth fshift
+  !  set flag return_3@emeth
+  !  goto get_energy
+  !    label return_3fshift
+  
+  set emeth gshift
+    set flag return_3@emeth
+    goto get_energy
+      label return_3gshift
+
+!########### DOMDEC energies ############
+set ddmeth domdec dlb off
+set ddver DOMDEC
+set retlabel ddret
+goto test_energy
+label ddret
+
+
+!########### DOMDEC_GPU energies ############
+if ?domdec_g .eq. 1 then
+  set ddmeth domdec gpu on dlb off
+  set ddver DOMDEC_GPU
+  set retlabel ddgpuret
+  goto test_energy
+  label ddgpuret
+endif
+
+echo "Test OK"
+
+stop
+
+! ************************************
+! ******* test_energy ****************
+! ************************************
+
+label test_energy
+
+! Set max allowed energy and force differences
+if @ddver eq domdec_gpu then
+  set max_ediff 0.6
+  set max_fdiff 0.0005
+else
+  set max_ediff 1.0e-4
+  set max_fdiff 8.0e-4
+endif
+
+set d 2
+set dielec cdie
+
+read coor card name  @0/5dfr_solv.crd
+set emeth switch
+  set flag return_2@emeth
+  goto get_energy
+    label return_2switch
+
+!! NOTE: coordinates have to re-read here because get_energy with d=2 destroys them
+!!read coor card name  @0/5dfr_solv.crd
+!!set emeth shift
+!!  set flag return_2@emeth
+!!  goto get_energy
+!!    label return_2shift
+
+read coor card name  @0/5dfr_solv.crd
+set emeth fswitch
+  set flag return_2@emeth
+  goto get_energy
+    label return_2fswitch
+
+read coor card name  @0/5dfr_solv.crd
+set emeth fshift
+  set flag return_2@emeth
+  goto get_energy
+    label return_2fshift
+
+read coor card name  @0/5dfr_solv.crd
+set emeth gshift
+  set flag return_2@emeth
+  goto get_energy
+    label return_2gshift
+
+!----- dist dielec energies domdec -------------------------
+set dielec rdie
+
+read coor card name  @0/5dfr_solv.crd
+set emeth switch
+  set flag return_4@emeth
+  goto get_energy
+    label return_4switch
+
+! NOTE: coordinates have to re-read here because get_energy with d=2 destroys them
+read coor card name  @0/5dfr_solv.crd
+set emeth shift
+  set flag return_4@emeth
+  goto get_energy
+    label return_4shift
+
+read coor card name  @0/5dfr_solv.crd
+set emeth fswitch
+  set flag return_4@emeth
+  goto get_energy
+    label return_4fswitch
+
+!!read coor card name  @0/5dfr_solv.crd
+!!set emeth fshift
+!!  set flag return_4@emeth
+!!  goto get_energy
+!!    label return_4fshift
+
+read coor card name  @0/5dfr_solv.crd
+set emeth gshift
+  set flag return_4@emeth
+  goto get_energy
+    label return_4gshift
+
+echo @{ed_switch_cdie}   @{fd_switch_cdie}
+!!echo @{ed_shift_cdie}    @{fd_shift_cdie}
+echo @{ed_fswitch_cdie}  @{fd_fswitch_cdie}
+echo @{ed_fshift_cdie}   @{fd_fshift_cdie}
+echo @{ed_gshift_cdie}   @{fd_gshift_cdie}
+
+echo @{ed_switch_rdie}   @{fd_switch_rdie}
+echo @{ed_shift_rdie}    @{fd_shift_rdie}
+echo @{ed_fswitch_rdie}  @{fd_fswitch_rdie}
+!!echo @{ed_fshift_rdie}   @{fd_fshift_rdie}
+echo @{ed_gshift_rdie}   @{fd_gshift_rdie}
+
+!---- const dielectric ------------------
+set status = pass
+if @{ed_switch_cdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_switch_cdie
+
+set status = pass
+if @{fd_switch_cdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_switch_cdie
+
+!!if @{ed_shift_cdie} gt @{max_ediff} then
+!!   echo Test FAILED for @ddver ed_shift_cdie
+!!   stop
+!!endif
+
+!!if @{fd_shift_cdie} gt @{max_fdiff} then
+!!   echo Test FAILED for @ddver fd_shift_cdie
+!!   stop
+!!endif
+
+set status = pass
+if @{ed_fswitch_cdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_fswitch_cdie
+
+set status = pass
+if @{fd_fswitch_cdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_fswitch_cdie
+
+set status = pass
+if @{ed_fshift_cdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_fshift_cdie
+
+set status = pass
+if @{fd_fshift_cdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_fshift_cdie
+
+set status = pass
+if @{ed_gshift_cdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_gshift_cdie
+
+set status = pass
+if @{fd_gshift_cdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_gshift_cdie
+
+!------- R-dielectric -----------------
+set status = pass
+if @{ed_switch_rdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_switch_rdie
+
+set status = pass
+if @{fd_switch_rdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_switch_rdie
+
+set status = pass
+if @{ed_shift_rdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_shift_rdie
+
+set status = pass
+if @{fd_shift_rdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_shift_rdie
+
+set status = pass
+if @{ed_fswitch_rdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_fswitch_rdie
+
+set status = pass
+if @{fd_fswitch_rdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_fswitch_rdie
+
+set status = pass
+if @{ed_gshift_rdie} gt @{max_ediff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver ed_gshift_rdie
+
+set status = pass
+if @{fd_gshift_rdie} gt @{max_fdiff} then
+   set status = fail
+endif
+echo testcase result: @status -- @ddver fd_gshift_rdie
+
+goto @retlabel
+
+! ************************************
+! ******* GET_ENERGY   ***************
+! ************************************
+
+label get_energy
+
+if @emeth eq GSHIFT then
+    energy e14fac 1.0 cutnb 11.0 cgonnb 0.0 cgofnb 9.0 atom @dielec @emeth -
+       ctonnb 7.5 ctofnb 9.0 vatom eps 15.0 VGSHift @ddmeth
+else
+    energy e14fac 1.5 -
+         eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 -
+         @vmeth @emeth @dielec @ddmeth
+endif
+
+set im 0
+if @d .eq. 1 set im ?imel
+calc ee = ?ener + @im
+set ee ?ener
+
+coor force comp
+
+if @d .eq. 1 then
+  write coor card comp name @9/e1_@emeth_@dielec.cor
+  write title name @9/ener_@emeth_@dielec
+* set e1 @ee
+*
+
+else
+  read coor card name @9/e1_@emeth_@dielec.cor
+  coor rms comp
+  set fd_@emeth_@dielec ?rms
+  stream @9/ener_@emeth_@dielec
+  calc ed_@emeth_@dielec = abs ( @e1 - @ee )
+
+endif
+
+goto @flag
+
+
+!*****************************************************
+!             BUILD
+label build
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+goto @return
+

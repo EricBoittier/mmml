@@ -1,0 +1,188 @@
+*  emaptest.inp: Test case for EMAP module.
+*  T-cell Receptor Variable domain(PDB code: 1a7n) a,b chains are used 
+*  Xiongwu Wu   July 8, 2002
+*
+
+stream datadir.def
+
+if ?emap .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -1
+
+set z a7n
+
+! Read in a7n molecule
+open read form unit 12 name @0@z.psf
+read psf card unit 12 
+
+open read unit 16 card name @0@z.crd
+read coor unit 16 card 
+
+! Save complex structure
+coor copy comp
+
+!Generate a map object map1 from the molecule structure 
+! with default resolution 15A
+emap gene map1 sele all end
+
+
+!Output the map object to a map file in CCP4 format
+emap write map1 name "scratch/a7n.ccp4" format ccp4
+
+!Create a map object map2 by read in from a map file in CCP4 format
+emap read map2 name "scratch/a7n.ccp4" format ccp4
+
+!Create a map object by duplication
+emap dupl mapid map1 to map3
+
+
+!Mess up a-chain position
+coor orien sele segid a7na end
+coor tran sele segid a7na end xdir 1 ydir 4 zdir -5
+coor rota sele segid a7na end xdir -1 ydir 3 zdir -5 phi 120
+
+!Mess up b-chain position
+coor orien sele segid a7nb end
+coor tran sele segid a7nb end xdir 1 ydir 4 zdir -5
+coor rota sele segid a7nb end xdir -1 ydir 3 zdir -5 phi 120
+
+!Generate a,b-chain map object mapa,mapb
+emap gene mapa sele segi a7na end
+emap gene mapb sele segi a7nb end
+
+!Restore x-ray coordinates
+coor copy
+
+!Define rigid domains for a-chain and b-chain
+emap assign mapa as riga sele segid a7na end
+emap assign mapb as rigb sele segid a7nb end
+
+!build map2 as riga + rigb
+! initialize map2
+emap init map2
+
+!Add riga and rigb to map2
+emap add riga to map2
+emap add rigb to map2
+
+!Update statistics of map2
+emap stat map2
+
+!Define complex components as riga and rigb for fitting 
+emap comp riga 
+emap comp rigb append
+
+!Generate summation map from all complex components
+emap sum map3
+
+
+! Compare map1 and map2, they are  almost identical with centain round off error
+! density correlation
+emap corr mapid map1  mapid map2
+! Laplacian correlation
+emap corr mapid map1  mapid map2 DDR, very sensitive to round off error
+! Core-weighed density correlation
+emap corr mapid map1  mapid map2 CORE
+! Core-weighed Laplacian correlation
+emap corr mapid map1  mapid map2 DDR CORE
+
+! Compare map1 and map3, they are  almost identical with centain round off error
+emap corr mapid map1  mapid map3
+emap corr mapid map1  mapid map3 DDR
+emap corr mapid map1  mapid map3 CORE
+emap corr mapid map1  mapid map3 DDR CORE
+
+! Compare map1 and map3, they are   identical
+emap corr mapid map2  mapid map3
+emap corr mapid map2  mapid map3 DDR
+emap corr mapid map2  mapid map3 CORE
+emap corr mapid map2  mapid map3 DDR CORE
+
+! Save the current position
+emap save riga
+emap save rigb
+
+!Translate riga and rotate rigb
+emap tran riga xdir 1 ydir 4 zdir -5
+emap rota riga xdir 1 ydir 3 zdir -5 phi 120
+emap rota rigb xdir -1 ydir -4 zdir 5 phi -90
+
+!Project to obtain the new coordinates
+emap proj riga sele segi a7na end
+emap proj rigb sele segi a7nb end
+
+
+!Calculate the RMS deviations  before fitting 
+coor rms sele segi a7na end
+coor rms sele segi a7nb end
+coor rms sele all end
+
+! Compare the map with each rigid domain
+emap corr mapid map1  rigid riga DDR CORE
+emap corr mapid map1  rigid rigb DDR CORE
+
+!Construct the complex structure according to map1 using single-body gtmc method
+!The components difined as components above will be docked to map1
+! Core-weighted Laplacian correlation is recommended for single-body fitting
+emap dock mapid map1 gtmc  ntran 2 nrot 2   -
+ncyc 10 nstep 20 tran 15 rota 30 CORE DDR 
+
+
+!Generate summation map from all complex components
+emap sum map3
+
+! Compare map1 and map3, they are  now very similar
+emap corr mapid map1  mapid map3
+emap corr mapid map1  mapid map3 DDR
+emap corr mapid map1  mapid map3 CORE
+emap corr mapid map1  mapid map3 DDR CORE
+
+! Compare the fitting of each rigid domain
+emap corr mapid map1  rigid riga DDR CORE
+emap corr mapid map1  rigid rigb DDR CORE
+
+
+!Project to obtain fitted coordinates
+emap proj riga sele segi a7na end
+emap proj rigb sele segi a7nb end
+
+!Calculate the RMS deviation of the fitting result from x-ray structure
+coor rms sele segi a7na end
+coor rms sele segi a7nb end
+coor rms sele all end
+
+
+!Refine the complex structure  using many-body gtmc method
+! Density correlation can be used for many-body fitting
+emap dock mapid map1 gtmc many  -
+LOOP 2 ntran 1 nrot 1 ncyc 10 nstep 20 tran 3.0 rota 5.0
+
+
+!Generate summation map from all complex components
+emap sum map3
+
+! Compare map1 and map3, they should be very similar if docked correctly
+emap corr mapid map1  mapid map3
+
+!Project to obtain fitted coordinates
+emap proj riga sele segi a7na end
+emap proj rigb sele segi a7nb end
+
+!Calculate the RMS deviation of the fitting result from x-ray structure
+coor rms sele all end
+
+!Write out the fitting corrdinates
+open writ form unit 16 name @9@z_fit.pdb
+writ coor pdb unit 16 sele segid a7na .or. segid a7nb end
+
+
+stop
+

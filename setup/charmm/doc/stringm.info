@@ -1,0 +1,1733 @@
+CHARMM Element doc/stringm.info $Revision: 2.1 $
+
+File: Stringm, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+              String method for the study of conformational transitions
+
+              V. Ovchinnikov (ovchinnv@georgetown.edu)
+
+* Menu:
+
+* Description::           Introduction to the string method suite
+* Invocation::            String method invocation
+* SM0K::                  String method at zero temperature
+* SMCV::                  String method in collective variables
+* FTSM::                  Finite-temperature string method
+* Supporting files::      Test cases and supporting files
+* References::            References
+
+
+File: Stringm, Node: Description, Up: Top, Previous: Top, Next: Syntax
+
+Introduction.
+
+The string method module is an algorithm for finding paths between
+different configurations of a molecular system.  It is a
+`chain-of-states' method, similar in principle to the Replica Path and
+Nudged Elastic Band (NEB) methods, in which a continuous transition path
+is `discretized'  into a finite collection of system replicas under the
+constraint of approximately equal spacing using a predefined distance
+metric such as root-mean-square distance (RMSD)between adjacent
+replicas.
+
+Algorithm.
+
+The string methods are implemented according to the reference at the end
+of this document. For each replica, the 0-K string algorithm performs
+steepest descent (SD)  evolution on the potential energy landscape (i.e.
+minimization) followed by a collective `reparametrization' to maintain
+equal spacing between adjacent replicas.  The String method in
+collective variables (SMCV) by default performs SD minimization on a
+multidimensional _free energy_ landscape of the chosen collective
+variables. The required free energy gradients are samples by molecular
+dynamics with restraints. The finite-temperature string method (FTSM)
+samples hyperplanes locally perpendicular to an average path,  computing
+free energies by integrating the average force acting on the
+hyperplanes, or by sampling a tessellation of the conformational space
+defined on the basis of the average path.
+
+Implementation notes
+
+The string method is a parallel simulation technique and  requires that
+CHARMM be compiled in parallel (using the keyword 'M' for the
+message-passing interface and the keyword 'STRINGM' to compile the string
+method source code):
+  $> ./configure --with-stringm && make -C build/cmake install
+
+Each bead on the string is represented by a group of processors which
+communicate internally via the standard communicator MPI_COMM_LOCAL
+(which is the same as COMM_CHARMM inside the program).  The exchange of
+information between each processor group, as required during, e.g., the
+reparametrization step, occurs via an additional string communicator
+(MPI_COMM_STRNG), whose nodelist consists of the root processor in each
+local group.  This communication scheme is set up using the module
+multicom at the beginning of each string calculation (see command
+references below).
+
+Limitations
+
+The zero-temperature string method (SM0K) is designed for the steepset
+descent minimizer, although other minimizers can be used 'manually' by
+explicitly invoking reparametrization and minimization alternately.
+
+The string methods that use dynamics (SMCV and FTSM) are designed for
+the standard leapfrog integrator under the original by-atom
+parallelization scheme. Thus, other integrators and parallel schemes
+(e.g. velocity verlet, DOMDEC, constant pressure integration) are not
+supported, even if the CHARMM code may compile with many different
+options. This retains the convenience of using a single executable for
+different types of simulations, but the compatibility restrictions
+should be kept in mind.
+
+Extensions of select parts of the string methods to other
+integrators/parallelizations may be implemented in the future.
+
+
+File: Stringm, Node: Invocation, Up: Top, Previous: Description, Next: SM0K
+
+Invocation of the string method modules.
+
+Introduction.
+
+The string method suite relies on a special communication scheme that is
+provided by the module multicom (MCOM). This module is to be called
+prior to any string calculation to define the message-passing
+communicators for communication within and between string nodes. (This
+implies that the string method requires the message passing interface,
+which in a CHARMM compilation is provided by the keyword M). A special
+command to MCOM will create a series of local communicators to handle
+communication between different cpus associated with the same string
+image, and a communicator for communication between different string
+images.
+
+Subsequent calls to string method initialization routines will check
+that the appropriate communicators have been set up and print a status
+message or a warning.
+
+Syntax.
+
+MCOM STRIng <int> BY <int>
+
+STRIng [ ZERO <character*> |
+         SM0K <character*> |
+         COLV <character*> |
+         FTSM <character*> |
+         OPEN [UNIT <int>] -
+              [NAME <character*>] -
+              [{UNFOrmatted|FILE|FORMatted|CARD}] -
+              [{READ|WRITe|APPEnd}] -
+         CLOSe]
+
+
+Command description.
+
+MCOM STRIng <int>(i) BY <int>(j) Create MPI communicators for (j) string
+replicas, with (i) CPU cores assigned to each replica.  The total number
+of CPUs in the parallel run (e.g. the number given to the mpirun command
+must be no less than (i)*(j), otherwise an error message will be
+printed.
+------------------------------------------------------------------------
+
+[SM0K|ZERO] Invoke the command parser for the zero-temperature string
+method (SM0K subcommands are documented elsewhere in this file)
+
+[SMCV|COLV] Invoke the command parser for the string method in collective
+variables (COLV subcommands are documented elsewhere)
+
+[FTSM] Invoke the zero-temperature string command parser (FTSM
+subcommands are documented elsewhere)
+
+[OPEN] Open a file on the root node of each string image.  I/O
+specification is the same as that described for general CHARMM I/O (see
+io.info). This STRIng OPEN command is different from the OPEN command
+because the latter will only open a file on the root note of the
+parallel run.
+
+Known issues :
+
+Execution of MCOM STRIng may require modification to sequence
+definitions (i.e. READ SEQUence).  More precisely, e.g., the following
+snippet in the main script will not read a new sequence on all string
+replicas:
+
+read sequence card 
+* new sequence
+*
+[n]
+ALA ...
+
+The sequence will be read only on the global root node.  This is because
+the string roots will only read a file if it has been opened with
+"STRIng OPEN", which is impossible to do above.  To solve this issue,
+two methods are recommended:
+
+(1) read sequence prior to calling MCOM 
+
+(2) put the sequence in a text file and open the text file with "STRIng
+OPEN", i.e.
+
+string open unit 50 seq.dat
+read sequ card unit 50
+
+
+[CLOSe] Close file unit on the root node of each string image.
+
+
+File: Stringm, Node: SM0K, Up: Top, Previous: Invocation, Next: SMCV
+Zero-temperature (0K) String Method
+
+STRIng ZERO [INITialize]}                                                                |
+            [REPArametrize   [{DEFI <real>}] -
+                             [{ITER <int>}] -
+                             [{LINE | SPLI | BSPL | DST [{WNCT <real>}] | LIN2}] -
+                             [{ORIE <atom-selection>} [{MASS}] ] -
+                             [{MOVE <atom-selection>}] ]                                 |
+            [STATistics      [{COUNt <int>]} -
+                             [{ENER <energy_terms> [ENAM <character*>]}] -
+                             [{RMSD [RNAM <character*>] [{RAPP}]} ] -
+                             [{RMSA [RANM <character*>] [{RAAP}]} ] -
+                             [{DELS [DNAM <character*>] [{DAPP}]} ] -
+                             [{ORIE}] -
+                             [{MASS}] -
+                             [{ARCL [ANAM <character*>] [{AAPP}]} ] -
+                             [{CURV [CVNM <character*>] [{CAPP}]} ] ]                    |
+            [CONFormational Consistency}]                                                |
+            [CHIRality}]                                                                 |
+            [MINImize        [{REPF <int>}]  -
+                             [{STAF <int>}]  -
+                             [{CONFF <int>}] -
+                             [{CHIRF <int>}] -
+                             [{NOPR}]]                                                   |
+            [INTErpolate     [{ METH [LINE|SPLI|BSPL]}] -
+                             [NIN <int>] -
+                             [NOUT <int>] -
+                             [{CRIN <character*>} | {DCDIN <character*> [{BEGIn <int>}] [{STEP <int>}] } ] -
+                             [OUTLIST <character*> | OUTBASE <character*> [{OUTI <int>}]] -
+                             [{PDB [{RESI}] | FILE | UNFO | CARD | FORM}] -
+                             [{ORIE <atom selection> [{MASS}]}] ]
+
+
+
+--------------------------------------------------------------------------
+[INIT] Initialize the zero-temperature string module. Substitution
+parameters ?MESTRING and ?NSTRING will be set to correspond to the
+string rank of each CPU group, and to the total number of string
+replicas, respectively.
+
+--------------------------------------------------------------------------
+[REPA] Call reparametrization (Repa) module.
+
+[LINE] Perform simple linear interpolation. This is the most stable and
+preferred method.
+
+[SPLI] Perform cubic spline interpolation. This method has very low
+dissipation, and may cause the string curves corresponding to very
+complex systems (and especially poorly resolved) systems to lengthen
+indefinitely, preventing convergence.
+
+[BSPL] Perform B-spline interpolation. This method introduces more
+dissipation than the LINE method, and produces a smoother string curve.
+
+[DST {WNCT <real> w \in [0..1] } ] Perform interpolation using the
+Discrete Sine Transform described in reference [3].  This method
+presently appears to offer no advantages over the other interpolation
+methods above, is not often used, and thus should be considered
+experimental. [WNCT <real>] specifies the wave number cut-off for the
+DST method.  A value w implies that only the lowest w-fraction of
+wavenumbers will be used to reconstruct the path by the inverse sine
+transform. 
+
+[LIN2] Exact (i.e. noniterative) linear interpolation in which
+Newton-Raphson iterations are used to redistribute images such length
+increments between adjacent images are exactly equal. Because the NR
+iterations may fail to converge for very jagged strings, the method is
+not generally recommended for long simulations.
+
+[DEFI <real>] maximum allowed RMSD error in the distance between
+adjacent replicas, defined as max_i RMSD[i,i+1]/RMSD[i,i-1]. The default
+value is 1.1. A value <= 1.0 will cause the reparametrization to proceed
+to the maximum number of iterations (see below).
+
+[ITER <int> ] maximum number of reparametrization iterations. The
+default value is 10.
+
+NOTE: iterative reparametrization will continue until the
+DEFI requirement is satisfied, or the maximum number of iterations is
+exceeded. 'ITER 0' is allowed, and will cause the code to compute
+information about the string parametrization without modifying it.
+
+[ORIE {SELE <atom-selection> END}] atom selection that indicates that
+the adjacent string replicas are to be superposed to miminize the RMSD
+between atoms in the atom selection.  This option should typicaly be
+present for rigid-body-invariant systems. The [MASS] specifies that the
+orientation is to use mass-weighting.  Prior to reparametrization,
+replica (i>1) will be rotated/translated such that the RMSD between the
+orientation sets  of atoms of replicas (i) and (i-1) is minimized.
+Replica coordinates will be restored to the original frame of reference
+after reparametrization.
+
+[MOVE {SELE <atom-selection> END}] atom selection that specifies the
+parametrization of the string, i.e. those atoms to which
+reparametrization will be applied.  Coordinates not included in teh
+selection will not be affected by reparametrization.  The default option
+is to MOVE all atom coordinates.
+
+--------------------------------------------------------------------------
+[STAT] Call statistics (Stat) module. Specify statistics options when
+arguments are present. When called without arguments, an instance of
+statistics output will be written out.
+
+[COUNt <int>] specifies iteration counted for statistics output.  The
+default value is 0.  This number is incremented after every call to
+statistics, and  is printed in the output files corresponding to RMSD,
+DELS, ARCL, and CURV. It is also appended to the base file name
+specified by the [ENAM <character*>]
+
+[ENER {<energy_terms>} [ENAM <character*>]] sets up output of energy values
+along the path.  At each statistics call, the energy values corresponding
+to the terms in {<energy_terms>} will be listed in one file per iteration, 
+with one line of output per replica. The list {<energy_terms>} can contain
+one or more energy substitution keywords described in energy.info
+(*note Energy:(doc/energy.info)).  The current iteration will be appended
+to the base energy file name specified with [ENAM <character*>], followed by 
+extension '.DAT'.  If ENAM is omitted, energy output is directed to the 
+output stream.  This subcommand must be terminated by END.
+
+[RMSD RNAM <character*> [RAPP]] sets up output of RMSD values between the
+replica coordinates at the current iteration and the coordinates present in 
+the comparison set (usually the initial string).  At each call to string 
+statistics, a line will be added to the file with the name specified in
+[RNAM <character*>], with the columns in the file corresponding to different 
+replicas.  If RAPP is specified, output will be appended to the file.
+If RNAM is omitted, RMSD output is directed to the output stream.
+This subcommand is useful for gauging convergence of the string.
+
+[RMSA RANM <character*> [RAAP]] sets up output of RMSD values between
+the replica coordinates at the current iteration and the time-averaged
+simulation coordinates of the replica.  At each call to string 
+statistics, a line will be added to the file with the name specified in
+[RNAM <character*>]. If RAAP is specified, output will be appended to
+the file.
+
+[DELS DNAM <character*> [DAPP]] sets up output of RMSD values between
+the replica coordinates at the current iteration and those at the
+previous iteration. At each call to string statistics, a line will be
+added to the file with the  name specified with [DNAM <character*>].  If
+DAPP is specified, output will be appended to the file.
+
+[ORIE {MASS}] If ORIE is present, structures will be superposed to
+minimize the RMSD between simulation and reference, averaged, and
+previous structures. If MASS is present, orientation will use
+mass-weighting. These keywords affect the behavior of options RMSD,
+RMSA, and DELS only.
+
+[ARCL ANAM <character*> [AAPP]] sets up output of the distance between 
+the adjacent replicas (such that their sum yields the string length)  at
+the current iteration.  At each call to string statistics, a line will
+be added to the file with the name specified with [ANAM <character*>]. 
+If AAPP is specified, output will be appended to the file.
+
+[CURV CVNM <character*> [CAPP]] sets up output of the approximate
+string curvature  at each string image.  At each call to string
+statistics, a line will be added to the file with the name specified
+with [CVNM <character*>].  If CAPP is specified, output will be appended
+to the file.
+
+--------------------------------------------------------------------------
+[MINI] Perform string energy minimization using steepest descent (other
+minimizers are supported indirectly at script level).
+
+[REPF <int>]   Number of steps to skip between consecutive
+reparametrizations. REPA options must be set prior to calling MINI.
+
+[CHIRF <int>]  Number of steps between consecutive calls to conformational
+consistency. CHIR options must be set prior to calling MINI.
+
+[CONFF <int> ] Number of steps between consecutive calls to CONFCons
+module. CONF options must be set prior to calling MINI.
+
+[STAF <int>]  Number of reparametrization steps between consecutive
+calls to statistics module, i.e. the number of minimization steps
+between consecutive statistics to is <iSTATF> * <iREPF> .
+
+[NOPR] Flag to limit non-essential string output from various modules
+during minimization.
+--------------------------------------------------------------------------
+
+[INTE] Interpolate a string onto a new string with different resolution.
+Useful for creating initial paths between known endpoints. 
+
+[METH [LINE|SPLI|BSPL] ] interpolation method. Presently valid choices are LINE, SPLI,
+BSPL (described above for REPA). The default is LINE.
+
+[NIN] Number of coordinate sets in the existing string.
+
+[NOUT] Number of coordinate sets in the interpolated string.
+
+[CRIN <character*>] Name of text file which contains the filenames in
+which existing coordinates are stored, with one file name per line.
+This option is mutually exclusive with DCDIN.
+
+[DCDIN <character*> [{BEGIn <int>}] [{STEP <int>}] } ] Name of
+trajectory file which contains the existing string coordinates.  BEGIN
+<int> specifies the frame number corresponding to the first string image
+(default: 1).  STEP <int> specifies the stride between adjacent string
+images in the trajectory (default: 1).
+
+[OUTLIST <character*> ] Indicates that output file names corresponding
+the  interpolated string are to be found in a text file with the
+provided name (one file name per line). This option is mutually
+exclusive with  OUTBASE.
+
+[OUTBASE] Indicates that output file names corresponding to the 
+interpolated string are to be of the form <outbase><i>.cor;
+CHARMM coordinate format will be used.  The indices <i> are computed as
+i \in [<outi> .. <outi> + <nout> - 1], where :
+[OUTI <int>outi ] specifies the initial index (default: 0)
+
+The following options are passed to the CHARMM coordinate input/output
+routines:
+
+[PDB [{RESI}] ] Indicates that input/output coordinate files are in PDB
+format.  RESI will pass the 'RESID' option to the coordinate reader.
+
+[FILE | UNFO ] Indicates that input/output coordinate files are
+UNFORMATTED.
+
+[CARD | FORM}] Indicates that input/output coordinate files are
+FORMATTED.
+
+[ORIE {MASS}] If ORIE is present, structures will be superposed to
+minimize the RMSD between adjacent string images prior to interpolation.
+If MASS is present, orientation will use mass-weighting.
+--------------------------------------------------------------------------
+
+[CONF] Call conformational consistency (ConfCons) module. CONFcons
+options can be set prior to calling using the CONFCons interface
+described in corman.info.
+
+--------------------------------------------------------------------------
+
+[CHIR] Call chirality (Chir) module. CHIRality options can be set prior
+to calling using the CHIRality interface described elsewhere in this
+file.
+
+--------------------------------------------------------------------------
+
+Chirality module
+
+Description.
+
+A simple chirality checker to find and correct chirality errors acording
+to prescribed rules, applied to an optional atom selection. The
+functionality is provided as part of the string module along with the
+conformational consistency (CONFcons) module to correct coordinate
+errors that occur when generating minimum energy paths using the 0K
+string method.
+
+Syntax.
+
+ COOR CHIRality [{INIT}] [{FINA}] [{CHECK}] [{FIX}] [{NOFX}] [{NOPR}]
+ [{PRIN}] [{HELP}] [{RULE}] [{PSEU}] [{PROP}] [{READ {UNIT} {ADD}}]
+ {<atom selection>}
+
+Command reference.
+
+[INIT ] initialize Chirality (also, reinitialize, erasing old rules).
+
+[FINA ] finalize Chirality, deallocating all data.
+
+[CHECK] check residues specified in the atom selection for errors
+
+[FIX  ] attempt to correct Chirality errors found during checking.
+
+[NOFX ] check for errors, but do not attempt to correct them
+
+[NOPR ] produce minimal output (useful during 0K string minimizations).
+
+[PRIN ] produce normal (verbose) output
+
+[HELP ] print succinct command reference
+
+[RULE ] print currently defined rules that will be applied to each
+matching residue. The rule syntax is decsribed below.
+
+[PSEU ] also check for pseudo-chirality errors (i.e. ordering of
+hydrogens in a methyl group).
+
+[PROP ] also check for pseudo-chirality in the Proline patch.
+
+[READ  {UNIT<int>} {ADD} ] read rules from unit (or from the input
+stream if unit is omitted).  ADD will append new rules to the existing
+set of rules.
+
+ Atom selection is optional, and all atoms will be selected by default.
+ When present, each residue with at least one atom contained in the atom
+ selection will be checked (i.e. BYRES keyword is implied in the
+ selection)
+
+Description of chirality rules.
+
+Each chirality rule is a character string that contains the following in
+order: Residue name <char*>, four atom types <char*>, a dihedral angle
+threshold for determining whether the chirality is incorrect <real>, an
+flag that determines the correct dihedral range, and names of two atoms which
+specify the bond to be inverted in case of a chirality error.
+
+For example, the rule 'ARG N C CB HA 0. -1 HA CA' indicates that the
+dihedral angle  N-C-CB-HA in residue ARG must be less than zero 
+Precisely, the inequality that is evaluated is [ phi(x) * (-1) > phi0 *
+(-1) ],  where  phi0=0 and the flag "-1" implicitly specifies the valid
+range, i.e. valid `side` of the inequality. If this rule is violated,
+then the position of  atom HA will be reflected through the plane
+perpendicular to the bond CA-HA at CA.
+
+Known issues.
+
+For some pathological geometries, in particular those that are far from
+tetrahedral, the chirality module will not be able to identify the
+proper reflection.  More precisely, this will occur if reflecting the
+corresponding atom in the rule (e.g. HA in the above rule) will not lead
+to a sign change in the dihedral. This could happen, e.g.,  if the
+reflection atom is located too close to its bonded neighbor (e.g. CA in
+the above rule).  It is therefore strongly recommended to use the
+chirality module with geometries that are close to equilibrium.
+
+--------------------------------------------------------------------------
+
+Conformational consistency module.
+
+Description.
+
+The CONFormational CONSistency module is applicable to groups of atoms
+that have rotational symmetry because some of the constituent atoms are
+indistinguishable, e.g. H1, H2, and H3 in a methyl group. In specifying
+the coordinates of a molecule with such a group, the atoms can be
+arranged in three completely equivalent ways, relative to a reference
+conformation. These are H1/H2/H3, H2/H3/H1, H3/H1/H2. They are related
+by rotations around the bond that involves the parent atom (e.g. methyl
+carbon). Note that the conformation H1/H3/H2 is not allowed because it
+corresponds to a change of (pseudo) chirality, which is assumed to be
+fixed (see chirality module) The purpose of this module is to identify
+all such symmetry groups in a molecular coordinate set and choose the
+rotation that brings the coordinates into the closest proximity (in the
+sense of a certain RMSD ) to the coordinates in a reference set. This is
+done according to a set of rules, which can be specified by the user; a
+default set for the charmm22 protein topology is defined in this module.
+
+A description of the algorithm and the rules is provided in corman.info.
+When used with the 0K string method, the CONFcons module check
+consistency for each pair of adjacent structures along the string.
+
+--------------------------------------------------------------------------
+
+Test cases.
+
+c40test/sm0k.inp
+c40test/confcons.inp
+
+--------------------------------------------------------------------------
+
+SM0K References
+
+[1] W. E, W. Ren, and E. Vanden-Eijnden, J. Chem. Phys. 126, 164103 (2007).
+[2] V. Ovchinnikov, M. Karplus, and E. Vanden-Eijnden, J. Chem. Phys.
+134, 085103 (2011).
+[3] I. Khavrutskii, K. Arora, and C. Brooks III, J. Phys. Chem. 125, 174108
+(2006).
+
+If you find the SM0K code useful in preparing a manuscript,
+please cite the implementation reference 2 above.
+
+
+File: Stringm, Node: SMCV, Up: Top, Previous: SM0K, Next: FTSM
+
+String Method in Collective Variables (SMCV).
+-------------------------------------------------------------------------------------------------------------
+
+Command Syntax.
+
+STRIng COLVar [INITialize [{MAXCV}]                                                                         |
+              [DONE]                                                                                        |
+              [ADD [POSI_COM_X[{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}][FRAMe<int>] <atom_selection>]|
+                   [POSI_COM_Y[{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}][FRAMe<int>] <atom_selection>]|
+                   [POSI_COM_Z[{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}][FRAMe<int>] <atom_selection>]|
+                   [DIHE_COM [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}]<atom_selection><x4> ]  |
+                   [ANGLE_COM [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}]<atom_selection><x3> ] |
+                   [DIST_COM [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}]<atom_selection><x2> ]  |
+                   [ANGLVEC [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}] -
+                            [P1 [<atom_selection> | 3<real>]] [P2 [<atom_selection> | 3<real>]] -
+                            [P3 [<atom_selection> | 3<real>]] [P4 [<atom_selection> | 3<real>]] -
+                            [{FR1<int>}] [{FR2<int>}] ] |
+                   [FRAME <atom_selection>] |
+                   [QUATERNION [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}][{FRA1<int>}][{FRA2<int>}]] |
+                   [RMSD [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}] <atom_selection> -
+                         [{ORIE <atom_selection>}] [{MASS}] [{MAIN|COMP}]] |
+                   [DRMSD [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}] <atom_selection> -
+                         [{ORIE <atom_selection>}] [{MASS}] [{MAIN|COMP}]] |
+                   [PROJ [{FORCe<real>}][{<WEIGht<real>}][{GAMMa<real>}] <atom_selection> -
+                         [{ORIE <atom_selection>}] [{MASS}] [{MAIN|COMP}]]]                                 |
+              [LIST]                                                                                        |
+              [CLEAr]                                                                                       |
+              [REPArametrize [{DEFI <real>}] -
+                             [{ITER <int>}] -
+                             [{LINE | SPLI | BSPL | DST [{WNCT <real>}] | LIN2}]                            |
+              [TEST [GRAD {STEP <real>} | PARA | MINV] ]                                                    |
+              [FILL {MAIN|REF|OLD} {COMP} ]                                                                 |
+              [SWAP 2x[MAIN|REF|OLD] ]                                                                      |
+              [COPY 2x[MAIN|REF|OLD] ]                                                                      |
+              [PRINt[{ALL}] {UNIT <int>} {NAME <character*>} {COL}]                                         |
+              [READ [{ALL | SCOL<int> TCOL<int>}] {UNIT <int>} {NAME <character*>} {COL}]                   |
+              [SET  [{IND<int> | ALL }] -
+                    [{FORCe<real>}] [{GAMMa<real>}] [{WEIGht<real>}] [{ZVAL<real> [REP<int>] [{COL<int>}]}] ]                                                               |
+              [VOROnoi [VCUT <real> [{REP<int>}]] |
+                       [VMAP [CALC] | -
+                             [PRINt[{UNIT <int>}] [NAME <character*>] ] -
+                             [READ [{UNIT <int>}] [NAME <character*>] ] -
+                             [CLEA] ] | -
+                       [READ [UNIT <int>] [NAME <character*>] ] -
+                       [PRINt[UNIT <int>] [NAME <character*>] ] ]                                           |
+              [FRAMe[CLEAr] |
+                    [RESEt] |
+                    [FILL [{COMP}] [{ALIGn}]] |
+                    [PRINt[{ALL}] [{UNIT<int>}] [{NAME<character*>}]] |
+                    [READ [{ALL}] [{UNIT<int>}] [{NAME<character*>}]] |
+                    [LIST] |
+                    [ALIGn [{RMSD | VORO}]] ]                                                               |
+              [PARA [QUAT [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]] |-
+                    [FRAM [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]] |-
+                    [COLV [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]] |-
+                    [MMAT [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]] |-
+                    [VORO [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]] ]                    |
+              [MINV [LU|lu|DIAG|diag]]                                                                      |
+              [MMAT [CALC | -
+                    [PRINt[{INV}] [{UNIT<int>}] [NAME<character*>]] | - 
+                    [READ [{INV}] [{UNIT<int>}] [NAME<character*>]] | -
+                    [FAST [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]] ]                    |
+              [WEIGht[CALC|
+                     [PRINt[{UNIT<int>}] [NAME<character*>]] | - 
+                     [READ [{UNIT<int>}] [NAME<character*>]] ]                                              |
+              [INTE [{INTERPCV [METH [LINE|SPLI|BSPL|LIN2]]}] -
+                    [NIN<int>] [CVIN<character*>] -
+                    [NOUT<int>][CVOUT<character*>] -
+                    [{COOR [CRIN<character*>][CROUT<character*>] -
+                           [{PDB  [{RESI}] | FILE | UNFO | CARD | FORM}]]]                                  |
+              [DYNAmics[{STAF <int>}]  -
+                       [{NOPR}] -
+                       [{VORO}] -
+                       [{REPA [REPF <int>]} ] -
+                       [{STAT [STAF]}] -
+                       [{HISF <int>] -
+                       [{EVOL [EVOF <int>] -
+                              [{EVOS <int>}] -
+                              [{EVOStep <real>}] -
+                              [{EXPO {MEMO <real>} | AVER {NAVE <int> }]]
+                       [{RSTR [REEQ <int>] {SMD|STEER}}] -
+                       [{REX [REXF <int>] [REXT <real>]}] -
+                       <regular dynamics options>]                                       |
+              [STATistics[{COUNt <int>]} -
+                         [{RMSD [RNAM <character*>] [{RAPP}]} ] -
+                         [{RMSA [RANM <character*>] [{RAAP}]} ] -
+                         [{DELS [DNAM <character*>] [{DAPP}]} ] -
+                         [{ARCL [ANAM <character*>] [{AAPP}]} ] -
+                         [{CURV [CVNM <character*>] [{CAPP}]} ] -
+                         [{FREE [FENM <character*>] [{FAPP}]} ] -
+                         [{COLV [CNAM <character*>] [{CVAP}] }]
+                         [{VORO [VNAM <character*>]} ] -
+                         [{VMAP [{VNAM <character*>}]} ] -
+                         [{VLOG [{VNAM <character*>}]} [{VOFF <int>}] [{VLAP}]}] -
+                         [{REXM [RXNM <character*>] [{RXOL <character*>}]}] -
+                         [{REXL [{RXNM <character*>}] [{ROFF <int>}] [{RXAP}]}] -
+                         [{FORC [FCNM <character*>] [{FCAP}] }] -
+                         [{MMAT [MNAM <character*>]}]]
+
+Command Description.
+--------------------------------------------------------------------------
+
+[INIT] Initialize the string method in collective variables (SMCV).
+Substitution parameters ?MESTRING and ?NSTRING will be set to correspond
+to the string rank of each CPU group, and to the total number of string
+replicas, respectively.
+--------------------------------------------------------------------------
+
+[DONE] Finalize SMCV module
+--------------------------------------------------------------------------
+
+[ADD [<CV_specification>]]  Define a collective variable.  The following
+CV are supported.
+
+1)POSI_COM_X : X-component of COM of atom group
+2)POSI_COM_Y : Y-component of COM of atom group
+3)POSI_COM_Z : Z-component of COM of atom group
+4)DIST       : Distance between two COM groups 
+5)ANGL       : Angle between two COM groups 
+6)ANGLVEC    : Angle between two vectors 
+7)DIHE       : Dihedral angle between two COM groups 
+8)RMSD       : Root-mean-square distance to a reference
+               coordinate set of an atom group 
+9)DRMSD      : Difference between RMSDs to two coordinate sets
+10)PROJ      : Fraction of distance between two coordiante sets
+               (projected onto vector connecting the two sets,
+               accounting for rotation)
+
+11)QUATERNION : quaternion representation of rotation transformation
+between two frames.  When a quaternion CV is specified, four CVs will
+actually be created, corresponding to the components of the quaternion.
+
+A new coordinate reference frame can be specified on the basis of an
+atom selection using ADD FRAME <atom_selection>; the frame axes will be
+defined as the eigenvectors of the moment of inertia tensor of the
+selected coordinates.
+
+The following (optional) keywords are valid for all CV:
+
+[{FORCe<real>}] Set harmonic force constant.
+[{<WEIGht<real>}] Set CV weight in distance computation (this is akin to
+atomic mass in the case of absolute position CV.
+[{GAMMa<real>}] Set the CV friction coefficient for the evolution of the
+CV in inverse AKMA time units (see EVOL keyword for the evolution equation)
+
+NOTE: Each CV definition requires a corresponding number of atom
+selections as indicated in teh syntax section above.
+
+RMSD, DRMSD and PROJ CVs take an optional orientation set specified by
+the keyword ORIE after the main (RMSD) selection. The MASS keyword
+causes mass-weighting to be used in the RMSD computation ans in best-fit
+superpositions.
+
+POSI_COM_[X|Y|Z] CVs take a optional frame number via `FRAMe <int>`
+(default 0 for absolute frame) in which the positions will be expressed. 
+To use a non-absolute frame, such a frame must first be defined via `ADD
+FRAMe <atom_selection>`; frame indices correspond to the order in which
+frames have been defined.
+
+The ANGLVEC CV specifies the angle between two vectors. The vectors are
+defined using four coordinate triplets.  Each coordinate triplet can be
+defined either using an atom selection or three real numbers. The first
+vector is defined by coordinates P1 and P2, and the second vector, by
+coordinates P3 and P4.  In addition, each vector can be defined in a
+different reference frame, specified optionally as `FR1<int>` and
+`FR2<int>`; the default frame is zero for each vector, which corresponds
+to the absolute coordinate frame. The angle and its derivatives are
+computed after the vectors are implicitly rotated into the same
+reference frame.
+
+The QUATERNION CV definition requires the specification of two
+coordinate frames FR1<int> and FR2<int>; the quaternion that is defined
+corresponds to the rotation of frame 2 into frame 1.  Frames must be
+different (otherwise the quaternion is the identity rotation).
+--------------------------------------------------------------------------
+
+[REPA] Call reparametriation (Repa) module.  The supported
+reparametrization methods are the same as those described for the
+finite-temperature string module (FTSM) and the zero-temperature string
+(SM0K).
+--------------------------------------------------------------------------
+
+[LIST] List currently defined collective variables.
+--------------------------------------------------------------------------
+
+[CLEAr] Remove all collective variables, frames and quaternions.
+--------------------------------------------------------------------------
+
+[TEST [GRAD {STEP <real>}|PARA|MINV] Test gradients of the string
+restraint potentials by finite difference if GRAD is specified; test
+parallel force computation when PARA is specified; test the computation
+of M-tensor inverse by LU decomposition, and by direct multi-diagonal
+matrix inversion. STEP sets the finite difference interval to use with
+GRAD. Parallel force computation test will work only when more than one
+CPU is assigned to a string image. The MINV test is provided for
+cross-validation.
+--------------------------------------------------------------------------
+
+[FILL {MAIN|REF|OLD} {COMP} ] Calculate values of the CV from
+instantaneous coordinates and put into string column specified by one of
+"MAIN", "REF" or "OLD".  This is how an initial string is defined in the
+beginning of a set of optimizations.  Omission of column will result in
+the main CV coordinates being populated.  Reference coordinates for
+statistics (see e.g. STAT RMSD) are assumed to be in the reference
+column (REF). The OLD column is used internally during string evolution,
+and contains the previous CV values (i.e. those prior to the most recent
+instance of 'EVOL'); the old values are used to linearly adjust CV
+coordinates from the old values to new values to avoid numerical
+instabilities.  The user can also populate the OLD column manually, as
+can be useful in performing steered molecular dynamics (SMD).  In this
+case, 'SMD' or 'STEERED' must be included in the 'STRING COLVAR DYNA'
+command.
+
+ 
+COMP indicates that CHARMM comparison coordinates are to be used for
+computing CV.
+--------------------------------------------------------------------------
+
+[PRINt {ALL} {UNIT <int>} {NAME <character*>} {COL}] Write current CV
+coordinates to file from the column specified by COL. `ALL` indicates
+that the root node of each string replica is to write a separate file
+containing only the CV values of the corresponding replica. If ALL is
+omitted,  one file will be created with the number of lines equal to the
+number of defined CV, each line containing M values, corresponding to M
+CVs.
+--------------------------------------------------------------------------
+
+[READ {ALL | SCOL<int> TCOL<int>} {UNIT <int>} {NAME <character*>}
+{COL}] Read CV coordinates from file into the column specified by COL.
+`ALL` indicates that the root node of each string replica is to read a
+separate file containing only the CV values of the corresponding
+replica. If ALL is omitted, all CV coordinates are assumed to be
+contained in one with the number of lines equal to the number of defined
+CV, each line containing M values, corresponding to M CVs. If SCOL<i> is
+specified, each replica will read the CV coordinates of the i-th replica
+(i-th column) provided in the file (rather than it's corresponding
+column); TCOL must be provided along with SCOL, and indicates the number
+of columns (string images) in the file.
+--------------------------------------------------------------------------
+
+[SWAP 2x[MAIN|REF|OLD]] Swap string coordinates in the specified columns.
+--------------------------------------------------------------------------
+
+[COPY 2x[MAIN|REF|OLD]] Copy string coordinates from the first column to the
+second column.
+--------------------------------------------------------------------------
+
+[SET  [{IND<int> | ALL }] <parameter>] Will set parameter value for CV
+with index IND<i>, or for all CV if ALL is specified.  <parameter> can
+be one or more of the following:  [FORCe<real>] force constant for
+harmonic restraint potential. [GAMMa<real>] friction constant for CV
+evolution (see EVOL in DYNAmics  below). [WEIGht<real>] CV weight for
+computing (string) distances. [ZVAL<real> [REP<int>] [{COL<int>}]] value
+for the CV variable, set for the specified replica in the specified
+column.
+--------------------------------------------------------------------------
+
+[VOROnoi VCUT <real> {REP <int>} ] Set the maximum allowed distance from
+the string in the plane perpendicular to the string tangent that the
+instantaneous MD replica is allowed to travel in Voronoi simulations.
+This allows one to limit the transition tube width in Voronoi
+calculations. REP<i> will set the Voronoi cutoff distance on replica <i>
+only.
+
+[VOROnoi VMAP CALC] Compute the Voronoi map, which lists the Voronoi
+cell in which each instantaneous string coordinate set resides.  In the
+present implementation, the functionality is used to ascertain that each
+instantaneous replica corresponds to the correct string image; i.e. MD
+replica on node (i) is closest to the string image (i), in which case
+the Voronoi map will consist ot two identical rows with entries 1 ... M, 
+where M is the number of string images. Instantaneous coordinates and
+string coordinates must be defined prior to invoking this command.
+
+[VOROnoi VMAP PRIN [{UNIT <int>}] [NAME <character*>] ] Print Voronoi
+map to file with provided NAME and (optionally) provided unit number.
+
+[VOROnoi VMAP READ [{UNIT <int>}] [NAME <character*>] ] Read Voronoi map
+from file with provided NAME and (optionally) provided unit number.
+
+[VOROnoi VMAP CLEA] Clear the Voronoi map if it has been READ or
+CALCulated.  This will force the Voronoi map to be recomputed at the
+beginning of dynamics.  This option is important due to the present
+CHARMM implementation of Voronoi calculations.  The integrator will
+issue warnings if an MD replica is found outside its corresponding
+Voronoi cell; however, each replica is technically allowed to leave its
+cell for one iteration, at which point its (half-kick) momenta (the
+Verlet integrator is assumed) are reversed to return it to its home
+cell. In particular, is it possible that a replica will be outside of
+its cell at the timestep at which the restart file is written, in which
+case, the Voronoi map will be flagged as incorrect unless it is CLEARed
+prior to dynamics.
+
+[VOROnoi PRINt[{UNIT <int>}] [NAME <character*>] ] Print matrix C_ij
+with the number of Voronoi crossing attempts from cell (i) to cell (j)
+to file with provided NAME and (optionally) provided unit number.  This
+file can be quickly postprocessed for a fast calculation of free energies
+of the tessellation.
+
+[VOROnoi READ [{UNIT <int>}] [NAME <character*>] ] Read matrix C_ij with
+the number of Voronoi crossing attempts from cell (i) to cell (j) to
+file with provided NAME and (optionally) provided unit number. This
+command is useful for restarting a Voronoi calculation with previously
+accumulated crossing statistics.
+
+--------------------------------------------------------------------------
+[FRAMe <char*>] The FRAMe commands concern the manipulation of
+coordinate reference frames that can be used to compute rigid-body
+invariant positions, angles between vectors in different reference
+frames, and orientation quaternions. Addition of new frames is described
+under the ADD command above.
+
+[CLEAr] Remove all reference frames.
+
+[RESEt] Force any code that depends on a reference frame to recompute
+all reference frame axes. E.g., evaluating of a position CV expressed in
+a non-absolute frame of reference.
+
+[FILL [{COMP}] [{ALIGn}]] Compute reference frame axes from
+instantaneous coordinates according to the atom selection specified in
+ADD FRAME command. Because frame vectors are defined as eigenvectors of
+moment of inertia tensors of a set of atoms, frame vectors are only
+unique up to a sign.  Considering only right-handed coordinate frames,
+there are three possible definitions of a frame.  To ensure that different
+replicas define the frame vectors consistently, the option ALIGn is
+provided. When ALIGn is present, a reference coordinate set is assumed
+to be present in the comparison set, and the frame vectors computed from
+the main coordinate set are consistent with those computed from the
+comparison set. If the comparison set has the same coordinates for all
+string replicas, this almost surely implies that the frames are also
+defined consistently between the different replicas. COMP swaps the
+roles of the main and the comparison sets.
+
+[PRINt[{ALL}] [{UNIT<int>}] [{NAME<character*>}]] Write frame vectors to
+file with specified name and optional unit number.  If ALL is specified,
+the root node of each string group/image will write a separate file with
+the frame vectors corresponding to the image.  If ALL is omitted, frame
+vectors will be written for all replicas by the root node for the entire
+string.  Each line in the files consists of nine entries corresponding
+to the three frame vectors (written out columnwise).  The frame axes
+corresponding to different replicas are written on consecutive lines. 
+If more than one frame is defined, the first frame is written out as a
+block of M lines (where M is the number of replicas); for N frames,
+there will be N such consecutive blocks.
+
+[READ [{ALL}] [{UNIT<int>}] [{NAME<character*>}]] Read frame vectors to
+file with specified name and optional unit number.  File format and
+`ALL` option is as described for PRINt above.
+
+[LIST] List all defined frames and their constituent atoms.
+
+[ALIGn [{RMSD | VORO}]] Align frames along the string, making sure that
+the frames are defined consistently on different replicas.  RMSD will
+cause the code to find the frame vectors such that the (position) CV
+values computed from the coordinates are closest to the string (in the
+notation of ref. [1] ||\theta(x) - z || is minimum).  if VORO is
+specified, the code will select frame vectors such that the (position)
+CV values computed from the coordinates are closest to the string in the
+sense of the Voronoi metric,  i.e. that each instantaneous coordinate
+set is within its corresponding Voronoi cell.
+
+The ALIGn oiptions should not normally be needed if the frame vectors
+are written out and read in during successive simulation, because in
+that case there is no ambiguity in their definition.
+
+--------------------------------------------------------------------------
+[PARA [QUAT [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]]]
+Indicate whether to enable parallel computation of quaternions and
+quaternion derivatives; default : off
+
+[PARA [FRAM [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]]]
+Indicate whether to enable parallel computationl of reference frames and
+their derivatives; default : off
+
+[PARA [COLV [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]]]
+Indicate whether to enable parallel computation of collective variables
+and their derivatives; default : off
+
+[PARA [MMAT [YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]]]
+Indicate whether to enable parallel computation of the metric tensor;
+default : on
+
+[PARA [VORO[YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]]]
+Indicate whether to enable parallel computation of Voronoi distances;
+default : on
+
+--------------------------------------------------------------------------
+[MINV [LU|lu|DIAG|diag]] Specify method for inverting the metric tensor.
+LU specifies LU decomposition; DIAG specifies a multidiagonal direct
+inversion. DIAG is expected to be faster for matrices with nonzero
+entries clustered near the diagonal. The structure of the metric tensor
+depends on the definition of the CV.
+
+--------------------------------------------------------------------------
+[MMAT [CALC]] Calculate the instantaneous metric tensor from
+coordinates.
+
+[MMAT PRINt[{INV}] [{UNIT<int>}] [NAME<character*>]] Write metric tensor
+to file with specified name and (optional) unit number. INV indicates
+that the inverse of the metric tensor is to be written.
+
+[MMAT READ [{INV}] [{UNIT<int>}] [NAME<character*>]] Read metric tensor
+from file with specified name and (optional) unit number. INV indicates
+that the inverse of the metric tensor is to be read.
+
+[MMAT [FAST[YES|ON|TRUE|T|yes|on|true|t|NO|OFF|FALSE|F|no|off|false|f]]]
+Specify whether to use a sparse matrix algorithm for computing the
+metric tensor. The FAST routine may not be faster if the metric tensor
+is not sparse (whether this is true depends on the definition of the
+CV).
+
+--------------------------------------------------------------------------
+[WEIGht [CALC]] Compute CV weights from metric tensor. The weights are
+necessary do define distance in the space of CV. Alternatively, weights
+can be specified at the time of CV definition or read from file as
+described below. Whatever the method of choice, the weights should
+typically be held constant throughout a given SMCV simulation (e.g. they
+are equivalent to atomic masses if the CV are Cartesian coordinates).
+
+[WEIGht PRINt[{UNIT<int>}] [NAME<character*>]] Write CV weights to file
+with provided name and optional unit number. The output will consist of
+a single line with a number of floating point entries equal to the
+number of CV.
+
+[WEIGht READ [{UNIT<int>}] [NAME<character*>]] Read CV weights from file
+with provided name and optional unit number.
+
+--------------------------------------------------------------------------
+[INTE [{INTERPCV [METH [LINE|SPLI|BSPL|LIN2]]}] -
+      [NIN<int>] [CVIN<character*>] -
+      [NOUT<int>][CVOUT<character*>] -
+      [{COOR [CRIN<character*>][CROUT<character*>] -
+             [{PDB  [{RESI}] | FILE | UNFO | CARD | FORM}]]]
+
+[INTE] Interpolate a string onto a new string with different resolution.
+The routine can be used to interpolate CVs using the INTERPCV option,
+and also to create coordinate files that are optimal for the given CV
+values (starting from supplied coordinate files).
+
+[INTERPCV METH [LINE|SPLI|BSPL|LIN2] ] interpolation method to use. The
+valid methods are  as described in the zero-temperature string
+documentation; default : LINE
+
+[NIN] Number of images in the existing string.
+
+[CVIN <character*>] Name of text file which contains the existing CV
+values (format given in PRINt command above).
+
+[NOUT] Number of coordinate sets in the interpolated string.
+
+[CVOUT <character*>] Name of text file to which interpolated CV values
+will be written. If INTERPCV is not set, the file specified by CVOUT is
+assumed to exist, containing the CV values for which coordinate files
+are to be generated (see CRIN/CROUT below).
+
+[{COOR <character*>}] When provided, coordinate files will be written in
+correspondence to the CV values in file CVOUT<char*>, using the
+following parameters.
+
+[CRIN <character*>] Name of text file that contains the filenames in
+which existing coordinates are stored, with one file name per line.
+
+[CROUT <character*> ] Name of text file that contains file names to
+which coordinate sets corresponding to the CVs in CVOUT<char*>
+are to be written.
+
+The following options are passed to the CHARMM coordinate input/output
+routines:
+
+[PDB [{RESI}] ] Indicates that input/output coordinate files are in PDB
+format.  RESI will pass the 'RESID' option to the coordinate reader.
+
+[FILE | UNFO ] Indicates that input/output coordinate files are
+UNFORMATTED.
+
+[CARD | FORM}] Indicates that input/output coordinate files are
+FORMATTED.
+-------------------------------------------------------------------------
+
+[DYNAmics] The STRIng COLV DYNAmics command will parse options relevant
+for the SMCV and subsequently call the regular dynamics integrator.
+Currently, SMCV support is limited to the default Verlet leapfrog
+integrator (dynamc module). The following, all optional, keywords are
+supported.
+
+[{STAF <int>}] Number of steps to skip between successive outputs of
+statistics. STAT options must be set prior to dynamics.
+
+[{NOPRint}] Reduce output from FTSM during dynamics.
+
+[{VORO}] For each FTSM replica, dynamics will be constrained to the
+corresponding Voronoi cell by reversing momenta at cell boundaries. This
+allows computing the free energy of the Voronoi tessellation and the
+MFPT between different Voronoi cells.
+
+
+[{EVOL [EVOF <int>] [{EVOS <int>}] [{EXPO {MEMO <real>}|AVER [NAVE
+<int>] }]}] Specify string evolution options. EVOL turns
+on string evolution during dynamics.
+
+EVOF <int> specifies the frequency at which the evolution is to be
+performed. A reasonable value for EVOF is 10, implying, essentially that
+every 10th structure during dynamics will be added to a running average.
+
+EVOS <int> specifies the number of dynamics steps after each update (if
+UPDA is set) during which evolution is temporarily turned off. This can
+be used to set an equilibration period after each update.  A reasonable
+choice is to use the value for REEQ (see below) which specifies the
+number of dynamics steps over which the restraint potentials are
+adjusted to new string coordinates after an update.
+
+EVST <real> specifies the evolution step for the string images. By
+default, string evolution follows steepest descent dynamics on the  free
+energy landscape of the collective variables (refs. 1-2), i.e.,  
+
+cv_i(n+1) = cv_i(n) - dt / gamma_i * M_ij * dF(cv_k; k\in[1,M])/dcv_j,
+
+where n is the nth iteration, dt is specified by EVST, gamma is the 
+friction coefficient specified in the definition of each CV, M is the
+metric tensor, and F is the (M-dimensional) free energy as a function of
+the M collective variables. In the above equation, the quantity
+(dt/gamma) must units of squared time, where the unit of time is
+determined implicitly by the units of the MD engine; e.g. in CHARMM, the
+AKMA time unit is used. Reasonable values for dt (EVST) and gamma depend
+on the collective variable and the evolution frequency, but O(-3) and
+O(1), respectively, are a good place to start.
+
+EXPO {MEMO} specifies that evolution will use the exponential averaging,
+i.e.,  CV(N+1) =  <rMEMO> *CV(N) + (1-<rMEMO>) * X_INST, where CV(N) are
+the CV coordinates at the Nth evolution call, X_INST are the
+instantaneous CV values computed from MD coordinates, and MEMO is a
+memory parameter in the range [0, 1]. Reasonable values for MEMO are
+0.999 - 0.9999.
+
+AVER {NAVE <int>} Evolution will use simple averaging, i.e.,
+PHI(N)=AVERAGE_{i=1}^{N}(X_i).  To dampen oscillations at the beginning
+of a simulation, NAVE can be used to set an artificial number of samples
+in the average. That is, the average is updated using  PHI(N+1) = ( NAVE
+* PHI(N) + X_INST ) / (NAVE++) ; therefore a high value for NAVE will
+decrease | PHI(N+1)-PHI(N) |. [{REPA [REPF <int>]}] indicates that
+reparametrization is to be performed after each block of REPF<int>
+iterations. REPA options must be set prior to dynamics.
+
+RSTR [REEQ <int>] {SMD|STEER} RSTR specifies that SMCV restraints are to
+be turned on during dynamics.  REEQ specifies the number of simulation
+steps during which the restraint potentials will switch to the EVOLved
+CV coordinates from previous CV coordinates (during each evolution, if
+EVOL EVOF<i> is set). This option prevents abrupt changes in the
+restraints which can lead to instability. Values in the range 10 -- 500
+are reasonable, depending on the system.  When SMD or, equivalently,
+STEER are included, the OLD CV coordinate set (which can be FILLed
+manually, as described above) is not initialized prior to launching
+dynamics.  This can be used to perform steered MD, whereby the CV values
+to which the MD replicas are restrained are computed by interpolating
+linearly between the OLD and MAIN CV sets.  The steering is performed
+over the number of iterations set by REEQ.
+
+REX [REXF <int>] [REXT <real>] Instructs the code to attempt to swap MD
+coordinates between adjacent replicas at frequency REXF <i> using
+temperature REXT <r> in the Metropolis criterion.  This option can
+significantly improve the convergence of free energy profiles but
+requires that the force constants in the restraining potentials be
+sufficiently low to facilitate frequent exchanges (a success rate of at
+least 10% is recommended).  REXT can be increased beyond the simulation
+temperature to facilitate exchanges, but this will cause the
+thermodynamic ensemble to deviate from the Boltzmann distribution.
+
+------------------------------------------------------------------------
+[STATistics] Call statistics module. Specify statistics options when
+arguments are present. When called without arguments, an instance of
+statistics output will be written out. The SMCV STAT module has similar
+syntax to the zero-temperature (SM0K) and finite-temperature (FTSM) STAT
+modules.  The specification of keywords RMSD RMSA DELS ARCL CURV FREE
+FORC VORO VMAP VLOG REXM REXL is as described for the SM0K and FTSM STAT
+routines.  Keywords MMAT and COLV are described below.
+
+[STAT MMAT [MNAM <character*>]] Indicate that the metric tensor is to be
+output at each statistics call.  The output file with the specified name
+will contain a column of N MxM matrices where N is the number of string
+replicas and M is the number of CV.
+
+[STAT COLV [CNAM <character*> {CVAP}]] Indicate that CV values are to be
+output at each statistics iteration to the fiel with the specified name,
+appending to an existing file (e.g. from previous calculations) is CVAP
+is set.  Each line of the file corresponds to a single CV and contains N
+values for the N replicas. Successive lines correspond to different CV.
+
+------------------------------------------------------------------------
+Test cases.
+
+c40test/smcv.inp
+c40test/smcv-pos.inp
+c40test/smcv-voro.inp
+
+------------------------------------------------------------------------
+SMCV References:
+
+[1] L. Maragliano, A. Fischer, E. Vanden-Eijnden, and G. Ciccotti, J.
+Chem.Phys. 125, 024106 (2006).
+[2] L. Maragliano and E. Vanden-Eijnden, Chem. Phys. Lett. 426, 168
+(2006).
+[3] V. Ovchinnikov, M. Karplus, and E. Vanden-Eijnden, J. Chem. Phys.
+134, 085103 (2011).
+
+If you find the SMCV code useful in preparing a manuscript,
+please cite the implementation reference 3 above.
+
+
+File: Stringm, Node: FTSM, Up: Top, Previous: SMCV, Next: References
+
+Finite-Temperature String Method (FTSM).
+-----------------------------------------------------------------------------------------
+
+Command Syntax.
+
+STRIng FTSM [INITialize]                                                                |
+            [DONE]                                                                      |
+            [ADD [ORIEnt|RMSD] <atom selection>]                                        |
+            [LIST]                                                                      |
+            [CLEAr [ORIEnt|RMSD]]                                                       |
+            [REPArametrize  [{DEFI <real>}] -
+                            [{ITER <int>}] -
+                            [{LINE | SPLI | BSPL | DST [{WNCT <real>}] | LIN2}]         |
+            [ORIE <atom selection> {MASS}]                                              |
+            [TEST [GRAD {STEP <real>}|PARA]                                             |
+            [FILL {MAIN|REF} {COMP} ]                                                   |
+            [COMM [ALLGather|HYPERcube|GATHERBroadcast]]                                |
+            [PRINt [COR|DCD] {UNIT <int>} {NAME <character*>} {COL}]                    |
+            [READ  [COR|DCD] {UNIT <int>} {NAME <character*>} {COL}]                    |
+            [SWAP 2x[MAIN|REF]]                                                         |
+            [COPY 2x[MAIN|REF]]                                                         |
+            [SET  [ORIE <atom_selection>]  | -
+                  [RMSD <atom_selection>]  | -
+                  [KPAR <real> {ANGStrom}] | -
+                  [KPRP <real> {ANGStrom}] | -
+                  [KRMS <real> {ANGStrom}] | -
+                  [DPRP <real> {ANGStrom} {REP <int>} ] -
+                  [DRMS <real> {REP <int>} {UPPE} ] -
+                  [MASS {yes|on|true|t|YES|ON|TRUE|T|no|off|false|f|NO|OFF|FALSE|F}] - |
+                  [PROJ {yes|on|true|t|YES|ON|TRUE|T|no|off|false|f|NO|OFF|FALSE|F}] - |
+                  [VCUT <real> {REP <int>} ] ]                                         |
+            [VOROnoi [VMAP [CALC] | -
+                           [PRIN [{UNIT <int>}] [NAME <character*>] ] -
+                           [READ [{UNIT <int>}] [NAME <character*>] ] -
+                           [CLEA] ] | -
+                     [READ [UNIT <int>] [NAME <character*>] ] -
+                     [PRINt[UNIT <int>] [NAME <character*>] ] ]                        |
+            [DYNAmics[{NOPR}] -
+                     [{VORO}] -
+                     [{UPDA [UPDF <int>] {REPA} ] -
+                     [{STAT [STAF]}] -
+                     [{EVOL [EVOF <int>] -
+                            [{EVOS <int>}] -
+                            [{EXPO {MEMO <real>} | AVER [NAVE <int>] {MAXAVE <int>}}]}]-
+                     [{RSTR [REEQ <int>]}] -
+                     [{REX [REXF <int>] [REXT <real>]}] -
+                     <regular dynamics options>]                                       |
+            [STATistics [{COUNt <int>]} -
+                        [{RMSD [RNAM <character*>] [{RAPP}]} ] -
+                        [{ARCL [ANAM <character*>] [{AAPP}]} ] -
+                        [{CURV [CVNM <character*>] [{CAPP}]} ] -
+                        [{DIST [DNAM <character*>] [{DAPP}]} ] -
+                        [{FREE [FENM <character*>] [{FAPP}] [{NOCV}] }] -
+                        [{FORC [FCNM <character*>] [{FCAP}] }] -
+                        [{CENT [CNAM <character*>] [{CEAP}] }]
+                        [{REXM [RXNM <character*>] [{RXOL <character*>}]}] -
+                        [{REXL [{RXNM <character*>}] [{ROFF <int>}] [{RXAP}]}] -
+                        [{VORO [VNAM <character*>]} ] -
+                        [{VMAP [{VNAM <character*>}]} ] -
+                        [{VLOG [{VNAM <character*>}]} [{VOFF <int>}] [{VLAP}]}]
+
+Command Description.
+--------------------------------------------------------------------------
+
+[INIT] Initialize the finite-temperature string module. Substitution
+parameters ?MESTRING and ?NSTRING will be set to correspond to the
+string rank of each CPU group, and to the total number of string
+replicas, respectively.
+--------------------------------------------------------------------------
+
+[DONE] Finalize the finite-temperature string module
+--------------------------------------------------------------------------
+
+[REPA] Call reparametrization (Repa) module.  The supported
+reparametrization methods are the same as those described for the
+zero-temperature string method (SM0K), except that keywords ORIE, MASS
+and MOVE are not supported (similar functionality is configured by other
+means described below)
+--------------------------------------------------------------------------
+
+[ADD [ORIEnt|RMSD] <atom selection>] Add a center-of-mass (COM) position
+vector computed from the atom selection to the reaction set (i.e.
+coordinates that define the string). ORIEnt will add to the orientation
+set (groups which will define the best-fit superposition); RMSD will add
+to the forcing set (groups between which the distances are computed
+after alignment.  NOTE: an empty orientation set implies that best-fit
+alignments will not be performed.  COM groups should be nonoverlapping,
+otherwise the metric tensor will not, generally, be close to the
+corresponding inverse mass tensor (see ref. [1] for a discussion of the
+metric tensor), which will probably lead to inaccurate free energies;
+however this condition is not checked in the code.
+
+--------------------------------------------------------------------------
+
+[LIST] List currently defined orientation and forcing sets.
+--------------------------------------------------------------------------
+
+[CLEAr [ORIEnt|RMSD]] Clear orientation or forcing set.
+--------------------------------------------------------------------------
+
+[ORIE <atom selection> {MASS}] Perform best-fit superposition of the
+instantaneous coordinates, such that the root-mean-squared distance
+(RMSD) between instantaneous coordinates of string image (i>0) and (i-1)
+are minimum.  MASS specifies that mass-weighting is to be used.
+--------------------------------------------------------------------------
+
+[TEST [GRAD {STEP <real>}|PARA] Test gradients of the string restraint
+potentials by finite difference if GRAD is specified; test parallel
+force computation when PARA is specified. STEP sets the finite
+difference interval to use with GRAD. Parallel force computation test
+will work only when more than one CPU is assigned to a string image.
+--------------------------------------------------------------------------
+
+[FILL {MAIN|REF} {COMP} ] Calculate values of the COM positions from
+instantaneous coordinates and put into string column specified by MAIN
+or REF.  This is how an initial string is defined in the beginning of a
+set of optimizations.  Omission of column will result in the main column
+being populated.  Reference coordinates for statistics (see e.g. STAT
+RMSD) are assumed to be in column REF.  COMP specifies that CHARMM
+comparison coordinates are to be used for computing COM positions.
+--------------------------------------------------------------------------
+
+[COMM [ALLGather|HYPERcube|GATHERBroadcast]] Specify parallel
+communication scheme for gathering gradients computed in parallel. ALLG
+uses MPI_allgather ; HYPER uses an internal hypercube subroutine
+implemented via MPI_SendRecv ; GATHERB uses MPI_Gather to local root
+followed by MPI_Bcast. This choice should not normally have a large
+impact on performance. The default method is hypercube.
+--------------------------------------------------------------------------
+
+[PRINt [COR|DCD] {UNIT <int>} {NAME <character*>} {COL}] Write current
+string coordinates to file from the column specified by COL. COR and DCD
+specify CHARMM coordinate and trajectory format, respectively. If COM
+groups contain more than one atom, the coordinate of the COM group will
+be output as the coordinate of the first atom in the COM group.  It is
+possible to define multiple COM groups with the same first atom.
+However, this possibility is not considered at present (see short
+discussion above following ADD).
+
+--------------------------------------------------------------------------
+[READ  [COR|DCD] {UNIT <int>} {NAME <character*>} {COL}] Read string
+coordinates from file into the column specified by COL. COR and DCD
+specify CHARMM coordinate and trajectory format, respectively. If COM
+groups contain more than one atom, the coordinate of the COM group will
+be found as the coordinate of the first atom in the COM group.
+--------------------------------------------------------------------------
+
+[SWAP 2x[MAIN|REF]] Swap string coordinates in the specified columns.
+--------------------------------------------------------------------------
+
+[COPY 2x[MAIN|REF]] Copy string coordinates from the first column to the
+second column.
+--------------------------------------------------------------------------
+
+[SET ORIE <atom_selection>] In addition to the ADD command for
+(iteratively) defining atom groups (see above), this command is a
+shortcut for defining the entire ORIEntation set, albeit with one atom
+per group, i.e. the number of groups is the number of atoms in the atom
+selection, and the COM position of the group is the position of the
+corresponding (single) atom in the group.
+
+[SET RMSD <atom_selection>] Same as above, but defines the forcing group
+
+[SET KPAR <real> {ANGStrom}] Set force constant for plane restraint
+(i.e. force acting parallel to the path; see ref. [1] for definition of
+restraint potentials).  ANGStrom indicates that the distance unit in
+the force constant are Angstrom.  If unspecified, the distance unit is
+equal to twice the distance between adjacent string replicas.
+
+[SET KPRP <real> {ANGStrom}] Set force constant for in-plane restraint
+(i.e. force acting perpendicular to the path for limiting). This option
+is used for limiting the transition tube width. ANGStrom option as
+above.
+
+[SET KRMS <real> {ANGStrom}] Set force constant for a regular RMSD
+restraint, whereby the MD replica is restrained to the string image via
+U = krms/2 || RMSD (x , x0) - RMSD0 ||^2 (where x includes an implicit
+best-fit rotation).  This potential corresponds approximately to the
+behavior in the replica path functionality. Although the free energies
+cannot be computed,  the RMSD potential is useful for path
+equilibration. ANGStrom option as above.
+
+[SET DPRP <real> {ANGStrom} {REP <int>} ] Set the reference distance for
+the in-plane restraint perpendicular to the path; used for limiting the
+transition tube width, as the MD replica will be restrained to a
+vicinity of the path.  REP allows the use of different values for
+different replicas, although this flexibility is not often used.
+ANGStrom option as above.
+
+[SET DRMS <real> {REP <int>} {UPPE} ] Set the reference RMSD0 for the
+RMSD restraint above; if omitted, the default value of zero is used. If
+UPPE is specified, the restraint is only active when the computed
+RMSD(x) exceeds the reference value. I.e. this corresponds to the
+one-sided RMSD potential U = krms/2 max(0,|| RMSD (x , x0) - RMSD0||)^2
+
+[SET MASS {yes|on|true|t|YES|ON|TRUE|T|no|off|false|f|NO|OFF|FALSE|F}]
+When set to on, all distances will be calculated after mass-weighting
+the string coordinates; best-fit superposition will also use mass
+weights.  When off, uniform weights will be used.
+
+[SET PROJection
+{yes|on|true|t|YES|ON|TRUE|T|no|off|false|f|NO|OFF|FALSE|F}] When set to
+on, coordinate vectors pointing from the string image to the
+instantaneous MD replica are projected onto the path tangent. This
+allows the imposition of restraints to the distance to the hyperplane
+normal to the string.  This option should normally be on for FTSM to
+allow the computation of free energies.  The force constants
+corresponding to the  parallel and perpendicular force are KPAR and KPRP
+defined above.  When set to off, the MD replica is restrained to the
+corresponding image using RMSD restraints (see KRMS above).
+
+[SET VCUT <real> {REP <int>} ] Set the maximum allowed distance from the
+string in the plane perpendicular to the string tangent that the
+instantaneous MD replica is allowed to travel in Voronoi simulations.
+This allows one to limit the transition tube width in Voronoi
+calculations, and is the constrained counterpart of DPRP/KPRP above.
+REP<i> will set the Voronoi cutoff distance on replica <i> only.
+------------------------------------------------------------------------
+
+[VOROnoi VMAP CALC] Compute the Voronoi map, which lists the Voronoi
+cell in which each instantaneous string coordinate set resides.  In the
+present implementation, the functionality is used to ascertain that each
+instantaneous replica corresponds to the correct string image; i.e. MD
+replica on node (i) is closest to the string image (i), in which case
+the Voronoi map will consist ot two identical rows with entries 1 ... N, 
+where N is the number of string images. Instantaneous coordinates and
+string coordinates must be defined prior to invoking this command.
+
+[VOROnoi VMAP PRIN [{UNIT <int>}] [NAME <character*>] ] Print Voronoi
+map to file with provided NAME and (optionally) provided unit number.
+
+[VOROnoi VMAP READ [{UNIT <int>}] [NAME <character*>] ] Read Voronoi map
+from file with provided NAME and (optionally) provided unit number.
+
+[VOROnoi VMAP CLEA] Clear the Voronoi map if it has been READ or
+CALCulated.  This will force the Voronoi map to be recomputed at the
+beginning of dynamics.  This option is important due to the present
+CHARMM implementation of Voronoi calculations.  The integrator will
+issue warnings if an MD replica is found outside its corresponding
+Voronoi cell; however, each replica is technically allowed to leave its
+cell for one iteration, at which point its (half-kick) momenta (the
+Verlet integrator is assumed) are reversed to return it to its home
+cell. In particular, is it possible that a replica will be outside of
+its cell at the timestep at which the restart file is written, in which
+case, the Voronoi map will be flagged as incorrect unless it is CLEARed
+prior to dynamics.
+
+[VOROnoi PRINt[{UNIT <int>}] [NAME <character*>] ] Print matrix C_ij
+with the number of Voronoi crossing attempts from cell (i) to cell (j)
+to file with provided NAME and (optionally) provided unit number.  This
+file can be quickly postprocessed for a fast calculation of free energies
+of the tessellation.
+
+[VOROnoi READ [{UNIT <int>}] [NAME <character*>] ] Read matrix C_ij with
+the number of Voronoi crossing attempts from cell (i) to cell (j) to
+file with provided NAME and (optionally) provided unit number. This
+command is useful for restarting a Voronoi calculation with previously
+accumulated crossing statistics.
+
+------------------------------------------------------------------------
+[DYNAmics] The STRIng FTSM DYNAmics command will parse options relevant
+for the FTSM and subsequently call the regular dynamics integrator.
+Currently, FTSM support is limited to the default Verlet leapfrog
+integrator (dynamc module). The following, all optional, keywords are
+supported.
+
+[{STAF <int>}] Number of steps to skip between successive outputs of
+statistics. STAT options must be set prior to dynamics.
+
+[{NOPRint}] Reduce output from FTSM during dynamics.
+
+[{VORO}] For each FTSM replica, dynamics will be constrained to the
+corresponding Voronoi cell by reversing momenta at cell boundaries. This
+allows computing the free energy of the Voronoi tessellation and the
+MFPT between different Voronoi cells.
+
+[{UPDA [UPDF <int>] {REPA}] When UPDA is present string coordinates will
+be  updated from the running averages computed by option EVOL. UPDF
+specifies the frequency of updating (i.e. number of the intervening
+dynamics steps). REPA indicates that a raperametrization is to be
+performed after each update. REPA options must be set prior to dynamics.
+
+[{EVOL [EVOF <int>] [{EVOS <int>}] [{EXPO {MEMO <real>}|AVER [NAVE
+<int>] {MAXAVE <int>}}]}] Specify string evolution options. EVOL turns
+on string evolution during dynamics. 
+
+EVOF <int> specifies the frequency at which the evolution is to be
+performed. A reasonable value for EVOF is 10, implying, essentially that
+every 10th structure during dynamics will be added to a running average.
+
+EVOS <int> specifies the number of dynamics steps after each update (if
+UPDA is set) during which evolution is temporarily turned off. This can
+be used to set an equilibration period after each update.  A reasonable
+choice is to use the value for REEQ (see below) which specifies the
+number of dynamics steps over which the restraint potentials are
+adjusted to new string coordinates after an update.
+
+EXPO {MEMO} specifies that evolution will use the exponential averaging,
+i.e.,  PHI(N+1) =  <rMEMO> *PHI(N) + (1-<rMEMO>) * X_INST, where PHI(N)
+are the string coordinates at the Nth evolution call, X_INST are the
+instantaneous MD coordinates (after best-fit superposition, if the
+orientation set is non-empty), and MEMO is a memory parameter in the
+range [0, 1]. Reasonable values for MEMO are 0.999 - 0.9999.
+
+EXPO AVER {NAVE <int>} {MAXAVE <int>} Evolution will use simple
+averaging, i.e., PHI(N)=AVERAGE_{i=1}^{N}(X_i).  To dampen oscillations
+at the beginning of a simulation, NAVE can be used to set an artificial
+number of samples in the average. That is, the average is updated using 
+PHI(N+1) = ( NAVE * PHI(N) + X_INST ) / (NAVE++) ; therefore a high
+value for NAVE will decrease | PHI(N+1)-PHI(N) |. Specifying MAXAVE <i>
+will prevent NAVE from exceeding <i>; this effectively transforms this
+evolution method to EXPOnential evolution described above.  MAXAVE is
+zero by default.
+
+RSTR [REEQ <int>] RSTR specifies that FTSM restraints are to be turned
+on during dynamics. The type of restraint is determined by PROJection
+[on|off] (see above). REEQ specifies the number of simulation steps
+during which the restraint potentials will switch to using UPDAted
+string coordinates from previous string coordinates (during each update,
+if updates are on). This option prevents abrupt changes in the
+restraints which can lead to instability. Values in the range 10 -- 500
+are reasonable, depending on the system.
+
+REX [REXF <int>] [REXT <real>] Instructs the code to attempt to swap MD
+coordinates between adjacent replicas at frequency REXF <i> using
+temperature REXT <r> in the Metropolis criterion.  This option can
+significantly improve the convergence of free energy profiles but
+requires that the force constants in the restraining potentials be
+sufficiently low to facilitate frequent exchanges (a success rate of at
+least 10% is recommended).  REXT can be increased beyond the simulation
+temperature to facilitate exchanges, but this will cause the
+thermodynamic ensemble to deviate from the Boltzmann distribution.
+
+------------------------------------------------------------------------
+[STATistics] Call statistics module. Specify statistics options when
+arguments are present. When called without arguments, an instance of
+statistics output will be written out. The FTSM STAT module has similar
+syntax to the zero-temperature (SM0K) STAT module.
+
+[COUNt <int>] specifies iteration counted for statistics output.  The
+default value is 0.  This number is incremented after every call to
+statistics, and  is printed in the output files corresponding to RMSD,
+ARCL, CURV, DIST, FREE and FORCE.
+
+[RMSD RNAM <character*> [RAPP]] sets up output of RMSD values between the
+replica coordinates at the current iteration and the coordinates present in 
+the comparison set (usually the initial string).  At each call to string 
+statistics, a line will be added to the file with the name specified in
+[RNAM <character*>], with the columns in the file corresponding to different 
+replicas.  If RAPP is specified, output will be appended to the file.
+If RNAM is omitted, RMSD output is directed to the output stream.
+This subcommand is useful for gauging convergence of the string.
+
+[ARCL ANAM <character*> [AAPP]] sets up output of the distance between 
+the adjacent replicas (such that their sum yields the string length)  at
+the current iteration.  At each call to string statistics, a line will
+be added to the file with the name specified with [ANAM <character*>]. 
+If AAPP is specified, output will be appended to the file.
+
+[CURV CVNM <character*> [CAPP]] sets up output of the approximate string
+curvature  at each string image (the curvature is approximate because it
+is computed under the assumption that the distance between adjacent
+string replicas is exactly equal). At each call to string statistics, a
+line will be added to the file with the name specified with [CVNM
+<character*>].  If CAPP is specified, output will be appended to the
+file.
+
+NOTE: arclength and curvature are computed by the reparametrization
+routine; therefore REPA must be active during dynamics to output ARCL
+and CURV statistics (otherwise the corresponding files will have zeros).
+If reparametrization is not desired, it can be used with 'REPA ITER 0',
+which will force the routine to be called but will not allow it to
+perform any reparametrization iterations.
+
+DIST [DNAM <character*>] [{DAPP}]] sets up output of the coordinate
+projections onto the string at each string image. At each call to string
+statistics, one or two lines will be added to the file with the name
+specified with [DNAM <character*>], depending in whether PROJ is on|off. 
+If DAPP is specified, output will be appended to the file.
+The output can be understood from the following diagram
+            r
+           /| }perpendicular distance
+   ---p---o---q---
+      \_____/
+         d -- projection onto q-p
+      \_______/
+          D --  displacement vector q-p
+
+where r is the instantaneous coordinate assigned to string image o, p
+and q are the adjacent string images. If PROJ is on, the first line is
+the normalized projection of r-o onto q-p, i.e.
+ (r-p) . (q-p)
+ ------------- = d/||D|| \def delta
+  ||q-p||^2
+
+and the second line is the normalized distance to the string, i.e. 
+  || ( r-p - d(q-p)/||D||) || / ||D||
+  
+These are the variables that are restrained in FTSM calculations  when
+PROJ is on. For example, for internal string points, delta is restrained
+to 0.5, and for the left and right endpoints, to 0 and 1, respectively.
+Note that ||D|| equals twice the string length increment ds. If PROJ is
+off, ||r-o|| will be printed.  In the above discussion, best-fit
+rotations are implicit when the orientation set is nonempty.
+
+FREE [FENM <character*>] [{FAPP}] [{NOCV}] sets up output of the free
+energy (FE). At each call to string statistics, a line will be added to
+the file with the name specified with [FENM <character*>].  If FAPP is
+specified, output will be appended to the file.  If NOCV is specified,
+curvature contributions will not be included in the FE output.
+
+FORC [FCNM <character*>] [{FCAP}] sets up output of the thermodynamic
+forces that can be integrated to obtain the free energy. If PROJ is on,
+at each call to string statistics, three lines will be added to the file
+with the name specified with [FENM <character*>] (only two lines are
+added if FREE energy output is requested as above and NOCV is
+specified). If FAPP is specified, output will be appended to the file. 
+The first line contains the forces acting on the parallel projection
+variable (delta above).  The ds metric is already included in the force, 
+so the FE at replica (i) can be computed (to first order) simply as (sum
+force_{j=1}^i ), although second-order (or higher) integration schemes
+such as the trapezoid rule are preferable. The second line contains the
+curvature contribution to the force (-\xi} in ref [1]. It can be added
+to the projection force to account for the curvature, if desired. If
+NOCV is specified with FREE energy output (above) this line will be
+omitted.  The third line lists the forces acting on the distance from
+the string used to limit transition tube width.  If is provided for
+information ans is not useful for computing the FE. If PROJ is off, the
+force acting on the RMSD variable (see section in KRMS above). This
+force is provided for information and cannot be used to compute the free
+energy.
+
+CENT [CNAM <character*>] [{CEAP}] sets up output of the string images in
+trajectory (.dcd) format.  At each statistics call N coordinate sets
+will be written consecutively to the specified file, where N is the
+number of string images.  If COM groups contain more than one atom, the
+coordinate of the COM group will be output as the coordinate of the first
+atom in the COM group.  It is possible to define multiple COM groups
+with the same first atom. However, this possibility is not considered at
+present (see short discussion above following ADD).
+
+REXM [RXNM <character*>] [{RXOL <character*>}] sets up output of the
+replica exchange map, which the current string image to which each MD
+replica is currently assigned (in the replica exchange functionality,
+the MD replica coordinates are allowed to `travel` between string images
+according to the Metropolis criterion to facilitate equilibration) RXNM
+is the name of the replica map file to which extension .map will be
+appended. RXOL allows the specification of an existing replica map (e.g.
+from a previous dynamics run) so that replica jump dynamics can be
+monitored continuously across restarts.
+
+REXL [{RXNM <character*>}] [{ROFF <int>}] [{RXAP}] sets up output of the
+replica exchange log, which contains a record of all the successful swap
+attempts. Each line lists the timestep at which the jump was performed
+and the two replicas whose coordinates have been swapped.  ROFF is an
+offset added to the timestep counter to provide continuous time
+evolution from previous runs. RXAP indicates that an existing log file
+is to be appended to.
+
+VORO [VNAM <character*>] specify name of file to which to print the
+matrix of crossing attempts C_ij  (see VOROnoi commands above). The
+extension '.dat' will be appended to the file name.
+
+VMAP [{VNAM <character*>}] specify name of file to which to print the
+Voronoi map (see VOROnoi commands above). The extension '.map' will be
+appended to the file name.
+
+VLOG [{VNAM <character*>}] [{VOFF <int>}] [{VLAP}] specifies the name of
+the binary Voronoi log file which contains the time record of all
+crossing attempts.  This file is written in binary format because it can
+become very large in order to accumulate sufficient statistics to
+compute free energies and mean first passage times. The file is post-
+processed using the MATLAB/Octave script vcalc.m given in the support
+directory. Briefly, each record in the file contains a variable number
+of entries, each entry being composed of 5 integers: (1) the iteration
+(or timestep) number, (2) string replica ID, (3) ID of the Voronoi cell
+from which the crossing attempt is being made, (4) the ID of the Voronoi
+cell to which the crossing attempt is being made, (5) the ID of the cell
+in which the replica resides after crossing attempt (i.e. whether the
+replica was reflected or allowed to cross). The present version of the
+code does not allow crossing; every replica is reflected, and all
+crossing attempts `fail`; however, this need not be the case more
+generally, and this feature may be included in future releases.  From
+the time record of crossing attempts, the free energy and reaction rates
+can be approximated according to refs. [3-4].  VOFF provides an optional
+offset for the timestep to preserve time-continuity of the crossing
+dynamics. VLAP indicates that an existing log file is to be appended to
+(however, the postprocessing script vcalc.m can accept multiple
+successive log files). The extension '.log' will be appended to the file
+name specified by VNAM.
+
+NOTE : The base file name specified by VNAM is shared by the the VORO
+output options above, and needs to be specified only once.
+------------------------------------------------------------------------
+
+Test cases.
+
+c40test/ftsm.inp
+c40test/ftsm-fix.inp
+c40test/ftsm-voro.inp
+
+------------------------------------------------------------------------
+
+References
+
+[1] W. E, W. Ren, and E. Vanden-Eijnden, Phys. Rev. B. 66, 052301 (2002).
+[2] E. Vanden-Eijnden and M. Venturoli, J. Chem. Phys. 131, 044120 (2009).
+[3] V. Ovchinnikov and M. Karplus, J. Chem. Phys. 140, 175103 (2014).
+
+If you find the FTSM code useful in preparing a manuscript,
+please cite the implementation reference 3 above.
+
+
+File: Stringm, Node: Supporting files, Up: Top, Previous: FTSM, Next: References
+
+Test cases
+
+The following test cases apply the string methods to the c7eq/c7ax
+transition in the alanine dipeptide in vacuum.
+
+test/c40test/sm0k.inp		Zero-temperature string
+test/c40test/smcv.inp		String in phi/psi dihedral angles
+test/c40test/smcv-pos.inp	String in Cartesian COM positions
+test/c40test/smcv-voro.inp	String with tessellations
+test/c40test/ftsm.inp		Finite-temperature string
+test/c40test/ftsm-fix.inp	Finite-temperature string without best-fit alignment
+test/c40test/ftsm-voro.inp	Finite-temperature string with tessellations
+
+c40test/confcons.inp	Test of conformational consistency using a myosin 6 fragment
+
+Supporting files
+
+The following are matlab/octave files that can be used to postprocess
+and display output from string calculations.
+
+support/stringm/arc.m 		: plot string length
+support/stringm/rmsd.m 		: plot rmsd between evolving string and initial string
+support/stringm/smooth2.m 	: optional smoothing routine
+support/stringm/vcalc.m 	: compute and plot free energy and mean first passage time from voronoi logs
+support/stringm/voro_fe.m 	: compute and plot free energy using collision data from voronoi simulations
+support/stringm/ftsm/free.m 	: compute free energy from ftsm simulation data
+support/stringm/sm0k/ener.n 	: plot potential energies along zero-temperature string in sm0k data 
+support/stringm/smcv/free.m 	: plot free energy output from SMCV simulations
+
+
+File: Stringm, Node: References, Up: Top, Previous: Supporting files, Next: Top
+
+Zero-temperature string method (SM0K)
+
+[1] W. E, W. Ren, and E. Vanden-Eijnden, J. Chem. Phys. 126, 164103 (2007).
+[2] V. Ovchinnikov, M. Karplus, and E. Vanden-Eijnden, J. Chem. Phys.
+134, 085103 (2011).
+[3] I. Khavrutskii, K. Arora, and C. Brooks III, J. Phys. Chem. 125, 174108
+(2006).
+
+If you find the SM0K code useful in preparing a manuscript,
+please cite the implementation reference 2 above.
+
+Finite-temperature string  method (FTSM)
+
+[1] W. E, W. Ren, and E. Vanden-Eijnden, Phys. Rev. B. 66, 052301 (2002).
+[2] E. Vanden-Eijnden and M. Venturoli, J. Chem. Phys. 131, 044120 (2009).
+[3] V. Ovchinnikov and M. Karplus, J. Chem. Phys. 140, 175103 (2014).
+
+If you find the FTSM code useful in preparing a manuscript,
+please cite the implementation reference 3 above.
+
+String method in collective variables (SMCV)
+
+[1] L. Maragliano, A. Fischer, E. Vanden-Eijnden, and G. Ciccotti, J.
+Chem.Phys. 125, 024106 (2006).
+[2] L. Maragliano and E. Vanden-Eijnden, Chem. Phys. Lett. 426, 168
+(2006).
+[3] V. Ovchinnikov, M. Karplus, and E. Vanden-Eijnden, J. Chem. Phys.
+134, 085103 (2011).
+
+If you find the SMCV code useful in preparing a manuscript,
+please cite the implementation reference 3 above.
+

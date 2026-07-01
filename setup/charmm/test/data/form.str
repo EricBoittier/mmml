@@ -1,0 +1,107 @@
+* calculate group-group energy (nonbonded) of 2 formamides
+*  1:nonbond option  7: filename
+*
+coor init sele segid frm2 end
+ic seed  3 o  3 c  3 ca
+ic build
+
+set x 1.0
+format (F14.8)
+set 8 2.25
+decr 8 by @x
+coor trans xdir @8 sele segid frm2 end
+coor rotate xdir 1.0 phi 180.0 sele segid frm2 end
+
+FAST OFF
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+
+open write card unit 32 name @9@7.out
+outu 32
+open write card unit 33 name @9@7.plt
+open write card unit 34 name @9@7_scal.plt
+open write card unit 35 name @9@7_vect.plt
+open write card unit 36 name @9@7_all.plt
+open write card unit 37 name @9@7_pvect.plt
+open write card unit 38 name @9@7_cvect.plt
+
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+
+label loop                                   
+incr 8 by @x
+coor trans xdir @x sele segid frm2 end 
+
+energy
+set 7 0.0
+incr 7 by ?ener
+set 7 @7 ?GRMS
+write title unit 33
+* @8 @7
+*
+
+FAST SCALAR
+energy
+set 6 0.0
+incr 6 by ?ener
+set 6 @6 ?GRMS
+write title unit 34
+* @8 @6
+*
+test first tol 0.00001 step 0.0002
+
+FAST VECTOR
+energy
+set 5 0.0
+incr 5 by ?ener
+set 5 @5 ?GRMS
+write title unit 35
+* @8 @5
+*
+test first tol 0.00001 step 0.0002
+
+FAST PARVECT
+energy
+set 4 0.0
+incr 4 by ?ener
+set 4 @4 ?GRMS
+write title unit 37
+* @8 @4
+*
+test first tol 0.00001 step 0.0002
+
+FAST CRAYVEC
+energy
+set 3 0.0
+incr 3 by ?ener
+set 3 @3 ?GRMS
+write title unit 38
+* @8 @3
+*
+test first tol 0.00001 step 0.0002
+
+write title unit 6
+* @8
+*   general @7
+*   scalar  @6
+*   vector  @5
+*   parvect @4
+*   crayvec @3
+*
+write title unit 36
+* @8
+*   general @7
+*   scalar  @6
+*   vector  @5
+*   parvect @4
+*   crayvec @3
+*
+
+FAST OFF
+vibran
+write seco card finite sele all end unit 32 tol 0.00001 step 0.0002
+end
+if 8 lt 14.01 goto loop
+
+outu 6
+return
+
+

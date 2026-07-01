@@ -1,0 +1,196 @@
+* Test case for OpenMM Dock
+* Created by Xinqiang Ding (xqding_at_umich.edu)
+* at 2017/12/19 14:11:25
+*
+
+if ?fftdock .ne. 1 then
+   echo "Test NOT performed. FFTDOCK must be defined in pref.dat"
+   stop
+endif
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed. OPENMM must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+! read the topology and parameter files
+read rtf card name @0/top_all36_prot.rtf
+read rtf card name @0/top_all36_na.rtf append
+read rtf card name @0/top_all36_cgenff.rtf append
+
+read param card name @0/par_all36_prot.prm
+read param card name @0/par_all36_na.prm append
+read param card name @0/par_all36_cgenff.prm append
+
+stream @0/benzene.stream
+
+! read protein
+read sequ pdb name @0/t4l.pdb
+generate PRO setup
+auto angle dihe
+
+! add hydrogen for the protein
+read coor pdb name @0/t4l.pdb resid
+!ic fill
+ic param
+ic build
+hbuild sele all end
+PRINt COORdinate SELEct .NOT. INITialized END
+
+! real ligand pdb 
+read sequ pdb name @0/benzene.pdb
+generate LIGA setup
+read coor pdb name @0/benzene.pdb resid
+print coor sele .not. init end
+
+write psf card name ./@9/t4l-benzene.psf
+write coor pdb name ./@9/t4l-benzene.pdb
+
+! parameters for generating protein grid potential
+set SPACE = 0.5 
+set XCEN = 26.912
+set YCEN = 6.126 
+set ZCEN = 4.179 
+set XMAX = 21.501
+
+! parameter for soft soft-core potential
+set EMAX = 0.6
+set MINE = -0.4
+set MAXE = 8.0
+
+! update nonbond parameter for grid potential
+update atom switch vswitch cutnb 999 ctonnb 999 ctofnb 999 -
+       soft emax @EMAX vdwe mine @MINE maxe @MAXE elee -
+       rdie epsilon 3
+
+! read van der Waals radii
+open unit 10 read form name @0/fftdock_c36prot_cgenff_probes.txt
+fftg radii unit 10
+
+! define the enviroment part of the system based which the grid potential is calculated
+define backbone -
+   sele ( -
+   segid pro .and. -
+   (type n .or. type ca .or. type c .or. type o .or. type oct* .or. type ha* .or. type hn .or. type ht*) -
+   ) show end
+   
+define omatoms sele ( segid LIGA ) .or. -
+       (.byres. (((segid LIGA .and. ( .not. hydrogen )) .around. 5) .and. ( .not. hydrogen)))  show end
+
+define env sele .not. omatoms show end 
+
+! generate potential grid
+fftg pgen xmax @xmax ymax @xmax zmax @xmax -
+    xcen @xcen ycen @ycen zcen @zcen -
+    dgrid @space emax @EMAX mine @MINE maxe @MAXE -
+    sele env end -
+    rdie epsilon 3
+
+open unit 10 write unform name @9/t4l_grid-emax-@EMAX-mine-@MINE-maxe-@MAXE.bin
+fftg pwri unform unit 10
+close unit 10
+
+fftg clear
+grid clear
+
+! set parameters for hard soft-core grid potential
+open unit 10 read form name @0/fftdock_c36prot_cgenff_probes.txt
+fftg radii unit 10
+set EMAX = 3
+set MINE = -20
+set MAXE = 40
+fftg pgen xmax @xmax ymax @xmax zmax @xmax -
+    xcen @xcen ycen @ycen zcen @zcen -
+    dgrid @space emax @EMAX mine @MINE maxe @MAXE -
+    sele env end -
+    rdie epsilon 3
+
+open unit 10 write unform name @9/t4l_grid-emax-@EMAX-mine-@MINE-maxe-@MAXE.bin
+fftg pwri unform unit 10
+close unit 10
+fftg clear
+
+! define fixed and flexible parts of the system
+define flex sele ( segid LIGA ) .or. -
+       (.byres. (((segid LIGA .and. ( .not. hydrogen )) .around. 5) .and. ( .not. hydrogen))) .and. ( .not. backbone )  show end
+define fix sele (.byres. flex) .and. backbone show end
+
+! fill the ICB array for bond parameter
+update nbxmod 5 ctonnb 88 ctofnb 90 cutnb 95 vatom vswitch switch 
+
+! read grid potential for OpenMM dock
+open unit 31 read unform name @9/t4l_grid-emax-0.6-mine--0.4-maxe-8.0.bin
+open unit 32 read unform name @9/t4l_grid-emax-3-mine--20-maxe-40.bin
+OMMD grid UNIS 31 UNIH 32
+close unit 31
+close unit 32
+
+! create OpenMM system and context
+set numcopy = 3
+OMMD build sele fix end sele flex end ncopy @numcopy
+OMMD CGRS -
+     SOFT 1.0 HARD 0.0 -
+     EMAX 0.6 MINE -0.4 MAXE 8.0 -
+     EPS 3
+OMMD ENER
+
+open unit 31 read unform name @9/t4l_grid-emax-0.6-mine--0.4-maxe-8.0.bin
+grid read sele flex end unit 31
+close unit 31
+
+update atom switch vswitch cutnb 999 ctofnb 999 ctonnb 999 -
+       soft emax 0.6 vdwe mine -0.4 maxe 8.0 elec -
+       rdie epsilon 3
+
+! This command is require otherwise some diheral angles comprise
+! atoms from more than 2 blocks defined in the following.
+! Without this command, the following block command fails.
+dele dihe sele env end 
+
+block 3
+  call 2 sele fix end
+  call 3 sele flex end  
+  coef 1 1 0 vdw 0 elec 0
+  coef 1 2 0 vdw 0 elec 0
+  coef 1 3 0 vdw 0 elec 0
+  coef 2 2 0 vdw 0 elec 0
+  coef 2 3 1 vdw 1 elec 1
+  coef 3 3 1 vdw 1 elec 1  
+end
+energy
+
+! compare energy values calculated using the original CHARMM ENERGY routine 
+! and using ENERGY routine in OPENMM_DOCK
+calc tmp = ?BOND  + ?UREY
+calc bondener = @tmp * @numcopy
+@testcheck @bondener ?OMMDBOND 0.001 OMMD_DOCK_BOND_ENERGY
+
+calc angleener = ?ANGL * @numcopy
+@testcheck @angleener ?OMMDANGL 0.001 OMMD_DOCK_ANGLE_ENERGY
+
+calc diheener = ?DIHE * @numcopy
+@testcheck @diheener ?OMMDDIHE 0.001 OMMD_DOCK_ANGLE_ENERGY
+
+calc imprener = ?IMPR * @numcopy
+@testcheck @imprener ?OMMDIMPR 0.001 OMMD_DOCK_ANGLE_ENERGY
+
+calc cmapener = ?CMAP * @numcopy
+@testcheck @cmapener ?OMMDCMAP 0.001 OMMD_DOCK_ANGLE_ENERGY
+
+calc grvdener = ?grvd * @numcopy
+@testcheck @grvdener ?OMMDVDWG 0.01 OMMD_DOCK_ANGLE_ENERGY
+
+calc grelener = ?grel * @numcopy
+@testcheck @grelener ?OMMDELEG 0.1 OMMD_DOCK_ANGLE_ENERGY
+
+calc nbondener = ( ?vdw + ?elec ) * @numcopy
+@testcheck @nbondener ?OMMDNBON 0.001 OMMD_DOCK_ANGLE_ENERGY
+
+stop

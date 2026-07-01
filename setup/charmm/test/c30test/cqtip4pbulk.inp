@@ -1,0 +1,151 @@
+*  dynamics of bulk box of TIP4P-FQ molecules
+*  test
+*
+!  This script performs a minimization and 5000 steps of dynamics
+!  on a box of TIP4P-FQ waters (216 molecules). The initial geometry
+!   is read in from tip4p.crd
+
+!  The lonepair facility is set up
+
+!  A 100-step minimization using steepest descents is performed.
+
+!  5000 steps of dynamics with the charges coupled to a Nose-Hoover heat 
+!   bath are performed.
+
+
+!  NOTES: 1. For all computations related to the fluctuating charge scheme
+!            as implememted currently, the E14FAC value must be 0.0 (because
+!   	     the 1-4 intramolecular electrostatic interactions are explicitly
+!   	     accounted for  by the shielded Coulomb interaction.   E14FAC 0.0
+!  	     is explicitly defined in the input for now, until a standard 
+! 	     is agreed upon.  (Current CHARMM parameter files take E14FAc 1.0
+!  	     as the default).
+
+
+!         2. Charge dynamics with temperature baths are specified in the 
+! 	     dynamics control lines.  The option  FQINT should be set to 1
+!	     for Nose-Hoover thermostat.  Velocity reassignment is not allowed
+!            since it leads to incorrect charge kinetic energy fluctuations.
+
+!	     The parameters for the baths are specified before the dynamics
+!            control options section.  The mode of specifying number of baths,
+!	     atoms belonging to a bath, bath parameters, etc. is the same as for
+! 	     specifiying the values for Nose thermostats for nuclear degrees of 
+!	     freedom.  (this will be more apparent below).
+
+
+! 	  3. The timestep used is 0.0005 ps (yes, 0.5 femtoseconds). Could use
+!            up to 1.0 fs, but this is a matter of how much drift one wants to 
+!	     allow from the adiabatic surface.
+
+if ?cheq .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+              
+if ?colfft eq 1 then
+      echo "Test NOT performed with COLFFT."
+      stop
+endif
+
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+stream datadir.def
+
+! Read toppology and parameter files
+open unit 1 read form name @0top_all30_cheq_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all30_cheq_prot.inp
+read param card unit 1
+close unit 1
+
+read sequ tip4 216
+generate tip4 first none last none setup noang nodihed 
+
+open read unit 1  form name  @0tip4p.crd
+read coor card unit 1 
+close unit 1
+
+!  procedure for lone-pair facility usage
+coor copy comp
+
+lonepair bisector dist 0.15 angle 0.0 dihe 0.0 -
+       sele atom tip4 * OM end -
+       sele atom tip4 * OH2 end -
+	sele atom tip4 * H1 end -
+	sele atom tip4 * H2 end
+
+! set the usual fluctuating charge parameters
+!  Masses are from Rick, Stuart, and Berne paper.
+
+cheq norm byres sele all end
+cheq tip4 sele all end
+cheq QMAS CGMA 0.000069 TSTA 0.01 sele all end
+
+fast ON
+
+set length 18.817
+set 6 @length
+set 7 @length
+set 8 @length
+
+set cutoff 15.0
+
+Calc ctonnb = @cutoff - 1.0
+Calc ctofnb = @cutoff - 0.5
+
+calc boxcut @6/2.0
+
+calc volu = @6 * @7 * @8
+set ang 90
+crystal defi cubic @6 @7 @8 @ang @ang @ang
+crystal build cutoff 15 Noper 0
+open read card unit 10 name @0cubic.xtl
+crystal read card unit 10
+close unit 10
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+shake bonh tol 1.0e-8 para mxit 20000
+
+! Minimize for a few steps
+!  NOTE:  need to set the e14fac to 0.0 since the intramolecular
+!   electrostatics includes 1-4 shielded interactions via the hardness
+!   matrix elements
+
+mini sd cheq cgmd 1 nstep 30 nprint 10 -
+ELEC EWALD KAPPa 0.370  PMEWALD fftx 20 ffty 20 fftz 20 -
+atom vatom vdistance cdie eps 1.0 vswitch wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb cutim @cutoff -
+nbxmod -5 e14fac 0.0
+
+! set up the Nose-Hoover baths for the charges
+! the calling procedure is identical to the NOSE 
+!  call for applying the bath to nuclear degrees of freedom
+!
+!  the "NOSE" is replaced by "FQBA"
+
+FQBA 1                         ! set up '1' bath
+CALL 1 sele atom * * * end     !  selec the atoms that will be coupled to this bath
+COEF 1  QREF  0.005  TREF 1.0  ! bath parameters (usual meaning)
+END
+
+! open the relevant files for simulation output
+
+dynamics cpt leap start timestep 0.00050 nstep 10 nprint 1 iprfrq 1000 -
+cheq cgmd 1 cgeq 1 fqint 1 -
+firstt 298.0 finalt 298.0  twindl -5.0 twindh 5.0 iseed 940829 -
+ichecw 1 teminc 0.0 ihtfrq 0 ieqfrq 0 -
+iasors 1 iasvel 1 iscvel 0 isvfrq 50 -
+inbfrq -1 imgfrq -1 ilbfrq 0 nbscale 1.5 -
+e14fac 0 nbxmod -5 -
+cdiel eps 1.0 cutnb @cutoff cutim @cutoff ctofnb @ctofnb ctonnb @ctonnb vswi -  
+Ewald kappa 0.320 pmEwald qcor 1 order 4 fftx 20 ffty 20 fftz 20 ntrfrq 2000 - !PM
+       pconstant pmass 100.0 pref 30.0 pgamma 20.0 - !  Constant pressure
+       Hoover tmass 50.0 REFT 298.0
+
+stop

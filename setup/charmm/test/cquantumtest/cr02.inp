@@ -1,0 +1,113 @@
+* cr02.inp - CHARMMRATE INTERFACE
+* Cristobal Alhambra : c28a1 22-Jun-2000
+* CHARMMRATE INTERFACE : Geometry optimization of chorismate in water
+*
+
+if ?charmmra .ne. 1 then stop
+if ?quantum .ne. 1 then stop
+
+stream datadir.def
+
+! Topology file
+! -------------
+open read form unit 1 name @0cr02.topo
+read rtf card unit 1
+close unit 1
+
+! Parameter file
+! --------------
+open read form unit 1 name @0cr02.para
+read para card unit 1
+close unit 1
+
+! Read sequence
+! -------------
+read sequ card
+1
+chrm
+generate chrm first none last none noangle nodihedral 
+
+read sequ tip3 726
+generate bulk first none last none noangle nodihedral 
+
+! Read coordinates
+! ----------------
+open read  form unit 10 name @0cr02.crd
+read coordinates card unit 10
+
+update atom noextend cdie fswitched eps 1.0 -
+      cutnb 12.0 ctofnb 11.0 ctonnb 10.    -
+      inbf -1 
+
+quantum sele segid chrm end am1 charge -2 scfc 0.00000001
+
+!-------------------
+! Open the i/o units 
+!-------------------
+rewind unit 10
+open write form unit 11 name @0optcr02.crd
+
+!----------------------------------------------------
+! Open the units to write out the output over the job
+!----------------------------------------------------
+ open write form unit 61 name @9optcr02.61
+
+polyrate sele BYNU 1:24 end runit 10 opunit 11
+*general
+
+ title
+ geometry optimization
+ end
+
+ atoms
+    1  c
+    2  c
+    3  c
+    4  c
+    5  c
+    6  c
+    7  h
+    8  h
+    9  h
+   10  h
+   11  o
+   12  c
+   13  c
+   14  h
+   15  h
+   16  c
+   17  o
+   18  o
+   19  c
+   20  o
+   21  o
+   22  h
+   23  o
+   24  h
+ end
+
+*optimization
+
+  print
+
+  gcomp  1.d-4
+
+*second
+
+  numstep  1.0D-2
+
+*react1
+
+  constant
+  end
+
+  species ssrp
+
+  noproject
+
+*finish
+!          end of polyrate input deck
+!
+
+
+stop

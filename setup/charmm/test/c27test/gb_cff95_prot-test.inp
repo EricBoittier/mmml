@@ -1,0 +1,196 @@
+*  Test mmff calculation
+*
+
+if ?cff .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+set pnode 
+if ?numnode .gt. 1 then 
+     set pnode node 0
+     echo "CFF Not Parallel: Test NOT Performed"
+     stop
+endif
+
+
+bomlev -5 @pnode
+stream datadir.def
+prnlev 0
+USE CFF
+
+OPEN READ UNIT 20 CARD NAME @0cff93.frc
+READ PARA UNIT 20 CARD
+CLOSE UNIT 20
+
+OPEN READ FORM UNIT 1 NAME @0aminoh_cff.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+prnlev 5 @pnode
+
+!!!!********SINGLE AA*************!!!!
+open unit 1 read form name @0trp.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup
+patch sing seg 1
+scalar charge stat
+
+prnlev 0 @pnode
+    rename atom cd select ( resname ile .and. type cd1 ) end    !ILE
+    rename atom hd1 select ( resname ile .and. type hd11 ) end
+    rename atom hd2 select ( resname ile .and. type hd12 ) end
+    rename atom hd3 select ( resname ile .and. type hd13 ) end
+    rename atom hg1 select ( resname cys .and. type hg ) end    !CYS
+    rename atom hg1 select ( resname ser .and. type hg ) end    !SER
+    rename atom hn1 select ( resname pro .and. ires 1 .and. type ht1 ) end
+    rename atom hn2 select ( resname pro .and. ires 1 .and. type ht2 ) end
+    rename atom ot1 select type oct1 end
+    rename atom ot2 select type oct2 end
+
+prnlev 5 @pnode
+open unit 1 read form name @0trp.crd
+read coor card unit 1
+close unit 1
+
+prnlev 0 @pnode
+    rename atom cd1 select ( resname ile .and. type cd ) end    !ILE
+    rename atom hd11 select ( resname ile .and. type hd1 ) end
+    rename atom hd12 select ( resname ile .and. type hd2 ) end
+    rename atom hd13 select ( resname ile .and. type hd3 ) end
+    rename atom hg select ( resname cys .and. type hg1 ) end    !CYS
+    rename atom hg select ( resname ser .and. type hg1 ) end    !SER
+    rename atom ht1 select ( resname pro .and. ires 1 .and. type hn1 ) end
+    rename atom ht2 select ( resname pro .and. ires 1 .and. type hn2 ) end
+    rename atom oct1 select type ot1 end
+    rename atom oct2 select type ot2 end
+
+prnlev 5 @pnode
+
+!  Now turn on the optimized generalized Born energy term 
+!  for CFF95 - generic w/o molecule-based lambda optimized.
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7660 Epsilon 80.0
+
+energy cutnb 999 ctofnb 990 ctonnb 980 switch vswitch
+
+mini abnr nstep 100 tolenr 0.001
+
+test first  step 0.00001 tol 0.0000001
+
+GBorn Clear
+
+!  Now turn on the optimized generalized Born energy term 
+!  for MMFF - lambda optimized for single AA
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7703 Epsilon 80.0
+
+energy
+
+test first  step 0.00001 tol 0.0000001
+
+GBorn Clear
+
+delete atom select all end
+
+!!!!********DIAAS*************!!!!
+
+open unit 1 read form name @0ser-tyr.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup
+
+prnlev 0 @pnode
+    rename atom cd select ( resname ile .and. type cd1 ) end    !ILE
+    rename atom hd1 select ( resname ile .and. type hd11 ) end
+    rename atom hd2 select ( resname ile .and. type hd12 ) end
+    rename atom hd3 select ( resname ile .and. type hd13 ) end
+    rename atom hg1 select ( resname cys .and. type hg ) end    !CYS
+    rename atom hg1 select ( resname ser .and. type hg ) end    !SER
+    rename atom hn1 select ( resname pro .and. ires 1 .and. type ht1 ) end
+    rename atom hn2 select ( resname pro .and. ires 1 .and. type ht2 ) end
+    rename atom ot1 select type oct1 end
+    rename atom ot2 select type oct2 end
+
+prnlev 5 @pnode
+open unit 1 read form name @0ser-tyr.crd
+read coor card unit 1
+close unit 1
+prnlev 0 @pnode
+    rename atom cd1 select ( resname ile .and. type cd ) end    !ILE
+    rename atom hd11 select ( resname ile .and. type hd1 ) end
+    rename atom hd12 select ( resname ile .and. type hd2 ) end
+    rename atom hd13 select ( resname ile .and. type hd3 ) end
+    rename atom hg select ( resname cys .and. type hg1 ) end    !CYS
+    rename atom hg select ( resname ser .and. type hg1 ) end    !SER
+    rename atom ht1 select ( resname pro .and. ires 1 .and. type hn1 ) end
+    rename atom ht2 select ( resname pro .and. ires 1 .and. type hn2 ) end
+    rename atom oct1 select type ot1 end
+    rename atom oct2 select type ot2 end
+
+prnlev 5 @pnode
+
+!  Now turn on the optimized generalized Born energy term 
+!  for CFF95 - dipeptide  optimized.
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7686 Epsilon 80.0
+
+energy cutnb 999 ctofnb 990 ctonnb 980 switch vswitch
+
+mini abnr nstep 100 tolenr 0.001
+
+coor force comp
+print coor comp
+
+GBorn Clear
+
+delete atom select all end
+
+!!!!********PROTEINS*************!!!!
+
+open unit 1 read form name @01ptq.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup
+
+prnlev 0 @pnode
+    rename atom cd select ( resname ile .and. type cd1 ) end    !ILE
+    rename atom hd1 select ( resname ile .and. type hd11 ) end
+    rename atom hd2 select ( resname ile .and. type hd12 ) end
+    rename atom hd3 select ( resname ile .and. type hd13 ) end
+    rename atom hg1 select ( resname cys .and. type hg ) end    !CYS
+    rename atom hg1 select ( resname ser .and. type hg ) end    !SER
+    rename atom hn1 select ( resname pro .and. ires 1 .and. type ht1 ) end
+    rename atom hn2 select ( resname pro .and. ires 1 .and. type ht2 ) end
+    rename atom ot1 select type oct1 end
+    rename atom ot2 select type oct2 end
+
+prnlev 5 @pnode
+open unit 1 read form name @01ptq.crd
+read coor card unit 1
+close unit 1
+prnlev 0 @pnode
+    rename atom cd1 select ( resname ile .and. type cd ) end    !ILE
+    rename atom hd11 select ( resname ile .and. type hd1 ) end
+    rename atom hd12 select ( resname ile .and. type hd2 ) end
+    rename atom hd13 select ( resname ile .and. type hd3 ) end
+    rename atom hg select ( resname cys .and. type hg1 ) end    !CYS
+    rename atom hg select ( resname ser .and. type hg1 ) end    !SER
+    rename atom ht1 select ( resname pro .and. ires 1 .and. type hn1 ) end
+    rename atom ht2 select ( resname pro .and. ires 1 .and. type hn2 ) end
+    rename atom oct1 select type ot1 end
+    rename atom oct2 select type ot2 end
+
+prnlev 5 @pnode
+
+!  Now turn on the optimized generalized Born energy term 
+!  for CFF95 - optimized for proteins.
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.6957 Epsilon 80.0
+
+energy cutnb 999 ctofnb 990 ctonnb 980 switch vswitch
+
+GBorn Clear
+
+delete atom select all end
+
+stop

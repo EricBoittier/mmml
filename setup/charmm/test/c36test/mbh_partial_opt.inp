@@ -1,0 +1,128 @@
+* CHARMM c36a1 testcase
+* TEST MOBILE BLOCK HESSIAN METHOD (MBH) IN VIBRAN
+* An Ghysels, June 2008
+* Partially optimized structure
+* System: trimer of Gly
+*
+
+bomblev -1
+STREam datadir.def
+
+
+! -------------------------------------
+! READ DATA
+
+
+   read rtf   card name @0/top_all22_prot_na.inp
+   read param card name @0/par_all22_prot.inp
+
+   read sequ gly 3
+   gener TRIG setup warn first ACE last CT3
+   print coord
+
+! construct  coordinates
+   ic purge ! clean up table
+   ic param ! fill in some missing bond and angle information from parameter file
+   ic seed 1 N 1 CA 1 C  ! give first 3 atoms to start building ic
+   ic build ! try to place missing atoms
+
+! check to see if we have it all (except the hydrogens)
+   print coor select .not. hydrogen .and. .not. initialized end
+   print coor
+
+! fill in coords for hydrogens
+   hbuild select hydrogen end
+   print coor 
+   energy ! see if we can get an energy here
+
+
+! -------------------------------------
+! WRITE SOME FILES
+
+write psf card name @9/trimergly.part.psf
+* PSF from top_all22_prot for TRIMER GLY
+* AG 13/04/2008
+*
+
+! get masses into .crd file
+   scalar wmain copy mass
+   scalar mass show
+
+write coor card name @9/trimergly.part.input.crd
+* CRD from top_all22_prot for TRIMER GLY
+* AG 13/04/2008
+*
+
+! -------------------------------------
+! GEOMETRY OPTIMIZATION
+
+! FIX several atoms
+   define mybl sele bynumber 1:25 end
+   cons fix sele  mybl end
+
+! minimization
+   mini sd nstep 100 nprint 100 fswitch vswitch
+   mini abnr nstep 8000 tolgrd 0.000001 nprint 100 fswitch vswitch
+   energy
+
+! and UNFIX the atoms
+   cons fix sele none end
+   energy
+
+! UPDATE CRD
+write coor card name @9/trimergly.part.crd
+* CRD from top_all22_prot for TRIMER GLY - PARTIALLY OPTIMIZED
+* min e = ?ENER
+* AG 13/04/2008
+*
+
+
+! -------------------------------------
+! VIBRATIONAL ANALYSIS
+! should be performed in another CHARMM file
+! such that the fixed atoms are really unfixed
+! See use of CONS FIX command.
+
+
+! -------------------------------------
+! VIBRATIONAL ANALYSIS
+calc k = 3 * ?natom
+vibran nmodes @k fswitch vswitch
+
+
+!!!!! 1. full Hessian
+! Negative frequencies appear.
+! Less than six zeros frequencies.
+diag
+
+open write unit 23 card name @9/trimergly.part.hess.full
+write second card unit 23 
+* FULL Hessian
+*
+
+open write unit 24 card name @9/trimergly.part.modes.full
+write norm card unit 24 
+* FULL modes
+*
+
+
+!!!!! 2. MBH mobile block hessian approach
+! Same block as in optimization:
+! No negative frequencies.
+! There are six zeros frequencies.
+
+blks init
+blks addb sele bynumber 1:25 end
+mbh
+
+open write unit 25 card name  @9/trimergly.part.hess.mbh
+write second card unit 25 
+* MBH Hessian
+*
+
+open write unit 26 card name  @9/trimergly.part.modes.mbh
+write norm card unit 26 
+* MBH modes
+*
+
+end

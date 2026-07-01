@@ -1,0 +1,223 @@
+* test hbanalysis facility
+*
+stream datadir.def
+set testfail 0
+
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+read rtf  card name @0top_all22_prot.inp
+read para card name @0par_all22_prot.inp
+
+read sequ tip3 3
+gene wat noangle nodihe 
+read coor card
+* one water molecule
+*
+    3
+    1    1 TIP3 OH2    2.53067   0.59634  -2.47655
+    2    1 TIP3 H1     2.61978   1.54016  -2.60884
+    3    1 TIP3 H2     1.89243   0.32098  -3.13461
+coor dupl sele resi 1 end sele resi 2 end
+
+coor orie sele resi 1 end
+coor trans ydir  0.39059
+coor rota zdir 1.0 phi 52.3 sele resi 2 end
+coor trans ydir -2.0 sele resi 2 end
+coor dupl sele resi 2 end sele resi 3 end
+coor rota ydir 1.0 phi 180.0 sele resi 3 end
+coor trans ydir -2.0 sele resi 3 end
+rename resn brdg sele resi 2 end ! so we can use this to test bridging
+
+coor mind  sele resi 1 end sele resi 2:3 end 
+coor mind  sele resi 2 end sele resi 3 end 
+print coor
+! set up a fake trajectory
+! the first three frames contain all three molecules lined up and within
+! hbonding distance (1A or so in this case)
+coor copy comp
+open unit 21 write unform name @9hbanal.cor
+traj iwrite 21 nfile 12 delta 1.0
+traj write 
+traj write 
+traj write 
+! move last molecule away, and do 6 more frames
+coor trans ydir -3.0 sele resi 3 end
+coor mind  sele resi 1 end sele resi 2:3 end 
+print coor
+traj write 
+traj write 
+traj write 
+traj write 
+traj write 
+traj write 
+! and move second one to follow for the last three frames
+coor trans ydir -3.0 sele resi  2 end
+coor mind  sele resi 1 end sele resi 2:3 end 
+print coor
+traj write 
+traj write 
+traj write 
+! now analyze for hbonding
+!bomlev -2
+!update 
+open unit 21 read unform name @9hbanal.cor
+coor hbond cuthb 1.2 firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele atom * 1 OH2 end sele resi 1 end
+@qcheck 0 ?nhbond 0.001 hba1_1
+@qcheck 0 ?avhblf 0.0001 hba1_2
+!if ?nhbond ne 0 then incr nfail by 1
+!if ?avhblf ne 0 then incr nfail by 1
+! and do the update
+update
+open unit 21 read unform name @9hbanal.cor
+coor hbond cuthb 1.2 firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele atom * 1 OH2 end sele resi 1 end
+@qcheck 0 ?nhbond 0.001 hba1_3
+@qcheck 0 ?avhblf 0.0001 hba1_4
+!if ?nhbond ne 0 then incr nfail by 1
+!if ?avhblf ne 0 then incr nfail by 1
+
+! time values modified to match fixed TRAJ WRITE (AKMA, not ps)
+open unit 21 read unform name @9hbanal.cor
+coor hbond cuthb 1.2 firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele atom * 1 OH2 end sele resi 2 end
+@qcheck 0.75 ?nhbond 0.001 hba1_5
+@qcheck 8.99999 ?avhblf 0.0001 hba1_6
+!if ?nhbond ne 0.75 then incr nfail by 1
+!if ?avhblf ne 0.439994 then incr nfail by 1
+
+open unit 21 read unform name @9hbanal.cor
+coor hbond firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele resi 1 end sele resi 2:3 end
+@qcheck 0.75 ?nhbond 0.001 hba1_7
+@qcheck 8.99999 ?avhblf 0.0001 hba1_8
+!if ?nhbond ne 0.75 then incr nfail by 1
+!if ?avhblf ne 0.439994 then incr nfail by 1
+
+open unit 21 read unform name @9hbanal.cor
+coor hbond  firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele resi 1:2 end sele resi 1:3 end
+@qcheck 2.5 ?nhbond 0.001 hba1_9
+@qcheck 5.9999 ?avhblf 0.0001 hba1_10
+!if ?nhbond ne 2.5 then incr nfail by 1
+!if ?avhblf ne 0.293329 then incr nfail by 1
+
+! and test for bridging
+open unit 21 read unform name @9hbanal.cor
+coor hbond  bridge BRDG  cuthb 1.2 firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele resi 1 end sele resi 1:3 end
+@qcheck 0.25 ?nhbond 0.001 hba1_11
+@qcheck 3.0000 ?avhblf 0.0001 hba1_12
+!if ?nhbond ne 0.25 then incr nfail by 1
+!if ?avhblf ne 0.146665 then incr nfail by 1
+
+open unit 21 read unform name @9hbanal.cor
+coor hbond  bridge BRDG  cuthb 1.2 firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele resi 1 end sele resi 3 end
+@qcheck 0.25 ?nhbond 0.001 hba1_13
+@qcheck 3.0000 ?avhblf 0.0001 hba1_14
+!if ?nhbond ne 0.25 then incr nfail by 1
+!if ?avhblf ne 0.146665 then incr nfail by 1
+
+open unit 21 read unform name @9hbanal.cor
+coor hbond  bridge BRDG  cuthb 1.2 firstu 21 nunit 1 begin 1 skip 1 stop 12 -
+ sele resi 1 end sele resi 1:3 end
+@qcheck 0.25 ?nhbond 0.001 hba1_15
+@qcheck 3.0000 ?avhblf 0.0001 hba1_16
+!if ?nhbond ne 0.25 then incr nfail by 1
+!if ?avhblf ne 0.146665 then incr nfail by 1
+
+
+! how  is it without a trajectory?
+print coor
+coor hbond bridge BRDG cuthb 8.0 sele resi 1 end sele resi 1:3 end
+@qcheck 26 ?nhbond 0.001 hba1_17
+!if ?nhbond ne 26 then incr nfail by 1
+
+coor hbond bridge BRDG cuthba 160.0 cuthb 8.0 sele resi 1 end sele resi 1:3 end
+@qcheck 1 ?nhbond 0.001 hba1_18
+!if ?nhbond ne 26 then incr nfail by 1
+
+coor hbond  cut 8.0 sele resi 1 end sele resi 1:3 end
+@qcheck 8 ?nhbond 0.001 hba1_19
+!if ?nhbond ne 26 then incr nfail by 1
+
+coor hbond  cuthb 8.0 cuta 160.0 sele resi 1 end sele resi 1:3 end
+@qcheck 2 ?nhbond 0.001 hba1_20
+!if ?nhbond ne 26 then incr nfail by 1
+
+coor copy ! and with initial set, but with bridge Oxygen at origin?
+coor transl ydir 2.0
+print coor
+coor hbond bridge BRDG cuthb 1.2 sele resi 1 end sele resi 1:3 end
+@qcheck 1 ?nhbond 0.001 hba1_21
+!if ?nhbond ne 1 then incr nfail by 1
+
+coor hbond bridge BRDG cuthba 160.0 cuthb 1.2 sele resi 1 end sele resi 1:3 end
+@qcheck 1 ?nhbond 0.001 hba1_22
+!if ?nhbond ne 1 then incr nfail by 1
+
+coor hbond  cut 1.2 sele resi 1 end sele resi 1:3 end
+@qcheck 1 ?nhbond 0.001 hba1_23
+!if ?nhbond ne 1 then incr nfail by 1
+
+coor hbond  cuthb 1.2 cuta 160.0 sele resi 1 end sele resi 1:3 end
+@qcheck 1 ?nhbond 0.001 hba1_24
+!if ?nhbond ne 1 then incr nfail by 1
+
+
+! and if we rotate molecule 2 a little
+coor rota zdir 1.0 phi 30.0 sele resi 2 end
+
+coor hbond bridge BRDG cuthb 3.0 sele resi 1 end sele resi 1:3 end
+@qcheck 26 ?nhbond 0.001 hba1_25
+!if ?nhbond ne 26 then incr nfail by 1
+
+coor hbond bridge BRDG cuthb 3.0 sele resi 1 end sele resi 1:3 end VERBOSE
+define junk sele hbdefi end
+@qcheck 3 ?nsel 0.001 hba1_25a
+define junk sele hbdefj end
+@qcheck 6 ?nsel 0.001 hba1_25b
+define junk sele hbdefb end
+@qcheck 1 ?nsel 0.001 hba1_25c
+
+coor hbond bridge BRDG cuthba 160.0 cuthb 3.0 sele resi 1 end sele resi 1:3 end
+@qcheck 0 ?nhbond 0.001 hba1_26
+!if ?nhbond ne 0 then incr nfail by 1
+
+
+coor hbond  cut 3.0 sele resi 1 end sele resi 1:3 end
+@qcheck 4 ?nhbond 0.001 hba1_27
+!if ?nhbond ne 4 then incr nfail by 1
+
+coor hbond  cuthb 3.0 cuta 160.0 sele resi 1 end sele resi 1:3 end
+@qcheck 0 ?nhbond 0.001 hba1_28
+!if ?nhbond ne 0 then incr nfail by 1
+
+coor hbond  cuthb 3.0 cuta 120.0 sele resi 1 end sele resi 1:3 end
+@qcheck 1 ?nhbond 0.001 hba1_29
+!if ?nhbond ne 1 then incr nfail by 1
+
+coor rota zdir 1.0 phi 30.0 sele resi 2 end
+
+coor hbond  cut 3.0 sele resi 1 end sele resi 1:3 end
+@qcheck 4 ?nhbond 0.001 hba1_30
+!if ?nhbond ne 4 then incr nfail by 1
+
+coor hbond  cuthb 3.0 cuta 160.0 sele resi 1 end sele resi 1:3 end
+@qcheck 0 ?nhbond 0.001 hba1_31
+!if ?nhbond ne 0 then incr nfail by 1
+
+coor hbond  cuthb 3.0 cuta 120.0 sele resi 1 end sele resi 1:3 end
+@qcheck 0 ?nhbond 0.001 hba1_32
+!if ?nhbond ne 0 then incr nfail by 1
+
+
+if @testfail ne 0 then
+  echo hba1 testcase summary result: fail
+else
+  echo hba1 testcase summary result: pass
+endif

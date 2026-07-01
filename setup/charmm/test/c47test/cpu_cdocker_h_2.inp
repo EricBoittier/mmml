@@ -1,0 +1,176 @@
+* cpu_cdocker_h_2.inp
+* This is used for test hydrogen bond grids in cpu CDOCKER.
+* Created by Yujin Wu (wyujin_at_umich.edu)
+* at 2021/02/19
+*
+
+stream datadir.def
+
+!! Read the topology and parameter files
+read rtf card name @0top_all36_prot.rtf
+read rtf card name @0top_all36_cgenff.rtf append
+read rtf card name @0probes_c36prot-cgenff.rtf append
+
+read param flex card name @0par_all36_prot.prm
+read param flex card name @0par_all36_cgenff.prm append
+read param flex card name @0probes_c36prot-cgenff.prm append
+
+stream @0methanol.str
+
+!! Build ligand
+read sequ pdb name @0methanol.pdb
+generate LIGA setup
+read coor pdb name @0methanol.pdb
+print coor select .not. init end
+
+!! Grid dimension 
+coor stats select segid LIGA .and. (type H4 .or. type O) end
+set xcen ?XAVE
+set ycen ?YAVE
+set zcen ?ZAVE
+
+!! Read in probe atoms and set position
+read sequ card 
+* title
+* 
+1 
+PROB
+generate PROB setup
+scalar x set @xcen select segid PROB end
+scalar y set @ycen select segid PROB end
+scalar z set @zcen select segid PROB end
+
+!! Fix position of target
+cons fix select segid LIGA end
+skipe all excl vdw elec
+energy
+
+!! Update nonbond parameter for grid potential 
+update atom switch vswitch cutnb 999 ctonnb 999 ctofnb 999 -
+       soft emax 3 vdwe mine -20 maxe 40 elee -
+       rdie epsilon 3
+
+!! Hbond grids parameter
+set hmax = -1.0
+set rcta = 1.5
+set rctb = 3.5
+calc rij = (@rcta - @rctb) * (@rcta - @rctb)
+calc fa = -4 * @hmax / @rij
+calc fb = 0.5 * (@rcta + @rctb)
+
+!! Generate grids
+open unit 3 write form name @9methanol.ascii
+title
+* Test hbond grids for system
+*
+
+grid generate xmax 10 ymax 10 zmax 10 -
+     xcen @xcen ycen @ycen zcen @zcen -
+     hmax @hmax rcta @rcta rctb @rctb -
+     dgrid grhb 0.5 -  
+     select segid PROB end formatted outu 3
+close unit 3
+grid clear
+delete atom select segid PROB end
+
+!! Record donor/acceptor atom position
+coor stats select type H4 end
+set dx ?XAVE 
+set dy ?YAVE 
+set dz ?ZAVE 
+
+coor stats select type O end
+set ax ?XAVE
+set ay ?YAVE
+set az ?ZAVE
+
+!! Read in grid 
+skip none
+update atom switch vswitch cutnb 12 ctofnb 10 ctonnb 8 vdwe elec rdie epsilon 3
+open unit 3 read form name @9methanol.ascii
+grid read formatted unit 3 select segid LIGA end grhb
+close unit 3
+
+!! Set variables
+set idx = 1
+set dmax = 0
+set total = 0
+label compare
+
+!! Translate ligand by a random distance
+read coor pdb name @0methanol.pdb
+calc xtran (?random - 0.5) * 2 * 3
+calc ytran (?random - 0.5) * 2 * 3
+calc ztran (?random - 0.5) * 2 * 3
+coor trans xdir @xtran ydir @ytran zdir @ztran select segid LIGA end
+
+!print coor select type O end
+!stop
+
+!! Read new donor/acceptor position
+coor stats select type H4 end
+set dx2 ?XAVE 
+set dy2 ?YAVE 
+set dz2 ?ZAVE 
+
+coor stats select type O end
+set ax2 ?XAVE
+set ay2 ?YAVE
+set az2 ?ZAVE
+
+!! Donor-acceptor distance
+calc arx = abs(@ax - @dx2)
+calc ary = abs(@ay - @dy2)
+calc arz = abs(@az - @dz2)
+calc ra = @arx ** 2 + @ary ** 2 + @arz ** 2
+calc ra = sqrt(@ra)
+
+calc drx = abs(@dx - @ax2)
+calc dry = abs(@dy - @ay2)
+calc drz = abs(@dz - @az2)
+calc rd = @drx ** 2 + @dry ** 2 + @drz ** 2
+calc rd = sqrt(@rd)
+
+!! Donor/Acceptor energy
+calc aener = @fa * (@fb - @ra) * (@fb - @ra) + @hmax
+calc dener = @fa * (@fb - @rd) * (@fb - @rd) + @hmax
+if @aener .gt. 0 then
+   set aener = 0
+endif
+if @dener .gt. 0 then
+   set dener = 0
+endif
+calc totalener = @aener + @dener
+
+!! Grid energy
+energy
+set gener = ?grhb
+
+!! Compute difference
+calc tmp = abs(@totalener - @gener)
+calc total = @total + @tmp
+if @tmp .gt. @dmax then
+   set dmax = @tmp
+   set rAmax = @ra
+   set rDmax = @rd
+   set eAmax = @aener
+   set eDmax = @dener
+   set eGmax = @gener
+endif
+
+!! Loop
+if @idx .le. 100 then
+   incr idx by 1
+   goto compare
+endif
+
+calc total = @total / @idx
+echo @dmax @rAmax @rDmax @eAmax @eDmax @eGmax
+
+@testcheck @total 0 0.1 average_energy
+@testcheck @dmax 0 0.5 max_difference
+
+stop
+
+
+

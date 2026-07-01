@@ -1,0 +1,126 @@
+* CHARMM 25 Testcase resdtest.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* water test for restrained distances
+*
+
+if ?novibran .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -1
+
+read rtf cards
+* water rtf
+*
+   18
+MASS 1 H 1.000
+MASS 2 O 16.00
+
+RESI WAT 0.0
+GROUP
+ATOM O O -0.4
+ATOM H1 H 0.2
+ATOM H2 H 0.2
+BOND O H1 O H2 !  H1 H2
+ANGLE H1 O H2
+
+END
+
+READ PARAM CARD
+* PARAMETERS FOR WATER
+*
+BOND
+H    O    450.0       1.00 ! from ST2 geometry
+H    H        0.0       1.6329931 ! from ST2 geometry (for SHAKE w/PARAM)
+ANGLE
+H    O  H       55.0     109.47122 ! TETRAHEDRAL FOR ST2'S
+END
+
+READ SEQU CARD
+* ONE WATER
+*
+    1
+WAT
+
+GENER WAT
+
+READ COOR CARD
+* WATER COORDINATES
+*
+    3
+    1    1 WAT  O      0.00000   0.06415   0.00000 WAT  1
+    2    1 WAT  H1     0.81650  -0.51321   0.00000 WAT  1
+    3    1 WAT  H2    -0.81650  -0.51321   0.00000 WAT  1
+
+READ IC
+* IC FOR WATER
+*
+  17
+    3
+    1   1 H1    1 O     1 H2    1 ??
+    1   1 O     1 H2    1 H1    1 ??
+    1   1 H2    1 H1    1 O     1 ??
+
+COOR COPY COMP
+IC FILL
+IC PRINT
+delete bond sele type h1 end sele type h2 end
+
+mini nrap nstep 5 nprint 1
+
+coor rotate xdir 0.5 ydir 0.3 zdir 0.6 phi 23.0
+energy inbf 0
+
+!!! 1 !!! Make the water assymetric without changing the angle
+
+RESDistance  KVAL 1000.0  RVAL 0.25 - 
+        1.0   WAT 1 O  WAT 1 H1  -
+       -1.0   WAT 1 O  WAT 1 H2
+
+energy
+
+skip all exclude resd
+
+energy
+
+coor force comp
+print coor comp
+
+print resdistances
+
+test first step 0.00001 tol 0.0
+
+skip none
+
+mini abnr nstep 200 nprint 10
+ic fill
+print ic
+
+print resdistances
+
+!!! 2 !!! Make the water nearly an equilateral triangle
+
+RESDistance  RESEt
+
+RESDistance  KVAL 1000.0  RVAL 0.0 - 
+        1.0   WAT 1 O  WAT 1 H1  -
+        1.0   WAT 1 O  WAT 1 H2  -
+       -2.0   WAT 1 H1 WAT 1 H2
+RESDistance  KVAL 1000.0  RVAL 0.0 - 
+        1.0   WAT 1 O  WAT 1 H1  -
+       -2.0   WAT 1 O  WAT 1 H2  -
+        1.0   WAT 1 H1 WAT 1 H2
+RESDistance  KVAL 1000.0  RVAL 0.0 - 
+       -2.0   WAT 1 O  WAT 1 H1  -
+        1.0   WAT 1 O  WAT 1 H2  -
+        1.0   WAT 1 H1 WAT 1 H2
+
+mini abnr nstep 200 nprint 10
+ic fill
+print ic
+print resdistances
+test first step 0.00001 tol 0.0
+
+stop
+

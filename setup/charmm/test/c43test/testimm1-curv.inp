@@ -1,0 +1,63 @@
+* CHARMM 43 testcase testimm1_curv.inp
+* Binod Nepal and Themis Lazaridis, 02-May-2018, c43a2
+* Example file for IMM1_curv
+*
+
+if ?aspener .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+!if ?numnode .ne. 1 then
+! echo "Test NOT performed in parallel."
+! stop
+!endif
+
+stream datadir.def
+
+open read card unit 3 name @0toph19_eef1.1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name  @0param19_eef1.1.inp
+read para unit 3 card
+close unit 3
+
+read sequ card
+* unblocked
+*
+16
+ MET SER THR SER SER LEU ARG ARG GLN MET LYS ASN ILE
+ VAL HIS ASN
+
+gene main setu
+
+ic param
+
+open read unit 2 card name @0imm1_curv.crd
+read coor card unit 2
+close unit 2
+
+eef1 setup membrane slvt water slv2 chex nsmth 10 width 26.0 temp 298.15 -
+              unit 93 name @0solvpar.inp  aemp 0.85 -
+        lat pl 0.001 xpe 0.0 LAMBDA 0.3 radu 100
+     update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+!prnlev 10
+energy
+
+!This is the correct answer:
+! ENER>        0   -539.98018      0.00000      0.97899
+! ENER INTERN>        2.37341     10.99056      0.00000     10.30695      2.48808
+! ENER EXTERN>      -94.04068   -261.71104      0.00000   -210.38747      0.00000
+!----------       ---------    ---------    ---------    ---------    ---------
+
+@qcheck ?ENER -539.98018 0.01 testimm1-energy
+
+mini sd nstep 300
+
+dynamics verlet timestep 0.002 nstep 500 nprint 100 iprfrq 100 -
+      firstt 240 finalt 300 twindh 10.0 ieqfrq 200 ichecw 1 -
+      iasors 0 iasvel 1 inbfrq 20 iseed 54858769
+
+stop

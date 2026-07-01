@@ -1,0 +1,44 @@
+* TEST of RGYR command
+*
+
+stream datadir.def
+bombl -2
+
+OPEN READ FORM UNIT 11 NAME  @0toprna10r.rtf
+READ RTF  CARD UNIT 11
+CLOSE UNIT 11
+OPEN READ FORM UNIT 12 NAME  @0pardna10.prm
+READ PARAMETERS CARD UNIT 12
+CLOSE UNIT 12
+
+READ SEQUENCE CARDS
+* SHORT RNA PIECE
+* No water or counter-ions
+*
+4
+ADE CYT GUA URI
+
+GENERATE RNA FIRST 5TER SETUP
+
+ic param
+ic seed 1 C1' 1 C2' 1 C3'
+ic build
+coor copy comp
+
+! N E W    C O M M A N D:
+coor rgyr mass
+coor rgyr mass fact 2.0
+coor rgyr mass fact 5.0
+coor rgyr
+COOR RGYR MASS COMP sele .not.  ATOM * * N% end
+scalar wmain set 6.0 sele chem C* end
+scalar wmain set 0.0 sele .NOT. chem C* end
+coor rgyr weig
+scalar wmain set 8.0 sele chem N* end
+coor rgyr weig
+coor init sele chem N* end
+coor rgyr mass
+coor rgyr weig
+coor rgyr weig sele .NOT. chem N* end
+coor init
+coor rgyr mass

@@ -1,0 +1,8 @@
+/* -------------------------------------------------------------------------- *
+ *                                 OpenMMGBMV                                 *
+ * -------------------------------------------------------------------------- */
+
+#include "CudaGBMVKernelSources.h"
+
+using namespace OpenMMGBMV;
+using namespace std;

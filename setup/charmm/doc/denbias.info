@@ -1,0 +1,114 @@
+﻿CHARMM Element doc/DENBIAS.info $Revision: 1 $
+
+File: DENBIAS,  Node: Top,  Up: (doc/commands.info),  Next: Syntax
+
+                       DENBIAS Module of CHARMM
+
+Recently developed DENBIAS (DENsity BIASing) module calculates the density of 
+a particular molecular species in a cylindrical volume aligned to the Z-axis.
+
+
+
+* Menu:
+* Syntax::              Syntax of the DENBIAS command
+* Function::            Purpose of each of the command
+* Examples::            Usage examples of the DENBIAS module
+
+
+File: DENBIAS,  Node: Syntax,  Up: Top,  Previous: Top,  Next: Function
+
+                       Syntax of the DENBIAS Command
+
+[SYNTAX DENBIAS]
+
+DBIAs [CLEAr] [ANAL] [config-options]
+
+config-options:
+     {ASEL|DSEL atom-selection-1 [atom-selection-2]}
+     RCYL real 
+     RW   real 
+     ZUP  real 
+     ZLOW real 
+     ZW   real 
+     FORC real 
+     TDEN real
+
+
+
+
+File: DENBIAS, Node: Function, Up: Top, Previous: Syntax, Next: Examples
+             
+CLEAr      Clears the memory and deallocates the arrays.
+
+ANAL       Calculates the values of number density of selected species
+           and their differences and reports them in units of 1/nm^3.
+
+config-options:
+
+atom-selection: Atom selection is invoked by CHARMM standard select command. 
+Selected atoms are to be considered for density biasing potential. If only 
+one selection is performed (ASEL), the potential function is made by:
+ 
+                  1/2 * FORC * (density_of_selected_atoms - TDEN)^2 
+           
+If double selection is performed (DSEL), the difference between the densities 
+of these two selections will construct the reaction coordinate for biasing 
+potential:
+
+     1/2 * FORC * ((density_of_selected_1 - density_of_selected_2) - TDEN)^2
+
+
+
+Cylinder-specification:
+The parameters for the cylinder, such as radius of cylinder (RCYL), the range 
+of cylinder height (ZLow to ZUp), and the switching distance in radial (RW) 
+and axial (ZW) directions are specified.
+
+
+RCYL       radius of cylinder (real) in Angstroms
+
+RW         width of switching region in radial direction (real) in Angstroms
+
+ZLOW       lower bound of cylinder on the Z-exis (real) in Angstroms
+
+ZUP        upper bound of cylinder on the Z-exis (real) in Angstroms
+
+ZW         width of switching region in z-direction (real) in Angstroms
+
+Force-specification:
+The parameters for the potential function is given by FORC (the force constant), 
+and TDEN the target equilibrium density.
+
+FORCe       force constant (real) in kcal/mol/nm^6
+
+TDEN       target density (real) in 1/nm^3
+
+
+
+File: DENBIAS, Node: Examples, Up: Top, Previous: Function, Next: Top
+                                  Examples
+
+Example (1)
+
+   For biasing the density of one species (water molecules) to reach 10 (1/nm^3) 
+with force constant of 10 kcal/mol/nm^6 in a cylinder with radius of 8 Angstroms 
+that spans from 0 to 18 Angstroms:
+
+DBIAs ASEL select resn tip3 end RCYL 8 RW 1 ZUP 18 ZLOW 0 FORC 10 TDEN 10
+
+Example (2)
+
+   For biasing the difference in densities of two species (HELT and HELM) to 
+reach 20.0 (1/nm^3) with force constant of 10 kcal/mol/nm^6 in a cylinder of 
+radius 50 Angstroms that spans from -inf to +inf:
+
+DBIAs DSEL select resn helt end -
+           select resn helm end -
+       RCYL 50 RW 1 ZUP 100 ZLOW -100 FORC 10 TDEN 20.0
+
+Example (3)
+
+   Calculating the number densities of two residues called HELM and HELT:
+
+DBIAs DSEL select resn helt end select resn helm end rcyl 50 rw 1 zup 25 zlow -25
+DBIAs ANAL

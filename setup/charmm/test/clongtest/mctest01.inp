@@ -1,0 +1,158 @@
+* mctest01.inp
+* Author:   Aaron R. Dinner 
+* Date:     19 July 2004 (replacing that of 3 June 1998)
+* Version:  c32a1        (replacing that of c26a2)
+* Test:     Metropolis Monte Carlo with several different types of moves
+* Model:    Alanine dipeptide in a box of 125 tip3 water molecules 
+*           with periodic boundaries
+*
+
+! The system is not an ideal one for Monte Carlo (MC) for a variety
+! of reasons.  It was chosen because it illustrates the different types of 
+! moves well.
+
+if ?mc .ne. 1 then stop
+
+BOMLev 0
+STREam datadir.def
+
+! Read standard topology and parameter files
+
+OPEN READ CARD UNIT 1 NAME @0/toph19.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+OPEN READ CARD UNIT 2 NAME @0/param19.prm
+READ PARA CARD UNIT 2
+CLOSE UNIT 2
+
+! Generate the PSF --- no special actions for MC need be taken at this step.
+
+READ SEQUence CARD
+* Blocked alanine
+*
+   3
+ACE ALA CBX
+
+GENErate MAIN SETUP
+
+! Build the coordinates
+
+IC PARAM
+IC SEED 2 N     2 CA    2 C
+IC BUILD
+
+READ SEQUence TIP3 125
+GENErate WAT  NOANGLE NODIHEDRAL
+
+! Read coordinates
+
+OPEN READ CARD UNIT 4 NAME @0/tip125.crd
+READ COORDINATE CARD UNIT 4 APPEND
+CLOSE UNIT 4
+
+DELETE ATOM SORT SELE .BYRES. -
+    (TYPE OH2 .AND. ((SEGID MAIN .AND. .NOT. TYPE H*) .AROUND. 2.8)) END
+
+!  Now turn on the image 
+CRYStal DEFIne CUBIC 15.5516 15.5516 15.5516 90.0 90.0 90.0
+CRYStal BUILd CUTOFF 15.5516
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE SEGID WAT END 
+
+! Energy calculations are group based since the box of water
+! is based on that from tipstest.inp.  MC can handle either
+! atom or group based calculations.
+!
+! Also note that MC needs a call to ENERgy or UPDAte to correctly
+! initialize the non-bonded structures.
+
+! Cutoffs are a bit long just for testing.
+ENERgy INBFRQ 1 IHBFRQ 1 GROUP VGROUP SWITCH VSWITCH -
+       CUTIM 12.0 CUTNB 11.0 CTOFNB 7.5 CTONNB 6.5  EPS 1.0
+
+! Create the MC move set by a series of calls to MOVE ADD
+
+! WEIGhts are chosen such that each degree of freedom has roughly equal 
+! frequency of being chosen
+
+! Rigid body translations of waters
+MOVE ADD MVTP RTRN BYREsidue WEIGht 1.0 DMAX 0.40 LABEL WTRN -
+         SELE (TYPE OH2) END 
+
+! Rigid body rotations
+MOVE ADD MVTP RROT BYREsidue WEIGht 1.0 DMAX 25.0 LABEL WROT -
+         SELE (TYPE OH2) END 
+
+! Link translations and rotations of water so they are done together.
+! Only WTRN will appear in MCSTAT.
+MOVE LINK LAB1 WTRN LAB2 WROT
+
+! Single atom moves for the peptide atoms
+MOVE ADD MVTP CART WEIGht 1.0 DMAX 0.05 -
+        ARMP 0.40 ARMA 0.4 ARMB 0.4 DOMCf 3.0 ANISotropic 1 LABEL SING -
+        SELE (.NOT. RESNAME TIP3) END
+
+! Individual rotation of the peptide torsions
+MOVE ADD MVTP TORS WEIGht  1.0 DMAX  70.0 FEWEr 1 LABEL PDIHE -
+         ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+         SELE ALL END SELE ALL END
+
+! End creation of the move set
+
+! Save the unoptimized move set 
+
+OPEN WRITE CARD UNIT 35 NAME @9/mctest01.mcm
+MOVE WRITE UNIT 35
+
+! Open a file for trajectory writing
+
+OPEN WRITE UNFORMATTED UNIT 34 NAME @9/mctest01.trj
+
+! Run a short Monte Carlo simulation with the above move set
+!
+! The non-bond and image list updates are more frequent than would 
+! be chosen normally to minimize error in this example.
+! IECHeck is the frequency of comparing the MC running total of the energy 
+! with a call to the standard ENERGY routine.  The difference is printed in 
+! the Delta-E column of the "MC E>" table.  In general, IECHeck should be
+! non-zero only when one is initially trying to choose INBFrq and IMGFrq
+! since the total energy does not affect the MC dynamics.
+!
+! Small errors typically derive from atoms previously outside CUTNB.
+! Large errors typically derive from atoms previously outside CUTIM.
+
+MC TEMPerature 300.00 NSTEps 1000 ISEEd 518282 -
+   IDOMcfrq  5 INBFrq 100   IMGFrq 100 IECHeck 100 -
+   IUNCrd 34   NSAVc  100
+
+! Now try atom based cutoffs.
+! Cutoffs are a bit long just for testing.
+NBONDS  ATOM  FSHIFT CDIE  VDW VSHIFT  -
+        CUTNB 11.0  CTOFNB 7.5 CTONNB 6.5  WMIN 1.5  EPS 1.0
+
+ENERgy
+
+MC TEMPerature 300.00 NSTEps 1000 -
+   IDOMcfrq  5 INBFrq 100  IMGFrq 100 IECHeck 100 -
+   IUNCrd 34   NSAVc  100
+
+! Save the optimized move set 
+
+OPEN WRITE CARD UNIT 35 NAME @9/mctest01.mco
+MOVE WRITE UNIT 35
+
+! Save the final coordinates
+
+OPEN WRITE CARD UNIT 36 NAME @9/mctest01.crd
+WRITE COOR CARD UNIT 36
+
+! Unlink and free the move set to check the memory usage
+
+MOVE LINK LAB1 WTRN 
+
+MOVE DELEte LABEL WTRN  
+MOVE DELEte LABEL WROT  
+MOVE DELEte LABEL SING  
+MOVE DELEte LABEL PDIH
+
+STOP

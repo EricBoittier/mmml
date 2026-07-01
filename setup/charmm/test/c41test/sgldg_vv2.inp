@@ -1,0 +1,129 @@
+* SGLDG simulation for SWM4-DP water 
+*     Xiongwu Wu   July 2015
+*
+
+set test 0
+if ?numnode .eq. 1 incr test by 1
+if ?numnode .eq. 2 incr test by 1
+if ?numnode .eq. 4 incr test by 1
+if ?numnode .eq. 8 incr test by 1
+if @test .eq. 0 then
+  echo "The SGLDG test should only be run with 1,2,4,or 8  processes."
+  stop
+endif
+
+
+stream datadir.def
+
+
+SET ALPHAO = 1.042520
+SET DOM    = 0.238080
+
+OPEN READ CARD UNIT 1 NAME @0top_all22_model_swm4.inp
+READ RTF CARD UNIT 1
+OPEN READ CARD UNIT 1 NAME @0top_all22_drude.inp
+READ RTF CARD APPEND UNIT 1
+
+OPEN CARD READ UNIT 1 NAME @0par_all22_prot_swm4.inp
+READ PARAM CARD UNIT 1
+OPEN READ CARD UNIT 1 NAME @0par_all22_drude.inp
+READ PARAM CARD APPEND UNIT 1
+
+
+!=======================================================
+!  Liquid
+!-------------------------------------------------------
+
+READ SEQUENCE SWM4 125
+GENERATE WAT SETUP NOANGLE NODIHEDRAL
+
+OPEN READ CARD UNIT 10 NAME @0swm4test.crd
+READ COOR CARD UNIT 10
+
+SCALAR WMAIN  = ZERO
+SCALAR WMAIN SET @ALPHAO SELECT TYPE OH2 END
+DRUDE THOLE 0.0 MASS 0.4 KDRUDE 500.0 SELECT TYPE OH2 END
+SCALAR MASS SHOW
+SCALAR CHARGE SHOW
+
+COOR COPY COMP
+SHAKE BONH PARAM TOLERANCE 1.0E-9 -
+      NOFAST -
+      SELECT ( SEGID WAT .AND. .NOT. TYPE D* ) END -
+      SELECT ( SEGID WAT .AND. .NOT. TYPE D* ) END
+
+LONEPAIR BISECTOR DIST @DOM ANGLE 0.0 DIHE 0.0 -
+         SELECT ATOM WAT * OM END  SELECT ATOM WAT * OH2 END - 
+         SELECT ATOM WAT * H1 END  SELECT ATOM WAT * H2  END
+
+COOR SHAKE
+
+!! Crystal definition
+CRYSTAL DEFINE CUBIC 15.517182 15.517182 15.517182 90.0 90.0 90.0
+CRYSTAL BUILD NOPERATIONS 0 CUTOFF 12.0
+IMAGE BYRESIDUES SELECT RESNAME SWM4 END
+
+!! Energy
+ENERGY ATOM VATOM VSHIFT -
+       CTOFNB 15.0 CUTNB 18.0 CUTIM 18.0 WMIN 1.0 -
+       EWALD SPLINE KAPPA 0.33333 -
+       PMEWALD ORDER 4 FFTX 16 FFTY 16 FFTZ 16 -
+       INBFRQ -1 IMGFRQ -1 IHBFRQ 0
+
+
+!=======================================================
+!  NPT dynamics
+!-------------------------------------------------------
+
+!! Get induced dipoles
+shake off
+CONS FIX SELECT .NOT. TYPE D* END
+MINI SD NSTEP 100
+CONS FIX SELECT NONE END
+SHAKE BONH PARAM TOLERANCE 1.0E-9 -
+      NOFAST -
+      SELECT ( SEGID WAT .AND. .NOT. TYPE D* ) END -
+      SELECT ( SEGID WAT .AND. .NOT. TYPE D* ) END
+
+! Temperature control
+TPCONTROL NTHER 2  NHGAM 5.0 NHGAMD 10.0 -
+        THER 1  TREF 298.15  LANG SELECT .NOT. TYPE D* END  -
+        THER 2  TREF   1.00  LANG SELECT TYPE D* END  -
+        BARO    PREF   1.00  BTAU 0.2
+
+
+!! Dynamics
+set NSTEPS = 1000
+set NPRINT = 100
+OPEN WRITE CARD UNIT 62 NAME @9swm4_sgldg.nose
+DYNA VV2 START  -
+     NSTEP  @NSTEPS  TIME     0.001  -
+     NPRINT @NPRINT  IPRFRQ @NSTEPS  NTRFRQ @NSTEPS  NSAVC 1000 -
+     iseed  31415926  14159263   41592631   15926314  -
+     FIRSTT  298.15  -
+     SGLD SGFT 1.0 -
+     IUNO        62  NSNOS  @NPRINT
+
+
+if ?numnode eq 1 set eplf -1046.483
+if ?numnode eq 2 set eplf -1036.997
+if ?numnode eq 4 set eplf -1023.075
+if ?numnode eq 8 set eplf -1003.576
+
+if ?numnode eq 1 set epllf -970.020
+if ?numnode eq 2 set epllf -963.385
+if ?numnode eq 4 set epllf -952.212
+if ?numnode eq 8 set epllf -936.209
+
+@qcheck ?EPOTLF @eplf 0.010  sgld_vv2_epotlf
+@qcheck ?EPOTLLF @epllf  0.010  sgld_vv2_epotllf
+
+if @testfail eq 0 then
+   set status PASS
+else
+   set status FAIL - @testfail failing tests
+endif
+
+echo sgldg_vv2 summary TESTCASE RESULT: @status
+
+stop

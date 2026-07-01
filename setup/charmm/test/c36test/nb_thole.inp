@@ -1,0 +1,129 @@
+* c36test/nb_thole.inp
+*
+
+stream datadir.def
+
+set rnacl 3.94 
+set aij 2.15
+
+ioformat extended
+
+bomlev -1
+
+read rtf card !append
+* Topology for drude model compounds
+*
+34
+
+MASS   106 SODD     23.00000 Na ! Sodium  1+
+MASS   202 CL       35.45320 CL ! Chloride -
+MASS   114 DRUD      0.00000 H  ! drude particle
+
+DECL -CA
+DECL -C
+DECL -O
+DECL +N
+DECL +HN
+DECL +CA
+
+!DEFA FIRS NTER LAST CTER
+!reset default patches
+DEFA FIRS NONE LAST NONE
+AUTOGENERATE ANGLES DIHEDRALS DRUDE  !note use of DRUDE
+
+RESI SOD          1.00 ! Sodium Ion
+GROUP
+ATOM SOD  SODD   1.00  ALPHA -0.157 THOLE 0.0
+PATCHING FIRST NONE LAST NONE
+
+RESI CL          -1.00 ! Chloride Ion
+GROUP
+ATOM CL   CL     -1.00  ALPHA -3.968968 THOLE 0.0
+PATCHING FIRST NONE LAST NONE
+
+END
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+read para card !append
+* Drude polarizable FF parameters
+*
+
+BONDS
+!atom type      Kb       b0
+!============================================
+!Generic Drude parameters
+!488.89, OD305A OD30A
+!486.49, OD31A, OD31B
+!487.74, OD2C1A,
+
+DRUD     X        500.000
+
+ANGLES
+!atom types     Ktheta  Theta0   Kub     S0
+!==================================================
+
+DIHEDRALS
+!atom types            Kchi     n     delta
+!=================================================
+
+IMPROPER
+!
+!V(improper) = Kpsi(psi - psi0)**2
+!
+!Kpsi: kcal/mole/rad**2
+!psi0: degrees
+!note that the second column of numbers (0) is ignored
+
+
+NONBONDED nbxmod  5 atom vatom cdiel vdistance switch vswitch -
+cutnb 16.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+D*       0.0   -0.0000    0.0000  ! Wildcard for Drudes and dummy atom
+LP       0.0   -0.0000    0.0000
+
+SODD     0.0   -0.0315100 1.4616800 ! Yu
+CL       0.0   -0.0719737 2.4811139 ! Yu
+
+NBFIX
+SODD  CL     -0.04762  @rnacl
+
+THOLE TCUT 5.0  MAXNBTHOLE 50000
+CL SODD  @aij
+
+END
+
+read sequ SOD 1
+gene SOD first none last none DRUDE DMASS 0.4 HYPE HORD 4 KHYP 40000 RHYP 0.2 show
+coor set xdir 0 ydir 0 zdir 0 sele segid sod end
+
+read sequ CL 1
+gene CL  first none last none DRUDE DMASS 0.4 HYPE HORD 4 KHYP 40000 RHYP 0.2 show
+coor set xdir 0 ydir 0 zdir 0 sele segid cl end
+
+coor sdrude
+shake para
+coor shake
+shake off
+faster off
+
+ener atom vatom ctonnb 100 ctofnb 110 cutnb 150 inbfrq 20 switch cdie eps 1.0
+
+open write card unit 12 name @9/@{aij}_@{rnacl}.dat
+
+set zdir = 2.5
+!label loop
+    coor set zdir @zdir sele segid cl end
+calc zdird = @zdir - 0.1 
+calc ydird = 0.1
+calc xdird = 0.1
+    coor set xdir @xdird ydir @ydird zdir @zdird sele type dcl end
+    coor set xdir @xdird ydir @ydird zdir 0.1 sele type dsod end
+    mini sd nstep 1000 nprint 100
+    ener
+    gete print
+    quick sele type CL end sele type DCL end
+    write title unit 12
+    * @zdir ?ener  ?dist
+    *
+
+stop

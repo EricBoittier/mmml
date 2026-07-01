@@ -1,0 +1,214 @@
+* Testcase alpha_infinite -- January, 2022 -- BRB
+* INPUT FILE FOR INFINITE ALANINE ALPHA-HELIX USING IMAGES
+* MAIN SEGMENT IS JUST ONE ALANINE RESIDUE, and then redo with two alanine residues.
+*
+
+! This is primarily a test of autogeneration of for angles and dihedrals for primary-image interactions.
+
+STREam datadir.def
+
+BOMLEV -2
+open read card unit 1 name @0top_all36_prot.rtf
+READ RTF CARD UNIT 1
+open read card unit 2 name @0par_all36_prot.prm
+READ PARAMETER CARD UNIT 2
+
+READ SEQUENCE CARD
+*ALANINE ALPHA-HELIX BUILDING BLOCK SEQUENCE
+*
+1
+ALA
+GENERATE MAIN SETUP FIRST NONE LAST NONE
+
+print psf full
+print ic
+
+
+SET 1 -98.57
+SET 2 1.45
+SET 3 -57.4
+SET 4 -47.5
+
+IC PURGE
+IC EDIT
+DIHE 1 H 1 N 1 CA 1 C 122.6
+!DIHE 1 C 2 N 2 CA 2 C -57.4
+!DIHE 1 N 1 CA 1 C 2 N -47.5
+DIHE 1 O 1 C 1 CA 1 N 132.5
+END
+IC PARA
+
+IC SEED 1 N 1 CA 1 C
+IC BUILD
+print coor
+hbuild
+print coor
+
+COOR ROTA XDIR 0.5 YDIR -0.64 ZDIR 0.0 PHI -54.0
+print coor
+COOR TRAN XDIR 0.0 YDIR 1.682 ZDIR 0.0
+print coor
+
+
+READ IMAG CARD
+* IMAGE FILE FOR ALANINE ALPHA-I HELIX
+*
+IMAGE UP
+ROTATE 0.0 0.0 1.0 @1
+TRANSLATE 0.0 0.0 @2
+IMAGE DN
+DEFINE INVE UP
+IMAGE UP2
+DEFINE UP UP
+IMAGE DN2
+DEFINE DN DN
+IMAGE UP3
+DEFINE UP2 UP
+IMAGE DN3
+DEFINE DN2 DN
+IMAGE UP4
+DEFINE UP3 UP
+IMAGE DN4
+DEFINE DN3 DN
+IMAGE UP5
+DEFINE UP4 UP
+IMAGE DN5
+DEFINE DN4 DN
+IMAGE UP6
+DEFINE UP5 UP
+IMAGE DN6
+DEFINE DN5 DN
+IMAGE UP7
+DEFINE UP6 UP
+IMAGE DN7
+DEFINE DN6 DN
+IMAGE UP8
+DEFINE UP7 UP
+IMAGE DN8
+DEFINE DN7 DN
+IMAGE UP9
+DEFINE UP8 UP
+IMAGE DN9
+DEFINE DN8 DN
+IMAGE UP10
+DEFINE UP9 UP
+IMAGE DN10
+DEFINE DN9 DN
+IMAGE UP11
+DEFINE UP10 UP
+IMAGE DN11
+DEFINE DN10 DN
+END
+
+
+UPDATE INBF 0 IHBF 0 IMGFRQ 100 IMALL CUTIM 10.0
+coor print image
+
+
+IMPATCH LINK PRIM MAIN 1 UP MAIN 1 SETUP
+!IMPATCH LINK PRIM MAIN 1 UP MAIN 1 SETUP angle dihe
+
+print image psf naming
+
+PRINT COOR
+IC FILL
+PRINT IC
+MINI ABNR NSTEP 200 INBFRQ 50 NPRINT 5 IMGFRQ 50 -
+         CDIE SHIFT ATOM CUTNB 9.5 CTOFNB 8.5
+
+PRINT COOR
+IC FILL
+PRINT IC
+
+print psf full
+
+open write card unit 9 name @9alpha_infinite.psf
+write psf card unit 9
+* Alpha helix psf
+*
+
+print image psf naming
+
+open write card unit 9 name @9alpha_infinite.impsf
+write image psf unit 9
+* Alpha helix image psf
+*
+
+IOFOrmat EXTEnded 
+open write card unit 10 name @9alpha_infinite.crd
+coor write card image unit 10 sele segid MAIN .or. segid UP end
+* Minimized coordinates for single alanine infitie helix
+* Energy = ?ENER
+*
+
+set ESING ?ENER
+
+!
+! Part two... Now repeat the same with TWO alanines in the primary cell.
+! Image PSF should be similar (same counts), and energy exactly doubled.
+!
+
+DELETE ATOM SELE ALL END  ! start with a new psf
+
+READ SEQUENCE CARD
+*ALANINE ALPHA-HELIX BUILDING BLOCK SEQUENCE
+*
+2
+ALA ALA
+GENERATE MAIN SETUP FIRST NONE LAST NONE
+
+
+open read card unit 10 name @9alpha_infinite.crd
+read coor card ignore unit 10
+
+print coor
+
+
+READ IMAG CARD
+* IMAGE FILE FOR ALANINE ALPHA-I HELIX
+*
+IMAGE UP
+ROTATE 0.0 0.0 1.0 @1
+ROTATE 0.0 0.0 1.0 @1
+TRANSLATE 0.0 0.0 @2
+TRANSLATE 0.0 0.0 @2
+IMAGE DN
+DEFINE INVE UP
+IMAGE UP2
+DEFINE UP UP
+IMAGE DN2
+DEFINE DN DN
+IMAGE UP3
+DEFINE UP2 UP
+IMAGE DN3
+DEFINE DN2 DN
+IMAGE UP4
+DEFINE UP3 UP
+IMAGE DN4
+DEFINE DN3 DN
+IMAGE UP5
+DEFINE UP4 UP
+IMAGE DN5
+DEFINE DN4 DN
+END
+
+UPDATE INBF 0 IHBF 0 IMGFRQ 100 IMALL CUTIM 10.0
+
+IMPATCH LINK PRIM MAIN 2 UP   MAIN 1 UP   MAIN 2 PRIM MAIN 1 SETUP
+! try a second unneeded duplicate patch at the botton to try to trip up the code.
+!IMPATCH LINK DN MAIN 2 PRIM   MAIN 1 PRIM   MAIN 2 DN MAIN 1 SETUP
+
+print image psf naming
+
+PRINT COOR
+IC FILL
+PRINT IC
+ENERGY INBFRQ 50 NPRINT 5 IMGFRQ 50 -
+         CDIE SHIFT ATOM CUTNB 9.5 CTOFNB 8.5
+
+calc e2 = @ESING * 2
+@testcheck ?ener @e2 0.05 alpha_infite
+
+
+
+

@@ -1,0 +1,87 @@
+* ...  
+* Parameter File for CHARMM version 20 - stripped
+*
+BOND
+C    C      450.0       1.38 
+C    CT     290.0       1.53 
+C    NP     420.0       1.33 
+C    O      640.0       1.23 
+CT   CT     240.0       1.54 
+CT   NP     390.0       1.47 
+H    H        0.0       1.6329931 
+H    NP     450.0       0.98 
+HA   C      315.0       1.09 
+HA   CT     345.0       1.09 
+THETAS ! BOND ANGLES (bond angles) 
+C    C    CT      65.0     118.0 
+C    C    NP      65.0     120.0 
+C    C    O       65.0     119.0 
+CT   C    CT      65.0     117.0 
+CT   C    NP      58.0     117.5 
+CT   C    O       85.0     121.5 
+HA   C    C       40.0     119.0 
+HA   C    CT      45.0     117.0 
+HA   C    NP      55.0     118.0 
+HA   C    O       54.0     121.0 
+NP   C    NP      70.0     118.0 
+NP   C    O       84.0     121.0 
+C    CT   C       70.0     113.0 ! CT bond angles
+C    CT   CT      70.0     109.47
+C    CT   NP      70.0     111.6 
+CT   CT   CT      50.0     112.5
+CT   CT   NP      65.0     109.47
+HA   CT   C       36.0     109.47
+HA   CT   CT      41.0     109.47
+HA   CT   HA      34.0     109.47
+HA   CT   NP      50.0     109.47
+C    NP   C       60.0     120.0 ! NP bond angles
+C    NP   CT      80.0     120.0 
+CT   NP   CT      60.0     120.0 
+H    NP   C       30.0     120.0 
+H    NP   CT      35.0     120.0 
+H    NP   H       40.0     118.0 
+PHI  ! TORSIONAL (torsional) ANGLES, i.e. DIHEDRALS (dihedrals)
+X    C    C    X        6.0  2  180.0 
+X    C    CT   X        1.0  3    0.0 
+X    C    NP   X        8.2  2  180.0 
+X    CT   CT   X        1.6  3    0.0 
+X    CT   NP   X        0.6  3    0.0 
+
+IMPHI   
+NP   H    H    C       45.0  0    0.0
+C    X    X    O      100.0  0    0.0
+C    X    X    CT     100.0  0    0.0
+C    X    X    NP      45.0  0    0.0 
+CT   X    X    NP      45.0  0    0.0 
+H    X    X    NP      35.0  0    0.0 
+HA   X    X    C       53.0  0    0.0 
+ 
+!DEFAULTS FOR DNA
+! NONBONDED NBXMOD 5 ATOM RDIEL SHIFT VATOM VSWITCH VDISTANCE -
+!         CUTNB 11.5 CTOFNB 10.5 CTONNB 9.5 EPS 1.0 E14F 1.0 
+!
+! STANDARD DEFAULTS
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!
+!
+!                  Emin         Rmin    (these columns used 
+!               (kcal/mol)       (A)     for 1-4 interactions)
+!
+H        0.044   -0.0498       0.800
+HA       0.100   -0.00450      1.368
+!
+C        1.65    -0.0903       1.800    
+CT       1.65    -0.0903       1.800
+NP       1.10    -0.2384       1.600
+O        0.84    -0.1591       1.600
+
+HBOND AEXP 4 REXP 6 HAEX 4 AAEX 2   NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+   CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+!
+N*   N*      -3.00 3.00
+N*   O*      -3.50 2.90
+OT   N*      -4.00 2.85
+O*   O*      -4.25 2.75
+!
+END

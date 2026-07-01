@@ -1,0 +1,29 @@
+* write out the pdb file for fixed solute dynamics with NAMD program 
+* Author: Andrei A. Golosov
+* usage: charmm <fix_solute.inp infile=  outfile=  
+*  
+
+open unit 1 read form name "~/toppar.dir/top_all27_prot_na.rtf"
+read rtf card unit 1
+
+open unit 1 read form name "~/toppar.dir/par_all27_prot_na.prm"
+read param card unit 1
+
+if @?infile eq 0 stop
+if @?outfile eq 0 stop
+
+open unit 1 read form name @infile.psf 
+read psf card unit 1 
+
+open unit 1 read card name @infile.crd
+read coor card  unit 1
+
+! select all waters and Na and Cl ions
+define solvent sele .byres. ( type OH2 .or. resname SOD .or. resname CLA ) end
+! fix solute
+scalar wmain set 0 sele all end
+scalar wmain set 1 sele .not. solvent end
+open unit 2 write form name @outfile.pdb
+write coor pdb unit 2 
+
+stop

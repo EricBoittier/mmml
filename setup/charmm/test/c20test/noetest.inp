@@ -1,0 +1,99 @@
+*  NOE DISTANCE RESTRAINTS TEST CASE
+*  PTI with four Xtal waters used
+*
+
+if ?pnoe .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+OPEN READ FORM UNIT 1 NAME @0toph19.rtf
+READ RTF  CARD UNIT 1
+OPEN READ FORM UNIT 2 NAME @0param19.prm
+READ PARAMETER CARD UNIT 2
+
+READ SEQUENCE  CARDS
+*PTI SEQUENCE
+*
+   58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+GENERATE  MAIN
+
+PATCH DISU MAIN  5 MAIN 55
+PATCH DISU MAIN 14 MAIN 38
+PATCH DISU MAIN 30 MAIN 51
+
+READ SEQUENCE WATER 4
+GENERATE SOLV NOANGLE
+
+open unit 3 read card   name @0bpti.crd
+READ COORD card  UNIT 3
+COOR COPY COMP
+
+energy
+print energy
+faster off
+skip all excl noe
+
+noe
+assign sele atom main  1 ca end sele atom main 57 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+assign sele atom main  5 ca end sele atom main 42 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+assign sele atom main 10 ca end sele atom main 44 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+assign sele atom main 10 ca end sele atom main 12 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+assign sele atom main 20 ca end sele atom main 44 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+assign sele atom main 23 ca end sele atom main 40 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+assign sele atom main 53 ca end sele atom main 23 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+assign sele atom main 54 ca end sele atom main 30 ca end -
+       kmin 2.0 rmin 5.0 kmax 1.0 rmax 6.0 fmax 1.0
+print
+end
+
+gete print
+
+open write card unit 14 name @9noetest.dat
+noe
+print
+print anal
+print anal cut 1.0
+write unit 14
+* noetest restraints
+*
+reset
+print anal
+end                 
+
+open read card unit 14 name @9noetest.dat
+noe
+scale 2.0
+read unit 14
+print anal
+end
+gete print
+coor force comp
+coor dist weigh comp
+scalar wmain = wcomp
+define used sele prop wmain .gt. 0.0 end
+print coor comp sele used end
+test first sele used end tol 0.00001
+
+noe
+scale 3.0
+print anal
+end
+gete print
+
+stop

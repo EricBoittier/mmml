@@ -1,0 +1,61 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+set 0 /cb/monet2/charmm/c26b1/toppar/
+
+open unit 1 read form name "top_all22_prot.inp"
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name "par_all22_prot.inp"
+read param card unit 1
+close unit 1
+
+open unit 1 read form name "5dfr_minimized.crd"
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name "5dfr_solv-cube.crd"
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+set 7 62.23
+
+set theta 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta    
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec ndir 2 2 2
+
+!  turn on faster options and set-up SHAKE
+shake fast bonh tol 1.0e-8 para
+
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 nstep 10 nprint 1 iprfrq 1000 -
+     iseed 123456 nsavc 0 nsavv 0 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 20 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 - !PME
+     hoover reft 298 tmass 250 tbath 298     ! Constant temperature
+
+
+stop
+

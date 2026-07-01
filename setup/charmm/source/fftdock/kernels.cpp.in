@@ -1,0 +1,16 @@
+#include "kernels.h"
+
+const std::string Kernels::${conj_mult_var} =
+  "${conj_mult_str}";
+
+const std::string Kernels::${correct_energy_var} =
+  "${correct_energy_str}";
+
+const std::string Kernels::${lig_var} =
+  "${lig_str}";
+
+const std::string Kernels::${prot_var} =
+  "${prot_str}";
+
+const std::string Kernels::${sum_grids_var} =
+  "${sum_grids_str}";

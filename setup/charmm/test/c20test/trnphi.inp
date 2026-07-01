@@ -1,0 +1,111 @@
+* TESTS A NUMBER OF DYNAMICS CALCULATIONS
+*
+
+stream datadir.def
+
+OPEN READ FORM UNIT 1 NAME  @0toph8.rtf
+READ RTF  CARD UNIT 1
+BOMLEV -2
+OPEN READ FORM UNIT 2 NAME  @0param3.prm
+READ PARAM CARD UNIT 2
+
+READ SEQUENCE CARDS
+* TRYPTOPHAN
+*
+    1
+TRP
+
+GENERATE TRYP
+
+READ COORD CARDS
+* TRYPTOPHAN BUILT AND MINIMIZED WITH SD 50 STEPS, ABNR 500 STEP,
+* AND CG 50 STEPS EPS=R POTENTIAL
+*
+   19
+    1    1 TRP  HT1    0.10124   0.57409  -1.38529
+    2    1 TRP  HT2    1.71114   0.43637  -1.90440
+    3    1 TRP  N      1.06717   0.30225  -1.10075
+    4    1 TRP  HT3    1.07999  -0.68894  -0.79051
+    5    1 TRP  CA     1.47212   1.19190   0.02727
+    6    1 TRP  CB     2.69565   2.02615  -0.34753
+    7    1 TRP  CG     3.92166   1.16873  -0.67893
+    8    1 TRP  CD1    4.81252   0.77506   0.29018
+    9    1 TRP  CD2    4.29511   0.67909  -1.89046
+   10    1 TRP  NE1    5.72693   0.04608  -0.32026
+   11    1 TRP  HE1    6.09389  -0.74349   0.12669
+   12    1 TRP  CE2    5.42381  -0.01032  -1.60094
+   13    1 TRP  CE3    3.76875   0.77367  -3.15481
+   14    1 TRP  CZ2    6.13756  -0.67683  -2.56270
+   15    1 TRP  CZ3    4.47167   0.10800  -4.14811
+   16    1 TRP  CH2    5.63634  -0.60503  -3.85644
+   17    1 TRP  C      0.27986   2.11295   0.30889
+   18    1 TRP  OT1   -0.40216   2.48057  -0.63623
+   19    1 TRP  OT2   -0.10570   2.19226   1.45887
+
+NBONDS CUTNB 100.0 CTONNB 99.0 CTOFNB 99.5
+
+!!!!! 1 marker for the first section of dynamics testing
+OPEN WRITE FILE UNIT 40 NAME @9FOR040.DAT
+OPEN WRITE FILE UNIT 50 NAME @9FOR050.DAT
+OPEN WRITE CARD UNIT 90 NAME @9FOR090.DAT
+DYNA  NSTEP 500  timestep 0.001 INBFRQ 20 IHBFRQ 20 FIRSTT 1000. NPRINT 10 -
+     IPRFRQ 20 IHTFRQ 0 IEQFRQ 0 NSAVC 10 NSAVV 10 IUNCRD 40 IUNVEL 50 -
+     ISEED 311 IUNWRI 90
+
+!!!!! 2 marker for the first section of dynamics testing
+OPEN READ  FILE UNIT 40 NAME @9FOR040.DAT
+MONITOR DIHEDRALS FIRSTU 40 NUNIT 1 SHOW ALL
+
+!!!!! 3 marker for the first section of dynamics testing
+open read unit 40 file name @9for040.dat
+open WRITE unit 60 file name @9for060.dat
+READ COORD CARDS COMP
+* TRYPTOPHAN BUILT AND MINIMIZED WITH SD 50 STEPS, ABNR 500 STEP,
+* AND CG 50 STEPS EPS=R POTENTIAL
+*
+   19
+    1    1 TRP  HT1    0.10124   0.57409  -1.38529
+    2    1 TRP  HT2    1.71114   0.43637  -1.90440
+    3    1 TRP  N      1.06717   0.30225  -1.10075
+    4    1 TRP  HT3    1.07999  -0.68894  -0.79051
+    5    1 TRP  CA     1.47212   1.19190   0.02727
+    6    1 TRP  CB     2.69565   2.02615  -0.34753
+    7    1 TRP  CG     3.92166   1.16873  -0.67893
+    8    1 TRP  CD1    4.81252   0.77506   0.29018
+    9    1 TRP  CD2    4.29511   0.67909  -1.89046
+   10    1 TRP  NE1    5.72693   0.04608  -0.32026
+   11    1 TRP  HE1    6.09389  -0.74349   0.12669
+   12    1 TRP  CE2    5.42381  -0.01032  -1.60094
+   13    1 TRP  CE3    3.76875   0.77367  -3.15481
+   14    1 TRP  CZ2    6.13756  -0.67683  -2.56270
+   15    1 TRP  CZ3    4.47167   0.10800  -4.14811
+   16    1 TRP  CH2    5.63634  -0.60503  -3.85644
+   17    1 TRP  C      0.27986   2.11295   0.30889
+   18    1 TRP  OT1   -0.40216   2.48057  -0.63623
+   19    1 TRP  OT2   -0.10570   2.19226   1.45887
+
+MERGE FIRSTU 40 NUNIT 1 OUTPUTU 60 -
+      ORIENT MASS SELE ALL END ! PRINT
+COOR ORIE RMS MASS
+
+if ?nocorrel .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+!!!!! 4 marker for the first section of dynamics testing
+open read unit 40 file name @9for040.dat
+open read unit 60 file name @9for060.dat
+correl maxtime 500 maxser 5
+enter nor rms mass
+trajectory firstu 40 nunit 1 
+enter rot rms mass
+trajectory firstu 60 nunit 1
+enter diff duplicate rot
+mantime diff mult -1.0
+mantime diff add rot
+show all
+write all card unit 6
+end
+
+STOP

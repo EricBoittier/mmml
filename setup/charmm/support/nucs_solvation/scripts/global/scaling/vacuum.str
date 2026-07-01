@@ -1,0 +1,10 @@
+* vacuum.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* Calculation of electrostatic interaction in vacuum
+*
+
+INTEraction SELE GROUP END SELE GROUP2 END
+SET ENERGY1 = ?ELEC
+SCAL SCA3 SET @ENERGY1 SELECT GROUP2 END
+
+RETURN

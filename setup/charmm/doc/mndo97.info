@@ -1,0 +1,182 @@
+CHARMM Element doc/mndo97.info $Revision: 1.1.1.1 $
+
+File: Mndo97, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+      Combined Quantum Mechanical and Molecular Mechanics Method
+                       Based on MNDO97 in CHARMM
+
+                     by Paul Bash (pabash@nwu.edu)
+
+                       Additional modifications
+             Kwangho Nam(nam@chem.umn.edu) and Darrin York
+
+
+* Menu:
+
+* Description::         Description of the MNDO97 commands
+* Usage::               How to run MNDO97 in CHARMM
+* NEWD::                NEWD Command
+* Installation::        How to install MNDO97 in CHARMM environment
+
+
+File: mndo97, Node: Description, Up: Top, Next: Usage, Previous: Top
+
+
+    The MNDO97 QM potential is initialized with the MNDO97 command.
+
+
+[SYNTAX MNDO97]
+
+MNDO97   [REMOve] [EXGRoup] (atom selection) 
+         [GLNK atom-selection]
+         [AM1|PM3|MNDO|MNDD|AMDD] [PHOT] [CHARge int]
+         [SWITched]
+
+         [DXLBomd] [NORDder int] [NSTEpscf int]
+
+         [D3BJ] [D3PARAM] [S6VA real] [S8VA real] [A1VA real] [A2VA real]
+
+         [H4CO] [PRED] [POHO real] [POHN real] [PNHO real] [PNHN real]
+                       [MWHO real] [MNH4 real] [MCOO real]
+                       [REPK real] [REPE real] [REPR real]
+
+         [NEWD int] ewald-spec [NOPMewald]
+
+    ewald-spec::=  { [ KMAX integer ]                        } KSQMAX integer
+                   { KMXX integer KMXY integer KMXZ integer  }
+
+REMOve:  Classical energies within QM atoms are removed.
+
+EXGRoup: QM/MM Electrostatics for link host groups removed.
+
+GLNK:    GHO method implementation (refer qmmm.info).
+
+AM1:     The AM1 method is to be used. (default)
+PM3:     The PM3 method is to be used.
+MNDO:    The MNDO method to be used.
+MNDD:    The MNDO/d method to be used.
+AMDD:    The AM1/d method to be used. (This method has very limited number of atoms 
+         supported. Specifically, use in combination with PHOT keyword.)
+PHOT:    For the AM1/d method, PHOT use the AM1/d-PhoT method (Nam, JCTC, 2007).
+         Also, for Mg atom, it uses AM1 parameters.
+
+CHARge:  Total charge of QM region. (At present, it only supports RHF options.)
+
+SWITched: Use the (group-based) switching function for the QM-MM interactions.
+          See below, if this option is used together with QM/MM-Ewald or QM/MM-PME
+          method.
+
+
+DXLBomd: This uses the Niklasson JCP (2009) 130:214109 and Zheng JCT (2011) 135:044122,
+         in which the quess QM density is propagated using Dissipated Lagrandian MD.
+         The dissipation requires user to provide two variables. They are provided
+         using
+
+NORDder : The maximum order to sum the dissipation terms. At present, only terms
+          between 3 and 9 are supported. See Niklasson JCP (2009) 130:214109.
+NSTEpscf: The number of SCF cycle. Mostly, 7 or larger is safe. Also, in many cases
+          smaller than 7 SCF cycles provides stable MD simulations.
+
+         For details of the method, please refer Niklasson JCP (2009) 130:214109 and
+         Zheng JCT (2011) 135:044122. 
+
+D3BJ:    Use Grimme's D3 dispersion method. The default is the two-body dispersion 
+         correciton with Becky and Johsnson's damping function 
+         (Grimme, JCC (2011) 32:1456)
+D3PARAM: Use the user supplied D3-BJ parameters. Use the below to read user 
+         provided parameters: S6VA, S8VA, A1VA, and A2VA
+S6VA:    s6 parameter. The scaling factor for the R^-6 term.
+         The default is 1.0 and it is advised not to change this value.
+S8VA:    s8 parameter. The scaling factor for the R^-8 term.
+A1VA:    a1 parameter. a1 and a2 are the two dampling parameters introducted by BJ.
+A2VA:    a2 parameter.
+
+H4CO:    Use of the H4 correction (Rezac, J Chem Theory Comput (2021) 8:141). 
+         When it is used, it is recommended to use together with D3BJ correction.
+         Refer the reference for the default paramesters for AM1 and PM3 methods.
+PRED:    Use the user supplied H4 correction parameters:
+POHO:    C_OO parameter.
+POHN:    C_ON parameter.
+PNHO:    C_NO parameter.
+PNHN:    C_NN parameter.
+MWHO:    C_wat parameter.
+MNH4:    C_S,NHR3+ parameter.
+MCOO:    C_S,COO- parameter.
+REPK:    S_HH repulsion parameter in unit of kcal/mol. 
+         See eq. (11) of the reference.
+REPE:    e_HH repulsion parameter.
+REPR:    r_0,HH repulsion parameter in unit of Angstrom.
+
+Current implementation has a limit in choosing non-bonded options. All
+atom based cutoffs methods is not fully supported for a certain boundary
+conditions such as periodic boundary condition. In any case, the QM-MM
+non-bond generation routine will only generate the non-bond list based
+on group-group separation scheme. Especially to use any periodic boundary
+conditions, use group based cutoff scheme.
+
+
+
+File: Mndo97, Node: NEWD, Up: Top, Next: Installation, Previous: Description
+
+                        Description of the NEWE Command
+
+[ NEWD int ] ewald-spec [NOPMewald]
+
+   ewald-spec::=  { [ KMAX integer ]                        } KSQMAX integer
+                  { KMXX integer KMXY integer KMXZ integer  }
+
+A simple Ewald sum method is implemented into the QM/MM potential. A full
+description of theory is described in J. Chem. Theory. Comput. (2005) 1, 2
+and Nam. JCTC (2014). 
+
+With NOPMewald, the regaular Ewald sum method is used for the QM/MM calculation.
+So, this option is denoted as QM/MM-Ewald method. Without NOPMewald, if
+the MM use PME method, the QM/MM part is also QM/MM-PME method. (see ewald.info).
+
+The defaults for the QM/MM-Ewald calculations are set internally and are
+currently set to NEWD 1, KMAX=5, KSQMax=27, where the KMAX keyword is the
+number of kvectors (or images of the primary unit cell) that will be summed
+in any direction.  It is the radius of the Ewald summation. For orthorombic
+cells, the value of kmax may be independently specified in the x, y, and z
+directions with the keywords KMXX, KMXY, and KMXZ.  But, different from
+regular Ewald in CHARMM, it has no limitation on the shape of box, and can be
+used with PMEwald in MM part.
+
+The KSQMax key word should be chosen between  KMAX squared and 3 times
+KMAX squared, and KAPPA value share the exact same number you use in Nonbond
+options.
+
+When QM/MM-Ewald or QM/MM-PME method is used together with the SWITched option. 
+The total energy is expressed as
+
+E_total =  Sw(r)*E_qm/mm(real space) + dE_qm/mm(periodic correction) + E_mm
+
+E_qm/mm(real space): The regular QM/MM interaction, in which MM point charges
+                     interact with the entire QM (electron) density.
+dE_qm/mm(periodic correction) 
+         = (1-Sw(r))*dE_qm/mm (real space part) + dE_qm/mm(reciprocal space part)
+         where d= Dela. 
+
+For each term, refer Nam JCTC (2005) 1, 2, and Nam JCTC (2014) 10, 4175.
+
+When this is used with the SWITched option, the real space is switched off at the
+cutoff distance, and dE_qm/mm (real space part) is turned on slowly between the
+cut on and cut off distances. This makes the transition from the full QM/MM real
+space potential to the dE_qm/mm (real space part) correction smoothly and thus
+generate more stable MD trajectory.
+
+
+
+File: Mndo97, Node: Installation, Up: Top, Next: Top, Previous: NEWD
+
+MNDO97/CHARMM interface status (February 1997)
+
+- MNDO97, CADPAC, GAMESS and QUANTUM keywords cannot coexist in pref.dat
+
+To compile MNDO97 with CHARMM one uses:
+
+$ ./configure --with-mndo97 --without-colfft 
+$ make -C build/cmake install
+
+The "--with-mndo97" specifies to compile and link MNDO97 with CHARMM.

@@ -1,0 +1,139 @@
+* CHARMM c33a1 Testcase hba2.inp
+* test hbanalysis facility with PBC
+*
+
+if ?PBOUND .ne. 1 then
+ echo "c33test/hba2> Test NOT performed."
+ echo hba2 testcase result: skip
+STOP
+endif
+
+set STATUS pass
+stream datadir.def
+
+read rtf  card name @0top_all22_prot.inp
+read para card name @0par_all22_prot.inp
+read sequence card
+* ypgdv
+*
+5
+tyr pro gly asp val
+
+generate pept setup
+
+read sequence tip3 756
+
+generate wat noangles nodihedrals
+
+open unit 1 read form name @0turnwat14.chr
+read coor card unit 1
+close unit 1
+hbuild sele segid pept .and. hydrogen end
+!write coor card name @0peptwat.crd
+!* ypgdv in 29A cubic box with 756 water, all-h
+!*
+!read coor  card name @0peptwat.crd
+! Static hydrogen bond analysis
+coor hbond  sele segid pept end sele segid wat end
+echo nhbnd ?NHBOND
+set nh1 ?NHBOND
+coor hbond  sele segid pept end sele segid wat end  PBC cubic xsize 29.0
+echo nhbnd ?NHBOND
+set nh2 ?NHBOND
+coor hbond   sele segid wat .and. .not. hydrogen end -
+ sele segid wat .and. hydrogen end
+echo nhbnd  ?NHBOND
+set nh3 ?NHBOND
+coor hbond  sele segid wat .and. .not. hydrogen  end -
+            sele segid wat .and. hydrogen end -
+     PBC cubic xsize 29.0
+echo nhbnd  ?NHBOND
+set nh4 ?NHBOND
+
+! move peptide out of primary box 
+coor transl xdir 29.0 ydir -29.0 sele segid pept end
+! No hbonds to be found now
+coor hbond sele segid pept end sele segid wat end
+echo nhbnd  ?NHBOND
+set nh5 ?NHBOND
+! with correct PBC in place, same hbonds will be found as before translation
+coor hbond verb sele segid pept end sele segid wat end PBC cubic xsize 29.0
+coor hbond sele segid pept end sele segid wat end PBC cubic xsize 29.0
+echo nhbnd  ?NHBOND
+set nh6 ?NHBOND
+! faking a far too large box will result in no hbonds being found
+coor hbond  sele segid pept end sele segid wat end PBC cubic xsize 300.0
+echo nhbnd  ?NHBOND
+set nh7 ?NHBOND
+! 29A cubic box
+crystal define ortho 29. 29. 29. 90. 90. 90.
+crystal build cutoff 15.0
+image byres sele segi wat end
+!image byseg sele segi pept end
+coor hbond  sele segid pept end sele segid wat end
+echo nhbnd  ?NHBOND
+set nh8 ?NHBOND
+coor hbond  sele segid pept end sele segid wat end PBC cubic xsize 29.0
+echo nhbnd  ?NHBOND
+set nh9 ?NHBOND
+! Next line should give same result - 
+! box size should be taken from crystal setup
+coor hbond  sele segid pept end sele segid wat end PBC cubic xsize 300.0
+echo nhbnd  ?NHBOND
+set nh10 ?NHBOND
+
+!leave peptide out of primary box during dynamics
+shake para bonh
+open unit 21 write unform name @9hba2.cor
+dyna leap  strt nstep 100 timestep 0.002 -
+ firstt 295.0 finalt 295.0 twindh 10.0 twindl -10.0 -
+ iasors 1 iasvel 1 ichecw 1 ieqfrq 0 -
+ iunr -1 iunw -1 iunc 21 -
+ inbfrq -1 imgfrq -1 nsavc 10 -
+ atom cdie fshif vdis vshif  ctofnb 9.0 cutnb 10.0 cutim 10.0
+
+open unit 21 read unform name @9hba2.cor
+coor hbond  sele segid pept end sele segid wat end firstu 21 nunit 1 
+echo nhbnd  ?NHBOND
+set nh11 ?NHBOND
+coor hbond  sele segid pept end -
+            sele segid wat end -
+            firstu 21 nunit 1 PBC cubic xsize 29.0
+echo nhbnd  ?NHBOND
+set nh12 ?NHBOND
+coor hbond  sele segid wat .and. .not. hydrogen  end -
+            sele segid wat .and. hydrogen  end -
+            firstu 21 nunit 1
+echo nhbnd  ?NHBOND
+set nh13 ?NHBOND
+coor hbond  sele segid wat .and. .not. hydrogen  end -
+            sele segid wat .and. hydrogen  end -
+             firstu 21 nunit 1 PBC cubic xsize 29.0
+echo nhbbd  ?NHBOND
+set nh14 ?NHBOND
+coor hbond  sele segid wat .and. .not. hydrogen  end -
+            sele segid wat .and. hydrogen  end -
+            firstu 21 nunit 1 PBC cubic xsize 300.0
+echo nhbnd  ?NHBOND
+set nh15 ?NHBOND
+
+! Simple fail/pass test. The number of hbonds should obey these 
+! relationships (c32a2 March 2005 values in parenthesis):
+!  nh1=nh2=nh6=nh9=nh10 (=29)
+!  nh5=nh7=nh8=0
+!  nh14=nh15 (=1307.7)
+! nh3<nh4 (1133 and 1329)
+! nh13<nh14 (1105.4 and 1307.7)
+if @nh1 .ne. @nh2 set STATUS FAIL
+if @nh1 .ne. @nh6 set STATUS FAIL
+if @nh1 .ne. @nh9 set STATUS FAIL
+if @nh1 .ne. @nh10 set STATUS FAIL
+if @nh5 .ne. @nh7 set STATUS FAIL
+if @nh5 .ne. @nh8 set STATUS FAIL
+if @nh5 .ne. 0  set STATUS FAIL
+if @nh14 .ne. @nh15 set STATUS FAIL
+if @nh3 .gt. @nh4 set STATUS FAIL
+if @nh13 .gt. @nh14 set STATUS FAIL
+
+echo hba2 testcase result: @STATUS
+stop

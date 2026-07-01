@@ -1,0 +1,140 @@
+* MNDO97/CHARMM test case of c32a2
+* Kwangho Nam, Jun 2005
+* Dihydrogen MethylPhosphate (QM) with one TIP3P water (MM)
+* Using AM1 Hamiltonian
+*
+
+if ?mndo97 .ne. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+BOML -3
+FASTer ON
+
+stream datadir.def
+
+read rtf card
+* Dihydrogen MethylPhosphate with TIP3P water
+*
+27 1
+
+MASS     4 HT     1.00800 H 
+MASS    16 HN4Q   1.00800 H 
+MASS    18 HN9Q   1.00800 H 
+MASS    48 CN9Q  12.01100 C 
+MASS    65 ON2Q  15.99900 O
+MASS    66 ON3Q  15.99900 O 
+MASS    75 OT    15.99940 O 
+MASS    88 PQ    30.97400 P  
+
+RESI TIP3         0.000 
+GROUP
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2 H1 OH2 H2 H1 H2  
+ANGLE H1 OH2 H2           
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI MOL1         0.00  ! P(O)(OH)(OH)(OCH3)
+GROUP
+ATOM C1   CN9Q    0.000
+ATOM H11  HN9Q    0.000
+ATOM H12  HN9Q    0.000
+ATOM H13  HN9Q    0.000
+ATOM O1   ON2Q    0.000
+GROUP
+ATOM PA   PQ      0.000
+ATOM O2   ON3Q    0.000
+ATOM O3   ON2Q    0.000
+ATOM H3   HN4Q    0.000
+ATOM O4   ON2Q    0.000
+ATOM H4   HN4Q    0.000
+PATCHING FIRS NONE LAST NONE
+
+END
+
+read para card !append
+* Dihydrogen MethylPhosphate with TIP3P water
+*
+
+BONDS
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+HT   HT      0.000     1.5139 ! ALLOW WAT
+
+ANGLES
+HT   OT   HT     55.000   104.5200 ! ALLOW WAT
+
+DIHEDRALS
+
+IMPROPER
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+                !adm jr., 5/08/91, suggested cutoff scheme
+!                Emin         Rmin/2
+!                (kcal/mol)   (A)
+HT       0.000000  -0.046000  0.224500 
+OT       0.000000  -0.152100  1.768200 
+CN9Q     0.0       -0.080000  2.30400  
+HN9Q     0.0       -0.01000   0.47028
+HN4Q     0.0       -0.02289   0.46102
+ON2Q     0.0       -0.06973   1.33152
+ON3Q     0.0       -0.38079   1.80735
+PQ       0.0       -0.63983   1.85547
+
+END
+ 
+
+! RESIDUE GENERATION
+READ SEQU CARD
+* Dihydrogen MethylPhosphate 
+*
+1
+MOL1
+
+GENE SOLU FIRST NONE LAST NONE SETUP WARN
+
+!
+READ SEQU CARD
+* TIP3P water
+*
+1
+TIP3
+
+GENE BULK NOANGLE NODIHEDRAL WARN SETUP
+
+open unit 1 read card name @0mol1_mndo97.crd
+read coord card unit 1
+close unit 1
+
+NBONDds -
+   NBXMod 5 E14Fac 1.0 WMIN 1.0 -
+   ELEC GROUp SWITch VDW VGROup VSHIft -
+   CDIE EPS 1.0 -
+   CUTNb 21.0  CTOFnb  20.00  CTONnb  19.00 -
+   INBF 1000
+
+SHAKE FAST WATEr sele resname TIP3 end TOL 1.e-9 para
+
+define qms sele segid SOLU end
+
+print coord sele qms end
+
+
+open unit 66 name @0mndo.inp form read
+mndo unit 66 sele qms end sele none end remo 
+
+energy
+
+mini abnr nstep 100 nprint 10
+
+print coord sele all end
+
+test first tol 0.0 step 0.0005
+
+
+
+stop

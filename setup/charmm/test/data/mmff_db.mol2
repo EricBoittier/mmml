@@ -1,0 +1,714 @@
+#	Name:			<unnamed>
+#	Creating user name:	ijen
+#	Creation time:		Thu May 27 13:29:06 1999
+
+#	Modifying user name:	ijen
+#	Modification time:	Thu May 27 13:30:07 1999
+
+@<TRIPOS>MOLECULE
+AM07A
+    8     7     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 O1         -0.1052    0.0000    0.1103 O.2       1 AAM07      -0.3715 
+      2 C2         -0.0490    0.0000    1.3290 C.2       1 AAM07       0.1986 
+      3 N3          1.1115    0.0000    2.0089 N.am      1 AAM07      -0.2032 
+      4 C4          1.1030    0.0000    3.3538 C.2       1 AAM07       0.1986 
+      5 O5          2.1220    0.0000    4.0248 O.2       1 AAM07      -0.3715 
+      6 H6         -0.9661    0.0000    1.9164 H         1 AAM07       0.1610 
+      7 H7          1.9892    0.0000    1.5296 H         1 AAM07       0.2270 
+      8 H8          0.1296    0.0000    3.8421 H         1 AAM07       0.1610 
+@<TRIPOS>BOND
+     1    2    1 2    
+     2    3    2 am   
+     3    2    6 1    
+     4    3    4 am   
+     5    3    7 1    
+     6    4    5 2    
+     7    4    8 1    
+@<TRIPOS>SUBSTRUCTURE
+     1 AAM07       3 RESIDUE           1 A     ALA     0 ROOT 
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Thu May 27 14:01:00 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Thu May 27 14:01:45 1999
+
+@<TRIPOS>MOLECULE
+AR07A
+    9     9     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 O1         -0.3863    0.0000    0.3616 O.3       1 NFURA      -0.2712
+      2 C2         -0.0617    0.0000    1.6874 C.2       1 NFURA       0.0766
+      3 C3          1.2931    0.0000    1.8468 C.2       1 NFURA      -0.0687
+      4 C4          1.8496    0.0000    0.5328 C.2       1 NFURA      -0.0687
+      5 C5          0.7912    0.0000   -0.3293 C.2       1 NFURA       0.0766
+      6 H6         -0.8482    0.0000    2.4406 H         1 NFURA       0.0951
+      7 H7          1.7237    0.0000    2.8471 H         1 NFURA       0.0327
+      8 H8          2.9303    0.0000    0.3991 H         1 NFURA       0.0327
+      9 H9          0.7836    0.0000   -1.4182 H         1 NFURA       0.0951
+@<TRIPOS>BOND
+     1    1    2 1
+     2    5    1 1
+     3    3    2 2
+     4    2    6 1
+     5    4    3 1
+     6    3    7 1
+     7    5    4 2
+     8    4    8 1
+     9    5    9 1
+@<TRIPOS>SUBSTRUCTURE
+     1 NFURA       5 RESIDUE           1 A     ASN     0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Thu May 27 13:57:25 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Thu May 27 14:00:26 1999
+
+@<TRIPOS>MOLECULE
+CA07A
+    9     8     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 O1         -0.0002   -0.0004    0.0084 O.2       1 OICPPEN    -0.3603
+      2 C2          0.0032   -0.0002    1.2284 C.2       1 OICPPEN     0.2508
+      3 C3          1.2783   -0.0004    1.9598 C.2       1 OICPPEN     0.0202
+      4 C4          1.3217   -0.0003    3.2941 C.2       1 OICPPEN    -0.0769
+      5 O5         -1.1467    0.0000    1.8966 O.3       1 OICPPEN    -0.2949
+      6 H6          2.2032   -0.0006    1.3850 H         1 OICPPEN     0.0703
+      7 H7          2.2819    0.0067    3.8077 H         1 OICPPEN     0.0695
+      8 H8          0.3968   -0.0071    3.8689 H         1 OICPPEN     0.0695
+      9 H9         -1.8440    0.3047    1.3278 H         1 OICPPEN     0.2518
+@<TRIPOS>BOND
+     1    2    1 2
+     2    3    2 1
+     3    2    5 1
+     4    3    4 2
+     5    3    6 1
+     6    4    7 1
+     7    4    8 1
+     8    5    9 1
+@<TRIPOS>SUBSTRUCTURE
+     1 OICPPEN     3 RESIDUE           1 A     ****    0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Thu May 27 14:02:21 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Thu May 27 14:02:49 1999
+
+@<TRIPOS>MOLECULE
+CE07A
+   14    13     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1          0.0000    0.0000    0.0000 C.2       1 CE08CE08    0.2282
+      2 O2          0.0000    0.0000    1.3450 O.3       1 CE08CE08   -0.2756
+      3 C3          1.3140    0.0000    1.9820 C.3       1 CE08CE08    0.0821
+      4 O4          0.9770    0.0040   -0.7240 O.2       1 CE08CE08   -0.3548
+      5 H5         -0.9726   -0.0040   -0.4898 H         1 CE08CE08    0.1697
+      6 H6          2.0142   -0.6349    1.4193 H         1 CE08CE08    0.0645
+      7 C4          1.8520    1.4160    2.0080 C.3       1 CE08CE08   -0.0344
+      8 C2          1.0910   -0.5890    3.3570 C.3       1 CE08CE08   -0.0344
+      9 H9          2.7127    1.4687    2.6909 H         1 CE08CE08    0.0258
+     10 H10         1.0649    2.1009    2.3565 H         1 CE08CE08    0.0258
+     11 H11         2.1689    1.7065    0.9955 H         1 CE08CE08    0.0258
+     12 H12         0.2486   -0.0756    3.8436 H         1 CE08CE08    0.0258
+     13 H13         1.9995   -0.4587    3.9634 H         1 CE08CE08    0.0258
+     14 H14         0.8628   -1.6610    3.2640 H         1 CE08CE08    0.0258
+@<TRIPOS>BOND
+     1    2    1 1
+     2    1    4 2
+     3    1    5 1
+     4    3    2 1
+     5    3    6 1
+     6    7    3 1
+     7    3    8 1
+     8    7    9 1
+     9    7   10 1
+    10    7   11 1
+    11    8   12 1
+    12    8   13 1
+    13    8   14 1
+@<TRIPOS>SUBSTRUCTURE
+     1 CE08CE08     7 RESIDUE           1 A     ****    0 ROOT
+
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Thu May 27 14:06:50 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Thu May 27 14:08:35 1999
+
+@<TRIPOS>MOLECULE
+CJ07A
+    8     7     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1          0.1212   -0.0001   -0.0537 C.2       1 CJ07CJ07   -0.0791
+      2 C2          0.0616   -0.0001    1.2799 C.2       1 CJ07CJ07   -0.0114
+      3 C3          1.2765    0.0000    2.1075 C.2       1 CJ07CJ07    0.1170
+      4 O4          2.3754   -0.0010    1.5777 O.2       1 CJ07CJ07   -0.3659
+      5 H5          0.8117    0.6668   -0.5679 H         1 CJ07CJ07    0.0700
+      6 H6         -0.5206   -0.6671   -0.6275 H         1 CJ07CJ07    0.0700
+      7 H7         -0.9194   -0.0001    1.7528 H         1 CJ07CJ07    0.0676
+      8 H8          1.1956    0.0010    3.1935 H         1 CJ07CJ07    0.1319
+@<TRIPOS>BOND
+     1    2    1 2
+     2    1    5 1
+     3    1    6 1
+     4    3    2 1
+     5    2    7 1
+     6    3    4 2
+     7    8    3 1
+@<TRIPOS>SUBSTRUCTURE
+     1 CJ07CJ07     8 RESIDUE           1 A     ****    0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Thu May 27 14:09:08 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Thu May 27 14:09:38 1999
+
+@<TRIPOS>MOLECULE
+CO07A
+   13    12     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1          0.1520    0.0120   -0.0353 C.3       1 CO07CO07   -0.0402
+      2 C2         -0.0126    0.0067    1.4959 C.3       1 CO07CO07    0.0187
+      3 C3          1.3404    0.0270    2.1454 C.2       1 CO07CO07    0.0991
+      4 O4          2.3476    0.0295    1.4569 O.2       1 CO07CO07   -0.3749
+      5 H5          0.7048   -0.8831   -0.3565 H         1 CO07CO07    0.0288
+      6 H6          0.7037    0.9135   -0.3404 H         1 CO07CO07    0.0288
+      7 C4         -1.2363    0.0254   -0.7016 C.3       1 CO07CO07   -0.0631
+      8 H8         -0.5673   -0.8898    1.8098 H         1 CO07CO07    0.0493
+      9 H9         -0.5665    0.9068    1.8012 H         1 CO07CO07    0.0493
+     10 H10         1.4230    0.0394    3.2312 H         1 CO07CO07    0.1348
+     11 H11        -1.1374    0.3431   -1.7501 H         1 CO07CO07    0.0231
+     12 H12        -1.8928    0.7268   -0.1658 H         1 CO07CO07    0.0231
+     13 H13        -1.6697   -0.9849   -0.6639 H         1 CO07CO07    0.0231
+@<TRIPOS>BOND
+     1    1    2 1
+     2    1    5 1
+     3    1    6 1
+     4    7    1 1
+     5    2    3 1
+     6    2    8 1
+     7    2    9 1
+     8    3    4 2
+     9    3   10 1
+    10    7   11 1
+    11    7   12 1
+    12    7   13 1
+@<TRIPOS>SUBSTRUCTURE
+     1 CO07CO07     7 RESIDUE           1 A     ****    0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Thu May 27 14:10:01 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Thu May 27 14:10:42 1999
+
+@<TRIPOS>MOLECULE
+HL07A
+    8     7     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1         -0.0056   -0.0009    0.0000 C.3       1 AHL07      -0.0180
+      2 C2         -0.0011    0.0017    1.5400 C.3       1 AHL07       0.1879
+      3 Cl3         1.6662   -0.0062    2.1251 Cl        1 AHL07      -0.0837
+      4 Cl4        -0.8265    1.4483    2.1302 Cl        1 AHL07      -0.0837
+      5 Cl5        -0.8334   -1.4377    2.1382 Cl        1 AHL07      -0.0837
+      6 H6          0.2612   -1.0033   -0.3663 H         1 AHL07       0.0270
+      7 H7          0.7268    0.7319   -0.3695 H         1 AHL07       0.0270
+      8 H8         -1.0086    0.2673   -0.3632 H         1 AHL07       0.0270
+@<TRIPOS>BOND
+     1    1    2 1
+     2    1    6 1
+     3    1    7 1
+     4    1    8 1
+     5    2    3 1
+     6    2    4 1
+     7    2    5 1
+@<TRIPOS>SUBSTRUCTURE
+     1 AHL07       1 RESIDUE           1 A     ALA     0 ROOT
+
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Thu May 27 14:11:16 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Thu May 27 14:11:57 1999
+
+@<TRIPOS>MOLECULE
+IM07A
+    9     8     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1         -0.1553    0.0000    0.0948 C.2       1 IFFTBSCH   -0.0741
+      2 C2         -0.0499    0.0000    1.4256 C.2       1 IFFTBSCH   -0.0271
+      3 C3          1.2579    0.0000    2.0969 C.2       1 IFFTBSCH    0.0058
+      4 N4          1.3205    0.0000    3.3654 N.2       1 IFFTBSCH   -0.3544
+      5 H5          0.4665    0.6669   -0.5006 H         1 IFFTBSCH    0.0770
+      6 H6         -0.8631   -0.6669   -0.3953 H         1 IFFTBSCH    0.0770
+      7 H7         -0.9650    0.0000    2.0160 H         1 IFFTBSCH    0.0681
+      8 H8          0.4766    0.0737    3.9117 H         1 IFFTBSCH    0.1203
+      9 H9          2.1730    0.0000    1.5066 H         1 IFFTBSCH    0.1073
+@<TRIPOS>BOND
+     1    2    1 2
+     2    1    5 1
+     3    1    6 1
+     4    3    2 1
+     5    2    7 1
+     6    3    4 2
+     7    9    3 1
+     8    4    8 1
+@<TRIPOS>SUBSTRUCTURE
+     1 IFFTBSCH     9 RESIDUE           1 A     ****    0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Tue Jul 27 14:35:12 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Tue Jul 27 14:38:29 1999
+
+@<TRIPOS>MOLECULE
+NC07A
+   16    15     1     1     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1         -0.4822    0.4428    0.2970 C.3       1 ANC07      -0.0381
+      2 C2         -0.1576    0.3583    1.8096 C.3       1 ANC07       0.0579
+      3 N3          1.2656    0.4209    2.0195 N.2       1 ANC07      -0.2622
+      4 C4          1.5468    0.0545    3.2025 C.2       1 ANC07       0.3156
+      5 N5          1.1266    0.7346    4.2654 N.3       1 ANC07      -0.1680
+      6 N6          2.8249   -0.3133    3.2032 N.3       1 ANC07      -0.1680
+      7 H7          0.0305   -0.3699   -0.2408 H         1 ANC07       0.0255
+      8 H8         -0.1468    1.4071   -0.1154 H         1 ANC07       0.0255
+      9 H9         -1.5672    0.3489    0.1325 H         1 ANC07       0.0255
+     10 H10        -0.5423   -0.5991    2.1978 H         1 ANC07       0.0601
+     11 H11        -0.6647    1.1800    2.3426 H         1 ANC07       0.0601
+     12 H12         1.7082    1.2366    1.6259 H         1 ANC07       0.2398
+     13 H13         1.6861    1.6546    4.3491 H         1 ANC07       0.2065
+     14 H14         1.2586    0.1494    5.1635 H         1 ANC07       0.2065
+     15 H15         3.0130   -0.9619    4.0459 H         1 ANC07       0.2065
+     16 H16         3.4670    0.5530    3.2646 H         1 ANC07       0.2065
+@<TRIPOS>BOND
+     1    2    1 1
+     2    1    7 1
+     3    1    8 1
+     4    1    9 1
+     5    2    3 1
+     6    2   10 1
+     7    2   11 1
+     8    3    4 2
+     9    3   12 1
+    10    4    5 1
+    11    4    6 1
+    12    5   13 1
+    13    5   14 1
+    14    6   15 1
+    15    6   16 1
+@<TRIPOS>SUBSTRUCTURE
+     1 ANC07       3 RESIDUE           1 A     ALA     0 ROOT
+
+#	Name:			<unnamed>
+#	Creating user name:	ijen
+#	Creation time:		Sun Dec 26 13:38:54 1999
+
+#	Modifying user name:	ijen
+#	Modification time:	Sun Dec 26 13:38:54 1999
+
+@<TRIPOS>MOLECULE
+NH07A
+   17    17     1     0     1
+PROTEIN
+NO_CHARGES
+
+
+@<TRIPOS>DICT
+PROTEIN PROTEIN
+@<TRIPOS>ATOM
+      1 N1          0.0000    0.0000    0.0000 N.3       1 AXPIAXPI    0.0000 
+      2 C2          0.0000    0.0000    1.4620 C.3       1 AXPIAXPI    0.0000 
+      3 C3          1.4390    0.0000    1.9590 C.3       1 AXPIAXPI    0.0000 
+      4 C4          2.1900   -1.2120    1.4100 C.3       1 AXPIAXPI    0.0000 
+      5 C5          2.0670   -1.2750   -0.1110 C.3       1 AXPIAXPI    0.0000 
+      6 C6          0.6020   -1.2250   -0.5250 C.3       1 AXPIAXPI    0.0000 
+      7 H7         -0.9590    0.0760   -0.3370 H         1 AXPIAXPI    0.0000 
+      8 H8         -0.5260   -0.8770    1.8850 H         1 AXPIAXPI    0.0000 
+      9 H9         -0.5250    0.8960    1.8090 H         1 AXPIAXPI    0.0000 
+     10 H10         1.4580    0.0030    3.0550 H         1 AXPIAXPI    0.0000 
+     11 H11         1.9230    0.9210    1.6160 H         1 AXPIAXPI    0.0000 
+     12 H12         1.7610   -2.1260    1.8430 H         1 AXPIAXPI    0.0000 
+     13 H13         3.2430   -1.1830    1.7120 H         1 AXPIAXPI    0.0000 
+     14 H14         2.5350   -2.1860   -0.5000 H         1 AXPIAXPI    0.0000 
+     15 H15         2.5820   -0.4190   -0.5600 H         1 AXPIAXPI    0.0000 
+     16 H16         0.0930   -2.1370   -0.1580 H         1 AXPIAXPI    0.0000 
+     17 H17         0.5120   -1.2150   -1.6160 H         1 AXPIAXPI    0.0000 
+@<TRIPOS>BOND
+     1    1    2 1    
+     2    6    1 1    
+     3    1    7 1    
+     4    2    3 1    
+     5    2    8 1    
+     6    2    9 1    
+     7    4    3 1    
+     8    3   10 1    
+     9    3   11 1    
+    10    5    4 1    
+    11    4   12 1    
+    12    4   13 1    
+    13    6    5 1    
+    14    5   14 1    
+    15    5   15 1    
+    16    6   16 1    
+    17   17    6 1    
+@<TRIPOS>SUBSTRUCTURE
+     1 AXPIAXPI    17 RESIDUE           1 A     ****    0 ROOT 
+
+#	Name:			<unnamed>
+#	Creating user name:	ijen
+#	Creation time:		Sun Dec 26 13:39:21 1999
+
+#	Modifying user name:	ijen
+#	Modification time:	Sun Dec 26 13:39:21 1999
+
+@<TRIPOS>MOLECULE
+OH07A
+   19    19     1     0     1
+PROTEIN
+NO_CHARGES
+
+
+@<TRIPOS>DICT
+PROTEIN PROTEIN
+@<TRIPOS>ATOM
+      1 C1          0.0000    0.0000    0.0000 C.3       1 AXCYAXCY    0.0000 
+      2 C2          0.0000    0.0000    1.5230 C.3       1 AXCYAXCY    0.0000 
+      3 C3          1.4230    0.0000    2.0810 C.3       1 AXCYAXCY    0.0000 
+      4 C4          2.2280    1.1780    1.5350 C.3       1 AXCYAXCY    0.0000 
+      5 C5          2.2290    1.1770    0.0070 C.3       1 AXCYAXCY    0.0000 
+      6 C6          0.8040    1.1730   -0.5440 C.3       1 AXCYAXCY    0.0000 
+      7 O7         -1.3280   -0.0250   -0.5300 O.3       1 AXCYAXCY    0.0000 
+      8 H8         -0.5720   -0.8620    1.8830 H         1 AXCYAXCY    0.0000 
+      9 H9         -0.5270    0.9020    1.8680 H         1 AXCYAXCY    0.0000 
+     10 H10         1.9200   -0.9380    1.8000 H         1 AXCYAXCY    0.0000 
+     11 H11         1.4000    0.0250    3.1760 H         1 AXCYAXCY    0.0000 
+     12 H12         3.2550    1.1470    1.9170 H         1 AXCYAXCY    0.0000 
+     13 H13         1.7860    2.1160    1.8950 H         1 AXCYAXCY    0.0000 
+     14 H14         2.7570    0.2840   -0.3530 H         1 AXCYAXCY    0.0000 
+     15 H15         2.7810    2.0420   -0.3770 H         1 AXCYAXCY    0.0000 
+     16 H16         0.7980    1.1370   -1.6390 H         1 AXCYAXCY    0.0000 
+     17 H17         0.2970    2.1050   -0.2510 H         1 AXCYAXCY    0.0000 
+     18 H18         0.4490   -0.9350   -0.3560 H         1 AXCYAXCY    0.0000 
+     19 H19        -1.7600    0.7950   -0.2320 H         1 AXCYAXCY    0.0000 
+@<TRIPOS>BOND
+     1    1    2 1    
+     2    1    6 1    
+     3    7    1 1    
+     4    1   18 1    
+     5    2    3 1    
+     6    2    8 1    
+     7    2    9 1    
+     8    3    4 1    
+     9    3   10 1    
+    10    3   11 1    
+    11    5    4 1    
+    12    4   12 1    
+    13    4   13 1    
+    14    6    5 1    
+    15    5   14 1    
+    16    5   15 1    
+    17    6   16 1    
+    18    6   17 1    
+    19   19    7 1    
+@<TRIPOS>SUBSTRUCTURE
+     1 AXCYAXCY    19 RESIDUE           1 A     ****    0 ROOT 
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Tue Jul 27 14:08:58 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Tue Jul 27 14:09:19 1999
+
+@<TRIPOS>MOLECULE
+OR07A
+   13    13     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1         -0.7522   -0.3116   -0.7649 C.3       1 FURNTHYD   -0.0274
+      2 C2         -0.7841   -0.2259    0.7584 C.3       1 FURNTHYD   -0.0274
+      3 C3          0.7043   -0.2102    1.0892 C.3       1 FURNTHYD    0.0477
+      4 O4          1.3551    0.4376   -0.0146 O.3       1 FURNTHYD   -0.3798
+      5 C5          0.4154    0.6117   -1.0829 C.3       1 FURNTHYD    0.0477
+      6 H6         -1.6955    0.0790   -1.1744 H         1 FURNTHYD    0.0288
+      7 H7         -0.5919   -1.3379   -1.1268 H         1 FURNTHYD    0.0288
+      8 H8         -1.2751   -1.1217    1.1664 H         1 FURNTHYD    0.0288
+      9 H9         -1.3051    0.6740    1.1172 H         1 FURNTHYD    0.0288
+     10 H10         1.0679   -1.2430    1.1951 H         1 FURNTHYD    0.0560
+     11 H11         0.8857    0.3406    2.0239 H         1 FURNTHYD    0.0560
+     12 H12         0.0614    1.6526   -1.1177 H         1 FURNTHYD    0.0560
+     13 H13         0.8686    0.3455   -2.0492 H         1 FURNTHYD    0.0560
+@<TRIPOS>BOND
+     1    1    2 1
+     2    5    1 1
+     3    1    6 1
+     4    1    7 1
+     5    3    2 1
+     6    2    8 1
+     7    2    9 1
+     8    4    3 1
+     9    3   10 1
+    10    3   11 1
+    11    5    4 1
+    12    5   12 1
+    13    5   13 1
+@<TRIPOS>SUBSTRUCTURE
+     1 FURNTHYD     5 RESIDUE           1 A     ****    0 ROOT
+
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Tue Jul 27 14:09:40 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Tue Jul 27 14:10:04 1999
+
+@<TRIPOS>MOLECULE
+RA07A
+   15    15     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1         -1.0927    0.1927   -0.7165 C.3       1 HCCYHCCY   -0.0531
+      2 C2         -1.0371    0.2570    0.8262 C.3       1 HCCYHCCY   -0.0531
+      3 C3          0.4559    0.2904    1.1615 C.3       1 HCCYHCCY   -0.0531
+      4 C4          1.0567   -0.6399    0.1099 C.3       1 HCCYHCCY   -0.0531
+      5 C5          0.3255   -0.2289   -1.1737 C.3       1 HCCYHCCY   -0.0531
+      6 H6         -1.3464    1.1856   -1.1164 H         1 HCCYHCCY    0.0265
+      7 H7         -1.8439   -0.5394   -1.0477 H         1 HCCYHCCY    0.0265
+      8 H8         -1.5106   -0.6416    1.2484 H         1 HCCYHCCY    0.0265
+      9 H9         -1.5500    1.1540    1.2033 H         1 HCCYHCCY    0.0265
+     10 H10         0.6133   -0.1044    2.1761 H         1 HCCYHCCY    0.0265
+     11 H11         0.8680    1.3081    1.0954 H         1 HCCYHCCY    0.0265
+     12 H12         0.8349   -1.6844    0.3740 H         1 HCCYHCCY    0.0265
+     13 H13         2.1451   -0.5065    0.0224 H         1 HCCYHCCY    0.0265
+     14 H14         0.8278    0.6269   -1.6484 H         1 HCCYHCCY    0.0265
+     15 H15         0.2756   -1.0662   -1.8853 H         1 HCCYHCCY    0.0265
+@<TRIPOS>BOND
+     1    1    2 1
+     2    5    1 1
+     3    1    6 1
+     4    1    7 1
+     5    3    2 1
+     6    2    8 1
+     7    2    9 1
+     8    4    3 1
+     9    3   10 1
+    10    3   11 1
+    11    5    4 1
+    12    4   12 1
+    13    4   13 1
+    14    5   14 1
+    15    5   15 1
+@<TRIPOS>SUBSTRUCTURE
+     1 HCCYHCCY     5 RESIDUE           1 A     ****    0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Tue Jul 27 14:10:32 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Tue Jul 27 14:10:58 1999
+
+@<TRIPOS>MOLECULE
+RE07A
+   13    12     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1         -0.9575   -0.6391   -1.8967 C.2       1 RE07RE07   -0.1146
+      2 C2         -0.9818   -0.6592   -0.5621 C.2       1 RE07RE07   -0.0773
+      3 C3          0.2905   -0.6606    0.2343 C.3       1 RE07RE07    0.0019
+      4 C4          0.3211    0.5420    1.1319 C.2       1 RE07RE07   -0.0773
+      5 C5          1.3005    1.4445    1.0392 C.2       1 RE07RE07   -0.1146
+      6 H6         -0.2863    0.0411   -2.4189 H         1 RE07RE07    0.0303
+      7 H7         -1.6088   -1.3030   -2.4633 H         1 RE07RE07    0.0303
+      8 H8         -1.9437   -0.6747   -0.0518 H         1 RE07RE07    0.0690
+      9 H9          1.1542   -0.6439   -0.4467 H         1 RE07RE07    0.0614
+     10 H10         0.3253   -1.5721    0.8492 H         1 RE07RE07    0.0614
+     11 H11        -0.4717    0.6725    1.8670 H         1 RE07RE07    0.0690
+     12 H12         1.2209    2.3911    1.5717 H         1 RE07RE07    0.0303
+     13 H13         2.1790    1.2340    0.4310 H         1 RE07RE07    0.0303
+@<TRIPOS>BOND
+     1    2    1 2
+     2    1    6 1
+     3    1    7 1
+     4    3    2 1
+     5    2    8 1
+     6    4    3 1
+     7    3    9 1
+     8    3   10 1
+     9    5    4 2
+    10    4   11 1
+    11    5   12 1
+    12    5   13 1
+@<TRIPOS>SUBSTRUCTURE
+     1 RE07RE07     5 RESIDUE           1 A     ****    0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Tue Jul 27 15:53:08 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Tue Jul 27 15:56:20 1999
+
+@<TRIPOS>MOLECULE
+SR07A
+   13    13     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1         -0.7572    0.0689   -0.9615 C.ar      1 SR07SR07    0.0122
+      2 C2         -0.4777    0.1435    0.4072 C.ar      1 SR07SR07   -0.0501
+      3 C3          0.2941    0.0987   -1.8820 C.ar      1 SR07SR07   -0.0501
+      4 S1         -2.4199   -0.1590   -1.5241 S.3       1 SR07SR07   -0.1189
+      5 C5          0.8375    0.2836    0.8445 C.ar      1 SR07SR07   -0.0678
+      6 H6         -1.2859    0.0922    1.1278 H         1 SR07SR07    0.0565
+      7 C7          1.6114    0.2101   -1.4375 C.ar      1 SR07SR07   -0.0678
+      8 H8          0.0866    0.0352   -2.9441 H         1 SR07SR07    0.0565
+      9 H9         -2.2731    0.1540   -2.4710 H         1 SR07SR07    0.1222
+     10 C10         1.8874    0.3074   -0.0743 C.ar      1 SR07SR07   -0.0687
+     11 H11         1.0497    0.3749    1.9036 H         1 SR07SR07    0.0600
+     12 H12         2.4223    0.2210   -2.1568 H         1 SR07SR07    0.0600
+     13 H13         2.9124    0.4007    0.2658 H         1 SR07SR07    0.0559
+@<TRIPOS>BOND
+     1    1    2 ar
+     2    3    1 ar
+     3    1    4 1
+     4    2    5 ar
+     5    7    3 ar
+     6   10    5 ar
+     7    2    6 1
+     8    3    8 1
+     9    4    9 1
+    10   10    7 ar
+    11    5   11 1
+    12    7   12 1
+    13   10   13 1
+@<TRIPOS>SUBSTRUCTURE
+     1 SR07SR07    10 RESIDUE           1 A     ****    0 ROOT
+
+#       Name:                   <unnamed>
+#       Creating user name:     ijen
+#       Creation time:          Fri May 28 12:22:34 1999
+
+#       Modifying user name:    ijen
+#       Modification time:      Fri May 28 12:23:25 1999
+
+@<TRIPOS>MOLECULE
+BIPHENYL
+   22    23     1     0     0
+PROTEIN
+GAST_HUCK
+
+
+@<TRIPOS>ATOM
+      1 C1          0.5604    1.3084   -0.0113 C.ar      1 BIPH1      -0.0617
+      2 C2          1.2482    0.2079    0.4912 C.ar      1 BIPH1      -0.0612
+      3 C3          0.6218   -1.0399    0.5554 C.ar      1 BIPH1      -0.0540
+      4 C4         -0.7030   -1.2084    0.1188 C.ar      1 BIPH1      -0.0179
+      5 C5         -1.3793   -0.0837   -0.3845 C.ar      1 BIPH1      -0.0540
+      6 C6         -0.7529    1.1641   -0.4496 C.ar      1 BIPH1      -0.0612
+      7 H7          1.0474    2.2756   -0.0608 H         1 BIPH1       0.0618
+      8 H8          2.2709    0.3180    0.8334 H         1 BIPH1       0.0618
+      9 H9          1.1588   -1.8964    0.9465 H         1 BIPH1       0.0624
+     10 H10        -2.4027   -0.1762   -0.7297 H         1 BIPH1       0.0624
+     11 H11        -1.2905    2.0198   -0.8418 H         1 BIPH1       0.0618
+     12 C12        -1.3445   -2.5398    0.1979 C.ar      1 BIPH1      -0.0179
+     13 C13        -2.5752   -2.6886    0.8599 C.ar      1 BIPH1      -0.0540
+     14 C14        -3.2001   -3.9358    0.9479 C.ar      1 BIPH1      -0.0612
+     15 C15        -2.6059   -5.0564    0.3740 C.ar      1 BIPH1      -0.0617
+     16 C16        -1.3858   -4.9309   -0.2868 C.ar      1 BIPH1      -0.0612
+     17 C17        -0.7619   -3.6837   -0.3738 C.ar      1 BIPH1      -0.0540
+     18 H18        -3.0547   -1.8282    1.3124 H         1 BIPH1       0.0624
+     19 H19        -4.1487   -4.0316    1.4635 H         1 BIPH1       0.0618
+     20 H20        -3.0924   -6.0227    0.4422 H         1 BIPH1       0.0618
+     21 H21        -0.9196   -5.8013   -0.7342 H         1 BIPH1       0.0618
+     22 H22         0.1868   -3.6070   -0.8927 H         1 BIPH1       0.0624
+@<TRIPOS>BOND
+     1    2    1 ar
+     2    1    6 ar
+     3    1    7 1
+     4    2    3 ar
+     5    2    8 1
+     6    3    4 ar
+     7    3    9 1
+     8    4    5 ar
+     9    4   12 1
+    10    5    6 ar
+    11    5   10 1
+    12    6   11 1
+    13   12   13 ar
+    14   12   17 ar
+    15   13   14 ar
+    16   13   18 1
+    17   14   15 ar
+    18   14   19 1
+    19   15   16 ar
+    20   15   20 1
+    21   17   16 ar
+    22   16   21 1
+    23   17   22 1
+@<TRIPOS>SUBSTRUCTURE
+     1 BIPH1      17 RESIDUE           1 A     ****    0 ROOT

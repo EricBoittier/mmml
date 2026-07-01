@@ -1,0 +1,1156 @@
+* CHARMM testcase: lookup.inp
+* testing solvent-solvent, solvent-solute table lookup routines.
+* Lennart Nilsson
+* Revised January 2020 to use 12 water molecules,
+* and to test on ?GRMS only on node 0 (it is sometime problematic on slaves)
+*
+! Arguments: SECTION=n  (n=1,.., 11)  run just section n
+!            FROM=n     start test at section n 
+!            TO=m       stop test at section m (defaults to the last section) 
+
+if ?lookup .ne. 1 then 
+ echo "c34test/lookup> Test NOT performed."
+ echo lookup_0 testcase result: skip
+STOP
+endif
+if ?parallel .eq. 1 then
+if ?numnode .gt. 8 then
+ echo "c34test/lookup> "numnode=?numnode :: too few atoms for numnode > 8"
+ echo "c34test/lookup> Test NOT performed."
+STOP
+endif
+endif
+stream datadir.def
+
+if  @?section .eq. 1 then
+  set from @section
+  set to   @section
+endif
+if  @?from .eq. 1 then
+   set beginsection @from
+   set endsection 12     ! explicitly set to last section
+   if  @?to .eq. 1  then
+     set endsection  @to
+   endif
+   set donow goto BEGINSETUP=@beginsection
+   if @beginsection ge 12 goto BEGINSETUP=12
+   if @beginsection ge 9  goto BEGINSETUP=9
+else
+   set beginsection 1
+   set endsection 999
+   set donow echo
+endif
+
+label BEGINSETUP=0
+read rtf  card name @0top_all22_prot.inp
+read para card name @0par_all22_prot.inp
+
+read sequence tip3 12
+generate wat noangle nodihe
+read coor card
+*
+   36
+    1    1 TIP3 OH2    2.53067   0.59634  -2.47655
+    2    1 TIP3 H1     2.61978   1.54016  -2.60884
+    3    1 TIP3 H2     1.89243   0.32098  -3.13461
+    4    2 TIP3 OH2    1.46380  -0.14859   0.94227
+    5    2 TIP3 H1     1.42555  -0.79496   1.64723
+    6    2 TIP3 H2     1.14145  -0.61515   0.17114
+    7    3 TIP3 OH2   -6.16770  -0.53438   2.53526
+    8    3 TIP3 H1    -6.12649  -1.16005   3.25850
+    9    3 TIP3 H2    -5.46493   0.08948   2.71730
+   10    4 TIP3 OH2    5.16982   2.79045  -0.75622
+   11    4 TIP3 H1     4.72909   2.07005  -0.30566
+   12    4 TIP3 H2     5.15679   3.51117  -0.12645
+   13    5 TIP3 OH2   -5.24439   3.91551   1.07017
+   14    5 TIP3 H1    -5.61387   3.11356   0.70060
+   15    5 TIP3 H2    -4.30328   3.74700   1.11651
+   16    6 TIP3 OH2   -8.63434  -2.42423  -3.53695
+   17    6 TIP3 H1    -9.08200  -1.57836  -3.55530
+   18    6 TIP3 H2    -9.19522  -3.00381  -4.05244
+   19    7 TIP3 OH2   -7.92373  -0.26227  -1.41115
+   20    7 TIP3 H1    -7.71038  -1.03211  -0.88385
+   21    7 TIP3 H2    -7.18597  -0.17260  -2.01439
+   22    8 TIP3 OH2    2.28137   7.89462  -0.54418
+   23    8 TIP3 H1     2.90101   7.21809  -0.81726
+   24    8 TIP3 H2     2.07311   7.67670   0.36431
+   25    9 TIP3 OH2   -0.14676   2.28355   1.34837
+   26    9 TIP3 H1     0.15703   1.59769   0.75378
+   27    9 TIP3 H2     0.57464   2.40242   1.96617
+   28   10 TIP3 OH2    8.51622  -6.11492   2.20899
+   29   10 TIP3 H1     8.56544  -5.50480   2.94490
+   30   10 TIP3 H2     8.94173  -5.65383   1.48610
+   31   11 TIP3 OH2    2.99394  -3.32221   1.67585
+   32   11 TIP3 H1     3.13653  -4.26851   1.69601
+   33   11 TIP3 H2     2.88784  -3.11523   0.74734
+   34   12 TIP3 OH2   -3.85123  -5.22057  -1.05167
+   35   12 TIP3 H1    -3.80812  -4.36072  -1.47004
+   36   12 TIP3 H2    -4.30882  -5.77310  -1.68535
+
+coor dupl sele ires 1 end  sele  ires 2 end
+coor dupl sele ires 1 end  sele  ires 3 end
+
+coor orient sele ires 1 end
+coor transl xdir 4.111 sele ires 1:2 end
+coor transl ydir 4.5 sele ires 2 end
+coor transl xdir -4.0 sele ires 3 end
+coor transl zdir 8.0 sele ires 4:12 end ! to get them out of the way
+print coor
+coor dist sele ires 1 end  sele ires 2:3 end 
+
+set tol 0.01
+set tol5 0.05
+set tol8 0.08
+
+set pmetol 5.0
+
+if @beginsection ge 7 goto BEGINSETUP=7
+if @beginsection ge 4 goto BEGINSETUP=4
+@donow
+label ENDSETUP=0
+
+label BEGINSETUP=1
+label ENDSETUP=1
+
+label BEGINTEST=1
+! Section 1. No PBC. All atoms use solvent-solvent routines with different cutoffs
+set section 1
+set test=1 = pass
+set fail
+energy cutnb 10.0 ctofnb 7.5 vshift fshift
+
+set ee ?ENER
+set eg ?GRMS
+if ?mynode .gt. 0 then set dg 0.0
+! Default
+set subsection default
+lookup sele segid wat end
+energy
+
+if ?numnode .le. 1 then
+! Exclude this test since numbers will be different in parallel
+set counts pass
+if ?NNOO .ne. 25 set counts fail
+if ?NNVU .ne. 0 set counts fail
+if ?NNNB .ne. 0 set counts fail
+if counts .ne. pass then
+set test=1 = fail
+set fail = @fail + @subsection=counts
+endif
+endif
+
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol5 then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection default-noenergy
+lookup sele segid wat end noenergy
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol5 then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection all-int10
+lookup int tabi 10 sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection all-tabi150
+lookup tabi 150  sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection int150-23-novu
+lookup int tabi 150 sele ires 2:3  end novu
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection int150-12-novu
+lookup int tabi 150 sele ires 1:2  end novu
+energy
+if ?numnode .le. 1 then
+set counts pass
+if ?NNOO .ne. 1 set counts fail
+if ?NNVU .ne. 0 set counts fail
+if ?NNNB .ne. 190 set counts fail
+if counts .ne. pass then
+set test=1 = fail
+set fail = @fail + @subsection=counts
+endif
+endif
+
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=1 = fail
+set fail = @fail + @subsection
+endif
+
+if test=1 ne pass then
+  echo result: test=1 fail components: @fail
+else
+  echo result: test=1 pass
+endif
+
+if endsection eq @section stop
+
+label ENDTEST=1
+
+label BEGINSETUP=2
+label ENDSETUP=2
+
+label BEGINTEST=2
+!Section 2. Change cutoffs
+set section 2
+set test=2 pass
+set fail 
+lookup reset
+energy  cutnb 10.0 ctofnb 5.0 fswitch
+set ee ?ENER
+set eg ?GRMS
+
+set subsection int150-fsw-all 
+lookup int tabi 150 sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol set status FAIL
+if @dg gt @tol set status FAIL
+if @de gt @tol then
+set test=2 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=2 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection int150-13-novu
+lookup int tabi 150  sele ires 1 .or. ires 3   end novu
+energy 
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol set status FAIL
+if @dg gt @tol set status FAIL
+if @de gt @tol then
+set test=2 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=2 = fail
+set fail = @fail + @subsection
+endif
+
+if test=2 ne pass then
+  echo result: test=2 fail components: @fail
+else
+  echo result: test=2 pass
+endif
+
+if endsection eq @section stop
+
+label ENDTEST=2
+
+label BEGINSETUP=3
+label ENDSETUP=3
+
+label BEGINTEST=3
+!Section 3. Involve solVent-solUte lookups as well
+set section 3
+set test=3 = pass
+set fail 
+lookup reset
+energy  cutnb 10.0 ctofnb 5.0 fswitch
+set ee ?ENER
+set eg ?GRMS
+
+set subsection int150-vu13
+lookup int tabi 150  sele ires 1 .or. ires 3 end
+energy 
+if ?numnode .le. 1 then
+set counts pass
+if ?NNOO .ne. 1 set counts fail
+if ?NNVU .ne. 25 set counts fail
+if ?NNNB .ne. 0 set counts fail
+if counts .ne. pass then
+set test=3 = fail
+set fail = @fail + @subsection=counts
+endif
+endif
+
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol set status FAIL
+if @dg gt @tol set status FAIL
+if @de gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection int150-vu12
+lookup int tabi 150  sele ires 1:2 end
+energy 
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol set status FAIL
+if @dg gt @tol set status FAIL
+if @de gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection int150-vu23
+lookup int tabi 150  sele ires 2:3 end
+energy 
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection tab150-vu23
+lookup noint energy tabi 150  sele ires 2:3 end
+energy 
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=3 = fail
+set fail = @fail + @subsection
+endif
+
+if test=3 ne pass then
+  echo result: test=3 fail components: @fail
+else
+  echo result: test=3 pass
+endif
+
+if endsection eq @section stop
+label ENDTEST=3
+
+label BEGINSETUP=4
+!Section 4. With PBC
+!crystal define orthorhombic 12. 12. 12. 90. 90. 90.
+crystal define orthorhombic 25. 25. 25. 90. 90. 90.
+crystal build cutoff 12.0 noper 0
+image byresidue sele segid wat end
+
+if beginsection gt 4 @donow
+label ENDSETUP=4
+
+label BEGINTEST=4
+!Section 4. With PBC
+set test=4 pass
+set fail
+set section 4
+lookup reset
+energy cutnb 10.0 ctofnb 7.5 vshift fshift cutim 10.0
+set ee ?ENER
+set eg ?GRMS
+
+set subsection pbc-tabi100
+lookup tabi 100 noint energy sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol5 then
+set test=4 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=4 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection pbcint10
+lookup int tabincr 10 sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=4 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=4 = fail
+set fail = @fail + @subsection
+endif
+
+if test=4 ne pass then
+  echo result: test=4 fail components: @fail
+else
+  echo result: test=4 pass
+endif
+
+if endsection eq @section stop
+
+label ENDTEST=4
+
+label BEGINSETUP=5
+label ENDSETUP=5
+
+label BEGINTEST=5
+!Section 5. PBC and solVent-solUte
+set fail
+set test=5 = pass
+set section 5
+
+lookup reset
+energy cutnb 10.0 ctofnb 7.5 vshift fshift cutim 10.0
+set ee ?ENER
+set eg ?GRMS
+
+set subsection pbc-vu12
+lookup  tabincr 100 noint noenergy sele ires 1:2 end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol5 then
+set test=5 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=5 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection pbc-vu13
+lookup int  sele ires 1 .or. ires 3 end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=5 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=5 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection pbc-vu23
+lookup int tabincr 50  sele ires 2:3 end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=5 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol8 then
+set test=5 = fail
+set fail = @fail + @subsection
+endif
+
+if ?imcubes .ne. 1 then
+ echo result: test=5 IMCUBES section SKIPPED - not compiled
+else
+   set subsection imcubes-23
+   lookup int tabincr 100 sele ires 2:3 end
+   energy bycbim
+   calc de = abs( @ee - ?ENER ) / abs( @ee )
+   if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+   if @de gt @tol5 then
+    set test=5 = fail
+    set fail = @fail + @subsection
+   endif
+   if @dg gt @tol then
+     set test=5 = fail
+     set fail = @fail + @subsection
+   endif
+endif
+
+if test=5 ne pass then
+  echo result: test=5 fail components: @fail
+else
+  echo result: test=5 pass
+endif
+
+if endsection eq @section stop
+label ENDTEST=5
+
+label BEGINSETUP=6
+label ENDSETUP=6
+
+label BEGINTEST=6
+!Section 6. PME
+set fail
+set test=6 = pass
+set section 6
+
+lookup reset
+energy bygroup cutnb 10.0 ctofnb 7.5 cutim 10.0  - 
+   ewald pme  kappa 0.34 order 6 fftx 24 ffty 24 fftz 24
+set ee ?ENER
+set eg ?GRMS
+
+set subsection pme
+lookup  tabi 100 noint sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @pmetol then
+set test=6 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @pmetol then
+set test=6 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection pme-12
+lookup  tabi 100 interpolation noenergy sele ires 1:2  end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @pmetol then
+set test=6 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @pmetol then
+set test=6 = fail
+set fail = @fail + @subsection
+endif
+
+if test=6 ne pass then
+  echo result: test=6 fail components: @fail
+else
+  echo result: test=6 pass
+endif
+
+if endsection eq @section stop
+label ENDTEST=6
+
+label BEGINSETUP=7
+coor orient sele ires 1 end
+coor dupl sele ires 1 end  sele  ires 2 end
+coor dupl sele ires 1 end  sele  ires 3 end
+coor transl Zdir -2.41 sele ires 1 end
+coor transl zdir +2.41 sele ires 3 end
+coor print
+coor dist sele ires 1 end  sele ires 2:3 end 
+
+label ENDSETUP=7
+
+label BEGINTEST=7
+!Section 7. Another coordinate configuration
+set fail
+set test=7 = pass
+set section 7
+lookup reset
+energy  cutnb 20.0 ctofnb 10.5 cutim 20.0 fshift vshift noewald
+set ee ?ENER
+set eg ?GRMS
+
+set subsection conf2-all
+lookup tabi 100 noint sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol5 then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection conf2-all-int100
+lookup tabi 100 interpolate sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol5 then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol5 then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection conf2-12
+lookup tabi 100 noint sele ires 1:2 end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol  set status FAIL
+if @dg gt @tol set status FAIL
+if @de gt @tol5 then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection conf2-23
+lookup tabi 100 nointerpolate sele ires 2:3 end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+
+if @de gt @tol5 then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection conf2-12-int20
+lookup tabi 20 interpolate sele ires 1:2 end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol5 then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=7 = fail
+set fail = @fail + @subsection
+endif
+
+if test=7 ne pass then
+  echo result: test=7 fail components: @fail
+else
+  echo result: test=7 pass
+endif
+
+if endsection eq @section stop
+label ENDTEST=7
+
+label BEGINSETUP=8
+label ENDSETUP=8
+
+label BEGINTEST=8
+!Section 8. Misc tests, no self-validation for now
+set fail
+set test=8 = no internal check
+set section 8
+coor force comp
+print coor comp
+lookup reset
+energy fshift vshift noewald
+coor force comp
+print coor comp
+lookup tabi 150 interpolate sele segid wat end
+energy
+coor force
+print coor
+coor diff
+print coor
+
+! Just one solvent molecule - should be trapped
+lookup tabi 100 sele ires 1  end
+echo result: test=8 NO INTERNAL CHECK
+
+if endsection eq @section stop
+
+label ENDTEST=8
+
+!Section 9. Peptide in water
+! New system
+label BEGINSETUP=9
+if beginsection .lt. 9 then
+! Turn off images, then remove psf
+read image init
+end
+delete atom sele all end
+endif
+lookup reset
+! This tolerance is just barely enough...
+set tol 0.0002
+
+read rtf  card name @0top_all22_prot.inp
+read para card name @0par_all22_prot.inp
+read sequence card
+* ypgdv
+*
+5
+tyr pro gly asp val
+
+generate pept setup
+read sequence tip3 756
+generate wat noangles nodihedrals
+
+read coor card name  @0turnwat14.chr
+hbuild sele segid pept .and. hydrogen end
+if beginsection ge 10 goto BEGINSETUP=10
+!@donow
+label ENDSETUP=9
+
+label BEGINTEST=9
+!Section 9. Peptide in water
+set test=9 pass
+set fail
+set section 9
+energy fshift vshift cutnb 14.0 ctofnb 12.0 
+set ee ?ENER
+set eg ?GRMS
+
+set subsection pept+wat
+lookup  tabi 500 noint  sele segid wat end 
+energy
+
+if ?numnode .le. 1 then
+set counts pass
+if ?NNOO .ne. 79886 set counts fail
+if ?NNVU .ne. 71197 set counts fail
+if ?NNNB .ne. 187   set counts fail
+if counts .ne. pass then
+set test=9 = fail
+set fail = @fail + @subsection=counts
+endif
+endif
+
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection int100-pept+wat
+lookup  tabi 100 interpolate sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+set subsection pept+wat-novu
+lookup  tabi 500 noint sele segid wat end novu
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+!!!!!!! INTERACTION ENERGIES ARE NOT YET SUPPORTED BY THE LOOKUP ROUTINES
+GOTO END9
+set subsection intene-pept-wat
+lookup reset
+energy
+interaction sele segid pept end sele segid wat end
+set ee ?ener
+set eg ?grms
+lookup sele segid wat end
+interaction sele segid pept end sele segid wat end
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection intene-pept-wat200
+lookup reset
+energy
+define a sele segid wat .and. resi 1:200 end
+interaction sele a end sele .not. a end
+set ee ?ener
+set eg ?grms
+lookup sele segid wat end
+interaction sele a  end sele .not. a end
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection intene-all-wat200
+lookup reset
+energy
+define a sele segid wat .and. resi 1:200 end
+interaction sele a end  sele all end
+set ee ?ener
+set eg ?grms
+lookup sele segid wat end
+interaction sele a end sele  all end
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=9 = fail
+set fail = @fail + @subsection
+endif
+
+!!!!!!! END OF INTERACTION ENERGY PART
+LABEL END9
+
+if test=9 ne pass then
+  echo result: test=9 fail components: @fail
+else
+  echo result: test=9 pass
+endif
+
+if endsection eq @section stop
+
+label ENDTEST=9
+
+label BEGINSETUP=10
+
+! 29A cubic box
+crystal define ortho 29. 29. 29. 90. 90. 90.
+crystal build cutoff 15.0
+image byres sele segi wat end
+if beginsection ge 11 goto BEGINSETUP=11
+label ENDSETUP=10
+
+label BEGINTEST=10
+!Section 10. With PBC
+set test=10 pass
+set fail
+set section 10
+lookup reset
+
+energy fshift vshift cutnb 14.0 ctofnb 12.0 cutim 14.0 bygroup
+set ee ?ENER
+set eg ?GRMS
+set subsection pept+wat+pbc
+lookup  tabi 500 noint sele segid wat end
+energy
+if ?numnode .le. 1 then
+set counts pass
+if ?NNOO .ne. 79873 set counts fail
+if ?NNVU .ne. 71133 set counts fail
+if ?NNNB .ne.   187 set counts fail
+if ?NIMGOO .ne. 80183 set counts fail
+if ?NIMGVU .ne. 4711 set counts fail
+if ?NIMGVV .ne.    0 set counts fail
+
+if counts .ne. pass then
+set test=10 = fail
+set fail = @fail + @subsection=counts
+endif
+endif
+
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=10 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=10 = fail
+set fail = @fail + @subsection
+endif
+
+set subsection pept+wat+pbc+int10
+lookup tabi 10 interpolate sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=10 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=10 = fail
+set fail = @fail + @subsection
+endif
+
+! PME
+lookup reset
+energy ewald pme kappa 0.34 order 6 fftx 32 ffty 32 fftz 32 cutnb 11.0 ctofnb 9.0 bygroup
+set ee ?ENER
+set eg ?GRMS
+set subsection petp+wat+pme
+lookup  tabi 500 noint sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=10 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=10 = fail
+set fail = @fail + @subsection
+endif
+
+if test=10 ne pass then
+  echo result: test=10 fail components: @fail
+else
+  echo result: test=10 pass
+endif
+
+if endsection eq @section stop
+
+label ENDTEST=10
+
+label BEGINSETUP=11
+label ENDSETUP=11
+
+label BEGINTEST=11
+! Section 11. Dynamics, but no self-validation
+set test=11 = NO INTERNAL CHECK
+set section 11
+lookup reset
+energy ewald pme kappa 0.34 order 6 fftx 32 ffty 32 fftz 32 cutnb 11.0 ctofnb 9.0 bygroup
+lookup  tabi 100 interpolate  sele segid wat end
+
+shake bonh fast para !tol 1e-8
+dynamics start nprint 20 inbfrq 20 nstep 100 ntrfrq 100 echeck -1.0 timestep 0.001
+
+echo result: test=11 no internal check
+if endsection eq @section stop
+
+label ENDTEST=11
+
+label BEGINSETUP=12
+if @beginsection .eq. 12 then
+ set fail
+else
+ read image init
+ end 
+ delete atom sele all end
+ shake off 
+endif
+if ?MAXA .lt. 60000 then
+  echo result: test=12 SKIPPED - requires at least LARGE CHARMM version
+  set test=12 skipped
+  goto ENDTEST=12
+endif
+
+! setup dhfr with PBC
+open unit 1 read form name @0top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+read sequence card
+**
+*
+159
+MET ILE SER LEU ILE ALA ALA LEU ALA VAL ASP ARG VAL ILE GLY MET GLU ASN ALA MET
+PRO TRP ASN LEU PRO ALA ASP LEU ALA TRP PHE LYS ARG ASN THR LEU ASP LYS PRO VAL
+ILE MET GLY ARG HSD THR TRP GLU SER ILE GLY ARG PRO LEU PRO GLY ARG LYS ASN ILE
+ILE LEU SER SER GLN PRO GLY THR ASP ASP ARG VAL THR TRP VAL LYS SER VAL ASP GLU
+ALA ILE ALA ALA CYS GLY ASP VAL PRO GLU ILE MET VAL ILE GLY GLY GLY ARG VAL TYR
+GLU GLN PHE LEU PRO LYS ALA GLN LYS LEU TYR LEU THR HSD ILE ASP ALA GLU VAL GLU
+GLY ASP THR HSD PHE PRO ASP TYR GLU PRO ASP ASP TRP GLU SER VAL PHE SER GLU PHE
+HSD ASP ALA ASP ALA GLN ASN SER HSD SER TYR CYS PHE GLU ILE LEU GLU ARG ARG
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @05dfr_solv-cube_equil.pdb
+read coor pdb unit 1 resi
+close unit 1
+
+! Dimension of a box
+set size 62.23
+Calc 7 = @size 
+set  theta = 90.0
+ Crystal define cubic @7 @7 @7 @theta @theta @theta    
+crystal build cutoff 11 noper 0
+
+ image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+ image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+ set tol 0.00001
+label ENDSETUP=12
+
+label BEGINTEST=12
+! Section 12. JAC (dhfr) also with dynamics
+set section 12
+set test=12 pass
+lookup reset
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 
+set ee ?ENER
+set eg ?GRMS
+set subsection jac-ene
+lookup  tabi 100 interpolate sele segid wat end
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+if @de gt @tol then
+set test=12 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=12 = fail
+set fail = @fail + @subsection
+endif
+
+lookup reset
+set subsection jac-dyna
+shake bonh fast para  tol 1e-8
+dynamics bycbim leap start timestep 0.0001 nstep 2 nprint 1  iprfrq 100 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 200 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 
+
+energy
+set ee ?ENER
+set eg ?GRMS
+
+lookup sele segid wat end
+open unit 1 read form name @05dfr_solv-cube_equil.pdb
+read coor pdb unit 1 resi
+close unit 1
+dynamics bycbim leap start timestep 0.0001 nstep 2 nprint 1  iprfrq 100 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 200 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 
+energy
+calc de = abs( @ee - ?ENER ) / abs( @ee )
+if ?mynode .eq. 0 then calc dg = abs( @eg - ?GRMS ) / abs( @eg )
+! Here we need to be more relaxed since even this two-step trajectory is a bit chaotic
+! in particular for parallel runs
+set tol 0.05
+if @de gt @tol then
+set test=12 = fail
+set fail = @fail + @subsection
+endif
+if @dg gt @tol then
+set test=12 = fail
+set fail = @fail + @subsection
+endif
+
+if test=12 ne pass then
+  echo result: test=12 fail components: @fail
+else
+  echo result: test=12 pass
+endif
+
+if endsection eq @section stop
+label ENDTEST=12
+
+label DONE
+set status pass
+if test=1 .eq. fail set status fail
+if test=2 .eq. fail set status fail
+if test=3 .eq. fail set status fail
+if test=4 .eq. fail set status fail
+if test=5 .eq. fail set status fail
+if test=6 .eq. fail set status fail
+if test=7 .eq. fail set status fail
+if test=8 .eq. fail set status fail
+if test=9 .eq. fail set status fail
+if test=10 .eq. fail set status fail
+if test=11 .eq. fail set status fail
+if test=12 .eq. fail set status fail
+
+echo lookup testcase result: @status
+if status .eq. pass stop
+
+echo lookup_1 testcase result: @{test=1}
+echo lookup_2 testcase result: @{test=2}
+echo lookup_3 testcase result: @{test=3}
+echo lookup_4 testcase result: @{test=4}
+echo lookup_5 testcase result: @{test=5}
+echo lookup_6 testcase result: @{test=6}
+echo lookup_7 testcase result: @{test=7}
+echo lookup_8 testcase result: @{test=8}
+echo lookup_9 testcase result: @{test=9}
+echo lookup_10 testcase result: @{test=10}
+echo lookup_11 testcase result: @{test=11}
+echo lookup_12 testcase result: @{test=12}
+
+

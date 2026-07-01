@@ -1,0 +1,1027 @@
+1
+                 Chemistry at HARvard Macromolecular Mechanics
+                   (CHARMM) - Developmental Version 33b2   February 15, 2007   
+       Copyright(c) 1984-2001  President and Fellows of Harvard College
+                              All Rights Reserved
+      Current operating system: Linux-2.6.18-53.1.13.el5(i686)@lily.iwr.uni-
+                 Created on  6/16/ 8 at 21:11:16 by user: fischer     
+
+            Maximum number of ATOMS:     60120, and RESidues:       20040
+            Current HEAP size:        10240000, and STACK size:  10000000
+
+ RDTITL> * SCALING.INP, LAST MODIFIED MAY/12/2004
+ RDTITL> * BY SONJA M. SCHWARZL & STEFAN FISCHER
+ RDTITL> * SCALING FACTORS FOR IMPLICIT WATER
+ RDTITL> * GROUP SCALING FACTOR DETERMINED AS AVERAGE OVER GROUP-GROUP PAIRWISE
+ RDTITL> * SCALING FACTORS
+ RDTITL> * CALCULATION OF INTERACTION ENERGY IN VACUUM
+ RDTITL> * CALCULATION OF INTERACTION ENERGY IN SOLUTION WITH PBEQ
+ RDTITL> * MODIFIED BY DANZHI HUANG JAN/31/2002
+ RDTITL> *
+  
+ CHARMM>     
+  
+ CHARMM>    STREAM generate.str
+ VOPEN> Attempting to open::generate.str::
+ OPNLGU> Unit 99 opened for READONLY access to generate.str
+
+                    INPUT STREAM SWITCHING TO UNIT    99
+ RDTITL> * GENERATION OF THE PROTEIN (WILL BE USED FOR EVERYTHING).
+ RDTITL> *
+ Parameter: IN1 <- "" <empty>
+  
+ CHARMM>     
+  
+ CHARMM>    ! Directory from which to generate the protein :
+ CHARMM>    SET       GENERATE  "../../../test/"
+ Parameter: GENERATE <- ""../../../test/""
+  
+ CHARMM>     
+  
+ CHARMM>    STREAM   @GENERATE/gene.str
+ Parameter: GENERATE -> ""../../../test/""
+ VOPEN> Attempting to open::../../../test//gene.str::
+ OPNLGU> Unit 98 opened for READONLY access to ../../../test//gene.str
+
+                    INPUT STREAM SWITCHING TO UNIT    98
+ RDTITL> * GENERATION OF BPTI FOR CALCULATION OF SCALING FACTORS FOR CHARGE SCALING
+ RDTITL> *
+ Parameter: IN1 <- "" <empty>
+  
+ CHARMM>     
+  
+ CHARMM>    OPEN READ UNIT 1 CARD NAME  @GENERATE/top_all22_prot_lipid.inp
+ Parameter: GENERATE -> ""../../../test/""
+ VOPEN> Attempting to open::../../../test//top_all22_prot_lipid.inp::
+ OPNLGU> Unit  1 opened for READONLY access to ../../../test//top_all22_prot_lipid.inp
+  
+ CHARMM>    READ RTF CARD UNIT 1
+ MAINIO> Residue topology file being read from unit   1.
+ TITLE> *>>>>>>> COMBINED CHARMM22 ALL-HYDROGEN TOPOLOGY FILE FOR <<<<<<
+ TITLE> *>>>>>>>>>>>>>>>>>>> PROTEINS AND LIPIDS <<<<<<<<<<<<<<<<<<<<<<<
+ TITLE> *>>>>>>>>>>>>>>>>>>>>> SEPTEMBER 1998 <<<<<<<<<<<<<<<<<<<<<<<<<<
+ TITLE> *>>>>>>> DIRECT COMMENTS TO ALEXANDER D. MACKERELL JR. <<<<<<<<<
+ TITLE> *>>>>>> 410-706-7442 OR EMAIL: ALEX,MMIRIS.AB.UMD.EDU  <<<<<<<<<
+ TITLE> *
+ WARNING from DECODI -- Zero length string being converted to 0
+ RTFRDR> WARNING: Version number is NOT specified.
+
+      ***** LEVEL  2 WARNING FROM <RTFRDR> *****
+      ***** Version number 22 not needed.
+      ******************************************
+      BOMLEV (  0) IS NOT REACHED. WRNLEV IS  5
+
+  
+ CHARMM>    CLOSE UNIT 1
+ VCLOSE: Closing unit    1 with status "KEEP"
+  
+ CHARMM>     
+  
+ CHARMM>    ! OPEN READ UNIT 1 CARD NAME "param19-1.2.inp"
+ CHARMM>    OPEN READ UNIT 1 CARD NAME  @GENERATE/par_all22_prot_lipid.inp
+ Parameter: GENERATE -> ""../../../test/""
+ VOPEN> Attempting to open::../../../test//par_all22_prot_lipid.inp::
+ OPNLGU> Unit  1 opened for READONLY access to ../../../test//par_all22_prot_lipid.inp
+  
+ CHARMM>    READ PARAM CARD UNIT 1
+
+          PARAMETER FILE BEING READ FROM UNIT  1
+ TITLE> *>>>>>>> COMBINED CHARMM22 ALL-HYDROGEN PARAMETER FILE FOR <<<<<<
+ TITLE> *>>>>>>>>>>>>>>>>>>> PROTEINS AND LIPIDS <<<<<<<<<<<<<<<<<<<<<<<
+ TITLE> *>>>>>>>>>>>>>>>>>>>>> SEPTEMBER 1998 <<<<<<<<<<<<<<<<<<<<<<<<<<
+ TITLE> *>>>>>>> DIRECT COMMENTS TO ALEXANDER D. MACKERELL JR. <<<<<<<<<
+ TITLE> *>>>>>> 410-706-7442 OR EMAIL: ALEX,MMIRIS.AB.UMD.EDU  <<<<<<<<<
+ TITLE> *
+ PARMIO> NONBOND, HBOND lists and IMAGE atoms cleared.
+  
+ CHARMM>    CLOSE UNIT 1
+ VCLOSE: Closing unit    1 with status "KEEP"
+  
+ CHARMM>     
+  
+ CHARMM>    OPEN READ UNIT 1 CARD NAME  @GENERATE/bpti.seq
+ Parameter: GENERATE -> ""../../../test/""
+ VOPEN> Attempting to open::../../../test//bpti.seq::
+ OPNLGU> Unit  1 opened for READONLY access to ../../../test//bpti.seq
+  
+ CHARMM>    READ SEQUence CARD  UNIT 1
+ MAINIO> Sequence information being read from unit   1.
+ TITLE> * SEQUENCE OF 58 RESIDUES FOR BPTI
+ TITLE> *
+  
+ SEQRDR>    58
+  
+ SEQRDR>    ARG  PRO  ASP  PHE  CYS  LEU  GLU  PRO  PRO  TYR  THR  GLY  PRO
+  
+ SEQRDR>    CYS  LYS  ALA  ARG  ILE  ILE  ARG  TYR  PHE  TYR  ASN  ALA  LYS
+  
+ SEQRDR>    ALA  GLY  LEU  CYS  GLN  THR  PHE  VAL  TYR  GLY  GLY  CYS  ARG
+  
+ SEQRDR>    ALA  LYS  ARG  ASN  ASN  PHE  LYS  SER  ALA  GLU  ASP  CYS  MET
+  
+ SEQRDR>    ARG  THR  CYS  GLY  GLY  ALA
+
+          RESIDUE SEQUENCE --    58 RESIDUES
+          ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR THR GLY PRO CYS LYS ALA ARG ILE ILE ARG 
+          TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS GLN THR PHE VAL TYR GLY GLY CYS ARG ALA 
+          LYS ARG ASN ASN PHE LYS SER ALA GLU ASP CYS MET ARG THR CYS GLY GLY ALA 
+ ***** Message from SEQRDR ***** THE SYSTEM CONTAINS 12 TITRATABLE GROUPS
+ THE USER MUST PREDETERMINE THE PROTONATION STATE THROUGH THE SEQUENCE AND RTF
+ HIS -  0  ASP -  2  GLU -  2  LYS -  4  TYR -  4
+  
+ CHARMM>    CLOSE UNIT 1
+ VCLOSE: Closing unit    1 with status "KEEP"
+  
+ CHARMM>     
+  
+ CHARMM>    GENErate 1BPI SETUp
+ THE PATCH 'NTER' WILL BE USED FOR THE FIRST RESIDUE
+ THE PATCH 'CTER' WILL BE USED FOR THE LAST  RESIDUE
+ GENPSF> Segment   1 has been generated. Its identifier is 1BPI.
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        1   Number of residues   =       58
+         Number of atoms         =      898   Number of groups     =      273
+         Number of bonds         =      909   Number of angles     =     1626
+         Number of dihedrals     =     2388   Number of impropers  =      141
+         Number of cross-terms   =        0
+         Number of HB acceptors  =       79   Number of HB donors  =      120
+         Number of NB exclusions =        0   Total charge =    6.00000
+  
+ CHARMM>     
+  
+ CHARMM>    read sequence tip3 4
+  
+ CHARMM>    GENErate WAT noangle nodihedral
+ NO PATCHING WILL BE DONE ON THE FIRST RESIDUE
+ NO PATCHING WILL BE DONE ON THE LAST  RESIDUE
+ GENPSF> Segment   2 has been generated. Its identifier is WAT.
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        2   Number of residues   =       62
+         Number of atoms         =      910   Number of groups     =      277
+         Number of bonds         =      921   Number of angles     =     1630
+         Number of dihedrals     =     2388   Number of impropers  =      141
+         Number of cross-terms   =        0
+         Number of HB acceptors  =       83   Number of HB donors  =      120
+         Number of NB exclusions =        0   Total charge =    6.00000
+  
+ CHARMM>     
+  
+ CHARMM>     
+  
+ CHARMM>    PATCH DISU 1BPI 5 1BPI 55
+ ATOM  1BPI 5    CYS  HG1  AND ALL REFERENCES TO IT DELETED.
+ ATOM  1BPI 55   CYS  HG1  AND ALL REFERENCES TO IT DELETED.
+
+ Message from MAPIC: Atom numbers are changed.
+ DELTIC:         2 bonds deleted
+ DELTIC:         2 angles deleted
+ DELTIC:         6 dihedrals deleted
+ DELTIC:         2 donors deleted
+ PATCH: Check angles and dihedrals autogenerated.
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        2   Number of residues   =       62
+         Number of atoms         =      908   Number of groups     =      277
+         Number of bonds         =      920   Number of angles     =     1630
+         Number of dihedrals     =     2389   Number of impropers  =      141
+         Number of cross-terms   =        0
+         Number of HB acceptors  =       83   Number of HB donors  =      118
+         Number of NB exclusions =        0   Total charge =    6.00000
+  
+ CHARMM>    PATCH DISU 1BPI 14 1BPI 38
+ ATOM  1BPI 14   CYS  HG1  AND ALL REFERENCES TO IT DELETED.
+ ATOM  1BPI 38   CYS  HG1  AND ALL REFERENCES TO IT DELETED.
+
+ Message from MAPIC: Atom numbers are changed.
+ DELTIC:         2 bonds deleted
+ DELTIC:         2 angles deleted
+ DELTIC:         6 dihedrals deleted
+ DELTIC:         2 donors deleted
+ PATCH: Check angles and dihedrals autogenerated.
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        2   Number of residues   =       62
+         Number of atoms         =      906   Number of groups     =      277
+         Number of bonds         =      919   Number of angles     =     1630
+         Number of dihedrals     =     2390   Number of impropers  =      141
+         Number of cross-terms   =        0
+         Number of HB acceptors  =       83   Number of HB donors  =      116
+         Number of NB exclusions =        0   Total charge =    6.00000
+  
+ CHARMM>    PATCH DISU 1BPI 30 1BPI 51
+ ATOM  1BPI 30   CYS  HG1  AND ALL REFERENCES TO IT DELETED.
+ ATOM  1BPI 51   CYS  HG1  AND ALL REFERENCES TO IT DELETED.
+
+ Message from MAPIC: Atom numbers are changed.
+ DELTIC:         2 bonds deleted
+ DELTIC:         2 angles deleted
+ DELTIC:         6 dihedrals deleted
+ DELTIC:         2 donors deleted
+ PATCH: Check angles and dihedrals autogenerated.
+ PSFSUM> PSF modified: NONBOND lists and IMAGE atoms cleared.
+ PSFSUM> Summary of the structure file counters :
+         Number of segments      =        2   Number of residues   =       62
+         Number of atoms         =      904   Number of groups     =      277
+         Number of bonds         =      918   Number of angles     =     1630
+         Number of dihedrals     =     2391   Number of impropers  =      141
+         Number of cross-terms   =        0
+         Number of HB acceptors  =       83   Number of HB donors  =      114
+         Number of NB exclusions =        0   Total charge =    6.00000
+  
+ CHARMM>     
+  
+ CHARMM>    !..... other stuff, if needed to define the ENERgy function .....!
+ CHARMM>     
+  
+ CHARMM>    RETURN
+ VCLOSE: Closing unit   98 with status "KEEP"
+
+                    RETURNING TO INPUT STREAM    99
+  
+ CHARMM>     
+  
+ CHARMM>    ! Read the oriented coordinates for which the NUCS is to be determined:
+ CHARMM>    ! (if not oriented yet, run GET_BOX.INP first) :
+ CHARMM>    OPEN UNIT 3 READ CARD NAME     @GENERATE/bpti_oriented.crd
+ Parameter: GENERATE -> ""../../../test/""
+ VOPEN> Attempting to open::../../../test//bpti_oriented.crd::
+ OPNLGU> Unit  3 opened for READONLY access to ../../../test//bpti_oriented.crd
+  
+ CHARMM>    READ COOR  card UNIT 3
+          SPATIAL COORDINATES BEING READ FROM UNIT  3
+ TITLE> * GET_BOX.STR, LAST MODIFIED OCT/17/2001
+ TITLE> * BY SONJA M. SCHWARZL & STEFAN FISCHER
+ TITLE> * GET THE BOX SIZES FOR PBEQ CALCULATION.
+ TITLE> *  DATE:     8/29/ 2     11:56:41      CREATED BY USER: SCHWARZL
+ TITLE> *
+  
+ CHARMM>    CLOSE UNIT 3
+ VCLOSE: Closing unit    3 with status "KEEP"
+  
+ CHARMM>     
+  
+ CHARMM>    SKIP ALL EXCL ELEC
+ SKIPE> The following energy terms will be computed :
+  ELEC
+  
+ CHARMM>    ! This energy-call must be successfull:
+ CHARMM>    ENER
+
+ NONBOND OPTION FLAGS: 
+     ELEC     VDW      ATOMs    CDIElec  SHIFt    VATOm    VSWItch 
+     BYGRoup  NOEXtnd  NOEWald 
+ CUTNB  = 14.000 CTEXNB =999.000 CTONNB = 10.000 CTOFNB = 12.000
+ WMIN   =  1.500 WRNMXD =  0.500 E14FAC =  1.000 EPS    =  1.000
+ NBXMOD =      5
+ There are        0 atom  pairs and        0 atom  exclusions.
+ There are        0 group pairs and        0 group exclusions.
+ <MAKINB> with mode   5 found   2544 exclusions and   2347 interactions(1-4)
+ <MAKGRP> found    818 group exclusions.
+ Generating nonbond list with Exclusion mode = 5
+ == PRIMARY == SPACE FOR   259765 ATOM PAIRS AND        0 GROUP PAIRS
+
+ General atom nonbond list generation found:
+   194707 ATOM PAIRS WERE FOUND FOR ATOM LIST
+     7738 GROUP PAIRS REQUIRED ATOM SEARCHES
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0  -1276.58901      0.00000      5.69968
+ENER EXTERN>        0.00000  -1276.58901      0.00000      0.00000      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+  
+ CHARMM>     
+  
+ CHARMM>    RETURN
+ VCLOSE: Closing unit   99 with status "KEEP"
+
+                    RETURNING TO INPUT STREAM     5
+  
+ CHARMM>    STREAM settings.str
+ VOPEN> Attempting to open::settings.str::
+ OPNLGU> Unit 99 opened for READONLY access to settings.str
+
+                    INPUT STREAM SWITCHING TO UNIT    99
+ RDTITL> * SETTINGS.STR
+ RDTITL> * BY SONJA SCHWARZL & STEFAN FISCHER
+ RDTITL> * LAST MODIFIED JUNE/16/2008
+ RDTITL> *
+ Parameter: IN1 <- "" <empty>
+  
+ CHARMM>     
+  
+ CHARMM>    !xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ CHARMM>    ! general settings
+ CHARMM>     
+  
+ CHARMM>    SET FINALRESIDUE  62   ! Total number of residues, including waters, etc
+ Parameter: FINALRESIDUE <- "62"
+  
+ CHARMM>                           ! (get from coordinate file for ex.)
+  
+ CHARMM>     
+  
+ CHARMM>         ! Residue-range for which NUCS factors should be calculated :
+  
+ CHARMM>    SET FIRSTRESIDUE   1   ! If residue FIRSTRESIDUE-1 exists, scaling-factors
+ Parameter: FIRSTRESIDUE <- "1"
+  
+ CHARMM>                           ! will also be determined for its sidechain and BACK2.
+  
+ CHARMM>     
+  
+ CHARMM>    SET LASTRESIDUE   62   ! If residue LASTRESIDUE+1 exists, scaling-factor
+ Parameter: LASTRESIDUE <- "62"
+  
+ CHARMM>                           ! for its BACK1 will also be determined.
+  
+ CHARMM>     
+  
+ CHARMM>         ! Coordinate-file with NUCS scaling-factors in WMAIN column:
+  
+ CHARMM>    SET OUTPUT "./output/global_lambda_@FIRSTRESIDUE-@LASTRESIDUE.crd"
+ Parameter: FIRSTRESIDUE -> "1"
+ Parameter: LASTRESIDUE -> "62"
+ Parameter: OUTPUT <- ""./output/global_lambda_1-62.crd""
+  
+ CHARMM>     
+  
+ CHARMM>         ! Coordinate-file with E^solv,cut_I in 4th column:
+  
+ CHARMM>    SET OUTPUT1 "./output/global_e_solv_@FIRSTRESIDUE-@LASTRESIDUE.crd"
+ Parameter: FIRSTRESIDUE -> "1"
+ Parameter: LASTRESIDUE -> "62"
+ Parameter: OUTPUT1 <- ""./output/global_e_solv_1-62.crd""
+  
+ CHARMM>     
+  
+ CHARMM>         ! Output file with PBEQ pairwise interaction energy in last column:
+  
+ CHARMM>    SET OUTPUT2 "./output/global_pairwise_@FIRSTRESIDUE-@LASTRESIDUE.dat"
+ Parameter: FIRSTRESIDUE -> "1"
+ Parameter: LASTRESIDUE -> "62"
+ Parameter: OUTPUT2 <- ""./output/global_pairwise_1-62.dat""
+  
+ CHARMM>     
+  
+ CHARMM>     
+  
+ CHARMM>    !xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ CHARMM>    ! Define target-region, for which "global" scaling will be done, for ex:
+ CHARMM>     
+  
+ CHARMM>    DEFINE fixed SELE SEGID 1BPI  .AND. -
+ CHARMM>                      (RESID 1:6 .OR. RESID 23:31 .OR. RESID 48:58 ) END
+ SELRPN>    368 atoms have been selected out of    904
+  
+ CHARMM>     
+  
+ CHARMM>    DEFIne targetregion SELEct .not. fixed END
+ SELRPN>    536 atoms have been selected out of    904
+  
+ CHARMM>     
+  
+ CHARMM>    !xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ CHARMM>    ! energy function settings
+ CHARMM>     
+  
+ CHARMM>    SET PARAM   22         ! '19' or '22'
+ Parameter: PARAM <- "22"
+  
+ CHARMM>    SET ELECTR  cdiel      ! 'rdiel' or 'cdiel'
+ Parameter: ELECTR <- "CDIEL"
+  
+ CHARMM>    SET UCTONNB 99.0       ! user defined CTONNB
+ Parameter: UCTONNB <- "99.0"
+  
+ CHARMM>    SET UCTOFNB 100.0      ! user defined CTOFNB
+ Parameter: UCTOFNB <- "100.0"
+  
+ CHARMM>    SET UWMIN   0.0        ! user defined WMIN (0.0 recommended)
+ Parameter: UWMIN <- "0.0"
+  
+ CHARMM>    SET UFUNCTION  switch  ! 'SWITCH' (recommended) or 'SHIFT'
+ Parameter: UFUNCTION <- "SWITCH"
+  
+ CHARMM>    SET UVFUNCTION vswitch ! 'VSWITCH' (recommended) or 'VSHIFT'
+ Parameter: UVFUNCTION <- "VSWITCH"
+  
+ CHARMM>     
+  
+ CHARMM>    !xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ CHARMM>    ! PBEQ settings
+ CHARMM>     
+  
+ CHARMM>    SET EPSWAT 80.0        ! solvent dielectric contant
+ Parameter: EPSWAT <- "80.0"
+  
+ CHARMM>    SET EPSPROT 1.0        ! protein dielectric constant
+ Parameter: EPSPROT <- "1.0"
+  
+ CHARMM>    SET CON 0.145          ! ion concentration (M)
+ Parameter: CON <- "0.145"
+  
+ CHARMM>    SET TEM 293.0          ! temperature
+ Parameter: TEM <- "293.0"
+  
+ CHARMM>    set sw 1.5             ! smoothing window
+ Parameter: SW <- "1.5"
+  
+ CHARMM>    set offset 0.7         ! offset to be added to atomic radii
+ Parameter: OFFSET <- "0.7"
+  
+ CHARMM>     
+  
+ CHARMM>     
+  
+ CHARMM>    ! User defined setting for membrane proteins
+ CHARMM>    ! If there is no membrane, set NTMEMB, NHEAD, NZMEMB, NVMEMB to 0.0
+ CHARMM>    !                              NEPSM, NEPSH to 1.0
+ CHARMM>    SET NTMEMB 0.0         !  thickness of the membrane
+ Parameter: NTMEMB <- "0.0"
+  
+ CHARMM>    SET NHEAD 0.0          !  thickness of the headgroup region
+ Parameter: NHEAD <- "0.0"
+  
+ CHARMM>    SET NZMEMB 0.0         !  position (along Z) of the membrane center
+ Parameter: NZMEMB <- "0.0"
+  
+ CHARMM>    SET NEPSM 1.0          !  membrane dielectric constant
+ Parameter: NEPSM <- "1.0"
+  
+ CHARMM>    SET NEPSH @NEPSM       !  membrane headgroup dielectric constant
+ Parameter: NEPSM -> "1.0"
+ Parameter: NEPSH <- "1.0"
+  
+ CHARMM>    SET NVMEMB  0.0        !  potential difference across the membrane (Volts)
+ Parameter: NVMEMB <- "0.0"
+  
+ CHARMM>     
+  
+ CHARMM>     
+  
+ CHARMM>    ! Box-dimensions (grip-points, use odd numbers) and grid spacing,
+ CHARMM>    ! in three steps.
+ CHARMM>    ! Protein dimensions in X-direction approximately XMAX - XMIN + 6 A
+ CHARMM>     
+  
+ CHARMM>    ! For ex. for BPTI :
+ CHARMM>    ! STATISTICS FOR  904 SELECTED ATOMS:
+ CHARMM>    !    XMIN =  -20.453580 XMAX =   19.599980 XAVE =    0.000000
+ CHARMM>    !    YMIN =  -12.824930 YMAX =   12.424300 YAVE =    0.000000
+ CHARMM>    !    ZMIN =  -10.845289 ZMAX =   16.592690 ZAVE =    0.000000
+ CHARMM>    !    WMIN =    0.224500 WMAX =    2.275000 WAVE =    1.512901
+ CHARMM>    !
+ CHARMM>    ! X = 46.05356
+ CHARMM>    ! Y = 31.24923
+ CHARMM>    ! Z = 33.437979
+ CHARMM>     
+  
+ CHARMM>     
+  
+ CHARMM>    ! first step: leaves 25 A around the protein:
+ CHARMM>     
+  
+ CHARMM>    SET DCEL1 4.0        ! grid spacing
+ Parameter: DCEL1 <- "4.0"
+  
+ CHARMM>    SET NCLX1 25         ! number of grid points in X-direction
+ Parameter: NCLX1 <- "25"
+  
+ CHARMM>    SET NCLY1 21         !                          Y
+ Parameter: NCLY1 <- "21"
+  
+ CHARMM>    SET NCLZ1 21         !                          Z
+ Parameter: NCLZ1 <- "21"
+  
+ CHARMM>     
+  
+ CHARMM>    ! second step: leaves 10 A
+ CHARMM>     
+  
+ CHARMM>    SET DCEL2 2.0
+ Parameter: DCEL2 <- "2.0"
+  
+ CHARMM>    SET NCLX2 33
+ Parameter: NCLX2 <- "33"
+  
+ CHARMM>    SET NCLY2 27
+ Parameter: NCLY2 <- "27"
+  
+ CHARMM>    SET NCLZ2 27
+ Parameter: NCLZ2 <- "27"
+  
+ CHARMM>     
+  
+ CHARMM>    ! third step: leaves 5 A
+ CHARMM>     
+  
+ CHARMM>    SET DCEL3 1.0
+ Parameter: DCEL3 <- "1.0"
+  
+ CHARMM>    SET NCLX3 57
+ Parameter: NCLX3 <- "57"
+  
+ CHARMM>    SET NCLY3 43
+ Parameter: NCLY3 <- "43"
+  
+ CHARMM>    SET NCLZ3 45
+ Parameter: NCLZ3 <- "45"
+  
+ CHARMM>     
+  
+ CHARMM>     
+  
+ CHARMM>    !xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ CHARMM>    ! user must specify atoms for each group that is not an amino acid or water,
+ CHARMM>    ! such as ATP, Mg, Retinal,..., as uatoms
+ CHARMM>    Define uatoms select none end
+ SELRPN>      0 atoms have been selected out of    904
+  
+ CHARMM>     
+  
+ CHARMM>     
+  
+ CHARMM>    RETURN
+ VCLOSE: Closing unit   99 with status "KEEP"
+
+                    RETURNING TO INPUT STREAM     5
+  
+ CHARMM>    STREAM initialize.str
+ VOPEN> Attempting to open::initialize.str::
+ OPNLGU> Unit 99 opened for READONLY access to initialize.str
+
+                    INPUT STREAM SWITCHING TO UNIT    99
+ RDTITL> * INITIALIZE.STR, LAST MODIFIED MAY/12/2004
+ RDTITL> * BY SONJA M. SCHWARZL & STEFAN FISCHER
+ RDTITL> * SETUP FOR CALCULATION OF SCALING FACTORS FOR CHARGE SCALING
+ RDTITL> *
+ Parameter: IN1 <- "" <empty>
+  
+ CHARMM>     
+  
+ CHARMM>    !xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ CHARMM>     
+  
+ CHARMM>    BOMLev -1
+  
+ CHARMM>    WRNLev -1
+  
+ CHARMM>    PRNLev -1
+
+ Warning from SCALAR: The sum of charges (    6.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    6.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    9.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    9.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    8.320000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    8.320000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.600000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.600000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (   -0.180000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    6.720000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    6.720000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    0.180000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    8.360000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    8.360000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.860000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.860000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    8.320000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    8.320000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    6.360000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    6.360000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.680000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.680000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    6.540000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    6.540000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.620000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.620000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.620000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.620000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    8.360000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    8.360000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.510000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.510000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.860000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.860000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.510000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.510000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.260000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.260000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    8.360000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    8.360000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    6.360000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    6.360000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    6.540000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    6.540000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.680000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.680000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (   11.320000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    8.700000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    8.700000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    8.700000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    8.700000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.510000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.510000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.680000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.680000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.960000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.320000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.320000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+
+ Warning from SCALAR: The sum of charges (    7.668000) is not an integer
+
+   The Debye-Huckel approximation for all boundary points
+$$$$$$  New timer profile $$$$$
+   List time                       0.05 Other:            0.00
+         Electrostatic & VDW             0.24 Other:            0.00
+      Nonbond force                   0.24 Other:            0.00
+         Bond energy                     0.00 Other:            0.00
+         Angle energy                    0.00 Other:            0.00
+         Dihedral energy                 0.00 Other:            0.00
+         Restraints energy               0.00 Other:            0.00
+      INTRNL energy                   0.00 Other:            0.00
+   Energy time                     0.24 Other:            0.00
+ Total time                    190.91 Other:          190.63

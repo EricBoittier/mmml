@@ -1,0 +1,297 @@
+CHARMM Element doc/mtp.info $Revision: 1.11 $
+
+File: Mtp, Node: Top, Up: (doc/commands.info), Next: Interaction
+
+
+          Multipole Module
+
+
+by  Nuria Plattner (nuria_plattner@brown.edu)
+and Myung Won Lee (mw.lee@unibas.ch)
+and Markus Meuwly (m.meuwly@unibas.ch)
+
+
+Questions and comments regarding MTP should be directed to
+----------------------------------------------------------
+Nuria Plattner or Myung Won Lee
+
+
+References:
+
+N. Plattner and M. Meuwly, Biophys. J., 94, 2505 (2008)
+
+N. Plattner, Distributed multipole moments in atomistic force fields: 
+implementation and applications, Ph.D. Thesis, University of Basel, 
+Basel, Switzerland, (2009).
+
+A. J. Stone, The Theory of Intermolecular Forces, Oxford University 
+Press (1996)
+
+
+
+The multipole (MTP) module allows to include electrostatic
+interactions between multipolar distributions and point charges
+or between several multipolar distributions.
+
+
+* Menu:
+
+* Interaction::           INTERACTION TYPES INCLUDED
+* Input::                 MTP INPUT FILES
+* Parameters::            HOW TO OBTAIN ATOMIC MULTIPOLE PARAMETERS
+* Gradients::             GRADIENTS
+* Potentials::            COMBINATION WITH ANHARMONIC BOND POTENTIALS
+
+
+
+File: Mtp, Node: Interaction, Up: Top, Previous: Top, Next: Input
+
+
+INTERACTION TYPES INCLUDED
+--------------------------
+
+Currently interactions up to Rank 2 (quadrupole) are fully implemented
+and interactions up to Rank 3 (octopole) are included for linear
+molecules. In detail, the following components are available:
+
+3 components for dipole moments
+5 components for quadrupole moments
+1 component for octopole moments
+
+The interactions of these components include interactions of all
+components with point charges as well as the interactions of the
+components with each other.
+
+The number of components needed for a given intermolecular interaction
+depends on the highest multipole rank on each atom as well as on the
+molecular geometry.
+
+
+
+File: Mtp, Node: Input, Up: Top, Previous: Interaction, Next: Parameters
+
+
+MTP INPUT FILES
+---------------
+
+A typical input sequence to activate MTP looks as follows:
+
+open unit 40 card read name mtp.dma
+MTP MTPUNIT 40
+close unit 40
+
+where mtp.dma is the name of a file containing parameters necessary
+for MTP (see below).
+
+MTP parameters are read initially by the MTP module and used in 
+calculating energies and gradients.
+
+
+A typical MTP parameter file looks like the following:
+
+ 1               ! number of molecules (a)
+ 1               ! number of types of molecules (a)
+
+ 2               ! number of sites (b-1)
+ 533 534 0 0 0   ! reference atoms (b-2)
+ QFLC            ! and QFLC (b-3)
+ 1.151           ! Re for QFLC (in angstrom) (b-3)
+ NoLINT          ! No linear triatomic (b-4)
+ 0 0             ! reference range (b-5)
+
+ 533             ! reference atom (c)
+ 2               ! rank (Limit 2)
+  0.0648         ! charge (Q0)
+  0.3686         ! charge (Q')  Q = Q0 + Q' ( R - Re )
+  0.5139         ! qu10 (Q0)
+ -1.1332         ! qu10 (Q')
+  0.3787         ! qu20 (Q0)
+ -0.5204         ! qu20 (Q')
+
+ 534             ! reference atom
+ 2               ! rank (Limit 2)
+ -0.0648         ! charge (Q0)
+ -0.3686         ! charge (Q')
+ -0.3230         ! qu10 (Q0)
+  0.9811         ! qu10 (Q')
+  0.5716         ! qu20 (Q0)
+ -0.1324         ! qu20 (Q')
+
+(a) The 1st line specifies the total number of molecules containing
+ MTP, and the 2nd line the number of types of MTP molecules.
+
+(b) Parameters for each type of molecule should be given.
+ (b-1) The number of sites is the number of points (atoms) in a
+  molecule that are described by MTP.
+ (b-2) A line with the MTP atom indices should follow, which are
+  atom numbers used in the CHARMM coordinate file. In the current
+  implementation, the total number of MTP atoms in a single molecule
+  cannot exceed 3.  Add zeros after the atom numbers on this line so
+  that the total number of integer numbers on this line is 5.
+ (b-3) If the following line contains QFLC, the equilibrium bond
+  length Re should be given in angstrom on the next line and each
+  moment is described by Q = Q0 + Q' ( R - Re ), where R is the
+  interatomic distance, Re is the equilibrium bond length (given
+  after QFLC), Q0 is the moment at R = Re, and Q' is the slope
+  of Q with respect to the change in bond distance.  (N.B. Q0 should
+  be in atomic unit, while Re is in angstrom.  Therefore, Q' has the
+  unit of Q0 per angstrom.)  QFLC is allowed only for diatomic
+  molecules at present.  If static moments are to be used, put NoQFLC
+  instead of QFLC.  In the case of NoQFLC, equilibrium bond length
+  Re should not be given on the next line.
+ (b-4) Following QFLC/NoQFLC line, LINT/NoLINT should be given, where
+  LINT is used for linear triatomic molecule and NoLINT otherwise.
+ (b-5) Then, the range of atoms should be given.  This is used when
+  there are more than one MTP molecule of the same type.  The order of
+  atoms in each molecule should be identical. The initial and final
+  atom indices for the molecules of the same type, excluding the first
+  molecule, are provided on this line.  The atom indices for the first
+  molecule of this type are given in (c).  If there is only a single
+  molecule of this type, just use '0 0'.
+
+(c) The parameters for each MTP site in a molecule follow.  The atom
+ index is given first, and then the rank is given.  Rank 0 is used for
+ charge, rank 1 up to dipole, and rank 2 up to quadrupole moments.  In
+ the case of QFLC, Q0 and Q' values for the atom are given for each of
+ the following components: Q00 / Q1Z / Q20 (Q22C) / Q30 for rank 0 /
+ 1 / 2 / 3.  Charge for this atom should be set to zero in the psf file.
+ If necessary, Q0 and Q' values for Q22C can be added after Q20.
+ If Q22C is used for a diatomic molecule, it is required to change
+ the 'number of sites' from 2 to 3 and set up a dummy atom as
+ described in (d') below.
+ In the case of NoQFLC, only Q0 values are given for the following
+ components: Q1Z Q1X Q1Y / Q20 Q21C Q21S Q22C Q22S for rank 1 / 2.
+ Charge in the psf file should not be changed for NoQFLC.
+ Here, Q00 means charge, Q1[XYZ] X, Y, and Z components of dipole
+ moments, Q2* quadrupole moments, etc.
+
+(d) Part (c) is repeated for each MTP site (atom) in a molecule.
+
+(d') When a nonzero Q22C quadrupole moment component is used for
+ a diatomic molecule, a dummy atom is used to set up local coordinate
+ system and information on the dummy atom should be provided.
+ As dummy atom in the MTP module is used only to set up the local axis
+ system of diatomic molecule, the MTPs on the dummy atom are not
+ considered in the calculation of energy.  It should be combined with
+ QFLC, and thus Q' values for real atoms are set to 0.0 if fluctuation
+ of MTPs is not desired.  Information on dummy atom should be provided
+ after specifying MTPs of all real atoms in a molecule.
+ In the example below, a dummy atom is attached to atom 533, at a
+ distance of 1.5 angstrom from atom 533 with the angle formed by
+ (dummy atom)--(atom 533)--(atom 534) to be 120 degrees.  Scan interval
+ should be given in degree.  Only integer scan interval is allowed.
+
+ -533            ! dummy atom attached to atom 533 (N.B. negative sign)
+  534 1.5 120. 1 ! atom 534, r (in A), theta (in deg), scan_int (in deg)
+  0              ! rank
+  0.0            ! charge Q0 for dummy atom (not used)
+  0.0            ! charge gradient Q' for dummy atom (not used)
+
+(e) Parts (b)-(d) are repeated for each type of MTP molecule.
+
+More example inputs are provided in the MTP test cases 
+mtp-no-h2o.inp, mtp-h2o-trimer.inp and mtp-cluster.inp
+
+
+
+File: Mtp, Node: Parameters, Up: Top, Previous: Input, Next: Gradients
+
+
+HOW TO OBTAIN ATOMIC MULTIPOLE PARAMETERS
+-----------------------------------------
+
+The parameters that should be provided in part (c) can be obtained
+from quantum chemical calculations and the GDMA program. A typical 
+procedure is as follows:
+
+(1) Prepare an input file for Gaussian 03 (G03).  Checkpoint file
+    should be specified.  HF, DFT, or MP2 can be used to generate MTP
+    parameters.
+
+(2) Run the G03 job.
+
+(3) Convert the checkpoint file into a formatted file by 'formchk'
+    command of G03, which will be used by GDMA.
+
+(4) Prepare GDMA input file.  For details, refer to the following web
+    site:
+    http://www-stone.ch.cam.ac.uk/documentation/gdma/README.html
+
+(5) Execute GDMA and obtain a punch file. Punch file contains
+    multipole moment parameters, which can be used in MD simulation.
+
+
+The multipole scheme used by GDMA and in the MTP module is spherical
+tensor notation. If multipoles of another program are to be used or
+compared, it should be considered that they may be in Cartesian tensor
+notation and have to be transformed to spherical tensor notation
+first.
+
+In order to include a new parameter set, it is important to check
+whether the order of atom numbers is in agreement with the sign
+convention used for the reference axis system. E.g. for linear
+molecules, the sign of the dipole and octopole moments taken from
+GDMA needs to be adapted to the order of the atoms. For CO, if the C
+atom comes first in the atom ordering, the signs are reversed with
+respect to the standard orientation in a GAUSSIAN calculation which
+puts the oxygen in the positive side of the coordinate system and the
+carbon on the negative side of the coordinate system.
+
+
+
+File: Mtp, Node: Gradients, Up: Top, Previous: Parameters, Next: Potentials
+
+
+GRADIENTS
+---------
+
+The gradients of static atomic multipole moments are composed of two
+components:
+
+1) A component depending on the atom position on which the multipole
+moment is placed. This component is included generally for all
+multipole interactions in the code.
+
+2) A component depending on the reference axis system in which the
+orientation of the multipole moment is defined, i.e. on the positions
+of all atoms defining the corresponding reference axis system. These 
+components have to be coded separately for each new reference axis 
+system. Currently, they are included for linear molecules, linear 
+triatomic and water. For details, see the comments in the code for 
+each multipole interaction subroutine.
+
+For the gradients of fluctuating atomic multipole moments (QFLC
+option), complete gradients include an additional term accounting for
+the changes of moments with molecular geometry. This contribution has
+not been incorporated in the MTP module yet.
+
+
+
+File: Mtp, Node: Potentials, Up: Top, Previous: Gradients, Next: Parallelization
+
+
+COMBINATION WITH ANHARMONIC BOND POTENTIALS
+-------------------------------------------
+
+Besides harmonic potentials for bond stretching and bending, other
+types of potential may be used, such as Morse potential, RRKR
+potential, KKY water potential, etc. The potentials mentioned above
+have been tested (and results from their use are in the literature),
+but have not been included in the current distribution of CHARMM.
+
+
+
+File: Mtp, Node: Parallelization, Up: Top, Previous: Potentials, Next: Top
+
+
+PARALLELIZATION
+---------------
+
+For each process, separate pair list is built outside MTP module.
+Energies and gradients due to MTPs are computed for the pair list
+passed to MTP module in each process, and then are combined outside
+this module.  For a system containing diatomic molecule(s) with non-
+zero Q22C quadrupole component, only a single processor is supported.
+Test for the parallel MTP has been made with and without PBCs using
+an executable built with OpenMPI and PGI compilers.
+

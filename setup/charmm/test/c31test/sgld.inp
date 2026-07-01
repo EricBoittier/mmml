@@ -1,0 +1,137 @@
+* Test scrips SGLD algorithm
+*   by Xiongwu Wu, Ph.D.   at NIH (7/2003)
+*   SGMDfp tests added. (7/2010)
+*
+
+set u aq16
+
+stream datadir.def
+
+! read parameter and topology files
+
+open unit 10 read form name @0top_all22_prot.inp
+read rtf unit 10 card
+close unit 10
+
+open unit 10 read form name @0par_all22_prot.inp
+read param unit 10 card
+close unit 10
+
+READ SEQUENCE CARDS
+* a 16 residue helix peptide
+*
+   16
+ALA ALA GLN ALA ALA ALA ALA GLN ALA ALA ALA ALA GLN ALA ALA TYR 
+
+GENERATE PEP  FIRS ACE LAST CT2 SETUP 
+
+! Build up coordinate from IC parameter 
+IC PARA 
+
+IC SEED 1 HY1 1 CAY 1 CY
+
+IC BUILD
+!center the coordinates at original
+COOR ORIE
+
+!Minization using default force field parameters
+MINI ABNR NSTEP 100 TOLGRA 0.1 
+
+
+
+PRNLEV 5 NODE 0
+
+! Shake all bond length for large time steps
+SHAKE BOND PARA
+
+!SGMD simulation with default setting (TSGAVG=0.2ps, SGFT=0.2)
+open write unit 31 CARD name @9@u.rst
+open write unit 32 file name @9@u.dcd
+DYNA  LEAP  STRT CPT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100 ISEED 314159  -
+   SGMD  -
+   TCON  TCOU  0.1  TREF  300 -
+   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+!SGLD simulation with default setting (TSGAVG=0.2 ps, SGFT=1)
+
+! Set friction forces
+SCAL FBETA SET 1.0 SELE ALL END
+
+open write unit 31 CARD name @9@u.rst
+open write unit 32 file name @9@u.dcd
+DYNA LANG LEAP  STRT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100 ISEED 314159   -
+   SGLD  -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+!SGLD simulation with SGFT=2 and TSGAVG=0.5ps 
+
+DYNA LANG LEAP  STRT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 0 NSAVV 0 NPRINT 100 ISEED 314159   -
+   SGLD TSGAVG 0.5 TEMPSG 0 SGFT 0  -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+! Save TREFLF value from this simulation for later use
+set tref ?TREFLF
+
+!SGLD simulation with TEMPSG=400K to reach a search ability comparable to a 
+! high temperature simulation at 400 K. 
+
+DYNA LANG LEAP  STRT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 0 NSAVV 0 NPRINT 100 ISEED 314159   -
+   SGLD TSGAVG 0.5 TEMPSG 400 TREFLF @tref  -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+
+!SGLDfp simulation (with SGBZ) to mantain canonical distribution
+!  TREFSG is not set and will be estimated from simulation.
+
+scalar sgwt set 0.0 sele all end
+scalar sgwt set 1.0 sele bynu 90:150 end
+
+open write unit 31 CARD name @9@u.rst
+open write unit 32 file name @9@u.dcd
+DYNA LANG LEAP  STRT  NSTE 1000 TIME 0.002  -
+   IPRFRQ 1000 ISVFRQ 1000 IHTFRQ 0 IEQFRQ 0 INBFRQ 10 IHBFRQ 0 -
+   IUNREA -1 IUNWRI 31 IUNCRD 32 IUNVEL 33 KUNIT -1 -
+   NSAVC 1000 NSAVV 00 NPRINT 100 ISEED 314159   -
+   SGLD SGBZ TSGAVG 0.5 SGFT 1.0 ISGSTA 50 ISGEND 150  -
+   TBATH 300   FIRST 260 -
+   IASORS 0 IASVEL 1 ICHECW 0 -
+   NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+   CUTNB 24.0  CTOFNB 22.0  CTONNB 20.0  EPS 1.0  E14FAC 1.0  WMIN 1.0
+
+           
+! Write the final coordinates to disk
+open writ unit 20 card name @9@u.end
+writ coor unit 20 card
+* simulation coordinate of a 16-residue helical peptide
+* 
+
+open writ unit 22 card name @9@u.pdb
+writ coor pdb unit 22 
+* simulation coordinate of  16-residue helical peptide
+* 
+
+STOP

@@ -1,0 +1,7 @@
+HETATM    1  SOD SOD     1     -10.707   1.280  -3.023  0.00  0.00      HETA
+HETATM    2  SOD SOD     2       5.278  -5.350  -3.759  0.00  0.00      HETA
+HETATM    3  SOD SOD     3     -15.455  -0.916   0.107  0.00  0.00      HETA
+HETATM    4  CLA CLA     4       0.591  -7.685   6.242  0.00  0.00      HETA
+HETATM    5  CLA CLA     5      13.863  -5.587  -0.433  0.00  0.00      HETA
+TER
+END

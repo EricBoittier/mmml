@@ -1,0 +1,1371 @@
+CHARMM Element doc/io.info 1.1
+
+File: io.info, Node: Top, Up: (doc/commands.info), Next: Read
+
+                        Input-Output Commands
+
+        The commands described here are used for reading and writing
+data structures used in the main part of CHARMM. Some of data structures
+used in the analysis facility may also be read and written.
+
+* Menu:
+
+* Read::        Reading data from external sources
+* Write::       Writing data structures in machine readable form
+* Print::       Writing data structures in a human readable form on unit 6
+* Clear::       Clear data from some structures and release allocated memory
+* Titles::      Specifying and manipulating titles
+* IOFORM::      Specify PSF file format
+
+File: io.info, Node: Read, Up: Top, Next: Write, Previous: Top
+
+              READ - Reads Data from External Sources
+
+        This command reads data into the data structures from external
+sources. The external sources can be either card image files or binary
+files. The fortran unit number from which the information is read, is
+specified with the unit-spec.
+
+        The precise format of all these files is described only in the
+source code as that serves as the only definitive, accurate, and up to
+date description of these formats. The description of the data
+structures provides pointers to the subroutines which should be
+consulted, see *note data: (usage.info)Data Structures.
+
+* Menu:
+
+* Read Syntax::            Syntax of the READ command
+* Segments::               Reading segments'sequences and coordinates
+* Sequence::               Reading a segment's sequence
+* Coordinate::             Reading coordinates
+* Universal::              Reading coordinates from nonstandard formats
+* Param Files::            The formats used in parameter files
+* RTF File format::        The format used in topology files
+* Other files::            Reading all other file types
+
+File: io.info, Node: Read Syntax, Up: Read, Next: Sequence, Previous: Read
+
+                        Syntax of READ Command
+
+[SYNTAX READ]
+
+READ { RTF { [APPEnd] [PRINt] }                        } { UNIT integer  } 
+                                                         { NAME filename }
+     { PARAmeter {   [PRINt]  [APPEnd]  [FLEX] }       }
+     {           {   [NBON ]            [MMFF] }       }
+
+     { IC  { [ CARD ] } [ APPEnd ] [ SAVEd ]           }
+     {     {   FILE   }                                }
+
+     { SEQUence  { [ CARD ]                   }        }
+     {           {   COOR  [ RESId ] [SEGI  <segid>] } }
+     {           {   PDB   [ RESId ] [CHAIn <char>] }  }
+                                     [SEGI  <segid>] } }
+                                     [NCHAin  <int]  } }
+                                     [repeat(SKIP <resn>)] } }
+                                     [repeat(ALIAs <resold> <resnew>)] } }
+                                     [SEQRes]        } }
+                                     [FIRStresid  <int>] } }
+                                     [HETAtm]        } }
+                                     [NOATom]        } }
+     {           {   TIPS    integer          }        } ! TIP3P water model
+     {           {   ST2     integer          }        } ! ST2 water model
+     {           {   WATEr   integer          }        } ! OH2 residue model
+     {           {   DUM     integer          }        } ! Dummy atoms
+     {           {   resname integer          }        } ! Any RESI in the RTF
+
+     { HBONd  { [ FILE ] }                             }
+     {        {   CARD   }                             }
+
+     { PSF    [ CARD ] [ APPEnd ] [ XPLOR/OLDPSF ]     }
+
+     { CONStraints                                     }
+
+     { NBONd [ FILE ]                                  }
+
+     { TABLe [ FILE ]                                  }
+
+     { BTABle [ FILE ]                                 }
+
+     { TRAJectory [ COMP ]                             }
+
+     { IMAGes { [TRANsformations ]  [INIT]   }          }
+     {        {  PSF  image-psf-spec         }          }
+
+     { XRAY                                            }
+
+     { UNIVersal-coordinate-format                     }
+
+     { COORdinate coor-spec [ COMP ]                   }
+
+     { SEGId segid  { PDB     } [BUILd build-spec]     }
+     {              { CARD    }                        }
+     {              { FREE    }                        }
+     { NAMD FILE "filename" **                         }
+
+     {NM                                               }
+
+ ** no other options are available
+
+ image-psf-spec ::= [APPEnd] { [AUTOgen]       } 
+                             {  NOAUtog [SORT] }
+
+
+
+ coor-spec ::= { FILE      [IFILE int [CONTinue]]      } coor-option
+               { CARD      [OFFS  int] [ RESI ]        }
+               { PDB    [OFFS  int] [MODEL int] [OFFI] }
+               { UNIVersal [OFFS  int] [ RESI ]        }
+               { IGNOre                                }
+               { DYNR      CURR|DELT|VEL               }
+               { TARG                                  }
+               { TAR2                                  }
+
+ coor-option ::=  [APPEnd] [INITial] [FREEfield] atom-selection
+
+ build-spec ::= [FIRSt pres] [LAST pres] [ ANGLe   ] [ DIHEdrals ] [SETUp] [WARN]
+                      [HETAom] [DELE]    [ NOANgle ] [ NODIhedral]
+
+Syntactic ordering: The second field must be specified as shown.
+The file to be read can be specified either through the UNIT number (the
+same number as in a preceding OPEN statement) or through the NAME keyword.
+
+
+Note: For PSF reading, Caution should be use with some of the existing pert 
+scripts as they reassign the atom type code using scalar commands and unless 
+one is using a RTF/PARAMETER file with fixed atom types this will cause 
+uncontrolled assignments of atom type codes, and corresponding parameters.
+
+
+File: io.info, Node: Segments, Up: Read, Previous: Read Syntax, Next: Sequence
+
+            Reading the sequence and coordinates of segments simultanously
+
+
+        This command provides convenient way to transform a system in PDB file
+format into new CHARMM segments with given coordinates.  When read in segments
+from a PDB file, one can specify BUILd to generate all atom connectivities and
+atom types. If there are missing atoms in the PDB file, one can specify SETUp 
+to generate an internal coordinate table of the segments to be used to 
+generate the coordiantes of those missing atoms.  Each chain in the PDB file
+will form a new segment named as the given SEGId followed by its segment 
+number. These generated segments are well quialified CHARMM segments and
+can be used for atom based simulation. This is a very convenient way to 
+generate simulation systems from PDB files. However, It requires that all
+residue and atom names in the input file are consistent with that in the
+CHARMM RTF file.
+    For example: 
+          open read unit 10 card name 1b5s.pdb
+          read segid b5s PDB build setup unit 10
+       This command can be used to create a new segment from either a
+PDB file (PDB), a CHARMM coordinate file (CARD), or a free format coordinate
+file (FREE). If BUILd  option is not specified, the generated 
+segment contains only atoms listed in the input PDB file but no atomic 
+connectivities are generated.  Such a segment can be used to generate a map 
+object needed in the EMAP module (see emap.info). With this command, a map 
+object can be quickly converted from a PDB structure.
+
+
+File: io.info, Node: Sequence, Up: Read, Previous: Segments, Next: Coordinate
+
+            Specifying a sequence of residues for a segment
+
+
+        The specification of SEQUence causes the program to accept a
+sequence of residue names to be used to generate the next segment in the
+molecule. Unless the WATEr, TIPS, or ST2 option is used, the sequence is
+specified as follows:
+
+        title
+        number of residues
+        repeat(residue names)
+
+        The form of the title is defined in the syntactic glossary,
+*note syn: (usage.info)Syntactic Glossary. The number of
+residues is specified on the line following the title in free field
+format. If the number of residues you specify is less than zero,
+CHARMM will read residues until it encounters a blank line or end of
+file. If the number is greater than zero, it will also stop once it
+has read at least as many residues as you've specified. If the number
+you specify is zero, you will get a warning message as one common
+error is to forget the number entirely. In this case, the first
+residue name will be consumed as the number and converted to zero.
+        The residue names are specified as separate words, each no
+longer than 4 characters, on as many lines as are required for all the
+residues. This sequence may be placed immediately following the READ
+command if the unit number is the stream or may be placed in a separate file.
+        When reading is complete, CHARMM will list all the residues it
+has read, and tell you which residues it thinks can be titrated.
+
+        The WATEr option allows a sequence of water molecules to be
+specified. This will give the old 3-center water model (not recommended).
+The integer which follows the keyword gives the number of waters. The TIP3P
+water model may be specified with the TIPS option. Likewise, the ST2
+option allows ST2 waters to be specified. Obviously, no sequence on
+separate lines need be given. The topology file must contain the residue
+named (OH2,TIP3,ST2); otherwise, the GENErate command invoked subsequently
+will fail.
+
+        The COOR option will read the sequence from a CHARMM format card
+coordinate file. The residue numbers are ignored except that when a change
+occurs, a new residue is added. If the RESId keyword is also present,
+then the resid's are obtained from the resid field of the coordinate file.
+The SEGI <segid> option allows the sequence to be read only for the residues
+belonging to the corresponding segid in the coordinate file.
+For the PDB option resids are always read from the resSeq (resid) field.
+This is useful when one wants to specify residue names (rather than use
+the number representation). No other information is read from the coordinate
+file during this process. To read the sequence for a specific chain in a PDB
+file the CHAIn <char> option can be used; <char> is the one letter PDB chain
+id in position 22 of ATOM/HETATM records. If the SEGI <segid> option is used
+the sequence is read for the atoms that have the corresponding segid in 
+columns 73-76 of the PDB file. NCHAin <int> starts reading from chain number
+<int> as defined by TER separator records. Variables SQNRES and SQRESID are 
+set to the number of residues read and the SEGId used.
+	By default only ATOM records are read. The HETAtm keyword allows 
+HETATM records as well, and the NOATom keyword turns off reading of ATOM
+records. SKIP specifies residue names that will be ignored, and the ALIAs 
+keyword provides a simple residue name translation facility:
+Each instance of <resold> will be replaced by <resnew>.
+        With the keyword SEQRes the sequence will be
+read from SEQRES records, which is useful when there are missing residues
+in the ATOM records. Here FIRStresid (default 1) is used for the RESId 
+numbering. See examples in test/c39test/readpdb.inp.
+
+File: io.info, Node: Coordinate, Up:Read, Previous:Sequence, Next: Universal
+
+                          Reading coordinates
+
+
+        The reading of coordinates is done with the READ COOR command,
+and there are several options (which may change over in future versions).
+Coordinates may be read into the main set or the comparison coordinate set
+using the COMP keyword.
+
+        There are three possible file formats that can be used to read
+in coordinates. They are coordinate binary files, dynamics coordinate
+trajectories, and coordinate card images. In addition, NAMD program
+binary restart coordinates(and velocities) files can be read (only
+into main set). Protein Data Bank (PDB) formatted files can also be
+read. PDB files do however require some editing first. All the HEADER
+and other junk before the actual coordinate section has to be removed
+and optionally replaced by a standard CHARMM title. There should be no
+line with NATOM (= number of atoms) preceding the actual coordinates.
+CHARMM does no translation whatsoever of residue or atom names, so you
+would either have to rename some entries in the PSF or in the
+coordinate file in case there are differences. The MODEL option reads
+the specified MODEL number from an NMR style multiple coordinate set
+PDB file.
+
+        For all formats, a subset of the atoms in the PSF may be selected
+using the standard atom selection syntax. For binary files, This is a
+risky maneuver, and warning messages are given when this is attempted.
+Only coordinates of selected atoms may be modified. When reading binary
+files, or using the IGNOre keyword, coordinate values are mapped into
+the selected atoms sequentially (NO checking is done!).
+Selection of atoms does not work with NAMD binary files (example:
+    read namd file "myfile.coor.rst" 
+)
+
+        The reading of the first two file formats is specified with the
+FILE option. The program reads the file header to tell which format it
+is dealing with. The coordinate binary files have a file header of
+'COOR' and contain only one set of coordinates. These are created with a
+WRIT COOR FILE command. The dynamics coordinate trajectories have a file
+header of 'CORD' and have multiple coordinate sets. These files are
+created by the dynamics function of the program. To specify which
+coordinate set in the trajectory to be read, the IFILE option is
+provided. One specifies the coordinates position within the file. The
+default value for this option will cause the first coordinate set to be
+read. If the IFILE value is negative, then the next file (other than
+the first one) will be read. This will only work if a set has already been
+read from the file with a positive IFILE value. The CONTinue keyword specifies
+that frame counting will continue from the current position in the file, not from
+the start. The sequence
+READ COOR FILE IFILE 10 UNIT 51
+READ COOR FILE CONT IFILE 10 UNIT 51
+will first read frame 10 and then frame 20 from unit 51. In this way possibly
+expensive re-reading of the file from the beginning every time is avoided.
+
+        For binary files, the APPEnd command will 'deselect' all atoms
+up to the highest one with a known position. This is done in addition
+to the normal atom selection. This is useful for structures with several
+distinct segments where it is desireable to keep separate coordinate
+modules.
+
+        The CARD file format is the standard means in CHARMM for
+providing a human readable and writable coordinate file. The format is
+as follows:
+
+* Normal format for less than 100000 atoms and PSF IDs with less than
+five characters
+         title
+         NATOM (I5)
+         ATOMNO RESNO   RES  TYPE  X     Y     Z   SEGID RESID Weighting
+           I5    I5  1X A4 1X A4 F10.5 F10.5 F10.5 1X A4 1X A4 F10.5
+
+* Expanded format for more than 100000 atoms (upto 10**10) and with
+upto 8 character PSF IDs. (versions c31a1 and later)
+         title
+         NATOM (I10)
+         ATOMNO RESNO   RES  TYPE  X     Y     Z   SEGID RESID Weighting
+           I10   I10 2X A8 2X A8       3F20.10     2X A8 2X A8 F20.10
+
+        The title is a title for the coordinates, see *note syn:
+(usage.info)Syntactic Glossary, for details. Next comes the
+number of coordinates. If this number is zero or too large, the entire
+file will be read. Finally, there is one line for each coordinate.
+
+        ATOMNO gives the number of the atom in the file. It is ignored
+on reading. RESNO gives the residue number of the atom. It must be
+specified relative to the first residue in the PSF. The OFFSet option
+should be specified if one wishes to read coordinates into other positions.
+The APPEnd option adds an additional offset which points to the
+the residue just beyond the highest one with known positions. This option
+also 'deselects' all atoms below this residue (inclusive).
+For example, if one is reading in coordinates for the second segment of a
+two chain protein using two card files, and the APPEnd option is used,
+RESNO must start at 1 in both files for the file reading to work
+correctly.
+
+        It should also be remembered that for card images, residues are
+identified by RESIDUE NUMBER. This number can be modified by using the
+OFFSet feature, which allows coordinates to be read from a different PSF.
+Both positive and negative values are allowed. The RESId option will
+cause the residue number field to be ignored and map atoms from SEGID
+and RESID labels instead.
+
+        RES gives the residue type of the atom. RES is checked against
+the residue type in the PSF for consistency. TYPE gives the IUPAC name
+of the atom. The coordinates of an atom within a residue need not be
+specified in any particular order. A search is made within each residue
+in the PSF for an atom whose IUPAC name is given in the coordinate file.
+
+        The RESId option overrides the residue number and fills coordinates
+based on the SEGID and RESID identifiers in the coordinate file.
+This is the recommended method where different PSF's are used.
+
+        The IGNORE option allows one to read in a card coordinate file
+while bypassing the normal tests of the residue name, number, and atom
+name. When IGNORE is specified in place of card, the identifying
+information is ignored completely. Starting from the first selected
+atom, the coordinates are copied sequentially from the file.
+
+        The PDB option works very much like the CARD option, but expects the
+actual file format to be according to Protein Data Bank standards:
+
+ text IATOM  TYPE  RES  IRES      X  Y  Z    W
+  A6   I5  2X A4   A4    I5  4X     3F8.3 6X F6.2
+
+The OFFI option enforces the official pdb format.  The segid (chain id)
+has to be one character in length on read  and it is truncated
+to one character on write.
+        Normally, the coordinates are not reinitialized before new values
+are read, but if this is desired, the INITialize keyword, will cause the
+coordinate values for all selected atoms to be initialized. Note that only
+atoms that have been selected, will be initialized (9999.0). The COOR INIT
+command provides a more general way to initialize coordinates.
+
+The READ COOR DYNR variant reads a full coordinate set from a dynamics
+RESTart file. It REQUIRES a matching PSF and allows no selections or
+other manipulations. A restart file (usually) contains three sets of
+atom data, and you chose which one to read in with keywords: 
+ CURR     the current coordinates
+ DELT     the displacement to be taken from the current coordinates
+ VEL      the current velocities (in AKMA units)
+
+NOTE: The restart file written after a crash may be sligthly different,
+at present (c28a2) it contains the previous coordinates instead of velocities.
+
+The READ COOR TARG and READ COOR TAR2 commands read in the coordinates of the 
+target for Targeted Molecular Dynamics (TMD; see tmd.info)
+
+File: io.info, Node: Universal, Up: Read, Previous: Coordinates, Next: Param Files
+
+                 Reading coordinates from nonstandard formats
+
+
+      The reading of coordinates is done with the READ COOR command,
+and there are several options.  One such option is the READ COOR
+UNIVersal command which will read using a previously specified format.
+The Universal format is specified by the READ UNIVersal command.  This
+reads the specification from the input stream or from a specified
+file.
+
+READ UNIVersal
+
+The following commands clear the translation table and sets up
+default specifications for the file format.
+
+  CHARMM       - setup standard CHARMM format (default)
+  PDB          - setup brookhaven format
+  AMBER        - setup standard AMBER  format 
+  UNKNown      - setup null format (everything must be specified)
+
+The following commands specify the field locations of various items
+When reading free-of-field, the starting values are sorted to determine
+the ordering of parsing.
+
+  SEGID start length
+  RESID start length
+  TYPE  start length
+  RESN  start length
+  IRES  start length
+  ISEQ  start length
+  X     start length
+  Y     start length
+  Z     start length
+  W     start length
+
+The following commands specify how input lines should be considered.
+
+  PICK  start length  string    - choose only line that match one or
+                                  more of these 
+  EXCL  start length  string    - exclude any line that contains one
+                                  of these 
+  TITL  start length  string    - add any line containing one of these
+                                  to the title 
+
+The following commands specify character translation upon reading the file.
+
+  TRANslate { SEGID external-segid internal-segid                         }
+            { RESID external-resid internal-resid match-segid             }
+            { RESN  external-resn  internal-resn  match-segid             }
+            { TYPE  external-type  internal-type  match-resn  match-segid }
+
+  END   - terminate reading universal file format
+
+File: io.info, Node: Param Files, Up: Read, Previous: Universal, Next: RTF File format
+
+                        The Format of Parameter Files
+
+[SYNTAX Parameter read command format]
+
+READ { PARAmeter {   [PRINt]  [APPEnd]  [FLEX] }  }
+     {           {   [NBON ]            [MMFF] }  }
+
+
+The PRINT and NBON options determine the extend of printing while
+reading parameters.  The NBON will list the NATVDW*(NATVDW+1)/2 vdw table.
+
+The APPEnd keyword will add the new paramters to the existing parameter
+set. APPEnd does not work with binary files, MMFF, CFF, SPAS.  Also,
+only paramters of the same type (e.g. both FLEXible) may be appended.
+
+The MMFF keyword invokes the Merck Force Field paramter reader.
+     see *note MMFF (mmff.info).
+
+The FLEX keyword specifies the new flexible parameter format.  This is
+the same as the standard CHARMM parameter format, but;
+(1) allows general wildcarding for all terms
+(2) allows parameter substitution for missing paramters
+(3) does not require a previously read RTF (no global MASSES list required)
+(4) allows the definition of paramter equivalence groups.
+
+[SYNTAX Parameter file format]
+
+        Parameters can be read from cards or binary modules by the routine
+PARRDR.  After the title, card file data is divided into sections beginning
+with a keyword line and followed by data lines read free field:
+
+        ATOM                             (Flexible paramters only)
+         MASS   code   type   mass       (Flexible paramters only)
+
+        EQUIvalence                      (Flexible paramters only)
+         group  atom [ repeat(atom) ]    (Flexible paramters only)
+
+        BOND
+         atom atom force_constant distance
+
+        ANGLe or THETA
+         atom atom atom force_constant theta_min UB_force_constant UB_rmin
+
+        DIHE or PHI
+         atom atom atom atom force_constant periodicity phase
+
+        IMPRoper or IMPHI
+         atom atom atom atom force_constant periodicity phase
+
+        CMAP
+         atom atom atom atom atom atom atom atom resolution
+         <...cmap data...>
+         
+        NBONd or NONB  [nonbond-defaults]
+         atom* polarizability  e  vdW_radius -
+              [1-4 polarizability  e  vdW_radius] [C6_long_range]
+
+        NBFIX
+         atom_i* atom_j*  emin rmin [ emin14 [ rmin14 ]]
+
+
+        HBOND [AEXP ia] [REXP ir] [AHEX ih] [AAEX iaa] [hbond-defaults]
+         donor-heavy-atom* acceptor-heavy-atom* well_depth distance
+
+
+       ( SPAS only paramter types )
+
+            FLUC
+             atom chi_value zeta_value prin_integer chma_value
+         
+            KAPPa
+             atom atom atom atom atom atom force_constant 
+         
+            LCH2
+             atom atom atom atom atom force_constant 
+         
+            14TG
+             atom atom atom atom trans_const gauche_const
+         
+
+        PRINt [ON ]
+              [OFF]
+
+
+     where '*' allows wildcard specifications:
+      *  matches any string of characters (including none),
+      %  matches any single character,
+      #  matches any string of digits (including none),
+      +  matches any single digit.
+
+---------------------------------------------------------------------------
+nonbond-defaults::= [NBXMod int] [CUTNB real] [CTOFNB real] [CTONNB real]
+                          [WMIN real] [E14Fac real] [EPS real]
+
+  [ATOM ] [CDIElectric] [SHIFt  ] [VATOm ] [VSWItch ] [BYGRoup] [GEOMetric ]
+  [GROUp] [RDIElectric] [SWITch ] [VGROup] [VSHIft  ] [BYCUbe ] [ARIThmetic]
+                        [FSWITch]          [VFSWitch]
+                        [FSHIft ]
+
+hbond-defaults::= [ ACCEptor   ] [ HBEXclude   ] [ BEST ]
+                  [ NOACceptor ] [ HBNOexclude ] [ ALL  ]
+
+        [CUTHB real] [CTOFHB real] [CTONHB real]
+            [CUTHA real] [CTOFHA real] [CTONHA real]
+                [REXP int(def12)] [AEXP int(def10)]
+                    [HAEX int(def4)] [AAEX int(def2)]
+---------------------------------------------------------------------------
+
+Sections end with the occurence of the next keyword line, or a line with
+the word END, the latter terminating parameter reading.
+
+Errors in the input file will result in warning messages but not
+termination of the run.
+
+	For angles, if theta_min is given as a negative number, then a
+cosine style angle potential function being used for those angles, rather
+than CHARMM's usual angle potential energy function.
+
+        No wildcard usage is allowed for bonds and angles. For dihedrals,
+two types are allowed; A - B - C - D (all four atoms specified) and
+X - A - B - X (only middle two atoms specified). Double dihedral
+specifications may be specified for the four atom type by listing a
+given set twice. When specifying this type in the topology file, specify
+a dihedral twice (with nothing intervening) and both forms will be used.
+
+        There are five choices for wildcard usage for improper dihedrals;
+1) A - B - C - D  (all four atoms, double specification allowed)
+2) A - X - X - B
+3) X - A - B - C
+4) X - A - B - X
+5) X - X - A - B
+When classifying an improper dihedral, the first acceptable match (from
+the above order) is chosen. The match may be made in either direction
+( A - B - C - D = D - C - B - A).
+
+        The periodicity value for dihedrals and improper dihedral terms
+must be an integer. If it is positive, then a cosine functional form is used.
+Only positive values of 1,2,3,4,5 and 6 are allowed for the vector, parallel
+vector and cray routines. Slow and scalar routines can use any positive
+integer and thus dihedral constrains can be of any periodicity.
+ Reference angle 0.0 and 180.0 degree correspond to minimum in staggered 
+and eclipsed respectively. Any reference angle is allowed. The value
+180 should be prefered over -180 since it is parsed faster and more
+accuratly. When the periodicity is given as zero, for OTHER THAN THE
+FIRST dihdral in a multiple dihedral set, then a the amplitude is a
+constant added to the energy. This is needed to effect the
+Ryckaert-Bellemans potential for hydrocarbons (see below). 
+
+The normal dihedral energy equation is:
+      E = K * ( 1.0 + cos( periodicity * phi - phase ) )
+
+When the periodicity is given as zero, then a harmonic restoring potential
+in (phi - phi_min) is used. The phase value gives phi_min for this option.
+This functional form is identical to that reported in the CHARMM paper,
+except that either functional form (referred to as proper and improper)
+may be used for dihedrals and improper dihedrals. The distinction between
+these terms is that seperate lookup tables are kept and the default atom
+choices are still different. For dihedrals, the selection is usually based
+on the middle two atoms, and for improper dihedrals, the selection is based on
+the outer two atoms. For either terms, all 4 atoms may be required.
+
+The HBOND line can be used to specify exponents for the hbond function,
+with ia and ir being the attractive and repulsive radial terms and
+ih and iaa the cosine exponents on the angular terms at the h and a
+respectively. Defaults 4, 6, 4, and 2 respectively.
+
+For atom types with no NBOND parameters given, no van der Waals
+interactions will be calculated.  You will be warned, but be careful.
+
+The nbond parameters for 1-4 interactions can be specified by placing the
+extra set of parameters after the first.  By default the same parameters
+will be used for 1-4 and all other interactions.
+
+NON-BOND parameter combination rules depend on how the parameters are listed.
+If the second number is negative, it is used as Emin, and
+        Emin(ij)=-sqrt(Emin(i)*Emin(j)).
+If the second number is positive, it is used as Neff, and the Slater Kirkwood
+formula is used to compute Emin(ij).  If the C6_long_range value is specified,
+then that value is used for all long-range dipsersion-PME interactions, instead 
+of the usual short range C6 value derived from self Emin(ii) and Rmin(ii).
+
+        The PARRDR card field ,NBFIX, allows individual atom type
+van der Waal pair interactions to be specified. Subsequent lines must have;
+
+        atom_i atom_j  emin rmin [ emin14 [ rmin14 ]]
+
+If emin is positive, a severe warning is issued. The wildcard "X" may
+be given. In the case where both atoms are wildcards, the entire
+nbond parameter set will be modified.
+        If emin14 and rmin14 are not specified, then the value of emin
+and rmin will be used. NOTE: The previous value will not be used.
+        NBFIXes are processed in order. For that reason, wildcard
+usage should come first. In the case of duplicate specifications,
+there is no check, and the last specification will be used.
+        The maximun number of NBFIX entries is currently set at 150.
+The space for this is allocated in PARMIO.
+
+PARAMETER I/O ADDENDUM:
+In order to calculate the Ryckaert-Bellemans torsional potential for butane
+and other extended atom hydrocarbons, the following terms should be included
+in the parameter file:
+
+ V = gamma[1.116 - 1.462cos(phi) - 1.578 cos**2(phi) + 0.368 cos**3(phi)
+                 + 3.156 cos**4(phi) - 3.788 cos**5(phi)]
+      and gamma = 1.987 kcal/mol
+
+J. P. Ryckaert and A. Bellemans, Chem. Phys. Lett. 30, 123 (1975).
+J. P. Ryckaert and A. Bellemans, Disc. Farad. Soc. 66,  95 (1978).
+
+PHI
+! Ryckaert Bellemans has trans = 0.0
+! since cos is an even function cos(-phi)=cos(phi), invert the 
+! sign of the coefficients with odd power of cos(phi)
+CH3E CH2E CH2E CH3E   0.470467 5   0.0
+CH3E CH2E CH2E CH3E   0.783947 4   0.0
+CH3E CH2E CH2E CH3E   2.53516  3   0.0
+CH3E CH2E CH2E CH3E   1.56789  2   0.0
+CH3E CH2E CH2E CH3E   2.34787  1   0.0
+CH3E CH2E CH2E CH3E  -4.70368  0   0.0
+
+The potential should be used with SHAKE bonds and angles or bonds only
+as required.  The zero periodicity (constant) term should NOT be the
+first in the set, otherwise it will be treated as an improper torsion.
+
+
+File: io.info, Node: RTF File format, Up: Read, Previous: Param Files, Next: Other files
+
+[SYNTAX RTF file format]
+
+                The Format of a Residue Topology File
+
+        Here is a description of what is currently (24-May-1982) in
+residue topology files (as they are stored in ascii files). You may use
+this format if you specify the CARD option in the READ command. The
+format of binary files depends on the current implementation of the RTF
+data structure (see RTF.FCM).
+
+        The purpose of residue topology files is to store the
+information for generating a representation of macromolecule from its
+sequence. These files are read by RTFRDR a subroutine in RTFIO which
+should be be consulted for formats and the final word on what is
+actually done with these files.
+
+        The residue topology files are named TOP... .  There are two
+forms, binary module (.MOD) and card format (usually .INP or .RTF)
+although the binary is typically no longer used. The card format files
+are structured as input files for CHARMM, beginning with a run title
+and the command READ RTF CARD, followed by the actual topology file.
+
+        The first section of the topology files is a title section in
+the usual format of up to ten lines delimited by a line containing only
+a * in column 1.
+
+        The remaining information is read in free field format as
+commands to define the RTF. The ordering of the commands is important
+in that some information is needed to define others (i.e. the atoms
+of a residue must be defined before the bonds between them).
+The recommended structure of this file is:
+
+        Initial setup:
+                MASS specification for each atom type
+                DECLarations of out of segment definitions
+                DEFAults for patching on the fist and last residues
+                AUTOgenerate angles dihedrals drude ...
+        For each residue:
+                RESIdue name and total charge specification
+                        (or PRESidue if this is a patch)
+                ATOM definitions within this residue
+                GROUping dividers between atom definitions
+                BOND specification
+                ANGLe specifications
+                DIHEdral angle specifications
+                IMPRoper dihedral angle specifications
+                CMAP dihedral angle specifications, resolution
+                DONOr specifications
+                ACCEptor specifications
+                IC information
+                PATChing residues to use if defaults are not desired
+        Closing:
+                END statement
+        Display control:
+                PRINT option
+
+        The format above is not rigid. In particular, The 'out of
+residue declarations' may be augmented and redefined at any point.
+These declarations are checked against all 'out of segment' atom
+references. This is done to avoid potential problems where atom names
+are misspelled. The number following the declaration is ignored, and
+is for the users own reference (or debugging).
+
+        The syntax of all subcommands are as follows:
+
+
+     MASS atom-type-code atom-type-name mass [drude-type]
+      As of c40a1 the atom-type-code can be input as a -1 and this
+      generates atom-type-codes internally in a sequential manner
+      defining the atom-type-code for the current mass declaration
+      as that which increments NATC by one. One can mix both explicitly
+      specified atom-type-codes and -1 values, the atom-type-codes are
+      generated internally based on the atom-type-name.
+      The drude-type keyword indicates that this is a drude particle.
+
+     DECLare out-of-residue-name
+      This adds names to be considered for possible connections
+      to the previous or next residues.  This is done as a spelling
+      check. Any atoms names not contained with in the residue nor
+      on this list of declarations will be flagged as an error.
+      Use the symbol "-" as an atom name prefix to denote the previous
+      residue, use "+" for the subsequent residue. Use "#" as a prefix
+      for the (n+2) residue.
+
+     DEFAults [ FIRSt { name } ] [ LAST { name } ]
+                      { NONE }          { NONE }
+
+
+     AUTOgen { [ ANGLes ] [ DIHEdrals ] [ PATChes ] [ PCHEck   ] } [ DRUDe   ]
+               [ NOANgl ] [ NODIhedal ] [ NOPAtch ] [ NOPCheck ]   [ NODRude ]
+             {   OFF                                             }
+
+     Tha AUTOgen command sets flags for autogeneration. 
+     The "OFF" keyword resets all of the autogeneration flags.
+     The PATChes keyword will cause autogen to be performed with each patch command.
+     The NOPAtches keyword will prevent autogeneration to be performed with a PATCh command.
+     This is useful when there are many patches to be performed.
+     This does not apply to image patching (which always autogenerates).
+     The PCHEck keyword looks for linear angles and removes them from the dihedral lists.
+     If there is no parameter file read, then NOPCheck is inferred.
+
+     The keywords ANGLes, NOANgles, DIHEdrals, NODIhedrals, and OFF are now local flags
+     and apply only to subsequent RESI and PRES commands.  The order is important.
+     There may be more than one AUTOgen command, allowing turning on and off autogeneration 
+     for different sets of residues and patches.
+
+
+
+     { RESIdue  } name [total-charge] [ AUTOgen   ] [ ANGLes   ] [ DIHEdrals   ] [ PCHEck   ]
+     { PRESidue }                     [ NOAUtogen ] [ NOANgles ] [ NODIhedrals ] [ NOPCheck ] 
+
+     Residues labled PRES may only be used for patching. Residues
+     defined with RESI may not be used as a patch.
+     The autogeneration specifications, if provided, override the defaults.
+
+     ATOM iupac atom-type charge repeat(exclusion-names) drude-spec autogen-spec
+
+           drude-spec ::= [ALPHA real] [THOLE real] [TYPE drude-type]
+
+           autogen-spec:==  [ NOAUtogen  ] No angle nor dihedral autogenerate
+
+                            [ NOACentral ] No "J" position angle autogenerate
+                            [ NOAEdges   ] No "I" or "K" angle autogenerate
+                            [ NOANgles   ] No angle autogenerate 
+
+                            [ NODCentral ] No "J" nor "K" dihedral autogenerate
+                            [ NODEdges   ] No "I" nor "L" dihedral autogenerate
+                            [ NODIhedrals] No dihedral autogenerate
+          
+
+     GROUp
+      This keyword divides the structure into specific electrostatic
+      groups.  These are used with explicit group-group electrostatic
+      options and are used to make the atom-atom list generation
+      more efficient.  If a RESIdue does not start with a GROUp command,
+      then any ATOMs defined will belong to the last group of the
+      previous residue.  Also, the maximum number of atoms allowed in
+      any group is currently set at 1000 (MAXING in dimens.fcm).
+      As a general guide, and electrostatic group should be roughly neutral
+      or have unit charge.  A group should generally be a rigid group of
+      atoms, and should not have heavy (non-hydrogen) atoms in a 1-5
+      arrangement.  Hydrogens should always be in the same group as its
+      bonded partner.  A group should NEVER include two or more groups
+      of atoms that are not covalently linked.
+
+     BOND repeat(iupac iupac) [ NOAUtogen  ] No angle nor dihedral autogenerate
+                              [ NOANgles   ] No angle autogenerate 
+
+                              [ NODCentral ] No "J-K" dihedral autogenerate
+                              [ NODEdges   ] No "I-J" nor "K-L" dihedral autogenerate
+                              [ NODIhedrals] No dihedral autogenerate
+
+      Note: The autogeneration keywords apply to ALL elements listed in the BOND command.
+      Thus, with the command:  "BOND CA CA  N CA NODCentral",
+      no internal dihedrals will be generated for either of the two bonds.  
+
+     { ANGLe  } repeat(iupac iupac iupac) [NODIhedrals] 
+     { THETa  }   
+         Keyword NODI will prevent dihedrals from being autogenerated.                       
+  
+     { NOANgle } repeat(iupac iupac iupac) [NODIhedrals]
+     This command selects angles to be excluded from autogeneration.
+     Keyword NODI will also prevent dihedrals from being autogenerated. 
+
+     { LINEar } repeat(iupac iupac iupac) 
+     The LINEar command is the same function as: NOANGLe ... NODI
+     and will delete that angle and all dihedrals containing those atoms.
+
+     { DIHEdral } repeat(iupac iupac iupac iupac)
+     { PHI      }                                 
+
+     { NODIhedral } repeat(iupac iupac iupac iupac)
+     This command selects dihedrals to be excluded from autogeneration.
+
+     { IMPRoper } repeat(iupac iupac iupac iupac)
+     { IMPHi    }
+
+     { CMAP } repeat(iupac iupac iupac iupac iupac iupac iupac iupac)
+
+     DONOr [ hydrogen ] [ heavy-atom ] [ antecedent-1 antecedent-2 ]
+           [ BLNK     ] [ hydrogen   ]
+     The antecedents are not required unless hydrogen position
+     generation is desired.
+
+     ACCEptor iupac [iupac [iupac] ]
+     The first antecedents is required if and angle dependence about
+     the acceptor atom is desired. The second antecedent is unused.
+
+     LONEPAIR -
+         { CENTer  iupac repeat(iupac)   [MASS]                                }
+         {                                                                     }
+         { COLInear  3x(iupac)  [DISTance real] [SCAled real]                  }
+         {                                                                     }
+         { { RELAtive } 4x(iupac) [DISTance real] [ANGLe real] [DIHEdral real] }
+         { { BISEctor }                                                        }
+
+
+     ANISOTROPY O C CA N A11 0.6968 A22 1.2194 << Can someone fix this documentation
+                                         with actual syntax instead of just an example??
+
+     {  IC   }
+     { BILD  } name name name name bond angle phi angle bond
+     { BUILd }
+     BLNK may be used to indicate a missing atom name.
+
+     DELEte { ATOM                             iupac  [COMBine iupac]     }
+            { BOND                             (iupac iupac)              }
+            { THETa | ANGLe | LINEar | NOANgle (iupac iupac iupac)        }
+            { DIHEdral | PHI | NODIhedral      (iupac iupac iupac iupac)  }
+            { IMPHi | IMPRoper                 (iupac iupac iupac iupac)  }
+            { LONEpair                         lone-pair-spec             }
+
+     Deletions for ATOM, BOND, and IMPRoper are allowed only in patch residues
+     (PRES). When using the "AUTOgenerate RTF" option, deleting ANGLes 
+     or DIHEdrals is best done with the NOANgle, LINEar, and NODIhedral commands. 
+     Such deletion occurs at the end of the next autogeneration process.
+
+
+     The COMBine keyword for ATOM deletions allows passing part of the IC
+     data for the deleted atom to the "combine" atom, i.e. stereochemistry
+     of atoms bonded to the deleted atom.  In order to use the COMBine
+     option, both atoms must be present in the PSF and it must be invoked
+     from the PATCh command (not the GENErate command).
+
+     PATChing [ FIRSt { name } ] [ LAST { name } ]
+                      { NONE }          { NONE }
+     This command dictates which patch is to be invoked if this is the 
+     first or last residue of a sequence. This selection may be overridden 
+     in the GENErate command.
+
+
+
+     PRINt { ON  }
+           { OFF }
+
+        The PRINt command may be used to control the display of lines as
+they are read by the RTF reader. The initial setting for printing is
+controlled by the READ command itself. If PRINT is specified, then
+printing will initially be enabled; otherwise, the commands will not
+be echoed. PRINT ON turns on echoing of RTF specifications; PRINT OFF
+turns them off. This command is useful for debugging an addition to a
+previously tested topology file.
+
+         For examples of how to use the autogeneration features,
+                   see *note read:(doc/struct.info)Autogen
+
+
+        A small sample RTF card file follows:
+
+*  title for documentation example
+*
+   18    1
+MASS     1 H      1.00800
+MASS    11 C     12.01100
+MASS    12 CH1E  13.01900
+MASS    13 CH2E  14.02700
+MASS    14 CH3E  15.03500
+MASS    31 N     14.00670
+MASS    38 NH1   14.00670
+MASS    51 O     15.99940
+MASS    56 OH2   15.99940
+
+DECL -C
+DECL -O
+DECL +N
+DECL +H
+DECL +CA
+
+DEFA FIRS NTER LAST CTER
+
+RESI ALA     0.00000
+GROU
+ATOM N    NH1    -0.35
+ATOM H    H       0.25
+ATOM CA   CH1E    0.10
+GROU
+ATOM CB   CH3E    0.00
+GROU
+ATOM C    C       0.45
+ATOM O    O      -0.45
+BOND N    CA        CA   C         C    +N        C    O         N    H
+BOND CA   CB
+THET -C   N    CA             N    CA   C              CA   C    +N
+THET CA   C    O              O    C    +N             -C   N    H
+THET H    N    CA             N    CA   CB             C    CA   CB
+DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+IMPH N    -C   CA   H         C    CA   +N   O         CA   N    C    CB
+CMAP -C  N  CA  C   N  CA  C  +N
+DONO H    N    -C   CA
+ACCE O C
+BILD -C   CA   *N   H      0.0000    0.00  180.00    0.00   0.0000
+BILD -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+BILD N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+BILD +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+BILD CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+BILD N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+
+
+RESI OH2     0.00000
+GROUP
+ATOM OH2  OH2    -0.40000     H1   H2
+ATOM H1   H       0.20000     H2
+ATOM H2   H       0.20000
+BOND OH2  H1        OH2  H2
+THET H1   OH2  H2
+DONO H1   OH2 -O -O
+DONO H2   OH2 -O -O
+ACCE OH2
+PATC FIRS NONE LAST NONE
+
+END
+
+NOTES::
+
+      The use of improper dihedrals for the PSF is unrelated
+to the use of improper dihedrals for the internal coordinate tables.
+
+
+                   L
+PSF usage:         |
+                   |
+                   I
+                  / \
+                 /   \
+           -----J---- K------ 
+
+
+IC table usage: 
+
+              I      L
+               \    /
+                \  /
+                 *K
+                  |
+                  |
+                  J
+
+
+Note that for PSF usage the first atom is the central atom,
+and the last atom is the atom to be restained relative to
+the axis defined by the middle pair of atoms.  For the IC table
+usage, the central atom is in the third position, but the 
+axis is again defined by the middle pair of atoms. 
+
+Also note that as of c40a the atom-type-code that follows the MASS
+statement in the RTF (as described above for the PARAMETER file)
+can be given as -1, which will cause a sequential atom-type-code,
+array ATCT in the RTF, to be placed at NTCT+1, where NTCT is the
+value of the largest atom-type-code specified to date.
+
+An atom name may not start with the following 4 letter sequence:
+   ‘NOAU','NOAC','NOAE','NOAN',’NODC’,’NODE’,’NODI’,
+   ’MASS',’BLNK’,’DELE’,'ALPH,',THOL','TYPE'
+This is restriction is imposed to simplify parsing when reading an RTF.
+So, you can't name your atoms DELETED nor MASSLESS nor NODE22 nor TYPE4 ...
+
+
+
+File: io.info, Node: Other files, Up: Read, Previous: RTF File format, Next: Read
+
+          Reading data other than the sequence or coordinates
+
+
+        The parameter files (PARA) and internal coordinate files (IC)
+and hydrogen bond (HBONd) data files can be read as card images or binary
+files. Specifying CARD signifies card image input; specifying FILE
+signfies binary file input. Please note that topology file must be read
+in before the parameters can be read.
+
+        Protein structure files (PSF) files can be read and written in
+card/ascii format either with the "old" CHARMM format or using the "XPLOR"
+format, which replaces the atom-type code with the atom type name.
+This option may only be used if a parameter file has been read.
+
+Reading a binary (file) formated psf file is no longer supported in CHARMM.
+
+	The non bonded list (NBONd) can only be read as a binary file.
+The constraints (CONStraint) which includes dihedral restraints may only 
+be read as formatted file (card).
+
+        There are two types of IC card files (residue number vs. resid's).
+The residue number option is the default, and atom assignments are based
+on residue number. This is the low precision form. The resid option
+is the high precision form and atom assignments are based on SIGID's and
+RESID's. This is also useful where different homologies are used.
+
+        The (READ IMAGes TRANsformantions) reads a transformation file.
+This can only be read in card image format (see *note images:(images.info).).
+The INIT keyword will remove all existing image data. Without the
+INIT keyword, any existing image items (such as bonds) would be kept.
+This allows one to modify the crystal geometry without the necessity
+of regenerating all image items.  The 
+
+
+        The READ IMAGE PSF will read only PSF elements involving image atoms.
+It is assumed that image atoms already exist, so only use this command AFTER 
+the first instance of an image update.
+The APPEnd allows reading a second image PSF, or extending a built image PSF.
+Without the APPEnd option, all existing image PSF elements are deleted.
+The AUTOgen option creates new angle and dihedal lists after reading. There
+is no feature (at present) to retain angles or dihedrals when autogenerating.
+The NOAUtog keyword suppressed autogeneration, and keeps all existing lists.
+The REMDupl removes duplicate image entries that are duplicates by symmetry,
+or atom order, or both. The terms searched for duplicates include:
+bonds, angles, dihedrals, impropers, crossterms, and nonbond exclusions.
+The NOREmd keyword suppresses the removal of duplicates.  It is recommended 
+for testing, or where multiple identical energy terms are actually wanted.
+Both AUTOgenerating and REMDuplicates are defaults for this command.
+
+        The TABLe file contains the nonbond energy lookup information.
+Once read in, The effects cannot be reversed. The nonbond energy
+evaluation is now under control of the table routines.
+
+        The BTABle file contains the bonded energy lookup information.
+Once read in, the effects cannot be reversed. The bonded energy
+evaluation is now under control of the table routines. The table must
+be read after the structure (psf) of the system is set up. The format
+of the table is the following:
+
+BOND
+A B
+104
+1.86999999999998e+00 -3.74058562118872e+02 1.90794423875772e+02
+1.88999999999998e+00 -3.66707803850426e+02 1.83386760216079e+02
+...
+
+Here 'BOND' is the type of the bonded interaction. The other choices
+are 'ANGLE' and 'DIHE', for angular and dihedral interactions.
+Second line 'A B' defines the two atom types between which the bonded
+interaction is set. For 'ANGLE' three atom types are required, and for
+'DIHE' four atom types are required. Third line defines the number of
+entries in the lookup table. The lookup table itself starts on the
+fourth line with three real numbers per line. The first column is the
+distance between the atoms for 'BOND', or the angle in radians for
+'ANGLE' and 'DIHE'. The second column is the gradient of the
+potential energy (-1 x force) and the third column is the potential
+energy.
+
+        The NM file contains normal modes from previous *note
+DIMS:(dims.info) runs. With the help of this file those modes can be
+avoided on subsequent runs, which increases the diversity of
+trajectories. This is part of the 'self avoidance' algorithm in the
+DIMS module and used with the DIMS keywords MTRA, NWIND, and NMUN.
+
+
+File: io.info, Node: Write, Up: Top, Previous: Read, Next: Print
+
+            WRITe - Writes Data Structures to External Files
+
+[SYNTAX WRITe]
+
+                        Syntax
+
+         WRITe { { PSF       } [CARD] [XPLOR/OLDPSF]  }  { UNIT unit-number }
+               {                                      }  { NAME filename    }
+               { { RTF       }                        }  
+               { { PARAmeter }                        }
+               { { NBONd     }*                       }
+               { { TABLe     }                        }
+               {                                      }
+               { { COORdinate coor-spec } [CARD]      }
+               {                          [PDB [MODEL int [FIRSt|LAST]] [OFFI]}
+               {                          [DUMB]      }
+               {                          [XYZ]       }
+               { { IC [RESId] [SAVEd] } [FILE] [RTF]  }
+               { { HBONd [ANAL]         }             }
+               {                                      }
+               { { IMAGes imag-spec}                  }
+               { { ENERgy             }               }
+               { { CONStraint [PSF 0] }               }
+               { { TITLe              }               }
+               {                                      }
+               { NAMD FILE "filename" **              }
+
+        coor-spec:== [COMP]  [OFFS int] [IMAGes]  atom-selection
+
+        imag-spec::= { TRANsformations                       }
+                     { FORCes                                }
+                     { PSF { [NAMIng] } { [ AUTOgen_only ] } }
+                     {     {  BYNUM   } { [ NOAUtogen    ] } }
+
+*: The NBOND list can only be WRITten in binary (FILE) form. Use PRINt to get
+formatted output.
+
+** no other options are available for NAMD
+
+                        Function
+
+        The primary purpose of this command to save some of CHARMM's
+data structures. The coordinate and internal coordinate data structures
+can be written in formatted form so that they be edited independent
+of CHARMM using a text editor. The option, FILE, specifies that a file
+is to be written in unformatted form (binary).  The option, CARD,
+specifies that a file is to written in formatted form.  For the
+coordinate and internal coordinate file, CARD is the default.  The
+coordinate option PDB gives a file in Protein Data Bank format, with
+just the ATOM records; the MODEL N option writes a PDB file in the NMR-style
+multiple coordinate set format (note that for this to work the file has to 
+be specified as UNIT <int>, not as NAME <string>): 
+
+MODEL 0 (or no MODEL keyword) just write standard PDB file
+MODEL 1 writes beginning of multicoordinate file (title, MODEL 1,
+        coor, TER, ENDMDL)
+MODEL N (N>1) appends just coordinates for MODEL N  (MODEL N, coor,
+        TER, ENDMDL)
+MODEL N (N<0) appends last coordinate set, and END (MODEL |N|, coor,
+        TER, ENDMDL, END)
+
+        Keyword FIRSt forces writing of title even if N.NE.1, LAST forces
+writing of END line. 
+
+        The XPLOr option of WRITe PSF produces an XPLOR style PSF file (atom
+type names are used instead of atom type numbers) 
+This option may only be used if a parameter file has been read.
+
+        The selection of "PSF 0" in the WRITe CONS only works with PERT and
+writes data for the lambda=0 PSF. 
+
+        A set of title lines must follow the WRIT command. This title
+will be written at the start of the file and serves to document the
+file. For your protection, one should always make good use of this
+title, as it may be the only documentation for the file.
+
+        The UNIT keyword specifes what Fortran unit the output should be
+written to. It cannot be omitted unless the filename is provided with the NAME
+keyword.
+
+	The XYZ keyword writes a simple .xyz format file with (A8,3F11.5),
+as an export format for other programs; the first title line is used for
+the comment record.
+
+        For images, there are files for listing the transformation, forces, or 
+the image PSF. For the image PSF, only the file produced with the NAMIng 
+option can be read by CHARMM. The NAMIng option is default for the 
+WRITe command, and the BYNUM option is the default for the PRINt command.
+The AUTOgen_only option writes out only the information need for autogeneration,
+and not the actual image-primary angle and dihedral lists that may exist.
+This option is intended for simplicity when creating for edit, an image psf.
+
+
+File: io.info, Node: Print, Up: Top, Previous: Write, Next: Titles
+
+          PRINt - writes information to output file (unit 6)
+
+[SYNTAX PRINt]
+
+                        Syntax
+
+         PRINt { PSF [XPLOre] [FULL]  }
+               { RTF                  }
+               { CONStraint [PSF 0]   }
+               { PARAmeter   [USED]   }
+               { RESIdue              }
+               { COORdinate coor-spec }
+               { IC     [ SAVEd ] [RTF]  }
+               { HBONd       [ ANAL ] }
+               { NBOND                }
+               { IMAGes imag-spec     }
+               { TITLe                }
+               { ENERgy               }
+
+        coor-spec::= [COMP] [OFFS int] [IMAGes] atom-selection
+
+        imag-spec::= { TRANsformations      }
+                     { FORCes               }
+                     { PSF { [BYNUm]  }     }
+                     {     {  NAMIng  }     }
+
+ Syntactic ordering: All commands must be typed in the order shown.
+
+
+                       Function
+
+        This command is used to list information contained in data
+structures used by the program. The information must already have been
+created through use of a READ, GENE, HBON, etc., command. The printable
+output is sent to unit 6.
+
+        The XPLOr option of PRINt PSF produces an XPLOR type PSF
+listing.  Atom type names are printed instead of atom type numbers.
+This option may only be used if a parameter file has been read.
+The FULL option uses the format of "WRITe PSF" and had additional information.
+
+        The selection of "PSF 0" in the PRINt CONS only works with PERT
+and prints data for the lambda=0 PSF.
+
+      For printing parameters, the USED option causes the print of only
+the paramters that were used in the most recent energy evaluation. This
+option is PSF dependent.
+
+        For hydrogen bonds, ANAL gives a geometrical and energy analysis
+of the hydrogen bonds. Representing the hydrogen bond as
+A2-A1-X-H....Y-, the distances X-Y, H-Y, the angle (180 - <X-H-Y ), the
+dihedral angle A2-A1-X-H and the hydrogen bond energy contribution are
+listed. A more versatile hbond analysis facility is provided by 
+COOR HBOND (see *note corman:(corman.info)).
+
+
+File: io.info, Node: Clear, Up: Top, Previous: Print, Next: Titles
+[SYNTAX CLEAr]
+
+                        Syntax
+
+         CLEAr_memory { RTF                           }
+                     
+
+
+The CLEAR command removes unneeded data from the RTF or from the parameter file
+and releases the memory used to store such data.
+
+The CLEAR RTF command removes all residue based information, but fully retains 
+all RTF flags and all atom type arrays.  There are two ways to use this feature:
+     1. At the end of all PSF generation and patching
+     2. Before reading each RTF APPEnd file
+Option (1) can use a lot of memory,  but that can all be freed before other tasks.
+Option (2) limits memory use, but any GENErate or PATCh commands may only use 
+RESI or PRES elements from the most recent "READ RTF APPEND" command.
+
+
+
+File: io.info, Node: Titles, Up: Top, Previous: Clear, Next: IOFORM
+[SYNTAX TITLe]
+
+        Titles - Specifying and manipulating
+
+        Titles are optional. All title lines MUST begin with a "*".
+If no title is specified, the title will be untouched. This is useful when
+a series of titles are needed. Titles are terminated with a line containing
+only a "*" in the first colunm. There may be up to 32 lines contained
+in any title.
+        The titles are read using RDCMND, thus parameter substitutions are
+allowed.
+        A command TITLe has been added to CHARMM which can be used to specify
+a title to be used by subsequent write commands.
+        For interactive use, A title is always required (no backspace can
+be done) when RDTITL is called.
+
+        The date,time, and user is added at the end of the title when
+a title is written to a file. If a date and time is already present,
+it will be superceeded. For the print option, the date and time
+information is left as it was.
+        A second title array TITLEB has been added to CTITLA.FCM
+TITLEA is to be used for writing, and TITLEB must be used for reading
+from data files. In this way, the main title is never destroyed by reading
+a data file. For any write command, TITLEA can be modified by specifying
+a title. Any further writes will use that title, unless a new title is
+specified.
+        As it is now, title lines should not end in "-" and any characters
+beyond a "!" will not be included in the title.
+        Titles may begin with a "#" as well as "*". The pound sign
+is converted to a "*" upon reading. When the first title line begins
+with "#", the old title is not destroyed. All entered title lines
+superceed any previous title lines. Obviously, if more title lines are entered
+than were previously present, then there will be no difference in the two
+methods. This option was added for cases where a series of identical
+titles, except for a different first line, was needed.
+        The COPY keyword of the TITLe command will copy the current TITLB
+(the reading title) to TITLA (the writing title) before reading the
+subsequent title. If there is no subsequent title, then just a copy is done.
+
+        Normally, when titles are written to card files, the first column
+"*"s are retained. With the WRITe TITLe command, several changes are made.
+First, the first colunm of "*"s is suppressed. Second, no date and time
+and username is added. Third, the file is not closed. This command is
+primarily used for creating files for plotting. It is often used in
+conjunction with looping and energy terms. Here is an example of possible
+applications;
+
+OPEN WRITE CARD UNIT 23 NAME ENERGY.DAT        ! Open the file for plot data
+WRITE TITLE UNIT 23
+*  this file contains .....
+*  more message data  .....
+*
+SET 1 -180.0                   ! Set the initial dihedral angle value
+LABEL LOOP                     ! Here is the loop return point
+CONS DIHE ....... MIN @1       ! Introduce the desired dihedral constraint
+MINIMIZE .....                 ! Minimize
+CONS CLDH                      ! Remove the dihedral constraint
+SET 2 @1                       ! copy parameter one to parameter two
+TRIM 2 FROM 1 TO 10            ! Pad parameter two with blanks for formatting
+                               ! It will now be 10 characters long
+WRITE TITLE UNIT 23
+* DIHEDRAL = @2 ENERGY = ?ENER ! write this only this line to unit 23
+*
+INCREMENT 1 BY 15.0            ! Add 15 to parameter one
+IF 1 LT 180.1 GOTO LOOP
+CLOSE UNIT 23
+STOP
+
+
+File: io.info, Node: IOFORM, Up: Top, Previous: Titles, Next: Top
+
+                        I/O Format Control        
+
+IOFOrmat [ EXTEnded | NOEXtended ]
+
+     In c30a2, the PSF entries are extended for I10 atom numbers and 
+character*8 PSF IDs (SEGID, RESID,RES and TYPE). Atom numbers take 
+I5 in coordinate files and I8 in psf files and CHARACTER*4 PSF IDs are 
+used for Normal (noextended) I/O operation. These are expanded to I10 and A8
+respectively.  Noextended format is the default and the extended
+format is used only when the number of atoms is greater than 100000 or
+any PSF ID is longer than 4 characters.  The IOFOrmat command overrides the
+default:  IOFOrmat EXTEnded enforces the extended format and
+IOFOrmat NOEXtended does the normal (old) format.

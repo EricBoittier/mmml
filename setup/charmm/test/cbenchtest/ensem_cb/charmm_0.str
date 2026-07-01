@@ -1,0 +1,88 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+pref
+
+if @?list eq 0 set list = bycb
+if @?fast eq 0 set fast = 1
+if @?lookup eq 0 set lookup = 0
+if @?nstep eq 0 set nstep = 10
+if @?nprint eq 0 set nprint = 1
+
+read rtf card name "top_all22_prot.inp"
+read param card name "par_all22_prot.inp"
+
+read sequ coor name 5dfr_minimized.crd
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+read coor pdb unit 1 resi name "5dfr_solv-cube_equil.pdb"
+
+! Dimension of a box
+set size 62.23
+Calc 7 = @size 
+set  theta = 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta    
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+calc nwat = ?nsel / 3
+
+!  turn on faster options and set-up SHAKE
+faster @fast
+
+shake bonh tol 1.0e-8 para fast
+
+if lookup gt 0 then
+     energy  eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi - 
+           Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+     lookup sele segid wat end 
+
+     set echeck = echeck -1
+else
+     set echeck = 
+endif
+
+calc rstu = 10 * @enum + 50 + ?mynode
+open form write unit @rstu name rest@enum.rst
+
+prnlev 5 node 0
+! Run dynamics in periodic box
+dynamics @list leap start timestep 0.001 -
+     nstep @nstep nprint @nprint  iprfrq 100 -
+     iunwri @rstu isvfrq 5 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 200 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 @echeck -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 - !PME
+     hoover reft 298 tmass 250 tbath 298     ! Constant temperature
+
+write coor card name dhfr_@enum.crd
+
+ensemble sync
+
+if @enum .eq. 0 then
+   write psf card name dhfr.psf
+   echo MASTER of all MASTERS
+   set n = 0
+   open unit 1 write unform name dhfr.dcd
+   traj iwrite 1 nfile @nens
+   label maketrj
+         read coor card name dhfr_@n.crd
+         traj write
+         incr n by 1
+   if n lt @nens goto maketrj
+endif
+
+return
+stop
+

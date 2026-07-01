@@ -1,0 +1,88 @@
+* loop_inter.str, last modified May/10/2004 
+* By Sonja M. Schwarzl & Stefan Fischer
+* loops over all groups that do not belong to target region
+* calculates electrostatic interaction energies between groups and 
+* target region both in vacuum and in solution
+* 
+
+SET COUNTER -1
+
+LABEL LOOP
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+  INCRement COUNTER BY 1
+
+  SET SELECTION BACK
+
+  SET RESNEXT @COUNTER
+  INCRement RESNEXT BY 1
+ 
+       ! check, if next residue is Proline
+  DEFINE foo SELEct IRES @RESNEXT END
+  IF ?SELRESN EQ PRO GOTO PROLABEL
+ 
+  LABEL ONCEAGAIN
+
+       ! Define group2 J of atoms
+
+  IF SELECTION EQ BACK DEFI GROUP2 SELE (BACK2 .and. IRES @COUNTER) .or. -
+                                       (BACK1 .and. IRES @RESNEXT) END
+  IF SELECTION EQ SIDE DEFI GROUP2 SELE SIDE .and. IRES @COUNTER END
+        
+    STREam calculation.str
+  
+  IF SELECTION EQ SIDE GOTO NEXTRESIDUE
+       ! else:
+    SET SELECTION SIDE
+    GOTO ONCEAGAIN
+ 
+ LABEL PROLABEL 
+       ! Calculate energy for sidechain j
+    SET SELECTION SIDE
+    DEFI GROUP2 SELE SIDE   .and. IRES @COUNTER END
+        STREam calculation.str
+
+       ! Calculate energy for Proline (j,j+1)
+    SET SELECTION BACK
+   
+  LABEL AGAIN
+
+    DEFI GROUP2 SELE (BACK2 .and. IRES @COUNTER) .or. - 
+      (BACK1 .and. IRES @RESNEXT) .or. (SIDE .and. IRES @RESNEXT) END
+        
+    STREam calculation.str
+
+       ! Calculate energy for Backbone (j+1,j+2)
+    INCRement COUNTER BY 1
+    INCREMENT RESNEXT BY 1
+       ! Check whether the next residue is proline
+    SET RESNEXT4 @RESNEXT 
+    INCREMENT RESNEXT4 BY 1
+    DEFINE foo SELECT IRES @RESNEXT4 END
+    IF ?SELRESN EQ PRO GOTO AGAIN
+     !else
+
+    DEFI GROUP2 SELE (BACK2 .and. IRES @COUNTER) .or. -
+     (BACK1 .and. IRES @RESNEXT) END
+         
+        STREam calculation.str
+
+       ! go back to normal loop by doing nothing
+
+ LABEL NEXTRESIDUE
+
+IF COUNTER LT @FINALRESIDUE GOTO LOOP
+! else:
+
+
+RETURN
+
+
+
+
+
+
+
+
+
+

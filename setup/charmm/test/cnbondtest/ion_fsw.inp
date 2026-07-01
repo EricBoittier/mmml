@@ -1,0 +1,124 @@
+* CHARMM 25 testcase ion_fsw.inp
+* Bernard R. Brooks, 14-Jul-1997
+* calculate coulomb interaction of 2 protons
+*
+
+bomlev -1
+stream datadir.def
+
+read rtf card
+* protons
+*
+   22    1
+mass 1 h 1.
+
+resi prot 0.1
+atom h1  h 0.1
+end
+
+read param card unit 5
+* proton parm file
+*
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.0440    -0.0498    0.8000
+END
+
+read sequence card
+* Proton
+*
+1
+prot
+
+generate p1
+generate p2 duplicate p1
+
+
+!skip elec
+!skip vdw
+prnlev 6
+
+!!!!!!!!!!!!
+        
+                    set 1  ATOM  CDIE  FSWITCH  VFSWIT  CTONNB  5.0  
+set f ion_cdie_fsw
+set flag rtn_fsw
+goto ion_str
+label rtn_fsw
+       
+                    set 1  ATOM  CDIE  FSWITCH  VFSWITCH CTONNB 10.0  
+set f ion_cdie_ftr
+set flag rtn_ftr
+stream ion_str
+label rtn_ftr
+
+stop
+
+label ion_str
+! calculate group-group energy (nonbonded) of 2 H ions
+!  1:nonbond option  f: filename
+
+read coor card free
+* coords for both protons
+*
+2
+1  1  prot h1  0.  0.  0.
+1  2  prot h1  1.25  0.  0.
+
+set x 1.0
+format (F11.5)
+set 8 2.25
+coor trans xdir @x sele segid p2 end
+
+FAST OFF
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+
+open write card unit 32 name @9@f.out
+outu 32
+open write card unit 33 name @9@f.plt
+open write card unit 34 name @9@f_scal.plt
+open write card unit 36 name @9@f_all.plt
+
+energy inbfrq 25 @1  cutnb 13.0 ctofnb 10.0 
+
+label loop                                   
+incr 8 by @x
+coor trans xdir @x sele segid p2 end 
+
+energy
+set 7 0.0
+incr 7 by ?ener
+set 7 @7 ?GRMS
+write title unit 33
+* @8 @7
+*
+
+FAST ON
+energy
+set 6 0.0
+incr 6 by ?ener
+set 6 @6 ?GRMS
+write title unit 34
+* @8 @6
+*
+test first tol 0.00001 step 0.0002
+
+
+write title unit 6
+* @8 @7 @6
+*
+write title unit 36
+* @8 @7 @6
+*
+test first tol 0.00001 step 0.0002
+
+FAST OFF
+vibran
+write seco card finite sele all end unit 32 tol 0.00001 step 0.0002
+end
+if 8 lt 14.01 goto loop
+
+outu 6
+goto @flag

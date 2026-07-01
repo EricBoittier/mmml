@@ -1,0 +1,5 @@
+*  CHARMM test stream file for parallel runs
+*    where rewinding stdin is not possible
+*
+stream @stream
+stop

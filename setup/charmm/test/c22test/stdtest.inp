@@ -1,0 +1,586 @@
+* STDTEST
+*
+
+! author  : Ryszard Czerminski (December 11, 1991)
+! purpose : to test quickly ALL commands;
+! note    : no attempt has been made to make all commands meaningful
+! required: toph19.mod, param19.mod
+!
+
+if ?pathint .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+set testname stdtest
+format (F20.7)
+
+open read card unit 11 name @0toph19.rtf
+read rtf  card unit 11
+close unit 11
+open read card unit 11 name @0param19.prm
+read parameter card unit 11
+close unit 11
+
+READ SEQUENCE  CARDS
+* ALA-TRP
+*
+   2
+ALA TRP
+
+GENERATE MAIN SETUP
+
+IC PARAM ALL
+IC SEED 1 N 1 CA 1 C
+IC BILD
+PRINT IC
+PRINT COOR
+
+open write card unit 18 name @9stdtst.crd
+write coor card unit 18
+* save coordinates
+*
+open write form unit 18 name @9stdtst.psf
+write psf card unit 18
+print psf
+
+update CTONNB 90. CTOFNB 94. CUTNB 99.
+update inbfrq 0 ihbfrq 0
+open write card unit 50 name @9stdtst1.rst
+open write file unit 51 name @9stdtst1.dcd
+open write file unit 52 name @9stdtst1.vel
+dyna strt nstep 10 time 0.001 nsavc 1 nsavv 1 iuncrd 51 iunvel 52 -
+     ihbfrq 0 inbfrq -1 iunwri 50 ilbfrq 0
+
+open read  card unit 50 name @9stdtst1.rst
+open write file unit 51 name @9stdtst2.dcd
+open write file unit 52 name @9stdtst2.vel
+dyna rest nstep 15 time 0.001 nsavc 1 nsavv 1 iuncrd 51 iunvel 52 -
+     iunrea 50
+
+@testcheck ?tote 77.5391891 .000001 @testname_1
+
+IC PARAmeters ALL
+IC FILL         COMP PREServe
+IC FILL         COMP APPEnd
+IC DIFFerences  COMP APPEnd
+IC DERIvatives  COMP APPEnd
+open read  file unit 51 name @9stdtst1.dcd
+open read  file unit 52 name @9stdtst2.dcd
+IC DYNAmics AVERages     FIRStunit 51 NUNIts 2 BEGIn 1 STOP 20 NSKIp 1
+open read  file unit 51 name @9stdtst1.dcd
+open read  file unit 52 name @9stdtst2.dcd
+IC DYNAmics FLUCtuations FIRStunit 51 NUNIts 2 BEGIn 1 STOP 20 NSKIp 1
+IC EDIT
+  DISTance   1 N 1 CA 1.3
+  ANGLe      1 N 1 CA 1 C 120.
+  DIHEdral   1 N 1 CA 1 C 1 O 180.
+END
+IC BUILd   COMP
+!IC SEED atom atom atom  [COMP]             }
+IC PURGe
+IC SCALe BOND 0.9 ANGLe 0.9 DIHEdral 0.9
+IC RANDom ISEEd 3141
+IC GAUSsian UNIT 6 1 N 1 CA 1 C
+bomlev -1
+IC PUCKer 2 NE1 2 CE2 2 CD2 2 CG 2 CD1 ANGLe 33. AMPL 0.3
+bomlev 5
+IC DELete BYNUM 1 2
+IC KEEP sele bynu 1 : 5 end
+
+IC KEEP FIRSt SECOnd THIRd FOURth
+IC SAVE PREServe
+IC RESTore PREServe
+
+IC PRINt
+
+! command: INQU ---------------------------
+
+INQU ! prints list of open files
+
+! command: JOIN ---------------------------
+
+READ SEQUENCE  CARDS
+* ala
+*
+   1
+ALA
+GENERATE SECN SETUP
+
+JOIN MAIN SECN RENU ! joins two segments and renumbers atoms
+PRINT COOR
+
+! restore initial psf and coordinates
+
+dele atom sele all end
+open read form unit 18 name @9stdtst.psf
+read psf card unit 18
+close unit 18
+open read card unit 18 name @9stdtst.crd
+read coor card unit 18
+close unit 18
+
+! command: MERG  ---------------------------
+
+open write card unit 50 name @9stdtst1.rst
+open write file unit 51 name @9stdtst1.dcd
+open write file unit 52 name @9stdtst1.vel
+dyna strt nstep 10 time 0.001 nsavc 1 nsavv 1 iuncrd 51 iunvel 52 -
+     ihbfrq 0 inbfrq -1 iunwri 50 ilbfrq 0
+
+open read  card unit 50 name @9stdtst1.rst
+open write file unit 51 name @9stdtst2.dcd
+open write file unit 52 name @9stdtst2.vel
+dyna rest nstep 15 time 0.001 nsavc 1 nsavv 1 iuncrd 51 iunvel 52 -
+     iunrea 50
+
+open read  file unit 51 name @9stdtst1.dcd
+open read  file unit 52 name @9stdtst2.dcd
+open write file unit 53 name @9stdtst3.dcd
+MERGE COOR FIRSTU 51 NUNIT 2 SKIP 1 OUTP 53 NFILE 25 -
+      sele all end -
+      ORIE MASS NORO sele all end
+
+open read  file unit 51 name @9stdtst1.vel
+open read  file unit 52 name @9stdtst2.vel
+open write file unit 53 name @9stdtst3.vel
+MERGE VEL  FIRSTU 51 NUNIT 2 SKIP 1 OUTP 53 NFILE 25
+
+
+! command: MINI ---------------------------
+
+MINI SD STEP 0.02 DEBUG NOUP -                       !NOUP seems to be deprecated. LNI
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -100.9079947 .000001 @testname_2
+
+MINI SD STEP 0.02 DEBUG SADDLE NOUP -                ! SADDLE seems to be only for NRAP. LNI
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -103.8234791 .000001 @testname_3
+
+MINI POWE STEP 0.02 DEBUG NOUP -
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -108.870966 .000001 @testname_4
+
+MINI POWE STEP 0.02 DEBUG SADDLE NOUP -
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -109.7502130 .000001 @testname_5
+
+MINI CONJ STEP 0.02 DEBUG NCGC 10 PCUT 0.99 NOUP -
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -111.4391034 .000001 @testname_6
+
+MINI CONJ STEP 0.02 DEBUG SADDLE NCGC 10 PCUT 0.99 NOUP -
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -111.8896735 .000001 @testname_7
+
+MINI ABNR STEP 0.02 DEBUG NOUP -
+     EIGR 0.01 MIND 5 STPL 1. STRI 0.1 -             ! abnr-spec
+     MASS PSTR 0.1 - ! LATT  NOCO - to be tested in CRYST module
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     FMEM  0.5 -                                     ! memory factor
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -111.3381220 .000001 @testname_8
+
+MINI ABNR STEP 0.02 DEBUG SADDLE NOUP -
+     EIGR 0.01 MIND 5 STPL 1. STRI 0.1 -             ! abnr-spec
+     MASS PSTR 0.1 - ! LATT  - ! NOCO -
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     FMEM  0.5 -                                     ! memory factor
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -111.3381220 .000001 @testname_9
+
+MINI NRAP STEP 0.02 DEBUG NOUP -
+     TFREq 1. NFREq 9          -                     ! nrap-spec
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -112.6131051 .000001 @testname_10
+
+MINI NRAP STEP 0.02 DEBUG SADDLE 0 NOUP -            ! SADDLE takes a numerical argument LNI
+     TFREq 1. NFREq 9          -                     ! nrap-spec
+     NSTEP 10 IHBF 0 INBF 0 NPRI 5 -                 ! frequency-spec
+     TOLENR 0.01 TOLGRD 0.01 TOLITR 10 TOLSTP 0.01 - ! tolerence-spec
+     IMAX   10  IPRI 1 PRTM 3                        ! print-spec
+@testcheck ?ener -112.6141577 .000001 @testname_11
+
+! command: MONI ---------------------------
+
+open read  file unit 51 name @9stdtst1.dcd
+open read  file unit 52 name @9stdtst2.dcd
+
+MONItor DIHEdral SHOW  ALL UNIT 6 FIRSt 51 NUNIt 2 BEGIn 1 -
+                   STOP 25 SKIP 10 SELEct all end
+
+! command: NBON  ---------------------------
+
+NBON NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+
+! command: NOE  ---------------------------
+
+open write unit 18 card name @9stdtst.noe
+NOE !  Invoke the module
+   RESEt 
+   ASSIgn KMIN 1. RMIN 1. KMAX 2. RMAX 2. FMAX 3. -
+       sele atom MAIN 1 N end sele atom MAIN 1 O end
+   PRINT ANAL CUT 1.
+   WRITe UNIT 18
+* title
+*
+   SCALe 1.
+   WRITe UNIT 18 ANAL
+* title
+*
+   END
+
+rewind unit 18
+noe
+   READ  UNIT 18
+end
+
+! command: PATH  ---------------------------
+
+close unit 30 ! path opens unit 30
+
+coor copy comp
+COOR AXIS sele atom main 1 ca end sele atom main 1 c end
+COOR ROTAte axis phi 180. sele type ot* show end
+
+open write file unit 18 name @9path.bin
+open write card unit 19 name @9path.inf
+path mode 2 rest 0 nstep 20 unit 18 ipath 19 npri 10 nstr 10 savp 5 -
+     ifpen 0 
+
+! command: PRIN  ---------------------------
+
+ener
+coor copy comp
+
+PRINt PSF oldpsf
+PRINt PSF XPLOr
+PRINt CONStraint
+PRINt PARAmeter
+PRINt COORdinate
+PRINt COORdinate COMP OFFs  100 sele bynu 2:4 end
+PRINt COORdinate IMAGes ! should be tested again when images are present
+PRINt IC
+PRINt HBONd
+PRINt HBONd ANAL
+PRINt IMAGes TRAN FORC PSF ! should be tested again when images are present
+PRINt TITLe
+PRINt ENERgy
+
+! command: RENA  ---------------------------
+
+RENA SEGID SEGI sele bynu 1:2 end ! new segment name for selected atoms
+RENA RESID RESI sele bynu 1:2 end ! new residue ID
+RENA RESN  RESN sele bynu 1:2 end ! new residue name
+RENA ATOM  ATOM sele bynu 1:1 end ! new atom name
+
+! command: RESE  ---------------------------
+
+open read form unit 18 name @9stdtst.psf
+read psf  card unit 18
+close unit 18
+open read card unit 18 name @9stdtst.crd
+read coor card unit 18
+close unit 18
+update inbfrq 1 ihbfrq 0 
+update inbfrq 0 ihbfrq 0
+
+! command: SBOU  ---------------------------
+! SBOUnd POTEntial INPUt <integer> OUTPut <integer>
+! I do not know how to test it
+open unit 18 form read name @0/sbdtest1.pot
+sbound read unit 18
+close unit 18
+
+sbound set xref 0.0 yref 0.0 zref 0.0 -
+  assign 1 sele (( .byres. (point 0.0 0.0 0.0 cut 11.0)) -     
+  .and. resn TIP3 .and. type O*) end 
+
+! command: SCAL  ---------------------------
+
+SCALar X = WMAIN sele bynu 2:4 show end    ! do a copy of vectors
+SCALar Y       SET 2.                      ! A = <real>
+SCALar Y       SHOW
+SCALar Z       ADD 2.                      ! A = <real> + A
+SCALar WMAIN   MULT 3.                     ! A = <real> * A
+SCALar XCOMP   DIVI 4.                     ! A = A / <real>
+SCALar YCOMP   SIGN                        ! A = sign ( A )
+SCALar ZCOMP   INTEger                     ! A = int ( A )
+SCALar WCOMP   SHOW
+SCALar WCOMP = Y                           ! do a copy of vectors
+SCALar WCOMP   SHOW
+SCALar WCOMP   RECIprocal                  ! A = 1/ A
+SCALar DX    = Y                           ! do a copy of vectors
+SCALar DX      LOG                         ! A = ln ( A )
+SCALar DY      EXP                         ! A = exp ( A )
+SCALar DZ      ABS                         ! A = ABS ( A )
+SCALar ECONt = Y                           ! do a copy of vectors
+bomlev -1
+SCALar ECONt   NORM                        ! A = A / 2-norm(A)
+bomlev -3
+SCALar EPCOnt  MIN 9.                      ! A = MIN (A,<real>)
+SCALar MASS    MAX 8.                      ! A = MAX(A,<real>)
+bomlev -3
+SCALar CHARge  ABS                         ! A = ABS ( A )
+SCALar CHARge  POWEr 3.                    ! A = A ** <real>
+bomlev 5
+SCALar CONS    POW2r                       ! A = A * A
+SCALar XREF    IPOW  5                     ! A = A ** int(<real>), OK for neg A
+SCALar YREF    SQRT                        ! A = SQRT(A)
+SCALar ZREF    SHOW
+SCALar MOVE    SET 2.                      ! A = <real>
+SCALar MOVE    STORe 1                     ! S(i) = A(i)
+SCALar FBETA = RADIUS                      ! do a copy of vectors
+SCALar FBETA   STATistics WEIGht 1
+SCALar FBETA   RECAll 1                    ! A(i) = S(i)
+SCALar ALPHa   +STOre 1                    ! S(i) = S(i) + A(i)
+SCALar EFFEct  *STOre 1                    ! S(i) = S(i) * A(i)
+SCALar RADIus  AVERage ALL       WEIGht 1  ! S(i) = sum(S(j))/Nj
+SCALar RADIus  AVERage BYSEgment WEIGht 1  ! S(i) = sum(S(j))/Nj
+SCALar RADIus  AVERage BYREsidue WEIGht 1  ! S(i) = sum(S(j))/Nj
+SCALar RADIus  AVERage BYGRoup   WEIGht 1  ! S(i) = sum(S(j))/Nj
+
+! command: SHAK  ---------------------------
+
+bomlev -3
+SHAKE BONH BOND ANGH ANGL MAIN TOL 1.0E-10 MXITer 20 PARA -
+      sele all end sele all end SHKScale 0.1
+bomlev 5
+SHAKE BONH BOND ANGH ANGL COMP TOL 1.0E-10 MXITer 20 -
+      sele all end sele all end SHKScale 0.1
+
+shake off
+sbou off
+skip sbou
+cons fix sele none end
+open read card unit 18 name @9stdtst.crd
+coor init
+read coor card unit 18
+close unit 18
+mini sd nstep 10 inbfrq 1
+update inbfrq 0
+ener
+coor copy comp
+SHAKE BOND PARA NOFAST MXITER 100
+COOR SHAKE MASS
+ener
+@testcheck ?ener 32.7288113 .000001 @testname_shake
+
+! command: TEST  ---------------------------
+! VIBRAN not parallel
+! and this testcheck will not pass in parallel
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+TEST FIRSt TOL 0.005 STEP 0.0001 UNIT 6 MASS 0 sele all end
+@testcheck ?nok 75 .000001 @testname_first
+TEST COORdinates
+coor copy comp
+TEST COORdinates COMP
+TEST CONNectvity SUBSet sele all end COMMon sele all end PRINt
+TEST PSF
+
+! command: TRAJ  ---------------------------
+
+!1) Initializing trajectory I/O
+
+OPEN READ  UNIT 51 FILE NAME @9stdtst1.dcd
+OPEN READ  UNIT 52 FILE NAME @9stdtst2.dcd
+OPEN WRITE UNIT 61 FILE NAME @9stdtst3.dcd
+TRAJectory IREAd  51 NREAd 2 SKIP 1 BEGIN 1 STOP 20  -
+     IWRIte 61 NWRIte 1 NFILE 20 EXPAnd NOTHer 10 DELTa 0.001 
+*...
+*
+
+TRAJectory READ        !2) Reading a frame
+TRAJectory READ COMP
+
+TRAJectory WRITe       !3) Writing a frame
+TRAJectory WRITe COMP
+
+! command: WRIT  ---------------------------
+
+open write form unit 18 name @9stdtst.tmp
+WRITe PSF card UNIT 18
+* title
+*
+WRITe PSF CARD oldpsf UNIT 6
+* title
+*
+WRITe PSF CARD XPLOr UNIT 6
+* title
+*
+
+open write file unit 18 name @9stdtst.table
+WRITe TABLe FILE UNIT 18
+* title
+*
+
+WRITe COOR sele bynu 1:1 end CARD UNIT 6
+* title
+*
+
+WRITe COOR sele bynu 1:1 end PDB  UNIT 6
+* title
+*
+
+WRITe COOR sele bynu 1:1 end DUMB UNIT 6
+* title
+*
+
+open write file unit 18 name @9stdtst.bcrd
+
+WRITe COOR sele bynu 1:1 end FILE UNIT 18
+* title
+*
+
+WRITe IC RESId CARD UNIT 6
+* title
+*
+
+WRITe HBONd ANAL CARD UNIT 6
+* title
+*
+
+WRITe ENER CARD UNIT 6
+* title
+*
+WRITe CONS CARD UNIT 6
+* title
+*
+WRITe TITL CARD UNIT 6
+* title
+*
+
+! command: VIBR  ---------------------------
+
+fast off
+shake off
+update inbfrq 1 ihbfrq 1
+ener
+update inbfrq 0 ihbfrq 0
+open write file unit 14 name @9stdtst.nmd
+open write card unit 18 name @9stdtst.sde
+
+VIBRan ! NMODe 9
+DIAGonalize NFREquencies 9 NADD 2 RAISe
+WRITe NORMal MODE 3 THRU 6 unit 14
+* title
+*
+WRITe SECOnd-derivatives RAISe unit 18 -
+      CARD FINIt STEP 0.0001 TOL 0.001 sele all end
+* title
+*
+open write file unit 19 name @9stdtst.dcd
+WRITe TRAJectory  MODE 3 THRU 6 unit 19 -
+      TEMP 300. TFRE 100. PHAS 3.6 SHAKe -
+      NCYC 1 STEP 0.01 NONOrm
+* title
+*
+open write file unit 19 name @9stdtst.dcd
+WRITe TRAJectory  MODE 3 THRU 6 unit 19 -
+      KCAL 3. TFRE 100. PHAS 3.6 SHAKe -
+      NCYC 1 STEP 0.01
+* title
+*
+open write file unit 19 name @9stdtst.dcd
+WRITe TRAJectory  MODE 3 THRU 6 unit 19 -
+      RMS  3. TFRE 100. PHAS 3.6 SHAKe -
+      NCYC 1 STEP 0.01
+* title
+*
+open write file unit 19 name @9stdtst.dcd
+WRITe TRAJectory  MODE 3 THRU 6 unit 19 -
+      MRMS 3. TFRE 100. PHAS 3.6 SHAKe -
+      NCYC 1 STEP 0.01
+* title
+*
+open write file unit 19 name @9stdtst.dcd.3
+open write file unit 20 name @9stdtst.dcd.4
+open write file unit 21 name @9stdtst.dcd.5
+open write file unit 22 name @9stdtst.dcd.6
+WRITe TRAJectory  MODE 3 THRU 6 unit 19 -
+      FACT 3. TFRE 100. PHAS 3.6 SHAKe -
+      SEQUential-files NCYC 1 STEP 0.01
+* title
+*
+open read file unit 14 name @9stdtst.nmd
+READ  NORMal-modes FILE unit 14  APPEnd MODE 3 THRU 6
+PRINt NORMal-modes MODE 3 THRU 6 INTDer FINIt -
+      TEMP 300. TFRE 100. NONOrm -
+      VECTors DOTProducts DIPOles STATistics sele all end
+open read file unit 51 name @9stdtst1.dcd
+open read file unit 52 name @9stdtst2.dcd
+QUASIharmonics NUNIts 2 FIRStunit 51 NSKIp 1 -
+         NFREquencies 6 NADD 2 TEMP 300.
+
+EXPLore MODE 3 THRU 3 TEMP 300. TFRE 100. unit 6 -
+        GRID 3 COMP SHAKe -
+        ADJUst BOLTzman 300. GAUSs 1.
+FLUC ATOM sele all end MODE 3 THRU 6 TEMP 300. TFRE 100. QUANtum VERBose
+FLUC IC                MODE 3 THRU 6 TEMP 300. TFRE 100. QUANtum VERBose
+FLUC USER sele all end MODE 3 THRU 6 TEMP 300. TFRE 100. QUANtum VERBose
+bomlev -2
+PAFL ATOM   sele all end MODE 3 THRU 6 TEMP 300. TFRE 100. -
+     QUAN VERB COOR SAVE ! CONT ! 26-Jul-94 MEK
+PAFL GROUP MASS sele all end MODE 3 THRU 6 TEMP 300. TFRE 100. -
+     QUAN VERB COOR SAVE ! CONT ! 26-Jul-94 MEK
+PAFL USER sele all end MODE 3 THRU 6 TEMP 300. TFRE 100. -
+     QUAN VERB COOR SAVE ! CONT ! 26-Jul-94 MEK
+bomlev 5
+RAYLeigh MODE 3 THRU 6 SAVE
+PED MODE 3 THRU 6 TEMP 300. TFRE 100. TOL 0.1
+THERMO MODE 3 THRU 6 TEMP 300. STEP 100.
+
+EDIT INCL TRAN X ORTHog TO 3 sele all end
+EDIT REMOve MODE 3 THRU 6 TRAN X NONOrm
+EDIT DELEte MODE 1 THRU 1
+EDIT ORTHogonalize PURGe MODE 3 THRU 6 TOL 0.01
+EDIT SHAKe MODE 3 THRU 6
+EDIT ZERO  MODE 3 THRU 6
+EDIT MOVE MODE 1 TO 2 SCALe 0.1 NONOrm
+EDIT ADD  MODE 1 TO 2 SCALe 0.1 NONOrm
+EDIT MULT MODE 1 SCALe 0.1
+EDIT SET  MODE 1 SCALe 1. NONOrm
+EDIT COPY MODE 1 TO 2
+BASIS IC FIRSt  BOND NOORthonorm
+BASIS IC FIRSt  ANGL NOORthonorm
+BASIS IC        DIHE NOORthonorm
+EDIT DELETE MODE 1 THRU 2
+BASIS IC SECOnd BOND NOORthonorm
+BASIS IC SECOnd ANGL NOORthonorm
+BASIS TR sele atom * * CA end BALAnce
+FILL DIFF MODE 3 THRU 3 TEMP 300 TFRE 100. APPE
+FILL COMP MODE 5 THRU 5 TEMP 300 TFRE 100. APPE
+CORREL MAXTimesteps 10 MAXSeries 5 MAXAt 9 COVAriance -
+       MODE 3 THRU 6 DATUnit 14
+END
+
+MASS    ! turn on  mass weighting flag (default)
+NOMAS   ! turn off mass weighting flag
+
+END
+@testcheck 1 1 .000001 @testname_finish
+
+stop
+

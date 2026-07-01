@@ -1,0 +1,26 @@
+Date: December 25, 2008
+-----------------------
+
+These were the scripts to make conversion between ##INCLUDE and ##USE
+pretty easy:
+
+change-one-module (still useful now, if we want to change names)
+
+    this script changes USE names for the ltm module for which we want
+    to change the name in all files
+
+change-use-sources
+
+    this is just the generalization of the above to do it for all the
+    ltm modules from ltm-list file
+
+crete-ltm-mk
+
+    it creates the ltm.mk file addition to the existing ltm.mk file
+    reding the list of former fcm files (ltm-list)
+
+create-ltm-src
+
+    adds module statements into each new ltm/*.src file by reading
+    ltm-list file.
+

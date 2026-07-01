@@ -1,0 +1,21 @@
+* Test to create a "simple" trajectory file suitable
+* for use as a reservoir.
+*
+
+stream datadir.def
+
+read rtf card name @0top_all27_prot_lipid_chiral.dat
+read para card name @0par_all27_prot_lipid_chiral.dat
+read psf card name @0ala3.psf
+read coor card name @0ala3.min.cor
+
+open unit 20 read form name @0frex1.trj_0
+open unit 30 writ unfo name @9frex1.dcd_0
+dyna unfo inpu 20 outp 30
+
+open unit 30 read unfo name @9frex1.dcd_0
+open unit 50 dire unfo name @9frex1.sdcd_0 recl 168
+
+merge firstu 30 nunit 1 outp 50 simple
+
+stop

@@ -1,0 +1,426 @@
+* This input file builds N-methyl alanyl acetamide and uses
+* all tricks nescesary to use Urey - Bradley  angle bonds
+*   %%%%%%%%%%%%%%%% PJR Q's %%%%%%%%%%%%%%%%%%%%
+*
+
+if ?novibran .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+Read RTF cards
+* methyl alanyl acetamide PJR Q'S
+*
+   18    1
+MASS   1  H    1.0
+MASS   2  HA   1.0
+MASS   3  HR   1.0
+MASS   4  HL   1.0
+MASS  10  CH3  12.0
+MASS  11  CL   12.0
+MASS  12  CR   12.0
+MASS  13  CA   12.0
+MASS  14  CB   12.0
+MASS  20  NL    14.0
+MASS  21  NR    14.0
+MASS  30  OL     16.0
+MASS  31  OR     16.0
+
+AUTOGEN OFF 
+RESI MAA 0.0
+ATOM CL CH3   -0.092
+ATOM HL1  H      0.031
+ATOM HL2  H     0.028
+ATOM HL3  H     0.025
+ATOM CLP  CL     0.433
+ATOM OL   OL     -0.428
+ATOM NL   NL     -0.274
+ATOM HL   HL     0.183
+ATOM CA   CA     0.070
+ATOM HA  HA     0.008
+ATOM CB   CB     -0.020
+ATOM HB1  H      0.004
+ATOM HB2  H      0.009
+ATOM HB3  H      0.016
+ATOM CRP  CR     0.433
+ATOM OR   OR     -0.428
+ATOM NR   NR     -0.274
+ATOM HR   HR     0.183
+ATOM CR   CH3    0.093
+ATOM HR1  H      -0.007
+ATOM HR2  H      0.008
+ATOM HR3  H      -0.001
+
+!    regular bonds
+BOND  HL1 CL HL2 CL HL3 CL   CL CLP CLP OL CLP NL NL HL
+BOND  NL CA   CA HA   CA CB   CB HB1   CB HB2   CB HB3
+BOND  CA CRP   CRP OR   CRP NR   NR HR   NR CR
+BOND  CR HR1   CR HR2   CR HR3
+!   now urey-bradley bonds
+BOND  HL1 HL2   HL2 HL3   HL3 HL1
+BOND  HB1 HB2   HB2 HB3   HB3 HB1
+BOND  HR1 HR2   HR2 HR3   HR3 HR1
+BOND  HL1 CLP   HL2 CLP   HL3 CLP
+BOND  HB1 CA    HB2 CA    HB3 CA
+BOND  HR1 NR    HR2 NR    HR3 NR
+BOND  HA NL   HA CB   HA CRP
+BOND  CL OL   CA OR   CL NL
+BOND  CA NR   OL NL   OR NR
+BOND  CLP CA   CRP CR   HL CA
+BOND  HR CR    NL CB    CRP CB
+BOND  NL CRP   CLP HL   CRP HR
+!   angle terms
+ANGL  HL1 CL HL2   HL2 CL HL3   HL3 CL HL1
+ANGL  HB1 CB HB2   HB2 CB HB3   HB3 CB HB1
+ANGL  HR1 CR HR2   HR2 CR HR3   HR3 CR HR1
+ANGL  HL1 CL CLP   HL2 CL CLP   HL3 CL CLP
+ANGL  HB1 CB CA    HB2 CB CA    HB3 CB CA
+ANGL  HR1 CR NR    HR2 CR NR    HR3 CR NR
+ANGL  HA CA NL   HA CA CB   HA CA CRP
+ANGL  CL CLP OL   CA CRP OR   CL CLP NL
+ANGL  CA CRP NR   OL CLP NL   OR CRP NR
+ANGL  CLP NL CA   CRP NR CR   HL NL CA
+ANGL  HR NR CR    NL CA CB    CRP CA CB
+ANGL  NL CA CRP   CLP NL HL   CRP NR HR
+! dihedrals
+DIHE  HL1 CL CLP NL   HL2 CL CLP NL   HL3 CL CLP NL
+DIHE  CL CLP NL HL    OL CLP NL HL    CL CLP NL CA
+DIHE  OL CLP NL CA    CLP NL CA HA    CLP NL CA CB
+DIHE  CLP NL CA CRP   HB1 CB CA HA    HB2 CB CA HA
+DIHE  HB3 CB CA HA    NL CA CRP NR    HA CA CRP NR
+DIHE  CB CA CRP NR    CA CRP NR HR    OR CRP NR HR
+DIHE  CA CRP NR CR    OR CRP NR CR    CRP NR CR HR1
+DIHE  CRP NR CR HR2   CRP NR CR HR3   CL OL CLP NL
+DIHE  NR OR CRP CA    CLP HL NL CA    CRP HR NR CR
+! other stuff
+ACCE  OL
+DONO  BLNK  HR
+ACCE  OR
+DONO  BLNK  HL
+IC  HL1 CL CLP NL   0.0  0.0  180.0 0.0 0.0
+IC  HL2  CLP *CL HL1   0. 0.0 120.0 0.0 0.0
+IC  HL3  CLP *CL HL1  0.0 0.0 -120. 0.0 0.0
+IC  CL  CLP  NL  CA   0.0 0.0 180. 0.0 0.0
+IC  OL  NL   *CLP CL  0.0 0.0 180. 0.0 0.0
+IC  CLP NL CA CRP     0.0 0.0 180. 0.0 0.0
+IC  NL  CA CRP NR     0.0 0.0 180. 0.0 0.0
+IC  HL  CA *NL CLP    0.0 0.0 180. 0.0 0.0
+IC  CA  CRP NR CR     0.0 0.0 180. 0.0 0.0
+IC  HA CRP *CA NL     0.0 0.0 -120.0 0.0 0.0
+IC  CB CRP *CA NL     0.0 0.0 120. 0.0 0.0
+IC  HB1 CB CA HA      0.0 0.0 180.0 0.0 0.0
+IC  HB2 CA *CB HB1    0.0 0.0 120.0 0.0 0.0
+IC  HB3 CA *CB HB1    0.0 0. -120.  0.0 0.0
+IC  CRP NR CR HR1     0.0 0.0 180. 0.0 0.0
+IC  OR  CA *CRP NR    0.0 0.0 180. 0.0 0.0
+IC  HR  CRP *NR CR    0.0 0.0 180.0 0.0 0.0
+IC  HR2 NR *CR HR1    0.0 0.0 120. 0.0 0.0
+IC  HR3 NR *CR HR1    0.0 0.0 -120. 0.0 0.0
+
+PATC  FIRS NONE LAST NONE
+
+END
+
+Read parameter CARD
+*  ROSSKY'S  DIALANINE PARAMETERS
+*
+bonds
+H  CH3   314.0 1.09
+H  CB    314.0 1.09
+HL   NL      405. 0.990
+HR   NR      405. 0.990
+HA   CA      300. 1.090
+CH3  CL      187.0 1.47
+CA   CR      187.0 1.47
+CL   OL      595.0 1.20
+CR   OR      595.0 1.20
+CL   NL      403.0 1.278
+CR   NR      403.0 1.278
+NL   CA      261.0 1.457
+NR   CH3     261.0 1.457
+CA   CB      110.0 1.530
+!  urey-bradley bonds
+H    H    1.80 1.8177!  37.5   109.5
+H    CL   38.4 2.1729!  28.7   109.5
+H    CA   43.6 2.1626!  26.8   109.5
+H    NR   41.0 2.0902!  30.1   109.5
+CH3  OL   52.0 2.6394!  40.9   120.0
+NL   OL   90.0 2.4048!  48.5   120.0
+CH3  NL   50.5 2.4518!  33.1   120.0
+HL   CL   27.9 2.2007!  26.6   120.0
+HL   CA   26.0 1.9690!  31.4   120.0
+CL   CA   16.2 2.6401!  54.5   120.0
+HA   NL   41.0 2.0902!  30.1   109.5
+HA   CB   43.6 2.1626!  26.8   109.5
+HA   CR   38.4 2.1729!  28.7   109.5
+CB   NL   45.5 2.4489!  33.2   109.5
+CB   CR   37.0 2.5003!  23.0   109.5
+NL   CR   30.0 2.5200!  21.0   109.5
+CA   OR   52.0 2.6394!  40.9   120.0
+NR   OR   90.0 2.4048!  48.5   120.0
+CA   NR   50.5 2.4518!  33.1   120.0
+HR   CR   27.9 2.2007!  26.6   120.0
+HR   CH3  26.0 1.9690!  31.4   120.0
+CR   CH3  16.2 2.6401!  54.5   120.0
+!  angle parameters
+ANGLES
+H    CH3  H    37.5   109.5
+H    CB   H    37.5   109.5
+H    CH3  CL   28.7   109.5
+H    CB   CA   26.8   109.5
+H    CH3  NR   30.1   109.5
+CH3  CL   OL   40.9   120.0
+NL   CL   OL   48.5   120.0
+CH3  CL   NL   33.1   120.0
+HL   NL   CL   26.6   120.0
+HL   NL   CA   31.4   120.0
+CL   NL   CA   54.5   120.0
+HA   CA   NL   30.1   109.5
+HA   CA   CB   26.8   109.5
+HA   CA   CR   28.7   109.5
+CB   CA   NL   33.2   109.5
+CB   CA   CR   23.0   109.5
+NL   CA   CR   21.0   109.5
+CA   CR   OR   40.9   120.0
+NR   CR   OR   48.5   120.0
+CA   CR   NR   33.1   120.0
+HR   NR   CR   26.6   120.0
+HR   NR   CH3  31.4   120.0
+CR   NR   CH3  54.5   120.0
+! dihedrals
+PHI
+X    CH3  CL   X    0.15  3 0.0
+X    CH3  NR   X    0.48  3 0.0
+X    CB   CA   X    0.17  3 0.0
+X    CL   NL   X    1.98  2 180.0
+X    CR   NR   X    1.98  2 180.0
+X    NL   CA   X    0.48  3 0.0
+X    CA   CR   X    0.17  3 0.0
+X    OL   CL   X    6.0   2 180.0
+X    OR   CR   X    6.0   2 180.0
+X    HL   NL   X    0.95  2 180.0
+X    HR   NR   X    0.95  2 180.0
+NONBONDED
+CH3  0.0  -0.09  1.8004
+CB   0.0  -0.09  1.8004
+CL   0.0  -0.09  1.8004
+CR   0.0  -0.09  1.8004
+CA   0.0  -0.09  1.8004
+H    0.0  -0.004489  1.4682
+HA   0.0  -0.004489  1.4682
+HR   0.0  -0.004489  0.9002
+HL   0.0  -0.004489  0.9002
+NL    0.0  -0.16   1.5546
+NR    0.0  -0.16   1.5546
+OL     0.0  -0.2304  1.4816
+OR     0.0  -0.2304  1.4816
+NBFIX
+HR  OL   0.0  1.0
+NBFIX
+HL  OR   0.0  1.0
+HBOND  REXP 12 AEXP 10
+HR  OL   -3.00 1.8
+HL  OR   -3.00 1.8
+!  Now for a real patch....we have to have H and O on the SAME amide
+!  hydrogenbonded with a 10-12 form (dont ask why) so Im going to
+!  give them the right nonbond distance and well depth with the
+!  wrong attractive exponet.(10) Its the best I can do SANS refitting
+!  or reprograming.
+HR OR   -.03  1.191
+HL OL   -.03  1.191
+! There ... its done.
+END
+
+! Read in the sequence, generate the segment 'maa', and setup IC entries.
+Read sequ card
+* maa
+*
+1
+MAA
+Generate maa setu
+
+! Now find positions for all atoms.
+READ COORD CARD
+* Initial coordinates of N-methyl alanyl acetamide
+*
+ 22
+    1    1 MAA  CL    -0.63246  -3.60531  -0.39354
+    2    1 MAA  HL1   -0.03788  -4.06974   0.39315
+    3    1 MAA  HL2   -1.67684  -3.47789  -0.10867
+    4    1 MAA  HL3   -0.54602  -4.23926  -1.27601
+    5    1 MAA  CLP   -0.14629  -2.27442  -0.78506
+    6    1 MAA  OL     0.29425  -2.04864  -1.87820
+    7    1 MAA  NL    -0.28117  -1.42102   0.15664
+    8    1 MAA  HL    -0.85649  -1.56699   0.94898
+    9    1 MAA  CA     0.00000   0.00000   0.00000
+   10    1 MAA  HA    -0.64156   0.38857  -0.79090
+   11    1 MAA  CB    -0.49047   0.59816   1.32007
+   12    1 MAA  HB1   -0.24104   1.65134   1.19079
+   13    1 MAA  HB2    0.19225   0.24874   2.09461
+   14    1 MAA  HB3   -1.54225   0.33792   1.43904
+   15    1 MAA  CRP    1.43208   0.32076  -0.08467
+   16    1 MAA  OR     1.97510   1.14770   0.59452
+   17    1 MAA  NR     2.12864  -0.30622  -0.95359
+   18    1 MAA  HR     1.72373  -0.97317  -1.56297
+   19    1 MAA  CR     3.49640  -0.01690  -1.36396
+   20    1 MAA  HR1    3.67114  -0.69657  -2.19800
+   21    1 MAA  HR2    4.25759  -0.31892  -0.64460
+   22    1 MAA  HR3    3.54939   1.00015  -1.75242
+
+ic fill
+!print ic
+scal charge store 1
+scal wmaim recall 1
+
+!Print coord
+Nbonds cdie eps 1.0 cutnb 99.0 wrnmxd 99.0 swit vswit nbxm 2
+Hbonds ihbfrq 50 cuthb 99.0 cutha 180.
+!ENERGY
+!
+!Cons dihe maa 1 CLP  maa 1 NL  maa 1 CA  maa 1 CRP  Force 200.0 min -60.
+!Cons dihe maa 1 NL  maa 1 CA  maa 1 CRP  maa 1 NR  force 200.0 min 60.
+! and relax the structure to the desired point on the Phi-Psi plot.
+!Mini abnr step 0.02 nstep 100 nprint 50 inbfrq 0 ihbfrq 50 strict 0.05
+!Cons cldh      ! Remove these dihedral constraints.
+!Mini abnr step 0.01 nstep 100 nprint 50 inbfrq 0 ihbfrq 50 strict 0.05
+!open unit 1 write form name maa1.crd
+!write coor card unit 1
+!* Coordinates for maa in -60/60
+!*
+
+read coor card
+* COORDINATES FOR MAA IN -60/60
+*  DATE:     8/14/ 5     13:57:34      CREATED BY USER: brooks
+*
+   22
+    1    1 MAA  CL     -.60099  -3.72570   -.40231 MAA  1      -.09200
+    2    1 MAA  HL1    -.02237  -4.07612    .45358 MAA  1       .03100
+    3    1 MAA  HL2   -1.66288  -3.73794   -.15237 MAA  1       .02800
+    4    1 MAA  HL3    -.42395  -4.38834  -1.25120 MAA  1       .02500
+    5    1 MAA  CLP    -.17247  -2.29777   -.76576 MAA  1       .43300
+    6    1 MAA  OL      .29377  -2.00351  -1.86914 MAA  1      -.42800
+    7    1 MAA  NL     -.34942  -1.41256    .20879 MAA  1      -.27400
+    8    1 MAA  HL     -.72641  -1.66701   1.08967 MAA  1       .18300
+    9    1 MAA  CA      .00880    .00742    .07766 MAA  1       .07000
+   10    1 MAA  HA     -.48826    .40497   -.81168 MAA  1       .00800
+   11    1 MAA  CB     -.54844    .75352   1.30632 MAA  1      -.02000
+   12    1 MAA  HB1    -.34873   1.82084   1.20750 MAA  1       .00400
+   13    1 MAA  HB2    -.07221    .37669   2.21184 MAA  1       .00900
+   14    1 MAA  HB3   -1.62512    .59382   1.37038 MAA  1       .01600
+   15    1 MAA  CRP    1.52945    .27368   -.05033 MAA  1       .43300
+   16    1 MAA  OR     2.17741    .88514    .80444 MAA  1      -.42800
+   17    1 MAA  NR     2.07670   -.21842  -1.15561 MAA  1      -.27400
+   18    1 MAA  HR     1.55039   -.73910  -1.81983 MAA  1       .18300
+   19    1 MAA  CR     3.49337   -.06995  -1.46706 MAA  1       .09300
+   20    1 MAA  HR1    3.70565   -.55836  -2.41853 MAA  1      -.00700
+   21    1 MAA  HR2    4.09145   -.53213   -.68110 MAA  1       .00800
+   22    1 MAA  HR3    3.74236    .98912  -1.54005 MAA  1      -.00100
+
+mini nrap nstep 5
+ic fill
+print ic
+! VIBRAN and quasi are not parallel
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+vibran
+     diag
+     fluct ic mode 7 thru 66 temp 300.
+     end
+!Cons dihe maa 1 CLP  maa 1 NL  maa 1 CA  maa 1 CRP  Force 200.0 min 60.
+!Cons dihe maa 1 NL  maa 1 CA  maa 1 CRP  maa 1 NR  force 200.0 min -60.
+! and relax the structure to the desired point on the Phi-Psi plot.
+!Mini abnr step 0.05 nstep 500 nprint 50 inbfrq 0 ihbfrq 50 strict 0.05
+!Cons cldh      ! Remove these dihedral constraints.
+!Mini abnr step 0.01 nstep 500 nprint 50 inbfrq 0 ihbfrq 50 strict 0.05
+!open unit 1 write form name maa2.crd
+!write coor card unit 1
+!* Coordinates for maa in 60/-60
+!*
+
+read coor card
+* COORDINATES FOR MAA IN 60/-60
+*  DATE:     8/14/ 5     13:57:36      CREATED BY USER: brooks
+*
+   22
+    1    1 MAA  CL     -.94445  -3.50755   -.69921 MAA  1      -.09200
+    2    1 MAA  HL1   -1.80230  -3.61773   -.03440 MAA  1       .03100
+    3    1 MAA  HL2   -1.29398  -3.32328  -1.71608 MAA  1       .02800
+    4    1 MAA  HL3    -.35659  -4.42682   -.68243 MAA  1       .02500
+    5    1 MAA  CLP    -.07539  -2.33219   -.23041 MAA  1       .43300
+    6    1 MAA  OL     1.10257  -2.47235    .10479 MAA  1      -.42800
+    7    1 MAA  NL     -.70803  -1.16309   -.22168 MAA  1      -.27400
+    8    1 MAA  HL    -1.65711  -1.08640   -.49996 MAA  1       .18300
+    9    1 MAA  CA     -.09520    .11153    .18204 MAA  1       .07000
+   10    1 MAA  HA     -.88432    .87144    .12022 MAA  1       .00800
+   11    1 MAA  CB      .35666    .04015   1.65176 MAA  1      -.02000
+   12    1 MAA  HB1     .66725   1.03122   1.98478 MAA  1       .00400
+   13    1 MAA  HB2    1.19253   -.65070   1.75523 MAA  1       .00900
+   14    1 MAA  HB3    -.47327   -.30228   2.27078 MAA  1       .01600
+   15    1 MAA  CRP    1.07933    .59456   -.70141 MAA  1       .43300
+   16    1 MAA  OR     1.02755   1.65783  -1.32684 MAA  1      -.42800
+   17    1 MAA  NR     2.13210   -.21293   -.73281 MAA  1      -.27400
+   18    1 MAA  HR     2.15150  -1.07846   -.24421 MAA  1       .18300
+   19    1 MAA  CR     3.32795    .08250  -1.51310 MAA  1       .09300
+   20    1 MAA  HR1    4.05294   -.72061  -1.37795 MAA  1      -.00700
+   21    1 MAA  HR2    3.76261   1.02375  -1.17525 MAA  1       .00800
+   22    1 MAA  HR3    3.06575    .15969  -2.56865 MAA  1      -.00100
+
+mini nrap nstep 5
+ic fill
+print ic
+vibran
+     diag
+     fluct ic mode 7 thru 66 temp 300.
+     end
+!Cons dihe maa 1 CLP  maa 1 NL  maa 1 CA  maa 1 CRP  Force 200.0 min -172.0
+!Cons dihe maa 1 NL  maa 1 CA  maa 1 CRP  maa 1 NR  force 200.0 min 176.0
+! and relax the structure to the desired point on the Phi-Psi plot.
+!Mini abnr step 0.08 nstep 500 nprint 50 inbfrq 0 ihbfrq 50 strict 0.05
+!Cons cldh      ! Remove these dihedral constraints.
+!Mini abnr step 0.01 nstep 500 nprint 50 inbfrq 0 ihbfrq 50 strict 0.05
+!open unit 1 write form name maa3.crd
+!write coor card unit 1
+!* Coordinates for maa in -172/176
+!*
+
+read coor card
+* COORDINATES FOR MAA IN -172/176
+*  DATE:     8/14/ 5     13:57:38      CREATED BY USER: brooks
+*
+   22
+    1    1 MAA  CL    -2.31767  -2.97719   -.37266 MAA  1      -.09200
+    2    1 MAA  HL1   -2.97316  -2.16851   -.69884 MAA  1       .03100
+    3    1 MAA  HL2   -1.93812  -3.51124  -1.24491 MAA  1       .02800
+    4    1 MAA  HL3   -2.88344  -3.66824    .25432 MAA  1       .02500
+    5    1 MAA  CLP   -1.14364  -2.39781    .42919 MAA  1       .43300
+    6    1 MAA  OL     -.92997  -2.70030   1.60524 MAA  1      -.42800
+    7    1 MAA  NL     -.39129  -1.54476   -.25381 MAA  1      -.27400
+    8    1 MAA  HL     -.56922  -1.28268  -1.19883 MAA  1       .18300
+    9    1 MAA  CA      .79174   -.87041    .29634 MAA  1       .07000
+   10    1 MAA  HA      .51693   -.33538   1.20462 MAA  1       .00800
+   11    1 MAA  CB     1.89567  -1.89242    .59832 MAA  1      -.02000
+   12    1 MAA  HB1    2.78727  -1.37647    .95664 MAA  1       .00400
+   13    1 MAA  HB2    2.14002  -2.44869   -.30764 MAA  1       .00900
+   14    1 MAA  HB3    1.55559  -2.58780   1.36615 MAA  1       .01600
+   15    1 MAA  CRP    1.29179    .13405   -.76668 MAA  1       .43300
+   16    1 MAA  OR      .75959    .18744  -1.88017 MAA  1      -.42800
+   17    1 MAA  NR     2.30169    .90682   -.39053 MAA  1      -.27400
+   18    1 MAA  HR     2.71278    .84861    .50948 MAA  1       .18300
+   19    1 MAA  CR     2.89360   1.90414  -1.27589 MAA  1       .09300
+   20    1 MAA  HR1    3.70007   2.41690   -.75106 MAA  1      -.00700
+   21    1 MAA  HR2    2.13428   2.62907  -1.57065 MAA  1       .00800
+   22    1 MAA  HR3    3.29360   1.41318  -2.16344 MAA  1      -.00100
+
+mini nrap nstep 5
+ic fill
+print ic
+vibran
+     diag
+     fluct ic mode 7 thru 66 temp 300.
+     end
+STOP

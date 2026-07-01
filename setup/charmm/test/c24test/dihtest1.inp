@@ -1,0 +1,224 @@
+* Test of various energy routines  for the dihedral and improper.
+*
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! for comparison of generated energy
+set enrefar1 10.35845
+set enrefar2 0.45212
+set enrefar3 0.43073
+set enrefar4 99.49403
+set enrefar5 99.49403
+set enrefar6 0.43073
+set enrefar7 0.00440
+set enrefar8 0.00440
+set enrefar9 0.00044
+set enrefar10 0.00044
+set enrefar11 0.00044
+set enrefar12 0.00044
+set enrefar13 10.35845
+set enrefar14 0.45212
+set enrefar15 0.43073
+set enrefar16 99.49403
+set enrefar17 99.49403
+set enrefar18 0.43073
+set enrefar19 0.00440
+set enrefar20 0.00440
+set enrefar21 0.00044
+set enrefar22 0.00044
+set enrefar23 0.00044
+set enrefar24 0.00044
+set tt 0
+
+stream datadir.def
+
+open unit 1 read form name @0top_all22_na.inp
+read rtf card unit 1
+close unit 1
+!
+open unit 1 read form name @0par_all22_na.inp
+read param card unit 1
+close unit 1
+!
+read SEQUence card
+* deoxyadenosine
+*|
+* dA
+*
+1
+ADE
+!
+GENErate dA FIRST 5TER LAST 3TER SETUp
+!
+PATCh DEO2 dA 1 SETUp   ! dA
+!
+read SEQUence card
+* deoxyadenosine
+*|
+* dC
+*
+1
+CYT
+!
+GENErate dC FIRST 5TER LAST 3TER SETUp
+!
+PATCh DEO1 dC 1 SETUp   ! dC
+!
+read coor ignore append
+* SETUP FOR DESOXYCYTOSINE
+* |
+* SETUP FOR DEOXYADENOSINE
+*
+   60
+    1    1 ADE  H5T   13.23796   4.39513  -2.39952 DA   1      0.00000
+    2    1 ADE  O5'   14.08282   4.01745  -2.66415 DA   1      0.00000
+    3    1 ADE  C5'   14.11249   2.65485  -2.22881 DA   1      0.00000
+    4    1 ADE  H5'   13.28779   2.10583  -2.73758 DA   1      0.00000
+    5    1 ADE  H5''  13.94484   2.60344  -1.12938 DA   1      0.00000
+    6    1 ADE  C4'   15.44389   1.97415  -2.57623 DA   1      0.00000
+    7    1 ADE  H4'   15.70840   2.16349  -3.63850 DA   1      0.00000
+    8    1 ADE  O4'   16.51786   2.48088  -1.71081 DA   1      0.00000
+    9    1 ADE  C1'   17.26020   1.38193  -1.21652 DA   1      0.00000
+   10    1 ADE  H1'   17.98850   1.08562  -2.00498 DA   1      0.00000
+   11    1 ADE  C5    19.27375   1.77286   1.79773 DA   1      0.00000
+   12    1 ADE  N7    18.63030   3.00284   1.80841 DA   1      0.00000
+   13    1 ADE  C8    17.87572   2.95202   0.73085 DA   1      0.00000
+   14    1 ADE  H8    17.21371   3.73972   0.35900 DA   1      0.00000
+   15    1 ADE  N9    17.96383   1.78425   0.02178 DA   1      0.00000
+   16    1 ADE  N1    20.66994  -0.03362   2.39244 DA   1      0.00000
+   17    1 ADE  C2    20.21538  -0.66424   1.31520 DA   1      0.00000
+   18    1 ADE  H2    20.62403  -1.66531   1.14520 DA   1      0.00000
+   19    1 ADE  N3    19.32937  -0.24337   0.41353 DA   1      0.00000
+   20    1 ADE  C4    18.88985   1.00299   0.71851 DA   1      0.00000
+   21    1 ADE  C6    20.22430   1.20311   2.67960 DA   1      0.00000
+   22    1 ADE  N6    20.68961   1.83417   3.76737 DA   1      0.00000
+   23    1 ADE  H61   21.35777   1.32853   4.30307 DA   1      0.00000
+   24    1 ADE  H62   20.36726   2.75167   3.98011 DA   1      0.00000
+   25    1 ADE  C2'   16.20444   0.30216  -1.01763 DA   1      0.00000
+   26    1 ADE  H2''  15.59175   0.52205  -0.11747 DA   1      0.00000
+   27    1 ADE  H2'   16.64866  -0.70950  -0.92598 DA   1      0.00000
+   28    1 ADE  C3'   15.35969   0.47226  -2.27704 DA   1      0.00000
+   29    1 ADE  H3'   14.31052   0.14657  -2.10662 DA   1      0.00000
+   30    1 ADE  O3'   15.92022  -0.31077  -3.32362 DA   1      0.00000
+   31    1 ADE  H3T   16.86868  -0.15372  -3.29438 DA   1      0.00000
+   32    2 CYT  H5T   -2.53450   1.61946  -0.79116 DC   1      0.00000
+   33    2 CYT  O5'   -1.62024   1.63395  -1.08868 DC   1      0.00000
+   34    2 CYT  C5'   -0.92909   0.55434  -0.45294 DC   1      0.00000
+   35    2 CYT  H5'   -1.34841  -0.40347  -0.83664 DC   1      0.00000
+   36    2 CYT  H5''  -1.08684   0.59494   0.64825 DC   1      0.00000
+   37    2 CYT  C4'    0.57504   0.58349  -0.75239 DC   1      0.00000
+   38    2 CYT  H4'    0.75521   0.75724  -1.83458 DC   1      0.00000
+   39    2 CYT  O4'    1.23638   1.64298   0.01216 DC   1      0.00000
+   40    2 CYT  C1'    2.52889   1.17415   0.34625 DC   1      0.00000
+   41    2 CYT  H1'    3.12274   1.19644  -0.59723 DC   1      0.00000
+   42    2 CYT  N1     3.16023   2.02165   1.39802 DC   1      0.00000
+   43    2 CYT  C6     2.44688   2.72905   2.35067 DC   1      0.00000
+   44    2 CYT  H6     1.36088   2.65019   2.28908 DC   1      0.00000
+   45    2 CYT  C2     4.58667   2.05476   1.43487 DC   1      0.00000
+   46    2 CYT  O2     5.26332   1.40668   0.62348 DC   1      0.00000
+   47    2 CYT  N3     5.20868   2.80791   2.39835 DC   1      0.00000
+   48    2 CYT  C4     4.49281   3.49076   3.28771 DC   1      0.00000
+   49    2 CYT  N4     5.15938   4.21361   4.19669 DC   1      0.00000
+   50    2 CYT  H41    6.15164   4.17173   4.11319 DC   1      0.00000
+   51    2 CYT  H42    4.69035   4.75453   4.88612 DC   1      0.00000
+   52    2 CYT  C5     3.05970   3.46400   3.28881 DC   1      0.00000
+   53    2 CYT  H5     2.51190   4.03214   4.03644 DC   1      0.00000
+   54    2 CYT  C2'    2.26371  -0.26335   0.77401 DC   1      0.00000
+   55    2 CYT  H2''   1.80063  -0.28308   1.78326 DC   1      0.00000
+   56    2 CYT  H2'    3.18591  -0.87823   0.77569 DC   1      0.00000
+   57    2 CYT  C3'    1.24127  -0.71462  -0.27258 DC   1      0.00000
+   58    2 CYT  H3'    0.49781  -1.40623   0.18021 DC   1      0.00000
+   59    2 CYT  O3'    1.91552  -1.38668  -1.32853 DC   1      0.00000
+   60    2 CYT  H3T    2.70615  -0.86774  -1.50993 DC   1      0.00000
+!
+define base sele .not. (type *' .or. type *P .or. type *T) end
+!
+set n 0
+set b dihe
+set a off
+goto loop
+!
+label l1
+set b impr
+goto loop
+!
+label l2
+set b dihe
+set a on
+goto loop
+!
+label l3
+set b impr
+goto loop
+!
+label l4
+
+STOP
+
+
+label loop
+!
+FASTER @a
+SKIP ALL EXClude @b
+incr n by 1
+!
+block 2
+clear
+end
+cons fix sele .not. all end
+!
+ener
+incr tt by 1
+@testcheck ?ener @enrefar@@tt -0.001 dihtest1_chk@tt
+
+test first step 0.0001 tol 0.0
+
+cons fix sele .not. base end
+ener
+incr tt by 1
+@testcheck ?ener @enrefar@@tt -0.001 dihtest1_chk@tt
+
+test first step 0.0001 tol 0.0
+
+block 2
+ call 2 sele base end
+ coef 2 2 0.1
+ coef 1 2 1.0
+ coef 1 1 10.
+end
+ener
+incr tt by 1
+@testcheck ?ener @enrefar@@tt -0.001 dihtest1_chk@tt
+
+test first step 0.0001 tol 0.0
+!
+cons fix sele .not. all end
+ener
+incr tt by 1
+@testcheck ?ener @enrefar@@tt -0.001 dihtest1_chk@tt
+
+test first step 0.0001 tol 0.0
+!
+block
+NOFO
+end
+ener
+incr tt by 1
+@testcheck ?ener @enrefar@@tt -0.001 dihtest1_chk@tt
+
+test first step 0.0001 tol 0.0
+!
+cons fix sele .not. base end
+ener
+incr tt by 1
+@testcheck ?ener @enrefar@@tt -0.001 dihtest1_chk@tt
+
+test first step 0.0001 tol 0.0
+!
+goto l@n
+!
+
+stop !  not used

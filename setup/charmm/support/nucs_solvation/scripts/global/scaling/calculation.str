@@ -1,0 +1,62 @@
+* calculation.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* Modified by Danzhi Huang 
+*
+
+ 
+IF ?NSEL .EQ. 0 GOTO SKIP
+  ! else:
+    ! if GROUP equals GROUP2 no computation necessary
+    IF @SELECTION EQ @SELECTION2 IF @COUNTER1 EQ @COUNTER2 GOTO SKIP
+    ! else: 
+        ! SYSTem "echo '@SELECTION2 @COUNTER2' "
+
+        ! reset charge vector to normal charges
+        SCAL CHARGE = SCA2
+
+        ! calculate interaction energy in vacuum between GROUP and GROUP2
+        ! returns results in SCA3
+        STREam vacuum.str
+        ! if interaction energy in vacuum between GROUP and GROUP2 is zero, skip 
+        ! stream solution.str, and set SCA3,SCA4,SCA7 to zero
+        IF @ENERGY1 .EQ. 0 GOTO SKIP
+
+        ! calculate interaction energy in solution between GROUP and GROUP2
+        ! returns results in SCA4
+        STREam solution.str
+
+        ! calculate pairwise dielectric constant for GROUP : GROUP2 interaction
+        ! returns it in SCA5 (only for group2 that is calculated, otherwise 
+        ! initialized to 0.0)
+        SCAL SCA5 = SCA4 SELEct GROUP2 END
+	SCAL SCA5 RECIprocal SELEct GROUP2 END
+        SCAL SCA5 PROD SCA3 SELEct GROUP2 END
+        SCAL SCA5 STATistics SELEct GROUP2 END
+        SCAL SCA7 = SCA4 SELEct group2 END    
+ 
+        ! If E_vac and E_solv have different signs 
+        ! the pairwise dielectric constant will be 
+        ! negative and the entries in SCA3, SCA4, SCA5 are set
+        ! to 0.0
+
+        IF ?SAVE .LT. 0.0 GOTO ZEROING
+        LABEl RESUME
+	! g used for count groups interaction pairs
+	increment g by 1
+	
+	WRITE TITLE UNIT 20
+	* @g @COUNTER1 @SELECTION @ENERGY1 @COUNTER2 @SELECTION2 @TESTVAR
+	* 
+
+ LABEL SKIP
+  
+  RETURN
+ 
+ 
+  LABEl ZEROING
+SCAL SCA3 SET 0.0 SELEct GROUP2 END
+SCAL SCA4 SET 0.0 SELEct GROUP2 END
+SCAL SCA5 SET 0.0 SELEct GROUP2 END
+GOTO RESUME
+
+ 

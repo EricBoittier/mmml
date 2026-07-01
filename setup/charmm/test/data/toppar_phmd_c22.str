@@ -1,0 +1,268 @@
+* Topology and parameters for PHMD, C22 use ONLY
+*
+
+!Hydronium
+! added by Jason Wallace
+! Sagnella and Voth Biophys. J. (1996) 70:2043-2051
+!
+!Hydroxide
+! added by Wei Chen
+! copied from TIP3
+!
+!Topology and parameters were copied from top_all22_prot_cmap_ephmd.inp & par_all22_prot_cmap_ephmd.inp
+!
+!Hydronium
+! added by Jason Wallace
+! Sagnella and Voth Biophys. J. (1996) 70:2043-2051
+!
+!Hydroxide
+! added by Wei Chen, copied from TIP3
+!
+!Zhi Yue, 2017
+!
+!MASS atom type number specifications
+! changed to "MASS -1"
+
+read rtf card append
+* Topology for PHMD
+*
+27  1
+
+MASS  -1  OZ   15.99940 O  ! hydronium oxygen
+MASS  -1  HZ    1.00800 H  ! hydronium hydrogen
+MASS  -1  OXP  15.99940 O  ! oxygen of protonated hydroxide
+MASS  -1  HXP   1.00800 H  ! hydrogen of protonated hydroxide
+
+PRES ASPP2        0.00 ! patch for use in PHMD, proton on od1
+GROUP                  ! and od1 via acetic acid, use in a patch statement
+                       ! ANGLes DIHEdrals are given
+ATOM CB   CT2    -0.21 !
+ATOM HB1  HA      0.09 ! HB1    OD1-HD1
+ATOM HB2  HA      0.09 !  |    /
+ATOM CG   CC      0.75 ! -CB--CG
+ATOM OD1  OC     -0.55 !  |    \
+ATOM OD2  OC     -0.61 ! HB2    OD2-HD2
+ATOM HD1  H       0.0  HD2!
+ATOM HD2  H       0.44 HD1!
+BOND OD1 HD1
+BOND OD2 HD2
+DONOR HD1 OD1
+DONOR HD2 OD2
+IC HD1  OD1  CG   OD2   0.0000  0.0000  0.0000  0.0000  0.0000
+IC HD2  OD2  CG   OD1   0.0000  0.0000  0.0000  0.0000  0.0000
+
+PRES ASPP1        0.00 ! patch for use in PHMD, proton on od1
+GROUP                  ! and od1 via acetic acid, use in a patch statement
+                       ! ANGLes DIHEdrals are given
+ATOM CB   CT2    -0.21 !
+ATOM HB1  HA      0.09 ! HB1    OD1-HD1
+ATOM HB2  HA      0.09 !  |    /
+ATOM CG   CD      0.75 ! -CB--CG
+ATOM OD1  OH1    -0.61 !  |    \\
+ATOM OD2  OB     -0.55 ! HB2    OD2
+ATOM HD1  H       0.44 !
+BOND OD1 HD1
+DONOR HD1 OD1
+IC HD1  OD1  CG   OD2   0.0000  0.0000  0.0000  0.0000  0.0000
+
+PRES GLUP2        0.00 ! patch for use in PHMD, proton on od1
+GROUP                  ! and od1 via acetic acid, use in a patch statement
+                       ! follow with AUTOGEN
+ATOM CG   CT2    -0.21 !
+ATOM HG1  HA      0.09 ! HG1    OE1-HE1
+ATOM HG2  HA      0.09 !  |    /
+ATOM CD   CC      0.75 ! -CG--CD
+ATOM OE1  OC     -0.55 !  |    \
+ATOM OE2  OC     -0.61 ! HG2    OE2-HE2
+ATOM HE1  H       0.0  HE2!
+ATOM HE2  H       0.44 HE1!
+BOND OE1 HE1
+BOND OE2 HE2
+DONOR HE1 OE1
+DONOR HE2 OE2
+IC HE1  OE1  CD   OE2   0.0000  0.0000  0.0000  0.0000  0.0000
+IC HE2  OE2  CD   OE1   0.0000  0.0000  0.0000  0.0000  0.0000
+
+PRES GLUP1        0.00 ! patch for use in PHMD, proton on od1
+GROUP                  ! and od1 via acetic acid, use in a patch statement
+                       ! follow with AUTOGEN
+ATOM CG   CT2    -0.21 !
+ATOM HG1  HA      0.09 ! HG1    OE1-HE1
+ATOM HG2  HA      0.09 !  |    /
+ATOM CD   CD      0.75 ! -CG--CD
+ATOM OE1  OH1    -0.61 !  |    \\
+ATOM OE2  OB     -0.55 ! HG2    OE2
+ATOM HE1  H       0.44 !
+BOND OE1 HE1
+DONOR HE1 OE1
+IC HE1  OE1  CD   OE2   0.0000  0.0000  0.0000  0.0000  0.0000
+
+RESI TIPP         1.00 ! Hydronium TIP3P - TIPP is resid recognized by pHMD as co-ion 
+GROUP
+ATOM OH2 OZ     -0.755 ! From : Sagnella and Voth Biophys. J. (1996) 70:2043-2051
+ATOM H1  HZ      0.585 ! Added by Jason A. Wallace
+ATOM H2  HZ      0.585
+ATOM H3  HZ      0.585
+BOND OH2 H1 OH2 H2 OH2 H3 ! real bonds
+BOND H1 H2
+BOND H2 H3
+BOND H3 H1 ! required for shake
+ANGLE H1 OH2 H2
+ANGLE H2 OH2 H3
+ANGLE H3 OH2 H2
+ACCEPTOR OH2 H1
+ACCEPTOR OH2 H2
+ACCEPTOR OH2 H3
+DONOR H1 OH2
+DONOR H2 OH2
+DONOR H3 OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI HYDM         1.00 ! Hydronium TIP3P - Copy to be used as primary titration site
+GROUP
+ATOM OH2 OZ     -0.755 ! From : Sagnella and Voth Biophys. J. (1996) 70:2043-2051
+ATOM H1  HZ      0.585 ! Added by Jason A. Wallace
+ATOM H2  HZ      0.585
+ATOM H3  HZ      0.585
+BOND OH2 H1 OH2 H2 OH2 H3 ! real bonds
+BOND H1 H2
+BOND H2 H3
+BOND H3 H1 ! required for shake
+ANGLE H1 OH2 H2
+ANGLE H2 OH2 H3
+ANGLE H3 OH2 H2
+ACCEPTOR OH2 H1
+ACCEPTOR OH2 H2
+ACCEPTOR OH2 H3
+DONOR H1 OH2
+DONOR H2 OH2
+DONOR H3 OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI TIPU         0.000 ! Protonated hydroxide, recognized by pHMD as co-ion, copy from TIP3
+GROUP
+ATOM OH2  OXP    -0.834
+ATOM H1   HXP     0.417
+ATOM H2   HXP     0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI HYDX         0.000 ! Protonated hydroxide, to be used as primary titration site, copy from TIP3
+GROUP
+ATOM OH2  OXP    -0.834
+ATOM H1   HXP     0.417
+ATOM H2   HXP     0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+END
+
+read para card flex append
+* Parameters for PHMD
+*
+
+ATOMS
+MASS  -1  OZ   15.99940 ! hydronium oxygen
+MASS  -1  HZ    1.00800 ! hydronium hydrogen
+MASS  -1  OXP  15.99940 ! oxygen of protonated hydroxide
+MASS  -1  HXP   1.00800 ! hydrogen of protonated hydroxide
+
+BONDS
+!
+!V(bond) = Kb(b - b0)**2
+!
+!Kb: kcal/mole/A**2
+!b0: A
+!
+!atom type Kb          b0
+!
+OC   H     545.000     0.9600 ! ALLOW   ALC ARO
+                 ! copy of EMB 11/21/89 methanol vib fit
+HXP  HXP     0.0       1.5139  ! Hydroxide - Wei Chen, copy from TIP3
+OXP  HXP   450.0       0.9572  ! hydroxide - Wei Chen, copy form TIP3
+HZ   HZ      0.0       1.5630  ! hydronium - J. Wallace
+OZ   HZ    400.0       0.9517  ! hydronium - J. Wallace
+
+ANGLES
+!
+!V(angle) = Ktheta(Theta - Theta0)**2
+!
+!V(Urey-Bradley) = Kub(S - S0)**2
+!
+!Ktheta: kcal/mole/rad**2
+!Theta0: degrees
+!Kub: kcal/mole/A**2 (Urey-Bradley)
+!S0: A
+!
+!atom types     Ktheta    Theta0   Kub     S0
+!
+
+H    OC   CC     55.000   115.0000 ! ALLOW   ALC ARO PEP POL
+                 ! copy ! adm jr. 5/02/91, acetic acid pure solvent
+HXP  OXP  HXP    55.0      104.52   ! hydroxide - Wei Chen, copy from TIP3
+HZ   OZ   HZ     50.0      110.40   ! hydronium - J. Wallace
+
+DIHEDRALS
+!
+!V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+!
+!Kchi: kcal/mole
+!n: multiplicity
+!delta: degrees
+!
+!atom types             Kchi    n   delta
+!
+! X    CD   OH1  X        6.0000  2   180.00 ! ALLOW   PEP POL ARO ALC MSL
+!                ! adm jr, 10/17/90, acetic acid C-Oh rotation barrier
+!                 ! changed from 2.05
+!                 ! Uncomment for single-site titration: ASPP1, GLUP1
+X    CC   OC   X        6.0000  2   180.00 ! ALLOW   PEP POL ARO ALC MSL
+                 ! for CTRP
+
+IMPROPER
+!
+!V(improper) = Kpsi(psi - psi0)**2
+!
+!Kpsi: kcal/mole/rad**2
+!psi0: degrees
+!note that the second column of numbers (0) is ignored
+!
+!atom types           Kpsi                   psi0
+!
+!OB   X    X    CD    100.0000         0      0.0000 ! ALLOW   ALC ARO POL
+                ! adm jr., 10/17/90, acetic acid vibrations
+OH1  OB  CT2   CD    100.0000         0      0.0000 ! ALLOW   ALC ARO POL
+                ! ASPP1
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+!
+!V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+!
+!epsilon: kcal/mole, Eps,i,j = sqrt(eps,i * eps,j)
+!Rmin/2: A, Rmin,i,j = Rmin/2,i + Rmin/2,j
+!
+!atom  ignored    epsilon      Rmin/2   ignored   eps,1-4       Rmin/2,1-4
+!
+
+!hydroxide - Wei Chen, copy from TIP3
+HXP      0.0       -0.046     0.2245
+OXP      0.0       -0.1521    1.7682
+
+!hydronium - J. Wallace
+HZ       0.0       -0.046     0.2245
+OZ       0.0       -0.1521    1.7682
+
+NBFIX
+!              Emin         Rmin
+!            (kcal/mol)     (A)
+
+OZ     OXP    -0.1521       4.5    ! adjusted to avoid overly strong attraction between hydroxide and hydronium at short distance
+
+
+END

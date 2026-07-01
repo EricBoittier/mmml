@@ -1,0 +1,509 @@
+* CHARMM c32a2 Testcase: dmolvib.inp
+* Victor Anisimov, 2004
+* Cytosine vibrational analysis with SCF Drudes
+* 
+
+if ?numnode .ne. 1 then 
+ echo "c32test/dmolvib> Test NOT performed in parallel."
+STOP
+endif
+
+if ?molvib .ne. 1 then 
+ echo "c32test/dmolvib> Test NOT performed."
+STOP
+endif
+
+bomlev -1
+
+faster on
+set residue cyt
+
+faster on
+
+read rtf card 
+* topology
+*
+27 1
+
+MASS 2    HN1   1.008000 H ! Nucleic acid amine proton
+MASS 3    HN2   1.008000 H ! Nucleic acid ring nitrogen proton
+MASS 4    HN3   1.008000 H ! Nucleic acid aromatic carbon proton
+MASS 7    HNP   1.008000 H ! pure aromatic H
+MASS 8    HN4   1.008000 H ! Nucleic acid phosphate hydroxyl proton
+MASS 9    HN5   1.008000 H ! Nucleic acid ribose hydroxyl proton
+MASS 10   HN6   1.008000 H ! Nucleic acid ribose aliphatic proton
+MASS 11   HN7   1.008000 H ! Nucleic acid proton (equivalent to protein HA)
+MASS 20   CN1  12.011000 C ! Nucleic acid carbonyl carbon
+MASS 23   CN2  12.011000 C ! Nucleic acid aromatic carbon to amide
+MASS 24   CN3  12.011000 C ! Nucleic acid aromatic carbon 
+MASS 30   CN4  12.011000 C ! Nucleic acid purine C8 and ADE C2  
+MASS 31   CN5  12.011000 C ! Nucleic acid purine C4 and C5
+MASS 50   NN1  14.007000 N ! Nucleic acid amide nitrogen
+MASS 51   NN1C 14.007000 N ! Nucleic acid imino nitrogen (cyt taut Sasha)
+MASS 52   NN2  14.007000 N ! Nucleic acid protonated ring nitrogen
+MASS 53   NN2B 14.007000 N ! From NN2, for N9 in GUA different from ADE
+MASS 54   NN2C 14.007000 N ! Nucleic acid protonated ring nitrogen (cyt taut Sasha)
+MASS 55   NN2U 14.007000 N ! Nucleic acid protonated ring nitrogen, ura N3
+MASS 56   NN2G 14.007000 N ! Nucleic acid protonated ring nitrogen, gua N1
+MASS 57   NN3  14.007000 N ! Nucleic acid unprotonated ring nitrogen 
+MASS 58   NN3A 14.007000 N ! Nucleic acid unprotonated ring nitrogen, ade N1 and N3
+MASS 59   NN3I 14.007000 N ! Nucleic acid unprotonated ring nitrogen, inosine N3
+MASS 60   NN3G 14.007000 N ! Nucleic acid unprotonated ring nitrogen, gua N3
+MASS 61   NN4  14.007000 N ! Nucleic acid purine N7
+MASS 62   NN5  14.007000 N ! Nucleic acid sp2 amine nitrogen
+MASS 63   NN6  14.007000 N ! Nucleic acid sp3 amine nitrogen (equiv to protein nh3)
+MASS 71   ON1  15.999400 O ! Nucleic acid carbonyl oxygen
+MASS 72   ON1C 15.999400 O ! Nucleic acid carbonyl oxygen, cyt O2
+
+!Drude atoms on heavy atoms of bases
+MASS   200 DC2    0.10000 ! Drude
+MASS   201 DC4    0.10000 ! Drude
+MASS   202 DC5    0.10000 ! Drude
+MASS   204 DC6	  0.10000 ! Drude
+MASS   205 DC8	  0.10000 ! Drude
+MASS   206 DN1	  0.10000 ! Drude
+MASS   207 DN2	  0.10000 ! Drude
+MASS   208 DN3	  0.10000 ! Drude
+MASS   209 DN4	  0.10000 ! Drude
+MASS   210 DN6	  0.10000 ! Drude
+MASS   211 DN7	  0.10000 ! Drude
+MASS   212 DN9	  0.10000 ! Drude
+MASS   213 DO2	  0.10000 ! Drude
+MASS   214 DO4	  0.10000 ! Drude
+MASS   215 DO6	  0.10000 ! Drude
+MASS   216 DC1    0.10000 ! Drude Cyt-Me
+MASS   217 DC9    0.10000 ! Drude Gua-Me
+
+DEFA FIRS none LAST none
+AUTOGENERATE ANGLES DIHEDRALS
+
+RESI CYT          0.00
+GROUP
+ATOM N1   NN2    -0.50  !charge changed by patch
+ATOM H1   HN2     0.37  !charge changed by patch
+ATOM C6   CN3     0.05  !charge changed by patch
+ATOM H6   HN3     0.17  !charge changed by patch
+ATOM C2   CN1     0.52  !unchanged
+ATOM O2   ON1C   -0.49  !unchanged
+ATOM N3   NN3    -0.66  !unchanged
+ATOM C4   CN2     0.65  !unchanged
+ATOM N4   NN1    -0.75  !unchanged
+ATOM H41  HN1     0.37  !unchanged
+ATOM H42  HN1     0.33  !unchanged
+ATOM C5   CN3    -0.13  !charge changed by patch
+ATOM H5   HN3     0.07  !charge changed by patch
+BOND N1   C2        N1   C6
+BOND C2   N3        C4   N4        N4   H41       N4   H42
+BOND C4   C5        C5   H5        C6   H6
+BOND N1   H1
+DOUBLE   C2   O2    C5   C6        N3   C4
+IMPR C2   N1   N3   O2        C4   N3   C5   N4
+IMPR N4   C4   H41  H42
+IMPR N1   C6   C2   H1  ! patch to create base
+DONO H42  N4
+DONO H41  N4
+ACCE O2   C2
+ACCE N3
+BILD C2   N1   C6   C5     1.399   120.6     0.0   121.0    1.337
+BILD C6   N1   C2   N3     1.364   120.6     0.0   118.9    1.356
+BILD N1   N3   *C2  O2     1.399   118.9   180.0   121.9    1.237
+BILD N1   C2   N3   C4     1.399   118.9     0.0   120.0    1.334
+BILD C5   N3   *C4  N4     1.426   121.8   180.00  118.9    1.337
+BILD N3   C4   N4   H41    1.337   117.9     0.00  118.9    1.01
+BILD H41  C4   *N4  H42    1.01    118.9   180.00  120.7    1.01
+BILD C6   C4   *C5  H5     0.0       0.0   180.0     0.0    0.0
+BILD N1   C5   *C6  H6     0.0       0.0   180.0     0.0    0.0
+BILD C5   C6   N1   H1     0.0       0.0   180.0     0.0    0.0 ! patch
+END
+
+read para card
+* parameters
+*
+BONDS
+CN3  HN6    350.0       1.09    !nadh, adm jr., 8/98
+CN1  CN3    302.0       1.409   !U, adm jr. 11/97
+CN1  NN2    320.0       1.400   !VA 380. 1.367 !C, adm jr. 11/97
+CN1  NN2G   340.0       1.410   !VA 1.396   !G, adm jr. 11/97
+CN1  NN2U   340.0       1.405   !VA 1.389   !U,T adm jr. 11/97
+CN1  NN3    270.0       1.365   !VA 350. 1.335 !C, adm jr. 11/97
+CN1  ON1    630.0       1.234   !VA 660.0 !U,A,G par_a4 adm jr. 10/2/91
+CN1  ON1C   620.0       1.250   !VA 620. 1.245 !C, adm jr. 10/2/91
+CN2  CN3    360.0       1.425   !VA 320. 1.406 !C, adm jr. 11/97
+CN2  CN5    320.0       1.390   !VA 360. 1.358   !A, adm jr. 11/97
+CN2  NN1    380.0       1.370   !VA 360. 1.366 !C,A,G JWK, adm jr. 10/2/91
+CN2  NN2G   400.0       1.410   !VA 1.392 !G  
+CN2  NN3    430.0       1.353   !VA 450. 1.343 !C  
+CN2  NN3A   420.0       1.342   !VA 400.0 !A, adm jr. 11/97
+CN2  NN3G   320.0       1.350   !VA 1.326   !G, adm jr. 11/97
+CN3  CN3    485.0       1.342   !VA 500.0 1.326 !C,U adm jr. 11/97
+CN3  HN3    368.0       1.09    !VA 350.0 !C,U, JWK
+CN3  NN2    302.0       1.363   !VA 302. 1.343 !C, adm jr. 11/97
+CN3  NN2B   320.0       1.375   !VA 1.343   !U,T adm jr. 11/97
+CN4  HN3    375.0       1.09    !VA 380.0 !G,A, JWK par_a7 9/30/91
+CN4  NN2    400.0       1.374   !VA 320. !A, adm jr. 11/97
+CN4  NN3A   370.0       1.336   !VA 350. 1.322   !A, adm jr. 11/97
+CN4  NN4    400.0       1.311   !VA 1.305   !G,A, adm jr. 11/97
+CN5  CN5    240.0       1.380   !VA 310. 1.361   !A, adm jr. 11/97
+CN5  NN2    300.0       1.390   !VA 1.375   !A, adm jr. 11/97
+CN5  NN2B   302.0       1.383   !VA 1.375   !G, adm jr. 11/97
+CN5  NN3A   350.0       1.340   !VA 350. 1.312   !A, JWK par_a8 9/30/91
+CN5  NN3G   350.0       1.342   !VA 1.315   !G, adm jr. 11/97
+CN5  NN4    340.0       1.372   !VA 310. 1.355   !A, adm jr. 11/97
+HN1  NN1    476.0       1.00    !VA 488.0 !A,C,G, JWK, adm jr. 7/24/91
+HN2  NN2    470.0       1.01    !VA 474.0 !C,U, JWK
+HN2  NN2B   472.0       1.01    !VA 474.0 !G, adm jr. 11/97
+HN2  NN2U   461.0       1.01    !VA 474.0 !U, JWK, adm jr. 7/24/91
+!Drude atoms on BASEs heavy atoms:
+CN1   DC2    500.000     0.000     ! I1 -- I2 BOND between  C2	DC2
+CN2   DC2    500.000     0.000     ! I1 -- I2 BOND between  C2	DC2
+CN4   DC2    500.000     0.000     ! I1 -- I2 BOND between  C2	DC2
+CN1   DC4    500.000     0.000     ! I1 -- I2 BOND between  C4	DC4
+CN2   DC4    500.000     0.000     ! I1 -- I2 BOND between  C4	DC4
+CN5   DC4    500.000     0.000     ! I1 -- I2 BOND between  C4	DC4
+CN3   DC5    500.000     0.000     ! I1 -- I2 BOND between  C5	DC5
+CN5   DC5    500.000     0.000     ! I1 -- I2 BOND between  C5	DC5
+CN1   DC6    500.000     0.000     ! I1 -- I2 BOND between  C6	DC6
+CN2   DC6    500.000     0.000     ! I1 -- I2 BOND between  C6	DC6
+CN3   DC6    500.000     0.000     ! I1 -- I2 BOND between  C6	DC6
+CN4   DC8    500.000     0.000     ! I1 -- I2 BOND between  C8	DC8
+NN2   DN1    500.000     0.000     ! I1 -- I2 BOND between  N1	DN1
+NN2B  DN1    500.000     0.000     ! I1 -- I2 BOND between  N1	DN1
+NN2G  DN1    500.000     0.000     ! I1 -- I2 BOND between  N1	DN1
+NN3A  DN1    500.000     0.000     ! I1 -- I2 BOND between  N1	DN1
+NN1   DN2    500.000     0.000     ! I1 -- I2 BOND between  N2	DN2
+NN2U  DN3    500.000     0.000     ! I1 -- I2 BOND between  N3	DN3
+NN3   DN3    500.000     0.000     ! I1 -- I2 BOND between  N3	DN3
+NN3A  DN3    500.000     0.000     ! I1 -- I2 BOND between  N3	DN3
+NN3G  DN3    500.000     0.000     ! I1 -- I2 BOND between  N3	DN3
+NN1   DN4    500.000     0.000     ! I1 -- I2 BOND between  N4	DN4
+NN1   DN6    500.000     0.000     ! I1 -- I2 BOND between  N6	DN6
+NN4   DN7    500.000     0.000     ! I1 -- I2 BOND between  N7	DN7
+NN2   DN9    500.000     0.000     ! I1 -- I2 BOND between  N9	DN9
+NN2B  DN9    500.000     0.000     ! I1 -- I2 BOND between  N9	DN9
+ON1   DO2    500.000     0.000     ! I1 -- I2 BOND between  O2	DO2
+ON1C  DO2    500.000     0.000     ! I1 -- I2 BOND between  O2	DO2
+ON1   DO4    500.000     0.000     ! I1 -- I2 BOND between  O4	DO4
+ON1   DO6    500.000     0.000     ! I1 -- I2 BOND between  O6	DO6
+ 
+ANGLES
+!@@@@@@@@ Adenine
+! ade 6-mem ring
+CN2  NN3A CN4     90.0     116.8  !VA 117.8  !6R) adm jr. 11/97
+NN3A CN4  NN3A    60.0     133.0  !6R)
+CN4  NN3A CN5     90.0     111.1  !VA 110.1  !6R)
+CN5  CN5  NN3A    60.0     124.4  !VA 127.4  !6R) bridgeC4
+CN2  CN5  CN5     60.0     121.0  !6R) bridgeC5
+CN5  CN2  NN3A    60.0     110.7  !6R)
+CN5  CN5  NN2    100.0     105.7  !5R) bridgeC4
+CN5  CN5  NN4    100.0     110.0  !5R) bridgeC5
+CN4  NN4  CN5    120.0     104.6  !5R)
+NN2  CN4  NN4    100.0     113.4  !5R)
+CN4  NN2  CN5    100.0     106.3  !5R)
+NN2  CN5  NN3A   100.0     126.9  !bridgeC4
+CN2  CN5  NN4    100.0     129.0  !bridgeC5
+HN3  CN4  NN3A    38.0     113.5  !h2
+NN3A CN2  NN1     35.0     125.7  !VA 50.0 130.7  !n6
+CN5  CN2  NN1     50.0     123.6  !VA 118.6  !
+CN2  NN1  HN1     40.0     121.5  !VA 40. !h61,h62, C,A,G
+HN1  NN1  HN1     31.0     117.0  !C,A,G
+NN4  CN4  HN3     39.0     124.8  !h8, G,A
+NN2  CN4  HN3     39.0     121.8  !
+CN5  NN2  HN2     30.0     129.4  !h9
+CN4  NN2  HN2     30.0     125.0  !
+!@@@@@@@@ Cytosine
+! cyt 6-mem ring
+CN1  NN2  CN3     50.0     116.1  !VA 50. 124.1 !C, adm jr. 11/97
+NN2  CN1  NN3     55.0     116.8  !VA 50. 116.8 !C
+CN1  NN3  CN2     85.0     119.1  !VA 85. 119.1 !C
+CN3  CN2  NN3    100.0     117.3  !VA 85. 119.3  !C
+CN2  CN3  CN3     45.0     117.8  !VA 85. 117.8 !C
+CN3  CN3  NN2     60.0     122.9  !VA 85. 122.9 !C 
+CN1  NN2  HN2     48.0     125.2  !VA 37. 121.2  !C, h1
+CN3  NN2  HN2     33.0     118.7  !VA 37. 114.7  !C
+NN2  CN1  ON1C    60.0     120.4  !VA 130. 119.4  !C, o2
+NN3  CN1  ON1C   130.0     122.8  !VA 130. 123.8  !C
+NN3  CN2  NN1     60.0     122.3  !VA 81. 122.3  !C, n4 vam 70.
+CN3  CN2  NN1     80.0     120.4  !VA 81. 118.4  !C
+CN2  CN3  HN3     38.0     120.1  !VA 38. 120.1 !C h5
+CN3  CN3  HN3     38.0     122.1  !VA 38. 122.1 !C,U
+HN3  CN3  NN2     48.0     115.0  !VA 44. 115.0 !C, h6
+
+DIHEDRALS
+! Cytosine 
+CN3  NN2  CN1  NN3      0.6     2   180.0  ! adm jr. 11/97
+NN2  CN1  NN3  CN2      0.6     2   180.0  ! adm jr. 11/97
+CN1  NN3  CN2  CN3      6.0     2   180.0  ! adm jr. 11/97
+NN3  CN2  CN3  CN3      0.6     2   180.0  ! adm jr. 11/97
+CN2  CN3  CN3  NN2      6.0     2   180.0  ! adm jr. 11/97
+CN3  CN3  NN2  CN1      0.6     2   180.0  ! adm jr. 11/97
+NN3  CN2  NN1  HN1      1.0     2   180.0  ! adm jr. 11/97
+CN3  CN2  NN1  HN1      1.0     2   180.0  ! adm jr. 11/97
+NN1  CN2  NN3  CN1      2.0     2   180.0  ! adm jr. 11/97
+NN1  CN2  CN3  CN3      2.0     2   180.0  ! adm jr. 11/97
+NN1  CN2  CN3  HN3      2.0     2   180.0  ! adm jr. 11/97
+ON1C CN1  NN2  HN2      3.0     2   180.0  ! adm jr. 11/97
+ON1C CN1  NN3  CN2      1.6     2   180.0  ! adm jr. 11/97
+ON1C CN1  NN2  CN3      1.6     2   180.0  ! adm jr. 11/97
+NN3  CN2  CN3  HN3      3.4     2   180.0  ! adm jr. 11/97
+NN2  CN3  CN3  HN3      3.4     2   180.0  ! adm jr. 11/97
+CN2  CN3  CN3  HN3      4.6     2   180.0  ! adm jr. 11/97
+CN1  NN2  CN3  HN3      4.6     2   180.0  ! adm jr. 11/97
+X    CN2  NN3  X        2.0     2   180.0  ! adm jr. 11/97
+! Wild cards for uracil, thymine and cytosine
+X    CN1  NN3  X        1.0     2   180.0  ! c22
+X    CN1  NN2  X        0.9     2   180.0  ! c22
+X    CN1  NN2G X        0.9     2   180.0  ! c22
+X    CN1  NN2U X        0.9     2   180.0  ! c22
+X    CN3  NN2  X        1.0     2   180.0  ! c22
+X    CN3  NN2B X        1.0     2   180.0  ! From X CN3 NN2 X, for thymines
+X    CN3  CN3  X        1.0     2   180.0  ! c22
+X    CN1  CN3  X        1.0     2   180.0  ! c22
+X    CN2  CN3  X        0.8     2   180.0  ! c22
+
+IMPROPER
+HN2  X    X    NN2      1.0     0     0.0     !C, adm jr. 11/97
+NN1  CN2  HN1  HN1      6.0     0     0.0     !A,C adm jr. 11/97
+CN1  X    X    ON1C    80.0     0     0.0     !C, par_32, adm jr. 10/2/91
+CN2  X    X    NN1     90.0     0     0.0     !C, 
+CN2  NN3  CN3  NN1     60.0     0     0.0     !C, 
+
+NONBONDED  NBXMOD 5  ATOM CDIEL FSHIFT VATOM VDISTANCE VFSWITCH -
+     CUTNB 14.0  CTOFNB 12.0  CTONNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 1.5
+HN1      0.0       -0.0460    0.2245 !HN1      0.0       -0.0460    0.2245
+HN2      0.0       -0.0460    0.39 !HN2      0.0       -0.0460    0.2245
+HN3      0.0       -0.046     1.00 !VA 1.1000 !adm jr. aromatic Hvdw
+HNP      0.0       -0.03      1.3582 !JES 8/25/89 values from Jorgensen fit to hydration energy
+HN4      0.0       -0.0460    0.2245
+HN5      0.0       -0.0460    0.2245
+HN6      0.0       -0.0220    1.3200
+HN7      0.0       -0.0220    1.3200
+!
+NN1      0.0        -0.20     1.88 !VA 1.61 !VA  1.85
+NN1C     0.0        -0.20     1.71 !V.A. change: 1.71 !from NN1
+NN2      0.0        -0.10     1.62 !VA 1.40 !VA 1.66 ! NN2  0.0  -0.20  1.85
+NN2B     0.0        -0.10     1.80 !VA 1.30 !VA 1.70 ! 
+NN2C     0.0        -0.10     1.70 !  "
+NN2G     0.0        -0.10     1.98 !VA 1.50 !VA 1.70 !  "
+NN2U     0.0        -0.10     1.73 !VA 1.30 !VA 1.70
+NN3      0.0        -0.20     1.98 !VA 1.66 !NN3 1.69   0.0  -0.20     1.85
+NN3A     0.0        -0.20     1.85 
+NN3G     0.0        -0.20     1.85 !VA 1.69 !from NN3
+NN3I     0.0        -0.20     1.69 !from NN3
+NN4      0.0        -0.20     1.95 !VA 1.62 !VA 1.85
+NN5      0.0        -0.20     1.85
+NN6      0.0        -0.20     1.85
+!
+ON1      0.0       -0.2000    1.90 !VA 2.18 !VA 1.53 !VA 1.64 !from ON1C  
+ON1C     0.0       -0.2000    1.97 !VA 1.51 !VA 1.57 ! 1.64 !ON1C  0.0  -0.1200  1.70
+! base ring C vdw param, 11/14/97, adm jr
+CN1      0.0       -0.10      1.9000
+CN2      0.0       -0.10      1.9000 
+CN3      0.0       -0.30      1.9000 !CN3   0.0   -0.09   1.7000
+CN4      0.0       -0.075     1.9000 
+CN5      0.0       -0.075     1.9000
+!
+DC1    0.0  -0.0  0.00000 ! Drude
+DC2    0.0  -0.0  0.00000 ! Drude
+DC4    0.0  -0.0  0.00000 ! Drude
+DC5    0.0  -0.0  0.00000 ! Drude
+DC6    0.0  -0.0  0.00000 ! Drude
+DC8    0.0  -0.0  0.00000 ! Drude
+DC9    0.0  -0.0  0.00000 ! Drude
+DN1    0.0  -0.0  0.00000 ! Drude
+DN2    0.0  -0.0  0.00000 ! Drude
+DN3    0.0  -0.0  0.00000 ! Drude
+DN4    0.0  -0.0  0.00000 ! Drude
+DN6    0.0  -0.0  0.00000 ! Drude
+DN7    0.0  -0.0  0.00000 ! Drude
+DN9    0.0  -0.0  0.00000 ! Drude
+DO2    0.0  -0.0  0.00000 ! Drude
+DO4    0.0  -0.0  0.00000 ! Drude
+DO6    0.0  -0.0  0.00000 ! Drude
+
+NBFIX
+END
+
+read sequence card
+* @residue
+*  
+1
+@residue
+
+generate @residue first none last none setup warn
+
+ic param
+ic seed 1 c2 1 n1 1 c6
+ic build
+ic purge
+print ic
+
+update shift atom cutnb 999.0 
+
+mini abnr tolstp 0.00001 tolgrd 0.0 step 0.0001 nstep 200 nprint 10
+
+! charges
+scalar charge set  -0.350 select resn @residue .and. type N1   end
+scalar charge set   0.202 select resn @residue .and. type H1   end
+scalar charge set  -0.044 select resn @residue .and. type C6   end
+scalar charge set   0.266 select resn @residue .and. type H6   end
+scalar charge set   0.600 select resn @residue .and. type C2   end
+scalar charge set  -0.545 select resn @residue .and. type O2   end
+scalar charge set  -0.602 select resn @residue .and. type N3   end
+scalar charge set   0.610 select resn @residue .and. type C4   end
+scalar charge set  -0.708 select resn @residue .and. type N4   end
+scalar charge set   0.369 select resn @residue .and. type H41  end
+scalar charge set   0.369 select resn @residue .and. type H42  end
+scalar charge set  -0.212 select resn @residue .and. type C5   end
+scalar charge set   0.045 select resn @residue .and. type H5   end
+
+! polarizabilities
+scalar wmain  set  -1.105  select resn @residue .and. type N1   end
+scalar wmain  set  -1.227  select resn @residue .and. type C6   end
+scalar wmain  set  -1.078  select resn @residue .and. type C2   end
+scalar wmain  set  -0.444  select resn @residue .and. type O2   end
+scalar wmain  set  -0.774  select resn @residue .and. type N3   end
+scalar wmain  set  -0.870  select resn @residue .and. type C4   end
+scalar wmain  set  -1.223  select resn @residue .and. type N4   end
+scalar wmain  set  -1.143  select resn @residue .and. type C5   end
+
+!! Generate the Drude particles
+DRUDE mass 0.1 kdrude 500.0 select segid @residue .and. .not. type H* end
+scalar mass show
+scalar charge show
+
+nbonds cutnb 999.0
+mini abnr tolstp 0.0 tolgrd 0.0 step 0.001 nstep 500 nprint 50
+
+! print IC table to check internal coordinates
+ic fill
+ic print
+coor print
+
+prnlev 3
+
+MOLVIB NDI1 33 NDI2 33 NDI3 45 SECO FINI 0.01
+GFX
+PRNT    1
+DIM    33   33   45
+IC
+ 1 8  9  0  0   !1 c4-n4
+ 1 12 13  0  0  !2 c5-h5
+ 1 3  4  0  0   !3 c6-h6
+ 1 1  2  0  0   !4 n1-h1
+ 1 5  6  0  0   !5 c2-o2
+ 1 9 10 0 0     !6 n4-h41
+ 1 9 11  0  0   !7 n4-h42
+ 1 8 12 0 0     !8 c4-c5 6-mem ring
+ 1 12  3  0  0  !9 c5-c6
+ 1 3  1  0  0   !10 c6-n1
+ 1 1  5  0  0   !11 n1-c2
+ 1 5  7  0  0   !12 c2-n3
+ 1 7  8  0  0   !13 n3-c4
+ 2 7 8 12  0    !14  n3-c4-c5     6-mem rin angles
+ 2 8 12 3  0    !15  c4-c5-c6
+ 2 12 3 1  0    !16  c5-c6-n1
+ 2 3 1 5  0     !17  c6-n1-c2
+ 2 1 5 7  0     !18  n1-c2-n3
+ 2 5 7 8  0     !19  c2-n3-c4
+ 2 9 8 12 0     !20  n4-c4-c5
+ 2 9 8 7 0      !21  n4-c4-n3
+ 2 13 12 3 0    !22  h5-c5-c6
+ 2 13 12 8 0    !23  h5-c5-c4
+ 2 4 3 1 0      !24  h6-c6-n1
+ 2 4 3 12 0     !25  h6-c6-c5
+ 2 2 1 5 0      !26  h1-n1-c2
+ 2 2 1 3 0      !27  h1-n1-c6
+ 2 6 5 7 0      !28  o2-c2-n3
+ 2 6 5 1 0      !29  o2-c2-n1
+ 2 8 9 10 0     !30  c4-n4-h41
+ 2 8 9 11 0     !31  c4-n4-h42
+ 2 10 9 11 0    !32  h41-n4-h42
+ 3 9 7 12 8     !33  n4-n3-c5-c4   torsion angles
+ 3 13 3 8 12    !34  h5-c6-c4-c5
+ 3 4 1 12 3     !35  h6-n1-c5-c6
+ 3 2 5 3 1      !36  h1-c2-c6-n1
+ 3 6 7 1 5      !37  o2-n3-n1-c2
+ 4 7 8 12 3     !38  n3-c4-c5-c6
+ 4 8 12 3 1     !39  c4-c5-c6-n1
+ 4 12 3 1 5     !40  c5-c6-n1-c2
+ 4 3 1 5 7      !41  c6-n1-c2-n3
+ 4 1 5 7 8      !42  n1-c2-n3-c4
+ 4 5 7 8 12     !43  c2-n3-c4-c5
+ 4 7 8 9 10     !44  n3-c4-n4-h41
+ 4 12 8 9 11    !45  c5-c4-n4-h42 !45, n3-c4-n4-h42
+UMAT     0    1    0           ! row normalization
+  1  1  1.          2  2  1.          3  3  1.          4  4  1.
+  5  5  1.          6  6  1.          6  7  1.          7  6  1.
+  7  7 -1.          8  8  1.
+  9  9  1.         10 10  1.         11 11  1.         12 12  1.
+ 13 13  1.
+ 14 20  0.542      14 21 -0.542      15 22  0.542      15 23 -0.542
+ 16 24  0.542      16 25 -0.542      17 26  0.542      17 27 -0.542
+ 18 28  0.542      18 29 -0.542 
+ 19 14  0.570323   19 15 -0.570323   19 16  0.570323   19 17 -0.570323
+ 19 18  0.570323   19 19 -0.570323
+ 20 14  0.806558   20 15 -0.403279   20 16 -0.403279   20 17  0.806558
+ 20 18 -0.403279   20 19 -0.403279
+ 21 15  0.6985     21 16 -0.6985     21 18  0.6985     21 19 -0.6985
+ 22 33  1.         23 34  1.         24 35  1.         25 36  1.
+ 26 37  1. 
+ 27 32  2.         27 30 -1.         27 31 -1.
+ 28 30  1.         28 31 -1.
+ 29 38  1.         29 39 -1.         29 40  1.         29 41 -1.
+ 29 42  1.         29 43 -1.
+ 30 38  2.         30 39 -1.         30 40 -1.         30 41  2.
+ 30 42 -1.         30 43 -1.
+ 31 39  1.         31 40 -1.         31 42  1.         31 43 -1.
+ 32 44  1.         32 45 -1.
+ 33 44  1.         33 45  1.
+ -1
+PED      0   15
+  1  sC4N4       2  sC5H        3  sC6H        4  sN1H
+  5  sC2O        6  sNH2        7  sNH2a
+  8  sC4C5       9  sC5C6      10  sC6N1      11  sN1C2
+ 12  sC2N3      13  sN3C4
+ 14  dC4N       15  dC5H       16  dC6H       17  dN1H
+ 18  dCO        19  dRing      20  dRinga     21  dRinga'
+ 22  gC4N       23  gC5H       24  gC6H       25  gN1H
+ 26  gC2O       27  dNH2       28  rNH2
+ 29  pucR       30  tRINGa     31  tRINGa'
+ 32  wNH2       33  tNH2
+-1
+EXPF
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+11.
+12.
+13.
+14.
+15.
+16.
+17.
+18.
+19.
+20.
+21.
+22.
+23.
+197.
+232.
+330.
+409.
+614.
+623.
+637.
+781.
+818.
+1087.
+END
+
+stop
+

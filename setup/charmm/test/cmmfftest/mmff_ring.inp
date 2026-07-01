@@ -1,0 +1,94 @@
+* mmff.INP
+* author:  Ryszard Czerminski (May 11, 1993)
+* purpose: to test new MMFF ring perception code
+* external files: MMFFANG.PAR MMFFBOND.PAR MMFFCHG.PAR MMFFDEF.PAR
+*                 MMFFOOP.PAR MMFFSTBN.PAR MMFFSUP.PAR MMFFSYMB.PAR
+*                 MMFFTOR.PAR MMFFVDW.PAR
+* UPDATED by CLB3 04/12/2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+set pass = 1
+set failed = 
+set tol = 1e-3
+
+stream datadir.def
+
+bomlev 5
+
+! energies and GRMS for *.mrk files in the order used in this input file
+!
+
+stream @0mmff_setup.str
+ 
+set i 0
+label fetchref
+goto @i
+label iloop
+incr i by 1
+read merck name @0ring_@i.mrk
+generate
+energy inbfrq 1 ihbfrq 0 CUTNB 15. CTOFNB 12. CTONNB 9. -
+       cdie e14fac 0.75 vswitch switch
+
+echo case @i new energy ?ener  grms ?grms
+calc ediff = abs ( ?ener - @eref )
+calc gdiff = abs ( ?grms - @gref )
+
+set epass = 0
+set gpass = 0
+
+if @ediff le @tol set epass = 1
+if @gdiff le @tol set gpass = 1
+
+calc egpass = @epass * @gpass
+if egpass le 0 set failed = @failed @i
+
+calc pass = @pass * @egpass
+
+if i lt 5 goto fetchref
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+if @pass eq 0 then
+      echo FAILING TESTS @failed
+endif
+
+stop
+
+label 0
+set eref = 151.51764
+set gref = 3.20045
+goto iloop
+
+label 1
+set eref = 171.59320
+set gref = 0.47872
+goto iloop
+
+label 2
+set eref = 86.04590
+set gref = 5.09348
+goto iloop
+
+label 3
+set eref = 44.12850
+set gref = 0.74461
+goto iloop
+
+label 4
+set eref = 4198.93913
+set gref = 69.11499
+goto iloop
+
+stop

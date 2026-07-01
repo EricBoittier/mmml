@@ -1,0 +1,2293 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+ 
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+---------------------------------------------------------------------------
+
+[0] About CHARMM28 Development
+
+As an on-going project, CHARMM development will be carried out with
+CHARMM version 28 series.  The base revision c28a1 is the same as c27b1.
+The following describes new features and enhancements incorporated in
+the c28 development period.
+
+===========================================================================
+
+[1] c28a2 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 1999 through February 15, 2000.
+
+1. University of Maryland Enhancements
+    Name          : I-Jen Chen and Alexander D. MacKerell, Jr.
+    Email Address : ijen@outerbanks.umaryland.edu,
+                    alex@outerbanks.umaryland.edu
+    Institution   : University of Maryland, Baltimore
+    Date          : Dec 31, 1999
+
+1.1.1 MMFF Enhancements
+    MMFF module in CHARMM is enhanced to accept molecules in the SYBYL
+MOL2 format.  Molecules of interest can be read in as an integral part of
+a CHARMM input file (see test/cmmfftest/mmff_mol2.inp and MMFF.DOC USAGE 3c)
+or as an external MOL2 database file (see test/cmmfftest/mmff_db_1.inp 
+and MMFF.DOC USAGE 3d).
+
+Files Modified:
+source/fcm/exfunc.fcm
+      /io/mainio.src
+      /mmff/merckio.src
+           /mmff.src
+      /util/string.src
+
+New Testcases:
+test/cmmfftest/mmff_mol2.inp
+              /mmff_db_1.inp
+    /data/mmff_db.mol2
+
+Modified documentation
+doc/mmff.doc
+
+..............................................................................
+
+1.1.2 SOLANA: Rotational Correlation Time of Water
+    Calculation of rotational correlation times corresponding to the three
+rotational motions of a water molecule has been added to the solvent
+analysis code.  The three rotational motions refer to motion around the
+dipole axis (twist), around an axis perpendicular to the molecular
+plane (rock) and around an axis parallel to the H-H vector (wag) (Ref 1).  
+The correlation time is calculated by fitting the exponentional decay part
+of the corresponding time correlation function C(t) to an exponentional
+function of the form C(t) = A exp(-t/tau) where tau is the correlation time.
+The direct correlation functions were calculated via direct method using the
+CORFUNC subroutine in the CORREL.SRC.  The calculation can be invoked by
+assigning a non-zero integeer value to the keyword RCOR.  For the details
+of input data please see CORMAN.DOC.
+
+REFERENCES:
+1. Johannesson, H. and Halle, B. J. Am. Chem. Soc. 1998, 120, 6859-6870
+2. Wallqvist, A. and Berne, B. J. J. Phys. Chem. 1993, 97, 13841-13851
+
+Files Modified:
+source/correl/solana.src
+
+Testcase Modified:
+test/c27test/solanal2.inp
+
+..............................................................................
+
+1.1.3 SOLANA: Hydration Number Calculation
+    Calculation of hydration number or, in general, the number of solvent
+molecules within a specified distance of a multi atom or single atom site
+has been added to the solvent analysis code.  This method counts the number
+of solvent molecules within RHYD and included normalization for the number
+of site atoms and time frames.  Since this is done within the solvent-site
+g(r) analysis routine keywords such as ISDIST, MGN, DR and RSPH should be
+specified.  Hydration number calculation can be invoked by specifying
+a non-zero integer value to the keyword IHYDN.
+
+Files Modified:
+source/correl/solana.src
+
+Testcase Modified:
+test/c27test/solanal2.inp
+
+------------------------------------------------------------------------------
+
+1.2 Further Enhancements to the Monte Carlo Module
+    Name          : Aaron R. Dinner
+    Email Address : aaron@bellatrix.pcl.ox.ac.uk
+    Institution   : University of Oxford
+    Date          : December 9, 1999
+
+1) Steepest descents minimization prior to application of the 
+   acceptance criterion is now allowed.
+2) Separate temperatures for each move group are now allowed.
+3) NOE constraint terms are now supported.
+4) The Tsallis (generalized) acceptance criterion is now allowed.
+5) A minor "bugfix" regarding the Delta-E column in the energy table 
+   printed during MC:  previously, when the running total of the energy 
+   and the value obtained upon checking the energy were exactly the 
+   same, the value of the energy was printed rather than their difference
+   (zero).
+
+Files Added:
+source/mc/mcmini.src
+
+Files Modified:
+source/mc/mc.src
+         /mcener.src
+         /moveio.src
+         /movead.src
+         /mvdihe.src
+      /fcm/mc.fcm
+      /energy/printe.src
+      /charmm/iniall.src
+      /nbonds/enbond.src
+             /enbondg.src
+             /enbfast.src
+
+Modified Documentation:
+doc/mc.doc
+
+------------------------------------------------------------------------------
+
+1.3 CHARMMRATE: CHARMM - POLYRATE Interface
+    Name          : Jiali Gao, C. Alhambra, J. Corchado, M. L. Sanchez, 
+                    J. Villa, and D. G. Truhlar
+    Email Address : gao@chem.umn.edu
+    Institution   : University of Minnesota
+    Date          : December 29, 1999
+
+    CHARMMRATE is a module of CHARMM for interfacing it with POLYRATE.
+The polyrate main program becomes a subprogram of CHARMM.  POLYRATE can be
+called to carry out variational transition state theory calculations with
+multidimensional semiclassical tunneling contributions.  When POLYRATE needs
+the value or gradient of the potential energy surface, it calls a set of
+interface routines called hooks.  The hooks in turn call CHARMM routines
+for energies and gradients calculated by molecular mechanics or QM/MM methods.
+    CHARMMRATE-version 1.0 is a module of charmm-version 28 for interfacing
+it with POLYRATE-version 8.1.1.  CHARMMRATE-version 1.0 will be distributed
+as part of the CHARMM program, beginning with version 28 of CHARMM.  The
+user will also require the CRATE utility for modifying POLYRATE to make it
+compatible with CHARMM.  The prospective user of CHARMMRATE should obtain
+a valid license for CHARMM and valid licenses for POLYRATE and CRATE from
+the University of Minnesota (http://comp.chem.umn.edu).
+
+Files Added:
+source/prate/charmmrate.src
+      /fcm/charmmrate.fcm
+build/UNX/prate.mk
+
+Files Modified:
+source/charmm/charmm_main.src
+             /install.com
+
+New Documentation:           !! documentation and testcases have not
+doc/charmmrate.doc           !! been completed as of Feb. 10, 2000
+                             !! should be done before c28a3
+New Testcases:
+test/c28test/cr01.inp
+            /cr02.inp
+test/data/cr01.top
+         /cr01.par
+         /cr02.top
+         /cr02.par
+
+------------------------------------------------------------------------------
+
+1.4 ACE Enhancement
+    Name          : Michael Schaefer
+    Email Address : schaefer@brel.u-strasbg.fr
+    Institution   : Univ. Louis Pasteur (Strasbourg) & Harvard
+    Date          : Aug 12, 1999
+
+(1) ACE can be used with BLOCK/REPLICA (multiple copies of part of the system)
+(2) atoms can be fixed (CONS FIX) when using ACE
+(3) the hydrophobic solvation term of ACE is no longer included in the ELEC
+    energy term (as it should be, since it is non-electrostatic);
+    WARNING: if your analysis of CHARMM log files relies on this, you have
+    to modify your approach!
+(4) the parameters of the self energy potential of ACE (1/omega, sigma, mue)
+    have been moved to the HEAP, as suggested by B. Broux; this reduces the
+    use of permanent memory significantly, if you compile CHARMM with ACE,
+    but don't use ACE in an application
+(5) warning messages when using ACE for atom types whose volume has not been
+    assigned in the parameter file; so if you use ACE with conventional
+    param19.inp (w/o volumes), there are lots of warnings; if there are
+    just a few warnings, you have to check whether the atom types concerned
+    are present in the system
+(6) capability of CHARMM compiled w/o ACE to read parameter files with the
+    volume table added -- this avoids unwanted error messages
+(7) the HEAP space used by ACE is freed when switching back from ACE to
+    another electrostatic potential (e.g., RDIE)
+(8) included volume spcification for TIP3P atom types and some comments
+    in the parameter file ./test/data/param19-1.2.inp
+(9) improved testcase (./test/c27test/ace1.inp) and updated documentation
+    in ./doc/ace.doc
+
+Files involved:
+source/charmm/iniall.src
+      /energy/eutil.src
+             /printe.src
+      /fcm/energy.fcm
+          /inbnd.fcm
+      /io/parmio.src
+      /manip/cstran.src
+      /nbonds/ace.src
+             /acean.src
+             /enbond.src
+             /nbonds.src
+             /nbutil.src
+test/c27test/ace1.inp
+    /data/param19-1.2.inp
+doc/ace.doc
+
+------------------------------------------------------------------------------
+
+1.5 BYCC Modification
+    Name          : Robert J. Petrella
+    Email Address : petrella@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : December 31, 1999
+
+    The only modification involves the removal of the need for cluster files.
+The algorithm in SUBROUTINE CLSBYRULE clusters the atoms automatically when
+the MKCLuster (make clusters) command is given.  Hence, all the user must do
+to implement the BYCC algorithm is (1) give the command MKCLusters and
+(2) specify BYCC in the NBOND command
+
+Files Modified:
+source/nbonds/nbutil.src   MKCLUST shortened and CLSBYRULE added
+      /io/rtfio.src        RDCLUS removed
+         /mainio.src       RDCLUS removed
+doc/nbonds.doc
+test/c27test/testbycc1.inp
+            /testbycc2.inp
+
+------------------------------------------------------------------------------
+
+1.6 TSRI Fixes and Enhancements
+    Name          : Charles L. Brooks, III, Michael F. Crowley
+    Email Address : brooks@scripps.edu, crowley@scripps.edu
+    Institution   : The Scripps Research Institute
+    Date          : January 15, 2000
+
+1.6.1 Compilation Enhancement
+    MPI installation procedures are reworked to modify machine specific
+Makefiles.  Makefile_gnu is modified for pgf compiler and g77 compilation
+options are added to increase performace by ~100%.  The optimization level
+is altered in nbondg.src compilation for Linux PGI compiler.
+
+Files modified:
+install.com
+build/UNX/Makefile_cspp
+         /Makefile_gnu
+         /nbonds.mk
+
+1.6.2 Documentation Update
+    Rg/RMSD restraint and Distance Matrix restraint are documnented.
+
+File Modified:
+doc/cons.doc
+
+1.6.3 Memory Save and Bugfixes
+    plnod0 (prnlev node 0) is added and broadcasted to other nodes.
+Changes are for saving memory, readcv bugfix, initializing variables.
+A bug is fixed in stream file handling.
+
+Files Modified:
+source/charmm/miscom.src
+      /correl/anacor.src
+             /solana.src
+      /dynamc/dcntrl.src
+             /dynio.src
+             /dynsub.src
+             /trnphi.src
+      /energy/eintern.src
+      /fcm/heap.fcm
+          /parallel.fcm
+      /gener/genpsf.src
+      /image/nbndgcm.src
+      /io/psfres.src
+         /rtfio.src
+         /trajio.src
+      /machdep/paral1.src
+      /manip/corman2.src
+            /cstran.src
+            /dynanal.src
+            /hbanal.src
+            /intcor.src
+      /minmiz/abner.src
+      /misc/hbuild.src (Milan's parallel bugfix)
+           /nmr.src    (NO_DQS addded)
+           /sbound.src
+      /nbonds/nbndcc.src
+             /nbonds.src
+             /nbutil.src
+      /pert/block.src
+           /icfcnf.src
+      /rxncor/travel.src
+      /vibran/quasi.src
+             /rbquas.src
+
+1.6.4 Parallel Generalized Born Model Code
+    RMSD-based extension of Rg restraint is added.  Parallel gb is fixed
+and clean up the code.
+
+Files Modified:
+source/energy/energy.src
+             /genborn.src
+             /intere.src
+             /rgy.src
+      /fcm/rgy.fcm
+
+1.6.5 Cray T3E Related Modifications
+    LBYCBIM flag is added in calling parameters.  NO_BYCU is fixed.
+Protected PME_PLAMSA code for non parallel compile.  Trajectory
+format/unformat is fixed.
+
+Files Modified:
+source/nbonds/cenbf.src
+             /nbndgc.src
+             /pme.src
+      /util/util.src
+
+1.6.6 Testcase Fixes
+    Unit number 99 conflicts with an internal file open unit number,
+changed to 89.  And other problems causing crash are fixed
+
+Files Modified:
+test/c20test/dyntest1.inp
+            /quasi.inp
+    /c22test/stdtest.inp
+    /c25test/hba1.inp
+    /c26test/pathint.inp
+    /c27test/mbtest30.inp
+
+------------------------------------------------------------------------------
+
+1.7 Karolinska Institute Fixes and Enhancements
+    Name          : Lennart Nilsson
+    Email Address : Lennart.Nilsson@biosci.ki.se
+    Institution   : Karolinska Institute
+    Date          : January 31, 2000
+
+1.7.1 Dynamics Restart File Read
+    New option  DYNR [CURR|DELT|VEL] added to READ COOR, allowing
+CURRent coordinates, displcement from current (DELT) coordinates or
+VELocities to be read from a dynamics restart file.
+
+Files new/modified:
+source/io/coorio.src
+      /dynamc/dynamc.src
+doc/io.doc
+test/c28test/dynr.inp: NEW
+
+1.7.2 HEAP Expansion
+    Made HEAP extension working on DEC ALPHA (should also work on other
+systems with 64 bit pointers, but right now it is implemented under the pref
+directive ALPHA)
+
+File modified:
+source/machdep/space.src
+
+1.7.3 OS Information
+    Modification of OS information in banner to include number of nodes
+running the job (from Milan Hodoscek)
+
+File modified:
+
+source/machdep/startup.src
+              /ctuff.c
+
+1.7.4 Nodenaming Problem Fix
+    Fixed nodenaming problem on parallel setups using the SOCKET library; 
+the original version had an inadvertent wild-card capability making nodenames
+PE1 and PE10 look identical.
+
+Files modified:
+source/machdep/socket.c
+
+1.7.5 COOR COVA/DMAT File Format
+    Modified output from the COOR COVA and COOR DMAT commands, such that
+if results are written to a file, as opposed to the charmm output file,
+all headers and blank lines are skipped. This makes it easier to read the
+file into a plotting program.
+
+Files modified:
+source/manip/corman2.src
+
+1.7.6 Block Data
+    Fixed block data initialization for the QM interface under GNU
+(similar as under HPUX)
+
+Files modified:
+source/quantum/qmdata.src
+              /qmset.src
+
+1.7.7 HBOND Analysis
+    Fixed error in calcualtion of average number of hbonds printed for
+single structure by the COOR HBOND command.
+    Added HBOND DONOR specifications for residue TIP3 in the test topology
+file.  This is needed by the hbanal testcases.
+
+File modified:
+source/manip/hbanal.src
+test/data/top_all22_prot.inp
+
+------------------------------------------------------------------------------
+
+1.8 MBO(N)D Updates
+    Name          : Masa Watanabe 
+    Email Address : watanabe@moldyn.com
+    Institution   : Moldyn, Inc.
+    Date          : December 23, 1999
+
+1.8.1 MOLDYN Include Files
+    Modifications of MBO(N)D are not correctly implemented in c27b1 and
+c28a1.  The following include files should be located in two places
+source/fcm and source/moldyn.  Both places should have exactly the same
+files.  In c27b1 and c28a1, only source/fcm has the correct version of
+these files.  Copy source/fcm include files into source/moldyn.
+
+Files involved:
+source/moldyn/HANDS2.INC
+             /HEAPMB.INC
+             /IFIRST.INC
+             /INTGRL.INC
+             /PARAM.FOR
+
+1.8.2 MBO(N)D Fixes and Enhancements
+    MBO(N)D related bugs have been fixed and BLAS Library dependent code has
+been eliminated.  MBO(N)D documentation has been updated.  c25test/mtsm3.inp
+is updated to use atom based cutoff.
+
+Files modified:
+build/UNX/Makefile_gnu
+         /Makefile_sgi
+         /Makefile_sgi64
+         /Makefile_ibmrs
+source/fcm/mbond.fcm
+      /mbond/mbdiag.src
+            /mbmodes.src
+            /mbond.src
+            /mbutil.src
+            /modtrans.src
+doc/mbond.doc
+test/c25test/mtsm3.inp
+
+===========================================================================
+
+[2] c28a3 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2000 through August 15, 2000.
+
+2.1 Oxford Physical and Theoretical Chemistry Lab Developments
+    Name          : Ben Webb, and Paul Lyne
+    Email Address : ben@bellatrix.pcl.ox.ac.uk
+    Institution   : Physical and Theoretical Chemistry Lab, Oxford, UK
+    Date          : July 15, 2000
+
+2.1.1 QM/MM fluctuating charge implementation (FlucQ)
+
+    The fluctuating charge model (FlucQ) is implemented in CHARMM and
+extended for QM/MM simulation with GAMESS-US, CADPAC or MOPAC. It is designed
+primarily for computationally efficient (approx. 10% overhead) modelling of
+solvent polarisation in hybrid QM/MM systems. Atomic charges are treated as
+extra degrees of freedom, and are propagated by extended Lagrangian methods
+during dynamics simulations. Restart and trajectory files are modified when
+FlucQ code is active, to store the extra charge information. Extra options have
+been added to the COOR ANAL command, to allow the calculation of a dipole
+distribution from a trajectory file. The entirety of these changes is activated
+by the presence of the FLUCQ keyword in pref.dat.
+
+Files Added:
+build/UNX/flucq.mk
+source/fcm/flucq.fcm
+      /flucq/flucq.src, fluqdyn.src, fluqene.src, fluqqmmm.src
+
+Files Modified:
+source/cff/enbfast_cff.src, enbonda_cff.src
+      /charmm/charmm_main.src, iniall.src
+      /correl/anacor.src, solana.src
+      /dynamc/dcntrl.src, dynamc.src, dynamc4.src, dynamcv.src, dynio.src
+      /energy/enefscal.src, energy.src, eutil.src, intere.src, printe.src
+      /fcm/energy.fcm, param.fcm
+      /gamint/gamini.src
+      /image/eimage.src, images.src, upimag.src, xtlfrq.src
+      /io/parmio.src, trajio.src
+      /manip/scalar.src
+      /mbond/mbdiag.src
+      /mc/mcener.src, mcimge.src
+      /minmiz/abner.src, conjug.src, egrad1.src, nraph.src, powell.src
+             /steepd.src, tndriv.src
+      /misc/hbuild.src
+      /mmff/enbfast_mm.src, enbscalar_mm.src
+      /nbonds/cenbf.src, enbfast.src, enbond.src, enbonda.src, enbondg.src
+             /evdwf.src, ewald.src, grape.src, nbonds.src
+      /pert/epert.src, icfcnf.src, icpert.src, tsme.src
+      /quantum/qmene.src
+
+New/Modified Documentation:
+doc/corman.doc, flucq.doc[New], scalar.doc
+
+New/Modified Testcase:
+test/c28test/fqam1.inp, fqgamess.inp
+    /data/flucq.crd, flucq.gms, flucq.prm, flucq.rtf
+
+..............................................................................
+
+2.1.2 Changes for compilation with Compaq compilers on Alpha Linux
+
+    A compiler switch (FORT) is added to install.com to build CHARMM (and, if
+present, CADPAC and GAMESS-US) with the Compaq Fortran and C compilers on Alpha
+systems running Linux (use it with "./install gnu medium FORT" or similar).
+CHARMM and GAMESS-US are built with 8-byte integers, for proper functioning of
+dynamic memory (heap expansion). A new target, "axp-linux", is added to
+gmscomp, which requires a version of GAMESS-US recent enough to have
+*ALX cards in unport.src (a patch is available on request).
+    Problems: the assumption that integers are four bytes long is widely spread
+throughout the CHARMM code; some of these problems have been fixed here (e.g.
+the RXNCOR code) but the main problem is that PSND4 is used to send both
+integers and REALs to other nodes, so parallel builds are still broken. In the
+long term, perhaps an explicit "pointer" type should be added (via.
+preprocessor, probably) and the PSND4 and PSND8 routines replaced with
+"send real", "send real*8" and "send integer".
+
+Files Modified:
+install.com
+build/UNX/Makefile_gnu, gmscomp
+source/cadint/cadini.src
+             /cadpac/intro.F
+      /fcm/cadpac.fcm
+      /machdep/space.src
+      /rxncor/rxndef.src, rxnene.src
+
+..............................................................................
+
+2.1.3 RXNCOR parallel fixes
+    The RXNCOR code is modified to run certain parts of the code only on
+node 0, as it expects to access files (e.g. to print the trace file) which
+is generally possible only on this node.
+
+Files Modified:
+source/energy/energy.src
+       rxncor/rxndef.src
+
+..............................................................................
+
+2.1.4 MMFF with g77 fix
+    A simple one-line fix enables proper compilation of the MMFF code on
+systems using the g77 Fortran compiler.
+
+Files Modified:
+source/mmff/merckio.src
+
+..............................................................................
+
+2.1.5 CADPAC and QUANTUM fixes, and port to GNU platform
+    A Makefile is provided for building CADPAC on a GNU machine (Intel or Alpha
+Linux). This requires a modified CADPAC distribution (not distributed with
+CHARMM) in order to build properly. The install script and Makefile for
+compilation on SGI platforms has also been fixed for parallel and/or 64-bit
+installations. Although QUANTUM in c28a2 will compile on GNU platforms, it will
+not run; a Makefile and modified install script is provided here for its proper
+functioning.
+
+Files Added:
+build/UNX/cadpac.mk_gnu
+         /quantum.mk_gnu
+
+Files Modified:
+install.com
+build/UNX/cadpac.mk_sgi
+source/cadint/cadpac/adapquad.F, angmom.f, atoms.F, banner.f, brueckner.F
+                    /chf.f, ddipmpc.f, ddjk.F, dftchf.F, dftmxm2.F
+                    /eigen.F, impt.f, index4.F, intro.F, io.F, jkder.F
+                    /magdft.F, main.F, master.F, mod2.F, mogues.F
+                    /mp2grad.F, mtimit.F, newint.F, nmrs.f, numprop.f
+                    /pack.F, paral.F, quadrature.f, scf.F, sorto.f
+                    /standv.F, start.F, stvder.F, tdhf.F, utilxx.F
+                    /utilyy.f
+
+------------------------------------------------------------------------------
+
+2.2 Enhancements to the Monte Carlo Module and Bugfixes
+    Name          : Aaron R. Dinner
+    Email Address : aaron@bellatrix.pcl.ox.ac.uk
+    Institution   : University of Oxford
+    Date          : 20 June 2000
+
+2.2.1 MC Enhancements
+
+1) The ACE/ACS solvation energy term is now supported.  As described in mc.doc,
+   exact calculation of the screening energy is highly inefficient, and an 
+   approximate scheme is introduced to accelerate MC simulations which use this
+   solvation model.
+
+2) It is now possible to minimize the system with the conjugate gradient (CG)
+   algorithm prior to application of the acceptance criterion.  CG is specified
+   by the keyword "MINI CONJ" in a MOVE ADD call:
+
+        MOVE ADD (no mini keywords     ) --> no minimization
+        MOVE ADD (NSTEps > 0           ) --> SD minimization
+        MOVE ADD (NSTEps > 0, MINI SD  ) --> SD minimization
+        MOVE ADD (NSTEps > 0, MINI CONJ) --> CG minimization
+
+   MOVE EDIT should work the same way.
+
+   Several parameters for CG minimization are fixed at their default values 
+   (NCGC = 100, PCUT = 0.9999, TOLIter = 100), which could be changed in future
+   versions if there is interest.
+
+3) The INBFrq keyword is now recognized in the MOVE ADD command and controls 
+   the non-bond list update during minimization.  Note that it is separate 
+   from the INBFrq keyword in the MC command.
+
+4) A heuristic non-bond list update has been implemented for MC.  The check is 
+   done at the end of each -INBFrq moves.  
+
+   The frequencies of image list updates (IMGFrq) and energy checks (IECHeck) 
+   need no longer be multiples of INBFrq, but the former will force a non-bond 
+   list update.  If either of these parameters is negative, the corresponding 
+   update will be performed whenever a heuristic non-bond list update is done 
+   (and thus should be used only with INBFrq < 0).
+
+5) It is now possible to go through the move set in regular rather than
+   random order.  The keyword to toggle this feature is PICK in MC:
+
+        PICK = 0 (default)     Random move group (i.e., a MOVE ADD
+                               call) and random move instance within
+                               that group.
+ 
+        PICK = 1               Sequential move group and sequential
+                               move instance within that group.
+    
+        PICK = 2               Random move group and sequential
+                               move instance within that group.
+
+   Note that, for PICK = 2, one does not a priori know how many steps will 
+   cover the move set evenly if the numbers of move instances for different 
+   move groups is different, so there can be a slight end effect.  For 
+   example, suppose there are seven steps left and it is time to pick a new 
+   group of move instances; if the move group picked has more than seven 
+   instances, only the first seven will be tried.  
+
+Files Added:
+source/mc/mcace.src
+
+Files Modified:
+source/mc/mc.src, mcener.src, mcmini.src, movead.src, moveio.src
+      /fcm/mc.fcm
+
+Modified Documentation:
+doc/mc.doc
+
+..............................................................................
+
+2.2.2 Bugfixes
+
+1) SKIP NONE
+     SKIP NONE turns off QM electrostatic terms.
+Correct QEQTRM(I) = SKIP to QEQTRM(I) = SKIPN.
+
+Files involved:
+source/energy/eutil.src
+
+2) QM/MM VDW energy calculations
+     QM/MM VDW energies vary with machine due to failure to update group
+centers in some cases.  A logical variable is passed to an integer argument 
+(LCENTR) of EGROUP, which results in a machine-dependent cast.
+
+Files involved:
+source/quantum/qmene.src
+
+3) Program hangs during first energy calculation
+     GNU preprocessor options concerning QMMMDATA should be the same as
+ALPHA/IRIS/DEC rather than OS2/HPUX.  Local variables are not properly
+initialized.  Add the compiler flag '-finit-local-zero -fno-automatic' to
+the FC0 macro.
+
+Files involved:
+source/quantum/qmdata.src, quantum/qmset.src
+build/UNX/Makefile_gnu
+
+------------------------------------------------------------------------------
+
+2.3 University of Minesota Developments
+    Name          : Cristobal Alhambra, J. Corchado, M. L. Sanchez, 
+                    J. Villa, Jiali Gao and D. G. Truhlar
+    Email Address : alhambra@chem.umn.edu
+    Institution   : U. of Minnesta
+    Date          : June 26, 2000
+
+2.3.1 CHARMM/POLYRATE interface
+    charmmrate is a module of charmm for interfacing it with
+polyrate. The polyrate main program becomes a subprogram of
+charmm. polyrate can be called to carry out variational
+transition state theory calculations with multidimensional
+semiclassical tunneling contributions. When polyrate needs
+the value or gradient of the potential energy surface, it
+calls a set of interface routines called hooks. The hooks in
+turn call charmm routines for energies and gradients
+calculated by molecular mechanics or QM/MM methods.
+
+    charmmrate-version 1.0 is a module of charmm-version 27
+for interfacing it with polyrate-version 8.1.1.
+charmmrate-version 1.0 will be distributed as part of the
+charmm program, beginning with version 27 of charmm. The
+user will also require the crate utility for modifying
+polyrate to make it compatible with charmm. The prospective
+user of charmmrate should obtain a valid license for charmm
+from an authorized charmm licenser and valid licenses for
+polyrate and crate from the University of Minnesota
+(http://comp.chem.umn.edu).
+
+Files Added:
+source/prate/charmmrate.src
+      /fcm/charmmrate.fcm
+build/UNX/prate.mk
+
+Files Modified:
+install.com
+source/charmm/charmm_main.src
+
+
+New Documentation:
+doc/charmmrate.doc
+
+New Testcase:
+test/c28test/cr01.inp, cr02.inp
+test/data/cr01p_ini.crd, cr01r_ini.crd, cr01ts_ini.crd,
+         /cr02.crd, cr02.para, cr02.topo, optcr02.crd
+
+..............................................................................
+
+2.3.2 Semiempirical Valence Bond (SEVB) Term
+
+     The SEVB term is a correction to the PES when combined semiempirical
+NDDO QM/MM hamiltonians are used to model the reactivity in enzyme active
+sites.  The code assigns two extended London-Eyring-Polanyi-Sato (LEPS)
+potentials to the subsystem {A,B,D} mimicking the acceptor, transferred,
+and donor sites, and the necessary parameters entering in the definition of
+the Morse functions, i.e. dissociation energies (Dxy), equilibrium distances
+(Rxy), beta exponents (bxy), and Sato parameters (Sxy). During a molecular
+dynamics simulation the value of the SEVB energy and gradients are evaluated
+at every step from the instantaneous configuration of the system and added
+to the corresponding arrays.
+
+
+Files Added:
+source/fcm/leps.fcm
+      /quantum/qmleps.src
+
+Files Modified:
+source/quantum/qmset.src, qmene.src
+
+Modified Documentation:
+doc/qmmm.doc
+
+New Testcase:
+test/c28test/testleps.inp
+
+------------------------------------------------------------------------------
+
+2.4 Biased Molecular Dynamics: Half Quadratic Bias Method (HQBM)
+    Name          : Emanuele Paci
+    Email Address : paci@pandora.u-strasbg.fr
+    Institution   : Univ. Louis Pasteur (Strasbourg) & Oxford University
+    Date          : Jul 15, 2000
+
+    Biased molecular dynamics implementation based on a time dependent half
+quadratic perturbation designed to induce large conformational changes on
+the simulation timescale and generate low energy pathways.
+
+Files Added:
+source/energy/hqbm.src
+      /fcm/hqbm.fcm
+
+Files Modified:
+source/charmm/charmm_main.src
+      /energy/energy.src
+      /energy/eutil.src
+      /fcm/energy.fcm
+
+New Documentation:
+doc/hqbm.doc
+
+New Testcase:
+test/c28test/hqbm.inp 
+test/data/1aps.crd, 1aps_mini.crd
+
+------------------------------------------------------------------------------
+
+2.5 Targeted Molecular Dynamics (TMD)
+    Name          : Jianpeng Ma
+    Email Address : jma@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : July 20, 2000
+
+    This is only for TMD using holonomic RMS constraint.  For doing
+Targeted Molecular Dynamics (TMD), one needs to define a moving coordinate
+and a target coordinate. You slowly pull the moving structure towards
+the target structure by gradually decreasing the RMS distance between two.
+The 'pulling' speed is defined by user.
+
+    Several new keywords for charmm dynamic command (DYNAmic) have been added.
+To invoke TMD, very similar to Berendsen's constant temperature method,
+one needs to start with the keyword TARGet, then followed by a few others
+defined detailed parameters such as the number of atom that subject to
+TMD constraint (NTAR), number of dynamic steps for stopping artificial
+rotation (INRT), and RMS increment (DINC).
+
+    The TMD code can work with and without SHAKE.
+
+Files Added:
+source/dynamc/tmd.src
+      /fcm/tmd.fcm
+
+Files Modified:
+source/charmm/charmm_main.src
+      /dynamc/dcntrl.src, dynamc.src, dynamc4.src, dynio.src
+      /energy/eutil.src
+      /minmiz/minmiz.src
+
+Modified Documentation:
+doc/dynamc.doc
+
+New Testcase:
+test/c28test/tmdtest.inp
+
+------------------------------------------------------------------------------
+
+2.6 BYCC Enhancements
+    Name          : Robert J. Petrella
+    Email Address : petrella@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : June 22, 2000
+
+2.6.1 EEF1 Modification
+     Modified eef1 to be compatible with active atom selections (i.e. with
+NBACtive command used in conjunction with BYCC non-bonded option).
+Since only active atoms appear in the nonbonded list, the ATOMON array
+flags (=1) the atoms appearing in the list.  Solvation energies are then
+calculated only with the flagged atoms.
+
+Modified Files:
+source/misc/eef1.src        SUBROUTINE EEF1EN, SLVPRINT and EEF1IM
+      /energy/energy.src    SUBROUTINE ENERGY
+             /intere.src    SUBROUTINE INTER2
+doc/eef1.doc
+
+..............................................................................
+
+2.6.2 BYCC code Enhancements
+     Reduced memory requirements of the BYCC option by assigning arrays
+to temporary memory (stack).  Eliminated unnecessary common block variables
+in actclus.fcm.  Also, removed SUBROUTINE RDCLUS from rtfio.src.
+
+Modified Files:
+source/nbonds/nbndcc.src   SUBROUTINE NBNDGG
+             /nbonds.src
+      /io/rtfio.src
+      /fcm/actclus.fcm
+
+------------------------------------------------------------------------------
+
+2.7 Karolinska Institute Fixes and Enhancements
+    Name          : Lennart Nilsson
+    Email Address : Lennart.Nilsson@biosci.ki.se
+    Institution   : Karolinska Institute
+    Date          : July 15, 2000
+
+2.7.1 COOR DMAT
+   A bug in the code for the RMSF option is fixed and the following new
+keywords are added:
+
+   MATRix      to give output in a matrix format, applies to the distance
+               as well as distance fluctuations
+   RELAtive    to give relative distance fluctuations
+   DUNIt <int> to give distance matrix output and fluctuations in one go
+
+Files involved:
+doc/corman.doc
+source/manip/corman2.src
+
+..............................................................................
+
+2.7.2 COOR COVA
+    The new keyword MATRix is added to give output in matrix format.
+
+Files involved:
+doc/corman.doc
+source/manip/corman2.src
+
+..............................................................................
+
+2.7.3 COOR HBOND
+    Modifed output format. With keyword VERBose one now gets listing of
+all pairs of hbonds between atoms in the two selections (previously one
+would only get statistics for the atoms in the first selection).
+
+Files involved:
+doc/corman.doc
+source/manip/hbanal.src
+
+..............................................................................
+
+2.7.4 TRAJ READ/WRITe
+     Documentation is clarified.
+
+Files involved:
+doc/dynamc.doc
+
+------------------------------------------------------------------------------
+
+2.8 TSRI Fixes and Enhancements
+    Name          : Charles L. Brooks, III, Michael F. Crowley
+    Email Address : brooks@scripps.edu, crowley@scripps.edu
+    Institution   : The Scripps Research Institute
+    Date          : July 17, 2000
+
+..............................................................................
+
+2.8.0 General overview.  We have introduced a number of improvements
+toward making CHARMM functionally more friendly and performance-wise
+better, these are described in 2.8.1 - 2.8.5.  Additional bugfixes for
+particular machines and algorithms are described in 2.8.6 and 2.8.7.
+Finally, new developments/improvements for "generalized homology
+modeling" (see http://mmtsb.scripps.edu), 2.8.8, and lambda-dynamics
+improvements (including enhancements to allow GB to be used with
+BLOCK), 2.8.9, are described.
+
+..............................................................................
+
+2.8.1 Fast Shake.  This modification involves bring the "fast vector"
+SHAKE into operation w/ fast scalar commands to utilize the analytic
+3x3 water-specific SHAKE algorithm.  This should become the default
+for SHAKE in CHARMM, it improves performance when water rigid
+molecules are employed very substantially.  It is accessed currently
+as documented in the SHAKE documentation w/ the shake fast option.
+
+KEYWORD: FSSHK
+
+source/charmm/iniall.src
+source/dynamc/dcntrl.src
+source/manip/shake.src
+
+..............................................................................
+
+2.8.2 This modification permits access to both a list and substitution
+varibles for query regarding the specific pref.dat options used in
+building a given CHARMM executable.  Documentation appears in
+the misc.doc  and subst.doc document files.
+
+KEYWORD: PREFMSI
+
+source/charmm/iniall.src
+doc/miscom.doc, subst.doc
+
+..............................................................................
+
+2.8.3 This modification was introduced to make permit easier use of
+CHARMM on MPI-parallel systems that do not support sdin and stdout.
+It turns off stdin and stdout and redirects automatically to files
+charmm.inp and charmm.out respectively.
+
+KEYWORD: FILEINPUT
+KEYWORD: FILEOUTPUT
+
+source/machdep/machio.src
+
+..............................................................................
+
+2.8.4 Nested Timers to permit more detailed timing information to be
+gathered for performance assessment.
+
+KEYWORD: NEWTIMER
+
+source/charmm/charmm_main.src, iniall.src
+source/dynamc/dcntrl.src, dynamc.src
+source/energy/energy.src
+source/image/nbndgcm.src
+source/manip/shake.src
+
+..............................................................................
+
+2.8.5 install.com
+
+Added "nolog" command option so log file is not created
+and compile output goes to stdout instead - a useful tool for development.
+
+All .mk files changed to enable the "keepf" and "keepo" install.com options.
+
+..............................................................................
+
+2.8.6 Bugfixes for ibmsp machines
+
+source/machdep/paral1.src
+
+..............................................................................
+
+2.8.7 Bugfixes for various problems from c28a2.
+
+KEYWORD: PMEPLSMA
+
+source/mmff/merckio.src
+source/nbonds/ace.src, enbfast.src, pme.src, pmeutil.src
+source/quantum/qmpac.src
+doc/nbonds.doc
+..............................................................................
+
+2.8.8 Center of Mass Harmonic Constraints for use in lattice/all atom
+refinement with "generalized homology modeling" tools being build by
+M. Feig.
+
+KEYWORD: HMCM
+
+source/charmm/iniall.src
+source/energy/ecnstr.src, energy.src, eutil.src, printe.src
+source/fcm/cnst.fcm, dimens.fcm, energy.fcm
+source/manip/cstran.src
+source/pert/epert.src
+test/c28test/hmcm.inp
+test/data/pep5.pdb
+doc/cons.doc
+
+..............................................................................
+
+2.8.9 Improvements and new additions to lambda-dynamics code/methods
+to permit 1) more general umbrella potentials that are
+lambda-dependent be applied for improved convergence and sampling
+during lambda-dynamics (See S. Banba et al., JCP, 2000; JPC, 2000); 2)
+to allow use of the generalized Born module with the BLOCK and
+lambda-dynamics approaches.  These are developments from Shinichi
+Banba while at TSRI.  NOTE: Some of these keywords will change and be
+eliminated to more tightly incorporate developments in the next
+release.
+
+KEYWORD: BANBA
+KEYWORD: LDLAN
+KEYWORD: LDMGEN
+KEYWORD: LMC
+KEYWORD: LRST
+KEYWORD: GBBLCK
+KEYWORD: GBFIXAT
+
+source/charmm/iniall.src
+source/dynamc/dcntrl.src, dynamc.src, dynio.src, dynlng.src
+source/energy/eintern.src, enefscal.src, eutil.src, genborn.src
+source/fcm/block.fcm, genborn.fcm, lambda.fcm, reawri.fcm, rwlam.fcm
+source/image/images.src
+source/nbonds/enbfast.src, enbond.src, enbonda.src, nbutil.src
+source/pert/block.src
+
+test/c28test/GB_block.inp, GB_fep.inp, GB_ldm.inp, GB_mcmd.inp
+            /ldm_lang.inp, ldm_lang_slow.inp, ldm_rst.inp, ldm_rst2.inp
+            /ldm_rst2_slow.inp, ldm_rst_slow.inp
+            /mcmd_rst.inp, mcmd_rst2.inp, mcmd_rst2_slow.inp, mcmd_rst_slow.inp
+            /replica_genborn1.inp, replica_genborn2.inp, replica_genborn3.inp
+doc/block.doc, dynamc.doc, genborn.doc, pdetail.doc
+
+------------------------------------------------------------------------------
+
+2.9 Slovenia National Institute of Chemistry Developments
+    Name          : Milan Hodoscek
+    Email Address : milan@kihp6.ki.si
+    Institution   : National Institute of Chemistry, Slovenia
+    Date          : June 23, 2000
+
+2.9.1 Name conflicts resolved
+    Due to GAMESS compatibility problems,
+    - NORM subroutine was changed to TQNORM
+    - EPSLON subroutine was changed to EPSLN
+    - PSETUP subroutine was changed to PRSET
+    - PATH subroutine was changed to PATHC
+
+Files modified:
+source/charmm/charmm_main.src
+      /correl/solana.src
+      /dimb/eispack.src
+      /dynamc/dcntrl.src, prssre.src
+      /rxncor/path.src
+
+..............................................................................
+
+2.9.2 GAMESS code update
+
+1) New GAMESS version (includes DFT) replaces gamint/gamess.  Parallel
+   library DDI is partially implemented in CHARMM for better performance.
+
+File Added:
+source/gamint/ddi.src
+
+2) New NOGUess option in GAMEss command added. It speeds up some calculations
+   and make others possible. Default is still the old behavior.
+
+Files modified:
+doc/gamess.doc
+source/fcm/gamess.fcm
+      /gamint/gamini.src, blur.src
+test/c25test/gmstst.inp
+
+..............................................................................
+
+2.9.3 Header Enhancement
+     More informational printout in the CHARMM header. It reports the
+hostname of the machine (and for parallel also number of additional
+processes) and more specific information of the operating system.
+
+Files modified:
+source/machdep/cstuff.c, startup.src
+
+..............................................................................
+
+2.9.4 Minor Enhancements
+    "Y2K" fix and more precision in timings.  Format for Volume calcultations
+increased.
+
+Files modified:
+source/machdep/cstuff.c, machutil.src
+      /manip/corman2.src
+
+------------------------------------------------------------------------------
+
+2.10 CHARMM / GAMESS-UK Interface
+    Name          : Paul Sherwood
+    Email Address : p.sherwood@daresbury.ac.uk
+    Institution   : CLRC Daresbury Lab.
+    Date          : July 20, 2000
+
+     Ab initio program GAMESS-UK (General Atomic and Molecular Electronic
+Structure System, UK version) is connected to CHARMM program in a QM/MM
+method.  This method is based on the interface to the GAMESS (US version),
+the latter being an extension of the QUANTUM code which is described in
+J. Comp. Chem., Vol. 11, No. 6, 700-733 (1990).
+
+     Some references are renamed in order to resolve conflics between
+CHARMM and GAMESS-UK as follows.  All other remaining clashes have been
+resolved by changing GAMESS-UK source.
+
+     common/equiv    => common/equiv0 in fcm/cff.fcm
+     common/deriv    => common/derivr in fcm/deriv.fcm
+     function lstchr => lastch        in cff/parrdr_cff.src
+     function INLIST => QINLIST       in image/nbondm.src, nbonds/nbonda.src,
+                                         nbonds/nbondg.src, nbonds/nutil.src
+     ortho1 => ortho1p in rxncor/path.src
+     shut   => chmshut in machdep/socket.c
+
+New Module and Files:
+source/gukint
+source/gukint/gukini.src
+doc/gamess-uk.doc
+test/c28test/alanine_guk.inp
+    /data/alanine_guk.in
+
+Modified Files:
+install.com
+build/UNX/Makefile_sgi and Makefile_gnu
+source/charmm/charmm_main.src, iniall.src
+      /energy/energy.src
+      /gener/update.src
+      /machdep/startup.src
+      /nbonds/nbonda.src, nbonds.src
+      /quantum/addlnat.src
+
+Notes:
+a) sgi and gnu are the only platforms that the code is tested on.
+b) Corrected logical test in mmff/merckio.src.
+
+------------------------------------------------------------------------------
+
+2.11 Combination of soft core potentials and PERT
+    Name          : Stefan Boresch and Michael Brunsteiner
+    Email Address : stefan@mdy.univie.ac.at
+    Institution   : University of Vienna, Austria
+    Date          : July 5, 2000
+
+     The PERT free energy module of CHARMM is based on a linear dependence
+on the coupling parameter.  While simplifying implementation, this
+approach is prone to van der Waals endpoint problems.  One widely used
+method to overcome the van der Waals endpoint problem is the use of
+soft core Lennard Jones and electrostatic interactions for those
+energy terms that cause problems.  This capability has been added,
+following Zacharias, Straatsma and McCammon, J. Chem. Phys. 1994, 100,
+9025.  A first publication in which a development version of the
+code was used is Brunsteiner & Boresch, JCP 2000, 112, 6953-55
+
+Modified Files:
+source/charmm/iniall.src    initialization
+      /energy/enefscal.src  force use of slow energy routines in subr. FASTST
+      /nbonds/enbonda.src   trap case PSSP; call spec. purpose energy routines
+             /enbondg.src
+      /pert/epert.src       bulk of changes,
+                            spec. purpose energy routines added
+           /pert.src        parsing, initialization, resetting; adding of add.
+                            dU/dL contributions to standard array entries
+      /fcm/pert.fcm         definitions of nonlocal variables
+
+Modified Documentation:
+doc/pert.doc
+
+New/Modified Testcase:
+test/c28test/pssp1.inp, pssp2.inp, pssp3.inp
+    /data/pssp3.pun
+
+------------------------------------------------------------------------------
+
+2.12 Cornell University Developments
+    Name          : Wonpil Im and Benoit Roux
+    Email Address : Benoit.Roux@med.cornell.edu
+    Institution   : Cornell University
+    Date          : 5 July, 2000
+
+2.12.1 Generalized solvent boundary potential (GSBP)
+
+    A generalized solvent boundary potential (GSBP) has been implemented
+for simulation of a reduced region while incorporating the influence of
+the surrounding implicitly.  GSBP is in the same spirit as the SBOUND
+potential and the SSBP but is relies heavily on the PBEQ module.
+The current implementation of the method is described in W. IM, S. Berneche
+and B. Roux. J. Chem. Phys. (2000, to appear).
+
+     The GSBP represents the electrostatic forces from the surrounding
+as the use of 2 components:  One is the static external field which comes
+from the charge distribution in the outer region considering the environment
+as a featureless dielectric medium.  The second one is the reaction field
+which is created by the charge distribution inside the inner region
+considering the whole molecular configuration and the solvent.
+
+New Files:
+source/misc/gsbp.src, gsbp2.src
+
+Modified Files:
+install.com (gsbp keyword)
+source/energy/energy.src, eutil.src, printe.src
+      /misc/pbeq.src, pbeq2.src
+      /fcm/energy.fcm, pbeq.fcm
+
+Modified Documentation:  
+doc/pbeq.doc
+
+New Testcases:  
+test/c28test/gsbptest1.inp  test the setup of the static field and
+                            reaction field matrix calculation
+test/c28test/gsbptest2.inp  generate short trajectory with GSBP forces 
+
+..............................................................................
+
+2.12.2 Miscelaneous upgrades for the PBEQ module
+
+     The PBEQ (Poisson-Boltzmann finite-difference solver) has been upgraded
+and improved.  Several methods for solving the finite difference equation
+have been implemented and tested.  Full multi-grid relaxation (FMGR),
+optimized successive over relaxation (OSOR), 3D periodic boundary conditions.
+Non-linear and partially linearized PB equation have been implemented.
+The performance of the code has been tested and improved by comparing with
+delPhi.  The performance is now fairly similar to that of delPhi.
+A complete benchmark input file pbeqtest6.inp is introduced to test all
+the convergence methods for a grid of 65 cubic (estimated run time is
+about 15 minutes on Pentium III).
+
+     A new stream file pka.str has been introduced to calculate pKa of
+ionizable residues with all atom PARAM22.  The charges of the 2 states
+are stored in scalar store 1 and store 2.  The usage of the stream file
+is illustrated in the pbeqtest7.inp file.
+
+Modified File:
+source/misc/pbeq.src, pbeq2.src
+      /fcm/pbeq.fcm
+
+Modified Documentation:  
+doc/pbeq.doc
+
+New Testcases:  
+test/c28test/pbeqtest4.inp  test 3D periodic boundary conditions
+            /pbeqtest5.inp  test non-linear and partially linearized PB
+            /pbeqtest6.inp  benchmark of all the finite-difference solvers
+            /pbeqtest7.inp  example of pKa calculation with pka.str
+test/data/pka.str, rs12_asp1.crd, str1.crd
+
+..............................................................................
+
+2.12.3 Multiple RMSD (BestFit) harmonic restraints
+
+     A new restraint has been introduced to manipulate and control
+macromolecular conformations.  The new restraint is related to the
+CONS HARM BestFit, which sets up harmonic restraints with respect of a 
+reference structure.  However, because all the reference data structure
+is stored in XREF, YREF, ZREF, this command allows only a single bestfit
+restraint.  In addition, it allows only a restraint to zero value of RMSD.
+It is useful to allow multiple such bestfit RMSD restraint to progress
+from one conformation to a second conformation of a molecular system.
+The new command CONS RMSD allows such multiple bestfit restraint.
+The form of the new restraint energy is:
+
+            E   =   Sum_i   KFORCE_i * [RMSD  - OFFSET_i]**2
+
+Where RMSD is the (possibly mass-weighted) root-mean-square-deviation (RMSD)
+of the current coordinates with respect to a reference structure,
+KFORCE_i is a force constant, and OFFSET_i is a constant value setting
+a relative distance with respect to the RMSD of the structure.
+The restraint energy is equivalent the normal BestFit energy.
+The forces have been checked with the TEST FIRST command.
+
+The syntax is very similar to all current restraints in CHARMM:
+
+CONS RMSD {FORCE <real>} {OFFSET <real>} -
+          [mass] [comp] [norotation] [notranslation] atom-selection
+
+sets a RMSD new restraint.  It should be noted that all the data structure
+is stored dynamically on the HEAP and thus, no extra permanent (static)
+storage is introduced.  
+
+CONS CLEAR 
+
+removes all multiple RMSD restraints
+
+CONS RMSD SHOW
+
+prints all current RMSD restraints with all parameters.
+
+
+New Files:
+source/energy/rmsd.src
+      /fcm/rmsd.fcm
+
+Modified Files:
+source/energy/ecnstr.src
+      /manip/cstran.src
+
+Modified Documentation:
+doc/cons.doc
+
+New Testcase:
+test/c28test/test_rmsd.inp
+
+..............................................................................
+
+2.12.4 Patch RTF generator for PERT calculations
+
+     A new utility command MKPRES has been introduced to write a PATCH
+for adding a dummy sidechain onto a backbone with the goal of performing
+free energy calculations.  The command generates the list of needed dihedral
+angles and non-bonded exclusions.
+
+New File:
+source/gener/mkpres.src
+
+Modified File:
+source/charmm/charmm_main.src
+
+Modified Documentation:
+doc/pert.doc
+
+New Testcase:
+test/c28test/mkpres.inp
+
+..............................................................................
+
+2.12.5 Bugfix: MMFP GEO PLANAR
+
+     It is possible to set a distance restraint between the center of mass
+of two atom selection using the GEO restraint.  If the keyword planar is used,
+the restraint applied only for the projection along the planar normal
+(given by xdir <real> ydir <real> zdir <real>, see doc/mmfp.doc).
+
+File Involved:
+source/misc/mmfp.src
+
+==============================================================================
+
+[3] c28a4 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 2000 through February 15, 2001.
+
+3.1 Oxford Physical and Theoretical Chemistry Lab Developments
+    Name          : Ben Webb
+    Email Address : ben@bellatrix.pcl.ox.ac.uk
+    Institution   : Physical and Theoretical Chemistry Lab, Oxford, UK
+    Date          : November 30, 2000
+
+3.1.1 QM/MM fluctuating charge improvements
+
+1) Bugs with freeing memory on shutting down FlucQ, and reading restart files
+   on parallel machines, are fixed.
+2) Charge thermostatting is now supported via. Nose-Hoover, coupling to an
+   external heat bath, or simple velocity scaling. This is set up with the
+   FQMASS, FQTCOU and FQSCAL options to the DYNAmics command, respectively.
+3) FlucQ simulations are now supported with Ewald (not PME) calculations.
+4) An interface to GAMESS-UK is now in place, which requires the standard
+   GAMESS-UK distribution to be suitably patched.
+5) Patches for CADPAC, GAMESS-US, and GAMESS-UK are available in
+   support/patch to allow FlucQ to function properly with these packages.
+
+Files Modified:
+source/flucq/flucq.src, fluqdyn.src, fluqqmmm.src
+      /charmm/iniall.src
+      /dynamc/dcntrl.src, dynio.src
+      /energy/energy.src
+      /fcm/flucq.fcm
+      /gukint/gukini.src
+      /nbonds/enbond.src, ewald.src, ewaldf.src
+
+Files Added:
+support/patch/cadpac.patch, gamess-uk.patch, gamess-us.patch
+
+New/Modified Documentation:
+doc/flucq.doc
+
+New/Modified Testcase:
+test/c28test/fqam1.inp, fqguk.inp
+    /data/fq_guk.in
+
+..............................................................................
+
+3.1.2 Changes for proper MPI functioning under Alpha Linux (GNUALPHA)
+
+    CHARMM must be built with 64-bit integers under Alpha Linux (using the
+Compaq C and Fortran compilers, by means of the FORT switch to install.com)
+in order for heap expansion and GAMESS to function correctly. However, external
+libraries (e.g. for MPI) are generally built with 32-bit integers. Thus, in
+order for CHARMM to interface properly with these libraries, all integer
+arguments must be explicitly passed as INTEGER*4. Routines that assume
+integers to be 4 bytes in length must also be changed to use 8 bytes. The
+implementation for MPI under Alpha Linux has been tested for CHARMM linked
+with the MPICH libraries (also compiled with Compaq's ccc/fort) on a network
+of EV56 machines.
+
+    install.com has also been modified to force mpif.h to explicitly define
+integers as INTEGER*4 under Alpha Linux. install.com now also uses mpicc/mpif77
+rather than gcc/g77 on all GNU systems when MPI is requested.
+
+Files Modified:
+install.com
+source/machdep/paral1.src, paral2.src, paral3.src
+      /gamint/ddi.src
+
+..............................................................................
+
+3.1.3 Addition of PM3 parameters to QUANTUM
+
+    PM3 parameters are added to the existing AM1 and MNDO parameters for
+QUANTUM. They can be used by specifying the 'PM3' option to the QUANTUM
+command rather than 'AM1'. Also, by default QUANTUM uses the CHARMM nonbond
+cutoffs for the QM/MM interaction (this differs from GAMESS/CADPAC, which
+interact with all MM atoms). This behaviour can be disabled, such that
+QUANTUM interacts with all MM atoms, by giving the 'NOCUtoff' option to the
+QUANTUM command.
+
+Files Modified:
+source/fcm/quantm.fcm, am1parm.fcm
+      /quantum/qmdata.src, qmene.src, qmpac.src, qmset.src, qmnbnd.src
+
+New/Modified Documentation:
+doc/qmmm.doc
+
+New/Modified Testcase:
+test/c28test/pm3.inp
+
+..............................................................................
+
+3.1.4 Addition of a "simple combination" to RXNCOR code
+
+    The existing RXNCOR "COMBination" command is supplemented by a "simple"
+combination ("SCOMbination") command. This takes a simple weighted sum
+of all names, as opposed to a weighted mean, and thus allows negative weights
+for tracing (for example) the difference between two bond lengths.
+
+Files Modified:
+source/rxncor/rxndef.src
+
+New/Modified Documentation:
+doc/umbrel.doc
+
+------------------------------------------------------------------------------
+
+3.2 University of Minesota Developments
+    Name          : Jiali Gao
+    Email Address : gao@chem.umn.edu
+    Institution   : University of Minnesota
+    Date          : December 29, 2000
+
+3.2.1 Semiempirical Quantum-Molecular Mechanical Code Enhancements
+
+1) QM/MM electrostatic free energy perturbation
+      A new option is added to the QUANtum command to perform
+free energy calculations for QM/MM interactions. 
+The PERT command performs electrostatic free energy decoupling
+calculations for QM/MM interactions on the fly of a molecular dynamics
+simulation.  The algorithm is based on a method described in J. Gao,
+J. Phys. Chem. 96, 537 (1992).  Through a series of simulations, the
+electrostatic component of the free energy of solvation can be determined.
+
+2) QM/MM interaction energy decomposition
+      The DECOmposition option is added to the QUANtum commad, which
+initiates an qm/mm interaction energy decomposition calculation 
+on the fly during a molecular dynamics simulation using the QUANtum command.
+It is currently implemented only for semiempirical Hamiltonians.
+The analysis is based on the method reported in J. Gao and X. Xia,
+Science, 258, 631 (1992).  It decomposes the total QM/MM electrostatic
+interaction energy into a vertical interaction energy Evert, and a
+polarization term Epol.  The latter is further separated into
+electrostatic stabilization Estab, and charge distortion Edist.
+
+3) Modification of space allocation for qm/mm interactions
+     Reduce the space allocated for qm/mm interactions.  Previously, space
+for all mm atoms are allocated.  Now, it is reduced to only request space
+for atoms that actual interact with qm atoms.  This only affects the
+semiempirical code.
+
+Files Modified:
+source/quantum/qmene.src, qmnbnd.src, qmset.src
+      /dynamc/dynamc.src
+      /energy/eutil.src
+
+Modified Documentation:
+doc/quantum.doc
+
+New Testcase:
+test/c28test/qmlep.inp
+
+Note that qmfep.inp is basically the same input for the qmmm testcase 
+c22test/quantum1.inp
+
+..............................................................................
+
+3.2.2 Umbrella Sampling Free Energy Calculation
+     A biasing potential for umbrella sampling free energy
+calculations (form 5) is added.
+
+     RXNCord: UMBRella FORM form KUMB ku DEL0 del0
+              form          functional form of potential
+              ----          ----------------------------
+               1               ku*(delta-del0)**2
+               5               ku*(delta-del0)**2 + Ubias(delta)
+
+Ubias is a biasing potential, used in addition to the harmonic restraining
+potential, to truncate high barriers of activated processes.  Ideally,
+Ubias(Rc) would be the negative of the potential of mean force g(Rc),
+where Rc is the reaction coordinate.  Ubias is implemented as a cubic spline
+function based on a tabulated data to be read prior to the call of RXNC.
+
+Files Modified:
+source/rxncor/rxndef.src, rxnene.src
+
+Modified Documentation:
+doc/umbrel.doc
+
+------------------------------------------------------------------------------
+
+3.3 Enhancements to the Monte Carlo Module
+    Name          : Aaron R. Dinner
+    Email Address : aaron@bellatrix.pcl.ox.ac.uk
+    Institution   : University of Oxford
+    Date          : 30 November 2000
+
+1) Hybrid Monte Carlo (HMC) moves were added.  In such moves, 
+   the positions of the atoms are propagated with a molecular 
+   dynamics integrator (DYNAMC).  See mc.doc and references 
+   therein for further description.
+
+2) Rigid body translations and rotations of heavy atoms and 
+   their associated hydrogen atoms (RTRN/RROT BYHEavy) were 
+   added.  Such moves allow one to compare MC simulations with 
+   dynamics simulations constrained with SHAKE BONH directly.
+
+   For consistency, the CART key word was changed to RTRN BYATom; 
+   the subroutines MVRTRN and MVCART were combined to condense the 
+   code.
+
+3) Group-based energy calculations now scale correctly with 
+   system size.  This modification involved changing the calling
+   arguments of EGROUP, ENBFSG, ENBFVG, and EIMNBD, which affected
+   several source files (detailed below).
+
+4) Concerted rotations that select the original conformation 
+   (to maintain detailed balance) are now counted as rejections 
+   for ARM, DOMC, and MCSTAT.  Also, the correct original driver 
+   angle rotation is now passed back.  Both these changes should 
+   improve automatic optimization of CROT moves.
+
+5) The calling arguments of EEF1EN were changed to accelerate MC 
+   calculations using this solvation term and for consistency with
+   the group-based energy calculation changes described above.  Also, 
+   the call to EEF1EN in MCENER was fixed to include the ATOMON list.
+
+6) The LCENTR flag is now handled correctly in ENBFVG.
+
+Files Added:
+mc/mvhmc.src (1)
+
+Files Modified:
+source/dynamc/dynamc.src (1)
+      /energy/energy.src (3,5), intere.src (5)
+      /image/eimage.src (3)
+      /mc/mc.src (1,2,3,4), mcace.src (3), mcener.src (3,5)
+         /mcimge.src (3), movead.src (1,2), moveio.src (1)
+         /mvcrot.src (4), mvrtrn.src (2)
+      /misc/eef1.src (5)
+      /nbonds/enbfast.src (3,6), enbond.src (3), enbondg.src (3)
+      /pert/epert.src (3)
+      /fcm/reawri.fcm (1)
+
+Modified Documentation:
+doc/mc.doc
+
+------------------------------------------------------------------------------
+
+3.4 TSRI Fixes and Enhancements
+    Name          : Charles L. Brooks, III and Michael F. Crowley
+    Email Address : brooks@scripps.edu, crowley@scripps.edu
+    Institution   : The Scripps Research Institute
+    Date          : December 29, 2000
+
+3.4.1 Installation Enhancements
+
+    gukint is added to make.  ibmsp3 Makefile is added.  NOLOG argument
+is added to send compile output to stdout rather than a log file.
+
+Files Added/Modified:
+install.com
+build/UNX/Makefile_ibmsp3 [New]
+
+..............................................................................
+
+3.4.2 Grid based energy calculation
+
+     A new function is added to calculate grid-based energies.
+
+Files Modified:
+source/charmm/charmm_main.src, iniall.src
+      /energy/energy.src, eutil.src, intere.src, printe.src
+      /fcm/energy.fcm, grid.fcm [New], pbeq.fcm
+      /misc/grid.src [New], pbeq.src, pbeq2.src
+
+New Documentation:
+doc/grid.doc
+
+..............................................................................
+
+3.4.3 Timing Calls
+
+     The new timer function is extended and runs on parallel machines.
+
+Files Modified;
+source/dynamc/dcntrl.src, dynamc.src, dynamc4.src, dynamvv.src
+      /energy/energy.src
+      /util/new_timer.src
+      /fcm/new_time.fcm, parallel.fcm
+      /image/nbndgcm.src
+      /machdep/machio.src, paral1.src, paral2.src, paral3.src
+      /nbonds/enbond.src, ewaldf.src, heurist.src
+
+..............................................................................
+
+3.4.4 Fast SHAKE
+
+     Fast shake (analytical) for all 2, 3, and 4 body constraints.
+Set up for all bonh (TIP3, ch, ch2, ch3, nh, etc), Very much improved
+fast shake for non-vector machines.  Works for parallel. (keyword FSSHK)
+
+Files Modified:
+source/fcm/fstshk.fcm
+      /gener/update.src
+      /manip/fsshake.src, shake.src
+
+..............................................................................
+
+3.4.5 Bugfixes and Enhancements
+
+doc/cons.doc            - insignificant change concerning fast shake
+
+   /galgor.doc          - update for bugfix
+
+source/fcm/cff.fcm      - ##IF CFF added to save huge amounts of memory
+                          when CFF keyword is not used
+
+      /fcm/dimens.fcm   - increased maximum for number of dihedrals for LARGE
+
+      /fcm/galgor.fcm   - changes for ic seed atom specifications
+
+      /gukint/ukini.src - added ##IF GAMESSUK 
+
+      /io/parmio.src    - added ability to have geometric combining rules for
+                          vdw parameters enabling OPLS FF to be implemented
+                          in charmm (keyword: GEOMVDW)
+
+      /misc/genetic.src - changes for ic seed atom specifications
+
+      /mmff/enbfast_mm.src - flucq error fixed: removed offending endif
+
+      /nbonds/nbexcl.src - makitc_clr() routine added to clear image memory
+
+      /nbonds/nbonds.src - NO_BYCC logic added
+
+      /nbonds/nbutil.src - bugfix for softvdw
+
+      /pert/block.src    - fixed allocation of ibvcrrt
+
+   
+      /util/prpref.src   - added FLUCQ
+
+..............................................................................
+
+3.4.5 Testing
+
+     Lots of test cases changed to fit the formula of being able to stream,
+get rid of references to unit 5 and unit 99.  Check keywords to decide
+if the test case is appropriate for the pref.dat keywords that were used
+for the executable being tested.  Made run parallel jobs on mpi, t3e, ibmsp3,
+and ibmsp.
+
+Files New/Modified:
+test/test.com
+    /stream.inp [New] 
+
+------------------------------------------------------------------------------
+          
+3.5 Slovenia National Institute of Chemistry Developments
+    Name          : Milan Hodoscek
+    Email Address : milan@kihp6.ki.si
+    Institution   : National Institute of Chemistry, Slovenia
+    Date          : December 28, 2000
+
+
+3.5.1 EEF1 method is parallelized
+
+Files Modified:
+source/misc/eef1.src
+
+Modified Documentation:
+doc/parallel.doc
+
+..............................................................................
+
+3.5.2 Arrays references
+
+Some arrays in common are used in too large loops, and some access the
+zeroth element, etc....
+
+Files Modified:
+source/energy/eutil.src - line 388: should be DO I=1,LENENP
+      /io/rtfio.src     - line 263: rtrtyp(nrtrs); but nrtrs is put to 0
+      /util/matrix.src  - lines 90,245,285,377,822,1018,1058:
+                          A(1) -> A(*) changes
+      /util/title.src   - lines 57,59: limit problems in LINE()
+
+..............................................................................
+
+3.5.3 Energy printout with QM/MM
+
+QM energies are converted from Hartrees to kcal/mole and become very
+large numbers which energy/printe.src couldn't handle. Fixed!
+
+File Modified:
+source/energy/printe.src
+
+..............................................................................
+
+3.5.4 Common block names
+
+Some of the names in .fcm SAVE statements and COMMON statements don't
+agree. All such occurences are fixed.
+
+Files Modified:
+source/fcm/fft.fcm
+      /fcm/intcr.fcm
+      /fcm/mmff.fcm
+
+..............................................................................
+
+3.5.5 XXLARGE size keyword
+
+install.com <machine-type> xxlarge didn't work. Fixed.
+
+Files Modified:
+install.com
+source/fcm/heap.fcm
+      /fcm/stack.fcm
+
+..............................................................................
+
+3.5.6 Performance problem
+
+Some of the common blocks are not aligned for efficient performance.
+The speed of CHARMM runs varies if compiled with different pref.dat keywords.
+
+File Mofdified:
+source/fcm/lambda.fcm
+
+..............................................................................
+
+3.5.7 Miscellaneous small bug fixes
+
+Files Modifed:
+source/fcm/lobos.fcm     - wrong position of ##ENDIF
+      /gamint/ddi.src    - typo in comment statement
+      /gamint/gamini.src - correct message for blur method
+      /image/nbndgcm.src - line 644: xw(3,nat) must go away!
+      /machdep/startup.src - line 229: allow use of parameters for any 
+parallel
+      /manip/shake.src   - line 271: call parptupdate() should be 
+removed!
+      /mmff/enbfast_mm.src - line 81: This ENDIF must be deleted!
+      /nbonds/pme.src    - line 357: latm problem in parallel
+install.com              - changed: reduced -> reduce as it is in 
+dimens.fcm
+
+Modified Documentation:
+doc/gamess.doc           - minor corrections
+
+------------------------------------------------------------------------------
+
+3.6 Encapsulation of the PERT/PSSP (Soft Core) Code
+    Name          : Stefan Boresch
+    Email Address : stefan@mdy.univie.ac.at
+    Institution   : University of Vienna, Austria
+    Date          : December 17, 2000
+
+The PSSP code (combination of PERT with soft core potentials) added in
+c28a3 has been put in ##IF PSSP brackets so that it can be cleanly
+eliminated if not needed.  Removing PERT from pref.dat has the same
+effect (PSSP without PERT is useless).  No functional changes were
+introduced!  PSSP is needed in the pref.dat to activate the PERT/PSSP
+code.
+
+Files Modified:
+source/charmm/iniall.src
+      /energy/enefscal.src
+      /fcm/pert.fcm
+      /pert/epert.src, pert.src
+
+------------------------------------------------------------------------------
+
+3.7 New Random Number Generator
+    Name          : Xiaoliang Qian, Dan Strahs and Tamar Schlick
+    Email Address : qian@biomath.nyu.edu
+    Institution   : New York University
+    Date          : December 22, 2000
+
+     A new Random number generator (RNG) is provided based on
+Pierre L'Ecuyer & Terry H Andres' C version code (see clcg.src).
+This RNG combines 4 linear congruential generators (LCGs)
+to get the long period of about 2^121 for the resulting sequence. 
+Multiple independent streams can also be achieved for parallel 
+computing. The current state for each stream is stored by four 
+integers rather than one for the old RNG. 
+
+     A representative usage of the CLCG RNG and the replacement
+of the old RNG is needed for MD with the LN integrator, which
+makes larger systems and longer simulation durations accessible,
+exhausting the period of the old RNG.
+
+     To conform to the existing function calling interface, the new RNG
+accepts a variable ISEED. However, the new RNG actually requires
+the propagation of four previous states, not just one state; hence,
+ISEED is now interpreted to select one of several random number streams, 
+ranging from 1 to <Maxgen>. (Maxgen is defined in fcm/clcg.fcm).
+Since ISEED is used to access a particular stream, the default value of
+ISEED (in iniall.src) will be 1 rather than 314159.  Call from subroutines
+attempting to specify ISEED are reinterpreted as modulo(Maxgen) to select
+a the random number stream.  Note that a separate subroutine SetSeed
+(clcg.src) is included for setting the initial seed of the new RNGs.
+
+     The new RND code is activated with the pref key "NEWRNG".  The default
+is still the "old" RNG.  Old dynamics restart files are not compatible
+with the new RNG code. (see dynamc/dynio.src)
+Multiple streams requires the propagation of 4*Nstream seeds through
+restart files, where Nstream is the number of streams. This suggests that
+the fixed format of the restart file would become variable. A possible
+solution emerges with adding an extra line or variable indicating the
+number of streams and, hence, the number of seed lines expected to be read.
+
+Files Added:
+source/util/clcg.src
+      /fcm/clcg.fcm
+
+Files Modified:
+source/charmm/iniall.src
+      /util/random.src
+      /dynamc/dynio.src
+
+==============================================================================
+
+[4] c28b1 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2001 through July 15, 2001.  c28b0 is the pre-release version
+tested prior the c28b1 release on August 15, 2001.
+
+4.1 TSRI Fixes and Enhancements
+    Name          : Charles L. Brooks, III and Michael F. Crowley
+    Email Address : brooks@scripps.edu, crowley@scripps.edu
+    Institution   : The Scripps Research Institute
+    Date          : July 2, 2001
+
+4.1.1 install.com 
+     Pref keys GBMF, GRID and RCFFT are added.  Note that RCFFT works
+only with PARALLEL.  SCALI MPI installation is added and SP3 FSSCK
+keyword error is fixed.
+
+4.1.2 Genborn
+     Added new GB module to allow individual atom-type based
+parameterization of Still-like GB model. Still under development.
+
+Files modified:
+doc/genborn.doc
+source/charmm/charmm_main.src
+      /energy/energy.src, genborn.src, intere.src
+      /fcm/genborn.fcm
+      /machdep/cstuff.c
+
+4.1.3 No Buffering 
+     Added keyword to eliminate output buffering.
+
+Files modified:
+source/machdep/cstuff.c
+
+4.1.4 Grid-Based Potentials
+     Additional development of grid-based potentials for ligand-receptor
+docking studies.  Modifications and testcases added.
+ 
+Files modified:
+source/charmm/iniall.src 
+      /energy/energy.src, intere.src
+      /misc/genetic.src, grid.src
+      /util/prpref.src
+
+New testcases:
+test/c28test/gridtest.inp, grid_2.inp
+    /data/3ptb_complex19.crd, 3ptb_complex19.psf, grid_3ptb.bin
+
+4.1.5 Real-to-Complex FFT for PME
+     Using real_to_complex FFT method uses the symmetry of the transformed
+charge matrix to cut memory requirements in about 1/2 and computation down
+by about 1/3 or more.  Only parallel implementation at present.  Speedup of
+50% on the FFTs results in 5% overall speedup for dhfr benchmark.
+
+pref.dat keyword: RCFFT
+
+Files modified:
+source/nbonds/nbutil.src, pme.src, pmeutil.src
+
+4.1.6 Faster Direct Sum
+     Rearranged loops, moving if statements outside loops (amounts to the
+same thing as expand) and prescreening the atoms inside the cutoff before
+doing the 6/12 and erfc loop.
+
+pref.dat keyword: FASTEW
+
+Files modified:
+source/nbonds/ewald.src
+
+4.1.7 IEEE 64 Bit Trajectory Reading
+     This is to read t3e/j90 trajectories from SGIs.
+
+pref.dat keyword: T3ETRAJ
+
+Files modified:
+source/dynamc/dynio.src
+      /fcm/stream.fcm
+      /util/title.src
+
+4.1.8 Compilation
+     Compilation feature for F90 and N32 added for SGIs
+
+pref.dat keyword: SGIF90
+
+Files modified:
+install.com
+source/machdep/machio.src, machutil.src, paral2.src, paral3.src
+      /mmff/datastruc.src
+
+4.1.9 test.com
+      Testcases made run on parallel platforms.  Need to change file names
+into lower case only.  Also added checking features compiled.
+
+Files modified:
+test/test.com
+    /c20test/brbtest.inp, dyntest2.inp, maatest.inp, trnphi.inp,
+            /vibpafl.inp, vibran.inp, vibwat.inp, vibrtst.inp
+    /c22test/cortst.inp, icfix.inp, icpert.inp, mewtest.inp,
+            /path.inp, pert.inp, slowgr.inp, stdtest.inp, window.inp
+    /c23test/clustst.inp
+    /c24test/pert2.inp
+    /c25test/cortst25.inp, helix.inp, pull.inp, quiet.inp, resdtest.inp,
+            /vibwat25.inp
+    /c27test/cubesgb.inp, genborn19.inp
+    /c28test/alanine_guk.inp, cr01.inp, cr02.inp
+
+Files renamed:
+test/c24test/dyn4dtest.inp
+    /c27test/gb_cff-data.inp, gb_cff95_na-test.inp, gb_cff95_prot-test.inp,
+            /gb_mmff94_na-test.inp, gb_mmff94_prot-test.inp,
+            /gb_mmff94_test.inp
+    /c28test/gb_block.inp, gb_fep.inp, gb_ldm.inp, gb_mcmd.inp
+
+------------------------------------------------------------------------------
+
+4.2 University of Minesota Developments
+    Name          : Jiali Gao
+    Email Address : gao@chem.umn.edu
+    Institution   : University of Minnesota
+    Date          : June 21, 2001
+
+(1)  allowing qm/mm group-group list for mm-group and qm-molecule
+     interactions in qm/mm calculations.
+
+(2)  efficient management of memory allocation for qm/mm.
+
+(3)  Inclusion of qm/mm periodic bondary conditions for qm/mm
+     calculations using Charlie Brooks' PBound.
+
+Files Modified:
+source/fcm/nbndqm.fcm
+      /quantum/qmene.src, qmnbnd.src
+
+------------------------------------------------------------------------------
+
+4.3 CFF Enhancements
+    Name          : Nan-Jie Deng
+    Email Address : ndeng@msi.com
+    Institution   : Molecular Simulations Inc.
+    Date          : April 20, 2001
+
+     Second derivatives related bugs/problems in CFF have been fixed and
+CFF documentation has been updated.  This bugfix involves fixing the
+calculation of analytical second derivatives in the CFF force field.
+As a result, methods that uses analytical second derivatives such as
+Newton-Raphson minimization and normal modes calculation are now supported
+with the use of CFF force field. 
+
+Files modified:
+source/fcm/cff.fcm
+      /cff/codes_cff.src, efscalar_cff.src, enbfast_cff.src,
+          /enbonda_cff.src, escalar_cff.src, parrdr_cff.src
+      /charmm/iniall.src
+      /util/parse.src
+      /io/rtfio.src
+doc/cff.doc
+
+------------------------------------------------------------------------------
+
+4.4 Harvard University Developments
+    Name          : Robert J. Petrella
+    Email Address : petrella@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : June 21, 2001
+
+4.4.1 ESTATS
+     Command "ESTATS"-- utility for calculating average and standard
+deviation of the potential energy and its components "on-the-fly"--
+i.e. during the actual simulation or sampling run, without the need
+for post-processing of trajectory files.
+
+pref.dat keyword: ESTATS
+
+Files modified:
+doc/energy.doc
+source/charmm/charmm_main.src, iniall.src
+      /energy/anal.src, energy.src
+
+Files added:
+source/fcm/estats.fcm
+
+4.4.2 ADUMB Modifications
+     "CORR" keyword--facility for "on-the-fly" calculation of the
+average values of specified variables as a function of the reaction
+coordinates in adaptive umbrella sampling runs.
+
+Files modified:
+doc/adumb.doc
+source/adumb/cmds.src
+            /umb.src
+      /charmm/iniall.src
+
+Files added:
+source/fcm/umbcor.fcm
+
+4.4.3 TSM modifications
+     "RUNA" keyword, used in conjunction with "SAVIc" keyword--
+facility for "on-the-fly" calculation of the free energy and average
+energy values during internal coordinate perturbation.
+
+Files modified:
+doc/perturb.doc
+source/charmm/iniall.src
+      /fcm/icpert.fcm
+      /pert/tsms.src, icpert.src
+
+------------------------------------------------------------------------------
+
+4.5 Graphics Module Enhancement
+    Name          : Rick Venable
+    Email Address : Rick_Venable@nih.gov
+    Institution   : FDA/CBER Biophysics Lab
+    Date          : July 16, 2001
+
+4.5.1 Added TRAJ commands to GRAPHX
+      Historically, only "COOR READ ... IFILE n" could be used within GRAPHX
+to read trajectory frames.  Support for TRAJ READ greatly facilitates
+viewing trajectories or making molecular animations at other than the
+default SKIP value from the trajectory file.
+
+Files Modified:
+source/graphics/graphx.src
+doc/graphx.doc
+
+------------------------------------------------------------------------------
+
+4.6 Bug Fixes and Enhancements
+    Name          : Milan Hodoscek
+    Email Address : milan@cmm.ki.si, milan@helix.nih.gov
+    Institution   : National Institute of Chemistry, Slovenia
+    Date          : July 16, 2001
+
+4.6.1 Added support for MD-GRAPE-II board
+
+      The new version of GRAPE, which is 10 times faster then previuos
+versionis now supported.
+
+Files Modified:
+source/charmm/iniall.src
+      /nbonds/enbond.src, grape.src, nbutils.src
+      /fcm/grape.fcm
+
+4.6.2 Compiler fixes
+
+      - Complaints about the standard routine names SETUP, MERGE
+      - preflx keyword missing
+
+Files Modified:
+source/mmff/mmff.src             (SETUP -> SETUPMF)
+      /dynamc/dynsub.src         (MERGE -> TMERGE)
+      /charmm/charmm_main.src    (MERGE -> TMERGE)
+      /fcm/noe.fcm               (!##PNOE missing)
+
+4.6.3 Bug Fixes
+
+      RGYR command didn't pass TEST FIRSt
+      MINI CONJ fails to converge - bug fixed
+
+Files Modified:
+source/energy/rgy.src       (RGYR fix)
+      /minmiz/conjug.src    (MINI CONJ fix)
+
+4.6.4 Documentation updated
+
+Files Modified:
+doc/parallel.doc, gamess.doc, developer.doc
+
+==============================================================================
+
+[5] c28b2 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 2001 through February 15, 2002.
+
+5.1 TSRI Fixes and Enhancements
+    Name          : Mike Crowley, Charles Brooks
+    Email Address : crowley@scripps.edu, brooks@scripps.edu
+    Institution   : TSRI
+    Date          : December 27, 2001
+
+(1) Added OPLS-AA protein force field to CHARMM.
+Pref keyword: OPLS
+Files modified:
+install.com
+source/charmm/iniall.src
+      /energy/enefscal.src
+      /util/prpref.src
+
+(2) Cray Binary File Read
+     Modified traj read to permit reading Cray binary files on other machines.
+Pref keyword: T3ETRAJ
+Files modified:
+source/dynamc/dynio.src
+
+(3) Zero Length Message
+     Changes to eliminate communication of zero length messages.
+Files modified:
+source/machdep/paral3.src
+
+(4) Fixed IO control in solana
+Files modified:
+correl/solana.src
+
+(5) Fixed code for parallel compile
+Files modified:
+image/nbndgcm.src
+
+(6) Code modifications for serial compile with RCFFT
+Pref keyword: RCFFT
+Files modified:
+install.com
+source/nbonds/pmeutil.src
+
+------------------------------------------------------------------------------
+
+2.7 Bugfixes
+
+(1) Velocity Verlet Restart
+    Name          : Arjan van der Vaart
+    Email Address : arjan@schubert.u-strasbg.fr
+    Institution   : ISIS
+    Date          : November 8, 2001
+
+     Restart runs using the velocity Verlet integrator always give SHAKE
+errors, when heavy atoms bound to the SHAKE-able hydrogens are fixed.
+
+File fixed:
+source/dynamc/dynamvv.src
+
+..............................................................................
+
+(2) Parallel EEF1 Fix
+    Name          : Arjan van der Vaart
+    Email Address : arjan@schubert.u-strasbg.fr
+    Institution   : ISIS
+    Date          : December 5, 2001
+
+     The parallel implementation of EEF1 gives wrong solvation (and total)
+energies if more than one processor is used (forces are fine).
+(Note that the "dirty trick" comments have been deleted, since the
+"dirty trick" has been replaced by new code)
+
+File fixed:
+source/misc/eef1.src
+

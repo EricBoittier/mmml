@@ -1,0 +1,155 @@
+* CHARMM 29 testcase quicktst.inp
+* Generate butane and test modified QUICk commands
+* Author: Mike Crowley and Charles L. Brooks III
+* External Files: top_all22_prot.inp and par_all22_prot.inp
+* 
+stream datadir.def
+
+set p buta                                ! system prefix
+set r @p                                  ! residue name
+set t Butane LUP trans->gauche in vacuum  ! title
+
+open read card unit 11 name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read card  unit 11 name @0par_all22_prot.inp
+read para card unit 11
+close unit 11
+
+read RTF card append
+* Butane all-H topology
+* K.Kuczera  27-Oct-93 Lawrence, KS
+*
+
+RESI BUTA      0.0000    ! Butane CH3CH2CH2CH3
+GROU                     !
+ATOM C1  CT3  -0.2700    !
+ATOM H11 HA    0.0900    !      H11 H21 H31 H41 
+ATOM H12 HA    0.0900    !       |   |   |   |
+ATOM H13 HA    0.0900    !   H12-C1--C2--C3--C4-H42
+GROU                     !       |   |   |   |
+ATOM C2  CT2  -0.1800    !      H13 H22 H32 H43
+ATOM H21 HA    0.0900    !
+ATOM H22 HA    0.0900    !
+GROU                     !
+ATOM C3  CT2  -0.1800    !
+ATOM H31 HA    0.0900    !
+ATOM H32 HA    0.0900    !
+GROUP
+ATOM C4  CT3  -0.2700    !
+ATOM H41 HA    0.0900    !
+ATOM H42 HA    0.0900    !
+ATOM H43 HA    0.0900    !
+!
+BOND  C1 C2  C2 C3  C3  C4
+BOND  C1 H11 C1 H12 C1 H13 C2 H21 C2 H22
+BOND  C3 H31 C3 H32 C4 H43 C4 H41 C4 H42
+!
+IC C1   C2   C3   C4    0.0000   0.0000  180.0000   0.0000  0.0000
+IC H11  C1   C2   C3    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H12  C1   C2   C3    0.0000   0.0000  180.0000   0.0000  0.0000
+IC H13  C1   C2   C3    0.0000   0.0000   60.0000   0.0000  0.0000
+IC H21  C2   C3   C4    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H22  C2   C3   C4    0.0000   0.0000   60.0000   0.0000  0.0000
+IC H31  C3   C2   C1    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H32  C3   C2   C1    0.0000   0.0000   60.0000   0.0000  0.0000
+IC C2   C3   C4   H41   0.0000   0.0000  -60.0000   0.0000  0.0000
+IC C2   C3   C4   H42   0.0000   0.0000  180.0000   0.0000  0.0000
+IC C2   C3   C4   H43   0.0000   0.0000   60.0000   0.0000  0.0000
+
+patc first none last none
+
+END
+
+! generate PSF 
+!----------------------------------------------------
+read sequence @r 1
+
+! no patching
+generate @p setup  first none  last none
+
+! test LUP algorithm
+!---------------------------------------------------
+
+! 1. Read in end-point structures
+!---------------------------------------------------
+
+! trans minimum
+read coor card
+* BUTA180m : BUTANE OPTIMIZED COORDS : TRANS UNCONSTRAINED
+*  DATE:     3/11/97     13:13:51      CREATED BY USER: kuczera
+*
+   14
+    1    1 BUTA C1     -.03297    .17236   -.19857 BUTA 1     12.01100
+    2    1 BUTA H11    -.42518    .74533    .66914 BUTA 1      1.00800
+    3    1 BUTA H12    -.52583   -.82348   -.21400 BUTA 1      1.00800
+    4    1 BUTA H13    -.30697    .71468  -1.12909 BUTA 1      1.00800
+    5    1 BUTA C2     1.48657    .01959   -.09607 BUTA 1     12.01100
+    6    1 BUTA H21    1.85574   -.57713   -.96151 BUTA 1      1.00800
+    7    1 BUTA H22    1.73797   -.54660    .82998 BUTA 1      1.00800
+    8    1 BUTA C3     2.22875   1.35998   -.07013 BUTA 1     12.01100
+    9    1 BUTA H31    1.97734   1.92617   -.99618 BUTA 1      1.00800
+   10    1 BUTA H32    1.85957   1.95670    .79531 BUTA 1      1.00800
+   11    1 BUTA C4     3.74828   1.20721    .03237 BUTA 1     12.01100
+   12    1 BUTA H41    4.02228    .66489    .96289 BUTA 1      1.00800
+   13    1 BUTA H42    4.24114   2.20305    .04780 BUTA 1      1.00800
+   14    1 BUTA H43    4.14049    .63424   -.83534 BUTA 1      1.00800
+
+! gauche minimum
+read coor card comp
+* BUTA70m : BUTANE OPTIMIZED COORDS : GAUCHE UNCONSTRAINED
+*  DATE:     3/11/97     13:13:53      CREATED BY USER: kuczera
+*
+   14
+    1    1 BUTA C1     1.80282   -.70412  -1.57106 BUTA 1     12.01100
+    2    1 BUTA H11    1.30195   -.01031  -2.27994 BUTA 1      1.00800
+    3    1 BUTA H12    1.30435  -1.69497  -1.63743 BUTA 1      1.00800
+    4    1 BUTA H13    2.86068   -.82503  -1.88767 BUTA 1      1.00800
+    5    1 BUTA C2     1.72364   -.15785   -.14207 BUTA 1     12.01100
+    6    1 BUTA H21    2.23577   -.86202    .55254 BUTA 1      1.00800
+    7    1 BUTA H22     .65240   -.11157    .16269 BUTA 1      1.00800
+    8    1 BUTA C3     2.33458   1.24006    .03060 BUTA 1     12.01100
+    9    1 BUTA H31    1.84247   1.93801   -.68447 BUTA 1      1.00800
+   10    1 BUTA H32    2.10039   1.59958   1.05942 BUTA 1      1.00800
+   11    1 BUTA C4     3.85224   1.28995   -.17169 BUTA 1     12.01100
+   12    1 BUTA H41    4.36023    .59393    .52991 BUTA 1      1.00800
+   13    1 BUTA H42    4.23609   2.31643    .01178 BUTA 1      1.00800
+   14    1 BUTA H43    4.12030    .99869  -1.20959 BUTA 1      1.00800
+
+! print atom position
+quick   sele bynu 8 end
+
+! print bond distance using atom selection
+quick   sele segi buta .and. type C4 end sele segi buta .and. type C3 end
+
+! print bond distance using atom selection
+quick   sele bynu 9 end sele bynu 8 end
+
+! print position of center of geometry of atom selection
+quick   sele bynu 9 .or. bynu 8 end
+quick   sele bynu 1 .or. bynu 5  .or. bynu 8 end
+
+! print bond distance of center of geometry of atom selection
+quick   sele (bynu 1 .or. bynu 5) end sele (bynu 8 .or. bynu 11) end
+
+! check quick command fault tolerance
+quick   
+
+! print dihedral
+quick  bynu 1 bynu 5 bynu 8 bynu 11
+q      1  5  8  11
+
+! print position of center of geometry of atom selection
+q       sele bynu 9 .or. bynu 8 end
+
+! print bond distance
+q 9 8
+
+! print dihedral using atom selections
+quick   sele segi buta .and. type C4 end  -
+          sele segi buta .and. type C3 end -
+          sele segi buta .and. type C2 end -
+          sele segi buta .and. type C1 end
+
+stop

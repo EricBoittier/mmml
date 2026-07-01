@@ -1,0 +1,108 @@
+* CHARMM 29 testcase pbeqave.inp
+* Author: RJ Petrella
+* Files: toph19.rtf, param19.prm
+* Tests: poisson-boltzmann phi-averaging over grid or over atom selection
+*
+
+BOMLev -5
+FASTer on
+
+stream datadir.def
+
+open unit 11 read form name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0param19.prm
+read param unit 11 card
+close unit 11
+
+READ SEQUENCE CARDS
+*PTI SEQUENCE
+*
+   58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP
+CYS MET ARG THR CYS GLY GLY ALA
+
+GENERATE  MAIN
+PATCH DISU MAIN  5 MAIN 55
+PATCH DISU MAIN 14 MAIN 38
+PATCH DISU MAIN 30 MAIN 51
+
+READ SEQUENCE WATER 4
+GENERATE  SOLV NOANGL
+
+OPEN UNIT 3 READ CARD   NAME @0bpti.crd
+READ COORD card  UNIT 3
+COOR COPY COMP
+
+NBOND  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 12.0  CTOFNB 11.0  CTONNB 9.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+     
+!center: -0.174419 -0.0255734 0.0573731
+COOR TRANS XDIR 0.174419 YDIR 0.0255734 ZDIR -0.0573731
+
+!define atom selection
+DEFINE BOX5 SELECT (point 0. 0. 0. cut 5) end
+
+PBEQ
+
+   RESET
+   scalar wmain = radius
+
+   SOLVE epsw 80 epsp 1.0 watr 1.4 conc 0.0 temp 300.0 -
+         dcel 1.0 -
+         NCLX 10 XBCEN 0 -
+         NCLY 10 YBCEN 0 -
+         NCLZ 10 ZBCEN 0 -
+         maxi 200 sele all end
+
+!calculate average phi over the grid
+   PBAV PHI KCAL xfirst -10.0 xlast 10.0 -
+                        yfirst -10.0 ylast 10.0 -
+                        zfirst -10.0 zlast 10.0
+
+   set 101 ?AVPH
+
+!calculate average phi for grid over selected atoms 
+   PBAV PHI KCAL UPDAte xfirst -10.0 xlast 10.0 -
+                        yfirst -10.0 ylast 10.0 -
+                        zfirst -10.0 zlast 10.0 -
+   ATOM SELE BOX5 END
+   set 102 ?AVPH   
+
+   calc differ = @102 - @101
+
+!repeat average 
+   PBAV PHI KCAL ATOM
+   set 101 ?AVPH
+
+!repeat for VOLTS
+  PBAV PHI VOLTS  
+
+   set 101 ?AVPH 
+
+!repeat for VOLTS with atom selection
+  PBAV PHI VOLTS ATOM 
+
+   set 102 ?AVPH
+
+  SOLVE epsw 80 epsp 1.0 watr 1.4 conc 0.0 temp 300.0 -
+         dcel 1.0 -
+         NCLX 10 XBCEN 0 -
+         NCLY 10 YBCEN 0 -
+         NCLZ 10 ZBCEN 0 -
+         maxi 200 sele all end
+
+  PBAV PHI KCAL xfirst -10.0 xlast 10.0 -
+                        yfirst -10.0 ylast 10.0 -
+                        zfirst -10.0 zlast 10.0
+
+   set 101 ?AVPH
+END
+
+STOP

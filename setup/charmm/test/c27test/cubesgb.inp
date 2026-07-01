@@ -1,0 +1,63 @@
+* CHARMM Testcase c26test/genborn.inp
+* Author: Charles L. Brooks, III
+* Date  : August 1, 1998
+* Test  : Generalized Born Solvation energy term
+*
+
+!  Uses files: toph19.rtf, param19.prm, 
+
+set pnode 
+if ?NUMNODE .gt. 1 then set pnode = node 0
+
+bomlev -2
+stream datadir.def
+
+!  First do general testing of energy, derivitives and minimization.
+!  Read the topology and parameter files
+!
+open unit 1 read form name @0toph19.rtf
+read rtf unit 1 card
+close unit 1
+ 
+open unit 1 read form name @0param19.prm
+read param unit 1 card 
+close unit 1
+
+open unit 1 read form name @0radius-1mbg.pdb
+read sequ pdb unit 1
+close unit 1
+
+! now generate the psf for this structure use setup to set up the interal
+! coordinate table
+!
+generate 1mbg setup first none last none
+
+! read coordinates
+open unit 1 read form name @0radius-1mbg.pdb
+read coor pdb unit 1 offset -89
+close unit 1
+
+!  CHECK version 19 PROTEIN PARAMETERS
+skipe all excl GBEnr
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0
+energy cutnb 15 ctonnb 12 ctofnb 14 switch vswitch
+
+set eatom ?ener
+
+coor force comp
+
+prnlev 7 @pnode
+energy cutnb 15 ctonnb 12 ctofnb 14 switch vswitch bycb
+
+Calc eatom = Abs ( @eatom - ?ener )
+
+if eatom gt 0.001 stop
+coor force
+
+coor diff
+
+coor dist weight
+
+print coor select property wmain gt 0.001 end
+
+stop

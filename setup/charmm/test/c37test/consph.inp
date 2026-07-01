@@ -1,0 +1,64 @@
+* code test of constant pH
+*
+
+stream datadir.def
+
+read rtf card name @0/top_all22_prot_na.inp
+read param card name @0/par_all22_prot_na.inp
+read sequ lys 1
+gene lys setup first ace last ct3
+
+ic para
+ic seed 1 N 1 CA 1 C
+ic build
+hbuild
+
+bomlev -2
+
+! set lysine charges to match the
+! protonated charges in the ph param file.
+scalar charge set  0.24 sele type ce  end
+scalar charge set  0.08 sele type he1 end
+scalar charge set  0.08 sele type he2 end
+scalar charge set -0.24 sele type nz  end
+scalar charge set  0.28 sele type hz1 end
+scalar charge set  0.28 sele type hz2 end
+scalar charge set  0.28 sele type hz3 end
+
+print coor sele resid 1 end
+scalar charge show sele resid 1 end
+
+bomlev 0
+
+energy
+
+open unit 20 read card name data/ph_param.prm
+read cph card unit 20
+close unit 20
+
+shake bonh param
+update atom cdie eps 1.0 cutnb 21.0 ctofnb 18.0 ctonnb 16.0 switch vswitch
+
+GBMV BETA -12 EPSILON 80 GEOM -
+     BUFR 0.2 Mem 20 CUTA 20 -
+     ALFRQ 1 P1 0.45 P2 1.25 P6 8.0 P3 0.65 -
+     WTYP 1 NPHI 5 CORR 1 SA 0.020 SB 0.0 SHIFT -0.1 SLOPE 0.9 -
+     FAST 1 SGBFRQ 4 SXD 0.3
+
+cnsph add sele resid 1 end
+
+scalar fbeta set 0.5
+
+open unit 30 write card name @9/consph_states.dat
+
+! NB an monte carlo trial every 5 steps is too short; it's
+! done here solely for testing purposes.
+dyna leap langevin start nstep 20 timestep 0.001 -
+  nprint 100 iprfrq 2000 ntrfrq 2000 -
+  firstt 300. finalt 300. tstruct 300. tbath 300. -
+  phcons phexcf 5 phmctr 1 phval 10.4 phunum 30 -
+  iasors 1 iasvel 1 iscvel 0 echeck 1000
+
+scalar charge show sele resid 1 end
+
+stop

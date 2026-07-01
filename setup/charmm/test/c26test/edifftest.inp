@@ -1,0 +1,68 @@
+* edifftest.inp
+* Author: Bernard R. Brooks
+* This test checks the abner minimization and various electrostatic options.
+* USING PTI EXTENDED ATOM AND EXPLICIT HYDROGEN MODELS.
+* WE USE A SHORTENED PTI TO SPEED THE RUN.
+* Also uses imove to check the fixed atom handling in abner.
+* External Files: toph10.rtf, param7.prm and edifftest.crd
+*
+
+bomblev -2
+stream datadir.def
+
+OPEN READ FORM UNIT 11 NAME @0toph10.rtf
+READ RTF  CARD UNIT 11
+CLOSE UNIT 11
+OPEN READ FORM UNIT 12 NAME @0param7.prm
+READ PARAMETER CARD UNIT 12
+CLOSE UNIT 12
+
+READ SEQUENCE card
+* PTI SEQUENCE (truncated)
+*
+ 6
+ARG PRO ASP PHE CYS LEU
+
+GENERATE M1
+
+READ SEQU card
+* PTI SEQUENCE
+*
+ 1
+CYS
+
+GENERATE M2
+
+PATCH DISU WARN      M1 5    M2 1
+
+READ SEQUENCE WATER 1
+GENERATE SOLV
+
+FAST ON
+
+!!!!! 1
+
+open read unit 3 card name @0edifftest.crd
+READ COORD card UNIT 3 init
+ENERGY ELEC ATOM CDIE FSHIFT CUTNB 6.0 ctofnb 5.5 ctonnb 5.0 INBFRQ 5 IHBFRQ 5
+
+define rots sele atom M1 3 * .and. -
+   ( type OD* .or. type CB .or. type CG ) show end
+
+coor copy comp
+coor axis sele atom m1 3 ca end sele atom m1 3 cb end
+coor rotate axis phi 120.0 sele rots end
+
+gete print
+ENERGY ELEC ATOM CDIE FSHIFT CUTNB 6.0 ctofnb 5.5 ctonnb 5.0 INBFRQ 5 IHBFRQ 5
+
+
+ediff sele rots end
+
+@testcheck ?ener 157 -0.1 edifftest_1
+
+ediff sele all  end
+
+@testcheck ?ener 157 -0.1 ediftest_2
+
+stop

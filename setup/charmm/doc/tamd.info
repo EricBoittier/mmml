@@ -1,0 +1,346 @@
+CHARMM Element doc/tamd.info $Revision: 1.1.1.1 $
+
+File: TAMD, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+           Torsion Angle Molecular Dynamics (TAMD) Module
+
+Purpose: carry out molecular dynamics and energy minimization in torsional 
+space using atomic forces in Cartesian space.  The Newton-Euler Inverse 
+Mass Operator (NEIMO) recursive algorithm of Jain et al. J. Comput. Phys.
+1993, 106, 258-268 was used to solve the equations of motion in internal
+coordinates.
+
+WARNING: The module is still being developed and may change in the future.
+Please report problems and direct questions and comments to Jianhan Chen 
+(jianhanc@umass.edu) or Charles L. Brooks, III (brookscl@umich.edu).
+
+REFERENCES:
+  A. Jain, N. Vaidehi and K. Kreutz-Delgado, J. Comp. Phys. 1993, 106, 258-268.
+  C. D. Schwieters and G. M. Clore, J. Magn. Reson. 2001, 152, 288-302.
+  J. Chen, W. Im and C. L. Brooks, III, J. Comp. Chem. 2005, 26, 1565-1578.
+
+* Menu:
+
+* Syntax::      Syntax of the TAMD commands
+* Function::    Purpose of each of the commands
+* Examples::    Usage examples of the TAMD analysis commands
+
+
+File: TAMD, Node: Syntax, Up: Top, Previous: Top, Next: Function
+
+
+                                 Syntax
+
+[SYNTAX TAMD functions]
+
+Syntax:
+
+TAMD   enter the TAMD module
+END    exit the TAMD module
+
+Subcommands:
+
+RESET      reset all TAMD variables.
+
+CLUSter    atom-selection
+
+TREE       { SETUp [TOPV charmm-topology-version] }
+           { CHECk }
+           { READ   UNIT INTEGER }
+           { WRITe  UNIT INTEGER }
+	   { PRINt }
+
+MINI       { SD steepd-spec }   [ nonbond-spec ] [ hbond-spec ] -
+                  [ INBFrq 0   ] [  IHBFrq 0  ] [NOUPdate] -
+                  [STEP real] [ frequency-spec ] [ tolerence-spec ] 
+
+DYNA       { STARt   } [ dynamics-parameters ] [ Berendsen-thermostat ]
+           { STRT    }
+           { RESTart }
+
+atoms-selection::= a selection of a group of atoms 
+
+charmm-topology-version::= { 19 } (param19) 
+                           { 22 } (param22)
+
+hbond-spec::=     *Note Hbonds:(doc/hbonds.info).
+
+nonbond-spec::=   *Note Nbonds:(doc/nbonds.info).
+
+frequency-spec::= [NSTEP int] [IHBFrq int] [INBFrq int] [NPRInt int]
+tolerence-spec::= [TOLENR real] [TOLGRD real] [TOLITR int] [TOLSTP real]
+                  *Note Minmiz:(doc/minmiz.info).
+
+dynamics-parameters::= *Note dynamc:(doc/dynamc.info).
+Berendsen-thermostat::= [QREF real] [TREF real]
+
+
+File: TAMD, Node: Function, Up: Top, Previous: Syntax, Next: Examples
+ 
+
+        General discussion regarding the TAMD module
+
+1. Tree Topology Setup
+-----------------------
+
+The molecule must be represented by a tree topology for energy minimization 
+or molecular dynamics to be carried out in torsion space.  The tree consists 
+of rigid bodies of atoms with invariable relative positions (clusters)
+connected by hinges where the permissible relative motion between adjoined
+clusters can be partially constrained.  Such a tree topology can be setup
+fully automatically for standard CHARMM param19/22 residues or
+semi-automatically when the molecule contains non-standard modifications.
+The whole process is accomplished by combination of two subcommands: CLUSter
+and TREE SETUp.
+
+CLUSter command forces the selected atoms to belong to the same cluster.
+It can be applied multiple times such all desired groups can be marked.
+
+TREE SETUp is used to finish the tree topology. If there are no previous marked
+clusters (specified by CLUSter commands), the command will groups the atoms
+into clusters based on predefined rules and generate the tree data structures.
+If there exist previous defined clusters, the command will group the unmarked
+atoms into clusters and then generate the tree structure.
+
+Typically a simple TREE SETUp command is sufficient to setup the tree topology.
+The other extreme case is to manually cluster all atoms and then use TREE SETUp
+to find all the hinges and build the tree.
+
+When the system consists of multiple chains (i.e., not covalently connected),
+each chain needs to have different SEGID in order for the TREE SETUp to work.
+
+TREE CHECk checks the self-consistency of tree topology.  In addition, PRNLEV
+can be set to be 6 or above to prompt TREE SETUp to print out the final tree
+topology for inspection.
+
+BOMLEV can be set to be -1 or lower such that the TREE SETUp routine can
+proceed to the end regardless of the intermediate errors.
+
+TREE READ and TREE WRITe commands read and write tree files. 
+
+TREE PRINt command prints the tree to the standout.
+
+2. Energy Minimization 
+-----------------------
+
+Energy minimization can be carried out directly in torsion space.  The gradient
+along internal coordinates can be computed from the Cartesian forces based on 
+NEIMO algorithm.  Currently only Steepest Decent is implemented.  Note that
+the torsion coordinates are coupled and thus SD minimization (as well as 
+other more sophisticated minimization algorithms) is less efficient compared to
+its counterpart in Cartesian space.  Typically only limited minimization is
+possible and smaller steps should be used.  It is particularly problematic when
+harmonic restraints of atomic positions are present.
+
+3. Molecular Dynamics
+-----------------------
+
+The accessible time scale of traditional molecular dynamics (MD) simulations in
+Cartesian coordinate is severely limited by the femtosecond integration time
+steps required by high-frequency bond and angle degrees of freedom.  However,
+interesting conformational changes of proteins involve mainly torsional degrees
+of freedom. Carrying out molecular dynamics directly in torsion space does not
+only exclusively sample most relevant degrees of freedom, but also allows
+larger integration time steps with elimination of hard degrees of freedom.
+
+Most parameters of DYNA in TAMD are exactly the same as those in a regular
+CHARMM DYNA command.  The exception is in temperature control and integration
+algorithm. Currently TAMD always employs a modified Leap-Frog algorithm and
+a simple Berendsen's thermostat.  When a negative QREF is given,
+constant-energy (NVE) simulation will be carried out instead.
+
+Direct use of a Cartesian force field like CHARMM PARAM22 in TAMD can be
+problematic because the rigid covalent geometry introduces severe distortions
+of underlying potential surface.  CMAP coorection terms in combination with
+softcore vdW and electrostatic interactions can be used to effectively restore
+the potential surface in torsion space. For PARAM22 force field, such
+corrections have been constructed for all standard residues except proline.
+These force field modifications can be loaded through special topology and
+parameter files.  Note that specific bond and angle geometry is required for
+these corretions to be meaningful.  This is not a problem for folding
+simulations from an extended chain build by IC BUILD.  However, to initiate 
+TAMD simulation from a given structure, one needs to "twist" the covalent
+geometry to be consistent with the coorrections terms.  This can be readily
+achieved through quick energy minimization with CONS IC retraints while
+turning off other interactions. An example is given in the next section.
+Also note that the current topology and parameter files have not been
+extensively tested with peptide folding simulations yet and it is almost
+certain that addditional adjustment is required for proper balance between
+helical and extended (beta) states.
+
+4. Non-TAMD commands parsed
+---------------------------
+
+Several essential commands are parsed inside TAMD module.  They include CONS,
+COOR ENER, GETE, I/O (READ, WRITE, OPEN, CLOSE, TITLES) and miscellaneous
+commands.
+
+
+File: TAMD, Node: Examples, Up: Top, Previous: Function, Next: Top
+
+                                Examples
+
+Example (1) : setup tree, do minimization and dynamics for a peptide with
+-----------   standard CHARMM param19/22 residues.
+
+open read card unit 10 name @toppar/top_all22_prot.inp
+read  rtf card unit 10
+open read card unit 10 name @toppar/par_all22_prot.inp
+read para card unit 10
+close unit 10
+
+open read unit 10 card name @pdbfile
+read sequence pdb unit 10
+generate @segid setup
+
+open read card unit 10 name @pdbfile
+coor read pdb  unit 10 resid
+close unit 10
+
+ic param
+ic build
+hbuild
+
+coor copy comp
+
+NBOND atom switch cdie vdw vswitch bycb -
+      ctonnb 16.0 ctofnb 20.0 cutnb 24.0
+
+! enter TAMD modulde
+TAMD
+
+   reset  
+
+! setup the tree topology automatically
+   tree setup   
+! check the self-consistency of the tree toplogy
+   tree check
+! write out the tree (not really necessary, but why not?)
+   open write unit 10 card name tree.dat
+   tree write unit 10
+   * this is a tamd tree file
+   *
+
+! some quick minimization (remember that minimization in torsion space is 
+! less efficient due to the non-canonical coordinates)   
+   mini sd nstep 200 step 0.01 nprint 20 maxt 0.1 tole 0.0001 
+
+! a short constant-temperature MD
+   open write unit 30 card name tamd.rest 
+   open write unit 31 file name tamd.dcd
+   dyna start iseed 231234 echeck 2000 -
+       nstep 5000 timestep 0.005 qref 20 tref 300 first 0 -
+       nsavc 100 nprint 200 iprfrq 100000 nsavv 0 isvfrq -1 -
+       iunrea -29 iunwri 30 iuncrd 31 iunvel -1 -
+       ntrfrq 2000 iasors 1
+
+! compute heavy atom rmsd from initial structure (the comparision cooridinates 
+! are not overwritten during TAMD)
+   coor orient rms select .not. hydrogen end
+
+! write out the final pdb
+   open write unit 10 card name tamd.pdb
+   coor write pdb unit 10
+   * after a short tamd, heavy atom rmsd is now: ?rms
+   *
+
+END
+
+Example (2): setup a tree topology semi-automatically for a polymer chain 
+-----------  with non-standard residues (a modified alanine dipeptide)
+
+....
+
+read sequence ala 1
+generate PEPT first ACE last CT3 setup
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+bomlev -1
+delete atom select type CAY .or. type HY# .or. type CAT .or. type HT# end
+bomlev 0
+
+TAMD
+   reset  
+   cluster select type cy .or. type oy .or. type n .or. type hn -
+            .or. type ca .or. type ha .or. type c .or. type o -
+            .or. type nt .or. type hnt  end
+
+   bomlev -1
+   wrnlev 0
+   prnlev 6
+   tree setup topv 22
+   prnlev 5
+   wrnlev 5
+   bomlev 0
+   tree check
+
+END
+....
+
+Example (3): enforce the covalent geometry to be consistent those defined in 
+------------ the topology file (IC tables).
+
+!===========================================================================
+! read in the TAMD ICFF top/par files (ahbb4)
+set toppar = toppar/tamdfff
+open read card unit 10 name @toppar/top_all22_prot_cmap.ahbb4.inp
+read  rtf card unit 10
+open read card unit 10 name @toppar/par_all22_prot_tadcmap.ahbb4.inp
+read para card unit 10
+! addition CMAP terms for chi1 coorrection maps
+open read card unit 10 name @toppar/par_tadmap.chi1.ahbb4..inp
+read para card unit 10 append
+close unit 10
+
+!(set up PSF and read in the coordinates)
+....
+
+! using CONS IC to enforce the covalent geometry
+if @?force eq 0   set force = 1000.0
+cons ic bond @force angle @force impr @force diheral 0.0
+
+! weak harmonic restaints to prevent large adjustments
+cons harm force 1.0 select .not. hydrogen end
+
+! constraint the peptide plane omega dihedral (CA-C-N-CA)
+! OMEGA should be consistent with the value in topology file
+define any selet bynu 1 end
+set  inx = ?selresi
+calc end = ?selresi + ?nres - 1
+calc next = @inx + 1
+label nextresi
+   define any select resid @inx end
+   if ?selresn eq PRO goto skipcdihe
+   define any select resid @next end
+   if ?selresn eq PRO goto skipcdihe
+   cons dihe force 4000 min @OMEGA width 0.0 -
+       PRO0 @inx  CA   PRO0 @inx  C   PRO0 @next  N  PRO0 @next CA
+   label skipcdihe
+   incr inx  by 1
+   incr next by 1
+if next le @end goto nextresi
+
+! turn off unnecessary energy terms.
+skip all excl cic harm cdihe
+
+ic save
+
+! quick minimization to enforce covalent geometry (bonds, angles and impropers)
+mini   sd nstep 100 nprint 50 step 0.005
+mini abnr nstep 100 nprint 50 step 0.005
+
+! cleanup the restaints and other setups
+skip none
+cons harm clear
+cons cldh
+cons ic bond 0.0 angle 0.0 impr 0.0 diheral 0.0
+
+! verify that the structure is now consistent with the topology IC tables
+ic scale bond -1.0 angle -1.0 dihe -1.0
+ic fill append
+ic print !unit 12
+!==========================================================================

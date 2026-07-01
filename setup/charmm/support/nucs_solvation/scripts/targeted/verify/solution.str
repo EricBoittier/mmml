@@ -1,0 +1,24 @@
+* solution.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* Calculation of electrostatic interaction in solution
+*
+
+! SCA9 contains electrostatic potential due to charges of SOURCE GROUP
+! at atom positions of all atoms
+! SCA4 is initialized to 1.0
+! CHARGE is set to globally pre-scaled charges in targetregion
+
+SCAL SCA4 = SCA9 SELEct GROUP2 END
+SCAL SCA4 PROD CHARGE SELEct GROUP2 END ! multiply potential with charge to
+                                        ! get atomic contributions to 
+                                        ! electrostatic interaction energy
+                                        ! in solution
+SCAL SCA4 STATistics SELEct GROUP2 END  ! get statistics to add up atomic
+                                        ! contributions
+SCAL SCA4 SET ?STOT SELEct GROUP2 END   ! set SCA4 for GROUP2 atoms to
+                                        ! electrostatic interactions energy
+                                        ! in solution
+
+SET SOLV ?STOT
+
+RETURN

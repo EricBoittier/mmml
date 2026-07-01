@@ -1,0 +1,10 @@
+#! /bin/csh
+
+foreach i ($argv)
+  if ( -e $i.orig ) then
+     echo "$i.orig already exists
+     exit -1
+  endif
+  mv $i $i.orig
+  sed 's/[dD][oO][uU][bB][lL][eE] [pP][rR][eE][cC][iI][sS][iI][oO][nN]/real(chm_real)/' $i.orig > $i
+end

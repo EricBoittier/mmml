@@ -1,0 +1,633 @@
+diff -Nur source-nofq/gukint/GAMESS-UK/m4/Makefile.in source-fq/gukint/GAMESS-UK/m4/Makefile.in
+--- source-nofq/gukint/GAMESS-UK/m4/Makefile.in	Tue Nov 28 18:45:39 2000
++++ source-fq/gukint/GAMESS-UK/m4/Makefile.in	Wed Nov 22 12:54:08 2000
+@@ -316,7 +316,7 @@
+ # ----------------------- CHARMM INTERFACE OPTIONS ----------------------
+ #
+ #--#if charmm#
+-QMMM_M4_OPTS =,qmmm,charmm
++QMMM_M4_OPTS =,qmmm,charmm,flucq
+ #--#endif#
+ #
+ # ------------------ DEVELOPMENT OPTIONS --------------------------
+diff -Nur source-nofq/gukint/GAMESS-UK/m4/drv1e.m source-fq/gukint/GAMESS-UK/m4/drv1e.m
+--- source-nofq/gukint/GAMESS-UK/m4/drv1e.m	Tue Nov 28 18:46:20 2000
++++ source-fq/gukint/GAMESS-UK/m4/drv1e.m	Sat Nov 25 05:09:51 2000
+@@ -1564,6 +1564,10 @@
+       end if
+       if (irest.le.5) then
+          call stvder(zscftp,core,core(iprefa),core(i10),nshell)
++_IF(flucq)
++c Calculate the FLUCQ QM-MM interaction (if any)
++         call fqqmmm(core,core(i10),nshell)
++_ENDIF
+          call timana(6)
+          nindmx = 0
+       end if
+diff -Nur source-nofq/gukint/GAMESS-UK/m4/intega.m source-fq/gukint/GAMESS-UK/m4/intega.m
+--- source-nofq/gukint/GAMESS-UK/m4/intega.m	Tue Nov 28 18:46:59 2000
++++ source-fq/gukint/GAMESS-UK/m4/intega.m	Sat Nov 25 05:09:51 2000
+@@ -13573,3 +13573,564 @@
+       end
+ _ENDIF 
+ _ENDIF
++
++_IF(flucq)
++      subroutine fqqmm2(q,iso,nshels,fqcfor,tokcal)
++      implicit REAL  (a-h,p-w),integer   (i-n),logical    (o)
++      implicit character *8 (z),character *1 (x)
++      implicit character *4 (y)
++C     Calculates the FlucQ QM-MM interaction for CHARMM/GAMESS-UK; called
++C     from subroutine fqqmmm in CHARMM's source/flucq/fluqqmmm.src.
++C     fqcfor is the CHARMM array of FlucQ charge forces; tokcal is a
++C     conversion factor from atomic units (GAMESS-UK) to AKMA units (CHARMM)
++INCLUDE(common/sizes)
++INCLUDE(common/timez)
++INCLUDE(common/symtry)
++INCLUDE(common/prints)
++INCLUDE(common/prnprn)
++INCLUDE(common/restar)
++INCLUDE(common/segm)
++INCLUDE(common/restri)
++INCLUDE(common/statis)
++INCLUDE(common/iofile)
++INCLUDE(common/dump3)
++INCLUDE(common/infoa)
++INCLUDE(common/nshel)
++_IF(drf)
++caleko
++      logical vector
++      common/nottwi/obeen,obeen2,obeen3,obeen4
++caleko
++_ENDIF
++      common/junk/s(225),g(225),
++     *pint,qint,rint,t,p0,q0,r0,pi,qi,ri,pj,qj,rj,ni,nj,
++     *tol,ii,jj,lit,ljt,mini,minj,maxi,maxj,iandk
++INCLUDE(common/root)
++      common/blkin/dxyz(4),gg(225),ft(225),fx(225),dij(225),
++     + pin(125),qin(125),rin(125),
++     + ijx(225),ijy(225),ijz(225)
++c mechanics
++INCLUDE(common/modj)
++INCLUDE(common/g80nb)
++INCLUDE(common/runlab)
++c ***** omit specified charges from attraction terms ***
++INCLUDE(common/chgcc)
++INCLUDE(common/xfield)
++INCLUDE(common/zorac)
++      character *8 title,guess
++      common/restrz/title(12),guess
++INCLUDE(common/drfopt)
++_IF(drf)
++c ******
++cdrf
++c     drf extension
++c     ====================================================================
++c         note: in hondo, o,x,y and z are real*8
++          common/hefcpar/edumm(5,1000),nedumm,iefc
++          common/hfldpar/fldxyz(3),ifld
++          character*4 keyfld, keyefc, iefc, ifld
++          data keyfld, keyefc /' fld',' efc'/
++         integer idafh,navh
++         common/hdafile/idafh,navh,ioda(2,1000)
++         common/c_of_m/pcm,qcm,rcm
++INCLUDE(../drf/comdrf/runpar)
++INCLUDE(../drf/comdrf/darw)
++INCLUDE(../drf/comdrf/sizesrf)
++INCLUDE(../drf/comdrf/scfopt)
++INCLUDE(../drf/comdrf/drfpar)
++cdrf  ===================  end drfexts ===============================
++_ENDIF
++      dimension q(*),iso(nshels,*)
++      dimension ix(35),iy(35),iz(35),jx(35),jy(35),jz(35)
++      dimension m0(48)
++      real*8 fqcfor(*),tokcal
++      data  m51/51/
++c mechanics
++      data dzero,pt5,done,two,three,five,seven,
++     +     rnine,eleven  /0.0d0,0.5d0,1.0d0,
++     + 2.0d0,3.0d0,5.0d0,7.0d0,9.0d0,11.0d0/
++      data pi212 /1.1283791670955d0/
++      data sqrt3 /1.73205080756888d0/
++      data sqrt5 /2.23606797749979d0/
++      data sqrt7 /2.64575131106459d0/
++      data rln10 /2.30258d0/
++c
++      data jx / 0, 1, 0, 0, 2, 0, 0, 1, 1, 0,
++     +          3, 0, 0, 2, 2, 1, 0, 1, 0, 1,
++     +          4, 0, 0, 3, 3, 1, 0, 1, 0, 2,
++     +          2, 0, 2, 1, 1/
++      data ix / 1, 6, 1, 1,11, 1, 1, 6, 6, 1,
++     *         16, 1, 1,11,11, 6, 1, 6, 1, 6,
++     *         21, 1, 1,16,16, 6, 1, 6, 1,11,
++     *         11, 1,11, 6, 6/
++      data jy / 0, 0, 1, 0, 0, 2, 0, 1, 0, 1,
++     +          0, 3, 0, 1, 0, 2, 2, 0, 1, 1,
++     +          0, 4, 0, 1, 0, 3, 3, 0, 1, 2,
++     +          0, 2, 1, 2, 1/
++      data iy / 1, 1, 6, 1, 1,11, 1, 6, 1, 6,
++     +          1,16, 1, 6, 1,11,11, 1, 6, 6,
++     +          1,21, 1, 6, 1,16,16, 1, 6,11,
++     +          1,11, 6,11, 6/
++      data jz / 0, 0, 0, 1, 0, 0, 2, 0, 1, 1,
++     +          0, 0, 3, 0, 1, 0, 1, 2, 2, 1,
++     +          0, 0, 4, 0, 1, 0, 1, 3, 3, 0,
++     +          2, 2, 1, 1, 2/
++      data iz / 1, 1, 1, 6, 1, 1,11, 1, 6, 6,
++     +          1, 1,16, 1, 6, 1, 6,11,11, 6,
++     +          1, 1,21, 1, 6, 1, 6,16,16, 1,
++     +         11,11, 6, 6,11/
++_IF(drf)
++      data maxbit /64/
++_ENDIF
++_IF(parallel)
++c***   **MPP**
++      iflop = iipsci()
++c***   **MPP**
++_ENDIF
++
++      l11 = (num*(num+1))/2
++      l12 = num*num
++
++      i80 = igmem_alloc(l11)
++      i90 = igmem_alloc(l12)
++      i801 = i80 - 1
++c
++_IF(mp2_parallel)
++c  version for mp2 and scf gradients using GA & MA tools
++      l10 = num
++      call dendd1(   zscftp, q(i80),q(i90),
++     &               q(mp2grad_dens),
++     &               q(mp2grad_pmat),  l10)
++_ELSE
++      call dendd1(zscftp,q(i80),q(i90),l11)
++_ENDIF
++
++c     write(6,*) 'bw> density matrix '
++c     do i=1,15
++c        write(6,*) q(i+i801)
++c     enddo
++
++      l1 = num
++      l2 = (num*(num+1))/2
++      l3 = num*num
++      l4 = natmod*3
++      l5 = natmod
++      outv = oprint(59)
++      nav = lenwrd()
++      if (nprint.eq.-5) outv = .false.
++c
++c
++c Allocate memory for charge exclusion
++c **************
++      if (omtchg) then
++       i110 = igmem_alloc(nat*nat)
++       call omitch(q(i110),nat,nona)
++      endif
++c **************
++c     call chek1e(o1e)
++c     if (oint_zora) o1e = o1e_zora
++c     if (oatscf_z) o1e = .false.
++c     write(6,*) 'bw> o1e is ',o1e
++      o1e=.false.
++_IF(drf)
++      if (oreact. and. .not. obeen) o1e = .false.
++      if (.not.o1e .or. mcupdt) then
++_ELSE
++      if (.not.(o1e)) then
++_ENDIF
++c...     avoid to reset if atomic zora corrections are used
++c...     or if we are in the middle of atomic startup (first point)
++         if (nat_z.le.0.and.guess.ne.'atdens'.and.guess.ne.'atoms')
++     1       opre_zora = .false.
++c
++c
++         cpu = cpulft(1)
++c
++         tol = rln10*itol
++         out = nprint.eq.3
++         if (out) then
++           do ii = 1,6
++            oprn(30+ii) = .true.
++           enddo
++          else
++           do ii = 1,6
++            if(oprn(30+ii)) out = .true.
++           enddo
++         endif
++         onorm = normf.ne.1 .or. normp.ne.1
++         ndum = l2 + l2 + l2
++_IF(parallel)
++cpsh
++ccc         ndum = ndum + l2
++_ENDIF
++c
++c     ----- ishell
++c
++c     write(6,*) 'bw> ishell ',nshell
++         do 440 ii = 1 , nshell
++            i = katom(ii)
++c
++c     ----- eliminate ishell -----
++c
++            do 450 it = 1 , nt
++               id = iso(ii,it)
++               if (id.gt.ii) go to 440
++               m0(it) = id
++450         continue
++            icent = i
++            pi = c(1,i)
++            qi = c(2,i)
++            ri = c(3,i)
++            i1 = kstart(ii)
++            i2 = i1 + kng(ii) - 1
++            lit = ktype(ii)
++            mini = kmin(ii)
++            maxi = kmax(ii)
++            loci = kloc(ii) - mini
++c
++c     ----- jshell
++c
++c     write(6,*) 'bw> jshell ',ii
++            do 430 jj = 1 , ii
++_IF(parallel)
++c***   **MPP**
++               if (oipsci()) go to 430
++c***   **MPP**
++_ENDIF
++               j = katom(jj)
++               if (oatint_z.and.j.ne.icent) go to 430
++               n2 = 0
++               do 470 it = 1 , nt
++                  jd = iso(jj,it)
++                  if (jd.gt.ii) go to 430
++                  id = m0(it)
++                  if (id.lt.jd) then
++                     nd = id
++                     id = jd
++                     jd = nd
++                  end if
++                  if (id.eq.ii .and. jd.gt.jj) go to 430
++                  if (id.eq.ii.and.jd.eq.jj) then
++                      n2 = n2 + 1
++                  end if
++470            continue
++               q2 = dble(nt)/dble(n2)
++               jcent = j
++               pj = c(1,j)
++               qj = c(2,j)
++               rj = c(3,j)
++               if (oatint_z) then
++c..              atomic scf all on origin
++                 pi = 0.0d0
++                 qi = 0.0d0
++                 ri = 0.0d0
++                 pj = 0.0d0
++                 qj = 0.0d0
++                 rj = 0.0d0
++               end if
++               j1 = kstart(jj)
++               j2 = j1 + kng(jj) - 1
++               ljt = ktype(jj)
++               minj = kmin(jj)
++               maxj = kmax(jj)
++               locj = kloc(jj) - minj
++               nroots = (lit+ljt-2)/2 + 1
++               rr = (pi-pj)**2 + (qi-qj)**2 + (ri-rj)**2
++c     write(6,*) 'bw> pi, pj ',pi,pj
++c     write(6,*) 'bw> distance between i,j ',i,j,' = ',rr
++               oiandj = ii.eq.jj
++c
++c     ----- prepare indices for pairs of (i,j) functions
++c
++               ij = 0
++               max = maxj
++               do 30 i = mini , maxi
++                  nnx = ix(i)
++                  nny = iy(i)
++                  nnz = iz(i)
++                  if (oiandj) max = i
++                  do 20 j = minj , max
++                     ij = ij + 1
++                     ijx(ij) = nnx + jx(j)
++                     ijy(ij) = nny + jy(j)
++                     ijz(ij) = nnz + jz(j)
++                     if (j.le.1) then
++                        ft(ij) = three
++                     else if (j.le.4) then
++                        ft(ij) = five
++                     else if (j.le.10) then
++                        ft(ij) = seven
++                     else if (j.gt.20) then
++                        ft(ij) = eleven
++                     else
++                        ft(ij) = rnine
++                     end if
++ 20               continue
++ 30            continue
++c
++c
++c     ----- i primitive
++c
++               jgmax = j2
++               do 400 ig = i1 , i2
++                  ai = ex(ig)
++                  arri = ai*rr
++                  axi = ai*pi
++                  ayi = ai*qi
++                  azi = ai*ri
++                  csi = cs(ig)
++                  cpi = cp(ig)
++                  cdi = cd(ig)
++                  cfi = cf(ig)
++                  cgi = cg(ig)
++c
++c     ----- j primtive
++c
++                  if (oiandj) jgmax = ig
++                  do 390 jg = j1 , jgmax
++                     aj = ex(jg)
++                     aa = ai + aj
++                     aa1 = done/aa
++                     dum = aj*arri*aa1
++                     if (dum.le.tol) then
++                        fac = dexp(-dum)
++                        csj = cs(jg)
++                        cpj = cp(jg)
++                        cdj = cd(jg)
++                        cfj = cf(jg)
++                        cgj = cg(jg)
++                        ax = (axi+aj*pj)*aa1
++                        ay = (ayi+aj*qj)*aa1
++                        az = (azi+aj*rj)*aa1
++                        odoub = oiandj .and. ig.ne.jg
++c
++c     ----- density factor
++c
++                        max = maxj
++                        nn = 0
++                        do 220 i = mini , maxi
++                           go to (50,60,120,120,
++     +                            70,120,120,80,120,120,
++     +                            90,120,120,100,120,120,120,120,120,
++     +                            110,
++     +                            112,120,120,114,120,120,120,120,120,
++     +                            116,120,120,118,120,120), i
++c
++ 50                        dum1 = csi*fac
++                           go to 120
++ 60                        dum1 = cpi*fac
++                           go to 120
++ 70                        dum1 = cdi*fac
++                           go to 120
++ 80                        if (onorm) dum1 = dum1*sqrt3
++                           go to 120
++ 90                        dum1 = cfi*fac
++                           go to 120
++ 100                       if (onorm) dum1 = dum1*sqrt5
++                           go to 120
++ 110                       if (onorm) dum1 = dum1*sqrt3
++                           go to 120
++ 112                       dum1 = cgi*fac
++                           go to 120
++ 114                       if (onorm) dum1 = dum1*sqrt7
++                           go to 120
++ 116                       if (onorm) dum1 = dum1*sqrt5/sqrt3
++                           go to 120
++ 118                       if (onorm) dum1 = dum1*sqrt3
++ 120                       if (oiandj) max = i
++                           do 210 j = minj , max
++                              go to (130,140,200,200,
++     +                               150,200,200,160,200,200,
++     +                               170,200,200,180,200,200,
++     +                               200,200,200,190,
++     +                               192,200,200,194,200,200,200,200,
++     +                               200,196,200,200,198,200,200),j
++ 130                          dum2 = dum1*csj
++                              if (odoub) then
++                                 if (i.gt.1) then
++                                    dum2 = dum2 + csi*cpj*fac
++                                 else
++                                    dum2 = dum2 + dum2
++                                 end if
++                              end if
++                              go to 200
++ 140                          dum2 = dum1*cpj
++                              if (odoub) dum2 = dum2 + dum2
++                              go to 200
++ 150                          dum2 = dum1*cdj
++                              if (odoub) dum2 = dum2 + dum2
++                              go to 200
++ 160                          if (onorm) dum2 = dum2*sqrt3
++                              go to 200
++ 170                          dum2 = dum1*cfj
++                              if (odoub) dum2 = dum2 + dum2
++                              go to 200
++ 180                          if (onorm) dum2 = dum2*sqrt5
++                              go to 200
++ 190                          if (onorm) dum2 = dum2*sqrt3
++                              go to 200
++ 192                          dum2 = dum1*cgj
++                              if (odoub) dum2 = dum2 + dum2
++                              go to 200
++ 194                          if (onorm) dum2 = dum2*sqrt7
++                              go to 200
++ 196                          if (onorm) dum2 = dum2*sqrt5/sqrt3
++                              go to 200
++ 198                          if (onorm) dum2 = dum2*sqrt3
++ 200                          nn = nn + 1
++                              dij(nn) = dum2
++ 210                       continue
++ 220                    continue
++c
++c     ----- nuclear attraction
++c
++                        dum = pi212*aa1
++c                       facinv = aa/(fac*pi212)
++                        do 260 i = 1 , ij
++                           dij(i) = dij(i)*dum
++ 260                    continue
++                        aax = aa*ax
++                        aay = aa*ay
++                        aaz = aa*az
++
++                        do 320 ic = 1 , nat
++
++                           do i=1,ij
++                              g(i)=0.0d0
++                           enddo
++                           if(omtchg .and. icent.eq.jcent) then
++c
++c ****** charge exclusion
++c
++                              pnuc = -q(i110-1+(ic-1)*nat + icent)
++                           else if ((oatint_z.or.
++     1                              (oint_zora.and.icoul_z.eq.2)).and.
++     1                             (ic.ne.icent.or.ic.ne.jcent)) then 
++c**ZORA
++                              pnuc = 0.0d0
++                           else
++                              pnuc = -czan(ic)
++                           endif
++
++                           cx = c(1,ic)
++                           cy = c(2,ic)
++                           cz = c(3,ic)
++                           if (oatint_z) then
++c....                        atomic zora all on origin
++                             cx = 0.0d0
++                             cy = 0.0d0
++                             cz = 0.0d0
++                           end if
++                           pp = aa*((ax-cx)**2+(ay-cy)**2+(az-cz)**2)
++                           if (nroots.le.3) call rt123
++                           if (nroots.eq.4) call roots4
++                           if (nroots.eq.5) call roots5
++                           mm = 0
++                           do 290 k = 1 , nroots
++                              uu = aa*u(k)
++                              ww = w(k)*pnuc
++                              tt = done/(aa+uu)
++                              t = dsqrt(tt)
++                              p0 = (aax+uu*cx)*tt
++                              q0 = (aay+uu*cy)*tt
++                              r0 = (aaz+uu*cz)*tt
++                              in = -5 + mm
++                              do 280 i = 1 , lit
++                                 in = in + 5
++                                 ni = i
++                                 do 270 j = 1 , ljt
++                                    jn = in + j
++                                    nj = j
++                                    call stvint
++                                    pin(jn) = pint
++                                    qin(jn) = qint
++                                    rin(jn) = rint*ww
++ 270                             continue
++ 280                          continue
++                              mm = mm + 25
++ 290                       continue
++                           do 310 i = 1 , ij
++                            nnx = ijx(i)
++                            nny = ijy(i)
++                            nnz = ijz(i)
++                            dum = dzero
++                            mm = 0
++                            do 300 k = 1 , nroots
++                               dum = dum + pin(nnx+mm)*qin(nny+mm)
++     +                               *rin(nnz+mm)
++                               mm = mm + 25
++ 300                        continue
++                            g(i) = g(i) + dum*dij(i)
++c     if (ic.eq.4) then
++c        write(6,*) 'bw> 1qmmm ',ii,jj,ig,jg
++c        write(6,*) 'bw> 1qmmm ',i,dum,dij(i),g(i)
++c     endif
++ 310                       continue
++
++
++C Update charge forces for this atom and basis function pair
++                              max = maxj
++                              nn = 0
++                              do 420 i = mini , maxi
++                                 li = loci + i
++                                 in = (li*(li-1))/2
++                                 if (oiandj) max = i
++                                 do 410 j = minj , max
++                                    lj = locj + j
++                                    jn = lj + in
++                                    nn = nn + 1
++                                    if (lj.eq.li) then
++                                       fqcfor(ic)=fqcfor(ic)+
++     &                                       q(jn+i801)*g(nn)*tokcal
++                                    else
++                                       fqcfor(ic)=fqcfor(ic)+
++     &                                    q(jn+i801)*g(nn)*two*tokcal
++                                    endif
++ 410                             continue
++ 420                          continue
++
++ 320                    continue
++
++                     end if
++c ...
++c ...
++ 390              continue
++ 400           continue
++c
++ 430        continue
++ 440     continue
++c
++
++         if (lpseud.ge.1) then
++            call caserr(
++     &         'pseudopotentials and flucq do not function together')
++         end if
++c
++c...   Gauge shift for testing Zora schemes
++c
++         if (igauge_z.ne.0) then
++            call caserr('zora and flucq do not function together')
++         end if
++c
++_IF(drf)
++        if (oreact) then 
++           call caserr('drf and flucq do not function together')
++         endif
++_ENDIF
++c
++c
++         cpu = cpulft(1)
++c
++      end if
++c
++c     ----- reset core memory -----
++c
++      if (omtchg) then
++         call gmem_free(i110)
++      endif
++      call gmem_free(i90)
++      call gmem_free(i80)
++ 
++      return
++      end
++_ENDIF
+diff -Nur source-nofq/gukint/GAMESS-UK/m4/util1.m source-fq/gukint/GAMESS-UK/m4/util1.m
+--- source-nofq/gukint/GAMESS-UK/m4/util1.m	Tue Nov 28 18:47:15 2000
++++ source-fq/gukint/GAMESS-UK/m4/util1.m	Wed Nov 22 12:54:08 2000
+@@ -4951,7 +4951,12 @@
+                  enddo
+                  if (l.ne.0)enc = enc + d(l)*dexp(-eta(l)*dsqrr)
+                endif
+-               enuc = enuc+cz(i)*cz(j)/dsqrr
++               enuct = cz(i)*cz(j)/dsqrr
++_IF(flucq)
++C If FlucQ is active, add in this interaction to the FlucQ (CHARMM) arrays
++               call fqqcor(i,j,enuct)
++_ENDIF
++               enuc = enuc+enuct
+             else
+                if(abs(cz(i)) .gt. 0.0001d0 .and. 
+      &            abs(cz(j)) .gt. 0.0001d0)owarn = .true.
+@@ -4959,6 +4964,10 @@
+          enddo
+       enddo
+       enuc = enuc+enc
++_IF(flucq)
++C Signal that the nuclear term is now complete, to avoid recalculation
++      call fqqcdn
++_ENDIF
+ c
+ c informational messages (behaviour has changed in v 6.2)
+ c
+diff -Nur source-nofq/flucq/fluqqmmm.src source-fq/flucq/fluqqmmm.src
+--- source-nofq/flucq/fluqqmmm.src		Wed Nov 29 20:20:59 2000
++++ source-fq/flucq/fluqqmmm.src		Wed Nov 29 20:23:36 2000
+@@ -1477,7 +1477,7 @@
+ ##INCLUDE '~/charmm_fcm/heap.fcm'
+ ##INCLUDE '~/charmm_fcm/consta.fcm'
+ C The following is uncommented by applying gamess-uk.patch
+-C     IF (QFLUC) CALL FQQMM2(Q,ISO,NSHELS,HEAP(FQCFOR),TOKCAL)
++      IF (QFLUC) CALL FQQMM2(Q,ISO,NSHELS,HEAP(FQCFOR),TOKCAL)
+       RETURN
+       END

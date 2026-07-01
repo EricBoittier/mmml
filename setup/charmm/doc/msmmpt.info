@@ -1,0 +1,145 @@
+CHARMM Element doc/mmpt.doc $Revision: 1.0 $
+
+File: MSMMPT, Node: Top, Up: (xxxx), Next: XXXX
+
+   Multi-state Molecular Mechanics with Proton Transfer (MS-MMPT)
+
+by  Zhen-Hao Xu (zhexu@uni-mainz.de)
+and Markus Meuwly (m.meuwly@unibas.ch)
+
+Questions and comments regarding MS-MMPT should be directed to
+----------------------------------------------------------
+Zhen-Hao Xu (z.xu@unibas.ch)
+
+Reference: Z.-H. Xu and M. Meuwly, J. Phys. Chem. B (2019) in print
+
+
+MS-MMPT has been developed, based on the established MMPT module, to 
+investigate diffusive proton transport in the condensed phase. The 
+MS-MMPT module extends the MMPT force field with multi-surface adiabatic
+reactive molecular dynamics (MS-ARMD) to describe multiple proton binding
+motifs. In the MS-MMPT method, a global potential energy for proton 
+transport is built by mixing multiple bonding patterns of a proton bonded
+to a possible acceptor atom. This method has been applied to proton 
+diffusion in water clusters and in bulk.
+
+Notes for users:
+1. MS-MMPT combines MMPT with MS-ARMD module. For the introduction and 
+usage of MMPT force field, please consult mmpt.doc
+
+2. The current implementation of MS-MMPT is geared towards the dynamics 
+of the excess proton in water.
+
+3. Treating multiple excess protons has not been validated.
+
+4. MS-MMPT supports the symmetric single (SSM), symmetric double (SDM), 
+nonlinear minimum (NLM) potentials and the potential with Legendre
+polynomial expansion (LPE) from MMPT.
+
+
+* Menu:
+
+* Syntax::                SYNTAX OF MSMMPT COMMAND
+* Input files::           MSMMPT INPUT FILES 
+
+
+File: MSMMPT, Node: Syntax, Up: Top, Previous: Top, Next: Input files
+
+ Description of the MSMMPT command
+
+The keyword MSPT should be used to invoke the MS-MMPT module:
+
+MSPT UHBR integer [USSM integer | USDM integer | UNLM integer - 
+     | ULPE integer ] UMUL integer
+
+
+UHBR is the unit containing the list of initial proton transfer motifs.
+
+The motif is represented in one line using the following format:
+-------------------------------------------------------------------
+(PSF No. of D atom) (PSF No. of H atom) (PSF No. of A atom) (PES type)
+-------------------------------------------------------------------
+E.g. for protonated water dimer the file contains the following line:
+     1     7     4   NLM
+
+‘D’ is the donor atom, ‘A’ is the acceptor atom.
+
+The type of proton transfer potential should be chosen from one of the 
+following:
+USSM is the unit representing for a PT potential with a single minimum
+USDM is the unit representing for a PT potential with symmetric double minimum
+UNLM is the unit representing for a PT potential with a non-linear path
+ULPE is the unit representing for a PT potential which contains Legendre
+polynomial expansion
+
+UMUL is the unit reading necessary parameters for the MS-MMPT module.
+Without specifying the UMUL unit, MS-MMPT will not be called.
+
+!############################################################
+! An input example of MS-MMPT parameter file with a
+! X-D--H*--A-Y bond connection in which D--H*--A is a defined
+! proton transfer motif
+!############################################################
+
+OPEN UNIT 15 CARD WRITE NAME msmmpt_wat.prm
+WRITE TITLE UNIT 15
+*    5.0           ! delta_E
+*    0.2213        ! force constant (fc) of the dihedral term (X-D--A-Y)
+*   10.985         ! fc of the supplementary angular terms (X-D--H* or H*--A-Y)
+*  128.432         ! equilibrium (eq) of the supplementary angular terms
+*    0.66          ! partial point charge of H* by definition
+*   552.94         ! fc of OH bond in H3O+ representation (rep.)
+*     0.9726       ! eq of OH bond in H3O+ rep., turn negative to deactivate the resonance struture for bonds
+*    31.18         ! fc of HOH bend in H3O+ rep.
+*   112.73         ! eq of HOH bend in H3O+ rep., turn negative to deactivate the resonance struture for angles
+*   592.23         ! fc of OH bond in H2O force field (#)
+*     0.9657       ! eq of OH bond in H2O (#)
+*    59.26         ! fc of HOH bend in H2O (#)
+*   106.56         ! eq of HOH bend in H2O (#)
+*     -0.198       ! EPSI_Oxy (H3O+), vdW parameters for H3O+ rep.
+*      1.734       ! RMIN_Oxy (H3O+), a negative value deactivates resonance strutures for vdW
+*     -0.000       ! EPSI_Hyd (H3O+)  
+*      0.001       ! RMIN_Hyd (H3O+), a negative value deactivates resonance strutures for vdW
+*     -0.1554253   ! EPSI_Oxy (H2O), vdW parameters of H2O force field (#)
+*      1.776572    ! RMIN_Oxy (H2O)
+*     -0.000       ! EPSI_Hyd (H2O)
+*    -99.00        ! RMIN_Hyd (H2O)
+*    -999.0        ! Length of a periodic box in X-dir. (#) 
+*    -999.0        ! Length of a periodic box in Y-dir. (#) 
+*    -999.0        ! Length of a periodic box in Z-dir. (#)
+*
+CLOSE UNIT 15
+
+The special note (#) denotes the parameters given by CHARMM input or 
+topology files. If PBC is not called, specify with arbitrary negative values.
+
+File: MSMMPT, Node: Input Files, Previous: Syntax, Up: Top, Next: Top
+
+ Explanation of input and output of MSMMPT
+
+!############################################################
+! A typical CHARMM input sequence for a MSMMPT simulation 
+! looks as follows:
+!############################################################
+
+! OPEN PARAMETER FILES FOR HYDROGEN BONDS
+OPEN UNIT 13 CARD READ NAME mmpt_h5o2p.prm
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+OPEN UNIT 14 FORMATTED READ NAME hbridge.dat
+
+! OPEN PARAMETER FILES FOR MS-MMPT MODULES
+OPEN UNIT 15 CARD READ NAME msmmpt_wat.prm
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+UPDATE
+
+! CALL MMPT ROUTINE, READ IN DATA
+MSPT UNLM 13 UHBR 14 UMUL 15
+
+CLOSE UNIT 13
+CLOSE UNIT 14
+CLOSE UNIT 15
+
+!---END---
+

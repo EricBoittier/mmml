@@ -1,0 +1,12 @@
+* This file sets distance restraints to model disulfide bonds
+*    
+    
+! Define distance restraints between C-alphas of cysteins involved in S-S bonds
+! Two chains (A & B); C18 & C66 correspond to resids 9 & 57 in MD numbering
+set segidA = PROA
+set segidB = PROB
+set ires 1
+define residue sele segid @segidA .and. resid @ires end
+define residue sele segid @segidB .and. resid @ires end
+RESDistance KVAL 378.0 RVAL 4.80 1.0 @segidA 9 CA @segidA 57 CA 
+RESDistance KVAL 378.0 RVAL 4.80 1.0 @segidB 9 CA @segidB 57 CA 

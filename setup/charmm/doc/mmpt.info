@@ -1,0 +1,240 @@
+CHARMM Element doc/mmpt.doc $Revision: 1.0 $
+
+File: MMPT, Node: Top, Up: (chmdoc/commands.doc), Next: Syntax
+
+           Molecular Mechanics with Proton Transfer (MMPT)
+
+by  Sven Lammers
+and Jing Huang (jing.huang@unibas.ch)
+and Markus Meuwly (m.meuwly@unibas.ch)
+
+Questions and comments regarding MMPT should be directed to
+----------------------------------------------------------
+Jing Huang (jing.huang@unibas.ch)
+
+Reference: S. Lammers, S. Lutz and M. Meuwly, J. Comp. Chem., 29, 
+1048 (2008) 
+
+
+The MMPT module contains reactive force fields to investigate proton 
+transfer (PT) reactions in MD simulations. It uses parametrized 
+three-dimensional potential energy surfaces (PESs) to describe 
+the interactions within a general DH--A proton transfer motif 
+where D is the donor, H is the hydrogen and A is the acceptor 
+atom. Together with the standard CHARMM force field and specific 
+rules control how bonded interactions on the donor and acceptor side 
+are switched on and off depending on the position of the transfering 
+H-atom (DH--A or D--HA). Multiple PT motifs can be located.
+
+
+* Menu:
+
+* Syntax::                SYNTAX OF MMPT COMMAND
+* Input files::           MMPT INPUT FILES 
+* Limitations::           LIMITATIONS
+
+
+File: MMPT, Node: Syntax, Up: Top, Previous: Top, Next: Input files
+
+ Description of the MMPT command
+
+The keyword MMPT should be used to invoke the MMPT module:
+
+MMPT UHBR integer   [USSM integer | USDM integer | UASM integer | - 
+     UNLM integer | ULPE integer | UDPT1 integer UDPT2 integer] [UHPM integer]
+
+
+UHBR is the unit containing the list of proton transfer motifs. Each 
+motif is represented in one line using the following format:
+-------------------------------------------------------------------
+(PSF No. of D atom) (PSF No. of H atom) (PSF No. of A atom) (PES type)
+-------------------------------------------------------------------
+E.g. for protonated water dimer the file contains the following line:
+     1     7     4   SSM
+
+
+There are six potential types currently supported, SSM (symmetric 
+single minimum), SDM (symmetric double minimum), ASM (asymmetric 
+single minimum), NLM (nonlinear hydrogen bond), LPE (legendre 
+polynomials expansion) and DPT (double proton transfer). For DPT type,
+exactly two transfer motifs need to be specified. The detailed formula
+of these PESs can be found in
+- SSM, SDM and ASM:
+   S. Lammers, S. Lutz and M. Meuwly, J. Comp. Chem., 29, 1048 (2008)
+- NLM:
+   Y. Yang and M. Meuwly, J. Chem. Phys., 133, 064503 (2010)
+- LPE:
+   J. Huang, Ph.D. Thesis, University of Basel (2011)
+- DPT:
+   K. Mackeprang, Z.-H. Xu, Z. Maroun, M. Meuwly and H. G. Kjaergaard,
+   Phys. Chem. Chem. Phys., 18, 24654-24662 (2016)
+
+
+
+For these PES types, the corresponding parameter files should be 
+provided in USSM, USDM, UASM, UNLM and ULPE, respectively. The format
+is one parameter per line. For DPT mode, it is mandatory to specify 
+two parameter files (UDPT1 and UDPT2). For each of UDPT1 or 
+UDPT2 files, the format is the same to that of USDM or USSM.
+
+
+UHPM opens the unit containing the list of additional parameter for 
+angle and dihedral interactions on acceptor side atoms with transfered 
+hydrogen atom, in case that these newly formed angle or dihedral terms 
+are not given in the standard charmm parameter file. It should have
+the following format:
+---------------------------------------------------------
+(No. of additional angle parameter)
+(PSF No. of atom I)  (PSF No. of atom J) (PSF No. of atom K) 
+(force constant) (equilibrium angle)
+...
+(No. of additional dihedral parameter)
+(PSF No. of atom I)  (PSF No. of atom J) (PSF No. of atom K) 
+(PSF No. of atom L) (force constant) (periodicity) 
+(equilibrium dihedral angle)
+...
+----------------------------------------------------------
+
+E.g. in case of protonated diglyme, certain angle and dihedral 
+parameter have to be provided for the acceptor side. 
+The file contains the following line:
+   1
+   3   5   1  50.000    108.000
+   2
+   1   3   5   1  1.0000  3  180.000 
+   3   3   5   1  1.0000  3  180.000
+
+
+
+MMPT parameter files need to be opened on the units before MMPT is 
+called. It is suggested to invoke MMPT before any ENERgy, 
+MINImization, or DYNAmics command. It is also recommended to proceed 
+the MMPT command with an UPDAte so that non-bonded parameter lists 
+are up-to-date. 
+
+
+
+File: MMPT, Node: Input Files, Previous: Syntax, Up: Top, Next: Limitations
+
+ Explanation of input and output of MMPT
+
+!############################################################
+! A typical input sequence for a MMPT simulation of protonated
+! water dimer looks as follows:
+!############################################################
+
+! OPEN PARAMETER FILES FOR HYDROGEN BONDS
+OPEN UNIT 13 CARD READ NAME mmpt_ssm_o2h5p.prm
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+OPEN UNIT 14 FORMATTED READ NAME HBRIDGE.DAT 
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+UPDATE
+
+! CALL MMPT ROUTINE, READ IN DATA
+MMPT USSM 13 UHBR 14
+
+CLOSE UNIT 13
+CLOSE UNIT 14
+
+!---END---
+
+!############################################################
+! 
+! One example of input for DPT simulation using MMPT force field
+!
+!############################################################
+
+OPEN UNIT 13 CARD WRITE NAME HBRIDGE.fad.DEF
+WRITE TITLE UNIT 13
+*     3    5     7   DPT
+*     8   10     2   DPT
+*
+
+CLOSE UNIT 13
+
+
+! OPEN PARAMETER FILES FOR HYDROGEN BOND
+OPEN UNIT 11 CARD READ NAME mmpt_mp2_sdm.prm
+OPEN UNIT 12 CARD READ NAME mmpt_mp2_ssm.prm
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+
+OPEN UNIT 13 FORMATTED READ NAME HBRIDGE.fad.DEF
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+
+UPDATE
+
+! CALL MMPT ROUTINE, READ IN DATA
+
+MMPT UDPT1 11 UDPT2 12 UHBR 13
+
+CLOSE UNIT 11
+CLOSE UNIT 12
+CLOSE UNIT 13
+
+!---END---
+
+Once MMPT is called, it first prints out the proton transfer motifs 
+that are treated by MMPT force field and then returns the information 
+that identifies the necessary modifications in the energy terms on 
+the donor and acceptor side:
+
+
+ MMPT> FOUND           1  HYDROGEN BOND(S) IN FILE:
+ MMPT>           1           7           4 SSM
+  
+ MMPT> ENERGIES AND FORCES OF FOLLOWING 
+       INTERACTIONS WILL BE REMOVED OR MODIFIED
+       
+       BONDED TERMS: FLAG  1  MEANS TERM EXISTS
+                     FLAG -1  MEANS TERM IS NEW
+       BONDS:
+       NO    ATOM I     ATOM J
+          5      1 O1         7 H5  
+       ANGLES:
+       NO    ATOM I     ATOM J     ATOM K   FLAG
+          2      2 H1         1 O1         7 H5        1
+          3      3 H2         1 O1         7 H5        1
+          4      5 H3         4 O2         7 H5       -1
+          4      6 H4         4 O2         7 H5       -1
+       DIHEDRALS:
+       NO    ATOM I    ATOM J      ATOM K     ATOM L   FLAG
+       IMPROPERS:
+       NO    ATOM I    ATOM J      ATOM K    ATOM L   FLAG
+       
+       NONBONDED TERMS: FLAG  1  MEANS TERM IS NEW
+                        FLAG -1  MEANS TERM EXISTS
+       SPECIAL 1-4 VDW: FLAG  14  MEANS TERM IS NEW
+       SPECIAL 1-4 VDW: FLAG -14 MEANS TERM EXISTS
+       
+       NONBONDED:
+       NO    ATOM I    ATOM J    FLAG
+          1      4 O2         7 H5        0
+          2      1 O1         4 O2        0
+          3      2 H1         7 H5       -1
+          4      3 H2         7 H5       -1
+          5      5 H3         7 H5        1
+          6      6 H4         7 H5        1
+
+
+The list contains the bond term of the donor acceptor which energy and
+force is removed, two existing angle terms on the donor side which 
+are modified, and two new angle terms on the acceptor side which are
+added, according to a switch function that turns the contributions on 
+and off depending on the position of the transferred proton.
+
+
+
+File: MMPT, Node: Limitations, Previous: Input files, Up: Top, Next: Top
+
+Limitations of current MMPT module
+
+Continuous proton transfer, e.g. proton shuttling along a water chain, is
+not possible with current MMPT module. A new version that allows proton 
+transport is under development.
+
+The maximum number of MMPT motifs is 200. This can be increased by 
+changing the variable NHBNUM in the subroutine ALLOCFIR if needed. 

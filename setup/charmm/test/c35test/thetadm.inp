@@ -1,0 +1,137 @@
+* CHARMM c35a1 Testcase: c35test/thetadm.inp
+* Author:   Wei Yang
+* Date:     July 2, 2007
+* Version:  c34a2
+* Test:     THETA-dynamcs in LDM in BLOCK
+*
+
+stream datadir.def
+bomb -5
+fast off
+
+set 3 300.0
+set mass 20
+set j meot
+set ndyn 1000
+set outfrq 100   !.dcd print out frequency
+set pertlam 0.0
+set lamstep 1
+set f 1
+set g 0
+set height 1.2 !Kchi energy barrier height defined in par_all22_prot2.inp
+
+read rtf  card
+* TOPOLOGY FILE FOR METHANOL TO METHANOL
+*
+   27     1
+MASS   100 DA    12.01100 C ! wei
+MASS   101 DB    12.01100 C ! wei
+MASS   102 DC    12.01100 C ! wei
+
+DEFA FIRS NONE LAST NONE
+
+RESI ABC         0.00 !
+ATOM  DA1  DA    0.00 !
+ATOM  DB1  DB    0.00 !    DA1       DA2
+ATOM  DB2  DB    0.00 !      \      /
+ATOM  DA2  DA    0.00 !       DB1--DB2---DA3
+ATOM  DA3  DC    0.00
+BOND  DA1  DB1  DB1  DB2  DB2  DA2
+BOND  DB2  DA3
+ANGL  DA1  DB1  DB2  DB1  DB2  DA2
+ANGL  DB1  DB2  DA3
+DIHE  DA1  DB1  DB2  DA2
+DIHE  DA1  DB1  DB2  DA3
+END
+
+read parameter card
+*>>>> CHARMM22 All-Hydrogen Parameter File for Proteins <<<<<<<<<<
+*
+
+BONDS
+DA   DB    225.000     1.5200 ! wei
+DC   DB    225.000     1.5200 ! wei
+DB   DB    225.000     1.5200 ! wei
+
+ANGLES
+DA   DB   DB    45.000    117.00
+DB   DB   DB    45.000    117.00
+DC   DB   DB    45.000    117.00
+
+DIHEDRALS
+DA   DB   DB   DA       90.000  1     0.00 ! wei
+DA   DB   DB   DA       90.000  2     0.00 ! wei
+DA   DB   DB   DB       7.0000  1   180.00 ! wei
+DA   DB   DB   DB       1.2000  2  -110.00 ! wei
+DA   DB   DB   DC       1.0000  1   180.00 ! wei
+!DA   DB   DB   DC       2.0000  2     0.00 ! wei
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+DA     0.000000  -0.000000     0.000000 !
+DB     0.000000  -0.000000     0.000000 !
+DC     0.000000  -0.000000     0.000000 !
+
+HBOND CUTHB 0.5  ! If you want to do hbond analysis (only), then use
+                 ! READ PARAM APPEND CARD
+                 ! to append hbond parameters from the file: par_hbond.inp
+
+END
+
+
+read sequence card
+*test
+*
+1
+ABC
+generate meth setup warn first none last none
+
+
+read coor card
+* initial minimized coordinates
+*
+    5
+    1    1 ABC  DA1    0.54478  -1.11130  -0.55984 ABC  1      0.00000
+    2    1 ABC  DB1   -0.53430  -0.18133  -0.02962 ABC  1      0.00000
+    3    1 ABC  DB2   -0.58366   0.03167   1.47458 ABC  1      0.00000
+    4    1 ABC  DA2    0.28659   1.14048   2.04344 ABC  1      0.00000
+    5    1 ABC  DA3    0.28659   1.14048   2.04344 ABC  1      0.00000
+
+print psf
+test psf
+
+BLOCK 3
+CALL 2 SELE bynum 4 show END
+CALL 3 SELE bynum 5 show END
+RMLA BOND THET
+LDMA
+END
+
+BLOCK
+QLDM THETA
+LANG temp 300.0
+!LDIN BLOCKnum LAMBda LamVelocity LamMass ReferenceE
+LDIN 1 1.00    0.0 1.0    0.0
+LDIN 2 0.49999 0.0 1.0    0.0   !last col (6) is reference energy
+LDIN 3 0.50001 0.0 1.0    0.0   !@referE   !last col (6) is reference energy
+END   !block
+
+!--------------------------DYNAMIC---------
+SCALAR FBETa SET 200.0
+
+open unit 25 writ form name @9/@j_@mass_@height_@ndyn_@g.res
+open unit 26 file writ name @9/@j_@mass_@height_@ndyn_@g.dcd
+open unit 50 unform write name @9/theta.dat
+
+dynamics start langevin timestep 0.001 nstep @ndyn -
+     firstt @3 finalt @3 twindl -10.0 twindh 10.0 -
+     iasvel 5 iasors 5 iunr -1 iunwri 25 -
+     nsavc @outfrq nsavv 0  iunldm 50 nsavl 100 -
+     iuncrd 26  iunvel -1 isvfrq 10000
+
+close unit 25
+close unit 26
+close unit 50
+
+
+STOP

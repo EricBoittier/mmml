@@ -1,0 +1,205 @@
+CHARMM Element doc/openmm_dock.info $
+
+File: openmm_dock, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+    OpenMM_DOCK: An Accelerated Routine for Protein-Ligand Docking
+               Using Parallel MD-based Simulated Anneling on GPUs
+                   By Xinqiang Ding and Charles L. Brooks III
+
+* Menu:
+* Background:   Background information about the method
+* Syntax:       Syntax of the command
+* Description:  Description of the command
+* Examples:     Example commands
+* Installation: How to compile openmm_dock
+
+File: openmm_dock, Node: Background, Up: (doc/commands.info), Next: Syntax
+
+                Background Information
+
+  This routine is for flexible protein-ligand docking, in which the ligand is
+flexible. Part of the protein, usually the amino acid side chains around the
+binding pocket can also be modelled as flexible. All the other part of the system
+is fixed. Molecular dynamics (MD) based simulated anneling is used to search
+for lowes energy conformations. To accelerate the calculation, three tricks are used:
+
+1. The nonbonded interaction between the flexible part and the fixed part are
+calculated using grid potentials. (see details in dock.src)
+2. A customized OpenMM system consisting of mutiple copies of the flexible part
+the protein-ligand complex is employed. Copies of the flexible part are independent,
+because there is no interaction between atoms from different copies. Therefore,
+runing one trial of simulated annealing with the customized system is equivalent to
+running multiple trials of simulated annealing for the protein-ligand complex
+3. The MD-based simulated annealing with the customized OpenMM system is run on GPUs
+4. Additional two customizable grid potential are added for usage of 
+introducing hydrogen bond interaction upon binding and potential usage 
+for covalent docking. (Added in August 2021 By Yujin Wu)
+
+
+File: openmm_dock, Node: Syntax, Up: Top, Previous: Background, Next: Description
+
+               Syntax of Commands
+
+Read Two Grid Potentials:
+
+  OMMD GRID UNIS <integer> UNIH <integer> [Formatted]
+
+Create OpenMM System and Context:
+
+  OMMD BUILD -
+       [ SELE <fixed atom selection> END ] -
+       SELE <flexible atom selection> END -
+       NCOPY <integer>
+       [nofi] [GRHB]
+       
+Set Positions from Main Coordinates:
+  OMMD SETC IDXC <integer>
+
+Change the softness of grid potential:
+  OMMD CGRS -
+       SOFT <float> HARD <float> -
+       EMAX <float> MINE <float> MAXE <float> -
+       EPS <float>       
+
+Run Simulated Anneling:
+
+  OMMD SIAN -
+       NSTEP <integer> -
+       FIRST <float> FINAT <float> TEMI <float> NHRQ <integer> -
+       FRIC <float>
+
+Copy Position to Main Coordinates
+  OMMD COOR IDXC <integer>
+
+
+File: openmm_dock, Node: Description, Up: Top, Previous: Syntax, Next: Examples
+
+             Detailed Description of Options in Commands
+
+Read Two Grid Potentials:
+  OMMD GRID UNIS <integer> UNIH <integer> [Formatted]
+    UNIS             Unit from which to read the soft protein grid potentials
+    UNIH             Unit from which to read the hard protein grid potentials
+    Formatted        Set if the grid potential is in ASCII format
+
+  This command reads two grid potentials (soft and hard) for the fixed part of
+protein. The grid is generated using grid command (see doc/grid.info).
+
+Create OpenMM System and Context:
+  OMMD BUILD -
+       [ SELE <fixed atom selection> END ] -
+       SELE <flexible atom selection> END -
+       NCOPY <integer>
+       [nofi] [GRHB]
+
+  NCOPY    num of copies of flexible atoms
+  nofi     only flexible atoms are used to build the OpenMM system
+  GRHB     The grid energy calculation includes the customizable grids.  
+
+  Given the fixed atom selection and the flexible atom selection, this command
+create an OpenMM system, which comprises of one copy of the fixed atoms and
+NCOPY copies of the flexible atoms. When there are no fixed atoms, as
+in the case of flexible-ligand and rigid-protein docking, only the flexible atom
+selection is specified to be the ligand atoms and nofi option has to be turned on.
+When part of the protein is also flexible, the flexible atom selection should include
+both ligand atoms and flexible protein atoms and the fixed atom selection should
+include the atoms to which the flexible part of the protein connect. During the MD-based
+simulated annealing, only the atoms in the flexible atom selection moves. Although
+the atoms in the fixed atom selection do not move, they have to be included in the
+system such that the flexible part of the protein does not lose bonds with the fixed
+part and drift away. This command also creates an OpenMM context with CUDA platform.
+  
+Set Positions from Main Coordinates:
+  OMMD SETC IDXC <integer>
+
+    IDXC    the index of the copye of flexible atoms whose positions are set based on
+            the main coordinates.
+
+Change the softness of grid potential:
+  OMMD CGRS -
+       SOFT <float> HARD <float> -
+       EMAX <float> MINE <float> MAXE <float> -
+       EPS <float>
+
+  SOFT <float>    a float number between 0 and 1.
+                  It specifies how much the soft grid is used. 0 means turning off
+		  the soft grid; 1 means turning on the soft grid fully.
+  HARD <float>    a float number between 0 and 1;
+                  It specifies how much the hard grid is used. 0 means turning off
+		  the hard grid; 1 means turning on the hard grid fully.
+		  
+  EMAX <float>    a positive float number. 
+  MINE <float>    a negative float number
+  MAXE <float>    a positive float number  
+      The above three parameters (EMAX, MINE, MAXE) specifies the softness of
+      nonbonded interactions between atoms. The meaning of these parameters are presented
+      in the documention ./doc/grid.info.
+
+  EPS  <float>    a positive float number. Distance dependent dielectric (r*eps) is used.
+
+  
+  Two grid potentials (soft and hard) with different softness parameters (i.e. EMAX, MINE,
+  MAXE) are included in the OpenMM system. The command here is for specifying which grid
+  to use.
+
+
+Run Simulated Anneling:
+
+  OMMD SIAN -
+       NSTEP <integer> -
+       FIRST <float> FINAT <float> INCT <float> NHRQ <integer>-
+       FRIC <float>
+
+    NSTEP    the number of steps
+    FIRST    the inital temperature for simulated annealing
+    FINAT    the final temperature for simulated annealing
+    NHRQ     the frequcy of changing the temperature
+    INCT     the incremental temperature
+
+
+Copy Coordinates from OMMD to the Main Coordinates
+  OMMD COOR IDXC <integer>
+
+    IDXC     the index of the cope of flexible atoms whose coordinates in the main
+    	     set are set using the coordinates from OMMD
+
+
+File: openmm_dock, Node: Examples, Up: Top, Previous: Description, Next: Installation
+
+!! define the flexible and fixed atom selections
+define backbone -
+   sele (segid prot .and. -
+	(type  n .or. type ca .or. type c .or. type o .or.-
+         type oct* .or. type ha* .or. type hn .or. type ht*)) end
+   
+define flex -
+   sele ( segid LIGA ) .or. -
+        (.byres. (((segid LIGA .and. ( .not. hydrogen )) .around. 5) .and. -
+	            ( .not. hydrogen))) .and. ( .not. backbone ) end
+
+define fix sele .not. flex end
+
+!! read grid potentials
+open unit 30 read unform name "./grid.bin"
+OMMD grid UNIT 30
+
+!! create OpenMM system and context
+OMMD build sele fix end sele flex end ncopy 10
+
+!! set positions for all copies of flexible atoms with a loop structure
+OMMD setc idxc @i
+
+!! run simulated annealing
+OMMD SIAN nstep 27000
+
+!! copy positions for each copy back to main coordiantes
+OMMD COOR IDXC @i
+
+File: openmm_dock, Node: Installation, Up: Top, Previous: Description
+
+To install CHARMM with the openmm_dock features, give the configure script the
+--with-fftdock
+command line option in addition to following the instructions for a normal
+CHARMM with OpenMM install using configure or CMake (see openmm.info). For example:
+configure --with-fftdock ...

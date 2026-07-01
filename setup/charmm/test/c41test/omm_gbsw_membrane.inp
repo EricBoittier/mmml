@@ -1,0 +1,326 @@
+* Test scrips for GBSA in OpenMM through the CHARMM-OpenMM gpu interface
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .gt. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+!-------------------------------------------------------------------------------
+!    USER INPUTS
+
+stream datadir.def
+
+prnlev 0 @pnode
+set PDBName   = 3bdc
+set CHAInname = pro0
+
+
+set TOPFilename  = @0/top_all22_prot_cmap_phmd.inp
+set PARFilename  = @0/par_all22_prot_chen_cmap_phmd.inp
+set GBRAdiipatch = @0/radius_gbsw.str
+set PDBFile      = @0/@{PDBName}.pdb
+
+!-------------------------------------------------------------------------------
+!    READ IN FILES, REPAIR / PATCH PROTEIN
+
+
+! open parameter and topology files
+read rtf  card name @TOPFilename
+read para card name @PARFilename
+
+read sequence card
+* sequence of vpu ( 2-81 ) M66L and M70L
+* QPIQIAIVAL VVAIIIAIVV WSIVIIEYRK ILRQRKIDRL
+* IDRLIERAED SGNESEGEIS ALVELGVELG HHAPWDVDDL
+*
+ 36
+! 1   2   3   4   5   6   7   8   9  10
+ GLN PRO ILE GLN ILE ALA ILE VAL ALA LEU
+ VAL VAL ALA ILE ILE ILE ALA ILE VAL VAL
+ TRP SER ILE VAL ILE ILE GLU GLY ARG GLY
+ GLY LYS LYS LYS LYS MET
+
+generate PEPA setup warn first NTER last CTER
+
+!
+! Make a Helix
+!
+
+coor stat select type CA end
+set ntot = ?nsel
+
+set i = 1
+
+label ic_edit
+
+calc j = @i - 1
+calc k = @i + 1
+
+if j .ge.  1 then
+IC EDIT
+DIHE @j  C  @i  N  @i CA  @i  C -57.8  ! PHI
+END
+endif
+
+if k .le. @ntot then
+IC EDIT
+DIHE @i  N  @i CA  @i  C  @k  N -47.0  ! PSI
+END
+endif
+
+incr i by 1
+if i .le. @ntot goto ic_edit
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+hbuild
+
+coor stat
+coor orie
+coor stat
+coor rotate ydir  1.0 phi 90.0
+coor stat
+coor trans zdir -?zmin
+coor trans zdir  -30.0
+coor stat
+
+coor trans xdir 1.0 ydir 1.0 dist 10.0
+
+! make all heavy (non-hydrogen) atoms stable, minimize energy
+cons harm force 10 mass select ( segid @chainname ) .and. ( .not. hydrogen ) end
+minimize sd nstep 10
+cons harm clear
+
+write psf card name @9/omm_gbsw_membrane.psf
+write coor file name @9/omm_gbsw_membrane.crd
+
+set i = 1
+set platform cuda
+label dotest
+set cut = 999
+if @i gt 2 set cut = 20
+
+!**********************Test @i**********************************
+
+prnlev 5 @pnode
+omm clear
+gbsw reset
+delete atom select all end
+read psf card name @9/omm_gbsw_membrane.psf
+read coor file name @9/omm_gbsw_membrane.crd
+prnlev 0 @pnode
+
+if @i eq 3 then
+      set 6 = 80  ! x-dim
+      set 7 = 80  ! y-dim
+      set 8 = 200  ! z-dim
+      read image card name @0/cubic.img
+      image byseg select all end
+endif
+!!!!!!!!!!!!!!!!!!!!!!
+!!    GBSW RADII    !!
+!prnlev 0 @pnode
+stream @GBRAdiipatch
+!prnlev 5 @pnode
+
+! cutoff and misc options
+update atom cdie switch vdw vswitch cutnb @cut ctofnb @cut ctonnb @cut -
+      inbfrq -1 cutim @cut imgfrq -1
+
+! Preamble to tests, set up gbsw energy and forces
+gbsw tmemb 35 msw 2.5
+prnlev 5 @pnode
+energy
+prnlev 0 @pnode
+set echarmm = ?ener
+coor force compare
+
+set return fromCHARMM
+goto ncharmm
+label fromCHARMM
+
+
+!         TEST OpenMM PLATFORM FOR GBSW
+
+prnlev 5 @pnode
+omm platform @platform
+energy omm
+prnlev 0 @pnode
+
+set eomm_cuda = ?ener
+coor force compare
+
+set return fromOMMCuda
+goto nopenmm
+label fromOMMCuda
+
+calc ediff = abs ( @echarmm - @{eomm_cuda} )
+calc error = abs ( @ediff / @echarmm )
+calc prdiff = 100 * @{ediff} / sqrt ( @echarmm * @{eomm_cuda} )
+
+prnlev 2 @pnode
+echo -------------------------------------------------------------------
+
+echo comparing default "gbsw" between CHARMM and OPENMM (@platform)
+echo
+echo CHARMM energy with GBSW: @echarmm  kcal/mol
+echo OMM energy with GBSW (@platform platform): @{eomm_cuda}  kcal/mol
+echo absolute unsigned difference: @ediff  kcal/mol  kcal/mol
+echo
+echo Force dot product: @fsum
+echo Percent energy error: @prdiff
+echo
+prnlev 0 @pnode
+
+set return fromTest
+set test = test @i
+goto prresults
+label fromTest
+
+incr i by 1
+if i le 3 goto dotest
+
+prnlev 5 @pnode
+stop
+
+
+!-------------------------------------------------------------------------------
+! AUX ROUTINES FOR NORMALIZATION AND DOT PRODUCTS
+!-------------------------------------------------------------------------------
+
+label prresults
+    set estat = fail
+    if @prdiff le 2e-0 then
+        set estat = pass
+    endif
+
+    calc diff = abs ( 1 - @fsum )
+    set fstat = fail
+    if @diff le 1e-2 then
+        set fstat = pass
+    endif
+
+    prnlev 2 @pnode
+    echo testcase result: @estat @test - energy - @Platform
+    echo testcase result: @fstat @test - forces - @Platform
+    prnlev 0 @pnode
+goto @return
+
+
+!-------------------------------------------------------------------------------
+
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+!-------------------------------------------------------------------------------
+
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar 4 store 1
+   scalar 5 store 2
+   scalar 6 store 3
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar 1 store 4
+   scalar 2 store 5
+   scalar 3 store 6
+
+goto @return

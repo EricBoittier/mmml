@@ -1,0 +1,279 @@
+CHARMM Element doc/overlap.info $Revision: 1.1.1.1 $
+
+File: Olap,  Node: Top, Up: (doc/charmm.info),  Next: Description
+
+
+                    Overlap of Molecular Similarity
+            
+
+     This is a maximum overlap method to investigate the structural
+similarity of flexible molecules. The atoms are described as Gaussians
+and the interaction energy between different molecules are basically
+overlap integrals. The Gaussians can represent either volume or charge.
+Alternatively, the overlap of the electrostatic potential is provided
+yielding exponential form.
+
+     This method supports all CHARMM functionality, because it provides
+just another energy term and forces for it. Only periodic boundaries and
+VIBRAN are not supported.
+
+Refercence: :Juneja, A; Riedesel, H; Hodoscek, M ; Knapp, EW
+JOURNAL OF CHEMICAL THEORY AND COMPUTATION (2009) 5, 659-673
+
+
+* Menu:
+
+* Description::         Description of the OVERLAP commands.
+* Usage::               How to use the OVERLAP method.
+* Implementation::      Implementation of the OVERLAP method
+* Performance::         Performance Issues
+
+
+File: Olap, Node: Description, Up: Top, Next: Usage, Previous: Top
+
+
+SYNTAX and DESCRIPTION
+======================
+
+
+One command (OLAP) is used in several different forms to specify
+everything.
+
+To initialize the method use:
+
+OverLAP  NUMB <int> WEIGht <real> VOLW <real> CHAW <real> ESPW <real> -
+  WIDTh <real> GAMMa <real> WEPO <real>
+
+NUMB <int>   - how many subsystems do we have
+
+WEIG <real>  - weighting factor for the whole overlap term; it also
+               accounts to bring units to kcal/mol, default = 1.0
+
+VOLW <real>  - weighting factor for the volume overlap term,
+               default = 0.0
+
+CHAW <real>  - weighting factor for the partial atomic charge overlap
+               term, default = 0.0
+
+ESPW <real>  - weighting factor for the electrostatic potential
+               overlap term, default = 0.0
+
+NOTE: Since all these three individual weighting factors default to 0.0,
+the user has to specify at least one of them as a non-zero value, or the
+program will bomb out because there is no overlap to calculate!
+The overall overlap Hodgkin index is calculated according to the following
+formula:
+
+           VOLW * H(volume) + CHAW * H(charge) + ESPW * H(e-s.pot)
+H(total) = -------------------------------------------------------
+                             VOLW + CHAW + ESPW
+
+This way the overall Hodgkin index will be scaled between -1 and 1, no
+matter what are the values of the individual weighting factors.
+
+WIDT <real>  - this value is used to scale all the atomic radii when
+               calculating volume or electrostatic potential overlap,
+	       default = 1.0
+
+GAMM <real>  - gamma value for the electrostatic potential, default = 1.0
+
+WEPO <real>  - linear factor for the electrostatic potential,
+               default = 1.0
+
+Before this initial OLAP command is called, WMAIN array should contain
+partial atomic charges. In the course of initializing the overlap
+subsystem, these charges will be copied from WMAIN to an internal array.
+After the initialization, the user should load WMAIN with per-atom
+weighting factors for the volume overlap (if the volume overlap is to be
+used at all). The most simple way to do this is via:
+
+SCALAR WMAIN SET 1
+
+which will give equal weighting of 1.0 to all atoms. Be aware of the
+commands that could alter WMAIN array so that these weighting factors
+are lost before calculating the overlap energy term!
+
+
+After initialization, subsystems should be defined using the following
+command:
+
+OLAP SYST <int> WEIG <real> SELE <selection factor> END
+
+SYST <int>   - the number of the subsystem being defined, should be
+               in range from 1 to the number given in the initialization
+	       command (NUMB parameter)
+
+WEIG <real>  - weighting factor for the system being defined,
+               default = 1.0
+
+SELE ... END - selection of atoms which constitute this system.
+
+The memory usage for these selections of subsystems is specified
+dynamically so there can be as many as one needs of these lines.
+
+Do not forget to cancel all physical energy terms between subsystems
+treated with the OLAP! This can be done using BLOCK command. Here is an
+example for three subsystems:
+
+BLOCK 3
+CALL 2 SELE ... END
+CALL 3 SELE ... END
+COEF 1 2 0.0
+COEF 1 3 0.0
+COEF 2 3 0.0
+END
+
+[For more than several subsystems, there will be many ``COEF x y 0.0''
+lines. This is something which may change, since specifying many block
+commands may cause users to make errors.
+
+Possible solutions:
+
+1. When generating nonbond list check the following:
+
+   if ((nolap(i).gt.0).and.(nolap(j).gt.0))then
+      if (iolap(nolap(i)).ne.iolap(nolap(j))) then
+         these 2 atoms have to be excluded.
+      endif
+   endif
+
+2. Or put the above in the exclusion list ??
+
+3. or use block code - this works!
+
+To check which atom is in which subsystem one can use:
+
+OLAP PRINt
+
+
+To print out individual forces and separate volume, charge and
+electrostatic potential Hodgkin indices use:
+
+OLAP DEBUg   - turn on debugging
+OLAP NODEbug - turn off debugging
+
+NOTE: This produces huge output! Therefore, it is not recomended to turn
+debugging on before a minimization or a dynamics run.
+
+
+Weighting factors for the overlap terms (WEIG, VOLW, CHAW, ESPW) and
+factors determining the shape of Gaussian and exponential functions
+(WIDT, GAMMa, WEPO) can be changed via:
+
+OLAP RESTart WEIG <real> VOLW <real> CHAW <real> ESPW <real> -
+  WIDT <real> GAMMa <real> WEPO <real>
+
+For the description of OLAP REST parameters, see above the section on
+initializing.
+
+NOTE: When utilizung OLAP REST command, default values of all parameters
+are not the previous ones, but the general defaults (VOLW=0, CHAW=0,
+ESPW=0, WIDT=1, GAMM=1, WEPO=1)! Therefore, the user has to specify all
+the non-default values again.
+
+
+To turn off the overlap method completely, use:
+
+OverLAP OFF
+
+NOTE: This command also copies charges back to WMAIN!
+
+
+File: Olap, Node: Usage, Up: Top, Next: Implementation, Previous: Description
+
+
+USAGE
+=====
+
+Since everything is flexible, I suggest to start with aligning the
+systems to themself first. With this approach one gets the estimate of
+the weights and radii which can be later used and improved in the
+alignement process of different species. 
+
+It is sometimes usefull to exclude certain atoms from the alignement
+procedure. The obvious procedure to do this is to use SCALar command
+and assign the WMAIN array to zero. This can be done both before
+OLAP initialization (thus setting atomic charges to zero and excluding
+them from the charge and electrostatic potential overlap) and after
+it (thus excluding atoms from the volume overlap).
+
+
+
+File: Olap, Node: Implementation, Up: Top, Next: Performance, Previous: Usage
+
+
+IMPLEMENTATION
+==============
+
+This is a new area of research, and the user might want to play with
+the different ``energy'' terms or formulas. The following is a
+guideline to do that. Everything CHARMM related is separated from the
+energy routines, so it should be easy for anyone to adjust the
+formulas for the systems under investigation.
+
+Because in general we may have one atom in several systems we need to
+use the following data structure:
+
+NOLAP(i), i=1, NATOM  this is a vector of pointers to the IOLAP array.
+IOLAP(i), i=1, NOLAP(NATOM) this is a vector which contains the information
+               to which subsystem each atom belongs to.
+
+Then the loop for the overlap integrals would be like this:
+
+      do i = 1, natom
+         do j = 1, natom
+            do k = nolap(i),nolap(i+1)-1
+               ix=iolap(k)
+               if(ix.gt.0) then
+                  do l = nolap(j), nolap(j+1)-1
+                     jx=iolap(l)
+                     if(jx.gt.0) then
+                        ipt = (ix-1)*ix/2+jx  ! this is not general case
+                        s(ipt) = s(ipt) + gauss(i)*gauss(j)
+                     endif
+                  enddo
+               endif
+            enddo
+         enddo
+      enddo
+
+The above is simplified model for illustration purposes only. For
+details see the actual code. All the code for calculating overlap
+energies and forces is in energy/eolap.src; command-line analysis is
+in misc/olap.src. Also see fcm/olap.fcm.
+
+The keyword to compile the method is ##OVERLAP.
+
+
+
+File: Olap, Node: Performance, Up: Top, Next: Top, Previous: Implementation
+
+
+PERFORMANCE ISSUES
+==================
+(since the systems are usually small this is not so big issue)
+
+Very probably the method is trivial to parallelize.  The following
+should take care of it:
+
+In OLAPINT()
+
+        icalc=0
+        do i = 1, natom
+           do j = 1, natom
+             ....
+
+                   icalc=icalc+1
+                   if(mod(icalc,numnod).eq.mynod) then
+                      ...
+                      call fmgauss()
+                      ...
+                   endif
+             ....
+           enddo
+        enddo
+
+This is a scheme for perfect load balance. However there is some loss
+in olapsd, because it always does it for all atoms (it doesn't scale)
+This way there is no additional communication involved!!!?
+

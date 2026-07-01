@@ -1,0 +1,164 @@
+CHARMM Element doc/ssnmr.info $Revision: 1.1.1.1 $
+
+File: SSNMR, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+              Solid State NMR (SSNMR) Energy Functions
+
+
+This module makes the SSNMR energy functions satisfying experimental data
+observed in solid-state NMR. It focuses on 15N-chemical shifts and 15N-1H
+dipolar couplings in a solid state. A set of these energy potentials are called
+as orientational restraints providing us with the orientation information, such
+as tilt, rotation, and etc. of in a particular helix. The module is specialized
+on determining helix orientations in a bilayer. 
+
+Please report problems to mack97hyuk@gmail.com or wonpil@ku.edu
+
+References  : J. Lee, J. Chen, C. L. Brooks III, and W. Im,
+              J. Magn. Reson. 193, 68-76(2008)
+            : it includes the explanation of developement and application for 
+              these restraints.
+
+* Menu:
+
+* 15N Chemical shift : Syntax           ::   Syntax of 15N chemical shift
+* 15N Cheimical shift : Charmm input    ::   Example of 15N chemical shift 
+* 15N-1H dipolar coupling: Syntax       ::   Syntax of 15N-1H dipolar coupling 
+* 15N-1H dipolar coupling: Charmm input ::   Example of 15N-1H dipolar coupling 
+
+
+File: SSNMR, Node: 15N Chemical shift : Syntax, Up: Top, Next: 15N Chemical shift : Charmm input, Previous: Top
+
+
+1. 15N chemical shift
+
+[SYNTAX]
+CCS
+EXPS [S11 real] [S22 real] [S33 real] [PHI real] 
+ASSIGN atom-selection [FORCe real] [EXP real]
+RESEt
+PRINt ANALysis
+END
+
+S11, S22, S33:  Chemical shift tensors (ppm). They are obtained by diagonalizing
+                a shielding tensor. These values are given from experiments.
+                Refer Table1 in the above reference. 
+
+PHI:            Phi angle (degrees) is defined by a rotation angle between NH
+                vector and S11 chemical tensor on the peptide plane. It depends
+                on the residues and also experimental conditions.
+
+FORCe:          Force constant (unit: kcal/mol/ppm^2).
+EXP:            Chemical shift observables from experiment (ppm).
+atom-selection: Three atoms (NH, C, and O in peptide plane) consisting of
+                chemical shift tensors.
+RESEt:          Reset the assigned energy potentials
+PRINt ANALysis: dump out junk data from the potentials
+
+
+
+File: SSNMR, Node: 15N Chemical shift : Charmm input, Up: Top, Next: 15N-1H dipolar coupling: Syntax, Previous: 15N Chemical shift : Syntax
+
+!----------CHARMM input--------------------------------------------------
+! assign the experimental observables
+set csexp8   76.50000
+set csexp9   85.40000
+set csexp10  72.60000
+
+!set chemical shift force constant (kcal/mol/ppm^2)
+set csforc 0.5 
+
+!generate chemical shift potential
+ccs
+exps   s11 64.0 s22 77.0 s33 217.0 phi 107
+assign sele ( resid  8 .and. ( type N .or. type HN )) .or. ( resid  7 .and. ( type C )) end -
+       forc @csforc exp @csexp8
+assign sele ( resid  9 .and. ( type N .or. type HN )) .or. ( resid  8 .and. ( type C )) end -
+       forc @csforc exp @csexp9
+assign sele ( resid 10 .and. ( type N .or. type HN )) .or. ( resid  9 .and. ( type C )) end -
+       forc @csforc exp @csexp10
+end
+
+!dump out junk data from the assigned potentials
+ccs
+print anal
+end
+
+!get total energy
+energy
+
+!test first
+test first sele ires 8:45 .and. (type N .or. type HN .or. type C) end
+
+stop
+!------------------------------------------------------------------------
+
+
+
+File: SSNMR, Node: 15N-1H dipolar coupling: Syntax, Up: Top, Next: 15N-1H dipolar coupling : Charmm input, Previous: 15N Chemical shift : Charmm input
+
+2. 15N-1H dipolar coupling (any dipolar couplings are possible, such as 13C-1H
+and etc.)
+
+[Syntax]
+CCS
+EXPS [NUDC real] DCABs DIPC
+ASSIGN atom-selection [FORCe real] [EXP real]
+RESEt
+PRINt ANALysis
+END
+
+NUDC:           Dipolar coupling constant; the value depends on the length of
+                dipolar coupling vector (NH); in the case of NH vector length
+                (1.07 Angstrom), it is ~19.86 kHz. If you want the simulation
+                to be flexible dipolar coupling constant, use the keyword DCABs.
+DCABs:          Flexible dipolar coupling constant will be used in the
+                simulation.
+DIPC:           It lets CHARMM to know the assingment to be dipolar coupling.
+FORCe:          Force constant (unit: kcal/mol/kHz^2).
+EXP:            Dipolar coupling observables from experiment (kHz).
+atom-selection: Two atoms ( N/HN, CA/HA,and etc.) consisting of dipolar
+                coupling.
+RESEt:          Reset the assigned energy potentials
+PRINt ANALysis: dump out junk data from the potentials
+
+
+
+
+File: SSNMR, Node: 15N-1H dipolar coupling : Charmm input, Up: Top, Next:, Previous: 15N-1H dipolar coupling: Syntax
+
+!----------CHARMM input--------------------------------------------------
+! assign the experimental observables
+set dcexp7    -9.26125
+set dcexp8   -11.09568
+set dcexp9    -8.12626
+
+!set dipolar coupling force constant (kcal/mol/kHz^2)
+set dcforc 0.5 
+
+!generate dipolar coupling potential
+ccs
+exps  nudc 19.86 ! DCABs
+!DC
+assign sele ( resid  7 .and. ( type N .or. type HN ))  end -
+       DIPC forc @dcforc exp @dcexp7
+assign sele ( resid  8 .and. ( type N .or. type HN ))  end -
+       DIPC forc @dcforc exp @dcexp8
+assign sele ( resid  9 .and. ( type N .or. type HN ))  end -
+       DIPC forc @dcforc exp @dcexp9
+end
+
+!dump out junk data from the assigned potentials
+ccs
+print anal
+end
+
+!get total energy
+energy
+
+!test first
+test first tol 0.000000001 sele ires 7:45 .and. ( type N .or. type HN ) end
+
+stop
+!------------------------------------------------------------------------

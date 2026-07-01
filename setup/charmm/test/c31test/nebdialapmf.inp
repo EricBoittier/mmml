@@ -1,0 +1,130 @@
+* CHARMM 31 testcase nebdialapmf.inp
+* Test the restraint dimnamics along the NEB path
+* Author: Jhih-Wei Chu
+* requires toph19.rtf and param19.prm
+*
+
+if ?replica .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+set z diala_r1000
+
+set krms 1000
+set kangle 0 
+set cosmax 0.98
+set kmax 0
+set rmax 0.0
+
+set outfile = diala
+set oid = 8
+
+bomblev -2
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+
+! GENERATE ALANINE DIPEPTIDE, PARM19
+!
+read sequence card
+3
+AMN ALA CBX
+generate ala setup warn
+
+set nrep 1
+replicate a nreplica @nrep select all end setup
+delete atom sele segid ala end
+nbond cutnb 999.
+scalar wmain set 1. sele all end
+ 
+coor read card
+* REPLICA 8
+*
+   12
+    1    1 AMN  CL    -0.55122  -1.59201   0.09503 A8   1      1.00000
+    2    1 AMN  C     -0.03148  -0.16581   0.02503 A8   1      1.00000
+    3    1 AMN  O     -0.77616   0.76903  -0.26209 A8   1      1.00000
+    4    2 ALA  N      1.27945   0.00250   0.20044 A8   2      1.00000
+    5    2 ALA  H      1.84934  -0.79125   0.22682 A8   2      1.00000
+    6    2 ALA  CA     1.90757   1.31122   0.34563 A8   2      1.00000
+    7    2 ALA  CB     3.35965   1.08365   0.75149 A8   2      1.00000
+    8    2 ALA  C      1.90039   2.25963  -0.85635 A8   2      1.00000
+    9    2 ALA  O      2.50715   3.33039  -0.80057 A8   2      1.00000
+   10    3 CBX  N      1.20518   1.92996  -1.94679 A8   3      1.00000
+   11    3 CBX  H      0.54045   1.21677  -1.87581 A8   3      1.00000
+   12    3 CBX  CA     1.27811   2.72873  -3.20636 A8   3      1.00000
+
+coor copy comp
+
+coor read card
+* REPLICA 10
+*
+   12
+    1    1 AMN  CL    -0.42953  -1.73543   0.11301 A10  1      1.00000
+    2    1 AMN  C     -0.01191  -0.28557  -0.06993 A10  1      1.00000
+    3    1 AMN  O     -0.78525   0.53445  -0.55597 A10  1      1.00000
+    4    2 ALA  N      1.25451  -0.01960   0.26133 A10  2      1.00000
+    5    2 ALA  H      1.81382  -0.78635   0.49423 A10  2      1.00000
+    6    2 ALA  CA     1.88399   1.29895   0.32744 A10  2      1.00000
+    7    2 ALA  CB     3.33701   1.14655  -0.10011 A10  2      1.00000
+    8    2 ALA  C      1.35220   2.54612  -0.37826 A10  2      1.00000
+    9    2 ALA  O      1.46222   3.64023   0.17532 A10  2      1.00000
+   10    3 CBX  N      0.78174   2.43514  -1.57856 A10  3      1.00000
+   11    3 CBX  H      0.51341   1.54329  -1.87852 A10  3      1.00000
+   12    3 CBX  CA     0.36925   3.62877  -2.37536 A10  3      1.00000
+
+ scalar xref = X
+ scalar yref = y
+ scalar zref = z
+
+coor read card
+* REPLICA 9
+*
+   12
+    1    1 AMN  CL    -0.53201  -1.63236   0.14662 A9   1      1.00000
+    2    1 AMN  C     -0.05293  -0.19412   0.04045 A9   1      1.00000
+    3    1 AMN  O     -0.82734   0.70941  -0.26232 A9   1      1.00000
+    4    2 ALA  N      1.25811  -0.00392   0.20347 A9   2      1.00000
+    5    2 ALA  H      1.82905  -0.79632   0.23949 A9   2      1.00000
+    6    2 ALA  CA     1.89414   1.30330   0.34335 A9   2      1.00000
+    7    2 ALA  CB     3.40263   1.09830   0.31428 A9   2      1.00000
+    8    2 ALA  C      1.58256   2.42575  -0.64589 A9   2      1.00000
+    9    2 ALA  O      1.82420   3.59355  -0.33941 A9   2      1.00000
+   10    3 CBX  N      1.04409   2.11608  -1.82630 A9   3      1.00000
+   11    3 CBX  H      0.68427   1.21603  -1.94725 A9   3      1.00000
+   12    3 CBX  CA     0.82361   3.14099  -2.88950 A9   3      1.00000
+
+rpath krms @krms kmax @kmax rmax @rmax kangle @kangle cosmax @cosmax -
+rota trans mass weigh ptau ppmf prpm 
+
+ener
+
+!open write unit 31 card name @9@outfile_@oid_h.rst
+!open write unit 32 file name @9@outfile_@oid_h.dcd
+!open write unit 33 file name @9@outfile_@oid_h.dvl
+!open write unit 34 card name @9@outfile_@oid_h.ene
+
+DYNAMICS LEAP STRT NSTEP 100 TIMESTEP 0.001 -
+    IPRFRQ 5 IHTFRQ 50 IEQFRQ 0 NTRFRQ 10  ISVFRQ 1 -
+    IUNREA -1 IUNWRI -1 IUNCRD -1 IUNVEL -1 KUNIT -1 -
+    NPRINT 5 NSAVC 1 NSAVV 1 INBFRQ 5  -
+    FIRSTT 0.0 FINALT 300.0 TEMINC 15.34   -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
+    ECHECK 200 
+                      
+!open write unit 31 card name @9@outfile_@oid_h.crd
+!write coor card unit 31
+                      
+!open write unit 31 card name @9@outfile_@oid_h.pdb
+!write coor pdb unit 31
+
+stop

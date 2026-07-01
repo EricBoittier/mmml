@@ -1,0 +1,143 @@
+* CHARMM 25 testcase: cortst25.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* TEST RUN FOR CHECKING THE ENERGY AND MINIMIZATION
+* Model: ALFA DECAGLYCINE
+*
+
+if ?nocorrel .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -1
+stream datadir.def
+
+open read unit 11 form name  @0toph19.rtf
+read rtf  card unit 11
+close unit 11
+open read unit 12 form name  @0param19.prm
+read parameter card unit 12
+close unit 12
+
+read sequence card
+* ALFA DECAGLYCINE SEQUENCE
+*
+   12
+AMN GLY GLY GLY GLY GLY GLY GLY GLY GLY GLY CBX
+
+generate main setup
+
+ic param
+ic edit
+DIHE   1 C     2 N     2 CA    2 C    -57.4
+DIHE   2 N     2 CA    2 C     3 N    -47.5
+DIHE   2 C     3 N     3 CA    3 C    -57.4
+DIHE   3 N     3 CA    3 C     4 N    -47.5
+DIHE   3 C     4 N     4 CA    4 C    -57.4
+DIHE   4 N     4 CA    4 C     5 N    -47.5
+DIHE   4 C     5 N     5 CA    5 C    -57.4
+DIHE   5 N     5 CA    5 C     6 N    -47.5
+DIHE   5 C     6 N     6 CA    6 C    -57.4
+DIHE   6 N     6 CA    6 C     7 N    -47.5
+DIHE   6 C     7 N     7 CA    7 C    -57.4
+DIHE   7 N     7 CA    7 C     8 N    -47.5
+DIHE   7 C     8 N     8 CA    8 C    -57.4
+DIHE   8 N     8 CA    8 C     9 N    -47.5
+DIHE   8 C     9 N     9 CA    9 C    -57.4
+DIHE   9 N     9 CA    9 C    10 N    -47.5
+DIHE   9 C    10 N    10 CA   10 C    -57.4
+DIHE  10 N    10 CA   10 C    11 N    -47.5
+DIHE  10 C    11 N    11 CA   11 C    -57.4
+DIHE  11 N    11 CA   11 C    12 N    -47.5
+END
+
+ic seed 2 ca 2 c 3 n
+ic build
+
+define junk sele .not. init show end
+coor orient mass
+mini abnr nstep 200 cutnb 100.0 ctofnb 50.0 ctonnb 50.0 atom switch cdie
+
+open write card unit 80 name @9cortst25.crd
+write coor card unit 80
+* initial mimimized coordinates for cortst25
+*
+
+open write file unit 50 name @9cortst25.trj
+
+scalar fbeta set 10.0 
+!DYNA LEAP LANGEVIN STRT  NSTEP 2000 TIMESTEP 0.001 -
+DYNA LEAP STRT  NSTEP 2000 TIMESTEP 0.001 -
+    IPRFRQ 500 IHTFRQ 0 IEQFRQ 0 NTRFRQ 0  -
+    IUNCRD 50 -
+    NPRINT 100 NSAVC 2 NSAVV 0 IHBFRQ 0 INBFRQ 0 -
+    ILBFRQ 1000 RBUFFER 0.0 TBATH 300.0 -
+    FIRSTT 300.0 FINALT 300.0  -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 0 TWINDH 0.0 TWINDL 0.0
+
+open write card unit 80 name @9cortst25.oaa
+open write card unit 81 name @9cortst25.taa
+open write card unit 90 name @9cortst25.tcc
+open write card unit 82 name @9cortst25.aad
+open write card unit 83 name @9cortst25.aaf
+open write card unit 84 name @9cortst25.abd
+open write card unit 85 name @9cortst25.abf
+open write card unit 91 name @9cortst25.acd
+open write card unit 92 name @9cortst25.acf
+open write card unit 93 name @9cortst25.cad
+open write card unit 94 name @9cortst25.can
+open write card unit 95 name @9cortst25.rms
+open read  file unit 50 name @9cortst25.trj
+
+open read card unit 70 name @9cortst25.crd
+read coor card unit 70 comp
+
+CORREL  MAXT 500 MAXS 5
+ENTER AA  TORSION MAIN  6 C MAIN 7 N MAIN 7 CA MAIN 7 C
+ENTER BB  TORSION MAIN  6 C MAIN 7 N MAIN 7 CA MAIN 7 C
+ENTER CC  TORSION MAIN  7 N MAIN 7 CA MAIN 7 C MAIN 8 N
+ENTER RMSD RMS MASS ORIENT
+TRAJ  FIRSTU 50 NUNIT 1 BEGIN 1200 STOP 1900 SKIP 10
+EDIT ALL DELTA 0.001
+SHOW ALL
+
+WRITE AA UNIT 80 DUMB TIME
+
+WRITE RMSD UNIT 95 DUMB TIME
+
+MANTIME AA DAVERAGE
+MANTIME BB DAVERAGE
+MANTIME CC DAVERAGE
+WRITE AA UNIT 81 DUMB TIME
+
+WRITE CC UNIT 90 DUMB TIME
+
+CORFUN AA AA DIRE LTC  P0
+WRITE CORR  UNIT 82 DUMB TIME
+
+CORFUN AA AA FFT LTC  P0
+WRITE CORR  UNIT 83 DUMB TIME
+
+CORFUN AA BB DIRE LTC P0
+WRITE CORR UNIT 84 DUMB TIME
+
+CORFUN AA BB FFT LTC P0
+WRITE CORR UNIT 85 DUMB TIME
+
+CORFUN AA CC DIRE LTC P0
+WRITE CORR UNIT 91 DUMB TIME
+
+CORFUN AA CC FFT LTC P0
+WRITE CORR UNIT 92 DUMB TIME
+
+CORFUN CC AA DIRE LTC P0
+WRITE CORR UNIT 93 DUMB TIME
+
+CORFUN CC AA DIRE NLTC P0
+WRITE CORR UNIT 94 DUMB TIME
+
+END
+
+coor orie rms mass
+
+STOP

@@ -1,0 +1,46 @@
+* calculate group-group energy (nonbonded) of 2 formamides
+*  1:nonbond option  7: filename
+*
+
+format (F14.8)
+
+
+FAST OFF
+energy inbfrq 25 @1 @2  
+set 7 0.0
+incr 7 by ?ener
+set 7 @7 ?GRMS
+prnlev 4
+test first tol 0.000001 step 0.00002   CRYStal  HOMOgeneous
+test first tol 0.000001 step 0.00002   CRYStal  sele none end
+prnlev 6
+
+FAST PARVECT
+energy
+set 4 0.0
+incr 4 by ?ener
+set 4 @4 ?GRMS
+prnlev 4
+test first tol 0.000001 step 0.00002   CRYStal  HOMOgeneous
+test first tol 0.000001 step 0.00002   CRYStal  sele none end
+prnlev 6
+
+write title unit 6
+* @f
+*   general @7
+*   parvect @4
+*
+write title unit 33
+* @f
+*   general @7
+*   parvect @4
+*
+
+return
+
+FAST OFF
+vibran
+write seco card finite sele all end unit 6 tol 0.000001 step 0.00002
+end
+
+return

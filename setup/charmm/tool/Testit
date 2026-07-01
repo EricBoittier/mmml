@@ -1,0 +1,50 @@
+#! /bin/csh -f 
+
+if ( $1 == -help || $1 == -h ) goto usage
+set cmpdir = Testoutput
+if ( $?CMPDIR ) then
+    set cmpdir = $CMPDIR
+endif
+
+if ( $#argv < 2 ) goto usage
+
+if ( $1 == "M" ) then
+   set do_parallel="$1 $2"
+   shift
+   shift
+else
+   set do_parallel=" "
+endif
+#echo setting arch num args is $#argv
+set arch = "$do_parallel $1"
+shift
+#echo setting outdir num args is $#argv
+set outdir = $1
+shift
+
+#foreach i ( 20 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40)
+#   if ( -d c${i}test ) set tests = "$tests $i"
+#end
+
+set tests = `ls -1d c[0-9][0-9]test | cut -c 2-3`
+echo $tests
+#echo setting tests num args is $#argv
+if ( $#argv > 0 ) set tests = "$argv"
+
+ foreach i ( $tests )
+  
+set do_test="./test.com $arch $outdir$i $cmpdir $i"
+   echo $do_test
+   $do_test
+end
+
+exit 0
+
+usage:
+   echo ""
+   echo "Usage: Testit <architecture> <output dir prefix>"
+   echo ""
+   echo " --- Use env var CMPDIR for comparison files with the prefix "
+   echo "       ex.: /cb/renoir1/crowley/charmm/c29b1/sgi/test/S "
+   echo ""
+   exit 1

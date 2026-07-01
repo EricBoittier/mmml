@@ -1,0 +1,56 @@
+* CHARMM c36a1 Testcase test/c36test/axd1.inp
+* Author: David Glowacki and Emanuele Paci
+* Date  : June 24, 2010
+* Test AXD
+*
+
+if ?AXD  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read card name @0toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0param19_eef1.inp
+read param card unit 1
+close unit 1
+
+READ SEQUENCE CARDS
+* 13-mer
+*
+13
+THR TRP ILE GLN ASN GLY SER THR LYS TRP 
+TYR GLN ASN 
+
+GENERATE PEPT WARN SETUP 
+
+! { Do not read coordinates }
+
+IC PARAMETERS
+IC SEED 1 N 1 CA 1 C
+IC BUILD
+
+MINI SD 
+
+!SHAKE BONH PARA TOLErance 1.0e-8
+
+OPEN WRITE UNIT 43 UNFORM NAME @9axd1.dcd
+OPEN WRITE UNIT 44 FORM NAME @9axd1.axd
+
+AXD IUNJ 44 PRANGE 19 21 SELE ((ATOM PEPT 1 N) .OR. (ATOM PEPT 13 C)) END MAX 28 MIN 19  
+
+! Test AXD using VV2 integration
+DYNAMICS VV2 START NSTEP 5000 TIMESTEP 0.001 -
+         IUNREA -1 IUNWRI -1 KUNIT -1 IUNCRD 43   -
+         IPRFRQ  100 NPRINT 100 NSAVC 500      -
+         INBFRQ -1 ICHECW 0 IEQFRQ 0 
+ 
+OPEN UNIT 19 FORM write NAME @9axd1.pdb 
+write coor pdb  unit 19
+*  13mer
+*
+
+STOP

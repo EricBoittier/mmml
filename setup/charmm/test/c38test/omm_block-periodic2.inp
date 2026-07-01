@@ -1,0 +1,626 @@
+*  OpenMM energy for trialanine blocked in a cubic box of solvent
+*  using various PBC methods.  Total system contains 1,437 atoms.
+*  Use the block decomposition of environment, reactant and product
+*  to test OpenMM/Block implementation for thermodynamic integration.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+set tol = 2e-4   ! Tolerance for test variation
+
+!  box size: 24.534238 x 24.534238 x 24.534238
+
+read rtf card name @0/top_all36_prot.rtf
+read param card flex name @0/par_all36_prot.prm
+stream @0/toppar_water_ions.str
+
+set return = frompatches
+goto patches
+label frompatches
+
+set return = fromhybrid
+goto hybrid
+label fromhybrid
+
+read sequ card
+* title
+*
+3
+ala asp ala
+
+generate pro0 first ace last ct3 setup
+rename resname ala select resname asp end
+read coor pdb name @0/ala3_solv-equil.pdb resid
+ic param
+ic build
+patch aspp1 pro0 2
+bomlev -2
+autogenerate angle dihedral
+bomlev 0
+set return = def0
+goto define
+label def0
+
+delete angle -
+      select product end -
+      select reactant end
+
+delete dihedral -
+      select product end -
+      select reactant end
+bomlev 0
+
+read coor card name side.chr
+ic generate
+ic fill
+ic param
+ic build
+
+if ?mynode .eq. 0 system "rm side.chr"
+
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+write psf card name @9/hybrid.psf
+
+set return = def1
+goto define
+label def1
+set return crys1
+goto setcrystal
+label crys1
+
+!  turn on faster options and set-up SHAKE
+faster on
+
+! PME
+set cutoffs = cutnb 11 cutim 11 ctofnb 9.9 ctonnb 9.9 vswitch switch
+set ewald = Ewald kappa 0.320 pmEwald order 4 fftx 24 ffty 24 fftz 24
+
+mini sd nstep 100
+write coor card name @9/minhybrid.chr
+
+!!!!!!!NOTE - Test was modified to ignore all PME utilizing tests since BLOCK partitioning in this case!!!!!!!!!!!!!
+!!!!!!!NOTE - doesn't work in either CHARMM (hybh) nor OPENMM. CLBIII 10/31/2013
+prnlev 5 @pnode
+set case = 5
+set pme = 0
+set ron = 8
+set vcut = vswitch
+set ecut = switch
+
+label docase
+
+      bomlev -1
+      delete atom select all end
+      bomlev 0
+      read psf card name @9/hybrid.psf
+      read coor card name @9/minhybrid.chr
+
+      ! Skip terms that aren't being perturbed
+      skipe  BOND ANGL UREY DIHE IMPR CMAP
+
+      echo Case @case: pme=@pme ctonnb=@ron @vcut @ecut
+      set cutoffs = cutnb 11 cutim 11 ctofnb 10 ctonnb @ron vatom @vcut atom @ecut
+      set ewald = noewald
+      set hybh = lambda
+      set clhh =
+      if @pme gt 0 then
+            set ewald = Ewald pme kappa 0.32 order 4 fftx 24 ffty 24 fftz 24
+            set hybh = hybh
+            set clhh = clhh
+      endif
+
+      bomlev -1
+      delete atom select product end
+      bomlev 0
+
+      prnlev 0 @pnode
+      set return = def2
+      goto define
+      label def2
+      set return = cryst2
+      goto setcrystal
+      label cryst2
+
+      label test1
+      prnlev 5 @pnode
+      energy eps 1.0 @cutoffs @ewald
+      set echr = ?ener
+      coor comp init
+      coor force comp
+      write coor card comp name @9/reactforce.chr
+
+      energy omm
+      set eommr = ?ener
+
+      calc diff = abs ( ( ?ener - @echr ) / @echr )
+      set status = fail
+      if @diff le @tol then
+        set status = pass
+      endif
+      echo testcase result: @status TEST 1-@case (pme=@pme, ron=@ron, vcut=@vcut, ecut=@ecut)
+
+      prnlev 0 @pnode
+      bomlev -1
+      delete atom select all end
+      bomlev 0
+      read psf card name @9/hybrid.psf
+      read coor card name @9/minhybrid.chr
+      set return = def3
+      goto define
+      label def3
+
+      delete atom select reactant end
+      set return =  cryst3
+      goto setcrystal
+      label cryst3
+
+      label test2
+      prnlev 5 @pnode
+      energy eps 1.0 @cutoffs @ewald
+      set echp = ?ener
+      coor comp init
+      coor force comp
+      write coor card comp name @9/prodforce.chr
+
+      energy omm
+      set eommp = ?ener
+
+      calc diff = abs ( ( ?ener - @echp ) / @echp )
+      set status = fail
+      if @diff le @tol then
+        set status = pass
+      endif
+      echo testcase result: @status TEST 2-@case (pme=@pme, ron=@ron, vcut=@vcut, ecut=@ecut)
+
+      prnlev 0 @pnode
+      bomlev -1
+      delete atom select all end
+      bomlev 0
+
+      read psf card name @9/hybrid.psf
+      read coor card name @9/minhybrid.chr
+      set return = def4
+      goto define
+      label def4
+
+      set return =  cryst4
+      goto setcrystal
+      label cryst4
+
+      label test3
+      prnlev 5 @pnode
+      block 3
+         call 2 select reactant end
+         call 3 select product end
+         rmla bond angle dihe impr
+      end
+
+      block
+         @clhh
+         lambda 0
+      end
+
+      ener eps 1.0 @cutoffs @ewald omm
+
+      set eommr0 = ?ener
+      calc diff = abs ( ( ?ener - @echr ) / @echr )
+      set status = fail
+      if @diff le @tol then
+        set status = pass
+      endif
+      echo testcase result: @status TEST 3-@case (pme=@pme, ron=@ron, vcut=@vcut, ecut=@ecut)
+
+      label test4
+
+      block
+         @clhh
+         lambda 1
+      end
+
+      ener eps 1.0 @cutoffs @ewald omm
+      set eommp0 = ?ener
+
+      calc diff = abs ( ( ?ener - @echp ) / @echp )
+      set status = fail
+      if @diff le @tol then
+        set status = pass
+      endif
+      echo testcase result: @status TEST 4-@case (pme=@pme, ron=@ron, vcut=@vcut, ecut=@ecut)
+
+      label test5
+
+      ! Finally check forces
+      ! Construct the hybrid forces and energy from those saved above
+      calc echarmm = ( @echr + @echp ) / 2
+      coor comp init
+      read coor card comp name @9/reactforce.chr
+      scalar xcomp set 0 select product end
+      scalar ycomp set 0 select product end
+      scalar zcomp set 0 select product end
+      scalar xcomp store 1
+      scalar ycomp store 2
+      scalar zcomp store 3
+
+      coor comp init
+      read coor card comp name @9/prodforce.chr
+      scalar xcomp set 0 select reactant end
+      scalar ycomp set 0 select reactant end
+      scalar zcomp set 0 select reactant end
+      scalar xcomp +store 1
+      scalar ycomp +store 2
+      scalar zcomp +store 3
+
+      scalar xcomp recall 1
+      scalar xcomp mult 0.5
+      scalar ycomp recall 2
+      scalar ycomp mult 0.5
+      scalar zcomp recall 3
+      scalar zcomp mult 0.5
+
+
+      prnlev 0 @pnode
+
+      set return fromCHARMM
+      goto ncharmm
+      label fromCHARMM
+      prnlev 5 @pnode
+
+      block
+         @clhh
+         lambda 0.5
+      end
+
+      ener eps 1.0 @cutoffs @ewald omm
+
+      block
+         clear
+      end
+
+      set eopenmm = ?ener
+      coor force comp
+      prnlev 0 @pnode
+
+      set return fromOpenMM
+      goto nopenmm
+      label fromOpenMM
+      prnlev 5 @pnode
+
+      Calc ediff =  abs ( ( @echarmm - @eopenmm ) /  @echarmm )
+      echo Force dot product: @fsum Fraction energy error: @ediff
+      calc diff = abs ( 1 - @fsum )
+
+      set status = fail
+      if @ediff le @tol then
+        set status = pass
+      endif
+      echo testcase result: @status TEST 5-@case (pme=@pme, ron=@ron, vcut=@vcut, ecut=@ecut) - energy
+
+      set status = fail
+      if @diff le @tol then
+        set status = pass
+      endif
+      echo testcase result: @status TEST 5-@case (pme=@pme, ron=@ron, vcut=@vcut, ecut=@ecut) - forces
+
+      label noforce
+      block
+          clear
+      end
+
+      skipe none
+
+      incr case by 1
+      if @case eq 2 then
+            set pme = 1
+            set ron = 10
+            set vcut = vswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 3 then
+            set pme = 1
+            set ron = 8
+            set vcut = vfswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 4 then
+            set pme = 1
+            set ron = 10
+            set vcut = vfswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 5 then
+            set pme = 0
+            set ron = 8
+            set vcut = vswitch
+            set ecut = switch
+            goto docase
+      endif
+      if @case eq 6 then
+            set pme = 0
+            set ron = 10
+            set vcut = vswitch
+            set ecut = switch
+            goto docase
+      endif
+
+      if @case eq 7 then
+            set pme = 0
+            set ron = 8
+            set vcut = vswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 8 then
+            set pme = 0
+            set ron = 10
+            set vcut = vswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 9 then
+            set pme = 0
+            set ron = 8
+            set vcut = vfswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 10 then
+            set pme = 0
+            set ron = 10
+            set vcut = vfswitch
+            set ecut = fshift
+            goto docase
+      endif
+
+      if @case eq 11 then
+            set pme = 0
+            set ron = 8
+            set vcut = vfswitch
+            set ecut = fswitch
+            goto docase
+      endif
+
+      if @case eq 12 then
+            set pme = 0
+            set ron = 10
+            set vcut = vfswitch
+            set ecut = fswitch
+            goto docase
+      endif
+
+if @case le 12 goto docase
+
+stop
+!=======================================================
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+goto @return
+
+!=======================================================
+label hybrid
+read sequ card
+* title
+*
+3
+ala asp ala
+
+generate pro0 first ace last ct3 setup
+rename resname ala select resname asp end
+read coor pdb name @0/ala3_solv-equil.pdb resid
+ic param
+ic build
+coor print select .not. initialized end
+coor print select type cg .or. type od1 .or. type od2 end
+rename atom cbm select atom pro0 2 cb end
+rename atom hb1m select atom pro0 2 hb1 end
+rename atom hb2m select atom pro0 2 hb2 end
+rename atom cgm select atom pro0 2 cg end
+rename atom od1m select atom pro0 2 od1 end
+rename atom od2m select atom pro0 2 od2 end
+write coor card name side.chr select type *m end
+delete atom
+
+goto @return
+
+!=======================================================
+label define
+      define reactant select ires 2 .and. -
+         ( type cb .or. type hb1 .or. type hb2 .or. -
+           type cg .or. type od1 .or. type od2 ) end
+      define product select ires 2 .and. type *m end
+goto @return
+
+!=======================================================
+label setcrystal
+   !! Dimension of a box
+   set size 24.534238
+   set 7 = @size
+   set theta = 90.0
+   Crystal define cubic @7 @7 @7 @theta @theta @theta
+   crystal build cutoff 11 noper 0
+   image byres xcen 0 ycen 0 zcen 0 select resname tip3 end
+   image byseg xcen 0 ycen 0 zcen 0 select segid pro0 end
+goto @return
+
+label patches
+
+read rtf card append
+* title
+*
+ 36 1
+!----------------------------------------------------------------------------
+! ASPARTIC ACID (ASP) PATCHES
+! Note: ASPP1x series must be read in before ASPP2x due to NB exclusion
+!       setup in BLOCK. ASPP1x usage depends on the position of the
+!       residue in the protein
+!----------------------------------------------------------------------------
+
+pres aspp1 0           ! od1 protonated species
+! HB1M   OD1M-HD1M
+!  |     /
+! -CBM--CGM
+!  |     \\
+! HB2M   OD2M
+
+atom cbm  ct2  -0.21  cb cg hb1 hb2 od1 od2 !cbp cgp hb1p hb2p od1p od2p hd2p
+atom hb1m ha2   0.09  cb cg hb1 hb2 od1 od2 !cbp cgp hb1p hb2p od1p od2p hd2p
+atom hb2m ha2   0.09  cb cg hb1 hb2 od1 od2 !cbp cgp hb1p hb2p od1p od2p hd2p
+atom cgm  cd    0.75  cb cg hb1 hb2 od1 od2 !cbp cgp hb1p hb2p od1p od2p hd2p
+atom od1m oh1  -0.61  cb cg hb1 hb2 od1 od2 !cbp cgp hb1p hb2p od1p od2p hd2p
+atom od2m ob   -0.55  cb cg hb1 hb2 od1 od2 !cbp cgp hb1p hb2p od1p od2p hd2p
+atom hd1m h     0.44  cb cg hb1 hb2 od1 od2 !cbp cgp hb1p hb2p od1p od2p hd2p
+
+bond od1m hd1m
+bond cbm hb2m
+bond ca cbm
+bond cbm hb1m
+bond cgm cbm
+bond cgm od1m
+bond cgm od2m
+
+impr cgm cbm od2m od1m
+
+acceptor od1m cgm
+acceptor od2m cgm
+donor hd1m od1m
+
+end
+
+read param card flex append
+
+dihedrals
+nh2 cc ct1 ct2 0 1 0
+
+improper
+oh1 x x cd 96 0 0
+
+end
+
+goto @return
+
+
+
+Constructed box from following command:
+
+convpdb.pl -center -nsel A:29-31 -out charmm22 -renumber 1 ~/Desktop/Students/MRobertson_REU/M2TMP/M2_CD/M2_Monomer_images/CondDomain.pdb | awk '{sub(/SER/,"ALA",$0);print $0}' | minCHARMM.pl -par blocked,nter=ACE,cter=CT3 | convpdb.pl -out charmm22 -solvate -cutoff 8 -cubic -segnames | convpdb.pl -segnames -renumwatersegs > ala3_solv.pdb

@@ -1,0 +1,90 @@
+* CHARMM c36a1 Testcase
+* QM/MM Testcase Multi-layered QM/MM using ab initio and semiempirical
+* QM/MM potential for LYSine.
+* Kwangho Nam, 06-26-2008
+*
+
+if ?squantm .ne. 1 then stop
+if ?gamessuk .ne. 1 then stop
+
+bomlev -3
+stream datadir.def
+
+!
+! Topology file
+! -------------
+OPEN READ FORMatted UNIT 1 NAME @0top_all22_prot.inp
+READ RTF CARD UNIT 1
+CLOSe UNIT 1
+
+!
+! Parameter file
+! --------------
+OPEN READ FORMatted UNIT 1 NAME @0par_all22_prot.inp
+READ PARAmeter CARD UNIT 1
+CLOSe UNIT 1
+
+!
+! sequence
+! ----------------
+READ SEQUence CARD
+* test Lysine
+*
+ 1
+LYS 
+
+GENERATE LYSI FIRST NTER LAST CTER WARN SETUP
+
+IC PARAM
+IC SEED 1 N   1 CA  1 C 
+IC BUILD
+IC FILL
+IC PURGE
+PRINT IC
+PRINT COORD
+
+mini abnr tolgrd 0.001 nstep 200 nprint 200
+
+print coord
+
+! -------------------------------------------
+! let's define the quantum part of the system
+! -------------------------------------------
+update atom cutnb 12.0 ctofnb 11.0 ctonnb 10.
+
+!scalar charge set 0.0 sele all end
+! This is needed to save ED3 between steps
+envi "ed3" "charmm.ed3"
+envi "ed7" "charmm.ed7"
+envi "gamess.in" "data/input_lys.guk"
+
+define qml sele all end
+define qmh sele bynum 16:22 .or. bynum 16 end
+define qmc sele bynum 16 end         ! put h-link between 16 and 13
+
+QUANtum am1 charge 1 sele qml end remo NOGA -
+        DUAL MLAYer sele qmh end LINK sele qmc end -
+                    RCUT 10.0 KHARge 1
+
+energy
+
+mini abnr nstep 50  tolgrd 0.001 nprint 5
+
+print coor
+
+test first sele all end tol 0.000001 step 0.00001
+
+quick 16 19    ! CE---NZ
+quick 16 19 20 ! CE-NZ-HZ1
+quick 16 19 21 ! CE-NZ-HZ2
+quick 13 16 19 ! CD-CE-NZ 
+
+quick 13 16    ! CD---CE
+quick 10 13 16 ! CG-CD-CE
+
+quick 10 13    ! CG---CD
+quick  7 10 13 ! CB-CG-CD
+
+
+STOP 
+

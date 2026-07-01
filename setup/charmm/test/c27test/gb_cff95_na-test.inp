@@ -1,0 +1,127 @@
+*  Test mmff calculation
+*
+
+set pnode
+if ?numnode .gt. 1 then 
+     set pnode node 0
+     echo "CFF Not Parallel: Test NOT Performed"
+     stop
+endif
+
+if ?cff .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -5
+stream datadir.def
+prnlev 0 @pnode
+USE CFF
+
+OPEN READ UNIT 20 CARD NAME @0cff93.frc
+READ PARA UNIT 20 CARD
+CLOSE UNIT 20
+
+OPEN READ FORM UNIT 1 NAME @0top_all22_na_cff.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+prnlev 5 @pnode
+
+!!!!********SINGLE NA BASES*************!!!!
+open unit 1 read form name @0ade.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup first 5pho last 3ter
+
+   rename atom h2'' select ( resname ade .and. type ho2' ) end
+open unit 1 read form name @0ade.crd
+read coor card unit 1
+close unit 1
+   rename atom ho2' select ( resname ade .and. type h2'' ) end
+
+!  Now turn on the optimized generalized Born energy term 
+!  for CFF95 - generic w/o molecule-based lambda optimized.
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7686 Epsilon 80.0
+
+GBorn Clear
+scalar radii show
+scalar wmain show
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7686 Epsilon 80.0 weight
+
+energy cutnb 999 ctofnb 990 ctonnb 980 switch vswitch cdie
+
+mini abnr nstep 100 tolenr 0.001
+
+test first  step 0.00001 tol 0.0000001
+
+GBorn Clear
+
+!  Now turn on the optimized generalized Born energy term 
+!  for CFF95 - lambda optimized for NA base
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7682 Epsilon 80.0
+
+energy
+
+test first  step 0.00001 tol 0.0000001
+
+GBorn Clear
+
+delete atom select all end
+
+!!!!********DINUCLEOTIDES*************!!!!
+
+open unit 1 read form name @0ade-cyt.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup first 5pho last 3ter
+
+   rename atom h2'' select ( resname ade .and. type ho2' ) end
+open unit 1 read form name @0ade-cyt.crd
+read coor card unit 1
+close unit 1
+   rename atom ho2' select ( resname ade .and. type h2'' ) end
+
+!  Now turn on the optimized generalized Born energy term 
+!  for CFF95 - lambda optimized for dinucleotides
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7681 Epsilon 80.0
+
+energy cutnb 999 ctofnb 990 ctonnb 980 switch vswitch cdie
+
+mini abnr nstep 100 tolenr 0.001
+
+GBorn Clear
+
+delete atom select all end
+goto skipthis ! NOTE CFF93 does not include parameters for nucleic acids (particularily Thyamine
+              ! and Guanine). Until we get the cff95 parameters or later this part cannot be run.
+!!!!********NA strands*************!!!!
+
+open unit 1 read form name @0287d.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup first 5pho last 3ter
+
+   rename atom h2'' select ( resname ade .and. type ho2' ) end
+open unit 1 read form name @0287d.crd
+read coor card unit 1
+close unit 1
+   rename atom ho2' select ( resname ade .and. type h2'' ) end
+
+!  Now turn on the optimized generalized Born energy term 
+!  for CFF95 - lambda optimized for NA strands
+GBorn P1 0.4475 P2 0.4209 P3 0.0120 P4 8.4186 P5 0.9 Lambda 0.7461 Epsilon 80.0
+scalar wmain show
+
+!skipe all excl gben
+energy cutnb 999 ctofnb 990 ctonnb 980 switch vswitch cdie
+
+GBorn Clear
+
+delete atom select all end
+label skipthis
+
+stop

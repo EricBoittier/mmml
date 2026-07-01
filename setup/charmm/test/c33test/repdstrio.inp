@@ -1,0 +1,74 @@
+* CHARMM c33a1 testcase repdstrio.inp: REPD IO test input file
+* By Paul Maragakis and Milan Hodoscek
+* Check the I/O functionality for distributed replica
+*
+
+stream datadir.def
+
+if ?repdstr .ne. 1 then
+  echo "REPD not compiled in"
+  echo "This test NOT performed"
+  stop
+endif
+
+if ?numnode .eq. 1 then
+  echo "REPD only works in parallel"
+  stop
+endif
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+read sequence card
+3
+AMN ALA CBX
+generate ala2 setup warn
+
+ic para
+ic seed 1 C 2 N 2 CA
+ic build
+
+repd nrep ?numnode
+
+open write card unit 1 name @9repdstrio.crd
+write coor card unit 1
+
+coor init sele all end
+
+open read card unit 1 name  @9repdstrio.crd
+read coor card unit 1
+
+
+open write file unit 50 name @9dyn.trj
+open write card unit 41 name @9dyn.res
+
+
+dyna verlet strt nstep 10 timestep 0.001  -
+    iprfrq 10000 ihtfrq 0 ieqfrq 1000 ntrfrq 10000  -
+    iuncrd 50 iunrea -1 iunwri 41 kunit -1 -
+    nprint 1 nsavc 1 nsavv 0 ihbfrq 0  -
+    firstt 300.0 finalt 300.0 teminc 0.0  tstruc 307.0 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0
+
+
+open write file unit 50 name @9dyn.trj
+open read card unit 41 name @9dyn.res
+
+dyna verlet restart nstep 10 timestep 0.001  -
+    iprfrq 10000 ihtfrq 0 ieqfrq 1000 ntrfrq 10000  -
+    iuncrd 50 iunrea 41 iunwri -1 kunit -1 -
+    nprint 1 nsavc 1 nsavv 0 ihbfrq 0  -
+    firstt 300.0 finalt 300.0 teminc 0.0  tstruc 307.0 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0
+
+
+
+repd reset
+
+
+stop

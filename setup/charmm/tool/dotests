@@ -1,0 +1,37 @@
+#!/bin/csh -f
+if ( $#argv <= 1 ) then
+   echo "Usage: dotests <chm_host> <newtest-prefix> [<oldtest-prefix>]"
+   echo "or for parallel: dotests <M> <# nodes> <machtype> <newtest-prefix> [<oldtest-prefix>]"
+   exit
+else if ($#argv == 2) then
+     set parallel = 0
+     set chm_host = $argv[1]
+     set new = $argv[2]
+     set old = $argv[2]
+else if ($#argv == 3) then
+     set parallel = 0
+     set chm_host = $argv[1]
+     set new = $argv[2]
+     set old = $argv[3]
+else if ($#argv == 4) then
+     set parallel = 1
+     set nproc = $argv[2]
+     set chm_host = $argv[3]
+     set new = $argv[4]
+     set old = $argv[4]
+else if ($#argv == 5) then
+     set parallel = 1
+     set nproc = $argv[2]
+     set chm_host = $argv[3]
+     set new = $argv[4]
+     set old = $argv[5]
+endif
+
+foreach t (20 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38)
+    if($parallel == 1) then
+         test.com M $nproc $chm_host ${new}$t ${old}$t $t
+    else
+         test.com $chm_host ${new}$t ${old}$t $t
+    endif
+end
+

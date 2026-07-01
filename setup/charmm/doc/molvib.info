@@ -1,0 +1,548 @@
+CHARMM Element doc/molvib.info $Revision: 1.1.1.1 $
+
+File: Molvib,  Node: Top,  Up: (doc/commands.info),  Next: Syntax
+
+                     The MOLVIB Module of CHARMM
+
+            By K.Kuczera & J.Wiorkiewicz-Kuczera, May 1991
+
+
+    MOLVIB is a general-purpose vibrational analysis program, suitable
+for small to medium sized molecules (say of less than 50 atoms).  For
+larger systems the detail of description may be too great.
+
+    The main options are:
+ 
+    - the vibrational problem in internal coordinates (GF)
+    - the vibrational problem in cartesian coordinates (GFX)
+    - analysis of GAUSSIAN program output (GFX,GAUS)
+    - analysis of dependencies in internal coordinate sets (G)
+    - canonic force field calculations (KANO)
+    - crystal normal mode analysis for k=0 (CRYS)
+    - generating cartesian displacements along some interesing
+      directions (STEP)
+    - the vibrational analysis in presence of Drude particles
+ 
+    The different options use mostly the same package of subroutines
+called in different order. New applications may thus be easily added
+when necessary. 
+ 
+    Of special interest is the symbolic PED analysis package, enabling
+a clear and condensed overview of the usually complex PED contributions.
+ 
+* Menu:
+
+* Syntax::              Syntax of the MOLVIB command
+* Function::            Purpose of each of the keywords
+* Input::               MOLVIB Input Description
+
+File: Molvib,  Node: Syntax,  Up: Top,  Previous: Top,  Next: Function
+[SYNTAX MOLVib command]
+
+    MOLVib NDI1 int NDI2 int NDI3 int 
+           [NATOm int] [MAXSymbol int] [NGMAx int] [NBLMax int]
+           [IZMAx int] [NOTOpology] [SECOnd] [PRINt] [FINIte real]
+
+
+File: Molvib,  Node: Function,  Previous: Syntax,  Up: Top,  Next: Input
+The following section describes the keywords of the MOLVib command.
+
+    NDI1,NDI2,NDI3 are the MOLVIB variables NQ, NIC, NIC0; their definition
+      here effectively replaces the MOLVIB 'DIM ' card. Two cases:
+    
+     a. Molecular vibrations
+        NIC0 - number of primitive internal coordinates (PIC's), this
+               must correspond to the number of entries following the
+               'IC' card
+        NIC - number of IC's left after transformation by first U matrix
+              If only one U matrix is used, this should be the same
+              as NQ; if no U matrices used, NQ=NIC=NIC0
+        NQ  - number of vibrational degrees of freedom. Usually this
+              is the famous number 3*Nat-6 (3*Nat-5), but also separate 
+              symmetry blocks of the vibrational Hamiltonian may be
+              entered. 
+     b. Crystal vibrations
+        NIC0 - no. of primitive molecular coords (MC), i.e. external
+               coords + primitive IC's
+        NIC  - no. of vibrational degrees of freedom = 3*NAT, where
+               NAT is the total no. of atoms in unit cell
+        NQ   - here =NIC
+ 
+    NATOm - defines the number of atoms in the system. To be used only in
+      conjunction with the NOTO flag. If NOTO is not provided, the number
+      of atoms from the PSF will be used in MOLVIB and will override any
+      values provided here.
+
+    IZMAx - needed for 'CRYS' option only - specifies maximum number
+      of molecules in unit cell. Default is 10.
+
+    MAXSymbol, NGMax, NBLMax - dimensions for PED analysis arrays. They
+      specify the maximum number of symbols, coordinate groups and
+      symmetry blocks, respectively. Defaults are NQ (NDI1) for all
+      three.  It is recommended not to modify these defaults.
+
+    NOTOpology - if flag is present, CHARMM data structures will not
+      be used, all information required is to be read in inside the module.
+      If flag is absent, cartesian coordinates, atomic masses and cartesian
+      force constants from CHARMM may be passed to MOLVIB, as needed.
+
+    SECOnd - calculate second derivatives (force constants in cartesian
+      coordinates) and pass them to MOLVIB.
+      This is done through a call to the CHARMM routine ENERGY, so all
+      preconditions for energy (and second derivative) calculations
+      must be met. 
+
+    PRINT - flag for test printout of the CHARMM second derivatives being
+      passed to MOLVIB.
+
+    FINIte - finite step size (default 0.01) for numerical calculation of
+      second derivatives, which is automatically invoked when Drude particles
+      are present in the system. Note, Drude coordinates are reset to atomic
+      centers upon leaving the MOLVIB analysis.
+
+
+File: Molvib,  Node: Input,  Up: Top,  Previous: Function,  Next: Top
+
+                            Input Description
+
+    This data is processed by subroutine MOLINP.  As the CHARMM command
+parser is not used, this input does not conform to CHARMM standards, 
+       e.g. - parameter substitution will not work
+            - the STREAM command will not work, all commands will be read
+              from the current input stream
+            - OPEN, READ, WRITE, etc. commands will not work
+            - most entries are not free format
+
+
+[SYNTAX MOLVIB input]
+      
+    The MOLVIB input consists of a series of blocks; each block
+consists of a command and an (optional) data structure; i.e. it has
+the form: 
+
+     command-spec 
+     [data-struc]
+
+     command-spec ::== keyword [<int1>] [<int2>] [<int3>] [<int4>]
+                       format: A4,6X,4I5
+    
+     data-struc ::== one of the MOLVIB input data structures; defined by the
+                     keyword.
+
+    The list of currently supported keywords folows. One of the first
+group of keywords must be used first in order to define type of
+calculation. 
+
+
+ Keyword        Interpretation
+
+  G     - perform redundancy analysis
+
+  GF    - solve standard Wilson GF problem
+
+  GAUS  - choose GAUSSIAN analysis option
+
+  GFX   - vibrational problem in cartesian coordinates
+
+  KANO  - determine canonical force field
+
+  CRYS  - crystal vibrations for k=0;
+
+  STEP  - generate cartesian displacements in a given
+
+
+For the remaining keywords, the order is arbitrary:
+
+ Keyword        Interpretation
+
+  CART  - read in cartesian coordinates 
+
+  MASA  - interpret fourth column of cartesian coord input as A numbers
+
+  MASZ  - interpret the above column as Z numbers 
+
+  UMAT  - read in U Matrix for similarity transformation
+
+  FMAT  - read in F matrix
+
+  LX    - read in cartesian eigenvectors 
+
+  IC    - read in internal/external coordinate definitions
+
+  PRNT  - set print level
+
+  TEST  - set print level
+
+  NULL  - control card for 'G   ' option with IGLEV=2
+
+  PED   - read in PED data structure
+
+  SCAL  - read in scale factor for F matrix
+
+  TRRM  - remove translational and rotational contributions to LX
+
+  MNAT  - read in the numbers of atoms for each molecule in unit cell
+
+  IFTR  - specifies the dimension (and type) of F matrix
+
+  SYMM  - read in symmetry blocking data
+
+  EXPF  - read in reference frequencies for the system
+
+  FINI  - step size for numerical icalculation of second derivatives
+          (applicable to classical Drude oscillator polarizable model only)
+          Note, Drude coordinates are reset to atomic centers upon leaving 
+          the MOLVIB analysis.
+
+  END   - end input section, perform MOLVIB calculations and
+
+
+This section gives a more detailed explanantion of the keywords and the
+assocaited data structures.
+
+
+ keyword            Interpretation
+
+   G     - perform redundancy analysis
+             <int1> == IGLEV
+             IGLEV=1 - diagonalize G and write out eigenvalues
+                       and eigenvectors
+             IGLEV=2 - additionally generate a set of null and
+                       independent coordinates orthogonal to the
+                       initially specified ones 
+
+  GF     - solve standard Wilson GF problem
+
+  GAUS   - choose GAUSSIAN analysis option
+
+  GFX    - vibrational problem in cartesian coordinates
+
+  KANO - determine canonical force field
+             <int1> == ICANO
+             ICANO=1 - preliminary run, just to output the FR
+                       matrix; one of the other keywords must follow
+                       GF, GFX or GAUS - so that FR is evaluated
+                       or just read in as part of those processes.
+             ICANO=2 - evaluation of the canonic force field FR*
+                      N.B. No U matrix allowed here.
+                      Give: DIMensions, CARTesian coords, IC's and FMAT.
+
+  CRYS  - crystal vibrations for k=0;
+                      <int1> == IZMOL,  <int2> == IFCRYS
+                      IZMOL - no. of molecules in unit cell
+                      IFCRYS=0 (default) - calculation analogous to GFX
+
+  STEP  - generate cartesian displacements in a given
+                      direction.
+                      <int1> == IFSTEP
+                      <int2> == ISTCOR
+                      <int3> == IFFMAT
+                      <int4> == IFLMAT
+                      Additionally, the card following the 'STEP'
+                      card contains the value of STPSIZ (real,free format)
+               IFSTEP=1 - cartesian eigenvector no. ISTCOR
+               (IFSTEP=2 - internal eigenvector no. ISTCOR, not implemented)
+               (IFSTEP=3 - internal coordinate no. ISTCOR, not implemented)
+               STPSIZ - step size, e.g. the transformation is 
+                  X(I)=X(I)+STPSIZ*LX(I,ISTCOR) for cart. eigenvectors
+                  where LX the columns of LX are normalized.
+               IFFMAT,IFLMAT - determine the starting point of the 
+                       calculation:
+               IFFMAT=0 and IFLMAT
+                                  =1 - start from LX
+                                  =2 - start from LS
+               IFLMAT=0 and IFFMAT
+                                  =1 - start from FX
+                                  =2 - start from FS
+ 
+  CART  - cartesian coordinates for NAT atoms will follow
+               <int1> == unused
+               <int2> == IFC
+               In MOLVIB <int1> usually used to define the number of
+                 atoms NAT.  In the CHARMM version, NAT is specified
+                 on the MOLVIB command line (if NOTO flag is used) or
+                 is read from the PSF (if NOTO is absent).
+               IFC - specifies format for cart. coords:
+                 IFC=0 free format, four real numbers per line
+                   X, Y, Z, and MASS (see below).
+                 IFC=1 CHARMM format; only atom entry lines, no titles
+                   or NATOM field, mass information in WMAIN field.
+                 N.B.
+                 For the 'GAUS' option use GAUSSIANxx CMS coordinates.
+                 FOR THE 'GFX ' option use GAUSSIANxx coordinates in the
+                 Z-matrix orientation.
+
+                 Mass specification : (1) enter mass in amu as fourth real
+                 number in  entry line for each atom.  (2) instead of mass
+                 place atomic number Z or mass number A as fourth real
+                 number  and subsequently use a 'MASZ' or 'MASA'
+                 control cards. NB. For 'CRYS' NAT should be equal to
+                 no. of atoms in unit cell.
+      
+  MASA  - interpret fourth column of cartesian coord input
+               as atomic mass numbers (A) ; useful for isotopes, e.g.
+               a mass of 2.0 will designate D, mass of 15.0 - 15N etc.
+
+  MASZ  - interpret the above column as atomic numbers (Z) 
+ 
+  UMAT  - read in U Matrix for similarity transformation
+             <int1> == IFU 
+             <int2> == INU 
+             <int3> == IUU 
+             <int4> == IZU 
+             IFU - defines format
+              =0 Schachtschneider/Snyder format only supported
+             INU = 1/0 - normalize/dont normalize rows of U
+             IUU - defines FORTRAN unit for U read
+                 if left blank, unit input stream will be used
+                 if >0 then the data should be provided in the correct
+                   FORTRAN file
+             IZU - multiplicity; usually IZU=(no. of molecules in unit
+                 cell). IZU.GT.1 turns on autogeneration of U for
+                 whole unit cell from the provided values for the first
+                 asymmetric unit.
+    (see SUBROUTINE RDMAT in MOLVIO)
+
+    Details:
+    Two, one or none U matrices may be supplied on input. These are
+    (generally) rectangular matrices which perform linear transformations
+    on internal coordinate sets, of the type
+       S=U*R  ( or S(i) = {sum over j} U(i,j)*R(j) ),
+    with S - final, and R initial coordinate sets. The function of the
+    U matrix is e.g. to transform from primitive IC' s (of which there
+    are NIC0>NQ) to a set of independent IC's NQ in number, or to scale
+    the IC's by a factor (useful when trying to reproduce vibrations
+    reported in the literature, as different research groups use different
+    definitons of angle or dihedral IC's).
+    If two U matrices are given, then the IC's (and the B and G matrices)
+    are sequentially transformed using first U1, then U2. The F matrix is
+    assumed to be expressed in the final IC's on input, and is not 
+    transformed (except for the 'KANO' option - see 'IFTR').
+
+ 
+  FMAT  - read in F matrix, (the second derivatives of energy wrt
+          coordinates) 
+             <int1> == IFF 
+             <int2> == ISF 
+             <int3> == IUF 
+               IFF - specifies format
+                 = 0 - Schatschneider/Snyder format
+                 = 1 - GAUSSIANxx format
+                   N.B. remember to use 'Z matrix' oriented cartesian
+                   coords. 
+                 = 2 - CHARMM formatted SECO file format
+               IFS = 1/0 - symmetrize/dont symmetrize (upper triangle
+                      assumed  on input)
+               IUF - FORTAN unit no., as for 'UMAT'
+            (see RDMAT, RFORC, RDSECO in MOLVIO)
+ 
+  LX    - read in cartesian eigenvectors 
+             <int1> == IFL 
+             <int2> == unused 
+             <int3> == IUL 
+             IFL - specifies format
+                = 0 - GAUSSIANxx format (see SUBROUTINE REIGEN)
+                  all 3*NAT eigenvectors read in
+                  N.B. remember to use 'standard' (or 'CMS') oriented
+                  cartesian coordinates
+                = 1 - CHARMM binary format (see SUBROUTINE REIGCH)
+                 only the NQ=3*NAT-6 "vibrational" eigenvectors
+                 are expected by REIGCH; use "WRITE NORM 7 THRU ..."
+                 command to achieve this.
+                 NB. Binary files are machine specific.
+              IUL - FORTAN unit no. from which to read , aas in 'UMAT'
+ 
+  IC    - read in internal/external coordinate definitions;
+             <int1> == IZIC
+             Five integers will be read from NIC0 lines in free
+             format; each line contains:
+             ITYP,I,J,K,L - specify type and four atom numbers
+             as defined in cartesian coordinates
+             Note: it is necessary to add zeros in unused fields.
+             IZIC - multiplicity, usually = no. of molecules in unit
+                   cell. IZIC.GT.1 turns on autogeneration of 
+                   internal/external coordinates for unit cell from
+                   the ones provided for the first asymmetric unit.
+ 
+            ITYP=1,2,3,4,5,6 - internal coordinates
+            ITYP = 1 - I-J  bond stretch
+ 
+                    I --- J
+ 
+            ITYP = 2 - I-J-K  angle bend
+ 
+                       J
+                      / \
+                     /   \
+                    I     K
+ 
+            ITYP = 3 - I-L bond angle with J-K-L plane (Wilson wag)
+ 
+                           K
+                          /
+                         /
+                  I --- L
+                         \
+                          \
+                           J
+ 
+            ITYP = 4 - angle between IJK abd JKL planes
+ 
+                I
+                 \
+                  \
+                   J --- K
+                          \
+                           \
+                            L
+
+            ITYP = 5 - I-J-K linear bend in IJL plane
+            ITYP = 6 - I-J-K linear bend perpendicular to IJL plane
+
+                I --- J --- K
+                  .       . 
+                    .   . 
+                      L
+ 
+              Note: For ITYP = 5 and 6, atom L can be omitted, in which
+                  case the reference plane will be defined arbitrarily
+                  based on the cartesian basis.
+
+            For details : a) see SUBROUTINE BMAT
+                          b) see Wilson,Decius,Cross section 4.1,
+                             substituting their atom numbers with:
+              ITYP=1   (12)   -> (IJ)
+                   2   (123)  -> (IKJ)   ! that's right !
+                   3   (1234) -> (IJKL)
+                   4   (1234) -> (IJKL)
+
+            A good reference for standard definitions of independent
+            internal coordinates for a wide selection of chemical
+            groups is:
+            P.Pulay,G.Fogarasi,F.Pang & J.E.Boggs, JACS 101, 2550 (1979)
+ 
+        For the 'CRYS' option, the external coordinates are defined
+        here; their codes:
+             ITYP=11 - x translation
+             ITYP=12 - y translation
+             ITYP=13 - z translation
+             ITYP=14 - x rotation
+             ITYP=15 - y rotation
+             ITYP=16 - z rotation
+ 
+         In this case the I field should hold the consecutive number
+         of the molecule in the unit cell (consistent with MNAT data).
+ 
+  PRNT  - set print level
+             <int1> == IPRNT
+               IPRNT=0 - minimal printout
+               IPRNT=5 - maximum printout [default is 2]
+ 
+  TEST  -  equivalent to 'PRNT' with IPRNT=4
+ 
+  NULL  - control card for 'G   ' option with IGLEV=2
+             <int1> == NULL 
+             <int2> == NSTRT
+              NULL = the number of orthonormal vectors for  the null
+                     space to be read from the U2 matrix
+              NSTRT = the number of starting vectors for the Gram-Schmidt
+                     procedure in the vibrational space
+
+    Note: If any null coordinates are known, they should be orthonormalized
+    and placed in the first NULL rows of U2. The program will then write out
+    the complete set of orthonormal coordinates spanning the null space,
+    starting with the ones provided. If NSTRT.GT.0 a completely independent
+    calculation will be performed in the vibrational space. In that case,
+    the NULL+1,...NULL+NSTRT rows of U2 should contain the known coordinates
+    of the vibrational space orthogonal to each other and the redundancies
+    (null space vectors). The program will construct an orthonormal basis of
+    the vibrational space which is orthogonal to the redundancies, starting
+    with the provided vectors.
+
+  PED  - symbolic PED analysis will be performed
+             <int1> == NGRUP
+             <int2> == NCUTP
+             NGRUP - number of coordinate groups to be defined
+             NCUTP - cutoff level; PED contributions below NCUTP % will
+               not be printed, for clarity (default is 3%).
+
+             The following cards must contain:
+             1. for each group I=1,NGRUP: LGRUP(I),IGRUP(I,J), J=1,LGRUP(I)
+                - the number of coords in group and their consecutive numbers
+                (these are the final numbers, i.e. after all U matrix
+                operations) (20I3)
+             2. for each coordinate : IS,SS - its consecutive number (after
+                all U matrix operations) and the assigned symbol.
+                4(I3,2X,A8,2X) - zero to four entries per line; blank fields
+                skipped, negative IS value to end this input section.
+                Only the first coord of each group needs a symbol defnition,
+                the rest are set to this string; contributions from the whole
+                group are added up and printed beside the group symbol.
+ 
+  SCAL   - scale the F matrix Fij' = FACT*Fij;
+             the real value of FACT will be read from next line (F10.6).
+ 
+  TRRM   - remove translational and rotational contributions from cartesian
+           coordinate vibrational eigenvectors. (currently used only
+           for GAUS) 
+ 
+  MNAT  - lines following this card will contain the numbers of atoms
+             of the individual molecules comprising the unit cell (or
+             molecular aggregate) in 20I3 format.
+             Application - makes possible external coordinate use in
+             vibrational analysis of mixed crystals or molecular
+             aggregates (use CRYS option in both cases).
+             The value of IZMOL should already be defined for this card
+ 
+  IFTR  - specifies the dimension (and type) of F matrix
+             <int1> == IFTRAN
+               = 0 - F is in primitive ICs R, NIC0xNIC0
+               = 1 - F is in S1=U1*R, NICxNIC
+               = 2 - F is in S2=U2*U1*R coords, NQxNQ
+             If card is not given, default IFTRAN=NUMAT is assumed
+            (works only for 'KANO' option)
+
+  SYMM  - use symmetry (in symbolic PED analysis only)
+              <int1> == NBLOCK
+              It is assumed that by use of similarity transformations (the U
+              matrices), the vibrational problem has been transformed to 
+              such coordinates that the Hamiltonian (G and F) is
+              block-diagonal. This usually happens if the coordinates form
+              a basis for the irreducible representations of the molecular
+              point group.
+
+              The following cards should contain the data:
+              IBLOCK(I),I=1,NBLOCK - sizes of consecutive blocks (coordinate
+              numbering is as for PED analysis, i.e. after all U matrix
+              transformations)
+              SBLOCK(I),I=1,NBLOCK - block symbols (e.g. representation names)
+
+  EXPF  - read in reference frequencies for the system
+              Frequencies should be in ascending order (if 'SYMM' is
+              present, the ordering should be separate within each block).
+              The frequencies from MOLVIB will be printed out side-by-side
+              with the reference set, differences and an rms deviation will
+              computed. (If 'SYMM' is present, a separate analysis will be
+              performed for each block).
+              Format: free, 1 real value per line.
+
+  FINI  - a finite difference step size can be specified (default is 0.01 
+              Angstrom). Applicable to classical Drude oscillator systems only. 
+              MOLVIB supports such systems by automatic switching to numerical
+              second derivatives when coordinates of Drude particles are
+              self-consistently adjusted to positions of real atoms. Note, 
+              Drude coordinates are reset to atomic centers upon leaving the 
+              MOLVIB analysis.
+
+  END   - end input section, perform MOLVIB calculations and
+                      return to CHARMM.
+ 
+ Note: the Schactschneider/Snyder format
+
+    This format is very useful for i/o of sparse matrices (or small and
+not so sparse ones). The basic format is: 4(2I3,F12.6) 
+The two integer fields specify the row and column number, the real field -
+the value of the array element. Any elements not explicitly specified are
+set to zero. Each line of input may contain 0-4 entries, blank lines are
+ignored, a negative value for the column number terminates input.
+See subroutine RDMAT in MOLVIO.

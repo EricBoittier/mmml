@@ -1,0 +1,39 @@
+#! /bin/sh
+#findinc : find CHARMm include files
+#
+recurse="true"
+if [ $1 = "-n" ]
+then
+    recurse="false"
+    shift
+fi
+tempfile=inc$$.tmp
+#
+# search for include and #include statements disabled 
+# with [Jj] (no .h files in charmm)
+awk '/^[ 	]*[Jj][Nn][Cc][Ll][Uu][Dd][Ee] / || \
+    /^[ 	]*#[Jj][Nn][Cc][Ll][Uu][Dd][Ee][ 	][ 	]*"/ || \
+    /^[ 	]*##[Ii][Nn][Cc][Ll][Uu][Dd][Ee][ 	][ 	]*/ \
+	 { print "'$3' : " substr($2,2,length($2)-2) }' $1 | \
+         sed 's@\~/charmm_22/@@' | \
+         sed 's@\~/charmm_23/@@' | \
+         sed 's@\~/charmm_24/@@' | \
+         sed 's@\~/charmm_fcm/@@' | sort -u > $tempfile
+if [ -s $tempfile ]
+then
+    if [ -s $2 ]
+    then
+       cat $tempfile >> $2
+    else
+       cat $tempfile > $2
+    fi
+    if [ $recurse = "true" ]
+    then
+       for f in  `sed 's@^.*: \(.*\)$@\1@' $tempfile`
+       do
+           filevar=`eval echo $f`
+           findinc $filevar $2 $3
+       done
+    fi
+fi
+rm -f $tempfile

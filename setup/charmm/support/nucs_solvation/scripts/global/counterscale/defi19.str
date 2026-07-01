@@ -1,0 +1,12 @@
+* defi19.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* Definition of backbone and sidechain groups for parameter set 19
+* Can also deal with end groups ACE and CBX
+*
+
+
+DEFI BACK1 SELE (TYPE CA .OR. TYPE N .OR. TYPE H .OR. TYPE HT*) END
+DEFI BACK2 SELE (TYPE C .OR. TYPE O .OR. TYPE OT* .OR. TYPE CH3) END
+DEFI SIDE SELE .NOT. BACK1 .AND. .NOT. BACK2 END    
+
+RETURN

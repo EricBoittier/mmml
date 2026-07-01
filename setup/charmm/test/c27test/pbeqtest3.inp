@@ -1,0 +1,224 @@
+* file: pbeqtest3.inp
+* .Test I.O. READ & WRITE PHI
+* .Test FOCUSSING
+* .Test NON-CUBIC BOX 
+* .Test BOUNDARY CONDITIONS (ZERO, INTBP)
+* .Test 3nd B-SPLINE CHARGE ASSIGNMENT  
+* .Test SPHERE and CYLINDER
+* .Test OPTIMIZED OVER-RELAXATION METHOD (OSOR)
+* .Test TIMER 2
+* .
+* .NOTE :The number of grid points in X, Y, and Z (NCEL,NCLX,NCLY,NCLZ) must
+*        be odd.  Otherwise, the number of grid points will be increased 
+*        by ONE without any WARNING message.
+*
+
+if ?pbeq .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+READ  RTF CARD
+*  TOP
+*
+   22     1
+MASS 1    PCHG  1.00000
+
+RESI Q              1.00 ! point charge
+GROUP
+ATOM PCHG  PCHG     1.00
+PATCHING FIRST NONE LAST NONE
+END
+
+READ PARA CARD
+* PAR
+*
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+PCHG     0.0000    0.0000    2.0000  
+END
+
+READ SEQUENCE Q 1
+GENERATE PCHG warn
+
+read coor card
+* A Point Charge
+*
+   1
+    1    1 Q    PCHG   0.00000   0.00000   0.00000 PCHG 1      0.00000
+
+PBEQ
+   scalar wmain = radius
+
+   SOLVE epsw 80.0 epsp 1.0 ncel 31 dcel 0.3 conc 0.0 watr 0.0 
+   set ener801 = ?ENPB
+
+!! WRITE PHI on coarse grid
+   open write FILE unit 40 name @9phi80.dat
+   write PHI  unit 40
+   close unit 40	
+
+   write phi card xfirst -10.0 xlast 10.0 unit 6
+
+!! FOCUSSING to fine grid
+   SOLVE epsw 80.0 epsp 1.0 ncel 31 dcel 0.15 conc 0.0 watr 0.0 FOCUS
+   set ener802 = ?ENPB
+
+   SOLVE epsw 1.0 epsp 1.0 ncel 31 dcel 0.3 conc 0.0 watr 0.0
+   set ener11 = ?ENPB
+
+!! WRITE PHI on coarse grid
+   open write file unit 40 name @9phi1.dat
+   write phi  unit 40
+   close unit 40
+
+!! FOCUSSING to fine grid
+   SOLVE epsw 1.0 epsp 1.0 ncel 31 dcel 0.15 conc 0.0 watr 0.0 FOCUS
+   set ener12 = ?ENPB
+
+   RESET  ! reset all grid parameters
+END
+
+PBEQ
+   scalar wmain = radius
+
+!! READ PHI on coarse grid
+   open read  FILE unit 40 name @9phi80.dat
+   read PHI   unit 40
+   close unit 40	
+
+   write phi card xfirst -10.0 xlast 10.0 unit 6
+
+!! FOCUSSING to fine grid
+   SOLVE epsw 80.0 epsp 1.0 ncel 31 dcel 0.15 conc 0.0 watr 0.0 FOCUS
+   set ener803 = ?ENPB
+
+!! READ PHI on coarse grid
+   open read  FILE unit 40 name @9phi1.dat
+   read PHI   unit 40
+   close unit 40	
+
+!! FOCUSSING to fine grid
+   SOLVE epsw 1.0 epsp 1.0 ncel 31 dcel 0.15 conc 0.0 watr 0.0 FOCUS
+   set ener13 = ?ENPB
+
+!! IF we don't use FOCUS, we may use NCEL 61 to get the fineness (DCEL=0.15).
+   SOLVE epsw 80.0 epsp 1.0 ncel 61 dcel 0.15 conc 0.0 watr 0.0 
+   set ener804 = ?ENPB
+
+   SOLVE epsw 1.0 epsp 1.0 ncel 61 dcel 0.15 conc 0.0 watr 0.0 
+   set ener14 = ?ENPB
+
+   calc total1 = @ener801 - @ener11
+   calc total2 = @ener802 - @ener12
+   calc total3 = @ener803 - @ener13
+   calc total4 = @ener804 - @ener14
+
+   write title unit 6
+   * Electrostatic free energy of solvation = @total1  
+   * Electrostatic free energy of solvation = @total2  
+   * Electrostatic free energy of solvation = @total3  
+   * Electrostatic free energy of solvation = @total4  
+   *
+
+   RESET
+END
+
+PBEQ
+   scalar wmain = radius
+
+!! Non-cubic box
+   SOLVE epsw 1.0 epsp 1.0 NCLx 31 NCLy 41 NCLz 51 dcel 0.3 conc 0.0 watr 0.0 
+   SOLVE epsw 1.0 epsp 1.0 NCLx 41 NCLy 51 NCLz 31 dcel 0.3 conc 0.0 watr 0.0 
+   SOLVE epsw 1.0 epsp 1.0 NCLx 51 NCLy 31 NCLz 41 dcel 0.3 conc 0.0 watr 0.0 
+
+!! Boundary Conditions
+!! One may run some testcases to choose a suitable boundary conditions for
+!! his own system.
+   SOLVE epsw 1.0 epsp 1.0 NCEL 41 dcel 0.3 conc 0.15 watr 0.0
+   SOLVE epsw 1.0 epsp 1.0 NCEL 41 dcel 0.3 conc 0.15 watr 0.0 ZERO
+   SOLVE epsw 1.0 epsp 1.0 NCEL 41 dcel 0.3 conc 0.15 watr 0.0 INTBP
+
+!! 3nd B-SPLINE CHARGE ASSIGNMENT  
+   SOLVE epsw 1.0 epsp 1.0 NCEL 41 dcel 0.3 conc 0.15 watr 0.0 BSPLine
+
+   RESET
+END
+
+PBEQ
+   scalar wmain = radius
+
+!! Membrane 
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  0.15 TEMP 300.0  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.0
+
+   write fkappa card zfirst -100.0 zlast 100.0
+   write epsz   card zfirst -100.0 zlast 100.0
+
+!! Cylinder: EPSC and NO KAPPA inside the cylinder
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  0.15 TEMP 300.0  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.0 - 
+         Rcyln  3.0 Hcyln 30.0  epsc  40.0  -
+         Xcyln  0.0 Ycyln  0.0  Zcyln  0.0
+
+   write fkappa card zfirst -100.0 zlast 100.0
+   write epsz   card zfirst -100.0 zlast 100.0
+
+!! Cylinder: EPSC and KAPPA inside the cylinder using CKAPpa
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  0.15 TEMP 300.0  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.0 - 
+         Rcyln  3.0 Hcyln 30.0  epsc  40.0  CKAPpa -
+         Xcyln  0.0 Ycyln  0.0  Zcyln  0.0
+
+   write fkappa card zfirst -100.0 zlast 100.0
+   write epsz   card zfirst -100.0 zlast 100.0
+
+!! Cylinder: EPSC, EPSM and NO KAPPA inside the cylinder using CTOM
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  0.15 TEMP 300.0  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.0 - 
+         Rcyln  3.0 Hcyln 30.0  epsc  40.0  CTOM -
+         Xcyln  0.0 Ycyln  0.0  Zcyln  0.0
+
+   write fkappa card zfirst -100.0 zlast 100.0
+   write epsz   card zfirst -100.0 zlast 100.0
+
+!! Sphere: EPSD and KAPPA  inside the sphere
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  0.15 TEMP 300.0  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.0 -
+         DROP  15.0 EPSD  40.0  XDROp  0.0  YDROp 0.0  ZDROp 0.0 
+
+   write fkappa card zfirst -100.0 zlast 100.0
+   write fkappa card yfirst -100.0 ylast 100.0
+   write epsz   card zfirst -100.0 zlast 100.0
+   write epsz   card yfirst -100.0 ylast 100.0
+
+   RESET
+END
+
+PBEQ
+   scalar wmain = radius
+
+   TIMER 2
+   SOLVE epsw 1.0 epsp 1.0 ncel 61 dcel 0.15 conc 0.15 watr 0.0 
+
+!! OSOR
+!! Please don't use OSOR in the case of EPSW=EPSP=1 and ZERO CONC with NO MEMB.
+   SOLVE epsw 1.0 epsp 1.0 ncel 61 dcel 0.15 conc 0.15 watr 0.0 OSOR
+
+   SOLVE epsw 80.0 epsp 1.0 ncel 61 dcel 0.15 conc 0.15 watr 0.0 
+
+!! OSOR
+   SOLVE epsw 80.0 epsp 1.0 ncel 61 dcel 0.15 conc 0.15 watr 0.0 OSOR
+   TIMER 0
+
+   RESET
+END
+
+STOP

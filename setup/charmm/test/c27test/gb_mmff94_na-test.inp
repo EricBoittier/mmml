@@ -1,0 +1,115 @@
+*  Test mmff calculation
+*
+
+! Multinode execution has file I/O problems.
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+if ?mmff .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -5
+
+stream datadir.def
+
+stream @0mmff_setup.str
+
+open unit 1 read form name @0top_all22_na.inp
+read rtf card unit 1
+close unit 1
+
+prnlev 5 @pnode
+
+!!!!********SINGLE NA BASES*************!!!!
+open unit 1 read form name @0ade.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup first 5pho last 3ter
+
+update inbfrq -1 ihbfrq 0 CUTNB 999. CTOFNB 990. CTONNB 980. e14fac 0.75
+
+open unit 1 read form name @0ade.crd
+read coor card unit 1
+close unit 1
+
+!  Now turn on the optimized generalized Born energy term 
+!  for MMFF - generic w/o molecule-based lambda optimized.
+GBorn P1 0.2163 P2 0.2564 P3 0.0144 P4 7.0038 P5 1.0 Lambda 0.91 Epsilon 80.0
+
+energy cutnb 999 ctofnb 990 ctonnb 980 e14fac 0.75 switch vswitch
+
+mini abnr nstep 100 tolenr 0.001
+
+test first  step 0.00001 tol 0.0000001
+
+GBorn Clear
+
+!  Now turn on the optimized generalized Born energy term 
+!  for MMFF - lambda optimized for NA base
+GBorn P1 0.2163 P2 0.2564 P3 0.0144 P4 7.0038 P5 1.0 Lambda 0.8787 Epsilon 80.0
+
+energy
+
+test first  step 0.00001 tol 0.0000001
+
+GBorn Clear
+
+delete atom select all end
+
+!!!!********DINUCLEOTIDES*************!!!!
+
+open unit 1 read form name @0ade-cyt.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup first 5pho last 3ter
+
+update inbfrq -1 ihbfrq 0 CUTNB 999. CTOFNB 990. CTONNB 980. e14fac 0.75
+
+open unit 1 read form name @0ade-cyt.crd
+read coor card unit 1
+close unit 1
+
+!  Now turn on the optimized generalized Born energy term 
+!  for MMFF - lambda optimized for dinucleotides
+GBorn P1 0.2163 P2 0.2564 P3 0.0144 P4 7.0038 P5 1.0 Lambda 0.8768 Epsilon 80.0
+
+energy cutnb 999 ctofnb 990 ctonnb 980 e14fac 0.75 switch vswitch
+
+mini abnr nstep 100 tolenr 0.001
+
+GBorn Clear
+
+delete atom select all end
+
+!!!!********NA strands*************!!!!
+
+open unit 1 read form name @0287d.crd
+read sequ coor unit 1
+close unit 1
+
+generate seg setup first 5pho last 3ter
+
+update inbfrq -1 ihbfrq 0 CUTNB 999. CTOFNB 990. CTONNB 980. e14fac 0.75
+
+open unit 1 read form name @0287d.crd
+read coor card unit 1
+close unit 1
+
+!  Now turn on the optimized generalized Born energy term 
+!  for MMFF - lambda optimized for NA strands
+GBorn P1 0.2163 P2 0.2564 P3 0.0144 P4 7.0038 P5 1.0 Lambda 0.8281 Epsilon 80.0
+
+skipe all excl gben
+energy cutnb 999 ctofnb 990 ctonnb 980 e14fac 0.75 switch vswitch
+
+GBorn Clear
+
+delete atom select all end
+
+stop

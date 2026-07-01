@@ -1,0 +1,69 @@
+* Convert the output of the replica path into a trajectory
+* Qiang Cui based on Paul Maragakis
+*
+
+if ?sccdftb .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+set 0 data/
+set 9 data/
+
+stream "data/cyclohexane.str"
+
+! Number of replicas.
+set nrpl 11
+! Number of residues
+set nres 1
+
+! Read in one end point configuration.
+OPEN UNIT 13 READ FORM NAME @0chair.crd
+READ COOR CARDS UNIT 13
+CLOSE UNIT 13
+
+! ########################################################
+define qm sele all end
+
+! ...... Do SCC min ......  
+scalar WMAIN set 1.0 sele (all) .and. type O*  SHOW end
+scalar WMAIN set 2.0 sele (all) .and. type N*  SHOW end
+scalar WMAIN set 3.0 sele (all) .and. type C*  SHOW end
+scalar WMAIN set 4.0 sele (all) .and. type H*  SHOW end
+
+sccdftb sele qm end TEMP 0.00 SCFT 0.00000001 
+
+energy
+! #######################################################
+
+! Read one frame out of the replica path coordinates
+open read card unit 14 name @9rp_scc.crd
+
+! Save the output into the trajectory file
+open write unit 15 name @9out.rp_scc.dcd 
+trajectory iwrite 15 nfile @nrpl
+
+! loop over the images and add them to the trajectory
+set i 1
+set res 0
+label loop
+  read coor card unit 14 offset @res
+  coor orien rms
+
+  energy
+
+  traj write
+  open write unit 16 name @9frame.crd form
+  write coor card unit 16
+  close unit 16
+  incr i by 1
+  decr res by @nres
+  if i .le. @nrpl goto loop
+
+! Save everything
+close unit 15
+
+! We are done!  
+stop
+
+

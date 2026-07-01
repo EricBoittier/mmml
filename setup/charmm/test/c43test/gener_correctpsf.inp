@@ -1,0 +1,38 @@
+* generate Drude Ac-Lys
+*
+
+DIMENS CHSIZE 3000000 MAXRES 3000000
+
+iofo exte
+
+stream datadir.def
+stream @0/toppar_drude_master_protein_contrepeatingresid.str
+stream @0/toppar_drude_model_2013e_contrepeatingresidacem.str
+
+read sequ LYS 1
+generate PROA first ACE last CT3 setup warn drude dmass 0.4 hype hord 4 khyp 40000 rhyp 0.2
+
+ic purge
+ic param
+ic print
+ic seed 1 CY 1 N 1 CA
+ic build
+coor sdrude
+coor shake
+coor print
+
+set status = fail
+
+define ss sele type D* .and. prop x .gt. 999.0 end  ! Atom without coordinate is usually 9999.0
+
+if ?NSEL .eq. 0 then
+  set status = pass
+endif
+
+echo testcase result: @status -- reading
+
+open write unit 30 card name @9/lys.drude.xplor.psf
+write psf xplor card unit 30
+
+stop
+

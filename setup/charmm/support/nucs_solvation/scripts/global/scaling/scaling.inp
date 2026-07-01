@@ -1,0 +1,31 @@
+* scaling.inp
+* NUCS scaling factors for implicit water.
+* Reference: J.Comput.Chem.26,1359-1371, 2005.
+* By Sonja M. Schwarzl & Stefan Fischer, last modified 17/06/2008
+*
+
+STREAM generate.str
+STREAM settings1.str
+STREAM settings2.str
+STREAM initialize.str
+
+     ! Compute only electrostatics :
+SKIP ALL EXCL ELEC
+ 
+     ! No bonded-exclusions (NBXMOD= -1 instead of 5),  cutoff :
+ENER  NBXMOD -1  VATOM ATOM  EPS 1.0  E14FAC 1.0  @ELECTR -
+      @UVFUNCTION @UFUNCTION CTONNB @UCTONNB CTOFNB @UCTOFNB CUTNB -
+      @UCUTNB WMIN @UWMIN    
+
+OPEN UNIT 20 WRITE FORM NAME @OUTPUT2
+WRITE TITLE UNIT 20
+* OUTPUT OF PAIRWISE INTERCTION ENERGY OF VACUUM AND SOLUTION
+* COUNTER    GROUP I   E^vac_IJ   GROUP J   E^solv_IJ
+*
+
+STREAM loop.str
+
+     ! Show scaling factors
+STREAM factors_out.str
+
+STOP

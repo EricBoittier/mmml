@@ -1,0 +1,104 @@
+* target.str
+* Loops over all groups, expand targetregion to include all atoms of groups
+* which had at least one atom in the original targetregion.
+* By Danzhi,Sonja Schwarzl & Stefan Fischer, last modified May/12/2001
+*
+
+! ! If the TARGETREGION is ALL atoms, this script is not necessary
+! ! (i.e., uncomment the "RETURN") :
+! RETURN
+
+SET COUNTER3 -1
+
+LABEL LOOP3
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+  INCRement COUNTER3 BY 1
+
+  SET SELECTION3 BACK
+
+  SET RESNEXT3 @COUNTER3
+  INCRement RESNEXT3 BY 1
+ 
+       ! check, if next residue is Proline
+  DEFINE foo SELEct IRES @RESNEXT3 END
+  IF ?SELRESN EQ PRO GOTO PROLABEL
+ 
+	LABEL ONCEAGAIN3
+    ! check if the group I belongs to target region
+  	IF SELECTION3 EQ BACK DEFI GROUP3 SELE (BACK2 .and. IRES @COUNTER3) .or. -
+                                       (BACK1 .and. IRES @RESNEXT3) END
+	IF SELECTION3 EQ SIDE DEFI GROUP3 SELE SIDE .and. IRES @COUNTER3 END
+  	DEFI foo SELE targetregion .and. group3 END
+  		IF ?NSEL .eq. 0 goto continue
+		! otherwise
+			defi targetregion sele targetregion .or.  group3  end
+    
+		 LABEL  continue
+  
+		IF SELECTION3 EQ SIDE GOTO NEXTRESIDUE3
+		       ! else:
+		    SET SELECTION3 SIDE
+   		    GOTO ONCEAGAIN3
+ 
+  LABEL PROLABEL 
+        	! Check sidechain j
+	  SET SELECTION3 SIDE
+    
+           ! check if the group I belongs to target region
+  
+	  DEFI GROUP3 SELE SIDE .and. IRES @COUNTER3 END
+	  DEFI foo SELE targetregion .and. group3 END
+		  IF ?NSEL .eq. 0 GOTO AGAIN2
+	  		! otherwise
+			  defi targetregion sele targetregion .or. group3 end
+		  LABEL AGAIN2
+      	 ! Check Proline (j,j+1)
+	   SET SELECTION3 BACK
+    
+              ! check if the group I belongs to target region
+
+	    DEFI GROUP3 SELE (BACK2 .and. IRES @COUNTER3) .or. - 
+	      (BACK1 .and. IRES @RESNEXT3) .or. (SIDE .and. IRES @RESNEXT3) END
+	    DEFI foo SELE targetregion .and. group3  END
+	    IF ?NSEL .eq. 0 GOTO CONTINUE2
+		! otherwise 
+   
+		defi targetregion sele targetregion .or. group3 show end 
+
+	    label continue2
+      		 ! Check Backbone (j+1,j+2)
+	    INCRement COUNTER3 BY 1
+	    INCREMENT RESNEXT3 BY 1
+       ! Check whether the next residue is proline
+	    DEFINE foo SELECT IRES @RESNEXT3 END
+	    IF ?SELRESN EQ PRO GOTO AGAIN2
+	     !else
+        	! check if the group I belongs to target region
+     
+		    DEFI GROUP3 SELE (BACK2 .and. IRES @COUNTER3) .or. -
+		     (BACK1 .and. IRES @RESNEXT3) END
+     
+		    Defi foo sele targetregion .and. group3 end
+		    IF ?NSEL .eq. 0 GOTO NEXTRESIDUE3
+			! otherwise
+			defi targetregion sele targetregion .or. group3 show end 
+
+ LABEL NEXTRESIDUE3
+
+IF COUNTER3 .lt. @FINALRESIDUE GOTO LOOP3
+
+
+RETURN
+
+
+
+! For debugging only :
+SCAL WMAIN SET 1 SELEct targetregion END
+SCAL WMAIN SET 0 SELEct .not. targetregion END
+
+open write unit 1 card name "target.crd"
+write coordinates card unit 1 
+close unit 1
+
+RETURN

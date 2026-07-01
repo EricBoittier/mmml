@@ -1,0 +1,118 @@
+* CHARMM stream file
+* support/stream/roll-angles.str
+* Used for GAMUS module scripts
+*
+
+! NOTE: This stream file assumes that there are two DNA chains with segment
+! names "A" and "B".  
+! The variables "A1" and "B1" are the residue numbers of the first base pair
+! of the step whose roll angle is to be sampled, on the "A" and "B" chains
+! respectively.
+
+! assumes the segments are "a" and "b"
+! a1 b1 are the resids of the bases for the first base pair in the step
+! (the second base pair is assumed to be base1+1 base2-1
+
+!prnlev 6
+!show parameters verbose
+!set a1 = @in2
+!set b1 = @in3
+calc a2 = @a1 + 1
+calc b2 = @b1 - 1
+set name1y = N3 ! @in3
+set name2y = C6 ! @in4
+set name3y = N7 ! @in5
+set name1r = C2 !@in6
+set name2r = C4 !@in7
+set name3r = C6 !@in8
+
+!rxncor reset
+! I wrote this command to make it possible to reset the state of the
+! RXNCOR system
+set purine1 = 0 !is base pair #1 a purine on strand A?
+set purine2 = 0 !is base pair #2 a purine on strand A?
+define temp select segid A .and. resid @a1:@a1 end
+if ?selresn .eq. ADE set purine1 = 1
+if ?selresn .eq. GUA set purine1 = 1
+define temp select segid A .and. resid @a2:@a2 end
+if ?selresn .eq. ADE set purine2 = 1
+if ?selresn .eq. GUA set purine2 = 1
+
+! we assume watson-crick complementation
+
+define ring select type N1 .or. type C2 .or. type N3 .or. type C4 .or. -
+    type C5 .or. type C6 .or. type N7 .or. type C8 .or. type N9 show end
+if purine1 .eq. 1 then
+	rxncor define a@{a1}a point select atom a @a1 @name1y end
+	rxncor define a@{a1}b point select atom a @a1 @name2y end
+	rxncor define a@{a1}c point select atom a @a1 @name3y end
+	rxncor define b@{b1}a point select atom b @b1 @name3r end
+	rxncor define b@{b1}b point select atom b @b1 @name2r end
+	rxncor define b@{b1}c point select atom b @b1 @name1r end
+else
+        rxncor define a@{a1}a point select atom a @a1 @name1r end
+        rxncor define a@{a1}b point select atom a @a1 @name2r end
+        rxncor define a@{a1}c point select atom a @a1 @name3r end
+        rxncor define b@{b1}a point select atom b @b1 @name3y end
+        rxncor define b@{b1}b point select atom b @b1 @name2y end
+        rxncor define b@{b1}c point select atom b @b1 @name1y end
+endif
+
+if purine2 .eq. 1 then
+        rxncor define a@{a2}a point select atom a @a2 @name1y end
+        rxncor define a@{a2}b point select atom a @a2 @name2y end
+        rxncor define a@{a2}c point select atom a @a2 @name3y end
+        rxncor define b@{b2}a point select atom b @b2 @name3r end
+        rxncor define b@{b2}b point select atom b @b2 @name2r end
+        rxncor define b@{b2}c point select atom b @b2 @name1r end
+else
+        rxncor define a@{a2}a point select atom a @a2 @name1r end
+        rxncor define a@{a2}b point select atom a @a2 @name2r end
+        rxncor define a@{a2}c point select atom a @a2 @name3r end
+        rxncor define b@{b2}a point select atom b @b2 @name3y end
+        rxncor define b@{b2}b point select atom b @b2 @name2y end
+        rxncor define b@{b2}c point select atom b @b2 @name1y end
+endif
+
+!define sugar select type C1' .or. type C2' .or. type C3' .or. type C4' -
+!  .or. type O4' .or. type H1' .or. type H2' .or. type H2'' .or. type H3' -
+!  .or. type H4' end
+
+define sugar select type *' end
+! normal vectors to the bases
+rxncor define pa@{a1} plane through a@{a1}a through a@{a1}b through a@{a1}c
+rxncor define pb@{b1} plane through b@{b1}a through b@{b1}b through b@{b1}c
+rxncor define pa@{a2} plane through a@{a2}a through a@{a2}b through a@{a2}c
+rxncor define pb@{b2} plane through b@{b2}a through b@{b2}b through b@{b2}c
+!normal vectors to the base pairs
+rxncor define p@{a1} vcom pa@{a1} 0.5 pb@{b1} 0.5
+rxncor define p@{a2} vcom pa@{a2} 0.5 pb@{b2} 0.5
+
+! lines along from B to A
+rxncor define a@{a1}d point mass select segid a .and. resid @a1:@a2  end
+!rxncor define b@{b1}d point select segid b .and. resid @b1 .and. ring end
+!rxncor define a@{a2}d point select segid a .and. resid @a2 .and. ring end
+rxncor define b@{b2}d point mass select segid b .and. resid @b2:@b1  end
+
+!rxncor define l direction a@{a1}d b@{b1}d
+!rxncor define l7 direction a@{a2}d b@{b2}d
+!rxncor define l67 vcom l6 0.5 l7 0.5 !l_m in notes
+rxncor define l@{a1}@{a2} direction a@{a1}d b@{b2}d
+! now, the roll angle definition
+! The A vectors are marked L or U for "lower" or "upper".
+! A_i "lower" is p_i x l_m (i,i+1);
+! A_i "upper" is p_i x l_m(i-1,i) (a different vector from A_i "lower"
+rxncor define a@{a1}l direction p@{a1} l@{a1}@{a2}
+!a_6 = p_6 x l_m, will reduce to unit vector
+rxncor define a@{a2}u direction p@{a2} l@{a1}@{a2}
+!a_7 = p_7 x l_m, will reduce to unit vector
+rxncor define r@{a1} angle a@{a1}l a@{a2}u l@{a1}@{a2}
+!cos rho = a_6 x a_7, will keep track of sign
+!rxncor define bend angle p6 p7 l67 !direct angle between vectors
+!rxncor set nrxn 1 r@a1
+! we will not do this here; we will do it in the main script,
+! as it requires knowledge of how many there are
+
+!prnlev 2
+
+return

@@ -1,0 +1,153 @@
+* form_ewald_m.inp
+* Bernard R. Brooks, 14-Jul-1997
+* calculate group-group energy (nonbonded) of 2 formamides
+*
+
+stream datadir.def
+
+bomlev -4
+open read unit 11 card name @0amino3h.rtf
+read rtf card unit 11
+close unit 11
+open read unit 12 card name @0param20.prm
+read param card unit 12
+close unit 12
+
+stream  @0mmff_setup.str
+
+read sequence card
+* formamide
+*
+2
+amn cbx
+
+generate frm1 setup
+generate frm2 duplicate frm1 setup  
+
+open read form unit 19 name @0form_mm.crd
+read coor card unit 19
+close unit 19
+
+coor trans xdir  -2.98  sele segid frm1 end
+
+prnlev 6
+
+set LX 10.0
+set LY 9.0
+set LZ 8.0
+
+crystal define Orthorhombic @LX @LY @LZ 90.0 90.0 90.0
+CRYStal BUILd  CUTOff 20.0
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+FAST OFF
+
+print coor
+
+!!!!!!!!!!!!
+! First do CDIE tests
+date
+
+set 2   ATOM  CDIE  FSHIFT cutim 13.0 cutnb 13.0 ctofnb 12. 
+set 8   noewald
+open write card unit 33 name @9form_ewald_@8.plt
+        
+                    set 1   VSWITCH CTONNB 10.0  
+set f form_ewald_vsw
+stream @0form_ewald.str
+        
+                    set 1   VSWITCH CTONNB 18.0  
+set f form_ewald_vtr
+stream @0form_ewald.str
+        
+                    set 1   VSHIFT  CTONNB  5.0  
+set f form_ewald_vsh
+stream @0form_ewald.str
+       
+                    set 1   VTRUNC  CTONNB  5.0   CTVT 12.0 
+set f form_ewald_vtrn
+stream @0form_ewald.str
+       
+!!!!!!!!!!!!
+goto skip
+
+! do high precision PME tests
+date
+
+set 2   ewald kappa .30 pmewald fftx 32 ffty 32 fftz 32 order 4
+
+set 8   pme_hp
+open write card unit 33 name @9form_ewald_@8.plt
+        
+                    set 1   VSWITCH CTONNB 10.0  
+set f form_ewald_vsw
+stream @0form_ewald.str
+        
+                    set 1   VSWITCH CTONNB 18.0  
+set f form_ewald_vtr
+stream @0form_ewald.str
+        
+                    set 1   VSHIFT  CTONNB  5.0  
+set f form_ewald_vsh
+stream @0form_ewald.str
+       
+                    set 1   VTRUNC  CTONNB  5.0  CTVT 12.0  
+set f form_ewald_vtrn
+stream @0form_ewald.str
+
+label skip       
+!!!!!!!!!!!!
+!  do low precision pme tests
+date
+
+set 2   ewald kappa .30 pmewald fftx 8 ffty 8 fftz 8 order 4
+set 8   pme_lp
+open write card unit 33 name @9form_ewald_@8.plt
+        
+                    set 1   VSWITCH CTONNB 10.0  
+set f form_ewald_vsw
+stream @0form_ewald.str
+        
+                    set 1   VSWITCH CTONNB 18.0  
+set f form_ewald_vtr
+stream @0form_ewald.str
+        
+                    set 1   VSHIFT  CTONNB  5.0  
+set f form_ewald_vsh
+stream @0form_ewald.str
+       
+                    set 1   VTRUNC CTONNB  5.0  CTVT 12.0
+set f form_ewald_vtrn
+stream @0form_ewald.str
+       
+!!!!!!!!!!!!!!!
+!  do std ewald tests
+date
+
+set 2   ewald KMAX 5 KSQMAX 27 KAPPA 0.30 spline nopme
+
+set 8   stdewald
+open write card unit 33 name @9form_ewald_@8.plt
+        
+                    set 1   VSWITCH CTONNB 10.0  
+set f form_ewald_vsw
+stream @0form_ewald.str
+        
+                    set 1   VSWITCH CTONNB 18.0  
+set f form_ewald_vtr
+stream @0form_ewald.str
+        
+                    set 1   VSHIFT  CTONNB  5.0  
+set f form_ewald_vsh
+stream @0form_ewald.str
+       
+                    set 1   VTRUNC  CTONNB  5.0   CTVT 12.0 
+set f form_ewald_vtrn
+stream @0form_ewald.str
+       
+!!!!!!!!!!!!
+date
+
+stop
+
+

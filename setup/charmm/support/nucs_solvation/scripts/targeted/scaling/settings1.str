@@ -1,0 +1,22 @@
+* settings1.str
+* By Sonja M. Schwarzl & Stefan Fischer, last modified 17/06/2008
+* 
+
+
+! input coordinate-file, with global scaling factors of target atoms in WMAIN:
+SET INPUTFAC "../../global/verify/output/global_lambda_1-62_counterscaled.crd"
+
+! output coordinates file with scaling factors in 4th column
+SET OUTPUT   "./output/targeted_lambda_1-62.crd"
+
+! output file with electrostatic interaction energies between groups outside
+! the target region and the target region (PBEQ and Coulomb), the distance
+! between the group and the target region, and the scaling factor
+SET OUTPUT2  "./output/target_nontarget_lambda.dat"
+
+
+! output file with all (global and targeted) scaling-factors :
+SET OUTPUT3  "./output/bpti_lambda_mixed.crd"
+
+
+RETURN

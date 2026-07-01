@@ -1,0 +1,15 @@
+#! /bin/bash
+
+#echo "#! /bin/bash" > image.edits
+#chmod 755 image.edits
+for k in `cat ltm-list`; do
+    echo $k
+    for i in `grep -l "/charmm_fcm/${k}" source/*/*.src` ; do
+        #echo $i 
+        sed -e "s@##INCLUDE '~/charmm_fcm/${k}'@##USE ${k/.f90/}@" $i >>  $i.tmp
+        #sed -e "s@##INCLUDE '~/charmm_fcm/image.f90'@##USE image@" $i >  $i.tmp
+        mv $i.tmp $i
+        #echo emacs -nw $i >> image.edits
+        #exit
+    done
+done

@@ -1,0 +1,35 @@
+* get_box.str
+* Get the Box sizes for PBEQ calculation.
+* By Sonja M. Schwarzl & Stefan Fischer, last modified 17/06/2008
+*
+
+STREAM generate.str
+STREAM settings2.str    ! only non-bonded settings needed here
+CALC UCUTNB =  @UCTOFNB + 4.0 
+
+COOR ORIENT
+COOR STAT
+
+! To get box dimensions calculate [(Xmin-Xmax) + 6 + 2 * x] / y
+! Xmax-Xmin give maximum distance between nuclei in X direction
+! 6 A more are necessary to get to solvent accessible surface
+! x = 25, 10, 5 (water around protein)
+! y = 4, 2, 1 (grid spacings)
+! round up to odd integer
+
+     ! Check energy function settings
+     ! Compute only electrostatics :
+SKIP ALL EXCL ELEC
+ENER  NBXMOD -1  VATOM ATOM  EPS 1.0  E14FAC 1.0  @ELECTR -
+      @UVFUNCTION @UFUNCTION CTONNB @UCTONNB CTOFNB @UCTOFNB CUTNB -
+      @UCUTNB WMIN @UWMIN    
+ 
+
+! write out oriented coordinates
+! These must be used in subsequent calculation of reparametrisation factors.
+
+OPEN WRITE UNIT 20 CARD NAME "../crd/bpti_oriented.crd"
+WRITE COORdinates CARD UNIT 20
+CLOSE UNIT 20
+
+STOP

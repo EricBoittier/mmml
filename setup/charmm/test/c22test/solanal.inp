@@ -1,0 +1,168 @@
+* SOLANAL: Charlie L. Brooks, 09-Dec-91
+* +CROSs : A. Blondel, Aug-93
+* Updated for c25 changes: L. Nilsson, Oct-96
+* Test solvent analysis on water
+*
+
+stream datadir.def
+bomlev -1
+
+read rtf card
+* TIP3P water topology (from TOPH19.RTF)
+*
+   19    1
+  MASS     1 HT      1.00800 ! TIPS3P WATER HYDROGEN
+  MASS     2 OT     15.99940 ! TIPS3P WATER OXYGEN
+
+  RESI TIP3  0.00000   ! TIPS3P WATER MODEL
+  GROUP
+  ATOM OH2  OT     -0.834 
+  ATOM H1   HT      0.417
+  ATOM H2   HT      0.417
+  BOND OH2  H1   OH2 H2  H1  H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+  THET H1   OH2  H2 
+  ACCE OH2
+  PATC  FIRS NONE LAST NONE
+
+END
+
+read param card
+* CARBON TETRACHLORIDE AND METHANE PARAMETER FILE
+* INCLUDES CCL4-METHANE HYBRID, TIP3 WATER, AND EXT-H HYDROCARBONS
+*
+ BOND
+  HT   OT     450.0       0.9572 ! from TIPS3P geometry
+  HT   HT       0.0       1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+ THETAS
+  HT   OT   HT      55.0     104.52    ! from TIPS3P geometry
+ NONBONDED   ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+       CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+  HT       0.0440    -0.0498    0.8000 !TIP3P water hydrogen, see NBFIX below
+  OT       0.8400    -0.1591    1.6000 !TIP3P water oxygen,   see NBFIX below
+ NBFIX
+  OT   OT    -0.1521  3.5364
+  HT   HT    -0.04598 0.4490
+  OT   HT    -0.08363 1.9927
+ HBOND AEXP 4 REXP 6 HAEX 0 AAEX 0   NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+   CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+  OH*  O*      -0.00 2.75
+
+END
+
+read sequ tip3 216
+! now generate the psf for this structure use setup to set up the interal
+! coordinate table
+!
+generate wat setup noangle
+
+! read the protein coordinates 
+!
+open unit 1 read form name @0tip216.crd
+read coor card unit 1
+close unit 1               
+
+set 6 18.856
+set 7 18.856
+set 8 18.856
+
+! Read in image transformation files and set-up image centering
+open unit 1 read form name @0cubic.img
+read image card unit 1
+image byresidue xcen 0.0 ycen 0.0 zcen 0.0 sele segid wat end
+
+faster on
+shake bond tol 1.0e-8
+
+open unit 20 write unform name @9tip32_1.crd 
+open unit 11 write form name @9tip32.res
+! Run dynamics in periodic box
+dynamics verlet strt timestep 0.002 nstep 10 nprint 10  iprfrq 10 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 60 ihtfrq 20 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri 11 nsavc 2 nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 20                 - !{* Nonbond options *}
+     inbfrq 10 imgfrq 10 -
+     eps 1.0 cutnb 7.00 cutim 7.00 shift vshift
+open unit 20 write unform name @9tip32_2.crd 
+open unit 11 read form name @9tip32.res
+! Run dynamics in periodic box
+dynamics verlet restart timestep 0.002 nstep 10 nprint 10  iprfrq 10 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 60 ihtfrq 20 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri -1 nsavc 2 nsavv 0 iunvel 0 -
+     iunread 11 iuncrd 20                 - !{* Nonbond options *}
+     inbfrq 10 imgfrq 10 -
+     eps 1.0 cutnb 7.00 cutim 7.00 shift vshift
+
+open unit 20 unform read name @9tip32_1.crd
+open unit 21 unform read name @9tip32_2.crd
+open unit 8 write form name @9tip32.groo 
+open unit 19 write form name @9tip32.groh 
+open unit 10 write form name @9tip32.grhh
+open unit 31 write form name @9tip32.msd
+open unit 32 write form name @9tip32.deN
+
+coordinate analysis solvent water spec -
+select ( resname tip3 .and. type oh2 ) end fini -
+xref 0.0 yref 0.0 zref 0.0 -
+begin  2 skip 1 ncors 5 firstu 20 nunit 2  -
+rspin 0.0 rspout 9.0 rDsp 9.4285 dr 0.1 rRsphere 9.4285 -
+mgn 100 igdist 8 ihh 10 ioh 19 imsd 31 iden 32 - 
+ifmin xbox 18.856 ybox 18.856 zbox 18.856
+
+
+! Now the same analysis with CROSs (AB)
+open unit 8 write form name @9tip32.graa 
+open unit 9 write form name @9tip32.grab 
+open unit 10 write form name @9tip32.grbb
+open unit 11 write form name @9tip32.msdc
+open unit 12 write form name @9tip32.deNc
+
+coordinate analysis solvent cross -
+select ( resname tip3 .and. type oh2 ) end -
+select ( resname tip3 .and. (type h1 .or. type h2)) end fini -
+xref 0.0 yref 0.0 zref 0.0 -
+begin 2 stop 20 skip 2  firstu 20 nunit 2 ncors 5 -
+rspin 0.0 rspout 9.0 rDsp 9.4285 dr 0.1 rRsphere 9.4285 -
+mgn 100 igdist 8 ihh 10 ioh 9 imsd 11 idens 12 - 
+ifmin xbox 18.856 ybox 18.856 zbox 18.856
+
+
+! and with a reduced set of points
+!open unit 51 unform read name @9tip32.crd
+open unit 8 write form name @9tip32.groo1 
+open unit 11 write form name @9tip32.msd1
+coordinate analysis solvent water spec -
+select ( resname tip3 .and. type oh2 ) end fini -
+xref 0.0 yref 0.0 zref 0.0 -
+begin 12  stop 20 skip 2 ncors 5 firstu 20 nunit 2 -
+rspin 0.0 rspout 9.0 rDsp 9.4285 dr 0.1 rRsphere 9.4285 -
+mgn 100 igdist 8 imsd 11 -
+ifmin xbox 18.856 ybox 18.856 zbox 18.856 
+
+open unit 8 write form name @9tip32.groo2 
+open unit 11 write form name @9tip32.msd2
+coordinate analysis solvent water spec -
+select ( resname tip3 .and. type oh2 ) end fini -
+xref 0.0 yref 0.0 zref 0.0 -
+ ncors 5 firstu 21 nunit 1 -
+rspin 0.0 rspout 9.0 rDsp 9.4285 dr 0.1 rRsphere 9.4285 -
+mgn 100 igdist 8 imsd 11 -
+ifmin xbox 18.856 ybox 18.856 zbox 18.856 
+
+open unit 8 write form name @9tip32.groo3 
+open unit 11 write form name @9tip32.msd3
+bomlev -3 ! to get by the request for VAC analysis
+
+coordinate analysis solvent water spec -
+select ( resname tip3 .and. type oh2 ) end fini -
+xref 0.0 yref 0.0 zref 0.0 -
+begin 2  stop 18 skip 2 ncors 5 firstu 20 nunit 2 -
+rspin 0.0 rspout 9.0 rDsp 9.4285 dr 0.1 rRsphere 9.4285 -
+mgn 100 igdist 8 imsd 11 -
+ifmin xbox 18.856 ybox 18.856 zbox 18.856 -
+ivac 77
+
+stop

@@ -1,0 +1,237 @@
+* title: benzen dimer for test calculation 
+* Generalized Born for hybrid MC/MD calculation using block module
+* Two dynamics (one for GBTYpe = 1, the other for GBTYpe = 2)
+* 3/10/00 S.Banba for CHARMM ver. 28
+*
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ echo gb_mcmd TESTCASE RESULT: SKIP
+ stop
+endif
+
+! lambda dyn not parallel
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ echo gb_mcmd TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+! Read in parameter and topology files.
+!
+open unit 1 read form name @0top_all22_model.inp       
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all22_prot.inp      
+read param card unit 1
+close unit 1
+
+! read in environmental atoms
+read sequ card
+* title
+*
+1
+benz 
+
+generate BEN1 setup
+
+! read ligands atoms
+read sequ card
+* title
+*
+3
+benz benz benz
+
+generate BEN2 setup
+
+set return return1
+goto coordinates
+label return1
+
+define lig1 sele atom ben2 1 * end
+define lig2 sele atom ben2 2 * end
+define lig3 sele atom ben2 3 * end
+
+! harmonic constraint force for environmental atoms.
+cons harmonic force 1.0 exponent 2 sele segid ben1 end
+
+scalar FBETA set 50.0 sele all .and. .not. hydrogen end
+shake bonh param        !tolerance 1.0e-06
+
+set 3 300.0 ! temperature
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Lambda-dynamics check start
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+block 4
+  call 2  sele lig1 end
+  call 3  sele lig2 end
+  call 4  sele lig3 end
+  !  blk lamb vel  mass ref_E frictional coeff (from /pb/free_energy_epsp2.dat)
+  QLMC MCTE 300.0 FREQ 1 MCST 1 MAX 1.0
+  LDIN 1  1.00 0.0  5.0  0.0 
+  LDIN 2  0.33 0.0  5.0  0.0 
+  LDIN 3  0.33 0.0  5.0  0.0 
+  LDIN 4  0.33 0.0  5.0  0.0 
+  LDMA               ! key word for convert lambdas into coefficient matrix
+  RMLA BOND THET IMPH PHI
+  LDBI 0             ! input the total no. of biasing potentials to set up heap
+end
+
+! Condition No.1 read variable conditions
+
+!set up GB term
+scalar wmain = radius
+scalar wmain set 1.50000 sele hydrogen .and. prop radius .lt. 1.50000 end
+GBorn P1 0.448 P2 0.173 P3 0.013 P4 9.015  P5 0.9 Lambda 0.705 Epsilon 80.0 -
+                                                 weight GBTYPE 1
+
+!!!! dynamics
+set NUM 1
+open unit 88 write file name @9GB_mcmd@NUM.dcd
+open unit 85 write file name @9GB_mcmd@NUM.lmd
+open unit 86 write form name @9GB_mcmd@NUM.res
+open unit 90 write form name @9GB_mcmd@NUM.tem
+open unit 82 write form name @9GB_mcmd@NUM.pot
+open unit 84 write form name @9GB_mcmd@NUM.bia
+
+faster 1
+
+dynamics start langevin timestep 0.001 nstep 50 nprint  5 iprfrq  5 -
+     firstt @3 finalt @3 twindl -10.0 twindh 10.0 -
+     iasvel 5 iasors 5 iunr -1 iunwri 86 nsavc 10 nsavv 0  -
+     iuncrd 88  iunvel -1 isvfrq 10 -
+     iunldm 85  nsavl 5 -  ! lambda print out
+     ilapot 82  ilaf 84 -  ! Vi & biase potential 
+     ilat   90  nlat 10 -  ! temperature atoms &
+                          - !{* Nonbond options *}
+     ieqfrq 10 inbfrq 10 imgfrq 0 ilbfrq 0 ihbfrq 0 tbath @3 rbuffer 0.0 -
+     cutnb 12.4 ctonnb 8.5 ctofnb 10.0 -
+     cdie eps 1.0 vswitch switch atom vatom echeck 1000
+!!!! 
+!
+energy
+@qcheck ?ener 42.6447 0.01 gb_mcmd_ener1
+! check rms from initial set --  need to reread initial coords
+coor copy comp
+set return return2
+coor init
+goto coordinates
+label return2
+coor orie rms comp
+@qcheck ?rms 0.159 0.01 gb_mcmd_rms1
+!
+GBorn Clear
+
+! Condition No.2 (GB energy Type 2)
+
+!set up GB term
+scalar wmain = radius
+scalar wmain set 1.50000 sele hydrogen .and. prop radius .lt. 1.50000 end
+GBorn P1 0.448 P2 0.173 P3 0.013 P4 9.015  P5 0.9 Lambda 0.705 Epsilon 80.0 -
+                                                 weight GBTYPE 2
+
+!!!! dynamics
+set NUM 2
+open unit 88 write file name @9GB_mcmd@NUM.dcd
+open unit 85 write file name @9GB_mcmd@NUM.lmd
+open unit 86 write form name @9GB_mcmd@NUM.res
+open unit 90 write form name @9GB_mcmd@NUM.tem
+open unit 82 write form name @9GB_mcmd@NUM.pot
+open unit 84 write form name @9GB_mcmd@NUM.bia
+
+faster 1
+
+dynamics start langevin timestep 0.001 nstep 50 nprint  5 iprfrq  5 -
+     firstt @3 finalt @3 twindl -10.0 twindh 10.0 -
+     iasvel 5 iasors 5 iunr -1 iunwri 86 nsavc 10 nsavv 0  -
+     iuncrd 88  iunvel -1 isvfrq 10 -
+     iunldm 85  nsavl 5 -  ! lambda print out
+     ilapot 82  ilaf 84 -  ! Vi & biase potential 
+     ilat   90  nlat 10 -  ! temperature atoms &
+                          - !{* Nonbond options *}
+     ieqfrq 10 inbfrq 10 imgfrq 0 ilbfrq 0 ihbfrq 0 tbath @3 rbuffer 0.0 -
+     cutnb 12.4 ctonnb 8.5 ctofnb 10.0 -
+     cdie eps 1.0 vswitch switch atom vatom echeck 1000
+!!!! 
+!
+energy
+@qcheck ?ener 44.174 0.01 gb_mcmd_ener2
+! check rms from initial set --  need to reread initial coords
+coor copy comp
+set return return3
+coor init
+goto coordinates
+label return3
+coor orie rms comp
+@qcheck ?rms 0.158 0.01 gb_mcmd_rms2
+!
+
+stop
+
+label coordinates
+! read benzene coord.
+read coor card 
+* Environmental benzene
+*
+   12
+    1    1 BENZ CG    -0.65009   1.15348  -0.45996 BEN1 1      0.00000
+    2    1 BENZ HG    -1.15115   2.04252  -0.81447 BEN1 1      0.00000
+    3    1 BENZ CD1   -0.50830   0.93067   0.91661 BEN1 1      0.00000
+    4    1 BENZ HD1   -0.90008   1.64798   1.62308 BEN1 1      0.00000
+    5    1 BENZ CD2   -0.14179   0.22281  -1.37657 BEN1 1      0.00000
+    6    1 BENZ HD2   -0.25107   0.39454  -2.43756 BEN1 1      0.00000
+    7    1 BENZ CE1    0.14179  -0.22281   1.37657 BEN1 1      0.00000
+    8    1 BENZ HE1    0.25107  -0.39454   2.43756 BEN1 1      0.00000
+    9    1 BENZ CE2    0.50830  -0.93067  -0.91661 BEN1 1      0.00000
+   10    1 BENZ HE2    0.90008  -1.64798  -1.62309 BEN1 1      0.00000
+   11    1 BENZ CZ     0.65009  -1.15348   0.45996 BEN1 1      0.00000
+   12    1 BENZ HZ     1.15115  -2.04252   0.81447 BEN1 1      0.00000
+
+
+! read benzene coord.
+read coor card append
+* Environmental benzene
+*
+   36
+    1    1 BENZ CG    -5.14797  -0.45371   1.60594 BEN2 1      0.00000
+    2    1 BENZ HG    -5.71974   0.45363   1.73482 BEN2 1      0.00000
+    3    1 BENZ CD1   -3.97360  -0.43896   0.84125 BEN2 1      0.00000
+    4    1 BENZ HD1   -3.63634   0.47834   0.38105 BEN2 1      0.00000
+    5    1 BENZ CD2   -5.57990  -1.64608   2.20328 BEN2 1      0.00000
+    6    1 BENZ HD2   -6.48515  -1.65791   2.79258 BEN2 1      0.00000
+    7    1 BENZ CE1   -3.23158  -1.61575   0.67369 BEN2 1      0.00000
+    8    1 BENZ HE1   -2.32475  -1.60074   0.08603 BEN2 1      0.00000
+    9    1 BENZ CE2   -4.83687  -2.82304   2.03623 BEN2 1      0.00000
+   10    1 BENZ HE2   -5.16923  -3.74188   2.49685 BEN2 1      0.00000
+   11    1 BENZ CZ    -3.66217  -2.80761   1.27158 BEN2 1      0.00000
+   12    1 BENZ HZ    -3.08775  -3.71328   1.14264 BEN2 1      0.00000
+   13    2 BENZ CG    -5.14797  -0.45371   1.60594 BEN2 2      0.00000
+   14    2 BENZ HG    -5.71974   0.45363   1.73482 BEN2 2      0.00000
+   15    2 BENZ CD1   -3.97360  -0.43896   0.84125 BEN2 2      0.00000
+   16    2 BENZ HD1   -3.63634   0.47834   0.38105 BEN2 2      0.00000
+   17    2 BENZ CD2   -5.57990  -1.64608   2.20328 BEN2 2      0.00000
+   18    2 BENZ HD2   -6.48515  -1.65791   2.79258 BEN2 2      0.00000
+   19    2 BENZ CE1   -3.23158  -1.61575   0.67369 BEN2 2      0.00000
+   20    2 BENZ HE1   -2.32475  -1.60074   0.08603 BEN2 2      0.00000
+   21    2 BENZ CE2   -4.83687  -2.82304   2.03623 BEN2 2      0.00000
+   22    2 BENZ HE2   -5.16923  -3.74188   2.49685 BEN2 2      0.00000
+   23    2 BENZ CZ    -3.66217  -2.80761   1.27158 BEN2 2      0.00000
+   24    2 BENZ HZ    -3.08775  -3.71328   1.14264 BEN2 2      0.00000
+   25    3 BENZ CG    -5.14797  -0.45371   1.60594 BEN2 3      0.00000
+   26    3 BENZ HG    -5.71974   0.45363   1.73482 BEN2 3      0.00000
+   27    3 BENZ CD1   -3.97360  -0.43896   0.84125 BEN2 3      0.00000
+   28    3 BENZ HD1   -3.63634   0.47834   0.38105 BEN2 3      0.00000
+   29    3 BENZ CD2   -5.57990  -1.64608   2.20328 BEN2 3      0.00000
+   30    3 BENZ HD2   -6.48515  -1.65791   2.79258 BEN2 3      0.00000
+   31    3 BENZ CE1   -3.23158  -1.61575   0.67369 BEN2 3      0.00000
+   32    3 BENZ HE1   -2.32475  -1.60074   0.08603 BEN2 3      0.00000
+   33    3 BENZ CE2   -4.83687  -2.82304   2.03623 BEN2 3      0.00000
+   34    3 BENZ HE2   -5.16923  -3.74188   2.49685 BEN2 3      0.00000
+   35    3 BENZ CZ    -3.66217  -2.80761   1.27158 BEN2 3      0.00000
+   36    3 BENZ HZ    -3.08775  -3.71328   1.14264 BEN2 3      0.00000
+
+goto @return
+

@@ -1,0 +1,120 @@
+* c31test/flexpartest.inp
+* Bernard R. Brooks, 08-Aug-2003
+* External files: toph19.rtf, param19.prm, bpti.crd,
+*                 flexpartest.prm, flexpartest_h.prm, flexpartest_xh.prm
+*
+
+if ?flexparm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+bomlev -2
+
+!!!!! 1 first section
+OPEN READ CARD UNIT 1 NAME @0toph19.rtf
+READ RTF UNIT 1 CARD
+CLOSE UNIT 1
+OPEN READ CARD UNIT 2 NAME @0param19.prm
+READ PARAMETER UNIT 2 CARD
+CLOSE UNIT 2
+
+READ  SEQUENCE  CARDS
+* PTI SEQUENCE
+*
+   58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP
+CYS MET ARG THR CYS GLY GLY ALA
+
+GENERATE  MAIN
+PATCH DISU MAIN  5 MAIN 55
+PATCH DISU MAIN 14 MAIN 38
+PATCH DISU MAIN 30 MAIN 51
+
+READ  SEQUENCE  WATER  4
+GENERATE  SOLV  NOANGLES
+
+open unit 3 read card name @0bpti.crd
+READ COORD card  UNIT 3
+close unit 3
+
+HBONDS ALL IHBFRQ 50
+ENERGY ATOM CDIE SHIF  VSHI VDIS
+set efirst ?ener
+coor force comp
+
+open unit 3 write card  name @9flexpartest.frc
+write coor card comp UNIT 3
+* forces for flexible paramter I/O test
+*
+
+print param
+print param used
+
+!!!!! 2 second section
+! read in a "bad" rtf 
+
+READ RTF CARD
+* TOPOLOGY FILE FOR PROTEINS USING EXPLICIT HYDROGEN ATOMS: VERSION 19
+* - This is a nearly null set for testing only...
+*
+   20    1                ! Version number
+MASS     1 H      1.00800 ! hydrogen which can h-bond to neutral atom
+END
+
+OPEN READ CARD UNIT 2 NAME @0flexpartest.prm
+READ PARAMETER UNIT 2 CARD FLEX print
+CLOSE UNIT 2
+
+HBONDS ALL IHBFRQ 50
+ENERGY ATOM CDIE SHIF  VSHI VDIS
+
+calc ediff abs ( ?ener - @efirst )
+
+coor force
+coor diff
+coor dist weigh
+print coor sele prop wmain .gt. 0.00001 end
+
+print param
+print param used
+
+if @ediff .gt. 0.00001 then DIE -5
+
+!!!!! 3 third section
+! now read the paramter file two parts
+! test APPENd feature...
+!
+
+OPEN READ CARD UNIT 2 NAME @0flexpartest_xh.prm
+READ PARAMETER UNIT 2 CARD FLEX print
+CLOSE UNIT 2
+OPEN READ CARD UNIT 2 NAME @0flexpartest_h.prm
+READ PARAMETER UNIT 2 CARD FLEX APPEND print 
+CLOSE UNIT 2
+
+open unit 3 read card  name @0bpti.crd
+READ COORD card  UNIT 3
+COOR COPY COMP
+
+HBONDS ALL IHBFRQ 50
+ENERGY ATOM CDIE SHIF  VSHI VDIS
+
+calc ediff abs ( ?ener - @efirst )
+
+coor force
+coor diff
+coor dist weigh
+print coor sele prop wmain .gt. 0.00001 end
+
+print param
+print param used
+
+if @ediff .gt. 0.00001 then DIE -5
+
+stop

@@ -1,0 +1,17 @@
+**
+*
+ensemble nensem 2 !zretawrt
+set ne ?whoiam
+ensemble open unit 20 write formatted name a@ne.dat
+
+write title unit 20
+**
+* whoiam @ne
+*
+
+pref
+echo ?whoiam
+
+stop
+
+

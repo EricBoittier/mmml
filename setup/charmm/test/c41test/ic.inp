@@ -1,0 +1,31 @@
+* ICRTFTEST print/write IC table in RTF format
+* L Nilsson, March 2016. Just writing, so no automatic validation. 
+*
+stream datadir.def
+READ RTF  CARD  NAME  @0toph9.rtf
+READ PARAMETER CARD NAME  @0param5.prm
+READ SEQUENCE  CARD
+*  FIRST SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE A  
+READ      SEQUENCE  CARD
+*  SECOND SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE B
+ic generate
+ic generate rtf
+ic write card unit 6
+ic write rtf unit 6
+write ic unit 6
+write ic rtf unit 6
+print ic
+print ic rtf
+ic print
+ic print rtf
+
+
+

@@ -1,0 +1,307 @@
+CHARMM Element doc/pipf.info 1.0
+
+File: PIPF,  Node: Top, Up: (doc/commands.info), Next: Description
+
+
+      Polarizable Intermolecular Potential Functions (PIPF)
+
+               by Jingzhi Pu, Shuhua Ma, and Jiali Gao
+              (pu@comp.chem.chem.edu, gao@chem.umn.edu)
+
+The PIPF module provides an implementation of the Polarizable
+Inter and intra molecular Potential Functions based on a point
+dipole interaction model. The force field for simulating proteins
+is undergoing development.
+
+* Menu:
+
+* Description::      Description of the PIPF Function
+* Syntax::           Syntax of the PIPF commands
+* Options::          PIPF Command Options
+* Examples::         Usage Example Script
+* Installation::     How to install PIPF in CHARMM environment.
+* Status::           Status of the PIPF code
+* References::       References for the PIPF Method
+
+
+File: PIPF, Node: Description, Up: Top, Previous: Top, Next:Syntax
+
+                  Description of the PIPF method
+            
+In the point dipole interaction model used in PIPF, each interaction
+site i is represented by an "atomic" polarizability (alpha_i), and the
+induced dipoles (u_i) are created under the total electric field 
+experienced at the site i (E_i):
+
+                   u_i = (alpha_i)(E_i) 
+
+where the total electric field at center i (E_i) is the sum of 
+the permanent electric field E_i^0 (caused by permanent charges) 
+and the induced electric field E_i^ind (caused by other induced 
+dipoles via an interaction tenser T_ij): 
+
+                   E_i = E_i^0 + sum[(T_ij)(u_j)]
+                                 j!=i
+
+The induced dipoles can be obtained exactly by a direct matrix 
+inversion or solved through a self-consistent iterative procedure.
+While the former scales as N^3 where N is the number of polarizable
+sites, the latter is considered to be computationally efficient.
+For a system with fully converged induced dipoles, the induction 
+energy (E_pol) can be evaluated by:
+
+                   E_pol = -(1/2) sum[(u_i)(E_i^0)] 
+                                   i
+
+For a large-sized system, alternatively, the induced dipole
+can be obtained approximately by employing the extended Lagrangian
+approach without full convergence, where the dipoles become independent 
+variables of the extended system and are allowed to evolve as functions 
+of time during a molecular dynamics simulation. For this dynamical dipole 
+approach, the induced dipoles are coupled to a Nose-Hoover bath to yield 
+dipoles that fluctuate around their fully converged values.
+
+
+File: PIPF, Node: Syntax, Up: Top, Previous: Description, Next: Options
+
+                      Syntax of the PIPF commands
+
+PIPF [CONV real] [ITER int] [PFMD int]
+     [DAMP int] [AFAC real] [CTOF real] [EXCL]
+     [DYNA] [UMAS real] [TSTA real] [UINT int] [UFRS int]
+     [AVDP int] [ANGL]
+     [MINV] [MPOL] [VPOL]
+
+PFBA I
+  CALL J {atom-selection}
+  COEF J [UREF real] [TREF real]
+  ....
+END
+
+
+File: PIPF, Node: Options, Up: Top, Previous: Syntax, Next: Examples
+
+                         PIPF Command Options
+
+PIPF: turn on a PIPF calculation; specified before ENERGY is called to invoke
+      the polarizable force field option.
+
+DYNA: turn on dynamical dipole piston.
+	 Default:  the iterative dipole procedure is adopted.
+
+MINV: turn on matrix inverse procedure to calculate induced dipols,
+      only feasible for small systems
+
+MPOL: calculate molecular polarizability for a single molecule, has to be used 
+      MINV
+
+VPOL: calculate second order derivative of energy (hessian),
+      has to be used with MINV
+
+CTOF: polarization energy cut-off for both DYNA and iterative cases.
+
+DAMP: = 0, no damping (default)
+      = 1, Thole's damping funtion roh2 (also used by Ren & Ponder)
+      = 2, Thole's damping function roh4 
+      > 2, not defined, switch to no damping.
+
+AFAC: is user controlled parameter related to the width of the 
+      gaussian distribution of the charge in Thole's damping 
+      functions. AFAC is set to 0.572 or 1.662 by default for 
+      the case of DAMP=1 or DAMP=2, respectively.
+
+EXCL: exclude the 1-4 intramolecular polarization.
+
+
+Relevant to iterative dipole:
+CONV: convergence criteria (in Deby/center); 
+      Default value: 0.01 Debye/center.  Note that this is a very good
+      convergence especially when the number atoms are large in the system.
+ITER: max number of iterations
+      Default: 20.  You don't want to use more than 20 iterations.  If you
+      do, check near contacts and system set up.
+PFMD: =0 iteration starts from 0 dipole (default)
+      =1 iteration starts from converged induced dipole from last dynacal step,
+         efficient in MD simulations
+
+
+Relevant to DYNA:
+UMAS: fictitious mass for dipole [(ps/e*A)^2*kcal/mol]
+TSTA: initial dipole temperature (K)
+UINT: = 1, nose-hoover constant temperature control
+      = 2, no temperature control
+
+UFRS: = 1, starting from zero-valued dipoles
+      = 2, using the zero-ordered induced dipole as start point
+           u = alp.E^0
+      = 3, starting from the fully converged dipoles
+     (note: for system with image atoms present, currently ONLY primary 
+            atoms are used to compute the zero-order induced dipole for 
+            UFRS=2 and the fully converged initial dipoles are also
+            computed from the primary atom interactions for UFRS=3.
+            However, since this is only an initial guess for dynamics,
+            although they are not exact, they should be a better approximation
+            than starting from zero dipoles.)
+
+ANGL: calculate the angle between dynamical dipole with total electric field 
+
+AVDP: specify the number of atoms per molecule to compute
+      average dipoles in pure liquid simulations. The average
+      total/permanent/induced dipole as well as the average
+      angle between the permanent and induced dipole will
+      be printed out if this option is used.
+
+
+Relevant to dynamical dipole piston, a Nose-Hoover heat bath option
+is added to specify the constant T control of dipole. The keyword is
+
+PFBA I
+  CALL J atom-selection
+  COEF J UREF [real] TREF [real]
+  ....
+END
+
+PFBA I: altogether there are I bath
+CALL J: the Jth bath is applied to selected atoms
+COEF J:
+UREF: the mass associated with the heat bath coordinates in the
+      Nose-Hoover algorithm
+TREF: temperature of the bath
+(Note: the setup of the heat bath coupled to the dipole dynamics is
+       similar to the way used in CHEQ. One may refer cheq.info for
+       this part of the documentation.)
+
+Misc. options:
+For cases where the skip of the polarization energy in PIPF is desired,
+one can use the energy skip command "SKIP EPOL".
+
+
+File: PIPF, Node: Examples, Up: Top, Previous: Options, Next: Installation
+
+                          Examples of PIPF 
+
+Three examples are available in the test suite to demonstrate
+the usage of the PIPF command. 
+
+cpipftest/pipf_test1: 
+   Geometry optimization of a water dimer based on the polarizable
+   POL2 fwater model. 
+
+cpipftest/pipf_test2: 
+   Constant pressure and temperature MD simulations of a small water
+   box containing 125 POL2 waters, where the induced dipoles in PIPF
+   calculations are obtained by the self-consistently iterative procedure.
+
+cpipftest/pipf_test3:
+   Constant pressure and temperature MD simulations of a small water
+   box containing 125 POL2 waters, where the induced dipoles in PIPF
+   calculations are updated dynamically by using an extended Lagrangian
+   approach.
+
+
+File: PIPF, Node: Installation, Up: Top, Previous: Examples, Next: Status
+
+                        Installation of PIPF
+
+To compile the PIPF code under the CHARMM environment, the 'pipf'
+argument needs to be specified when CHARMM is installed.
+To compile using the CMake infrastructure, execute
+
+       ./configure --with-pipf
+       make -C build/cmake install
+
+The 'pipf' options invoke the compilation and installation 
+of the PIPF code.
+
+The atomic polarizability parameters are read in from the second
+column of the NONBOND section in the CHARMM parameter file. 
+
+
+File: PIPF, Node: Status, Up: Top, Previous: Installation, Next: References
+
+                       Status of the PIPF code
+
+Analytical first order derivatives are available for both the self-consistently
+converged dipole and the dynamical dipole approaches in the current
+implementation. Analytical second order derivatives are available only for
+matrix inverse approach. Matrix inverse approach is only available for systems
+without image atoms. Energy minimization and molecular dynamics (MD) simulation
+are allowed for PIPF with fully converged dipoles. Alternatively, the
+induced dipoles can be dynamically updated with the extended Lagrangian
+method in MD simulations, in which the dipole dynamics can be coupled to
+a low temperature heat bath. Treatments of periodic boundary conditions in
+PIPF have been incorporated to work with both BOUNd and CRYStal. Currently,
+the CHARMM atom based non-bonded list is used to determine the interacting 
+centers in the polarization calculation, while the intramolecular 1-4 
+polarization can be optionally excluded. Two of Thole's damping schemes are 
+available to alleviate the over polarization between two atoms that are too 
+close. Additionally utilities have been added (1) to monitor the average angle
+between the induced dipole (U_ind) and total electric field (E_tot) in
+the dynamical dipole calculations (2) to compute the average dipole
+properties, i.e., total/permanent/induced dipoles and the angle between
+the permanent and induced dipoles in pure liquid simulations.
+
+Several aspects of the code will be improved in the near future,
+and new functionalities are under development:
+
+1. Polarization calculations based on group-group non-bonded list.
+2. The point-dipole interaction model based on a single dipole center
+   for each group.
+3. Compatibility with the Monte Carlo code, where the complete
+   non-bonded list should be used instead of a miniature non-bonded
+   list since the many-body character of the polarization energy term.
+4. Integration with quantum module to combine QM and a polarizable 
+   MM based on PIPF, allowing the mutual polarization between both the
+   QM and the MM parts.
+
+
+File: PIPF, Node: References, Up: Top, Previous: Status, Next: Top
+
+                          References
+
+1.  Ponder, J.; Case, D. A. Adv. Prot. Chem. 2003, 66, 27. 
+
+2.  Kaminski, G. A.; Stern, H. A.; Berne, B. J.; Friesner, R. A. 
+    J. Phys. Chem. A 2004, 108, 621. 
+
+3.  Lamoureux, G.; MacKerell, A. D., Jr.; Roux, B. J. Chem. Phys. 
+    2003, 119, 5185. 
+
+4.  Patel, S.; Brooks, C. L. III. J. Comput. Chem. 2004, 25, 1. 
+
+5.  Silberstein, L. Phil. Mag. 1917, 33, 92, 215, 521. 
+
+6.  Applequist, J.; Carl, J. R.; Fung, K.-K. J. Am. Chem. Soc. 
+    1972, 94, 2952. 
+
+7.  Birge, R. R. J. Chem. Phys. 1980, 72, 5312. 
+
+8.  Thole, B. T. Chem. Phys. 1981, 59, 341. 
+
+9.  Ahlstrom, P.; Wallqvist, A.; Engstrom, S. Mol. Phys. 1989, 68, 563. 
+
+10. Angyan, J. G.; Colonna-Cesari, F.; Tapia, O. Chem. Phys. Lett. 
+    1990, 166, 180. 
+
+11. Bernardo, D. N.; Ding, Y.; Krogh-Jespersen, K.; Levy, R. M. 
+    J. Phys. Chem. 1994, 98, 4180. 
+
+12. Gao, J.; Habibollazadeh, D.; Shao, L. J. Phys. Chem. 1995, 99, 16460. 
+
+13. Gao, J.; Pavelites, J. J.; Habibollazadeh, D. J. Phys. Chem. 
+    1996, 100, 2689. 
+
+14. Thmopson, M. J. Phys. Chem. 1996, 100, 14492. 
+
+15. Gao, J. J. Comput. Chem. 1996, 18, 1061. 
+
+16. Ren, P.; Ponder, W. J. Phys. Chem. B 2003, 107, 5933. 
+
+17. Sprik, M.; Klein, M. L. J. Chem. Phys. 1988, 89, 7556. 
+
+18. Belle, D. V.; Froeyen, M.; Lippens, G.; Wodak, S. J. Mol. Phys. 
+    1992, 77, 239. 
+
+19. Dang, L. X. J. Chem. Phys. 1992, 97, 2659.
+
+

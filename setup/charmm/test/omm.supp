@@ -1,0 +1,30 @@
+#
+# Valgrind suppressions for OpenMM libraries.
+# Usage example:
+# valgrind --suppressions=omm.supp ../exec/gnu/charmm < c37test/omm_dynamics.inp
+#
+{
+   plat_getname_Addr1
+   Memcheck:Addr1
+   fun:openmm_platform_getname_
+}
+{
+   plat_getommver_Addr1
+   Memcheck:Addr1
+   fun:openmm_platform_getopenmmversion_
+}
+{
+   plat_getplugindir_Addr1
+   Memcheck:Addr1
+   fun:openmm_platform_getdefaultpluginsdirectory_
+}
+{
+   plat_getpropval_Addr1
+   Memcheck:Addr1
+   fun:openmm_platform_getpropertyvalue_
+}
+{
+   strarr_get_Addr1
+   Memcheck:Addr1
+   fun:openmm_stringarray_get_
+}

@@ -1,0 +1,6727 @@
+MODULE DCM_FCM
+   USE CHM_KINDS
+   USE NUMBER
+
+!--------------------------------------------------------------------------------------------
+! THIS ROUTINE IMPLEMENTS THE DISTRIBUTED CHARGE MODEL (MIKE DEVEREUX, SHAMPA SANTRA,
+! MARKUS MEUWLY, JCTC 2014) WHERE OFF-CENTERED CHARGES ARE USED TO ADD MULTIPOLAR
+! ELECTROSTATICS TO MD SIMULATIONS
+!--------------------------------------------------------------------------------------------
+!
+! DEVELOPER NOTE: BE CAREFUL USING CHARMM'S ROUTINES TO CALCULATE THE VIRIAL. THE VIRIAL
+! REQUIRES THAT ATOMIC POSITIONS BE MULTIPLIED BY FORCES AT THAT POSITION, THE DCM ROUTINES
+! TRANSFER FORCES FROM VIRTUAL SITES TO NUCLEAR SITES SO VIRIAL CALCULATIONS MUST BE
+! CONSISTENT (I.E. CALCULATE VIRIAL AFTER FORCES HAVE BEEN TRANSFERED TO NUCLEI IN CENTRAL
+! CELL OR ADD A CORRECTION)
+!
+!--------------------------------------------------------------------------------------------
+!
+! TEST SUITE:
+! A COMPREHENSIVE TEST SUITE FOR DEVELOPMENT PURPOSES IS AVAILABLE FOR DOWNLOAD FROM
+! https://github.com/MMunibas/DCM-CHARMM-Test-Suite
+!
+!--------------------------------------------------------------------------------------------
+! GLOBAL VARIABLES:
+!
+! QDCM                  FLAG TO INDICATE TO EXTERNAL ROUTINES THAT DCM WILL BE USED
+! DCXYZ                 FLAG TO INDICATE THAT AN XYZ FILE OF DCM CHARGES SHOULD BE WRITTEN
+! DCMUL                 FLAG TO INDICATE THAT MULTIPOLES OF DCM RESIDUES SHOULD BE CALCULATED
+! (T)SHIFT ETC          FLAGS STORING WHAT TYPE OF CUTOFF SCHEME WILL BE USED (SEE NOTES BELOW)
+! QTI                   FLAG TO INDICATE THERMODYNAMIC INTEGRATION WILL BE PERFORMED
+! QPOL                  FLAG TO STATE AT LEAST ONE POLARIZABLE ATOM IS PRESENT IN SYSTEM
+! QIMG                  WHETHER THIS CALL IS FOR IMAGE ATOMS OR CENTRAL CELL
+! QWARNED               TO ENSURE WE DON'T THROW EXCESSIVE WARNINGS TO OUTPUT
+! QDCNB                 WHETHER WE NEED TO UPDATE THE DCM NONBONDED LISTS
+! IQDCNB                WHETHER WE NEED TO UPDATE THE DCM IMAGE NONBONDED LISTS
+! QDCNB14               WHETHER WE NEED TO UPDATE THE DCM 1-4 EXCLUSION LIST FOR PME
+! QFNB                  WHETHER WE NEED TO UPDATE THE FIELD NONBOND LIST FOR POLARIZATION TERM
+!
+! IUDCM                 FILE UNIT FOR DCM INPUT
+! IUDCXYZ               FILE UNIT FOR DCM CHARGE XYZ FILE
+! IUMUL                 FILE UNIT TO WRITE MULTIPOLE MOMENTS OF DCM RESIDUES
+! NF                    TOTAL NO. OF FRAMES IN SYSTEM
+! INF                   TOTAL NO. OF FRAMES IN IMAGES
+! NDQ                   TOTAL NO. OF DCM CHARGES IN CENTRAL CELL
+! INDQ                  TOTAL NO. OF DCM CHARGES IN IMAGES
+! NDP                   TOTAL NO. OF POLARIZABLE ATOMS IN SYSTEM
+! NATOMA                NO. OF ATOMS IN PRIMARY CELL (FOR USE WITH PERIODIC BOUNDARIES)
+! NATOMX1               NO. OF ATOMS IN PRIMARY CELL
+! NATIM                 NO. OF ATOMS INCLUDING IMAGES
+! MAXQ                  MAXIMUM ALLOWED DCM CHARGES PER ATOM
+! MAXPOL                MAXIMUM ALLOWED POLARIZABLE SITES PER ATOM
+! NALL                  NO. OF DCM CHARGES IN CURRENT ENERGY EVALUATION (CENTRAL CELL OR IMAGES)
+! NALLC                 NO. OF DCM CHARGES IN CENTRAL CELL ONLY
+! NQ                    NO. CHARGES FOR EACH ATOM IN EACH FRAME (ONE ATOM CAN APPEAR IN MORE
+!                       THAN ONE FRAME, CHARGES MAY ONLY APPEAR IN ONE OF THESE FRAMES)
+! NQA                   NO. CHARGES BELONGING TO EACH ATOM IN TOTAL
+! IDQ                   ARRAY LINKING ATOM NO. TO CORRESPONDING POSITION IN ARRAY OF
+!                       DCM CHARGES
+! FRAMEI                ARRAY LINKING FRAME NUMBER TO CORRESPONDING ATOM NUMBERS IN FRAME
+! AFRAME                ARRAY LINKING ATOM TO FRAME WHERE IT HAS NONZERO CHARGE
+! DPAIR                 ARRAY OF GEOMETRIC PAIRS OF DCM CHARGES (A1,B1,C1=-A2,-B2,-C2) (LEGACY...)
+! IREF                  INDEX OF REFERENCE ATOM IN CENTRAL CELL FOR EACH IMAGE ATOM
+! ATQ                   ARRAY LINKING DCM CHARGES TO ATOMS THEY BELONG TO
+! FRTYP                 ARRAY STORING WHETHER EACH FRAME USES BISECTOR Z-AXIS OR BOND Z-AXIS
+! INBLC,JNBLC           COPY OF INBL,JNBL NONBONDED LISTS FOR CENTRAL CELL ONLY
+! DNNB14                NO. OF DCM CHARGE 1-4 EXCLUSION INTERACTIONS FOR PME
+! DINB14,DIBLO14        CHARMM INB14,DIBLO14 EXCLUSION LIST EQUIVALENT FOR DCM CHARGES
+! DINBL,DJNBL           CHARMM INBL,JNBL NONBONDED LIST EQUIVALENT FOR DCM CHARGES
+! IDINBL,IDJNBL         CHARMM INBL,JNBL NONBONDED LIST EQUIVALENT FOR DCM CHARGES IN IMAGES
+!
+! PATCH VARIABLES (TO HANDLE PATCH ALTERATIONS TO DCM RESIDUES)
+! MOST ARE SET IN GENPSF.SRC
+!
+! DCMPATF               ARRAY OF PATCH ATOM SEGID, RESID, ATOM NO. IN RESIDUE FOR 'FIRST' PATCHES
+! DCMPATL               ARRAY OF PATCH ATOM SEGID, RESID, ATOM NO. IN RESIDUE FOR 'LAST' PATCHES
+! DCMNPATF              TOTAL NO. OF PATCH ATOMS IN 'FIRST' END PATCHES
+! DCMNPATL              TOTAL NO. OF PATCH ATOMS IN 'LAST' END PATCHES
+! DCMPATMOD             ARRAY OF RESIDUE ATOMS CHANGED BY PATCHES
+! DCMNPATMOD            NO. OF RESIDUE ATOMS CHANGED BY PATCHES
+! DCMPATDEL             ARRAY OF RESIDUE ATOMS DELETED BY PATCHES
+! DCMNPATDEL            NO. OF RESIDUE ATOMS DELETED BY PATCHES
+
+! MAXRQ                 MAXIMUM DISTANCE FROM A NUCLEUS TO ITS DCM CHARGE
+! TOKCAL                CONSTANT TO CONVERT ENERGY TO KCAL/MOL
+! DCLAMBDA              ENERGY SCALING FACTOR FOR T.I. WITHOUT PERT MODULE
+! AP                    POLARIZATION DAMPING CONSTANT
+! DCEWVIRIAL            TO HOLD DCM PME VIRIAL CORRECTION
+! EPOL                  VARIABLE TO HOLD CURRENT POLARIZATION ENERGY FOR PRINTING LATER
+! AQ,BQ,CQ              LOCAL AXIS DCM CHARGE COORDINATES
+! DQ                    DCM CHARGES
+! DPOL                  ATOMIC DIPOLAR POLARIZABILITIES
+! CGBAK                 TO SAVE ORIGINAL CHARMM CHARGE ARRAY FOR T.I. LAMBDA SWITCHING
+! XQAC                  STORE DCM CHARGE COORDINATES OF CENTRAL CELL ONLY FOR FIELD EVALUATIONS
+! B0AQ ETC              STORE AQ FOR LAMBDA=0 STATE (THERMODYNAMIC INTEGRATION)
+! B1AQ ETC              STORE AQ FOR LAMBDA=1 STATE (THERMODYNAMIC INTEGRATION)
+! DF1 ETC               GEOMETRIC DERIVATIVES FOR EACH DCM AXIS FRAME
+!
+! EWALD VARIABLES
+! KDCDXA/YA/ZA          ARRAY TO STORE K-SPACE FORCES TO PROVIDE CORRECT VIRIAL
+!
+! HALGREN VARIABLES
+! HALGTPY               CHARMM ATOM TYPE (NUMERIC VALUE) THAT WILL USE 14-7 TERM
+!
+!--------------------------------------------------------------------------------------------
+! MPI:
+! REAL MPI WORK IS DONE ELSEWHERE, NONBOND LIST ARRIVES HERE ALREADY DIVIDED BETWEEN NODES
+!
+! VARIABLES:
+! MYNOD                 INDEX OF CURRENT NODE (CORE/PROCESSOR)
+! MYNODP                MYNOD+1
+! NUMNOD                TOTAL NO. OF NODES (CORES/PROCESSORS)
+!--------------------------------------------------------------------------------------------
+! PERDIODIC BOUNDARIES:
+! THE VARIOUS ARRAYS NEED TO BE ENLARGED TO ACCOMMODATE THE ADDITIONAL IMAGE ATOMS, THIS IS
+! DONE IN IMGINIT. THE DCME ROUTINE IS CALLED TWICE FOR EACH ENERGY EVALUATION, ONCE FOR THE
+! PRIMARY CELL AND ONCE FOR THE IMAGE ATOMS. IMAGE ATOM CALLS ARE RECOGNIZED BY THE NATOMX VS
+! NATIM COMPARISON OR BY THE QIMG FLAG.
+!--------------------------------------------------------------------------------------------
+! SUPPORTED OPTIONS:
+!
+! SMOOTH CUTOFFS: SPECIFICALLY SHIFT, FSHIFT AND SWITCH FUNCTIONS. PARAMETERS SUCH AS CUTOFF
+! DISTANCE ARE TAKEN FROM CHARMM'S NONBONDED INPUT SPECIFICATION, BUT WHICH FUNCTION IS USED
+! FOR DCM MUST BE SPECIFIED IN THE DCM SECTION OF THE CHARMM INPUT FILE. THE "TSHIFT" VS
+! "SHIFT" DISTINCTION RELATES TO WHETHER WE USE THE NUCLEAR-NUCLEAR DISTANCE TO EVALUATE THE
+! CUTOFF FUNCTION FOR ALL CHARGES BELONGING TO A GIVEN ATOM ("SHIFT"), OR WHETHER WE USE THE
+! CHARGE-CHARGE DISTANCE DIRECTLY ("TSHIFT", PREFERRED)
+!
+! PARTICLE MESH EWALD SUMMATION SUPPORT HAS BEEN ADDED BY CALLING CHARMM'S INTERNAL REAL
+! AND K-SPACE ROUTINES FROM THE DCM ROUTINE AFTER CONSTRUCTING APPROPRIATE EXCLUSION LISTS
+! AND CHARGE AND COORDINATE ARRAYS. AN INTERNAL VIRIAL CORRECTION TERM IS NECESSARY
+!
+! DIPOLAR POLARIZABILITIES ARE IMPLEMENTED WITH DCM CHARGES, BUT ARE NOT YET COMPATIBLE WITH
+! K-SPACE TERMS FOR PARTICLE MESH EWALD
+!
+! THERMODYNAMIC INTEGRATION IS POSSIBLE USING CHARMM'S "PERT" MODULE. AS WELL AS THE USUAL
+! PERT KEYWORDS, THE INPUT FILE MUST DEFINE LAMBDA=0 AND LAMBDA=1 DCM STATES USING A
+! SEPARATE PARAMETER FILE FOR EACH STATE
+!
+! PERIODIC BOUNDARIES: AUTOMATICALLY ACTIVATED WHEN PERIODIC BOUNDARIES ARE SET UP IN THE
+! CHARMM INPUT FILE
+!
+!--------------------------------------------------------------------------------------------
+   LOGICAL, SAVE :: QDCM = .FALSE., DCXYZ = .FALSE., DCMUL = .FALSE., FLUX = .FALSE., SWITCH = .FALSE., SHIFT = .TRUE., &
+                    FSHIFT = .FALSE., WRNFLAG = .TRUE., TSHIFT = .FALSE., QTI = .FALSE., &
+                    TFSHIFT = .FALSE., QPOL = .FALSE., QIMG = .FALSE., QWARNED = .FALSE., QDCNB = .TRUE., &
+                    IQDCNB = .TRUE., QDCNB14 = .TRUE., QFNB = .TRUE., DIPO = .FALSE., QHALG = .FALSE., KERN = .FALSE.
+   INTEGER, SAVE :: IUDCM, IUDCXYZ, IUMUL, IUDIPO, IUFLUX, IUKERN, NTRAIN
+   INTEGER, SAVE :: NF, INF, NDQ, NDP, NATOMA, INDQ, MAXQ = 7, MAXPOL = 1, NATOMX1, NALL, NALLC
+   INTEGER, SAVE :: NATIM = 0
+   INTEGER, SAVE :: ISTEP = 0
+   INTEGER, SAVE :: STEPCOUNT = 0
+   INTEGER, SAVE :: NSAVDIPO = 1
+   INTEGER, SAVE :: HALGTYP = 0
+   INTEGER, SAVE, ALLOCATABLE :: NQ(:, :), NQA(:), IDQ(:), FRAMEI(:, :), AFRAME(:, :), DPAIR(:), &
+                                 IREF(:), ATQ(:), SELAT(:), SELDIP(:), FLXFRS(:)
+   INTEGER, SAVE, ALLOCATABLE :: FRTYP(:), INBLC(:), JNBLC(:), DNNB14, DINB14(:), DIBLO14(:)
+   INTEGER, SAVE, TARGET, ALLOCATABLE :: DINBL(:), DJNBL(:), IDINBL(:), IDJNBL(:)
+   INTEGER, SAVE :: DCMNPATF = 0, DCMNPATL = 0, DCMNPATMOD = 0, DCMNPATDEL = 0
+   INTEGER, SAVE, ALLOCATABLE :: DCMPATMOD(:, :), DCMPATDEL(:, :), DCMPATF(:, :), DCMPATL(:, :) ! (:,4)
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: DCMCHGF(:), DCMCHGL(:)
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: DCMPATCG(:)
+   REAL(CHM_REAL), SAVE :: MAXRQ, TOKCAL = 332.0716D0, DCLAMBDA = 1.D0, AP = 0.23616D0, DCEWVIRIAL(9), &
+                           EPOL
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: AQ(:), BQ(:), CQ(:), DQ(:), DPOL(:), CGBAK(:)
+
+   REAL(CHM_REAL),SAVE,ALLOCATABLE :: DADX1(:),DBDY1(:),DCDZ1(:),DADX2(:),DBDY2(:),DCDZ2(:),DADX3(:),DBDY3(:),DCDZ3(:),DADY1(:),DBDZ1(:),DCDX1(:),DADY2(:),DBDZ2(:),DCDX2(:),DADY3(:),DBDZ3(:),DCDX3(:),DADZ1(:),DBDX1(:),DCDY1(:),DADZ2(:),DBDX2(:),DCDY2(:),DADZ3(:),DBDX3(:),DCDY3(:)
+
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: XQAC(:), YQAC(:), ZQAC(:)
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: B0AQ(:), B0BQ(:), B0CQ(:), B0DQ(:), B0DPOL(:)
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: B1AQ(:), B1BQ(:), B1CQ(:), B1DQ(:), B1DPOL(:)
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: DF1(:), DF2(:), DF3(:), &
+                                        DF4(:), DF5(:), DF6(:), &
+                                        DF7(:), DF8(:), DF9(:), &
+                                        DF10(:), DF11(:), DF12(:), &
+                                        DF13(:), DF14(:), DF15(:), &
+                                        DF16(:), DF17(:), DF18(:), &
+                                        DF19(:), DF20(:), DF21(:), &
+                                        DF22(:), DF23(:), DF24(:), &
+                                        DF25(:), DF26(:), DF27(:)
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: KDCDXA(:), KDCDYA(:), KDCDZA(:)
+
+   CHARACTER(len=4), SAVE, ALLOCATABLE :: FLUX_TYPES(:)
+
+!  Kernels
+   CHARACTER(len=128), SAVE, ALLOCATABLE :: KERNTXT(:)
+   REAL(chm_real), SAVE, ALLOCATABLE :: XFIT(:, :), ALPHAS(:, :)
+
+   INTEGER, ALLOCATABLE :: A2D(:, :), A2P(:, :), A2R(:)
+   INTEGER :: NDCMR, RR
+
+   REAL(chm_real), SAVE, ALLOCATABLE :: XINPUT(:, :), DXIN(:, :, :)
+
+   ! extra derivatvies
+   REAL(chm_real), SAVE, ALLOCATABLE :: TMPDX(:, :, :, :), TMPDX2(:, :, :, :)
+   INTEGER, SAVE, ALLOCATABLE :: XKERNATMS(:, :)
+
+   REAL(CHM_REAL) :: A02ANG = 0.52917721067_CHM_REAL
+   REAL(CHM_REAL) :: RAD2DEG = 57.295779513_CHM_REAL
+   INTEGER, SAVE :: NATMK, NKDIST, NKERNC
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FLUX_PARMS(:, :, :) !
+
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPX1(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPX2(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPX3(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPX4(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPY1(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPY2(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPY3(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPY4(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPZ1(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPZ2(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPZ3(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: FPZ4(:) !
+   REAL(CHM_REAL), SAVE, ALLOCATABLE :: DTX1(:), DTX2(:), DTX3(:), DTY1(:), DTY2(:), DTY3(:), DTZ1(:), DTZ2(:), DTZ3(:)
+
+CONTAINS
+
+!-------------
+! SUBROUTINES:
+! ------------
+! DCM
+! DCME
+! EQQ
+! DCMNBONDS
+! GETEPOL
+! FIELD
+! DCMNNCUTOFF
+! DCMNBOND14LIST
+! ADD_DCM_RECIP_F
+! DCMSETIM
+! DCMNBUP
+! ADD_TORQUES
+! DCMINIT
+! PATCHRES
+! IMGINIT
+! AXIS1
+! AXIS2
+! FINDPAIR
+! DCMXYZFILE
+! DCLAM
+! DCCHGCOPY
+! DCENDSTATE
+! DC_CHLAMBDA
+! DCMEPRINT
+! DCMULT
+!-------------
+
+!*******************************************************************************************
+!                       DCM
+!*******************************************************************************************
+! ROUTINE TO PARSE THE INPUT FILE OPTIONS
+!*******************************************************************************************
+
+   SUBROUTINE DCM
+      USE CHM_KINDS
+      USE STREAM, ONLY: OUTU, PRNLEV
+      USE COMAND, ONLY: COMLEN, COMLYN
+      USE STRING, ONLY: NEXTA4, NEXTI, NEXTF
+      USE PSF, ONLY: NATOM
+      USE COORD
+      USE ALLOCATION
+      USE SELECT
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: COMM_CHARMM, MYNOD
+      USE MPI, ONLY: MPI_REAL8, MPI_LOGICAL, MPI_INTEGER
+#endif
+      IMPLICIT NONE
+
+      CHARACTER(LEN=4) WRD
+      INTEGER IERROR, I
+      LOGICAL FLAG
+
+      IF (.NOT. ALLOCATED(SELAT)) THEN
+         CALL CHMALLOC('DCM.SRC', 'DCM', 'SELAT', NATOM, INTG=SELAT)
+         CALL CHMALLOC('DCM.SRC', 'DCM', 'SELDIP', NATOM, INTG=SELDIP) ! TO HOLD WHICH ATOMS WE USE TO EVALUATE DIPOLE MOMENT
+         SELAT(1:NATOM) = 1  ! SELECT ALL ATOMS FOR XYZ FILE BY DEFAULT
+         SELDIP(1:NATOM) = 1 ! SELECT ALL ATOMS FOR DIPOLE FILE BY DEFAULT
+      END IF
+
+! WARN/DIE IF DCM MODULE WAS ALREADY INITIALIZED AND NOT DOING THERMODYNAMIC INTEGRATION:
+      IF (QDCM .AND. (.NOT. QTI)) THEN
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, '(A)') ' DCM> ERROR: MODULE IS BEING INITIALIZED FOR THE SECOND TIME. PLEASE PERFORM'
+            WRITE (OUTU, '(A)') '             INITIALIZATION ONLY ONCE PER RUN (AFTER SYSTEM SETUP)'
+            WRITE (OUTU, '(A)') '             IF ATTMEPTING THERMODYNAMIC INTEGRATION, PLEASE REFER TO '
+            WRITE (OUTU, '(A)') '             DOCUMENTATION FOR CORRECT SETUP'
+         END IF
+         CALL WRNDIE(-1, '<DCM> DCM', 'DCM ALREADY INITIALIZED')
+      END IF
+
+      QDCM = .TRUE.
+      FLAG = .TRUE.
+
+      IF (QTI) THEN
+#if KEY_PARALLEL==1
+         IF (MYNOD .EQ. 0) THEN ! IF IN NODE 0
+#endif
+            WRD = NEXTA4(COMLYN, COMLEN)
+            IF (WRD .NE. 'S1') THEN
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> ERROR: EXPECTING S1 KEYWORD FOR THERMODYNAMIC INTEGRATION'
+                  WRITE (OUTU, '(2A)') '      READ: ', WRD
+               END IF
+               CALL WRNDIE(-1, '<DCM> DCM', 'DCM TI ERROR')
+            END IF
+            IUDCM = NEXTI(COMLYN, COMLEN)
+#if KEY_PARALLEL==1
+         END IF
+#endif
+         CALL DCENDSTATE
+         RETURN
+      END IF
+
+#if KEY_PARALLEL==1
+      IF (MYNOD .EQ. 0) THEN
+#endif
+         DO WHILE (FLAG)
+            WRD = NEXTA4(COMLYN, COMLEN)
+            IF (WRD .EQ. 'IUDC') THEN
+               IUDCM = NEXTI(COMLYN, COMLEN)
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A,I4)') ' DCM> INPUT FILE FOR DCM CHARGES: UNIT ', IUDCM
+               END IF
+            ELSEIF (WRD .EQ. 'XYZ') THEN
+               DCXYZ = .TRUE.
+               IUDCXYZ = NEXTI(COMLYN, COMLEN)
+!        OPEN(UNIT=IUDCXYZ,FILE='DCM.XYZ',STATUS='REPLACE')
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> WORD XYZ'
+                  WRITE (OUTU, '(A,I4)') ' DCM> DCM CHARGE COORDS WILL BE WRITTEN TO FILE UNIT ', IUDCXYZ
+               END IF
+               CALL SELCTA(COMLYN, COMLEN, SELAT, X, Y, Z, WMAIN, .TRUE.)
+
+               ! ACTIVATE HALGREN 14-7 REPULSION FOR A SINGLE ATOM TYPE (MEANT FOR IAMOEBA H2O)
+            ELSEIF (WRD .EQ. 'HALG') THEN
+               QHALG = .TRUE.
+               HALGTYP = NEXTI(COMLYN, COMLEN) ! READ ATOM TYPE
+               WRITE (OUTU, '(A,I4)') ' DCM> HALGREN 14-7 TERM WILL BE USED FOR ATOMS OF TYPE', &
+                  HALGTYP
+
+               !
+               !
+               ! Geometrically dependant flux selected.
+            ELSEIF (WRD .EQ. 'FLUX') THEN
+               !IUFLUX = NEXTI(COMLYN, COMLEN)
+               !IF (PRNLEV .GT. 1) THEN
+               !   WRITE (OUTU, '(A,I4)') ' DCM> INPUT FILE FOR FLUX DCM CHARGES: UNIT ', IUFLUX
+               !END IF
+               FLUX = .TRUE.
+               WRITE (OUTU, '(A)') 'DCM> GEOMETRICALLY DEPENDENT CHARGE FLUX SELECTED.'
+
+            !  Kernel
+            ELSEIF (WRD .EQ. 'KERN') THEN
+               IUKERN = NEXTI(COMLYN, COMLEN)
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A,I4)') ' DCM> INPUT FILE FOR KERN DCM CHARGES: UNIT ', IUKERN
+               END IF
+               KERN = .TRUE.
+               WRITE (OUTU, '(A)') 'DCM> GEOMETRICALLY DEPENDENT CHARGE FLUX SELECTED.'
+
+            ! PRINT OUT DIPOLE
+            ELSEIF (WRD .EQ. 'DIP') THEN
+               DIPO = .TRUE.
+               IUDIPO = NEXTI(COMLYN, COMLEN)
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> WORD DIPO'
+                  WRITE (OUTU, '(A,I4)') ' DCM> DIPOLE VEC OF DCM CHGS WILL BE WRITTEN TO FILE UNIT ', IUDIPO
+               END IF
+               CALL SELCTA(COMLYN, COMLEN, SELDIP, X, Y, Z, WMAIN, .TRUE.)
+               !SAVE INTERVAL FOR DIPO
+            ELSEIF (WRD .EQ. "DSAV") THEN
+               NSAVDIPO = NEXTI(COMLYN, COMLEN)
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> WORD DSAV'
+                  WRITE (OUTU, '(A,I4,A)') ' DCM> DIPOLE DATA WILL BE WRITTEN EVERY ', NSAVDIPO, ' DYNA STEPS'
+               END IF
+            ELSEIF (WRD .EQ. 'MUL') THEN
+               DCMUL = .TRUE.
+               IUMUL = NEXTI(COMLYN, COMLEN)
+               OPEN (UNIT=IUMUL, FILE='DCM.PUNCH', STATUS='REPLACE')
+               CLOSE (IUMUL)
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> WORD MUL'
+                  WRITE (OUTU, '(A)') ' DCM> MULTIPOLE MOMENTS CALCULATED FROM DCM CHARGES WILL'
+                  WRITE (OUTU, '(A)') ' DCM> BE WRITTEN TO FILE DCM.PUNCH'
+               END IF
+            ELSEIF (WRD .EQ. 'SWIT') THEN
+               SWITCH = .TRUE.
+               SHIFT = .FALSE.
+               TSHIFT = .FALSE.
+               TFSHIFT = .FALSE.
+               FSHIFT = .FALSE.
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> SWITCH FUNCTION WILL BE USED FOR CUTOFFS'
+               END IF
+            ELSEIF (WRD .EQ. 'SHIF') THEN
+               SHIFT = .TRUE.
+               TSHIFT = .FALSE.
+               TFSHIFT = .FALSE.
+               SWITCH = .FALSE.
+               FSHIFT = .FALSE.
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> SHIFT FUNCTION WILL BE USED FOR CUTOFFS'
+               END IF
+            ELSEIF (WRD .EQ. 'FSHI') THEN
+               FSHIFT = .TRUE.
+               SWITCH = .FALSE.
+               SHIFT = .FALSE.
+               TSHIFT = .FALSE.
+               TFSHIFT = .FALSE.
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> FORCE SHIFT FUNCTION WILL BE USED FOR CUTOFFS'
+               END IF
+            ELSEIF (WRD .EQ. 'TSWI') THEN
+               SWITCH = .FALSE.
+               SHIFT = .FALSE.
+               TSHIFT = .FALSE.
+               TFSHIFT = .FALSE.
+               FSHIFT = .FALSE.
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> TIPNP SWITCH FUNCTION WILL BE USED FOR CUTOFFS'
+               END IF
+            ELSEIF (WRD .EQ. 'TSHI') THEN
+               SWITCH = .FALSE.
+               SHIFT = .FALSE.
+               TFSHIFT = .FALSE.
+               TSHIFT = .TRUE.
+               FSHIFT = .FALSE.
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> TIPNP SHIFT FUNCTION WILL BE USED FOR CUTOFFS'
+               END IF
+            ELSEIF (WRD .EQ. 'TFSH') THEN
+               SWITCH = .FALSE.
+               SHIFT = .FALSE.
+               TFSHIFT = .TRUE.
+               TSHIFT = .FALSE.
+               FSHIFT = .FALSE.
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> TIPNP FSHIFT FUNCTION WILL BE USED FOR CUTOFFS'
+               END IF
+            ELSEIF (WRD .EQ. 'LAMB') THEN
+               DCLAMBDA = NEXTF(COMLYN, COMLEN)
+               TOKCAL = 332.0716D0*DCLAMBDA
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A,F9.5)') ' DCM> THERMODYNAMIC INTEGRATION SELECTED, WITH LAMBDA', &
+                     ' SCALING FACTOR ', DCLAMBDA
+               END IF
+            ELSEIF (WRD .EQ. 'DAMP') THEN
+               AP = NEXTF(COMLYN, COMLEN)
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> POLARIZABILITY DAMPING CONSTANT ''A'' WILL BE USER-DEFINED:'
+                  WRITE (OUTU, '(A,F14.8)') ' DCM> A=', AP
+               END IF
+            ELSEIF (WRD .EQ. '') THEN
+               EXIT
+            ELSE
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(2A)') ' DCM> USER OPTION WAS ', WRD
+               END IF
+               CALL WRNDIE(1, '<DCM> DCM', 'UNRECOGNISED DCM OPTION')
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> NO FURTHER OPTIONS WILL BE PARSED'
+               END IF
+               EXIT
+            END IF
+         END DO
+         IF (SHIFT) THEN
+            IF (PRNLEV .GT. 1) THEN
+               WRITE (OUTU, '(A)') ' DCM> SHIFT FUNCTION WILL BE USED FOR CUTOFFS'
+            END IF
+         END IF
+#if KEY_PARALLEL==1
+      END IF ! MYNOD.EQ.0
+
+      CALL MPI_BARRIER(COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(FLUX, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR) !  ALLOCATE FLUX TO OTHER MPI NODES HERE?
+
+#endif
+
+      NATOMA = NATOM ! SET NUMBER OF ATOMS IN PRIMARY CELL
+      CALL DCMINIT(NATOM)
+
+#if KEY_PARALLEL==1
+      CALL MPI_BARRIER(COMM_CHARMM, IERROR)
+      ! BROADCAST DATA TO OTHER NODES
+      CALL MPI_BCAST(SWITCH, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(SHIFT, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(TSHIFT, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(TFSHIFT, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(FSHIFT, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(QHALG, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(TOKCAL, 1, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(SELAT, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(SELDIP, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(HALGTYP, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(FLUX, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+
+#endif
+      ! FLUSH(6)
+      RETURN
+   END SUBROUTINE DCM
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                       DCM ENERGY
+!*******************************************************************************************
+!
+! ROUTINE TO CALCULATE THE DCM ELECTROSTATIC ENERGY AND FORCES OF THE SYSTEM
+! ENERGY IS ADDED TO ETERM(ELEC) FOR PRIMARY CELL, ETERM(IMELEC) FOR IMAGE ATOMS
+! **ALL POLARIZATION ENERGY IS ADDED TO ETERM(IMELEC) IMAGE TERM!**
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCME(NATOMX, INBL, JNBL, ENB, EEL, BNBNDIBLO14, BNBNDINB14, QECONTX, ECONTX, &
+                   EPS, NNB14, KAPPA, ERFMOD, EWLDEX, X, Y, Z, DX, DY, DZ, CTONNB, CTOFNB &
+#if KEY_FLUCQ==1
+                   , QFLUC, FQCFOR &
+#endif
+                   )
+
+!  USE NEW_TIMER,ONLY:TIMER_START,TIMER_STOP,T_DCM
+
+      USE CHM_KINDS
+      USE STREAM, ONLY: OUTU, PRNLEV
+      ! PME ENERGY AND VIRIAL TERMS
+      USE PME_MODULE, ONLY: PME, QPME ! PME ROUTINE AND FLAG
+      USE ENERGYM, ONLY: ETERM, QETERM, EWKSUM, EWSELF, EWQCOR, EWUTIL, EWEXCL, &
+           EPRESS, VIXX, VIZZ, VEXX, VEZZ
+      USE PRSSRE, ONLY: VIRTOT
+#if KEY_IMCUBES==1
+      use INBND, only: LBYCBIM ! ONLY NEEDED FOR COMPATIBILITY CHECK
+#endif
+#if KEY_PHMD==1 /*phmd_outer*/
+      USE PHMD, ONLY: QPHMD  ! PME-CPHMD -- REQUIRED BY PME ROUTINE
+#endif
+
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: COMM_CHARMM, MYNOD
+      USE MPI, ONLY: MPI_REAL8, MPI_IN_PLACE, MPI_INTEGER, MPI_SUM !,MPI_COMM_WORLD
+#endif
+      IMPLICIT NONE
+
+!  X,Y,Z            ATOMIC COORDINATES
+!  DX,DY,DZ         FORCES. APPEND (DE/DX,...)
+!  EX,EY,EZ         ELECTRIC FIELD COMPONENTS (FOR POLARIZATION)
+!  NATOMX           NUMBER OF ATOMS
+!  INBL             CHARMM NONBOND LIST - ARRAY OF NONBONDED PARTNERS
+!  RESDC            DCM RESIDUE NAMES
+!  MAXQ             MAX ALLOWED DCM CHARGES PER ATOM
+!  MAXPOL           MAX ALLOWED POLARIZABILITIES PER ATOM (CURRENTLY 1)
+!  MAXRFR           MAX ALLOWED FRAMES PER RESIDUE
+!  MAXRA            MAX ALLOWED ATOMS PER RESIDUE
+!  NDCMRES          TOTAL NO. DCM RESIDUES
+!  NALL             NO. DCM + CENTRAL CHARGES
+!  NRES             FROM PSF: TOTAL NUMBER OF RESIDUES
+!  RAQ,RBQ,RCQ      REFERENCE RESIDUE A,B,C COORDINATES FOR DCM CHARGES
+!  RDQ              REFERENCE RESIDUE DCM CHARGES
+!  RNFRAME          NUMBER OF FRAMES IN EACH REFERENCE RESIDUE
+!  RNQ              NUMBER OF CHARGES FOR EACH ATOM IN EACH FRAME IN EACH REFERENCE RESIDUE
+!  RFRAMEI          ATOM INDEX OF EACH ATOM IN EACH FRAME OF EACH REFERENCE RESIDUE
+!  XQ,YQ,ZQ         XYZ COORDS OF EACH DCM CHARGE IN GLOBAL AXIS
+!  DQ               DCM CHARGE ARRAY
+!  DCDX,DCDY,DCDZ   LOCAL FORCE ARRAY FOR DCM CHARGES
+!  DCDXA...         LOCAL FORCE ARRAY FOR DCM + CENTRAL CHARGES
+!  XEI,XEJ,XEK      I,J,K COMPONENTS OF LOCAL X-AXIS VECTOR IN GLOBAL COORDINATES
+!  DXEIDA1X         PARTIAL DERIVATIVE OF LOCAL X-AXIS I-COMPONENT WRT CHANGE IN X-COORD
+!                   OF ATOM 1 IN LOCAL FRAME
+
+      INTEGER NATOMX, NATOM0, IERROR
+      INTEGER I, J, K, L, N, ITEMP, II
+      INTEGER, PARAMETER :: WDMAX = 20
+      INTEGER INBL(:), JNBL(:)
+      INTEGER BNBNDIBLO14(:), BNBNDINB14(:)     ! FOR EWALD EXCL ENERGY
+
+      ! FOR EWALD EXCL ENERGY:
+      INTEGER NNB14, ERFMOD
+      LOGICAL QECONTX
+      REAL(CHM_REAL) ECONTX(*), EPS, KAPPA
+      EXTERNAL EWLDEX
+#if KEY_FLUCQ==1
+      LOGICAL QFLUC
+      REAL(CHM_REAL) FQCFOR(*)
+#endif
+
+      REAL(CHM_REAL) TELEC, TOTELEC ! PARAMETERS FOR EVALUATING ENERGY
+      REAL(CHM_REAL) X(*), Y(*), Z(*), DX(*), DY(*), DZ(*), CTONNB, CTOFNB
+      REAL(CHM_REAL) DCGTOT
+      REAL(CHM_REAL) ENB, EEL
+
+      REAL(CHM_REAL), ALLOCATABLE :: XQ(:), YQ(:), ZQ(:)
+      REAL(CHM_REAL), ALLOCATABLE :: EX(:), EY(:), EZ(:)
+      REAL(CHM_REAL), ALLOCATABLE :: XEI(:, :), XEJ(:, :), XEK(:, :) ! modify for flux
+      REAL(CHM_REAL), ALLOCATABLE :: YEI(:, :), YEJ(:, :), YEK(:, :)
+      REAL(CHM_REAL), ALLOCATABLE :: ZEI(:, :), ZEJ(:, :), ZEK(:, :)
+      REAL(CHM_REAL), ALLOCATABLE :: DCDXA(:), DCDYA(:), DCDZA(:)
+
+!  print*,'starting dcme',MYNOD,NATOMX,NATIM,NATOMX1,QIMG
+!  CALL TIMER_START(T_DCM)
+#if KEY_IMCUBES==1
+      ! CATCH USER CALLING DCM ALONG WITH INCOMPATIBLE BYCB OPTION
+      IF (LBYCBIM) THEN
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A)') ' DCM> ERROR: DCM MODULE IS BEING CALLED TOGETHER &
+      &WITH INCOMPATIBLE BYCB OPTION'
+               END IF
+               CALL WRNDIE(-1, '<DCM> DCM', 'BYCB OPTION IN NBONDS IS NOT COMPATIBLE')
+      END IF
+#endif /* KEY_IMCUBES */
+      NATOM0 = NATOMX
+      IF (NATIM .EQ. NATOMA) NATIM = 0 !CATCH PERIODIC SYSTEM WITH NO IMAGE ATOMS WITHIN CUTOFFS
+      IF (QDCM) THEN
+
+         IF (NATOMX .EQ. 0) THEN
+            ! PROBABLY UNNECESSARY, NATOMX IS ALWAYS # ATOMS IN SYSTEM, ONLY # ATOMS IN NONBONDED
+            ! LIST CAN BE ZERO FOR A GIVEN CORE
+#if KEY_PARALLEL==1
+            IF (PRNLEV .GT. 1) THEN
+               WRITE (OUTU, '(A,I4,A)') '<DCM> WARNING: THREAD # ', MYNOD, ' HAS ZERO ATOMS &
+               &IN ITS SYSTEM.'
+            END IF
+            FLUSH (OUTU)
+            CALL WRNDIE(2, '<DCM> DCME', 'WARNING: THREAD # ', MYNOD, ' HAS ZERO ATOMS &
+            &IN ITS SYSTEM.')
+#else
+            CALL WRNDIE(0, '<DCM> DCME', 'WARNING: ZERO ATOMS IN SYSTEM FOR SERIAL JOB!')
+#endif
+         END IF
+
+!    IF(QPOL.AND.QPME)THEN
+!     CALL WRNDIE(0,'<DCM> DCME','ERROR: DIPOLAR POLARIZATION WITH EWALD SUMMATION IS NOT YET IMPLEMENTED')
+!    ENDIF
+
+         ! INITIALIZE DCM ARRAYS FOR THIS TIME STEP / GEOMETRY
+         IF (QIMG) THEN !IMAGE RUN
+            NALL = INDQ + NDQ
+            ALLOCATE (XQ(INDQ + NDQ), YQ(INDQ + NDQ), ZQ(INDQ + NDQ))
+            ALLOCATE (DCDXA(NALL), DCDYA(NALL), DCDZA(NALL))
+         ELSE !CENTRAL CELL / NO IMAGES
+            NALL = NDQ
+            ALLOCATE (XQ(NDQ), YQ(NDQ), ZQ(NDQ))
+            ALLOCATE (DCDXA(NALL), DCDYA(NALL), DCDZA(NALL))
+         END IF
+         XQ = 0.D0
+         YQ = 0.D0
+         ZQ = 0.D0
+         EPOL = 0.D0
+         DCDXA = 0.D0
+         DCDYA = 0.D0
+         DCDZA = 0.D0
+
+         ALLOCATE (XEI(NF, 3), XEJ(NF, 3), XEK(NF, 3), YEI(NF, 3), YEJ(NF, 3), YEK(NF, 3), &
+                   ZEI(NF, 3), ZEJ(NF, 3), ZEK(NF, 3))
+         XEI = 0.D0
+         XEJ = 0.D0
+         XEK = 0.D0
+         YEI = 0.D0
+         YEJ = 0.D0
+         YEK = 0.D0
+         ZEI = 0.D0
+         ZEJ = 0.D0
+         ZEK = 0.D0
+         ! FINISH INITIALIZING DCM ARRAYS
+
+         ! INITIALIZE POLARIZATION ARRAYS
+         IF (QPOL) THEN ! DETERMINE SIZE OF NONBONDED ARRAY (MIGHT BE ALREADY STORED SOMEWHERE ELSE...)
+            IF (.NOT. TSHIFT .AND. .NOT. TFSHIFT .AND. .NOT. QPME) THEN
+               CALL WRNDIE(-5, '<DCM> DCME', 'ERROR, CUTOFF SCHEME MUST BE TSHIFT, &
+               &TFSHIFT OR PME WHEN USING POLARIZABLE CENTERS WITH DCM')
+            END IF
+            IF (QPME .AND. .NOT. QWARNED) THEN
+               CALL WRNDIE(1, '<DCM> DCME', 'K-SPACE FIELD IS NOT YET IMPLEMENTED FOR DCM POLARIZATION &
+               &TERM, DIPOLES WILL BE INDUCED BY REAL-SPACE FIELD ONLY!')
+               QWARNED = .TRUE.
+            END IF
+            IF (.NOT. QIMG) THEN        !COPY ARRAY OF CENTRAL CELL
+               NATOMX1 = NATOMX
+            END IF
+            IF (QIMG .OR. NATIM .EQ. 0) THEN
+               N = NATOMX
+               ALLOCATE (EX(N), EY(N), EZ(N), SOURCE=0.D0)
+            END IF
+            IF (QFNB .AND. .NOT. QIMG .AND. NATIM .NE. 0) THEN ! UPDATE AND SAVE NBONDLIST FOR CENTRAL CELL
+               IF (ALLOCATED(INBLC)) THEN
+                  DEALLOCATE (INBLC, JNBLC)
+               END IF
+               ALLOCATE (INBLC(NATOMX), JNBLC(INBL(NATOMX)))
+               ITEMP = 0
+               DO I = 1, NATOMX
+                  IF (I > 1) THEN
+                     ITEMP = INBL(I - 1)                   ! INDEX OF START POSN IN NONBONDED LIST FOR J
+                  END IF
+                  INBLC(I) = INBL(I)
+                  DO J = ITEMP + 1, INBL(I)
+                     JNBLC(J) = JNBL(J)
+                  END DO
+               END DO
+               QFNB = .FALSE.
+            END IF
+         END IF ! IF QPOL
+         ! FINISH INITIALIZING POLARIZATION ARRAYS
+
+         ! DCM CHARGE NONBONDED LIST
+         IF (QPME) THEN ! UPDATE 14 EXCLUSION LIST FOR PME
+            IF (QDCNB14 .AND. (.NOT. QIMG .OR. NATIM .EQ. 0)) THEN
+               IF (ALLOCATED(DIBLO14)) THEN
+                  DEALLOCATE (DIBLO14, DINB14)
+                  DNNB14 = 0
+               END IF
+               ALLOCATE (DIBLO14(NALL), DINB14(NNB14*(MAXQ + 1)*(MAXQ + 1)))
+               CALL DCMNBOND14LIST(NATOMX, BNBNDINB14, BNBNDIBLO14)
+               QDCNB14 = .FALSE.
+            END IF
+         END IF
+
+! WRITE(OUTU,*) "DCME:", QIMG
+
+         ! CALCULATE DCM CHARGE POSITIONS USING LOCAL FRAMES
+         ! FIRST FIND LOCAL AXIS SYSTEM FOR EACH ATOM PLUS DERIVATIVES
+         CALL AXIS1(X, Y, Z, XEI, &
+                    XEJ, XEK, YEI, YEJ, YEK, ZEI, ZEJ, ZEK, NATOM0, XQ, YQ, ZQ)
+         CALL AXIS2(X, Y, Z, XEI, &
+                    XEJ, XEK, YEI, YEJ, YEK, ZEI, ZEJ, ZEK, NATOM0, XQ, YQ, ZQ)
+
+         ! ADD POSITIONS AND GEOM. DERIVATIVES FOR DCM CHARGES OF IMAGE ATOMS:
+         IF (QIMG) THEN
+            ! WRITE(OUTU,*) "DCME:QIMG"
+            DO I = NATOMA + 1, NATOM0 ! FIRST IMAGE ATOM TO TOTAL NO. ATOMS
+               DO J = 0, NQA(I) - 1
+                  K = IDQ(I) + J  ! IMAGE
+                  L = IDQ(IREF(I)) + J ! CENTRAL CELL
+                  ! DIFFERENCE BETWEEN IMAGE AND CENTRAL CELL
+                  XQ(K) = XQ(L) - X(IREF(I)) + X(I)  ! CALC DCM CHG POSNS FROM PRIMARY CELL ATOMS TO SAVE REPEATING WORK
+                  YQ(K) = YQ(L) - Y(IREF(I)) + Y(I)
+                  ZQ(K) = ZQ(L) - Z(IREF(I)) + Z(I)
+                  DF1(K) = DF1(L)                ! DO THE SAME FOR AXIS SYSTEM DERIVATIVES
+                  DF2(K) = DF2(L)
+                  DF3(K) = DF3(L)
+                  DF4(K) = DF4(L)
+                  DF5(K) = DF5(L)
+                  DF6(K) = DF6(L)
+                  DF7(K) = DF7(L)
+                  DF8(K) = DF8(L)
+                  DF9(K) = DF9(L)
+                  DF10(K) = DF10(L)
+                  DF11(K) = DF11(L)
+                  DF12(K) = DF12(L)
+                  DF13(K) = DF13(L)
+                  DF14(K) = DF14(L)
+                  DF15(K) = DF15(L)
+                  DF16(K) = DF16(L)
+                  DF17(K) = DF17(L)
+                  DF18(K) = DF18(L)
+                  DF19(K) = DF19(L)
+                  DF20(K) = DF20(L)
+                  DF21(K) = DF21(L)
+                  DF22(K) = DF22(L)
+                  DF23(K) = DF23(L)
+                  DF24(K) = DF24(L)
+                  DF25(K) = DF25(L)
+                  DF26(K) = DF26(L)
+                  DF27(K) = DF27(L)
+
+                  IF (KERN) THEN !.OR. KERN
+                     IF (FLXFRS(AFRAME(I, 1)) .EQ. 1) THEN
+                        IF (NATMK .GT. 3) THEN
+                           DO II = 1, NATMK - 3
+                              TMPDX2(II, K, 1, 1) = TMPDX2(II, L, 1, 1)
+                              TMPDX2(II, K, 1, 2) = TMPDX2(II, L, 1, 2)
+                              TMPDX2(II, K, 1, 3) = TMPDX2(II, L, 1, 3)
+                              TMPDX2(II, K, 2, 1) = TMPDX2(II, L, 2, 1)
+                              TMPDX2(II, K, 2, 2) = TMPDX2(II, L, 2, 2)
+                              TMPDX2(II, K, 2, 3) = TMPDX2(II, L, 2, 3)
+                              TMPDX2(II, K, 3, 1) = TMPDX2(II, L, 3, 1)
+                              TMPDX2(II, K, 3, 2) = TMPDX2(II, L, 3, 2)
+                              TMPDX2(II, K, 3, 3) = TMPDX2(II, L, 3, 3)
+                           END DO
+                        END IF ! IF EXTRA DXs REQUIRED
+                     END IF ! NEEDS FLUX
+                  END IF ! KERN
+
+               END DO
+            END DO
+         END IF
+
+         !CALCULATE CHARGE-CHARGE ENERGIES AND FORCES
+         TOTELEC = 0.D0
+         TELEC = 0.D0
+         CALL EQQ(NATOMX, NALL, INBL, JNBL, CTOFNB, CTONNB, XQ, YQ, ZQ, &
+                  X, Y, Z, DX, DY, DZ, DCDXA, DCDYA, DCDZA, KAPPA, ERFMOD, TELEC)
+         EEL = EEL + TELEC
+
+#if KEY_PARALLEL==1
+         IF (MYNOD .EQ. 0) THEN
+#endif
+
+            ! PRINT OUT CHARGE COORDINATES TO XYZ FILE
+            IF (DCXYZ) THEN
+               IF (.NOT. QIMG) THEN !image cell
+                  CALL DCMXYZFILE(IUDCXYZ, XQ, YQ, ZQ, DQ, X, Y, Z, NATOMX, NALL)
+               END IF !image cell
+            END IF !DCXYZ
+
+            IF (DIPO) THEN
+               CALL DCMDIPOFILE(IUDIPO, XQ, YQ, ZQ, DQ, X, Y, Z, NATOMX, NALL)
+            END IF
+            ! PRINT OUT ATOMIC MULTIPOLES TO 'PUNCH' FILE
+            IF (DCMUL) THEN
+               CALL DCMULT(IUMUL, XQ, YQ, ZQ, DQ, X, Y, Z, NDQ, NATOM0)
+            END IF
+#if KEY_PARALLEL==1
+         END IF ! MYNOD.EQ.0
+#endif
+
+! POLARIZATION ENERGY AND FORCES
+         IF (QPOL .AND. (NATIM .EQ. 0 .OR. QIMG)) THEN ! WAIT UNTIL WE HAVE IMAGES FOR TOTAL EX,EY,EZ
+
+            !ELECTRIC FIELD FOR POLARIZATION ENERGY
+            IF (QIMG) THEN
+               CALL FIELD(NATOMX1, INBLC, JNBLC, CTOFNB, X, Y, Z, DX, DY, DZ, EX, EY, EZ, XQ, YQ, ZQ, DQ, &
+                          KAPPA, ERFMOD)
+            END IF
+            CALL FIELD(NATOMX, INBL, JNBL, CTOFNB, X, Y, Z, DX, DY, DZ, EX, EY, EZ, XQ, YQ, ZQ, DQ, &
+                       KAPPA, ERFMOD)
+
+#if KEY_PARALLEL==1
+            ! GATHER RESULTS FROM NODES
+            CALL MPI_ALLREDUCE(MPI_IN_PLACE, EX, NATOMX, MPI_REAL8, MPI_SUM, &
+            &COMM_CHARMM, IERROR)
+            CALL MPI_ALLREDUCE(MPI_IN_PLACE, EY, NATOMX, MPI_REAL8, MPI_SUM, &
+            &COMM_CHARMM, IERROR)
+            CALL MPI_ALLREDUCE(MPI_IN_PLACE, EZ, NATOMX, MPI_REAL8, MPI_SUM, &
+            &COMM_CHARMM, IERROR)
+#endif
+
+            !ADD FIELD FROM IMAGE ATOMS TO CENTRAL CELL
+            ITEMP = 0
+            IF (QIMG) THEN
+               DO I = NATOMX1 + 1, NATOMX
+                  EX(IREF(I)) = EX(IREF(I)) + EX(I)
+                  EY(IREF(I)) = EY(IREF(I)) + EY(I)
+                  EZ(IREF(I)) = EZ(IREF(I)) + EZ(I)
+               END DO
+               DO I = NATOMX1 + 1, NATOMX
+                  EX(I) = EX(IREF(I))
+                  EY(I) = EY(IREF(I))
+                  EZ(I) = EZ(IREF(I))
+               END DO
+            END IF
+
+            ! EVALUATE POLARIZATION ENERGY AND FORCES
+            IF (QIMG) THEN
+               CALL GETEPOL(NATOMX1, INBLC, JNBLC, CTOFNB, X, Y, Z, DX, DY, DZ, EX, EY, EZ, XQ, YQ, ZQ, DQ, &
+                            DCDXA, DCDYA, DCDZA, KAPPA, ERFMOD, EPOL, .FALSE.)
+            END IF
+            CALL GETEPOL(NATOMX, INBL, JNBL, CTOFNB, X, Y, Z, DX, DY, DZ, EX, EY, EZ, XQ, YQ, ZQ, DQ, &
+                         DCDXA, DCDYA, DCDZA, KAPPA, ERFMOD, EPOL, .TRUE.)
+
+            ! CLEAR ARRAYS FOR NEXT TIMESTEP
+            DEALLOCATE (EX, EY, EZ)
+         END IF !QPOL AND QIMG OR NATIM.EQ.0
+         EEL = EEL + EPOL
+
+         ! OPTIONAL HALGREN BUFFERED 14-7 VDW TERM FOR AMOEBA COMPATIBILITY:
+         IF (QHALG) THEN
+            CALL EHALG(ENB, NATOMX, NALL, INBL, JNBL, X, Y, Z, DX, DY, DZ)
+         END IF
+
+         ! PARTICLE MESH EWALD (PME)
+         IF (QPME .AND. .NOT. QIMG) THEN !IF PARTICLE MESH EWALD WAS REQUESTED
+            DCGTOT = 0.D0 ! TOTAL CHARGE OF SYSTEM (SHOULD BE ZERO FOR EWALD)
+            DO I = 1, NALL
+               DCGTOT = DCGTOT + DQ(I)
+            END DO
+#if KEY_PHMD==1 /*phmd_outer*/
+            IF (QPHMD) THEN
+               CALL WRNDIE(-5, '<DCM> DCME', 'DCM MODULE DOES NOT SUPPORT QPHMD.')
+            END IF
+#endif
+            IF (NNB14 .GT. 0) THEN
+               CALL EWLDEX(ETERM(EWEXCL), NALL, DIBLO14, DINB14, &
+                           DNNB14, DQ, CTONNB, CTOFNB, EPS, &
+                           DCDXA, DCDYA, DCDZA, XQ, YQ, ZQ, QECONTX, ECONTX &
+#if KEY_FLUCQ==1
+                           , QFLUC, FQCFOR &
+#endif
+                           )
+            END IF
+            IF (.NOT. QIMG) THEN !CENTRAL CELL
+               IF (ALLOCATED(KDCDXA)) THEN
+                  DEALLOCATE (KDCDXA, KDCDYA, KDCDZA)
+                  DEALLOCATE (XQAC, YQAC, ZQAC)
+               END IF
+               ALLOCATE (KDCDXA(NALL + NATOMX), KDCDYA(NALL + NATOMX), KDCDZA(NALL + NATOMX))
+               ALLOCATE (XQAC(NALL + NATOMX), YQAC(NALL + NATOMX), ZQAC(NALL + NATOMX))
+               KDCDXA = 0.D0 ! TO STORE DCM K-SPACE FORCES
+               KDCDYA = 0.D0
+               KDCDZA = 0.D0
+               DCEWVIRIAL = 0.D0
+               NALLC = NALL !SAVE NALL OF CENTRAL CELL (NO IMAGES)
+               XQAC(1:NALLC) = XQ(1:NALLC)
+               YQAC(1:NALLC) = YQ(1:NALLC)
+               ZQAC(1:NALLC) = ZQ(1:NALLC)
+               CALL PME(ETERM(EWKSUM), ETERM(EWSELF), ETERM(EWQCOR), ETERM(EWUTIL), &
+                        QETERM(EWKSUM), QETERM(EWSELF), QETERM(EWQCOR), QETERM(EWUTIL), &
+                        XQ, YQ, ZQ, KDCDXA, KDCDYA, KDCDZA, NALL, DQ, DCGTOT, &
+#if KEY_LJPME==1
+                        (/0.0_chm_real/), &
+#endif
+                        DCEWVIRIAL, KAPPA &
+#if KEY_PHMD==1
+                        , QPHMD & ! PME-CPHMD -- Y Huang 2017
+#endif /* phmd */
+#if KEY_MNDO97==1
+                        , .false. &
+#endif
+                        , QDCM &
+                        )
+               ! CALCULATE VIRIAL
+               CALL VIRTOT(EPRESS(VIXX:VIZZ), EPRESS(VEXX:VEZZ), NALLC, XQ, YQ, ZQ, KDCDXA, KDCDYA, KDCDZA)
+            END IF
+         END IF !QPME
+
+         !APPLY TORQUES TO NUCLEI FROM OFF-CENTERED CHARGES
+         CALL ADD_TORQUES(DCDXA, DCDYA, DCDZA, NATOMX, .FALSE.) !ADD DCM TORQUES / FORCES
+         INF = 0 ! RESET NUMBER OF IMAGE FRAMES FOR NEXT TIME STEP
+      END IF         ! QDCM (CHG MODEL ACTIVATED)
+!  CALL TIMER_STOP(T_DCM)
+      RETURN
+   END SUBROUTINE DCME
+
+!*******************************************************************************************
+
+   SUBROUTINE EQQ(NATOMX, NALL, INBL, JNBL, CTOFNB, CTONNB, XQ, YQ, ZQ, &
+                  X, Y, Z, DX, DY, DZ, DCDXA, DCDYA, DCDZA, KAPPA, ERFMOD, TELEC)
+
+      ! GET NONBONDED PAIRS WITHIN CUTOFFS AND CALCULATE CUTOFF FUNCTIONS, ENERGIES AND FORCES
+      ! FOR PAIRS OF DCM CHARGES
+
+      USE ERFCD_MOD, ONLY: ERFCD ! ERROR FUNCTION ROUTINE
+      USE PME_MODULE, ONLY: QPME ! PME ROUTINE AND FLAG
+#if KEY_BLOCK==1
+      USE BLOCK_LTM, ONLY: QBLOCK, IBLCKP, BLCOEE
+#endif
+
+      IMPLICIT NONE
+
+      INTEGER NATOMX, NALL, INBL(:), JNBL(:) !INPUT ARGUMENTS
+      INTEGER I, J, K, L, M, N, P, ITEMP, ERFMOD
+      INTEGER, POINTER, DIMENSION(:) :: PDINBL, PDJNBL
+
+      LOGICAL QNCUT
+
+      REAL(CHM_REAL) :: DCDXA(:), DCDYA(:), DCDZA(:)
+      REAL(CHM_REAL) :: X(*), Y(*), Z(*), DX(*), DY(*), DZ(*), XQ(:), YQ(:), ZQ(:)
+      REAL(CHM_REAL) :: CTOFNB, CTOFNB2, CTONNB, CTONNB2
+      REAL(CHM_REAL) :: LX, LY, LZ, TRX, TRY, TRZ, TR2, LQ, RM1, R
+      REAL(CHM_REAL) :: TSMCT, TDSMCTX, TDSMCTY, TDSMCTZ, TELEC, T1, TD, TDX, TDY, TDZ
+      REAL(CHM_REAL) :: CTOFNBM1, CTOFNBM2, CTOFNBM4, CT, CT3, DEEL, TDSMCT, KAPPA
+      REAL(CHM_REAL) :: TWOCTOFNBM2
+
+! BLOCK CODE ADDED
+! K. Toepfer, April 2022
+#if KEY_BLOCK==1
+      REAL(CHM_REAL) :: COEF
+      INTEGER        :: IBL, JBL, KKB
+#endif
+
+      IF (.NOT. ALLOCATED(DINBL)) THEN
+         ALLOCATE (DINBL(NALL), DJNBL(INBL(NATOMX)*MAXQ*MAXQ), SOURCE=0)
+      END IF
+
+      QNCUT = .FALSE. ! WHETHER WE USE A NUCLEAR-NUCLEAR OR CHARGE-CHARGE CUTOFF SCHEME
+      IF (.NOT. QPME .AND. (FSHIFT .OR. SHIFT .OR. SWITCH)) QNCUT = .TRUE.
+
+      CTOFNB2 = CTOFNB*CTOFNB
+      CTOFNBM1 = 1.D0/CTOFNB
+      CTOFNBM2 = CTOFNBM1*CTOFNBM1  ! FASTER TO CALCULATE OUTSIDE THE NONBOND ATOM-ATOM LOOP
+      TWOCTOFNBM2 = 2.D0*CTOFNBM2
+      CTOFNBM4 = CTOFNBM2*CTOFNBM2
+      CTONNB2 = CTONNB*CTONNB
+      CT = CTOFNB2 - 3.D0*CTONNB2
+      CT3 = 1.D0/(CTOFNB2 - CTONNB2)**3
+
+      ! DCM CHARGE NONBONDED LIST
+      IF ((QDCNB .OR. IQDCNB) .AND. .NOT. QNCUT) THEN ! WE NEED TO UPDATE THE DCM CHG NBOND LIST
+         CALL DCMNBONDS(NATOMX, NALL, INBL, JNBL)
+      END IF ! QDCNB
+
+      IF (QIMG) THEN
+         PDINBL => IDINBL
+         PDJNBL => IDJNBL
+      ELSE
+         PDINBL => DINBL
+         PDJNBL => DJNBL
+      END IF
+
+      ! GET INTERACTING NONBONDED PAIRS FOR CASE WITH AND WITHOUT POLARIZABLE CENTERS
+      ITEMP = 0
+
+      IF (QNCUT) THEN ! IF USING NUCLEAR CUTOFFS
+         DO I = 1, NATOMX ! LOOP OVER CHARMM NONBONDED LIST
+            IF (I > 1) THEN
+               ITEMP = INBL(I - 1)      ! INDEX OF START POSN IN NONBONDED LIST FOR J
+            END IF
+            DO J = ITEMP + 1, INBL(I)  ! EACH ELEMENT J OF THE NONBONDED LIST OF I
+               M = ABS(JNBL(J))
+
+! BLOCK CODE ADDED, K. Toepfer, April 2022
+#if KEY_BLOCK==1
+               IF (QBLOCK) THEN
+                  IBL = IBLCKP(I)
+                  JBL = IBLCKP(M)
+                  IF (JBL < IBL) THEN
+                     KKB = IBL
+                     IBL = JBL
+                     JBL = KKB
+                  END IF
+                  KKB = IBL + JBL*(JBL - 1)/2
+                  COEF = BLCOEE(KKB)
+                  IF (COEF .eq. 0.d0) THEN
+                     CYCLE
+                  END IF
+               END IF
+#endif
+
+               TRX = X(M) - X(I) ! KEEP OVERWRITING UNLESS R2 < CTOFNB2
+               TRY = Y(M) - Y(I)
+               TRZ = Z(M) - Z(I)
+               TR2 = TRX*TRX + TRY*TRY + TRZ*TRZ
+               IF (TR2 .LT. CTOFNB2) THEN
+
+                  !CALCULATE CUTOFF TERMS
+                  IF (SHIFT) THEN
+                     T1 = -CTOFNB2 + TR2
+                     TSMCT = T1*CTOFNBM4
+                     TDSMCT = 4.D0*TSMCT
+                     TSMCT = TSMCT*T1
+                     TDSMCTX = TRX*TDSMCT
+                     TDSMCTY = TRY*TDSMCT
+                     TDSMCTZ = TRZ*TDSMCT
+                  ELSEIF (FSHIFT) THEN
+                     RM1 = 1.D0/SQRT(TR2)
+                     R = 1.D0/RM1
+                     TSMCT = (1.d0 - (R/CTOFNB))**2 ! SHIFT FUNCTION
+                     TDSMCT = -CTOFNB + R
+                     TDSMCT = 2.D0*TDSMCT*CTOFNBM2*RM1
+                     TDSMCTX = TRX*TDSMCT
+                     TDSMCTY = TRY*TDSMCT
+                     TDSMCTZ = TRZ*TDSMCT
+                  ELSEIF (SWITCH) THEN
+                     IF (TR2 .LT. CTONNB2) THEN
+                        TSMCT = 1.D0
+                        TDSMCTX = 0.D0
+                        TDSMCTY = 0.D0
+                        TDSMCTZ = 0.D0
+                     ELSE
+                        TDSMCT = -CTOFNB2 + TR2
+                        TSMCT = TDSMCT*TDSMCT*(CT + 2.D0*TR2)*CT3
+                        TDSMCT = -CT3*TDSMCT*(-12.D0*(TR2 - CTONNB2))
+                        TDSMCTX = TRX*TDSMCT
+                        TDSMCTY = TRY*TDSMCT
+                        TDSMCTZ = TRZ*TDSMCT
+                     END IF
+                  END IF
+
+                  !ENERGIES AND FORCES
+                  DO L = 0, NQA(I) - 1 ! LOOP OVER DCM CHARGES ON ATOM I
+                     N = IDQ(I) + L
+                     LX = XQ(N)
+                     LY = YQ(N)
+                     LZ = ZQ(N)
+                     LQ = DQ(N)*TOKCAL
+                     DO K = 0, NQA(M) - 1 ! LOOP OVER DCM CHARGES ON ATOM M
+                        P = IDQ(M) + K
+                        TRX = XQ(P) - LX
+                        TRY = YQ(P) - LY
+                        TRZ = ZQ(P) - LZ
+                        TR2 = TRX*TRX + TRY*TRY + TRZ*TRZ
+
+                        RM1 = ONE/SQRT(TR2)
+                        DEEL = LQ*DQ(P)*RM1
+#if KEY_BLOCK==1
+                        IF (QBLOCK) THEN
+                           DEEL = DEEL*COEF
+                        END IF
+#endif
+                        TELEC = TELEC + DEEL*TSMCT
+                        TD = DEEL*RM1*RM1
+                        TDX = TD*TRX*TSMCT
+                        TDY = TD*TRY*TSMCT
+                        TDZ = TD*TRZ*TSMCT
+                        DCDXA(N) = DCDXA(N) + TDX
+                        DCDYA(N) = DCDYA(N) + TDY
+                        DCDZA(N) = DCDZA(N) + TDZ
+                        DCDXA(P) = DCDXA(P) - TDX
+                        DCDYA(P) = DCDYA(P) - TDY
+                        DCDZA(P) = DCDZA(P) - TDZ
+
+                        TDX = -TDSMCTX*DEEL
+                        TDY = -TDSMCTY*DEEL
+                        TDZ = -TDSMCTZ*DEEL
+                        DX(I) = DX(I) + TDX
+                        DY(I) = DY(I) + TDY
+                        DZ(I) = DZ(I) + TDZ
+                        DX(M) = DX(M) - TDX
+                        DY(M) = DY(M) - TDY
+                        DZ(M) = DZ(M) - TDZ
+                     END DO
+                  END DO
+               END IF ! R2(DNNB).LT.CTOFNB2
+            END DO ! J=ITEMP+1,INBL(I)
+         END DO ! I=1,NATOMX
+
+      ELSE ! NOT USING NUCLEAR CUTOFFS, WE CAN USE DINBL, DJNBL
+
+         DO I = 1, NALL
+            IF (I > 1) THEN
+               ITEMP = PDINBL(I - 1)      ! INDEX OF START POSN IN NONBONDED LIST FOR J
+            END IF
+            LX = XQ(I)
+            LY = YQ(I)
+            LZ = ZQ(I)
+            LQ = DQ(I)*TOKCAL
+            DO J = ITEMP + 1, PDINBL(I)  ! EACH ELEMENT J OF THE NONBONDED LIST OF I
+               M = PDJNBL(J)
+
+               ! BLOCK CODE ADDED, K. Toepfer, April 2022
+#if KEY_BLOCK==1
+               IF (QBLOCK) THEN
+                  IBL = IBLCKP(ATQ(I))
+                  JBL = IBLCKP(ATQ(M))
+                  IF (JBL < IBL) THEN
+                     KKB = IBL
+                     IBL = JBL
+                     JBL = KKB
+                  END IF
+                  KKB = IBL + JBL*(JBL - 1)/2
+                  COEF = BLCOEE(KKB)
+                  IF (COEF .eq. 0.d0) THEN
+                     CYCLE
+                  END IF
+               END IF
+#endif
+
+               TRX = XQ(M) - LX ! KEEP OVERWRITING UNLESS R2 < CTOFNB2
+               TRY = YQ(M) - LY
+               TRZ = ZQ(M) - LZ
+               TR2 = TRX*TRX + TRY*TRY + TRZ*TRZ
+               IF (TR2 .LT. CTOFNB2) THEN
+                  RM1 = ONE/SQRT(TR2)
+                  ! CALCULATE CUTOFF TERMS
+                  IF (QPME) THEN
+                     R = ONE/RM1
+                     CALL ERFCD(R, KAPPA, TSMCT, TDSMCT, ERFMOD)
+                     TDSMCT = TDSMCT*RM1
+                     TDSMCTX = -TRX*TDSMCT
+                     TDSMCTY = -TRY*TDSMCT
+                     TDSMCTZ = -TRZ*TDSMCT
+                  ELSEIF (TSHIFT) THEN
+                     T1 = -CTOFNB2 + TR2
+                     TSMCT = T1*CTOFNBM4
+                     TDSMCT = FOUR*TSMCT
+                     TSMCT = TSMCT*T1
+                     TDSMCTX = TRX*TDSMCT
+                     TDSMCTY = TRY*TDSMCT
+                     TDSMCTZ = TRZ*TDSMCT
+                  ELSEIF (TFSHIFT) THEN
+                     R = ONE/RM1
+                     TSMCT = (ONE - (R*CTOFNBM1))**2 ! SHIFT FUNCTION
+                     TDSMCT = R - CTOFNB
+                     TDSMCT = TDSMCT*TWOCTOFNBM2*RM1
+                     TDSMCTX = TRX*TDSMCT
+                     TDSMCTY = TRY*TDSMCT
+                     TDSMCTZ = TRZ*TDSMCT
+                  END IF
+                  ! ENERGY AND FORCES
+                  DEEL = LQ*DQ(M)*RM1
+
+#if KEY_BLOCK==1
+                  IF (QBLOCK) THEN
+                     DEEL = DEEL*COEF
+                  END IF
+#endif
+
+                  TD = DEEL*TSMCT
+                  TELEC = TELEC + TD
+                  TD = TD*RM1*RM1
+                  TDX = -TDSMCTX*DEEL + TD*TRX
+                  TDY = -TDSMCTY*DEEL + TD*TRY
+                  TDZ = -TDSMCTZ*DEEL + TD*TRZ
+                  DCDXA(I) = DCDXA(I) + TDX
+                  DCDYA(I) = DCDYA(I) + TDY
+                  DCDZA(I) = DCDZA(I) + TDZ
+                  DCDXA(M) = DCDXA(M) - TDX
+                  DCDYA(M) = DCDYA(M) - TDY
+                  DCDZA(M) = DCDZA(M) - TDZ
+               END IF
+            END DO
+         END DO
+      END IF ! IF NUCLEAR CUTOFFS
+
+   END SUBROUTINE EQQ
+
+!*******************************************************************************************
+
+   SUBROUTINE DCMNBONDS(NATOMX, NALL, INBL, JNBL)
+
+      ! SUBROUTINE TO UPDATE DCM NONBONDED LIST FOR CENTRAL CELL OR IMAGES
+      ! TODO: STORE NBOND LISTS FOR PERT RUNS INSTEAD OF RE-EVALUATING FOR EACH CHANGE IN
+      ! LAMBDA
+      IMPLICIT NONE
+
+      INTEGER NATOMX, NALL, INBL(:), JNBL(:)
+      INTEGER TI, TIN, J, K, L, M, N, ITEMP
+
+      IF (QDCNB .AND. .NOT. QIMG) THEN ! IF CENTRAL CELL, NOT IMAGE NBONDLIST
+         IF (ALLOCATED(DINBL)) DEALLOCATE (DINBL, DJNBL)
+         ALLOCATE (DINBL(NALL), DJNBL(INBL(NATOMX)*MAXQ*MAXQ), SOURCE=0)
+         TI = 1
+         TIN = 1
+         DO WHILE (TIN .LE. NDQ) ! LOOP OVER DCM CHARGES
+            N = ATQ(TIN) ! ATOM NEXT DCM CHARGE BELONGS TO
+            IF (N > 1) THEN
+               ITEMP = INBL(N - 1)      ! INDEX OF START POSN IN NONBONDED LIST FOR J
+            ELSE
+               ITEMP = 0
+            END IF
+            DO L = 0, NQA(N) - 1
+               DO J = ITEMP + 1, INBL(N)  ! EACH ELEMENT J OF THE NONBONDED LIST OF I
+                  M = ABS(JNBL(J))
+                  DO K = 0, NQA(M) - 1
+                     DJNBL(TI + K) = IDQ(M) + K
+                  END DO !K
+                  TI = TI + NQA(M)
+               END DO !J
+               DINBL(TIN + L) = TI - 1
+            END DO !L
+            TIN = TIN + NQA(N)
+         END DO !I
+         QDCNB = .FALSE.
+      ELSEIF (QIMG .AND. IQDCNB) THEN ! IMAGE NBONDLIST
+         IF (ALLOCATED(IDINBL)) DEALLOCATE (IDINBL, IDJNBL)
+         ALLOCATE (IDINBL(NALL), IDJNBL(INBL(NATOMX)*MAXQ*MAXQ), SOURCE=0)
+         TI = 1
+         TIN = 1
+         DO WHILE (TIN .LE. (NDQ + INDQ)) ! LOOP OVER DCM CHARGES
+            N = ATQ(TIN) ! ATOM NEXT DCM CHARGE BELONGS TO
+            IF (N > 1) THEN
+               ITEMP = INBL(N - 1)      ! INDEX OF START POSN IN NONBONDED LIST FOR J
+            ELSE
+               ITEMP = 0
+            END IF
+            DO L = 0, NQA(N) - 1
+               DO J = ITEMP + 1, INBL(N)  ! EACH ELEMENT J OF THE NONBONDED LIST OF I
+                  M = ABS(JNBL(J))
+                  DO K = 0, NQA(M) - 1
+                     IDJNBL(TI + K) = IDQ(M) + K
+                  END DO !K
+                  TI = TI + NQA(M)
+               END DO !J
+               IDINBL(TIN + L) = TI - 1
+            END DO !L
+            TIN = TIN + NQA(N)
+         END DO !I
+         IQDCNB = .FALSE.
+      END IF
+
+   END SUBROUTINE DCMNBONDS
+
+!*******************************************************************************************
+
+   SUBROUTINE EHALG(ENB, NATOMX, NALL, INBL, JNBL, X, Y, Z, DX, DY, DZ)
+
+      ! GET HALGREN BUFFERED 14-7 INTERACTION ENERGY FOR AMOEBA COMPATIBILITY
+
+      USE PSF
+      USE ENERGYM, ONLY: ETERM, VDW
+
+      IMPLICIT NONE
+
+      INTEGER NATOMX, NALL, INBL(:), JNBL(:) !INPUT ARGUMENTS
+      INTEGER I, J, K, L, M, N, P, ATYP, ITEMP
+
+      REAL(CHM_REAL) :: DEL, GAM, EPS, EPSIJ, R, R2, RX, RY, RZ, RIJ, R0, R0IJ, R0IJM1
+      REAL(CHM_REAL) :: ENB, EHAL, TDX, TDY, TDZ
+      REAL(CHM_REAL) :: X(*), Y(*), Z(*), DX(*), DY(*), DZ(*)
+      REAL(CHM_REAL) :: CTOF, CTOF2
+
+      !   VDW  MMFF        : ES*{ [(1+GAMBUF)*RS/(R+GAMBUF*RS)]**7 *
+      !                      [(1+DELBUF*RS**7/(R**7 + DELBUF*RS**7) - 2 ] }
+      !                      (Buffered 14-7)
+
+      ! O EPS = 0.19682 kcal/mol
+      ! O SIG = 3.6453 Angstrom
+
+      ATYP = HALGTYP
+      DEL = 0.07D0
+      GAM = 0.12D0
+      EPS = 0.19682   ! KCAL/MOL (IAMOEBA OXYGEN)
+      R0 = 3.6453D0   ! ANGSTROM (IAMOEBA R0)
+      CTOF = 10.D0  ! 10 ANGSTROM VDW CUTOFF
+
+      EPSIJ = 4.D0*EPS*EPS/(SQRT(EPS) + SQRT(EPS))**2
+      R0IJ = (R0**3 + R0**3)/(R0**2 + R0**2)
+      R0IJM1 = 1.D0/R0IJ
+      CTOF2 = CTOF*CTOF
+
+      EHAL = 0.D0
+      DO I = 1, NATOMX
+         IF (I > 1) THEN
+            ITEMP = INBL(I - 1)      ! INDEX OF START POSN IN NONBONDED LIST FOR J
+         ELSE
+            ITEMP = 0
+         END IF
+         DO J = ITEMP + 1, INBL(I)  ! EACH ELEMENT J OF THE NONBONDED LIST OF I
+            M = ABS(JNBL(J))
+            IF (IAC(I) .EQ. ATYP .AND. IAC(M) .EQ. ATYP) THEN
+               RX = X(I) - X(M)
+               RY = Y(I) - Y(M)
+               RZ = Z(I) - Z(M)
+               R2 = RX**2 + RY**2 + RZ**2
+               IF (R2 .LT. CTOF2) THEN
+                  R = SQRT(R2)
+                  RIJ = R*R0IJM1
+                  ! HALGREN ENERGY
+                  ENB = ENB + EPSIJ*(((1.D0 + DEL)/(RIJ + DEL))**7)* &
+                        ((1.D0 + GAM)/(RIJ**7 + GAM) - 2.D0)
+                  ! FORCES
+                  TDX = 14.D0*EPSIJ*((1.D0 + DEL)**7)*RX/((R*R0IJ)*(RIJ + DEL)**8)
+                  TDX = TDX - EPSIJ*(1.D0 + GAM)*((1.D0 + DEL)**7)*(7.D0*RX*RIJ**6)/ &
+                        (((RIJ + DEL)**7)*((RIJ**7 + GAM)**2)*(R*R0IJ))
+                  TDX = TDX - 7.D0*EPSIJ*(1.D0 + GAM)*((1.D0 + DEL)**7)*RX/ &
+                        ((RIJ**7 + GAM)*((RIJ + DEL)**8)*(R*R0IJ))
+
+                  TDY = 14.D0*EPSIJ*((1.D0 + DEL)**7)*RY/((R*R0IJ)*(RIJ + DEL)**8)
+                  TDY = TDY - EPSIJ*(1.D0 + GAM)*((1.D0 + DEL)**7)*(7.D0*RY*RIJ**6)/ &
+                        (((RIJ + DEL)**7)*((RIJ**7 + GAM)**2)*(R*R0IJ))
+                  TDY = TDY - 7.D0*EPSIJ*(1.D0 + GAM)*((1.D0 + DEL)**7)*RY/ &
+                        ((RIJ**7 + GAM)*((RIJ + DEL)**8)*(R*R0IJ))
+
+                  TDZ = 14.D0*EPSIJ*((1.D0 + DEL)**7)*RZ/((R*R0IJ)*(RIJ + DEL)**8)
+                  TDZ = TDZ - EPSIJ*(1.D0 + GAM)*((1.D0 + DEL)**7)*(7.D0*RZ*RIJ**6)/ &
+                        (((RIJ + DEL)**7)*((RIJ**7 + GAM)**2)*(R*R0IJ))
+                  TDZ = TDZ - 7.D0*EPSIJ*(1.D0 + GAM)*((1.D0 + DEL)**7)*RZ/ &
+                        ((RIJ**7 + GAM)*((RIJ + DEL)**8)*(R*R0IJ))
+
+                  DX(I) = DX(I) + TDX
+                  DX(M) = DX(M) - TDX
+                  DY(I) = DY(I) + TDY
+                  DY(M) = DY(M) - TDY
+                  DZ(I) = DZ(I) + TDZ
+                  DZ(M) = DZ(M) - TDZ
+               END IF
+            END IF
+         END DO !J
+      END DO !I
+
+   END SUBROUTINE EHALG
+
+!*******************************************************************************************
+
+   SUBROUTINE GETEPOL(NATOMX, INBL, JNBL, CTOFNB, X, Y, Z, DX, DY, DZ, EX, EY, EZ, XQ, YQ, ZQ, DQ, &
+                      DCDXA, DCDYA, DCDZA, KAPPA, ERFMOD, EPOL, QENE)
+
+      ! USE ELECTRIC FIELD ARRAY TO EVALUATE POLARIZATION ENERGY AND DERIVATIVES
+
+      USE ERFCD_MOD, ONLY: ERFCD ! ERROR FUNCTION ROUTINE
+      USE PME_MODULE, ONLY: QPME ! PME ROUTINE AND FLAG
+
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: MYNOD
+      USE MPI, ONLY: MPI_REAL8, MPI_INTEGER, MPI_SUM !,MPI_COMM_WORLD
+#endif
+
+      IMPLICIT NONE
+
+      INTEGER NATOMX, INBL(:), JNBL(:) !INPUT ARGUMENTS
+      INTEGER I, J, L, M, N, ITEMP, ERFMOD
+      LOGICAL QENE
+
+      REAL(CHM_REAL) :: XQ(:), YQ(:), ZQ(:), DQ(:), DCDXA(:), DCDYA(:), DCDZA(:)
+      REAL(CHM_REAL) :: X(*), Y(*), Z(*), DX(*), DY(*), DZ(*)
+      REAL(CHM_REAL) :: CTOFNB, CTOFNB2
+      REAL(CHM_REAL) :: EX(:), EY(:), EZ(:), MUX, MUY, MUZ, EPOL
+      REAL(CHM_REAL) :: T, T1, T2, T3, T4, T5, T6, T7, LX, LY, LZ
+      REAL(CHM_REAL) :: TRX, TRY, TRZ, TR2, RM1, RM2, RM3, R, LDP, LPAPB, LP1, LP2
+      REAL(CHM_REAL) :: TSMCT, TDSMCT, TDSMCTX, TDSMCTY, TDSMCTZ, TDX, TDY, TDZ
+      REAL(CHM_REAL) :: CTOFNBM2, CTOFNBM4, KAPPA
+      REAL(CHM_REAL) :: FPOL, DFPOL, DFPOLX, DFPOLY, DFPOLZ, TE, DTE
+      REAL(CHM_REAL) :: DDVXDXDM, DDVYDXDM, DDVZDXDM, DDVXDYDM, DDVYDYDM, DDVZDYDM, &
+                        DDVXDZDM, DDVYDZDM, DDVZDZDM
+
+      CTOFNB2 = CTOFNB*CTOFNB
+      CTOFNBM2 = 1.D0/CTOFNB2
+      CTOFNBM4 = CTOFNBM2*CTOFNBM2
+
+      IF (QENE) THEN
+         DO I = 1, NATOMX1
+            IF (DPOL(I) .NE. 0.D0) THEN
+               ! INDUCED DIPOLE * FIELD
+               MUX = EX(I)**2*DPOL(I)
+               MUY = EY(I)**2*DPOL(I)
+               MUZ = EZ(I)**2*DPOL(I)
+               ! POLARIZATION ENERGY
+#if KEY_PARALLEL==1
+               IF (MYNOD .EQ. 0) THEN
+                  EPOL = EPOL - 0.5D0*(MUX + MUY + MUZ)*TOKCAL
+               END IF
+#else
+               EPOL = EPOL - 0.5D0*(MUX + MUY + MUZ)*TOKCAL
+#endif
+            END IF
+         END DO
+      END IF
+
+      ITEMP = 0
+
+      ! LOOP OVER ALL INTERACTIONS
+      DO I = 1, NATOMX
+         IF (I > 1) THEN
+            ITEMP = INBL(I - 1)      ! INDEX OF START POSN IN NONBONDED LIST FOR J
+         END IF
+         LX = X(I)
+         LY = Y(I)
+         LZ = Z(I)
+         LDP = DPOL(I)
+         DO J = ITEMP + 1, INBL(I)  ! EACH ELEMENT J OF THE NONBONDED LIST OF I
+            M = ABS(JNBL(J))
+            ! FORWARD INTERACTION OF POLARIZABLE CENTER A WITH DCM CHARGE(S) ON B
+            IF (LDP .NE. 0.D0) THEN
+               LPAPB = LDP
+               IF (DPOL(M) .NE. 0.D0) THEN
+                  LPAPB = DPOL(M)
+               END IF
+               LPAPB = LPAPB*LDP
+               CALL S2(I, M, LX, LY, LZ)
+            END IF ! LDP.NE.0.D0
+            ! ADD REVERSE INTERACTION OF DCM CHARGE(S) ON A WITH POLARIZABLE CENTER B
+            IF (DPOL(M) .NE. 0.D0) THEN
+               IF (LDP .NE. 0.D0) THEN
+                  LPAPB = LDP*DPOL(M)
+               ELSE
+                  LPAPB = (DPOL(M)*DPOL(M))
+               END IF
+               CALL S2(M, I, X(M), Y(M), Z(M))
+            END IF ! DPOL(M).NE.0.D0
+         END DO ! J=ITEMP+1,INBL(I)
+      END DO ! I=1,NATOMX
+
+   CONTAINS
+
+      SUBROUTINE S2(A, B, TX, TY, TZ)
+
+         IMPLICIT NONE
+
+         INTEGER :: A, B
+         REAL(CHM_REAL) :: TX, TY, TZ
+
+         LP1 = -AP*(1.D0/(LPAPB**(1.D0/6.D0)))**3
+         LP2 = -3.D0*AP/SQRT(LPAPB)
+
+         DO L = 0, NQA(B) - 1 ! LOOP OVER DCM CHARGES ON ATOM I
+            N = IDQ(B) + L
+            TRX = XQ(N) - TX
+            TRY = YQ(N) - TY
+            TRZ = ZQ(N) - TZ
+            TR2 = TRX*TRX + TRY*TRY + TRZ*TRZ
+            IF (TR2 .LT. CTOFNB2) THEN
+               RM1 = 1.D0/SQRT(TR2)
+               RM2 = RM1*RM1
+               RM3 = RM1*RM2
+               R = 1.D0/RM1
+
+               ! CALCULATE CUTOFF TERMS
+               CALL SCUT()
+
+               ! POLARIZATION DAMPING FUNCTION
+               DFPOL = EXP(LP1*(R**3))
+               FPOL = 1.D0 - DFPOL
+               DFPOL = LP2*DFPOL*R
+               DFPOLX = -DFPOL*TRX
+               DFPOLY = -DFPOL*TRY
+               DFPOLZ = -DFPOL*TRZ
+
+               ! FIELD AT NUCLEAR POSITION OF ATOM A
+               TE = DQ(N)*RM1
+               DTE = TE*RM2
+
+               TDX = -DTE*TRX
+               TDY = -DTE*TRY
+               TDZ = -DTE*TRZ
+
+               T5 = FPOL*TSMCT
+
+               ! FORCES
+               T2 = 3.D0*RM3*RM2
+               T3 = T2*TRX
+               T4 = T2*TRY
+
+               DDVXDXDM = T2*TRX*TRX - RM3
+               DDVYDXDM = T3*TRY
+               DDVZDXDM = T3*TRZ
+               DDVXDYDM = DDVYDXDM
+               DDVYDYDM = T2*TRY*TRY - RM3
+               DDVZDYDM = T4*TRZ
+               DDVXDZDM = DDVZDXDM
+               DDVYDZDM = DDVZDYDM
+               DDVZDZDM = T2*TRZ*TRZ - RM3
+
+               T1 = T5*DQ(N)
+               T4 = FPOL*DTE
+               T2 = T4*TDSMCTX
+               T3 = DFPOLX*TSMCT
+
+               DDVXDXDM = T1*DDVXDXDM - T2*TRX + T3*TDX
+               DDVYDXDM = T1*DDVYDXDM - T2*TRY + T3*TDY
+               DDVZDXDM = T1*DDVZDXDM - T2*TRZ + T3*TDZ
+
+               T2 = T4*TDSMCTY
+               T6 = DFPOLY*TSMCT
+
+               DDVXDYDM = T1*DDVXDYDM - T2*TRX + T6*TDX
+               DDVYDYDM = T1*DDVYDYDM - T2*TRY + T6*TDY
+               DDVZDYDM = T1*DDVZDYDM - T2*TRZ + T6*TDZ
+
+               T2 = T4*TDSMCTZ
+               T7 = DFPOLZ*TSMCT
+
+               DDVXDZDM = T1*DDVXDZDM - T2*TRX + T7*TDX
+               DDVYDZDM = T1*DDVYDZDM - T2*TRY + T7*TDY
+               DDVZDZDM = T1*DDVZDZDM - T2*TRZ + T7*TDZ
+
+               T = -DPOL(A)*TOKCAL
+               T3 = T*EX(A)
+               T4 = T*EY(A)
+               T5 = T*EZ(A)
+               DX(A) = DX(A) + T3*DDVXDXDM + T4*DDVYDXDM + T5*DDVZDXDM
+               DY(A) = DY(A) + T3*DDVXDYDM + T4*DDVYDYDM + T5*DDVZDYDM
+               DZ(A) = DZ(A) + T3*DDVXDZDM + T4*DDVYDZDM + T5*DDVZDZDM
+
+               DCDXA(N) = DCDXA(N) - T3*DDVXDXDM - T4*DDVYDXDM - T5*DDVZDXDM
+               DCDYA(N) = DCDYA(N) - T3*DDVXDYDM - T4*DDVYDYDM - T5*DDVZDYDM
+               DCDZA(N) = DCDZA(N) - T3*DDVXDZDM - T4*DDVYDZDM - T5*DDVZDZDM
+
+            END IF ! TR2.LT.CTOFNB2
+         END DO
+
+      END SUBROUTINE S2
+
+      SUBROUTINE SCUT()
+
+         ! EVALUATES INTERACTION CUTOFFS AND DERIVATIVES FOR CHARGE-CHARGE CUTOFF SCHEMES
+         IMPLICIT NONE
+
+         IF (QPME) THEN
+            R = 1.D0/RM1
+            CALL ERFCD(R, KAPPA, TSMCT, TDSMCT, ERFMOD)
+            TDSMCT = TDSMCT*RM1
+            TDSMCTX = -TRX*TDSMCT
+            TDSMCTY = -TRY*TDSMCT
+            TDSMCTZ = -TRZ*TDSMCT
+         ELSEIF (TSHIFT) THEN
+            T1 = -CTOFNB2 + TR2
+            TSMCT = T1*CTOFNBM4
+            TDSMCT = 4.D0*TSMCT
+            TSMCT = TSMCT*T1
+            TDSMCTX = TRX*TDSMCT
+            TDSMCTY = TRY*TDSMCT
+            TDSMCTZ = TRZ*TDSMCT
+         ELSEIF (TFSHIFT) THEN
+            R = 1.D0/RM1
+            TSMCT = (1.d0 - (R/CTOFNB))**2 ! SHIFT FUNCTION
+            TDSMCT = -CTOFNB + R
+            TDSMCT = 2.D0*TDSMCT*CTOFNBM2*RM1
+            TDSMCTX = TRX*TDSMCT
+            TDSMCTY = TRY*TDSMCT
+            TDSMCTZ = TRZ*TDSMCT
+         END IF
+
+      END SUBROUTINE SCUT
+
+   END SUBROUTINE GETEPOL
+
+!*******************************************************************************************
+
+   SUBROUTINE FIELD(NATOMX, INBL, JNBL, CTOFNB, X, Y, Z, DX, DY, DZ, EX, EY, EZ, XQ, YQ, ZQ, DQ, &
+                    KAPPA, ERFMOD)
+
+      ! CALCULATE ELECTRIC FIELD AND DERIVATES AT POSITIONS OF POLARIZABLE NUCLEAR CENTERS
+
+      USE ERFCD_MOD, ONLY: ERFCD ! ERROR FUNCTION ROUTINE
+      USE PME_MODULE, ONLY: QPME ! PME ROUTINE AND FLAG
+
+#if KEY_BLOCK==1
+      USE BLOCK_LTM, ONLY: QBLOCK, IBLCKP, BLCOEE
+#endif
+
+      IMPLICIT NONE
+
+      INTEGER NATOMX, INBL(:), JNBL(:) !INPUT ARGUMENTS
+      INTEGER I, J, L, M, N, ITEMP, ERFMOD
+
+      REAL(CHM_REAL) :: XQ(:), YQ(:), ZQ(:), DQ(:)
+      REAL(CHM_REAL) :: X(*), Y(*), Z(*), DX(*), DY(*), DZ(*), EX(:), EY(:), EZ(:)
+      REAL(CHM_REAL) :: CTOFNB, CTOFNB2, DTE, TRX, TRY, TRZ, TR2
+      REAL(CHM_REAL) :: T, T1, LX, LY, LZ, LDP, RM1, R, RM2
+      REAL(CHM_REAL) :: FPOL, LPAPB, LPAPBM1
+      REAL(CHM_REAL) :: TSMCT, TDSMCT
+      REAL(CHM_REAL) :: CTOFNBM2, CTOFNBM4, KAPPA
+
+      CTOFNB2 = CTOFNB*CTOFNB
+      CTOFNBM2 = 1.D0/CTOFNB2
+      CTOFNBM4 = CTOFNBM2*CTOFNBM2
+
+      ITEMP = 0
+      DO I = 1, NATOMX ! LOOP OVER CHARMM NONBONDED LIST
+         IF (I > 1) THEN
+            ITEMP = INBL(I - 1)      ! INDEX OF START POSN IN NONBONDED LIST FOR J
+         END IF
+         LX = X(I)
+         LY = Y(I)
+         LZ = Z(I)
+         LDP = DPOL(I)**(1.D0/6.D0)
+         DO J = ITEMP + 1, INBL(I)  ! EACH ELEMENT J OF THE NONBONDED LIST OF I
+            M = ABS(JNBL(J))
+            ! FORWARD INTERACTION OF POLARIZABLE CENTER A WITH DCM CHARGE(S) ON B
+            IF (LDP .NE. 0.D0) THEN
+               LPAPB = LDP
+               IF (DPOL(M) .NE. 0.D0) THEN
+                  LPAPB = DPOL(M)**(1.D0/6.D0)
+               END IF
+               LPAPB = LPAPB*LDP
+               LPAPBM1 = -AP*(1.D0/LPAPB)**3
+               CALL S1(I, M, LX, LY, LZ)
+            END IF ! DPOL(I).NE.0.D0
+            ! ADD REVERSE INTERACTION OF DCM CHARGE(S) ON A WITH POLARIZABLE CENTER B
+            IF (DPOL(M) .NE. 0.D0) THEN
+               IF (LDP .NE. 0.D0) THEN
+                  LPAPB = LDP*DPOL(M)**(1.D0/6.D0)
+               ELSE
+                  LPAPB = (DPOL(M)*DPOL(M))**(1.D0/6.D0)
+               END IF
+               LPAPBM1 = -AP*(1.D0/LPAPB)**3
+               CALL S1(M, I, X(M), Y(M), Z(M))
+            END IF ! DPOL(M).NE.0.D0
+         END DO ! J=ITEMP+1,INBL(I)
+      END DO ! I=1,NATOMX
+
+   CONTAINS
+
+      SUBROUTINE S1(A, B, TX, TY, TZ)
+
+         INTEGER :: A, B
+         REAL(CHM_REAL) :: TX, TY, TZ
+
+         ! BLOCK CODE ADDED
+! K. Toepfer, April 2022
+#if KEY_BLOCK==1
+         REAL(CHM_REAL) :: COEF
+         INTEGER        :: IBL, JBL, KKB
+
+         IF (QBLOCK) THEN
+            IBL = IBLCKP(A)
+            JBL = IBLCKP(B)
+            IF (JBL < IBL) THEN
+               KKB = IBL
+               IBL = JBL
+               JBL = KKB
+            END IF
+            KKB = IBL + JBL*(JBL - 1)/2
+            COEF = BLCOEE(KKB)
+            IF (COEF .eq. 0.d0) THEN
+               RETURN
+            END IF
+         END IF
+#endif
+
+         DO L = 0, NQA(B) - 1 ! LOOP OVER DCM CHARGES ON ATOM I
+            N = IDQ(B) + L
+            TRX = XQ(N) - TX
+            TRY = YQ(N) - TY
+            TRZ = ZQ(N) - TZ
+            TR2 = TRX*TRX + TRY*TRY + TRZ*TRZ
+            IF (TR2 .LT. CTOFNB2) THEN
+               RM1 = 1.D0/SQRT(TR2)
+               RM2 = RM1*RM1
+               R = 1.D0/RM1
+
+               ! CALCULATE CUTOFF TERMS
+               IF (QPME) THEN
+                  CALL ERFCD(R, KAPPA, TSMCT, TDSMCT, ERFMOD)
+               ELSEIF (TSHIFT) THEN
+                  T1 = -CTOFNB2 + TR2
+                  TSMCT = T1*CTOFNBM4
+                  TSMCT = TSMCT*T1
+               ELSEIF (TFSHIFT) THEN
+                  TSMCT = (1.d0 - (R/CTOFNB))**2 ! SHIFT FUNCTION
+               END IF
+
+               ! POLARIZATION DAMPING FUNCTION
+               FPOL = 1.D0 - EXP((R**3)*LPAPBM1)
+
+               ! FIELD AT NUCLEAR POSITION OF ATOM A
+               DTE = DQ(N)*RM1*RM2
+
+               T = FPOL*TSMCT
+
+#if KEY_BLOCK==1
+               IF (QBLOCK) THEN
+                  T = T*COEF
+               END IF
+#endif
+
+               EX(A) = EX(A) + T*DTE*TRX
+               EY(A) = EY(A) + T*DTE*TRY
+               EZ(A) = EZ(A) + T*DTE*TRZ
+
+            END IF ! TR2.LT.CTOFNB2
+         END DO ! L=0,NQA(I)-1
+      END SUBROUTINE S1
+
+   END SUBROUTINE FIELD
+
+!*******************************************************************************************
+
+   SUBROUTINE DCMNNCUTOFF(CTOFNB, CTONNB2, CTOFNB2, CTOFNBM2, CTOFNBM4, TRX, TRY, TRZ, TR2, &
+                          TSMCT, TDSMCT, TDSMCTX, TDSMCTY, TDSMCTZ)
+
+! EVALUATES INTERACTION CUTOFFS AND DERIVATIVES FOR NUCLEAR-NUCLEAR CUTOFF SCHEMES
+      IMPLICIT NONE
+
+      REAL(CHM_REAL) :: CTOFNB, CTONNB2, CTOFNB2, CTOFNBM2, CTOFNBM4, TRX, TRY, TRZ, TR2 ! INPUTS
+      REAL(CHM_REAL) :: TSMCT, TDSMCT, TDSMCTX, TDSMCTY, TDSMCTZ ! OUTPUTS
+      REAL(CHM_REAL) :: RM1, R, T1, CT, CT3 ! LOCAL VARIABLES
+
+      IF (SHIFT) THEN
+         T1 = -CTOFNB2 + TR2
+         TSMCT = T1*CTOFNBM4
+         TDSMCT = 4.D0*TSMCT
+         TSMCT = TSMCT*T1
+         TDSMCTX = TRX*TDSMCT
+         TDSMCTY = TRY*TDSMCT
+         TDSMCTZ = TRZ*TDSMCT
+      ELSEIF (FSHIFT) THEN
+         RM1 = 1.D0/SQRT(TR2)
+         R = 1.D0/RM1
+         TSMCT = (1.d0 - (R/CTOFNB))**2 ! SHIFT FUNCTION
+         TDSMCT = -CTOFNB + R
+         TDSMCT = 2.D0*TDSMCT*CTOFNBM2*RM1
+         TDSMCTX = TRX*TDSMCT
+         TDSMCTY = TRY*TDSMCT
+         TDSMCTZ = TRZ*TDSMCT
+      ELSEIF (SWITCH) THEN
+         IF (TR2 .LT. CTONNB2) THEN
+            TSMCT = 1.D0
+            TDSMCTX = 0.D0
+            TDSMCTY = 0.D0
+            TDSMCTZ = 0.D0
+         ELSE
+            TDSMCT = -CTOFNB2 + TR2
+            TSMCT = TDSMCT*TDSMCT*(CT + 2.D0*TR2)*CT3
+            TDSMCT = -CT3*TDSMCT*(-12.D0*(TR2 - CTONNB2))
+            TDSMCTX = TRX*TDSMCT
+            TDSMCTY = TRY*TDSMCT
+            TDSMCTZ = TRZ*TDSMCT
+         END IF
+      END IF
+
+   END SUBROUTINE DCMNNCUTOFF
+
+!*******************************************************************************************
+
+   SUBROUTINE DCMNBOND14LIST(NATOMX, BNBNDINB14, BNBNDIBLO14)
+
+      ! SUBROUTINE TO CREATE DCM 1-4 EXCLUSION LIST FOR EWALD
+      ! THIS LIST CAN BE PASSED TO EWLDEX FOR EWALD EXLUSION TERM
+      IMPLICIT NONE
+
+      INTEGER NATOMX, BNBNDINB14(:), BNBNDIBLO14(:) !INPUT ARGUMENTS
+
+      INTEGER I, J, K, L, M
+
+      DNNB14 = 0
+      K = 1
+      DO I = 1, NALL
+         ! GET EXCLUSION LIST FOR ATOM THIS CHARGE BELONGS TO
+         J = ATQ(I)
+         IF (J .GT. 1) THEN
+            K = BNBNDIBLO14(J - 1) + 1
+         ELSE
+            K = 1
+         END IF
+         DO L = 0, NQA(J) - 1 ! EXCLUDE OTHER CHARGES ON ATOM J
+            IF (IDQ(J) + L .GT. I) THEN ! IGNORE SELF-INTERACTION AND DON'T DOUBLE-COUNT
+               DNNB14 = DNNB14 + 1
+               DINB14(DNNB14) = IDQ(J) + L
+            END IF
+         END DO
+         DO L = K, BNBNDIBLO14(J) ! LOOP OVER EXCLUSION LIST OF ATOM J
+            DO M = 0, NQA(ABS(BNBNDINB14(L))) - 1 ! EXCLUDE DCM CHARGES OF EXCLUDED ATOMS
+               DNNB14 = DNNB14 + 1
+               DINB14(DNNB14) = SIGN(IDQ(ABS(BNBNDINB14(L))) + M, BNBNDINB14(L))
+            END DO
+         END DO
+         DIBLO14(I) = DNNB14
+      END DO
+
+   END SUBROUTINE DCMNBOND14LIST
+
+!*******************************************************************************************
+
+   SUBROUTINE ADD_DCM_RECIP_F(EWVIRIAL, X, Y, Z)
+
+      ! ADDS K-SPACE FORCES TO DX,DY,DZ AT CORRECT MOMENT TO CONSERVE VIRIAL
+      USE ENERGYM, ONLY: EPROP, VIRI, VIRE, EPRESS, VIXX, VIZZ, VEXX, VEZZ, VIRKE
+      USE PRSSRE, ONLY: VIRAL
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: NUMNOD, MYNOD, GCOMB
+#endif /* (parallel)*/
+
+      IMPLICIT NONE
+
+      INTEGER I, IS, IQ, NTOT
+      REAL(CHM_REAL) EWVIRIAL(:), VPROP, VPRESS(9), X(*), Y(*), Z(*)
+
+      ! ADD KSPACE TORQUES AND EVALUATE INTERNAL VIRIAL CORRECTION
+      CALL ADD_TORQUES(KDCDXA, KDCDYA, KDCDZA, NATOMA, .TRUE.)
+
+      EWVIRIAL(1:9) = 0.D0
+      DO I = 1, 9
+         EWVIRIAL(I) = EWVIRIAL(I) + DCEWVIRIAL(I)
+      END DO
+
+      ! ADD_TORQUES APPENDED NUCLEAR TERMS TO END OF KDCD ARRAYS, DO THE SAME FOR XQAC ETC.
+      DO I = 1, NATOMA
+         XQAC(I + NALLC) = X(I)
+         YQAC(I + NALLC) = Y(I)
+         ZQAC(I + NALLC) = Z(I)
+      END DO
+      NTOT = NALLC + NATOMA
+
+      ! ADD ON INTERNAL VIRIAL CORRECTION FROM K-SPACE FORCES (ORIGINAL
+      ! VIRIAL IS CALCULATED BY KSPACE ROUTINE FOR FORCES AT OFF-CENTER
+      ! POSITIONS)
+#if KEY_PARALLEL==1 /*parallel*/
+      CALL GCOMB(KDCDXA, NTOT)
+      CALL GCOMB(KDCDYA, NTOT)
+      CALL GCOMB(KDCDZA, NTOT)
+      I = INT(NTOT/NUMNOD)
+      IS = MYNOD*I
+      IF (MYNOD .EQ. 0) IS = 1
+      IQ = (MYNOD + 1)*I - 1
+      IF (MYNOD .EQ. NUMNOD - 1) IQ = NTOT
+      CALL VIRAL(VPROP, VPRESS, IS, IQ, XQAC, YQAC, ZQAC, KDCDXA, KDCDYA, KDCDZA)
+#else /* (parallel)*/
+      CALL VIRAL(VPROP, VPRESS, 1, NTOT, XQAC, YQAC, ZQAC, KDCDXA, KDCDYA, KDCDZA)
+#endif /* (parallel)*/
+      VPROP = (VPRESS(1) + VPRESS(5) + VPRESS(9))/3.D0
+      DO I = 1, 9
+         EPRESS(VIXX + I - 1) = VPRESS(I) + EPRESS(VIXX + I - 1)
+      END DO
+      EPROP(VIRI) = VPROP + EPROP(VIRI)
+
+      DCEWVIRIAL = 0.D0
+      DEALLOCATE (KDCDXA, KDCDYA, KDCDZA, XQAC, YQAC, ZQAC)
+
+   END SUBROUTINE ADD_DCM_RECIP_F
+
+!*******************************************************************************************
+
+   SUBROUTINE DCMSETIM(QIM, NATM)
+
+      ! SET QIMG (USED TO WARN DCME THIS IS AN IMAGE RUN)
+      IMPLICIT NONE
+
+      LOGICAL QIM
+      INTEGER NATM
+
+      QIMG = QIM
+      NATIM = NATM
+
+   END SUBROUTINE
+
+!*******************************************************************************************
+
+   SUBROUTINE DCMNBUP()
+
+! NBONDS HAS BEEN CALLED SINCE LAST DCM NBONDLIST UPDATE, SET FLAG TO UPDATE DCM LISTS AS WELL
+      QDCNB = .TRUE.
+      IQDCNB = .TRUE.
+      QDCNB14 = .TRUE.
+      QFNB = .TRUE.
+
+   END SUBROUTINE DCMNBUP
+
+!*******************************************************************************************
+
+   SUBROUTINE ADD_TORQUES(DCDXA, DCDYA, DCDZA, NATOMX, QCORR)
+
+      ! APPLY FORCES FROM OFF-CENTER DCM CHARGES TO NUCLEI THAT DEFINE THEIR FRAMES
+      ! NOTE THIS CAN BE PROBLEMATIC FOR THE VIRIAL IF IT WAS ALREADY CALCULATED FOR THE
+      ! OFF-CENTER POSITIONS, CALL THIS ROUTINE AT THE RIGHT TIME OR ADD A VIRIAL
+      ! CORRECTION TO ALLOW NPT CALCULATIONS ETC. (CHECK WITH "TEST FIRST CRYST" OR
+      ! "CHECK FIRST CRYST HOMO" FOR INTERNAL VIRIAL)
+
+      USE CHM_KINDS
+      USE DERIV, ONLY: DX, DY, DZ
+
+      !  ERIC: ADDING STREAM HERE FOR DEBUGGING
+      ! USE STREAM, ONLY: OUTU, PRNLEV
+
+      IMPLICIT NONE
+
+      INTEGER NATOMX
+      INTEGER I, J, K, A2, A3, IQ1, J1, K1, KK
+      INTEGER FR, L, M, XATM, II
+
+      LOGICAL QCORR
+
+      REAL(CHM_REAL) :: DCDXA(:), DCDYA(:), DCDZA(:)
+      REAL(CHM_REAL) :: TDX(NATOMX), TDY(NATOMX), TDZ(NATOMX)
+
+! BUILD CORRECTION TERM FOR EWALD VIRIAL CORRECTION
+      IF (QCORR) THEN
+         TDX(1:NATOMX) = DX(1:NATOMX)
+         TDY(1:NATOMX) = DY(1:NATOMX)
+         TDZ(1:NATOMX) = DZ(1:NATOMX)
+      END IF
+
+! ADD DCM TORQUES
+      DO I = 1, NATOMX
+         IF (NQA(I) .GT. 0) THEN
+            IF (AFRAME(I, 2) .EQ. 1) THEN   ! DETERMINE ATM1,ATM2,ATM3 FOR LOCAL AXES
+               A2 = 2
+               A3 = 3
+            ELSEIF (AFRAME(I, 2) .EQ. 2) THEN
+               A2 = 1
+               A3 = 3
+            ELSE
+               A2 = 2
+               A3 = 1
+            END IF
+            IF (AFRAME(I, 1) .EQ. 0) CYCLE ! NO CHARGES FOR THIS ATOM
+            J1 = FRAMEI(AFRAME(I, 1), A2)
+            K1 = FRAMEI(AFRAME(I, 1), A3)
+            DO J = 0, NQA(I) - 1
+               IQ1 = IDQ(I) + J
+               K = IDQ(I) + J
+
+               DX(I) = DX(I) + DCDXA(K)*(1.D0 + DF1(IQ1)) + DCDYA(K)*DF2(IQ1) + DCDZA(K)*DF3(IQ1)
+               DY(I) = DY(I) + DCDXA(K)*DF4(IQ1) + DCDYA(K)*(1.D0 + DF5(IQ1)) + DCDZA(K)*DF6(IQ1)
+               DZ(I) = DZ(I) + DCDXA(K)*DF7(IQ1) + DCDYA(K)*DF8(IQ1) + DCDZA(K)*(1.D0 + DF9(IQ1))
+
+               IF (J1 .NE. 0) THEN ! IF NOT MONATOMIC
+                  ! FORCE ON 1ST ATOM USED TO DEFINE LOCAL AXES FROM CHARGE K ON I
+                  DX(J1) = DX(J1) + DCDXA(K)*DF10(IQ1) + DCDYA(K)*DF11(IQ1) + DCDZA(K)*DF12(IQ1)
+                  DY(J1) = DY(J1) + DCDXA(K)*DF13(IQ1) + DCDYA(K)*DF14(IQ1) + DCDZA(K)*DF15(IQ1)
+                  DZ(J1) = DZ(J1) + DCDXA(K)*DF16(IQ1) + DCDYA(K)*DF17(IQ1) + DCDZA(K)*DF18(IQ1)
+               END IF
+
+               IF (K1 .NE. 0) THEN ! IF NOT DIATOMIC
+                  DX(K1) = DX(K1) + DCDXA(K)*DF19(IQ1) + DCDYA(K)*DF20(IQ1) + DCDZA(K)*DF21(IQ1)
+                  DY(K1) = DY(K1) + DCDXA(K)*DF22(IQ1) + DCDYA(K)*DF23(IQ1) + DCDZA(K)*DF24(IQ1)
+                  DZ(K1) = DZ(K1) + DCDXA(K)*DF25(IQ1) + DCDYA(K)*DF26(IQ1) + DCDZA(K)*DF27(IQ1)
+               END IF
+
+               IF (KERN) THEN !.OR. KERN
+                  IF (FLXFRS(AFRAME(I, 1)) .EQ. 1) THEN ! IF THIS FRAME NEEDS FLUX
+                     IF (NATMK .GT. 3) THEN ! LOOP OVER EXTRA ATOMS
+                        DO II = 1, NATMK - 3
+                           XATM = XKERNATMS(K, II)
+                          !  WRITE(OUTU,*) "TORQ:", "L", K, "XATM", XATM, "I", I
+                    DX(XATM) = DX(XATM) + DCDXA(K)*TMPDX2(II, K, 1, 1) + DCDYA(K)*TMPDX2(II, K, 1, 2) + DCDZA(K)*TMPDX2(II, K, 1, 3)
+                    DY(XATM) = DY(XATM) + DCDXA(K)*TMPDX2(II, K, 2, 1) + DCDYA(K)*TMPDX2(II, K, 2, 2) + DCDZA(K)*TMPDX2(II, K, 2, 3)
+                    DZ(XATM) = DZ(XATM) + DCDXA(K)*TMPDX2(II, K, 3, 1) + DCDYA(K)*TMPDX2(II, K, 3, 2) + DCDZA(K)*TMPDX2(II, K, 3, 3)
+                        END DO
+                     END IF
+                  END IF
+               END IF
+
+            END DO !J
+         END IF !NQA(I)>0
+      END DO !I
+
+      IF (QCORR) THEN
+         DO I = 1, NATOMX
+            !APPEND NUCLEAR POSITION VIRIAL CORRECTION TO END OF DXDX ARRAYS
+            DCDXA(I + NALLC) = DX(I) - TDX(I)
+            DCDYA(I + NALLC) = DY(I) - TDY(I)
+            DCDZA(I + NALLC) = DZ(I) - TDZ(I)
+         END DO
+         DO I = 1, NALLC
+            !OVERWRITE DCM CHARGE FORCE ARRAY WITH VIRIAL CORRECTION FOR EACH CHARGE
+            DCDXA(I) = -DCDXA(I)
+            DCDYA(I) = -DCDYA(I)
+            DCDZA(I) = -DCDZA(I)
+         END DO
+      END IF
+
+   END SUBROUTINE ADD_TORQUES
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                       DCM INITIALIZATION
+!*******************************************************************************************
+!
+! ROUTINE TO PROCESS SYSTEM, DETERMINE WHICH RESIDUES SHOULD HAVE DCM CHARGES AND DIVIDE
+! UP MOLECULES INTO FRAMES. RESULTS ARE STORED BY CONSTRUCTING THE CORRESPONDING ARRAYS
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCMINIT(NATOMX)
+      ! INITIALIZE ALL ATOMS WITH DCM CHARGES AS APPROPRIATE
+      USE CHM_KINDS
+      USE STREAM, ONLY: OUTU, PRNLEV
+      USE STRING, ONLY: FILSPC
+      USE PSF, ONLY: NRES, RES, CG, IBASE           ! FOR NRES,RES,CG,IBASE
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: COMM_CHARMM, MYNOD
+      USE MPI, ONLY: MPI_REAL8, MPI_INTEGER, MPI_LOGICAL
+#endif
+      IMPLICIT NONE
+
+! MAXPAT: MAXIMUM ALLOWED PATCHED RESIDUES
+! NPAT: NUMBER OF PATCHED RESIDUES
+
+      INTEGER, PARAMETER :: MAXRFR = 70, MAXRA = 3*MAXRFR, MAXPAT = 20
+
+      INTEGER IOS
+
+      INTEGER NATOMX, NATOM0, A, B, I, II, III, J, K, L, M, N, T, IO, NDCMRES, WDLEN, NDRES, NPAT, IERROR, NFLUXRES
+      INTEGER JJ, F, FRR
+      INTEGER, ALLOCATABLE :: RNFRAME(:), RNQ(:, :, :), RFRAMEI(:, :, :), RFRTYP(:, :)
+      INTEGER, ALLOCATABLE :: RNP(:, :, :)
+      REAL(CHM_REAL), ALLOCATABLE :: RAQ(:, :, :, :), RBQ(:, :, :, :), RCQ(:, :, :, :), RDQ(:, :, :, :)
+      REAL(CHM_REAL), ALLOCATABLE :: RDP(:, :, :, :)
+      CHARACTER(LEN=8), DIMENSION(NRES + MAXPAT) :: RESDC
+      CHARACTER(LEN=8) WD
+      LOGICAL QPATCHF, QPATCHL
+      CHARACTER(LEN=4) FLUX_TYPE
+
+      INTEGER :: AXISFRAMENUM, CHGNUM, AXESN
+      CHARACTER(LEN=3) RESNAME
+      REAL(chm_real) X1S, X2S, X3S, X4S
+      INTEGER, ALLOCATABLE :: FATM1(:), FATM2(:), FATM3(:)
+      INTEGER NLINES, ATOM_MATCH, NFLUXFRAMES, NKFR
+
+      INTEGER ATM1, ATM2, ATM3, FR
+
+      IF (NATOMX .EQ. 0) THEN ! CATCH CALL DCM BEFORE INITIALIZING SYSTEM
+         CALL WRNDIE(-5, '<DCM> DCMINIT', 'SYSTEM MUST BE INITIALIZED BEFORE CALLING DCM MODULE')
+      END IF
+#if KEY_PARALLEL==1
+      ! READ CHARGES & LOCAL COORDS FROM FILE
+      IF (MYNOD .EQ. 0) THEN
+#endif
+         READ (IUDCM, *, IOSTAT=IO) NDCMRES, NFLUXRES  ! NO. DISTRIBUTED CHG RESIDUE TYPES !!! TODO: add extra int for flux
+#if KEY_PARALLEL==1
+      END IF ! MYNOD .EQ. 0
+      CALL MPI_BARRIER(COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(NDCMRES, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+#endif
+      NATOM0 = NATOMX
+      ! ALLOCATE MEMORY FOR PERSISTENT VARIABLES
+      ALLOCATE (AFRAME(14*NATOM0, 2))
+      ALLOCATE (IDQ(14*NATOM0))
+      ALLOCATE (FRAMEI(14*NATOM0, 3))
+      ALLOCATE (FRTYP(14*NATOM0))
+      ALLOCATE (IREF(14*NATOM0))
+      ! TODO: VERY MEMORY-HUNGRY! ALL DUE TO FIRST ITERATION (BEFORE WE KNOW NDQ)
+      ALLOCATE (DPOL(14*NATOM0*MAXPOL))
+      ALLOCATE (DQ(14*NATOM0*MAXQ))
+      ALLOCATE (AQ(14*NATOM0*MAXQ))
+      ALLOCATE (BQ(14*NATOM0*MAXQ))
+      ALLOCATE (CQ(14*NATOM0*MAXQ))
+      ALLOCATE (ATQ(14*NATOM0*MAXQ))
+      ALLOCATE (DPAIR(14*NATOM0*MAXQ))
+      ALLOCATE (NQA(14*NATOM0))
+      ALLOCATE (NQ(14*NATOM0, 3))     ! UNLIKELY TO HAVE MORE FRAMES THAN ATOMS, NATOMX SHOULD BE SAFE
+      ! ALLOCATE FOLLOWING VARIABLES HERE, WE ONLY NEED THEM WHILE READING DEFINITIONS FILE
+      ! MAXPAT REFERS TO MAX ALLOWED NO. OF PATCHES (WE CREATE NEW RESIDUES FOR PACHES)
+      ALLOCATE (RDQ(NDCMRES*2 + MAXPAT, MAXRFR, MAXRA, MAXQ))
+      ALLOCATE (RDP(NDCMRES*2 + MAXPAT, MAXRFR, 3, MAXPOL))
+      ALLOCATE (RAQ(NDCMRES*2 + MAXPAT, MAXRFR, MAXRA, MAXQ))
+      ALLOCATE (RBQ(NDCMRES*2 + MAXPAT, MAXRFR, MAXRA, MAXQ))
+      ALLOCATE (RCQ(NDCMRES*2 + MAXPAT, MAXRFR, MAXRA, MAXQ))
+      ALLOCATE (RNQ(NDCMRES*2 + MAXPAT, MAXRFR, 3))
+      ALLOCATE (RNP(NDCMRES*2 + MAXPAT, MAXRFR, 3))
+      ALLOCATE (RFRTYP(NDCMRES*2 + MAXPAT, MAXRFR))
+      ALLOCATE (RFRAMEI(NDCMRES*2 + MAXPAT, MAXRFR, 3))
+      ALLOCATE (RNFRAME(NDCMRES*2 + MAXPAT))
+      ALLOCATE (CGBAK(NATOM0))
+      ! INITIALIZE ARRAYS
+      AFRAME = 0
+      ATQ = 0
+      IDQ = 0
+      FRAMEI = 0
+      FRTYP = 0
+      IREF = 0
+      DPOL = 0.D0
+      DQ = 0.D0
+      AQ = 0.D0
+      BQ = 0.D0
+      CQ = 0.D0
+      DPAIR = 0.D0
+      NQ = 0
+      NQA = 0
+      CGBAK = 0
+
+      RDQ = 0
+      RDP = 0
+      RAQ = 0
+      RBQ = 0
+      RCQ = 0
+      RNQ = 0
+      RNP = 0
+      RFRTYP = 0
+      RFRAMEI = 0
+      RNFRAME = 0
+
+      INF = 0
+      INDQ = 0
+      NDQ = 0  ! INITIALIZE INDEX FOR DCM CHARGE ARRAY
+      NDP = 0  ! SAME FOR POLARIZABILITIES
+
+#if KEY_PARALLEL==1
+      IF (MYNOD .EQ. 0) THEN
+#endif
+         NF = 0   ! INITIALIZE TO ZERO FRAMES IN TOTAL
+         NDRES = 0 ! NUMBER OF DCM RESIDUES IN SYSTEM
+         MAXRQ = 0.D0 ! MAX. DISTANCE OF ANY DCM CHARGE FROM ITS NUCLEUS
+         IF (IO > 0) THEN
+            CALL WRNDIE(-5, '<DCM> DCMINIT', 'INPUT ERROR READING # OF RESIDUES.')
+         ELSE IF (IO < 0) THEN
+            CALL WRNDIE(-5, '<DCM> DCMINIT', 'INPUT ERROR READING # OF RESIDUES.')
+         END IF
+         DO L = 1, NDCMRES        ! LOOP OVER ALL RESIDUES DEFINED IN FILE
+            READ (IUDCM, *)  ! BLANK LINE
+            ! READ RESIDUE NAME
+            RESDC(L) = '        '
+            READ (IUDCM, *) RESDC(L)
+            WDLEN = LEN_TRIM(RESDC(L))
+            CALL FILSPC(RESDC(L), 8, WDLEN)
+            IF (WDLEN .NE. 0) THEN
+               IF (WDLEN > 4) THEN
+                  IF (WRNLEV >= 2) WRITE (OUTU, '(A)') (' ***** ERROR IN DCM ***** RES NAME > 4 CHARS.')
+               END IF
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(2A)') ' DCM>          READING PARAMETERS FOR RESIDUE ', RESDC(L)
+               END IF
+            ELSE
+               CALL WRNDIE(-5, '<DCM> DCMINIT', 'INPUT ERROR READING NAME OF RESIDUE.')
+            END IF
+            READ (IUDCM, *) RNFRAME(L) ! NO. FRAMES IN RESIDUE
+            DO M = 1, RNFRAME(L)       ! LOOP OVER FRAMES
+               READ (IUDCM, *) RFRAMEI(L, M, 1:3), WD ! ATOM INDICES INVOLVED IN FRAME, Z-AXIS TYPE
+               IF (WD .EQ. 'BI') THEN
+                  RFRTYP(L, M) = 1 ! BISECTOR AS Z-AXIS
+                  IF (RFRAMEI(L, M, 2) .EQ. 0) THEN ! MONATOMIC
+                     IF (PRNLEV .GT. 1) THEN
+                        WRITE (OUTU, '(A,I5,A)') '<DCM> ERROR FOR RESIDUE ', RESDC(L), ' IN DCM CHARGE FILE'
+                     END IF
+                     CALL WRNDIE(-5, '<DCM> DCMINIT', 'CANNOT USE BISECTOR Z-AXIS FOR A MONATOMIC. USE BO INSTEAD')
+                  END IF
+                  IF (RFRAMEI(L, M, 3) .EQ. 0) THEN ! DIATOMIC
+                     IF (PRNLEV .GT. 1) THEN
+                        WRITE (OUTU, '(A,I5,A)') '<DCM> ERROR FOR RESIDUE ', RESDC(L), ' IN DCM CHARGE FILE'
+                     END IF
+                     CALL WRNDIE(-5, '<DCM> DCMINIT', 'CANNOT USE BISECTOR Z-AXIS FOR A DIATOMIC!')
+                  END IF
+               ELSEIF (WD .EQ. 'BO') THEN
+                  RFRTYP(L, M) = 0 ! BOND AS Z-AXIS
+               ELSE
+                  IF (PRNLEV .GT. 1) THEN
+                     WRITE (OUTU, '(A,I5,A)') '<DCM> AXIS SYSTEM TYPE ', WD, ' NOT RECOGNIZED'
+                     WRITE (OUTU, '(A)') '<DCM> ALLOWED TYPES ARE BO OR BI'
+                  END IF
+                  CALL WRNDIE(-5, '<DCM> DCMINIT', 'SYNTAX ERROR FOR AXIS SYSTEM TYPE.')
+               END IF
+               READ (IUDCM, *) RNQ(L, M, 1), RNP(L, M, 1) ! NO. CHGS, POLS FOR ATOM
+               IF (RNP(L, M, 1) .GT. 1) THEN ! MORE THAN 1 ATOMIC POLARIZABILITY
+                  IF (PRNLEV .GT. 1) THEN
+                     WRITE (OUTU, '(A,I5,A,I3,A)') ' DCM> RESIDUE ', L, ' FRAME ', M, 'ATOM 1:'
+                  END IF
+                  CALL WRNDIE(-5, '<DCM> DCMINIT', 'CURRENTLY NO MORE THAN 1 POLARIZABILITY PER ATOM ALLOWED')
+               END IF
+               DO N = 1, RNQ(L, M, 1)
+                  READ (IUDCM, *) RAQ(L, M, 1, N), RBQ(L, M, 1, N), RCQ(L, M, 1, N), RDQ(L, M, 1, N)
+                  IF (RFRAMEI(L, M, 3) .EQ. 0 .AND. RFRAMEI(L, M, 2) .EQ. 0) THEN ! MONATOMIC ION
+                     IF ((RAQ(L, M, 1, N) .NE. 0.D0) .OR. (RBQ(L, M, 1, N) .NE. 0.D0) .OR. (RCQ(L, M, 1, N) .NE. 0.D0)) THEN
+                        IF (PRNLEV .GT. 1) THEN
+                           WRITE (OUTU, '(A,I5,A)') '<DCM> ERROR FOR RESIDUE ', RESDC(L), ' IN DCM CHARGE FILE'
+                        END IF
+                        CALL WRNDIE(-5, '<DCM> DCMINIT', 'ALL DCM CHARGES MUST BE AT ORIGIN FOR MONATOMICS.')
+                     END IF
+                  END IF
+                  IF (RFRAMEI(L, M, 3) .EQ. 0) THEN ! DIATOMIC
+                     IF ((RAQ(L, M, 1, N) .NE. 0.D0) .OR. (RBQ(L, M, 1, N) .NE. 0.D0)) THEN
+                        IF (PRNLEV .GT. 1) THEN
+                           WRITE (OUTU, '(A,I5,A)') '<DCM> ERROR FOR RESIDUE ', RESDC(L), ' IN DCM CHARGE FILE'
+                        END IF
+                        CALL WRNDIE(-5, '<DCM> DCMINIT', 'ALL DCM CHARGES MUST BE ALONG Z-AXIS FOR DIATOMICS.')
+                     END IF
+                  END IF
+               END DO ! N
+               DO N = 1, RNP(L, M, 1)
+                  READ (IUDCM, *) RDP(L, M, 1, N)
+               END DO ! N
+               IF (RFRAMEI(L, M, 2) .EQ. 0) THEN ! MONATOMIC ION
+                  RNQ(L, M, 2) = 0
+                  RNP(L, M, 2) = 0
+               ELSE
+                  READ (IUDCM, *) RNQ(L, M, 2), RNP(L, M, 2)
+                  IF (RNP(L, M, 2) .GT. 1) THEN ! MORE THAN 1 ATOMIC POLARIZABILITY
+                     IF (PRNLEV .GT. 1) THEN
+                        WRITE (OUTU, '(A,I5,A,I3,A)') ' DCM> RESIDUE ', L, ' FRAME ', M, 'ATOM 2:'
+                     END IF
+                     CALL WRNDIE(-5, '<DCM> DCMINIT', 'CURRENTLY NO MORE THAN 1 POLARIZABILITY PER ATOM ALLOWED')
+                  END IF
+                  DO N = 1, RNQ(L, M, 2)
+                     READ (IUDCM, *) RAQ(L, M, 2, N), RBQ(L, M, 2, N), RCQ(L, M, 2, N), RDQ(L, M, 2, N)
+                     IF (RFRAMEI(L, M, 3) .EQ. 0) THEN ! DIATOMIC
+                        IF ((RAQ(L, M, 1, N) .NE. 0.D0) .OR. (RBQ(L, M, 1, N) .NE. 0.D0)) THEN
+                           IF (PRNLEV .GT. 1) THEN
+                              WRITE (OUTU, '(A,I5,A)') '<DCM> ERROR FOR RESIDUE ', RESDC(L), ' IN DCM CHARGE FILE'
+                           END IF
+                           CALL WRNDIE(-5, '<DCM> DCMINIT', 'ALL DCM CHARGES MUST BE ALONG Z-AXIS FOR DIATOMICS.')
+                        END IF
+                     END IF
+                  END DO ! N
+                  DO N = 1, RNP(L, M, 2)
+                     READ (IUDCM, *) RDP(L, M, 2, N)
+                  END DO ! N
+               END IF
+               IF (RFRAMEI(L, M, 3) .EQ. 0) THEN ! MONATOMIC OR DIATOMIC
+                  RNQ(L, M, 3) = 0
+                  RNP(L, M, 3) = 0
+               ELSE
+                  READ (IUDCM, *) RNQ(L, M, 3), RNP(L, M, 3)
+                  IF (RNP(L, M, 3) .GT. 1) THEN ! MORE THAN 1 ATOMIC POLARIZABILITY
+                     IF (PRNLEV .GT. 1) THEN
+                        WRITE (OUTU, '(A,I5,A,I3,A)') ' DCM> RESIDUE ', L, ' FRAME ', M, 'ATOM 3:'
+                     END IF
+                     CALL WRNDIE(-5, '<DCM> DCMINIT', 'CURRENTLY NO MORE THAN 1 POLARIZABILITY PER ATOM ALLOWED')
+                  END IF
+                  DO N = 1, RNQ(L, M, 3)
+                     READ (IUDCM, *) RAQ(L, M, 3, N), RBQ(L, M, 3, N), RCQ(L, M, 3, N), RDQ(L, M, 3, N)
+                  END DO ! N
+                  DO N = 1, RNP(L, M, 3)
+                     READ (IUDCM, *) RDP(L, M, 3, N)
+                  END DO ! N
+               END IF
+               IF (RNQ(L, M, 1) .GT. MAXQ .OR. RNQ(L, M, 2) .GT. MAXQ .OR. RNQ(L, M, 3) .GT. MAXQ) THEN
+                  IF (PRNLEV .GT. 1) THEN
+                     WRITE (OUTU, '(A,I5,A,I3,A)') '<DCM> ERROR FOR RESIDUE ', RESDC(L), ' FRAME ', M, ' IN DCM CHARGE FILE'
+                     WRITE (OUTU, '(A,I3,A)') '<DCM> NUMBER OF DCM CHARGES EXCEEDS MAXQ (', MAXQ, ')'
+                  END IF
+                  CALL WRNDIE(-5, '<DCM> DCMINIT', 'TOO MANY DCM CHARGES FOR ATOM. INCREASE MAXQ IN DCM.SRC')
+               END IF
+            END DO ! M
+         END DO ! LOOP OVER ALL RESIDUE TYPES L
+         ! NOW LOOP OVER ALL RESIDUES IN SYSTEM TO ASSIGN FRAMES, DISTRIBUTED CHARGES ETC
+         NPAT = 0 ! INITIALIZE NUMBER OF PATCHES
+         DO I = 1, NRES
+            IF (IBASE(I) .LT. NATOMX) THEN
+               DO J = 1, NDCMRES
+                  IF (RESDC(J) .EQ. RES(I)) THEN
+                     T = J ! APPLY THIS RESIDUE TYPE
+
+                     ! CHECK FOR PATCHES
+                     IF (DCMNPATF .GT. 0 .OR. DCMNPATL .GT. 0) THEN
+                        QPATCHF = .FALSE. ! "FIRST" PATCH
+                        QPATCHL = .FALSE. ! "LAST" PATCH
+                        DO K = 1, DCMNPATF
+                           IF (I .EQ. DCMPATF(K, 2)) THEN ! IF THIS RESIDUE APPEARS IN PATCH FIRST LIST
+                              QPATCHF = .TRUE.
+                           END IF
+                        END DO
+                        DO K = 1, DCMNPATL
+                           IF (I .EQ. DCMPATL(K, 2)) THEN ! IF THIS RESIDUE APPEARS IN PATCH LAST LIST
+                              IF (QPATCHF) THEN
+                                 IF (PRNLEV .GT. 1) THEN
+                                    WRITE (OUTU, '(2A,I5,A)') ' DCM> ERROR: RESIDUE ', RES(I), I, ' IS DOUBLE-PATCHED,'
+                                    WRITE (OUTU, '(A)') ' DCM> NOT YET SUPPORTED BY DCM MODULE'
+                                 END IF
+                                 CALL WRNDIE(-1, '<DCM> DCMINIT', 'DCM RESIDUES MAY NOT BE DOUBLE-PATCHED.')
+                              END IF
+                              QPATCHL = .TRUE.
+                           END IF
+                        END DO
+                        IF (QPATCHF .OR. QPATCHL) THEN
+                           IF (PRNLEV .GT. 1) THEN
+                              WRITE (OUTU, '(A)') ''
+                              WRITE (OUTU, '(2A,I5)') '  DCM> PATCHED DCM RESIDUE DETECTED: ', RES(I), I
+                           END IF
+                        END IF
+                        IF (QPATCHF) THEN
+                           NPAT = NPAT + 1
+                           CALL PATCHRES(NDCMRES, RNFRAME, RESDC, RFRTYP, RFRAMEI, RNQ, RNP, RAQ, RBQ, RCQ, &
+                                         RDQ, RDP, J, I, QPATCHF, QPATCHL)
+                           T = NDCMRES ! APPLY THE NEW PATCHED DCM RESIDUE TYPE
+                        END IF
+                        IF (QPATCHL) THEN
+                           NPAT = NPAT + 1
+                           CALL PATCHRES(NDCMRES, RNFRAME, RESDC, RFRTYP, RFRAMEI, RNQ, RNP, RAQ, RBQ, RCQ, &
+                                         RDQ, RDP, J, I, QPATCHF, QPATCHL)
+                           T = NDCMRES ! APPLY THE NEW PATCHED DCM RESIDUE TYPE
+                        END IF
+                     END IF
+                     IF (NPAT .GT. MAXPAT) THEN ! EXCEEDED MAX ALLOWED PATCHED RESIDUES
+                        IF (PRNLEV .GT. 1) THEN
+                           WRITE (OUTU, "(A,I3)") ' DCM> MAX NUMBER OF PATCHED RESIDUES EXCEEDED: ', NPAT
+                        END IF
+                        CALL WRNDIE(-1, '<DCM> DCMINIT', 'TOO MANY PATCHED RESIDUES.')
+                     END IF
+                     ! END CHECK FOR PATCHES
+
+                     NDRES = NDRES + 1
+                     DO K = 1, RNFRAME(T)
+                        NF = NF + 1
+                        IF (IBASE(I) + RFRAMEI(T, K, 3) .LE. NATOMX) THEN
+                           FRTYP(NF) = RFRTYP(T, K) ! SET FRAME Z-AXIS TYPE (BISECTOR OR BOND)
+                           DO M = 1, 3
+                              IF (RFRAMEI(T, K, M) .EQ. 0) THEN
+                                 FRAMEI(NF, M) = 0  ! MONATOMIC / DIATOMIC
+                              ELSE
+                                 FRAMEI(NF, M) = IBASE(I) + RFRAMEI(T, K, M)
+                              END IF
+                              IF (RNQ(T, K, M) .GT. 0) THEN ! IF MTH ATOM IN KTH FRAME HAS DCM CHARGES
+                                 AFRAME(IBASE(I) + RFRAMEI(T, K, M), 1) = NF  ! STORE WHICH FRAME THIS ATOM IS IN
+                                 AFRAME(IBASE(I) + RFRAMEI(T, K, M), 2) = M   ! STORE WHETHER ATOM 1,2 OR 3 IN FRAME
+                                 NQ(NF, M) = 0
+                                 IF (NQA(IBASE(I) + RFRAMEI(T, K, M)) .GT. 0) THEN
+                                    IF (PRNLEV .GT. 1) THEN
+                                       WRITE (OUTU, '(A,I4,A,I4,A)') ' DCM>   DCM CHARGES FOR ATOM ', &
+                                          IBASE(I) + RFRAMEI(T, K, M), ' RES ', I, &
+                                          ' ALREADY DEFINED, OVERWRITING, BUT OUTPUT PROBABLY GARBAGE...'
+                                       WRITE (OUTU, '(A,I4,A,I3,A,3I4,A)') ' DCM> (', NQA(IBASE(I) + RFRAMEI(T, K, M)), &
+                                          ' CHARGES ALREADY DEFINED FOR ATOM ', RFRAMEI(T, K, M), ' IN FRAME ', &
+                                          RFRAMEI(T, K, 1:3), ')'
+                                    END IF
+                                    CALL WRNDIE(-1, '<DCM> DCMINIT', 'DCM CHARGES FOR ATOM ALREADY DEFINED.')
+                                    IBASE(I) = 1
+                                 END IF
+                                 NQA(IBASE(I) + RFRAMEI(T, K, M)) = 0
+                                 IDQ(IBASE(I) + RFRAMEI(T, K, M)) = NDQ + 1    ! START INDEX OF DISTRIBUTED CHGS IN DQ ARRAY
+                                 IF (CG(IBASE(I) + RFRAMEI(T, K, M)) .NE. 0.D0 .AND. WRNFLAG) THEN ! OVERWRITE (ZERO) CG ARRAY FOR DCM ATOMS
+                                    CALL WRNDIE(1, '<DCM> DCMINIT', 'CENTRAL CHARGE FOR ATOM ALREADY DEFINED')
+                                    IF (PRNLEV .GT. 1) THEN
+                                       WRITE (OUTU, '(A,I4,3A)') '<DCM> ATOM ', IBASE(I) + RFRAMEI(T, K, M), ' CHARGE ', &
+                                          'ALREADY DEFINED, PERHAPS IN TOPOLOGY FILE? OVERWRITING FOR THIS AND', &
+                                          ' ALL FURTHER CLASHES'
+                                    END IF
+                                    WRNFLAG = .FALSE.
+                                 END IF
+                                 CG(IBASE(I) + RFRAMEI(T, K, M)) = 0.D0
+                                 DO L = 1, RNQ(T, K, M)
+                                    ! DEFINE POSITIONS OF DISTRIBUTED CHARGES IN LOCAL AXIS SYSTEM (A*EI, B*EJ, C*EK)
+                                    ! ALLOW ZERO CHARGES FOR THERMODYNAMIC INTEGRATION
+                                    NDQ = NDQ + 1
+                                    AQ(NDQ) = RAQ(T, K, M, L)
+                                    BQ(NDQ) = RBQ(T, K, M, L)
+                                    CQ(NDQ) = RCQ(T, K, M, L)
+                                    IF ((AQ(NDQ)**2 + BQ(NDQ)**2 + CQ(NDQ)**2) .GT. MAXRQ**2) THEN
+                                       MAXRQ = SQRT(AQ(NDQ)**2 + BQ(NDQ)**2 + CQ(NDQ)**2)
+                                    END IF
+                                    DQ(NDQ) = RDQ(T, K, M, L)
+                                    ATQ(NDQ) = IBASE(I) + RFRAMEI(T, K, M)
+                                    DPAIR(NDQ) = 0           ! INITIALIZE
+                                    NQA(IBASE(I) + RFRAMEI(T, K, M)) = NQA(IBASE(I) + RFRAMEI(T, K, M)) + 1
+                                    NQ(NF, M) = NQ(NF, M) + 1
+                                 END DO ! L (ALL CHARGES IN DCM FRAME, ATOM M)
+                                 IF (RNQ(T, K, M) .GT. 1) THEN  ! SEARCH FOR GEOMETRIC PAIRS
+                                    CALL FINDPAIR(IDQ(IBASE(I) + RFRAMEI(T, K, M)), RNQ(T, K, M))
+                                 END IF
+                              ELSE
+                                 NQ(NF, M) = 0
+                              END IF ! IF ATOM M HAS CHARGES
+                              IF (RNP(T, K, M) .GT. 0) THEN
+                                 DO L = 1, RNP(T, K, M)
+                                    DPOL(IBASE(I) + RFRAMEI(T, K, M)) = RDP(T, K, M, L)
+                                    NDP = NDP + 1
+                                    QPOL = .TRUE.
+                                 END DO ! L (ALL POLARIZABILITIES IN DCM FRAME, ATOM M)
+                                 IF (NQ(NF, M) .EQ. 0) THEN !CATCH POLARIZABLE ATOM HAS NO CHARGES
+                                    AFRAME(IBASE(I) + RFRAMEI(T, K, M), 1) = NF  ! STORE WHICH FRAME THIS ATOM IS IN
+                                    AFRAME(IBASE(I) + RFRAMEI(T, K, M), 2) = M
+                                 END IF
+                              END IF
+                           END DO ! M - EACH ATOM IN FRAME
+                        ELSE
+                           IF (PRNLEV .GT. 1) THEN
+                              WRITE (OUTU, '(A,I6,A,I6,A)') ' DCM>   DCM ATOM OUT OF RANGE (', IBASE(I) + RFRAMEI(J, K, 3), &
+                                 ' OF ', NATOMX, ')'
+                           END IF
+                           CALL WRNDIE(-5, '<DCM> DCMINIT', 'DCM ATOM INDEX OUT OF RANGE: FATAL ERROR.')
+                        END IF
+                     END DO ! K (ALL FRAMES IN DCM RESIDUE)
+                     EXIT ! BREAK OUT OF LOOP AS WE ALREADY MATCHED RES TYPE
+                  END IF ! IF IS A DCM RESIDUE
+               END DO ! J (ALL DCM RESIDUE TYPES)
+            END IF ! IF RESIDUE WITHIN LIMIT OF NATOMX
+         END DO ! I (ALL RESIDUES)
+
+         ! NOW ZERO REMAINING CHARGES IN SYSTEM (NON-DCM RESIDUES) AND CONVERT TO DCM NUCLEAR-CENTERED
+         DO I = 1, NATOMX
+            IF (CG(I) .NE. 0.D0) THEN ! CAN'T BE A DCM ATOM AS WE ZEROED THOSE CHARGES ALREADY
+               CGBAK(I) = CG(I)
+               NQA(I) = 1 ! CREATE "MONATOMIC" FRAME FOR THE NON-DCM ATOM
+               NF = NF + 1
+               NQ(NF, 1) = 1
+               NQ(NF, 2) = 0
+               NQ(NF, 3) = 0
+               NDQ = NDQ + 1
+               IDQ(I) = NDQ
+               AFRAME(I, 1) = NF
+               AFRAME(I, 2) = 1
+               FRAMEI(NF, 1) = I
+               FRAMEI(NF, 2) = 0
+               FRAMEI(NF, 3) = 0
+               AQ(NDQ) = 0.D0
+               BQ(NDQ) = 0.D0
+               CQ(NDQ) = 0.D0
+               DQ(NDQ) = CG(I)
+               ATQ(NDQ) = I
+               CG(I) = 0.D0 ! DON'T LET CHARMM DOUBLE-COUNT ELECTROSTATIC ENERGY
+            END IF
+         END DO
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, '(A,I6)') ' DCM>          TOTAL DCM RESIDUES IN SYSTEM: ', NDRES
+            WRITE (OUTU, '(A,I6)') ' DCM>          TOTAL DCM CHARGES IN SYSTEM: ', NDQ
+         END IF
+
+         ! STANDARD MDCM FINISHES
+         !WRITE(OUTU,*) MYNOD, FLUX
+
+#if KEY_PARALLEL==1
+! WRITE(OUTU,*) "IN MPI BLOCK"
+      END IF ! MYNOD.EQ.0
+
+      CALL MPI_BARRIER(COMM_CHARMM, IERROR)
+
+      ! BROADCAST DATA TO OTHER NODES
+      CALL MPI_BCAST(QPOL, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+
+      CALL MPI_BCAST(KERN, 1, MPI_LOGICAL, 0, COMM_CHARMM, IERROR)
+
+      CALL MPI_BCAST(NF, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(NDQ, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(NDRES, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(MAXRQ, 1, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+
+      CALL MPI_BCAST(IDQ, SIZE(IDQ, 1), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(FRAMEI, (SIZE(FRAMEI, 1))*3, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(FRTYP, SIZE(FRTYP, 1), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(AFRAME, (SIZE(AFRAME, 1))*2, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(IREF, SIZE(IREF, 1), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(NQA, SIZE(NQA, 1), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(NQ, (SIZE(NQ, 1))*3, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(ATQ, SIZE(ATQ, 1), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+
+      CALL MPI_BCAST(DQ, SIZE(DQ, 1), MPI_REAL8, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(AQ, SIZE(AQ, 1), MPI_REAL8, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(BQ, SIZE(BQ, 1), MPI_REAL8, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(CQ, SIZE(CQ, 1), MPI_REAL8, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(CG, NATOM0, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+      CALL MPI_BCAST(DPOL, SIZE(DPOL, 1), MPI_REAL8, 0, COMM_CHARMM, IERROR)
+
+#endif
+!  KEY PARA
+
+      ! ALLOCATE DERIVATIVE COEEFICIENTS FOR DCM CHARGES, 35X NO. OF CHARGES IN CASE WE USE IMAGES
+      ALLOCATE (DF1(13*NDQ), DF2(13*NDQ), DF3(13*NDQ), DF4(13*NDQ), DF5(13*NDQ), DF6(13*NDQ), &
+                DF7(13*NDQ), DF8(13*NDQ), DF9(13*NDQ), DF10(13*NDQ), DF11(13*NDQ), DF12(13*NDQ), &
+                DF13(13*NDQ), DF14(13*NDQ), DF15(13*NDQ), DF16(13*NDQ), DF17(13*NDQ), DF18(13*NDQ), &
+                DF19(13*NDQ), DF20(13*NDQ), DF21(13*NDQ), DF22(13*NDQ), DF23(13*NDQ), DF24(13*NDQ), &
+                DF25(13*NDQ), DF26(13*NDQ), DF27(13*NDQ))
+
+      ALLOCATE (FPX1(NDQ), FPX2(NDQ), FPX3(NDQ), FPX4(NDQ), &
+                FPY1(NDQ), FPY2(NDQ), FPY3(NDQ), FPY4(NDQ), &
+                FPZ1(NDQ), FPZ2(NDQ), FPZ3(NDQ), FPZ4(NDQ))
+
+      DF1 = 0.D0
+      DF2 = 0.D0
+      DF3 = 0.D0
+      DF4 = 0.D0
+      DF5 = 0.D0
+      DF6 = 0.D0
+      DF7 = 0.D0
+      DF8 = 0.D0
+      DF9 = 0.D0
+      DF10 = 0.D0
+      DF11 = 0.D0
+      DF12 = 0.D0
+      DF13 = 0.D0
+      DF14 = 0.D0
+      DF15 = 0.D0
+      DF16 = 0.D0
+      DF17 = 0.D0
+      DF18 = 0.D0
+      DF19 = 0.D0
+      DF20 = 0.D0
+      DF21 = 0.D0
+      DF22 = 0.D0
+      DF23 = 0.D0
+      DF24 = 0.D0
+      DF25 = 0.D0
+      DF26 = 0.D0
+      DF27 = 0.D0
+
+      !*******************************************************************************************
+      ! INITIALIZE FLUX MDCM HERE
+      !*******************************************************************************************
+#if KEY_PARALLEL==1
+      !  allocate array on all nodes.
+      IF (.NOT. ALLOCATED(FLXFRS)) THEN
+         ALLOCATE (FLXFRS(14*NATOM0))
+         FLXFRS = 0
+      END IF
+
+! READ CHARGES & LOCAL COORDS FROM FILE
+! IF NODE ONE IS ACTIVE
+      IF (MYNOD .EQ. 0) THEN
+#endif
+
+         IF (FLUX) THEN
+            READ (IUDCM, *) ! account for blank line
+            READ (IUDCM, *) RESNAME, NFLUXFRAMES
+
+            IF (.NOT. ALLOCATED(FLUX_TYPES)) THEN
+               ALLOCATE (FLUX_TYPES(NFLUXFRAMES), FATM1(NFLUXFRAMES), FATM2(NFLUXFRAMES), FATM3(NFLUXFRAMES))
+            END IF
+
+            DO II = 1, NFLUXFRAMES !  LOOP OVER FLUX FRAMES
+               READ (IUDCM, *) AXISFRAMENUM
+               !  SAVE THIS FRAME NUMBER AS FLUX
+               ! FLXFRS(AXISFRAMENUM) = ONE
+               READ (IUDCM, *) FLUX_TYPES(II), FATM1(II), FATM2(II), FATM3(II)
+               WRITE (OUTU, *) FLUX_TYPES(II), FATM1(II), FATM2(II), FATM3(II)
+               NLINES = (NQ(II, 1) + NQ(II, 2) + NQ(II, 3))*3
+               ! WRITE(OUTU,*) "NLINES: ", NLINES
+               !!!! PARSE FILE
+               DO I = 0, NLINES - 1
+                  READ (IUDCM, *) ATOM_MATCH, CHGNUM, X1S, X2S, X3S, X4S
+                  !  PATCH RESIDUES HERE
+                  DO III = 1, NRES
+                     DO J = 1, NDCMRES
+                        !  WRITE(OUTU,*) III, "FLXFRS", FLXFRS(III)
+                        IF (RESDC(J) .EQ. RES(III)) THEN
+                           L = IDQ(FRAMEI(III, ATOM_MATCH)) + CHGNUM - 1
+                           FLXFRS(III) = ONE
+                           AXESN = MOD(I, 3) + 1 ! will return 1, 2, 3 for every first second
+                           ! and third line in multiples of three
+                           IF (AXESN .EQ. 1) THEN
+                              FPX1(L) = X1S
+                              FPX2(L) = X2S
+                              FPX3(L) = X3S
+                              FPX4(L) = X4S
+                           END IF ! X AXIS
+                           IF (AXESN .EQ. 2) THEN
+                              FPY1(L) = X1S
+                              FPY2(L) = X2S
+                              FPY3(L) = X3S
+                              FPY4(L) = X4S
+                           END IF ! Y AXIS
+                           IF (AXESN .EQ. 3) THEN
+                              FPZ1(L) = X1S
+                              FPZ2(L) = X2S
+                              FPZ3(L) = X3S
+                              FPZ4(L) = X4S
+                           END IF ! Z AXIS
+
+                           WRITE (OUTU, *) I, ATOM_MATCH + IBASE(III), CHGNUM, L, AXESN, X1S
+
+                        END IF ! RESDC == RES
+                     END DO !N DCM RES
+                  END DO ! NRES
+               END DO ! FLUX LINES
+            END DO ! NFLUX RES
+         END IF ! IF FLUX
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!  KERNEL CHARGES
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         IF (KERN) THEN
+            READ (IUKERN, *) NTRAIN, NKERNC, NKFR, NATMK
+            !  CALCULATE THE NUMBER OF DISTANCES NEEDED FOR A SYM. DIST. MATRIX
+            NKDIST = (NATMK**2 - NATMK)/2
+
+!PRINTING FOR DEBUG
+WRITE(OUTU, *) "NTRAIN: ", NTRAIN
+WRITE(OUTU, *) "NKERNC: ", NKERNC
+WRITE(OUTU, *) "NATMK: ", NATMK
+WRITE(OUTU, *) "NKFR: ", NKFR
+WRITE(OUTU, *) "NKDIST", NKDIST
+            NDCMR = 0
+
+            !!  ADD FLUX FRAMES
+            DO III = 1, NDCMRES
+               DO J = 1, NRES
+                  WRITE(OUTU, *) "RESDC(J), RES(III) =", J, III, RESDC(III), RES(J)
+                  IF (RESDC(III) .EQ. RES(J)) THEN
+                      !  COUNT THE KERN RESIDUES NEEDED
+                      NDCMR = NDCMR + 1
+                     DO F = 1, NKFR
+                        WRITE(OUTU, *) "(III - 1)*NKFR + F = ", (III - 1)*NKFR + F
+                        FLXFRS((J - 1)*NKFR + F) = 1
+                     END DO
+                  END IF ! RESDC == RES
+               END DO !NRES
+            END DO ! NRES
+            !!  ADD FLUX FRAMES
+
+            WRITE(OUTU,*) "NDCMR", NDCMR
+
+         END IF ! IF KERN
+
+#if KEY_PARALLEL==1
+      END IF ! NODE0
+      IF (KERN) THEN
+         CALL MPI_BARRIER(COMM_CHARMM, IERROR)
+         ! BROADCAST DATA TO OTHER NODES
+         CALL MPI_BCAST(NTRAIN, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(NKDIST, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(NKERNC, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(NATMK, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(NDCMR, 1, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+      END IF ! KERN
+#endif
+
+      IF (KERN) THEN
+
+         ALLOCATE (KERNTXT(1 + NKERNC*3))
+         ALLOCATE (XFIT(NTRAIN, NKDIST))
+         ALLOCATE (ALPHAS(NKERNC*3, NTRAIN))
+         ALLOCATE (XINPUT(NDCMR, NKDIST))
+         ALLOCATE (DXIN(NDCMR*NKDIST, NKDIST, 3))
+         ALLOCATE (A2D(NATMK*NDCMR, NATMK - 1))
+         ALLOCATE (A2P(NATMK*NDCMR, NATMK - 1))
+         ALLOCATE (A2R(NATMK*NDCMR))
+         ALLOCATE (TMPDX(NATMK - 3, 13*NDQ, 3, 3))
+         ALLOCATE (TMPDX2(NATMK - 3, 13*NDQ, 3, 3))
+         ALLOCATE (XKERNATMS(13*NDQ, NATMK - 3))
+
+      END IF ! KERN
+
+#if KEY_PARALLEL==1
+
+      IF (MYNOD .EQ. 0) THEN
+
+#endif
+
+         IF (KERN) THEN
+
+         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         !  READ THE FILE NAMES
+            DO I = 1, NKERNC*3 + 1
+               READ (IUKERN, '(A)') KERNTXT(I)
+            END DO
+         ! READ THE TRAINING EXAMPLES
+            I = 1
+            open (unit=IUKERN, file=KERNTXT(I), iostat=ios)
+            if (ios /= 0) stop "Error opening file"
+            DO II = 1, NTRAIN
+               READ (IUKERN, *) XFIT(II, :)
+            END DO
+          ! READ THE COEFFICIENTS
+            DO I = 2, NKERNC*3 + 1
+               open (unit=IUKERN, file=KERNTXT(I), iostat=ios)
+               if (ios /= 0) stop "Error opening file"
+               DO II = 1, NTRAIN
+                  READ (IUKERN, *) ALPHAS(I - 1, II)
+               END DO
+            END DO
+          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+            DO J = 1, NDCMR
+               DO JJ = 1, NATMK
+               !! LINK ATOM TO CORRESPONDING RESIDUE
+                  A2R(JJ + (J - 1)*NATMK) = J
+               END DO
+            END DO
+
+!  INITIALIZE VALUES IN THE DISTANCE MATRIX
+         CALL DISTM_INIT()
+
+! ASSIGN EXTRA ATOMS IF MORE THAN 3 ATOMS IN THE KERN MOLECULE
+         IF (NATMK .GT. 3) THEN
+            DO F = 1, NKFR
+               I = 1
+               ATM1 = FRAMEI(F, 1)
+               ATM2 = FRAMEI(F, 2)
+               ATM3 = FRAMEI(F, 3)
+               DO A = 1, NATMK
+                  IF ((A .NE. ATM1) .AND. (A .NE. ATM2) .AND. (A .NE. ATM3)) THEN
+                     DO M = 1, 3
+                        IF (NQ(F, M) .GT. 0) THEN !  CHECK IF THERE ARE CHARGES IN THAT FRAME
+                           DO K = 0, NQ(F, M) - 1
+                              L = IDQ(FRAMEI(F, M)) + K
+
+                              DO FR = 1, NDCMR ! LOOP OVER FRAMES
+                                 XKERNATMS(L + (FR - 1)*NKERNC, I) = A + (FR - 1)*NATMK
+                              END DO
+                           END DO !CHARGES
+                        END IF ! IF CHARGE EXISTS
+                     END DO ! M - FRAME ATOMS
+                     I = I + 1
+                  END IF
+               END DO
+            END DO
+         END IF  ! IF MORE THAN 3 ATOMS IN THE KERN MOLECULE
+
+         END IF ! IF KERN
+
+#if KEY_PARALLEL==1
+      END IF !(MYNOD.EQ.0)
+
+      IF (FLUX .or. KERN) THEN
+
+         CALL MPI_BARRIER(COMM_CHARMM, IERROR)
+
+         CALL MPI_BCAST(FPX1, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPX2, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPX3, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPX4, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPY1, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPY2, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPY3, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPY4, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPZ1, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPZ2, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPZ3, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(FPZ4, NDQ, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+
+         CALL MPI_BCAST(FLXFRS, NF, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+   ENDIF
+   IF (KERN) THEN
+         CALL MPI_BCAST(ALPHAS, NKERNC*3*NTRAIN, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(XFIT, NTRAIN*NKDIST, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(DXIN, NDCMR*NKDIST*NKDIST*3, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(TMPDX, (NATMK - 3)*13*NDQ*3*3, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(TMPDX2, (NATMK - 3)*13*NDQ*3*3, MPI_REAL8, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(XKERNATMS, 13*NDQ*(NATMK - 3), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+
+         CALL MPI_BCAST(A2D, NATMK*NDCMR*(NATMK - 1), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(A2P, NATMK*NDCMR*(NATMK - 1), MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+         CALL MPI_BCAST(A2R, NATMK*NDCMR, MPI_INTEGER, 0, COMM_CHARMM, IERROR)
+
+      END IF ! FLUX OR KERN
+
+#endif
+
+      ALLOCATE (DADX1(13*NDQ), DBDY1(13*NDQ), DCDZ1(13*NDQ), DADX2(13*NDQ))
+      ALLOCATE (DBDY2(13*NDQ), DCDZ2(13*NDQ), DADX3(13*NDQ), DBDY3(13*NDQ))
+      ALLOCATE (DCDZ3(13*NDQ), DADY1(13*NDQ), DBDZ1(13*NDQ), DCDX1(13*NDQ))
+      ALLOCATE (DADY2(13*NDQ), DBDZ2(13*NDQ), DCDX2(13*NDQ), DADY3(13*NDQ))
+      ALLOCATE (DBDZ3(13*NDQ), DCDX3(13*NDQ), DADZ1(13*NDQ), DBDX1(13*NDQ))
+      ALLOCATE (DCDY1(13*NDQ), DADZ2(13*NDQ), DBDX2(13*NDQ), DCDY2(13*NDQ))
+      ALLOCATE (DADZ3(13*NDQ), DBDX3(13*NDQ), DCDY3(13*NDQ))
+    ALLOCATE (DTX1(13*NDQ),DTX2(13*NDQ),DTX3(13*NDQ), DTY1(13*NDQ),DTY2(13*NDQ),DTY3(13*NDQ),DTZ1(13*NDQ),DTZ2(13*NDQ),DTZ3(13*NDQ))
+
+   END SUBROUTINE DCMINIT
+
+!*******************************************************************************************
+!                     POLYX3
+!*******************************************************************************************
+!
+! EVALUATE POLYNOMIAL OF DEGREE 3 FOR AN ANGLE FIT
+!
+!*******************************************************************************************
+   FUNCTION POLYX3(THETA, A, B, C, D) RESULT(FIT)
+      IMPLICIT NONE
+      REAL(chm_real) :: A, B, C, D, THETA, FIT
+      FIT = A*THETA + B*THETA*THETA + C*THETA*THETA*THETA + D
+   END FUNCTION POLYX3
+
+! FIRST DERIVATIVE
+   FUNCTION POLYX3DERIV(THETA, A, B, C) RESULT(FIT_DERIV)
+      IMPLICIT NONE
+      REAL(chm_real)  :: A, B, C, THETA, FIT_DERIV
+
+      FIT_DERIV = A + TWO*B*THETA + THREE*C*THETA*THETA
+
+   END FUNCTION POLYX3DERIV
+
+!*******************************************************************************************
+!                     ANGLE TERMS
+!*******************************************************************************************
+!*******************************************************************************************
+
+   !!!!!!  X derivatives
+
+   FUNCTION CALC_DTHETADX1(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADX1)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADX1
+
+      DTHETADX1 = (MINONE*(X3*(Y1**2 - TWO*Y1*Y2 + Y2**2 + (Z1 - Z2)**2)) + X2*(Y1**2 + Y2*Y3 - Y1*(Y2 + Y3) + (Z1 - Z2)*(Z1 - Z3)) + X1*(Y2**2 - Y2*Y3 + Y1*(-Y2 + Y3) - (Z1 - Z2)*(Z2 - Z3)))/(((X1 - X2)**2 + (Y1 - Y2)**2 + (Z1 - Z2)**2)**1.5*SQRT((X2 - X3)**2 + (Y2 - Y3)**2 + (Z2 - Z3)**2)*SQRT(ONE - ((X1 - X2)*(-X2 + X3) + (Y1 - Y2)*(-Y2 + Y3) + (Z1 - Z2)*(-Z2 + Z3))**2/(((X1 - X2)**2 + (Y1 - Y2)**2 + (Z1 - Z2)**2)*((X2 - X3)**2 + (Y2 - Y3)**2 + (Z2 - Z3)**2))))
+
+   END FUNCTION CALC_DTHETADX1
+
+   FUNCTION CALC_DTHETADX2(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADX2)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADX2
+
+      DTHETADX2 = (MINONE*(((-x1 + TWO*x2 - x3)*((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2) + (-x2 + x3)*((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3)) + (x1 - x2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)*((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3)))/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)**1.5*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)**1.5*Sqrt(1 - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2))))))
+
+   END FUNCTION CALC_DTHETADX2
+
+   FUNCTION CALC_DTHETADX3(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADX3)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADX3
+
+      DTHETADX3 = ((x3*(y2**2 - y2*y3 + y1*(-y2 + y3) - (z1 - z2)*(z2 - z3)) - x1*(y2**2 - TWO*y2*y3 + y3**2 + (z2 - z3)**2) + x2*(y1*(y2 - y3) - y2*y3 + y3**2 + z1*z2 - z1*z3 - z2*z3 + z3**2)) / (Sqrt((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)**1.5*Sqrt(ONE - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)))))
+
+   END FUNCTION CALC_DTHETADX3
+
+!!!!!!  Y derivatives
+
+   FUNCTION CALC_DTHETADY1(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADY1)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADY1
+
+      DTHETADY1 = ((x2*x3*(-y1 + y2) - x1*(x3*(-y1 + y2) + x2*(y1 + y2 - TWO*y3)) + x2**2*(y1 - y3) + x1**2*(y2 - y3) + (z1 - z2)*(y2*z1 - y3*z1 - y1*z2 + y3*z2 + y1*z3 - y2*z3)) / (((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)**1.5*Sqrt((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)*Sqrt(1 - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)))))
+
+   END FUNCTION CALC_DTHETADY1
+
+   FUNCTION CALC_DTHETADY2(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADY2)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADY2
+
+      DTHETADY2 = MINONE * (((-y1 + TWO*y2 - y3)*((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2) + (-y2 + y3)*((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3)) +  (y1 - y2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)*((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3)))/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)**1.5*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)**1.5*Sqrt(ONE - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)))))
+
+   END FUNCTION CALC_DTHETADY2
+
+   FUNCTION CALC_DTHETADY3(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADY3)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADY3
+
+      DTHETADY3 =  (x3**2*(-y1 + y2) + x2*x3*(TWO*y1 - y2 - y3) + x1*x2*(y2 - y3) + x2**2*(-y1 + y3) + x1*x3*(-y2 + y3) + (z2 - z3)*(y3*(-z1 + z2) + y2*(z1 - z3) + y1*(-z2 + z3))) / (Sqrt((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)**1.5*Sqrt(1 - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2))))
+
+   END FUNCTION CALC_DTHETADY3
+
+!!!!!!  Z derivatives
+
+   FUNCTION CALC_DTHETADZ1(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADZ1)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADZ1
+
+      DTHETADZ1 = ((x2*x3*(-z1 + z2) - x1*(x3*(-z1 + z2) + x2*(z1 + z2 - TWO*z3)) + x2**2*(z1 - z3) + x1**2*(z2 - z3) + (y1 - y2)*(-(y2*z1) + y3*z1 + y1*z2 - y3*z2 - y1*z3 + y2*z3)) / (((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)**1.5*Sqrt((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)*Sqrt(ONE - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)))))
+
+   END FUNCTION CALC_DTHETADZ1
+
+   FUNCTION CALC_DTHETADZ2(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADZ2)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADZ2
+
+      DTHETADZ2 = (MINONE*((((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)*(-z1 + TWO*z2 - z3) + (z1 - z2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)*((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3)) + ((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*(-z2 + z3)*((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))) / (((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)**1.5*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)**1.5*Sqrt(ONE - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2))))))
+
+   END FUNCTION CALC_DTHETADZ2
+
+   FUNCTION CALC_DTHETADZ3(x1, x2, x3, y1, y2, y3, z1, z2, z3) RESULT(DTHETADZ3)
+      IMPLICIT NONE
+      REAL(CHM_REAL) :: x1, x2, x3, y1, y2, y3, z1, z2, z3, DTHETADZ3
+
+      DTHETADZ3 = ((x3**2*(-z1 + z2) + x2*x3*(TWO*z1 - z2 - z3) + x1*x2*(z2 - z3) + x2**2*(-z1 + z3) + x1*x3*(-z2 + z3) - (y2 - y3)*(y3*(-z1 + z2) + y2*(z1 - z3) + y1*(-z2 + z3))) / (Sqrt((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)**1.5*Sqrt(ONE - ((x1 - x2)*(-x2 + x3) + (y1 - y2)*(-y2 + y3) + (z1 - z2)*(-z2 + z3))**2/(((x1 - x2)**2 + (y1 - y2)**2 + (z1 - z2)**2)*((x2 - x3)**2 + (y2 - y3)**2 + (z2 - z3)**2)))))
+
+   END FUNCTION CALC_DTHETADZ3
+
+!*******************************************************************************************
+!                     DCMALLOCF
+!*******************************************************************************************
+!
+! ALLOCATE ARRAYS FOR PATCHING DCM RESIDUES (SEE ALSO GENPSF.F90)
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCMALLOCF(NAT)
+
+      IMPLICIT NONE
+
+      INTEGER NAT
+      INTEGER PREV1, PREV2
+
+      REAL(CHM_REAL), ALLOCATABLE :: ODCMPATF(:, :), ODCMCHGF(:)
+      REAL(CHM_REAL), ALLOCATABLE :: ODCMPATDEL(:, :), ODCMPATMOD(:, :), ODCMPATCG(:)
+
+      PREV1 = 0
+      PREV2 = 0
+
+      IF (ALLOCATED(DCMCHGF)) THEN
+         PREV1 = SIZE(DCMCHGF)
+         ALLOCATE (ODCMPATF(PREV1, 4), ODCMCHGF(PREV1))
+         ODCMPATF(1:PREV1, 1:4) = DCMPATF(1:PREV1, 1:4)
+         ODCMCHGF(1:PREV1) = DCMCHGF(1:PREV1)
+         DEALLOCATE (DCMPATF, DCMCHGF)
+      END IF
+      IF (ALLOCATED(DCMPATDEL)) THEN
+         PREV2 = SIZE(DCMPATCG)
+         ALLOCATE (ODCMPATDEL(PREV2, 4), ODCMPATMOD(PREV2, 4), ODCMPATCG(PREV2))
+         ODCMPATDEL(1:PREV2, 1:4) = DCMPATDEL(1:PREV2, 1:4)
+         ODCMPATMOD(1:PREV2, 1:4) = DCMPATMOD(1:PREV2, 1:4)
+         ODCMPATCG(1:PREV2) = DCMPATCG(1:PREV2)
+         DEALLOCATE (DCMPATDEL, DCMPATMOD, DCMPATCG)
+      END IF
+      ALLOCATE (DCMPATF(NAT + PREV1, 4), DCMPATDEL(NAT + PREV2, 4), DCMPATMOD(NAT + PREV2, 4), &
+                DCMCHGF(NAT + PREV1), DCMPATCG(NAT + PREV2))
+
+      IF (PREV1 .NE. 0) THEN
+         DCMPATF(1:PREV1, 1:4) = ODCMPATF(1:PREV1, 1:4)
+         DCMCHGF(1:PREV1) = ODCMCHGF(1:PREV1)
+      END IF
+      IF (PREV2 .NE. 0) THEN
+         DCMPATDEL(1:PREV2, 1:4) = ODCMPATDEL(1:PREV2, 1:4)
+         DCMPATMOD(1:PREV2, 1:4) = ODCMPATMOD(1:PREV2, 1:4)
+         DCMPATCG(1:PREV2) = ODCMPATCG(1:PREV2)
+      END IF
+
+   END SUBROUTINE DCMALLOCF
+
+!*******************************************************************************************
+!                     DCMALLOCL
+!*******************************************************************************************
+!
+! ALLOCATE ARRAYS FOR PATCHING DCM RESIDUES (SEE ALSO GENPSF.F90)
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCMALLOCL(NAT)
+
+      IMPLICIT NONE
+
+      INTEGER NAT
+      INTEGER PREV1, PREV2
+
+      REAL(CHM_REAL), ALLOCATABLE :: ODCMPATL(:, :), ODCMCHGL(:)
+      REAL(CHM_REAL), ALLOCATABLE :: ODCMPATDEL(:, :), ODCMPATMOD(:, :), ODCMPATCG(:)
+
+      PREV1 = 0
+      PREV2 = 0
+
+      IF (ALLOCATED(DCMCHGL)) THEN
+         PREV1 = SIZE(DCMCHGL)
+         ALLOCATE (ODCMPATL(PREV1, 4), ODCMCHGL(PREV1))
+         ODCMPATL(1:PREV1, 1:4) = DCMPATL(1:PREV1, 1:4)
+         ODCMCHGL(1:PREV1) = DCMCHGL(1:PREV1)
+         DEALLOCATE (DCMPATL, DCMCHGL)
+      END IF
+      IF (ALLOCATED(DCMPATDEL)) THEN
+         PREV2 = SIZE(DCMPATCG)
+         ALLOCATE (ODCMPATDEL(PREV2, 4), ODCMPATMOD(PREV2, 4), ODCMPATCG(PREV2))
+         ODCMPATDEL(1:PREV2, 1:4) = DCMPATDEL(1:PREV2, 1:4)
+         ODCMPATMOD(1:PREV2, 1:4) = DCMPATMOD(1:PREV2, 1:4)
+         ODCMPATCG(1:PREV2) = DCMPATCG(1:PREV2)
+         DEALLOCATE (DCMPATDEL, DCMPATMOD, DCMPATCG)
+      END IF
+      ALLOCATE (DCMPATL(NAT + PREV1, 4), DCMPATDEL(NAT + PREV2, 4), DCMPATMOD(NAT + PREV2, 4), &
+                DCMCHGL(NAT + PREV1), DCMPATCG(NAT + PREV2))
+
+      IF (PREV1 .NE. 0) THEN
+         DCMPATL(1:PREV1, 1:4) = ODCMPATL(1:PREV1, 1:4)
+         DCMCHGL(1:PREV1) = ODCMCHGL(1:PREV1)
+      END IF
+      IF (PREV2 .NE. 0) THEN
+         DCMPATDEL(1:PREV2, 1:4) = ODCMPATDEL(1:PREV2, 1:4)
+         DCMPATMOD(1:PREV2, 1:4) = ODCMPATMOD(1:PREV2, 1:4)
+         DCMPATCG(1:PREV2) = ODCMPATCG(1:PREV2)
+      END IF
+
+   END SUBROUTINE DCMALLOCL
+
+!*******************************************************************************************
+!                      PATCHRES
+!*******************************************************************************************
+!
+! SUBROUTINE TO ADD PATCH GROUPS TO DCM RESIDUES MODIFIED IN GENPSF.SRC
+! DCM RESIDUES ARE MODIFIED USING THE FOLLOWING PROCEDURE:
+! 1. MODIFY RESIDUE ATOMS THAT ARE PART OF PATCH BY SETTING CHARGES TO PATCH
+! VALUES AND DELETING EXISTING CHARGES
+! 2. DELETE ATOMS FROM DCM RESIDUE THAT WERE DELETED BY PATCH, CORRECT ATOM
+! NUMBERING & REMOVE FRAMES CONTAINING DELETED ATOMS (EXIT IF NOT POSSIBLE)
+! 3. ADD ATOMS TO START OR END OF RESIDUE THAT WERE ADDED BY PATCH AND CORRECT
+! ATOM NUMBERING. ADD ATOMS TO NEW FRAME.
+! 4. CORRECT TOTAL CHARGE BY DIVIDING REMAINDER BETWEEN ALL CHARGE SITES IN
+! RESIDUE
+!
+!*******************************************************************************************
+
+   SUBROUTINE PATCHRES(NDCMRES, RNFRAME, RESDC, RFRTYP, RFRAMEI, RNQ, RNP, RAQ, RBQ, &
+                       RCQ, RDQ, RDP, IORIG, IRES, QPATCHF, QPATCHL)
+
+      USE PSF, ONLY: RES, IBASE
+      USE STREAM, ONLY: OUTU, PRNLEV
+
+      IMPLICIT NONE
+
+      LOGICAL :: QPATCHF, QPATCHL, QMOD, QFOUND
+      INTEGER :: NDCMRES, IORIG, IRES
+      INTEGER :: NRATM, ONRATM, NPATMOD, NPATDEL, NPATADD, NPATF, NPATL, I, J, K, L, M, N
+      INTEGER :: RNFRAME(:), RNQ(:, :, :), RFRAMEI(:, :, :), RFRTYP(:, :), RNP(:, :, :)
+      INTEGER :: NATMORPH, ATMORPH(RNFRAME(IORIG)*3) ! HOLD ATOMS INDICES TO ADD TO FRAME
+      INTEGER, ALLOCATABLE :: PATMOD(:), PATMODO(:), PATDEL(:), RMAP(:)
+      REAL(CHM_REAL) RQTOT, NRQ, FRQ, LRQ, QCOR
+      REAL(CHM_REAL) :: ORPHQP(RNFRAME(IORIG)*3, 2) ! HOLD ATOM X,Y,Z,Q,POLS TO ADD TO FRAME
+      REAL(CHM_REAL), ALLOCATABLE :: PATCG(:)
+      REAL(CHM_REAL), ALLOCATABLE :: RAQ(:, :, :, :), RBQ(:, :, :, :), RCQ(:, :, :, :), RDQ(:, :, :, :)
+      REAL(CHM_REAL), ALLOCATABLE :: RDP(:, :, :, :)
+      CHARACTER(LEN=8) :: RESDC(:)
+
+! COPY EXISTING DCM RESIDUE TO NEW RESIDUE TYPE
+      NRATM = IBASE(IRES + 1) - IBASE(IRES) ! NUMBER OF ATOMS IN PATCHED RESIDUE
+      ONRATM = 0 ! INITIALIZE NO. ATOMS IN RESIDUE BEFORE PATCHING
+      NDCMRES = NDCMRES + 1 ! INCREMENT TOTAL NUMBER OF DCM RESIDUES (WE'RE ABOUT TO ADD ONE)
+      RNFRAME(NDCMRES) = RNFRAME(IORIG)  ! NEW RES STARTS WITH SAME NO. FRAMES AS ORIGINAL
+      WRITE (RESDC(NDCMRES), "(I3)") NDCMRES
+      RESDC(NDCMRES) = ADJUSTL(RESDC(NDCMRES))
+      RESDC(NDCMRES) = TRIM(RESDC(NDCMRES))
+      RESDC(NDCMRES) = 'P'//RESDC(NDCMRES)
+
+! START BY REPORTING SOME INFORMATION
+      NPATMOD = 0
+      NPATDEL = 0
+      NPATF = 0
+      NPATL = 0
+      DO I = 1, DCMNPATMOD
+         IF (IRES .EQ. DCMPATMOD(I, 2)) THEN
+            NPATMOD = NPATMOD + 1
+         END IF
+      END DO !I
+      ALLOCATE (PATMOD(NPATMOD))
+      ALLOCATE (PATMODO(NPATMOD))
+      ALLOCATE (PATCG(NPATMOD))
+      NPATMOD = 0
+      DO I = 1, DCMNPATMOD
+         IF (IRES .EQ. DCMPATMOD(I, 2)) THEN
+            NPATMOD = NPATMOD + 1
+            PATMOD(NPATMOD) = DCMPATMOD(I, 3) !ATOM NUMBER IN UNPATCHED RES
+            PATMODO(NPATMOD) = DCMPATMOD(I, 4) !ATOM NUMBER IN PATCHED RES
+            PATCG(NPATMOD) = DCMPATCG(I)
+         END IF
+      END DO !I
+      DO I = 1, DCMNPATDEL
+         IF (IRES .EQ. DCMPATDEL(I, 2)) THEN
+            NPATDEL = NPATDEL + 1
+         END IF
+      END DO !I
+      ALLOCATE (PATDEL(NPATDEL))
+      NPATDEL = 0
+      DO I = 1, DCMNPATDEL
+         IF (IRES .EQ. DCMPATDEL(I, 2)) THEN ! IF ATOM TO DELETE BELONGS TO THIS RESIDUE
+            NPATDEL = NPATDEL + 1  ! INCREMENT NO. OF DELETED ATOMS
+            PATDEL(NPATDEL) = DCMPATDEL(I, 3)  ! STORE ATOM INDEX TO BE DELETED
+            ONRATM = DCMPATDEL(I, 4) ! STORE ORIGINAL NUMBER OF ATOMS IN RESIDUE
+         END IF
+      END DO !I
+      IF (QPATCHF) THEN ! FIRST PATCHED
+         DO I = 1, DCMNPATF
+            IF (IRES .EQ. DCMPATF(I, 2)) THEN
+               NPATF = NPATF + 1
+            END IF
+         END DO
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, "(A,A4,I5,A,I3,A)") '  DCM: RES ', RES(IRES), IRES, &
+               ' IS FIRST PATCHED. PATCH CONTAINS ', NPATF, ' ATOMS, '
+            WRITE (OUTU, "(A,I3,A,I3,A)") '    ', NPATMOD, ' MODIFCATIONS, ', NPATDEL, ' DELETIONS'
+            WRITE (OUTU, "(A)") '  DCM: ATOMS CONTAINED IN PATCH:'
+         END IF
+         DO I = 1, DCMNPATF
+            IF (IRES .EQ. DCMPATF(I, 2)) THEN
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, "(A,I4,A,F8.4)") '       ATOM ', DCMPATF(I, 3), ' CHG ', DCMCHGF(I)
+               END IF
+            END IF
+         END DO
+      ELSEIF (QPATCHL) THEN ! LAST PATCHED
+         DO I = 1, DCMNPATL
+            IF (IRES .EQ. DCMPATL(I, 2)) THEN
+               NPATL = NPATL + 1
+            END IF
+         END DO
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, "(A,A4,I5,A,I3,A)") '  DCM: RES ', RES(IRES), IRES, &
+               ' IS LAST PATCHED. PATCH CONTAINS ', NPATL, ' ATOMS, '
+            WRITE (OUTU, "(I3,A,I3,A)") NPATMOD, ' MODIFCATIONS, ', NPATDEL, ' DELETIONS'
+            WRITE (OUTU, "(A)") '  DCM: ATOMS CONTAINED IN PATCH:'
+         END IF
+         DO I = 1, DCMNPATL
+            IF (IRES .EQ. DCMPATL(I, 2)) THEN
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, "(A,I4,A,F8.4)") '       ATOM ', DCMPATL(I, 3), ' CHG ', DCMCHGL(I)
+               END IF
+            END IF
+         END DO
+      END IF
+      IF (PRNLEV .GT. 1) THEN
+         WRITE (OUTU, "(A,I4,A)") '  DCM: PATCH MODIFIES ', NPATMOD, ' ATOM(S):'
+      END IF
+      DO I = 1, NPATMOD
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, "(A,I4,A,F8.4)") '       ATOM ', PATMOD(I), ' CHG ', PATCG(I)
+         END IF
+      END DO !I
+      IF (PRNLEV .GT. 1) THEN
+         WRITE (OUTU, "(A,I4,A)") '  DCM: ', NPATDEL, ' ATOM(S) WILL BE DELETED FROM ORIGINAL RESIDUE:'
+      END IF
+      DO I = 1, NPATDEL
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, "(A,I4)") '       ATOM ', PATDEL(I)
+         END IF
+      END DO !I
+
+! COPY UNPATCHED RESIDUE TO A NEW RESIDUE FOR PATCHING
+      NRQ = 0.D0 !UNPATCHED RESIDUE TOTAL CHARGE
+      FRQ = 0.D0 !FIRST PATCH TOTAL CHARGE
+      LRQ = 0.D0 !LAST PATCH TOTAL CHARGE
+      DO I = 1, RNFRAME(IORIG)
+         RFRTYP(NDCMRES, I) = RFRTYP(IORIG, I)
+         DO J = 1, 3
+            RFRAMEI(NDCMRES, I, J) = RFRAMEI(IORIG, I, J)
+            RNQ(NDCMRES, I, J) = RNQ(IORIG, I, J)
+            RNP(NDCMRES, I, J) = RNP(IORIG, I, J)
+            DO K = 1, RNQ(IORIG, I, J)
+               RAQ(NDCMRES, I, J, K) = RAQ(IORIG, I, J, K)
+               RBQ(NDCMRES, I, J, K) = RBQ(IORIG, I, J, K)
+               RCQ(NDCMRES, I, J, K) = RCQ(IORIG, I, J, K)
+               RDQ(NDCMRES, I, J, K) = RDQ(IORIG, I, J, K)
+               NRQ = NRQ + RDQ(IORIG, I, J, K)
+            END DO !K
+            DO K = 1, RNP(IORIG, I, J)
+               RDP(NDCMRES, I, J, K) = RDP(IORIG, I, J, K)
+            END DO !K
+         END DO !J
+      END DO !I
+
+      IF (PRNLEV .GT. 1) THEN
+         WRITE (OUTU, '(2A)') '  DCM: CREATING NEW PATCHED RESIDUE NAMED ', RESDC(NDCMRES)
+      END IF
+
+! START BY MODIFYING CHARGES
+      DO I = 1, NPATMOD
+         QMOD = .FALSE.
+         DO J = 1, RNFRAME(NDCMRES)
+            DO K = 1, 3
+               IF (RFRAMEI(NDCMRES, J, K) .EQ. PATMOD(I)) THEN
+                  IF (QMOD) THEN ! ALREADY MODIFIED THIS CHARGE, ZERO ANY FURTHER OCCURRENCES
+                     IF (RNP(NDCMRES, J, K) .GT. 0) THEN
+                        CALL WRNDIE(-1, '<DCM> PATCHRES', 'ERROR PROCESSING PATCH POLARIZABILITIES')
+                     END IF
+                     RNQ(NDCMRES, J, K) = 0
+                  ELSE ! HAVEN'T MODIFIED THIS CHARGE YET
+                     RNQ(NDCMRES, J, K) = 1
+                     RAQ(NDCMRES, J, K, 1) = 0.D0
+                     RBQ(NDCMRES, J, K, 1) = 0.D0
+                     RCQ(NDCMRES, J, K, 1) = 0.D0
+                     RDQ(NDCMRES, J, K, 1) = PATCG(I)
+                     IF (QPATCHL) THEN !NEED TO ADD MODIFED ATOMS TO PATCH "LAST" CHARGE
+                        LRQ = LRQ + PATCG(I)
+                     END IF
+                  END IF
+                  QMOD = .TRUE.
+               END IF
+            END DO !K
+         END DO !J
+      END DO !I
+
+! NOW DELETE ATOMS DELETED BY PATCH
+! CHECK THAT ATOMS AREN'T REQUIRED BY FRAMES WITH DCM CHARGES ANYWHERE, OTHERWISE
+! DELETE FRAMES THAT CONTAIN DELETED ATOMS
+      NATMORPH = 0 ! ZERO NUMBER OF ORPHANED ATOMS
+      DO I = 1, NPATDEL
+         QMOD = .FALSE.
+         J = 1
+         DO WHILE (J <= RNFRAME(NDCMRES))
+            DO K = 1, 3
+               IF (RFRAMEI(NDCMRES, J, K) .EQ. PATDEL(I)) THEN
+                  IF (RNQ(NDCMRES, J, 1) .GT. 0 .AND. K .NE. 1) THEN
+                     IF (RNQ(NDCMRES, J, 1) .GT. 1 .OR. (RNQ(NDCMRES, J, 1) .EQ. 1 .AND. (RAQ(NDCMRES, J, 1, 1) .NE. 0.D0 .OR. &
+                                                        RBQ(NDCMRES, J, 1, 1) .NE. 0.D0 .OR. RCQ(NDCMRES, J, 1, 1) .NE. 0.D0))) THEN
+                        IF (PRNLEV .GT. 1) THEN
+                           WRITE (OUTU, '(3A,2(I4,A))') ' DCM> RESIDUE ', RESDC(IORIG), ' FRAME ', J, ' ATOM ', K, &
+                              ' HAS DCM CHARGES'
+                           WRITE (OUTU, '(A,I5,A)') '      ATOM ', PATDEL(I), ' CANNOT BE DELETED FROM THIS FRAME FOR PATCHING'
+                        END IF
+                        CALL WRNDIE(-1, '<DCM> PATCHRES', 'CANNOT PATCH DCM RESIDUE')
+                     END IF
+                  ELSEIF (RNQ(NDCMRES, J, 2) .GT. 0 .AND. K .NE. 2) THEN
+                     IF (RNQ(NDCMRES, J, 2) .GT. 1 .OR. (RNQ(NDCMRES, J, 2) .EQ. 1 .AND. (RAQ(NDCMRES, J, 2, 1) .NE. 0.D0 .OR. &
+                                                        RBQ(NDCMRES, J, 2, 1) .NE. 0.D0 .OR. RCQ(NDCMRES, J, 2, 1) .NE. 0.D0))) THEN
+                        IF (PRNLEV .GT. 1) THEN
+                           WRITE (OUTU, '(3A,2(I4,A))') ' DCM> RESIDUE ', RESDC(IORIG), ' FRAME ', J, ' ATOM ', K, &
+                              ' HAS DCM CHARGES'
+                           WRITE (OUTU, '(A,I5,A)') '      ATOM ', PATDEL(I), ' CANNOT BE DELETED FROM THIS FRAME FOR PATCHING'
+                        END IF
+                        CALL WRNDIE(-1, '<DCM> PATCHRES', 'CANNOT PATCH DCM RESIDUE')
+                     END IF
+                  ELSEIF (RNQ(NDCMRES, J, 3) .GT. 0 .AND. K .NE. 3) THEN
+                     IF (RNQ(NDCMRES, J, 3) .GT. 1 .OR. (RNQ(NDCMRES, J, 3) .EQ. 1 .AND. (RAQ(NDCMRES, J, 3, 1) .NE. 0.D0 .OR. &
+                                                        RBQ(NDCMRES, J, 3, 1) .NE. 0.D0 .OR. RCQ(NDCMRES, J, 3, 1) .NE. 0.D0))) THEN
+                        IF (PRNLEV .GT. 1) THEN
+                           WRITE (OUTU, '(3A,2(I4,A))') ' DCM> RESIDUE ', RESDC(IORIG), ' FRAME ', J, ' ATOM ', K, &
+                              ' HAS DCM CHARGES'
+                           WRITE (OUTU, '(A,I5,A)') '      ATOM ', PATDEL(I), ' CANNOT BE DELETED FROM THIS FRAME FOR PATCHING'
+                        END IF
+                        CALL WRNDIE(-1, '<DCM> PATCHRES', 'CANNOT PATCH DCM RESIDUE')
+                     END IF
+                  END IF
+                  IF (PRNLEV .GT. 1) THEN
+                     WRITE (OUTU, '(A,I3,3A,3I4,A)') '  DCM: DELETING FRAME ', J, ' OF ', RESDC(IORIG), &
+                        '(', RFRAMEI(NDCMRES, J, 1:3), ')'
+                  END IF
+                  DO L = 1, 3 !STORE ORPHANED ATOMS FROM FRAME IF THEY HAVE CHARGES OR POLARIZABILITIES
+                     IF (L .NE. K) THEN
+                        QFOUND = .FALSE.
+                        DO M = 1, NPATDEL !CHECK ORPHANED ATOMS ARE NOT ALSO TO BE DELETED
+                           IF (PATDEL(I) .EQ. RFRAMEI(NDCMRES, J, L)) QFOUND = .TRUE.
+                        END DO
+                        IF (.NOT. QFOUND) THEN
+                           IF (RNP(NDCMRES, J, L) .NE. 0) THEN
+                              NATMORPH = NATMORPH + 1
+                              ORPHQP(NATMORPH, 2) = RDP(NDCMRES, J, L, 1) !STORE POLARIZBALITY
+                              ORPHQP(NATMORPH, 1) = 0.D0 !INITIALIZE CHG TO ZERO
+                              ATMORPH(NATMORPH) = -RFRAMEI(NDCMRES, J, L) !INITIALIZE TO UNMODIFIED ATOM NO.
+                              IF (RNQ(NDCMRES, J, L) .NE. 0) THEN !IF ALSO HAS CHG
+                                 ORPHQP(NATMORPH, 1) = RDQ(NDCMRES, J, L, 1) ! ATOM SHOULD HAVE <= 1 CHG AFTER CHECKS ABOVE
+                              END IF
+                           ELSEIF (RNQ(NDCMRES, J, L) .NE. 0) THEN !IF ATOM HAS ONLY CHG
+                              NATMORPH = NATMORPH + 1
+                              ORPHQP(NATMORPH, 1) = RDQ(NDCMRES, J, L, 1) ! ATOM SHOULD HAVE <= 1 CHG AFTER CHECKS ABOVE
+                              ORPHQP(NATMORPH, 2) = 0.D0 !SET POLARIZABILITY TO ZERO
+                              ATMORPH(NATMORPH) = -RFRAMEI(NDCMRES, J, L) !INITIALIZE TO UNMODIFIED ATOM NO.
+                           END IF
+                        END IF
+                     END IF
+                  END DO !L
+                  DO L = J, RNFRAME(NDCMRES) - 1 ! RENUMBER FRAMES
+                     RFRTYP(NDCMRES, L) = RFRTYP(NDCMRES, L + 1)
+                     DO M = 1, 3
+                        RFRAMEI(NDCMRES, L, M) = RFRAMEI(NDCMRES, L + 1, M)
+                        RNQ(NDCMRES, L, M) = RNQ(NDCMRES, L + 1, M)
+                        RNP(NDCMRES, L, M) = RNP(NDCMRES, L + 1, M)
+                        DO N = 1, RNQ(NDCMRES, L, M)
+                           RAQ(NDCMRES, L, M, N) = RAQ(NDCMRES, L + 1, M, N)
+                           RBQ(NDCMRES, L, M, N) = RBQ(NDCMRES, L + 1, M, N)
+                           RCQ(NDCMRES, L, M, N) = RCQ(NDCMRES, L + 1, M, N)
+                           RDQ(NDCMRES, L, M, N) = RDQ(NDCMRES, L + 1, M, N)
+                        END DO !N
+                        DO N = 1, RNP(NDCMRES, L, M)
+                           RDP(NDCMRES, L, M, N) = RDP(NDCMRES, L + 1, M, N)
+                        END DO !N
+                     END DO !M
+                  END DO !L
+                  RNFRAME(NDCMRES) = RNFRAME(NDCMRES) - 1
+                  J = J - 1
+                  QMOD = .TRUE.
+                  EXIT !K
+               END IF
+            END DO !K
+            J = J + 1
+         END DO !J
+      END DO !I
+! ADD NEW ATOMS
+      NPATADD = 0
+      NPATF = 0
+      DO I = 1, DCMNPATF
+         IF (DCMPATF(I, 2) .EQ. IRES) THEN
+            NPATF = NPATF + 1
+            ONRATM = DCMPATF(I, 4)
+            FRQ = FRQ + DCMCHGF(I)
+            QMOD = .FALSE.
+            DO J = 1, NPATMOD
+               IF (PATMODO(J) .EQ. DCMPATF(I, 3)) THEN
+                  QMOD = .TRUE. ! THIS ATOM IS ACTUALLY TO BE MODIFIED, NOT ADDED
+               END IF
+            END DO
+            IF (.NOT. QMOD) THEN ! ATOM IS REALLY TO BE ADDED
+               NPATADD = NPATADD + 1
+               NATMORPH = NATMORPH + 1 ! ADD ATOM TO ORPHANED ATOMS LIST
+               ATMORPH(NATMORPH) = DCMPATF(I, 3)
+               ORPHQP(NATMORPH, 1) = DCMCHGF(I)
+               ORPHQP(NATMORPH, 2) = 0.D0
+            END IF
+         END IF
+      END DO
+      NPATL = 0
+      DO I = 1, DCMNPATL
+         IF (DCMPATL(I, 2) .EQ. IRES) THEN
+            ONRATM = DCMPATL(I, 4)
+            NPATL = NPATL + 1
+            LRQ = LRQ + DCMCHGL(I)
+            QMOD = .FALSE.
+            DO J = 1, NPATMOD
+               IF (PATMODO(J) .EQ. DCMPATL(I, 3)) THEN
+                  QMOD = .TRUE. ! THIS ATOM IS ACTUALLY TO BE MODIFIED, NOT ADDED
+               END IF
+            END DO
+            IF (.NOT. QMOD) THEN ! ATOM IS REALLY TO BE ADDED
+               NPATADD = NPATADD + 1
+               NATMORPH = NATMORPH + 1 ! ADD ATOM TO ORPHANED ATOMS LIST
+               ATMORPH(NATMORPH) = DCMPATL(I, 3)
+               ORPHQP(NATMORPH, 1) = DCMCHGL(I)
+               ORPHQP(NATMORPH, 2) = 0.D0
+            END IF
+         END IF
+      END DO
+
+! MAP ATOM NUMBERS FROM ORIGINAL RESIDUE TO NEW PATCHED RESIDUE
+      IF (ONRATM .EQ. 0) THEN
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, '(4A)') ' DCM> ERROR: NO. ATOMS NOT FOUND FOR RESIDUE ', RESDC(NDCMRES), ' / ', &
+               RESDC(IORIG)
+         END IF
+         CALL WRNDIE(-1, '<DCM> PATCHRES', 'COULD NOT DETERMINE NO. ATOMS IN UNPATCHED RESIUDE')
+      END IF
+      ALLOCATE (RMAP(ONRATM))
+      DO I = 1, ONRATM  ! LOOP OVER ALL ATOMS IN ORIGINAL RESIDUE
+         QMOD = .FALSE.
+         DO J = 1, NPATMOD
+            IF (PATMOD(J) .EQ. I .AND. QPATCHF) THEN ! IF THIS ATOM WAS MODIFIED
+               RMAP(I) = PATMODO(J)
+               QMOD = .TRUE.
+            END IF
+         END DO !J
+         DO J = 1, NPATDEL
+            IF (PATDEL(J) .EQ. I) THEN ! IF THIS ATOM WAS DELETED
+               RMAP(I) = -1
+               QMOD = .TRUE.
+            END IF
+         END DO !J
+         IF (.NOT. QMOD) THEN !IF ATOM NOT MODIFIED OR DELETED
+            RMAP(I) = I
+            DO J = 1, NPATDEL !SHIFT LEFT IF ATOM BEFORE THIS WAS DELETED
+               IF (PATDEL(J) .LT. I) THEN
+                  RMAP(I) = RMAP(I) - 1
+               END IF
+            END DO !J
+            DO J = 1, NPATMOD !PATCH FIRST: SHIFT RIGHT IF ATOM AFTER THIS WAS MODIFIED AND MOVED TO START
+               IF (PATMOD(J) .GT. I .AND. QPATCHF) THEN
+                  RMAP(I) = RMAP(I) + 1
+               END IF
+            END DO !J
+            IF (QPATCHF) THEN ! ADD NEW & MODIFIED ATOMS TO START FOR FIRST PATCH
+               RMAP(I) = RMAP(I) + NPATADD
+            END IF
+         END IF
+!  print*,' rmap: atom map:',I,RMAP(I)
+      END DO !I
+
+! MODIFY ATOM NUMBERS IN FRAMES TO MATCH
+      DO I = 1, RNFRAME(NDCMRES)
+         DO J = 1, 3
+            IF (RFRAMEI(NDCMRES, I, J) .GT. ONRATM) THEN
+               CALL WRNDIE(-1, '<DCM> PATCHRES', 'ATOM NUMBER OUT OF RANGE IN RESIDUE')
+            END IF
+            IF (RMAP(RFRAMEI(NDCMRES, I, J)) .EQ. -1) THEN
+               CALL WRNDIE(-1, '<DCM> PATCHRES', 'DELETED ATOM STILL PRESENT IN FRAME')
+            END IF
+            RFRAMEI(NDCMRES, I, J) = RMAP(RFRAMEI(NDCMRES, I, J))
+         END DO
+      END DO !I
+
+! ADD NEW AND ORPHANED ATOMS TO NEW FRAMES
+      M = 4
+      IF (NATMORPH .GT. 0 .AND. PRNLEV .GT. 1) WRITE (OUTU, '(A)') ' ADDING ORPHANED ATOM(S) TO NEW FRAMES'
+      DO I = 1, NATMORPH
+         IF (ATMORPH(I) .LT. 0) THEN !APPLY REMAPPING TO INDEX OF MODIFIED ORPHAN ATOMS
+            ATMORPH(I) = RMAP(-ATMORPH(I)) !REMAPPED ATOM NO.
+         END IF
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, '(A,I4,2(A,F8.4))') '  ATOM ', ATMORPH(I), ' CHG ', ORPHQP(I, 1), ' POL ', ORPHQP(I, 2)
+         END IF
+         QFOUND = .FALSE.
+         DO J = 1, RNFRAME(NDCMRES)
+            DO K = 1, 3
+               IF (RFRAMEI(NDCMRES, J, K) .EQ. ATMORPH(I)) THEN
+                  IF (RNQ(NDCMRES, J, K) .NE. 0) THEN
+                     IF (PRNLEV .GT. 1) THEN
+                      WRITE (OUTU, '(A,I5,A,I4,A)') ' DCM> EXCEPTION: RES ', IRES, ' ORPHANED CHARGES EXIST IN FRAME ', J, 'ALREADY'
+                        WRITE (OUTU, '(2(A,I5))') '      FOR ATOM ', ATMORPH(I), ', CHG: ', RDQ(NDCMRES, J, K, 1)
+                     END IF
+                     CALL WRNDIE(-1, '<DCM> PATCHRES', 'INTERNAL PATCHING ERROR (CHARGES EXIST IN >1 FRAME)')
+                  END IF
+                  QFOUND = .TRUE. !ATOM EXISTS IN ANOTHER FRAME ALREADY: ADD ITS CHARGE HERE
+                  IF (ORPHQP(I, 1) .NE. 0.D0 .OR. ORPHQP(I, 2) .NE. 0.D0) THEN !IF ORPHANED CHARGE IS CHARGED OR POLARIZABLE
+                     RNQ(NDCMRES, J, K) = 1
+                     RAQ(NDCMRES, J, K, 1) = 0.D0
+                     RBQ(NDCMRES, J, K, 1) = 0.D0
+                     RCQ(NDCMRES, J, K, 1) = 0.D0
+                     RDQ(NDCMRES, J, K, 1) = ORPHQP(I, 1)
+                     ORPHQP(I, 1) = 0.D0 !AVOID ADDING IT TWICE
+                     IF (ORPHQP(I, 2) .NE. 0.D0) THEN
+                        RNP(NDCMRES, J, K) = 1
+                        RDP(NDCMRES, J, K, 1) = ORPHQP(I, 2)
+                        ORPHQP(I, 2) = 0.D0 !AVOID ADDING IT TWICE
+                     ELSE
+                        RNP(NDCMRES, J, K) = 0
+                        RDP(NDCMRES, J, K, 1) = 0.D0
+                     END IF
+                  END IF
+               END IF
+            END DO !K
+         END DO !J
+         IF (.NOT. QFOUND) THEN !ATOM NOT FOUND IN ANY EXISTING FRAME
+            IF (M .EQ. 4) THEN
+               M = 1
+               RNFRAME(NDCMRES) = RNFRAME(NDCMRES) + 1
+               RFRAMEI(NDCMRES, RNFRAME(NDCMRES), 2) = 0
+               RFRAMEI(NDCMRES, RNFRAME(NDCMRES), 3) = 0
+            END IF
+            RFRAMEI(NDCMRES, RNFRAME(NDCMRES), M) = ATMORPH(I)
+            RNQ(NDCMRES, RNFRAME(NDCMRES), M) = 1
+            RAQ(NDCMRES, RNFRAME(NDCMRES), M, 1) = 0.D0
+            RBQ(NDCMRES, RNFRAME(NDCMRES), M, 1) = 0.D0
+            RCQ(NDCMRES, RNFRAME(NDCMRES), M, 1) = 0.D0
+            RDQ(NDCMRES, RNFRAME(NDCMRES), M, 1) = ORPHQP(I, 1)
+            IF (ORPHQP(I, 2) .NE. 0.D0) THEN
+               RNP(NDCMRES, RNFRAME(NDCMRES), M) = 1
+               RDP(NDCMRES, RNFRAME(NDCMRES), M, 1) = ORPHQP(I, 2)
+            ELSE
+               RNP(NDCMRES, RNFRAME(NDCMRES), M) = 0
+               RDP(NDCMRES, RNFRAME(NDCMRES), M, 1) = 0.D0
+            END IF
+            IF (M .EQ. 3) THEN ! PRINT OUT NEWLY CREATED FRAME
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(A,3I4,A)') '  NEW FRAME COMPLETE: (', &
+                     RFRAMEI(NDCMRES, RNFRAME(NDCMRES), 1:3), ')'
+               END IF
+            END IF
+            M = M + 1
+         END IF
+      END DO !I
+
+      DO WHILE (M .LT. 4) !ADD MISSING ATOMS TO FINAL FRAME TO MAKE 3
+         QFOUND = .FALSE.
+         DO I = 1, NRATM
+            DO J = 1, M - 1 !FIND ATOMS NOT IN CURRENT FRAME
+               IF (I .EQ. RFRAMEI(NDCMRES, RNFRAME(NDCMRES), J)) QFOUND = .TRUE.
+            END DO !J
+            IF (.NOT. QFOUND) RFRAMEI(NDCMRES, RNFRAME(NDCMRES), M) = I
+         END DO !I
+         RNQ(NDCMRES, RNFRAME(NDCMRES), M) = 0
+         RNP(NDCMRES, RNFRAME(NDCMRES), M) = 0
+         IF (M .EQ. 3) THEN ! PRINT OUT NEWLY CREATED FRAME
+            IF (PRNLEV .GT. 1) THEN
+               WRITE (OUTU, '(A,3I4,A)') '  NEW FRAME COMPLETE: (', &
+                  RFRAMEI(NDCMRES, RNFRAME(NDCMRES), 1:3), ')'
+            END IF
+         END IF
+         M = M + 1
+      END DO
+
+! CHECK TOTAL CHARGE
+      RQTOT = 0.D0
+      DO I = 1, RNFRAME(NDCMRES)
+         DO J = 1, 3
+            DO K = 1, RNQ(NDCMRES, I, J)
+               RQTOT = RQTOT + RDQ(NDCMRES, I, J, K)
+            END DO !K
+         END DO !J
+      END DO !I
+      IF (PRNLEV .GT. 1) THEN
+         WRITE (OUTU, '(A,I4,A,F9.4)') '  DCM> RESIDUE ', IRES, ' TOTAL CHARGE AFTER PATCHING (A.U.): ', RQTOT
+      END IF
+      QCOR = (FRQ + LRQ + NRQ) - RQTOT
+      IF (PRNLEV .GT. 1) THEN
+         WRITE (OUTU, '(A,F9.4,A)') '       RESIDUAL CHARGE ', QCOR, &
+            ' WILL BE DIVIDED BETWEEN ALL ATOMS OF PATCH GROUP'
+      END IF
+
+! EASIEST TO CORRECT TOTAL CHARGE OVER PATCH GROUP ATOMS AS THEY HAVE ONLY CENTRAL CHARGES
+      DO I = 1, RNFRAME(NDCMRES)
+         DO J = 1, 3
+            IF (QPATCHF) THEN
+               DO K = 1, DCMNPATF
+                  IF (RFRAMEI(NDCMRES, I, J) .EQ. DCMPATF(K, 3) .AND. DCMPATF(K, 2) .EQ. IRES) THEN
+                     RDQ(NDCMRES, I, J, 1) = RDQ(NDCMRES, I, J, 1) + QCOR/NPATF
+                  END IF
+               END DO
+            ELSEIF (QPATCHL) THEN
+               DO K = 1, DCMNPATL
+                  IF (RFRAMEI(NDCMRES, I, J) .EQ. DCMPATL(K, 3) .AND. DCMPATL(K, 2) .EQ. IRES) THEN
+                     RDQ(NDCMRES, I, J, 1) = RDQ(NDCMRES, I, J, 1) + QCOR/NPATL
+                  END IF
+               END DO
+            END IF
+         END DO
+      END DO
+! CHECK AGAIN
+      RQTOT = 0.D0
+      DO I = 1, RNFRAME(NDCMRES)
+         DO J = 1, 3
+            DO K = 1, RNQ(NDCMRES, I, J)
+               RQTOT = RQTOT + RDQ(NDCMRES, I, J, K)
+            END DO !K
+         END DO !J
+      END DO !I
+      IF (PRNLEV .GT. 1) THEN
+         WRITE (OUTU, '(A,I4,A,F9.4)') '  DCM> RESIDUE ', IRES, ' TOTAL CHARGE AFTER CORRECTING (A.U.): ', RQTOT
+      END IF
+
+! DIAGNOSTIC: PRINT OUT PATCHED RESIDUE DETAILS
+      IF (PRNLEV > 5) THEN
+         WRITE (OUTU, '(A)') ' DCM> DIAGNOSTIC PRINTOUT OF NEW RESIDUE IN DCM PARAMETER FILE FORMAT:'
+         WRITE (OUTU, '(A)') '      (TO SUPPRESS THIS INFORMATION USE PRNLEV <= 5)'
+         WRITE (OUTU, '(3A,I3,A)') ' RES ', RESDC(NDCMRES), ':', NDCMRES, ' FRAMES'
+         DO I = 1, RNFRAME(NDCMRES)
+            WRITE (OUTU, '(3I4)') RFRAMEI(NDCMRES, I, 1:3)
+            DO J = 1, 3
+               WRITE (OUTU, '(2I3)') RNQ(NDCMRES, I, J), RNP(NDCMRES, I, J)
+               DO K = 1, RNQ(NDCMRES, I, J)
+                  WRITE (OUTU, '(4(F9.5))') RAQ(NDCMRES, I, J, K), RBQ(NDCMRES, I, J, K), RCQ(NDCMRES, I, J, K), &
+                     RDQ(NDCMRES, I, J, K)
+               END DO !K
+               DO K = 1, RNP(NDCMRES, I, J)
+                  WRITE (OUTU, '(F9.5)') RDP(NDCMRES, I, J, K)
+               END DO !K
+            END DO !J
+         END DO !I
+         WRITE (OUTU, '(2A)') ' END RES ', RESDC(NDCMRES)
+      ELSE
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, '(A)') ' DCM> USE PRNLEV > 5 TO SHOW PATCHED RESIDUE IN PARAMETER FILE FORMAT'
+         END IF
+      END IF
+
+   END SUBROUTINE PATCHRES
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                      IMGINIT
+!*******************************************************************************************
+!
+! SUBROUTINE TO INITIALIZE DCM FRAMES, CHARGES ETC. FOR IMAGE MOLECULES IDENTIFIED IN
+! UPIMG.SRC. THIS ROUTINE IS CALLED DIRECTLY FROM THERE AND NOT AT ALL DURING SIMULATIONS
+! WITHOUT PERIODIC BOUNDARY CONDITIONS
+!
+!*******************************************************************************************
+
+   SUBROUTINE IMGINIT(NATOMI, IS, IL)
+      ! NATOMI FROM UPIMAGE.SRC, CONTAINS START INDEX FOR NEXT GROUP OF IMAGE ATOMS TO BE ADDED
+      ! IS AND IL ALSO FROM UPIMAGE.SRC. THEY CONTAIN 1ST AND LAST ATOM INDICES OF REFERENCE
+      ! ATOMS FROM PRIMARY CELL FOR THE NEW IMAGE ATOMS
+
+      ! USE STREAM, ONLY: OUTU, PRNLEV
+
+      IMPLICIT NONE
+      INTEGER NATOMI, IS, IL, N, I, J, K, L, OFFS, II
+
+      ! WRITE(OUTU,*) "CALLNG IMGINIT", NATOMI,IS,IL
+
+      ! SHOULDN'T INDQ BE SET TO 0 HERE?
+      N = IL - IS + 1      ! NUM OF ATOMS TO BE ADDED
+      DO I = 0, N - 1
+         J = NATOMI + I + 1         ! INDEX OF NEW IMAGE ATOM
+         IREF(J) = IS + I         ! INDEX OF REFERENCE ATOM IN PRIMARY CELL
+         NQA(J) = NQA(IS + I)     ! NO. OF DCM CHGS FOR THIS IMAGE ATOM
+         IDQ(J) = INDQ + NDQ + 1    ! INDEX OF 1ST DCM CHG FOR THIS ATOM IN DCM ARRAYS
+         IF (QPOL) THEN
+            DPOL(J) = DPOL(IS + I)   ! COPY POLARIZABILITY FROM REF ATOM
+         END IF
+         DO K = 0, NQA(J) - 1
+            !INDEX FOR CENTRAL CELL ATOM
+            AQ(IDQ(J) + K) = AQ(IDQ(IS + I) + K)
+            BQ(IDQ(J) + K) = BQ(IDQ(IS + I) + K)
+            CQ(IDQ(J) + K) = CQ(IDQ(IS + I) + K)
+            DQ(IDQ(J) + K) = DQ(IDQ(IS + I) + K)
+
+            IF (KERN) THEN !.OR. KERN
+               IF ((FLXFRS(AFRAME(IS+I,1)) .EQ. 1) .AND. (NATMK .GT. 3)) THEN
+                  DO II = 1, NATMK - 3
+                     ! UPDATE EXTRA ATOMS                                  SOME OFFSET
+                     XKERNATMS(IDQ(J) + K, II) = XKERNATMS(IDQ(IS + I) + K, II) + (J - IREF(J)) ! + 1
+                  END DO
+                  ! WRITE(OUTU,*) "J", J, "IS+I", IS+I
+                  ! WRITE(OUTU,*) "J-IREF(J)", J-IREF(J), "IDQ(J)+K", IDQ(J)+K, "IDQ(IS+I)+K", IDQ(IS+I)+K
+                  ! WRITE(OUTU,*) "XKERNATMS(IDQ(IS+I)+K,1)", XKERNATMS(IDQ(IS+I)+K,1), "K", K
+                  ! WRITE(OUTU,*) "XKERNATMS(IDQ(J)+K,1)", XKERNATMS(IDQ(J)+K,1)
+               END IF
+            END IF !KERN
+
+            ATQ(IDQ(J) + K) = J
+            INDQ = INDQ + 1
+
+         END DO ! K
+
+         DO L = 1, NF ! QUITE HEAVY APPROACH: CAN OPTIMIZE HERE!
+            IF (FRAMEI(L, 1) .EQ. IREF(J)) THEN ! THIS IS 1ST ATOM IN SOME FRAME, CREATE NEW FRAME FOR THIS IMAGE ATOM
+              !  WRITE(OUTU,*) "RESIZING IMAGE FRAMES"
+               INF = INF + 1
+               ! CHECK WHETHER WE NEED TO ENLARGE ARRAYS TO ACCOMMODATE NEW FRAME
+               IF (NF + INF .GE. SIZE(FRAMEI, 1)) THEN
+                  ! WRITE (OUTU, *) "CALLNG IMGRESIZE"
+                  CALL IMGRESIZE()
+               END IF
+               OFFS = J - IREF(J) ! NOTE: THIS ASSUMES CONSTANT INDEX OFFSET FOR ALL ATOMS IN FRAME - DANGEROUS???
+               IF (AFRAME(FRAMEI(L, 1), 1) .EQ. L) THEN ! CHECK THIS WAS THE REFERENCE ATOM'S PRIMARY FRAME
+                  AFRAME(J, 1) = NF + INF  ! STORE WHICH FRAME IS THIS ATOM'S PRIMARY FRAME
+                  AFRAME(J, 2) = 1       ! THIS IS 1ST ATOM IN FRAME
+               END IF
+               FRAMEI(NF + INF, 1) = J
+               IF (FRAMEI(L, 2) .NE. 0) THEN
+                  FRAMEI(NF + INF, 2) = FRAMEI(L, 2) + OFFS
+                  IF (AFRAME(FRAMEI(L, 2), 1) .EQ. L) THEN
+                     AFRAME(FRAMEI(NF + INF, 2), 2) = AFRAME(FRAMEI(L, 2), 2)
+                     AFRAME(FRAMEI(NF + INF, 2), 1) = NF + INF
+                  END IF
+               ELSE ! MONATOMIC
+                  FRAMEI(NF + INF, 2) = 0
+               END IF
+
+               IF (FRAMEI(L, 3) .NE. 0) THEN
+                  FRAMEI(NF + INF, 3) = FRAMEI(L, 3) + OFFS
+                  IF (AFRAME(FRAMEI(L, 3), 1) .EQ. L) THEN
+                     AFRAME(FRAMEI(NF + INF, 3), 1) = NF + INF
+                     AFRAME(FRAMEI(NF + INF, 3), 2) = AFRAME(FRAMEI(L, 3), 2)
+                  END IF
+               ELSE
+                  FRAMEI(NF + INF, 3) = 0
+               END IF
+               FRTYP(NF + INF) = FRTYP(L)
+
+               ! UPDATE FLUX TYPE
+               IF (KERN) THEN !.OR. KERN
+                  FLXFRS(NF + INF) = FLXFRS(L)
+               END IF ! IF KERN
+            END IF
+
+         END DO ! L
+      END DO ! I
+      NATIM = NATOMI
+      RETURN
+   END SUBROUTINE IMGINIT
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                   IMGRESIZE
+!
+!*******************************************************************************************
+! PROPERLY HANDLE USER CHOOSING LARGE CUTOFFS FOR PERIODIC SYSTEMS (SIMILAR TO BOX SIZE)
+! BY DYNAMICALLY RESIZING ARRAYS
+!
+   SUBROUTINE IMGRESIZE()
+      USE CHM_KINDS
+
+      IMPLICIT NONE
+
+      INTEGER, ALLOCATABLE :: TNQ(:, :), TNQA(:), TIDQ(:), TFRAMEI(:, :), TAFRAME(:, :), TDPAIR(:), &
+                              TIREF(:), TATQ(:), TFRTYP(:)
+      INTEGER :: TSIZE, TSIZE2, I
+      REAL(CHM_REAL), ALLOCATABLE :: TAQ(:), TBQ(:), TCQ(:), TDQ(:), TDPOL(:)
+      REAL(CHM_REAL), ALLOCATABLE :: TDF1(:), TDF2(:), TDF3(:), &
+                                     TDF4(:), TDF5(:), TDF6(:), &
+                                     TDF7(:), TDF8(:), TDF9(:), &
+                                     TDF10(:), TDF11(:), TDF12(:), &
+                                     TDF13(:), TDF14(:), TDF15(:), &
+                                     TDF16(:), TDF17(:), TDF18(:), &
+                                     TDF19(:), TDF20(:), TDF21(:), &
+                                     TDF22(:), TDF23(:), TDF24(:), &
+                                     TDF25(:), TDF26(:), TDF27(:)
+
+      TSIZE = SIZE(AFRAME, 1)
+
+      CALL WRNDIE(1, '<DCM> IMGRESIZE', 'EXPANDING IMAGE ARRAYS, PERHAPS THE CUTOFF IS TOO LARGE FOR THE BOX LENGTH?')
+
+      ! ALLOCATE TEMPORARY ARRAYS TO STORE DATA DURING RESIZING
+      ALLOCATE (TAFRAME(TSIZE, 2))
+      ALLOCATE (TIDQ(TSIZE))
+      ALLOCATE (TFRAMEI(TSIZE, 3))
+      ALLOCATE (TFRTYP(TSIZE))
+      ALLOCATE (TIREF(TSIZE))
+      ALLOCATE (TDPOL(TSIZE*MAXPOL))
+      ALLOCATE (TDQ(TSIZE*MAXQ))
+      ALLOCATE (TAQ(TSIZE*MAXQ))
+      ALLOCATE (TBQ(TSIZE*MAXQ))
+      ALLOCATE (TCQ(TSIZE*MAXQ))
+      ALLOCATE (TATQ(TSIZE*MAXQ))
+      ALLOCATE (TDPAIR(TSIZE*MAXQ))
+      ALLOCATE (TNQA(TSIZE))
+      ALLOCATE (TNQ(TSIZE, 3))     ! UNLIKELY TO HAVE MORE FRAMES THAN ATOMS, NATOMX SHOULD BE SAFE
+
+      ! TEMPORARILY STORE DATA
+      TAFRAME(:, :) = AFRAME(:, :)
+      TIDQ(:) = IDQ(:)
+      TFRAMEI(:, :) = FRAMEI(:, :)
+      TFRTYP(:) = FRTYP(:)
+      TIREF(:) = IREF(:)
+      TDPOL(:) = DPOL(:)
+      TDQ(:) = DQ(:)
+      TAQ(:) = AQ(:)
+      TBQ(:) = BQ(:)
+      TCQ(:) = CQ(:)
+      TATQ(:) = ATQ(:)
+      TDPAIR(:) = DPAIR(:)
+      TNQA(:) = NQA(:)
+      TNQ(:, :) = NQ(:, :)
+
+      ! RESIZE ORIGINAL ARRAYS
+      DEALLOCATE (AFRAME, IDQ, FRAMEI, FRTYP, IREF, DPOL, DQ, AQ, BQ, CQ, ATQ, DPAIR, NQA, NQ)
+      TSIZE2 = TSIZE*2
+
+      ALLOCATE (AFRAME(TSIZE2, 2))
+      ALLOCATE (IDQ(TSIZE2))
+      ALLOCATE (FRAMEI(TSIZE2, 3))
+      ALLOCATE (FRTYP(TSIZE2))
+      ALLOCATE (IREF(TSIZE2))
+      ALLOCATE (DPOL(TSIZE2*MAXPOL))
+      ALLOCATE (DQ(TSIZE2*MAXQ))
+      ALLOCATE (AQ(TSIZE2*MAXQ))
+      ALLOCATE (BQ(TSIZE2*MAXQ))
+      ALLOCATE (CQ(TSIZE2*MAXQ))
+      ALLOCATE (ATQ(TSIZE2*MAXQ))
+      ALLOCATE (DPAIR(TSIZE2*MAXQ))
+      ALLOCATE (NQA(TSIZE2))
+      ALLOCATE (NQ(TSIZE2, 3))
+
+      ! COPY DATA BACK TO ORIGINAL ARRAYS
+      AFRAME(1:TSIZE, :) = TAFRAME(1:TSIZE, :)
+      IDQ(1:TSIZE) = TIDQ(1:TSIZE)
+      FRAMEI(1:TSIZE, :) = TFRAMEI(1:TSIZE, :)
+      FRTYP(1:TSIZE) = TFRTYP(1:TSIZE)
+      IREF(1:TSIZE) = TIREF(1:TSIZE)
+      DPOL(1:TSIZE*MAXPOL) = TDPOL(1:TSIZE*MAXPOL)
+      DQ(1:TSIZE*MAXQ) = TDQ(1:TSIZE*MAXQ)
+      AQ(1:TSIZE*MAXQ) = TAQ(1:TSIZE*MAXQ)
+      BQ(1:TSIZE*MAXQ) = TBQ(1:TSIZE*MAXQ)
+      CQ(1:TSIZE*MAXQ) = TCQ(1:TSIZE*MAXQ)
+      ATQ(1:TSIZE*MAXQ) = TATQ(1:TSIZE*MAXQ)
+      DPAIR(1:TSIZE*MAXQ) = TDPAIR(1:TSIZE*MAXQ)
+      NQA(1:TSIZE) = TNQA(1:TSIZE)
+      NQ(1:TSIZE, :) = TNQ(1:TSIZE, :)
+
+      ! REPEAT FOR FRAME DERIVATIVES
+      ALLOCATE (TDF1(TSIZE), TDF2(TSIZE), TDF3(TSIZE), TDF4(TSIZE), TDF5(TSIZE), TDF6(TSIZE), &
+                TDF7(TSIZE), TDF8(TSIZE), TDF9(TSIZE), TDF10(TSIZE), TDF11(TSIZE), TDF12(TSIZE), &
+                TDF13(TSIZE), TDF14(TSIZE), TDF15(TSIZE), TDF16(TSIZE), TDF17(TSIZE), TDF18(TSIZE), &
+                TDF19(TSIZE), TDF20(TSIZE), TDF21(TSIZE), TDF22(TSIZE), TDF23(TSIZE), TDF24(TSIZE), &
+                TDF25(TSIZE), TDF26(TSIZE), TDF27(TSIZE))
+      TDF1(1:TSIZE) = DF1(1:TSIZE)
+      TDF2(1:TSIZE) = DF2(1:TSIZE)
+      TDF3(1:TSIZE) = DF3(1:TSIZE)
+      TDF4(1:TSIZE) = DF4(1:TSIZE)
+      TDF5(1:TSIZE) = DF5(1:TSIZE)
+      TDF6(1:TSIZE) = DF6(1:TSIZE)
+      TDF7(1:TSIZE) = DF7(1:TSIZE)
+      TDF8(1:TSIZE) = DF8(1:TSIZE)
+      TDF9(1:TSIZE) = DF9(1:TSIZE)
+      TDF10(1:TSIZE) = DF10(1:TSIZE)
+      TDF11(1:TSIZE) = DF11(1:TSIZE)
+      TDF12(1:TSIZE) = DF12(1:TSIZE)
+      TDF13(1:TSIZE) = DF13(1:TSIZE)
+      TDF14(1:TSIZE) = DF14(1:TSIZE)
+      TDF15(1:TSIZE) = DF15(1:TSIZE)
+      TDF16(1:TSIZE) = DF16(1:TSIZE)
+      TDF17(1:TSIZE) = DF17(1:TSIZE)
+      TDF18(1:TSIZE) = DF18(1:TSIZE)
+      TDF19(1:TSIZE) = DF19(1:TSIZE)
+      TDF20(1:TSIZE) = DF20(1:TSIZE)
+      TDF21(1:TSIZE) = DF21(1:TSIZE)
+      TDF22(1:TSIZE) = DF22(1:TSIZE)
+      TDF23(1:TSIZE) = DF23(1:TSIZE)
+      TDF24(1:TSIZE) = DF24(1:TSIZE)
+      TDF25(1:TSIZE) = DF25(1:TSIZE)
+      TDF26(1:TSIZE) = DF26(1:TSIZE)
+      TDF27(1:TSIZE) = DF27(1:TSIZE)
+
+      DEALLOCATE (DF1, DF2, DF3, DF4, DF5, DF6, DF7, DF8, DF9, DF10, DF11, DF12, DF13, DF14, DF15, DF16, &
+                  DF17, DF18, DF19, DF20, DF21, DF22, DF23, DF24, DF25, DF26, DF27)
+      ALLOCATE (DF1(TSIZE2), DF2(TSIZE2), DF3(TSIZE2), DF4(TSIZE2), DF5(TSIZE2), DF6(TSIZE2), &
+                DF7(TSIZE2), DF8(TSIZE2), DF9(TSIZE2), DF10(TSIZE2), DF11(TSIZE2), DF12(TSIZE2), &
+                DF13(TSIZE2), DF14(TSIZE2), DF15(TSIZE2), DF16(TSIZE2), DF17(TSIZE2), DF18(TSIZE2), &
+                DF19(TSIZE2), DF20(TSIZE2), DF21(TSIZE2), DF22(TSIZE2), DF23(TSIZE2), DF24(TSIZE2), &
+                DF25(TSIZE2), DF26(TSIZE2), DF27(TSIZE2))
+
+      DF1(1:TSIZE) = TDF1(1:TSIZE)
+      DF2(1:TSIZE) = TDF2(1:TSIZE)
+      DF3(1:TSIZE) = TDF3(1:TSIZE)
+      DF4(1:TSIZE) = TDF4(1:TSIZE)
+      DF5(1:TSIZE) = TDF5(1:TSIZE)
+      DF6(1:TSIZE) = TDF6(1:TSIZE)
+      DF7(1:TSIZE) = TDF7(1:TSIZE)
+      DF8(1:TSIZE) = TDF8(1:TSIZE)
+      DF9(1:TSIZE) = TDF9(1:TSIZE)
+      DF10(1:TSIZE) = TDF10(1:TSIZE)
+      DF11(1:TSIZE) = TDF11(1:TSIZE)
+      DF12(1:TSIZE) = TDF12(1:TSIZE)
+      DF13(1:TSIZE) = TDF13(1:TSIZE)
+      DF14(1:TSIZE) = TDF14(1:TSIZE)
+      DF15(1:TSIZE) = TDF15(1:TSIZE)
+      DF16(1:TSIZE) = TDF16(1:TSIZE)
+      DF17(1:TSIZE) = TDF17(1:TSIZE)
+      DF18(1:TSIZE) = TDF18(1:TSIZE)
+      DF19(1:TSIZE) = TDF19(1:TSIZE)
+      DF20(1:TSIZE) = TDF20(1:TSIZE)
+      DF21(1:TSIZE) = TDF21(1:TSIZE)
+      DF22(1:TSIZE) = TDF22(1:TSIZE)
+      DF23(1:TSIZE) = TDF23(1:TSIZE)
+      DF24(1:TSIZE) = TDF24(1:TSIZE)
+      DF25(1:TSIZE) = TDF25(1:TSIZE)
+      DF26(1:TSIZE) = TDF26(1:TSIZE)
+      DF27(1:TSIZE) = TDF27(1:TSIZE)
+
+   END SUBROUTINE IMGRESIZE
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+   FUNCTION DIST(X, Y, Z, IDX1, IDX2, NATOMX) RESULT(DISTOUT)
+      INTEGER IDX1, IDX2, NATOMX
+      REAL(CHM_REAL) :: X(NATOMX), Y(NATOMX), Z(NATOMX)
+      REAL(CHM_REAL) DISTOUT
+      DISTOUT = ZERO
+      DISTOUT = DISTOUT + (X(IDX1) - X(IDX2))**TWO
+      DISTOUT = DISTOUT + (Y(IDX1) - Y(IDX2))**TWO
+      DISTOUT = DISTOUT + (Z(IDX1) - Z(IDX2))**TWO
+      DISTOUT = DISTOUT**HALF
+   END FUNCTION DIST
+!*******************************************************************************************
+
+   FUNCTION CART2INT(X, Y, Z, IDX1, IDX2, IDX3, NATOMX, R1, R2, R3) RESULT(DERV)
+      INTEGER IDX1, IDX2, IDX3, NATOMX
+      REAL(CHM_REAL) :: X(NATOMX), Y(NATOMX), Z(NATOMX)
+      REAL(CHM_REAL) :: DERV(3, 3, 3)
+      REAL(CHM_REAL) R1, R2, R3
+
+!!! R1
+      derv(1, 1, 1) = (x(IDX1) - x(IDX2))/R1
+      derv(2, 1, 1) = (x(IDX2) - x(IDX1))/R1
+      derv(3, 1, 1) = 0.0d0
+      derv(1, 2, 1) = (y(IDX1) - y(IDX2))/R1
+      derv(2, 2, 1) = (y(IDX2) - y(IDX1))/R1
+      derv(3, 2, 1) = 0.0d0
+      derv(1, 3, 1) = (z(IDX1) - z(IDX2))/R1
+      derv(2, 3, 1) = (z(IDX2) - z(IDX1))/R1
+      derv(3, 3, 1) = 0.0d0
+!!! R2
+      derv(1, 1, 2) = 0.0d0
+      derv(2, 1, 2) = (x(IDX2) - x(IDX3))/R2
+      derv(3, 1, 2) = (x(IDX3) - x(IDX2))/R2
+      derv(1, 2, 2) = 0.0d0
+      derv(2, 2, 2) = (y(IDX2) - y(IDX3))/R2
+      derv(3, 2, 2) = (y(IDX3) - y(IDX2))/R2
+      derv(1, 3, 2) = 0.0d0
+      derv(2, 3, 2) = (z(IDX2) - z(IDX3))/R2
+      derv(3, 3, 2) = (z(IDX3) - z(IDX2))/R2
+!!! R3
+      derv(1, 1, 3) = (x(IDX1) - x(IDX3))/R3
+      derv(2, 1, 3) = 0.0d0
+      derv(3, 1, 3) = (x(IDX3) - x(IDX1))/R3
+      derv(1, 2, 3) = (y(IDX1) - y(IDX3))/R3
+      derv(2, 2, 3) = 0.0d0
+      derv(3, 2, 3) = (y(IDX3) - y(IDX1))/R3
+      derv(1, 3, 3) = (z(IDX1) - z(IDX3))/R3
+      derv(2, 3, 3) = 0.0d0
+      derv(3, 3, 3) = (z(IDX3) - z(IDX1))/R3
+
+   END FUNCTION CART2INT
+
+!*******************************************************************************************
+   FUNCTION DIST3D(X1, Y1, Z1, X2, Y2, Z2) RESULT(DISTOUT)
+! INPUT
+      REAL(CHM_REAL) X1, Y1, Z1, X2, Y2, Z2, DISTOUT
+      DISTOUT = ZERO
+      DISTOUT = DISTOUT + ((X1 - X2)**TWO)
+      DISTOUT = DISTOUT + ((Y1 - Y2)**TWO)
+      DISTOUT = DISTOUT + ((Z1 - Z2)**TWO)
+      DISTOUT = DISTOUT**HALF
+   END FUNCTION DIST3D
+!*****
+
+!*******************************************************************************************
+   FUNCTION DISTN(A, B, N) RESULT(DISTOUT)
+      INTEGER N
+      REAL(CHM_REAL) :: A(N), B(N), DISTOUT
+      DISTOUT = ZERO
+      DO I = 1, N
+         DISTOUT = DISTOUT + ((A(I) - B(I))**TWO)
+      END DO
+      DISTOUT = DISTOUT**HALF
+   END FUNCTION DISTN
+!*****
+
+!*******************************************************************************************
+   SUBROUTINE GET_KERNEL(X, Y, N, KERNELX, DKX)! RESULT(KERNEL)
+      INTEGER N, CA, DIM, I
+      REAL(CHM_REAL) X(NDCMR, N), Y(NTRAIN, N)
+      REAL(CHM_REAL) :: KERNELX(NDCMR, NTRAIN), DKX(NDCMR, NKERNC*3, NKDIST)
+
+! EMPTY THE DERIVATIVES ARRAY
+      DO RR = 1, NDCMR
+         DO CA = 1, NKERNC*3
+            DO DIM = 1, NKDIST
+               DKX(RR, CA, DIM) = ZERO
+            END DO
+         END DO
+      END DO
+
+      DO RR = 1, NDCMR
+         DO I = 1, NTRAIN
+!  CALCULATE THE VALUE OF THE KERNEL
+            KERNELX(RR, I) = EXP((-ONE*DISTN(X(RR, :), Y(I, :), N)**TWO)/TWO)
+!  GET THE DERIVATIVE FOR ALL DIMS. OF THE DM AND FOR EACH CHARGE
+            DO CA = 1, NKERNC*3
+               DO DIM = 1, NKDIST
+                  DKX(RR, CA, DIM) = DKX(RR, CA, DIM) - ALPHAS(CA, I)*KERNELX(RR, I)*(X(RR, DIM) - Y(I, DIM))/(ONE**TWO)
+               END DO
+            END DO
+         END DO
+      END DO
+
+   END SUBROUTINE GET_KERNEL
+!*******************************************************************************************
+
+   SUBROUTINE DISTM_N(X, Y, Z, NATOMX)
+      INTEGER NATOMX, C, I, J, K, II, JJ
+      INTEGER CNT(NATMK*NDCMR)
+      REAL(CHM_REAL) :: X(NATOMX), Y(NATOMX), Z(NATOMX)
+
+      C = 1
+      DO I = 1, NATMK
+         DO J = 1, NATMK
+            IF ((I .LT. J)) THEN
+               !  ENTER THE DISTANCE INTO THE DIST. MATRIX
+
+               DO RR = 1, NDCMR
+
+                  II = I + (RR - 1)*NATMK
+                  JJ = J + (RR - 1)*NATMK
+
+                  XINPUT(RR, C) = DIST(X, Y, Z, II, JJ, NATOMX)
+
+                  DXIN(II, C, 1) = (X(II) - X(JJ))/XINPUT(RR, C)
+                  DXIN(II, C, 2) = (Y(II) - Y(JJ))/XINPUT(RR, C)
+                  DXIN(II, C, 3) = (Z(II) - Z(JJ))/XINPUT(RR, C)
+
+                  DXIN(JJ, C, 1) = (X(JJ) - X(II))/XINPUT(RR, C)
+                  DXIN(JJ, C, 2) = (Y(JJ) - Y(II))/XINPUT(RR, C)
+                  DXIN(JJ, C, 3) = (Z(JJ) - Z(II))/XINPUT(RR, C)
+               END DO
+
+               C = C + 1
+            END IF
+         END DO
+      END DO
+
+   END SUBROUTINE DISTM_N
+
+   SUBROUTINE DISTM_INIT()
+      INTEGER C, I, J, K, II, JJ
+      INTEGER CNT(NATMK*NDCMR)
+
+      DO RR = 1, NDCMR
+         DO I = 1, NATMK*NDCMR
+            DO J = 1, NATMK - 1
+               CNT(I) = 0
+               DXIN(I, J, 1) = ZERO
+               DXIN(I, J, 2) = ZERO
+               DXIN(I, J, 3) = ZERO
+            END DO
+         END DO
+      END DO
+
+      C = 1
+      DO I = 1, NATMK
+         DO J = 1, NATMK
+            IF ((I .LT. J)) THEN
+               !  ENTER THE DISTANCE INTO THE DIST. MATRIX
+
+               DO RR = 1, NDCMR
+                  II = I + (RR - 1)*NATMK
+                  JJ = J + (RR - 1)*NATMK
+                  CNT(II) = CNT(II) + 1
+                  CNT(JJ) = CNT(JJ) + 1
+                  ! which distance
+                  A2D(II, CNT(II)) = C
+                  A2D(JJ, CNT(JJ)) = C
+                  ! which pair
+                  A2P(II, CNT(II)) = JJ
+                  A2P(JJ, CNT(JJ)) = II
+               END DO
+
+               C = C + 1
+            END IF
+         END DO
+      END DO
+
+   END SUBROUTINE DISTM_INIT
+
+!*******************************************************************************************
+!                      AXIS 1
+!*******************************************************************************************
+!
+! ROUTINE CALLED ONCE PER TIME STEP TO CALCULATE THE LOCAL AXES REQUIRED TO PLACE DCM
+! CHARGES RELATIVE TO NUCLEAR COORDINATES OF EACH FRAME. AXIS DERIVATIVES ARE ALSO
+! CALCULATED, TO BE USED TO EVALUATE FORCES IN THE DCME SUBROUTINE. DEPSITE ITS LENGTH
+! AND COMPLEXITY, RELATIVELY LITTLE TIME IS SPENT HERE AS CALCULATIONS ARE DOMINATED BY
+! THE POORLY SCALING (WITH SYSTEM SIZE) CHARGE-CHARGE INTERACTIONS
+!
+!*******************************************************************************************
+! TODO: THIS ROUTINE HAS YET TO BE OPTIMIZED
+
+SUBROUTINE AXIS1(X, Y, Z, XEI, XEJ, XEK, YEI, YEJ, YEK, ZEI, ZEJ, ZEK, &
+                    NATOMX, XQ, YQ, ZQ)
+
+! FIND LOCAL AXES AND DERIVATIVES
+      USE CHM_KINDS
+      !  ERIC: ADDING STREAM HERE FOR DEBUGGING
+      USE STREAM, ONLY: OUTU, PRNLEV
+
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: COMM_CHARMM, MYNOD
+      USE MPI, ONLY: MPI_REAL8, MPI_INTEGER, MPI_LOGICAL
+#endif
+
+      IMPLICIT NONE
+
+      REAL(CHM_REAL) :: D1, D2, D3
+      REAL(chm_real) :: KERNELX(NDCMR, NTRAIN), DKX(NDCMR, NKERNC*3, NKDIST)
+      ! REAL(chm_real) :: XINPUT(3), KERNELX(NTRAIN)
+      INTEGER R
+
+      REAL(CHM_REAL) :: ANGLEVAL, ANGLEVALRAD
+      INTEGER FR, ATM1, ATM2, ATM3, J, K, L, LL, M, I, KK, C, IA, IB, IC
+      INTEGER XATM
+      INTEGER NATOMX
+      REAL(CHM_REAL) :: X(NATOMX), Y(NATOMX), Z(NATOMX)
+      REAL(CHM_REAL) :: RAB(3), RBC(3), TMPDERIV(3, 3)
+      REAL(CHM_REAL) XEI(NF, 3), XEJ(NF, 3), XEK(NF, 3) ! 3 for 3 atoms in a frame
+      REAL(CHM_REAL) YEI(NF, 3), YEJ(NF, 3), YEK(NF, 3)
+      REAL(CHM_REAL) ZEI(NF, 3), ZEJ(NF, 3), ZEK(NF, 3)
+      REAL(CHM_REAL) DXEIDA1X(NF, 3), DXEIDA1Y(NF, 3), DXEIDA1Z(NF, 3), &
+         DXEJDA1X(NF, 3), DXEJDA1Y(NF, 3), DXEJDA1Z(NF, 3), &
+         DXEKDA1X(NF, 3), DXEKDA1Y(NF, 3), DXEKDA1Z(NF, 3), &
+         DXEIDA2X(NF, 3), DXEIDA2Y(NF, 3), DXEIDA2Z(NF, 3), &
+         DXEJDA2X(NF, 3), DXEJDA2Y(NF, 3), DXEJDA2Z(NF, 3), &
+         DXEKDA2X(NF, 3), DXEKDA2Y(NF, 3), DXEKDA2Z(NF, 3), &
+         DXEIDA3X(NF, 3), DXEIDA3Y(NF, 3), DXEIDA3Z(NF, 3), &
+         DXEJDA3X(NF, 3), DXEJDA3Y(NF, 3), DXEJDA3Z(NF, 3), &
+         DXEKDA3X(NF, 3), DXEKDA3Y(NF, 3), DXEKDA3Z(NF, 3)
+      REAL(CHM_REAL) DYEIDA1X(NF, 3), DYEIDA1Y(NF, 3), DYEIDA1Z(NF, 3), &
+         DYEJDA1X(NF, 3), DYEJDA1Y(NF, 3), DYEJDA1Z(NF, 3), &
+         DYEKDA1X(NF, 3), DYEKDA1Y(NF, 3), DYEKDA1Z(NF, 3), &
+         DYEIDA2X(NF, 3), DYEIDA2Y(NF, 3), DYEIDA2Z(NF, 3), &
+         DYEJDA2X(NF, 3), DYEJDA2Y(NF, 3), DYEJDA2Z(NF, 3), &
+         DYEKDA2X(NF, 3), DYEKDA2Y(NF, 3), DYEKDA2Z(NF, 3), &
+         DYEIDA3X(NF, 3), DYEIDA3Y(NF, 3), DYEIDA3Z(NF, 3), &
+         DYEJDA3X(NF, 3), DYEJDA3Y(NF, 3), DYEJDA3Z(NF, 3), &
+         DYEKDA3X(NF, 3), DYEKDA3Y(NF, 3), DYEKDA3Z(NF, 3)
+      REAL(CHM_REAL) DZEIDA1X(NF, 3), DZEIDA1Y(NF, 3), DZEIDA1Z(NF, 3), &
+         DZEJDA1X(NF, 3), DZEJDA1Y(NF, 3), DZEJDA1Z(NF, 3), &
+         DZEKDA1X(NF, 3), DZEKDA1Y(NF, 3), DZEKDA1Z(NF, 3), &
+         DZEIDA2X(NF, 3), DZEIDA2Y(NF, 3), DZEIDA2Z(NF, 3), &
+         DZEJDA2X(NF, 3), DZEJDA2Y(NF, 3), DZEJDA2Z(NF, 3), &
+         DZEKDA2X(NF, 3), DZEKDA2Y(NF, 3), DZEKDA2Z(NF, 3), &
+         DZEIDA3X(NF, 3), DZEIDA3Y(NF, 3), DZEIDA3Z(NF, 3), &
+         DZEJDA3X(NF, 3), DZEJDA3Y(NF, 3), DZEJDA3Z(NF, 3), &
+         DZEKDA3X(NF, 3), DZEKDA3Y(NF, 3), DZEKDA3Z(NF, 3)
+      REAL(CHM_REAL) :: RB1, RB12, RB2, RB22, B1X, B1Y, B1Z, B2X, B2Y, B2Z, TX, TY, TZ
+      REAL(chm_real) :: DADT, DBDT, DCDT
+
+      REAL(CHM_REAL) :: FACA, FACB, FACC
+      REAL(CHM_REAL) :: XQ(*), YQ(*), ZQ(*)
+      REAL(CHM_REAL) :: FAC, FAC1, FAC2, FAC3, FAC4, FAC5, FAC6, REY, REY2
+      REAL(CHM_REAL) :: FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3
+      REAL(CHM_REAL) :: THTH, THTHTH ! dummy variables for theta sqr and theta cubed
+      REAL(CHM_REAL) :: DXI, DYI, DZI, DXJ, DYJ, DZJ, RI2, RJ2, RI, RJ, RIR, RJR, DXIR, DYIR, DZIR, DXJR, DYJR, DZJR, CST, AT
+
+      ! helper variables for derivatives
+      REAL(CHM_REAL) :: TDAX1, TDAX2, TDAX3, TDAY1, TDAY2, TDAY3, TDAZ1, TDAZ2, TDAZ3
+      REAL(CHM_REAL) :: TDBX1, TDBX2, TDBX3, TDBY1, TDBY2, TDBY3, TDBZ1, TDBZ2, TDBZ3
+      REAL(CHM_REAL) :: TDCX1, TDCX2, TDCX3, TDCY1, TDCY2, TDCY3, TDCZ1, TDCZ2, TDCZ3
+      REAL(CHM_REAL) :: DZDT ! d/dx (1-cos(x)^2)
+      REAL(CHM_REAL) :: ZVAL ! (1-cos(x)^2)
+      ! REAL(CHM_REAL) :: DKERN(3,3)
+      ! REAL(CHM_REAL) :: derv(3,3,3)
+
+      ! TODO: OPTIMIZE THIS ROUTINE...
+
+      ! THIS SUBROUTINE IS COMPLEX AND COULD BE WRITTEN IN DIFFERENT WAYS. THE AIM IS TO
+      ! CALCULATE THE GEOMETRIC DERIVATIVES OF EACH LOCAL AXIS UNIT VECTOR WITH RESPECT TO EACH
+      ! ATOMIC COORDINATE IN A FRAME. THERE ARE 3 NON-COLINEAR ATOMS IN EACH FRAME, EACH WITH THEIR OWN LOCAL
+      ! AXIS SYSTEM. THIS MEANS WE NEED PARTIAL DERIVATIVES OF ATOM 1'S LOCAL X,Y AND Z AXES WRT ATOM 1,2,3,
+      ! THE SAME FOR ATOMS 2 AND 3. EACH LOCAL AXIS VECTOR HAS 3 COMPONENTS IN THE GLOBAL AXIS
+      ! SYSTEM, SO WE NEED DXI/DRA, DXJ/DRA, DXK/DRA FOR THE LOCAL X-AXIS VECTOR OF ATOM 1. THE X-AXIS
+      ! VECTOR COMPONENTS I,J,K ARE ITS X,Y, AND Z COMPONENTS IN THE GLOBAL AXIS SYSTEM. SO FOR
+      ! ATOM 1'S X-AXIS WE NEED 9 PARTIAL DERIVATIVES: DX/DRA -> DXI/DA1X, DXI/DA1Y, DXI/DA1Z,
+      ! DXI/DA2X ... DXI/DA3Z. DA1X IS THE X-COORD OF ATOM 1. WE THEN NEED ATOM 1'S Y AND Z-AXIS
+      ! DERIVATIVES, GIVING 27 PARTIAL DERIVATIVES IN TOTAL. THE SAME FOR ATOMS 2 AND 3, WHICH HAVE THEIR
+      ! OWN LOCAL AXIS VECTORS, LEADING TO 81 PARTIAL DERIVATIVES IN TOTAL, NAMED EG DXEIDA1X(NF,3).
+      !
+      ! WHEN WE EVALUATE PARTIAL DERIVATIVES BELOW THE CODE IS WRITTEN IN A VERY GENERAL BUT POTENTIALLY
+      ! CONFUSING FASHION. THE NOTATION OF THE DERIVATIVES IS THEREFORE IMPORTANT TO UNDERSTAND:
+      !
+      ! DZEIDA1X(FR,1): THIS NOTATION MEANS THAT WE ARE EVALUATING A PARTIAL DERIVATIVE FOR ATOM 1 IN
+      ! THE FRAME 'FR', AS SHOWN BY THE ARRAY INDICES (FR,1). DZEI SHOWS THAT WE WANT A PARTIAL DERIVATIVE
+      ! OF THE 'I' (X) COMPONENT OF THE LOCAL Z-AXIS UNIT VECTOR IN THIS ATOM'S LOCAL COORDINATE SYSTEM
+      ! (SEE DCM JCTC PUBLICATION FOR DETAILS OF AXIS SYSTEM). THE DA1X SHOWS THAT WE ARE EVALUATING THE
+      ! DERIVATIVE WITH RESPECT TO THE X-COORDINATE OF ATOM 1. SO FAR SO LOGICAL. THE COMPLICATION COMES
+      ! IN THAT WHEN WE EVALUATE PARTIAL DERIVATIVES OF ATOM 1'S LOCAL AXES, DA1 REFERS TO ATOM 1, DA2 TO
+      ! ATOM 2, DA3 TO ATOM 3 AS EXPECTED. WHEN WE CALCULATE ATOM 2'S PARTIAL DERIVATIVES (FR,2), DA1
+      ! IS NOW ATOM 2, DA2 IS ATOM 1, DA3 IS ATOM 3. FOR ATOM 3'S LOCAL AXES (FR,3) DA1 IS ATOM 3, DA2
+      ! IS ATOM 2, DA3 IS ATOM 1. THIS CONVENTION COULD (AND PROBABLY SHOULD) BE CHANGED!
+
+      IF (KERN) THEN
+
+         ! WRITE(OUTU,*) NATOMX, NF
+
+         CALL DISTM_N(X, Y, Z, NATOMX)
+         CALL GET_KERNEL(XINPUT, XFIT, NKDIST, KERNELX, DKX)
+
+         DO FR = 1, NF ! LOOP OVER FRAMES
+            IF (FLXFRS(FR) .EQ. 1) THEN ! IF THIS FRAME NEEDS FLUX
+
+               ATM1 = FRAMEI(FR, 1)
+               ATM2 = FRAMEI(FR, 2)
+               ATM3 = FRAMEI(FR, 3)
+
+               ! LINK ATOM TO RESIDUE
+               RR = A2R(ATM1)
+
+               ! WRITE(OUTU,*) FR, ATM1, ATM2, ATM3, RR
+
+               DO M = 1, 3 ! LOOP OVER ATOMS IN THE FRAME
+                  DO K = 0, NQ(FR, M) - 1 ! LOOP OVER CHARGES ASSOC. W/ THE ATOM IN THAT FRAME
+                     ! RECALCULATE LOCAL AXIS POSITION BASED ON FIT
+                     L = IDQ(FRAMEI(FR, M)) + K
+                     IA = (L - 1)*3 + 1 - (RR - 1)*NKERNC*3
+                     IB = (L - 1)*3 + 2 - (RR - 1)*NKERNC*3
+                     IC = (L - 1)*3 + 3 - (RR - 1)*NKERNC*3
+
+                     AQ(L) = DOT_PRODUCT(KERNELX(RR, :), ALPHAS(IA, :))*A02ANG
+                     BQ(L) = DOT_PRODUCT(KERNELX(RR, :), ALPHAS(IB, :))*A02ANG
+                     CQ(L) = DOT_PRODUCT(KERNELX(RR, :), ALPHAS(IC, :))*A02ANG
+
+                     ! WRITE(OUTU,*) KERNELX(RR,:)
+                     ! WRITE(OUTU,*) XINPUT(RR,:)
+                     ! WRITE(OUTU,*) IA, IB, IC, AQ(L), BQ(L), CQ(L), DQ(L)
+
+                     TDAX1 = ZERO
+                     TDBX1 = ZERO
+                     TDCX1 = ZERO
+                     TDAX2 = ZERO
+                     TDBX2 = ZERO
+                     TDCX2 = ZERO
+                     TDAX3 = ZERO
+                     TDBX3 = ZERO
+                     TDCX3 = ZERO
+!!!!!!!
+                     TDAY1 = ZERO
+                     TDBY1 = ZERO
+                     TDCY1 = ZERO
+                     TDAY2 = ZERO
+                     TDBY2 = ZERO
+                     TDCY2 = ZERO
+                     TDAY3 = ZERO
+                     TDBY3 = ZERO
+                     TDCY3 = ZERO
+!!!!!!!
+                     TDAZ1 = ZERO
+                     TDBZ1 = ZERO
+                     TDCZ1 = ZERO
+                     TDAZ2 = ZERO
+                     TDBZ2 = ZERO
+                     TDCZ2 = ZERO
+                     TDAZ3 = ZERO
+                     TDBZ3 = ZERO
+                     TDCZ3 = ZERO
+
+                     IF ((NATMK .GT. 3)) THEN
+                        DO J = 1, NATMK - 3
+
+                           XATM = XKERNATMS(L, J)
+
+                           TMPDX(J, L, 1, 1) = ZERO
+                           TMPDX(J, L, 1, 2) = ZERO
+                           TMPDX(J, L, 1, 3) = ZERO
+                           TMPDX(J, L, 2, 1) = ZERO
+                           TMPDX(J, L, 2, 2) = ZERO
+                           TMPDX(J, L, 2, 3) = ZERO
+                           TMPDX(J, L, 3, 1) = ZERO
+                           TMPDX(J, L, 3, 2) = ZERO
+                           TMPDX(J, L, 3, 3) = ZERO
+
+                           TMPDX2(J, L, 1, 1) = ZERO
+                           TMPDX2(J, L, 1, 2) = ZERO
+                           TMPDX2(J, L, 1, 3) = ZERO
+                           TMPDX2(J, L, 2, 1) = ZERO
+                           TMPDX2(J, L, 2, 2) = ZERO
+                           TMPDX2(J, L, 2, 3) = ZERO
+                           TMPDX2(J, L, 3, 1) = ZERO
+                           TMPDX2(J, L, 3, 2) = ZERO
+                           TMPDX2(J, L, 3, 3) = ZERO
+                        END DO
+                     END IF
+
+! LOOP OVER ALL THE DISTANCES IN THE DIST. MATRIX.
+                     DO I = 1, NATMK - 1
+                        TDAX1 = TDAX1 + DKX(RR, IA, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 1)*A02ANG
+                        TDBX1 = TDBX1 + DKX(RR, IB, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 1)*A02ANG
+                        TDCX1 = TDCX1 + DKX(RR, IC, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 1)*A02ANG
+                        TDAX2 = TDAX2 + DKX(RR, IA, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 1)*A02ANG
+                        TDBX2 = TDBX2 + DKX(RR, IB, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 1)*A02ANG
+                        TDCX2 = TDCX2 + DKX(RR, IC, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 1)*A02ANG
+                        TDAX3 = TDAX3 + DKX(RR, IA, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 1)*A02ANG
+                        TDBX3 = TDBX3 + DKX(RR, IB, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 1)*A02ANG
+                        TDCX3 = TDCX3 + DKX(RR, IC, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 1)*A02ANG
+!!!!!!!
+                        TDAY1 = TDAY1 + DKX(RR, IA, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 2)*A02ANG
+                        TDBY1 = TDBY1 + DKX(RR, IB, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 2)*A02ANG
+                        TDCY1 = TDCY1 + DKX(RR, IC, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 2)*A02ANG
+                        TDAY2 = TDAY2 + DKX(RR, IA, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 2)*A02ANG
+                        TDBY2 = TDBY2 + DKX(RR, IB, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 2)*A02ANG
+                        TDCY2 = TDCY2 + DKX(RR, IC, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 2)*A02ANG
+                        TDAY3 = TDAY3 + DKX(RR, IA, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 2)*A02ANG
+                        TDBY3 = TDBY3 + DKX(RR, IB, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 2)*A02ANG
+                        TDCY3 = TDCY3 + DKX(RR, IC, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 2)*A02ANG
+!!!!!!!
+                        TDAZ1 = TDAZ1 + DKX(RR, IA, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 3)*A02ANG
+                        TDBZ1 = TDBZ1 + DKX(RR, IB, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 3)*A02ANG
+                        TDCZ1 = TDCZ1 + DKX(RR, IC, A2D(ATM1, I))*DXIN(ATM1, A2D(ATM1, I), 3)*A02ANG
+                        TDAZ2 = TDAZ2 + DKX(RR, IA, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 3)*A02ANG
+                        TDBZ2 = TDBZ2 + DKX(RR, IB, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 3)*A02ANG
+                        TDCZ2 = TDCZ2 + DKX(RR, IC, A2D(ATM2, I))*DXIN(ATM2, A2D(ATM2, I), 3)*A02ANG
+                        TDAZ3 = TDAZ3 + DKX(RR, IA, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 3)*A02ANG
+                        TDBZ3 = TDBZ3 + DKX(RR, IB, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 3)*A02ANG
+                        TDCZ3 = TDCZ3 + DKX(RR, IC, A2D(ATM3, I))*DXIN(ATM3, A2D(ATM3, I), 3)*A02ANG
+
+                        IF (NATMK .GT. 3) THEN
+                           DO J = 1, NATMK - 3
+
+                              XATM = XKERNATMS(L, J)
+
+                              TMPDX(J, L, 1, 1) = TMPDX(J, L, 1, 1) + DKX(RR, IA, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 1)*A02ANG
+                              TMPDX(J, L, 1, 2) = TMPDX(J, L, 1, 2) + DKX(RR, IB, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 1)*A02ANG
+                              TMPDX(J, L, 1, 3) = TMPDX(J, L, 1, 3) + DKX(RR, IC, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 1)*A02ANG
+
+                              TMPDX(J, L, 2, 1) = TMPDX(J, L, 2, 1) + DKX(RR, IA, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 2)*A02ANG
+                              TMPDX(J, L, 2, 2) = TMPDX(J, L, 2, 2) + DKX(RR, IB, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 2)*A02ANG
+                              TMPDX(J, L, 2, 3) = TMPDX(J, L, 2, 3) + DKX(RR, IC, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 2)*A02ANG
+
+                              TMPDX(J, L, 3, 1) = TMPDX(J, L, 3, 1) + DKX(RR, IA, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 3)*A02ANG
+                              TMPDX(J, L, 3, 2) = TMPDX(J, L, 3, 2) + DKX(RR, IB, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 3)*A02ANG
+                              TMPDX(J, L, 3, 3) = TMPDX(J, L, 3, 3) + DKX(RR, IC, A2D(XATM, I))*DXIN(XATM, A2D(XATM, I), 3)*A02ANG
+
+                           END DO
+                        END IF
+                     END DO
+
+                     J = 1
+
+                     IF (M .EQ. 1) THEN
+                        DADX1(L) = TDAX1
+                        DADX2(L) = TDAX2
+                        DADX3(L) = TDAX3
+                        DADY1(L) = TDAY1
+                        DADY2(L) = TDAY2
+                        DADY3(L) = TDAY3
+                        DADZ1(L) = TDAZ1
+                        DADZ2(L) = TDAZ2
+                        DADZ3(L) = TDAZ3
+                        DBDX1(L) = TDBX1
+                        DBDX2(L) = TDBX2
+                        DBDX3(L) = TDBX3
+                        DBDY1(L) = TDBY1
+                        DBDY2(L) = TDBY2
+                        DBDY3(L) = TDBY3
+                        DBDZ1(L) = TDBZ1
+                        DBDZ2(L) = TDBZ2
+                        DBDZ3(L) = TDBZ3
+                        DCDX1(L) = TDCX1
+                        DCDX2(L) = TDCX2
+                        DCDX3(L) = TDCX3
+                        DCDY1(L) = TDCY1
+                        DCDY2(L) = TDCY2
+                        DCDY3(L) = TDCY3
+                        DCDZ1(L) = TDCZ1
+                        DCDZ2(L) = TDCZ2
+                        DCDZ3(L) = TDCZ3
+                     END IF
+                     IF (M .EQ. 2) THEN
+                        DADX1(L) = TDAX2
+                        DADX2(L) = TDAX1
+                        DADX3(L) = TDAX3
+                        DADY1(L) = TDAY2
+                        DADY2(L) = TDAY1
+                        DADY3(L) = TDAY3
+                        DADZ1(L) = TDAZ2
+                        DADZ2(L) = TDAZ1
+                        DADZ3(L) = TDAZ3
+                        DBDX1(L) = TDBX2
+                        DBDX2(L) = TDBX1
+                        DBDX3(L) = TDBX3
+                        DBDY1(L) = TDBY2
+                        DBDY2(L) = TDBY1
+                        DBDY3(L) = TDBY3
+                        DBDZ1(L) = TDBZ2
+                        DBDZ2(L) = TDBZ1
+                        DBDZ3(L) = TDBZ3
+                        DCDX1(L) = TDCX2
+                        DCDX2(L) = TDCX1
+                        DCDX3(L) = TDCX3
+                        DCDY1(L) = TDCY2
+                        DCDY2(L) = TDCY1
+                        DCDY3(L) = TDCY3
+                        DCDZ1(L) = TDCZ2
+                        DCDZ2(L) = TDCZ1
+                        DCDZ3(L) = TDCZ3
+                     END IF
+                     IF (M .EQ. 3) THEN
+                        DADX1(L) = TDAX3
+                        DADX2(L) = TDAX2
+                        DADX3(L) = TDAX1
+                        DADY1(L) = TDAY3
+                        DADY2(L) = TDAY2
+                        DADY3(L) = TDAY1
+                        DADZ1(L) = TDAZ3
+                        DADZ2(L) = TDAZ2
+                        DADZ3(L) = TDAZ1
+                        DBDX1(L) = TDBX3
+                        DBDX2(L) = TDBX2
+                        DBDX3(L) = TDBX1
+                        DBDY1(L) = TDBY3
+                        DBDY2(L) = TDBY2
+                        DBDY3(L) = TDBY1
+                        DBDZ1(L) = TDBZ3
+                        DBDZ2(L) = TDBZ2
+                        DBDZ3(L) = TDBZ1
+                        DCDX1(L) = TDCX3
+                        DCDX2(L) = TDCX2
+                        DCDX3(L) = TDCX1
+                        DCDY1(L) = TDCY3
+                        DCDY2(L) = TDCY2
+                        DCDY3(L) = TDCY1
+                        DCDZ1(L) = TDCZ3
+                        DCDZ2(L) = TDCZ2
+                        DCDZ3(L) = TDCZ1
+                     END IF
+
+                  END DO ! LOOP CHARGES
+               END DO ! M
+            END IF ! IF FLUX HAS FLUX
+         END DO ! FRAMES
+      END IF !IF KERN
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! ANGLE FIT F_MDCM
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      IF (FLUX) THEN
+         DO FR = 1, NF ! LOOP OVER FRAMES
+            IF (FLXFRS(FR) .EQ. 1) THEN ! IF THIS FRAME NEEDS FLUX
+               ATM1 = FRAMEI(FR, 1)
+               ATM2 = FRAMEI(FR, 2)
+               ATM3 = FRAMEI(FR, 3)
+
+               FAX1 = X(ATM1)
+               FAX2 = X(ATM2)
+               FAX3 = x(ATM3)
+               FAY1 = Y(ATM1)
+               FAY2 = Y(ATM2)
+               FAY3 = Y(ATM3)
+               FAZ1 = Z(ATM1)
+               FAZ2 = Z(ATM2)
+               FAZ3 = Z(ATM3)
+               ! bond vector 1
+               DXI = X(ATM1) - X(ATM2)
+               DYI = Y(ATM1) - Y(ATM2)
+               DZI = Z(ATM1) - Z(ATM2)
+               ! bond vector 2
+               DXJ = X(ATM3) - X(ATM2)
+               DYJ = Y(ATM3) - Y(ATM2)
+               DZJ = Z(ATM3) - Z(ATM2)
+               ! length of bond vectors
+               RI2 = DXI*DXI + DYI*DYI + DZI*DZI
+               RJ2 = DXJ*DXJ + DYJ*DYJ + DZJ*DZJ
+               RI = SQRT(RI2)
+               RJ = SQRT(RJ2)
+               ! one over the length
+               RIR = ONE/RI
+               RJR = ONE/RJ
+               ! bond vectors x 1/length
+               DXIR = DXI*RIR
+               DYIR = DYI*RIR
+               DZIR = DZI*RIR
+               DXJR = DXJ*RJR
+               DYJR = DYJ*RJR
+               DZJR = DZJ*RJR
+               ! dot product
+               CST = DXIR*DXJR + DYIR*DYJR + DZIR*DZJR
+               ! angle
+               AT = ACOS(CST)
+               ZVAL = ONE - CST**2
+               ANGLEVAL = AT*RAD2DEG
+               ! squared and cubed theta
+               THTH = ANGLEVAL*ANGLEVAL
+               THTHTH = THTH*ANGLEVAL
+
+               DZDT = TWO*SIN(AT)*COS(AT)
+               !  WRITE(OUTU, *) "THETA: ", ANGLEVAL
+               ! calculate dThetas
+               DTX1(FR) = DZDT*CALC_DTHETADX1(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTY1(FR) = DZDT*CALC_DTHETADY1(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTZ1(FR) = DZDT*CALC_DTHETADZ1(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTX2(FR) = DZDT*CALC_DTHETADX2(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTY2(FR) = DZDT*CALC_DTHETADY2(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTZ2(FR) = DZDT*CALC_DTHETADZ2(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTX3(FR) = DZDT*CALC_DTHETADX3(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTY3(FR) = DZDT*CALC_DTHETADY3(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+               DTZ3(FR) = DZDT*CALC_DTHETADZ3(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)!*RAD2DEG
+
+               ! DTX1(FR) = CALC_DTHETADX1(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTY1(FR) = CALC_DTHETADY1(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTZ1(FR) = CALC_DTHETADZ1(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTX2(FR) = CALC_DTHETADX2(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTY2(FR) = CALC_DTHETADY2(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTZ2(FR) = CALC_DTHETADZ2(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTX3(FR) = CALC_DTHETADX3(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTY3(FR) = CALC_DTHETADY3(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+               ! DTZ3(FR) = CALC_DTHETADZ3(FAX1, FAX2, FAX3, FAY1, FAY2, FAY3, FAZ1, FAZ2, FAZ3)*RAD2DEG
+
+
+               DO M = 1, 3 ! LOOP OVER ATOMS IN THE FRAME
+                  !  CALCULATE THE ANGLE DERIVATIVE ONCE SINCE IT APPLIES TO EACH ATOM OF THE FRAME DIFFERENTLY
+                  IF (NQ(FR, M) .GT. 0) THEN !  CHECK IF THERE ARE CHARGES IN THAT FRAME
+                     DO K = 0, NQ(FR, M) - 1 ! LOOP OVER CHARGES ASSOC. W/ THE ATOM IN THAT FRAME
+                        ! RECALCULATE LOCAL AXIS POSITION BASED ON FIT
+                        L = IDQ(FRAMEI(FR, M)) + K
+
+                        ! AQ(L) = FPX1(L)*ANGLEVAL + FPX2(L)*THTH + FPX3(L)*THTHTH + FPX4(L)
+                        ! BQ(L) = FPY1(L)*ANGLEVAL + FPY2(L)*THTH + FPY3(L)*THTHTH + FPY4(L)
+                        ! CQ(L) = FPZ1(L)*ANGLEVAL + FPZ2(L)*THTH + FPZ3(L)*THTHTH + FPZ4(L)
+
+                        ! ! ASSIGN DERIVATIVES
+                        ! DADT = FPX1(L) + TWO*FPX2(L)*ANGLEVAL + THREE*FPX3(L)*THTH !POLYX3DERIV(ANGLEVAL,FPX1(L),FPX2(L),FPX3(L))
+                        ! DBDT = FPY1(L) + TWO*FPY2(L)*ANGLEVAL + THREE*FPY3(L)*THTH !POLYX3DERIV(ANGLEVAL,FPY1(L),FPY2(L),FPY3(L))
+                        ! DCDT = FPZ1(L) + TWO*FPZ2(L)*ANGLEVAL + THREE*FPZ3(L)*THTH !POLYX3DERIV(ANGLEVAL,FPZ1(L),FPZ2(L),FPZ3(L))
+
+                        AQ(L) = FPX1(L)*ZVAL + FPX2(L)*ZVAL**TWO + FPX3(L)*ZVAL**THREE + FPX4(L)
+                        BQ(L) = FPY1(L)*ZVAL + FPY2(L)*ZVAL**TWO + FPY3(L)*ZVAL**THREE + FPY4(L)
+                        CQ(L) = FPZ1(L)*ZVAL + FPZ2(L)*ZVAL**TWO + FPZ3(L)*ZVAL**THREE + FPZ4(L)
+
+                        AQ(L) = AQ(L) !* 1.8897259886D0
+                        BQ(L) = BQ(L) !* 1.8897259886D0
+                        CQ(L) = CQ(L) !* 1.8897259886D0
+
+                        ! ASSIGN DERIVATIVES
+                        DADT = FPX1(L) + TWO*FPX2(L)*ZVAL + THREE*FPX3(L)*ZVAL**2 !POLYX3DERIV(ANGLEVAL,FPX1(L),FPX2(L),FPX3(L))
+                        DBDT = FPY1(L) + TWO*FPY2(L)*ZVAL + THREE*FPY3(L)*ZVAL**2 !POLYX3DERIV(ANGLEVAL,FPY1(L),FPY2(L),FPY3(L))
+                        DCDT = FPZ1(L) + TWO*FPZ2(L)*ZVAL + THREE*FPZ3(L)*ZVAL**2 !POLYX3DERIV(ANGLEVAL,FPZ1(L),FPZ2(L),FPZ3(L))
+
+                        IF (M .EQ. 1) THEN
+                           DADX1(L) = DADT*DTX1(FR)
+                           DADX2(L) = DADT*DTX2(FR)
+                           DADX3(L) = DADT*DTX3(FR)
+                           DADY1(L) = DADT*DTY1(FR)
+                           DADY2(L) = DADT*DTY2(FR)
+                           DADY3(L) = DADT*DTY3(FR)
+                           DADZ1(L) = DADT*DTZ1(FR)
+                           DADZ2(L) = DADT*DTZ2(FR)
+                           DADZ3(L) = DADT*DTZ3(FR)
+                           !!!!!!!!!
+                           DBDX1(L) = DBDT*DTX1(FR)
+                           DBDX2(L) = DBDT*DTX2(FR)
+                           DBDX3(L) = DBDT*DTX3(FR)
+                           DBDY1(L) = DBDT*DTY1(FR)
+                           DBDY2(L) = DBDT*DTY2(FR)
+                           DBDY3(L) = DBDT*DTY3(FR)
+                           DBDZ1(L) = DBDT*DTZ1(FR)
+                           DBDZ2(L) = DBDT*DTZ2(FR)
+                           DBDZ3(L) = DBDT*DTZ3(FR)
+                           !!!!!!!!
+                           DCDX1(L) = DCDT*DTX1(FR)
+                           DCDX2(L) = DCDT*DTX2(FR)
+                           DCDX3(L) = DCDT*DTX3(FR)
+                           DCDY1(L) = DCDT*DTY1(FR)
+                           DCDY2(L) = DCDT*DTY2(FR)
+                           DCDY3(L) = DCDT*DTY3(FR)
+                           DCDZ1(L) = DCDT*DTZ1(FR)
+                           DCDZ2(L) = DCDT*DTZ2(FR)
+                           DCDZ3(L) = DCDT*DTZ3(FR)
+                           !!!!
+                        END IF
+                        IF (M .EQ. 2) THEN
+                           DADX1(L) = DADT*DTX2(FR)
+                           DADX2(L) = DADT*DTX1(FR)
+                           DADX3(L) = DADT*DTX3(FR)
+                           DADY1(L) = DADT*DTY2(FR)
+                           DADY2(L) = DADT*DTY1(FR)
+                           DADY3(L) = DADT*DTY3(FR)
+                           DADZ1(L) = DADT*DTZ2(FR)
+                           DADZ2(L) = DADT*DTZ1(FR)
+                           DADZ3(L) = DADT*DTZ3(FR)
+                           !!!!!!!!!
+                           DBDX1(L) = DBDT*DTX2(FR)
+                           DBDX2(L) = DBDT*DTX1(FR)
+                           DBDX3(L) = DBDT*DTX3(FR)
+                           DBDY1(L) = DBDT*DTY2(FR)
+                           DBDY2(L) = DBDT*DTY1(FR)
+                           DBDY3(L) = DBDT*DTY3(FR)
+                           DBDZ1(L) = DBDT*DTZ2(FR)
+                           DBDZ2(L) = DBDT*DTZ1(FR)
+                           DBDZ3(L) = DBDT*DTZ3(FR)
+                           !!!!!!!!
+                           DCDX1(L) = DCDT*DTX2(FR)
+                           DCDX2(L) = DCDT*DTX1(FR)
+                           DCDX3(L) = DCDT*DTX3(FR)
+                           DCDY1(L) = DCDT*DTY2(FR)
+                           DCDY2(L) = DCDT*DTY1(FR)
+                           DCDY3(L) = DCDT*DTY3(FR)
+                           DCDZ1(L) = DCDT*DTZ2(FR)
+                           DCDZ2(L) = DCDT*DTZ1(FR)
+                           DCDZ3(L) = DCDT*DTZ3(FR)
+                           !!!!
+                        END IF
+                        IF (M .EQ. 3) THEN
+                           DADX1(L) = DADT*DTX3(FR)
+                           DADX2(L) = DADT*DTX2(FR)
+                           DADX3(L) = DADT*DTX1(FR)
+                           DADY1(L) = DADT*DTY3(FR)
+                           DADY2(L) = DADT*DTY2(FR)
+                           DADY3(L) = DADT*DTY1(FR)
+                           DADZ1(L) = DADT*DTZ3(FR)
+                           DADZ2(L) = DADT*DTZ2(FR)
+                           DADZ3(L) = DADT*DTZ1(FR)
+                           !!!!!!!!!
+                           DBDX1(L) = DBDT*DTX3(FR)
+                           DBDX2(L) = DBDT*DTX2(FR)
+                           DBDX3(L) = DBDT*DTX1(FR)
+                           DBDY1(L) = DBDT*DTY3(FR)
+                           DBDY2(L) = DBDT*DTY2(FR)
+                           DBDY3(L) = DBDT*DTY1(FR)
+                           DBDZ1(L) = DBDT*DTZ3(FR)
+                           DBDZ2(L) = DBDT*DTZ2(FR)
+                           DBDZ3(L) = DBDT*DTZ1(FR)
+                           !!!!!!!!
+                           DCDX1(L) = DCDT*DTX3(FR)
+                           DCDX2(L) = DCDT*DTX2(FR)
+                           DCDX3(L) = DCDT*DTX1(FR)
+                           DCDY1(L) = DCDT*DTY3(FR)
+                           DCDY2(L) = DCDT*DTY2(FR)
+                           DCDY3(L) = DCDT*DTY1(FR)
+                           DCDZ1(L) = DCDT*DTZ3(FR)
+                           DCDZ2(L) = DCDT*DTZ2(FR)
+                           DCDZ3(L) = DCDT*DTZ1(FR)
+                           !!!!
+                        END IF
+                     END DO ! K LOOPING OVER ...
+                  END IF ! CHECK IF THERE ARE CHARGES IN THAT FRAME
+               END DO ! M LOOPING OVER ...
+               ! ENDIF !NOT MONATOMIC
+            END IF ! IF THIS FRAME NEEDS FLUX
+         END DO ! FR LOOPING OVER NO. OF FRAMES
+      END IF ! IF FLUX
+
+      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      !! Calculation of Frame derivatives
+      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      DO FR = 1, NF ! LOOP OVER FRAMES
+
+         IF (FRTYP(FR) .EQ. 0) THEN ! IF "BOND"-TYPE AXIS SYSTEM FOR THIS FRAME
+            ATM1 = FRAMEI(FR, 1)
+            ATM2 = FRAMEI(FR, 2)
+            ATM3 = FRAMEI(FR, 3)
+
+            IF (ATM2 .EQ. 0 .AND. ATM3 .EQ. 0) THEN !MONATOMIC, NEED TO INITIALIZE VARIABLES ONLY
+               L = IDQ(ATM1)
+               XQ(L) = X(ATM1)
+               YQ(L) = Y(ATM1)
+               ZQ(L) = Z(ATM1)
+               DO M = 1, 3
+                  DXEIDA1X(FR, M) = 0.D0
+                  DXEJDA1X(FR, M) = 0.D0
+                  DXEKDA1X(FR, M) = 0.D0
+                  DXEIDA1Y(FR, M) = 0.D0
+                  DXEJDA1Y(FR, M) = 0.D0
+                  DXEKDA1Y(FR, M) = 0.D0
+                  DXEIDA1Z(FR, M) = 0.D0
+                  DXEJDA1Z(FR, M) = 0.D0
+                  DXEKDA1Z(FR, M) = 0.D0
+
+                  DXEIDA2X(FR, M) = 0.D0
+                  DXEJDA2X(FR, M) = 0.D0
+                  DXEKDA2X(FR, M) = 0.D0
+                  DXEIDA2Y(FR, M) = 0.D0
+                  DXEJDA2Y(FR, M) = 0.D0
+                  DXEKDA2Y(FR, M) = 0.D0
+                  DXEIDA2Z(FR, M) = 0.D0
+                  DXEJDA2Z(FR, M) = 0.D0
+                  DXEKDA2Z(FR, M) = 0.D0
+
+                  DXEIDA3X(FR, M) = 0.D0
+                  DXEJDA3X(FR, M) = 0.D0
+                  DXEKDA3X(FR, M) = 0.D0
+                  DXEIDA3Y(FR, M) = 0.D0
+                  DXEJDA3Y(FR, M) = 0.D0
+                  DXEKDA3Y(FR, M) = 0.D0
+                  DXEIDA3Z(FR, M) = 0.D0
+                  DXEJDA3Z(FR, M) = 0.D0
+                  DXEKDA3Z(FR, M) = 0.D0
+
+                  DYEIDA1X(FR, M) = 0.D0
+                  DYEJDA1X(FR, M) = 0.D0
+                  DYEKDA1X(FR, M) = 0.D0
+                  DYEIDA1Y(FR, M) = 0.D0
+                  DYEJDA1Y(FR, M) = 0.D0
+                  DYEKDA1Y(FR, M) = 0.D0
+                  DYEIDA1Z(FR, M) = 0.D0
+                  DYEJDA1Z(FR, M) = 0.D0
+                  DYEKDA1Z(FR, M) = 0.D0
+
+                  DYEIDA2X(FR, M) = 0.D0
+                  DYEJDA2X(FR, M) = 0.D0
+                  DYEKDA2X(FR, M) = 0.D0
+                  DYEIDA2Y(FR, M) = 0.D0
+                  DYEJDA2Y(FR, M) = 0.D0
+                  DYEKDA2Y(FR, M) = 0.D0
+                  DYEIDA2Z(FR, M) = 0.D0
+                  DYEJDA2Z(FR, M) = 0.D0
+                  DYEKDA2Z(FR, M) = 0.D0
+
+                  DYEIDA3X(FR, M) = 0.D0
+                  DYEJDA3X(FR, M) = 0.D0
+                  DYEKDA3X(FR, M) = 0.D0
+                  DYEIDA3Y(FR, M) = 0.D0
+                  DYEJDA3Y(FR, M) = 0.D0
+                  DYEKDA3Y(FR, M) = 0.D0
+                  DYEIDA3Z(FR, M) = 0.D0
+                  DYEJDA3Z(FR, M) = 0.D0
+                  DYEKDA3Z(FR, M) = 0.D0
+
+                  DZEIDA1X(FR, M) = 0.D0
+                  DZEJDA1X(FR, M) = 0.D0
+                  DZEKDA1X(FR, M) = 0.D0
+                  DZEIDA1Y(FR, M) = 0.D0
+                  DZEJDA1Y(FR, M) = 0.D0
+                  DZEKDA1Y(FR, M) = 0.D0
+                  DZEIDA1Z(FR, M) = 0.D0
+                  DZEJDA1Z(FR, M) = 0.D0
+                  DZEKDA1Z(FR, M) = 0.D0
+
+                  DZEIDA2X(FR, M) = 0.D0
+                  DZEJDA2X(FR, M) = 0.D0
+                  DZEKDA2X(FR, M) = 0.D0
+                  DZEIDA2Y(FR, M) = 0.D0
+                  DZEJDA2Y(FR, M) = 0.D0
+                  DZEKDA2Y(FR, M) = 0.D0
+                  DZEIDA2Z(FR, M) = 0.D0
+                  DZEJDA2Z(FR, M) = 0.D0
+                  DZEKDA2Z(FR, M) = 0.D0
+
+                  DZEIDA3X(FR, M) = 0.D0
+                  DZEJDA3X(FR, M) = 0.D0
+                  DZEKDA3X(FR, M) = 0.D0
+                  DZEIDA3Y(FR, M) = 0.D0
+                  DZEJDA3Y(FR, M) = 0.D0
+                  DZEKDA3Y(FR, M) = 0.D0
+                  DZEIDA3Z(FR, M) = 0.D0
+                  DZEJDA3Z(FR, M) = 0.D0
+                  DZEKDA3Z(FR, M) = 0.D0
+               END DO
+               CYCLE ! SKIP AXIS DERIVATIVE CALCULATION FOR MONATOMIC, CONTINUE TO NEXT FRAME
+            END IF
+
+            ! FIRST DEFINE LOCAL Z-AXES = BOND ATM2-ATM1
+            B1X = X(ATM1) - X(ATM2)
+            B1Y = Y(ATM1) - Y(ATM2)
+            B1Z = Z(ATM1) - Z(ATM2)
+            RB12 = B1X**2 + B1Y**2 + B1Z**2
+            RB1 = SQRT(RB12)
+            ! NORMALIZE
+            ZEI(FR, 1) = B1X/RB1
+            ZEJ(FR, 1) = B1Y/RB1
+            ZEK(FR, 1) = B1Z/RB1
+            ZEI(FR, 2) = ZEI(FR, 1)
+            ZEJ(FR, 2) = ZEJ(FR, 1)
+            ZEK(FR, 2) = ZEK(FR, 1)
+
+            IF (ATM3 .NE. 0) THEN ! NOT DIATOMIC
+               B2X = X(ATM3) - X(ATM2)
+               B2Y = Y(ATM3) - Y(ATM2)
+               B2Z = Z(ATM3) - Z(ATM2)
+               RB22 = B2X**2 + B2Y**2 + B2Z**2
+               RB2 = SQRT(RB22)
+
+               ZEI(FR, 3) = B2X/RB2
+               ZEJ(FR, 3) = B2Y/RB2
+               ZEK(FR, 3) = B2Z/RB2
+
+               ! EY
+               ! DEFINE LOCAL Y-AXIS = BOND ATM2-ATM1 CROSS BOND ATM2-ATM3
+
+               FAC1 = -B1Z*B2Y + B1Y*B2Z
+               FAC2 = B1Z*B2X - B2Z*B1X
+               FAC3 = -B1Y*B2X + B2Y*B1X
+               REY2 = FAC1**2 + FAC2**2 + FAC3**2
+               REY = SQRT(REY2)
+               YEI(FR, 1) = FAC1/REY
+               YEJ(FR, 1) = FAC2/REY
+               YEK(FR, 1) = FAC3/REY
+
+               YEI(FR, 2) = YEI(FR, 1)
+               YEJ(FR, 2) = YEJ(FR, 1)
+               YEK(FR, 2) = YEK(FR, 1)
+
+               YEI(FR, 3) = YEI(FR, 1)
+               YEJ(FR, 3) = YEJ(FR, 1)
+               YEK(FR, 3) = YEK(FR, 1)
+
+               ! EX
+               ! DEFINE LOCAL X-AXIS = EZ CROSS EY
+
+               XEI(FR, 1) = YEK(FR, 1)*ZEJ(FR, 1) - YEJ(FR, 1)*ZEK(FR, 1)
+               XEJ(FR, 1) = YEI(FR, 1)*ZEK(FR, 1) - YEK(FR, 1)*ZEI(FR, 1)
+               XEK(FR, 1) = YEJ(FR, 1)*ZEI(FR, 1) - YEI(FR, 1)*ZEJ(FR, 1)
+
+               XEI(FR, 2) = XEI(FR, 1)
+               XEJ(FR, 2) = XEJ(FR, 1)
+               XEK(FR, 2) = XEK(FR, 1)
+
+               XEI(FR, 3) = YEK(FR, 3)*ZEJ(FR, 3) - YEJ(FR, 3)*ZEK(FR, 3)
+               XEJ(FR, 3) = YEI(FR, 3)*ZEK(FR, 3) - YEK(FR, 3)*ZEI(FR, 3)
+               XEK(FR, 3) = YEJ(FR, 3)*ZEI(FR, 3) - YEI(FR, 3)*ZEJ(FR, 3)
+            END IF ! IF NOT DIATOMIC
+
+            ! NOW THE Z-AXIS DERIVATIVES...
+            FACA = -1.D0/(RB1*RB12)
+            FACB = FACA*(-B1X)
+            ! DZEIDA1X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM1 X-COOR
+            DZEIDA1X(FR, 1) = FACA*(-B1Y**2 - B1Z**2)
+            DZEJDA1X(FR, 1) = FACB*(-B1Y)
+            DZEKDA1X(FR, 1) = FACB*(-B1Z)
+
+            FACB = FACA*(-B1Y)
+            DZEIDA1Y(FR, 1) = FACB*(-B1X)
+            DZEJDA1Y(FR, 1) = FACA*(-B1X**2 - B1Z**2)
+            DZEKDA1Y(FR, 1) = FACB*(-B1Z)
+
+            FACB = FACA*(-B1Z)
+            DZEIDA1Z(FR, 1) = FACB*(-B1X)
+            DZEJDA1Z(FR, 1) = FACB*(-B1Y)
+            DZEKDA1Z(FR, 1) = FACA*(-B1X**2 - B1Y**2)
+
+            ! DZEIDA2X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM2 X-COOR
+            DZEIDA2X(FR, 1) = -DZEIDA1X(FR, 1)
+            DZEJDA2X(FR, 1) = -DZEJDA1X(FR, 1)
+            DZEKDA2X(FR, 1) = -DZEKDA1X(FR, 1)
+
+            DZEIDA2Y(FR, 1) = -DZEIDA1Y(FR, 1)
+            DZEJDA2Y(FR, 1) = -DZEJDA1Y(FR, 1)
+            DZEKDA2Y(FR, 1) = -DZEKDA1Y(FR, 1)
+
+            DZEIDA2Z(FR, 1) = -DZEIDA1Z(FR, 1)
+            DZEJDA2Z(FR, 1) = -DZEJDA1Z(FR, 1)
+            DZEKDA2Z(FR, 1) = -DZEKDA1Z(FR, 1)
+
+            ! DERIVATIVES WRT ATM3 ALL ZERO FOR Z-AXIS
+            DZEIDA3X(FR, 1) = 0.D0
+            DZEJDA3X(FR, 1) = 0.D0
+            DZEKDA3X(FR, 1) = 0.D0
+
+            DZEIDA3Y(FR, 1) = 0.D0
+            DZEJDA3Y(FR, 1) = 0.D0
+            DZEKDA3Y(FR, 1) = 0.D0
+
+            DZEIDA3Z(FR, 1) = 0.D0
+            DZEJDA3Z(FR, 1) = 0.D0
+            DZEKDA3Z(FR, 1) = 0.D0
+
+            ! ATOM 2 DZEIDA1X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM1 X-COOR
+            DZEIDA1X(FR, 2) = DZEIDA2X(FR, 1)
+            DZEJDA1X(FR, 2) = DZEJDA2X(FR, 1)
+            DZEKDA1X(FR, 2) = DZEKDA2X(FR, 1)
+
+            FACB = FACA*(-B1Y)
+            DZEIDA1Y(FR, 2) = DZEIDA2Y(FR, 1)
+            DZEJDA1Y(FR, 2) = DZEJDA2Y(FR, 1)
+            DZEKDA1Y(FR, 2) = DZEKDA2Y(FR, 1)
+
+            FACB = FACA*(-B1Z)
+            DZEIDA1Z(FR, 2) = DZEIDA2Z(FR, 1)
+            DZEJDA1Z(FR, 2) = DZEJDA2Z(FR, 1)
+            DZEKDA1Z(FR, 2) = DZEKDA2Z(FR, 1)
+
+            ! DZEIDA2X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM2 X-COOR
+            DZEIDA2X(FR, 2) = -DZEIDA1X(FR, 2)
+            DZEJDA2X(FR, 2) = -DZEJDA1X(FR, 2)
+            DZEKDA2X(FR, 2) = -DZEKDA1X(FR, 2)
+
+            DZEIDA2Y(FR, 2) = -DZEIDA1Y(FR, 2)
+            DZEJDA2Y(FR, 2) = -DZEJDA1Y(FR, 2)
+            DZEKDA2Y(FR, 2) = -DZEKDA1Y(FR, 2)
+
+            DZEIDA2Z(FR, 2) = -DZEIDA1Z(FR, 2)
+            DZEJDA2Z(FR, 2) = -DZEJDA1Z(FR, 2)
+            DZEKDA2Z(FR, 2) = -DZEKDA1Z(FR, 2)
+
+            ! DERIVATIVES WRT ATM3 ALL ZERO FOR Z-AXIS
+            DZEIDA3X(FR, 2) = 0.D0
+            DZEJDA3X(FR, 2) = 0.D0
+            DZEKDA3X(FR, 2) = 0.D0
+
+            DZEIDA3Y(FR, 2) = 0.D0
+            DZEJDA3Y(FR, 2) = 0.D0
+            DZEKDA3Y(FR, 2) = 0.D0
+
+            DZEIDA3Z(FR, 2) = 0.D0
+            DZEJDA3Z(FR, 2) = 0.D0
+            DZEKDA3Z(FR, 2) = 0.D0
+
+            IF (ATM3 .NE. 0) THEN ! NOT DIATOMIC
+               FACC = -1.D0/(RB2*RB22)
+               FACB = FACC*(-B2X)
+               ! ATOM 3 DZEIDA1X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM1 X-COOR
+               DZEIDA1X(FR, 3) = FACC*(-B2Y**2 - B2Z**2)
+               DZEJDA1X(FR, 3) = FACB*(-B2Y)
+               DZEKDA1X(FR, 3) = FACB*(-B2Z)
+
+               FACB = FACC*(-B2Y)
+               DZEIDA1Y(FR, 3) = FACB*(-B2X)
+               DZEJDA1Y(FR, 3) = FACC*(-B2X**2 - B2Z**2)
+               DZEKDA1Y(FR, 3) = FACB*(-B2Z)
+
+               FACB = FACC*(-B2Z)
+               DZEIDA1Z(FR, 3) = FACB*(-B2X)
+               DZEJDA1Z(FR, 3) = FACB*(-B2Y)
+               DZEKDA1Z(FR, 3) = FACC*(-B2X**2 - B2Y**2)
+
+               ! DZEIDA2X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM2 X-COOR
+               DZEIDA2X(FR, 3) = -DZEIDA1X(FR, 3)
+               DZEJDA2X(FR, 3) = -DZEJDA1X(FR, 3)
+               DZEKDA2X(FR, 3) = -DZEKDA1X(FR, 3)
+
+               DZEIDA2Y(FR, 3) = -DZEIDA1Y(FR, 3)
+               DZEJDA2Y(FR, 3) = -DZEJDA1Y(FR, 3)
+               DZEKDA2Y(FR, 3) = -DZEKDA1Y(FR, 3)
+
+               DZEIDA2Z(FR, 3) = -DZEIDA1Z(FR, 3)
+               DZEJDA2Z(FR, 3) = -DZEJDA1Z(FR, 3)
+               DZEKDA2Z(FR, 3) = -DZEKDA1Z(FR, 3)
+
+               ! DERIVATIVES WRT ATM3 ALL ZERO FOR Z-AXIS
+               DZEIDA3X(FR, 3) = 0.D0
+               DZEJDA3X(FR, 3) = 0.D0
+               DZEKDA3X(FR, 3) = 0.D0
+
+               DZEIDA3Y(FR, 3) = 0.D0
+               DZEJDA3Y(FR, 3) = 0.D0
+               DZEKDA3Y(FR, 3) = 0.D0
+
+               DZEIDA3Z(FR, 3) = 0.D0
+               DZEJDA3Z(FR, 3) = 0.D0
+               DZEKDA3Z(FR, 3) = 0.D0
+
+               ! EY
+               ! CALCULATE DERIVATIVES
+               FAC1 = -B1Z*B2Y + B1Y*B2Z
+               FAC2 = -B1Y*B2X + B2Y*B1X
+               FAC3 = B1Z*B2X - B2Z*B1X
+               FAC4 = 2.D0*B2Y*FAC2
+               FAC5 = 2.D0*B2Z*FAC3
+               FAC6 = 0.5D0*(FAC1**2 + FAC2**2 + FAC3**2)**(-1.5)
+               FAC = (FAC4 - FAC5)*FAC6
+               DYEIDA1X(FR, 1) = -FAC1*FAC
+               DYEJDA1X(FR, 1) = -B2Z/REY - FAC3*FAC
+               DYEKDA1X(FR, 1) = B2Y/REY - FAC2*FAC
+
+               FAC4 = 2.D0*B2X*FAC2
+               FAC5 = 2.D0*B2Z*FAC1
+               FAC = (FAC5 - FAC4)*FAC6
+               DYEIDA1Y(FR, 1) = B2Z/REY - FAC1*FAC
+               DYEJDA1Y(FR, 1) = -FAC3*FAC
+               DYEKDA1Y(FR, 1) = -B2X/REY - FAC2*FAC
+
+               FAC4 = 2.D0*B2X*FAC3
+               FAC5 = 2.D0*B2Y*FAC1
+               FAC = (FAC4 - FAC5)*FAC6
+               DYEIDA1Z(FR, 1) = -B2Y/REY - FAC1*FAC
+               DYEJDA1Z(FR, 1) = B2X/REY - FAC3*FAC
+               DYEKDA1Z(FR, 1) = -FAC2*FAC
+
+               FAC = (2.D0*FAC2*(-B2Y + B1Y) + 2.D0*FAC3*(B2Z - B1Z))*FAC6
+               DYEIDA2X(FR, 1) = -FAC1*FAC
+               DYEJDA2X(FR, 1) = (B2Z - B1Z)/REY - FAC3*FAC
+               DYEKDA2X(FR, 1) = (-B2Y + B1Y)/REY - FAC2*FAC
+
+               FAC = (2.D0*FAC2*(B2X - B1X) + 2.D0*FAC1*(-B2Z + B1Z))*FAC6
+               DYEIDA2Y(FR, 1) = (-B2Z + B1Z)/REY - FAC1*FAC
+               DYEJDA2Y(FR, 1) = -FAC3*FAC
+               DYEKDA2Y(FR, 1) = (B2X - B1X)/REY - FAC2*FAC
+
+               FAC = (2.D0*FAC3*(-B2X + B1X) + 2.D0*FAC1*(B2Y - B1Y))*FAC6
+               DYEIDA2Z(FR, 1) = (B2Y - B1Y)/REY - FAC1*FAC
+               DYEJDA2Z(FR, 1) = (-B2X + B1X)/REY - FAC3*FAC
+               DYEKDA2Z(FR, 1) = -FAC2*FAC
+
+               FAC4 = 2.D0*B1Y*FAC2
+               FAC5 = 2.D0*B1Z*FAC3
+               FAC = (-FAC4 + FAC5)*FAC6
+               DYEIDA3X(FR, 1) = -FAC1*FAC
+               DYEJDA3X(FR, 1) = B1Z/REY - FAC3*FAC
+               DYEKDA3X(FR, 1) = -B1Y/REY - FAC2*FAC
+
+               FAC4 = 2.D0*B1X*FAC2
+               FAC5 = 2.D0*B1Z*FAC1
+               FAC = (-FAC5 + FAC4)*FAC6
+               DYEIDA3Y(FR, 1) = -B1Z/REY - FAC1*FAC
+               DYEJDA3Y(FR, 1) = -FAC3*FAC
+               DYEKDA3Y(FR, 1) = B1X/REY - FAC2*FAC
+
+               FAC4 = 2.D0*B1X*FAC3
+               FAC5 = 2.D0*B1Y*FAC1
+               FAC = (-FAC4 + FAC5)*FAC6
+               DYEIDA3Z(FR, 1) = B1Y/REY - FAC1*FAC
+               DYEJDA3Z(FR, 1) = -B1X/REY - FAC3*FAC
+               DYEKDA3Z(FR, 1) = -FAC2*FAC
+
+               ! ATOM 2
+               DYEIDA1X(FR, 2) = DYEIDA2X(FR, 1)
+               DYEJDA1X(FR, 2) = DYEJDA2X(FR, 1)
+               DYEKDA1X(FR, 2) = DYEKDA2X(FR, 1)
+
+               DYEIDA1Y(FR, 2) = DYEIDA2Y(FR, 1)
+               DYEJDA1Y(FR, 2) = DYEJDA2Y(FR, 1)
+               DYEKDA1Y(FR, 2) = DYEKDA2Y(FR, 1)
+
+               DYEIDA1Z(FR, 2) = DYEIDA2Z(FR, 1)
+               DYEJDA1Z(FR, 2) = DYEJDA2Z(FR, 1)
+               DYEKDA1Z(FR, 2) = DYEKDA2Z(FR, 1)
+
+               DYEIDA2X(FR, 2) = DYEIDA1X(FR, 1)
+               DYEJDA2X(FR, 2) = DYEJDA1X(FR, 1)
+               DYEKDA2X(FR, 2) = DYEKDA1X(FR, 1)
+
+               DYEIDA2Y(FR, 2) = DYEIDA1Y(FR, 1)
+               DYEJDA2Y(FR, 2) = DYEJDA1Y(FR, 1)
+               DYEKDA2Y(FR, 2) = DYEKDA1Y(FR, 1)
+
+               DYEIDA2Z(FR, 2) = DYEIDA1Z(FR, 1)
+               DYEJDA2Z(FR, 2) = DYEJDA1Z(FR, 1)
+               DYEKDA2Z(FR, 2) = DYEKDA1Z(FR, 1)
+
+               DYEIDA3X(FR, 2) = DYEIDA3X(FR, 1)
+               DYEJDA3X(FR, 2) = DYEJDA3X(FR, 1)
+               DYEKDA3X(FR, 2) = DYEKDA3X(FR, 1)
+
+               DYEIDA3Y(FR, 2) = DYEIDA3Y(FR, 1)
+               DYEJDA3Y(FR, 2) = DYEJDA3Y(FR, 1)
+               DYEKDA3Y(FR, 2) = DYEKDA3Y(FR, 1)
+
+               DYEIDA3Z(FR, 2) = DYEIDA3Z(FR, 1)
+               DYEJDA3Z(FR, 2) = DYEJDA3Z(FR, 1)
+               DYEKDA3Z(FR, 2) = DYEKDA3Z(FR, 1)
+
+               ! ATOM 3
+               DYEIDA1X(FR, 3) = DYEIDA3X(FR, 1)
+               DYEJDA1X(FR, 3) = DYEJDA3X(FR, 1)
+               DYEKDA1X(FR, 3) = DYEKDA3X(FR, 1)
+
+               DYEIDA1Y(FR, 3) = DYEIDA3Y(FR, 1)
+               DYEJDA1Y(FR, 3) = DYEJDA3Y(FR, 1)
+               DYEKDA1Y(FR, 3) = DYEKDA3Y(FR, 1)
+
+               DYEIDA1Z(FR, 3) = DYEIDA3Z(FR, 1)
+               DYEJDA1Z(FR, 3) = DYEJDA3Z(FR, 1)
+               DYEKDA1Z(FR, 3) = DYEKDA3Z(FR, 1)
+
+               DYEIDA2X(FR, 3) = DYEIDA2X(FR, 1)
+               DYEJDA2X(FR, 3) = DYEJDA2X(FR, 1)
+               DYEKDA2X(FR, 3) = DYEKDA2X(FR, 1)
+
+               DYEIDA2Y(FR, 3) = DYEIDA2Y(FR, 1)
+               DYEJDA2Y(FR, 3) = DYEJDA2Y(FR, 1)
+               DYEKDA2Y(FR, 3) = DYEKDA2Y(FR, 1)
+
+               DYEIDA2Z(FR, 3) = DYEIDA2Z(FR, 1)
+               DYEJDA2Z(FR, 3) = DYEJDA2Z(FR, 1)
+               DYEKDA2Z(FR, 3) = DYEKDA2Z(FR, 1)
+
+               DYEIDA3X(FR, 3) = DYEIDA1X(FR, 1)
+               DYEJDA3X(FR, 3) = DYEJDA1X(FR, 1)
+               DYEKDA3X(FR, 3) = DYEKDA1X(FR, 1)
+
+               DYEIDA3Y(FR, 3) = DYEIDA1Y(FR, 1)
+               DYEJDA3Y(FR, 3) = DYEJDA1Y(FR, 1)
+               DYEKDA3Y(FR, 3) = DYEKDA1Y(FR, 1)
+
+               DYEIDA3Z(FR, 3) = DYEIDA1Z(FR, 1)
+               DYEJDA3Z(FR, 3) = DYEJDA1Z(FR, 1)
+               DYEKDA3Z(FR, 3) = DYEKDA1Z(FR, 1)
+
+               ! EX
+               ! DERIVATIVES
+               DXEIDA1X(FR, 1) = -ZEK(FR, 1)*DYEJDA1X(FR, 1) + ZEJ(FR, 1)*DYEKDA1X(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA1X(FR, 1) - YEJ(FR, 1)*DZEKDA1X(FR, 1)
+               DXEJDA1X(FR, 1) = ZEK(FR, 1)*DYEIDA1X(FR, 1) - ZEI(FR, 1)*DYEKDA1X(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA1X(FR, 1) + YEI(FR, 1)*DZEKDA1X(FR, 1)
+               DXEKDA1X(FR, 1) = -ZEJ(FR, 1)*DYEIDA1X(FR, 1) + ZEI(FR, 1)*DYEJDA1X(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA1X(FR, 1) - YEI(FR, 1)*DZEJDA1X(FR, 1)
+
+               DXEIDA1Y(FR, 1) = -ZEK(FR, 1)*DYEJDA1Y(FR, 1) + ZEJ(FR, 1)*DYEKDA1Y(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA1Y(FR, 1) - YEJ(FR, 1)*DZEKDA1Y(FR, 1)
+               DXEJDA1Y(FR, 1) = ZEK(FR, 1)*DYEIDA1Y(FR, 1) - ZEI(FR, 1)*DYEKDA1Y(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA1Y(FR, 1) + YEI(FR, 1)*DZEKDA1Y(FR, 1)
+               DXEKDA1Y(FR, 1) = -ZEJ(FR, 1)*DYEIDA1Y(FR, 1) + ZEI(FR, 1)*DYEJDA1Y(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA1Y(FR, 1) - YEI(FR, 1)*DZEJDA1Y(FR, 1)
+
+               DXEIDA1Z(FR, 1) = -ZEK(FR, 1)*DYEJDA1Z(FR, 1) + ZEJ(FR, 1)*DYEKDA1Z(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA1Z(FR, 1) - YEJ(FR, 1)*DZEKDA1Z(FR, 1)
+               DXEJDA1Z(FR, 1) = ZEK(FR, 1)*DYEIDA1Z(FR, 1) - ZEI(FR, 1)*DYEKDA1Z(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA1Z(FR, 1) + YEI(FR, 1)*DZEKDA1Z(FR, 1)
+               DXEKDA1Z(FR, 1) = -ZEJ(FR, 1)*DYEIDA1Z(FR, 1) + ZEI(FR, 1)*DYEJDA1Z(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA1Z(FR, 1) - YEI(FR, 1)*DZEJDA1Z(FR, 1)
+
+               DXEIDA2X(FR, 1) = -ZEK(FR, 1)*DYEJDA2X(FR, 1) + ZEJ(FR, 1)*DYEKDA2X(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA2X(FR, 1) - YEJ(FR, 1)*DZEKDA2X(FR, 1)
+               DXEJDA2X(FR, 1) = ZEK(FR, 1)*DYEIDA2X(FR, 1) - ZEI(FR, 1)*DYEKDA2X(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA2X(FR, 1) + YEI(FR, 1)*DZEKDA2X(FR, 1)
+               DXEKDA2X(FR, 1) = -ZEJ(FR, 1)*DYEIDA2X(FR, 1) + ZEI(FR, 1)*DYEJDA2X(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA2X(FR, 1) - YEI(FR, 1)*DZEJDA2X(FR, 1)
+
+               DXEIDA2Y(FR, 1) = -ZEK(FR, 1)*DYEJDA2Y(FR, 1) + ZEJ(FR, 1)*DYEKDA2Y(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA2Y(FR, 1) - YEJ(FR, 1)*DZEKDA2Y(FR, 1)
+               DXEJDA2Y(FR, 1) = ZEK(FR, 1)*DYEIDA2Y(FR, 1) - ZEI(FR, 1)*DYEKDA2Y(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA2Y(FR, 1) + YEI(FR, 1)*DZEKDA2Y(FR, 1)
+               DXEKDA2Y(FR, 1) = -ZEJ(FR, 1)*DYEIDA2Y(FR, 1) + ZEI(FR, 1)*DYEJDA2Y(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA2Y(FR, 1) - YEI(FR, 1)*DZEJDA2Y(FR, 1)
+
+               DXEIDA2Z(FR, 1) = -ZEK(FR, 1)*DYEJDA2Z(FR, 1) + ZEJ(FR, 1)*DYEKDA2Z(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA2Z(FR, 1) - YEJ(FR, 1)*DZEKDA2Z(FR, 1)
+               DXEJDA2Z(FR, 1) = ZEK(FR, 1)*DYEIDA2Z(FR, 1) - ZEI(FR, 1)*DYEKDA2Z(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA2Z(FR, 1) + YEI(FR, 1)*DZEKDA2Z(FR, 1)
+               DXEKDA2Z(FR, 1) = -ZEJ(FR, 1)*DYEIDA2Z(FR, 1) + ZEI(FR, 1)*DYEJDA2Z(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA2Z(FR, 1) - YEI(FR, 1)*DZEJDA2Z(FR, 1)
+
+               DXEIDA3X(FR, 1) = -ZEK(FR, 1)*DYEJDA3X(FR, 1) + ZEJ(FR, 1)*DYEKDA3X(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA3X(FR, 1) - YEJ(FR, 1)*DZEKDA3X(FR, 1)
+               DXEJDA3X(FR, 1) = ZEK(FR, 1)*DYEIDA3X(FR, 1) - ZEI(FR, 1)*DYEKDA3X(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA3X(FR, 1) + YEI(FR, 1)*DZEKDA3X(FR, 1)
+               DXEKDA3X(FR, 1) = -ZEJ(FR, 1)*DYEIDA3X(FR, 1) + ZEI(FR, 1)*DYEJDA3X(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA3X(FR, 1) - YEI(FR, 1)*DZEJDA3X(FR, 1)
+
+               DXEIDA3Y(FR, 1) = -ZEK(FR, 1)*DYEJDA3Y(FR, 1) + ZEJ(FR, 1)*DYEKDA3Y(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA3Y(FR, 1) - YEJ(FR, 1)*DZEKDA3Y(FR, 1)
+               DXEJDA3Y(FR, 1) = ZEK(FR, 1)*DYEIDA3Y(FR, 1) - ZEI(FR, 1)*DYEKDA3Y(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA3Y(FR, 1) + YEI(FR, 1)*DZEKDA3Y(FR, 1)
+               DXEKDA3Y(FR, 1) = -ZEJ(FR, 1)*DYEIDA3Y(FR, 1) + ZEI(FR, 1)*DYEJDA3Y(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA3Y(FR, 1) - YEI(FR, 1)*DZEJDA3Y(FR, 1)
+
+               DXEIDA3Z(FR, 1) = -ZEK(FR, 1)*DYEJDA3Z(FR, 1) + ZEJ(FR, 1)*DYEKDA3Z(FR, 1) + &
+                                 YEK(FR, 1)*DZEJDA3Z(FR, 1) - YEJ(FR, 1)*DZEKDA3Z(FR, 1)
+               DXEJDA3Z(FR, 1) = ZEK(FR, 1)*DYEIDA3Z(FR, 1) - ZEI(FR, 1)*DYEKDA3Z(FR, 1) - &
+                                 YEK(FR, 1)*DZEIDA3Z(FR, 1) + YEI(FR, 1)*DZEKDA3Z(FR, 1)
+               DXEKDA3Z(FR, 1) = -ZEJ(FR, 1)*DYEIDA3Z(FR, 1) + ZEI(FR, 1)*DYEJDA3Z(FR, 1) + &
+                                 YEJ(FR, 1)*DZEIDA3Z(FR, 1) - YEI(FR, 1)*DZEJDA3Z(FR, 1)
+
+               ! ATOM 2
+               DXEIDA1X(FR, 2) = DXEIDA2X(FR, 1)
+               DXEJDA1X(FR, 2) = DXEJDA2X(FR, 1)
+               DXEKDA1X(FR, 2) = DXEKDA2X(FR, 1)
+
+               DXEIDA1Y(FR, 2) = DXEIDA2Y(FR, 1)
+               DXEJDA1Y(FR, 2) = DXEJDA2Y(FR, 1)
+               DXEKDA1Y(FR, 2) = DXEKDA2Y(FR, 1)
+
+               DXEIDA1Z(FR, 2) = DXEIDA2Z(FR, 1)
+               DXEJDA1Z(FR, 2) = DXEJDA2Z(FR, 1)
+               DXEKDA1Z(FR, 2) = DXEKDA2Z(FR, 1)
+
+               DXEIDA2X(FR, 2) = DXEIDA1X(FR, 1)
+               DXEJDA2X(FR, 2) = DXEJDA1X(FR, 1)
+               DXEKDA2X(FR, 2) = DXEKDA1X(FR, 1)
+
+               DXEIDA2Y(FR, 2) = DXEIDA1Y(FR, 1)
+               DXEJDA2Y(FR, 2) = DXEJDA1Y(FR, 1)
+               DXEKDA2Y(FR, 2) = DXEKDA1Y(FR, 1)
+
+               DXEIDA2Z(FR, 2) = DXEIDA1Z(FR, 1)
+               DXEJDA2Z(FR, 2) = DXEJDA1Z(FR, 1)
+               DXEKDA2Z(FR, 2) = DXEKDA1Z(FR, 1)
+
+               DXEIDA3X(FR, 2) = DXEIDA3X(FR, 1)
+               DXEJDA3X(FR, 2) = DXEJDA3X(FR, 1)
+               DXEKDA3X(FR, 2) = DXEKDA3X(FR, 1)
+
+               DXEIDA3Y(FR, 2) = DXEIDA3Y(FR, 1)
+               DXEJDA3Y(FR, 2) = DXEJDA3Y(FR, 1)
+               DXEKDA3Y(FR, 2) = DXEKDA3Y(FR, 1)
+
+               DXEIDA3Z(FR, 2) = DXEIDA3Z(FR, 1)
+               DXEJDA3Z(FR, 2) = DXEJDA3Z(FR, 1)
+               DXEKDA3Z(FR, 2) = DXEKDA3Z(FR, 1)
+
+               ! ATOM 3
+               ! DERIVATIVES
+               DXEIDA1X(FR, 3) = -ZEK(FR, 3)*DYEJDA1X(FR, 3) + ZEJ(FR, 3)*DYEKDA1X(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA1X(FR, 3) - YEJ(FR, 3)*DZEKDA1X(FR, 3)
+               DXEJDA1X(FR, 3) = ZEK(FR, 3)*DYEIDA1X(FR, 3) - ZEI(FR, 3)*DYEKDA1X(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA1X(FR, 3) + YEI(FR, 3)*DZEKDA1X(FR, 3)
+               DXEKDA1X(FR, 3) = -ZEJ(FR, 3)*DYEIDA1X(FR, 3) + ZEI(FR, 3)*DYEJDA1X(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA1X(FR, 3) - YEI(FR, 3)*DZEJDA1X(FR, 3)
+
+               DXEIDA1Y(FR, 3) = -ZEK(FR, 3)*DYEJDA1Y(FR, 3) + ZEJ(FR, 3)*DYEKDA1Y(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA1Y(FR, 3) - YEJ(FR, 3)*DZEKDA1Y(FR, 3)
+               DXEJDA1Y(FR, 3) = ZEK(FR, 3)*DYEIDA1Y(FR, 3) - ZEI(FR, 3)*DYEKDA1Y(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA1Y(FR, 3) + YEI(FR, 3)*DZEKDA1Y(FR, 3)
+               DXEKDA1Y(FR, 3) = -ZEJ(FR, 3)*DYEIDA1Y(FR, 3) + ZEI(FR, 3)*DYEJDA1Y(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA1Y(FR, 3) - YEI(FR, 3)*DZEJDA1Y(FR, 3)
+
+               DXEIDA1Z(FR, 3) = -ZEK(FR, 3)*DYEJDA1Z(FR, 3) + ZEJ(FR, 3)*DYEKDA1Z(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA1Z(FR, 3) - YEJ(FR, 3)*DZEKDA1Z(FR, 3)
+               DXEJDA1Z(FR, 3) = ZEK(FR, 3)*DYEIDA1Z(FR, 3) - ZEI(FR, 3)*DYEKDA1Z(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA1Z(FR, 3) + YEI(FR, 3)*DZEKDA1Z(FR, 3)
+               DXEKDA1Z(FR, 3) = -ZEJ(FR, 3)*DYEIDA1Z(FR, 3) + ZEI(FR, 3)*DYEJDA1Z(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA1Z(FR, 3) - YEI(FR, 3)*DZEJDA1Z(FR, 3)
+
+               DXEIDA2X(FR, 3) = -ZEK(FR, 3)*DYEJDA2X(FR, 3) + ZEJ(FR, 3)*DYEKDA2X(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA2X(FR, 3) - YEJ(FR, 3)*DZEKDA2X(FR, 3)
+               DXEJDA2X(FR, 3) = ZEK(FR, 3)*DYEIDA2X(FR, 3) - ZEI(FR, 3)*DYEKDA2X(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA2X(FR, 3) + YEI(FR, 3)*DZEKDA2X(FR, 3)
+               DXEKDA2X(FR, 3) = -ZEJ(FR, 3)*DYEIDA2X(FR, 3) + ZEI(FR, 3)*DYEJDA2X(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA2X(FR, 3) - YEI(FR, 3)*DZEJDA2X(FR, 3)
+
+               DXEIDA2Y(FR, 3) = -ZEK(FR, 3)*DYEJDA2Y(FR, 3) + ZEJ(FR, 3)*DYEKDA2Y(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA2Y(FR, 3) - YEJ(FR, 3)*DZEKDA2Y(FR, 3)
+               DXEJDA2Y(FR, 3) = ZEK(FR, 3)*DYEIDA2Y(FR, 3) - ZEI(FR, 3)*DYEKDA2Y(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA2Y(FR, 3) + YEI(FR, 3)*DZEKDA2Y(FR, 3)
+               DXEKDA2Y(FR, 3) = -ZEJ(FR, 3)*DYEIDA2Y(FR, 3) + ZEI(FR, 3)*DYEJDA2Y(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA2Y(FR, 3) - YEI(FR, 3)*DZEJDA2Y(FR, 3)
+
+               DXEIDA2Z(FR, 3) = -ZEK(FR, 3)*DYEJDA2Z(FR, 3) + ZEJ(FR, 3)*DYEKDA2Z(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA2Z(FR, 3) - YEJ(FR, 3)*DZEKDA2Z(FR, 3)
+               DXEJDA2Z(FR, 3) = ZEK(FR, 3)*DYEIDA2Z(FR, 3) - ZEI(FR, 3)*DYEKDA2Z(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA2Z(FR, 3) + YEI(FR, 3)*DZEKDA2Z(FR, 3)
+               DXEKDA2Z(FR, 3) = -ZEJ(FR, 3)*DYEIDA2Z(FR, 3) + ZEI(FR, 3)*DYEJDA2Z(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA2Z(FR, 3) - YEI(FR, 3)*DZEJDA2Z(FR, 3)
+
+               DXEIDA3X(FR, 3) = -ZEK(FR, 3)*DYEJDA3X(FR, 3) + ZEJ(FR, 3)*DYEKDA3X(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA3X(FR, 3) - YEJ(FR, 3)*DZEKDA3X(FR, 3)
+               DXEJDA3X(FR, 3) = ZEK(FR, 3)*DYEIDA3X(FR, 3) - ZEI(FR, 3)*DYEKDA3X(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA3X(FR, 3) + YEI(FR, 3)*DZEKDA3X(FR, 3)
+               DXEKDA3X(FR, 3) = -ZEJ(FR, 3)*DYEIDA3X(FR, 3) + ZEI(FR, 3)*DYEJDA3X(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA3X(FR, 3) - YEI(FR, 3)*DZEJDA3X(FR, 3)
+
+               DXEIDA3Y(FR, 3) = -ZEK(FR, 3)*DYEJDA3Y(FR, 3) + ZEJ(FR, 3)*DYEKDA3Y(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA3Y(FR, 3) - YEJ(FR, 3)*DZEKDA3Y(FR, 3)
+               DXEJDA3Y(FR, 3) = ZEK(FR, 3)*DYEIDA3Y(FR, 3) - ZEI(FR, 3)*DYEKDA3Y(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA3Y(FR, 3) + YEI(FR, 3)*DZEKDA3Y(FR, 3)
+               DXEKDA3Y(FR, 3) = -ZEJ(FR, 3)*DYEIDA3Y(FR, 3) + ZEI(FR, 3)*DYEJDA3Y(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA3Y(FR, 3) - YEI(FR, 3)*DZEJDA3Y(FR, 3)
+
+               DXEIDA3Z(FR, 3) = -ZEK(FR, 3)*DYEJDA3Z(FR, 3) + ZEJ(FR, 3)*DYEKDA3Z(FR, 3) + &
+                                 YEK(FR, 3)*DZEJDA3Z(FR, 3) - YEJ(FR, 3)*DZEKDA3Z(FR, 3)
+               DXEJDA3Z(FR, 3) = ZEK(FR, 3)*DYEIDA3Z(FR, 3) - ZEI(FR, 3)*DYEKDA3Z(FR, 3) - &
+                                 YEK(FR, 3)*DZEIDA3Z(FR, 3) + YEI(FR, 3)*DZEKDA3Z(FR, 3)
+               DXEKDA3Z(FR, 3) = -ZEJ(FR, 3)*DYEIDA3Z(FR, 3) + ZEI(FR, 3)*DYEJDA3Z(FR, 3) + &
+                                 YEJ(FR, 3)*DZEIDA3Z(FR, 3) - YEI(FR, 3)*DZEJDA3Z(FR, 3)
+
+            ELSE ! DIATOMIC
+               DO M = 1, 3
+                  DXEIDA1X(FR, M) = 0.D0
+                  DXEJDA1X(FR, M) = 0.D0
+                  DXEKDA1X(FR, M) = 0.D0
+                  DXEIDA1Y(FR, M) = 0.D0
+                  DXEJDA1Y(FR, M) = 0.D0
+                  DXEKDA1Y(FR, M) = 0.D0
+                  DXEIDA1Z(FR, M) = 0.D0
+                  DXEJDA1Z(FR, M) = 0.D0
+                  DXEKDA1Z(FR, M) = 0.D0
+
+                  DXEIDA2X(FR, M) = 0.D0
+                  DXEJDA2X(FR, M) = 0.D0
+                  DXEKDA2X(FR, M) = 0.D0
+                  DXEIDA2Y(FR, M) = 0.D0
+                  DXEJDA2Y(FR, M) = 0.D0
+                  DXEKDA2Y(FR, M) = 0.D0
+                  DXEIDA2Z(FR, M) = 0.D0
+                  DXEJDA2Z(FR, M) = 0.D0
+                  DXEKDA2Z(FR, M) = 0.D0
+
+                  DXEIDA3X(FR, M) = 0.D0
+                  DXEJDA3X(FR, M) = 0.D0
+                  DXEKDA3X(FR, M) = 0.D0
+                  DXEIDA3Y(FR, M) = 0.D0
+                  DXEJDA3Y(FR, M) = 0.D0
+                  DXEKDA3Y(FR, M) = 0.D0
+                  DXEIDA3Z(FR, M) = 0.D0
+                  DXEJDA3Z(FR, M) = 0.D0
+                  DXEKDA3Z(FR, M) = 0.D0
+
+                  DYEIDA1X(FR, M) = 0.D0
+                  DYEJDA1X(FR, M) = 0.D0
+                  DYEKDA1X(FR, M) = 0.D0
+                  DYEIDA1Y(FR, M) = 0.D0
+                  DYEJDA1Y(FR, M) = 0.D0
+                  DYEKDA1Y(FR, M) = 0.D0
+                  DYEIDA1Z(FR, M) = 0.D0
+                  DYEJDA1Z(FR, M) = 0.D0
+                  DYEKDA1Z(FR, M) = 0.D0
+
+                  DYEIDA2X(FR, M) = 0.D0
+                  DYEJDA2X(FR, M) = 0.D0
+                  DYEKDA2X(FR, M) = 0.D0
+                  DYEIDA2Y(FR, M) = 0.D0
+                  DYEJDA2Y(FR, M) = 0.D0
+                  DYEKDA2Y(FR, M) = 0.D0
+                  DYEIDA2Z(FR, M) = 0.D0
+                  DYEJDA2Z(FR, M) = 0.D0
+                  DYEKDA2Z(FR, M) = 0.D0
+
+                  DYEIDA3X(FR, M) = 0.D0
+                  DYEJDA3X(FR, M) = 0.D0
+                  DYEKDA3X(FR, M) = 0.D0
+                  DYEIDA3Y(FR, M) = 0.D0
+                  DYEJDA3Y(FR, M) = 0.D0
+                  DYEKDA3Y(FR, M) = 0.D0
+                  DYEIDA3Z(FR, M) = 0.D0
+                  DYEJDA3Z(FR, M) = 0.D0
+                  DYEKDA3Z(FR, M) = 0.D0
+               END DO
+
+               DZEIDA1X(FR, 3) = 0.D0
+               DZEJDA1X(FR, 3) = 0.D0
+               DZEKDA1X(FR, 3) = 0.D0
+               DZEIDA1Y(FR, 3) = 0.D0
+               DZEJDA1Y(FR, 3) = 0.D0
+               DZEKDA1Y(FR, 3) = 0.D0
+               DZEIDA1Z(FR, 3) = 0.D0
+               DZEJDA1Z(FR, 3) = 0.D0
+               DZEKDA1Z(FR, 3) = 0.D0
+
+               DZEIDA2X(FR, 3) = 0.D0
+               DZEJDA2X(FR, 3) = 0.D0
+               DZEKDA2X(FR, 3) = 0.D0
+               DZEIDA2Y(FR, 3) = 0.D0
+               DZEJDA2Y(FR, 3) = 0.D0
+               DZEKDA2Y(FR, 3) = 0.D0
+               DZEIDA2Z(FR, 3) = 0.D0
+               DZEJDA2Z(FR, 3) = 0.D0
+               DZEKDA2Z(FR, 3) = 0.D0
+
+               DZEIDA3X(FR, 3) = 0.D0
+               DZEJDA3X(FR, 3) = 0.D0
+               DZEKDA3X(FR, 3) = 0.D0
+               DZEIDA3Y(FR, 3) = 0.D0
+               DZEJDA3Y(FR, 3) = 0.D0
+               DZEKDA3Y(FR, 3) = 0.D0
+               DZEIDA3Z(FR, 3) = 0.D0
+               DZEJDA3Z(FR, 3) = 0.D0
+               DZEKDA3Z(FR, 3) = 0.D0
+            END IF !IF DIATOMIC
+
+            DO M = 1, 3
+               IF (NQ(FR, M) .GT. 0) THEN !  CHECK IF THERE ARE CHARGES IN THAT FRAME
+                  DO K = 0, NQ(FR, M) - 1
+                     L = IDQ(FRAMEI(FR, M)) + K
+
+                     ! IF NOT USING LPAIR
+                     IF (DPAIR(L) .GE. 0) THEN
+                        IF (FRAMEI(FR, 3) .NE. 0) THEN
+                           !  Calculates the translation from the nuclear centre
+                           TX = AQ(L)*XEI(FR, M) + BQ(L)*YEI(FR, M) + CQ(L)*ZEI(FR, M)
+                           TY = AQ(L)*XEJ(FR, M) + BQ(L)*YEJ(FR, M) + CQ(L)*ZEJ(FR, M)
+                           TZ = AQ(L)*XEK(FR, M) + BQ(L)*YEK(FR, M) + CQ(L)*ZEK(FR, M)
+                           !  Calculates global charge position
+                           XQ(L) = X(FRAMEI(FR, M)) + TX
+                           YQ(L) = Y(FRAMEI(FR, M)) + TY
+                           ZQ(L) = Z(FRAMEI(FR, M)) + TZ
+
+                        ELSE ! DIATOMIC
+                           TX = CQ(L)*ZEI(FR, M)
+                           TY = CQ(L)*ZEJ(FR, M)
+                           TZ = CQ(L)*ZEK(FR, M)
+                           XQ(L) = X(FRAMEI(FR, M)) + TX
+                           YQ(L) = Y(FRAMEI(FR, M)) + TY
+                           ZQ(L) = Z(FRAMEI(FR, M)) + TZ
+                        END IF
+
+                        DF1(L) = 0.D0
+                        DF2(L) = 0.D0
+                        DF3(L) = 0.D0
+                        DF4(L) = 0.D0
+                        DF5(L) = 0.D0
+                        DF6(L) = 0.D0
+                        DF7(L) = 0.D0
+                        DF8(L) = 0.D0
+                        DF9(L) = 0.D0
+                        DF10(L) = 0.D0
+                        DF11(L) = 0.D0
+                        DF12(L) = 0.D0
+                        DF13(L) = 0.D0
+                        DF14(L) = 0.D0
+                        DF15(L) = 0.D0
+                        DF16(L) = 0.D0
+                        DF17(L) = 0.D0
+                        DF18(L) = 0.D0
+                        DF19(L) = 0.D0
+                        DF20(L) = 0.D0
+                        DF21(L) = 0.D0
+                        DF22(L) = 0.D0
+                        DF23(L) = 0.D0
+                        DF24(L) = 0.D0
+                        DF25(L) = 0.D0
+                        DF26(L) = 0.D0
+                        DF27(L) = 0.D0
+
+                        IF (FLUX .OR. KERN) THEN !.OR. KERN
+                           IF (FLXFRS(FR) .EQ. 1) THEN ! IF THIS FRAME NEEDS FLUX
+                              ! DERIVATIVES IF USING FLUX
+                              ! WRT ATOM A OF FRAME (ABC)
+                              !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                              DF1(L) = XEI(FR, M)*DADX1(L) + YEI(FR, M)*DBDX1(L) + ZEI(FR, M)*DCDX1(L) !
+                              DF2(L) = XEJ(FR, M)*DADX1(L) + YEJ(FR, M)*DBDX1(L) + ZEJ(FR, M)*DCDX1(L) !
+                              DF3(L) = XEK(FR, M)*DADX1(L) + YEK(FR, M)*DBDX1(L) + ZEK(FR, M)*DCDX1(L) !
+                              !!!!!!!!!!!!!!!!
+                              DF4(L) = XEI(FR, M)*DADY1(L) + YEI(FR, M)*DBDY1(L) + ZEI(FR, M)*DCDY1(L) !
+                              DF5(L) = XEJ(FR, M)*DADY1(L) + YEJ(FR, M)*DBDY1(L) + ZEJ(FR, M)*DCDY1(L) !
+                              DF6(L) = XEK(FR, M)*DADY1(L) + YEK(FR, M)*DBDY1(L) + ZEK(FR, M)*DCDY1(L) !
+                              !!!!!!!!!!!!!!!!
+                              DF7(L) = XEI(FR, M)*DADZ1(L) + YEI(FR, M)*DBDZ1(L) + ZEI(FR, M)*DCDZ1(L) !
+                              DF8(L) = XEJ(FR, M)*DADZ1(L) + YEJ(FR, M)*DBDZ1(L) + ZEJ(FR, M)*DCDZ1(L) !
+                              DF9(L) = XEK(FR, M)*DADZ1(L) + YEK(FR, M)*DBDZ1(L) + ZEK(FR, M)*DCDZ1(L) !
+                              !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                              ! WRT ATOM B OF FRAME (ABC)
+                              DF10(L) = XEI(FR, M)*DADX2(L) + YEI(FR, M)*DBDX2(L) + ZEI(FR, M)*DCDX2(L) !
+                              DF11(L) = XEJ(FR, M)*DADX2(L) + YEJ(FR, M)*DBDX2(L) + ZEJ(FR, M)*DCDX2(L) !
+                              DF12(L) = XEK(FR, M)*DADX2(L) + YEK(FR, M)*DBDX2(L) + ZEK(FR, M)*DCDX2(L) !
+                              !!!!!!!!!!!!!!!!!!!!!
+                              DF13(L) = XEI(FR, M)*DADY2(L) + YEI(FR, M)*DBDY2(L) + ZEI(FR, M)*DCDY2(L) !
+                              DF14(L) = XEJ(FR, M)*DADY2(L) + YEJ(FR, M)*DBDY2(L) + ZEJ(FR, M)*DCDY2(L) !
+                              DF15(L) = XEK(FR, M)*DADY2(L) + YEK(FR, M)*DBDY2(L) + ZEK(FR, M)*DCDY2(L) !
+                              !!!!!!!!!!!!!!!!!!!!!
+                              DF16(L) = XEI(FR, M)*DADZ2(L) + YEI(FR, M)*DBDZ2(L) + ZEI(FR, M)*DCDZ2(L) !
+                              DF17(L) = XEJ(FR, M)*DADZ2(L) + YEJ(FR, M)*DBDZ2(L) + ZEJ(FR, M)*DCDZ2(L) !
+                              DF18(L) = XEK(FR, M)*DADZ2(L) + YEK(FR, M)*DBDZ2(L) + ZEK(FR, M)*DCDZ2(L) !
+                              !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                              ! WRT ATOM C OF FRAME (ABC)!
+                              DF19(L) = XEI(FR, M)*DADX3(L) + YEI(FR, M)*DBDX3(L) + ZEI(FR, M)*DCDX3(L) !
+                              DF20(L) = XEJ(FR, M)*DADX3(L) + YEJ(FR, M)*DBDX3(L) + ZEJ(FR, M)*DCDX3(L) !
+                              DF21(L) = XEK(FR, M)*DADX3(L) + YEK(FR, M)*DBDX3(L) + ZEK(FR, M)*DCDX3(L) !
+                              !!!!!!!! !!!!!!!!!!!!!!!!!!!!!!!!
+                              DF22(L) = XEI(FR, M)*DADY3(L) + YEI(FR, M)*DBDY3(L) + ZEI(FR, M)*DCDY3(L) !
+                              DF23(L) = XEJ(FR, M)*DADY3(L) + YEJ(FR, M)*DBDY3(L) + ZEJ(FR, M)*DCDY3(L) !
+                              DF24(L) = XEK(FR, M)*DADY3(L) + YEK(FR, M)*DBDY3(L) + ZEK(FR, M)*DCDY3(L) !
+                              !!!!!!!! !!!!!!!!!!!!!!!!!!!!!!
+                              DF25(L) = XEI(FR, M)*DADZ3(L) + YEI(FR, M)*DBDZ3(L) + ZEI(FR, M)*DCDZ3(L) !
+                              DF26(L) = XEJ(FR, M)*DADZ3(L) + YEJ(FR, M)*DBDZ3(L) + ZEJ(FR, M)*DCDZ3(L) !
+                              DF27(L) = XEK(FR, M)*DADZ3(L) + YEK(FR, M)*DBDZ3(L) + ZEK(FR, M)*DCDZ3(L) !
+
+                           END IF ! IF THIS FRAME NEEDS FLUX
+                        END IF ! DERIVATIVES IF NOT USING FLUX
+
+                        DF1(L) = DF1(L) + AQ(L)*DXEIDA1X(FR, M) + BQ(L)*DYEIDA1X(FR, M) + CQ(L)*DZEIDA1X(FR, M)!x, ei
+                        DF2(L) = DF2(L) + AQ(L)*DXEJDA1X(FR, M) + BQ(L)*DYEJDA1X(FR, M) + CQ(L)*DZEJDA1X(FR, M)!   ej
+                        DF3(L) = DF3(L) + AQ(L)*DXEKDA1X(FR, M) + BQ(L)*DYEKDA1X(FR, M) + CQ(L)*DZEKDA1X(FR, M)!   ek
+                        DF4(L) = DF4(L) + AQ(L)*DXEIDA1Y(FR, M) + BQ(L)*DYEIDA1Y(FR, M) + CQ(L)*DZEIDA1Y(FR, M)!y
+                        DF5(L) = DF5(L) + AQ(L)*DXEJDA1Y(FR, M) + BQ(L)*DYEJDA1Y(FR, M) + CQ(L)*DZEJDA1Y(FR, M)
+                        DF6(L) = DF6(L) + AQ(L)*DXEKDA1Y(FR, M) + BQ(L)*DYEKDA1Y(FR, M) + CQ(L)*DZEKDA1Y(FR, M)
+                        DF7(L) = DF7(L) + AQ(L)*DXEIDA1Z(FR, M) + BQ(L)*DYEIDA1Z(FR, M) + CQ(L)*DZEIDA1Z(FR, M)!z
+                        DF8(L) = DF8(L) + AQ(L)*DXEJDA1Z(FR, M) + BQ(L)*DYEJDA1Z(FR, M) + CQ(L)*DZEJDA1Z(FR, M)
+                        DF9(L) = DF9(L) + AQ(L)*DXEKDA1Z(FR, M) + BQ(L)*DYEKDA1Z(FR, M) + CQ(L)*DZEKDA1Z(FR, M)
+                        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        DF10(L) = DF10(L) + AQ(L)*DXEIDA2X(FR, M) + BQ(L)*DYEIDA2X(FR, M) + CQ(L)*DZEIDA2X(FR, M)!x
+                        DF11(L) = DF11(L) + AQ(L)*DXEJDA2X(FR, M) + BQ(L)*DYEJDA2X(FR, M) + CQ(L)*DZEJDA2X(FR, M)
+                        DF12(L) = DF12(L) + AQ(L)*DXEKDA2X(FR, M) + BQ(L)*DYEKDA2X(FR, M) + CQ(L)*DZEKDA2X(FR, M)
+                        DF13(L) = DF13(L) + AQ(L)*DXEIDA2Y(FR, M) + BQ(L)*DYEIDA2Y(FR, M) + CQ(L)*DZEIDA2Y(FR, M)!y
+                        DF14(L) = DF14(L) + AQ(L)*DXEJDA2Y(FR, M) + BQ(L)*DYEJDA2Y(FR, M) + CQ(L)*DZEJDA2Y(FR, M)
+                        DF15(L) = DF15(L) + AQ(L)*DXEKDA2Y(FR, M) + BQ(L)*DYEKDA2Y(FR, M) + CQ(L)*DZEKDA2Y(FR, M)
+                        DF16(L) = DF16(L) + AQ(L)*DXEIDA2Z(FR, M) + BQ(L)*DYEIDA2Z(FR, M) + CQ(L)*DZEIDA2Z(FR, M)!z
+                        DF17(L) = DF17(L) + AQ(L)*DXEJDA2Z(FR, M) + BQ(L)*DYEJDA2Z(FR, M) + CQ(L)*DZEJDA2Z(FR, M)
+                        DF18(L) = DF18(L) + AQ(L)*DXEKDA2Z(FR, M) + BQ(L)*DYEKDA2Z(FR, M) + CQ(L)*DZEKDA2Z(FR, M)
+                        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        DF19(L) = DF19(L) + AQ(L)*DXEIDA3X(FR, M) + BQ(L)*DYEIDA3X(FR, M) + CQ(L)*DZEIDA3X(FR, M)!x
+                        DF20(L) = DF20(L) + AQ(L)*DXEJDA3X(FR, M) + BQ(L)*DYEJDA3X(FR, M) + CQ(L)*DZEJDA3X(FR, M)
+                        DF21(L) = DF21(L) + AQ(L)*DXEKDA3X(FR, M) + BQ(L)*DYEKDA3X(FR, M) + CQ(L)*DZEKDA3X(FR, M)
+                        DF22(L) = DF22(L) + AQ(L)*DXEIDA3Y(FR, M) + BQ(L)*DYEIDA3Y(FR, M) + CQ(L)*DZEIDA3Y(FR, M)!y
+                        DF23(L) = DF23(L) + AQ(L)*DXEJDA3Y(FR, M) + BQ(L)*DYEJDA3Y(FR, M) + CQ(L)*DZEJDA3Y(FR, M)
+                        DF24(L) = DF24(L) + AQ(L)*DXEKDA3Y(FR, M) + BQ(L)*DYEKDA3Y(FR, M) + CQ(L)*DZEKDA3Y(FR, M)
+                        DF25(L) = DF25(L) + AQ(L)*DXEIDA3Z(FR, M) + BQ(L)*DYEIDA3Z(FR, M) + CQ(L)*DZEIDA3Z(FR, M)!z
+                        DF26(L) = DF26(L) + AQ(L)*DXEJDA3Z(FR, M) + BQ(L)*DYEJDA3Z(FR, M) + CQ(L)*DZEJDA3Z(FR, M)
+                        DF27(L) = DF27(L) + AQ(L)*DXEKDA3Z(FR, M) + BQ(L)*DYEKDA3Z(FR, M) + CQ(L)*DZEKDA3Z(FR, M)
+
+                     END IF  ! IF NOT USING LPAIR
+
+                     IF (DPAIR(L) .GT. 0) THEN  ! IS THIS MAKING THE CODE ANY FASTER
+                        J = DPAIR(L)
+                        XQ(J) = X(FRAMEI(FR, M)) - TX
+                        YQ(J) = Y(FRAMEI(FR, M)) - TY
+                        ZQ(J) = Z(FRAMEI(FR, M)) - TZ
+                        DF1(J) = -DF1(L)
+                        DF2(J) = -DF2(L)
+                        DF3(J) = -DF3(L)
+                        DF4(J) = -DF4(L)
+                        DF5(J) = -DF5(L)
+                        DF6(J) = -DF6(L)
+                        DF7(J) = -DF7(L)
+                        DF8(J) = -DF8(L)
+                        DF9(J) = -DF9(L)
+                        DF10(J) = -DF10(L)
+                        DF11(J) = -DF11(L)
+                        DF12(J) = -DF12(L)
+                        DF13(J) = -DF13(L)
+                        DF14(J) = -DF14(L)
+                        DF15(J) = -DF15(L)
+                        DF16(J) = -DF16(L)
+                        DF17(J) = -DF17(L)
+                        DF18(J) = -DF18(L)
+                        DF19(J) = -DF19(L)
+                        DF20(J) = -DF20(L)
+                        DF21(J) = -DF21(L)
+                        DF22(J) = -DF22(L)
+                        DF23(J) = -DF23(L)
+                        DF24(J) = -DF24(L)
+                        DF25(J) = -DF25(L)
+                        DF26(J) = -DF26(L)
+                        DF27(J) = -DF27(L)
+                     END IF! IF USING LPAIR
+
+                     IF (KERN) THEN !.OR. KERN
+                        IF (FLXFRS(FR) .EQ. 1) THEN ! IF THIS FRAME NEEDS FLUX
+
+                           IF (NATMK .GT. 3) THEN
+                              DO J = 1, NATMK - 3
+
+                                 ! WRITE(OUTU,*) "FR", FR, "J", J, "L", L
+
+                                 TMPDX2(J, L, 1, 1) = TMPDX(J, L, 1, 1)*XEI(FR, M) + &
+                                                      TMPDX(J, L, 1, 2)*YEI(FR, M) + TMPDX(J, L, 1, 3)*ZEI(FR, M)
+
+                                 TMPDX2(J, L, 1, 2) = TMPDX(J, L, 1, 1)*XEJ(FR, M) + &
+                                                      TMPDX(J, L, 1, 2)*YEJ(FR, M) + TMPDX(J, L, 1, 3)*ZEJ(FR, M)
+
+                                 TMPDX2(J, L, 1, 3) = TMPDX(J, L, 1, 1)*XEK(FR, M) + &
+                                                      TMPDX(J, L, 1, 2)*YEK(FR, M) + TMPDX(J, L, 1, 3)*ZEK(FR, M)
+
+                                 !!!!!!!!!!!!!!!!!!!!
+
+                                 TMPDX2(J, L, 2, 1) = TMPDX(J, L, 2, 1)*XEI(FR, M) + &
+                                                      TMPDX(J, L, 2, 2)*YEI(FR, M) + TMPDX(J, L, 2, 3)*ZEI(FR, M)
+
+                                 TMPDX2(J, L, 2, 2) = TMPDX(J, L, 2, 1)*XEJ(FR, M) + &
+                                                      TMPDX(J, L, 2, 2)*YEJ(FR, M) + TMPDX(J, L, 2, 3)*ZEJ(FR, M)
+
+                                 TMPDX2(J, L, 2, 3) = TMPDX(J, L, 2, 1)*XEK(FR, M) + &
+                                                      TMPDX(J, L, 2, 2)*YEK(FR, M) + TMPDX(J, L, 2, 3)*ZEK(FR, M)
+
+                                 !!!!!!!!!!!!!!!!!!!!
+
+                                 TMPDX2(J, L, 3, 1) = TMPDX(J, L, 3, 1)*XEI(FR, M) + &
+                                                      TMPDX(J, L, 3, 2)*YEI(FR, M) + TMPDX(J, L, 3, 3)*ZEI(FR, M)
+
+                                 TMPDX2(J, L, 3, 2) = TMPDX(J, L, 3, 1)*XEJ(FR, M) + &
+                                                      TMPDX(J, L, 3, 2)*YEJ(FR, M) + TMPDX(J, L, 3, 3)*ZEJ(FR, M)
+
+                                 TMPDX2(J, L, 3, 3) = TMPDX(J, L, 3, 1)*XEK(FR, M) + &
+                                                      TMPDX(J, L, 3, 2)*YEK(FR, M) + TMPDX(J, L, 3, 3)*ZEK(FR, M)
+
+                              END DO ! LOOP OVER EXTRA ATOMS
+                           END IF ! IF EXTRA ATOMS
+                        END IF ! IF THE FRAME USES FLUX
+                     END IF ! IF KERN
+
+                  END DO ! K
+               END IF ! IF ATOM HAS CHARGES
+            END DO ! M
+         END IF ! IF FRTYP.EQ.0
+      END DO ! LOOP OVER ALL FRAMES
+
+   END SUBROUTINE AXIS1
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                      AXIS 2
+!*******************************************************************************************
+!
+! ROUTINE CALLED ONCE PER TIME STEP TO CALCULATE THE LOCAL AXES REQUIRED TO PLACE DCM
+! CHARGES RELATIVE TO NUCLEAR COORDINATES OF EACH FRAME. AXIS DERIVATIVES ARE ALSO
+! CALCULATED, TO BE USED TO EVALUATE FORCES IN THE DCME SUBROUTINE. DEPSITE ITS LENGTH
+! AND COMPLEXITY, RELATIVELY LITTLE TIME IS SPENT HERE AS CALCULATIONS ARE DOMINATED BY
+! THE POORLY SCALING (WITH SYSTEM SIZE) CHARGE-CHARGE INTERACTIONS
+!
+!*******************************************************************************************
+! TODO: THIS ROUTINE HAS YET TO BE OPTIMIZED
+
+   SUBROUTINE AXIS2(X, Y, Z, XEI, XEJ, XEK, YEI, YEJ, YEK, ZEI, ZEJ, ZEK, &
+                    NATOMX, XQ, YQ, ZQ)
+
+! FIND LOCAL AXES AND DERIVATIVES
+      USE CHM_KINDS
+      USE STREAM, ONLY: OUTU, PRNLEV
+
+      IMPLICIT NONE
+
+      INTEGER FR, ATM1, ATM2, ATM3, J, K, L, M
+      INTEGER NATOMX
+      REAL(CHM_REAL) X(NATOMX), Y(NATOMX), Z(NATOMX)
+      REAL(CHM_REAL) XEI(NF, 3), XEJ(NF, 3), XEK(NF, 3)
+      REAL(CHM_REAL) YEI(NF, 3), YEJ(NF, 3), YEK(NF, 3)
+      REAL(CHM_REAL) ZEI(NF, 3), ZEJ(NF, 3), ZEK(NF, 3)
+      REAL(CHM_REAL) DXEIDA1X(NF, 3), DXEIDA1Y(NF, 3), DXEIDA1Z(NF, 3), &
+         DXEJDA1X(NF, 3), DXEJDA1Y(NF, 3), DXEJDA1Z(NF, 3), &
+         DXEKDA1X(NF, 3), DXEKDA1Y(NF, 3), DXEKDA1Z(NF, 3), &
+         DXEIDA2X(NF, 3), DXEIDA2Y(NF, 3), DXEIDA2Z(NF, 3), &
+         DXEJDA2X(NF, 3), DXEJDA2Y(NF, 3), DXEJDA2Z(NF, 3), &
+         DXEKDA2X(NF, 3), DXEKDA2Y(NF, 3), DXEKDA2Z(NF, 3), &
+         DXEIDA3X(NF, 3), DXEIDA3Y(NF, 3), DXEIDA3Z(NF, 3), &
+         DXEJDA3X(NF, 3), DXEJDA3Y(NF, 3), DXEJDA3Z(NF, 3), &
+         DXEKDA3X(NF, 3), DXEKDA3Y(NF, 3), DXEKDA3Z(NF, 3)
+      REAL(CHM_REAL) DYEIDA1X(NF, 3), DYEIDA1Y(NF, 3), DYEIDA1Z(NF, 3), &
+         DYEJDA1X(NF, 3), DYEJDA1Y(NF, 3), DYEJDA1Z(NF, 3), &
+         DYEKDA1X(NF, 3), DYEKDA1Y(NF, 3), DYEKDA1Z(NF, 3), &
+         DYEIDA2X(NF, 3), DYEIDA2Y(NF, 3), DYEIDA2Z(NF, 3), &
+         DYEJDA2X(NF, 3), DYEJDA2Y(NF, 3), DYEJDA2Z(NF, 3), &
+         DYEKDA2X(NF, 3), DYEKDA2Y(NF, 3), DYEKDA2Z(NF, 3), &
+         DYEIDA3X(NF, 3), DYEIDA3Y(NF, 3), DYEIDA3Z(NF, 3), &
+         DYEJDA3X(NF, 3), DYEJDA3Y(NF, 3), DYEJDA3Z(NF, 3), &
+         DYEKDA3X(NF, 3), DYEKDA3Y(NF, 3), DYEKDA3Z(NF, 3)
+      REAL(CHM_REAL) DZEIDA1X(NF, 3), DZEIDA1Y(NF, 3), DZEIDA1Z(NF, 3), &
+         DZEJDA1X(NF, 3), DZEJDA1Y(NF, 3), DZEJDA1Z(NF, 3), &
+         DZEKDA1X(NF, 3), DZEKDA1Y(NF, 3), DZEKDA1Z(NF, 3), &
+         DZEIDA2X(NF, 3), DZEIDA2Y(NF, 3), DZEIDA2Z(NF, 3), &
+         DZEJDA2X(NF, 3), DZEJDA2Y(NF, 3), DZEJDA2Z(NF, 3), &
+         DZEKDA2X(NF, 3), DZEKDA2Y(NF, 3), DZEKDA2Z(NF, 3), &
+         DZEIDA3X(NF, 3), DZEIDA3Y(NF, 3), DZEIDA3Z(NF, 3), &
+         DZEJDA3X(NF, 3), DZEJDA3Y(NF, 3), DZEJDA3Z(NF, 3), &
+         DZEKDA3X(NF, 3), DZEKDA3Y(NF, 3), DZEKDA3Z(NF, 3)
+      REAL(CHM_REAL) RB1, RB12, RB2, RB22, B1X, B1Y, B1Z, B2X, B2Y, B2Z, TX, TY, TZ
+      REAL(CHM_REAL) RBI, RBI2, BIX, BIY, BIZ, RBIM1
+      REAL(CHM_REAL) FACA, FACB, FACC
+      REAL(CHM_REAL) XQ(*), YQ(*), ZQ(*)
+      REAL(CHM_REAL) FAC, FAC1, FAC2, FAC3, FAC4, FAC5, FAC6, REY, REY2
+
+      ! TODO: OPTIMIZE THIS ROUTINE...
+
+      ! README:
+      !
+      ! THIS SUBROUTINE IS COMPLEX AND COULD BE WRITTEN IN DIFFERENT WAYS. THE AIM IS TO
+      ! CALCULATE THE GEOMETRIC DERIVATIVES OF EACH LOCAL AXIS UNIT VECTOR WITH RESPECT TO EACH
+      ! ATOMIC COORDINATE IN A FRAME. THERE ARE 3 NON-COLINEAR ATOMS IN EACH FRAME, EACH WITH THEIR OWN LOCAL
+      ! AXIS SYSTEM. THIS MEANS WE NEED PARTIAL DERIVATIVES OF ATOM 1'S LOCAL X,Y AND Z AXES WRT ATOM 1,2,3,
+      ! THE SAME FOR ATOMS 2 AND 3. EACH LOCAL AXIS VECTOR HAS 3 COMPONENTS IN THE GLOBAL AXIS
+      ! SYSTEM, SO WE NEED DXI/DRA, DXJ/DRA, DXK/DRA FOR THE LOCAL X-AXIS VECTOR OF ATOM 1. THE X-AXIS
+      ! VECTOR COMPONENTS I,J,K ARE ITS X,Y, AND Z COMPONENTS IN THE GLOBAL AXIS SYSTEM. SO FOR
+      ! ATOM 1'S X-AXIS WE NEED 9 PARTIAL DERIVATIVES: DX/DRA -> DXI/DA1X, DXI/DA1Y, DXI/DA1Z,
+      ! DXI/DA2X ... DXI/DA3Z. DA1X IS THE X-COORD OF ATOM 1. WE THEN NEED ATOM 1'S Y AND Z-AXIS
+      ! DERIVATIVES, GIVING 27 PARTIAL DERIVATIVES IN TOTAL. THE SAME FOR ATOMS 2 AND 3, WHICH HAVE THEIR
+      ! OWN LOCAL AXIS VECTORS, LEADING TO 81 PARTIAL DERIVATIVES IN TOTAL, NAMED EG DXEIDA1X(NF,3).
+      !
+      ! WHEN WE EVALUATE PARTIAL DERIVATIVES BELOW THE CODE IS WRITTEN IN A VERY GENERAL BUT POTENTIALLY
+      ! CONFUSING FASHION. THE NOTATION OF THE DERIVATIVES IS THEREFORE IMPORTANT TO UNDERSTAND:
+      !
+      ! DZEIDA1X(FR,1): THIS NOTATION MEANS THAT WE ARE EVALUATING A PARTIAL DERIVATIVE FOR ATOM 1 IN
+      ! THE FRAME 'FR', AS SHOWN BY THE ARRAY INDICES (FR,1). DZEI SHOWS THAT WE WANT A PARTIAL DERIVATIVE
+      ! OF THE 'I' (X) COMPONENT OF THE LOCAL Z-AXIS UNIT VECTOR IN THIS ATOM'S LOCAL COORDINATE SYSTEM
+      ! (SEE DCM JCTC PUBLICATION FOR DETAILS OF AXIS SYSTEM, IN THE AXIS2 ROUTINE THE ONLY DIFFERENCE IS THAT
+      ! ATOM 2'S Z-AXIS IS THE BOND1-BOND2 BISECTOR, RATHER THAN SIMPLY BOND1). THE DA1X SHOWS THAT WE
+      ! ARE EVALUATING THE DERIVATIVE WITH RESPECT TO THE X-COORDINATE OF ATOM 1. SO FAR SO LOGICAL. THE
+      ! COMPLICATION COMES IN THAT WHEN WE EVALUATE PARTIAL DERIVATIVES OF ATOM 1'S LOCAL AXES, DA1
+      ! REFERS TO ATOM 1, DA2 TO ATOM 2, DA3 TO ATOM 3 AS EXPECTED. WHEN WE CALCULATE ATOM 2'S PARTIAL
+      ! DERIVATIVES (FR,2), DA1 IS NOW ATOM 2, DA2 IS ATOM 1, DA3 IS ATOM 3. FOR ATOM 3'S LOCAL AXES (FR,3)
+      ! DA1 IS ATOM 3, DA2 IS ATOM 2, DA3 IS ATOM 1. THIS CONVENTION COULD (AND PROBABLY SHOULD) BE CHANGED!
+
+      DO FR = 1, NF ! LOOP OVER FRAMES
+         IF (FRTYP(FR) .EQ. 1) THEN ! IF "BOND"-TYPE AXIS SYSTEM FOR THIS FRAME
+            ATM1 = FRAMEI(FR, 1)
+            ATM2 = FRAMEI(FR, 2)
+            ATM3 = FRAMEI(FR, 3)
+
+            ! FIRST DEFINE LOCAL Z-AXES = BOND ATM2-ATM1
+            B1X = X(ATM1) - X(ATM2)
+            B1Y = Y(ATM1) - Y(ATM2)
+            B1Z = Z(ATM1) - Z(ATM2)
+            RB12 = B1X**2 + B1Y**2 + B1Z**2
+            RB1 = SQRT(RB12)
+            ! NORMALIZE
+            ZEI(FR, 1) = B1X/RB1
+            ZEJ(FR, 1) = B1Y/RB1
+            ZEK(FR, 1) = B1Z/RB1
+
+            B2X = X(ATM3) - X(ATM2)
+            B2Y = Y(ATM3) - Y(ATM2)
+            B2Z = Z(ATM3) - Z(ATM2)
+            RB22 = B2X**2 + B2Y**2 + B2Z**2
+            RB2 = SQRT(RB22)
+
+            ZEI(FR, 3) = B2X/RB2
+            ZEJ(FR, 3) = B2Y/RB2
+            ZEK(FR, 3) = B2Z/RB2
+
+            BIX = ZEI(FR, 1) + ZEI(FR, 3)
+            BIY = ZEJ(FR, 1) + ZEJ(FR, 3)
+            BIZ = ZEK(FR, 1) + ZEK(FR, 3)
+            RBI2 = BIX**2 + BIY**2 + BIZ**2
+            RBI = SQRT(RBI2)
+
+            ! BISECTOR COULD BE ZERO LENGTH (COLINEAR)
+            IF (ABS(RBI) .LT. 0.00001) THEN
+               IF (PRNLEV .GT. 1) THEN
+                  WRITE (OUTU, '(3(A,I5))') ' DCM> COLINEARITY DETECTED FOR ATOMS ', ATM1, ',', ATM2, ',', ATM3
+               END IF
+               CALL WRNDIE(-5, '<DCM> AXIS2', 'IF BONDS BECOME COLINEAR, BISECTOR Z-AXIS CANNOT BE USED.')
+            END IF
+
+            ZEI(FR, 2) = BIX/RBI
+            ZEJ(FR, 2) = BIY/RBI
+            ZEK(FR, 2) = BIZ/RBI
+
+            ! EY
+            ! DEFINE LOCAL Y-AXIS = BOND ATM2-ATM1 CROSS BOND ATM2-ATM3
+
+            FAC1 = -B1Z*B2Y + B1Y*B2Z
+            FAC2 = B1Z*B2X - B2Z*B1X
+            FAC3 = -B1Y*B2X + B2Y*B1X
+            REY2 = FAC1**2 + FAC2**2 + FAC3**2
+            REY = SQRT(REY2)
+            YEI(FR, 1) = FAC1/REY
+            YEJ(FR, 1) = FAC2/REY
+            YEK(FR, 1) = FAC3/REY
+
+            YEI(FR, 2) = YEI(FR, 1)
+            YEJ(FR, 2) = YEJ(FR, 1)
+            YEK(FR, 2) = YEK(FR, 1)
+
+            YEI(FR, 3) = YEI(FR, 1)
+            YEJ(FR, 3) = YEJ(FR, 1)
+            YEK(FR, 3) = YEK(FR, 1)
+
+            ! EX
+            ! DEFINE LOCAL X-AXIS = EZ CROSS EY
+
+            XEI(FR, 1) = YEK(FR, 1)*ZEJ(FR, 1) - YEJ(FR, 1)*ZEK(FR, 1)
+            XEJ(FR, 1) = YEI(FR, 1)*ZEK(FR, 1) - YEK(FR, 1)*ZEI(FR, 1)
+            XEK(FR, 1) = YEJ(FR, 1)*ZEI(FR, 1) - YEI(FR, 1)*ZEJ(FR, 1)
+
+            XEI(FR, 2) = YEK(FR, 2)*ZEJ(FR, 2) - YEJ(FR, 2)*ZEK(FR, 2)
+            XEJ(FR, 2) = YEI(FR, 2)*ZEK(FR, 2) - YEK(FR, 2)*ZEI(FR, 2)
+            XEK(FR, 2) = YEJ(FR, 2)*ZEI(FR, 2) - YEI(FR, 2)*ZEJ(FR, 2)
+
+            XEI(FR, 3) = YEK(FR, 3)*ZEJ(FR, 3) - YEJ(FR, 3)*ZEK(FR, 3)
+            XEJ(FR, 3) = YEI(FR, 3)*ZEK(FR, 3) - YEK(FR, 3)*ZEI(FR, 3)
+            XEK(FR, 3) = YEJ(FR, 3)*ZEI(FR, 3) - YEI(FR, 3)*ZEJ(FR, 3)
+
+            ! NOW THE Z-AXIS DERIVATIVES...
+            FACA = -1.D0/(RB1*RB12)
+            FACB = FACA*(-B1X)
+            ! DZEIDA1X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM1 X-COOR
+            DZEIDA1X(FR, 1) = FACA*(-B1Y**2 - B1Z**2)
+            DZEJDA1X(FR, 1) = FACB*(-B1Y)
+            DZEKDA1X(FR, 1) = FACB*(-B1Z)
+
+            FACB = FACA*(-B1Y)
+            DZEIDA1Y(FR, 1) = FACB*(-B1X)
+            DZEJDA1Y(FR, 1) = FACA*(-B1X**2 - B1Z**2)
+            DZEKDA1Y(FR, 1) = FACB*(-B1Z)
+
+            FACB = FACA*(-B1Z)
+            DZEIDA1Z(FR, 1) = FACB*(-B1X)
+            DZEJDA1Z(FR, 1) = FACB*(-B1Y)
+            DZEKDA1Z(FR, 1) = FACA*(-B1X**2 - B1Y**2)
+
+            ! DZEIDA2X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM2 X-COOR
+            DZEIDA2X(FR, 1) = -DZEIDA1X(FR, 1)
+            DZEJDA2X(FR, 1) = -DZEJDA1X(FR, 1)
+            DZEKDA2X(FR, 1) = -DZEKDA1X(FR, 1)
+
+            DZEIDA2Y(FR, 1) = -DZEIDA1Y(FR, 1)
+            DZEJDA2Y(FR, 1) = -DZEJDA1Y(FR, 1)
+            DZEKDA2Y(FR, 1) = -DZEKDA1Y(FR, 1)
+
+            DZEIDA2Z(FR, 1) = -DZEIDA1Z(FR, 1)
+            DZEJDA2Z(FR, 1) = -DZEJDA1Z(FR, 1)
+            DZEKDA2Z(FR, 1) = -DZEKDA1Z(FR, 1)
+
+            ! DERIVATIVES WRT ATM3 ALL ZERO FOR Z-AXIS OF ATOM 1 (FR,1)
+            DZEIDA3X(FR, 1) = 0.D0
+            DZEJDA3X(FR, 1) = 0.D0
+            DZEKDA3X(FR, 1) = 0.D0
+
+            DZEIDA3Y(FR, 1) = 0.D0
+            DZEJDA3Y(FR, 1) = 0.D0
+            DZEKDA3Y(FR, 1) = 0.D0
+
+            DZEIDA3Z(FR, 1) = 0.D0
+            DZEJDA3Z(FR, 1) = 0.D0
+            DZEKDA3Z(FR, 1) = 0.D0
+
+            ! BISECTOR DERIVATIVE CORRECTION
+            RBIM1 = 1.D0/RBI
+
+            ! DERIVATIVE OF BISECTOR Z-AXIS (ATM2) WRT ATM 1 X-COORD
+            FACC = (BIX*DZEIDA1X(FR, 1) + BIY*DZEJDA1X(FR, 1) + BIZ*DZEKDA1X(FR, 1))/(RBI2**1.5)
+            DZEIDA2X(FR, 2) = DZEIDA1X(FR, 1)*RBIM1 - (BIX*FACC)
+            DZEJDA2X(FR, 2) = DZEJDA1X(FR, 1)*RBIM1 - (BIY*FACC)
+            DZEKDA2X(FR, 2) = DZEKDA1X(FR, 1)*RBIM1 - (BIZ*FACC)
+
+            FACC = (BIX*DZEIDA1Y(FR, 1) + BIY*DZEJDA1Y(FR, 1) + BIZ*DZEKDA1Y(FR, 1))/(RBI2**1.5)
+            DZEIDA2Y(FR, 2) = DZEIDA1Y(FR, 1)*RBIM1 - (BIX*FACC)
+            DZEJDA2Y(FR, 2) = DZEJDA1Y(FR, 1)*RBIM1 - (BIY*FACC)
+            DZEKDA2Y(FR, 2) = DZEKDA1Y(FR, 1)*RBIM1 - (BIZ*FACC)
+
+            FACC = (BIX*DZEIDA1Z(FR, 1) + BIY*DZEJDA1Z(FR, 1) + BIZ*DZEKDA1Z(FR, 1))/(RBI2**1.5)
+            DZEIDA2Z(FR, 2) = DZEIDA1Z(FR, 1)*RBIM1 - (BIX*FACC)
+            DZEJDA2Z(FR, 2) = DZEJDA1Z(FR, 1)*RBIM1 - (BIY*FACC)
+            DZEKDA2Z(FR, 2) = DZEKDA1Z(FR, 1)*RBIM1 - (BIZ*FACC)
+
+            FACC = -1.D0/(RB2*RB22)
+            FACB = FACC*(-B2X)
+            ! ATOM 3 DZEIDA1X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM1 X-COOR
+            DZEIDA1X(FR, 3) = FACC*(-B2Y**2 - B2Z**2)
+            DZEJDA1X(FR, 3) = FACB*(-B2Y)
+            DZEKDA1X(FR, 3) = FACB*(-B2Z)
+
+            FACB = FACC*(-B2Y)
+            DZEIDA1Y(FR, 3) = FACB*(-B2X)
+            DZEJDA1Y(FR, 3) = FACC*(-B2X**2 - B2Z**2)
+            DZEKDA1Y(FR, 3) = FACB*(-B2Z)
+
+            FACB = FACC*(-B2Z)
+            DZEIDA1Z(FR, 3) = FACB*(-B2X)
+            DZEJDA1Z(FR, 3) = FACB*(-B2Y)
+            DZEKDA1Z(FR, 3) = FACC*(-B2X**2 - B2Y**2)
+
+            ! DZEIDA2X=DERIVATIVE OF LOCAL Z-AXIS UNIT VECTOR I-COMPONENT (ZEI) WRT ATOM2 X-COOR
+            DZEIDA2X(FR, 3) = -DZEIDA1X(FR, 3)
+            DZEJDA2X(FR, 3) = -DZEJDA1X(FR, 3)
+            DZEKDA2X(FR, 3) = -DZEKDA1X(FR, 3)
+
+            DZEIDA2Y(FR, 3) = -DZEIDA1Y(FR, 3)
+            DZEJDA2Y(FR, 3) = -DZEJDA1Y(FR, 3)
+            DZEKDA2Y(FR, 3) = -DZEKDA1Y(FR, 3)
+
+            DZEIDA2Z(FR, 3) = -DZEIDA1Z(FR, 3)
+            DZEJDA2Z(FR, 3) = -DZEJDA1Z(FR, 3)
+            DZEKDA2Z(FR, 3) = -DZEKDA1Z(FR, 3)
+
+            ! DERIVATIVES WRT ATM3 ALL ZERO FOR Z-AXIS
+            DZEIDA3X(FR, 3) = 0.D0
+            DZEJDA3X(FR, 3) = 0.D0
+            DZEKDA3X(FR, 3) = 0.D0
+
+            DZEIDA3Y(FR, 3) = 0.D0
+            DZEJDA3Y(FR, 3) = 0.D0
+            DZEKDA3Y(FR, 3) = 0.D0
+
+            DZEIDA3Z(FR, 3) = 0.D0
+            DZEJDA3Z(FR, 3) = 0.D0
+            DZEKDA3Z(FR, 3) = 0.D0
+
+            ! BISECTOR DERIVATIVE CORRECTION
+            RBIM1 = 1.D0/RBI
+
+            ! DERIVATIVE OF BISECTOR Z-AXIS (ATM2) WRT ATM 3 X-COORD
+            FACC = (BIX*DZEIDA1X(FR, 3) + BIY*DZEJDA1X(FR, 3) + BIZ*DZEKDA1X(FR, 3))/(RBI2**1.5)
+            DZEIDA3X(FR, 2) = DZEIDA1X(FR, 3)*RBIM1 - (BIX*FACC)
+            DZEJDA3X(FR, 2) = DZEJDA1X(FR, 3)*RBIM1 - (BIY*FACC)
+            DZEKDA3X(FR, 2) = DZEKDA1X(FR, 3)*RBIM1 - (BIZ*FACC)
+
+            FACC = (BIX*DZEIDA1Y(FR, 3) + BIY*DZEJDA1Y(FR, 3) + BIZ*DZEKDA1Y(FR, 3))/(RBI2**1.5)
+            DZEIDA3Y(FR, 2) = DZEIDA1Y(FR, 3)*RBIM1 - (BIX*FACC)
+            DZEJDA3Y(FR, 2) = DZEJDA1Y(FR, 3)*RBIM1 - (BIY*FACC)
+            DZEKDA3Y(FR, 2) = DZEKDA1Y(FR, 3)*RBIM1 - (BIZ*FACC)
+
+            FACC = (BIX*DZEIDA1Z(FR, 3) + BIY*DZEJDA1Z(FR, 3) + BIZ*DZEKDA1Z(FR, 3))/(RBI2**1.5)
+            DZEIDA3Z(FR, 2) = DZEIDA1Z(FR, 3)*RBIM1 - (BIX*FACC)
+            DZEJDA3Z(FR, 2) = DZEJDA1Z(FR, 3)*RBIM1 - (BIY*FACC)
+            DZEKDA3Z(FR, 2) = DZEKDA1Z(FR, 3)*RBIM1 - (BIZ*FACC)
+
+            ! DZEIDA2X=DERIVATIVE OF LOCAL ATOM 2 (FR,2) Z-AXIS UNIT VECTOR I-COMPONENT (ZEI)
+            ! WRT ATOM2 X-COOR
+            DZEIDA1X(FR, 2) = -DZEIDA2X(FR, 2) - DZEIDA3X(FR, 2)
+            DZEJDA1X(FR, 2) = -DZEJDA2X(FR, 2) - DZEJDA3X(FR, 2)
+            DZEKDA1X(FR, 2) = -DZEKDA2X(FR, 2) - DZEKDA3X(FR, 2)
+
+            DZEIDA1Y(FR, 2) = -DZEIDA2Y(FR, 2) - DZEIDA3Y(FR, 2)
+            DZEJDA1Y(FR, 2) = -DZEJDA2Y(FR, 2) - DZEJDA3Y(FR, 2)
+            DZEKDA1Y(FR, 2) = -DZEKDA2Y(FR, 2) - DZEKDA3Y(FR, 2)
+
+            DZEIDA1Z(FR, 2) = -DZEIDA2Z(FR, 2) - DZEIDA3Z(FR, 2)
+            DZEJDA1Z(FR, 2) = -DZEJDA2Z(FR, 2) - DZEJDA3Z(FR, 2)
+            DZEKDA1Z(FR, 2) = -DZEKDA2Z(FR, 2) - DZEKDA3Z(FR, 2)
+
+            ! EY
+            ! CALCULATE DERIVATIVES
+            FAC1 = -B1Z*B2Y + B1Y*B2Z
+            FAC2 = -B1Y*B2X + B2Y*B1X
+            FAC3 = B1Z*B2X - B2Z*B1X
+            FAC4 = 2.D0*B2Y*FAC2
+            FAC5 = 2.D0*B2Z*FAC3
+            FAC6 = 0.5D0*(FAC1**2 + FAC2**2 + FAC3**2)**(-1.5)
+            FAC = (FAC4 - FAC5)*FAC6
+            DYEIDA1X(FR, 1) = -FAC1*FAC
+            DYEJDA1X(FR, 1) = -B2Z/REY - FAC3*FAC
+            DYEKDA1X(FR, 1) = B2Y/REY - FAC2*FAC
+
+            FAC4 = 2.D0*B2X*FAC2
+            FAC5 = 2.D0*B2Z*FAC1
+            FAC = (FAC5 - FAC4)*FAC6
+            DYEIDA1Y(FR, 1) = B2Z/REY - FAC1*FAC
+            DYEJDA1Y(FR, 1) = -FAC3*FAC
+            DYEKDA1Y(FR, 1) = -B2X/REY - FAC2*FAC
+
+            FAC4 = 2.D0*B2X*FAC3
+            FAC5 = 2.D0*B2Y*FAC1
+            FAC = (FAC4 - FAC5)*FAC6
+            DYEIDA1Z(FR, 1) = -B2Y/REY - FAC1*FAC
+            DYEJDA1Z(FR, 1) = B2X/REY - FAC3*FAC
+            DYEKDA1Z(FR, 1) = -FAC2*FAC
+
+            FAC = (2.D0*FAC2*(-B2Y + B1Y) + 2.D0*FAC3*(B2Z - B1Z))*FAC6
+            DYEIDA2X(FR, 1) = -FAC1*FAC
+            DYEJDA2X(FR, 1) = (B2Z - B1Z)/REY - FAC3*FAC
+            DYEKDA2X(FR, 1) = (-B2Y + B1Y)/REY - FAC2*FAC
+
+            FAC = (2.D0*FAC2*(B2X - B1X) + 2.D0*FAC1*(-B2Z + B1Z))*FAC6
+            DYEIDA2Y(FR, 1) = (-B2Z + B1Z)/REY - FAC1*FAC
+            DYEJDA2Y(FR, 1) = -FAC3*FAC
+            DYEKDA2Y(FR, 1) = (B2X - B1X)/REY - FAC2*FAC
+
+            FAC = (2.D0*FAC3*(-B2X + B1X) + 2.D0*FAC1*(B2Y - B1Y))*FAC6
+            DYEIDA2Z(FR, 1) = (B2Y - B1Y)/REY - FAC1*FAC
+            DYEJDA2Z(FR, 1) = (-B2X + B1X)/REY - FAC3*FAC
+            DYEKDA2Z(FR, 1) = -FAC2*FAC
+
+            FAC4 = 2.D0*B1Y*FAC2
+            FAC5 = 2.D0*B1Z*FAC3
+            FAC = (-FAC4 + FAC5)*FAC6
+            DYEIDA3X(FR, 1) = -FAC1*FAC
+            DYEJDA3X(FR, 1) = B1Z/REY - FAC3*FAC
+            DYEKDA3X(FR, 1) = -B1Y/REY - FAC2*FAC
+
+            FAC4 = 2.D0*B1X*FAC2
+            FAC5 = 2.D0*B1Z*FAC1
+            FAC = (-FAC5 + FAC4)*FAC6
+            DYEIDA3Y(FR, 1) = -B1Z/REY - FAC1*FAC
+            DYEJDA3Y(FR, 1) = -FAC3*FAC
+            DYEKDA3Y(FR, 1) = B1X/REY - FAC2*FAC
+
+            FAC4 = 2.D0*B1X*FAC3
+            FAC5 = 2.D0*B1Y*FAC1
+            FAC = (-FAC4 + FAC5)*FAC6
+            DYEIDA3Z(FR, 1) = B1Y/REY - FAC1*FAC
+            DYEJDA3Z(FR, 1) = -B1X/REY - FAC3*FAC
+            DYEKDA3Z(FR, 1) = -FAC2*FAC
+
+            ! ATOM 2
+            DYEIDA1X(FR, 2) = DYEIDA2X(FR, 1)
+            DYEJDA1X(FR, 2) = DYEJDA2X(FR, 1)
+            DYEKDA1X(FR, 2) = DYEKDA2X(FR, 1)
+
+            DYEIDA1Y(FR, 2) = DYEIDA2Y(FR, 1)
+            DYEJDA1Y(FR, 2) = DYEJDA2Y(FR, 1)
+            DYEKDA1Y(FR, 2) = DYEKDA2Y(FR, 1)
+
+            DYEIDA1Z(FR, 2) = DYEIDA2Z(FR, 1)
+            DYEJDA1Z(FR, 2) = DYEJDA2Z(FR, 1)
+            DYEKDA1Z(FR, 2) = DYEKDA2Z(FR, 1)
+
+            DYEIDA2X(FR, 2) = DYEIDA1X(FR, 1)
+            DYEJDA2X(FR, 2) = DYEJDA1X(FR, 1)
+            DYEKDA2X(FR, 2) = DYEKDA1X(FR, 1)
+
+            DYEIDA2Y(FR, 2) = DYEIDA1Y(FR, 1)
+            DYEJDA2Y(FR, 2) = DYEJDA1Y(FR, 1)
+            DYEKDA2Y(FR, 2) = DYEKDA1Y(FR, 1)
+
+            DYEIDA2Z(FR, 2) = DYEIDA1Z(FR, 1)
+            DYEJDA2Z(FR, 2) = DYEJDA1Z(FR, 1)
+            DYEKDA2Z(FR, 2) = DYEKDA1Z(FR, 1)
+
+            DYEIDA3X(FR, 2) = DYEIDA3X(FR, 1)
+            DYEJDA3X(FR, 2) = DYEJDA3X(FR, 1)
+            DYEKDA3X(FR, 2) = DYEKDA3X(FR, 1)
+
+            DYEIDA3Y(FR, 2) = DYEIDA3Y(FR, 1)
+            DYEJDA3Y(FR, 2) = DYEJDA3Y(FR, 1)
+            DYEKDA3Y(FR, 2) = DYEKDA3Y(FR, 1)
+
+            DYEIDA3Z(FR, 2) = DYEIDA3Z(FR, 1)
+            DYEJDA3Z(FR, 2) = DYEJDA3Z(FR, 1)
+            DYEKDA3Z(FR, 2) = DYEKDA3Z(FR, 1)
+
+            ! ATOM 3
+            DYEIDA1X(FR, 3) = DYEIDA3X(FR, 1)
+            DYEJDA1X(FR, 3) = DYEJDA3X(FR, 1)
+            DYEKDA1X(FR, 3) = DYEKDA3X(FR, 1)
+
+            DYEIDA1Y(FR, 3) = DYEIDA3Y(FR, 1)
+            DYEJDA1Y(FR, 3) = DYEJDA3Y(FR, 1)
+            DYEKDA1Y(FR, 3) = DYEKDA3Y(FR, 1)
+
+            DYEIDA1Z(FR, 3) = DYEIDA3Z(FR, 1)
+            DYEJDA1Z(FR, 3) = DYEJDA3Z(FR, 1)
+            DYEKDA1Z(FR, 3) = DYEKDA3Z(FR, 1)
+
+            DYEIDA2X(FR, 3) = DYEIDA2X(FR, 1)
+            DYEJDA2X(FR, 3) = DYEJDA2X(FR, 1)
+            DYEKDA2X(FR, 3) = DYEKDA2X(FR, 1)
+
+            DYEIDA2Y(FR, 3) = DYEIDA2Y(FR, 1)
+            DYEJDA2Y(FR, 3) = DYEJDA2Y(FR, 1)
+            DYEKDA2Y(FR, 3) = DYEKDA2Y(FR, 1)
+
+            DYEIDA2Z(FR, 3) = DYEIDA2Z(FR, 1)
+            DYEJDA2Z(FR, 3) = DYEJDA2Z(FR, 1)
+            DYEKDA2Z(FR, 3) = DYEKDA2Z(FR, 1)
+
+            DYEIDA3X(FR, 3) = DYEIDA1X(FR, 1)
+            DYEJDA3X(FR, 3) = DYEJDA1X(FR, 1)
+            DYEKDA3X(FR, 3) = DYEKDA1X(FR, 1)
+
+            DYEIDA3Y(FR, 3) = DYEIDA1Y(FR, 1)
+            DYEJDA3Y(FR, 3) = DYEJDA1Y(FR, 1)
+            DYEKDA3Y(FR, 3) = DYEKDA1Y(FR, 1)
+
+            DYEIDA3Z(FR, 3) = DYEIDA1Z(FR, 1)
+            DYEJDA3Z(FR, 3) = DYEJDA1Z(FR, 1)
+            DYEKDA3Z(FR, 3) = DYEKDA1Z(FR, 1)
+
+            ! EX
+            ! DERIVATIVES
+            DXEIDA1X(FR, 1) = -ZEK(FR, 1)*DYEJDA1X(FR, 1) + ZEJ(FR, 1)*DYEKDA1X(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA1X(FR, 1) - YEJ(FR, 1)*DZEKDA1X(FR, 1)
+            DXEJDA1X(FR, 1) = ZEK(FR, 1)*DYEIDA1X(FR, 1) - ZEI(FR, 1)*DYEKDA1X(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA1X(FR, 1) + YEI(FR, 1)*DZEKDA1X(FR, 1)
+            DXEKDA1X(FR, 1) = -ZEJ(FR, 1)*DYEIDA1X(FR, 1) + ZEI(FR, 1)*DYEJDA1X(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA1X(FR, 1) - YEI(FR, 1)*DZEJDA1X(FR, 1)
+
+            DXEIDA1Y(FR, 1) = -ZEK(FR, 1)*DYEJDA1Y(FR, 1) + ZEJ(FR, 1)*DYEKDA1Y(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA1Y(FR, 1) - YEJ(FR, 1)*DZEKDA1Y(FR, 1)
+            DXEJDA1Y(FR, 1) = ZEK(FR, 1)*DYEIDA1Y(FR, 1) - ZEI(FR, 1)*DYEKDA1Y(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA1Y(FR, 1) + YEI(FR, 1)*DZEKDA1Y(FR, 1)
+            DXEKDA1Y(FR, 1) = -ZEJ(FR, 1)*DYEIDA1Y(FR, 1) + ZEI(FR, 1)*DYEJDA1Y(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA1Y(FR, 1) - YEI(FR, 1)*DZEJDA1Y(FR, 1)
+
+            DXEIDA1Z(FR, 1) = -ZEK(FR, 1)*DYEJDA1Z(FR, 1) + ZEJ(FR, 1)*DYEKDA1Z(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA1Z(FR, 1) - YEJ(FR, 1)*DZEKDA1Z(FR, 1)
+            DXEJDA1Z(FR, 1) = ZEK(FR, 1)*DYEIDA1Z(FR, 1) - ZEI(FR, 1)*DYEKDA1Z(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA1Z(FR, 1) + YEI(FR, 1)*DZEKDA1Z(FR, 1)
+            DXEKDA1Z(FR, 1) = -ZEJ(FR, 1)*DYEIDA1Z(FR, 1) + ZEI(FR, 1)*DYEJDA1Z(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA1Z(FR, 1) - YEI(FR, 1)*DZEJDA1Z(FR, 1)
+
+            DXEIDA2X(FR, 1) = -ZEK(FR, 1)*DYEJDA2X(FR, 1) + ZEJ(FR, 1)*DYEKDA2X(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA2X(FR, 1) - YEJ(FR, 1)*DZEKDA2X(FR, 1)
+            DXEJDA2X(FR, 1) = ZEK(FR, 1)*DYEIDA2X(FR, 1) - ZEI(FR, 1)*DYEKDA2X(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA2X(FR, 1) + YEI(FR, 1)*DZEKDA2X(FR, 1)
+            DXEKDA2X(FR, 1) = -ZEJ(FR, 1)*DYEIDA2X(FR, 1) + ZEI(FR, 1)*DYEJDA2X(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA2X(FR, 1) - YEI(FR, 1)*DZEJDA2X(FR, 1)
+
+            DXEIDA2Y(FR, 1) = -ZEK(FR, 1)*DYEJDA2Y(FR, 1) + ZEJ(FR, 1)*DYEKDA2Y(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA2Y(FR, 1) - YEJ(FR, 1)*DZEKDA2Y(FR, 1)
+            DXEJDA2Y(FR, 1) = ZEK(FR, 1)*DYEIDA2Y(FR, 1) - ZEI(FR, 1)*DYEKDA2Y(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA2Y(FR, 1) + YEI(FR, 1)*DZEKDA2Y(FR, 1)
+            DXEKDA2Y(FR, 1) = -ZEJ(FR, 1)*DYEIDA2Y(FR, 1) + ZEI(FR, 1)*DYEJDA2Y(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA2Y(FR, 1) - YEI(FR, 1)*DZEJDA2Y(FR, 1)
+
+            DXEIDA2Z(FR, 1) = -ZEK(FR, 1)*DYEJDA2Z(FR, 1) + ZEJ(FR, 1)*DYEKDA2Z(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA2Z(FR, 1) - YEJ(FR, 1)*DZEKDA2Z(FR, 1)
+            DXEJDA2Z(FR, 1) = ZEK(FR, 1)*DYEIDA2Z(FR, 1) - ZEI(FR, 1)*DYEKDA2Z(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA2Z(FR, 1) + YEI(FR, 1)*DZEKDA2Z(FR, 1)
+            DXEKDA2Z(FR, 1) = -ZEJ(FR, 1)*DYEIDA2Z(FR, 1) + ZEI(FR, 1)*DYEJDA2Z(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA2Z(FR, 1) - YEI(FR, 1)*DZEJDA2Z(FR, 1)
+
+            DXEIDA3X(FR, 1) = -ZEK(FR, 1)*DYEJDA3X(FR, 1) + ZEJ(FR, 1)*DYEKDA3X(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA3X(FR, 1) - YEJ(FR, 1)*DZEKDA3X(FR, 1)
+            DXEJDA3X(FR, 1) = ZEK(FR, 1)*DYEIDA3X(FR, 1) - ZEI(FR, 1)*DYEKDA3X(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA3X(FR, 1) + YEI(FR, 1)*DZEKDA3X(FR, 1)
+            DXEKDA3X(FR, 1) = -ZEJ(FR, 1)*DYEIDA3X(FR, 1) + ZEI(FR, 1)*DYEJDA3X(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA3X(FR, 1) - YEI(FR, 1)*DZEJDA3X(FR, 1)
+
+            DXEIDA3Y(FR, 1) = -ZEK(FR, 1)*DYEJDA3Y(FR, 1) + ZEJ(FR, 1)*DYEKDA3Y(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA3Y(FR, 1) - YEJ(FR, 1)*DZEKDA3Y(FR, 1)
+            DXEJDA3Y(FR, 1) = ZEK(FR, 1)*DYEIDA3Y(FR, 1) - ZEI(FR, 1)*DYEKDA3Y(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA3Y(FR, 1) + YEI(FR, 1)*DZEKDA3Y(FR, 1)
+            DXEKDA3Y(FR, 1) = -ZEJ(FR, 1)*DYEIDA3Y(FR, 1) + ZEI(FR, 1)*DYEJDA3Y(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA3Y(FR, 1) - YEI(FR, 1)*DZEJDA3Y(FR, 1)
+
+            DXEIDA3Z(FR, 1) = -ZEK(FR, 1)*DYEJDA3Z(FR, 1) + ZEJ(FR, 1)*DYEKDA3Z(FR, 1) + &
+                              YEK(FR, 1)*DZEJDA3Z(FR, 1) - YEJ(FR, 1)*DZEKDA3Z(FR, 1)
+            DXEJDA3Z(FR, 1) = ZEK(FR, 1)*DYEIDA3Z(FR, 1) - ZEI(FR, 1)*DYEKDA3Z(FR, 1) - &
+                              YEK(FR, 1)*DZEIDA3Z(FR, 1) + YEI(FR, 1)*DZEKDA3Z(FR, 1)
+            DXEKDA3Z(FR, 1) = -ZEJ(FR, 1)*DYEIDA3Z(FR, 1) + ZEI(FR, 1)*DYEJDA3Z(FR, 1) + &
+                              YEJ(FR, 1)*DZEIDA3Z(FR, 1) - YEI(FR, 1)*DZEJDA3Z(FR, 1)
+
+            ! ATOM 2
+            DXEIDA1X(FR, 2) = -ZEK(FR, 2)*DYEJDA1X(FR, 2) + ZEJ(FR, 2)*DYEKDA1X(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA1X(FR, 2) - YEJ(FR, 2)*DZEKDA1X(FR, 2)
+            DXEJDA1X(FR, 2) = ZEK(FR, 2)*DYEIDA1X(FR, 2) - ZEI(FR, 2)*DYEKDA1X(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA1X(FR, 2) + YEI(FR, 2)*DZEKDA1X(FR, 2)
+            DXEKDA1X(FR, 2) = -ZEJ(FR, 2)*DYEIDA1X(FR, 2) + ZEI(FR, 2)*DYEJDA1X(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA1X(FR, 2) - YEI(FR, 2)*DZEJDA1X(FR, 2)
+
+            DXEIDA1Y(FR, 2) = -ZEK(FR, 2)*DYEJDA1Y(FR, 2) + ZEJ(FR, 2)*DYEKDA1Y(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA1Y(FR, 2) - YEJ(FR, 2)*DZEKDA1Y(FR, 2)
+            DXEJDA1Y(FR, 2) = ZEK(FR, 2)*DYEIDA1Y(FR, 2) - ZEI(FR, 2)*DYEKDA1Y(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA1Y(FR, 2) + YEI(FR, 2)*DZEKDA1Y(FR, 2)
+            DXEKDA1Y(FR, 2) = -ZEJ(FR, 2)*DYEIDA1Y(FR, 2) + ZEI(FR, 2)*DYEJDA1Y(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA1Y(FR, 2) - YEI(FR, 2)*DZEJDA1Y(FR, 2)
+
+            DXEIDA1Z(FR, 2) = -ZEK(FR, 2)*DYEJDA1Z(FR, 2) + ZEJ(FR, 2)*DYEKDA1Z(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA1Z(FR, 2) - YEJ(FR, 2)*DZEKDA1Z(FR, 2)
+            DXEJDA1Z(FR, 2) = ZEK(FR, 2)*DYEIDA1Z(FR, 2) - ZEI(FR, 2)*DYEKDA1Z(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA1Z(FR, 2) + YEI(FR, 2)*DZEKDA1Z(FR, 2)
+            DXEKDA1Z(FR, 2) = -ZEJ(FR, 2)*DYEIDA1Z(FR, 2) + ZEI(FR, 2)*DYEJDA1Z(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA1Z(FR, 2) - YEI(FR, 2)*DZEJDA1Z(FR, 2)
+
+            DXEIDA2X(FR, 2) = -ZEK(FR, 2)*DYEJDA2X(FR, 2) + ZEJ(FR, 2)*DYEKDA2X(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA2X(FR, 2) - YEJ(FR, 2)*DZEKDA2X(FR, 2)
+            DXEJDA2X(FR, 2) = ZEK(FR, 2)*DYEIDA2X(FR, 2) - ZEI(FR, 2)*DYEKDA2X(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA2X(FR, 2) + YEI(FR, 2)*DZEKDA2X(FR, 2)
+            DXEKDA2X(FR, 2) = -ZEJ(FR, 2)*DYEIDA2X(FR, 2) + ZEI(FR, 2)*DYEJDA2X(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA2X(FR, 2) - YEI(FR, 2)*DZEJDA2X(FR, 2)
+
+            DXEIDA2Y(FR, 2) = -ZEK(FR, 2)*DYEJDA2Y(FR, 2) + ZEJ(FR, 2)*DYEKDA2Y(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA2Y(FR, 2) - YEJ(FR, 2)*DZEKDA2Y(FR, 2)
+            DXEJDA2Y(FR, 2) = ZEK(FR, 2)*DYEIDA2Y(FR, 2) - ZEI(FR, 2)*DYEKDA2Y(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA2Y(FR, 2) + YEI(FR, 2)*DZEKDA2Y(FR, 2)
+            DXEKDA2Y(FR, 2) = -ZEJ(FR, 2)*DYEIDA2Y(FR, 2) + ZEI(FR, 2)*DYEJDA2Y(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA2Y(FR, 2) - YEI(FR, 2)*DZEJDA2Y(FR, 2)
+
+            DXEIDA2Z(FR, 2) = -ZEK(FR, 2)*DYEJDA2Z(FR, 2) + ZEJ(FR, 2)*DYEKDA2Z(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA2Z(FR, 2) - YEJ(FR, 2)*DZEKDA2Z(FR, 2)
+            DXEJDA2Z(FR, 2) = ZEK(FR, 2)*DYEIDA2Z(FR, 2) - ZEI(FR, 2)*DYEKDA2Z(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA2Z(FR, 2) + YEI(FR, 2)*DZEKDA2Z(FR, 2)
+            DXEKDA2Z(FR, 2) = -ZEJ(FR, 2)*DYEIDA2Z(FR, 2) + ZEI(FR, 2)*DYEJDA2Z(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA2Z(FR, 2) - YEI(FR, 2)*DZEJDA2Z(FR, 2)
+
+            DXEIDA3X(FR, 2) = -ZEK(FR, 2)*DYEJDA3X(FR, 2) + ZEJ(FR, 2)*DYEKDA3X(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA3X(FR, 2) - YEJ(FR, 2)*DZEKDA3X(FR, 2)
+            DXEJDA3X(FR, 2) = ZEK(FR, 2)*DYEIDA3X(FR, 2) - ZEI(FR, 2)*DYEKDA3X(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA3X(FR, 2) + YEI(FR, 2)*DZEKDA3X(FR, 2)
+            DXEKDA3X(FR, 2) = -ZEJ(FR, 2)*DYEIDA3X(FR, 2) + ZEI(FR, 2)*DYEJDA3X(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA3X(FR, 2) - YEI(FR, 2)*DZEJDA3X(FR, 2)
+
+            DXEIDA3Y(FR, 2) = -ZEK(FR, 2)*DYEJDA3Y(FR, 2) + ZEJ(FR, 2)*DYEKDA3Y(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA3Y(FR, 2) - YEJ(FR, 2)*DZEKDA3Y(FR, 2)
+            DXEJDA3Y(FR, 2) = ZEK(FR, 2)*DYEIDA3Y(FR, 2) - ZEI(FR, 2)*DYEKDA3Y(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA3Y(FR, 2) + YEI(FR, 2)*DZEKDA3Y(FR, 2)
+            DXEKDA3Y(FR, 2) = -ZEJ(FR, 2)*DYEIDA3Y(FR, 2) + ZEI(FR, 2)*DYEJDA3Y(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA3Y(FR, 2) - YEI(FR, 2)*DZEJDA3Y(FR, 2)
+
+            DXEIDA3Z(FR, 2) = -ZEK(FR, 2)*DYEJDA3Z(FR, 2) + ZEJ(FR, 2)*DYEKDA3Z(FR, 2) + &
+                              YEK(FR, 2)*DZEJDA3Z(FR, 2) - YEJ(FR, 2)*DZEKDA3Z(FR, 2)
+            DXEJDA3Z(FR, 2) = ZEK(FR, 2)*DYEIDA3Z(FR, 2) - ZEI(FR, 2)*DYEKDA3Z(FR, 2) - &
+                              YEK(FR, 2)*DZEIDA3Z(FR, 2) + YEI(FR, 2)*DZEKDA3Z(FR, 2)
+            DXEKDA3Z(FR, 2) = -ZEJ(FR, 2)*DYEIDA3Z(FR, 2) + ZEI(FR, 2)*DYEJDA3Z(FR, 2) + &
+                              YEJ(FR, 2)*DZEIDA3Z(FR, 2) - YEI(FR, 2)*DZEJDA3Z(FR, 2)
+
+            ! ATOM 3
+            ! DERIVATIVES
+            DXEIDA1X(FR, 3) = -ZEK(FR, 3)*DYEJDA1X(FR, 3) + ZEJ(FR, 3)*DYEKDA1X(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA1X(FR, 3) - YEJ(FR, 3)*DZEKDA1X(FR, 3)
+            DXEJDA1X(FR, 3) = ZEK(FR, 3)*DYEIDA1X(FR, 3) - ZEI(FR, 3)*DYEKDA1X(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA1X(FR, 3) + YEI(FR, 3)*DZEKDA1X(FR, 3)
+            DXEKDA1X(FR, 3) = -ZEJ(FR, 3)*DYEIDA1X(FR, 3) + ZEI(FR, 3)*DYEJDA1X(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA1X(FR, 3) - YEI(FR, 3)*DZEJDA1X(FR, 3)
+
+            DXEIDA1Y(FR, 3) = -ZEK(FR, 3)*DYEJDA1Y(FR, 3) + ZEJ(FR, 3)*DYEKDA1Y(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA1Y(FR, 3) - YEJ(FR, 3)*DZEKDA1Y(FR, 3)
+            DXEJDA1Y(FR, 3) = ZEK(FR, 3)*DYEIDA1Y(FR, 3) - ZEI(FR, 3)*DYEKDA1Y(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA1Y(FR, 3) + YEI(FR, 3)*DZEKDA1Y(FR, 3)
+            DXEKDA1Y(FR, 3) = -ZEJ(FR, 3)*DYEIDA1Y(FR, 3) + ZEI(FR, 3)*DYEJDA1Y(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA1Y(FR, 3) - YEI(FR, 3)*DZEJDA1Y(FR, 3)
+
+            DXEIDA1Z(FR, 3) = -ZEK(FR, 3)*DYEJDA1Z(FR, 3) + ZEJ(FR, 3)*DYEKDA1Z(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA1Z(FR, 3) - YEJ(FR, 3)*DZEKDA1Z(FR, 3)
+            DXEJDA1Z(FR, 3) = ZEK(FR, 3)*DYEIDA1Z(FR, 3) - ZEI(FR, 3)*DYEKDA1Z(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA1Z(FR, 3) + YEI(FR, 3)*DZEKDA1Z(FR, 3)
+            DXEKDA1Z(FR, 3) = -ZEJ(FR, 3)*DYEIDA1Z(FR, 3) + ZEI(FR, 3)*DYEJDA1Z(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA1Z(FR, 3) - YEI(FR, 3)*DZEJDA1Z(FR, 3)
+
+            DXEIDA2X(FR, 3) = -ZEK(FR, 3)*DYEJDA2X(FR, 3) + ZEJ(FR, 3)*DYEKDA2X(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA2X(FR, 3) - YEJ(FR, 3)*DZEKDA2X(FR, 3)
+            DXEJDA2X(FR, 3) = ZEK(FR, 3)*DYEIDA2X(FR, 3) - ZEI(FR, 3)*DYEKDA2X(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA2X(FR, 3) + YEI(FR, 3)*DZEKDA2X(FR, 3)
+            DXEKDA2X(FR, 3) = -ZEJ(FR, 3)*DYEIDA2X(FR, 3) + ZEI(FR, 3)*DYEJDA2X(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA2X(FR, 3) - YEI(FR, 3)*DZEJDA2X(FR, 3)
+
+            DXEIDA2Y(FR, 3) = -ZEK(FR, 3)*DYEJDA2Y(FR, 3) + ZEJ(FR, 3)*DYEKDA2Y(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA2Y(FR, 3) - YEJ(FR, 3)*DZEKDA2Y(FR, 3)
+            DXEJDA2Y(FR, 3) = ZEK(FR, 3)*DYEIDA2Y(FR, 3) - ZEI(FR, 3)*DYEKDA2Y(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA2Y(FR, 3) + YEI(FR, 3)*DZEKDA2Y(FR, 3)
+            DXEKDA2Y(FR, 3) = -ZEJ(FR, 3)*DYEIDA2Y(FR, 3) + ZEI(FR, 3)*DYEJDA2Y(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA2Y(FR, 3) - YEI(FR, 3)*DZEJDA2Y(FR, 3)
+
+            DXEIDA2Z(FR, 3) = -ZEK(FR, 3)*DYEJDA2Z(FR, 3) + ZEJ(FR, 3)*DYEKDA2Z(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA2Z(FR, 3) - YEJ(FR, 3)*DZEKDA2Z(FR, 3)
+            DXEJDA2Z(FR, 3) = ZEK(FR, 3)*DYEIDA2Z(FR, 3) - ZEI(FR, 3)*DYEKDA2Z(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA2Z(FR, 3) + YEI(FR, 3)*DZEKDA2Z(FR, 3)
+            DXEKDA2Z(FR, 3) = -ZEJ(FR, 3)*DYEIDA2Z(FR, 3) + ZEI(FR, 3)*DYEJDA2Z(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA2Z(FR, 3) - YEI(FR, 3)*DZEJDA2Z(FR, 3)
+
+            DXEIDA3X(FR, 3) = -ZEK(FR, 3)*DYEJDA3X(FR, 3) + ZEJ(FR, 3)*DYEKDA3X(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA3X(FR, 3) - YEJ(FR, 3)*DZEKDA3X(FR, 3)
+            DXEJDA3X(FR, 3) = ZEK(FR, 3)*DYEIDA3X(FR, 3) - ZEI(FR, 3)*DYEKDA3X(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA3X(FR, 3) + YEI(FR, 3)*DZEKDA3X(FR, 3)
+            DXEKDA3X(FR, 3) = -ZEJ(FR, 3)*DYEIDA3X(FR, 3) + ZEI(FR, 3)*DYEJDA3X(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA3X(FR, 3) - YEI(FR, 3)*DZEJDA3X(FR, 3)
+
+            DXEIDA3Y(FR, 3) = -ZEK(FR, 3)*DYEJDA3Y(FR, 3) + ZEJ(FR, 3)*DYEKDA3Y(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA3Y(FR, 3) - YEJ(FR, 3)*DZEKDA3Y(FR, 3)
+            DXEJDA3Y(FR, 3) = ZEK(FR, 3)*DYEIDA3Y(FR, 3) - ZEI(FR, 3)*DYEKDA3Y(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA3Y(FR, 3) + YEI(FR, 3)*DZEKDA3Y(FR, 3)
+            DXEKDA3Y(FR, 3) = -ZEJ(FR, 3)*DYEIDA3Y(FR, 3) + ZEI(FR, 3)*DYEJDA3Y(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA3Y(FR, 3) - YEI(FR, 3)*DZEJDA3Y(FR, 3)
+
+            DXEIDA3Z(FR, 3) = -ZEK(FR, 3)*DYEJDA3Z(FR, 3) + ZEJ(FR, 3)*DYEKDA3Z(FR, 3) + &
+                              YEK(FR, 3)*DZEJDA3Z(FR, 3) - YEJ(FR, 3)*DZEKDA3Z(FR, 3)
+            DXEJDA3Z(FR, 3) = ZEK(FR, 3)*DYEIDA3Z(FR, 3) - ZEI(FR, 3)*DYEKDA3Z(FR, 3) - &
+                              YEK(FR, 3)*DZEIDA3Z(FR, 3) + YEI(FR, 3)*DZEKDA3Z(FR, 3)
+            DXEKDA3Z(FR, 3) = -ZEJ(FR, 3)*DYEIDA3Z(FR, 3) + ZEI(FR, 3)*DYEJDA3Z(FR, 3) + &
+                              YEJ(FR, 3)*DZEIDA3Z(FR, 3) - YEI(FR, 3)*DZEJDA3Z(FR, 3)
+
+            DO M = 1, 3
+               IF (NQ(FR, M) .GT. 0) THEN
+                  DO K = 0, NQ(FR, M) - 1
+                     L = IDQ(FRAMEI(FR, M)) + K
+                     IF (DPAIR(L) .GE. 0) THEN
+                        IF (FRAMEI(FR, 3) .NE. 0) THEN
+                           TX = AQ(L)*XEI(FR, M) + BQ(L)*YEI(FR, M) + CQ(L)*ZEI(FR, M)
+                           TY = AQ(L)*XEJ(FR, M) + BQ(L)*YEJ(FR, M) + CQ(L)*ZEJ(FR, M)
+                           TZ = AQ(L)*XEK(FR, M) + BQ(L)*YEK(FR, M) + CQ(L)*ZEK(FR, M)
+                           XQ(L) = X(FRAMEI(FR, M)) + TX
+                           YQ(L) = Y(FRAMEI(FR, M)) + TY
+                           ZQ(L) = Z(FRAMEI(FR, M)) + TZ
+                        ELSE ! DIATOMIC
+                           TX = CQ(L)*ZEI(FR, M)
+                           TY = CQ(L)*ZEJ(FR, M)
+                           TZ = CQ(L)*ZEK(FR, M)
+                           XQ(L) = X(FRAMEI(FR, M)) + TX
+                           YQ(L) = Y(FRAMEI(FR, M)) + TY
+                           ZQ(L) = Z(FRAMEI(FR, M)) + TZ
+                        END IF
+                        DF1(L) = AQ(L)*DXEIDA1X(FR, M) + BQ(L)*DYEIDA1X(FR, M) + CQ(L)*DZEIDA1X(FR, M)
+                        DF2(L) = AQ(L)*DXEJDA1X(FR, M) + BQ(L)*DYEJDA1X(FR, M) + CQ(L)*DZEJDA1X(FR, M)
+                        DF3(L) = AQ(L)*DXEKDA1X(FR, M) + BQ(L)*DYEKDA1X(FR, M) + CQ(L)*DZEKDA1X(FR, M)
+                        DF4(L) = AQ(L)*DXEIDA1Y(FR, M) + BQ(L)*DYEIDA1Y(FR, M) + CQ(L)*DZEIDA1Y(FR, M)
+                        DF5(L) = AQ(L)*DXEJDA1Y(FR, M) + BQ(L)*DYEJDA1Y(FR, M) + CQ(L)*DZEJDA1Y(FR, M)
+                        DF6(L) = AQ(L)*DXEKDA1Y(FR, M) + BQ(L)*DYEKDA1Y(FR, M) + CQ(L)*DZEKDA1Y(FR, M)
+                        DF7(L) = AQ(L)*DXEIDA1Z(FR, M) + BQ(L)*DYEIDA1Z(FR, M) + CQ(L)*DZEIDA1Z(FR, M)
+                        DF8(L) = AQ(L)*DXEJDA1Z(FR, M) + BQ(L)*DYEJDA1Z(FR, M) + CQ(L)*DZEJDA1Z(FR, M)
+                        DF9(L) = AQ(L)*DXEKDA1Z(FR, M) + BQ(L)*DYEKDA1Z(FR, M) + CQ(L)*DZEKDA1Z(FR, M)
+                        DF10(L) = AQ(L)*DXEIDA2X(FR, M) + BQ(L)*DYEIDA2X(FR, M) + CQ(L)*DZEIDA2X(FR, M)
+                        DF11(L) = AQ(L)*DXEJDA2X(FR, M) + BQ(L)*DYEJDA2X(FR, M) + CQ(L)*DZEJDA2X(FR, M)
+                        DF12(L) = AQ(L)*DXEKDA2X(FR, M) + BQ(L)*DYEKDA2X(FR, M) + CQ(L)*DZEKDA2X(FR, M)
+                        DF13(L) = AQ(L)*DXEIDA2Y(FR, M) + BQ(L)*DYEIDA2Y(FR, M) + CQ(L)*DZEIDA2Y(FR, M)
+                        DF14(L) = AQ(L)*DXEJDA2Y(FR, M) + BQ(L)*DYEJDA2Y(FR, M) + CQ(L)*DZEJDA2Y(FR, M)
+                        DF15(L) = AQ(L)*DXEKDA2Y(FR, M) + BQ(L)*DYEKDA2Y(FR, M) + CQ(L)*DZEKDA2Y(FR, M)
+                        DF16(L) = AQ(L)*DXEIDA2Z(FR, M) + BQ(L)*DYEIDA2Z(FR, M) + CQ(L)*DZEIDA2Z(FR, M)
+                        DF17(L) = AQ(L)*DXEJDA2Z(FR, M) + BQ(L)*DYEJDA2Z(FR, M) + CQ(L)*DZEJDA2Z(FR, M)
+                        DF18(L) = AQ(L)*DXEKDA2Z(FR, M) + BQ(L)*DYEKDA2Z(FR, M) + CQ(L)*DZEKDA2Z(FR, M)
+                        DF19(L) = AQ(L)*DXEIDA3X(FR, M) + BQ(L)*DYEIDA3X(FR, M) + CQ(L)*DZEIDA3X(FR, M)
+                        DF20(L) = AQ(L)*DXEJDA3X(FR, M) + BQ(L)*DYEJDA3X(FR, M) + CQ(L)*DZEJDA3X(FR, M)
+                        DF21(L) = AQ(L)*DXEKDA3X(FR, M) + BQ(L)*DYEKDA3X(FR, M) + CQ(L)*DZEKDA3X(FR, M)
+                        DF22(L) = AQ(L)*DXEIDA3Y(FR, M) + BQ(L)*DYEIDA3Y(FR, M) + CQ(L)*DZEIDA3Y(FR, M)
+                        DF23(L) = AQ(L)*DXEJDA3Y(FR, M) + BQ(L)*DYEJDA3Y(FR, M) + CQ(L)*DZEJDA3Y(FR, M)
+                        DF24(L) = AQ(L)*DXEKDA3Y(FR, M) + BQ(L)*DYEKDA3Y(FR, M) + CQ(L)*DZEKDA3Y(FR, M)
+                        DF25(L) = AQ(L)*DXEIDA3Z(FR, M) + BQ(L)*DYEIDA3Z(FR, M) + CQ(L)*DZEIDA3Z(FR, M)
+                        DF26(L) = AQ(L)*DXEJDA3Z(FR, M) + BQ(L)*DYEJDA3Z(FR, M) + CQ(L)*DZEJDA3Z(FR, M)
+                        DF27(L) = AQ(L)*DXEKDA3Z(FR, M) + BQ(L)*DYEKDA3Z(FR, M) + CQ(L)*DZEKDA3Z(FR, M)
+                     END IF
+                     IF (DPAIR(L) .GT. 0) THEN  ! IS THIS MAKING THE CODE ANY FASTER??
+                        J = DPAIR(L)
+                        XQ(J) = X(FRAMEI(FR, M)) - TX
+                        YQ(J) = Y(FRAMEI(FR, M)) - TY
+                        ZQ(J) = Z(FRAMEI(FR, M)) - TZ
+                        DF1(J) = -DF1(L)
+                        DF2(J) = -DF2(L)
+                        DF3(J) = -DF3(L)
+                        DF4(J) = -DF4(L)
+                        DF5(J) = -DF5(L)
+                        DF6(J) = -DF6(L)
+                        DF7(J) = -DF7(L)
+                        DF8(J) = -DF8(L)
+                        DF9(J) = -DF9(L)
+                        DF10(J) = -DF10(L)
+                        DF11(J) = -DF11(L)
+                        DF12(J) = -DF12(L)
+                        DF13(J) = -DF13(L)
+                        DF14(J) = -DF14(L)
+                        DF15(J) = -DF15(L)
+                        DF16(J) = -DF16(L)
+                        DF17(J) = -DF17(L)
+                        DF18(J) = -DF18(L)
+                        DF19(J) = -DF19(L)
+                        DF20(J) = -DF20(L)
+                        DF21(J) = -DF21(L)
+                        DF22(J) = -DF22(L)
+                        DF23(J) = -DF23(L)
+                        DF24(J) = -DF24(L)
+                        DF25(J) = -DF25(L)
+                        DF26(J) = -DF26(L)
+                        DF27(J) = -DF27(L)
+                     END IF
+                  END DO ! K
+               END IF ! IF ATOM HAS CHARGES
+            END DO ! M
+         END IF ! FRTYP(FR).EQ.1
+      END DO ! FR=1,NF
+
+   END SUBROUTINE AXIS2
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                       IDENTIFY SYMMETRICAL PAIRS OF CHARGES
+!*******************************************************************************************
+!
+! NO LONGER USED, THIS SUBROUTINE FINDS GEOMETRICALLY RELATED DCM CHARGES THAT ALLOW SOME VERY
+! SMALL COMPUTATIONAL SPEED GAINS IN THE CHARGE ASSIGNMENT ROUTINES
+!
+
+   SUBROUTINE FINDPAIR(IQ1, RNQ)
+
+      USE CHM_KINDS
+      IMPLICIT NONE
+
+      INTEGER IQ1, RNQ, I, J
+      DO I = 0, RNQ - 1
+         IF (ABS(AQ(IQ1 + I)) .GT. 0 .OR. ABS(BQ(IQ1 + I)) .GT. 0 .OR. ABS(CQ(IQ1 + I)) .GT. 0) THEN
+            DO J = I + 1, RNQ - 1
+               IF (ABS(AQ(IQ1 + I) + AQ(IQ1 + J)) .LT. 0.01D0 .AND. ABS(BQ(IQ1 + I) + BQ(IQ1 + J)) &
+                   .LT. 0.01D0 .AND. ABS(CQ(IQ1 + I) + CQ(IQ1 + J)) .LT. 0.01D0) THEN
+                  ! DPAIR(IQ1+I)=IQ1+J
+                  ! DPAIR(IQ1+J)=-IQ1-I
+                  DPAIR(IQ1 + I) = ZERO
+                  DPAIR(IQ1 + J) = ZERO
+               END IF
+            END DO
+         END IF
+      END DO
+
+   END SUBROUTINE FINDPAIR
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                       DCM-XYZ-FILE
+!*******************************************************************************************
+!
+! WRITE AN XYZ FILE WITH DCM CHARGE COORDINATES IN GLOBAL AXIS, PLUS CHARGES IN A.U.
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCMXYZFILE(UN, XQ, YQ, ZQ, DQ, X, Y, Z, NATOMX, NALL)
+      USE CHM_KINDS, only: chm_real
+
+      IMPLICIT NONE
+
+      INTEGER NALL, UN, I, NPT, NATOMX, N, L
+      REAL(CHM_REAL) XQ(*), YQ(*), ZQ(*), DQ(*), X(*), Y(*), Z(*)
+      REAL :: XCoM, YCoM, ZCoM, XMU, YMU, ZMU, NSELE, MTOT
+
+      ! IF (DYNAMQ) THEN
+      NPT = NATOMX + NALL
+      WRITE (UN, '(I5)') NPT
+      WRITE (UN, *) "  dumped from DCM module"
+
+      DO I = 1, NATOMX
+         WRITE (UN, '(A1,4(2X,F8.4))') 'C', X(I), Y(I), Z(I)
+      END DO
+      DO I = 1, NALL
+         WRITE (UN, '(A1,4(2X,F8.4))') 'O', XQ(I), YQ(I), ZQ(I), DQ(I)
+      END DO
+      ! ENDIF
+
+   END SUBROUTINE DCMXYZFILE
+
+!*******************************************************************************************
+
+   SUBROUTINE DCMDIPOFILE(UN, XQ, YQ, ZQ, DQ, X, Y, Z, NATOMX, NALL)
+
+      ! MATTHIAS VOGLER 2021:
+      ! CALCULATE DIPOLE MOMENT OF DCM CHARGES FOR A GIVEN ATOM SELECTION AND WRITE
+      ! TO FILE FOR THE CURRENT TIME STEP
+
+      USE CHM_KINDS, only: chm_real
+      USE psf, only: amass
+      USE contrl, ONLY: DYNAMQ
+      USE PARALLEL, ONLY: MYNOD
+      IMPLICIT NONE
+      INTEGER NALL, UN, I, NPT, NATOMX, N, L
+      REAL(CHM_REAL) XQ(*), YQ(*), ZQ(*), DQ(*), X(*), Y(*), Z(*)
+      REAL :: XCoM, YCoM, ZCoM, XMU, YMU, ZMU, NSELE, MTOT
+
+      if (NATOMX .EQ. NATOMA) THEN
+         if (MYNOD .EQ. 0) THEN
+            ! WRITE FILE
+            !PRINT*, "dipole save interval: ", NSAVDIPO
+            IF (DYNAMQ) THEN
+               IF (STEPCOUNT > 1) THEN
+                  IF (ISTEP < 100 .AND. ISTEP .GE. 0 .AND. MOD(ISTEP, NSAVDIPO) .EQ. 0) THEN
+                     XCoM = ZERO
+                     YCoM = ZERO
+                     ZCoM = ZERO
+                     XMU = ZERO
+                     YMU = ZERO
+                     ZMU = ZERO
+                     NSELE = ZERO
+                     MTOT = ZERO
+
+                     ! CALC CoM
+                     do I = 1, NATOMA
+                        if (SELDIP(I) == 1) THEN
+                           MTOT = MTOT + AMASS(I)
+                           XCoM = XCoM + AMASS(I)*X(I)
+                           YCoM = YCoM + AMASS(I)*Y(I)
+                           ZCoM = ZCoM + AMASS(I)*Z(I)
+                           NSELE = NSELE + ONE
+                        end if
+                     end do
+                     XCoM = XCoM/MTOT
+                     YCoM = YCoM/MTOT
+                     ZCoM = ZCoM/MTOT
+                     !print*, "Center of Mass:", XCoM, YCoM, ZCoM, NSELE
+
+                     !CALC DIPOLE MOMENT
+                     NSELE = ONE
+                     do I = 1, NATOMA
+                        if (SELDIP(I) == 1) THEN
+                           DO L = 0, NQA(I) - 1 ! LOOP OVER DCM CHARGES ON ATOM I
+                              N = IDQ(I) + L
+                              XMU = XMU + DQ(N)*(XQ(N) - XCoM)
+                              YMU = YMU + DQ(N)*(YQ(N) - YCoM)
+                              ZMU = ZMU + DQ(N)*(ZQ(N) - ZCoM)
+                              NSELE = NSELE + ONE
+                           end do
+                        end if
+                     end do
+
+                     !##########################
+                     ! WRITE DIPOLE FILE
+                     !##########################
+                     WRITE (UN, '(2X,3(2X,F10.5))') XMU, YMU, ZMU
+                     ! print*, UN, XMU, YMU, ZMU
+                     ! print*, "DIPOLE WRITTEN", ISTEP+1, "TIMES"
+                  END IF
+                  IF (ISTEP > 99) THEN
+                     ISTEP = MINTWO
+                  END IF
+                  ISTEP = ISTEP + ONE
+               END IF
+               STEPCOUNT = STEPCOUNT + ONE
+            END IF
+         end if
+      end if
+
+   END SUBROUTINE DCMDIPOFILE
+
+!*******************************************************************************************
+!                      SET DCM LAMBDA
+!*******************************************************************************************
+!
+! SET DCM LAMBDA VALUE FOR FREE ENERGY CALCULATIONS (CALLED BY EPERT)
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCLAM(LAMBDA)
+
+      USE CHM_KINDS
+      IMPLICIT NONE
+      REAL(CHM_REAL) LAMBDA
+
+      DCLAMBDA = LAMBDA
+      TOKCAL = 332.0716D0*DCLAMBDA
+
+   END SUBROUTINE DCLAM
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                      SAVE CURRENT DCM CHARGES TO AN ARRAY
+!*******************************************************************************************
+!
+! BACKUP CURRENT DCM CHARGES CORRESPONDING TO LAMBDA=0 STATE IN THERMODYNAMIC INTEGRATION
+! CALCS, ALSO COPY CENTRAL CHARGES BACK TO CG ARRAY FOR CHARMM. THIS ROUTINE SHOULD BE
+! CALLED BY EPERT.SRC BEFORE IT CREATES ITS OWN BACKUP PSF
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCCHGCOPY(CG)
+
+      USE CHM_KINDS
+      USE STREAM, ONLY: OUTU, PRNLEV
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: MYNOD
+#endif
+      IMPLICIT NONE
+      INTEGER I
+      REAL(CHM_REAL) CG(*)
+
+      ALLOCATE (B0AQ(NDQ), B0BQ(NDQ), B0CQ(NDQ), B0DQ(NDQ))
+      IF (QPOL) THEN
+         ALLOCATE (B0DPOL(NATOMA))
+      END IF
+
+      DO I = 1, NDQ
+         B0AQ(I) = AQ(I)
+         B0BQ(I) = BQ(I)
+         B0CQ(I) = CQ(I)
+         B0DQ(I) = DQ(I)
+      END DO
+
+      DO I = 1, NATOMA
+         CG(I) = CGBAK(I)
+         IF (QPOL) THEN
+            B0DPOL(I) = DPOL(I)
+         END IF
+      END DO
+
+      AQ = 0.D0
+      BQ = 0.D0
+      CQ = 0.D0
+      DQ = 0.D0
+      ATQ = 0.D0
+
+      QTI = .TRUE.
+
+      DEALLOCATE (CGBAK)
+      IF (PRNLEV .GT. 1) THEN
+         WRITE (OUTU, '(A)') ' DCM> BACKING UP CURRENT DCM CHARGES AS STATE LAMBDA=0'
+      END IF
+
+   END SUBROUTINE DCCHGCOPY
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                      DEFINE SECOND DCM PARAMETER STATE
+!*******************************************************************************************
+!
+! APPLY A SECOND SET OF DCM CHARGES CORRESPONDING TO AN END STATE (LAMBDA=1) FOR
+! THERMODYNAMIC INTEGRATION. THE ORIGINAL DCM CHARGES SHOULD HAVE BEEN STORED IN AN ARRAY
+! BY DCMCHGCOPY.
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCENDSTATE()
+
+      USE CHM_KINDS
+      USE STREAM, ONLY: OUTU, PRNLEV
+
+#if KEY_PERT == 1
+      USE PERT, ONLY: PPCG
+#endif /* KEY_PERT */
+
+#if KEY_PARALLEL==1
+      USE PARALLEL, ONLY: MYNOD
+#endif
+      IMPLICIT NONE
+
+      INTEGER I, TNDQ
+      TNDQ = NDQ
+
+      DEALLOCATE (AFRAME)
+      DEALLOCATE (IDQ)
+      DEALLOCATE (FRAMEI)
+      DEALLOCATE (FRTYP)
+      DEALLOCATE (IREF)
+      DEALLOCATE (DQ)
+      DEALLOCATE (AQ)
+      DEALLOCATE (BQ)
+      DEALLOCATE (CQ)
+      DEALLOCATE (ATQ)
+      DEALLOCATE (DPAIR)
+      DEALLOCATE (NQ)
+      DEALLOCATE (NQA)
+      DEALLOCATE (DPOL)
+      DEALLOCATE (DF1, DF2, DF3, DF4, DF5, DF6, DF7, DF8, DF9, DF10, DF11, DF12, DF13, DF14, DF15, DF16, &
+                  DF17, DF18, DF19, DF20, DF21, DF22, DF23, DF24, DF25, DF26, DF27)
+      DEALLOCATE (FPX1, FPX2, FPX3, FPX4, FPY1, FPY2, FPY3, FPY4, FPZ1, FPZ2, FPZ3, FPZ4)
+
+
+        DEALLOCATE (DADX1, DBDY1, DCDZ1, DADX2)
+        DEALLOCATE (DBDY2, DCDZ2, DADX3, DBDY3)
+        DEALLOCATE (DCDZ3, DADY1, DBDZ1, DCDX1)
+        DEALLOCATE (DADY2, DBDZ2, DCDX2, DADY3)
+        DEALLOCATE (DBDZ3, DCDX3, DADZ1, DBDX1)
+        DEALLOCATE (DCDY1, DADZ2, DBDX2, DCDY2)
+        DEALLOCATE (DADZ3, DBDX3, DCDY3)
+        DEALLOCATE (DTX1,DTX2,DTX3, DTY1,DTY2,DTY3,DTZ1,DTZ2,DTZ3)
+
+
+      CALL DCMINIT(NATOMA)
+
+      IF (NDQ .NE. TNDQ) THEN
+#if KEY_PARALLEL==1
+         IF (MYNOD .EQ. 0) THEN
+#endif
+            IF (PRNLEV .GT. 1) THEN
+               WRITE (OUTU, '(A)') ' DCM> ERROR: DIFFERENT NO. OF DCM CHARGES IN STATE LAMBDA=0 AND'
+               WRITE (OUTU, '(A,2(I6,A))') '             LAMBDA=1 (', TNDQ, ' VS ', NDQ, ')'
+            END IF
+#if KEY_PARALLEL==1
+         END IF
+#endif
+         CALL WRNDIE(-1, '<DCM> DCENDSTATE', 'CHANGE IN # DCM CHARGES IN DCENDSTATE')
+      END IF
+
+      ALLOCATE (B1AQ(NDQ), B1BQ(NDQ), B1CQ(NDQ), B1DQ(NDQ))
+      IF (QPOL) THEN
+         ALLOCATE (B1DPOL(NATOMA))
+      END IF
+      DO I = 1, NDQ
+         B1AQ(I) = AQ(I)
+         B1BQ(I) = BQ(I)
+         B1CQ(I) = CQ(I)
+         B1DQ(I) = DQ(I)
+      END DO
+
+      IF (QPOL) THEN
+         DO I = 1, NATOMA
+            B1DPOL(I) = DPOL(I)
+         END DO
+      END IF
+
+#if KEY_PERT == 1
+      PPCG = 0.D0 ! ZERO PERT MODULE CHG ARRAY FOR STATE 1
+#endif /* KEY_PERT */
+
+#if KEY_PARALLEL==1
+      IF (MYNOD .EQ. 0) THEN
+#endif
+         IF (PRNLEV .GT. 1) THEN
+            WRITE (OUTU, '(A)') ' DCM> ADDING NEW DCM CHARGES AS STATE LAMBDA=1'
+         END IF
+#if KEY_PARALLEL==1
+      END IF
+#endif
+
+   END SUBROUTINE DCENDSTATE
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                      SWITCH TO LAMBDA=0 OR LAMBDA=1 CHARGES
+!*******************************************************************************************
+!
+! SWITCH TO THERMODYNAMIC INTEGRATION INITIAL (LAMBDA=0) OR FINAL (LAMBDA=1) STATE
+!
+!*******************************************************************************************
+
+   SUBROUTINE DC_CHLAMBDA(LAMBDA, NATM)
+
+      USE CHM_KINDS
+      IMPLICIT NONE
+
+      INTEGER LAMBDA, I, NATM, J, IQ, JQ
+
+! PRINT*,' DCM> SWITCHING TO LAMBDA=',LAMBDA ! DIAGNOSTIC
+
+! SIGNAL WE SHOULD UPDATE NONBOND LISTS AS PERT WILL HAVE ACTED ON THEM
+      QDCNB = .TRUE.
+      IQDCNB = .TRUE.
+      QDCNB14 = .TRUE.
+      QFNB = .TRUE.
+! FIRST LOAD CHARGES FOR PRIMARY CELL
+      IF (LAMBDA .EQ. 0) THEN
+         DO I = 1, NATOMA
+            IF (QPOL) THEN
+               DPOL(I) = B0DPOL(I)
+            END IF
+            DO J = 0, NQA(I) - 1
+               IQ = IDQ(I) + J
+               AQ(IQ) = B0AQ(IQ)
+               BQ(IQ) = B0BQ(IQ)
+               CQ(IQ) = B0CQ(IQ)
+               DQ(IQ) = B0DQ(IQ)
+               ATQ(IQ) = I
+            END DO
+         END DO
+! NOW ADD IMAGE ATOM CHARGES
+         IF (NATOMA .LT. NATM) THEN
+            DO I = NATOMA + 1, NATM
+               IF (QPOL) THEN
+                  DPOL(I) = B0DPOL(IREF(I))
+               END IF
+               DO J = 0, NQA(I) - 1
+                  IQ = IDQ(I) + J
+                  JQ = IDQ(IREF(I)) + J
+                  AQ(IQ) = B0AQ(JQ)
+                  BQ(IQ) = B0BQ(JQ)
+                  CQ(IQ) = B0CQ(JQ)
+                  DQ(IQ) = B0DQ(JQ)
+                  ATQ(IQ) = I
+               END DO
+            END DO
+         END IF
+      ELSEIF (LAMBDA .EQ. 1) THEN
+         DO I = 1, NATOMA
+            IF (QPOL) THEN
+               DPOL(I) = B1DPOL(I)
+            END IF
+            DO J = 0, NQA(I) - 1
+               IQ = IDQ(I) + J
+               AQ(IQ) = B1AQ(IQ)
+               BQ(IQ) = B1BQ(IQ)
+               CQ(IQ) = B1CQ(IQ)
+               DQ(IQ) = B1DQ(IQ)
+               ATQ(IQ) = I
+            END DO
+         END DO
+! NOW ADD IMAGE ATOM CHARGES
+         IF (NATOMA .LT. NATM) THEN
+            DO I = NATOMA + 1, NATM
+               IF (QPOL) THEN
+                  DPOL(I) = B1DPOL(IREF(I))
+               END IF
+               DO J = 0, NQA(I) - 1
+                  IQ = IDQ(I) + J
+                  JQ = IDQ(IREF(I)) + J
+                  AQ(IQ) = B1AQ(JQ)
+                  BQ(IQ) = B1BQ(JQ)
+                  CQ(IQ) = B1CQ(JQ)
+                  DQ(IQ) = B1DQ(JQ)
+                  ATQ(IQ) = I
+               END DO
+            END DO
+         END IF
+      ELSE
+         CALL WRNDIE(-1, '<DCM> DC_CHLAMBDA', 'LAMBDA CAN ONLY EQUAL 0 OR 1 IN DC_CHLAMBDA')
+      END IF
+
+   END SUBROUTINE DC_CHLAMBDA
+
+!*******************************************************************************************
+
+!*******************************************************************************************
+!                       PRINT DCM ENERGIES
+!*******************************************************************************************
+!
+! PRINT RELEVANT ENERGIES TO OUPUT FILE IF REQUESTED
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCMEPRINT(UN)
+
+      USE STREAM, ONLY: PRNLEV
+
+      IMPLICIT NONE
+
+      INTEGER UN  ! FILE UNIT TO WRITE TO
+
+      IF (QPOL .AND. PRNLEV .GT. 1) THEN
+         WRITE (UN, '(A,F14.5)') 'ENER DCMPOL> ', EPOL
+      END IF
+
+   END SUBROUTINE DCMEPRINT
+
+!*******************************************************************************************
+!                       DCM MULTIPOLES
+!*******************************************************************************************
+!
+! WITE OUT MULTIPOLE MOMENTS GENERATED BY DCM CHARGES (A.U.) IN GDMA PUNCH FILE FORMAT
+!
+!*******************************************************************************************
+
+   SUBROUTINE DCMULT(UN, XQ, YQ, ZQ, DQ, X, Y, Z, NDQ, NATOMX)
+      USE CHM_KINDS
+      USE PSF, ONLY: ATYPE
+      IMPLICIT NONE
+      INTEGER NDQ, NATOMX, UN, I, J, K
+      REAL(CHM_REAL) XQ(*), YQ(*), ZQ(*), DQ(*)
+      REAL(CHM_REAL) X(*), Y(*), Z(*)
+      REAL(CHM_REAL) Q00, Q10, Q11C, Q11S, Q20, Q21C, Q21S, Q22C, Q22S, Q30, Q31C, Q31S, Q32C, Q32S
+      REAL(CHM_REAL) Q33C, Q33S
+      REAL(CHM_REAL) RX, RY, RZ, R, R2
+      REAL(CHM_REAL), PARAMETER :: TOB = 1.889725989D0
+
+      OPEN (UNIT=UN, FILE='DCM.PUNCH', POSITION='APPEND', STATUS='OLD')
+      WRITE (UN, *) '! ATOMIC MULTIPOLES FROM DCM CHARGES IN GLOBAL FRAME'
+      WRITE (UN, *) '! GENERATED BY CHARMM DCM MODULE'
+      WRITE (UN, *)
+      DO I = 1, NATOMX
+         Q00 = 0.D0
+         Q10 = 0.D0
+         Q11C = 0.D0
+         Q11S = 0.D0
+         Q20 = 0.D0
+         Q21C = 0.D0
+         Q21S = 0.D0
+         Q22C = 0.D0
+         Q22S = 0.D0
+         Q30 = 0.D0
+         Q31C = 0.D0
+         Q31S = 0.D0
+         Q32C = 0.D0
+         Q32S = 0.D0
+         Q33C = 0.D0
+         Q33S = 0.D0
+         DO J = 0, NQA(I) - 1
+            K = IDQ(I) + J
+            RX = (XQ(K) - X(I))*TOB
+            RY = (YQ(K) - Y(I))*TOB
+            RZ = (ZQ(K) - Z(I))*TOB
+            R2 = RX**2 + RY**2 + RZ**2
+            R = SQRT(R2)
+            Q00 = Q00 + DQ(K)
+            Q10 = Q10 + DQ(K)*RZ
+            Q11C = Q11C + DQ(K)*RX
+            Q11S = Q11S + DQ(K)*RY
+            Q20 = Q20 + DQ(K)*0.5D0*(3.D0*RZ**2 - R2)
+            Q21C = Q21C + DQ(K)*SQRT(3.D0)*RX*RZ
+            Q21S = Q21S + DQ(K)*SQRT(3.D0)*RY*RZ
+            Q22C = Q22C + DQ(K)*0.5D0*SQRT(3.D0)*(RX**2 - RY**2)
+            Q22S = Q22S + DQ(K)*SQRT(3.D0)*RX*RY
+            Q30 = Q30 + DQ(K)*0.5D0*(5.D0*RZ**3 - 3.D0*RZ**2)
+            Q31C = Q31C + DQ(K)*SQRT(3.D0/8.D0)*RX*(5.D0*RZ**2 - R**2)
+            Q31S = Q31S + DQ(K)*SQRT(3.D0/8.D0)*RY*(5.D0*RZ**2 - R**2)
+            Q32C = Q32C + DQ(K)*SQRT(15.D0/4.D0)*RZ*(RX**2 - RY**2)
+            Q32S = Q32S + DQ(K)*SQRT(15.D0)*RX*RY*RZ
+            Q33C = Q33C + DQ(K)*SQRT(5.D0/8.D0)*(RX**3 - 3.D0*RX*RY**2)
+            Q33S = Q33S + DQ(K)*SQRT(5.D0/8.D0)*(3.D0*RX**2*RY - RY**3)
+         END DO
+         WRITE (UN, '(A3,6X,3(2X,F14.10),4X,A7)') ATYPE(I), X(I)*TOB, Y(I)*TOB, Z(I)*TOB, 'Rank  3'
+         WRITE (UN, '(X,F14.10)') Q00
+         WRITE (UN, '(X,3(F14.10,X))') Q10, Q11C, Q11S
+         WRITE (UN, '(X,5(F14.10,X))') Q20, Q21C, Q21S, Q22C, Q22S
+         WRITE (UN, '(X,5(F14.10,X))') Q30, Q31C, Q31S, Q32C, Q32S
+         WRITE (UN, '(X,2(F14.10,X))') Q33C, Q33S
+         WRITE (UN, *)
+      END DO
+      CLOSE (UN)
+      DCMUL = .FALSE.
+
+   END SUBROUTINE DCMULT
+END MODULE DCM_FCM

@@ -1,0 +1,428 @@
+* CHARMM c33a1 Testcase hqbm_single.inp
+* hqbm tests on ci2 - single copy versions
+*
+
+stream datadir.def 
+
+if ?hqbm .ne. 1 then
+    echo "Test NOT performed"
+    stop
+endif
+
+
+set prot 1ypa
+set t 300.0
+set seed 27041994
+
+open unit 1 read card name @0/toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/param19_eef1.inp
+read para card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+faster on
+
+eef1 setup temp @T unit 95 name @0/solvpar.inp
+update ctonnb 7.0 ctofnb 9.0 cutnb 10.0 group rdie
+
+eef1 print
+
+nbonds elec  switch  group  rdie vdw  vswitch vgroup - 
+       cutnb 13.0 ctofnb 9.0 ctonnb 7.0 -
+       wmin 1.2 eps 1.0 e14f 0.4 nbxm 5 
+
+shake bonh param tol 1e-7
+
+energy
+
+!**********************************************************************
+! RC1: use away option to drive away from initial config
+!**********************************************************************
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc1_dist_away
+
+open unit 10 write card name @9/@TEST_iunj.dat
+hqbm reset	! start from scratch
+hqbm rc1 alpha 100 sele type CA .and. (resid 1 .or. resid 64) end -
+	iunj 10 away
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_ene.dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 50 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 50
+close unit 70
+
+!**********************************************************************
+! RC1: use fix option to keep at certain value of rxn coord
+!**********************************************************************
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc1_dist_fix
+
+open unit 10 write card name @9/@TEST_iunj.dat
+hqbm reset	! start from scratch
+hqbm rc1 alpha 100 sele type CA .and. (resid 1 .or. resid 64) end -
+	iunj 10 fix
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 50 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 50
+close unit 70
+
+!**********************************************************************
+! RC1: use away option to drive away from initial config
+!**********************************************************************
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc1_dist_smd
+
+open unit 10 write card name @9/@TEST_iunj.dat
+hqbm reset	! start from scratch
+hqbm rc1 alpha 100 sele type ca .and. (resid 1 .or. resid 64) end -
+	iunj 10 smd away gamma 5.0
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_ene.dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 50 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 50
+close unit 70
+
+!!**********************************************************************
+!! RC1: constrain to initial config
+!!**********************************************************************
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc1_dist_thru
+
+open unit 10 write card name @9/@TEST_iunj.dat
+hqbm reset	! start from scratch
+hqbm rc1 alpha 100 sele type CA .and. (resid 1 .or. resid 64) end -
+	iunj 10
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_ene.dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 50 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 50
+close unit 70
+
+!**********************************************************************
+! RC1: use away option to drive away from initial config (Rg)
+!**********************************************************************
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc1_rg_away
+
+! coords = 0 => Rg**2 constraint
+scalar xcomp set 0.0
+scalar ycomp set 0.0
+scalar zcomp set 0.0
+
+open unit 10 write card name @9/@TEST_iunj.dat
+hqbm reset	! start from scratch
+hqbm rc1 alpha 100 sele .not. type H* end -
+	iunj 10 away
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_ene.dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 50 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 50
+close unit 70
+
+!**********************************************************************
+! RC2: use away option to drive away from initial config
+!**********************************************************************
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc2_dist_away
+
+open unit 10 write card name @9/@TEST_iunj.dat
+hqbm reset	! start from scratch
+hqbm rc2 alpha 100 sele type CA .and. (resid 1 .or. resid 64) end -
+	iunj 10 away
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_ene.dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 50 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 50
+close unit 70
+
+!**********************************************************************
+! RC3/PHI:  single copy version
+!**********************************************************************
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc3_single
+
+open unit 30 write card name -
+    @9/@TEST_iunj.dat
+open unit 31 write card name -
+    @9/@TEST_iunk.dat
+open unit 32 write card name -
+    @9/@TEST_iund.dat
+
+open unit 10 read card name -
+    @0/ci2_phi.dat
+
+set alpha 10000
+! read phi-values and set up constraint
+hqbm reset
+hqbm phi iunphi 10 iunj 30 iunk 31 iund 32 alpha @ALPHA beta 5.0
+
+open unit 20 write card name -
+    @9/@TEST_a@ALPHA.rst
+open unit 21 write file name -
+    @9/@TEST_a@ALPHA.dcd
+open unit 23 write card name -
+    @9/@TEST_a@ALPHA.ene
+dynamics leap verlet start nstep 100 timestep 0.002 iseed @SEED iseed @SEED -
+	iprfrq 400 ihtfrq 0 ieqfrq 800 ntrfrq 0 ihbfrq 0 -
+	inbfrq -1 ilbfrq 0 -
+	iunwri 20 iuncrd 21 kunit 23 - ! iunvel 22 
+	nprint 20 nsavc 20 nsavv 0 -
+	iasors 0 iasvel 1 iscvel 0 ichecw 1 teminc 0.0 twindh 10.0 -
+	twindl -10.0 -
+	firstt @T finalt @T 
+
+close unit 20
+close unit 21
+close unit 23
+
+set oalpha @alpha
+calc alpha = @ALPHA * 10
+! show use of upalpha
+hqbm upalpha phi @ALPHA
+
+open unit 19 read card name -
+    @9/@TEST_a@OALPHA.rst
+open unit 20 write card name -
+    @9/@TEST_a@ALPHA.rst
+open unit 21 write file name -
+    @9/@TEST_a@ALPHA.dcd
+open unit 23 write card name -
+    @9/@TEST_a@ALPHA.ene
+
+!old integrator not parallel !!??
+if ?parallel .eq. 1 then
+   if ?numnode .gt. 1 then
+      echo "Old integrator not parallel"
+      stop
+   endif
+endif
+
+dynamics leap nose restart nstep 100 timestep 0.002 iseed @SEED -
+	iprfrq 400 ihtfrq 0 ieqfrq 0 ntrfrq 0 ihbfrq 0 -
+	inbfrq -1 ilbfrq 0 -
+	iunrea 19 iunwri 20 iuncrd 21 kunit 23 -
+	nprint 20 nsavc 20 nsavv 0 -
+	tref @T qref 500.0 -
+	iasors 0 iasvel 1 iscvel 0 ichecw 1 
+
+close unit 19
+close unit 20
+close unit 21
+close unit 23
+close unit 30
+close unit 31
+close unit 32
+
+!-----------------------------------------------------------------------
+!    RC4 / HX protection factor restraint
+!-----------------------------------------------------------------------
+set test rc4_single
+! new parms
+set HXFC 0.35
+set HXFH 2
+!
+set a 100
+
+! set up constraint 
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+open unit 30 write card name -
+    @9/@TEST_iunj.dat
+open unit 31 write card name -
+    @9/@TEST_iunk.dat
+
+open unit 40 read card name -
+    @0/logp_@PROT.dat
+define backbone sele ( type CA ) .or. ( type C ) .or. ( type N ) -
+	.or. ( type O ) end
+define conts sele ( .not. type H ) end
+hqbm reset
+hqbm rc4 nhcon -
+        iunp 40 iunj 30 iunk 31 iund -1 alpha @A -
+        hxfc @HXFC hxfh @HXFH rcut 6.5 hcut 2.4 -
+        beta 5.0 beth 10.0 tol 0.0 excl 2 -
+        sele conts end sele ( type O ) end -
+        sele ( type N ) end sele ( type H ) end
+
+open unit 20 write form name -
+    @9/@TEST.restart
+open unit 21 write unform name -
+    @9/@TEST.dcd
+open unit 23 write form name -
+    @9/@TEST.ene
+dynamics leap start nstep 200 timestep 0.001 iseed @SEED -
+	iprfrq 200 ihtfrq 0 ieqfrq 0 ntrfrq 0 ihbfrq 0 -
+	inbfrq -1 ilbfrq 0 -
+	iunrea 19 iunwri 20 iuncrd 21 kunit 23 -
+	nprint 50 nsavc 50 nsavv 0 -
+	tref @T qref 500.0 -
+	iasors 0 iasvel 1 iscvel 0 ichecw 1 
+
+close unit 19
+close unit 20
+close unit 21
+close unit 23
+close unit 30
+close unit 31
+close unit 40
+
+! ... then use upalpha as per usual
+
+!======================================================================
+! RC6 / NOE restraint
+!======================================================================
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc6_single
+
+open unit 10 write card name @9/@TEST_iunj.dat
+! these are nonsense noe data ...
+open unit 30 read card name @0/ci2_noe.dat
+hqbm reset
+hqbm rc6 alpha 10 iunj 10 iunnoe 30
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 10 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 30
+close unit 50
+close unit 70
+
+!======================================================================
+! RC9 / 3J restraint
+!======================================================================
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+set test rc9_single
+
+open unit 10 write card name @9/@TEST_iunj.dat
+open unit 11 write card name @9/@TEST_iunk.dat
+! these are nonsense scalar coupling data ...
+open unit 30 read card name @0/ci2_jcons.dat
+hqbm reset
+hqbm rc9 alpha 10000 iunj 10 iunk 11 junit 30
+
+open unit 50 write file name @9/@TEST_trj.dcd
+open unit 70 write card name @9/@TEST_dat
+dynamics leap verlet start nstep 200 timestep 0.002 iseed @SEED -
+    iprfrq 100 ihtfrq 0 ieqfrq 500 ntrfrq 500  -
+    iunrea -1 iunwri -1 iuncrd 50 iunvel -1 kunit 70 -
+    nprint 10 nsavc 50 nsavv 0 ihbfrq 0 inbfrq 25  -
+    firstt 300.0 finalt 300.0 teminc 0.0   -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+close unit 10
+close unit 50
+close unit 70
+
+
+stop

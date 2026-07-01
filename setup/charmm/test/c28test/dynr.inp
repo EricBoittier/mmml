@@ -1,0 +1,131 @@
+* A SIMPLE TEST CASE of 
+* coordinate reading from the DYN RESTART FILE
+*
+stream datadir.def
+BOMLEV -2
+
+OPEN READ FORM UNIT 1 NAME  @0toph9.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+OPEN READ FORM UNIT 2 NAME  @0param5.prm
+READ PARAMETER CARD UNIT 2
+CLOSE UNIT 2
+
+READ SEQUENCE  CARD
+*  FIRST SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE A   SETU
+
+READ      SEQUENCE  CARD
+*  SECOND SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE B  SETU
+
+READ COOR CARD
+* INITIAL COORDINATES FOR AMN-CBX *2
+*  DATE:    10/26/83      4:44:54      CREATED BY USER: BROOKSG
+*
+   12
+    1    1 AMN  CL    -3.33267  -1.67441   0.00000 A    1      0.00000
+    2    1 AMN  C     -2.19986  -0.66094   0.00000 A    1      0.00000
+    3    1 AMN  O     -1.02163  -1.01403   0.00000 A    1      0.00000
+    4    2 CBX  N     -2.52876   0.62775   0.00000 A    2      0.00000
+    5    2 CBX  H     -1.82759   1.31241   0.00000 A    2      0.00000
+    6    2 CBX  CA    -3.96329   1.03051   0.00000 A    2      0.00000
+    7    3 AMN  CL     3.33267   1.67441   0.00000 B    1      0.00000
+    8    3 AMN  C      2.19986   0.66094   0.00000 B    1      0.00000
+    9    3 AMN  O      1.02163   1.01403   0.00000 B    1      0.00000
+   10    4 CBX  N      2.52876  -0.62775   0.00000 B    2      0.00000
+   11    4 CBX  H      1.82759  -1.31241   0.00000 B    2      0.00000
+   12    4 CBX  CA     3.96329  -1.03051   0.00000 B    2      0.00000
+
+COOR ORIENT
+ENERGY NBXMOD 3   CUTHA 80.0 CUTHB 20.0   ! SIGADD 99.0
+
+shake bonh param
+
+! check coordinate restart
+open unit 52 write form name @9dynr0.res
+open unit 41 write unform name @9dynr0.cor
+open unit 42 write unform name @9dynr0.vel
+!
+dynamics start nstep 5  iunwr 52 iseed 314159  -
+nsavv 1 iunv 42 nsavc 1 iunc 41
+read coor dynr curr  name @9dynr0.res comp ! read coords into comp
+coor rms ! should be zero if restart read correctly
+@qcheck ?rms 0 0.000001 dynr_coor_restart
+
+! check velocity restart
+open unit 52 write form name @9dynr.res
+open unit 41 write unform name @9dynr.cor
+open unit 42 write unform name @9dynr.vel
+!
+dynamics start nstep 5  iunwr 52 iseed 314159  -
+nsavv 1 iunv 42 nsavc 1 iunc 41
+read coor dynr vel name @9dynr.res ! read vels into main
+coor rms ! should be zero if restart read correctly
+@qcheck ?rms 0 0.000001 dynr_vel_restart
+
+! check what is in the trajectory at timesteps 4 and 5:
+open unit 51 read unform name @9dynr.cor
+
+traj iread 51 nread 1  skip 1 begin 1
+traj read 
+traj read
+traj read
+traj read 
+traj read
+read coor dynr curr name @9dynr.res comp
+coor rms ! should be zero if restart and trajectory read correctly
+@qcheck ?rms 0 0.000001 dynr_vs_dcdcor
+
+! and for the velocities
+open unit 51 read unform name @9dynr.vel
+
+traj iread 51 nread 1  skip 1 begin 1
+traj read 
+traj read
+traj read
+traj read 
+traj read
+read coor dynr vel name @9dynr.res comp
+coor rms ! should be zero if restart and trajectory read correctly
+@qcheck ?rms 0 0.000001 dynr_vs_dcdvel
+
+! check DELT set
+! reload orig coords and run for six timesteps; then make sure that displacement from 5-step run is consistent
+READ COOR CARD
+* INITIAL COORDINATES FOR AMN-CBX *2
+*  DATE:    10/26/83      4:44:54      CREATED BY USER: BROOKSG
+*
+   12
+    1    1 AMN  CL    -3.33267  -1.67441   0.00000 A    1      0.00000
+    2    1 AMN  C     -2.19986  -0.66094   0.00000 A    1      0.00000
+    3    1 AMN  O     -1.02163  -1.01403   0.00000 A    1      0.00000
+    4    2 CBX  N     -2.52876   0.62775   0.00000 A    2      0.00000
+    5    2 CBX  H     -1.82759   1.31241   0.00000 A    2      0.00000
+    6    2 CBX  CA    -3.96329   1.03051   0.00000 A    2      0.00000
+    7    3 AMN  CL     3.33267   1.67441   0.00000 B    1      0.00000
+    8    3 AMN  C      2.19986   0.66094   0.00000 B    1      0.00000
+    9    3 AMN  O      1.02163   1.01403   0.00000 B    1      0.00000
+   10    4 CBX  N      2.52876  -0.62775   0.00000 B    2      0.00000
+   11    4 CBX  H      1.82759  -1.31241   0.00000 B    2      0.00000
+   12    4 CBX  CA     3.96329  -1.03051   0.00000 B    2      0.00000
+
+COOR ORIENT
+ENERGY NBXMOD 3   CUTHA 80.0 CUTHB 20.0   ! SIGADD 99.0
+
+open unit 52 write form name @9dynr1.res
+dynamics start nstep 6  iunwr 52 iseed 314159 
+
+read coor dynr curr name @9dynr0.res ! 5-step coor
+read coor dynr delt name @9dynr0.res comp ! 5-step displacement to 6
+coor add comp ! compute 6-test coor in comp
+read coor dynr curr name @9dynr1.res ! load 6-step coor into main
+coor rms ! should be zero
+@qcheck ?rms 0 0.000001 dynr_step
+

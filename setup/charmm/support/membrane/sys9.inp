@@ -1,0 +1,108 @@
+* Membrane System : sys9.inp
+* Minimize the energy of the full structure
+*
+
+stream param.str
+
+set LengthX @BoxSizeX
+set LengthY @BoxSizeY
+set LengthZ @BoxSizeZ
+
+!read topology
+open read card unit 10 name @direcTp/@TopFile
+read rtf card unit 10
+close unit 10
+
+!read parameters
+open read card unit 10 name @direcTp/@ParFile
+read param card unit 10
+close unit 10
+
+stream @direcSequence/peptide.str
+
+read sequence DMPC @NLipid
+generate DMPC  setup
+
+read sequence TIP3 @NWaterMol
+generage BULK noangle nodihedral
+
+open read card unit 1 name @direcWork/sys8.crd
+read coor card unit 1
+close unit 1
+
+define HEAD select ( type P .or. type N .or. type C1* .or. type O1* ) .and. segid DMPC end
+coor stat mass select HEAD end
+coor stat mass select segid DMPC end
+
+!----------------------------------------------------------------------
+! Constraints on membrane
+
+MMFP
+! Harmonic function to prevent penetration of water
+GEO  plane -
+     xref 0.0 yref 0.0 zref 0.0 zdir 1.0 -
+     harmonic outside force 10.00 droff 9.0 select type OH2 end
+END
+
+set i 1
+label DO_1
+
+coor stat mass select ( head .and. resi @i ) end
+if ?zave gt 0 set zref = @ZPosTop
+if ?zave le 0 set zref = @ZPosBot
+
+MMFP
+GEO plane  RCM -
+    xref 0.0  yref 0.0  zref @zref   zdir 1.0 -
+    force  5.0   select head .and. resi @i show end
+END
+
+incr i by 1
+if i le @NLipid goto DO_1
+
+cons fix select segid PEPT end
+
+!-------------------------------------------------------------------------
+! Minimize and equilibrate
+
+open unit 8 read card name @direcCubic/cubic.img
+read imag print init unit 8
+close unit 8
+
+imag byres sele resnam TIP3 .or. resnam DMPC end
+print coor
+
+energy group   switch cdiel -                 ! Electrostatics
+       vgroup  vswitch      -                 ! VDW
+       ctonnb 7.0 ctofnb 8.0 cutnb 9.5 cutim 9.5
+
+mini abnr nstep 600 nprint 10 step 0.005 inbfrq -1  imgfrq 5
+
+scalar fbeta set 3.0 select .not. type H* end
+shake bonh param tol 1.0e-6
+open write card unit 50 name @direcWork/sys9.rst
+
+DYNAMICS  start             nstep      2500  timestp   0.002  nprint   100 -
+          iasvel        1  firstt    330.0  finalt    330.0  tstruc 330.0 -
+          langevin         tbath     330.0  rbuf        0.0  iseed 75037676231 -
+          inbfrq       -1  ihbfrq       10  ilbfrq        0  -
+          iunread      -1  iprfrq      500  -
+          iunwrite     50  imgfrq        5  -
+          iuncrd       -1  nsavcrd     100  -
+          iunvelo      -1  nsavvelo      0
+
+open write card unit 1 name @direcWork/sys9.crd
+write coor card unit 1
+* Full system
+* after minimization and 5 psec dynamics
+*
+
+open write card unit 1 name @direcWork/sys9.pdb
+write coor pdb unit 1
+* Full pdb system 
+* after minimization and 5 psec dynamics
+*
+
+stop
+
+

@@ -1,0 +1,151 @@
+* CHARMM c29a2 testcase 
+* Author: RJ Petrella
+* Files: toph19.rtf, param19.prm
+* Tests: rmsd correlations in adaptive umbrella sampling
+*
+
+BOMLev -5
+FASTer on
+
+stream datadir.def
+
+open unit 11 read form name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0param19.prm
+read param unit 11 card
+close unit 11
+
+! Generate the dipeptide seqment.
+read sequ card
+* N-methylalanylacetamide (the alanine dipeptide)
+* constructed as a blocked alanine residue
+*
+3
+ace phe cbx
+generate phe setup
+
+IC PARAM
+IC SAVE
+IC PRINT
+
+COOR INIT SELE ALL END
+IC SEED 1 CH3 1 C 2 N
+IC BUILD
+COOR COPY COMP
+
+!store coordinates in first reference set
+umbrella corr rmsd cor1
+
+IC EDIT
+ DIHE 2 CA 2 CB 2 CG 2 CD1 0
+END
+
+COOR INIT SELE ALL END
+IC SEED 1 CH3 1 C 2 N
+IC BUILD
+
+!store coordinates in second reference set
+umbrella corr rmsd cor2
+
+COOR COPY
+
+update ctonnb 7. ctofnb 9. cutnb 10. group switch cdie 
+
+SCALAR FBETa SET  6.0 SELEct ( ALL )  END
+
+CONS FIX SELE RESI 2 .AND. (TYPE CA .OR. TYPE CB) END
+
+energy
+NBOND inbfreq 0
+
+MINImize SD nstep 10 nprint 10 inbfrq 0 ihbfrq 0
+
+!open unit 17 write card name corr.dist  !if writing to files
+!open unit 27 write card name corr.rmsd.1 !if writing to files 
+!open unit 28 write card name corr.rmsd.2
+
+format (1pg14.7)
+@testcheck ?ENER -34.84004 0.000001 adumbcorr-ener1
+format
+
+COOR COPY COMP
+
+DEFINE SIDE SELE (TYPE CB .OR. TYPE CG .OR. TYPE CD1 .OR. -
+TYPE CD2 .OR. TYPE CE1 .OR. TYPE CE2 .OR. TYPE CZ) END
+
+
+! BEGIN { setup umbrella potential }
+umbrella dihe nresol 18 trig 6 poly 1 phe 2 N phe 2 CA phe 2 CB -
+ phe 2 CG
+
+! distance correlations
+
+umbrella corr dist sele type H .and. resi 3 end -
+ sele  type H .and. resi 2  end
+umbrella corr dist sele type H .and. resi 3 end -
+ sele  type CA .and. resi 2  end
+umbrella corr dist sele type H .and. resi 2 end -
+ sele  type CB .and. resi 2  end
+umbrella corr dist sele type H .and. resi 2 end -
+ sele  type N .and. resi 3  end
+
+!rmsd correlations
+
+!allocate memory for 200 atoms total in 10 substructures
+!print results every 5 updates
+umbrella corr rmsd setup natm 200 nstr 10 
+
+! rmsd for whole phe residue, no orientation
+! with x2 symmetry
+umbrella corr rmsd subs sele (resi 2) end -
+  sele resi 2 end -                 !must specify this even w/o orient
+  sele resi 2 .and. side end -      !symmetry here
+  symm 2 CA 2 CB 2 CG 2 CD1 fold 2
+
+!same without side chain symmetry
+umbrella corr rmsd subs sele (resi 2) end 
+
+! rmsd for whole residue, WITH orientation
+! with x2 symmetry
+umbrella corr rmsd subs sele (resi 2) end -
+  sele resi 2 end -                  !orient here
+  sele resi 2 .and. side end -       !symmetry here
+  orie symm 2 CA 2 CB 2 CG 2 CD1 fold 2
+
+!same without side chain symmetry
+umbrella corr rmsd subs sele (resi 2) end - 
+ sele resi 2 end - !orient here
+ orient  
+
+!same as above
+umbrella corr rmsd subs sele (resi 2) end - 
+ orient
+
+!rmsd of side chain oriented to itself--should give
+!results close to zero
+umbrella corr rmsd subs sele resi 2 .AND. -
+  SIDE end -
+  sele resi 2 .AND. SIDE end -
+  sele resi 2 .and. side end -       !symmetry here
+  orie symm 2 CA 2 CB 2 CG 2 CD1 fold 2
+
+!open unit 27 write card name umbrella.file
+!open unit 26 write card name accu.file 
+
+umbrella init nsim 100 update 500 equi 0 temp 300 thres 10 -
+    cpfr 2 freq 2 
+
+!wuni 27 wcun 26 
+   
+!dynamics nose tref 300 qref 20 start -
+dynamics start -
+             nstep 2000 timestep 0.001 -
+             ihbfrq 0 inbfrq 0  ilbfrq 5 -
+             nprint 10000  iprfreq -1 -
+             isvfrq 10000  iunwrite -1 iunread -1 
+
+@testcheck ?ENER -40.60731 0.000001 adumbcorr-ener2
+
+STOP

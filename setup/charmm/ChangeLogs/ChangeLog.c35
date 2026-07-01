@@ -1,0 +1,2951 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+---------------------------------------------------------------------------
+
+[0] About CHARMM35 Development
+
+     At the July 2007 CHARMM meeting (University of Maryland, Baltimore County
+July 20-22, 2007), we decided to release CHARMM c34b1 with incorporating
+enhancements and fixes to the developmental version c34a2.  The modified
+source code and features are described in ChangeLog.c34, [3] c34b1 Change Log.
+
+     As an on-going project, CHARMM development will be carried out
+with CHARMM version 35a series.  The following describes new features
+and enhancements incorporated in the c35 development period.
+
+==============================================================================
+
+[1] c35a1 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2007 through August 15, 2007.  The developments are
+based on CHARMM version c34a1.  Some enhancements and fixes to c34a2
+are also incorporated into c34b1 as described in the c34b1 release note
+(ChangeLog.c34).
+
+1.1 TSRI Developments
+    Developers    : Mike Crowley, Jana Khandogin, Ilja Khavrutskii,
+                    Charles L. Brooks, III
+    Email Address : michael_crowley@nrel.gov, janakhan@scripps.edu,
+                    ikhavru@mccammon.ucsd.ed, brooks@scripps.edu
+    Institution   : The Scripps Research Institute
+    Date          : July 5, 2007
+
+1.1.1 Column fft for better parallel performance in PME
+
+     Better code for parallel column fft to reduce communications for high
+processor counts and increase load balancing.
+
+Prefx Keys: COLFFT
+
+Files Modified:
+source/nbonds/nbutil.src
+source/nbonds/pme.src
+source/nbonds/pme_column_fft.src
+source/nbonds/pme_column_recip.src
+source/nbonds/pmeutil.src
+test/c26test/pme_p21.inp
+
+..............................................................................
+
+1.1.2 Image facility added to the PHMD module
+
+     Constant pH molecular dynamics can be now performed for periodic boundary
+systems.
+
+Files Added:
+test/c35test/phmd_images.inp
+test/data/phmd_hsp.in
+
+Files Modified:
+doc/phmd.doc
+source/energy/energy.src
+source/energy/phmd.src
+
+..............................................................................
+
+1.1.3 Harmonic Fourier Beads Method
+
+     Harmonic fourier bead method for transition path optimization and 
+identification. 
+
+Files Added:
+doc/hfb.doc  -->> missing
+test/c35test/trek_hfb.inp
+
+Files Modified:
+source/rxncor/adiab.src
+source/rxncor/travel.src
+source/rxncor/travel2.src
+
+..............................................................................
+
+1.1.4 RMSD constraint code changed to module
+
+     RMSD code changed to module to aid in revitalizing the second-selection
+mode.
+
+Files Modified:
+source/dynamc/dcntrl.src
+source/energy/ecnstr.src
+source/energy/rmsd.src
+source/manip/cstran.src
+
+..............................................................................
+
+1.1.5 Various fixes and enhancements
+
+Files Modified:
+source/correl/rdfsol.src           uninitialized variable fixed
+source/dynamc/dynamc.src           io control fixed
+source/dynamc/dynamvv.src          io control fixed
+source/energy/gbsw.src             deallocation of unallocated array 
+source/manip/shake.src             typo in pref keyword MPI_AIX64 fixed
+source/nbonds/enbond.src           getmaxnprs() fix for Intel compiler
+source/nbonds/ewald.src            getmaxnprs() fix for Intel compiler
+source/nbonds/pme_column_recip.src cheq module migration error fixed
+source/util/parse.src              Added ?iseed as query variable
+
+------------------------------------------------------------------------------
+
+1.2 Re-introduction of GBMV Additions into Fortran 90 Module 
+    Developer:    : Michael Feig
+    Email Address : feig@msu.edu
+    Institution   : Michigan State University
+    Date          : June 30, 2007
+
+     During the switch of GBMV to Fortran 90, recent additions to the
+GBMV module were lost (in particular the VDWaals code). This update
+re-introduces previously submitted updates.
+
+Files Modified:
+doc/gbmv.doc
+source/energy/gbmvmodule.src
+
+------------------------------------------------------------------------------
+
+1.3 University of Chicago Developments
+    Developers    : Edward Harder, Yuqing Deng and Benoit Roux
+    Email Address : eharder@uchicago.edu, deng@mcs.anl.gov, roux@uchicago.edu
+    Institution   : University of Chicago, Argonne National Lab
+    Date          : July 3, 2007
+
+1.3.1 New Format for Topology/Parameters of Drude Mode
+
+     A new format encodes the Drude model from the RTF. In the present
+implementation the drude particles are generated for all atoms for which
+polarizabilities (ie. via ALPHA) are specified in the RTF file.
+This allows for the drudes to be generated automatically when a molecule
+is generated in CHARMM. In addition, code has been developed to allow for
+inclusion of atom-based Thole scale factors, atom-based anisotropic
+polarizabilities and the addition of lone pairs to selected atoms at
+the RTF level. These enhancements allow for all the information for the
+polarizable drude force field to be included in the RTF and parameter files.
+
+
+Files Removed:
+source/fcm/thole.fcm
+
+Files Modified:
+doc/drude.doc
+doc/fitcharge.doc
+doc/tpcntrl.doc
+doc/lonepair.doc
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/energy/energy.src
+source/fcm/aniso.fcm
+source/fcm/dimens.fcm
+source/fcm/psf.fcm
+source/fcm/rtf.fcm
+source/gener/drude.src
+source/gener/genpsf.src
+source/gener/modpsf.src
+source/gener/update.src
+source/io/parmio.src
+source/io/psfres.src
+source/io/rtfio.src
+source/manip/corman.src
+source/misc/fitcharge.src
+source/nbonds/nbexcl.src
+source/pert/epert.src
+source/util/array.src
+
+..............................................................................
+
+1.3.2 Various updates and enhancements
+
+     New GSBP cavity potential for the sphere calculation is introduced.
+A WCA repulsive potential is placed before the dialectric boundary to prevent
+water molecules going out of the atomistic simulation region.
+In the generalized multiple calculation, all the charges are included (even if
+they could be outside the atomistic region) to avoid discontinuity in the
+electrostatic potential.
+     Read and write the multipole expansion coefficients and external field
+(PHIX) in card format. Fixed a bug when the large box calculation has more
+grid points than the focused box in GSBP setup calculation.
+     Exclude GCMC ghost atoms from the extended electrostatics calculation and
+from the single distance restraint potential. Removed the temporary WCAD array
+on the stack and passed WCAD from psf in QCGSET and CGINV. Increase the number
+of maximum selection definitions to 200 in fcm/selcta.fcm
+
+Files Modified:
+doc/pbeq.doc
+source/energy/energy.src
+source/fcm/selcta.fcm
+source/misc/pbeq2.src
+source/misc/gsbp.src
+source/misc/mmfp.src
+source/nbonds/nbondg.src
+source/nbonds/exelec.src
+source/nbonds/cheqmodule.src
+
+------------------------------------------------------------------------------
+
+1.4 QUB (QM/MM path integral) Updates
+    Developers    : Dan Thomas Major and Jiali Gao
+    Email Address : majort@mail.biu.ac.il and gao@chem.umn.edu
+    Institution   : Bar-Ilan University, Israel and University of Minnesota
+    Date          : June 30, 2007
+
+1.4.1 Enhancement to QUB module
+
+     The code has been significantly updated and now includes three submodules
+(QCP,BQCP, and QFEP). QCP performs standard Quantized Classical Path, BQCP
+performs QCP with bisection sampling, while QFEP performs mass-perturbation
+BQCP. The latter allows for accurate estimates of kinetic isotope effects in
+condensed phase reactions (See doc file for some tech. references).
+
+1.4.2 Path-Integral coupling with QM/MM methods
+
+     The code is coupled with the QUANTUM, SQUANTM, and SCCDFTB modules.
+In particular, the coupling with QUANTUM and SQUANTM is tight, and a number
+of efficient enhancements have been implemented. 
+With QUANTUM and SQUANTM gradient calculations are automatically turned off
+for efficiency, and for QUANTUM the 1- and 2-electron integrals for QM atoms
+not described as path-integrals are stored by QUB to avoid recalculation
+during path-integral sampling. This will be done for SQUANTM in the near
+future as well.
+
+1.4.3 Parallel Code
+
+     QUB runs in parallel with both QUANTUM and SQUANTM. QUB takes control 
+of parallel run instead of QUANTUM and SQUANTM, as it scales nearly linearly
+with number of processors. QUB doesn't run in parallel with SCCDFTB, yet.
+
+Files Added:
+test/cquantumtest/qmpathint1.inp
+test/cquantumtest/qmpathint2.inp
+test/cquantumtest/sqmpathint1.inp
+test/cquantumtest/sqmpathint2.inp
+
+Files Modified:
+doc/parallel.doc
+doc/qub.doc
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/fcm/qubpi.fcm
+source/fcm/squantm.fcm
+source/quantum/qub.src
+source/quantum/mpiqub.src
+
+------------------------------------------------------------------------------
+
+1.5 Plastic Network Model (PNM) Implementation
+    Developmers   : Jingzhi Pu, Paul Maragakis, and Martin Karplus
+    Email Address : pu@tammy.harvard.edu; Paul.Maragakis@deshaw.com;
+                    marci@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : July 1, 2007
+
+     The plastic network model (PNM) gives a simple description of the free
+energy landscape that has multiple basins around meta-stable conformers.
+The PNM energy can be viewed as an EVB type potential based on two diabatic
+states expressed as elastic networks of the stable conformational states.
+The coupling of the two states is described by a mixing constant. The method
+has been applied to adenylate kinase to generate transition pathways for the
+conformational change between the open and closed states. See references
+given below for details:
+
+[1].  Maragakis, P.; Karplus, M. J. Mol. Biol. 2005, 352, 807.
+[2].  Tirion, M. M. Phys. Rev. Lett. 1996, 77, 1905.
+
+     The current implementaion of PNM in CHARMM is limited to case with two
+end states, where the user can specify different spring constants, network
+cutoffs, and zeroes of energy separately for the two states (see doc/pnm.doc).
+The current implementation also allows the user to define two subgroups of
+atoms, where the inter-network connection between the two subgroups can be
+removed, and only the intra-network connections are retained. This function
+may be useful in studying the coupling between different subunits in a
+multi-subunit protein complex. 
+
+Files Added:
+doc/pnm.doc
+source/fcm/pnm.fcm
+source/misc/pnm.src
+test/c35test/test_pnm.inp
+test/data/bmfe.top
+test/data/bmfe.par
+test/data/bmfe.psf
+test/data/bmfe.crd
+test/data/bmff.crd
+
+Files Modified:
+source/charmm/charmm_main.src            
+source/energy/ediff.src                  
+source/energy/energy.src                  
+source/energy/eutil.src                   
+source/energy/printe.src                  
+source/fcm/energy.fcm                     
+
+------------------------------------------------------------------------------
+
+1.6 GHO Method Interfac to SCC-DFTB (GHO-SCCDFTB)
+    Developers    : Jingzhi Pu and Jiali Gao 
+    Email Address : pu@tammy.harvard.edu; gao@chem.umn.edu
+    Institution   : Harvard University
+    Date          : July 1, 2007
+
+     The origianl implementation of GHO-SCCDFTB in c34a2 has a restriction
+that all GHO boundary atoms have to be placed at the end of the QM
+fragment. This limitation is inherited from an earlier GHO implementation
+for the semiempirical module QUANTUM in CHARMM (see doc/qmmm.doc,
+GLNK: Restrictions; a common practice is to write a new residue for
+QM atoms and place GHO boundary atoms at the end of that residue).
+This restriction is now removed by rearranging the list of QM atoms
+internally in CHARMM. The source files need to be modified are:
+
+     A bug has been fixed for GHO-SCCDFTB gradient. This bug caused 
+wrong gradient if the compiler does not initialize a real type 
+variable to zero when it is declared (for example, g77 under Linux). 
+We fixed this bug by initializing some variables explicitly.
+
+Files Added:
+test/cquantumtest/buta_ghosccdftb.inp
+
+Files Modified:
+source/sccdftbint/sccdftbini.src
+source/sccdftbint/stbgho.src
+
+------------------------------------------------------------------------------
+
+1.7 Semiempirical QM/MM SQUANTM and MNDO97 Updates
+    Developers    : Kwangho Nam
+    Email Address : nam@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : June 30, 2007
+
+1.7.1 SQUANTM Fortran90 format change
+
+     The format of SQUANTM semiempirical QM/MM module is changed to
+comply with other CHARMM source format, allowing other CHARMM fcm
+files can be used. This change removes a specific preprocessing 
+step in the compilation, though the module only supports Fortran90
+compilers. (Platform tested includes GNU, ALTIX, IBMAIX, and 
+IBMAIXMP.)
+
+1.7.2 SQUANTM Parallel implementation
+
+     The module is parallelized, and a memory management is improved 
+when using QM/MM-Ewald summation method. The reciprocal K-space 
+terms require a huge memory allocation, and current modification
+breaks down the memory allocation to each processor evenly but does
+not require internode communication. 
+
+1.7.3 QM/MM Gaussian core-core interaction
+
+     To be consistent with other semiempirical QM/MM module in CHARMM,
+Gaussian core-core interaction is introduced for AM1 and PM3 methods,
+and a keyword is also introduced to turn off this interaction to be
+compatible with older versions.   
+
+1.7.4 Bug fixes for MNDO97 and SQUANTM compilations.
+
+     Several bugs are fixed for a smooth compilation of MNDO97 and
+SQUANTM module. In the MNDO97 module, the current fixes will allow
+the use of GHO method as a default. 
+
+Files Added:
+build/UNX/squantm.mk               
+source/squantm/sqnt_qm2_energy.src 
+source/squantm/sqnt_qm2_ewald.src  
+source/squantm/sqnt_qm2_gho.src   
+source/squantm/sqnt_qm2_grad.src   
+source/squantm/sqnt_qm2_mopac.src  
+source/squantm/sqnt_qmmm_int.src   
+source/squantm/sqnt_qmmm_module.src
+source/squantm/sqnt_qmmm_util.src  
+source/fcm/qm2_array_locations.fcm
+source/fcm/qm2_constants.fcm
+source/fcm/qm2_conversions.fcm
+source/fcm/qm2_double.fcm
+source/fcm/qm2_elements.fcm
+source/fcm/qm2_parameters.fcm
+
+Files Removed:
+build/UNX/squantm.mk_altix
+build/UNX/squantm.mk_gnu
+build/UNX/squantm.mk_ibmaix
+build/UNX/squantm.mk_ibmaix64
+source/squantm/sqnt_qm2_energy.src90
+source/squantm/sqnt_qm2_ewald.src90
+source/squantm/sqnt_qm2_gho.src90
+source/squantm/sqnt_qm2_grad.src90
+source/squantm/sqnt_qm2_mopac.src90
+source/squantm/sqnt_qmmm_int.src90
+source/squantm/sqnt_qmmm_module.src90
+source/squantm/sqnt_qmmm_util.src90
+source/squantm/assert.h
+source/squantm/constants.h
+source/squantm/conversions.h
+source/squantm/dprec.h
+source/squantm/qm2_array_locations.h
+source/squantm/qm2_elements.h
+source/squantm/qm2_parameters.h
+
+Files Modified:
+install.com
+doc/qmmm.doc
+doc/mndo97.doc
+source/charmm/iniall.src
+source/energy/energy.src
+source/fcm/gamess.fcm
+source/fcm/mndgho.fcm
+source/mndint/mndo97q.tar.gz
+source/squantm/sqnt_ene.src
+source/squantm/sqnt_nbnd.src
+source/squantm/sqnt_setup.src
+
+------------------------------------------------------------------------------
+
+1.8 Z-Module Updates and Various Enhancements
+    Developer     : Robert J. Petrella
+    Email Address : petrella@fas.harvard.edu
+    Institution   : Harvard University
+    Date          : June 30, 2007
+
+1.8.1 IRANdom random integer generator
+
+     IRANdom command--generates series of random numbers from uniform
+distributions.
+
+Files Modified: 
+doc/miscom.doc
+source/charmm/miscom.src
+source/util/random.src
+
+..............................................................................
+
+1.8.2 SECOnd comparison coordinate set 
+
+     SECOnd comparison coordinate set for use in coordinate manipulation
+commands
+
+Prefx Keys: COMP2
+
+Files Modified:
+doc/corman.doc
+source/fcm/coordc.fcm
+source/gener/genpsf.src
+source/io/mainio.src 
+source/manip/corman.src
+
+..............................................................................
+
+1.8.3 Z Module Update 
+
+     ZMODule (structure prediction module) is refined and enhanced:
+   - compatibility with CMAP and Urey-Bradley terms added
+   - call to SUBROUTINE CODES implemented
+   - name changed from ZERO module
+   - other minor changes
+ 
+Prefx Keys: ZEROM, ACTBOND
+
+Files Modified:
+doc/zerom.doc
+source/charmm/charmm_main.src
+source/fcm/actclus.fcm
+source/zerom/zerom1.src
+source/zerom/zerom2.src
+
+..............................................................................
+
+1.8.4 Bonded energy terms for active atoms 
+
+     Facility for selecting atoms to be included in bonded energy
+calculations.
+
+Prefx Keys: ACTBOND 
+
+Files Modified:
+source/charmm/iniall.src
+source/energy/eintern.src
+source/energy/enefscal.src
+source/energy/energy.src
+
+=========================================================================
+
+1.9 Reading/Writing NAMD binary file in CHARMM
+    Developer     : Andrei A. Golosov and Milan Hodoscek 
+    Email Address : agolosov@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : June 30, 2007
+
+     CHARMM is now able to read and write NAMD (molecular dynamics program
+from Klaus Schulten's lab) binary coordinates/velocities restart
+files.  To do this, READ_NAMD and WRITE_NAMD subroutines are called in
+source/io/mainio.src These routines are written in C in
+source/machdep/cstuff.c
+
+     Support files have been added for conversion of CHARMM psf file into
+NAMD xplor psf file and creation of auxilarily pdb files for NAMD
+necessary for simulations of solvated systems with fixed and
+harmonically restrained solute.
+
+Files Added:
+support/namd/namdpsf.inp
+support/namd/fix_solute.inp
+support/namd/harm_rest_solute.inp
+test/c35test/namdio.inp
+
+Files Modified:
+doc/io.doc
+source/io/mainio.src
+source/machdep/cstuff.c
+
+------------------------------------------------------------------------------
+
+1.10 Fast Analytical Continuum Treatment of Solvation
+    Developer     : Urs Haberthuer and Amedeo Caflisch
+    Email Address : caflisch@bioc.uzh.ch
+    Institution   : Department of Biochemistry, University of Zurich
+    Date          : June 25, 2007
+
+     FACTS is an efficient method for calculating the free energy of
+solvation of a (macro)molecule embedded in a continuum solvent
+(Haberthuer and Caflisch, J. Comput. Chem. under review). It is based
+on the fully analytical evaluation of the volume and spatial symmetry
+of the solvent that is displaced from around a solute atom by its
+neighboring atoms. The two measures of solvent displacement are
+combined in empirical equations to approximate the atomic (or self)
+electrostatic solvation energy and the solvent accessible surface area.
+The former directly yields the effective Born radius, which is used in
+the generalized Born formula to calculate the solvent-screened
+electrostatic interaction energy. The solvent accessible surface area
+is used to approximate the non-polar contribution to solvation. FACTS
+is only four times slower than using the vacuum energy in molecular
+dynamics simulations of peptides and proteins.
+
+
+Files Added:
+doc/facts.doc
+source/fcm/facts.fcm
+source/misc/fctall.src
+test/c35test/facts.inp
+
+Files Modified:
+install.com
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/energy/energy.src
+source/energy/eutil.src
+source/energy/printe.src
+source/fcm/energy.fcm
+source/fcm/image.fcm
+source/fcm/inbnd.fcm
+source/nbonds/nbonds.src
+source/nbonds/nbutil.src
+
+------------------------------------------------------------------------------
+
+1.11 RXMD: A Module to Switch PES during Dynamics Run
+    Developer     : Markus Meuwly and Jonas Danielsson
+    Email Address : 
+    Institution   : University of Basel
+    Date          : February 24, 2007
+
+     The Reactive Molecular Dynamics (RMD) method allows to do molecular
+dynamics using two potential energy surfaces provided by the user, such that
+the dynamics always takes place on the lowest surface. Crossings are detected
+automatically and occur by a fast, smooth, switching centered in time at the
+point where the crossing was detected. The implementation currently assumes
+that the long-range interactions are handled with the SHIFT setting for
+electrostatics and the SWITCH for the Lennard-Jones potential. To include
+RMD in the compilation, the flag RMD should be included in pref.dat   
+
+Prefx Keys: RMD
+
+Files Added:
+doc/cross.doc
+source/misc/cross.src
+source/fcm/cross.fcm
+source/fcm/saveforces.fcm  
+test/c35test/cross.inp
+test/data/cross.par
+test/data/hemeonly.psf
+test/data/top_all22cross_prot.inp
+test/data/par_all22cross_prot.inp
+
+Files Modified: 
+source/charmm/iniall.src
+source/charmm/miscom.src 
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/energy/energy.src
+source/energy/eutil.src
+source/fcm/energy.fcm
+source/misc/genetic.src
+source/pert/epert.src
+source/pert/icpert.src
+
+------------------------------------------------------------------------------
+
+1.12 Karolinska Institute Fixes and Enhancements
+    Developer     : Lennart Nilsson
+    Email Address : Lennart.Nilsson@biosci.ki.se
+    Institution   : Karolinska Institute
+    Date          : June 28, 2007
+
+1.12.1 Fast nonbonded interactions using lookup tables
+
+     Fast (twofold speedup vs ENBAEXP) lookup tables implemented for
+solvent-solvent, solvent-solute and solute-solute interactions. All nonbonded
+schemes handled by ENBAEXP (including real space part of PME) are handled.
+For now only three site water models can be used (TIP3P, SPC, SPC/E), but TIP4P
+is being implemented. The code works in parallel and with peridic boundary
+conditions. Non-bonded lists generated with BYGRoup or BYCB options work.
+The code is protected by pref.dat keyword LOOKUP. Previous keywords (SLVSLV,
+LNTAB1) are obsolete and have been removed in the supplied files.
+
+[Note] There is a problem with the testcase when running in parallel on more
+than 2 CPUs; part of the testcase uses a very small system and this causes
+some list to be empty when the job is split over 4 CPUs. For real systems
+there is no problem.
+
+Files Added:
+source/nbonds/elookup.src
+source/nbonds/lookup_module.src
+test/c35test/lookup.inp
+
+Files Removed:
+source/nbonds/ewwnb.src
+test/c34test/nbsolv.inp
+
+Files Modified:
+doc/nbonds.doc
+source/charmm/iniall.src
+source/charmm/miscom.src
+source/energy/energy.src
+source/image/eimage.src
+source/image/nbndgcm.src
+source/image/upimag.src 
+source/nbonds/nbonds.src
+source/nbonds/nbutil.src
+source/nbonds/enbaexp.src
+source/fcm/dimens.fcm
+
+..............................................................................
+
+1.12.2 Bugfixes
+
+File modified
+source/correl/solana.src      Missing IREAL4 in call to FREHP
+
+source/dynamc/dynio.src       Constant in calls to extractint8, writint4,
+source/util/datstr.src        fillint4 replaced with variable
+
+source/image/images.src       Memory allocation for PBCUBES and IMCUBES fixed
+
+------------------------------------------------------------------------------
+
+1.13 Developments at the National Institute of Health
+    Developers    : Jhih-Wei Chu, H. Lee Woodcock,
+                    and Bernard R. Brooks
+    Email Address : jwchu@berkeley.edu, hlwood@nih.gov and brb@nih.gov
+    Institution   : Laboratory of Computational Biology, NHLBI, NIH
+    Date          : July 1, 2007
+
+1.13.1 Holonomic Constraints for Order Parameters
+
+     Four order paramters have been implemendted. 
+1. The difference between two bond lengths
+2. The distance between two atoms
+3. Equal (rms)distances between two references
+4. Equal (rms)distances between replicas of a reaction path.
+
+Prefx Keys: RXNCONS
+
+Files Added:
+doc/rxncons.doc
+source/fcm/rxncons.fcm
+source/fcm/rxnconswt.fcm
+source/fcm/rxncons3.fcm
+source/fcm/rxncons4.fcm
+source/manip/rxcons.src
+source/manip/rxcons_1.src
+source/manip/rxcons_2.src
+source/manip/rxcons_3.src
+source/manip/rxcons_4.src
+test/c35test/rxncons.inp
+test/c35test/rxncons_rpath.inp
+
+Files Modified:
+doc/commands.doc
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/gener/update.src
+source/manip/holonom.src 
+
+..............................................................................
+
+1.13.2 Extensions for QM/MM and Reaction Path Methods 
+
+1. Full QM/MM Normal Mode Analysis via Q-Chem
+2. Delocalized Gaussian Blurred MM charges support added via Q-Chem
+3. Added Block support to SCC-DFTD replica path/NEB method
+4. Clean up of SD minimizer (i.e. removal of unnecessary pathway method code)
+5. Fixed NEB SD minimzer to decouple off-path and in-path forces during
+   minimizations
+
+Prefx Keys: QCHEM, SCCDFTB, REPLICA, RPATH, GAMESS, GAMESS-UK
+
+Files Added:
+test/c35test/qm-mm_dgmm.inp
+test/c35test/qm-mm_nmodes.inp
+test/data/qchem_gpc.inp
+test/data/qchem_pc.inp
+test/data/qm-hess.inp
+test/data/qmmm-hess.inp
+
+Files Modified:
+doc/gamess-uk.doc 
+doc/qchem.doc 
+doc/replica.doc 
+doc/sccdftb.doc 
+source/charmm/iniall.src 
+source/energy/energy.src 
+source/fcm/gamess.fcm 
+source/gukint/gukini.src 
+source/minmiz/steepd.src 
+source/sccdftbint/sccdftbini.src 
+
+------------------------------------------------------------------------------
+
+1.14 Developments at NIC-Slovenia
+    Developer     : Milan Hodoscek
+    Email Address : milan@cmm.ki.si
+    Institutions  : National Institutes of Chemistry, Ljubljana, Slovenia
+                    and National Institute of Health, Bethesda, MD, USA
+    Date          : June 30, 2007
+
+1.14.1 GAMESS/CHARMM QM/MM interface: support for the latest GAMESS
+
+     Support for the latest version of GAMESS (24 MAR 2007 R1) was
+added to CHARMM. New development in this version includes: TD-DFT
+method, many new functionals were added totaling to almost 50, another
+MP2 parallelization, etc. Also the interface code uses XXLARGE charmm
+as default.
+
+Files Modified:
+build/UNX/gamess.mk
+build/UNX/gmscomp
+doc/gamess.doc
+doc/diesel.doc
+source/fcm/gamess.fcm
+source/gamint/ddi.src
+source/gukint/gukini.src
+
+.............................................................................
+
+1.14.2 REPDSTR
+
+     The REPlica DiSTRibuted functionality was further extended:
+parallel IF, STREam, OUTU is also working now.
+
+Files Added:
+test/data/ala2.crd_0
+test/data/ala2.crd_1
+test/data/ala2.crd_2
+test/data/ala2.crd_3
+
+Files Modified:
+doc/repdstr.doc
+doc/replica.doc
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/charmm/miscom.src
+source/energy/energy.src
+source/energy/epath.src
+source/fcm/repdstr.fcm
+source/fcm/stream.fcm
+source/gener/repdstr.src
+source/io/mainio.src
+source/machdep/paral1.src
+source/util/parse.src
+test/c34test/rexc.inp
+
+.............................................................................
+
+1.14.3 Multi Scale Command: MSCALE
+
+     The multiscale command causes CHARMM to run several
+independent but connected calculations using subsystems. The
+calculations can use either CHARMM or other programs with a consistent
+interface. The suppoted interface programs are implemented for the
+following ab initio packages: NWCHEM, GAUSSIAN, MOLPRO.
+
+Files Added:
+doc/mscale.doc
+build/UNX/mscale.mk
+source/mscale/mscale.src
+source/mscale/nwchem.f03
+source/mscale/Makefile
+test/c35test/mscale.inp
+test/c35test/sys1.inp
+test/c35test/sys2.inp
+test/c35test/sys3.inp
+
+Files modified:
+install.com
+build/UNX/Makefile_gnu
+build/UNX/energy.mk
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/energy/energy.src
+source/machdep/machio.src
+source/machdep/startup.src
+source/pert/epert.src
+
+.............................................................................
+
+1.14.4 Torsional Cross Term: CMAP
+
+
+     The CMAP code was extended to support REPLICA and BLOCK
+
+Files modified:
+source/energy/ecmap.src
+source/fcm/block.fcm
+source/gener/replica.src
+source/gener/update.src
+source/pert/block.src
+
+.............................................................................
+
+1.14.5 Small fixes:
+
+Files modified:
+source/cff/enbfast_cff.src   (##IMCUBES vs. ##PBCUBES)
+source/cff/ewald_cff.src     (##IMCUBES vs. ##PBCUBES)
+source/correl/rdfsol.src     (SOLPRT() -> WSOLPRT() conflict with GAMESS)
+source/dynamc/dcntrl.src     (##LDM added to compile ##PERT without it)
+source/energy/energy.src     (##BANBA added to ##IF)
+source/machdep/cstuf.c       (OpenMPI fix)
+source/machdep/startup.src   (##PARCMD fix)
+source/manip/corman.src      (write(*,*) fix)
+source/misc/mmfp.src         (INTEGER(4) vs INTEGER(8) problem)
+source/misc/scpism.src       (DERVIS() -> SCDERIVS() conflict with GAMESS)
+source/misc/pbeq2.src        (ADDINT() -> PBADDINT() conflict with GAMESS)
+source/nbonds/pblist.src     (##FORTRAN90 - deprecated)
+test/c33test/hqbm_single.inp (old integrator not parallel!)
+test/c34test/vmodwat.inp     (vibran and quasi not parallel!)
+test/c34test/testzero.inp    (if ?zerom was missing)
+
+------------------------------------------------------------------------------
+
+1.15 Block and QM/MM Normal Mode Updates
+    Developer        : Qiang Cui
+    Email Address    : cui@chem.wisc.edu
+    Institution      : University of Wisconsin - Madison
+    Date             : July 2, 2007
+
+1.15.1 Block normal mode, QM/MM normal mode
+
+     Compilation problems with the VIBBLOCK flag are fixed. A problem that 
+QM/MM NMA with REDU FIX FINITE doesn't work for large systems is fixed.
+
+Files Modified:
+source/misc/hbuild.src         HSBLC to 0 fix for !##VIBBLOCK
+source/misc/fitchrg.src        Add protection (##IFN VIBBLOCK) for PYTHAG
+source/energy/hqbm.src         Misspelling VIBBLOCK as VIBBLOVK (2 times)
+source/vibran/vibblock.src     Remove the definition/references of ATOMON
+source/misc/eef1.src
+
+..............................................................................
+
+1.15.2 For QM/MM NMA
+
+     In the section that processes 'REDU',somehow some key changes
+(the avoid of allocating the hessian for the entire system even when many
+atoms are fixed) have been taken out. QC put back in.
+
+Files Modified:
+source/vibran/vibran.src
+
+------------------------------------------------------------------------------
+
+1.16 Developments at University of Vienna
+    Developers    : Stefan Boresch
+    Email Address : stefan@mdy.univie.ac.at
+    Institution   : University of Vienna
+    Date          : May 7, 2007
+
+     This fix addresses two distinct problems:
+
+I. Having a lot of nonbonded exclusions in a RESI entry in the RTF (e.g.
+useful to simulate dual topology with PERT) can result in a buffer
+overflow in SUBROUTINE MAKINB (nbexcl.src). NOTE: The bug was discovered
+in connection with PERT, but is completely independent of any PERT use!
+
+II. Switching extended electrostatics on and off while PERT is
+activated causes crashes. 
+
+Files involved:
+source/pert/pert.src
+source/nbonds/nbexcl.src
+source/nbonds/nbonds.src
+source/nbonds/nbutil.src
+
+------------------------------------------------------------------------------
+
+1.17 Florida State University Developments
+    Developers    : Wei Yang
+    Email Address : yang@sb.fsu.edu
+    Institution   : Florida State University, School of Computational Science
+    Date          : July 3, 2007
+
+1.17.1 Adaptive integration (ADIN) method for hybrid MD/MC simulation
+
+     Adaptive integration method is implemented based on in the original
+chemical space hybrid MD/MC simulation, which has the acceptance probability:
+
+P_accpt[lambda0->lambda1] = min{1,exp[-beta*(lambda1-lambda0)*dUdl(lambda0)]}.
+
+In the new method, an adaptive reweighting scheme was realized based on the
+following equation:
+
+                             min{1,exp[-beta*(lambda1-lambda0)*dUdl(lambda0)]
+P_accpt[lambda0->lambda1] = --------------------------------------------------
+                             exp[-beta*(<dUdl(lambda0)>+<dUdl(lambda1)>)/2]}   ,
+
+where dUdl denotes energy derivative with respect to each visiting lambda
+and <> represents ensemble average.
+
+Files Added:
+source/fcm/blockappend.fcm
+test/c35test/test/adin.inp
+
+Files Modified:
+doc/block.doc
+source/pert/block.src
+source/dynamc/dynamc.src
+
+..............................................................................
+
+1.17.2 Theta-dynamics
+
+     This is an alternative method for the original lambda-dynamics. Lambda**2
+is replaced by sin(theta)**2 and (1-lambda**2) by cos(theta)**2. Theta, instead
+of lambda, now is the variable for propagation. This implementation can avoid
+the artifacts brought in by the constant external works in the Lagarangian
+Multiplier boundary treatment. 
+
+Files Added:
+test/c35test/test/thetadm.inp
+
+Files Modified:
+doc/block.doc
+source/energy/energy.src
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/dynamc/dynio.src
+source/dynamc/dynlng.src
+source/pert/block.src
+
+------------------------------------------------------------------------------
+
+1.18 Bugfixes and Enhancements
+
+1.18.1 ifort v8.0 compilation
+    Developer     : Robert Best
+    Email Address : r.b.best.00@cantab.net
+    Institution   : NIH
+    Date          : March 9, 2007
+
+     CHARMM will not compile with ifort v8.0 due to the variable N used prior
+to declaration in pme.src, subroutine CFFTF. Declaration of n is switched to
+before declaration of wsave(4*n).
+
+Files involved:
+source/nbonds/pme.src
+
+..............................................................................
+
+1.18.2 Parallelization of the SCP-ISM
+    Developer     : Sergio A. Hassan
+    Email Address : mago@helix.nih.gov
+    Institution   : CMM/DCB National Institutes of Health
+    Date          : June 20, 2007
+
+     The SCP-ISM (Screened Coulomb Potentials-Implicit Solvent Model) was
+parallelized using standard MPI routines coded into the scpism.src. 
+
+Files Modified:
+doc/scpism.doc
+source/fcm/scpism.fcm
+source/misc/scpism.src
+
+..............................................................................
+
+1.18.3 X11 color map
+    Developer     : Rick Venable
+    Email Address : venabler@nhlbi.nih.gov
+    Institution   : NIH/NHLBI 
+    Date          : July 6, 2007
+
+     Colors were not displayed properly for the X11 screen graphics.
+Declare INTEGER*4 COLOR_MAP instead of INTEGER.
+
+[Note] Promotion of all INTEGER variables to INTEGER*8 led to a word length 
+mismatch for the COLOR_MAP array, which is passed to a C routine.
+
+Files involved:
+source/fcm/graph.fcm
+
+==============================================================================
+
+[2] c35a2 Change Log
+
+     The following are introduced and modified during the development period
+of August 15, 2007 through February 15, 2008. The developments are based on
+CHARMM version c35a1.  Some enhancements and fixes are also incorporated into
+c34b2 as described in the c34b1 release note (ChangeLog.c34).
+
+2.1 Developments at the National Institute of Health
+    Developer     : H. Lee Woodcock, Xiongwu Wu, Richard W. Pastor and 
+                    Bernard R. Brooks
+    Email Address : wuxw@nhlbi.nih.gov, hlwood@nih.gov and brb@nih.gov
+    Institution   : Laboratory of Computational Biology, NHLBI, NIH
+    Date          : December 28, 2007
+
+2.1.1 Universal IPS method for anisotropic systems (XW)
+
+     The IPS method is extended to anisotropic simualtion systems. The extended
+IPS method calculates long-range interactions in two steps.  The first step
+calculates the interaction within the local region defined by CTOFNB or RIPS.
+The second step calculates the difference of an anisotropic system (defined by
+radius RAIPS, which is set by default the diagonal distance of the PBC box).
+The first step is done the same way as the cutoff methods by summing over local
+atom pairs.  The second step is done through the convolution thereom which can
+be efficiently calculated using the FFT technique.  This method can be used for
+both homogenouse and hetergenous systems, as well as non-periodic systems like
+in vacuume.  For interfacial systems, 1+2D IPS can be used for the second step
+calculation. Also, the IPS method can be applied for L-J interaction alone to
+be combined with Ewald method for charge interaction calculation. 
+This extension make the IPS method a convenient way for any type of simulation
+study.
+
+
+Prefx Keys: NBIPS
+
+Files Modified:
+install.com
+build/UNX/energy.mk 
+build/UNX/Makefile_sgi
+build/UNX/Makefile_sgi64
+doc/nbonds.doc
+source/energy/energy.src
+source/fcm/nbips.fcm
+source/image/nbondm.src 
+source/machdep/startup.src
+source/misc/fctall.src 
+source/nbonds/enbaexp.src
+source/nbonds/enbfast.src 
+source/nbonds/enbips.src 
+source/nbonds/enbond.src 
+source/nbonds/enbonda.src 
+source/nbonds/enbondg.src 
+source/nbonds/nbonda.src 
+source/nbonds/nbondg.src
+source/nbonds/nbonds.src 
+source/nbonds/nbutil.src 
+source/util/new_timer.src 
+source/vibran/vibran.src 
+test/c32test/ips_tip216.inp 
+
+..............................................................................
+
+2.1.2 Extensions for QM/MM and Reaction Path Methods (HLW)
+
+1. Full QM/MM Normal Mode Analysis via Q-Chem (can also save and read
+   previously computed Hessians) 
+2. Delocalized Gaussian Blurred MM charges support added via Q-Chem (added
+   testcase) 
+3. Micro-iteration optimization procedure for QM/MM and QM/MM Replica Path
+   (not fully tested)
+4. Can use Q-Chem's internal coordinate optimization with QM/MM interface 
+5. Can place Lennard-Jones potentials on MM atoms during QM/MM optimizations
+   using Q-Chem's optimizer (useful for preventing over-polarization) 
+6. Added ability to reuse saved orbitals between energy calls and/or
+   optimizations 
+7. Added ability to read in and set charges on the QM region of a QM/MM
+   calculation (useful for speeding up QM/MM optimizations) 
+8. Improved lone pair handling in FINDEL 
+
+Prefx Keys: QCHEM, REPLICA, RPATH, VIBRAN  
+
+Files Added:
+test/c35test/qmmm_dgmm.inp
+test/c35test/qmmm_normal_modes.inp
+test/data/qchem_gpc.inp
+test/data/qchem_pc.inp
+test/data/qm-hess.inp
+test/data/qmmm-hess.inp
+
+Files Modified:
+doc/qchem.doc
+source/charmm/iniall.src
+source/energy/energy.src
+source/fcm/gamess.fcm
+source/gukint/gukini.src
+source/quantum/addlnat.src
+test/c33test/ts_opt_cyclohexane.inp
+
+..............................................................................
+
+2.1.3  Vibrational Subsystem Analysis 
+
+Added the VSA method. The VSA method will be useful in a variety of situation; 
+
+1. examination of local-global motion
+2. performing accurate NMA while eliminating unwanted degrees of freedom 
+3. eliminating excess noise from large NMA (i.e. QM/MM)
+4. performing NMA while not at a stationary point with respect to all degrees
+   of freedom  
+5. integration of light particle during NMA (i.e. application to polarizable
+   models)
+
+Prefx Keys: QCHEM, VIBRAN
+
+Files Added:
+test/c35test/vsa_butane.inp
+
+Files Modified:
+source/vibran/vibran.src
+source/vibran/vibsub.src
+source/manip/scalar.src
+
+------------------------------------------------------------------------------
+
+2.2 Developments at NIC-Slovenia
+    Developer     : Milan Hodoscek
+    Email Address : milan@cmm.ki.si
+    Institutions  : National Institutes of Chemistry, Ljubljana, Slovenia
+                    and National Institute of Health, Bethesda, MD, USA
+    Date          : January 2, 2008
+
+2.2.1 Add new parameter to the PRINTE subroutine
+
+     PRINTE calculates the GRMS value internally. However in some
+cases this is not correct since the printing process gets the value
+from the other processes. See for example source/csa/csacomm.src. A
+new flag QGRMS was introduced into parameter list to skip the GRMS
+calculation.
+
+Files modified:
+source/energy/printe.src
+source/dynamc/dynamcv.src
+source/dynamc/dynamc4.src
+source/dynamc/dynamc.src
+source/dimb/nmdimb.src
+source/dynamc/dynamln.src
+source/dynamc/dynamvv.src
+source/dynamc/dynamvv2.src
+source/dynamc/tamd.src
+source/dynamc/tmd.src
+source/energy/ediff.src
+source/energy/eutil.src
+source/energy/intere.src
+source/image/xtlfrq.src
+source/io/mainio.src
+source/mbond/mbback.src
+source/mc/mcener.src
+source/minmiz/abner.src
+source/minmiz/conjug.src
+source/minmiz/egrad1.src
+source/minmiz/nraph.src
+source/minmiz/powell.src
+source/minmiz/steepd.src
+source/minmiz/tndriv.src
+source/misc/genetic.src
+source/misc/genetic2.src
+source/pert/block.src
+source/pert/epert.src
+source/pert/pert.src
+source/rxncor/path.src
+source/vibran/redbas.src
+source/vibran/vibcom.src
+source/vibran/vibio.src
+source/vibran/vibsub.src
+source/zerom/zerom2.src
+
+..............................................................................
+
+2.2.2 Conversion of epath.src into the new fortran standard
+
+     RPATH module is converted to the new fortran standard.
+No stack or heap usage in the rpath.src file.
+
+Files Modified:
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/charmm/miscom.src
+source/dynamc/dcntrl.src
+source/energy/energy.src
+source/energy/epath.src
+source/fcm/path.fcm
+source/gener/repdstr.src
+source/manip/rxcons_4.src
+source/minmiz/abner.src
+source/util/parse.src
+
+..............................................................................
+
+
+2.2.3 FINDEL routine not protected by QM/MM flags
+
+FINDEL routine is needed in other than QM codes
+
+file modified:
+source/quantum/addlnat.src
+
+
+..............................................................................
+
+2.2.4 Increased the size of MAXPAD, MAXSHK in dimens.fcm
+
+Increased dimensions so that water system with near 25000 atoms can be run
+in medium sized charmm.
+
+Modified file:
+source/fcm/dimens.fcm
+
+.......................................................
+
+2.2.5 Unification of libraries in Makefile_<machine-type> files
+
+Fixed the inconsistencies in the build/UNX/Makefile_<macine-type> files. In
+order to avoid editing them separately the objlibs.mk include file is
+created. install.csh is also modified accordingly.
+
+Files Added:
+build/UNX/objlibs.mk
+
+Files Modified:
+build/UNX/Makefile_alpha
+build/UNX/Makefile_alphamp
+build/UNX/Makefile_altix
+build/UNX/Makefile_em64t
+build/UNX/Makefile_g95
+build/UNX/Makefile_gnu
+build/UNX/Makefile_hpitanium
+build/UNX/Makefile_hpux
+build/UNX/Makefile_ibmaix
+build/UNX/Makefile_ibmaix64
+build/UNX/Makefile_ibmaixmp
+build/UNX/Makefile_ibmaixmp64
+build/UNX/Makefile_ibmlnxmp
+build/UNX/Makefile_ibmlnxmp_so
+build/UNX/Makefile_itanium
+build/UNX/Makefile_osx
+build/UNX/Makefile_sgi
+build/UNX/Makefile_sgi64
+build/UNX/Makefile_sun
+build/UNX/Makefile_sun64
+build/UNX/Makefile_sunmpi
+build/UNX/Makefile_t3e
+
+------------------------------------------------------------------------------
+
+2.3 Dynamic Importance Sampling (DIMS)
+    Developers    : Juan R. Perilla, Oliver Beckstein, Anu Nagarajan,
+                    Jennifer Johnston, Elizabeth Denning, Tom Woolf
+    Email Address : jrperillaj@jhu.edu, orbeckst@jhmi.edu, anu@jhu.edu,
+                    jen.johnston@jhmi.edu, edennin3@jhu.edu, twoolf@jhmi.edu
+    Institution   : Johns Hopkins University, School of Medicine
+    Date          : Dec 19, 2007
+
+Dynamic Importance Sampling (DIMS) is a method that generates ensembles of
+transitions between a given initial and final state. Typically, those states
+are experimental structures in two different functional states. What sets DIMS
+apart from other methods is that no reaction coordinate needs to be defined in
+advance and that the quality of a transition can be assessed with a score
+during the simulation. 
+
+DIMS has a rather large number of options implemented and it can access
+several other parameters from other functions that it uses. DIMS can use
+different 'flavors' to bias the transition. (We use 'flavors' in favor of
+'modes' in order to avoid confusion with normal modes.). DIMS-Block Normal
+Modes goes from the origin structure towards the target structure by
+displacing atoms on the conformational space, using collective motion
+information---the normal modes---as bias. Two additional features increase
+the quality and diversity of trajectories: linear combinations of normal
+modes and mode self-avoidance. Another flavor, DIMS-Cartesian, generates
+targeted stochastic trajectories by using a soft-ratcheting algorithm. 
+
+Prefx Keys: DIMS
+            VIBBLOCK (required)
+
+Files Added:
+doc/dims.doc
+source/dynamc/dims.src
+source/fcm/dims.fcm
+
+Files Modified:
+build/UNX/dynamc.mk
+doc/corman.doc
+doc/dynamc.doc
+doc/vibran.doc
+doc/commands.doc
+doc/correl.doc
+doc/io.doc
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/correl/anacor.src
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/fcm/new_time.fcm
+source/io/mainio.src
+source/manip/corman.src
+source/util/new_timer.src
+test/c35test/dims.inp
+test/c35test/dims_nm.inp
+test/data/1bdc_dims_start.pdb
+test/data/1bdc_dims_targ.pdb
+
+------------------------------------------------------------------------------
+
+2.4 FACTS Improvements
+    Developer     : Urs Haberthuer, Francois Marchand and Amedeo Caflisch
+    Email Address : caflisch@bioc.uzh.ch
+    Institution   : Department of Biochemistry, University of Zurich
+    Date          : December 20, 2007
+
+1. The FACTS (Fast Analytical Continuum Treatment of Solvation) module
+   was parallelized using the standard CHARMM communication routines
+   coded in the paral1.src.
+
+2. Van der Waals dispersion term was added to FACTS according to
+   E. Gallicchio and RM Levy, J Comput Chem 25: 479--499, 2004.
+
+3. Minor improvements: timer added, better memory management, code layout.
+
+Prefx Keys: FACTS
+
+Files Added:
+test/c35test/facts_p19.inp
+test/c35test/facts_p22.inp
+
+Files Removed:
+test/c35test/facts.inp
+
+Files Modified:
+build/UNX/misc.mk
+doc/facts.doc
+doc/parallel.doc
+doc/preflx_list.doc
+source/fcm/facts.fcm
+source/energy/energy.src
+source/image/images.src
+source/misc/fctall.src
+source/nbonds/nbonds.src
+source/nbonds/nbutil.src
+source/util/new_timer.src
+
+------------------------------------------------------------------------------
+
+2.5 Crystal Simulation Enhancements
+    Developer     : Guillaume Lamoureux, Pedro E. M. Lopes and
+                    Alexander D. MacKerell, Jr.
+    Email Address : glamoure@alcor.concordia.ca, lopes@outerbanks.umaryland.edu
+                    alex@outerbanks.umaryland.edu
+    Institution   : Concordia University and University of Maryland, Baltimore
+    Date          : December 31, 2007
+
+     Allow crystal simulations of different symmetries using the VV2
+integrator with the polarizable Drude model. The implemented changes have the
+purpose of extending the constant-pressure code for the VV2 integrator.
+Extensions are added to perform crystal simulations in different symmetries.
+Additions have been made in the TPCONTROL command as shown below.
+
+Two new flags in the BARO line of TPCONTROL:
+
+    ZONLY: To allow scaling along the Z-direction only.  
+
+    FULL: To allow scaling of all degrees of freedom of the crystal type,
+          without breaking its symmetry. 
+
+Note that the code does not work with the MONOCLINIC lattice type.          
+
+Files Modified:
+doc/tpcntrl.doc
+source/fcm/nose.fcm
+source/dynamc/dcntrl.src
+source/dynamc/tpcontrol.src
+source/dynamc/dynamvv2.src
+source/dynamc/dynio.src
+
+------------------------------------------------------------------------------
+
+2.6 FITPARAM: Generic Parameter Optimization Module
+    Developer     : Victor Anisimov, Alexander MacKerell
+    Email Address : victor@outerbanks.umaryland.edu
+    Institution   : University of Maryland at Baltimore
+    Date          : December 31, 2007
+
+     New fitting procedure (FITPARAM) is implemented as a part of the
+FITCHARGE module. FITPARAM is a parameter fitting procedure that is primarily 
+designed to fit partial atomic charges and atomic polarziabilities based on 
+the Drude oscillator model to interaction energy data and dipole moments, 
+though it may be applied to fitting of other parameters. It supports 
+optimization of multiple parameters for a series of model compounds sharing 
+common parameter sets. Different weights can be assigned to different target 
+data. Optimized parameters can be restrained to their corresponding initial 
+values by using a parabolic penalty function. FITPARAM performs non-linear 
+least square fitting using the Levenberg-Marquardt algorithm.
+A revision of FITCHARGE has also been made to reduce its memory requirement.
+
+Prefx Keys: FITCHG
+
+Files Added:
+doc/fitparam.doc
+test/c35test/antoine.inp
+test/data/antoine.ini
+test/data/antoine.exp
+
+Files Modified:
+source/misc/fitcharge.src
+source/charmm/charmm_main.src
+
+------------------------------------------------------------------------------
+
+2.7 Dyanmic Memory Usage for RMD
+    Developer     : Stephan Lutz, Markus Meuwly
+    Email Address : stephan.lutz@unibas.ch, m.meuwly@unibas.ch
+    Institution   : Department of Physical Chemistry, University of Basel
+    Date          : December 18, 2007
+
+     Solved the out-of-memory compilation error when compiling with larger
+charmm-sizes and prefix RMD. Charmm-size dependent common block arrays in
+cross.fcm and saveforces.fcm were replaced by dynamical allocatable Fortran90
+arrays. Memory for these arrays only gets allocated by giving the RXMD command 
+and for some of these arrays additionally the DYNAmics command.
+
+Files removed:
+source/fcm/saveforces.fcm
+
+Files modified:
+build/UNX/charmm.mk
+build/UNX/dynamc.mk
+build/UNX/energy.mk
+build/UNX/misc.mk
+build/UNX/pert.mk
+doc/cross.doc
+source/charmm/miscom.src
+source/fcm/cross.fcm
+source/dynamc/dnctrl.src
+source/dynamc/dynamc.src
+source/energy/energy.src
+source/misc/cross.src
+source/pert/epert.src
+source/pert/icpert.src
+
+------------------------------------------------------------------------------
+
+2.8 Simulated Scaling
+    Developer     : Wei Yang
+    Email Address : yang@mailer.sb.fsu.edu
+    Institution   : Florida State University
+    Date          : January 31, 2008
+
+     This is the method for the localized enhanced sampling and simultaneous
+alchemical free energy simulations. The recursion in Wang-Landau algorithm
+is adopted in this method. For more details, please check Li, H., Fajer, M.,
+and Yang, W. 2007. Simulated scaling method for efficient localized
+conformational sampling and simultaneous alchemical free energy simulation:
+A general method for MM, QM, and QM/MM simulations. J. Chem. Phys. 126:024106.
+
+Files Added:
+test/c35test/sstest.inp
+
+Files Modified:
+doc/block.doc
+source/charmm/iniall.src
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/fcm/blockappend.fcm
+source/fcm/lambda.fcm
+source/mc/mvhmc.src
+source/pert/block.src
+
+------------------------------------------------------------------------------
+
+2.9 Karolinska Institute Fixes and Enhancements
+    Name          : Lennart Nilsson
+    Email Address : Lennart.Nilsson@biosci.ki.se
+    Institution   : Karolinska institutet
+    Date          : December 28, 2007
+ 
+
+(1) FORMAT correction and misunderstanding of insertion codes when reading
+sequence from PDB file 
+
+Files involved:
+source/io/coorio.src
+source/io/psfres.src
+
+(2) Changed internal variables to REAL*8 to allow large range.
+
+Files involved:
+source/util/calc.src 
+
+(3) Added option to supply radii for excluded volume correction in WMAIN.
+Also added the excluded volume correction and the uncorrected g(r) to the
+output. Changed an EQUIVALENCE statement that caused F90 compilation problems 
+
+Files involved:
+doc/corman.doc
+source/correl/solana.src 
+
+(4) Documented the NAME keyword for READ/WRITE commands
+
+Files involved:
+doc/io.doc 
+
+(5) The lookup command is available in c34b1.
+
+Files involved:
+test/c34test/lookup.inp   NEW
+test/c35test/lookup.inp   DELETED
+
+(6) Improved energy reporting when using LOOKUP NOENERGY
+     With the NOENERGY option the LOOKUP code only calculates the energies when
+the non-bond list is updated. For image energies intermittently stored energy
+was not properly reset, and hence reported energies could show jumps (no effect
+on the dynamics though since forces are not affected).
+
+Files involved:
+source/image/eimage.src
+
+------------------------------------------------------------------------------
+
+2.10 Genetic Neural Network for QSPR
+    Developer     : Jie Hu and Aaron Dinner
+    Email Address : dinner@uchicago.edu
+    Institution   : The University of Chicago
+    Date          : January 15, 2008
+
+Artificial neural networks are used to fit data non-linearly (with possible
+cross-validation) and either one of two genetic algorithms or exhaustive
+enumeration can be used to select between the combinations of descriptors
+that yield the best predictions for the target data.  Input format and options
+are described in gnn.doc.
+
+Prefx Keys: GNN
+
+Files Added:
+doc/gnn.doc
+source/fcm/gnn.fcm
+source/misc/gnn.src
+test/c35test/gnn.inp
+test/data/gnn.dat
+
+Files Modified:
+build/UNX/misc.mk
+source/charmm/charmm_main.src
+
+------------------------------------------------------------------------------
+
+2.11 Bugfixes
+
+2.11.1 Bug fixed for trace-statistics collection routine in umbrella sampling
+    Name          : Yousung Jung
+    Email Address : yousung@caltech.edu
+    Institution   : California Institute of Technology
+    Date          : September 11, 2007
+    CHARMM version: c33b2
+
+     In the present code (rxnene.src) of umbrella sampling, one can have more
+'hits' in the .stt file than the number of MD steps actually taken, because
+of the way the statistics is collected currently using the variable 'rxncnt'.
+This would then yiled the free energy that is incorrect. This problem is
+described also in rxnene.src.
+
+     In the fixed code, I use the actual MD step (MDSTEP2 = ISTEP) as a
+control variable for updating the trace-statistics.
+
+Files involved:
+source/charmm/iniall.src
+source/dynamc/dynamc.src
+source/fcm/rxncom.fcm
+source/rxncor/rxnene.src
+source/rxncor/rxndef.src
+
+..............................................................................
+
+2.11.2 CLK_TCK Definition fixed
+    Developer     : Mikhail Wolfson
+    Email Address : wolfsonm@mit.edu
+    Institution   : MIT
+    Date          : January 29, 2008
+
+     In the file source/machdep/cstuff.c, lines 391 - 393 read:
+
+#if defined(CLOCKS_PER_SEC)     /* fix for glibc-2.4 */
+#define CLK_TCK CLOCKS_PER_SEC
+#endif
+
+This is incorrect. CLK_TCK and CLOCKS_PER_SEC do not have the same value on 
+many systems. It is fixed to
+
+#if !defined(CLK_TCK)     /* fix for glibc-2.4 */
+      extern long int __sysconf (int);
+#   define CLK_TCK ((__clock_t) __sysconf (2))        /* 2 is _SC_CLK_TCK */
+#endif
+
+Files involved:
+source/machdep/cstuf.c
+
+..............................................................................
+
+2.11.3 Calling argument list fix (charmm.org forum)
+
+     tmdrhof removed from the calling argument list for shiftz
+
+Files involved:
+source/dynamc/dynamc.src
+
+..............................................................................
+
+2.11.4 Preprocessor directive fixes
+
+     Misplaced and missing preprocessor directives fixed (charmm.org forum)
+
+Files involved:
+source/energy/energy.src
+source/energy/gbmvmodule.src
+source/energy/genborn.src
+source/misc/scpism.src
+
+..............................................................................
+
+2.11.5 NDEGF fix for VV2 Integrator
+    Developer     :  Ed Harder
+    Email Address :  eharder@uchicago.edu
+    Institution   :  University of Chicago
+    Date          :  Feb 11, 2008
+
+     In the VV2 integrators the evaluation of the number of degrees of freedom
+for the system is fixed. 6 degrees of freedom were erroneously being
+subtracted for the VV2 integrator in source/dynamc/dcntrl.src. The result is
+an incorrect assignment of kinetic energy to the system when using the Nose
+thermostats with the VV2 integrator. The problem is only significant when 6 is
+on the order of the total number of degrees of freedom in the system such as
+a single molecule in vacuum.  This is corrected and 3 degrees of freedom are
+necessarily subtracted for the translational degrees of freedom lost when 
+the center of mass kinetic energy of the system is dissipated.   
+
+Files involved:
+source/dynamc/dcntrl.src
+
+..............................................................................
+
+2.11.6 SCCDFTB bugs fixed
+    Developers    : Qiang Cui
+    Email Address : cui@chem.wisc.edu
+    Institution   : University of Wisconsin, Madson
+    Date          : October 27, 2007
+
+     Free HEAP properly and initialize NSCCRP when SCCDFTB in use.
+
+
+source/misc/gsbp.src
+source/misc/pbeq.src
+
+..............................................................................
+
+2.11.7 MOLVIB document updated
+    Developer     : Kenno Vanommeslaeghe
+    Email Address : kenno@outerbanks.umaryland.edu
+    Institution   : University of Maryland, Baltimore
+    Date          : January 8, 2008
+
+    Ducument the definition of linear bend internal coordinates in MOLVIB.
+
+Files involved:
+doc/molvib.doc
+
+------------------------------------------------------------------------------
+
+2.12 Force Field Parameter Updates
+    Developers    : Alex D. MacKerell
+    Email Address : alex@outerbanks.umaryland.edu
+    Institution   : University of Maryland, School of Pharmacy
+    Date          : December 31, 2007
+
+  1) New carbohydrate force field parameters added. This includes an
+extensive set of monosaccharides, acyclic analogs and glycosyl
+linkages.  The parameters are designed to be compatible with the
+CHARMM22 and 27 additive force fields.
+
+  2) Lipids: Minor corrections to several residues used for generation
+of lipids.  Myristic acid added to allow for creation of DMPC. New
+model compounds added to toppar_all27_lipid_model.str.
+
+  3) Proteins: Neutral N- and C-terminal patches added: NNEU and CNEU. 
+
+  4) Proteins: Topology and parameter files WITHOUT CMAP no longer the
+default and not included in the toppar directory. Note that the
+original CHARMM22 model may be reproduced by including the SKIPE CMAP
+command in the charmm input script.
+
+  5) Redundant toppar_history files deleted.
+
+Files Added:
+toppar/top_all35_sugar.rtf
+toppar/par_all35_sugar.prm
+
+Files Removed:
+toppar/top_all22_prot_cmap.inp
+toppar/par_all22_prot_cmap.inp
+toppar/toppar_history/c32b2/toppar_history directory
+toppar/toppar_history/c33b2/toppar_history directory
+
+Files Modified:
+doc/parmfile.doc
+doc/rtop.doc
+toppar/par_all22_prot.inp
+toppar/par_all27_lipid.prm
+toppar/par_all27_prot_lipid.prm
+toppar/par_all27_prot_na.prm
+toppar/stream/toppar_all22_prot_fluoro_alkanes.str
+toppar/stream/toppar_all22_prot_model.str
+toppar/stream/toppar_all27_lipid_cholesterol.str
+toppar/stream/toppar_all27_lipid_model.str
+toppar/stream/toppar_all27_na_model.str
+toppar/top_all22_prot.inp
+toppar/top_all27_lipid.rtf
+toppar/top_all27_na_lipid.rtf
+toppar/top_all27_prot_lipid.rtf
+toppar/top_all27_prot_na.rtf
+toppar/toppar_all.history
+
+==============================================================================
+
+[3] c35b1 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2008 through August 15, 2008.  The developments are
+based on CHARMM version c35a2.
+
+3.1 University of Michigan Fixes and enhancements
+    Developer     : Mike Crowley, Charlie Brooks
+    Email Address : michael_crowley@nrel.gov, brookscl@umich.edu
+    Institution   : NREL, U. Michigan
+    Date          : June 30, 2008
+
+     Fixes for itanium clusters, em64t, osx, ##IF problems, obsolete fortran,
+and column fft codes.
+
+     - Fixed MPI communications and pref flags for
+     - itanium cluster parallel builds
+     - obsolete flags removed for osx and em64t
+     - testing parallel with machinefile added
+     - TESTENDIAN trajectory reading fixed for trajectories with fixed atoms
+     - Faster direct space fixed (FEWMFC), mkl added
+     - Code cleanup in pme, bugfix column fft, workaround for bug in intel
+       compiler affecting fft
+     - Code constructs that have been deleted from fortran standard, and are
+       not in intel fortran anymore are replaced with working code.
+
+Prefx Keys: FEWMFC, COLFFT, INTELMKL
+
+Files Modified:
+install.com
+build/UNX/Makefile_itanium
+build/UNX/Makefile_em64t
+build/UNX/Makefile_osx
+build/UNX/dynamc.mk
+source/adumb/umb.src
+source/dynamc/dynamc.src
+source/dynamc/dynio.src
+source/energy/energy.src
+source/energy/eintern.src
+source/fcm/emap.fcm
+source/fcm/blockappend.fcm
+source/io/rtfio.src
+source/machdep/machutil.src
+source/manip/corman2.src
+source/misc/gnn.src
+source/misc/grid.src
+source/misc/gsbp.src
+source/misc/gsbp2.src
+source/misc/pbeq.src
+source/misc/pbeq2.src
+source/nbonds/enbond.src
+source/nbonds/ewald.src
+source/nbonds/nbonds.src
+source/nbonds/pme.src
+source/nbonds/pme_column_fft.src
+source/nbonds/pmeutil.src
+source/util/new_timer.src
+test/test.com  
+
+------------------------------------------------------------------------------
+
+3.2 Developments at the National Institute of Health
+    Institution   : Laboratory of Computational Biology, NHLBI, NIH
+    Date          : July 1, 2008
+
+3.2.1 Enhancements and documentation update
+    Developer     : Rick Venable
+    Email Address : venabler@nhlbi.nih.gov
+
+(1) Pressure tensor data ouptut
+     In order to capture the pressure tensor data on every integration step
+without being overwhelmed by additional data from setting NPRINT 1, the
+IUPTEN option was added to the pressure related parsing (prssre.src).
+The default is to do nothing unless a positive integer is specified for
+this Fortran unit number.  Calls to PSCALE() were modified to add the
+integration step, so that the time values could be written properly.
+
+Files Modified:
+doc/pressure.doc
+source/charmm/iniall.src
+source/dynamc/prssre.src
+source/dynamc/dynamc4.src,
+source/dynamc/dynamc.src
+source/fcm/reawri.fcm
+c24test/nptdyn.inp
+
+(3) crystl.doc update
+    Updated the information on using image patches with CRYSTAL. Added a
+section describing the use of P21 symmetry for interfacial systems, with
+some input examples for the coordinate placement, the symmetry change,
+and the needed minimization.
+
+Files modified:
+doc/crystl.doc
+
+
+(2) Split trajectory into subsets
+      Up to 64 subsets may be created from input trajectory files, using a list
+which identifies the subset number for each frame in the input trajectory.
+The membership list format is that produced by the CLUSTER command of
+CORREL, specified by the UNIMember keyword of CLUSTER. Any means may be
+used to produce the file, as long as it conforms to that format.  The time
+base is ignored when writing the subsets, and each is renumbered as a
+sequential series from 1 to N, where N is the number of frames in the subset.
+
+Files Modified:
+doc/dynamc.doc
+source/dynamc/dynsub.src
+test/c35test/mrgsubset.inp
+
+..............................................................................
+
+3.2.2 Bugfix for b-spline correction in IPS calculation
+    Developer     :  Xiongwu Wu and Bernard Brooks
+    Email Address :  wuxw@nhlbi.nih.gov
+
+      The correction to b-spline spreading of atoms is missing, which causes
+errors in IPS energy, force and viral calculation.
+
+Files involved:
+doc/nbonds.doc              Changes in IPS description
+source/energy/energy.src    Removed NTRANS from AIPS routine argument.
+source/fcm/nbips.fcm        Added boundary energy variables
+source/nbonds/enbips.src    B-spline correction is added
+
+------------------------------------------------------------------------------
+
+3.3 Developments at NIC-Slovenia
+    Names         : Milan Hodoscek
+    Email Address : milan@cmm.ki.si
+    Institutions  : National Institutes of Chemistry, Ljubljana, Slovenia
+                    and National Institute of Health, Bethesda, MD, USA
+    Date          : June 30, 2008
+
+3.3.1 Mscale bug fix
+
+Files Modified:
+source/mscale/mscale.src
+
+.............................................................................
+
+3.3.2 GAMESS/CHARMM QM/MM interface: support for the latest GAMESS
+
+     Support for latest version of GAMESS (11 Apr 2008 R1) released on
+April 21, 2008 was added to CHARMM. New development in this version
+includes: new grid code for DFT calculations (the default has changed
+- so are the results if compared with older version). Popular SG1 was
+added. 
+
+Files Modified:
+build/UNX/gmscomp
+doc/gamess.doc
+
+------------------------------------------------------------------------------
+
+3.4 Michigan State University Developments
+    Developer     : Sean Law, Srinivasa Murthy Gopal/Michael Feig
+    Email Address : feig@msu.edu
+    Institution   : Michigan State University
+    Date          : June 28, 2008
+
+     A number of small changes are summarized here:
+
+- changed optimization level and modified CMAP code to avoid numerical errors 
+  on 64-bit Intel architecture.
+- fixed name conflict in VIBBLOCK module (pythag subroutine)
+
+Files Modified:
+build/UNX/energy.mk
+build/UNX/Makefile_em64t
+source/vibran/vibblock.src
+
+------------------------------------------------------------------------------
+
+3.5 Karolinska Institute Fixes and Enhancements
+    Developer     : Lennart Nilsson
+    Email Address : Lennart.Nilsson@biosci.ki.se
+    Institution   : Karolinska Institute
+    Date          : June 28, 2008
+
+     Added -1 warning if ISEED is specified at a langevin dynamics restart.
+Fixed problems with PDB format introduced in c35a2, both for coordinates and
+sequences.
+
+Files Modified:
+doc/io.doc
+source/dynamc/dcntrl.src
+source/io/coorio.src
+source/io/mainio.src
+source/io/psfres.src
+
+------------------------------------------------------------------------------
+
+3.6 University of Chicago Developments
+    Developer     : Haibo Yu, Yuqing Deng, Wei Jiang, Benoit Roux
+    Email Address : haibo@uchicago.edu, deng@mcs.anl.gov, wjiang@mcs.anl.gov,
+                    roux@uchicago.edu
+    Institutions  : University of Chicago, Argonne National Lab
+    Date          : June 30, 2008
+
+3.6.1 New Format for PSF of Drude Mode
+
+    XPLOr format for PSF of Drude mode is extended to include the Thole 
+and polarizability for each particle. In the new format, the 
+anisotropic information for the lone-pairs of Drude model is shown 
+along with the lone-pair information. This new format is intended to 
+provide a PSF of Drude mode for developing NAMD package.
+    The parmfile read-in subroutine has been modified to allow ATOM
+NAMES longer than 4 characters in NBFIX section (i.e. for DRUDe atoms).
+    
+Files Modified:
+source/fcm/dimens.fcm
+source/io/psfres.src
+source/io/parmio.src
+               
+..............................................................................
+
+3.6.2 Various updates and enhancement 
+
+    Problems with SSBP parallel running are fixed.
+    Fixed a bug in when CAVIty potential is activated in GSBP, and GCMC 
+simulations are performed. The cavity potential does not go to properly 
+zero for GCMC solvent molecules inside the sphere for cavity radius 
+larger than 18 angstroms.  This only affects GCMC simulations with GSBP 
+CAVIty potential activated. 
+    Fixed a bug when the EMPI empirical corrections are activated in a
+deformable boundary.
+
+Files Modified:
+source/misc/gsbp.src 
+source/misc/ssbp.src
+
+------------------------------------------------------------------------------
+
+3.7 University of Maryland Developments
+    Developer     : Olgun Guvench, Kenno Vanommeslaeghe and Alex MacKerell
+    Email Address : alex@outerbanks.umaryland.edu
+    Institution   : University of Maryland, Baltimore
+    Date          : June 30, 2008
+
+3.7.1 Document updates
+
+     Lone pairs with undefined coordinates can be built by COOR SHAKE.
+Wrong definition of impropers can have problematic results. Clarified this
+in the documentation. Also included a warning pertaining the phase of ordinary
+dihedrals.
+
+Files involved:
+doc/corman.doc
+doc/lonepair.doc
+doc/parmfile.doc
+doc/rtop.doc
+
+..............................................................................
+
+3.7.2 CHARMM General Force field.
+
+     The new CHARMM General Force Field, developed in the MacKerell lab and
+ready to be published, overflows hard-coded array sizes for dihedrals and
+residues. A new preflx keyword, CGENFF, was introduced to request larger
+arrays at compile time. As the change has little effect on CHARMM's memory
+footprint, install.com was modified to include the CGENFF keyword by default.
+All this is consistent with previous additions of "large" force fields
+(eg. MMFF). The CGENFF keyword was also added to preflx_list.doc.
+
+Prefx Keys: CGENFF
+
+Files Added:
+test/c35test/cgenff.inp
+test/data/top_cgenff_all_1g5merge.inp
+test/data/par_cgenff_all_1g5merge.inp
+
+Files Modified:
+install.com
+doc/preflx_list.doc
+source/fcm/dimens.fcm
+
+..............................................................................
+
+3.7.3 Added substitution parameters for ring pucker calculation
+
+     Added substitution parameters for ring pucker calculation in corman.src.
+
+Files Modified:
+doc/subst.doc
+source/manip/corman.src
+
+..............................................................................
+
+3.7.4 toppar Updates
+
+     Inclusion of initial release of the CHARMM general force field in
+the toppar directory. CHARMM general force field has been designed to
+treat a range ofpharmacological compounds.  The parmaeters have been
+optimized to be consistent with the CHARMM all-atom additive force
+fields.
+
+Files Removed:
+toppar/par_all34_ethers.prm
+toppar/par_all35_sugar.prm
+toppar/top_all34_ethers.rtf
+toppar/top_all35_sugar.rtf
+
+Files Added:
+toppar/par_all32_lipid.prm
+toppar/par_all35_carb.prm
+toppar/par_all35_ethers.prm
+toppar/top_all32_lipid.rtf
+toppar/top_all35_carb.rtf
+toppar/top_all35_ethers.rtf
+
+Updates:
+toppar/drude.tar.gz
+toppar/silicates.tar.gz
+toppar/toppar_history.tar.gz
+
+Files Modified:
+toppar/non_charmm/00readme
+toppar/par_all27_lipid.prm
+toppar/par_all27_na_lipid.prm
+toppar/par_all27_prot_lipid.prm
+toppar/par_all27_prot_na.prm
+toppar/stream/toppar_all27_na_model.str
+toppar/top_all27_lipid.rtf
+toppar/top_all27_na_lipid.rtf
+toppar/top_all27_prot_lipid.rtf
+toppar/toppar_all.history
+
+------------------------------------------------------------------------------
+
+3.8 Bugfixes and Enhancements
+
+3.8.1 VMOD fixes
+    Developer        : Charles Robert (& David Perahia)
+    Email Address    : charles.robert@u-psud.fr
+    Institution      : CNRS - France
+    Date             : May 19, 2008
+
+     In the previous version VMOD used its own normal-mode file-reading
+routine that was incomplete. Several new features have been added as well.
+
+     VMOD obtains the restraint direction(s) from a normal-mode format file.
+In the initial version, an over-simplified approach was used to read the
+file. To resolve this and potentially other future problems, VMOD now re-uses
+existing code from VIBRAN for reading the normal-mode file. This provides
+the advantage of guaranteeing VMOD/VIBRAN coherence in the future.
+
+Files involved:
+doc/mmfp.doc
+source/energy/energy.src
+source/fcm/mmfp.fcm
+source/misc/mmfp.src
+source/vibran/vibio.src
+test/c34test/vmodwat.inp
+
+..............................................................................
+
+3.8.2 VIBRAN READ NORM 
+    Developer        : Charles Robert (& David Perahia)
+    Email Address    : charles.robert@u-psud.fr
+    Institution      : CNRS - France
+    Date             : May 19, 2008
+
+     In VIBRAN, one should be able to read normal modes from either a binary
+or card-formatted normal modes file. Further, the READ NORM command allows
+one to specify which modes are to be read from the file, e.g., mode 7 from
+a file with 20 modes. Call this reading from the "middle" of the file.
+There are no problems when all modes are read at once for either binary or
+card-formatted files. Also, a single mode can be read from the middle of a
+binary file without any problem. But for reading one or more modes from the
+middle of a card formatted file, the wrong values are obtained.
+
+Files involved:
+source/vibran/vibio.src
+
+..............................................................................
+
+3.8.3 Bug fixed in FACTS image interaction list setup
+    Developer     : Francois Marchand and Amedeo Caflisch
+    Email Address : caflisch@bioc.uzh.ch
+    Institution   : Department of Biochemistry, University of Zurich
+    Date          : June 30, 2008
+
+     FACTS builds lists for the atom-atom and atom-image atom interactions.
+The size of the image atom array (equivalent to NATIM) was set to be
+twice the number of atoms present in the system. It appeared that 
+the actual number of image atoms can be bigger than that, what leads
+to crashes under certain system configurations.The size of this array
+was set to 26*NATOM instead of 2*NATOM.
+
+Files involved:
+doc/facts.doc
+source/image/images.src
+source/misc/fctall.src
+
+..............................................................................
+
+3.8.4 CORSOL f95 compilation
+    Developer     : Tibor Rudas and Stefan Boresch
+    Email Address : tibor.rudas@univie.ac.at, stefan@mdy.univie.ac.at
+    Institution   : University Vienna
+    Date          : Jun 28th 2008
+
+     Compilation of CHARMM failed when the CORSOL keyword was present
+in pref.dat for several reasons: (i) Change of the CHEQ functionality
+to Fortran95 required the additon of 'use cheq...'.
+(ii) During the Fortran95 migration, an assigned goto was handled
+incorrectly. By mimicking what was done in correl.src the problem could
+be avoided
+
+Files involved:
+source/correl/corsol.src
+source/correl/ancsol.src
+
+..............................................................................
+
+3.8.5 RMD documentation update
+    Developer     : Stephan Lutz
+    Email Address : stephan.lutz@unibas.ch
+    Institution   : University of Basel, Switzerland
+    Date          : 06/30/2008
+
+     Some remarks added to the RMD documentation (cross.doc) concerning
+the configuration of the supplied PSF when using the RXMD command.
+
+Files Modified:
+doc/cross.doc
+
+..............................................................................
+
+3.8.6 PNM gradient calculation
+    Developer     : Jingzhi Pu
+    Email Address : pu@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : july 15, 2008
+
+     Introduced into CHARMM since c35a1, the PNM code was adopted from
+a preliminary code as a part of the USER command. Since the energy routine
+for USER energy (subroutine USERE) was called at the very beginning of all
+energy components, the PNM gradients were directly assigned to their global 
+arrays (DX,DY,DZ). However, PNM gradients should be incorporated
+accumulatively. The bug actualy does not affact the results for most of
+the calculations, except for a few rare cases, for example, when the 
+USER or RXMD command is used in combination with the PNMI command. 
+
+Files involved:
+source/misc/pnm.src
+
+..............................................................................
+
+3.8.7 GHO atom parameters for GHO-MNDO/d
+    Developer     : Jingzhi Pu
+    Email Address : pu@tammy.harvard.edu
+    Institution   : Harvard University
+    Date          : july 15, 2008
+
+     A bug is found in source/mndint/mndo97q/97/PARAMD.f. The GHO atoms in 
+the CHARMM/MNDO97 interface are conviniently defined as an element
+with atom number 85. Paramters for GHO are therefore adopted from 
+carbon by mapping parameters of the element 85 to those of the element 6. 
+However, for the MNDO/d Hamiltonian, due to the structure of the code, 
+at some point, following 'DO 50 I=11,LMD' in the subroutine PARAMD of 
+source/mndint/mndo97q/97/PARAMD.f, the GHO parameters are reset to the 
+original MNDO/d parameters for the real element 85 (which is actually 
+missing in the parameter definition). So we explicitly skip this reassignment 
+if a GHO atom is detected (I .eq. 85), to prevent it from being overwritten. 
+
+Files involved:
+source/mndint/mndo97q/97/PARAMD.f
+
+------------------------------------------------------------------------------
+
+3.9 Unreleased Features for Further Testing
+
+     At the Harvard CHARMM meeting (July 11-12, 2008), we determined that
+further testing and enhancements were necessary for the following features
+before general release. The relevant codes and supporting files are removed
+from the c35b1 release.
+
+     - Dynamic Importance Sampling (DIMS)
+     - FIRPARAM
+     - Genetic Neural Network (GNN) for QSPR
+
+Files Removed:
+doc/dims.doc
+doc/fitparam.doc
+doc/gnn.doc
+source/dynamc/dims.src
+source/fcm/dims.fcm
+source/fcm/gnn.fcm
+source/misc/gnn.src
+test/c35test/antoine.inp
+test/c35test/dims.inp
+test/c35test/dims_nm.inp
+test/c35test/gnntest.inp
+test/data/1bdc_dims_start.pdb
+test/data/1bdc_dims_targ.pdb
+test/data/antoine.exp
+test/data/antoine.ini
+test/data/gnn.dat
+
+Files Modified:
+install.com
+build/UNX/charmm.mk
+build/UNX/dynamc.mk
+build/UNX/io.mk
+build/UNX/manip.mk
+build/UNX/misc.mk
+doc/commands.doc
+doc/corman.doc
+doc/correl.doc
+doc/dynamc.doc
+doc/io.doc
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/correl/anacor.src
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/io/mainio.src
+source/manip/corman.src
+source/misc/fitcharge.src
+source/util/new_timer.src
+
+------------------------------------------------------------------------------
+
+3.10 Random Number Generator
+    Developer     : Youngdo Won
+    Email Address : won@hanyang.ac.kr and won@helix.nih.gov
+    Date          : August 6, 2008
+
+     As some simulations expand over several nano seconds, recurrence of
+random numbers could be a problem. We addressed this with a "new" random
+number generator in the version c28a4 (February 15, 2001): the Combined
+Linear Congruential Generator (CLCG). It was parallelized in c32a1 (2004).
+Problems involved with it were fixed in c33a1 (2005). The CLCG random number
+has been default for the special versions compiled with the ##NEWRNG
+key. The CLCG code is now default and ##NEWRNG encapsulation is removed.
+For testing or checking previous trajectories, the "old" random number 
+generator, REAL* FUNCTION OLDRANDOM(ISEED), is available as a run time option.
+In order to switch the "old" random number generator, the miscellaneous
+RANDom command is modified to include,
+
+     RANDom [OLDRandom ]
+            [CLCG      ]
+
+Files Modified:
+install.com
+doc/miscom.doc
+source/charmm/iniall.src
+source/correl/solana.src
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/dynamc/dynio.src
+source/dynamc/dynlng.src
+source/dynamc/dynutil.src
+source/fcm/exfunc.fcm
+source/fcm/rndnum.fcm
+source/manip/intcor.src
+source/mc/mc.src
+source/misc/genetic.src
+source/misc/pbeq.src
+source/util/clcg.src
+source/util/random.src
+source/vibran/vibran.src
+
+==============================================================================
+
+[4] c35b2 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 2008 through February 15, 2009.  The developments are
+based on CHARMM version c35b1.
+
+4.1 IPS Enhancements
+    Developer     : Xiongwu Wu and Bernard R. Brooks
+    Email Address : wuxw@nhlbi.nih.gov
+    Institution   : NHLBI, NIH
+    Date          : December 28, 2008
+
+     Fix the structural orderness around cutoff when using 3D IPS and clearer
+output information with IPS calculation.
+
+     The 3D IPS function is improved based on a distribution of local region
+radius to reach countinuous derivatives upto the 4th order.  This improved
+3D IPS can produce correct structural and thermodynamic properties of fully
+homogeneous systems with a local region radius comparable to normal cutoff
+distances (about 10 angstroms).  Therefore, for fully homogeneous systems,
+3D IPS is a convenient algorithm for simulation(defined by keyword "PXYZ").
+While for hetereogenous systems, 3D IPS/DFFT with large local region radius
+is an accurate way to calculate nonbonded interactions.
+
+     The parameters of IPS calculation are output in a consistent definition
+to the 3DIPS/DFFT paper: "Xiongwu Wu and Bernard R. Brooks, Using the
+isotropic periodic sum method to calculate long-range interactions of
+heterogeneous systems. J. Chem. Phys., Vol.129, No.15, 154115 (2008)".
+
+Files involved:
+doc/nbonds.doc
+source/nbonds/enbips.src
+
+------------------------------------------------------------------------------
+
+4.2 RMD fixes and enhancements
+    Developer     : Stephan Lutz, Markus Meuwly
+    Email Address : stephan.lutz@unibas.ch, m.meuwly@unibas.ch
+    Institution   : Department of Physical Chemistry, University of Basel
+    Date          : December 26, 2008
+
+     Several modifications in Reactive MD module removing some bugs found for 
+very specific PSF and RMD definitions. Additionally, the previous precondition 
+for a mandatory bond inclusion in the PSF when the specific bond is getting
+removed in the RMD definition is now abolished. Merged all Fortran77 COMMON
+BLOCK variables from cross.fcm into module cross and converted all fixed size
+arrays to allocatable ones.
+
+Files Removed:
+source/fcm/cross.fcm
+
+Files Modified:
+build/UNX/charmm.mk
+build/UNX/dynamc.mk
+build/UNX/energy.mk
+build/UNX/misc.mk
+build/UNX/pert.mk
+doc/cross.doc
+source/charmm/iniall.src
+source/charmm/miscom.src
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/energy/energy.src
+source/misc/cross.src
+source/misc/genetic.src
+source/pert/epert.src
+source/pert/icpert.src
+test/c35test/cross.inp
+
+------------------------------------------------------------------------------
+
+4.3 Bugfixes and Enhancements
+
+4.3.1 VV2 Bugfix for NVT ensemble runs
+    Developer     : Haibo Yu and Benoit Roux
+    Email Address : haibo@uchicago.edu and roux@uchicago.edu
+    Institutions  : University of Chicago, Argonne National Lab
+    Date          : September 6, 2008
+
+     Simulations with VV2 integrator at NVT ensemble crash at step 0 
+with an error mesg SHAKE failed. Some of the variables in RattleRoll
+subroutine are not initialized.
+
+Files involved:
+source/dynamc/dynamvv2.src
+
+..............................................................................
+4.3.2 The mass array scaling kept unchanged for the force constant
+    Developer     : Nuria Plattner
+    Email Address : nuria.plattner@unibas.ch
+    Institution   : University of Basel
+    Date          : October 14, 2008
+
+     For path integral molecular dynamics, the force constant between the
+beads depends on the mass of the corresponding atoms. The mass is taken from
+the AMASS(*) array. At the same time, the mass of the beads used for the
+dynamics is scaled by the number of beads. (According to the centroid
+approximation.) The two usages of the mass array require different values
+of the masses, therefore it is not possible to use only one array for both
+modules.
+
+Files involved:
+source/energy/pathint.src
+source/fcm/pathint.fcm
+
+..............................................................................
+
+4.3.3 Eight character RESIdue name support
+    Developer     : Alex MacKerell
+    Email Address : alex@outerbanks.umaryland.edu
+    Institution   : University of Maryland, Baltimore
+    Date          : December 31, 2008
+
+     There appears to be a small bug with the number of characters
+recognized by the "read sequence RESI NRES" command.  When you have a
+residue with more then 4 characters "read sequence RESI NRES" only
+recognizes 4 characters in the residue name.  This leads to the
+generate statement failing as it can't find the correct residue in the
+topology.  Using "read sequence card" does not give this error.
+
+Files involved:
+source/io/mainio.src
+
+==============================================================================
+
+[5] c35b3 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2009 through August 15, 2009.  The developments are
+based on CHARMM version c35b2.
+
+5.1 Bugfixes and Enhancements
+
+5.1.1 Prefx key fix
+    Developer     : Stefan Boresch
+    Email Address : stefan@mdy.univie.ac.at
+    Institution   : University of Vienna
+    Date          : July 1, 2009
+
+     Incorrect !##RMD handling in iniall.src
+
+Files involved:
+source/charmm/iniall.src
+
+..............................................................................
+
+5.1.2 Variable location fix
+    Developer     : Rick Venable
+    Email Address : venabler@nhlbi.nih.gov
+    Institution   : LBC/NHLBI/NIH
+    Date          : April 7, 2009
+
+     KK is placed out of ##CHEQ block. (dynamc.src) molt_dummy is declared 
+integer. (psfres.src)  qchemp of ##CHEMPERT is placed out of ##PSSP block.
+bugfixes on charmm.org
+
+Files involved:
+source/dynamc/dynamc.src
+source/io/psfres.src
+source/fcm/pert.fcm
+source/pert/epert.src
+
+..............................................................................
+
+5.1.3 DYNA UNFO write and format fix
+    Developer     : Lennart Nilsson
+    Email Address : Lennart.Nilsson@biosci.ki.se
+    Institution   : Karolinska Institute
+    Date          : January 27, 2009
+
+     With I4BINARY in effect (the default) on a 64-bit system the timestep
+written to a binary trajectory created with DYNA UNFO has the value 0.0.
+
+Files involved:
+source/dynamc/dynio.src
+source/nbonds/enbips.src
+
+..............................................................................
+
+5.1.4 DYNAMC with transition path sampling with PNSAve.
+    Developer     : Michael Hagan (via Aaron Dinner)
+    Email Address : dinner@uchicago.edu
+    Institution   : The University of Chicago
+    Date          : May 13, 2009
+
+     Incorrect error handling when setting inconsistent TPS options for
+input of a saved trajectory.
+
+Files involved:
+source/dynamc/tps.src
+
+..............................................................................
+
+5.1.5 MC with Wang-Landau sampling from an input initial guess
+   Developer     : Aaron Dinner
+   Email Address : dinner@uchicago.edu
+   Institution   : The University of Chicago
+   Date          : July 23, 2009
+
+     Array into which the free energies (middle column of file) are read is
+declared as integer rather than real*8 leading to truncation.
+
+Files involved:
+source/mc/wl.src
+
+..............................................................................
+
+5.1.6 Routine name corrected
+    Developer        : Thomas Taylor / Stefan Boresch
+    Email Address    : anubis@mdy.univie.ac.at / stefan@mdy.univie.ac.at
+    Institution      : Institut fuer Computergestuetzte Biologische Chemie
+    Date             : 2009-05-28
+
+    Compiling with PIPF keyword to enable pipf code does not work out of
+the box because of typo. corrected to EPFDRV.
+
+
+Files involved:
+source/nbonds/enbond.src
+
+..............................................................................
+
+5.1.7 VSHIft / RSCAle=0 for some atoms leads to NaN
+    Developer        : Stefan Boresch
+    Email Address    : stefan@mdy.univie.ac.at
+    Institution      : University of Vienna, Austria
+    Date             : June 26, 2009
+
+     In free energy simulations with PERT it may be very useful to use
+RSCAle to set the LJ interactions of some atoms to zero. We just
+noticed by coincidence that this doesn't work with VSHIft (we usually
+use VSWItch). Since any fix (suggestions below) touches the inner loop
+of the (slow) energy routines (EVDW in enbonda.src), I'd appreciate
+feedback before submitting a formal bugfix. Consider the following
+fragment from enbonda.src (ca. line 804ff in c36a2):
+
+      IF (S.LT.C2OFNB) THEN
+        SGSHSQ=RSCLF(I)*RSCLF(J)*CNBA(IC)
+        SIG2=SGSHSQ*R2
+        SIG6=SIG2*SIG2*SIG2
+        SIG12=SIG6*SIG6
+        SGSHSQ=SGSHSQ*RECOF2
+        SGSHSQ=SGSHSQ*SGSHSQ*SGSHSQ
+        ASH6=TWO*(SGSHSQ-ONE)*SGSHSQ*SGSHSQ/SIG6 ! <----
+        BSH6=(THREE*SGSHSQ-FOUR)*SGSHSQ
+C
+        ENBPR=(CNBB(IC)*(SIG12-SIG6-SIG6+ASH6-BSH6))
+        DF=CNBB(IC)*R2*(TWELVE*(SIG6-SIG12)+SIX*ASH6)
+
+As you can see, SGSHSQ becomes zero if RSCLF of either atom
+I or J is zero, leading to a division by zero in the line
+marked by <----
+
+Realizing that SGSHSQ/SIG6 equals (RECOF2/R2)**3 leads to
+an obvious fix of the offending line
+Avoid the 0/0 expression by rewriting the offending line as
+
+        ASH6=TWO*(SGSHSQ-ONE)*SGSHSQ*(RECOF2/R2)**3
+
+Files involved:
+source/nbonds/enbonda.src
+
+==============================================================================
+
+5.2 Carbohydrate force field
+    Developer     : Alex MacKerell, Olgun Guvench, Liz Hatcher
+    Email Address : alex@outerbanks.umaryland.edu
+    Institution   : Univ. of Maryland, School of Pharmacy
+    Date          : August 9, 2009
+
+     New versions, deemed all36, of the carbohydrate RTF and PRM files
+containing fully optimized parameters for the acyclic sugars, the glycosyl
+linkages in hexopyranoses and the furanose monosaccharides.
+
+Files Removed:
+toppar/par_all35_carb.prm
+toppar/top_all35_carb.rtf
+
+Files Added:
+toppar/par_all36_carb.prm
+toppar/top_all36_carb.rtf
+
+==============================================================================
+
+[6] c35b4 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 2009 through February 15, 2010.  The developments are
+based on CHARMM version c35b3.
+
+6.1 Enhancements and minor fixes in SCPISM
+    Developer     : Sergio A. Hassan
+    Email Address : mago@helix.nih.gov
+    Institution   : CMM/DCB National Institutes of Health
+    Date          : December 29, 2009
+
+    Main fix in line 444: (ELECFG .AND. CH.NE.ZERO) ---> (ELECFG)
+    Improvement in CPU time
+    Extension of the model to par19 
+    Improved treatment of HB interactions 
+
+Prefx Keys: 
+   SCPISM
+
+Files Added: 
+   test/data/scphb-par22.inp
+   test/data/scphb-par19.inp
+   test/data/scpism-par22.inp
+   test/data/scpism-par19.inp
+
+Files Modified:
+   doc/scpism.doc
+   source/fcm/scpism.fcm
+   source/misc/scpism.src
+
+------------------------------------------------------------------------------
+
+6.2 Graphics fixes and enhancements
+    Developer     : Rick Venable
+    Email Address : venabler@nhlbi.nih.gov
+    Institution   : NIH/NHLBI Lab. of COmputational Biology
+    Date          : December 26, 2009
+
+Prefx Keys:
+    install.com mach-type chm-size X ...
+    GRAPHX
+    POV
+
+    A color map array declared as INTEGER was corrected to INTEGER*4; the
+RGB true color values were being interpreted incorrectly.
+
+    X11 compile bugs in install.com and Makefiles for 'gnu' and 'em64t'
+machine types were fixed.  Additional small changes were made for both
+gfortran and ifort compilers for 'gnu'.
+
+    The FILEINPUT pref.dat keyword has been removed (install.com).
+
+    MPI compiler renames changed to allow e.g. -static-libgfortran arg.
+
+Files involved:
+install.com
+build/UNX/Makefile_em64t
+build/UNX/Makefile_gnu
+source/graphics/povdfn.src
+
+------------------------------------------------------------------------------
+
+6.3 Bugfixes
+
+6.3.1 Fixed array allocation and array usage problems for two MANTIME commands
+    Developer     : Rick Venable
+    Email Address : venabler@nhlbi.nih.gov
+    Institution   : NIH/NHLBI Lab. of COmputational Biology
+    Date          : December 26, 2009
+
+    Integration would give alternating bad data values which got progressively
+more pronounced at longer times for 64-bit but not 32-bit executables.
+There were no obvious word size issues in the code, but a questionable
+usage of the same FAH array passed into two different arrays in the QSF
+integration routine was suspected.
+
+    While investigating this, another MANTIME bug was observed for WHIST; an
+array was allocated on the STACK but referenced to the HEAP in the
+subroutine call.
+
+Sample input to reproduce the problem (or testcase):
+MANTime series-name WHIS        ! requires ADUMB in pref.dat
+MANTime series-name INTEgrate   ! long time series in 64-bit
+
+Files involved:
+source/correl/mantim.src
+
+..............................................................................
+
+6.3.2 PBEQ HTMEmb keyward parsing fixed (charmm.org FORUM)
+
+     The HTMEMB (membrane height) input keyword is not active in the PBEQ
+module, although it is listed as an input parameter. The parsing key is fixed
+in the GTRMF call.
+
+Files involved:
+source/misc/pbeq.src
+
+..............................................................................
+
+6.3.3 Write MMFP restraint when running in parallel
+    Developer     : Igor Vorobyov/Alex MacKerell
+    Email Address : ivorobyov@ucdavis.edu/alex@outerbanks.umaryland.edu
+    Institution   : UC Davis/Univ. of Maryland, Baltimore
+    Date          : November 30, 2009
+
+     The MMFP constraint position, angle or dihedral data are not written
+to the previously opened data file but to fort.X file (X is the unit number
+of the data file as controlled by IUMMFP keyword) if the node where the MMFP
+constraint energy is computed is not the I/O node. This typically happens
+with parallel jobs running on more than 2 cpus.
+
+Files involved:
+source/energy/energy.src
+source/misc/mmfp.src
+
+..............................................................................
+
+6.3.4 Mass weighted center of selected atoms fixed (charmm.org FORUM)
+
+     The center of mass for a given atom selection (around line 400) is
+calculated as SUM (coordinate) / SUM (mass). It should calculate
+SUM (coordinate x mass) / SUM (mass).
+
+Files involved:
+source/misc/quicka.src
+
+------------------------------------------------------------------------------
+
+6.4 Update of toppar files for c35b4
+    Developer     :  Alex MacKerell
+    Email Address :  alex@outerbanks.umaryland.edu
+    Institution   :  Univ. of Maryland, Baltimore
+    Date          :  01/08/2010
+
+doc/parmfile.doc updated
+lipids parmeters to version 32 (version 27 removed)
+carbohydrate parameters to version 35
+drude parameters updated
+
+==============================================================================
+
+[7] c35b5 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2010 through August 15, 2010.
+
+7.1 HFB and other fixes
+    Developer     : Charlie Brooks
+    Email Address : brookscl@umich.edu
+    Institution   : U. Michigan
+    Date          : August 9, 2010
+
+TREK/HFB: spurious rotation of images
+GBSW: memory allocation errors after repeated resets
+
+Subversion revision 41
+
+Files involved:
+build/UNX/Makefile_osx     use -mnative instead of -mpentium3
+source/energy/gbsw.src     deallocate startalst, gblookup,
+                           tmpdist only if allocated
+source/rxncor/adiab.src    added flag LNOROTATE to eliminate spurious rotation
+source/rxncor/travel.src
+
+==============================================================================
+
+[8] c35b6 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 2010 through February 15, 2011.
+
+8.1 Update polar electrostatic IPS potential
+    Developer     : Xiongwu Wu and Bernard R. Brooks
+    Email Address : wuxw@nhlbi.nih.gov
+    Institution   : NHLBI, NIH
+    Date          : January 31, 2011
+
+     Electrostatic IPS potential is replaced by the polar electrostatic IPS
+potential.
+
+Files involved:
+source/nbonds/enbips.src
+
+------------------------------------------------------------------------------
+
+8.2 MCMA fixes
+    Developer   : Rick Venable and Bernard R. Brooks
+    Institution : NHLBI, NIH
+    Date        : November 20, 2010
+
+     The MCMA code in c35bN versions is not included by default, and some
+deficiencies in the existing code have been overlooked.  In particular,
+tests with 3 different compilers all lead to fatal errors related to an
+internal WRITE statement.  A revised version of the source file was
+obtained, tested, and found to fix the problem.  The test case now runs
+to completion without any problems.
+
+Files involved:
+source/mc/mcma.src
+
+------------------------------------------------------------------------------
+
+8.3 University of Michigan Fixes
+    Developer     : Charlie Brooks
+    Email Address : brookscl@umich.edu
+    Institution   : U. Michigan
+    Date          : January 11, 2011
+
+(1) Trek HFB fixes
+     An invalid index in array IDNEXT caused a segmentation fault.
+Arrays WAMPX etc. were not correctly deallocated.
+
+Files Involved:
+source/rxncor/travel2.src
+
+(2) APBS Update
+     CHARMM APBS code needs updates for compatibility with F95 modules and
+the current third-party interface.
+
+Files Involved:
+build/UNX/Makefile_osx
+source/misc/apbs.src
+source/misc/pbeq.src
+
+(3) PHMD fix
+     Subroutine RunPHMD incorrectly used the size of ImINBL when traversing
+ImINBSL, causing some simulations to die or segfault.
+
+Files Involved:
+source/charmm/charmm_main.src
+source/energy/phmd.src
+
+(4) SOLANL uninitialized variables
+     Uninitialized variables OX2, ATCOR, ATCOR1, ATCOR2 in subroutine SOLANL
+led to inconsistent rotational correlation times.
+
+Files Involved:
+source/correl/solana.src
+
+(5) Miscellaneous fixes and cleanup
+     Miscellaneous bug fixes since c36a4 not yet incorporated in the master
+repository.
+
+Files Involved:
+source/image/nbndgcm.src
+source/manip/rxcons_3.src
+source/minmiz/steepd.src
+source/nbonds/ewald.src
+source/rxncor/adiab.src
+

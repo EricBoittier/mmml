@@ -1,0 +1,20 @@
+* WATER PARAMETER FILE
+*
+BOND
+HT   OT     450.0       0.9600
+HT   HT       0.0       1.5180 
+
+THETAS
+HT   OT   HT      55.0     104.49
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+!LJ params
+HT       0.0       -0.121596  0.322977 ! with pol with q
+OT       0.0       -0.301059  1.744040 ! with pol with q
+
+
+HBOND CUTHB 0.5
+END
+

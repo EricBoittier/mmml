@@ -1,0 +1,370 @@
+CHARMM Element doc/eef1.info $Revision: 1.1.1.1 $
+#
+File: EEF1, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+                        Effective Energy Function 1
+
+
+     EEF1 is an effective energy function combining the CHARMM 19 polar
+hydrogen energy function (with certain modifications, see below)
+with an excluded volume implicit solvation model.  The solvation model
+is similar in spirit to the Atomic Solvation Parameter approach, but
+does not use surface areas and is therefore much faster; simulations
+with EEF1 take about 50% longer than the corresponding vacuum simulation.
+
+     The solvation model assumes that the solvation free energy of each
+group is equal to the solvation free energy of that group in a small
+model compound less the amount of solvation it loses due to solvent
+exclusion by other atoms of the macromolecule around it. The exclusion
+effect of nearest and next-nearest neighbors (1-2 and 1-3 interactions)
+are neglected because such neighbors also exist in small model compounds.
+The CHARMM nonbonded atom and exclusion lists are used for the solvation
+calculation.
+
+     Because not only DG but also DH and DCp data are available, we
+can calculate the solvation free energy at different temperatures.
+This calculation assumes a DCp independent of temperature.
+Therefore extrapolation to temperatures very different from 300 K
+is not reliable.
+
+     EEF1 refers not only to the implicit solvation model but also to
+the specific modifications and nonbonded options used in CHARMM.
+The nonbonded options must be: ctonnb 7. ctofnb 9. cutnb 10. group rdie
+(see example file below).
+
+Three files are needed to use EEF1 (they can be found in subdirectory
+support/aspara):
+  toph19_eef1.inp : This is a modification of toph19.inp where ionic
+		      sidechains and termini are neutralized and contains
+		      an extra parameter type (CR)
+  param19_eef1.inp: This is a modification of param19.inp which includes
+                      the extra parameter type (CR)
+  solvpar.inp     : This file contains the solvation parameters
+
+	When the INTE command is used with EEF1, the number listed under
+ASP is the amount of solvation free energy that is excluded between the
+two atom selections. For example, the INTE between atom A and atom B will
+give the amount of solvation A loses due to B plus the amount B loses due
+to A.  The command "INTE sele all end" will give the amount of solvation free
+energy excluded, not the total solvation free energy of all atoms.  That
+is, it is not equivalent to "ENERGY".
+
+	EEF1 can be used with images. In that case the ASP energy term
+refers to the solvation free energy of the primary atoms.  This is usually
+less negative than when images are not present, because image atoms exclude
+some solvation free energy from the primary atoms.
+
+        EEF1 is compatible with the BYCC non-bonded option and the NBACtive
+command, so that the calculation of non-bonded and solvation energy terms
+can be limited to specific subsets of atoms in the system.
+
+	The analytical expression of the second derivative matrix of the
+EEF1 potential has now been added. Thus, the normal modes, for example,
+can now be calculated analytically.
+
+* Menu:
+
+* Syntax::         Syntax of the EEF1 commands
+* References::     Useful references
+* Example::        Input file
+
+
+#
+File: EEF1, Node: Syntax, Up: Top, Next: References, Previous: Top
+
+
+                            Syntax for EEF1
+
+
+     There are only two EEF1 commands:
+
+         EEF1 SETUP [TEMP real] UNIT int NAME solv_param_file
+
+         EEF1 PRINT
+
+     The first sets up the solvation calculation by giving TEMP
+and reading in the solvation parameters. And the second
+prints out the solvation of each group. The solvation energy
+is stored in ETERM(ASP) and reported under the name "ASP".
+Obviously, it makes no sense to use both ASP and EEF1.
+If one wants to skip the solvation term after one has set it
+up, one can issue the command SKIP ASP.
+
+ TEMP   is the temperature to which the solvation parameters refer
+        (default is 298.15). Note that this is unrelated to the
+        temperature at which one runs dynamics. It just determines
+        the solvation free energy parameter values.
+ PRINT  prints out the solvation free energy of each atom/group
+        as well as the solvation enthalpy and heat capacity
+
+
+#
+File: EEF1, Node: References, Up: Top, Next: Example, Previous: Syntax
+
+
+                            References
+
+
+ [1]  T. Lazaridis and M. Karplus, Effective energy function for
+      proteins in solution, Proteins, 35:133-152 (1999)
+
+ [2]  T. Lazaridis and M. Karplus, Discrimination of the native from
+      misfolded protein models with an energy function including
+      implicit solvation, J. Mol. Biol., 288:477-487 (1999)
+
+ [3]  T. Lazaridis and M. Karplus, "New View of Protein Folding
+      reconciled with the Old through Multiple Unfolding Simulations",
+      Science, 278:1928 (1997)
+
+#
+File: EEF1, Node: Example, Up: Top, Next: IMM1, Previous: References
+
+---------------------------------------------------------------------
+* Example file for EEF1
+*
+
+open read card unit 3 name toph19_eef1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name param19_eef1.inp
+read para unit 3 card
+close unit 3
+
+open read unit 3 card name filename.crd
+read seque coor unit 3
+close unit 3
+
+generate main setup
+
+open read unit 2 card name filename.crd
+read coor card unit 2
+close unit 2
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+
+eef1 setup temp 298.15 unit 93 name solvpar.inp
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+mini abnr nstep 300
+
+!This command prints out solvation free energy for each atom
+eef1 print
+
+dynamics verlet timestep 0.002 nstep 1000 nprint 100 iprfrq 100 -
+      firstt 240 finalt 300 twindh 10.0 ieqfrq 200 ichecw 1 -
+      iasors 0 iasvel 1 inbfrq 20
+
+inte sele resid 2 end sele resid 19 end
+
+!the command below is not equivalent to energy
+inte sele all end
+
+energy
+skip asp
+energy
+
+stop
+
+#
+File: EEF1, Node: New EEF1 parameters, Up: Top, Next: IMM1, Previous: References
+
+		New EEF1 parameters  (May 2004)
+
+	Recent work (e.g. Masunov & Lazaridis, JACS 125:1722,2003) revealed
+that the interactions between some ionizable sidechains in EEF1 are too
+strong. Also, interactions between hydroxyl groups seem to be too strong.
+The files toph19eef1.1.inp and param19eef1.1.inp contain empirical adjustments
+of the partial charges to mitigate some of these problems. We refer to this
+parameter set as EEF1.1.
+
+	In addition, topology files are provided for using EEF1 with the
+CHARMM22, all atom force field (solvpar22.inp, top_all22_prot_eef1.inp,
+and top_all22_prot_eef1.1.inp).  The standard parameter file can be used with
+these. The combination of EEF1 with CHARMM22 has not been extensively tested.
+
+	Also, DEBYE-HUCKEL screening of electrostatic interactions has been
+implemented, mostly for development purposes. To use it add the keyword
+	IONIC xxx
+where xxx is the ionic strength in mol/lt. With this all electrostatic
+interactions are multiplied by exp(-r/rD), where rD is the Debye length
+(rD = SQRT(0.0316 Temp/IonicStrength )
+
+
+#
+File: EEF1, Node: IMM1, Up: Top, Next: Top, Previous: New EEF1 parameters
+
+                        Implicit Membrane Model 1
+
+     IMM1 is an extension of EEF1 for modeling proteins in lipid membranes
+(T. Lazaridis, Proteins, 52:176-92, 2003). The implicit membrane is set up
+like this:
+
+open read unit 11 card name toph19_eef1.1.inp
+read rtf card unit 11
+close unit 11
+
+open read unit 12 card name param19_eef1.1.inp
+read para card unit 12
+close unit 12
+
+... generate psf, read coordinates ...
+
+eef1 setup membrane slvt water slv2 chex nsmth 10 width 26.0 temp 298.15 -
+              unit 93 name ../solvpar.inp aemp 0.85
+
+... mini, dyna, etc.
+
+The keyword MEMBrane specifies that a membrane is to be modeled.  "slvt water"
+specifies that the exterior solvent is water and "slv2 chex" that the interior
+solvent is cyclohexane. NSMTH (default 10) determines how steep the transition
+is at the interface between interior and exterior. WIDTH is the width of the
+interior region in Ang (default 30). Standard values are to be used here depending on
+the lipid one wants to model. Such values can be obtained from experimental
+data (see http://www.brocku.ca/researchers/peter_rand/lipid/default.html).
+For example:
+
+	DMPC	23.1 A
+	DOPC    25.4 A
+	POPC    27.0 A
+
+The last keyword (AEMP, default 0.85) determines the extent of strengthening
+of electrostatic interactions in the membrane (the smaller, the stronger).
+This parameter was empirically adjusted to give reasonable membrane insertion
+energies for model systems.
+	For charged groups buried in the membrane, a linear switching function
+reproduces better all-atom potentials of mean force (Lazaridis et al. BBA Biomem
+1838:2149, 2014). To use a linear switching function for the charged sidechains
+add to the eef1 command line the keyword LINF.
+
+	The above command sets up a neutral/zwitterionic membrane. The effect
+of negatively charged lipids can be accounted for by using a Gouy-Chapman term
+in the energy function (T.Lazaridis, Proteins 58:518, 2005). This is done by
+adding the following keywords:
+
+eef1 setup ....   gouy anfr 0.3 area 70. offset 3.0 conc 0.1 valence 1
+
+GOUY specifies that a Gouy-Chapman term is to be used. ANFR is the molar
+fraction of anionic lipids (e.g., a 70/30 mixture of PC/PG corresponds
+to ANFR 0.3, which is the default). AREA is the area (Angstrom^2) per lipid
+(default 70). OFFSet is the distance of the plane of negative charge
+(usually the phosphates) from the hydrocarbon/water boundary (default 3).
+CONC and VALEnce are the molarity and valence of the salt (default 0.1 and 1,
+respectively).
+
+	CAUTION: When the Gouy-Chapman term is calculated, the ionic sidechains
+are given a full charge (they are neutralized otherwise), and this is done
+by checking the partial charges. If you want to use topology files other the
+ones provided (toph19eef1.1.inp) it might not work.
+
+	It is also possible to include the effect of transmembrane voltage
+by adding the keyword
+	VOLT xxx
+where xxx is the transmembrane voltage in Volt (default 0.1).
+The transmembrane voltage is set up so that it is positive in the +z
+direction. This term is based on the analytical solution to the
+Poisson-Boltzmann equation (Roux, Biophys. J, 1997).
+
+	The GC and TM voltage energies are added to the Solvation Free Energy
+(under ASP column). These terms will be printed out if PRNLEV is greater
+than 9.
+
+        An implicit cylindrical, toroidal (parabolic) or circular pore in
+a neutral membrane can be accounted for by using a modified energy function
+(T. Lazaridis, J. Chem. Theory Comput., 1:716-722 (2005); M. Mihajlovic and
+T. Lazaridis, Biochim. Biophys. Acta, 1798:1494-1502 (2010)). The following
+keywords should be added for the cylindrical, toroidal or circular pore,
+respectively:
+
+eef1 setup membrane ... rcyl 10
+eef1 setup membrane ... rprb 10 aprb 15
+eef1 setup membrane ... rcrc 10
+
+where RCYL specifies a cylindrical pore of 10 Ang radius; RPRB specifies
+a parabolic pore of 10 Ang radius at the center of the pore and APRB
+defines the curvature of the pore (the pore radius at the membrane surface
+will be rprb+aprb); RCRC specifies a circular pore of 10 Angstrom radius.
+
+	For cylindrical (hydrophobic) pores it is possible to add a term
+describing the free energy cost of hydrophobic group exposure (Rahaman &
+Lazaridis, BBA, 2013). Peptides covering this area will reduce this
+free energy cost. To include this term add the keyword EPOR, for example:
+
+eef1 setup ... rcyl 10 epor
+
+It is also possible to use a different value for NSMTH in the radial direction
+than in the z direction by using the keyword NSMP.
+
+	For pores in anionic membranes the Gouy-Chapman analytical equations
+do not apply. It is possible, however, to obtain the potential by numerical
+solution of the Poisson-Boltzmann equation and use it as a static field
+in molecular dynamics simulations (He et al. J Comp Chem 34:1463, 2013).
+To invoke this facility add the keyword PHI followed by the name of the
+file containing the electrostatic potential in openDX format:
+
+eef1 setup membrane ... PHI <potential.file> [IUPHI <integer> BDCD <integer>]
+
+A software package (MBUILD) to prepare such PB calculations using APBS
+for membrane pores is available by request to T. Lazaridis. Additional
+parameters for this facility are:
+
+IUPHI  (default 91) : fortran unit number for input file
+BDCD   (default 0)  : boundary condition for PB potential. 0: periodic cubic.
+		      1: outside the PB region use the Gouy-Chapman eq.
+
+	It is possible to include the membrane dipole potential and lateral
+pressure effects in IMM1 (Zhan & Lazaridis, Biophys Chem 161:1, 2012 and
+Biophys J 104:643, 2013). The dipole potential is invoked by the keyword MDP:
+
+eef1 setup membrane ... MDP <value>
+
+where <value> is the dipole potential at the membrane center (default 0).
+The dipole potential energy will be printed if PRNLEV>9.
+
+Lateral pressure calculation is invoked by the keyword LAT:
+
+eef1 setup membrane ... LAT CMD <real> APL <real> PL <real> XPE <real> LAMBDA <real>
+
+CMD    (default 5.3) : Membrane compressibility modulus per Ang (mN/m A)
+APL    (default 70)  : Area per lipid
+PL     (default 0.01): Peptide to lipid molar ratio
+XPE    (default 0.0) : mole fraction of DOPE
+LAMBDA (default 0.5) : expansion coefficient
+
+If PRNLEV>9, the lateral pressure profile, the cross-sectional area, and
+the lateral pressure energy will be printed. The lateral pressure and
+membrane dipole energy are included in the ASP energy term, but not
+in the atomic solvation energies reported by 'eef1 print'.
+
+At this point the lateral pressure term is only available for mixtures of
+DOPC and DOPE. To adapt the lateral pressure term to other lipids one
+would need to change the parameters meanmod, gaussmod, curpe, curpc, delta,
+magn, pos, width in subroutine genlatpres. A c program (latpres.c) is
+available upon request for testing the effect of these parameters on
+the lateral pressure profile before implementation in charmm.
+
+	An adaptation of IMM1 to the all atom CHARMM36 force field is available.
+To use it one should use the topology file top_all36_prot_eef1.1.rtf
+and solvpar22.inp in subdirectory support/aspara with the standard parameter
+file. The keyword "switch" should be added to the nonbonded options and the
+value of AEMP should be set to 0.91.
+
+A curved membrane (Nepal et al., Biophys. J, 114:2128,2018) can be invoked
+by the keyword RADU <REAL>, where <REAL> is the radius of curvature.
+This will generate a spherical membrane of specified radius at the membrane
+midplane. The center of the sphere will be at the origin. To generate a
+cylindrical membrane parallel to the x axis, the keyword TUBE should be added.
+
+For example,
+
+eef1 setup membrane ... RADU 100 		! Vesicle
+eef1 setup membrane ... RADU 100 TUBE 		! Tube
+
+To capture the entire curvature effect, the curved membrane should be
+invoked in conjunction with the lateral pressure effect, although it is not
+technically mandatory. The electrostatic potential in curved membranes is
+calculated based on approximate solutions to the Poisson-Boltzmann equation
+(Nepal et al., Protein Science, 2020).  For radii above 100 A one can also use
+the Gouy-Chapman flat-membrane model by adding the keyword GCCU.

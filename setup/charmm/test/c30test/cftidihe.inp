@@ -1,0 +1,293 @@
+* CHARMM 30 testcase cftidihe.inp
+* Testing one-dimensional conformational thermodynamic integration
+* Coordinate type: dihedral
+* System: butane in vacuum
+* Author: Krzysztof Kuczera, Lawrence, KS 14-Jan-2003
+* External Files: top_all22_prot.inp and par_all22_prot.inp
+* Replaces cftigas.inp
+*
+
+if ?qtsm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! Multinode execution has file I/O problems.
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+bomlev -1
+stream datadir.def
+
+set 3 buta           ! PSF prefix
+set 4 150            ! C-C diheral [deg]
+set 8 300.0          ! temperature [K]
+set t butane_in_gas  ! title
+set r buta           ! solute segid
+set n 2000          ! number of MD steps
+
+! read in topology, parameter and PSF files
+!===========================================
+open read card unit 11 name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read card  unit 11 name @0par_all22_prot.inp
+read para card unit 11
+close unit 11
+
+read RTF card append
+* Butane all-H topology
+* K.Kuczera  27-Oct-93 Lawrence, KS
+*
+
+RESI BUTA      0.0000    ! Butane CH3CH2CH2CH3
+GROU                     !
+ATOM C1  CT3  -0.2700    !
+ATOM H11 HA    0.0900    !      H11 H21 H31 H41 
+ATOM H12 HA    0.0900    !       |   |   |   |
+ATOM H13 HA    0.0900    !   H12-C1--C2--C3--C4-H42
+GROU                     !       |   |   |   |
+ATOM C2  CT2  -0.1800    !      H13 H22 H32 H43
+ATOM H21 HA    0.0900    !
+ATOM H22 HA    0.0900    !
+GROU                     !
+ATOM C3  CT2  -0.1800    !
+ATOM H31 HA    0.0900    !
+ATOM H32 HA    0.0900    !
+GROUP
+ATOM C4  CT3  -0.2700    !
+ATOM H41 HA    0.0900    !
+ATOM H42 HA    0.0900    !
+ATOM H43 HA    0.0900    !
+!
+BOND  C1 C2  C2 C3  C3  C4
+BOND  C1 H11 C1 H12 C1 H13 C2 H21 C2 H22
+BOND  C3 H31 C3 H32 C4 H43 C4 H41 C4 H42
+!
+IC C1   C2   C3   C4    0.0000   0.0000  180.0000   0.0000  0.0000
+IC H11  C1   C2   C3    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H12  C1   C2   C3    0.0000   0.0000  180.0000   0.0000  0.0000
+IC H13  C1   C2   C3    0.0000   0.0000   60.0000   0.0000  0.0000
+IC H21  C2   C3   C4    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H22  C2   C3   C4    0.0000   0.0000   60.0000   0.0000  0.0000
+IC H31  C3   C2   C1    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H32  C3   C2   C1    0.0000   0.0000   60.0000   0.0000  0.0000
+IC C2   C3   C4   H41   0.0000   0.0000  -60.0000   0.0000  0.0000
+IC C2   C3   C4   H42   0.0000   0.0000  180.0000   0.0000  0.0000
+IC C2   C3   C4   H43   0.0000   0.0000   60.0000   0.0000  0.0000
+
+patc first none last none
+
+END
+
+read sequence BUTA 1
+generate BUTA setup warn
+
+! read in current coordinates : from equilibration
+!=======================================================
+read coor card
+* BUTA : BUTANE IN VACUUM
+* OPTIMIZED COORDINATES WITH PHI=160.0000 FIXED BY TSM
+*  DATE:     9/ 1/96     12:36:39      CREATED BY USER: kuczera
+*
+   14
+    1    1 BUTA C1      .11218    .10887   -.71648 BUTA 1     12.01100
+    2    1 BUTA H11    -.54387    .81246   -.16004 BUTA 1      1.00800
+    3    1 BUTA H12    -.37964   -.88735   -.73899 BUTA 1      1.00800
+    4    1 BUTA H13     .21232    .47478  -1.76104 BUTA 1      1.00800
+    5    1 BUTA C2     1.48566    .01618   -.04691 BUTA 1     12.01100
+    6    1 BUTA H21    2.01225   -.64459   -.77486 BUTA 1      1.00800
+    7    1 BUTA H22    1.54419   -.47673    .94934 BUTA 1      1.00800
+    8    1 BUTA C3     2.22786   1.35636    .00514 BUTA 1     12.01100
+    9    1 BUTA H31    1.91378   1.96198   -.87713 BUTA 1      1.00800
+   10    1 BUTA H32    1.91755   1.91461    .91671 BUTA 1      1.00800
+   11    1 BUTA C4     3.75096   1.20838   -.03510 BUTA 1     12.01100
+   12    1 BUTA H41    4.10620    .61595    .83548 BUTA 1      1.00800
+   13    1 BUTA H42    4.24135   2.20512   -.00582 BUTA 1      1.00800
+   14    1 BUTA H43    4.06706    .68864   -.96514 BUTA 1      1.00800
+
+coor copy comp
+
+! show the initial conformation
+!==================================================
+ic edit
+  dihe 1 C1   1 C2   1 C3   1 C4   0.0 
+  dihe 1 H11  1 C1   1 C2   1 C3   0.0
+  dihe 1 H12  1 C1   1 C2   1 C3   0.0
+  dihe 1 H13  1 C1   1 C2   1 C3   0.0
+end
+ic fill
+ic print
+
+define mov1 sele show segid @r .and. resid 1 .and. ( type -
+       C1 .or. type C2 .or. type H1% .or. type H2% ) end
+define mov2 sele show segid @r .and. resid 1 .and. ( type -
+       C3 .or. type C4 .or. type H3% .or. type H4% ) end
+
+! Use TSM: 
+!  to fix phi
+!  to define "perturbations" by +-2.5,5.0 deg
+!  to save perturabtion energies and energy derivative to .icp file
+!  Note: to get correct sign of derivative maintain the
+!        order of the selections in "move ..." (see cfti.doc)
+!        alternate correct selection: use only "sele mov2 end"
+!==============================================================
+tsm
+  fix dihe @r 1 c1  @r 1 c2  @r 1 c3  @r 1 c4 toli 1.0e-5
+  maxi 100
+  savi icun 10 icfr 10 nwin 2
+  move dihe @r 1 c1  @r 1 c2  @r 1 c3  @r 1 c4 by -5 inte -
+    sele mov2 end sele mov1 end
+  cfti
+end
+
+! generated nb list 
+update cutnb 14.0 ctofnb 12.0 ctonnb 10.0 wmin 1.2 inbfrq 1
+
+! SHAKE bonds to hydrogen atoms
+SHAKE BONH tolerance 1.0e-6 para
+
+energy 
+
+! energy minimize
+mini abnr nstep 100 nprint 50 inbf -1
+
+! Open files for dynamics
+
+open unit 10 form write name @9@3d@4.icp
+open unit 30 unfo write name @9@3d@4.cor
+open unit 31 card write name @9@3d@4.crd
+
+title
+* @3: @t
+* Dynamics with phi=@4 deg
+*
+
+faster 1
+
+! select integrator : VERL      -> dynamc.src
+!                     VERL ORIG -> dynamcv.src
+!                     VVER      -> dynamvv.src
+DYNAMICS  -
+  LEAP STRT  NSTEP @n TIMESTEP 0.002  - 
+!  NOSE QREF 50.0 TREF 300.0 NCYC 5 STRT NSTEP @n TIMEST 0.002 - 
+  inbfrq -1 ihbfrq 0 ilbfrq 0 -
+  IUNCRD 30 IUNVEL -1 KUNIT -1 IUNWRI -1 IUNREA -1 -
+  IPRFRQ 100  NPRINT 100  NSAVC 20 NSAVV  0 ISVFRQ 100 -
+  IASORS 1 IASVEL 1 FIRSTT 240.0 FINALT 300.0 - 
+  IHTFRQ 100 IEQFRQ 100 ICHECKW 1  TWINDH 20.0 TWINDL -20.0 -
+  ISEED 314159 
+
+
+write coor card unit 31
+* @3: @t
+* Coords after 5ps equil + 10ps MD with phi=@4 deg
+*
+
+! check constraint
+!================
+ic fill
+ic print
+
+tsm clear
+
+
+! Analysis step 1: TI results, total free energy derivative
+!  + energy-entropy decomposition
+! By selecting energy terms to be calculated, free energy component
+! analysis may be performed using this command [E-S are useless then]
+!=====================================================================
+
+open unit 51 unfo read name @9@3d@4.cor
+
+
+! just as in the dynamics phase.
+! update is used after FAST to get correct setup of internal and 
+! nonbonded energy pointer tables.
+! For the TI free energy derivative only the "solute-solvent" energy
+! term is needed; however whenever entropy is being calculated
+! the correct total system potential energy must be evaluated
+! For butane in gas phase I use 'update cutnb 99.0' here
+! and 'cfta inbf 0' below, for other systems think about optimal setup.
+!======================================================================
+FASTER 1
+update cutnb 99.0 ctonnb 10.0 ctofnb 12.0 inbfrq 1 ihbfrq 0
+
+
+! skip energy terms
+!-------------------
+!skipe incl all excl bond angl urey dihe impr    ! internal energy
+!skipe incl bond angl urey dihe impr             ! nonbonded
+
+!this gives more printout for debugging
+!prnl 7
+
+! Use TSM: this duplicates what was used in generation phase
+! to define perturbation coordinate only
+!==============================================================
+tsm
+  fix dihe @r 1 c1  @r 1 c2  @r 1 c3  @r 1 c4 toli 1.0e-5
+  maxi 100
+  move dihe @r 1 c1  @r 1 c2  @r 1 c3  @r 1 c4 by -5 inte -
+    sele mov2 end sele mov1 end
+  cfta first 51 nunit 1 temp 300.0 skip 1 cont 100 -
+    inbf 0 ihbf 0 imgf 0
+end
+
+!tsm clear
+
+! Analysis step 2: TI calculation using the energies and gradients
+! stored in the .icp file
+!=====================================================================
+
+open unit 10 card read name @9@3d@4.icp
+
+! Use TSM: no energy evaluations here, all info read from .icp
+!==============================================================
+tsm
+  cftj uicp 10 temp 300.0 cont 100 npert 2
+end
+
+!tsm clear
+
+
+! Analysis step 3: original TSM: TP results - free energy perturbation
+!=====================================================================
+
+open unit 10 form read name @9@3d@4.icp
+
+! Use TSM post-processing command
+!   first,nunit - first file no and no. of files
+!   begin,stop - first and last configuration (as written to file)
+!                to be processed
+!   ic - IC perturbations are considered
+!   surf - print dA as function of IC values at end
+!   inte - print out both total and interaction energies
+!   temp,delt - temperature and temperature step in dA calculations
+!   ctem - additionally print out average T from kinetic energy
+!   bins - use bins of n configurations to estimate errors
+!   maxp - no of coords to be perturbed
+!   maxw - no of windows (i.e. no of steps to reach max. displacement,
+!          times 2, as perturbs are always done in + and - dir).
+!   maxs - max points on surface
+!=====================================================================
+tsm post ic surf inte maxp 1 maxw 6 maxs 200
+ proc firs 10 nuni 1 bins 100 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 2000
+end
+
+tsm clear
+
+! comparing TI with TP:
+! With 'DYNA VVER' on a Pentium IV with Red Hat Linux 7.3/gcc/g77
+! TP : A(-147.5 deg) = 0.6450 , A(-152.5 deg) = 0.2081 kcal/mol
+! so dA/dx = (0.6450 - 0.2081)/5.0 kcal/(mol deg) = 5.01 kcal/(mol rad)
+!    compared to TI values 5.02 (both .cor and .icp)
+! and analogously for TP U result: dU/dx = 5.13 kcal/(mol rad)
+!     compared to TI values 5.18 (.cor) and 5.14 (.icp)
+! KK Jan 2003
+
+stop

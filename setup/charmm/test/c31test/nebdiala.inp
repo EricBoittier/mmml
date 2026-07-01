@@ -1,0 +1,191 @@
+* CHARMM 31 testcase nebdiala.inp
+* Test the NEB ABNR minimization
+* Author: Jhih-Wei Chu
+* requires toph19.inp, param19.inp
+*
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+if ?replica .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+set z diala_r1000
+
+set krms 1000
+set kangle 0 
+set cosmax 0.98
+set kmax 0
+set rmax 0.0
+
+bomblev -2
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+
+! GENERATE ALANINE DIPEPTIDE, PARM19
+!
+read sequence card
+3
+AMN ALA CBX
+generate ala setup warn
+
+IC PARA
+
+IC SEED 1 C 2 N 2 CA
+IC BUILD
+!
+! minimize to get right ENERGY and do a quick energy/angle check
+!
+mini sd nstep 1000 cutnb 100.0 nprint 50 inbfrq 5000
+
+!cutnb 100.0
+ener
+quick 2 4 6 8
+  set qphi = ?PHI
+
+quick 4 6 8 10
+  set qpsi = ?PHI
+
+ open write card unit 44 name @9diala.pdb
+ write coor pdb unit 44 
+ close unit 44
+
+!
+!  Build replicas and delete the initial coordinates
+!
+set nrep 25
+replicate a nreplica @nrep select all end setup
+delete atom sele segid ala end
+
+!
+!  Setup block interaction matrix (which has all replicas at full 
+!
+block 2
+  call 2 select segid a* end
+  coef 1 1 1.0
+  coef 2 2 1.0
+  coef 2 1 1.0
+end
+
+!
+!  check that energy is the same as before (multiplied by 
+!  the number of replicas)
+!
+ener  
+
+!
+!  create an initial crude cyclical path diangolly. 
+!
+!
+open write card unit 20 name @9@z_initial.dat
+
+set phis -180.0
+set psis -180.0
+set phie 180.0
+set psie 180.0
+
+! Calculate the increment of dihedral angles, which determine the 
+!initial path.
+calc incphi -( @phie - @phis ) / (@nrep )
+calc incpsi ( @psie - @psis ) / (@nrep )
+
+!
+!  change phi,psi
+!
+set i 1
+calc phi 0.0
+calc psi 50.0
+
+label loop1
+
+  define rotatphi select  atom A@i 3 * .or. -
+     atom A@i 2 O  .or. atom A@i 2 C .or. -
+     atom A@i 2 CA .or. atom A@i 2 CB show end
+
+  coor axis select atom A@i 2 N end select atom A@i 2 CA end
+  coor rotate axis phi @phi select rotatphi end
+
+  define rotatpsi select rotatphi .and. .not. -
+     (atom A@i 2 CA .or. atom A@i 2 CB) show end
+
+  coor axis select atom A@i 2 CA end select atom A@i 2 C end
+  coor rotate axis phi @psi select rotatpsi end
+
+  define junk select atom A@i 1 C end
+  set 2 ?SELATOM
+  define junk select atom A@i 2 N end
+  set 4 ?SELATOM
+  define junk select atom A@i 2 CA end
+  set 6 ?SELATOM
+  define junk select atom A@i 2 C end
+  set 8 ?SELATOM
+  define junk select atom A@i 3 N end
+  set 10 ?SELATOM
+
+  quick @2 @4 @6 @8
+  set qphi ?PHI
+  quick @4 @6 @8 @10
+  set qpsi ?PHI
+
+  write title unit 20
+* @i @qphi @qpsi
+*
+
+  incr i by 1
+  incr phi by @incphi
+  incr psi by @incpsi
+
+if @i .le. @nrep goto loop1
+
+scalar wmain set 1. sele all end
+
+close unit 20
+
+ open write card unit 44 name @9diala_replica_initial.pdb
+ write coor pdb unit 44
+ close unit 44
+
+rpath krms @krms kmax @kmax rmax @rmax kangle @kangle cosmax @cosmax -
+      rota trans mass weigh cycl nebf ppmf
+
+energy
+gete print
+
+nbond cutnb 100.0
+
+energy
+
+gete print
+
+rpath krms @krms kmax @kmax rmax @rmax kangle @kangle cosmax @cosmax -
+      rota trans mass weigh cycl nebf !ppmf
+
+open write file unit 37 name @9@z.dcd 
+
+minimize sd nstep 200 tolstp 0.0 nprint 1 cutnb 100.0 ! debug
+
+rpath krms @krms kmax @kmax rmax @rmax kangle @kangle cosmax @cosmax -
+      rota trans mass weigh cycl nebf ppmf
+
+energy
+
+ open write card unit 44 name @9@z.pdb
+ write coor pdb unit 44
+ close unit 44
+
+ open write card unit 44 name @9@z.crd
+ write coor card unit 44
+ close unit 44
+
+stop

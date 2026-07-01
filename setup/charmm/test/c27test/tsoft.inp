@@ -1,0 +1,82 @@
+* CHARMM Testcase c26test/tsoft.inp
+* Author: Michal Vieth
+* Date  : March 17, 1998
+* Model : N-methyl alanyl acetamide
+* Files : toph19.rtf and param19.prm
+* Test  : build NMA using internal coordinates tests the reduction of
+*         nonbonded interactions
+*
+stream datadir.def
+
+open read form unit 11 name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+open read form unit 11 name @0param19.prm
+read param card unit 11
+close unit 11
+
+! Read in the sequence and generate the psf (protein structure file - an
+! internal CHARMM data structure describing the specific connectivity for
+! the specific structure of interest.  It is created using the information
+! from the topology and parameter files
+Read sequ card
+* maa
+*
+3
+AMN ALA CBX
+
+Generate maa setup !the segment identifier is called maa and the setup
+                   !command indicates that the internal coordinate tables
+                   !(based upon ic information in the rtf) will be created
+
+set 1 ?rand
+ic edit
+    dihe  1 C     2 N     2 CA    2 C 0
+    dihe  2 N     2 CA    2 C     3 N 120
+   END   
+
+ic parameters  !fill the current ic table based upon values from the
+               !parameter and/or rtf files
+
+ic seed 1 cl 1 c 1 o  !provide the three atoms to "seed" building
+
+ic build  !build the structure based upon the internal coordinates (ics)
+
+print ic
+print coordinates
+coor orie  !orient molecule so CM is at origin and principal axes are along
+           !cartesian directions
+
+
+Nbonds cdie eps 1.0 cutnb 99.0 ctofnb 90.0 wrnmxd 99.0 swit vswit -
+rmin 0.85
+energy 
+
+energy eps 2.0
+energy  rmin 0.0
+
+stop
+
+prnlev 3 @pnode
+GALGorithm EVOLve -
+mCarlo   Tbeg 500.0 Tend 250.0  tfrq 10 -
+RAND iseed 111 rtran 2.0 rrota 3.6 rdihe 360.0 -
+  MAXGenerations 2000 -
+  niches 1 inte 10999 -
+  gsize 1 muta 1.0  pinte 1.0 - !qrmin rmin 0.885  -  
+  ibig 50 bdis 100.0  -
+  print 200 Dist 20.0  delete  clear
+
+skipe bonds
+skipe angle
+energy 
+set 0 0
+label loop
+incr 0 by 1
+inte sele iseg @0 end
+if 0 lt @npar goto loop
+
+energy rmin 0.0
+print ic
+print coor
+stop

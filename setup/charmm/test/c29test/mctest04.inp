@@ -1,0 +1,169 @@
+* mctest04.inp
+* Author:   Aaron R. Dinner 
+* Date:     19 July 2004 (replacing that of 15 June 2001)
+* Version:  c32a1        (replacing that of c29a1)
+* Test:     Constant Pressure Monte Carlo with volume move linking
+* Model:    Alanine dipeptide in a box of 125 tip3 water molecules 
+*           with periodic boundaries
+*
+
+! Multinode execution has file I/O and other problems.
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+if ?mc .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?domdec eq 1 then
+  echo "Test NOT performed with DOMDEC."
+  stop
+endif
+
+BOMLev 0
+PRNLev 3
+STREam datadir.def
+
+! Read standard topology and parameter files
+
+OPEN READ CARD UNIT 1 NAME @0/toph19.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+OPEN READ CARD UNIT 2 NAME @0/param19.prm
+READ PARA CARD UNIT 2
+CLOSE UNIT 2
+
+! Generate the PSF --- no special actions for MC need be taken at this step.
+
+READ SEQUence CARD
+* Blocked alanine
+*
+   3
+ACE ALA CBX
+
+GENErate MAIN SETUP
+
+! Build the coordinates
+
+IC PARAM
+IC SEED 2 N     2 CA    2 C
+IC BUILD
+
+READ SEQUence TIP3 125
+GENErate WAT  NOANGLE NODIHEDRAL
+
+! Read coordinates
+
+OPEN READ CARD UNIT 4 NAME @0/tip125.crd
+READ COORDINATE CARD UNIT 4 APPEND
+CLOSE UNIT 4
+
+DELETE ATOM SORT SELE .BYRES. -
+    (TYPE OH2 .AND. ((SEGID MAIN .AND. .NOT. TYPE H*) .AROUND. 2.8)) END
+
+!  Now turn on the image 
+CRYStal DEFIne CUBIC 15.5516 15.5516 15.5516 90.0 90.0 90.0
+CRYStal BUILd CUTOFF 15.5516
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE SEGID WAT END 
+
+!  Now turn on the image 
+CRYStal DEFIne CUBIC 15.5516 15.5516 15.5516 90.0 90.0 90.0
+CRYStal BUILd CUTOFF 15.5516
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE SEGID WAT END 
+
+! Infinite non-bond cutoff just for testcase to allow checking.
+ENERgy INBFRQ 1 IHBFRQ 1 GROUP VGROUP SWITCH VSWITCH -
+       CUTIM 11.0 CUTNB 10.0 CTOFNB 7.5 CTONNB 6.5  EPS 1.0
+
+! Create the MC move set by a series of calls to MOVE ADD
+
+! Volume moves for the peptide
+! Make WEIGht unusually high to attempt a significant number of times
+! in this short testcase.
+MOVE ADD MVTP VOLUme BYATom    WEIGht  1.0 DMAX 0.005 LABEL PPPT -
+         SELE (.NOT. RESNAME TIP3) END
+
+! Volume moves for the water
+MOVE ADD MVTP VOLUme BYREsidue WEIGht  1.0 DMAX 0.01 LABEL PWAT -
+         SELE (      RESNAME TIP3) END
+
+! Link the volume moves so the whole system is scaled at once
+MOVE LINK LAB1 PPPT LAB2 PWAT
+
+! Rigid body translations of waters
+MOVE ADD MVTP RTRN   BYREsidue WEIGht 1.0 DMAX 0.25 LABEL WTRN -
+         SELE (TYPE OH2) END 
+
+! Rigid body rotations
+MOVE ADD MVTP RROT   BYREsidue WEIGht 1.0 DMAX 25.0 LABEL WROT -
+         SELE (TYPE OH2) END 
+
+! Link the translations and rotations so they are performed together.
+MOVE LINK LAB1 WTRN LAB2 WROT
+
+! Single atom moves for the peptide atoms
+MOVE ADD MVTP RTRN   BYHEavy   WEIGht 1.0 DMAX 0.2 LABEL STRN -
+         ARMP 0.40 ARMA 0.4 ARMB 0.4 DOMCf 3.0 ANISotropic 1 -
+         SELE (.NOT. RESNAME TIP3) END
+
+! Single atom moves for the peptide atoms
+MOVE ADD MVTP RROT   BYHEavy   WEIGht 1.0 DMAX 30.0 LABEL SROT -
+         ARMP 0.40 ARMA 0.4 ARMB 0.4 DOMCf 3.0 -
+         SELE (.NOT. RESNAME TIP3) END
+
+! Individual rotation of the peptide torsions
+MOVE ADD MVTP TORS WEIGht  1.0 DMAX  10.0 FEWEr 1 LABEL DIHE -
+         ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+         SELE ALL END
+
+! End creation of the move set
+
+! Run a short Monte Carlo simulation with the above move set
+! See notes on IECHeck in mctest01.inp and mctest03.inp
+!
+! When NOT using CRYStal for the images, it is necessary to give
+! the starting volume for constant pressure simulations.
+
+MC TEMPerature 300.00 PRESsure 1.0 NSTEps 1000 ISEEd 518282 -
+   IDOMcfrq 20 INBFrq 100 IMGFrq 100 IECHeck 100 
+
+! Save the optimized move set 
+
+OPEN WRITE CARD UNIT 35 NAME @9/mctest04.mco
+MOVE WRITE UNIT 35
+
+! Read the optimized move set over the current one to check I/O
+
+OPEN READ  CARD UNIT 36 NAME @9/mctest04.mco
+MOVE READ  UNIT 36 APPEND 0
+CLOSE UNIT 36
+
+ENERgy
+
+! Here, the final volume from the previous simulations carries through
+MC TEMPerature 300.00 PRESsure 1.0 NSTEps 1000 -
+   IDOMcfrq 20 INBFrq 100 IMGFrq 100 IECHeck 100 
+
+! Save the final coordinates
+
+OPEN WRITE CARD UNIT 36 NAME @9/mctest04.crd
+WRITE COOR CARD UNIT 36
+
+! Free the move set to check the memory usage
+
+MOVE LINK LAB1 PPPT
+MOVE LINK LAB1 WTRN
+
+MOVE DELEte LABEL PPPT  
+MOVE DELEte LABEL PWAT  
+MOVE DELEte LABEL WTRN  
+MOVE DELEte LABEL WROT  
+MOVE DELEte LABEL STRN  
+MOVE DELEte LABEL SROT  
+MOVE DELEte LABEL DIHE   
+
+STOP

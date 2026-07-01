@@ -1,0 +1,269 @@
+* Image autogen testing.  Let's do graphene with autogenerate angles and dihedrals.
+* CHARMM testcase: c48test/graphene.inp  January,2022 --BRB
+* build (10,0)ring structures
+*
+
+STREam datadir.def
+
+bomlev -3
+
+set 2 4.2
+set 1 2.1
+set 3 3.6373067
+
+
+read rtf card
+* some building blocks for nano tubes
+*
+   22
+
+mass 1 h 1.08 h
+mass 2 c 12.0 c
+
+declare -c1
+declare -c2
+declare -c3
+declare -c4
+declare -c5
+declare -c6
+
+auto angle dihe
+
+resi c6 0.0
+atom c1 c 0.0
+atom c2 c 0.0
+atom c3 c 0.0
+atom c4 c 0.0
+atom c5 c 0.0
+atom c6 c 0.0
+
+bond c1 c2  c2 c3  c3 c4  c4 c5  c5 c6  c6 c1
+
+ic c1 c2 c3 c4   0.0  0.0  0.0  0.0  0.0
+ic c2 c3 c4 c5   0.0  0.0  0.0  0.0  0.0
+ic c3 c4 c5 c6   0.0  0.0  0.0  0.0  0.0
+ic c4 c5 c6 c1   0.0  0.0  0.0  0.0  0.0
+ic c5 c6 c1 c2   0.0  0.0  0.0  0.0  0.0
+ic c6 c1 c2 c3   0.0  0.0  0.0  0.0  0.0
+
+resi c4 0.0
+atom c1 c 0.0
+atom c2 c 0.0
+atom c3 c 0.0
+atom c4 c 0.0
+
+bond c1 c2  c2 c3  c3 c4  c4 c1  
+ic c1 c2 c3 c4   0.0  0.0  0.0  0.0  0.0
+ic c2 c3 c4 c1   0.0  0.0  0.0  0.0  0.0
+ic c3 c4 c1 c2   0.0  0.0  0.0  0.0  0.0
+ic c4 c1 c2 c3   0.0  0.0  0.0  0.0  0.0
+
+
+pres lnk1 0.0
+bond 1c1 2c4
+ic 1c3 1c2 1c1 2c4   0.0  0.0  0.0  0.0  0.0
+ic 1c2 1c1 2c4 2c5   0.0  0.0  0.0  0.0  0.0
+ic 1c1 2c4 2c5 2c6   0.0  0.0  0.0  0.0  0.0
+
+pres lnk2 0.0
+bond 1c2 2c5
+
+pres lnk3 0.0
+bond 1c3 2c6
+
+pres lnk4 0.0
+bond 1c4 2c1
+
+pres lnk5 0.0
+bond 1c5 2c2
+
+pres lnk6 0.0
+bond 1c6 2c3
+
+pres lnk41 0.0
+bond 1c1 2c2  1c4 2c3
+
+pres lnk12 0.0
+bond 1c2 2c3  1c1 2c4
+
+pres lnk23 0.0
+bond 1c3 2c4  1c2 2c1
+
+pres lnk34 0.0
+bond 1c4 2c1  1c3 2c2
+
+end
+
+read param card
+* parameters for nanotubes
+*
+
+bond
+c c  250.0 1.4
+h c  300.0 1.08
+
+angle
+c c c 50.0 120.0
+h c c 5.0 120.0
+
+dihe
+c c c c  0.05 2 180.0
+h c c c   1.0 2 180.0
+h c c h   1.0 2 180.0
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+h  0.0  -0.022  1.32
+c  0.0  -0.07   2.0
+
+end
+
+read sequ c6 1
+
+generate ring setup
+
+print psf 
+print psf full
+
+
+ic param
+ic print
+ic seed ring 1 c2 ring 1 c3 ring 1 c4
+ic build
+
+!random uniform iseed 555 scale 1.0
+!scalar x random
+!scalar y random
+!scalar z random
+
+coor orient norot
+coor rota ydir 1.0 phi 180.0
+!coor scale fact -1.0
+
+coor stat
+print coor
+
+READ IMAG CARD 
+* IMAGE FILE FOR ALANINE ALPHA-I HELIX
+*
+
+IMAGE UP
+!ROTATE 0.0 0.0 1.0 60.0
+TRANSLATE @2 0.0 0.0 
+
+IMAGE LU
+TRANSLATE @1 @3 0.0 
+
+IMAGE LD
+DEFINE LU INVE UP
+
+IMAGE DN
+DEFINE INVE UP
+
+IMAGE RD
+DEFINE INVE LU
+
+IMAGE RU
+DEFINE INVE LD
+
+! 2nd row
+
+IMAGE UP2
+DEFINE UP UP
+
+IMAGE LUU
+DEFINE UP LU
+
+IMAGE LU2
+DEFINE LU LU
+
+IMAGE LUD
+DEFINE LU LD
+
+IMAGE LD2
+DEFINE LD LD
+
+IMAGE LDD
+DEFINE LD DN
+
+IMAGE DN2
+DEFINE DN DN
+
+IMAGE RDD
+DEFINE RD DN
+
+IMAGE RD2
+DEFINE RD RD
+
+IMAGE RUD
+DEFINE RD RU
+
+IMAGE RU2
+DEFINE RU RU
+
+IMAGE RUU
+DEFINE RU UP
+
+END
+
+
+UPDATE INBF 0 IHBF 0 IMGFRQ 100 IMALL CUTIM 9.0
+
+coor print image
+
+
+IMPATCH LNK1 PRIM ring 1 UP ring 1 SETUP
+
+IMPATCH LNK2 PRIM ring 1 RU ring 1 SETUP
+
+IMPATCH LNK3 PRIM ring 1 RD ring 1 SETUP
+
+IMPATCH LNK4 PRIM ring 1 DN ring 1 SETUP
+
+IMPATCH LNK5 PRIM ring 1 LD ring 1 SETUP
+
+IMPATCH LNK6 PRIM ring 1 LU ring 1 SETUP
+
+print image psf naming
+print image psf
+print image trans
+
+!fast off
+!skip all excl bond
+!anal term sele all end any
+!energy
+!stop
+
+!MINI ABNR NSTEP 200 INBFRQ 50 NPRINT 5 IMGFRQ 50 -
+!     CDIE SHIFT ATOM EPS 1.0 CUTNB 8.5 CTOFNB 7.5
+
+coor orie norot
+
+fast off
+!anal term sele all end any nonbond
+energy INBFRQ 50 CDIE SHIFT ATOM EPS 1.0 CUTNB 8.5 CTOFNB 7.5
+!coor orie norot
+
+coor stat
+!scalar z set 0.0
+
+print image force
+print image trans 
+
+coor dist weigh 
+
+print coor
+
+update imall cutim 50.0
+open write card unit 12 name @9graphene_all.crd
+coor write card image unit 12
+
+! check the image .bonded. atom selection feature.
+coor print card image sele .bonded. segid ring .and .not. segid ring end
+coor print card image sele .bonded. ( .bonded. segid ring .and .not. segid ring ) end
+coor print card image sele .bonded. .bonded. .bonded. segid ring end
+coor print card image sele .bonded. .bonded. .bonded.  .bonded. segid ring end
+coor print card image
+
+
+

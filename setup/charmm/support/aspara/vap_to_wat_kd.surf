@@ -1,0 +1,40 @@
+* file:  vap_to_wat_kd.surf
+*
+!   Note:  These are asp's from Wolfendon water to vapor numbers,
+!                     adjusted for standard state by Kyte and Doolittle.  
+!                    They are in units of cal/(mol*A**2).
+!                    Table of ASP's 
+!
+!  Notes: -ANY refers to any residue type
+!         -A negative radius causes the atom to be ignored
+!               (such as hydrogens,...)
+!         -Atom name can use CHARMM wildcard rules (not residue names).
+!         -These commands ar eprocessed sequentially.  If an
+!           atom is matched by more then one line the LAST line is used.
+!         -This file is free field format.
+!
+   1.400000 ! the probe radius
+!
+! residue-type  atom-name  asp-value  radius  reference-area  swap-pairs
+ANY  H*       0.0    -1.0     0.0  ! ignore hydrogens
+ANY  C*       4.0     1.9     0.0
+ANY  O*    -112.0     1.4     0.0
+ANY  N*    -112.0     1.7     0.0
+ANY  S*     -17.0     1.8     0.0
+LYS  NZ    -169.0     1.7     0.0
+ANY  NT    -169.0     1.7     0.0
+ASP  OD1   -112.0     1.4     0.0   OD2
+ASP  OD2   -166.0     1.4     0.0   OD1
+GLU  OE1   -112.0     1.4     0.0   OE2
+GLU  OE2   -166.0     1.4     0.0   OE1
+ANY  OCT1  -166.0     1.4     0.0   OCT2
+ANY  OCT2  -112.0     1.4     0.0   OCT1
+HIS  ND1   -112.0     1.7     0.0   NE2
+HIS  NE2   -169.0     1.7     0.0   ND1
+ARG  NH1   -112.0     1.7     0.0   NH2
+ARG  NH2   -169.0     1.7     0.0   NH1
+SO4  O1    -166.0     1.4     0.0   O2
+SO4  O2    -112.0     1.4     0.0   O1
+SO4  O3    -166.0     1.4     0.0   O4
+SO4  O4    -112.0     1.4     0.0   O3
+END

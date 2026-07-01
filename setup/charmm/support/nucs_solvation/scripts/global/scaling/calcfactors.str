@@ -1,0 +1,29 @@
+* calcfactors.str, last modified May/10/2004
+* By Sonja M. Schwarzl & Stefan Fischer
+*
+
+  IF ?NSEL .EQ. 0 GOTO CONTINUE
+
+         ! Check charge of group.
+         ! If all partial atomic charges equal zero no computation necessary.
+	 ! All groups outside the target have charges equal to zero and are 
+         ! thus skipped.
+         ! Charges are checked by calculating the sum of absolute charges
+    SCAL CHARGE = SCA2 SELE GROUP END
+    SCAL CHARGE ABS SELEct GROUP END
+    SCAL CHARGE STAT SELE GROUP END
+    IF ?STOT EQ 0 GOTO CONTINUE  
+
+    ! else:
+      STREAM pbeq.str ! calculates electrostatic potential due to atom charges
+                      ! of GROUP, returns potential at atom positions in SCA9 
+
+      STREAM scaling.str ! calculates group-group pairwise interaction energies
+                         ! both in vacuum and in solution, calculates pairwise
+                         ! scaling factors, averages to get group scaling factors
+                         ! returns scaling factors in SCA6
+
+    LABEL CONTINUE
+    
+      
+ RETURN     

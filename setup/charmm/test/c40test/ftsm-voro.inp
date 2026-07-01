@@ -1,0 +1,387 @@
+* Finite temperature string method (FTSM) test case
+* alanine dipeptide isomerization in vacuum
+* compute path and energy using tessellation
+*
+!SUMMARY : generate initial path by linear interpolation
+! in phi/psi dihedral angles; perform optimization
+! compute the path and free energy along the path
+! Note : the simulation time here is much _too short_ to obtain
+! a converged path & FE (note that we are starting from a linear interpolant
+! in dihedral space); in addition, fewer than 16 replicas will not give a very
+! smooth path ; this is the price you pay when using Cartesian coordinates
+
+if ?stringm .ne. 1 then
+   echo "String method code not compiled."
+   echo "Test NOT performed."
+   stop
+endif
+!
+if ?numnode  .lt. 3  then
+  echo "At least three cpu cores are required to run this test."
+  echo "Test NOT performed."
+  STOP
+endif
+!
+if ?numnode  .ne. 8  then
+  echo "Internal PASS/FAIL test only available for 8 cpu cores b/c result depends on # cores."
+  echo "Internal PASS/FAIL test check will be omitted."
+endif
+!
+set myname ftsm-voro.inp
+!
+stream datadir.def
+!**********************************************************
+set nrun 0
+set toppar  @0
+set outdir  @9
+set datadir @outdir
+set outputdir @outdir
+! read parameter and topology files
+!
+open unit 1 read form name @TOPPAR/top_all22_model.inp
+read rtf card unit 1
+close unit 1
+!
+open unit 1 read form name @TOPPAR/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! ***************************** generate alanine dipeptide
+read sequence card
+* alanine dipeptide in vacuum
+*
+1
+ALAD
+
+generate dial setup warn
+write psf card name @outdir/diala.psf
+!
+if @?nlocal eq 0 set nlocal 1
+calc nrep = ?numnode / @nlocal
+!
+mcom string @nlocal by @nrep ! set up communication
+string ftsm init ! initialize ftsm
+!**************************** replica variables ***********
+set ncpu ?nstring
+set me ?mestring
+!
+! set dihedral angles for this replica
+! (1) define range of angles
+calc phis -90.
+calc psis 90.0
+calc phie @phis+180.0
+calc psie @psis-180.0
+
+if @ncpu .gt. 1 then 
+ calc mypsi = @psis + ( @psie - @psis ) * @me / ( @ncpu - 1 )
+ calc myphi = @phis + ( @phie - @phis ) * @me / ( @ncpu - 1 )
+else
+ calc mypsi = @psis
+ calc myphi = @phis
+endif 
+!
+ic edit
+dihe  dial 1 clp   dial 1 nl   dial 1 ca   dial 1 crp @myphi
+dihe  dial 1 nl   dial 1 ca   dial 1 crp   dial 1 nr @mypsi
+end
+!
+! generate coordinates
+IC PARA
+IC SEED 1 CLP 1 NL 1 CA
+IC BUILD
+!
+! specify infinite cutoff
+update cutnb 1000.0
+! gently minimize to avoid instability during MD
+mini sd nstep 10
+! ***************************** DONE generating alanine dipeptide
+! adding "angstrom" sets the length scale to Ang for input; the values are renormalized before MD
+set ang
+set ang angstrom
+string ftsm set kpar 200 @ang ! force constant for hyperplanes restraints
+string ftsm set kprp 200 @ang ! force constant f[or tube restraints
+string ftsm set dprp 0.5 @ang ! distance away from string at which tube restraint becomes active
+!
+! add string atoms using com notation
+define orient sele .not. hydrogen end
+label oloop
+ define com sele bynum ?selatom end ! here, just one atom per COm group
+ string ftsm add orient sele com end
+ define orient sele orient .and. .not. com end
+ if ?nsel gt 0 -
+goto oloop
+!
+define forcing sele .not. hydrogen end
+label floop
+ define com sele bynum ?selatom end
+ string ftsm add rmsd sele com end
+ define forcing sele forcing .and. .not. com end
+ if ?nsel gt 0 -
+goto floop
+!
+! show string coords
+string ftsm list
+!
+string ftsm set mass on ! turn on mass weighting in RMSD computation and orientation
+string ftsm fill col main   ! assign coordinates of the string from instantaneous coordinates in the main set ("main" is optional)
+!
+string ftsm set vcut 0.5 ! keep MD replicas within this value in Ang RMSD of path images (ang by default)
+string ftsm voro vmap calc ! compute & print initial map (optional)
+string ftsm voro vmap print name @datadir/voro_ini.map
+string ftsm voro clear ! needed if map computed prior to dynamics
+!
+string ftsm stat -
+                  vlog vnam @datadir/voro@nrun  voff 0 vmap voro - ! voronoi tessellation output
+                  rmsd rnam @datadir/rmsd.dat  - ! compute rmsd from coordinate in col 8
+
+!set fbeta for langevin
+scalar fbeta set 10 select all end
+!
+set tstep 0.001
+set temp 300
+!
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+!
+string ftsm copy main ref ! save center as reference coords
+! real reparameterization
+string ftsm repa iter 1 defi 1.02 bspline  ! use iterative bspline interpolation; maximum of one iteration; using bsplines b/c need extra smoothing w/ voronoi
+!string ftsm repa
+string ftsm print dcd name @outputdir/string_initial.dcd ! initial string
+!
+!!!!!!!!!!!!!!!!!!! string options
+set nsteps 100000
+set evof 10      ! frequency of string evolution
+set reqfreq 100  ! steps to adjust to new restraints
+set dcdfreq 1000 ! trajectory output frequency
+set freq 1000    ! misc frequency
+set memo 0.999  ! slower evolution than for restgrained ftsm
+if @me eq 0 set memo 0.99999 ! (almost) fix left endpoint
+calc mep = @me + 1
+if @me eq @ncpu set memo 0.99999 ! (almost) fix right endpoint
+
+!*********************************************************
+! dynamics
+bomblev -1
+!
+string ftsm dyna -
+ stat staf @freq -   ! statistics output
+ evolve evof @evof expo memo @memo - ! frequency of image evolution & evolution option: exponentially decaying kernel
+ upda updf @freq repa - ! frequency of updating string images
+ voro - ! turn on tessellation constraints
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea 67 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+! final coordinates
+string open card write unit 1 name @outputdir/diala@nrun_@me.cor
+write coor card unit 1
+! write final string file : all coordinates present in first frame; only string coordinates present in subsequent frames
+string ftsm print dcd name @outputdir/string_final.dcd
+! also write in charmm coordinate format
+string ftsm print cor name @outputdir/string_final@me.cor
+!
+! turn off string
+string ftsm done
+bomb -1
+mcom done
+!
+!=================== check path (NOT free energy, which is more complicated to compute) ===============================
+if ?numnode eq 8 then ! internal PASS/FAIL :  compare path RMSD to reference path
+!
+label check
+!
+set mue 0 ! mean error
+set muetol 0.5 ! error tolerance
+!
+read coor card name @outputdir/string_final0.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -1.99590  -2.41759   0.93107 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.39443  -1.07911   0.88759 DIAL 1      0.00000
+    6    1 ALAD OL    -2.08115  -0.08586   0.85436 DIAL 1      0.00000
+    7    1 ALAD NL    -0.06674  -1.01346   0.87904 DIAL 1      0.00000
+    9    1 ALAD CA     0.65448   0.23035   0.79930 DIAL 1      0.00000
+   11    1 ALAD CB     1.99083   0.12699   1.54393 DIAL 1      0.00000
+   15    1 ALAD CRP    0.89923   0.61378  -0.64966 DIAL 1      0.00000
+   16    1 ALAD OR     1.79966   0.14729  -1.28939 DIAL 1      0.00000
+   17    1 ALAD NR     0.07627   1.47302  -1.20073 DIAL 1      0.00000
+   19    1 ALAD CR     0.20963   1.90783  -2.55761 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outputdir/string_final1.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -2.09726  -2.30625   0.95565 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.41595  -1.03272   0.88716 DIAL 1      0.00000
+    6    1 ALAD OL    -2.03587  -0.04413   0.86076 DIAL 1      0.00000
+    7    1 ALAD NL    -0.09594  -1.02385   0.84696 DIAL 1      0.00000
+    9    1 ALAD CA     0.71910   0.14595   0.79010 DIAL 1      0.00000
+   11    1 ALAD CB     2.04424  -0.14480   1.41002 DIAL 1      0.00000
+   15    1 ALAD CRP    0.92448   0.67194  -0.60700 DIAL 1      0.00000
+   16    1 ALAD OR     1.84295   0.62813  -1.08564 DIAL 1      0.00000
+   17    1 ALAD NR     0.05043   1.18334  -1.29223 DIAL 1      0.00000
+   19    1 ALAD CR     0.13543   1.70198  -2.61713 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outputdir/string_final2.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -2.18844  -2.19000   0.99544 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.43117  -0.99298   0.90003 DIAL 1      0.00000
+    6    1 ALAD OL    -1.98079  -0.03145   0.88536 DIAL 1      0.00000
+    7    1 ALAD NL    -0.12554  -1.02548   0.82196 DIAL 1      0.00000
+    9    1 ALAD CA     0.77543   0.06172   0.77002 DIAL 1      0.00000
+   11    1 ALAD CB     2.08082  -0.40826   1.22799 DIAL 1      0.00000
+   15    1 ALAD CRP    0.92894   0.73217  -0.56478 DIAL 1      0.00000
+   16    1 ALAD OR     1.77389   1.09908  -0.86167 DIAL 1      0.00000
+   17    1 ALAD NR     0.09873   0.90810  -1.39976 DIAL 1      0.00000
+   19    1 ALAD CR     0.14128   1.51213  -2.68642 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outputdir/string_final3.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -2.26946  -2.04690   1.08226 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.43407  -0.95686   0.92370 DIAL 1      0.00000
+    6    1 ALAD OL    -1.90600  -0.06944   0.86959 DIAL 1      0.00000
+    7    1 ALAD NL    -0.15044  -1.00476   0.83775 DIAL 1      0.00000
+    9    1 ALAD CA     0.83231  -0.02148   0.74280 DIAL 1      0.00000
+   11    1 ALAD CB     2.09879  -0.66193   0.98889 DIAL 1      0.00000
+   15    1 ALAD CRP    0.90872   0.78575  -0.52246 DIAL 1      0.00000
+   16    1 ALAD OR     1.56918   1.50969  -0.63138 DIAL 1      0.00000
+   17    1 ALAD NR     0.22815   0.67427  -1.50949 DIAL 1      0.00000
+   19    1 ALAD CR     0.22173   1.36837  -2.74913 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outputdir/string_final4.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -2.32717  -1.84832   1.28445 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.42086  -0.92609   0.94340 DIAL 1      0.00000
+    6    1 ALAD OL    -1.81723  -0.21768   0.66888 DIAL 1      0.00000
+    7    1 ALAD NL    -0.16510  -0.92504   0.95371 DIAL 1      0.00000
+    9    1 ALAD CA     0.89903  -0.09204   0.72039 DIAL 1      0.00000
+   11    1 ALAD CB     2.07209  -0.91357   0.71360 DIAL 1      0.00000
+   15    1 ALAD CRP    0.88377   0.82704  -0.47728 DIAL 1      0.00000
+   16    1 ALAD OR     1.34047   1.79520  -0.43139 DIAL 1      0.00000
+   17    1 ALAD NR     0.36284   0.53307  -1.57968 DIAL 1      0.00000
+   19    1 ALAD CR     0.29760   1.30879  -2.77091 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outputdir/string_final5.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -2.35849  -1.61445   1.55129 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.39723  -0.91890   0.94610 DIAL 1      0.00000
+    6    1 ALAD OL    -1.72603  -0.51867   0.30622 DIAL 1      0.00000
+    7    1 ALAD NL    -0.17472  -0.77026   1.14619 DIAL 1      0.00000
+    9    1 ALAD CA     0.95408  -0.12254   0.71443 DIAL 1      0.00000
+   11    1 ALAD CB     1.97665  -1.12003   0.50152 DIAL 1      0.00000
+   15    1 ALAD CRP    0.88132   0.86054  -0.43938 DIAL 1      0.00000
+   16    1 ALAD OR     1.26525   1.92528  -0.31671 DIAL 1      0.00000
+   17    1 ALAD NR     0.39883   0.51370  -1.58740 DIAL 1      0.00000
+   19    1 ALAD CR     0.29610   1.34092  -2.74545 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outputdir/string_final6.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -2.40992  -1.34901   1.73981 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.36752  -0.93547   0.94210 DIAL 1      0.00000
+    6    1 ALAD OL    -1.58264  -0.94114   0.01314 DIAL 1      0.00000
+    7    1 ALAD NL    -0.20561  -0.56642   1.30506 DIAL 1      0.00000
+    9    1 ALAD CA     0.98157  -0.12434   0.71363 DIAL 1      0.00000
+   11    1 ALAD CB     1.83181  -1.28348   0.35916 DIAL 1      0.00000
+   15    1 ALAD CRP    0.89334   0.89671  -0.41307 DIAL 1      0.00000
+   16    1 ALAD OR     1.30650   1.98706  -0.26428 DIAL 1      0.00000
+   17    1 ALAD NR     0.36181   0.55651  -1.56432 DIAL 1      0.00000
+   19    1 ALAD CR     0.25640   1.41396  -2.70475 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outputdir/string_final7.cor comp
+read coor card
+* FINITE TEMPERATURE STRING IMAGE FILE
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   10
+    1    1 ALAD CL    -2.48654  -1.09443   1.82974 DIAL 1      0.00000
+    5    1 ALAD CLP   -1.33927  -0.96554   0.92027 DIAL 1      0.00000
+    6    1 ALAD OL    -1.40278  -1.39882  -0.21371 DIAL 1      0.00000
+    7    1 ALAD NL    -0.26070  -0.34843   1.41931 DIAL 1      0.00000
+    9    1 ALAD CA     0.99378  -0.10393   0.72703 DIAL 1      0.00000
+   11    1 ALAD CB     1.69448  -1.40552   0.28615 DIAL 1      0.00000
+   15    1 ALAD CRP    0.92389   0.93472  -0.39014 DIAL 1      0.00000
+   16    1 ALAD OR     1.46295   2.01335  -0.26249 DIAL 1      0.00000
+   17    1 ALAD NR     0.25440   0.62444  -1.50507 DIAL 1      0.00000
+   19    1 ALAD CR     0.14086   1.49425  -2.63872 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+calc mue = @mue / ?numnode
+
+if @mue le @muetol then
+ echo @myname TESTCASE RESULT: PASS
+else
+ echo @myname TESTCASE RESULT: FAIL
+ incr testfail
+endif
+
+endif
+
+stop
+

@@ -1,0 +1,122 @@
+* c32test: mcmatest
+* Test MCMA moves that make biased changes to peptide conformations.
+* 11-Aug-2004, Peter J Steinbach
+*
+
+stream datadir.def
+if ?MCMA .ne. 1 then 
+ echo "c32test/mcmatest> Test NOT performed."
+ stop
+endif
+
+bomblev -3   ! Allows ENERGY TOLERANCE EXCEEDED during annealing
+
+open unit 1 read card name @0/toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/param19_eef1.inp 
+read param card unit 1
+close unit 1
+
+read sequ cards
+*  sequence with each of the 20 amino acids
+*
+   22
+ ALA ALA ARG ASN ASP CYS GLN GLU GLY HIS ILE LEU LYS
+ MET PHE PRO SER THR TRP TYR VAL VAL 
+
+generate test  setup warn
+
+ic para
+ic seed 1 N 1 CA 1 C
+ic build
+define junk sele .not. init show end
+
+!  Save full IC table to generate entire structure
+ic purge
+ic print
+ic save
+
+! Keep ICs to be changed by MCMA moves.  
+! Here, all single bonds between heavy atoms are kept.
+
+ic delete impr
+ic delete sele hydrogen end
+! Don't MC-jump backbone omega's, except before prolines.
+ic delete third sele type n .and. .not. resn pro end
+ic delete sele resn pro .and. type cg end
+define hist sele resn his .or. resn hsd .or. resn hse .or. -
+                 resn hsc .or. resn hsp end
+ic delete sele hist     .and. ( type ce* .or. type ne* ) end
+ic delete sele resn phe .and. type ce* end
+ic delete sele resn tyr .and. type ce* end
+ic delete sele resn trp .and. ( type ce* .or. type ne* .or. type cz* ) end
+ic delete third sele resn arg .and. type cz* end
+ic delete first sele type cay end
+ic print
+
+!  Define energy function: EEF1 with SHAKE
+shake bonh tol 1.0e-10 para
+eef1 setup temp 298.15 unit 93 name @0/solvpar.inp
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+energy
+set cutoff true
+
+! Set seed for random number generation.
+set s 112233
+
+random uniform iseed @s                           
+
+! Note that the recognition of IC entries as (phi,psi) and (chi1,chi2) pairs
+! by the "mcma init" command below assumes that every phi is followed
+! immediately by its psi, every chi1 by its chi2.
+! The "ic delete" commands above fail to do this for the last residue;
+! this problem can be fixed by writing the ICs to a file and editing
+! the order of ICs #80, 81, and 82.
+!
+! MCMA INIT: segmov resmov dcosmx  dphimx   dpsimx   dxyzmx  sigsc  iseed
+!                                  (rad)     (rad)
+mcma   init   test    1      0.      0.        0.       0.    1.0     @s
+
+! bias move: Modify any 1 torsion or torsion-pair, biasing where possible.
+mcma bias 1
+define junk sele .not. init show end
+
+! side move: A "bias" move applied only to side-chain torsion(s).
+mcma side 1
+define junk sele .not. init show end
+
+! main move: Change 3 consecutive (phi,psi) pairs to same values,
+!      chosen based on 1st residue.
+!      First time: no annealing.  
+!      Second: anneal over 2000 MD steps
+!      (heat to about 450 K; cool to about 200 K).
+mcma main 3 0      0.0
+define junk sele .not. init show end
+mcma main 3 2000 450.0
+define junk sele .not. init show end
+
+! back move: Change 4 consecutive (phi,psi) pairs, biased individually.
+!      First time: no annealing.
+!      Second: anneal over 2000 MD steps
+!      (heat to about 600 K; cool to about 200 K).
+mcma back 4 0      0.0
+define junk sele .not. init show end
+mcma back 4 2000 600.0
+define junk sele .not. init show end
+
+! all move: Modify all IC entries, biasing with 2D Gaussians where possible.
+!      This move does not alter Cartesian coords; it allows user-defined
+!      initcoord.
+!      May be useful for loops.
+
+define back sele type n .or. type ca .or. type c end
+define initcoord sele .not. ( ires 1 : 1 .and. back ) end
+coor init sele initcoord end
+
+mcma all
+ic save overwrite
+ic build save
+define junk sele .not. init show end
+
+stop

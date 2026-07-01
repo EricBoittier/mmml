@@ -1,0 +1,27 @@
+#! /bin/csh 
+
+foreach f ( $argv )
+    set ff = $f
+    set fforig = $ff.orig
+    set f = $ff:r
+    
+    if ( -e $fforig ) then
+	set fff = $fforig
+    else
+	set fff = $ff
+	cp $ff $fforig
+    endif
+    
+    if ( -e $f.f90) /bin/rm $f.f90
+    touch $f.f90
+    cat >> $f.f90 <<EOF
+##SET FREEFORMFTN
+EOF
+    
+     awk -f $TOOL/freeformat.awk $fff >> $f.f90
+     sed "s/\.fcm/\.f90/" $f.f90 >! $ff
+
+     echo $f
+end	
+exit
+

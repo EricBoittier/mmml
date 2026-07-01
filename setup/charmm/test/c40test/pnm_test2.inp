@@ -1,0 +1,190 @@
+* MD Simulation of clpx using PNM ; 6 ENMs per PNM ; each subunit is a separate PNM
+*
+
+set me pnm_test2
+
+stream datadir.def
+
+if ?pnm .ne. 1 then
+ echo "PNM not compiled"
+ echo "Test NOT performed"
+ echo @me TESTCASE RESULT: SKIP
+ stop
+else
+ if ?block .ne. 1 then
+      echo "BLOCK is required but not present"
+      echo "Test NOT performed"
+      echo @me TESTCASE RESULT: SKIP
+      stop
+ endif
+endif
+!
+if @?nrun eq 0 set nrun 1
+if @?restart eq 0 set restart 0
+!
+set scratch @9
+!
+set return mini
+goto pnm_setup
+label mini
+!
+test first step 0.001 sele bynu 1:5 tol 0 end
+!
+set eref 7073.23062
+set etol 1e-3
+!
+energy
+@qcheck ?ener @eref @etol @{me}_1
+!
+coor copy comp
+mini conj nstep 100 nprint 50
+energy
+@qcheck ?ener -302.790 @etol @{me}_2
+coor orie rms
+@qcheck ?rms 1.62 0.01 @{me}_3
+write coor card name @scratch/clpx_m.cor
+!
+! temperature
+set temp 300
+!
+set start strt 
+set iunwri 69
+set iuncrd 68
+set iunrea -1
+set nsteps 1000
+set tstep 0.004
+set dcdfreq 1000
+set pfreq 1000 ! print frequency
+!
+! restart and dcd files:
+open write file unit @iuncrd name @scratch/clpx@{nrun}.dcd
+open write card unit @iunwri name @scratch/clpx@{nrun}.rst ! output restart file
+!
+set start strt
+!
+dyna -
+tconstant tcoupling 0.01 trefer @temp    -
+@start -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+firstt @temp -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea @iunrea iunwri @iunwri iuncrd @iuncrd iunvel -1 kunit -1 -
+nprint @pfreq -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1    ! set seeds for reproducibility
+
+read coor card name @scratch/clpx_m.cor comp
+coor orie rms
+!
+set eref 1343.97
+set etol 0.01
+!
+energy
+@qcheck ?ener @eref @etol @{me}_4
+
+stop
+
+
+label pnm_setup
+!========================================== SET UP PNM =============================================
+set path @0
+!
+set psffile @path/clpx-3hws-pnm
+read psf card name @{psffile}.psf
+! read coordinates
+read coor pdb name @path/clpx-3hws-cgsa_rad.pdb resid ! radii in the temperature column
+!
+! nonbonded parameters (ad hoc)
+set arad 4
+set emin -0.5
+
+! define CG topology/parameters
+read rtf card 
+* cg bead parameters
+*
+99  1
+MASS     22 CG1    1 ! mass overwritten in psf
+MASS     23 CG2    1
+MASS     29 CG3    1
+end
+!
+read param card
+* update nonbonded radius for coarse-grained particle (CA)
+* use a radial dielectric model for simplicity
+*
+NONBONDED  NBXMOD 5 ATOM RDIEL SHIFT VATOM VDISTANCE VSWITCH CUTNB 14.0  CTOFNB 12  CTONNB 10  EPS 1.0  E14FAC 0.0  WMIN 1.5
+CG1  0.00000000 @emin  @arad
+CG2  0.00000000 @emin  @arad
+CG3  0.00000000 @emin  @arad
+end
+
+! skip energy terms that PNM replaces
+!---------------------
+skip all excl pnme vdw elec ! other terms, such as solvation to be added here if desired
+! turn off nonbonded self-interactions using block
+set fvdw 1.0
+block 6
+ call 1 sele segid CGA2 end
+ call 2 sele segid CGB2 end
+ call 3 sele segid CGC2 end
+ call 4 sele segid CGD2 end
+ call 5 sele segid CGE2 end
+ call 6 sele segid CGF2 end
+!
+ coef 1 1 0.0 !vdw @fvdw
+ coef 2 2 0.0 !vdw @fvdw
+ coef 3 3 0.0 !vdw @fvdw
+ coef 4 4 0.0 !vdw @fvdw
+ coef 5 5 0.0 !vdw @fvdw
+ coef 6 6 0.0 !vdw @fvdw
+end
+!
+! PNM set up
+set segid1 CGA2
+set segid2 CGB2
+set segid3 CGC2
+set segid4 CGD2
+set segid5 CGE2
+set segid6 CGF2
+!
+set npnm 6 ! number of pnm models (six enms per pnm)
+set pmix 1 ! larger values result in lower transition barriers
+set kf   1 ! force constant
+coor copy comp ! save coordinates
+!
+pnm init 36
+set ipnm 1
+label pnm_loop1
+ pnm newm ! start a new model
+ set which @segid@@ipnm
+ set jpnm 1
+ label pnm_loop2
+  set from @segid@@jpnm
+!
+  coor dupl sele segid @from end sele segid @which end
+! add this model
+  pnm add forc @kf cut 12.0 zero 0.0 pmix @pmix sele segid @which end
+  coor copy ! restore coords
+  incr jpnm by 1
+  if @jpnm .le. @npnm -
+ goto pnm_loop2
+!
+ incr ipnm by 1
+ if @ipnm .le. @npnm -
+goto pnm_loop1
+!
+! mandatory energy call
+!
+ENERGY
+!============================================ DONE SETTING UP PNM =================================
+goto @return

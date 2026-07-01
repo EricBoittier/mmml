@@ -1,0 +1,128 @@
+* mmff_db_1.inp
+* author:  I-Jen Chen (Dec. 28, 1999)
+* purpose: to test MMFF parameter reader, energy & derivatives
+* external files: MMFFANG.PAR MMFFBOND.PAR MMFFCHG.PAR MMFFDEF.PAR
+*                 MMFFOOP.PAR MMFFSTBN.PAR MMFFSUP.PAR MMFFSYMB.PAR
+*                 MMFFTOR.PAR MMFFVDW.PAR
+*                 mmff_setup.STR
+*                 mmff_db.mol2
+* UPDATED by Josh Buckner 04/17/2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+! energies and GRMS for *.mrk files in the order
+! used in this input file
+!
+!                     ENERgy                      GRMS   mol or mrk file
+!
+!ENER>        0     -3.96954      0.00000      7.5361      CE07A
+!ENER>        0     -4.95385     -2.51841      2.83456     NH07A
+!ENER>        0     39.55055    -45.54452      2.01569     BIPHENYL
+
+stream datadir.def
+stream @0mmff_setup.str
+
+set tol = 1e-3
+set pass = 1
+set failed = 
+
+set f1 test_db.dat
+open unit 50 write form name @9@f1
+open unit 60 read  form name @0mmff_db.mol2
+
+!mmff_db.mol2 contains all compounds in the mmff_mol2.inp
+!AM07A
+!AR07A
+!CA07A
+!CE07A
+!CJ07A
+!HL07A
+!IM07A
+!NC07A
+!NH07A
+!OH07A
+!OR07A
+!RA07A
+!RE07A
+!SR07A
+!BIPHENYL
+
+set 1 ce07a
+
+set e = -3.96954
+set grms = 7.5361
+
+read db ce07a unit 60
+goto mmfftst
+label ce07a
+
+set 1 NH07A
+
+set e = -4.95385
+set grms = 2.83456
+
+read db NH07A unit 60
+goto mmfftst
+label NH07A
+
+set 1 BIPHENYL
+
+set e = 39.55055
+set grms = 2.01569
+
+read db BIPHENYL unit 60
+goto mmfftst
+label BIPHENYL
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+if @pass eq 0 then
+      echo FAILING TESTS @failed
+endif
+
+stop
+
+label mmfftst
+generate
+open unit 20 write form name @9test_@1.mrk
+write merck unit 20
+* test @1 
+*
+update inbfrq 1 ihbfrq 0 CUTNB 999. CTOFNB 888. cdie e14fac 0.75
+energy
+
+echo enew @1  ?ener  ?grms
+calc ediff = abs ( ?ener - @e )
+calc grmsd = abs ( ?grms - @grms )
+
+set epass = 0
+set gpass = 0
+if @ediff le @tol set epass = 1
+if @grmsd le @tol set gpass = 1
+calc egpass = @epass * @gpass
+if egpass le 0 set failed = @failed @1
+calc pass = @pass * @egpass
+
+test first STEP 0.00001 tol 0.0
+mini nrap nstep 20 nprint  1
+write title unit 50
+* @1    ?ener
+*
+
+vibran
+diag
+write seco card unit 6 finite step 0.000001 tol 0.000001  !1
+
+end
+goto @1
+

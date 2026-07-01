@@ -1,0 +1,141 @@
+* CHARMM
+*  test of 1fsv :  polarizable model
+*  test of gas phase dynamics with and without CHEQ 
+*
+
+!  This test sets up a small protein 1FSV and first performs
+!  a minimization and gas phase dynamics without CHEQ; following,
+!  a minimization is performed to obtain the chemical potential equalized
+!  charges for the configuration and a gas-phase dynamics run ensues.
+
+
+!  Finally, gas-phase dynamics with the final CHEQ charges is run without
+!   CHEQ for testing.
+
+
+if ?cheq .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! for this test, CHEQ + parallel do not mix 
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0top_all30_cheq_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all30_cheq_prot.inp
+read param card unit 1
+close unit 1
+
+read sequ card
+* 1fsv
+*
+28
+GLN GLN TYR THR ALA LYS ILE LYS GLY ARG THR PHE ARG
+ASN GLU LYS GLU LEU ARG ASP PHE ILE GLU LYS PHE LYS
+GLY ARG
+generate 1fsv first nter last cter  angle dihedral setup warn
+
+open unit 1 read form name @01fsv_vacu.crd
+read coor card unit 1
+close unit 1
+
+! Dimension of the solvent volume
+set 7 = 9999
+set 8 @7
+set 9 @8
+
+set cutoff 999
+set ctofnb = @cutoff
+Calc ctofnb = @ctofnb - 2.0
+set ctonnb = @ctofnb
+Calc ctonnb = @ctonnb - 1.0
+
+!  turn on faster options and set-up SHAKE
+faster on
+shake bonh tol 1.0e-8 para mxit 20000
+
+set seed 314159
+
+skipe cmap  ! skip cmap for test
+
+MINI SD nstep 100 nprint 50 -
+atom vatom vdistance cdie eps 1.0 vswitch fshift wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+e14fac 1.0 
+
+dynamics cpt leap start timestep 0.00050 nstep 50 nprint 25 iprfrq 1000 -
+firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 iseed @seed -
+        ichecw 1 teminc 0.0 ihtfrq 0 ieqfrq 0 -
+        iasors 1 iasvel 1 iscvel 0 -
+        inbfrq -1 imgfrq -1 ilbfrq 0 -
+       eps 1.0 cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb
+       
+! Turn CHEQ on and proceed with dynamical charge calculations.
+
+
+cheq on 
+
+cheq norm byres select all end
+cheq flex select segid 1fsv end
+cheq QMAS CGMA 0.0089 TSTA 0.001 sele all end
+
+!   minimize to get equilibrium charges
+
+!: First with nuclei held fixed
+!  Remember to make sure E14FAC is 0.0 (either in parameter file or via
+!                                       the command line)
+
+MINI cheq noco cgmd 1 SD nstep 50 nprint 50 -
+atom vatom vdistance cdie eps 1.0 vswitch fshift wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+e14fac 0.0 nbxmod -5
+
+!: Second with all degrees of freedom
+
+MINI cheq cgmd 1 SD nstep 50 nprint 50 -
+atom vatom vdistance cdie eps 1.0 vswitch fshift wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+e14fac 0.0 nbxmod -5
+
+!  Set up charge thermostat
+FQBA 1
+CALL 1 sele atom 1fsv * * end
+COEF 1  QREF  0.005  TREF 1.0
+END
+
+
+! Open relevant files and perform vacuum dynamics
+
+
+dynamics cpt leap start timestep .00050 nstep 50 nprint 10 iprfrq 1000 -
+        cheq cgmd 1 cgeq 1 fqint 1 -
+        firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 iseed @seed -
+        ichecw 1 teminc 0.0 ihtfrq 0 ieqfrq 0 -
+        iasors 1 iasvel 1 iscvel 0 -
+        inbfrq -1 imgfrq -1 ilbfrq 0 - 
+        e14fac 0 nbxmod -5 -
+        cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb  -
+
+
+! Show charges 
+scalar charge show
+
+
+! Turn off CHEQ and get non-polarizable Hamiltonian energy with current charges
+cheq off
+
+energy -
+atom vatom vdistance cdie eps 1.0 vswitch fshift wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+e14fac 1.0
+
+stop
+

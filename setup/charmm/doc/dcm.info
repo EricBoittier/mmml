@@ -1,0 +1,413 @@
+CHARMM Element doc/dcm.doc 1.1
+
+File: DCM, Node: Top, Up: (chmdoc/commands.doc), Next: Syntax
+
+
+                    Distributed Charge Model (DCM)
+
+              By Mike Devereux, Oliver Unke, Eric Boittier,
+                             Markus Meuwly   
+            (Michael.Devereux@unibas.ch, m.meuwly@unibas.ch )
+
+
+The DCM command allows the use of Distributed Charge Models to compute
+the electrostatic energy and force. The method is documented in the
+articles 'A Novel, Computationally Efficient Multipolar Model
+Employing Distributed Charges for Molecular Dynamics Simulations'
+(J. Chem. Theory Comput., 2014, 10, pp
+4229-4241. http://dx.doi.org/10.1021/ct500511t) and 'Minimal
+distributed charges: Multipolar quality at the cost of point charge
+electrostatics.'  (J. Chem. Phys. 2017, 147, pp 161712;
+https://doi.org/10.1063/1.4993424) If called, the DCM module zeroes
+all atomic charges in the standard CHARMM charge arrays, copies their
+original values to the DCM routine, adds any off-center DCM charges
+for residues that are listed in the specified .dcm parameter file, and
+then handles all electrostatics internally. The electrostatic term in
+the output file arises purely from the DCM module.
+
+A recent extension implements conformational-dependence of charge
+positions via the "FLUX" keyword. Accuracy in electrostatics is
+thereby maintained across different conformers
+(https://arxiv.org/abs/2206.15366#)
+
+
+* Menu:
+
+* Syntax::           Syntax of DCM Commands
+* Description::      Description of DCM Commands
+* Requirements::     Requirements to run DCM calculations
+* Capabilities::     Description of capabilities
+* DCM format::       Description of the .dcm topology file
+* Examples::         Input Files for various examples
+
+
+
+File: DCM, Node: Syntax, Up: Top, Next: Description, Previous: Top
+
+                Syntax of DCM Commands
+
+[Syntax DCM]
+
+DCM    { IUDCm elec-opt-spec [ XYZ IUXYZ ] [ MUL IUMUL ] [ LAMBda real ] }
+       { [ FLUX ] }
+
+DCM    { S1 IUS1 }
+
+
+elec-opt-spec::= [ SWITCH ] [ SHIFT ] [ FSHIFT ] [ TSWITCH ] [ TSHIFT ]
+
+
+File: DCM, Node: Description, Up: Top, Previous: Syntax, Next: Requirements
+
+  Keyword  Default   Purpose
+
+  IUDCm	   -         Fortran unit of .dcm parameter file
+                     (should be opened in input file before using)
+
+  LAMBda   -         Scaling factor to be applied to DCM energy for each energy
+                     evaluation. This option is used for evaluating free energy
+                     contributions in line with the approach of Bereau et al. (Bereau, T.,
+                     Kramer, C., Meuwly, M., J.Chem.Theor.Comput., 2013, 9, 5450-5459)
+ 
+  XYZ      -         Write Cartesian coordinates of all DCM charges along with
+                     nuclear coordinates to a file for diagnostic purposes or for use in
+                     QM/MM calculations
+
+  IUXYZ    -         Fortran unit of file where all coordinates and charges should
+                     be dumped at every timestep
+
+  MUL      -         Calculate and write atomic multipoles from DCM charge
+                     arrangements of each atom in global reference axis system in GDMA's
+                     '.lpun' format (diagnostic)
+
+  IUMUL    -         Fortran unit of file where total atomic multipole moments
+                     should be dumped
+
+  S1       -         For thermodynamic integration calculations in
+                     combination with CHARMM's "PERT" keyword only. Defines the "Lambda=1"
+                     product electrostatic state, note that this keyword assumes that the
+                     "Lambda=0" or "initial" TI electrostatic state has already been
+                     defined and stores all existing DCM charges before the "S1" option is
+                     called in a separate array. See test case.
+
+  IUS1     -         Fortran unit of .dcm parameter file containing DCM charges for
+                     final (product) state
+
+  FLUX     -         Requests activation of conformationally dependent charge positions.
+                     necessary parameters will be read from the IUDCm unit.
+
+
+Electrostatic cutoff options:
+
+The standard SWITCH, SHIFT and FSHIFT cutoffs have been implemented
+but need to be declared separately in the DCM section, overriding
+whatever was requested by NBOND. The cutoff values (inner and outer
+cutoff, nonbond list cutoff and image cutoff) will be taken from the
+NBOND section of the standard CHARMM input file, so only the desired
+method needs to be declared in the DCM section.
+
+Note that "SHIFT", "FSHIFT" and "SWITCH" cutoffs have been implemented
+such that all DCM charges belonging to the same atom experience the
+same damping (the charge-charge distance evaluated is actually the
+nucleus-nucleus distance). This can be important for true DCM models
+derived directly from multipole expansions, but is not appropriate for
+(f)MDCM, TIP4P or TIP5P, where charges are further from the nucleus
+and the models were fitted by damping based on the true charge-charge
+separation, rather than the nucleus-nucleus separation. For such
+models TSHIFT (recommended) or TFSHIFT can be used.
+
+  SWITCH   -         "SWITched" cutoffs will be used, nuclear coordinates are
+                     used to approximate charge-charge distance. See Nbonds.
+
+  SHIFT    -         "SHIFted" cutoffs will be used, nuclear coordinates are used
+                     to approximate charge-charge distance. See Nbonds.
+
+  FSHIFT   -         "FSHIfted" cutoffs will be used, nuclear coordinates are
+                     used to approximate charge-charge distance. See Nbonds.
+
+  TFSHIFT  -         "FSHIFTed" electrostatic cutoffs will be used, charge-charge
+                     distances are used to evaluate cutoffs. See Nbonds.
+
+  TSHIFT   -         Recommended. CHARMM "SHIFted" electrostatic cutoffs will be
+                     used, charge-charge distances are used to evaluate cutoffs. See
+                     Nbonds.
+
+
+File: DCM, Node: Requirements, Up: Top, Next: Capabilities, Previous: Description
+
+Requirements
+
+A DCM calculation requires a 'DCM' section in the CHARMM input file
+and an external file (typically with extension '.dcm') containing the
+DCM charges for each DCM residue.
+
+The calculation proceeds by first setting up the simulation, defining
+atom types, force field parameters, sequence, atomic coordinates
+etc. as usual. Periodic boundaries and nonbonded cutoffs can also be
+configured before calling DCM. Once simulation setup is otherwise
+complete a call is made in the input file to the DCM module to add DCM
+charges to all atoms with a residue type mentioned in the .dcm
+parameter file. A call to 'ENERgy' before and after calling 'DCM' in
+the CHARMM input file should reveal a change in the electrostatic
+interaction energy after DCM initialization. After initializing the
+DCM module it will be called each time the energy is updated.
+
+If DCM is to be used in conjunction with CHARMM's "PERT" module for
+thermodynamic integration, then the initial lambda=0 state should be
+set up before calling DCM with the corresponding lambda=0 .dcm
+parameter file, and then "PERT" to store the initial state. The system
+should then be modified as appropriate to form the lambda=1 final
+state and the DCM command should be called again with the "S1" option
+to read in a second "lambda=1" .dcm parameter file prepared by the
+user to define the final state. Dynamics for the given TI window can
+then begin. See test case.
+
+In order to use conformationally-dependent charges with the "FLUX"
+keyword, the necessary parameters must be added to the .dcm parameter
+file.
+
+
+
+
+File: DCM, Node: Capabilities, Up: Top, Next: DCM format, Previous: Requirements
+
+Capabilities
+
+The DCM code has been integrated with standard CHARMM machinery for
+periodic boundaries, non-bonded cutoffs, constant-pressure
+simulations and Ewald summation.
+
+There is no requirement for all moieties in a system to carry DCM
+charges, akin to QM/MM simulations. A standard CHARMM simulation can
+be set up with only certain residues of interest assigned DCM charges,
+any atom-centered charges will be passed to the DCM module and the
+split-level atom-centered/DCM simulation will proceed automatically.
+
+The DCM charges and Cartesian coordinates can be dumped to a file at
+every timestep using the 'XYZ' command in the DCM block of the input
+file. This file can be used diagnostically or parsed and used to pass
+the DCM charges as external point charges in a QM/MM calculation. It
+is not yet implemented to specify how frequently this file should be
+updated, or to specify a subgroup of the atoms to be dumped.
+
+The code works for diatomics as long as all DCM charges lie along the
+bond axis, as the bond is used to define the z-axis while the x- and
+y-axes remain undefined.
+
+Free Energy Calculations have been implemented using CHARMM's PERT
+routines. To use this feature, add a standard DCM section before the
+PERT command is called that reads a .dcm parameter file for the
+LAMBDA=0 state. Call PERT as usual for a standard CHARMM TI run. After
+PERT you should define your LAMBDA=1 state by calling the DCM routine
+again, but this time read in a second .dcm file with the keyword 'S1'
+
+A simple polarization routine is included in the DCM module, where an
+isotropic polarizability can be assigned to each atom in the dcm
+charge parameter file. To maintain computational efficiency a
+single-iteration approximation is used, i.e. rather than the induced
+dipole on an atom modifying the electric field of other atoms and
+inducing a new dipole, iterating until self-consistency, we stop after
+a single iteration. This is equivalent to assuming that induced
+dipoles are caused only by the permanent electric field of surrounding
+moieties, and are not affected by the surrounding induced dipoles. As
+such, the polarizability should be treated as a parameter to be
+fitted, rather than a physically measurable quantity. The damping
+function employed in the AMOEBA force field (J Phys Chem B. 2010
+March 4; 114(8): 2549–2564. doi:10.1021/jp910674d ) is used here.
+
+The maximum number of charge sites per atom is 7, as typically no more
+than 1-3 charges per atom are required.
+
+PSF FILES
+Note: the routine does not add DCM charges to the standard CHARMM PSF
+file, and central charges are zeroed. This means that you cannot save
+and load DCM charges from a PSF file, and you cannot save non-DCM
+charges to the PSF after calling the DCM routine. The system must
+instead be reinitialized, add charges from the topology and .dcm 
+files as before.
+
+SHAKE
+
+Use of SHAKE is supported, but is not yet compatible with the "FAST
+WATER" option. Use instead the older (and more general) "SHAKE BOND"
+approach.
+
+FLEXIBLE CHARGE MODELS (fMDCM)
+
+This feature is developmental and currently only allows coupling of
+charge positions to specified angular degrees of freedom. Extension to
+allow coupling to arbitrary degrees of freedom is in progress. A
+sample parameter file is provided with the corresponding test case.
+
+
+
+
+File: DCM, Node: DCM format, Up: Top, Next: Examples, Previous: Capabilities
+
+DCM file format
+
+The DCM parameter file (extension .dcm ) will load the following
+information / parameters:
+
+NR NFX: The number of residue types with DCM charges and
+polarizabilities (for a solute in solvent NR=2) and the number of
+residue types with flexible charges)
+
+NAME: The name of the residue as in the psf file.
+
+NFRAMES: The total number of axis system frames required for the
+residue, see J. Chem. Theory Comput., 2014, 10 (10), pp 4229–4241 for
+a description of the local axis system and how to define them.
+
+Na Nb Nc SAXIS: Atom indices to define the axis system frames and the
+type of axis system to use for atoms Na, Nb, Nc. SAXIS is the type of
+axis system. Two keywords exist BO and BI corresponding to bond or
+bisector z-axis. BO will use atom a and b to define the local z axis,
+BI uses the bisector of a b c. Note that in the line 'Na Nb Nc', if
+the third atom index Nc is set to '0' the molecule is taken to be a
+diatomic and only two atoms (i.e. information for atoms a and b) are
+expected to follow.
+
+NCa NPa: the number of charges and polarizable sites for atom a
+
+POSX POSY POSZ CV: x, y, z positions of the charge sites with the atom
+at (0 0 0) and the magnitude of the charge
+
+PVa: value of isotropic polarizability for atom a
+
+NOTES:
+
+Identical blocks follow for atoms b and c. If an atom index occurs in
+multiple frames only one such block is given and in all other frames
+the number of charges and polarizable sites is set to "0 0", see
+examples below.
+
+For each axis system frame defined in a DCM parameter file, three
+local axis systems (one for each atom) are constructed with the
+origins taken at the position of each atomic nucleus. The number of
+charges and polarizable sites per atom (local axis system) and the
+position (in Angstrom) of each charge in its local axis system are
+also defined, along with the corresponding values of charges and
+polarizabilities (optional) in (a.u).
+
+To summarize, once an axis system frame for atoms a,b,c is defined,
+the number, (x,y,z)-position and magnitude of charges (and polarizable
+sites if requested) for atom a in its local axis system, then for atom
+b and then the same for atom c are defined next.
+
+The .dcm file has a fixed format, see examples.
+
+If an atom appears in more than one axis system frame, then in the
+.dcm file, the number of charges and charge values for this same atom
+have to be declared multiple times, but the charges will be non zero
+in only one axis system frame. See also the explanation in the first
+paragraph, page 4232 of J. Chem. Theory Comput., 2014, 10 (10), pp
+4229–4241 . See example below.
+
+
+
+File: DCM, Node: Examples, Up: Top, Next: , Previous: DCM format
+
+Examples
+
+!----------------------------------EXAMPLE H2O--------------------------------!
+The following is a .dcm file for water, which provides a simple example as
+there is only one frame and two off-center charges per atom. All atoms are
+non-polarizable.
+!-----------Next line is begining of the .dcm file for H2O--------------------!
+1 0        ! no. residue types defined here (DCM and fMDCM)
+
+WAT       ! residue name
+1          ! no. axis system frames
+ 2  1  3 BI  ! atom indices involved in frame  1
+2  0          ! no. chgs and polarizable sites for atom  2
+      0.1260132091       0.0000000000      -0.4814804450      -0.5276865387
+      0.0866301185       0.0000000000      -0.1171477518       0.7043758247
+2  0          ! no. chgs and polarizable sites for atom  1
+      0.0000000000      -0.5064709322      -0.0140790018      -0.1766892860
+     -0.0000000000       0.5064709322      -0.0140790018      -0.1766892860
+2  0          ! no. chgs and polarizable sites for atom  3
+     -0.1260132091       0.0000000000      -0.4814804450      -0.5276865387
+     -0.0866301185       0.0000000000      -0.1171477518       0.7043758247
+
+! Note that in the line '2 1 3 BI', if the third atom index is set to
+! '0' the molecule is taken to be a diatomic and only two atoms (with
+! up to 7 DCM charges each) are expected to follow.
+!-----------------------end of the .dcm file for H2O--------------------------!
+
+
+!----------------Example .dcm file for benzene and water--------!
+2 0        ! Number of residue types defined here (DCM and fMDCM)
+
+BENZ       ! Residue name (matches topology file)
+6          ! Number of axis system frames
+ 7  1  2 BO  ! atom indices involved in frame 1 (C-atoms are 1-6)
+2  0          ! no. chgs and polarizable sites for atom  7
+      0.0000237914       0.0000035914       0.3999765788       0.2157846427
+      0.0000220194       0.0000033239       0.3701860224      -0.1759614527
+3  0          ! no. chgs and polarizable sites for atom  1
+      0.0000053592       0.0000008090       0.0900970650       0.9997069079
+      0.0000081055       0.3677817712       0.1054518383      -0.5197650489
+     -0.0000514046      -0.3677661170       0.1054584463      -0.5197650489
+3  0          ! no. chgs and polarizable sites for atom  2
+      0.0780263518       0.0000008090       0.0450501592       0.9997069079
+      0.0913230600       0.3677817712       0.0527291321      -0.5197650489
+      0.0913585348      -0.3677661170       0.0526808967      -0.5197650489
+ 8  2  3 BO  ! atom indices involved in frame  1
+2  0          ! no. chgs and polarizable sites for atom  8
+     -0.0000517033      -0.0000963053       0.3999737720       0.2157846427
+     -0.0000494046      -0.0000945870       0.3701832157      -0.1759614527
+0  0          ! no. chgs and polarizable sites for atom  2
+3  0          ! no. chgs and polarizable sites for atom  3
+      0.0780273314      -0.0000051967       0.0450437115       0.9997069079
+      0.0913526674       0.3677747410       0.0527221302      -0.5197650489
+      0.0913315263      -0.3677731478       0.0526738921      -0.5197650489
+ 9  3  4 BO  ! atom indices involved in frame  1
+2  0          ! no. chgs and polarizable sites for atom  9
+      0.0002666349      -0.0000001328       0.3999753458       0.2157846427
+      0.0002626520      -0.0000003264       0.3701847896      -0.1759614527
+0  0          ! no. chgs and polarizable sites for atom  3
+3  0          ! no. chgs and polarizable sites for atom  4
+      0.0780259161       0.0000005853       0.0450485706       0.9997069079
+      0.0913330536       0.3677815091       0.0527113051      -0.5197650489
+      0.0913476264      -0.3677663813       0.0526956220      -0.5197650489
+ 10  4  5 BO  ! atom indices involved in frame  1
+2  0          ! no. chgs and polarizable sites for atom  10
+     -0.0000732361      -0.0000550881       0.3999765184       0.2157846427
+     -0.0000704813      -0.0000541892       0.3701859621      -0.1759614527
+0  0          ! no. chgs and polarizable sites for atom  4
+3  0          ! no. chgs and polarizable sites for atom  5
+      0.0780284766      -0.0000027185       0.0450454039       0.9997069079
+      0.0913493160       0.3677776417       0.0527113771      -0.5197650489
+      0.0913371415      -0.3677702485       0.0526880754      -0.5197650489
+ 11  5  6 BO  ! atom indices involved in frame  1
+2  0          ! no. chgs and polarizable sites for atom  11
+      0.0002288551      -0.0000009386       0.3999730724       0.2157846427
+      0.0002256085      -0.0000011161       0.3701825162      -0.1759614527
+0  0          ! no. chgs and polarizable sites for atom  5
+3  0          ! no. chgs and polarizable sites for atom  6
+      0.0780236157       0.0000005367       0.0450500425       0.9997069079
+      0.0913175370       0.3677814524       0.0527360645      -0.5197650489
+      0.0913586037      -0.3677664345       0.0526736993      -0.5197650489
+ 12  6  1 BO  ! atom indices involved in frame  1
+2  0          ! no. chgs and polarizable sites for atom  12
+     -0.0000170811      -0.0000068707       0.3999746473       0.2157846427
+     -0.0000154980      -0.0000069303       0.3701840909      -0.1759614527
+0  0          ! no. chgs and polarizable sites for atom  6
+0  0          ! no. chgs and polarizable sites for atom  1
+
+WAT       ! residue name
+1          ! no. axis system frames
+ 2  1  3 BI  ! atom indices involved in frame  1
+2  0          ! no. chgs and polarizable sites for atom  2
+      0.1260132091       0.0000000000      -0.4814804450      -0.5276865387
+      0.0866301185       0.0000000000      -0.1171477518       0.7043758247
+2  0          ! no. chgs and polarizable sites for atom  1
+      0.0000000000      -0.5064709322      -0.0140790018      -0.1766892860
+     -0.0000000000       0.5064709322      -0.0140790018      -0.1766892860
+2  0          ! no. chgs and polarizable sites for atom  3
+     -0.1260132091       0.0000000000      -0.4814804450      -0.5276865387
+     -0.0866301185       0.0000000000      -0.1171477518       0.7043758247
+
+
+!---------------------END of file .dcm---------------------------------------!

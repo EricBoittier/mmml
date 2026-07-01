@@ -1,0 +1,20 @@
+!! Build ligand
+read sequ pdb name "data/benzene.pdb"
+bomlev -1
+generate LIGA setup
+auto angle dihe
+bomlev 0
+read coor pdb name "data/benzene.pdb" resid
+
+!! Check if it has lone pair
+!! If it has lone pair -- redistribute this charge
+define lp select type lp* .and. segid LIGA end
+if ?nsel .gt. 0 then
+   set nlp = ?nsel
+   scalar charge stat select .not. type lp* end
+   calc qinc = -?stot / @nlp
+   scalar charge add @qinc select type cl* .or. type br* .or. type i* end
+   delete atom select lp end
+   scalar charge stat
+endif
+

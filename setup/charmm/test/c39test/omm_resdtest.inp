@@ -1,0 +1,474 @@
+* CHARMM 39 Testcase omm_resdtest.inp
+* Adapted from c25test/resdtest.inp by Bernard R. Brooks, 15-JUL-97, c25b1
+* This test evaluates the implementation of the resd commands into the CHARMM/OpenMM interface
+* Written by Charles L. Brooks III, 16-Jan-2014
+* water test for restrained distances
+*
+
+if ?openmm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+bomlev -1
+set tol = 1e-6
+
+read rtf cards
+* water rtf
+*
+   18
+MASS 1 H 1.000
+MASS 2 O 16.00
+MASS 3 AR 39
+
+RESI WAT 0.0
+GROUP
+ATOM O O -0.4
+ATOM H1 H 0.2
+ATOM H2 H 0.2
+BOND O H1 O H2 !  H1 H2
+ANGLE H1 O H2
+
+END
+
+READ PARAM CARD
+* PARAMETERS FOR WATER
+*
+BOND
+H    O    0       1 ! from ST2 geometry
+H    H        0       1.6329931 ! from ST2 geometry (for SHAKE w/PARAM)
+ANGLE
+H    O  H       0     109.47122 ! TETRAHEDRAL FOR ST2'S
+
+END
+
+READ SEQU CARD
+* ONE WATER
+*
+    1
+WAT
+
+GENER WAT
+
+READ COOR CARD
+* WATER COORDINATES
+*
+    3
+    1    1 WAT  O      0.00000   0.06415   0.00000 WAT  1
+    2    1 WAT  H1     0.81650  -0.51321   0.00000 WAT  1
+    3    1 WAT  H2    -0.81650  -0.51321   0.00000 WAT  1
+
+READ IC
+* IC FOR WATER
+*
+  17
+    3
+    1   1 H1    1 O     1 H2    1 ??
+    1   1 O     1 H2    1 H1    1 ??
+    1   1 H2    1 H1    1 O     1 ??
+
+COOR COPY COMP
+IC FILL
+IC PRINT
+delete bond sele type h1 end sele type h2 end
+
+mini nrap nstep 5 nprint 1 cdie cutnb 999 ctofnb 999 ctonnb 999
+
+coor rotate xdir 0.5 ydir 0.3 zdir 0.6 phi 23.0
+energy inbf 0
+
+!!! 1 !!! Make the water asymmetric without changing the angle
+
+RESDistance  KVAL 1000.0  RVAL 0.25 -
+        1.0   WAT 1 O  WAT 1 H1  -
+       -1.0   WAT 1 O  WAT 1 H2
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 1: failed
+else
+      echo Test 1: passed
+endif
+
+!!! 2 !!! Make the water nearly an equilateral triangle
+
+RESDistance  RESEt
+
+RESDistance  KVAL 1000.0  RVAL 0.0 -
+        1.0   WAT 1 O  WAT 1 H1  -
+        1.0   WAT 1 O  WAT 1 H2  -
+       -2.0   WAT 1 H1 WAT 1 H2
+RESDistance  KVAL 1000.0  RVAL 0.0 -
+        1.0   WAT 1 O  WAT 1 H1  -
+       -2.0   WAT 1 O  WAT 1 H2  -
+        1.0   WAT 1 H1 WAT 1 H2
+RESDistance  KVAL 1000.0  RVAL 0.0 -
+       -2.0   WAT 1 O  WAT 1 H1  -
+        1.0   WAT 1 O  WAT 1 H2  -
+        1.0   WAT 1 H1 WAT 1 H2
+
+mini abnr nstep 200 nprint 10
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 2: failed
+else
+      echo Test 2: passed
+endif
+
+!!! 3 !!! Arbitrary collection of restraints
+RESDistance  RESEt
+RESDistance  KVAL 10.0  RVAL 0.25 -
+        1.0   WAT 1 O  WAT 1 H1  -
+       -1.0   WAT 1 O  WAT 1 H2
+RESDistance  KVAL 20.0  RVAL 0.20 -
+        1.0   WAT 1 O  WAT 1 H1  -
+       -1.0   WAT 1 O  WAT 1 H2
+RESDistance  KVAL 100.0  RVAL 0.0 -
+        1.0   WAT 1 O  WAT 1 H1  -
+        1.0   WAT 1 O  WAT 1 H2  -
+       -2.0   WAT 1 H1 WAT 1 H2
+RESDistance  KVAL 100.0  RVAL 0.0 -
+        1.0   WAT 1 O  WAT 1 H1  -
+       -2.0   WAT 1 O  WAT 1 H2  -
+        1.0   WAT 1 H1 WAT 1 H2
+RESDistance  KVAL 100.0  RVAL 0.0 -
+       -2.0   WAT 1 O  WAT 1 H1  -
+        1.0   WAT 1 O  WAT 1 H2  -
+        1.0   WAT 1 H1 WAT 1 H2
+RESDistance  KVAL 100.0  RVAL 0.25 -
+        1.0   WAT 1 O  WAT 1 H1  -
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 3: failed
+else
+      echo Test 3: passed
+endif
+
+!!! 4 !!! Test flatbottom restraints
+RESDistance  RESEt
+
+scalar x set 0
+scalar y set 0
+scalar z set 0
+
+print coor
+
+resdistance kval 10 rval 4 eval 2 -
+     1 wat 1 o wat 1 h1 -
+     positive
+
+scalar x set 5 select bynu 1 end
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 4a: failed
+else
+      echo Test 4a: passed
+endif
+
+scalar x set 2.5 select bynu 1 end
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 4b: failed
+else
+      echo Test 4b: passed
+endif
+
+!!! 5 !!! Test flatbottom restraints
+RESDistance  RESEt
+
+scalar x set 0
+scalar y set 0
+scalar z set 0
+
+print coor
+
+resdistance kval 10 rval 4 eval 2 -
+     1 wat 1 o wat 1 h1 -
+     negative
+
+scalar x set 5 select bynu 1 end
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 5a: failed
+else
+      echo Test 5a: passed
+endif
+
+scalar x set 2.5 select bynu 1 end
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 5b: failed
+else
+      echo Test 5b: passed
+endif
+
+!!! 6 !!! Test different ival values
+RESDistance  RESEt
+
+scalar x set 0
+scalar y set 0
+scalar z set 0
+
+print coor
+
+resdistance kval 10 rval 4 eval 2 -
+     ival 2 1 wat 1 o wat 1 h1
+!resdistance kval 10 rval 4 eval 2 -
+!     1 wat 1 o wat 1 h1
+
+
+scalar x set 5 select bynu 1 end
+
+energy
+set chme = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set omme = ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @chme - @omme )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 6: failed
+else
+      echo Test 6: passed
+endif
+
+stop

@@ -1,0 +1,22 @@
+* Test case to ensure that the output of a three site lambda dynamics trajectory
+* is correctly processed. The MULTI DDG lines of the output file should always
+* be the same. Most lines will be infinity because of inadequate sampleing.
+* The first finite line after
+*             B1 B2 B3  INDEX ....> 0.800 ....> 0.950 ....> 0.800 ....> 0.950
+* should read
+* MULTI DDG>   2 11 23     14     0.41047    Infinity   -30.86953    Infinity
+*
+
+stream datadir.def
+
+! Test to ensure the LDM functionality exists in this build of CHARMM.
+if ?block .ne. 1 then
+   echo LDM functionality absent: Test NOT performed
+   echo "TESTCASE RESULT msld_3site_traj_check : SKIP"
+   stop
+endif
+
+open unit 44 read file name @08der_res0_prod.lmd
+traj lamb print ctlo 0.8 cthi 0.95 refcom 256 first 44 nunit 1
+
+stop

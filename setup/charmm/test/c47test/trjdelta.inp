@@ -1,0 +1,72 @@
+* test of traj header timestep field read, write options
+* some programs write timestep field in picosec instead of akma
+* rpico interprets as picosec, sets DELTA in AKMA
+* tset overrides file value and sets user specified value
+* user value specified in picosec, sets DELTA in AKMA
+*
+
+stream datadir.def
+
+read rtf card name @0/top_all36_prot.rtf
+read param card flex name @0/par_all36_prot.prm
+stream @0/toppar_water_ions.str
+
+read sequ coor segid main name @0/bpti.crd
+gener main setup warn 
+read sequ tip3 4
+gener solv noang nodihe
+
+! MERGE test
+open unit 41 read file name @0/bpti1.dcd
+format (ES9.3)
+traj query unit 41
+!echo ?DELTA
+@testcheck ?DELTA 4.889E-05 1.e-8 ps_write_read_as_akma
+
+! convert to akma
+open unit 51 write file name @9/bpti2.dcd
+merge firstu 41 nunit 1 rpico outputu 51 nfile 5
+open unit 51 read file name @9/bpti2.dcd
+traj query unit 51
+!echo ?DELTA
+@testcheck ?DELTA 1.000E-03 1.e-6 ps_read_converted_to_akma
+
+! override file value
+open unit 31 read file name @9/bpti2.dcd
+open unit 41 write file name @9/bpti3.dcd
+merge firstu 31 nunit 1 tset 0.24 outputu 41 nfile 5
+open unit 41 read file name @9/bpti3.dcd
+traj query unit 41
+!echo ?DELTA
+@testcheck ?DELTA 2.400E-01 1.e-3 verify_tset
+
+! revert
+format
+
+! TRAJIO test; read/write
+open unit 31 read file name @9/bpti2.dcd
+traj query unit 31
+open unit 32 write file name @9/bpti4.dcd
+traj firstu 31 nunit 1 iwrite 32 nfile 5
+set k = 1
+label trjlp
+  traj read
+  traj write
+  incr k by 1
+if k le 5 goto trjlp
+open unit 32 read file name @9/bpti4.dcd
+traj query unit 32
+
+! WRITE only
+open unit 32 write file name @9/bpti5.dcd
+traj iwrite 32 nfile 5
+set k = 1
+label trjlp2
+  traj write
+  incr k by 1
+if k le 5 goto trjlp2
+open unit 32 read file name @9/bpti5.dcd
+traj query unit 32
+
+stop
+

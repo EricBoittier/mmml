@@ -1,0 +1,56 @@
+* scaling.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* streams loop2.str to get pairwise interaction energies in vacuum (SCA3)
+* and solution (SCA4) and in solution within the cutoff (SCA7)
+* Calculates group-group pairwise scaling factors (SCA5)
+* determines scaling factor for SOURCE group (written to SCA6)
+* determines E^solv,cut for SOURCE group (written to SCA8)
+*
+
+     ! initialize SCA3, SCA4, SCA5, SCA7
+SCAL SCA3 SET 0.0 SELEct all END      ! E^vac_IJ
+SCAL SCA4 SET 0.0 SELEct all END      ! E^solv_IJ
+SCAL SCA5 SET 0.0 SELEct all END      ! eps_IJ
+SCAL SCA7 SET 0.0 SELEct all END      ! E^solv_IJ for d(I,J) < cutoff
+
+     ! loop over all residues except SOURCE GROUP residue and calculate
+     ! electrostatic interaction energies in vacuum (returned in SCA3)
+     ! and in solution (returned in SCA4)
+     ! if the two energies have different signs the entries have been set 
+     ! to 0.0
+     ! entries for SOURCE GROUP are set to 0.0
+
+STREam loop2.str
+
+     ! Calculate E^solv,cut_I as sum(E^solv_IJ | d(I,J) < cutoff) and 
+     ! store it to SCA8 in position of group I
+SCAL SCA7 STATistics SELEct groupatoms END
+SCAL SCA8 SET ?STOT SELEct group END
+
+     ! Calculate dielectric constant as 
+     ! eps = sum(|E^vac_IJ|) / sum(|E^solv_IJ|)
+SCAL SCA3 ABS
+SCAL SCA4 ABS
+
+SCAL SCA3 STATistics select groupatoms end 
+SET EVACSUM ?STOT 
+
+SCAL SCA4 STATistics select groupatoms end
+SET ESOLVSUM ?STOT
+
+SCAL SCA6 SET @EVACSUM SELEct GROUP END
+SCAL SCA6 DIVID @ESOLVSUM SELEct GROUP END
+
+     ! calculate scaling factor lambda =  square root(eps)
+SCAL SCA6 SQRT SELEct GROUP END
+
+RETURN
+
+
+
+
+
+
+
+
+

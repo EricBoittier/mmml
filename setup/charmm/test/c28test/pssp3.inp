@@ -1,0 +1,427 @@
+* Testcase III for the PERT/PSSP code (combination of soft core
+* potentials and PERT)
+* |
+* Do a gas phase mutation of isobutane to an 'isobutane' without
+* nonbonded interactions.  Required intermediate step when
+* calculating the solvation free energy of isobutane
+* |
+* Uses only one set of nonbonded options; tests accumulation
+* during MD
+*
+
+! Author: Stefan Boresch (stefan@mdy.univie.ac.at)
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! NB: IGNORE THE TP (EF) RESULTS                                      !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ echo pssp3 TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Preliminaries: Set up the system and PERT                           !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+set name ibut
+
+read rtf cards
+* isobutane setup (from CHARMM22 protein all-hydrogen parameters)
+*
+   27     1
+MASS     1 HA     1.00800 H ! nonpolar H
+MASS     3 CT1   12.01100 C ! aliphatic sp3 C for CH
+MASS     4 CT2   12.01100 C ! aliphatic sp3 C for CH2
+MASS     5 CT3   12.01100 C ! aliphatic sp3 C for CH3 
+mass    91 dha    1.00800 h ! ha-like dummy atom
+mass    93 dct1  12.01100 c ! ct3-like dummy atom
+mass    94 dct2  12.01100 c ! ct3-like dummy atom
+mass    95 dct3  12.01100 c ! ct3-like dummy atom
+
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE   
+
+Resi ibut         0.00 ! Iso-butane
+Group
+atom  ct  ct1   -0.09 !          H12
+atom  ht  ha     0.09 !           | 
+Group                 !       H11-C1-H13
+Atom  c1  ct3   -0.27 !           |
+Atom  h11 ha     0.09 !           CT-HT
+Atom  h12 ha     0.09 !          / \
+Atom  h13 ha     0.09 !         /   \
+Group                 !   H21-C2     C3-H31
+Atom  c2  ct3   -0.27 !      / |     | \
+Atom  h21 ha     0.09 !   H22 H23   H33 H32
+Atom  h22 ha     0.09 !
+Atom  h23 ha     0.09 !
+Group
+atom  c3  ct3   -0.27
+Atom  h31 ha     0.09
+atom  h32 ha     0.09
+atom  h33 ha     0.09
+Bond ct  c1  ct  c2  ct c3 ct  ht
+Bond c1 h11 c1 h12 c1 h13
+Bond c2 h21 c2 h22 c2 h23
+Bond c3 h31 c3 h32 c3 h33
+ic  ht   ct  c1  h11  0.00  0.00   60.0  0.00 0.00
+ic  ct   c1  h11 h12  0.00  0.00    0.0  0.00 0.00
+ic  ht   ct  c1  h12  0.00  0.00  180.0  0.00 0.00
+ic  ht   ct  c1  h13  0.00  0.00  300.0  0.00 0.00
+ic  h12  c1  ct  c2   0.00  0.00   60.0  0.00 0.00
+ic  h12  c1  ct  c3   0.00  0.00  -60.0  0.00 0.00
+ic  ht   ct  c2  h21  0.00  0.00   60.0  0.00 0.00
+ic  ht   ct  c2  h22  0.00  0.00  180.0  0.00 0.00
+ic  ht   ct  c2  h23  0.00  0.00  300.0  0.00 0.00
+ic  ht   ct  c3  h31  0.00  0.00   60.0  0.00 0.00
+ic  ht   ct  c3  h32  0.00  0.00  180.0  0.00 0.00
+ic  ht   ct  c3  h33  0.00  0.00  300.0  0.00 0.00
+
+END
+
+
+read parameters cards
+* Subset of params, after CHARMM22 All-Hydrogen Parameter File
+*
+BONDS
+!
+!V(bond) = Kb(b - b0)**2
+!
+!Kb: kcal/mole/A**2
+!b0: A
+!
+!atom type Kb          b0
+!
+CT1  CT1   222.500     1.5000 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT2  CT1   222.500     1.5380 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT2  CT2   222.500     1.5300 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT3  CT1   222.500     1.5380 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT3  CT2   222.500     1.5280 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT3  CT3   222.500     1.5300 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT1   309.000     1.1110 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT2   309.000     1.1110 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT3   322.000     1.1110 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+! begin chem. dummy block
+DCT1  DCT1   222.500     1.5000 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT2  DCT1   222.500     1.5380 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT2  DCT2   222.500     1.5300 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT3  DCT1   222.500     1.5380 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT3  DCT2   222.500     1.5280 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT3  DCT3   222.500     1.5300 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT1   309.000     1.1110 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT2   309.000     1.1110 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT3   322.000     1.1110 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+! end chem. dummy block
+DHA  HA    322.000     1.1110 ! dummy atoms 
+                ! as ha ct3
+HT   HT      0.000     1.5139 ! ALLOW WAT
+                ! FROM TIPS3P GEOMETRY (FOR SHAKE/W PARAM)
+dHw  dHw      0.000     1.5139 ! for dummy water
+                ! sb
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+                ! FROM TIPS3P GEOM
+dOw  dHw   450.000     0.9572 ! for dummy water
+                ! sb
+
+ANGLES
+!
+!V(angle) = Ktheta(Theta - Theta0)**2
+!
+!V(Urey-Bradley) = Kub(S - S0)**2
+!
+!Ktheta: kcal/mole/rad**2
+!Theta0: degrees
+!Kub: kcal/mole/A**2 (Urey-Bradley)
+!S0: A
+!
+!atom types     Ktheta    Theta0   Kub     S0
+!
+CT1  CT1  CT1   53.350    111.00    8.00   2.56100 ! ALLOW ALI
+                ! alkane update, adm jr., 3/2/92
+CT1  CT2  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+CT2  CT1  CT1   53.350    111.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT2  CT2  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+CT2  CT2  CT2   58.350    113.60   11.16   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT2  CT3  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+CT3  CT1  CT1   53.350    108.50    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT3  CT1  CT2   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT3  CT1  CT3   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT3  CT2  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+CT3  CT2  CT2   58.000    115.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+CT3  CT2  CT3   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT1  CT2   34.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT1  CT3   34.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT1  HA    35.500    109.00    5.40   1.80200 ! TEST for test cpd
+                ! based on HA   CT2  HA
+HA   CT2  CT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+HA   CT2  CT2   26.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT2  CT3   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT3  CT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+HA   CT3  CT2   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT3  CT3   37.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT3  HA    35.500    108.40    5.40   1.80200 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT2  HA    35.500    109.00    5.40   1.80200 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+! begin chem. dummy block
+DCT1  DCT1  DCT1   53.350    111.00    8.00   2.56100 ! ALLOW ALI
+                ! alkane update, adm jr., 3/2/92
+DCT1  DCT2  DCT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+DCT2  DCT1  DCT1   53.350    111.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT2  DCT2  DCT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+DCT2  DCT2  DCT2   58.350    113.60   11.16   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT2  DCT3  DCT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+DCT3  DCT1  DCT1   53.350    108.50    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT3  DCT1  DCT2   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT3  DCT1  DCT3   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT3  DCT2  DCT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+DCT3  DCT2  DCT2   58.000    115.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+DCT3  DCT2  DCT3   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT1  DCT2   34.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT1  DCT3   34.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT1  dHA    35.500    109.00    5.40   1.80200 ! TEST for test cpd
+                ! based on HA   DCT2  HA
+dHA   DCT2  DCT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+dHA   DCT2  DCT2   26.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT2  DCT3   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT3  DCT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+dHA   DCT3  DCT2   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT3  DCT3   37.500    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   DCT3  dHA    35.500    108.40    5.40   1.80200 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+dHA   dCT2  dHA    35.500    109.00    5.40   1.80200 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+! end chem. dummy block
+dHA  HA   CT2   33.430    110.324   ! 22.53   2.17900 ! dummy atom
+                ! as ha ct3 ct1 -- ambiguous...
+dHA  ha   dHA   35.500    108.605  !  5.40   1.80200 ! dummy atom
+                ! from ha ct3 ha
+HT   OT   HT     55.000   104.5200 ! ALLOW WAT
+                ! TIP3P GEOMETRY, ADM JR.
+dHw  dOw  dHw     55.000   104.5200 ! for dummy water
+                ! sb
+DIHEDRALS
+!
+!V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+!
+!Kchi: kcal/mole
+!n: multiplicity
+!delta: degrees
+!
+!atom types             Kchi    n   delta
+!
+CT3  CT2  CT2  CT2      0.1500  1     0.00 ! ALLOW ALI
+                ! alkane update, adm jr., 3/2/92, butane trans/gauche
+CT3  CT2  CT2  CT3      0.1500  1     0.00 ! ALLOW ALI
+                ! alkane update, adm jr., 3/2/92, butane trans/gauche
+X    CT1  CT1  X        0.2000  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    CT1  CT2  X        0.2000  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    CT1  CT3  X        0.2000  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    CT2  CT2  X        0.1950  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    CT2  CT3  X        0.1600  3     0.00 ! ALLOW   ALI
+                ! rotation barrier in Ethane (SF)
+X    CT3  CT3  X        0.1550  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+! begin chemical dummy block
+DCT3  DCT2  DCT2  DCT2      0.1500  1     0.00 ! ALLOW ALI
+                ! alkane update, adm jr., 3/2/92, butane trans/gauche
+DCT3  DCT2  DCT2  DCT3      0.1500  1     0.00 ! ALLOW ALI
+                ! alkane update, adm jr., 3/2/92, butane trans/gauche
+X    DCT1  DCT1  X        0.2000  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    DCT1  DCT2  X        0.2000  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    DCT1  DCT3  X        0.2000  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    DCT2  DCT2  X        0.1950  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    DCT2  DCT3  X        0.1600  3     0.00 ! ALLOW   ALI
+                ! rotation barrier in Ethane (SF)
+X    DCT3  DCT3  X        0.1550  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+! end chemical dummy block
+X    CT2  ha   X       10.0000  3     0.00 ! testing something stronger here-
+                ! as x ct1 ct3 x
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+                !adm jr., 5/08/91, suggested cutoff scheme
+!
+!V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+!
+!epsilon: kcal/mole, Eps,i,j = sqrt(eps,i * eps,j)
+!Rmin/2: A, Rmin,i,j = Rmin/2,i + Rmin/2,j
+!
+!atom  ignored    epsilon      Rmin/2   ignored   eps,1-4       Rmin/2,1-4
+!
+CT1    0.000000  -0.020000     2.275000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+                ! isobutane pure solvent properties, adm jr, 2/3/92
+CT2    0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+                ! propane pure solvent properties, adm jr, 2/3/92
+CT3    0.000000  -0.080000     2.060000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+                ! methane/ethane a.i. and ethane pure solvent, adm jr, 2/3/92
+HA     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+                ! methane/ethane a.i. and ethane pure solvent, adm jr, 2/3/92
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+                !TIP3P HYDROGEN PARAMETERS, adm jr., NBFIX obsolete
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+                !TIP3P OXYGEN PARAMETERS, adm jr., NBFIX obsolete
+END
+
+read sequ cards
+* @name
+*
+1
+@name
+generate @name setup
+
+bomlev -2  ! for missing parameter warning
+ic para
+bomlev 0
+print ic
+ic seed 1 c1 1 ct 1 c3
+ic build
+
+print coor
+
+goto testdata
+label fromtestdata
+set ind 1
+
+energy cutnb 9.5 ctofnb 7.5 ctonnb 6.5 group switch cdie ihbfrq 0 inbfrq -1
+
+@qcheck ?ENER @e@@ind 0.1 pssp3_@ind
+incr ind
+
+mini nrap nstep 50 nprint 10 
+
+pert sele all end
+defi ha sele segi @name .and. hydrogen end
+defi ct1 sele segi @name .and. atom @name 1 ct end
+defi ct3 sele segi @name .and. atom @name 1 c+ end
+
+scalar char set 0. sele segi @name end
+scalar type set 91 sele ha end
+scalar type set 93 sele ct1 end
+scalar type set 95 sele ct3 end
+
+energy lstart 0. lamb 0. lstop 1.
+
+@qcheck ?ENER @e@@ind 0.1 pssp3_@ind
+incr ind
+
+energy lstart 0. lamb 1. lstop 1.
+
+@qcheck ?ENER @e@@ind 0.1 pssp3_@ind
+incr ind
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 2) Do dynamics                                                      !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! NB: IGNORE THE TP (EF) RESULTS                                      !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! ---- MFC uses non-parallel integrator
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed in parallel"
+ echo pssp3 TESTCASE RESULT: SKIP
+ stop
+endif
+
+! The PSSP specific part is in pssp3.pun (in data directory)
+
+open read unit 80 card name @0pssp3.pun
+dyna nose tref 300. qref 10. strt nstep 120 timestep 0.0005 -
+    iprfrq 20 ihtfrq 0 ieqfrq 0 ntrfrq 0  -
+    nprint 10 nsavc 0 nsavv 0 inbfrq 0 ihbfrq 0 -
+    firstt 240.0 finalt 300.0 iunwr -1 iseed 1 -
+    iasors 1 iasvel 1 ichecw 0  punit 80 ilbfrq 20
+
+! check coordinates
+scalar xcomp set 0
+scalar ycomp set 0
+scalar zcomp set 0
+
+coor rms
+
+@qcheck ?RMS @rms 0.001 pssp3_@ind
+incr ind
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! NB: IGNORE THE TP (EF) RESULTS (am I repeating myself...?)          !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+stop
+
+label testdata
+SET e1 -16.01630
+SET e2 -17.44141
+SET e3 0.73406
+SET rms 2.4157
+goto fromtestdata

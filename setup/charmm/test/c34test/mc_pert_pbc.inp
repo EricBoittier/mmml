@@ -1,0 +1,218 @@
+* CHARMM Testcase: c34test/mc_pert_pbc.inp
+* Author:   Aaron Dinner
+* Date:     December 30, 2006
+* Version:  c34a2
+* Test:     PERT with PBC
+*
+
+! This testcase compares the GCMC/PBC insertion of water into
+! an empty box and a box with one nonblocking benzene molecule
+! that is decoupled with PERT.
+
+stream datadir.def
+
+prnlev 3 @pnode
+
+read rtf card
+* benzene and tip3p topology
+*
+  27     1
+MASS     4 HT     1.00800 H ! TIPS3P WATER HYDROGEN
+MASS     5 HP     1.00800 H ! aromatic H
+MASS    21 CA    12.01100 C ! aromatic C
+MASS    75 OT    15.99940 O ! TIPS3P WATER OXYGEN
+
+RESI TIP3        0.00 ! TIPS3P WATER MODEL, adm jr.
+GROUP                 ! Generate noangle nodihedral
+ATOM OH2  OT    -0.834
+ATOM H1   HT     0.417
+ATOM H2   HT     0.417
+BOND OH2  H1   OH2  H2   H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+ACCE OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI BENZ        0.00 ! benzene, adm jr.
+GROUP
+ATOM CG   CA    -0.115 !
+ATOM HG   HP     0.115 !      HD1  HE1
+GROUP                  !       |    |
+ATOM CD1  CA    -0.115 !      CD1--CE1
+ATOM HD1  HP     0.115 !      /      \
+GROUP                  ! HG--CG      CZ--HZ
+ATOM CD2  CA    -0.115 !      \      /
+ATOM HD2  HP     0.115 !      CD2--CE2
+GROUP                  !       |    |
+ATOM CE1  CA    -0.115 !      HD2  HE2
+ATOM HE1  HP     0.115 !
+GROUP
+ATOM CE2  CA    -0.115
+ATOM HE2  HP     0.115
+GROUP
+ATOM CZ   CA    -0.115
+ATOM HZ   HP     0.115
+BOND CD1 CG CD2 CG CE1 CD1
+BOND CE2 CD2 CZ CE1 CZ CE2
+BOND CG HG CD1 HD1 CD2 HD2 CE1 HE1
+BOND CE2 HE2 CZ HZ
+IC CG   CD1  CE1  CZ    0.0000  0.0000   0.0000  0.0000  0.0000
+IC CD1  CE1  CZ   CE2   0.0000  0.0000   0.0000  0.0000  0.0000
+IC CE1  CZ   CE2  CD2   0.0000  0.0000   0.0000  0.0000  0.0000
+IC CD1  CD2  *CG  HG    0.0000  0.0000 180.0000  0.0000  0.0000
+IC CE1  CG   *CD1 HD1   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CE2  CG   *CD2 HD2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CZ   CD1  *CE1 HE1   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CZ   CD2  *CE2 HE2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC CE1  CE2  *CZ  HZ    0.0000  0.0000 180.0000  0.0000  0.0000
+
+END
+
+read param card
+*parameters
+*
+
+BONDS
+
+HT   HT      0.000     1.5139 ! ALLOW WAT
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+HP   CA    340.000     1.0800 ! ALLOW   ARO
+CA   CA    305.000     1.3750 ! ALLOW   ARO
+
+ANGLES
+
+CA   CA   CA    40.000    120.00   35.00   2.41620 ! ALLOW   ARO
+HP   CA   CA    30.000    120.00   22.00   2.15250 ! ALLOW   ARO  
+HT   OT   HT     55.000   104.5200 ! ALLOW WAT
+
+DIHEDRALS
+
+HP   CA   CA   CA       4.2000  2   180.00 ! ALLOW   ARO
+                ! JES 8/25/89 benzene
+HP   CA   CA   HP       2.4000  2   180.00 ! ALLOW   ARO
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+                !adm jr., 5/08/91, suggested cutoff scheme
+
+CA     0.000000  -0.070000     1.992400 ! ALLOW   ARO
+HP     0.000000  -0.030000     1.358200   0.000000  -0.030000     1.358200 ! ALLOW ARO
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+                !TIP3P OXYGEN PARAMETERS, adm jr., NBFIX obsolete
+END
+
+set nwater = 125
+read sequence tips @nwater
+generate BULK setup noangle nodihedral
+
+coor set xdir 0 ydir 0 zdir 0 -
+   select segid BULK .and. (type OH2)  end
+coor set xdir 0.9572 ydir 0 zdir 0 -
+   select segid BULK .and. (type H*)  end
+coor rotate zdir 1.0 phi 104.52 -
+   select segid BULK .and. (type H2)  end
+coor trans    xdir 0.0  ydir 0.0 zdir 0.0 select segid BULK end
+
+!prnlev 10
+bomlev -5
+
+CRYStal DEFIne CUBIC 15.5516 15.5516 15.5516 90.0 90.0 90.0
+CRYStal BUILd CUTOFF 15.5516
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE SEGID BULK END
+nbonds inbfrq 20 imgfrq 20 ctonnb  ctofnb 14 cutnb 15.5516  -
+       elec switch atoms cdie eps 1.0 vdw vswitch vatom cutim 1000 imall
+
+scalar gcmc set 0.0 select segid BULK end
+scalar gcblocker set 0.0 select all end
+scalar gcblocker set 1.0 select .not. type H* end
+
+!  Add the moves
+move add mvtp rtrn byres weight 0.33 sele segid BULK .and. type O* end -
+     dmax 0.25 armp 0.2 arma 0.8 armb 0.1 domcf 2.0 aniso 0 label disp
+move add mvtp rrot byres weight 0.33 dmax 40.0 sele segid BULK .and. type O* end -
+    armp 0.2 arma 0.8 armb 0.1 domcf 2.0 aniso 0 label rota
+move add mvtp gcmc weight 0.33 sele segid BULK .and. type O* end label gcmc
+move link gcmc lab1 disp lab2 gcmc
+move link gcmc lab1 rota lab2 gcmc
+move link      lab1 disp lab2 rota
+
+fast gene
+energy
+
+!mc within an empty box
+
+MC nsteps 100 temp 298.0 iseed 132 -
+   iecheck 100 inbfrq  20 imgfrq 20 nsavc 100 iuncrd -1 -
+   muex -3.0 dens 0.03342 -
+   xmin -7.7758 ymin -7.7758 zmin -7.7758 -
+   xmax  7.7758 ymax  7.7758 zmax  7.7758 -
+   gccut 2.5 rgrid 0.25 notb 10
+
+set vace = ?ener
+
+scalar gcmc set 0.0
+
+energy
+
+read sequence card
+* Solute
+*
+  1
+benz
+generate SOLU setup noangle nodihedral first none last none
+
+read coor card append
+* BUILDING BENZENE IN LYSOZYME POCKET
+*  DATE:    11/10/ 3     11:15:40      CREATED BY USER: deng
+*
+   12
+    1    1 BENZ CG     1.30189  -0.49861   0.01372 SOLU 1      0.00000
+    2    1 BENZ HG     2.30834  -0.88910   0.04501 SOLU 1      0.00000
+    3    1 BENZ CD1    0.21866  -1.36683  -0.00642 SOLU 1      0.00000
+    4    1 BENZ HD1    0.38742  -2.43345  -0.02109 SOLU 1      0.00000
+    5    1 BENZ CD2    1.08771   0.87292  -0.00648 SOLU 1      0.00000
+    6    1 BENZ HD2    1.92655   1.55301  -0.02110 SOLU 1      0.00000
+    7    1 BENZ CE1   -1.08593  -0.87279  -0.00786 SOLU 1      0.00000
+    8    1 BENZ HE1   -1.92244  -1.55565  -0.02685 SOLU 1      0.00000
+    9    1 BENZ CE2   -0.21625   1.36822  -0.00779 SOLU 1      0.00000
+   10    1 BENZ HE2   -0.38271   2.43512  -0.02675 SOLU 1      0.00000
+   11    1 BENZ CZ    -1.30823   0.49896   0.01516 SOLU 1      0.00000
+   12    1 BENZ HZ    -2.31501   0.88819   0.05043 SOLU 1      0.00000
+
+
+coor set xdir 0 ydir 0 zdir 0 -
+   select segid BULK .and. (type OH2)  end
+coor set xdir 0.9572 ydir 0 zdir 0 -
+   select segid BULK .and. (type H*)  end
+coor rotate zdir 1.0 phi 104.52 -
+   select segid BULK .and. (type H2)  end
+coor trans    xdir 0.0  ydir 0.0 zdir 0.0 select segid BULK end
+
+scalar gcmc set 1.0 select segid SOLU end
+scalar gcblocker set 0.0 select segid solu end
+
+scalar charge set 0.0 select segid SOLU end
+scalar charge show select segid SOLU end
+scalar wcad set 0.0 select segid SOLU end
+scalar wcad show select segid SOLU end
+
+energy
+
+calc ebenz = ?ener - ?vdw
+
+PERT scl0 scr0 0.0 scl1 scr1 0.0 select segid SOLU end
+
+energy pwindow lambda 0.723 lstop 1.0
+
+!mc with a ghost bezene molecule
+
+MC nsteps 100 temp 298.0 iseed 132 -
+   iecheck 100 inbfrq  20 imgfrq 20 nsavc 100 iuncrd -1 -
+   muex -3.0 dens 0.03342 -
+   xmin -7.7758 ymin -7.7758 zmin -7.7758 -
+   xmax  7.7758 ymax  7.7758 zmax  7.7758 -
+   gccut 2.5 rgrid 0.25 notb 10
+
+set newen = ?ener
+!The difference should be small
+calc diff = @newen - @vace - @ebenz

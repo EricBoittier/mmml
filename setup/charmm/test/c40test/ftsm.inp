@@ -1,0 +1,340 @@
+* Finite temperature string method (FTSM) test case
+* alanine dipeptide isomerization in vacuum
+*
+!SUMMARY : generate initial path by linear interpolation
+! in phi/psi dihedral angles; perform optimization
+! compute the path and free energy along the path
+
+if ?stringm .ne. 1 then
+   echo "String method code not compiled."
+   echo "Test NOT performed."
+   stop
+endif
+!
+if ?numnode  .lt. 3  then
+  echo "At least three cpu cores are required to run this test."
+  echo "Test NOT performed."
+  STOP
+endif
+!
+if ?numnode  .ne. 8  then
+  echo "Internal PASS/FAIL test only available for 8 cpu cores b/c result depends on # cores."
+  echo "Internal PASS/FAIL test check will be omitted."
+endif
+!
+set myname ftsm.inp
+!
+stream datadir.def
+!**********************************************************
+set nrun 0
+set toppar  @0
+set outdir  @9
+set datadir @outdir
+set outputdir @outdir
+! read parameter and topology files
+!
+open unit 1 read form name @TOPPAR/top_all22_model.inp
+read rtf card unit 1
+close unit 1
+!
+open unit 1 read form name @TOPPAR/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! ***************************** generate alanine dipeptide
+read sequence card
+* alanine dipeptide in vacuum
+*
+1
+ALAD
+
+generate dial setup warn
+write psf card name @outdir/diala.psf
+!
+if @?nlocal eq 0 set nlocal 1
+calc nrep = ?numnode / @nlocal
+!
+mcom string @nlocal by @nrep ! set up communication
+string ftsm init ! initialize ftsm
+!**************************** replica variables ***********
+set ncpu ?nstring
+set me ?mestring
+!
+! set dihedral angles for this replica
+! (1) define range of angles
+calc phis -90.
+calc psis 90.0
+calc phie @phis+180.0
+calc psie @psis-180.0
+
+if @ncpu .gt. 1 then 
+ calc mypsi = @psis + ( @psie - @psis ) * @me / ( @ncpu - 1 )
+ calc myphi = @phis + ( @phie - @phis ) * @me / ( @ncpu - 1 )
+else
+ calc mypsi = @psis
+ calc myphi = @phis
+endif 
+!
+ic edit
+dihe  dial 1 clp   dial 1 nl   dial 1 ca   dial 1 crp @myphi
+dihe  dial 1 nl   dial 1 ca   dial 1 crp   dial 1 nr @mypsi
+end
+!
+! generate coordinates
+IC PARA
+IC SEED 1 CLP 1 NL 1 CA
+IC BUILD
+!
+! specify infinite cutoff
+update cutnb 1000.0
+! gently minimize to avoid instability during MD
+mini sd nstep 20
+! ***************************** DONE generating alanine dipeptide
+! adding "angstrom" sets the length scale to Ang for input; the values are renormalized before MD
+set ang
+set ang angstrom
+string ftsm set kpar 200 @ang ! force constant for hyperplanes restraints
+string ftsm set kprp 200 @ang ! force constant f[or tube restraints
+string ftsm set dprp 0.5 @ang ! distance away from string at which tube restraint becomes active
+!
+! add string atoms using com notation
+define orient sele .not. hydrogen end
+label oloop
+ define com sele bynum ?selatom end ! here, just one atom per COm group
+ string ftsm add orient sele com end
+ define orient sele orient .and. .not. com end
+ if ?nsel gt 0 -
+goto oloop
+!
+define forcing sele .not. hydrogen end
+label floop
+ define com sele bynum ?selatom end
+ string ftsm add rmsd sele com end
+ define forcing sele forcing .and. .not. com end
+ if ?nsel gt 0 -
+goto floop
+!
+string ftsm set mass on ! turn on mass weighting in RMSD computation and orientation
+string ftsm set proj on ! forces restrain distance to hyperplane, but not position in the hyperplane (this is needed to compute 1D FE)
+string ftsm fill col main   ! assign coordinates of the string from instantaneous coordinates in the main set ("main" is optional)
+!
+string ftsm test grad step 0.00001 ! test gradients
+!string ftsm test para ! will fail for 1-processor groups
+mcom barrier global ! barrier on global communicator (optional)
+!
+! set up statistics
+string ftsm stat -
+                  rmsd rnam @datadir/rmsd.dat  - ! compute rmsd from coordinate in col 8
+                  arcl anam @datadir/arcl.dat  - ! compute arclength
+                  curv cvnm @datadir/curv.dat  - ! compute curvature
+                  free fenm @datadir/fe.dat  -   ! compute free energy
+                  forc fcnm @datadir/force.dat  - ! output forces
+                  rexl rexm rxnm @datadir/rex - ! output replica exchange map/log
+                  cent cnam @datadir/path.dcd  ! output the instantaneous string
+
+!set fbeta for langevin
+scalar fbeta set 10 select all end
+!
+set tstep 0.001
+set temp 300
+!
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+!
+! align string using reparametrizaton routine
+string ftsm repa iter 0
+string ftsm repa ! each replica will be superposed into the preceding one
+string ftsm copy main ref ! save center as reference coords
+!
+! real reparameterization
+string ftsm repa iter 1 defi 1.02 line  ! use iterative linear interpolation; maximum of one iteration
+!
+!string ftsm stat ! test statistics manually (optional)
+string ftsm repa ! test reparametrization manually (optional)
+!
+!!!!!!!!!!!!!!!!!!! string options
+set nsteps 40000
+set evof 10      ! frequency of string evolution
+set reqfreq 100  ! steps to adjust to new restraints
+set dcdfreq 1000 ! trajectory output frequency
+set freq 1000    ! misc frequency
+!
+!*********************************************************
+! test projection dynamics
+string ftsm dyna -
+ rstr reeq @reqfreq - ! restrained dynamics 
+! stat staf @freq -   ! statistics output
+ stat staf @nsteps -   ! statistics output
+ rex rexf 100 rext @Temp - ! Hamiltonian replica exchange frequency and temperature 
+ evolve evof @evof expo memo 0.995 - ! frequency of image evolution & evolution option: exponentially decaying kernel
+ upda updf @freq repa - ! frequency of updating string images
+ evos @reqfreq - ! statistics slices to skip when computing average force/smoothing
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea 67 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+!***********************************************************************************************
+! set up statistics again
+string ftsm stat -
+                  rmsd rnam @datadir/rmsd2.dat  - ! compute rmsd from coordinate in col 8
+                  arcl anam @datadir/arcl2.dat  - ! compute arclength
+                  curv cvnm @datadir/curv2.dat  - ! compute curvature
+                  free fenm @datadir/fe2.dat  -   ! compute free energy (which will be zero for rms dynamics)
+                  forc fcnm @datadir/force2.dat  - ! output forces
+                  rexl rexm rxnm @datadir/rex2 - ! output replica exchange map/log
+                  cent cnam @datadir/path2.dcd  ! output the instantaneous string
+
+! sample the hyperplanes a little more, but without string evolution or rex: 
+incr nrun by 1
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+!
+string ftsm dyna -
+ rstr reeq @reqfreq - ! restrained dynamics 
+ stat staf @nsteps -   ! statistics output
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea 67 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+! final coordinates
+string open card write unit 1 name @outputdir/diala@nrun_@me.cor
+write coor card unit 1
+!***********************************************************************************************
+! test rmsd dynamics (rmsd restraints in the spirit of replica path (FE cannot be computed)
+!
+incr nrun by 1
+string ftsm set proj off
+string ftsm set krms 0
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+
+! set up statistics again
+string ftsm stat -
+                  rmsd rnam @datadir/rmsd3.dat  - ! compute rmsd from coordinate in col 8
+                  arcl anam @datadir/arcl3.dat  - ! compute arclength
+                  curv cvnm @datadir/curv3.dat  - ! compute curvature
+                  free fenm @datadir/fe3.dat  -   ! compute free energy (which will be zero for rms dynamics)
+                  forc fcnm @datadir/force3.dat  - ! output forces
+                  rexl rexm rxnm @datadir/rex3 - ! output replica exchange map/log
+                  cent cnam @datadir/path3.dcd  ! output the instantaneous string
+
+string ftsm test grad
+
+string ftsm dyna -
+ rstr reeq @reqfreq - ! restrained dynamics 
+! stat staf @freq -   ! statistics output
+ stat staf @nsteps -   ! statistics output
+ rex rexf 100 rext @Temp - ! Hamiltonian replica exchange frequency and temperature 
+ evolve evof @evof expo memo 0.999 - ! frequency of image evolution & evolution option: exponentially decaying kernel
+ upda updf @freq repa - ! frequency of updating string images
+ evos @reqfreq - ! statistics slices to skip when computing average force/smoothing
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea 67 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+! final coordinates
+string open card write unit 1 name @outputdir/diala@nrun_@me.cor
+write coor card unit 1
+!
+! write final string file : all coordinates present in first frame; only string coordinates present in subsequent frames
+string ftsm print dcd name @outputdir/string_final.dcd
+! also write in charmm coordinate format
+string ftsm print cor name @outputdir/string_final@me.cor
+!
+!
+string ftsm done ! stop string
+bomlev -1 ! mcom done generates level 0 warning
+mcom done ! reset communicators
+!
+!=================== check free energy ==================================
+if ?numnode eq 8 then ! internal PASS/FAIL :  compare free energy profile
+!
+label fecheck
+! read fe.dat file and check that free energy looks reasonable
+! reference free energy
+set FR1 0.000000000000000E+00
+set FR2 0.764293365602834E+00
+set FR3 0.192080315845314E+01
+set FR4 0.244811002488265E+01
+set FR5 0.468657351174177E+01
+set FR6 0.625348264964732E+01
+set FR7 0.367515191509419E+01
+set FR8 0.155092830929553E+01
+!
+! change file to one entry per line : 
+if ?mynode eq 0 system "cat scratch/fe2.dat | awk '{for (i = 1; i <= NF; ++i) print $i}' | tail -n8 > scratch/_tmp"
+open read card name scratch/_tmp unit 1
+set i 0
+set mue 0
+set muetol 0.5 ! kcal/mol
+label feloop
+  incr i
+  get unit 1 F@@i
+  calc mue = @mue + abs ( @FR@@i - @F@@i )
+  if @i lt ?numnode -
+goto feloop
+calc mue = @mue / ?numnode ! mean unsigned error
+if @mue le @muetol then
+ echo @myname TESTCASE RESULT: PASS
+else
+ echo @myname TESTCASE RESULT: FAIL
+ incr testfail
+endif 
+endif
+
+stop
+

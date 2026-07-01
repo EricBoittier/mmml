@@ -1,0 +1,28 @@
+#!/bin/csh
+#PBS -l nodes=8:ppn=8
+#PBS -l walltime=10:00:00
+#PBS -N dhfr_bench
+#PBS -j oe
+
+
+hostname
+set nodes = 64
+set reps = 8
+
+cd $PBS_O_WORKDIR
+cp *.pdb *.crd *.inp $PBSREMOTEDIR
+
+set chpar = /export/people/brookscl/charmm/c36a6_ens/ifort_ompi/exec/em64t_M/charmm
+#set chpar = /export/users/dlbraun/charmm/exec/em64t_M/charmm
+#set chpar = ~/programs/charmm/repd_hfb_maxpcm/c36a5/exec/em64t/charmm
+cd $PBSREMOTEDIR
+
+
+mpirun -np $nodes $chpar nens=$reps -input charmm.inp > charmm.out
+
+mkdir $nodes-$reps
+mv * $nodes-$reps/.
+
+cp -r * $PBS_O_WORKDIR/.
+
+exit 

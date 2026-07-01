@@ -1,0 +1,233 @@
+* CHARMM / G09 Testcase cquantumtest/alanine_g09.inp
+* Author: Paul Sherwood (Modifed for Q-Chem by H. Lee Woodcock)
+* Modified for Gaussian09 by Michael Gaus
+* Alalnine test case for QM(G09)/MM using G09 interface
+* CTERM is QM and the rest is MM Link atom is between CA and C
+*
+
+if ?g09 .ne. 1 then stop
+STREam datadir.def
+
+read rtf card
+* Taken from top_all22_prot.inp
+*
+   22     1
+MASS     1 H      1.00800 ! polar H
+MASS     2 HC     1.00800 ! N-ter H
+MASS     3 HA     1.00800 ! nonpolar H
+MASS     6 HB     1.00800 ! backbone H
+MASS    20 C     12.01100 ! polar C
+MASS    22 CT1   12.01100 ! aliphatic sp3 C for CH
+MASS    24 CT3   12.01100 ! aliphatic sp3 C for CH3 
+MASS    32 CC    12.01100 ! carbonyl C for sidechains asn,asp,gln,glu
+MASS    54 NH1   14.00700 ! peptide nitrogen
+MASS    56 NH3   14.00700 ! ammonium nitrogen
+MASS    70 O     15.99900 ! carbonyl oxygen
+MASS    72 OC    15.99900 ! carboxylate oxygen
+mass     9 QQH    1.00800 ! link atom
+
+
+DECL -CA  
+DECL -C  
+DECL -O  
+DECL +N  
+DECL +HN  
+DECL +CA  
+
+DEFA FIRS NTER LAST CTER   
+AUTO ANGLES DIHE   
+
+RESI ALA          0.00
+GROUP   
+ATOM N    NH1    -0.47  !     |
+ATOM HN   H       0.31  !  HN-N
+ATOM CA   CT1     0.07  !     |     HB1
+ATOM HA   HB      0.09  !     |    /
+GROUP                   !  HA-CA--CB-HB2
+ATOM CB   CT3    -0.27  !     |    \
+ATOM HB1  HA      0.09  !     |     HB3
+ATOM HB2  HA      0.09  !   O=C
+ATOM HB3  HA      0.09  !     |
+GROUP                   !
+ATOM C    C       0.51
+ATOM O    O      -0.51
+BOND CB CA  N  HN  N  CA  O  C   
+BOND C  CA  C  +N  CA HA  CB HB1  CB HB2  CB HB3   
+IMPR N -C CA HN  C CA +N O   
+DONOR HN N   
+ACCEPTOR O C   
+IC -C   CA   *N   HN    1.3551 126.4900  180.0000 115.4200  0.9996
+IC -C   N    CA   C     1.3551 126.4900  180.0000 114.4400  1.5390
+IC N    CA   C    +N    1.4592 114.4400  180.0000 116.8400  1.3558
+IC +N   CA   *C   O     1.3558 116.8400  180.0000 122.5200  1.2297
+IC CA   C    +N   +CA   1.5390 116.8400  180.0000 126.7700  1.4613
+IC N    C    *CA  CB    1.4592 114.4400  123.2300 111.0900  1.5461
+IC N    C    *CA  HA    1.4592 114.4400 -120.4500 106.3900  1.0840
+IC C    CA   CB   HB1   1.5390 111.0900  177.2500 109.6000  1.1109
+IC HB1  CA   *CB  HB2   1.1109 109.6000  119.1300 111.0500  1.1119
+IC HB1  CA   *CB  HB3   1.1109 109.6000 -119.5800 111.6100  1.1114
+
+PRES CTER        -1.00 ! standard C-terminus
+GROUP                  ! use in generate statement
+ATOM C    CC      0.34 !   OT2
+ATOM OT1  OC     -0.67 !  //
+ATOM OT2  OC     -0.67 ! -C
+DELETE ATOM O          !  \\
+BOND C OT1 C OT2       !   OT1
+IMPR OT1 CA OT2 C   
+ACCEPTOR OT1 C   
+ACCEPTOR OT2 C   
+IC N    CA   C    OT2   0.0000  0.0000  180.0000  0.0000  0.0000
+IC OT2  CA   *C   OT1   0.0000  0.0000  180.0000  0.0000  0.0000
+
+PRES NTER         1.00 ! standard N-terminus
+GROUP                  ! use in generate statement
+ATOM N    NH3    -0.30 !
+ATOM HT1  HC      0.33 !         HT1	
+ATOM HT2  HC      0.33 !        /
+ATOM HT3  HC      0.33 ! --CA--N--HT2
+ATOM CA   CT1     0.21 !   |    \
+ATOM HA   HB      0.10 !   HA    HT3
+DELETE ATOM HN   
+BOND HT1 N HT2 N HT3 N   
+DONOR HT1 N   
+DONOR HT2 N   
+DONOR HT3 N   
+IC HT1  N    CA   C     0.0000  0.0000  180.0000  0.0000  0.0000
+IC HT2  CA   *N   HT1   0.0000  0.0000  120.0000  0.0000  0.0000
+IC HT3  CA   *N   HT2   0.0000  0.0000  120.0000  0.0000  0.0000
+
+end
+
+read param card
+* from par_all22_prot.inp
+*
+
+BONDS
+CT1  CC    200.000     1.5220 ! ALLOW   POL
+                ! adm jr. 4/05/91, for asn,asp,gln,glu and cters
+NH3  HC    403.000     1.0400 ! ALLOW   POL
+                ! new stretch and bend; methylammonium (KK 03/10/92)
+OC   CC    525.000     1.2600 ! ALLOW   PEP POL ARO ION
+                ! adm jr. 7/23/91, acetic acid
+NH3  CT1   200.000     1.4800 ! ALLOW   ALI POL
+                ! new stretch and bend; methylammonium (KK 03/10/92)
+CT3  CT1   222.500     1.5380 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HA   CT3   322.000     1.1110 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HB   CT1   330.000     1.0800 ! ALLOW   PEP
+                ! Alanine Dipeptide ab initio calc's (LK)
+qqh  cc      0.0       1.0    ! Link atom
+
+ANGLES
+NH3  CT1  CC     43.700   110.0000 ! ALLOW   PEP POL ARO ALI
+                ! adm jr. 4/05/91, for asn,asp,gln,glu and cters
+OC   CC   CT1   40.000    118.00   50.00   2.38800 ! ALLOW   ALI PEP POL ARO ION
+                ! adm jr. 7/23/91, correction, ACETATE (KK)
+HC   NH3  CT1   30.000    109.50   20.00   2.07400 ! ALLOW   POL ALI
+                ! new stretch and bend; methylammonium (KK 03/10/92)
+HC   NH3  HC     44.000   109.5000 ! ALLOW   POL
+                ! new stretch and bend; methylammonium (KK 03/10/92)
+HA   CT3  CT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+                ! alkane frequencies (MJF), alkane geometries (SF)
+CT3  CT1  CC     52.000   108.0000 ! ALLOW   ALI PEP POL ARO
+                ! adm jr. 4/09/92, for ALA cter
+NH3  CT1  CT3    67.700   110.0000 ! ALLOW   ALI POL
+                ! new aliphatics, adm jr., 2/3/92
+HA   CT3  HA    35.500    108.40    5.40   1.80200 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+HB   CT1  CT3    35.000   111.0000 ! ALLOW  PEP
+                ! Alanine Dipeptide ab initio calc's (LK)
+HB   CT1  CC     50.000   109.5000 ! ALLOW  PEP POL
+                ! adm jr. 4/05/91, for asn,asp,gln,glu and cters
+NH3  CT1  HB     51.500   107.5000 ! ALLOW   ALI POL PEP
+                ! new aliphatics, adm jr., 2/3/92
+OC   CC   OC   100.000    124.00   70.00   2.22500 ! ALLOW   POL ION PEP ARO
+                ! adm jr. 7/23/91, correction, ACETATE (KK)
+qqh  cc   ct1    0.0        0.0    ! Link atom
+
+DIHEDRALS
+OC   CC   CT1  NH3      3.2000  2   180.00 ! ALLOW PEP PRO
+                ! adm jr. 4/17/94, zwitterionic glycine
+X    CT1  CT3  X        0.2000  3     0.00 ! ALLOW   ALI
+                ! alkane update, adm jr., 3/2/92
+X    CT1  NH3  X        0.1000  3     0.00 ! ALLOW   ALI POL
+                ! 0.715->0.10 METHYLAMMONIUM (KK)
+X    CT1  CC   X        0.0500  6   180.00 ! ALLOW   POL PEP
+                ! For side chains of asp,asn,glu,gln, (n=6) from KK(LK)
+
+
+IMPROPER
+OC   X    X    CC     96.0000         0      0.0000 ! ALLOW   PEP POL ARO ION
+                ! 90.0->96.0 acetate, single impr (KK)
+
+
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+                !adm jr., 5/08/91, suggested cutoff scheme
+C      0.000000  -0.110000     2.000000 ! ALLOW   PEP POL ARO
+                ! NMA pure solvent, adm jr., 3/3/93
+CC     0.000000  -0.070000     2.000000 ! ALLOW   PEP POL ARO
+                ! adm jr. 3/3/92, acetic acid heat of solvation
+CT1    0.000000  -0.020000     2.275000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+                ! isobutane pure solvent properties, adm jr, 2/3/92
+CT3    0.000000  -0.080000     2.060000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+                ! methane/ethane a.i. and ethane pure solvent, adm jr, 2/3/92
+H      0.000000  -0.046000     0.224500 ! ALLOW PEP POL SUL ARO ALC
+                ! same as TIP3P hydrogen, adm jr., 7/20/89
+HA     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+                ! methane/ethane a.i. and ethane pure solvent, adm jr, 2/3/92
+HB     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+                ! methane/ethane a.i. and ethane pure solvent, adm jr, 2/3/92
+HC     0.000000  -0.046000     0.224500 ! ALLOW POL
+                ! new, small polar Hydrogen, see also adm jr. JG 8/27/89
+NH1    0.000000  -0.200000     1.850000   0.000000  -0.200000     1.550000 ! ALLOW   PEP POL ARO
+                ! This 1,4 vdW allows the C5 dipeptide minimum to exist.(LK)
+NH3    0.000000  -0.200000     1.850000 ! ALLOW   POL
+                ! adm jr.
+O      0.000000  -0.120000     1.700000   0.000000  -0.120000     1.400000 ! ALLOW   PEP POL
+                ! This 1,4 vdW allows the C5 dipeptide minimum to exist.(LK)
+OC     0.000000  -0.120000     1.700000 ! ALLOW   POL ION
+                ! JG 8/27/89
+qqh    0.000000   0.000000     0.000000 ! Link atom
+
+end
+
+read sequ ala 1
+gene mpep setup
+
+ic param
+ic seed mpep 1 n mpep 1 ca mpep 1 c
+ic build
+
+mini abnr nstep 1000 nprint 1000
+
+addl qqh1 mpep 1 c mpep 1 ca
+
+!------ Launch Gaussian ---------------------------------
+envi g09profile "data/G09PROFILE"
+envi g09exe     "/share/apps/gaussian/g09/g09"
+envi g09fchk    "/share/apps/gaussian/g09/formchk"
+envi g09cmd     "data/alanine_g09.G09CMD"
+envi g09inp     "g1"
+envi GAUSS_SCRDIR "scratch/"
+!--------------------------------------------------------
+
+define qm sele atom mpep 1 c  .or. atom mpep 1 ot1 - 
+          .or. atom mpep 1 ot2 end
+
+gaus nogu remove sele qm end
+
+open write card unit 1 name @9/test.psf
+write psf card unit 1
+
+open write card unit 1 name @9/test.cor
+write coor card unit 1
+
+energy
+
+!test first tol 0.0 step 0.0005 
+
+stop

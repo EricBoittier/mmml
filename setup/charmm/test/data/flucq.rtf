@@ -1,0 +1,27 @@
+* Residue topology file for TIP4P and quantum water, for FlucQ
+* 
+    18 1
+MASS     4 HP     1.00800 ! TIP4P WATER HYDROGEN
+MASS     5 MP     0.0     ! TIP4P WATER M-SITE
+MASS    58 OP    15.99940 ! TIP4P WATER OXYGEN
+MASS    11 HTQ    1.00800
+MASS    81 OWQ   15.99940
+
+RESI TIP4 .000   ! TIP4P WATER MODEL
+GROUP
+ATOM OH2  OP      0.00
+ATOM H1   HP      0.52
+ATOM H2   HP      0.52
+ATOM M1   MP     -1.04
+BOND OH2  H1    OH2  H2    H1 H2    M1 H1  M1 H2  ! Bonds between M site and hydrogens are needed for FlucQ
+THET H1   OH2  H2
+PATC  FIRS NONE LAST NONE
+
+RESI QWAT    .000
+GROUP
+ ATOM OH2Q  OWQ     0.000  ! Let the charge be zero so no need to adjust
+ ATOM H1Q   HTQ     0.000  ! NONB lists for eletrostatics
+ ATOM H2Q   HTQ     0.000
+PATC  FIRS NONE LAST NONE
+BOND OH2Q H1Q  OH2Q H2Q  H1Q H2Q  ! This bonds are needed to avoid vdW terms on this atoms!!
+END

@@ -1,0 +1,84 @@
+* Test the Stillinger-David-Weber Polarization Model PM6 on small clusters 
+* pm6test1.inp :  test isolated water
+*
+
+if ?polar .ne. 1 then
+ echo "Test NOT performed."
+ echo pm6test1 testcase result: skip
+ stop
+endif
+
+stre datadir.def
+
+read RTF card
+* OPOL  Oxygen Stillinger polarization model
+* HPOL  hydrogen Stillinger polarization model
+* HPAT  Path integral for Stillinger polarization model
+*
+   20    1                ! Version number
+MASS    53 OPOL  16.00000 ! Oxygen in polarization model PM1
+MASS    54 HPOL   1.00000 ! Hydrogen in polarization model PM1
+
+DEFA FIRS NTER LAST CTER
+
+RESI OPOL  -2.000   ! FREE OXYGEN
+GROUP
+ATOM OPOL OPOL   -2.000
+PATC  FIRS NONE LAST NONE
+
+RESI HPOL   1.000   ! FREE PROTON
+GROUP
+ATOM HP1  HPOL    1.000
+PATC  FIRS NONE LAST NONE
+
+END
+
+read PARAM card
+* parameters for PM6
+*
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+
+HPOL     0.0440    -0.0498    0.8000 !TIP3P water hydrogen for PM6
+OPOL     0.8400    -0.1591    1.6000 !TIP3P water oxygen for PM6
+END
+
+
+!-----------------------------------------------------------------------------
+! isolated water molecule
+
+read sequence card
+* one water
+*
+   3
+OPOL HPOL HPOL 
+generate WAT setup warning 
+
+define O1 select type OPOL end
+define H2 select type HP*  .and. resid 2 end
+define H3 select type HP*  .and. resid 3 end
+
+ZMAT
+select O1 end
+select H2 end select O1 end  dist 0.9584
+select H3 end select O1 end  dist 0.9584 select H2 end  theta  104.4500
+ZEND
+
+print coor
+
+POLAR  WAT  
+
+ENERGY atom vatom switch vswitch wmin 0.0
+test first step 0.00001 tol 0.0
+
+mini sd   nstep  2000 nprint 2000 step 0.0001     inbfrq 0
+
+set e0 ?ener
+
+vibran  nmod 20
+diag finite step 0.0001
+end
+
+@testcheck @e0 -1032.9251 -0.1 pm6test1
+
+stop

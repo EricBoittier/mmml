@@ -1,0 +1,44 @@
+* combine_all_factors.str
+* Reads in global factors for target region and targeted factors for non-target
+* region. Combines them and writes coordinate-file with all scaling factors.
+* Sonja Schwarzl & Stefan Fischer. 17/06/2008
+*
+
+STREam "./generate.str"
+STREam "./settings1.str"
+STREam "./settings2.str"
+
+IF @PARAM EQ 22 STREam "defi22.str"
+IF @PARAM EQ 19 STREam "defi19.str"
+
+STREam "./target.str"
+
+! read in coordinate file with global factors for targetregion :
+open read card unit 1 name   @INPUTFAC
+read coor card unit 1
+close unit 1
+
+! store global scaling factors in WMAIN :
+SCAL SCA1 = WMAIN
+
+! take reciprocal value of global factors to make them consistent with the
+! targeted scaling factors :
+SCAL SCA1 RECI
+
+! read in coordinate file with scaling-factors for non-targetregion
+open read card unit 1 name   @OUTPUT
+read coor card unit 1
+close unit 1
+
+! store targeted scaling factors in SCA1 (only for non-targetregion)
+SCAL SCA1 = WMAIN SELEct .not. targetregion END
+
+! put all scaling factors in WMAIN and write coordinate file
+SCAL WMAIN = SCA1
+
+! output file with all (global and targeted) scaling-factors :
+open write unit 1 card name   @OUTPUT3
+write coordinates card unit 1
+close unit 1
+
+STOP

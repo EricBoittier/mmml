@@ -1,0 +1,111 @@
+**************** CHARMm input script "mmff_solanal.inp" ***************
+* MMFF_SOLANAL: Jay L. Banks, 13-Oct-1993
+* Test MMFF water model using solvent analysis
+* UPDATED by Josh Buckner 18 April 2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+set tol = 1e-3
+set pass = 1
+set eref = -704.86098
+set gref = 19.32283
+
+stream datadir.def
+
+bomlev 5
+read rtf  card unit  5
+* TOPOLOGY FILE FOR METHANOL TO METHANOL
+*
+   20    1                   ! Version number
+MASS    31 HOH    1.00794 H  ! HYDROGEN IN H2O
+MASS    70 OH2   15.9994  O  ! OXYGEN ON WATER
+
+AUTOGENERATE ANGLES
+DEFA FIRS NONE LAST NONE
+
+RESI OH2     0.0   ! MMFF WATER MODEL
+GROUP
+ATOM OH2  OH2    -0.86
+ATOM H1   HOH     0.43
+ATOM H2   HOH     0.43
+BOND OH2 H1  OH2 H2   !    H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+
+END
+
+stream @0mmff_setup.str
+
+read sequence OH2 125
+generate SOLV
+
+open read card unit 1 name @0wat125.crd
+read coor card unit 1
+close unit 1               
+
+set 6 15.517182
+set 7 15.517182
+set 8 15.517182
+
+!faster on <- this is default
+faster off
+
+! Read in image transformation files and set-up image centering
+open unit 1 read form name @0cubic.img
+read image card unit 1
+image byresidue xcen 0.0 ycen 0.0 zcen 0.0 sele segid SOLV end
+energy ihbfrq 0 inbfrq -1 imgfrq 10 cdie e14fac 0.75 switch vswitch -
+       CUTIM 999. CUTNB 15. CTOFNB 14. CTONNB 11. ! group
+
+echo enew  ?ener  ?grms
+calc ediff = abs ( ?ener - @eref )
+calc grmsd = abs ( ?grms - @gref )
+
+set epass = 0
+set gpass = 0
+if @ediff le @tol set epass = 1
+if @grmsd le @tol set gpass = 1
+calc egpass = @epass * @gpass
+calc pass = @pass * @egpass
+
+shake bonh tol 1.0e-8 param
+
+open unit 20 write unform name @9mmff.dcd 
+
+! Run dynamics in periodic box
+dynamics verlet strt timestep 0.001 nstep 10 nprint 2  iprfrq 1000 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 60 ihtfrq 20 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri -1 nsavc 2 nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 20                 - !{* Nonbond options *}
+
+open unit 20 unform read name @9mmff.dcd
+
+open unit 8 write form name @9mmff.groo125 
+open unit 9 write form name @9mmff.groh125 
+open unit 10 write form name @9mmff.grhh125
+open unit 11 write form name @9mmff.msd
+open unit 12 write form name @9mmff.den
+
+! parsing code change c25a2->c25a3, syntax modified LNI
+
+coordinate analysis solvent water spec -
+  select ( resname oh2 .and. type oh2 ) end fini -
+  xref 0.0 yref 0.0 zref 0.0 -
+  ncors 5 nunit 1 firstu 20 begin 2 skip 2 stop 10 -
+  rspin 0.0 rspout 9.0 rDsp 7.758591 dr 0.1 rRsphere 7.758591 -
+  mgn 80 igdist 8 ioh 9 ihh 10 imsd 11 iden 12 ifmin xbox @6 ybox @7 zbox @8
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+
+stop

@@ -1,0 +1,233 @@
+* Unrealistic setup for butane to test the energy routines.
+* Arnaud Blondel March1994.
+*
+stream datadir.def
+
+read rtf card
+* RTF for Buthane
+   20    1                ! Version number
+MASS    13 CH2E  14.02700 !  Two hydrogenes
+MASS    14 CH3E  15.03500 !  Three   "
+
+AUTOGENERATE ANGLES
+
+RESI BUTA
+GROU
+ATOM CA   CH3E     0.00
+ATOM CB   CH2E     0.00
+ATOM CC   CH2E     0.00
+ATOM CD   CH3E     0.00
+BOND CA   CB        CB   CC        CC   CD
+DIHE CA   CB   CC   CD
+IC   CA   CB   CC   CD     1.5400  111.00  180.00  111.00   1.5400
+IC   CB   CC   CD   CA     1.5200  111.00  180.00   60.00   3.0000
+
+END
+
+read param card !unit 1
+* PARAM for Buthane
+*
+
+BOND
+CH2E CH2E   225.0       1.52
+CH2E CH3E   225.0       1.54
+
+THETAS
+CH2E CH2E CH3E    45.0     111.0
+
+PHI
+X    CH2E CH2E X        10.0       1      20.0  ! These are made up.
+X    CH2E CH2E X        10.0       2      40.0  ! These are made up.
+X    CH2E CH2E X        10.0       3      60.0  ! These are made up.
+X    CH2E CH2E X        10.0       4      80.0  ! These are made up.
+X    CH2E CH2E X        10.0       6     120.0  ! These are made up.
+X    CH2E CH2E X        10.0       5     100.0  ! These are made up.
+
+IMPHI
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+CH2E     1.77    -0.0000       2.235 1.77 -0.1 1.9 !  extended carbons
+CH3E     2.17    -0.0000       2.165 1.77 -0.1 1.9 ! /
+
+NBFIX
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+!
+!	All protein-protein NBFIXes removed
+!
+HBOND AEXP 4 REXP 6 HAEX 0 AAEX 0   NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+   CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+!
+END
+!
+read sequ card
+* Butane
+*
+1
+BUTA
+!
+gene BUT SETUp WARN
+!
+IC param
+IC seed 1 CA 1 CB 1 CC
+IC build
+!
+define target sele (type CC .or. type CD) end
+coor axis sele atom BUT 1 CB end sele atom BUT 1 CC end
+coor rota axis phi 180.0 sele target end
+!
+open unit 9 write form name @9tmp
+write coor card unit 9
+close unit 9
+!
+open unit 1 write form name @9enes.slow
+!
+NBONd inbfrp 0
+!
+set a off
+!
+set tt 0 ! for internal testing
+
+label loop
+!
+FASTer @a
+!
+set n 0
+
+SKIP ALL EXClude dihe
+ener
+
+incr tt by 1         !internal testing
+set enar@@tt ?ener  !internal testing
+
+write title unit 1
+* @n  ?DIHE
+*
+test first step 0.00001 tol 0.00001
+test seco  step 0.00001 tol 0.00001
+!
+label mainloop
+!
+incr n by 1
+coor rota axis phi 10.0 sele target end
+SKIP ALL EXClude DIHE
+ener
+
+incr tt by 1            !internal testing
+set enar@@tt ?ener     !internal testing
+
+write title unit 1
+* @n  ?DIHE
+*
+test first step 0.00001 tol 0.000001
+test seco  step 0.00001 tol 0.000001
+!
+
+if n lt 35 goto mainloop
+!
+close unit 1
+!
+if a eq off goto encore
+
+!testing
+
+set enrefar1 77.05737
+set enrefar2 50.00000
+set enrefar3 40.60307
+set enrefar4 48.21401
+set enrefar5 60.00000
+set enrefar6 63.68406
+set enrefar7 57.66044
+set enrefar8 50.00000
+set enrefar9 48.86659
+set enrefar10 54.46801
+set enrefar11 60.00000
+set enrefar12 59.51917
+set enrefar13 54.07604
+set enrefar14 50.00000
+set enrefar15 51.73648
+set enrefar16 57.12116
+set enrefar17 60.00000
+set enrefar18 57.12116
+set enrefar19 51.73648
+set enrefar20 50.00000
+set enrefar21 54.07604
+set enrefar22 59.51917
+set enrefar23 60.00000
+set enrefar24 54.46801
+set enrefar25 48.86659
+set enrefar26 50.00000
+set enrefar27 57.66044
+set enrefar28 63.68406
+set enrefar29 60.00000
+set enrefar30 48.21401
+set enrefar31 40.60307
+set enrefar32 50.00000
+set enrefar33 77.05737
+set enrefar34 106.99358
+set enrefar35 120.00000
+set enrefar36 106.99358
+set enrefar37 77.05737
+set enrefar38 49.99999
+set enrefar39 40.60307
+set enrefar40 48.21403
+set enrefar41 60.00001
+set enrefar42 63.68406
+set enrefar43 57.66043
+set enrefar44 49.99999
+set enrefar45 48.86660
+set enrefar46 54.46803
+set enrefar47 60.00001
+set enrefar48 59.51916
+set enrefar49 54.07603
+set enrefar50 50.00000
+set enrefar51 51.73649
+set enrefar52 57.12117
+set enrefar53 60.00000
+set enrefar54 57.12116
+set enrefar55 51.73648
+set enrefar56 50.00000
+set enrefar57 54.07603
+set enrefar58 59.51917
+set enrefar59 60.00000
+set enrefar60 54.46802
+set enrefar61 48.86660
+set enrefar62 49.99999
+set enrefar63 57.66043
+set enrefar64 63.68406
+set enrefar65 60.00002
+set enrefar66 48.21404
+set enrefar67 40.60307
+set enrefar68 49.99997
+set enrefar69 77.05733
+set enrefar70 106.99355
+set enrefar71 120.00000
+set enrefar72 106.99359
+
+set cc 1
+label testloop
+@testcheck @enar@@cc @enrefar@@cc 0.0001 dihtest2_chk.@cc
+
+incr cc by 1
+if cc le @tt goto testloop
+
+!
+STOP
+!
+label encore
+!
+open unit 1 read form name @9tmp
+read coor card unit 1
+close unit 1
+!
+open unit 1 write form name @9enes.vect
+!
+set a on
+!
+goto loop
+!
+STOP ! not used.

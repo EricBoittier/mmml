@@ -1,0 +1,81 @@
+* CHARMM 37 testcase pucker1.inp
+* Generate pyranoid ring of sucrose and test QUICk puckering parameters
+* See: D. Cremer and J. A. Pople, JACS 97:6, page 1354, 1975
+* Author: Antti-Pekka Hynninen
+* 
+stream datadir.def
+
+read RTF card
+* Pyranoid ring of sucrose, no hydrogens, no charges
+* Antti-Pekka Hynninen, 2012
+*
+31 1
+
+MASS 1 O     15.99940
+MASS 2 C     12.01100
+
+RESI PYRA      0.0000
+GROU
+ATOM O1  O     0.0000
+ATOM C1  C     0.0000
+ATOM C2  C     0.0000
+ATOM C3  C     0.0000
+ATOM C4  C     0.0000
+ATOM C5  C     0.0000
+END
+
+read sequence pyra 1
+generate 1 noangle nodihe setup
+
+read coor card
+* Pyranoid ring of sucrose
+* From: D. Cremer and J. A. Pople, JACS 97:6, page 1354, 1975
+*
+    6
+    1    1 PYRA O1     0.00000   1.38390   0.19760 PYRA 1     15.99940
+    2    1 PYRA C1     1.19970   0.76240  -0.21060 PYRA 1     12.01100
+    3    1 PYRA C2     1.23560  -0.70400   0.23930 PYRA 1     12.01100
+    4    1 PYRA C3     0.01100  -1.45640  -0.25500 PYRA 1     12.01100
+    5    1 PYRA C4    -1.23000  -0.72080   0.24200 PYRA 1     12.01100
+    6    1 PYRA C5    -1.21640   0.73500  -0.21330 PYRA 1     12.01100
+
+quick 1 2 3 4 5 6
+
+! Correct values (values from Cremer & Pople are in parenthesis):
+!
+! Q    = 0.55655                      (0.566)
+! thet = 0.08957 rad = 5.13 angles    (5.2)
+! phi  = 3.19585 rad = 183.11 angles  (183.7)
+
+show ?Q
+show ?thet
+show ?phi
+
+cons puck bynum 1 2 3 4 5 6 kcon 10.0 10.0 10.0 valu 0.6 0.2 3.3 -
+     expo 2.0 2.0 2.0
+
+print cons
+
+faster off
+
+skipe all excl cpuck
+
+energy
+coor force comp
+print coor comp
+test first step 0.0001 tol 0.00001
+
+! Clear and run again to test the clear command
+cons clpc
+print cons
+
+cons puck bynum 1 2 3 4 5 6 kcon 10.0 10.0 10.0 valu 0.6 0.2 3.3 -
+     expo 2.0 2.0 2.0
+
+energy
+coor force comp
+print coor comp
+test first step 0.0001 tol 0.00001
+
+stop
+

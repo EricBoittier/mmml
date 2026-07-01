@@ -1,0 +1,9 @@
+#! /bin/bash
+
+for i in `cat ltm-list`; do 
+    echo "module " ${i/.f90/} > ../ltm/${i/.f90/.src}
+    echo "##USE chm_kinds" >> ../ltm/${i/.f90/.src}
+    echo "##USE dimens" >> ../ltm/${i/.f90/.src}
+    cat $i >>  ../ltm/${i/.f90/.src}
+    echo "end module " ${i/.f90/} >> ../ltm/${i/.f90/.src}
+done

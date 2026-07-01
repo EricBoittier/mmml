@@ -1,0 +1,177 @@
+* Membrane System : sys8.inp
+* Generates the bulk overlay of water for the system. 
+* Moves the water overlay back and forth in Z until optimum
+* number of waters is determined.  That sets the Z-translational distance. 
+*
+
+bomlev -1
+stream param.str
+
+set LengthX  @BoxSizeX
+set LengthY  @BoxSizeY
+
+!read topology
+open read card unit 10 name @direcTp/@TopFile
+read rtf card unit 10
+close unit 10
+
+!read parameters
+open read card unit 10 name @direcTp/@ParFile
+read param card unit 10
+close unit 10
+
+open read card unit 1 name @direcWork/sys5_imag.crd 
+read sequence coor unit 1
+generate TOTO setup noangle nodihedrals
+close unit 1
+patch @FirstRes TOTO @FirstResNum
+patch @LastRes TOTO @LastResNum
+
+open read card unit 1 name @direcWork/sys5_imag.crd 
+read coor card unit 1
+close unit 1
+
+ic param
+delete atom select .not. init end
+delete atom select type H* end
+scalar charge set 0.0
+
+set N ?nres
+open read card unit 1 name @direcWork/sys7_box.crd 
+read sequence coor unit 1
+generate WAT1 setup noangle nodihedral
+rewind unit 1
+read coor card unit 1 offset @N
+coor trans zdir 15.552 select segid WAT1 end 
+
+set N ?nres
+rewind unit 1
+read sequence coor unit 1
+generate WAT2 setup noangle nodihedral
+rewind unit 1
+read coor card unit 1 offset @N 
+
+set N ?nres
+rewind unit 1
+read sequence coor unit 1
+generate WAT3 setup noangle nodihedral
+rewind unit 1
+read coor card unit 1 offset @N
+coor trans zdir -15.552 select segid WAT3 end
+
+define OVE  select segid WAT1 .or. segid WAT2 .or. segid WAT3 end
+coor stat sele OVE end
+coor stat sele segid TOTO end
+cons fix sele segid TOTO end
+
+!-----------------------------------------------------------------
+! Moves the water overlay back and forth in Z until optimum
+! number of waters is determined
+
+set L @HalfZ
+label LOOP
+
+energy group   switch cdiel -                    ! Electrostatics
+       vgroup  vswitch      -                    ! VDW
+       ctonnb 7.0 ctofnb 8.0 cutnb 9.5 cutim 9.5
+
+coor trans select OVE end zdir @L
+update wmin 0.25 cutnb 3.0 ctonnb 3.0 ctofnb 3.0
+scalar wmain = z
+coor stat sele OVE end
+define wrong1 sele (OVE .and. ( prop 1 .lt. 12.0 ) .and. type OH2 ) end
+define count1  select ((type OH2 .and. OVE)  .and. ( segid TOTO .around. 2.4)) .or. wrong1 end
+
+coor trans select OVE  end zdir -@L
+coor trans select OVE end zdir -@L
+scalar wmain = z
+update wmin 0.25 cutnb 3.0 ctonnb 3.0 ctofnb 3.0
+coor stat sele OVE end
+define wrong2 sele (OVE .and. ( prop 1 .gt. -12.0 ) .and. type OH2 ) end
+define count2  select ((type OH2 .and. OVE) .and. ( segid TOTO .around. 2.4)).or. wrong2 end
+coor trans select OVE end zdir  @L
+
+define total select ( OVE .and. ( type OH2 .and. ( .not. (count1 .or. count2 ) ))) end
+
+set NearWaterNum @WaterNum
+mult NearWaterNum by 1.05
+if ?nsel lt @WaterNum goto SKIP
+if ?nsel gt @NearWaterNum decr L by 0.5
+if ?nsel le @NearWaterNum decr L by 0.1
+goto LOOP
+
+!---------------------------------------------------------------------------
+
+label SKIP
+delete atoms select .byres. ( count1 .or. count2 ) end
+delete atoms sele segid TOTO end
+
+define OVE  select segid WAT1 .or. segid WAT2 .or. segid WAT3 end
+coor trans select OVE end zdir  @L
+coor stat sele OVE end
+
+open write card unit 1 name @direcWork/sys8_temp.crd
+write coor card unit 1
+* overlay of hex-waters 
+*
+
+open write card unit 1 name @direcWork/sys8_temp.pdb
+write coor pdb unit 1
+* overlay of hex-waters  
+*
+
+!---------------------------------------------------------------
+! Rebuilding the coordinates file
+
+delete atom select all end
+
+open read card unit 1 name @direcWork/sys5.crd
+read sequence coor unit 1
+generate MAIN setup noangle nodihedral
+close unit 1
+patch @FirstRes MAIN @FirstResNum
+patch @LastRes MAIN @LastResNum
+
+open read card unit 1 name @direcWork/sys5.crd
+read coor card unit 1
+close unit 1
+
+set N ?nres
+open read card unit 1 name @direcWork/sys8_temp.crd
+read sequence coor unit 1
+generate BULK noangle nodihedral
+rewind unit 1
+read coor card unit 1 offset @N
+close unit 1
+
+! Set the periodic box
+set  LengthZ @L
+mult LengthZ by 2
+open unit 8 read card name @direcCubic/cubic.img
+read imag print init unit 8
+close unit 8
+
+imag byres sele resnam TIP3 .or. resnam DMPC end
+update imall wmin 0.25 cutnb 3.0 ctonnb 3.0 ctofnb 3.0 cutim 3.0
+
+open write card unit 1 name @direcWork/sys8.crd
+write coor card unit 1
+* Full system 
+*
+
+open write card unit 1 name @direcWork/sys8.pdb
+write coor pdb unit 1
+* Full system 
+*
+
+open write card unit 1 name @direcWork/sys8_imag.crd 
+write coor card image unit 1 select.not. ( segid BULK .or. segid MAIN ) end
+* Image system
+*
+
+open write card unit 1 name @direcWork/sys8_imag.pdb 
+write coor pdb image unit 1 select.not. ( segid BULK .or. segid MAIN ) end
+* Image system  
+*
+
+stop

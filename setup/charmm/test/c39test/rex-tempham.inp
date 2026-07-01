@@ -1,0 +1,99 @@
+* hamiltonian REX
+*
+
+if ?repdstr .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 4 then
+ echo "Wrong number of processors. Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card name @0top_all36_prot.rtf
+read para card name @0par_all36_prot.prm
+read psf card name @0prot-pos.psf
+read coor card name @0prot-mini.crd
+
+energy
+
+repd nrep 4 exch unit 33 freq 20 tham -
+   temp 300. -
+   temp 330. -
+   temp 365. -
+   temp 410. -
+
+open unit 20 write form name @9combo-th.out
+outu 20
+
+calc l = ?myrep / 10.0
+
+calc c1 = ( @l *  0.21 ) + ( ( 1 - @l ) *  0.130 )
+calc c2 = ( @l *  0.05 ) + ( ( 1 - @l ) *  0.075 )
+calc c3 = ( @l *  0.05 ) + ( ( 1 - @l ) *  0.075 )
+calc c4 = ( @l * -0.30 ) + ( ( 1 - @l ) * -0.960 )
+calc c5 = ( @l *  0.33 ) + ( ( 1 - @l ) *  0.340 )
+calc c6 = ( @l *  0.33 ) + ( ( 1 - @l ) *  0.340 )
+calc c7 = ( @l *  0.33 ) + ( ( 1 - @l ) *  0.000 )
+
+scalar charge set @c1 sele atom a-pro 2 ce  end
+scalar charge set @c2 sele atom a-pro 2 he1 end
+scalar charge set @c3 sele atom a-pro 2 he2 end
+scalar charge set @c4 sele atom a-pro 2 nz  end
+scalar charge set @c5 sele atom a-pro 2 hz1 end
+scalar charge set @c6 sele atom a-pro 2 hz2 end
+scalar charge set @c7 sele atom a-pro 2 hz3 end
+
+open unit 33 write form name @9combo-th.exch
+
+scalar fbeta set 1.0
+dyna leap lang start -
+  nstep 100 timestep 0.001 nprint 10 iprfrq 100 -
+  firstt 300. finalt 300. tstruct 300. tbath 300. -
+  iseed 575722 9123209 8004 990261 -
+  iasors 1 iasvel 1 iscvel 0 ichecw 0 
+
+! Test whether the case succeeded or failed. It is easiest
+! to do this when we know exactly how many processors there
+! were.
+
+set passprob = 0
+set passexup = 0
+set passexdn = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 0.91991
+if ?myrep .eq. 0 set referup = 0.5
+if ?myrep .eq. 0 set referdn = 0.0
+if ?myrep .eq. 0 set refener = 47.1644
+if ?myrep .eq. 1 set refprob = 0.54581
+if ?myrep .eq. 1 set referup = 0.0
+if ?myrep .eq. 1 set referdn = 0.5
+if ?myrep .eq. 1 set refener = 48.7151215
+if ?myrep .eq. 2 set refprob = 0.2505
+if ?myrep .eq. 2 set referup = 0.0
+if ?myrep .eq. 2 set referdn = 0.0
+if ?myrep .eq. 2 set refener = 54.48095
+if ?myrep .eq. 3 set refprob = 0.18174
+if ?myrep .eq. 3 set referup = 0.0
+if ?myrep .eq. 3 set referdn = 0.0
+if ?myrep .eq. 3 set refener = 64.1422
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?exrup .ae. @referup set passexup = 1
+if ?exrdn .ae. @referdn set passexdn = 1
+if ?ener .ae. @refener set passener = 1
+
+calc result = @passprob + @passexup + @passexdn + @passener
+
+repd reset
+
+outu 6
+prnlev 5 node 0
+
+@testcheck @result 4 0 REXTEMPHAM
+
+stop

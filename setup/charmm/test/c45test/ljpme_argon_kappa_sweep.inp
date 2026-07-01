@@ -1,0 +1,164 @@
+* LJPME test energy-related properties' invariance
+* with respect to the Ewald attenuation parameter
+*
+
+if ?ljpme .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+bomblev -1
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+read rtf card
+*  topology for argon!
+*
+22 1
+MASS  -1  AR        39.94800 ! Argon
+DEFA FIRS NONE LAST NONE
+RESI AR           0.00   !Argon
+GROUP
+ATOM AR  AR       0.00
+AUTOGENERATE ANGLES DIHEDRALS
+END
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+read para card
+NONBONDED
+AR       0.0       -0.0240273 2.285639
+END
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+read sequ ar 1000
+generate seg1
+read coor card name @0/argon_1000.crd
+
+! Dimension of the box
+set box 50
+calc xtcut = @box/2
+crystal define cubic @box @box @box 90.0 90.0 90.0
+crystal build cutoff @xtcut noper 0
+image byres select all end
+
+faster off
+
+set tol -1e-4
+
+set mycut 24.5
+set nbcut 24.5
+energy cutnb @nbcut cutim @nbcut ctofnb @mycut ctonnb @mycut vswi -
+     kappa 0.3 order 8 fftx 64 ffty 64 fftz 64 -
+     ewald pmewald ljpme dkappa 0.3 dorder 8 dftx 64 dfty 64 dftz 64
+set k3ener ?ener
+set k3vixx ?vixx
+set k3vixy ?vixy
+set k3vixz ?vixz
+set k3viyy ?viyy
+set k3viyz ?viyz
+set k3vizz ?vizz
+coor force comp
+coor swap
+q 1
+set k3fr1x ?xval
+set k3fr1y ?yval
+set k3fr1z ?zval
+q 3
+set k3fr3x ?xval
+set k3fr3y ?yval
+set k3fr3z ?zval
+q 5
+set k3fr5x ?xval
+set k3fr5y ?yval
+set k3fr5z ?zval
+coor swap
+
+set mycut 21
+set nbcut 21
+energy cutnb @nbcut cutim @nbcut ctofnb @mycut ctonnb @mycut vswi -
+     kappa 0.4 dorder 9 fftx 96 ffty 96 fftz 96 -
+     ewald pmewald ljpme dkappa 0.4 dorder 9 dftx 96 dfty 96 dftz 96
+set k4ener ?ener
+set k4vixx ?vixx
+set k4vixy ?vixy
+set k4vixz ?vixz
+set k4viyy ?viyy
+set k4viyz ?viyz
+set k4vizz ?vizz
+coor force comp
+coor swap
+q 1
+set k4fr1x ?xval
+set k4fr1y ?yval
+set k4fr1z ?zval
+q 3
+set k4fr3x ?xval
+set k4fr3y ?yval
+set k4fr3z ?zval
+q 5
+set k4fr5x ?xval
+set k4fr5y ?yval
+set k4fr5z ?zval
+coor swap
+@testcheck @k4ener @k3ener @tol k3_k4_ener
+@testcheck @k4vixx @k3vixx @tol k3_k4_vixx
+@testcheck @k4vixy @k3vixy @tol k3_k4_vixy
+@testcheck @k4vixz @k3vixz @tol k3_k4_vixz
+@testcheck @k4viyy @k3viyy @tol k3_k4_viyy
+@testcheck @k4viyz @k3viyz @tol k3_k4_viyz
+@testcheck @k4vizz @k3vizz @tol k3_k4_vizz
+@testcheck @k4fr1x @k3fr1x @tol k3_k4_fr1x
+@testcheck @k4fr1y @k3fr1y @tol k3_k4_fr1y
+@testcheck @k4fr1z @k3fr1z @tol k3_k4_fr1z
+@testcheck @k4fr3x @k3fr3x @tol k3_k4_fr3x
+@testcheck @k4fr3y @k3fr3y @tol k3_k4_fr3y
+@testcheck @k4fr3z @k3fr3z @tol k3_k4_fr3z
+@testcheck @k4fr5x @k3fr5x @tol k3_k4_fr5x
+@testcheck @k4fr5y @k3fr5y @tol k3_k4_fr5y
+@testcheck @k4fr5z @k3fr5z @tol k3_k4_fr5z
+
+set mycut 19
+set nbcut 19
+energy cutnb @nbcut cutim @nbcut ctofnb @mycut ctonnb @mycut vswi -
+     kappa 0.5 order 10 fftx 128 ffty 128 fftz 128 -
+     ewald pmewald ljpme dkappa 0.5 dorder 10 dftx 128 dfty 128 dftz 128
+set k5ener ?ener
+set k5vixx ?vixx
+set k5vixy ?vixy
+set k5vixz ?vixz
+set k5viyy ?viyy
+set k5viyz ?viyz
+set k5vizz ?vizz
+coor force comp
+coor swap
+q 1
+set k5fr1x ?xval
+set k5fr1y ?yval
+set k5fr1z ?zval
+q 3
+set k5fr3x ?xval
+set k5fr3y ?yval
+set k5fr3z ?zval
+q 5
+set k5fr5x ?xval
+set k5fr5y ?yval
+set k5fr5z ?zval
+coor swap
+@testcheck @k5ener @k4ener @tol k4_k5_ener
+@testcheck @k5vixx @k4vixx @tol k4_k5_vixx
+@testcheck @k5vixy @k4vixy @tol k4_k5_vixy
+@testcheck @k5vixz @k4vixz @tol k4_k5_vixz
+@testcheck @k5viyy @k4viyy @tol k4_k5_viyy
+@testcheck @k5viyz @k4viyz @tol k4_k5_viyz
+@testcheck @k5vizz @k4vizz @tol k4_k5_vizz
+@testcheck @k5fr1x @k4fr1x @tol k4_k5_fr1x
+@testcheck @k5fr1y @k4fr1y @tol k4_k5_fr1y
+@testcheck @k5fr1z @k4fr1z @tol k4_k5_fr1z
+@testcheck @k5fr3x @k4fr3x @tol k4_k5_fr3x
+@testcheck @k5fr3y @k4fr3y @tol k4_k5_fr3y
+@testcheck @k5fr3z @k4fr3z @tol k4_k5_fr3z
+@testcheck @k5fr5x @k4fr5x @tol k4_k5_fr5x
+@testcheck @k5fr5y @k4fr5y @tol k4_k5_fr5y
+@testcheck @k5fr5z @k4fr5z @tol k4_k5_fr5z

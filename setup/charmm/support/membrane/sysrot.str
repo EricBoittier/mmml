@@ -1,0 +1,81 @@
+* Sysrot.str  
+* For systematic rotations of individual lipids in the system
+* can also do rotations of the helix if desired (currently in)
+*
+
+open write card unit 10 name @direcWork/sys4_rot.dat
+write title unit 10
+* LipidNum StepNum TotalBad Memory_Best Current_Bad  Theta_Best Current_Theta  
+*
+
+!--------------------------------------------------------------
+! Systematic Rotations
+!--------------------------------------------------------------
+
+set LipidNumber 1               ! Lipid number
+set Step        1               ! total number of steps
+set BadTotKeep  @BadTotal       ! initial setting for "best" number
+
+label Loop_lip
+
+set Theta 10.0    ! Rotation angle theta
+set ThetaBest 0.0
+
+cons fix  sele .not. ( segid L@LipidNumber  ) end  !cut-down on number of contacts to analyze
+update imall 
+
+prnlev 0
+! the images option here means that all bad contacts between L@L and images or reals are included 
+coor dist images cut 2.6 sele (.not. type H*) .and.         ( segid L@LipidNumber  )  end    - 
+                         sele (.not. type H*) .and.  .not.  ( segid L@LipidNumber  )  end 
+prnlev 5
+set BadOld  ?npair 
+set BadBest @BadOld
+
+! to set the xmov,ymov,zmov variables for the particular lipid
+coor orient norot  sele ( segid L@LipidNumber  ) end  !center the lipid at origin
+coor trans xdir -?xmov ydir -?ymov zdir -?zmov select all end
+
+label Loop_rotate
+coor trans xdir ?xmov ydir ?ymov zdir ?zmov select all end
+coor rotate zdir 1.0 PHI @Theta sele ( segid L@LipidNumber  ) end 
+coor trans xdir -?xmov ydir -?ymov zdir -?zmov select all end
+cons fix  sele .not. ( segid L@LipidNumber  ) end  !cut-down on number of contacts to analyze
+update imall 
+prnlev 0
+coor dist images cut 2.6 sele (.not. type H*) .and.         ( segid L@LipidNumber  ) end    - 
+                         sele (.not. type H*) .and.  .not.  ( segid L@LipidNumber  ) end 
+prnlev 5
+!update the Grand Total of bad contacts
+set BadNew ?npair  ! current amount 
+
+if @BadNew gt @BadBest goto next_rot
+    decrement BadTotKeep by @BadBest  !update the Grand-Total of bad contacts 
+    increment BadTotKeep by @BadNew   
+    set BadBest   @BadNew             ! keep the new best number of bad contacts
+    set ThetaBest @Theta              ! keep the new best rotation angle
+
+label next_rot
+write title unit 10
+* @LipidNumber @Step @BadTotKeep @BadBest @BadNew @ThetaBest @Theta
+*
+
+coor trans xdir ?xmov ydir ?ymov zdir ?zmov select all end
+coor rotate zdir 1.0 PHI -@Theta sele (segid L@LipidNumber  ) end   !rotate back to initial position
+coor trans xdir -?xmov ydir -?ymov zdir -?zmov select all end
+incr step  by 1         ! update total number of steps
+incr Theta by 10.0      ! increase rotation angle
+if Theta le 350.0 goto Loop_rotate
+
+! Rotate back to the best
+cons fix select none end
+coor trans xdir ?xmov ydir ?ymov zdir ?zmov select all end
+coor rotate zdir 1.0 PHI @ThetaBest sele (segid L@LipidNumber  ) end
+coor trans xdir -?xmov ydir -?ymov zdir -?zmov select all end
+
+incr LipidNumber by 1
+if LipidNumber le @NLipid goto Loop_lip
+
+return
+stop
+

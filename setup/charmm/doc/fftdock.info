@@ -1,0 +1,137 @@
+CHARMM Element doc/fftdock.info $
+
+File: fftdock, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+ FFTDOCK: An Accelerated Routine for Rigid-Protein Rigid-Ligand Docking
+           Using Fast Fourier Transform Algorithm
+        By Xinqiang Ding and Charles L. Brooks III
+
+* Menu:
+* Background:   Background information about the method
+* Syntax:       Syntax of the command
+* Description:  Description of the command
+* Examples:     Example commands
+* Installation: How to compile fftdock    
+
+File: fftdock, Node: Background, Up: (doc/commands.info), Next: Syntax
+
+                Background Information
+		
+Fast Fourier transform (FFT) algorithm has been successfully used for rigid
+protein-protein docking. The basic idea is as the following. The interaction
+energy between two proteins (in fixed orientations) for all possible relative
+positions can be formulated as a cross correlation function between two 3
+dimenstional grid, each of which can be calculated based of a protein's
+structure. The FFT algorithm can be used to greatly accelerate the calculation
+of the cross correlation function. Here the same idea is adapted for protein-
+ligand docking. Given a protein structure, potential grids can be calculated
+around the ligand binding pocket (See grid.info for further information). Given
+a ligand with a fixed conformation and a fixed orientation, similar grid be
+calculated. Then the FFT algorithm is used to calculate interaction energies
+between the proteina and ligand for all possible translations of the ligand
+inside the binding pocket. The FFT calculation for multiple ligand orientations
+are parallized on graphic processing units (GPUs).
+
+File: fftdock, Node: Syntax, Up: Top, Previous: Background, Next: Description
+
+               Syntax of Commands
+
+Initialize Grid Potential:
+
+  FFTG READ UNIT <integer> [Formatted]
+
+Run Docking:
+
+  FFTG LCON -
+       NCON <integer> ICON <integer> -
+       NROK <integer> SIZB <integer> -
+       QUAU <integer> NQUA <integer> -
+       IQUA -
+       SELE <atom selection> END
+
+Collect Results:
+
+  FFTG COOR -
+       ICON <integer> IROT <integer>
+
+File: fftdock, Node: Description, Up: Top, Previous: Syntax, Next: Examples
+
+             Detailed Description of Options in Commands
+
+Initialize Grid Potential:
+  FFTG READ UNIT <integer> [Formatted]
+
+    UNIT             Unit from which to read the protein grid potentials
+    Formatted        Set if the grid potential is in ASCII format
+
+  This command reads in protein grid potentials generated using grid command (see
+  doc/grid.info).
+
+
+Run Docking:
+  FFTG LCON -
+       NCON <integer> ICON <integer> -
+       NROK <integer> [SIZB <integer>] -
+       QUAU <integer> NQUA <integer> -
+       [IQUA] -       
+       SELE <atom selection> END
+
+    NCON    Num of ligand conformations which will be docked
+    ICON    Index of current ligand conformation
+    NROK    Num of low energy ligand orienations saved
+    SIZB    Size of batch for FFT
+    QUAU    Unit num of file from which quaternions are read
+    NQUA    Num of ligand orientations for each conformation
+    RNQU    Logical flag to rotate each quaternion randomly before applying (not recommended,
+            but retained for compatability).
+    IQUA    Set if the original orientation is included
+    
+  This command does the FFT-based docking. A ligand is specified using an atom
+selection. Its conformation coordinates are read from main coordinates. For
+from the main coordinates [see doc/corman.info]. For each conformation, multiple
+docked using FFTs. The FFTs are run in batches with a batch size of SIZB. It
+is expected that a large batch size should be used as along as it can fit into
+the GPU device's memory, because a large batch size can make better use of the
+parallelism provide by GPUs. After the FFT dock, these orientations are ranked
+based on its energy and NROK low energy orientations are saved internal.
+
+Collect Results:
+  FFTG COOR -
+       ICON <integer> IROT <integer>
+
+    ICON    Index of conformation
+    IROT    Index of orientation
+
+  This command copies the ligand coordinates corresponding to ICON'th
+conformation and IROT'th orientaion to the main coordinates.
+
+File: fftdock, Node: Examples, Up: Top, Previous: Description, Next: Installation
+
+! read grid potential 
+open unit 30 read unform name "grid.bin"
+FFTG READ UNIT 30
+
+! read different conformations and dock them
+FFTG LCON NCON 10 ICON 1 NROK 2 NQUA 100 IQUA sele segi LIGA end
+...
+add more commands to read in another ligand conformation
+...
+FFTG LCON NCON 10 ICON 2 NROK 2 NQUA 100 IQUA sele segi LIGA end
+
+! save ligand structures after docking
+FFTG COOR ICON 1 IROT 1
+...
+add more commands to save the current structure
+...
+FFTG COOR ICON 1 IROT 2
+
+! apparently you can also write loop to go through all the docked structures.
+
+File: fftdock, Node: Installation, Up: Top, Previous: Examples
+
+To install CHARMM with the fftdock command, give the configure script the
+--with-fftdock
+command line option. For example:
+configure --with-fftdock ...
+

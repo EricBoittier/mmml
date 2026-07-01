@@ -1,0 +1,392 @@
+* String method at 0K (SM0K) test case
+* alanine dipeptide isomerization in vacuum
+* this test case replaces c36test/zts_ene.inp
+*
+!SUMMARY : generate initial path by linear interpolation
+! in phi/psi dihedral angles; perform SD string minimization;
+! compute the minimum energy path (MEP) and the 
+! energy along the MEP
+
+if ?stringm .ne. 1 then
+   echo "String method code not compiled."
+   echo "Test NOT performed."
+   stop
+endif
+!
+if ?numnode  .lt. 3  then
+  echo "At least three cpu cores are required to run this test."
+  echo "Test NOT performed."
+  STOP
+endif
+!
+if ?numnode  .ne. 8  then
+  echo "Internal PASS/FAIL test only available for 8 cpu cores b/c result depends on # cores."
+  echo "Internal PASS/FAIL test check will be omitted."
+endif
+!
+set myname sm0k.inp
+!
+stream datadir.def
+!**********************************************************
+! read parameter and topology files
+set toppar  @0
+set outdir  @9
+!
+open unit 1 read form name @TOPPAR/top_all22_model.inp
+read rtf card unit 1
+close unit 1
+!
+open unit 1 read form name @TOPPAR/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! ***************************** generate alanine dipeptide
+read sequence card
+* alanine dipeptide in vacuum
+*
+1
+ALAD
+
+generate dial setup warn
+write psf card name @outdir/diala.psf
+!
+mcom string 1 by ?numnode ! initialize communicators
+string zero init ! initialze string
+!**************************** replica variables ***********
+set ncpu ?nstring
+set me ?mestring
+!
+! set dihedral angles for this replica
+! (1) define range of angles
+calc phis -90.
+calc psis 90.0
+calc phie @phis+180.0
+calc psie @psis-180.0
+
+if @ncpu .gt. 1 then 
+ calc mypsi = @psis + ( @psie - @psis ) * @me / ( @ncpu - 1 )
+ calc myphi = @phis + ( @phie - @phis ) * @me / ( @ncpu - 1 )
+else
+ calc mypsi = @psis
+ calc myphi = @phis
+endif 
+!
+ic edit
+dihe  dial 1 clp   dial 1 nl   dial 1 ca   dial 1 crp @myphi
+dihe  dial 1 nl   dial 1 ca   dial 1 crp   dial 1 nr @mypsi
+end
+!
+! generate coordinates
+IC PARA
+IC SEED 1 CLP 1 NL 1 CA
+IC BUILD
+! specify infinite cutoff
+update cutnb 1000.0
+! ***************************** DONE generating alanine dipeptide
+!
+!!!!!!!!!!! define string atoms coordinates !!!!!!!!!!!!!!!
+define orientation sele .not. hydrogen end
+define moving sele .not. hydrogen end ! do not have to be the same as above
+
+coor copy comp ! save for rmsd output
+! set up string statistics to print
+string zero stat ener ener bonds angles dihe impr vdw elec enam @outdir/string end - ! various energy terms to print
+                rmsd rname @outdir/rmsd.dat - ! rmsd to initial string in comp
+                dels dname @outdir/dsdt.dat - ! rmsd change from previous iteration
+                arcl aname @outdir/arc.dat - ! arclength
+                curv cvnm @outdir/curv.dat ! curvature
+
+! set up reparameterization output
+string zero repa iter 1 defi 1.021 linear orie select orientation end move select moving end
+
+! test manually
+string zero repa ! manual reparametrization
+string zero stat ! manual statistics call
+
+! run string (minimizer)
+string zero mini nstep 20000 -
+ repf 20 - ! reparametrization frequency
+ staf 10   ! statistics output frequency (will output once in staf*repf iterations)
+!
+! minimize with a finer step if desired
+string zero mini repf 20 staf 10 nstep 5000 step 0.001
+!
+string open card write unit 1 name @outdir/diala22_zts_@me.cor ! need "string" to open on all replicas
+write coor card unit 1
+!
+! turn off string
+string zero done
+bomb -1
+mcom done
+!
+!=================== check path (NOT free energy, which is more complicated to compute) ===============================
+if ?numnode eq 8 then ! internal PASS/FAIL :  compare path RMSD to reference path
+!
+label check
+!
+set mue 0 ! mean error
+set muetol 0.5 ! error tolerance
+!
+read coor card name @outdir/diala22_zts_0.cor comp
+read coor card
+* STRING METHOD AT 0K (SM0K) TEST CASE
+* ALANINE DIPEPTIDE ISOMERIZATION IN VACUUM
+* THIS TEST CASE REPLACES C36TEST/ZTS_ENE.INP
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.69097  -1.27333   0.04282 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.79044  -1.12294  -0.02759 DIAL 1      0.00000
+    3    1 ALAD HL2   -0.45853  -1.76364   1.01157 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.36588  -1.92996  -0.79167 DIAL 1      0.00000
+    5    1 ALAD CLP   -0.01151   0.03840  -0.04388 DIAL 1      0.00000
+    6    1 ALAD OL    -0.64574   1.07542  -0.18905 DIAL 1      0.00000
+    7    1 ALAD NL     1.32484   0.02817   0.03363 DIAL 1      0.00000
+    8    1 ALAD HL     1.81615  -0.82836   0.13311 DIAL 1      0.00000
+    9    1 ALAD CA     2.13254   1.23057  -0.00751 DIAL 1      0.00000
+   10    1 ALAD HA     1.61391   2.01738   0.52571 DIAL 1      0.00000
+   11    1 ALAD CB     3.47903   0.97099   0.69929 DIAL 1      0.00000
+   12    1 ALAD HB1    4.05268   0.17938   0.17125 DIAL 1      0.00000
+   13    1 ALAD HB2    4.09668   1.89475   0.71708 DIAL 1      0.00000
+   14    1 ALAD HB3    3.30541   0.64530   1.74631 DIAL 1      0.00000
+   15    1 ALAD CRP    2.36398   1.73449  -1.43188 DIAL 1      0.00000
+   16    1 ALAD OR     3.46513   1.66722  -1.97317 DIAL 1      0.00000
+   17    1 ALAD NR     1.30218   2.26293  -2.06823 DIAL 1      0.00000
+   18    1 ALAD HR     0.41175   2.24345  -1.60934 DIAL 1      0.00000
+   19    1 ALAD CR     1.38934   2.79816  -3.40569 DIAL 1      0.00000
+   20    1 ALAD HR1    0.39931   3.18117  -3.73760 DIAL 1      0.00000
+   21    1 ALAD HR2    1.72056   2.01185  -4.12144 DIAL 1      0.00000
+   22    1 ALAD HR3    2.12247   3.63555  -3.44581 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outdir/diala22_zts_1.cor comp
+read coor card
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.62975  -1.45680   0.26207 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.69121  -1.39920   0.58908 DIAL 1      0.00000
+    3    1 ALAD HL2   -0.07685  -2.11741   0.96275 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.59348  -1.88749  -0.76059 DIAL 1      0.00000
+    5    1 ALAD CLP   -0.04336  -0.09839   0.26826 DIAL 1      0.00000
+    6    1 ALAD OL    -0.70785   0.87662   0.58819 DIAL 1      0.00000
+    7    1 ALAD NL     1.23529   0.00808  -0.11215 DIAL 1      0.00000
+    8    1 ALAD HL     1.73786  -0.79938  -0.39561 DIAL 1      0.00000
+    9    1 ALAD CA     1.99094   1.24763  -0.07121 DIAL 1      0.00000
+   10    1 ALAD HA     1.69443   1.80816   0.80606 DIAL 1      0.00000
+   11    1 ALAD CB     3.48949   0.89747   0.04379 DIAL 1      0.00000
+   12    1 ALAD HB1    3.83621   0.35316  -0.86058 DIAL 1      0.00000
+   13    1 ALAD HB2    4.10111   1.81961   0.15008 DIAL 1      0.00000
+   14    1 ALAD HB3    3.66663   0.25763   0.93345 DIAL 1      0.00000
+   15    1 ALAD CRP    1.76446   2.16005  -1.28180 DIAL 1      0.00000
+   16    1 ALAD OR     2.69502   2.75633  -1.81773 DIAL 1      0.00000
+   17    1 ALAD NR     0.50495   2.30128  -1.73267 DIAL 1      0.00000
+   18    1 ALAD HR    -0.23593   1.85388  -1.22845 DIAL 1      0.00000
+   19    1 ALAD CR     0.18653   3.10001  -2.89180 DIAL 1      0.00000
+   20    1 ALAD HR1   -0.90564   3.07215  -3.09883 DIAL 1      0.00000
+   21    1 ALAD HR2    0.72491   2.72131  -3.79079 DIAL 1      0.00000
+   22    1 ALAD HR3    0.48783   4.15984  -2.72935 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outdir/diala22_zts_2.cor comp
+read coor card
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.50433  -1.68681   0.38285 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.42963  -1.78366   0.99249 DIAL 1      0.00000
+    3    1 ALAD HL2    0.23447  -2.43602   0.73835 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.75295  -1.88665  -0.68025 DIAL 1      0.00000
+    5    1 ALAD CLP    0.04047  -0.32023   0.53998 DIAL 1      0.00000
+    6    1 ALAD OL    -0.48552   0.48724   1.28939 DIAL 1      0.00000
+    7    1 ALAD NL     1.12026  -0.01751  -0.19094 DIAL 1      0.00000
+    8    1 ALAD HL     1.51254  -0.69608  -0.79961 DIAL 1      0.00000
+    9    1 ALAD CA     1.85754   1.22785  -0.06555 DIAL 1      0.00000
+   10    1 ALAD HA     1.90672   1.49775   0.98198 DIAL 1      0.00000
+   11    1 ALAD CB     3.29019   0.99376  -0.58971 DIAL 1      0.00000
+   12    1 ALAD HB1    3.27957   0.74361  -1.67175 DIAL 1      0.00000
+   13    1 ALAD HB2    3.91208   1.90465  -0.44733 DIAL 1      0.00000
+   14    1 ALAD HB3    3.76860   0.15890  -0.03596 DIAL 1      0.00000
+   15    1 ALAD CRP    1.24569   2.42557  -0.79774 DIAL 1      0.00000
+   16    1 ALAD OR     1.86078   3.48416  -0.89899 DIAL 1      0.00000
+   17    1 ALAD NR     0.01355   2.29251  -1.32369 DIAL 1      0.00000
+   18    1 ALAD HR    -0.49393   1.45446  -1.15331 DIAL 1      0.00000
+   19    1 ALAD CR    -0.62904   3.36365  -2.04758 DIAL 1      0.00000
+   20    1 ALAD HR1   -1.63339   3.04775  -2.40554 DIAL 1      0.00000
+   21    1 ALAD HR2   -0.01840   3.66503  -2.92896 DIAL 1      0.00000
+   22    1 ALAD HR3   -0.75447   4.25551  -1.39220 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outdir/diala22_zts_3.cor comp
+read coor card
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.39894  -1.90669   0.31613 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.21772  -2.15087   1.02825 DIAL 1      0.00000
+    3    1 ALAD HL2    0.41779  -2.64797   0.44920 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.79260  -1.96949  -0.71914 DIAL 1      0.00000
+    5    1 ALAD CLP    0.10211  -0.54352   0.60222 DIAL 1      0.00000
+    6    1 ALAD OL    -0.33157   0.10038   1.54383 DIAL 1      0.00000
+    7    1 ALAD NL     1.04349  -0.07062  -0.22584 DIAL 1      0.00000
+    8    1 ALAD HL     1.35904  -0.63575  -0.97733 DIAL 1      0.00000
+    9    1 ALAD CA     1.76679   1.17310  -0.02168 DIAL 1      0.00000
+   10    1 ALAD HA     2.18370   1.15560   0.97725 DIAL 1      0.00000
+   11    1 ALAD CB     2.91646   1.24134  -1.04874 DIAL 1      0.00000
+   12    1 ALAD HB1    2.51944   1.27373  -2.08567 DIAL 1      0.00000
+   13    1 ALAD HB2    3.53566   2.14952  -0.88008 DIAL 1      0.00000
+   14    1 ALAD HB3    3.57364   0.35219  -0.94763 DIAL 1      0.00000
+   15    1 ALAD CRP    0.94003   2.45598  -0.11535 DIAL 1      0.00000
+   16    1 ALAD OR     1.30508   3.48124   0.45610 DIAL 1      0.00000
+   17    1 ALAD NR    -0.18776   2.43440  -0.85015 DIAL 1      0.00000
+   18    1 ALAD HR    -0.48642   1.58052  -1.26031 DIAL 1      0.00000
+   19    1 ALAD CR    -1.02775   3.60098  -0.98322 DIAL 1      0.00000
+   20    1 ALAD HR1   -1.90123   3.38509  -1.63607 DIAL 1      0.00000
+   21    1 ALAD HR2   -0.45651   4.44922  -1.42487 DIAL 1      0.00000
+   22    1 ALAD HR3   -1.40636   3.92252   0.01438 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outdir/diala22_zts_4.cor comp
+read coor card
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.31238  -2.06312   0.00142 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.19735  -2.40614   0.58117 DIAL 1      0.00000
+    3    1 ALAD HL2    0.54215  -2.73485   0.23067 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.54897  -2.11832  -1.08125 DIAL 1      0.00000
+    5    1 ALAD CLP    0.01343  -0.67293   0.39290 DIAL 1      0.00000
+    6    1 ALAD OL    -0.64328  -0.10205   1.24773 DIAL 1      0.00000
+    7    1 ALAD NL     1.04897  -0.11456  -0.25388 DIAL 1      0.00000
+    8    1 ALAD HL     1.48642  -0.65663  -0.95979 DIAL 1      0.00000
+    9    1 ALAD CA     1.71572   1.15190   0.02170 DIAL 1      0.00000
+   10    1 ALAD HA     2.44527   0.95154   0.79487 DIAL 1      0.00000
+   11    1 ALAD CB     2.46333   1.58017  -1.25892 DIAL 1      0.00000
+   12    1 ALAD HB1    1.74604   1.78682  -2.08170 DIAL 1      0.00000
+   13    1 ALAD HB2    3.06524   2.49662  -1.07552 DIAL 1      0.00000
+   14    1 ALAD HB3    3.15281   0.77492  -1.58839 DIAL 1      0.00000
+   15    1 ALAD CRP    0.90258   2.34124   0.54327 DIAL 1      0.00000
+   16    1 ALAD OR     1.30425   2.99675   1.50153 DIAL 1      0.00000
+   17    1 ALAD NR    -0.24000   2.66562  -0.09209 DIAL 1      0.00000
+   18    1 ALAD HR    -0.57715   2.08487  -0.82334 DIAL 1      0.00000
+   19    1 ALAD CR    -1.05423   3.77607   0.34231 DIAL 1      0.00000
+   20    1 ALAD HR1   -1.94106   3.89516  -0.31746 DIAL 1      0.00000
+   21    1 ALAD HR2   -0.47027   4.72449   0.32562 DIAL 1      0.00000
+   22    1 ALAD HR3   -1.41261   3.60925   1.38424 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outdir/diala22_zts_5.cor comp
+read coor card
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.36943  -1.98866  -0.24660 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.39002  -2.27274   0.09324 DIAL 1      0.00000
+    3    1 ALAD HL2    0.36315  -2.69281   0.19833 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.33115  -2.05990  -1.35423 DIAL 1      0.00000
+    5    1 ALAD CLP   -0.08206  -0.60329   0.18930 DIAL 1      0.00000
+    6    1 ALAD OL    -0.91581   0.02089   0.82601 DIAL 1      0.00000
+    7    1 ALAD NL     1.11435  -0.11828  -0.18263 DIAL 1      0.00000
+    8    1 ALAD HL     1.68522  -0.73329  -0.71226 DIAL 1      0.00000
+    9    1 ALAD CA     1.73092   1.18180   0.06912 DIAL 1      0.00000
+   10    1 ALAD HA     2.70104   0.95122   0.48677 DIAL 1      0.00000
+   11    1 ALAD CB     1.97620   1.89320  -1.27891 DIAL 1      0.00000
+   12    1 ALAD HB1    1.01464   2.13499  -1.77682 DIAL 1      0.00000
+   13    1 ALAD HB2    2.55025   2.83373  -1.13098 DIAL 1      0.00000
+   14    1 ALAD HB3    2.56181   1.23486  -1.95527 DIAL 1      0.00000
+   15    1 ALAD CRP    1.12780   2.15991   1.08517 DIAL 1      0.00000
+   16    1 ALAD OR     1.70832   2.39382   2.14285 DIAL 1      0.00000
+   17    1 ALAD NR    -0.02324   2.78486   0.76905 DIAL 1      0.00000
+   18    1 ALAD HR    -0.52211   2.49931  -0.04242 DIAL 1      0.00000
+   19    1 ALAD CR    -0.64186   3.74204   1.65408 DIAL 1      0.00000
+   20    1 ALAD HR1   -1.56753   4.15614   1.19709 DIAL 1      0.00000
+   21    1 ALAD HR2    0.05307   4.58397   1.87237 DIAL 1      0.00000
+   22    1 ALAD HR3   -0.91552   3.25650   2.61863 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outdir/diala22_zts_6.cor comp
+read coor card
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.55991  -1.71186  -0.29646 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.65253  -1.81582  -0.11919 DIAL 1      0.00000
+    3    1 ALAD HL2   -0.02454  -2.46816   0.31502 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.35679  -1.89336  -1.37363 DIAL 1      0.00000
+    5    1 ALAD CLP   -0.13114  -0.34696   0.07802 DIAL 1      0.00000
+    6    1 ALAD OL    -0.94812   0.45962   0.51222 DIAL 1      0.00000
+    7    1 ALAD NL     1.16574  -0.06510  -0.10923 DIAL 1      0.00000
+    8    1 ALAD HL     1.74416  -0.79278  -0.46021 DIAL 1      0.00000
+    9    1 ALAD CA     1.83377   1.21372   0.09328 DIAL 1      0.00000
+   10    1 ALAD HA     2.88894   0.98068   0.09382 DIAL 1      0.00000
+   11    1 ALAD CB     1.59217   2.15709  -1.10621 DIAL 1      0.00000
+   12    1 ALAD HB1    0.51665   2.41763  -1.19213 DIAL 1      0.00000
+   13    1 ALAD HB2    2.18219   3.09294  -0.99820 DIAL 1      0.00000
+   14    1 ALAD HB3    1.90358   1.65790  -2.04810 DIAL 1      0.00000
+   15    1 ALAD CRP    1.62286   1.93003   1.43072 DIAL 1      0.00000
+   16    1 ALAD OR     2.47426   1.86516   2.31480 DIAL 1      0.00000
+   17    1 ALAD NR     0.49958   2.65258   1.59503 DIAL 1      0.00000
+   18    1 ALAD HR    -0.22630   2.55567   0.91613 DIAL 1      0.00000
+   19    1 ALAD CR     0.23838   3.42969   2.78171 DIAL 1      0.00000
+   20    1 ALAD HR1   -0.74438   3.94443   2.70143 DIAL 1      0.00000
+   21    1 ALAD HR2    1.02944   4.19914   2.92970 DIAL 1      0.00000
+   22    1 ALAD HR3    0.21742   2.77157   3.67951 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+read coor card name @outdir/diala22_zts_7.cor comp
+read coor card
+*  DATE: UNAVAILABLE WHEN THE STRINGM MODULE IS USED
+*
+   22
+    1    1 ALAD CL    -0.72392  -1.35274   0.01973 DIAL 1      0.00000
+    2    1 ALAD HL1   -1.80527  -1.29340   0.27222 DIAL 1      0.00000
+    3    1 ALAD HL2   -0.24133  -2.09492   0.69008 DIAL 1      0.00000
+    4    1 ALAD HL3   -0.62126  -1.68359  -1.03515 DIAL 1      0.00000
+    5    1 ALAD CLP   -0.10655  -0.02019   0.20221 DIAL 1      0.00000
+    6    1 ALAD OL    -0.77568   0.92871   0.59147 DIAL 1      0.00000
+    7    1 ALAD NL     1.20457   0.06222  -0.07686 DIAL 1      0.00000
+    8    1 ALAD HL     1.67382  -0.76011  -0.37439 DIAL 1      0.00000
+    9    1 ALAD CA     2.02315   1.26228   0.01393 DIAL 1      0.00000
+   10    1 ALAD HA     2.99867   0.97463  -0.35192 DIAL 1      0.00000
+   11    1 ALAD CB     1.51802   2.39269  -0.91292 DIAL 1      0.00000
+   12    1 ALAD HB1    0.52243   2.76046  -0.58655 DIAL 1      0.00000
+   13    1 ALAD HB2    2.22762   3.24722  -0.91320 DIAL 1      0.00000
+   14    1 ALAD HB3    1.42219   2.01463  -1.95232 DIAL 1      0.00000
+   15    1 ALAD CRP    2.28250   1.75776   1.43508 DIAL 1      0.00000
+   16    1 ALAD OR     3.41103   1.71181   1.91783 DIAL 1      0.00000
+   17    1 ALAD NR     1.24010   2.24051   2.13420 DIAL 1      0.00000
+   18    1 ALAD HR     0.32753   2.17380   1.72349 DIAL 1      0.00000
+   19    1 ALAD CR     1.37533   2.76400   3.47203 DIAL 1      0.00000
+   20    1 ALAD HR1    0.38934   3.10434   3.85797 DIAL 1      0.00000
+   21    1 ALAD HR2    2.07692   3.62865   3.48545 DIAL 1      0.00000
+   22    1 ALAD HR3    1.77191   1.98302   4.15974 DIAL 1      0.00000
+
+coor orie rms mass sele .not. hydrogen  end
+calc mue = @mue + ?RMS
+
+calc mue = @mue / ?numnode
+
+if @mue le @muetol then
+ echo @myname TESTCASE RESULT: PASS
+else
+ echo @myname TESTCASE RESULT: FAIL
+ incr testfail
+endif 
+
+endif
+
+stop

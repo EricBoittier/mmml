@@ -1,0 +1,225 @@
+*  OpenMM energy for trialanine blocked using fixed atoms
+*  Test is done for molecule in vacuum and then in a cubic box of solvent
+*  using PBC w/ PME.
+*  OpenMM does not eliminate the calculation of forces on fixed atoms
+*  it only ceases to propagate them. Thus, to check that the energies
+*  are correct we subtract off the vdw+elec interaction energy for
+*  the fixed atoms.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+!  box size: 24.534238 x 24.534238 x 24.534238
+
+read rtf card name @0/top_all22_prot.inp
+
+read param card name @0/par_all22_prot.inp
+
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+!  turn on faster options and set-up SHAKE
+faster on
+
+set cutoffs = cutnb 999 ctofnb 990 ctonnb 990 vswi
+
+!***************TEST 0*****************************
+! Check that initial energies match
+energy @cutoffs
+set ech = ?ener
+! Set tolerance of 0.005 % of total energy
+calc tol = abs ( ?ener * 0.00005 )
+
+energy omm
+set eomm = ?ener
+
+Calc diff = abs ( @ech - @eomm )
+set status = fail
+if @diff le @tol then
+  set status = pass
+endif
+echo testcase result: @status TEST 0
+
+!***************TEST 1*****************************
+! Calculate the contribution from the fixed atoms to add back in
+skipe all excl vdw elec
+inte select ires 1 end select ires 1 end
+set ediff = ?ener
+skipe none
+
+cons fix select ires 1 end
+
+energy
+set ech = ?ener
+energy omm
+set eomm = ?ener
+Calc diff = abs ( @ech - @eomm + @ediff )
+set status = fail
+if @diff le @tol then
+  set status = pass
+endif
+echo testcase result: @status TEST 1
+
+!***************TEST 2*****************************
+! Check that fixed atoms don't move during dynamics
+dynamics leap start timestep 0.001 -
+     nstep 100 nprint 10 iprfrq 20 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 echeck -1 -
+     iunread -1 iunwrite -1 -
+     eps 1.0 @cutoffs -
+     omm
+
+read coor comp pdb name @0/ala3_solv-equil.pdb resi
+
+coor orie rms select ires 1 end
+coor rms select ires 1 end
+
+set status = fail
+if ?rms le 0.00001 then
+  set status = pass
+endif
+echo testcase result: @status TEST 2
+
+!***************TEST 3*****************************
+! Check that unfixing atoms restores energy to original
+! Should cause omm system to be regenerated
+
+cons fix select none end
+
+energy
+set ech = ?ener
+energy omm
+set eomm = ?ener
+
+Calc diff = abs ( @ech - @eomm )
+set status = fail
+if @diff le @tol then
+  set status = pass
+endif
+echo testcase result: @status TEST 3
+
+!  Now try with periodic bc system w/ water
+delete atom select all end
+
+
+!!!!!!!!!!!!!!!!!!!!!!PART 2!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+label dowater
+
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+! Dimension of a box
+set size 24.534238
+set 7 = @size
+set theta = 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta
+crystal build cutoff 11 noper 0
+
+!  turn on faster options and set-up SHAKE
+faster on
+!shake fast bonh tol 1.0e-5 para
+
+set cutoffs = eps 1 cutnb 11 cutim 11 ctofnb 9 ctonnb 9 vswi
+
+! PME
+set ewald = Ewald kappa 0.320 pmEwald order 4 fftx 24 ffty 24 fftz 24
+
+
+!***************TEST 4*****************************
+! Check that initial energies match
+energy @cutoffs @ewald
+set ech = ?ener
+! Set tolerance of 0.005 % of total energy
+calc tol = abs ( ?ener * 0.00005 )
+
+energy omm
+set eomm = ?ener
+
+Calc diff = abs ( @ech - @eomm )
+set status = fail
+if @diff le @tol then
+  set status = pass
+endif
+echo testcase result: @status TEST 4
+
+!***************TEST 5*****************************
+! Calculate the contribution from the fixed atoms to add back in
+skipe all excl vdw elec
+inte select ires 1 end select ires 1 end
+set ediff = ?ener
+skipe none
+
+cons fix select ires 1 end
+
+energy
+set ech = ?ener
+energy omm
+set eomm = ?ener
+Calc diff = abs ( @ech - @eomm + @ediff )
+set status = fail
+if @diff le @tol then
+  set status = pass
+endif
+echo testcase result: @status TEST 5
+
+!***************TEST 6*****************************
+shake fast bonh tol 1.0e-5 para
+
+! Check that fixed atoms don't move during dynamics
+dynamics leap start timestep 0.001 -
+     nstep 100 nprint 10 iprfrq 20 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 echeck -1 -
+     iunread -1 iunwrite -1 -
+     eps 1.0 @cutoffs @ewald ntrfrq 100 -
+     omm
+
+read coor comp pdb name @0/ala3_solv-equil.pdb resi
+
+coor orie rms select ires 1 end
+coor rms select ires 1 end
+set status = fail
+if ?rms le 0.00001 then
+  set status = pass
+endif
+echo testcase result: @status TEST 6
+
+!***************TEST 7*****************************
+! Check that unfixing atoms restores energy to original
+! Should cause omm system to be regenerated
+shake off
+cons fix select none end
+energy
+set ech ?ener
+energy omm
+set eomm = ?ener
+
+Calc diff = abs ( @ech - @eomm )
+set status = fail
+if @diff le @tol then
+  set status = pass
+endif
+echo testcase result: @status TEST 7
+
+stop

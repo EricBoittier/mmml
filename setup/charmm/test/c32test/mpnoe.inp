@@ -1,0 +1,115 @@
+* CHARMM c32a2 Testcase: mpnoe.inp
+* Author: Michael Schaefer
+* Files:  toph19.rtf, param19.prm, 3ptb_complex.psf, 3ptb_complex.pdb
+* Tests:  moving point-NOE's demonstrated on trypsin/benzamidine complex
+*
+
+if ?pnoe .ne. 1 then 
+ echo "c32test/mpnoe> Test NOT performed."
+STOP
+endif
+
+
+set pnode
+if ?parallel .eq. 1 then set pnode = node 0
+
+stream datadir.def
+
+open unit 11 read form name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0param19.prm
+read param unit 11 card
+close unit 11
+
+read param card  append
+* additional parameters for benzamidine
+*
+
+ANGL
+   C    C  NC2    70.000  120.00000  !<<<<<
+DIHE
+   CR1E C    C    NC2      2.5       2     180.0
+
+END
+
+open unit 1 read form name @03ptb_complex19.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read form name @03ptb_complex19.crd
+read coor card unit 1
+close unit 1
+
+! { non-bonded specifications, setup RDIE }
+FASTer 5
+
+! 
+energy atom rdie epsi 5.0 -
+        switch vdis vswi E14Fac 1.0 -
+        cutnb 13.0 ctonnb 8.0 ctofnb 12.0
+
+! allow only active-site atoms to move
+define ligand sele resname ben end
+define protein sele .not. ligand end
+define contact_atom sele protein .and. -
+  (point -8.556 -3.790  5.198 cut 10.0) end
+define contact_res sele .byres. contact_atom end
+define fixed sele protein .and. .not. contact_res end
+cons fix sele fixed end
+
+SHAKE BONH TOLErance 1.0e-6 PARAMeter
+
+! keep protein backbone in flexible region constrained:
+cons harm force 1.0 sele type N .or. type CA .or. type C end
+
+! shift benzamidine by 2A in Z-direction ("undocked" position)
+SCALar Z ADD  2 sele ligand end
+
+! original point-NOE's are for BENZ on shifted start poistion;
+! target points are for BENZ in the docked position:
+NOE
+assign kmax 10.0 rmax 2.0 fmax     10.0 -
+  CNOX   -8.556 CNOY   -3.790 CNOZ    7.198 -
+  sele atom BENZ     1 C1   end
+assign kmax 10.0 rmax 2.0 fmax     10.0 -
+  CNOX  -10.657 CNOY   -4.725 CNOZ    6.583 -
+  sele atom BENZ     1 N1   end
+assign kmax 10.0 rmax 2.0 fmax     10.0 -
+  CNOX   -9.248 CNOY   -4.000 CNOZ    4.935 -
+  sele atom BENZ     1 N2   end
+print anal
+! move point-NOE's within 5 steps (real life: 50000 steps)
+NMPNoe          5
+MPNOe INOE      1 -
+  TNOX   -8.556 TNOY   -3.790 TNOZ    5.198
+MPNOe INOE      2 -
+  TNOX  -10.657 TNOY   -4.725 TNOZ    4.583
+MPNOe INOE      3 -
+  TNOX   -9.248 TNOY   -4.000 TNOZ    2.935
+END
+
+! perform Langevin dynamics, friction:
+scalar fbeta set 10.0 sele .not. hydrogen end
+
+! perform short dynamics to dock BENZ (real docking: 50000 steps)
+dynamics leap start - !langevin start -        ! start
+     nstep 5 timestep 0.002 -         !
+     rbuffer 0.0 ilbfrq 0 -           ! langev. rbuf, update frq.
+     tbath 300.0 firstt 300.0 finalt 300.0 - ! temperature
+     ichecw 0 ieqfrq 0 -              ! no temp window check
+     iseed 2223456 iasvel 1 -         ! gaussian vel. at start
+     echeck 500.0 -                   ! max del-E per step
+     inbfrq -1 -                      ! nb list update frq.
+     nprint   5 iprfreq  5 -          ! energy print frq./ eave frq.
+     isvfrq 0 -                       ! no save anything
+     nsavc     0 -
+     nsavv     0 ihbfrq 0             ! no velocity write, hb update
+
+
+! no check for the outcome is done here; all that matters is
+! that the commands are performed (moving PNOE's) without error;
+! this testcase is intended as a template for docking calculations
+
+STOP

@@ -1,0 +1,42 @@
+* verify_factors.inp, last modified May/10/2004
+* By Sonja M. Schwarzl 
+*
+ 
+STREAM generate.str
+STREAM settings1.str
+STREAM settings2.str
+
+STREAM initialize.str
+
+! STATISTICS FOR 2473 SELECTED ATOMS:
+    ! XMIN =  -25.996614 XMAX =   22.166716 XAVE =     .000000
+    ! YMIN =  -17.224480 YMAX =   21.932240 YAVE =     .000000
+    ! ZMIN =  -20.566592 ZMAX =   20.793466 ZAVE =     .000000
+    ! WMIN =     .224500 WMAX =    2.275000 WAVE =    1.443318
+
+! Compute only electrostatics :
+SKIP ALL EXCL ELEC   
+
+! No bonded-exclusions (NBXMOD= -1 instead of 5), infinite cutoff :
+ENER  NBXMOD -1  VATOM ATOM  EPS 1.0  E14FAC 1.0  @ELECTR -
+      @UVFUNCTION @UFUNCTION CTONNB @UCTONNB CTOFNB @UCTOFNB CUTNB -
+      @UCUTNB WMIN @UWMIN    
+
+    !where data will be output:   
+    
+OPEN UNIT 24 WRITE FORM NAME @OUTPUTBACK
+WRITE TITLE UNIT 24
+* I    E^vac_I    E^solv   E^NUCS_I   lambda_I 
+*
+
+OPEN UNIT 25 WRITE FORM NAME @OUTPUTSIDE
+WRITE TITLE UNIT 25
+* I    E^vac_I    E^solv   E^NUCS_I   lambda_I 
+*
+
+STREAM loop.str
+
+CLOSE UNIT 24
+CLOSE UNIT 25
+
+STOP

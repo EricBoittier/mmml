@@ -1,0 +1,259 @@
+* CHARMM c35a1 testcase, 15-Aug-2007
+* testing the reaction coordinate constraints
+* Aurore Jhih-Wei Chu (jwchu.at.berkeley.edu) June 30, 2007
+*
+
+if ?replica .ne. 1 then stop
+if ?rxncons .ne. 1 then stop
+
+stream datadir.def
+
+set z diala
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+! GENERATE ALANINE DIPEPTIDE, PARM19
+!
+read sequence card
+*
+3
+AMN ALA CBX
+
+generate ala setup warn
+
+read coor card
+* REPLICA 1
+*  DATE:    10/15/ 6     15:10:50      CREATED BY USER: chu
+*
+   12
+    1    1 AMN  CL    -0.63168  -1.35083  -0.11348 A1   1      1.00000
+    2    1 AMN  C      0.13750  -0.05041  -0.27815 A1   1      1.00000
+    3    1 AMN  O     -0.22603   0.81114  -1.07949 A1   1      1.00000
+    4    2 ALA  N      1.22057   0.10060   0.47848 A1   2      1.00000
+    5    2 ALA  H      1.56031  -0.64705   1.01191 A1   2      1.00000
+    6    2 ALA  CA     2.02795   1.30307   0.42202 A1   2      1.00000
+    7    2 ALA  CB     2.14222   1.90945   1.81248 A1   2      1.00000
+    8    2 ALA  C      3.41778   0.88880  -0.02353 A1   2      1.00000
+    9    2 ALA  O      3.92383  -0.15491   0.39502 A1   2      1.00000
+   10    3 CBX  N      4.02346   1.68832  -0.89926 A1   3      1.00000
+   11    3 CBX  H      3.53543   2.46829  -1.23286 A1   3      1.00000
+   12    3 CBX  CA     5.40187   1.41021  -1.40079 A1   3      1.00000
+
+!!! Test d1 - d2 constraint
+coor mind sele bynu 8 end sele bynu 3 end
+set dis1 = ?mind
+coor mind sele bynu 3 end sele bynu 11 end
+set dis2 = ?mind
+calc dimd2o = @dis1 - @dis2
+
+open write card unit 66 name @9@z.bdis.lag
+RCON BDIS rxnc plag @dimd2o sele bynu 8 end -
+                            sele bynu 3 .or. bynu 11 end iunl 66
+
+nbon cutnb 999. ctofnb 995. ctonnb 990.
+
+set oname = diala
+open write unit 31 card name @9@oname.bdis.rst
+open write unit 32 file name @9@oname.bdis.dcd
+
+dynamics leap start nstep 1000 timeatep 0.001 -
+         iprfrq 100 ihtfrq 0 ieqfrq 100 ntrfrq 100 isvfrq 0 -
+         iunrea -1  iunwri 31 iuncrd 32 iunvel -1 kunit -1 -
+         nprint 100 nsavc 100 nsavv 0  -
+         firstt 300.0 finalt 300.0 teminc 3.0 -
+         iasors 1 iasvel 1 iscvel 0 ichew 0 echeck 500.0 -
+         twindh 5.0 twindl -5.0
+
+close unit 31 
+close unit 32
+close unit 33 
+close unit 34
+close unit 66
+
+coor mind sele bynu 3 end sele bynu 8 end 
+set dis1 = ?mind
+coor mind sele bynu 3 end sele bynu 11 end
+set dis2 = ?mind
+calc d1md2 = @dis1 - @dis2
+
+! relative test tolerance of one percent
+set tol = 0.01
+
+@testcheck @d1md2 @dimd2o @tol rxncons_test_1
+
+rcon bdis clean
+
+!!! Test BOND constraint
+coor mind sele bynu 3 end sele bynu 11 end
+set bondo = ?mind
+
+open write card unit 66 name @9@z.bond.lag
+RCON BOND plag rxnc @bondo sele bynu 3 end sele bynu 11 end iunl 66 
+
+nbon cutnb 999. ctofnb 995. ctonnb 990.
+
+set oname = diala
+open write unit 31 card name @9@oname.bond.rst
+open write unit 32 file name @9@oname.bond.dcd
+
+dynamics leap start nstep 1000 timeatep 0.001 -
+         iprfrq 100 ihtfrq 0 ieqfrq 100 ntrfrq 100 isvfrq 0 -
+         iunrea -1  iunwri 31 iuncrd 32 iunvel -1 kunit -1 -
+         nprint 100 nsavc 100 nsavv 0  -
+         firstt 300.0 finalt 300.0 teminc 3.0 -
+         iasors 1 iasvel 1 iscvel 0 ichew 0 echeck 500.0 -
+         twindh 5.0 twindl -5.0
+
+close unit 31 
+close unit 32
+close unit 33 
+close unit 34
+
+coor mind sele bynu 3 end sele bynu 11 end 
+set bond = ?mind
+
+@testcheck @bond @bondo @tol rxncons_test_2
+
+rcon bond clean
+
+!!! Test Plane CONstraint
+
+read coor card 
+* REPLICA 10
+*  DATE:    10/15/ 6     15:10:50      CREATED BY USER: chu
+*
+   12
+    1    1 AMN  CL    -0.42712  -1.73773   0.10386 A1   1      1.00000
+    2    1 AMN  C     -0.00735  -0.28872  -0.08092 A1   1      1.00000
+    3    1 AMN  O     -0.77405   0.52771  -0.58320 A1   1      1.00000
+    4    2 ALA  N      1.25027  -0.01831   0.27965 A1   2      1.00000
+    5    2 ALA  H      1.79410  -0.77914   0.56318 A1   2      1.00000
+    6    2 ALA  CA     1.88970   1.29671   0.31995 A1   2      1.00000
+    7    2 ALA  CB     3.33326   1.13177  -0.13442 A1   2      1.00000
+    8    2 ALA  C      1.35369   2.54594  -0.37903 A1   2      1.00000
+    9    2 ALA  O      1.46273   3.63722   0.18020 A1   2      1.00000
+   10    3 CBX  N      0.78276   2.44144  -1.57980 A1   3      1.00000
+   11    3 CBX  H      0.51851   1.55075  -1.88679 A1   3      1.00000
+   12    3 CBX  CA     0.36495   3.63882  -2.36816 A1   3      1.00000
+
+
+
+! read two reference coordinates, one in ref and the other in comp
+ 
+read coor card  comp
+* REPLICA 11
+*  DATE:    10/15/ 6     15:10:50      CREATED BY USER: chu
+*
+   12
+    1    1 AMN  CL    -0.35718  -1.78080   0.00385 A1   1      1.00000
+    2    1 AMN  C      0.05487  -0.33219  -0.20054 A1   1      1.00000
+    3    1 AMN  O     -0.66510   0.44059  -0.82663 A1   1      1.00000
+    4    2 ALA  N      1.24754  -0.01216   0.31134 A1   2      1.00000
+    5    2 ALA  H      1.75329  -0.74179   0.71912 A1   2      1.00000
+    6    2 ALA  CA     1.88908   1.30233   0.30302 A1   2      1.00000
+    7    2 ALA  CB     3.14782   1.23175  -0.55130 A1   2      1.00000
+    8    2 ALA  C      1.17937   2.61264  -0.03590 A1   2      1.00000
+    9    2 ALA  O      1.20362   3.53724   0.77600 A1   2      1.00000
+   10    3 CBX  N      0.55295   2.73475  -1.20721 A1   3      1.00000
+   11    3 CBX  H      0.37105   1.91710  -1.71590 A1   3      1.00000
+   12    3 CBX  CA    -0.03178   4.02776  -1.67065 A1   3      1.00000
+
+ scalar xref = xcomp
+ scalar yref = ycomp
+ scalar zref = zcomp
+ 
+read coor card  comp
+* REPLICA 9
+*  DATE:    10/15/ 6     15:10:50      CREATED BY USER: chu
+*
+   12
+    1    1 AMN  CL    -0.53455  -1.62768   0.13177 A1   1      1.00000
+    2    1 AMN  C     -0.05060  -0.19051   0.03224 A1   1      1.00000
+    3    1 AMN  O     -0.81972   0.71498  -0.27758 A1   1      1.00000
+    4    2 ALA  N      1.25719  -0.00624   0.22751 A1   2      1.00000
+    5    2 ALA  H      1.80983  -0.80382   0.34402 A1   2      1.00000
+    6    2 ALA  CA     1.91321   1.29538   0.32771 A1   2      1.00000
+    7    2 ALA  CB     3.41682   1.07212   0.24071 A1   2      1.00000
+    8    2 ALA  C      1.58031   2.42479  -0.64701 A1   2      1.00000
+    9    2 ALA  O      1.81473   3.59080  -0.32852 A1   2      1.00000
+   10    3 CBX  N      1.04221   2.12562  -1.83047 A1   3      1.00000
+   11    3 CBX  H      0.72927   1.21255  -1.97917 A1   3      1.00000
+   12    3 CBX  CA     0.77167   3.16863  -2.86432 A1   3      1.00000
+
+scalar wmain set 1.0 sele all end
+open write card unit 66 name @9@z.pcns.lag
+
+RCON PCNS rxnc 0.0 weig plag iunl 66
+
+nbon cutnb 999. ctofnb 995. ctonnb 990.
+
+set oname = diala
+open write unit 31 card name @9@oname.pcns.rst
+open write unit 32 file name @9@oname.pcns.dcd
+
+dynamics leap start nstep 1000 timeatep 0.001 -
+         iprfrq 100 ihtfrq 0 ieqfrq 100 ntrfrq 100 isvfrq 0 -
+         iunrea -1  iunwri 31 iuncrd 32 iunvel -1 kunit -1 -
+         nprint 100 nsavc 100 nsavv 0  -
+         firstt 300.0 finalt 300.0 teminc 3.0 -
+         iasors 1 iasvel 1 iscvel 0 ichew 0 echeck 500.0 -
+         twindh 5.0 twindl -5.0
+
+close unit 31 
+close unit 32
+close unit 33 
+close unit 34
+
+rcon pcns clean
+
+read coor card  comp
+* REPLICA 11
+*  DATE:    10/15/ 6     15:10:50      CREATED BY USER: chu
+*
+   12
+    1    1 AMN  CL    -0.35718  -1.78080   0.00385 A1   1      1.00000
+    2    1 AMN  C      0.05487  -0.33219  -0.20054 A1   1      1.00000
+    3    1 AMN  O     -0.66510   0.44059  -0.82663 A1   1      1.00000
+    4    2 ALA  N      1.24754  -0.01216   0.31134 A1   2      1.00000
+    5    2 ALA  H      1.75329  -0.74179   0.71912 A1   2      1.00000
+    6    2 ALA  CA     1.88908   1.30233   0.30302 A1   2      1.00000
+    7    2 ALA  CB     3.14782   1.23175  -0.55130 A1   2      1.00000
+    8    2 ALA  C      1.17937   2.61264  -0.03590 A1   2      1.00000
+    9    2 ALA  O      1.20362   3.53724   0.77600 A1   2      1.00000
+   10    3 CBX  N      0.55295   2.73475  -1.20721 A1   3      1.00000
+   11    3 CBX  H      0.37105   1.91710  -1.71590 A1   3      1.00000
+   12    3 CBX  CA    -0.03178   4.02776  -1.67065 A1   3      1.00000
+
+ coor orie rms comp
+ set dp = ?RMS
+
+read coor card  comp
+* REPLICA 9
+*  DATE:    10/15/ 6     15:10:50      CREATED BY USER: chu
+*
+   12
+    1    1 AMN  CL    -0.53455  -1.62768   0.13177 A1   1      1.00000
+    2    1 AMN  C     -0.05060  -0.19051   0.03224 A1   1      1.00000
+    3    1 AMN  O     -0.81972   0.71498  -0.27758 A1   1      1.00000
+    4    2 ALA  N      1.25719  -0.00624   0.22751 A1   2      1.00000
+    5    2 ALA  H      1.80983  -0.80382   0.34402 A1   2      1.00000
+    6    2 ALA  CA     1.91321   1.29538   0.32771 A1   2      1.00000
+    7    2 ALA  CB     3.41682   1.07212   0.24071 A1   2      1.00000
+    8    2 ALA  C      1.58031   2.42479  -0.64701 A1   2      1.00000
+    9    2 ALA  O      1.81473   3.59080  -0.32852 A1   2      1.00000
+   10    3 CBX  N      1.04221   2.12562  -1.83047 A1   3      1.00000
+   11    3 CBX  H      0.72927   1.21255  -1.97917 A1   3      1.00000
+   12    3 CBX  CA     0.77167   3.16863  -2.86432 A1   3      1.00000
+
+ coor orie rms comp
+ set dm = ?RMS
+
+ @testcheck @dp @dm @tol rxncons_test_3
+
+stop

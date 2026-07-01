@@ -1,0 +1,140 @@
+* CHARMM Testcase: c34test/vmodwat.inp
+* Author:  David PERAHIA, Sylvain FREDERIQUE and Charles H. ROBERT   
+* Date:    December 29, 2006
+* Version: c34a2
+* Test:    Simple VMOD test based on earlier charmm test c20test/vibwat
+*
+
+! Calculates normal modes for a water molecule, writes pdb file and dcd
+! of vibrational mode movements. Then applies VMOD restraint to first
+! vibrational mode (bending), minimizes, and writes a final pdb file
+
+! VIBRAN and quasi are not parallel
+if ?parallel .eq. 1 then
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+endif
+
+!if ?novibran .eq. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+bomlev -1
+stream datadir.def
+
+! ---------------------------------------------------------------------------
+! CALCULATE NORMAL MODES FOR WATER MOLECULE
+
+read rtf cards
+* water rtf
+*
+   18
+MASS 1 H 1.000
+MASS 2 O 16.00
+
+RESI WAT 0.0
+GROUP
+ATOM O O -0.4
+ATOM H1 H 0.2
+ATOM H2 H 0.2
+BOND O H1 O H2 !  H1 H2
+ANGLE H1 O H2
+
+END
+
+READ PARAM CARD
+* PARAMETERS FOR WATER
+*
+BOND
+H    O    450.0       1.00 ! from ST2 geometry
+H    H      0.0       1.6329931 ! from ST2 geometry (for SHAKE w/PARAM)
+ANGLE
+H    O  H       55.0     109.47122 ! TETRAHEDRAL FOR ST2'S
+END
+
+READ SEQU CARD
+* ONE WATER
+*
+    1
+WAT
+GENER WAT
+
+READ COOR CARD
+* WATER COORDINATES
+*
+    3
+    1    1 WAT  O      0.00000   0.06415   0.00000 WAT  1
+    2    1 WAT  H1     0.81650  -0.51321   0.00000 WAT  1
+    3    1 WAT  H2    -0.81650  -0.51321   0.00000 WAT  1
+
+
+update ctonnb 8.0 ctofnb 9.0 cutnb 11.0
+
+! Unrestrained minimization
+mini nrap nstep 5 nprint 1
+
+open write card unit 11 name @9water.pdb
+write coor pdb unit 11
+* Original structure
+*
+
+! Calculate modes and write the three vibrational mode trajectories
+open write file unit 10 name @9water.mod
+open write file unit 15 name @9water12.dcd
+open write card unit 20 name @9water.n20
+vibran  nmod 20
+  diag
+  write norm unit 10
+  outu 20
+  print norm mode 1 thru 20
+  outu 6
+  write traj mode 7 thru 9 mrms 0.2 phas 7.2 unit 15
+end
+
+
+
+! ---------------------------------------------------------------------------
+! TEST VMOD COMMANDS
+
+! Verify modes
+open read file unit 10 name @9water.mod
+open write card unit 21 name @9water.n21
+vibran nmod 20
+  diag
+  read norm file unit 10
+  outu 21
+  print norm mode 1 thru 20
+  outu 6
+end
+close unit 10
+
+! Read minimized coordinates
+open read card unit 11 name @9water.pdb
+read coor pdb unit 11
+
+print coor
+
+! Open modes file to be read by VMOD, detailed output file
+open read file unit 10 name @9water.mod
+open write card unit 11 name @9water.qcr
+
+mmfp
+ vmod init mxmd 3 krot 10e5 kcgr 10e3 umdn 10 uout 11 nsvq 1
+ vmod add imdn 7 kmdn 100000 qn 0.1
+ vmod print
+end
+
+! Minimize with mode restraint
+mini conj nstep 500 nprint 1 tolgrad 1e-6
+
+open write card unit 11 name @9waterq.pdb
+write coor pdb unit 11
+* Water minimized with VMOD restraint
+*
+
+print coor
+
+stop

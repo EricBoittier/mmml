@@ -1,0 +1,120 @@
+* fMDCM module test (distributed / off-center charges that
+* move as a function of molecular geometry to maintain
+* accuracy of electric field for different conformers)
+*
+
+BOMLEV 0
+PRNLEVEL 2 NODE 0
+
+STREam datadir.def
+
+read rtf card
+* ---- 
+* RTF for water
+* ---- 
+*
+   22    0
+
+MASS   201 OH2   15.999400
+MASS   202 HOH    1.007940
+MASS   999 K      39.100000
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI WAT   0.000 
+GROUP
+ATOM O    OH2   0.0000
+ATOM H    HOH   0.0000
+ATOM H1   HOH   0.0000
+BOND H    O   
+BOND H1   O   
+ANGLE H O H1    ! REQUIRED
+
+PATCH FIRST NONE LAST NONE
+
+RESI K    1.000
+GROUP
+ATOM K    K    1.0000
+PATCH FIRST NONE LAST NONE
+END
+
+read para card
+* ---- 
+* parameters for water 
+* ---- 
+*
+
+BONDS
+HOH  OH2   567.094     0.9690 
+
+ANGLES
+HOH  OH2  HOH    47.353    103.9780 
+
+DIHEDRALS
+
+IMPROPER
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch - 
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+OH2     0.000000  -0.152100     1.768200    
+HOH     0.000000  -0.046000     0.224500    
+K 0.0  -0.000328   2.6580    0.0  -0.000164   2.6580
+
+END
+
+!================================================================
+! Read coordinates
+!================================================================
+read sequ card
+* toy system
+*
+5
+WAT WAT WAT WAT K
+
+generate WAT WAT WAT WAT K
+
+read coor pdb
+!* rigor conformer
+!*
+ATOM      1  O   WAT     1       0.000   0.000   0.117  1.00  0.00      WAT 
+ATOM      2  H   WAT     1       0.000   0.763  -0.468  1.00  0.00      WAT 
+ATOM      3  H1  WAT     1       0.000  -0.763  -0.468  1.00  0.00      WAT 
+ATOM      4  O   WAT     2       1.500   1.500   1.617  1.00  0.00      WAT 
+ATOM      5  H   WAT     2       1.500   2.263   1.032  1.00  0.00      WAT 
+ATOM      6  H1  WAT     2       1.500   0.737   1.032  1.00  0.00      WAT
+ATOM      7  O   WAT     3       3.000   3.000   3.117  1.00  0.00      WAT 
+ATOM      8  H   WAT     3       3.000   3.763   2.532  1.00  0.00      WAT 
+ATOM      9  H1  WAT     3       3.000   2.237   2.532  1.00  0.00      WAT
+ATOM     10  O   WAT     4       4.500   4.500   4.617  1.00  0.00      WAT 
+ATOM     11  H   WAT     4       4.500   5.263   4.032  1.00  0.00      WAT 
+ATOM     12  H1  WAT     4       4.500   3.737   4.032  1.00  0.00      WAT
+ATOM     13  K   K       5      -1.352  -2.842  -1.416  1.00  0.00        K
+END
+
+
+!================================================================
+! fMDCM
+!================================================================
+open unit 10 card read name @0/fmdcm_water.dcm
+
+! WITH FLUX
+DCM FLUX IUDCM 10 TSHIFT 
+close unit 10
+
+ENERGY
+
+set refener 17.13667 
+
+calc diff = abs(?ener - @refener)
+if diff gt 0.001 then
+   echo "Test failed, incorrect total energy"
+   stop
+endif
+
+coor force comp
+
+TEST FIRST
+
+echo "TEST SUCCESSFUL"
+

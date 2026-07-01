@@ -1,0 +1,21 @@
+* convert charmm psf to xplor psf format which used by NAMD program
+* Author: Andrei A. Golosov
+* usage: charmm <namdpsf.inp infile=... outfile=...  
+*
+
+open unit 1 read form name "~/toppar.dir/top_all27_prot_na.rtf"
+read rtf card unit 1
+
+open unit 1 read form name "~/toppar.dir/par_all27_prot_na.prm"
+read param card unit 1
+
+if @?infile eq 0 stop
+if @?outfile eq 0 stop
+
+open unit 2 read form name @infile.psf 
+read psf card unit 2
+
+open unit 2 write form name @outfile.xplor.psf
+write psf card unit 2 xplor
+
+stop

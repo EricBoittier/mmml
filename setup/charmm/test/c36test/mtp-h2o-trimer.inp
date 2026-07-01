@@ -1,0 +1,166 @@
+* CHARMM c36a4r1 testcase: mtp-h2o-trimer.inp
+* Test input file for atomic multipole module MTP
+* Test system: water trimer
+*
+
+bomlev -1
+
+! set working directory
+stream datadir.def
+
+! set temperature for molecular dynamics
+SET temp 50
+
+read rtf card unit 5
+* rtf for water
+*
+   22     0
+MASS     4 HT     1.00800 H ! TIPS3P WATER HYDROGEN
+MASS    75 OT    15.99940 O ! TIPS3P WATER OXYGEN
+
+
+RESI TIP3         0.000 ! tip3p water model, generate using noangle nodihedral
+GROUP   
+ATOM OH2  OT     -0.280016  ! charges to be combined with MTP parameters
+ATOM H1   HT      0.140008
+ATOM H2   HT      0.140008
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2   
+PATCHING FIRS NONE LAST NONE 
+
+END
+
+read para card unit 5
+* water parameters
+*
+BOND
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+HT   HT      0.000     1.5139 ! ALLOW WAT
+
+ANGLE
+HT   OT   HT     50.000   104.5200 ! ALLOW WAT
+
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 900.0 ctofnb 890.0 ctonnb 880.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+END
+
+
+READ SEQUENCE  CARDS
+* sequence 
+*
+    3
+TIP3 TIP3 TIP3
+
+GENERATE MAIN SETUP NODIHEDRAL
+
+
+READ COOR CARD UNIT 5
+* INITIAL COORDINATES FOR water trimer
+*
+    9
+    1    1 TIP3 OH2   -1.06408  -0.88182  -0.13171 MAIN 1     15.99940
+    2    1 TIP3 H1    -1.54227  -1.41261   0.51344 MAIN 1      1.00800
+    3    1 TIP3 H2    -1.44872  -1.15382  -0.97327 MAIN 1      1.00800
+    4    2 TIP3 OH2    1.39851  -0.29971   0.04455 MAIN 2     15.99940
+    5    2 TIP3 H1     0.41901  -0.47039   0.00743 MAIN 2      1.00800
+    6    2 TIP3 H2     1.78863  -1.17950   0.06576 MAIN 2      1.00800
+    7    3 TIP3 OH2   -0.68951   1.78640   0.19283 MAIN 3     15.99940
+    8    3 TIP3 H1    -0.65262   0.82981   0.10479 MAIN 3      1.00800
+    9    3 TIP3 H2     0.23142   2.04269   0.24108 MAIN 3      1.00800
+   
+   
+!============define nonbonded parameters====================
+ENERGY CUTNB 800.0 CTONNB 500.0 CTOFNB 700.0 - 
+	VSWITCH SHIFT CDIE EPS 1.0
+	
+!============initialize MTP module====================
+! read MTP input file for 3 waters
+
+open unit 40 card read name @0/mtp-h2o-trimer.dma
+
+MTP MTPUNIT 40
+
+close unit 40
+
+! check energy with MTP
+energy
+
+! short minimization
+MINI SD NSTEP 20 NPRINT 10 
+
+OPEN UNIT 1 WRITE CARD NAME @9/mini.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/mini.cor
+WRITE COOR CARD UNIT 1
+
+! run dynamics using SHAKE
+Shake bonh
+
+!=======heating ============================================
+
+OPEN WRITE UNIT 12 FILE NAME @9/heat.dcd
+OPEN UNIT 11 WRITe FORM NAME @9/heat.res
+
+DYNA STRT VERL NSTE 5000 TIME 0.001 inbfrq 5  -
+        IPRFRQ 500 IHTFRQ 5 IEQFRQ 10 IHBFRQ 0 -
+        IUNREA -1 IUNWRI 11 IUNCRD 12 IUNVEL -1 -
+        NPRINT 10 NSAVC 2500 -
+        ISEED 314158 314158 314158 314158 -
+        FIRSTT 0.0 FINALT @temp TEMINC 1.0 -
+        IASORS 1 IASVEL 1 ICHECW 10 
+
+OPEN UNIT 1 WRITE CARD NAME @9/co2.heat.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/co2.heat.cor
+WRITE COOR CARD UNIT 1
+
+!============equilibration===================
+
+OPEN UNIT 10 READ FORM NAME @9/heat.res
+OPEN UNIT 11 WRITE FORM NAME @9/eq.res
+OPEN WRITE UNIT 12 FILE NAME @9/eq.dcd
+
+DYNA RESTRT VERL NSTE 5000 TIME 0.001 inbfrq 5  -
+	IPRFRQ 500 IEQFRQ 500 IHBFRQ 0  -
+	IUNREA 10 IUNWRI 11 IUNCRD 12 IUNVEL -1 -
+        NPRINT 10 NSAVC 2500 -
+        ISEED 314158 314158 314158 314158 -
+	FIRSTT @temp FINALT @temp -
+        IASORS 1 IASVEL 1 ISCVEL 0 -
+        ICHECW 1 TWINDL -10.0 TWINDH 10.0 -
+
+OPEN UNIT 1 WRITE CARD NAME @9/eq.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/eq.cor
+WRITE COOR CARD UNIT 1
+
+!============free dynamics NVE===================
+
+OPEN UNIT 10 READ FORM NAME @9/eq.res
+OPEN UNIT 11 WRITE FORM NAME @9/dyn.res
+OPEN WRITE UNIT 12 FILE NAME @9/dyn.dcd
+
+DYNA RESTRT LEAP NSTE 50000 TIME 0.001 inbfrq 5  -
+	IPRFRQ 5000 IEQFRQ 0 IHBFRQ 0 -
+	IUNREA 10 IUNWRI 11 IUNCRD 12 IUNVEL -1 -
+        NPRINT 10 NSAVC 2500 -
+        ISEED 314158 314158 314158 314158 -
+	FIRSTT @temp FINALT @temp -
+	IASORS 0 IASVEL 0 ISCVEL 1 ICHECW 10
+
+OPEN UNIT 1 WRITE CARD NAME @9/dyn.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/dyn.cor
+WRITE COOR CARD UNIT 1
+
+STOP
+

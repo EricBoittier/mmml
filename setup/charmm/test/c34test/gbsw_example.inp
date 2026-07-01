@@ -1,0 +1,1290 @@
+* The function of this test is to evaluate the energy and first derivitives
+* of the new generalized Born with a smooth switching function (GBSW)
+* module in CHARMM. 
+* This test case is written to provide an example of how a test 
+* case might be structured to enable the relatively automated
+* evaluation  of test case output.
+* The original test case was written by Wonpil Im (6/03)
+*
+! We would like each "section" of the test labeled with the following
+! syntax:
+! Setup sections:
+! to initiate a setup section: label BEGINSETUP=<int>
+! to end a setup section:      label ENDSETUP=<int>
+!
+! Test sections:
+! to initiate a test section: label BEGINTEST=<int>
+! to end a test section:      label ENDTEST=<int>
+!
+! where <int> ennumerates the section number (0-n) for SETUP and
+! (0-n) for TEST
+!
+! Within each section one or more aspects of functionality are evaluated
+! on a pass/fail basis. If the section as a whole passes then
+! this is denoted with the command:
+! echo TEST=<int> PASSED
+!
+! If it fails, you can attach descriptors to the failure message and indicate this
+! in the resulting output as:
+! echo TEST=<int> FAILED @FailureMessage
+!
+! If, for some reason, the section is by-passed, say because the particular functionality
+! does not run in parallel, then the output diagnostic for that section should be:
+! echo TEST=<int> SKIPPED
+!
+
+
+! Test to ensure the functionality exists in this build of CHARMM.
+! Use exctly this format so that it can be parsed by test facilities.
+!if ?gbsw .ne. 1 then
+! echo GBSW functionality absent: Test NOT performed
+! stop
+!endif
+
+! In datadir.def we define a variable pnode that should be
+! used to "protect" all calls to prnlev
+! additionally, the variable tol is defined to control
+! differences in computed and reference variables.
+set tol = 1.0e-4
+stream datadir.def
+
+! Format for prnlev shown here
+prnlev 5 @pnode
+
+label BEGINSETUP=0 ! This demarks the beginning of the setup region
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! In general use standard topology/parameter files, or include these
+! directly in the input script to eliminate an abundance of files in
+! the data directory. Test cases should be as self-contained as possible
+
+! read parameter and topology files
+open unit 10 read form name @0top_all22_prot.inp
+read rtf unit 10 card
+close unit 10
+
+open unit 10 read form name @0par_all22_prot.inp
+read param unit 10 card
+close unit 10
+
+! An example of including files in input script is
+! given here for the system sequence and coordinates
+! read sequence and coordinates
+
+read sequ card
+* Sequence of 1fsv
+*
+28
+GLN GLN TYR THR ALA LYS ILE LYS GLY ARG 
+THR PHE ARG ASN GLU LYS GLU LEU ARG ASP 
+PHE ILE GLU LYS PHE LYS GLY ARG
+generate PROT setup warn
+!close unit 10
+
+set return = fromcoor
+goto coordinates
+label fromcoor
+
+coor stat
+coor orient
+coor stat
+
+! Here we will key on the value of xmax from stat to check that
+! our setup was successful
+calculate diff = abs ( ?xmax - 16.085464 )
+if @diff .ge. @tol then
+   echo SETUP=0 FAILED
+   stop
+else
+   echo SETUP=0 PASSED
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDSETUP=0 !This demarks the end of the setup portion
+
+! Here we loop through the test once for each major surface representation
+set molsurf = false
+label molsurf
+goto expected_values  ! Load expaced values of computed variables
+label BEGINTEST=0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test single-point energy calculation and reset:
+
+set TEST=0 = PASSED
+set FAILED =
+
+format (f16.6)
+! Make sure energy w/o GBSW works
+NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+energy
+calculate diff = abs ( ?ener - @e0 )
+if @diff .ge. @tol then
+   set TEST=0 = FAILED
+   set FAILED = @FAILED + nogbswENER
+endif
+
+coor force comp
+coor stat comp
+calculate diff = abs ( ?zmin - @fzmin )
+if @diff .ge. @tol then
+   set TEST=0 = FAILED
+   set FAILED = @FAILED + nogbswFORCE
+endif
+format
+
+set l = 1
+set return = fromradii
+label enerloop
+      prnlev 0 @pnode
+      goto getradii
+      label fromradii
+      prnlev 5 @pnode
+
+      scalar wmain statistics select .not. type H* end
+      define check select (.not type H* ) .and. ( property wmain .eq. 0.0 ) -
+             show end
+      if ?nsel ne 0  then
+         set TEST=0 = FAILED
+         set FAILED = @FAILED + RADII loop @l
+      endif
+
+      
+      if @molsurf eq true then
+      	     GBSW molsurf sgamma 0.03 dgp 1.5 GBenergy
+      else
+            GBSW sw 0.3 sgamma 0.03 dgp 1.5 GBenergy
+      endif
+
+      ! To perform a minimization or dynamics with cutoffs
+
+      NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+      ENERGY
+      
+      gbsw reset
+
+      incr l by 1
+if l le 4 goto enerloop
+
+format (f16.6)
+
+! Check energy of generalized Born term
+calculate diff = abs ( ?gben - @g0 )
+if @diff .ge. @tol then
+   set TEST=0 = FAILED
+   set FAILED = @FAILED + GBEN
+endif
+
+! Check energy of GBSW ASP term
+calculate diff = abs ( ?asp - @sa0 )
+if @diff .ge. @tol then
+   set TEST=0 = FAILED
+   set FAILED = @FAILED + ASP
+endif
+
+! Check force calculaiton by comparing maximum F_y
+coor force comp
+coor stat comp
+calculate diff = abs ( ?ymax - @fymax0 )
+if @diff .ge. @tol then
+   set TEST=0 = FAILED
+   set FAILED = @FAILED + FORCE
+endif
+
+format
+
+if TEST=0 ne PASSED then
+   echo TEST=0 FAILED MOLSURF = @molsurf
+   echo failed components: @failed
+else
+   echo TEST=0 PASSED MOLSURF = @molsurf
+endif
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=0
+
+label BEGINTEST=1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test minimization w/ sd
+! Note we use a relatively small number of steps since
+! different architectures/parallel lead to divergence for
+! large numbers of interations
+
+set TEST=1 = PASSED
+set FAILED =
+set return = fromrad02
+prnlev 0 @pnode
+goto getradii
+label fromrad02
+prnlev 5 @pnode
+
+if @molsurf eq true then
+      GBSW molsurf sgamma 0.03 dgp 1.5 GBenergy
+else
+      GBSW sw 0.3 sgamma 0.03 dgp 1.5 GBenergy
+endif
+
+
+NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+mini sd nstep 20
+energy
+format (f16.6)
+! Check energy of generalized Born term
+calculate diff = abs ( ?ener - @g1 )
+if @diff .ge. @tol then
+   set TEST=1 = FAILED
+   set FAILED = @FAILED + ener
+endif
+
+! Check energy of GBSW ASP term
+calculate diff = abs ( ?asp - @sa1 )
+if @diff .ge. @tol then
+   set TEST=1 = FAILED
+   set FAILED = @FAILED + ASP
+endif
+
+! Check minimization propagation by comparing maximum F_y
+coor stat
+calculate diff = abs ( ?ymax - @ymax1 )
+if @diff .ge. @tol then
+   set TEST=1 = FAILED
+   set FAILED = @FAILED + COOR
+endif
+
+! Check force calculation by comparing minimum F_z
+coor force comp
+coor stat comp
+calculate diff = abs ( ?zmin - @fzmin1 )
+if @diff .ge. @tol then
+   set TEST=1 = FAILED
+   set FAILED = @FAILED + FORCE
+endif
+
+format
+
+gbsw reset
+
+if TEST=1 ne PASSED then
+   echo TEST=1 FAILED MOLSURF = @molsurf
+   echo failed components: @failed
+else
+   echo TEST=1 PASSED MOLSURF = @molsurf
+endif
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=1
+
+! Now test another mm method w/ gbsw
+! Need to read intial coordinates back in to eliminate
+! potential accumulated trajectory differences
+set return = fromc02
+goto coordinates
+label fromc02
+
+coor stat
+coor orient
+coor stat
+
+label BEGINTEST=2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test minimization w/ abnr
+! Note we use a relatively small number of steps since
+! different architectures/parallel lead to divergence for
+! large numbers of interations
+
+set TEST=2 = PASSED
+set FAILED =
+set return = fromrad03
+prnlev 0 @pnode
+goto getradii
+label fromrad03
+prnlev 5 @pnode
+
+if @molsurf eq true then
+      GBSW molsurf sgamma 0.03 dgp 1.5 GBenergy
+else
+      GBSW sw 0.3 sgamma 0.03 dgp 1.5 GBenergy
+endif
+
+NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+mini abnr nstep 20
+energy
+
+format (f16.6)
+! Check energy of generalized Born term
+calculate diff = abs ( ?ener - @g2 )
+if @diff .ge. @tol then
+   set TEST=2 = FAILED
+   set FAILED = @FAILED + ener
+endif
+
+! Check energy of GBSW ASP term
+calculate diff = abs ( ?asp - @sa2 )
+if @diff .ge. @tol then
+   set TEST=2 = FAILED
+   set FAILED = @FAILED + ASP
+endif
+
+! Check minimization propagation by comparing maximum F_y
+coor stat
+calculate diff = abs ( ?ymax - @ymax2 )
+if @diff .ge. @tol then
+   set TEST=2 = FAILED
+   set FAILED = @FAILED + COOR
+endif
+
+! Check force calculation by comparing minimum F_z
+coor force comp
+coor stat comp
+calculate diff = abs ( ?zmin - @fzmin2 )
+if @diff .ge. @tol then
+   set TEST=2 = FAILED
+   set FAILED = @FAILED + FORCE
+endif
+format
+
+if TEST=2 ne PASSED then
+   echo TEST=2 FAILED MOLSURF = @molsurf
+   echo failed components: @failed
+else
+   echo TEST=2 PASSED MOLSURF = @molsurf
+endif
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=2
+
+! Now test another mm method w/ gbsw
+! Need to read intial coordinates back in to eliminate
+! potential accumulated trajectory differences
+set return = fromc03
+goto coordinates
+label fromc03
+
+coor stat
+coor orient
+coor stat
+
+label BEGINTEST=3
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test dynamics
+! Note we use a relatively small number of steps since
+! different architectures/parallel lead to divergence for
+! large numbers of interations
+
+set TEST=3 = PASSED
+set FAILED =
+set return = fromrad04
+prnlev 0 @pnode
+goto getradii
+label fromrad04
+prnlev 5 @pnode
+
+if @molsurf eq true then
+      GBSW molsurf sgamma 0.03 dgp 1.5 GBenergy
+else
+      GBSW sw 0.3 sgamma 0.03 dgp 1.5 GBenergy
+endif
+
+NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+! dynamics, no thermostat, alphas update every step
+
+dynamics vver start timestep 0.001 nstep  50 nprint 25 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq -1
+energy
+
+format (f16.6)
+! Check energy of generalized Born term
+calculate diff = abs ( ?ener - @g3 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + ener
+endif
+
+! Check energy of GBSW ASP term
+calculate diff = abs ( ?asp - @sa3 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + ASP
+endif
+
+! Check minimization propagation by comparing maximum F_y
+coor stat
+calculate diff = abs ( ?ymax - @ymax3 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + COOR
+endif
+
+! Check force calculation by comparing minimum F_z
+coor force comp
+coor stat comp
+calculate diff = abs ( ?zmin - @fzmin3 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + FORCE
+endif
+format
+
+! dynamics, with update every 2 steps, thermostat a MUST!
+GBSW igbfrq 2
+
+dynamics vver start timestep 0.001 nstep  50 nprint 25 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200 -
+        NOSE RSTN TREF 298.0 QREF 10 NCYC 10
+energy
+
+GBSW reset
+format (f16.6)
+! Check energy of generalized Born term
+calculate diff = abs ( ?ener - @g4 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + ener_igb2
+endif
+
+! Check energy of GBSW ASP term
+calculate diff = abs ( ?asp - @sa4 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + ASP_igb2
+endif
+
+! Check minimization propagation by comparing maximum F_y
+coor stat
+calculate diff = abs ( ?ymax - @ymax4 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + COOR_igb2
+endif
+
+! Check force calculation by comparing minimum F_z
+coor force comp
+coor stat comp
+calculate diff = abs ( ?zmin - @fzmin4 )
+if @diff .ge. @tol then
+   set TEST=3 = FAILED
+   set FAILED = @FAILED + FORCE_igb2
+endif
+format
+
+if TEST=3 ne PASSED then
+   echo TEST=3 FAILED MOLSURF = @molsurf
+   echo failed components: @failed
+else
+   echo TEST=3 PASSED MOLSURF = @molsurf
+endif
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=3
+
+! Now test another mm method w/ gbsw
+! Need to read intial coordinates back in to eliminate
+! potential accumulated trajectory differences
+set return = fromc04
+goto coordinates
+label fromc04
+
+coor stat
+coor orient
+coor stat
+
+label BEGINTEST=4
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Test first derivitives
+
+set TEST=4 = PASSED
+set FAILED =
+set return = fromrad05
+prnlev 0 @pnode
+goto getradii
+label fromrad05
+prnlev 5 @pnode
+
+if @molsurf eq true then
+      GBSW molsurf sgamma 0.03 dgp 1.5 GBenergy
+else
+      GBSW sw 0.3 sgamma 0.03 dgp 1.5 GBenergy
+endif
+
+NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+
+energy
+
+! Test the first derivitives against numerical calculations
+! pick sets arbitrary sets of atoms to test
+
+set l = 0
+define atoms select none end
+label getatm
+      set n = 0
+      Let n = ?rand * ?natom
+      Let n = int @n
+      Let n = @n + 1
+      if n gt ?natom set n = ?natom
+      define atoms select bynum @n .or. atoms end
+      incr l by 1
+if l le 20 goto getatm
+
+test first step 1.0e-4 tol 1.0e-4 select atoms end
+calculate diff = abs ( ?nok - ?nsel * 3 )
+
+if diff gt @tol then
+     set TEST=4 = FAILED
+     set failed = @failed + firstd
+endif
+
+if TEST=4 ne PASSED then
+   echo TEST=4 FAILED MOLSURF = @molsurf
+   echo failed components: @failed
+else
+   echo TEST=4 PASSED MOLSURF = @molsurf
+endif
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=4
+
+if @molsurf ne true then
+   set molsurf = true
+   goto molsurf
+endif
+
+label BEGINTEST=5
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Fake test to illustrate section skipping
+bomlev -1
+if ?gbsw gt 0 then
+      echo TEST=5 SKIPPED module doesn't have functionality
+      goto ENDTEST=5
+endif
+! Following would be the test of the specific functionality
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label ENDTEST=5
+
+stop
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!SUBROUTINES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! This portion of the script provides anticiapted outcomes
+! for each of the two trips through the gbsw tests.
+
+label expected_values
+      if @molsurf ne true then
+         set e0 = -692.087093
+         set fzmin = -24.728646
+         
+         set g0 = -1059.587156
+         set sa0 = 86.390861
+         set fymax0 = 42.033084
+         
+         set g1 = -1726.366077
+         set sa1 = 86.089460
+         set ymax1 = 13.277485
+         set fzmin1 = -4.126529
+         
+         set g2 = -1751.771847
+         set sa2 = 86.486868
+         set ymax2 = 13.274666
+         set fzmin2 = -3.376262
+         
+         set g3 = -1472.582808
+         set sa3 = 87.679364
+         set ymax3 = 12.923893
+         set fzmin3 = -57.447454
+         
+         set g4 = -1448.699392
+         set sa4 = 90.280355
+         set ymax4 = 12.960747
+         set fzmin4 = -71.394797
+      else         
+         set e0 = -1665.283388
+         set fzmin = -23.250008
+         
+         set g0 = -929.614739
+         set sa0 = 87.166824
+         set fymax0 = 40.946129
+         
+         set g1 = -1596.843915
+         set sa1 = 86.647700
+         set ymax1 = 13.274562
+         set fzmin1 = -4.421781
+         
+         set g2 = -1622.698855
+         set sa2 = 87.222384
+         set ymax2 = 13.261078
+         set fzmin2 = -10.617176
+         
+         set g3 = -1342.822735
+         set sa3 = 88.730668
+         set ymax3 = 12.942623
+         set fzmin3 = -57.803650
+         
+         set g4 = -1319.591884
+         set sa4 = 91.452586
+         set ymax4 = 13.116495
+         set fzmin4 = -70.419132
+      endif
+goto BEGINTEST=0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label coordinates
+
+read coor card ! unit 5 ! since F95/F2003 no longer supports rewinding standard input
+* X-RAY STRUCTURE OF SOLUTE SYSTEM 1FSV2 SOLVATED IN A OCTA VOLUME CONSTRUCTED
+* FROM A CUBE OF EDGELENGTH 63.1166 A. VOLUME CONTAINS 7062 WATER MOLECULES.
+* IF VOLUME SHAPE IS CUBIC, USE DIMENSIONS 63.1166.
+* IF VOLUME SHAPE IS OCTAHEDRAL USE BASIC DIMENSIONS OF 63.1166 X 63.1166 X 63.1
+* A TETRAHEDRAL ANGLE WITH OCTAHEDRAL SYMMETRY FOR CRYSTAL FACILITY
+* OR USE IMAGE FACILITY WITH DIMENSIONS JUST NOTED.
+* CRYSTAL FACILITY LOGICAL FLAG = TRUE, USE:
+* SET THETA = 109.4712206344907
+* CRYSTAL DEFINE OCTA 54.6606 54.6606 54.6606 109.4712206344907 109.471220634490
+*  DATE:    10/20/ 2     10:33:23      CREATED BY USER: sandeep
+*
+  504
+    1    1 GLN  N    -10.68982   4.72028  -9.51437 1FSV 1      0.00000
+    2    1 GLN  HT1  -10.75117   3.90929 -10.15910 1FSV 1      0.00000
+    3    1 GLN  HT2  -11.55400   5.29298  -9.57214 1FSV 1      0.00000
+    4    1 GLN  HT3  -10.58576   4.38902  -8.52343 1FSV 1      0.00000
+    5    1 GLN  CA    -9.52110   5.56249  -9.84066 1FSV 1      0.00000
+    6    1 GLN  HA    -8.80263   4.94728 -10.36258 1FSV 1      0.00000
+    7    1 GLN  CB    -9.93217   6.80183 -10.67331 1FSV 1      0.00000
+    8    1 GLN  HB1  -10.66271   7.42812 -10.11219 1FSV 1      0.00000
+    9    1 GLN  HB2   -9.01932   7.41886 -10.83933 1FSV 1      0.00000
+   10    1 GLN  CG   -10.54890   6.44185 -12.03377 1FSV 1      0.00000
+   11    1 GLN  HG1   -9.85737   5.79469 -12.61432 1FSV 1      0.00000
+   12    1 GLN  HG2  -11.50798   5.89872 -11.89688 1FSV 1      0.00000
+   13    1 GLN  CD   -10.82456   7.73741 -12.80443 1FSV 1      0.00000
+   14    1 GLN  OE1  -11.98434   8.14331 -12.93946 1FSV 1      0.00000
+   15    1 GLN  NE2   -9.73115   8.39389 -13.29972 1FSV 1      0.00000
+   16    1 GLN  HE21  -9.85024   9.24839 -13.80655 1FSV 1      0.00000
+   17    1 GLN  HE22  -8.81191   8.02424 -13.16482 1FSV 1      0.00000
+   18    1 GLN  C     -8.95998   6.00361  -8.53651 1FSV 1      0.00000
+   19    1 GLN  O     -9.26278   7.09839  -8.06680 1FSV 1      0.00000
+   20    2 GLN  N     -8.18670   5.11241  -7.88115 1FSV 2      0.00000
+   21    2 GLN  HN    -7.91951   4.23633  -8.27358 1FSV 2      0.00000
+   22    2 GLN  CA    -7.63621   5.38225  -6.58779 1FSV 2      0.00000
+   23    2 GLN  HA    -7.74132   6.43453  -6.35851 1FSV 2      0.00000
+   24    2 GLN  CB    -8.32412   4.59418  -5.44910 1FSV 2      0.00000
+   25    2 GLN  HB1   -8.49447   3.53693  -5.73643 1FSV 2      0.00000
+   26    2 GLN  HB2   -7.63275   4.61037  -4.57714 1FSV 2      0.00000
+   27    2 GLN  CG    -9.64028   5.24115  -4.93704 1FSV 2      0.00000
+   28    2 GLN  HG1   -9.98808   4.70542  -4.02978 1FSV 2      0.00000
+   29    2 GLN  HG2   -9.41525   6.29014  -4.64639 1FSV 2      0.00000
+   30    2 GLN  CD   -10.80054   5.20032  -5.94170 1FSV 2      0.00000
+   31    2 GLN  OE1  -10.91283   4.27112  -6.75280 1FSV 2      0.00000
+   32    2 GLN  NE2  -11.69095   6.23846  -5.86895 1FSV 2      0.00000
+   33    2 GLN  HE21 -12.49196   6.26402  -6.46695 1FSV 2      0.00000
+   34    2 GLN  HE22 -11.55303   6.97379  -5.20453 1FSV 2      0.00000
+   35    2 GLN  C     -6.15749   5.14080  -6.69795 1FSV 2      0.00000
+   36    2 GLN  O     -5.44054   6.01989  -7.16844 1FSV 2      0.00000
+   37    3 TYR  N     -5.65368   3.97293  -6.22407 1FSV 3      0.00000
+   38    3 TYR  HN    -6.23152   3.22951  -5.89382 1FSV 3      0.00000
+   39    3 TYR  CA    -4.23399   3.74233  -6.07576 1FSV 3      0.00000
+   40    3 TYR  HA    -3.68533   4.53741  -6.56572 1FSV 3      0.00000
+   41    3 TYR  CB    -3.80335   3.64997  -4.58858 1FSV 3      0.00000
+   42    3 TYR  HB1   -4.63965   3.30473  -3.94610 1FSV 3      0.00000
+   43    3 TYR  HB2   -2.94419   2.95746  -4.45271 1FSV 3      0.00000
+   44    3 TYR  CG    -3.36532   5.01962  -4.14509 1FSV 3      0.00000
+   45    3 TYR  CD1   -4.27055   6.08603  -3.98745 1FSV 3      0.00000
+   46    3 TYR  HD1   -5.33039   5.91800  -4.09609 1FSV 3      0.00000
+   47    3 TYR  CE1   -3.80749   7.38484  -3.74026 1FSV 3      0.00000
+   48    3 TYR  HE1   -4.51685   8.19510  -3.65651 1FSV 3      0.00000
+   49    3 TYR  CZ    -2.42793   7.62651  -3.65228 1FSV 3      0.00000
+   50    3 TYR  OH    -1.90928   8.92769  -3.48159 1FSV 3      0.00000
+   51    3 TYR  HH    -2.54779   9.47904  -3.02235 1FSV 3      0.00000
+   52    3 TYR  CD2   -1.99378   5.27321  -4.01010 1FSV 3      0.00000
+   53    3 TYR  HD2   -1.29097   4.46827  -4.15672 1FSV 3      0.00000
+   54    3 TYR  CE2   -1.52424   6.56462  -3.76750 1FSV 3      0.00000
+   55    3 TYR  HE2   -0.45995   6.74241  -3.70322 1FSV 3      0.00000
+   56    3 TYR  C     -3.84881   2.48150  -6.78756 1FSV 3      0.00000
+   57    3 TYR  O     -4.01432   1.38595  -6.26900 1FSV 3      0.00000
+   58    4 THR  N     -3.28120   2.59122  -8.00201 1FSV 4      0.00000
+   59    4 THR  HN    -3.13650   3.47267  -8.44445 1FSV 4      0.00000
+   60    4 THR  CA    -2.98418   1.44486  -8.82717 1FSV 4      0.00000
+   61    4 THR  HA    -3.55620   0.59847  -8.47042 1FSV 4      0.00000
+   62    4 THR  CB    -3.36727   1.69343 -10.27859 1FSV 4      0.00000
+   63    4 THR  HB    -2.63982   2.38637 -10.75628 1FSV 4      0.00000
+   64    4 THR  OG1   -4.64136   2.33130 -10.31677 1FSV 4      0.00000
+   65    4 THR  HG1   -5.23383   1.77697  -9.80329 1FSV 4      0.00000
+   66    4 THR  CG2   -3.43236   0.38562 -11.10480 1FSV 4      0.00000
+   67    4 THR  HG21  -3.80395   0.59640 -12.13057 1FSV 4      0.00000
+   68    4 THR  HG22  -2.42951  -0.07614 -11.20528 1FSV 4      0.00000
+   69    4 THR  HG23  -4.11278  -0.35051 -10.62777 1FSV 4      0.00000
+   70    4 THR  C     -1.51714   1.11156  -8.67789 1FSV 4      0.00000
+   71    4 THR  O     -1.04457   0.12540  -9.23920 1FSV 4      0.00000
+   72    5 ALA  N     -0.74442   1.93345  -7.92200 1FSV 5      0.00000
+   73    5 ALA  HN    -1.14548   2.70560  -7.43820 1FSV 5      0.00000
+   74    5 ALA  CA     0.68366   1.75430  -7.76211 1FSV 5      0.00000
+   75    5 ALA  HA     1.12795   1.79247  -8.74696 1FSV 5      0.00000
+   76    5 ALA  CB     1.32728   2.83928  -6.87197 1FSV 5      0.00000
+   77    5 ALA  HB1    1.16807   3.84269  -7.32021 1FSV 5      0.00000
+   78    5 ALA  HB2    0.88303   2.83797  -5.85331 1FSV 5      0.00000
+   79    5 ALA  HB3    2.42240   2.67353  -6.77981 1FSV 5      0.00000
+   80    5 ALA  C      0.98281   0.42374  -7.12464 1FSV 5      0.00000
+   81    5 ALA  O      0.73043   0.23164  -5.93631 1FSV 5      0.00000
+   82    6 LYS  N      1.54660  -0.51783  -7.92296 1FSV 6      0.00000
+   83    6 LYS  HN     1.78335  -0.32056  -8.86952 1FSV 6      0.00000
+   84    6 LYS  CA     1.79953  -1.86454  -7.49235 1FSV 6      0.00000
+   85    6 LYS  HA     1.17100  -2.10302  -6.65156 1FSV 6      0.00000
+   86    6 LYS  CB     1.63643  -2.96020  -8.58158 1FSV 6      0.00000
+   87    6 LYS  HB1    2.18059  -2.65597  -9.49880 1FSV 6      0.00000
+   88    6 LYS  HB2    2.09134  -3.90551  -8.20491 1FSV 6      0.00000
+   89    6 LYS  CG     0.16264  -3.26079  -8.89845 1FSV 6      0.00000
+   90    6 LYS  HG1   -0.34756  -3.39936  -7.91770 1FSV 6      0.00000
+   91    6 LYS  HG2   -0.30710  -2.38497  -9.39375 1FSV 6      0.00000
+   92    6 LYS  CD    -0.10679  -4.53695  -9.72329 1FSV 6      0.00000
+   93    6 LYS  HD1    0.51705  -5.37326  -9.34146 1FSV 6      0.00000
+   94    6 LYS  HD2   -1.17009  -4.82121  -9.54043 1FSV 6      0.00000
+   95    6 LYS  CE     0.04205  -4.38965 -11.24916 1FSV 6      0.00000
+   96    6 LYS  HE1   -0.32786  -5.30937 -11.75146 1FSV 6      0.00000
+   97    6 LYS  HE2   -0.54514  -3.52029 -11.61237 1FSV 6      0.00000
+   98    6 LYS  NZ     1.44773  -4.19646 -11.67592 1FSV 6      0.00000
+   99    6 LYS  HZ1    1.48466  -4.11404 -12.71229 1FSV 6      0.00000
+  100    6 LYS  HZ2    1.82388  -3.32667 -11.24851 1FSV 6      0.00000
+  101    6 LYS  HZ3    2.02298  -5.00861 -11.37482 1FSV 6      0.00000
+  102    6 LYS  C      3.21378  -1.83557  -7.05622 1FSV 6      0.00000
+  103    6 LYS  O      4.12090  -2.03261  -7.86006 1FSV 6      0.00000
+  104    7 ILE  N      3.39203  -1.57402  -5.74469 1FSV 7      0.00000
+  105    7 ILE  HN     2.59580  -1.41445  -5.16632 1FSV 7      0.00000
+  106    7 ILE  CA     4.64920  -1.37741  -5.08001 1FSV 7      0.00000
+  107    7 ILE  HA     5.23508  -0.72070  -5.70937 1FSV 7      0.00000
+  108    7 ILE  CB     4.47590  -0.68198  -3.71690 1FSV 7      0.00000
+  109    7 ILE  HB     4.06121   0.32887  -3.95447 1FSV 7      0.00000
+  110    7 ILE  CG2    3.42071  -1.35411  -2.80094 1FSV 7      0.00000
+  111    7 ILE  HG21   3.00864  -0.60743  -2.08963 1FSV 7      0.00000
+  112    7 ILE  HG22   2.57930  -1.78886  -3.37068 1FSV 7      0.00000
+  113    7 ILE  HG23   3.88181  -2.15907  -2.19539 1FSV 7      0.00000
+  114    7 ILE  CG1    5.82308  -0.44046  -2.99063 1FSV 7      0.00000
+  115    7 ILE  HG11   6.32284  -1.41046  -2.78116 1FSV 7      0.00000
+  116    7 ILE  HG12   6.48607   0.14281  -3.66771 1FSV 7      0.00000
+  117    7 ILE  CD     5.67086   0.32018  -1.66911 1FSV 7      0.00000
+  118    7 ILE  HD1    6.67117   0.54340  -1.23967 1FSV 7      0.00000
+  119    7 ILE  HD2    5.13824   1.28131  -1.83264 1FSV 7      0.00000
+  120    7 ILE  HD3    5.10458  -0.27819  -0.92534 1FSV 7      0.00000
+  121    7 ILE  C      5.34947  -2.70954  -5.04998 1FSV 7      0.00000
+  122    7 ILE  O      6.15738  -3.01367  -5.92418 1FSV 7      0.00000
+  123    8 LYS  N      5.03820  -3.55092  -4.04905 1FSV 8      0.00000
+  124    8 LYS  HN     4.37169  -3.28687  -3.35903 1FSV 8      0.00000
+  125    8 LYS  CA     5.62781  -4.84430  -3.89199 1FSV 8      0.00000
+  126    8 LYS  HA     6.66289  -4.78851  -4.19983 1FSV 8      0.00000
+  127    8 LYS  CB     5.52962  -5.33527  -2.43210 1FSV 8      0.00000
+  128    8 LYS  HB1    5.96733  -4.54331  -1.78414 1FSV 8      0.00000
+  129    8 LYS  HB2    4.45903  -5.45235  -2.16355 1FSV 8      0.00000
+  130    8 LYS  CG     6.26726  -6.64390  -2.10981 1FSV 8      0.00000
+  131    8 LYS  HG1    6.05745  -6.90148  -1.04678 1FSV 8      0.00000
+  132    8 LYS  HG2    5.86984  -7.46744  -2.74191 1FSV 8      0.00000
+  133    8 LYS  CD     7.78943  -6.54643  -2.29178 1FSV 8      0.00000
+  134    8 LYS  HD1    8.01757  -6.36830  -3.36629 1FSV 8      0.00000
+  135    8 LYS  HD2    8.15188  -5.66923  -1.70972 1FSV 8      0.00000
+  136    8 LYS  CE     8.52092  -7.81255  -1.82275 1FSV 8      0.00000
+  137    8 LYS  HE1    8.29166  -8.02617  -0.75835 1FSV 8      0.00000
+  138    8 LYS  HE2    8.21603  -8.68366  -2.44042 1FSV 8      0.00000
+  139    8 LYS  NZ     9.99203  -7.67091  -1.94504 1FSV 8      0.00000
+  140    8 LYS  HZ1   10.44833  -8.54824  -1.62173 1FSV 8      0.00000
+  141    8 LYS  HZ2   10.24602  -7.50063  -2.93921 1FSV 8      0.00000
+  142    8 LYS  HZ3   10.32247  -6.87721  -1.36076 1FSV 8      0.00000
+  143    8 LYS  C      4.88265  -5.76834  -4.80564 1FSV 8      0.00000
+  144    8 LYS  O      5.49449  -6.59487  -5.47707 1FSV 8      0.00000
+  145    9 GLY  N      3.53436  -5.66317  -4.84950 1FSV 9      0.00000
+  146    9 GLY  HN     3.00932  -5.05871  -4.25844 1FSV 9      0.00000
+  147    9 GLY  CA     2.79326  -6.32050  -5.88846 1FSV 9      0.00000
+  148    9 GLY  HA1    3.05368  -7.37092  -5.89246 1FSV 9      0.00000
+  149    9 GLY  HA2    2.98915  -5.80720  -6.81939 1FSV 9      0.00000
+  150    9 GLY  C      1.34898  -6.18514  -5.54327 1FSV 9      0.00000
+  151    9 GLY  O      0.68618  -7.20559  -5.37087 1FSV 9      0.00000
+  152   10 ARG  N      0.82080  -4.95669  -5.32876 1FSV 10     0.00000
+  153   10 ARG  HN     1.28631  -4.09219  -5.50216 1FSV 10     0.00000
+  154   10 ARG  CA    -0.46788  -4.84856  -4.69273 1FSV 10     0.00000
+  155   10 ARG  HA    -1.11058  -5.64099  -5.05362 1FSV 10     0.00000
+  156   10 ARG  CB    -0.31493  -4.95147  -3.15929 1FSV 10     0.00000
+  157   10 ARG  HB1    0.32119  -5.84197  -2.95257 1FSV 10     0.00000
+  158   10 ARG  HB2    0.25101  -4.07484  -2.78302 1FSV 10     0.00000
+  159   10 ARG  CG    -1.61039  -5.12111  -2.35377 1FSV 10     0.00000
+  160   10 ARG  HG1   -1.67954  -4.25409  -1.65968 1FSV 10     0.00000
+  161   10 ARG  HG2   -2.49990  -5.06504  -3.01585 1FSV 10     0.00000
+  162   10 ARG  CD    -1.61697  -6.39697  -1.48897 1FSV 10     0.00000
+  163   10 ARG  HD1   -0.59382  -6.65116  -1.14345 1FSV 10     0.00000
+  164   10 ARG  HD2   -2.24892  -6.25173  -0.58668 1FSV 10     0.00000
+  165   10 ARG  NE    -2.14724  -7.56586  -2.27706 1FSV 10     0.00000
+  166   10 ARG  HE    -1.46625  -8.17829  -2.68867 1FSV 10     0.00000
+  167   10 ARG  CZ    -3.49411  -7.84052  -2.36816 1FSV 10     0.00000
+  168   10 ARG  NH1   -4.41513  -6.97624  -1.82661 1FSV 10     0.00000
+  169   10 ARG  HH11  -5.40045  -7.14976  -1.87828 1FSV 10     0.00000
+  170   10 ARG  HH12  -4.12975  -6.12136  -1.38711 1FSV 10     0.00000
+  171   10 ARG  NH2   -3.91829  -8.98028  -3.00535 1FSV 10     0.00000
+  172   10 ARG  HH21  -4.89017  -9.21125  -3.09111 1FSV 10     0.00000
+  173   10 ARG  HH22  -3.26788  -9.62628  -3.41271 1FSV 10     0.00000
+  174   10 ARG  C     -1.06743  -3.53481  -5.09714 1FSV 10     0.00000
+  175   10 ARG  O     -0.40018  -2.51695  -4.95959 1FSV 10     0.00000
+  176   11 THR  N     -2.30553  -3.51969  -5.65418 1FSV 11     0.00000
+  177   11 THR  HN    -2.83679  -4.34577  -5.82514 1FSV 11     0.00000
+  178   11 THR  CA    -3.04128  -2.30957  -5.94707 1FSV 11     0.00000
+  179   11 THR  HA    -2.35073  -1.50975  -6.18353 1FSV 11     0.00000
+  180   11 THR  CB    -4.02422  -2.52499  -7.09021 1FSV 11     0.00000
+  181   11 THR  HB    -4.79467  -1.72101  -7.10257 1FSV 11     0.00000
+  182   11 THR  OG1   -4.66628  -3.79465  -6.97370 1FSV 11     0.00000
+  183   11 THR  HG1   -5.23528  -3.72432  -6.20010 1FSV 11     0.00000
+  184   11 THR  CG2   -3.25943  -2.48741  -8.42590 1FSV 11     0.00000
+  185   11 THR  HG21  -3.96653  -2.53766  -9.28131 1FSV 11     0.00000
+  186   11 THR  HG22  -2.67710  -1.55055  -8.50863 1FSV 11     0.00000
+  187   11 THR  HG23  -2.56074  -3.34441  -8.49987 1FSV 11     0.00000
+  188   11 THR  C     -3.80768  -1.95052  -4.69320 1FSV 11     0.00000
+  189   11 THR  O     -4.41958  -2.82788  -4.08361 1FSV 11     0.00000
+  190   12 PHE  N     -3.76395  -0.66568  -4.27035 1FSV 12     0.00000
+  191   12 PHE  HN    -3.36655   0.05949  -4.83121 1FSV 12     0.00000
+  192   12 PHE  CA    -4.39556  -0.21496  -3.05123 1FSV 12     0.00000
+  193   12 PHE  HA    -4.65291  -1.07610  -2.44726 1FSV 12     0.00000
+  194   12 PHE  CB    -3.49067   0.71349  -2.21052 1FSV 12     0.00000
+  195   12 PHE  HB1   -3.21978   1.63756  -2.75783 1FSV 12     0.00000
+  196   12 PHE  HB2   -3.96372   0.99658  -1.24845 1FSV 12     0.00000
+  197   12 PHE  CG    -2.24511  -0.06996  -1.92284 1FSV 12     0.00000
+  198   12 PHE  CD1   -1.14321   0.01387  -2.78761 1FSV 12     0.00000
+  199   12 PHE  HD1   -1.16229   0.69379  -3.62745 1FSV 12     0.00000
+  200   12 PHE  CE1   -0.03640  -0.81327  -2.60349 1FSV 12     0.00000
+  201   12 PHE  HE1    0.77983  -0.73795  -3.30153 1FSV 12     0.00000
+  202   12 PHE  CZ    -0.00478  -1.72407  -1.54592 1FSV 12     0.00000
+  203   12 PHE  HZ     0.85357  -2.36351  -1.41398 1FSV 12     0.00000
+  204   12 PHE  CD2   -2.21870  -1.00644  -0.87716 1FSV 12     0.00000
+  205   12 PHE  HD2   -3.07718  -1.14035  -0.23831 1FSV 12     0.00000
+  206   12 PHE  CE2   -1.10468  -1.82385  -0.68718 1FSV 12     0.00000
+  207   12 PHE  HE2   -1.11696  -2.54646   0.11180 1FSV 12     0.00000
+  208   12 PHE  C     -5.66803   0.47947  -3.40052 1FSV 12     0.00000
+  209   12 PHE  O     -5.97992   0.70200  -4.56635 1FSV 12     0.00000
+  210   13 ARG  N     -6.43398   0.89337  -2.37671 1FSV 13     0.00000
+  211   13 ARG  HN    -6.20638   0.70614  -1.42079 1FSV 13     0.00000
+  212   13 ARG  CA    -7.72210   1.49226  -2.59498 1FSV 13     0.00000
+  213   13 ARG  HA    -8.02158   1.40173  -3.63044 1FSV 13     0.00000
+  214   13 ARG  CB    -8.83256   0.90267  -1.69945 1FSV 13     0.00000
+  215   13 ARG  HB1   -8.59646   1.11596  -0.63287 1FSV 13     0.00000
+  216   13 ARG  HB2   -9.81042   1.37640  -1.93494 1FSV 13     0.00000
+  217   13 ARG  CG    -8.95229  -0.61817  -1.86474 1FSV 13     0.00000
+  218   13 ARG  HG1   -9.33810  -0.85503  -2.87853 1FSV 13     0.00000
+  219   13 ARG  HG2   -7.92469  -1.04373  -1.78915 1FSV 13     0.00000
+  220   13 ARG  CD    -9.81482  -1.27463  -0.77675 1FSV 13     0.00000
+  221   13 ARG  HD1   -9.59817  -0.80917   0.20863 1FSV 13     0.00000
+  222   13 ARG  HD2  -10.90084  -1.19110  -0.98645 1FSV 13     0.00000
+  223   13 ARG  NE    -9.41746  -2.71774  -0.64936 1FSV 13     0.00000
+  224   13 ARG  HE    -8.77090  -2.91165   0.09746 1FSV 13     0.00000
+  225   13 ARG  CZ    -9.74561  -3.68673  -1.56887 1FSV 13     0.00000
+  226   13 ARG  NH1  -10.59381  -3.40318  -2.61077 1FSV 13     0.00000
+  227   13 ARG  HH11 -10.84852  -4.09104  -3.29389 1FSV 13     0.00000
+  228   13 ARG  HH12 -10.98775  -2.48831  -2.71938 1FSV 13     0.00000
+  229   13 ARG  NH2   -9.21387  -4.94615  -1.43696 1FSV 13     0.00000
+  230   13 ARG  HH21  -9.43567  -5.68434  -2.07764 1FSV 13     0.00000
+  231   13 ARG  HH22  -8.59976  -5.17149  -0.67655 1FSV 13     0.00000
+  232   13 ARG  C     -7.58379   2.92896  -2.25691 1FSV 13     0.00000
+  233   13 ARG  O     -8.48660   3.70736  -2.53370 1FSV 13     0.00000
+  234   14 ASN  N     -6.49775   3.32329  -1.56827 1FSV 14     0.00000
+  235   14 ASN  HN    -5.72875   2.73252  -1.32794 1FSV 14     0.00000
+  236   14 ASN  CA    -6.30169   4.70453  -1.25083 1FSV 14     0.00000
+  237   14 ASN  HA    -6.48396   5.29130  -2.14033 1FSV 14     0.00000
+  238   14 ASN  CB    -7.21869   5.21544  -0.10425 1FSV 14     0.00000
+  239   14 ASN  HB1   -6.89045   6.20548   0.27119 1FSV 14     0.00000
+  240   14 ASN  HB2   -8.24946   5.34098  -0.50041 1FSV 14     0.00000
+  241   14 ASN  CG    -7.22036   4.19964   1.04433 1FSV 14     0.00000
+  242   14 ASN  OD1   -6.23859   4.15262   1.78471 1FSV 14     0.00000
+  243   14 ASN  ND2   -8.29203   3.36022   1.16520 1FSV 14     0.00000
+  244   14 ASN  HD21  -8.29623   2.64991   1.87049 1FSV 14     0.00000
+  245   14 ASN  HD22  -9.05601   3.42315   0.52257 1FSV 14     0.00000
+  246   14 ASN  C     -4.83968   4.79480  -0.94121 1FSV 14     0.00000
+  247   14 ASN  O     -4.13140   3.78919  -1.00717 1FSV 14     0.00000
+  248   15 GLU  N     -4.37448   6.00975  -0.55497 1FSV 15     0.00000
+  249   15 GLU  HN    -4.98833   6.79142  -0.49331 1FSV 15     0.00000
+  250   15 GLU  CA    -2.98888   6.31487  -0.27650 1FSV 15     0.00000
+  251   15 GLU  HA    -2.37496   5.82170  -1.01752 1FSV 15     0.00000
+  252   15 GLU  CB    -2.68851   7.83696  -0.23628 1FSV 15     0.00000
+  253   15 GLU  HB1   -3.15381   8.31529  -1.12276 1FSV 15     0.00000
+  254   15 GLU  HB2   -3.16093   8.30144   0.65813 1FSV 15     0.00000
+  255   15 GLU  CG    -1.18393   8.17127  -0.25184 1FSV 15     0.00000
+  256   15 GLU  HG1   -0.65548   7.65802   0.57908 1FSV 15     0.00000
+  257   15 GLU  HG2   -0.72707   7.83781  -1.20686 1FSV 15     0.00000
+  258   15 GLU  CD    -1.01789   9.67812  -0.08593 1FSV 15     0.00000
+  259   15 GLU  OE1   -0.97556  10.13235   1.08893 1FSV 15     0.00000
+  260   15 GLU  OE2   -0.95862  10.39515  -1.11868 1FSV 15     0.00000
+  261   15 GLU  C     -2.67072   5.79512   1.08565 1FSV 15     0.00000
+  262   15 GLU  O     -1.54543   5.40148   1.37280 1FSV 15     0.00000
+  263   16 LYS  N     -3.69220   5.79290   1.96423 1FSV 16     0.00000
+  264   16 LYS  HN    -4.60125   6.05754   1.65710 1FSV 16     0.00000
+  265   16 LYS  CA    -3.62260   5.39904   3.34655 1FSV 16     0.00000
+  266   16 LYS  HA    -2.86851   6.01814   3.81113 1FSV 16     0.00000
+  267   16 LYS  CB    -4.99238   5.61506   4.03519 1FSV 16     0.00000
+  268   16 LYS  HB1   -5.54688   6.35752   3.41456 1FSV 16     0.00000
+  269   16 LYS  HB2   -5.60141   4.68555   4.04770 1FSV 16     0.00000
+  270   16 LYS  CG    -4.96507   6.18763   5.45864 1FSV 16     0.00000
+  271   16 LYS  HG1   -4.73964   5.36010   6.16742 1FSV 16     0.00000
+  272   16 LYS  HG2   -4.16666   6.95518   5.54408 1FSV 16     0.00000
+  273   16 LYS  CD    -6.32683   6.82986   5.78566 1FSV 16     0.00000
+  274   16 LYS  HD1   -6.41921   7.79517   5.24137 1FSV 16     0.00000
+  275   16 LYS  HD2   -7.12170   6.15356   5.39080 1FSV 16     0.00000
+  276   16 LYS  CE    -6.62475   7.02478   7.27827 1FSV 16     0.00000
+  277   16 LYS  HE1   -7.63245   7.47276   7.41246 1FSV 16     0.00000
+  278   16 LYS  HE2   -6.58958   6.04871   7.80773 1FSV 16     0.00000
+  279   16 LYS  NZ    -5.64750   7.92200   7.93354 1FSV 16     0.00000
+  280   16 LYS  HZ1   -5.89590   8.02310   8.93877 1FSV 16     0.00000
+  281   16 LYS  HZ2   -4.69613   7.50859   7.85417 1FSV 16     0.00000
+  282   16 LYS  HZ3   -5.66451   8.85591   7.47723 1FSV 16     0.00000
+  283   16 LYS  C     -3.18900   3.95925   3.40089 1FSV 16     0.00000
+  284   16 LYS  O     -2.23625   3.62904   4.08914 1FSV 16     0.00000
+  285   17 GLU  N     -3.83416   3.09102   2.59227 1FSV 17     0.00000
+  286   17 GLU  HN    -4.62094   3.41388   2.06108 1FSV 17     0.00000
+  287   17 GLU  CA    -3.54848   1.68192   2.47810 1FSV 17     0.00000
+  288   17 GLU  HA    -3.55584   1.28165   3.48238 1FSV 17     0.00000
+  289   17 GLU  CB    -4.58903   0.92024   1.62007 1FSV 17     0.00000
+  290   17 GLU  HB1   -5.24573   1.64827   1.09681 1FSV 17     0.00000
+  291   17 GLU  HB2   -4.08979   0.32063   0.83215 1FSV 17     0.00000
+  292   17 GLU  CG    -5.45528  -0.04783   2.44236 1FSV 17     0.00000
+  293   17 GLU  HG1   -4.80464  -0.68856   3.07639 1FSV 17     0.00000
+  294   17 GLU  HG2   -6.14829   0.51883   3.09892 1FSV 17     0.00000
+  295   17 GLU  CD    -6.24099  -0.91616   1.46525 1FSV 17     0.00000
+  296   17 GLU  OE1   -6.97348  -0.32662   0.62688 1FSV 17     0.00000
+  297   17 GLU  OE2   -6.10255  -2.16737   1.51030 1FSV 17     0.00000
+  298   17 GLU  C     -2.17737   1.44988   1.89957 1FSV 17     0.00000
+  299   17 GLU  O     -1.48491   0.53223   2.32671 1FSV 17     0.00000
+  300   18 LEU  N     -1.74634   2.28571   0.92207 1FSV 18     0.00000
+  301   18 LEU  HN    -2.33620   3.02234   0.59779 1FSV 18     0.00000
+  302   18 LEU  CA    -0.43174   2.22445   0.30169 1FSV 18     0.00000
+  303   18 LEU  HA    -0.29522   1.21754  -0.06622 1FSV 18     0.00000
+  304   18 LEU  CB    -0.27584   3.23678  -0.87471 1FSV 18     0.00000
+  305   18 LEU  HB1   -1.02623   2.98814  -1.65556 1FSV 18     0.00000
+  306   18 LEU  HB2   -0.51609   4.25177  -0.49596 1FSV 18     0.00000
+  307   18 LEU  CG     1.12893   3.32509  -1.53963 1FSV 18     0.00000
+  308   18 LEU  HG     1.87104   3.49687  -0.72563 1FSV 18     0.00000
+  309   18 LEU  CD1    1.54929   2.03986  -2.27302 1FSV 18     0.00000
+  310   18 LEU  HD11   2.58587   2.14158  -2.65944 1FSV 18     0.00000
+  311   18 LEU  HD12   1.52691   1.17320  -1.58018 1FSV 18     0.00000
+  312   18 LEU  HD13   0.87753   1.84425  -3.13389 1FSV 18     0.00000
+  313   18 LEU  CD2    1.25983   4.54349  -2.47450 1FSV 18     0.00000
+  314   18 LEU  HD21   2.32162   4.68498  -2.76950 1FSV 18     0.00000
+  315   18 LEU  HD22   0.66657   4.39398  -3.39683 1FSV 18     0.00000
+  316   18 LEU  HD23   0.91393   5.46728  -1.96372 1FSV 18     0.00000
+  317   18 LEU  C      0.62269   2.49913   1.34934 1FSV 18     0.00000
+  318   18 LEU  O      1.71379   1.93555   1.32686 1FSV 18     0.00000
+  319   19 ARG  N      0.29337   3.37470   2.31400 1FSV 19     0.00000
+  320   19 ARG  HN    -0.60732   3.81038   2.30164 1FSV 19     0.00000
+  321   19 ARG  CA     1.16403   3.82282   3.36629 1FSV 19     0.00000
+  322   19 ARG  HA     2.16940   3.90310   2.97541 1FSV 19     0.00000
+  323   19 ARG  CB     0.68438   5.20892   3.85124 1FSV 19     0.00000
+  324   19 ARG  HB1    0.84829   5.92930   3.01781 1FSV 19     0.00000
+  325   19 ARG  HB2   -0.40923   5.17173   4.03776 1FSV 19     0.00000
+  326   19 ARG  CG     1.33527   5.77445   5.11691 1FSV 19     0.00000
+  327   19 ARG  HG1    1.06550   5.09394   5.95698 1FSV 19     0.00000
+  328   19 ARG  HG2    2.44185   5.78225   5.01620 1FSV 19     0.00000
+  329   19 ARG  CD     0.81614   7.19606   5.38099 1FSV 19     0.00000
+  330   19 ARG  HD1    1.46618   7.95697   4.89990 1FSV 19     0.00000
+  331   19 ARG  HD2   -0.22022   7.28509   4.98592 1FSV 19     0.00000
+  332   19 ARG  NE     0.75989   7.45298   6.85794 1FSV 19     0.00000
+  333   19 ARG  HE     1.17169   6.75677   7.45179 1FSV 19     0.00000
+  334   19 ARG  CZ     0.06147   8.50914   7.39433 1FSV 19     0.00000
+  335   19 ARG  NH1   -0.48523   9.46762   6.57571 1FSV 19     0.00000
+  336   19 ARG  HH11  -0.97380  10.26400   6.93855 1FSV 19     0.00000
+  337   19 ARG  HH12  -0.36591   9.43082   5.58006 1FSV 19     0.00000
+  338   19 ARG  NH2   -0.08596   8.59775   8.75675 1FSV 19     0.00000
+  339   19 ARG  HH21  -0.56707   9.36265   9.19083 1FSV 19     0.00000
+  340   19 ARG  HH22   0.30202   7.90564   9.37085 1FSV 19     0.00000
+  341   19 ARG  C      1.15910   2.80559   4.48329 1FSV 19     0.00000
+  342   19 ARG  O      2.15907   2.63815   5.17962 1FSV 19     0.00000
+  343   20 ASP  N      0.04196   2.06437   4.64898 1FSV 20     0.00000
+  344   20 ASP  HN    -0.76256   2.23656   4.08051 1FSV 20     0.00000
+  345   20 ASP  CA    -0.16482   1.10171   5.71460 1FSV 20     0.00000
+  346   20 ASP  HA     0.40279   1.41834   6.57943 1FSV 20     0.00000
+  347   20 ASP  CB    -1.65179   0.90134   6.13108 1FSV 20     0.00000
+  348   20 ASP  HB1   -2.26043   0.60353   5.25248 1FSV 20     0.00000
+  349   20 ASP  HB2   -1.71528   0.08906   6.88989 1FSV 20     0.00000
+  350   20 ASP  CG    -2.22997   2.17196   6.76742 1FSV 20     0.00000
+  351   20 ASP  OD1   -1.50668   2.81872   7.57276 1FSV 20     0.00000
+  352   20 ASP  OD2   -3.40848   2.50923   6.46827 1FSV 20     0.00000
+  353   20 ASP  C      0.36998  -0.22768   5.25423 1FSV 20     0.00000
+  354   20 ASP  O      0.41940  -1.19529   6.01107 1FSV 20     0.00000
+  355   21 PHE  N      0.78393  -0.30429   3.97314 1FSV 21     0.00000
+  356   21 PHE  HN     0.68017   0.48794   3.37546 1FSV 21     0.00000
+  357   21 PHE  CA     1.33207  -1.48122   3.35822 1FSV 21     0.00000
+  358   21 PHE  HA     0.76264  -2.33779   3.69385 1FSV 21     0.00000
+  359   21 PHE  CB     1.29351  -1.37159   1.81448 1FSV 21     0.00000
+  360   21 PHE  HB1    0.24243  -1.22326   1.49463 1FSV 21     0.00000
+  361   21 PHE  HB2    1.88543  -0.50365   1.45779 1FSV 21     0.00000
+  362   21 PHE  CG     1.81927  -2.61896   1.15783 1FSV 21     0.00000
+  363   21 PHE  CD1    1.05519  -3.79789   1.12543 1FSV 21     0.00000
+  364   21 PHE  HD1    0.06543  -3.81270   1.55758 1FSV 21     0.00000
+  365   21 PHE  CE1    1.57057  -4.96060   0.54432 1FSV 21     0.00000
+  366   21 PHE  HE1    0.97892  -5.86329   0.52632 1FSV 21     0.00000
+  367   21 PHE  CZ     2.87206  -4.96592   0.03163 1FSV 21     0.00000
+  368   21 PHE  HZ     3.28020  -5.87880  -0.37443 1FSV 21     0.00000
+  369   21 PHE  CD2    3.12064  -2.63137   0.63030 1FSV 21     0.00000
+  370   21 PHE  HD2    3.73091  -1.74069   0.67546 1FSV 21     0.00000
+  371   21 PHE  CE2    3.65012  -3.80262   0.08628 1FSV 21     0.00000
+  372   21 PHE  HE2    4.66606  -3.80228  -0.27106 1FSV 21     0.00000
+  373   21 PHE  C      2.75993  -1.62318   3.79346 1FSV 21     0.00000
+  374   21 PHE  O      3.20215  -2.71983   4.12390 1FSV 21     0.00000
+  375   22 ILE  N      3.50988  -0.49722   3.80031 1FSV 22     0.00000
+  376   22 ILE  HN     3.09808   0.38430   3.58172 1FSV 22     0.00000
+  377   22 ILE  CA     4.94030  -0.46725   4.00919 1FSV 22     0.00000
+  378   22 ILE  HA     5.36262  -1.28438   3.44541 1FSV 22     0.00000
+  379   22 ILE  CB     5.57008   0.83661   3.51942 1FSV 22     0.00000
+  380   22 ILE  HB     5.21917   1.67837   4.15905 1FSV 22     0.00000
+  381   22 ILE  CG2    7.10782   0.76688   3.60885 1FSV 22     0.00000
+  382   22 ILE  HG21   7.56158   1.75392   3.37988 1FSV 22     0.00000
+  383   22 ILE  HG22   7.43628   0.49614   4.62390 1FSV 22     0.00000
+  384   22 ILE  HG23   7.50726   0.02481   2.89063 1FSV 22     0.00000
+  385   22 ILE  CG1    5.13535   1.11927   2.05770 1FSV 22     0.00000
+  386   22 ILE  HG11   5.36520   0.22908   1.43292 1FSV 22     0.00000
+  387   22 ILE  HG12   4.03745   1.28226   2.02578 1FSV 22     0.00000
+  388   22 ILE  CD     5.80379   2.35048   1.43459 1FSV 22     0.00000
+  389   22 ILE  HD1    5.34139   2.57446   0.44941 1FSV 22     0.00000
+  390   22 ILE  HD2    5.67137   3.23666   2.09122 1FSV 22     0.00000
+  391   22 ILE  HD3    6.88891   2.18173   1.27297 1FSV 22     0.00000
+  392   22 ILE  C      5.17661  -0.70445   5.48499 1FSV 22     0.00000
+  393   22 ILE  O      6.20718  -1.23259   5.90341 1FSV 22     0.00000
+  394   23 GLU  N      4.15826  -0.36895   6.30528 1FSV 23     0.00000
+  395   23 GLU  HN     3.34442   0.06202   5.92308 1FSV 23     0.00000
+  396   23 GLU  CA     4.08580  -0.64648   7.71720 1FSV 23     0.00000
+  397   23 GLU  HA     4.92584  -0.14863   8.17014 1FSV 23     0.00000
+  398   23 GLU  CB     2.77470  -0.07206   8.31042 1FSV 23     0.00000
+  399   23 GLU  HB1    2.69937   0.97813   7.94282 1FSV 23     0.00000
+  400   23 GLU  HB2    1.89048  -0.61201   7.91415 1FSV 23     0.00000
+  401   23 GLU  CG     2.71017   0.00703   9.84575 1FSV 23     0.00000
+  402   23 GLU  HG1    3.72986   0.00904  10.27315 1FSV 23     0.00000
+  403   23 GLU  HG2    2.21110   0.96197  10.12742 1FSV 23     0.00000
+  404   23 GLU  CD     1.89813  -1.15481  10.41756 1FSV 23     0.00000
+  405   23 GLU  OE1    2.39227  -2.31108  10.38026 1FSV 23     0.00000
+  406   23 GLU  OE2    0.76665  -0.89614  10.90501 1FSV 23     0.00000
+  407   23 GLU  C      4.20441  -2.13525   7.96458 1FSV 23     0.00000
+  408   23 GLU  O      4.97819  -2.57785   8.81300 1FSV 23     0.00000
+  409   24 LYS  N      3.46839  -2.93181   7.15843 1FSV 24     0.00000
+  410   24 LYS  HN     2.92891  -2.52768   6.42236 1FSV 24     0.00000
+  411   24 LYS  CA     3.29194  -4.35891   7.30025 1FSV 24     0.00000
+  412   24 LYS  HA     3.45753  -4.63299   8.33359 1FSV 24     0.00000
+  413   24 LYS  CB     1.87180  -4.79567   6.86104 1FSV 24     0.00000
+  414   24 LYS  HB1    1.58597  -4.20741   5.96061 1FSV 24     0.00000
+  415   24 LYS  HB2    1.85913  -5.86673   6.56763 1FSV 24     0.00000
+  416   24 LYS  CG     0.81856  -4.58804   7.96522 1FSV 24     0.00000
+  417   24 LYS  HG1    1.22696  -3.89645   8.73411 1FSV 24     0.00000
+  418   24 LYS  HG2   -0.07641  -4.09542   7.52428 1FSV 24     0.00000
+  419   24 LYS  CD     0.37162  -5.89891   8.64036 1FSV 24     0.00000
+  420   24 LYS  HD1    1.27911  -6.45046   8.97050 1FSV 24     0.00000
+  421   24 LYS  HD2   -0.21824  -5.63296   9.54674 1FSV 24     0.00000
+  422   24 LYS  CE    -0.49440  -6.77633   7.71606 1FSV 24     0.00000
+  423   24 LYS  HE1   -1.44389  -6.25358   7.47458 1FSV 24     0.00000
+  424   24 LYS  HE2    0.03878  -7.00575   6.77051 1FSV 24     0.00000
+  425   24 LYS  NZ    -0.84559  -8.07599   8.33798 1FSV 24     0.00000
+  426   24 LYS  HZ1   -1.44033  -8.62085   7.68122 1FSV 24     0.00000
+  427   24 LYS  HZ2    0.02136  -8.61201   8.54291 1FSV 24     0.00000
+  428   24 LYS  HZ3   -1.37002  -7.91056   9.22071 1FSV 24     0.00000
+  429   24 LYS  C      4.30106  -5.08876   6.45074 1FSV 24     0.00000
+  430   24 LYS  O      4.29176  -6.31675   6.38090 1FSV 24     0.00000
+  431   25 PHE  N      5.19832  -4.34251   5.77749 1FSV 25     0.00000
+  432   25 PHE  HN     5.19007  -3.34987   5.88450 1FSV 25     0.00000
+  433   25 PHE  CA     6.14526  -4.84553   4.80950 1FSV 25     0.00000
+  434   25 PHE  HA     5.71895  -5.71541   4.32897 1FSV 25     0.00000
+  435   25 PHE  CB     6.43661  -3.74193   3.74425 1FSV 25     0.00000
+  436   25 PHE  HB1    5.49244  -3.50929   3.20807 1FSV 25     0.00000
+  437   25 PHE  HB2    6.77245  -2.83866   4.28837 1FSV 25     0.00000
+  438   25 PHE  CG     7.47743  -4.01948   2.68809 1FSV 25     0.00000
+  439   25 PHE  CD1    7.67127  -5.29040   2.11903 1FSV 25     0.00000
+  440   25 PHE  HD1    7.04907  -6.12231   2.41339 1FSV 25     0.00000
+  441   25 PHE  CE1    8.71680  -5.50820   1.21382 1FSV 25     0.00000
+  442   25 PHE  HE1    8.88390  -6.49860   0.82304 1FSV 25     0.00000
+  443   25 PHE  CZ     9.54465  -4.44838   0.82362 1FSV 25     0.00000
+  444   25 PHE  HZ    10.34941  -4.61516   0.12360 1FSV 25     0.00000
+  445   25 PHE  CD2    8.30526  -2.96024   2.27126 1FSV 25     0.00000
+  446   25 PHE  HD2    8.17439  -1.97838   2.69618 1FSV 25     0.00000
+  447   25 PHE  CE2    9.32968  -3.16842   1.34472 1FSV 25     0.00000
+  448   25 PHE  HE2    9.96571  -2.34730   1.04800 1FSV 25     0.00000
+  449   25 PHE  C      7.40247  -5.25632   5.54558 1FSV 25     0.00000
+  450   25 PHE  O      8.29225  -5.87022   4.96167 1FSV 25     0.00000
+  451   26 LYS  N      7.51070  -4.92179   6.85647 1FSV 26     0.00000
+  452   26 LYS  HN     6.74644  -4.47096   7.31213 1FSV 26     0.00000
+  453   26 LYS  CA     8.70592  -5.05617   7.66993 1FSV 26     0.00000
+  454   26 LYS  HA     8.45276  -4.65433   8.63988 1FSV 26     0.00000
+  455   26 LYS  CB     9.26798  -6.49886   7.85402 1FSV 26     0.00000
+  456   26 LYS  HB1    9.68197  -6.87393   6.89141 1FSV 26     0.00000
+  457   26 LYS  HB2   10.11497  -6.43202   8.57721 1FSV 26     0.00000
+  458   26 LYS  CG     8.30530  -7.56676   8.40011 1FSV 26     0.00000
+  459   26 LYS  HG1    7.69365  -7.13337   9.22100 1FSV 26     0.00000
+  460   26 LYS  HG2    7.62225  -7.88058   7.58298 1FSV 26     0.00000
+  461   26 LYS  CD     9.09886  -8.76960   8.95309 1FSV 26     0.00000
+  462   26 LYS  HD1    9.88861  -9.05240   8.22138 1FSV 26     0.00000
+  463   26 LYS  HD2    9.62041  -8.42838   9.87711 1FSV 26     0.00000
+  464   26 LYS  CE     8.26498 -10.00973   9.30845 1FSV 26     0.00000
+  465   26 LYS  HE1    8.88954 -10.73745   9.86994 1FSV 26     0.00000
+  466   26 LYS  HE2    7.38643  -9.73092   9.92613 1FSV 26     0.00000
+  467   26 LYS  NZ     7.77265 -10.70471   8.09481 1FSV 26     0.00000
+  468   26 LYS  HZ1    7.21564 -11.53688   8.37613 1FSV 26     0.00000
+  469   26 LYS  HZ2    7.17226 -10.05888   7.54326 1FSV 26     0.00000
+  470   26 LYS  HZ3    8.57860 -11.01054   7.51337 1FSV 26     0.00000
+  471   26 LYS  C      9.82147  -4.22575   7.08995 1FSV 26     0.00000
+  472   26 LYS  O     10.98455  -4.62603   7.10673 1FSV 26     0.00000
+  473   27 GLY  N      9.46117  -3.04407   6.55255 1FSV 27     0.00000
+  474   27 GLY  HN     8.51584  -2.73162   6.57998 1FSV 27     0.00000
+  475   27 GLY  CA    10.36962  -2.14726   5.89927 1FSV 27     0.00000
+  476   27 GLY  HA1   10.03176  -2.01759   4.88154 1FSV 27     0.00000
+  477   27 GLY  HA2   11.39167  -2.48994   5.98955 1FSV 27     0.00000
+  478   27 GLY  C     10.21521  -0.87616   6.64565 1FSV 27     0.00000
+  479   27 GLY  O     11.13401  -0.44734   7.34024 1FSV 27     0.00000
+  480   28 ARG  N      9.01586  -0.26460   6.49954 1FSV 28     0.00000
+  481   28 ARG  HN     8.30495  -0.65609   5.91932 1FSV 28     0.00000
+  482   28 ARG  CA     8.61376   0.98018   7.10084 1FSV 28     0.00000
+  483   28 ARG  HA     7.58394   1.12151   6.80574 1FSV 28     0.00000
+  484   28 ARG  CB     8.63680   0.99451   8.64481 1FSV 28     0.00000
+  485   28 ARG  HB1    9.66206   0.74982   8.99500 1FSV 28     0.00000
+  486   28 ARG  HB2    8.38981   2.01400   9.01328 1FSV 28     0.00000
+  487   28 ARG  CG     7.63188  -0.00889   9.23622 1FSV 28     0.00000
+  488   28 ARG  HG1    6.61919   0.44204   9.18965 1FSV 28     0.00000
+  489   28 ARG  HG2    7.61641  -0.93110   8.61278 1FSV 28     0.00000
+  490   28 ARG  CD     7.95742  -0.44669  10.66950 1FSV 28     0.00000
+  491   28 ARG  HD1    7.21109  -1.17568  11.05098 1FSV 28     0.00000
+  492   28 ARG  HD2    8.96138  -0.92189  10.69951 1FSV 28     0.00000
+  493   28 ARG  NE     8.00614   0.75462  11.57139 1FSV 28     0.00000
+  494   28 ARG  HE     8.91834   1.13770  11.73893 1FSV 28     0.00000
+  495   28 ARG  CZ     6.89281   1.31558  12.15458 1FSV 28     0.00000
+  496   28 ARG  NH1    5.64365   0.80209  11.91126 1FSV 28     0.00000
+  497   28 ARG  HH11   4.81467   1.18633  12.32471 1FSV 28     0.00000
+  498   28 ARG  HH12   5.51662   0.00483  11.31547 1FSV 28     0.00000
+  499   28 ARG  NH2    7.03989   2.39758  12.98796 1FSV 28     0.00000
+  500   28 ARG  HH21   6.25345   2.83498  13.43014 1FSV 28     0.00000
+  501   28 ARG  HH22   7.94063   2.79618  13.17678 1FSV 28     0.00000
+  502   28 ARG  C      9.42378   2.12309   6.48673 1FSV 28     0.00000
+  503   28 ARG  OT1   10.45560   2.51970   7.08587 1FSV 28     0.00000
+  504   28 ARG  OT2    9.01181   2.60875   5.40013 1FSV 28     0.00000
+
+
+goto @return
+
+stop
+
+label getradii
+!* Atomic radius derived from solvent electrostatic charge distribution
+!* Tested with free energy perturbation with explicit solvent
+!* Authors:  Mafalda Nina, Dmitrii Belogv, and Benoit Roux
+!* University of Montreal, June 1996.
+!* M. Nina and B. Roux. Atomic Radii for Continuum Electrostatics Calculations based on 
+!* Molecular Dynamics Free Energy Simulations. J. Phys. Chem. B 101: 5239-5248 (1997).
+!*
+
+! UPDATES:
+! --------
+!
+! GLU and ASP modified December 1st, 1998 by Mafalda Nina
+!
+! Protonated histidine HSP has been included, January 1999 by Mafalda Nina
+! dG_elec = -68.15 kcal/mol (MD/FES) or -68.10 kcal/mol (PBEQ)
+!
+! TEA and ions added by Benoit Roux, January 1999.
+!
+! sodium added by Benoit Roux, November 2000
+     
+! Set to zero all H radii
+scalar wmain set 0.0 sele chem H* end
+
+! Set heavy atoms to average default values 
+scalar wmain set 2.3 sele chem C* end 
+scalar wmain set 1.8 sele chem O* end
+scalar wmain set 2.3 sele chem N* end
+scalar wmain set 2.3 sele chem S* end
+      
+!Patches CT3 N-Methylamide C-terminus
+!        ACE acetylated N-terminus (ACP for PRO)
+scalar wmain set 2.06 sele (type CAY .or. type CAT) end
+scalar wmain set 2.04 sele type CY end
+scalar wmain set 1.52 sele type OY end
+scalar wmain set 2.23 sele type NT end
+scalar wmain set 1.40 sele type OT* end ! for COO- terminus
+      
+!Backbone
+scalar wmain set 2.04 sele type C  end
+! for peptide bond
+scalar wmain set 1.52 sele type O  end
+             ! for peptide bond
+scalar wmain set 2.23 sele type N  end
+             ! for peptide bond
+scalar wmain set 2.86 sele type CA  end
+             ! for all CA except GLY
+scalar wmain set 2.38 sele (resnam GLY .and. type CA) end
+             ! for GLY only
+      
+!Hydrogens
+scalar wmain set 0.00 sele type H* end
+       ! for all hydrogens
+
+!Carbons 
+scalar wmain set 2.67 sele type CB end
+       ! for all residues
+scalar wmain set 2.46 sele type CG* end 
+       ! for ARG, GLN, ILE, LYS, MET, PHE, THR, TRP, VAL, HSP, HSD  
+scalar wmain set 2.77 sele resnam GLU .and. type CG end 
+       ! for GLU only
+scalar wmain set 2.44 sele type CD* end 
+       ! for ARG, ILE, LEU, LYS
+scalar wmain set 1.98 sele (resnam GLN .and. type CD) .or. -
+       (resnam ASN .and. type CG) .or. - 
+       (resnam GLU .and. type CD) .or. (resnam ASP .and. type CG) end  
+       ! for ASP, GLU, ASN, GLN 
+scalar wmain set 1.98 sele (resnam PRO .and. -
+       (type CB .or. type CG .or. type CD)) end
+       ! for PRO only
+scalar wmain set 2.00 sele (resnam TYR .and. (type CE* .or. type CD* .or. -
+       type CZ)) .or. (resnam PHE .and. (type CE* .or. -
+       type CD* .or. type CZ))  end
+       ! for TYR, PHE rings 
+scalar wmain set 1.78 sele (resnam TRP .and. (type CE* .or. type CD* .or. - 
+       type CZ* .or. type CH2)) end
+       ! for TRP ring only
+scalar wmain set 2.10 sele type CE end
+       ! for MET only
+scalar wmain set 2.80 sele (resnam ARG .and. type CZ) .or. -
+       (resnam LYS .and. type CE) end
+       ! for ARG, LYS
+scalar wmain set 1.98 select (( resnam HSD  .or. resnam HSP) .and. type CE1) -
+       .or. (( resnam HSD .or. resnam HSP)  .and. type CD2) end
+       ! for neutral HSD and protonated HSP 
+      
+!Oxygens
+scalar wmain set 1.40 sele (resnam GLU .or. resnam ASP) .and. -
+       (type OE* .or. type OD*) end
+       ! for GLU, ASP
+scalar wmain set 1.42 sele (resnam ASN .or. resnam GLN) .and. -
+       (type OE* .or. type OD*) end
+       ! for ASN, GLN
+scalar wmain set 1.64 sele type OG* end
+       ! for SER, THR
+scalar wmain set 1.85 sele (resnam TYR .and. type OH) end
+       ! for TYR only
+scalar wmain set 2.2 select resname TIP3 .and. type OH2 end
+       ! for explicit water molecules                                       
+
+!Nitrogens
+scalar wmain set 1.80 sele resnam HSD  .and. (type NE2 .or. type ND1) end
+       ! for neutral HSD 
+scalar wmain set 2.30 sele resnam HSP  .and. (type NE2 .or. type ND1) end
+       ! for protonated HSP 
+scalar wmain set 2.13 sele resnam ARG .and. (type NH* .or. type NE) .or. -
+       (resnam LYS .and. type NZ) end
+       ! for ARG, LYS
+scalar wmain set 2.15 sele (resnam GLN .and. type NE2) .or. -
+       (resnam ASN .and. type ND2) end 
+       ! for GLN, ASN
+scalar wmain set 2.40 sele resnam TRP .and. type NE1 end
+       ! for TRP
+      
+!Sulphur
+scalar wmain set 2.00 sele type S* end
+       ! for MET, CYS
+      
+      
+!Ions
+scalar wmain set 2.035 select resname POT end
+       !potassium ion K+
+      
+scalar wmain set 2.035 select resname CLA end
+       !chloride ion Cl-
+      
+scalar wmain set 1.66 select resname SOD end
+       !sodium ion Na+
+                    
+scalar wmain set 2.15 sele resnam TEA .and. type N end
+scalar wmain set 2.30 sele ( type C1 .or. type C2 .or. type C3 .or. type C4 ) -
+       .and. resnam TEA end
+scalar wmain set 2.30 sele ( type C5 .or. type C6 .or. type C7 .or. type C8 ) -
+       .and. resnam TEA end
+       ! Tetramethylamonium (TEA)
+      
+goto @return
+
+stop

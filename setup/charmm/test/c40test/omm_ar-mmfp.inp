@@ -1,0 +1,539 @@
+* MMFP GEO test to figure out what various options are
+*
+
+stream datadir.def
+set tol = 1e-5
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+set eps = 120
+set sigma = 3.4
+Calc emin = @eps * ?kblz
+Calc rmin2 = @sigma * ( 2 ) ** ( 1 / 6 ) / 2
+read rtf card
+* rtf file
+*
+33   0
+mass 1 lj 40
+
+resi lj 0
+atom lj lj 0
+
+end
+
+read param card
+* parameter file
+*
+nonbonded nbxmod 5 atom vatom cdiel switch vswitch -
+          cutnb 999 ctofnb 999 ctonnb 999 -
+          eps 1 e14fac 1 wmin 1.5
+lj 0 -@emin @rmin2
+
+end
+
+read sequ lj 1
+generate Ar
+
+set d = 0
+label dorcm
+scalar x set 0
+scalar y set 0
+scalar z set 0
+set rcm =
+skipe all excl geo
+set t = 1
+!******************Test spherical geo boundary*********************!
+
+label sphere
+
+      if ?natom gt 1 then
+            scalar x set 0
+            scalar x set 7 select bynu 2 end
+            scalar x set -7 select bynu 3 end
+            set rcm = rcm
+      endif
+      if t eq 1 then
+            set where = inside
+            coor translate xdir 8
+            scalar x stat
+      endif
+      if t eq 2 then
+             set where = outside
+             coor translate xdir -2
+       endif
+      if t eq 3 then
+            set where = symmetric
+            coor translate xdir 8
+            scalar x stat
+      endif
+      ! Check spherical MMFP GEO
+      mmfp
+           geo spherical harm @where @rcm -
+           xref 1 yref 1 zref 1 -
+           force 10 droff 5.2 select segid ar end
+      end
+
+      energy
+      set chme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp store 1
+      scalar ycomp store 2
+      scalar zcomp store 3
+
+      prnlev 7 @pnode
+      energy omm
+      prnlev 5 @pnode
+      set omme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp mult -1
+      scalar xcomp +store 1
+
+      scalar ycomp mult -1
+      scalar ycomp +store 2
+      scalar zcomp mult -1
+      scalar zcomp +store 3
+
+      scalar xcomp recall 1
+      scalar ycomp recall 2
+      scalat zcomp recall 3
+
+      coor stat comp
+
+      prnlev 5 @pnode
+      ! Check tolerances
+      calc dener = abs ( @chme - @omme )
+      calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+      calc diff = @dforce * @dener
+
+      set status = pass
+      if @diff gt @tol then
+            set status = fail
+      endif
+      echo testcase result: @status Test 1 sphere-@t @rcm
+
+      mmfp
+         geo reset
+      end
+
+      incr t by 1
+if t le 3 goto sphere
+
+set t = 1
+!******************Test cylindrical geo boundary*********************!
+
+label cylinder
+
+      if ?natom gt 1 then
+            scalar x set 0
+            scalar x set 7 select bynu 2 end
+            scalar x set -7 select bynu 3 end
+            set rcm = rcm
+      endif
+      if t eq 1 then
+            set where = inside
+            coor translate xdir 8
+      endif
+      if t eq 2 then
+             set where = outside
+             coor translate xdir -2
+      endif
+      if t eq 3 then
+            set where = symmetric
+            coor translate xdir 8
+      endif
+      ! Check cylindrical MMFP GEO
+      mmfp
+           geo cylinder harm @where @rcm -
+           xref 1 yref 1 zref 1 -
+           xdir 3 ydir 2 zdir 3 -
+           force 10 droff 5.2 select segid ar end
+      end
+
+      energy
+      set chme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp store 1
+      scalar ycomp store 2
+      scalar zcomp store 3
+
+      prnlev 7 @pnode
+      energy omm
+      prnlev 5 @pnode
+      set omme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp mult -1
+      scalar xcomp +store 1
+
+      scalar ycomp mult -1
+      scalar ycomp +store 2
+      scalar zcomp mult -1
+      scalar zcomp +store 3
+
+      scalar xcomp recall 1
+      scalar ycomp recall 2
+      scalat zcomp recall 3
+
+      coor stat comp
+
+      prnlev 5 @pnode
+      ! Check tolerances
+      calc dener = abs ( @chme - @omme )
+      calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+      calc diff = @dforce * @dener
+
+      set status = pass
+      if @diff gt @tol then
+        set status = fail
+      endif
+      echo testcase result: @status Test 2 cylinder-@t @rcm
+
+      mmfp
+         geo reset
+      end
+
+      incr t by 1
+if t le 3 goto cylinder
+
+set t = 1
+!******************Test plane geo boundary*********************!
+
+label plane
+
+      if ?natom gt 1 then
+            scalar x set 0
+            scalar x set 7 select bynu 2 end
+            scalar x set -7 select bynu 3 end
+            set rcm = rcm
+      endif
+      if t eq 1 then
+            set where = inside
+            coor translate xdir 12
+      endif
+      if t eq 2 then
+             set where = outside
+             coor translate xdir -2
+      endif
+      if t eq 3 then
+            set where = symmetric
+            coor translate xdir 8
+      endif
+      ! Check planar MMFP GEO
+      mmfp
+           geo plane harm @where @rcm -
+           xref 1 yref 1 zref 1 -
+           xdir 3 ydir 2 zdir 3 -
+           force 10 droff 5.2 select segid ar end
+      end
+
+      energy
+      set chme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp store 1
+      scalar ycomp store 2
+      scalar zcomp store 3
+
+      prnlev 7 @pnode
+      energy omm
+      prnlev 5 @pnode
+      set omme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp mult -1
+      scalar xcomp +store 1
+
+      scalar ycomp mult -1
+      scalar ycomp +store 2
+      scalar zcomp mult -1
+      scalar zcomp +store 3
+
+      scalar xcomp recall 1
+      scalar ycomp recall 2
+      scalat zcomp recall 3
+
+      coor stat comp
+
+      prnlev 5 @pnode
+      ! Check tolerances
+      calc dener = abs ( @chme - @omme )
+      calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+      calc diff = @dforce * @dener
+
+      set status = pass
+      if @diff gt @tol then
+        set status = fail
+      endif
+      echo testcase result: @status Test 3 plane-@t @rcm
+
+      mmfp
+         geo reset
+      end
+
+      incr t by 1
+if t le 3 goto plane
+
+incr d by 1
+delete atom select all end
+read sequ lj 3
+generate ar
+scalar x set 0
+scalar y set 0
+scalar z set 0
+
+if d le 1 goto dorcm
+
+set t = 1
+!******************Test sphere/plane geo boundary*********************!
+
+label spheplan
+
+      if ?natom gt 1 then
+            scalar x set 0
+            scalar x set 5 select bynu 2 end
+            scalar x set -5 select bynu 3 end
+            set rcm = rcm
+      endif
+      if t eq 1 then
+            set where = inside
+            coor translate xdir 8 select bynu 1 end
+            coor translate xdir 12 select bynu 2:3 end
+      endif
+      if t eq 2 then
+             set where = outside
+             coor translate xdir -2
+      endif
+      if t eq 3 then
+            set where = symmetric
+            coor translate xdir 8
+      endif
+      ! Check planar MMFP GEO
+      mmfp
+           geo plane harm @where @rcm -
+           xref 1 yref 1 zref 1 -
+           xdir 3 ydir 2 zdir 3 -
+           force 10 droff 5.2 select bynu 2:3 end
+      end
+      ! Check spherical MMFP GEO
+      mmfp
+           geo spherical harm @where -
+           xref 1 yref 1 zref 1 -
+           force 10 droff 5.2 select bynu 1 end
+      end
+
+      energy
+      set chme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp store 1
+      scalar ycomp store 2
+      scalar zcomp store 3
+
+      prnlev 7 @pnode
+      energy omm
+      prnlev 5 @pnode
+      set omme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp mult -1
+      scalar xcomp +store 1
+
+      scalar ycomp mult -1
+      scalar ycomp +store 2
+      scalar zcomp mult -1
+      scalar zcomp +store 3
+
+      scalar xcomp recall 1
+      scalar ycomp recall 2
+      scalat zcomp recall 3
+
+      coor stat comp
+
+      prnlev 5 @pnode
+      ! Check tolerances
+      calc dener = abs ( @chme - @omme )
+      calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+      calc diff = @dforce * @dener
+
+      set status = pass
+      if @diff gt @tol then
+        set status = fail
+      endif
+      echo testcase result: @status Test 4 sphere-plane-@t
+
+      print coor
+
+      mmfp
+         geo reset
+      end
+
+      incr t by 1
+if t le 3 goto spheplan
+
+set t = 1
+!******************Test sphere/cylinder geo boundary*********************!
+
+label sphecyli
+
+      if ?natom gt 1 then
+            scalar x set 0
+            scalar x set 5 select bynu 2 end
+            scalar x set -5 select bynu 3 end
+            set rcm = rcm
+      endif
+      if t eq 1 then
+            set where = inside
+            coor translate xdir 8
+      endif
+      if t eq 2 then
+             set where = outside
+             coor translate xdir -2
+      endif
+      if t eq 3 then
+            set where = symmetric
+            coor translate xdir 8
+      endif
+      ! Check planar MMFP GEO
+      mmfp
+           geo cylinder harm @where -
+           xref 1 yref 1 zref 1 -
+           xdir 3 ydir 2 zdir 3 -
+           force 10 droff 5.2 select bynu 1 end
+      end
+      ! Check spherical MMFP GEO
+      mmfp
+           geo spherical harm @where @rcm -
+           xref 1 yref 1 zref 1 -
+           force 10 droff 5.2 select bynu 2:3 end
+      end
+
+      energy
+      set chme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp store 1
+      scalar ycomp store 2
+      scalar zcomp store 3
+
+      prnlev 7 @pnode
+      energy omm
+      prnlev 5 @pnode
+      set omme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp mult -1
+      scalar xcomp +store 1
+
+      scalar ycomp mult -1
+      scalar ycomp +store 2
+      scalar zcomp mult -1
+      scalar zcomp +store 3
+
+      scalar xcomp recall 1
+      scalar ycomp recall 2
+      scalat zcomp recall 3
+
+      coor stat comp
+
+      prnlev 5 @pnode
+      ! Check tolerances
+      calc dener = abs ( @chme - @omme )
+      calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+      calc diff = @dforce * @dener
+
+      set status = pass
+      if @diff gt @tol then
+        set status = fail
+      endif
+      echo testcase result: @status Test 5 sphere-cylinder-@t
+
+      mmfp
+         geo reset
+      end
+
+      incr t by 1
+if t le 3 goto sphecyli
+
+label doend
+delete atom select all end
+
+read sequ lj 4
+generate ar
+
+read coor card
+    4
+    1    1 LJ   LJ     3.57376   3.57806  -5.37130 AR   1      0.00000
+    2    2 LJ   LJ     4.88778   1.79431  -4.20052 AR   2      0.00000
+    3    3 LJ   LJ     5.05545   0.79677  -3.15528 AR   2      0.00000
+    4    4 LJ   LJ     5.31596   3.56472  -0.56425 AR   3      0.00000
+
+skipe all excl geo
+set t = 1
+MMFP
+  GEO sphere harm inside rcm  -
+     xref 1 yref 2 zref 3 -
+     force 10 droff 0 select bynu 1 .or. bynu 3:4 show end
+
+  GEO plane harm inside -
+     xref 1 yref 2 zref 3 -
+     xdir 1 -
+     force 10 droff 0 select bynu 2 end
+
+  GEO print
+END
+
+      energy
+      set chme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp store 1
+      scalar ycomp store 2
+      scalar zcomp store 3
+      scalar xcomp store 4
+      scalar ycomp store 5
+      scalar zcomp store 6
+
+      prnlev 7 @pnode
+      energy omm
+      prnlev 5 @pnode
+      set omme = ?ener
+      prnlev 0 @pnode
+      coor force comp
+      scalar xcomp mult -1
+      scalar xcomp +store 1
+
+      scalar ycomp mult -1
+      scalar ycomp +store 2
+      scalar zcomp mult -1
+      scalar zcomp +store 3
+
+      scalar xcomp recall 1
+      scalar ycomp recall 2
+      scalat zcomp recall 3
+
+      coor stat comp
+
+      prnlev 5 @pnode
+      ! Check tolerances
+      calc dener = abs ( @chme - @omme )
+      calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+      calc diff = @dforce * @dener
+
+      set status = pass
+      if @diff gt @tol then
+        set status = fail
+      endif
+      echo testcase result: @status Test 6 sphere-plane-@t
+
+stop

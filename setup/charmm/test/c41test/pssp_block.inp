@@ -1,0 +1,126 @@
+* Testcase I for the BLOCK/PSSP code (combination of soft core
+* potentials and PERTBLOCK)
+* |
+* Build a box of water, mutate one water to a dummy molecule and 
+* calc. energy, forces, dU/dL for the supported nonbonded options.
+* |
+* Does not test Ewald (see pssp2.inp)
+* |
+* NOT a full free energy calculation
+*
+
+! Author: Stefan Boresch (stefan@mdy.univie.ac.at)
+! adapted for BLOCK by Lennart Nilsson
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ echo pssp_block TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Preliminaries: Set up the system and BLOCK
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+read rtf card
+* tips3p water topology file
+*
+   20    1
+mass     4 ht     1.00800  ! tips3p water hydrogen
+mass    58 ot    15.999940 ! tips3p water oxygen
+mass    94 dh     1.00800  ! dummy water hydrogen
+mass    98 do    15.999940 ! dummy water oxygen
+
+resi tip3    .000   ! tips3p water model
+group
+atom oh2  ot   -0.834 
+atom h1   ht    0.417
+atom h2   ht    0.417
+bond oh2 h1  oh2 h2  h1 h2 ! the last bond is needed for shake
+thet h1   oh2  h2 
+!                            note: no donors or acceptors for tips3p
+patc  firs none last none
+end
+
+read param card
+* tips3p water parameter file
+*
+bond
+ht  ot     450.0   0.9572 ! from tips3p geometry
+ht  ht       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+dh  do     450.0   0.9572 ! from tips3p geometry
+dh  dh       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+thetas
+ht  ot  ht  55.0 104.52   ! from tips3p geometry
+dh  do  dh  55.0 104.52   ! from tips3p geometry
+!
+nonbonded   atom cdiel switch vatom vdistance vswitch -
+     cutnb 8.0  ctofnb 7.5  ctonnb 6.5  eps 1.0  e14fac 1.0  wmin 1.5
+!
+ht       0.0440    1.0       0.8000  
+ot       0.8400    6.0       1.6000  
+
+nbfix
+ot ot -0.1521 3.5364
+ht ht -0.04598 0.4490
+ot ht -0.08363 1.9927
+
+end
+
+! read in 216 tip3 solvent molecules and their
+! equilibrated coordinates.
+
+read sequ tip3 216
+gene solv setu noangle
+
+read coor  card name @0tip216.crd
+
+coor orient norot
+! Set up BLOCK
+! BLOCK 2: res 2; BLOCK 3: res 3;  resi 2 will sit almost on top of resi 1
+coor dupl sele resi 1 end sele resi 2 end
+coor transl xdir 1.0 sele resi 2 end
+block 3
+call 2 sele resi 2 end
+call 3 sele resi 3 end
+lambda 0.0
+end
+fast off
+energy shift
+set e1 ?ener
+block 
+lambda 1.0
+end
+energy
+set e2 ?ener
+block 
+lambda 0.5
+end
+energy
+set e3 ?ener
+calc halfener = (@e1 + @e2) / 2.0
+@qcheck @halfener @e3 0.00001 pssp_block-nosoftcore
+! now with soft core, energies should change..
+block 
+lambda 0.0
+pssp
+end
+energy
+block
+lambda 1.0
+end
+energy
+! Here is the critical test
+block
+lambda 0.5 
+end
+energy
+calc result = abs (?ENER - @E3)
+if @result .le. 0.1 then
+echo pssp_block testcase result: fail
+else
+echo pssp_block testcase result: pass
+endif
+stop

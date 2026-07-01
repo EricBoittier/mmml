@@ -1,0 +1,122 @@
+CHARMM Element doc/aspenr.info $Revision: 1.1.1.1 $
+
+File: ASPENR, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+                Atomic Solvation Parameter Based Energy
+
+Purpose: calculate solvation free energy and forces based on the
+exposed surface area of each atom using Atomic Solvation Parameters.
+
+Please report problems to brbrooks@helix.nih.gov
+
+
+REFERENCES:
+         M. Wesson and D. Eisenberg, 19??.
+
+* Menu:
+
+* Syntax::      Syntax of ASP input
+* Structure::   Structure of the .surf file containing ASP data
+* Examples::    Usage examples of the ASP module
+
+
+File: ASPENR, Node: Syntax, Up: Top, Previous: Top, Next: Structure
+
+
+                                 Syntax
+
+[SYNTAX ASP functions]
+
+Syntax: The ASP specifications can be specified any time prior to an
+        energy calculation and can be input either through reading a
+        file or parsed directly off the command line - although the
+        file route is more usual.  Once turned on, the ASP energy
+        term is in place during the course of the CHARMM run, i.e., it
+        cannot be turned off except using the skipe command, 
+        see *note Skipe (doc/energy.info).
+
+
+Reading surf file:  open unit 1 read vap_to_wat_kd.surf
+                    read surf unit 1
+                    close unit 1 
+
+File: ASP, Node: Structure, Up: Top, Next: Examples, Previous: Syntax
+
+This module computes solvation energies and forces based on the
+surface area model proposed by Wesson and Eisenberg, i.e., 
+E_solv = Sum (Gamma_i * ASA_i + Eref_i), where Gamma_i is a parameter
+describing the free energy cost of burying atom i (in units of
+cal/mol/A^2), ASA_i is the surface area of atom i with radius RvdW_i
+and probe radius Rprobe and Eref_i is a reference solvation energy.
+The analytic expressions for atomic surface areas and corresponding
+cartesian derivitives are used in these calculations.
+
+The values of the required parameters are read from a "surf" file
+which has the following syntax:
+
+* file:  vap_to_wat_kd.surf
+*
+!   Note:  These are asp's from Wolfendon water to vapor numbers,
+!                     adjusted for standard state by Kyte and Doolittle.  
+!                    They are in units of cal/(mol*A**2).
+!                    Table of ASP's 
+!
+   1.400000 ! the probe radius
+!
+! residue-type  atom-name  asp-value  radius  reference-area  swap-pairs
+      ANY           H*        00.0     -1.0       0.0  ! ignore hydrogens
+                
+      ANY           C         04.0      1.90      0.00
+      ANY          OT1      -112.0      1.40      0.00           OT2
+      ANY          OT2      -112.0      1.40      0.00           OT1
+      ANY           N       -112.0      1.70      0.00
+                 .
+                 .
+                 .
+                 .
+       TRP          CZ2        04.0     1.90      0.00
+       TRP          CZ3        04.0     1.90      0.00
+       TRP          CH2        04.0     1.90      0.00
+       ASN          OD1       -112.0    1.40      0.00
+       ASP          OD1       -112.0    1.40      0.00           OD2
+       ASP          OD2       -166.0    1.40      0.00           OD1
+
+END
+
+Notes: -ANY refers to any residue type
+       -A negative radius causes the atom to be ignored
+          (such as hydrogens,...)
+       -Atom name can use CHARMM wildcard rules (not residue names).
+       -These commands ar eprocessed sequentially.  If an
+        atom is matched by more then one line the LAST line is used.
+       -This file is free field format.
+
+
+File: ACE, Node: Examples, Up: Top, Previous: Structure, Next: Top
+
+
+                                Examples
+
+To set up energy calculations/simulations/minimizations with the ASP potential,
+the following call is expected to be adequate in most situations:
+
+       open unit 1 read form name vap_to_wat_kd.surf
+       read surf unit 1
+       close unit 1
+
+When you do an energy calculation, dynamics or minimization with ASP, you get
+columns in the log file printout with energy terms for ASP, e.g.,
+
+ENER ENR:  Eval#     ENERgy      Delta-E         GRMS
+ENER INTERN:          BONDs       ANGLes       UREY-b    DIHEdrals    IMPRopers
+ENER EXTERN:        VDWaals         ELEC       HBONds          ASP         USER
+ ----------       ---------    ---------    ---------    ---------    ---------
+ENER>        0    -44.02560      7.74091      6.01738
+ENER INTERN>        0.00000      0.04160      0.00000      0.00000      0.04556
+ENER EXTERN>        5.95140    -42.32325      0.00000     -7.74091      0.00000
+ ----------       ---------    ---------    ---------    ---------    ---------
+
+and the same during minimization and dynamics.
+
+see also: test cases c27test/aspenr.inp

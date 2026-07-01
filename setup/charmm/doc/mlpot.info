@@ -1,0 +1,462 @@
+﻿PyCHARMM Element doc/mlpot.info 2.0
+
+
+                         Machine Learning Potential (MLpot)
+
+                    By K. Töpfer, L.I. Vazquez-Salazar, O.T. Unke, M. Meuwly
+                    (kai.toepfer@unibas.ch , m.meuwly@unibas.ch)
+
+The MLpot extension in the PyCHARMM toolkit allows using a custom
+machine learning-based (ML) interaction potential based on the Asparagus
+program package (https://github.com/MMunibas/Asparagus.git) to apply, e.g., a 
+PhysNet model potential (J. Chem. Theory Comput.  2019, 15, 3678-3693). This
+implementation allows the user to run mixed ML/MM simulations akin to the more
+widely known QM/MM simulations.
+
+The custom potential energy function does not only provide the
+application of a n-dimensional reactive force field for a selected set
+of ML atoms, it can also provide conformationally dependent atom
+centered charges for computing electrostatic interactions with the
+fixed point charges of the other MM atoms in the simulation. The ML-MM
+electrostatic interactions are handled by the Asparagus model potential
+using the shifted Coulomb cutoff scheme to include the partial derivative
+of the ML atom charges by the ML atom position. Alternatively, fixed point
+charges as defined in the psf file can be used for the ML part as
+well.  Note, that the LJ parameter do not adopt changes in the bonding
+structure. The implementation of the PhysNet model in CHARMM using the
+PyCHARMM API is intended to be as flexible as possible to use for
+other ML potential models.
+
+* Menu:
+
+* Syntax::           Syntax of MLpot Class
+* Description::      Description of MLpot Input Parameters
+* Requirements::     Requirements to Run MLpot Module
+* Capabilities::     Description of Capabilities
+* Examples::         Various Examples
+* Frequent Errors::  Solution for Frequent Errors
+* Notes::            Developer notes
+
+
+
+            Syntax of MLpot Class
+
+pycharmm.MLpot(
+    ml_model
+    ml_Z,
+    ml_selection,
+    ml_charge=0,
+    ml_fq=True,
+    mlmm_ctofnb=None,
+    mlmm_ctonnb=None,
+    **kwargs)
+
+
+            Description of MLpot Input Parameters
+
+  Keyword       -   (Type, Default) Purpose
+  ----------------------------------------------------------------------------
+
+  ml_model      -   (asparagus.interface.model_pycharmm.PyCharmm_Calculator)
+                    PyCHARMM model potential calculator object from the
+                    Asparagus program package, which must be initialized prior
+                    to the activation of the pycharmm.MLpot module.
+
+  Z             -   (list) Respective atomic numbers of the ML atoms
+                    which are consistent with the atomic number label in the
+                    trained ML model.
+
+  ml_selection  -   (pycharmm.SelectAtoms object) SelectAtoms object of the
+                    atoms that are treated by the ML potential. 
+                    
+  ml_charge -       (int, default=0) Total charge of the ML atom selection.
+                    Note: For ml_fq=True, the psf charges
+                    of the ML atom are all set to zero to neglect
+                    electrostatic interaction by the CHARMM force
+                    field. This could be in conflict for a selection
+                    of ML atoms with total charges different than
+                    zero.
+
+  ml_fq         -   (bool, default=True) Use conformational dependent
+                    fluctuating charge prediction of the ML potential model to 
+                    compute the ML-MM electrostatic interaction. If False, the 
+                    ML-MM electrostatic interaction is captured by the CHARMM 
+                    force field using the atomic charges defined in the psf 
+                    file.
+                    
+  mlmm_ctofnb   -   (float, default=None) Maximum non-bonded interaction range
+                    of the ML-MM atom electrostatic interactions. if None, the 
+                    ctofnb value defined in CHARMM is used. Note that ML 
+                    potential uses the non-bonded list to include 
+                    interaction between ML atoms of the central cell with the 
+                    ones from the image cells if periodic boundary 
+                    conditions are enabled. That requires cutnb larger than the 
+                    cutoff range of the PhysNet model and cutnb should be 
+                    larger than cutofnb (ctonnb < ctofnb < cutnb).
+
+  mlmm_ctonnb   -   (float, default=None) Non-bonded interaction range threshold
+                    of the ML-MM atom electrostatic interactions at which the 
+                    switch-off function is applied additional to the shifted 
+                    Coulomb potential scheme. if None, the ctonnb value defined 
+                    in CHARMM is used.
+
+
+            Requirements to Run MLpot Module
+
+The MLpot module requires the working Asparagus program package linked
+via to by the PYTHONPATH environment variable. It is available at 
+https://github.com/MMunibas/Asparagus.git and supports the sampling, 
+training and application of implemented machine learning-based model 
+potentials using the PyTorch module.
+
+To carry out computations with a ML potential a PyCHARMM calculator
+class object of a trained model potential must be initialized in the
+PyCHARMM script and passed to the MLpot function. To avoid errors, the
+MLpot module should be called in the PyCHARMM script after the molecular
+system is fully set up and the non-bonding parameter setup is defined.
+There can only be one MLpot module active in the simulation.
+
+
+            Description of Capabilities
+
+The MLpot module is only callable via PyCHARMM. MLpot is compatible with 
+standard CHARMM machinery for periodic boundaries, non-bonded cutoffs and 
+constant-pressure simulations. If fluctuating charges are disabled, MLpot 
+behaves likes a usual custom energy function defined in usersb and Ewald 
+summation is supported. If fluctuating charges are enabled, only zero 
+charge ML atom selection are supported so far and Ewald summation is 
+applicable. As ML-MM electrostatic interactions are handled by the MLpot 
+module itself, the ML atom charges in the psf file are set to zero to avoid
+double counting. In case of Ewald summation, the near field evaluation of the
+ML-MM electrostatic interaction is done by MLpot, but far range interaction
+between ML-MM atoms becomes zero due to the zero charges of ML atoms in the 
+psf file.
+
+Technically, all existing bonds, angles, dihedrals and improper angles
+between the ML atoms are deleted and ML atom pairs are included to the
+non-bonding exclusion list. CHARMM may also deletes all angles, dihedrals
+and improper angles including just even one ML atom. As there are no
+bonds between ML atoms, SHAKE is not applicable to constraint bond
+distances or angles between ML atoms. If hydrogen atom are part of the
+ML atom selection it is recommended to set the time step to equal or
+lower than 0.5 fs.
+
+No other CHARMM modules are included into the MLpot implementation.
+Thus, all modules affecting partially the potential energy including ML atoms
+(e.g.  BLOCK module) could not be compatible with MLpot and should be 
+thoroughly tested before production runs are carried out.
+
+If the simulated system only contains atoms defined in the ML atom
+selection, CHARMM cannot handle the energy output information
+correctly and shows 'NaN' and '-Infinite' values. The simulation
+however seems to run correctly.
+
+A conversion of the CHARMM neighbor list to a ML-ML and ML-MM atom
+pair list is performed in a CHARMM module (api_func.F90) using module
+defined integer arrays of certain size to avoid allocation each time
+the function is called. Currently the max size support a ML atom
+selection size of 100 atoms (max_Nml) and pair interactions of up to
+100000 (max_Npr). Especially the number of pair interaction might
+become a source for errors for very large ML and MM atom numbers.
+
+
+
+            Examples:
+
+One test script for the simulation of a formic acid dimer in water can be 
+found in the charmm directory (tool/pycharmm/tests/testMLpot_fad_water.py)
+
+Further examples for molecular dynamic simualation can be found in the 
+Aspargus example directory:
+https://github.com/MMunibas/Asparagus/tree/master/examples/NH3_pycharmm
+
+
+            Frequent Errors:
+
+- Error when importing pycharmm module or generally 'ctype' errors
+  Error:
+    ...
+  Possible Solution:
+    - Check whether the version of the python package 'protobuf' is lower or 
+      equal '3.20.1'. Newer version lead to errors reqgarding 'ctype' and the
+      pipe between CHARMM (Fortran) and PyCHARMM  (Python).
+    - Recompile the full CHARMM version including the '--as-library' label 
+      when running './config.sh --as-library'. Don't forget to run 
+      'make install' after compilation to generate 'lib/libcharmm.so'.
+      (aka "Have you tried turning it off and on again?", Roy Trenneman, 
+      The IT Crowd (2006-2013))
+
+- Error in PyCHARMM when reading system (e.g. read psf file)
+  Error:
+    """
+    ***** LEVEL -3 WARNING FROM <psf_read_formatted> *****
+    ***** atom type not found for atom
+    ****************************************** 
+    """
+  Possible Solution:
+    - Different to native CHARMM, PyCHARMM needs an 'ATOMS' block in the 
+      parameter ('*.par' or '*.prm') files. Otherwise it won't recognize 
+      bonding terms. Basically just copy the respective atom definitions from 
+      the topology file ('*.top' or '*.rtf') to the 'ATOMS' block at the top 
+      of the parameter file.
+      E.g. (examples/FPhOH_water/toppar/pfoh.par):
+        """
+        * Parameters generated by analogy by
+        * CHARMM General Force Field (CGenFF) program version 1.0.0
+        *
+        
+        ATOMS
+        MASS    61 CG2R61  12.01100  ! 6-mem aromatic C
+        MASS    65 CG2R66  12.01100  ! 6-mem aromatic carbon bound to F
+        MASS    24 HGR62    1.00800  ! nonpolar H, neutral 6-mem planar ...
+        MASS    23 HGR61    1.00800  ! aromatic H
+        [...]
+
+        BONDS
+        CG2R61 CG2R61  305.00     1.3750 ! PROT benzene, JES 8/25/89
+        CG2R61 CG2R66  305.00     1.3700 ! NAMODEL difluorotoluene
+        [...]
+        """
+
+- User energy from MLpot (PhysNet) shows 'NaN'.
+  Errors:
+    - None, just 'NaN' in energy output block for 'Euser'
+  Possible Solution:
+    - Check if the atomic number list passed to the MLpot module matches with
+      the atomic numbers in the training data. A mismatch can likely appear 
+      when using ASE to read a .pdb file and returning the atomic numbers 
+      (e.g. 'Z = atoms.get_atomic_numbers()', see line 102 in 
+      'examples/Criegee/Script_run.py'). ASE interpret the atom name as atom
+      type and names such as 'CA...' for an alpha-carbon can be seen as atom
+      type calcium 'Ca'.
+
+- ML treated molecule breaks imediatly or quickly at the start of MD simulation
+  or even unconstrained minimizations.
+  Errors:
+    - ML molecule adopting chemically wrong structure or splits into atoms
+  Possible Solution:
+    - In MD simulations, conformations are adopted which are outside the 
+      training samples.
+      This artifact mostly appears when the ML treated molecule adopts 
+      structures which were not included in the training set. This often 
+      happens for, e.g., ML-MM simulation of ML molecules in MM solution 
+      where different conformation were reached in comparison to gas phase 
+      simulations.
+    - In structure optimizations, forces of initial structures are high and 
+      lead to bad conformations.
+      It also can happend during the structure optimization (MINI) when the 
+      new guess is outside the trained conformation because of a huge 
+      potential (and forces) difference between classical force field and the
+      ML model potential. Normally, large changes or even jumps between
+      optimization steps are prevented by method and limited by the keyword
+      'step real' (default: step 0.02). This was not observed in the case of a
+      'MINI SD' run, that lead to large jumps in bond lengths (up to 0.5 Ang)
+      after the first step. 
+      Fix: - lower step parameter, e.g., 'MINI SD STEP 0.001'
+
+
+
+            Developer Notes
+
+Modified CHARMM c49a2 files:
+
+- energy/energy.F90 - line 394:
+
+    use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set
+
+- energy/energy.F90 - line 1003-1012:
+
+    if (qeterm(user) .and. mlpot_is_set()) then
+      call mlpot_call(&
+          eterm(user), &
+          natom, ntrans, natim, &
+          x, y, z, &
+          dx, dy, dz, &
+          bnbnd%jnb, bnbnd%inblo, &
+          bimag%imattr, bimag%imjnb, bimag%imblo)
+    end if
+
+- image/upimag_util.F90 - line 27:
+
+    use api_func, only: mlpot_is_set
+
+- image/upimag_util.F90 - line 63-67:
+       
+    IF(MLPOT_IS_SET()) THEN
+        CALL MKIMNB_MLPOT(NATOM,NATIM,NTRANS,INB,IBLO,NNB, &
+                          BIMAG%IMATPT,BIMAG%IMATTR, &
+                          BIMAG%IMINB,BIMAG%IMIBLO,BIMAG%NIMINB,(I))    
+    END IF
+
+- image/upimag_util.F90 - line 237-362:
+    
+   SUBROUTINE MKIMNB_MLPOT(NATOM,NATIM,NTRANS,INB,IBLO,NNB, &
+       IMATPT,IMATTR,INB14,IBLO14,NNB14,MXNB14)
+    !-----------------------------------------------------------------------
+    !     THIS ROUTINE TAKES THE PSF INFORMATION AND GENERATES
+    !     A NONBONDED EXCLUSION LIST (INB14 and IBLO14) 
+    !     FOR MLPOT TREATED ATOMS.
+    !
+    !     By Kai Toepfer May 2022
+    !
+    ...
+    END SUBROUTINE MKIMNB_MLPOT
+
+- gener/update.F90 - line 60:
+
+    use api_func, only: mlpot_update, mlpot_is_set   ! Kai Toepfer Jan. 2024
+
+- gener/update.F90 - line 367-376:
+
+    !
+    ! Update ML-ML and ML-MM atom pair lists for MLpot module
+    ! Kai Toepfer, Jan. 2024
+    !
+    if(mlpot_is_set().and.(LNBOND.or.LIMAGE)) then
+       call mlpot_update(                        &
+          natom, ntrans, natim,                  &
+          bnbnd%jnb, bnbnd%inblo,                &
+          bimag%imattr, bimag%imjnb, bimag%imblo)
+    endif
+
+- nbonds/heurist.F90 - line 308:
+
+   use api_func, only: mlpot_update, mlpot_is_set   ! Kai Toepfer Jan. 2024
+
+- nbonds/heurist.F90 - line 577-587:
+
+   !
+   ! Update ML-ML and ML-MM atom pair lists for MLpot module
+   ! Kai Toepfer, Jan. 2024
+   !
+   if(mlpot_is_set().and.(QDONB.or.QDOIM.or.QDOXT)) then
+     call mlpot_update(                        &
+       natom, ntrans, natim,                   &
+       bnbnd%jnb, bnbnd%inblo,                 &
+       bimag%imattr, bimag%imjnb, bimag%imblo)
+     if(prnlev >= 4) write(outu,100) 'MLpot',istep
+   endif
+
+- api/api_func.F90:
+    
+    - global variables added
+    + function callback_mlpot
+    + subroutine mlpot_set_func
+    + subroutine mlpot_set_properties
+    + subroutine mlpot_unset
+    + subroutine mlpot_update
+    + subroutine mlpot_call
+    + function mlpot_is_set
+    
+- api/api_image.F90:
+
+    + function image_get_ucell  # <- not needed in the MLpot implementation
+    + function image_get_ntrans
+    + subroutine image_update_bimag
+    
+- api/api_nbonds.F90:
+
+    + function nbonds_get_ctonnb
+    + function nbonds_get_ctofnb
+    + subroutine nbonds_update_bnbnd
+    
+- api/api_psf.F90:
+
+    + function psf_get_nnb
+    + subroutine psf_set_charges
+    + subroutine psf_get_iblo_inb
+    + subroutine psf_set_iblo_inb
+
+    
+Modified PyCHARMM files:
+
+- energy_mlpot.py   <- Added
+
+- __init__.py - line 22:
+
+    from .energy_mlpot import MLpot
+    
+- image.py:
+
+    + def get_ucell
+    + def get_ntrans
+    + def update_bimag
+    
+- nbonds.py:
+
+    + def get_ctonnb
+    + def get_ctofnb
+    + def update_bnbnd
+    
+- psf.py:
+
+    + def get_nnb
+    + def set_charge
+    + def get_iblo_inb
+    + def set_iblo_inb
+    
+# Selection by atom number is not required for MLpot, but might be a convenient 
+# addition.
+
+- select.py;
+
+    + def by_atom_num
+    
+- select_atoms.py - line 37:
+    
+    def __init__(self, selection=None,
+                 select_all=False,
+                 seg_id='',
+                 res_id='', res_name='',
+                 atom_nums=None,		#<- line 39
+                 atom_type='', chem_type='',
+                 initials=False,
+                 lonepairs=False,
+                 hydrogens=False,
+                 update=True):
+                 
+- select_atoms.py - line 67-71:
+    
+        if not atom_nums is None:
+            if isinstance(atom_nums, int):
+                self.by_atom_nums([atom_nums])
+            else:
+                self.by_atom_nums(atom_nums)
+
+- select_atoms.py - line 137-142:
+
+    def by_atom_nums(self, atom_nums):
+        for num in atom_nums:
+            new_sel = select.or_selection(
+                self.get_selection(), select.by_num(num))
+            self.set_selection(new_sel)
+        return self
+
+
+        
+Developer comments:
+
+- One thing I saw in previous implementation of ANI in PyCHARMM and could be
+a great improvement in performance.
+When assigning forces to the c_type arrays dx, dy and dz, an immense
+improvement in the performance is obtained when the array of the atom force
+contribution is converted to a c_type list first (note the reduction to 
+1-dimensional c_type list). Numpy arrays have already a built-in function for 
+that: e.g. numpy.array().ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+I guess doing it once for the whole list is more effective than doing a type 
+conversion float32 -> c_long or float64 -> c_double for each force contribution 
+separately.
+
+TO DO:
+
+- At the moment, the potential energy computed by the MLpot module is reported
+in the USER energy block. The MLpot energy contains not just the internal 
+potential energy of the ML atom selection but also the electrostatic 
+interaction between ML atoms and MM atoms of the central cell and between
+ML atoms and MM atoms of the image cells. In later version it would be
+advantageous if MLpot returns both energy contributions, ML atom potential
+and ML-MM electrostatic potential, separately and that these can be added to
+the correct energy contribution ENERgy and ELECtrostatic/IMELECtrostatic.
+
+
+

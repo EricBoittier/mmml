@@ -1,0 +1,109 @@
+* Test scrips for CHARMM's GBSW routine
+* Written by Wonpil Im (6/03)
+*
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+stream datadir.def
+
+
+! read parameter and topology files
+
+open unit 10 read form name @0top_all22_prot.inp
+read rtf unit 10 card
+close unit 10
+
+open unit 10 read form name @0par_all22_prot.inp
+read param unit 10 card
+close unit 10
+
+! read sequence and coordinate
+
+open read card unit 10 name @01fsv_vacu.crd
+read sequence coor card unit 10
+generate PROT setup warn
+close unit 10
+
+open read card unit 10 name @01fsv_vacu.crd
+read coor card unit 10
+close unit 10
+
+coor stat
+coor orient
+coor stat
+
+
+! To perform a single-point energy calculation with infinite cutoffs:
+
+prnlev 0 @pnode
+stream @0radius.str
+prnlev 5 @pnode
+scalar wmain statistics select .not. type H* end
+define check select (.not type H* ) .and. ( property wmain .eq. 0.0 ) show end
+if ?nsel ne 0  stop       !some heavy atom have a zero radius
+
+GBSW sw 0.3 sgamma 0.03 dgp 1.5 GBenergy
+
+! To perform a minimization or dynamics with cutoffs
+
+NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+ENERGY
+
+mini abnr nstep 20
+
+! dynamics, no thermostat, alphas update every step
+
+dynamics vver start timestep 0.001 nstep  50 nprint 10 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq -1
+
+! dynamics, with update every 2 steps, thermostat a MUST!
+
+GBSW igbfrq 2
+
+dynamics vver start timestep 0.001 nstep  50 nprint 10 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200 -
+        NOSE RSTN TREF 298.0 QREF 10 NCYC 10
+
+
+GBSW reset
+
+! 
+! The same calculations with the molecular representation (GBSWms)
+!
+
+prnlev 0 @pnode
+stream @0radius.str
+prnlev 5 @pnode
+scalar wmain statistics select .not. type H* end
+define check select (.not type H* ) .and. ( property wmain .eq. 0.0 ) show end
+if ?nsel ne 0  stop       !some heavy atom have a zero radius
+
+GBSW molsurf sgamma 0.03 dgp 1.5 GBenergy
+
+! To perform a minimization or dynamics with cutoffs
+
+NBOND atom switch cdie vdw vswitch ctonnb 16 ctofnb 16 cutnb 20
+ENERGY
+
+mini abnr nstep 20
+
+! dynamics, no thermostat, alphas update every step
+
+dynamics vver start timestep 0.001 nstep  50 nprint 10 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq -1
+
+! dynamics, with update every 2 steps, thermostat a MUST!
+
+GBSW igbfrq 2
+
+dynamics vver start timestep 0.001 nstep  50 nprint 10 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200 -
+        NOSE RSTN TREF 298.0 QREF 10 NCYC 10
+
+
+stop

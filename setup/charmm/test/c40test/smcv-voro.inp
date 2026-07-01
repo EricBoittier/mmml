@@ -1,0 +1,258 @@
+* String method in collective variables (SMSV) test case
+* alanine dipeptide isomerization in vacuum
+* this is a more complex example that involves sm0k followed
+* by voronoi dynamics with evolution; NOTE that the latter is an experimental
+* feature, i.e. it is recommended to run voronoi dynamics
+* starting from a converged path, with evolution disabled
+*
+!SUMMARY : generate initial path by linear interpolation
+! in phi/psi dihedral angles; perform optimization
+! compute the path and free energy along the path
+
+if ?stringm .ne. 1 then
+   echo "String method code not compiled."
+   echo "Test NOT performed."
+   stop
+endif
+!
+if ?numnode  .lt. 3  then
+  echo "At least three cpu cores are required to run this test."
+  echo "Test NOT performed."
+  STOP
+endif
+!
+if ?numnode  .ne. 8  then
+  echo "Internal PASS/FAIL test only available for 8 cpu cores b/c result depends on # cores."
+  echo "Internal PASS/FAIL test check will be omitted."
+endif
+!
+set myname smcv-voro.inp
+!
+stream datadir.def
+!**********************************************************
+set nrun 0
+set toppar  @0
+set outdir  @9
+set datadir @outdir
+set outputdir @outdir
+! read parameter and topology files
+!
+open unit 1 read form name @TOPPAR/top_all22_model.inp
+read rtf card unit 1
+close unit 1
+!
+open unit 1 read form name @TOPPAR/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! ***************************** generate alanine dipeptide
+read sequence card
+* alanine dipeptide in vacuum
+*
+1
+ALAD
+
+generate dial setup warn
+write psf card name @outdir/diala.psf
+!
+set nlocal 1
+set nrep ?numnode
+!
+mcom string @nlocal by @nrep ! set up communication: now we have nrep groups
+!**************************** replica variables ***********
+set ncpu ?numnodeg ! global cpu count
+set me ?mynodeg ! global rank
+!
+! set dihedral angles for this replica
+! (1) define range of angles
+calc phis -90.
+calc psis 90.0
+calc phie @phis+180.0
+calc psie @psis-180.0
+
+if @ncpu .gt. 1 then 
+ calc mypsi = @psis + ( @psie - @psis ) * @me / ( @ncpu - 1 )
+ calc myphi = @phis + ( @phie - @phis ) * @me / ( @ncpu - 1 )
+else
+ calc mypsi = @psis
+ calc myphi = @phis
+endif 
+!
+ic edit
+dihe  dial 1 clp   dial 1 nl   dial 1 ca   dial 1 crp @myphi
+dihe  dial 1 nl   dial 1 ca   dial 1 crp   dial 1 nr @mypsi
+end
+!
+! generate coordinates
+IC PARA
+IC SEED 1 CLP 1 NL 1 CA
+IC BUILD
+!
+!
+! specify "infinite" cutoff
+update cutnb 1000.0
+! minimize using zero temp. string :
+string sm0k init
+string sm0k repa iter 1 defi 1.05 orie sele .not. hydrogen end
+string sm0k mini nstep 1000 repf 20
+string sm0k done
+!
+! ***************************** DONE generating alanine dipeptide
+! ***************************** initialize SMCV; allocate memory for a maximum of 2 cv (optional)
+string smcv init maxcv 2
+!
+! define collective variables
+string colvar add dihe_com -
+ select atom dial 1 clp end -
+ select atom dial 1 nl end -
+ select atom dial 1 ca end -
+ select atom dial 1 crp end
+string colvar add dihe_com -
+ select atom dial 1 nl end -
+ select atom dial 1 ca end -
+ select atom dial 1 crp end -
+ select atom dial 1 nr end
+!
+string colvar list ! list variables
+string colvar fill ! fill CV values from main set
+! copy to other sets
+string colvar copy main ref ! reference struture
+!
+!save as the reference structure
+string colvar write name @datadir/cv_0.dat col ref
+string colvar weight calc
+string colvar weight write name @datadir/wgt@nrun.dat
+string colvar mmat write name @datadir/mmat@nrun.dat ! to see the metric tensor
+string colvar mmat write name @datadir/minv@nrun.dat inv ! to see its inverse
+!
+! set up statistics
+string colvar stat count 0 vlog vnam @datadir/voro@nrun vmap voro -
+		rmsd rname @datadir/rmsd@nrun.dat  -  ! save rmsd & append
+		arcl aname @datadir/arc@nrun.dat   -  ! save arclength
+		curv cvnm @datadir/curv@nrun.dat   -  ! save arclength
+		colv cnam @datadir/cv@nrun.dat     -  ! collective variables file
+		mmat mnam @datadir/mmat@nrun.dat   -  ! short-term average of metric tensor
+
+! check to make sure replicas are within their cells
+string colvar voro vmap calc
+string colvar voro vmap print name @datadir/vmap@nrun.map
+string colvar voro vmap clear ! clear before dynamics
+!
+string colvar voro vcut 2 ! empirical tube cutoff : restrict replicas to within 2 angstroms of string
+!
+!set fbeta for langevin
+scalar fbeta set 10 select all end
+!
+set tstep 0.001
+set temp 300
+!
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+!
+!!!!!!!!!!!!!!!!!!!! set up SMCV reparameterization
+string colvar repa iter 1 defi 1.021 bspline
+!
+!!!!!!!!!!!!!!!!!!! string options
+set nsteps 50000
+set dcdfreq 1000 ! trajectory output frequency
+set freq 1000    ! misc frequency
+!
+set memo 0.995  ! evolution parameter
+if @me eq 0 set memo 0.9999     ! keep endpoints fixed to help with convergence
+incr me by 1
+if @me eq @ncpu set memo 0.9999
+incr me by -1
+!
+set save 10 ! frequency of saving inst. cv samples and M tensor values
+set evoskip 100 ! timesteps to skip after evolution before updating statistics
+!
+!*********************************************************
+! test SMCV Voronoi dynamics
+nobomb ! avoid dying on "max iterations exceeded in voronoi smart update
+
+string colvar dyna -
+voronoi - ! use voronoi tessellation constraints
+evolve evof @freq expo memo @memo evos @evoskip - ! string evolution parameters
+repa repf @freq -   ! reparametrization
+stat staf @freq -   ! statistics output
+hisf @save -        ! history time slice frequency (for statistics)
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea 67 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+! coordinates
+string open card write unit 1 name @outputdir/diala@nrun_@me.cor
+write coor card unit 1
+! print main CV
+string colvar print name @outputdir/cv_@nrun.dat
+!
+string smcv done
+bomlev -1
+mcom done
+!
+!=================== check CV calues (string) ==================================
+if ?numnode eq 8 then ! internal PASS/FAIL :  compare free energy profile
+!
+label check
+! read cv.dat file
+! reference values
+!
+set cvr1 -0.142134115414746E+01
+set cvr2 -0.136996968420128E+01
+set cvr3 -0.122470327901048E+01
+set cvr4 -0.921316689488070E+00
+set cvr5 -0.453568155605614E+00
+set cvr6 0.802219709045368E-01
+set cvr7 0.639731565305834E+00
+set cvr8 0.121723611110543E+01
+set cvr9 0.123652062554362E+01
+set cvr10 0.667100238863333E+00
+set cvr11 0.116425259516296E+00
+set cvr12 -0.373430787232915E+00
+set cvr13 -0.718195702788219E+00
+set cvr14 -0.971169792291492E+00
+set cvr15 -0.112442076400515E+01
+set cvr16 -0.118130824274494E+01
+!
+! change file to one entry per line : 
+if ?mynode eq 0 system "cat scratch/cv_0.dat | sed -e 's/^  *//g' | awk '{for (i = 1; i <= NF; ++i) print $i}' | tail -n16 > scratch/_tmp"
+open read card name scratch/_tmp unit 1
+set i 0
+set mue 0
+set muetol 0.75 ! kcal/mol
+calc ncv = ?numnode * 2
+label feloop
+  incr i
+  get unit 1 cv@@i
+  calc mue = @mue + abs ( @cv@@i - @cvr@@i )
+  if @i lt @ncv -
+goto feloop
+calc mue = @mue / ?numnode ! mean unsigned error
+if @mue le @muetol then
+ echo @myname TESTCASE RESULT: PASS
+else
+ echo @myname TESTCASE RESULT: FAIL
+ incr testfail
+endif 
+endif
+
+stop
+

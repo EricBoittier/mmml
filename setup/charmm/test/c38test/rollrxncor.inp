@@ -1,0 +1,71 @@
+* CHARMM c38a1 testcase
+* Test RXNCOR for roll angles
+* Author J Spiriti, 2012
+*
+
+!the command parser only accomodates an 8-letter variable name
+if ?ADUMBRXN  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?ROLLRXNC  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomblev -1
+stream datadir.def
+!This script is to be executed from the run directory.
+open unit 1 read formatted name @0top_all22_na.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read formatted name @0par_all22_na.inp
+read para card unit 1
+close unit 1
+read sequ card
+*
+6
+cyt thy cyt gua ade gua
+generate a warn angles dihedrals first 5ter last 3ter 
+autogen angles dihedrals
+patch deo1 a 1
+patch deo1 a 2
+patch deo1 a 3
+patch deo2 a 4
+patch deo2 a 5
+patch deo2 a 6
+
+generate b dupl a
+
+open unit 1 read formatted name @0short-dna.crd
+read coor card unit 1
+close unit 1
+
+
+
+set a1 = 3
+set b1 = 4
+lower
+stream @0roll-angles.str !3 4
+rxncor set nrxn 1 r3
+
+
+!The values for the "umbrella coordinate" should be a little bit above 0.5 (corresponding to a roll angle of +0-10 degrees).
+open unit 50 write formatted name @9umbcor-roll-rxncor
+!THRE setting prevents histograms from being eliminated.
+calc pip = ?pi + 1e-4
+calc res = 360 / 1
+umbrella rxncor nresol @res trig 12 poly 1 min -@pip max @pip name r3
+umbrella init nsim 100 update 10000 equi 1000 thresh 1e99 temp 300 ucun 50 maxbias 10.0
+
+dynamics tref 300 qref 20 start -
+             nstep 200 timestep 0.001 -
+             ihbfrq 0 inbfrq 10  ilbfrq 5 -
+             iseed 12 -
+             nprint 100  iprfreq 100 -
+             isvfrq 100  iunwrite -1 iunread -1 -
+             wmin 1.2
+
+test first select all end
+stop

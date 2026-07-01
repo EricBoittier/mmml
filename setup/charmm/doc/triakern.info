@@ -1,0 +1,328 @@
+		Triatomic Kernel Module*
+
+by
+Marco Pezzella
+Debasish Koner
+Kai Töpfer
+Markus Meuwly
+
+TRIAKERN provides additional potential forms for three atomic systems, beside 
+the usual bond/bond/bending potentials provided in CHARMM. The main purpose of 
+this module is to provide high-accuracy intramolecular potentials that 
+reproducing kernels can achieve. The module substitutes the potentials 
+involved, defined in the PSF file, with a new three body term. The module is
+intended to be used for spectroscopic purposes and, in case of single reference potentials, for reactive dynamics. 
+TRIAKERN is invoked using the TKRN keyword.
+
+References:
+[1] Oliver T. Unke and Markus Meuwly, J. Chem. Inf. Model., 2017, 57, 8,
+	1923–1931.
+[2] Seyedeh Maryam Salehi, Debasish Koner and Markus Meuwly, J. Phys. Chem. B, 
+	2019, 123, 15, 3282-3290.
+[3] Debasish Koner, Juan Carlos San Vicente Veliz, Ad van der Avoird, and 
+	Markus Meuwly, Phys. Chem. Chem. Phys., 2019, 21, 24976-24983
+
+Syntax ::  Syntax of the TRIAKERN module.
+Description :: A brief description of the module commands and how it works.
+How to build the grid :: Brief description of how to build a grid.
+Example  :: Energy conservation for the He--H2 complex from Reference [3]
+
+
+!---------------------------------- Syntax -----------------------------------!
+
+
+TKRN {	ACTIvate [ {csvfile} STR ] [ {k1} INT ] [ {k2} INT ] [ {k3} INT ] 
+		[ {coortype} STR ] unit-conversion 3x atom selection }
+TKRN { 	CLEAr }
+
+unit-conversion::=  [BOHR] [PCNV real] [HARTree] [KJMOl] [EVOLt] [ECNV real]
+
+
+	Description of the TRIAKERN module.
+
+ACTI - 	Will activate the module, substituting the interactions between the 
+		three atoms with the ones implemented in CHARMM.
+
+CLEA - 	Removes all the interactions introduced by the ACTI command.
+
+unit-conversion 	-	Provide options to convert between Kernel potential 
+						units and CHARMMs AKMA units.
+
+3x atom selection 	- 	Selection of atom(s) 1, 2 and 3, respectively.
+
+
+!-------------------------------- Description --------------------------------!
+
+TRKN ACTI:
+The command 'TRKN ACTI' must be followed by a string label of the external 
+.csv file (csvfile) name without file extension, 3 integer number for the 
+kernel type function and a 4 letter label for the coordinate grid. The order 
+for the definition of the atom selection or unit conversion parameter in 
+the input command is then arbitrary. The command will replace the bond and
+angle potential contribution with a Kernel potential. That means that the 
+respective bond and angle parameter do not have to be set to zero. The 
+Kernel potential contribution is added to the bond energy part 'EBOND' as the
+split of a 3-atomic potential into bond and angle contribution is 
+indeterminable.
+
+
+{csvfile}:
+The external .csv file contains an ordered three dimensional grid of 
+coordinates and energies, see the "How to build the grid" section. This file
+is defined without its file extension (e.g. if called 'pes1.csv' just input 
+'pes1') and is expected to be given in a .csv format with extension .csv or 
+direct as RKHS kernel file of the same name but with file extension .kernel 
+(e.g 'pes1.kernel'). 
+The routine checks for the existence of a .kernel file with the specified 
+name. If it does not exist, it will look for the ".csv" file and create a new 
+.kernel file.
+
+{k1}, {k2}, {k3}:
+Next are 3 integer numbers describing the kernel coordinate type function 
+for each of the 3 degrees of freedom (e.g. '0 0 16', see table for available 
+kernel types and integer number below or in extbond.info). For additional 
+technical details, see Reference [1].
+	
+	Kernel number -> Kernel type
+	0  -> Reciprocal Power N2 M6 Kernel 
+	1  -> Reciprocal Power N3 M6 Kernel
+	2  -> Reciprocal Power N2 M5 Kernel 
+	3  -> Reciprocal Power N3 M5 Kernel
+	4  -> Reciprocal Power N2 M4 Kernel 
+	5  -> Reciprocal Power N3 M4 Kernel
+	6  -> Reciprocal Power N2 M3 Kernel 
+	7  -> Reciprocal Power N3 M3 Kernel
+	8  -> Reciprocal Power N2 M2 Kernel 
+	9  -> Reciprocal Power N3 M2 Kernel
+	10 -> Reciprocal Power N2 M1 Kernel 
+	11 -> Reciprocal Power N3 M1 Kernel
+	12 -> Reciprocal Power N2 M0 Kernel 
+	13 -> Reciprocal Power N3 M0 Kernel
+	14 -> Exponential Decay N2 Kernel
+	15 -> Exponential Decay N3 Kernel
+	16 -> Taylor Spline N2 Kernel
+	17 -> Taylor Spline N3 Kernel
+	18 -> Laplacian Kernel
+	19 -> Bernoulli N2 Kernel
+
+{coortype}:
+Next is a 4 letter label of the coordinate type of the grid (e.g. 
+'jdrt' for Jacobi coordinates (j) with the order distance atom 1 to 2 
+(d, usually labelled r), distance center of mass atom 1,2 to atom 3 (r,
+usually labelled R but capitalisation is ignored in CHARMM/Fortran) and
+angle theta between vector d and r). The following grid types are predefined:
+
+	'iddd' or 'i123' or 'int2':
+		Internal coordinates expressed by the three interatomic distance in
+		the order distance atom 1 to 2, distance atom 2 to 3 and distance 
+		atom 3 to 1. Note, the atom order is defined by the atom selection part
+		of the input line.
+	'jdrz':
+		Internal Jacobi coordinates expressed by atom distance 1 to 2 (d), 
+		distance center of mass of atom distance 1,2 to atom 3 (r) and the 
+		angle theta between the respective vectors d, r in a z-representation 
+		defined by z = (1 - cos(theta))/2.
+	'jzrd' or 'jaco':
+		Internal Jacobi coordinates expressed as in 'jdrz' but with the order 
+		z, r, d.
+	'jdrt':
+		Internal Jacobi coordinates such as 'jdrz' but with angle theta (t) 
+		between d and r expressed as angle in radian (order d, r, t).
+	'jtrd':
+		Internal Jacobi coordinates such as 'jzrd' but with angle theta (t) 
+		between d and r expressed as angle in radian (order t, r, d).
+	'rddz':
+		Internal Radau coordinates expressed by atom distances between the 
+		atoms 2 to 1 (d1) and atoms 2 to 3 (d2), and the angle theta between
+		the respective vectors d1 and d2 in a z-representation defined by 
+		z = (1 - cos(theta))/2.
+	'rzdd' or 'int1':
+		Internal Radau coordinates expressed as in rddz but with the order
+		z, d1, d2.
+	'rddt':
+		Internal Radau coordinates such as 'rddz' but with angle theta (t) 
+		between d1 and d2 expressed as angle in radian (order d1, d2, t).
+	'rtdd':
+		Internal Radau coordinates such as 'rzdd' but with angle theta (t) 
+		between d1 and d2 expressed as angle in radian (order t, d1, d2).
+	'cust':
+		Customizable coordinate system subroutine. 
+
+atom selection:
+The atom selection defines either 3 single atoms or 3 sets of atoms that 
+defines for one Kernel potential or multiple Kernel potentials the atoms in the
+order 1, 2 and 3.
+E.g., if the atom selection is just one atom each (e.g. 'sele bynum 1 end sele 
+bynum 2 end sele bynum 3 end'), it will replace the bond and angle potential
+between the 3 atoms with a Kernel potential but only if an angle between these
+3 atoms is defined in any arbitrary order (e.g. 1-2-3 or 2-3-1). If multiple
+angles including the selected atoms are defined, only one Kernel potential is
+applied (redundancy check within the module) but all angle and bond potential
+contribution are still deactivated.
+If the atom selection includes multiple angles (e.g. 'sele type OH2 end sele 
+type H1 end sele type H2 end'), there will Kernel potentials applied for all
+angles containing exactly one atom of the atom sets 1, 2 and 3 but in any 
+arbitrary order.
+To check the intended definition of triatomic Kernel potentials, if the input
+file is run at a print level 'prnlvl' >= 5, the output will print a list 
+of all defined Kernel potentials including atom indices.
+
+unit-conversion:
+The unit conversion options can be used to adjust the units used for the 
+coordinate grid and energy in the .csv file and the AKMA units used by CHARMM.
+This option should eliminate the need of changing a source .csv file to match
+the CHARMM unit requirements.
+If distances in the .csv file are defined in Angstrom, no unit conversion 
+options for the coordinates are required, but if they are  defined in Bohr,
+the option 'BOHR' will convert the coordinate input from CHARMM to Bohr and 
+also convert the computed forces back. In other cases, the option 'PCNV real'
+defines a conversion factor applied to convert position (and forces) from 
+Angstrom to the spatial unit in the .csv file (e.g. for Bohr 'PCNV 1.8897').
+If both options are specified, the last option defined is used.
+If the energy in the .csv file are defined in kcal/mol, no unit conversion 
+options for the energy is needed. Otherwise, the options 'HART', 'KJMO' or
+'EVOL' instruct an energy (and force) conversion from Hartree, kJ/mol or eV,
+respectively, to kcal/mol (and kcal/mol/Angstrom). A custom energy conversion
+factor can be defined by 'ECNV real' (e.g. from Hartree to kcal/mol with 
+'ECNV 627.509'). If multiple options are specified, the last option defined is
+used.
+
+TRKN CLEA:
+The command 'TKRN CLEA' deactivate the Kernel potential contributions. 
+However, the default CHARMM energy is not restored until the next setup of the
+bond and angle arrays. This should be executed at each start of a method such
+as dynamics, but should be carefully checked.
+
+
+Compatibility:
+No compatibility issues with of the TRIAKERN module wit other modules in CHARMM
+are observed. However, it does not support other potential manipulation modules
+such as the BLOCK module.
+
+!---------------------------- How to build a grid ----------------------------!
+
+1 - For a representative number of points of the potential energy surface, 
+perform a set of ab initio calculations along the three dimensions of your
+chosen coordinate system a, b and c (e.g., Jacobi r, R, theta or Radau r1, r2,
+theta).
+
+2 - Save the coordinates and the energies, in increasing order of a, b, c in 
+a .csv file with N, M and K are the number of point for each coordinate, 
+respectively. Please refer to the previous section kernel coordinate type for 
+each coordinate set.
+
+		a1,b1,c1,E(1)
+		a1,b1,c2,E(2)
+		....
+		a1,b1,cK,E(K)
+		a1,b2,c1,E(K+1)
+		a1,b2,c2,E(K+1+1)
+		....
+		a1,bM,cK,E(M*K)
+		a2,b1,c1,E(M*K+1)
+		a2,b1,c2,E(M*K+2)
+		....
+		aN,bM,cK,E(N*M*K)
+
+3 - It is recommended for a good Kernel potential accuracy with respect to the 
+reference energies, that the zero line of the potential energies E_ref are
+shifted to the desired asymptote E_asympt by E_ref - E_asympt, such that E(r_asympt)=0. The asymptote should be the full atomization (or full 
+dissociation) energy of the 3-atomic system, because the Kernel function
+decays to zero for coordinates outside the definition range (especially 
+important for reactive potentials). Another motivation is to avoid a Kernel 
+energy contribution with such a large absolute number that it lead to artifacts
+in displaying the energies in the output.
+
+
+!---------------------------------- Example ----------------------------------!
+
+test/c47test/triakern_heh2.inp
+
+The Kernel from Reference [2], expressed in 'int1', is used to run an energy 
+minimization. Test First is then invoked to check if the difference between the 
+analytical and numerical gradient is consistent within the sixth decimal place.
+
+Activation command for HeH2 with a heh2.csv file in Angstrom and kcal/mol:
+"""
+TKRN acti heh2 16 4 4 int1 -
+  sele bynum 1 end -
+  sele bynum 2 end -
+  sele bynum 3 end
+"""
+
+
+test/c49test/triakern_kscn_water.inp
+
+Test script for multiple different ways to activate the triakern module 
+for different residues (SCN anion and water) in an aqueous KSCN solution. 
+The script includes an optional minimization, heating, equilibration and 
+NVE simulation step.
+
+Activation command for 75 SCN anions with a rkhs_scn_jdrz.csv file in Bohr and 
+Hartree:
+
+Option 1:
+"""
+set n 1
+label loop_trkn_scn
+
+  TKRN ACTI rkhs_scn_jdrz 0 0 16 jdrz -
+    ecnv 627.5094738898777 pcnv 1.8897261258369282 -
+    sele resid @n .and. resname SCN .and. type N3C end - ! 1 atom selected
+    sele resid @n .and. resname SCN .and. type C3N end - ! 1 atom selected
+    sele resid @n .and. resname SCN .and. type S end     ! 1 atom selected
+  
+  increase n by 1
+if n le 75 goto loop_trkn_scn
+"""
+
+Option 2 (recommended):
+"""
+TKRN ACTI rkhs_scn_jdrz 0 0 16 jdrz -
+  hartree bohr -
+  sele resname SCN .and. type N3C end -	! 75 atoms selected
+  sele resname SCN .and. type C3N end - ! 75 atoms selected
+  sele resname SCN .and. type S end     ! 75 atoms selected
+"""
+
+Activation command for TIP3P water residues with a rkhs_water_rddz.csv file in 
+Bohr and Hartree:
+"""
+TKRN ACTI rkhs_water_rddz 0 0 16 rddz -
+  hartree bohr -
+  sele resname TIP3 .and. type H1 end -
+  sele resname TIP3 .and. type OH2 end -
+  sele resname TIP3 .and. type H2 end
+"""
+
+
+test/c49test/triakern_mescn.inp
+
+Test script for a -SCN ligand bonded to a methyl group. The energy and forces
+of the SCN ligand are computed by the triakern module and the methyl group as
+well as the bond, angle and dihedral energy between methyl and -SCN atoms are
+computed by CGenFF.
+The script includes an optional minimization, heating, equilibration and NVE 
+simulation step.
+
+Activation command for -SCN label with a scnlig.csv file in Bohr and Hartree:
+"""
+TKRN acti scnlig 16 0 0 jzrd -
+  hartree bohr -
+  sele resname LIG .and. type N end -
+  sele resname LIG .and. type C2 end -
+  sele resname LIG .and. type S end
+"""
+
+!---------------------------------- CHANGES ----------------------------------!
+
+source/energy/triakern.F90:
+- Complete overhaul of the triakern module, but still backwards compatible.
+
+source/energy/energy.F90:
+- line 524 to 538 - Comment about the effect if ICB and ICT elements of the
+  respective bonds and angle are set to zero in the CODES subroutine.
+  Adding the call for the tria_kern_update subroutine if qkern is set true
+  that set the respective elements in ICB and ICT zero to deactivate the 
+  respective bond and angle potential contribution.
+

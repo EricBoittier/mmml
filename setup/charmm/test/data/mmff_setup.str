@@ -1,0 +1,69 @@
+* setup of MMFF in CHARMM
+*
+Faster OFF ! default for mmff test cases
+use mmff force field
+
+prnlev 5
+if ?mynode .ne. 0 then
+      if ?parallel .eq. 1 iolev 0
+endif
+open read form unit 1 name @0mmffsup.par
+read parameter card mmff SUPP unit 1
+
+open read form unit 1 name @0mmffprop.par
+read parameter card mmff PROP unit 1
+!read parameter card mmff PROP name @0mmffprop.par
+
+open read form unit 1 name @0mmffsymb.par
+read parameter card mmff SYMB unit 1
+open read form unit 1 name @0mmffdef.par
+read parameter card mmff DEFI  unit 1
+open read form unit 1 name @0mmffbndk.par
+read parameter card mmff BNDK  unit 1
+open read form unit 1 name @0mmffhdef.par
+read parameter card mmff HDEF  unit 1
+open read form unit 1 name @0mmffarom.par
+read parameter card mmff AROM  unit 1
+open read form unit 1 name @0mmffvdw.par
+read parameter card mmff VDW   unit 1
+open read form unit 1 name @0mmffbond.par
+read parameter card mmff BOND  unit 1
+open read form unit 1 name @0mmffchg.par
+read parameter card mmff CHRG 	 unit 1 
+open read form unit 1 name @0mmffpbci.par
+read parameter card mmff PBCI 	 unit 1 
+open read form unit 1 name @0mmffang.par
+read parameter card mmff ANGL 	 unit 1 
+open read form unit 1 name @0mmffstbn.par
+read parameter card mmff STBN 	  unit 1
+open read form unit 1 name @0mmffdfsb.par
+read parameter card mmff DFSB 	  unit 1
+open read form unit 1 name @0mmffoop.par
+read parameter card mmff OOPL 	  unit 1
+open read form unit 1 name @0mmfftor.par
+read parameter card mmff TORS  unit 1
+! read parameter card mmff SYMB name @0mmffsymb.par
+! read parameter card mmff DEFI name @0mmffdef.par
+! read parameter card mmff BNDK name @0mmffbndk.par
+! read parameter card mmff HDEF name @0mmffhdef.par
+! read parameter card mmff AROM name @0mmffarom.par
+! read parameter card mmff VDW  name @0mmffvdw.par
+! read parameter card mmff BOND name @0mmffbond.par
+! read parameter card mmff CHRG name @0mmffchg.par
+! read parameter card mmff PBCI name @0mmffpbci.par
+! read parameter card mmff ANGL name @0mmffang.par
+! read parameter card mmff STBN name @0mmffstbn.par
+! read parameter card mmff DFSB name @0mmffdfsb.par
+! read parameter card mmff OOPL name @0mmffoop.par
+! read parameter card mmff TORS name @0mmfftor.par
+close unit 1
+if ?mynode .ne. 0 then
+      if ?parallel .eq. 1 iolev -1
+endif
+
+!stop
+
+prnlev 0
+prnlev 5 node 0
+
+return

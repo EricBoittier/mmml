@@ -1,0 +1,345 @@
+* OpenMM test of block partitioning of the energy for free energy calculations
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+set tol = 1e-3
+
+read rtf card
+* Topology file
+*
+31   1
+
+mass 1 a1 10
+mass 2 a2 10
+mass 3 a3 10
+mass 4 a4 10
+mass 5 a5 10
+
+default first none last none
+
+resi nbnd 0
+atom a1 a1 0
+atom a2 a2 0     ! reactant
+atom a3 a3 0 a2  ! product/ atom a2 is excluded from a3
+
+resi bond 0
+atom a1 a1 0
+atom a2 a2 0     ! reactant
+atom a3 a3 0 a2  ! product/ atom a2 is excluded from a3
+bond a1 a2
+bond a1 a3
+
+resi angl 0
+atom a1 a1 0
+atom a2 a2 0
+atom a3 a3 0     ! reactant
+atom a4 a4 0 a3  ! product/ atom a3 is excluded from a4
+bond a1 a2 a2 a3
+bond a2 a4
+angle a1 a2 a3
+angle a1 a2 a4
+
+resi dihe 0
+atom a1 a1 0
+atom a2 a2 0
+atom a3 a3 0
+atom a4 a4 0     ! reactant
+atom a5 a5 0 a4  ! product/ atom a4 is excluded from a5
+bond a1 a2 a2 a3 a3 a4
+bond a3 a5
+angle a1 a2 a3 a2 a3 a4
+angle a2 a3 a5
+dihe a1 a2 a3 a4
+dihe a1 a2 a3 a5
+
+end
+
+read para card flex
+* parameters for model
+*
+
+atoms
+mass 1 a1 10
+mass 2 a2 10
+mass 3 a3 10
+mass 4 a4 10
+mass 5 a5 10
+
+bonds
+a1 a2 10 3
+a1 a3 20 3
+a2 a3 10 3
+a2 a4 20 3
+
+
+angle
+a1 a2 a3 10 120
+a1 a2 a4 20 120
+a2 a3 a4 10 120
+a2 a3 a5 10 120
+
+dihe
+a1 a2 a3 a4 10 3 0
+a1 a2 a3 a5 20 3 0
+
+nbonded nbxmod 5 atom cdie vatom switch vswitch cutnb 999 ctofnb 999 ctonnb 990
+a1 0 -1 2 0 -0 1
+a2 0 -1 2 0 -0 1
+a3 0 -1 3 0 -0 1
+a4 0 -1 2 0 -0 1
+a5 0 -1 2 0 -0 1
+
+end
+
+read sequ bond 1
+generate dimr noangl
+
+print coor
+
+scalar x set 0 select bynu 1 end
+scalar y set 0
+scalar z set 0
+scalar x set 3.5 select bynu 2 end
+scalar x set 4 select bynu 3 end
+
+energy
+
+inte select bynu 1:2 end
+inte select bynu 1 .or. bynu 3 end
+
+block 3
+      call 2 select bynu 2 end
+      call 3 select bynu 3 end
+      lambda 1
+end
+
+energy
+energy omm
+
+block
+    lambda 0
+end
+
+energy
+set e = ?ener
+energy omm
+Calc diff = abs ( @e - ?ener )
+
+if @diff le @tol then
+    echo passed phase-1a
+else
+    echo failed phase-1a
+endif
+
+block
+  rmla bond
+end
+
+energy
+set e = ?ener
+energy omm
+Calc diff = abs ( @e - ?ener )
+
+if @diff le @tol then
+    echo passed phase-1b
+else
+    echo failed phase-1b
+endif
+
+block
+ clear
+end
+
+delete atom select all end
+
+label phase2
+read sequ angl 1
+generate trmr noangl
+
+scalar x set 0
+scalar y set 0
+scalar z set 0
+
+calc x = 3.5 * cos ( 35 * ?pi / 180 )
+calc y = 3.5 * sin ( 35 * ?pi / 180 )
+scalar x set 3 select bynu 2 end
+scalar x set @x select bynu 3 end
+scalar y set @y select bynu 3 end
+calc x = 4 * cos ( 25 * ?pi / 180 )
+calc y = 4 * sin ( 25 * ?pi / 180 )
+scalar x set @x select bynu 4 end
+scalar y set @y select bynu 4 end
+
+energy
+
+inte select bynu 1:3 end
+inte select bynu 1:2 .or. bynu 4 end
+
+
+block 3
+  call 2 select bynu 3 end
+  call 3 select bynu 4 end
+  lambda 1
+end
+
+energy
+energy omm
+
+block
+  lambda 0
+end
+
+energy
+set e = ?ener
+energy omm
+Calc diff = abs ( @e - ?ener )
+
+if @diff le @tol then
+    echo passed phase-2a
+else
+    echo failed phase-2a
+endif
+
+block
+  clear
+end
+
+block 3
+  call 2 select bynu 3 end
+  call 3 select bynu 4 end
+  rmla bond
+  lambda 1
+end
+
+energy
+energy omm
+
+block 3
+  call 2 select bynu 3 end
+  call 3 select bynu 4 end
+  rmla bond thet
+  lambda 0.5
+end
+
+energy
+set e = ?ener
+energy omm
+Calc diff = abs ( @e - ?ener )
+
+if @diff le @tol then
+    echo passed phase-2b
+else
+    echo failed phase-2b
+endif
+
+block
+  clear
+end
+
+delete atom select all end
+
+label phase3
+
+read sequ nbnd 1
+generate nbnd
+
+scalar x set 0
+scalar y set 0
+scalar z set 0
+scalar x set 2 selecy bynu 2 end
+scalar x set 3 select bynu 3 end
+
+energy
+
+inte select bynu 1:2 end
+inte select bynu 1 .or. bynu 3 end
+
+block 3
+call 2 select bynu 2 end
+call 3 select bynu 3 end
+lambda 1
+end
+
+energy
+set e = ?ener
+energy omm
+Calc diff = abs ( @e - ?ener )
+
+if @diff le @tol then
+    echo passed phase-3a
+else
+    echo failed phase-3a
+endif
+
+block
+lambda 0
+end
+
+energy
+
+set e = ?ener
+energy omm
+Calc diff = abs ( @e - ?ener )
+
+if @diff le @tol then
+    echo passed phase-3b
+else
+    echo failed phase-3b
+endif
+
+
+block
+clear
+end
+
+label phase4
+
+scalar charge set -1 select bynu 1 end
+scalar charge set 2 select bynu 2 end
+scalar charge set -3 select bynu 3 end
+
+energy
+inte select bynu 1:2 end
+inte select bynu 1 .or. bynu 3 end
+
+block 3
+call 2 select bynu 2 end
+call 3 select bynu 3 end
+lambda 1
+end
+
+energy
+
+set e = ?ener
+
+energy omm
+
+Calc diff = abs ( @e - ?ener )
+
+if @diff le @tol then
+    echo passed phase-4
+else
+    echo failed phase-4
+endif
+
+block
+clear
+end
+
+stop

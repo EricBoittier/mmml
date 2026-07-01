@@ -1,0 +1,111 @@
+* mctest03.inp
+* Author:   Aaron R. Dinner 
+* Date:     15 June 2001
+* Version:  c29a1
+* Test:     Constant Pressure Monte Carlo with move linking
+* Model:    A box of 125 waters with (crystal) periodic boundaries
+*
+
+! Multinode execution has file I/O and other problems.
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+IF ?MC .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+BOMLev -2
+PRNLev  3
+STREam datadir.def
+
+! Read standard topology and parameter files
+
+OPEN READ CARD UNIT 1 NAME @0/toph19.rtf
+READ RTF CARD UNIT 1 
+CLOSE UNIT 1
+
+OPEN READ CARD UNIT 2 NAME @0/param19.prm
+READ PARAMETER CARD UNIT 2
+CLOSE UNIT 2
+
+! Generate the PSF --- no special actions for MC need be taken at this step.
+
+READ SEQUence TIP3 125
+GENErate WAT SETUP noangle
+
+! Read coordinates
+
+OPEN READ CARD UNIT 4 NAME @0/tip125.crd
+READ COORDINATE CARD UNIT 4
+CLOSE UNIT 4
+
+! Turn on the image 
+
+CRYStal DEFIne CUBIC 15.5516 15.5516 15.5516 90.0 90.0 90.0
+CRYStal BUILd CUTOFF 10.0
+
+ENERgy INBFRQ 1 IHBFRQ 1 GROUP VGROUP SWITCH VSWITCH -
+       CUTIM 10.0 CUTNB 9.0 CTOFNB 8.0 CTONNB 6.0  EPS 1.0
+
+! Create the MC move set by a series of calls to MOVE ADD
+
+! Rigid body translations of waters
+MOVE ADD MVTP RTRN   BYREsidue WEIGht 125.0 DMAX 0.25 LABEL WTRN -
+         SELE (TYPE OH2) END 
+
+! Rigid body rotations
+MOVE ADD MVTP RROT   BYREsidue WEIGht 125.0 DMAX 25.0 LABEL WROT -
+         SELE (TYPE OH2) END 
+
+! Link the translations and rotations so they are performed together.
+MOVE LINK LAB1 WTRN LAB2 WROT
+
+! Volume moves
+MOVE ADD MVTP VOLUme BYREsidue WEIGht   1.0 DMAX 0.005 LABEL PRES -
+         SELE ALL END
+
+! Run some short Monte Carlo simulations with the above move set
+!
+! IECHeck is the frequency of comparing the MC running total of the energy 
+! with a call to the standard ENERGY routine.  The difference is printed 
+! in the Delta-E column of the "MC E>" table.  Given the cutoffs and update 
+! frequencies selected for this example, a non-zero Delta-E value for 
+! an IECHEck indexed larger than zero is indicative of a coding error.
+
+! Open a restart file for writing
+OPEN WRITE FORMATTED UNIT 34 NAME @9/mctest03.rst
+
+MC TEMPerature 300.00 PRESsure 1.0 NSTEps 1000 ISEEd 581282 -
+   INBFrq 100  IMGFrq 100 IECHeck 100 IUNWrite 34 ISVFrq 100
+
+close unit 34
+
+! Write out the move set 
+OPEN WRITE FORMATTED UNIT 35 NAME @9/mctest03.mcm
+MOVE WRITE UNIT 35
+
+! Overwrite the move set with the moves from the file we just wrote
+! to test move I/O.
+OPEN READ  FORMATTED UNIT 36 NAME @9/mctest03.mcm
+MOVE READ  UNIT 36 APPEND 0
+CLOSE UNIT 36
+
+! Open a restart file for reading
+OPEN READ  FORMATTED UNIT 36 NAME @9/mctest03.rst
+
+MC TEMPerature 300.00 PRESsure 1.0 NSTEps 1000 ISEEd 581282 -
+   INBFrq 100  IMGFrq 100 IECHeck 100 IUNRead  36 RESTart
+
+
+! Unlink the translations and rotations for freeing
+MOVE LINK LAB1 WTRN  
+
+! Free the move set to check the memory usage
+MOVE DELEte LABEL WTRN  
+MOVE DELEte LABEL WROT  
+MOVE DELEte LABEL PRES  
+
+STOP

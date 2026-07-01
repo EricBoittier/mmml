@@ -1,0 +1,116 @@
+* CHARMM c33a1 Testcase hqbm_rc3_ens.inp
+* test phi-value constraint using replicas
+*
+
+ensemble nensem 4
+
+! replica variables
+set nrep ?nensem
+set node ?whoiam
+
+! global run variables
+bomlev -1
+set segid PROT
+
+stream datadir.def 
+if ?ensemble .ne. 1 then
+      echo "This test NOT performed"
+      stop
+endif
+if ?hqbm .ne. 1 then
+      echo "This test NOT performed"
+      stop
+endif
+
+set prot 1ypa
+set t 300.0
+set seed 27041994
+
+open unit 1 read card name @0/toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/param19_eef1.inp
+read para card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+faster on
+
+eef1 setup temp @T unit 95 name @0/solvpar.inp
+update ctonnb 7.0 ctofnb 9.0 cutnb 10.0 group rdie
+
+eef1 print
+
+nbonds elec  switch  group  rdie vdw  vswitch vgroup - 
+       cutnb 13.0 ctofnb 9.0 ctonnb 7.0 -
+       wmin 1.2 eps 1.0 e14f 0.4 nbxm 5 
+
+shake bonh param tol 1e-7
+
+energy
+
+! random seeds
+if @NODE .eq. 0  set seed 21422150
+if @NODE .eq. 1  set seed 5490565
+if @NODE .eq. 2  set seed 1265980
+if @NODE .eq. 3  set seed 1999290
+if @NODE .eq. 4  set seed 27041994
+if @NODE .eq. 5  set seed 2061999
+if @NODE .eq. 6  set seed 1238721
+if @NODE .eq. 7  set seed 2430748
+
+faster on 
+eef1 setup temp 298 unit 95 name @0/solvpar.inp
+update ctonnb 7.0 ctofnb 9.0 cutnb 10.0
+eef1 print
+! required for lazaridis parameters to be valid
+nbonds elec  switch  group  rdie vdw  vswitch vgroup - 
+       cutnb 13.0 ctofnb 9.0 ctonnb 7.0 -
+       wmin 1.2 eps 1.0 e14f 0.4 nbxm 5 
+
+shake bonh param tol 1e-7
+
+! ======================================================================
+!             Ensemble phi test
+! ======================================================================
+
+set test rc3_ensemble
+
+open unit 30 write card name -
+@9/@TEST_iunj.dat
+open unit 31 write card name -
+@9/@TEST_iunk.dat
+open unit 32 write card name -
+@9/@TEST_iund.dat
+
+unit 10 read card name -
+@0/ci2_phi.dat
+
+! read phi-values and set up constraint
+hqbm phi iunphi 10 iunj 30 iunk 31 iund 32 alpha 100000 beta 5.0
+
+open unit 20 write card name -
+@9/@TEST_nd@NODE.rst
+open unit 21 write file name -
+@9/@TEST_nd@NODE.dcd
+open unit 23 write card name -
+@9/@TEST_nd@NODE.ene
+dynamics leap verlet start nstep 1000 timestep 0.002 iseed @SEED -
+	iprfrq 2000 ihtfrq 0 ieqfrq 4000 ntrfrq 0 ihbfrq 0 -
+	inbfrq -1 ilbfrq 0 -
+	iunwri 20 iuncrd 21 kunit 23 - ! iunvel 22 
+	nprint 100 nsavc 500 nsavv 0 -
+	iasors 0 iasvel 1 iscvel 0 ichecw 1 teminc 0.0 twindh 10.0 -
+	twindl -10.0 -
+	firstt @T finalt @T 
+
+stop
+

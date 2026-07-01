@@ -1,0 +1,161 @@
+* Membrane System : sys3.inp
+* Build a layer of pseudo-lipid big sphere ( top layer )
+*
+
+stream param.str
+
+calc LargeBoxX 3.0*@BoxSizeX
+calc LargeBoxY 3.0*@BoxSizeY
+
+!Read topologie
+open read card unit 1 name @direcTp/@TopFile
+read rtf card unit 1
+close unit 1
+
+!Read parameters
+open read card unit 2 name @direcTp/@ParFile
+read param card unit 2
+close unit 2
+
+stream @direcSequence/peptide.str
+
+open read card unit 10 name @direcStruct/@struct
+read coor card  unit 10
+close unit 10
+
+ic param
+ic fill
+ic build
+coor stat
+
+!-----------------------------------------------------------------------
+! Put @NPoloTop big-spheres molecules at random positions
+
+read sequence POL @NPoloTop
+generate HEAD
+
+!Random number generation for POLO position
+RAND UNIF ISEED @RdomISEED3
+random uniform scale 1.
+
+set i    1
+label do_i
+  set xpos ?random
+  set ypos ?random
+  calc xpos @LargeBoxX*@xpos-@LargeBoxX/2.0
+  calc ypos @LargeBoxY*@ypos-@LargeBoxY/2.0
+  coor set xdir @xpos  ydir @ypos  zdir @ZPosTop -
+       select segid HEAD .and. resid @i end
+  MMFP
+  GEO plane  RCM -
+        xref 0.0  yref 0.0  zref @ZPosTop   zdir 1.0 -
+        force  25.0   select segid HEAD .and. resi @i show end
+  END
+incr i by 1
+if i le @NPoloTop goto do_i
+
+nbond elec switch
+cons fix select segid PEPT end
+mini sd nstep 1000
+
+open write card unit 1 name @direcWork/largebox.pdb
+write coor pdb unit 1
+close unit 1
+
+!---------------------------------------------------------------------
+! Shrink the box to its final size
+
+set nstep 1000
+label  do_shrink
+
+  set LastBoxX @LargeBoxX
+  set LastBoxY @LargeBoxY
+  decr LargeBoxX by 1.0
+  decr LargeBoxY by 1.0
+  if @LargeBoxX lt @BoxSizeX set LargeBoxX @BoxSizeX
+  if @LargeBoxY lt @BoxSizeY set LargeBoxY @BoxSizeY
+ 
+  calc factor @LargeBoxX/@LastBoxX
+  scalar X mult @factor select segid HEAD end
+ 
+  calc factor @LargeBoxY/@LastBoxY
+  scalar Y mult @factor select segid HEAD end
+  
+  set LengthX @LargeBoxX
+  set LengthY @LargeBoxY
+  set LengthZ 200
+  open read card unit 1 name @direcCubic/cubic.img
+  read imag print init unit 1
+  close unit 1
+  image bygroups xcen 0.0 ycen 0.0 zcen 0.0 sele segid HEAD end
+ 
+  skip HBOND
+  mini sd nstep @nstep nprint    200 - 
+	  inbfrq     5 imgfrq      5 -
+	  ctonnb   6.0 ctofnb    7.0 cutnb    8.0 cutim    8.0 wmin     2.5  -
+	  elec         switch        group        cdie         eps      1.0  -
+	  vdw          vswitch       vgroup
+
+  scalar fbeta set  10.0 select all end
+
+  DYNAMICS  start           nstep   @nstep  timestp   0.001  iprfrq     1000  nprint    100  -
+            -
+	    iasvel       1  firstt   300.0  finalt    300.0  tstruc    300.0  -
+	    langevin        tbath    300.0  rbuf        0.0  -
+            -
+	    inbfrq       5  imgfrq       5  ihbfrq      0    ilbfrq        0  -
+            -
+	    iunread     -1  -
+	    iunwrite    -1  -
+	    iuncrd      -1  nsavcrd      0  -
+	    iunvelo     -1  nsavvelo     0  -
+	    kunit       -1  
+
+if @LargeBoxX gt @BoxSizeX goto do_shrink
+if @LargeBoxY gt @BoxSizeY goto do_shrink
+
+!-------------------------------------------------------------------------------
+
+shake tolerance 1.0e-06 bond param select segid HEAD end
+scalar fbeta set  10.0 select all end
+
+DYNAMICS  start            nstep     2000  timestp   0.001  iprfrq    1000  -
+          nprint     100  -
+          -
+          iasvel       1  firstt   300.0  finalt    300.0  tstruc    300.0  -
+          langevin        tbath    300.0  rbuf        0.0  -
+          -
+          inbfrq       5  imgfrq       5  ihbfrq        0  ilbfrq        0  -
+          -
+          iunread     -1  -
+          iunwrite    -1  -
+          iuncrd      -1  nsavcrd      0  -
+          iunvelo     -1  nsavvelo     0  -
+          kunit       -1  
+ 
+
+open write card unit 10 name @direcWork/toplayer.crd
+write coor card unit 10
+* @NPoloTop pseudo-lipid spheres (Top layer)
+*
+
+read sequence POL @NPoloBot
+generate TETE 
+
+calc OffRes  @LastResNum + @NPoloTop
+open read card unit 1 name @direcWork/sys2.crd   
+read coor card unit 1 offset @OffRes
+close unit 1
+
+open write card unit 10 name @direcWork/sys3.crd
+write coor card unit 10
+* @NLipid pseudo-lipid spheres  
+*
+
+open write card unit 10 name @direcWork/sys3.pdb
+write coor pdb unit 10
+* @NLipid pseudo-lipid spheres  
+*
+
+stop
+

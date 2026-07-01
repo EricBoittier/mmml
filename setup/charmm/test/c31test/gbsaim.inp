@@ -1,0 +1,185 @@
+* CHARMM Testcase (c31a2) gbsaim.inp 
+* Author: Velin Z. Spassov, Accelrys
+* Date  : November 28, 2002
+* Test  : GBSA/IM  model
+*         Generalized Born - Surface Area continuum solvent  model
+*         with Implicit Membrane 
+* NOTE:
+*  Gbim command activates  GBIM, Generalized Born with Implicit Membrane 
+*                          (a modification of Genborn module)
+* "read saim ..." activates the solvent accessible surface caculations
+*  using  ASPMEMB ( a  modification of ASPENER with Implicit Membrane )  
+
+!  Uses files: toph19.rtf, param19.prm,
+
+bomlev -2
+stream datadir.def
+
+!  First do general testing of energy, derivitives and minimization.
+!  Read the topology and parameter files
+!
+open unit 1 read form name @0toph19.rtf
+read rtf unit 1 card
+close unit 1
+ 
+open unit 1 read form name @0param19.prm
+read param unit 1 card 
+close unit 1
+
+ set cutnb 999
+ calc cuton = @cutnb - 3
+ calc cutoff = @cutnb - 1
+
+! set up  MEMBRANE parameters
+
+ set thick 30.0  ! membrane tickness is 30.0 Angstr.
+ set 1      Z    ! membrane normal is along Z axis  
+ set cntr   0.0  ! membrane midplane centred at  Z = 0 ( at X=0 if Xmdir; Y=0 if Ymdir)
+
+! set molecular dielectric constant (epsm is the dielectric constant inside both the molecule and the membrane)
+  set epsm 2.0 ! 
+! set surface-tension parameter
+  set Sigma 25.0    ! Sigma in cal/mol Angstr^2
+
+!  construct a di-peptide in extended conformation
+read sequence card
+*  blocked di-peptide
+*
+ 4
+Amn PHE GLU  Cbx
+
+generate DIPT setup
+
+ic param
+ic seed 1 cl 1 c 1 o
+ic build
+
+faster on
+
+! NOTE! All solvation energy  terms are referenced to an uniform environment with the properties of molecular
+! and membrane interior. 
+ 
+!  Calculate  the energy in the reference medium with diel const. 2 ( without GBSA solvation term ) 
+nbond CUTNB @cutnb CTONNB @cuton CTOFNB @cutoff elec cdiel eps @epsm
+
+skipe none
+! minimize to avoid too short atomic contacts
+ 
+mini sd   nstep   100 nprint 50
+mini abnr nstep   100 nprint 50
+set Eunif ?ener
+
+!  Build and write out a surf file for ASP calculations
+
+open unit 1 write form name @9test.surf
+write title unit 1
+** Test file for ASP/IM calculations, all atoms w/ vdW radii and unit
+** solvation parameters
+**
+*  1.4  @thick @cntr @1     !Probe radius, [membrane thickness],  [membrane centred at ..], [direction]
+set atnb  1
+label repeat
+   define att select bynu @atnb end
+   set RESN  ?selresn
+   set ATOM  ?seltype
+   scalar radius stats select att end
+   set RAD  ?stot
+
+   write title unit 1
+* @RESN   @ATOM  @Sigma  @RAD  0.0
+*
+
+   incr atnb by 1
+if atnb le ?natom goto repeat
+close unit 1
+
+!  Now open this file and read it
+!  Note that "read saim ..." activates ASPMEMB module
+open read form unit 1  name @9test.surf
+read saim unit 1
+close unit 1
+
+
+!Turn on the Generalized Born energy term using the param19 parameters
+
+Gbim P1 0.415 P2 0.239 P3 1.756 P4 10.51 P5 1.1 Lambda 0.730 Epsilon 80.0 Epsmol 2.
+
+! Now calculate energy with GB term
+skipe all excl GBEnr
+energy cutnb @cutnb ctonnb @cuton ctofnb @cutoff
+
+set EGBwater ?GBEN
+
+!  Now turn off GB and make sure all flags are reset
+Gbim Clear
+skipe none
+energy 
+
+!  Calculate diff w/ previous Eunif, should be zero
+calc delta =  ?ener -  @Eunif
+
+
+!  Now turn on  Generalized Born energy term with Implicit membrane 
+Gbim P1 0.415 P2 0.239 P3 1.756 P4 10.51 P5 1.1 Lambda 0.730 Epsilon 80.0 Epsmol 2. -
+      Tmemb @thick  @1mdir  Center @cntr   Gamma 0.55
+
+!center the peptide 
+coor orie 
+coor stat
+
+!now move the peptide  to the membrane interface
+
+calc Zirfc = @thick /2  
+coor trans Zdir 1 dist  @Zirfc
+
+coor stat
+
+! Now calculate energy with both GB and SA terms  in the presence of Implicit Membrane
+
+
+
+energy 
+
+
+
+! Now test first derivatives 
+test  first step 0.00001 tol 0.00001
+
+
+
+coor stat sele resnam GLU end
+set ze0 ?zave
+coor stat sele resnam PHE end
+set zf0 ?zave
+
+Gbim Clear
+skipe none
+!  Now turn on  Generalized Born / Implicit membrane  energy term
+Gbim P1 0.415 P2 0.239 P3 1.756 P4 10.51 P5 1.1 Lambda 0.730 Epsilon 80.0 Epsmol 2. -
+      Tmemb @thick  @1mdir  Center @cntr  Gamma 0.55
+
+!  Now check that minimizaton works with GB and SA energy terms
+mini sd nstep   200 nprint 50
+mini abnr nstep 100 nprint 25
+
+! The polar solvation forces extract the charged GLU residue from membrane interior,
+! but move the hydrophobic PHE more deep inside the membrane.
+ 
+coor stat sele resnam GLU  end
+calc delZ_GLU = ?zave - @ze0
+coor stat sele resnam PHE  end
+calc delZ_PHE = ?zave - @zf0
+
+coor print
+set Ememb ?ener
+
+! Now move the petide far enough from the membrane
+coor trans Zdir 1 dist 1000 sele all end
+! Now calculate the  energy of peptide in water environment,
+! i.e. enough far from membrane
+energy
+
+! Now calculate the energy of  integration of peptide to membrane 
+calc dE = @Ememb  - ?Ener
+
+stop

@@ -1,0 +1,206 @@
+* GRID_2.INP
+* This test-case demonstrates features of the grid-based potentials.
+* It utilizes the param19 force field and the
+* trypsin/benzamidine receptor/ligand pair.
+* Required files: param19.inp, toph19.inp
+*  3ptb_complex.psf, 3ptb_complex.pdb, grid_3ptb.bin
+*
+
+if ?grid .ne. 1 then
+ echo "Test NOT performed."
+ echo grid_2 TESTCASE RESULT: SKIP
+ stop
+endif
+if ?numnode .gt. 1 then
+ echo "Test NOT performed in parallel."
+ echo grid_2 TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+! Read in parameter and topology files.
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+read rtf card append
+* ...
+*
+   22    0
+MASS   301 P1    1.00    P1 ! 
+MASS   302 P2    1.00    P2 ! 
+MASS   303 P3    1.00    P3 ! 
+MASS   304 P4    1.00    P4 ! 
+MASS   305 P5    1.00    P5 ! 
+MASS   306 P6    1.00    P6 ! 
+MASS   307 P7    1.00    P7 ! 
+MASS   308 P8    1.00    P8 ! 
+MASS   309 P9    1.00    P9 ! 
+MASS   310 P10   1.00    P10 ! 
+MASS   311 P11   1.00    P11 ! 
+
+RESI PROB 11.000
+ATOM P1 P1 1.0 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 
+ATOM P2 P2 1.0 p3 p4 p5 p6 p7 p8 p9 p10 p11 
+ATOM P3 P3 1.0 p4 p5 p6 p7 p8 p9 p10 p11 
+ATOM P4 P4 1.0 p5 p6 p7 p8 p9 p10 p11 
+ATOM P5 P5 1.0 p6 p7 p8 p9 p10 p11 
+ATOM P6 P6 1.0 p7 p8 p9 p10 p11 
+ATOM P7 P7 1.0 p8 p9 p10 p11 
+ATOM P8 P8 1.0 p9 p10 p11 
+ATOM P9 P9 1.0 p10 p11 
+ATOM P10 P10 1.0 p11 
+ATOM P11 P11 1.0 
+PATCH FIRST NONE LAST NONE
+END
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+read param card append
+* additional parameters for benzamidine
+*
+
+ANGL
+   C    C  NC2    70.000  120.00000  !<<<<<
+DIHE
+   CR1E C    C    NC2      2.5       2     180.0
+
+END
+
+read param card append
+* Test probes for grid potential set-up
+*
+
+NBONDED  NBXMOD 5  ATOM RDIEL SWITCH VATOM VDISTANCE VSWITCH -
+CUTNB 999 CTOFNB 999 CTONNB 999 EPS 3 E14FAC 0.5 WMIN 1.5
+!
+!                 EMIN         Rmin     These columns used for
+!              (kcal/mol)      (A)      1-4 interactions
+!
+P1       0.00     -1.0000       0.6
+P2       0.00     -1.0000       0.8
+P3       0.00     -1.0000       1.468
+P4       0.00     -1.0000       1.6
+P5       0.00     -1.0000       1.7398
+P6       0.00     -1.0000       1.89
+P7       0.00     -1.0000       2.1
+P8       0.00     -1.0000       2.165
+P9       0.00     -1.0000       2.235
+P10      0.00     -1.0000       2.365
+P11      0.00     -1.0000       2.59
+
+END
+
+open unit 1 read form name @03ptb_complex19.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read form name @03ptb_complex19.crd
+read coor card unit 1
+close unit 1
+
+! Define dimensions of volume for docking
+coor stat select resname ben end
+set xcen = ?xave
+set ycen = ?yave
+set zcen = ?zave
+
+! Set dimensions of grid as maximum extent of ligand + 4 A
+Calc Xmax = ?xmax - ?xmin + 4
+Calc Ymax = ?ymax - ?ymin + 4
+Calc Zmax = ?zmax - ?zmin + 4
+Let Xmax = Max @Xmax @Ymax 
+Let Xmax = Max @Xmax @Zmax
+
+! If we have already generated the grid potentials go to final part.
+! Uncomment after grid generation and run again.
+goto alreadygener
+
+! Remove ligand and generate probe atoms.
+delete atom select resname ben end
+
+read sequ card
+* title
+*
+1
+prob
+generate prob
+
+! Set positions for all probe atoms
+scalar x set @xcen select segid prob end
+scalar y set @ycen select segid prob end
+scalar z set @zcen select segid prob end
+
+print coor select resname prob end
+
+! Fix position of receptor.
+cons fix select segid 3ptb end
+skipe all excl vdw elec
+
+energy
+
+open unit 3 write form name @9grid_3ptb.ascii
+title
+* Test grid for system
+*
+
+! Generate grid-based potentials for 11 probe atoms + electrostatic
+! using default grid spacing of 0.5 A and default harmonic potential
+! beyond grid edges (300 kcal/mol/A^2).
+grid generate xmax @xmax ymax @xmax zmax @xmax -
+     xcen @xcen ycen @ycen zcen @zcen -
+     select segid prob end formatted outu 3
+
+grid clear
+
+stop
+
+! Begin here after grid potentials have been generated
+label alreadygener
+
+! Fix receptor atoms for "rigid"-receptor docking
+cons fix select segid 3ptb end
+
+! Read grid and set-up for ligand (benz)
+open unit 3 read form name @0grid_3ptb.ascii
+grid read formatted unit 3 select segid benz end
+close unit 3
+
+! Randomly rotate ligand about its center and minimize
+Calc phi = ?rand * 30
+
+coor rota xdir @xcen ydir @ycen zdir @zcen phi @phi select segid benz end
+
+! Turn off grid potential and minimize using "true" receptor.
+grid off
+energy inbfrq 1
+
+@qcheck ?ENER -7.92 0.01 grid_2_1
+
+coor copy compare
+mini sd nstep 200 inbfrq 0
+coor rms select segid benz end
+
+@qcheck ?RMS 0.469 0.001 grid_2_2
+
+! Turn on grid potential, restore coordinates of ligand and remove receptor
+! then minimize using grid-based potential only.
+grid on select segid benz end
+coor swap
+coor translate xdir 10000 select segid 3ptb end
+energy inbfrq 1
+
+@qcheck ?ENER 16.73 0.01 grid_2_3
+
+mini sd nstep 200 inbfrq 0
+
+! Check rmsd between ligand minimized in actual receptor and in grid-based
+! receptor.
+coor rms select segid benz end
+
+@qcheck ?RMS 0.07 0.001 grid_2_4
+
+stop

@@ -1,0 +1,469 @@
+CHARMM Element doc/fitparam.info $Revision: 1.1.1.1 $
+
+File: Fitparam, Node: Top, Up: (doc/commands.info), Next: Introduction
+
+
+                        Parameter Fitting Procedure
+
+   By Victor Anisimov (victor@outerbanks.umaryland.edu) 
+   and Alex MacKerell Jr. (alex@outerbanks.umaryland.edu); December 2007
+
+FITPARAM is a parameter fitting procedure that is primarily designed to fit 
+partial atomic charges and atomic polarziabilities based on the Drude
+oscillator model to interaction energy data and dipole moments, though it may
+be applied to fitting of other parameters (see below). It supports optimization
+of multiple parameters for a series of model compounds sharing common parameter
+sets. Different weights can be assigned to different target data. Optimized
+parameters can be restrained to their corresponding initial values by using
+a parabolic penalty function. FITPARAM performs non-linear least square fitting
+using the Levenberg-Marquardt algorithm.
+
+* Menu:
+
+* Introduction::        Overview of functionality
+* Syntax::              Syntax of commands
+* Keywords::            Description of keywords
+* Format::              File format
+* Example::             Input examples
+* Limitations::         Known limitations
+
+
+File: Fitparam, Node: Introduction, Up: Top, Next: Syntax, Previous: Top
+
+                        Overview of functionality
+
+The primary purpose of FITPARAM is charge derivation using various types of 
+interaction energy as a target data. In this goal it complements the 
+functionality of the FITCHARGE module which derives charges solely from
+fitting to electrostatic potentials (see fitcharge.info). However, FITPARAM
+is not limited to charge derivation and it can be used to optimize any sort of 
+parameters using any sort of relevant target data. 
+
+Although implemented in CHARMM the FITPARAM module is in fact a stand-alone 
+procedure.  The user is not required to load topology and generate a molecule 
+and if loaded this information will be ignored. The command FITPARAM operates 
+with generic parameters without the awareness whether these are point charges, 
+atomic polarizabilities or dihedral force constants. Thus, any parameter may
+be optimized using FITPARAM based on basic least square fitting.
+Correspondingly, calculation of the target property and its gradient has to be
+performed separately by external routines. Preparing the necessary scripts
+to accomplish this task becomes the user assignment. Despite this obvious
+inconvenience, such architectural design is necessary to allow for flexibility
+in the target data used, which otherwise would not be accessible for the
+parameter optimization. It also makes possible parameter fitting for a variety
+of molecules to be performed simultaneously. 
+
+In order to start parameter optimization FITPARAM needs an initial guess for 
+parameters. It reads the parameter values from the input file, performs a
+cycle of least square optimization and saves the updated parameters in the
+output file. Then FITPARAM executes the external job, which performs target
+property and gradient calculations using the current parameter values and
+returns the control back to FITPARAM. These iterations are continued until
+convergence criterion is satisfied.
+
+Using FITPARAM to optimize charges requires the user to preserve the total 
+charge of the optimized molecule. This can be accomplished by excluding one 
+charge from the fitting and computing the value of the excluded charge in the 
+external procedure as the difference in total charge of the molecule and the
+sum of optimized charges. In general it is not important which atomic charge
+to exclude from the fitting. The general suggestion is to exclude that charge
+which appears least important in reproducing the value of the target data.
+
+Dipole moment information can be provided to FITPARAM in two different ways. A 
+dipole may be presented in scalar form as the total dipole moment or in vector 
+form representing three dipole moment components. These two ways of dipole 
+moment specification are handled independently by FITPARAM. When dealing with 
+multiple molecules each molecule may be represented by its own total dipole 
+moment and dipole components. The total dipole moment value may be defined as 
+the gas-phase experimental value, or QM computed value, or manually defined 
+value the user is targeting as the result of the fitting. Providing manually 
+increased (or HF/6-31G* computed) dipole moments is a standard practice when 
+deriving charges for a non-polarizable model. Providing the dipole moment in 
+vector form has the purpose of minimizing the angle between the model and
+target dipole moment vectors.
+
+
+File: Fitparam, Node: Syntax, Up: Top, Next: Keywords, Previous: Introduction
+
+                            Syntax of commands
+
+[SYNTAX FITPARAM - parameter optimization]
+
+FITPARAM {
+          [NITEr int]  [TOLErance real]  [COUNter int]
+
+           NEXPeriments int  NPARameters int  
+           GUESs int  EXPData int  PARM int
+
+           [EXPWeight int]  [RESTraints int]
+
+           {
+            [ANTOINE]  
+            [ [NDIPoles int]  [FVALues int  REXternal str  [MULTiplicity int] ]
+           }
+         }
+
+
+File: Fitparam, Node: Keywords, Up: Top, Next: Format, Previous: Syntax
+
+                        Description of keywords
+
+   NITEr - (optional) maximum number of Levenberg-Marquardt (least square) 
+iterations. Default value NITE=100. 
+   TOLErance - (optional) relative tolerance on the convergence of the
+minimized function. Default value TOLE=1.0E-4. 
+   COUNter - (optional) is number of iterations under the tolerance it needs to
+converge. Default value COUN=2. Greater values can be used to assure the 
+convergence. 
+
+   NEXPeriments - (mandatory) number of target data. Care must be taken when 
+handling dipole moments which can be provided in scalar (single value for
+total dipole) or vector form (three dipole component values in a row). Three 
+components of a vector are considered as one target value for NEXP keyword. 
+Total dipole moment value counts independently as one experimental value. This 
+is also discussed in the examples section.
+   NPARameters - (mandatory) number of parameters to optimize.
+
+   GUESs - (mandatory) file unit number for initial parameter guess.
+   EXPData - (mandatory) file unit number for target ("experimental") data.
+   PARM - (mandatory) file unit number to save optimized parameter values.
+
+   EXPWeight - (optional) file unit number for individual weights assigned to 
+each target value. Default value is 1.0 for each target value.
+   RESTraints int - (optional) file unit number for individual restraint 
+factors assigned to each optimized parameter. Default value is 0.0, which
+means free fitting without restraints.
+
+Following keywords are exclusive.
+
+   ANTOINE - (mandatory if Antoine Constant calculation is expected) switches
+on Antoine parameter fitting to find analytical dependence in experimental
+vapor pressure - temperature dependence. This information is useful for
+calculation of experimental heat of vaporization.
+
+   or  
+
+   NDIPoles - (mandatory, if dipoles are provided in vector form) number of 
+dipole moments specified in vector form (X Y Z form). Default value is 0. Note,
+NDIP keyword counts only the number of dipoles provided in vector form (X Y Z 
+components). Correspondingly, NDIP does not count the number of dipoles
+provided in scalar form (total dipole moment).
+   FVALues - file unit number. This file provides function values and gradients
+to FITPARAM. The data in this file have to be computed externally using updated
+parameter values (which are saved in PARM unit by FITPARAM). FITPARAM needs 
+current target function values and gradients to perform next parameter 
+optimization iteration.
+   REXternal - external procedure provided in the form of a string enclosed in 
+double quotes. This string will be executed by CHARMM. This external procedure 
+is in charge of calculating current function values and gradients.
+   MULTiplicity - (optional) file unit number. The data in this file specify th
+multiplicity of the optimized parameters. Default value of multiplicity for
+each parameter value is 1. FITPARAM computes the total charge using the
+information about charge multiplicity. This data makes no influence on the
+progress of parameter optimization and is implemented for debugging purpose
+only. For example, three hydrogen atoms in methyl group carrying the same
+charge value imply a multiplicity of 3. Correct accounting for charge
+multiplicity will help FITPARAM to provide meaningful information about total
+charge of the optimized molecule. Non-charge parameters should be assigned
+multiplicity 0. This is particularly helpful to when FITPARAM optimizes charges
+simultaneously with non-charge parameters.
+
+
+File: Fitparam, Node: Format, Up: Top, Next: Example, Previous: Keywords
+
+                                File format
+
+   GUESs unit
+Includes NPAR number of lines.
+Format: string (up to 20 characters before real number is encountered), real 
+(recognized by decimal point). Example: "A    17.81671". The string portion of 
+the data will be printed by FITPARAM as the parameter name. One may use the 
+string portion to do some useful work for external job, e.g. "set A  17.81671" 
+would turn the parameter file into a functional CHARMM script file.
+
+   EXPD unit
+Includes NEXP number of lines.
+Format: one real value per string. (Exception is Antoine input file which 
+contains two real numbers in free format. First value is temperature; the
+second one is vapor pressure.) Total dipole moment is defined by one value.
+Dipole moment components are specified by three numbers in free format.
+Example:
+1.63                      ! dipoleTotal    MP2 value
+-1.5155  0.1868  -0.5583  ! dipoleXYZ
+Comments can be placed after exclamation mark. This information will be
+ignored by FITPARAM.
+
+   PARM unit
+Includes NPAR number of lines.
+Format: A20,F16.8
+This is an output file which will be created by FITPARAM.
+
+   FVAL unit
+Includes NEXP + NEXP * NPAR number of lines.
+Format: The format is free. This file is created by external job and read by 
+FITPARAM. The external job creating this file has to take care of the following
+requirements. One real number per string is expected for scalar values. Three 
+numbers are provided for a vector value. First NEXP data are the function
+values which are computed for NEXP target data using the current parameter
+values. The order of computed values must be the same as in the EXPD file.
+Next NPAR * NEXP data are partial derivatives computed in the order of
+experimental data (first running index) and parameter data (second running
+index). Example:
+E1
+E2
+E3
+dE1/dp1
+dE2/dp1
+dE3/dp1
+dE1/dp2
+dE2/dp2
+dE3/dp2
+Where E1, E2, E3  are target (experimental) data; p1 and p2 are optimized 
+parameters. Derivatives of vector properties are provided by three real
+numbers in a row (see example below).
+
+   EXPW unit
+Includes NEXP number of lines.
+Format: one real number in a row.
+
+   MULT unit
+Includes NPAR number of lines.
+Format: one integer number in a row.
+
+   REST unit
+Includes NPAR number of lines.
+Format: one real number in a row.
+
+
+File: Fitparam, Node: Examples, Up: Top, Next: Limitations, Previous: Format
+
+                            Input Examples
+
+Two examples given in this section illustrate basic functionality of FITPARAM. 
+First example covers optimization of Antoine function parameters. This is an 
+example where the function value and gradient computations are implemented 
+inside the FITPARAM module so there is no need to call an external procedure. 
+Therefore this is an exception to the standard use of FITPARAM. This example
+is discussed here because of its simplicity and because it is included in
+CHARMM test case (see antoine.inp).
+
+The Antoine function is a simple parametric analytical function which is used
+to describe experimental vapor pressure - temperature dependence. It has the 
+following form: lnP = A + [B / (T + C)], where A,B, and C are fitted
+parameters, P - pressure, T- temperature.
+
+Having this function gives the opportunity to compute derivative of pressure 
+over temperature which is necessary to compute the heat of vaporization of the 
+pure liquid. Following is the content of the antoine.inp script:
+
+open unit 11 read  form name antoine.ini     ! initial guess for parameters
+open unit 12 read  form name antoine.exp     ! experimental (target data)
+open unit 13 write form name antoine.prm     ! storage for optimized parameters
+FITPARAM -
+  NITE 50 -     ! maximum number of iterations
+  TOLE 0.001 -  ! chi^2 convergence threshold
+  COUN 2 -      ! number of consecutive successful steps before convergence
+  NEXP 8 -      ! number of experimental data
+  NPAR 3 -      ! number of parameters to fit (2 or 3 Antoine coefficients)
+  ANTOINE -     ! Antoine coefficient fitting
+  GUES 11 -     ! input: initial guess for parameters
+  EXPD 12 -     ! input: data to fit to
+  PARM 13       ! output: file to store optimized parameters
+stop
+
+The computation starts from opening two input files antoine.ini and
+antoine.exp, which contain initial guess for parameters and target experimental
+data, respectively. Following is the content of antoine.ini file:
+A    17.81671
+B  4705.03330
+C   -60.75000
+
+Three parameters, NEXP=3, will be optimized starting form the above values.
+
+The antoine.exp file contains the following data:
+393.15        3.649359     
+398.15        3.877432     
+403.15        4.076690     
+408.15        4.264087     
+413.15        4.461877     
+418.15        4.651099     
+423.15        4.825109     
+428.15        5.018603
+
+Here we have 8 experimental data, NEXP=8, representing temperature - vapor 
+pressure data.
+
+Following parameter values are obtained after the execution of the above
+script:
+A       17.84653417
+B     4706.72855119
+C      -61.45937115
+
+The second example illustrates how to set up FITPARAM calculation for a charge 
+parameter optimization calculation. The example is based on hydroxyl charge 
+optimization in ethanol targeting interactions with water, which is a standard 
+charge derivation procedure in the additive CHARMM force field. In the example 
+the alkane charges in methyl group are constrained to their standard values.
+The methyl group is also kept electro-neutral. Two lone pairs (OLP) are
+assigned to oxygen atom in this example; therefore the oxygen atom is
+represented by two point charges (qOLP). Note, the central O atom carries zero
+charge. The charges to be determined are qC, two qHC, two qOLP, and qHO.
+From these variables one should be excluded. This charge should be assigned
+manually to maintain a total charge of zero. In the present example we exclude
+the methylene group hydrogen atom charge: qH = -1/2 * (2*qOLP + qC + qHO).
+Remaining variables define NPARM=3. The lone pairs are equivalent therefore
+they contribute as one parameter qOLP. Correspondingly, the initial guess
+parameter file "parameters.ini" contains the following data:
+set qOLP   -0.23
+set qHO     0.36
+set qC     -0.06
+
+Because the qOLP parameter has the multiplicity of 2 we declare this in the 
+"multiplicity" file:
+group
+2
+1
+1
+
+Here the parameter multiplicity is preceded with the "group" keyword which 
+indicates the program that an electro-neutral group is being treated. If the 
+methyl group charges were also included in the fitting, then the
+"multiplicity" file would contain the following data:
+group
+2
+1
+1
+group
+3
+
+Here we optimize the charge on methyl hydrogens (which has multiplicity 3), 
+whereas the charge on methyl carbon has to be computed externally to keep the 
+CH3 group electro-neutral.
+
+The charges specified in the "parameters.ini" file are taken from the CHARMM22 
+force field. To restrain the charges to their initial values we specify 
+"restraints" file using the following restraint factors:
+0.1
+0.1
+0.1
+
+The smaller the number the weaker the restraint. To choose a particular value 
+one needs to do some experimenting. Next we define the target data in
+"expdata"
+file:
+-4.89                     ! C-O-H angle bisector
+-2.51                     ! along C-O line
+-4.80                     ! lone-pair position
+-4.36                     ! along O-H line
+ 1.8                      ! dipoleTotal                   MP2 = 1.6259
+-1.5155  0.1868  -0.5583  ! dipoleXYZ
+
+Presented is ethanol - water QM interaction energies and the ethanol dipole. 
+First four values in the expdata file are interaction energies for the 
+corresponding four water orientations. The fifth value is the ethanol dipole 
+moment set to 1.8 Debye. Note, that the MP2 dipole is 1.63. The dipole moment 
+is purposefully increased to provide an illustrative example that we are free
+to define any target data we want our model to reproduce. While we are 
+experimenting with the magnitude of the total dipole moment we certainly want
+to minimize the angle between the target and empirical dipole moment vectors. 
+Therefore the sixth line of data is the dipole moment specified in vector form.
+Overall, we have six target data, NEXP=6, and one dipole vector, NDIP=1.
+Weighting of data is performed via the "expweight" file that instructs
+FITPARAM of the level of priority assigned to the target data:
+1.
+1.
+1.
+1.
+100.
+100000.
+
+Each line in this file applies to corresponding target data in the "expdata" 
+file. The value 1.0 means a standard weight. The larger the value we specify 
+the stronger FITPARAM will try to match the target data during the parameter 
+optimization. One needs to make some empirical adjustments in order to define 
+the optimal value for the each weighting factor.
+
+The FITPARAM script to run the optimization has the following form:
+
+open unit 11 read  form name parameters.ini
+open unit 12 read  form name expdata
+open unit 13 write form name parameters
+open unit 14 write form name fvalues
+open unit 15 read  form name expweight
+open unit 16 read  form name multiplicity
+open unit 17 read  form name restraints
+FITPARAM -
+    NITE 100 -              ! max number of iterations
+    TOLE 0.0001 -           ! convergence tolerance
+    COUN  4 -               ! steps to test the convergence
+    NEXP  6 -               ! number of target data
+    NDIP  1 -               ! number of dipole moments among the target data
+    NPAR  3 -               ! number of parameters to optimize
+    GUES 11 -               ! initial guess for parameters
+    EXPD 12 -               ! target data
+    PARM 13 -               ! place to store optimized parameters between loops
+    FVAL 14 -               ! function values and derivatives
+    REXT "./run.pl ./parameters ./fvalues"  -  ! script to compute derivatives
+    EXPW 15 -               ! weight of individual target data, optional
+    MULT 16 -               ! parameter multiplicity,           optional
+    REST 17                 ! weight of parameter restraint,    optional
+stop
+
+After reading initial guesses for parameters specified in the "parameters.ini" 
+file FITPARAM will write updated parameter values in the "parameters" file
+(see unit PARM 13). The "parameters" file can be streamed into a CHARMM script
+to be run externally to compute energies and gradients using the current
+parameter values. This is done with the help of the REXT keyword (which stands
+for Run EXTernal process), which tells FITPARAM how to invoke the external
+process to compute the function values and derivatives. In this particular
+example we invoke the string "./run.pl ./parameters ./fvalues". This says that
+computation will be managed by perl script "run.pl" which we assume will invoke
+individual computations. The perl script takes two arguments. The "parameter"
+file contains current parameter values computed by FITPARAM. The "fvalues"
+file instructs "run.pl" script to save the function values and gradients in
+the "fvalues" file, because FITPARAM will be reading it (see FVAL 14 unit)
+after "run.pl" script finishes its computation. The perl script or other user
+selected external routine has to be written individually for each optimization
+job. Due to the nature of individual computations and because of the multitude
+of possibilities it is difficult to provide one set of rules on how to do this
+in the best way. Preparing such script the user should take care about writing
+the "fvalues" file in the right format (see above). The data in this file are
+rewritten with each optimization cycle. For the example shown above the
+"fvalues" file had the following intermediate values:
+  -5.34805
+  -2.72626
+  -5.07762
+  -4.62209
+   1.86600
+  -1.72300    0.03500   -0.71400
+  30.85000
+  27.06500
+  30.33000
+ -15.22500
+ -14.00000
+   0.89123   -6.56414   -2.47438
+   5.55000
+   9.83500
+   5.61500
+ -25.45000
+  -4.00000
+   0.55868   -4.51683   -1.57192
+   2.59500
+   1.12500
+   2.67500
+  -1.37500
+  -3.00000
+  -0.09208   -0.23845    0.21026
+
+Relating these data to the data in "expdata" file helps to reinforce the 
+understanding of the format of the "fvalues" file.
+
+
+
+File: Fitparam, Node: Limitations, Up: Top, Previous: Example, Next: Top
+
+                               Known limitations
+
+The present implementation does not preserve the total charge. Therefore, the 
+user is responsible to manage this problem in designing the external procedure.
+Implementing the charge constraint mechanism is in future development plans.

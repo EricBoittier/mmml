@@ -1,0 +1,68 @@
+* CHARMM c35a1 testcase: 15-Aug-2007
+* buta_ghosccdftb.inp - test GHO-SCCDFTB for a new feature
+* of rearranging the GHO atoms internallly: butane 
+*  MINIMIZATION OF LIGAN PLUS ENZIME 
+*
+  
+stream datadir.def
+
+if ?sccdftb .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+  
+!
+! Topology file
+! -------------
+OPEN READ FORMatted UNIT 1 NAME @0top_all22_model.inp
+READ RTF CARD UNIT 1
+CLOSe UNIT 1
+  
+!
+! Parameter file
+! --------------
+OPEN READ FORMatted UNIT 1 NAME @0par_all22_prot.inp
+READ PARAmeter CARD UNIT 1
+CLOSe UNIT 1
+
+!
+! sequence 
+! ----------------
+READ SEQUence CARD 
+* test butane
+*
+ 1
+BUTA
+
+GENERATE BUTA SETUP
+
+IC PARAM
+IC SEED 1 H11 1 C1 1 C2
+IC BUILD
+IC FILL
+IC PURGE
+PRINT IC
+
+! -------------------------------------------
+! let's define the quantum part of the system
+! -------------------------------------------
+define qms sele BYNU 4:10 .or. bynu 14  end
+
+define mms sele .not. qms end
+
+nbonds atom cutnb 12.0 ctofnb 11.0 ctonnb 10. 
+
+scalar WMAIN set 1.0 sele qms .and. type C*  SHOW end
+scalar WMAIN set 2.0 sele qms .and. type H*  SHOW end
+
+sccdftb remove chrg 0 sele qms end glnk sele bynu 4 .or. bynu 14 end scft 0.00000001 
+
+energy
+
+test FIRST step 0.001
+
+mini abnr nstep 200 tolgrd 0.001 nprint 10
+
+print coord 
+
+stop

@@ -1,0 +1,139 @@
+* CHARMM Testcase c28test/hmcm.inp
+* Author: Michael Feig
+* Date  : March 6, 2000
+* Test  : Harmonic restraint of protein side chain center of mass
+*
+
+if ?hmcom .ne. 1 then
+ echo "Test NOT performed."
+ echo hmcm TESTCASE RESULT: SKIP
+ stop
+endif
+
+
+! Uses files: par_all22_prot.inp, top_all22_prot.inp, pep5.pdb
+set tol 0.05
+bomlev -2
+stream datadir.def
+
+! Read topology and parameter files
+
+open unit 1 read form name @0top_all22_prot.inp
+read rtf unit 1 card
+close unit 1
+
+open unit 1 read form name @0par_all22_prot.inp
+read param unit 1 card
+close unit 1
+
+! Read simple five residue peptide
+
+open unit 10 read form name @0pep5.pdb
+read sequ pdb unit 10
+
+generate pept setup warn
+rewind unit 10
+read coor pdb unit 10
+close unit 10
+
+ic param
+ic build
+
+update CDIE eps 1.0 cutnb 999 ctofnb 998 ctonnb 997 switch vswitch
+mini sd inbfreq -1 step 0.005 nstep 10 tolenr 1e-04
+
+! Constrain center of geometry for side chains 2 and 3 
+! defined by heavy atoms
+
+define res2sel -
+select resid 2 .and. .not. -
+( type h* .or. type n .or. type c .or. type o .or. type oct* .or. type ot* ) -
+end
+
+define res3sel -
+select resid 3 .and. .not. -
+( type h* .or. type n .or. type c .or. type o .or. type oct* .or. type ot*) -
+end
+
+coor stat select res2sel end !mass
+set x2ave ?xave 
+set y2ave ?yave 
+set z2ave ?zave
+coor stat select res3sel end !mass
+set x3ave ?xave 
+set y3ave ?yave 
+set z3ave ?zave
+
+
+!*****************************
+     STEP 1
+!*****************************
+!---------- Restraints ---------------------------------------------------
+cons hmcm force 100.0 refx @x2ave refy @y2ave refz @z2ave select res2sel end !mass
+cons hmcm force 100.0 refx @x3ave refy @y3ave refz @z3ave select res3sel end !mass
+
+
+! keep original coordinates for comparison
+
+coor copy comp
+ 
+! minimize following steepest descent 
+
+faster on
+
+!update CDIE eps 1.0 cutnb 999 ctofnb 998 ctonnb 997 switch vswitch
+mini sd inbfreq -1 step 0.005 nstep 500 tolenr 1e-04 nprint 10
+
+! print center of geometry for each residue
+! should be close for residues 2 and 3
+
+set 5 1
+label loop
+
+coor stat -
+select resid @5 .and. .not. -
+( type h* .or. type n .or. type c .or. type o .or. type oct* .or. type ot* ) -
+end
+
+coor stat -
+select resid @5 .and. .not. -
+( type h* .or. type n .or. type c .or. type o .or. type oct* .or. type ot* ) -
+end comp
+
+incr 5 by 1
+if 5 lt 5.1 goto loop
+
+coor stat select res2sel end !mass
+calc delx = @x2ave - ?xave
+calc dely = @y2ave - ?yave
+calc delz = @z2ave - ?zave
+calc del = sqrt ( @delx * @delx + @dely * @dely + @delz * @delz )
+
+@qcheck @del 0 @tol hmcm_1
+
+coor stat select res3sel end !mass
+calc delx = @x3ave - ?xave
+calc dely = @y3ave - ?yave
+calc delz = @z3ave - ?zave
+calc del = sqrt ( @delx * @delx + @dely * @dely + @delz * @delz )
+
+@qcheck @del 0 @tol hmcm_2
+
+!*****************************
+     STEP 2
+!*****************************
+!---------- Restraints ---------------------------------------------------
+calc x2val = @x2ave + 0.3
+calc y3val = @y2ave !- 0.3
+cons hmcm clear
+cons hmcm force 200.0 refx @x2val select res2sel end mass
+
+dyna nstep 200 nprint 10
+
+coor stat select res2sel end !mass
+calc delx = @x2val - ?xave
+calc del = sqrt ( @delx * @delx )
+
+@qcheck @del 0 @tol hmcm_3
+
+stop

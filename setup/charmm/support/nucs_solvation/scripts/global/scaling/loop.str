@@ -1,0 +1,103 @@
+* loop.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* Calculation of electrostatic potential in solution due to charges
+* of SOURCE GROUP with PBEQ.
+* Calculation of scaling factors for SOURCE GROUP
+* Loop over all residues.
+* last modified by Danzhi on 05.11.2001
+*
+
+! loop over all residues from firstresidue to lastresidue
+
+SET COUNTER1 @FIRSTRESIDUE
+DECRement COUNTER1 BY 2
+
+LABEL LOOP1
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+  INCRement COUNTER1 BY 1
+   
+  SET SELECTION BACK
+ 
+  SET RESNEXT @COUNTER1  
+  INCRement RESNEXT BY 1
+  
+  ! check, if next residue is Proline
+  DEFINE foo SELEct IRES @RESNEXT END
+  IF ?SELRESN EQ PRO GOTO PROLABEL
+  
+  LABEL ONCEAGAIN
+
+       ! Define group I of source atoms
+
+  IF SELECTION EQ BACK DEFI GROUP SELE (BACK2 .and. IRES @COUNTER1) .or. -
+                                       (BACK1 .and. IRES @RESNEXT) END
+  IF SELECTION EQ SIDE DEFI GROUP SELE SIDE .and. IRES @COUNTER1 END
+
+  ! check if the group is the last back group of one protein segment
+  IF ?NSEL .gt. 6 if selection EQ back stream terminal.str
+    STREam calcfactors.str
+  
+  IF SELECTION EQ SIDE GOTO NEXTRESIDUE
+    ! else:
+      SET SELECTION SIDE
+      GOTO ONCEAGAIN
+
+  LABEL PROLABEL 
+       ! Calculate factors for SIDE of residue i
+    SET SELECTION SIDE
+ 
+    DEFI GROUP SELE SIDE .and. IRES @COUNTER1 END
+    STREam calcfactors.str    
+
+       ! Calculate factors for Proline (i,i+1)
+    SET SELECTION BACK
+   LABEL AGAIN  
+    DEFI GROUP SELE (BACK2 .and. IRES @COUNTER1) .or. - 
+              (BACK1 .and. IRES @RESNEXT)  .or. -
+	      (SIDE .and. IRES @RESNEXT) END
+
+! check if the group is the last back group of one protein segment
+    IF ?NSEL .gt. 14 if selection EQ back stream terminal3.str
+    
+	STREam calcfactors.str
+
+       ! Calculate factors for Backbone group (i+1, i+2)
+    INCRement COUNTER1 BY 1
+    INCREMENT RESNEXT BY 1
+! Check whether the next residue is proline
+    SET RESNEXT3 @RESNEXT 
+    INCREMENT RESNEXT3 BY 1
+    DEFINE foo SELECT IRES @RESNEXT3 END
+    IF ?SELRESN EQ PRO GOTO AGAIN
+     !else
+
+    DEFI GROUP SELE (BACK2 .and. IRES @COUNTER1) .or. -
+     (BACK1 .and. IRES @RESNEXT) END
+     
+! check if the group is the last back group of one protein segment
+    IF ?NSEL .gt. 6 if selection EQ back stream terminal.str
+    
+      STREam calcfactors.str
+
+    ! go back to normal loop by doing nothing
+
+    LABEL NEXTRESIDUE
+IF COUNTER1 LT @LASTRESIDUE GOTO LOOP1
+
+
+RETURN
+
+
+
+
+
+
+
+
+
+
+
+
+
+

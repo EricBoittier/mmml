@@ -1,0 +1,107 @@
+* Test simple conversion of byte-order for binary trajectory files
+* Lennart Nilsson, c38a2, February 2013. If it runs to a normal end all is well.
+*
+! Run with argument NODYN=1 to skip running the dynamics if you want to test on
+! a set of files created with another executable.
+! The prefx keyword is NOVONVERT but only the "NOCONVER" part seems to be used here
+if ?noconver .eq. 1 then
+   echo "Endianness conversion code not compiled in"
+   echo "Test NOT performed"
+   echo tstend_0 testcase result: skip
+   stop
+endif
+if ?pgi .eq. 1 then
+   echo "Test NOT performed"
+   echo tstend_0 testcase result: skip
+   stop
+endif
+!if ?numnode .gt. 1 then
+!   echo "Test NOT performed"
+!   stop
+!endif
+
+stream datadir.def
+READ RTF  CARD name @0toph9.rtf
+OPEN READ FORM UNIT 2 NAME  @0param5.prm
+READ PARAMETER CARD UNIT 2
+CLOSE UNIT 2
+
+READ SEQUENCE  CARD
+*  FIRST SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE A   SETU
+
+READ      SEQUENCE  CARD
+*  SECOND SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE B  SETU
+
+READ COOR CARD
+* INITIAL COORDINATES FOR AMN-CBX *2
+*  DATE:    10/26/83      4:44:54      CREATED BY USER: BROOKSG
+*
+   12
+    1    1 AMN  CL    -3.33267  -1.67441   0.00000 A    1      0.00000
+    2    1 AMN  C     -2.19986  -0.66094   0.00000 A    1      0.00000
+    3    1 AMN  O     -1.02163  -1.01403   0.00000 A    1      0.00000
+    4    2 CBX  N     -2.52876   0.62775   0.00000 A    2      0.00000
+    5    2 CBX  H     -1.82759   1.31241   0.00000 A    2      0.00000
+    6    2 CBX  CA    -3.96329   1.03051   0.00000 A    2      0.00000
+    7    3 AMN  CL     3.33267   1.67441   0.00000 B    1      0.00000
+    8    3 AMN  C      2.19986   0.66094   0.00000 B    1      0.00000
+    9    3 AMN  O      1.02163   1.01403   0.00000 B    1      0.00000
+   10    4 CBX  N      2.52876  -0.62775   0.00000 B    2      0.00000
+   11    4 CBX  H      1.82759  -1.31241   0.00000 B    2      0.00000
+   12    4 CBX  CA     3.96329  -1.03051   0.00000 B    2      0.00000
+COOR ORIENT
+ENERGY 
+
+IF @?dodyn .eq. 0 THEN
+shake bonh param
+open unit 21 write unform name @9native.cor 
+open unit 22 write unform name @9little.cor conv little_endian
+open unit 23 write unform name @9big.cor    convert big_endian
+open unit 31 write form name @9restart.res  conv big_endian ! should not matter, formatted file
+dynamics start nstep 20 nprint 10 nsavc 2 iunc 21 iunwri 31 echeck -1.0
+open unit 31 write form name @9restart1.res
+open unit 32 read  form name @9restart.res
+dynamics restart nstep 20 nprint 10 nsavc 2 iunc 22 iunwri 31 iunrea 32 echeck -1.0
+open unit 32 read  form name @9restart1.res
+dynamics restart nstep 20 nprint 10 nsavc 2 iunc 23 iunrea 32 echeck -1.0
+ENDIF
+
+open unit 121 read unform name @9native.cor
+open unit 122 read unform name @9little.cor
+open unit 123 read unform name @9big.cor
+coor dyna firstu 121 nunit 3
+print coor
+
+! now try on canned files,
+open unit 131 read unform name @0native.cor
+open unit 132 read unform name @0little.cor
+open unit 133 read unform name @0big.cor
+coor dyna firstu 131 nunit 3
+print coor
+coor stat sele atom b 2 ca end
+@testcheck ?xave 3.906 0.005 tstend_1
+
+prnlev 6 @pnode
+open unit 121 read unform name @9native.cor
+open unit 122 read unform name @9little.cor conv big_endian
+open unit 123 read unform name @9big.cor
+coor dyna firstu 121 nunit 3
+print coor
+coor stat sele atom b 2 ca end
+@testcheck ?xave 3.906 0.005 tstend_2
+
+if @testfail .gt. 0 then
+ echo test: tstend Read old files @tstold 
+ echo test: tstend Read new files @tstnew 
+endif
+ 
+ 
+

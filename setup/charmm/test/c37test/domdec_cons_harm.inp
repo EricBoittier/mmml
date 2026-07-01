@@ -1,0 +1,129 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! MFC 2012: Tests domdec functionality:
+!               vdw energies and forces for different cutoff methods
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+stream datadir.def
+goto build
+label returnbuild
+format (f20.10)
+
+coor copy comp
+
+cons harm sele segid 5dfr .and. resid 1:100 end force 10.0 mass comp
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn1
+goto run_dynamics
+label return_dyn1
+
+shake off
+
+  set flag return_ene1
+  goto get_energy
+    label return_ene1
+  set fd ?rms
+  calc ed = abs ( @e1 - @e2 )
+  calc hd = abs (@harm1 - @harm2 )
+
+
+stop
+
+! ************************************
+! ******* GET_ENERGY   ***************
+! ************************************
+
+label get_energy
+
+! Run dynamics in periodic box\
+set vmeth vswitch
+set ddmeth 
+energy bycb -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 @vmeth -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     @ddmeth
+set e1 ?ener
+set harm1 ?harm
+scalar dx store 1
+scalar dy store 2
+scalar dz store 3
+
+set ddmeth domdec dlb off
+energy bycb -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 @vmeth -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64  -
+     @ddmeth
+set e2 ?ener
+set harm2 ?harm
+coor force comp
+scalar x copy 1
+scalar y copy 2
+scalar z copy 3
+coor rms 
+goto @flag
+
+! ************************************
+! ******* Run dynamics ***************
+! ************************************
+
+label run_dynamics
+
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 nstep 10 nprint 10 iprfrq 1000 -
+     iseed 123456 335577 895623 59163 nsavc 0 nsavv 0 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 20 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 -
+     hoover reft 298 tmass 250 tbath 298     ! Constant temperature
+
+goto @flag
+
+!*****************************************************
+!             BUILD
+label build
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+goto returnbuild
+

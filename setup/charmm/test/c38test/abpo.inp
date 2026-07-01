@@ -1,0 +1,90 @@
+* Adaptively biased path optimization for alanine dipeptide conformational transition
+*
+
+! Note: datadir.def is not used in this testcase.
+! Please run the script under the directory where output is expected,
+! and modify the following line to set 0 to the correct path to data.
+! Make sure the path is quote protected.
+
+if ?ABPO .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 4 then
+  echo "Wrong number of processors. Test NOT performed."
+  stop
+endif
+
+set 0 "data"
+if ?mynode .eq. 0 system "cp @0/init.dat init.dat"
+
+! Read toppar
+open unit 1 read form name @0/top_all22_model.inp
+read rtf card unit 1
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+
+! Set up ensemble environment
+ensemble nensem 4
+set rep ?whoiam
+if @rep .eq. 0 set phi -83
+if @rep .eq. 0 set psi  75
+if @rep .eq. 1 set phi -83
+if @rep .eq. 1 set psi  75
+if @rep .eq. 2 set phi  70
+if @rep .eq. 2 set psi -70
+if @rep .eq. 3 set phi  70
+if @rep .eq. 3 set psi -70
+
+! Build structure
+read sequence card
+* Sequence for generating adp
+*
+1
+ALAD
+generate ADP setup
+ic param
+ic edit
+dihedral adp 1 clp adp 1 nl adp 1 ca adp 1 crp @phi
+dihedral adp 1 nl adp 1 ca adp 1 crp adp 1 nr @psi
+end
+ic seed 1 nl 1 ca 1 crp
+ic build
+
+! Setup temperature and nonbond specifications
+set temp 300
+update inbfrq -1 elec TRUNcate atom cdie eps 1.0 -
+	cutnb 100 ctonnb 90 ctofnb 95
+scalar fbeta set 5 sele all end
+energy
+
+! Setup collective variables
+ensemble abpo setcv -
+        tsel sele type clp end sele type nl end sele type ca end sele type crp end -
+        tsel sele type nl end sele type ca end sele type crp end sele type nr end
+
+! Evaluate the D matrix
+ensemble abpo dtns dsteps 50000
+dyna leap lang tbath @temp timestep 0.001 -
+	nsavc 100 nprint 1000 IPRFrq 50000
+
+! Reset the coordinates
+coor init
+ic param
+ic edit
+dihedral adp 1 clp adp 1 nl adp 1 ca adp 1 crp @phi
+dihedral adp 1 nl adp 1 ca adp 1 crp adp 1 nr @psi
+end
+ic seed 1 nl 1 ca 1 crp
+ic build
+
+! Run path optimization
+ensemble abpo opti -
+	temp @temp bcyc 1 ecyc 30 npnt 500 moll 0.05 bfct 0.90 pred 500 -
+	rtube 0.2 ftube 50.0 smooth 0.05 -
+	mnblock 40 bstep 10000 minc 50
+dyna leap lang tbath @temp timestep 0.001 -
+	nsavc 100 nprint 1000 IPRFrq 10000
+
+stop

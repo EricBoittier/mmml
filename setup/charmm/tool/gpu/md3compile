@@ -1,0 +1,38 @@
+#! /bin/bash
+
+# If there are no variables from user, use Gentoo defaults
+#
+# install.com sets CUDATK and CUDASDK
+# for both compiling md3 libraries and Makefile_gpu
+
+echo "Compiling CUDA interface for CHARMM"
+
+# rm -f rsqrt.g80emu r1.g80emu
+mkdir -p intel gcc
+
+if [ "$ifort_gpu" == 1 ] ; then
+    target_dir=intel
+    CC=icc
+    CXX=icpc
+    FC=ifort
+    FLAGS='-xW -tpp7'
+else
+    target_dir=gcc
+    CC=gcc
+    CXX=g++
+    FC=gfortran
+    FLAGS=''
+fi
+export CC CXX FC FLAGS
+
+cd rs
+make || exit 1
+cp libmd3withg80vg.a ../$target_dir
+#    cp rsqrt.g80emu r1.g80emu ..
+cd ..
+
+cd pme
+make || exit 1
+cp libmd3withg80s.a ../$target_dir
+cd ..
+

@@ -1,0 +1,211 @@
+* CHARMM Testcase c34a2
+* PHMD module with image facility
+* Written by Jana Khandogin (June 2007)
+*
+
+if ?phmd .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+set pnode
+if ?numnode .gt. 1 then set pnode node 0
+
+stream datadir.def
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINSETUP=0
+
+calc tol = 1.e-6
+
+! read parameter and topology files
+open unit 1 read form name @0top_all22_prot_cmap_phmd.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all22_prot_chen_cmap_phmd.inp
+read param card unit 1
+close unit 1
+
+
+read sequence card
+* sequence of the C-peptide from ribonuclease A
+*
+ 13 
+! 1   2   3   4   5   6   7   8   9  10
+ LYS GLU THR ALA ALA ALA LYS PHE GLU ARG
+ GLN HSP MET
+
+generate CPEP setup warn first NTER last CTER
+
+!
+! Make a Helix
+!
+
+coor stat select type CA end
+set ntot = ?nsel
+
+set i = 1
+
+label ic_edit
+
+calc j = @i - 1
+calc k = @i + 1
+
+if j .ge.  1 then
+IC EDIT
+DIHE @j  C  @i  N  @i CA  @i  C -57.8  ! PHI
+END
+endif
+
+if k .le. @ntot then
+IC EDIT
+DIHE @i  N  @i CA  @i  C  @k  N -47.0  ! PSI
+END
+endif
+
+incr i by 1
+if i .le. @ntot goto ic_edit
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+hbuild
+
+coor stat
+coor orie
+coor stat
+coor rotate ydir  1.0 phi 90.0
+coor stat
+coor trans zdir -?zmin
+coor trans zdir  -30.0
+coor stat
+
+coor trans xdir 1.0 ydir 1.0 dist 10.0
+
+!
+! Image Setup
+!
+
+READ IMAGE
+* 4-fold symmetry
+*
+
+IMAGE RT2
+ROTATE 0.0 0.0 1.0  90.0
+
+IMAGE RT3
+ROTATE 0.0 0.0 1.0 180.0
+
+IMAGE RT4
+ROTATE 0.0 0.0 1.0 270.0
+
+END
+
+
+calc ctonnb = 20.0 
+calc ctofnb = @ctonnb
+calc cutnb  = @ctofnb + 4.0
+calc cutim  = @cutnb
+
+NBOND atom switch cdie vdw vswitch - ! imall - !bycb 
+      ctonnb @ctonnb ctofnb @ctofnb cutnb @cutnb cutim @cutim
+
+prnlev 0 @pnode
+stream @0radius.str
+prnlev 5 @pnode
+
+scalar wmain statistics select .not. type H* end
+define check select (.not type H* ) .and. ( property wmain .eq. 0.0 ) show end
+if ?nsel ne 0  stop       !some heavy atom have a zero radius
+
+GBSW sw 0.3 rmax 20.0 nang 38 nrad 0 sgamma 0.030 dgp 1.5 tmemb 35.0 msw 2.5
+
+ENERGY
+set Ebefore = ?ener
+! Note, vdW part of energy from titrating group was moved from pHEn to vdW
+! make adjustment so test 1 correctly compares for pass/fail
+set EvdWB4 = ?vdw
+
+label ENDSETUP=0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=0
+! single-point PHMD
+
+open unit 23 read form name @0phmd_hsp.in
+PHMD par 23 wri 26 ph 6 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+ENERGY
+calc Eafter = ?ener - ?phen -?vdw + @EvdwB4
+show @Eafter
+show @Ebefore
+@testcheck @Eafter @Ebefore @tol phmd_images_test_0
+
+label ENDTEST=0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=1
+
+test first step 0.00001 select type CA end
+
+calc ref = ?nsel * 3
+@testcheck ?nok @ref @tol phmd_images_test_1
+
+label ENDTEST=1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+scalar x store 1
+scalar y store 2
+scalar z store 3
+
+PHMD reset
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=2
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+
+! PHMD dynamics
+open unit 23 read form name @0phmd_hsp.in
+PHMD par 23 wri 26 ph 6.0 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+dynamics leap start timestep 0.002 nstep 5 nprint 1 iprfrq 100 -
+  firstt 298 finalt 298 ichecw 0 iseed 314159 -
+  iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200
+
+label ENDTEST=2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+label BEGINTEST=3  ! GBSW w/ salt and rotational symmetry
+ENERGY
+
+test first step 0.00001 select type CA end
+
+calc ref = ?nsel * 3
+@testcheck ?nok @ref @tol phmd_images_test_3
+
+label ENDTEST=3
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+stop

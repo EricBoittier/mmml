@@ -1,0 +1,94 @@
+* CHARMM c38a1 testcase
+* Test link between adaptive umbrella and RXNCOR
+* Author J Spiriti, 2012
+*
+
+!the command parser only accomodates an 8-letter variable name
+if ?ADUMBRXN  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+!#========================================================
+
+! grid resolution
+!CALC RES 360 / @DA
+set max = 10
+calc res = @max / 0.1
+open unit 1 read formatted name @0top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read formatted name @0par_all22_prot.inp
+read para card unit 1
+close unit 1
+ 
+! read in the sequence
+read sequ ala 2
+bomblev -10
+generate pep first none last none warn angle dihedral setup 
+patch ace pep 1
+patch ct3 pep 2
+autogen angles dihedrals
+bomblev -1
+! write out the psf file
+open unit 1 write card name @9pep-ace.psf
+write psf card unit 1
+close unit 1
+
+! read in the starting coordinates
+!open unit 1 read card name @9c7eq.cor
+!read coor card unit 1
+!close unit 1
+	ic generate
+	ic param
+	ic seed 1 n 1 ca 1 c
+	ic build
+
+	open unit 1 write formatted name @9start.cor
+	write coor card unit 1
+	close unit 1
+!#{=============================================================}
+
+! ace setup
+nbonds atom rdie fswitch cutnb 999 ctofnb 989 ctonnb 979
+
+	mini sd nstep 100
+	mini conj nstep 500
+!quick 1 cy 1 n 1 ca 1 c
+!quick 1 n 1 ca 1 c 1 nt
+	open unit 1 write formatted name @9min.cor
+	write coor card unit 1
+	close unit 1
+!stop
+!#########################################################################
+!# setup umbrella potential (see adumb.doc)
+!# we'll do a 2 dimensional umbrella sampling of the phi and psi dihedral
+!# angles
+!#
+!# note that this code automatically uses WHAM to combine the data of
+!# all runs so far (to calculate the free energy and the new umbrella potential)
+!# 
+!# for the very first run, this umbrella is set to zero
+!#
+open unit 44 write card name @9adumb-ace-wuni.dat
+rxncor define p1 point select atom pep 1 oy end
+rxncor define p2 point select atom pep 2 hnt end
+rxncor define dist distance p1 p2
+rxncor set nrxn 1 dist
+open unit 45 write card name @9trace
+rxncor trace dist unit 45
+umbrella rxncor nresol @res trig 0 poly 10 min 0 max @max name dist
+umbrella init nsim 100 update 10000 equi 1000 thresh 10 temp 300
+
+dynamics tref 300 qref 20 start -
+             nstep 200 timestep 0.001 -
+             ihbfrq 0 inbfrq 10  ilbfrq 5 -
+             iseed 12 -
+             nprint 100  iprfreq 100 -
+             isvfrq 100  iunwrite -1 iunread -1 -
+             wmin 1.2
+
+test first select all end
+stop

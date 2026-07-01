@@ -1,0 +1,888 @@
+CHARMM Element doc/replica.info 1.1
+
+File: Replica, Node: Top, Up: (doc/commands.info), Next: Syntax 
+
+Replica: Commands which deal with replication of the molecular system: Replica.
+
+# <caves>-Aug-18-1993 (Leo Caves) Initial release.
+# REPLICA/PATH method added by B. Brooks March 1994.
+# Feynmann Path Integral Methods added
+    by B. Roux, K. Hinsen and Marc Souaille, June 1997.
+
+The commands described in this node are associated with the replication of
+regions of the PSF, see *note gener:(doc/struct.info)Generate.  A facility
+for replication of regions of the PSF has been implemented to support a class
+of methods which seek to improve the sampling of a (usually small) region of
+the molecular system, by selective replication.  Such methods include LES
+(Locally Enhanced Sampling [Elber and Karplus 1990, J. Amer. Chem. Soc. 112,
+9161-9175]) and MCSS (Multiple Copy Simultaneous Search [Miranker and Karplus
+1991, Proteins 11, 29-34]).
+
+The Replica Path Method as applied to QM, MM and QM/MM reaction paths is 
+described in the following paper and should be cited when applied... 
+
+  H. Lee Woodcock, M. Hodoscek, P. Sherwood, Y. S. Lee, H. F. Schaefer, and 
+  B. R. Brooks; Exploring the QM/MM Replica Path Method: A Pathway
+  Optimization of the Chorismate to Prephenate Claisen Rearrangement
+  Catalyzed by Chorismate; Theor. Chem. Acc. 2003; 109 (3); 140-148.
+
+the Nudged Elastic Band method as implemented in CHARMM is built upon the 
+Replica Path functionality therefore the above paper and the following paper 
+(which describes the NEB implementation and improvements in minimization 
+techniques) should be cited when applied... 
+
+  J. W. Chu, B. L. Trout and B. R. Brooks; A super-linear minimization scheme 
+  for the nudged elastic band method; J. Chem. Phys. 2003; 119(24);
+  12708-12717.
+
+* Menu:
+* Syntax::		Syntax of the replication commands
+* Usage::	 	Description of command usage
+* Implementation::	A brief description of the anatomy of replication 
+* Restrictions:: 	Restrictions on usage	
+* Examples:: 		Supplementary examples of the use of REPLica
+* Path::                Replica Path Method
+* OffPath::             Off-Path Optimzation / Simulation 
+* Pathint::             Path Integral Calculation using REPLica
+
+
+File: Replica, Node: Syntax, Up: Top, Next: Usage, Previous: Top
+
+Syntax of PSF Replication commands
+
+[SYNTAX: REPLication commands]
+
+REPLica { [segid] [NREPlica integer] [SETUP] [atom-selection] [COMP] }
+        { RESEt                                                      }
+
+segid:==		Basename for replica segment identifiers. 
+atom-selection:==	(see *note select:(doc/select.info).)
+
+
+
+      {   OFF                                                             }
+RPATh { [KRMS real] [KANGle real] [COSMax real] [MASS] [WEIGht] other-spec}
+
+other-spac:== [ KMIN real RMIN real ]
+                [ KMAX real RMAX real ]
+                  [ EVWIdth real ] [ CYCLic ]
+                    [ROTAte  ] [TRANslate  ]
+                    [NOROtate] [NOTRanslate]
+                   [ NEBA ] [ KNEB real ]
+                   [ NEBF ] [ ETAN ] [ CIMG ] [ PPMF ] [ ANAL ]
+
+
+File: Replica, Node: Usage, Up: Top, Next: Implementation, Previous: Syntax
+	
+Description of REPLica command usage
+
+1) (The implicit GENERate subcommand)
+This command performs the essential act of replication. Its action is to
+replicate (to a degree specified by NREPlica, default: 2) (a subset of) the
+molecular system, as specified in the (primary) atom-selection (default: all).
+All atomic properties and topological attributes of the region are replicated
+(for a full list, see *note implem:(doc/replica.info)Implementation).  Each
+replica of the primary atom selection constitutes a new segment in (and 
+appended to) the PSF, however the atom and residue names and the residue
+identifiers of the primary atom selection are carried over.
+
+The implicit generation subcommand optionally accepts a segment identifier
+(segid).  The length of segid must be such that when concatenated with the
+(integer representing the) maximum number of replicas specified for generation,
+it does not exceed 4 characters.  If omitted, then replica segment identifiers
+will simply be set to the replica number. At present no check is made for
+duplicate segment identifiers, so choose with care. The command is designed to
+operate in a manner similar to the GENErate command from the main parser.
+
+The effect of the replication command may be classified into two areas:
+structure and interactions. Structurally, as mentioned above, the command
+performs the necessary book-keeping work for CHARMM, in order that each
+individual replica is functionally equivalent to the region of the structure
+specified in the atom selection. ie. in the case where the atomic positions of
+an individual replica are the same as the primary atom selection (as they will
+be immediately after issuing the REPLica command), the energy and forces of the
+individual replica and the appropriate region of the primary system are
+identical (there is an important corollary to this statement which is now
+discussed).
+
+In the area of discussing the interactions of replicas it is useful to
+introduce the concept of a subsystem.  Before issuing a REPLica command, there
+is considered to be one subsystem, the primary subsystem, to which all atoms
+belong. Upon issuing the REPLIca command a new subsystem is generated, which
+consists of replicas of a subset of the primary subsystem (as specified in the
+atom selection).  In this case there are now two subsystems.
+
+The simple cases specifying interactions of subsystems and replicas may now
+be stated:
+	* Replicas within a subsystem do NOT interact. 
+	* Replicas belonging to different subsystems do interact. 
+
+In CHARMM, the interaction rules of replicas are applied in the non-bonded list
+generation routines, through appropriate group/atom exclusions. You will notice
+some diagnostic messages from the list generation routines indicating the
+number of group/atom interactions excluded on the basis of replication.  In
+following the rules of interaction of replicas it is important to note that a
+given replication of a subset of the primary subsystem, results in a new
+subsystem. Thus the subset of the primary subsystem and its individual replicas
+are now in different subsystems and are thus will interact.  For this reason,
+the replication action is usually followed by an immediate removal of the atoms
+of the subset of the primary subsystem, through a call to DELEte *note
+dele:(doc/struct.info)Delete). This leaves all replicas of the specified
+region in a single subsystem, arranged as contiguous segments appended to the
+current PSF.
+
+A note on renormalization of energy and forces:
+In the original implementation of REPLica in a developmental version of CHARMM
+at Harvard, there exists a close coupling of the REPLica command and the
+energy/force evaluation routines. In the current REPLica implementation in the
+standard CHARMM distribution, appropriate energy/force scaling for the system
+in question may be achieved through the use of the BLOCK facility of CHARMM see
+*note Block(doc/block.info). The combination of REPLica and BLOCK provides
+for very flexible method of handling replica interactions.  Note that if the
+primary system is FIXed and that only one replicated subsystem is present (the
+case in many MCSS applications) then normalization of energy/forces is NOT
+required.
+
+Example:
+In the following section of CHARMM command script, a segment named PROT is
+generated from a sequence read from a coordinate file. A couple of selection
+definitions are made which together identify the sidechain atoms of residue
+12.  In the REPLIca command, 4 copies of the sidechain are generated and placed
+in three new segments A1 to A4 at the end of the PSF. Next the selections are
+redefined (as REPLica has altered the PSF and this corrupts existing selections
+made with the DEFIne command). These (newly redefined) selections are made to
+remove the sidechain atoms in the primary system that were selected for
+replication. Next BLOCK is used to setup the scaling of energy and forces in
+this system with a primary and a single replicated subsystem. In the call to
+BLOCK, 2 blocks are requested. By default BLOCK places all atoms of the system
+in block 1, so the first action is to redefine the replicated subsystem to
+block 2. Next we simply set up the desired interaction matrix. Primary
+subsystem self interactions are simply set to unity (no scaling).  Interactions
+within each replica are set to 0.25 (the reciprocal of the number of
+replicas).  Primary <--> replicated subsystem interactions are similarly scaled
+by 0.25.  (Note that the REPLica interface to the non-bonded list generation
+routines removes all inter-replica (intra-subsystem) interactions.) Finally,
+the masses of the replicated atoms are scaled by 0.25, by using the SCALar
+commands. (Note that mass-scaling may not be desirable as it has been
+demonstrated that in the original LES framework, the thermal properties of the
+replicas are such that at thermal equilibrium, the mapping of replicas back to
+the "physical" system (with a single copy) results in too high a temperature.
+The overestimation of the temperature in the physical system is a factor of N
+in the simplest case of a uniform "weighting" of all replicas by a factor of
+1/N, where N is the number of replicas employed in the simulation. This effect
+is an active field of research, though a solution for systems where only
+equilibrium properties are desired is to either scale up the masses of the
+replicas by a factor of N, or to selectively rescale the velocities of the
+replicas.)
+
+
+...
+
+! { read sequence and generate segment }
+READ SEQU COOR UNIT 11
+GENErate PROT 
+
+! { define some useful atom selections } 
+DEFIne backbone SELEct TYPE N  .OR. TYPE CA .OR. TYPE C .OR. -
+                       TYPE HN .OR. TYPE HA .OR. TYPE CB END
+DEFIne disorder SELEct (SEGID PROT .AND. RESId 12) .AND. .NOT. backbone END
+
+! { replicate the selected sidechain four times }
+REPLIcate A NREPlica 4 SELEct ( disorder ) END
+
+! { redefine as REPLIca has changed PSF and this trashes SELEction
+!   definitions }
+DEFIne backbone SELEct TYPE N  .OR. TYPE CA .OR. TYPE C .OR. -
+                       TYPE HN .OR. TYPE HA .OR. TYPE CB END
+DEFIne disorder SELEct (SEGID PROT .AND. RESId 12) .AND. .NOT. backbone END
+                     
+DELEte ATOM SELEct ( disorder ) END
+DEFIne replicas SELEct SEGId A* END
+
+! { set up an appropriate interaction matrix }
+BLOCK 2
+CALL 2 SELEct ( replicas ) END
+COEF 1 1 1.0
+COEF 2 2 0.25
+COEF 2 1 0.25
+END
+
+! { note masses can be modified if desired through the SCALar commands }
+! { note that this may not always be desirable --- see comments above }
+SCALar MASS MULt 0.25 SELEct replicas END
+
+... load/generate some coordinates and proceed..
+
+
+2) The RESEt subcommand.
+
+The RESEt subcommand has the effect of reducing all current subsystems to a
+single primary subsystem. This is accomplished by simply switching off the
+CHARMM's REPLica handling mechanism. This change is currently irreversible, in
+as much as the REPLica state must be restored through appropriate calls to the
+REPLica command.  This command is there to support the use of REPLica for
+simple replication of PSF elements for which subsequent REPLIca handling is not
+required.
+
+Example:
+The following example begins by building a PSF containing a single CO
+molecule.  An immediate call to REPLica requests the generation of 256 replicas
+(with SEGId's of R1 to R256) of the primary subsystem (the CO molecule with the
+SEGId CO). Next the original CO molecule is removed. The final command,
+switches off the CHARMM's replica handling, leaving a PSF with 256 CO's which
+interact with each other. This may seem like a redundant command given the
+ability to generate a long sequence with commands like READ SEQU COOR or a
+little copy and paste with your favorite editor, but remember that REPLica can
+handle replication of ANY subset of the PSF, reducing the need for tampering
+with RTF definitions and creating new PATCh residues (PRES's).
+
+READ SEQUence CARDS
+* a single carbon monoxide molecule
+*
+1
+CO
+
+GENErate CO 					! generate the primary system
+
+REPLica R NREP 256 SELEct SEGId CO END		! replicate
+DELEte ATOM SELEct SEGId CO END			! remove primary system 
+REPLica RESEt					! reduce replicates to primary
+
+
+File: Replica, Node: Implementation, Up: Top, Next: Restrictions, Previous: Usage
+
+Notes on Implementation of REPLica in CHARMM.
+
+This node is of primary directed at CHARMM developers, but may be of 
+interest to the curious user.
+
+Structurally, the call to REPLica handles all atomic and topological properties
+of atoms in the primary atom selection. Properties that are replicated include
+group/residue membership, atom-code, IUPAC name, partial charge, parameter type
+code, fixed atom flag, X,Y,Z and W for main and comparison and reference
+coordinates, the forces DX,DY and DZ, the friction coefficient FBETa, and the
+harmonic constraint.  Topological entries include bond, angle, dihedral,
+improper terms, explicit non-bonded exclusion flags and H-bond donor and
+acceptor arrays. Optionally, IC table entries for the primary selection are
+replicated.
+
+For interactions, the handling of replicas in CHARMM has been implemented using
+a very simple data structure which allows for a simple and efficient interface
+to the central CHARMM routines. Essentially, subsystem and replica identities
+are maintained through the use of linked lists.  On the first call to REPLica,
+the primary system (the existing PSF) is initialized to be subsystem 1 (repID),
+consisting of 1 replica.  Each call to REPLica, establishes a new subsystem,
+and each replica requested is distinguished by a separate replica number. The
+replica number is maintained at both the group (repNoG) and atom (repNoA) level
+for efficiency in the non-bonded list generation routines.
+
+In the following schematic we see the state of the data structure in which
+there is a primary system consisting of 4 atoms. The threefold replication of
+atoms 2 and 3 (which form a distinct group in the primary system) is shown. The
+replication forms a new subsystem (repID).  Each replicated group gets a
+distinct flag representing the individual replica, as do the replicated atoms.
+These flags index into the repID array which contains the subsystem membership
+flags.  In this way the subsystem/replica membership is easily established
+through knowledge of the group or atom number.
+
+Atom  Name	repID	repNoG	repNoA	Comments
+#
+1	N	1	1	1	| Primary subsystem
+2	CA	 		1	|
+3	C			1	|
+4	O			1 	|
+5	CA	2	2	2	& Replicated substem (NREP=3)
+6	C 	 	 	2	&
+7	CA		3	3	&
+8	C 		 	3	&
+9	CA		4	4	&
+10	C 		 	4	&
+
+An schematic of the replica exclusion code in the non-bond list generation
+is now given for an atom pair i and j.
+
+IF ( ( repNoA(i) .NE. repNoA(j) ) .AND. 
+     ( repID(repNoA(i)).EQ.repID(repNoA(j)) ) ) THEN
+       
+	EXCLUDE PAIR (i,j) in list
+ELSE
+	INCLUDE PAIR (i,j) in list
+ENDIF
+
+There is another component of the REPLica data structure which is a array
+(byatom) of "weights". These weights in general reflect the degree of
+replication of the subsystem to which the atom belongs, but may be changed
+through SCALar commands (SCALar WEIGht SET..). This array was used in the
+developmental version of CHARMM with REPLicas as the interface to the
+energy/force routines for correct normalization. In the current standard CHARMM
+release, this array exists, but is redundant. Currently it will be filled by a
+value of the reciprocal of the number of replicas requested for any subsystem.
+It has been retained for some degree of flexibility in future releases. At
+present it may be used as an additional array for book-keeping.
+
+
+File: Replica, Node: Restrictions, Up: Top, Next: Examples, Previous: Implementation
+
+The only absolute requirement for this command is that a PSF of the molecular
+system be present prior to the call to REPLIca. 
+
+All non-bonded list generation options are currently supported, however
+IMAGES and EXTENDED electrostatics are currently not supported.
+
+Please note that the replica group flags follow the group membership of the
+primary atom selection, therefore take care not to split groups in a selection
+if group-based energy evaluations are to be subsequently used.
+
+Run-time attributes of the system such as SHAKE constraints, BLOCK membership
+and SBOUND flags will not be replicated. (Re)Issue such commands after
+replication has been performed.
+
+It must be noted that currently the replica handling mechanisms of CHARMM are
+generated through the run-time use of the REPLica command. i.e. the REPLica
+data structure is not currently incorporated in the standard system PSF or able
+to be saved to an external file for restoring its state.  The philosophy is
+that all necessary attributes of the replicas are contained in the primary
+system PSF and that it is therefore only necessary to keep that explicitly. Of
+course, the coordinates of the individual replicas must be saved.
+
+
+File: Replica, Node: Examples, Up: Top, Next: Path, Previous: Restrictions
+
+Supplementary examples.
+
+Replication of PHE 22 and 33 and TYR 35 of BPTI
+These examples illustrate two ways of setting up replicated subsystems.
+In both cases replicas of the sidechains are created from CG outwards. 
+In the first example three calls to REPLica are made, one for each sidechain,
+which create 5 replicas for each subsystem.
+In the second example, one call to REPLica is made, which replicates
+all three of the sidechains, to create one replicated subsystem containing
+five 5 replicas of the triad.
+In each case an appropriate interaction matrix for the subsystems is 
+created with the use of the BLOCK command.
+
+Example 1: 
+
+3 replicated subsystems: 5 copies of each individual sidechain in each.
+
+REPLicate A NREPlica 5 SETUP -
+     SELEct (SEGId 4PTI .AND. RESId 22) .AND. .NOT. -
+             (type N .or. type CA .or. type C .or. -
+              type O .or. type HN  .or. type HA .or. type CB)  END
+
+REPLicate B NREPlica 5 SETUP -
+     SELEct (SEGId 4PTI .AND. RESId 33) .AND. .NOT. -
+             (type N .or. type CA .or. type C .or. -
+              type O .or. type HN  .or. type HA .or. type CB)  END
+
+REPLicate C NREPlica 5 SETUP -
+     SELEct (SEGId 4PTI .AND. RESId 35) .AND. .NOT. -
+             (type N .or. type CA .or. type C .or. -
+              type O .or. type HN  .or. type HA .or. type CB)  END
+
+
+! DELETE the necessary regions of the primary sub-system
+DELEte ATOM -
+     SELEct (SEGId 4PTI .AND. (RESI 22 .OR. RESI 33 .OR. RESI 35)) .AND. -
+              .NOT. (type N .or. type CA .or. type C .or. -
+              type O .or. type HN  .or. type HA .or. type CB)  END
+
+DEFIne phe22 SELEct SEGId A* END
+DEFIne phe33 SELEct SEGId B* END
+DEFIne tyr35 SELEct SEGId C* END
+
+! set up the correct energy/force scaling. 
+! the default coefficient is one.
+BLOCK 4
+   CALL 2 SELEct phe22 END	! assign replicated subsystems to blocks
+   CALL 3 SELEct phe33 END
+   CALL 4 SELEct tyr35 END
+   COEF 2 1 0.2                 ! primary <-> replicated subsystems 
+   COEF 3 1 0.2
+   COEF 4 1 0.2
+   COEF 2 2 0.2			! replicated subsystem self-terms
+   COEF 3 3 0.2
+   COEF 4 4 0.2
+   COEF 3 2 0.04		! replicated <-> replicated subsystems
+   COEF 4 2 0.04
+   COEF 4 3 0.04
+END
+
+
+
+Example 2:
+
+1 replicated subsystem: 5 replicas consisting of the 3 different sidechains
+
+REPLicate A NREPlica 5 SETUP -
+     SELEct (SEGId 4PTI .AND. (RESId 22 .OR. RESID 33 .OR. RESID 35) ) -
+     .AND. .NOT.  (type N .or. type CA .or. type C .or. -
+              type O .or. type HN  .or. type HA .or. type CB)  END
+
+! DELETE the necessary regions of the primary sub-system
+DELEte ATOM -
+     SELEct (SEGId 4PTI .AND. (RESI 22 .OR. RESI 33 .OR. RESI 35)) .AND. -
+             .NOT. (type N .or. type CA .or. type C .or. -
+              type O .or. type HN  .or. type HA .or. type CB)  END
+
+! set up the correct energy/force scaling.
+BLOCK 2
+   CALL 2 SELEct SEGId A* END
+   COEF 1 2 0.2
+   COEF 2 2 0.2
+END
+
+
+File: Replica, Node: Path, Up: Top, Next: OffPath, Previous: Examples
+
+
+                        Replica Path Method
+
+      The replica/path method allows the positions between sequential
+replicas to be restrained.  This allows minimization and simulated
+annealing methods to be used to search for transition states.
+
+                                      B. Brooks, NIH, March 1994
+
+This code currently requires exactly one replicated subsystem with at
+least three replicas.
+
+The nudged elastic band (NEB) method [H. Jonsson, G. Mills, and
+K.W. Jacobsen, "Nudged Elastic Band Method for Finding Minimum Energy
+Paths of Transitions", in "Classical and Quantum Dynamics in Condensed
+Phase Simulations", World Scientific, 1998] is implemented as part of
+the replica path method.  The energy function in this method does not
+correspond to the forces (does not pass TEST FIRST) because of the
+projections involved.  Only simple minimization/quenching schemes can
+be used for the path optimization.
+
+                                    P. Maragakis, Harvard, June 2002
+
+The nudged elastic band (NEB) method [H. Jonsson, G. Mills, and
+K.W. Jacobsen, "Nudged Elastic Band Method for Finding Minimum Energy
+Paths of Transitions", in "Classical and Quantum Dynamics in Condensed
+Phase Simulations", World Scientific, 1998] is implemented within the
+framework of the replica path method.  ABNR and SD can be used with this
+method. Ecount is used to calculate the energy of each replica in the path.
+Note that this NEB method uses the keyword NEBF, it is different from NEBA.
+See Chu, Trout, and Brooks, JCP Vol 119, pp. 12708-12717,2003 for more details
+Note that GRMS will not be zero even when NEB minimization is converged.
+Instead, the OFF-path and along path gradient should be close to zero.
+The print of OFF-path and path gradient can be turned on by the "DEBU"
+keyword of abnr.
+
+                                    Jhih-Wei Chu, MIT, 2003
+
+
+Syntax:
+
+RPATh   OFF   !  clear the replica/path energy restraint
+
+RPATh  [ KRMS real ] [ KANGle real ] [ COSMax real ] [MASS] [WEIGht]
+                [ KMAX real RMAX real ] [ EVWIdth real ] [CYCLic] 
+                              [   ROTAte ] [   TRANslate ]
+                              [ NOROtate ] [ NOTRanslate ]
+                [ NEBA ] [ KNEB real ]
+                [ NEBF ] [ ETAN ] [ CIMG ] [ PPMF ] [ ANAL ]
+
+    MASS   - Use mass weighting in rms determination.
+    WEIGht - Use the main weighting array for weighting the rms vector.
+    KRMS   - The rms deviation force constant (Kcal/mol/A**2)
+    KANGle - The COS(angle) deviation force constant (Kcal/mol)
+    COSMax - The value of COS(theta) below which the vectors are restrained.
+    RMAX   - The maximum rms deviation per replica step
+    KMAX   - The force constant for exceeding the maximum step (Kcal/mol/A**2)
+    EVWIdth- Width of switching region in the rms bestfit rotation (FROTU)
+                (Angstrom**2) which is used when degenerate eigenvalues occur.
+                Current recommended value: 0.001, default: 0.0)
+
+    ROTAte - Do a best fit rotation for every replica step
+    NOROt  - Don't "
+    TRANsl - Do a best fit translation for every replica step
+    NOTRans- Don't "
+    NEBA   - Use the nudged elastic band approach
+    KNEB   - The nudged elastic band spring constant
+
+    NEBF   - Use the nudged elastic band (can work with ABNR. use KRMS
+             instead of KNEB.) 
+    ETAN   - Jonsson's energy based tangent estimation,
+             JCP, 113, 9978-9985, 2000
+    CIMG   - Jonsson's climbing image for transition state refinement,
+             JCP, 113, 9901, 2000
+    PPMF   - Print the force along the tangent direction of tha path of each
+             replica at each energy call.
+    ANAL   - Print statistics of NEB calculations after some minimization
+             or MD steps.
+
+Replica/Path energy functions:
+
+   Erms = sum  {  0.5* Krms * ( rms  - <rms> )**2 }      I=1,NREP-1
+             I                     I
+
+      where rms  is the weighted rms deviation between replica I and I+1
+               I
+
+   Erms = sum  {  0.5* Kmaxrms * ( rms  - Rmaxrms )**2 }      I=1,NREP-1
+             I                        I
+
+
+   Eang = sum  { 0.5* Kang * ( cosmax - cos(theta) )**2 }  (cos(theta)<cosmax) 
+             I
+
+        =  0.0   when cos(theta) >= cosmax                  I=1,NREP-2
+
+      where cos(theta) is determined from the dotproduct of weighted deviation
+      vectors between replicas I and I+1 and between I+1 and I+2.
+
+By default, this restraint uses absolute positions.  This is only appropriate
+if a subset of the atoms is replicated.  The ROTAtions and TRANslations options
+should be used if the replicated atoms have significant freedom to move. 
+
+An example of use:
+
+! { read sequence and generate segment }
+READ SEQU COOR UNIT 11
+GENErate PROT 
+
+! { define atom region in which to search for transition state }
+DEFINE active sele segid prot .and. resid 15 : 19 end
+
+! { replicate the selected residues 20 times }
+REPLIcate A NREPlica 20 SELEct ( active ) END
+
+! { redefine is necessary }
+DEFINE active sele segid prot .and. resid 15 : 19 end
+
+! { read product coordinates }                     
+OPEN read card unit 12 name products.crd
+READ coor card unit 12 COMP
+                     
+! { read reactant coordinates }                     
+OPEN read card unit 12 name reactants.crd
+READ coor card unit 12
+COOR orient rms mass sele .not. ( active .or segid A* ) end
+
+! { setup initial guess coordinates for all intermediates }
+
+set 1 1
+set a 0.0
+label loop
+  coor duplicate sele active end sele segid A@1 end
+  coor duplicate sele active end sele segid A@1 end comp
+  coor average fact @a sele segid A@1 end
+  incr a by 0.05
+  incr 1 by 1
+  if @1 .lt. 20.5 goto loop
+
+DELEte ATOM SELEct  active  END
+DEFIne replicas SELEct SEGId A* END
+
+! { average the non active reactant and product atoms }
+COOR average sele .not. replicas end
+COOR copy comp
+
+! { set up an appropriate interaction matrix }
+BLOCK 2
+  CALL 2 SELEct replicas END
+  COEF 1 1 1.0
+  COEF 2 2 0.05
+  COEF 2 1 0.05
+END
+
+! { specify residue 17 as more inportant in the weighting }
+SCALAR wmain set 1.0
+SCALAR wmain set 4.0 sele replicas .and. resid 17 end
+
+! invoke the path code
+RPATH KRMS 100.0 KANGle 100.0 COSMax 0.5 MASS WEIGHT ROTAtion TRANSlations
+
+! { fix the endpoints }
+cons fix sele segid a1 .or. segid a20 end
+
+minimize abnr nstep 100
+! {.... perhaps simulated annealing using MD ...}
+
+! { plot energy as a function of the path }
+open write card unit 20 name energy.dat
+set 1 1
+label eloop
+  BLOCK 2
+    CALL 1 sele all end
+    CALL 2 sele replicas .and. .not. segid A@1 end
+    COEF 1 1 1.0
+    COEF 2 1 0.0
+    COEF 2 2 0.0
+  END
+  ENERGY
+  write title unit 20
+* @1 ?energy  
+*
+  incr 1 by 1
+  if @1 .lt. 20.5 goto loop
+
+.... more analysis ...
+
+STOP
+
+
+File: Replica, Node: OffPath, Up: Top, Next: Pathint, Previous: Path
+
+    Off-Path Optimzation / Simulation (Extension to the Replica Path Method)
+
+   The off-path simulation technique allows users to compute the Potential of
+Mean Force (PMF) of a particular reaction. This is accomplished by restraining
+simulations to run in orthogonal planes of a pre-computed replica/path. Using
+distributed computing these simulations can be run in parallel thus increasing
+the sampling abilty of simulations.   
+
+Syntax:
+
+RPATh [KRMS real] [ KMAX real] [RMAX real] [OPTImize] [ANALysis] [CURVCorr]
+      [Additional RPATh keywords]
+
+   KRMS     - The RMS deviation force constant (Kcal/mol/A**2)
+   KMAX     - This force constant is applied if the simulation path moves too 
+              far away from the reference path.
+   RMAX     - The max RMS distance the simulation path is allowed to move away 
+              from the reference path.
+   OPTImize - Turn on the off-path procedure
+   ANALysis - Do the analysis of the off-path procedure (This must be called 
+              after the minimization/simulation is performed)
+   CURVCorr - Apply a curvature correction during the off-path procedure
+
+Example:
+--------
+RPATh KRMS 5000.0  KMAX 2000.0 RMAX 0.10 ROTA TRANS WEIGHT CYCLIC OPTIMIZE
+
+Path definition:
+----------------
+     _j_   
+    /   \  (Simulation Path)
+   /  j  \
+  /  / \  \
+ /  /   \  \
+i  i     k  k
+ (Ref. Path) 
+
+Off-Path Details:
+-----------------
+
+Rij = RMSd(j(sim) --> i(ref))
+Rjk = RMSd(j(sim) --> k(ref))
+Rjj = RMSd(j(sim) --> j(ref))
+
+Erms = Sum { 0.5 * Krms * (Rij - Rjk)**2 }
+  - This is applied to keep Rij = Rjk
+  - This is added to the EPATHR term
+
+Ermax = Sum { 0.5 * Kmax * (Rjj - Rmax)**2 }
+  - Is applied if Rjj > Rmax
+  - This is added to the EPATHA term
+
+Using this procedure allows an approximate PMF to be computed via determination 
+of the work needed to move from plane to plane during the simulation. 
+
+CURVCorr:
+---------
+
+The curvature correction acts as an additional restraint to prevent the
+simulation path from wondering into nearby deep wells and skewing the PMF
+downward. This is accomplished by scaling the force projection by the ratio of
+the forward and backward distance with respect to Rij and Rjk. To use this add
+the keyword CURVCorr to the RPATh command. 
+
+ANALysis:
+---------
+
+After performing an off-path optimization / simulation you can then run the
+command...
+
+RPATh ANALysis
+
+This will print out the PMF obtained from the simulation. Two columns will be
+printed: WORKTOT and ETOT. This is the work (ETOT) it takes to move from
+simulation plane to simulation plane as you move through the pathway. The work
+it takes to go half way from point to plane is also printed (WORKTOT). Given
+long enough simulations are run, these are good approximations to the pathway
+PMF.
+
+
+File: Replica, Node: PathKine, Up: Top, Next: Pathint, Previous: OffPath
+
+
+                         Kinetic Energy Potential
+
+     The curvatures along a path may be controlled by adding kinetic energy
+potentials. If only kinetic energy potentials are used, a straight line gives
+the optimal answer. Minimizing the sum of kinetic energy potentials and
+potential energies gives minimium Hamiltonian path. Adding potential energy
+significantly enhances the convergence speed of path optimization on rugged
+potential energy surface. The force constants of  kinetic energy potentials
+can be tunned to give negligible effects on reaction barriers but maintaining
+efficiency. The weighting of each atom is inherited from the setups of rpath.
+For each segment of replica, the kinetic energy potential is: 
+half * kpki * sum { wi * (ri_I+1 - ri_I)**2) }.
+Determined by the length of segment, a time step associated with kinetic energy
+potential can be obtained to computed temperature. 
+
+Syntax:
+
+RPATh [ PKIN ] [ KPKI real ] [ ISOK ] [PTEM TEMP REAL ] [ WETH ] -
+      [ PKNU ] -
+      [Additional RPATh keywords] 
+
+   PKIN     - Actives the use of kinetic energy potential 
+   KPKI     - The force constant of kinetic energy potentials 
+              The unit is (kcal/mole/A**2) if the unit of weighting
+              array is ignored.
+   ISOK     - Maintaining constant kinetic energy (isokinetic) during
+              optimization. force constants are adjusted according to segment
+              length.
+   PTEM     - Maintaining  constant kinetic energy (isokinetic) based on 
+              a specied value of temperature.
+   WETH     - Using work-energy theorem to adjust the force constants of
+              kinetic energy potential. Force constants are changed to 
+              compensate the changes in potential energy to maintain total
+              energy.
+   PKNU     - The component of the gradient of kinetic energy potential along
+              the direction of potential energy gradient that is perpendicular
+              to the path is projected for minimial purturbation for the
+              optimization perpendicular to the path 
+
+EXAMPLE: 
+
+Add kinetic energy potential to path energy.
+
+RPATH KRMS 100.0 MASS PKIN KPKI 1.0 
+
+Maintain constant kinetic energy energy.
+
+RPATH KRMS 100.0 MASS PKIN KPKI 1.0 ISOK
+
+Maintain constant kinetic energy energy with a temperature of 300.0
+
+RPATH KRMS 100.0 MASS PKIN KPKI 1.0 ISOK PTEM TEMP 300.0
+
+
+File: Replica, Node: Pathint, Up: Top, Previous: OffPath, Next: Repdstr
+
+
+                Discretized Feynman Path Integral Method
+
+
+The REPLica command can be used together with the PINT command to compute
+averaged observables of a quantum system. This computation approach
+exploit the isomorphism between the discretized form of Feynmann path integrals
+representation of the density matrix with an effective classical system
+obeying Boltzmann statistics of a canonical ensemble at temperature T
+(see D. Chandler and P.G. Wolynes, J. Chem. Phys. 74 (1981) 4078).
+Molecular dynamics simulations of the effective classical system
+are valid for obtaining ensemble averages, although they do not provide
+information on the time-dependent quantum dynamics of the system.
+Roughly speaking, the quantum delocalisation of each atom of the system
+is represented in terms of a ring polymer or necklace of beads.  These beads
+are treated as classical particles.  A discretization of the path integral
+with 20 to 30 fictitious particles is usually adequate in studies of
+proton transfer, although for a protein one might want to use a much smaller
+number of beads.  For proper use, read carefully this documentation until the
+end as well as the accompagnying stream file.
+
+B. Roux & M. Souaille, Montreal, June 1997
+
+Following the path integral approach, each nucleus is replaced in the
+effective classical system by a ring polymer, or necklace, of Nbeads
+fictitious particles with a harmonic spring between nearest neighbors
+along the ring.  For the sake of simplicity, in the current implementation
+in CHARMM, each atom is represented by the the same number of beads.
+The creation of the beads is achieved by the command REPLICA (see example
+below). The collection of beads of a given atom has the structure of a
+necklace:  each bead interacts with two neighbours and the last bead interacts
+with the first.  The energy of the ring polymers is a sum of harmonic terms
+between consecutive beads along a necklace:
+
+spring energy = -((Kb*T*P/(2*LAMBDA**2))*|r-r'|**2
+
+where r and r' are the position vectors of the two beads and LAMBDA is
+the thermal wavelength of the quantum particule (of mass M) represented by
+the necklace, LAMBDA=HBAR**2/(M*Kb*T). These interactions are added in the
+CHARMM energy through the command PINT (see example below).
+
+The interaction between two quantum atoms A and B is represented as follows:
+the necklace of A interacts with the necklace of B in a ONE TO ONE
+correspondence:  each bead of A interacts with ONE AND ONLY ONE bead of B by
+means of the classical CHARMM potential energy function scaled by 1/Nbeads.
+There is NO such interaction between the beads belonging to the same necklace.
+Moreover, if only a part of the whole system is treated quantum mechanically,
+(this MUST be an entire segment) the beads of an atom A of such a subsystem
+interacts with all the classical atoms by means of the classical CHARMM
+potential energy function scaled by 1/Nbeads.  The attribution of the
+diffferent interactions as well as their scaling is achieved by the command 
+BLOCK.  The resulting potential energy of the effective classical system is:
+
+U_eff({R}_1, {R}_2,...,{R}_p,...,{R}_Nbeads)  =
+   (Spring energy of ring polymers)
+   + U({R}_1)/Nbeads
+   + U({R}_2)/Nbeads
+   + ...
+   + U({R}_p)/Nbeads
+   + ...
+   + U({R}_Nbeads)/Nbeads
+
+where {R}_p represents all the coordinates of the $p$-th REPLICA and
+U({R}_p) represents the full CHARMM energy of the p-th REPLICA.
+
+The configurational sampling of the effective classical system may be performed
+using Langevin molecular dynamics.  The choice of Langevin dynamics is dictated
+by the need to avoid the non-ergodicity of path integral molecular dynamics
+simulations based on the microcanonical ensemble.  Of course the friction
+constant and the masses used in the dynamics are immaterial as far as the
+convergence toward a canonical ensemble is concerned but the spring constant
+in PINT are calculated from the AMASS array, so those cannot be changed
+carelessly.
+
+Alternatively, the configuration space can now be sampled with Monte Carlo.
+At present, the allowed path integral moves are displacements of single beads 
+(RTRN BYATom) or movements of seven sequential beads such that the path 
+integral spring lengths remain unchanged (CROT PIMC) (see mc.info).  Use of
+Monte Carlo with path integrals requires addition of the keyword MC to the
+PINT command.
+
+The following stream file allows to treat the molecule SEGID as a quantum
+system with Nbeads.
+
+----------------------------------------------------------------------------
+* Stream file for path integral calculations
+* Before calling, set the following variables:
+*   Nbeads  number of beads
+*   SEGID   segid of the quantum molecule
+*   TEMP    temperature
+*
+
+! Define replicas and delete original
+
+REPLICA @segid nreplica  @nbeads  select segid @segid show end setup
+delete atom select segid @segid show end
+
+! Set up the correct energy/force scaling
+set scale = 1.0
+divide scale by @nbeads
+BLOCK 2
+  CALL 2 SELEct ( segid @{segid}* ) show end
+  COEF 1 2 @scale
+  COEF 2 2 @scale
+END
+
+! Add springs
+
+pint temp @temp beads @nbeads select segid @{segid}1 end -
+     select none end
+------------------------------------------------------------------------------
+
+
+File: Replica, Node: Repdstr, Up: Top, Previous: Pathint, Next: Top
+
+                      The Parallel Distributed Replica
+
+
+
+This module has now a separated doc file: repdstr.info

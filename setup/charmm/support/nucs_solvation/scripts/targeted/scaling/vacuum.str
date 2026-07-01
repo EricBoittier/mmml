@@ -1,0 +1,13 @@
+* vacuum.str, last modified May/10/2004
+* By Sonja M. Schwarzl & Stefan Fischer
+* Calculation of Coulomb electrostatic interaction 
+*
+        
+! reset charge vector to globally scaled charges in targetregion
+SCAL CHARGE = SCA7
+
+INTEraction SELE GROUP END SELE GROUP2 END
+SET ENERGY1 = ?ELEC
+SCAL SCA3 SET @ENERGY1 SELECT GROUP2 END
+
+RETURN

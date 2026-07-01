@@ -1,0 +1,12 @@
+* Stream file for topology and parameter reading
+* Total number of lonepairs in all these str files is greater than 1000
+* Some of the residues are also changed by inserting lone pair cent at random locations
+* 
+
+! Read topology and parameter files
+stream @toppar/toppar_drude_master_protein_2013f.str   ! master, includes protein, water and ions (must be read first)
+stream @toppar/toppar_drude_lipid_2017c.str   ! lipid
+stream @toppar/toppar_drude_nucleic_acid_2017c.str   ! DNA
+stream @toppar/toppar_drude_model_2013f.str   ! model compounds
+stream @toppar/toppar_drude_carbohydrate_2018a.str   ! hexapyranoses
+

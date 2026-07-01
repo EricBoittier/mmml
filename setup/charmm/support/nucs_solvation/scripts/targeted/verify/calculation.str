@@ -1,0 +1,44 @@
+* calculation.str, last modified May/11/2004
+* By Sonja M. Schwarzl 
+*
+
+ 
+IF ?NSEL .EQ. 0 GOTO SKIP
+  ! else:
+    ! if GROUP2 is in target region no computation is necessary
+    DEFIne foo1 SELEct targetregion .and. GROUP2 END
+    IF ?NSEL .ne. 0 GOTO SKIP
+    ! else: 
+
+        ! calculate interaction energy in solution with unmodified charges
+	! between GROUP and GROUP2
+	STREam "./solution.str"
+
+        ! calculate interaction energy in vacuum with unmodified charges
+	! between GROUP and GROUP2	
+	SCAL CHARGE = SCA2
+        INTEraction SELE GROUP END SELE GROUP2 END
+        SET VAC = ?ELEC
+
+        ! calculate scaled interaction energy in vacuum between GROUP and GROUP2
+	SCAL CHARGE = SCA7
+        INTEraction SELE GROUP END SELE GROUP2 END
+        SET NUCS = ?ELEC
+
+ 	
+	! calculate distance between GROUP and GROUP2
+	COOR AXIS SELEct GROUP END SELEct GROUP2 END
+	
+
+	! write output into data file
+	WRITE TITLE UNIT 20
+	* @COUNTER @SELECTION ?RAXI @SOLV @VAC @NUCS 
+	* 
+
+ LABEL SKIP
+  
+RETURN
+ 
+ 
+
+ 

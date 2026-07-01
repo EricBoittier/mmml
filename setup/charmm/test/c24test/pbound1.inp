@@ -1,0 +1,120 @@
+* PBOUND1: A simple test case to verify that the energy and other
+*  energy derived properties are identical between the PBOUND
+*  command and normal images
+*  by Charles L. Brooks, III and William A. Shirley, 11-Aug-95
+*
+
+if ?pbound .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0param19.prm
+read param card unit 1
+close unit 1
+
+read sequ tip3 125
+generate wat setup noangl
+
+open unit 1 read form name @0tip125.crd
+read coor card unit 1
+close unit 1               
+
+! Set-up image information for cubic periodic boundaries
+set 6 15.5516
+set 7 15.5516
+set 8 15.5516
+open unit 1 read form name @0cubic.img
+read image card unit 1
+close unit 1
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+
+!! check with fast scalar routines
+fast ON
+energy cutnb 7.775 cutim 7.775 fshift vswit
+@testcheck ?ener -1116.01099 0.0001 pbound1_chk1
+
+set testE ?ener
+set scalE ?ener
+
+BOUND CUBOUND BOXL 15.5516 CUTNB 7.775
+
+energy cutnb 7.775 cutim 7.775 fshift vswit
+
+@testcheck ?ener -1116.01099 0.0001 pbound1_chk2
+
+decr testE by ?ener
+set scalpE ?ener
+
+inte select all end
+set intE ?ener
+decr intE by @scalE
+
+write title unit 6
+* Difference between images and pbound energies is: @testE
+* Difference between images and inte/pbound energies is: @intE
+*
+
+bound off
+
+energy cutnb 7.775 cutim 7.775 fshift vswit
+
+@testcheck ?ener -1116.01099 0.0001 pbound1_chk3
+
+set testE ?ener
+set crayE ?ener
+
+BOUND CUBOUND BOXL 15.5516 CUTNB 7.775
+
+energy cutnb 7.775 cutim 7.775 fshift vswit
+
+@testcheck ?ener -1116.01099 0.0001 pbound1_chk4
+
+decr testE by ?ener
+set craypE ?ener
+
+inte select all end
+set intE ?ener
+decr intE by @crayE
+decr craypE by @scalpE
+
+write title unit 6
+*  CRAYVEC Portion
+* Difference between images and pbound energies is: @testE
+* Difference between images and inte/pbound energies is: @intE
+* Difference between images and inte/pbound energies is: @intE
+* Difference between Scalar fast and Crayvec pbound energies: @craypE
+*
+
+!  Now do a bit of dynamics to test things
+shake bonh param tol 1.0e-6
+
+title
+*  Dynamics 
+*
+
+! Run dynamics in periodic box
+dynamics leap strt timestep 0.0015 nstep 100 nprint 200  iprfrq 200 iseed 653210 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 60 ihtfrq 20 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 isvfrq 0 -
+     iunwri 0 nsavc 0 nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 0                           - !{* Nonbond options *}
+     inbfrq 20 imgfrq 20 ilbfrq 0 -
+     eps 1.0 cutnb 7.775 cutim 7.775 fshift vswi
+
+@testcheck ?ener -1128.05615 0.0001 pbound1_chk5
+
+stop
+
+
+
+
+

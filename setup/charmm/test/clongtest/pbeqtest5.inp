@@ -1,0 +1,117 @@
+* CHARMM 28 testcase pbeqtest5.inp
+* .Test Nonlinear and Partially linearized PBEQ with membrane
+* .Test COUNTER-ION distribution along Z
+* Author: Benoit Roux*
+
+if ?pbeq .ne. 1 then stop
+
+READ  RTF CARD
+*  TOP
+*
+   22     1
+MASS 1    PCHG  1.00000
+
+RESI Q              1.00 ! point charge
+GROUP
+ATOM PCHG  PCHG     1.00
+PATCHING FIRST NONE LAST NONE
+END
+
+READ PARA CARD
+* PAR
+*
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+PCHG     0.0000    0.0000    2.0000  
+END
+
+READ SEQUENCE Q 4
+GENERATE PCHG warn
+
+read coor card
+* A Point Charge
+*
+   4
+    1    1 Q    PCHG   5.00000   0.00000   0.00000 PCHG 1      0.00000
+    2    2 Q    PCHG   0.00000   5.00000   0.00000 PCHG 1      0.00000
+    3    3 Q    PCHG  -5.00000   0.00000   0.00000 PCHG 1      0.00000
+    4    4 Q    PCHG   0.00000  -5.00000   0.00000 PCHG 1      0.00000
+
+PBEQ
+
+!
+! only with Transmembrane potential (double layer)
+!
+   scalar wmain  set 0.0
+   scalar charge set 0.0
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  1.00 TEMP 300.0 INTBP  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.1 - 
+
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+   SOLVE partlinear -
+         ncel    61 dcel   0.5  epsw  80.0  conc  1.00 TEMP 300.0 KEEP  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.1 - 
+
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+   SOLVE nonlinear -
+         ncel    61 dcel   0.5  epsw  80.0  conc  1.00 TEMP 300.0 KEEP  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.1
+
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+!
+! with Cylindrical Pore and with periodic boundary conditions in XY
+! NOTE: Here, we used ITERate instead of calling SOLV with KEEP.
+!       This works only if VMEMB is equal to zero.
+!
+   scalar wmain  set 0.0
+   scalar charge set 0.25
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  1.00 TEMP 300.0 INTBP  -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.0 - 
+         Rcyln  3.0 Hcyln 15.0  epsc  80.0  CKAPpa -
+         Xcyln  0.0 Ycyln  0.0  Zcyln  0.0
+
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+   ITERate partlinear
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+   ITERate nonlinear
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+!
+! with Cylindrical Pore and without periodic boundary conditions in XY (NPBC)
+! NOTE: Here, we used ITERate instead of calling SOLV with KEEP.
+!       This works only if VMEMB is equal to zero.
+!
+   scalar wmain  set 0.0
+   scalar charge set 0.25
+   SOLVE ncel    61 dcel   0.5  epsw  80.0  conc  1.00 TEMP 300.0 INTBP NPBC -
+         Tmemb 15.0 Zmemb  0.0  epsm   2.0  Vmemb  0.0 - 
+         Rcyln  3.0 Hcyln 15.0  epsc  80.0  CKAPpa -
+         Xcyln  0.0 Ycyln  0.0  Zcyln  0.0
+
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+   ITERate partlinear
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+   ITERate nonlinear
+   COUNTERION
+   write phi   card zfirst -100.0 zlast 100.0 unit 6
+
+   RESET
+
+END
+
+STOP

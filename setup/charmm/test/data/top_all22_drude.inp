@@ -1,0 +1,112 @@
+* Atom declaration for setting up induced polarization with drude atoms
+* athor: Benoit Roux
+*
+27  1
+
+!Drude atoms
+MASS   300 DC     0.10000 ! Drude
+MASS   301 DCA    0.10000 ! Drude
+MASS   302 DCB    0.10000 ! Drude
+MASS   303 DCD    0.10000 ! Drude
+MASS   304 DCD1   0.10000 ! Drude
+MASS   305 DCD2   0.10000 ! Drude
+MASS   306 DCE    0.10000 ! Drude
+MASS   307 DCE1   0.10000 ! Drude
+MASS   308 DCE2   0.10000 ! Drude
+MASS   309 DCE3   0.10000 ! Drude
+MASS   310 DCG    0.10000 ! Drude
+MASS   311 DCG1   0.10000 ! Drude
+MASS   312 DCG2   0.10000 ! Drude
+MASS   313 DCH2   0.10000 ! Drude
+MASS   314 DCZ    0.10000 ! Drude
+MASS   315 DCZ2   0.10000 ! Drude
+MASS   316 DCZ3   0.10000 ! Drude
+MASS   317 DN     0.10000 ! Drude
+MASS   318 DND1   0.10000 ! Drude
+MASS   319 DND2   0.10000 ! Drude
+MASS   320 DNE    0.10000 ! Drude
+MASS   321 DNE1   0.10000 ! Drude
+MASS   322 DNE2   0.10000 ! Drude
+MASS   323 DNH1   0.10000 ! Drude
+MASS   324 DNH2   0.10000 ! Drude
+MASS   325 DNZ    0.10000 ! Drude
+MASS   326 DO     0.10000 ! Drude
+MASS   327 DOD1   0.10000 ! Drude
+MASS   328 DOD2   0.10000 ! Drude
+MASS   329 DOE1   0.10000 ! Drude
+MASS   330 DOE2   0.10000 ! Drude
+MASS   331 DOG    0.10000 ! Drude
+MASS   332 DOG1   0.10000 ! Drude
+MASS   333 DOH    0.10000 ! Drude
+MASS   334 DOT1   0.10000 ! Drude
+MASS   335 DOT2   0.10000 ! Drude
+MASS   336 DSD    0.10000 ! Drude
+MASS   337 DSG    0.10000 ! Drude
+MASS   338 DCAY   0.10000 ! Drude 
+MASS   339 DCY    0.10000 ! Drude 
+MASS   340 DOY    0.10000 ! Drude 
+MASS   341 DNY    0.10000 ! Drude 
+MASS   342 DCAT   0.10000 ! Drude 
+MASS   343 DNT    0.10000 ! Drude
+
+!Drude for NMA
+MASS   344 DCL    0.10000   ! Drude
+MASS   348 DCR    0.10000   ! Drude
+
+!Drude for SWM4-DP
+MASS   349 DOH2   0.00000   ! Drude
+
+!Drude for alkanes
+MASS   350 DC1    0.10000   ! Drude
+MASS   351 DC2    0.10000   ! Drude
+MASS   352 DC3    0.10000   ! Drude
+MASS   353 DC4    0.10000   ! Drude
+MASS   354 DC5    0.10000   ! Drude
+MASS   355 DCT    0.10000   ! Drude
+MASS   356 DCP    0.10000   ! Drude
+
+!Drude for amides
+MASS   357 DCC    0.10000   ! Drude
+MASS   358 DC     0.10000   ! Drude
+
+!Drude for dipeptides
+MASS   359 DCLP   0.10000   ! Drude
+MASS   360 DOL    0.10000   ! Drude
+MASS   361 DNL    0.10000   ! Drude
+MASS   362 DCRP   0.10000   ! Drude
+MASS   363 DOR    0.10000   ! Drude
+MASS   364 DNR    0.10000   ! Drude
+
+!Drude for phosphates
+MASS   365 DP1    0.10000   ! Drude
+MASS   366 DO1    0.10000   ! Drude
+MASS   367 DO2    0.10000   ! Drude
+MASS   368 DO3    0.10000   ! Drude
+MASS   369 DO4    0.10000   ! Drude
+
+MASS   370 DNE0   0.10000 ! Drude for Neon
+
+!Drude on hydrogens
+MASS   400 DH11   0.10000   ! Drude
+MASS   401 DH12   0.10000   ! Drude
+MASS   402 DH13   0.10000   ! Drude
+MASS   403 DH21   0.10000   ! Drude
+MASS   404 DH22   0.10000   ! Drude
+MASS   405 DH23   0.10000   ! Drude
+
+!Drude on ions
+MASS   410 DLIT   0.00000    ! Drude oscillator for Lithium Ion
+MASS   411 DSOD   0.00000    ! Drude oscillator for Sodium Ion
+MASS   412 DPOT   0.00000    ! Drude oscillator for Potassium Ion
+MASS   413 DRUB   0.00000    ! Drude oscillator for Rubidium Ion
+MASS   414 DCES   0.00000    ! Drude oscillator for Cesium Ion
+MASS   415 DFLU   0.00000    ! Drude oscillator for Fluoride Ion
+MASS   416 DCLA   0.00000    ! Drude oscillator for Chloride Ion
+MASS   417 DBRO   0.00000    ! Drude oscillator for Bromide Ion
+MASS   418 DIOD   0.00000    ! Drude oscillator for Iodine Ion
+!MASS   419 DMAG   0.00000    ! Drude oscillator for Magnesium Ion
+!MASS   420 DCAL   0.00000    ! Drude oscillator for Calcium Ion
+!MASS   421 DSTR   0.00000    ! Drude oscillator for Strontium Ion
+!MASS   422 DBAR   0.00000    ! Drude oscillator for Barium Ion
+
+END

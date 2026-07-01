@@ -1,0 +1,133 @@
+* CHARMM c34a1 testcase, 15-Aug-2006
+* trivial test of hamiltonian exchange
+* 
+
+if ?ensemble .ne. 1 then
+   echo "This test NOT run"
+   stop
+endif
+
+stream datadir.def
+
+set node ?whoiam
+set nrep ?nensem
+
+set test hex_rex
+
+if @NODE .eq. 0 set seed 27041994
+if @NODE .eq. 1 set seed 2061999
+if @NODE .eq. 2 set seed 14042004
+if @NODE .eq. 3 set seed 31415927
+
+set p frag
+set t ?ensmyt
+
+!======================================================================
+! BEGIN SETUP
+!======================================================================
+if @NODE .EQ. 0 set dihe1 0.391366
+if @NODE .EQ. 0 set dihe2 0.908591
+if @NODE .EQ. 0 set dihe3 0.054127
+if @NODE .EQ. 0 set dihe4 0.159808
+if @NODE .EQ. 1 set dihe1 0.293524
+if @NODE .EQ. 1 set dihe2 0.681443
+if @NODE .EQ. 1 set dihe3 0.040595
+if @NODE .EQ. 1 set dihe4 0.119856
+if @NODE .EQ. 2 set dihe1 0.195683
+if @NODE .EQ. 2 set dihe2 0.454295
+if @NODE .EQ. 2 set dihe3 0.027063
+if @NODE .EQ. 2 set dihe4 0.079904
+if @NODE .EQ. 3 set dihe1 0.097841
+if @NODE .EQ. 3 set dihe2 0.227148
+if @NODE .EQ. 3 set dihe3 0.013531
+if @NODE .EQ. 3 set dihe4 0.039952
+
+read rtf card
+* Topology 
+*
+   20   1
+MASS 18  G18      101.000000
+MASS 19  G19      87.000000
+MASS 20  G20      114.000000
+MASS 21  G21      147.000000
+
+DECL +CA
+
+AUTOGENERATE ANGLES DIHEDRAL
+
+RESI G18        0.0
+GROU
+Atom  CA  G18      0.0
+Bond CA +CA
+
+RESI G19        0.0
+GROU
+Atom  CA  G19      0.0
+Bond CA +CA
+
+RESI G20        0.0
+GROU
+Atom  CA  G20      0.0
+Bond CA +CA
+
+RESI G21        0.0
+GROU
+Atom  CA  G21      0.0
+Bond CA +CA
+
+END
+
+ensemble open unit 10 read card name @0/hexrex_parm.inp
+read param card unit 10
+ensemble close unit 10
+
+read sequence card
+* four particle fragment
+*
+4
+G18 G19 G20 G21
+
+generate prot setup
+rename resname ala sele all end
+
+read coor pdb
+HEADER  blah
+ATOM      1  CA  ALA     1      -8.421  -4.178  -4.468  1.00  1.00      PROT
+ATOM      2  CA  ALA     2      -7.290  -1.212  -6.594  1.00  1.00      PROT
+ATOM      3  CA  ALA     3      -3.823  -1.640  -8.141  1.00  1.00      PROT
+ATOM      4  CA  ALA     4      -2.996   2.067  -7.765  1.00  1.00      PROT
+END
+
+!ensemble open unit 10 write card name dump_node@node.pdb
+!coor write pdb unit 10
+!ensemble close unit 10
+!stop
+
+! setup exchange
+
+open unit 50 write card name @9/@TEST_rep2t.dat
+open unit 51 write card name @9/@TEST_t2rep.dat
+ensemble exchange freq 20 rep2to 50 t2repo 51 292 292 292 292
+ensemble info
+
+
+!======================================================================
+! END SETUP
+!======================================================================
+
+faster 1
+
+shake bond
+
+scalar fbeta set 1.0
+
+dynamics leap langevin start nstep 1000 timestep 0.01 iseed @SEED -
+    iprfrq 10000 ihtfrq 0 ieqfrq 0 ntrfrq 10000  -
+    iunrea -1 iunwri -1 iuncrd -1 iunvel -1 kunit -1 -
+    nprint 0 nsavc 0 nsavv 0 ihbfrq 0 inbfrq 0  -
+    ilbfrq 0 rbuffer 0.0 tbath @T -
+    firstt @T finalt @T teminc 0.0 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 1 twindh 10.0 twindl -10.0
+
+
+stop

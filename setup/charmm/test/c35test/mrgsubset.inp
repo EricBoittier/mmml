@@ -1,0 +1,78 @@
+* CHARMM c35a2 testcase mrgsubset.inp
+* test of merge subset, using cluster membership file from correl
+* run short langevin dynamics, cluster phi, psi, and relevant chi1
+* split input trajectory into cluster based subsets
+* RM Venable  venabler.at.nhlbi.nih.gov
+*
+
+stream datadir.def
+
+! PROTEIN FILES
+read rtf card name @0top_all22_prot.inp
+read param card name @0par_all22_prot.inp
+
+! PENTAPEPTIDE
+read sequ pdb name @0pep5.pdb
+gener pep setup warn first ace last ct3
+read coor pdb name @0pep5.pdb
+ic purge
+ic param
+ic fill preserve
+ic build
+hbuild sele hydrogen end
+
+set para
+if ?NUMNODE gt 1 set para node 0
+! DYNAMICS
+open unit 31 write file name @9pep5md.trj
+prnlev 0 @PARA
+dyna leap strt  nstep 10000 timestep 0.001 ISEED 42465 -
+    iprfrq 5000 ihtfrq 0 ieqfrq 500 ntrfrq 500 -
+    iunrea -1 iunwri -1 iuncrd 31 iunvel -1 kunit -1 -
+    nprint 5000 nsavc 10 nsavv 0 ihbfrq 0 inbfrq 25  -
+    atom  fswitch cdie eps 5. vdw vswitch -
+    cutnb 15.0  ctofnb 12.0 ctonnb 8.0  wmin 1.0 -
+    firstt 400.0 finalt 400.0  tstruct 400. -
+    iasors 1 iasvel 1 iscvel 0 ichecw 1 twindh 0.0 twindl 0.0
+prnlev 5 @PARA
+
+! CLUSTER WITH CORREL
+! correl maxtim 1000 maxser 12 maxatom ?natom noupdate
+!INTERIOR BACKBONE
+! set r 2
+! label ppl
+! calc m = @R - 1
+! calc p = @R + 1
+! enter f@R dihe pep @M C pep @R N pep @R CA pep @R C
+! enter y@R dihe pep @R N pep @R CA pep @R C pep @P N
+! incr r by 1
+! if r le 4 goto ppl
+
+! FILL THE SERIES
+! open unit 11 read file name @9pep5md.trj
+! traj firstu 11 nunit 1
+! close unit 11
+
+! CLUSTER; THIS WAS TUNED TO GIVE A KNOWN RESULT (NO. OF CLUSTERS)
+! BY VARYING THE RADIUS
+! open unit 61 write card name @9cluster.txt
+! open unit 62 write card name @9cmember.lst
+! cluster f2 nfeat 6 angle radius 60 unic 61 unim 62 maxcl 100 maxit 100
+! end
+
+! stop
+
+! SETUP FOR 6 CLUSTERS; OUTPUT TRAJECTORIES
+set c = 1
+label opnloop
+calc u = 20 + @C
+open unit @U write file name @9cls@C.trj
+incr C by 1
+if C le 6 goto opnloop
+! INPUT FILES
+open unit 2 read card name @0cmember.lst
+open unit 41 read file name @9pep5md.trj
+! SPLIT INTO CLUSTER BASED SUBSETS
+merge coor subset firstu 41 nunit 1 outputu 21 nunss 6 memssu 2
+
+stop

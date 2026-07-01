@@ -1,0 +1,208 @@
+* CHARMM 26 testcase luptst.inp
+* Generate butane and run LUP protocol to create path between trans and
+*    gauche minima
+* Author: Krzysztof Kuczera, Lawrence, KS  22-Mar-1997
+* External Files: top_all22_prot.inp and par_all22_prot.inp
+* 
+
+! --- MFC cannot read rtf card from stream for parallel
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ echo luptst testcase result: skip
+ stop
+endif
+
+if ?rxncor .ne. 1 then
+ echo "Test NOT performed."
+ echo luptst testcase result: skip
+ stop
+endif
+
+stream datadir.def
+
+set p buta                                ! system prefix
+set r @p                                  ! residue name
+set t Butane LUP trans->gauche in vacuum  ! title
+
+open read card unit 11 name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read card  unit 11 name @0par_all22_prot.inp
+read para card unit 11
+close unit 11
+
+read RTF card append
+* Butane all-H topology
+* K.Kuczera  27-Oct-93 Lawrence, KS
+*
+
+RESI BUTA      0.0000    ! Butane CH3CH2CH2CH3
+GROU                     !
+ATOM C1  CT3  -0.2700    !
+ATOM H11 HA    0.0900    !      H11 H21 H31 H41 
+ATOM H12 HA    0.0900    !       |   |   |   |
+ATOM H13 HA    0.0900    !   H12-C1--C2--C3--C4-H42
+GROU                     !       |   |   |   |
+ATOM C2  CT2  -0.1800    !      H13 H22 H32 H43
+ATOM H21 HA    0.0900    !
+ATOM H22 HA    0.0900    !
+GROU                     !
+ATOM C3  CT2  -0.1800    !
+ATOM H31 HA    0.0900    !
+ATOM H32 HA    0.0900    !
+GROUP
+ATOM C4  CT3  -0.2700    !
+ATOM H41 HA    0.0900    !
+ATOM H42 HA    0.0900    !
+ATOM H43 HA    0.0900    !
+!
+BOND  C1 C2  C2 C3  C3  C4
+BOND  C1 H11 C1 H12 C1 H13 C2 H21 C2 H22
+BOND  C3 H31 C3 H32 C4 H43 C4 H41 C4 H42
+!
+IC C1   C2   C3   C4    0.0000   0.0000  180.0000   0.0000  0.0000
+IC H11  C1   C2   C3    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H12  C1   C2   C3    0.0000   0.0000  180.0000   0.0000  0.0000
+IC H13  C1   C2   C3    0.0000   0.0000   60.0000   0.0000  0.0000
+IC H21  C2   C3   C4    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H22  C2   C3   C4    0.0000   0.0000   60.0000   0.0000  0.0000
+IC H31  C3   C2   C1    0.0000   0.0000  -60.0000   0.0000  0.0000
+IC H32  C3   C2   C1    0.0000   0.0000   60.0000   0.0000  0.0000
+IC C2   C3   C4   H41   0.0000   0.0000  -60.0000   0.0000  0.0000
+IC C2   C3   C4   H42   0.0000   0.0000  180.0000   0.0000  0.0000
+IC C2   C3   C4   H43   0.0000   0.0000   60.0000   0.0000  0.0000
+
+patc first none last none
+
+END
+
+! generate PSF 
+!----------------------------------------------------
+read sequence @r 1
+
+! no patching
+generate @p setup  first none  last none
+
+! test LUP algorithm
+!---------------------------------------------------
+
+! 1. Read in end-point structures
+!---------------------------------------------------
+
+! trans minimum
+read coor card
+* BUTA180m : BUTANE OPTIMIZED COORDS : TRANS UNCONSTRAINED
+*  DATE:     3/11/97     13:13:51      CREATED BY USER: kuczera
+*
+   14
+    1    1 BUTA C1     -.03297    .17236   -.19857 BUTA 1     12.01100
+    2    1 BUTA H11    -.42518    .74533    .66914 BUTA 1      1.00800
+    3    1 BUTA H12    -.52583   -.82348   -.21400 BUTA 1      1.00800
+    4    1 BUTA H13    -.30697    .71468  -1.12909 BUTA 1      1.00800
+    5    1 BUTA C2     1.48657    .01959   -.09607 BUTA 1     12.01100
+    6    1 BUTA H21    1.85574   -.57713   -.96151 BUTA 1      1.00800
+    7    1 BUTA H22    1.73797   -.54660    .82998 BUTA 1      1.00800
+    8    1 BUTA C3     2.22875   1.35998   -.07013 BUTA 1     12.01100
+    9    1 BUTA H31    1.97734   1.92617   -.99618 BUTA 1      1.00800
+   10    1 BUTA H32    1.85957   1.95670    .79531 BUTA 1      1.00800
+   11    1 BUTA C4     3.74828   1.20721    .03237 BUTA 1     12.01100
+   12    1 BUTA H41    4.02228    .66489    .96289 BUTA 1      1.00800
+   13    1 BUTA H42    4.24114   2.20305    .04780 BUTA 1      1.00800
+   14    1 BUTA H43    4.14049    .63424   -.83534 BUTA 1      1.00800
+
+! gauche minimum
+read coor card comp
+* BUTA70m : BUTANE OPTIMIZED COORDS : GAUCHE UNCONSTRAINED
+*  DATE:     3/11/97     13:13:53      CREATED BY USER: kuczera
+*
+   14
+    1    1 BUTA C1     1.80282   -.70412  -1.57106 BUTA 1     12.01100
+    2    1 BUTA H11    1.30195   -.01031  -2.27994 BUTA 1      1.00800
+    3    1 BUTA H12    1.30435  -1.69497  -1.63743 BUTA 1      1.00800
+    4    1 BUTA H13    2.86068   -.82503  -1.88767 BUTA 1      1.00800
+    5    1 BUTA C2     1.72364   -.15785   -.14207 BUTA 1     12.01100
+    6    1 BUTA H21    2.23577   -.86202    .55254 BUTA 1      1.00800
+    7    1 BUTA H22     .65240   -.11157    .16269 BUTA 1      1.00800
+    8    1 BUTA C3     2.33458   1.24006    .03060 BUTA 1     12.01100
+    9    1 BUTA H31    1.84247   1.93801   -.68447 BUTA 1      1.00800
+   10    1 BUTA H32    2.10039   1.59958   1.05942 BUTA 1      1.00800
+   11    1 BUTA C4     3.85224   1.28995   -.17169 BUTA 1     12.01100
+   12    1 BUTA H41    4.36023    .59393    .52991 BUTA 1      1.00800
+   13    1 BUTA H42    4.23609   2.31643    .01178 BUTA 1      1.00800
+   14    1 BUTA H43    4.12030    .99869  -1.20959 BUTA 1      1.00800
+
+
+! set up nonbond lists: not needed really
+energy
+update cutnb 99.0 ctonnb 10.0 ctofnb 12.0
+
+! this file will contain the output trajectory
+open unit 21 unfo write name @9buta_lup1.trj
+
+! reset print level to avoid hundreds++ of update messages
+prnl 1 @pnode
+
+! 2. Run LUP routine
+! This is the "primitive" mode (INIT 1), in which the initial path guess
+! is a straight line in Cartesian space. In the case of butane I found that
+! using the CHARMM SD optimizer with multiple steps at each point per cycle
+! led to aggregation of path opoints in the trans and gauche minima.
+! I thus used the more slowly convergent IOPT 2 method, in which one SD step
+! is performed per point in each cycle.
+!---------------------------------------------------
+
+LUPOpt NPATh 12 UOUT 21 INIT 1 EPSE 0.01 MAXC 500 STEP 0.01 IPVO 1 -
+       IOPT 2 LPRI 10  
+
+! This is an example of a different setup:
+! INIT 2 is used - a series of structures are read in, in my case I prepared
+! a set of structures differing by 10 deg in central C-C dihedral, which leads
+! to (trivially) good convergence to the adiabatic path.
+! Generally this converges more quickly to low energy structures, but the path
+! obtained may be worse.
+! Additionally, the default IOPT 1 is used; here in each cycle 10 CHARMM SD
+! steps will be done consecutively for each path point.
+!LUPOpt NPATh 12 UOUT 21 INIT 2 EPSE 0.005 MAXC 250 STEP 0.01 IPVO 2 -
+!       IOPT 1 LPRI 1 SD NSTEP 10
+!buta180m.crd
+!buta170.crd
+!buta160.crd
+!buta150.crd
+!buta140.crd
+!buta130.crd
+!buta120.crd
+!buta110.crd
+!buta100.crd
+!buta90.crd
+!buta80.crd
+!buta70m.crd
+
+!3. Analyze the path -- check that points are evenly spaced along C-C dihedral
+
+open unit 21 unfo write name @9buta_lup1.trj
+open unit 15 card write name @9luptst.dat
+
+
+set 1 1
+set 2 12
+
+label lupan
+
+read coor file ifile @1 unit 21
+rewind unit 21
+
+energy
+quick  1  5  8  11
+
+write title unit 15
+* ?phi ?ener
+*
+
+incr 1 by 1
+if 1 le @2 goto lupan
+
+@testcheck ?ener 4.47690013 -0.001 luptst
+
+
+STOP

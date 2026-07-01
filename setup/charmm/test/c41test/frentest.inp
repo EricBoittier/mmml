@@ -1,0 +1,54 @@
+* Test the free energy calculation module  (FREN)
+* 
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+prnlev 5
+
+! Use the five atomic benchmark systems of the NBB paper (doi: 10.1002/jcc.21687)
+! and determine the free energy difference between systems II and III 
+! based on data from system I. 
+
+stream datadir.def
+
+open unit 11 read form name @0frentest.dat 
+
+set status pass 
+
+FREN
+    ! Load data - the first line in the file is the header, so we specify an offset of 1 
+    load U00 11 COLUmn 2 OFFSet 1 
+    load U01 11 COLUmn 3 OFFSet 1 
+    load U10 11 COLUmn 2 OFFSet 1 
+    load U11 11 COLUmn 3 OFFSet 1 
+    load US0 11 COLUmn 1 OFFSet 1 
+    load US1 11 COLUmn 1 OFFSet 1 
+
+    ! Do an BAR calculation - the result is stored in ?FREN
+    BAR TEMP 300 
+    calc mydiff = ABS( ?FREN - -12.48 )
+    if @mydiff .GT. 0.01  set status fail 
+
+    ! Do an NBB calculation - the result is stored in ?FREN
+    NBB TEMP 300 
+    calc mydiff = ABS( ?FREN - -14.23 )
+    if @mydiff .GT. 0.01  set status fail  
+
+    ! Use Zwanzig equation with reweighting
+    NBZWANZIG TEMP 300 
+    calc mydiff = ABS( ?FREN - -14.23 )
+    if @mydiff .GT. 0.01  set status fail  
+
+    ! Use Zwanzig equation with reweighting in the backward direction
+    NBZWANZIG TEMP 300 BACK
+    calc mydiff = ABS( ?FREN - 14.23 )
+    if @mydiff .GT. 0.01  set status fail  
+
+end 
+
+echo fren testcase result: @status
+
+stop 

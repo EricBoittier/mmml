@@ -1,0 +1,147 @@
+* CHARMM Testcase pme_p21.inp
+* Author: Charles L. Brooks, III  20-Jan-98
+* Files : top_all22_prot.inp, par_all22_prot.inp,
+*         mbco_au_q0.crd, mono_p21.xtl, pme_p21.rst
+* Test  : dynamics of restrained mbco in p21 crystal using pme after
+*         deleting a high-pressure water.
+*
+
+stream datadir.def
+bomlev -5
+
+if ?colfft eq 1 then
+      echo "Test NOT performed with COLFFT."
+      stop
+endif
+
+open unit 11 read card name @0top_all22_prot.inp
+read rtf unit 11 card 
+close unit 11
+read rtf card append
+* SO4 ion topology
+*
+   22     1
+RESI  SO4     -2.0
+GROUP
+ATOM  S   S    0.0
+ATOM  O1  OC  -0.5
+ATOM  O2  OC  -0.5
+ATOM  O3  OC  -0.5
+ATOM  O4  OC  -0.5
+BOND    S O1  S O2
+DOUBLE  S O3  S O4
+ACCEPTOR  O1 S
+ACCEPTOR  O2 S
+ACCEPTOR  O3 S
+ACCEPTOR  O4 S
+PATCHING FIRS NONE LAST NONE   
+END
+
+open unit 11 read card name @0par_all22_prot.inp
+read param unit 11 card
+close unit 11
+read param card append
+* SO4 Parameters
+*
+
+BOND
+OC   S          400.0     1.43  ! from c25a1/toppar/param19.inp
+ANGLE
+OC   S    OC     85.0   109.5   ! FORCE CONSTANT JST A GUESS.
+END
+
+read sequence card
+* Myoglobin sequence
+*
+  153
+VAL LEU SER GLU GLY  GLU TRP GLN LEU VAL  LEU HSD VAL TRP ALA
+LYS VAL GLU ALA ASP  VAL ALA GLY HSD GLY  GLN ASP ILE LEU ILE
+ARG LEU PHE LYS SER  HSD PRO GLU THR LEU  GLU LYS PHE ASP ARG
+PHE LYS HSD LEU LYS  THR GLU ALA GLU MET  LYS ALA SER GLU ASP 
+LEU LYS LYS HSD GLY  VAL THR VAL LEU THR  ALA LEU GLY ALA ILE
+LEU LYS LYS LYS GLY  HSP HSD GLU ALA GLU  LEU LYS PRO LEU ALA
+GLN SER HSD ALA THR  LYS HSE LYS ILE PRO  ILE LYS TYR LEU GLU
+PHE ILE SER GLU ALA  ILE ILE HSD VAL LEU  HSD SER ARG HSP PRO 
+GLY ASP PHE GLY ALA  ASP ALA GLN GLY ALA  MET ASN LYS ALA LEU
+GLU LEU PHE ARG LYS  ASP ILE ALA ALA LYS  TYR LYS GLU LEU GLY
+TYR GLN GLY
+
+generate MB 
+read sequ HEME 1
+generate  HEM
+read sequ CO   1
+generate  CO
+read sequ TIP3 137
+generate  XTLW noangle nodihedral
+read sequ SO4 1
+generate  IONS
+read sequ TIP3 200
+generate  WAT  noangle nodihedral
+
+open unit 11 read card name @0mbco_au_q0.crd
+read coor card unit 11
+close unit 11
+
+crystal define monoclinic    64.180   30.840   34.690  90.00 105.84  90.00
+open unit 1 read card name @0mono_p21.xtl
+crystal read unit 1 card
+close unit 1
+
+define prot sele segid mb .or. segid hem .or. segid co end
+coor stat sele segid wat end
+coor stat sele segid xtlw end
+coor stat sele prot end
+image byres sele .not. prot .and. .not. type h* end -
+      xcen ?xave ycen ?yave zcen ?zave
+update inbf 0 cutim 4.0
+coor stat sele segid wat end
+coor stat sele segid xtlw end
+
+!open read form unit 40 name @0pme_p21.rst
+open write form unit 41 name @9dyn.rst
+dyna verlet strt nstep 2 timestep 0.001 -
+    iprfrq 1000 ihtfrq 0 ieqfrq 1000 -
+    iuncrd -1 iunrea 40 iunwri 41 iunvel -1 kunit -1 -
+    nprint 1  nsavc 0 nsavv 0 ihbfrq 0 -
+    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+    twindh 10.0 twindl -10.0 ntrfrq 1000 -
+    inbfrq -1 atom vatom cutnb 9.0 ctofnb 8. cdie eps 1. -
+    ctonnb 7. vshift cutim 14.0 imgfrq 25 wmin .5 -
+    ewald pmewald kappa 0.32 order 6 fftx 80 ffty 36 fftz 48 - 
+    spline  echeck 100000.0 firstt 300. finalt 300. tstruc 200.
+
+open write form unit 40 name @9dyn.rst
+open write form unit 41 name @9dyn2.rst
+dyna verlet rest nstep 10 timestep 0.001 -
+    iprfrq 1000 ihtfrq 0 ieqfrq 1000 -
+    iuncrd -1 iunrea 40 iunwri 41 iunvel -1 kunit -1 -
+    nprint 1  nsavc 0 nsavv 0 ihbfrq 0 -
+    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+    twindh 10.0 twindl -10.0 ntrfrq 1000 -
+    inbfrq -1 atom vatom cutnb 9.0 ctofnb 8. cdie eps 1. -
+    ctonnb 7. vshift cutim 14.0 imgfrq 25 wmin .5 -
+    ewald pmewald kappa 0.32 order 6 fftx 80 ffty 36 fftz 48 - 
+    spline  echeck 100000.0 firstt 300. finalt 300. tstruc 200.
+
+ener    
+set Eatom ?ener
+
+
+open write form unit 40 name @9dyn.rst
+open write form unit 41 name @9dyn2.rst
+dyna bycb verlet rest nstep 10 timestep 0.001 -
+    iprfrq 1000 ihtfrq 0 ieqfrq 1000 -
+    iuncrd -1 iunrea 40 iunwri 41 iunvel -1 kunit -1 -
+    nprint 1  nsavc 0 nsavv 0 ihbfrq 0 -
+    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+    twindh 10.0 twindl -10.0 ntrfrq 1000 -
+    inbfrq -1 atom vatom cutnb 9.0 ctofnb 8. cdie eps 1. -
+    ctonnb 7. vshift cutim 14.0 imgfrq 25 wmin .5 -
+    ewald pmewald kappa 0.32 order 6 fftx 80 ffty 36 fftz 48 - 
+    spline  echeck 100000.0 firstt 300. finalt 300. tstruc 200.
+
+ener
+
+!  Difference should be zero
+decr eatom by ?ener
+stop

@@ -1,0 +1,96 @@
+* EDS subsystem with a five atomic benchmark system
+*
+
+! This test is run by test/c37test/eds.inp and
+! is not meant to be run independently.
+
+if ?mscale .ne. 1 then
+ echo "eds.inp> Test NOT performed."
+ stop
+endif
+if ?qeds .ne. 1 then
+ echo "eds.inp> Test NOT performed."
+ stop
+endif
+
+read rtf card
+* Topology for five atomic benchmark system
+*
+31  1
+
+
+MASS   106 D11    10.00000 H ! dummy atom
+MASS   107 D12    10.00000 H ! dummy atom
+MASS   108 D13    10.00000 H ! dummy atom
+MASS   109 D14    10.00000 H ! dummy atom
+MASS   110 D15    10.00000 H ! dummy atom
+
+AUTO ANGLES DIHE
+
+!reset default patches
+DEFA FIRS NONE LAST NONE
+
+RESI F2          0.00    ! Five-atomic test system
+GROUP
+ATOM D11  D11    0.0
+ATOM D12  D12    0.0
+ATOM D13  D13    0.0
+ATOM D14  D14    0.0
+ATOM D15  D15    0.0
+BOND D11 D12 D12 D13 D13 D14 D14 D15
+IC D11  D12  D13  D14   1.53    111.00  180.00  111.00   1.53
+IC D12  D13  D14  D15   1.53    111.00  180.00  111.00   1.53
+
+END
+
+read param card
+* Missing parameters
+*
+
+BONDS
+D11  D12  1000.00     1.53
+D12  D13  1000.00     1.53
+D13  D14  1000.00     1.53
+D14  D15  1000.00     1.53
+
+ANGLES
+D11  D12  D13  1000.000   111.00   100. 2.52183
+D12  D13  D14  1000.000   111.00   100. 2.52183
+D13  D14  D15  1000.000   111.00   100. 2.52183
+
+DIHEDRALS
+D11  D12  D13  D14      2.0     3   0.00 !
+D11  D12  D13  D14      2.0     1   0.00 !
+D12  D13  D14  D15      2.0     3   0.00 !
+D12  D13  D14  D15      2.0     1   0.00 !
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+D11    0.000000  -0.000000     0.000000
+D12    0.000000  -0.000000     0.000000
+D13    0.000000  -0.000000     0.000000
+D14    0.000000  -0.000000     0.000000
+D15    0.000000  -0.000000     0.000000
+
+END
+
+read sequ card
+* f2
+*
+1
+f2
+
+generate f2 setup
+
+ic para
+
+ic seed 1 D11 1 D12 1 D13
+
+ic build
+
+energy  nbxmod 5  atom  cdiel  shift  vatom  vdistance  vswitch inbfrq 1 -
+        cutnb         1000.0  ctofnb         998.0  ctonnb         990.0 -
+        eps             1.0  e14fac          1.0  wmin            1.5 -
+        ihbfrq 0
+
+server debug

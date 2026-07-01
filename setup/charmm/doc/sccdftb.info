@@ -1,0 +1,857 @@
+CHARMM Element doc/sccdftb.info $Revision: 1.2 $
+
+File: SCCDFTB, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+      Combined Quantum Mechanical and Molecular Mechanics Method
+                       Based on SCCDFTB in CHARMM
+
+                     by  Qiang Cui and Marcus Elstner
+                 (cui@chem.wisc.edu, elstner@phys.upb.de)
+
+        The approximate Density Functional program SCCDFTB (Self-
+consistent charge Density-Functional Tight-Binding) is interfaced with
+CHARMM program in a QM/MM method.  
+
+	This method is described in 
+
+Phys. Rev. B,  58,7260 (1998)
+Phys. Stat. Sol. B, 217, 357 (2000)
+J. Phys. : Condens. Matter., 14, 3015 (2002) 
+
+        Recent reviews are: 
+WIREs Comput. Mol. Sci., 4, 49-61 (2014)
+PCCP, 16, 14368-14377 (2014) 
+
+	The QM/MM interface in CHARMM has been described in
+J. Phys. Chem. B 105 (2001) 569
+
+        The GHO-SCC-DFTB/MM boundary treatment has been described
+in J. Phys. Chem. A 108 (2004) 5454.
+
+	A recent review of SCC-DFTB/MM can be found in
+J. Phys. Chem. B. 110, 6458-6469 (2006). Recent extensions can be found in
+J. Phys. Chem. A. 111, 10861-10873 (2007). 
+J. Chem. Theory Comput. 7, 931-948 (2011).
+
+The extension of the SCC-DFTB method to work with the Replica Path 
+and the Nudged Elastic Band methods has been described in the following
+paper and should be cited when applied:
+
+  H. L. Woodcock, M. Hodoscek, and B. R. Brooks Exploring SCC-DFTB Paths
+  for Mapping QM/MM Reaction Mechanisms J. Phys. Chem. A; 2007; 111(26)
+  5720-5728.
+
+* Menu:
+
+* Description::         Description of the sccdftb commands.
+* Usage::               How to run sccdftb in CHARMM.
+* Installation::        How to install sccdftb in CHARMM environment.
+* FEP::                 Free energy perturbations with SCC-DFTB/MM
+* Electrostatics::      Electrostatics in SCC-DFTB/MM
+* GLNK::                GLNK Commands
+* Status::              Status of the interface code.
+
+
+File: SCCDFTB Node: Description, Up: Top, Next: Usage, Previous: Top
+
+
+     Note: before running CHARMM with SCCDFTB enabled, it may be necessary
+     to execute the following at the command line.
+
+     ulimit -s unlimited
+
+     Failure to do so may result in unexpected segfaults.
+
+     The SCCDFTB QM potential is initialized with the SCCDFTB command
+
+[SYNTAX SCCDFTB]
+
+SCCDFTB   [REMOve] [CHRG] (atom selection) [GLNK atom-selection]
+          [TEMPerature] [SCFtolerance] 
+          [CUTF] [EWAD EOPT KAPPA kappa KMAX kmax KSQMAX ksqmax]
+          [PMEW FFTX fftx FFTY ffty FFTZ fftz ORDEr order]
+          [UPDT 0]
+          [MULL]
+          [DISP]
+          [HBON GAUS]
+          [DHUB DHGA]
+          [D3RD]
+          [SCFC]
+          [QDIP UDIP unit] 
+          [SHES] [RHES]        
+          [CDKO]
+          [UNPE unpe] 
+          [LDEP]
+          [DMEThod int]
+          [MIXE int] [GENS int] [SYMM real]
+          [IGUESS]
+          [IDAMP]
+          [PLUS]
+          [NBO] 
+          [PERT TEMP SCFT CHRG (atom selection)]
+ 
+REMOve:  Classical energies within QM atoms are removed.
+
+CHRG:    Net charge in the QM subsystem.
+
+         The atoms in selection will be treated as QM atoms.
+
+GLNK atom-selection: contains a list of atoms that are selected as
+                     GHO boundary atoms.
+
+TEMPerature:  Specifies the electronic temperature (Fermi distribution).
+              Can be used to accelerate or achieve SCF convergence 
+              (default =0.0).
+              
+SCFtolerance: Convergence criteria for the SCF cycle. As default
+              a value of 1.d-7 is used.
+
+CUTF: a flag that turns on cut-off, will use the same scheme used for
+      MM interactions (allows atom-based fshift and shift). This option 
+      is recommended for QM-MM interactions in EWAD calculation.
+
+EWAD: a flag that turns on ewald summation for QM-QM and QM-MM 
+      electrostatic interactions
+EOPT: performs an internal optimization for kappa and kmax as well as
+      real-space sum. NOT recommended - very inefficient. incompatible
+      with CUTF
+KAPPA, KMAX, KSQMAX: parameters used for QM-QM and QM-MM ewald 
+      contributions.
+
+PMEW: a flag that turns on particle mesh ewald (PME) summation for 
+      QM-QM and QM-MM electrostatic interactions
+FFTX, FFTY, FFTZ: Integer numbers of Fast Fourier Transform grid points
+      for the charge mesh (default 32)
+ORDEr: specifies the order of the B-spline interpolation, e.g. cubic is
+       order 4, fifth degree is ORDEr 6 (default).  The ORDEr must be 
+       an even number and at least 4.
+
+UPDT: Whether to update the box during a MD run. Default is 0 (not update!)
+      Do NOT forget to specify this to 1 when running CPT calculations
+      (although additional tests should be done for CPT in terms of virial 
+       calculations!)
+
+MULL: Transfer the mulliken charges to the CG array such that they can be
+      printed out by transferring the CG array to any vectors (e.g.,
+      scalar wmain = charge; print coor)
+
+DISP: Dispersion interactions among QM atoms can be calculated using an 
+      empirical formular (Elstner et al. J. Chem. Phys. 114, 5149, 2001).
+      One needs to specify a set of parameters in the DISPERSION.INP file
+      (see the above ref for details).
+
+TWOBody THREebody: Add the D3(BJ) two-body or three-body dispersion correction 
+      due to Grimme (Grimme et al. J. Chem. Phys. 132 (2010), 154104 and Grimme 
+      et al. J. Comput. Chem. 32 (2011), 1456-1465). Parameters are set 
+      automatically with the DFTB method (I.e. DFTB2/DFTB3/CPE correction, etc).
+
+HBON: The short-range behavior of XH gamma function is modified with a damping 
+      function. This significantly enhances the hydrogen bonding interactions
+      (Elstner, Cui, unpublished). The damping exponent needs to be specified
+      in the sccdftb.dat file. However, with the modified gamma, the repulsive
+      potential has to be adjusted accordingly. This can be done in an
+      empirical fashion by including a Gaussian (constrained to operate in
+      a range by a switching function) in the relevant repulsive potential;
+      the parameters for the Gaussian and the switching function need to be
+      specified in the spl file and turned on using the GAUS keyword.
+
+DHUB: --> obsolete keyword (but still fully functional): use D3RD instead.
+      To improve proton affinities, which depend much on the charges in the
+      protonated DHGA and deprotonated molecules, the SCC-DFTB is expanded
+      to the 3rd order. Currently only on-site terms have been included,
+      which were observed to have a major impact on the calculated PAs for
+      many molecules. The relevant parameters are the derivative of the
+      Hubbard parameters (related to chemical hardness), which need to be
+      specified in the sccdftb.dat file. The DHGA keyword includes further
+      flexibility in the behavior of the Hubbard parameters as a function of
+      charge (Elstner, Cui, JPC-A, 111, 10861-10873 (2007)).
+
+D3RD: Full 3rd order extension of SCC-DFTB. For invoking DFTB3 
+      (JCTC 2011,7,931) D3RD should be used in combination with HBON. 
+      The necessary parameters (Hubbard derivatives) need to be
+      specified in the sccdftb.dat file (see below).
+
+SCFC: instead of using energy difference between iterations to determine SCF
+      convergence, use difference in Mulliken charge between iterations. The
+      threshold is 0.05*sqrt(SCFtolerance). This option can be useful when
+      very tight convergence is desired (see, e.g., SI of JCP, 127, 234504
+      (2007))
+
+CPE0, CPEQ: Use the charge-independent DFTB3/CPE model with the parameters 
+      from Christensen et al. (2015) http://arxiv.org/abs/1507.00370 - Note:
+      The parameters are optimized for simultaneous use of the D3(BJ)
+      three-body dispersion correction (i.e., the THREebody keyword).
+      Note: the CPE methods requires CHARMM to be compiled with the +DFTBMKL
+      option - this is described under the MIXE keyword in this document.
+
+QDIP: indicate that QM dipole moment will be written to file of unit # UDIP.
+      Can be useful for IR calculations using ACF of QM dipoles.
+
+SHES: Save "dd1.dat" file in finite differences frequency calculations
+      (DIAG FINITE and REDU FIX FINITE)
+
+RHES: Read in "dd1.dat" file (from parent directory of the calculation)
+
+CDKO: The Charge-Dependent Klopman-Ohno flag activates a short-range
+      damping of the 1/r electrostatic interaction between QM (SCC-DFTB) 
+      and MM atoms taking into account charge-penetration effects. It 
+      is particularly useful for describing highly charged species in 
+      a QM/MM setup such as phosphate hydrolysis reactions in 
+      biological systems and was investigated in combination with 
+      an optimized set of element type dependent QM Van der Waals 
+      parameters (Hou, Cui, JCTC, 8, 4293-4304 (2012)). The relevant parameters 
+      need to be specified in a separate input file named ko_para.inp 
+      (see below for details) that needs to be located in the directory
+      where CHARMM is executed (similar to sccdftb.dat). Note, when 
+      using in combination with LDEP the s-orbital Hubbard (and deriv)
+      is taken as the QM Hubbard for the QM/MM interaction.
+
+UNPE: Followed by a floating-point number this flag specifies the 
+      number of unpaired electrons and invokes the inclusion of 
+      spin-polarization effects in a collinear description (see e.g.
+      JPC-A 2007,111,5622. and refs therein).
+
+LDEP: L-dependence of the Hubbard parameters. This option should only be
+      used with DFTB parameters that are designed for l-dependence! If 
+      D3RD is switched on also the Hubbard derivative parameters for s-, 
+      p-, and d-orbitals are necessary and need to be specified in the
+      sccdftb.dat (see below). An example for this option is provided
+      in test/c38test/sccdftb_ldep.inp.
+
+DMET: Needs an integer(0/1/2/3) as input to specify the diagonalizer for solving
+      the secular equations in DFTB.
+      0 : Legacy diagonalizer
+      1 : LAPACK DSYGV, requires +DFTBMKL
+      2 : LAPACK DSYGVD, requires +DFTBMKL - (recommended)
+    
+      Options 1 and 2 requires CHARMM to be linked to an implementation of LAPACK,
+      and to be compiled with the +DFTBMKL option. If +DFTBMKL is used, BLAS routines
+      are used to calculate the density matrix and calculate the Mulliken charges and
+      DFTB gradient. DMET 2 is usually the fastest, and will normally speed up the 
+      DFTB calculation substantially.
+
+MIXE: Needs an integer(0/1/2/3) as input to specify the charge-mixing scheme
+      to be used in the SCF iterations.
+      0 : Simple mixing scheme
+      1 : Anderson mixing scheme (recommended)
+      2 : Broyden mixing scheme (default)
+      3 : DIIS mixing scheme
+
+      For the Anderson and DIIS mixing schemes, the LAPACK subroutine DGESV 
+      is required. Hence the CHARMM executable has to be linked to LAPACK 
+      (Intel MKL is recommended). For the Anderson and DIIS implementation to
+      work, the following need to be done:
+
+      Add DFTBMKL to the installation command line such that DFTBMKL gets
+      included in the generated pref.dat. For example:
+
+              ./configure --with-sccdftb --add dftbmkl
+              make -C build/cmake install
+
+      If MIXE is specified as '1' or '3' in the input without having compiled CHARMM
+      with LAPACK, the Broyden mixer will be used instead of Anderson/DIIS.
+
+      In situations where Intel MKL is unavailable, simply compile with the OS 
+      default version of BLAS and LAPACK by linking CHARMM with:
+
+      -llapack -lblas
+
+      For example, one may set the environment variable LDFLAGS to the above
+      before executing the configure script.
+
+      Note that Intel MKL is usually the fastest LAPACK implementation for CHARMM.
+ 
+GENS: Number of iterations (including the current one) whose input and output 
+      charges are mixed in the Anderson mixing scheme. Generally, 5-6 should be
+      sufficient. Default: 8
+
+SYMM: A real number, in order to avoid linear dependency near the convergence
+      region in the Anderson mixing scheme. Default: 0.01 (recommended)
+
+IGUESS: Order of DXL-BOMD algorithm for charge propagation from previous
+      dynamics. The input value and real order correspondence is [ 105: 1,
+      107: 3, 109: 5, 111: 7, 113: 9, 115: 11, 117: 13].
+      The details of the algorithm can be found in J. Chem. Phys. (135,
+      044122, 2011). The default value is 0, which means getting charge from
+      the previous geometry converged values.
+
+IDAMP: Number of damping steps in DXL-BOMD. The number of steps before turning
+      on DXL-BOMD algorithm.
+
+PLUS: Use the libDFTB+ back-end to carry out the SCC-DFTB calculations. This 
+      option requires CHARMM to be compiled with the +DFTBPLUS option.
+      Instructions for this can be found in the installation section in this
+      document.
+
+NBO:  CHARMM will output the nbo.47 file that can be read in by NBO 6.0 to conduct
+      Natural Bonding Orbital (NBO) analysis of the bonding structure. 
+
+PERT: With the PERT keyword within the SCCDFTB command, alchemical free energy 
+      simulation is conducted between two atomic selections, each with its own
+      TEMP SCFT and CHRG variables. [Currently open-shell cases not considered]
+      This is used to convert the QM region into a combination of QM/MM atoms;
+      coupled with a thermodynamic cycle, this allows solvation free energy
+      and ligand binding calculations. See, for example, X. Lu et al., Mol. Siml.
+      42, 1056-1078 (2016). 
+      Note that when converting the entire QM region into MM atoms, no PERT keyword
+      is needed in the SCCDFTB module. For some examples, see the section in 
+      pert.info.
+
+     In the SCCDFTB program the atomtypes are represented by consecutive 
+numbers. The definition of SCCDFTB atom numbers has to be accomplished 
+before invoking the SCCDFTB command. The numbers are stored in WMAIN.
+If the QM system e.g contains only O, N, C and H atoms,
+the the numbering can be executed as follows:
+
+scalar WMAIN set 1.0 sele type O*  SHOW end
+scalar WMAIN set 2.0 sele type N*  SHOW end
+scalar WMAIN set 3.0 sele type C*  SHOW end
+scalar WMAIN set 4.0 sele type H*  SHOW end
+
+Now, the O atoms are represented by 1.0, the N atoms by 2.0 etc. 
+
+        Link atom may be added between an QM and MM atoms with the
+following command:
+
+ADDLinkatom  link-atom-name  QM-atom-spec  MM-atom-spec
+
+      link-atom-name ::= a four character descriptor starting with QQ.
+
+      atom-spec::= {residue-number atom-name}
+                   { segid  resid atom-name }
+                   { BYNUm  atom-number     }
+
+        When using link atoms to break a bond between QM and MM
+regions bond and angle parameters have to be added to parameter file
+or better use READ PARAm APPEnd command.
+
+        If define is used for selection of QM region put it after all
+ADDLink commands so the numbers of atoms in the selections are not
+changed. Link atoms are always selected as QM atoms.
+
+	Currently, three different link atom schemes are implemented. 
+SLA(default), EXGR and DIV. For a detailed comparison between them, see
+J. Phys. Chem. B 109, 9082-9095 (2005). Briefly, SLA should be avoided 
+if there is major charge change during the QM/MM calculations (e.g.,
+deprotonation). EXGR in general works well, but can be problematic if the
+QM region interacts directly with the mainchain NH (in the same group as
+CA and therefore can be excluded from interacting with QM).
+
+Example:
+SCCDFTB DIV remove CHRG 2 SELE resn @m END TEMP 0.00 SCFT 0.00000001
+
+
+File: SCCDFTB Node: Usage, Up: Top, Next: Installation, Previous: Description
+
+
+SCCDFTB input files
+-------------------
+
+SCCDFTB needs to read in the parameter files, which have 
+a two-body character. Therefore, the interaction parmeters
+for all pairs of atoms have to be read in.
+These files are named like oo.spl, on.spl, oc.spl, no.spl etc.,
+where oo.spl contains the two-center integrals for the O-O interaction,
+on.spl the  two-center integrals for the O-N interaction etc.
+DFTB needs these parameters for the O-N and N-O interaction,
+similarily for all other pairwise interactions.
+The file sccdftb.dat contains the paths to these parameters, as:
+
+'potential:atom-1-atom-1'
+'potential:atom-1-atom-2'
+'potential:atom-1-atom-3'
+... \\
+'potential:atom-1-atom-N' 
+'potential:atom-2-atom-1' 
+... \\
+'potential:atom-2-atom-N' 
+'potential:atom-N-atom-1' 
+... \\
+'potential:atom-N-atom-N'
+
+where atom-1 is the atom defined by 1.0, as described above,
+atom-2 defined in WMAIN by 2.0 etc.
+
+If open-shell treatment via UNPE is specified, SCC-DFTB needs to read 
+in the spin-polarization constants. These are listed directly after the 
+parameter files section, one line for each atom type as defined in 
+WMAIN and following the same order as above (first line for atom-1, 
+second line for atom-2, and so on). Each line needs to look like: 
+
+spin-'dummy' Wss Wsp Wps Wpp Wsd Wpd Wdd Wds Wdp
+
+where for readability 'dummy' can be the name of the atom type (e.g. c
+for carbon). Values for the constants Wss,... can be found in the 
+Dissertation thesis of Christof Koehler, 2003, Unviversity Paderborn, 
+page 114f, which is also available online via 
+http://digital.ub.uni-paderborn.de/hs/content/titleinfo/3163
+
+When third order DFTB is invoked via D3RD (or the now obsolete keyword 
+DHUB) the Hubbard derivatives Ud need to be specified following the 
+parameter file section, or the spin-section if the UNPE keyword is used:
+
+'dummy' Ud-atom1
+'dummy' Ud-atom2
+...
+
+For values of Ud see JCTC 2011,7,931.
+
+When D3RD and LDEP is specified the Hubbard derivatives section looks
+like:
+
+'dummy' Ud-atom1-d-orbital Ud-atom1-p-orbital Ud-atom1-s-orbital
+'dummy' Ud-atom2-d-orbital Ud-atom2-p-orbital Ud-atom2-s-orbital
+...
+
+If DHGA is specified (again, this is an obsolete option and was only 
+used in combination with DHUB), one line containing three number follow 
+in the form:
+
+v0_hgau alp_hgau q0_hgau 
+
+For details see JCTC 2008,4,2067.
+
+For HBON one additional parameter 'zeta' is necessary which is set as a
+single number in a single line following all previous sections (if 
+invoked via corresponding keyword).
+
+
+An example of a system containing O N C and H and having specified the 
+keywords UNPE 1.0, D3RD, and HBON, sccdftb.dat would look like:
+
+'PATH/oo.spl'
+'PATH/on.spl'
+'PATH/oc.spl'
+'PATH/oh.spl'
+'PATH/no.spl'
+'PATH/nn.spl'
+'PATH/nc.spl'
+'PATH/nh.spl'
+'PATH/co.spl'
+'PATH/cn.spl'
+'PATH/cc.spl'
+'PATH/ch.spl'
+'PATH/ho.spl'
+'PATH/hn.spl'
+'PATH/hc.spl'
+'PATH/hh.spl'
+spin-o     -0.035 -0.030 -0.030 -0.028 0.0 0.0 0.0 0.0 0.0
+spin-n     -0.033 -0.027 -0.027 -0.026 0.0 0.0 0.0 0.0 0.0
+spin-c     -0.031 -0.025 -0.025 -0.023 0.0 0.0 0.0 0.0 0.0
+spin-h     -0.072  0.0    0.0    0.0   0.0 0.0 0.0 0.0 0.0
+'o' -0.19
+'n' -0.13
+'c' -0.23
+'h' -0.16
+4.2
+
+where PATH specifies the path to the directory where the data files 
+are located. Be careful, an error in the sequence or a wrong assingnment
+ of parameters to atoms (coordinates) will make results meaningless.
+Parameter files can be downloaded at www.dftb.org or
+requested from Marcus Elstner (marcus.elstner@kit.edu). 
+
+Another input file is necessary if the CDKO keyword is applied. 
+It contains two parameters for each QM atom type and one atom-size 
+describing parameter for each element appearing in the MM part. The
+file is called ko_para.inp and needs to look like:
+
+nQMatomtypes nMMelements
+WMAIN:atom-1             a:atom-1  b:atom-1
+WMAIN:atom-2             a:atom-2  b:atom-2 
+...                      ...
+WMAIN:nQMatomtypes       a:atom-nQMatomtypes  b:atom-nQMatomtypes
+<blank line>
+name:MMelement1   U:MMelement1
+name:MMelement2   U:MMelement2
+...               ...
+name:nMMelements  U:nMMelements
+
+For the sccdftb.dat example above, the number of QM atomtypes is
+nQMatomtypes = 4 (O,N,C, and H), if the MM part is composed solely out 
+of water the number of MM elements nMMelements = 2, where 
+name:MMelement1 is O and name:MMelement2 is H. a, b, and U are the 
+corresponding parameters published for phosphate
+hydrolysis reactions (Hou, Cui, 8, 4293-4304 (2012)).
+An example for this scheme is provided in test/c37test/sccdftb_cdko.inp
+For additional discussion on the CDKO parameters, see, JPC, B 118, 11007-11027 (2014).
+
+
+SCCDFTB output files (currently disabled)
+-----------------------------------------
+
+SPE.DAT : contains the Kohn-Sham energies with occupations numbers.
+CHR.DAT : contains the atomic  (Mulliken) charges of the atoms 
+          (first row) and for the orbitals (s, px,py,pz,dxx.. ) in the 
+          following columns.
+REST.DAT: contains dipolemoment (D), calculated from the Mulliken 
+          charges (not a reliable estimate of Dipolemoment in general!)
+
+
+File: SCCDFTB Node: Installation, Up: Top, Next: FEP, Previous: Usage
+
+
+Installation of SCCDFTB
+-----------------------
+
+The source code of SCCDFTB ist distributed with CHARMM.
+To compile the SCCDFTB method as the quantum part:
+./install machine size T
+T invokes the SCCDFTB 
+The parameter files have to be reqeusted and stored in a directory,
+which can be reached by 'PATH' (see up).
+
+To enable the DFTB+ interface, three steps must be taken:
+1) Obtain and compile the DFTB+ library - instructions 
+   must be found elsewhere.
+
+2) Modify the Makefile_${em64t|gnu} for proper linking, etc.:
+  2a) Add the directory where libdftb+ is compiled to the $INCLUDE
+      environment variable in the makefile:
+
+      LIBDFTBDIR = /path/to/dftbplus_source/api/charmm/_obj_x86_64-linux-ifort
+      INCLUDE =  -I$(LIBDFTBDIR)
+
+  2b) Modify the link-line to properly link to libdftb+, e.g. for Makefile_em64t
+
+      $(LD) -o charmm.exe $(LIB)/*.o $(LIBDFTBDIR)/_dir_extlib_xmlf90/*.o $(LIBDFTBDIR)/*.o \
+      $(LIBS) $(LIBS) $(LIBS) $(ADDLIB) $(QLIB) $(MSGLIB) -I$(LIBDFTBDIR)/ \
+      -I$(LIBDFTBDIR)/_dir_extlib_xmlf90 $(MATHLIBS)
+
+      where $(MATHLIBS) is the link options to BLAS/LAPACK (usually MKL).
+
+3) use the "+DFTBPLUS keyword" to compile, e.g.:
+  ./install machine size T +DFTBPLUS
+
+4) Use the PLUS keyword in the SCCDFTB group to run using the DFTB+ engine.
+
+
+File: SCCDFTB Node: FEP, Up: Top, Next: Electrostatics, Previous: Installation
+
+	Free energy perturbations with SCC-DFTB/MM
+
+The code currently allows dual-topology based SCC-DFTB/MM free energy
+perturbation calculations; since all scaling related to the QM component
+of the free energy derivative is done inside SCC-DFTB, the FEP 
+calculations do not have to use BLOCK.
+
+As discussed in JPC, 107, 8643 (2003), a practical problem of using
+FEP with QM/MM potentials is that the structure of the QM region 
+undergoes significant distortions at end-points if one scales the entire
+QM molecule; there is no such problem if one chooses to scale only
+QM/MM interactions, but that requires calculation of new terms. The
+general solution is to add harmonic constraints on the QM part -
+either only at the end-points and then re-weight the calculated free 
+energy derivatives - or, more elegantly, add harmonic constraints 
+as "chaperones" throughout the "alchemy" simulation and compute 
+corrections based on local configuration integrals. See W. Yang et al. 
+J. Chem. Phys. 2004.
+
+For the special case where the two end-states have very similar chemical
+structures - such as in redox, metal-exchange and pKa applications, 
+which we believe are scenarios where QM/MM treatment is useful, a simple
+dual-topology-single-coordinate (DTSC) approach has been introduced. As
+the name implies, one uses only one set of coordinates for the two 
+states (e.g., reduced and oxidized states). Due to the fact that the 
+free energy is path-independent, such an approach is formally exact. In 
+practical applications, error might arise due to SHAKE - i.e. X-H 
+distances are assumed to the same in the two states - which usually has 
+negligible effects.
+
+At each configuration (hence single-coordinate) along the trajectory, 
+two electronic structure calculations are carried out (dual topology) 
+and the free energy derivative with respect to the coupling parameter 
+is evaluated and averaged on the fly. 
+
+With minor modifications, the algorithm also works for pKa prediction
+for a specific group in large molecules. For more details, refer to the
+following publications:
+
+	M. Formaneck, G. Li, X. Zhang, Q. Cui, J. Thero. Comput. Chem.
+	1, 53-68 (2002) 
+	G. Li, X. Zhang, Q. Cui, J. Phys. Chem. B (2003) 107, 8643
+	G. Li, Q. Cui, J. Phys. Chem. B, (2003) 107, 14521
+
+NOTE BENE: It MUST be used with "FAST OFF" because only generic 
+atom-atom codes have been modified so far (made default).
+
+Due to the fact that ALL QM related components are handled within SCC
+(including GSBP and eWald, see next section), FEP (such as pKa) 
+calculations can be used with both eWald and GSBP - provided that it is 
+the QM part that undergoes "alchemical" mutation. 
+The code has NOT been extensively tested in which both QM and MM 
+undergo changes.
+
+        Two examples are given to illustrate computational details; the
+first one deals with redox potential calculations for FAD in Cholesterol
+oxidase, and the second one concerns pKa calculations of ethanethiol
+(Ch3CH2SH) in water. The test files are scc_fep_dtsc.inp and 
+scc_pka1/2.inp. 
+
+Example(1)
+----------
+        For redox potential calculations, the following set-up is used,
+......
+
+  SCCDFTB LAMDa [REST] STOP [CUTF] OUTPut int -
+  [REMOve] (atom selection 1) [CHRG] [TEMPerature] [SCFtolerance] -
+                                                   [UNPE]         -
+  INIT @lam PASS int STEP int TIAV int -
+                              [CHRG] [TEMPerature] [SCFtolerance] -
+                                                   [UNPE]         -
+           (atom selection 2) -
+           (atom selection 3) 
+
+LAMD:  invoke the TI method to perform free energy calculations
+REST:  Restart option for accumulating statistics concerning <DU/DL>
+       i.e., necessary values will be read in from dynamics restart
+       file
+STOP:  employ the dual-topology-single-coordinate approach
+CUTF:  invoke cutoff for QM/MM electrostatic interactions
+OUTP:  unit number for storing the free energy derivative <DU/DL>
+INIT:  the current lamda value
+PASS:  numbers of MD steps to be skipped when accumulating <DU/DL>
+STEP:  the frequency of collecting statistics for <DU/DL> 
+TIAV:  the frequency of computing the average of DU/DL.
+
+atom selection 1: Reactant+Product to set up MM list for QM atoms
+atom selection 2: Reactant state
+atom selection 3: Product  state
+--------------------------------------------------------------------
+
+For pKa calculations, two free energy simulations are in 
+principle required; in the first step, the protonated state is mutated
+into the ionized state as the acidic proton is mutated into a dummy atom
+in the second step, the dummy atom is transferred into the gas phase. 
+Test calculations indicate that the contribution from the 2nd step is 
+likely to be small. 
+
+Example(2a)
+----------
+In the first step, BLOCK is used together with SCCDFTB
+......
+
+BLOCK 3
+SCCDFTB STOP PKAC ISTP 1
+CALL 2 SELE qm1  END
+CALL 3 SELE qmh  END
+CALL 1 SELE .not. (qm1 .or. qmh) END
+COEF 1  1  1.0
+COEF 1  2  1.0
+COEF 1  3  1.0
+COEF 2  2  0.0
+COEF 2  3  @lam
+COEF 3  3  0.0
+END
+
+SCCDFTB PKAC ISTP 1 HYGN int [CUTF] OUTPut int -
+[REMOve] (atom selection 1) [CHRG] [TEMPerature] [SCFtolerance] -
+                                                 [UNPE]         -
+INIT @lam PASS int STEP int TIAV int -
+                            [CHRG] [TEMPerature] [SCFtolerance] -
+                                                 [UNPE]         -
+atom selection 2 -
+atom selection 3
+......
+
+In the BLOCK section :
+the SCCD keyword is used to set up coefficent matrix for calculating 
+bonded contribution involving the dummy atom to <DU/DL>. 
+ISTP 1: the first step in pKa calculations
+qm1 is the ionized state (e.g., CH3CH2S-); 
+qmh is the acidic proton.
+
+In the SCCDFTB section:
+PKAC  : invoke pKa calculation
+ISTP 1: the first step in pKa calculations
+HYGN  : atomic index (number) of the acidic proton in the psf 
+atom selection 1:   protonated state (CHRG:   protonated state)
+atom selection 2:   protonated state (CHRG: deprotonated state)
+atom selection 3: deprotonated state
+
+Example(2b)
+----------
+In the second step for pKa calculations, the dummy atom is transferred 
+into vacuum,
+
+......
+calc 1mlam 1.0-@lam
+
+BLOCK 3
+SCCDFTB STOP PKAC ISTP 2
+CALL 2 SELE qm1  END
+CALL 3 SELE qmh  END
+CALL 1 SELE .not. (qm1 .or. qmh) END
+COEF 1  1  1.0
+COEF 1  2  1.0
+COEF 1  3  @1mlam
+COEF 2  2  0.0
+COEF 2  3  0.0 bond 1.0 angl 1.0 dihe 1.0
+COEF 3  3  0.0
+END
+
+SCCDFTB PKAC ISTP 2 HYGN int [CUTF] OUTPut int -
+[REMOve] [CHRG] (atom selection 1) [TEMPerature] [SCFtolerance] -
+INIT @lam PASS int STEP int TIAV int 
+......
+
+Note that with BLOCK, the coefficient matrix is different in the 
+second step: we are only scaling the non-bond (vdW) interaction between
+the environment and the dummy atom (1 and 3). The bonded terms between
+the QM and the dummy atom (2 and 3) is kept (coefficient as 1.0) and
+will be taken out with local configuration integrals.
+
+In SCC-DFTB, atom selection 1: deprotonated state
+
+
+File: SCCDFTB Node: Electrostatics, Up: Top, Previous: FEP, Next: GLNK
+
+     Since 2004, electrostatics in SCC-DFTB/MM simulations can be 
+treated in several ways for both spherical and periodic conditions:
+i). As for other QM packages, the default is no cut-off for QM/MM 
+electrostatic interactions. This is NOT recommended when cut-off 
+is used for MM; the imbalance will cause over-polarization of the media
+(e.g.,see discussion in classical simulations by Woods, J. Chem. Phys. 
+103, 6177, 1995). A useful option is to use extended electrostatics for
+MM.
+
+ii). Cut-off is introduced for QM/MM electrostatics, similar to MM
+interactions; i.e., the same scaling factors are the same as those for 
+MM interactions. Simply add "CUTF" to the SCC-DFTB command line.
+Currently only supports energy/force-shifts based on atoms
+
+iii). For spherical boundary conditions, the
+GSBP approach can now be used with SCC-DFTB. The current implementation
+takes GSBP contributions into the SCF iteration, although for a large
+inner region, this may not be necessary. Further tests are being carried
+out. The code will be extended to other boundary conditions and QM 
+methods in the future. If one uses sorting (i.e., truncate size of
+basis in GSBP), make sure a SCC-DFTB/MM 
+energy calculation with MULL (save Mulliken charge) is carried out 
+before issuing GSBP, since the Mulliken charges are used to estimate
+contributions from various basis functions to the QM related terms. 
+See test cases for examples.
+
+The GSBP and PB reference calculations are made consistent in terms of 
+reference state and the boundaries are updated in the PB calculations. 
+Simple test on a simple sodium ion led to correct answer with different EPSP
+values.
+
+The implementation is described in: J. Chem. Phys. 123, 014905 (2005).
+
+iv). For PBC simulations, one can use either cut-off or eWald sum for
+SCC-DFTB/MM interactions. Also PME has been implemented for the QM/MM 
+interactions but no extensive performance checks have been carried out
+yet. The current QM/MM implementation allows in principle all cell shapes.
+For eWald, one can either let the code optimize the exponent to get the
+best balance between real space sum and the reciprocal space sum (EOPT)
+or one can specify a set of parameters (Kappa, KMAX, KSQMAX).
+The real space sum is done till convergence is met with EOPT or 
+without CUTF (so more expensive); EOPT is incompatible with CUTF.
+With cutoff (CUTF), the real sum is limited to atoms within the cutoff- 
+which is recommended (much more efficient). In any case, one should
+carefully test kappa, KMAX to ensure the convergence of energy and, 
+more importantly, force from SCC-DFTB/MM calculations. 
+
+A sample command line would be:
+......
+SCCDFTB remove CHRG 2 SELE resn @m END TEMP 0.00 SCFT 0.00000001 EWAD -
+CUTF Kappa 0.45  KMAX 6 KSQMAX 100
+......
+
+With the 2009 implementation, QM/MM-eWald without CUTF is about 4-6 
+times slower than a QM/MM calculation without eWald (i.e., with only cutoff).
+With real-space cutoff (CUTF), QM/MM-eWald is only slightly slower than QM/MM
+without eWald. In 2012, QM/MM-PME has been implemented for SCC-DFTB by the 
+Gao group. For an example, see test/c37test/sccdftb_pme.inp.
+
+The eWald implementation is described in: J. Phys. Chem. B 109, 17715-17733
+(2005). The PME implementation follows the same approach as established for 
+SQUANTM as described in J. Chem. Theory Comput, 1, 2-13 (2005).
+
+An important point for PBC simulations is that all image must be used 
+with "UPDAte IMAL ". This is because symmetry operations have not been
+considered in the SCC-DFTB/MM code - which obviously needs to be fixed
+in the future.
+
+The eWald implementation is described in: J. Phys. Chem. B 109, 17715-17733
+(2005)
+
+v).  SCC-DFTB has been implemented to work with Poisson-Boltzmann, which
+allows to calculate solvation free energy and optimize reaction path with
+implicit solvent. Several keywords are added to the PBEQ module:
+
+	PSTL(0.01 kcal/mol): Energy convergence criterion of the iterative
+             QM-PB calculation
+
+	MXPS(5000): Maximum # of SCC and PB solver iterations. 
+
+	IGAS: flag to initiate calculation from gas phase in every step,
+             otherwise from last step (this is default for solvation free
+             energy calculation).
+
+	CHDR: instead of a fixed set of atomic radii, use charge-depdent radii,
+             which can be useful for charged species (Hou, Zhu and QC,
+             unpublished). In this case, a file named radius.inp, which
+             contains optimized parameters for the charge-dependence of atomic
+             radius, must be included in the local directory, similar to
+             sccdftb.dat.
+
+	For details please refer test cases: test_sccpb.inp 
+
+
+File: SCCDFTB Node: GLNK, Up: Top, Previous: Electrostatics, Next: Status
+
+                Description of the GLNK Command
+
+[GLNK atom-selection]
+
+atom-selection: contains a list of atoms that are boundary atoms.
+
+Restrictions: see the correponding entry for GLNK in quantum.info
+
+Description:  see the correponding entry for GLNK in quantum.info
+
+Limitations: The present implementation allows up to 5 QM-boundary
+atoms. To improve the geometry for the QM/MM boundary bond, an
+empirical correction (Ecor) term is added. Currently, Ecor parameters
+are only available for cases where the QM/MM partition cuts a C-C,
+a C-O, or a C-S bond.  For other cases, no empirical corrections
+will be included. Unrestricted GHO-SCC-DFTB for open-shell system
+is not implemented.
+
+Reference: Reference made to the following paper, which contains
+a more thorough description and discussion of test cases, is appreciated.
+
+Jingzhi Pu, Jiali Gao, and Donald G. Truhlar,
+J. Phys. Chem. A 108, 5454-5463 (1998). "Combining Self-Consistent-Charge
+Density-Functional Tight-Binding (SCC-DFTB) with Molecular Mechanics by
+the Generalized Hybrid Orbital (GHO) Method."
+
+
+File: SCCDFTB Node: Status, Up: Top, Next: Top, Previous: GLNK
+
+
+     The current implementation has analytical first derivative and thus
+allows energy minimizations, reaction path search (e.g., travel) and
+molecular dynamics simulations; SCC-DFTB/MM also works with Monte Carlo.
+Replica can also be used, which makes it possible to use replica path
+and related approaches (such the nudged elastic band) for determining
+reaction path with the SCC-DFTB/MM potential; along the same line,
+path integral simulations can be carried out as well, although only for
+equilibrium properties at this stage.
+
+
+     Several aspects of the code will be improved in the near future, 
+and new functionalities will be added:
+
+1. Interface with centroid path-integral simulations and Tsallis
+   statistics.
+2. More flexible interface with BLOCK for general free energy 
+   simulations.
+3. Better methods for open-shell systems; constrained density functional
+   theories.
+4. Time-dependent treatment for electronically excited states; non-adiabtic MD.
+5. Integration with polarizable force field models (Drude).
+

@@ -1,0 +1,66 @@
+* CHARMM 36 GPU Testcase
+* Milan Hodoscek, 17-FEB-2011
+* Model: Myoglobin with CO in a cubic box of 4985 water molecules
+* Test : dynamics using pme
+* Files: top/par_all22_prot.inp, mbco4985w.crd
+*
+
+bomlev -3
+open unit 1 read card name top_all22_prot.inp
+read rtf unit 1 card 
+open unit 1 read card name par_all22_prot.inp
+read param unit 1 card
+
+read sequ card
+* prot
+*
+  153
+VAL LEU SER GLU GLY GLU TRP GLN LEU VAL LEU HSD VAL TRP ALA LYS VAL GLU ALA ASP
+VAL ALA GLY HSD GLY GLN ASP ILE LEU ILE ARG LEU PHE LYS SER HSD PRO GLU THR LEU
+GLU LYS PHE ASP ARG PHE LYS HSD LEU LYS THR GLU ALA GLU MET LYS ALA SER GLU ASP
+LEU LYS LYS HSD GLY VAL THR VAL LEU THR ALA LEU GLY ALA ILE LEU LYS LYS LYS GLY
+HSD HSD GLU ALA GLU LEU LYS PRO LEU ALA GLN SER HSD ALA THR LYS HSD LYS ILE PRO
+ILE LYS TYR LEU GLU PHE ILE SER GLU ALA ILE ILE HSD VAL LEU HSD SER ARG HSD PRO
+GLY ASN PHE GLY ALA ASP ALA GLN GLY ALA MET ASN LYS ALA LEU GLU LEU PHE ARG LYS
+ASP ILE ALA ALA LYS TYR LYS GLU LEU GLY TYR GLN GLY
+
+generate mb
+
+read sequ heme 1
+generate hem setup
+
+read sequ co 1
+generate co
+
+read sequ tip3 4985
+generate wat noang nodih
+
+open unit 11 read card name mbco4985w.crd
+read coor card unit 11
+close unit 11
+
+set 7 55.49456
+crystal define cubic @7 @7 @7 90.0 90.0 90.0
+crystal build cutoff 14.0
+
+image byres sele all end
+
+envi VG_LDIMX 5
+envi VG_LDIMY 5
+envi VG_LDIMZ 5
+
+
+dyna start nstep 1000 timestep 0.001 -
+    iprfrq 1000 ihtfrq 0 ieqfrq 0 -
+    iuncrd -1 iunrea -1 iunwri -1 iunvel -1 kunit -1 -
+    nprint 100 nsavc 100 nsavv 0 ihbfrq 0 -
+    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+    twindh 100.0 twindl -100.0 ntrfrq 1000 -
+    hoover reft 300.0 tmass 2000.0 tbath 300.0 -
+    firstt 300.0 finalt 300.0 teminc 0.0  tstruc 307.0 -
+    inbfrq 1000 atom vatom cutnb 12.0 ctofnb 10. cdie eps 1. -
+    ctonnb 9.99 vshift cutim 13.5 imgfrq 1000 wmin .5 -
+    ewald pmewald kappa 0.32 order 6 fftx 64 ffty 64 fftz 64 -
+    spline bycb echeck 0 iseed 123 345 567 789  - 
+    grape 11     ! grape 13 for parallel, grape 11 for faster scalar
+

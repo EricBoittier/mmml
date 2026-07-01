@@ -1,0 +1,68 @@
+* omm_switchpair.inp
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+
+read rtf card
+* title
+*
+     35   1
+
+mass 1 a 1
+
+resi a 0
+atom a1 a -1
+atom a2 a 1
+
+end
+
+read param card
+* title
+*
+
+nbonds cutnb 14 ctofnb 12 ctonnb 10 cdie atom vatom fswitch vfswitch
+a 0 -1 1
+
+end
+
+read sequ a 1
+generate a
+
+scalar charge set 0
+scalar x set -1
+scalar y set 0
+scalar z set 0
+
+scalar x set 1 select bynu 2 end
+
+print coor
+
+open unit 1 write form name @9/fswitch.dat
+echu 1
+set r = 1
+label r
+      scalar x set @r select bynu 2 end
+      energy cutnb 14 ctofnb 12 ctonnb 10 cdie atom vatom switch vswitch
+      scalar dx stat select bynu 1 end
+      set f = ?stot
+      set e = ?ener
+      energy omm cutnb 14 ctofnb 12 ctonnb 10 cdie atom vatom switch vswitch
+      scalar dx stat select bynu 1 end
+      set fomm = ?stot
+      set eomm = ?ener
+
+      echo @r @e @eomm @f @fomm
+      incr r by 0.1
+if r le 14 goto r
+
+stop

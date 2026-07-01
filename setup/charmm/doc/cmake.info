@@ -1,0 +1,215 @@
+CHARMM Element doc/cmake.info 1.1
+
+File: Cmake, Node: Top, Up: (doc/charmm.info), Previous: (doc/install.info), Next: (doc/usage.info)
+
+                  Using CMake to install CHARMM
+
+CMake is an alternative to install.com for configuring, compiling,
+and installing CHARMM. This file describes how to use cmake and
+the configure shell script to build CHARMM.
+
+There are two relevant files in the root CHARMM source distribution.
+The CMakeLists.txt file is read by CMake to configure the source
+for compilation.
+The configure file is a shell script wrapper that invokes CMake.
+
+The configure script provides a more traditional command line switch interface.
+Also, if CMake is not available, the script will build and use a cmake binary
+from the tool/cmake directory. The script ultimately just builds
+a list of options and invokes CMake with the list.
+
+Other methods of using CMake such as the ncurses ccmake GUI and
+the Qt GUI are untested and unsupported. Support for ccmake may be added in
+the future.
+
+* Menu:
+
+* Workflow::      Three Steps to a CMake Install
+* Configuration:: The First Step
+* Compilation::   The Second Step
+* Installation::  The Third and Final Step
+
+
+File: Cmake, Node: Workflow, Up: Top, Previous: Top, Next: Machines
+
+                      Workflow
+
+There are three steps, configuration, compilation, and installation to create
+a working install of CHARMM from the source distribution using CMake.
+The first step, configuration, uses the configure script,
+or the cmake command directly,
+to configure the source for compiling.
+The configuration step occurs in a new empty directory, the build directory.
+The second step is to compile the source in the build directory by invoking
+the make command which uses the makefile written by CMake in
+the configuration step.
+The third step is to install the binaries and support files into a path prefix
+designated during configuration by typing 'make install'. 
+
+
+File: Cmake, Node: Configuration, Up: Top, Previous: Workflow, Next: Compilation
+
+                      Configuration
+
+To configure the source prior to compilation, make a new directory. For example,
+on a GNU/Linux system, I might have the CHARMM source in my home directory under
+'charmm'.
+
+$ cd ~
+$ ls
+charmm
+
+Making a new build directory might look like the following.
+
+$ mkdir charmm-build
+$ ls
+charmm     charmm-build
+
+From the new build directory, invoke the configure script with the desired
+options.
+
+$ cd charmm-build
+$ ../charmm/configure ...
+
+To see the currently supported list of options, use the --help option.
+
+$ ../charmm/configure --help
+Usage: configure [--option1] [--option2] ...
+
+Options:
+
+General options
+
+-p <install path>, --prefix <install path>
+     install CHARMM into the given directory
+-g, --debug
+     include debug symbols in final exec
+-l, --lite
+     lite build of CHARMM (minimal pref.dat keywords)
+-c <path to cmake>, --cmake <path to cmake>
+     use <path to cmake> to configure the build
+-a <keyword1,keyword2,...,keywordN>, --add <keyword1,keyword2,...,keywordN>
+     add the keywords to the final pref.dat
+-r <keyword1,keyword2,...,keywordN>, --remove <keyword1,keyword2,...,keywordN>
+     remove the keywords from the final pref.dat
+-D var1=val1 -D var2=val2 ... -D varN=valN
+     set CMake variables to the given values
+
+Non-default features
+
+--static
+     link only static libs for a portable executable
+-u, --domdec_gpu
+     include support for DOMDEC_GPU
+--with-fftdock
+     include support for fftdock GPU features
+--repdstr
+     include support for REPDSTR
+-s, --sccdftb
+     include support for SCC-DFTB
+--stringm
+     include support for STRINGM
+--with-x11
+     include support for X11 graphics via XDISPLAY
+-q, --gamess
+     include support for GAMESS QM/MM interface
+
+Compiler options
+
+--with-gnu, --with-gcc
+     finds the first gnu compilers on the path to use in the build
+--with-intel
+     finds the first Intel compilers on the path to use in the build
+--with-pgi
+     finds the first PGI compilers on the path to use in the build
+--with-cuda-host-compiler <C/C++ compiler>
+     the C/C++ host compiler that nvcc will used (passed via -ccbin)
+
+Remove default features
+
+--without-domdec
+     skips compiling DOMDEC features
+--without-fftw
+     skips linking in the FFTW library
+--without-mkl
+     skips linking in Intel's MKL library
+--without-mpi
+     skips compiling MPI features
+--without-openmm
+     skips compiling OpenMM features
+
+Some notable CMake variables (set with the -D <variable>=<value> option)
+
+CUDA_HOST_COMPILER
+    the C/C++ host compiler that nvcc will used (passed via -ccbin)
+    
+optimization
+    The optimization level 0, 1, 2, or 3 passed to the compiler via '-O<#>'.
+    This will be added to the CHARMM_<Lang>_FLAGS_RELEASE CMake variable where
+    Lang is C, CXX, and Fortran.
+    It should not normally be necessary to set this flag. A default level is set
+    in the CMakeLists.txt file.
+    
+arch_flag_C
+arch_flag_CXX
+arch_flag_Fortran
+    A compiler option to add to the CHARMM_<Lang>_FLAGS_RELEASE CMake variable where
+    Lang is C, CXX, and Fortran.
+    It should not normally be necessary to set this flag. A default level is set
+    in the CMakeLists.txt file.
+    For example, the default switch for GNU GCC is '-march=native'
+
+nvcc_ptx_target
+    Set a virtual architechture for CUDA code. The CUDA code will be compiled to PTX
+    for the given virtual architechture. The CUDA driver will compile the PTX to
+    a real GPU architecture at runtime. Use the compute number times 10, for example:
+    32, 35, 53, 75...
+
+nvcc_arch_target
+    Set a real GPU architechture for CUDA code. The CUDA code will be compiled to
+    the given real architechture. The CUDA driver will not use the JIT compiler at
+    runtime. Use the compute number times 10, for example: 32, 35, 53, 75...
+
+For example, to configure compilation using the Intel compiler suite and
+including debugging symbols:
+
+$ ../charmm/configure --intel --debug --prefix=/home/jdoe/charmm-install
+
+Please note that you must provide the prefix to successfully complete the final
+install phase and the prefix must be the full, literal path.
+Do not use shortcuts such as ~ or ..
+
+If the configure script detects the file 'install.com' and
+the directory 'build' in the current working directory, then
+the script will run the cmake command from the 'build/cmake' directory
+creating this directory if necessary.
+After configuration, in this case, change to the 'build/cmake' directory
+to run the make command or pass the '-C build/cmake' option to the make command.
+A relative prefix option will be relative to the
+'build/cmake' directory instead of the top-level source directory.
+If no prefix option is provided, the executable and plugins will be installed
+into the CHARMM source root bin and lib directories.
+
+
+File: Cmake, Node: Compilation, Up: Top, Previous: Configuration, Next: Installation
+
+                   Compilation
+
+After configuration completes with no errors,
+invoke make in the build directory.
+
+$ make -j3
+
+
+File: Cmake, Node: Installation, Up: Top, Previous: Compilation, Next: Top
+
+Finally, if compilation completes with no error,
+invoke 'make install' to install binaries and support files into
+the user specified prefix directory.
+The binaries will be installed to <prefix>/bin
+
+To run the test cases from the installed <prefix> test directory,
+give test.com the first argument cmake intead of gnu or em64t.
+
+$ cd <prefix>/test
+$ ./test.com cmake ...

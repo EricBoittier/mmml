@@ -1,0 +1,483 @@
+* Test scrips for GBSA in OpenMM through the CHARMM-OpenMM gpu interface
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .gt. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+!-------------------------------------------------------------------------------
+!    USER INPUTS
+
+stream datadir.def
+
+prnlev 0 @pnode
+set PDBName   = 3bdc_hsp
+set CHAInname = pro0
+set ph        = 7.0
+
+
+set TOPFilename    = @0/top_all22_prot_cmap_phmd.inp
+set PARFilename    = @0/par_all22_prot_chen_cmap_phmd.inp
+set GBRAdiipatch   = @0/radius_gbsw.str
+set PDBFile        = @0/@{PDBName}.pdb
+set PHCHarges      = @0/phmd.in
+set OUTPhmdlambda  = lambdas_ph_@{ph}.lamb
+
+!-------------------------------------------------------------------------------
+!    READ IN FILES, REPAIR / PATCH PROTEIN
+
+
+! open parameter and topology files
+read rtf  card name @TOPFilename
+read para card name @PARFilename
+
+! read pdb, fill IC table, generate PSF
+read sequence pdb name @PDBFile
+generate @chainname setup
+read coordinate pdb name @PDBFile resid
+
+! fill gaps, build file, add hydrogens
+ic parameter
+ic build
+hbuild sele hydrogen end
+
+!--------------------------
+!  build titration
+
+set segid = ?selsegi
+set res1 = ?selresi         ! get the starting value of resid
+calc reslast = ?selresi + ?nres -1
+
+set ires @res1
+
+! patch hydrogens
+label patch
+    define residue sele segid @segid .and. resid @ires show end
+    if ?selresn eq asp patch aspp2 @segid @ires
+    if ?selresn eq glu patch glup2 @segid @ires
+    incr ires
+if ires le @reslast goto patch
+
+autogen angles dihed
+
+hbuild sele segi @segid .and. resn asp .and. type hd* end
+hbuild sele segi @segid .and. resn glu .and. type he* end
+
+ic generate
+ic fill
+
+set ires @res1
+
+! patch torsions
+label edit
+ define residue sele segid @segid .and. resid @ires show end
+ if ?selresn eq asp then
+    ic edit
+       dihe @segid @ires cb @segid @ires cg @segid @ires od1 @segid @ires hd1 180.0
+       dihe @segid @ires cb @segid @ires cg @segid @ires od2 @segid @ires hd2 180.0
+    end
+    coor init sele segi @segid .and. resid @ires .and. type hd* end
+ endif
+ if ?selresn eq glu then
+    ic edit
+       dihe @segid @ires cg @segid @ires cd @segid @ires oe1 @segid @ires he1 180.0
+       dihe @segid @ires cg @segid @ires cd @segid @ires oe2 @segid @ires he2 180.0
+    end
+    coor init sele segi @segid .and. resid @ires .and. type he* end
+ endif
+ incr ires
+if ires le @reslast goto edit
+
+!--------------------------
+
+ic build
+coor stat
+coor trans xdir -?xave ydir -?yave zdir -?zave
+coor stat
+coor orie
+
+! make all heavy (non-hydrogen) atoms stable, minimize energy
+cons harm force 10 mass select ( segid @chainname ) .and. ( .not. hydrogen ) end
+minimize sd nstep 10
+cons harm clear
+
+write psf card name @9/ommcphmd.psf
+write coor card name @9/ommcphmd.chr
+
+set i = 1
+set platform cuda
+label dotest
+set cut = 999
+if @i eq 2 set cut = 20
+
+!**********************Test @i**********************************
+
+prnlev 5 @pnode
+omm clear
+gbsw reset
+delete atom select all end
+
+read psf card name @9/ommcphmd.psf
+read coor card name @9/ommcphmd.chr
+
+prnlev 0 @pnode
+!!!!!!!!!!!!!!!!!!!!!!
+!!    GBSW RADII    !!
+!prnlev 0
+stream @GBRAdiipatch
+!prnlev 5
+
+! cutoff and misc options
+update atom cdie switch vdw vswitch cutnb @cut ctofnb @cut ctonnb @cut -
+      inbfrq -1
+
+!! Preamble to tests, set up gbsw energy and forces
+gbsw conc 0.15 !nang 50 (Note this seems to fail in the forces)
+
+
+energy
+set echarmm = ?ener
+coor force compare
+
+set return fromCHARMM
+goto ncharmm
+label fromCHARMM
+
+! TEST CUDA PLATFORM FOR GBSW
+
+omm platform @platform
+energy omm omsw omrf omrx 1
+set eomm_cuda = ?ener
+coor force compare
+
+set return fromOMMCuda
+goto nopenmm
+label fromOMMCuda
+
+calc ediff = abs ( @echarmm - @{eomm_cuda} )
+calc prdiff = 100 * @{ediff} / abs ( @echarmm )
+
+prnlev 2 @pnode
+echo -------------------------------------------------------------------
+
+echo comparing "gbsw nang 50 conc 0.15" between CHARMM and OPENMM (cuda)
+echo
+echo CHARMM energy with GBSW: @echarmm  kcal/mol
+echo OMM energy with GBSW (cuda platform): @{eomm_cuda}  kcal/mol
+echo absolute unsigned difference: @ediff  kcal/mol  kcal/mol
+echo
+echo Force dot product: @fsum
+echo Percent energy error: @prdiff
+echo
+prnlev 0 @pnode
+
+set return fromTest2
+goto prresults
+label fromTest2
+
+incr i by 1
+if i le 2 goto dotest
+
+omm clear
+gbsw reset
+delete atom select all end
+
+read psf card name @9/ommcphmd.psf
+read coor card name @9/ommcphmd.chr
+
+prnlev 0 @pnode
+!!!!!!!!!!!!!!!!!!!!!!
+!!    GBSW RADII    !!
+!prnlev 0
+stream @GBRAdiipatch
+!prnlev 5
+
+! cutoff and misc options
+update atom cdie switch vdw vswitch cutnb @cut ctofnb @cut ctonnb @cut -
+      inbfrq -1
+
+!! Preamble to tests, set up gbsw energy and forces
+gbsw conc 0.15 !nang 50 (Note this seems to fail in the forces)
+
+! set up some properties of dynamics
+if @?nsteps eq 0 set nsteps = 100
+set echeck = echeck -1
+calc nwrite = int ( @nsteps / 50 )
+calc nave = int ( @nsteps / 50 )
+set temp = 298
+
+! load protonated / unprotonated charge states
+open unit 23 read form name @PHCHarges
+! output lambda file
+open unit 26 write form name @9/@{OUTPhmdlambda}_gpu
+! PHMD dynamics (Langevin dynamics to progress theta)
+! to output, remember to open an output file unit, and use the "lam" flag
+PHMD par 23 write 26 lam ph @ph nprint @nwrite mass 10 -
+     barr 1.0 bartau 1.0 temp @temp -
+     beta 15! Langevin dynamics for theta variables
+
+!**********************Test 3**********************************
+!         run some dynamics
+
+
+omm platform CUDA
+
+prnlev 5 @pnode
+echo -------------------------------------------------------------------
+
+echo running dynamics with CUDA-GBSW
+echo
+prnlev 0 @pnode
+
+shake fast bonh tol 1.0e-5 para
+
+open write unit 20 file name  @9/@{PDBName}_@{ph}_sim.dcd_gpu
+
+prnlev 5 @pnode
+
+scalar fbeta set 5
+
+dynamics leap langevin start -
+  timestep 0.002 -      !!timestep interval
+  nstep @nsteps -       !!no. of steps
+  nprint @nwrite -          !!freq of printout
+  iprfrq @nsteps -        !!freq of calc avg/rms energy
+  nsavc @nwrite -       !!freq of writing coordinates
+  nsavv 0 -             !!freq of writing velocities
+  iuncrd 20 -           !!write out coordinates
+  firstt @temp -        !!initial temp
+  finalt @temp -        !!final temp
+  tstruc @temp -        !!temp at which starting structure has been equilibrated
+  tbath @temp -         !!temp of langevin bath
+  ichecw 0 -            !!do not scale velocities to final temp (i.e. equilibrate)
+  ihtfrq 100 -          !!freq of heating
+  ieqfrq 0 -            !!freq of scaling/assigning velocity(X)
+  iasors 1 -            !!assign velocities during heating (0 will be scale velocities)
+  iasvel 1 -            !!using gaussian distribution to assign velocities
+  iscvel 0 -
+  inbfrq -1 -
+  ilbfrq 0 -
+  imgfrq -1 -
+  ntrfrq 1000 -
+  echeck -1  -         !!energy tolerance check before crashing
+  omm  omsw omrf omrx 1  gamma 5 !! use OpenMM for dynamics
+
+omm clear
+gbsw reset
+phmd reset
+delete atom select all end
+
+
+read psf card name @9/ommcphmd.psf
+read coor card name @9/ommcphmd.chr
+
+prnlev 0 @pnode
+!!!!!!!!!!!!!!!!!!!!!!
+!!    GBSW RADII    !!
+!prnlev 0
+stream @GBRAdiipatch
+prnlev 5
+
+! cutoff and misc options
+update atom cdie switch vdw vswitch cutnb @cut ctofnb @cut ctonnb @cut -
+      inbfrq -1
+
+!! Preamble to tests, set up gbsw energy and forces
+gbsw conc 0.15 !nang 50 (Note this seems to fail in the forces)
+
+! set up some properties of dynamics
+if @?nsteps eq 0 set nsteps = 100
+set echeck = echeck -1
+calc nwrite = int ( @nsteps / 50 )
+calc nave = int ( @nsteps / 50 )
+set temp = 298
+
+open unit 23 read form name @PHCHarges
+! output lambda file
+open unit 26 write form name @9/@{OUTPhmdlambda}_cpu
+! PHMD dynamics (Langevin dynamics to progress theta)
+! to output, remember to open an output file unit, and use the "lam" flag
+PHMD par 23 write 26 lam ph @ph nprint @nwrite mass 10 -
+     barr 1.0 bartau 1.0 temp @temp -
+     beta 15! Langevin dynamics for theta variables
+
+!**********************Test 3**********************************
+!         run some dynamics
+
+prnlev 5 @pnode
+echo -------------------------------------------------------------------
+
+echo running dynamics with CPU
+echo
+prnlev 0 @pnode
+
+shake fast bonh tol 1.0e-5 para
+
+open write unit 20 file name  @9/@{PDBName}_@{ph}_sim.dcd_cpu
+
+prnlev 5 @pnode
+
+dynamics leap langevin start -
+  timestep 0.002 -      !!timestep interval
+  nstep @nsteps -       !!no. of steps
+  nprint @nwrite -          !!freq of printout
+  iprfrq @nsteps -        !!freq of calc avg/rms energy
+  nsavc @nwrite -       !!freq of writing coordinates
+  nsavv 0 -             !!freq of writing velocities
+  iuncrd 20 -           !!write out coordinates
+  firstt @temp -        !!initial temp
+  finalt @temp -        !!final temp
+  tstruc @temp -        !!temp at which starting structure has been equilibrated
+  tbath @temp -         !!temp of langevin bath
+  ichecw 0 -            !!do not scale velocities to final temp (i.e. equilibrate)
+  ihtfrq 100 -          !!freq of heating
+  ieqfrq 0 -            !!freq of scaling/assigning velocity(X)
+  iasors 1 -            !!assign velocities during heating (0 will be scale velocities)
+  iasvel 1 -            !!using gaussian distribution to assign velocities
+  iscvel 0 -
+  inbfrq -1 -
+  ilbfrq 0 -
+  imgfrq -1 -
+  ntrfrq 1000 -
+  echeck -1            !!energy tolerance check before crashing
+
+stop
+
+
+!-------------------------------------------------------------------------------
+! AUX ROUTINES FOR NORMALIZATION AND DOT PRODUCTS
+!-------------------------------------------------------------------------------
+
+label prresults
+    set estat = fail
+    if @prdiff le 3.5e-0 then
+        set estat = pass
+    endif
+
+    calc diff = abs ( 1 - @fsum )
+    set fstat = fail
+    if @diff le 3e-2 then
+      set fstat = pass
+    endif
+
+    prnlev 2 @pnode
+    echo testcase result: @estat TEST @i - energy - cuda
+    echo testcase result: @fstat TEST @i - forces - cuda
+    prnlev 0 @pnode
+goto @return
+
+!-------------------------------------------------------------------------------
+
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+!-------------------------------------------------------------------------------
+
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar 4 store 1
+   scalar 5 store 2
+   scalar 6 store 3
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar 1 store 4
+   scalar 2 store 5
+   scalar 3 store 6
+
+goto @return

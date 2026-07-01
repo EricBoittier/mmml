@@ -1,0 +1,132 @@
+* Restrained-Ensemble simulation of T4 lysozyme with r1 at 62, 109, 134 
+*
+
+! data files required: top_par_protein.inp, 2lzm.pdb, t4l_62_109_134.dat
+
+! First prepare a system
+
+STREAM datadir.def
+
+! Read topology, parameter and distribution files
+stream @0top_par_protein.inp
+
+read sequence card unit 5
+* EPR + peptide
+*
+ 164
+!1      2      3      4      5      6      7      8      9      10
+Met    Asn    Ile    Phe    Glu    Met    Leu    Arg    Ile    Asp
+Glu    Gly    Leu    Arg    Leu    Lys    Ile    Tyr    Lys    Asp
+Thr    Glu    Gly    Tyr    Tyr    Thr    Ile    Gly    Ile    Gly
+Hsd    Leu    Leu    Thr    Lys    Ser    Pro    Ser    Leu    Asn
+Ala    Ala    Lys    Ser    Glu    Leu    Asp    Lys    Ala    Ile
+Gly    Arg    Asn    Cys    Asn    Gly    Val    Ile    Thr    Lys
+Asp    CYR1   Ala    Glu    Lys    Leu    Phe    Asn    Gln    Asp  !mutate resid 62 to R1 
+Val    Asp    Ala    Ala    Val    Arg    Gly    Ile    Leu    Arg
+Asn    Ala    Lys    Leu    Lys    Pro    Val    Tyr    Asp    Ser
+Leu    Asp    Ala    Val    Arg    Arg    Cys    Ala    Leu    Ile
+Asn    Met    Val    Phe    Gln    Met    Gly    Glu    CYR1   Gly  !mutate resid 109 to R1
+Val    Ala    Gly    Phe    Thr    Asn    Ser    Leu    Arg    Met
+Leu    Gln    Gln    Lys    Arg    Trp    Asp    Glu    Ala    Ala
+Val    Asn    Leu    CYR1   Lys    Ser    Arg    Trp    Tyr    Asn  !mutate resid 134 to R1
+Gln    Thr    Pro    Asn    Arg    Ala    Lys    Arg    Val    Ile
+Thr    Thr    Phe    Arg    Thr    Gly    Thr    Trp    Asp    Ala
+Tyr    Lys    Asn    Leu
+generate A first NTER last CTER setup
+
+bomlev -9
+rename resname HIS select resname HSD end
+rename atom    CD1 select type CD  .and. resname ILE end
+read coor pdb official name @02lzm.pdb
+ic param
+ic build
+hbuild
+rename resname HSD select resname HIS end
+rename atom    CD  select type CD1  .and. resname ILE end
+bomlev -5
+
+cons fix select .bygroup. ( type N .or. type CA .or. type C )  end
+
+mini abnr nstep 200 nprint 100 cdie eps 10.0
+
+shake  tolerance 1.0e-09 bonh param
+scalar fbeta set 5.0 select .not. type H* end
+
+DYNAMICS  strt            nstep    100  timestp   0.001   iprfrq    100  -
+          nprint    100  -
+          -
+          iasvel       1  firstt   300.0  finalt    300.0  tstruc     300.0 -
+          langevin        tbath    300.0  rbuf        0.0  -
+          -
+          inbfrq      -1  imgfrq      -1  ihbfrq       0  ilbfrq        0  -
+          -
+          iunread     -1  -
+          iunwrite    -1  -
+          iuncrd      -1  nsavcrd      0
+
+mini abnr nstep 100 nprint 100 cdie eps 10.0
+
+! start the model and simulation for the RE simulation
+
+set Nreplica = 25
+
+define spinlabel select .bygroup. ( type CB .or. type SG .or. type S1L .or. type C1R .or. -
+                 type C1 .or. type C2D .or. type C1D .or. type C2A .or. type C1A ) .and.  -
+                 resname CYR1 end
+
+REPLica B NREPlica @Nreplica SETUP select spinlabel end
+
+define spinlabel select .bygroup. ( type CB .or. type SG .or. type S1L .or. type C1R .or. -
+                 type C1 .or. type C2D .or. type C1D .or. type C2A .or. type C1A ) .and.  -
+                 resname CYR1 .and. segid A end
+
+DELEte ATOM SELEct spinlabel show END
+DEFIne replicas SELEct SEGId B* show END
+
+! { set up an appropriate interaction matrix }
+calc scale = 1/@Nreplica
+BLOCK 2
+CALL 2 SELEct ( replicas ) END
+COEF 1 1 1.0
+COEF 2 2 1.0 !@scale
+COEF 2 1 @scale
+END
+
+! Read and apply restraint 
+! 62 109 134
+open read card unit 50 name @0t4l_62_109_134.dat
+
+MMFP
+EPR nspinlabels 3 nreplica  @Nreplica  kenpp 10000.0 sig2epr  1.7  -
+    select type ON .and. resnam CYR1 end                            -
+    delppp 1.0  nptot 3 nppp  60   unit 50 
+END
+
+shake  tolerance 1.0e-09 bonh param
+scalar fbeta set 5.0 select .not. type H* end
+
+mini abnr nstep 200 nprint 100 cdie eps 10.0 ctonnb 10.0 ctofnb 12.0 cutnb  16.0
+
+! It is important to increase the nstep to better match experimental distributions with calculation
+
+DYNAMICS  strt            nstep    100  timestp   0.001   iprfrq    100  -
+          nprint    100  -
+          -
+          iasvel       1  firstt   300.0  finalt    300.0  tstruc     300.0 -
+          langevin        tbath    300.0  rbuf        0.0  -
+          -
+          inbfrq      -1  imgfrq      -1  ihbfrq       0  ilbfrq        0  -
+          -
+          iunread     -1  -
+          iunwrite    -1  -
+          iuncrd      -1  nsavcrd      0
+
+open read card unit 50 name @0t4l_62_109_134.dat
+
+MMFP
+EPR nspinlabels 3 nreplica  @Nreplica kenpp 10000.0 sig2epr  1.7  -
+    select type ON .and. resnam CYR1 end                            -
+    delppp 1.0  nptot 3 nppp  60   unit 50  verbose
+END
+
+stop

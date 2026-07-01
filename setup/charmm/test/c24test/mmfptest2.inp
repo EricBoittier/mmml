@@ -1,0 +1,190 @@
+* file: mmfptest.inp
+* test of rsolvent boundary potential with one potassium and 8 waters
+*
+stream datadir.def
+
+if ?NUMNODE .gt. 1 then
+  echo mmfptest2 testcase result: skip
+  echo "Test NOT performed."
+  stop
+endif
+
+read rtf card
+* TOPOLOGY FILE FOR PROTEINS USING EXPLICIT HYDROGEN ATOMS: VERSION 19
+*
+   20    1                ! Version number
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+MASS    69 POT   39.09800 ! Potassium
+
+RESI TIP3    .000   ! TIPS3P WATER MODEL
+GROUP
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2  H1        OH2  H2      H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+ACCE OH2
+PATC  FIRS NONE LAST NONE
+
+RESI POT   1.00000
+GROU
+ATOM POT   POT    1.00000
+PATC  FIRS NONE LAST NONE
+
+END
+
+
+read param card
+* - parameter file PARAM19 -
+*
+
+BOND
+HT   OT     450.0       0.9572 ! from TIPS3P geometry
+HT   HT       0.0       1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+THETAS
+HT   OT   HT      55.0     104.52    ! FROM TIPS3P GEOMETRY
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+HT       0.0440    -0.0498    0.8000  !TIP3P water hydrogen, see NBFIX below
+OT       0.8400    -0.1591    1.6000  !TIP3P water oxygen,   see NBFIX below
+POT      0.0000    -0.08316   1.93200
+
+
+END
+
+read sequence TIP3 8 
+generate BULK setup noangle
+
+read sequence POT  1
+generate ION setup 
+
+!---------------------------------------------------------------
+! read the starting coordinates 
+
+read coor card
+* Potassium IN 8 WATERS
+*
+   25
+    1    1 TIP3 OH2   -1.12315  -0.23126  -2.45734 BULK 1     -0.83400
+    2    1 TIP3 H1    -1.87089   0.31489  -2.69994 BULK 1      0.41700
+    3    1 TIP3 H2    -1.22187  -1.02235  -2.98712 BULK 1      0.41700
+    4    2 TIP3 OH2   -2.41629   1.53233  -0.16311 BULK 2     -0.83400
+    5    2 TIP3 H1    -2.87994   1.86130  -0.93320 BULK 2      0.41700
+    6    2 TIP3 H2    -2.73621   0.63670  -0.05480 BULK 2      0.41700
+    7    3 TIP3 OH2    2.68987  -0.21741  -1.24215 BULK 3     -0.83400
+    8    3 TIP3 H1     2.88608   0.58243  -1.72998 BULK 3      0.41700
+    9    3 TIP3 H2     3.42029  -0.80388  -1.43906 BULK 3      0.41700
+   10    4 TIP3 OH2   -2.32904  -1.55479   0.91539 BULK 4     -0.83400
+   11    4 TIP3 H1    -2.86119  -1.40778   1.69734 BULK 4      0.41700
+   12    4 TIP3 H2    -2.04757  -2.46705   0.98469 BULK 4      0.41700
+   13    5 TIP3 OH2    1.83898  -1.31963   1.14381 BULK 5     -0.83400
+   14    5 TIP3 H1     2.11349  -2.18539   1.44604 BULK 5      0.41700
+   15    5 TIP3 H2     2.16604  -1.26403   0.24594 BULK 5      0.41700
+   16    6 TIP3 OH2    0.42923  -2.71507  -1.05248 BULK 6     -0.83400
+   17    6 TIP3 H1     0.89073  -3.47441  -0.69660 BULK 6      0.41700
+   18    6 TIP3 H2     0.19632  -2.97222  -1.94459 BULK 6      0.41700
+   19    7 TIP3 OH2    0.53970   2.63932  -1.07644 BULK 7     -0.83400
+   20    7 TIP3 H1    -0.23602   3.07176  -0.71937 BULK 7      0.41700
+   21    7 TIP3 H2     0.67646   3.05600  -1.92727 BULK 7      0.41700
+   22    8 TIP3 OH2   -0.13759   0.03105   2.68246 BULK 8     -0.83400
+   23    8 TIP3 H1     0.71669  -0.32097   2.43239 BULK 8      0.41700
+   24    8 TIP3 H2    -0.24913  -0.23539   3.59504 BULK 8      0.41700
+   25    9 POT  POT   -0.20060   0.12184  -0.03462 POT  1      1.00000
+
+NBOND   ctonnb 50.0 ctofnb  50.0 cutnb  14.0  wmin     1.2  -
+        elec        switch       group        cdie          eps      1.0  -
+                    extend       grad         quadr         -
+        vdw         vswitch      vgroup
+
+!-------------------------------------------------------------------------
+! Water boundary constraints
+MMFP
+
+! Impose a harmonic restraint on the solute at the origin
+geo sphere RCM force 10.0 select segid ION end 
+
+! Setup the solvent boundary
+SSBP select type OH2 end
+
+END
+energy
+@testcheck ?ener -118.763104 0.0001 mmfptest2_chk1
+
+write title unit 6
+* BOUNDARY RADIUS = ?rmax
+*
+
+test first step 0.001 tol 0.0 
+mini abnr nstep 50 nprint 10 inbfrq 5
+
+!---------------------------------------------------------------
+! Equilibration dynamics
+
+shake tolerance 1.0e-06 bonh param
+scalar fbeta set 5.0 select type O* end
+
+DYNAMICS  start             nstep     100  timestp   0.001  iprfrq  100  iseed 56789 -
+          nprint     10  -
+ -
+          iasvel        1  firstt    300.0  finalt    300.0  tstruc    300.0  -
+          langevin         tbath     300.0  rbuf        0.0  -
+ -
+          inbfrq        5  ihbfrq        0  ilbfrq        0  -
+ -
+          iunread      -1  -
+          iunwrite     -1  -
+          iuncrd       -1  nsavcrd       0  -
+          iunvelo      -1  nsavvelo      0  -
+          kunit        -1
+
+
+coor dist select segid ION end  select type O* end 
+write title unit 6
+* BOUNDARY RADIUS = ?rmax
+*
+
+!--------------------------------------------------------------------------
+! Illustrate FIXED-RADIUS options
+! The system is embedded in a 10 angs radius dielectric cavity (radius fixed)
+MMFP
+SSBP reset
+SSBP kirkwood fixed radius 10.0 !diec 78.40 
+END
+energy
+
+set tol = 0.0001
+@testcheck ?ener -112.025845 @tol mmfptest2_chk2
+
+!--------------------------------------------------------------------------
+! Finally, illustrate the RISM-HNC cavity potential 
+! with the fixed options, the SSBP cavity potential has 
+! a minimum of  -0.72274 kcal/mol at "r = radius".
+! (very analogous to the SBOUND potential)
+
+Delete atom select .not. (segid BULK .and. resid 1 ) end
+
+MMFP
+SSBP reset
+SSBP CAVITY fixed radius 10.0  select type OH2 end
+END
+
+energy
+
+set tol = 0.0001
+@testcheck ?ener 0.393385758 @tol mmfptest2_chk3
+skip all excl ssbp 
+
+coor orient norot select type OH2 .and. segid BULK .and. resid 1 end 
+coor copy comp
+set 1 8.0
+label loop
+coor copy 
+coor trans xdir @1 select segid BULK .and. resid 1 end 
+gete print
+incr 1 by 0.10
+if 1 le 12.5 goto loop
+
+@testcheck ?ener 9.27726213 0.0001 mmfptest2_chk4
+stop

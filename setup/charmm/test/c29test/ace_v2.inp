@@ -1,0 +1,179 @@
+* CHARMM Testcase ace_v2_1.inp
+* Author: Michael Schaefer
+* Files:  toph19.rtf, param19.prm, acepar19.inp
+* Tests:  ACE2 energy and gradient, scaling of atom volumes
+*
+
+if ?ace .ne. 1 then
+ echo "Test NOT performed."
+ echo ace_v2 TEST CASE RESULT: SKIP
+ stop
+endif
+
+if ?replica .ne. 1 then
+ echo "Test NOT performed."
+ echo ace_v2 TEST CASE RESULT: SKIP
+ stop
+endif
+
+set pnode 
+if ?parallel .eq. 1 then set pnode = node 0
+
+stream datadir.def
+
+open unit 11 read form name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0param19.prm
+! read param print unit 11 card ! verbose
+read param unit 11 card
+close unit 11
+
+! read ACE parameters from file:
+open read unit 11 card name @0acepar19.inp
+read ACEParameters card unit 11
+close unit 11
+
+read sequence card
+* fragment of hairpin BH8 peptide
+*
+6
+THR VAL ASN GLY LYS THR
+
+generate bh8 setup
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+! calculate energy with "conventional" r-dielectric electrostatics:
+energy atom rdie switch vdis vswi -
+       cutnb 13.0 ctonnb 8.0 ctofnb 12.0 E14Fac 1.0
+
+! minimize a few steps to eliminate bad contacts:
+mini sd  nstep 5  nprint  10
+
+energy
+set E_rdie ?ener
+
+@testcheck ?ENER 86.15447 0.000001 ace_v2-ener1
+
+!--------------------------------------------------------------
+! test ACE2 energy and gradient:
+!--------------------------------------------------------------
+
+prnlev 5 @pnode
+
+! activate ACE2 (improved treatment of Born solvation radii):
+energy atom ace2 ieps 1.0 seps 80.0 alpha 1.3 sigma 2.5 switch -
+       vdis vswi cutnb 15.0 ctonnb 10.0 ctofnb 14.0
+
+@testcheck ?ENER -161.17806 0.000001 ace_v2-ener2
+
+! this is the reference energy:
+set E_ace ?ener
+
+! check gradients:
+test first step 0.00001 tol 0.000001
+
+!--------------------------------------------------------------
+! scale atom volumes:
+!--------------------------------------------------------------
+
+! scale the atom volumes by a factor of 0.9 (different energy):
+energy atom ace2 ieps 1.0 seps 80.0 alpha 1.3 sigma 2.5 switch -
+       vdis vswi cutnb 15.0 ctonnb 10.0 ctofnb 14.0 -
+       FVSCale 0.9
+set E_new ?ener
+
+! switch back to 100% volumes (should reproduce original energy):
+energy atom ace2 ieps 1.0 seps 80.0 alpha 1.3 sigma 2.5 switch -
+       vdis vswi cutnb 15.0 ctonnb 10.0 ctofnb 14.0 -
+       FVSCale 1.0
+set E_new ?ener
+decr E_new by @{E_ace}
+
+!--------------------------------------------------------------
+! switch ace2 off and on again:
+!--------------------------------------------------------------
+
+! de-activate ace2, use r-dielectric electrostatics:
+energy atom rdie switch vdis vswi -
+       cutnb 13.0 ctonnb 8.0 ctofnb 12.0 E14Fac 1.0
+set E_new ?ener
+
+! calculate diff with original rdie energy (difference should be zero):
+decr E_new by @{E_rdie}
+
+! re-activate ace2 and check energy (difference should be zero):
+energy atom ace2 ieps 1.0 seps 80.0 alpha 1.3 sigma 2.5 switch -
+       vdis vswi cutnb 15.0 ctonnb 10.0 ctofnb 14.0
+set E_new ?ener
+decr E_new by @{E_ace}
+
+!--------------------------------------------------------------
+! use current/ideal geometry for nb-exclusion list:
+!--------------------------------------------------------------
+
+! use current geometry for atom pair distances in the non-bonded
+! exclusion list; energy is different from previous:
+energy atom ace2 ieps 1.0 seps 80.0 alpha 1.3 sigma 2.5 switch -
+       vdis vswi cutnb 15.0 ctonnb 10.0 ctofnb 14.0 -
+       current_geometry
+set E_new ?ener
+decr E_new by @{E_ace}
+
+! re-activate use of ideal geometry distances for the atom pairs
+! in the nonbonded exclusion list, which is the ace default;
+! energy should be the same as originally calculated:
+energy atom ace2 ieps 1.0 seps 80.0 alpha 1.3 sigma 2.5 switch -
+       vdis vswi cutnb 15.0 ctonnb 10.0 ctofnb 14.0 -
+       ideal_geometry
+set E_new ?ener
+decr E_new by @{E_ace}
+
+! minimize a few steps with ACE2:
+mini sd  nstep 5  nprint  1
+
+@testcheck ?ENER -202.65295 0.000001 ace_v2-ener3
+
+!--------------------------------------------------------------
+! test ACE2 energy with use of BLOCK/Replica (multiple copies):
+! ** thanks to Collin Stultz for help **
+!--------------------------------------------------------------
+
+prnlev 5 @pnode
+
+! set ACE2 (already activated) reference energy:
+set E_ref ?ener
+
+! define residue to be replicated: ASN 3
+define residue select segid bh8 .and. resid 3 end
+
+! replicate residue:
+replicate A nrep 2 select residue end
+
+! delete original residue:
+delete atom select residue end
+
+! setup BLOCK interaction matrix:
+block 2
+call 2 select segid A* end
+coef 1 1 1.0
+coef 1 2 0.5
+coef 2 2 0.5
+end
+
+! calculate energy with ACE2, should be the same as w/o replicas:
+energy
+set E_new ?ener
+decr E_new by @{E_ref}
+
+@testcheck ?ENER -202.65294 0.000001 ace_v2-ener4
+
+! forces should work with replicas:
+test first step 0.00001 tol 0.000001
+
+
+STOP

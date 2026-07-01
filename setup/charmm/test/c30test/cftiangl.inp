@@ -1,0 +1,312 @@
+* CHARMM 30 testcase cftiangl.inp
+* Testing CFTI:one-dimensional conformational thermodynamic integration
+* Coordinate type: angle
+* System: formamide...water complex
+* Author: Krzysztof Kuczera, Lawrence, KS 14-Jan-2003
+* External Files: top_all22_prot.inp and par_all22_prot.inp
+*
+
+if ?qtsm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! Multinode execution has file I/O problems.
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+bomlev -1
+stream datadir.def
+
+! some definitions
+!------------------------------
+set 3 fmwt           ! PSF prefix
+set 4 120            ! O...O=C angle in degrees
+set p frmm                       ! simulation prefix
+set r @p                         ! residue name
+set t formamide...water hydrogen bonding ! title
+
+! Read in standard protein dictionaries
+!---------------------------------------
+open unit 1 card read name @0top_all22_prot.inp
+read RTF card unit 1
+open unit 2 card read name @0par_all22_prot.inp
+read PARA card unit 2
+
+! Append a special topology file specifying formamide
+!--------------------------------------------------
+read RTF cards append
+* Formamide all-H topology: use with main protein topology
+* K.Kuczera  10-Feb-94 Lawrence, KS
+*
+   22     1
+
+RESI FRMM      0.0000    ! Formamide CHONH2
+GROU                     !
+ATOM C   CC    0.4000    !    H3     H1
+ATOM N   NH2  -0.5000    !     \    /
+ATOM H1  H     0.2500    !      C--N
+ATOM H2  H     0.2500    !     /    \
+ATOM H3  HA    0.1000    !    O      H2
+ATOM O   O    -0.5000    !
+!
+BOND  C  N   C  O   C  H3   N  H1   N  H2
+!
+IC H1   N    C    H3    0.0000   0.0000    0.0000   0.0000  0.0000
+IC H3   C    N    H2    0.0000   0.0000  180.0000   0.0000  0.0000
+IC O    C    N    H1    0.0000   0.0000  180.0000   0.0000  0.0000
+IC O    C    N    H2    0.0000   0.0000    0.0000   0.0000  0.0000
+
+patc first none last none
+
+END
+
+! Generate PSF for formamide
+!----------------------------------------------------
+read sequ cards
+* formamide
+*
+1
+FRMM
+!generate TEST setup
+generate TEST
+
+!read coor card
+!* formamide model optimized geometry
+!*
+!    6
+!    1    1 FRMM C      -.00380    .00366    .00000 TEST 1      6.00000
+!    2    1 FRMM N      1.35043    .00322    .00000 TEST 1      7.00000
+!    3    1 FRMM H1     1.85980    .85945    .00000 TEST 1      1.00000
+!    4    1 FRMM H2     1.80815   -.88357    .00000 TEST 1      1.00000
+!    5    1 FRMM H3     -.42146   1.01598    .00000 TEST 1      1.00000
+!    6    1 FRMM O      -.67191  -1.02899    .00000 TEST 1      8.00000
+
+!coor print
+
+!! optimize geometry
+!mini powell nstep 1000 tolgrad 0.000001 
+
+!open unit 1 write form name cftiangle.crd
+!write coor card unit 1
+
+! orient molecule to to align C=O bond with x axis:
+!coor orie sele type C .or. type O end
+!coor print
+
+! translate molecule to put O at x=3.0
+!coor tran xdir 3.61496 ydir 0.0 zdir 0.0
+!coor print
+
+! Generate PSF for water  molecule
+! Remember that CHARMM TIP3 water model has no angles!
+!---------------------------------------------------------
+read sequ cards
+* water
+*
+1
+TIP3
+!generate WAT setup noangle nodihe   
+generate WAT noangle nodihe   
+
+!read coor card free
+!* water model geometry : from CHARMM model, O-H along x
+!*
+!    3
+!    7    2 TIP3 OH2    0.00000   0.00000   0.00000 WAT  1      8.00000
+!    8    2 TIP3 H1     0.95720   0.00000   0.00000 WAT  1      1.00000
+!    9    2 TIP3 H2    -0.23999  -0.92660   0.00000 WAT  1      1.00000
+
+! translate system so form O is at origin
+!coor tran xdir -3.0 ydir 0.0 zdir 0.0
+! rotate water
+!coor rota xdir 0.0 ydir  1.0 zdir 0.0 phi -60.0 sele segid WAT end
+
+
+!open unit 4 card write name  @9fmwt.pdb
+!write coor PDB unit 4
+!* @t : initial structure
+!*
+read coor pdb unit 5 resi
+REMARK  FORMAMIDE...WATER HYDROGEN BONDING : INITIAL STRUCTURE
+REMARK   DATE:    11/24/ 9      9:31:10      CREATED BY USER: brookscl 
+ATOM      1  C   FRMM    1       1.230   0.000   0.000  1.00  6.00      TEST
+ATOM      2  N   FRMM    1       1.965  -1.137   0.000  1.00  7.00      TEST
+ATOM      3  H1  FRMM    1       2.961  -1.100   0.000  1.00  1.00      TEST
+ATOM      4  H2  FRMM    1       1.469  -2.003   0.000  1.00  1.00      TEST
+ATOM      5  H3  FRMM    1       1.853   0.901   0.000  1.00  1.00      TEST
+ATOM      6  O   FRMM    1      -0.000  -0.000   0.000  1.00  8.00      TEST
+ATOM      7  OH2 TIP3    1      -1.500   0.000   2.598  1.00  8.00      WAT 
+ATOM      8  H1  TIP3    1      -1.021   0.000   1.769  1.00  1.00      WAT 
+ATOM      9  H2  TIP3    1      -1.620  -0.927   2.806  1.00  1.00      WAT 
+TER      10      TIP3     1
+END
+
+!=====================================================================
+! This ends the construction part  O-H...O=C should all be on x axis
+!=====================================================================
+
+! add harmonic constraint to  O...O distance
+IC EDIT 
+!bond TEST 1 O    WAT 1 OH2  0.0
+dihe WAT 1 OH2  TEST 1 O   TEST 1 C  TEST 1 N   0.0
+END
+ic fill 
+ic print
+
+! Make the molecules stay close with harmonic constraint
+cons ic bond 1.0
+
+
+define mov1 sele show segid TEST .and. .not. type O end
+define mov2 sele show  segid WAT end
+
+! Use TSM:  for mini and equ fix C=O...C angle only
+!==============================================================
+tsm
+  fix ANGLE TEST 1 C  TEST 1 O  WAT 1 OH2 toli 1.0e-5
+  maxi 100
+end
+
+
+! generate nb list 
+update cutnb 90.0 ctofnb 12.0 ctonnb 10.0 wmin 1.2 inbfrq 1
+
+mini powell nstep 200 inbfrq -1
+!mini powell nstep 100 inbfrq -1
+
+
+! SHAKE bonds to hydrogen atoms
+!SHAKE BONH tolerance 1.0e-6 para
+
+open unit 60 form write name @9@3d@4.rst
+
+! Equilibration
+DYNAMICS  -
+  STRT LEAP  NSTEP 500 TIMESTEP 0.002  - 
+!  NOSE QREF 50.0 TREF 300.0 NCYC 5 -
+  inbfrq -1 ihbfrq 0 ilbfrq 0 -
+  IUNCRD -1 IUNVEL -1 KUNIT -1 IUNWRI 60 IUNREA -1 -
+  IPRFRQ 100  NPRINT 1000  NSAVC 0 NSAVV  0 ISVFRQ 1000 -
+  IASORS 1 IASVEL 1 FIRSTT 240.0 FINALT 300.0 ISEED 314159 -
+  IHTFRQ 100 IEQFRQ 1000 ICHECKW 1  TWINDH 20.0 TWINDL -20.0
+  
+
+! Use TSM:  trajectory generation phase
+! savi: set up data saving - every 10th step, use 2 pert windows
+! move:  define perturbation and moving atoms
+!        (alternate selection: "sele mov2 end" only)
+! cfti:  activate dU/dx calculations so both TP and TI are done
+!==============================================================
+tsm
+    savi icun 10 icfr 5 nwin 2
+    move ANGLE TEST 1 C  TEST 1 O  WAT 1 OH2 by -10.0 inte -
+     sele mov2 end sele mov1 end
+    cfti
+end
+
+! data files for MD
+open unit 10 form write name @9@3d@4.icp
+open unit 30 unfo write name @9@3d@4.cor
+open unit 32 card write name @9@3d@4.pdb
+open unit 60 form read  name @9@3d@4.rst
+
+! Trajectory generation
+DYNAMICS  -
+  REST LEAP  NSTEP 200 TIMESTEP 0.002  - 
+!  NOSE QREF 50.0 TREF 300.0 NCYC 5 -
+  inbfrq -1 ihbfrq 0 ilbfrq 0 -
+  IUNCRD 30 IUNVEL -1 KUNIT -1 IUNWRI -1 IUNREA 60 -
+  IPRFRQ 100  NPRINT 100  NSAVC 10 NSAVV  0 ISVFRQ 100 -
+  IASORS 1 IASVEL 1 FIRSTT 240.0 FINALT 300.0 ISEED 314159 -
+  IHTFRQ    0 IEQFRQ 100 ICHECKW 1  TWINDH 20.0 TWINDL -20.0
+
+
+write coor PDB unit 32
+* @3: @t
+* Coords after 10ps equil + 40ps MD with a=@4 deg
+*
+
+! check constraint
+!================
+ic fill
+ic print
+
+tsm clear
+
+! TI Analysis step 1: derivatives of A, U and S
+!=====================================================================
+
+open unit 51 unfo read name @9@3d@4.cor
+
+
+! just as in the dynamics phase.
+! For this small system in gas phase I use
+! 'update cutnb 99.0' ! and 'cfta inbf 0' below
+!  for  other systems think about optimal setup.
+!======================================================================
+FASTER 1
+update cutnb 99.0 ctonnb 10.0 ctofnb 12.0 inbfrq 1 ihbfrq 0
+
+
+! Use TSM:  fix and move have to be the same as in traj generation
+!  move:      alternate selection: "sele mov2 end" only
+!  cfta: TI analysis using trajectory ccordinates
+!==============================================================
+tsm
+  maxi 100
+  fix ANGLE TEST 1 C  TEST 1 O  WAT 1 OH2 toli 1.0e-5
+  move ANGLE TEST 1 C  TEST 1 O  WAT 1 OH2 by -10.0 inte -
+     sele mov2 end sele mov1 end
+  cfta first 51 nunit 1 temp 300.0 skip 1 cont 5 -
+    inbf 0 ihbf 0 imgf 0
+end
+
+
+! Analysis step 2: TI calculation using the energies and gradients
+! stored in the .icp file
+!=====================================================================
+
+open unit 10 card read name @9@3d@4.icp
+
+! Use TSM: no energy evaluations here, all info read from .icp
+!==============================================================
+tsm
+  cftj uicp 10 temp 300.0 cont 5 npert 2
+end
+
+
+! Analysis step 3: original TSM: TP results - free energy perturbation
+!=====================================================================
+
+open unit 10 form read name @9@3d@4.icp
+
+! Use TSM post-processing command
+!   first,nunit - first file no and no. of files
+!   begin,stop - first and last configuration (as written to file)
+!                to be processed
+!   ic - IC perturbations are considered
+!   surf - print dA as function of IC values at end
+!   inte - print out both total and interaction energies
+!   temp,delt - temperature and temperature step in dA calculations
+!   ctem - additionally print out average T from kinetic energy
+!   bins - use bins of n configurations to estimate errors
+!   maxp - no of coords to be perturbed
+!   maxw - no of windows (i.e. no of steps to reach max. displacement,
+!          times 2, as perturbs are always done in + and - dir).
+!   maxs - max points on surface
+!=====================================================================
+tsm post ic surf inte maxp 1 maxw 6 maxs 200
+ proc firs 10 nuni 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 2000
+end
+
+
+! TI-TP comparison
+! On Pentium IV workstation, Red Hat 7.3 Linux, g77/gcc, LEAP integrator
+! TP: [(0.1919-0.0696)/10]*(180/pi) = 0.70 kcal/(mol rad)
+! TI:  0.71 kcal/(mol*rad) (.cor) and  0.73  kcal/(mol*rad) (.icp)
+! KK Jan 2003
+stop

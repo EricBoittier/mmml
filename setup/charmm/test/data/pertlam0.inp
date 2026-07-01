@@ -1,0 +1,186 @@
+* PERT.INP
+* author:  Ryszard Czerminski (December 11, 1991)
+* purpose: to test PERT command (slow growth method)
+* problem: calculates free energy perturbation for migrating -OH group
+*          in methanol (CH3-OH -> OH-CH3)
+* external files: none
+*
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+read rtf  card
+* TOPOLOGY FILE FOR METHANOL TO METHANOL
+*
+   20    1                ! Version number
+MASS     1 H      1.00800 ! Hydrogen bonding hydrogen (neutral group)
+MASS     3 HA     1.00800 ! Aliphatic or aromatic non-hydrogen bonding hydrogen
+MASS     4 HT     1.00800 ! TIPS3P water model hydrogen
+MASS    10 CT    12.01100 ! Aliphatic carbon  -sp3
+MASS    45 OT    15.99940 ! Hydroxyl oxygen (tetrahedral)/Ionizable acid oxygen
+MASS    46 OW    15.99940 ! TIP3P water model oxygen
+MASS    98 DU1   3.00800  ! dummy for hydrogens 
+MASS    99 DU2   15.0350  ! dummy for carbon 
+
+AUTOGENERATE ANGLES
+DEFA FIRS NTER LAST CTER
+
+RESI MNL            0.00  !  methanol residue
+GROU
+ATOM C    CT     -0.2
+ATOM HA   HA      0.2  
+ATOM HB   HA      0.2  
+GROU
+ATOM O1   OT     -0.8
+ATOM H1   H       0.4
+ATOM O2   HA      0.2
+ATOM H2   DU1     0.
+BOND C HA   C HB    C O1   C O2   O1 H1   O2 H2
+DIHE H1 O1 C HA  
+DIHE H1 O1 C HB
+DIHE H1 O1 C O2
+DIHE H2 O2 C HA  
+DIHE H2 O2 C HB
+DIHE H2 O2 C O1
+DONO  H2 O2
+DONO  H1 O1
+ACCE  O1
+ACCE  O2
+IC    BLNK H1   O1     C     0.00     0.00   180.00    0.00   0.00
+IC    H1   O1   C      HA    0.00     0.00    60.00    0.00   0.00
+IC    H1   O1   C      HB    0.00     0.00   240.00    0.00   0.00
+IC    H2   O2   C      HA    0.00     0.00   240.00    0.00   0.00
+IC    H2   O2   C      HB    0.00     0.00    60.00    0.00   0.00
+IC    H2   O2   C      O1    0.00     0.00   180.00    0.00   0.00
+IC    H1   O1   C      O2    0.00     0.00   180.00    0.00   0.00
+PATCH FIRST NONE LAST NONE
+
+!
+! Water models
+RESI TIP3    .000   !  TIPS3P
+GROUP
+ ATOM OH2  OW     -0.834
+ ATOM H1   HT      0.417
+ ATOM H2   HT      0.417
+BOND OH2  H1        OH2  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+PATC  FIRS NONE LAST NONE
+END
+
+read parameter card 
+* From Parameter File for CHARMM version 20
+* Copyright (c) 1986  Polygen Corporation  All Rights Reserved
+* Includes parameters for both polar and all hydrogen topology files
+*
+BOND
+CT   CT     225.0       1.540
+CT   OT     400.0       1.420
+OT   H      450.0       0.960
+HA   CT     345.0       1.09
+HT   HT       0.0       1.5139
+HT   OW     450.0       0.9572
+! bond perturbation
+OT   DU1    345.0       0.2 ! perturbation OT   H      450.0       0.960
+HA   DU1    345.0       0.2 ! perturbation OT   H      450.0       0.960
+
+THETAS
+HA   CT   CT      41.0     109.47
+HA   CT   HA      34.0     109.47
+HA   CT   OT      44.0     109.47
+H    OT   CT      49.0     109.47
+HT   HT   OW       0.0     127.74
+HT   OW   HT      55.0     104.5
+! angle perturbation
+H    OT   DU1      3.40    109.47  ! perturbation HA   CT   HA      34.0     109.47
+DU1  OT   DU1      0.34    109.47  ! perturbation HA   CT   HA      34.0     109.47
+DU1  OT   CT       4.90    109.47  ! perturbation H    OT   CT      49.0     109.47
+DU1  HA   CT       4.9     109.47  ! perturbation H    OT   CT      49.0     109.47
+
+PHI
+X    CT   CT   X        1.6  3    0.0
+X    CT   OT   X        0.5  3    0.0
+! dihedral perturbation
+X    CT   HA   X        0.1  3    0.0
+
+! STANDARD DEFAULTS
+NONBONDED  NBXMOD 5  ATOM CDIEL SWIT VATOM VDISTANCE VSWIT -
+     CUTNB 99.0  CTOFNB 98.0  CTONNB 97.0  EPS 1.0  E14FAC 0.5  WMIN 1.5
+!
+! The following nonbonded parameters have not been tested or verified.
+!
+!                  Emin         Rmin    (these columns used
+!               (kcal/mol)       (A)     for 1-4 interactions)
+!
+H        0.044   -0.0498       0.800
+HA       0.100   -0.00450      1.368
+HT       0.044   -0.0498       0.800
+CT       1.65    -0.0903       1.800
+OT       0.84    -0.1591       1.600
+OW       0.84    -0.1591       1.600
+DU*      0.10     0.0          1.0
+!
+
+NBFIX
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+!
+OW   OW      -0.152073  3.5365
+HT   HT      -0.04598   0.4490
+HT   OW      -0.08363   1.9927
+!
+!STANDARD DEFAULTS
+HBOND AEXP 4 REXP 6 HAEX 4 AAEX 2   NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+   CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+!
+O*   O*      -4.25 2.75
+!
+END
+
+read sequence card
+*...
+*
+    1
+mnl
+generate meth setup warn first none last none
+
+scalar mass   set  8.     sele atom meth 1 o1 show end
+scalar mass   set  3.     sele atom meth 1 h1 show end
+scalar mass   set  8.     sele atom meth 1 o2 show end
+scalar mass   set  3.     sele atom meth 1 h2 show end
+
+!
+! Building cartesians from internal coordinates and
+! minimizing has been replaced by reading pre-minimized coordinates
+! directly from the input. In this way we can decouple modifications
+! in minimizers from modifications in dynamics and/or pert module.
+! Ryszard Czerminski (92/05/18)
+!
+!ic param   ! to fill the table with parameter values
+!coor set sele atom meth 1 c end 
+!coor set sele atom meth 1 o1 end xdir 1.42 ydir 0.0 zdir 0.0
+!coor set sele atom meth 1 h1 end xdir 1.92 ydir 0.89 zdir 0.0
+!ic build
+read coor card
+* initial minimized coordinates
+*
+    7
+    1    1 MNL  C     -0.15841   0.34707   0.00000 METH 1      0.00000
+    2    1 MNL  HA    -0.21747   0.97522  -0.89112 METH 1      0.00000
+    3    1 MNL  HB    -0.21747   0.97522   0.89112 METH 1      0.00000
+    4    1 MNL  O1     1.05536  -0.40295   0.00000 METH 1      0.00000
+    5    1 MNL  H1     1.83183   0.16859   0.00000 METH 1      0.00000
+    6    1 MNL  O2    -1.00784  -0.33920   0.00000 METH 1      0.00000
+    7    1 MNL  H2    -1.17819  -0.23442   0.00000 METH 1      0.00000
+
+print psf
+test psf
+
+update inbfrq 10000 ihbfrq 0 cdie cutnb 999.
+
+energy
+
+server ! this is MSCALE: lambda 0 PSF
+
+stop

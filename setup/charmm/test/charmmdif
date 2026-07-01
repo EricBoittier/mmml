@@ -1,0 +1,316 @@
+#!/bin/sh
+#set -vx
+
+# Charmm test output filter and diff-er.
+# Scott Brozell, TSRI
+
+# create usage statement
+usage()
+{
+cat << EOF
+Usage: $0 [-k] [-s] [-t {0,1,2,3,4,5}] [-v] [-w] old_charmm_output new_charmm_outputs
+
+Description
+       Strip irrelevant differences from all files and then diff
+       old_charmm_output file with each new_charmm_output file.
+
+Options
+       -k
+              keep temporary files; the default is to remove them.
+
+       -s
+              ignore the sign of floating point numbers.
+
+       -t n={0,1,2,3,4,5}
+              truncate the last n digits of floating point numbers.
+
+       -v
+              emit verbose messages that indicate the processing status.
+
+       -w
+              ignore whitespace.  Note that blank lines are removed
+              regardless of this option.
+EOF
+
+exit 1;
+}
+
+# standardize command line options
+optionlist='kst:vw'
+set -- `getopt "$optionlist" "$@"`
+
+# parse options
+on='on'
+keep_temporary_files=''
+ignore_sign=''
+ignore_whitespace=''
+truncate=''
+verbose=''
+while [ $# -gt 0 ]
+do
+    case "$1" in
+        -k)    keep_temporary_files=$on ;;
+        -s)    ignore_sign=$on ;;
+        -t)    truncate=$on; shift; digits=$1 ;;
+        -v)    verbose=$on ;;
+        -w)    ignore_whitespace=$on ;;
+        --)    shift; break ;;
+        -*)    usage ;;
+        *)     break ;;
+    esac
+    shift
+done
+
+# command requires at least 2 arguments
+if [ $# -lt 2 ]
+then
+    usage;
+fi
+
+# Perform the following transformations on all charmm output files:
+# ## denotes cut and pasted charmm output lines
+#
+# Delete these lines
+##                   (CHARMM) - Developmental Version 30b1     August 15, 2003
+##      Current operating system: Linux-2.4.18-5smp(i686)@bohr[+  1]
+#
+# Delete these lines
+##                 Created on  8/ 1/ 3 at 18:53:43 by user: sbrozell
+##*  DATE:     8/ 1/ 3     18:53:43      CREATED BY USER: sbrozell
+##REMARK   DATE:     7/28/ 3     13: 1:28      CREATED BY USER: sbrozell
+#
+# Delete this line
+##            Maximum number of ATOMS:    360720, and RESidues:       72000
+##            Current HEAP size:        10240000, and STACK size:   2000000
+#
+# Remove file specific information from these lines
+## Processing passed argument "stream=/usr/local/srb/charmm/c30b0/test/c29test/sasa.inp"
+## Parameter: STREAM <- "/USR/LOCAL/SRB/CHARMM/C30B0/TEST/C29TEST/SASA.INP"
+## Parameter: STREAM -> "/USR/LOCAL/SRB/CHARMM/C30B0/TEST/C29TEST/SASA.INP"
+## Parameter: STREAM == "/USR/LOCAL/SRB/CHARMM/C30B0/TEST/C23TEST/CMDPAR.INP"
+## CHARMM: list of open files:
+##           5 stdin read  formatted
+##           6 stdout write formatted
+##          50 /peano/sbrozell/c30b0/test/scratch/stdtst1.rst read  formatted
+##          51 /peano/sbrozell/c30b0/test/scratch/stdtst1.dcd read  unformatted
+##          52 /peano/sbrozell/c30b0/test/scratch/stdtst2.dcd read  unformatted
+##          99 /peano/sbrozell/c30b0/test/c22test/stdtest.inp read  formatted
+#
+# Delete these lines
+## Parallel load balance (sec.):
+## Node Eext      Eint   Wait    Comm    List   Integ   Total
+##   0     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+##   1     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+##PARALLEL> Average timing for all nodes:
+##   2     0.0     0.0     0.0     0.0     0.0     0.0     0.0
+#
+# Delete these lines
+##      $$$$$$  New timer profile Local node$$$$$
+##
+##      Nonbond force           0.00144 Other:    0.00000
+##         Bond energy             0.00012 Other:    0.00000
+##         Angle energy            0.00017 Other:    0.00000
+##         Dihedral energy         0.00027 Other:    0.00000
+##         Restraints energy       0.00012 Other:    0.00000
+##      INTRNL energy           0.00377 Other:    0.00310
+##      Comm force              0.00691 Other:    0.00000
+##   Energy time             0.01628 Other:    0.00415
+## Total time              0.29155 Other:    0.27527
+##
+##         $$$$$$  Average   profile $$$$$
+##
+##      Nonbond force           0.00134 Other:    0.00000
+##         Bond energy             0.00012 Other:    0.00000
+##         Angle energy            0.00017 Other:    0.00000
+##         Dihedral energy         0.00027 Other:    0.00000
+##         Restraints energy       0.00012 Other:    0.00000
+##      INTRNL energy           0.00448 Other:    0.00380
+##      Comm force              0.00705 Other:    0.00000
+##   Energy time             0.01714 Other:    0.00502
+## Total time              0.29136 Other:    0.27508
+#
+# Delete these lines
+##                    MAXIMUM STACK SPACE USED IS  566726
+##                    STACK CURRENTLY IN USE IS         0
+##                    HEAP PRINTOUT-  HEAP SIZE  10240000
+##                    SPACE CURRENTLY IN USE IS         0
+##                    MAXIMUM SPACE USED IS       1049432
+##            PRINHP> ADDRESS:         1 LENGTH:  10240000 NEXT:         0
+##                     ELAPSED TIME:     0.30  SECONDS
+##                         CPU TIME:     0.19  SECONDS
+## CPU TIME=       0.02 ELAPSED TIME=       0.02
+#
+# Delete all lines containing:
+#      OPNLGU
+#      TESTENDIAN
+#      VCLOSE
+#      VOPEN
+## VOPEN> Attempting to open::datadir.def::
+## OPNLGU> Unit 98 opened for READONLY access to datadir.def
+## VCLOSE: Closing unit   98 with status "KEEP"
+#
+# Convert lowercase floating point exponent delimiters to uppercase:
+#  e+  ->  E+
+#  e-  ->  E-
+# Delete useless floating point exponent fields, ie,
+#  E+, E-, E+0, E-0, E+00, E-00, etc.
+# Delete leading zeros in floating point exponent fields, ie,
+#  E+004 -> E+4
+#  E-005 -> E-5
+# Prepend zero to floating point numbers beginning with ., ie, convert:
+#    . -> 0.
+#   -. -> -0.
+# Convert all forms of floating point zero to 0., ie,
+#  -0. ->  0., +0. ->  0., -0.0 ->  0.0, etc.
+#
+# Remove blank lines
+#
+# Optionally remove signs and truncate digits
+
+base='/tmp/'
+for path in $@
+do
+    file=`echo $path | sed 's@/@_@g'`  # convert pathname into unique filename
+    cat $path |
+    # use @ (or |) to delimit regular expressions to improve readability.
+    # this requires \@ for regular expression addresses.
+    # see UNIX Power Tools, 2nd ed., p617.
+    sed -e '\@^ *(CHARMM) - Developmental Version @d' \
+        -e '\@^ *Current operating system: @d' \
+        -e '\@Created on [ 1-9][0-9]/[ 0-9][0-9]/[ 0-9][0-9] at [ 1-9][0-9]:[ 0-9][0-9]:[ 0-9][0-9] by user:@d' \
+        -e '\@\  DATE:    [ 1-9][0-9]/[ 0-9][0-9]/[ 0-9][0-9]     [ 1-9][0-9]:[ 0-9][0-9]:[ 0-9][0-9]      CREATED BY USER:@d' \
+        -e '\@^            Maximum number of ATOMS: [ 0-9]*, and RESidues:@d' \
+        -e '\@^            Current HEAP size: [ 0-9]*, and STACK size:@d' \
+        -e 's|argument "stream=[a-zA-Z0-9\._/]*test/|argument "stream=|' \
+        -e 's|Parameter: STREAM \([-<=][->=]\) "[a-zA-Z0-9\._/]*TEST/|Parameter: STREAM \1 "|' \
+        -e 's|Attempting to open::[a-zA-Z0-9\._/]*test/|Attempting to open::|' \
+        -e 's|access to [a-zA-Z0-9\._/]*test/|access to |' \
+        -e 's|^          [ 0-9][0-9] [a-zA-Z0-9\._/]*test/\([a-zA-Z0-9\._/]*\) read  [un]*formatted|\1 read [un]formatted|' \
+        -e '\@^ Parallel load balance (sec.):@,\@^ Total time        @d' \
+        -e '\@\$\$\$\$\$\$  New timer profile @,\@^ Total time        @d' \
+        -e '\@\$\$\$\$\$\$  Average   profile @,\@^ Total time        @d' \
+        -e '\@^                    MAXIMUM STACK SPACE USED IS@d' \
+        -e '\@^                    STACK CURRENTLY IN USE IS@d' \
+        -e '\@^                    HEAP PRINTOUT-  HEAP SIZE@d' \
+        -e '\@^                    SPACE CURRENTLY IN USE IS@d' \
+        -e '\@^                    MAXIMUM SPACE USED IS@d' \
+        -e '\@^ *PRINHP> ADDRESS: @d' \
+        -e '\@^                     ELAPSED TIME: @d' \
+        -e '\@^ *CPU TIME[:=] @d' \
+        -e '/OPNLGU/d' \
+        -e '/RANDOM NUM/d' \
+        -e '/SEEDS>/d' \
+        -e '/TESTENDIAN/d' \
+        -e '/VCLOSE/d' \
+        -e '/VOPEN/d' \
+        -e 's@e+@E+@g' \
+        -e 's@e-@E-@g' \
+        -e 's@E[-+]0*\([^0-9]\)@\1@g' \
+        -e 's@E[-+]0*$@@g' \
+        -e 's@E\([-+]\)0*\([1-9]\)@E\1\2@g' \
+        -e 's@ \.@0.@g' \
+        -e 's@ -\.@-0.@g' \
+        -e 's@[-+ ]0\.\(0*[^0-9]\)@ 0.\1@g' \
+        -e 's@[-+ ]0\.\(0*\)$@ 0.\1@g' \
+        -e '\@^ *$@d' \
+        -e 's/  *ISEED =  *1//' \
+        -e '/random clcg/d' \
+        -e '/CLCG Random/d' \
+        -e '/reference distance/d' \
+        -e '/CGONNB = .* CGOFNB =/d' \
+        -e '/EANGLC: QANGTYPE =/d' \
+        -e '/EANGLE> FORCE: ANGLE NOT FLAT/d' \
+        -e '/PARRDR> ALL ANGLES HAVE POSITIVE MINIMA/d' \
+        -e '/EANGLE> Using CHARMM angle function/d' \
+        -e '/E[A-Z]*C: Using routine E[A-Z]*F/d' \
+        -e '/TORQ> No external forces defined/d' \
+        -e '/QM groups found: * 0/d' \
+        -e '/Git commit ID/d' \
+        -e '/SVN revision/d' \
+        -e '/operation not performed/d' \
+        > $base$file.$$
+    if [ "$ignore_sign" = "$on" ]
+    then
+        mv $base$file.$$ $base$file.$$.
+        sed -e 's@[-+]\([0-9][0-9]*\.[0-9]*\)@ \1@g' \
+            $base$file.$$. > $base$file.$$
+        if [ "$keep_temporary_files" != "$on" ]
+        then
+            rm $base$file.$$.
+        fi
+    fi
+    if [ "$truncate" = "$on" ]
+    then
+        mv $base$file.$$ $base$file.$$.
+        case "$digits" in
+            0)    cat $base$file.$$. > $base$file.$$ ;;
+            1)    sed -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      $base$file.$$. > $base$file.$$ ;;
+            2)    sed -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      $base$file.$$. > $base$file.$$ ;;
+            3)    sed -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      $base$file.$$. > $base$file.$$ ;;
+            4)    sed -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      $base$file.$$. > $base$file.$$ ;;
+            5)    sed -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      -e 's@\([-+]\{0,1\}[0-9][0-9]*\.[0-9]*\)[0-9]@\1@g' \
+                      $base$file.$$. > $base$file.$$ ;;
+            *)    usage ;;
+        esac
+        if [ "$keep_temporary_files" != "$on" ]
+        then
+            rm $base$file.$$.
+        fi
+    fi
+done
+
+# get old charmm output file
+file=`echo $1 | sed 's@/@_@g'`  # convert pathname into unique filename
+old=$base$file.$$
+shift
+
+# diff old with each new charmm output file
+for path in $@
+do
+    file=`echo $path | sed 's@/@_@g'`  # convert pathname into unique filename
+    new=$base$file.$$
+#    cat $old $new
+    if [ "$verbose" = "$on" ]
+    then
+        echo "Charmm diff: $old $new"
+    fi
+    if [ "$ignore_whitespace" = "$on" ]
+    then
+        diff -w $old $new
+    else
+        diff $old $new
+    fi
+    status=$?
+    if [ "$verbose" = "$on" ]
+    then
+        if [ $status -eq 0 ]
+        then
+            echo "No difference"
+        fi
+    fi
+    if [ "$keep_temporary_files" != "$on" ]
+    then
+        rm $new
+    fi
+done
+
+if [ "$keep_temporary_files" != "$on" ]
+then
+    rm $old
+fi
+exit
+

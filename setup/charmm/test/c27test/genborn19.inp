@@ -1,0 +1,185 @@
+* CHARMM Testcase c26test/genborn.inp
+* Author: Charles L. Brooks, III
+* Date  : August 1, 1998
+* Test  : Generalized Born Solvation energy term
+*
+
+!  Uses files: toph19.rtf, param19.prm, 
+
+stream datadir.def
+
+!  First do general testing of energy, derivitives and minimization.
+!  Read the topology and parameter files
+!
+open unit 1 read form name @0toph19.rtf
+read rtf unit 1 card
+close unit 1
+ 
+open unit 1 read form name @0param19.prm
+read param unit 1 card 
+close unit 1
+
+set cutnb 999
+label do19
+!  Set-up blocked tri-peptide
+read sequ card
+*  blocked tri-peptide
+*
+ 5
+Amn Ala Thr Phe Cbx
+
+generate 3pep setup
+
+ic param
+ic seed 1 cl 1 c 1 o
+ic build
+
+coor orie
+coor stat
+
+faster on
+
+!  Check the energy w/o GB
+skipe none
+energy cutnb @cutnb
+
+set EwoGB ?ener
+
+!  Now turn on the Generalized Born energy term using the param19 parameters
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0
+
+! Now calculate energy w/ GB
+skipe all excl GBEnr
+energy cutnb @cutnb
+
+set EGB80 ?GBEN
+
+!  Now turn off GB and make sure all flags are reset
+GBorn Clear
+
+skipe none
+energy cutnb @cutnb
+
+!  Calculate diff w/ previous EwoGB, should be zero
+decr EwoGB by ?ener
+
+skipe all excl GBEnr
+!  Now check GB w/ smaller dielectric
+!  Now turn on the Generalized Born energy term using the param19 parameters
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 2.0
+
+! Now calculate energy w/ GB
+energy cutnb @cutnb
+
+GBorn Clear
+
+!  Eratio should equal (1-1/80)/(1-1/2)=2*(1-1/80)
+set Eratio @EGB80
+divi Eratio by ?GBEN
+
+!  Now turn on the Generalized Born energy term using the param19 parameters
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0
+
+! Now calculate energy w/ GB and check first derivatives
+energy cutnb @cutnb
+coor force comp
+print coor comp
+
+test first step 0.00001 tol 0.0000001
+
+GBorn Clear
+!  Test use of radii from wmain array
+scalar wmain = radii
+!  Now turn on the Generalized Born energy term using the param19 parameters
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0 Weight
+
+! Now calculate energy w/ GB
+energy cutnb @cutnb
+
+GBorn Clear
+
+set Ediff @EGB80
+decr Ediff by ?GBEN
+
+!  Now check forces, printing below should yield zeros
+coor force
+coor diff
+print coor
+
+coor init
+ic param
+ic seed 1 cl 1 c 1 o
+ic build
+
+coor orie
+coor stat
+
+!  Save current coordinates for checks w/ fixed atoms below.
+coor copy compare
+
+!  Finally minimize for 100 steps using SD w/ all energy terms.
+skipe none
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 -
+      Lambda 0.7591 Epsilon 80.0 analysis
+
+mini sd nstep 100
+
+!!!!CHECK SCALAR RECALL of GB variables
+!  What are the current Generalized Born Alpha, SigX, SigY, SigZ and T_GB values?
+skipe all excl GbEnr
+energy cutnb @cutnb
+scalar GBAlpha show 
+scalar SigX show 
+scalar SigY show 
+scalar SigZ show 
+Scalar T_GB show 
+Scalar GBAtom show
+GBorn Clear
+
+skipe none
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0 analysis
+
+!!!!CHECK SCALAR RECALL of GB variables
+!  What are the current Generalized Born Alpha, SigX, SigY, SigZ and T_GB values?
+skipe all excl GbEnr
+energy cutnb @cutnb
+scalar GBAlpha show 
+scalar SigX show 
+scalar SigY show 
+scalar SigZ show 
+Scalar T_GB show 
+Scalar GBAtom show
+GBorn Clear
+
+delete atom select all end
+!!!!CHECK PROTEIN AND DNA GB PARAMETERS
+
+open unit 1 read form name @0radius-1mbg.pdb
+read sequ pdb unit 1
+close unit 1
+
+! now generate the psf for this structure use setup to set up the interal
+! coordinate table
+!
+generate 1mbg setup first none last none
+
+! read coordinates
+open unit 1 read form name @0radius-1mbg.pdb
+read coor pdb unit 1 offset -89
+close unit 1
+
+!  CHECK version 19 PROTEIN PARAMETERS
+skipe all excl GBEnr
+GBorn P1 0.4153 P2 0.2388 P3 1.7488 P4 10.4991 P5 1.1 Lambda 0.7591 Epsilon 80.0
+energy cutnb @cutnb
+
+GBorn Clear
+delete atom select all end
+
+if cutnb eq 15 goto quit
+set cutnb 15
+goto do19
+
+label quit
+
+stop

@@ -1,0 +1,112 @@
+* bycctest2.inp
+* Author:   Robert J. Petrella
+* Date:     1.13.00
+* Version:  c28a1
+* Test:     BYCC non-bonded list generation, atoms clustered by rule
+*           (no cluster files) -- check conistency of energies
+*           with and without active atom selections
+* Model:    BPTI in vacuum (4 buried waters) in PARAM22 representation
+*
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+BOMLev -2
+STREam datadir.def
+
+! Read topology and parameter files
+
+OPEN READ CARD UNIT 11 NAME @0top_all22_prot.inp    ! topology file
+READ RTF  CARD UNIT 11
+CLOSE UNIT 11
+
+OPEN READ CARD UNIT 12 NAME @0par_all22_prot.inp    ! parameter file
+READ PARA CARD UNIT 12
+CLOSE UNIT 12
+
+! Generate the PSF 
+
+READ SEQUENCE CARD
+* BPTI sequence
+*
+58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+GENERATE MAIN SETUP WARNING
+
+READ SEQUENCE CARD
+* Buried waters
+*
+4 
+TIP3 TIP3 TIP3 TIP3
+GENERATE WATE NOANGLE NODIHE
+
+! Read the coordinates
+
+OPEN UNIT 13 READ CARD NAME @0bpti_allh.crd        ! coordinate file
+READ COOR CARD UNIT 13
+CLOSE UNIT 13
+
+IC BUILD
+
+! make clusters
+MKCL CADL 3.5 CMAR 5
+
+!define interesting side chain
+DEFINE INTER SELE RESI 1 .AND. SEGI MAIN END
+
+!define active region as side chain + large buffer
+! (20 A around CB)
+DEFINE ACTIVE SELE (INTER .AND. TYPE CB) .AROUND. 20 END
+
+! activate atoms
+NBACtive SELE ACTIVE END
+
+!fix atoms in buffer and inactive regions
+CONS FIX SELE (ACTIVE .AND. .NOT. INTER) END
+
+! atom-based non-bonded list generation
+! -------------------------
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SHIFt -
+    INBFreq 1 BYCC
+
+!check the interaction energy
+INTE SELE INTER END SELE ALL END
+
+! compare this to the default method energy
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SHIFt -
+    INBFreq 1 BYGR
+
+INTE SELE INTER END SELE ALL END
+
+!now in group-based calculations:
+! atom-based non-bonded list generation
+! -------------------------
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITch -
+    INBFreq 1 BYCC GROUP 
+    
+!check the interaction energy
+INTE SELE INTER END SELE ALL END
+
+!check again against default
+NBONd -
+    CUTNb 12.0  CTONnb 10.0 CTOFnb 11.9 -
+    E14Fac 0.4  CDIElectric  VSWITch SWITCH -
+    INBFreq 1 BYGR GROUP
+
+!check the interaction energy
+INTE SELE INTER END SELE ALL END
+
+STOP

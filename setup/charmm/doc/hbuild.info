@@ -1,0 +1,148 @@
+CHARMM Element doc/hbuild.info $Revision: 1.1.1.1 $
+
+File: Hbuild, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+                 Construction of hydrogen positions
+
+                   By Axel Brunger, December 1983
+
+* Menu:
+
+* Syntax::              Syntax of the HBUILD command
+* Algorithm::           Description of the used algorithm
+
+File: Hbuild, Node: Syntax, Up: Top, Next: Algorithm, Previous: Top
+
+                    Syntax of the HBUILD command
+
+[SYNTAX HBUILD]
+
+HBUILD     [atom-selection] hbond-spec  non-bond-spec
+
+           [PHIStp real] [PRINt]  [CUTWater real]
+
+           [WARN] [DISTof real] [ANGLon real]
+
+      where <atom-selection> specify the hydrogens to be
+(re-)constructed (see *note selection:(doc/select.info).).
+By default (if no selection is specified) these are all unknown
+hydrogens and lone pairs (this is equivalent to a selection
+"SELEction (LONE .OR. HYDRogen) .AND..NOT INITial").
+
+      hbond-spec are hydrogen bond specifications, see (*note
+hbonds:(doc/hbonds.info)Syntax.) for the detailed syntax, and
+non-bond-spec are non-bonded interaction specifications, see (*note
+nbonds:(doc/nbonds.info)Syntax.) for the detailed syntax.
+
+      At present the use of the following options is not supported
+by HBUILD and may yield to errors:
+BEST in hbond-spec,
+GROUP [...] in non-bond-spec.
+
+      PHIStp (default: 10 degrees) determines the step size of the
+donor group rotation algorithm in HBUILD.
+
+      PRINt (default: PRINt flag off) if specified prints information
+about electrostatic, Van der Waals, hydrogen bond, dihedral energy
+as well as ST2 energy during the performance of the algorithm.
+
+      If WARN is specified routine ST2WRN is invoked after exiting
+HBUILD to provide information about unlikely water-(non-polar group)
+configurations. See that routine for the purpose of DISTof and ANGLon.
+
+        Any bond between atoms, both of which are to be built, will
+be ignored. If it is desired to build a chain of atoms with this method,
+it is essential to build each level in this chain with a separate HBUILD
+invocation.
+
+File: Hbuild, Node: Algorithm, Up: Top, Previous: Syntax, Next: Top
+
+                    Alogorithm of the hydrogen builder
+
+
+1. Introduction
+
+In most cases a X-ray diffraction structure contains no information
+about the positions of the protons of a particular protein. However, our
+empirical hydrogen bond energy function CHARMM requires the treatment of
+explicit protons at least for hydrogen bond forming protons. To
+construct proton positions starting from the X-ray structure of a
+protein is the task of our method. At present only hydrogen bonding
+protons are constructed. Due to the generality of the algorithm also the
+positions of aliphatic protons could be easily constructed. Proton
+coordinates are constructed for the protein as well as for the
+surrounding water. The water requires special treatment and the
+investigations for a this part of the method are not yet complete.
+
+         The presented method was tested using the neutron diffraction
+structures of two different proteins systems each including several
+water molecules. One structure was ribonuclease A with 128 water
+molecules. The other structure was trypsin with 30 ordered water
+molecules. The knowledge of the proton positions using the neutron data
+allowed detailed comparisions of spatial positions of the protons,
+hydrogen bond and energy differences. The results indicate that the use
+of the presented method should yields to a good initial structure of the
+protons and is therefore a useful tool in cases where no neutron
+structure is available.
+
+
+2.  Methods
+
+In the first part of our method all proton positions of the protein
+are constructed. The protons are classified according to their
+environment. At present the following classes are defined:
+a) proton bound to a donor with at least two heavy donor antecedents
+    (e.g. (C, CA)-N-H)
+b) proton bound to a donor with one heavy donor antecedent and no
+    other proton (e.g. -OH-HH of tyrosine)
+c) proton bound to a donor with one heavy donor antecedent and one
+    other proton (e.g. -NH2-(HH21, HH22) group of arginine)
+d) proton bound to a donor with one heavy donor antecedent and two
+    other protons (e.g. -NZ-(HZ1, HZ2, HZ3) group of lysine)
+
+        First, all protons of class a) are placed by using equilibrium
+bond lengths, angles and dihedrals. This problem is overdetermined if
+there exists more than one heavy donor antecedent. In these cases an
+averaging over all possible ways to place the proton is performed.
+        In the next step the protons of all other classes are
+constructed. All these classes have in common that there is a degree of
+freedom to place the protons (e.g. a spin around the CE-NZ bond of
+lysine). To find an optimum position the dihedral angle with the
+symmetry axis antecedent-donor is modified in small steps over a certain
+range determined by the symmetry of the donor group. For each dihedral
+angle the protons of the donor are placed according to their equilibrium
+geometry and the relative energy of the corresponding configuration is
+evaluated. The energy is determined by using the hydrogen bond
+potential, the Van der Waals term, electrostatic term and the dihedral
+term derived from the full energy expression of CHARMM. The dihedral
+with the lowest energy is taken and the protons of the donor group are
+placed with the optimum dihedral angle. This procedure is performed in
+the order given by the residue sequence of the protein. Not jet
+constructed protons have no influence on the current energy
+evaluations.
+
+
+        After construction of all explicit protein protons the water
+protons are constructed. First, a sequence of water molecules is
+determined independent of any input sequence (e.g. by the X-ray data).
+The waters are ordered in respect to the minimum distance of the water
+oxygen to any protein atom. The protons of waters near the protein are
+constructed first. At present there are three classes of water molecules
+treated in our method.
+ a) water able to form two different hydrogen bonds to acceptor atoms
+ b) water able to form only one hydrogen bond to acceptor atom
+ c) water forms no hydrogen bonds at all to acceptor atoms. In case a)
+protons are placed by performing a rotation of the water molecule in the
+plane defined by the two best hydrogen bonds and taking the minimum
+energy configuration. In case b) one proton is placed on the (linear)
+hydrogen bond and the water is rotated around this hydrogen bond axis
+placing the other proton using the equilibrium geometry. Again the
+minimum energy configuration is taken. The evaluated relative energy is
+the sum of the Van der Waals, the electrostatic and the hydrogen bond
+energy terms. Finally, the water protons of case b) are placed in a
+standard way (H1 on x-axis, H2 in x,y plane) after all other protons
+have been placed. ST2 water molecules are treated as regular waters
+for the proton construction. The position of the lone pairs is
+derived from the proton positions.
+
+

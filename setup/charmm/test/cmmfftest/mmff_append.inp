@@ -1,0 +1,25 @@
+* mmff_append.INP
+* author:  Ryszard Czerminski (April 8, 1994)
+* purpose: to test 'read merck ... append' command
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+stream datadir.def
+stream @0mmff_setup.str
+bomlev 5
+
+set 1 @0am07a.mrk
+
+read merck name @1
+read merck name @1 append
+generate
+write merck unit 6
+* test am07a + am07a
+*
+
+stop

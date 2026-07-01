@@ -1,0 +1,43 @@
+* calenergy.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* calculation of interaction energies in vacuum E^vac_I
+* calculation of scaled interaction energies in vacuum E^NUCS_I
+*
+
+  IF ?NSEL .EQ. 0 GOTO CONTINUE
+
+         ! Check charge of group.
+         ! If all partial atomic charges equal zero no computation necessary.
+         ! All groups outside the target have charges equal to zero and are
+         ! thus skipped.
+         ! Charges are checked by calculating the sum of absolute charges
+    SCAL CHARGE = SCA3 SELE GROUP END
+    SCAL CHARGE ABS SELEct GROUP END
+    SCAL CHARGE STAT SELE GROUP END
+    IF ?STOT EQ 0 GOTO CONTINUE
+
+    ! else:
+      STREam vacuum.str ! calculation of E^vac_I
+
+    ! get value of E^solv,cut for selected group   
+    SCAL SCA4 STAT SELEct group END
+    SET ESOLV ?SAVE
+   
+    ! get value of the scaling factor for selected group
+    SCAL SCA1 STAT SELEct group END   
+    SET FACTOR ?SAVE  
+    STREAM nucs.str ! calculation of E^NUCS_I
+  	    
+    ! where data will be written:   
+    IF @SELECTION .EQ. BACK SET UNIT 24
+    IF @SELECTION .EQ. SIDE SET UNIT 25
+    
+      WRITE TITLE UNIT @UNIT
+    * @COUNTER ?SELRESN  @SELECTION @EVAC @ESOLV @ENUCS @FACTOR 
+    *  
+    LABEL CONTINUE
+    
+      
+ RETURN     
+
+

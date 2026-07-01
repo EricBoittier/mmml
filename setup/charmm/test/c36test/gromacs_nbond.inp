@@ -1,0 +1,139 @@
+* Test electrostatics for CHARMM and GROMACS
+* This should be run both with and without EXPAND
+* for full code coverage.
+*
+
+stream datadir.def
+
+read rtf card
+* RTF for dummy system
+*
+   27 1
+
+MASS    1 D      1.00000 D ! dummy atom
+MASS    2 E      1.00000 E ! dummy atom
+
+
+RESI DUC         2.00 ! dummy residue
+GROUP
+ATOM D1   D      1.00
+ATOM D2   D      1.00
+BOND D1 D2
+
+RESI DUG         2.00 ! dummy residue
+GROUP
+ATOM E1   E      1.00
+ATOM E2   E      1.00
+BOND E1 E2
+
+END
+
+read param card
+* PARAM for dummy residue
+*
+
+BOND
+D       D             5.000000    2.000000
+E       E             5.000000    2.000000
+ANGLE
+D       D       D             6.000000  180.000000
+E       E       E             6.000000 -180.000000
+
+
+!NONBonded NBXMod 1 -
+!CUTNB 14 CGONNB 0.0 CGOFNB 12.0  ATOM CDIE FSHIft EPS 15 -
+!         CTONNB 9.0 CTOFNB 12.0 VATOM      VSWItch
+NONBonded NBXMod 1 -
+CUTNB 14 CGONNB 0.0 CGOFNB 12.0  ATOM CDIE GSHIft EPS 15 -
+         CTONNB 9.0 CTOFNB 12.0 VATOM      VGSHift
+
+D          0.0       -1.0    2.00000
+E          0.0       -1.0    2.00000
+
+END
+
+calc vstart = 1
+calc vstop = 20
+calc vstep = .01
+
+! test first with fast off
+fast off
+
+! sanity test first with CHARMM
+set a1 E1
+set a2 E2
+read sequ DUG 1
+gener FOO setup
+
+read coor card
+* DUMMY
+*       E1 - E2
+*
+    2
+    1    1 DUG  E1     1.00000   0.00000   0.00000 FOO  1      0.00000
+    2    1 DUG  E2     0.00000   0.00000   0.00000 FOO  1      0.00000
+
+open unit 10 write card name @9/gromacs-slow.dat
+
+calc currx = @vstart
+
+scalar x set @currx select type @a1 end
+print coor
+quick select type @a1 end select type @a2 end
+energy
+write title unit 10
+*@currx ?vdw ?elec
+*
+
+label loopvdw
+    calc currx = @currx + @vstep
+
+    scalar x set @currx select type @a1 end
+    print coor    
+    
+    prnlev 9 @pnode
+    quick select type @a1 end select type @a2 end
+    energy
+
+write title unit 10
+*@currx ?vdw ?elec
+*
+
+    if @currx .le. @vstop goto loopvdw
+label endvdw
+close unit 10
+
+! now do it all over again with fast ON
+
+open unit 10 write card name @9/gromacs-fast.dat
+fast on
+
+calc currx = @vstart
+
+scalar x set @currx select type @a1 end
+print coor
+quick select type @a1 end select type @a2 end
+energy
+write title unit 10
+*@currx ?vdw ?elec
+*
+
+label loopvdw2
+    calc currx = @currx + @vstep
+
+    scalar x set @currx select type @a1 end
+    print coor
+
+    prnlev 9 @pnode
+    quick select type @a1 end select type @a2 end
+    energy
+
+write title unit 10
+*@currx ?vdw ?elec
+*
+
+    if @currx .le. @vstop goto loopvdw2
+label endvdw2 
+close unit 10
+
+stop

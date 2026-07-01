@@ -1,0 +1,205 @@
+* c37a1 Test for the valbond module.
+* This minimizes a molecule, which should end up 
+* with an energy of 16.66
+*
+
+FAST OFF
+
+stream datadir.def
+
+PRNLev 5 @pnode
+
+READ RTF CARD
+* RTF
+*
+22  1
+
+MASS     1 H      1.00800 H ! polar H
+MASS     3 HA     1.00800 H ! nonpolar H
+MASS    23 CT2   12.01100 C ! aliphatic sp3 C for CH2
+MASS    24 CT3   12.01100 C ! aliphatic sp3 C for CH3
+MASS   122 P     30.97000 P ! phosphorus
+MASS   126 XIR   192.2000 IR ! Hypervalent IR
+
+DEFA FIRS NONE LAST NONE   
+! note that the angles are not included for valbond use
+AUTO DIHE NOPCheck
+RESI UNK   0.00
+GROUP
+ATOM Ir01 XIR 0
+ATOM H02 H 0
+ATOM H03 H 0
+ATOM P04 P 0
+ATOM P05 P 0
+ATOM C06 CT2 -0.18
+ATOM H07 H 0
+ATOM H08 H 0
+ATOM C09 CT3 -0.27
+ATOM H0A HA 0.09
+ATOM H0B HA 0.09
+ATOM H0C HA 0.09
+ATOM H0D HA 0.09
+ATOM H0E HA 0.09
+ATOM C0F CT2 -0.18
+ATOM H0G H 0
+ATOM H0H H 0
+ATOM C0I CT3 -0.27
+ATOM H0J HA 0.09
+ATOM H0K HA 0.09
+ATOM H0L HA 0.09
+ATOM H0M HA 0.09
+ATOM H0N HA 0.09
+BOND Ir01 H02
+BOND Ir01 H03
+BOND Ir01 P04
+BOND Ir01 P05
+BOND H0M C0I
+BOND C09 H0E
+BOND H07 P05
+BOND H0B C06
+BOND H0K C0F
+BOND H0C C09
+BOND P04 H0G
+BOND P04 C0F
+BOND P04 H0H
+BOND H0D C09
+BOND H0L C0I
+BOND C06 H0A
+BOND C06 C09
+BOND C06 P05
+BOND C0F H0J
+BOND C0I H0N
+BOND C0I C0F
+BOND H08 P05
+! These angles will be treated using the CHARMM force field.
+! All the "missing" angles (the ones centered on Ir or P) 
+! will be treated using VALBOND.
+ANGLE P04      C0F     C0I
+ANGLE P04      C0F     H0J
+ANGLE P04      C0F     H0K
+ANGLE P05      C06     H0A
+ANGLE P05      C06     C09
+ANGLE P05      C06     H0B
+ANGLE C06      C09     H0C
+ANGLE C06      C09     H0D
+ANGLE C06      C09     H0E
+ANGLE C09      C06     H0A
+ANGLE C09      C06     H0B
+ANGLE H0A      C06     H0B
+ANGLE H0C      C09     H0D
+ANGLE H0C      C09     H0E
+ANGLE H0D      C09     H0E
+ANGLE C0F      C0I     H0M
+ANGLE C0F      C0I     H0N
+ANGLE C0F      C0I     H0L
+ANGLE C0I      C0F     H0J
+ANGLE C0I      C0F     H0K
+ANGLE H0J      C0F     H0K
+ANGLE H0L      C0I     H0M
+ANGLE H0L      C0I     H0N
+ANGLE H0M      C0I     H0N
+
+END
+
+READ PARAMETERS CARD
+* Local parameters
+*
+ 
+BONDS
+CT3  CT2   222.500     1.5280 ! ALLOW   ALI
+HA   CT2   309.000     1.1110 ! ALLOW   ALI
+HA   CT3   322.000     1.1110 ! ALLOW   ALI
+P    H     443.000     1.42
+P    CT2   443.000     1.85
+XIR  H     443.000     1.54
+XIR  P     443.000     2.36
+
+ANGLES
+HA   CT2  CT3   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT2  HA    35.500    109.00    5.40   1.80200 ! ALLOW   ALI
+HA   CT3  CT2   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT3  HA    35.500    108.40    5.40   1.80200 ! ALLOW   ALI
+CT2 P H    60.0 109.47
+H   P H    60.0 109.47
+P CT2 CT3  60.0 109.47
+P CT2 HA   60.0 109.47
+
+DIHEDRALS
+X    CT2  CT3  X        0.1600  3     0.00 ! ALLOW   ALI
+XIR  P    CT2  CT3      0.5000  1     0.00
+X    P    CT2  X        0.1450  3     0.00
+X    P    CT1  X        0.1450  3     0.00
+X    XIR  P    X        0.000   3     0.00
+
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+                !adm jr., 5/08/91, suggested cutoff scheme
+!
+!V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+!
+!epsilon: kcal/mole, Eps,i,j = sqrt(eps,i * eps,j)
+!Rmin/2: A, Rmin,i,j = Rmin/2,i + Rmin/2,j
+!
+!atom  ignored    epsilon      Rmin/2   ignored   eps,1-4       Rmin/2,1-4
+!
+CT2    0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000
+CT3    0.000000  -0.080000     2.060000   0.000000  -0.010000     1.900000
+H      0.000000  -0.046000     0.224500 ! ALLOW PEP POL SUL ARO ALC
+HA     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+XIR    0.000000  -0.030000     1.9082
+P      0.0       -0.585000     2.1500
+
+
+END
+
+READ SEQUENCE CARD
+* Here's the sequence
+*
+1
+UNK
+
+GENERATE vbtest
+
+READ COOR PDB 
+TITLE     
+ATOM      1 Ir01 UNK     1      -0.682   0.522   0.668
+ATOM      2  H02 UNK     1       1.394   0.792  -0.233
+ATOM      3  H03 UNK     1       0.535   2.498  -0.619
+ATOM      4  P04 UNK     1       0.292   0.093   3.055
+ATOM      5  P05 UNK     1      -0.937   0.251  -2.490
+ATOM      6  C06 UNK     1      -1.969  -0.869  -3.329
+ATOM      7  H07 UNK     1       0.443   0.281  -3.292
+ATOM      8  H08 UNK     1       0.683  -0.252  -3.176
+ATOM      9  C09 UNK     1      -2.417   0.024  -1.499
+ATOM     10  H0A UNK     1      -0.958   0.523  -3.336
+ATOM     11  H0B UNK     1      -2.358  -1.646  -4.049
+ATOM     12  H0C UNK     1      -3.003  -0.386  -2.838
+ATOM     13  H0D UNK     1      -2.512  -1.212  -2.204
+ATOM     14  H0E UNK     1      -1.647   0.418  -1.216
+ATOM     15  C0F UNK     1      -0.625  -0.864   3.337
+ATOM     16  H0G UNK     1       0.637   0.391   2.863
+ATOM     17  H0H UNK     1      -0.454   0.967   3.453
+ATOM     18  C0I UNK     1       0.017  -3.497   2.625
+ATOM     19  H0J UNK     1       1.576  -2.826   3.641
+ATOM     20  H0K UNK     1      -0.073  -1.201   4.174
+ATOM     21  H0L UNK     1       0.570  -3.272   3.339
+ATOM     22  H0M UNK     1       0.085  -2.118   0.758
+ATOM     23  H0N UNK     1       1.019  -3.309   2.167
+TER
+END
+
+VALB E IR01 6
+VALB DONE
+
+MINIMIZE CONJ NSTEP 500 NPRINT 1
+
+VALB PRINT
+
+ENERgy
+
+write coor pdb unit 6
+* ENER = ?ENER
+*
+
+STOP

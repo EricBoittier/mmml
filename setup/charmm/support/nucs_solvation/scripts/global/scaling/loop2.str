@@ -1,0 +1,97 @@
+* loop2.str, last modified NOV/05/2001 by Danzhi
+* By Sonja M. Schwarzl & Stefan Fischer
+* loops over all groups except SOURCE group
+* calculates electrostatic interaction energy between SOURCE group and 
+* all other groups both in vacuum (SCA3) and in solution (SCA4)
+* 
+
+SET COUNTER2 -1
+
+LABEL LOOP2
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+  INCRement COUNTER2 BY 1
+
+  SET SELECTION2 BACK
+
+  SET RESNEXT2 @COUNTER2
+  INCRement RESNEXT2 BY 1
+ 
+       ! check, if next residue is Proline
+  DEFINE foo SELEct IRES @RESNEXT2 END
+  IF ?SELRESN EQ PRO GOTO PROLABEL
+ 
+  LABEL ONCEAGAIN2
+
+       ! Define group2 J of atoms
+
+  IF SELECTION2 EQ BACK DEFI GROUP2 SELE (BACK2 .and. IRES @COUNTER2) .or. -
+                                       (BACK1 .and. IRES @RESNEXT2) END
+  IF SELECTION2 EQ SIDE DEFI GROUP2 SELE SIDE .and. IRES @COUNTER2 END
+      
+   ! check if the group2 is the last back group of one protein segment
+  IF ?NSEL .gt. 6 if  selection2 EQ back stream terminal2.str
+  
+    STREam calculation.str
+  
+  IF SELECTION2 EQ SIDE GOTO NEXTRESIDUE2
+       ! else:
+    SET SELECTION2 SIDE
+    GOTO ONCEAGAIN2
+ 
+ LABEL PROLABEL 
+       ! Calculate energy for sidechain j
+    SET SELECTION2 SIDE
+    DEFI GROUP2 SELE SIDE   .and. IRES @COUNTER2 END
+        STREam calculation.str
+
+       ! Calculate energy for Proline (j,j+1)
+    SET SELECTION2 BACK
+   
+  LABEL AGAIN2
+
+    DEFI GROUP2 SELE (BACK2 .and. IRES @COUNTER2) .or. - 
+      (BACK1 .and. IRES @RESNEXT2) .or. (SIDE .and. IRES @RESNEXT2) END
+    
+    ! check if the group2 is the last back group of one protein segment 
+    IF ?NSEL .gt. 14 if selection2 EQ back stream terminal2.str
+    
+    STREam calculation.str
+
+       ! Calculate energy for Backbone (j+1,j+2)
+    INCRement COUNTER2 BY 1
+    INCREMENT RESNEXT2 BY 1
+       ! Check whether the next residue is proline
+    SET RESNEXT4 @RESNEXT2 
+    INCREMENT RESNEXT4 BY 1
+    DEFINE foo SELECT IRES @RESNEXT4 END
+    IF ?SELRESN EQ PRO GOTO AGAIN2
+     !else
+
+    DEFI GROUP2 SELE (BACK2 .and. IRES @COUNTER2) .or. -
+     (BACK1 .and. IRES @RESNEXT2) END
+     
+    ! check if the group2 is the last back group of one protein segment
+    IF ?NSEL .gt. 6 if selection2 EQ back stream terminal4.str
+    
+        STREam calculation.str
+
+       ! go back to normal loop by doing nothing
+
+ LABEL NEXTRESIDUE2
+
+IF COUNTER2 LT @FINALRESIDUE GOTO LOOP2
+! else:
+
+
+RETURN
+
+
+
+
+
+
+
+
+
+

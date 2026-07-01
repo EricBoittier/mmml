@@ -1,0 +1,63 @@
+* CHARMM Testcase c26test/tpnoe.inp
+* Author: Charles L. Brooks, III
+* Date  : January 20, 1998
+* Model : N-methyl alanyl acetamide
+* Files : toph19.rtf and param19.prm
+* Test  : the noe restraint between point (C0X, C0Y, C0Z) and
+*         an atom specified by an atom selection 
+*
+
+if ?pnoe .ne. 1 then
+ echo "Test NOT performed."
+ echo tpnoe testcase result: skip
+ stop
+endif
+
+stream datadir.def
+
+open read form unit 11 name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+open read form unit 11 name @0param19.prm
+read param card unit 11
+close unit 11
+
+! Read in the sequence and generate the psf (protein structure file - an
+! internal CHARMM data structure describing the specific connectivity for
+! the specific structure of interest.  It is created using the information
+! from the topology and parameter files
+Read sequ card
+* maa
+*
+3
+AMN ALA CBX
+
+Generate maa setup !the segment identifier is called maa and the setup
+                   !command indicates that the internal coordinate tables
+                   !(based upon ic information in the rtf) will be created
+
+ic parameters  !fill the current ic table based upon values from the
+               !parameter and/or rtf files
+
+ic seed 1 cl 1 c 1 o  !provide the three atoms to "seed" building
+
+ic build  !build the structure based upon the internal coordinates (ics)
+
+print ic
+print coordinates
+coor orie  !orient molecule so CM is at origin and principal axes are along
+           !cartesian directions
+
+NOE
+assign kmin 0.0 rmin 0.0 kmax 20 rmax 0.2 -
+cnox 0.0 cnoy  0.5 cnoz 0.3 -
+  select segid   maa .and. type Cl   end 
+end
+
+Nbonds cdie eps 1.0 cutnb 99.0 ctofnb 90.0 wrnmxd 99.0 swit vswit
+energy
+mini powell nstep 10
+
+@testcheck ?ener -35.0925715 -1 tpnoe
+
+stop

@@ -1,0 +1,77 @@
+* vdw_test.inp
+* Bernard R. Brooks, 14-Jul-1997
+* calculate vdw interaction of 2 protons
+* fb:  ctonnb = 11 ctofnb = 12
+*
+
+bomlev -1
+stream datadir.def
+
+read rtf card
+* protons
+*
+   22    1
+mass 1 h 1.
+
+resi prot 0.1
+atom h1  h 0.1
+end
+
+read param card unit 5
+* proton parm file
+*
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.0440    -0.0498    0.8000
+END
+
+read sequence card
+* Proton
+*
+1
+prot
+
+generate p1
+generate p2 duplicate p1
+
+read coor card free
+* coords for both protons
+*
+2
+1  1  prot h1  0.  0.  0.
+1  2  prot h1  2.  0.  0.
+
+print coor
+skipe all excl vdw
+FAST OFF
+!energy cdie inbfrq 25 cutnb 13.0 ctofnb 12.0 ctonnb 11.0
+
+open write card unit 33 name @92h_fbvdw.plt
+     
+coor dupli sele segid p1 end sele segid p2 end
+
+format (f18.10)
+set x 0.02
+set 2 1.0
+coor trans sele segid p2 end xdir @2 ydir 0.0  zdir 0.0    
+
+label loop
+incr 2 by @x
+coor trans sele segid p2 end xdir @x ydir 0.0  zdir 0.0    
+!gete print
+!energy cdie inbfrq 25 cutnb 13.0 ctofnb 12.0 ctonnb 11.0
+energy cdie inbfrq 25 cutnb 13.0 ctofnb 3.0 ctonnb 2.0
+coor force comp
+coor axis sele segid p2 end comp
+
+vibran
+write seco card finite sele segid p2 end unit 6 tol 0.
+end
+write title card unit 33
+*  @2  ?vdw ?xaxi ?trac
+*
+if 2 lt 14.01 goto loop
+
+stop

@@ -1,0 +1,261 @@
+* xtlala1 : Crystal testcase
+* xtl_ala[1-4].inp from Martin J. Field, 22-NOV-90
+*
+
+stream datadir.def
+set testname xtlala1
+format (F20.7)
+
+Read rtf card
+* Alanine Topology File.
+*
+    19    1
+ MASS     2 HC     1.00800
+ MASS     3 HA     1.00800
+ MASS    11 C     12.01100
+ MASS    16 CT    12.01100
+ MASS    40 NH3   14.00700
+ MASS    52 OC    15.99900
+
+ AUTOGENERATE ANGLES
+ DEFA FIRS NONE LAST NONE
+
+ RESI ALA     0.00000
+ GROU
+ ATOM HT1  HC      0.44
+ ATOM HT2  HC      0.44
+ ATOM HT3  HC      0.44
+ ATOM N    NH3    -0.86
+ ATOM CA   CT      0.23
+ ATOM HA   HA      0.05
+ ATOM CB   CT     -0.28
+ ATOM HB1  HA      0.09
+ ATOM HB2  HA      0.09
+ ATOM HB3  HA      0.09
+ ATOM C    C       0.95
+ ATOM OT1  OC     -0.84
+ ATOM OT2  OC     -0.84
+
+ BOND   HT1  N     HT2  N     HT3  N
+ BOND   HB1  CB    HB2  CB    HB3  CB
+ BOND   N    CA    CA   C     CA   CB
+ BOND   CA   HA    OT1  C     OT2  C
+
+ DIHE  HT2  N    CA   C         HT1  N    CA   C         HT3  N    CA   C
+ DIHE  HT2  N    CA   HA        HT1  N    CA   HA        HT3  N    CA   HA
+ DIHE  HT2  N    CA   CB        HT1  N    CA   CB        HT3  N    CA   CB
+ DIHE  HB3  CB   CA   N         HB2  CB   CA   N         HB1  CB   CA   N
+ DIHE  HB3  CB   CA   HA        HB2  CB   CA   HA        HB1  CB   CA   HA
+ DIHE  HB3  CB   CA   C         HB2  CB   CA   C         HB1  CB   CA   C
+ DIHE  N    CA   C    OT2
+
+ IMPH  C    CA    OT2  OT1
+
+END
+
+Read param card
+* Parameter file for alanine.
+*
+
+ BONDS
+ HA   CT     330.0          1.10
+ HA   C      330.0          1.10
+ HC   NH3    405.0          1.04
+ C    CT     250.0          1.52! 185.0          1.52
+ C    OC     450.0          1.25! 450.0          1.26
+ CT   CT     235.5          1.53
+ CT   NH3    300.0          1.50! 235.5          1.45
+
+
+ THETAS
+ HC   NH3  HC      40.0     109.5
+ HC   NH3  CT      40.0     109.5
+ HA   CT   HA      38.0     108.5
+ HA   CT   C       60.0     109.0
+ HA   CT   CT      45.0     109.5
+ HA   CT   NH3     60.0     107.5! 51.5     109.5
+ C    CT   CT      50.0     111.0
+ C    CT   NH3     50.0     112.0!45.3 110.0
+ CT   C    OC      60.0     115.0!40.0 116.0
+ CT   CT   NH3     70.0     110.0!67.7 110.0
+ OC   C    OC      70.0     130.0! 50.0 128.0
+
+ PHI
+ X    C    CT   X        0.0       3 0.0000
+ X    CT   CT   X        0.157     3 0.0000
+ X    CT   NH3  X        0.138     3 0.0000 !0.138
+
+ IMPHI
+ C    X    X    CT       20.0      0 0.0 !5.75      0 0.0
+ C    X    X    OC       20.0      0 0.0 !5.75      0 0.0000
+ !
+ NONBONDED  CUTNB 21.0 CTOFNB 20.0 CTONNB 19.0 EPS 1.0  E14FAC 0.5
+ !
+  !           -eps   sigma/2 * [2^(1/6)] = RMIN
+  C    0.0   -0.0903   1.8
+  CT   0.0   -0.0903   1.8
+  HA   0.0   -0.0045   1.468
+  HC   0.0   -0.0045   0.8
+  NH3  0.0   -0.2384   1.6      !#
+  OC   0.0   -0.6469   1.6      !#  !!! -1.0244   1.482
+
+END
+
+Read sequence card
+* Alanine
+*
+   1
+ALA
+Generate ALA setup
+
+Read coor card free
+* X-ray diffraction coordinates for L-alanine at 23K.
+* Lattice parameters 5.9279, 12.2597 and 5.7939 Angstroms.
+*
+   13
+    1    1 ALA  HT1    0.7036    0.0572    0.1979
+    2    1 ALA  HT2    0.7783    0.1897    0.2086
+    3    1 ALA  HT3    0.5807    0.1492    0.0110
+    4    1 ALA  N      0.64709   0.13755   0.18313
+    5    1 ALA  CA     0.46633   0.16105   0.35424
+    6    1 ALA  HA     0.4213    0.2498    0.3359
+    7    1 ALA  CB     0.25989   0.09069   0.30332
+    8    1 ALA  HB1    0.1936    0.1109    0.1340
+    9    1 ALA  HB2    0.1261    0.1056    0.4357
+   10    1 ALA  HB3    0.3041    0.0051    0.3056
+   11    1 ALA  C      0.55409   0.14081   0.59983
+   12    1 ALA  OT1    0.72683   0.08377   0.62438
+   13    1 ALA  OT2    0.44086   0.18403   0.76120
+
+
+!!!!! xtl_ala1.inp !!!!!
+! To convert fractional unit cell coordinates to Cartesians.
+
+Coor convert fractional symmetric  6.025 12.324 5.783 90.0 90.0 90.0
+
+Open write card unit 14 name @9xtl_xray.crd
+Write coor card unit 14
+* X-ray crystal structure of alanine. Cartesian coordinates.
+* a = 6.025 , b = 12.324 and c = 5.783 angstroms.
+*
+
+!!!!! xtl_ala2.inp !!!!!
+! Crystal image file generation.
+
+Open read card unit 13 name @9xtl_xray.crd
+Read coor card unit 13
+Close unit 13
+
+! Open a file for the crystal transformations.
+Open write card unit 14 name @9xtl_ala.xtl
+
+! Define the crystal.
+Crystal Define Orthorhombic 6.025 12.324 5.783 90.0 90.0 90.0
+
+! Build the crystal using a cutoff of 10.0 Angstroms.
+Crystal Build cutoff 10.0 noperations 3
+(X+1/2,-Y+1/2,-Z)
+(-X,Y+1/2,-Z+1/2)
+(-X+1/2,-Y,Z+1/2)
+
+! Print the crystal definition.
+Crystal Print
+
+! Write out the crystal transformation file.
+Crystal Write card unit 14
+* Crystal image file for alanine. Cutoff 10.0 angstroms.
+* a = 6.025 , b = 12.324 and c = 5.783 angstroms.
+*
+
+!!!!! xtl_ala3.inp !!!!!
+! A full crystal optimisation.
+
+Open read card unit 13 name @9xtl_xray.crd
+Read coor card unit 13
+Close unit 13
+
+! Define the crystal.
+Crystal Define Orthorhombic 6.025 12.324 5.783 90.0 90.0 90.0
+
+! Read in an existing crystal transformation file.
+Open read card unit 14 name @9xtl_ala.xtl
+Crystal Read card unit 14
+Close unit 14
+
+! Calculate an energy.
+Energy ihbfrq 0 inbfrq 10 imgfrq 10 cutim 999.0
+
+! Perform the minimisation.
+Minimise Abnr Lattice Nstep 250 Nprint 50 Tolgrd 0.1 Inbfrq 0 Imgfrq 0
+@testcheck ?ener -87.0056854 .0000001 @testname_1
+
+! Test the first derivatives.
+Test First Step 0.000001 Tol 0.000001
+@testcheck ?nok 39 .0000001 @testname_2
+
+
+! Save the optimised coordinates.
+Open write card unit 17 name @9xtl_alamin1.crd
+Write coor card unit 17
+* Optimised coordinates for crystalline alanine. The lattice is
+* optimised with a = , b = and c = .
+*
+
+! Find all crystal contacts of less than 2.5 Angstroms.
+Update imgfrq 10 cutim 999.0
+Coor dist image cut 2.5 sele segid ALA end sele .not. segid ALA end
+@testcheck ?ener -87.0056854 .0000001 @testname_3
+set xxx ?xave
+stop
+!!!!! xtl_ala4.inp !!!!!
+! Unit cell coordinate generation.
+
+Open read card unit 13 name @9xtl_alamin1.crd
+Read coor card unit 13
+Close unit 13
+
+! Define the crystal.
+Crystal Define orthorhombic 5.59967 12.19617 5.40430 90.0 90.0 90.0
+
+! Read in the unit cell crystal transformations from the input stream.
+Crystal Read card
+! Here is the crystal transformation file.
+* P212121 crystal image file.
+*
+Symmetry
+(X,Y,Z)
+(X+1/2,-Y+1/2,-Z)
+(-X,Y+1/2,-Z+1/2)
+(-X+1/2,-Y,Z+1/2)
+End
+
+Images
+! Operation     A     B     C
+          2     0     0     0
+          3     0     0     0
+          4     0     0     0
+          2    -1     0     0
+          3     0    -1     0
+          4     0     0    -1
+End
+
+! Update the image lists and print the image coordinates.
+Update inbfrq 50 imgfrq 50 ihbfrq 50 cutim 99.0
+Print coor image
+
+! Write out the unit cell coordinates.
+Open write card unit 17 name @9xtl_alamin2.crd
+Write coor image card unit 17
+* Optimised coordinates for the full unit cell of crystalline
+* alanine (4 molecules). The lattice is optimised with a = 5.59967,
+* b = 12.19617 and c = 5.40430 Angstroms.
+*
+
+! Testing FREE command
+energy
+@testcheck ?ener -87.0056854 .0000001 @testname_1
+crystal free
+energy
+@testcheck ?ener -87.0056854 .0000001 @testname_1
+
+Stop

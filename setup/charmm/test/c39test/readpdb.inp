@@ -1,0 +1,313 @@
+*  testing pdb-reading functionality
+*  Lennart Nilsson
+*
+stream datadir.def
+! Using system command in parallel can be tricky, so restrict this to node 0
+set master 1
+if ?NUMNODE .gt. 1 then
+ if ?mynode .gt. 0 set master 0
+endif
+
+read rtf  card name @0top_all36_prot.rtf
+read para card name @0par_all36_prot.prm flex
+read rtf  card name @0top_all36_na.rtf append
+read para card name @0par_all36_na.prm flex append
+stream              @0toppar_water_ions.str
+
+set status pass
+set nfail 0
+set prndef prnlev ?prnlev @pnode
+set prn1 prnlev 1 @pnode
+
+!!! READ SEQUECE AND  GET COORDINATES
+! resids with insertion codes
+read sequence pdb chain a name data/1cet.pdb alias HIS HSD
+if ?SQNRES .ne. 305 then
+  incr nfail by 1
+  set status fail
+endif
+
+gene a setup
+rename resn his sele resn hsd end
+read coor pdb name data/1cet.pdb official resi 
+define  unk sele .not. initialized .and. .not hydrogen end
+if 29 .ne. ?nsel then ! ILE CD and C-terminal oxygens
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+ic para
+ic build
+@PRN1
+hbuild sele hydrogen end
+@PRNDEF
+define  unk sele .not. initialized end
+if ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+
+! missing residues, and odd resid numbering; THR 9 in CHAIN B has been deleted
+! for this test
+delete atom sele all end
+read sequence pdb chain B  name data/9ant.pdb ALIAS HIS HSD  SEQRES FIRST -1
+if ?SQNRES .ne. 62 then
+  incr nfail by 1
+  set status fail
+endif
+gene ant2 setup 
+rename resn his sele resn hsd end
+read coor pdb name data/9ant.pdb resi
+print coor sele resi 1:10 .and. .not. initialized  .and. .not. hydrogen end
+define  unk sele .not. initialized end
+if 651 .ne. ?nsel then
+  incr nfail by 1
+  set status fail
+endif
+ic para
+ic build
+@PRN1
+hbuild sele hydrogen end
+@PRNDEF
+define  unk sele .not. initialized end
+if  ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+
+delete atom sele all end
+read sequence pdb chain B  name data/9ant.pdb ALIAS HIS HSD
+gene ant2 setup 
+rename resn his sele resn hsd end
+read coor pdb name data/9ant.pdb resi
+define  unk sele .not. hydrogen .and. .not. initialized end
+ic para
+ic build
+define  unk sele .not. hydrogen .and. .not. initialized end
+if  ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+
+! read more than one chain
+coor init
+rename segi b sele segi ant2 end
+read coor pdb name data/9ant.pdb resi official
+define  unk sele .not. hydrogen .and. .not. initialized end
+ic para
+ic build
+define  unk sele .not. hydrogen .and. .not. initialized end
+if ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+! Add a few more chains from 9ant.pdb
+rename segi ant2 sele segi b end
+read sequence pdb chain a name data/9ant.pdb alias his hsd
+gene ant1 setup
+rename resn his sele resn hsd end
+
+read sequence pdb chain c name data/9ant.pdb  alias a ade alias c cyt alias g gua alias t thy
+gene dna1 setup first 5ter last 3ter
+! deoxy:
+patch deo5 dna1 100 
+set i 101
+label loop
+  patch deox dna1 @i
+  incr i by 1
+  if i le 114 goto loop
+rename resn a sele resn ade end
+rename resn c sele resn cyt end
+rename resn g sele resn gua end
+rename resn t sele resn thy end
+! This is an instance of an old-style PDB, which uses C1* instead of C1' etc in DNA
+if @master .eq. 1 then system "sed -e s/*/\'/g data/9ant.pdb > scratch/9ant-b.pdb"
+read coor pdb name scratch/9ant-b.pdb resi
+ic para
+ic build
+define  unk sele .not. hydrogen .and. .not. initialized end
+if ?nsel .ne. 0 then
+  print coor sele unk end
+else 
+ set status pass
+endif
+! and finally the waters
+read sequence pdb name data/9ant.pdb NOAT HETA ALIAS HOH TIP3 SKIP NI
+gene w noangle nodihe
+rename resn hoh sele resn tip3 end
+rename atom O   sele atom w * OH2 end
+
+if @master .eq. 1 then system "sed -e 's/HOH  /HOH W/g' data/9ant.pdb > scratch/9ant-b.pdb"
+read coor pdb name scratch/9ant-b.pdb  sele segi w end resi official
+read coor card name  @09ant.crd comp sele .not. hydrogen end
+coor orie rms sele .not. hydrogen end
+if ?RMS .gt. 0.0001 then
+  incr nfail by 1
+  set status fail
+endif
+
+@PRN1
+hbuild sele hydrogen end
+@PRNDEF
+define  unk sele .not. initialized end
+if ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+
+! New system: phi29 polymerase with DNA, TTP, water and MG
+! There is also a "ligand" EDO which we don't have in the RTF so we ignore it
+delete atom sele all end
+read sequence pdb chain A name  data/2pyl.pdb alias his hsd
+gene A setup
+read sequence pdb chain X name data/2pyl.pdb - 
+     alias 2da ade alias da ade alias dc cyt alias dg gua alias dt thy
+gene x setup first 5ter last 3ter
+rename resn his sele resn hsd end
+read sequence pdb chain Y name data/2pyl.pdb - 
+     alias 2da ade alias da ade alias dc cyt alias dg gua alias dt thy
+gene y setup first 5ter last 3ter
+! deoxy:
+patch deo5 x 1 
+set i 2
+label xloop
+  patch deox x @i
+  incr i by 1
+  if i le 10 goto xloop
+! residue 11 in chain X is 2'-3'-di-deoxy, so cannot accept PATCH DEOX
+! in a real case we would need to set up an appropriate patch
+patch deo5 y 4 
+set i 5
+label yloop
+  patch deox y @i
+  incr i by 1
+  if i le 17 goto yloop
+
+rename resn da sele resn ade end
+rename resn dc sele resn cyt end
+rename resn dg sele resn gua end
+rename resn dt sele resn thy end
+rename atom op1 sele atom * * o1p end
+rename atom op2 sele atom * * o2p end
+read coor pdb official resi name data/2pyl.pdb
+
+ ! now the TTP
+read sequence thy 1
+gene T setup first 5pho last 3ter
+! Need a proper patch (cf RESI ATP in toppar_all36_na_nad_ppi.str) to make it a triphosphate
+! so we fake it a little here
+patch deo5 T 1
+rename atom PA sele atom T 1 P end
+rename atom O1A sele atom T 1 O1P end
+rename atom O2A sele atom T 1 O2P end
+rename atom O3A sele atom T 1 O5T end
+rename resi 3204 sele segi T end ! this is the number it has in the PDB file
+if @master .eq. 1 then system "sed -e 's/TTP A/THY T/g' data/2pyl.pdb > scratch/junk.pdb"
+read coor pdb official resi name scratch/junk.pdb sele segi T end
+ic para
+ic build
+
+! the MG ions
+if @master .eq. 1 then system "sed -e 's/ MG A/ MG M/g' data/2pyl.pdb > scratch/junk.pdb"
+read sequ pdb chain M name scratch/junk.pdb hetatm
+gene M noangle nodihe
+read coor pdb official resi name scratch/junk.pdb sele segi M end
+
+! and the water
+!if @master .eq. 1 then
+if ?numnode .eq. 1 then
+system "sed -e 's/O   HOH A/OH2 HOH W/g' data/2pyl.pdb > scratch/junk.pdb"
+system "sed -e 's/O   HOH X/OH2 HOH W/g' scratch/junk.pdb > scratch/junk2.pdb"
+system "sed -e 's/O   HOH Y/OH2 HOH W/g' scratch/junk2.pdb > scratch/junk3.pdb"
+system "sleep 1"
+!endif
+read sequ pdb name scratch/junk3.pdb  chain w hetatm alias hoh tip3
+gene W noangle nodihe
+rename resn hoh sele resn tip3 end 
+read coor pdb official resi name scratch/junk3.pdb sele segi w end
+endif
+@PRN1
+hbuild sele hydrogen end
+@PRNDEF
+print coor sele .not. initialized end
+
+! variations of "read sequence pdb"
+delete atom sele all end
+!!! JUST READ SEQUENCES. NO SEGMENTS GENERATED
+!simple error check: sum the number of residues read
+set sum 0
+read sequence pdb chain B  name data/9ant.pdb SEQRES
+calc sum = @sum + ?SQNRES 
+read sequence pdb nchain 1 name data/9ant.pdb SEQRES
+calc sum = @sum + ?SQNRES 
+read sequence pdb nchain 1 name data/9ant.pdb  SEQRES SKIP MET SKIP ASN ALIAS HIS HSD
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain A name data/9ant.pdb SEQRES SKIP MET SKIP ASN ALIAS HIS HSD
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain B name data/9ant.pdb SEQRES SKIP MET SKIP ASN ALIAS HIS HSD
+calc sum = @sum + ?SQNRES 
+read sequence pdb nchain 1 name data/9ant.pdb SEQRES SKIP MET SKIP ASN ALIAS HIS HSD
+calc sum = @sum + ?SQNRES 
+read sequence pdb segi ant1 name data/9ant.pdb
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain B   name data/9ant.pdb
+calc sum = @sum + ?SQNRES 
+read sequence pdb nchain 2  name data/9ant.pdb
+calc sum = @sum + ?SQNRES 
+read sequence pdb segi ant1 name data/9ant.pdb SKIP HIS
+calc sum = @sum + ?SQNRES 
+read sequence pdb segi ant1 name data/9ant.pdb SKIP TYR
+calc sum = @sum + ?SQNRES 
+read sequence pdb segi ant1 name data/9ant.pdb SKIP TYR SKIP HIS
+calc sum = @sum + ?SQNRES 
+read sequence pdb segi ant2 name data/9ant.pdb ALIAS TYR HIS
+calc sum = @sum + ?SQNRES 
+read sequence pdb nchain 1  name data/9ant.pdb ALIAS PHE HIS SKIP TYR 
+calc sum = @sum + ?SQNRES 
+read sequence pdb           name data/9ant.pdb NOAT HETATM SKIP NI ALIAS HOH TIP3
+calc sum = @sum + ?SQNRES 
+read sequence pdb segi ant1 name data/9ant.pdb SKIP MET ALIAS HIS HSE SKIP ASN ALIAS PHE TYR
+calc sum = @sum + ?SQNRES 
+read sequence pdb segi ant1 name data/9ant.pdb SKIP TYR ALIAS HIS TYR SKIP ASN ALIAS PHE TYR
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain c  name data/9ant.pdb alias a ade alias c cyt alias g gua alias t thy 
+calc sum = @sum + ?SQNRES 
+read sequence pdb nchain 4 name data/9ant.pdb seqres  alias a ade aliac c cyt alias g gua alias t thy 
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain Y name data/2pyl.pdb SEQRES
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain X name data/2pyl.pdb SEQRES
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain X name data/2pyl.pdb SEQRES SKIP 2DA
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain X name data/2pyl.pdb SEQRES ALIAS 2DA ADE
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain A name data/2pyl.pdb SEQRES
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain X name data/2pyl.pdb
+calc sum = @sum + ?SQNRES     
+read sequence pdb chain X name data/2pyl.pdb  HETA
+calc sum = @sum + ?SQNRES 
+read sequence pdb chain X name data/2pyl.pdb  HETA NOAT
+calc sum = @sum + ?SQNRES 
+read sequence pdb name data/2pyl.pdb HETA NOAT SKIP 2DA SKIP MG SKIP TTP ALIAS HOH TIP3 SKIP EDO
+calc sum = @sum + ?SQNRES 
+read sequence pdb name data/2pyl.pdb HETA NOAT SKIP 2DA SKIP MG SKIP HOH ALIAS  TTP THY SKIP EDO
+calc sum = @sum + ?SQNRES 
+if @sum .ne. 1950 then
+  set status fail
+  incr nfail by 1 
+endif
+
+echo readpdb testcase result: @status
+if  @status .ne. pass then
+  echo result: readpdb test @nfail subtests @status
+endif
+
+
+

@@ -1,0 +1,155 @@
+* Run All-atom CpHMD with PME
+* Shen lab, University of Maryland School of Pharmacy  
+*
+
+stream datadir.def
+
+if ?colfft .eq. 1 then
+  echo "Test NOT performed. All-atom CpHMD with PME not compatible with COLFFT"
+  stop
+endif
+
+set top @0top_all22_prot.rtf
+set par @0par_all22_prot.prm
+set phmdtoppar @0toppar_phmd_c22.str
+
+set phmdin @0phmd_pme_c22.in
+set phmdout @9phmd_pme_asp.lamb
+
+! Read topology and parameter files
+open unit 1 read card name @top
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @par
+read param card unit 1 flex
+close unit 1
+
+stream @{phmdtoppar}
+
+read sequ card 
+1
+ASP
+
+gene ASP first ACE last CT3 setup
+
+patch aspp2 ASP 1
+
+read coor card
+*
+   26
+    1    1 ASP  CAY   -2.21545   0.42958   0.92822 ASP  1      2.67000
+    2    1 ASP  HY1   -2.51909  -0.10085   0.00210 ASP  1      0.00000
+    3    1 ASP  HY2   -2.62043   1.46442   0.90649 ASP  1      0.00000
+    4    1 ASP  HY3   -2.65152  -0.09691   1.80535 ASP  1      0.00000
+    5    1 ASP  CY    -0.74672   0.47279   1.06391 ASP  1      2.04000
+    6    1 ASP  OY    -0.22532   0.99717   2.03701 ASP  1      1.52000
+    7    1 ASP  N     -0.01176  -0.00973   0.04162 ASP  1      2.03000
+    8    1 ASP  HN    -0.44914  -0.44795  -0.73453 ASP  1      0.00000
+    9    1 ASP  CA     1.44354   0.10016   0.01739 ASP  1      2.86000
+   10    1 ASP  HA     1.81517  -0.30928   0.94963 ASP  1      0.00000
+   11    1 ASP  CB     2.05307  -0.67524  -1.18908 ASP  1      2.67000
+   12    1 ASP  HB1    1.66640  -1.71388  -1.20481 ASP  1      0.00000
+   13    1 ASP  HB2    1.78647  -0.17786  -2.14339 ASP  1      0.00000
+   14    1 ASP  CG     3.57513  -0.75345  -1.09528 ASP  1      1.98000
+   15    1 ASP  OD1    4.22383  -1.12139  -2.10045 ASP  1      1.40000
+   16    1 ASP  OD2    4.14267  -0.48038  -0.02201 ASP  1      1.40000
+   17    1 ASP  HD1    5.17482  -1.16178  -1.97627 ASP  1      0.00000
+   18    1 ASP  HD2    5.08269  -0.55036  -0.17312 ASP  1      0.00000
+   19    1 ASP  C      1.89405   1.56837  -0.03237 ASP  1      2.04000
+   20    1 ASP  O      3.07255   1.89669   0.01014 ASP  1      1.52000
+   21    1 ASP  NT     0.94742   2.50987  -0.12224 ASP  1      2.03000
+   22    1 ASP  HNT   -0.00697   2.23945  -0.09802 ASP  1      0.00000
+   23    1 ASP  CAT    1.26121   3.90446  -0.04451 ASP  1      2.06000
+   24    1 ASP  HT1    1.96740   4.19632  -0.85506 ASP  1      0.00000
+   25    1 ASP  HT2    0.34004   4.51960  -0.14216 ASP  1      0.00000
+   26    1 ASP  HT3    1.73832   4.14291   0.93379 ASP  1      0.00000
+
+read sequ TIPU 1
+gene TIPU setup noangle nodihedra
+
+read coor card append
+*
+    3
+    1    1 TIPU OH2    0.95720   0.00000   0.00000 TIPU 1      0.00000
+    2    1 TIPU H1     0.00000   0.00000   0.00000 TIPU 1      0.00000
+    3    1 TIPU H2     1.19719   0.92663   0.00000 TIPU 1      0.00000
+
+coor trans xdir 1 ydir 1 zdir 1 dist 10 sele resn TIPU end
+
+coor orient sele all end
+
+! Setup Periodic Boundary Condition
+! ---------------------------------
+ SET XTLTYPE  = OCTAHEDRAL
+ SET A = 20
+ SET B = 20
+ SET C = 20
+ SET ALPHA = 109.4712206344907
+ SET BETA  = 109.4712206344907
+ SET GAMMA = 109.4712206344907
+ SET FFTX = 20
+ SET FFTY = 20
+ SET FFTZ = 20
+
+CRYSTAL DEFINE @XTLtype @A @B @C @alpha @beta @gamma
+set imcut = 16.0
+set nbcut = 16.0
+set nbcutoff = 12.0
+set nbcuton = 10.0
+crystal build cutoff @imcut
+
+
+define water sele resn TIPU end
+define protein sele .not. water end
+
+! Turn-on Image Atoms
+! -------------------
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select water end
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select protein end
+
+
+! Test 1 : first derivatives
+! --------------------------------------------------------
+energy elec atom cdie vdw vatom vswitch -  
+       ctonnb 10.0 ctofnb 12.0 cutnb 16.0 cutim 16.0 -
+       inbfrq -1 ihbfrq -1 imgfrq -1 -
+       ewald pmew fftx @FFTX ffty @FFTY fftz @FFTZ kappa 0.34 spline order 6
+
+
+test first step 0.00001 tol 0.00001
+
+
+! Test 2 : an example showing that titration is coupled
+! ----------------------------------------------------------
+
+! Setup PHMD: Asp coupled to OH-
+! ----------------------------------
+open unit 23 read form name @phmdin
+open unit 25 write form name @phmdout
+PHMD PAR 23 wri 25 PH 4.0 NPRI 1 mass 10 -
+     BETA 5.0 TEMP 300.0 LAM -
+     sele resn ASP .or. resn TIPU end -
+     qcouple 1 -
+     resi 1 resc 2
+
+
+! Dynamics
+! --------------
+DYNA LEAP START time 0.002 nstep 100 -
+     nprint 1 iprfrq 1 ntrfrq 1000  -
+     iuncrd -1 iunvel -1 kunit -1 -
+     nsavc 0 nsavv 0 IMGfrq -1 -
+     firstt 300.0 finalt 300.0 tstruc 300.0 -
+     hoover tbath 300.0 reft 300.0 tmass 1000.0 - 
+     elec atom cdie vdw vatom vswitch - 
+     ctonnb 10.0 ctofnb 12.0 cutnb 16.0 cutim 16.0 -
+     inbfrq -1 ihbfrq -1 imgfrq -1 -
+     ewald pmew fftx @FFTX ffty @FFTY fftz @FFTZ kappa 0.34 spline order 6
+
+! Print Lambda values from last step
+! -------------
+PHMD LAMBP
+
+stop
+

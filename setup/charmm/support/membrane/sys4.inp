@@ -1,0 +1,331 @@
+* Membrane System : sys4.inp
+* For randomly picking the lipids from the 2000 member DPPC library
+* and then performing systematic rotations and translations 
+*
+
+stream param.str
+
+set LengthX @BoxSizeX
+set LengthY @BoxSizeY
+set LengthZ 200.0 
+
+!Read topologie
+open read card unit 1 name @direcTp/@TopFile
+read rtf card unit 1
+close unit 1
+
+!Read parameters
+open read card unit 2 name @direcTp/@ParFile
+read param card unit 2
+close unit 2
+
+!Random number generation for picking lipids
+RAND UNIF  ISEED @RdomISEED4
+
+stream @direcSequence/peptide.str
+
+read sequence POL @NLipid
+generate HEAD 
+
+open read card unit 1 name @direcWork/sys3.crd
+read coor card unit 1
+close unit 1
+
+!------------------------------------------------------------------
+! Randomly choosing the lipids and hydration water
+!------------------------------------------------------------------
+
+set LipidNum 1
+label loop_gen
+label repeat_sele
+
+set a ?RAND
+if a le 0.5 set Lipdir conf1   ! conf1 and conf2 are two directories 
+if a gt 0.5 set Lipdir conf2   ! containing lipid structures
+
+calc N = int( ?rand * 1000 )   
+
+set NumObject  ?nres
+open read card unit 1 name @direcLip/@Lipdir/dmpc_@N.crd
+read sequence coor unit 1
+generate L@LipidNum setup noangle nodihedrals
+close unit 1
+open read card unit 1 name @direcLip/@Lipdir/dmpc_@N.crd
+read coor card unit 1 offset @NumObject   
+close unit 1
+
+! check to delete any lipids that have tail near head groups
+coor stat sele segid L@LipidNum .and. type C214 end
+if ?ZAVE ge -11.0 delete atoms sele segid L@LipidNum end 
+if ?ZAVE ge -11.0 goto repeat_sele
+coor stat sele segid L@LipidNum .and. type C314 end
+if ?ZAVE ge -11.0 delete atoms sele segid L@LipidNum end 
+if ?ZAVE ge -11.0 goto repeat_sele
+
+! final check to make sure no added water from primary hydration is below 
+! the glycerol region (in the alkanes)
+coor stat sele segid L@LipidNum .and. type O22 end
+set 1 ?ZAVE
+coor stat sele segid L@LipidNum .and. type O32 end
+set 2 ?ZAVE
+scalar wmain = Z
+define below1 sele .byres. ( type OH2 .and. prop 1 .lt. @1 .and. segid L@LipidNum ) end
+if ?NSEL ne 0  delete atoms sele .byres. ( type OH2 .and. prop 1 .lt. @1 .and. segid L@LipidNum ) end
+define below2 sele .byres. ( type OH2 .and. prop 1 .lt. @2 .and. segid L@LipidNum ) end
+if ?NSEL ne 0  delete atoms sele .byres. ( type OH2 .and. prop 1 .lt. @2 .and. segid L@LipidNum ) end
+
+! put the X-Y  center of mass of the lipid head at the origin 
+coor stat mass select segid L@LipidNum end
+coor trans xdir -?XAVE ydir -?YAVE zdir 0.0 select segid L@LipidNum end
+! to put the P-N of the polar head at the z=0 point
+coor stat sele segid L@LipidNum .and. ( type P .or. type N ) end
+coor trans zdir -?ZAVE select segid L@LipidNum end 
+
+! flip the orientation of the lipids in the lower monolayer if head Z le 0
+coor stat sele segid HEAD .and. resid @LipidNum end 
+if ?ZMIN le 0  coor rotate xdir 1.0  phi 180.0 select segid L@LipidNum end
+
+! put the head group at the location of the spheres
+coor stat select segid HEAD .and. resid @LipidNum end
+coor trans xdir ?XMIN ydir ?YMIN zdir ?ZMIN select segid L@LipidNum end
+
+! continue for total number of lipids that are needed
+incr LipidNum by 1
+if LipidNum le @NLipid goto loop_gen
+
+!---------------------------------------------------------------------
+! Delete the vdW spheres from the file and all non-water hydrogens 
+! for faster rot/tran
+!---------------------------------------------------------------------
+
+delete atom select type POLO end
+delete atoms sele type H* .and. .not. (type H1 .or. type H2) end 
+
+print coor 
+
+open unit 8 read card name @direcCubic/cubic.img 
+read imag print init unit 8
+close unit 8
+
+energy atom  switch  cdiel -               ! Electrostatics
+       vatom vswitch       -               ! VDW
+       wmin 0.25 cutnb 3.0 ctonnb 3.0 ctofnb 3.0 cutim 5.0     ! cutplace
+
+update imall
+
+!---------------------------------------------------------------------
+! To find the number of bad contacts 
+!---------------------------------------------------------------------
+
+coor dist cut 2.6 sele (.not. type H*)  end     -
+                  sele (.not. type H*)  end
+set BadMain  ?npair
+divi BadMain by 2
+
+coor dist cut 2.6 images  sele (.not. type H*) .and.       (segid PEPT .or. segid L*)  end  -
+                          sele (.not. type H*) .and. .not. (segid PEPT .or. segid L*)  end
+
+set  BadTotal @BadMain
+set  BadImag  ?npair
+divi BadImag  by 2
+incr BadTotal by @BadImag       ! BadTotal = BadMain + BadImag
+
+open write card unit 1 name @direcWork/sys4_1.crd
+write coor card unit 1
+* Protein with @NLipid lipids 
+* and Main-Main=@BadMain  Main-Image=@BadImag  Grand-total=@BadTotal
+*
+
+open write card unit 1 name @direcWork/sys4_1.pdb
+write coor pdb unit 1
+* Protein with @NLipid lipids 
+* and Main-Main=@BadMain  Main-Image=@BadImag  Grand-total=@BadTotal
+*
+
+!--------------------------------------------------------
+! To eliminate bad contacts by systematic rotation
+!---------------------------------------------------------
+
+stream @direcStr/sysrot.str 
+
+cons fix sele none end
+update imall
+
+prnlev 0
+coor dist cut 2.6 sele (.not. type H*)  end     -
+                  sele (.not. type H*)  end
+
+prnlev 5
+set BadMain  ?npair
+divi BadMain by 2
+
+prnlev 0
+coor dist cut 2.6 images  sele (.not. type H*) .and.       (segid PEPT .or. segid L* )  end  -
+                          sele (.not. type H*) .and. .not. (segid PEPT .or. segid L* )  end
+
+prnlev 5
+set  BadTotal @BadMain
+set  BadImag  ?npair
+divi BadImag  by 2
+incr BadTotal by @BadImag
+
+open write card unit 1 name @direcWork/sys4_2.crd 
+write coor card unit 1
+* protein with @NLipid lipids  
+* after sysrot  (1st)
+* and Main-Main=@BadMain  Main-Image=@BadImag  Grand-total=@BadTotal
+*
+
+open write card unit 1 name @direcWork/sys4_2.pdb
+write coor pdb unit 1
+* protein with @NLipid lipids  
+* after sysrot  (1st)
+* and Main-Main=@BadMain  Main-Image=@BadImag  Grand-total=@BadTotal
+*
+
+!-----------------------------------------------------------
+! To eliminate bad contacts by systematic translation
+!-----------------------------------------------------------
+
+stream @direcStr/systran.str 
+
+cons fix sele none end
+update imall
+
+prnlev 0
+coor dist cut 2.6 sele (.not. type H*)  end     -
+                  sele (.not. type H*)  end
+prnlev 5
+set BadMain  ?npair
+divi BadMain by 2
+
+prnlev 0
+coor dist cut 2.6 images  sele (.not. type H*) .and.       (segid PEPT .or. segid L* )  end  -
+                          sele (.not. type H*) .and. .not. (segid PEPT .or. segid L* )  end
+
+prnlev 5
+set  BadTotal  @BadMain
+set  BadImag   ?npair
+divi BadImag   by 2
+incr BadTotal  by @BadImag
+
+open write card unit 1 name @direcWork/sys4_3.crd
+write coor card unit 1
+* Protein with @NLipid lipids
+* after systran (2nd)
+* and Main-Main=@BadMain  Main-Image=@BadImag  Grand-total=@BadTotal
+*
+
+open write card unit 1 name @direcWork/sys4_3.pdb
+write coor pdb unit 1
+* Protein with @NLipid lipids
+* after systran (2nd)
+* and Main-Main=@BadMain  Main-Image=@BadImag  Grand-total=@BadTotal
+*
+
+delete atom sele all end
+
+!---------------------------------------------------------
+! Re-arranging the crd from rot/tran for the minimization 
+! and write file in better order
+!---------------------------------------------------------
+
+open read card unit 1 name @direcWork/sys4_3.crd   
+read sequence coor unit 1 
+generate TOTO first none last none setup noangle nodihedrals
+close unit 1
+
+open read card unit 1 name @direcWork/sys4_3.crd    
+read coor card unit 1
+close unit 1
+
+delete atom sele .not. resnam TIP3 end
+
+open write card unit 1 name @direcWork/temp_water.crd 
+write coor card unit 1
+* water
+*
+ 
+delete atom sele all end
+
+open read card unit 1 name @direcWork/sys4_3.crd   
+read sequence coor unit 1
+generate LIPI setup noangle nodihedrals
+close unit 1
+
+open read card unit 1 name @direcWork/sys4_3.crd 
+read coor card unit 1
+close unit 1
+
+delete atom sele .not. resnam DMPC end
+
+open write card unit 1 name @direcWork/temp_dmpc.crd
+write coor card unit 1
+* dmpc 
+*
+
+delete atom sele all end
+
+stream @direcSequence/peptide.str
+
+open read card unit 1 name @direcWork/sys4_3.crd 
+read coor card unit 1
+close unit 1
+
+open write card unit 1 name @direcWork/temp_pep.crd
+write coor card unit 1 
+*  pept 
+*
+
+delete atom sele all end
+
+!-------------------------------------------------------------
+! Re-building the system
+!-------------------------------------------------------------
+
+stream @direcSequence/peptide.str
+
+open read card unit 1 name @direcWork/temp_pep.crd
+read coor card unit 1
+close unit 1
+set NumObject ?nres
+
+open read card unit 1 name @direcWork/temp_dmpc.crd
+read sequence coor unit 1
+generate DMPC setup 
+close unit 1
+
+open read card unit 1 name @direcWork/temp_dmpc.crd
+read coor card unit 1 offset @NumObject
+close unit 1
+
+set NumObject2 ?nres
+open read card unit 1 name @direcWork/temp_water.crd
+read sequence coor unit 1
+generate BULK nodihedrals noangles
+close unit 1
+
+open read card unit 1 name @direcWork/temp_water.crd
+read coor card unit 1 offset @NumObject2
+close unit 1
+
+print coor
+hbuild
+print coor
+
+!--------------------------------
+! Write out the main system  
+!--------------------------------
+
+open write card unit 1 name @direcWork/sys4_4.crd
+write coor card unit 1
+* Peptide, lipids and associated water molecules
+*
+
+open write card unit 1 name @direcWork/sys4_4.pdb
+write coor pdb unit 1
+* Peptide, lipids and associated water molecules
+*
+
+stop
+

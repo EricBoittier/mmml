@@ -1,0 +1,1288 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+
+CHARMM 36.0
+     c36a1    Developmental     August    15, 2008
+     c36a2    Developmental     February  15, 2009
+     c36a3    Developmental     August    15, 2009
+     c36a4    Developmental     February  15, 2010
+     c36a4r1  Developmental     May        1, 2010
+     c36a5    Developmental     August    15, 2010
+     c36a6    Developmental     February  15, 2011
+     c36b1    Release           August    15, 2011
+     c36b2    Release           February  15, 2012
+
+CHARMM 37.0
+     c37a1    Developmental     August    15, 2011
+     c37a2    Developmental     February  15, 2012
+     c37b1    Release           September 30, 2012
+     c37b2    Release           February  15, 2013
+
+CHARMM 38.0
+     c38a1    Developmental     September 30, 2012
+     c38a2    Developmental     February  15, 2013
+     c38b1    Release           August    15, 2013
+     c38b2    Release           February  15, 2014
+
+CHARMM 39.0
+     c39a1    Developmental     August    15, 2013
+     c39a2    Developmental     February  15, 2014
+     c39b1    Release           August    15, 2014
+     c39b2    Release           February  15, 2015
+
+CHARMM 40.0
+     c40a1    Developmental     August    15, 2014
+     c40a2    Developmental     February  15, 2015
+     c40b1    Release           August    15, 2015
+     c40b2    Release           February  15, 2016
+
+CHARMM 41.0
+     c41a1    Developmental     August    15, 2015
+     c41a2    Developmental     February  15, 2016
+     c41b1    Release           August    15, 2016
+     c41b2    Release           February  15, 2017
+---------------------------------------------------------------------------
+
+[0] About CHARMM41 Development
+
+     At the 2015 CHARMM meeting (Pallottihaus Vienna, July 17-19, 2015),
+we decided to release CHARMM c40b1 with incorporating enhancements and fixes
+to the developmental c40a1 and c40a2 versions. The following c40a2 addition
+and enhancements are put on hold for further testing and developments
+
+2.4 String method suite for modeling conformational transitions
+2.6.4 OpenMM based extension of fast replica exchange
+2.6.12 Preliminary CMake support and OpenMM improvements (only CMAKE)
+
+==============================================================================
+
+[1] c41a1 Change Log
+
+    c41a1 includes additions to the c40a2 developmental version that require
+further refinements.
+
+1.1 OpenMM and CMake Improvements Spring 2015
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : July 10, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/12886
+Subversion committed: Revision 372
+
+OpenMM improvements:
+1. replace plugins with newly available OpenMM functionality
+   a. OmmXml
+   b. CharmmNBForce
+2. allow user to serialize state or integrator to xml
+3. add install time openmm version detection for future development
+4. improve makemod.pl support for C++
+
+Add CMake support for DOMDEC, DOMDEC GPU, FFTW, MKL, MPI, OpenMP.
+Improve configure script optional arguments for user friendliness.
+
+------------------------------------------------------------------------------
+1.2 SGLDg for enhaced search and accurate sampling
+    Developers : Xiongwu Wu
+    Institution: NHLBI/NIH
+    Date       : July 14, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/12995
+Subversion committed: Revision 381
+
+     SGLDg/SGMDg is implemented for efficient conformational sampling and
+accurate ensemble distribution
+
+Files Added:
+test/c40test/sgldg_vv2.inp
+test/c40test/slowgr_ips.inp
+test/data/aspw.cor_0
+test/data/aspw.cor_1
+test/data/aspw.psf_0
+test/data/aspw.psf_1
+
+Files Modified:
+source/dynamc/dcntrl.src
+source/dynamc/dynamc.src
+source/dynamc/dynamvv2.src
+source/dynamc/sglds.src
+source/nbonds/nbips_ltm.src
+source/nbonds/enbips.src
+source/pert/epert.src
+doc/sgld.doc
+doc/dynamc.doc
+
+------------------------------------------------------------------------------
+1.3 Improvements for Q-Chem/CHARMM QM/MM
+    Developer  : H. Lee Woodcock
+    Institution: USF
+    Date       : July 14, 2015
+
+     USF-Numerous extensions to the Q-Chem/CHARMM QM/MM interface
+including g09 interface updates.
+
+Files Modified:
+doc/qchem.doc
+source/charmm/iniall.src
+source/dynamc/dynsub.src
+source/energy/energy.src
+source/energy/printe.src
+source/gener/replica.src
+source/gukint/gukini.src
+source/io/parmio.src
+source/ltm/gamess_ltm.src
+source/ltm/sccdftbsrc_ltm.src
+source/misc/pbeq.src
+source/misc/smbp.src
+source/quantum/addlnat.src
+source/sccdftbint/sccdftbini.src
+
+------------------------------------------------------------------------------
+1.4 MNDO97 QM/MM modeul update
+    Developers : Kwangho Nam
+    Institution: Umea University, Sweden
+    Date       : July 13, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/12947
+Subversion committed: Revision 379
+
+     The MNDO97 module has been rewritten for speed up and stability of the
+module. First, the parallel option is supported for MNDO97 QM/MM calculations.
+Despite the SCF diagonalization routine not been fully parallel, the overall
+parallel scalability is bettern than the SQUANTM module. Second, the QM/MM-PME
+method has been implemented. Compared to the implementation in the SQUANTM
+module, the present implementation is better paralleized and more efficient.
+Last, extended Lagrangian Born-Oppenheimer MD with dissipation method
+has been implemented for stability and speed of the BOMD QM/MM MD calculation.
+The method is used for propagation of initial electron density during MD,
+while achieving more than 15 percent overall speed-up without sacrificing
+accuracy of the simulation.
+
+------------------------------------------------------------------------------
+1.5 GAMESS, Q-Chem, and EXAFMM Supports
+    Developers : Milan Hodoscek
+    Institution: NIC, Slovenia
+    Date       : July 14, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/12991
+Subversion committed: Revision 385, 386, 387
+
+1.5.1 GAMESS
+
+     Support for the new version of GAMESS (Version: 5 December 2014 R1) is
+added. The patches for the GAMESS package are explained in the doc/gamess.doc
+file and available from http://ala.cmm.ki.si/gamess/20141205.1
+
+Files modified:
+source/gamint/ddi.src
+doc/gamess.doc
+build/UNX/gmscomp
+
+1.5.2 Q-Chem
+
+     Modifications to most of QM/MM interfaces, so Q-Chem interface can
+be compiled by default even when no Q-Chem program is
+available. Currently a small program is provided in the tool
+directory, so one can run testcases. In the future this program
+will be replaced by one that can really perform ab initio HF
+calculations so the CHARMM testcases can be reliably compared to
+the Q-Chem results.
+
+1.5.3 EXAFMM
+
+     Export to exafmm library available from http://bitbucket.com is
+provided. It exports coordinates, PSF data, parameters and
+velocities in a single file that can be read by a tool in exafmm
+library diustribution.
+
+Files modified:
+source/dynamc/dynio.src
+source/ltm/grape_ltm,.src
+source/nbonds/enbond.src
+source/nbonds/grape.src
+source/nbonds/nbutil.src
+
+------------------------------------------------------------------------------
+1.6 testcase update and format bugfix in gukini and pgif95 compile fix
+    Developer  : Lennart Nilsson and Josh Buckner
+    Date       : Augus 7, 2015
+
+     In source/gukint/gukini.src, replaced a read(line,*) with
+read(line,'(3F25.0)') for more reliable parsing.
+Updated test/c25test/hba1.inp with new qcheck PASS/FAIL framework.
+From test/c38test/tstend.inp, removed check for testendi .eq. 1.
+Deleted test/c32test/endian.inp
+
+     pgf95 objects to setting QGMREM and QINIGM from source/ltm/gamess_ltm.src
+to .TRUE. or .FALSE. These guys are declared in source/ltm/gamess_ltm.src
+as LOGICAL(gms_int) If I switch the declaration to plain LOGICAL QGMREM,
+QINIGM then the code compiles.
+
+Files Modified:
+source/gukint/gukini.src
+test/c25test/hba1.inp
+test/c38test/tstend.inp
+test/c32test/endian.inp
+source/ltm/gamess_ltm.src
+
+------------------------------------------------------------------------------
+1.7 drude energy and force
+    Developer  : Jing Huang
+    Date       : August 11, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13140
+Subversion committed: Revision 407
+
+     If one runs serial charmm with Drude, the anisotropic
+polarizability terms are not included at all, either energy or
+force. The addition of if statements for the DOMDEC  drude
+implementation ignore the case that charmm runs in serial.
+
+Files Involved:
+source/energy/energy.src
+test/c36test/test_drude.inp
+test/c31test/drude_benzene.inp
+test/data/drude_benzene.crd
+test/data/drude_test.psf
+test/data/drude_test_xplor.psf
+test/data/drude_water.psf
+test/data/drude_water_xplor.psf
+
+------------------------------------------------------------------------------
+1.8 qchem compile fixes
+    Developer  : Josh Buckner
+    Date       : August 12, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13150
+Subversion committed: Revision 409
+
+     The code was missing some KEY_QCHEM C preprocessing guards.
+In most cases, this was to check if QCHEM was not present to compile
+in other QUANTUM code.  The missing cpp guards caused CHARMM to not
+compile with the QC install.com option.
+
+Files Involved:
+source/gukint/gukini.src
+source/nbonds/pme.src
+source/quantum/qub.src
+
+------------------------------------------------------------------------------
+1.9 squantum fixes
+    Developer  : Kwangho Nam
+    Date       : August 14, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13162
+Subversion committed: Revision 412
+
+    Some of the tests in csquantumtest fail out with a CHARMM warning and others segfault.
+
+Files Involved:
+source/energy/energy.src
+source/nbonds/erfcd.src
+source/quantum/qmnbnd.src
+source/quantum/quantm_ltm.src
+source/quantum/qub.src
+source/squantm/sqnt_setup.src
+test/cquantumtest/but0.inp
+test/cquantumtest/but3.inp
+test/cquantumtest/but4.inp
+test/cquantumtest/quantum1.inp
+
+------------------------------------------------------------------------------
+1.10 TURBOMOLE bugfix
+    Developer  : Chris Rowley
+    Date       : August 12, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13158
+Subversion committed: Revision 414
+
+  There is a bug in the TURBOMOLE QM/MM code where the point charge gradients
+are calculated but are not read. gukini.src has been modified to read
+pc_gradients if there are a non-zero number of MMATOMS.
+
+Files Involved:
+source/gukint/gukini.src
+
+------------------------------------------------------------------------------
+1.11 Solid-state NMR restraint and RDC restraint
+    Developer  : Wonpil Im, Thenmalarchelvi Rathinavelan, Jinhyuk Lee and
+	         Sunhwan Jo
+    Institution: University of Kansas
+    Date       : July 15, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13036
+Subversion committed: Revision 399, 400
+
+prefx Keys: RDC, SSNMR
+
+     Restraint potential using solid-state NMR (chemical shift
+anisotropy/dipolar coupling) and RDC (residual dipolar coupling) observables.
+
+Files Added:
+source/misc/ssnmr.src
+source/misc/ssnmr_ltm.src
+source/misc/rdc.src
+source/misc/rdc_ltm.src
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+doc/ssnmr.doc
+doc/rdc.doc
+test/c41test/ssnmr.inp
+test/c41test/rdc.inp
+test/data/ubi_rdc.charmm
+
+Files Modified:
+source/energy/energy.src
+source/energy/eutil.src
+source/energy/energym.src
+source/energy/printe.src
+
+==============================================================================
+
+[2] c41a2 Change Log
+
+    The following are introduced and modified during the development period
+of Agust 15, 2015 through February 15, 2016.
+
+2.1 Drude Patches, Autogen, and Direct-ID Analysis
+    Developer  : Jing Huang
+    Institution: University of Maryland
+    Date       : November 16, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13204
+Subversion committed: Revision 423
+
+1. Update Alex MacKerell's docs on PATCh and AUTOgenerate
+2. Enhance the functionality of the AUTOgen command
+3. Make DELE ANIS work for Drude patches
+4. Remove superfluous VTHOLE keyword in gener/drude.src
+5. Add an option DIID in "coor cova" to perform Direct-ID analysis
+6. Document DIID usage in corman.doc
+
+------------------------------------------------------------------------------
+2.2 Multiple DMCO terms; repulsive RMSD restraints; short-range ETEN potential
+    Developer  : Alex Dickson
+    Institution: Michigan State University
+    Date       : November 17, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13212
+Subversion committed: Revision 424
+
+     Changes that support multiple sets of DMCO constraints and contact
+specific cutoffs. See doc/cons.doc and the DMCO command. Changes that support
+RMSD restraints that are purely repulsive, through specifying a negative BOFF
+value in a CONS RMSD command. See RMSD restraints in doc/cons.doc.
+Changes that support using short-range ETEN potential.  See ETSR entry
+in doc/energy.doc.
+
+Files Added:
+test/c41test/etsr.inp
+test/c41test/ndmc.inp
+test/c41test/neg_boff.inp
+
+------------------------------------------------------------------------------
+2.3 University of Michigan Developments
+    Developer  : Josh Buckner and Charles L. Brooks III
+    Institution: University of Michigan
+    Date       : November 23, 2015
+
+2.3.1 CMake build system updates
+
+Check-in: http:/charmm.hanyang.ac.kr/13220
+Subversion committed: Revision 425
+
+1. Add an option to configure script to build sccdftb
+2. fix linking problems
+3. improve openmp detection
+4. improve osx compatibility
+
+Files Added:
+tool/cmake/FindOpenMP_Fortran.cmake
+
+..............................................................................
+2.3.2 prefx keyword cleanup
+
+Check-in: http:/charmm.hanyang.ac.kr/13228
+Subversion committed: Revision 426
+
+1. add larmord to default install in install.com
+2. remove deprecated prefx keywords from test input scripts
+3. remove deprecated keywords from CMake builds
+
+..............................................................................
+2.3.3 OpenMM improvements
+
+Check-in: http:/charmm.hanyang.ac.kr/13236
+Subversion committed: Revision 427
+
+1. Remove OpenMM version 5 specific code
+2. improve test for OpenMM Context recreation
+3. move OpenMM energy component fetch into C++ routines to improve portability
+4. increase character buffer for CustomCompoundForce formula
+
+..............................................................................
+2.3.4 MSCPAR Overhaul
+
+Check-in: http:/charmm.hanyang.ac.kr/13240
+Subversion committed: Revision 428
+
+1. Module mscpar moved to param_store for storing CHARMM input script
+   parameters.
+2. SETMSR, SETMSI, SETMSC from source/util/parse.src replaced by
+   param_store%set_param
+3. GETMSR, GETMSI, GETMSC from source/util/parse.src replaced by
+   param_store%get_param
+4. Size of storage for input script parameters resizes dynamically to
+   accomodate current number of parameters in use.
+
+Files Added:
+source/ltm/param_store_ltm.src
+
+Files Deleted:
+source/ltm/mscpar_ltm.src
+
+..............................................................................
+2.3.5 block exclusion command, openmm nbfix improvement
+
+Check-in: http:/charmm.hanyang.ac.kr/13248
+Subversion committed: Revision 429
+
+1. Block exclusion commands
+     The EXCLusion command allows you to create exclusions between
+and within blocks, and thus eliminates the need to add them to the
+residue/patch definitions in the rtf.
+
+2. OpenMM NB fix performance improvements
+     Removed O(n^2) loop in the case where there are no nbfixes.
+
+Files Added:
+test/c41test/blockexcl_test.inp
+test/c41test/msld_test2.inp
+
+..............................................................................
+2.3.6 add OpenMM lib dir to rpath
+
+Check-in: http:/charmm.hanyang.ac.kr/13258
+Subversion committed: Revision 430
+
+     Added OpenMM lib dir to the rpath of the charmm executable produced by
+install.com so that when executing from test/test.com, the loader on OSX can
+find libopenmm.dylib
+
+------------------------------------------------------------------------------
+2.4 GAMESS and EXAFMM interfaces
+    Developer  : Milan Hodoscek
+    Institution: NIC/Slovenia
+    Date       : January 25, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13338
+Subversion committed: Revision 441
+
+2.4.1 New GAMESS version support.
+     New version of GAMESS (December 5, 2014) is interfaced with the
+CHARMM. It now compiles along with the default Q-Chem interface
+
+2.4.2 grape.src modification for EXAFMM interface
+     Changes to grape module in CHARMM so it supports linking the
+EXAFMM library. EXAFMM library is used to perform nonbond interaction
+calculations using the fast multipole method. The library needs to be
+installed separately from github.
+
+Files Added:
+doc/fmm.doc
+
+------------------------------------------------------------------------------
+2.5 PINS algorithm implementation in the ENSEMBLE module
+    Developer  : Florent Hedin, Nuria Plattner, Markus Meuwly
+    Institution: University of Basel, Switzerland
+    Date       : January 29, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13342
+Subversion committed: Revision 442
+prefx Keys: PINS
+
+     Partial Infinite Swapping (PINS) is a rare-event sampling algorithm,
+which is based on the PT/RE algorithms. PINS uses a symmetrisation strategy
+for combining probability distributions at different temperatures, so that
+they become more highly connected and thus easier to sample than the original.
+
+Files Added:
+source/ensemble/pins.src
+test/c41test/ens_pins.inp
+
+------------------------------------------------------------------------------
+2.6 Bugfixes
+
+2.6.1 LONEPAIR linkatom QM/MM allocation bug
+    Developer  : Christopher Rowley
+    Institution: Memorial University
+    Date       : August 25, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13191
+Subversion committed: Revision 444
+
+     The swm4.inp test fails with a segfault when CHARMM is compiled with
+the QChem, Turbomole, or g09 interfaces. The problem is due to the one-time
+allocation of the LKATMS array in lonepair.src. If the number of atoms is
+increased by adding additional residues, this array is not reallocated and
+a segfault will occur when the code tries to access elements out of range
+for the original array. A check has been added to see if the array size
+matches the number of atoms. The array is reallocated if the number of atoms
+has changed. The swm4.inp testcase will now pass with the QM/MM versions.
+
+Files Involved:
+source/dynamc/lonepair.src
+
+..............................................................................
+2.6.2 patch bug with Drude FF + Autogenerate Patch
+    Developer  : Jing Huang
+    Institution: University of Maryland
+    Date       : November 16, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13195
+Subversion committed: Revision 422
+
+     Inside the subroutine PATCH, the subroutine AUTGEN is called with .false.
+instead of LDRUDE leading to a bug when AUTO is used together with Drude FF.
+
+Files Involved:
+source/gener/modpsf.src
+
+..............................................................................
+2.6.3 prefx write_comment violates array bounds
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : November 30, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13268
+Subversion committed: Revision 431
+
+     The write_comment subroutine in tool/prefx.f90 tries to access elt 0 of
+an array that starts at 1.
+
+Files Involved:
+tool/prefx.f90
+
+..............................................................................
+2.6.4 allow 8 char time series name
+    Developer  : Rick Venable
+    Institution: NIH/NHLBI
+    Date       : December 2, 2015
+
+Check-in: http:/charmm.hanyang.ac.kr/13277
+Subversion committed: Revision 444
+
+     Changed the parsing of time-series-name to allow 8 char names.
+
+Files Involved:
+source/correl/correl.src
+
+..............................................................................
+2.6.5 idummy in pustrm uninitialized
+    Developer  : Victor Ovchinnikov
+    Institution: Harvard University
+    Date       : January 12, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13311
+Subversion committed: Revision 437
+
+     The variable idummy is not initialized in the subroutine pustrm.
+
+Files Involved:
+source/util/title.src
+
+..............................................................................
+2.6.6 remove mbond keyword tests and data
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : January 13, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13321
+Subversion committed: Revision 438
+
+     Since the mbond keyword and associated code no longer exist, the mbond
+testcases and data only used by the mbond testcases may be removed.
+
+..............................................................................
+2.6.7 Title: Error in facts.doc keyword descriptions
+    Developer  : Carol Post
+    Institution: Purdue University
+    Date       : January 14, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13328
+Subversion committed: Revision 444
+
+     In the node Function of facts.doc, keywords TCIC and TCIL are mixed up
+in the descriptions. Currently, the description for TCIL corresponds to TCIC
+and vice versa. Therefore, to correct the documentation, change TCIL to be
+TCIC and change TCIC to be TCIL.
+
+Files Involved:
+doc/facts.doc
+
+..............................................................................
+2.6.8 Correct resid for segments PDB read generated
+    Developer  : Xiongwu Wu
+    Institution: NIH, NHLBI
+    Date       : January 18, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13332
+Subversion committed: Revision 444
+
+     The residue identity from PDB through "read segid PDB " has blank spaces
+when resid has only one or two characters. The causes problems to specify a
+residue by "segname resid" for commands like "Patch"
+
+Files Involved:
+source/emap/emapsubs.src
+
+..............................................................................
+2.6.9 MPI Deadlock When Energy Tolerance Exceeded
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : February 5, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13347
+Subversion committed: Revision 439
+
+     During dynamics, if delta energy exceeds the specified energy tolerance,
+a single node will try to gather the positions and velocities using a
+blocking MPI call. The other nodes continue running dynamics as usual.
+So a deadlock will occur as soon as one of the other nodes, oblivious to
+the exceeded energy tolerance, attempts a blocking MPI call.
+
+Files Involved:
+source/dynamc/dynamc.src
+
+==============================================================================
+
+[3] c41b1 Change Log
+
+     At the 2016 CHARMM meeting (University of Michigan, July 8-10, 2016),
+we decided to release CHARMM c41b1 with incorporating enhancements and fixes
+to the developmental c41a1 and c41a2 versions.
+
+The c41b1 release includes the enhancements and fixes to the developmental
+version c41a2 during the development period of February 15, 2016 through
+August 15, 2016.
+
+------------------------------------------------------------------------------
+3.1 Update from University of Michigan Repository
+
+3.1.1 Script and Patch to Produce a Free Version
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : March 26, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13485
+Subversion committed: Revision 468
+
+     The script can be used (from an empty directory outside the charmm tree)
+to produce the free version of charmm.
+
+Files Added:
+tool/make_free_charmm
+tool/free_charmm.patch
+
+..............................................................................
+3.1.2 Spring 2015 Improvements
+    Developer  : David Braun, Evan Arthur, Josh Buckner, Charles L Brooks III,
+                 Mike Crowley
+    Institution: University of Michigan, NREL
+    Date       : June 15, 2016
+
+1. test/c38test/adumb-domdec.inp is renamed to domdec-adumb.inp to be
+consistent with the rest of the domdec tests
+Check-in: http:/charmm.hanyang.ac.kr/13547
+Subversion committed: Revision 472
+
+2. added the standard CHARMM wrappers for alloc, dealloc and realloc for
+a new ch80 type of character arrays. This type handles arrays of elements
+character(len=80) mostly used for sets of host names in parallel runs.
+Check-in: http:/charmm.hanyang.ac.kr/13557
+Subversion committed: Revision 475
+
+3. test.com argument for number of OpenMP threads
+Check-in: http:/charmm.hanyang.ac.kr/13565
+Subversion committed: Revision 476
+
+4. Added an OpenMM plugin to enable OpenMM assisted GBSW and PHMD.
+Check-in: http:/charmm.hanyang.ac.kr/13581
+Subversion committed: Revision 479
+
+5. pgi support support for the new pgi compilers and other enhancements
+Check-in: http:/charmm.hanyang.ac.kr/13605
+Subversion committed: Revision 482
+
+6. OpenMM documentation update
+Check-in: http:/charmm.hanyang.ac.kr/13636
+Subversion committed: Revision 488
+
+------------------------------------------------------------------------------
+3.2 Karolinsta Spring 2016 updates
+    Developer  : Lennart Nilsson
+    Institution: Karolinska Institutet
+    Date       : June 16, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13522
+Subversion committed: Revision 469
+
+1. VERBOse keyword for the COOR command
+     If the VERBOse option is on, the atoms actually involved in a hydrogen
+bond are flagged in two selection sets named HBDEFI and HBDEFJ for atoms in
+the first and second selections, respectively.
+
+2. VDWR keyword for the COOR HBONd command
+     This is useful when atoms of very different size (eg S.H.O and N.H.O)
+can be involved in the hydrogen bond, such that a single cutoff value is
+inadequate.
+
+3. RTF keyword to the IC and GENE commands
+     The RTF keyword specifies that the printed listing of the result is to
+be in the same format as in the RTF.
+
+4. WRIT and HWRIT keywords for the SCAL command
+     The [H]WRIT option writes all selected entries to an ascii file, one
+item per line for WRITe or all on one line (Horizontally) for HWRIte.
+
+5. LOOKUP for PERT and BLOCK
+
+6. 'fast on' with scalar RSCA in which it is autmatically turned off for
+interactions with perturbed atoms
+
+7. readcv routine checks for too many open file handles and calls wrndie
+IUNIT is compared to LASTU
+
+Files Added:
+test/c41test/hba3.inp
+test/c41test/lookup_pert.inp
+test/c41test/omm_block_coeff.inp
+test/c41test/pssp_block.inp
+test/c41test/ic.inp
+
+------------------------------------------------------------------------------
+3.3 MNDO97 QM/MM Update
+    Developer  : Kwangho Nam and Pedro Ojeda-May
+    Institution: Umea University, Sweden
+    Date       : June 13, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13508
+Subversion committed: Revision 487
+
+The update contains numberous changes made to the MNDO97 module for
+speed-up and better MPI parallelization. With this update, at least
+15 % speed up of the BOMD QM/MM MD simulations and the parallel routines
+show around 50 % speed-up compared to the previous MNDO97 module (i.e.,
+c41a1 version).
+In addition, changes are made to allow the reading of NAMD trajectories,
+including the reading and conversion of the lattice information.
+
+------------------------------------------------------------------------------
+3.4 Changes in the CHARMM toppar file format
+    Developer  : Alex MacKerell
+    Institution: University of Maryland, Baltimore
+    Date       : August 13, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13862
+Subversion committed: Revision 521 and 522
+
+     Removal of MASS (atom type) numbers (to -1).  This will avoid issues
+with repeated numbers and allow for arrays to be adjusted based on the
+number of atom types actually used. As non-profit users can get new
+versions of the program, they will be able to use these files as needed.
+
+Files Modified:
+toppar.tar.gz
+
+==============================================================================
+[4] c41b2 Change Log
+
+     The following are fixed and enhanced during the development period
+of Agust 15, 2016 through February 15, 2017.
+
+4.1 Free Version Update
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : August 17, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13904
+Subversion committed: Revision 532(c41b) and 533
+
+     The script and patch file for producing free charmm required updates
+for the new version.
+
+Files Involved:
+CMakeLists.txt
+source/domdec/domdec_common.src
+test/c40test/testopti.inp
+tool/cmake/prefx_files.txt
+tool/free_charmm.patch
+tool/make_free_charmm
+
+..............................................................................
+4.2 mc segfaults and nonparallel testcases
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : August 18, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13912
+Subversion committed: Revision 534(c41b) and 535
+
+- several MC routines segfault for non-debug builds compiled with intel
+  compilers
+
+- some problematic testcases:
+  c41test/etsr.inp and c41test/frentest.inp shouldn't be run in parallel
+  c41test/slowgr_ips.inp takes longer than 5 minute
+    => test.com kills it at the 5 minute mark
+  c42test/mkdummytest.inp has a line that leads test.com to mark it as failed
+    erroneousl
+
+Files Involved:
+source/mc/mc.src
+source/mc/mvcrot.src
+test/c41test/estr.inp
+test/c41test/frentest.inp
+test/c41test/slowgr_ips.inp
+test/c42test/mkdummytest.inp
+
+..............................................................................
+4.3 conshelix compile errors
+    Developer  : Soohyung Park
+    Institution: University of Kansas
+    Date       : September 9, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13926
+Subversion committed: Revision 536(c41b) and 537
+
+     CONSHELIX cannot be compiled because of a missing use statement and
+a variable with the same name in both mmfp and conshelix modules.
+
+Files Involved:
+source/energy/conshelix.src
+source/energy/energy.src
+source/misc/mmfp.src
+
+..............................................................................
+4.4 omm resd with intel hangs
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : September 12, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13934
+Subversion committed: Revision 538(c41b) and 539
+
+     The openmm resd subsystem hangs if build with intel compilers
+and optimization.
+
+Files Involved:
+source/openmm/omm_restraint.src
+
+..............................................................................
+4.5 virial calculation with domdec gpu only option
+    Developer  : Xubin Li, Lianqing Zheng, and Wei Yang
+    Institution: Florida State University
+    Date       : September 16, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13942
+Subversion committed: Revision 540(c41b) and 541
+
+     With domdec gpu only, virial was calculated incorrectly. After the k-space
+virial was read from gpu to cpu, it was not added to the total virial.
+(energy.src) When calculating the direct space virial, the forces included
+reciprocal forces too. To fix this issue, we need to calculate direct force
+and reciprocal force separately, and combine them after the direct virial is
+calculated. (MDsim.cu, Force.cu, CudaEnergyVirial.cu)
+
+Files Involved:
+source/domdec_gpu/CudaEnergyVirial.cu
+source/domdec_gpu/CudaEnergyVirial.h
+source/domdec_gpu/Force.cu
+source/domdec_gpu/Force.h
+source/domdec_gpu/reduce.cu
+source/domdec/MDsim.cu
+source/domdec/MDsim.h
+source/energy/energy.src
+
+..............................................................................
+4.6 domdec gpu only cufft problem
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : September 16, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13953
+Subversion committed: Revision 542(c41b) and 543
+
+     I changed CUDA_COMPATIBILITY_NATIVE to CUDA_COMPATIBILITY_FFTW_PADDED to
+support CUDA 8.0 which isn't out yet. This breaks domdec gpu only mode.
+So I'm reverting the change. This will allow domdec gpu only to work with
+CUDA 6.0, 6.5, 7.0 and 7.5 but the code won't compile with CUDA 8.0 Release
+Candidate.
+
+File Involved:
+source/domdec_gpu/CudaPMERecip.cu
+
+..............................................................................
+4.7 domdec_gpu with the CUDA 8.0 Toolkit
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : October 31, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13960
+Subversion committed: Revision 544(c41b), 545, 546
+
+     The domdec_gpu install.com option fails at compile time.
+
+Files Involved:
+build/UNX/Makefile_gnu
+source/domdec_gpu/CudaPMERecip.h
+source/domdec_gpu/CudaPMERecip.cu
+
+..............................................................................
+4.8 lambda dyn modulo
+    Developer  : Ryan Hayes
+    Institution: University of Michigan
+    Date       : November 4, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13977
+Subversion committed: Revision 547(c41b) and 548
+
+     It was an inefficient implementation of the modulo function which caused
+an executable to hang during crashes, as well as an interpolation error using
+int (round towards zero) when it should have been using floor (round down).
+
+Files Involved:
+source/pert/lambdadyn.src
+
+..............................................................................
+4.9 COOR DIST RESI Bugfix
+    Developer  : Wonmuk Hwang
+    Institution: Texas A&M University
+    Date       : November 16, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/13984
+Subversion committed: Revision 562(c41b) and 563
+
+    Fixed a bug in subroutine corman3.src:DISTN3, which caused an error when
+applying the COOR DIST RESI command to two pairs of resid ranges within
+the same segment.
+
+File Involved:
+source/manip/corman3.src
+
+..............................................................................
+4.10 pmeutil load_bsp_mod array overrun
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : December 8, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/13995
+Subversion committed: Revision 550(c41b) and 549
+
+The function load_bsp_mod of the pmeutil module indexes allocated array
+bsp_arr past its end when forder >= max(nfft1, nfft2, nfft3). This leads
+to a crash only sometimes.
+
+File Involved:
+source/nbonds/pmeutil.src
+
+..............................................................................
+4.11 SCC-DFTB and Q-Chem SMBP bug and SMBP document fix
+    Developer  : H. Lee Woodcock
+    Institution: University of South Florida
+    Date       : December 13, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/14002
+Subversion committed: Revision 552(c41b) and 551
+
+1) When SCC-DFTB is compiled with QCHEM then NQM gets set to NSCCTC,
+   but if qmused_qchem is true then NQM should be updated to NGAMES instead.
+2) SMBP documentation should make clear that ESP and ChelpG charges are
+   supported via Q-Chem (i.e., not only Mulliken).
+
+Files Involved:
+source/misc/pbeq.src
+doc/pbeq.doc
+
+..............................................................................
+4.12 domdec gpu direct force bug and lambdadyn output format
+    Developer  : Ryan Hayes
+    Institution: University of Michigan
+    Date       : December 15, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/14020
+Subversion committed: Revision 555(c41b) and 554
+
+1) In CudaDirectForce_util.h, sh_bixlam was incorrectly declared as an integer
+   which caused lambda values to be rounded to zero. In addition, the cross
+   terms dpotiAT and dpotjAT between sites were being calculated incorrectly.
+2) In lambdadyn.src, there is some misformatted output that leads to crashes
+   above prnlev 9.
+
+Files Involved:
+source/domdec_gpu/CudaDirectForce_util.h
+source/pert/lambdadyn.src
+
+..............................................................................
+4.13 lqmewd undefined
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : December 15, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/14041
+Subversion committed: Revision 558(c41b) and 559
+
+     For some builds that include the prefx keyword MNDO97, the variable lqmewd
+appearing in source/nbonds/qmmm_pme_module.src, is undefined.
+
+File Involved:
+source/nbonds/qmmm_pme_module.src
+
+..............................................................................
+4.14 close qchem force field prm file
+    Developer  : H. Lee Woodcock
+    Institution: University of South Florida
+    Date       : December 21, 2016
+
+Check-in: http:/charmm.hanyang.ac.kr/14088
+Subversion committed: Revision 567(c41b) and 568
+
+     The qchem force field prm file written to unit 92 in SUBROUTINE PARWTR
+must be explicitly closed to avoid an error message on OSX/macOS.
+
+File Involved:
+source/io/parmio.src
+
+..............................................................................
+4.15 Fixes at Karolinska Institute
+    Developer  : Lennart Nilsson
+    Institution: Karolinska Institutet
+    Date       : January 9, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/14103
+Subversion committed: Revision 572(c41b) and 571
+
+- move the 'IF(.NOT. QHAVCRD(NATOM,(/ -1 /),XREF) )' block inside the
+  'IF(NTOT.EQ.0) THEN' block instead of after it.
+- add a test for whether frequency for stopping rotation in TMD is actually
+  zero
+- rearrange 'DATA AFRQ' so that NPHFREQ is before INRT and NPHFREQ is set to
+  JFRQ(11) and INRT is set to JFRQ(12)
+- update FUNCTION QHAVCRD to use fortran intrinsics 'any' and 'all'
+- Standardie self reporting pass/fail of testcases
+
+Files Involved:
+source/correl/anacor.src
+source/dynamc/dcntrl.src
+source/energy/eutil.src
+source/util/chutil.src
+test/c40test/testopti.inp
+
+..............................................................................
+4.16 Small Fixes from NREL and NIH
+    Developer  : Mike Crowley and Andy Simmonett
+    Institution: NREL and NIH
+    Date       : January 10, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/14114
+Subversion committed: Revision 574(c41b) and 573
+
+- small fix to correct the virial in multi-GPU DOMDEC calculations
+- changed 'nbdirect->calc_virial(ncoord_home' to 'nbdirect->calc_virial(ncoord'
+- somewhat more informative error message for the case where there are an
+  invalid number of nodes: write out some of the node parameters
+- Fix for parallel run in rmsdyn. Someone made slaves dealloc and exit messing
+  up the synchronization of mpi broadcasts. Comment out the chmdeallocs.
+- minor cleanup; remove unused variables and commented code
+- For some reason not having a return statement in a stream file makes
+  parallel runs crash. Added return to the end of the stream file.
+
+Files Involved:
+source/domdec/MDsim.cu
+source/domdec/domdec_r2d_comm.src
+source/manip/rmsdyn.src
+source/squantm/sqnt_mlayer.src
+test/data/qtest.str
+
+..............................................................................
+4.17 Fix to preprocessor flags for CHARMM-TURBOMOLE
+    Developer  : Christopher Rowley
+    Institution: Memorial University of Newfoundland
+    Date       : January 25, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/14160
+Subversion committed: Revision 592(c41b) and 593
+
+     Changed preprocessor commands to allow compilation
+
+Files Involved:
+source/nbonds/ewald.src
+source/gukint/gukini.src
+
+..............................................................................
+4.18 mini blows up with PME and BLOCK in CHARMM builds without MPI
+    Developer  : Charles Brooks
+    Institution: University of Michigan
+    Date       : January 26, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/14169
+Subversion committed: Revision 580(c41b) and 581
+
+    Engery blows up within three steps of minimization using block and PME
+in serial builds of charmm (ie without MPI).
+
+Files Involved:
+source/energy/ecntrl.src
+source/nbonds/enbonda.src
+source/nbonds/enbondg.src
+source/nbonds/pme.src
+test/c36test/pme_block.inp
+
+..............................................................................
+4.19 c36test/pme_block.inp
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : February 3, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/14206
+Subversion committed: Revision 586(c41b) and 587
+
+     c36test/pme_block.inp uses an odd test that has always reported a fail.
+
+Files Involved:
+test/c36test/pme_block.inp
+
+..............................................................................
+4.20 segfault in image module
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : February 7, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/14218
+Subversion committed: Revision 588(c41b) and 589
+
+     In the xdistm subroutine of source/image/nbndgcm.src, an array lstn2m is
+read beyond its bounds and an invalid upper bound nbrnr is set for another do
+loop to write to lstn2m beyond the bounds. This results in a segfault.
+
+Files Involved:
+source/image/nbndgcm.src
+
+..............................................................................
+4.21 openmm 7.1 compatibility
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : February 8, 2017
+
+Check-in: http:/charmm.hanyang.ac.kr/1425
+Subversion committed: Revision 590(c41b) and 591
+
+     OpenMM 7.1 includes an api change for the MonteCarloBarostat class
+setTemperature and getTemperature are now setDefaultTemperature and
+getDefaultTemperature
+
+Files Involved:
+CMakeLists.txt
+install.com
+source/openmm/omm_main.src
+tool/cmake/prefx_keywords.cmake

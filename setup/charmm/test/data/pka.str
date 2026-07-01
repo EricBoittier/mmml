@@ -1,0 +1,97 @@
+* pka.str
+* stream file for pKa Poisson-Bolztmann calculation
+* deals with explicit charge distribution on the ionizable site
+*
+
+
+!Miscelaneous variables 
+ 
+set    Dcel   =  0.5      !initial value for the mesh size in the finite-difference
+set    Ncel   =   65      !maximum number of grid points
+set    EpsP   =  1.0      !dielectric constant for the protein interior
+set    EpsW   = 80.0      !solvent dielectric constant  
+set    Conc   =  0.0      !salt concentration
+set    Focus  = Yes
+
+!Note that the resid must be set before streaming into this file
+
+scalar wcomp = charge 
+
+patch @patch @Segid @resid setup 
+
+hbuild  !build any missing hydrogens
+
+scalar wcomp  store 1
+scalar charge store 2
+
+define SITE select  .bygroup.  ( resid @resid ) show end
+define REST select .not. site end
+
+! Charges of the unprotonated state
+scalar wmain recall 1 
+scalar wmain show
+scalar wmain stat select SITE end
+
+! Charges of the protonated state
+scalar wmain recall 2 
+scalar wmain show
+scalar wmain stat select SITE end
+
+! Estimate the grid dimensions
+format (f15.5)
+
+coor orient norotate
+coor stat select all end
+calc DcelX = ( ?Xmax - ?Xmin ) / @Ncel
+calc DcelY = ( ?Ymax - ?Ymin ) / @Ncel
+calc DcelZ = ( ?Zmax - ?Zmin ) / @Ncel
+if @DcelX gt @Dcel  set Dcel   = @DcelX
+if @DcelY gt @Dcel  set Dcel   = @DcelY
+if @DcelZ gt @Dcel  set Dcel   = @DcelZ
+
+coor stat select SITE end
+set Xcen = ?xave
+set Ycen = ?yave
+set Zcen = ?zave
+
+
+PBEQ
+
+stream @0radius.str
+
+scalar charge recall 2    ! Protonated charge distribution
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  
+if Focus eq yes SOLVE ncel @Ncel Dcel 0.25 EpsP @EpsP EpsW @EpsW  focus XBcen @Xcen YBcen @Ycen ZBcen @Zcen
+
+set EnerPs = ?enpb        ! Protonated side chain in structure
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  select SITE end 
+if Focus eq yes SOLVE ncel @Ncel Dcel  0.25 EpsP @EpsP EpsW @EpsW  focus XBcen @Xcen YBcen @Ycen ZBcen @Zcen select SITE end
+
+set EnerPi = ?enpb        ! Protonated side chain isolated 
+
+
+scalar charge recall 1    ! Unprotonated charge distribution
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  
+if Focus eq yes SOLVE ncel @Ncel Dcel  0.25 EpsP @EpsP EpsW @EpsW  focus XBcen @Xcen YBcen @Ycen ZBcen @Zcen
+
+set EnerUs = ?enpb        ! Unprotonated side chain in structure
+
+SOLVE ncel @Ncel Dcel @Dcel EpsP @epsP EpsW @EpsW  select SITE end 
+if Focus eq yes SOLVE ncel @Ncel Dcel  0.25 EpsP @EpsP EpsW @EpsW  focus XBcen @Xcen YBcen @Ycen ZBcen @Zcen select SITE end
+
+set EnerUi = ?enpb        ! Unprotonated side chain isolated
+
+calc Energy = ( @EnerPs - @EnerUs ) - ( @EnerPi - @EnerUi )
+
+calc pKa =  -@Energy/( ?KBLZ * 300 ) * log10(exp(1))          ! = log10( exp(-@Energy/( ?KBLZ * 300 )))
+
+END
+
+
+
+
+
+

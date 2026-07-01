@@ -1,0 +1,126 @@
+* CHARMM c36a1 Testcase c36test/conspath.inp
+* Author: Sean Law & Michael Feig
+* Date  : December 23, 2007
+* Test  : Harmonic path restraint of DNA nucleotide center of mass
+*
+
+! Uses files: par_all22_na.inp, top_all22_na.inp, nt4.pdb, splinepts.inp
+
+if ?cpath  .ne. 1  then
+  echo "Test NOT performed."
+  STOP
+endif
+   
+bomlev -2
+stream datadir.def
+
+! Read topology and parameter files
+
+open unit 1 read form name @0top_all22_na.inp
+read rtf unit 1 card
+close unit 1
+
+open unit 1 read form name @0par_all22_na.inp
+read param unit 1 card
+close unit 1
+
+! Read simple poly-nucleotide
+
+open unit 10 read form name @0nt4.pdb
+read sequ pdb unit 10
+
+generate first 5PHO last 3TER N01A setup warn
+rewind unit 10
+read coor pdb unit 10 resi
+close unit 10
+!print coor
+
+! read user defined spline points
+open unit 77 read form name @0splinepts.inp
+
+ic param
+ic build
+update atom CDIE eps 1 cutnb 20 ctofnb 18 ctonnb 16 shift vshift  bygr
+
+! keep original coordinates for comparison
+coor copy comp
+
+! Restrain center of geometry for residues 6 and 7 (heavy atoms only)
+
+cons path comp spline select type p end -
+force 15 tzero -0.2 select resid 6 .and. (.not. hydrogen) end -
+force 15 tzero -0.2 select resid 7 .and. (.not. hydrogen) end 
+
+
+! Test First Derivatives
+
+skip all excl path
+!test first tol 1e-5 step 1e-6 select (resid 6:7) .and. (.not. hydrogen) end
+test first tol 1e-5 step 1e-6 select all end
+!test first tol 1e-5 step 1e-6 select resid 7 .and. type P .and. (.not. hydrogen) end
+skip none
+test first tol 1e-5 step 1e-6 select all end
+!test first tol 1e-5 step 1e-6 select (resid 6:7) .and. (.not. hydrogen) end
+
+! minimize following steepest descent 
+
+faster on
+mini sd nprint 10 inbfreq -1 step 0.005 nstep 500
+
+! Clear CONS PATH
+
+cons path clear
+
+! Restrain center of geometry for residues 6 and 7
+! (heavy atoms AND not including the phosphorous atom).
+! relative to spline points from unit 77 and with
+! T-initial values from the COMParison set
+
+cons path comp splunit 77 -
+force 10 tzero 0.2 select resid 6 .and. (.not. (type p .or. hydrogen)) end -
+force 10 tzero 0.2 select resid 7 .and. (.not. (type p .or. hydrogen)) end
+
+! minimize following steepest descent and abnr
+
+! short md
+
+shake bonh tol 1e-08 param
+dyna leap start timestep 0.002 nstep 100 finalt 298 -
+inbfreq -1 imgfreq -1 bycb -
+iasors 1 iasvel 1 -
+ichecw 1 ieqfrq 100 twindl -5.96 twindh +5.96 -
+nprint 50 iprfrq 20 nsavc 50 nsavv 0 iunvel -1 -
+tstru 298 firstt 298 iseed 15249629 -
+echeck 20 -
+iunrea -1 iunwri -1 iuncrd -1 kunit -1
+
+
+! default correct values
+set toten = -40.1442
+set path0 = 0.493689
+
+!-if ?tote .ne. @toten goto diehard
+!-if ?path .ne. @path0 goto diehard
+
+calc echk = abs( ?tote - ( @toten ) )
+if echk .gt. 0.0001 goto diehard
+
+calc pchk = abs( ?path - ( @path0 ) )
+if pchk .gt. 0.000001 goto diehard
+
+stop
+
+label diehard
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!*****  CONS PATH FORCE FIELD NOT CORRECT   *****!!!!!
+!!!!!!!!                                           !!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!                                            !!!!!!
+!!!!!!!!                                            !!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+bomlev 0
+quit  ! to make charmm stop abnormally
+
+stop

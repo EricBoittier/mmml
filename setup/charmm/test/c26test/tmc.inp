@@ -1,0 +1,100 @@
+* Test case for Monte Carlo with rigid bonds, angles, dihedrals   
+* This input file builds N-methyl alanyl acetamide
+* using internal coordinates and then manipulates the
+* structure based on the dihedrals, bond and agnle ics
+* It has been modified to explore the use of the replica/GA command
+* for copying multiple (5 structures) structures to explore conformations
+* THIS USES MC annealing with translational/rotational degrees of freedom
+*
+
+if ?NUMNODE .gt. 1 then
+  echo tmc testcase result: skip
+  echo "Test NOT performed."
+  stop
+endif
+
+if ?genetic .ne. 1 then
+ echo "Test NOT performed."
+ echo tga testcase result: skip
+ stop
+endif
+
+stream datadir.def
+open read form unit 1 name @0/toph19.rtf
+read rtf card unit 1
+open read form unit 1 name @0/param19.prm
+read param card unit 1
+
+! Read in the sequence and generate the psf (protein structure file - an
+! internal CHARMM data structure describing the specific connectivity for
+! the specific structure of interest.  It is created using the information
+! from the topology and parameter files
+Read sequ card
+* maa
+*
+3
+AMN ALA CBX
+
+Generate maa setup !the segment identifier is called maa and the setup
+                   !command indicates that the internal coordinate tables
+                   !(based upon ic information in the rtf) will be created
+
+ic parameters  !fill the current ic table based upon values from the
+               !parameter and/or rtf files
+
+ic seed 1 cl 1 c 1 o  !provide the three atoms to "seed" building
+
+ic build  !build the structure based upon the internal coordinates (ics)
+
+print ic
+print coordinates
+coor orie  !orient molecule so CM is at origin and principal axes are along
+           !cartesian directions
+
+set npar 5 
+GAlgorithm SETUp -
+    CHROmosomes @npar select segid maa end -
+    VARIable_ICs
+    DIHEdral INCLude  1 C     2 N     2 CA    2 C   end
+    DIHEdral INCLude  2 N     2 CA    2 C     3 N   end
+   tran rota
+   END   
+
+Nbonds cdie eps 1.0 cutnb 99.0 ctofnb 90.0 wrnmxd 99.0 swit vswit
+energy
+
+@testcheck ?ener -362.846895 -1 tmc_1
+
+prnlev 3 @pnode
+GALGorithm EVOLve -
+mCarlo   Tbeg 500.0 Tend 250.0  tfrq 10 -
+RAND iseed 111 rtran 2.0 rrota 3.6 rdihe 360.0 -
+  MAXGenerations 2000 -
+  niches 1 inte 10999 -
+  gsize 1 muta 1.0  pinte 1.0 qrmin rmin 0.885  -  
+  ibig 50 bdis 100.0  -
+  print 200 Dist 20.0  delete  clear
+
+skipe bonds
+skipe angle
+energy 
+
+! e to within 1.0% of -195 ok
+set tol = 0.01
+set refe = -191
+
+@testcheck ?ener @refe @tol tmc_2
+
+set 0 0
+label loop
+incr 0 by 1
+inte sele iseg @0 end
+if 0 lt @npar goto loop
+
+energy rmin 0.0
+print ic
+print coor
+
+@testcheck ?ener @refe @tol tmc_3
+
+stop

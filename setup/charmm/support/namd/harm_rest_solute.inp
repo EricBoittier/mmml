@@ -1,0 +1,40 @@
+* set up harmonic restraint pdb file for NAMD program  
+* harmonically restrain solute 
+* Author: Andrei A. Golosov
+* usage: charmm <harm_rest_solute.inp infile=... outfile=... k0=... kb=...
+* kb is the backbone restraint force constant
+* k0 is the restraint force constant for the rest of the solute
+* output: harm.pdb 
+*
+
+open unit 1 read form name "~/toppar.dir/top_all27_prot_na.rtf"
+read rtf card unit 1
+
+open unit 1 read form name "~/toppar.dir/par_all27_prot_na.prm"
+read param card unit 1
+
+if @?infile eq 0 stop
+if @?outfile eq 0 stop
+! constant for all
+if @?k0 eq 0 stop
+! constant for backbone
+if @?kb eq 0 stop
+
+open unit 2 read form name @infile.psf 
+read psf card unit 2
+
+open unit 1 read card name @infile.crd
+read coor card  unit 1
+
+! select all waters and Na and Cl ions
+define solvent sele .byres. ( type OH2 .or. resname SOD .or. resname CLA ) end
+! restrain all heavy atoms of protein and DNA/RNA 
+scalar wmain set 0 sele all end
+scalar wmain set @k0 sele ( .not. solvent ) .and. .not. hydrogen end
+! restrain the backbone of protein and DNA/RNA 
+scalar wmain set @kb sele type c .or. type o .or. type ca .or. type n .or. type P .or. type OP* end 
+
+open unit 2 write form name @outfile.pdb
+write coor pdb unit 2 
+
+stop

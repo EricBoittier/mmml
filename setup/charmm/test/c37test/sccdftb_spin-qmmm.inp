@@ -1,0 +1,241 @@
+* CHARMM c37a2 Testcase sccdftb_spin-qmmm.inp
+* test case for DFTB3 spin-polarization correction (UNPE) 
+* in a small sample QM/MM setup
+* Michael Gaus & Qiang Cui, July 2012, UW Madison
+
+bomlev 0
+
+if ?SCCDFTB .NE. 1 then
+  echo "Test NOT Performed."
+  STOP
+endif
+
+
+read rtf card
+* example top file
+*
+37 2
+
+mass     1 H      1.00800 H ! standard H
+mass     2 C     12.01100 C ! standard C
+mass     3 N     14.00700 N ! standard N
+mass     4 O     15.99940 O ! standard O
+
+default first none last none
+autogenerate angles dihedral
+
+resi c2h7         0.000 ! only for qm-zone, thus charges are not necessary
+group
+atom C1   C       0.000
+atom H2   H       0.000
+atom H3   H       0.000
+atom H4   H       0.000
+atom C5   C       0.000
+atom H6   H       0.000
+atom H7   H       0.000
+atom H8   H       0.000
+atom H9   H       0.000
+bond C1 H2 C1 H3 C1 H4 
+bond C5 H6 C5 H7 C5 H8 C5 H9
+!pathing first none last none
+
+resi c2h6       0.000 ! only for qm-zone, thus charges are not necessary
+group
+atom C1   C       0.000
+atom H2   H       0.000
+atom H3   H       0.000
+atom H4   H       0.000
+atom C5   C       0.000
+atom H6   H       0.000
+atom H7   H       0.000
+atom H8   H       0.000
+bond C1 C5
+bond C1 H2 C1 H3 C1 H4 
+bond C5 H6 C5 H7 C5 H8 
+!pathing first none last none
+
+END
+
+
+read para card
+* example prm file
+*
+BONDS
+C     C   222.500      1.5380    ! only for qm-purposes
+C     H   330.000      1.0800
+
+ANGLES
+H   C   C       34.500    110.10   22.53   2.17900
+H   C   H       35.500    109.00    5.40   1.80200
+
+DIHEdrals
+X   C   C   X           0.2000  3     0.00
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+C      0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000
+H      0.000000  -0.022000     1.320000   0.0        0.0          0.0
+N      0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000
+O      0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000
+
+END
+
+
+read psf card
+PSF CMAP CHEQ
+
+       2 !NTITLE
+* GET CH3-H-CH3 EXAMPLE                                                         
+*  DATE:     7/ 6/12     14:47:27      CREATED BY USER: mgaus                   
+
+      25 !NATOM
+       1 ASDF 1    C2H7 C1      2    0.00000       12.0110           0   0.00000     -0.301140E-02
+       2 ASDF 1    C2H7 H2      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       3 ASDF 1    C2H7 H3      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       4 ASDF 1    C2H7 H4      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       5 ASDF 1    C2H7 C5      2    0.00000       12.0110           0   0.00000     -0.301140E-02
+       6 ASDF 1    C2H7 H6      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       7 ASDF 1    C2H7 H7      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       8 ASDF 1    C2H7 H8      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+       9 ASDF 1    C2H7 H9      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      10 ASDF 2    C2H6 C1      2    0.00000       12.0110           0   0.00000     -0.301140E-02
+      11 ASDF 2    C2H6 H2      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      12 ASDF 2    C2H6 H3      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      13 ASDF 2    C2H6 H4      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      14 ASDF 2    C2H6 C5      2    0.00000       12.0110           0   0.00000     -0.301140E-02
+      15 ASDF 2    C2H6 H6      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      16 ASDF 2    C2H6 H7      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      17 ASDF 2    C2H6 H8      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      18 ASDF 3    C2H6 C1      2    0.00000       12.0110           0   0.00000     -0.301140E-02
+      19 ASDF 3    C2H6 H2      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      20 ASDF 3    C2H6 H3      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      21 ASDF 3    C2H6 H4      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      22 ASDF 3    C2H6 C5      2    0.00000       12.0110           0   0.00000     -0.301140E-02
+      23 ASDF 3    C2H6 H6      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      24 ASDF 3    C2H6 H7      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+      25 ASDF 3    C2H6 H8      1    0.00000       1.00800           0   0.00000     -0.301140E-02
+
+      21 !NBOND: bonds
+       1       2       1       3       1       4       5       6
+       5       7       5       8       5       9      10      14
+      10      11      10      12      10      13      14      15
+      14      16      14      17      18      22      18      19
+      18      20      18      21      22      23      22      24
+      22      25
+
+      33 !NTHETA: angles
+       2       1       3       2       1       4       3       1       4
+       6       5       7       6       5       8       6       5       9
+       7       5       8       7       5       9       8       5       9
+      11      10      12      11      10      13      11      10      14
+      12      10      13      12      10      14      13      10      14
+      10      14      15      10      14      16      10      14      17
+      15      14      16      15      14      17      16      14      17
+      19      18      20      19      18      21      19      18      22
+      20      18      21      20      18      22      21      18      22
+      18      22      23      18      22      24      18      22      25
+      23      22      24      23      22      25      24      22      25
+
+      18 !NPHI: dihedrals
+      11      10      14      15      11      10      14      16
+      11      10      14      17      12      10      14      15
+      12      10      14      16      12      10      14      17
+      13      10      14      15      13      10      14      16
+      13      10      14      17      19      18      22      23
+      19      18      22      24      19      18      22      25
+      20      18      22      23      20      18      22      24
+      20      18      22      25      21      18      22      23
+      21      18      22      24      21      18      22      25
+
+       0 !NIMPHI: impropers
+
+
+       0 !NDON: donors
+
+
+       0 !NACC: acceptors
+
+
+       0 !NNB
+
+       0       0       0       0       0       0       0       0
+       0       0       0       0       0       0       0       0
+       0       0       0       0       0       0       0       0
+       0
+
+       3       0 !NGRP NST2
+       0       0       0       9       0       0      17       0       0
+
+       1 !MOLNT
+       1       1       1       1       1       1       1       1
+       1       1       1       1       1       1       1       1
+       1       1       1       1       1       1       1       1
+       1
+
+       0       0 !NUMLP NUMLPH
+
+       0 !NCRTERM: cross-terms
+
+
+read coor card
+* GET CH3-H-CH3 EXAMPLE
+*  DATE:     7/ 6/12     14:47:27      CREATED BY USER: mgaus
+*
+   25
+    1    1 C2H7 C1     0.00000  -0.00015  -1.42344 ASDF 1      0.00000
+    2    1 C2H7 H2     0.00000   0.00046  -0.30174 ASDF 1      0.00000
+    3    1 C2H7 H3     0.00000   1.02999  -1.77596 ASDF 1      0.00000
+    4    1 C2H7 H4    -0.89229  -0.51553  -1.77506 ASDF 1      0.00000
+    5    1 C2H7 C5     0.00000   0.00022   1.51556 ASDF 1      0.00000
+    6    1 C2H7 H6     0.89229  -0.51553  -1.77506 ASDF 1      0.00000
+    7    1 C2H7 H7    -0.92717   0.53548   1.71052 ASDF 1      0.00000
+    8    1 C2H7 H8     0.00000  -1.07042   1.71016 ASDF 1      0.00000
+    9    1 C2H7 H9     0.92717   0.53548   1.71052 ASDF 1      0.00000
+   10    2 C2H6 C1     4.00000   0.00000   0.76357 ASDF 2      0.00000
+   11    2 C2H6 H2     4.00000   1.01611   1.16097 ASDF 2      0.00000
+   12    2 C2H6 H3     4.00000  -1.01611  -1.16097 ASDF 2      0.00000
+   13    2 C2H6 H4     4.87998   0.50806  -1.16097 ASDF 2      0.00000
+   14    2 C2H6 C5     4.00000   0.00000  -0.76357 ASDF 2      0.00000
+   15    2 C2H6 H6     3.12002   0.50806  -1.16097 ASDF 2      0.00000
+   16    2 C2H6 H7     4.87998  -0.50806   1.16097 ASDF 2      0.00000
+   17    2 C2H6 H8     3.12002  -0.50806   1.16097 ASDF 2      0.00000
+   18    3 C2H6 C1    -4.00000   0.00000   0.76357 ASDF 3      0.00000
+   19    3 C2H6 H2    -4.00000   1.01611   1.16097 ASDF 3      0.00000
+   20    3 C2H6 H3    -4.00000  -1.01611  -1.16097 ASDF 3      0.00000
+   21    3 C2H6 H4    -3.12002   0.50806  -1.16097 ASDF 3      0.00000
+   22    3 C2H6 C5    -4.00000   0.00000  -0.76357 ASDF 3      0.00000
+   23    3 C2H6 H6    -4.87998   0.50806  -1.16097 ASDF 3      0.00000
+   24    3 C2H6 H7    -3.12002  -0.50806   1.16097 ASDF 3      0.00000
+   25    3 C2H6 H8    -4.87998  -0.50806   1.16097 ASDF 3      0.00000
+
+
+nbonds atom fshift cdie vdw vshift -
+       cutnb 14.0 ctofnb 12.0 ctonnb 10.0 wmin 1.5 eps 1.0 -
+       inbfrq -1
+
+define qm sele resid 1 end
+
+! for a successful execution a file named sccdftb.dat
+! needs to be located at the current working directory,
+! the corresponding example sccdftb.dat file can be found
+! at data/sccdftb_spin-qmmm.sccdftbdat, the SCCDFTB parameter files
+! can be downloaded from the www.dftb.org webpage (mio-1-1)
+
+scalar wmain set 1.0 sele (qm) .and. type C*  end
+scalar wmain set 2.0 sele (qm) .and. type H*  end
+
+sccdftb remove d3rd hbon chrg 0 sele qm end temp 0.00 scft 0.00000001 unpe 1
+
+!open unit 30 write file name trj.dcd 
+!energy
+mini conj nstep 100 nprint 10 ! nsavc 1 iuncrd 30
+!mini abnr nstep 200
+
+!open unit 3 name ./c2h7-2ethane-opt.cor write form
+!write coor card unit 3
+!close unit 3
+
+stop
+
+
+

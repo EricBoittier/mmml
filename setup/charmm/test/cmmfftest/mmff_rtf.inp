@@ -1,0 +1,220 @@
+* mmff_rtf.inp
+* author:  Ryszard Czerminski (May 11, 1993)
+* purpose: to test new RTF keywords (SINGLE, DOUBLE & TRIPLE) with ala2
+* external files: MMFFANG.PAR MMFFBOND.PAR MMFFCHG.PAR MMFFDEF.PAR
+*                 MMFFOOP.PAR MMFFSTBN.PAR MMFFSUP.PAR MMFFSYMB.PAR
+*                 MMFFTOR.PAR MMFFVDW.PAR
+* UPDATED by Josh Buckner 18 April 2018
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+set tol = 1e-3
+set pass = 1
+set failed =
+
+stream datadir.def
+stream @0mmff_setup.str
+
+read merck unit 5
+ala2.msf                                                              94 1813331
+MOL O  E =       0.0000   G =  1.49E+01  MMFF                          
+   23    22
+    0.0000     0.0000     0.0000     7 34 0     1 N      1ALA   -0.8530
+   -0.3466    -0.9805     0.0000     1 36 0     2 HT1    1ALA    0.4500
+   -0.3466     0.4903     0.8492     1 36 0     3 HT2    1ALA    0.4500
+   -0.3466     0.4903    -0.8492     1 36 0     4 HT3    1ALA    0.4500
+    1.4580     0.0000     0.0000     6  1 0     5 CA     1ALA    0.5643
+    1.8065    -0.5196     0.8925     1  5 0     6 HA     1ALA    0.0000
+    1.9348    -0.7485    -1.2451     6  1 0     7 CB     1ALA    0.0000
+    1.5406    -1.7647    -1.2583     1  5 0     8 HB1    1ALA    0.0000
+    1.6010    -0.2419    -2.1506     1  5 0     9 HB2    1ALA    0.0000
+    3.0231    -0.8049    -1.2676     1  5 0    10 HB3    1ALA    0.0000
+    2.0212     1.4226     0.0000     6  3 0    11 C      1ALA    0.5687
+    1.2926     2.4073     0.0000     8  7 0    12 O      1ALA   -0.5700
+    3.3658     1.4554     0.0000     7 10 0    13 N      2ALA   -0.7301
+    3.9250     0.6264     0.0000     1 28 0    14 HN     2ALA    0.3700
+    4.0060     2.7564     0.0000     6  1 0    15 CA     2ALA    0.1942
+    3.7140     3.3098    -0.8925     1  5 0    16 HA     2ALA    0.0000
+    3.5734     3.5313     1.2451     6  1 0    17 CB     2ALA    0.0000
+    2.4919     3.6666     1.2583     1  5 0    18 HB1    2ALA    0.0000
+    3.8610     2.9971     2.1506     1  5 0    19 HB2    2ALA    0.0000
+    4.0402     4.5160     1.2676     1  5 0    20 HB3    2ALA    0.0000
+    5.5255     2.5771     0.0000     6 41 0    21 C      2ALA    0.4059
+    5.9817     1.4349     0.0000     8 32 0    22 OCT1   2ALA   -0.6500
+    6.2350     3.5819     0.0000     8 32 0    23 OCT2   2ALA   -0.6500
+    2     1  1      3     1  1      4     1  1      7     5  1      1     5  1
+   11     5  1     11    13  1      5     6  1      7     8  1      7     9  1
+    7    10  1     12    11  2     17    15  1     13    14  1     13    15  1
+   21    15  1     15    16  1     17    18  1     17    19  1     17    20  1
+   21    22  1     21    23  2
+END
+
+generate
+
+energy CUTNB 999. CTOFNB 998. CTONNB 997. SWITch VSWItch cdie -
+       ihbfrq 0 e14fac 0.75
+
+set case = 1
+set eref = 30.22314
+set gref = 15.27260
+goto tester
+label 1
+
+write merck unit 6
+* test alanine dipeptide in Merck format
+*
+
+write coor card name @9ala2.tmp
+
+read rtf card unit 5
+* RTF for alanine
+*
+     22    0
+MASS     1 H      1.00800 H  ! Hydrogen bonding hydrogen (neutral group)
+MASS     2 HC     1.00800 H  ! Hydrogen bonding hydrogen (charged group)
+MASS     3 HA     1.00800 H  ! Aliphatic or aromatic hydrogen
+MASS    10 CT    12.01100 C  ! Aliphatic carbon (tetrahedral)
+MASS    14 C     12.01100 C  ! Carbonyl or Guanidinium carbon
+MASS    32 NP    14.00670 N  ! Nitrogen in peptide, amide, or related, group
+MASS    36 NT    14.00670 N  ! Nitrogen (tetrahedral), i.e. Amine, etc.
+MASS    40 O     15.99940 O  ! Carbonyl oxygen for amides or related structures
+MASS    43 OC    15.99940 O  ! Charged oxygen
+
+DECL -CA
+DECL -C
+DECL -O
+DECL +N
+DECL +H
+DECL +CA
+DECL -N
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NTER LAST CTER
+
+RESI ALA           0.00  !  Alanine
+GROUP
+ ATOM N    NP     -0.40
+ ATOM HN   H       0.25  
+ ATOM CA   CT      0.05
+ ATOM HA   HA      0.05
+GROUP
+ ATOM CB   CT     -0.15
+ ATOM HB1  HA      0.05
+ ATOM HB2  HA      0.05
+ ATOM HB3  HA      0.05
+GROUP
+ ATOM C    C       0.60
+ ATOM O    O      -0.55
+BOND CB   CA                       N    HN        N    CA
+BOND C    CA        C    +N        CA   HA        CB   HB1       CB   HB2
+BOND CB   HB3
+DOUBLE O C
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   C    CA   CB   HB1    0.0000    0.00  180.00    0.00   0.0000
+IC   HB1  CA   *CB  HB2    0.0000    0.00  120.00    0.00   0.0000
+IC   HB1  CA   *CB  HB3    0.0000    0.00  240.00    0.00   0.0000
+
+PRES NTER          0.90
+! This patch is used to provide a charged NH3+ group for the N-terminal
+! This patch will NOT work with a PRO as the first residue (use PROP)
+! This patch will NOT work with a GLY as the first residue (use GLYP)
+! This patch will NOT work with dehydro amino acids as the first residue
+!   (use NTRU)
+GROU
+ ATOM N    NT     -0.30
+ ATOM HT1  HC      0.35
+ ATOM HT2  HC      0.35
+ ATOM HT3  HC      0.35
+ DELETE ATOM HN
+ ATOM CA   CT      0.15
+BOND HT1  N         HT2  N    HT3  N
+!DIHE HT1  N    CA   C
+DONO HT1  N
+DONO HT2  N
+DONO HT3  N
+IC   HT1  N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   HT1   CA  *N   HT2    0.0000    0.00  120.00    0.00   0.0000
+IC   HT1   CA  *N   HT3    0.0000    0.00  240.00    0.00   0.0000
+
+PRES CTER         -0.90
+! This patch is used to provide a charged COO- group for the C-terminal
+GROU
+ ATOM C    C       0.14
+ ATOM OCT1 OC     -0.57
+ ATOM OCT2 OC     -0.57
+ ATOM CA   CT      0.10
+DELETE ATOM O
+BOND   C    OCT1
+DOUBLE C    OCT2
+!DIHE N    CA    C    OCT2
+IMPH C    OCT2  OCT1 CA
+ACCE OCT1 C
+ACCE OCT2 C
+IC   N    CA    C    OCT2    0.0  0.0  180.0  0.0  0.0
+IC   OCT2 CA    *C   OCT1    0.0  0.0  180.0  0.0  0.0
+
+END
+
+delete atom sele all end
+
+read sequ ala 2
+bomlev -2
+generate ala2
+
+print psf
+read coor card name @9ala2.tmp
+
+energy
+set case = 2
+set eref = 30.22314
+set gref = 15.27260
+goto tester
+label 2
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+if @pass eq 0 then
+      echo FAILING TESTS @failed
+endif
+
+stop
+
+label tester
+
+echo @case new energy ?ener  grms ?grms
+calc ediff = abs ( ?ener - @eref )
+calc gdiff = abs ( ?grms - @gref )
+
+set epass = 0
+set gpass = 0
+
+if @ediff le @tol set epass = 1
+if @gdiff le @tol set gpass = 1
+
+calc egpass = @epass * @gpass
+if egpass le 0 set failed = @failed @case
+
+calc pass = @pass * @egpass
+
+goto @case
+
+stop

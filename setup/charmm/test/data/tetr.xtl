@@ -1,0 +1,38 @@
+* TEST THE BUILDING AND BLOCK PARTITIONING OF PROTEIN PATCHES FOR
+* TITRATABLE RESIDUES AND TI CALCULATIONS.
+* C. L. BROOKS III - SEPTEMBER, 2013
+*  DATE:    10/17/13     16:39:49      CREATED BY USER: mcrowley
+*
+ SYMMETRY
+ (X,Y,Z)                                 
+ END
+
+ IMAGES
+ ! Operation     A     B     C
+           1    -1    -1    -1
+           1    -1     0    -1
+           1    -1     1    -1
+           1     0    -1    -1
+           1     0     0    -1
+           1     0     1    -1
+           1    -1    -1     0
+           1    -1     0     0
+           1    -1     1     0
+           1     0    -1     0
+           1     0     1     0
+           1    -1    -1     1
+           1    -1     0     1
+           1    -1     1     1
+           1     0    -1     1
+           1     0     0     1
+           1     0     1     1
+           1     1     1     1
+           1     1     0     1
+           1     1    -1     1
+           1     1     1     0
+           1     1     0     0
+           1     1    -1     0
+           1     1     1    -1
+           1     1     0    -1
+           1     1    -1    -1
+ END

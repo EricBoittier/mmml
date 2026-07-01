@@ -1,0 +1,925 @@
+* This CHARMM .top file describes a Go model of 1bg8-CC
+*
+
+read rtf card
+* Topology for Go model of 1bgd
+*
+   20   1
+MASS 1   G1       128.000000
+MASS 2   G2       128.000000
+MASS 3   G3       97.000000
+MASS 4   G4       99.000000
+MASS 5   G5       114.000000
+MASS 6   G6       87.000000
+MASS 7   G7       186.000000
+MASS 8   G8       101.000000
+MASS 9   G9       103.000000
+MASS 10  G10      128.000000
+MASS 11  G11      114.000000
+MASS 12  G12      147.000000
+MASS 13  G13      113.000000
+MASS 14  G14      71.000000
+MASS 15  G15      99.000000
+MASS 16  G16      114.000000
+MASS 17  G17      128.000000
+MASS 18  G18      87.000000
+MASS 19  G19      147.000000
+MASS 20  G20      128.000000
+MASS 21  G21      97.000000
+MASS 22  G22      101.000000
+MASS 23  G23      71.000000
+MASS 24  G24      99.000000
+MASS 25  G25      57.000000
+MASS 26  G26      147.000000
+MASS 27  G27      71.000000
+MASS 28  G28      128.000000
+MASS 29  G29      71.000000
+MASS 30  G30      113.000000
+MASS 31  G31      114.000000
+MASS 32  G32      114.000000
+MASS 33  G33      128.000000
+MASS 34  G34      114.000000
+MASS 35  G35      128.000000
+MASS 36  G36      97.000000
+MASS 37  G37      128.000000
+MASS 38  G38      114.000000
+MASS 39  G39      71.000000
+MASS 40  G40      99.000000
+MASS 41  G41      113.000000
+MASS 42  G42      114.000000
+MASS 43  G43      99.000000
+MASS 44  G44      128.000000
+MASS 45  G45      57.000000
+MASS 46  G46      113.000000
+MASS 47  G47      71.000000
+MASS 48  G48      101.000000
+MASS 49  G49      99.000000
+MASS 50  G50      101.000000
+MASS 51  G51      97.000000
+MASS 52  G52      71.000000
+MASS 53  G53      113.000000
+MASS 54  G54      99.000000
+MASS 55  G55      128.000000
+MASS 56  G56      71.000000
+MASS 57  G57      103.000000
+MASS 58  G58      101.000000
+MASS 59  G59      128.000000
+MASS 60  G60      114.000000
+MASS 61  G61      128.000000
+MASS 62  G62      128.000000
+MASS 63  G63      71.000000
+MASS 64  G64      114.000000
+MASS 65  G65      147.000000
+MASS 66  G66      128.000000
+MASS 67  G67      114.000000
+MASS 68  G68      128.000000
+MASS 69  G69      99.000000
+MASS 70  G70      128.000000
+MASS 71  G71      57.000000
+MASS 72  G72      128.000000
+MASS 73  G73      186.000000
+MASS 74  G74      114.000000
+MASS 75  G75      128.000000
+MASS 76  G76      113.000000
+MASS 77  G77      128.000000
+MASS 78  G78      128.000000
+MASS 79  G79      97.000000
+MASS 80  G80      99.000000
+MASS 81  G81      114.000000
+MASS 82  G82      87.000000
+MASS 83  G83      186.000000
+MASS 84  G84      101.000000
+MASS 85  G85      103.000000
+MASS 86  G86      128.000000
+MASS 87  G87      114.000000
+MASS 88  G88      147.000000
+MASS 89  G89      113.000000
+MASS 90  G90      71.000000
+MASS 91  G91      99.000000
+MASS 92  G92      114.000000
+MASS 93  G93      128.000000
+MASS 94  G94      87.000000
+MASS 95  G95      147.000000
+MASS 96  G96      128.000000
+MASS 97  G97      97.000000
+MASS 98  G98      101.000000
+MASS 99  G99      71.000000
+MASS 100 G100     99.000000
+MASS 101 G101     57.000000
+MASS 102 G102     147.000000
+MASS 103 G103     71.000000
+MASS 104 G104     128.000000
+MASS 105 G105     71.000000
+MASS 106 G106     113.000000
+MASS 107 G107     114.000000
+MASS 108 G108     114.000000
+MASS 109 G109     128.000000
+MASS 110 G110     114.000000
+MASS 111 G111     128.000000
+MASS 112 G112     97.000000
+MASS 113 G113     128.000000
+MASS 114 G114     114.000000
+MASS 115 G115     71.000000
+MASS 116 G116     99.000000
+MASS 117 G117     113.000000
+MASS 118 G118     114.000000
+MASS 119 G119     99.000000
+MASS 120 G120     128.000000
+MASS 121 G121     57.000000
+MASS 122 G122     113.000000
+MASS 123 G123     71.000000
+MASS 124 G124     101.000000
+MASS 125 G125     99.000000
+MASS 126 G126     101.000000
+MASS 127 G127     97.000000
+MASS 128 G128     71.000000
+MASS 129 G129     113.000000
+MASS 130 G130     99.000000
+MASS 131 G131     128.000000
+MASS 132 G132     71.000000
+MASS 133 G133     103.000000
+MASS 134 G134     101.000000
+MASS 135 G135     128.000000
+MASS 136 G136     114.000000
+MASS 137 G137     128.000000
+MASS 138 G138     128.000000
+MASS 139 G139     71.000000
+MASS 140 G140     114.000000
+MASS 141 G141     147.000000
+MASS 142 G142     128.000000
+MASS 143 G143     114.000000
+MASS 144 G144     128.000000
+MASS 145 G145     99.000000
+MASS 146 G146     128.000000
+MASS 147 G147     57.000000
+MASS 148 G148     128.000000
+MASS 149 G149     186.000000
+MASS 150 G150     114.000000
+MASS 151 G151     128.000000
+MASS 152 G152     113.000000
+
+DECL +CA
+
+AUTOGENERATE ANGLES DIHEDRAL
+
+RESI G1         0.0
+GROU
+Atom  CA  G1       0.0
+Bond CA +CA
+
+RESI G2         0.0
+GROU
+Atom  CA  G2       0.0
+Bond CA +CA
+
+RESI G3         0.0
+GROU
+Atom  CA  G3       0.0
+Bond CA +CA
+
+RESI G4         0.0
+GROU
+Atom  CA  G4       0.0
+Bond CA +CA
+
+RESI G5         0.0
+GROU
+Atom  CA  G5       0.0
+Bond CA +CA
+
+RESI G6         0.0
+GROU
+Atom  CA  G6       0.0
+Bond CA +CA
+
+RESI G7         0.0
+GROU
+Atom  CA  G7       0.0
+Bond CA +CA
+
+RESI G8         0.0
+GROU
+Atom  CA  G8       0.0
+Bond CA +CA
+
+RESI G9         0.0
+GROU
+Atom  CA  G9       0.0
+Bond CA +CA
+
+RESI G10        0.0
+GROU
+Atom  CA  G10      0.0
+Bond CA +CA
+
+RESI G11        0.0
+GROU
+Atom  CA  G11      0.0
+Bond CA +CA
+
+RESI G12        0.0
+GROU
+Atom  CA  G12      0.0
+Bond CA +CA
+
+RESI G13        0.0
+GROU
+Atom  CA  G13      0.0
+Bond CA +CA
+
+RESI G14        0.0
+GROU
+Atom  CA  G14      0.0
+Bond CA +CA
+
+RESI G15        0.0
+GROU
+Atom  CA  G15      0.0
+Bond CA +CA
+
+RESI G16        0.0
+GROU
+Atom  CA  G16      0.0
+Bond CA +CA
+
+RESI G17        0.0
+GROU
+Atom  CA  G17      0.0
+Bond CA +CA
+
+RESI G18        0.0
+GROU
+Atom  CA  G18      0.0
+Bond CA +CA
+
+RESI G19        0.0
+GROU
+Atom  CA  G19      0.0
+Bond CA +CA
+
+RESI G20        0.0
+GROU
+Atom  CA  G20      0.0
+Bond CA +CA
+
+RESI G21        0.0
+GROU
+Atom  CA  G21      0.0
+Bond CA +CA
+
+RESI G22        0.0
+GROU
+Atom  CA  G22      0.0
+Bond CA +CA
+
+RESI G23        0.0
+GROU
+Atom  CA  G23      0.0
+Bond CA +CA
+
+RESI G24        0.0
+GROU
+Atom  CA  G24      0.0
+Bond CA +CA
+
+RESI G25        0.0
+GROU
+Atom  CA  G25      0.0
+Bond CA +CA
+
+RESI G26        0.0
+GROU
+Atom  CA  G26      0.0
+Bond CA +CA
+
+RESI G27        0.0
+GROU
+Atom  CA  G27      0.0
+Bond CA +CA
+
+RESI G28        0.0
+GROU
+Atom  CA  G28      0.0
+Bond CA +CA
+
+RESI G29        0.0
+GROU
+Atom  CA  G29      0.0
+Bond CA +CA
+
+RESI G30        0.0
+GROU
+Atom  CA  G30      0.0
+Bond CA +CA
+
+RESI G31        0.0
+GROU
+Atom  CA  G31      0.0
+Bond CA +CA
+
+RESI G32        0.0
+GROU
+Atom  CA  G32      0.0
+Bond CA +CA
+
+RESI G33        0.0
+GROU
+Atom  CA  G33      0.0
+Bond CA +CA
+
+RESI G34        0.0
+GROU
+Atom  CA  G34      0.0
+Bond CA +CA
+
+RESI G35        0.0
+GROU
+Atom  CA  G35      0.0
+Bond CA +CA
+
+RESI G36        0.0
+GROU
+Atom  CA  G36      0.0
+Bond CA +CA
+
+RESI G37        0.0
+GROU
+Atom  CA  G37      0.0
+Bond CA +CA
+
+RESI G38        0.0
+GROU
+Atom  CA  G38      0.0
+Bond CA +CA
+
+RESI G39        0.0
+GROU
+Atom  CA  G39      0.0
+Bond CA +CA
+
+RESI G40        0.0
+GROU
+Atom  CA  G40      0.0
+Bond CA +CA
+
+RESI G41        0.0
+GROU
+Atom  CA  G41      0.0
+Bond CA +CA
+
+RESI G42        0.0
+GROU
+Atom  CA  G42      0.0
+Bond CA +CA
+
+RESI G43        0.0
+GROU
+Atom  CA  G43      0.0
+Bond CA +CA
+
+RESI G44        0.0
+GROU
+Atom  CA  G44      0.0
+Bond CA +CA
+
+RESI G45        0.0
+GROU
+Atom  CA  G45      0.0
+Bond CA +CA
+
+RESI G46        0.0
+GROU
+Atom  CA  G46      0.0
+Bond CA +CA
+
+RESI G47        0.0
+GROU
+Atom  CA  G47      0.0
+Bond CA +CA
+
+RESI G48        0.0
+GROU
+Atom  CA  G48      0.0
+Bond CA +CA
+
+RESI G49        0.0
+GROU
+Atom  CA  G49      0.0
+Bond CA +CA
+
+RESI G50        0.0
+GROU
+Atom  CA  G50      0.0
+Bond CA +CA
+
+RESI G51        0.0
+GROU
+Atom  CA  G51      0.0
+Bond CA +CA
+
+RESI G52        0.0
+GROU
+Atom  CA  G52      0.0
+Bond CA +CA
+
+RESI G53        0.0
+GROU
+Atom  CA  G53      0.0
+Bond CA +CA
+
+RESI G54        0.0
+GROU
+Atom  CA  G54      0.0
+Bond CA +CA
+
+RESI G55        0.0
+GROU
+Atom  CA  G55      0.0
+Bond CA +CA
+
+RESI G56        0.0
+GROU
+Atom  CA  G56      0.0
+Bond CA +CA
+
+RESI G57        0.0
+GROU
+Atom  CA  G57      0.0
+Bond CA +CA
+
+RESI G58        0.0
+GROU
+Atom  CA  G58      0.0
+Bond CA +CA
+
+RESI G59        0.0
+GROU
+Atom  CA  G59      0.0
+Bond CA +CA
+
+RESI G60        0.0
+GROU
+Atom  CA  G60      0.0
+Bond CA +CA
+
+RESI G61        0.0
+GROU
+Atom  CA  G61      0.0
+Bond CA +CA
+
+RESI G62        0.0
+GROU
+Atom  CA  G62      0.0
+Bond CA +CA
+
+RESI G63        0.0
+GROU
+Atom  CA  G63      0.0
+Bond CA +CA
+
+RESI G64        0.0
+GROU
+Atom  CA  G64      0.0
+Bond CA +CA
+
+RESI G65        0.0
+GROU
+Atom  CA  G65      0.0
+Bond CA +CA
+
+RESI G66        0.0
+GROU
+Atom  CA  G66      0.0
+Bond CA +CA
+
+RESI G67        0.0
+GROU
+Atom  CA  G67      0.0
+Bond CA +CA
+
+RESI G68        0.0
+GROU
+Atom  CA  G68      0.0
+Bond CA +CA
+
+RESI G69        0.0
+GROU
+Atom  CA  G69      0.0
+Bond CA +CA
+
+RESI G70        0.0
+GROU
+Atom  CA  G70      0.0
+Bond CA +CA
+
+RESI G71        0.0
+GROU
+Atom  CA  G71      0.0
+Bond CA +CA
+
+RESI G72        0.0
+GROU
+Atom  CA  G72      0.0
+Bond CA +CA
+
+RESI G73        0.0
+GROU
+Atom  CA  G73      0.0
+Bond CA +CA
+
+RESI G74        0.0
+GROU
+Atom  CA  G74      0.0
+Bond CA +CA
+
+RESI G75        0.0
+GROU
+Atom  CA  G75      0.0
+Bond CA +CA
+
+RESI G76        0.0
+GROU
+Atom  CA  G76      0.0
+
+
+RESI G77        0.0
+GROU
+Atom  CA  G77      0.0
+Bond CA +CA
+
+RESI G78        0.0
+GROU
+Atom  CA  G78      0.0
+Bond CA +CA
+
+RESI G79        0.0
+GROU
+Atom  CA  G79      0.0
+Bond CA +CA
+
+RESI G80        0.0
+GROU
+Atom  CA  G80      0.0
+Bond CA +CA
+
+RESI G81        0.0
+GROU
+Atom  CA  G81      0.0
+Bond CA +CA
+
+RESI G82        0.0
+GROU
+Atom  CA  G82      0.0
+Bond CA +CA
+
+RESI G83        0.0
+GROU
+Atom  CA  G83      0.0
+Bond CA +CA
+
+RESI G84        0.0
+GROU
+Atom  CA  G84      0.0
+Bond CA +CA
+
+RESI G85        0.0
+GROU
+Atom  CA  G85      0.0
+Bond CA +CA
+
+RESI G86        0.0
+GROU
+Atom  CA  G86      0.0
+Bond CA +CA
+
+RESI G87        0.0
+GROU
+Atom  CA  G87      0.0
+Bond CA +CA
+
+RESI G88        0.0
+GROU
+Atom  CA  G88      0.0
+Bond CA +CA
+
+RESI G89        0.0
+GROU
+Atom  CA  G89      0.0
+Bond CA +CA
+
+RESI G90        0.0
+GROU
+Atom  CA  G90      0.0
+Bond CA +CA
+
+RESI G91        0.0
+GROU
+Atom  CA  G91      0.0
+Bond CA +CA
+
+RESI G92        0.0
+GROU
+Atom  CA  G92      0.0
+Bond CA +CA
+
+RESI G93        0.0
+GROU
+Atom  CA  G93      0.0
+Bond CA +CA
+
+RESI G94        0.0
+GROU
+Atom  CA  G94      0.0
+Bond CA +CA
+
+RESI G95        0.0
+GROU
+Atom  CA  G95      0.0
+Bond CA +CA
+
+RESI G96        0.0
+GROU
+Atom  CA  G96      0.0
+Bond CA +CA
+
+RESI G97        0.0
+GROU
+Atom  CA  G97      0.0
+Bond CA +CA
+
+RESI G98        0.0
+GROU
+Atom  CA  G98      0.0
+Bond CA +CA
+
+RESI G99        0.0
+GROU
+Atom  CA  G99      0.0
+Bond CA +CA
+
+RESI G100       0.0
+GROU
+Atom  CA  G100     0.0
+Bond CA +CA
+
+RESI G101       0.0
+GROU
+Atom  CA  G101     0.0
+Bond CA +CA
+
+RESI G102       0.0
+GROU
+Atom  CA  G102     0.0
+Bond CA +CA
+
+RESI G103       0.0
+GROU
+Atom  CA  G103     0.0
+Bond CA +CA
+
+RESI G104       0.0
+GROU
+Atom  CA  G104     0.0
+Bond CA +CA
+
+RESI G105       0.0
+GROU
+Atom  CA  G105     0.0
+Bond CA +CA
+
+RESI G106       0.0
+GROU
+Atom  CA  G106     0.0
+Bond CA +CA
+
+RESI G107       0.0
+GROU
+Atom  CA  G107     0.0
+Bond CA +CA
+
+RESI G108       0.0
+GROU
+Atom  CA  G108     0.0
+Bond CA +CA
+
+RESI G109       0.0
+GROU
+Atom  CA  G109     0.0
+Bond CA +CA
+
+RESI G110       0.0
+GROU
+Atom  CA  G110     0.0
+Bond CA +CA
+
+RESI G111       0.0
+GROU
+Atom  CA  G111     0.0
+Bond CA +CA
+
+RESI G112       0.0
+GROU
+Atom  CA  G112     0.0
+Bond CA +CA
+
+RESI G113       0.0
+GROU
+Atom  CA  G113     0.0
+Bond CA +CA
+
+RESI G114       0.0
+GROU
+Atom  CA  G114     0.0
+Bond CA +CA
+
+RESI G115       0.0
+GROU
+Atom  CA  G115     0.0
+Bond CA +CA
+
+RESI G116       0.0
+GROU
+Atom  CA  G116     0.0
+Bond CA +CA
+
+RESI G117       0.0
+GROU
+Atom  CA  G117     0.0
+Bond CA +CA
+
+RESI G118       0.0
+GROU
+Atom  CA  G118     0.0
+Bond CA +CA
+
+RESI G119       0.0
+GROU
+Atom  CA  G119     0.0
+Bond CA +CA
+
+RESI G120       0.0
+GROU
+Atom  CA  G120     0.0
+Bond CA +CA
+
+RESI G121       0.0
+GROU
+Atom  CA  G121     0.0
+Bond CA +CA
+
+RESI G122       0.0
+GROU
+Atom  CA  G122     0.0
+Bond CA +CA
+
+RESI G123       0.0
+GROU
+Atom  CA  G123     0.0
+Bond CA +CA
+
+RESI G124       0.0
+GROU
+Atom  CA  G124     0.0
+Bond CA +CA
+
+RESI G125       0.0
+GROU
+Atom  CA  G125     0.0
+Bond CA +CA
+
+RESI G126       0.0
+GROU
+Atom  CA  G126     0.0
+Bond CA +CA
+
+RESI G127       0.0
+GROU
+Atom  CA  G127     0.0
+Bond CA +CA
+
+RESI G128       0.0
+GROU
+Atom  CA  G128     0.0
+Bond CA +CA
+
+RESI G129       0.0
+GROU
+Atom  CA  G129     0.0
+Bond CA +CA
+
+RESI G130       0.0
+GROU
+Atom  CA  G130     0.0
+Bond CA +CA
+
+RESI G131       0.0
+GROU
+Atom  CA  G131     0.0
+Bond CA +CA
+
+RESI G132       0.0
+GROU
+Atom  CA  G132     0.0
+Bond CA +CA
+
+RESI G133       0.0
+GROU
+Atom  CA  G133     0.0
+Bond CA +CA
+
+RESI G134       0.0
+GROU
+Atom  CA  G134     0.0
+Bond CA +CA
+
+RESI G135       0.0
+GROU
+Atom  CA  G135     0.0
+Bond CA +CA
+
+RESI G136       0.0
+GROU
+Atom  CA  G136     0.0
+Bond CA +CA
+
+RESI G137       0.0
+GROU
+Atom  CA  G137     0.0
+Bond CA +CA
+
+RESI G138       0.0
+GROU
+Atom  CA  G138     0.0
+Bond CA +CA
+
+RESI G139       0.0
+GROU
+Atom  CA  G139     0.0
+Bond CA +CA
+
+RESI G140       0.0
+GROU
+Atom  CA  G140     0.0
+Bond CA +CA
+
+RESI G141       0.0
+GROU
+Atom  CA  G141     0.0
+Bond CA +CA
+
+RESI G142       0.0
+GROU
+Atom  CA  G142     0.0
+Bond CA +CA
+
+RESI G143       0.0
+GROU
+Atom  CA  G143     0.0
+Bond CA +CA
+
+RESI G144       0.0
+GROU
+Atom  CA  G144     0.0
+Bond CA +CA
+
+RESI G145       0.0
+GROU
+Atom  CA  G145     0.0
+Bond CA +CA
+
+RESI G146       0.0
+GROU
+Atom  CA  G146     0.0
+Bond CA +CA
+
+RESI G147       0.0
+GROU
+Atom  CA  G147     0.0
+Bond CA +CA
+
+RESI G148       0.0
+GROU
+Atom  CA  G148     0.0
+Bond CA +CA
+
+RESI G149       0.0
+GROU
+Atom  CA  G149     0.0
+Bond CA +CA
+
+RESI G150       0.0
+GROU
+Atom  CA  G150     0.0
+Bond CA +CA
+
+RESI G151       0.0
+GROU
+Atom  CA  G151     0.0
+Bond CA +CA
+
+RESI G152       0.0
+GROU
+Atom  CA  G152     0.0
+
+END
+

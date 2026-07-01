@@ -1,0 +1,671 @@
+* Test the building and block partitioning of protein patches for
+* titratable residues and TI calculations.
+* C. L. Brooks III - September, 2013
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+
+!************************************************
+! Note: Test should work for any combination of
+! ctofnb/ctonnb and switch/vswitch, fswitch/vfswitch,
+! fshift/vswitch w/ usepme=0
+! Also works, i.e., all tests should pass for
+! usepme=1 and vswitch, vfswitch or ctofnb=ctonnb
+!************************************************
+
+set ctonnb = 8.5
+set usepme = 1
+set vdwswi = vswitch
+
+read rtf card name @0/top_all36_prot.rtf
+read param card flex name @0/par_all36_prot.prm
+stream @0/toppar_water_ions.str
+stream @0/protonation_patches_toppar36_prot.str
+
+
+set tol = 1e-3
+
+! set the lambda value for the "wt" species
+set l1 = 0.4
+
+if @?ctofnb eq 0 set ctofnb = 9.5
+if @?ctonnb eq 0 set ctonnb = @ctofnb
+if @?vdwswi eq 0 set vdwswi = vswitch
+if @?elecswi eq 0 set elecswi = switch
+
+set resname1 = asp
+set resname2 = glu
+set resname3 = lys
+set resname4 = tyr
+set resname5 = hsp
+
+set i = 1
+
+label dores
+set res = @resname@@i
+!******************TEST @i - @res****************************
+
+read sequ card
+* title
+*
+3
+ala @res ala
+generate pro0 first ace last ct3 setup
+
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+print coor sele .not. initialized end
+
+mini sd nstep 100 cdie atom cutnb 14 ctofnb 12 ctonnb 10 switch vswitch
+energy cutnb 999 ctofnb 999 ctonnb 999
+
+define firstD select segid pro0 .and. resname @res end
+set resid = ?selresi
+
+if @res eq ASP then
+      set reslist = type cb .or. type cg .or. type hb1 .or. type hb2 .or. type od1 .or. type od2
+      set reslist2 =
+      set p1 = aspp1
+      set p2 = aspp2
+      set n = 2
+
+      set a1 = cb
+      set a2 = cg
+      set a3 = hb1
+      set a4 = hb2
+      set a5 = od1
+      set a6 = od2
+      set nat = 6
+
+      calc l2 = ( 1 - @l1 ) / 2
+      calc l3 = ( 1 - @l1 ) / 2
+
+      ! # ions, 3 SOD, 2 CLA
+      ! box size: 30.899207 x 23.685586 x 23.584414
+      set ions = SOD:3=CLA:2
+      set nion = 5
+      set iseq = sod sod sod cla cla
+      set nwat = 440
+      set xb = 23.7
+      set yb = 23.7
+      set zb = 30.9
+      set fft = fftx 24 ffty 24 fftz 32
+endif
+
+if @res eq GLU then
+      set reslist = type cg .or. type cd .or. type hg1 .or. type hg2 .or. type oe1 .or. type oe2
+      set reslist2 =
+      set p1 = glup1
+      set p2 = glup2
+      set n = 2
+
+      set a1 = cg
+      set a2 = cd
+      set a3 = hg1
+      set a4 = hg2
+      set a5 = oe1
+      set a6 = oe2
+      set nat = 6
+      calc l2 = ( 1 - @l1 ) / 2
+      calc l3 = ( 1 - @l1 ) / 2
+
+      ! # ions, 3 SOD, 2 CLA
+      ! box size: 31.480033 x 23.834000 x 18.853967
+      set ions = SOD:3=CLA:2
+      set xb = 24
+      set yb = 24
+      set zb = 32
+      set fft = fftx 24 ffty 24 fftz 32
+endif
+
+if @res eq LYS then
+      set reslist = type ce .or. type nz .or. type he1 .or. type he2 .or. type hz1 .or. type hz2 .or. type hz3
+      set reslist2 =
+      set p1 = lysn
+      set n = 1
+
+      set a1 = ce
+      set a2 = he1
+      set a3 = he2
+      set a4 = nz
+      set a5 = hz1
+      set a6 = hz2
+      set a7 = hz3
+      set nat = 7
+      calc l2 = ( 1 - @l1 )
+
+      ! # ions, 2 SOD, 3 CLA
+      ! box size: 30.899207 x 23.685586 x 23.584414
+      set ions = SOD:2=CLA:3
+      set xb = 24
+      set yb = 24
+      set zb = 32
+      set fft = fftx 24 ffty 24 fftz 32
+endif
+
+if @res eq TYR then
+      set reslist = type ce1 .or. type ce2 .or. type he1 .or. type he2 .or. type cz .or. type oh .or. type hh
+      set reslist2 =
+      set p1 = tyru
+      set n = 1
+
+      set a1 = ce1
+      set a2 = he1
+      set a3 = ce2
+      set a4 = he2
+      set a5 = cz
+      set a6 = oh
+      set a7 = hh
+      set nat = 7
+
+      calc l2 = ( 1 - @l1 )
+
+      ! # ions, 3 SOD, 2 CLA
+      ! box size: 32.056169 x 24.498000 x 20.163898
+      set ions = SOD:3=CLA:2
+      set xb = 24
+      set yb = 24
+      set zb = 32
+      set fft = fftx 24 ffty 24 fftz 32
+endif
+
+if @res eq HSP then
+      set reslist = type cb .or. type hb1 .or. type hb2 .or. type nd1 .or. type hd1 .or. type cg .or. type ce1
+      set reslist2 = .or. type he1 .or. type ne2 .or. type he2 .or. type cd2 .or. type hd2
+      set p1 = hsdn
+      set p2 = hsen
+      set n = 2
+
+      set a1 = cb
+      set a2 = hb1
+      set a3 = hb2
+      set a4 = nd1
+      set a5 = hd1
+      set a6 = cg
+      set a7 = ce1
+      set a8 = he1
+      set a9 = ne2
+      set a10 = he2
+      set a11 = cd2
+      set a12 = hd2
+      set nat = 12
+
+      calc l2 = ( 1 - @l1 ) / 2
+      calc l3 = ( 1 - @l1 ) / 2
+
+      ! # ions, 2 SOD, 3 CLA
+      ! box size: 31.917917 x 24.411889 x 19.670056
+      set ions = SOD:2=CLA:3
+      set xb = 24
+      set yb = 24
+      set zb = 32
+      set fft = fftx 24 ffty 24 fftz 32
+endif
+
+set cutoffs = cutnb 11 cutim 11 ctofnb @ctofnb ctonnb @ctonnb @vdwswi @elecswi
+set ewald = noewald
+if @?usepme gt 0 set ewald = Ewald kappa 0.320 pmEwald order 4 @fft
+
+define side select segid pro0 .and. resid @resid .and -
+       ( @reslist @reslist2 ) end
+
+replica r nrep @n select side end
+
+set c = 1
+label renameH
+    set b = @a@@c
+    set d = @{b}m
+    echo @d
+    rename atom @d select atom r1 @resid @a@@c end
+    set d = @{b}p
+    rename atom @d select atom r2 @resid @a@@c end
+   incr c by 1
+if c le @nat goto renameH
+
+write coor card name @9/@p1.chr select segid r1 end
+
+if @n gt 1 then
+      write coor card name @9/@p2.chr select segid r2 end
+endif
+
+replica reset
+delete atom select segid r1 end
+if @n gt 1 delete atom select segid r2 end
+
+define firstD select resname @res end
+set resid = ?selresi
+define side select resid @resid .and -
+      ( @reslist @reslist2 ) end
+
+patch @p1 pro0 @resid setup
+if @n gt 1 then
+      patch @p2 pro0 @resid setup
+endif
+bomlev -2
+autogenerate angle dihedral
+bomlev 0
+
+delete angle select ( @reslist @reslist2 ) end -
+             select ( type *m .or. type *p ) end
+delete dihed select ( @reslist @reslist2 ) end -
+             select ( type *m .or. type *p ) end
+if @n gt 1 delete angle select ( type *m ) end select ( type *p ) end
+if @n gt 1 delete dihed select ( type *m ) end select ( type *p ) end
+
+ic generate
+
+rename segid r1 select segid pro0 end
+read coor card name @9/@p1.chr resid
+rename segid r2 select segid r1 end
+if @n gt 1 then
+      read coor card name @9/@p2.chr resid
+endif
+rename segid pro0 select segid r2 end
+
+ic fill
+ic param
+print coor select .not. initialized end
+
+ic build
+print coor select .not. initialized end
+
+coor orie
+
+write psf card name @9/composite.psf
+write coor pdb name @9/composite.pdb
+
+!system "convpdb.pl -readseg -out charmm22 -segnames -solvate -cutoff 8 -ions @IONS scratch/composite.pdb | convpdb.pl -out charmm22 -segnames -nsel TIP3 > wat@I.pdb"
+read sequ pdb name @0/wat@i.pdb
+generate wt00 noangl nodihe
+read coor pdb name @0/wat@i.pdb resi
+
+!system "convpdb.pl -readseg -out charmm22 -segnames -solvate -cutoff 8 -ions @IONS scratch/composite.pdb | convpdb.pl -out charmm22 -segnames -nsel SOD+CLA > ions@I.pdb"
+read sequ pdb heta name @0/ions@i.pdb
+generate heta
+read coor pdb name @0/ions@i.pdb resi
+
+print coor select .not. initialized end
+
+Calc xb2 = @xb / 2
+Calc yb2 = @yb / 2
+Calc zb2 = @zb / 2
+
+coor stats
+coor rotate xdir 0 ydir 1 zdir 0 phi 90
+coor translate xdir @xb2 ydir @yb2 zdir @zb2
+coor stats
+
+
+set return = f1
+goto setxtl
+label f1
+
+energy @cutoffs @ewald
+mini sd nstep 100
+
+write psf card name @9/ala@{res}ala_solvated.psf
+write coor pdb name @9/ala@{res}ala_solvated.pdb
+
+energy @cutoffs @ewald
+set sumE = ?ener
+
+set Ewt = 0
+set Em = 0
+set Ep = 0
+
+set keep = wt
+label donextH
+
+      bomlev -1
+      delete atom select all end
+      bomlev 0
+      read psf card name @9/ala@{res}ala_solvated.psf
+      read coor pdb name @9/ala@{res}ala_solvated.pdb resid
+
+
+      define wt select segid pro0 .and. resid @resid .and. -
+            ( @reslist @reslist2 ) end
+
+      define m select segid pro0 .and. resid @resid .and. -
+            ( type *m ) end
+
+      define p select segid pro0 .and. resid @resid .and. -
+            ( type *p ) end
+
+      define env select .not. ( wt .or. m .or. p ) end
+
+     if @keep eq WT delete atom select m .or. p end
+     if @keep eq M  delete atom select wt .or. p end
+     if @keep eq P  delete atom select wt .or. m end
+
+     set return = f2
+     goto setxtl
+     label f2
+
+     energy @cutoffs @ewald
+
+     set E@keep = ?ener
+     coor force comp
+     write coor card comp name @9/@keep.chr
+
+     if @keep eq P goto doblockH
+     if @keep eq M set keep = p
+     if @keep eq WT set keep = m
+goto donextH
+
+label doblockH
+if @n eq 1 set Ep = 0
+
+bomlev -1
+delete atom select all end
+bomlev 0
+read psf card name @9/ala@{res}ala_solvated.psf
+read coor pdb name @9/ala@{res}ala_solvated.pdb resid
+set return = f3
+goto setxtl
+label f3
+
+set wt = 0
+set p = 0
+set m = 0
+set nb = 3
+set k4 =
+if @n gt 1 then
+     set nb = 4
+     set k4 = call 4 select p end
+endif
+block @nb
+  call 2 select wt end
+  call 3 select m  end
+  @k4
+end
+
+block
+  coef 1 2 1
+  coef 1 3 0
+  coef 2 2 1
+  coef 2 3 0
+  coef 3 3 0
+end
+if @n gt 1 then
+   block
+      coef 1 4 0
+      coef 2 4 0
+      coef 3 4 0
+      coef 4 4 0
+  end
+endif
+energy @cutoffs @ewald omm
+
+set wt = ?ener
+
+block
+  coef 1 2 0
+  coef 1 3 1
+  coef 2 2 0
+  coef 3 3 1
+end
+energy @cutoffs @ewald omm
+
+set m = ?ener
+
+if @n gt 1 then
+   block
+     coef 1 3 0
+     coef 1 4 1
+     coef 3 3 0
+     coef 4 4 1
+   end
+   energy @cutoffs @ewald omm
+
+   set p = ?ener
+else
+   set p = 0
+endif
+
+calc diff = ( @wt + @m + @p ) - ( @Ewt + @Em + @Ep )
+calc diff = abs ( @diff  / ( @Ewt + @Em + @Ep ) )
+
+set status = fail
+if @diff le @tol then
+   set status = pass
+endif
+echo testcase result: @status test @i @res
+
+!*********************Test 2 forces********************
+! Construct forces from decomposed terms
+prnlev 0 @pnode
+scalar xcomp set 0
+scalar ycomp set 0
+scalar zcomp set 0
+read coor card comp name @9/wt.chr
+scalar xcomp mult @l1
+scalar xcomp store 1
+scalar ycomp mult @l1
+scalar ycomp store 2
+scalar zcomp mult @l1
+scalar zcomp store 3
+
+scalar xcomp set 0
+scalar ycomp set 0
+scalar zcomp set 0
+read coor card comp name @9/m.chr
+scalar xcomp mult @l2
+scalar xcomp +store 1
+scalar ycomp mult @l2
+scalar ycomp +store 2
+scalar zcomp mult @l2
+scalar zcomp +store 3
+
+if @n gt 1 then
+      scalar xcomp set 0
+      scalar ycomp set 0
+      scalar zcomp set 0
+      read coor card comp name @9/p.chr
+      scalar xcomp mult @l3
+      scalar xcomp +store 1
+      scalar ycomp mult @l3
+      scalar ycomp +store 2
+      scalar zcomp mult @l3
+      scalar zcomp +store 3
+endif
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalar zcomp recall 3
+
+set return fromCHARMM
+goto ncharmm
+label fromCHARMM
+prnlev 5 @pnode
+
+block
+  coef 1 2 @l1
+  coef 1 3 @l2
+  coef 2 2 @l1
+  coef 2 3 0
+  coef 3 3 @l2
+end
+if @n gt 1 then
+   block
+      coef 1 4 @l3
+      coef 2 4 0
+      coef 3 4 0
+      coef 4 4 @l3
+  end
+endif
+
+energy @cutoffs @ewald omm
+
+set eopenmm = ?ener
+
+coor force comp
+
+prnlev 0 @pnode
+set return fromOpenMM
+goto nopenmm
+label fromOpenMM
+prnlev 5 @pnode
+
+calc echarmm = ( @l1 * @Ewt + @l2 * @Em )
+if @n gt 1 then
+      Calc echarmm = @echarmm + @l3 * @Ep
+endif
+
+Calc ediff = abs ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm )
+echo Force dot product: @fsum Energy error: @ediff
+calc diff = abs ( 1 - @fsum )
+
+set status = fail
+if @ediff le @tol then
+   set status = pass
+endif
+echo testcase result: @status @{i}a - energy for @res
+
+set status = fail
+if @diff le @tol then
+   set status = pass
+endif
+echo testcase result: @status @{i}a - forces for @res
+
+block
+   clear
+end
+bomlev -1
+delete atom select all end
+bomlev 0
+
+incr i by 1
+
+! commented V out: 5 - hsp fails with an openmm error
+! All Forces must have identical exceptions
+! if i le 5 goto dores
+
+if i le 4 goto dores
+
+stop
+
+label setxtl
+   Crystal define tetr @xb @yb @zb 90 90 90
+   crystal build cutoff 11 noper 0
+   image byres xcen  @xb2 ycen @yb2 zcen @zb2 select .not. segid pro0 end
+   image byseg xcen @xb2 ycen @yb2 zcen @zb2 select segid pro0 end
+goto @return
+
+!=======================================================
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+goto @return

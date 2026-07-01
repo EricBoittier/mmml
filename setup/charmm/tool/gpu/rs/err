@@ -1,0 +1,40 @@
+icc -xW -tpp7 -c -O -ffast-math -DCUDA_SDK_2 vtgrape.c
+icc: command line remark #10148: option '-tp' not supported
+icc: command line warning #10006: ignoring unknown option '-ffast-math'
+vtgrape_cellindex.c(2437): warning #267: the format string requires additional arguments
+      fprintf(stderr,"** ldim[%d]<=1 is not allowed in MR3calccoulomb_vdw_ij_ci_exlist **\n");
+                                                                                            ^
+
+ar ruv libmd3withg80vg.a md_mother.o vtgrape.o
+ar: creating libmd3withg80vg.a
+a - md_mother.o
+a - vtgrape.o
+ranlib libmd3withg80vg.a
+icc -xW -tpp7 -O -ffast-math -DCUDA_SDK_2 -o emutestvg emutest.c libmd3withg80vg.a /usr/local/cuda/sdk/C/lib/libcutil_x86_64.a -L/usr/local/cuda/lib64 -lcudart -lGLU -lGL -lm 
+icc: command line remark #10148: option '-tp' not supported
+icc: command line warning #10006: ignoring unknown option '-ffast-math'
+emutest.c(428): warning #592: variable "man" is used before its value is set
+  		     i,r[i],man,*((unsigned int *)&man),exp,ui,r1est,r1test[i],r1est-r1test[i]);
+  		            ^
+
+emutest.c(428): warning #592: variable "exp" is used before its value is set
+  		     i,r[i],man,*((unsigned int *)&man),exp,ui,r1est,r1test[i],r1est-r1test[i]);
+  		                                        ^
+
+emutest.c(428): warning #592: variable "ui" is used before its value is set
+  		     i,r[i],man,*((unsigned int *)&man),exp,ui,r1est,r1test[i],r1est-r1test[i]);
+  		                                            ^
+
+emutest.c(833): warning #268: the format string ends before this argument
+  		    fprintf(stderr,"** error : ni2 overflow **\n",ni2);
+  		                                                  ^
+
+ifort -xW -tpp7 -O -ffast-math -o sample_md3vg sample_md3.f libmd3withg80vg.a /usr/local/cuda/sdk/C/lib/libcutil_x86_64.a -L/usr/local/cuda/lib64 -lcudart -lGLU -lGL -lm 
+ifort: command line remark #10148: option '-tp' not supported
+ifort: command line warning #10006: ignoring unknown option '-ffast-math'
+./initialize.sh
+Device 0: Quadro FX 3800
+writing r1.g80emu ... finished.
+writing rsqrt.g80emu ... finished.
+succeed to generate r1.g80emu
+succeed to generate rsqrt.g80emu

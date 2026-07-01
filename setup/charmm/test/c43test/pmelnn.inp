@@ -1,0 +1,812 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! RLH 2017: Tests domdec and domdec_gpu PME with MSLD calculations
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed. BLOCK must be defined in pref.dat"
+   stop
+endif
+
+if ?colfft .ne. 1 then
+   echo "Test NOT performed. COLFFT must be defined in pref.dat"
+   stop
+endif
+
+if ?domdec_g .ne. 1 then
+   echo "Part of Test SKIPPED. DOMDEC_G must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+! ! Hand copied contents of datadir.def
+! faster on
+! set pnode = 
+! if ?numnode .gt. 1 set pnode = node 0
+! set 0 "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/"     ! input data directory
+! set 9 scratch/  ! scratch directory
+! set testcheck stream @0/test.str
+! set qcheck stream "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/qtest.str"
+! set testfail 0
+! ! end datadir.def
+
+! Need water to go with charmm 36 force field
+stream @0/toppar_water_ions.str
+! stream "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/toppar_water_ions.str"
+
+! Need charmm 36 for some protein patch features
+open unit 1 read form name @0/top_all36_prot.rtf
+! open unit 1 read form name "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/top_all36_prot.rtf"
+read rtf card append unit 1
+close unit 1
+
+! Need charmm 36 for some protein patch features
+open unit 1 read form name @0/par_all36_prot.prm
+! open unit 1 read form name "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/par_all36_prot.prm"
+read param card append flex unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+! open unit 1 read form name "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/5dfr_minimized.crd"
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+! open unit 1 read form name "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/5dfr_solv.crd"
+read coor card unit 1
+close unit 1
+
+! CHARMM won't let us selectively delete the H-H-O and O-H-H angles later
+! So we'll delete all of the water angles both times.
+dele angle sele ( resname TIP3 ) end sele ( resname TIP3 ) end
+
+faster on
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+format (f16.6)
+
+! for loop order1
+set order = 4
+label orderloop1
+if @order le 8 then
+
+! **** Calculate energy using CPU DOMDEC without blocks ****
+set tag = rawo@order
+set flag2 = returnraw
+goto energysave
+label returnraw
+
+format
+calc order = @order + 2
+format (f16.6)
+goto orderloop1
+endif
+
+bomlev -2
+
+! define site1sub2 select (resname tip3 .and. resid 1) end
+stream @0/ca_ser.str
+! stream "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/ca_ser.str"
+patch ca_ser 5DFR 30 setup
+ic param
+ic build
+patch ca_ser 5DFR 153 setup
+ic param
+ic build
+
+set segid 5DFR
+set resid 30
+stream @0/sele_ser.str
+! stream "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/sele_ser.str"
+stream @0/sele_bb.str
+! stream "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/sele_bb.str"
+define site@{resid}subnat select ( segid @segid .and. resid @resid .and. .not. ( site@{resid}subser .or. site@{resid}bb ) ) end
+
+set resid 153
+stream @0/sele_ser.str
+! stream "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/sele_ser.str"
+stream @0/sele_bb.str
+! stream "/home/rhaye/CHARMM/chv6/charmm_pmel/test/data/sele_bb.str"
+define site@{resid}subnat select ( segid @segid .and. resid @resid .and. .not. ( site@{resid}subser .or. site@{resid}bb ) ) end
+
+auto angle dihe
+
+! It would be nice if there were a way to keep the H-O-H angles in water
+dele angle sele ( resname TIP3 ) end sele ( resname TIP3 ) end
+
+dele angle sele ( site30subnat ) show end sele ( site30subser ) show end
+dele dihe sele ( site30subnat ) show end sele ( site30subser ) show end
+dele impr sele ( site30subnat ) show end sele ( site30subser ) show end
+dele angle sele ( site153subnat ) show end sele ( site153subser ) show end
+dele dihe sele ( site153subnat ) show end sele ( site153subser ) show end
+dele impr sele ( site153subnat ) show end sele ( site153subser ) show end
+
+! Have to turn images back on because patches turned them off
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+bomlev -1
+
+
+
+! for loop order2
+set order = 4
+label orderloop2
+if @order le 8 then
+
+set lam1 = 1
+set lam2 = 1
+
+set flag = return1
+goto setup5
+label return1
+
+calc delec = ?elec - @elecrawo@@order
+calc dewks = ?ewks - @ewksrawo@@order
+calc dewse = ?ewse - @ewserawo@@order
+calc dewex = ?ewex - @ewexrawo@@order
+
+echo "Direct space deviation (ELEC)" @delec
+echo "Recipr space deviation (EWKS)" @dewks
+echo "Self energy deviation  (EWSE)" @dewse
+echo "Exclusions deviation   (EWEX)" @dewex
+
+set tol = 0.0005
+calc tol10 = 10*@tol
+calc tol100 = 100*@tol
+@qcheck @delec 0 @tol MSLD_PMEN@{order}_ENDPOINT_ELEC
+@qcheck @dewks 0 @tol MSLD_PMEN@{order}_ENDPOINT_EWKS
+! Bigger rounding errors because EWSE and EWEX are so big
+@qcheck @dewse 0 @tol10 MSLD_PMEN@{order}_ENDPOINT_EWSE
+@qcheck @dewex 0 @tol10 MSLD_PMEN@{order}_ENDPOINT_EWEX
+
+
+
+set lam1 = 0
+set lam2 = 0
+set lam3 = 0
+set lam4 = 0
+
+set flag = return2
+goto setup9
+label return2
+
+! for loop 1
+set iloop = 1
+label forloop1i
+if @iloop le 4 then
+
+set lam@iloop = 0.5
+set flag = return3
+goto setup9
+label return3
+
+set lam@iloop = 1
+set flag = return4
+goto setup9
+label return4
+
+format
+calc jloop = @iloop + 1
+format (f16.6)
+label forloop1j
+if @jloop le 4 then
+
+set lam@jloop = 1
+set flag = return5
+goto setup9
+label return5
+
+set lam@jloop = 0
+
+format
+calc jloop = @jloop + 1
+format (f16.6)
+goto forloop1j
+endif
+
+set lam@iloop = 0
+
+format
+calc iloop = @iloop + 1
+format (f16.6)
+goto forloop1i
+endif
+
+
+
+! set token = elec
+! set flag = return6
+! goto quadfit
+! label return6
+
+! set token = ewks
+! set flag = return7
+! goto quadfit
+! label return7
+
+! set token = ewse
+! set flag = return8
+! goto quadfit
+! label return8
+
+! set token = ewex
+! set flag = return9
+! goto quadfit
+! label return9
+
+! Because CHARMM isn't smart enough to do parameter substitution as outlined in the doc files...
+
+set r = @vdw0000
+calc a1vdw = 4*( @{vdw0.5000} - @r )-( @{vdw1000} - @r )
+calc a2vdw = 4*( @{vdw00.500} - @r )-( @{vdw0100} - @r )
+calc a3vdw = 4*( @{vdw000.50} - @r )-( @{vdw0010} - @r )
+calc a4vdw = 4*( @{vdw0000.5} - @r )-( @{vdw0001} - @r )
+calc a11vdw = ( @{vdw1000} - @r ) - @{a1vdw}
+calc a22vdw = ( @{vdw0100} - @r ) - @{a2vdw}
+calc a33vdw = ( @{vdw0010} - @r ) - @{a3vdw}
+calc a44vdw = ( @{vdw0001} - @r ) - @{a4vdw}
+calc a12vdw = ( @{vdw1100} - @r )-( @a1vdw + @a2vdw + @a11vdw + @a22vdw )
+calc a13vdw = ( @{vdw1010} - @r )-( @a1vdw + @a3vdw + @a11vdw + @a33vdw )
+calc a14vdw = ( @{vdw1001} - @r )-( @a1vdw + @a4vdw + @a11vdw + @a44vdw )
+calc a23vdw = ( @{vdw0110} - @r )-( @a2vdw + @a3vdw + @a22vdw + @a33vdw )
+calc a24vdw = ( @{vdw0101} - @r )-( @a2vdw + @a4vdw + @a22vdw + @a44vdw )
+calc a34vdw = ( @{vdw0011} - @r )-( @a3vdw + @a4vdw + @a33vdw + @a44vdw )
+
+set r = @elec0000
+calc a1elec = 4*( @{elec0.5000} - @r )-( @{elec1000} - @r )
+calc a2elec = 4*( @{elec00.500} - @r )-( @{elec0100} - @r )
+calc a3elec = 4*( @{elec000.50} - @r )-( @{elec0010} - @r )
+calc a4elec = 4*( @{elec0000.5} - @r )-( @{elec0001} - @r )
+calc a11elec = ( @{elec1000} - @r ) - @{a1elec}
+calc a22elec = ( @{elec0100} - @r ) - @{a2elec}
+calc a33elec = ( @{elec0010} - @r ) - @{a3elec}
+calc a44elec = ( @{elec0001} - @r ) - @{a4elec}
+calc a12elec = ( @{elec1100} - @r )-( @a1elec + @a2elec + @a11elec + @a22elec )
+calc a13elec = ( @{elec1010} - @r )-( @a1elec + @a3elec + @a11elec + @a33elec )
+calc a14elec = ( @{elec1001} - @r )-( @a1elec + @a4elec + @a11elec + @a44elec )
+calc a23elec = ( @{elec0110} - @r )-( @a2elec + @a3elec + @a22elec + @a33elec )
+calc a24elec = ( @{elec0101} - @r )-( @a2elec + @a4elec + @a22elec + @a44elec )
+calc a34elec = ( @{elec0011} - @r )-( @a3elec + @a4elec + @a33elec + @a44elec )
+
+set r = @ewks0000
+calc a1ewks = 4*( @{ewks0.5000} - @r )-( @{ewks1000} - @r )
+calc a2ewks = 4*( @{ewks00.500} - @r )-( @{ewks0100} - @r )
+calc a3ewks = 4*( @{ewks000.50} - @r )-( @{ewks0010} - @r )
+calc a4ewks = 4*( @{ewks0000.5} - @r )-( @{ewks0001} - @r )
+calc a11ewks = ( @{ewks1000} - @r ) - @{a1ewks}
+calc a22ewks = ( @{ewks0100} - @r ) - @{a2ewks}
+calc a33ewks = ( @{ewks0010} - @r ) - @{a3ewks}
+calc a44ewks = ( @{ewks0001} - @r ) - @{a4ewks}
+calc a12ewks = ( @{ewks1100} - @r )-( @a1ewks + @a2ewks + @a11ewks + @a22ewks )
+calc a13ewks = ( @{ewks1010} - @r )-( @a1ewks + @a3ewks + @a11ewks + @a33ewks )
+calc a14ewks = ( @{ewks1001} - @r )-( @a1ewks + @a4ewks + @a11ewks + @a44ewks )
+calc a23ewks = ( @{ewks0110} - @r )-( @a2ewks + @a3ewks + @a22ewks + @a33ewks )
+calc a24ewks = ( @{ewks0101} - @r )-( @a2ewks + @a4ewks + @a22ewks + @a44ewks )
+calc a34ewks = ( @{ewks0011} - @r )-( @a3ewks + @a4ewks + @a33ewks + @a44ewks )
+
+set r = @ewse0000
+calc a1ewse = 4*( @{ewse0.5000} - @r )-( @{ewse1000} - @r )
+calc a2ewse = 4*( @{ewse00.500} - @r )-( @{ewse0100} - @r )
+calc a3ewse = 4*( @{ewse000.50} - @r )-( @{ewse0010} - @r )
+calc a4ewse = 4*( @{ewse0000.5} - @r )-( @{ewse0001} - @r )
+calc a11ewse = ( @{ewse1000} - @r ) - @{a1ewse}
+calc a22ewse = ( @{ewse0100} - @r ) - @{a2ewse}
+calc a33ewse = ( @{ewse0010} - @r ) - @{a3ewse}
+calc a44ewse = ( @{ewse0001} - @r ) - @{a4ewse}
+calc a12ewse = ( @{ewse1100} - @r )-( @a1ewse + @a2ewse + @a11ewse + @a22ewse )
+calc a13ewse = ( @{ewse1010} - @r )-( @a1ewse + @a3ewse + @a11ewse + @a33ewse )
+calc a14ewse = ( @{ewse1001} - @r )-( @a1ewse + @a4ewse + @a11ewse + @a44ewse )
+calc a23ewse = ( @{ewse0110} - @r )-( @a2ewse + @a3ewse + @a22ewse + @a33ewse )
+calc a24ewse = ( @{ewse0101} - @r )-( @a2ewse + @a4ewse + @a22ewse + @a44ewse )
+calc a34ewse = ( @{ewse0011} - @r )-( @a3ewse + @a4ewse + @a33ewse + @a44ewse )
+
+set r = @ewex0000
+calc a1ewex = 4*( @{ewex0.5000} - @r )-( @{ewex1000} - @r )
+calc a2ewex = 4*( @{ewex00.500} - @r )-( @{ewex0100} - @r )
+calc a3ewex = 4*( @{ewex000.50} - @r )-( @{ewex0010} - @r )
+calc a4ewex = 4*( @{ewex0000.5} - @r )-( @{ewex0001} - @r )
+calc a11ewex = ( @{ewex1000} - @r ) - @{a1ewex}
+calc a22ewex = ( @{ewex0100} - @r ) - @{a2ewex}
+calc a33ewex = ( @{ewex0010} - @r ) - @{a3ewex}
+calc a44ewex = ( @{ewex0001} - @r ) - @{a4ewex}
+calc a12ewex = ( @{ewex1100} - @r )-( @a1ewex + @a2ewex + @a11ewex + @a22ewex )
+calc a13ewex = ( @{ewex1010} - @r )-( @a1ewex + @a3ewex + @a11ewex + @a33ewex )
+calc a14ewex = ( @{ewex1001} - @r )-( @a1ewex + @a4ewex + @a11ewex + @a44ewex )
+calc a23ewex = ( @{ewex0110} - @r )-( @a2ewex + @a3ewex + @a22ewex + @a33ewex )
+calc a24ewex = ( @{ewex0101} - @r )-( @a2ewex + @a4ewex + @a22ewex + @a44ewex )
+calc a34ewex = ( @{ewex0011} - @r )-( @a3ewex + @a4ewex + @a33ewex + @a44ewex )
+
+set r = @ener0000
+calc a1ener = 4*( @{ener0.5000} - @r )-( @{ener1000} - @r )
+calc a2ener = 4*( @{ener00.500} - @r )-( @{ener0100} - @r )
+calc a3ener = 4*( @{ener000.50} - @r )-( @{ener0010} - @r )
+calc a4ener = 4*( @{ener0000.5} - @r )-( @{ener0001} - @r )
+calc a11ener = ( @{ener1000} - @r ) - @{a1ener}
+calc a22ener = ( @{ener0100} - @r ) - @{a2ener}
+calc a33ener = ( @{ener0010} - @r ) - @{a3ener}
+calc a44ener = ( @{ener0001} - @r ) - @{a4ener}
+calc a12ener = ( @{ener1100} - @r )-( @a1ener + @a2ener + @a11ener + @a22ener )
+calc a13ener = ( @{ener1010} - @r )-( @a1ener + @a3ener + @a11ener + @a33ener )
+calc a14ener = ( @{ener1001} - @r )-( @a1ener + @a4ener + @a11ener + @a44ener )
+calc a23ener = ( @{ener0110} - @r )-( @a2ener + @a3ener + @a22ener + @a33ener )
+calc a24ener = ( @{ener0101} - @r )-( @a2ener + @a4ener + @a22ener + @a44ener )
+calc a34ener = ( @{ener0011} - @r )-( @a3ener + @a4ener + @a33ener + @a44ener )
+
+
+
+set a12vdw = 0
+set a34vdw = 0
+
+@qcheck @a11elec 0 @tol MSLD_PMEN@{order}_QUADRATIC_ELEC11
+@qcheck @a22elec 0 @tol MSLD_PMEN@{order}_QUADRATIC_ELEC22
+@qcheck @a33elec 0 @tol MSLD_PMEN@{order}_QUADRATIC_ELEC33
+@qcheck @a44elec 0 @tol MSLD_PMEN@{order}_QUADRATIC_ELEC44
+set a12elec = 0
+set a34elec = 0
+
+@qcheck @a12ewse 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWSE12
+@qcheck @a13ewse 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWSE13
+@qcheck @a14ewse 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWSE14
+@qcheck @a23ewse 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWSE23
+@qcheck @a24ewse 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWSE24
+@qcheck @a34ewse 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWSE34
+
+! This is subject to change, depending on the exclusion strategy chosen. Does not affect endpoints
+! @qcheck @a11ewex 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWEX11
+! @qcheck @a22ewex 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWEX22
+! @qcheck @a33ewex 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWEX33
+! @qcheck @a44ewex 0 @tol10 MSLD_PMEN@{order}_QUADRATIC_EWEX44
+
+calc a1 = @a1vdw + @a1elec + @a1ewks + @a1ewse + @a1ewex
+calc a2 = @a2vdw + @a2elec + @a2ewks + @a2ewse + @a2ewex
+calc a3 = @a3vdw + @a3elec + @a3ewks + @a3ewse + @a3ewex
+calc a4 = @a4vdw + @a4elec + @a4ewks + @a4ewse + @a4ewex
+calc a11 = @a11vdw + @a11elec + @a11ewks + @a11ewse + @a11ewex
+calc a12 = @a12vdw + @a12elec + @a12ewks + @a12ewse + @a12ewex
+calc a13 = @a13vdw + @a13elec + @a13ewks + @a13ewse + @a13ewex
+calc a14 = @a14vdw + @a14elec + @a14ewks + @a14ewse + @a14ewex
+calc a22 = @a22vdw + @a22elec + @a22ewks + @a22ewse + @a22ewex
+calc a23 = @a23vdw + @a23elec + @a23ewks + @a23ewse + @a23ewex
+calc a24 = @a24vdw + @a24elec + @a24ewks + @a24ewse + @a24ewex
+calc a33 = @a33vdw + @a33elec + @a33ewks + @a33ewse + @a33ewex
+calc a34 = @a34vdw + @a34elec + @a34ewks + @a34ewse + @a34ewex
+calc a44 = @a44vdw + @a44elec + @a44ewks + @a44ewse + @a44ewex
+
+
+
+! for loop 2
+set iloop = 0.005
+label forloop2i
+if @iloop le 1 then
+
+set jloop = 0.005
+label forloop2j
+if @jloop le 1 then
+
+set lam1 = @iloop
+set lam2 = @jloop
+set flag = return10
+goto setup5
+label return10
+
+set flag = return11
+goto lambdaforce
+label return11
+
+calc predelec = @a1elec*@lam1 + @a2elec*@rem1 + @a3elec*@lam2 + @a4elec*@rem2
+calc predelec = @predelec + @a11elec*@lam1*@lam1 + @a22elec*@rem1*@rem1
+calc predelec = @predelec + @a33elec*@lam2*@lam2 + @a44elec*@rem2*@rem2
+calc predelec = @predelec + @a12elec*@lam1*@rem1 + @a13elec*@lam1*@lam2
+calc predelec = @predelec + @a14elec*@lam1*@rem2 + @a23elec*@rem1*@lam2
+calc predelec = @predelec + @a24elec*@rem1*@rem2 + @a34elec*@lam2*@rem2
+calc predelec = @predelec + @elec0000
+
+calc predewks = @a1ewks*@lam1 + @a2ewks*@rem1 + @a3ewks*@lam2 + @a4ewks*@rem2
+calc predewks = @predewks + @a11ewks*@lam1*@lam1 + @a22ewks*@rem1*@rem1
+calc predewks = @predewks + @a33ewks*@lam2*@lam2 + @a44ewks*@rem2*@rem2
+calc predewks = @predewks + @a12ewks*@lam1*@rem1 + @a13ewks*@lam1*@lam2
+calc predewks = @predewks + @a14ewks*@lam1*@rem2 + @a23ewks*@rem1*@lam2
+calc predewks = @predewks + @a24ewks*@rem1*@rem2 + @a34ewks*@lam2*@rem2
+calc predewks = @predewks + @ewks0000
+
+calc predewse = @a1ewse*@lam1 + @a2ewse*@rem1 + @a3ewse*@lam2 + @a4ewse*@rem2
+calc predewse = @predewse + @a11ewse*@lam1*@lam1 + @a22ewse*@rem1*@rem1
+calc predewse = @predewse + @a33ewse*@lam2*@lam2 + @a44ewse*@rem2*@rem2
+calc predewse = @predewse + @a12ewse*@lam1*@rem1 + @a13ewse*@lam1*@lam2
+calc predewse = @predewse + @a14ewse*@lam1*@rem2 + @a23ewse*@rem1*@lam2
+calc predewse = @predewse + @a24ewse*@rem1*@rem2 + @a34ewse*@lam2*@rem2
+calc predewse = @predewse + @ewse0000
+
+calc predewex = @a1ewex*@lam1 + @a2ewex*@rem1 + @a3ewex*@lam2 + @a4ewex*@rem2
+calc predewex = @predewex + @a11ewex*@lam1*@lam1 + @a22ewex*@rem1*@rem1
+calc predewex = @predewex + @a33ewex*@lam2*@lam2 + @a44ewex*@rem2*@rem2
+calc predewex = @predewex + @a12ewex*@lam1*@rem1 + @a13ewex*@lam1*@lam2
+calc predewex = @predewex + @a14ewex*@lam1*@rem2 + @a23ewex*@rem1*@lam2
+calc predewex = @predewex + @a24ewex*@rem1*@rem2 + @a34ewex*@lam2*@rem2
+calc predewex = @predewex + @ewex0000
+
+calc predfl2 = @a1 + 2*@a11*@lam1 + @a12*@rem1 + @a13*@lam2 + @a14*@rem2
+calc predfl3 = @a2 + 2*@a22*@rem1 + @a12*@lam1 + @a23*@lam2 + @a24*@rem2
+calc predfl4 = @a3 + 2*@a33*@lam2 + @a13*@lam1 + @a23*@rem1 + @a34*@rem2
+calc predfl5 = @a4 + 2*@a44*@rem2 + @a14*@lam1 + @a24*@rem1 + @a34*@lam2
+
+calc dev1 = @predfl2 - @fl2
+calc dev2 = @predfl3 - @fl3
+calc dev3 = @predfl4 - @fl4
+calc dev4 = @predfl5 - @fl5
+
+@qcheck ?elec @predelec @tol MSLD_PMEN@{order}_PRED_ELEC_@{lam1}_@{lam2}
+@qcheck ?ewks @predewks @tol MSLD_PMEN@{order}_PRED_EWKS_@{lam1}_@{lam2}
+@qcheck ?ewse @predewse @tol10 MSLD_PMEN@{order}_PRED_EWSE_@{lam1}_@{lam2}
+@qcheck ?ewex @predewex @tol10 MSLD_PMEN@{order}_PRED_EWEX_@{lam1}_@{lam2}
+@qcheck @fl2 @predfl2 @tol10 MSLD_PMEN@{order}_PRED_FLAM2_@{lam1}_@{lam2}
+@qcheck @fl3 @predfl3 @tol10 MSLD_PMEN@{order}_PRED_FLAM3_@{lam1}_@{lam2}
+@qcheck @fl4 @predfl4 @tol10 MSLD_PMEN@{order}_PRED_FLAM4_@{lam1}_@{lam2}
+@qcheck @fl5 @predfl5 @tol10 MSLD_PMEN@{order}_PRED_FLAM5_@{lam1}_@{lam2}
+
+
+
+if ?domdec_g .eq. 1 then
+echo "Test NOT performed. DOMDEC_G must be defined in pref.dat"
+
+set tag = @@{lam1}@@{lam2}gpu
+set flag2 = return12
+goto energysavegpu
+label return12
+
+set flag = return13
+goto lambdaforce
+label return13
+
+@qcheck ?elec @predelec @tol100 MSLD_DDGPU_PMEN@{order}_PRED_ELEC_@{lam1}_@{lam2}
+@qcheck ?ewks @predewks @tol100 MSLD_DDGPU_PMEN@{order}_PRED_EWKS_@{lam1}_@{lam2}
+@qcheck ?ewse @predewse @tol100 MSLD_DDGPU_PMEN@{order}_PRED_EWSE_@{lam1}_@{lam2}
+@qcheck ?ewex @predewex @tol100 MSLD_DDGPU_PMEN@{order}_PRED_EWEX_@{lam1}_@{lam2}
+@qcheck @fl2 @predfl2 @tol10 MSLD_DDGPU_PMEN@{order}_PRED_FLAM2_@{lam1}_@{lam2}
+@qcheck @fl3 @predfl3 @tol10 MSLD_DDGPU_PMEN@{order}_PRED_FLAM3_@{lam1}_@{lam2}
+@qcheck @fl4 @predfl4 @tol10 MSLD_DDGPU_PMEN@{order}_PRED_FLAM4_@{lam1}_@{lam2}
+@qcheck @fl5 @predfl5 @tol10 MSLD_DDGPU_PMEN@{order}_PRED_FLAM5_@{lam1}_@{lam2}
+
+endif
+
+
+
+calc jloop = @jloop + 0.33
+goto forloop2j
+endif
+
+calc iloop = @iloop + 0.33
+goto forloop2i
+endif
+
+
+
+! Check forces at some random position in lambda space
+set lam1 = 0.3
+set lam2 = 0.4
+set flag = return14
+goto setup5
+label return14
+
+define testselection select (resname TIP3 .and. resid 1) .or. site30subnat .or. site30subser .or. site30bb .or. site153subnat .or. site153subser .or. site153bb end 
+
+domdec dlb off gpu off
+update
+! Fails, presumably due to ewald direct space cutoff
+! test first tol 0.0001 step 0.0001 select testselection end
+test first tol 0.0005 step 0.00001 select testselection end
+calc nviolations = abs ( ?nok - 3 * ?nsel )
+@qcheck @nviolations 0 0.5 MSLD_PMEN@{order}_TESTFIRST
+
+if ?domdec_g .eq. 1 then
+echo "Test NOT performed. DOMDEC_G must be defined in pref.dat"
+
+! domdec gpu is single precision, so test first can't be nearly as stringent
+domdec dlb off gpu only
+update
+! test first tol 0.05 step 0.01 select testselection end
+test first tol 0.05 step 0.01 select testselection end
+calc nviolations = abs ( ?nok - 3 * ?nsel )
+@qcheck @nviolations 0 0.5 MSLD_DDGPU_PMEN@{order}_TESTFIRST
+
+energy domdec dlb off gpu off
+scalar 4 copy dx
+scalar 5 copy dy
+scalar 6 copy dz
+
+energy domdec dlb off gpu only
+scalar 7 copy dx
+scalar 8 copy dy
+scalar 9 copy dz
+scalar 7 mult -1
+scalar 8 mult -1
+scalar 9 mult -1
+scalar 7 sum 4
+scalar 8 sum 5
+scalar 9 sum 6
+scalar 7 pow2
+scalar 8 pow2
+scalar 9 pow2
+scalar 7 sum 8
+scalar 7 sum 9
+scalar 7 sqrt
+scalar 7 stat
+
+@qcheck ?smax 0 0.01 MSLD_DDGPU_PMEN@{order}_F_CONSISTENT_MAX
+@qcheck ?save 0 0.001 MSLD_DDGPU_PMEN@{order}_F_CONSISTENT_MEAN
+
+endif
+
+
+
+show param
+
+format
+calc order = @order + 2
+format (f16.6)
+goto orderloop2
+endif
+
+
+
+! ! Return first for running interactively
+! return
+! stop
+
+
+
+set order = 4
+
+shake fast bonh tol 1.0e-8 para
+
+energy domdec dlb off gpu off
+
+set flag return_dyn1
+goto run_dynamics
+label return_dyn1
+
+if ?domdec_g .eq. 1 then
+echo "Test NOT performed. DOMDEC_G must be defined in pref.dat"
+
+energy domdec dlb off gpu only
+
+set flag return_dyn2
+goto run_dynamics
+label return_dyn2
+
+endif
+
+echo "Test OK"
+
+stop
+
+! ************************************
+! ******* Run dynamics ***************
+! ************************************
+
+label run_dynamics
+
+open unit 24 write file name @9/c43_pmel.lmd
+
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 nstep 10 nprint 1 iprfrq 1000 -
+     iseed 123456 nsavc 0 nsavv 0 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 20 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     iunldm 24 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order @order fftx 64 ffty 64 fftz 64 ntrfq 200 -
+     hoover reft 298 tmass 250 tbath 298     ! Constant temperature
+
+goto @flag
+
+! ************************************
+! ******* Set up 5 block system ******
+! ************************************
+
+label setup5
+
+BLOCK
+   CLEAR
+END
+
+BLOCK 5
+   Call 2 sele site30subnat end
+   Call 3 sele site30subser end
+   Call 4 sele site153subnat end
+   Call 5 sele site153subser end
+   qldm theta
+   lang temp 298.0
+   ldin 1 1.0 0.0 5.0 0.0 5.0
+   ldin 2 @lam1 0.0 5.0 0.0 5.0
+   calc rem1 = 1 - @lam1
+   ldin 3 @rem1 0.0 5.0 0.0 5.0
+   ldin 4 @lam2 0.0 5.0 0.0 5.0
+   calc rem2 = 1 - @lam2
+   ldin 5 @rem2 0.0 5.0 0.0 5.0
+   excl 2 3 4 5
+   rmla bond thet dihe impr
+   msld 0 1 1 2 2 fnsi 5.5
+   msma
+
+   PMEL NN
+
+   ! Check block.doc for functional form of these biasing potentials
+   ldbi 0
+END
+
+set tag = @@{lam1}@@{lam2}
+set flag2 = returnsetup5
+goto energysave
+label returnsetup5
+
+goto @flag
+
+! ************************************
+! ******* Set up 9 block system ******
+! ************************************
+
+label setup9
+
+BLOCK
+   CLEAR
+END
+
+BLOCK 9
+   Call 2 sele site30subnat end
+   Call 3 sele none end
+   Call 4 sele site30subser end
+   Call 5 sele none end
+   Call 6 sele site153subnat end
+   Call 7 sele none end
+   Call 8 sele site153subser end
+   Call 9 sele none end
+   qldm theta
+   lang temp 298.0
+   ldin 1 1.0 0.0 5.0 0.0 5.0
+   ldin 2 @lam1 0.0 5.0 0.0 5.0
+   calc rem1 = 1 - @lam1
+   ldin 3 @rem1 0.0 5.0 0.0 5.0
+   ldin 4 @lam2 0.0 5.0 0.0 5.0
+   calc rem2 = 1 - @lam2
+   ldin 5 @rem2 0.0 5.0 0.0 5.0
+   ldin 6 @lam3 0.0 5.0 0.0 5.0
+   calc rem3 = 1 - @lam3
+   ldin 7 @rem3 0.0 5.0 0.0 5.0
+   ldin 8 @lam4 0.0 5.0 0.0 5.0
+   calc rem4 = 1 - @lam4
+   ldin 9 @rem4 0.0 5.0 0.0 5.0
+   excl 2 3 2 4 4 5 6 7 6 8 8 9
+   rmla bond thet dihe impr
+   msld 0 1 1 2 2 3 3 4 4 fnsi 5.5
+   msma
+
+   PMEL NN
+
+   ! Check block.doc for functional form of these biasing potentials
+   ldbi 0
+END
+
+set tag = @@{lam1}@@{lam2}@@{lam3}@@{lam4}
+set flag2 = returnsetup9
+goto energysave
+label returnsetup9
+
+goto @flag
+
+! ************************************
+! ******* Call energy and save PME ***
+! ************************************
+
+label energysave
+
+! energy e14fac 1.5 eps 1.0 cutnb 14 cutim 14 ctofnb 12 ctonnb 10 fswitch vfswitch -
+!      domdec dlb off gpu off
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vshi -
+     Ewald kappa 0.320 pmEwald order @order fftx 64 ffty 64 fftz 64 -
+     domdec dlb off gpu off
+
+set vdw@tag = ?vdw
+set elec@tag = ?elec
+set ewks@tag = ?ewks
+set ewse@tag = ?ewse
+set ewex@tag = ?ewex
+set ener@tag = ?ener
+
+goto @flag2
+
+! ************************************
+! ******* Call GPU energy and save ***
+! ************************************
+
+label energysavegpu
+
+! energy e14fac 1.5 eps 1.0 cutnb 14 cutim 14 ctofnb 12 ctonnb 10 fswitch vfswitch -
+!      domdec dlb off gpu only
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vshi -
+     Ewald kappa 0.320 pmEwald order @order fftx 64 ffty 64 fftz 64 -
+     domdec dlb off gpu only
+
+set vdw@tag = ?vdw
+set elec@tag = ?elec
+set ewks@tag = ?ewks
+set ewse@tag = ?ewse
+set ewex@tag = ?ewex
+set ener@tag = ?ener
+
+goto @flag2
+
+! ************************************
+! ******* Save lambda forces *********
+! ************************************
+
+label lambdaforce
+
+BLOCK
+   flam fl1 1
+   flam fl2 2
+   flam fl3 3
+   flam fl4 4
+   flam fl5 5
+END
+
+echo @fl2
+echo @fl3
+echo @fl4
+echo @fl5
+
+goto @flag
+
+! ************************************
+! ******* Get coefficients ***********
+! ************************************
+
+label quadfit
+
+calc a1@token = 4*( @{@@{token}0.5000} - @{@@{token}0000} )-( @{@@{token}1000} - @{@@{token}0000} )
+calc a2@token = 4*( @{@@{token}00.500} - @{@@{token}0000} )-( @{@@{token}0100} - @{@@{token}0000} )
+calc a3@token = 4*( @{@@{token}000.50} - @{@@{token}0000} )-( @{@@{token}0010} - @{@@{token}0000} )
+calc a4@token = 4*( @{@@{token}0000.5} - @{@@{token}0000} )-( @{@@{token}0001} - @{@@{token}0000} )
+
+calc a11@token = ( @{@@{token}1000} - @{@@{token}0000} ) - @{a1@@{token}}
+calc a22@token = ( @{@@{token}0100} - @{@@{token}0000} ) - @{a2@@{token}}
+calc a33@token = ( @{@@{token}0010} - @{@@{token}0000} ) - @{a3@@{token}}
+calc a44@token = ( @{@@{token}0001} - @{@@{token}0000} ) - @{a4@@{token}}
+
+calc a12@token = ( @{@@{token}1100} - @{@@{token}0000} )-( @{a1@@{token}} + @{a2@@{token}} + @{a11@@{token}} + @{a22@@{token}} )
+calc a13@token = ( @{@@{token}1010} - @{@@{token}0000} )-( @{a1@@{token}} + @{a3@@{token}} + @{a11@@{token}} + @{a33@@{token}} )
+calc a14@token = ( @{@@{token}1001} - @{@@{token}0000} )-( @{a1@@{token}} + @{a4@@{token}} + @{a11@@{token}} + @{a44@@{token}} )
+calc a23@token = ( @{@@{token}0110} - @{@@{token}0000} )-( @{a2@@{token}} + @{a3@@{token}} + @{a22@@{token}} + @{a33@@{token}} )
+calc a24@token = ( @{@@{token}0101} - @{@@{token}0000} )-( @{a2@@{token}} + @{a4@@{token}} + @{a22@@{token}} + @{a44@@{token}} )
+calc a34@token = ( @{@@{token}0011} - @{@@{token}0000} )-( @{a3@@{token}} + @{a4@@{token}} + @{a33@@{token}} + @{a44@@{token}} )
+
+goto @flag

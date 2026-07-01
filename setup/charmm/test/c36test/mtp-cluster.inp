@@ -1,0 +1,221 @@
+* CHARMM c36a4r1 testcase: mtp-cluster.inp
+* Test input file for atomic multipole module MTP
+* Test molecules: CO, H2O, CO2
+*
+
+bomlev -1
+
+! set working directory
+stream datadir.def
+
+! set temperature for molecular dynamics
+SET temp 50
+
+read rtf card unit 5
+* rtf for CO CO2 and water
+* parameters taken form CHARMM toppar except for electrostatics
+*
+   22     0
+MASS     1 CM    12.01100 C ! heme CO carbon 
+MASS     2 OM    15.99900 O ! heme CO/O2 oxygen
+MASS     4 HT     1.00800 H ! TIPS3P WATER HYDROGEN
+MASS    41 CST   12.01100 C ! CO2 carbon 
+MASS    75 OT    15.99940 O ! TIPS3P WATER OXYGEN
+MASS    77 OST   15.99900 O ! CO2 oxygen
+
+
+RESI CO           0.00 ! CO ligand for heme
+GROUP   
+ATOM C    CM      0.0000
+ATOM O    OM     -0.0000
+TRIPLE C O   
+PATCHING FIRS NONE LAST NONE   
+
+
+!AUTOGENERATE ANGLES
+DEFA FIRS NONE LAST NONE
+
+RESI TIP3         0.000 ! tip3p water model, generate using noangle nodihedral
+GROUP   
+ATOM OH2  OT     -0.280016  ! charges to be combined with MTP parameters
+ATOM H1   HT      0.140008
+ATOM H2   HT      0.140008
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2   
+PATCHING FIRS NONE LAST NONE 
+
+
+RESI CO2             0.00 ! Carbon Dioxide, charges to be combined with MTP parameters
+GROUP                     ! requires AUTOgenerate ANGLes
+ATOM C      CST      0.031976 !
+ATOM OC1    OST     -0.015988 ! 
+ATOM OC2    OST     -0.015988 ! 
+BOND OC1 C   OC2 C
+ANGLE OC1 C OC2
+PATCHING FIRS NONE LAST NONE
+
+END
+
+read para card unit 5
+*...
+*
+BOND
+OM   CM   1115.000     1.1280 ! ALLOW HEM
+CST  OST  1019.00      1.1600 ! JES
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+HT   HT      0.000     1.5139 ! ALLOW WAT
+
+ANGLE
+OST  CST  OST    55.559  180.0000 ! CO2, JES
+HT   OT   HT     50.000   104.5200 ! ALLOW WAT
+
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 900.0 ctofnb 890.0 ctonnb 880.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+CM     0.000000  -0.110000     2.100000 ! ALLOW HEM
+OM     0.000000  -0.120000     1.700000 ! ALLOW HEM
+CST    0.000000  -0.058000     1.563000 ! 
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+OST    0.000000  -0.165000     1.692000 ! 
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+END
+
+
+READ SEQUENCE  CARDS
+* sequence for CO/CO2/H2O cluster 
+*
+    6
+CO2 CO2 TIP3 TIP3 CO CO
+
+GENERATE MAIN SETUP NODIHEDRAL
+print psf
+
+
+READ COOR CARD UNIT 5
+* INITIAL COORDINATES FOR CO/CO2/H2O cluster
+*
+   16
+    1    1 CO2  C      0.89364  -0.37034  -0.60228 MAIN 1     12.01100
+    2    1 CO2  OC1    1.78277  -0.34116   0.14590 MAIN 1     15.99900
+    3    1 CO2  OC2   -0.00393  -0.39447  -1.33584 MAIN 1     15.99900
+    4    2 CO2  C     -2.17985  -2.04122   0.17898 MAIN 2     12.01100
+    5    2 CO2  OC1   -1.22288  -2.62942   0.47066 MAIN 2     15.99900
+    6    2 CO2  OC2   -3.13222  -1.44450  -0.11124 MAIN 2     15.99900
+    7    3 TIP3 OH2   -1.76645   2.28228  -0.48229 MAIN 3     15.99940
+    8    3 TIP3 H1    -2.71319   2.43628  -0.55692 MAIN 3      0.00800
+    9    3 TIP3 H2    -1.57229   1.67129  -1.19026 MAIN 3      0.00800
+   10    4 TIP3 OH2   -0.94017   0.38712   1.36902 MAIN 4     15.99940
+   11    4 TIP3 H1    -0.39017   0.65219   2.10128 MAIN 4      0.00800
+   12    4 TIP3 H2    -1.29784   1.22005   1.03176 MAIN 4      0.00800
+   13    5 CO   C     -0.54225   4.16712   2.28075 MAIN 5     12.01100
+   14    5 CO   O     -0.86543   3.15480   2.66129 MAIN 5     15.99900
+   15    6 CO   C      1.02138  -4.85785  -0.98344 MAIN 6     12.01100
+   16    6 CO   O      1.64234  -4.03811  -1.44773 MAIN 6     15.99900
+   
+   
+!============define nonbonded parameters====================
+ENERGY CUTNB 800.0 CTONNB 500.0 CTOFNB 700.0 - 
+	VSWITCH SHIFT CDIE EPS 1.0
+	
+!============initialize MTP module====================
+! read MTP input file for CO/H2O/CO2
+
+open unit 40 card read name @0/mtp-cluster.dma
+
+MTP MTPUNIT 40
+
+close unit 40
+
+! check energy with initial charges
+energy
+
+! check energy with some charges overwritten by MTP module
+energy
+
+! check if energy unchanged
+energy
+
+! rotation of the entire cluster about random angles allows to check if 
+! the reference axis systems are defined properly
+
+COOR ORIENT SELE ALL END
+COOR ROTAtion XDIR 1.0 YDIR 0.0 ZDIR 0.0 PHI 230 ! rotation in degrees about y-axis
+COOR ROTAtion XDIR 1.0 YDIR 1.0 ZDIR 0.0 PHI 80 ! rotation in degrees about y-axis
+COOR ROTAtion XDIR 0.0 YDIR 0.0 ZDIR 1.0 PHI 160 ! rotation in degrees about z-axis
+
+! check if energy unchanged
+energy
+
+! short minimization of energy
+MINI SD NSTEP 20 NPRINT 10 
+
+OPEN UNIT 1 WRITE CARD NAME @9/mini.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/mini.cor
+WRITE COOR CARD UNIT 1
+
+!=======heating ============================================
+
+OPEN WRITE UNIT 12 FILE NAME @9/heat.dcd
+OPEN UNIT 11 WRITe FORM NAME @9/heat.res
+
+DYNA STRT VERL NSTE 1000 TIME 0.001 inbfrq 5  -
+        IPRFRQ 200 IHTFRQ 5 IEQFRQ 10 IHBFRQ 0 -
+        IUNREA -1 IUNWRI 11 IUNCRD 12 IUNVEL -1 -
+        NPRINT 10 NSAVC 2500 -
+        ISEED 314158 314158 314158 314158 -
+        FIRSTT 0.0 FINALT @temp TEMINC 2.0 -
+        IASORS 1 IASVEL 1 ICHECW 10 
+
+OPEN UNIT 1 WRITE CARD NAME @9/co2.heat.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/co2.heat.cor
+WRITE COOR CARD UNIT 1
+
+!============equilibration===================
+
+OPEN UNIT 10 READ FORM NAME @9/heat.res
+OPEN UNIT 11 WRITE FORM NAME @9/eq.res
+OPEN WRITE UNIT 12 FILE NAME @9/eq.dcd
+
+DYNA RESTRT VERL NSTE 1000 TIME 0.001 inbfrq 5  -
+	IPRFRQ 200 IEQFRQ 200 IHBFRQ 0  -
+	IUNREA 10 IUNWRI 11 IUNCRD 12 IUNVEL -1 -
+        NPRINT 10 NSAVC 2500 -
+        ISEED 314158 314158 314158 314158 -
+	FIRSTT @temp FINALT @temp -
+        IASORS 1 IASVEL 1  iscvel 0  -
+        ICHECW 1 TWINDL -10.0  TWINDH  10.0 -
+  
+OPEN UNIT 1 WRITE CARD NAME @9/eq.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/eq.cor
+WRITE COOR CARD UNIT 1
+
+!============free dynamics NVE===================
+
+OPEN UNIT 10 READ FORM NAME @9/eq.res
+OPEN UNIT 11 WRITE FORM NAME @9/dyn.res
+OPEN WRITE UNIT 12 FILE NAME @9/dyn.dcd
+
+DYNA RESTRT LEAP NSTE 10000 TIME 0.001 inbfrq 5  -
+	IPRFRQ 1000 IEQFRQ 0 IHBFRQ 0 -
+	IUNREA 10 IUNWRI 11 IUNCRD 12 IUNVEL -1 -
+        NPRINT 10 NSAVC 2500 -
+        ISEED 314158 314158 314158 314158 -
+	FIRSTT @temp FINALT @temp -
+	IASORS 0 IASVEL 0 ISCVEL 1 ICHECW 10
+
+OPEN UNIT 1 WRITE CARD NAME @9/dyn.pdb
+WRITE COOR PDB UNIT 1
+
+OPEN UNIT 1 WRITE CARD NAME @9/dyn.cor
+WRITE COOR CARD UNIT 1
+
+STOP
+

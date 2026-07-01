@@ -1,0 +1,978 @@
+   ASSI   SELE resid     2 .AND. type N    end SELE resid     2 .AND. type HN   end -
+          REXP    -8.1700  DELL    -8.1700  DELU    -8.1700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     3 .AND. type N    end SELE resid     3 .AND. type HN   end -
+          REXP     8.2710  DELL     8.2710  DELU     8.2710  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     4 .AND. type N    end SELE resid     4 .AND. type HN   end -
+          REXP    10.4890  DELL    10.4890  DELU    10.4890  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     5 .AND. type N    end SELE resid     5 .AND. type HN   end -
+          REXP     9.8710  DELL     9.8710  DELU     9.8710  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type N    end SELE resid     6 .AND. type HN   end -
+          REXP     9.1520  DELL     9.1520  DELU     9.1520  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type N    end SELE resid     7 .AND. type HN   end -
+          REXP     3.7000  DELL     3.7000  DELU     3.7000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     8 .AND. type N    end SELE resid     8 .AND. type HN   end -
+          REXP     6.4610  DELL     6.4610  DELU     6.4610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    10 .AND. type N    end SELE resid    10 .AND. type HN   end -
+          REXP     7.6340  DELL     7.6340  DELU     7.6340  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type N    end SELE resid    11 .AND. type HN   end -
+          REXP    -7.5280  DELL    -7.5280  DELU    -7.5280  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type N    end SELE resid    12 .AND. type HN   end -
+          REXP     7.3780  DELL     7.3780  DELU     7.3780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type N    end SELE resid    13 .AND. type HN   end -
+          REXP     6.9470  DELL     6.9470  DELU     6.9470  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type N    end SELE resid    14 .AND. type HN   end -
+          REXP     9.7130  DELL     9.7130  DELU     9.7130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    15 .AND. type N    end SELE resid    15 .AND. type HN   end -
+          REXP     9.8510  DELL     9.8510  DELU     9.8510  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type N    end SELE resid    16 .AND. type HN   end -
+          REXP     1.9090  DELL     1.9090  DELU     1.9090  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    17 .AND. type N    end SELE resid    17 .AND. type HN   end -
+          REXP     0.0410  DELL     0.0410  DELU     0.0410  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    18 .AND. type N    end SELE resid    18 .AND. type HN   end -
+          REXP   -10.5130  DELL   -10.5130  DELU   -10.5130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    20 .AND. type N    end SELE resid    20 .AND. type HN   end -
+          REXP    -4.0710  DELL    -4.0710  DELU    -4.0710  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    21 .AND. type N    end SELE resid    21 .AND. type HN   end -
+          REXP     2.1190  DELL     2.1190  DELU     2.1190  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    22 .AND. type N    end SELE resid    22 .AND. type HN   end -
+          REXP    11.8140  DELL    11.8140  DELU    11.8140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type N    end SELE resid    23 .AND. type HN   end -
+          REXP     9.0980  DELL     9.0980  DELU     9.0980  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    25 .AND. type N    end SELE resid    25 .AND. type HN   end -
+          REXP     2.9480  DELL     2.9480  DELU     2.9480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type N    end SELE resid    26 .AND. type HN   end -
+          REXP     8.8920  DELL     8.8920  DELU     8.8920  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type N    end SELE resid    27 .AND. type HN   end -
+          REXP     8.2230  DELL     8.2230  DELU     8.2230  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    28 .AND. type N    end SELE resid    28 .AND. type HN   end -
+          REXP     1.5020  DELL     1.5020  DELU     1.5020  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    29 .AND. type N    end SELE resid    29 .AND. type HN   end -
+          REXP     7.1760  DELL     7.1760  DELU     7.1760  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type N    end SELE resid    30 .AND. type HN   end -
+          REXP     8.7090  DELL     8.7090  DELU     8.7090  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type N    end SELE resid    31 .AND. type HN   end -
+          REXP     4.2840  DELL     4.2840  DELU     4.2840  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    32 .AND. type N    end SELE resid    32 .AND. type HN   end -
+          REXP     1.2650  DELL     1.2650  DELU     1.2650  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type N    end SELE resid    33 .AND. type HN   end -
+          REXP     8.2580  DELL     8.2580  DELU     8.2580  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type N    end SELE resid    34 .AND. type HN   end -
+          REXP     6.5250  DELL     6.5250  DELU     6.5250  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    35 .AND. type N    end SELE resid    35 .AND. type HN   end -
+          REXP   -12.5030  DELL   -12.5030  DELU   -12.5030  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type N    end SELE resid    36 .AND. type HN   end -
+          REXP   -13.8790  DELL   -13.8790  DELU   -13.8790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    39 .AND. type N    end SELE resid    39 .AND. type HN   end -
+          REXP    10.7010  DELL    10.7010  DELU    10.7010  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    40 .AND. type N    end SELE resid    40 .AND. type HN   end -
+          REXP     1.9400  DELL     1.9400  DELU     1.9400  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    41 .AND. type N    end SELE resid    41 .AND. type HN   end -
+          REXP     7.8740  DELL     7.8740  DELU     7.8740  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type N    end SELE resid    42 .AND. type HN   end -
+          REXP     5.7190  DELL     5.7190  DELU     5.7190  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type N    end SELE resid    43 .AND. type HN   end -
+          REXP     7.6790  DELL     7.6790  DELU     7.6790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type N    end SELE resid    44 .AND. type HN   end -
+          REXP     7.9790  DELL     7.9790  DELU     7.9790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    45 .AND. type N    end SELE resid    45 .AND. type HN   end -
+          REXP     4.2390  DELL     4.2390  DELU     4.2390  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    46 .AND. type N    end SELE resid    46 .AND. type HN   end -
+          REXP     7.0520  DELL     7.0520  DELU     7.0520  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    47 .AND. type N    end SELE resid    47 .AND. type HN   end -
+          REXP     9.0500  DELL     9.0500  DELU     9.0500  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type N    end SELE resid    48 .AND. type HN   end -
+          REXP   -10.8260  DELL   -10.8260  DELU   -10.8260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    49 .AND. type N    end SELE resid    49 .AND. type HN   end -
+          REXP     3.5000  DELL     3.5000  DELU     3.5000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type N    end SELE resid    50 .AND. type HN   end -
+          REXP     5.8570  DELL     5.8570  DELU     5.8570  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    51 .AND. type N    end SELE resid    51 .AND. type HN   end -
+          REXP    -6.7880  DELL    -6.7880  DELU    -6.7880  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    52 .AND. type N    end SELE resid    52 .AND. type HN   end -
+          REXP   -16.9830  DELL   -16.9830  DELU   -16.9830  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    54 .AND. type N    end SELE resid    54 .AND. type HN   end -
+          REXP    -6.3010  DELL    -6.3010  DELU    -6.3010  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type N    end SELE resid    55 .AND. type HN   end -
+          REXP     6.7610  DELL     6.7610  DELU     6.7610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type N    end SELE resid    56 .AND. type HN   end -
+          REXP    11.0210  DELL    11.0210  DELU    11.0210  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    57 .AND. type N    end SELE resid    57 .AND. type HN   end -
+          REXP    10.8550  DELL    10.8550  DELU    10.8550  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    58 .AND. type N    end SELE resid    58 .AND. type HN   end -
+          REXP     7.8630  DELL     7.8630  DELU     7.8630  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    59 .AND. type N    end SELE resid    59 .AND. type HN   end -
+          REXP    10.4030  DELL    10.4030  DELU    10.4030  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    60 .AND. type N    end SELE resid    60 .AND. type HN   end -
+          REXP     7.3550  DELL     7.3550  DELU     7.3550  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type N    end SELE resid    61 .AND. type HN   end -
+          REXP     6.9110  DELL     6.9110  DELU     6.9110  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    62 .AND. type N    end SELE resid    62 .AND. type HN   end -
+          REXP     2.5130  DELL     2.5130  DELU     2.5130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type N    end SELE resid    63 .AND. type HN   end -
+          REXP   -11.0510  DELL   -11.0510  DELU   -11.0510  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type N    end SELE resid    64 .AND. type HN   end -
+          REXP    10.7210  DELL    10.7210  DELU    10.7210  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    65 .AND. type N    end SELE resid    65 .AND. type HN   end -
+          REXP     4.0260  DELL     4.0260  DELU     4.0260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    66 .AND. type N    end SELE resid    66 .AND. type HN   end -
+          REXP    11.3200  DELL    11.3200  DELU    11.3200  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type N    end SELE resid    67 .AND. type HN   end -
+          REXP     9.8460  DELL     9.8460  DELU     9.8460  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    68 .AND. type N    end SELE resid    68 .AND. type HN   end -
+          REXP     8.7360  DELL     8.7360  DELU     8.7360  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type N    end SELE resid    69 .AND. type HN   end -
+          REXP     6.3480  DELL     6.3480  DELU     6.3480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    70 .AND. type N    end SELE resid    70 .AND. type HN   end -
+          REXP     4.5520  DELL     4.5520  DELU     4.5520  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     2 .AND. type HN   end SELE resid     1 .AND. type C    end -
+          REXP     1.6080  DELL     1.6080  DELU     1.6080  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     3 .AND. type HN   end SELE resid     2 .AND. type C    end -
+          REXP    -2.9270  DELL    -2.9270  DELU    -2.9270  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     4 .AND. type HN   end SELE resid     3 .AND. type C    end -
+          REXP     2.0660  DELL     2.0660  DELU     2.0660  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     5 .AND. type HN   end SELE resid     4 .AND. type C    end -
+          REXP     1.3430  DELL     1.3430  DELU     1.3430  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type HN   end SELE resid     5 .AND. type C    end -
+          REXP     2.6830  DELL     2.6830  DELU     2.6830  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type HN   end SELE resid     6 .AND. type C    end -
+          REXP     1.7300  DELL     1.7300  DELU     1.7300  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     8 .AND. type HN   end SELE resid     7 .AND. type C    end -
+          REXP    -1.1280  DELL    -1.1280  DELU    -1.1280  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type HN   end SELE resid    10 .AND. type C    end -
+          REXP     1.0570  DELL     1.0570  DELU     1.0570  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type HN   end SELE resid    11 .AND. type C    end -
+          REXP    -1.4910  DELL    -1.4910  DELU    -1.4910  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type HN   end SELE resid    12 .AND. type C    end -
+          REXP     1.9330  DELL     1.9330  DELU     1.9330  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type HN   end SELE resid    13 .AND. type C    end -
+          REXP     1.4810  DELL     1.4810  DELU     1.4810  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    15 .AND. type HN   end SELE resid    14 .AND. type C    end -
+          REXP     1.8740  DELL     1.8740  DELU     1.8740  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type HN   end SELE resid    15 .AND. type C    end -
+          REXP     3.1990  DELL     3.1990  DELU     3.1990  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    17 .AND. type HN   end SELE resid    16 .AND. type C    end -
+          REXP     0.8960  DELL     0.8960  DELU     0.8960  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    18 .AND. type HN   end SELE resid    17 .AND. type C    end -
+          REXP     0.4420  DELL     0.4420  DELU     0.4420  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    20 .AND. type HN   end SELE resid    19 .AND. type C    end -
+          REXP     0.7830  DELL     0.7830  DELU     0.7830  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    21 .AND. type HN   end SELE resid    20 .AND. type C    end -
+          REXP     2.0760  DELL     2.0760  DELU     2.0760  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type HN   end SELE resid    22 .AND. type C    end -
+          REXP     2.2280  DELL     2.2280  DELU     2.2280  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    25 .AND. type HN   end SELE resid    24 .AND. type C    end -
+          REXP    -3.8810  DELL    -3.8810  DELU    -3.8810  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type HN   end SELE resid    25 .AND. type C    end -
+          REXP     3.7170  DELL     3.7170  DELU     3.7170  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type HN   end SELE resid    26 .AND. type C    end -
+          REXP     0.4280  DELL     0.4280  DELU     0.4280  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    28 .AND. type HN   end SELE resid    27 .AND. type C    end -
+          REXP    -0.2820  DELL    -0.2820  DELU    -0.2820  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    29 .AND. type HN   end SELE resid    28 .AND. type C    end -
+          REXP    -0.8150  DELL    -0.8150  DELU    -0.8150  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type HN   end SELE resid    29 .AND. type C    end -
+          REXP     2.3600  DELL     2.3600  DELU     2.3600  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type HN   end SELE resid    30 .AND. type C    end -
+          REXP     2.8880  DELL     2.8880  DELU     2.8880  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    32 .AND. type HN   end SELE resid    31 .AND. type C    end -
+          REXP    -3.7720  DELL    -3.7720  DELU    -3.7720  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type HN   end SELE resid    32 .AND. type C    end -
+          REXP     2.7230  DELL     2.7230  DELU     2.7230  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type HN   end SELE resid    33 .AND. type C    end -
+          REXP     1.9860  DELL     1.9860  DELU     1.9860  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    35 .AND. type HN   end SELE resid    34 .AND. type C    end -
+          REXP     0.4330  DELL     0.4330  DELU     0.4330  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type HN   end SELE resid    35 .AND. type C    end -
+          REXP    -1.0190  DELL    -1.0190  DELU    -1.0190  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    39 .AND. type HN   end SELE resid    38 .AND. type C    end -
+          REXP    -0.0120  DELL    -0.0120  DELU    -0.0120  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    40 .AND. type HN   end SELE resid    39 .AND. type C    end -
+          REXP     1.9700  DELL     1.9700  DELU     1.9700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    41 .AND. type HN   end SELE resid    40 .AND. type C    end -
+          REXP    -2.0320  DELL    -2.0320  DELU    -2.0320  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type HN   end SELE resid    41 .AND. type C    end -
+          REXP     2.8150  DELL     2.8150  DELU     2.8150  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type HN   end SELE resid    42 .AND. type C    end -
+          REXP    -0.1100  DELL    -0.1100  DELU    -0.1100  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type HN   end SELE resid    43 .AND. type C    end -
+          REXP     2.5540  DELL     2.5540  DELU     2.5540  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    45 .AND. type HN   end SELE resid    44 .AND. type C    end -
+          REXP     2.3260  DELL     2.3260  DELU     2.3260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    46 .AND. type HN   end SELE resid    45 .AND. type C    end -
+          REXP     1.5470  DELL     1.5470  DELU     1.5470  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    47 .AND. type HN   end SELE resid    46 .AND. type C    end -
+          REXP    -0.4480  DELL    -0.4480  DELU    -0.4480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type HN   end SELE resid    47 .AND. type C    end -
+          REXP    -2.2550  DELL    -2.2550  DELU    -2.2550  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    49 .AND. type HN   end SELE resid    48 .AND. type C    end -
+          REXP    -1.9410  DELL    -1.9410  DELU    -1.9410  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type HN   end SELE resid    49 .AND. type C    end -
+          REXP     2.4370  DELL     2.4370  DELU     2.4370  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    51 .AND. type HN   end SELE resid    50 .AND. type C    end -
+          REXP    -0.6410  DELL    -0.6410  DELU    -0.6410  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    52 .AND. type HN   end SELE resid    51 .AND. type C    end -
+          REXP    -3.4510  DELL    -3.4510  DELU    -3.4510  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    54 .AND. type HN   end SELE resid    53 .AND. type C    end -
+          REXP     1.3610  DELL     1.3610  DELU     1.3610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type HN   end SELE resid    54 .AND. type C    end -
+          REXP    -2.7590  DELL    -2.7590  DELU    -2.7590  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type HN   end SELE resid    55 .AND. type C    end -
+          REXP     2.3120  DELL     2.3120  DELU     2.3120  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    57 .AND. type HN   end SELE resid    56 .AND. type C    end -
+          REXP    -0.2780  DELL    -0.2780  DELU    -0.2780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    58 .AND. type HN   end SELE resid    57 .AND. type C    end -
+          REXP    -0.9700  DELL    -0.9700  DELU    -0.9700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    59 .AND. type HN   end SELE resid    58 .AND. type C    end -
+          REXP     3.0040  DELL     3.0040  DELU     3.0040  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    60 .AND. type HN   end SELE resid    59 .AND. type C    end -
+          REXP    -2.1360  DELL    -2.1360  DELU    -2.1360  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type HN   end SELE resid    60 .AND. type C    end -
+          REXP     1.9960  DELL     1.9960  DELU     1.9960  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    62 .AND. type HN   end SELE resid    61 .AND. type C    end -
+          REXP     2.4220  DELL     2.4220  DELU     2.4220  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type HN   end SELE resid    62 .AND. type C    end -
+          REXP    -5.0480  DELL    -5.0480  DELU    -5.0480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type HN   end SELE resid    63 .AND. type C    end -
+          REXP     1.9080  DELL     1.9080  DELU     1.9080  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    65 .AND. type HN   end SELE resid    64 .AND. type C    end -
+          REXP     2.3650  DELL     2.3650  DELU     2.3650  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    66 .AND. type HN   end SELE resid    65 .AND. type C    end -
+          REXP     1.7840  DELL     1.7840  DELU     1.7840  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type HN   end SELE resid    66 .AND. type C    end -
+          REXP     2.8970  DELL     2.8970  DELU     2.8970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    68 .AND. type HN   end SELE resid    67 .AND. type C    end -
+          REXP     0.2810  DELL     0.2810  DELU     0.2810  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type HN   end SELE resid    68 .AND. type C    end -
+          REXP     1.5900  DELL     1.5900  DELU     1.5900  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    70 .AND. type HN   end SELE resid    69 .AND. type C    end -
+          REXP     1.2610  DELL     1.2610  DELU     1.2610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     1 .AND. type CA   end SELE resid     1 .AND. type HA   end -
+          REXP   -16.4200  DELL   -16.4200  DELU   -16.4200  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     2 .AND. type CA   end SELE resid     2 .AND. type HA   end -
+          REXP     7.6090  DELL     7.6090  DELU     7.6090  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     3 .AND. type CA   end SELE resid     3 .AND. type HA   end -
+          REXP    12.1850  DELL    12.1850  DELU    12.1850  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     4 .AND. type CA   end SELE resid     4 .AND. type HA   end -
+          REXP    26.2980  DELL    26.2980  DELU    26.2980  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     5 .AND. type CA   end SELE resid     5 .AND. type HA   end -
+          REXP    23.6130  DELL    23.6130  DELU    23.6130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type CA   end SELE resid     6 .AND. type HA   end -
+          REXP    17.9660  DELL    17.9660  DELU    17.9660  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type CA   end SELE resid     7 .AND. type HA   end -
+          REXP    16.8620  DELL    16.8620  DELU    16.8620  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     9 .AND. type CA   end SELE resid     9 .AND. type HA   end -
+          REXP   -11.4530  DELL   -11.4530  DELU   -11.4530  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    10 .AND. type CA   end SELE resid    10 .AND. type HA#  end -
+          REXP    25.4175  DELL    25.4175  DELU    25.4175  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type CA   end SELE resid    11 .AND. type HA   end -
+          REXP     9.0170  DELL     9.0170  DELU     9.0170  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type CA   end SELE resid    12 .AND. type HA   end -
+          REXP    11.3000  DELL    11.3000  DELU    11.3000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type CA   end SELE resid    13 .AND. type HA   end -
+          REXP    18.3460  DELL    18.3460  DELU    18.3460  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type CA   end SELE resid    14 .AND. type HA   end -
+          REXP    24.7330  DELL    24.7330  DELU    24.7330  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    15 .AND. type CA   end SELE resid    15 .AND. type HA   end -
+          REXP    22.8980  DELL    22.8980  DELU    22.8980  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type CA   end SELE resid    16 .AND. type HA   end -
+          REXP     8.3010  DELL     8.3010  DELU     8.3010  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    17 .AND. type CA   end SELE resid    17 .AND. type HA   end -
+          REXP    17.9190  DELL    17.9190  DELU    17.9190  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    18 .AND. type CA   end SELE resid    18 .AND. type HA   end -
+          REXP   -14.9170  DELL   -14.9170  DELU   -14.9170  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    19 .AND. type CA   end SELE resid    19 .AND. type HA   end -
+          REXP    -6.8720  DELL    -6.8720  DELU    -6.8720  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    21 .AND. type CA   end SELE resid    21 .AND. type HA   end -
+          REXP    24.8860  DELL    24.8860  DELU    24.8860  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    22 .AND. type CA   end SELE resid    22 .AND. type HA   end -
+          REXP    20.3720  DELL    20.3720  DELU    20.3720  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type CA   end SELE resid    23 .AND. type HA   end -
+          REXP     6.7800  DELL     6.7800  DELU     6.7800  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    24 .AND. type CA   end SELE resid    24 .AND. type HA   end -
+          REXP   -28.1920  DELL   -28.1920  DELU   -28.1920  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    25 .AND. type CA   end SELE resid    25 .AND. type HA   end -
+          REXP    15.1620  DELL    15.1620  DELU    15.1620  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type CA   end SELE resid    26 .AND. type HA   end -
+          REXP    -5.2050  DELL    -5.2050  DELU    -5.2050  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type CA   end SELE resid    27 .AND. type HA   end -
+          REXP    15.6350  DELL    15.6350  DELU    15.6350  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    28 .AND. type CA   end SELE resid    28 .AND. type HA   end -
+          REXP   -36.4040  DELL   -36.4040  DELU   -36.4040  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    29 .AND. type CA   end SELE resid    29 .AND. type HA   end -
+          REXP    23.0280  DELL    23.0280  DELU    23.0280  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type CA   end SELE resid    30 .AND. type HA   end -
+          REXP     5.2260  DELL     5.2260  DELU     5.2260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type CA   end SELE resid    31 .AND. type HA   end -
+          REXP   -22.9430  DELL   -22.9430  DELU   -22.9430  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type CA   end SELE resid    33 .AND. type HA   end -
+          REXP    14.5000  DELL    14.5000  DELU    14.5000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type CA   end SELE resid    34 .AND. type HA   end -
+          REXP    16.4780  DELL    16.4780  DELU    16.4780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    35 .AND. type CA   end SELE resid    35 .AND. type HA#  end -
+          REXP    16.1235  DELL    16.1235  DELU    16.1235  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type CA   end SELE resid    36 .AND. type HA   end -
+          REXP   -37.9860  DELL   -37.9860  DELU   -37.9860  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    37 .AND. type CA   end SELE resid    37 .AND. type HA   end -
+          REXP    -3.4290  DELL    -3.4290  DELU    -3.4290  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    38 .AND. type CA   end SELE resid    38 .AND. type HA   end -
+          REXP     3.8040  DELL     3.8040  DELU     3.8040  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    39 .AND. type CA   end SELE resid    39 .AND. type HA   end -
+          REXP     5.4760  DELL     5.4760  DELU     5.4760  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    40 .AND. type CA   end SELE resid    40 .AND. type HA   end -
+          REXP   -11.6040  DELL   -11.6040  DELU   -11.6040  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    41 .AND. type CA   end SELE resid    41 .AND. type HA   end -
+          REXP    11.7480  DELL    11.7480  DELU    11.7480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type CA   end SELE resid    42 .AND. type HA   end -
+          REXP    12.5700  DELL    12.5700  DELU    12.5700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type CA   end SELE resid    43 .AND. type HA   end -
+          REXP    14.8130  DELL    14.8130  DELU    14.8130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type CA   end SELE resid    44 .AND. type HA   end -
+          REXP    16.8520  DELL    16.8520  DELU    16.8520  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    45 .AND. type CA   end SELE resid    45 .AND. type HA   end -
+          REXP    17.0260  DELL    17.0260  DELU    17.0260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    46 .AND. type CA   end SELE resid    46 .AND. type HA   end -
+          REXP    16.8020  DELL    16.8020  DELU    16.8020  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    47 .AND. type CA   end SELE resid    47 .AND. type HA#  end -
+          REXP     7.6990  DELL     7.6990  DELU     7.6990  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type CA   end SELE resid    48 .AND. type HA   end -
+          REXP   -14.5340  DELL   -14.5340  DELU   -14.5340  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    49 .AND. type CA   end SELE resid    49 .AND. type HA   end -
+          REXP    17.0350  DELL    17.0350  DELU    17.0350  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type CA   end SELE resid    50 .AND. type HA   end -
+          REXP     2.1020  DELL     2.1020  DELU     2.1020  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    51 .AND. type CA   end SELE resid    51 .AND. type HA   end -
+          REXP   -36.6040  DELL   -36.6040  DELU   -36.6040  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    52 .AND. type CA   end SELE resid    52 .AND. type HA   end -
+          REXP     4.6550  DELL     4.6550  DELU     4.6550  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    53 .AND. type CA   end SELE resid    53 .AND. type HA#  end -
+          REXP    29.1760  DELL    29.1760  DELU    29.1760  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    54 .AND. type CA   end SELE resid    54 .AND. type HA   end -
+          REXP    -3.0650  DELL    -3.0650  DELU    -3.0650  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type CA   end SELE resid    55 .AND. type HA   end -
+          REXP    12.8990  DELL    12.8990  DELU    12.8990  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type CA   end SELE resid    56 .AND. type HA   end -
+          REXP   -20.8260  DELL   -20.8260  DELU   -20.8260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    57 .AND. type CA   end SELE resid    57 .AND. type HA   end -
+          REXP     8.9290  DELL     8.9290  DELU     8.9290  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    59 .AND. type CA   end SELE resid    59 .AND. type HA   end -
+          REXP    17.2540  DELL    17.2540  DELU    17.2540  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    60 .AND. type CA   end SELE resid    60 .AND. type HA   end -
+          REXP   -20.7590  DELL   -20.7590  DELU   -20.7590  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type CA   end SELE resid    61 .AND. type HA   end -
+          REXP    18.9480  DELL    18.9480  DELU    18.9480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    62 .AND. type CA   end SELE resid    62 .AND. type HA   end -
+          REXP     5.4260  DELL     5.4260  DELU     5.4260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type CA   end SELE resid    63 .AND. type HA   end -
+          REXP     6.7040  DELL     6.7040  DELU     6.7040  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type CA   end SELE resid    64 .AND. type HA   end -
+          REXP     6.7840  DELL     6.7840  DELU     6.7840  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    65 .AND. type CA   end SELE resid    65 .AND. type HA   end -
+          REXP    25.4700  DELL    25.4700  DELU    25.4700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    66 .AND. type CA   end SELE resid    66 .AND. type HA   end -
+          REXP    26.9410  DELL    26.9410  DELU    26.9410  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type CA   end SELE resid    67 .AND. type HA   end -
+          REXP    23.7840  DELL    23.7840  DELU    23.7840  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    68 .AND. type CA   end SELE resid    68 .AND. type HA   end -
+          REXP    17.0500  DELL    17.0500  DELU    17.0500  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type CA   end SELE resid    69 .AND. type HA   end -
+          REXP    15.7550  DELL    15.7550  DELU    15.7550  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    70 .AND. type CA   end SELE resid    70 .AND. type HA   end -
+          REXP    13.8650  DELL    13.8650  DELU    13.8650  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     1 .AND. type CE   end SELE resid     1 .AND. type SD   end -
+          REXP   -21.6620  DELL  -121.6620  DELU   -21.6620  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     1 .AND. type CG   end SELE resid     1 .AND. type HG#  end -
+          REXP   -10.5075  DELL  -110.5075  DELU   -10.5075  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     2 .AND. type CB   end SELE resid     2 .AND. type HB#  end -
+          REXP   -14.9200  DELL  -114.9200  DELU   -14.9200  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     2 .AND. type CG   end SELE resid     2 .AND. type HG#  end -
+          REXP    -7.9600  DELL  -107.9600  DELU    -7.9600  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     3 .AND. type CD   end SELE resid     3 .AND. type CG1  end -
+          REXP    -1.8480  DELL  -101.8480  DELU    -1.8480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     3 .AND. type CG2  end SELE resid     3 .AND. type CB   end -
+          REXP   -14.2890  DELL   -14.2890  DELU   -14.2890  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     4 .AND. type CB   end SELE resid     4 .AND. type HB#  end -
+          REXP     8.2700  DELL     8.2700  DELU     8.2700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     5 .AND. type CG1  end SELE resid     5 .AND. type CB   end -
+          REXP   -29.1260  DELL   -29.1260  DELU   -29.1260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     5 .AND. type CG2  end SELE resid     5 .AND. type CB   end -
+          REXP    -4.4770  DELL    -4.4770  DELU    -4.4770  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type CB   end SELE resid     6 .AND. type HB#  end -
+          REXP   -12.5715  DELL  -112.5715  DELU   -12.5715  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type CD   end SELE resid     6 .AND. type HD#  end -
+          REXP   -13.2940  DELL  -113.2940  DELU   -13.2940  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type CG   end SELE resid     6 .AND. type HG#  end -
+          REXP   -13.4215  DELL  -113.4215  DELU   -13.4215  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type CB   end SELE resid     7 .AND. type HB   end -
+          REXP   -27.8780  DELL   -27.8780  DELU   -27.8780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type CG2  end SELE resid     7 .AND. type CB   end -
+          REXP    -1.1490  DELL    -1.1490  DELU    -1.1490  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     8 .AND. type CB   end SELE resid     8 .AND. type HB#  end -
+          REXP    10.5070  DELL    10.5070  DELU   110.5070  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     8 .AND. type CD1  end SELE resid     8 .AND. type CG   end -
+          REXP    -7.1750  DELL  -107.1750  DELU    -7.1750  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     8 .AND. type CD2  end SELE resid     8 .AND. type CG   end -
+          REXP     4.7540  DELL     4.7540  DELU   104.7540  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     8 .AND. type CG   end SELE resid     8 .AND. type HG   end -
+          REXP    -5.1250  DELL  -105.1250  DELU    -5.1250  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     9 .AND. type CB   end SELE resid     9 .AND. type HB   end -
+          REXP    14.0740  DELL    14.0740  DELU    14.0740  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     9 .AND. type CG2  end SELE resid     9 .AND. type CB   end -
+          REXP   -17.8540  DELL   -17.8540  DELU   -17.8540  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type CB   end SELE resid    11 .AND. type HB#  end -
+          REXP   -13.5035  DELL  -113.5035  DELU   -13.5035  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type CD   end SELE resid    11 .AND. type HD#  end -
+          REXP    -9.0460  DELL  -109.0460  DELU    -9.0460  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type CG   end SELE resid    11 .AND. type HG#  end -
+          REXP    -8.0310  DELL  -108.0310  DELU    -8.0310  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type CB   end SELE resid    12 .AND. type HB   end -
+          REXP    10.7700  DELL    10.7700  DELU    10.7700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type CG2  end SELE resid    12 .AND. type CB   end -
+          REXP   -14.2100  DELL   -14.2100  DELU   -14.2100  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type CB   end SELE resid    13 .AND. type HB   end -
+          REXP    15.2810  DELL    15.2810  DELU   115.2810  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type CD   end SELE resid    13 .AND. type CG1  end -
+          REXP    -0.8110  DELL  -100.8110  DELU    -0.8110  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type CG2  end SELE resid    13 .AND. type CB   end -
+          REXP     4.2910  DELL     4.2910  DELU   104.2910  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type CB   end SELE resid    14 .AND. type HB   end -
+          REXP    14.8510  DELL    14.8510  DELU   114.8510  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type CG2  end SELE resid    14 .AND. type CB   end -
+          REXP   -20.9350  DELL  -120.9350  DELU   -20.9350  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    15 .AND. type CB   end SELE resid    15 .AND. type HB#  end -
+          REXP    31.8975  DELL    31.8975  DELU   131.8975  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    15 .AND. type CD2  end SELE resid    15 .AND. type CG   end -
+          REXP    11.5980  DELL    11.5980  DELU   111.5980  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type CB   end SELE resid    16 .AND. type HB#  end -
+          REXP     6.3575  DELL     6.3575  DELU   106.3575  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type CG   end SELE resid    16 .AND. type HG#  end -
+          REXP    18.2715  DELL    18.2715  DELU   118.2715  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    17 .AND. type CG1  end SELE resid    17 .AND. type CB   end -
+          REXP   -28.5110  DELL   -28.5110  DELU   -28.5110  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    17 .AND. type CG2  end SELE resid    17 .AND. type CB   end -
+          REXP    17.2740  DELL    17.2740  DELU    17.2740  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    18 .AND. type CB   end SELE resid    18 .AND. type HB#  end -
+          REXP   -25.0837  DELL   -25.0837  DELU   -25.0837  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    18 .AND. type CG   end SELE resid    18 .AND. type HG#  end -
+          REXP     6.7505  DELL     6.7505  DELU   106.7505  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    19 .AND. type CD   end SELE resid    19 .AND. type HD#  end -
+          REXP    21.5830  DELL    21.5830  DELU   121.5830  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    19 .AND. type CG   end SELE resid    19 .AND. type HG#  end -
+          REXP   -18.8950  DELL  -118.8950  DELU   -18.8950  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    20 .AND. type CB   end SELE resid    20 .AND. type HB#  end -
+          REXP    -7.3207  DELL    -7.3207  DELU    -7.3207  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    21 .AND. type CB   end SELE resid    21 .AND. type HB#  end -
+          REXP   -21.1605  DELL   -21.1605  DELU   -21.1605  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    22 .AND. type CB   end SELE resid    22 .AND. type HB   end -
+          REXP   -17.7980  DELL   -17.7980  DELU   -17.7980  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    22 .AND. type CG2  end SELE resid    22 .AND. type CB   end -
+          REXP    -2.9040  DELL    -2.9040  DELU    -2.9040  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type CB   end SELE resid    23 .AND. type HB   end -
+          REXP    10.3140  DELL    10.3140  DELU    10.3140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type CD   end SELE resid    23 .AND. type CG1  end -
+          REXP     4.7740  DELL     4.7740  DELU   104.7740  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type CG1  end SELE resid    23 .AND. type HG1# end -
+          REXP    -0.8130  DELL  -100.8130  DELU    -0.8130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type CG2  end SELE resid    23 .AND. type CB   end -
+          REXP   -22.0290  DELL   -22.0290  DELU   -22.0290  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    24 .AND. type CB   end SELE resid    24 .AND. type HB#  end -
+          REXP   -12.1300  DELL  -112.1300  DELU   -12.1300  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    24 .AND. type CG   end SELE resid    24 .AND. type HG#  end -
+          REXP    -5.0340  DELL  -105.0340  DELU    -5.0340  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    25 .AND. type CB   end SELE resid    25 .AND. type HB#  end -
+          REXP    22.4175  DELL    22.4175  DELU   122.4175  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type CB   end SELE resid    26 .AND. type HB   end -
+          REXP    -2.7790  DELL    -2.7790  DELU    -2.7790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type CG1  end SELE resid    26 .AND. type CB   end -
+          REXP    13.3600  DELL    13.3600  DELU    13.3600  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type CG2  end SELE resid    26 .AND. type CB   end -
+          REXP   -34.5910  DELL   -34.5910  DELU   -34.5910  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type CB   end SELE resid    27 .AND. type HB#  end -
+          REXP   -12.9125  DELL   -12.9125  DELU   -12.9125  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type CE   end SELE resid    27 .AND. type HE#  end -
+          REXP   -10.5870  DELL  -110.5870  DELU   -10.5870  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type CG   end SELE resid    27 .AND. type HG#  end -
+          REXP    28.4600  DELL    28.4600  DELU   128.4600  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    28 .AND. type CB   end SELE resid    28 .AND. type CA   end -
+          REXP     3.0000  DELL     3.0000  DELU     3.0000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    29 .AND. type CD   end SELE resid    29 .AND. type HD#  end -
+          REXP    26.3010  DELL    26.3010  DELU   126.3010  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    29 .AND. type CE   end SELE resid    29 .AND. type HE#  end -
+          REXP    14.6780  DELL    14.6780  DELU   114.6780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type CB   end SELE resid    30 .AND. type HB   end -
+          REXP    11.7760  DELL    11.7760  DELU    11.7760  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type CD   end SELE resid    30 .AND. type CG1  end -
+          REXP    18.2170  DELL    18.2170  DELU   118.2170  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type CG1  end SELE resid    30 .AND. type HG1# end -
+          REXP    -5.8790  DELL  -105.8790  DELU    -5.8790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type CG2  end SELE resid    30 .AND. type CB   end -
+          REXP   -18.7680  DELL   -18.7680  DELU   -18.7680  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type CB   end SELE resid    31 .AND. type HB#  end -
+          REXP    -9.8110  DELL    -9.8110  DELU    -9.8110  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type CG   end SELE resid    31 .AND. type HG#  end -
+          REXP    -7.6600  DELL  -107.6600  DELU    -7.6600  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    32 .AND. type CB   end SELE resid    32 .AND. type HB#  end -
+          REXP    18.8520  DELL    18.8520  DELU   118.8520  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type CB   end SELE resid    33 .AND. type HB#  end -
+          REXP    20.8190  DELL    20.8190  DELU    20.8190  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type CD   end SELE resid    33 .AND. type HD#  end -
+          REXP    17.0990  DELL    17.0990  DELU   117.0990  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type CE   end SELE resid    33 .AND. type HE#  end -
+          REXP    13.6080  DELL    13.6080  DELU   113.6080  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type CG   end SELE resid    33 .AND. type HG#  end -
+          REXP    22.1710  DELL    22.1710  DELU   122.1710  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type CB   end SELE resid    34 .AND. type HB#  end -
+          REXP   -17.1470  DELL  -117.1470  DELU   -17.1470  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type CG   end SELE resid    34 .AND. type HG#  end -
+          REXP     8.7730  DELL     8.7730  DELU   108.7730  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type CB   end SELE resid    36 .AND. type HB   end -
+          REXP   -33.2470  DELL   -33.2470  DELU   -33.2470  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type CD   end SELE resid    36 .AND. type CG1  end -
+          REXP    -4.6110  DELL  -104.6110  DELU    -4.6110  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type CG2  end SELE resid    36 .AND. type CB   end -
+          REXP    -0.7670  DELL    -0.7670  DELU    -0.7670  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    37 .AND. type CD   end SELE resid    37 .AND. type HD#  end -
+          REXP    31.2950  DELL    31.2950  DELU   131.2950  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    37 .AND. type CG   end SELE resid    37 .AND. type HG#  end -
+          REXP   -13.3880  DELL  -113.3880  DELU   -13.3880  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    38 .AND. type CD   end SELE resid    38 .AND. type HD#  end -
+          REXP     8.2410  DELL     8.2410  DELU   108.2410  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    38 .AND. type CG   end SELE resid    38 .AND. type HG#  end -
+          REXP    -3.8770  DELL  -103.8770  DELU    -3.8770  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    39 .AND. type CB   end SELE resid    39 .AND. type HB#  end -
+          REXP     4.5755  DELL     4.5755  DELU   104.5755  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    40 .AND. type CB   end SELE resid    40 .AND. type HB#  end -
+          REXP     5.9250  DELL     5.9250  DELU     5.9250  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    40 .AND. type CG   end SELE resid    40 .AND. type HG#  end -
+          REXP    12.3350  DELL    12.3350  DELU   112.3350  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    41 .AND. type CG   end SELE resid    41 .AND. type HG#  end -
+          REXP     5.8290  DELL     5.8290  DELU   105.8290  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type CB   end SELE resid    42 .AND. type HB#  end -
+          REXP    11.0390  DELL    11.0390  DELU   111.0390  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type CD   end SELE resid    42 .AND. type HD#  end -
+          REXP     5.5520  DELL     5.5520  DELU   105.5520  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type CB   end SELE resid    43 .AND. type HB#  end -
+          REXP    -4.1140  DELL    -4.1140  DELU    -4.1140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type CD1  end SELE resid    43 .AND. type CG   end -
+          REXP    -9.8150  DELL  -109.8150  DELU    -9.8150  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type CD2  end SELE resid    43 .AND. type CG   end -
+          REXP     9.5000  DELL     9.5000  DELU   109.5000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type CB   end SELE resid    44 .AND. type HB   end -
+          REXP    15.4970  DELL    15.4970  DELU   115.4970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type CD   end SELE resid    44 .AND. type CG1  end -
+          REXP    -5.4430  DELL  -105.4430  DELU    -5.4430  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type CG1  end SELE resid    44 .AND. type HG1# end -
+          REXP    30.8570  DELL    30.8570  DELU   130.8570  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type CG2  end SELE resid    44 .AND. type CB   end -
+          REXP    20.0240  DELL    20.0240  DELU   120.0240  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    45 .AND. type CB   end SELE resid    45 .AND. type HB#  end -
+          REXP    40.9320  DELL    40.9320  DELU    40.9320  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    46 .AND. type CB   end SELE resid    46 .AND. type CA   end -
+          REXP   -28.5610  DELL   -28.5610  DELU   -28.5610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type CB   end SELE resid    48 .AND. type HB#  end -
+          REXP     8.5390  DELL     8.5390  DELU   108.5390  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type CD   end SELE resid    48 .AND. type HD#  end -
+          REXP     3.5910  DELL     3.5910  DELU   103.5910  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type CE   end SELE resid    48 .AND. type HE#  end -
+          REXP     0.8070  DELL     0.8070  DELU   100.8070  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type CG   end SELE resid    48 .AND. type HG#  end -
+          REXP     0.4770  DELL     0.4770  DELU   100.4770  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    49 .AND. type CB   end SELE resid    49 .AND. type HB#  end -
+          REXP    25.0790  DELL    25.0790  DELU   125.0790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    49 .AND. type CG   end SELE resid    49 .AND. type HG#  end -
+          REXP    12.7450  DELL    12.7450  DELU   112.7450  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type CB   end SELE resid    50 .AND. type HB#  end -
+          REXP    -5.7340  DELL    -5.7340  DELU    -5.7340  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type CD1  end SELE resid    50 .AND. type CG   end -
+          REXP     0.5800  DELL     0.5800  DELU   100.5800  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type CD2  end SELE resid    50 .AND. type CG   end -
+          REXP     3.3880  DELL     3.3880  DELU   103.3880  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type CG   end SELE resid    50 .AND. type HG   end -
+          REXP   -14.1220  DELL  -114.1220  DELU   -14.1220  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    51 .AND. type CB   end SELE resid    51 .AND. type HB#  end -
+          REXP   -19.3470  DELL   -19.3470  DELU   -19.3470  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    51 .AND. type CG   end SELE resid    51 .AND. type HG#  end -
+          REXP    -0.2000  DELL  -100.2000  DELU    -0.2000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    52 .AND. type CB   end SELE resid    52 .AND. type HB#  end -
+          REXP    17.7295  DELL    17.7295  DELU    17.7295  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    54 .AND. type CD   end SELE resid    54 .AND. type HD#  end -
+          REXP    -6.1905  DELL  -106.1905  DELU    -6.1905  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    54 .AND. type CG   end SELE resid    54 .AND. type HG#  end -
+          REXP   -13.1280  DELL  -113.1280  DELU   -13.1280  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type CB   end SELE resid    55 .AND. type HB   end -
+          REXP     2.5940  DELL     2.5940  DELU     2.5940  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type CG2  end SELE resid    55 .AND. type CB   end -
+          REXP    19.1080  DELL    19.1080  DELU    19.1080  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type CB   end SELE resid    56 .AND. type HB#  end -
+          REXP    -4.7250  DELL    -4.7250  DELU    -4.7250  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type CD2  end SELE resid    56 .AND. type CG   end -
+          REXP   -14.2760  DELL  -114.2760  DELU   -14.2760  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type CG   end SELE resid    56 .AND. type HG   end -
+          REXP    15.1140  DELL    15.1140  DELU   115.1140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    57 .AND. type CB   end SELE resid    57 .AND. type HB#  end -
+          REXP    12.4205  DELL    12.4205  DELU   112.4205  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    58 .AND. type CB   end SELE resid    58 .AND. type HB#  end -
+          REXP     1.1525  DELL     1.1525  DELU     1.1525  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    59 .AND. type CB   end SELE resid    59 .AND. type HB#  end -
+          REXP    37.2218  DELL    37.2218  DELU    37.2218  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    60 .AND. type CB   end SELE resid    60 .AND. type HB#  end -
+          REXP   -10.5545  DELL  -110.5545  DELU   -10.5545  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type CB   end SELE resid    61 .AND. type HB   end -
+          REXP    17.5490  DELL    17.5490  DELU    17.5490  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type CD   end SELE resid    61 .AND. type CG1  end -
+          REXP   -12.4080  DELL  -112.4080  DELU   -12.4080  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type CG1  end SELE resid    61 .AND. type HG1# end -
+          REXP    34.2115  DELL    34.2115  DELU   134.2115  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type CG2  end SELE resid    61 .AND. type CB   end -
+          REXP    15.8410  DELL    15.8410  DELU    15.8410  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    62 .AND. type CB   end SELE resid    62 .AND. type HB#  end -
+          REXP   -20.8790  DELL   -20.8790  DELU   -20.8790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    62 .AND. type CG   end SELE resid    62 .AND. type HG#  end -
+          REXP   -13.2400  DELL  -113.2400  DELU   -13.2400  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type CB   end SELE resid    63 .AND. type HB#  end -
+          REXP    26.4620  DELL    26.4620  DELU    26.4620  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type CD   end SELE resid    63 .AND. type HD#  end -
+          REXP    22.7930  DELL    22.7930  DELU   122.7930  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type CE   end SELE resid    63 .AND. type HE#  end -
+          REXP     8.5250  DELL     8.5250  DELU   108.5250  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type CG   end SELE resid    63 .AND. type HG#  end -
+          REXP    25.6110  DELL    25.6110  DELU   125.6110  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type CB   end SELE resid    64 .AND. type HB#  end -
+          REXP     4.9580  DELL     4.9580  DELU     4.9580  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type CG   end SELE resid    64 .AND. type HG#  end -
+          REXP    -6.4820  DELL  -106.4820  DELU    -6.4820  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    65 .AND. type CB   end SELE resid    65 .AND. type HB#  end -
+          REXP    -4.5680  DELL    -4.5680  DELU    -4.5680  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    66 .AND. type CB   end SELE resid    66 .AND. type HB   end -
+          REXP    24.3240  DELL    24.3240  DELU    24.3240  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type CD1  end SELE resid    67 .AND. type CG   end -
+          REXP    -6.8890  DELL  -106.8890  DELU    -6.8890  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type CD2  end SELE resid    67 .AND. type CG   end -
+          REXP    16.0200  DELL    16.0200  DELU   116.0200  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type CG   end SELE resid    67 .AND. type HG   end -
+          REXP     4.1930  DELL     4.1930  DELU   104.1930  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    68 .AND. type CB   end SELE resid    68 .AND. type HB#  end -
+          REXP   -19.4268  DELL   -19.4268  DELU   -19.4268  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type CD1  end SELE resid    69 .AND. type CG   end -
+          REXP     2.6550  DELL     2.6550  DELU   102.6550  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type CD2  end SELE resid    69 .AND. type CG   end -
+          REXP    18.2170  DELL    18.2170  DELU   118.2170  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    70 .AND. type CB   end SELE resid    70 .AND. type HB   end -
+          REXP   -10.1820  DELL  -110.1820  DELU   -10.1820  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    70 .AND. type CG2  end SELE resid    70 .AND. type CB   end -
+          REXP     8.2060  DELL     8.2060  DELU   108.2060  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     2 .AND. type N    end SELE resid     1 .AND. type C    end -
+          REXP     0.8160  DELL     0.8160  DELU     0.8160  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     3 .AND. type N    end SELE resid     2 .AND. type C    end -
+          REXP    -2.1060  DELL    -2.1060  DELU    -2.1060  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     4 .AND. type N    end SELE resid     3 .AND. type C    end -
+          REXP     0.1420  DELL     0.1420  DELU     0.1420  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     5 .AND. type N    end SELE resid     4 .AND. type C    end -
+          REXP    -0.7950  DELL    -0.7950  DELU    -0.7950  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type N    end SELE resid     5 .AND. type C    end -
+          REXP     0.4800  DELL     0.4800  DELU     0.4800  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type N    end SELE resid     6 .AND. type C    end -
+          REXP    -0.1060  DELL    -0.1060  DELU    -0.1060  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     8 .AND. type N    end SELE resid     7 .AND. type C    end -
+          REXP    -2.0300  DELL    -2.0300  DELU    -2.0300  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type N    end SELE resid    10 .AND. type C    end -
+          REXP     0.9630  DELL     0.9630  DELU     0.9630  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type N    end SELE resid    11 .AND. type C    end -
+          REXP    -1.7630  DELL    -1.7630  DELU    -1.7630  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type N    end SELE resid    12 .AND. type C    end -
+          REXP     0.7320  DELL     0.7320  DELU     0.7320  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type N    end SELE resid    13 .AND. type C    end -
+          REXP    -0.4770  DELL    -0.4770  DELU    -0.4770  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    15 .AND. type N    end SELE resid    14 .AND. type C    end -
+          REXP     0.5330  DELL     0.5330  DELU     0.5330  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type N    end SELE resid    15 .AND. type C    end -
+          REXP     0.7560  DELL     0.7560  DELU     0.7560  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    17 .AND. type N    end SELE resid    16 .AND. type C    end -
+          REXP     0.6970  DELL     0.6970  DELU     0.6970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    18 .AND. type N    end SELE resid    17 .AND. type C    end -
+          REXP     0.8100  DELL     0.8100  DELU     0.8100  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    20 .AND. type N    end SELE resid    19 .AND. type C    end -
+          REXP     1.0260  DELL     1.0260  DELU     1.0260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    21 .AND. type N    end SELE resid    20 .AND. type C    end -
+          REXP     0.5220  DELL     0.5220  DELU     0.5220  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type N    end SELE resid    22 .AND. type C    end -
+          REXP    -0.2580  DELL    -0.2580  DELU    -0.2580  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    25 .AND. type N    end SELE resid    24 .AND. type C    end -
+          REXP    -2.5230  DELL    -2.5230  DELU    -2.5230  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type N    end SELE resid    25 .AND. type C    end -
+          REXP     1.1610  DELL     1.1610  DELU     1.1610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type N    end SELE resid    26 .AND. type C    end -
+          REXP    -1.1460  DELL    -1.1460  DELU    -1.1460  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    28 .AND. type N    end SELE resid    27 .AND. type C    end -
+          REXP     0.2060  DELL     0.2060  DELU     0.2060  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    29 .AND. type N    end SELE resid    28 .AND. type C    end -
+          REXP    -1.0230  DELL    -1.0230  DELU    -1.0230  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type N    end SELE resid    29 .AND. type C    end -
+          REXP     0.1310  DELL     0.1310  DELU     0.1310  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type N    end SELE resid    30 .AND. type C    end -
+          REXP     0.5780  DELL     0.5780  DELU     0.5780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    32 .AND. type N    end SELE resid    31 .AND. type C    end -
+          REXP    -2.0140  DELL    -2.0140  DELU    -2.0140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type N    end SELE resid    32 .AND. type C    end -
+          REXP     1.1160  DELL     1.1160  DELU     1.1160  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type N    end SELE resid    33 .AND. type C    end -
+          REXP    -0.3980  DELL    -0.3980  DELU    -0.3980  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    35 .AND. type N    end SELE resid    34 .AND. type C    end -
+          REXP     0.8670  DELL     0.8670  DELU     0.8670  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type N    end SELE resid    35 .AND. type C    end -
+          REXP     0.9150  DELL     0.9150  DELU     0.9150  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    39 .AND. type N    end SELE resid    38 .AND. type C    end -
+          REXP    -1.4250  DELL    -1.4250  DELU    -1.4250  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    40 .AND. type N    end SELE resid    39 .AND. type C    end -
+          REXP     0.7920  DELL     0.7920  DELU     0.7920  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    41 .AND. type N    end SELE resid    40 .AND. type C    end -
+          REXP    -1.8950  DELL    -1.8950  DELU    -1.8950  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type N    end SELE resid    41 .AND. type C    end -
+          REXP     1.1460  DELL     1.1460  DELU     1.1460  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type N    end SELE resid    42 .AND. type C    end -
+          REXP    -1.3910  DELL    -1.3910  DELU    -1.3910  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    44 .AND. type N    end SELE resid    43 .AND. type C    end -
+          REXP     0.7480  DELL     0.7480  DELU     0.7480  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    45 .AND. type N    end SELE resid    44 .AND. type C    end -
+          REXP     0.1740  DELL     0.1740  DELU     0.1740  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    46 .AND. type N    end SELE resid    45 .AND. type C    end -
+          REXP     0.8870  DELL     0.8870  DELU     0.8870  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    47 .AND. type N    end SELE resid    46 .AND. type C    end -
+          REXP    -1.5670  DELL    -1.5670  DELU    -1.5670  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type N    end SELE resid    47 .AND. type C    end -
+          REXP    -0.0120  DELL    -0.0120  DELU    -0.0120  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    49 .AND. type N    end SELE resid    48 .AND. type C    end -
+          REXP    -0.9700  DELL    -0.9700  DELU    -0.9700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type N    end SELE resid    49 .AND. type C    end -
+          REXP     0.7730  DELL     0.7730  DELU     0.7730  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    51 .AND. type N    end SELE resid    50 .AND. type C    end -
+          REXP     0.3770  DELL     0.3770  DELU     0.3770  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    52 .AND. type N    end SELE resid    51 .AND. type C    end -
+          REXP    -0.0890  DELL    -0.0890  DELU    -0.0890  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    54 .AND. type N    end SELE resid    53 .AND. type C    end -
+          REXP     0.9630  DELL     0.9630  DELU     0.9630  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type N    end SELE resid    54 .AND. type C    end -
+          REXP    -1.9460  DELL    -1.9460  DELU    -1.9460  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type N    end SELE resid    55 .AND. type C    end -
+          REXP     0.3100  DELL     0.3100  DELU     0.3100  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    57 .AND. type N    end SELE resid    56 .AND. type C    end -
+          REXP    -0.7950  DELL    -0.7950  DELU    -0.7950  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    58 .AND. type N    end SELE resid    57 .AND. type C    end -
+          REXP    -1.2120  DELL    -1.2120  DELU    -1.2120  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    59 .AND. type N    end SELE resid    58 .AND. type C    end -
+          REXP     0.6210  DELL     0.6210  DELU     0.6210  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    60 .AND. type N    end SELE resid    59 .AND. type C    end -
+          REXP    -2.0170  DELL    -2.0170  DELU    -2.0170  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type N    end SELE resid    60 .AND. type C    end -
+          REXP     0.6840  DELL     0.6840  DELU     0.6840  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    62 .AND. type N    end SELE resid    61 .AND. type C    end -
+          REXP     0.4430  DELL     0.4430  DELU     0.4430  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type N    end SELE resid    62 .AND. type C    end -
+          REXP    -1.3730  DELL    -1.3730  DELU    -1.3730  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type N    end SELE resid    63 .AND. type C    end -
+          REXP    -0.0360  DELL    -0.0360  DELU    -0.0360  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    65 .AND. type N    end SELE resid    64 .AND. type C    end -
+          REXP     0.3010  DELL     0.3010  DELU     0.3010  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    66 .AND. type N    end SELE resid    65 .AND. type C    end -
+          REXP    -0.6490  DELL    -0.6490  DELU    -0.6490  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type N    end SELE resid    66 .AND. type C    end -
+          REXP     0.3890  DELL     0.3890  DELU     0.3890  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    68 .AND. type N    end SELE resid    67 .AND. type C    end -
+          REXP    -1.1880  DELL    -1.1880  DELU    -1.1880  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type N    end SELE resid    68 .AND. type C    end -
+          REXP     0.2580  DELL     0.2580  DELU     0.2580  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    70 .AND. type N    end SELE resid    69 .AND. type C    end -
+          REXP    -0.3750  DELL    -0.3750  DELU    -0.3750  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     1 .AND. type CA   end SELE resid     1 .AND. type C    end -
+          REXP    -2.4200  DELL    -2.4200  DELU    -2.4200  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     2 .AND. type CA   end SELE resid     2 .AND. type C    end -
+          REXP     0.6130  DELL     0.6130  DELU     0.6130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     3 .AND. type CA   end SELE resid     3 .AND. type C    end -
+          REXP    -1.0550  DELL    -1.0550  DELU    -1.0550  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     4 .AND. type CA   end SELE resid     4 .AND. type C    end -
+          REXP    -2.4730  DELL    -2.4730  DELU    -2.4730  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     5 .AND. type CA   end SELE resid     5 .AND. type C    end -
+          REXP    -0.2790  DELL    -0.2790  DELU    -0.2790  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type CA   end SELE resid     6 .AND. type C    end -
+          REXP    -3.1340  DELL    -3.1340  DELU    -3.1340  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type CA   end SELE resid     7 .AND. type C    end -
+          REXP     0.1640  DELL     0.1640  DELU     0.1640  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     9 .AND. type CA   end SELE resid     9 .AND. type C    end -
+          REXP    -1.5940  DELL    -1.5940  DELU    -1.5940  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    10 .AND. type CA   end SELE resid    10 .AND. type C    end -
+          REXP    -0.8890  DELL    -0.8890  DELU    -0.8890  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type CA   end SELE resid    12 .AND. type C    end -
+          REXP     1.5320  DELL     1.5320  DELU     1.5320  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type CA   end SELE resid    13 .AND. type C    end -
+          REXP    -2.6090  DELL    -2.6090  DELU    -2.6090  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type CA   end SELE resid    14 .AND. type C    end -
+          REXP     1.7690  DELL     1.7690  DELU     1.7690  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    15 .AND. type CA   end SELE resid    15 .AND. type C    end -
+          REXP    -3.1390  DELL    -3.1390  DELU    -3.1390  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type CA   end SELE resid    16 .AND. type C    end -
+          REXP     1.0960  DELL     1.0960  DELU     1.0960  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    17 .AND. type CA   end SELE resid    17 .AND. type C    end -
+          REXP    -2.1390  DELL    -2.1390  DELU    -2.1390  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    19 .AND. type CA   end SELE resid    19 .AND. type C    end -
+          REXP     0.5180  DELL     0.5180  DELU     0.5180  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    20 .AND. type CA   end SELE resid    20 .AND. type C    end -
+          REXP    -2.1970  DELL    -2.1970  DELU    -2.1970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    21 .AND. type CA   end SELE resid    21 .AND. type C    end -
+          REXP    -0.7300  DELL    -0.7300  DELU    -0.7300  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    22 .AND. type CA   end SELE resid    22 .AND. type C    end -
+          REXP    -0.5960  DELL    -0.5960  DELU    -0.5960  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    24 .AND. type CA   end SELE resid    24 .AND. type C    end -
+          REXP     0.7690  DELL     0.7690  DELU     0.7690  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    25 .AND. type CA   end SELE resid    25 .AND. type C    end -
+          REXP     1.4140  DELL     1.4140  DELU     1.4140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    26 .AND. type CA   end SELE resid    26 .AND. type C    end -
+          REXP    -2.4600  DELL    -2.4600  DELU    -2.4600  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    27 .AND. type CA   end SELE resid    27 .AND. type C    end -
+          REXP     2.4920  DELL     2.4920  DELU     2.4920  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    28 .AND. type CA   end SELE resid    28 .AND. type C    end -
+          REXP     0.4510  DELL     0.4510  DELU     0.4510  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    29 .AND. type CA   end SELE resid    29 .AND. type C    end -
+          REXP    -0.2690  DELL    -0.2690  DELU    -0.2690  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    30 .AND. type CA   end SELE resid    30 .AND. type C    end -
+          REXP    -0.6950  DELL    -0.6950  DELU    -0.6950  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type CA   end SELE resid    31 .AND. type C    end -
+          REXP     1.3610  DELL     1.3610  DELU     1.3610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    32 .AND. type CA   end SELE resid    32 .AND. type C    end -
+          REXP     1.2970  DELL     1.2970  DELU     1.2970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    33 .AND. type CA   end SELE resid    33 .AND. type C    end -
+          REXP    -2.4160  DELL    -2.4160  DELU    -2.4160  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type CA   end SELE resid    34 .AND. type C    end -
+          REXP    -2.3540  DELL    -2.3540  DELU    -2.3540  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    35 .AND. type CA   end SELE resid    35 .AND. type C    end -
+          REXP    -0.2250  DELL    -0.2250  DELU    -0.2250  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    38 .AND. type CA   end SELE resid    38 .AND. type C    end -
+          REXP    -0.5870  DELL    -0.5870  DELU    -0.5870  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    39 .AND. type CA   end SELE resid    39 .AND. type C    end -
+          REXP     0.7140  DELL     0.7140  DELU     0.7140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    40 .AND. type CA   end SELE resid    40 .AND. type C    end -
+          REXP    -0.3730  DELL    -0.3730  DELU    -0.3730  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type CA   end SELE resid    42 .AND. type C    end -
+          REXP    -1.9440  DELL    -1.9440  DELU    -1.9440  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type CA   end SELE resid    43 .AND. type C    end -
+          REXP     2.2460  DELL     2.2460  DELU     2.2460  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    45 .AND. type CA   end SELE resid    45 .AND. type C    end -
+          REXP     2.3400  DELL     2.3400  DELU     2.3400  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    46 .AND. type CA   end SELE resid    46 .AND. type C    end -
+          REXP    -1.5730  DELL    -1.5730  DELU    -1.5730  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    47 .AND. type CA   end SELE resid    47 .AND. type C    end -
+          REXP     1.1650  DELL     1.1650  DELU     1.1650  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type CA   end SELE resid    48 .AND. type C    end -
+          REXP     1.9970  DELL     1.9970  DELU     1.9970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    49 .AND. type CA   end SELE resid    49 .AND. type C    end -
+          REXP    -0.7350  DELL    -0.7350  DELU    -0.7350  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type CA   end SELE resid    50 .AND. type C    end -
+          REXP     0.6700  DELL     0.6700  DELU     0.6700  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    51 .AND. type CA   end SELE resid    51 .AND. type C    end -
+          REXP     1.1650  DELL     1.1650  DELU     1.1650  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    53 .AND. type CA   end SELE resid    53 .AND. type C    end -
+          REXP    -2.0130  DELL    -2.0130  DELU    -2.0130  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type CA   end SELE resid    55 .AND. type C    end -
+          REXP     1.8720  DELL     1.8720  DELU     1.8720  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type CA   end SELE resid    56 .AND. type C    end -
+          REXP    -0.2300  DELL    -0.2300  DELU    -0.2300  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    57 .AND. type CA   end SELE resid    57 .AND. type C    end -
+          REXP     1.1120  DELL     1.1120  DELU     1.1120  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    58 .AND. type CA   end SELE resid    58 .AND. type C    end -
+          REXP     1.1880  DELL     1.1880  DELU     1.1880  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    59 .AND. type CA   end SELE resid    59 .AND. type C    end -
+          REXP    -0.9440  DELL    -0.9440  DELU    -0.9440  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    60 .AND. type CA   end SELE resid    60 .AND. type C    end -
+          REXP     1.5780  DELL     1.5780  DELU     1.5780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type CA   end SELE resid    61 .AND. type C    end -
+          REXP    -2.4670  DELL    -2.4670  DELU    -2.4670  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type CA   end SELE resid    63 .AND. type C    end -
+          REXP     0.7970  DELL     0.7970  DELU     0.7970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type CA   end SELE resid    64 .AND. type C    end -
+          REXP    -0.9170  DELL    -0.9170  DELU    -0.9170  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    65 .AND. type CA   end SELE resid    65 .AND. type C    end -
+          REXP    -1.8810  DELL    -1.8810  DELU    -1.8810  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    66 .AND. type CA   end SELE resid    66 .AND. type C    end -
+          REXP    -1.1350  DELL    -1.1350  DELU    -1.1350  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    67 .AND. type CA   end SELE resid    67 .AND. type C    end -
+          REXP    -1.8680  DELL    -1.8680  DELU    -1.8680  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    68 .AND. type CA   end SELE resid    68 .AND. type C    end -
+          REXP    -0.1430  DELL    -0.1430  DELU    -0.1430  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type CA   end SELE resid    69 .AND. type C    end -
+          REXP    -3.0680  DELL    -3.0680  DELU    -3.0680  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     1 .AND. type CA   end SELE resid     1 .AND. type CB   end -
+          REXP     1.6670  DELL     1.6670  DELU     1.6670  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     6 .AND. type CA   end SELE resid     6 .AND. type CB   end -
+          REXP     2.0980  DELL     2.0980  DELU     2.0980  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     7 .AND. type CA   end SELE resid     7 .AND. type CB   end -
+          REXP     1.5750  DELL     1.5750  DELU     1.5750  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid     9 .AND. type CA   end SELE resid     9 .AND. type CB   end -
+          REXP     1.4430  DELL     1.4430  DELU     1.4430  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    11 .AND. type CA   end SELE resid    11 .AND. type CB   end -
+          REXP     1.1530  DELL     1.1530  DELU     1.1530  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    12 .AND. type CA   end SELE resid    12 .AND. type CB   end -
+          REXP    -0.6660  DELL    -0.6660  DELU    -0.6660  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    13 .AND. type CA   end SELE resid    13 .AND. type CB   end -
+          REXP     0.0270  DELL     0.0270  DELU     0.0270  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    14 .AND. type CA   end SELE resid    14 .AND. type CB   end -
+          REXP    -0.9520  DELL    -0.9520  DELU    -0.9520  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    16 .AND. type CA   end SELE resid    16 .AND. type CB   end -
+          REXP     0.6260  DELL     0.6260  DELU     0.6260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    18 .AND. type CA   end SELE resid    18 .AND. type CB   end -
+          REXP     1.2600  DELL     1.2600  DELU     1.2600  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    19 .AND. type CA   end SELE resid    19 .AND. type CB   end -
+          REXP    -0.9920  DELL    -0.9920  DELU    -0.9920  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    22 .AND. type CA   end SELE resid    22 .AND. type CB   end -
+          REXP     0.5390  DELL     0.5390  DELU     0.5390  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    23 .AND. type CA   end SELE resid    23 .AND. type CB   end -
+          REXP     0.6610  DELL     0.6610  DELU     0.6610  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    24 .AND. type CA   end SELE resid    24 .AND. type CB   end -
+          REXP     1.3180  DELL     1.3180  DELU     1.3180  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    28 .AND. type CA   end SELE resid    28 .AND. type CB   end -
+          REXP     0.6140  DELL     0.6140  DELU     0.6140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    31 .AND. type CA   end SELE resid    31 .AND. type CB   end -
+          REXP     1.3580  DELL     1.3580  DELU     1.3580  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    34 .AND. type CA   end SELE resid    34 .AND. type CB   end -
+          REXP     2.4970  DELL     2.4970  DELU     2.4970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    36 .AND. type CA   end SELE resid    36 .AND. type CB   end -
+          REXP     1.2690  DELL     1.2690  DELU     1.2690  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    38 .AND. type CA   end SELE resid    38 .AND. type CB   end -
+          REXP     0.0140  DELL     0.0140  DELU     0.0140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    39 .AND. type CA   end SELE resid    39 .AND. type CB   end -
+          REXP    -0.4080  DELL    -0.4080  DELU    -0.4080  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    42 .AND. type CA   end SELE resid    42 .AND. type CB   end -
+          REXP    -0.4270  DELL    -0.4270  DELU    -0.4270  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    43 .AND. type CA   end SELE resid    43 .AND. type CB   end -
+          REXP    -0.6910  DELL    -0.6910  DELU    -0.6910  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    46 .AND. type CA   end SELE resid    46 .AND. type CB   end -
+          REXP    -1.9470  DELL    -1.9470  DELU    -1.9470  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    48 .AND. type CA   end SELE resid    48 .AND. type CB   end -
+          REXP    -1.4360  DELL    -1.4360  DELU    -1.4360  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    50 .AND. type CA   end SELE resid    50 .AND. type CB   end -
+          REXP    -0.2730  DELL    -0.2730  DELU    -0.2730  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    54 .AND. type CA   end SELE resid    54 .AND. type CB   end -
+          REXP     1.5500  DELL     1.5500  DELU     1.5500  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    55 .AND. type CA   end SELE resid    55 .AND. type CB   end -
+          REXP    -2.5000  DELL    -2.5000  DELU    -2.5000  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    56 .AND. type CA   end SELE resid    56 .AND. type CB   end -
+          REXP     0.6950  DELL     0.6950  DELU     0.6950  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    57 .AND. type CA   end SELE resid    57 .AND. type CB   end -
+          REXP    -1.1830  DELL    -1.1830  DELU    -1.1830  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    59 .AND. type CA   end SELE resid    59 .AND. type CB   end -
+          REXP    -1.0310  DELL    -1.0310  DELU    -1.0310  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    60 .AND. type CA   end SELE resid    60 .AND. type CB   end -
+          REXP     1.7140  DELL     1.7140  DELU     1.7140  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    61 .AND. type CA   end SELE resid    61 .AND. type CB   end -
+          REXP    -0.9260  DELL    -0.9260  DELU    -0.9260  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    62 .AND. type CA   end SELE resid    62 .AND. type CB   end -
+          REXP     0.6450  DELL     0.6450  DELU     0.6450  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    63 .AND. type CA   end SELE resid    63 .AND. type CB   end -
+          REXP    -2.0780  DELL    -2.0780  DELU    -2.0780  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    64 .AND. type CA   end SELE resid    64 .AND. type CB   end -
+          REXP     0.1580  DELL     0.1580  DELU     0.1580  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    65 .AND. type CA   end SELE resid    65 .AND. type CB   end -
+          REXP     1.5560  DELL     1.5560  DELU     1.5560  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    66 .AND. type CA   end SELE resid    66 .AND. type CB   end -
+          REXP     1.0670  DELL     1.0670  DELU     1.0670  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    69 .AND. type CA   end SELE resid    69 .AND. type CB   end -
+          REXP     2.2970  DELL     2.2970  DELU     2.2970  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1
+   ASSI   SELE resid    70 .AND. type CA   end SELE resid    70 .AND. type CB   end -
+          REXP     1.8100  DELL     1.8100  DELU     1.8100  KHAR  @kharm  KASY  @kasym  LHAR  @lharm  EXPO  1

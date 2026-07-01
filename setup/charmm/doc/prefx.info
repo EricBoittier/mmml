@@ -1,0 +1,403 @@
+
+File: prefx.info, Node: Top, Up: (developer.info)Tools, Previous: (developer.info)Tools, Next: (developer.info)makemod
+
+                          CHARMM Preprocessing
+
+      There is a CHARMM preprocessor, PREFX (formerly PREFLX), which
+reads source files as input and produces fortran files for subsequent
+compilation.  The main purpose of this preprocessor is to allow a single
+version of the source code to work with all platforms and compile options.
+A summary of preflx capabilities:
+      1.  Allows selective compile of machine specific code
+      2.  Allows selected features to be not compiled (to reduce memory needs)
+      3.  Supports a size directive to allow larger (and smaller) versions.
+      4.  Handles the inclusion of .fcm files in a general manner
+      5.  Allows alternate include file directory to be specified
+      6.  Allows code expansion for alternate compiles
+          (can move IFs from a DO loop).
+      7.  Allows comments on source lines following a "!"
+      8.  Handles the conversion to single precision (CRAY, DEC alpha,...)
+      9.  Identifies unwanted tabs in the source code
+      10. Checks for line lengths exceeding 72 for non-comments
+      11. Allows processing multiple files from a list (Macintosh version).
+      12. Allows the removal of "IMPLICIT NONE" from source files.
+
+NOTE: We have transitioned to use the C-preprocessor (cpp) and the use of the ##IF
+      syntax has been phased out. We no longer make a pass through the prefx
+      preprocessor. Do not use ## constructs.
+      In the revised document below we add the corresponding cpp equivalent
+      constructs which represent the current CHARMM standard. A good reference for the use
+      of cpp can be found at http://gcc.gnu.org/onlinedocs/cpp/. Finally, we note that
+      we are not "endorsing" the full use of cpp functionality since this can lead to
+      code that is highly obfuscated. The current recommendation is to utilize it primarily
+      for those functions that are equivalent to the same functionality in the prefx preprocessor.
+
+The source files have the extension ".src".
+These files are no longer automatically processed by the PREFX preprocessor.
+Each ".src" file is copied to the build directory with ".F90" replacing ".src".
+
+* Menu:
+
+* Conditional:: Conditional compilation directives
+* Listing::     Keyword listing directives
+* Expansion::   Code expansion directives
+* Reserved::    Preprocessor reserved words
+* Keywords::    Some important keywords
+
+
+File: prefx.info, Node: Conditional, Up: Top, Previous: Top, Next: Listing
+
+SELECTIVE COMPILATION
+
+Conditional compilation is controlled by simple directives.  The directives
+all start with "##" in the first column.  Global keywords should be in upper
+case and have multiple letters (local keywords use single character or lower
+case).  ##IF constructs can be nested (up to 40 levels).
+
+     ##IF keyword(s)     (match-token) ! process code if any keyword is active.
+     #if KEY_KEYWORD_1 == 1 || KEY_KEYWORD_2 == 1 /* cpp equivalent, process code if KEYWORD_1 or KEYWORD_2 active */
+     ##ELIF keyword(s)   (match-token) ! after and IF or IFN,
+                                         alternate processing.
+     #elif KEY_KEYWORD == 1            /* cpp equivalent */
+     ##ELSE              (match-token) ! after and IF, ELIF, or IFN, process the rest.
+     #else                             /* cpp equivalent */
+     ##ERROR 'message'                 ! indicates an error within a
+                                       ! ##IF construct
+                                       ! (usually after a ##ELSE condition).
+                                       ! Note: single quotes are required.
+     #error                            /* cpp equivalent */
+     ##ENDIF             (match-token) ! terminates IF, IFN, ELSE, or ELIF constructs.
+     #endif                            /* cpp equivalent */
+     ##IFN keyword(s)    (match-token) ! process code if no keyword is active.
+     #if KEY_KEYWORD != 1              /* cpp equivalent */
+
+
+     keywords:: A set of one or more keyword that may be specified in pref.dat
+                or in an ##EXPAND construct (see below).
+
+     match-token :: unique text string in parentheses; must be the
+                    same for each use in an ##IF ... ##ENDIF block
+
+** NOTE: On lines meant for the cpp, the '!' character is reserved for
+         the binary boolean negation operator. Comments at the end of
+	 cpp lines should be enclosed in '/*' and '*/' delimiters.
+	 These dilimiters are not valid in Fortran lines, including comments.
+	 For example, the lines '! MSP /*\' and '! MSP \*/' cause errors.
+	 Normal Fortran comments beginning with '!' and containing no
+	 '/*' or '*/' are valid.
+
+Example (from fcm/dimens.fcm):
+
+            INTEGER MAXVEC
+      ##IFN VECTOR PARVECT               (maxvec_spec)
+            integer(chm_int),PARAMETER :: MAXVEC = 10     
+      ##ELIF LARGE XLARGE                (maxvec_spec)
+            integer(chm_int),PARAMETER :: MAXVEC = 4000
+      ##ELIF MEDIUM                      (maxvec_spec)
+            integer(chm_int),PARAMETER :: MAXVEC = 2000 
+      ##ELIF SMALL                       (maxvec_spec)
+            integer(chm_int),PARAMETER :: MAXVEC = 2000
+      ##ELIF XSMALL                      (maxvec_spec)
+            integer(chm_int),PARAMETER :: MAXVEC = 1000 
+      ##ELSE                             (maxvec_spec)
+      ##ERROR 'Unrecognized size directive in DIMENS.FCM.'
+      ##ENDIF                            (maxvec_spec)
+
+ Equivalent using cpp structured directives
+            INTEGER MAXVEC
+      #if KEY_VECTOR == 0 || KEY_PARVECT == 0
+            integer(chm_int),PARAMETER :: MAXVEC = 10     
+      #elif KEY_LARGE == 1 || KEY_XLARGE == 1
+            integer(chm_int),PARAMETER :: MAXVEC = 4000
+      #elif KEY_MEDIUM == 1
+            integer(chm_int),PARAMETER :: MAXVEC = 2000 
+      #elif KEY_SMALL == 1
+            integer(chm_int),PARAMETER :: MAXVEC = 2000
+      #elif KEY_XSMALL == 1
+            integer(chm_int),PARAMETER :: MAXVEC = 1000 
+      #else
+      #error 'Unrecognized size directive in DIMENS.FCM.'
+      #endif
+
+Note: Although the above example illustrates the syntax of cpp equivalent prefx commands
+      none of the keywords above are supported any longer.
+
+
+When multiple keywords are specified, an "OR" condition is implied.
+IF an "AND" condition is required, use a nested ##IF construct.
+In the example above, MAXVEC will not be 10 if either VECTOR or
+PARVECT is specified.
+ 
+The text ".not." may be added before a keyname to test for its inverse.
+For example, the following constructs are equivalent:
+
+         ##IFN BLOCK                    ##IF .not.BLOCK
+
+but these are not equivalent:
+         ##IFN BLOCK TSM                ##IF .not.BLOCK  .not.TSM
+
+This is because the the first will select when both are false but the second
+will select when either is false.
+
+In the cpp syntax these are
+        #if KEY_BLOCK != 1
+        #if KEY_BLOCK != 1 && KEY_TSM != 1 versus #if KEY_BLOCK != 1 || KEY_TSM != 1
+In cpp it is more transparaent what the boolean logic is.
+
+** NOTE: The single line syntax noted below is not supported as part of the
+         cpp format style and should no longer be used.
+
+Selective compilation may also be done using on a single line using
+a "!##" construct.  The syntax is:
+        standard-fortran-line    !## keyword(s)  ! comments
+
+A space is not required between the "!##" and the keyword list.
+For example the following constructs are equivalent:
+
+Standard format:      
+      ##IF LONGLINE
+            QLONGL=.TRUE.
+      ##ELSE
+            QLONGL=.FALSE.
+      ##ENDIF
+
+Compact format (with comments):      
+            QLONGL=.TRUE.     !##LONGLINE       ! specify the QLONGL flag
+            QLONGL=.FALSE.    !##.not.LONGLINE  ! based on compilation options
+
+Both "and" and "or" conditions can be used for one line processing:
+            !##PERT  !##PARALLEL   - An "AND" conditional compile
+            !##PERT PARALLEL       - An "OR" conditional compile
+
+      
+NOTE: To assist the automatic ##IF checking utilities, please do not place
+## characters in the source code (other than on comment lines) unless
+absolutely necessary.
+
+
+File: prefx.info, Node: Listing, Up: Top, Previous: Conditional, Next: Expansion
+
+Keyword listing directives;
+
+##KEYWORDS LIST unit
+  Inserts a fortran write lines of all current keywords to the selected
+  write unit. "unit" may be a variable name or a number but it is limited
+  to 8 characters maximum.
+
+#if KEY_KEYWORDS95 == 1 || KEY_LIST == 1 || KEY_outu == 1   /* cpp */
+
+##KEYWORDS FILL count array 
+  Fills an integer count variable with the number of current keys and
+  also fill a character*12 array in the program with the current keys.
+  Count and array variable names are limited to 8 characters maximum.
+
+
+File: prefx.info, Node: Expansion, Up: Top, Previous: Listing, Next: Reserved
+
+CODE EXPANSION
+
+For computational intensive routines which are not too large, code expansion
+may be used to increase efficiency.  This is achieved by moving constant IF
+conditions to the outside of major loops. Code expansion is optional and (if
+done properly) the code should function in both expanded and unexpanded forms.
+This means that the code should be written and tested in an unexpanded
+form and then retested with expansion enabled.
+
+
+##EXPAND local-flag(s) .when.  conditional-flag(s)   (identifier)
+
+Expand subcommands control section (immediately following the ##EXPAND):
+     ##PASS1 flag1 flag2 ... 
+     ##PASS2 flag1 flag2 ... 
+     ##PASS3 ...   - code sections and conditions for each pass
+     ##PASS[n] ... 
+     ##EXFIN       - code section for the termination of the expand section
+     ##EXEND       - end of expansion specification
+##ENDEX   (identifier)
+    (the identifier is required and must match the corresponding ##EXPAND).
+    For each pass, the specified flags are temporarily set (or .not. set)
+    as requested.  If all of the conditions for the code expansion (flags
+    specified after the .when. construct) are not set, then all flags from
+    the ##EXPAND line (before the .when.) are temporarily set and no code
+    expansion is processed.
+
+Example (from nbonds/enbfs8.src):
+      ...
+      ...
+      ...
+      !--- Do block expansion of code
+      ##EXPAND  B  forces    .when. BLOCK EXPAND  (expand_block)
+      ##PASS1  .not.forces
+            IF(QBLOCK .AND. NOFORC) THEN
+      ##PASS2  forces
+            ELSE IF(QBLOCK) THEN
+      ##PASS3 .not.BLOCK  forces
+            ELSE
+      ##EXFIN
+            ENDIF
+      ##EXEND
+      
+            mainloop: DO I=1,NATOMX       ! Begin of main loop
+      ...
+      ...
+      ...
+               frcloop: IF (.NOT. NOFORC) THEN     !##B
+      ##IF forces
+               DX(I)=DX(I)+DTX
+               DY(I)=DY(I)+DTY
+               DZ(I)=DZ(I)+DTZ
+      ##ENDIF
+               ENDIF frcloop                     !##B
+      ...
+      ...
+      ...
+            ENDDO mainloop              ! End of main loop
+      
+      ##ENDEX    (expand_block)
+            RETURN
+            END subroutine enbfs8
+
+This example will do a multi pass compilation when BOTH the
+"EXPAND" and the "BLOCK" keywords are set.  If they are not both
+set, then the local flags "B" and "forces" will be set until
+the corresponding ##ENDEX is reached.  If the "EXPAND" and "BLOCK"
+conditions are met, then the body of the expanded section will be
+compiled three times.
+ PASS1 - additional active flag:             disabled flag: forces
+ PASS2 - additional active flag: forces      disabled flag: 
+ PASS3 - additional active flag: forces      disabled flag: BLOCK
+
+
+File: prefx.info, Node: Reserved, Up: Top, Previous: Expansion, Next: Keywords
+
+RESERVED KEYWORDS
+
+The following keywords are reserved:
+      END       - The end of keywords in pref.dat (END is not a keyword)
+      SINGLE    - Conversion to single precision   (SINGLE is a keyword)
+      PUTFCM    - Include files are to be copied into fortran files
+      VMS       - Use VMS directory names (from DEC's DCL)
+      REMIMPNON - Remove any "IMPLICIT NONE" lines found in the source
+      FCMDIR    - Specification of include file directory
+      UPPERCASE - Convert all non-text code to uppercase Fortran
+      LONGLINE  - Allows a longer line output format (>80 characters).
+      SAVEFCM   - Include all SAVE statements
+      EXPAND    - Do semi-automatic code expansion
+      single-letter - reserved for unexpanded compile conditionals
+      lower-case    - reserved for local compile flags (within a routine)
+      IF IFN ELIF ELSE ENDIF - prefx logic
+      KEYWORDS LIST FILL - prefx macro.
+      ERROR      - stop preprocessing and exit with error code
+
+Other Keyword Rules
+  - Keyword may not exceed 12 characters in length.
+  - Global keywords must be all uppercase
+  - Local  keywords must be all lowercase
+  - Keywords should otherwise follow fortran standards for naming
+  - Recommendation: Avoid one and two letter keywords (harder to find)
+
+     preflx.dat or pref.dat are the preprocessor instruction data files.
+Create a file preflx.dat or pref.dat (with UNIX) that contains 
+one or more of the keywords specified below.  On UNIX platforms, install.com
+and CMake generate the default pref.dat file in the build/{machine_type} directory
+and the build/cmake directory respectively.
+The "END" keyword stops parsing keywords.  
+
+The use of a (Match-Token) can help to identify the components of ##IF
+blocks in source files that make heavy use of ## directives; it should
+follow any keywords, and must be appended to all components of a given
+##IF block. It should always be used with the exception of very short
+non-embedded ##IF blocks. See the code for more examples.
+
+
+File: prefx.info, Node: Keywords, Up: Top, Previous: Reserved, Next: (developer.info)makemod
+
+LIST OF ALL KEYWORDS IN CHARMM
+
+A complete list of all compile flags and options WITH SUITABLE DESCRIPTIONS
+will be found in the documentation file *note (preflx_list.info)::
+It can change much between released CHARMM versions.
+
+The information list here highlights reserved keywords and other basic
+information that is unlikely to change between versions.
+
+[1] Include File Directory
+    FCMDIR=directory_name   ! point to a particular directory
+    FCMDIR=CURRENT          ! use what is specified in the include line.
+    FCMDIR=LOCAL            ! use the local directory.
+
+[2] Machine Type (choose exactly one)
+    ALPHA       = DEC alpha workstation
+    APOLLO      = HP-Apollo, both AEGIS and UNIX
+    CONVEX      = Convex Computer
+    CRAY        = Cray Research Inc.
+    HPUX        = Hewlett-Packard series 700.
+    IBM         = IBM-3090 running AIX
+    IRIS        = Silicon Graphics
+    SUN         = Sun Microsystems
+
+  Other machine descriptors
+    GNU         = using GNU Fortran compiler
+    GRAPE       = Use MD-GRAPE-II board to speedup nonbond calculations
+    LOBOS       = LoBoS cluster specific code
+
+  Parallel machine types
+    ALPHAMP     = DEC Alpha Multi Processor machines
+    SGIMP       = machine type            = SGI Power Challenge
+    T3D         = Cray massively parallel (DEC Alpha chip)
+    T3E         = Cray massively parallel (DEC Alpha chip)
+    TERRA       = multiprocessor DEC Alpha chip system
+
+[3] Operating system (choose at most one)
+    AIX370      = IBM UNIX
+    UNIX        = UNIX
+    UNICOS      = Cray UNIX
+    OS2         = IBM pre-emptive multitasking
+
+[4] Size directives are no longer keywords. Size is set at
+    XXLARGE     =360720 atom limit
+
+[5] Machine Architecture (may choose several)
+    SCALAR      = machine characteristics = default for scalar machines
+    VECTOR      = feature directive *     = Vectorized routines
+    PARVECT     = Parallel vector code (multi processor vector machines)
+    CRAYVEC     = Fast vector code (standard vector code)
+    SINGLE      = specifies single precision version (primarily used for CRAY)
+    SGIF90      = Used to compile CHARMM using F90 compiler on SGI machines
+    T3ETRAJ     = Used to read t3e trajectories on IEEE machines
+                  w/ 32 bit integers
+
+[6] Parallel CHARMM descriptors
+    (all require the PARALLEL keyword)
+    See *note (preflx_list.info)Parallel::
+
+[7] Feature directives
+    See *note (preflx_list.info)Feature::
+
+[8] Graphics keywords; choose only one (except on Apollo)
+    GLDISPLAY   = use the GL display code for the graphics window (*)
+    NODISPLAY   = no graphics window; PostScript, other files produced
+    NOGRAPHICS  = graphics code not compiled
+    XDISPLAY    = use the X11 display code for the graphics window
+
+     (*) the GL code is relatively untested, and may have problems
+
+[9] Keywords Not for Normal Use
+    See *note (preflx_list.info)Unnorm::
+
+[10] Major Blocks that can be Removed, but normally are not.
+    See *note (preflx_list.info)NOINC::
+
+[11] Other Control Directives
+    EXPAND      = Do semi-automatic code expansion
+    LONGLINE    = Allows a longer line output format (>80 characters).
+    SAVEFCM     = Include all SAVE statements in .fcm files
+    SINGLE      = Conversion to single precision (SINGLE is a keyword)
+    PUTFCM      = Include files are to be copied into fortran files
+    VMS         = Use VMS directory names (from DEC's DCL)
+    REMIMPNON   = Remove any "IMPLICIT NONE" lines found in the source
+    UPPERCASE   = Convert all non-text code to uppercase Fortran
+
+    By employing appropriate preprocessor keys, one can generate a
+variant of CHARMM for a specific machine with specific features.
+

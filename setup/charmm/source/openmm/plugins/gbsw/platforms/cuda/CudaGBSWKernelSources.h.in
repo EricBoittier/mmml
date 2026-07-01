@@ -1,0 +1,25 @@
+#ifndef OPENMM_CUDAGBSWKERNELSOURCES_H_
+#define OPENMM_CUDAGBSWKERNELSOURCES_H_
+
+/* -------------------------------------------------------------------------- *
+ *                                 OpenMMGBSW                                 *
+ * -------------------------------------------------------------------------- */
+
+#include <string>
+
+namespace OpenMMGBSW {
+
+/**
+ * This class is a central holding place for the source code of CUDA kernels.
+ * The CMake build script inserts declarations into it based on the .cu files in the
+ * kernels subfolder.
+ */
+
+class CudaGBSWKernelSources {
+public:
+@CUDA_FILE_DECLARATIONS@
+};
+
+} // namespace OpenMMGBSW
+
+#endif /*OPENMM_CUDAGBSWKERNELSOURCES_H_*/

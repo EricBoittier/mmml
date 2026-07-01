@@ -1,0 +1,14 @@
+* settings1.str
+* By Sonja M. Schwarzl & Stefan Fischer, last modified 17/06/2008
+* 
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! Input coordinate-file (with final scaling factors in WMAIN):
+SET INPUTFAC "../scaling/output/bpti_lambda_mixed.crd"
+
+! File for interctions in solution and in vacuum (unscaled and scaled):
+SET OUTPUT "./output/bpti_target_nontarget.dat"
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+RETURN

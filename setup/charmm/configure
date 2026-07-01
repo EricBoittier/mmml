@@ -1,0 +1,611 @@
+#!/bin/bash
+
+show_help() {
+  echo "Usage: configure [--option1] [--option2] ..."
+  echo ""
+  echo "General options"
+  echo ""
+  echo "-p <install path>, --prefix <install path>"
+  echo "     install CHARMM into the given directory"
+  echo "-g, --debug"
+  echo "     include debug symbols in final exec"
+  echo "-l, --lite"
+  echo "     lite build of CHARMM (minimal pref.dat keywords)"
+  echo "     turns all options off regardless of other arguments"
+  echo "-c <path to cmake>, --cmake <path to cmake>"
+  echo "     use <path to cmake> to configure the build"
+  echo "-a <keyword1,keyword2,...,keywordN>, --add <keyword1,keyword2,...,keywordN>"
+  echo "     add the keywords to the final pref.dat"
+  echo "-r <keyword1,keyword2,...,keywordN>, --remove <keyword1,keyword2,...,keywordN>"
+  echo "     remove the keywords from the final pref.dat"
+  echo "-D var1=val1 -D var2=val2 ... -D varN=valN"
+  echo "     set CMake variables to the given values"
+  echo "--as-library"
+  echo "     only build a shared library; do not build an executable"
+  echo "-F flag"
+  echo "     pass a flag to CMake (eg -F '-GNinja')"
+  echo "--with-ninja"
+  echo "     use ninja as the build program instead of make"
+  echo "--without-new-files"
+  echo "     do not scan for new files to add as source code"
+  echo ""
+  echo "Non-default features"
+  echo ""
+  echo "--static"
+  echo "     link only static libs for a portable executable"
+  echo "--with-blade"
+  echo "     include support for BLaDE GPU features"
+  echo "-u, --with-domdec_gpu, --domdec_gpu"
+  echo "     include support for DOMDEC_GPU"
+  echo "--with-fftdock"
+  echo "     include support for fftdock GPU features"
+  echo "--with-gamus"
+  echo "     include support for GAMUS"
+  echo "--with-ljpme"
+  echo "     include support for LJPME features"
+  echo "--with-repdstr, --repdstr"
+  echo "     include support for REPDSTR"
+  echo "-s, --with-sccdftb, --sccdftb"
+  echo "     include support for SCC-DFTB"
+  echo "--with-stringm, --stringm"
+  echo "     include support for STRINGM"
+  echo "--with-x11"
+  echo "     include support for X11 graphics via XDISPLAY"
+  echo "-q, --with-gamess, --gamess"
+  echo "     include support for GAMESS QM/MM interface"
+  echo "--with-pipf"
+  echo "     include support for Polarizable Intermolecular Potential Function"
+  echo "--with-ensemble"
+  echo "     include support for ENSEMBLE replicas; requires MPI"
+  echo "--with-abpo"
+  echo "     include support for ABPO; requires MPI and activates ENSEMBLE"
+  echo "--with-nih"
+  echo "     include the NIH extra set of pref.dat keywords"
+  echo "--with-tsri"
+  echo "     include the TSRI extra set of pref.dat keywords"
+  echo ""
+  echo "Non-default mutually exclusive QM/MM options"
+  echo ""
+  echo "--with-squantm"
+  echo "     include support for squantum (not compatible with qchem)"
+  echo "--with-g09"
+  echo "     include support for Gaussian09"
+  echo "--with-qturbo"
+  echo "     include support for QTURBO"
+  echo "--with-mndo97"
+  echo "     include support for MNDO97 (not compatible with qchem)"
+  echo "--with-qmmmsemi"
+  echo "     include support for QMMMSEMI (AMBER semi-empirical qmmm)"
+  echo ""
+  echo "Compiler options"
+  echo ""
+  echo "--with-gnu, --with-gcc"
+  echo "     finds the first gnu compilers on the path to use in the build"
+  echo "--with-intel"
+  echo "     finds the first Intel compilers on the path to use in the build"
+  echo "--with-pgi"
+  echo "     finds the first PGI compilers on the path to use in the build"
+  echo "--with-cuda-host-compiler <C/C++ compiler>"
+  echo "     the C/C++ host compiler that nvcc will used (passed via -ccbin)"
+  echo ""
+  echo "Remove default features"
+  echo ""
+  echo "--without-colfft"
+  echo "     skips compiling COLFFT features"
+  echo "--without-domdec"
+  echo "     skips compiling DOMDEC features"
+  echo "--without-fftw"
+  echo "     skips linking in the FFTW library"
+  echo "--without-mkl"
+  echo "     skips linking in Intel's MKL library"
+  echo "--without-mpi"
+  echo "     skips compiling MPI features"
+  echo "--without-openmm"
+  echo "     skips compiling OpenMM features"
+  echo "--without-qchem"
+  echo "     skips compiling Q-CHEM features including the qchem executable"
+  echo "--without-quantum"
+  echo "     skips compiling QUANTUM features"
+  echo ""
+  echo "Helpful environment variables"
+  echo ""
+  echo "    Setting these variables is usually unnecessary."
+  echo "    It is usually enough to have the feature or"
+  echo "    a related binary first in your path."
+  echo ""
+  echo "Feature     Environment variable(s)"
+  echo ""
+  echo "Compiler....CC, CXX, FC"
+  echo "CUDA........CUDA_TOOLKIT_ROOT_DIR, CUDA_BIN_PATH"
+  echo "OpenMM......OPENMM_PLUGIN_DIR, OPENMM_DIR, OPENMM_HOME"
+  echo "FFTW........FFTW_DIR, FFTW_HOME"
+  echo "MKL.........MKLROOT, MKL_HOME"
+  echo ""
+  echo "Feature     CMake variable(s)"
+  echo ""
+  echo "MPI.........MPI_Fortran_COMPILER, MPI_C_COMPILER, MPI_C++_COMPILER"
+  echo "CUDA........nvcc_ptx_target, nvcc_arch_target"
+  echo "OpenMM......OPENMM_PLUGIN_DIR, OPENMM_LIBRARY, OPENMM_INCLUDE_DIR"
+  echo ""
+}
+
+set_compilers() {
+  echo '====='
+  echo "$1 compiler suite selected"
+  CC=$(command -v "$2")
+  CXX=$(command -v "$3")
+  FC=$(command -v "$4")
+  if test -x "$CC" && test -x "$CXX" && test -x "$FC"; then
+    export CC
+    export CXX
+    export FC
+  else
+    echo "ERROR $1 compiler suite not found on path"
+    exit 1
+  fi
+}
+
+add_feature() {
+  echo '====='
+  echo "$1 selected"
+  cmake_args="$cmake_args -D$1=ON"
+}
+
+remove_feature() {
+  echo '====='
+  echo "skip $1"
+  cmake_args="$cmake_args -D$1=OFF"
+}
+
+function abspath {
+    if [[ -d "$1" ]]
+    then
+        pushd "$1" >/dev/null
+        pwd
+        popd >/dev/null
+    elif [[ -e $1 ]]
+    then
+        pushd "$(dirname "$1")" >/dev/null
+        echo "$(pwd)/$(basename "$1")"
+        popd >/dev/null
+    else
+        echo "$1" does not exist! >&2
+        return 127
+    fi
+}
+
+# Reset all variables that might be set
+path_cmake=$(command -v cmake)
+user_cmake=''
+use_ninja=0
+scan_files=1
+env_vars='env'
+cmake_args=''
+prefix=''
+
+while :; do
+  case $1 in
+    -h|-\?|--help)   # Call a "show_help" function then exit.
+      show_help
+      exit
+      ;;
+    --static)
+      add_feature static
+      ;;
+    -g|--debug)
+      echo '====='
+      echo 'debug compile selected'
+      cmake_args="$cmake_args -DCMAKE_BUILD_TYPE=Debug"
+      ;;
+    -l|--lite)
+      echo '====='
+      echo 'lite build selected'
+      cmake_args="$cmake_args -Dlite=On"
+      ;;
+    --as-library)
+      echo '====='
+      echo 'library build selected'
+      cmake_args="$cmake_args -Das_library=On"
+      ;;
+    -c|--cmake)       # Takes an argument, ensure it has been specified.
+      echo '====='
+      echo 'user specified cmake command'
+      if [ "$2" ] ; then
+        echo "    $2"
+        user_cmake=$2
+        shift 2
+        continue
+      else
+        echo 'ERROR must specify an argument:' >&2
+        echo '    --cmake CMAKE' >&2
+        exit 1
+      fi
+      ;;
+    --cmake=?*)
+      echo '====='
+      echo 'user specified cmake command'
+      user_cmake=${1#*=} # Delete up to "=" and assign the remainder.
+      echo "    $user_cmake"
+      ;;
+    --cmake=)         # Handle the case of an empty --cmake=
+      echo '====='
+      echo 'user specified cmake command'
+      echo 'ERROR must specify an argument:' >&2
+      echo '    --cmake=CMAKE' >&2
+      exit 1
+      ;;
+    -D)       # Takes an argument, ensure it has been specified.
+      echo '====='
+      echo 'setting a cmake variable'
+      if [ "$2" ] ; then
+        echo "    $2"
+        var_and_val=$2
+        cmake_args="$cmake_args -D$var_and_val"
+        shift 2
+        continue
+      else
+        echo 'ERROR must specify an argument:' >&2
+        echo '    -D var1=val1 -D var2=val2 ... -D varN=valN' >&2
+        exit 1
+      fi
+      ;;
+    -F)       # Takes an argument, ensure it has been specified.
+        echo '====='
+        echo 'adding a cmake flag'
+        if [ "$2" ] ; then
+            echo "    $2"
+            cmake_args="$cmake_args $2"
+            shift 2
+            continue
+        else
+            echo 'ERROR must specify an argument:' >&2
+            echo '    -F <cmake flag>' >&2
+            exit 1
+        fi
+        ;;
+    -a|--add)       # Takes an argument, ensure it has been specified.
+      echo '====='
+      echo 'additional keywords'
+      if [ "$2" ] ; then
+        echo "    $2"
+        cmake_args="$cmake_args -Dadd_keywords=$2"
+        shift 2
+        continue
+      else
+        echo 'ERROR must specify an argument:' >&2
+        echo '    --add <keyword1,keyword2,...,keywordN>' >&2
+        exit 1
+      fi
+      ;;
+    --add=?*)
+      echo '====='
+      echo 'additional keywords'
+      add_kws=${1#*=} # Delete up to "=" and assign the remainder.
+      echo "    $add_kws"
+      cmake_args="$cmake_args -Dadd_keywords=$add_kws"
+      ;;
+    --add=)         # Handle the case of an empty --cmake=
+      echo '====='
+      echo 'additional keywords'
+      echo 'ERROR must specify an argument:' >&2
+      echo '    --add <keyword1,keyword2,...,keywordN>' >&2
+      exit 1
+      ;;
+    -r|--remove)       # Takes an argument, ensure it has been specified.
+      echo '====='
+      echo 'remove keywords'
+      if [ "$2" ] ; then
+        echo "    $2"
+        cmake_args="$cmake_args -Dremove_keywords=$2"
+        shift 2
+        continue
+      else
+        echo 'ERROR must specify an argument:' >&2
+        echo '    --remove <keyword1,keyword2,...,keywordN>' >&2
+        exit 1
+      fi
+      ;;
+    --remove=?*)
+      echo '====='
+      echo 'remove keywords'
+      rm_kws=${1#*=} # Delete up to "=" and assign the remainder.
+      echo "    $rm_kws"
+      cmake_args="$cmake_args -Dremove_keywords=$rm_kws"
+      ;;
+    --remove=)         # Handle the case of an empty --cmake=
+      echo '====='
+      echo 'remove keywords'
+      echo 'ERROR must specify an argument:' >&2
+      echo '    --remove <keyword1,keyword2,...,keywordN>' >&2
+      exit 1
+      ;;
+    -p|--prefix)       # Takes an argument, ensure it has been specified.
+      echo '====='
+      echo 'user specified install prefix'
+      if [ "$2" ] ; then
+        echo "    $2"
+        prefix=$2
+        cmake_args="$cmake_args -DCMAKE_INSTALL_PREFIX=$2"
+        shift 2
+        continue
+      else
+        echo 'ERROR must specify a path:' >&2
+        echo '    --prefix <install prefix>' >&2
+        exit 1
+      fi
+      ;;
+    --prefix=?*)
+      echo '====='
+      echo 'user specified install prefix'
+      prefix=${1#*=} # Delete up to "=" and assign the remainder.
+      echo "    $prefix"
+      cmake_args="$cmake_args -DCMAKE_INSTALL_PREFIX=$prefix"
+      ;;
+    --prefix=)         # Handle the case of an empty --prefix=
+      echo '====='
+      echo 'user specified install prefix'
+      echo 'ERROR must specify a path:' >&2
+      echo '    --prefix <install prefix>' >&2
+      exit 1
+      ;;
+    --with-ninja) # takes no args
+      echo '====='
+      echo 'user specified ninja instead of unix makefiles'
+      use_ninja=1
+      cmake_args="$cmake_args -GNinja"
+      ;;
+    --without-new-files) # takes no args
+      echo '====='
+      echo 'user specified: do not scan for new source files'
+      scan_files=0
+      ;;
+    --with-cuda-host-compiler) # Takes argument, ensure it is specified
+      echo '====='
+      echo 'user specified cuda host compiler'
+      if [ "$2" ] ; then
+        echo "    $2"
+        cmake_args="$cmake_args -DCUDA_HOST_COMPILER=$2"
+        shift 2
+        continue
+      else
+        echo 'ERROR must specify a compiler:' >&2
+        echo '    --with-cuda-host-compiler <compiler>' >&2
+        exit 1
+      fi
+      ;;
+    --with-cuda-host-compiler=?*)
+      echo '====='
+      echo 'user specified cuda host compiler'
+      cuda_cc=${1#*=} # Delete up to "=" and assign remainder
+      echo "    $cuda_cc"
+      cmake_args="$cmake_args -DCUDA_HOST_COMPILER=$cuda_cc"
+      ;;
+    --with-cuda-host-compiler=) # Handle empty --with-cuda-host-compiler=
+      echo '====='
+      echo 'user specified cuda host compiler'
+      echo 'ERROR must specify a compiler:' >&2
+      echo '    --with-cuda-host-compiler <compiler>' >&2
+      exit 1
+      ;;
+    --with-gnu|--with-gcc) # use gnu compiler collection
+      set_compilers GNU gcc g++ gfortran
+      ;;
+    --with-intel) # use intel compiler suite
+      set_compilers Intel icc icpc ifort
+      ;;
+    --with-pgi) # use pgi compiler suite
+      set_compilers PGI pgcc pgc++ pgfortran
+      ;;
+    --repdstr)
+      add_feature repdstr
+      ;;
+    -s|--sccdftb)
+      add_feature sccdftb
+      ;;
+    --stringm)
+      add_feature stringm
+      ;;
+    -q|--gamess)
+      add_feature gamess
+      ;;
+    --nwchem)
+      add_feature nwchem
+      ;;
+    -u|--domdec_gpu) # domdec_gpu also enables domdec
+      add_feature domdec_gpu
+      ;;
+    --without-?*) # remove named feature
+      remove_feature ${1#--without-}
+      ;;
+    --with-?*) # add named feature
+      add_feature ${1#--with-}
+      ;;
+    --)              # End of all options.
+      shift
+      break
+      ;;
+    -?*)
+      printf 'WARNING unknown option (ignored): %s\n' "$1" >&2
+      ;;
+    *) # Default case: no more options, break loop
+      break
+  esac
+
+  shift
+done
+
+src_dir=$(dirname "$0")
+src_dir=$(abspath $src_dir)
+
+# warn user to build in fresh directory
+in_place_build=0
+if [[ -e "./install.com" && -d "./build" ]] ; then
+    in_place_build=1
+    if [ -z "$prefix" ] ; then
+        prefix=$PWD
+        cmake_args="$cmake_args -DCMAKE_INSTALL_PREFIX=$prefix -Din_place_install=ON"
+    fi
+    if [[ ! -d "./build/cmake" ]] ; then
+        mkdir "./build/cmake"
+    fi
+    echo '====='
+    echo 'swapping directories temporarily'
+    pushd ./build/cmake
+    echo '====='
+    echo 'WARNING build directory not empty'
+    echo "moving to $PWD"
+    echo 'press ctrl+c to abort'
+elif [ "$(ls)" ] ; then
+    echo '====='
+    echo 'WARNING build directory not empty'
+    echo 'building in a source directory is not recommended'
+    echo 'please create a new build directory for optimal results'
+fi
+
+# if no install prefix specified warn about spamming to
+# system directories
+if [ -z "$prefix" ] ; then
+  echo '====='
+  echo 'WARNING install prefix not specified'
+  echo 'depending on your system, executing make install'
+  echo 'may result in directories being written to /usr/local'
+  echo 'or somewhere similar'
+fi
+
+build_dir=$PWD
+
+# process new files into source files for CMake
+process_new_files() {
+    lang=$1
+    suffix=""
+    if [[ "$lang" == "fortran" ]]; then
+       suffix=F90
+    elif [[ "$lang" == "c" ]]; then
+        suffix=c
+    elif [[ "$lang" == "cxx" ]]; then
+        suffix=cpp
+    fi
+    fn=${lang}_files.cmake
+    orig_file=tool/cmake/$fn
+    new_file=$build_dir/$fn
+
+    # remove leading and trailing whitespace
+    awk_program='{gsub(/^[ \t]+|[ \t]+$/, "", $0); print $0}'
+    awk "$awk_program" "$orig_file" > "$new_file"
+
+    new_src=$(find -L source -mindepth 2 -maxdepth 2 -type f \
+                     -name *.$suffix -print \
+                    | grep -Fxvf "$new_file")
+    if [[ ! -z "$new_src" ]]; then
+        echo -e "$(sed -e '$ d' $new_file)" \
+             "\n$new_src\n)" \
+             > "$new_file.0"
+        awk "$awk_program" "$new_file.0" > "$new_file"
+        mv "$new_file" "$orig_file"
+    fi
+}
+
+if [[ "${scan_files}" = 1 ]]; then
+    pushd "$src_dir" > /dev/null
+    process_new_files fortran
+    process_new_files c
+    process_new_files cxx
+    popd > /dev/null
+fi
+
+cmake_command=''
+if [ "$user_cmake" ] ; then
+  if [ ! -x "$user_cmake" ] ; then
+    echo 'ERROR user specified cmake not found or not executable:' >&2
+    echo "    $user_cmake" >&2
+    exit 1
+  fi
+  cmake_command="$user_cmake"
+else
+  cmake_command="$path_cmake"
+fi
+
+# check version of cmake; if < 2.8 then compile a newer one
+if test -x "$cmake_command"; then
+  cmake_v=$("$cmake_command" --version | head -1)
+  cmake_v=${cmake_v#cmake version }
+  cmake_v_major=$(echo $cmake_v | cut -f1 -d.)
+  cmake_v_minor=$(echo $cmake_v | cut -f2 -d.)
+  if test "$cmake_v_major" -le "2" && test "$cmake_v_minor" -lt "8"; then
+    cmake_bad_version=true
+  fi
+fi
+
+# check for cmake; if not found, compile fresh copy in build dir
+if test ! -x "$cmake_command" || test "$cmake_bad_version" == "true" ; then
+  echo '====='
+  echo 'cmake command not found, not executable, or unsupported version'
+  echo "    $cmake_command"
+  echo 'bootstrapping cmake from charmm tools'
+  echo 'press ctrl+c to abort'
+
+  #create directories in which to build and install cmake executable
+  mkdir -p cmake/build cmake/install
+
+  #find cmake source archive
+  cmake_archive=$(find "$src_dir/tool/cmake" \
+    -name cmake-*.tar.gz \
+    -type f \
+    | head -1)
+
+  #build cmake from source
+  tar -xzf $cmake_archive --directory cmake
+  cmake_src=$(find cmake -name cmake-* -type d | head -1)
+  cd "$cmake_src"
+  ./bootstrap \
+      --prefix="$build_dir/cmake/install" \
+      -- -DCMAKE_USE_OPENSSL=OFF \
+      && make \
+      && make install
+  cd "$build_dir"
+  cmake_command="$build_dir/cmake/install/bin/cmake"
+  if [ ! -x "$cmake_command" ] ; then
+    echo '====='
+    echo 'ERROR'
+    echo 'building cmake failed'
+    echo 'cannot continue charmm build'
+    echo 'please install cmake and put it in your PATH'
+    echo 'or use install.com'
+    exit 2
+  fi
+fi
+
+build_program=make
+if [[ "${use_ninja}" = 1 ]] ; then
+    build_program=ninja
+fi
+
+echo '====='
+echo 'configuration using cmake continues using'
+echo "$env_vars $cmake_command$cmake_args $src_dir"
+echo ''
+echo "after configuration run $build_program in"
+echo "    $build_dir"
+echo 'to compile and link the charmm executable'
+echo '====='
+
+$env_vars $cmake_command$cmake_args $src_dir
+
+if [ "${?}" = 0 ] ; then
+    echo '====='
+    echo "you are now ready to run $build_program in"
+    echo "    $build_dir"
+else
+    echo '====='
+    echo 'ERROR cmake configure failed'
+    echo 'check cmake log files and try again'
+    exit 2
+fi
+
+if [[ "$in_place_build" = 1 ]] ; then
+    echo '====='
+    echo 'changing directories back to'
+    popd
+fi
+
+echo '====='

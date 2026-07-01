@@ -1,0 +1,156 @@
+* File:    sasa.inp
+* Author:  Urs Haberthuer
+* Date:    26 Decemeber 2001
+* Version: c29a1
+* Test:    SASA
+*
+
+if ?SASAE .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! --- Begin set definitions ---
+
+stream    datadir.def
+
+set ise   473829180
+
+set tmp   330.0
+set tcp   5.0
+
+set psi   chan
+
+set frtf  toph19_eef1.inp
+set fpar  param19_eef1.inp
+set fhrst hot.rst
+set ferst equ.rst
+set fprst prd.rst
+
+set dtpf  @0
+set dhot  @9
+set dequ  @9
+set dprd  @9
+
+! --- End set definitions ---
+
+! --- Begin generation procedure ---
+
+open read card name @dtpf/@frtf unit 30
+read rtf card unit 30
+close unit 30
+
+open read card name @dtpf/@fpar unit 30
+read parameter card unit 30
+close unit 30
+
+read sequence card
+* chan
+*
+63
+ala  arg  asn  asp  cys  gln  glu  gly  his  hsd  ile
+leu  lys  met  phe  pro  ser  thr  trp  tyr  val
+ala  arg  asn  asp  cys  gln  glu  gly  his  hsd  ile
+leu  lys  met  phe  pro  ser  thr  trp  tyr  val
+ala  arg  asn  asp  cys  gln  glu  gly  his  hsd  ile
+leu  lys  met  phe  pro  ser  thr  trp  tyr  val
+
+generate @psi warn setup
+
+! --- End generation procedure ---
+
+! --- Begin constructing coordinates ---
+
+ic parameters
+ic seed 2 ca 2 c 3 n
+ic build
+
+! --- End constructing coordinates ---
+
+! --- Begin setting up SASA ---
+
+! Use the SASA standard setup.
+
+nbond nbxmod 5 atom rdiel shift vatom vdistance vshift -
+      cutnb 8.0 ctofnb 7.5 ctonnb 6.5 eps 2.0 e14fac 0.4 wmin 1.5
+
+sasa selection (.not. hydrogen) end
+
+! --- End setting up SASA ---
+
+! --- Begin minimization ---
+
+minimize sd   nstep 300 nprint 20 tolgrad 0.1
+minimize conj nstep 200 nprint 20 tolgrad 0.1
+
+! --- End minimization ---
+
+! --- Begin heating procedure ---
+
+open write card name @dhot/@fhrst unit 11
+
+shake bonh parameters tol 1.0e-6
+
+dynamics leap start timestp 0.002 nstep 330 -
+         inbfrq 10 ihbfrq 0 -
+         ihtfrq 5  ieqfrq 0 -
+         iprfrq 5 -
+         iunrea -1 iunwri 11 iuncrd -1 iunvel -1 kunit -1 -
+         isvfrq 330 nsavc 0 nsavv 0 nprint 5 -
+         firstt 0.0 finalt @tmp teminc 5.0 -
+         ichecw 0 twindl -10.0 twindh 10.0 -
+         iasors 1 iasvel 1 -
+         iseed @ise
+
+close unit 11
+
+! --- End heating procedure ---
+
+! --- Begin equilibration procedure ---
+
+open read  card name @dhot/@fhrst unit 10
+
+open write card name @dequ/@ferst unit 11
+
+shake bonh parameters tol 1.0e-6
+
+dynamics leap restart timestp 0.002 nstep 200 -
+         inbfrq 10 ihbfrq 0 -
+         ihtfrq 0  ieqfrq 5 -
+         iprfrq 5 -
+         iunrea 10 iunwri 11 iuncrd -1 iunvel -1 kunit -1 -
+         isvfrq 200 nsavc 0 nsavv 0 nprint 5 -
+         firstt @tmp finalt @tmp teminc 0.0 -
+         ichecw 1 twindl -10.0 twindh 10.0 -
+         iasors 1 iasvel 1
+
+close unit 10
+close unit 11
+
+! --- End equilibration procedure ---
+
+! --- Begin production procedure ---
+
+open read  card name @dequ/@ferst unit 10
+
+open write card name @dprd/@fprst unit 11
+
+shake bonh parameters tol 1.0e-6
+
+dynamics leap restart timestp 0.002 nstep 100 -
+         inbfrq 10 ihbfrq 0 -
+         ihtfrq 0  ieqfrq 0 -
+         iprfrq 5 -
+         iunrea 10 iunwri 11 iuncrd -1 iunvel -1 kunit -1 -
+         isvfrq 100 nsavc 0 nsavv 0 nprint 5 -
+         firstt @tmp finalt @tmp teminc 0.0 -
+         ichecw 0 twindl -10.0 twindh 10.0 -
+         iasors 1 iasvel 1 -
+         tconst tcoupling @tcp treference @tmp
+
+close unit 10
+close unit 11
+
+! --- End production procedure ---
+
+stop

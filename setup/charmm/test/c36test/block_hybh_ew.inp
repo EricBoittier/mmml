@@ -1,0 +1,218 @@
+* block_hybh.inp
+* Test HYBrid_Hamiltonian (BLOCK) w/wo ewald w/wo pbound.
+* -- test-system is extended atom ethane/methanol
+*    run a short trajectory a lamb=(2i-1)/20, i=1,10
+*
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+if ?colfft eq 1 then
+      echo "Test NOT performed with COLFFT."
+      stop
+endif
+
+!--- Old integrator not parallel -----
+if ?numnode .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card
+* ethane / methanol hybrid in water
+*
+   22    1
+MASS   1     HT    1.0080
+MASS   2     H     1.0080
+MASS   3     CH3E 15.0350
+MASS   4     OH1  15.9994
+MASS   5     OT   15.9994
+
+AUTOGEN OFF 
+RESI HYB 0.0
+ATOM C1A  CH3E  0.265  
+ATOM O    OH1  -0.70   
+ATOM H    H     0.435  
+ATOM C1B  CH3E  0.00   C1A O H
+ATOM C2   CH3E  0.00   C1A O H
+
+BOND C1B C2
+BOND C1A O  O H
+ANGL C1A O H
+
+RESI TIP3     0.00000 ! TIPS3P WATER MODEL, GENERATE USING NOANGLE NODIHEDRAL
+GROUP   
+ATOM OH2  OT     -0.83400  ! ALLOW WAT
+ATOM H1   HT      0.41700  ! ALLOW WAT
+ATOM H2   HT      0.41700  ! ALLOW WAT
+BOND OH2 H1 OH2 H2 H1 H2    ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE H1 OH2 H2    ! REQUIRED
+
+END
+
+read param card
+* parameter file based on param 19 for
+* ethane/methanol hybrid in water
+*
+
+BOND
+CH3E CH3E   225.0     1.54
+CH3E OH1    400.0     1.42
+OH1  H      450.0     0.96
+OT   HT     450.0     0.9572
+HT   HT       0.0     1.5139
+
+THETAS
+CH3E OH1  H    35.0   109.5
+HT   OT   HT   55.0   104.52
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+ 
+CH3E   2.17    -0.1811    2.165     1.77 -0.1 1.9
+OH1    0.84    -0.1591    1.6
+H      0.044   -0.0498    0.8
+OT     0.8400  -0.1591    1.6000 !TIP3P WATER OXYGEN,   SEE NBFIX BELOW
+HT     0.0440  -0.0498    0.8000 !TIP3P WATER HYDROGEN, SEE NBFIX BELOW
+
+NBFIX
+
+OT   OT      -0.152073  3.5365  ! TIPS3P VDW INTERACTION
+HT   HT      -0.04598   0.4490
+HT   OT      -0.08363   1.9927
+
+END
+
+read sequence card
+* hybrid
+*
+1
+hyb
+gene hyb
+
+read coor card free
+* methanol/ethane hybrid, param 19 representation
+*
+    5
+    1 1 HYB C1A -0.77    0.0     0.0
+    2 1 HYB C2   0.77    0.0     0.0
+    3 1 HYB O    0.65    0.0     0.0
+    4 1 HYB H    0.97045 0.90494 0.0
+    5 1 HYB C1B -0.77    0.0     0.0
+
+print coor
+
+coor orient
+coor statistics
+
+print coor
+
+read sequence tip3 125
+generate tip3
+
+! 125 water molecule box, box-length = 15.5516 A
+open unit 4 form read name @0tip125.crd
+read coor card offset 1 unit 4
+clos unit 4
+
+! delete waters overlapping with hybrid
+delete atom sele .byres. (segid tip3 .and. type oh2 .and. -
+        (( .not. segid tip3 .and. .not. (hydrogen .or. lone ) ) -
+        .around. 2.54 ) ) end
+
+set 6 15.5516
+set 7 15.5516
+set 8 15.5516
+
+crys defi orth @6 @7 @8 90.0  90.0  90.0
+crys buil cutoff 30.0 nope 0
+
+image byres xcen 0. ycen 0. zcen 0. sele all end
+
+block 3
+call 2 sele atom hyb 1 c1a .or. -
+            atom hyb 1 o   .or. -
+            atom hyb 1 h   end
+call 3 sele atom hyb 1 c1b .or. -
+            atom hyb 1 c2  end
+hybh 0.5
+end
+
+energy inbfrq 1 nbxmod 5 atom cdie eps 1. e14fac 0.4 wmin 1.5 -
+       cutim 8. imgfrq 1 -
+       ewal  pmew kapp .29 fftx 32 ffty 32 fftz 32 -
+       cutnb  8.0  ctofnb  6.5 ctonnb  6.5 swit wmin 1.0
+!       cutnb  10.0  ctofnb  8.5 ctonnb  8.5 swit wmin 1.0
+
+cons fix sele resn hyb end
+
+shake bonh
+
+!---------
+! now run "production"
+
+!pre-eq
+
+block 3
+ hybh 0.05
+end
+
+open unit 11 writ form name @9bew.rst
+
+dyna start nose qref 10. tref 300. time 0.002 - 
+     nstep 10 nprint 10 iprfrq 10 imgfrq 10 inbfrq 10 -
+     iunrea 10 iunwri 11 iunc -1 nsavc 5 -
+     first 240. ntrfrq 1000
+
+set w 10   ! Window numb.
+set f 1    ! 1rst Window
+set c @f   ! cur. Window
+
+label LOOP
+
+set  m @c      ! hybh = c
+mult m by 2    ! hybh = c*2
+decr m by 1    ! hybh = c*2-1
+divi m by 2    ! hybh = (c*2-1)/2
+divi m by @w   ! hybh = (c*2-1)/2/w
+
+block 3
+ hybh @m 
+ outh 12
+ tsth 0.001
+end
+
+open unit 10 read form name @9bew.rst
+open unit 12 writ form name @9beweq@c.prt
+
+!equil
+
+dyna restart nose qref 10. tref 300. time 0.002 - 
+     nstep 5 nprint 10 iprfrq 50 -
+     iunrea 10 iunwri 10 iunc -1 nsavc 5
+
+block 3
+ tsth 0.001
+end
+
+!prod
+
+open unit 10 read form name @9bew.rst
+open unit 12 writ form name @9bewpr@c.prt
+
+dyna restart nose qref 10. tref 300. time 0.002 - 
+     nstep 50 nprint 10 iprfrq 50 -
+     iunrea 10 iunwri 10 iunc -1 nsavc 5
+
+block 3
+ tsth 0.001
+end
+
+ incr c
+if c le @w goto loop
+
+stop
+!No. post-processing

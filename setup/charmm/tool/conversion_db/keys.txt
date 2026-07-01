@@ -1,0 +1,37 @@
+POINTER DATABASE KEYS:
+the columns in the pointer databases are labeled as follows:
+1)  number           -- the number assigned to the pointer (serially starting from first file, alphabetically)
+2)  pointer name     -- name of pointer 
+3)  type fx          -- IREAL8, INTEG4, ILOGI4, or IREAL4
+4)  allocated in file-- file in which pointer is used to do allocation in ALLHP or ALLSTK
+5)  allocated in proc-- procedure in which pointer is used to do allocation
+6)  declared in      --file in which pointer is declared (LOCALDECL means in same file as above)
+7)  type             --type of array associated with pointer, as per the procedure database, DEFAULT0 means was not found either locally or globally,
+                   MULTISUB means the variable was found in multiple subroutines, so typing not done.
+8)  times loc used   --the number of times the pointer is used in a call, in the same subroutine in which it was used for allocation
+9)  last loc use call--the last local procedure call in which the pointer was used
+10)  glb type         --the type of array as determined by a global search of the pointer in the all calls.  MULTITYPE means it had more
+                      than one type of associated array--i.e. probably an error in the CHARMM code (only 2 instances),  DEFAULT1 means not found in
+                      global search.
+11)  tmes usd glob    --the number of times the pointer was found in calls in a global search
+12)  last glb use     --the call in which the pointer was last used
+13)  loc type         --the type of the pointer as determined only by examination of the local calls (same subroutine as allocation)
+
+the stack pointer db has only the first 9 columns.
+
+----------------------------------------------------------------------------------------------------------------------
+
+PROCEDURE DATABASE KEYS:
+1) file number
+2) file name
+3) number of procedure in current file
+4) subroutine (S) or function (F)
+5) name of procedure (subroutine or function)
+6) number of argument in entire database
+7) number of argument in file
+8) number of argument in subroutine
+9) name of argument 
+10) type of argument, as declared in the subroutine
+11) number of times the argument was found to be declared in the subroutine
+   (0 if not found, 2 often if INTEGER8/INTEGER4 double declaration, a few are 3
+    or more--some of these are script errors).

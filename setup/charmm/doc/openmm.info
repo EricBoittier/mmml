@@ -1,0 +1,754 @@
+CHARMM Element doc/openmm.info $Revision: 1.1.1.1 $
+
+File: OpenMM,  Node: Top, Up: (doc/charmm.info),  Next: Setup
+
+
+                    OpenMM GPU acceleration interface to CHARMM
+
+
+     This module describes the interface of CHARMM with the OpenMM
+development platform for GPU accelerated simulations. CHARMM is
+compatible with OpenMM versions 6.3 and greater. The current
+interface supports molecular dynamics on CUDA or OPENCL supported
+graphical processing units (GPUs). For a full list of hardware on
+which the OpenMM libraries should run, see the OpenMM website
+(https://simtk.org/home/openmm). The OpenMM methods are free and
+available as pre-compiled libraries or source form. In addition, one
+needs the NVIDIA drivers and CUDA toolkit installed on the
+machine - please see OpenMM documentation for the basic procedures to
+set-up and install these components, as well as which versions are required.
+
+     The CHARMM/OpenMM interface is under continuing development with
+new CHARMM features being added all of the time. The current
+implementation supports dynamics and energy calculations for periodic
+and non-periodic systems using cutoffs, nocutoffs (for finite
+systems), and PME/Ewald and cutoffs for periodic systems.  Periodic
+systems supported are only orthorhombic (a,b,c, alpha=beta=gamma=90.
+Only Leapfrog Verlet integration and Langevin dynamics are
+supported. Constant temperature molecular dynamics is also supported
+through the Andersen heatbath method in the OpenMM module. Additionally,
+constant pressure, constant temperature dynamics are available using
+MC sampled barostat. Finally, we have provided access to the variable
+timestep Verlet (Leapfrog) and Langevin integrators implemented in the
+OpenMM module.  SHAKE is supported as are all of the CHARMM
+forcefields, e.g., CMAP.
+
+Special Notice: The CHARMM/OpenMM interface is an evolving interface
+with the OpenMM accelerated dynamics engine for GPU accelerated
+molecular dynamics (See the News at www.charmm.org for a discussion of
+the benchmarks and their performance). The functionality present
+through the current CHARMM interface has been released prior to
+"aging" in the CHARMM developmental version for a year because of the
+important performance enhancements in provides through GPU
+acceleration. The interface and associated modules have been well
+tested, but are likely to contain yet undiscovered limitations,
+compared with the full functionality in CHARMM. Additionally, we note
+that this code operates in single precision as default, which may not be
+acceptable for all applications. However, with the release of OpenMM 5.0
+double and mixed precision models are available. At present, the CHARMM/OpenMM
+interface accommodates molecular dynamics with and without periodic
+boundary conditions, using all of the current CHARMM force fields, and
+in NVE, NVT and NPT ensembles - although not using the same methods of
+achieving these as in the rest of CHARMM. Users are forewarned to
+carry out some pre-testing on their system prior to initiating long
+runs on GPUs. As new features and methods are added to the
+CHARMM/OpenMM interface they will be described in the updated
+documentation.
+
+* Menu:
+
+* Setup::               Setting up to use/compile CHARMM/OpenMM
+* Usage::               Usage and functional support of CHARMM/OpenMM
+* Multi-GPU::           Using multiple GPUs and platforms
+* Block-OpenMM::        Running Block calculations on the GPU
+* GBSAOBC2-OpenMM::     Running GBSA OBC2 Generalized Born Model OpenMM
+* Examples::            Examples of CHARMM/OpenMM usage
+
+
+File: OpenMM, Node: Setup, Up: Top, Next: Usage, Previous: Top
+
+
+SETTING UP AND BUILDING CHARMM/OPENMM
+=====================================
+
+
+To build CHARMM with the OpenMM interface to enable GPU accelerated molecular
+dynamics one needs to first install the appropriate GPU drivers and software
+support, e.g., NVIDIA drivers and CUDA toolkit. Additionally, the OpenMM
+libraries need to be installed. Please see the OpenMM web pages and
+documentation to accomplish this procedure (https://simtk.org/home/openmm).
+
+OpenGL header files may need to be installed. For example, for Debian
+and related Linux distributions. One may need to install the package
+mesa-common-dev if it is not already installed.
+
+Setup necesssary environment variables for load library and OpenMM path:
+The following environment variables need to be setup: OPENMM_PLUGIN_DIR
+and the library path. Assuming OpenMM has been installed in it's default
+directory (/usr/local/openmm), then set the following environment variable:
+
+Mac OSX or Linux
+
+bash shell: export OPENMM_PLUGIN_DIR=/usr/local/openmm/lib/plugins
+csh shell: setenv OPENMM_PLUGIN_DIR /usr/local/openmm/lib/plugins
+
+These should be added to your .bashrc or .cshrc to ensure they are always
+setup.
+
+Additionally, one needs to tell the loader where the OpenMM libraries are
+installed. This differs on Linux versus Mac OSX systems because of static
+versus dynamic load library uses on these two OSs.
+
+Linux (bash): export LD_LIBRARY_PATH=/usr/local/openmm/lib:$OPENMM_PLUGIN_DIR:$LD_LIBRARY_PATH
+Linux (csh): setenv LD_LIBRARY_PATH /usr/local/openmm/lib:$OPENMM_PLUGIN_DIR:$LD_LIBRARY_PATH
+
+Mac OSX (bash):
+  export DYLD_LIBRARY_PATH=/usr/local/openmm/lib:$OPENMM_PLUGIN_DIR:$DYLD_LIBRARY_PATH
+Max OSX (csh):
+  setenv DYLD_LIBRARY_PATH /usr/local/openmm/lib:$OPENMM_PLUGIN_DIR:$DYLD_LIBRARY_PATH
+
+OpenMM anisotropic barostat, GBSW and PHMD functionality are also available as OpenMM plugins.
+When CHARMM is built using install.com, the plugins are installed in the directory
+<CHARMM root directory>/lib/<CHARMM host>/openmm_plugins
+(for example <CHARMM root directory>/lib/osx/openmm_plugins).
+When CHARMM is built using CMake, the plugins are install in the directory <CHARMM root directory>/lib.
+There is no longer any need to set CHARMM_PLUGIN_DIR at build or run time unless
+you have copied the CHARMM's plugins to a new directory.
+In this case, you may need to add the new directory to (DY)LD_LIBRARY_PATH and
+set the environment variable CHARMM_PLUGIN_DIR to the new location.
+
+INSTALLING CHARMM/OpenMM
+========================
+Installing CHARMM with the OpenMM interface is straightforward on Linux and
+Mac OSX:
+
+Setup necesssary environment variables: Set OPENMM_PLUGIN_DIR as described
+above, and set CUDATK to the location of the CUDA toolkit. Assuming OpenMM
+and CUDA have been installed in their default directories
+(/usr/local/openmm and /usr/local/cuda respectively), then set the following
+environment variables:
+
+Mac OSX or Linux
+
+bash shell:
+  export OPENMM_PLUGIN_DIR=/usr/local/openmm/lib/plugins
+  export CUDATK=/usr/local/cuda
+
+csh shell:
+  setenv OPENMM_PLUGIN_DIR /usr/local/openmm/lib/plugins
+  export CUDATK=/usr/local/cuda
+
+These should be added to your .bashrc or .cshrc to ensure they are always
+setup.
+
+MacOS or Linux / Intel compilers
+configure --with-intel
+make -C build/cmake install
+
+MacOS or Linux / GCC compilers
+configure --with-gnu
+make -C build/cmake install
+
+The OpenMM anisotropic barostat, GBSW and PHMD plugins are available for use by default.
+
+Note: At present we are supporting features for OpenMM 6.3 through 7.2.2
+releases. These releases may provide slightly different interfaces to Cuda-based
+computations and precision. See comments below for more details.
+
+
+File: OpenMM, Node: Usage, Up: Top, Next: Multi-GPU, Previous: Setup
+
+
+USAGE and IMPLEMENTATION
+========================
+
+USAGE: add keyword omm to dynamics command *note dynamc:(doc/dynamc.info), or to energy call
+(via the energy or gete commands *note energy:(doc/energy.info) . For dynamics, this
+gives you the default Verlet Leapfrog integrator with timestep specified in the dynamics
+command. For energy/gete calls, you get all energy terms that are active with the non-bonded and
+bonded terms being computed on the GPU. One can also include the various options noted below:
+
+SUMMARY OF OPENMM COMMANDS
+==========================
+
+OMM [ openmm-control-spec ]
+
+openmm-control-spec
+      on                 Sets omm_active to true and tells CHARMM all subsequent calls to energy,
+                         dynamics or minimization will use OpenMM interface for calculation of
+                         supported energies and forces. OpenMM context will be created later as needed
+     off                 Sets omm_active to false but retains any OpenMM context already created
+     clear               Sets omm_ative to false and destroys the OpenMM Context
+     serialize [system, state, integrator] [unit <unit #>] Serializes the given OpenMM object: system (the default), state, or integrator as an XML string. The string
+                                   is output to OUTU in the case of missing [unit <unit #>] and
+                                   is output to unit <unit #> otherwise
+     platform [cuda,reference,opencl,cpu] Provides platform and device level control from inside
+     nocpu                Allow only CUDA and OpenCL platforms to proceed. If any other platform is selected by OpenMM or by the user, CHARMM will fail with a warning.
+     precision [single, mixed, double]    CHARMM command language.
+     deviceid [<specify device IDs to use>]
+
+setting up GBSA OBC2
+     gbsa [<gboff/gbon> uueps <real> vveps <real>]
+                         Enable gbsa module (subsequently turn it off w/ gboff or
+                         on w/ gbon) set dielectric for solute (uueps, default 1) or
+                         solvent (vveps, default 78.5).
+
+
+Dynamics keyword options in CHARMM/OpenMM interface
+keyword           default                          action
+=========================================================================================
+omm                false              - dynamics keyword to access openMM interface
+langevin           false              - dynamics keyword to turn on Langevin integration
+andersen           false              - dynamics keyword to turn on Andersen heatbath
+prmc               false              - dynamics keyword to turn on MC barostat
+variable           false              - dynamics keyword to use variable timestep md
+gamma               5.0               - Langevin friction coefficient in ps^-1
+colfrq             1000               - Andersen heatbath coupling constant ps^-1
+pref                1.0               - MC barostat reference pressure in atmospheres
+prxx, pryy, przz    1.0               - MC barostat reference pressure in atmospheres
+tens                0.0               - MC barostat reference surface tension (in dynes/cm^2)
+iprsfrq             25                - MC barostat sampling frequency
+vtol               1e-3               - Variable timestep error tolerence
+
+NOTE: Coordinates, velocities and restart files can be written every NSAVC, NSAVV, ISVFRQ
+timesteps to files specified by IUNCRD, IUNVEL and IUNWRI. Restarts can be used specifying
+RESTSRT in the dynamics command with IUNREA also specified, like normal CHARMM runs.
+
+WARNING: At present the energy file is not written, since OpenMM only returns the total energies
+(TOTE, TOTKE, EPOT and TEMP) and VOLUME.
+
+Constant Temperature Dynamics
+=============================
+omm langevin gamma <real>      - runs Langevin dynamics with friction coefficient gamma (ps^1)
+                   <5.0>         at a temperature given by finalt in dynamics command.
+
+omm andersen colfreq <integer> - runs constant T with Andersen collision frequency colfrq
+                     <1000>      at temperature given by finalt in dynamics command
+
+Constant Pressure/Constant Temperature Dynamics
+===============================================
+Using either of the integrators noted above, one can run MC barostat-ed molecular dynamics by
+adding:
+
+omm langevin gamma <real> prmc pref <real> iprsfrq <integer> - runs Langevin dynamics with
+                    <5.0>            <1.0>          <25>       barostat with a reference
+                                                               pressure of pref atmospheres
+                                                               and MC volume move attempted
+                                                               every iprsfq steps.
+
+In addition, we have implemented a varient of the anisortopic barostat that enables constant surface
+tension, constant surface area and related ensembles to be simulated. The freedom in changing the
+size/shape of the box is related to the crystal space group chosen as well as the type of barostat.
+The relevant commands are:
+
+omm prmc przz <real> iprsfrq <integer>                       - runs constant normal pressure and
+                                                               constant surface area
+
+omm prmc prxx <real> pryy <real> iprsfrq <integer>           - constant z dimension, constant pressure
+                                                               in independent tangential x, y dimensions
+
+omm prmc tens <real> iprsfrq <integer>                       - constant surface tension and constant volume
+                                                               x,y degrees of freedom coupled to surface
+                                                               tension, z changes to maintain constant volume
+
+omm prmc tens <real> przz <real> iprsfrq <integer>           - constant surface tension and normal pressure
+
+
+Variable Timestep Molecular Dynamics
+====================================
+OpenMM has implemented a bounded error estimate driven variable timestep integration scheme
+in which the size of the timestep is bounded by a specified error that would be associated with
+the explicit Euler integrator. The timestep is chosen to satisfy the following relationship
+
+error = dt^2 Sum_i ( |f_i|/m_i ),
+
+where error is the desired maximum error in the step, given the current forces. From the
+user-supplied error, the timestep follows from
+
+dt = sqrt( error / Sum_i ( |f_i|/m_i ) )
+
+Adding variable_timestep vtol <real> (default 1.0e-3) uses a variable timestep version of the
+above integrators (Langevin or Leapfrog). One can run NVE dynamics with Leapfrog as well, but
+this may be not useful.
+
+One can also use the variable timestep algorithms with the barostat.
+
+Energy Computations
+===================
+
+Energy terms supported through the CHARMM/OpenMM interface for computation
+on the GPU include: BOND ANGL UREY DIHE IMPR VDW ELEC IMNB IMEL EWKS EWSE EWEX,
+HARM and ETEN. However, these are returned from the CHARMM/OpenMM interface as just ENER,
+i.e., the sum of the components. One can evaluate the individual components through
+use of the SKIPE commands.
+
+Minization
+==========
+
+Minimization can be carried out through the CHARMM/OpenMM interface via a very
+simple minimizer as implemented in OpenMM. To invoke minization using accelerated
+platforms through the CHARMM/OpenMM interface you simply specify the steps
+and tolerance for the energy function (TOLFUN) through the CHARMM minization
+commands "MINI OMM NSTEP <integer (default 100)> TOLGRD <real (default 0.0)>.
+This will run OpenMM's minimizer for nstep iterations or until the tolerance
+TOLGRD is reached. TOLGRD is the RMS gradient values. The minimization is 
+carried out using the energy function as specified through the 
+CHARMM/OpenMM interface.
+
+CHARMM Restraints
+=================
+The CHARMM/OpenMM interface supports a subset of the CONS HARM harmonic restraints.
+Speciically, the default ABSOLUTE restraints with XSCALE=YSCALE=ZSCALE=1 are
+supported. The COMP, WEIGHT and MASS keywords associated with this restraint are
+also supported (see *note cons:(doc/cons.info) and testcase
+c37test/3ala_openmm_restraints.inp)
+
+The CHARMM/OpenMM interface supports the CONS RESDistance restraints.
+(see *note cons:(doc/cons.info) and testcase c39test/omm_resdtest.inp)
+
+The CHARMM/OpenMM interface supports the CONS DIHEdral restraints.
+(see *note cons:(doc/cons.info) and testcase c39test/omm_consdihe.inp)
+
+The CHARMM/OpenMM interface can carry-out energy calculations that combine
+the forces for energy terms computed on the GPU (non-bonded (VDW/ELEC) and
+bonded (BOND, ANGL, DIHE, IMPHI) with those from other CHARMM functionality.
+At present, aside from doing a static energy/force evaluation, one cannot use
+CHARMM's minimizers or dynamics methods together with these forces (although
+it is planned that we will support this functionality in the future).
+
+NOTE: When using single precision arithmetic on the GPU, long NVE simulations may
+have an energy drift on the order of 10^-2 * KBOLTZ * T / NDEGF per nanosecond.
+However, with the release of OpenMM 5.0, both mixed and double precision models
+are available in both CUDA and OpenCL.
+
+As noted in the overview above, the CHARMM/OpenMM supports "no frills"
+molecular dynamics for periodic and non-periodic systems. For non-periodic
+systems cutoffs and no-cutoffs are supported. For cutoff based methods
+a reaction field can be utilized. This is also true for periodic systems that
+don't employ PME/Ewald methods. The cutoff method is keyed to the value of
+the energy-related cutoff CTOFNB. If CTOFNB > 990 it's assumed that no
+cutoffs are to be used and OpenMM computes all interactions for non-periodic
+systems. If CTOFNB < 990, and other truncation methods (set note below) are not
+specified then the solvent reaction field is used with a
+cutoff switch such that the electrostatic energy for atom pair ij, u_ij, is
+given by:
+
+         q_i*q_j    /  1                    \
+u_ij = ---------- .|  ---- + k_rf*r^2 -c_rf  |
+       4*pi*eps_0   \ r_ij                  /
+
+k_rf = (eps_solvwnt - 1)/(2*eps_solvent+1)/(r_cutoff)^3
+
+c_rf = (3*eps_solvent)/(2*eps_solvent+1)/(r_cutoff)
+
+where r_cutoff is the cutoff distance (CTOFNB) and eps_solvent is the dielectric
+constant of the solvent. If eps_solvent >> 1, this causes the forces to go to
+zero at the cutoff.
+
+The CHARMM/OpenMM Generalized solvent reaction field can also be specified on any
+nonbond/energy/dynamic command as:
+
+energy omrf omrx <value>      -   default 1
+
+Energy based cutoff methods
+============================
+Other energy based methods have recently been implemented. The CHARMM/OpenMM interface
+now supports the folowing combinations of van der Waals and electrostatic methods:
+
+Supported combinations of energy methods
+----------------------------------------
+**pme/ewald <specification> ctonnb <value> ctofnb <value> vatom vswitch/vfswitch
+*noewald atom switch vatom vswitch ctonnb <value> ctofnb <value>
+*noewald atom switch vatom vfswitch ctonnb <value> ctofnb <value>
+*noewald atom fswitch vatom vfswitch ctonnb <value> ctofnb <value>
+*noewald atom fshift vatom vswitch ctonnb <value> ctofnb <value>
+*noewald atom fshift vatom vfswitch ctonnb <value> ctofnb <value>
+*noewald atom omrxfld vatom vswitch/vfswitch ctonnb <value> ctofnb <value>
+
+OpenMM now supports a vdW switching function pf the form S = 1 - 6x^5 + 15x^4 - 10x^3
+where x = (r-r_switch)/(r_cutoff - r_switch) and r_cutoff = ctofnb and r_switch = ctonnb.
+
+Also supported is the long range vdW correction that is keyed from the LRC command
+
+Summary of supported non-bond truncation methods:
+
+For van der Waals: VSWITCH, VFSWITCH, OMSW LRC
+For electrostatics: SWITCH, FSWITCH, FSHIFT, OMRF [OMRX <RxnFld_dielectric (default 1) >]
+
+*Note, non-Ewald/PME calculations are supported for periodic and non-periodic
+systems.
+
+**Note, see Ewald/PME discussion below.
+
+Ewald and PME support
+---------------------
+
+This is deprecated, the CHARMM/OpenMM Interface now supports direct input
+of Kappa, fftx, ffty, fftz from CHARMM energy/dynamic/nonbond command for
+PME-based Ewald.
+
+Ewald and PME-based Ewald are both implemented. With PME-based Ewald the
+OpenMM interface employs the cutoff (CTOFNB), the box length, and an
+estimated error desired for the long-range electrostatic forces to
+determine the number of number of grid points for the PME calculations,
+FFTX, FFTY and FFTZ. However, to maintain consistency with CHARMM, the
+CHARMM/OpenMM interface takes CTOFNB, FFTX(Y,Z) and Box_x(y,z) to determine
+the error estimate and KAPPA. Thus, KAPPA as set in the CHARMM energy/nonbond
+or dynamics command may be over-ridden to ensure that FFTX(Y,Z) is maintained
+as requested. The error estimate is defined as delta and is related to KAPPA
+via the relaitonship
+
+delta = exp[-(KAPPA*CUTNB)^2)                                   (1)
+
+In the current implementation, this relationship in the form
+
+KAPPA = Sqrt(-ln(2*delta))/CUTNB                                (2)
+
+is combined with
+
+FFTX(Y,Z) = 2*KAPPA*box_x(y,z)/(3*delta^(1/5))                  (3)
+
+to eliminate KAPPA and is solved (via bisection) for a delta value that will
+yield the user provided values of FFTX(Y,Z) and KAPPA is determined from
+the relationship (2) above.
+
+
+
+File: OpenMM, Node: Multi-GPU, Up: Top, Next: Block-OpenMM, Previous: Usage
+
+Control over the number of GPU devices one uses,  the platform for GPU-based
+computations and the precision model is available through environment variables
+
+Environment variable	  	  Setting	  Effect
+OPENMM_DEVICE			   0/1/0,1        Use device 0/1/0 and 1 (parallel)
+OPENMM_PLATFORM           OpenCL/CUDA/Reference   Use OpenMM platform based on
+                                                  OpenCL/Cuda/Reference(CPU)
+OPENMM_PRECISION           single/mixed/double    Do calculations in single (fastest), mixed
+                                                  or double precision (slowest) on platform
+CUDA_COMPILER                                     path to cuda compiler nvcc (usually /usr/local/cuda/bin)
+
+Note: OpenMM chooses a default platform based on a guess for best performance if not is
+specified with the environment variable. Also, the platform Reference is a cpu-based
+platform for testing/validation purposes. Finally, the different precision models are not
+supported in OpenMM 4.1.1 (only single precision).
+
+Note: As of this release (02/15/2013) there is an issue with OpenCL on Mac OSX 10.7.8 and beyond,
+the OpenMM team and Apple are discussing these problems, and there will hopefully be resolution soon.
+
+Example (C-shell) setenv OPENMM_DEVICE 0,1    # Use both GPU devices
+Note: OpenMM 4.1.1 supports parallel calculations (0,1) only for platform OpenCL.
+OpenMM 5.0 adds parallel support for platform CUDA.
+
+
+File: OpenMM, Node: Block-OpenMM, Up: Top, Next: GBSAOBC2-OpenMM, Previous: Multi-GPU
+
+USING BLOCK IN CHARMM/OPENMM
+============================
+
+A number of features of the CHARMM Block facility have been implemented on the GPU using the CHARMM/OpenMM
+interface. However, this has been done with some restrictions on the manner in which the interaction
+scaling is done.
+
+When running TP/MBAR calculations with a set of fixed lamda values for three (3) blocks, env, react and prod,
+the vdW softcore can be used but there is no corresponding electrostatic softcore. In this case the rlambda for
+the 1-2 soft vdW interactions is taken as 1 - coef_1-2, which is assumed to be the same as coef_1-3 and the value 
+of the 1-3 soft vdW is taken to be coef_1-2. The intra-react atoms use 1 - coef_1-2 and the intra-prod atoms use
+coef_1-2. One exception is if the react or prod is a dummy atom (as in asolute free energy calcualtions) in 
+which case the lambda taken to control the softcore potential is that for the prod group, and therefore the 
+prod group should be the dummy atom.
+
+When running TP/MBAR calculations with a set of fixed lamda values for two (2) blocks, env, and react,
+the vdW softcore can be used but there is no corresponding electrostatic softcore. In this case the rlambda for the
+vdW softcore is determined by the lamda = 1 - coef_1-2. 
+
+If four (4) blocks are chosen, 1) the vdW softcore cannot be used and 2) the blocks are assumed to be:
+block_1 => env, block_2 => react, block_3 => prod and block_4 => tempering scaling, i.e., as in solute
+tempering replica exchange.
+
+Block is used as detailed in the Block documentaiton for setting up the scaling of different terms.
+As with its implementation in CHARMM, one can scale the vdW, elec, bond, angle, dihed, impr terms
+independent of one another, although negative values of the block coefficients are not allowed due
+to a limitation in the manner in which the scaling is implemented. (Scaling is implemented by scaling
+corresponding force constants as the system is being set-up, this the affected bond, angle, dihedral
+and improper force constants are scaled by the block coefficient. The charges of atoms in a given block
+are also scaled by their block coefficient and the L-J emin value is scaled by the block coefficient
+squared, such that when the standard combination rules are applied the scaling of the interaction
+is by the block coefficient to the first power. The intra-block terms are treated differently for
+vdW and elec to ensure they match the CHARMM energies.)
+
+The rmla command to remove specific terms from the block scaling also works as it does in CHARMM.
+
+This implementaiton is fully suitable for running fixed lambda TP/MBAR calculations. The trajectories
+generated at a particular lambda value can be post-processed either using the GPU-based CHARMM/OpenMM
+machinery, in which case the restrictions noted above apply and two separate passes must be carried out
+to get the "reactant" and "product" energies needed to construct the TI integratnd or the TP free energy
+increment. Alternatively, except if the OpenMM reaction field was employed, the trajectories can be
+post-processed using the the CHARMM Block facility as detailed in block.info
+(see *note block:(doc/block.info)).
+
+More recently, the soft core potentials, to eliminate endpoint problems in TI/TP as been add
+via the Hayes et al paper JPC B (2017). This enables the samping of soft core van der Waals interactions.
+The recommendation for doing TI/MBAR via CHARMM/OpenMM BLOCK is to turn the electrostatics off before the
+van der Waals is removed. Thus for the electrostatics using lambda of the form:
+Elec_reactant = (1-lambda/0.8)*Step(0.8-lambda)*Elec_reactant and Elec_product = lambda/0.8*Step(lambda-0.2).
+
+
+File: OpenMM, Node: GBSAOBC2-OpenMM, Up: Top, Next: Top, Previous: Block-OpenMM
+
+USING GBSA OBC2 IN CHARMM/OPENMM
+================================
+
+OpenMM provides the facility to implement the GBSA OBC2 model from Onufriev, Bashford and Case. This interface
+has been "opened" for use through the CHARMM/OpenMM interface. The relevant parameters to run these calculations
+are the inherent atomic radii and scaling constants. These parameters for protein atoms contained in the
+par/top_all36_prot models have been incorporated into the file toppar/openmm_gbsaobc2/charmm_all36_prot_gbsaobc.str.
+Streaming this file just before calling gbsa in the CHARMM/OpenMM interface puts the radii and scale factors
+into the wmain and wcomp arrays, respectively, making the subsequent call now prepared to upload the data
+to the CHARMM/OpenMM interace and thus run Generalzied Born calculations through the interface.
+
+A few support files are also included to 1) enable one to run the serialized CHARMM/OpenMM setup through the
+python API in OpenMM (see file tool/OpenMMFiles/omm_gbsaobc-test.py) and 2) enable one to extract radii and
+scaling factors for other Amber force fields (using the OpenMM supplied xml files for those force fields that
+reside in OpenMMn.nn-Mac/python/simtk/openmm/app/data/) using the awk script getff.awk (see file
+tool/OpenMMFiles/getff.awk).
+
+See *note usage:(doc/openmm.info)
+
+Test case: test/c39test/omm_gbsaobc_streamn-test.inp
+
+
+File: OpenMM, Node: Examples, Up: Top, Next: Top, Previous: GBSAOBC2-OpenMM
+
+
+EXAMPLES
+========
+
+Molecular dynamics using NVE with PME in a cubic system (from JACS Benchmark):
+
+set nsteps = 1000
+set cutoff = 11
+set ctofnb = 8
+set ctonnb = 7.5
+set kappa = 0.3308  ! Consistent with cutofnb and fftx,y,z
+calc cutim = @cutoff
+
+! Dimension of a box
+set size 62.23
+set  theta = 90.0
+! Dimension of a box
+Crystal define cubic @size @size @size @theta @theta @theta
+crystal build cutoff @cutim noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+!  turn on faster options and set-up SHAKE
+faster on
+energy  eps 1.0 cutnb @cutoff cutim @cutim -
+        ctofnb @ctofnb ctonnb @ctonnb vswi -
+        ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64
+
+shake fast bonh tol 1.0e-8 para
+
+set echeck = echeck -1
+
+open unit 20 write form restart.res
+
+! Run NVE dynamics, write restart file
+calc nwrite = int ( @nsteps / 10 )
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm ! Just turn on openMM, get Leapfrog Verlet, NVE
+
+! Restart dynamics from current file
+! Run dynamics in periodic box
+dynamics leap restart timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 iunrea 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm ! Just turn on openMM, get Leapfrog Verlet, NVE
+
+!!!!!!!!!!!!!!!!!!!LANGEVIN HEATBATH NVT!!!!!!!!!!!!!!!!!!!!!
+! Run NVT dynamics with Langevin heatbath, gamma = 10 ps^-1
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm langevin gamma 10 ! turn on openmm, set-up Langevin
+
+! Run variable timestep Langevin dynamics with error tolerance of 3e-3
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm langevin gamma 10 variable vtol 3e-3 ! turn on openmm, set-up variable
+                                              ! timestep Langevin dynamics
+
+!!!!!!!!!!!!!!!!!!!LANGEVIN HEATBATH/MC BAROSTAT NPT!!!!!!!!!!!!!!!!!!!!!
+! Run NPT dynamics with Langevin heatbath, gamma = 10 ps^-1
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm langevin gamma 10 - ! turn on openmm, set-up Langevin
+     mcpr pref 1 iprsfrq 25  ! set-up MC barostat at 1 atm, move attempt / 25 steps
+
+! Run variable timestep Langevin dynamics with error tolerance of 3e-3
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm langevin gamma 10 variable vtol 3e-3 - ! turn on openmm, set-up variable
+     -                                          ! timestep Langevin dynamics
+     mcpr pref 1 iprsfrq 25                     ! set-up MC barostat at 1 atm, move attempt / 25 steps
+
+!!!!!!!!!!!!!!!!!!!ANDERSEN HEATBATH NVT!!!!!!!!!!!!!!!!!!!!!
+! Run NVT dynamics with Andersen heatbath, collision frequency = 250
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm andersen colfrq 250 - ! turn on openmm, set-up Andersen
+     mcpr pref 1 iprsfrq 25    ! set-up MC barostat at 1 atm, move attempt / 25 steps
+
+! Run variable timestep Leapfrog w/ Andersen heatbath and error tolerance of 2e-3
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm andersen colfrq 250 variable vtol 3e-3 ! turn on openmm, set-up variable
+                                                ! timestep Langevin dynamics
+
+!!!!!!!!!!!!!!!!!!!ANDERSEN HEATBATH/MC BAROSTAT NPT!!!!!!!!!!!!!!!!!!!!!
+! Run NPT dynamics with Andersen heatbath, collision frequency = 250
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm andersen colfrq 250 - ! turn on openmm, set-up Andersen
+     mcpr pref 1 iprsfrq 25    ! set-up MC barostat at 1 atm, move attempt / 25 steps
+
+! Run variable timestep Leapfrog w/ Andersen heatbath and error tolerance of 2e-3
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nwrite iprfrq @nwrite isvfrq @nsteps iunwri 20 -
+     firstt 298 finalt 298  -
+     ichecw 0 ihtfrq 0 ieqfrq 0 -
+     iasors 1 iasvel 1 iscvel 0  -
+     ilbfrq 0 inbfrq -1 imgfrq -1 @echeck bycb -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 ntrfq @nsteps - !PME
+     omm andersen colfrq 250 variable vtol 3e-3 - ! turn on openmm, set-up variable
+     -                                            ! timestep Andersen dynamics
+     mcpr pref 1 iprsfrq 25                       ! set-up MC barostat at 1 atm, move attempt / 25 steps
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!EXAMPLE ENERGY CALCULATIONS!!!!!!!!!!!!!!!!!!!!!!!!
+! Use omm on/off/clear to set-up and carry-out energy calculations using CPU and/or GPU
+
+! Energy calculation for periodic system use PME on CPU
+energy eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+       ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64
+
+! Same calculation using GPU throuhg CHARMM/OpenMM interface
+energy eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+       ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64 -
+       omm
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!EXAMPLE II!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+! Energy calculation for periodic system use PME on CPU
+energy eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+       ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64
+
+omm on  ! subsequent invocations of energy will use CHARMM/OpenMM interface
+! Same calculation using GPU through CHARMM/OpenMM interface
+energy eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+       ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64
+
+omm off  ! turn off use of GPU calculation but leave OpenMM "Context" intact
+! Energy calculation for periodic system use PME on CPU
+energy eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+       ewald kappa @kappa pme order 4 fftx 64 ffty 64 fftz 64
+
+omm clear   ! Deactivate (until next omm on) calculations using GPU
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TEST CASES!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+The relevant test cases for the CHARMM/OpenMM functionality are:
+
+    Test case    	    	  	Purpose
+c37test/
+omm_acetate.inp         Test whether CHARMM/OpenMM handles nbfixes correctly w/ periodic bcs.
+omm_dynam-vts.inp       Test CHARMM/OpenMM dynamics with various integrators and variable timestep integration
+omm_dynamics.inp        Test CHARMM/OpenMM dynamics with various integrators
+omm_exception.inp       Test whether CHARMM/OpenMM handles nbfixes correctly w/ periodic bcs
+omm_modpsf.inp          Test whether CHARMM/OpenMM senses psf changes and rebuilds OpenMM context
+omm_nbexcl.inp          Test whether CHARMM/OpenMM handles nb exclusions correctly
+omm_nbfix.inp           Test whether CHARMM/OpenMM handles nbfixes correctly
+omm_nonperiodic.inp     Test and compare CHARMM and CHARMM/OpenMM energy and forces for vacuum system
+omm_periodic.inp        Test and compare CHARMM and CHARMM/OpenMM energy and forces for solvated system
+omm_restraints.inp      Test restraint methods between CHARMM and CHARMM/OpenMM for vacuum system
+
+c38test/
+omm_block-periodic.inp  Test BLOCK commands as implemented in CHARMM/OpenMM interface
+omm_block-periodic2.inp Second test of BLOCK commands as implemented in CHARMM/OpenMM interface
+omm_block1.inp          Test of basic BLOCK commands as implemented in CHARMM/OpenMM interface
+omm_fixed.inp           Test implementation of fixed atoms in CHARMM/OpenMM interface
+omm_go-model.inp        Test Karanicolas/Brooks ETEN Go model w/o & w/ periodicity
+omm_switch-nbfix.inp    Test switch/shift w/ NBFixes functioanlity of CHARMM/OpenMM interface
+omm_switch.inp          Test switch/shift functioanlity of CHARMM/OpenMM interface
+omm_switch14.inp          Test switch/shift functioanlity of CHARMM/OpenMM interface
+omm_switchpair.inp          Test switch/shift functioanlity of CHARMM/OpenMM interface
+
+c39test/
+omm_block_ti.inp        Test BLOCK-based TI calculations through CHARMM/OpenMM interface
+omm_dynamics_baro2.inp  Test anisotropic Monte Carlo based barostat plugin
+omm_resdtest.inp        Test CONS RESDistance restraint implmentation through CHARMM/OpenMM
+omm_consdihetest.inp    Test CONS DIHEdral restraint implementation through CHARMM/OpenMM

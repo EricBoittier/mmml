@@ -1,0 +1,294 @@
+* loneprtest.inp
+* Author: Bernard R. Brooks
+* Files : None
+* Tests : Lone pair facility
+*
+
+bomlev -2
+stream datadir.def
+
+read      rtf   card
+* TOPOLOGY FILE FOR lone pair test
+*
+   18    1                ! Classification from AB
+MASS     1 H      1.00800 ! hydrogen which can h-bond to neutral atom
+MASS     2 HC     1.00800 !   -    "     -               charged atom
+
+RESI CEN1  0.00000
+GROU
+ATOM H1   H       0.1
+
+RESI CEN2  0.00000
+GROU
+ATOM H1   H       0.0
+ATOM H2   H       0.1
+
+RESI CEN3  0.00000
+GROU
+ATOM H1   H       0.0
+ATOM H2   H       0.0
+ATOM H3   H       0.1
+
+RESI CEN4  0.00000
+GROU
+ATOM H1   H       0.0
+ATOM H2   H       0.0
+ATOM H3   H       0.0
+ATOM H4   H       0.1
+END
+
+read      parameter  card
+* parameter file for lonepair test
+*
+BOND
+H    H      0.0         1.0
+THETAS
+H    H    H        0.0     90.0 
+PHI
+H    H    H    H        0.0       2     180.0
+IMPHI
+H    H    H    H        0.0    0     0.0
+NONBONDED  NBXMOD 5  ATOM CDIEL SWITCH VATOM VDISTANCE VSHIFT -
+     CUTNB 20.0  CTOFNB 17.5  CTONNB 13.5  EPS 1.0  E14FAC 1.0 WMIN 1.5
+!
+H        0.0440    0.0       0.8000
+END
+
+read      sequence  card
+* two 2-center sets
+*
+    2
+CEN4  CEN4
+
+generate a  setup
+
+read coor card
+* coordinate for first test
+*
+    8
+    1    1 CEN4 H1     0.00000   0.00000   0.00000 A    1      0.00000
+    2    1 CEN4 H2     0.00000   1.00000   0.00000 A    1      0.00000
+    3    1 CEN4 H3     0.00000   1.00000   1.00000 A    1      0.00000
+    4    1 CEN4 H4     1.00000   1.00000   1.00000 A    1      0.00000
+    5    2 CEN4 H1     3.00000   3.00000   3.00000 A    2      0.00000
+    6    2 CEN4 H2     3.00000   3.00000   2.00000 A    2      0.00000
+    7    2 CEN4 H3     2.00000   3.00000   2.00000 A    2      0.00000
+    8    2 CEN4 H4     2.00000   2.00000   2.00000 A    2      0.00000
+
+coor copy comp
+
+energy
+test first step 0.00001 tol 0.0
+
+!!!!!!!! test fixed option !!!!!!!!
+
+coor copy
+
+lonepair fixed  A 1 H4
+lonepair fixed  A 2 H4
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 1.91722 -0.001 loneprtest_1
+
+!!!!!!!! test center option !!!!!!!!
+
+coor copy
+
+lonepair center A 1 H4 sele resid 1 .and. .not. type H4 end
+lonepair center A 2 H4 sele resid 2 .and. .not. type H4 end
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 0.81613 -0.001 loneprtest_2
+
+!!!!!!!! test colocate option !!!!!!!!
+
+coor copy
+
+lonepair colocate sele type h4 end sele type h3 end
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 1.10691 -0.001 loneprtest_3
+
+!!!!!!!! test colinear dist option !!!!!!!!
+
+coor copy
+
+lonepair colinear DIST 0.5 - 
+       sele type h4 end sele type h3 end sele type h2 end
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 1.30249 -0.001 loneprtest_4
+
+!!!!!!!! test colinear scale option !!!!!!!!
+
+coor copy
+
+lonepair colinear scale -0.5   - 
+       sele type h4 end sele type h3 end sele type h2 end
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 0.93924 -0.001 loneprtest_5
+
+!!!!!!!! test cen2 option !!!!!!!!
+
+coor copy
+
+lonepair cen2 sele type h4 end sele type h3 end sele type h2 end
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 0.93924 0.001 loneprtest_6
+
+!!!!!!!! test relative option !!!!!!!!
+
+coor copy
+
+lonepair relative sele type h4 end sele type h3 end -
+                  sele type h2 end sele type h1 end -
+                  DIST 1.0 ANGLE 90.0 DIHE 90.0
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 1.00123 0.001 loneprtest_7
+
+!!!!!!!! test bisector option !!!!!!!!
+
+coor copy
+
+lonepair bisector sele type h4 end sele type h3 end -
+                  sele type h2 end sele type h1 end -
+                  DIST 1.0 ANGLE 60.0 DIHE 100.0
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+lonepair clear
+
+@testcheck @e0 0.88789 0.001 loneprtest_8
+
+!!!!!!!! test relative option  with random coords !!!!!!!!
+
+random gaussian 0.7 iseed 258261
+scalar x random
+scalar y random
+scalar z random
+coor add
+
+lonepair relative sele type h4 end sele type h3 end -
+                  sele type h2 end sele type h1 end -
+                  DIST 1.25 ANGLE 75.0 DIHE 98.0
+lonepair print
+
+coor shake
+energy
+set e0 ?ener
+test first step 0.00001 tol 0.0
+print coor
+
+@testcheck @e0 0.73911 -0.001 loneprtest_9
+
+!!!!!!!! tests lonepair I/O !!!!!!!!
+
+print psf
+
+open write card unit 20 name @9loneprtest.psfc1
+write psf card unit 20
+
+! test deletion of a lonepair
+delete atom  sele atom a 1 h4 end
+print psf
+
+! test binary write
+!open write file unit 21 name @9loneprtest.psfb1
+!write psf file unit 21
+!open write card unit 22 name @9loneprtest.psfc3
+!write psf card unit 22
+
+! test read psf append
+rename segid B sele segid a end
+open read card unit 20 name @9loneprtest.psfc1
+read psf card unit 20 append
+print psf
+
+! test deletion of a lonepair host (error message desired)
+delete atom sele atom B 2 H1 end
+print psf
+
+! test reading then writing
+open read card unit 20 name @9loneprtest.psfc1
+read psf card unit 20
+open write card unit 20 name @9loneprtest.psfc2
+write psf card unit 20
+
+! test binary read
+!delete atom sele all end
+!open read file unit 21 name @9loneprtest.psfb1
+!read psf file unit 21
+open write card unit 22 name @9loneprtest.psfc4
+write psf card unit 22
+
+! Note:
+! c1 and c2 should be the same
+! c3 and c4 should be the same
+
+!!!!!!!! end of tests !!!!!!!!
+
+stop

@@ -1,0 +1,93 @@
+* omm_switch14.inp
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+read rtf card
+* title
+*
+     35   1
+
+mass 1 a 1
+
+AUTOGEN ANGLES DIHEDRALS
+resi a 0
+atom a1 a -1
+atom a2 a 0
+atom a3 a 0
+atom a4 a 1
+bond a1 a2 a2 a3 a3 a4
+end
+
+read param card
+* title
+*
+
+bonds
+a a 10 1.5
+
+angle
+a a a 10 120
+
+dihedral
+a a a a 2 3 0
+
+nbonds e14fac 0.5 cutnb 14 ctofnb 12 ctonnb 10 cdie atom vatom fswitch vfswitch
+a 0 -2 2 -1 1.5
+
+end
+
+read sequ a 1
+generate a angle dihedrals
+ic generate
+ic param
+print ic
+scalar x set 0 select bynu 1:3 end
+scalar y set 0 select bynu 1:3 end
+scalar z set 0 select bynu 1:3 end
+scalar x set 0 select bynu 1 end
+scalar y set 0 select bynu 1 end
+scalar z set 0 select bynu 1 end
+scalar x set 1.5 select bynu 2 end
+
+calc x3 = sin ( 60 / 180 * ?pi ) * 1.5
+calc y3 = cos ( 60 / 180 * ?pi ) * 1.5
+
+scalar x set @x3 select bynu 3 end
+scalar y set @y3 select bynu 3 end
+
+ic build
+print coor
+!scalar charge set 0
+energy nbxmod 5
+energy omm nbxmod 5
+
+stop
+
+open unit 1 write form name @9/fswitch.dat
+echu 1
+set r = 1
+label r
+      scalar x set @r select bynu 2 end
+      energy cutnb 14 ctofnb 12 ctonnb 10 cdie atom vatom switch vswitch
+      scalar dx stat select bynu 1 end
+      set f = ?stot
+      set e = ?ener
+      energy omm cutnb 14 ctofnb 12 ctonnb 10 cdie atom vatom switch vswitch
+      scalar dx stat select bynu 1 end
+      set fomm = ?stot
+      set eomm = ?ener
+
+      echo @r @e @eomm @f @fomm
+      incr r by 0.1
+if r le 14 goto r
+
+stop

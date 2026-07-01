@@ -1,0 +1,67 @@
+* initialize.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* setup for calculation of scaling factors for charge scaling
+* 
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+BOMLev -1
+! WRNLev -1
+! PRNLev -1
+FAST ON
+
+CALC UCUTNB =  @UCTOFNB + 4.0 
+
+!xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+! g used for count group interaction 
+SET g  0 
+     ! WMAIN has be set to the atomic radii for the calculation with PBEQ.
+SCAL WMAIN = RADIUS
+     ! After a call to SOLVE or ENPB the atomic radii are saved in a special 
+     ! array.
+     ! The atomic contribution to the electrostatic free energy are returned
+     ! in WMAIN (destroying the radii).
+     ! In every loop the radii will be recalled from SCA1 to WMAIN.
+     ! For storing the dummy array SCA1 is used.
+     ! SCAL WMAIN SHOW
+SCAL SCA1 = WMAIN
+
+! read in coordinates with scaling factors in 4th column
+OPEN UNIT 3 READ CARD NAME @INPUTFAC
+READ COOR CARD UNIT 3
+CLOSE UNIT 3
+ 
+     ! scale charges and store pre-scaled charges in array SCA7.
+SCAL SCA7 = WMAIN  
+SCAL SCA7 PROD CHARGE
+
+! store unmodified charges in SCA2
+SCAL SCA2 = CHARGE
+
+
+IF @PARAM EQ 22 STREam "defi22.str"
+IF @PARAM EQ 19 STREam "defi19.str"
+
+     ! define selection that contains exactly one atom per target group I
+DEFI groupatoms SELEct (.not. RESName PRO   .and. (TYPE CA .or. TYPE CB .or. TYPE OT2)) -
+                         .or. (RESName PRO .and. (TYPE CA .or. TYPE OT2)) .or. -
+                         (RESName TIP3 .and. TYPE OH2) .or. -
+                         (RESName DIP3 .and. TYPE OH2) .or. uatoms end
+
+! calculate targeted scaling factors only for non-target region
+! take scaled charges for target region using global scaling factors
+! take care that the target region boundary is along group definitions.
+STREam target.str
+
+
+RETURN
+
+
+
+
+
+
+
+
+
+

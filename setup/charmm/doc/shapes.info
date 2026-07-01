@@ -1,0 +1,474 @@
+CHARMM Element doc/openmm.info $Revision: 1.1.1.1 $
+^_
+File: shapes,  Node: Top, Up: (doc/charmm.info),  Next: Syntax
+
+            
+                               Shape Descriptors
+
+A CHARMM section to deal with shapes and charge distributions
+for small molecules.
+
+                 By Bernard R. Brooks and Yuhong Zhang - NIH
+
+* Menu:
+
+* Syntax::              Command syntax for the shape descriptors
+* Description::         Description of each of the SHAPE commands
+
+Overview
+
+A shape descriptor facility has been developed with several goals in mind;
+
+      - Best fit two or more molecules based on shape. 
+      - Docking small molecules into an active site.
+      - Optimize the conformation of a molecule to achieve
+          a particular shape.
+      - Optimize the conformation of two molecules so that
+          they give the same shape.
+      - Generate descriptors of a molecule for QSAR applications.
+      - To provide a simple graphic representation of a molecule.
+
+It also provides the capability for:
+      - Rigid body minimizations
+      - Rigid body dynamics
+      - Rigid and flexible docking
+      - Structural analysis of miscellaneous properties
+                 (e.g. hydrophobic moments)
+      - Searching a trajectory for frames with a given property/shape
+      - High volume screening when coupled with a structural database
+
+This is achieved by representing a molecule's shape and charge distribution
+(and other properties) as series of a polynomic expansion in cartesian space.
+
+A new data structure, Shape Descriptors, has been created.  The following
+commands and command features have been added to CHARMM to manipulate
+and utilize this data structure.
+
+^_
+File: shapes, Node: Syntax, Up: Top, Next: Description, Previous: Top
+
+Syntax:
+--------------------------------------------------------------------------------
+Commands defining the shape descriptor tables:
+
+SHAPe { CLEAr  [PROPerties]                } - clear the descriptor data
+      { ORDER integer                      } - specify the expansion order
+      {                                    }
+      { PROP integer  name  property-spec  } - add or modify a property
+      {                                    }
+      { DESC name* { [STATic] } [atom-sel] } - Add or modify a descriptor
+      {            { FLEXible }   [COMP]   }
+      {            { RIGId    }            }
+      {                                    }
+      { DELEte name*                       } - delete one descriptor table
+      { WEIGht  weight-spec                } - specify weighting table values
+
+###   { GRID    grid-spec                  } - specify a grid for searching
+                                               volume
+
+--------------------------------------------------------------------------------
+I/O commands for shape descriptors
+
+SHAPe { PRINt {name}  [ ORDEr integer]     } - print the selected descriptor(s)
+      {       {ALL }                       }
+###   { STAT  {name}  [ PROP int ]         } - print statistics about a shape
+###   {       {ALL }                       }
+      { LIST                               } - list all active descriptors
+      {                                    }
+      { WRITe  [UNIT integer]              } - write the descriptor data
+      { READ [UNIT int] [APPEnd]           } - read a saved descriptor dataset
+
+###   { DISPlay name PROPerty int [UNIT integer] [TOLErance real] }
+###                                        - Display descriptors as shaped blob
+
+--------------------------------------------------------------------------------
+Manipulation commands for shape descriptors
+
+SHAPe { ROTAte  name* vector-spec PHI real } - rotate a descriptor
+      { TRANslate name* vector-spec        } - translate a descriptor
+      { CENTer name1 [PROPerty num] [name2]} - Center a shape at origin
+      {                    [NONChiral]     }           (or at another shape)
+      {                                    }
+      { COMPare  name1 name2  [PROP int]   } - print the fit of two descriptors
+      {                                    }
+      { AXIS name  [ NORM  ]  [PROP int]   } - define an axis
+      {            [ MAJOr ]               }    (see corman.info: AXIS and LSQP)
+      {            [ MINOr ]               }
+
+--------------------------------------------------------------------------------
+Manipulation commands for shape descriptors
+
+SHAPe { COPY      name name   [PROP int]   } - copy from second to first
+      { SUM       name name   [PROP int]   } - add two shape factors together
+      { DIFF      name name   [PROP int]   } - subtract two shape factors
+      { SCALe     name real   [PROP int]   } - scale a single shape factor
+      { DUPLIcate name name                } - make another copy of an existing
+                                               shape
+--------------------------------------------------------------------------------
+Commands to setup a shape restraint
+
+SHAPe { RESTraint { CLEAR                        } } -Clear all shape restraints
+      {           { ADD name1 name2 [FORCE real] } } -Add a shape restraint
+      {           { MODIfy name1 name2 FORCE real} } -Change a force constant
+
+--------------------------------------------------------------------------------
+
+###   { PARTition  .... } - Cut a shape into two subshapes based on a planar cut
+
+--------------------------------------------------------------------------------
+
+name* ::= { a descriptor name } - process one descriptor
+          { ALL               } - process all descriptors
+
+property-spec::=  { array } [EXPOnent integer] { POINt   }  { [RAW]      }
+                  { ZERO  }                    { HOMOgen }  { NORMalized }
+                  { ONE   }                    { GAUSsian}  { CENTered   } 
+                                               { GRID    } 
+                                               { NONE    } 
+
+array::= {any CHARMM array name from the atom-selection "PROP" list}
+
+
+vector-spec::= { [XDIR real] [YDIR real] [ZDIR real]   } [DISTance real]
+               {   [XCEN real] [YCEN real] [ZCEN real] }   [FACTor real]
+               {                                       }
+               {  AXIS                                 }
+
+weight-spec::= [PRINt] repeat( ELEMent element-spec [ORDEr int] [SCALe] real )
+         element-spec::=  iiii  
+               i ::= { *     }
+                     { digit }   (element-spec examples:  020*  ***1  1102 )
+                           (indicies given as: x,y,z,prop)
+
+--------------------------------------------------------------------------------
+### means: not yet finished...
+
+
+
+
+================================================================================
+================================================================================
+
+^_
+File: shapes, Node: Description, Up: Top, Next: Top, Previous: Syntax
+
+
+                             THE SHAPE SUBCOMMANDS
+
+--------------------------------------------------------------------------------
+SHAPe  CLEAr  [PROPerties] 
+
+      This command clears the descriptor data by removing all shapes.  It also
+removes all allocated heap data.  It will not "forget" the shape property
+definitions unless the "PROPerties" keyword is specified.   
+
+--------------------------------------------------------------------------------
+SHAPe  ORDER integer
+
+      This command specifies the order of the polynomial expansion for each
+property.  This is not a value that should be changed while manipulating
+shapes.  It is not possible (at present) to mix shapes with different
+orders.  WARNING: When the order is changes ALL existing shapes are deleted.
+The minimum order value is 2 and the maximimum is MAXORD (currently 10).
+The cost for manipulating shapes is worse than factorial in the order.
+
+--------------------------------------------------------------------------------
+SHAPe  PROPerty int name { array } [EXPOnent int] { POINt   }  { [RAW]      }
+                         { ZERO  }                { HOMOgen }  { NORMalized }
+                         { ONE   }                { GAUSsian}  { CENTered   } 
+                                                  { GRID    } 
+                                                  { NONE    } 
+
+      This command will add or modify a single property.  The integer indicates
+which property number to use (must be specified in sequence) or modify.
+This number corresponds to the column number when printing shapes.
+The maximum number of properties is MAXPRP (currently 10).
+
+      The array name identifies the data source and this may be any CHARMM array
+name from the atom-selection "PROP" list.  This list currently contains:
+      X        Y        Z        WMAIn    XCOMp    YCOMp    ZCOMp    WCOMp   
+      DX       DY       DZ       ECONt    EPCOnt   MASS     CHARge   CONStrai
+      XREF     YREF     ZREF     FBETa    MOVE     TYPE     IGNOre   ASPValue
+      VDWSurfa ALPHa    EFFEct   RADIus   RSCAle   FDIM     FDCOns   FDEQ
+      SCA1     SCA2     SCA3     SCA4     SCA5     SCA6     SCA7     SCA8
+      SCA9     ZERO     ONE
+The exponent (default 1) determines what power to raise the values in the
+selected data array.
+
+      For each property, there are two subtypes.  The first subtype determines
+how atoms are treated.  The second subtype indicates how data is processed.
+The allowed the first subtypes include:
+       { POINt      } - Atoms are treated as point sources.
+       { HOMOgen    } - Atoms are treated as homogeneous spheres
+       { GAUSsian   } - Atoms are treated as a 3-d normalized gaussian
+       { GRID       } - Atoms are used to compute grid points (see COOR SEARch)
+                        and the grid points are used to determine shape values
+       { NONE       } - This is an error condition (treated as 'POINt')
+For all options other than "POINt", the atomic "radii" are stored in SCA9
+(scalar array number 9) which may be filled by the command:
+                        "SCALar array-name STORe 9"
+
+The allowed second subtypes include:
+       { [RAW]      } - Data is not further processed in any way (the default)
+       { NORMalized } - All descriptor elements are scaled by the reciprocal
+                        of the total property value for all selected atoms.
+                        This is used to get "center of mass" or "center of
+                        geometry" information instead of "total mass" data.
+       { CENTered   } - All descriptor elements of order 2 or higher are
+                        expanded about the values of the first order moments.
+                        With this option, the higher order moments are invariant
+                        to net translation of the shape (or associated atoms).
+
+................................................................................
+
+Elements of the "RAW" subtype are given by:
+
+ element        = sum      { X**j * Y**k * Z**l *value    **  exponent      }
+    j,k,l,iprop     atom-i    i      i      i       iprop,i         iprop 
+
+................................................................................
+
+Elements of the "NORMalized" subtype are given by:
+
+ norm           = sum      {value    **  exponent      }
+      iprop         atom-i     iprop,i         iprop 
+
+                    when(j+k+l >0)
+ element        = sum      { X**j * Y**k * Z**l *value    **  exponent   }/norm
+    j,k,l,iprop     atom-i    i      i      i       iprop,i         iprop 
+
+                    when(j+k+l =0)
+                = norm
+
+................................................................................
+
+Elements of the "CENTered" subtype are given by:
+
+                    when(j+k+l <2)
+ element        = sum      { X**j * Y**k * Z**l *value    **  exponent      }
+    j,k,l,iprop     atom-i    i      i      i       iprop,i         iprop 
+
+                    when(j+k+l >1)
+                = sum    { (X-XC)**j * (Y-YC)**k * (Z-ZC)**l *value**exponent }
+                    atom-i   i           i            i           iprop,i  iprop
+                  
+where:       XC = sum      { X   *value    **  exponent      }
+                    atom-i    i       iprop,i         iprop       
+
+             YC =    "       Y        "
+             XC =    "       Z        "
+
+--------------------------------------------------------------------------------
+SHAPe DESCriptor { name } { [STATic] } [atom-selection] [COMP]
+                 { ALL  } { FLEXible }    
+                          { RIGId    }           
+                                        
+The DESCriptor subcommand will add one descriptor, or modify existing
+descriptors.  Descriptors are referred to by name (properties by number).
+The maximum number of shapes is given by MAXSHP (currently 20).
+There are three type of descriptors which determine how and when the descriptor
+data is used:
+
+ { STATic  } - Only recompute when done explicitly.
+ { FLEXible} - Always recompute based on current positions and data.
+ { RIGId   } - Do not recompute, but force atoms to move as a rigid body.
+
+The default type is "STATic". This type of descriptor is computed once for each
+"SHAPe DESC" command and is never recomputed from atomic data, but can be
+modified (e.g. SHAPE ROTAte) or otherwise manipulated (e.g. SHAPe ADD)
+
+The "FLEXible" type is recomputed whenever its associated atoms move.  This is
+useful for forcing a set of atoms to adopt a particular shape.  This can also be
+used in searching through a trajectory file for a frame that best represents
+a particular shape.  For this subtype, it is useful to think of the shape as
+an active propery of the atoms positions.  Also note: If any of the associated
+data array are modified (e.g. the CHARge array and one or more property is
+assigned to the charge, then the shape decscriptor will also change).
+
+The "RIGId" subtype forces the atoms to behave as a rigid body.  Whenever the
+shape rotates or translates, its associates atoms will undergo the same
+operation.  This option changes the number of degrees of freedom for
+minimization and dynamics.  Each RIGId shape adds 6 degrees of freedom and
+removes 3N (where N is the number of associated atoms).  This option should
+only be used when 3 or more atoms are used to define a shape.
+
+Atom selection restrictions:
+   WARNING: An atom may belong to one non-STATic shape (type FLEXible or RIGId)!
+   If an atom already assigned to a shape is reassigend to a new
+   shape, the former shape becomes inactive (i.e. type "NONE") and is disabled.
+
+--------------------------------------------------------------------------------
+SHAPe  DELEte { name }
+              { ALL  }
+
+The "DELEte" subcommand will delete one (or ALL) of the existing shapes.  This
+is different from the "SHAPe CLEAr" command in that the weighting array is
+not modified.
+Note: It is not possible to delete a shape property, but one can be disabled by:
+using "SHAPe PROPerty integer name  ZERO NONE"
+
+--------------------------------------------------------------------------------
+SHAPe  WEIGht  [PRINt]  repeat( ELEMent element-spec [ORDEr int] [SCALe] real )
+         element-spec::=  iiii     (indicies given as: x,y,z,prop)
+               i ::= { *     }
+                     { digit }   
+  (element-spec examples:  020*  ***1  1102 )
+
+The "WEIGht" subcommand is used in setting up the weighting table values.
+The weighting tables are used for comparing shapes and also used as element
+prefactors in the shapew restraint energy.  The default value for this
+array is zero for all elements.
+
+Some examples of element-spec:
+       020*  - Modify or set all Y**2 elements for all properties.
+       ***3  - Modify or set all weighting elements for the 3rd property.
+       1102  - Modify or set the X*Y element for the second propery.
+
+An example of this command:
+     shape weight elem **** 0.0   ! make sure it is all zero
+     shape weight elem **** order 1 1.0 -
+                  elem **** order 2 0.5 -
+                  elem **** order 3 0.2 -
+                  elem **** order 4 0.01
+     shape weight elem **** scale 0.001
+     shape weight elem ***1 scale 10.0  print
+
+--------------------------------------------------------------------------------
+SHAPe GRID ...
+###  This command has not yet been fully developed...
+
+--------------------------------------------------------------------------------
+SHAPe  PRINt {name}  [ORDEr integer] 
+             {ALL }                  
+
+The "PRINt" subcommand will print one or ALL of the existing descriptors.
+By default, all elements will be listed.  If the "ORDEr" value is specified,
+only elements with a sum of exponents less than or equal to the specified order
+will be printed.
+
+--------------------------------------------------------------------------------
+SHAPe  STATistics  {name}  [ PROP int ]
+                   {ALL }              
+
+The "STATistics" subcommand will print various statistics about one or ALL
+of the current shapes.
+
+--------------------------------------------------------------------------------
+SHAPe  LIST
+
+The "LIST" subcommand will list all active descriptors, all of the active
+properties, and all of the shape restraints.
+
+--------------------------------------------------------------------------------
+SHAPe { WRITe          } [UNIT integer] 
+      { READ  [APPEnd] }
+
+The I/O subcommands allow a set of shapes to be saved to a disk and subsequently
+retrieved.  There are restrictions to the "READ APPEnd" option (the order and
+all properties must match).  
+
+--------------------------------------------------------------------------------
+SHAPe  DISPlay name PROPerty int [UNIT integer] [TOLErance real] }
+
+The "DISPlay" subcommand is used to display descriptors as shaped blob within
+CHARMM graphics (or other graphics packages).
+
+### NOTE: This command is not yet finished
+
+--------------------------------------------------------------------------------
+SHAPe { ROTAte PHI real }  name  { center-specs } [ DISTance real ]
+      { TRANslate       }        { AXIS         } [ FACTor real   ]
+
+center-specs: [XDIR real] [YDIR real] [ZDIR real]  -
+                 [XCEN real] [YCEN real] [ZCEN real]
+               
+The "TRANslate" and "ROTAte" subcommands are used to move shapes about, either
+with or without associated atoms.  The "SHAPe AXIS" command may be used to
+define an axis vector for rotation or translation.  .
+
+--------------------------------------------------------------------------------
+SHAPe  CENTer name1 [PROPerty num] [ name2  [NONChiral] ]    
+
+The "CENTer" subcommand has two modes of operation.  If a single shape name is
+specified, then that shape is centered at coordinate origin based on the values
+of the specified property.  The usual property subtypes are:
+          ONE   EXPOnent 1  POINt  NORMalized  - Center of geometry
+          MASS  EXPOnent 1  POINt  NORMalized  - Center of mass
+but others are, of course, possible.
+
+If a second name is specified, them a best fit is performed based by; (a) moving
+the first shape so that it has a common center with the second, (b) then
+rotating the first shape so that the principal axis align, (c) rotating and/or
+inverting the first shape by 180 degrees, to find the best overall fit where
+the pincipal axis are aligned.  If the "NONChiral" keyword is specified, it also
+tries a set of mirror image best fits.  If there are atoms associated with
+the shape (type "RIGId") then they will also move as part of the best-fit
+operation.  With the "NONChiral" option, the chirality of the selected atoms
+may invert (still rigid, but opposite chirality!).
+
+--------------------------------------------------------------------------------
+SHAPe  COMPare  name1 name2  [PROP int]   - print the fit of two descriptors
+
+The "COMPare" subcommand will print the fit of two shapes for one (or all)
+properties.  This command does not modify any shape (only prints result).
+The result is given as the square-root of the "ssq" value (see below).
+The value of the fit is stored in the "?SFIT" substitution variable.
+
+--------------------------------------------------------------------------------
+SHAPe  AXIS name  [ NORM  ]  [PROP int] 
+                  [ MAJOr ]             
+                  [ MINOr ]             
+
+The "AXIS" subcommand will determine an axis for subsequent use.  This is
+same axis created by the "COOR AXIS" and the "COOR LSQP" commands.  The
+resultant axis will be centered at the data center of the shape, and the
+direction of the axis will along one of the principal axis directions.
+The largest moment is "MAJOr" the secons is "MINOr" and the smallest is
+"NORMal".  This usage is the same as that of the "COOR LSQP" command.
+
+--------------------------------------------------------------------------------
+SHAPe { COPY      name1 name2   [PROP int]   } - copy from second to first
+      { SUM       name1 name2   [PROP int]   } - add two shape factors together
+      { DIFF      name1 name2   [PROP int]   } - subtract two shape factors
+      { SCALe     name1 real    [PROP int]   } - scale a single shape factor
+
+These commands manipulate a particular shape for one (if specified) or all
+properties.  The shape, name1, is the one which is modified.  The shape, name2,
+is used as a data source.  This is what it does;
+      COPY     name1 = name2
+      SUM      name1 = name1 + name2
+      DIFF     name1 = name1 - name2
+      SCALe    name1 = name1 * real
+
+--------------------------------------------------------------------------------
+SHAPe  DUPLIcate name1 name2 
+
+The "DUPLicate" command is like the "COPY" command, except that a new shape is
+added.  If the original shape has associated atoms (type "RIGId" or "FLEX"),
+these will NOT be assigned to the new shape (and a warning issued).
+                                        
+--------------------------------------------------------------------------------
+SHAPe  RESTraint { CLEAR                        }   - Clear all shape restraints
+                 { ADD name1 name2 [FORCE real] }   - Add a shape restraint
+                 { MODIfy name1 name2 FORCE real}   - Change a force constant
+
+The "RESTrain" subcommand manipulates which pairs of shapes make up the
+shape restraint energy term.  This energy term is symmetric (i.e. the order
+of the names doesn't matter).  The form of the energy is
+
+      Energy    = sum    { 0.5 * K  * ssq  )
+          shape    rest-i         i      i
+
+      ssq  = sum      {  weight     * ( elem(i1)     - elem(i2)     )**2
+         i     j,k,l,prop    j,k,l,prop    j,k,l,prop   j,k,l,prop
+
+Commands to setup a shape restraint
+The maximum number of shape restraints is given by MAXESH (currently 10).
+
+--------------------------------------------------------------------------------
+###   { PARTition  .... } - Cut a shape into two subshapes based on a planar cut
+
+Shape partitioning is still in development.... (coming soon..hopefully)
+
+--------------------------------------------------------------------------------
+End.

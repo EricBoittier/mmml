@@ -1,0 +1,83 @@
+#
+# Valgrind suppressions for Intel Fortran libraries.
+# Usage example:
+# valgrind --suppressions=ifort.supp ../exec/em64t/charmm < c20test/test.inp
+#
+{
+   for_inquire_Cond
+   Memcheck:Cond
+   ...
+   fun:for_inquire
+}
+{
+   for_inquire_Value8
+   Memcheck:Value8
+   ...
+   fun:for_inquire
+}
+{
+   for_close_Value8
+   Memcheck:Value8
+   ...
+   fun:for__close_proc
+}
+{
+   open_proc_Cond
+   Memcheck:Cond
+   ...
+   fun:for__open_proc
+}
+{
+   open_proc_Value8
+   Memcheck:Value8
+   ...
+   fun:for__open_proc
+}
+{
+   open_proc_Addr8
+   Memcheck:Addr8
+   ...
+   fun:for__open_proc
+}
+{
+   reopen_Cond
+   Memcheck:Cond
+   ...
+   fun:for__reopen_file
+}
+{
+   reopen_Value8
+   Memcheck:Value8
+   ...
+   fun:for__reopen_file
+}
+{
+   io_return_Cond
+   Memcheck:Cond
+   ...
+   fun:for__io_return
+}
+{
+   io_return_Value8
+   Memcheck:Value8
+   ...
+   fun:for__io_return
+}
+{
+   io_return_Addr8
+   Memcheck:Addr8
+   ...
+   fun:for__io_return
+}
+{
+   stack_trace_Cond
+   Memcheck:Cond
+   ...
+   fun:for__issue_diagnostic
+}
+{
+   stack_trace_Value8
+   Memcheck:Value8
+   ...
+   fun:for__issue_diagnostic
+}

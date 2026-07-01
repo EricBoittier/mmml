@@ -1,0 +1,199 @@
+* EXAMPLE INPUT FILE FOR ENERGY MIMINIZATION AND DYNAMICS
+* OF MOLECULAR MECHANICS PROTON TRANSFER (MMPT) OF THE 
+* PROTONATED WATER DIMER H2O...H+...H2O 
+*
+
+stream datadir.def
+
+BOMLEV 0
+PRNL 5 @pnode
+
+! ====================================================
+! set up system
+! ====================================================
+
+! READ IN TOPOLOGY AND  PARAMETER FILES
+
+READ RTF CARD UNIT 5
+* ... 
+* rtf for protonated water dimer H2O...H+...H2O 
+* ...
+*
+   22    0 
+MASS     1 H       1.00800
+MASS     2 O      15.99900
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI PWD   0.000
+GROUP
+ATOM O1   O      0.00
+ATOM H1   H      0.00
+ATOM H2   H      0.00
+ATOM O2   O      0.00
+ATOM H3   H      0.00
+ATOM H4   H      0.00
+ATOM H5   H      0.00
+BOND O1 H1 O1 H2 O2 H3 O2 H4 O1 H5
+ANGLE H1 O1 H2 H3 O2 H4 H1 O1 H5 H2 O1 H5
+PATCH FIRST NONE LAST NONE
+END
+
+
+read para card unit 5
+* ...
+* parameter for protonated water dimer H2O...H+...H2O 
+*
+
+BOND
+O   H    500.000     0.9572 
+
+ANGLE
+H   O   H     55.000   104.5200 
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+H     0.000000  -0.046000     0.224500 ! ALLOW WAT
+
+O     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+
+END
+
+READ SEQUENCE  CARDS
+* PWD - Protonated Water Dimer
+*
+   1
+PWD
+
+GENERATE MAIN SETUP NOANGLE NODIHEDRAL
+
+print psf
+
+! READ IN COORDINATES FROM PDB
+
+
+READ COOR PDB UNIT 5
+REMARK  SCC DYNAMICS OF PROTANATED DIGLYME                                                          
+ATOM      1  O1  PWD     1      -0.049  -0.086  -0.003  0.00  1.00      MAIN
+ATOM      2  H1  PWD     1       0.806  -0.215  -0.448  0.00  4.00      MAIN
+ATOM      3  H2  PWD     1      -0.741  -0.612  -0.438  0.00  4.00      MAIN
+ATOM      4  O2  PWD     1      -0.072   0.054   2.408  0.00  1.00      MAIN
+ATOM      5  H3  PWD     1      -0.926   0.191   2.852  0.00  4.00      MAIN
+ATOM      6  H4  PWD     1       0.624   0.573   2.845  0.00  4.00      MAIN
+ATOM      7  H5  PWD     1      -0.060  -0.016   1.203  0.00  4.00      MAIN
+END
+
+
+! ====================================================
+! set up MMPT
+! ====================================================
+
+OPEN UNIT 13 CARD WRITE NAME @9/mmpt_ssm_h5o2p.prm
+WRITE TITLE UNIT 13
+*       141.901588       
+*         2.228720       
+*         1.960100       
+*        11.879385       
+*        -0.977126       
+*         1.348090       
+*       357.171000       
+*         3.393090       
+*          0.102289  
+*         0.008873  
+*         35.621011
+*
+
+CLOSE UNIT 13
+
+OPEN UNIT 14 CARD WRITE NAME @9/HBRIDGE.h5o2p.DAT
+WRITE TITLE UNIT 14
+*     1     7     4   SSM   
+*
+
+CLOSE UNIT 14
+
+
+! OPEN PARAMETER FILES FOR HYDROGEN BONDS
+
+OPEN UNIT 13 CARD READ NAME @9/mmpt_ssm_h5o2p.prm
+
+
+! OPEN FILE OF ATOMS WHICH FORM HYDROGEN BONDS
+
+OPEN UNIT 14 FORMATTED READ NAME @9/HBRIDGE.h5o2p.DAT 
+
+! RUN AN UPDATE TO INITIALISE NONBONDED ATOM PAIRS
+
+UPDATE
+
+! CALL MMPT ROUTINE, READ IN DATA
+
+MMPT USSM 13 UHBR 14
+
+CLOSE UNIT 13
+CLOSE UNIT 14
+
+! TURN OFF FAST ROUTINES, ONLY USE STANDARD 
+
+FAST -1 
+
+! =========================================================
+! start minimization
+! =========================================================
+
+mini conj nstep 1000 nprint 1000 tolg 0.0001
+
+!=========================================================
+! start dynamics 
+!=========================================================
+
+OPEN UNIT 40 WRITe FORMatted NAME @9/h5o2p.heat.res
+
+DYNAmics VERLET  STart -
+  NSTEp   5000 TIMEstep 0.0001 -
+  NPRInt   100 IPRFrq     100  -
+  FIRSTT 0.0 FINALT 300.0 teminc 5.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 50 IEQFRQ 0 -
+  ICHECW 77 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread -1 iunwrit 40 iuncrd -1 iseed 656570
+
+close unit 40
+
+open unit 41 read formatted name @9/h5o2p.heat.res
+OPEN UNIT 40 WRITe FORMatted NAME @9/h5o2p.equil.res
+
+DYNAmics VERLET  reSTart -
+  NSTEp   5000 TIMEstep 0.0001 -
+  NPRInt   100 IPRFrq     100  -
+  FIRSTT 300.0 FINALT 300.0  -
+  IASORS 1 IASVEL 1 ISCVEL 0 -
+  ihtfrq 0 IEQFRQ 100 -
+  ICHECW 1 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread 41 iunwrit 40 iuncrd -1 !
+
+close unit 41
+close unit 40
+
+
+open unit 41 read formatted name @9/h5o2p.equil.res
+
+OPEN UNIT 40 WRITe FORMatted NAME @9/h5o2p.dyna.res
+!open unit 42 write file name @9/h5o2p.dyna.dcd
+
+DYNAmics VERLET  reSTart -
+  NSTEp   10000 TIMEstep 0.0001 -
+  NPRInt   100 IPRFrq     100  -
+  IASORS 1 IASVEL 0 ISCVEL 0 -
+  ihtfrq 0 IEQFRQ 0 -
+  ICHECW 1 TWINDL -5.0  TWINDH  5.0 -
+  INBFrq   10  nsavc 0 -
+  iunread 41 iunwrit 40 iuncrd -1 
+
+
+stop
+
+

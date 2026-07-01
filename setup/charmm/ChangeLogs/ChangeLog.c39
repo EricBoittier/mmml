@@ -1,0 +1,1519 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+
+CHARMM 36.0
+     c36a1    Developmental     August    15, 2008
+     c36a2    Developmental     February  15, 2009
+     c36a3    Developmental     August    15, 2009
+     c36a4    Developmental     February  15, 2010
+     c36a4r1  Developmental     May        1, 2010
+     c36a5    Developmental     August    15, 2010
+     c36a6    Developmental     February  15, 2011
+     c36b1    Release           August    15, 2011
+     c36b2    Release           February  15, 2012
+
+CHARMM 37.0
+     c37a1    Developmental     August    15, 2011
+     c37a2    Developmental     February  15, 2012
+     c37b1    Release           September 30, 2012
+     c37b2    Release           February  15, 2013
+
+CHARMM 38.0
+     c38a1    Developmental     September 30, 2012
+     c38a2    Developmental     February  15, 2013
+     c38b1    Release           August    15, 2013
+     c38b2    Release           February  15, 2014
+
+CHARMM 39.0
+     c39a1    Developmental     August    15, 2013
+     c39a2    Developmental     February  15, 2014
+     c39b1    Release           August    15, 2014
+     c39b2    Release           February  15, 2015
+---------------------------------------------------------------------------
+
+[0] About CHARMM39 Development
+
+     At the 2013 CHARMM meeting (University of Zurich, Switzerland, June 28-30,
+2012), we decided to release CHARMM c38b1 with incorporating enhancements and
+fixes to the developmental version c38a2.
+
+     As an on-going project, CHARMM development will be carried out
+with CHARMM version 39a series.
+
+==============================================================================
+
+[1] c39a1 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2013 through August 15, 2013
+
+1.1 DXL-BOMD combination with SCC-DFTB and SCC-DFTB/MM methods
+    Developer  : Guishan Zheng
+    Institution: Harvard University
+    Date       : March 21, 2013
+
+Check-in: http:/charmm.hanyang.ac.kr/4167
+Subversion committed: Revision 241
+
+     The DXL-BOMD algorithm propagates the electronic variables from previous
+steps and utilize the idea from Langevin dynamics in order to improve the
+convergence rate of iterations solution of equations in electronic structure
+calculations (here in SCCDFTB) while maintaining the stability of the
+trajectory in terms of energy. More concretely, the algorithm obtains the
+electronic structure variables from a linear combination of its values at
+previous steps/geometries. Due to the unavoidable noise from any numerical
+implementation, a dissipative "force" is added in order to achieve a better
+stability of trajectories. The linear combination coefficients and the
+coefficient for the dissipative force can be found in J. Chem. Phys. (2011)
+135, 044122.
+
+     The current implementation is only for SCC-DFTB and SCC-DFTB/MM although
+it should work for any electronic structure methods and QM/MM methods in
+addition to any polarizable force field methods that requiring the solution of
+equations in an iterative manner. In the current implementation, only CHARGES
+are propagated although the algorithm works also for any other variables, e.g.
+Fock matrix, density matrix.
+
+prefx Keys: IGUESS, IDAMP
+
+Files Added:
+source/sccdftbint/sccdftbsrc/dxlc.f
+source/sccdftbint/sccdftbsrc/inicof.f
+
+Files Modified:
+install.com
+build/UNX/sccdftb.mk
+source/dynamc/dynamc.src
+source/ltm/sccdftb_ltm.src
+source/ltm/sccdftbsrc_ltm.src
+source/sccdftbint/sccdftbsrc/eglcao.f
+
+------------------------------------------------------------------------------
+
+1.2 CHARMM/OpenMM plugin
+    Developer  : Charles Brooks, Mike Garrahan, Shuai Wei, Josh Buckner
+    Institution: U. Michigan
+    Date       : June 26, 2013
+
+Check-in: http:/charmm.hanyang.ac.kr/4844
+Subversion committed: Revision 262
+
+     An OpenMM plugin for anistropic pressure contains header files from the
+OpenMM 5.1 source distribution. The header files are distributed under the GPL
+and with the permission of the OpenMM developers.
+Prefx Keys: OPENMM
+
+Files Added:
+source/openmm/plugin/CMakeLists.txt
+source/openmm/plugin/Makefile
+source/openmm/plugin/docs/DoxyfileC++.in
+source/openmm/plugin/omm_headers/CudaArray.h
+source/openmm/plugin/omm_headers/CudaContext.h
+source/openmm/plugin/omm_headers/CudaPlatform.h
+source/openmm/plugin/omm_headers/OpenCLArray.h
+source/openmm/plugin/omm_headers/OpenCLContext.h
+source/openmm/plugin/omm_headers/OpenCLPlatform.h
+source/openmm/plugin/omm_headers/RealVec.h
+source/openmm/plugin/omm_headers/ReferencePlatform.h
+source/openmm/plugin/omm_headers/SFMT.h
+source/openmm/plugin/omm_headers/SimTKOpenMMCommon.h
+source/openmm/plugin/omm_headers/SimTKOpenMMRealType.h
+source/openmm/plugin/omm_headers/SimTKOpenMMUtilities.h
+source/openmm/plugin/omm_headers/cl.hpp
+source/openmm/plugin/omm_headers/windowsExportCuda.h
+source/openmm/plugin/omm_headers/windowsExportOpenCL.h
+source/openmm/plugin/omm_patch.in
+source/openmm/plugin/openmmapi/include/OpenMMCharmm.h
+source/openmm/plugin/openmmapi/include/openmm/CharmmKernels.h
+source/openmm/plugin/openmmapi/include/openmm/MonteCarloBarostat2.h
+source/openmm/plugin/openmmapi/include/openmm/internal/MonteCarloBarostatImpl2.h
+source/openmm/plugin/openmmapi/src/MonteCarloBarostat2.cpp
+source/openmm/plugin/openmmapi/src/MonteCarloBarostatImpl2.cpp
+source/openmm/plugin/platforms/cuda/CMakeLists.txt
+source/openmm/plugin/platforms/cuda/include/CudaCharmmKernelFactory.h
+source/openmm/plugin/platforms/cuda/src/CudaCharmmKernelFactory.cpp
+source/openmm/plugin/platforms/cuda/src/CudaCharmmKernelSources.cpp.in
+source/openmm/plugin/platforms/cuda/src/CudaCharmmKernelSources.h.in
+source/openmm/plugin/platforms/cuda/src/CudaCharmmKernels.cpp
+source/openmm/plugin/platforms/cuda/src/CudaCharmmKernels.h
+source/openmm/plugin/platforms/cuda/src/kernels/monteCarloBarostat2.cu
+source/openmm/plugin/platforms/cuda/tests/CMakeLists.txt
+source/openmm/plugin/platforms/opencl/CMakeLists.txt
+source/openmm/plugin/platforms/opencl/include/OpenCLCharmmKernelFactory.h
+source/openmm/plugin/platforms/opencl/src/OpenCLCharmmKernelFactory.cpp
+source/openmm/plugin/platforms/opencl/src/OpenCLCharmmKernelSources.cpp.in
+source/openmm/plugin/platforms/opencl/src/OpenCLCharmmKernelSources.h.in
+source/openmm/plugin/platforms/opencl/src/OpenCLCharmmKernels.cpp
+source/openmm/plugin/platforms/opencl/src/OpenCLCharmmKernels.h
+source/openmm/plugin/platforms/opencl/src/kernels/monteCarloBarostat2.cl
+source/openmm/plugin/platforms/opencl/tests/CMakeLists.txt
+source/openmm/plugin/platforms/reference/include/ReferenceCharmmKernelFactory.h
+source/openmm/plugin/platforms/reference/src/ReferenceCharmmKernelFactory.cpp
+source/openmm/plugin/platforms/reference/src/ReferenceCharmmKernels.cpp
+source/openmm/plugin/platforms/reference/src/ReferenceCharmmKernels.h
+source/openmm/plugin/platforms/reference/src/ReferenceMonteCarloBarostat2.cpp
+source/openmm/plugin/platforms/reference/src/ReferenceMonteCarloBarostat2.h
+source/openmm/plugin/platforms/reference/tests/CMakeLists.txt
+source/openmm/plugin/prebuilt/FILES
+source/openmm/plugin/prebuilt/README
+source/openmm/plugin/prebuilt/src/CudaCharmmKernelSources.cpp
+source/openmm/plugin/prebuilt/src/CudaCharmmKernelSources.h
+source/openmm/plugin/prebuilt/src/OpenCLCharmmKernelSources.cpp
+source/openmm/plugin/prebuilt/src/OpenCLCharmmKernelSources.h
+source/openmm/plugin/prebuilt/wrappers/CharmmOpenMMCWrapper.cpp
+source/openmm/plugin/prebuilt/wrappers/CharmmOpenMMCWrapper.h
+source/openmm/plugin/prebuilt/wrappers/CharmmOpenMMFortranModule.f90
+source/openmm/plugin/prebuilt/wrappers/CharmmOpenMMFortranWrapper.cpp
+source/openmm/plugin/wrappers/CMakeLists.txt
+source/openmm/plugin/wrappers/CWrapper_Header.xslt
+source/openmm/plugin/wrappers/CWrapper_Source.xslt
+source/openmm/plugin/wrappers/FortranWrapper_Header.xslt
+source/openmm/plugin/wrappers/FortranWrapper_Source.xslt
+test/c38test/omm_dynamics_baro2.inp
+
+Files Modified:
+install.com
+doc/openmm.doc
+source/openmm/omm_main.src
+
+==============================================================================
+[2] c39a2 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 2013 through February 15, 2014.
+
+2.1 NIH CHARMM Developer Workshop
+    Developer  : Charles Brooks, Bernard Brooks, Lennart Nilsson,
+                 Rick Venable, Mike Crowley, Antti-Pekka Hynninen
+                 Tim Miller, Andy Simmonett, Frank Pickard, Josh Buckner
+
+Check-in: http:/charmm.hanyang.ac.kr/6175
+Subversion committed: Revision 272
+
+- removed obsolete host types and associated code:
+  alpha, alphamp, altix, hpitanium, hpux, ibmaix, ibmaix64, ibmaixmp,
+  ibmaixmp64, ibmlnxmp, ibmlnxmp_so, itanium, sgi, sgi64, sun, sun64,
+  sunmpi, t3e
+- removed obsolete keywords and associated code:
+  PBCUBES, NOVIBRAN, TESTENDIAN, GLDISPLAY, NOREWIND, NOCORREL, I4BINARY,
+  T3ETRAJ, PARALLELX, NOIMAGES
+- replaced 'use rtf' with 'use rtf, only: ...' where applicable
+- updated tests to reduce irrelevant dynamics output
+- use prefx.f90 only, prefx.src removed
+- removed size argument from install.com command
+- removed superfluous prints from rtfio
+- added a basic .gitignore file for git users
+- standardized tests on "Test NOT performed" message
+- updated output comparison message removal in test/seddir
+- removed CMPI keyword from default gnu builds
+- removed binary I/O for rtf, param, psf
+- C preprocessor now preferred over prefx
+
+------------------------------------------------------------------------------
+
+2.2 University of Michigan Developments
+    Developer  : Josh Buckner, Garrett Goh, Jennifer L. Knight,
+                 Antti-Pekka Hynninen, Mike Crowley, Charles Brooks
+    Institution: U. Michigan, NREL
+    Date       : January 13, 2014
+
+2.2.1 OpenMM features, testing tools, and memory usage
+
+Check-in: http:/charmm.hanyang.ac.kr/6178
+Subversion committed: Revision 272
+prefx Keys: openmm, domdec
+
+- Added OpenMM block support
+- Added OpenMM support for switching and nbfix with switching
+- Added tools for running and analyzing tests:
+  tool/docompare
+  tool/dotests
+- Added colfft and domdec control to test cases
+- Updated OpenMM Go model and tests
+- Updated memory usage in mmff, cff, cpath, etc.
+
+..............................................................................
+
+2.2.2 Updates for OpenMM 5.2 compatibility
+
+Check-in: http:/charmm.hanyang.ac.kr/6181
+Subversion committed: Revision 272
+prefx Keys: openmm, prmc
+
+- Added library for reading/writing xml files of OpenMM System objects
+  using OpenMM serialization routines
+- Ewald/PME parameters now set directly using custom OpenMM plugin
+- openmm keyword now loads anisotropic barostat plugin by default
+  extra keyword prmc not needed
+
+..............................................................................
+
+2.2.3 pH-REX for CPHMD
+
+Check-in: http:/charmm.hanyang.ac.kr/6184
+Subversion committed: Revision 272
+
+- Fully functional pH-REX code
+- Added support for protein CPHMD
+- Added support for universal CPHMD
+
+..............................................................................
+
+2.2.4 DOMDEC developments
+
+Check-in: http:/charmm.hanyang.ac.kr/6190
+Subversion committed: Revision 272
+prefx Keys: DOMDEC
+
+- 1-4 interactions & exclusions implemented for DOMDEC. BLOCK implemented
+  for DOMDEC and test case (c39test/msldtest2.inp) finished.
+- New unified COLFFT that uses thread-compatible code. 1-4 calculation done
+  using bonded lists, but not activated in this version.
+- DOMDEC_GPU now runs, tested with 1-4 GPUs
+- Better splitting of direct nodes
+- DOMDEC supports BLOCK (msld)
+- Faster enbfix14
+- fsshake_kernel.src introduced, settle_water vectorized
+- Faster colfft kernels implemented
+- grad_sumrc moved into kernel
+- Fixes for colfft_sse.c align16 problem merged into master
+- Removed align16 from colfft_sse.c. SSE version of recip force calculation
+  (gather) now working
+- Faster SSE version of charge spreading implemented in COLFFT
+- domdec now works without split, SPLIt ON/OFF parameter introduced.
+  First working version of multi-GPU domdec_gpu.
+- Created energy_util -module, started working on creating a "energy" module
+- Better memory management for domdec_d2r_comm, added nullify() to dealloc_mod,
+  wrote unit test for domdec_d2d_comm::transfer_coord(), started writing unit
+  test for nblist_builder::ns_grid()
+- direct->reciprocal communication broken into two subroutines
+- domdec_gpu direct non-bonded forces can now be calculated on multiple
+  GPU nodes.
+- colfft now works for domdec_gpu with mpi+openmp
+- Testing facilities added to nblist_tilex. domdec_gpu integration started.
+- colfft fixed for nthread < 8, CUDA force_kernel selection implemented
+- DOMDEC_GPU changes. TILESIZE=16 now works, benchmarking output added.
+  nblist_ltm.src renamed to nblist_types.src
+- New 1-4 interaction/exclusion calculation for domdec_gpu
+- Removed support for all bonded energy calculations expect ebonded_domdec.src.
+- Unit test added for DOMDEC that makes sure the non-bonded force functional is
+  the derivative of the energy. DOMDEC test case modified to run the unit test.
+- External virial calculation removed from domdec, values of VIRE, PRESSE, and
+  VIRKE set to zero. Domdec test case (domdec.inp) updated to include virial
+  and pressure tests, and translational invariance test.
+- First version of the new domdec virial calculation
+- Local coordinate routines separated into domdec_local.src, data types moved
+  to domdec_local_types.src
+- local coordinate and force arrays separated from nblist_ltm.src into
+  domdec_local.src
+- DOMDEC: 1-4 Exclusions now calculated using enbcalc_xfast
+- Fixed bug in DOMDEC when using "skipe elec"
+- First version of DOMDEC on dynamvv2.src
+- Remove support from DOMDEC for MIC, AVX, GPU, OpenMP, and single precision
+- New neighborlist build routine for domdec_gpu
+
+..............................................................................
+
+2.2.5 MSLD test improvements
+
+Check-in: http:/charmm.hanyang.ac.kr/6193
+Subversion committed: Revision 272
+
+- test for molecule in a vaccum periodic box
+- increased the size of the msld big test
+- test now quits early till it is ready
+- fixed comparisons and dynamics
+- commented debugging shortcut in testcase
+- comparison set for forces
+- migrated the full patches from test/data/protonation_patches file and
+  checked for making sure the hydrogens are adjacent to the heavy atoms they
+  are bonded to for DOMDEC purposes.
+- adding test for small molecule in vaccuum with msld and DOMDEC
+- added force testing
+- c35test/sstest does not need a million steps
+- tests for msld with DOMDEC
+
+..............................................................................
+
+2.2.6 dimens and mmff dynamic memory allocation
+
+Check-in: http:/charmm.hanyang.ac.kr/6193
+Subversion committed: Revision 272
+
+- dynamic allocation for MAXATC, moved dimension parameters to appropriate
+  modules
+- lots of cleanup from memory allocation of rtf stuff and addition of dynamic
+  memory for MAXATC/natct
+- dynamic allocation for natct-type variables
+- moved dimension parameters out of dimens_ltm to this module tsms
+- moved MAXING parameter out of dimens_ltm into this file and also upimg.src
+- dynamic memory for natct-type variables added
+- changes in call strings due to changes in mmff module moving things out of
+  dimens into mmff
+- simple change to allow for no hostname when there is no attached network
+  during MPI runs
+- moved MMFF parameters into mmff_ltm from dimens_ltm
+- moved parameter MAXING to upimag out of dimens
+- moved parameters from dimens.fcm to umb module
+
+..............................................................................
+
+2.2.7 Package Clean-up
+
+Check-in: http:/charmm.hanyang.ac.kr/6225
+Subversion committed: Revision 273
+
+- source/machdep/cstuff.c
+  In all versions of function uninf: Tests and code added to avoid accessing
+  a null pointer in case the system can't provide hostname information for
+  whatever reason.
+- source/energy/intere.src
+  Preprocessor directive contained a compound logic statement that required
+  more parens. In the LITE build, the missing parens produce a semicolon alone
+  on a line causing a compiler error for gcc 4.3 but not for gcc 4.7.
+- source/domdec/sse_util.h source/nbond/colfft_sse.c
+  An SSE macro for gnu gcc will accept a 'const int' C variable whereas the
+  clang/llvm toolchain requires a literal integer (i.e. 4).
+  Before modification, charmm cannot be built on an OSX platform with clang
+  (default OSX C compiler linked to /usr/bin/gcc).
+- Removed some files that are automatically generated at each build from
+  the svn repository:
+- build/UNX/*.mk except for build/UNX/objlibs.mk and build/UNX/sccdftb.mk
+  tool/prefx_*
+
+------------------------------------------------------------------------------
+
+2.3 IMM1 enhancements
+    Developer  : Themis Lazaridis, Huan Zhan, Yi He, Asif Rahaman
+    Institution: Department of Chemistry, City College of New York
+    Date       : October 23, 2013
+
+Check-in: http:/charmm.hanyang.ac.kr/5058
+Subversion committed: Revision 270
+
+Submitted the following enhancements of IMM1 implicit membrane model:
+a) incorporation of a dipole potential (Zhan & Lazaridis, Biophys Chem, 2012)
+   and a lateral pressure term (Zhan & Lazaridis, BJ 2013)
+b) adaptation of EEF1/IMM1 to charmm 36 and a hydrophobic pore energy term
+   (Rahaman & Lazaridis, BBA 2013)
+c) use of a Poisson-Boltzmann electrostatic potential for simulation in pores
+   in anionic membranes (He et al. J Comp Chem 2013)
+
+Also made small additions and corrections in the standard topology and
+parameter files (e.g. parameters for neutral Arginine and protonated His
+and a missing IC entry for Pro in the topology file)
+
+File Added:
+support/aspara/top_all36_prot_lipid_eef1.1.rtf
+
+------------------------------------------------------------------------------
+
+2.4 University of Basel Developments
+    Developer  : Tristan Bereau, Christian Kramer, Florent Hedin,
+                 Tibor Nagy, Juvenal Yosa Reyes, Markus Meuwly
+    Institution: University of Basel
+
+2.4.1 Spherical multipole electrostatic module
+
+Check-in: http:/charmm.hanyang.ac.kr/5044
+Check-in: http:/charmm.hanyang.ac.kr/5054
+Subversion committed: Revision 269
+prefx Keys: MTPL
+
+     The MTPL module represents the charge distribution of small (diatomics)
+to arbitrarily large molecules using a multipole (MTP) expansion in
+spherical harmonics. MTP interactions are computed in the atoms' local
+reference axis systems. This reduces the number of MTP interactions to be
+evaluated by allowing to set coefficients to zero on the basis of symmetry.
+The module computes both interaction energies and forces/torques for molecular
+dynamics simulations.
+
+Files Added:
+source/nbonds/mtpl.src
+doc/mtpl.doc
+test/c39test/mtpl_water-dimer.inp
+test/data/mtpl_water-dimer.lpun
+
+..............................................................................
+
+2.4.2 Multi-Surface Adiabatic Reactive Molecular Dynamics
+
+Check-in: http:/charmm.hanyang.ac.kr/6233
+Subversion committed: Revision 277
+prefx Keys: RMD MRMD
+
+     The Multi-Surface Adiabatic Reactive Molecular Dynamics (MS-ARMD)
+method allows the construction of global reactive potential energy surface from
+standard force fields and running molecular dynamics on it.
+
+Files Added:
+source/misc/mrmd.src
+doc/mrmd.doc
+test/c39test/mrmd_h2so4.inp
+test/data/mrmd_h2so4.par
+
+..............................................................................
+
+2.4.3 Spatial Averaging, a rare events sampling Monte Carlo based algorithm
+
+Check-in: http:/charmm.hanyang.ac.kr/6239
+Subversion committed: Revision 274
+prefx Keys: SPAV
+
+     Spatial averaging (SA-MC) is an efficient algorithm dedicated
+to the study of rare-event problems: at the heart of this method is the
+realization that from the equilibrium density a related, modified probability
+density candidate can be constructed through a suitable transformation.
+This new density is more highly connected than the original density which
+increases the probability for transitions between neighboring states which
+in turn speeds up the sampling.
+
+Files Added:
+source/mc/mcspav.src
+test/c39test/mc_test_spav.inp
+
+------------------------------------------------------------------------------
+
+2.5 EMAP Enhancements
+    Developer  : Xiongwu Wu
+    Institution: NIH/NHLBI
+    Date       : February 7, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/6250
+Subversion committed: Revision 275
+prefx Keys: EMAP
+
+Allow EMAP restraint to be accessbile from CONS commands.
+
+File Added:
+test/c39test/emaprestraint.inp
+
+------------------------------------------------------------------------------
+
+2.6 Fixes and Enhancements
+
+2.6.1 gb_cff testcase crashes
+    Developer  : Josh Buckner
+
+Check-in: http:/charmm.hanyang.ac.kr/5019
+Subversion committed: Revision 268
+
+source/cff/parrdr_cff.src
+In PARRDR_CFF the entire array cff_fcm%innb is initialized to 0 before data
+is read in.
+
+..............................................................................
+
+2.6.2 OpenMM plugin not detected for a debug build
+    Developer  : Josh Buckner
+
+Check-in: http:/charmm.hanyang.ac.kr/5023
+Subversion committed: Revision 268
+
+nstall.com now looks for the shared object with the  the '_d' appended after
+the name but before the so suffix first and then looks for the shared object
+without the '_d'
+
+..............................................................................
+
+2.6.3 OpenMM plugin compile
+    Developer  : Josh Buckner
+
+Check-in: http:/charmm.hanyang.ac.kr/5323
+Subversion committed: Revision 271
+
+Added -I$chmsrc/openmm/plugin/prebuilt/wrappers to INCLUDE of makefiles in
+install.com c shell script.
+
+..............................................................................
+
+2.6.4 Typo in CCP4 map read code and compatibility with DOMDEC
+    Developer  : Xiongwu Wu
+
+Check-in: http:/charmm.hanyang.ac.kr/5200
+Subversion committed: Revision 271
+
+X starting position was assigned to Z starting position that causes the map
+positioned at wrong place. Modified to run with DOMDEC.
+
+Files Involved:
+source/emap/emapsubs.src
+
+..............................................................................
+
+2.6.5 fix qgas doubly declared
+    Developer  : Lennart Nilsson
+
+Check-in: http:/charmm.hanyang.ac.kr/6187
+Subversion committed: Revision 272
+
+renamed qgas variable in pbeq to qgas1 and updated references in energy.
+
+Files Involved:
+source/energy/energy.src
+source/misc/pbeq.src
+
+..............................................................................
+
+2.6.6 Fixes for compiling with X flag for em64t and osx
+    Developer  : Rick Venable
+
+Check-in: http:/charmm.hanyang.ac.kr/6247
+Subversion committed: Revision 276
+
+Errors in install.com and Makefile_osx as well as changes to how Apple
+handles X11 require changes in order to compile CHARMM with X11 code included.
+
+Files Involved:
+install.com
+build/UNX/Makefile_osx
+
+==============================================================================
+[3] c39b1 Change Log
+
+    The following are introduced and modified during the development period
+of February 15, 2014 through August 15, 2014.
+
+3.1 Z-module Enhancements
+    Developer  : Bob Petrella
+    Institution: Harvard University, National Institutes of Chemstry Ljubljana
+    Date       : April 17, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/11766
+Subversion committed: Revision 283 and 289
+
+     Enhancements to the Z Module.
+
+(1) Module now runs in parallel and
+parallel-parallel.  Added preprocessing of conformers--filtering prior
+to production calculations--by energy or geometric criteria.
+Conformations can also be chosen randomly. Introduced derived-type
+data structure for conformers. Modularized zmod files.
+
+(2) Active atoms (ACTBOND preprocessor keyword) now can be used in parallel
+charmm (atom decomposition).
+
+(3) Modified subroutines 'BILDC' and 'CARTCV' for speed.  An array of selected
+atoms may now be passed to the routines; options to avoid some testing are
+included.  CARTCV has been partly rewritten for increased speed.
+
+(4) added ability to define groups of processors of any size in a charmm run
+through the command: CPUS NEIGhborhoods
+This establishes sets of group-related variables, including HOODCOM and
+HEADCOM communicators which allow communication within and between groups,
+respectively.
+
+(5) added routines that allow passing integer or real arrays asynchronously.
+There are separate post-send, post-receive, wait-send and wait-receive routines
+that allow for communication/computation overlap.
+Also added array-of-array type in chm_types
+
+(6) Modified zmod testcase (c34test/testzero.inp) slightly to be consistent
+with new code.
+
+Files Added:
+source/zerom/zdata_ltm.src
+source/zerom/zerom_comm.src
+source/zerom/zerom_cs.src
+source/zerom/zerom_struc.src
+source/zerom/zerom_types.src
+source/zerom/zerom_util.src
+source/zerom/zmodule.src
+source/machdep/paral4.src
+source/ltm/cpustruc.src
+source/machdep/async_util2.src
+source/machdep/asynccomg.src
+source/nbonds/nbndcc_utilb.src
+
+------------------------------------------------------------------------------
+
+3.2 EPR Restrained-Ensemble Molecular Dynamics
+    Developer  : Benoit Roux, Lei Huang and Shahidul Islam
+    Institution: University of Chicago, Argonne National Lab
+    Date       : May 28, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/8963
+Subversion committed: Revision 286
+
+A module for structure refinement with Restrained-Ensemble Molecular Dynamics
+simulation (Roux B. and Islam, S. M. J. Phys. Chem. B, 2013, 117, 4733-39)
+using experimental EPR data is introduced. In this simulation, it is required
+to create a system with multiple copies of spin-labels, which yield a total of
+N2 distances for each pair of spin-labels at every step in a molecular dynamics
+simulation. The ensemble-averaged instantaneous histogram produced by the
+multiple replica are then matched with the target experimental EPR/DEER
+histogram via an energy restraint using a large harmonic force constant.
+
+Files Modified:
+source/energy/energy.src
+source/misc/mmfp.src
+doc/mmfp.doc
+
+------------------------------------------------------------------------------
+
+3.3 NIH Replica exchange and MSCALE developments
+    Developer  : Benjamin (Tim) Miller and Bernard R. Brooks
+    Institution: NHLBI/NIH
+    Date       : July 2, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12101
+Check-in: http:/charmm.hanyang.ac.kr/12294
+Subversion committed: Revision 290, 291 and 311
+
+3.3.1 Add new 2-D temperature, pH, and Hamiltonian replica exchange code.
+
+     Add a new replica exchange keyword TWOD that allows two dimensional
+replica exchange. Each dimension can be temperature, hamiltonian,
+and discrete-state constant pH replica exchange. There can be only
+one temperature or pH dimension.
+This new module can handle more functionality than the existing EX2D
+code. In principle, these can be merged in the future.
+
+Files Added:
+test/c40test/rex-2d.inp
+
+..............................................................................
+
+3.3.2 Combined temperature and Hamiltonian replica exchange
+
+     Implement the combined temperature + Hamiltonian exchange criteria
+mentioned in the original Okamoto paper that described Hamiltonian
+replica exchange. This is accessed via the THAM key-word to REPDSTR.
+
+Files Added:
+test/c40test/rex-tempham.inp
+test/data/prot-pos.psf
+test/data/prot-mini.crd
+
+..............................................................................
+
+3.3.3 pH and Hamiltonian reservoir replica exchange
+
+     The Boltzmann reservoir replica exchange code has been expanded to
+work with Hamiltonian replica exchange and discrete state constant pH
+replica exchange (CONSPH pref.dat key word).
+
+Files Added:
+test/c40test/rsvr-hrex.inp
+test/data/top_all27_prot_na.rtf
+test/data/par_all27_prot_na.prm
+test/data/lysine.psf
+test/data/lysine.crd
+test/data/lambda0-320k.sdcd
+test/data/lambda1-320k.sdcd
+test/data/energies-lambda0.dat
+test/data/energies-lambda1.dat
+
+..............................................................................
+
+3.3.4 Minor replica exchange enhancements/fixes
+
+- Minor clean-up of FASTREPDSTR code.
+- Set WRNLEV correctly after REPD command is given.
+- Add tags to Hamiltonian replica exchange print-out for
+  easier tracking.
+- Clean up the output written to the exchange log file.
+
+..............................................................................
+
+3.3.5 Enhancements to MSCALE and EDS
+
+- Add the REDU keyword to the MSCALE command, which is used in
+  conjunction with the already existing UPEN keyword. When REDU
+  is used, the log file unit given by UPEN is only updated during
+  dynamics.
+- Reformulate the EDS equation to improve numerical stability by
+  factoring out large constants. This behavior is activated by
+  the DYNO (dynamic offsets) keyword. This is not an approximation,
+  but rather a redistribution of terms that helps prevent floating
+  point overflow when evaluating large absolute energies.
+- Allow constant pressure simulations to be run using EDS by
+  incorporating the virial terms into the EDS equations.
+- Allow fluctuating charges in EDS simulations.
+- Allow MSCALE and BLOCK commands to occur after REPD without the
+  use of a stream file.
+
+..............................................................................
+
+3.3.6 Add ability to write reservoir files for constant pH simulations directly
+
+     Adds the ability to write out an entry to a reservoir file every
+NSAVC time steps. This reservoir file can be used later with pH
+reservoir replica exchange.
+
+..............................................................................
+
+3.3.7 Replica exchange test case improvements and bug fixes
+
+     As pointed out by Charles L. Brooks III and others during the
+2014 CHARMM Developers' Meeting, there is currently no mechanism
+to evaluate whether most CHARMM test cases are succeeding or
+failing, since most of them simply exercise the code.
+
+     This development adds several new subst variables (documented in
+subst.doc) to the REPDSTR module that allows introspection of
+exchange probabilities and rates. In addition, I have modified
+many of the replica exchange test cases to run with fixed random
+seeds for reproducability and use these probabilities, along
+with final energies, to have definite success and failure
+conditions, which are reported directly by the test case itself.
+It also ensures PH-REX is handled correctly.
+
+     Furthermore, a bug was discovered in the getmsr subroutine
+limiting floating point subst variables to 4 characters; this
+has been corrected.
+
+     Finally, build/UNX/Makefile_em64t has been modified to add the
+-assume byterecl compiler flag. This makes Intel-compiled
+executables treat the RECL argument for direct I/O identically
+to gfortran and PGI compiled ones.
+
+------------------------------------------------------------------------------
+
+3.4 Extended functionality for reading PDB files
+    Developer  : Lennart Nilsson
+    Institution: Karolinska Institutet
+    Date       : July 15, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12131
+Subversion committed: Revision 299
+
+- Extended functionality for reading PDB files
+- Moved endian check to subroutine GTICNT
+- Changed optimization flags for better AMD compability
+- SEQRDR and testcase update
+
+Files Added:
+test/c39test/readpdb.inp
+test/data/1cet.pdb
+test/data/2pyl.pdb
+test/data/9ant.crd
+test/data/9ant.pdb
+test/data/par_all36_na.prm
+test/data/top_all36_na.rtf
+
+------------------------------------------------------------------------------
+
+3.5 DOMDEC Spring 2014 improvements
+    Developer  : Antti-Pekka Hynninen
+    Institution: NREL
+    Date       : June 11, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12141
+Subversion committed: Revision 300
+
+- warning added for low FFTW performance on multiple GPUs
+- min_xyz/max_xyz determination
+- energy tolerance
+- transfer_coord: set_homezone()
+- single precision fix in direct->recip communication
+- Now SETTLE only works for DOMDEC
+- Fixed DOMDEC_GPU "empty" box and cumsum short array
+- gpu_nonbond/ updated
+- independent domdec command
+- virial pressure computation
+- CONS DIHE, NOE, REDCNS, CONS HMCM implemented for domdec
+- c37test/domdec.inp single precision test larger allowed error
+- New SSE and AVX intrinsic
+- enb inner loops using c++ templates (enb_core_vec.cpp)
+- memory re-allocation
+- gpu bonded & 1-4 interactions
+- Direct-Recip communication uses atom lists instead of group lists
+- NPT test
+- gpu test in domdec_vdw.inp
+- DLB in domdec_bonded.src: coord_to_boxind
+- gpu pre-energy kernel launch
+- DOMDEC_GPU direct calculation split into two
+- DOMDEC_GPU neighborlist builder
+- transfer_coord/transfer_force now based on atoms, not groups
+- domdec_d2d_comm.src somewhat rewritten using subroutine calls
+- Bonded / Non-bonded energy calculation split into subroutines in energy.src
+- MKL thread safety
+- SHAKE can now be initialized anywhere.
+- IUPT, KUPT: allocation moved to energym.src
+- makefile updates for C++ and OSX
+- emap test case updates from Xiongwu
+- Loop variable added as "private" to all OpenMP loops.
+
+Files Added:
+source/domdec/CudaIntegrator.h
+source/domdec/NBdirect.cu
+source/domdec/NBdirect.h
+source/domdec/domdec_bonded_types.src
+source/domdec/domdec_cons.src
+source/domdec/domdec_shake.src
+source/domdec/domdec_util_gpu.cu
+source/domdec/domdec_util_gpu_mod.src
+source/domdec/enb_core_vec.cpp
+source/domdec/enb_core_vec.h
+source/domdec/enb_core_wrapper.cpp
+source/domdec/enb_core_wrapper_mod.src
+source/domdec/sse_defs.h
+source/domdec_gpu/Bonded_struct.h
+source/domdec_gpu/VirialPressure.cu
+source/domdec_gpu/VirialPressure.h
+source/domdec_gpu/XYZ.h
+source/domdec_gpu/cudaXYZ.h
+source/domdec_gpu/hostXYZ.h
+source/domdec_gpu/reduce.cu
+source/util/pack_mod.src
+test/c39test/domdec_cons.inp
+test/c39test/domdec_npt.inp
+
+Files Removed:
+source/domdec/bench_store_gpu.h
+source/domdec/colfft_gpu.cu
+source/domdec/colfft_gpu_mod.src
+source/domdec/enb_core_avx.c
+source/domdec/enb_core_sp_sse.c
+source/domdec/enb_core_sse.c
+source/domdec/enb_core_sse.h
+source/domdec/gpu_utils.cu
+source/domdec/gpu_utils.h
+source/domdec_gpu/Bspline.h
+source/domdec_gpu/Grid.cu
+source/domdec_gpu/Grid.h
+source/domdec_gpu/Matrix3d.cu
+source/domdec_gpu/Matrix3d.h
+source/domdec_gpu/MultiNodeMatrix3d.h
+
+------------------------------------------------------------------------------
+
+3.6 OpenMM interface improvements
+    Developer  : Josh Buckner and Charles Brooks III
+    Institution: University of Michigan
+    Date       : July 15, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12149
+Check-in: http:/charmm.hanyang.ac.kr/12153
+Check-in: http:/charmm.hanyang.ac.kr/12322
+Subversion committed: Revision 300 and 309
+
+1. 5.2 and 6.0 compatibility improvements
+2. clang and c++ compilers compatibility improvements
+3. openmm51 prefx keyword added to turn on OpenMM 5.1 compatibility
+4. serialization, xml text output of system in format compatible
+   with standalone OpenMM applications:
+   omm seri [unit <unit #>]
+5. prefx keyword nonbplugin and command:
+   omm nb <on|off>
+   to turn on/off CharmmNB plugin
+   When the CharmmNB plugin is off, OpenMM NonbondedForce is used instead
+   prefx Keys: openmm51, nonbplugin
+6. OpenMM 6.0 CPU platform implemented for CharmmNB plugin
+7. added wrapper to allow developer access to the state of individual
+   force groups from OpenMM in fortran
+8. OpenMM interface additions (see doc/openmm.doc)
+   cons resd / cons dihe restraints / cdW switching / new gbsa module
+9. corrected CHARMM/OpenMM switching functions:
+10. Added random seed initialization for OpenMM calls
+11. Changes to allow atom-type-code -1
+12. GO Pair model is also included.
+
+------------------------------------------------------------------------------
+
+3.7 Developer document updates
+    Developer  : Charles BL. rooks III
+    Institution: University of Michigan
+    Date       : July 24, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12270
+Subversion committed: Revision 303
+
+     Mostly updates to proper use of preprocessing directives.
+
+Files Updated:
+doc/developer.doc
+doc/parallel.doc
+doc/pert.doc
+doc/prefx.doc
+
+------------------------------------------------------------------------------
+
+3.8 Bugfixes and Enhancements
+
+3.8.1 Different output of emap testcases in serial and parallel runs
+    Developer  : Xiongwu Wu
+    Institution: NHLBI, NIH
+    Date       : 3/6/2014
+
+Check-in: http:/charmm.hanyang.ac.kr/6332
+Subversion committed: Revision 285
+
+     The testcases, c38test/mapsgld.inp and c39/emaprestraint.inp, have
+different outputs due to SGLD runs caused by different random number serials
+and due to unprotected printing.
+
+Files involved:
+source/emap/emapop.src
+source/emap/emapsubs.src
+test/c38test/mapsgld.inp
+test/c39test/emaprestraint.inp
+test/data/gb1v.cor
+test/data/gb1v.psf
+
+..............................................................................
+
+3.8.2 ensemble compile errors
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : March 10, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/6344
+Subversion committed: Revision 284
+
+     ensemble won't compile due to a copy/paste error in an mpi_send call
+and modifications to the ensrex subroutine.
+
+Files Involved:
+source/ensemble/ensemble.src
+
+..............................................................................
+
+3.8.3 Bug in IMAGES used with REPDSTR
+    Developer  : Tim Miller
+    Institution: NHLBI/NIH
+    Date       : March 11, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/6348
+Subversion committed: Revision 284
+
+     There is currently a bug that causes incorrect nonbond energy terms to be
+calculated immediately following an exchange when REPDSTR is used with images.
+This is caused by NBONDS and UPIMAGE being called in the wrong order in
+subroutine REPDSTR, The attached patch resolves the issue.
+
+Files Involved:
+source/gener/repdstr.src
+
+..............................................................................
+
+3.8.4 Bugfix for non-zero net charge in Drude psf file
+    Developer  : Lei Huang, Benoit Roux
+    Institution: University of Chicago, Argonne National Lab
+    Date       : May 16, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/8002
+Subversion committed: Revision 287
+
+     The net charge is not zero in Drude psf file in some cases.
+
+Files Involved:
+source/gener/genpsf.src
+source/gener/drude.src
+
+..............................................................................
+
+3.8.5 Quantum module QUB fix
+    Developer  : Dan T major
+    Institution: Bar-Ilan University, Israel
+    Date       : May 27, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/8799
+Subversion committed: Revision 288
+
+     Bug in parallel version of QUB module resulted in segmentation fault error
+(bug seemingly introduced in version c37a2). Subroutine PIMCM was fixed.
+
+Files Involved:
+source/quantum/qub.src
+
+..............................................................................
+
+3.8.6 OpenMM 6 compatibility
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : May 27, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/8843
+Subversion committed: Revision 284
+
+     Compilation with the openmm install.com keyword fails with OpenMM
+versions >= 6.0. Compilation for OpenMM 5.2, 6.0, and 6.0.1 is fixed.
+
+..............................................................................
+
+3.8.7 repdstr variable wrnlorig missing decl
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : July 11, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12119
+Subversion committed: Revision 293
+
+     wrnlorig is used in source/gener/repdstr.src but not declared. It should
+have been declared in source/ltm/repdstr_ltm.src along with the declarations
+for iolorig and prnlorig
+
+Files Involved:
+source/gener/repdstr.src
+source/ltm/repdstr_ltm.src
+
+..............................................................................
+
+3.8.8 Parsing of random command and parallel supprot in dynamics restart file
+    Developer  : Milan Hodoscek
+    Institution: NIC/Slovenia
+    Date       : July 14, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12127
+Subversion committed: Revision 295
+
+     There were problems with parsing the random command for example
+as in c36test/random.inp. Also the restart file has now information of
+all the seeds from all processes when run in parallel. The restarted run
+can use either the ones from the previous if they match the number of
+needed seeds in the current run or they create the new seeds
+accordingly. This guaranties that the seeds are always different on
+all the processors in a parallel CHARMM run. For the langevin
+dynamics the possibility to obtain the same dynamics in parallel as in
+single processor run was added.
+
+     This change makes a few test cases different than in the r291
+revision (mainly just information printout). The following is the list
+of test cases that must be different, since they fix the parsing of
+the random command, or in the case of c29test/mctest03.inp there is a
+change in restart because of the random seeds.
+
+ c32test/attr.inp
+ c25test/helix.inp
+ c26test/loneprtest.inp
+ c29test/mctest03.inp
+ c36test/random.inp
+ c32test/repul.inp
+ c36test/rmsd_dyncall.inp
+
+     Some of the test cases did not match the ones from the r291 tree:
+
+- c39test/mrmd_h2so4 dies in r291 as in the version I am sending
+- c33_test/neb_abnr.out - at the end of minimization the result is the same
+- c37test/quasi-pca.out - reported some NaN messages and IEEE errors:
+  I fixed it and now it is obviously different. I added line 455 in
+  vibran/quasi.src to initialize the DDV array.
+
+Files Involved:
+source/vibran/quasi.src
+source/dynamc/dynio.src
+source/dynamc/dynlng.src
+source/util/random.src
+
+..............................................................................
+
+3.8.9 Cosmetic bugfix in reservoir replica exchange
+    Developer  : Tim Miller
+    Institution: NHLBI/NIH
+    Date       : July 15, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12139
+Subversion committed: Revision 296
+
+     There's a small logic bug in subroutine RESEXCH in repdstr.src that will
+cause a spurious "exchange failed" message to print out even when it succeeds.
+The bug is entirely cosmetic and will not affect simulation results.
+
+Files Involved:
+source/gener/repdstr.src
+
+..............................................................................
+
+3.8.10 Small Fixes to GAMMESS, REPLICA, Q-CHEM, etc.
+    Developer  : Milan Hodoscek
+    Institution: NIC/Slovenia
+    Date       : July 16, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12195
+Check-in: http:/charmm.hanyang.ac.kr/12204
+Subversion committed: Revision 297 and 298
+
+- support for current version of GAMESS
+- performance enhancement for replica code
+- replacing complex*16 with chm_cmplx for single precision compile
+- typo in coorio.src comment
+- performance enhancement for Q-Chem/CHARMM interface
+- support new parmeters (flexparm) for all QM/MM methods added
+- ab initio QM/MM compile in array.src
+- gukini.src fixed so it compiles with the latest sources
+
+Files Involved:
+source/gamint/ddi.src
+source/gener/replica.src
+source/gukint/gukini.src
+source/image/xtlfrq.src
+source/io/coorio.src
+source/gukint/gukini.src
+source/quantum/addlnat.src
+source/util/array.src
+doc/dynamc.doc
+doc/gamess.doc
+doc/miscom.doc
+doc/scalar.doc
+
+..............................................................................
+
+3.8.11 repdstr.src syntax problem
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : July 22, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12243
+Check-in: http:/charmm.hanyang.ac.kr/12223 (Tim Miller)
+Subversion committed: Revision 301
+
+Slight syntax problem caused a failure to compile. Added a THEN after
+an ELSE IF(...) clause to fix the problem. See attached svn-made patch file.
+
+Files Involved:
+source/gener/repdstr.src
+
+..............................................................................
+
+3.8.12 DRUDE use with rtf dynamic alloc
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : July 22, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12251
+Subversion committed: Revision 302
+
+     rtf dynamic allocation not working correctly when using DRUDE
+
+Files Involved:
+source/io/rtfio.src
+
+..............................................................................
+
+3.8.13 Intel compilers versions 11 and 12 fix
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : July 24, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12278
+Subversion committed: Revision 304
+
+     Recent DOMDEC improvements require gcc macros. These were removed for
+Intel builds with the compiler switch -no-gcc. I have removed the -no-gcc
+switch from Makefile_em64t.
+
+Files Involved:
+build/UNX/Makefile_em64t
+
+..............................................................................
+
+3.8.14 OpenMM testcase fixes
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : July 28, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12286
+Subversion committed: Revision 305
+
+     test/c38test/omm_switch-nbfix.inp uses @9 but didn't contain 'stream
+datadir.def' so I simply added that test/c39test/omm_block_ti.inp had three
+setenv commands instead of just set on accident
+
+Files Involved:
+test/c38test/omm_switch-nbfix.inp
+test/c39test/omm_block_ti.inp
+
+..............................................................................
+
+3.8.15 cpp related quick fixes
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : July 31, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12298
+Subversion committed: Revision 306
+
+     Several files contained malformed cpp directives as well as cpp comment
+delimiters.
+     Partial line comments are no longer deleted by prefx. From each of the
+src files, cpp comment delimiters were removed from Fortran comments, and in
+cpp lines, Fortran-style comments were replaced by cpp-style comments. Some
+notes were added to doc/prefx.doc to document the problems.
+
+Files Involved:
+doc/prefx.doc
+source/energy/enefscal.src
+source/energy/rmsd.src
+source/io/mainio.src
+source/misc/mmfp.src
+tool/prefx.f90
+
+..............................................................................
+
+3.8.16 CORREL output fix
+    Developer  : Josh Buckner
+    Institution: University of Michigan
+    Date       : August 6, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12306
+Subversion committed: Revision 307
+
+     The previous change that I made to tool/prefx.f90 caused the output of
+the CORREL command to be all 0's and NaN's.
+     Modified tool/prefx.f90 to strip out the comments as before but also to
+leave cpp lines (lines beginning with '#') alone.
+
+Files Involved:
+tool/prefx.f90
+
+..............................................................................
+
+3.8.17 Makefiule_gnu fix for -fabi-version=0 flag
+    Developer  : Tim Miller
+    Institution: NHLBI/NIH
+    Date       : August 7, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12315
+Subversion committed: Revision 308
+
+     The logic for detecting and setting -fabi-version=0 in Makefile_gnu is
+backwards. Therefore, compiling with gcc will fail on platforms with AVX
+instructions available because the -fabi-version=0 flag does not get set.
+     The flag needs to be changed on gcc versions >= 4.6.0. For older
+compilers on AVX compatible machines, CHARMM will not build. A sensible error
+message is added in this case.
+
+Files Involved:
+build/UNX/Makefile_gnu
+
+==============================================================================
+[4] c39b2 Change Log
+
+    The following are introduced and modified during the development period
+of August 15, 2014 through February 15, 2015.
+
+4.1 Updates to the CHARMM-TURBOMOLE QM/MM interface
+    Developer  : Chris Rowley and Benoit Roux
+    Institution: University of Chicago, Argonne National Lab
+    Date       : September 2, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12460
+Subversion committed: Revision 330
+
+     A change was made in the variable declaration in the QTURBO to import
+the atct array from the rtf module, which had prevented compilation in
+earlier versions.
+     The documentation was updated to include a reference to the J. Comput.
+Chem. paper describing the interface and to online examples.
+     The script turbo.py was revised for clarity and to support hybrid DFT
+functionals, excited state properties, and shared memory versions of TURBOMOLE.
+
+Files Modified:
+source/gukint/gukini.src
+doc/qturbo.doc
+support/programs/turbo.py
+
+------------------------------------------------------------------------------
+
+4.2 Enhancements and Fixes
+(1) extraneous quotes in c39test/omm_gbsaobc_stream-test.inp
+    Developer  : Josh Buckner
+    Date       : August 15, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12358
+Subversion committed: Revision 318
+
+     The test case c39test/omm_gbsaobc_stream-test.inp had three extra double
+quotes around the names of some input files read from test/data.
+
+Files Involved:
+test/c39test/omm_gbsaobc_stream-test.inp
+
+..............................................................................
+
+(2) alloced TVEC in mmfp..src
+    Developer  : Charles L. Brooks III
+    Date       : August 18, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12424
+Subversion committed: Revision 320
+
+     The testcase c39test/test_re_method.inp crashes because an allocatable
+array TVEC is set to 1 instead of allocated in the file source/misc/mmfp.src
+on line 3144.
+
+Files Involved:
+source/misc/mmfp.src
+
+..............................................................................
+
+(3) compile for domdec_gpu and gfortran
+    Developer  : Rick Venable
+    Date       : August 20, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12451
+Subversion committed: Revision 324
+
+     Bugs in both install.com and Makefile_gnu prevented compilation with
+the above command line.  The symptom were a failure to find a compatible
+version of libcudart.so, and when that was fixed, all of the omp_* calls
+were listed as unresolved globals.
+
+Files Involved:
+build/UNX/Makefile_gnu
+install.com
+..............................................................................
+
+(4) parallel readpdb, startup wrnlev, and powell.src convergence report
+    Developer  : Lennart Nilsson
+    Date       : September 4, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12465
+Subversion committed: Revision 326
+
+1. added default wrnlev to source/charmm/charmm_main.src
+2. fixed an unguarded write in source/minmiz/powell.src
+3. bugfixes for reading pdb files in parallel (M):
+   source/io/coorio.src - prnlev guard for readpdb messages
+   source/io/psfres.src - fixed misplaced calls to SETMSI/C that were causing
+                          crashes in parallel (M) during readpdb
+   test/c39test/readpdb.inp - added support for running test case in parallel
+
+Files Involved:
+source/charmm/charmm_main.src
+source/minmiz/powell.src
+source/io/coorio.src
+source/io/psfres.src
+test/c39test/readpdb.inp
+
+..............................................................................
+
+(5) OpenMM Dehedral Restraint Issue
+    Developer  : Charles L. Brooks, III
+    Date       : December 4, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12586
+Subversion committed: Revision 336
+
+     The test c39test/omm_consdihetest.inp sometimes fails with a segmentation
+fault. Dihedral restraints with the same functional representation but
+different parameters were being treated as the same retraint in the restraint
+creation subroutine.
+
+Files Involved:
+c39test/omm_consdihetest.inp
+source/openmm/omm_restraint.src
+
+..............................................................................
+
+(6) Reading psf with additive force fields containing lonepairs
+    Developer  : Jing Huang and Alexander D. MacKerell Jr.
+    Date       : December 19, 2014
+
+Check-in: http:/charmm.hanyang.ac.kr/12613
+Subversion committed: Revision 341
+
+     Fixed a bug that charmm crashes when reading non-Drude psf files
+containing lonepairs. While charmm additive force fields in general don't
+contain lonepairs, there might be some particular usage of lonepairs such as
+the halogen force fields developed in our lab.
+     Besides, the maxium number of substition parameters is increased from
+512 to 1024, as overflow becomes more often encountered in setting up
+complicated systsm.
+
+Files Involved:
+source/io/psfres.src
+source/util/cmdpar.src

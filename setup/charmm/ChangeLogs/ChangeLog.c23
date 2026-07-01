@@ -1,0 +1,3574 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM Manager (chmgr@tammy.harvard.edu)
+---------------------------------------------------------------------------
+
+
+[0] About CHARMM23 Development
+
+As an on-going project, CHARMM development has been carried out with
+CHARMM version 23 series.  Since we branched out from the c22g2
+release version, we have made two alpha versions (c23a1 and c23a2) and
+five FORTRAN versions (c23f and c23f1 through c23f4).
+
+(1) As the "f" in c23f stands for FORTRAN version, we converted FLECS
+    source into FORTRAN.  The conversion task had been completed by
+    c23f2.  Now CHARMM is written in full FORTRAN except several
+    machine dependant codes in C. 
+
+(2) We maintain all source and support files under CVS (Concurrent
+    Versions System) control.  The ROOT repository is
+    tammy.harvard.edu:/prog/chmgr/CVS.  CHARMM23 is stored in 
+    /prog/chmgr/CVS/c23f.  A particular version is retrieved with
+    the version name as the rivision tag (e.g., c23f3)
+
+(3) We require all developers to understand CHARMM coding standard and
+    checkin rules.  Please, consult doc/developer.doc and doc/install.doc
+    for details.  There are three forms you can get through
+    anonymous-ftp to tammy.harvard.edu:pub/charmm/problem.form,
+    bugfix.form and project.form.  Use problem.form and bugfix.form to
+    report problems and bugfixes, respectively.  These should be sent
+    to charmm-bugs@tammy.harvard.edu.
+    We also require a written description of source code modification
+    (done or planned) from each developer.  Please consult project.form
+    to report your development status and plan.  It will help the
+    manager to schedule integration and to provide better idea of code
+    changes on going.  All such project descriptions will be sent to
+    other developers.
+
+The following lists the modifications along the development line from
+c23a1 through the current version.
+
+==============================================================================
+
+[1] c23a1 Change Log
+    CHARMM c22g2 (July 7, 1992) to c23a1 (August 15, 1992)
+
+1.1 CVS/CDE Support
+ - A new directory cde_defs is added and contains CDE specific
+   information.  You should modify any of its contents ONLY when you
+   add/remove files in the received snapshot.
+ - install.com, module makefiles (~/build/{machine_type}/*.mk) and
+   ~/tool/makemod are modified to meed the requirements of CDE
+   init/get command.  Also, mainmake (makemod for ~/source/main) is
+   added in ~/tool and should be used when you generate main module
+   makefiles.  ~/tool/unix directory is removed.
+ - Note that when source file structure is modified, the modification
+   should be reflected in the corresponding .mk files and ~/tool/vaxvms/
+   vmsinstall.com.  In general, any file structure alteration
+   (including addition and deletion) must be reflected in cde_defs
+   files. 
+
+1.2 Stardent Version Support
+ - There are problems on Kubota Computer (Stardent) platforms.  Make
+   command does not function as we expect on UNIX machines.  In order
+   to work around the problem, some stardent specific sections are
+   added in install.com.  A proper set of module makefiles is found in
+   ~/build/stardent.
+ - Note that not all testcases are checked out.  Especially,
+   c20test/rtftest (associated with io/rtfio.src), testsel2
+   (associated with util/string.src and/or util/parse.src)
+   c22test/icpert, mewtest.
+
+1.3 Molecular Simulations Inc. Modifications
+===========================================================================
+CHMGR Note: 05-Aug-92
+All the modifications described are integrated with the tag msi9207 in c23a1
+===========================================================================
+   Name             : Ryszard Czerminski
+   Email Address    : ryszard@connection.prospect.com
+   Institution      : Molecular Simulations Inc.
+   Date             : August 1, 1992
+===========================================================================
+
+(1) Cray Porting
+
+main/miscom.src        - SPECIFY defined for CRAY
+energy/enefst2.src     - CRAY port
+energy/enefst2q.src    - CRAY port
+energy/enefvp.src      - CRAY port
+image/imnbfp.src       - CRAY port
+machdep/space.src      - bugfix: VEHEAP on CRAY was allocating four times
+		       - to much space
+manip/fshake.src       - CRAY port
+nbonds/enbf2.src       - CRAY port
+nbonds/enbf3.src       - CRAY port
+nbonds/enbf4.src       - CRAY port
+nbonds/enbf5.src       - CRAY port
+nbonds/evdwf.src       - CRAY port
+nbonds/ewald.src       - CRAY port
+nbonds/ewaldf.src      - CRAY port
+nbonds/ewaldf2.src     - CRAY port
+nbonds/nbexcl.src      - CRAY port
+nbonds/nbndf2p.src     - CRAY port
+nbonds/nbndfp.src      - CRAY port
+
+
+
+(2) Frequency Based Crystal Update
+
+The most extensive modifications was done to allow for automated,
+frequency based, crystal update. New variable (IXTFRQ) was introduced
+which controls frequency of the crystal update.
+
+main/iniall.src        - CUTIM moved here,
+fcm/image.fcm          - new CUTXTL & IXTFRQ
+gener/update.src       - new IXTFRQ
+image/crystal.src      - crystal update implemented,
+                       - XBUILD split into XBUILD and XBUILD2;
+ 		       - PRNXTLD modified, PRINTX removed
+		       - CRYSTAL FREE added
+image/images.src       - CUTIM removed
+nbonds/heurist.src     - call to XBUILD2 added
+
+
+
+(3) Replace calls to DIEWRN and DIE by calls to WRNDIE
+
+The idea is to replace all calls to DIEWRN and direct calls to DIE by
+appropriate calls to WRNDIE which gives more information to the output
+and communicates error messages to QUANTA.  Eventually, when all calls
+to it are replaced, DIEWRN should be removed.
+
+image/upimag.src       - DIE replaced by WRNDIE
+machdep/machio.src     - DIEWRN replaced by WRNDIE
+quantum/qmjunc.src     - DIE(-5) replaced by WRNDIE, EXIT replaced by WRNDIE
+quantum/qmpac.src      - EXIT replaced by WRNDIE
+quantum/qmset.src      - DIE(-5) replaced by WRNDIE
+
+
+
+(4) Dimension Increase in dimens.fcm
+
+MAXSYM increased to 192  (was 24)
+MXRTA  increased to 2250 (was 2000)
+MXRTB  increased to 2250 (was 2000)
+MXTBL  increased to 3000 (was 2000)
+
+remove the following three lines for ##IF QUANTA
+##IF QUANTA
+      PARAMETER (MAXATC = 500, MAXCB = 1500, MAXCH = 1600, MAXCI = 600,
+     &           MAXCP  = 700, MAXCT = 5500, MAXCN = 7000)
+
+
+
+(5) HP port (HPUX)
+
+machdep/cstuff.c       - HP port
+machdep/machio.src     - HP port; DIEWRN replaced by WRNDIE
+machdep/startup.src    - HP port
+
+
+
+(6) Ability to Linearly Increase/Decrease Pressure
+
+The goal was to allow for linear increase (decrease) of the pressure
+during single dynamic run. New variables/keywords were introduced
+(PIXX - initial value of XX component of pressure tensor, PFXX - final
+value etc... for other components) 
+
+dynamc/dcntrl.src      - new variable NPRIVOLD; new REFPI and REFPF
+ 			 (initial and final reference pressure tensors)
+		       - new keywords : PIXX,PIYY etc...
+					PFXX,PFYY etc...
+                         for initial and final pressure tensor
+			 format modified for initial and final
+dynamc/dynamc.src      - PRNXTLD modified
+fcm/reawri.fcm         - QCNSTPL logical flag for linear pressure ramping
+
+
+
+(7) Minimizers &  Communication with QUANTA
+
+- All CHARMM/QUANTA communications has been removed from minimizers and
+  placed in PRINTE subroutine.
+- attempt has been made to further standardize different minimizers
+  printout
+- attempt has been made (not complete yet e.g. for Newton-Raphson)
+  to make minimizers to return the lowest energy
+  (and corresponding coordinates) as a final
+
+energy/printe.src      - QUANTA communication with minimizers moved here;
+		       - format fixed;
+		       - EPROP(GRMS) calculation removed for dynamics
+minmiz/egrad1.src      - QUANTA communication moved to PRINTE;
+                       - PRINTX replaced by PRNXTLD
+minmiz/abner.src       - QUANTA removed
+minmiz/conjug.src      - QUANTA removed
+minmiz/nraph.src       - QUANTA removed
+minmiz/powell.src      - QUANTA removed
+minmiz/steepd.src      - QUANTA removed
+                       - bugfix: now this minimizer can converge too!
+
+
+(8) PRNLEV Modified
+
+The goal of this modification is to make PRNLEV=0 the default
+(similarly to other *LEV keywords e.g. BOMLEV). PRNLEV=0 would give
+minimum but sufficient information. PRNLEV > 0 would be used mostly
+for testing and debugging and of course for CHARMM output lovers.
+PRNLEV < 0 would be use to cut output even further (e.g. for very long
+dynamics run) What exactly PRNLEV should be in each particular place
+will be establish most probably by trial and error self-convergent
+(hopefully) procedure.
+
+dynamc/dynamc.src  - PRNLEV modified
+image/crystal.src  - PRNLEV modified
+minmiz/abner.src   - PRNLEV modified
+minmiz/conjug.src  - PRNLEV modified
+minmiz/nraph.src   - PRNLEV modified
+minmiz/powell.src  - PRNLEV modified
+minmiz/steepd.src  - PRNLEV modified
+nbonds/heurist.src - PRNLEV modified
+util/parse.src     - PRNLEV modified
+
+
+(9) QUANTUM Code Problem Fix
+
+main/iniall.src        - QMMMINIT moved from ENERGY
+energy/energy.src      - QMMMINIT moved to   INIALL
+fcm/quantm.fcm         - QMDATA rearranged (REAL*8 first etc...)
+quantum/qmpac.src      - declaration of HELECT fixed
+
+
+
+(10) Miscellaneous
+
+image/nbondm.src       - loops rearranged in ##IF PERT
+util/util.src          - QUANTA communication
+
+
+1.4 Cray Fast Code and Problem Fix
+===========================================================================
+CHMGR Note: 07-Aug-92
+All the modifications described are integrated with the tag djt9207 in c23a1
+===========================================================================
+
+SUBJECT: Cray version
+
+PEOPLE INVOLVED: tobias@sun0.chem.upenn.edu, brooks@cmchem.chem.cmu.edu
+
+BACKGROUND INFORMATION
+The code was written by myself and John Mertz at Cray Research and
+incorporated first into CHARMM 19.  We later implemented similar code
+into Polygen's CHARMm 21.  Given the large differences between CHARMM
+22 and previous versions, it was quite a task to port the code to the
+first version of CHARMM 22.  I completed that just as version c22g1
+was released and then completed the port to c22g1 just as c22g2 was
+released.  Since myself and others were anxious to simply have a
+working, optimized Cray version of CHARMM 22, the initial port, as you
+will see, is very superficial.  Given the large similarities between
+the Convex and Cray vector/parallel code, it would be nice to use
+mostly the same code on the two machines (and others with similar
+architectures).  But since I have been largely excluded from
+discussions of plans for future development, I decided expedience and
+simplicity on my part was in order and did not attempt to  incorporate
+Cray-specific modifications into the existing code.  Rather, I crudely
+"spliced" in our code.  I would be happy to participate in
+beautification of the Cray code and/or future developments of largely
+machine-independent vector parallel code.  I give below a list of the
+files I modified and added with a brief description of what was done.
+In addition to  the code itself, I am planning to send a brief
+document describing the algorithms and their implementation and usage,
+and another prepared by Charlie that discusses some deviations between
+the Convex and Cray test cases.
+
+
+SUMMARY
+Vector/parallel code for energy calculation, shake, and nonbonded
+list generation on the Cray was implemented.  Dynamic heap and
+stack allocation on the Cray was added.  Several bugs in the Cray
+code were fixed.  Overall, the changes to existing code are
+superficial, the bare minimum necessary to incorporate the code,
+and are therefore fairly mild but not very elegant.  Several new
+source files were added.
+
+ROUTINES ADDED
+fcm/cray.fcm		-contains heap pointers for Cray fast shake
+energy/cenerf.src	-vector/parallel bonded energy routines for Cray
+manip/cshake.src	-vector/parallel shake routines for Cray
+image/cnbndm.src	-vector/parallel atom-based image nb list routine
+nbonds/cenbf.src	-vector/parallel nb energy routine
+nbonds/cnbnd.src	-vector/parallel atom-based nb list routine
+
+ROUTINES CHANGED
+install.com		-added prefx PARVECT key for Cray
+build/cray		-added make of new files to several makefiles
+build/cray/Makefile_cray-added compiler switches for parallel compilation
+build/cray/image.mk	-compile nbondm.f with optimization turned of
+			 because of compiler bug
+build/cray/nbonds.mk	-compile ewald.f with optimization turned of
+			 because of compiler bug
+energy/energy.src	-added crude interface to Cray bonded energy
+			 routines
+fcm/heap.fcm		-declare pointer to heap for dynamic allocation
+fcm/stack.fcm		-declare pointer to stack for dynamic allocation
+image/images.src	-added compiler directives for vectorization in
+			 TRANSO and TRANSI
+image/upimag.src	-modified some loops and added directives for
+			 vectorization in MKIMAT
+machdep/cstuff.c	-added function to get # physical cpus from system
+machdep/machutil.src	-added routine to get NCPU from system
+machdep/startup.src	-adding parsing of heap and stack sizes to
+			 command line parsing code
+main/charmm.src		-moved call to ARGUMT
+main/charmm.src		-made QFASTNB=.TRUE. default on Cray
+main/miscom.src		-set QFASTNB=.TRUE. when FASTER.GE.0 on Cray
+manip/shake.src		-added crude interface to Cray shake routines
+nbonds/nbndgc.src	-change RHEAP equivalence to pointer statement
+nbonds/nbonds.src	-added crude interface to Cray nb list routines
+nbonds/enbond.src	-added crude interface to Cray nb energy routine;
+			 changed line IF(.NOT.LEWALD) to IF(ELECFG.AND.
+			 .NOT.LEWALD) in EVDW to fix SKIPE ELEC problem
+pert/icpert.src		-bug fixes
+rxncor/rxndef.src	-change RHEAP equivalence to pointer statement
+util/selcta.src		-change LHEAP equivalence to pointer statement
+util/util.src		-added dynamic heap and stack allocation to
+			 INITHP and INISTK routines
+
+==============================================================================
+
+
+[2] c23a2 Change Log
+    CHARMM c23a1 (August 15, 1992) to c23a2 (October 25, 1992)
+
+2.1 NIH Development
+===========================================================================
+CHMGR Note: 22-Oct-92
+  All the modifications described are integrated either with the tag
+  nih9208 or nih9209 in c23a2
+===========================================================================
+   Name             : Bernard R. Brooks
+   Email Address    : brbrooks@helix.nih.gov
+   Institution      : NIH
+   Date             : August 18, 1992 and September 18, 1992
+===========================================================================
+
+  File(s) Removed : fcm/intel.fcm
+  File(s) Added   : fcm/parallel.fcm
+                    fcm/surface.fcm
+                    machdep/parallel.src
+                    minmiz/tndriv.src
+                    minmiz/tnpack.src
+                    misc/aspener.src
+
+
+(1) BUGFIX:  Changes in CHARMM to fix a specific problem.
+
+  File(s) modified: gener/genpsf.src  
+                    gener/modpsf.src  
+                    image/nbondm.src  
+                    io/coorio.src     
+                    nbonds/nbondg.src 
+                    quantum/qmene.src 
+                    quantum/qmset.src 
+
+Description of each bug:
+...........................................................................
+gener/genpsf.src
+
+      This ancient bug manifests itself with a one residue segment where
+both the first residue patch and the last residue patch try to modify
+the same atom.  The code currently adds both atoms (with the same name).
+This fix causes the atom in the last patch to take precedence for
+charges, but the van der Waal type is taken from the first patch
+(please don't ask why).  This bug fix is messy and is interwoven with
+the charge augment feature described below.  I recommend not fixing
+this bug in old versions, just beware of it.
+
+...........................................................................
+gener/modpsf.src
+
+      This is another ancient bug which causes problems when the
+first residue of a PSF is patched.  The fix is very simple.  This
+problem should be fixed in older versions of CHARMM.
+
+      A1177           DO (J=JS,IBLO(INVMAP(I)))
+      changed to
+      B1169           DO (J=IBLO(INVMAP(I)-1)+1,IBLO(INVMAP(I)))
+
+...........................................................................
+image/nbondm.src
+
+      Standard FORTRAN does not allow a jump into an IF block
+although most compilers allow this.  This fix is needed to correct
+the problems for compilers where this is not allowed.  This has
+been acomplished by breaking the large IF block into two smaller
+ones.
+
+      A601                            ENDIF
+      A602       255                    CONTINUE
+      A603                            IF(QPERT) THEN
+      changed to
+      B596       255                    CONTINUE
+
+...........................................................................
+io/coorio.src
+
+      This bug is present because the parsing for keywords in coordinate I/O
+is done before the parsing for atom selections, thus the atom selection
+token RESId is eaten by the keyword parser (as the RESI option).  Other
+keyword/token conflicts are possible as well.  The quick fix is to
+move the atom selection up by roughly 20 lines.  This problem should
+be fixed in older CHARMM versions.
+
+      A64             IMODE=0
+      A65             CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE,
+      A66            2      .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG,
+      A67            4      .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+      A68             IF(IMODE.NE.0) CRAP-OUT
+      A69       C
+      deleted before
+      B63             IFILE=GTRMI(COMLYN,COMLEN,'IFIL',1)
+      
+      
+      B84             IMODE=0
+      B85             CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE,
+      B86            2      .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG,
+      B87            4      .TRUE.,X,Y,Z,.TRUE.,1,WMAIN)
+      B88             IF(IMODE.NE.0) CRAP-OUT
+      inserted before
+      A91       C
+      
+...........................................................................
+nbonds/nbondg.src
+
+      Standard FORTRAN does not allow a jump into an IF block
+although most compilers allow this.  This fix is needed to correct
+the problems for compilers where this is not allowed.  This has
+been acomplished by breaking the large IF block into two smaller
+ones.
+
+
+      A755                        ENDIF
+      A756       255                CONTINUE
+      A757                        IF(QPERT) THEN
+      changed to
+      B748       255                CONTINUE
+
+...........................................................................
+quantum/qmene.src
+
+      This modification reverts this code to an older version.  I don't
+know why the LVDW flag was disabled in the call to EGROUP in the
+routine EVDWQM, but it has to be wrong.  This change had the effect
+of deleting the subroutine altogether.  I suspect that this was done
+as a short term fix after the space allocation was mangled in qmset.src.
+
+      A1114          $            .false.,.true.,lcons,lshft,lfswt,
+      changed to
+      B1108     C     $            .false.,.true.,lcons,lshft,lfswt,
+      B1109          $            .false.,.false.,lcons,lshft,lfswt,
+
+...........................................................................
+quantum/qmset.src
+
+      As with the changes in qmene.src, the changes here make no sense.
+The space allocation was non-optimal in the older version, but this
+recent modification is just wrong!  This corrects the problem,
+but there may be more to this than is obvious.
+
+      A1018     CC      nqmlen=natqm*(natom-natqm)
+      A1019           nqmlen=natqm*natom
+      A1020           inblos=allstk(integ4(natom))
+      A1021           jnbs  =allstk(integ4(nqmlen))
+      A1022           inbloq=allstk(integ4(natom))
+      changed to
+      B1006           nqmlen=natqm*natqm
+      B1007           inblos=allstk(integ4(nqmlen))
+      B1008           jnbs  =allstk(integ4(nqmlen))
+      B1009           inbloq=allstk(integ4(nqmlen))
+
+---------------------------------------------------------------------------
+(2) STANDARDS
+
+      These changes are usually simple, but reflect the need for the code
+to adhere to coding standards.  Changes in this section include;
+
+      Declaring all variables
+      Removal of unused variables
+      Removal of unused include files
+      Insuring calling sequences match the subroutine or function
+        that is called
+      Ending source files with an END statement
+      Ending common include files with a comment line
+      Fixing variable type mismatches between calling sequnces and
+        subroutines
+      Adding an "!" after a ##ENDIF statement (or other ## statements)
+        before comments
+            e.g.  ##ENDIF ! BLOCK  - is correct
+                  ##ENDIF BLOCK    - should be avoided
+      Fully implementing the ##IF SAVEFCM feature
+      Commenting all variables within include files
+      Put all compiler directives within ##IF blocks.
+      Some additional comments for code readability and clarity.
+
+Though I have fixed a number of problems, I have not yet had the opportunity
+to do a complete crosscheck on this code.  Additional mismatch problems and
+unused variable problems may be uncovered.
+
+Files modified:
+      main/iniall.src
+      energy/cenerf.src, enefscal.src, enefvect.src, enefst2.src
+      fcm/am1parm.fcm, impnon.fcm, quanta.fcm, quantm.fcm, shake.fcm
+      image/cnbndm.src
+      io/rtfio.src
+      machdep/machutil.src, startup.src
+      manip/cshake.src
+      minmiz/egrad1.src, nraph.src, steepd.src
+      nbonds/cenbf.src, cnbnd.src, enbfast.src, ewaldf.src
+      quantum/qmdata.src, qmene.src, qmjunc.src, qmpac.src, qmset.src
+      rxncor/rxndef.src
+
+---------------------------------------------------------------------------
+(3) FORTRAN Conversion
+
+Files modified:
+      main/iniall.src, usersb.src
+      correl/anacor.src
+      dynamc/dynamc.src
+      energy/energy.src
+
+---------------------------------------------------------------------------
+(4) PARALLEL
+
+      General code for support of CHARMM on MIMD machines is now complete.
+This includes; Control of the I/O levels for all file I/O.  For parallel
+machines or workstation clusters, only node zero performs I/O and it 
+broadcasts data to other nodes.  Control of all printing through
+PRNLEV or WRNLEV.
+      All compuationally intensive code exercised in MD is now fully parallel
+which includes: DYNAMC, ENERGY (and most subsections), SHAKE, PRSSRE, DYNLNG,
+IMAGES,...  Almost all comutationally intensive code in the first order
+minimizers is fully parallel.  Other usage of the energy routines are
+parallel (such as the energy time series in CORREL).
+      Many of the changes were required to remove the Intel specific nature
+of the initial implementation.  Most of the remaining changes deal with I/O
+control.  Please include I/O control in all future code that is developed.
+
+Files modified:
+      main/charmm.src, iniall.src, miscom.src
+      correl/anacor.src, corrio.src, solana.src
+      dynamc/dcntrl.src, dynamc.src, dynamcv.src, dynio.src, dynlng.src,
+             prssre.src     
+      energy/ecnstr.src, eintern.src, enefscal.src, enefvect.src,
+             energy.src, eutil.src
+      fcm/dimens.fcm, heap.fcm, parallel.fcm(NEW), stack.fcm,
+          intel.fcm(REMOVED)
+      gener/hbonds.src, update.src      
+      graphics/apodraw.src, drawit.src
+      image/crystal.src, eimage.src, imagio.src, nbondm.src, xtlfrq.src
+      io/coorio.src, mainio.src, parmio.src, psfres.src, rtfio.src, univio.src
+      machdep/machio.src, parallel.src(NEW), startup.src   
+      manip/cstran.src, intcor.src, rmsdyn.src, shake.src, wrgaus.src
+      minmiz/egrad1.src, nraph.src
+      misc/drawsp.src, noe.src, sbound.src, testch.src, xray.src         
+      molvib/molvco.src, molvio.src
+      nbonds/enbond.src, etable.src, heurist.src, nbondg.src, nbonds.src
+      pert/epert.src
+      rxncor/path.src, rxndef.src, travel.src
+      util/datstr.src, parse.src, title.src
+      vibran/rbquas.src, redbas.src, vibcom.src, vibio.src, vibsub.src
+
+---------------------------------------------------------------------------
+(5) ATOMPARSE
+
+      A new atom name parsing subroutine has been developed.  All commands
+in CHARMM which use atom parsing now use this new utility which provides a
+consistency in the parsing of atom names.  This is done in a fashion that
+all existing input scripts will continue to function.  This makes the code
+simpler and facilitates further advancements in atom parsing.  One new
+feature allows an atom selection to be used to select a series of atoms.
+This is very useful in CORREL for specifying clusters of atoms for analysis.
+When the atom selection feature is used to specify 4 atoms of a dihedral,
+the first 4 selected atoms will be chosen.
+
+Files modified:
+      correl/correl.src     
+      fcm/exfunc.fcm        
+      manip/cstran.src, intcor.src      
+      util/chutil.src       
+      vibran/vibutil.src    
+
+---------------------------------------------------------------------------
+(6) MSCNUM 
+
+      New code for flexible miscellaneous command substitutions has been
+fully incoporated.  Additional types were needed to make this code more
+flexible.  Three types are supported, REAL(*8), INTEGER, CHARACTER.
+There are three subroutines which can be called; integer (SETMSI),
+character (SETMSC), and real (SETMSR) to specify a command substitution
+variable.  Now it is possible for ?NATOM to return an integer, ?RSM to
+return a real number, and ?SEGID to return the segment identifier of the
+first selected atom.
+
+Files modified: 
+      main/charmm.src, iniall.src, miscom.src     
+      correl/corrio.src
+      fcm/mscpar.fcm
+      machdep/machutil.src
+      manip/corman.src, corman2.src, rgyr.src, rmsdyn.src, rotlsq.src,
+            scalar.src
+      misc/quicka.src
+      util/parse.src, selcta.src       
+      vibran/thermo.src, vibio.src
+
+---------------------------------------------------------------------------
+(7) EULER Dynamics Integrator
+
+      The incorporation of of the Langevin/Implicit Euler dynamics
+integrator has been achieved.  This code is currently being evaluated for
+suitability in biomolecular simulations and in free energy studies.
+The effect is to remove the energy in the high frequency degrees of
+freedom which eliminates the noise in free energy studies where bonds are
+being modified.  This effort is the first method of several that will be
+explored (the next will eliminate not only high frequnecy energy and high
+frequency heat capacity as well, and still allow a flexible system).
+To support the Implicit Euler integration, a Truncated Newton Minimizer
+has been added.  This minimizer may be used directly using the MINI TN
+command.  The minimizer is not yet fully implemented (it works, but is
+not as efficient as it will be), but it is already very competitive
+relative to existing minimization methods.  Do not use TN with SHAKE.
+This code has been developed by Tamar Schlick at NYU.  It has been
+integrated within CHARMM with some modifications.  Testing and evaluation
+are ongoing.  Further modifications will be forthcoming.
+
+Files modified:
+      main/iniall.src
+      dynamc/dcntrl.src, dynamc.src
+      energy/eutil.src, printe.src
+      fcm/energy.fcm, euler.fcm, number.fcm
+      minmiz/minmiz.src, tndriv.src, tnpack.src
+      pert/epert.src
+
+---------------------------------------------------------------------------
+(8) Histogram Option in CORREL
+
+      A histogram option to time series manipulation has been developed.
+This is executed by the command;
+
+      MANTime time-series-name HISTogram min-value max-value num-steps
+
+The selected time series is replaced with a histogram which contains
+the probability of finding the time series within a given value range.
+
+Files modified:
+      correl/correl.src, mantim.src
+
+---------------------------------------------------------------------------
+(9) EHFC: High Freequency Correction
+
+      The leap-frog dynamics integrator has been modified to have an
+improved high frequency correction (HFC) term.  With the old term,
+energy was conserved within a harmonic degree of freedom, but total energy
+would drift as energy exchanged between high and low frequency degrees of
+freedom.  The new code avoids this problem.  As per request from several
+people, the total energy and kinetic energy that is printed in the first
+line of dynamics energy printout has reverted to the standard Verlet
+energies, and these match the output of the old integrator.  The HFC terms
+(total energy, and kinetic energy) are now printed on the second line.
+The fluctuation of the HFC total energy is usually an order of magnitude
+smaller than that of the total energy.  The HCF total energy is a good
+indicator of problems with NVE dynamics because small changes in total
+energy are not lost in the noise of high frequency oscillations.
+
+Files modified:
+      dynamc/dynamc.src     
+      energy/eutil.src, printe.src     
+      fcm/energy.fcm        
+
+---------------------------------------------------------------------------
+(10) QUANTUM - Changes to the QUANTUM code
+
+      The QUANTUM code has been modified extensively (also see bug report
+above) to bring the code into CHARMM standards.  Several hundred variables
+were declared and the IMPLICIT statements were removed.  These variables
+were declared with minimal checking of variable names for spelling errors.
+Naming conflicts involving the variable NALPHA were corrected.
+
+Files modified:
+      energy/energy.src     
+      fcm/quantm.fcm        
+      quantum/qmdata.src, qmene.src, qmjunc.src, qmpac.src, qmset.src
+
+---------------------------------------------------------------------------
+(11) SURFACE
+
+      New analytic surface area code and energy terms for ASP (Atomic
+Solvation Parameters) energy and forces have been fully integrated
+(and parallelized for multi-machines).  This has been achieved by the
+incorporation and adaptation of the code from Wesson and Eisenberg.
+The default for the COOR SURFace command is now the analytic surface
+area.  The older Lee and Richards algorithm is still available if a
+nonzero accuracy is requested.
+
+Files modified:
+      main/iniall.src
+      energy/energy.src, eutil.src, printe.src
+      fcm/energy.fcm, surface.fcm       
+      io/mainio.src
+      misc/aspener.src, surfac.src
+
+---------------------------------------------------------------------------
+(12) CRAYVEC Preprocessor Keyword
+
+      The CRAY code that has been recently incorporated has been worked on.
+In addition to fixing several problems, the code has been made general for
+use on non-CRAY architectures and all features are tested with the NIH test
+cases that check all possible nonbond options with all of the FAST versions.
+The new keyword CRAYVEC has been added which controls the compilation of
+the optimized CRAY code.  The required changes to energy/energy.src,
+nbonds/enbond.src, and nbonds/nbonds.src in order to support the optimized
+CRAY code has been significantly simplified and localized.  The variable
+LMACH=3 now selects the fast CRAY code.  Flags (## type) which control
+FAST usage (in order of priority subject to change) now include;
+      SCALAR
+      VECTOR
+      PARVECT
+      CRAYVEC
+All four sets of fast options are supported in a general manner.  It will
+now be possible to test and compare these methods for performance on a wider
+variety of machines.
+      The code has also been brought up to CHARMM standards.  Specific
+problems fixed included;
+  Fix number of argument mismatches (2 occurances: one in energy.src
+    and one in cenerf.src)
+  Fix argument mismatch (2 occurances of REAL*8 to REAL in cnbnd.src)
+  Declaration of several undeclared variables.
+  Incorporation of ##IF UNICOS blocks around cray compiler directives
+  Addition of generic code for non-cray architectures to simulate
+    boolean operations.
+  Addition of generic subroutines for non-cray architectures to simulate
+    cray system calls.
+Additional problems have not been dealt with (such as the replicated
+computation of R**2 in cnbnd.src, once in subroutine CPAIRS and once in
+main routine).
+
+Files modified:
+      main/iniall.src, miscom.src, 
+      energy/cenerf.src, energy.src
+      image/cnbndm.src, upimag.src
+      nbonds/cenbf.src, cnbnd.src, enbond.src, nbonds.src
+
+---------------------------------------------------------------------------
+(13) EFFICIENCY
+
+      A few changes to enhance efficiency were made.  Changes to the image
+code were made for speed.  The changes to io/psfres.src were made to save
+a considerable amount of memory.
+
+Files modified:
+      image/nbondm.src, upimag.src
+      io/psfres.src
+
+
+---------------------------------------------------------------------------
+(14) GRMS
+
+      The gradient root mean squared (GRMS) calculation that was recently
+added to energy.src has been removed.  Instead, two GRMS sections have been
+added to the old integrator which accomplishes the same task without the
+cost for other uses of the energy routine.
+
+Files modified:
+      dynamc/dynamcv.src
+      energy/energy.src
+
+---------------------------------------------------------------------------
+(15) ##IFN NOXX Preprocessor Keys
+
+      The full implementation of the ##IFN NOxxx was not completed in the
+earlier version.  Several problems have been encountered and fixed as new
+combinations have been tried.   The ##IFN NOxxx feature has been implemented
+to save memory on non-virtual memory machines so that larger molecular
+systems can be employed.
+
+Files modified:
+      main/charmm.src
+      dynamc/dynio.src
+      gener/psfsum.src
+      io/mainio.src
+      minmiz/egrad1.src
+      misc/testch.src
+
+---------------------------------------------------------------------------
+(16) PRNLEV
+
+      In some of the recent changes, the definition of the PRNLEV variable
+was modified, but not for all of CHARMM.  The use of PRNLEV has been reset
+to its previous definition for now.  The redefinition of PRNLEV will be made
+as the code gets converted to FORTRAN for the entire program.
+The definitions are;
+
+                              OLD         NEW
+      no print version        0          -1
+      very brief version      2           0
+      brief version           3           1
+      inner loop default      4           4
+      default                 5           5
+      verbose                 6           6
+      very verbose            7+          7+
+
+The new PRNLEV changes have not yet been incorporated.
+
+Files modified:
+      main/iniall.src
+      dynamc/dynamc.src
+      image/crystal.src
+      machdep/parallel.src
+      minmiz/conjug.src, nraph.src, powell.src, steepd.src
+      nbonds/heurist.src
+      util/parse.src
+
+---------------------------------------------------------------------------
+(17) QAUGMENT
+
+      It is desirable for a patch to be able to augment the charge of an atom.
+The current code could only set a charge.  The new code can add or subtract
+a value from the charge.  This is done by using a patch charge value near
+100.0.   For example, a charge of 100.15 will add 0.15 to the current charge.
+A charge value of -101.0 will subtract 1.0 from the current charge.  Charge
+values less than -90.0 or larger than 90.0 are no longer allowed for generate
+or patch without charge augment.  This feature is coupled with the bugfix in
+genpsf described above.  It allows more flexible patches to be developed where
+the prior charge on modified atoms need not be known.
+
+Files modified:
+      gener/genpsf.src, modpsf.src
+
+---------------------------------------------------------------------------
+(18) SPACEALLOC: Space Allocation
+
+      A few modification have been made with the intent of reducing the
+amount of data structure resizing.  These are straightforward.
+
+Files modified:
+      image/upimag.src
+      nbonds/nbexcl.src
+
+
+---------------------------------------------------------------------------
+(19) VACUUM_OP: COOR SEARCH Subcommand
+
+      The ability to manipulate pixel bitmaps generated from the COOR SEARCH
+command has been developed. The new syntax for the COOR SEARCH command is;
+
+COOR SEARch {PRINt [UNIT int]} {            } {[VACUum]} {[RESEt]} [SAVE]
+            {[NOPRint]       } {[RCUT  real]} { FILLed } { AND   }
+                               {[RBUFf real]} { HOLES  } { OR    }
+                                                         { XOR   }
+The new keywords are;
+      SAVE  - save the resultant bitmap for subsequent operations
+      AND   - logical AND the new bitmap with the previously saved map
+      OR    - logical OR  the new bitmap with the previously saved map
+      XOR   - logical XOR the new bitmap with the previously saved map
+      HOLES - search for holes (vacuum points surrounded by filled points)
+
+Files modified:
+      manip/corman.src, corman2.src
+
+---------------------------------------------------------------------------
+(20) VERNUM: Version Number
+
+      The version number (as a float value) and version name have been added
+to version.fcm.  This allows subversions to be specified and defined simply.
+
+Files modified:
+      main/iniall.src
+      fcm/version.fcm
+
+===========================================================================
+(21) OTHER MINOR CHANGES:
+
+      This section deals with simple changes which involve just
+one file and which don't fit into one of the above categories.
+
+...........................................................................
+dynamc/dcntrl.src - (mod to QORIG)(new NPREv keyword)
+
+      The new NPREv keyword allows an MD run trajectory to start on other
+than step 1.  This is useful if one wants to do a "restart" without using
+a CHARMM restart file.
+      The modifications to the logical flag QORIG now specify the new
+leap-frog integrator as the integrator to use when one or more of the
+following conditions is met;
+      The NIH keyword is used during compilation
+      The PARALLEL keyword is used during compilation
+      The PERT  keyword is used during compilation
+      The OLDDYN keyword is not used during compilation
+      The LEAP  keyword is used (leap-frog)
+      The NEW   keyword is used
+      The CPT   keyword is used (Constant Temperature and/or Pressure)
+      The EULEr keyword is used (Implicit Euler integration)
+
+The new integrator should be the general default, but I'll let someone
+else make that push.
+
+...........................................................................
+machdep/space.src - (don't declare library routines as external with UNIX)
+
+      The library routines  FMALLOC and IADDR do not need to be declared
+as external with UNIX.  On some systems, the explicit declaration disables
+the usage of the library routines.
+
+...........................................................................
+machdep/machutil.src - (timing calls modified)
+
+      The variable ELATM (not to be confused with ELATIM) has been added
+to give correct elapsed times.  The current code has a minor problem.
+
+...........................................................................
+manip/intcor.src - (new delete or keep for impropers)
+
+      A new keyword, IMPRoper, has been added to the IC KEEP and
+IC DELEte commands.  This allows internal coordinate entries
+to be selected based on whether it is an improper type of IC entry.
+This keyword works in conjuntion with atom selections.
+
+...........................................................................
+manip/scalar.src - (SCALar STAT format)
+
+      The format for print in the SCALar STAT command has been
+changed from (F12.6) to (1PG12.6) so that very large and very
+small property values can be displayed.
+
+...........................................................................
+graphics/graphx.src - (Titles for CHARMM graphics)
+
+      A general titling facility has been added to CHARMM graphics.
+This graphics facility is fully supported on Apollo, partially
+supported on SGI, and will soon be supported on IBM-RS and
+HPUX (HP730s).
+
+...........................................................................
+pert/epert.src - (partial ST2 implem.)
+
+      I have started to implement the ST2 water model with the PERT
+code.  This implementation is not complete, but the new code is
+nonintrusive.
+
+...........................................................................
+util/selcta.src - (new key numbers and names)(new tokens)
+
+      One new operator;   .BYGROUP. <factor>
+      And one new token;   IGROup  <int1> : <int2>
+have been added to allow the selection of atoms based on electrostatic
+groupings.
+
+      Several keynames have been added to allow the query of the
+characterstics of selected atoms;
+
+    ?SELATOM  - number of first atom selected
+    ?SELIRES  - number of first residue selected
+    ?SELISEG  - number of first segment selected
+
+    ?SELTYPE  - name of first atom selected
+    ?SELRESI  - resid of first residue selected
+    ?SELSEGI  - segid of first residue selected
+    ?SELRESN  - residue type of first atom selected
+    ?SELCHEM  - chemical type of first atom selected
+
+These new keywords are in addition to the existing keyword;
+    ?NSEL    - Number of atoms selected
+
+...........................................................................
+vibran/vibio.src - (card format NMD files)
+
+      A card NMD (normal mode) file is now supported.  This allows
+normal mode files to be moved more easily between machine types.
+
+...........................................................................
+io/coorio.src - (preselection before data conversion)
+
+      When reading coordinates in card format in CREAD, the values of
+the coordinates for a trial atom are now not decoded until the target
+atom has been identified.  This allows coordinate files with a few
+very poorly placed atoms (e.g. '**********') to be read as long as the
+offending atom is not selected.
+
+===========================================================================
+
+2.2 MSI Development
+===========================================================================
+CHMGR Note: 22-Oct-92
+  All the modifications described are integrated with the tag msi9210
+===========================================================================
+   Name             : Ryszard Czerminski
+   Email Address    : ryszard@connection.prospect.com
+   Institution      : Molecular Simulations, Inc.
+   Date             : October 10, 1992
+===========================================================================
+
+(1) Bugfixes
+
+correl/solana.src
+  - READV changed to CREADV
+
+gener/update.src
+  - WRNLEV decreased to 0 for missing parameters
+
+images/images.src
+  - in IMATOM call to SPLITI introduced this fixes the bug not
+    allowing to use more then single digid in image patches atom names;
+    now the only limitation is caused by the fact that atom names are CHAR*6
+    (with two characters for number, this is why also MXNPA=100 is  replaced
+    by MXNPA=99
+  - IPRES(9),IMPRES(9) replaced by IPRES(MXNPA),IMPRES(MXNPA)
+  - MXNPA=100 replaced by MXNPA=99 (we have only 2 characters for number
+    before atom name)
+
+util/string.src
+  - ports (ardent, hpux, ibm)
+
+input/vibran.inp
+  - second OPEN WRITE CARD UNIT 7 NAME @9FOR007.DAT commented. It is
+    producing "OPEN" not possible - error message on hp.
+
+
+(2) FORTRAN conversion
+
+    dynamc/dynio.src
+    image/crystal.src, eimage.src, images.src, imagio.src
+    io/mainio.src, parmio.src, psfres.src, rtfio.src, trajio.src, univio.src
+    nbonds/heurist.src
+
+Folowing files are waiting to resolve differences with Bernie:
+    dynamc/prssre.src
+    image/upimag.src
+    io/coorio.src
+
+
+(3) COMPILATION PROBLEMS:
+
+quantum code has to be compiled with -static on sgi and -K on hp
+
+===========================================================================
+
+
+2.3 Hanyang University Development
+===========================================================================
+CHMGR Note: 22-Oct-92
+  All the modifications described are integrated with the tag hyu9210
+===========================================================================
+   Name             : Youngdo Won
+   Email Address    : won@gaya.kreonet.re.kr
+   Institution      : Hanyang University
+   Date             : October 22, 1992
+===========================================================================
+
+(1) FORTRAN Conversion
+
+    dynamc/prssre.src, trnphi.src
+    energy/ecnstr.src, enst2.src, eutil.src, intere.src, printe.src
+    machdep/machio.src, space.src, startup.src
+    main/miscom.src
+    manip/pucker.src, rgyr.src, scalar.src, shake.src
+    misc/drawsp.src, hbuild.src, sbound.src, surfac.src
+    util/array.src, datstr.src, parse.src, random.src, util.src
+
+
+(2) HPUX Porting
+    The build/hpux directory is added.  install.com and test22.com are
+modified.  ar option -ruvco is changed to -ruvc in .mk files and
+install.com.  The makemod script is modified to generate the modified .mk
+files.  Makefile_hpux is written.  Not all testcases are checked out;
+especially note that maatest runs into an infinite loop.
+
+===========================================================================
+
+
+[3] About c23f Developmental Version
+
+     Most of FLECS source files are converted to FORTRAN.  Files before and
+after conversion are gathered in tammy.harvard.edu:/prog/chmgr/fortraned
+directory, which contain the same subdirectories as charmm/source.
+'before' files have an extension designating the version number (e.g.,
+g2, a1, etc.) and 'after' files are taged with the developer's initial
+(brb for Bernie Brooks, rcz for Ryszard Czerminski, ydw for Youngdo Won,
+sf for Stefan Fischer, djt for Doug. Tobias, td for Tom Ngo, etc.)
+As of the c23f release, graphics/apodraw.src, apograph.src, drawit.src,
+graphx.src and nbonds/nbndgc.src are still in FLECS.
+     Graphics routines will be replaced with a FORTRAN version SGI modules.
+Tom Ngo has deposited nbndgc.src in FORTRAN, however it contains new
+files and will be put into c23f1.  At the February 13th CHARMM meeting,
+we decided to keep the charmm/tool/flexfort.f translator for the time
+being.
+    All DEC/CMS headers are removed from source files and the INCLUDE
+directory designator charmm_22 is replaced by charmm_23.  We put
+"CHARMM Element ..." on the first line of each each file.
+
+
+==============================================================================
+
+[4] c23f1 Change Log
+    CHARMM c23a2 (October 25, 1992) to c23f (March 1, 1993) and
+                                       c23f1 (March 15, 1993)
+
+4.1 New .mk files and Makefiles
+
+    When new modules are added, we must add the corresponding module
+make files (such as solvation.mk).  In this version, we simplify
+machine specific makefiles by using RANLIB macro definition in
+Makefile_{machine_type}.  ranlib is needed by convex, ibmrs, sun
+and stardent platforms and not needed by cray and sgi machines.
+For hpux, it is no longer required in recent OS versions.
+
+
+4.2 Tom Ngo's BYCUbe Nonbond List Generation Method
+
+    source/nbond/nbndgc.src is converted to FORTRAN.  During the 
+conversion Tom made an enhancement in speed by using ZTBL.
+
+Files Modified:
+ doc/nbonds.doc
+   - Added docs for BYCUbes and ZTBL representation.
+ source/fcm/dimens.fcm
+   - Added variables to support ZTBL representation of exclusion list.
+     The ZTBL representation of the exclusion list is a data structure
+       that allows you to find out whether a given pair of atoms is
+       1-2, 1-3, or 1-4, in a manner that is much more efficient than
+       traversal of the exclusion list as it is currently implemented
+       (JNB/INBLO).
+     Dimens.fcm now contains two extra constants, MAXZ14 and MXZ14G,
+       the maximum sizes of the atom-atom and group-group ZTBL lists,
+       respectively.
+ source/fcm/psf.fcm
+   - I added Z14 and Z14G, which are the ZTBL forms of the atom-atom and
+       group-group exclusion lists, respectively.  Additionally, there 
+       are a number of supporting variables with names that start with
+       Z14 and Z14G.  The contents of these tables are generated in 
+       MAKINB and MAKGRP.
+ source/machdep/machutil.src
+   - Added Convex-specific code and corrected some spellings.
+       The Convex library routines etime() and dtime(), at least as of
+       ConvexOS 9.1, contain bugs that cause them to add 0.25s to the
+       apparent CPU time, sporadically.  I added Convex-specific code that
+       calls the library routine cputime() instead.
+ source/nbonds/enbond.src
+   - Corrected a bug in calculation of RVAL.
+     The old code for estimating the size of the group-group nonbonded
+       interaction list (JNBG) gave figures that are overestimates by a
+       factor of (NATOM/NGRP)**4.  On any machine, this wasted memory, and
+       one some machines, this caused out-of-memory errors.  In consultation
+       with Bernie Brooks, I rewrote the line, adding an extra buffer that
+       accounts for the the non-infinitesimal size of groups.
+ source/nbonds/nbexcl.src
+   - MAKINB and MAKGRP now generate the ZTBL rep'ns of the exclusion list.
+     Added some ZTBL-specific arguments to the end of the MAKINB and MAKGRP
+       argument lists.  This code also produces some user feedback that
+       shows the degree of compression achieved, if PRNLEV.GE.6.
+ source/nbonds/nbndgc.src
+   - Converted to FORTRAN and overhauled to use ZTBL representation.
+     This version of NBNDGC.SRC is quite different from the old one.
+     It is all in FORTRAN, and it should be somewhat faster.  Its speed
+       can easily be doubled by removing a Quicksort phase, which
+       unfortunately is required by the present energy routines.
+
+File Added:
+ source/util/ztbl.src
+   - Brand-new file.  Support for ZTBL representation.
+     This file contains routines that construct the ZTBL representation of
+       the exclusion list and access it.
+
+
+4.3 Georgios Archontis' RISM integration
+
+===========================================================================
+   Name             : Georgios Archontis
+   Email Address    : georgios@tammy.harvard.edu
+   Date             : February 11, 1993
+===========================================================================
+
+Integration of the RISM module into CHARMM
+
+    The RISM module enables the calculation of the site-site
+pair correlation functions c(r) and radial distribution 
+functions g(r) for a multi-component molecular system. It
+can also calculate the chemical potential of solvation of
+a solute species into a solvent and decompose this potential
+into the energy and entropy of solvation.
+    The module is invoked from a standard CHARMM input file 
+using the command "RISM". This command transfers control to
+the subroutine RISM (work/rism.src). The subroutine RISM 
+uses its own character*4 parser to recognize two kinds of
+
+   commands:
+
+     1) the familiar CHARMM commands GOTO, LABEL, OPEN, CLOSE,
+	STREAM, RETURN, SET, DECR, INCR and IF [EQ NE GT GE LT LE]  
+	Currently only the commands OPEN CLOSE STREAM RETURN call 
+	the appropriate CHARMM routines, whereas the other commands
+	call routines in the directory solvation. The main CHARMM 
+	parser can be used for all the above commands, and this is
+	to be done in the near future.
+     2) the RISM-specific commands READ, WRITE, SETUP, EDTZM,
+	STATE, ITERATE, DERIVATIVE, SOLVATION, ANALYSIS
+	Exiting the RISM module is achieved by the command STOP
+
+==========================================================================
+
+Files modified
+--------------
+ main/charmm.src         - call to RISM added
+ main/iniall.src         - initialization of RISM-specific variables added
+
+Files added
+-----------
+ solvation/rism.src      - controls the execution of the RISM-related 
+			   commands by calling the appropriate routines.
+ solvation/charli.src    - manipulates character strings. 
+ solvation/coorman.src   - generates the intramolecular matrix and the 
+			   structure.
+ solvation/cycles.src    - controls the iteration cycle that solves 
+			   the integral equation
+ solvation/deriv.src     - solvent density response 
+ solvation/fft.src       - controls the fourier transform of the 
+			   integral equation.
+ solvation/imsld.src     - FFT transformation routines (for other 
+			   machines than CONVEX) and matrix inversions.
+ solvation/rismio.src    - reads/writes RISM related input and output
+			   and generates pointers for the arrays.
+ solvation/soluu.src     - solute-solute calculation
+ solvation/soluv.src     - solute-solvent calculation
+ solvation/solvv.src     - solvent-solvent calculation
+ solvation/solvation.src - calculates thermodynamics
+ solvation/state.src     - dielectric correction, analysis of the pair 
+			   correlation functions.
+
+ fcm/charli.fcm          - declares RISM-related functions 
+ fcm/control.fcm         - iteration variables
+ fcm/distri.fcm          - RISM related arrays for the distribution functions
+			   and pointers
+ fcm/fft.fcm             - FFT variables 
+ fcm/rism.fcm            - dimensions of RISM arrays
+ fcm/rismio.fcm          - character variables
+ fcm/struc.fcm           - internal parameter arrays, residue and segment 
+			   names, coordinates.
+
+ doc/rism.doc            - RISM documentation
+ test/c23test/rism.inp   - Input test file for RISM calculations.
+
+===========================================================================
+
+
+4.4 Masa Watanabe's Dynamics Code Development
+
+===========================================================================
+   Name             : Masa Watanabe
+   Email Address    : watanabe@tammy.harvard.edu
+   Date             : February 16, 1993
+===========================================================================
+
+1. VELOCITY VERLET INTEGRATOR 
+
+   Two integrator (Verlet and Leap-frog) methods presented in CHARMM have
+   own flavors, but Verlet method are handling velocities rather awkward,
+   and the form of the integrator may introduce some numerical imprecision.
+   On the other hand Leap-frog minimizes loss of precision on a computer,
+   but it do not handle the velocities in a completely satisfactory manner.
+   Velocity Verlet integrator can store positions, velocities, and 
+   accelerations all at the same time and minimizes round-off error.
+
+Files modified:
+           dynamc/dcntrl.src
+          
+Files added:
+           fcm/tbmts.fcm
+           dynamc/dynamvv.src   : Velocity Verlet method
+
+----------------------------------------------------------------------------
+2. NOSE-HOOVER CONSTANT TEMPERATURE METHOD 
+
+   [Based on S. Nose, JCP 81, 511 (1984) and W.G. Hoover, Phy. Rev. A 31, 
+   1695 (1985)]
+   This is an another type of constant temperature method, but 
+   an equilibration time in the vicinity of the desired temperature is
+   faster than other routines which are available in CHARMM. Also
+   multi-temperature controls are also developed. Different parts or
+   molecules in the different heat baths in order to equilibrate the system
+   faster and keep the system in the desired temperature well. This method 
+   can now works in Verlet and Velocity Verlet integrators.
+
+   There are two different way to call Nose-Hoover method during dynamics
+   run. One way to call it simply types:
+
+   DYNA NOSE QREF desired heat bath dumping  TREF desired temperature -
+
+Files modified:
+           dynamc/dcntrl.src     
+           dynamc/dynamcv.src
+           dynamc/dynamvv.src
+           dynamc/dynio.src
+           main/charmm.src
+           main/iniall.src
+
+Files added:
+           fcm/nose.fcm
+           dynamc/nose.src
+
+
+-----------------------------------------------------------------------------
+3. MULTIPLE TIME-SCALED METHOD
+
+   [Based on Tuckerman, Berne, Martyna, JCP 97, 1990 (1992)]
+   Tuckerman et al proposed a reversible RESPA algorithm recently. Previous 
+   MTS methods had the disadvantages lied in the loss of accuracy due to 
+   the approximation of holding the slow variables fixed while integrating 
+   the equations for the fast variables. But in this reversible RESPA
+   equations of motions were derived from Liouville operators and Trotter
+   theorem. This method give more accurate dynamics than previous methods.
+   In this method, you can specify up to three different time steps in
+   dynamic simulation run.
+
+Files modified:
+           fcm/bases.fcm  
+           fcm/tbmts.fcm
+           dynamc/dcntrl.src 
+           dynamc/dynamvv.src 
+           image/nbondm.src
+           image/upimag.src
+           nbonds/nbondg.src
+           nbonds/nbonds.src
+           main/charmm.src
+           main/iniall.src
+
+Files added:
+           fcm/tbmtsp.fcm
+           energy/enemts.src
+           image/emts.src
+
+===========================================================================
+
+4.5 MMFP and NMR codes from Benoit Roux 
+
+MMFP (Miscellaneous Mean Field Potential) Code added
+Files modified:
+           doc/commands.doc
+           source/main/charmm.src
+           source/energy/energy.src
+           source/energy/printe.src
+File added:
+           doc/mmfp.doc
+           source/misc/mmfp.src
+           source/fcm/mmfp.fcm
+
+NMR analysis commands added
+Files modified:
+           doc/commands.doc
+           source/charmm.src
+Files added:
+           doc/nmr.doc
+           source/misc/nmr.src
+           source/misc/zmat.src
+
+===========================================================================
+
+4.6 Bugfixes
+
+ (1) source/correl/correl.src
+   - Bernie R. Brooks
+     Unused lable 105 removed
+
+ (2) source/dynamc/prssre.src
+   - Bernie R. Brooks
+     VXY to VXZ in the EPRESS(PIZX) term
+
+ (3) source/gener/update.src
+   - Stefan Fischer
+     (IMGFRQ.GT.0) is fixed by (IBMGRQ.NE.0)
+
+ (4) source/io/trajio.src
+   - Bernie R. Brooks
+     ##IFN NOIMAGES code fixed
+
+ (5) source/io/univio.src
+   - Bernie R. Brooks
+     Name translation bug fixed: .OR. to .AND.
+
+ (6) source/machdep/cstuff.c
+    - Youngdo Won
+     HPUX definition added to access getunamef
+
+ (7) source/manip/fshake.src
+   - Stefan Boresch
+     ##IFN NOST2 code fixed
+
+ (8) source/manip/scalar.src
+   - Bernie R. Brooks 
+     1PG14.6 replaces 1PG12.6
+
+ (9) source/manip/shake.src
+   - Doug. J. Tobias
+     SHKCRA called added (fixed) for Cray version
+
+(10) source/manip/wrgaus.src
+   - Youngdo Won
+     FMT extraneous blank error fixed
+
+(11) source/minmiz/conjug.src
+   - Ryszard Czerminski
+     Divided by zero bug fixed
+
+(12) source/misc/aspener.src and source/fcm/surface.fcm
+   - Bernie R. Brooks
+     Replaced with the most recent NIH version
+
+(13) source/misc/noe.src
+   - Bernie R. Brooks
+     Parsing bug fixed
+
+(14) source/nbonds/enbfast.src
+   - Bernie R. Brooks
+     A nonstandard SKIP bug fixed
+
+(15) source/pert/pert.src
+   - Stefan Boresch
+     ##IF NOMISC code fixed
+
+(16) source/rxncor/rxndef.src
+   - Stefan Boresch
+     ##ENDIF moved
+
+
+4.7 New testcase for CHARMM version 23 (test/c23test)
+
+ (1) test/c23test/mmfptest.inp
+   - Benoit Roux
+     Miscellaneous Mean Field Potential testcase
+
+ (2) test/c23test/mtsm1.inp
+     test/c23test/mtsm2.inp
+   - Masa Watanabe
+     Multiple Time Scale dynamics testcases
+
+ (3) test/c23test/nmrtest1.inp
+     test/c23test/nmrtest2.inp
+     test/c23test/nmrtest3.inp
+     test/c23test/zmat.inp
+   - Benoit Roux
+     NMR Utility testcases
+
+ (4) test/c23test/nose1.inp
+     test/c23test/nose2.inp
+   - Masa Watanabe
+     Nose thermostat testcase
+
+ (5) test/c23test/rism.inp
+   - Georgios Archontis
+     RISM calculation testcase
+
+==============================================================================
+
+[5] c23f2 Change Log
+    CHARMM c23f1 (March 15, 1993) to c23f2 (August 15, 1993)
+
+     Fixes cumulated during the period of March 15, 1993 and August 1,
+1993 are incorporated into this release.  In addition to bugfixes, we
+add supports for DEC ALPHA running under OSF (identified by 'alpha' for
+the installation), DEC stations running under Ultrix (dec), MacIntosh
+System 7 (not installable by install.com), and PARALLEL architecture
+platforms.  Problems with RISM and MTS code have been fixed.  We have
+incorporated the current NIH PARALLEL code and Leo Caves' REPLICA
+program into the current version.  The following details the
+modifications done over c23f1 version.
+
+5.1 New .mk files and build procedure
+     There are files removed and added in this releases:
+
+     Files/Directories Removed:
+       build/cray/
+       build/convex/
+       build/hpux/
+       build/ibmrs/
+       build/sgi/
+       build/stardent/
+       build/sun/
+       source/fcm/charli.fcm
+       source/fcm/external.fcm
+       source/fcm/rismio.fcm
+       source/solvation/charli.src
+       source/solvation/imsld.src
+
+     Files Added:
+       build/UNX/
+       source/fcm/replica.fcm
+       source/gener/replica.src
+       source/graphics/grutil.src
+       source/graphics/iris_graphics.c
+       source/machdep/parcomm.src
+       source/machdep/socket.c
+       source/manip/corman3.src
+       source/quantum/addlnat.src
+       source/quantum/qmnbnd.src
+       test/c23test/replica.inp
+
+Note that build/{platform} directories are replaced by build/UNX, which
+is the generic UNIX build directory.  UNX supports Cray, Convex, HP-UX,
+IBM RS/6000 AIX, SGI, Stardent, DEC ALPHA OSF, DEC Ultrix, and SUN.
+The installation procedure, install.com, is modified to handle the
+unified build directory.
+     The module makefiles are adjusted for the removal/addition in the
+source code.  We use the following set of macros for certain source
+files.  For all other files, $(FC2) is used.
+
+       UNX/energy.mk
+         $(FCR) enefst2.f
+         $(FCR) enefst2q.f
+         $(FC3) enefvect.f
+       UNX/image.mk
+         $(FCR) imnbf2p.f
+         $(FC3) imnbfp.f
+         $(FC0) nbondm.f
+       UNX/manip.mk
+         $(FC3) fshake.f
+         $(FCR) fshake2.f
+       UNX/nbonds.mk
+         $(FCR) enbf2.f
+         $(FCR) enbf3.f
+         $(FCR) enbf4.f
+         $(FCR) enbf5.f
+         $(FC3) evdwf.f
+         $(FC3) ewaldf.f
+         $(FCR) ewaldf2.f
+         $(FCR) nbndf2p.f
+         $(FC3) nbndfp.f
+       UNX/quantum.mk
+         $(FC0) addlnat.f
+         $(FC0) qmdata.f
+         $(FC0) qmene.f
+         $(FC0) qmjunc.f
+         $(FC0) qmnbnd.f
+         $(FC0) qmpac.f
+         $(FC0) qmset.f
+
+
+5.2 ALPHA and DEC versions
+  - Xiaoling Liang (Harvard) and Mary E. Karpen (CMU)
+    c22f1 is ported to a Digital ALPHA platform 3000/500 running OSF/1
+V1.2 and Dec FORTRAN 3.3.1 and to a DEC 5000/240 station running under
+Ultrix.
+
+Files modified:
+    fcm/number.fcm
+    machdep/machutil.src, machio.src, startup.src, space.src
+Files added:
+    build/UNX/Makefile_alpha, build/UNX/Makefile_dec
+
+
+5.3 NIH Developments
+  - Bernard R. Brooks
+    Email Address    : brbrooks@helix.nih.gov
+    Institution      : National Institutes of Health
+    Date             : April 23, 1993 and August 5, 1993
+
+    This report covers corrections of c23f1 and further software
+development for the period of March 15, 1993 to August 5, 1993.
+
+(1) Macintosh (System 7) code added
+Files modified:
+    dynamc/dynamc.src
+    dynamc/dynamcv.src
+    dynamc/dynamvv.src
+    fcm/iochan.fcm
+    fcm/number.fcm
+    machdep/machio.src
+    machdep/machutil.src
+    machdep/space.src
+    machdep/startup.src
+    quantum/qmdata.src
+    quantum/qmset.src
+
+(2) QUANTUM Code Corrections
+1) April 23, 1993
+    There were several problems with the quantum code that have been
+fixed.  The QM/MM code has been worked on to clean up several
+remaining major problem.  New skip flags for energy subcomponents in
+the QM and QM/MM potential have been introduced.  We added the Bohr
+radius (needed for consistency in QM code and to provide agreement
+with MOPAC).  We fixed the problems in the calls to MECI, to SS, and
+the variable miscmatch problems for CUC.  This code still gives
+different answers on different machines (the problems are in the QM
+section).  This code is being replaced in the near future, but the
+fixes here are an definite improvement.   Note: when using TRAVEL code
+with the QM/MM code, make sure you increase the DELTa value.
+Files modified:
+    main/charmm.src
+    main/iniall.src
+    energy/eutil.src
+    energy/printe.src
+    quantum/addlnat.src
+    quantum/qmdata.src
+    quantum/qmene.src
+    quantum/qmjunc.src
+    quantum/qmpac.src
+    quantum/qmset.src
+    fcm/consta.fcm
+    fcm/quantm.fcm
+
+2) August 5, 1993
+    A major bug in the QM/MM code has been found and corrected.  The
+van der Waal group nonbond list was missing elements due to an improper
+interpretation of the group-group exclusion list in CHARMM (It's a two
+state list, not a 3 state as in the atom-atom exclusion list).  All
+vdw interactions between QM and MM group where any QM atom had an
+exclusion or a 1-4 interaction with any MM atom was not computed.
+This caused major problems in certain situations where there was a
+strong electrostatic attraction with no compensating vdw interaction.
+The bug was found when dealing with the HIV protease where we found
+energy changes of several hundred Kcal/mol during a minimization
+procedure.  New code to add link and place link atoms has been written.
+Files modified:
+    main/charmm.src
+    quantum/qmset.src
+    util/chutil.src
+    nbonds/nbutil.src
+Files added:
+    quantum/addlnat.src
+    quantum/qmnbnd.src
+
+(3) Graphics
+    Graphics code converted to FORTRAN and overhauled.  Versions that
+work with Xwindows and GL are in progress.  All remaining FLECS code
+removed.  A new preflx keyword, NODISPLAY, builds a version which
+produces HPGL, PLUTO FDAT, and LIGHT .atm files without requiring any
+screen display capabilities.  The SG (IRIS) code incorporation is
+relatively untested.  Postscript file output similar to HPGL (but much
+nicer looking, hopefully) is also planned.  The X11 development will
+begin shortly, using a model similar to original Apollo graphics.
+Files modified:
+    graphics/apodraw.src                 APOLLO
+    graphics/apograph.src                APOLLO
+    graphics/inter.src                   APOLLO
+    graphics/ugap.src                    APOLLO
+    graphics/drawit.src
+    graphics/graphx.src
+    fcm/graph.fcm     (referenced in main/iniall.src, manip/corman.src)
+    main/charmm.src
+    dynamc/dynsub.src
+Files added:
+    graphics/grutil.src      (new file)
+    graphics/iris_graphics.c (new file)  IRIS
+
+(4) Leap-Frog Integrator
+    I have continued to develop the leap-frog integrator in CHARMM.  I
+have modified Berendsen's method so that it will work for very small
+systems and for very weak coupling constants.  I have added a langevin
+implicit Euler scheme (from Tamar Schlick), I have corrected the high
+frequence correction code printout.  Now it is possible to use SHAKE
+with CPT and get correct pressures and temperatures.
+    Another change is that I now calculate the change in potential
+energy due to the constant pressure algorithm.  The energy lost due to
+the changes in box size is now added to the kinetic energy during the
+constant temperature procedure.   This allows the constant presure
+code to nearly conserve energy and allows the constant temperature
+code to be used with weak coupling times.  This correction was made
+when we found that water box simulations with the Berendsen's method
+were running about 10 degrees too cold when both temperature and
+pressure coupling times of 1ps were used.  Now the correct target
+temperature is achieved, even in the limit of very weak couplings.
+Files modified:
+    dynamc/prssre.src
+    dynamc/dynamc.src
+    dynamc/dcntrl.src
+    main/iniall.src
+
+(5) New COOR DIST command
+    The COOR DISTance command has been overhauled and has additional
+features.  One such feature is the ability to get g(r) plots from
+trajectory files using atom selections.  It has several other
+features.  The new syntax is:
+
+COOR DISTance
+
+    {  WEIGhting vector-spec               atom-selection           }
+    {                                                               }
+    { [UNIT int] [CUT real] [ENERGy [CLOSe]] 2X(atom-selection) -   }
+
+            { [Nonbonds] } { [NO14exclusions] } { [NOEXclusions] }  -
+            { NONOnbonds } {    14EXclusions  } {    EXCLusions  }
+
+         [TRIAngle]   [ HISTogram HMIN real HMAX real HNUM integer  -
+                         [HSAVe] [HPRInt] [HNORm real] [HDENsity real] ]
+
+For a more detailed description, see the documentation.
+Files modified:
+    manip/corman.src
+    manip/corman2.src
+File added:
+    manip/corman3.src
+
+(6) New Parsing Options
+    The IF command will be expanded to allow commands such as:
+
+      IF ?ENER .GT. ?VDW  THEN GOTO label
+or
+      IF ?NSEL .LT. 8 THEN GOTO label
+
+The old syntax continues to work.  Other parsing enhancements are also
+new.
+Files modified:
+    main/miscom.src
+    fcm/string.fcm
+    util/parse.src
+    util/string.src
+
+(7) NOE Overhaul
+    The NOE restraints now work on groups of atoms and with the
+flexibly defined distance restraint.
+Files modified:
+    fcm/noe.fcm
+    fcm/pert.fcm
+    fcm/dimens.fcm
+    main/iniall.src
+    quantum/addlnat.src
+    gener/modpsf.src
+    energy/enemts.src
+    energy/energy.src
+    pert/epert.src
+    pert/pert.src
+    misc/noe.src
+
+(8) PARALLEL Code
+    The parallel code in C23f1 is old and it has not been updated.  A
+new version has been introduced.
+Files modified:
+    main/iniall.src
+    main/miscom.src
+    correl/anacor.src
+    dynamc/prssre.src
+    energy/energy.src
+    energy/eutil.src
+    fcm/parallel.fcm
+    gener/update.src
+    image/crystl.src
+    image/xtlfrq.src
+    machdep/cstuff.c
+    machdep/machio.src
+    machdep/machutil.src
+    machdep/parallel.src
+    machdep/parcomm.src
+    machdep/startup.src
+    minmiz/abner.src
+    minmiz/egrad1.src
+    minmiz/egrad2.src
+    minmiz/nraph.src
+    minmiz/steepd.src
+    misc/surfac.src
+    molvib/molvco.src
+    nbonds/nbonds.src
+    pert/epert.src
+    rxncor/path.src
+    util/title.src
+    vibran/redbas.src
+    vibran/vibcom.src
+    vibran/vibio.src
+    vibran/vibsub.src
+    dynamc/dynamc.src
+    energy/enefscal.src
+    energy/enemts.src
+    nbonds/enbfast.src
+    nbonds/etable.src
+    nbonds/heurist.src
+    nbonds/nbondg.src
+Files added:
+    machdep/parcomm.src
+    machdep/socket.c
+
+(9) CID and CPD Declaration Correction
+    The array CID was declared as REAL*8 in several places (it never was).
+CPD was placed in the wrong PARAM common block.
+Files modified:
+    energy/cenerf.src 
+    energy/enefvp.src
+    fcm/param.fcm
+
+(10) Calling Argument Mismatch Fix: ENBF5NV
+    The call and the routine ENBF5NV did not match.  This routine is
+not tested and rarely used (I have only one test case that runs it,
+and I'll bet that no one has ever used it...).  I have fixed the
+problem, but routines like this should be removed from CHARMM.
+Files modified:
+    nbonds/enbf5.src
+    nbonds/evdwf.src
+
+(11) Removal of DFLOAT
+    DFLOAT is not a standard function.  Its use made no difference in
+any of the places where it was used.  All uses of DFLOAT have been
+removed. 
+Files modified:
+    dynamc/dynamcv.src
+    dynamc/dynamvv.src
+
+(12) STAR code removed
+    I removed the ##IF STAR code (obsolete).
+File modified:
+    energy/enefvect.src
+
+(13) Atom limit exceeded warning.
+    An atom limit warning (fatal) has been added when the GETE command
+is used with images and the COMP option, where NATOMT exceed MAXA.
+File modified:
+    energy/eutil.src
+
+(14) Use of PRNLEV, WRNLEV and IOLEV
+    Several print lines have been added without reference to WRNLEV or
+PRNLEV.  I have fixed these problems where I find them.  This is VERY
+important for parallel CHARMM and it is a reasonable coding standard.
+Likewise, IOLEV must be used for any I/O other than printing.  I will
+fix these as I find them.
+File modified:
+    nbonds/nbexcl.src
+
+(15) CORDYN Bugfix
+    I introduced a bug in CORDYN in converting to Fortran.  I fixed it.
+File modified:
+    correl/cordyn.src
+
+(16) Group boundaries in GENERATE command
+    The group boundaries were not being properly set in
+gener/genpsf.src for fisrt and last residue patching.  This problem
+has been fixed.  Some PSF's may change and energies using the GROUP
+methods may be different.  This makes the method similar to what was
+obtained with CHARMM22, but there are cases where the boundaries are
+different than what CHARMM22 provided.  This algorithm is an
+improvement and makes more intuitive sense.
+File modified:
+    gener/genpsf.src
+
+(17) Atom selection overhauled
+    The atom selection routine had problems.  I did a major overhaul
+and tested it well.  We have been using the tested routine for several
+months at NIH.  There were several bugs in operator priority and in
+the use of the .around. operator. I vectorized most atom loops, and
+removed copy procedure during push and pop.
+File modified:
+    util/selcta.src
+
+(18) String print bug.
+    RMV found a discrepancy in the how the last two arguments are
+passed to PRNTST, particularly from SELRPN; He noticed it when he
+omitted the END keyword from an atom selection while testing the all
+Fortran graphics code; the consequence is an infinte output loop,
+requiring a keyboard interrupt.  I fixed this by modifying how PRNTST
+handles its input values (-1 now means: put the full string on one line.
+File modified:
+    util/string.src
+
+(19) MAKGRP call bugfix
+    The calls to the routine MAKGRP have the wrong number of arguments.
+I fixed this by adding a flag and making all of the calls consistent.
+Files modified:
+    image/upimag.src
+    nbonds/nbexcl.src
+
+(20) Function call update
+    The old function SETMSC had been replaced with SETMSR.  The calls
+in misc/mmfp.src and rxncor/travel have been brought up to date.
+Files modified:
+    misc/mmfp.src
+    rxncor/travel.src
+
+(21) Error in DIEWRN call.
+    In string.src, there was a bad call to DIEWRN.  This has been
+replaced with a call to WRNDIE.
+File modified:
+    util/string.src
+
+(22) Duplicate energy term addresses in fcm/energy.fcm
+    Both EHARM and GEO were given the same address.  The addresses for
+GEO and MDIP were increased by one. Note that this modification
+changes the dynamic restart files.
+File modified:
+    fcm/energy.fcm
+
+(23) Branch into IF block
+    Branch into IF block code in misc/testch.src has been rewritten.
+File modified:
+    misc/testch.src
+  
+(24) NOE restraint remapping
+    Added remapping code for NOE restraints when atoms are added or
+deleted.  Now when atoms are added or deleted, the NOE restraints
+remain correct.  Restraints involving deleted atoms are removed.
+Files modified:
+    gener/modpsf.src
+    quantum/addlnat.src
+
+(25) FORMAT statement moved
+    Move format line 100 in nbonds/heurist to outside conditionally
+compiled code.
+File modified:
+    nbonds/heurist.src
+
+(26) Group-group list print
+    The routines that print the nonbond list have been improved so
+that the group-group lists are also printed.  In the past, only
+atom-atom lists were considered.  This enhancement was needed to debug
+the QM/MM problem, but is generally useful so I include it as a
+permanent feature.
+Files modified:
+    nbonds/nbutil.src
+    util/chutil.src
+
+(27) Print control bugfix
+    Minor print control bug fixed.
+File modified:
+    dynamc/dynamcv.src
+
+(28) ##IF - Code fix
+    There were several problems with ##IF code.  Since some linkers
+require zero undefined globals, these problems must be fixed.
+
+1) The NOSE integration code called two of the BLOCK routines (BLASGN
+and I4VAL), but there is no check to see if the BLOCK code has been
+compiled.  I moved the routines BLASGN and I4VAL to outside the ##IF
+BLOCK conditional code in block.src.  Also, a ##IFN NOIMAGES was added
+before the call to IMHBON.
+File modified:
+    pert/block.src
+
+2) The routine INCRYS was inside a ##IFN NOIMAGES, but the routine
+is need in INIALL for all cases.  I moved it.
+    image/crystal.src
+
+3) There were calls to XTLAXS and XTLLAT in READCV that were not
+blocked with NOIMAGES.  A call to IMFILL in READYN.  I added
+appropriate ## control code to fix this.
+File modified:
+    dynamc/dynio.src
+
+4) The arrays REACLS and PRODLS were used in NBNDGC without testing
+the "##IF TSM" flag.  I fixed it.
+File modified:
+    nbonds/nbndgc.src
+
+5) The use of QBLOCK in nbonds/evdwf needed to be sectioned off with
+##IF QBLOCK
+File modified:
+    nbonds/evdwf.src
+
+(29) JOIN/RENUMBER developed.
+    A "JOIN segid RENUMBER" feature will be added in the JOIN command.
+This allows resid's to be made sequential within a single segment.
+File modified:
+    gener/modpsf.src
+
+(30) SCALAR command enhanced.
+    The scalar commands have been enhanced.  The ASP arrays (IGNOre,
+ASPV, and VDWS) are now accessible.  There is a sort option for the
+SHOW command.  There is a new MASS keyword for the STATistics and
+AVERage commands
+File modified:
+    manip/scalar.src
+
+(31) PERT/FLAGS
+    The energy term flags will be properly used in PERT.  Thus it will
+be possible to multiply separate energy terms by a scale factor.
+Files modified:
+    pert/pert.src
+    pert/epert.src
+
+(32) IMPLICIT NONE
+    The IMPLICIT statement is not in a standard FORTRAN, which is
+replaced with ##INCLUDE '~/charmm_23/impnon.fcm'
+Files modified:
+    misc/nmr.src
+    misc/zmat.src
+    util/ztbl.src
+
+
+5.4 CMU Bugfixes
+  - Charles L. Brooks, Chiachin Tsoo, Mary E. Karpen, Bill Young
+    Email Address    : brooks@chem.cmu.edu; tsoo@chem.cmu.edu
+    Institution      : Carnegie Mellon University
+    Date             : May 3, 1993
+
+(1) CSHAKE problem with fixed atoms
+    Correct expressions for hmassi & hmassj when there are fixed atoms.
+File modified:
+    manip/cshake.src
+
+(2) Improper intrinsic function argument type
+    The original code, SQRT( DBLE(N) ) is translated to fortran code
+on cray as SQRT(     (N) ), which gives improper intrinsic function
+argument type.  It is fixed to SQRT( DBLE( FLOAT(N) ) ).
+File modified:
+    minmiz/tnpack.src
+
+(3) Machine(Cray) dependent arithmatic error
+    Subroutine DCNTRL control the dynamic runs from heating to
+equilibrating by comparing the variable J to I=(FINALT-FIRSTT)/TEMINC.
+However, this expression doesn't always give the expected values.
+This is a problem of number representation on the cray.  Cray people
+said "cray uses different number representation than other
+machines(convex, sgi, sun, ibm and dec use IEEE)".  One way to get
+around with this problem might be:
+
+ instead of 
+            I=(FINALT-FIRSTT)/TEMINC,
+ let
+            I=(FINALT-FIRSTT)/TEMINC*(1.+1.d-13)
+
+File modified:
+    dynamc/dcntrl.src
+
+(4) Illegal option ls -1
+    Use -c instead of -1 for ls as in "set mdlist = `/bin/ls -c | sed
+'/fcm/d' | sed '/main/d'"
+File modified:
+    install.com
+
+(5) Angle correlation bugfix
+    The following modifications to correl/anacor.src (SUBROUTINE
+ANACOR) and corrio.src (SUBROUTINE SHOWTS) will correct the average &
+rms fluctuations reported by the correl facility for angle data.
+Files modified:
+    correl/anacor.src
+    correl/corrio.src (SUBROUTINE SHOWTS)
+
+(6) Fixed atom coordinates in dynamics trajectory reading
+    Fixed atoms are not read in when BEGIN starts the trajectory read
+after the first frame.  The fixed atoms are normally defined only in
+the first frame of a dynamics trajectory.  When the first frame is not
+asked for by the user (i.e., BEGIN points to a trajectory frame later
+than the first frame), the fixed atom data is never read, and the atom
+coordinates are left undefined.  This is due to the RDFST logical
+always being defined as .false.  This variable appears to have been
+defined as .true. under certain conditions in charmm19, but this line
+is dropped in charmm22 & charmm23.
+File modified:
+    dynamc/dynio.src
+
+(7) EHOUSS arguments corrected
+    The subroutine EHOUSS returns the incorrect eigenvalues on some
+machines.  The original subroutine EHOUSS is called from the
+subroutine EIGRS with the following statement: 
+
+    CALL EHOUSS(A,N,D,WK(ND),WK(ND))
+
+  The EHOUSS subroutine has arguments:
+
+    SUBROUTINE EHOUSS(A,N,D,E,E2)
+
+E2 is computed within EHOUSS as the square of E.  On return, there is
+a machine-dependent ambiguity in the values stored in WK.  WK is
+subsequently used in the routine EQRT2S, which requires EHOUSS's E
+vector (not E2) as input.
+File modified:
+    util/matrix.src
+
+(8) Record overflow
+    A write statement in the PERTAN subroutine caused a record
+overflow on some machines, causing a core dump.  Format statement #43
+was changed to avoid record overflows.  NOTE: upon the request from
+Bernie, it is fixed as in the following
+     ##IF LONGLINE
+       43  FORMAT(' PERTRES> LSTART=',F12.5,' LSTOP=',F12.5,
+          *       ' EPRTOT=',F12.5,'  EFORWARD=',F12.5,' EPREF=',
+          *       F12.5,' DIFAVE=',F12.5,' DIFFLC=',F12.5)
+     ##ELSE
+       43  FORMAT(' PERTRES> LSTART  =',F12.5,' LSTOP=',F12.5,
+          *       ' EPRTOT=',F12.5,/,10x,'EFORWARD=',F12.5,' EPREF=',
+          *       F12.5,' DIFAVE=',F12.5/10x,'DIFFLC  =',F12.5)
+     ##ENDIF
+File modified:
+    pert/pert.src
+
+(9) CPU time on a DEC Alpha machine
+    Added an ALPHA section to the beginning of TIMRB.  This section
+does not contain the "EXTERNAL SECNDS" line, since the SECNDS function
+as written does not run on the alphas (ITIME writes an integer*8 array
+rather than an integer*4 array).  The secnds function used is thus the
+one provided in the alpha's libfor.a library.  Add the following in
+the subroutine TIMBR.
+    ##ELIF ALPHA
+          REAL SECNDS
+          REAL CPUREF
+          REAL CPUT,ZEROT
+          REAL TARRAY(2), TREF, ETIME
+          EXTERNAL ETIME
+          SAVE CPUREF,TREF,ZEROT
+     100  CONTINUE
+          TREF = ETIME(TARRAY)
+File modified:
+    machdep/machutil.src
+
+(10) 4-byte integer sort bugfix
+    The cshkin2 routine (in cshake.src) incorrectly sorts the 'constr'
+vector on machines that use four-byte integers.  This is because the
+util/sort.src routine SORT sorts only integer vectors, but the cshkin2
+passes two integer vectors and one real*8 vector to SORT.  When
+integers are defined as eight-bytes (as on the Cray Y/MP), the real
+vector is sorted correctly along w/ the two integer vectors.  With
+four-byte integers, however, the sort splits each real*8 value, giving
+wrong answers.
+    An integer vector (ktemp) containing the original indices
+(1,2,...,nconst) has been defined & is sent in to SORT rather than the
+real vector (rtemp).  This vector is then used to fill the constr
+vector in the proper order via indirect addressing.  This is
+summarized in brief below:
+        rtemp(i) = constr(i), i = 1, nconst
+        ktemp(i) = i        , i = 1, nconst
+        call sort (itemp,jtemp,ktemp)
+        constr(i) = rtemp(ktemp(i)), i = 1, nconst
+File modified:
+    manip/cshake.src (cshkini and cshkin2 routines)
+
+
+5.5 Bugfixes and Enhancements
+    The following are the records of cumulated bugfixes and minor
+enhancements done at Harvard and by requests from users.
+
+(1) Floating Point Error: Division by Zero Fix
+  - Leo Caves, reported
+File modified:
+    minmiz/abner.src
+
+(2) CUTIM < CUTNB Case Fix
+  - Chandra Verma, reported
+When CUTNB is reset to a value less than CUTIM, reset CUTIM to the new
+CUTNB value and inform it to the user.
+File modified:
+    nbonds/nbutil.src
+
+(3) Heuristic Update Problem Fix on Cray Version
+  - Stefan Fischer
+    Bug occurs in CRAY executables built with the UNICOS pre-compiler
+directive.  Even if heuristic non-bond updating is requested, i.e.
+INBFRQ is set to -1 , the non-bond list update is done at EVERY energy
+call, whatever the non-bond cut-off buffer zone or the next set of
+coordinates are.
+    One of the UNICOS pre-compiler directives in NBONDS.SRC causes the
+execution of
+            CALL NBNDF(BNBND, LNBND, MAXJNB, MXJNBG, X, Y, Z, ATSX,
+     &                 ATSY, ATSZ, CMPLTD)
+to be skipped.  The NBNDF() subroutine does the job of copying the
+latest X,Y,Z coordinate set into the ATSX,Y,Z array, which is used to
+determine how much the coordinates change from one energy call to the
+next and whether an update should be done.
+    Adding code ( that copies the X,Y,Z coordinates into ATSX,Y,Z ) to
+the section of code that is executed only if the UNICOS pre-compiler
+directive is set.
+File modified:
+    nbonds/nbonds.src
+
+(4) A Problem in RXNDEF Fix
+  -  Jeffry D. Madura
+     Email Address    : madura@hobbes.chem.uh.edu
+     Institution      : University of South Alabama
+     Date             : Aug. 6, 1992
+     When defining the reaction coordinate distance in the rxncor
+module the above error message was reported.  After looking at the
+source code I found that the if statement was not properly
+constructed.  I made the change indicated below, recompiled and ran
+the job.  Everything appeared to work correctly.  I have NOT be able
+to fully test the rest of the reaction coordinate code since I am not
+familiar with this module. I will be running a few more tests to
+determine if all is working well.
+     To fix the error message I changed line 247 in the file
+RXNDEF.SRC 
+      if (ind1.ne.80) call wrndie(-3, '<RXNDEF>',
+to
+      if (deftyp(ind1).ne.80) call wrndie(-3, '<RXNDEF>',
+
+(5) Branch into IF block
+  - Masakatsu Watanabe
+    Branch back in MTS code in dynamvv.src to label 2222 jumps into an
+IF block.  Also IMTS is used outside of an MTS conditional compile
+section in dcntrl.src.
+Files modified:
+    dynamc/dcntrl.src
+    dynamc/mts.src
+
+(6) TRAVEL Improvement
+  - Stefan Fischer
+    "Floating point exception" on Cray upon first call to sub-routine
+DBRENT is due to the fact that the REAL*8 variable LASTU (not explicitly
+initialized in DBRENT) is given a CHARACTER value by the Cray compiler
+upon program startup.  This problem is fixed.
+    CPR (alias REFINE) in TRAVEL module is improved to handle the case
+when convergence reaches the limits of numerical precision.
+File Modified:
+    rxncor/travel.src
+
+(7) Extension of Solanal ANALysis command:
+  - Arnaud Blondel
+    A command -CROSs- was added to allow a cross analysis on two
+selected subsets of atoms. For the moment the exclusion of the couple
+of atoms belonging to the same SEGId is not implemented.  The keyword
+CROSs cannot be selected with the following options: WATer, SITE,
+IKIRkg, ISDIst, IFDBf.   IVAC, IMSD, IFMIn were not tested with CROSs.
+Files modified:
+    correl/solana.src
+    doc/corman.doc
+    test/c22test/solanal.inp
+
+(8) RISM code overhauled
+  - Georgios Archontis and Youngdo Won
+    The solvation module (RISM program) was introduced into CHARMM
+c23f and had its own parser and utility routines.  Once initiated by
+the command "RISM", it runs by itself without communicating with other
+module programs.  It takes up about 25 Mbyte space of memory over the
+c23f version.
+    We have fixed all the problems that have been reported.  Name
+conflict of CHECK and CONSTR is resolved.  IMSL routines are moved to
+util/imsl.src from solvation/imsld.src and MISC and other parsing
+routines are replaced by RDCMND and appropriate string functions.  For
+memory management, all big arrays are allocated on HEAP.
+Files modified:
+    fcm/distri.fcm
+    fcm/exfunc.fcm
+    fcm/struc.fcm
+    solvation/coorman.src
+    solvation/cycles.src
+    solvation/deriv.src
+    solvation/fft.src
+    solvation/rism.src
+    solvation/rismio.src
+    solvation/solvation.src
+    solvation/state.src
+    util/imsl.src
+    util/parse.src
+    util/string.src
+Files removed:
+    fcm/charli.fcm
+    fcm/external.fcm
+    fcm/rismio.fcm
+    solvation/charli.src
+    solvation/imsld.src
+
+(9) REPLica: Support for replicas added.
+  - Leo Caves
+    Tool to support LES and MCSS calculations. Performs replication of
+arbitrary regions of PSF. Data structure interfaces to non-bond list
+generation routines, to perform appropriate exclusions. In association
+with BLOCK can provide appropriate energy/force normalizations for
+various classes of methods employing replicas. For details see
+replica.doc.
+    Introduced REPLICA and REPDEB preprocessor directives.  Code for
+cray multi-tasking list generation routine used inference and has not
+been tested.  Convex parallel code works fine.  Added miscellaneous
+parameters to report number of atom/group pairs from non-bonded
+routines: ?NNBA, ?NNBG, ?NNBI for atom/group/images respectively.  For
+replica-based exclusions from the list there are ?NRXA and ?NRXG for
+atom and group exclusions.
+Files added:
+	gener/replica.src
+	fcm/replica.fcm
+	c23test/replica.inp
+	doc/replica.doc
+Files modified:
+	main/charmm.src:
+	main/iniall.src:
+	nbonds/cnbnd.src:
+	nbonds/nbexcl.src:
+	nbonds/nbndf2p.src:
+	nbonds/nbndfp.src:
+	nbonds/nbndgc.src:
+	nbonds/nbondg.src:
+	nbonds/nbonds.src:
+	manip/scalar.src:
+	util/selcta.src:
+	gener/modpsf.src:
+
+==============================================================================
+
+[6] c23f3 Change Log
+    CHARMM c23f2 (August 15, 1993) to c23f3 (February 1, 1994)
+
+6.1 NIH Modifications and Enhancements
+  - Bernard R. Brooks
+    Email Address    : brbrooks@helix.nih.gov
+    Institution      : National Institutes of Health
+    Date             : January 15, 1994
+
+(1) Dihedral time series in CORREL.
+    Fixed problems with recent diheral code in correl to account for
+torsional timeseries.  The correct fluctuation is now determined.
+The extra processing has been removed from the SHOW command because
+the data may no longer be valid for this processing when MANTIME
+commands are present in a script.  A new command option "MANTime
+CONTinuous-dihedral" has been added to allow a dihedral timeseries to
+be unfolded to a continuous function. 
+Files modified:
+    correl/anacor.src
+    correl/mantim.src
+    correl/corrio.src
+..............................................................................
+
+(2) Bug in energy time series in CORREL.
+    Fixed bug in NEXTE in anacor regarding step number.  The incorrect
+nonbond list was being used to determine the energy due to an
+off-by-one error.
+Files modified:
+    correl/anacor.src
+..............................................................................
+
+(3) New CORREL MANTIME options.
+    New options (RATIo and KMULt) added to the CORREL MANTIME command.
+Files modified:
+    correl/correl.src
+    correl/mantim.src
+..............................................................................
+
+(4) Bug in the CORREL SHOW command.
+
+An incorrect pointer was used when multiple time series were present.
+Files modified:
+      correl/corrio.src
+..............................................................................
+
+(5) Bug in the CORREL ENTER VECT command.
+    The conversion to FORTRAN was suboptimal.
+Files modified:
+      correl/correl.src
+..............................................................................
+
+(6) Analytic default for COOR SURF.
+    Recent modifications to the COOR SURF command have been removed.
+The default for the COOR SURF command has reverted to the analytic
+answer.  The anaylitic answer is less expensive and more accurate. 
+The older Lee and Richard's algorithm may still be invoked by specifying
+a nonzero RPRObe value.  The maximum number of contacts that a sphere may
+have has been increased from 15 to 35.
+Files modified:
+    misc/surfac.src
+..............................................................................
+
+(7) SCALAR READ command.
+    A new SCALAR READ option has been added.  It allows values to be
+entered from a file.  The use is:
+      OPEN READ CARD UNIT 12 NAME file.dat
+      SCALar WMAIn READ 12 SELE ... END
+which will read selected entries to the weighting array.
+Files modified:
+    manip/scalar.src
+..............................................................................
+
+(8) NODISPLAY keyword made functional
+    There were problems with NODISPLAY keyword.
+    - in graphics/graphx.src EOF was not inititalized
+    - in graphics/drawit.src VECMMULN index K fixed
+    - prefx.f changes all INTEGER*2 to INTEGER on CRAY.
+Changed everything except apollo system calls to INTEGER, so graphics
+code now works on the CRAY as well.  Fixed a bug in the graphics
+transformation routine for non Apollo.  The SHELL command option now
+functional for IRIS and UNIX machines.
+Files modified:
+    fcm/graph.fcm
+    fcm/graphdep.fcm
+    graphics/drawit.src
+    graphics/grutil.src
+    graphics/apodraw.src
+    graphics/apograph.src
+..............................................................................
+
+(9) Completion of X windows CHARMM graphics.
+    New files to support X display and PostScript output for CHARMM
+graphics.  machdep/xdisp.c has to be modified for port to other than
+HPUX machines.
+Bug in graphics:
+    If apodraw.src is not compiled with -K than stereo feature does
+not work.  For now we just compile it with -K, but this is 20% slower
+executable!
+files modified:
+    graphics/apograph.src
+    graphics/graphx.src
+    graphics/grutil.src
+    graphics/apodraw.src
+    graphics/psdraw.src
+    graphics/drawit.src
+    machdep/xdisp.c    (new)
+    graphic/psdraw.src (new)
+
+    Changed name of subroutine READV because it is the name of system
+routine used by Xlib.
+files modified:
+    correl/solana.src
+
+..............................................................................
+
+(10) SGI Graphics
+    Put #ifdef sgi in the first line. Also change cc line in
+build/UNX/Makefile_sgi to cc -cckr -Dsgi. This prevents other machines
+without gl include files to compile this file.
+files modified:
+    graphics/iris_graphics.c
+..............................................................................
+
+(11) Setting environment variables in CHARMM.
+    A new command: ENVIronment <shell-environment-variable> <value>
+It does the same as specifying setenv in csh.  It is useful for
+defining X display within charmm scripts before running the graphics
+command and it is used for the GAMESS interface.
+files modified:
+    main/miscom.src
+..............................................................................
+
+(12) Numbers added in number.fcm
+    Some reorganization of number.fcm was performed.  Numbers are
+placed in sequential order (to find them with less effort.  The CRAY
+and ALPHA keywords were removed.  The number THR60 (360.D0) was
+renamed to THR6TY to make it consistent with the rest of the 3 digit
+numbers.
+Files modified:
+    fcm/number.fcm
+    pert/icfix.src
+    pert/tsmp.src
+    solvation/fft.src
+..............................................................................
+
+(13) Some ## control bugs fixed.
+    ##IF NOMISC and ##IF NOVIBRAN code modified
+Files modified:
+    gener/modpsf.src
+    image/crystal.src
+    misc/zmat.src
+    quantum/addlnat.src
+..............................................................................
+
+(14) Bug in the "IC DELEte IMPRoper ..." fixed
+    There was a logic error for the deleting improper IC table
+entires.  For current executables, the code allows all impropers to be
+deleted with a null atom selection (IC DELEte IMPRoper SELEct NONE
+END).  This correction allows the selection of improper entries to
+delete, as implied in the documentation.  The same problem was also
+corrected in the IC KEEP command.
+Files modified:
+    manip/intcor.src
+..............................................................................
+
+(15) Resolve Possible Name Conflicts with GAMESS
+    Problems with SGI compiler which doesn't like the same name for
+SUBROUTINE or FUNCTION and COMMON block. It was easier to change this
+in CHARMM than in GAMESS.
+Names and files modified:
+
+              VIRIAL -> VIRAL :  dynamc/prssre.src
+                                 energy/enemts.src
+                                 energy/energy.src
+                                 pert/epert.src
+
+              GAUSS -> GAUSSI :  dynamc/dynutil.src
+
+              GAMMA -> GAMA :    misc/nmr.src
+
+              CONNEC -> CONECT : misc/testch.src
+..............................................................................
+
+(16) Parallel code enhanced.
+    Problems were encountered when running SBOUND in parallel.  Needed
+to change QCMPRS to .FALSE. in call to RDCMND.  A global combine
+option has been added to TRANSI for printing the total forces and torques.
+Files modified:
+    misc/sbound.src
+    image/images.src
+    machdep/parallel.src
+
+    Changed CALL PARUPDATE and fixed the subroutine
+Files modified:
+    gener/update.src
+
+    Added new keyword (PARAGON) for Intel Paragon machine.
+Files modified:
+    machdep/machio.src
+    machdep/parallel.src
+..............................................................................
+
+(17) DBLE usage removed
+    The use of the DBLE function has been removed.  Its use was superfluous.
+Files modified:
+    minmiz/tnpack.src
+    gener/replica.src
+    misc/nmr.src
+..............................................................................
+
+(18) Single precision overflow conditions corrected.
+    Arbitrary large values have been replaced with RBIG in DCNTRL and
+in NOSECT.  The order of operations for calculating a constant has
+been modified so that intermediate values do not overflow in NMRRAT.
+Files modified:
+    dynamc/dcntrl.src
+    misc/nmr.src
+    dynamc/nose.src
+..............................................................................
+
+(19) FREHP added
+    Missing FREHP statement for array IPAX in manip/corman.src
+Files Modified:
+    manip/corman.src
+..............................................................................
+
+(20) Nonstandard Intrinsic function DNINT replaced.
+    The HPUX compiler doesn't accept DNINT as a function name so it
+was changed to its generic name ANINT
+Files modified:
+    dynamc/dcntrl.src
+..............................................................................
+
+(21) Add link atom bug.
+    Off-by-one bug fixed in the generation of link atoms in the middle
+of a PSF.
+Files modified:
+    quantum/addlnat.src
+..............................................................................
+
+(22) A variable added for TNPACK.
+
+Files modified:
+      fcm/contrl.fcm
+..............................................................................
+
+(23) Some errors in solvation code fixed.
+    The routines EDTZM2, MKGR, MKWR, and CLOSURE were called with the
+wrong number of arguments.  I fixed the call to EDTZM2, but the other
+are still wrong (the needed correction was not transparent).
+Files modified:
+    solvation/coorman.out
+    solvation/soluu.out
+    solvation/soluv.out
+..............................................................................
+
+(24) Floating point numbers in calling sequences removed.
+    Double precision constants are removed from calling sequences.
+The common, fcm/number.fcm, is employed in a few places.  In general,
+numbers such as 3.0D0 should not be found in the code outside of a
+##IFN SINGLE block.  The routines in quantum/qmpac.src had some major
+cleaning due to lots of "D0" in intrinsic functions.  These changes
+are needed for Compiling on the IBM RS6K.
+Files modified:
+    quantum/qmpac.src
+    quantum/qmset.src
+    rxncor/adiab.src
+    rxncor/travel.src
+    minmiz/tnpack.src
+    rxncor/adiab.src
+    solvation/fft.src
+    solvation/soluu.src
+    solvation/soluv.src
+    solvation/solvation.src
+    solvation/solvv.src
+..............................................................................
+
+(25) More TABS removed.
+Files modified:
+    solvation/solvation.src
+    solvation/rismio.src
+..............................................................................
+
+(26) Redunant compilation keywords removed.
+    The keywords IBMVM and VM were all replaced by IBMVM.
+    The keywords IBMMVS and MVS were all replaced by IBMMVS.
+Files modified:
+    machdep/machutil.src
+..............................................................................
+
+(27) Unused routines removed:
+    The obsolete routine, SHAKES, has been removed.
+Files modified:
+    manip/shake.src
+..............................................................................
+
+(28) Unused variables removed:
+    Old unused variables have been removed.  A check was made to
+ensure that they are not contained within ##IF blocks.
+Files modified:
+    correl/anacor.src
+    energy/cenerf.src
+    energy/enefst2.src
+    energy/enefst2q.src
+    energy/enefvp.src
+    gener/makphi.src
+    gener/psfsum.src
+    image/cnbndm.src  
+    image/imnbf2p.src 
+    manip/cstran.src  
+    manip/fshake.src  
+    manip/fshake2.src 
+    manip/rgyr.src    
+    manip/shake.src 
+    minmiz/conjug.src
+    molvib/molinp.src 
+    molvib/molvio.src 
+    molvib/molvsb.src 
+    nbonds/cenbf.src  
+    nbonds/enbf2.src  
+    nbonds/enbf3.src  
+    nbonds/enbf4.src  
+    nbonds/ewald.src  
+    nbonds/ewaldf.src 
+    nbonds/ewaldf2.src
+    nbonds/nbexcl.src 
+    nbonds/nbndf2p.src   
+    pert/icfix.src   
+    pert/icpert.src  
+    pert/tsme.src    
+    pert/tsmp.src    
+    pert/tsms.src
+..............................................................................
+
+(29) PREFX.SRC overhauled.
+    The PREFX program has been overhauled.  The new code has the
+following features: 
+    - It allows "!" comments at the end of valid fortran statements.
+    - Conversion to single precision is performed ONLY if the SINGLE
+      keyword is present.
+    - It allows the use of identifier comments in ## statements.
+      For example:
+          ##IF PERT (pertprint)
+          ...
+          ##ELSE (pertprint)
+          ...
+          ##ENDIF (pertprint)
+This makes the code easier to read and allows ##ENDIF statements to be
+uniquely identified.  A fatal error is flagged if the identifiers do
+not match.  Most of the features of the previous prefx have been
+retained.
+Files modified:
+    prefx.f to prefx.src
+
+------------------------------------------------------------------------------
+
+6.2 KI/CSB Bugfixes
+  - Lennart Nilsson
+    Email Address    : ln@pike.csb.ki.se
+    Institution      : Departement of Medical Biophysics, Karolinska Institute
+    Date             : December 13, 1993
+
+(1) Long Filename Support
+    CHARMM crashes at first coordineate write with filenames >32
+characters used.
+Files modified:
+    machdep/machio.src
+
+(2) Nbond List Generation
+    crash due to integer overflow when natoms > 65536 (2**16).  With
+large systems (NATOMS>65536) the estimate of space allocation in
+nbonds causes an integer overflow (natoms*natoms then is too large for
+an integer*4 variable)
+Files modified:
+    nbonds/nbonds.src
+
+(3) CORREL Update Problem
+    correl calls update, which is usually not necessary when you
+analyze trajectories, and consequently crashes if parameters and
+coordinates are not present.  The PSF and trajectory should be
+sufficient.
+Files midified:
+    correl/correl.src
+
+(4) CORREL PUCKER Timeseries
+    The timeseries is a 2dim vector, currently returns same value in
+both positions,  I will also change the pucker calculation to use the
+Altona&Sundaralingam definitions instead of currently used
+Cremer&Pople; the latter is more general (applicable also to rings w/
+> 5 members), but not as commonly used as the former. (A&S and C&P
+give very similar results)
+Files modified:
+    correl/correl.src
+
+(5) Date Format Fix
+    On all other machines dates are reported in the month/day/year
+order (this is in misc. titles & banner etc.) - to be consistent and
+use the same order thruout (and to stick to the historically given
+m/d/y order from the good old vax/vms days where the routine IDATE had
+its arguments in that order) the wrapper routine idate has to be
+changed sligthly.
+Files modified:
+    machdep/machutil.src
+
+(6) Parameter Checking in SURFAC
+    Added check that parameters are actually present.
+Files Modified:
+    misc/surfac.src:
+
+(7) Rotation Matrix
+    Added COOR ROTAte MATRix variant (also updated corman.doc) 
+Files Mofified:
+    manip/corman.src
+
+(8) GETUNAMEF
+    Get username via getunamef on DEC/ALPHA as on our other platforms.
+Files Modified:
+    machdep/machutil.src
+
+(9) Miscellaneous Problems in SOLANA
+    Get DTC from icntrl array in trajectory and place FREEAT and TEMP
+on HEAP.  Correct calls to corfuncb  heap(VX) --> heap(VZ).
+Files Modified:
+    correl/solana.src
+
+------------------------------------------------------------------------------
+
+6.3 Extension of Command Line Parameter Handling
+  - Leo Caves
+    Email Address    : caves@tammy.harvard.edu
+    Institution      : Harvard University
+    Date             : January 18, 1994
+
+    A command line parameter token can now be a string rather than
+just one of the single characters 0-9,a-z,A-Z. For substitution a
+token is indicated by the use of the @ character as before. The token
+is end-delimited by any non-alphanumeric character. In the case that
+the token is not found in the parameter table, a check is made to see
+if the first character of the token is itself a token in the parameter
+table. If this single character token is in the table, the
+corresponding value is substituted -- this is the necessary scheme to
+allow backwards compatibilty with the old parameter substitution,
+which allowed parameters embedded in strings.  For unambiguous token
+detection, "protect" the token with brackets {} --- this allows for
+the use of non alphanumerics in tokens such as -,_.  To test whether a
+token is in the parameter table, use @?token.  This will substitute 1
+if token is in the table, 0 if not. This is useful (in conjuction with
+the IF command) for setting defaults. (Note thar @? takes precedence
+over any of the built-in parameters such as ?ENER etc. --- it is
+parsed first). eg. if @?maxTemp .eq. 0 set maxTemp = 300. 
+
+    At present the parameter table is dimensioned as follows (set in
+cmdpar.fcm):
+        Maximum number of parameters: 256 
+        Maximum token length:          32 
+        Maxiumum value length:        128 
+        For current sizes use command: SHOW PARAmeters VERBose.
+
+    A extension to the parameter manipulation commands such as
+INCR,DECR,MULT etc. has been made in the form of a rudimentary
+expression evaluator, accessible through the LET command (one of the
+miscallaneous commands). It has a VERY SIMPLE syntax definition, it is
+not a recursive descent parser!  It supports compound assignment
+operators +=,-=,*= etc.., It has some functions SQRT, SIN, MAX, MIN,
+ACOS, INT etc... It supports the usual binary operators, +,-,*,/ and %
+(MOD). There are no precedence rules, so you have to split the
+expressions appropriately. eg. The following expression:
+
+a = (( @a + max( @b, 4) ) ** sqrt(@area) ) / acos(-1)
+needs to be dealt with as follows:
+SET tmp ! all variables on LHS of a LET statement need to be defined. 
+LET a += max @b 4
+LET tmp = sqrt @area
+LET a = @a ** @tmp
+LET a /= acos -1
+
+OK, so its not very sophisticated ! But it is robust to argument,operator 
+and range errors. 
+
+    All of the above information is contained in miscom.doc. The
+testcase test/c23test/cmdpar.inp gives examples of usage.
+
+Files added:
+    util/cmdpar.src
+    test/c23test/cmdpar.inp
+Files modified:
+    fcm/cmdpar.fcm
+    fcm/string.fcm
+    fcm/exfunc.fcm
+    util/string.src
+    util/parse.src
+    main/miscom.src
+    machdep/startup.src
+    doc/miscom.doc
+
+------------------------------------------------------------------------------
+
+6.4 Modifications of Multiple Time Step (MTS) Method
+  - Masa Watanabe
+    Email Address    : watanabe@tammy.harvard.edu
+    Institution      : Harvard University
+    Date             : January 20, 1994
+
+    MTS energy routines were modified in order to unify with standard
+routines.  MTS energy and image energy routines were converted into
+standard energy and image energy routines.  Both enemts.src and
+emts.src were deleted.
+
+Files Modified:
+    fcm/bases.fcm
+    fcm/tbmts.fcm
+    fcm/tbmtsp.fcm
+    dynamc/mts.src
+    dynamc/dcntrl.src
+    dynamc/dynamvv.src
+    main/charmm.src
+    main/iniall.src
+    energy/energy.src
+    image/eimage.src
+    nbonds/nbonds.src
+Files Added:
+    fcm/tbmtsp1.fcm
+Files Deleted:
+    energy/enemts.src
+    image/emts.src
+
+------------------------------------------------------------------------------
+
+6.5 CMU Development
+  - Charles L Brooks, III, Mary E. Karpen and W. S. Young
+    Email Address    : brooks@chem.cmu.edu
+    Institution      : Carnegie-Mellon University
+    Date             : January 18, 1994
+
+(1) Clustr code integrated into CORREL
+    The CLUSTER command clusters time series data obtained within the
+CORREL facility.  The data are grouped into sets with similar time
+series values, using euclidean distance as the dissimilarity measure
+between different time frames of a set of time series.  It is useful,
+for example, for grouping together similar conformations or energy
+levels.
+
+Files Modified:
+    correl/correl.src
+    doc/correl.doc
+Files Added:
+    correl/clustr.src
+    test/c23test/clustst.inp
+    test/data/clustst.hex
+
+(2) STRING common block renamed.
+    Changed common name STRING to STRNGC to avoid compiler errors.
+Files Modified:
+    fcm/string.fcm
+
+(3) Generic intrinsic function name used
+    Changed DABS and DSQRT to generic functions ABS and SQRT, needed
+when not double precision, i.e., Cray and ALPHA machines.
+Files Modified:
+    dynacm/dynamvv.src
+
+(4) Compiler directive correction
+    Changed cray compiler directive from CDIR$ SCALAR to CDIR$ NOVECTOR.
+SCALAR is not a valid directive.
+Files Modified:
+    nbonds/nbndfp.src
+
+(5) Dyanmics with NOE restraints
+    Dynamics fails when using noe restraint.  DDF must be initialized
+to zero.
+Files Modified:
+    misc/noe.src
+
+(6) FREHP calls fixed
+    incorrect FREHP statements after call to CNBNDM
+Files Modified:
+    source/nbonds/nbonds.src
+
+(7) Memory management problem fixed
+    code logic does not allow RSCSHK to release heap space allocated
+in CSHKINI
+Files Modified:
+    manip/shake.src
+
+(8) FASTER CRAYVEC & FSHIFT
+    The code in cenbf.src (invoked w/ "FASTer CRAYvec") does not
+currently support the force shift nonbonded option "FSHIFT".
+A nonparallel routine (ENBFV8) is called instead.  Vector/parallel
+code is added to cenbf.src to implement the nonbonded electrostatic
+option FSHIFT.
+Files Modified:
+    nbonds/enbond.src
+    nbonds/cenbf.src
+
+
+------------------------------------------------------------------------------
+
+6.6 Other Harvard Fixes
+  - Xiaoling Liang     (lia@tammy.harvard.edu)
+    Georgios Archontis (georgios@tammy.harvard.edu)
+    Masa Watanabe      (watanabe@tammy.harvard.edu)
+    Institution      : Harvard University
+    Date             : January 26, 1994
+
+(1) IASVEL=0 correction to the Verlet integrator
+  - Xiaoling Liang
+    The IASVEL 0 option does not assign comparison coordinates as
+initial velocity.
+Files Modified:
+    dynamc/dcntrl.src
+
+(2) QMMMDATA block data
+  - Xiaoling Liang and Youngdo Won
+    Initial data assigned through data block QMMMDATA get lost on
+ALPHA, DEC and SGI machines so quantum can not be performed.  Unused
+common block /VERSION/ removed from am1parm.fcm amd qmdata.src
+Files Modified:
+    fcm/am1parm.fcm
+    quantum/qmset.src
+    quantum/qmdata.src
+
+(3) BLOCK COMP CONT
+  - Xiaoling Liang
+    keyword CONT added for TI calculations in BLOCK which gives an
+ensemble average as a function of time.
+Files Modified:
+    pert/block.src
+
+(4) FREHP call added 
+  - Masa Watanabe
+    Charles L Brooks III reported the problem of missing FREHP
+statement.  It is fixed in the Nose dynamics code and the testcase is
+modified accordingly.
+Files Modified:
+    dynamc/dcntrl.src
+    test/c23test/nose2.inp
+
+(5) RISM code cleaned
+  - Georgios Archontis
+    Adds three 0.0's in the calling argument of CLOSURE calls in
+soluu.src and soluv.src.  IWK(NN) changed to IWK(6*DVECT+150) in
+fft.src.  Remove unused variables (NU and NUU) in fcm/distri.fcm.
+test/c23test/rism.inp is modified to show diatomic solute with two
+different sites.  doc/rism.doc is updated
+Files Modified:
+    solvation/soluu.src
+    solvation/soluv.src
+    solvation/fft.src
+    fcm/distri.fcm
+    test/c23test/rism.inp
+    doc/rism.doc
+
+==============================================================================
+
+[7] c23f4 Change Log
+    CHARMM c23f3 (February 1, 1994) to c23f4 (August 15, 1994)
+
+Bugfixes reported to charmm-bugs@tammy during the development cycle
+are incorporated.  The bug-reports are collected in ~ftp/charmm/Bugs.
+
+(1) Stack allocation errors in ANACOR
+  - Mary E. Karpen (B940425.mek and B940526.mek)
+    Several errors in stack allocation in the call to TRNPHI from
+ANACOR are fixed.  Stack allocation for TRNPHI arrays are moved from
+correl to ANACOR.  Since only DIHE time series require these arrays,
+the stack space in ANACOR is only allocated for these time series.
+Also, rather than have dihedral angle transitions calculated as the
+default, it makes more sense to calculate them by request.  This is
+done by adding the option TRANsition on the ENTE DIHE command line.
+(doc/correl.doc is updated)
+Files Modified:
+    /correl/correl.src
+           /anacor.src
+
+(2) SOLANA bugs
+  - Ryszard Czerminski (B940523.rcz)
+    Calling argument list is corrected for the RDNEXCO call, and a
+warning message is coorected.
+  - Jay Banks (B940317.jb)
+    Crystal test corrected from QCRYS=(IC11.EQ.1) to QCRYS=(IC11.NE.0)
+File Modified:
+    /correl/solana.src
+
+(3) Dynamics extra step
+  - Bernard R. Brooks (B940210.brb and B940601.brb)
+    When running a DYNA LEAP MD step with SHAKE and with equilibration /
+heating (or with saving a restart file) determined by NCYCLE would
+take an incorrect (extra) step.  The DO I=ATFRST,ATLAST block is added
+to fix the problem.
+File Modified:
+    /dynamc/dynamc.src
+
+(4) Parallel code addition/correction
+  - Bernard R. Brooks (B940210.brb and B940601.brb)
+    Parallel code added.
+  - Leo Caves and Arnaud Blondel
+    A bug in the addition is fixed by ##INCLUDE '~/charmm_23/stream.fcm'  
+File Modified:
+    /dynamc/dynio.src
+
+(5) Correct virial summation
+  - Bernard R. Brooks (B940601.brb)
+    When running dynamics using the PARALLEL code, the VIRI and VIRKe
+values reported during dynamics with SHAKE are incorrect.  This is due
+to shake corrections to the internal virial coefficient not being
+globally summed before being added to EPROP(VIRI) in routine VIRSHK
+(dynamc/prssre.src) called from DYNAMC (dynamc/dynamc.src).  The same
+problem occurs with the pressure tensor EPRESS(VIXX).  The problem is
+fixed to get the virial summed across processors.  The fix needs to
+include INTEGER RPXX,RPYY,RPZZ,RPXY,RPXZ,RPYZ in reawri.fcm
+Files Modified:
+    /dynamc/prssre.src
+    /fcm/reawri.fcm
+
+(6) Trajectory reading with crystal data
+  - Bernard R. Brooks (B940601.brb #9)
+    The routine CREAD has been updated to allow the reading of
+trajectory files with crystal data.  Also, coordinates with bad fields
+will be ignored (instead of causing a fatal error). 
+File Modified:
+    /io/coorio.src
+
+(7) Command line parsing
+  - Bernard R. Brooks (B940601.brb #10)
+    Command line parsing is fixed for multi-character command line
+parameters.
+File Modified:
+    /machdep/startup.src
+
+(8) FREHP calls added
+  - Mary E. Karpen (B940712.mek #3)
+    Heap allocated in SHKCOM is not released on program exit.  This
+does not affect charmm job output in any way, except in the "SPACE
+CURRENTLY IN USE" report at the end of the job.  The space is freed,
+so SPACE USED is zero at job end, allowing other potential problems
+with heap allocation to be detected.  The IF (QSHAKE) condition to
+freeing the cray shake heap (RSCSHK) is added for consistency, though
+this makes no difference in the current code logic.
+Files Modified:
+    /main/iniall.src
+    /manip/shake.src
+
+(9) ORINTC problem with parallel code
+  - Bernard R. Brooks (B940601.brb #11)
+  There was a bug in the routine ORINTC which caused CHARMM to fail on
+  parallel systems when the COOR ORIEnt command was executed.
+File Modified:
+    /manip/corman2.src
+
+(10) ATOMID correction
+  - Bernard R. Brooks (B940601.brb #12)
+    Atom identifier was wrong in printing dihedral restraints.  Calls
+to ATOMID are fixed.  Only the printout was affected.
+File Modified:
+    /manip/cstran.src
+
+(11) PHASE value fix
+  - Arnaud Blondel (B940601.ab)
+    Wrong values (sign flip) can be returned if PseudoPhase is close
+to 90 or -90 due to infinity of tan(PsPhase).  For unknown reason the
+same phenomenon occurs around 180.
+File Modified:
+    /manip/pucker.src
+
+(12) TRACE bugfix
+  - Bernard R. Brooks (B940601.brb #14)
+    There was a bug in COOR ORIE RMS command in computing the trace of
+the coordinate Lagrangian matrix in FROTU.  W(3) is changed to W(4).
+File Modified:
+    /manip/rotlsq.src
+
+(13) ING14P fix
+  - Jay Banks (B940603.jb)
+    In the IF (QPERT) block, the index into ING14P array should be
+NXIP not NXI.  Two lines are corrected; ING14P(NXI) to ING14P(NXIP).
+File Modified:
+    /nbonds/nbondg.src
+
+(14) BLOCK code cleaned
+  - Arnaud Blondel (B940302.ab and B940303.ab)
+    Coefficient matrix print out is corrected by checking QBLOCK upon
+the BLOCK END command.  BLOCK usage flags are removed upon the BLOCK
+CLEAR command.
+File Modified:
+    /pert/block.src
+
+(15) Initialize ALLC and ALLZ arrays
+  - Ryszard Czerminski (B940514.rcz)
+    Floating point exception error is avoided by initializing ALLC and
+ALLZ arrays.
+File Modified:
+    /quantum/qmpac.src
+
+(16) REAL/REAL*8 usage fix
+  - Ryszard Czerminski (B940412.rcz)
+    An inconsistent use of memory (real vs. real*8) is corrected.
+    real*8 wt(n) to real wt(n).
+FIle Modified:
+    /rxbcor/rxnene.src
+
+(17) Division by zero
+  - Bernard R. Brooks and Georgios Archontis
+    Division by zero problem is fixed in ADIE=(1.0+CDIE2*(3.0*YDIE-1.0))/
+(3*YDIE*(CDIE2-1.0)).
+File Modified:
+    /solvation/state.src
+
+(18) Move IF test in parsing
+  - Bernard R. Brooks (B940601.brb)
+    The if test that was used to set the FFOUR variable was put in the
+wrong place.  The line IF(QCMPRS) FFOUR=COMLYN(1:4) is moved from l.
+142 to l. 129.
+File Modified:
+    /util/parse.src
+
+(19) Infinite loop problem
+  - Ryszard Czerminski (B940209.rcz)
+    An infinite loop is created when CHCKHP calls WRNDIE.  Call to
+CHCKHP in PRINHP should be commented out.
+File Modified:
+    /util/util.src
+
+(20) Vectorization Error
+  - Mary E. Karpen (B940425.mek #5)
+    AMASST in subroutine VIBFLU is incorrectly calculated on the cray
+c90.  In the testcase vibran.inp, the command
+    FLUCT ATOM MODE 1 THRU 57 TEMP 300.0 SELE TYPE CA END
+results in the variable AMASST in the vibran/vibsub.src routine VIBFLU
+to be assigned 19 (= NATOM) rather than the correct amount (1).  By
+removing vectorization from the loop, AMASST is calculated correctly.
+There is no obvious reason why vectorization would break this loop,
+so there is potentially another bug lurking, which was not found.
+File Modified:
+    /vibran/vibsub.src
+
+(21) Non-standard continuation character
+  - Bernard R. Brooks
+    Non-standard continuation character # is replaced by $.  Four such
+lines are changed.
+File Modified:
+    /minmiz/tnpack
+
+(22) Declaration fix in REPLICA
+  - Mary E. Karpen (B940425.mek #1a)
+    Incorrect private/shared declarations for replica code are corrected.
+File Modified:
+    /nbonds/cnbnd.src
+
+(23) EXTERNAL XDIST
+  - Bernard R. Brooks (B940601.brb #15)
+    It appears that SGI's new compiler has a nonstandard definition of
+what EXTERNAL means.  EXTERNAL XDIST is encapsulated by ##IFN IRIS and
+##ENDIF.
+File Modified:
+    /nbonds/nbndgc.src
+
+(24) Apollo graphics
+  - Bernard R. Brooks (B940601.brb)
+  An INTEGER declaration is fixed to INTEGER*2 for Apollo versions.
+Files Modified:
+    /graphics/apodraw.src
+    /graphics/apograph.src
+    /fcm/graphdep.fcm
+
+(25) Preprocessor keys for MTS code
+  - Ryszard Czerminski (B940223.rcz)
+  - Mary E. Karpen (B940425.mek #1b)
+    Problems with preprocessor directives for MTS is fixed.
+Files Modified:
+    /dynamc/mts.src: 
+    /image/eimage.src: 
+
+(26) PRNLEV fix
+  - Bernard R. Brooks (B940601.brb)
+    WRNLEV.GE.2 is corrected to PRNLEV.GE.3
+File Modified:
+    /gener/modpsf.src
+
+(27) Vector dependency
+  - Mary E. Karpen (B940425.mek #2)
+    Vector dependencies exist in TRANSI routine but CDIR$ IVDEP
+specified on line 126.  Comment out.
+File Modified:
+    /image/images.src: 
+
+(28) UNIX command
+  - Bernard R. Brooks (B940601.brb)
+    The ENVIronment command is encapsulated by ##IF UNIX -- ##ENDIF.
+File Modified:
+    /main/miscom.src
+
+(29) Non-standard quote
+  - Michael E. Holder (B940531.mh)
+    Non-standard use of " fixed to '.
+File Modified:
+    /util/cmdpar.src
+
+(30) IMAGE/CRYSTAL keyword parsing bug
+  - Ryszard Czerminski
+    Nonbonded list is not set up properly upon NBOND command.  LIMAGE
+should be set .TRUE. in the argument list of the UPDATE call.
+File modified:
+    /main/cahrmm.src
+
+(31) Version number updated
+  - CHARMM Manager
+    Never used VERNMR is removed and VERNMC is updated.
+File Modified:
+    /fcm/version.fcm
+
+==============================================================================
+
+[8] c23f5 Change Log
+    CHARMM c23f4 (August 15, 1994) to c23f5 (March 15, 1995)
+
+8.1 Convex Exemplar SPP-100 and generic PVM Ports
+    Developer     : Charles L. Brooks, III and Stephen H. Fleischman
+    Email Address : brooks@scripps.edu
+    Institution   : The Scripps Research Institute
+    Date          : January 5, 1995
+    CHARMM Version: c23f4
+    Proj. Report  : D950104.clb
+
+     A port of CHARMM version 24a2 to general PVM based parallelism using
+existing parallel code as well as a port to the Convex parallel machine are
+included.  The original port is the work of Stephen H. Fleischman from
+Convex Computer Corp.  Charles L. Brooks, III simply implemented this port
+in other versions of CHARMM.
+
+Files Added:
+    build/UNX/Makefile_cspp
+
+Files Modified:
+    install.com
+    doc/parallel.doc
+    source/charmm/iniall.src
+              fcm/parllel.fcm
+          machdep/machutil.src
+                  parallel.src
+                  parcomm.src
+                  startup.src
+             util/string.src
+
+------------------------------------------------------------------------------
+8.2 Cray T3D Port
+    Name          : Charles L. Brooks, III and Barry C. Bolding
+    Email Address : brooks@scripps.edu
+    Institution   : The Scripps Research Institute
+    Date          : January 6, 1995
+    CHARMM Version: c23f4
+    Proj. Report  : D950106.clb
+
+     A port of CHARMM version 24a2 to the Cray T3D parallel computer using
+existing parallel code.  The original port is the work of Barry C. Bolding
+from Cray Research Inc. in collaboration with Charles L. Brooks, III, who
+implemented this port in other versions of CHARMM.
+
+Files Added:
+    build/UNX/Make_t3d
+
+Files Modified:
+    install.com
+    doc/parallel.doc
+    source/charmm/charmm_main.src
+           machdep/cstuff.c
+                   machio.src
+                   machutil.src
+                   parallel.src
+                   space.src
+                   startup.src
+           fcm/dimens.fcm
+               heap.fcm
+               number.fcm
+               stack.fcm
+
+------------------------------------------------------------------------------
+8.3 Thinking Machine's CM5 Port
+    Name          : Robert Nagle 
+    Email Address : nagle@tammy.harvard.edu 
+    Institution   : Harvard 
+    Date          : August 24, 1994
+    CHARMM Version: c23f4
+    OS            : CMOST 7.3_final.1-rev.3
+    Proj. Report  : D940825.rn
+
+1) Many I/O operations on the CM5 resulted in a system wide hang.
+   Since I/O was set up to be synchronous broadcast, all processors
+   should have been making the same I/O requests.  However, in some
+   instances, branches were made based on either PRNLEV (more frequently)
+   or IOLEV.  This resulted in node 0 doing an open, say, and all other
+   nodes continuing on their merry way.  Result - deadlock.
+
+2) Previous communication scheme was based on a simple send and
+   receive model.  By using TMC's active message layer, communication
+   bandwith can be increased by anywhere from 50% to 5X.  
+
+3) DIE on one node could leave the others merrily trundling along.
+
+4) Other minor improvements
+
+Files Added:
+    build/UNX/Makefile_cm5
+    source/fcm/cm5.fcm
+
+Files Modified:
+    install.com
+    doc/parallel.doc
+    source/machdep/machutil.src
+                   parallel.src
+                   startup.src
+                   string.src
+
+------------------------------------------------------------------------------
+8.4 OS/2 Port
+    Name          : Stefan Boresch
+    Email Address : boresch@tammy.harvard.edu
+    Institution   : Harvard University (Karplus group)
+    Date          : November 1994
+    CHARMM Version: c23f4
+    OS            : S/2 2.x and higher
+
+     CHARMM (c23f4) has been ported to the OS/2 operating system,
+version 2.x and higher.  The Watcom Fortran compiler (v. 9.5,
+patch-level (c)) has been used.  The port is fairly complete, a
+detailed list of limitations and known problems is given in the 'Other
+Comments' section.  The modifications should also be applicable to
+c24a2 by applying the changes described below to the respective files.
+(I can't hold two versions of CHARMM on my hard-drive at the same time;
+I'm happy to work / check the modifications of c24a2/c24a3 once they
+become available.)
+     A new pre-processor keyword, OS2, has been introduced, and all
+OS/2 related changes hide behind the OS2 keyword.  The port has revealed
+several bugs of the compiler, one of them is annoying, and I hope it
+will be fixed soon.  On the other hand, as OS/2 / Watcom FORTRAN is not
+yet another Unix platform, a few quirks of the code have become apparent
+as well; one might consider changing the basic code in these instances...
+     While most Unix utilities have been ported to OS/2, I do not
+want to rely on the user having these installed.  Therefore, I shall
+write an install script in REXX (the OS/2 built in scripting
+language); I will also provide utilities to automatically generate
+makefiles.  (to be done a.s.a.p!)  Unfortunately, WATCOM's make
+utility doesn't support a number of features used in the Unix
+makefiles for CHARMM, so the makefiles differ significantly.  Most
+likely one can write them much more elegant, but this needs to be done
+as well...
+     Watcom FORTRAN allows direct access to any OS/2 system call.
+Therefore, there is no need for C routines; all .c files are superfluous
+for OS/2!
+     Currently, there is no free FORTRAN compiler for OS/2 (asides from
+f2c, and I really didn't want to use that...)  I'll watch out for the
+GNU FORTRAN compiler which apparently is in alpha testing.  The WATCOM
+compiler has proven quite reliable, and to the best of my knowledge is
+the cheapest option for academic institutions.  The same package
+also supports 32bit extended DOS, Windows 3.1 and Windows NT; i.e. if
+someone is so inclined, porting to these platforms should be more
+or less painless.  However, I used the HPFS filesystem, so I didn't
+worry about shortening filenames to DOS' 8.3 convention.
+
+Files Modified (module/file.src):
+    source/charmm/iniall.src
+                 /miscom.src
+           dynamc/dynio.src
+              fcm/impnon.fcm
+                 /number.fcm
+          machdep/machio.src
+                 /machutil.src
+                 /space.src
+                 /startup.src
+            manip/corman.src
+           rxncor/path.src
+        solvation/fft.src
+
+Other Comments:
+     The user needs the Watcom Fortran compiler v. 9.5.  Patchlevel
+(c) was used for the port.  The installation will work only on a HPFS
+partition.  It should be considered to include an OS/2
+executable in the distribution package.  (The executable itself should
+run on both HPFS and FAT partitions)
+     As described above, patchlevel (c) contains an annoying bug
+that requires a somewhat clumsy workaround and Charmm to be called through
+a script file.  I will provide patches as soon as the compiler is fixed.  
+     A set of makefiles that will work for c23f4 is provided.  I'm
+working on a general install utility written in REXX (the built in
+scripting language of OS/2).  I shall also provide REXX scripts to generate
+makefiles solely based on the list of source files.
+     The executable has been currently tested only when compiled
+without optimization.  I'll test which optimization levels are
+possible a.s.a.p.  I'm confident, however, that no major problems will
+arise (I never had any optimization related problems with the c22gx
+series of CHARMM).
+
+KNOWN LIMITATIONS/PROBLEMS:
+* Compiler bug related to REWIND of STDIN (clumsy workaround exists)
+* QUANTUM code not supported: I didn't even try as I don't think that
+  a PC will be used for QM calculations anyways.
+* Aside from the quantum testcase, two other test-cases fail:
+        rism.inp
+        xtlala2.inp 
+* OS/2 doesn't have an OS funtion that reports the CPU time consumed
+  by a program/process.  Hence dummy routines are introduced, a CPU time
+  of 0.00 is reported.
+
+------------------------------------------------------------------------------
+8.5 Other Bugfixes and Enhancements
+
+     Bugfixes reported to charmm-bugs@tammy during the development cycle
+are incorporated.  The bug-reports are collected in ~ftp/charmm/Bugs.
+
+(1) Initialize R2 in ehbond.src
+  - Ryszard Czerminski (B940822.rcz)
+
+     There is a logic flow in energy/ehbond.src (subr. EHBOND) resulting in
+computation with undetermined values and in "floating point problems"... 
+If S.GT.C2OFHB and ANALYS.ne.3 R2 will not be calculated but used later on...
+
+Files involved:
+    source/energy/ehbond.src
+
+..............................................................................
+(2) Bug in INQUIRE Function on ALPHA Machine
+  - Ryszard Czerminski (B940824.rcz)
+    Machine          : DECALPHA
+    Operating System : OSF/1 V2.0 240
+
+     As a work around I have increased MAXLEN from 80 to 256.
+At the same time I have eliminated MXFLNM and replaced it with MAXLEN.
+
+Files involved:
+    source/util/title.src
+
+..............................................................................
+(3) Uses of CHARMM Variables in Parallel Environment
+  - Lennart Nilsson (B940825.ln)
+
+     The last argument is left off when invoking the slave processes.
+No problem as long as only the master process uses the variable,
+but hangs the whole thing if the slaves need to have the correct value.
+In parcomm.src, two loops having the number of program arguments as upper
+bound should use NPRARG, not NPRARG-1.
+
+Files involved:
+    source/machdep/parcomm.src
+
+..............................................................................
+(4) Write Commands in Parallel CHARMM with Slave Proccesses
+  - Lennart Nilsson (B940907.ln)
+
+     The command "write ... name ..." is incorrectly parsed by the slave
+processes in a parallel environment and they crash (or hang).
+
+Files involved:
+    source/io/mainio.src
+
+..............................................................................
+(5) ENCODF of ".0"
+  - Arnaud Blondel (B941220.ab)
+
+     On some machines' Zero is written .0. This causes ENDCOF to return
+empty parameter.  
+
+Files Modified:
+    source/util/string.src
+
+..............................................................................
+(6) NOE Bugfixes
+  - Lennart Nilsson (B941221.ln)
+
+(6.1) The RESET command in the NOE module does not zero the variable NOENM2
+      so add
+              NOENM2=0 
+      to the RESEt handling
+
+(6.2) When reading old format NOE input files the following two lines are
+      needed in the OLD section of the ASSI parser
+              RNEXP=THREE
+              RNTCN=ZERO
+
+Files Modified:
+    source/misc/noe.src
+
+..............................................................................
+(7) Verlet Dynamics Coordinate Update
+  - Lennart Nilsson (B941222.ln)
+  - Ryszard Czerminski (B941221.rcz)
+
+     Coordinates after dynamics (verlet) are propagated one extra step.
+When using the standard verlet integrator (ORIG keyword to dynamics command)
+the coordinates in charmm after a dynamics command are not the same as the
+coordinates for at the last step of dynamics, as seen if an energy command is
+issued immediately after the dynamics.  This does not happen with the leap
+integrator.
+     This is because in dynamcv x,y,z are updated after the energy call in 
+the main dynamics loop and before the ENDDO, whereas in dynamc x,y,z are
+updated before the energy call, and thus after the loopback decision is made.
+
+DYNAMC (leap):
+
+loop
+   x=xcomp+xold
+   writec x
+   updeci x
+   energy x
+   printe x
+   xold=....
+   xcomp=x
+endloop  ! x is still what it was at the energy call in step i
+
+DYNAMCV (verlet):
+
+loop
+   writec x
+   updeci x
+   energy x
+   printe x
+   xold=x
+   x=xnew
+endloop ! x is NOT what it was in step i, rather what it will be in i+1
+
+In order to fix this, Ryszard added following lines at the very end of
+DCNTRL routine
+...
+C
+##IF OLDDYN
+      IF(ORIG) THEN  ! bug#92242xfsq01
+        DO I=1,NATOM
+          X(I)=XOLD(I)
+          Y(I)=YOLD(I)
+          Z(I)=ZOLD(I)
+        ENDDO
+      ENDIF
+##ENDIF ! OLDDYN
+
+NOTE: This fix results in differences in dynamics benchmarks.
+
+Files Modified:
+     source/dynamc/dcntrl.src
+
+..............................................................................
+(8) Reading Lower Case PDB Files
+  - Lennart Nilsson (B950104.ln)
+
+     Lower case characters in charmm/pdb coordinate files are not understood.
+Call CNVTUC after reading lines from charmm/pdb formatted files.  Also change
+name of varaible LEN (conflict with intrinsic function) to SLEN.
+
+Files Involved:
+    source/io/coorio.src
+
+..............................................................................
+(9) Cray Dependent Coding Fixed
+  - Ryszard Czerminski & Mike Mirman (B950105.rcz)
+    FORTRAN version  : CRAY FORTRAN CFT77 6.0.4.2
+
+     The construct does not compile properly on CRAY
+
+    ##IF IBM IBMRS CRAY
+         FUNCTION FUN(A)
+         REAL*8 FUN
+    ##ELSE
+         REAL*8 FUNCTION FUN(A)
+    ##ENDIF
+
+and the CRAY key is removed in ##IF
+
+Files Inveloved:
+    source/dimb/eispack.src
+          image/crystal.src
+         minmiz/tnpack.src
+        quantum/qmpac.src
+           util/random.src
+                string.src
+                util.src
+                vector.src
+
+..............................................................................
+(10) Branch into IF/DO Block Problem Fixed
+   - P950105.elm
+
+Files Involved:
+    source/dynamc/dynamvv.src
+             misc/aspener.src
+                 /surfac.src
+           vibran/vibran.src
+

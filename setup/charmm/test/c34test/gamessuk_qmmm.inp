@@ -1,0 +1,217 @@
+* CHARMM Testcase
+* Author: H. Lee Woodcock
+* Date: July 2006
+* Butane test case for performing SCCDFTB Replica Path Calculation
+* This test case is for a QM/MM system
+*
+
+IF ?GAMESSUK .NE. 1 THEN
+ echo "GAMESSUK Code NOT Compiled: Test NOT performed."
+ STOP
+endif
+
+bomblev -2
+
+read rtf card
+* TOPOLOGY FILE FOR PROTEINS USING EXPLICIT HYDROGEN ATOMS: VERSION 22
+*
+   22     1
+MASS     3  HAL     1.00800 ! nonpolar H
+MASS    14  CTL2   12.01100 ! aliphatic sp3 C for CH2
+MASS    15  CTL3   12.01100 ! aliphatic sp3 C for CH3
+MASS   100  QQH     1.00800 ! Link Atom
+
+auto angle dihe
+
+Resi BUTA        0.00 ! BUTANE
+Group
+Atom  h1 hal     0.09 !    H2
+Atom  h2 hal     0.09 !     |
+Atom  h3 hal     0.09 ! H1-C1-H3
+Atom  c1 ctl3   -0.27 !     |
+Atom  h4 hal     0.09 ! H4-C2-H5
+Atom  h5 hal     0.09 !     |
+Atom  c2 ctl2   -0.18 !     |
+Atom  h6 hal     0.09 ! H6-C3-H7
+Atom  h7 hal     0.09 !     |
+atom  c3 ctl2   -0.18 !     |
+atom  h8 hal     0.09 ! H8-C4-H10
+atom  h9 hal     0.09 !     |
+atom h10 hal     0.09 !    H9
+atom  c4 ctl3   -0.27 !
+Bond h1 c1  h2 c1  h3 c1  c1 c2
+Bond h4 c2  h5 c2  c2 c3
+Bond h6 c3  h7 c3  c3 c4
+Bond h8 c4  h9 c4  h10 c4
+ic  h1  c1 c2 c3  0.00  0.00    0.0  0.00 0.00
+ic  h1  c1 c2 h4  0.00  0.00  120.0  0.00 0.00
+ic  h1  c1 c2 h5  0.00  0.00  240.0  0.00 0.00
+ic  h2  c1 c2 c3  0.00  0.00  120.0  0.00 0.00
+ic  h3  c1 c2 c3  0.00  0.00  240.0  0.00 0.00
+ic  c1  c2 c3 c4  0.00  0.00    0.0  0.00 0.00
+ic  c1  c2 c3 h6  0.00  0.00  120.0  0.00 0.00
+ic  c1  c2 c3 h7  0.00  0.00  240.0  0.00 0.00
+ic  h4  c2 c3 c4  0.00  0.00  120.0  0.00 0.00
+ic  h5  c2 c3 c4  0.00  0.00  240.0  0.00 0.00
+ic  c2  c3 c4 h8  0.00  0.00    0.0  0.00 0.00
+ic  c2  c3 c4 h9  0.00  0.00  120.0  0.00 0.00
+ic  c2  c3 c4 h10 0.00  0.00  240.0  0.00 0.00
+ic  h6  c3 c4 h10 0.00  0.00  120.0  0.00 0.00
+ic  h7  c3 c4 h10 0.00  0.00  240.0  0.00 0.00
+PATC  FIRS NONE LAST NONE
+end
+
+read param card
+*
+BOND
+qqh   CTL2   0.0         1.0     ! Link atom
+CTL3  CTL2   222.500     1.5280 ! ALLOW   ALI
+HAL   CTL2   309.000     1.1110 ! ALLOW   ALI
+HAL   CTL3   322.000     1.1110 ! ALLOW   ALI
+CTL2  CTL2   222.500     1.5300 ! ALLOW   ALI
+ANGLE
+HAL   CTL2  CTL3   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+CTL3  CTL2  CTL2   58.000    115.00    8.00   2.56100 ! ALLOW   ALI
+HAL   CTL2   HAL    35.500    109.00    5.40   1.80200 ! ALLOW   ALI
+HAL   CTL3   HAL    35.500    108.40    5.40   1.80200 ! ALLOW   ALI
+HAL   CTL3  CTL2   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+qqh   CTL2  CTL3   0.0        0.0    ! Link atom
+qqh   CTL2  CTL2   0.0        0.0    ! Link atom
+HAL   CTL2  CTL2   26.500    110.10   22.53   2.17900 ! ALLOW   ALI
+DIHEDRALS
+CTL3  CTL2  CTL2  CTL3      0.1500  1     0.00 ! ALLOW ALI
+X     CTL2  CTL2  X        0.1950  3     0.00 ! ALLOW   ALI
+X     CTL2  CTL3  X        0.1600  3     0.00 ! ALLOW   ALI
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 12.0  CTOFNB 10.5  CTONNB 9.0  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!
+CTL2    0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+CTL3    0.000000  -0.080000     2.060000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+HAL     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+qqh     0.000000   0.000000     0.000000 ! Link atom
+
+end
+
+read sequence card
+*  Just a butane
+*
+  1
+BUTA
+GENERATE MAIN SETU
+
+set nrep 5
+set n    5
+
+ic param
+ic edit
+dihe 1 c1 1 c2 1 c3 1 c4 180.0
+end
+ic seed 1 c1 1 c2 1 c3
+ic build
+coor orie mass select type c* end
+
+read coor card
+* A SIMPLE TEST CASE
+*  DATE:     7/16/ 4     14:56: 5      CREATED BY USER: hlwood
+*
+   14
+    1    1 BUTA H1    -1.89751   1.32599   0.67379 MAIN 1      0.00000
+    2    1 BUTA H2    -2.09667   0.62102  -0.97300 MAIN 1      0.00000
+    3    1 BUTA H3    -2.78643  -0.22819   0.46028 MAIN 1      0.00000
+    4    1 BUTA C1    -1.92725   0.37610   0.09769 MAIN 1      0.00000
+    5    1 BUTA H4    -0.47763  -0.65090   1.34465 MAIN 1      0.00000
+    6    1 BUTA H5    -0.67604  -1.35322  -0.29596 MAIN 1      0.00000
+    7    1 BUTA C2    -0.61616  -0.39491   0.26919 MAIN 1      0.00000
+    8    1 BUTA H6     0.67145   1.34328   0.35201 MAIN 1      0.00000
+    9    1 BUTA H7     0.47305   0.64097  -1.28860 MAIN 1      0.00000
+   10    1 BUTA C3     0.61157   0.38497  -0.21314 MAIN 1      0.00000
+   11    1 BUTA H8     1.89293  -1.33592  -0.61774 MAIN 1      0.00000
+   12    1 BUTA H9     2.78185   0.21826  -0.40423 MAIN 1      0.00000
+   13    1 BUTA H10    2.09208  -0.63096   1.02904 MAIN 1      0.00000
+   14    1 BUTA C4     1.92267  -0.38604  -0.04164 MAIN 1      0.00000
+
+ic delete sele type h* end
+
+! Add link atom to cut butane in half
+addl qqh1 main 1 c2 main 1 c3
+
+REPLIcate A NREPlica @nrep SELEct ALL END setup
+delete atom sele segid main end
+
+calc fact = 1.0 / @nrep
+
+! { set up an appropriate interaction matrix }
+BLOCK 2
+  CALL 2 SELEct segid a* end
+  COEF 1 1 1.0
+  COEF 2 2 @fact
+  COEF 2 1 @fact
+END
+
+energy
+
+! Create initial pathway
+set 1 1
+set phi 0.0
+
+define b0 sele type c3 end
+define b1 sele ( b0 .or. .bonded. b0 ) .and. .not. type c2 end
+define b2 sele ( b1 .or. .bonded. b1 ) .and. .not. type c2 end
+
+calc incphi 360.0 / @nrep
+label loop
+  coor axis sele atom A@1 1 c2 end sele atom A@1 1 c3 end
+  coor rotate sele b2 .and. segid A@1 show end axis phi @phi
+  incr 1 by 1
+  incr phi by @incphi
+  trim 1
+if @1 .le. @nrep then goto loop
+
+print coor
+
+ic fill
+
+print coor 
+
+ scalar wmain set 1.0
+ scalar wmain set 0.0 sele type h* end
+
+ coor copy comp
+ coor copy comp weight
+
+! Define the QM region
+define qm sele atom A* 1 c1  .or. atom A* 1 c2 -
+      .or. atom A* 1 h1 .or. atom A* 1 h2 -
+      .or. atom A* 1 h3 .or. atom A* 1 h4 -
+      .or. atom A* 1 h5 .or. atom A* 1 qqh* show end
+
+! Setup of the interaction matrix 
+BLOCK 2
+  CALL 2 SELEct qm show end
+  COEF 1 1 1.0
+  COEF 2 2 @fact
+  COEF 2 1 @fact
+END
+
+! ------------------------------------------
+! Initialize Replica Path Calculation
+  RPATh KRMS 5000.0 RMAX 0.25 KANGle 100.0 KMAX 500.0 COSMax 0.98 ROTA TRAN WEIGHT CYCLic
+
+!
+envi "gamess.in" "data/gamessuk_rpath.in"
+envi "gamess.out" "gamess.out"
+envi "ed3" "gamess.ed3"
+envi "ed7" "gamess.ed7"
+envi "ed2" "gamess.ed2"
+gamess remove chrg 0 sele qm end 
+
+  scalar wmain set 1.0
+  scalar wmain set 0.0 sele type h* end
+
+  energy
+
+  test first tol 0.0 step 0.0001
+
+stop
+

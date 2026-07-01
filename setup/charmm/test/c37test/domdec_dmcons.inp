@@ -1,0 +1,126 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! APH 2012: Tests domdec functionality with distance matrix constraints
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+if ?NUMNODE .gt. 2 then
+   echo "Test NOT performed. This test hangs with 8 processes."
+   echo "The problem should be investigated and fixed."
+   stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+format (f16.6)
+
+! ********* Run domdec with DLB **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb on
+
+set return fromdm
+goto distmat
+label fromdm
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn1
+goto run_dynamics
+label return_dyn1
+
+calc diff = abs(?dmc - 69.041097)
+echo @diff
+if diff gt 0.0 then
+   echo "Test failed"
+   stop
+endif
+
+echo "Test OK"
+
+stop
+
+! ************************************
+! ******* Run dynamics ***************
+! ************************************
+
+label run_dynamics
+
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 nstep 10 nprint 10 iprfrq 1000 -
+     iseed 123456 nsavc 0 nsavv 0 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 20 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 -
+     hoover reft 298 tmass 250 tbath 298     ! Constant temperature
+
+goto @flag
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!   DISTMAT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! from cons.doc: Distance Matrix restraint
+
+label distmat
+
+define bb -
+      sele segid 5dfr .and. -
+      (type ca .or. type c .or. type n .or. type o ) end
+define sd -
+      sele segid 5dfr .and. .not. (bb .or. hydrogen) end
+
+set dmforce 2000
+set dmref  1
+set dmsave 100
+DMCO FORCe @dmforce     REFE @dmref OUTPut 25 NSAVe @dmsave -
+CUTOff 6.5 NCONtact  4
+sele sd .and. (resi   1  .or. resi  92  ) end WEIGht  0.8158139980007818
+sele sd .and. (resi   3  .or. resi  87  ) end WEIGht  0.9665094391591674
+sele sd .and. (resi   3  .or. resi  111 ) end WEIGht  0.9879192119842544
+sele sd .and. (resi   3  .or. resi  157 ) end WEIGht  0.9895819946415852
+
+label end
+goto @return

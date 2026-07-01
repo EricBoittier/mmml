@@ -1,0 +1,65 @@
+* USER_DEF.STR:  All user definitions.
+* Called by COMB_INTERPOL.INP
+* By Stefan Fischer, June 29-2006
+*
+
+! Select atoms to be build by Cartesian interpolation, not IC-interpolation.
+! This includes the protein backbone (without =O or HN, but with Proline
+! side-chain), Cystein side-chains making disulfide-briges, water, ATP,Mg, etc.
+!
+! Note: all atoms not belonging to this selection must be constructable via
+! IC BUILD, i.e. they must have appropriate IC-entries in the topology-file
+! that connect them to some of the atoms selected here.  Examples of
+! such atoms are protein side-chains.
+!
+DEFINE cart_interpol  SELE  (TYPE CA .OR. TYPE N .OR. TYPE C .OR. -
+                             RESNAME PRO .OR. -
+                             SEGI GDP1 .OR. SEGI TIP3)  END
+
+! Number N of interpolation steps (yields N-1 intermediates) :
+!
+SET steps = 20
+
+! Shrink side-chains, if desired, for ex. 0.5 halves them (1=does nothing) :
+SET shrink = 0.5
+
+! Coordinates between which to interpolate :
+!
+SET reactant = ../crd/reac.crd
+SET product  = ../crd/prod.crd
+
+! Output directory for interpolated frames (must already exist) :
+!
+SET outdir = ./frames
+
+! The perl-script "vector.pl" will create s_vec.ic , the IC-vector used for
+! IC-interpolation. Make sure perl is installed.
+! It is run as a "command" from inside CHARMM.
+!
+! The name of the first *.ic file must be the same as the content of the
+! "reactant" variable above, but with the extension .ic
+!
+! The name of the second *.ic file must be the same as the content of the
+! "product" variable above, but with the extension .ic
+!
+! Notes: - this long line must NOT be broken into two lines connected via '-',
+!        - variable-substitution does not work within "".
+!
+SET command "perl ./vector.pl ../crd/reac.crd.ic ../crd/prod.crd.ic ./frames/s_vec.ic"
+
+! Must be the same as the last argumemt of vector.pl
+! (see "command" in previous line) :
+!
+SET vect = ./frames/s_vec.ic
+
+! The name of the resulting combined-interpolated coordinate-frames, to which 
+! the step-number will be appended (will be put in the "outdir" set above) :
+!
+SET final    @outdir/interpol_comb
+
+! Filename for interpolated trajectory, which will include the product but
+! not the reactant :
+!
+SET traj = @final_@steps_steps.dcd
+
+RETURN

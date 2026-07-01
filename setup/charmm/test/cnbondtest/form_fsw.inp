@@ -1,0 +1,53 @@
+* form_fsw.inp
+* Bernard R. Brooks, 14-Jul-1997
+* calculate group-group energy (nonbonded) of 2 formamides
+*
+
+bomlev -2
+stream datadir.def
+
+open read unit 11 card name @0amino3h.rtf
+read rtf card unit 11
+close unit 11
+open read unit 12 card name @0param20.prm
+read param card unit 12
+close unit 12
+
+read sequence card
+* formamide
+*
+2
+amn cbx
+
+generate frm1 setup
+generate frm2 duplicate frm1 setup  
+
+ic param
+ic seed  2 h  2 n  2 ca
+ic seed  3 o  3 c  3 ca
+ic build
+coor rotate ydir 1.0 phi 180.0 sele segid frm1 end
+coor trans xdir 0.98  sele segid frm1 end
+
+!skip vdw
+skip elec
+
+!!!!!!!!!!!!
+        
+                    set 1  ATOM  CDIE  FSWITCH  VFSWIT  CTONNB  5.0  
+set f form_cdie_fsw
+stream @0form.str
+       
+                    set 1  ATOM  CDIE  FSWITCH  VFSWITCH CTONNB 10.0  
+set f form_cdie_ftr
+stream @0form.str
+
+                    set 1  ATOM  RDIE  FSWITCH  VFSWIT  CTONNB  5.0  
+set f form_rdie_fsw
+stream @0form.str
+       
+                    set 1  ATOM  RDIE  FSWITCH  VFSWITCH CTONNB 10.0  
+set f form_rdie_ftr
+stream @0form.str
+
+stop

@@ -1,0 +1,50 @@
+diff -Nur cadpac-nofq/main.F cadpac-fq/main.F
+--- cadpac-nofq/main.F	Tue Nov 28 18:33:46 2000
++++ cadpac-fq/main.F	Tue Nov 28 18:32:28 2000
+@@ -1246,6 +1246,10 @@
+ C    READ ENRGY FROM DUMPFILE
+ C
+       CALL READ3(EN,LDA(ISEX(13)),ISEC13,IFILD)
++#ifdef FLUCQ
++C Calculate QM/MM contribution to CHARMM FlucQ charge force, if any
++      CALL FQQMMM(Q)
++#endif
+       E=ETOT
+       RETURN
+       END
+diff -Nur cadpac-nofq/utilxx.F cadpac-fq/utilxx.F
+--- cadpac-nofq/utilxx.F	Tue Nov 28 18:35:04 2000
++++ cadpac-fq/utilxx.F	Tue Nov 28 18:32:28 2000
+@@ -825,6 +825,9 @@
+      2              LFIELD,FIXED,LEX,LDAM12,LDAM13,LDAM23,LDIIS,
+      3              NCYC,ISCHM,LOCK,MAXIT,NCONV,NPUNCH,LOKCYC,
+      4              FGXX,FGXY,FGXZ,FGYY,FGYZ,FGZZ
++#ifdef FLUCQ
++      INTEGER CHMIN
++#endif
+ C
+       DATA ZERO /0.0D0/
+ C
+@@ -886,6 +889,9 @@
+ C     WITH FORM BREPL * EXP ( -AREPL * R)
+ C
+       DO 60 J=1,NAT
++#ifdef FLUCQ
++      CHMIN=0
++#endif
+       DO 50 I=1,NLAT
+       AX=CLAT(1,I)-C(1,J)
+       AY=CLAT(2,I)-C(2,J)
+@@ -893,6 +899,12 @@
+       RR=DSQRT(AX*AX+AY*AY+AZ*AZ)
+       ENUC0=ENUC0+ZAN(J)*ZLAT(I)/RR
+      1   +  BREPL(I)*DEXP(-AREPL(I)*RR)
++#ifdef FLUCQ
++C Lines added for FLUCQ by Ben Webb, 2000
++      CALL FQQCOR(CHMIN,ZAN(J)*ZLAT(I)/RR
++     &            +BREPL(I)*DEXP(-AREPL(I)*RR))
++C
++#endif
+ 50    CONTINUE
+ 60    CONTINUE
+       RETURN

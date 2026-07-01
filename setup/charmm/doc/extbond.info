@@ -1,0 +1,204 @@
+		External Bond Module * 	
+by 
+Pierre-Andre Cazade
+Marco Pezzella 
+Debasish Koner 
+Markus Meuwly
+
+References:
+
+EXTBOND provides additional bond potential forms, besides the usual
+harmonic one provided in CHARMM. The module works by substituting the
+harmonic potential of a bond defined in the PSF file for a new
+potential and is primarily intended but not limited to applications in
+spectroscopy. The PSF remains unchanged. EXTBOND can also add new
+bonds, which are not present in the PSF file. Those bonds are not
+explicitly added to the PSF file and only exist for the duration of a
+CHARMM run. EXTBOND is called via the XTBD keyword.
+
+References: 
+[1] Oliver T. Unke and Markus Meuwly, J. Chem. Inf. Model., 2017, 57 (8),
+	pp 1923–1931
+
+
+Syntax ::  Syntax of the EXTBOND module.
+Description :: A brief description of the module and how it works.
+Parameter file (optional) :: Shows how to use the parameter file. 
+Implemented Kernels :: Reproducing kernels available in the module.
+How to build the grid :: Brief description of how to build a grid.
+Example  :: Description of the example: N-Methylacetamide (NMA).
+
+!--------------------------------Syntax--------------------------------! 
+
+XTBD  { READ UNIT integer }
+
+      { ADDI { HARM k0 (real) r0 (real) } } double selection
+      {      { AMOE k0 (real) r0 (real) } }
+      {      { MORS D0 (real) r0 (real) beta (real) } }
+      {      { QUAR k0 (real) r0 (real) k1 (real) k2 (real) } }
+      {      { RKHS filename(char) kerneltype(char) asymptote (char)} }
+
+
+      { REPL { HARM k0 (real) r0 (real) } } double selection
+      {      { AMOE k0 (real) r0 (real) } }
+      {      { MORS D0 (real) r0 (real) beta (real) } }
+      {      { QUAR k0 (real) r0 (real) k1 (real) k2 (real) } }
+      {      { RKHS filename (char) kerneltype (char) asymptote (char) } }
+      
+      { CLEA }
+      
+READ option will identify the additional/replacement bonds in the
+specified unit file. Information about the input file will be given in
+the next section.
+
+ADDI adds bonds between successive atom pairs between the first and
+second selections with the potential of choice.
+
+REPL replaces all existing bonds between the first and second
+selections with the potential of choice.
+
+CLEA remove any additional/substituting potential.
+
+HARM for a harmonic potential: k0*(r-r0)**2
+AMOE for an MM3 anharmonic bond potential used in AMOEBA
+MORS for a Morse potential D0*(1-exp(-beta*(r-r0)))**2
+QUAR for the quartic potential : k0*(r-r0)**2+k1*(r-r0)**3+k2*(r-r0)**4
+RKHS for Reproducing Kernel Hilbert Space: a grid of n points 
+     of distances and energies.
+ 
+For RKHS the following information are required:
+
+1- The external file is an ordered set of interatomic distances and
+energies, described in the "How to build the grid" section. This file
+can be given in the csv format or direct as kernels. Notice that the
+filename has to be given without extension.  The routine checks for
+the existence of a ".kernel" file with the specified name, if does not
+exist, it will look for the ".csv" and create the new ".kernel" file.
+
+2- Kerneltype: An integer number that describes the type of kernel to
+be used. For available kernel types see the "Implemented Kernels"
+section below. For additional technical details see reference [1].
+
+3- Asymptote: A real number that rescales the bond energy to the
+correct dissociation energy. Due to the kernels implementiation, the
+asympotic energy needs to go to zero.
+
+
+!--------------------------------Description-------------------------------!
+
+EXTBOND is invoked by the XTBD command. At first the module reads the
+parameters for the new bond and the atoms involved. The new bond
+definition will be considered only for the present run of CHARMM, no
+modifications will be applied to the PSF file.
+
+No modifications are needed in the parameter files. 
+
+No compatibility issues with other modules in CHARMM are registered.
+
+
+
+!-----------------------------Parameter file-----------------------------!
+The bond parameters can be given both: internally in the input file or
+externally.
+
+The definition of the bond in the external file is presented here.
+The first line is an integer number that defines the number of bonds
+present in the external file. The second and third lines define the
+bond type and atoms involved with its parameters respectively. In the
+next lines a dummy example can be found.
+
+N     		       ! number of bonds defined in the file 
+TYPE 		       ! typology of bond 
+ATOM1 ATOM2 parameters ! atoms involved in the new bond and bond parameters.
+repeat the second and third line N-1 times. 
+
+
+Example::
+!--- CHARMM input file
+... parameters defintions....
+
+open unit 40 card name yourdatafile
+XTBD read  unit 40
+
+... the rest of the input 
+5
+HARM
+1 2 600.00 1.23
+AMOE
+3 4 600.00 1.23
+MORS
+5 6 120.0  1.21 2.7
+QUAR 
+7 8 110.0 1.2 50. 20.0
+RKHS
+9 10  pes 0 K1D -121.9746
+
+
+!-------------------------Implemented Kernels-------------------------!
+
+For more details see reference [1].
+
+0  -> Reciprocal Power N2 M6 Kernel 
+1  -> Reciprocal Power N3 M6 Kernel
+2  -> Reciprocal Power N2 M5 Kernel 
+3  -> Reciprocal Power N3 M5 Kernel
+4  -> Reciprocal Power N2 M4 Kernel 
+5  -> Reciprocal Power N3 M4 Kernel
+6  -> Reciprocal Power N2 M3 Kernel 
+7  -> Reciprocal Power N3 M3 Kernel
+8  -> Reciprocal Power N2 M2 Kernel 
+9  -> Reciprocal Power N3 M2 Kernel
+10 -> Reciprocal Power N2 M1 Kernel 
+11 -> Reciprocal Power N3 M1 Kernel
+12 -> Reciprocal Power N2 M0 Kernel 
+13 -> Reciprocal Power N3 M0 Kernel
+14 -> Exponetial Decay N2 kernel
+15 -> Exponetial Decay N2 kernel
+
+
+N describes the number of terms used in the Kernels, M describes the
+degree of the polynomial expansion.
+
+Reciprocal Power Decay:: Those kernels describe a decay of the form of
+1/r^(m+1) decay for values larger than the greatest point in the
+grid. The kernel is defined for values on the interval [0,infinity).
+
+Laplacian:: Necessary to evaluate the Laplacian kernel given by
+exp(||x-x'||/sigma).  Note that sigma can be set to any positive
+value, but is initialized automatically with the value 1. It is not
+recommended for interpolating potential energy surfaces. The kernel is
+only defined on the interval [0,infinity).
+
+Exponential Decay:: For values larger than the greatest point in the
+grid, the kernel decays exponentially with exp(-beta*x). Note that
+beta can be set to any positive value, but is initialized
+automatically with the value 1.  This type of kernel is recommended
+for short-range intermolecular interactions, which often decay
+exponentially. The kernel is only defined for values in the interval
+[0,infinity).
+
+For most applications a chemical bond can be described by a Reciprocal
+Power N2 M6 Kernel (option "0").
+
+!------------------------- How to build a grid-------------------------!
+
+1) For each bond that should be reproduced by a kernel, perform an Ab
+Initio calculation along a scan of the bond.
+
+2) Save the bond length and the energies (in AKMA units), in
+increasing order of r in a csv file.
+	   	r1 , E1
+		r2 , E2
+		....
+		rN , EN
+		
+3) Reference the energies to the asymptote E - E_asympt, such that
+E(r_asympt)=0.
+
+!-----------------------------------Example-----------------------------------!
+
+The xtbd_nma.inp test case with the parameter xtbd_nma.para parameter
+file and the xtbd_pes.csv, that contains the kernel, are distributed
+with the package. This example describes the vibrational analysis and
+free dynamics of the NMA molecule with the EXTBOND module invoked for
+the C=O bond.

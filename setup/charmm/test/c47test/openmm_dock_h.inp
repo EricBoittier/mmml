@@ -1,0 +1,242 @@
+* openmm_dock_h.inp
+* This is used for test hydrogen bond grids in gpu CDOCKER.
+* Created by Yujin Wu (wyujin_at_umich.edu)
+* at 2021/02/19
+*
+
+if ?fftdock .ne. 1 then
+   echo "Test NOT performed. FFTDOCK must be defined in pref.dat"
+   stop
+endif
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed. OPENMM must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+!! Read the topology and parameter files
+read rtf card name @0top_all36_prot.rtf
+read rtf card name @0top_all36_cgenff.rtf append
+
+read param flex card name @0par_all36_prot.prm
+read param flex card name @0par_all36_cgenff.prm append
+
+stream @0methanol.str
+
+!! Build ligand
+read sequ pdb name @0methanol.pdb
+generate LIGA setup
+read coor pdb name @0methanol.pdb
+print coor select .not. init end
+
+!! Hbond grids parameter
+set hmax = -10
+set rcta = 0
+set rctb = 5
+calc rij = (@rcta - @rctb) * (@rcta - @rctb)
+calc fa = -4 * @hmax / @rij
+calc fb = 0.5 * (@rcta + @rctb)
+
+! If we have already generated the grid potentials go to final part.
+! Uncomment after grid generation and run again.
+
+!! Grid dimension
+coor stats select segid LIGA .and. (type H4 .or. type O) end
+set xcen ?XAVE
+set ycen ?YAVE
+set zcen ?ZAVE
+
+!! Update nonbond parameter for grid potential
+update atom switch vswitch cutnb 999 ctonnb 999 ctofnb 999 -
+       soft emax 3 vdwe mine -20 maxe 40 elee -
+       rdie epsilon 3
+
+!! Read in vdW radii for grid generation
+if @?gpuid eq 0 set gpuid = 0
+open unit 1 read form name @0fftdock_c36prot_cgenff_probes.txt
+fftg radii unit 1 gpuid @gpuid
+close unit 1
+
+!! Generate unform grid potential 1
+set emax = 3
+set mine = -20
+set maxe = 40
+set xmax = 12
+set space = 0.5
+
+fftg pgen xmax @xmax ymax @xmax zmax @xmax -
+          xcen @xcen ycen @ycen zcen @zcen -
+          hmax @hmax rcta @rcta rctb @rctb -
+          dgrid @space -
+          emax @emax mine @mine maxe @maxe rdie epsilon 3 -
+          select segid LIGA end gpuid @gpuid
+
+open unit 1 write unform name @9methanol_gpu_1.bin
+fftg pwri unform unit 1 gpuid @gpuid grhb
+close unit 1
+fftg clear
+grid clear
+
+!! Generate unform grid potential 2
+set emax = 15
+set mine = -120
+set maxe = 200
+set xmax = 12
+set space = 0.5
+
+fftg pgen xmax @xmax ymax @xmax zmax @xmax -
+          xcen @xcen ycen @ycen zcen @zcen -
+          hmax @hmax rcta @rcta rctb @rctb -
+          dgrid @space -
+          emax @emax mine @mine maxe @maxe rdie epsilon 3 -
+          select segid LIGA end gpuid @gpuid
+
+open unit 2 write unform name @9methanol_gpu_2.bin
+fftg pwri unform unit 2 gpuid @gpuid grhb
+close unit 2
+fftg clear
+grid clear
+
+!! ICB array for bond parameters
+update atom switch vswitch cutnb 12 ctofnb 10 ctonnb 8 vdwe elec rdie epsilon 3
+
+!! Record donor/acceptor atom position
+coor stats select type H4 end
+set dx ?XAVE
+set dy ?YAVE
+set dz ?ZAVE
+
+coor stats select type O end
+set ax ?XAVE
+set ay ?YAVE
+set az ?ZAVE
+
+!! Read grid potential for OpenMM dock
+open unit 31 read unform name @9methanol_gpu_1.bin
+open unit 32 read unform name @9methanol_gpu_2.bin
+OMMD grid UNIS 31 UNIH 32 grhb
+close unit 31
+close unit 32
+
+! create OpenMM system and context
+set numcopy = 1
+OMMD build sele segid LIGA end ncopy @numcopy nofi grhb
+OMMD CGRS -
+     SOFT 1.0 HARD 0.0 -
+     EMAX 0.6 MINE -0.4 MAXE 8.0 -
+     EPS 3
+
+!! Set variables
+set idx = 1
+set idxD = 0
+set idxA = 0
+set dmax = 0
+set amax = 0
+set dtotal = 0
+set atotal = 0
+label compare
+
+!! Translate ligand by a random distance
+read coor pdb name @0methanol.pdb
+calc xtran (?random - 0.5) * 2 * 6
+calc ytran (?random - 0.5) * 2 * 6
+calc ztran (?random - 0.5) * 2 * 6
+coor trans xdir @xtran ydir @ytran zdir @ztran select segid LIGA end
+
+!! Check set and copy coordinates
+if @idx .eq. 1 then
+   coor stats select segid LIGA end 
+   set xcen ?XAVE
+   set ycen ?YAVE
+   set zcen ?ZAVE
+   OMMD SETC IDXC 1
+   OMMD COOR IDXC 1
+   coor stats select segid LIGA end
+   set OMMxcen ?XAVE
+   set OMMycen ?YAVE
+   set OMMzcen ?ZAVE
+   calc avgCoor = abs(@xcen + @ycen + @zcen - @OMMxcen - @OMMycen - @OMMzcen)
+   endif
+
+!! Read new donor/acceptor position
+coor stats select type H4 end
+set dx2 ?XAVE
+set dy2 ?YAVE
+set dz2 ?ZAVE
+
+coor stats select type O end
+set ax2 ?XAVE
+set ay2 ?YAVE
+set az2 ?ZAVE
+
+!! Donor-acceptor distance
+calc arx = abs(@ax - @dx2)
+calc ary = abs(@ay - @dy2)
+calc arz = abs(@az - @dz2)
+calc ra = @arx ** 2 + @ary ** 2 + @arz ** 2
+calc ra = sqrt(@ra)
+
+calc drx = abs(@dx - @ax2)
+calc dry = abs(@dy - @ay2)
+calc drz = abs(@dz - @az2)
+calc rd = @drx ** 2 + @dry ** 2 + @drz ** 2
+calc rd = sqrt(@rd)
+
+!! Donor/Acceptor energy
+calc aener = @fa * (@fb - @ra) * (@fb - @ra) + @hmax
+calc dener = @fa * (@fb - @rd) * (@fb - @rd) + @hmax
+if @aener .gt. 0 then
+   set aener = 0
+endif
+if @dener .gt. 0 then
+   set dener = 0
+endif
+
+!! OpenMM system energy
+OMMD SETC IDXC 1
+OMMD ENER grhb
+set oDener = ?ommdhdog
+set oAener = ?ommdhacg
+
+!! Compute difference
+calc dtmp = abs(@oDener - @dener)
+calc atmp = abs(@oAener - @aener)
+calc dtotal = @dtotal + @dtmp
+calc atotal = @atotal + @atmp
+if @dtmp .gt. @dmax then
+   set dmax = @dtmp
+   set rDmax = @rd
+   set eDmax = @dener
+   set gDmax = @oDener
+endif
+if @atmp .gt. @amax then
+   set amax = @atmp
+   set rAmax = @ra
+   set eAmax = @aener
+   set gAmax = @oAener
+endif
+
+!! Loop
+if @idx .le. 1000 then
+   incr idx by 1
+   goto compare
+endif
+
+calc dtotal = @dtotal / @idx
+calc atotal = @atotal / @idx
+echo @dtotal @dmax @atotal @amax @rAmax @rDmax @eAmax @gAmax @eDmax @gDmax
+
+@testcheck @avgcoor 0 0.01 ommd_coor_copy
+@testcheck @dtotal 0 1 donor_grid_average_energy
+@testcheck @atotal 0 1 acceptor_grid_average_energy
+@testcheck @dmax 0 5 donor_grid_max_difference
+@testcheck @amax 0 5 acceptor_grid_max_difference
+
+stop

@@ -1,0 +1,277 @@
+*  Test the Miscelaneous-Mean-Field-Potentials
+*  tripeptide used
+*
+
+stream datadir.def
+
+open read form unit 1 name @0toph19.rtf
+read rtf  card unit 1
+close unit 1
+
+open read form unit 1 name @0param19.prm
+read parameter card unit 1
+close unit 1
+
+
+read sequence  cards
+* 5-ALA sequence
+*
+   3
+ASP ALA ARG
+generate  MAIN setup
+
+read coor card 
+*  TRIPEPTIDE USED
+*
+   35
+    1    1 ASP  HT1    3.08042   5.56145  -4.87908 MAIN 1      0.00000
+    2    1 ASP  HT2    4.11817   4.77139  -3.83878 MAIN 1      0.00000
+    3    1 ASP  N      3.28017   4.63985  -4.44049 MAIN 1      0.00000
+    4    1 ASP  HT3    2.54756   4.30950  -3.78037 MAIN 1      0.00000
+    5    1 ASP  CA     3.57376   3.57806  -5.37130 MAIN 1      0.00000
+    6    1 ASP  CB     4.83412   3.89037  -6.18668 MAIN 1      0.00000
+    7    1 ASP  CG     5.89709   4.58074  -5.35965 MAIN 1      0.00000
+    8    1 ASP  OD1    6.69885   3.92113  -4.71404 MAIN 1      0.00000
+    9    1 ASP  OD2    5.86323   5.80147  -5.28046 MAIN 1      0.00000
+   10    1 ASP  C      3.72200   2.40159  -4.42693 MAIN 1      0.00000
+   11    1 ASP  O      2.69317   2.05787  -3.84854 MAIN 1      0.00000
+   12    2 ALA  N      4.88778   1.79431  -4.20052 MAIN 2      0.00000
+   13    2 ALA  H      5.68615   2.07795  -4.69301 MAIN 2      0.00000
+   14    2 ALA  CA     5.05545   0.79677  -3.15528 MAIN 2      0.00000
+   15    2 ALA  CB     6.40511   0.11801  -3.32828 MAIN 2      0.00000
+   16    2 ALA  C      5.03974   1.44713  -1.77572 MAIN 2      0.00000
+   17    2 ALA  O      4.72242   0.80455  -0.77558 MAIN 2      0.00000
+   18    3 ARG  N      5.43184   2.72133  -1.73997 MAIN 3      0.00000
+   19    3 ARG  H      5.80668   3.13412  -2.54589 MAIN 3      0.00000
+   20    3 ARG  CA     5.31596   3.56472  -0.56425 MAIN 3      0.00000
+   21    3 ARG  CB     6.68687   3.59278   0.17175 MAIN 3      0.00000
+   22    3 ARG  CG     7.98389   3.74828  -0.65417 MAIN 3      0.00000
+   23    3 ARG  CD     8.57405   5.16372  -0.71872 MAIN 3      0.00000
+   24    3 ARG  NE     7.58508   6.09637  -1.21923 MAIN 3      0.00000
+   25    3 ARG  HE     6.92636   6.43311  -0.57650 MAIN 3      0.00000
+   26    3 ARG  CZ     7.35351   6.31002  -2.51585 MAIN 3      0.00000
+   27    3 ARG  NH1    6.19935   6.88086  -2.84352 MAIN 3      0.00000
+   28    3 ARG  HH11   5.93538   6.91571  -3.80742 MAIN 3      0.00000
+   29    3 ARG  HH12   5.45875   6.81220  -2.17508 MAIN 3      0.00000
+   30    3 ARG  NH2    8.19607   5.92117  -3.47415 MAIN 3      0.00000
+   31    3 ARG  HH21   7.85274   5.89756  -4.41306 MAIN 3      0.00000
+   32    3 ARG  HH22   9.00679   5.37663  -3.25917 MAIN 3      0.00000
+   33    3 ARG  C      4.78930   4.94925  -0.97859 MAIN 3      0.00000
+   34    3 ARG  OT1    4.25787   5.09110  -2.08284 MAIN 3      0.00000
+   35    3 ARG  OT2    4.97825   5.92864  -0.25676 MAIN 3      0.00000
+!-----------------------------------------------------------------------------
+
+! Center of mass constraint
+!prnlev 6
+MMFP
+GEO  sphere  RCM -
+     xref 1.0 yref 2.0 zref 3.0 -
+     force 10.0 droff 0.0 select type CA end 
+
+GEO  sphere  RCM -
+     xref 0.0 yref 0.0 zref 0.0 -
+     force 10.0 droff 0.0 select resid 1 end
+
+GEO  sphere -
+     xref 0.0   yref  0.0 zref 0.0 -
+     force 10.0 droff 0.0 select resid 2 end
+
+GEO  print
+END
+
+skip all excl GEO
+faster off
+energy wmin 0.0
+test first tol 0.0 step 0.0001
+
+!---------------------------------------------------
+! spherical constraint
+MMFP
+GEO  reset
+GEO  sphere -
+     xref 1.0 yref 2.0 zref 3.0 -
+     force 100.0 droff 0.0 select type O* end
+END
+mini abnr nstep 200 inbfrq 0 nprint 50
+
+!---------------------------------------------------
+! cylindrical tube constraint
+MMFP
+GEO  reset
+GEO  cylinder -
+     xref 4.0 yref 5.0 zref 6.0 xdir 0.0 ydir 1.0 -
+     force 100.0 droff 0.0 select type H* end
+END
+mini abnr nstep 200 inbfrq 0 nprint 50
+
+!---------------------------------------------------
+! double harmonic wall constraint
+MMFP
+GEO  reset
+GEO  plane -
+     xref 7.0 yref 8.0 zref 9.0 zdir 1.0 -
+     force 100.0 droff 0.0 select type N* end
+END
+mini abnr nstep 200 inbfrq 0 nprint 50
+
+! look at the coordinates
+print coor 
+
+!---------------------------------------------------
+! illustrate the harmonic wall
+
+MMFP
+GEO  reset
+GEO  plane -
+     xref 0.0 yref 0.0 zref 0.0 xdir 1.0 -
+     force 100.0 droff 1.0 select bynu 1 end 
+END
+
+set 1  -10.0001
+label loo1
+coor set xdir @1 select bynu 1 end
+gete print
+incr 1 by 1.0
+if 1 le 10.0 goto loo1
+
+!---------------------------------------------------
+! illustrate the quartic sphere
+
+MMFP
+GEO  reset
+GEO  sphere quartic -
+     xref 8.0 force 0.2 droff 13.0 p1 2.25 select bynu 1 end 
+GEO  print
+END
+
+set 1  10.00
+label loo2
+coor set xdir @1 select bynu 1 end
+gete print
+incr 1 by 1.0
+if 1 le 30.0 goto loo2
+
+
+coor set xdir 22.06 select bynu 1 end
+mini abnr nstep 50 nprint 50 
+gete print
+print coor select bynu 1 end
+
+coor set xdir 25.0 select bynu 1 end
+test first tol 0.0 step 0.0001  select bynu 1 end
+
+!-------------------------------------------------------------------------------
+! test the dipole constraints
+MMFP
+MDIP  dip0 1.0 force 100.0 power 1  xdir 1.0 select all end
+MDIP  print
+END
+
+stop
+!------------------------------------------------------------------------------
+! test the dipole constraints
+MMFP
+MDIP  xdir 1.0 xref 5.0 dip0 0.0 force 100.0 power 1  select all end
+MDIP  print
+END
+
+SKIP all excl MDIP
+energy
+
+MMFP
+MDIP reset
+MDIP  xdir 1.0 xref 0.0 dip0 0.0 force 100.0 power 1  select all end
+MDIP  print
+END
+gete print
+test first tol 0.0 step 0.0001
+
+scalar charge set 1.0 select bynu 1 end
+MMFP
+MDIP reset
+MDIP  xdir 1.0 xref 0.0 dip0 5.0 force 10.0 power 2  select bynu 1 show end
+MDIP  print
+END
+coor set xdir 5.0 select bynu 1 end
+energy
+test first tol 0.0 step 0.0001 select bynu 1 end
+coor set xdir 4.0 select bynu 1 end
+gete print
+coor set xdir 6.0 select bynu 1 end
+gete print
+
+mini SD   nstep 50 nprint 50
+gete print
+print coor select bynu 1 end
+
+! Center to center of mass constraint
+!prnlev 6
+MMFP
+GEO  maxgeo 2500 -
+     sphere  RCM  distance -
+     harmonic symmetric force 10.0 droff 5.0 -
+     select bynu 1:10 end    select bynu 11:20 end
+
+GEO  print
+END
+
+coor set xdir 0.001 select bynu 1:10 end
+coor set xdir 1.002 select bynu 11:20 end
+
+faster off
+skip all excl geo
+energy
+write title unit 6
+* ?RGEO   ?XCM ?YCM ?ZCM  ?XCM2 ?YCM2  ?ZCM2  
+*
+
+coor set xdir 0.001 select bynu 1:10 end
+coor set xdir 5.002 select bynu 11:20 end
+gete print
+write title unit 6
+* ?RGEO   ?XCM ?YCM ?ZCM  ?XCM2 ?YCM2  ?ZCM2  
+*
+
+coor set xdir 0.001 select bynu 1:10 end
+coor set xdir 10.002 select bynu 11:20 end
+gete print
+
+write title unit 6
+* ?RGEO   ?XCM ?YCM ?ZCM  ?XCM2 ?YCM2  ?ZCM2  
+*
+
+test first tol 0.0 step 0.0001 
+
+
+!---------------------------------------------------
+! Gaussian solvation potential (simulate a membrane between -10 and +10)
+
+write title unit 10
+* GAUSSIAN solvation wall
+*
+
+MMFP
+
+GEO  reset
+GEO  plane -
+     xref 0.0 yref 0.0 zref 0.0 zdir 1.0 -
+     GAUSS force  1.00 p1 2.0 droff 12.5 select bynu 1 end
+
+GEO  print
+END
+
+set z -17.0001
+label do_3
+coor set zdir @z select bynu 1 end
+gete print
+write title unit 10
+* @z  ?geo
+*
+incr z by 0.25
+if z le 17.0 goto do_3
+
+coor set zdir 14.0 select bynu 1 end
+gete print
+test first tol 0.0 step 0.0001  select bynu 1 end
+
+stop

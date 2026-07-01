@@ -1,0 +1,307 @@
+* CHARMM c36a1 testcase
+* Test BLOCk module using PME
+* Author H Kamberaj, 2008 
+*
+if @?lambda eq 0 set lambda = 0.36
+calc onemlambda = 1 - @lambda
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+if ?colfft eq 1 then
+      echo "Test NOT performed with COLFFT."
+      stop
+endif
+stream datadir.def
+
+FASTER ON
+
+!prnlev 7 @pnode
+
+! read topology
+
+OPEN READ UNIT 2 CARD NAME @0top_all22_prot.inp
+READ RTF UNIT 2 CARD
+CLOSE UNIT 2
+
+! read parameters
+
+OPEN READ UNIT 2 CARD NAME @0par_all22_prot.inp
+READ PARAM UNIT 2 CARD
+CLOSE UNIT 2
+
+! -- generate a water segment
+read sequ TIP3 216
+generate TIP3 warn setup noangle nodihedral
+
+! -- read coordinates
+OPEN UNIT 4 FORM READ NAME @0tip216.crd
+READ COOR CARD UNIT 4
+CLOSE UNIT 4
+
+CRYSTAL DEFINE CUBIC 18.856 18.856 18.856 90.0 90.0 90.0
+CRYSTAL BUILD CUTOFF 9.0 NOPERATIONS 0
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+NBONDS IMGFRQ -1 INBFRQ -1 -
+       ATOM EWALD PMEWALD KAPPA 0.34 -
+       FFTX 20 FFTY 20 FFTZ 20 ORDER 6 QCOR 0.0 -    ! electrostatic specification -> PMEWALD
+       FSWITCH CDIE E14FAC 1.0 EPS 1.0 -             ! electrostatic - option - specification
+       VDW VATOM Vswitch -                           ! Van der Waals specification
+       CUTNB 9.0  CTONNB 7.5 CTOFNB 8.0 CUTIM 9.0 -  ! Cutoff for non-bounded interactions
+       WMIN 1.5 WRNMXD 0.5
+
+energy
+
+write psf card name @9/tip.psf
+write coor card name @9/tip.crd
+
+block 3
+   call 2 select ires 1:10 end
+   call 3 select ires 11:20  end
+   lambda @lambda
+end
+
+energy
+
+set ewk = ?ewks 
+set ews =  ?ewse 
+set ewe = ?ewex
+
+set ebase = ?ener
+coor force comp
+coor init
+
+read coor card name @9/tip.crd
+mini sd nstep 5 nprint 1
+
+read coor card name @9/tip.crd
+block 3
+    lambda 1
+end
+
+energy
+calc ewk = @ewk - @onemlambda * ?ewks 
+calc ews =  @ews - @onemlambda * ?ewse 
+calc ewe = @ewe - @onemlambda * ?ewex
+
+calc ebase = @ebase - @onemlambda * ?ener
+coor force
+coor scale fact @onemlambda
+coor diff comp
+
+coor init
+read coor card name @9/tip.crd
+
+block 3
+    lambda 0
+end
+
+energy
+
+set refe = -1954.65996
+@qcheck ?ener @refe 0.00001 energy
+
+calc ewk = @ewk - @lambda * ?ewks 
+calc ews =  @ews - @lambda * ?ewse 
+calc ewe = @ewe - @lambda * ?ewex
+calc ebase = @ebase - @lambda * ?ener
+
+if @ebase gt 1e-4 then
+  echo ewks @ewk ewse @ews ewex @ewe
+endif
+
+! if @ebase gt 1e-4 then
+!       echo test one failed - energy
+!       echo ewks @ewk ewse @ews ewex @ewe
+! else
+!       echo test one passed - energy
+! endif
+
+coor force
+coor scale fact @lambda
+coor diff comp
+coor stat
+calc err = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+if @err gt 1e-4 then
+      echo test one failed - forces
+else
+      echo test one passed - forces
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+block
+   clear
+end
+
+bomlev -1
+delete atom select all end
+bomlev 0
+read psf card name @9/tip.psf
+read coor card name @9/tip.crd
+
+replica p nreplica 1 select ires 1:10 end
+replica reset
+!delete atom select .byres. ( segid p1 .and. resid 1 ) end
+print coor select ires 1:10 end
+print coor select segid p1 end
+
+CRYSTAL DEFINE CUBIC 18.856 18.856 18.856 90.0 90.0 90.0
+CRYSTAL BUILD CUTOFF 9.0 NOPERATIONS 0
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+NBONDS IMGFRQ -1 INBFRQ -1 -
+       ATOM EWALD PMEWALD KAPPA 0.34 -
+       FFTX 20 FFTY 20 FFTZ 20 ORDER 6 QCOR 0.0 -    ! electrostatic specification -> PMEWALD
+       FSWITCH CDIE E14FAC 1.0 EPS 1.0 -             ! electrostatic - option - specification
+       VDW VATOM Vswitch -                           ! Van der Waals specification
+       CUTNB 9.0  CTONNB 7.5 CTOFNB 8.0 CUTIM 9.0 -  ! Cutoff for non-bounded interactions
+       WMIN 1.5 WRNMXD 0.5
+
+write psf card name @9/tip.psf
+write coor card name @9/tip.crd
+
+block 3
+   call 2 select ires 1:10 end
+   call 3 select segid p1 end
+   lambda @lambda
+end
+
+energy
+set ebase = ?ener
+coor force comp
+coor init
+
+read coor card name @9/tip.crd
+block 3
+    lambda 1
+end
+
+energy
+calc ebase = @ebase - @onemlambda * ?ener
+coor force
+coor scale fact @onemlambda
+coor diff comp
+
+coor init
+read coor card name @9/tip.crd
+
+block 3
+    lambda 0
+end
+
+energy
+calc ebase = @ebase - @lambda * ?ener
+
+if @ebase gt 1e-4 then
+      echo test two failed - energy
+else
+      echo test two passed - energy
+endif
+
+coor force
+coor scale fact @lambda
+coor diff comp
+coor stat
+calc err = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+if @err gt 1e-4 then
+      echo test two failed - forces
+else
+      echo test two passed - forces
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+block
+   clear
+end
+
+read coor card name @9/tip.crd
+
+block 3
+   call 2 select ires 1:10 end
+   call 3 select segid p1 end
+   coeff 1 2 @onemlambda
+   coeff 2 2 @onemlambda
+   coeff 1 3 @lambda
+   coeff 2 3 0
+   coeff 3 3 @lambda
+end
+
+energy
+set ebase = ?ener
+coor force comp
+coor init
+
+read coor card name @9/tip.crd
+
+block 3
+   coeff 1 2 1
+   coeff 2 2 1
+   coeff 2 3 0
+   coeff 1 3 0
+   coeff 3 3 0
+end
+
+energy
+
+calc ebase = @ebase - @onemlambda * ?ener
+coor force
+coor scale fact @onemlambda
+coor diff comp
+
+coor init
+read coor card name @9/tip.crd
+
+block 3
+   coeff 1 2 0
+   coeff 2 2 0
+   coeff 2 3 0
+   coeff 1 3 1
+   coeff 3 3 1
+end
+
+energy
+calc ebase = @ebase - @lambda * ?ener
+
+if @ebase gt 1e-4 then
+      echo test three failed - energy
+else
+      echo test three passed - energy
+endif
+
+coor force
+coor scale fact @lambda
+coor diff comp
+
+calc err = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+if @err gt 1e-4 then
+      echo test three failed - forces
+else
+      echo test three passed - forces
+endif
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+block
+   clear
+end
+
+coor init
+read coor card name @9/tip.crd
+
+block 3
+   call 2 select ires 1:10 end
+   call 3 select segid p1 end
+   coeff 1 2 @onemlambda
+   coeff 2 2 @onemlambda
+   coeff 1 3 @lambda
+   coeff 2 3 0
+   coeff 3 3 @lambda
+end
+
+mini sd nstep 5 nprint 1
+
+STOP
+
+

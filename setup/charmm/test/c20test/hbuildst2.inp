@@ -1,0 +1,283 @@
+* HBUILDST2 : Axel Brunger 1982/83
+* Test run for the hydrogen position builder including ST2's.
+*
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?nost2 .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+OPEN READ FORM UNIT 1 NAME  @0toph9.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+BOMLEV -2
+OPEN READ FORM UNIT 2 NAME  @0param6.prm
+READ PARAM CARD UNIT 2
+CLOSE UNIT 2
+BOMLEV  0
+
+read rtf card append
+* patch to include angles for ST2 just for testing
+* and to define correct ST2 charges
+*
+   20    1
+pres ST2A        0.00
+atom OX2  OH2     .00 ! USE CHARGES WITH EPS=2.0
+atom HX1  H       .48 !
+atom HX2  H       .48 !
+atom LX1  LP     -.48 !
+atom LX2  LP     -.48 !
+angle HX1 OX2 HX2   HX1 OX2 LX1  HX1 OX2 LX2  HX2 OX2 LX1   HX2 OX2 LX2
+angle LX1 OX2 LX2
+end
+
+read sequence cards
+* RNase beta sheet part 1
+*
+    7
+PRO VAL ASN THR PHE VAL HSC
+generate BET1 setup
+
+read sequence cards
+* RNase beta sheet part 2
+*
+    7
+SER ILE THR ASP CYS ARG GLU
+generate BET2 setup
+
+read sequence st2 5
+generate St2
+patch ST2A ST2 1    warn
+patch ST2A ST2 2    warn
+patch ST2A ST2 3    warn
+patch ST2A ST2 4    warn
+patch ST2A ST2 5    warn
+
+read coor card offset -41
+* shortened RNase sequence beta sheet part 1
+* neutron diffraction structure of ribonuclease
+* obtained from Greg Petsko
+*
+   68
+  416   42 PRO  N     27.35563   7.06022   6.93119
+  417   42 PRO  CD    27.98205   7.40160   5.59861
+  418   42 PRO  CA    28.20449   6.19776   7.69905
+  419   42 PRO  CB    29.26930   5.66861   6.70704
+  420   42 PRO  CG    29.25018   6.59712   5.50731
+  421   42 PRO  C     28.79245   6.72230   8.99675
+  422   42 PRO  O     29.01698   5.99117   9.94926
+  423   43 VAL  N     29.05793   7.99757   8.89827
+  424   43 VAL  H     28.90648   8.59162   8.12529
+  425   43 VAL  CA    29.69531   8.70259  10.04107
+  426   43 VAL  CB    31.21849   8.59123   9.80615
+  427   43 VAL  CG1   31.95624   9.51129  10.73045
+  428   43 VAL  CG2   31.53416   7.15353  10.14212
+  429   43 VAL  C     29.24282  10.12954  10.12006
+  430   43 VAL  O     29.11877  10.74086   9.04753
+  431   44 ASN  N     28.99918  10.56153  11.33006
+  432   44 ASN  H     29.14509  10.00934  12.15126
+  433   44 ASN  CA    28.58851  11.94317  11.61679
+  434   44 ASN  CB    27.07362  12.09792  11.35263
+  435   44 ASN  CG    26.66547  13.54982  11.35519
+  436   44 ASN  OD1   27.22469  14.38041  10.63453
+  437   44 ASN  ND2   25.70533  13.96685  12.15177
+  438   44 ASN  HD21  25.23518  13.25760  12.74472
+  439   44 ASN  HD22  25.38801  14.94874  12.18306
+  440   44 ASN  C     28.96740  12.39629  13.05350
+  441   44 ASN  O     28.79346  11.60717  13.96907
+  442   45 THR  N     29.34952  13.66157  13.18942
+  443   45 THR  H     29.42904  14.26829  12.42567
+  444   45 THR  CA    29.65977  14.25600  14.48200
+  445   45 THR  CB    31.10227  14.80128  14.54509
+  446   45 THR  OG1   31.90032  13.79366  14.02498
+  447   45 THR  HG1   31.79428  12.85862  14.26452
+  448   45 THR  CG2   31.63905  15.22483  15.92743
+  449   45 THR  C     28.63678  15.40147  14.77181
+  450   45 THR  O     28.23957  16.22362  13.97472
+  451   46 PHE  N     28.26090  15.42758  16.05002
+  452   46 PHE  H     28.64239  14.75289  16.71221
+  453   46 PHE  CA    27.38060  16.42406  16.64194
+  454   46 PHE  CB    26.10794  15.92525  17.37850
+  455   46 PHE  CG    25.13360  15.39802  16.33829
+  456   46 PHE  CD1   24.29112  16.26010  15.67764
+  457   46 PHE  CD2   25.11930  13.99757  16.12183
+  458   46 PHE  CE1   23.39582  15.70752  14.75129
+  459   46 PHE  CE2   24.27159  13.45843  15.17240
+  460   46 PHE  CZ    23.38186  14.31091  14.47944
+  461   46 PHE  C     28.22539  17.23776  17.64523
+  462   46 PHE  O     29.07335  16.60378  18.34076
+  463   47 VAL  N     28.06751  18.56294  17.61240
+  464   47 VAL  H     27.34542  18.93657  17.02099
+  465   47 VAL  CA    28.78747  19.43654  18.56747
+  466   47 VAL  CB    29.61288  20.45107  17.74474
+  467   47 VAL  CG1   30.53574  21.31776  18.65057
+  468   47 VAL  CG2   30.35272  19.71917  16.65579
+  469   47 VAL  C     27.77446  20.03635  19.56409
+  470   47 VAL  O     26.77212  20.63117  19.10297
+  471   48 HSC  N     28.09145  19.92921  20.86590
+  472   48 HSC  H     28.92273  19.45190  21.12698
+  473   48 HSC  CA    27.26330  20.37964  21.96510
+  474   48 HSC  CB    27.32057  19.25145  23.03046
+  475   48 HSC  CG    26.89043  17.88403  22.61191
+  476   48 HSC  CD2   27.61824  16.74201  22.30620
+  477   48 HSC  ND1   25.58312  17.53996  22.60524
+  478   48 HSC  HD1   24.79289  18.19046  22.78528
+  479   48 HSC  CE1   25.50089  16.26163  22.22516
+  480   48 HSC  NE2   26.72091  15.75629  22.06307
+  481   48 HSC  HE2   26.92283  14.78054  21.78558
+  482   48 HSC  C     27.75132  21.65568  22.59755
+  483   48 HSC  O     28.22737  21.67718  23.78343
+
+read coor card  offset -72
+* shortened RNase sequence beta sheet part 2
+* see above
+*
+   69
+  774   80 SER  N     32.69556  19.55673  23.50799
+  775   80 SER  H     32.21520  20.45721  23.70957
+  776   80 SER  CA    31.91247  18.33600  23.79472
+  777   80 SER  CB    30.79948  18.66125  24.76826
+  778   80 SER  OG    30.05549  17.48966  24.74825
+  779   80 SER  HG    29.24969  17.53190  25.24887
+  780   80 SER  C     31.30875  17.86867  22.46213
+  781   80 SER  O     30.65674  18.70656  21.80456
+  782   81 ILE  N     31.65585  16.67174  21.98049
+  783   81 ILE  H     32.22105  16.04006  22.47290
+  784   81 ILE  CA    31.22831  16.16409  20.69920
+  785   81 ILE  CB    32.37001  16.24358  19.70104
+  786   81 ILE  CG2   32.99632  17.63213  19.45843
+  787   81 ILE  CG1   33.33544  15.23097  20.19653
+  788   81 ILE  CD    34.29426  14.75481  19.15477
+  789   81 ILE  C     30.76085  14.72678  20.90745
+  790   81 ILE  O     31.13488  14.02406  21.87124
+  791   82 THR  N     29.89373  14.31091  20.00726
+  792   82 THR  H     29.58767  14.85542  19.24095
+  793   82 THR  CA    29.30620  12.95040  19.97084
+  794   82 THR  CB    27.82835  12.79296  20.28527
+  795   82 THR  OG1   27.49452  13.40774  21.51424
+  796   82 THR  HG1   27.96319  13.18809  22.31903
+  797   82 THR  CG2   27.47324  11.32300  20.32527
+  798   82 THR  C     29.61784  12.46272  18.52028
+  799   82 THR  O     29.20474  13.10745  17.51340
+  800   83 ASP  N     30.31171  11.37677  18.45001
+  801   83 ASP  H     30.58467  10.84070  19.25531
+  802   83 ASP  CA    30.64776  10.71129  17.18770
+  803   83 ASP  CB    31.99652  10.06809  17.30670
+  804   83 ASP  CG    32.84881  10.52697  16.14697
+  805   83 ASP  OD1   33.47277  11.56185  16.26340
+  806   83 ASP  OD2   32.70667   9.62189  15.20831
+  807   83 ASP  C     29.67010   9.56505  16.98406
+  808   83 ASP  O     29.55062   8.85350  17.92682
+  809   84 CYS  N     29.10260   9.46445  15.84177
+  810   84 CYS  H     29.28555  10.14605  15.09854
+  811   84 CYS  CA    28.12815   8.48179  15.43759
+  812   84 CYS  CB    26.90109   9.22752  14.97287
+  813   84 CYS  SG    26.00696  10.23897  16.20134
+  814   84 CYS  C     28.70065   7.68307  14.27581
+  815   84 CYS  O     29.05154   8.28441  13.26739
+  816   85 ARG  N     28.84289   6.40512  14.51996
+  817   85 ARG  H     28.56754   6.00192  15.38988
+  818   85 ARG  CA    29.38734   5.47776  13.53668
+  819   85 ARG  CB    30.67100   4.94169  14.16347
+  820   85 ARG  CG    31.37675   4.04659  13.16378
+  821   85 ARG  CD    32.40045   5.02963  12.66419
+  822   85 ARG  NE    33.07164   5.45587  13.91111
+  823   85 ARG  HE    32.87922   4.99584  14.80361
+  824   85 ARG  CZ    33.95636   6.44467  13.93932
+  825   85 ARG  NH1   34.35910   7.15238  12.86731
+  826   85 ARG  HH11  33.96748   6.95347  11.95378
+  827   85 ARG  HH12  35.05100   7.89005  12.97194
+  828   85 ARG  NH2   34.55408   6.70003  15.12932
+  829   85 ARG  HH21  34.28357   6.22848  15.97154
+  830   85 ARG  HH22  35.22500   7.47494  15.17497
+  831   85 ARG  C     28.43803   4.29312  13.33099
+  832   85 ARG  O     27.89538   3.69523  14.23990
+  833   86 GLU  N     28.25630   4.03776  12.02046
+  834   86 GLU  H     28.65800   4.55501  11.25723
+  835   86 GLU  CA    27.32862   2.94566  11.64397
+  836   86 GLU  CB    27.29494   3.05894  10.09903
+  837   86 GLU  CG    25.98626   2.95910   9.41684
+  838   86 GLU  CD    25.96399   2.41229   7.98475
+  839   86 GLU  OE1   24.96674   1.89197   7.68109
+  840   86 GLU  OE2   27.05938   2.47641   7.38359
+  841   86 GLU  C     27.81263   1.62624  12.22358
+  842   86 GLU  O     29.02216   1.28755  12.18562
+
+read coor card
+* some water coordinates
+*
+   15
+ 2007   15 ST2  OX2   30.95127  14.59622  10.76225  14.65111
+ 2008   15 ST2  HX1   31.90628  14.64000  10.97871  14.54827
+ 2009   15 ST2  HX2   31.03687  13.91616  10.04723  14.73486
+ 2133   16 ST2  OX2   28.53545  21.27360  26.28703  31.55907
+ 2134   16 ST2  HX1   28.33687  21.52742  25.39300  31.40230
+ 2135   16 ST2  HX2   28.24325  20.40768  26.48810  31.41050
+ 2154   17 ST2  OX2   12.85658   4.80269  14.21477  67.22215
+ 2155   17 ST2  HX1   13.70097   4.34150  14.26914  67.09614
+ 2156   17 ST2  HX2   12.70368   5.13254  15.10726  67.11537
+ 2160   18 ST2  OX2   33.41767  12.46310  11.57832  47.51263
+ 2161   18 ST2  HX1   33.03679  11.69011  12.07688  47.32378
+ 2162   18 ST2  HX2   34.34752  12.13363  11.63679  47.53332
+ 2181   19 ST2  OX2   32.69186   3.84422  16.96765  46.54588
+ 2182   19 ST2  HX1   33.26508   3.07161  17.06511  46.61032
+ 2183   19 ST2  HX2   32.10055   3.60806  16.25468  46.52946
+
+ic parameter
+ic build
+
+coor initial selection hydrogen .or. lone end
+hbuild selection hydrogen .and. .not. segid ST2 end -
+     print phistp 10.0 -
+     acce ctonhb 4.7 ctofhb 5.2 cuthb 5.7 ctonha 50.0 ctofha 70.0 CUTHA 90.0 -
+     elec group cdie switch eps 2.0 -
+          cutnb 8.0 ctexnb 999.0 ctonnb 99.0 ctofnb 99.0 -
+     vdw nbxmod 5 vswitch vdistance norxn
+!
+! TEST HBUILD with ST2's
+!
+hbuild selection segid ST2 .and. (hydrogen .or. lone) end -
+     print phistp 10.0 -
+     acce ctonhb 4.7 ctofhb 5.2 cuthb 5.7 ctonha 50.0 ctofha 70.0 CUTHA 90.0 -
+     elec group cdie switch eps 2.0 -
+          cutnb 30.0 ctexnb 999.0 ctonnb 99.0 ctofnb 99.0 -
+     vdw nbxmod 5 vswitch vdistance norxn
+
+print coor
+
+nbonds elec group cdie switch eps 2.0 -
+            cutnb 30.0 ctexnb 999.0 ctonnb 99.0 ctofnb 99.0 -
+       vdw nbxmod 5 vswitch vdistance norxn
+
+PRINT COOR
+!
+!anal
+!  build bond -
+!     geometry $
+!  keeponly selection segid ST2 end
+!  print table pretty
+!  build angle -
+!     geometry $
+!  keeponly selection segid ST2 end
+!  print table pretty
+!!
+!  build atom -
+!     evdw $ -
+!     elec $ -
+!     ehb $
+!  keeponly selection segid ST2 .and. (type H* .or. type L*) end
+!  add stats sum $ place residue $
+!  print table column sort resid $ tag $ $$
+!!
+!  build torsion -
+!     geometry  $
+!  print table column sort segid $ resid $ tag $ $$
+!end
+stop

@@ -1,0 +1,31 @@
+* CRYSTAL FILE FOR MBCO (KURIYAN ET AL.). CUTOFF 20.0 ANGSTROMS.
+* A,B,C,ALPHA,BETA,GAMMA = 64.180  30.840  34.690  90.00 105.84  90.00
+*
+ SYMMETRY
+ (X,Y,Z)                                 
+ (-X,Y+1/2,-Z)                           
+ END
+
+ IMAGES
+ ! Operation     A     B     C
+           1     0    -1    -1
+           1     0     0    -1
+           1     0     1    -1
+           1     0    -1     0
+           1     0     1     0
+           1     0    -1     1
+           1     0     0     1
+           1     0     1     1
+           2     0    -2     0
+           2     0    -1     0
+           2     0     0     0
+           2     0     1     0
+           2     1    -1     0
+           2     1     0     0
+           2     0    -1     1
+           2     0     0     1
+           2     1    -2     1
+           2     1    -1     1
+           2     1     0     1
+           2     1     1     1
+ END

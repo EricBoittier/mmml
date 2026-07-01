@@ -1,0 +1,315 @@
+* CHARMM 25 testcase allxtl.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* Crystal symmetry test case.  Test ALL of the crystal types.
+*
+
+bomblev -2
+stream datadir.def
+
+!
+!  Read in Cornell et al. parameters and RTF
+!
+
+read rtf card
+*  TIP3P
+*
+23    1
+MASS   26  HW 1.008          !  H in TIP3P water
+MASS   42  OW 16.00          !  oxygen in TIP3P water
+
+DEFAULT FIRST NTER LAST CTER
+AUTOGENERATE ANGLES DIHEDRAL
+
+RESI WAT          0.00   ! TIP3P WATER MODEL  
+                         ! GENERATE USING NOANGLE NODIHEDRAL
+GROUP   
+ATOM OH2  OW     -0.834
+ATOM H1   HW      0.417 
+ATOM H2   HW      0.417  
+BOND OH2  H1     OH2  H2    H1   H2    ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE H1 OH2 H2    ! REQUIRED
+PATCHING FIRS NONE LAST NONE   
+
+END
+
+read param card
+*  TIP3P
+*
+
+BONDS
+OW   HW  553.0    0.9572    !  TIP3P water
+HW   HW  553.0    1.5136    !  TIP3P water
+
+THETAS
+HW   OW   HW    100.      104.52  !  TIP3P water
+HW   HW   OW      0.      127.74  !  (found in crystallographic water with 3 bonds)
+
+NONBONDED  NBXMOD 5  ATOM CDIEL FSHIFT VSHIFT -
+     CUTNB 14.0  CTOFNB 12.0  CTONNB 10.0  EPS 1.0  E14FAC 0.83333333  WMIN 1.4
+!          Emin       Rmin/2         Emin/2      Rmin  (for 1-4's)
+!       (kcal/mol)     (A)
+HW  0.0  -0.0000     0.0000    0.0  -0.0000     0.0000  ! TIP3P water model
+OW  0.0  -0.1520     1.7683    0.0  -0.0760     1.7683  ! TIP3P water model
+
+END
+
+read sequence wat 1000
+generate wat noangle nodihedral
+
+open read card unit 11 name @0wat1000.crd
+read coordinates card unit 11 select segid wat end
+close unit 11
+
+coordinate orient norotate select all end mass
+coor dist weigh
+delete atom sele .byres. ( type o* .and. prop wmain .gt. 7.0 ) end
+join wat renumber
+coor stat
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   cubic case !!
+
+set type cubic
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT01
+goto testing
+label SECT01
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   tetragonal case !!  high symmetry
+
+set type tetr 
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT02
+goto testing
+label SECT02
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   tetragonal case !!  low symmetry
+
+set type tetr 
+set a 20.0
+set b 20.0
+set c 17.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT03
+goto testing
+label SECT03
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   orthorhombic case !!  high symmetry
+
+set type orth
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT04
+goto testing
+label SECT04
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   orthorhombic case !!  low symmetry
+
+set type orth
+set a 20.0
+set b 18.5
+set c 17.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT05
+goto testing
+label SECT05
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   monoclinic case !!  high symmetry
+
+set type mono
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT06
+goto testing
+label SECT06
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   monoclinic case !!  low symmetry
+
+set type mono
+set a 20.0
+set b 18.5
+set c 17.0
+set alpha 90.0
+set beta  75.0
+set gamma 90.0
+
+set flag SECT07
+goto testing
+label SECT07
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   triclinic case !!  high symmetry
+
+set type tric
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT08
+goto testing
+label SECT08
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   triclinic case !!  low symmetry
+
+set type tric
+set a 20.0
+set b 18.5
+set c 17.0
+set alpha 80.0
+set beta  75.0
+set gamma 70.0
+
+set flag SECT09
+goto testing
+label SECT09
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   hexagonal case !!  high symmetry
+
+set type hexa
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 90.0
+set beta  90.0
+set gamma 120.0
+
+set flag SECT10
+goto testing
+label SECT10
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   hexagonal case !!  low symmetry
+
+set type hexa
+set a 20.0
+set b 20.0
+set c 17.0
+set alpha 90.0
+set beta  90.0
+set gamma 120.0
+
+set flag SECT11
+goto testing
+label SECT11
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   rhombohedral case !!  high symmetry
+
+set type rhom
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 90.0
+set beta  90.0
+set gamma 90.0
+
+set flag SECT12
+goto testing
+label SECT12
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   rhomahedral case !!  low symmetry
+
+set type rhom
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 80.0
+set beta  80.0
+set gamma 80.0
+
+set flag SECT13
+goto testing
+label SECT13
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   octrahedral case !!  std symmetry
+
+set type octa
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 109.4712206344907
+set beta  109.4712206344907
+set gamma 109.4712206344907
+
+set flag SECT14
+goto testing
+label SECT14
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!   rhombic dodecahedron case !!  std symmetry
+
+set type rhdo
+set a 20.0
+set b 20.0
+set c 20.0
+set alpha 60.0
+set beta  90.0
+set gamma 60.0
+
+set flag SECT15
+goto testing
+label SECT15
+
+STOP
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+label testing
+
+crystal define @type @a @b @c @alpha @beta @gamma
+crystal build cutoff 16.0
+
+ener atom fshift cutnb 14.0 cutimg 15.0 ctofnb 13.0 ctonnb 11.0 vshift
+
+test first tol 0.0 step 0.00001 crystal select ires 20 end
+print ener
+test first tol 0.0 step 0.000001 crystal select ires 20 end
+print ener
+
+test first tol 0.0 step 0.00001 crystal homo select ires 20 end
+print ener
+test first tol 0.0 step 0.000001 crystal homo select ires 20 end
+print ener
+
+goto @flag

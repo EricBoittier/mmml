@@ -1,0 +1,986 @@
+* Test the building and block partitioning of protein patches for
+* titratable residues and TI calculations.
+* C. L. Brooks III - September, 2013
+*
+
+stream datadir.def
+set toppar @0
+
+!-- Read in parameters
+goto setpar
+label backpar
+!-- Set up the system
+goto setup
+label backsetup
+!-- set up crystal imaging
+set return = f3
+goto setxtl
+label f3
+
+!--- reference energy
+set goodener -49441.07365
+set goodenerbond -49443.67542
+set goodenerthet -49449.59608
+set goodenerdihe -49455.92676
+set goodenerimpr -49441.70070
+set etol .04
+set ftol 0.001
+!goto checkforces
+
+!--------------------------------------------------------------------------------
+!------------------- First calculation with old block: get energy -------------
+!--------------------------------------------------------------------------------
+BLOCK 4
+   ! selections are set in the setup scripting sourced above
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   rmla bond thet dihe impr ! all bond and angle energy terms are treated
+                            ! at full strength
+   coef 1 2 .4
+   coef 1 3 .3
+   coef 1 4 .3
+   coef 2 2 .4
+   coef 2 3 0
+   coef 2 4 0
+   coef 3 3 .3
+   coef 3 4 0
+   coef 4 4 .3
+
+END
+
+energy  @cutoffs @ewald
+set blockener ?ener
+coor force comp
+write coor card comp name @9msld_forces_block.cor
+block
+clear
+end
+
+!--------------------------------------------------------------------------------
+!------------------- Second calculation MSLD: get energy -------------
+!--------------------------------------------------------------------------------
+
+! ------------- bonds are also scaled ----------
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla thet dihe impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy @cutoffs @ewald
+set msldenerbond ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_bond.cor
+block
+clear
+end
+
+! ------------- angles are also scaled ----------
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla bond dihe impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy @cutoffs @ewald
+set msldenerthet ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_thet.cor
+block
+clear
+end
+
+! ------------- dihedrals are also scaled ----------
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla bond thet impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy @cutoffs @ewald
+set msldenerdihe ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_dihe.cor
+block
+clear
+end
+
+!---------------- all bonded energy terms are full strength ---------------
+
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla bond thet dihe impr      ! all bonded energy terms are full strength
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy @cutoffs @ewald
+set msldener ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld.cor
+
+!--------------------------------------------------------------------------------
+!------------------- Third calculation MSLD dynamics without DOMDEC -------------
+!--------------------------------------------------------------------------------
+! default dynamics
+shake fast para bonh tol 1.e-8
+
+block
+clear
+end
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+open unit 12 write form name @9/msld_heat.res
+open unit 14 write unform name @9/msld_heat.ldn
+
+dynamics start timestep 0.002 nstep 100 nprint 10 iprfrq 10 -
+   iseed @seeds -
+   firstt 310 finalt 310 teminc 100.0 -
+   ihtfrq 100 ieqfrq 0 ntrfrq 5000 -
+   iasors 1 iasvel 1 iscvel 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
+   iunwri 12 nsavc 300 nsavv 0 nsavl 10 iunvel 0 -
+   iunread 13 iunldm 14 eps 1.0 echeck 0
+set dynener ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_dyn.cor
+shake off
+block
+clear
+end
+
+if ?domdec .ne. 1 goto skipdomdec1
+
+set retdd retlab1
+set ddopt dlb off ppang 600
+set f1 msld_dd1
+set f2 msld_dd1_dyn
+goto rundd
+label retlab1
+set ddenerbond1 @ddenerbond
+set ddenerthet1 @ddenerthet
+set ddenerdihe1 @ddenerdihe
+set ddenerimpr1 @ddenerimpr
+set ddener1 @ddener
+set dddynener1 @dddynener
+
+if ?domdec_g .ne. 1 goto skipdomdec1
+
+set retdd retlab2
+set ddopt dlb off gpu on
+set f1 msld_dd2
+set f2 msld_dd2_dyn
+goto rundd
+label retlab2
+set ddenerbond2 @ddenerbond
+set ddenerthet2 @ddenerthet
+set ddenerdihe2 @ddenerdihe
+set ddenerimpr2 @ddenerimpr
+set ddener2 @ddener
+set dddynener2 @dddynener
+
+label skipdomdec1
+!------------------- CHECK for FAILURES  -------------
+!---- Energies
+set TESTE1 PASS
+set TESTE2 PASS
+set TESTDIFF12 PASS
+set TESTE4 PASS
+set TESTDIFF24 PASS
+set TESTDIFF35 PASS
+calc diff = abs( @blockener - @goodener )
+if @diff .gt. @etol set teste1 FAIL
+
+calc diff = abs( @msldener - @goodener )
+if @diff .gt. @etol set teste2 FAIL
+
+calc diff = abs( @msldener - @blockener )
+if @diff .gt. @etol set testdiff12 FAIL
+
+if ?domdec .ne. 1 goto skipdomdec2
+
+calc diff = abs( @ddenerbond1 - @goodenerbond )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddenerthet1 - @goodenerthet )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddenerdihe1 - @goodenerdihe )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddenerimpr1 - @goodenerimpr )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddener1 - @goodener )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @msldenerbond - @ddenerbond1 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+calc diff = abs( @msldenerthet - @ddenerthet1 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+calc diff = abs( @msldenerdihe - @ddenerdihe1 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+calc diff = abs( @msldener - @ddener1 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+calc diff = abs( @dynener - @dddynener1 )
+if @diff .gt. @etol set testdiff35 FAIL
+
+if ?domdec_g .ne. 1 goto skipdomdec2
+
+calc diff = abs( @ddenerbond2 - @goodenerbond )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddenerthet2 - @goodenerthet )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddenerdihe2 - @goodenerdihe )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddenerimpr2 - @goodenerimpr )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @ddener2 - @goodener )
+if @diff .gt. @etol set teste4 FAIL
+
+calc diff = abs( @msldenerbond - @ddenerbond2 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+calc diff = abs( @msldenerthet - @ddenerthet2 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+calc diff = abs( @msldenerdihe - @ddenerdihe2 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+calc diff = abs( @msldener - @ddener2 )
+if @diff .gt. @etol set testdiff24 FAIL
+
+!calc diff = abs( @dynener - @dddynener2 )
+!if @diff .gt. @etol set testdiff35 FAIL
+
+label skipdomdec2
+
+if @teste1 .eq. fail goto failtest
+if @teste2 .eq. fail goto failtest
+if @teste4 .eq. fail goto failtest
+if @testdiff12 .eq. fail goto failtest
+if @testdiff24 .eq. fail goto failtest
+if @testdiff35 .eq. fail goto failtest
+
+!---- Forces
+label checkforces
+read coor card name @0/msld2gbig_forces.cor
+write coor card name @9/msld_forces_good.cor
+
+set f1 good
+set f2 block
+goto diffforces
+label backgoodblock
+
+set f1 msld
+set f2 block
+goto diffforces
+label backmsldblock
+
+if ?domdec .ne. 1 goto skipdomdec3
+
+set f1 msld
+set f2 msld_dd1
+goto diffforces
+label backmsldmsld_dd1
+
+set f1 msld_dyn
+set f2 msld_dd1_dyn
+goto diffforces
+label backmsld_dynmsld_dd1_dyn
+
+if ?domdec_g .ne. 1 goto skipdomdec3
+
+set ftol 0.02
+set f1 msld
+set f2 msld_dd2
+goto diffforces
+label backmsldmsld_dd2
+
+!set f1 msld_dyn
+!set f2 msld_dd2_dyn
+!goto diffforces
+!label backmsld_dynmsld_dd2_dyn
+
+label skipdomdec3
+! ---- Test Successful ----
+stop
+
+label diffforces
+read coor card comp name @9msld_forces_@f1.cor
+read coor card      name @9msld_forces_@f2.cor
+coor diff
+coor stat
+calc diff = ?xmax - ?xmin + ?ymax - ?ymin + ?zmax - ?zmin
+if @diff .gt. @ftol goto failtest
+echo PASS @f1 @f2
+goto back@f1@f2
+
+label failtest
+echo msld2 test FAILED
+quit  ! command that triggers abnormal termination
+stop
+
+
+!================================================================
+!            ROUTINES
+!================================================================
+
+!============================================================
+!               RUNDD
+!============================================================
+label rundd
+!--------------------------------------------------------------------------------
+!------------------- Fourth calculation MSLD with DOMDEC: get energy -------------
+!--------------------------------------------------------------------------------
+shake off
+read coor pdb name @pdb/alaaspala_solvated_gbig.pdb resid
+
+! ------------- bonds are also scaled ----------
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla thet dihe impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy  @cutoffs @ewald domdec @ddopt
+set ddenerbond ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_dd_bond.cor
+block
+clear
+end
+
+! ------------- angles are also scaled ----------
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla bond dihe impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy  @cutoffs @ewald
+set ddenerthet ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_dd_thet.cor
+block
+clear
+end
+
+! ------------- dihedrals are also scaled ----------
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla bond thet impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy  @cutoffs @ewald
+set ddenerdihe ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_dd_dihe.cor
+block
+clear
+end
+
+! ------------- impropers are also scaled ----------
+! ### NOTE: This result is not used in the comparison between old CHARMM because
+!           old CHARMM does not compute scaled impropers.
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla bond thet dihe
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy  @cutoffs @ewald
+set ddenerimpr ?ener
+coor force comp
+write coor card comp name @9msld_forces_msld_dd_impr.cor
+block
+clear
+end
+
+!---------------- all bonded energy terms are full strength ---------------
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla bond thet dihe impr      ! all bonded energy terms are full strength
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+energy  @cutoffs @ewald
+set ddener ?ener
+coor force comp
+write coor card comp name @9msld_forces_@f1.cor
+
+!--------------------------------------------------------------------------------
+!------------------- Fifth calculation MSLD dynamics with DOMDEC -------------
+!--------------------------------------------------------------------------------
+boml 0
+
+block
+clear
+end
+BLOCK 4
+   Call 2 sele wt end
+   Call 3 sele m  end
+   Call 4 sele p  end
+   qldm theta                          ! qldm selects l-dynamics
+   lang temp 310.0  ! assigns effective temperatures for
+                    !   propagating theta values via langevin dynamics
+   ldin 1 1.0     0.0  12.0  0.0 5.0   ! environment
+   ldin 2 0.40    0.0  12.0  0.0 5.0
+   ldin 3 0.30    0.0  12.0  0.0 5.0
+   ldin 4 0.30    0.0  12.0  0.0 5.0
+   rmla impr
+   msld 0 1 1 1 fnex 5.5  ! msld selects multi-site l-dynamics
+                          !   numbers assign each block to specified site on the core
+   msma                   ! msma constructs interaction matrix,
+                          !      assigns l and theta values for each block
+END   !end block subcommands
+
+shake fast para bonh tol 1.e-8
+
+! default dynamics
+open unit 12 write form name @9/msld_heat.res
+open unit 14 write unform name @9/msld_heat.ldn
+
+dynamics start timestep 0.002 nstep 100 nprint 10 iprfrq 10 -
+   iseed @seeds -
+   firstt 310 finalt 310 teminc 100.0 -
+   ihtfrq 100 ieqfrq 0 ntrfrq 5000 -
+   iasors 1 iasvel 1 iscvel 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
+   iunwri 12 nsavc 300 nsavv 0 nsavl 10 iunvel 0 -
+   iunread 13 iunldm 14 eps 1.0 echeck 0
+set dddynener ?ener
+coor force comp
+write coor card comp name @9msld_forces_@f2.cor
+block
+clear
+end
+goto @retdd
+
+!============================================================
+!               SETPAR
+!============================================================
+label setpar
+read rtf card name @toppar/top_all36_prot.rtf
+read param card flex name @toppar/par_all36_prot.prm
+stream @toppar/toppar_water_ions.str
+stream @toppar/protonation_patches_toppar36_prot.str
+
+
+set tol = 1e-3
+
+! set the lambda value for the "wt" species
+set l1 = 0.4
+
+if @?cutnb  eq 0 set cutnb = 11
+if @?ctofnb eq 0 set ctofnb = 9.5
+if @?ctonnb eq 0 set ctonnb = @ctofnb
+if @?vdwswi eq 0 set vdwswi = vswitch
+if @?elecswi eq 0 set elecswi = switch
+set usepme = 1
+set psf @0
+set pdb @0
+set xtl @0
+
+set seeds 3212345 7568881 22133 909145
+
+goto backpar
+
+
+
+!============================================================
+!               SETUP
+!============================================================
+label setup
+!****  goto setuppsfpdb  ! to see how psf/pdb were set up
+
+boml -1
+delete atom select all end
+
+set xb 53.68189
+set yb 57.02944
+set zb 66.15490
+
+read psf card name @psf/alaaspala_solvated_gbig.psf
+read coor pdb name @pdb/alaaspala_solvated_gbig.pdb resid
+
+define firstD select segid pro0 .and. resname asp end
+set resid = ?selresi
+
+      set reslist = type cb .or. type cg .or. type hb1 -
+               .or. type hb2 .or. type od1 .or. type od2
+      set reslist2 =
+      define wt select segid pro0 .and. resid @resid .and. -
+            ( @reslist @reslist2 ) end
+
+      define m select segid pro0 .and. resid @resid .and. -
+            ( type *m ) end
+
+      define p select segid pro0 .and. resid @resid .and. -
+            ( type *p ) end
+
+
+set cutoffs = cutnb @cutnb cutim @cutnb ctofnb @ctofnb ctonnb @ctonnb @vdwswi @elecswi
+set ewald =
+if @?usepme gt 0 set ewald = Ewald kappa 0.320 pmEwald order 4 @fft
+
+define side select segid pro0 .and. resid @resid .and -
+       ( @reslist @reslist2 ) end
+set reslist2 =
+
+ set reslist = type cb .or. type cg .or. type hb1 -
+               .or. type hb2 .or. type od1 .or. type od2
+set fft = fftx 24 ffty 24 fftz 32
+
+goto backsetup
+
+!******************
+label setuppsfpdb
+!******************
+
+!-----Crowley/Brooks ----- this part is to show how the psf was set up
+!
+read sequ card
+* title
+*
+3
+ala asp ala
+generate pro0 first ace last ct3 setup
+
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+print coor sele .not. initialized end
+
+mini sd nstep 100 cdie atom cutnb 14 ctofnb 12 ctonnb 10 switch vswitch
+energy cutnb 999 ctofnb 999 ctonnb 999
+
+define firstD select segid pro0 .and. resname asp end
+set resid = ?selresi
+
+set return backfix
+goto fixasp
+label backfix
+
+set cutoffs = cutnb 11 cutim 11 ctofnb @ctofnb ctonnb @ctonnb @vdwswi @elecswi
+set ewald =
+!if @?usepme gt 0 set ewald = Ewald kappa 0.320 pmEwald order 4 @fft
+
+define side select segid pro0 .and. resid @resid .and -
+       ( @reslist @reslist2 ) end
+
+replica r nrep @n select side end
+
+set c = 1
+label renameH
+    set b = @a@@c
+    set d = @{b}m
+    echo @d
+    rename atom @d select atom r1 @resid @a@@c end
+    set d = @{b}p
+    rename atom @d select atom r2 @resid @a@@c end
+   incr c by 1
+if c le @nat goto renameH
+
+write coor card name cor/@p1.chr select segid r1 end
+
+if @n gt 1 then
+      write coor card name cor/@p2.chr select segid r2 end
+endif
+
+replica reset
+delete atom select segid r1 end
+if @n gt 1 delete atom select segid r2 end
+
+define firstD select resname asp end
+set resid = ?selresi
+define side select resid @resid .and -
+      ( @reslist @reslist2 ) end
+
+patch aspp1g pro0 2 setup
+
+if @n gt 1 then
+      patch aspp2g pro0 2 setup
+endif
+
+bomlev -2
+autogenerate angle dihedral
+bomlev 0
+
+delete angle select ( @reslist @reslist2 ) end -
+             select ( type *m .or. type *p ) end
+delete dihed select ( @reslist @reslist2 ) end -
+             select ( type *m .or. type *p ) end
+if @n gt 1 delete angle select ( type *m ) end select ( type *p ) end
+if @n gt 1 delete dihed select ( type *m ) end select ( type *p ) end
+
+ic generate
+
+rename segid r1 select segid pro0 end
+read coor card name cor/@p1.chr resid
+rename segid r2 select segid r1 end
+if @n gt 1 then
+      read coor card name cor/@p2.chr resid
+endif
+rename segid pro0 select segid r2 end
+
+ic fill
+ic param
+print coor select .not. initialized end
+
+ic build
+print coor select .not. initialized end
+
+coor orie
+
+write psf card name psf/composite.psf
+write coor pdb name pdb/composite.pdb
+
+system "convpdb.pl -readseg -out charmm22 -segnames -solvate -cutoff 25 -ions @IONS pdb/composite.pdb | convpdb.pl -out charmm22 -segnames -nsel TIP3 > wat.pdb"
+read sequ pdb name wat.pdb
+generate wt00 noangl nodihe
+read coor pdb name wat.pdb resi
+
+system "convpdb.pl -readseg -out charmm22 -segnames -solvate -cutoff 25 -ions @IONS pdb/composite.pdb | convpdb.pl -out charmm22 -segnames -nsel SOD+CLA > ions.pdb"
+read sequ pdb name ions.pdb
+generation heta
+read coor pdb name ions.pdb resi
+
+print coor select .not. initialized end
+if ?nsel .gt. 0 stop
+
+coor stats
+coor rotate xdir 0 ydir 1 zdir 0 phi 90
+coor stats
+calc xb = ?xmax - ?xmin
+calc yb = ?ymax - ?ymin
+calc zb = ?zmax - ?zmin
+
+set return = f1
+goto setxtl
+label f1
+
+energy @cutoffs @ewald
+prnl 5
+mini sd nstep 100 nprint 20 @cutoffs @ewald
+
+mini conj nstep 100 @cutoffs @ewald
+!write coor pdb name pdb/amini.pdb
+!read coor pdb name pdb/amini.pdb resid
+!print coor sele .not. initialized end
+
+cons harm absolute sele segid pro0 end force 100
+
+coor stat sele segid pro0 end
+mini sd nstep 100 @cutoffs
+
+! heating with constant p
+open unit 12 write form name @9/msld_heat0.res
+open unit 14 write unform name @9/msld_heat.dcd
+
+shake fast para bonh tol 1.e-8
+dynamics leap start timestep 0.002 nstep 1000 nprint 100 iprfrq 10 -
+   cpt pcons pref 1 pmass 100 pgamma 20 -
+   iseed @seeds -
+   firstt 100 finalt 300 teminc 10.0 -
+   ihtfrq 100 ieqfrq 0 ntrfrq 5000 -
+   iasors 1 iasvel 1 iscvel 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
+   iunwri 12 nsavv 0 nsavl 10 iunvel 0 -
+   iunread 13 iunldm 14 eps 1.0 -
+   iuncrd 14 nsavc 100 echeck -1
+
+cons harm clear
+scalar fbeta set 10.0 select all end
+
+! heating with langevin dynamics
+open unit 12 write form name @9/msld_heat1.res
+open unit 14 write unform name @9/msld_heat1.dcd
+
+dynamics lang start timestep 0.002 nstep 1000 nprint 100 iprfrq 200 -
+   iseed @seeds -
+   cpt pcons pref 1 pmass 100 pgamma 20 -
+   firstt 300 finalt 310 teminc 100.0 -
+   ihtfrq 0 ieqfrq 100 ntrfrq 5000 -
+   iasors 1 iasvel 1 iscvel 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
+   iunwri 12 nsavc 100 iuncrd 14 nsavv 0 nsavl 10 iunvel 0 -
+   iunread 13 iunldm 15 eps 1.0
+
+write psf card name psf/alaaspala_solvated_eq_g_big.psf
+write coor pdb name pdb/alaaspala_solvated_eq_g_big.pdb
+stop
+
+
+
+!============================================================
+!               SETXTL
+!============================================================
+label setxtl
+   Crystal define ortho @xb @yb @zb 90 90 90
+   crystal build cutoff 11 noper 0
+!    open unit 14 form write name @xtl/ortho.xtl
+!   crystal write card unit 14
+!   stop
+!   crystal build cutoff 11 noper 0
+    open unit 14 form read name @xtl/ortho.xtl
+    crystal read card unit 14
+   image byres xcen  0 ycen 0 zcen 0 select .not. segid pro0 end
+   image byseg xcen 0 ycen 0 zcen 0 select segid pro0 end
+goto @return
+
+!=======================================================
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+goto @return
+
+
+label fixasp
+      set reslist = type cb .or. type cg .or. type hb1 -
+               .or. type hb2 .or. type od1 .or. type od2
+      set reslist2 =
+      set p1 = aspp1g
+      set p2 = aspp2g
+      set n = 2
+
+      set a1 = cb
+      set a2 = cg
+      set a3 = hb1
+      set a4 = hb2
+      set a5 = od1
+      set a6 = od2
+      set nat = 6
+
+      calc l2 = ( 1 - @l1 ) / 2
+      calc l3 = ( 1 - @l1 ) / 2
+
+      ! # ions, 3 SOD, 2 CLA
+      ! box size: 30.899207 x 23.685586 x 23.584414
+      set ions = SOD:3=CLA:2
+      set fft = fftx 24 ffty 24 fftz 32
+goto @return

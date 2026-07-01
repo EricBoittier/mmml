@@ -1,0 +1,880 @@
+*  Test various Miscellaneous-Mean-Field-Potential constraints
+*  (No solvent constraints included in this test case)
+*  for tetrapeptide with a sodium ion,
+*  loop over a droff range to check potential and force, then use 
+*  test first and a short minimization.
+*
+
+stream datadir.def
+
+open read form unit 1 name @0top_all22_prot_na.inp
+read rtf  card unit 1
+close unit 1
+
+open read form unit 1 name @0par_all22_prot_na.inp
+read parameter card unit 1
+close unit 1
+
+read sequence cards
+* sequence
+*
+   4
+ASP ALA ALA ALA
+generate  MAIN setup
+
+read sequence SOD 1
+generate SOD setup warn
+
+read coor card
+* COORDINATES FOR WHOLE TEST SYSTEM
+*
+  46
+    1    1 ASP  N      2.10877  -2.44425  -1.09381 MAIN 1      0.00000
+    2    1 ASP  HT1    2.71319  -3.29192  -0.93401 MAIN 1      0.00000
+    3    1 ASP  HT2    2.34575  -2.08761  -2.03901 MAIN 1      0.00000
+    4    1 ASP  HT3    1.09786  -2.75409  -1.08280 MAIN 1      0.00000
+    5    1 ASP  CA     2.38719  -1.44448  -0.03059 MAIN 1      0.00000
+    6    1 ASP  HA     2.44000  -1.99902   0.89874 MAIN 1      0.00000
+    7    1 ASP  CB     3.77519  -0.82764  -0.36131 MAIN 1      0.00000
+    8    1 ASP  HB1    4.53941  -1.62849  -0.45419 MAIN 1      0.00000
+    9    1 ASP  HB2    3.74709  -0.25046  -1.30901 MAIN 1      0.00000
+   10    1 ASP  CG     4.20766   0.08094   0.75366 MAIN 1      0.00000
+   11    1 ASP  OD1    3.98753  -0.28430   1.93532 MAIN 1      0.00000
+   12    1 ASP  OD2    4.67212   1.20884   0.47350 MAIN 1      0.00000
+   13    1 ASP  C      1.26975  -0.40693   0.15164 MAIN 1      0.00000
+   14    1 ASP  O      0.44842  -0.20597  -0.73835 MAIN 1      0.00000
+   15    2 ALA  N      1.22679   0.25555   1.33120 MAIN 2      0.00000
+   16    2 ALA  HN     1.95908   0.06008   1.98860 MAIN 2      0.00000
+   17    2 ALA  CA     0.32857   1.33116   1.71858 MAIN 2      0.00000
+   18    2 ALA  HA     0.48634   1.46501   2.77820 MAIN 2      0.00000
+   19    2 ALA  CB     0.74546   2.64873   1.03902 MAIN 2      0.00000
+   20    2 ALA  HB1    1.80711   2.86848   1.26704 MAIN 2      0.00000
+   21    2 ALA  HB2    0.64850   2.57575  -0.06061 MAIN 2      0.00000
+   22    2 ALA  HB3    0.13250   3.50282   1.39304 MAIN 2      0.00000
+   23    2 ALA  C     -1.16944   1.06191   1.58156 MAIN 2      0.00000
+   24    2 ALA  O     -1.83213   0.60477   2.51138 MAIN 2      0.00000
+   25    3 ALA  N     -1.73906   1.35129   0.40027 MAIN 3      0.00000
+   26    3 ALA  HN    -1.16446   1.72537  -0.32414 MAIN 3      0.00000
+   27    3 ALA  CA    -3.12188   1.09163   0.07205 MAIN 3      0.00000
+   28    3 ALA  HA    -3.74890   1.35083   0.91583 MAIN 3      0.00000
+   29    3 ALA  CB    -3.50586   1.95308  -1.14198 MAIN 3      0.00000
+   30    3 ALA  HB1   -3.37072   3.03028  -0.91112 MAIN 3      0.00000
+   31    3 ALA  HB2   -2.87352   1.70292  -2.01851 MAIN 3      0.00000
+   32    3 ALA  HB3   -4.57127   1.79503  -1.41220 MAIN 3      0.00000
+   33    3 ALA  C     -3.36810  -0.37934  -0.24837 MAIN 3      0.00000
+   34    3 ALA  O     -4.42513  -0.93639   0.04026 MAIN 3      0.00000
+   35    4 ALA  N     -2.38825  -1.04828  -0.86690 MAIN 4      0.00000
+   36    4 ALA  HN    -1.52275  -0.59183  -1.07559 MAIN 4      0.00000
+   37    4 ALA  CA    -2.44918  -2.45658  -1.16154 MAIN 4      0.00000
+   38    4 ALA  HA    -2.80603  -2.98575  -0.28692 MAIN 4      0.00000
+   39    4 ALA  CB    -3.36059  -2.75171  -2.36949 MAIN 4      0.00000
+   40    4 ALA  HB1   -4.39459  -2.40511  -2.17186 MAIN 4      0.00000
+   41    4 ALA  HB2   -2.98826  -2.23618  -3.27959 MAIN 4      0.00000
+   42    4 ALA  HB3   -3.40209  -3.84446  -2.56286 MAIN 4      0.00000
+   43    4 ALA  C     -1.00142  -2.92464  -1.41719 MAIN 4      0.00000
+   44    4 ALA  OT1   -0.48744  -2.79450  -2.56080 MAIN 4      0.00000
+   45    4 ALA  OT2   -0.33076  -3.34924  -0.43878 MAIN 4      0.00000
+   46    5 SOD  SOD    4.36817   3.18432  -0.83209 SOD  1      0.00000
+
+! Status of coordinates:
+coor stat mass select resnam SOD end
+coor stat mass select resid 1 end
+coor stat mass select resid 4 end
+coor stat mass select resid 1 .or. resid 4 end
+
+update cutnb 50.0 ctofnb 47.0 ctonnb 45.0
+
+coor copy comp
+
+skip all excl GEO
+
+!---------------------------------------------------
+! spherical constraint
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_sphere.dat
+
+MMFP
+GEO  sphere rcm iummfp 10 -
+     xref 10.0 yref 0.0 zref 0.0 -
+     force 100.0 droff @droff select segid main .and. resid 1 end
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_sphere.ene
+
+set droff = 0.0
+
+label loop2
+
+MMFP
+GEO  sphere rcm -
+     xref 10.0 yref 0.0 zref 0.0 -
+     force 100.0 droff @droff select segid main .and. resid 1 end
+END
+
+energy
+
+write title unit 13
+* @droff ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop2
+
+! copy original coordinates before next test
+coor copy
+
+!---------------------------------------------------
+! cylindrical tube constraint
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_cylin.dat
+
+MMFP
+GEO  cylinder rcm iummfp 10 -
+     xref 4.0 yref 5.0 zref 6.0 xdir 0.0 ydir 1.0 -
+     force 100.0 droff @droff select segid main .and. resid 1 end
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_cylin.ene
+
+set droff = 0.0
+
+label loop3
+
+MMFP
+GEO  cylinder rcm -
+     xref 4.0 yref 5.0 zref 6.0 xdir 0.0 ydir 1.0 -
+     force 100.0 droff @droff select segid main .and. resid 1 end
+END
+
+energy
+
+write title unit 13
+* @droff ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop3
+
+! copy original coordinates before next test
+coor copy
+
+!---------------------------------------------------
+! plane constraint
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_plane.dat
+
+MMFP
+GEO  plane  rcm iummfp 10 -
+     xref 7.0 yref 8.0 zref 9.0 zdir 1.0 -
+     force 100.0 droff @droff select segid main .and. resid 1 end
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_plane.ene
+
+set droff = 0.0
+
+label loop4
+
+MMFP
+GEO  plane rcm -
+     xref 7.0 yref 8.0 zref 9.0 zdir 1.0 -
+     force 100.0 droff @droff select segid main .and. resid 1 end
+END
+
+energy
+
+write title unit 13
+* @droff  ?ener ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop4
+
+! copy original coordinates before next test
+coor copy
+
+!---------------------------------------------------
+! illustrate the harmonic wall
+
+set droff = 0.0
+
+open unit 10 write form name @9mmfp_test_plane_harmwall.dat
+
+MMFP
+GEO  plane iummfp 10 -
+     xref 0.0 yref 0.0 zref 0.0 xdir 1.0 -
+     force 100.0 droff 0.0 select segid sod end 
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_plane_harmwall.ene
+
+set droff = -10.0
+
+label loop5
+
+MMFP
+GEO  plane -
+     xref 0.0 yref 0.0 zref 0.0 xdir 1.0 -
+     force 100.0 droff 0.0 select segid sod end 
+END
+
+coor set xdir @droff select segid sod end
+
+ener
+
+write title unit 13
+* @droff ?ener ?grms
+*
+
+calc droff = @droff + 0.5
+
+MMFP
+GEO RESET
+END
+
+if droff le 10.0 goto loop5
+
+! copy original coordinates before next test
+coor copy
+
+!---------------------------------------------------
+! illustrate the quartic sphere
+
+set droff = 10.0
+
+open unit 10 write form name @9mmfp_test_quartic.dat
+
+MMFP
+GEO  sphere quartic iummfp 10  -
+     xref 0.0 yref 0.0 zref 0.0 force 0.2 droff @droff p1 2.25 select segid sod end 
+GEO  print
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+open unit 13 write form name @9mmfp_test_quartic.ene
+
+set droff = 8.0
+
+label loop6
+
+coor set xdir @droff ydir 0.0 zdir 0.0 select segid sod end
+energy
+
+write title unit 13
+* @droff  ?ener  ?grms
+*
+
+incr droff by 0.1
+
+if droff le 12.0 goto loop6
+
+MMFP
+GEO RESET
+END
+
+! copy original coordinates before next test
+coor copy
+
+skip none
+
+!-------------------------------------------------------------------------------
+! test the dipole constraints
+MMFP
+MDIP  dip0 1.0 force 100.0 power 1  xdir 1.0 select all end
+MDIP  print
+END
+
+energy
+test first tol 0.0 step 0.0001
+
+skip all excl geo
+
+! copy original coordinates before next test
+coor copy
+
+! test for distance restraints
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_dist.dat
+
+MMFP 
+GEO  sphere  RCM  distance iummfp 10 -
+      harmonic symmetric force 100.0 droff @droff -
+      select segid main .and. resid 1:2 end     -
+      select segid main .and. resid 3:4 end 
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_dist.ene
+
+set droff = 0.0
+
+label loop7
+
+MMFP 
+GEO  sphere  RCM  distance  -
+      harmonic symmetric force 100.0 droff @droff -
+      select segid main .and. resid 1:2 end     -
+      select segid main .and. resid 3:4 end 
+END
+
+energy
+
+write title unit 13
+* @droff  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop7
+
+! Test DIST PLANAR, such that ion is delta_z=8 A from c.o.m. of central
+! two residues of peptide, with output to unit 10
+! Initial delta_z distance of -1.57A should jump
+! to 8.0 during Minimization. Note that following this 
+! the value will change during test first.  
+! copy original coordinates before next test
+coor copy
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_dist_plane.dat
+
+MMFP
+GEO DIST PLAN HARM SYMM iummfp 10 force 100.0 DROF @droff select resnam SOD  end  -
+    XDIR 0 YDIR 0 ZDIR 1 RCM sele resid 2:3 end 
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_dist_plane.ene
+
+set droff = 0.0
+
+label loop8
+
+MMFP
+GEO DIST PLAN HARM SYMM force 100.0 DROF @droff select resnam SOD  end  -
+    XDIR 0 YDIR 0 ZDIR 1 RCM sele resid 2:3 end 
+END
+
+energy
+
+write title unit 13
+* @droff  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop8
+
+! Test DIST CYLI, such that ion is on the surface of a cylinder
+! delta_r=10 A from c.o.m. of peptide, with output to unit 44
+! Initial delta_r distance of 6.56A should jump
+! to 10.0 during Minimization. Note that following this 
+! the value will change during test first.  
+! copy original coordinates before next test
+
+coor copy
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_dist_cylin.dat
+
+MMFP
+GEO DIST CYLI HARM SYMM iummfp 10 force 100.0 DROF @droff select resnam SOD  end  -
+    XDIR 0 YDIR 0 ZDIR 1 RCM sele resid 2:3 end 
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_dist_cylin.ene
+
+set droff = 0.0
+
+label loop9
+
+MMFP
+GEO DIST CYLI HARM SYMM force 100.0 DROF @droff select resnam SOD  end  -
+    XDIR 0 YDIR 0 ZDIR 1 RCM sele resid 2:3 end 
+END
+
+energy
+
+write title unit 13
+* @droff  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop9
+
+! copy original coordinates before next test
+coor copy
+
+! Test center-of-mass angle constraints
+
+set tref 90.0
+
+open unit 10 write form name @9mmfp_test_angle.dat
+
+MMFP
+GEO  sphere  RCM  angle iummfp 10 -
+     harmonic symmetric force 100.0 tref @tref dtoff 0.0  -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   3 end       -
+     select segid sod  end
+END 
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_angle.ene
+
+set tref = 0.0
+
+label loop10
+
+MMFP
+GEO  sphere  RCM  angle  -
+     harmonic symmetric force 100.0 tref @tref dtoff 0.0 -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   3 end       -
+     select segid sod  end
+END 
+
+energy
+
+write title unit 13
+* @tref  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc tref = @tref + 5.0
+
+if tref le 360.0 goto loop10
+
+! copy original coordinates before next test
+coor copy
+
+! Test center-of-mass axis angle constraints
+
+set tref 90.0
+
+open unit 10 write form name @9mmfp_test_aangle.dat
+
+MMFP
+GEO  sphere  RCM  aangle iummfp 10 -
+     harmonic symmetric force 100.0 tref @tref dtoff 0.0  -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   2 end       -
+     select segid sod  end
+END 
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_aangle.ene
+
+set tref = 0.0
+
+label loop10a
+
+MMFP
+GEO  sphere  RCM  aangle  -
+     harmonic symmetric force 100.0 tref @tref dtoff 0.0 -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   2 end       -
+     select segid sod  end
+END 
+
+energy
+
+write title unit 13
+* @tref  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc tref = @tref + 5.0
+
+if tref le 360.0 goto loop10a
+
+! copy original coordinates before next test
+coor copy
+
+! Test center-of-mass dihedral constraints
+
+set tref = 90.0
+
+open unit 10 write form name @9mmfp_test_dihe.dat
+
+MMFP
+GEO  sphere  RCM  dihedral iummfp 10 -
+     harmonic symmetric force 100.0 tref @tref  -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   2 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   4 end
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_dihe.ene
+
+set tref = 0.0
+
+label loop11
+
+MMFP
+GEO  sphere  RCM  dihedral  -
+     harmonic symmetric force 100.0 tref @tref dtoff 0.0 -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   2 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   4 end
+END
+
+energy
+
+write title unit 13
+* @tref  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc tref = @tref + 5.0
+
+if tref le 360.0 goto loop11
+
+! copy original coordinates before next test
+coor copy
+
+! Test HARM INSI center-of-mass dihedral constraints
+! with new TREF/DTOFF variables 
+! Keep within +-10 deg of 90deg with two GEO: 
+! Output the dihedral to unit 13 
+
+open unit 10 write form name @9mmfp_test_dihe_b.dat
+
+set tref = 90.0
+
+MMFP
+GEO  MAXGEO 200 sphere  RCM  dihedral iummfp 10 -
+     harmonic INSI force 100.0 TREF @tref  DTOFF 10 -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   2 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   4 end  
+GEO  sphere  RCM  dihedral -
+     harmonic OUTS force 100.0 TREF @tref  DTOFF 10 -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   2 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   4 end  
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_dihe_b.ene
+
+set tref = 0.0
+
+label loop12
+
+MMFP
+GEO  MAXGEO 200 sphere  RCM  dihedral -
+     harmonic INSI force 100.0 TREF @tref  DTOFF 10 -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   2 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   4 end  
+GEO  sphere  RCM  dihedral -
+     harmonic OUTS force 100.0 TREF @tref  DTOFF 10 -
+     select segid main .and. resid   1 end       -
+     select segid main .and. resid   2 end       -
+     select segid main .and. resid   3 end       -
+     select segid main .and. resid   4 end  
+END
+
+energy
+
+write title unit 13
+* @tref  ?ener  ?grms
+*
+
+calc tref = @tref + 5.0
+
+MMFP
+GEO RESET
+END
+
+if tref le 360.0 goto loop12
+
+! Test Molecular AXIS distance restraint, parallel
+! with output to unit 11
+! Initial axial distance of -5.13A should jump
+! to 2.0 during Minimization. Note that following this 
+! the value will change during test first.  
+! copy original coordinates before next test
+coor copy
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_adis.dat
+
+MMFP
+GEO ADIS SPHE HARM SYMM iummfp 10 force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_adis.ene
+
+set droff = 0.0
+
+label loop13
+
+MMFP
+GEO ADIS SPHE HARM SYMM force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end
+END
+
+energy
+
+write title unit 13
+* @droff  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop13
+
+! Test Molecular AXIS distance restraint, PERPendicular 
+! Initial perp distance of 2.57A should jump
+! to 5.0 during Minimization. Note that following this 
+! the value will change during test first.  
+! copy original coordinates before next test
+
+coor copy
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_adis_perp.dat
+
+MMFP
+GEO ADIS SPHE PERP HARM SYMM iummfp 10 force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end 
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_adis_perp.ene
+
+set droff = 0.0
+
+label loop14
+
+MMFP
+GEO ADIS SPHE PERP HARM SYMM force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end 
+END
+
+energy
+
+write title unit 13
+* @droff  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop14
+
+! COMBINED 2 Molecular AXIS distance restraints
+! Initial axial distance in unit 11 of -5.13A should jump
+! to 2.0 during Minimization. Note that following this 
+! the value will change during test first.  
+! Initial perp distance of 2.57A should jump
+! to at least 8.0 and no more than 8.2. 
+! copy original coordinates before next test
+coor copy
+
+set droff = 5.0
+
+open unit 10 write form name @9mmfp_test_adis_combine.dat
+
+MMFP
+GEO MAXGEO 200 ADIS SPHE HARM SYMM iummfp 10 force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end
+GEO ADIS SPHE PERP HARM OUTS force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end 
+GEO ADIS SPHE PERP HARM INSI force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end 
+END
+
+test first tol 0.0 step 0.0001
+mini sd nstep 50 nprint 10
+
+MMFP
+GEO RESET
+END
+
+open unit 13 write form name @9mmfp_test_adis_combine.ene
+
+set droff = 0.0
+
+label loop15
+
+MMFP
+GEO MAXGEO 200 ADIS SPHE HARM SYMM force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end
+GEO ADIS SPHE PERP HARM OUTS force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end 
+GEO ADIS SPHE PERP HARM INSI force 100.0 DROF @droff select resnam SOD  end  -
+    RCM sele resid 1 end sele resid 4 end 
+END
+
+energy
+
+write title unit 13
+* @droff  ?ener  ?grms
+*
+
+MMFP
+GEO RESET
+END
+
+calc droff = @droff + 0.5
+
+if droff le 10.0 goto loop15
+
+stop
+
+
+--------------D5F2ADBCB81F3E2B357CAF9A--

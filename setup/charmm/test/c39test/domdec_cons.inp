@@ -1,0 +1,269 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+! APH 2014: Tests domdec functionality:
+! CONS DIHE
+! CONS HMCM
+! RESD
+! NOE
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be defined in pref.dat"
+   stop
+endif
+
+if ?NUMNODE .lt. 2 then
+   echo "Test NOT performed. This test may take > 5 min. with 1 process."
+   stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+! Dimension of a box
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+ioform exte
+format (f16.6)
+
+! ************ Setup constraints ************
+!
+! Some pretty random dihedral restraints
+!
+cons dihe bynu 1 5 7 8 min 30.0 width 10.0 force 1.0 period 1
+cons dihe bynu 10 13 14 15 min 54.4 width 15.0 force 1.2 period 0
+cons dihe bynu 50 52 54 57 min -80.0 width 11.0 force 1.1 period 1
+cons dihe bynu 101 100 102 105 min -50.0 width 5.0 force 0.7 period 1
+cons dihe bynu 169 172 175 177 min 70.1 width 9.0 force 1.3 period 1
+cons dihe bynu 360 363 369 370 min 56.0 width 10.0 force 1.0 period 0
+cons dihe bynu 509 508 510 511 min 150.0 width 9.5 force 1.1 period 1
+cons dihe bynu 509 508 510 512 min 40.0 width 12.0 force 1.4 period 1
+cons dihe bynu 2483 2481 2480 2484 min 1.0 width 10.0 force 1.2 period 0
+
+!
+! Center-of-mass constraint
+!
+cons hmcm force 10.0 weig refx 12.421279 refy -1.546860 refz -5.295595 -
+     sele bynu 1000:1010 end
+
+!
+! RESD
+!
+RESDistance  KVAL 1000.0  RVAL 0.25 - 
+        1.0   WAT 1 OH2  WAT 1 H1  -
+       -1.0   WAT 1 OH2  WAT 1 H2
+
+!
+! NOE
+!
+noe
+assign rmin 1.7 rmax 2.3 kmin 1 kmax 1 sumr rexp -0.2 -
+    sele segid WAT .and. resid 1 end -
+    sele segid WAT .and. resid 2 end 
+end
+
+! ********* Run old parallel **********
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn1
+goto run_dynamics
+label return_dyn1
+
+write coor card name @9/old_xyz.crd
+coor force comp
+write coor comp card name @9/old_force.crd
+
+shake off
+
+calc eold = ?ener
+calc viriold = ?viri
+calc pressiold = ?prsi
+
+calc diff abs(-65171.254575 - @eold)
+echo @diff
+if diff gt 0.0001 then
+   echo "Test failed"
+   stop
+endif
+
+calc diff = abs(-11739.332528 - @viriold)
+echo @diff
+if diff gt 0.0001 then
+   echo "Test failed"
+   stop
+endif
+
+calc diff = abs(-161.405896 - @pressiold)
+echo @diff
+if diff gt 0.0001 then
+   echo "Test failed"
+   stop
+endif
+
+! ********* Run domdec **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb on
+
+!write coor card name @9/dd_xyz.crd
+!coor force comp
+!write coor comp card name @9/dd_force.crd
+!stop
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn2
+goto run_dynamics
+label return_dyn2
+
+calc edd = ?ener
+calc viridd = ?viri
+calc pressidd = ?prsi
+
+calc diff = abs(@edd - @eold)
+echo @diff
+if diff gt 0.0002 then
+   echo "Test failed"
+   stop
+endif
+
+calc diff = abs(@viridd - @viriold)
+echo @diff
+if diff gt 0.0003 then
+   echo "Test failed"
+   stop
+endif
+
+calc diff = abs(@pressidd - @pressiold)
+echo @diff
+if diff gt 0.00006 then
+   echo "Test failed"
+   stop
+endif
+
+!write coor card name @9/dd_xyz.crd
+!coor force comp
+!write coor comp card name @9/dd_force.crd
+
+read coor comp card name @9/old_xyz.crd
+coor rms
+echo ?rms
+if ?rms gt 0.0000001 then
+   echo "Test failed"
+   stop
+endif
+
+read coor comp card name @9/old_force.crd
+coor force
+coor rms
+echo ?rms
+if ?rms gt 0.000008 then
+   echo "Test failed"
+   stop
+endif
+
+echo "Test OK"
+
+stop
+
+! ********* Run domdec without direct/recip split **********
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+     domdec dlb off split off
+
+shake fast bonh tol 1.0e-8 para
+
+set flag return_dyn3
+goto run_dynamics
+label return_dyn3
+
+calc edd = ?ener
+calc diff = abs(@eold - @edd)
+echo @diff
+if diff gt 0.000180 then
+   echo "Test failed"
+   stop
+endif
+
+calc viridd = ?viri
+calc pressidd = ?prsi
+
+calc diff = abs(@viriold - @viridd)
+echo @diff
+if diff gt 0.0006 then
+   echo "Test failed"
+   stop
+endif
+
+calc diff = abs(@pressiold - @pressidd)
+echo @diff
+if diff gt 0.00016 then
+   echo "Test failed"
+   stop
+endif
+
+echo "Test OK"
+
+stop
+
+! ************************************
+! ******* Run dynamics ***************
+! ************************************
+
+label run_dynamics
+
+! Run dynamics in periodic box
+dynamics leap start timestep 0.002 nstep 100 nprint 10 iprfrq 1000 -
+     iseed 123456 nsavc 0 nsavv 0 -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 30.0 ihtfrq 20 ieqfrq 100 -
+     iasors 1 iasvel 1 iscvel 0  -
+     inbfrq -1 imgfrq -1 ilbfrq 0 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 -
+     hoover reft 298 tmass 250 tbath 298     ! Constant temperature
+
+goto @flag
+

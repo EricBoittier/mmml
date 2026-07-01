@@ -1,0 +1,46 @@
+* CHARMM c36a1 testcase vsys2.inp
+* Test the mscale module with water trimer
+* Authors: Milan Hodoscek, Lee Woodcock
+*
+
+
+if ?mscale .ne. 1 then
+ echo "mscale.inp> Test NOT performed."
+ stop
+endif
+
+! Read in the standard test definitions
+stream datadir.def
+
+open read unit 1 card name @0top_all22_prot.inp
+read rtf unit 1 card
+
+open read unit 1 card name @0par_all22_prot.inp
+read param unit 1 card
+
+read sequ tip3 2
+
+generate w setup noang nodihe
+
+
+read  coor card
+* TWO WATERS
+*  DATE:     5/22/ 7     13:14: 7      CREATED BY USER: milan
+*
+    6
+    1    1 TIP3 OH2    0.03112  -0.05455   0.00000 W    1      0.00000
+    2    1 TIP3 H1     0.98695  -0.00338   0.00000 W    1      0.00000
+    3    1 TIP3 H2    -0.25806   0.85792   0.00000 W    1      0.00000
+    4    2 TIP3 OH2    0.03112  -0.05455   5.00000 W    2      0.00000
+    5    2 TIP3 H1     0.98695  -0.00338   5.00000 W    2      0.00000
+    6    2 TIP3 H2    -0.25806   0.85792   5.00000 W    2      0.00000
+
+print coor 
+
+energy cdie cutnb 14.0 ctofnb 12.0 fshift vshift atom
+
+fast off 
+
+server !finite step 0.005
+
+stop

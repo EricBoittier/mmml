@@ -1,0 +1,93 @@
+* CHARMM c33a1 testcase pipf_test2.inp : Jingzhi Pu, 06/2005
+* Test PIPF with POL2 water box: 
+* CPT dynamics with fully converged dipoles
+*
+
+stream datadir.def
+
+if ?pipf .ne. 1 then
+ echo "cpipftest/pipf_test2> PIPF test NOT performed."
+ stop
+endif
+
+read rtf card
+* POL2 WATER TOPOLOGY FILE
+*
+   20    1
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+
+RESI POL2        0.00 ! POL2 WATER MODEL, Dang, L. X. JCP 1992, 97, 2659
+GROUP                 ! Generate noangle nodihedral
+ATOM OH2  OT    -0.730
+ATOM H1   HT     0.365
+ATOM H2   HT     0.365
+BOND OH2  H1   OH2  H2   H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+ACCE OH2
+END
+
+bomlev -2
+read param card
+* POL2 WATER PARAMETER FILE
+*
+BOND
+OT   HT    450.0   1.0000 ! FROM POL2 GEOM
+HT   HT      0.0   1.6333 ! FROM POL2 GEOMETRY (FOR SHAKE/W PARAM)
+THETAS
+HT  OT  HT  55.0 109.50   ! FROM POL2 GEOMETRY
+!
+NONBONDED   ATOM CDIEL SHIFT VATOM VDISTANCE VSWITCH -
+     CUTNB 14.0  CTOFNB 12.0  CTONNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 0.5
+!
+HT       0.170000  -0.000000     0.000000
+OT       0.528000  -0.160000     1.793694
+
+END
+
+bomlev -1
+
+! Read in 125 POL2 solvent molecules and their
+! equilibrated coordinates.
+
+READ SEQU POL2 125
+GENE SOLV SETU NOANGLE
+
+OPEN READ UNIT 10 CARD NAME @0pol2_125.crd
+READ COOR UNIT 10 CARD
+CLOSE UNIT 10
+
+! Set parameter 6 to 15.5516 A, the length of one side
+! of the box of water.  This value will be used as a scale
+! factor for all image transformations.
+
+SET 6 15.5516
+
+! Open and read the image transformation file for creating
+! 26 image objects around the primary structure
+
+CRYSTAL DEFINE CUBIC @6 @6 @6 90.0 90.0 90.0
+CRYSTAL BUILD CUTOFF 7.5 NOPERATIONS 0
+
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+SHAKE BONH PARAM SELE ALL END
+
+update fswitch noextend cdie vdw vshift eps 1.0  -
+           cutnb 7.5 ctofnb 7.0 ctonnb 6.5 WMIN 0.5  -
+           inbf 5 imgfrq 5 cutim 7.5
+
+! define dipole convergence and max iteration
+pipf conv 0.0001 iter 20 
+
+mini sd nstep 1
+
+dynamics cpt leap start time 0.001 nstep 100 iseed 314159 -
+        firstt 300.0 finalt 300.0 tstruc 300.0 -
+        ihbfrq 0 iprfrq 20 nprint 5 -
+        iasors 1 iasvel 1 ieqfrq 0 -
+        inbfrq 10 imgfrq 10 cutnb 14.0 cutim 14.0 - 
+        pconstant pmass 100.0 pref 1.0 pgamma 10.0 -
+        hoover reft 300.0 tmass 250.0 tbath 300.0 
+
+STOP

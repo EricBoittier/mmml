@@ -1,0 +1,215 @@
+* CHARMM Testcase: c34test/pert_block.inp
+* Author:   Wei Yang
+* Date:     December 30, 2006
+* Version:  c34a2
+* Test:     PERT + lambda dynamcs in BLOCK
+*
+
+if ?block .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+bomblev -2
+
+set 3 300.0
+set mass 20
+set j meot
+set ndyn 1000
+set outfrq 10   !.dcd print out frequency
+set pertlam 0.0
+set lamstep 1
+set f 1
+set g 0
+set height 1.2 !Kchi energy barrier height defined in par_all22_prot2.inp
+
+read rtf  card
+* TOPOLOGY FILE FOR METHANOL TO METHANOL
+*
+   27     1
+MASS   100 DA    12.01100 C ! wei
+MASS   101 DB    12.01100 C ! wei
+MASS   102 DC    12.01100 C ! wei
+
+DEFA FIRS NONE LAST NONE
+
+RESI ABC         0.00 !
+ATOM  DA1  DA    0.00 !
+ATOM  DB1  DB    0.00 !    DA1       DA2
+ATOM  DB2  DB    0.00 !      \      /
+ATOM  DA2  DA    0.00 !       DB1--DB2---DA3
+ATOM  DA3  DB    0.00
+BOND  DA1  DB1  DB1  DB2  DB2  DA2
+BOND  DB2  DA3
+ANGL  DA1  DB1  DB2  DB1  DB2  DA2
+ANGL  DB1  DB2  DA3
+DIHE  DA1  DB1  DB2  DA2
+DIHE  DA1  DB1  DB2  DA3
+END
+
+read parameter card
+*>>>> CHARMM22 All-Hydrogen Parameter File for Proteins <<<<<<<<<<
+*
+
+BONDS
+DA   DB    225.000     1.5200 ! wei
+DC   DB    225.000     1.5200 ! wei
+DB   DB    225.000     1.5200 ! wei
+
+ANGLES
+DA   DB   DB    45.000    117.00
+DB   DB   DB    45.000    117.00
+DC   DB   DB    45.000    117.00
+
+DIHEDRALS
+DA   DB   DB   DA       1.0000  1   180.00 ! wei
+DA   DB   DB   DB       2.0000  1     0.00 ! wei
+DA   DB   DB   DB       2.0000  2     0.00 ! wei
+DA   DB   DB   DC       1.2000  1   110.00 ! wei
+DA   DB   DB   DC       2.0000  2     0.00 ! wei
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+DA     0.000000  -0.000000     0.000000 !
+DB     0.000000  -0.000000     0.000000 !
+DC     0.000000  -0.000000     0.000000 !
+
+HBOND CUTHB 0.5  ! If you want to do hbond analysis (only), then use
+                 ! READ PARAM APPEND CARD
+                 ! to append hbond parameters from the file: par_hbond.inp
+
+END
+
+
+read sequence card
+*test
+*
+1
+ABC
+generate meth setup warn first none last none
+
+
+read coor card
+* initial minimized coordinates
+*
+    5
+    1    1 ABC  DA1    0.54478  -1.11130  -0.55984 ABC  1      0.00000
+    2    1 ABC  DB1   -0.53430  -0.18133  -0.02962 ABC  1      0.00000
+    3    1 ABC  DB2   -0.58366   0.03167   1.47458 ABC  1      0.00000
+    4    1 ABC  DA2    0.28659   1.14048   2.04344 ABC  1      0.00000
+    5    1 ABC  DA3    0.28659   1.14048   2.04344 ABC  1      0.00000
+
+print psf
+test psf
+
+
+!OPEN UNIT 3 NAME ./abc_pert2.psf READ FORM
+!READ PSF CARD UNIT 3
+!CLOSE UNIT 3
+
+!OPEN UNIT 3 NAME ./abc_pert2.crd READ FORM
+!READ COOR CARD UNIT 3
+!CLOSE UNIT 3
+
+
+!-------------------------Pert---------
+pert sele all end
+scalar type set 102 -
+   sele type DA2 end
+scalar type set 102 -
+   sele type DA3 end
+
+!---------------------------BLOCK-----------------------
+BLOCK 3
+CALL 2 SELE type DA2 END
+CALL 3 SELE type DA3 END
+CALL 1 SELE .not. (type DA2 .or. type DA3) END
+QLDM
+LANG temp 300.0
+LDIN 1 1.00 0.0 @mass  0.0
+LDIN 2 0.50 0.0 @mass  0.0
+LDIN 3 0.50 0.0 @mass  0.0
+!RMBOND
+!RMANGLE
+RMLA BOND THETA
+LDMA
+LDBI 0
+
+!LDWR IUNL 8 NSAVL 10
+
+END
+
+open unit 12 write form name @9/pertl
+write title unit 12
+** pert script file
+**
+*lstart 0.0 lambda @pertlam lstop 1.0 pstart 0 pstop @ndyn pwind
+*end
+
+close unit 12
+
+open read card unit 12 name @9/pertl
+
+!--------------------------DYNAMIC---------
+SCALAR FBETa SET 200.0
+
+open unit 25 writ form name @9/@j_@mass_@height_@ndyn_@g.res
+open unit 26 file writ name @9/@j_@mass_@height_@ndyn_@g.dcd
+open unit 27 file writ name @9/@j_@mass_@height_@ndyn_@g.ldm
+
+dynamics start langevin timestep 0.001 nstep @ndyn -
+     firstt @3 finalt @3 twindl -10.0 twindh 10.0 -
+     iasvel 5 iasors 5 iunr -1 iunwri 25 -
+     nsavc @outfrq nsavv 0 punit 12 -
+     iuncrd 26  iunvel -1 isvfrq 10000 -
+     iunldm 27
+
+close unit 8
+close unit 12
+close unit 25
+close unit 26
+
+!--------------------Loop from last structure---------------
+incr pertlam by @lamstep
+
+label looplam
+
+OPEN UNIT 8 form WRITE NAME @9/@j_@mass_@height_@ndyn_@f.lam
+
+open unit 12 write form name @9/pertl
+
+write title unit 12
+** pert script file
+**
+*lstart 0.0 lambda @pertlam lstop 1.0 pstart 0 pstop @ndyn pwind
+*end
+
+close unit 12
+
+open read card unit 12 name @9/pertl
+
+open unit 24 read form name @9/@j_@mass_@height_@ndyn_@g.res
+open unit 25 writ form name @9/@j_@mass_@height_@ndyn_@f.res
+open unit 26 file writ name @9/@j_@mass_@height_@ndyn_@f.dcd
+
+dynamics restart langevin timestep 0.001 nstep @ndyn -
+     firstt @3 finalt @3 twindl -10.0 twindh 10.0 -
+     iasvel 5 iasors 5 iunr 24 iunwri 25 -
+     nsavc @outfrq nsavv 0 punit 12 -
+     iuncrd 26  iunvel -1 isvfrq 10000
+
+close unit 8
+close unit 12
+close unit 24
+close unit 25 
+close unit 26
+
+
+incr pertlam by @lamstep
+incr f by 1
+if pertlam le 1.0 goto looplam
+
+
+STOP
+

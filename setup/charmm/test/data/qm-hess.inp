@@ -1,0 +1,15 @@
+$rem
+exchange              hf
+basis                 sto-3g
+qm_mm                 true      
+jobtype               freq 
+symmetry              off       
+sym_ignore            true      
+print_input           true      
+qmmm_print            true      
+$end
+
+$molecule
+0 1
+$end
+

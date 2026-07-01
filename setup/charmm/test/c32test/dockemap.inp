@@ -1,0 +1,101 @@
+* CHARMM c32 testcase dockemap.inp
+* Xiongwu Wu   May, 2004
+* dock of TCR-b chain into TCR-a chain to get a complex structure
+* using molecular maps
+* Data file : tcr.pdb
+*
+
+
+if ?numnode .ne. 1 then 
+ echo "c32test/dockemap.inp> Test NOT performed in parallel."
+STOP
+endif
+
+if ?emap .ne. 1 then 
+ echo "c32test/dockemap.inp> Test NOT performed."
+STOP
+endif
+
+
+set z tcr
+
+bomlev -1
+
+stream datadir.def
+
+OPEN READ FORM UNIT 11 NAME  @0top_all22_prot.inp
+READ RTF  CARD UNIT 11
+close unit 11
+
+OPEN READ FORM UNIT 12 NAME  @0par_all22_prot.inp
+READ PARAM  CARD UNIT 12
+close unit 12
+
+open read form unit 12 name @0@z.pdb
+read segid tcr unit 12 pdb build setup
+
+ic para
+ic build
+
+!Center the coordinate set
+
+coor orien
+
+!Copy the complex structure to comparison set
+coor copy comp
+
+! Make a-chain coordinate correct
+coor copy sele segi tcr1 end 
+
+! Show the rms of b-chain before docking
+coor rms sele segi tcr1 end
+coor rms sele segi tcr2 end
+
+!start map object manipulation
+
+! Define parameters
+emap parm eps 80.0
+emap parm psolv 100.0
+emap parm psele 300.0
+emap parm pcore 0.2
+
+! Generate molecular map of a-chain
+emap gene mapa fmap sele segi tcr1 end -
+  DX 3.0 DY 3.0  DZ 3.0 AX 20 AY 20  AZ 20  
+
+! Generate molecular map of b-chain
+emap gene mapb fmap sele segi tcr2 end -
+  DX 3.0 DY 3.0  DZ 3.0 AX 20 AY 20  AZ 20  
+
+emap assi  mapa sele segi tcr1 end as riga
+emap assi  mapb sele segi tcr2 end as rigb
+
+! Calculate starting energy
+emap inte mapi mapa rigi rigb
+show ?EMCORE ?EMSOLV ?EMELE ?EMCONS ?EMENG
+
+! Open trajectory file to store the conformation of b-chain during the search
+emap traj open format unit 32 name @9dock_tcrb.trj !"dock_tcrb.trj"
+
+emap dock fmap gtmc mapi mapa rigi rigb   -
+  ntra 2 nrot 1 ncyc 10 nstep 100 temp 300 dtco 1000.0 traj 1 space
+
+! Close the trajectory file
+emap traj close unit 32 
+
+! Calculate ending energy
+emap inte mapi mapa rigi rigb
+show ?EMCORE ?EMSOLV ?EMELE ?EMCONS ?EMENG
+
+! Get the final coordinates of b-chain
+emap proj rigb sele segi tcr2 end
+
+coor rms sele segi tcr1 end
+coor rms sele segi tcr2 end
+
+open writ form unit 16 name @9tcr_dock.pdb
+writ coor pdb unit 16 
+* fitted complex structure
+* 
+
+stop

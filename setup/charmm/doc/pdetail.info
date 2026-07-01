@@ -1,0 +1,2055 @@
+CHARMM Element doc/pdetail.info 1.1
+
+File: PDETAIL, Node: Top, Up: (doc/perturb.info), Next: Introduction
+
+ 
+                Details about TSM Free Energy Calculations
+
+* Menu:
+ 
+* Introduction::           What will be covered.
+* Theory and Methodology:: General discussion.
+* Practice::               How to do it.
+
+
+
+File: PDETAIL, Node: Introduction, Up: Top, Next: Theory and Methodology, Previous: Top
+ 
+
+                             Introduction
+ 
+
+       For a good overview of free energy simulation methods, the follow-
+ing references are suggested:  M. Mezei and D. L. Beveridge, in Annals of
+the New York Academy of Sciences, chapter titled "Free Energy Simulations",
+482 (1986) 1; T.  P. Straatsma, PhD dissertation, "Free Energy Evaluation
+by  Molecular Dynamics Simulations", University of Groningen, Netherlands
+(1987)  and  S.  H.  Fleischman  and C. L. Brooks III, "Thermodynamics of
+Aqueous  Solvation:  Solution  Properties  of  Alchohols and Alkanes", J.
+Chem. Phys., 87, (1987) p. 3029,  D.  J.  Tobias and  C.  L. Brooks  III,
+J. Chem. Phys., 89, (1988) 5115-5127, and D.J. Tobias, "The Formation and 
+Stability of  Protein Folding Initiation Structures",  Ph.D. dissertation
+Carnegie Mellon University (1991).
+ 
+         In the previous nodes we have generally referred to this area of
+molecular  simulation  as a "perturbation" theory.  Actually, none of the
+techniques  used  are  actually  perturbation methods.  The relationships
+used  for computing the relative free energy differences are all exact in
+the  statistical  mechanical  sense.  The use of the term perturbation in
+this  context  arises  from  the  fact  that  in the pre-number crunching
+supercomputer  days,  various  series  expansions were derived from these
+equations and were in fact perturbation theories.  The name thermodynamic
+integration  might  be used, however common practice has been to apply it
+to  only  one  particular formulation (and furthermore not put that under
+the  rubric of thermodynamic perturbation).  Finally, the use of the name
+"free energy simulations" is another misonomer for two reasons: 1) we can
+calculate  the  temperature  derivative  thermodynamic properties as well
+(Delta  E  and  Delta  S) and the one thing we can't get is absolute free
+energies  (as  van  Gunsterin  has  pointed  out , Mother  Nature doesn't
+integrate all over phase space either). In fact, we generally are limited
+to calculating relative changes in free energies, i.e. Delta Delta A's.
+ 
+        In thermodynamic perturbation theory, a system with the potential 
+energy function U0 is perturbed to one with the potential function U1, and 
+the resulting free energy difference is calculated as
+
+		A1 - A0 = -kT ln < exp[ -(1/kT)*(U1 - U0)] >
+
+where k is Boltzmann's constant, T is temperature (degrees K), and A0 and 
+A1 are the excess Helmholtz free energies of systems 0 and 1, respectively.  
+Two methods of thermodynamic perturbation are implemented in CHARMM:
+
+    1) Chemical perturbation, where the perturbation being considered is a 
+       change in the system's potential function parameters and topology, 
+       e.g., CH3OH is "mutated" to CH3CH3, and
+
+    2) Internal coordinate perturbation, where the perturbation represents 
+       a variation in configuration, and the potential function remains the 
+       same for the perturbed and unperturbed systems.
+
+Each of these is discussed separately below.
+
+
+File: PDETAIL, Node: Theory and Methodology, Up: Top, Next: Practice, Previous: Introduction
+ 
+
+                         THEORY AND METHODOLOGY
+
+* Menu:
+
+* Chemical::   Chemical Perturbation Theory and Methodology
+* Internal::   Internal Coordinate Perturbation Theory and Methodology
+* References:: Some References on Thermodynamic Perturbation
+
+
+
+File: PDETAIL, Node: Chemical, Up: Theory and Methodology, Next: Internal, Previous: Theory and Methodology
+
+
+                          Chemical Perturbation
+
+        If  you  have  read  either  (Fleischman  and  Brooks,  1987)  or
+(Straatsma,  1987)  or any of the McCammon or Kollman perturbation (oops!
+that  word  again) papers, then you have seen the standard schpiel on why
+getting  Delta  A's  (or  Delta G's) of solvation or drug/enzyme binding,
+among  other  processes is so difficult and that if one is satisfied with
+relative changes in free energies it is computationally more tractable to
+"trans-mutate"  various  parts  of  a  system  in  a  way that is usually
+physically     unreasonable     but    computationally    feasible    and
+thermodynamically  equivalent to that obtained from the physical process.
+Read some of the aforementioned references if this doesn't ring a bell.
+ 
+        So  that's  what  we  are doing - calculating relative changes in
+free  energies  (Delta  Delta  A) for solvation and small molecule/enzyme
+binding, among other things.  In the rest of this node, we will discuss a
+little  bit  of the theory (you're better off reading the papers) and lot
+about  the  actual  how-to-do-it in our implementation.  Subsequent nodes
+discuss  the  actual  implementation  and  some  issues  to consider when
+attempting this type of calculation.
+ 
+ 
+                              The Hamiltonian
+ 
+        There are three basic techniques for calculating relative changes
+in  free  energy  and  their  temperature  derivative  properties: 1) the
+so-called "perturbation" approach  2) "Thermodynamic Integration" (TI) 3)
+and  the  somewhat  dubious  "slow-growth" technique (which is actually a
+step-child of the TI method).
+ 
+        In all of the methods we use a hybrid hamiltonian,
+ 
+                                             N           N
+                H(lambda) = H  + (1 - lambda) H  + lambda H  .
+                             o                 R           P
+ 
+                where: H  = "Environment" part of the Hamiltonian
+                        o
+                       H  = "Reactant" part of the Hamiltonian
+                        R
+                       H  = "Product" part of the Hamiltonian
+                        P
+                       lambda = coupling parameter (extent of
+                                                    transformation)
+                       N = integer exponent
+ 
+        The  various terms will be explained shortly.  First, a bit about
+our  Weltanshauung  viz.  free energy simulations.  The system is divided
+into  four  sets  of atoms: 1) The reactant atoms 2) the product atoms 3)
+the  colo  atoms  and 4) the environment atoms.  The reactant and product
+atoms  are  those  that are actually being changed. The colo atoms (short
+for  co-located  charge)  are  those  in which only the charge changes in
+going  from  reactant  to product.  The environment atoms are the rest of
+the system (e.g. solvent; parts of a molecule common to both reactant and
+product).   The  reactant  and product designations are arbitrary and are
+used  as  a  convention  to denote the direction in which we are mutating
+(i.e. start with reactant end up with product).
+ 
+        A simple example, taken from (Fleischman and Brooks, 1987) is the
+calculation  of  the  relative  change  in the solvation free energies of
+methanol  and ethane.  This one has been done by virtually everybody that
+has  written a free energy simulation code.  The system is represented by
+the  water  molecules  (we used a box of 125 in our study) and the hybrid
+methanol/ethane  system,  with  aliphatic  methyl  groups  represented as
+extended atoms.
+ 
+                        O1--H1
+                       /          H
+                      /          /
+              H      C1--C2     O
+               \                 \
+                O                 H
+               /
+              H
+ 
+Using  the  depiction  above, for the tranformation of methanol -> ethane
+the  reactant  atoms  are the hybrid's O1 and H1; the product atom is the
+hybrid's   C2  methyl  group.   The  hybrid  molecule's  C1 methyl  group
+changes  charge  as  one  goes  from reactant to product.  This is a colo
+atom,  in  going  from  methanol  ->  ethane  it starts with the methanol
+methyl  group  charge  and ends up (at lambda = 1.) with the ethyl methyl
+group  charge.   Otherwise,  C1  is  considered an environment atom.  The
+atoms  of  the  water  molecules  constitute the actual environment atoms
+in  this  system.   If  the  hybrid  molecule  was  larger  it  too could
+contain environment atoms.
+ 
+        All  potential energy terms involving the reactant atoms, as well
+as  the  electrostatic  interactions  involving  colo  atoms  with  their
+reactant charges, go into H .  The kinetic energies of the reactant atoms
+                           R
+also  are  included  in this term.  Similarly, the potential energy terms
+involving  product  atoms  and  the  colo  product  charge  electrostatic
+interactions along with the kinetic energies of the product atoms go into
+H .  The rest of the energy terms are incorporated into H .
+ P                                                       o
+Note that for a potential energy term to be included in, say, H  only one
+                                                               R
+atom  in  the given interaction has to be a reactant atom (or in the case
+of  a  electrostatic  interaction  a  colo  atom).  Similarly for product
+terms.
+ 
+        For  electrostatic terms involving colo atoms effectively what is
+done  is  that  electrostatic  terms containing colo atoms are calculated
+twice,  once  with  the  reactant charges and then again with the product
+charges.  Terms  between  colo  reactant  charges  and reactant atoms are
+avoided  and  similarly  for  product  atoms.   Actually, the programming
+details  are a bit more complicated than that and if interested see *NOTE
+implementation: (pimplem).   The  outcome is the  same as just described.
+ 
+        It is assumed that when the hybrid molecule is constructed in the
+residue  topology  file,  there  are  no internal coordinate energy terms
+involving  reactant and product atoms.  As yet no checking is done in the
+program.   Similarly,  it is assumed that non-bonded exclusions have been
+specified between reactant and product atoms.
+ 
+        In  our implementation, the Hamiltonian is constructed exactly as
+specified in the equation above.  In many papers, that particular form of
+the  Hamiltonian is given in the theoretical section (or more likely, the
+form  with  N=1, i.e. linear) and in the actual implementation the lambda
+dependence  of the Hamiltonian is quite a bit more complex.  This is done
+in  those  implementations where the force constants and other parameters
+in  the  energy  terms  are  factored  by  lambda rather than calculating
+various energy terms and factoring them.
+ 
+        In  a  statistical mechanical sense there is no particular reason
+that  forces  one to factor the Hamiltonian consistently like we do.  The
+thermodynamics  holds  regardless of path and the equipartion theorem for
+obtaining  the  kinetic  energy  works  just  as  well  (though  in other
+implementations  it  appears  that the factoring of the kinetic energy is
+ignored anyway).   However,  we feel that there are certain advantages to
+doing  it  this  way.  First, there is a certain conceptual simplicity in
+factoring  the  Hamiltonian  consistently  for reactant and product terms
+enmass.   Second,  it  makes obtaining the derivatives of the Hamiltonian
+with  respect  to  lambda,  d E(lambda)/dlambda  programmatically simple.
+These  derivatives  are  needed  in  the TI and, the related, slow growth
+methods.   Actually,  the current algorithm for the slow growth method in
+our  implementation  uses  finite  differences  for  the derivative as do
+Kollman and van Gunsterin.  This  could easily be changed.  Factoring the
+energy  terms  rather  than  functional parameters permits a more modular
+design  and  makes  incorporating  changes  by others to energy functions
+terms easier.
+ 
+                      The Free Energy Equations
+ 
+        As  we  said  there are two (maybe three, depending how you count
+it)  different  ways  that  we   obtain the free energy changes.  For the
+thermodynamic integration method (TI) the following expression is used:
+ 
+                  _ 1
+                 /
+                 |
+        /\ A =   |  < d H(lambda)/d lambda >       d lambda
+        --       |                          lambda
+                _/ 0
+ 
+Expressions  for  energy  and  entropy  changes  can  be derived for this
+equation  (Mezei and Beveridge, 1986) and have been incorporated into our
+program.   They  suffer  from  very high uncertainties due to presence of
+ensemble  averages  over  the  total  energy which are then multiplied by
+ensemble  averages  over  d H/d lambda.   One  is  apparently  better off
+getting average energies at the endpoints and subtracting.
+ 
+        The   method   we   have   used  the  most  is the  thermodynamic
+perturbation  technique.   For  this,  the free energy change is given as
+follows:
+ 
+      /\ A (lambda ->  lambda') = - kT ln < exp - (V - V ) >
+      --                                            R   P   lambda
+ 
+Notice that all of the averages are at lambda.  To get the total delta A
+                  ___
+                  \
+        /\ A  =   /       /\ A (lambda -> lambda')
+        --        ---     --          i         i
+                   i
+ 
+the  pieces  are  added  up.   The user must insure that the whole lambda
+range is covered.  For example, in the methanol -> ethane calculation, we
+ran dynamics at 3 points: lambda = .125, .5 and .875.  To cover the range
+we calculated delta A's as follows:
+ 
+          lambda'      lambda       lambda'
+ 
+           0.000       0.125        0.250
+           0.250       0.500        0.750
+           0.750       0.875        1.000
+ 
+I.e.,  for  each  lambda  in  which  dynamics were run two delta A's were
+calculated, one lower and one higher than the corresponding lambda.  This
+has  been  termed  "double-wide" sampling.  Note that the pieces all join
+up.
+ 
+        In  our  implementation we have the capability of calculating the
+temperature  derivative  related  thermodynamic  properties,  delta E and
+delta  S.   This  is  effected by the use of equations derived by Brooks.
+ 
+See Fleischman and Brooks, 1987 for the corrected set of equations.  They
+use a finite difference approximation to the derivatives that avoids then
+necessity  of  taking the differences of large averages that would result
+from using the explicit temperture derivatives.
+ 
+        With   both  of  the  aformentioned  methods  the  technique  for
+accomplishing the simulations is called the "window" procedure.  In these
+methods  simulations  are  run  at a discrete number of lambda points (we
+generally  use  3  - 6 and long trajectories; other workers use up to 100
+lambda points and very short trajectories).  In the case of thermodynamic
+perturbation  the  total  free  energy  change  is  pieced  together from
+perturbations  done  with  each  "window".   In the case of thermodynamic
+integration  the  integration  is  done  by  a quadrature method.  In our
+implementation,  we fit the ensemble average as a function of lambda to a
+cubic  spline  polynomial and then integrate the polynomial analytically.
+No  extrapolation to endpoints is done.  So if you start at lambda = .125
+and  end  at  lambda  =  .875  (like  we  do)  you  can use thermodynamic
+perturbation  to get the end points (.125 -> 0 and .875 -> 1.) and TI for
+the middle.
+ 
+        An   alternative   sampling   method  is  termed  "slow  growth".
+It  is  more  or  less  an approximation to the thermodynamic integration
+method.   In  this  case  instead  of lambda being a constant for a given
+trajectory  (as  in  the  window  method),  instead  the parameter varies
+monotonically with each time step.
+ 
+ 
+                 n steps
+                 ----
+                 \
+        /\ A =   /    H(lambda + delta lambda) - H(lambda )
+        --       ----         i                          i
+                  i
+and
+        lambda  = lambda    + delta lambda
+              i         i-1
+ 
+Where H is the Hamiltonian and delta lambda = 1/nstep.
+
+
+
+File: PDETAIL, Node: Internal, Up: Theory and Methodology, Next: References, Previous: Chemical
+
+
+                      Internal Coordinate Perturbation
+
+
+    According to the thermodynamic perturbation (TP) theory, the Helmholtz 
+free energy difference, A1 - A0, between system 0, in which the 
+conformational coordinate of interest (e.g. an internal coordinate) is equal 
+to x, and another system, in which the coordinate has been "perturbed" by 
+the amount dx, is given by the equation
+
+        A1 - A0 = A(x + dx) - A(x) 
+
+                = kT ln < exp [-kT (U(x + dx) - U(x)) ] >           (1)
+                                                         x
+
+where U is the potential energy k is Boltzmann's constant and T is 
+temperature (degrees K).  The <...>x notation denotes a canonical ensemble 
+average over the "reference" ensemble in which the coordinate is equal to x.  
+Although the potential energy may depend on many degrees of freedom, for the 
+sake of simplicity we have only explicitly indicated its dependence on x.  
+If we assume that the ergodic hypothesis holds, we can equate the ensemble 
+average appearing in equation (1) to the time average computed from an MD 
+simulation, e.g.
+
+<exp [ -(1/kT) (U(x + dx)) ]> = 
+
+             (1/N) * Sum   { exp [ -(1/kT)*(Ui(x+dx) - Ui(x)) ] }   (2)
+                       1->N
+
+where Ui is the value of the potential energy at the ith timestep and N is 
+the number of timesteps in the simulation.  Since the average is over the 
+reference ensemble, we must constrain the system so the value of the 
+coordinate of interest is x at each step of the simulation.  In other words, 
+we must impose the holonomic constraint
+
+                      sigma = x(t) - x(0) = 0                       (3)
+
+during the integration of the equations of motion.  The conformational 
+coordinate may correspond to a set of internal coordinates.  In that case, 
+equation (3) implies a set of holonomic constraints.  In addition to 
+enforcing the conformational constraint, we need to carry out the 
+perturbation (x -> x + dx), calculate the potential energy difference, U(x + 
+dx) - U(x), and restore the constraint at each step of the simulation.
+
+	With the above considerations, the following pseudo-computer code 
+illustrates schematically the implementation of the TP method into an MD 
+simulation:
+
+	set up dynamics; specify constraint and perturbation
+	do i = 1,N
+		compute potential energy and forces
+		take unconstrained dynamics step
+		satisfy constraints
+		perform perturbation
+		compute potential energy
+		restore constraints
+	end do
+	compute averages and thermodynamics
+
+A detailed description of an algorithm for satisfying internal coordinate 
+constraints is given in (Tobias, 1991).  We concentrate here on the tasks of 
+specifying and performing the perturbation, and computing the difference in 
+the potential energy of the perturbed and reference systems.
+
+	The specification of the perturbation consists of identifying the 
+degree(s) of freedom to be perturbed and the atoms whose positions change as 
+a result of the perturbation.  Our implementation allows for perturbations 
+of distances, angles, and torsions between groups of atoms.  For example, we 
+may use a distance perturbation to study the breakup of a salt-bridge (ion 
+pair) formed by the sidechains of lysine and glutamic acid, where x might be 
+the distance between the N atom in the lysine sidechain and the carboxyl C 
+atom in the glutamic acid sidechain, and the perturbation would consist of 
+moving the entire glutamic acid residue.  Alternatively, we could use an 
+angle perturbation to study the angular dependence of the strength of a 
+hydrogen bond between two amides, where x is the O...H-N angle, and the 
+perturbation moves the entire hydrogen bond donor molecule.  Or, we could 
+use a torsional perturbation to study the trans-gauche isomerization in 
+butane, where x is the dihedral angle for methyl group rotation about the 
+central C-C bond, and the perturbation moves a terminal methyl group and the 
+hydrogen atoms on the adjacent methylene group.  In addition to simple 
+perturbations of a single internal coordinate, we can define more 
+complicated perturbations involving more than one internal coordinate in 
+order to study correlated conformational transitions.  For example, we could 
+combine perturbations of the phi and psi dihedral angles to study backbone 
+conformational equilibria in peptides (see *Notes implementation: 
+(pimplem).).
+
+	The procedure for carrying out internal coordinate perturbations 
+during molecular dynamics simulations may be summarized as follows: after 
+choosing an internal coordinate to perturb, and deciding which atoms will be 
+moved by the perturbation, we compute a Cartesian displacement vector which 
+changes the internal coordinate by a specified amount, and add the displace-
+ment vector to the positions of the atoms to be moved.  Thus, in our imple-
+mentation, the perturbation can be described as a rigid body movement of the 
+perturbed atoms relative to the unperturbed atoms.
+
+	Once we have moved all of the atoms involved in the perturbation, we 
+need to compute the potential energy difference, delta U = U1 - U0 = U(x + 
+dx) - U(x).  To do this, we could compute U(x), carry out the perturbation 
+and compute U(x + dx), and simply take the difference.  However, this direct 
+route is computationally inefficient, because interaction energies between 
+atoms which are not moved by the perturbation are unnecessarily recomputed.  
+To minimize the computational effort required to compute delta U, we only 
+consider the interactions which change as a result of the perturbation.  For 
+this purpose, we partition the system into two parts: the atoms which are 
+moved by the perturbation (denoted by "s" for "solute"), and those which are 
+not (denoted by "b" for "bath").  With this partitioning, we can write the 
+potential energy as a sum of three contributions:
+
+    U(x) = Uss(x) + Usb(x) + Ubb(x),                                (4)
+
+where Uss, Usb, and Ubb are the solute-solute, solute-bath, and bath-bath 
+interaction energies, respectively.  Clearly, Ubb(x + dx) - Ubb(x) = 0 since 
+the positions of the bath atoms are not changed by the perturbation.  Thus,
+
+   U1 - U0 = Uss(x + dx) - Uss(x) + Usb(x+dx) - Usb(x).             (5)
+
+	Since, in typical applications, the number of solute atoms is much 
+smaller than the number of bath atoms, equation (5) represents a large 
+reduction in computational effort over the direct route.  Before we proceed, 
+we point out that when we need U(x + dx) in addition to delta U (e.g. for 
+computation of conformational entropies using finite difference temperature 
+derivatives of the TP free energy (see *Note description: (perturb).), we 
+can use the following expression:
+
+     U(x + dx) = Uss(x + dx) + Usb(x + dx) + Ubb(x)
+
+               = Uss(x + dx) + Usb(x + dx) + U(x) - Uss(x) - Usb(x),   (6)
+
+since Ubb(x + dx) = Ubb(x).  We assume that U(x) is computed when the forces 
+required for the propagation of the dynamics are computed.  Thus, we still 
+only need to compute the changes in the solute-solute and solute-bath 
+interaction energies which result from the perturbation.
+
+	In general, when we have a choice, we partition the system so that the 
+solute consists of the smallest possible number of atoms.  There are two 
+good reasons for this.  First, smaller solute partitions require less effort 
+to compute the interaction energies.  Second, with smaller solute 
+partitions, there is less of a chance that the solute atoms will "run into" 
+bath atoms as a result of the perturbation.  When solute and bath atoms run 
+into one another, there is a large, positive van der Waals contribution to 
+deltaU.  This is undesireable because large delta U values lead to poorer 
+convergence of the average in equation (2).  The partitioning of the system 
+is especially important when the perturbations are carried out in "crowded" 
+environments, such as in solution or in the interior of a protein.
+
+	In some cases it is useful to divide the solute partition into two 
+sections, and accomplish the desired perturbation by moving each section by 
+half the perturbation.  For example, to perturb the dihedral angle in butane 
+by dx, we could include both methyl carbons and all of the hydrogens in the 
+solute partition, with the C1 methyl group and C2 methylene hydrogens in one 
+section, and the C4 methyl group and C3 hydrogens in the other section, and 
+move each section by dx/2.  This "double move" strategy is useful when the 
+perturbation is carried out on a small molecule in a crowded environment 
+where the movement of n atoms by dx/2 is more favorable than the movement of 
+approximately n/2 atoms by dx.  The option to perform perturbations in this 
+fashion is available in our implementation.
+
+	In principle, we could get the free energy difference between any two 
+conformations, x0 and x1, in a single simulation using the TP theory 
+expression:
+
+       delta A = A1 - A0 = A(x1) - A(x0) 
+
+               = - kT ln < exp [ -(1/kT)*(U(x1) - U(x0)) ] >   .     (7)
+                                                            x0
+
+However, in practice, for typical simulation lengths, the average in 
+equation (7) exhibits acceptable convergence only when deltaA <= 2kT 
+(Beveridge & DiCapua, 1989).  Thus, if the free energy difference between 
+the conformations x0 and x1 or the free energy barrier separating them, is 
+more than about 2kT, then a single simulation is not sufficient to determine 
+accurately the free energy difference.  This problem is circumvented by 
+breaking up the range of the coordinate, x1 - x0 into n segments or 
+"windows", y(i),
+
+dy = (x1 - x0)/(n + 1);  y(i) = x0 + (i - 1) dy; i = 1,...,n,          (8)
+
+and running a series of n simulations where the free energy differences,
+
+   delta A(i) = A(y(i+1)) - A(y(i) 
+
+              = -kT ln < exp [ -(1/kT)*(U(y(i+1)) - U(y(i))) ] >       (9)
+                                                                y(i)
+
+are computed.  Then the free energy difference between x1 and x0 is obtained 
+by summing the results from the n windows, e.g.
+
+                        x1
+      delta A = Integral   (p(deltaA(y))/py) dy
+                        x0
+                   
+              = Sum    delta A(i),                                     (10)
+                  1->n
+
+where p(z) denotes the partial derivative of z.  Aside from yielding more 
+accurate free energy differences, the window method is attractive because it 
+allows us to map out the free energy surface as a function of the 
+conformational coordinate.
+
+	By far the most time consuming task in a molecular dynamics simulation 
+is the evaluation of the forces necessary to propagate the equations of 
+motion.  The additional work required for computing the interaction energies 
+needed for the TP free energy differences is relatively small.  Thus, it is 
+advantageous to get more than one free energy difference from a single 
+simulation.  This is the motivation for using the so-called "double-wide" 
+sampling method (Beveridge & DiCapua, 1989), where the free energy 
+differences A(y + dy) - A(y) and A(y - dy) - A(y) are obtained in one 
+simulation.  Furthermore, we can divide dx into m subintervals, dy(m) = 
+dy/m, and compute 2m free energy differences,
+
+           +/-
+delta A(i,k)  =  A(y(i) +/- dy(m)) - A(y(i))
+
+              = -kT ln < exp[ -(1/kT)*(U(y(i) +/- kdy(m)) - U(y(i))) ] >
+                                                                       y(i)
+
+                                                   k = 1,...,m;        (11)
+
+over the range y(i) - dy <= y <= y(i) + dy from a single simulation with x = 
+y(i).  Then we sum the free energy differences from the various subintervals 
+(in analogy with equation (10)) to get a free energy surface for each 
+window.  This "double-wide, multiple-point" window method allows a higher 
+resolution mapping of the free energy surface with little additional 
+computational effort.
+
+	Let us now comment on how dy is chosen.  As we have already said, dy 
+should be chosen so that the free energy change in a given window is not 
+more than a couple of kT.  In addition, the shape of the free energy surface 
+in a given window can be used to determine a good choice for dy.  A 
+reasonable choice for a given system can be made by considering results from 
+short simulations with a modest dy and several subintervals at a couple of 
+values of y in the range of interest.  In general, for perturbations in 
+crowded environments (e.g. in solution or the interior of a protein), 
+excessively large values of dy always result in positive free energy 
+differences.  This is because the perturbation results in repulsive van der 
+Waals interactions of the atoms in the solute partition with those in the 
+bath partition.  The value of dy where the free energy difference begins to 
+sharply increase can then be regarded as the upper bound on acceptable dy 
+values.  Of course, it is possible that the underlying free energy surface 
+really does rise sharply beyond the second subinterval in both directions.  
+That is why we suggest running another test at a different value of y.  In 
+addition to running short test calculations, it is also useful to consult 
+previous work to get a preliminary estimate for an acceptable size of a 
+perturbation in a similar system (for several examples, see (Tobias, 1991)).
+
+	In our implementation, the information needed to calculate 
+conformational thermodynamics (free energies, internal energies, entropies, 
+average interaction energies), and their associated statistical 
+uncertainties, is written to a datafile during a simulation.  The data file 
+is subsequently "post-processed" to yield the quantities of interest.  The 
+alternative approach is to calculate the average properties of interest as 
+the simulation progresses, and simply write out the final results at the end 
+of the simulation.  The latter approach has the advantage that large, 
+cumbersome data files do not need to be saved on a mass-storage device (e.g. 
+disk or tape).  However, we prefer the post-processing approach because of 
+the flexibility it gives us in the analysis of the data.  For example, we 
+can: examine the time evolution, and hence the "convergence", of the average 
+properties; carry out the averaging on an arbitrary amount of the data; 
+compare various protocols for computing the statistical uncertainties or 
+finite-difference temperature derivatives, etc.
+
+	We use the method of block averages (a.k.a. batch averages) to compute 
+the average properties and their uncertainties (Wood, 1968).  In this 
+method, the total number of samples, N, is divided into m "batches" of n 
+samples (mn = N), and the average of the property of interest, <O>i, is 
+computed for each batch i:
+
+     <O>i = (1/n) Sum      O(k,i),                                  (12)
+                    k=1->n
+
+where O(k,i) is the kth observation of O in the ith batch.  The average of 
+the N samples, <O>, is simply the average of the batch averages:
+
+     <O> = (1/m) Sum      <O> ;                                     (13)
+                   i=1->m    i
+
+
+and the "uncertainty", std<O>, is estimated from the standard deviation in 
+the batch averages:
+
+    std<O> = ( Sum    [ (<O> - <O>)**2 / m(m - 1)] )**1/2           (14)
+               i=1->n       i
+
+
+We use equation (14) to compute the uncertainty in the average of the 
+exponential in equation (1).  Then we obtain the uncertainty in the free 
+energy (and other thermodynamic functions) by error propagation (Young, 
+1962), e.g.
+
+	std(delta A)**2 = (p(delta A)/p(z))**2 (std(z))**2
+
+                    = (kT*std(z)/z)**2                               (15)
+
+where z is the average of the exponential in equation (1).
+
+	In order for the uncertainty given by equation (14) to be a good 
+estimate of the "true" uncertainty (e.g. in a large number of random 
+samples), the block size must be chosen so that the block averages are 
+uncorrelated (randomly distributed), and the number of blocks is not too 
+small for the evaluation of a meaningful standard deviation.  The block size 
+n is typically chosen arbitrarily and possible correlations in the data are 
+ignored.  More refined uncertainties can be obtained by considering the 
+actual correlation of the data determined explicitly from the 
+autocorrelation function (Straatsma, et al., 1986).  However, we presently 
+have no facility for carrying out the correlation function analysis.
+
+
+
+File: PDETAIL, Node: References, Up: Theory and Methodology, Next: Theory and Methodology, Previous: Internal
+
+
+References
+
+	Beveridge, D. L. & DiCapua, F. M. (1989), in "Computer Simulations of 
+Biomolecular Systems", eds. van Gunsteren, W. F. & Weiner, P. K. (Escom, 
+Leiden).
+
+	Straatsma, T. P. (1987). "Free Energy Evaluation by Molecular Dynamics 
+Simulations" (Ph.D. dissertation, Department of Physical Chemistry, 
+University of Groningen).
+
+	Tobias, D. J. (1991). "The Formation and Stability of Protein Folding 
+Initiation Structures" (Ph.D. Dissertation, Department of Chemistry,  
+Carnegie Mellon University).
+
+	Wood, W. W. (1968), in "Physics of Simple Liquids", eds. Rowlinson, J. 
+S. & Rushbrooke, G. S. (North-Holland, Amsterdam).
+
+	Young, H. D. (1962). "Statistical Treatment of Experimental Data" 
+(McGraw-Hill, New York).
+
+
+
+File: PDETAIL, Node: Practice, Up: Top, Previous: Theory and Methodology, Next: Top
+ 
+
+                                  Practice
+ 
+
+        In  this  node  we  tell  you how to actually set up and run free
+energy simulations.
+ 
+        The  calculation  is  done  in  three steps.  The first two steps
+occur  in  the  same  input  file  -  perturbation set up and running the
+dynamics.   The  last step, the post-processing, is generally done with a
+separate  input file since the output of several trajectories are usually
+used.
+ 
+        To set up the free energy simulation dynamics input file you start
+with the usual set up for a dynamics run: psf, coordinates, image input or
+stochastic  boundary  condition input etc..  In addition you have to issue
+free energy  simulation (FES) set up commands.  Currently the set up input
+is    initiated    by   the   TSM   command   (*Note  syntax:  (perturb).)
+(*Note description: (perturb).).   For chemical perturbations,  these com-
+mands define the reactant, product and colo lists; the type of simulation:
+slow growth or window procedure  (both the thermodynamic  perturbation and 
+the  thermodynamic integration methods can be done with the  window proce-
+dure).   For internal coordinate perturbations,  the setup commands define
+the  internal coordinate(s) to be perturbed, the set of atoms moved by the
+perturbation, and how and where the thermodynamic results will be written.
+ 
+
+* Menu:
+
+* CPrac::  Chemical Perturbation Practice
+* IPrac::  Internalal Coordinate Perturbation Practice
+
+
+
+File: PDETAIL, Node: CPrac, Up: Practice, Previous: Practice, Next: IPrac
+
+
+                      CHEMICAL PERTURBATION - PRACTICE
+
+
+        As  currently  configured , most of the minimization routines will
+work   using   the  hybrid  V(lambda)  potential.   We  generally  do  any
+minimization  prior to dynamics with the hybrid molecule unperturbed since
+we  are really concerned with removing bad contacts.  It is not guaranteed
+in  the  future  that  the V(lambda) will be available to the minimization
+routines.
+ 
+        After  the  FES set up has been entered flags have been set in the
+program  and  data  structures  created  and  dynamics  can be run with no
+changes in the commands used in any other dynamics run.  One will normally
+run  some  thermalization  runs  with  the  data  being  discarded.  For a
+thermalization  run  the  SAVE  command in the FES set up is generally not
+used.   For  production  runs  for  TI  or Thermodynamic Perturbation (TP)
+the  SAVE option must be issued in the FES set up input.  This will result
+in  the  output of V(R) and V(P), lambda among other things in a formatted
+file.  All this will be discussed below with examples.
+ 
+
+* Menu:
+
+* SetUp::     Setting Up the FES Simulation and Running Dynamics
+* PostD::      Post-processing the Data
+* Optional::  Using Some Optional FES Set Up Commands
+
+
+File: PDETAIL, Node: SetUp, Up: CPrac, Previous: CPrac, Next: PostD
+
+
+          Setting Up the FES Simulation and Running Dynamics
+ 
+Below  is  a  fragment of the input file for setting up the thermalization
+of  the  ethanol  ->  propane  hybrid.   Windowing will be used and we can
+decide  at  the  end  whether  to  post-process the output using TI or TP.
+Using the representation below the system is partioned as follows:
+ 
+                             O1--H1
+                            /
+                           /
+                     C1--C2
+                           \
+                            \
+                             C3
+ 
+The  reactant  atoms are O1 and H1; the only product atom in this example
+is  C3  and  there  is  one  COLO  atom,  C2.   The methyl group C1 is an
+"environment"  atom.   It  is present in both reactant and product and in
+our model its charge does not change in going from reactant to product.
+ 
+* Ethanol -> Propane
+*
+ 
+! Read topology file
+READ RTF CARD
+* TOPOLOGY FILE ethanol -> propane
+*
+   20    1                ! Version number
+MASS     1 H      1.00800 ! hydrogen which can h-bond to neutral atom
+MASS    13 CH2E  14.02700 !   -    "    -           two
+MASS    14 CH3E  15.03500 !   -    "    -           three
+MASS    53 OH1   15.99940 ! hydroxy oxygen
+ 
+! This is put in to force the necessity of using a GENERATE Noangles
+! in the input file.  The standard topology files use this statement.
+AUTOGENERATE ANGLEs
+ 
+RESI ETP 0.000
+GROU
+C1 CH3E 0.    ! environment atom
+C2 CH2E 0.265 ! COLO atom the charge is the reactant charge
+O1 OH1 -0.7   ! reactant atom
+H1 H    0.435 C3 ! reactant atom note the non-bonded exclusion with
+GROU
+C3 CH3E 0.    ! product atom
+ 
+BOND C1 C2       !environment term
+BOND C2 O1 O1 H1 !reactant terms
+BOND C2 C3       !product term
+ 
+! the angles MUST be specified
+! note the absence of O1 C2 C3 between reactant and product atoms
+ANGLe  C1 C2 C3  !product term
+ANGLe  C1 C2 O1  C2 O1 H1  !reactant terms
+ 
+! this will be a V(R) term.
+DIHED C1 C2 O1 H1
+ 
+! don't really need it but what the heck.
+DONO H1 O1
+ACCE O1
+ 
+IC C1 C2 O1 H1  1.54 111. 180. 109.5 0.96
+IC C2 O1 H1 BLNK 0. 0. 0. 0. 0.
+IC C3 C2 C1 BLNK 0. 0. 0. 0. 0.
+ 
+PATCH FIRST NONE LAST NONE
+!
+END
+ 
+! Read parameter file
+READ PARAM CARD
+* parameter file for ETP hybrid.
+*
+ 
+BOND
+CH2E CH3E  225.0  1.54
+CH2E OH1   400.0  1.42
+OH1  H     450.0  0.96
+ 
+THETA
+CH3E CH2E CH3E  45.0 112.5
+CH3E CH2E OH1   45.0 111.0
+CH2E OH1  H     35.0 109.5
+ 
+PHI
+CH3E CH2E OH1 H  0.5   3   0.0
+ 
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSWIT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+ 
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.0440    -0.0498    0.8000
+CH2E     1.77      -0.1142    2.235  1.77 -0.1 1.9
+CH3E     2.17      -0.1811    2.165  1.77 -0.1 1.9
+OH1      0.8400    -0.1591    1.6000
+ 
+HBOND AEXP 4 REXP 6 HAEX 0 AAEX 0   NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+   CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+!
+H*    N%      -0.00      2.0 ! WER potential adjustment
+H*    O*      -0.00      2.0
+ 
+END
+ 
+! read the sequence of one residue
+read sequence card
+* ETP
+*
+1
+ETP
+ 
+! Generate the  hybrid molecule.  Note that we use the NOANGLE command
+! because of the AUTOGENERATE ANGLES command in the RTF file.
+GENERATE ETP SETUP NOANGLE
+ 
+! determine the geometry and coordinates
+IC SEED  1 C1 1 C2 1 O1
+IC PARAM
+IC PURGE
+IC BUILD
+ 
+! The Hybrid molecule is built. Now set up the FES stuff.
+TSM
+! Assign reactant list:
+REAC sele etp 1 O1 .or. etp 1 H1 end
+! Assign product list:
+PROD sele etp 1 C2 end
+! Set lambda - we will use TI or TP.
+! The lambda dependence of the Hamiltonian will be linear.
+! This is the default and the POWEr 1 command is actually unecessary.
+LAMBda .125 POWEr 1
+! The common methyl group is a colo atom.  Since the charge in the
+! rtf was for the reactant the RCHArge command is actually unecessary.
+COLO ETM 1 C2  PCHArge 0. RCHArge 0.265
+!
+! This is a thermalization run - so no save statement.
+! Just terminate the FES setup with an END statement.
+END
+ 
+! Set up dynamics.
+! Since we are interested in the thermodynamic properties and not
+! the dynamics, we can use Langevin heat bath dynamics to maintain
+! temperature equilibration. Lambda is .125.
+ 
+title
+* etp: Ethanol To Propane
+* FES run
+*
+!a simple expedient
+shake bond angle
+!  Set-up Langevin dynamics for temperature control
+scalar fbeta set 50.0 sele .not. hydrogen end
+!
+! open restart file for output
+open unit 3 write form name etp0.res
+!
+dynamics langevin timestep 0.001 nstep 10 nprint 2 iprfrq 2 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 60 ihtfrq 20 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri 3 nsavc 0 nsavv 0 iunvel 0 -
+     iunread -1                           - !{* Nonbond options *}
+     inbfrq 10 imgfrq 10 ilbfrq 0 tbath 300.0 rbuffer 0.0 -
+     eps 1.0 cutnb 8.0 cutim 8.0 ctofnb 7.75
+stop
+*END of INPUT*
+ 
+        This  file  has  everything  you  need  to  run the example.  The
+topology  and parameter input are included.  The FES set up was initiated
+with the TSM command.  The reactant and product lists were specified with
+REAC  and  PROD  commands  that  use  the  standard CHARMM atom selection
+syntax.   Had  their  been either no reactant atoms or product atoms then
+the  command  would  have been REAC NONE or PROD none as the case may be.
+Note that specifying both would have resulted in an error condition being
+flagged.   Since  we  are  using the window method we specified LAMBda as
+being  0.125.   We also explicitly specified the lambda dependence of the
+Hamiltonian  as  being  (1-lambda)**1 for the reactant part and lambda**1
+for  the  product  part.  Since not entering the POWEr parameter causes a
+default of 1 for the exponent in was unecessary to actually enter it.
+ 
+        There  is one COLO atom in the system.  The product charge of the
+C2  methylene  extended atom was 0.  In the RTF the charge was .265 which
+is  the  reactant  (ethanol)  charge.   Since that's what we want for the
+reactant  charge  there  was  actually  no  need  to  enter  the  RCHArge
+parameter.  Again, we put it there for illustrative purposes, the default
+is to assume that for any COLO atom the charge in the RTF is the reactant
+charge  unless  the  RCHArge  parameter  is included in the COLO command.
+Note that charges can also be changed with the SCALAR command.
+ 
+        We  could  have  chosen a value of the POWEr parameter other than
+one  (i.e.  non-linear  lambda scaling).  This is potentially useful when
+using   the TI method for the free energy change.  Non-linear scaling has
+one  major  advantage.   At  lambda = 0 the components of the derivatives
+dH(lambda)/dlambda  due  to  the  product  part  of  the  Hamiltonian are
+identically  zero  and similarly, at lambda = 1 the components due to the
+reactant   part   are  zero.   This  solves  the  "lambda  goes  to  zero
+catastrophe" problem.  This is the problem that as lambda approaches zero
+or  one  the positions of the atoms affected (mostly product or reactant,
+respectively, and sometimes environment atoms bonded to them) feel forces
+that  approach  a  constant or zero value (zero potential energy) and can
+thus have positions anywhere in phase space.
+ 
+        Since  the  approximations  to the ensemble averages are obtained
+from  finite  length trajectories, determining values of those quantities
+becomes  a computationally intractable proposition.  The TI integral over
+dlambda  will  tend  to diverge when linear scaling is used.  In both the
+TI  and TP methods actually calculating the dynamics trajectory generally
+will be problematical, with large movements of the atoms resulting in bad
+van  der  Waals  contacts  (the  r**12  repulsion eventually is felt) and
+fraying  of  bonds  with  lambda approaching zero or one.  Another way of
+viewing  the situation is that at lambda = 0 or 1 the product or reactant
+atoms, respectively, do not exist yet.  Doing the perturbation to lambda'
+(or equivalently viewing the derivative, dH/dlambda, as a perturbation to
+lambda  +  dlambda)  requires having the coordinates of atoms that do not
+exist  yet  or  any  longer.  Non-linear scaling and the TI method can be
+used  to  avoid  this  difficulty  for  the reasons given in the previous
+paragraph.   Another  way  is to scale the TI integral by a function that
+reduces  the  weight  of  the  integrand  as  lambda  -> 0 or 1.  This is
+discussed in Mezei and Beveridge.
+ 
+        For  lambda  =  0, if use of the TI method with non-linear lambda
+scaling  was planned we would issue a command, prior to the FES setup, to
+delete the product atoms from the hybrid molecule rtf:
+ 
+   DELEte ATOMs SELEct etp 1 C2 END
+ 
+This  is  a standard CHARMM PSF modification command and would be issued
+after  the  segment  generation.  Alternatively, we could have just used
+an RTF for ethanol.
+ 
+        The  FES  setup command sequence would be modified slightly from
+the previous example:
+ 
+   TSM
+   REAC sele etp 1 O1 .or. etp 1 H1 end
+   ! no product atom at lambda = 0
+   PROD NONE
+   ! non-linear lambda scaling
+   LAMBda .125 POWEr 2
+   END
+ 
+Note  that  since there are no product atoms at lambda = 0, the PROD NONE
+command  is  issued.   Also  there  is no need for the COLO command.  For
+lambda at 1 we can use an equivalent procedure (left as an assignment for
+the reader).
+ 
+        In  most of our work to date, we have used linear scaling and the
+TP method.  To get around the catastrophe problem, we do not run dynamics
+at  lambda  =  0  or  1.  Instead we run them at values of lambda a small
+distance  away  from  0  or  1  and "perturb" down to the endpoints.  One
+potential  problem may occur with this procedure.  In cases, such as that
+of  the  transformation  hydrophobic  ->  hydrophobic  solute  in aqueous
+solution,  where water structure rearrangements around the solute are the
+major  contributing  factor  to  the  free energy change, not sampling at
+lambda = 0 or 1 may mean that the significant part of phase space for the
+rearrangement  is  not  adequately  sampled. If in going from reactant ->
+product  (or vice versa) a significant volume becomes newly accessible to
+the solvent, the presence of the r**-12 repulsive forces from the "almost
+but  not  completely  disappeared"  atoms  may  conceivably  prevent  the
+necessary  configurations  of  the  water molecules from appearing in the
+finite length trajectory.  This problem has not been investigated yet.
+ 
+        Non-linear  scaling  may  be preferred for sampling efficiency, a
+debatable  point  that  has  been  discussed  by a number of researchers.
+Problems  can  result  since  the monotonicity of the integrand in the TI
+intregral  is  no  longer  assured.   In  the  case of the TP method, the
+non-linear scaling forces the use of very small "perturbations" lambda ->
+lambda'.  The  non-linear  exponent  makes the delta V(lambda -> lambda')
+very  large.   For  example,  if  the  exponent  is 6 and lambda = .5 and
+lambda' = .25, a not unreasonable "window", the potential energy term for
+the  product  gets  multiplied  by  .5**6  = 0.16 for lambda and .25**6 =
+0.00024 for lambda'.  So one has terms of exp(-beta(.15V  - 0.00024V ) in
+                                                        P           P
+the   ensemble   average  for  the  TP  method,  causing  extremely  slow
+convergence.  For the temperature derivative related properties, one runs
+into problems with floating point overflows.  This is probably the reason
+why Kollman uses his convoluted "charge decoupling" technique whereby the
+van  der Waals interaction contribution to the perturbation is calculated
+with  slow  growth  and the charge interaction contribution is calculated
+with windows.
+ 
+        For the production runs we merely add a SAVE statement to the FES
+set  up  commands, any place before the END statement.  In it the FORTRAN
+unit number for the output file that will contain the FES information and
+an output frequency (we generally use 1).
+ 
+    SAVE UNIT 10 FREQ 1
+ 
+The  FES  output  file must be opened for formatted write access prior to
+invoking the dynamics command.  Use the unit number specified in the SAVE
+statement.
+ 
+     OPEN UNIT 10 WRITE FORM NAME ETP1.PRT
+ 
+Production  dynamics  are  run  in  the usual way.  To run the production
+dynamics  the  the command used for the previous (thermalization) example
+is slightly modified.
+ 
+! open restart file for output
+open unit 4 write form name etp1.res
+! open restart file for input
+open unit 3 write form name etp0.res
+!
+dynamics langevin rest timestep 0.001 nstep 10 nprint 2 iprfrq 2 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 60 ihtfrq 20 ieqfrq 200 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri 4 nsavc 0 nsavv 0 iunvel 0 -
+     iunread 3                            - !{* Nonbond options *}
+     inbfrq 10 imgfrq 10 ilbfrq 0 tbath 300.0 rbuffer 0.0 -
+     eps 1.0 cutnb 8.0 cutim 8.0 ctofnb 7.75
+ 
+We  opened  the  restart file from the thermalization for input on unit 3
+and opened the a file for restart file output on unit 4.  In the dynamics
+command  we  modified  iunread  and  iunwrite  to deal with this. We also
+specified  that  this  is a dynamics restart.  All this has nothing to do
+specifically with FES simulations.
+ 
+        The  above  procedure is repeated for more lambda points.  In our
+study  we  used  lambda  =  .5  and  .875.   At  each  value  of lambda a
+thermalization run is done followed by production runs.  One advantage of
+this implementation as compared to some others is that one can always run
+additional  trajectories  at  any  given value of lambda and add tack the
+output  onto  that  of  the  previous  runs.   Similarly,  we  can insert
+trajectories  at other values of lambda and recalculate the thermodynamic
+properties.
+ 
+
+File: PDETAIL, Node: PostD, Up: CPrac, Previous: SetUp, Next: Optional
+
+
+                         Post-Processing the Data
+ 
+        Assume  that  we  now  have  three  FES  output  files: etp1.prt,
+etp2.prt  and  etp3.prt for lambda = .125, .5 and .875, respectively.  To
+make  things  interesting  let  us  assume  that  we  went  back  and ran
+additional trajectories at each value of lambda and these files are named
+etp4.prt,  etp5.prt  and  etp6.prt  for  lambda  =  .125,  .5  and  .875,
+respectively.   We  used  the  window  sampling method with linear lambda
+scaling.   The  next  step is to post-process the output so as to compute
+the free energy changes.  The following input file will do the job:
+ 
+* Post-processing Example ETP: ethanol -> propane vacuum.
+* TP method linear lambda scaling.
+*
+! open FES data files for input.
+open unit 10 form read etp1.prt
+open unit 11 form read etp2.prt
+open unit 12 form read etp3.prt
+open unit 13 form read etp4.prt
+open unit 14 form read etp5.prt
+open unit 15 form read etp6.prt
+!
+! now the post-processing input
+!
+TSM  POST PSTAck 6 PLOT
+! lambda = .125 -> lambda' = 0.
+PROC FIRST 10 NUNIT 2 LAMB 0.0 TEMP 298.0 DELT 10. BINS 100 CTEM
+! lambda = .125 -> lambda' = 0.25
+PROC FIRST 10 NUNIT 2 LAMB 0.25 TEMP 298.0 DELT 10. BINS 100 CTEM
+! lambda = .5 -> lambda' = 0.25
+PROC FIRST 12 NUNIT 2 LAMB 0.0 TEMP 298.0 DELT 10. BINS 100 CTEM
+! lambda = .5 -> lambda' = 0.75
+PROC FIRST 12 NUNIT 2 LAMB 0.0 TEMP 298.0 DELT 10. BINS 100 CTEM
+! lambda = .875 -> lambda' = 0.75
+PROC FIRST 14 NUNIT 2 LAMB 0.0 TEMP 298.0 DELT 10. BINS 100 CTEM
+! lambda = .875 -> lambda' = 1.0
+PROC FIRST 14 NUNIT 2 LAMB 0.0 TEMP 298.0 DELT 10. BINS 100 CTEM
+!
+! the END command tells the post-processor to tally everything up.
+END
+STOP
+ 
+        This  is  an complete input file for post-processing using the TP
+method.  First,  all of the data files that were needed were opened prior
+to  invoking the post-processor.  The command to initiate post processing
+was:
+ 
+TSM  POST <parameters>
+ 
+For a full explanation of the parameters see *Note PDESC: (perturb). Note
+that   by   not   specifying   the   sub-command  TI  (for  thermodynamic
+integration),  the  TP  (thermodynamic  perturbation) method is selected.
+The  PSTAck  command allocates space for various temporary arrays. PSTAck
+should be equal to the number of PROCess commands.  In the case of the TP
+method  they  are  used  for  holding  plotting  values  until  the final
+processing is done.  The PLOT parameter indicates that plotting output is
+to  be  generated.   This is written into the CHARMM output file (unit 6)
+and can be extracted with an editor.  The format will serve as data input
+to the PLT2 program.  For the TP method delta A, delta E and delta S as a
+function  of  lambda  are  output  with  lambda  points marked by X's and
+lambda' points marked by O's.
+ 
+        The  PROCess commands cover the complete range from 0 to 1.  This
+example  shows  how we can tack on trajectories.  The post-processor will
+read  each  file  until it encounters and end of file (EOF) condition and
+count the steps itself.  The nstep parameter at the beginning of the file
+is  ignored.  Often this value is not accurate since it is something that
+is written out before the dynamics starts; not an actual count of records
+written.   The  FIRSt parameter specifies the initial FORTRAN unit number
+for  the  first  file  for  a  given PROCess command; NUNIt specifies the
+number  of  files  to  be read.  It is assumed that they were opened with
+contiguous  unit  numbers.   The  NUNIt parameter includes the FIRSt unit
+number  in  the count.  If there is only one file, NUNIt can be left out.
+The  parameter  LAMBDa indicates lambda prime; TEMP is the temperature to
+be   used  in  the  calculations  (all  those  1/kT's).   DELTat  is  the
+temperature  increment  for the finite difference temperature derivatives.
+We  normally  use  10  degrees.   The  parameter  BINSize  is used in the
+estimation  of  the  statistical  uncertainty  (error)  of  the a various
+thermodynamic properties.
+ 
+        So  here  is  a  good  point  at  which  to discuss how the error
+estimation is calculated (at least I think it's a good point).  The major
+problem  is that the data is very highly correlated.  To get around this,
+in  many implementation including ours, the data is divided into bins and
+deviations  of  the  bin  averages  from the total trajectory average are
+calculated to get the variance.  The idea is that the use of bin averages
+will  remove  the correlated dependence of the variance.  We always use a
+bin  size  of  100.  The estimated error will depend on the choice of bin
+size.   One  would hope that it would converge as a function of bin size.
+Our trajectory lengths are generally not long enough to ensure this.
+ 
+        A  method  for  determining  the variance of a property that uses
+correlation  functions  has  been  developed by T. P. Straatsma, H. J. C.
+Berendsen  and A. J. Stam ( T. P. Straatsma, H. J. C. Berendsen and A. J.
+Stam,  Molecular  Physics,  57  p89  (1986)  also in T. P. Straatsma' PhD
+dissertation  referenced  above).  This method looks promising as long as
+one  visually monitors the correlation function behavior and extrapolates
+at  the  longer  lag  times.   The  problem  is  that  the  error  in the
+approximation  of  the  correlation  function is introduced.  The authors
+used  an  exponential extrapolation to overcome this.  This algorithm has
+been implemented by a member of the research group in another context and
+is being tested.
+ 
+        Once  the  variance  of the ensemble averages are calculated, the
+uncertainty in the thermodynamic properties are determined by propagation
+of errors.  For the TI method the necessary derivatives are determined by
+numerical  differentiation.   Total  uncertainties  are  determined  from
+summing the variances for each window (or lambda point in the TI method).
+ 
+        One  final  remark  on about the PROCess command line.  The CTEMp
+parameter sets a flag to calculate the average temperature at each lambda
+point.   This  can  be  done since the FES data file contains the kinetic
+energy  at  each  step.   The  calculated  temperature  is  not  used  in
+calculating  any of the properties, however.  To use it one would have to
+reprocess  the  data  with  the  average  temperature determined from the
+previous iteration entered manually in the TEMP command.
+ 
+        Note  that the user does not specify the lambda scaling.  This is
+determined by reading  a  header  lineas in the first file in the series.
+Furthermore,  the  user  is responsible for ensuring that this value does
+not  change  among  files  in  the  series  as  well  as in the different
+processing commands (unless it is intentional for some reason).
+ 
+        As   mentioned   above   the   final  command,  END,  causes  the
+post-processor  to  tally up the averages and calculated the final values
+of  the  thermodynamic  properties  and to write out the plotting output.
+ 
+        We  could  have  chosen to use the TI method.  As an illustrative
+example,  let us assume that we used non-linear lambda scaling, say POWEr
+2  and  ran  simulations  at  lambda = 0.0, 0.2, 0.4, 0.8 and 1.0 and the
+output  files  (one  per  lambda) are in etp1.prt, etp2.prt, etp3.prt and
+etp4.prt  and etp5.prt.  The input file would a title and open statements
+for  each  file  as  before.   The  post-processing  commands would be as
+follows:
+ 
+* Post-processing Example ETP: ethanol -> propane vacuum.
+* TI method with non-linear lambda scaling N = 2.
+*
+! open FES data files for input.
+open unit 10 form read etp1.prt
+open unit 11 form read etp2.prt
+open unit 12 form read etp3.prt
+open unit 13 form read etp4.prt
+open unit 14 form read etp5.prt
+ 
+TSM  POST PSTAck 5 TI PLOT
+! lambda = 0.0
+PROC FIRST 10 NUNIT 2 ZERO TEMP 298.0 BINS 100 CTEM
+! lambda = 0.2
+PROC FIRST 11 NUNIT 2 TEMP 298.0  BINS 100 CTEM
+! lambda = 0.4
+PROC FIRST 12 NUNIT 2 TEMP 298.0 BINS 100 CTEM
+! lambda = 0.8
+PROC FIRST 13 NUNIT 2 TEMP 298.0 BINS 100 CTEM
+! lambda = 1.0
+PROC FIRST 14 NUNIT 2 ONE TEMP 298.0 DELT 10. BINS 100 CTEM
+! the END command tells the post-processor to tally everything up.
+! sorts the lists of ensemble averages and does the final integration.
+END
+ 
+Note  that  there  is  no  LAMBdaprime  parameter as there was for the TP
+post-processing.   Also  since  the temperature derivative properties are
+calculated  in  a  different  fashion, there  is  no DELTatemp parameter,
+either.   Also, for  the points at lambda = 0 and 1 the sub-commands ZERO
+and  ONE are introduced.  These tell the program that the lambda value in
+the  data  file  is  exactly  zero  or  one.   This is necessary to avoid
+floating point errors at the endpoints.
+ 
+        When  the  END  command  is  issued, the post-processor sorts the
+ensemble  averages  as  a  function  of  lambda, fits the points to cubic
+spline   polynomials   and   integrates   the  resulting  function.   The
+propagation  of  error  is determined by numerical differentiation of the
+integrals with respect to each ensemble average data point.
+ 
+        Instead  of delta A, delta E and delta S as a function of lambda,
+the integrands for the TI integrals are written out for plotting, namely,
+<dH/dlamba> and d<H(lambda)>/dlambda.
+ 
+        If we wanted to use the same data as in the first post-processing
+example, i.e., linear lambda scaling and no dynamics run at lambda = 0 or
+1;  post-processing  would have had to be done in two steps if use of the
+TI  method  was  desired.   First,  the  thermodynamic properties for the
+interval  between the lowest and highest values of lambda (.125 and .875)
+would  be calculated using the TI method.  The endpoint pieces would have
+to  be  computed in a separate invocation of the post-processor using the
+TP  method  (i.e.  .125 -> 0 and .875 -> 1).  One would then manually add
+up  the  pieces.  It is not clear what the point would be to doing such a
+calculation.
+ 
+
+
+File: PDETAIL, Node: Optional, Up: CPrac, Previous: PostD, Next: CPrac
+
+
+              Using Some of the Optional FES Set Up Commands
+ 
+        We  will  now  discuss  some of the set up options that make life
+interesting here in Perturbationland.  There  are  several  commands that
+are not  used  much,  PIGGyback,  GLUE  and  NOKE  that are  described in
+*Note description: (perturb).   They were  put  in  for  some specialized
+purposes and may be useful for weird things.
+ 
+* Menu:
+
+* SLOWG::      Slow Growth Method
+* DONT::       The DONT Command
+* UmSam::      Umbrella Sampling in TSM
+
+
+File: PDETAIL, Node: SLOWG, Up: Optional, Previous: Optional, Next: DONT
+
+
+                             SLOW GROWTH
+ 
+        An  alternative  method  for  free energy simulations is the slow
+growth    technique.     For    a    discussion   of   the   method   see
+*Note  Theory and Methodology::.  The  syntax  of the command is given in
+*Note  Description: (Perturb).   There  are  some  disadvantages to using
+this  technique.   Since  lambda  is changed with every step, there is no
+way  to  tack  on  additional trajectories.  In general the paths are not
+reversible  (lambda  0  ->  1  vs.  1  -> 0) and the general, not totally
+satisfactory,  procedure  has  been  to  average  the two directions.  In
+our  implementation  the  the free energy change is calculated during the
+dynamics  run  and  so a temperature must be assumed a priori.  Actually,
+since  the  SAVE  command  still  works  with this method, an addition to
+the  post-processor  could  be  made  to  allow  the  reprocessing of the
+data.   Currently  the  only  property  that  is  calculated  is the free
+energy  change.   Also currently, the derivative dH/dlambda is determined
+by  finite  difference H(lambda')-H(lambda) ( a "perturbation" to lambda'
+at each step.  As mentioned in *Note Theory and Methodology::, analytical
+differentiation   could   be  easily  implemented.   The  most  egregious
+shorcoming is that error analysis is not easily accomplished.
+ 
+        There  are  some  advantages to the method.  The actual input and
+management of the problem is generally easier than with the window method
+in  that the free energy is determined in one trajectory.  However, since
+one  generally  has  to  run  the  transformation  in both directions the
+simplification  is  not  all that great.  One has only two thermalization
+runs  to  do  (at  each  end point).  It is arguable that there are cases
+where  it  is  better  to  use slow growth and that the steady continuous
+change  in lambda is a more stable way to achieve the transformation than
+the  discrete  jumps of the window method.  When using non-linear scaling
+the  window  technique  is  problematical  if  the TP method is used (see
+*Note Theory and Methodology::)  and  it is not clear yet whether one can
+get  away with using a few lambda points and numberical quadrature in the
+TI window method.
+ 
+        I  will  finish  this discussion of the slow growth method with a
+few pointers.  One, the final free energy change is written at the end of
+the  dynamics  run,  buried  in  other  output.   Two,  if there are both
+reactant  and products, set up the thermalization with the LAMBDA command
+not  the  SLOWgrowth  and use a lambda value a small bit away from 0 (for
+the 0 -> 1 transformation) or 1 (for the 1 -> 0 case).  Then run the slow
+growth  production  dynamics.   Three, there are two way in which you can
+switch directions.  The easiest way is to issue the SLOWgrowth command as
+follows:
+ 
+   SLOW LFROM 1. LTO 0. TEMP 298.
+ 
+However,  this  may  offend  your  conseptual sensibilities since you are
+transforming  FROM  the  product  TO the reactant in that case.  The more
+difficult alternative is to switch the reactant and product designations.
+However,  if  you  do  that  and  have  COLO atoms remember to switch the
+PCHArge  and  RCHArge  values.  Note that in this case use of the RCHArge
+parameter  is mandatory since the default is to assume that the charge in
+the  RTF  (or set by a SCALAR command) is the REACTANT charge.  Do it the
+first way.  Fourth, and last, note that the command allows you to specify
+non-linear lambda scaling with the POWEr parameter.
+ 
+
+
+File: PDETAIL, Node: DONT, Up: Optional, Previous: SLOWG, Next: UmSam
+
+
+                            The DONT command
+ 
+        Note that in the ethanol -> propane input file, we used the SHAKE
+BOND  ANGLE  command.   This effectively removes those degrees of freedom
+from  consideration  in  the perturbation.  We assume that they would not
+have significant effect on the solvation thermodynamics.  We chose to use
+the  SHAKE  constraints  so  that the calculation would be similar to the
+Monte  Carlo  simulations  run  by  Jorgensen (for methanol -> ethane, an
+other  part of our study).  It most situations it is not desirable to use
+SHAKE  on  bonds other than to hydrogen.  However, if all of the internal
+energy  terms  are  scaled  by  lambda,  at  small  lambda  values  large
+fluctuations in the energy may result as bond stretching (especially) and
+angle  bending terms are weakened for interactions involving reactant and
+product  atoms.   Therefore  we  have implemented an alternative means of
+dealing   with   this   situation:    the   DONT   command   (see   *Note
+Description(PERTURB).)   For  reactant  and product separate commands are
+issued  that  specify  which  internal energy terms are to be ignored for
+purposes of the lambda scaling:
+ 
+        DONT REAC BOND THETA
+ 
+        DONT PROD BOND THETA
+ 
+The  full  syntax  and explanation of the parameters are described in the
+node  mentioned  above.   One  can  specify bond stretching (BOND); angle
+bending  (ANGLE or THETA); torsion (DIHEdral or PHI) or improper dihedral
+(IMPHI  or  IMPRoper)  terms.   We generally specify only BOND and THETA.
+Torsional  motions do play significant role in the free energy changes we
+are interested in.
+ 
+        When  a  DONT  command  is  issued  it  means that during the FES
+dynamics  run  the  specified  terms  are  calculated and included in the
+environment part of the hamiltonian without lambda scaling.  Thus we have
+some overcounting of terms.  I.e., carbon atoms can end up with more than
+a valence of 4.  However, we have found that this does not greatly change
+the overall free energy changes (for a complete cycle).
+ 
+        Note  that  reissuing  a given DONT command (REAC or PROD) clears
+all of the flags first.  This is a command that we use alot.
+ 
+
+
+File: PDETAIL, Node: UmSam, Up: Optional, Previous: DONT, Next: Optional
+
+
+                            Umbrella Sampling
+ 
+        When  we  wish  to  sample torsional minima separated by barriers
+that  make  transitions  infrequent (> 1 kT), we can resort to "umbrella"
+or  "importance"  sampling.   We  adopt  a  modified potential with lower
+barriers  and  then the correct the approximation to the ensemble average
+with the "actual" potential energy at the end.
+ 
+        <A> = <A/w> /<1/w>
+                   w      w
+where,
+        w = exp(-beta (V        - V         ))
+                        actual     surrogate
+ 
+<A>  on  the  lhs  of  the  equation is the corrected ensemble average of
+property  A.   The ensemble averages on the rhs of the equation are those
+that  result  from  having  the  surrogate  potential  energy term in the
+Hamiltonian.
+ 
+        In   the   current  implementation  the  umbrella  correction  is
+available  for  the  ensemble averages used to calculate delta A, delta E
+and  delta  S in the free energy simulations.  It is presently limited to
+modifying the three-fold torsional term.
+ 
+        It  is  assumed  that  the  surrogate potential is the one in the
+parameter  file.   Hence, if you have dihedral angles of the same type as
+the  one  that is to be subjected to umbrella sampling and you donot want
+them  treated  the  same way the atoms must be given different type names
+and the parameter file modified (see *Note description: (perturb).).
+ 
+        Given  below  is  an example command.  Assume that the problem is
+the transformation of n-butane into propane in aqueous solution or vacuum
+and the hybrid molecule has a segment name of btp (guess what that stands
+for).  The umbrella command might look like this:
+ 
+        UMBR btp 1 C1 btp 1 C2 btp 1 C3 btp 1 C4 VACT 1.6
+ 
+The  four  atoms  of  the  butane  dihedral  are specified and the 3-fold
+term  for  the  "actual"  potential  is  given.   The "surrogate" term is
+present  in  the  parameter  file and might be something like .5.  If the
+molecule  had  more  than one dihedral angle around the same central axis
+all of them would be specified in separate UMBRella commands.
+ 
+        Invoking  the  UMBRella  command causes the FES output to have an
+additional  field,  the  w term in equation above.  The header line after
+the  title  in  the  data  file  has  a  field  that  indicates that this
+additional field is present.
+ 
+        In  the  post-processing,  the  flag parameter UMBR must be added
+to each PROCess command to indicate that the umbrella correction is to be
+applied.
+
+
+File: PDETAIL, Node: IPrac, Up: Practice, Previous: CPrac, Next: Practice
+
+
+                INTERNAL COORDINATE PERTURBATION - PRACTICE
+
+
+	Below we show a CHARMM22 input file which computes thermodynamic 
+surfaces as functions of a reaction coordinate connecting ideal right- and 
+left-handed alpha helical conformations (aR and aL, respectively) of the 
+alanine dipeptide in vacuum.  The conformational transition involves 
+changes in both the backbone phi and psi dihedral angles.  The ideal aR and 
+aL conformations have phi,psi = -60,-60 and 60,60 degrees, respectively.  
+We defined the reaction coordinate to lie on the line phi = psi.  Thus, the 
+transition involves 120 degree changes in both the dihedral angles.  We 
+have divided the overall transition into ten windows, with 12 degree 
+perturbations (6 degrees in both the positive and negative directions) of 
+phi and psi in each window.  Furthermore, each window is divided into four 
+subintervals, yielding thermodynamic data at 3 degree intervals.
+
+	All ten simulations are performed with one input file using the 
+CHARMM looping capability.  The first simulation is performed at phi,psi = 
+-54,-54 degrees so that the aR endpoint is reached by perturbation in the 
+negative direction.  After each structure is built, it is minimized to 
+relieve any bad contacts that may have resulted from the building, while 
+keeping the dihedral angles in the vicinity of the desired values with 
+harmonic constraints.  Then the dihedral angles are set back to the desired 
+values using IC EDIT and the structure is rebuilt using IC BUILD.  Next, 
+the i.c. constraints are specified and the peptide is equilibrated.  
+Following equilibration, the perturbation is specified and the production 
+dynamics is run.  Note that the BY values for the phi and psi perturbations 
+have opposite signs.  This is because the atoms to be moved by the 
+perturbations (e.g. the atoms in the INTE selection) occur at one end of 
+the two central atoms in the phi dihedral angle and the other end in the 
+psi dihedral angle.  Hence, the direction of rotation which corresponds to 
+an increase in phi corresponds to a decrease in psi (see the discussion of 
+the MOVE command at *Note implementation: (pimplem).).  Therefore, since we 
+want phi and psi to increase and decrease together, we use BY values with 
+opposite signs.  After each perturbation simulation, the constraints and 
+perturbations are cancelled using TSM CLEAR in preparation for the next 
+simulation.  Finally, after all ten simulations have been carried out, the 
+data is post-processed.  In this example, we have requested construction of 
+the thermodynamic surfaces (free energy, internal energy, and entropy) at 
+300 K using a temperature increment of 10 K in the finite-difference 
+derivatives.  After the END command terminates the post-processing, the 
+thermodynamic surfaces are printed out, first as functions of phi (since it 
+was specified in the first MOVE command), and then as functions of psi.
+
+* Input file for i.c. constraint and perturbation example.
+* In this example, we compute the relative thermodynamics
+* of the right- and left-handed alpha helical conformations
+* of the alanine dipeptide in vacuum.  The phi,psi values
+* of the right- and left-handed conformations are -60,-60
+* and 60,60 degrees, respectively.  We compute the thermodynamic
+* surfaces using 10 windows with perturbations dphi,dpsi = +/- 3,6
+* degrees.
+*
+
+! Read topology and parameter files
+open unit 1 read form name toph19.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name param19.inp
+read param card unit 1
+close unit 1
+
+! Read the sequence and generate the psf
+read sequence card
+* alanine dipeptide (blocked alanine residue)
+*
+3
+amn ala cbx
+
+generate pept setup
+
+! Set window counter to be used in loop
+set 1 1
+
+! Set phi and psi dihedral angles for first window (we'll perturb
+! back to right-handed alpha)
+set 2 -54.0 ! phi
+set 3 -54.0 ! psi
+
+! Do all of the windows in a loop
+label LOOP
+
+ic param
+
+! Set phi and psi to the desired values and build
+! the dipeptide
+ic edit
+ dihe 1 c 2 n 2 ca 2 c @2 ! phi
+ dihe 2 n 2 ca 2 c 3 n @3 ! psi
+end
+ic seed 1 cl 1 c 2 n
+ic build
+
+! Minimize with harmonic dihedral constraints to relieve
+! any bad contacts that might result from building
+cons dihe pept 1 c pept 2 n pept 2 ca pept 2 c min @2 force 100.0
+cons dihe pept 2 n pept 2 ca pept 2 c pept 3 n min @3 force 100.0
+update atom cdie shif vdis vswi cutnb 10.0
+minimization sd nstep 50 tolgrd 0.01 inbfrq 50
+cons cldh
+
+! Reset phi and psi to the desired values before setting the
+! i.c. constraints
+ic fill
+ic print
+ic edit
+ dihe 1 c 2 n 2 ca 2 c @2 ! phi
+end
+coor init sele ((atom pept 2 h) .or. (segi pept .and. resi 1)) end
+ic build
+ic edit
+ dihe 2 n 2 ca 2 c 3 n @3 ! psi
+end
+coor init sele ((atom pept 2 o) .or. (segi pept .and. resi 3)) end
+ic build
+
+! Set the i.c. constraints; maximum number of iterations = 100;
+! tolerances = 1.0e-5 degrees
+tsm
+ maxi 100
+ fix dihe pept 1 c pept 2 n pept 2 ca pept 2 c toli 1.0e-5 ! phi
+ fix dihe pept 2 n pept 2 ca pept 2 c pept 3 n toli 1.0e-5 ! psi
+end
+
+! Run 10 steps equilibration dynamics
+dynamics verlet strt nstep 10 timestep 0.0005 firstt 300.0 -
+ inbfrq 10 nprint 1 iprfrq 10 iasors 1 ichecw 1 iasvel 1 -
+ atom cdie shif vdis vswi cutnb 10.0
+
+! Open perturbation data file
+open unit 10 write form name example_@1.icp
+
+! Set up perturbations; save data on unit 10 every step; use
+! 2 subintervals in each window (nwin 2), e.g., change dihedrals by
+! +/- 3,6 degrees; note "by" values have opposite signs so the moves
+! both go in the same direction
+tsm
+ savi icun 10 icfr 1 nwin 2
+ move dihe pept 1 c pept 2 n pept 2 ca pept 2 c by  6.0 -
+  inte sele ((atom pept 2 h) .or. (atom pept 2 n) .or.  -
+            (segi pept .and. resi 1)) end ! phi
+ move dihe pept 2 n pept 2 ca pept 2 c pept 3 n by -6.0 -
+  inte sele ((atom pept 2 o) .or. (atom pept 2 c) .or.  -
+            (segi pept .and. resi 3)) end ! psi
+end
+
+! Run 20 steps perturbation dynamics
+dynamics verlet strt nstep 20 timestep 0.0005 firstt 300.0 -
+ inbfrq 20 nprint 1 iprfrq 20 iasors 1 ichecw 1 iasvel 1 -
+ atom cdie shif vdis vswi cutnb 10.0
+
+! Close data file and clear constraints and perturbations
+close unit 10
+tsm clear
+
+! Get ready for next window
+incr 1 by 1
+incr 2 by 12.0
+incr 3 by 12.0
+coor init sele all end
+if 1 le 10 goto LOOP
+
+! At this point, all ten simulations have been carried out
+
+! Open the data files for post-processing
+open unit 10 read form name example_1.icp
+open unit 11 read form name example_2.icp
+open unit 12 read form name example_3.icp
+open unit 13 read form name example_4.icp
+open unit 14 read form name example_5.icp
+open unit 15 read form name example_6.icp
+open unit 16 read form name example_7.icp
+open unit 17 read form name example_8.icp
+open unit 18 read form name example_9.icp
+open unit 19 read form name example_10.icp
+
+! Post-process the data; use binsize of 5 datasets
+! in error calculation; calculate avg. temp.; use
+! T = 300 K and deltaT = 10 K in thermodynamics;
+! construct thermodynamic surfaces
+tsm post ic maxp 2 maxw 2 surf maxs 100
+ proc first 10 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 11 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 12 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 13 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 14 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 15 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 16 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 17 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 18 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+ proc first 19 nunits 1 bins 5 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 20
+end
+
+stop
+
+
+Lambda-Dynamics approach to free energy calculations:
+
+
+	In this node, we will focus on aspects of the free energy 
+calculations which are not covered in TSM discussion.  However, it is
+recommended to go through details of TSM approach first since the new
+dynamics is based on same underlying principles as TSM does and we
+will use those basic concepts and terminologies without further 
+explanation.
+
+ 
+(i) Potential of Mean Force
+
+	In addition to TI and thermodynamic perturbation method, an 
+alternative approach to the free energy calculations is to develop 
+the free energy A along a "reaction coordinate", zeta (to avoid
+confusion, we will use "zeta" instead of "xi" used in the reference [1]). 
+Zeta is typically a configurational coordinate. Thus, the reactant 
+configuration and the product configuration are represented by
+zeta = 0 and zeta = 1 respectively. For a continuous coordinate zeta, 
+the Helmholtz free energy difference, or the reversible work required to 
+carry the system from the reactant configuration to the product 
+configuration, is often referred to as the "potential of mean force" (PMF), 
+W(zeta). The exact connection between W(zeta) and the probability density 
+of the system rho(zeta) is expressed as 
+
+              W(zeta) = -KT ln[rho(zeta)]
+
+That leads to the free energy difference  DeltaA(zeta) = W(zeta), 
+when rho(zeta) is normalized at a particular value of zeta, e.g., 
+rho(zeta=0) = 1.
+
+	It is well known that conventional importance MD or MC sampling 
+techniques will be prone to produce an inadequate estimation of W(zeta) 
+in situations where the potential of mean force differs by more than 
+a few kcal/mol over the range of  0 <= zeta <= 1.0 .  To expand the range 
+of DeltaA(zeta), the umbrella sampling method is frequently employed. Here 
+the basic idea is to introduce a biasing or umbrella potential U*(zeta), 
+thereby replacing the original potential energy  V(x,y,z) by a modified 
+potential V(x,y,z) + U*(zeta).  The ultimate goal is to use the auxiliary 
+potential U*(zeta) to "flatten" out the energy barriers along the coordinate
+zeta.  In so doing, a more uniformly distributed density function rho(zeta) 
+can be generated with a fixed amount of sampling because transitions 
+between the reactant and product configuration are now more facile.
+
+	From statistical mechanics, the explicit connection between the 
+biased probability density function rho*(zeta) and the true density 
+rho(zeta) of the system can be easily made. It is simply stated as  
+                             
+                          rho*(zeta)exp{U*(zeta)/kT}
+              rho(zeta) = --------------------------
+                          <exp{U*(zeta)/kT}>*
+
+where the notation " * " emphasizes that the ensemble average is being 
+taken over the modified potential function.
+
+	Owing to the complexity of many problems of interest, it is 
+apparent that a single biasing potential is usually not sufficient enough 
+to cover the whole range of the reaction coordinate zeta, and 
+simultaneously produce good sampling.  Thus, a set of restraining 
+potentials, U*(zeta), is used to shift the local minima in the desired 
+direction.  In this "window" approach, the potential of mean force,     
+W(zeta), in each window takes the form of
+
+         W (zeta) = -kT ln[rho*(zeta)] - U*(zeta) + C
+          i                   i           i          i
+
+         C = kTln <exp[U*(zeta)]>*
+          i             i
+
+The direct evaluation of the constants C's , being of exponential form, 
+is susceptible to large numerical fluctuations. These fluctuations in turn 
+make the accurate calculation of these constants very difficult. In order 
+to achieve an uniformly good potential of mean force, W(zeta), the different 
+constants, C's , from successive simulation windows have to be perfectly 
+matched so as to make W(zeta) agree in the overlapping regions.  The 
+implementation of many conventional matching schemes such as the "splicing" 
+method is very difficult, if not impossible, when generating two or higher 
+dimensional potential of mean force surfaces.
+
+(ii) Lambda Dynamics Methodology I
+
+Thus far, two auxiliary quantities have been introduced to facilitate 
+free energy calculations: a coupling parameter lambda (extent of 
+transformation) in TSM; a "reaction coordinate" zeta in the PMF.  On 
+the one hand, the coupling parameter approach takes advantage of the 
+fact that the free energy difference, DeltaA, is a function of the 
+state only. Thus, DeltaA can be computed along any reversible path 
+connecting the initial and final states.  This added flexibility 
+certainly hold  great potential for designing new approaches to free 
+energy calculations.  On the other hand, the power of specific biasing 
+potentials used in the umbrella sampling method can be fully utilized 
+to combat the difficulties encountered in conventional free energy 
+calculations.  To make full use of the coupling parameter lambda, two 
+crucial questions, among others, pertinent to the lambda will be focused 
+on: (1) What is the best way to deal with the lambda variable in 
+developing a new method? In other words, rather than being separated from 
+the configurational coordinate set {x,y,z}, is it more efficient to treat 
+the lambda variable on the same footing as an ordinary space coordinate? 
+(2) If so, what  governs the dynamics of the lambda variable?  Based on 
+the assumption that the lambda variable can be treated as an ordinary 
+coordinate, a natural connection to the umbrella sampling method may be made 
+immediately. Identifying the lambda variable as the "reaction coordinate" 
+zeta, the problem of calculating chemical free energy differences is 
+isomorphic with that of computing potentials of mean force in the lambda 
+variable.  This transformation brings up a point we have discussed earlier,
+namely, the matching problem of the constant C's associated with the 
+umbrella sampling has to be attended to. Therefore, another important 
+question: (3) What is the optimal way of processing the simulation data?  
+This question is of great importance for the generation of a multidimensional 
+free energy surface.
+ 
+	As noted before, any two equilibrium states can be generally 
+connected by reversible transition pathways.  A typical approach is to
+partition the system Hamiltonian as a linear function of a coupling 
+parameter lambda
+
+     H(lambda) = (1 - lambda) H  + lambda H  + H 
+                               R           P    Env
+
+Instead of using a single variable, consider a general case where the 
+pathway itself is characterized by a set of coupling variables, 
+{lambda(i)}, i = 1,...,n.  This represents the situation where 
+"alchemical" mapping of one molecule into another, for the purpose 
+of computing a free energy difference, changes different components of 
+the interaction terms with different scaling factors. We can control the 
+transition between the two molecules by partitioning a Hamiltonian of 
+the general form
+
+H   ({lambda(i); i=1,n}) = H ({lambda(i); i=1,n}) + H ({lambda(i); i=1,n})
+ R*n                        R                        P
+                          
+                         + H
+                            Env
+
+where H    stands for the Hamiltonian of the atoms not being transformed
+       Env        
+while H    ({lambda(i); i=1,n}) is the reactant (product) Hamiltonian.  
+       R(P)
+H    ({lambda(i); i=1,n}) is a legitimate mapping provided that
+ R*n
+
+H    ({lambda(i) = 0; i=1,n}) and H    ({lambda(i) = 1; i=1,n})
+ R*n                               R*n
+
+correspond to the Hamiltonians for the reactant and product states 
+respectively.  Because the two states, R  and P, are separated by many 
+intermediate states with {0} < {lambda(i)} < {1}, and there exist generally 
+many conceivable potential pathways (and barriers) on the potential 
+energy surface, a natural question arises: what is the optimal transition 
+pathway? In the language of the perturbation calculations, how does one 
+select values of {lambda(i)}, i = 1,...,n, so that efficient ensemble 
+averaging can be performed? 
+
+	We propose a new mapping scheme for performing free energy 
+calculations.  We permit the control variables {lambda(i)} for the chemical 
+transformation to evolve as dynamic variables, under the influence of both 
+the hybrid Hamiltonian above, and added biasing potentials. The dynamic 
+treatment of the {lambda(i)} variables is directed at the first two 
+questions raised earlier.  Since the biasing potentials are at our disposal, 
+the new method will allow us more control over the sampling space, thereby 
+enhancing our control over the convergence of ensemble sampling.
+
+	We formulate the lambda-dynamics by utilizing an extended 
+Hamiltonian.  In this formalism, the {lambda(i)} are considered as a set 
+of fictitious "particle" coordinates, 
+
+        H        ({lambda(i)}) = H   ({lambda(i)})  
+         Extended                 R*n
+
+                                 n
+                                ____        __          __
+                            +   \     M(i)  | dlambda(i) |**2
+                                /    ------ |---------   |
+                                ----   2.0  | dt         |
+                                i = 1       |__        __|
+
+                            +   U*({lambda(i)})
+
+where the lambda-dependent potential term, U*({lambda(i)}), will serve as 
+an umbrella or a biasing potential to limit the range of {lambda(i)}. 
+Moreover, a kinetic energy term is associated with a set 
+of fictitious masses {M(i)}.  The coupling between spatial coordinates 
+and energy parameters is through the lambda dependence of H   ({lambda(i)}). 
+    	                                                   R*n 
+
+	The introduction of the umbrella potential term U*({lambda(i)})       
+in H         ({lambda(i)}) provides a great deal of freedom in improving 
+    Extended
+
+efficiency in sampling.  By using a well designed U*({lambda(i)}), we can 
+achieve the following objectives: (1) limit the range of {lambda(i)} 
+sampled in independent simulations or windows to some particular set of
+ values; (2) supply the boundary conditions for the overall range of 
+{0} <= {lambda(i)} <= {1}; and more importantly, (3) increase transition 
+rates among potential wells separated by high energy barriers. By utilizing 
+the second set of adjustable parameters {M(i)}, we should be able to gain 
+more control over the evolution of the {lambda(i)} variables.
+ 	
+	Generally speaking, the new method will generate a multidimensional 
+probability density distribution. This entails a multidimensional potential 
+of mean force surface in the {lambda(i)} variable space. This leads us to 
+another important aspect of our approach, namely to apply a more powerful 
+analysis technique to the resulting distributions.  This is directed 
+towards the third question raised above.  Optimal histogram analysis 
+method, developed by Ferrenberg and Swendsen for studying phase transitions, 
+and further extended to biological simulations by Kumar and the Swendsen 
+group, and by Boczko and Brooks, has proven to be very successful in 
+generating free energy surfaces for physical, chemical and biological 
+processes.  In addition to producing the best possible estimation of free 
+energies and optimizing links (constant C's) between simulations, the 
+weighted histogram analysis method (WHAM) is a multidimensional method and 
+has a built-in estimate of sampling errors.  These characteristics serve 
+well the needs of our new lambda-dynamics.
+
+
+	Our lambda dynamics approach also offers better control over a 
+couple of technical problems in FEP.  The first is related to the 
+{lambda(i)} --> {0} or {lambda(i)} --> {1} limiting situation, often 
+referred to as the "close encounters" problem in the literature. In MC 
+simulations, this generally does not cause any real problem since random 
+numbers are used to sample the configurational variable and stability 
+is not an issue. However, in the case of MD simulations, large numerical 
+errors, often leading to instability of the numerical solution to 
+the dynamics equations, take place when either {lambda(i)} --> {0} or 
+{lambda(i)} --> {1} occur.  Conventional perturbation calculations often 
+avoid the problem by running simulations at a small distance away from {0} or 
+{1}.  Nonetheless, this approach is not appropriate for the formalism of 
+lambda-dynamics because the lambda variable itself evolves dynamically 
+during the course of the simulation. The umbrella potential of our 
+formulation offers a convenient solution to this problem.  Simple biasing 
+potentials are generally sufficient to prevent the boundary crossing 
+{lambda(i)} < {0} or {lambda(i)} > {1}.  To further restrain the range of 
+lambda variables, we have implemented a different partition scheme of the 
+system Hamiltonian in CHARMM, i.e. a linear lambda variable is replaced by
+a quadratic form lambda**2, as will be seen shortly.  This is an extremely 
+helpful technique at the {lambda(i)} --> {0} end.   The second issue is 
+that the extra degrees of freedom associated with the fictitious masses 
+provide additional control over the dynamics of the lambda variables.  
+
+
+(A) Application for relative free energy calculations:
+ 
+         To avoid redundancy, we will only outline the partitioning schemes
+of the system Hamiltonian for each application.  Please refer to BLOCK.DOC
+and DYNAMC.DOC for detailed CHARMM commands when performing lambda dynamics
+simulation runs.
+
+	The lambda-dynamics formalism is applicable to typical free energy
+calculation problems, e.g, a mutation of one molecule into another.  This 
+is a prototype for the majority of free energy calculations carried out to 
+study relative solubility, relative binding affinity or protein stability. 
+We will outline our implementation using the same example as TSM does.
+
+        To calculate the relative solvation free energies of methanol and 
+ethane, we write the extended system Hamiltonian as   
+ 
+
+     H        ({lambda(i)}) = [lambda(2)**2] H  + [lambda(3)**2] H  + H 
+      Extended                                R                   P    Env
+
+                                  3
+                                ____        __          __
+                            +   \     M(i)  | dlambda(i) |**2
+                                /    ------ |---------   |
+                                ----   2.0  | dt         |
+                                i = 2       |__        __|
+
+                            +   U*({lambda(i)})
+
+subject to the condition
+
+        3
+       ____  
+       \
+       /     [lambda(i)**2] = 1.0            
+       ----
+       i = 2
+
+    
+This system has three distinguished blocks: a reactant (OH group of the 
+methanol), a product (CH3 of the ethane) and environment (unchanged CH3 
+group and solvent).  By default, block one is assigned to the environment,
+which leads to lambda(1) = 1.0 in our implementation.  Please refer to 
+*note block:(doc/block.info) for detailed CHARMM commands.
+
+(iii) Lambda Dynamics Methodology II
+
+By using a different partitioning scheme in H        ({lambda(i)}) 
+                                    	     Extended
+                      N
+                     ____  
+                    \
+V(x,{lambda(i)}) =  /     [lambda(i)**2] (V (x)-F ) +  V
+                    ----                   i     i      Env
+                    i = 2
+
+one can perform free energy calculations for multiple ligands simultaneously. 
+Here one lambda(i) is assigned to each potential, V (x), which represents a
+ 				                   i
+distinct solute molecule (or ligand), F  is the biasing potential for ligand i.
+				       i
+If the {lambda(i)} variables are subject to a holonomic condition
+
+       N 
+       ____  
+       \
+       /     [lambda(i)**2] = 1.0            
+       ----
+       i = 2
+
+the probability distributions of the system at given lambda(i) values are a 
+manifestation of the free energy differences between different solute 
+molecules. For example, 
+
+
+       P[lambda(i) = 1, {lambda(m =/= i} = 0]           D_Delta A
+       ______________________________________ = Exp{-  --------}
+                                                          kT
+       P[lambda(j) = 1, {lambda(m =/= j} = 0]
+
+where D_Delta A is the total free energy difference between molecules i and j.
+Since the free energy difference between molecules for half of the
+thermodynamic cycle (F , e.g. ligands in the unbound state) is incorporated 
+                      i
+into the Hamiltonian of the system for the other half
+of the cycle (e.g. protein-liand bound state), D_Delta is the relative binding 
+affinity of the ligands to the protein receptor.
+
+With this formalism of Hamiltonian l-dynamics can evaluate relative binding
+free energy of multiple ligands simultaneously, providing either qualitative
+ranking within short simulation time or quatitative results with desired 
+precision. In the former case (or the screening calculation), 
+the ligands with favorable binding affinity
+are identified and relative ordering of those ligands can be obtained from
+the probability distribution of the ligands in the [lambda(i)**2]=1 state. 
+The running averages of each [lambda(i)**2] can also be used to provide the
+ranking. In the latter case, the free energy difference between molecules  
+for half of the thermodynamic cycle will be evaluated. Here F acts as a
+						             i		 
+potential. It corresponds to the estimated free energy of the ligand from 
+previous calculations. Therefore the estimated free energy can be improved
+iteratively. The WHAM method can be used to combine data from different
+simulations to get optimal estimate of the free energy.
+
+There exists an analogy between our screening calculations and competitive
+binding experiments carried out in the laboratory.  In fact, a competitive
+binding experiment usually consists of different ligands and a single receptor
+in solution. By determining the relative concentrations of constituent ligands
+in solution, the relative binding affinity of ligands can be inferred.
+Thus, a "best" ligand can be selected accordingly. Similarly, by determining
+the running averages or the relative populations of each lambda(i), we can
+distinguish favorable ligand molecules from unfavorable ones.
+ 
+In hybrid MC/MD method, Metropolis Monte Carlo method is used to evolve the 
+lambda-space and molecular dynamics method is used for evolving the atomic
+coordinates for generating the canonical ensemble of the ligands instead of
+using molecular dynamics method with extended Hamiltonian in the
+lambda-dynamics method. Both methods gave the same configurational partition
+functions. The relative free energy can be calculated from the probability
+distrubitions in MC/MD method. The MC/MD method was originally presented by
+Bennett and Tidor, independently. The straightforward extension of this
+method for multiple ligands, which was named CMC/MD, was achieved by
+Pitera & Kollman.
+One advantage of MC/MD is that sampling of {lambda} can be determined by the
+user, while the proper choice of the biased potential is required in the
+lambda-dynamics method. 
+For example, it is possible for MC/MD to sample only chemically important end
+points. However, the acceptance ratio may be too small when the ligands have
+the large and different parts. 
+The disadvantage of MC/MD is that the sudden change in chemical space evolved
+by MC step produces a discontinuous effect in the atomic momentum space so
+that the atoms of the newly selected ligand do not have velocities appropriate
+for the environmental conditions.
+The re-assignment of the velocities to the ligands is not carried out in this
+version of CHARMM.
+
+	The holonomic constraint used above, which is necessary to ensure 
+the physical nature of the end points, is treated using the Lagrange 
+multiplier method.  Moreover, a renormalization of the {lambda(i)} variables 
+at each MD step is performed to guarantee that the condition is satisfied. 
+The reason is that the equation is always solved approximately in any 
+simulation algorithm, and the renormalization prevents small errors  from 
+propagating.
+ 
+
+REFERENCES
+
+X. Kong and C. L. Brooks III, J. Chem. Phys., 105, 2414 (1996).
+
+C. L. Brooks III, M. Karplus, and B. M. Pettitt, In Advances in Chemical 
+Physics,  Vol. LXXI, edited by I. Prigogine and S. A. Rice (Wiley, New York, 
+1988).
+
+Z. Liu and B. J. Berne, J. Chem. Phys., 99, 6071 (1993).
+
+A. M. Ferrenberg and R. H. Swendsen, Phys. Rev. Lett., 63, 1195 (1989).
+
+A. M. Ferrenberg, Ph.D Thesis, Carnegie Mellon University, 1989.
+
+S. Kumar, D. Bouzida, R. H. Swendsen, P. A. Kollman, and J. Rosenberg, J. 
+Comput. Chem., 13, 1011 (1992).
+
+E. M. Boczko and C. L. Brooks III, J. Phys. Chem., 97, 4509 (1993).
+
+B. Tidor, J. Phys. Chem., 97, 1069 (1993).
+
+B. R. Brooks, R. E. Bruccoleri, B. D. Olafson, D. J. States, S. Swaminathan, 
+and M. Karplus, J. Comput. Chem., 4, 187 (1983).

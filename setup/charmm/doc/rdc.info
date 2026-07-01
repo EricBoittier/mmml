@@ -1,0 +1,166 @@
+CHARMM Element doc/rdc.info $Revision: 1.1.1.1 $
+
+File: RDC, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+            Residual Dipolar coupling (RDC) module
+
+
+Residual dipolar coupling (RDC) is an orientational restraint offering 
+information about the average orientation of an internuclear vector formed 
+by two NMR active nuclei with respect to the static magnetic field. This 
+module allows the user to restrain RDC during the NMR structure calculation.
+
+
+Please report problems to tr@iith.ac.in or wonpil@ku.edu 
+
+Reference   :  Rathinavelani, T. and Im, W., J. Comp. Chem.  
+               28:1858  &  29:1640  (2007)
+
+* Menu:
+
+* Syntax::   Syntax of RDC restraint module
+* Details::  Details of RDC commands
+* Example::  Examples for RDC restraints
+
+
+File: RDC, Node: Syntax, Up: Top, Next: Details, Previous: Top
+
+
+
+                       Syntax of RDC restraint module
+
+RDC   Reset    
+RDC   [MAXRDC integer] [NSET integer] [SRDC] [QRMF] [QFIXA] [QFIXB] [SLOW]
+      [URDC integer] [BMRB] [XPLOR] [KHAR real] [LHAR real] [KASY real]
+      [EXPO integer]
+RDC   Anal     [URDC integer] 
+RDC   Bcal     [IATM character] [JATM character] [RRES integer] [URDC integer].
+______________________________________________________________________
+
+
+
+File: RDC, Node: Details, Up: Top, Next: Example, Previous: Syntax
+
+
+
+                      Details of RDC commands
+
+1   NSET    Number of alignment media from which RDCs are collected; Default 1.
+2   MAXRDC  Maximum number of RDC restraints; Default 1000.
+3   SRDC    Normalizes (scales) the given RDCs with respect to NH RDC.
+4   KHAR    Force constant for harmonic restraint; Default 1.
+5   LHAR    Length of the harmonic function; Default 1.
+6   KASY    Force constant for the soft asymptotic potential; Default 1.
+7   EXPO    Exponential function for soft asymptote; Default 1.
+8   QRMF    Define molecular frame only using RDC atoms. 
+9   QFIXA   Fix the alignment tensor.
+10  QFIXB   Fix all the RDC bonds.
+11  SLOW    RDC full force calculation.
+12  URDC    Unit number of the file from which the RDC data should be read.
+13  XPLO    XPLOR format RDC input; Default format: CHARMM.
+14  BMRB    BMRB format RDC input; Default format: CHARMM.
+15  ANAL    Gives detailed analysis of observed versus calculated RDCs. 
+16  BCAL    Given one type of RDC, for instance HN-H, does the back calculation
+            of RDCs like CA-HA, C-CA etc using the alignment tensor derived 
+            using HN-N RDC. Requires atoms involved in RDC back calculation.
+            If the URDC is specified, the output will be stored in a separate 
+            file that has a URDC number as the suffix and prefix as 'fort'.
+            If URDC is not specified, the analysis will be displayed in the
+            CHARMM output file itself. RRES indicates the starting residue
+            number. Note that back calculation of RDC will not work for
+            methylene RDCs.
+17  RESET   Resets all assignments of the RDC module.
+
+
+
+File: RDC, Node: Example, Up: Top, Next: Top, Previous: Details
+
+
+
+                       Examples for RDC restraints
+
+
+
+1)  Example for reading BMRB format RDC restraints from a file named
+    data/ubi_rdc.bmrb measured in a single alignment media and restraining
+    it with soft asymptotic potential parameters KHAR=0.5, KASY=0.5, LHAR=5
+    and EXPO=1
+
+RDC reset
+open read card unit 11 name ubi_rdc.bmrb
+RDC  KHAR 0.5  KASY  0.5  LHAR  5   EXPO 1 URDC 11 bmrb
+
+2)  Example for reading CHARMM format RDC restraints from files protg1.cmm1,
+    protg1.cmm2, protg1.cmm3, protg1.cmm4 and protg1.cmm5 measured in five 
+    alignment media and restraining it with soft asymptotic potential
+    parameters KHAR=0.5, KASY=0.5, LHAR=5 and EXPO=1. Different soft asymptotic
+    potential parameters can be used for different RDCs in the CHAMM format. 
+
+RDC reset
+set lharmNH   =  2.0
+set kasymNH  =  0.5
+set kharmNH  =  0.5
+
+set lharmCAC   =  2.0
+set kasymCAC  =  0.5
+set kharmCAC  =  0.25
+
+set lharmCAH   =  2.0
+set kasymCAH  =  0.25
+set kharmCAH  =  0.25
+
+set lharmHNC   =  2.0
+set kasymHNC  =  1.0
+set kharmHNC  =  1.0
+
+set lharmNC   =  2.0
+set kasymNC  =  1.0
+set kharmNC  =  1.0
+
+open read card unit 11 name protg1.cmm1
+open read card unit 12 name protg1.cmm2
+open read card unit 13 name protg1.cmm3
+open read card unit 14 name protg1.cmm4
+open read card unit 15 name protg1.cmm5
+
+RDC nset 5 maxrdc 3000  EXPO 1 URDC 11 
+
+    Or
+
+RDC nset 5 maxrdc 3000 EXPO 1 URDC 15  URDC 14  URDC 12   URDC 11   URDC 13
+
+3)  Example for normalizing RDCs with respect to NH vector as well as to define
+    the molecular frame with respect to the RDC only atoms. 
+
+RDC reset
+open read card unit 11 name ubi_rdc.bmrb
+RDC SRDC QRMF KHAR 0.5  KASY  0.5  LHAR  5   EXPO 1 URDC 11 bmrb
+
+4)  Example for analyzing observed vs calculated RDCs. If the URDC is
+    specified, the output will be stored in a separate file that has a URDC
+    number as the suffix and prefix as ".fort". If URDC is not specified,
+    the analysis will be displayed in the CHARMM output file itself.
+
+To have the analysis details in CHARMM output:
+
+RDC ANAL 
+
+To have the analysis details in fort.90:
+
+RDC ANAL URDC 90
+
+5)  Example for back calculating RDC from multiple alignment media
+
+To have the analysis details in CHARMM output:
+
+RDC BCAL  IATM  CA JATM HA  
+
+To have the analysis details in CHARMM output, but, with residue number
+starting from 20:
+
+RDC BCAL  IATM  CA JATM HA  RRES 20
+
+To have the analysis details in fort.90:
+
+RDC BCAL  IATM  CA JATM HA  URDC 90

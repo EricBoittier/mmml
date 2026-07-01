@@ -1,0 +1,104 @@
+* CHARMM 32 testcase cons_rsmd_zeta.inp
+* Zeta form of the Relative RMSD Restraining Potential.
+* Two atom selections utilized.
+* CheY protein, using inactive and active x-ray structures as references.
+* Author: Mark Formaneck, Univ. Wisc. Madison June 2004
+* 
+
+bomb -1
+
+stream datadir.def
+
+OPEN UNIT 21 NAME @0/top_all22_prot_na.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+ 
+OPEN UNIT 22 NAME @0/par_all22_prot_na.inp     READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+ 
+OPEN UNIT 3 NAME @0/cons-rmsd-zeta.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+ 
+OPEN UNIT 3 NAME @0/cons-rmsd-zeta-ref1.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+stream datadir.def
+
+set force  =  5000.0
+set cz     =  1.0
+
+! force the structure halfway between the two refence structures.
+! RMSD1=RMSD2
+set voff = 0.0
+
+! Define atoms to apply restraint to - hvy atoms of protein loop
+define rmsdsel select (ires 85 : 91) .and. .not. type h* end
+! Define atoms to fit targets with - all backbone atoms
+define fitsel select (type CA .or. type C .or. type O  .or. type N) end
+
+
+! Read in Inactive x-ray structure of protein
+OPEN UNIT 3 NAME @0/cons-rmsd-zeta-ref1.crd READ FORM
+READ  COOR CARD UNIT 3 
+CLOSE UNIT 3
+
+! Read in Active x-ray structure of protein
+OPEN UNIT 3 NAME @0/cons-rmsd-zeta-ref2.crd READ FORM
+READ  COOR CARD UNIT 3  COMP
+CLOSE UNIT 3
+
+! Space needed for one relative restraint (MAXR)
+calc num = 2*?NATOM
+
+! Set Up the Zeta Relative RMSD restraining potential
+! note that the 'RELAtive' keyword is no longer needed.
+! First Selection - apply constraint to a protein loop
+! Second Selection - Use the backbone atoms of the entire protein to fit
+!      the reference structures.
+cons rmsd offset @voff force @force -
+     select rmsdsel end -
+     select fitsel  end -
+     MAXR @num -
+     ZETA czeta @cz  -   ! Zeta form of restraint
+     INRT 10             ! Fit targets only every 10 steps
+
+cons rmsd show
+
+shake bonh
+SCALAR FBETA SET 80.0 
+
+! file to write out RMSD1, RMSD2, ZETA(t) and ZETA0
+open unit 10 form write name @9/cons-rmsd-zeta.tim
+
+!DYNA LEAP LANG   STRT NSTEP 100 TIME 0.002 NPRINT 50 IPRFRQ  50 - 
+DYNA LEAP STRT NSTEP 100 TIME 0.002 NPRINT 50 IPRFRQ  50 - 
+     FIRSTT 300.0 TSTRUCT 300.0 - 
+     INBFRQ -1  IHBFRQ 0     NSAVC 500  NSAVV 0    ISVFRQ 5000 -
+     IUNREA -1  IUNWRI -1    IUNCRD -1  IUNVEL -1  KUNIT -1    IUNO -1 -
+     ILBFRQ 10  TBATH 300.0  RBUFFER 0.0 -
+     RMSD urmsd 10 -
+     echeck 1000
+
+close unit 10 
+
+! Final Check on system
+! Read in Inactive x-ray structure of protein
+OPEN UNIT 3 NAME @0/cons-rmsd-zeta-ref1.crd READ FORM
+READ  COOR CARD UNIT 3 COMP
+CLOSE UNIT 3
+coor orient COMP rms select fitsel  end
+coor             rms select rmsdsel end
+
+! Read in Active x-ray structure of protein
+OPEN UNIT 3 NAME @0/cons-rmsd-zeta-ref2.crd READ FORM
+READ  COOR CARD UNIT 3  COMP
+CLOSE UNIT 3
+coor orient COMP rms select fitsel  end
+coor             rms select rmsdsel end
+
+
+STOP
+

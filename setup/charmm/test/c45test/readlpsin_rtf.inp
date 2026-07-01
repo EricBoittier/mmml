@@ -1,0 +1,87 @@
+* Reading large number of lonepair > 1000 in the rtf files
+*
+
+! Read topology and parameter files
+prnlev 7
+stream datadir.def
+set status = fail
+set toppar @0/manylp_toppar_drude
+stream @0/manylp_toppar_drude.str
+set status = pass
+echo testcase result: @status -- Reading rtf files with more than 1000 lone pair parameter
+prnlev 5
+
+! READ PROTEIN
+open read unit 10 card name @0/readlpsin1.crd
+read sequence coor unit 10 RESI
+
+generate PROA first NTER last CTER setup warn drude dmass 0.4 ! show
+
+!read coordinates
+rewind unit 10
+read coor card unit 10 append
+
+! patch
+PATCH DISU PROA 110 PROA 187 SETUP WARN
+
+!! READ WATER
+!open read unit 10 card name @0/readlpsin2.crd
+!read sequence coor unit 10 RESI
+!
+!generate SOLV first none last none setup warn noangle nodihedral drude dmass 0.4 ! show
+
+!read coordinates
+!rewind unit 10
+!read coor card unit 10 append
+
+coor sdrude
+define ninit sele .not. init .and. hydr end
+if ?nsel .gt. 0 then
+   ic para
+   ic build
+   coor sdrude
+endif
+coor shake
+
+!write full coordinate set
+open write unit 10 card name @9/output.psf
+write psf card unit 10
+
+open write unit 10 card name @9/output.pdb
+write coor pdb unit 10
+
+open write unit 10 card name @9/output.crd
+write coor card unit 10
+
+define restyr sele resname TYR show end
+set ntyr ?nsel
+
+! One LPCX has been introduced in TYR residue in the rtf
+define lptyr sele type LPCX show end
+set nlptyr ?nsel
+
+calc nrat = @ntyr/@nlptyr
+calc irat = int(@nrat)
+set status = fail
+
+if @irat .eq. @nrat then
+set status = pass
+endif
+echo testcase result: @status -- PSF creation
+
+echo Checking deletion of residue and shifting of parameters.
+set status = failed
+define restyr sele resname TYR show end
+set ftyr ?selires
+set atnum ?selatom
+set restyp ?selresn
+calc prevres = @ftyr - 1
+define todelete sele segid ?selsegi .and. resid @prevres show end
+delete atom sele todelete end
+
+coor print
+set status = pass
+
+echo testcase result: @status -- Deletion and Shifting
+
+stop

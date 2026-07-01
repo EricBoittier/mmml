@@ -1,0 +1,34 @@
+3		! number of molecules (or fragments)
+1		! number of reference sites
+
+
+3		! number of charge sites
+1 2 3 0 0	!reference atoms
+NoQFLC
+NoLINT
+4 9           !reference range
+	
+1		!reference atoms
+2			! rank
+
+-0.418741		!qu10
+0.0			!qu11s
+0.0			!qu12
+0.028448		!qu20
+0.0			!qu21c
+0.0			!qu21s
+-1.687540		!qu22c
+0.0			!qu22s
+
+
+
+2		!reference atoms
+0			! rank
+
+
+
+3		!reference atoms
+0			! rank
+
+
+

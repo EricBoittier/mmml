@@ -1,0 +1,186 @@
+CHARMM Element doc/mtpl.info $Revision: 1.0 $
+
+File: MTPL, Node: Top, Up: (doc/commands.info), Next: Coefficients
+
+
+              Spherical Multipole Electrostatic Module using Local
+                             Reference Axis Systems
+
+
+by  Tristan Bereau   (bereau@alumni.cmu.edu)
+    Christian Kramer (christian.kramer@uibk.ac.at)
+    Markus Meuwly    (m.meuwly@unibas.ch)
+
+
+
+References:
+
+T. Bereau, C. Kramer, M. Meuwly, submitted
+T. Bereau et al., J. Phys. Chem. B _117_ 5460-5471 (2013)
+C. Kramer, P. Gedeck, M. Meuwly, J. Comp. Chem. _33_ 1673--1688 (2012)
+
+
+The MTPL module represents the charge distribution of small (diatomics) to
+arbitrarily large molecules using a multipole (MTP) expansion in
+spherical harmonics. MTP interactions are computed in the atoms' local
+reference axis systems. This reduces the number of MTP interactions to be
+evaluated by allowing to set coefficients to zero on the basis of symmetry. The
+module computes both interaction energies and forces/torques for molecular
+dynamics simulations.
+
+
+* Menu:
+* Coefficients::          MTP coefficients
+* Syntax::                Syntax of the MTPL command
+* Description::           Description of the keywords and options
+* Notes::                 General notes
+
+
+
+File: MTPL, Node: Coefficients, Up: Top, Previous: Top, Next: Syntax
+
+                                MTP coefficients
+
+MTP interactions up to, and including, rank 2 (quadrupole) are implemented.
+All MTP coefficients are expressed in spherical coordinates:
+* 1 component  for the monopole (i.e., partial charge): Q_00
+* 3 components for the dipole: Q_10, Q_11c, Q_11s
+* 5 components for the quadrupole: Q_20, Q_21c, Q_21s, Q_22c, Q_22s
+
+The partial charges *replace* the charges read from a topology/PSF file.
+
+The MTPL module computes all interactions *except* the charge-charge
+interactions, which need to be taken care of by other modules (e.g., PME).  
+
+Any atom can be given an MTP rank between 0 (i.e., monopole) and 2 (i.e.,
+quadrupole). Different ranks on different atoms can be used within the same
+simulation.
+
+MTP coefficients must be expressed in a modified PUN file that describes both
+the MTP parameters on every atomic site and the associated local axis
+system. All atoms must be specified in the same file, using the same atom ID
+(and order) as in the psf file.  The structure of the file consists is:
+1. 3 lines for title/comments (unused)
+2. atom ID; position x; position y; position z; "Rank"; rank
+3. "LRA:"; lra; neighbor 1; neighbor 2; neighbor 3; neighbor 4
+4. Q_00
+5. Q_10; Q_11c; Q_11s
+6. Q_20; Q_21c; Q_21s; Q_22c; Q_22s
+7. *empty line*
+8. *Repeat from step 2. to include more atoms*
+
+where ";" corresponds to a blank space; 'lra' is the type of local reference
+axis system, which can be one of the following: 'c3v', 'int', 'ter' (see
+[Kramer, Gedeck, Meuwly, JCC _33_ (2012)]) as well as 'lin' for linear/diatomic
+molecules (all of them without the single quotes); neighbor # is the atom ID of
+a neighbor used to define the local axis system ('0' means no neighbor); and
+Q_xx are the spherical MTP coefficients expressed in the local axis system.  
+
+The order and number of neighbors for each type of axis system is described in
+Kramer et al., except for 'lin', where an atom has one neighbor if it's at a
+terminal position and two neighbors (with the same priority rules as in Kramer
+et al.) if it's an internal atom.  The positions x, y, and z are not used in the
+present implementation.  The atom ID starts at 1 for the first particle, not 0.
+
+The following is an example of such a file for a single water molecule
+
+# LPUN file for a single water molecule
+# MTP interactions expressed in the local axis system
+#
+1 O2HH 1.418 2.967 2.166 Rank 2
+LRA: int 3 2 0 0
+-0.4188
+0.00 -0.00 -0.4358
+-0.9632 0.00 0.00 0.4747 0.00
+
+2 HO2H 2.185 3.54 2.157 Rank 2
+LRA: ter 1 3 0 0
+0.2094
+-0.0279 0.00 0.00
+0.17852 -0.0132 0.00 0.0278 0.00
+
+3 HO2H 0.677 3.56 2.287 Rank 2
+LRA: ter 1 2 0 0
+0.2094
+-0.0279 -0.00 0.00
+0.17852 -0.0132 0.00 0.0278 0.00
+
+
+Further assistance on the generation of this file will be provided in an
+upcoming publication [Kramer, Bereau, Spinn, Liedle, Gedeck, Meuwly, in
+preparation].
+
+
+File: MTPL, Node: Syntax, Up: Top, Previous: Coefficients, Next: Description
+
+                           Syntax of the MTPL command
+
+MTPL MTPUNIT integer [PREF real] [cutoff-spec]
+
+cutoff-spec::=    [RON2 real] [ROFF2 real] [RON3 real] [ROFF3 real]
+                  [RON4 real] [ROFF4 real] [RON5 real] [ROFF5 real]
+
+
+File: MTPL, Node: Description, Up: Top, Previous: Syntax, Next: Notes
+
+                    Description of the keywords and options                  
+
+Keyword   default   Purpose
+
+MTPUNIT             read above-mentioned local PUN file (card format)
+
+PREF      1.0       prefactor that scales all interaction energies and
+                    forces/torques by PREF (needs to be between 0.0 and 1.0).
+
+RON2      CTONNB    Threshold value of the switching function for all
+                    interactions with power law ~1/R^2.
+
+RON3      CTONNB    id. for ~1/R^3.
+
+RON4      CTONNB    id. for ~1/R^4.
+
+RON5      CTONNB    id. for ~1/R^5.
+
+ROFF2     CTOFNB    Cutoff value of the switching function for all interactions
+                    with power law ~1/R^2.
+
+ROFF3     CTOFNB   id. for ~1/R^3.
+
+ROFF4     CTOFNB   id. for ~1/R^4.
+
+ROFF5     CTOFNB   id. for ~1/R^5.
+
+
+File: MTPL, Node: Notes, Up: Top, Previous: Description, Next: Top
+
+                                 General notes
+
+* The use of the present module requires CHARMM to be compiled with the MTPL
+  flag. 
+
+* Parallelization (through MPI) is supported.
+
+* The MTPL module converts the torques generated by the interactions into forces
+  on the neighboring atoms (the ones involved in an atom's local axis system).
+  For stability reasons, we advise the use of bond-constraint algorithms (e.g.,
+  SHAKE) on all bonds to hydrogens. 
+
+* The PREF option can show useful when one wishes to perform thermodynamic
+  integration.  The interaction potential can simply be scaled to the coupling
+  constant linearly:
+           
+      U_TI(q; lambda) = lambda * U_MTP(q)
+
+  where U_MTP(q) is the original interaction energy, q is the set of
+  coordinates, and lambda is the coupling parameter.  In that case, the
+  simulation is run with PREF=lambda, and a later postprocessing read of the
+  trajectory can extract the energies with the original Hamiltonian (i.e.,
+  PREF=1.0), since the derivative of the interaction energy with respect to
+  lambda will yield the original interaction energy U_MTP(q).
+
+* Increasing the PRNLEV to at least 5 will output the total MTP energy computed
+  by the module at every MD step.
+
+* Compiling CHARMM with the MTPL_DEBUG flag will show detailed information about
+  the calculation of every energy and force/torque.
+

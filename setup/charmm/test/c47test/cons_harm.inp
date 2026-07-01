@@ -1,0 +1,61 @@
+* CHARMM 47a2 testcase cons_harm.inp
+* Test CONS HARM upon PSF change.
+* Author: Wonmuk Hwang (hwm), 2022.
+* requires no input files
+*
+
+stream datadir.def
+
+BOMLEV -1
+read rtf card name @0/top_all27_prot_lipid_chiral.dat
+read para card name @0/par_all27_prot_lipid_chiral.dat
+read psf card name @0/ala3.psf
+read coor card name @0/ala3.min.cor
+
+ener
+set e0 ?ener
+
+CONS harm SELE bynu 10:14 END  force 1.
+PRINT CONS
+
+ener
+set e1 ?ener
+calc de @{e1} - @{e0}
+stream @0test.str @de 0.000 1.0E-8 cnshm0
+
+coor trans xdir 1 ydir 1 zdir 1  SELE all end
+ener
+set e2 ?ener
+calc de @{e2} - @{e1}
+stream @0test.str @de 15.000 1.0E-8 cnshm1
+
+rename segi ala4 sele segi ala3 end
+
+read psf appe card name @0/ala3.psf
+read coor card resi name @0/ala3.min.cor sele segi ala3 end
+
+print cons
+
+coor trans xdir 200 sele segi ala3 end
+ener
+set e3 ?ener
+calc f3 @e0 * 2.D0
+
+calc de @{e3} - @{f3}
+stream @0test.str @de 15.0D0 1.0E-8 cnshm2
+
+CONS harm force 1 SELE segi ala3 .and. resi 2 .and type CA end
+coor trans xdir -1 ydir -1 zdir -1  SELE all end
+ener
+set e4 ?ener
+calc de @{e3} - @{e4}
+stream @0test.str @de 12.0D0 1.0E-8 cnshm3
+
+dele atom sele segi ala4 end sort
+print cons
+ener
+set e5 ?ener
+calc de @{e4} - @{e5}
+stream @0test.str @de @{e0} 1.0E-8 cnshm4
+
+stop

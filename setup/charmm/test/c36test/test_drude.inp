@@ -1,0 +1,136 @@
+* DRUDE model protein test case
+*
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ echo "WARNING: In parallel, this test shows that"
+ echo "the energy blows up because of the harmonic constraint."
+ stop
+endif
+
+stream datadir.def
+set charmmversion c36a5
+set minimize yes   !perform energy minimization
+set protein yes    !access protein information in toppar files
+ioformat extended
+
+stream @0/toppar_drude_master_protein_2013b.str
+
+!Default for all residues
+set DrudeOption = drude dmass 0.4 hype hord 4 khyp 40000 rhyp 0.2 show
+!set DrudeOptionPatch = drude dmass 0.4 show
+set DrudeOptionPatch
+ioformat extended
+
+!! Non-bonded parameters
+set 3 999.0  ! cutim
+set 4 999.0  ! cutnb
+set 5 995.0  ! ctonnb
+set 6 997.0  ! ctofnb
+set 7 switch
+set 8 atom
+set 11 vswitch
+set 10 vatom
+
+set residue ala
+set pres1 ace
+set pres2 ct3
+set seed a 1 CAY a 1 CY a 1 N
+
+read sequ card
+* @residue
+*
+1
+@residue
+generate a first @pres1 last @pres2 setup warn @DrudeOption
+
+print psf
+
+ic para
+ic seed @seed
+ic build
+ic print
+coor print
+
+coor sdrude
+coor shake
+coor print
+
+update cdie inbfrq -1 ihbfrq 0 @8 @7 @10 @11
+
+energy
+
+cons harm force 100000. sele .not. type D* end
+mini ABNR nstep 5 nprint 1
+cons harm force 0.0 sele all end
+
+energy
+
+delete atom sele all end
+drude reset
+
+!test disulfide
+set segid prot
+set pres1 nter     !N-terminal patch
+set pres2 cter     !C-terminal patch
+set restot 6       !total number of residues in the protein
+
+! generate full protein sequence
+read sequence card
+* generate all parametrized amino acids
+*
+@restot
+ala cys gly gly cys ala
+
+generate @segid first @pres1 last @pres2 setup warn @DrudeOption
+
+! patch in disulfides
+set resi1 2
+set resi2 5
+
+!standard patch
+patch disu @segid @resi1 @segid @resi2 setup warn @DrudeOptionPatch
+autogenerate angles dihedrals
+print psf
+
+ic param
+ic seed 1 N 1 CA 1 C
+ic print
+ic build
+coor print
+
+coor shake
+coor sdrude
+coor print
+
+update cdie inbfrq -1 ihbfrq 0 @8 @7 @10 @11
+
+energy
+
+cons harm force 100000. sele .not. type D* end
+mini ABNR nstep 5 nprint 1
+cons harm force 0.0 sele all end
+
+energy
+
+DrudeHardWall L_WALL 0.2
+
+open write card unit 7 name @9drude_test.psf
+write psf card unit 7
+* PSF in CHARMM FORMAT
+*
+
+open write card unit 8 name @9drude_test_xplor.psf
+write psf card xplor unit 8
+* PSF in XPLOR FORMAT
+*
+
+close unit 7
+open read card unit 7 name @9drude_test.psf
+read psf card unit 7
+
+close unit 8
+open read card unit 8 name @9drude_test_xplor.psf
+read psf card xplor unit 8
+
+stop

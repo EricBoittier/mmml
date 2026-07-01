@@ -1,0 +1,474 @@
+CHARMM Element doc/ensemble.info $Revision: 1.1.1.1 $
+
+File: Ensemble,  Node: Top,  Up: (doc/commands.info),  Next: Syntax
+
+              ENSEMBLE averaging / replica exchange
+
+                                                            Robert Best
+                        0-K String method
+
+                                                      Victor Ovchinnikov
+
+             Partial Infinite Swapping Algorithm (PINS)
+
+                                                      Florent Hedin et al.
+
+    The ENSEMBLE module of CHARMM permits one to start a number of
+copies of CHARMM, communicating using MPI, with some small amount
+of information being shared between the copies. There are a number
+of applications of this:
+    (i) to average restraints over an ensemble (especially
+            useful for NOE's/spin labels in unfolded states (1,2).
+    (ii) to perform replica-exchange (parallel tempering) (3)
+            simulations at a number of temperatures to enhance
+            sampling. 
+    (iii) to do replica exchange between different energy functions.
+            (e.g. between different umbrella windows) (4).
+    (iv) exponential averaging of different force-fields (5).
+    (v) to find a minimum energy path (MEP) between two 
+        conformations of a molecule (0-K String method)
+    (vi) to perform Partial Infinite Swapping (PINS), an efficient rare-event sampling 
+         algorithm based on parallel tempering (ref. below)
+
+Many other applications can be envisaged. 
+
+This feature is still quite new and it is advisable to stick
+closely to the test cases to start with. 
+
+References:
+-------------
+1. R. B. Best & M. Vendruscolo, JACS, 126, 8090-8091 (2004) + supp info.
+2. R. B. Best, J. Clarke & M. Karplus, J. Mol. Biol., 349, 185-203 (2005).
+3. K. Lindorff-Larsen, R. B. Best, M. A. DePristo, C. M. Dobson &
+   M. Vendruscolo, Nature, 433, 128-132 (2005).
+4. R. B. Best & G. Hummer, unpublished.
+5. R. B. Best, Y-G. Chen and G. Hummer, Structure, 13, 1755-1763 (2005).
+6. F. Hedin, N. Plattner, M. Meuwly, JCTC, To Be Published, 2016
+
+The zero-temperature string method is described in:
+
+1. E, W., Ren, W. & Vanden-Eijnden, E.
+   Simplified and improved string method for computing the minimum energy
+   paths in barrier-crossing events. J. Chem. Phys. 126, 164103-164103-8 (2007)
+
+The Partial Infinite Swapping (PINS) method is described in:
+1. F. Hedin, N. Plattner, J. D. Doll and M. Meuwly, JCTC, Submitted, 2016
+
+------------------------------------------------------------------
+NOTES ON BUILDING THE ENSEMBLE CODE:
+
+For gnu compilers using the new CMake build system:
+  $> ./configure -a ENSEMBLE
+  $> make -C build/cmake install
+
+For enabling the PINS module using the new CMake build system:
+  $> ./configure -a ENSEMBLE,PINS
+  $> make -C build/cmake install
+
+------------------------------------------------------------------
+
+* Menu:
+
+* Syntax::                  Syntax of the ENSEMBLE command
+* General Description::     General info on I/O and other practical matters
+* Replica Exchange::        Using replica exchange to swap between different
+                            force-fields and/or temperatures
+* PINS Method::             Description of the PINS implementation
+* Ensemble Restraints::     Using HQBM and ENSEMBLE to average restraints
+* Force-field Averaging::   Combining two potentials with exponential averaging
+                            (e.g. for "multi-go" models)
+* 0-K String method::       Finding minimum energy paths (MEP) between two
+                            conformations of a molecule
+* Test Cases::              Description of c33 and c34 tests
+
+
+File: Ensemble,  Node: Syntax,  Up: Top,  Previous: Top,  Next: General Description
+
+Initialize ENSEMBLE:
+--------------------
+
+ENSEMBLE NENSEM integer
+
+Replica exchange commands:
+--------------------------
+
+ENSEMBLE EXCH T2REp integer REP2t integer FREQ integer MAPU integer -
+        [ PINS NBM1 integer integers,... NBM2 integer integers,...] -
+        [ AUTO LOWT real TGRAD real PSWAP real | TEMP1 TEMP2 ... TEMPN ]
+
+ENSEMBLE [SWON | SWOFF]
+
+ENSEMBLE INFO
+
+ENSEMBLE STRING
+
+General commands:
+-----------------
+
+ENSEMBLE SYNC
+
+ENSEMBLE SEED [ROOT integer]
+
+Force-field averaging (used for "multi-Go", for example)
+--------------------------------------------------------
+
+ENSEMBLE EXPAvg BETA real [ UNIT real ] -
+         OFFSet real_1 real_2 ... real_nensem
+
+
+File: Ensemble,  Node: General Description,  Previous: Syntax,  Up: Top,  Next: Replica Exchange
+
+The following section describes the keywords of the ENSEMBLE command.
+
+General Description
+===================
+
+Ensemble enabled executables run exactly the same as normal parallel
+CHARMM using the normal mpirun/mpiexec or whatever the parallel run
+command is. A charmm script will be processed in the normal parallel
+way until the ensemble initializing command is given. Once ensemble is
+initialized for N replicas, there are N replicas of charmm running
+where the total processors are split evenly among the replicas. (***
+The total number of processors must be evenly divisable by the number
+of replicas. ***)
+
+Once running in ensemble mode, each replica runs independently at
+first, each reading the default input stream. Each replica produces
+its default output to an output file charmm.out.xxx, where xxx is the
+replica number (excepting the 0th replica which still goes to stdout)
+from 1 to N-1.
+
+Each replica can open and close files independently. Take care to not
+open the same file for writing (such as dcd or restart files) on
+different replicas, see example below. 
+
+Each replica can stream a new input file, allowing independent
+simulations to run out of the a large number of processors in the same
+batch run.
+
+Initializing ENSEMBLE
+-----------------------
+
+The command
+
+   ensemble nensem 4
+
+will break the processors into 4 replicas of the current state of the
+charmm run, giving 1/4 of the processors to each replica. The replicas
+are numbered 0,1,2,3. The output for rep 0 still goes to stdout, while
+the others go to charmm.out.001, charmm.out.002, charmm.out.003. The
+replicas keep reading the input file (though independently) unless
+directed to stream another input file. The identity of the replica can
+be determined from ?whoiam and the total number of replicas can be
+determined from ?nensem.
+
+        set numrep ?nensem
+        set myrep ?whoiam
+
+These are useful for giving different file names to different nodes or
+used in conditionals to process the input stream differently for each
+rep, for example:
+
+       open unit 20 write form name rest@myrep.rst
+       stream newinput_@myrep.inp
+       if @myrep .eq. 000 then
+            do some stuff
+       endif
+       ensemble sync
+
+This implementation differs from other implementations of replica
+exchange (excluding those based on external scripting), for example
+the closely related REPDstr function in CHARMM, or that in GROMACS, in
+that all processes can take input from the same file rather than
+reading different files. Reading from a single file requires a few
+additional commands, but has the advantage that all simulation input
+is contained in one place. Alternatively one could use separate input
+files as noted above.
+
+Each node reads the input file itself and each node maintains a
+completely independent copy of all data.  This allows dynamics to be
+run much as usual, with all nodes happily unaware of the others, apart
+from the communication entailed in replica-exchange or force-field
+averaging. A few points about I/O.  
+
+Files that really should be opened with unique names for each rep:
+------------------------------------------------------------------
+trajectories (coord/velocities/..)
+restart files
+energy files from dynamics runs
+any other dynamics output which will differ between replicas
+coordinate writing
+experimental data files for HQBM
+
+Files opened for reading by all reps will be opened by each rep in
+read-only mode, each rep opening the file and reading it
+independently. This may cause io delays for huge numbers of reps.
+
+Some Initialization notes
+-------------------------
+For most ensemble averaged restraints, starting all replicas with the same
+coordinates and velocities this is a waste of time (and is one pathological
+case where an N-replica simulation will behave exactly like a single replica).
+Thusly, one should assign either or both different random seeds (see below) and
+different starting coordinates to different replicas. Bear in mind that not all
+integration schemes in CHARMM actually use a random seed from the dyna command
+(e.g. NOSE does not, but LEAP VERLET does).
+
+e.g. for assigning different seeds
+if ?whoiam .eq. 0 set seed 23832
+if ?whoiam .eq. 1 set seed 9375283
+etc...
+Then use "dyna start ... iseed @seed ..."
+
+
+
+File: Ensemble,  Node: Replica Exchange,  Previous: General Description,  Up: Top,  Next: PINS method
+
+Replica Exchange
+================
+
+NOTE: THE REPLICA EXCHANGE FEATURE IS STILL NOT THOROUGHLY TESTED AND
+SHOULD THEREFORE BE USED WITH CAUTION.
+
+At present, only the main dynamics integrator in charmm (that is, the
+three-step verlet in dynamc.src) is fully supported by this command. Thus
+'DYNA NOSE' etc. will not work, but 'DYNA LEAP' will.
+
+An earlier version of this code required a deconvolution of coordinates
+written at different tempertures. However, since the overhead for 
+coordinate swapping is so low, it is easier to do it during the run
+and that is how it is done at present. A record of swaps is still
+written out for information.
+
+NEW IN C34: 
+- Constant pressure MD 
+- Support for VV2 integrator (incl. constant pressure)
+
+The idea will not be described here, see Sugita & Okamoto, Chem. Phys. Lett.
+314, 141-151 (1999), for example.
+
+When starting off, replica exchange is turned off. To turn it on and
+set up temperatures use:
+
+ENSEMBLE EXCH T2REp integer REP2t integer FREQ integer MAPU integer -
+        [ RULEs integer ] -
+        [ AUTO LOWT real TGRAD real PSWAP real | TEMP1 TEMP2 ... TEMPN ]
+        T2RE integer: unit to write map of replica(T) as sim progresses
+        REP2 integer: unit to write map of T(replica) as sim progresses
+        (yes, this is redundant!)
+        FREQ integer: frequency in MD timesteps for attempting swaps
+        ##deprecated: MAPU integer: file to read a final temperature map
+                      in order to restart dynamics ##
+        RULEs integer: number of unit to read allowed swaps from.
+            The format of this file is
+            ----------8<--------------8<-------------
+            NRULE
+            I_1     J_1
+            I_2     J_2
+            ...
+            I_NRULE J_NRULE
+            ----------8<--------------8<-------------
+            where NRULE is the number of allowed swaps and subsequent
+            lines detail the pairs of nodes that are allowed to swap
+            Nodes are numbered from 1...NENSEM
+        AUTO LOWT real TGRAD real PSWAP real: this is the first way to
+            set up replica temperatures. Just specify the lowest
+            temperature you want, the gradient of potential energy
+            as a function of T (determined from a few trial
+            simulations), and  the desired probability of
+            swapping replicas. This assumes a delta function for
+            the energy distributions, which is clearly incorrect.
+        TEMP1 TEMP2 ... TEMPN: specify temperatures manually - must give
+            as many as there are replicas!
+
+ENSEMBLE [SWON | SWOFF]: turn replica exchange on/off. Can be useful to 
+        have it off for initial equilibration.
+
+## deprecated: ENSEMBLE WRITE UNIT integer: write temperature map to unit
+for restart purposes (read in using MAPU in ENSE EXCH). ##
+
+ENSEMBLE INFO: print out info about replica temperatures, etc.
+
+
+
+File: Ensemble, Node: PINS method, Previous: Replica Exchange, Up: Top, Next: Ensemble Restraints
+
+
+PINS method
+===========
+
+Details :
+---------
+
+Partial Infinite Swapping (PINS) is a rare-event sampling algorithm, which is based
+on the PT/RE algorithms. PINS uses a symmetrisation strategy for combining probability
+distributions at different temperatures, so that they become more highly connected
+and thus easier to sample than the original.
+
+PINS is derived from the infinite swapping (INS) method: contrary to PT, INS uses
+the fully symmetrized distribution of configurations in temperature space, whereas
+PT just occasionally enriches the local temperature with configurational informa-
+tion coming from simulations at a higher temperature. Formally, INS is based on
+a mathematical analysis of the convergence rate of PT simulations as a function
+of the temperature swap attempt frequencies. It was proven that this
+convergence rate is a monotonically increasing function of the swap rate, and thus
+optimal sampling is reached in the infinite swapping limit.
+In other words, INS provides optimal sampling for a given replica by using informa-
+tion from all other temperatures used in the simulation. This could be achieved by
+allowing exchanges between all replicas at each time step.
+
+However, for K replicas there are K! possible exchanges so this would quickly become an
+unmanageable number of exchanges. The partial infinite swapping (PINS) algorithm
+adresses this problem using a partitioning strategy whereby temperature
+space is divided into blocks, and local (but full) symmetrisation is used within each
+block. More precisely, the current implementation uses the "dual-chain" approach, where the
+K−temperature set is partitioned into blocks in two different ways,
+one for each chain. The two blocks must have a complementary structure without
+a boundary between the blocks defined for the two chains. This is required in order
+to achieve sampling of the overall temperature space for all the replicas. For a set
+of 12 temperatures, a possible partitioning for the two chains (a|b) is (3,6,3|4,4,4),
+where the a boundaries are T3 -- T4 and T9 -- T10 , and for b they are T4 -- T5 and
+T8 -- T9. On the other hand, the partitioning (3,3,6|6,3,3) is not valid, as chain a
+boundaries’ are T3 -- T4 and T6 -- T7 , and for chain b they are T6 -- T7 and T9 -- T10 ,
+thus sharing the common boundary T6 -- T7.
+
+How to :
+--------
+
+PINS is enabled as follows : in the command block starting with ENSEMBLE EXCH
+an extra line starting with PINS is added:
+
+  ENSEMBLE EXCH [common PT/RE variables] -
+  PINS NBM1 integer integers,... NBM2 integer integers,... -
+  [other variables and list of temperatures ...]
+
+Keywords NBM1 and NMB2 are directly followed by an integer corresponding to the number of
+blocks within chain 1 and chain 2, respectively: for the above defined example (3,6,3|4,4,4) there 
+are 3 blocks for each chain:
+
+  PINS NBM1 3 integers,... NBM2 3 integers,...
+
+Then after each number of blocks the partitioning structure is written as a list of integers: 
+for the previous example (3,6,3|4,4,4) this would be written as:
+
+  PINS NBM1 3 3 6 3 NBM2 3 4 4 4
+
+Another example of valid parameters, for 32 temperatures, for 2 chains of 6 blocks,
+i.e. (6,6,6,6,5,3|3,5,6,6,6,6) would be:
+
+  PINS NBM1 6 6 6 6 6 5 3 NBM2 6 3 5 6 6 6 6
+
+Test case file:
+---------------
+
+The file c41test/pins_ens.inp provides an example of input file for using the PINS variant of PT/RE, for sampling
+the Potential Energy Surface of the alanine dipeptide.
+
+As this example file requires 12 replicas, it will not run by default using the test.com file; use instead:
+
+  mpirun -np 12 ../exec/charmm -i c41test/ens_pins.inp
+
+Notes on post-processing :
+--------------------------
+
+PINS provides data at all thermodynamic states which
+can be used for computing properties at a given state. The sampling convergence is
+significantly improved by this step which requires reweighting of the data collected
+at different T. This step can either be performed during the simulation ("on the
+fly" reweighting), or at the end of the simulation, as a post-processing step. For the
+current PINS implementation it was decided to employ post-processing.
+
+The procedure is detailed in Reference [F. Hedin, N. Plattner, J.D. Doll and M. Meuwly, JCTC, Submitted, 2016].
+
+Programs and scripts are provided via the following git repository, self-documented:
+
+                      http://github.com/FHedin/PINSpostproc
+
+The user will only need to provide a list of potential energies corresponding to each frame of 
+the saved trajectory files. During simulation those energies can be saved to a text file using the KUNIT
+variable of the DYNA command:
+
+  OPEN WRITE FOrmatted   UNIT 33 NAME @out/equil_@myrep.dat
+
+  DYNA STRT ...-
+  KUNIT 33 ... -
+  ...
+
+Please refer to the URL above where use instructions are provided, concerning the post-processing.
+
+
+File: Ensemble,  Node: Ensemble Restraints,  Previous: PINS method,  Up: Top,  Next: Force-field Averaging
+
+Ensemble restraints
+=====================
+
+This is mostly documented in hqbm.info. The only relevant commands
+are the 'general' ones above. Note comments about random seeds!
+
+
+File: Ensemble,  Node: Force-field Averaging,  Previous: Ensemble Restraints,  Up: Top,  Next: 0-K String method
+
+The "ENSEmble EXPAvg" command invokes exponential averaging of different
+force-fields. Each node reads a different force-field (by using node-dependent
+names for the force-field files, for example), and the different potentials
+are averaged with the following function:
+
+exp(-beta_mix * E(R)) = exp(-beta_mix * {E_1(R) + off_1}) + ... 
+                        + exp(-beta_mix * {E_nensem(R) + off_nensem})
+
+(see Structure paper reference in intro) beta_mix is analogous to the 
+standard beta = 1/kT but need not correspond to the temperature at which 
+simulations are run.
+
+All nodes propagate exactly the same dynamics, but each evaluates only one
+energy function, and the forces and energies are subsequently shared at each
+time step to calculate the average. 
+
+The meaning of the various parts of the command:
+
+ENSEMBLE EXPAvg BETA real [ UNIT integer ] -
+         OFFSet real_1 real_2 ... real_nensem
+
+BETA: specifies beta_mix
+UNIT: specifies a formatted unit to write energies every NPRINT steps
+      during MD.
+OFFSet: specifies offsets off_1 ... off_nensem. This allows the relative
+        energies of the different force-fields to be tuned, e.g.
+        to match experimental data
+
+
+File: Ensemble,  Node: 0-K String method,  Previous: Force-field Averaging,  Up: Top,  Next: Test Cases
+
+0-K String method
+=====================
+
+The O-K (zero-temperature) String method is fully documented elsewhere *note syn: (doc/stringm.info)
+
+
+File: Ensemble,  Node: Test Cases,  Previous: 0-K String method,  Up: Top,  Next: Top
+
+TESTCASES:
+=============================================
+
+To run ensemble tests for architecture "arch", use the following 
+command in the test directory:
+./test.com E arch 
+in this case the optional fourth command specifying target will be ignored.
+
+This will run four processes for each test case; the
+following test cases (all names ending "_ens.inp") will
+be run.
+
+c33test:
+--------
+hqbm_rc3_ens.inp: }  Ensemble-averaged restraints 
+hqbm_rc4_ens.inp: }  See hqbm.info
+hqbm_rc8_ens.inp: }                   
+
+rex_ens.inp: Simple example of replica exchange with different temperatures
+
+c34test:
+--------
+hexrex_ens.inp: Simple example of replica exchange with different force-fields
+rex2_ens.inp: Example of 2D replica exchange with a custom rules for swapping
+multi_ens.inp: Exponential averaging of some simple harmonic potentials

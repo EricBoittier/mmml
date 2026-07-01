@@ -1,0 +1,50 @@
+* calculation.str, last modified May/10/2004
+* By Sonja M. Schwarzl & Stefan Fischer
+*
+
+ 
+IF ?NSEL .EQ. 0 GOTO SKIP
+  ! else:
+    ! if GROUP2 is in target region no computation is necessary
+    DEFIne foo1 SELEct targetregion .and. GROUP2 END
+    IF ?NSEL .ne. 0 GOTO SKIP
+    ! else: 
+
+        ! calculate interaction energy in vacuum between GROUP and GROUP2
+        ! returns results in SCA3
+        STREam vacuum.str
+
+        ! calculate interaction energy in solution between GROUP and GROUP2
+        ! returns results in SCA4
+        STREam solution.str
+	
+	! calculate distance between GROUP and GROUP2
+	COOR AXIS SELEct targetregion END SELEct GROUP2 END
+	
+	! calculate absolute energy values
+	CALC ABS1 = ABS(@ENERGY1)
+	CALC ABS80 = ABS(@ENERGY80)
+	
+	! determine scaling factors
+	CALC lambda = @ABS80 / @ABS1
+	IF @ABS1 .lt. @ABS80 SET lambda 1.0
+	IF @ENERGY1 .eq. 0 SET lambda 1.0
+
+	! write output into data file
+	WRITE TITLE UNIT 20
+	* @COUNTER @SELECTION @ENERGY1 @ENERGY80  ?RAXI @LAMBDA
+	* 
+	
+	! write scaling factors into SCA6
+	SCAL SCA6 SET @LAMBDA SELEct GROUP2 END
+	
+
+
+
+ LABEL SKIP
+  
+RETURN
+ 
+ 
+
+ 

@@ -1,0 +1,4 @@
+integer, parameter :: num_pref_keys = ${NUM_PREFX_KEYWORDS}
+character(len = 12), dimension(num_pref_keys), parameter :: pref_keys = &
+     [ character(len = 12) :: &
+       ${PREFX_KEYWORDS_STRINGS} ]

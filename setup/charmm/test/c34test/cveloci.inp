@@ -1,0 +1,96 @@
+* CHARMM 33 testcase (c33a2) cveloci.inp
+* Test the constant velocity (##CVELOCI) dynimcs
+* Author: Milan Hodoscek
+* requires data/wat125.crd
+*
+
+if ?cveloci .ne. 1 then
+ echo "cveloci.inp> Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card
+* water from top_all22_prot.inp
+*
+   27     1
+
+MASS     1 HT     1.00800 H ! water
+MASS     2 OT    15.99900 O ! water
+
+DEFA FIRS NONE LAST NONE
+
+RESI OH2          0.000 ! tip3p water model, generate using noangle nodihedral
+GROUP   
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2   
+
+end
+
+read param card
+* parameters just for water
+*
+
+bonds
+HT   HT      0.000     1.5139 ! ALLOW WAT
+                ! FROM TIPS3P GEOMETRY (FOR SHAKE/W PARAM)
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+                ! FROM TIPS3P GEOM
+
+angles
+HT   OT   HT     55.000   104.5200 ! ALLOW WAT
+                ! TIP3P GEOMETRY, ADM JR.
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+                !TIP3P HYDROGEN PARAMETERS, adm jr., NBFIX obsolete
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+                !TIP3P OXYGEN PARAMETERS, adm jr., NBFIX obsolete
+end
+
+read sequ oh2 125
+
+generate wat setup nodihe noang
+
+open read unit 1 card name @0wat125.crd
+read coor card unit 1
+
+open write unit 1 card name @9wat125.psf
+write psf unit 1 card
+
+cons fix sele resid 1 : 2 end
+
+coor copy comp
+
+define cvec sele resid 1 : 2 end
+
+coor trans xdir -1.0 dist 1.0 sele cvec end 
+
+cveloci 1 sele cvec end
+
+open write unit 1 file name @9wat125.trj
+dyna verlet strt nstep 500 timestep 0.001  -
+    iprfrq 10000 ihtfrq 0 ieqfrq 1000 ntrfrq 10000  -
+    iuncrd 1 -
+    nprint 100 nsavc 100 nsavv 0 ihbfrq 0 nbscale 1.0 -
+    firstt 300.0 finalt 300.0 teminc 0.0  tstruc 307.0 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0
+
+open read unit 1 file name @9wat125.trj
+open write unit 10 card name @9wat125.dat
+
+correl maxtimesteps 100 maxseries 2 maxatoms 1000
+enter rms rms
+traj first 1 nunits 1 begin 100 skip 100
+show all
+write all unit 10 dumb time
+end
+
+stop

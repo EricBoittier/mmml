@@ -1,0 +1,364 @@
+CHARMM Element doc/fitcharge.info $Revision: 1.1.1.1 $
+
+
+File: Fitcharge, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+                  The Charge and Drude Polarizability Fitting
+
+                  By V.Anisimov and G.Lamoureux, December 2004
+                  Editions By E. Harder 2007
+
+	The commands of this section solve the task of charge fitting to 
+QM electrostatic potential (ESP) maps. In the case of classical Drude
+polarizable systems both ESP fitted charges and atomic polarizabilities 
+will be determined in the single fitting step. The polarizability 
+determination is based on Drude charge fitting to the series of perturbed 
+ESP maps obtained in presence of perturbation charges. See DRUDE.DOC for 
+a description of the classical Drude polarizable model. The citations given 
+in the references section give further details about the charge fitting 
+procedure. See FITCHARGE test for the practical sample of charge fitting 
+and Drude polarizability determination.
+
+	The fitcharge routine can be used for charge fitting for the additive 
+model. A single unperturbed QM ESP is used in this case.
+
+	The program supports lone-pairs in either additive or Drude 
+polarizable model. The QM ESP maps and fitcharge instruction set are 
+independent of the presence of lone pairs.
+
+* Menu:
+
+* Syntax::              Syntax of charge fitting commands
+* Introduction::        Introduction to charge fitting
+* Function::            Purpose of the commands
+* Example::             Input example
+* Limitations::		Known limitations
+
+
+File: Fitcharge, Node: Syntax, Up: Top, Next: Introduction, Previous: Top
+
+                    Syntax of charge fitting commands
+
+[SYNTAX FITCharge - charge fitting]
+
+FITCharge { [EQUIvalent atom-selection] 
+            [RESTraint [PARAbolic|HYPErbolic] 
+               [BHYP real] [DHYP real] [FLAT real] [DFLAt real] 
+            ]
+            atom-selection-1  atom-selection-2
+            [NITEr int] [TOLErance real] [COUNter int]
+            NCONf int  UPOT int  UOUT int  NPERt int [int] 
+            [TEST] UPPOt int  UCOOrd int  [ALTInput]
+            [UPRT int] [ASCAle real] [RDIPole real] [VTHOLe] }
+          }
+
+atom-selection ::= see *note select:(doc/select.info)
+
+
+File: Fitcharge, Node: Introduction, Up: Top, Next: Function, Previous: Syntax
+
+
+                 	Introduction to charge fitting
+
+Unrestrained charge fitting:
+	The electrostatic properties of a molecular mechanics model with 
+Drude polarizabilities are represented by atomic partial charges {q_i} 
+and Drude charges {delta_i}.  The Drude charges are related to atomic
+polarizabilities {alpha_i = q_i^2/k_D}, where k_D is a uniform
+harmonic coupling constant between each atom and its Drude particle.
+These charges are ajusted to give the best agreement with the ab
+initio molecular electrostatic potential phi^AI, computed on a set of
+gridpoints {r_g} around the molecule.
+
+	Although partial charges of a nonpolarizable model can be extracted
+from a single potential map, adjusting the polarizabilities requires a
+series of /perturbed/ potential maps {phi^AI_p}, each one representing
+the molecule in the presence of a small point charge at a given
+position r_p.  The molecular mechanics model for the molecule under
+the influence of perturbation p is a collection of point charges {q_i
+- delta_i} at atomic positions {r_i} and Drude charges {delta_i} at
+positions {r_i + d_pi}.  The model electrostatic potential for the
+p-th perturbation, at the g-th gridpoint, is
+
+phi_pg({q}) = sum_i [ (q_i-\delta_i)/(|r_i-r_g|)
+                    + (delta_i)/(|r_i+d_pi-r_g|} ]
+
+	The optimal displacements {d_pi} depend on the position r_p of the
+perturbating charge, as well as on the atomic and Drude charges. All 
+charges are adjusted to minimize the discrepancy between the ab initio 
+and model potential maps, i.e., we find the charges that minimize the 
+following chi^2 function:
+
+chi^2 = chi^2_\phi({q}) = sum_pg [ phi^AI_pg - phi_pg({q}) ]^2
+
+	Because of the implicit charge-dependence of the displacements 
+{d_pi}, the system of equations
+
+(@ chi^2)/(@ q) = 0
+
+where q designates either {q_i} or {delta_i}, has to be solved
+iteratively.  We use the Levenberg-Marquardt algorithm, specially
+designed to minimize chi^2-type functions.
+
+Restrained charge fitting:
+	Solving equations for chi^2 = chi^2_phi, one usually ends up 
+with partial charges and polarizabilities having poor chemical significance
+(e.g. charges on carbon > 1).  For nonpolarizable models, it was shown
+that fitted charges of neighboring atoms were highly correlated, and,
+more generally, that the atomic point charges model of the potential
+was largely overparametrized.  It is therefore desirable to either
+remove charge contributions that have a negligible effect on the
+potential, or to penalize any deviation from some ``intuitive'' (or
+``conservative'') reference charge, given that the restraint doesn't
+significantly deteriorate the quality of the fit.
+
+The original RESP scheme of Bayly et al. minimizes chi^2 =
+chi^2_phi + chi^2_r, with either
+
+chi^2_r = A sum_i (q_i - qbar_i)^2
+
+or
+
+chi^2_r = A sum_i [ sqrt(q_i^2 + b^2) - b ]
+
+The first restraint is forcing the charges q_i to their ``reference''
+values qbar_i, and the second restraint is favoring smaller
+charges.  The force constant A is chosen so that undesirable charge
+deviations are penalized while chi^2_phi stays close to its
+unrestrained value. It assumes a uniform restraint force A, independent 
+of the atom type.  A more flexible scheme would allow various A's, but 
+this has not been implemented.
+
+	Although the RESP scheme was formulated for nonpolarizable, 
+partial charges models, it is generalizable to models with Drude
+polarizabilities.  Equation may be written
+
+chi^2_r = sum_i [ A ( sqrt(q_i^2 + b^2) - b )
+                + A'( sqrt(delta_i^2 + b'^2) - b' ) ]
+
+where distinct force constants A and A' are used for the atomic and
+Drude charges, along with distinct hyperbolic stiffnesses b and b'. We
+thus separately penalize the net atomic charges {q_i} and the Drude
+charges {delta_i = sqrt(alpha_i / k_D)}.
+
+The restraint function has the form
+
+chi^2_r = N_p N_g sum_i [
+  w_i S(q_i - qbar_i) + w'_i S(delta_i - deltabar_i) ],
+
+where N_p is the number of perturbations and N_g is the number of
+gridpoints.
+
+The restraints are not applied directly to the charges of the
+particles, but to the net charges {q_i} and dipoles
+{-delta_i,delta_i}.  The weights {w_i} and {w'_i} are read from the
+WMAIN array and the initial atomic charges are taken as reference
+charges {qbar_i} and {deltabar_i}.
+
+The function S(q) describes the shape of the penalty as the deviation
+increases.  Two basic shapes are available:
+
+PARA   Parabolic shape, S(q) = q^2
+
+HYPE   Hyperbolic shape, S(q) = sqrt(q^2+b^2)-b
+
+Parameter b (keyword BHYP) is 0.1 electron by default. The additional 
+keyword DHYP, with default value B, is used for Drude charges. To 
+produce S(q) = |q|, set b=0.
+
+The FLAT keyword modifies the shape:
+
+         S(q+FLAT)  if  q < -FLAT,
+S'(q) =  0          if  -FLAT < q < FLAT,
+         S(q-FLAT)  if  FLAT < q.
+
+The default value is FLAT=0.  The additional keyword DFLAt, with
+default value FLAT, is used for Drude charges.
+
+
+File: Fitcharge, Node: Function, Up: Top, Next: Example, Previous: Introduction
+
+                          Purpose of the commands
+
+EQUIvalent atom-selection 
+
+	This block allows explicit equivalences between atoms to be stated. 
+Default value is no equivalences, i.e. each atom is unique in the fitting
+procedure. Multiple EQUIvalence keywords are allowed. For each EQUI keyword, 
+the selected atoms are made equivalent.
+
+[ RESTraint [PARAbolic|HYPErbolic] 
+               [BHYP real] [DHYP real] [FLAT real] [DFLAt real] ]
+
+	RESTraint keyword invokes RESP restrained fitting.  Not specifying 
+the RESTraint keyword causes unrestrained fitting to be performed. The
+charges and polarizabilities are restrainted to their initial values
+(for parabolic penalty function, invoked by keyword PARA, which is also 
+default) or to zero (in the case of the hyperbolic restraint, HYPE keyword). 
+The restraint forces (penalty weight) are taken from WMAIN array. They can 
+be assigned to individual atoms but in practice a uniform stiffness 
+parameter works well for the whole system (see example below).
+   A choice between PARAbolic or HYPERbolic function can be made for the 
+penalty function in the case of the restrained fitting. The PARAbolic shape 
+introduces the penalty function in the form S(q) = q^2 where q is charge 
+deviation from the restrained value. The HYPErbolic penalty function is 
+S(q) = sqrt(q_^2 + B^2) - B, where B is the parabola stiffness parameter. 
+   BHYP keyword sets the stiffness for atomic charges.
+   DHYP keyword penalizes the atomic polarizability (i.e. the Drude charges). 
+   FLAT keyword introduces a flat well potential,i zeroing the penalty for 
+the charge deviation in the range from -FLAT to +FLAT. 
+   DFLAT keywords has simular effect for atomic polarizabilites (i.e. Drude 
+charges).
+
+atom-selection-1  atom-selection-2
+
+   SELEct ... END  The first atom selection specifies the atoms to fit. 
+This is an obligatory keyword.
+   SELEct ... END  The second atom selection specifies the atoms
+contributing to the electrostatic potential. This is an obligatory keyword.
+In most common cases both selections should be pointing to all atoms of the 
+system excluding the perturbation ion. All other (non-selected) atoms are 
+contributing to the potential energy, and are considered as a perturbation 
+(this is how the CALcium perturbation atom is handled).
+
+[NITEr int] [TOLErance real] [COUNter int]
+
+   NITEr - maximum number of Levenberg-Marquardt (least square) iterations. 
+Default value NITE=50. If the program does not converge in 50 iterations most 
+likely something is wrong with the input data.
+   TOLErance - relative tolerance on the convergence of the minimized 
+function (chi^2 corresponding to ESP deviation and penalty contribution) for 
+Levenberg-Marquardt algorithm. Default value TOLE=1.0E-4. Setting bigger
+value is not advised. Smaller values may cause convergence problems.
+   COUNter is number of iterations under the tolerance it needs to
+converge. Default value COUN=2. In most cases setting COUN=1 will result in
+the fitting requiring less number of LM steps but the results may be highly
+questionable. COUN=2 is proven to be safe. Greater values can be used to test
+convergence to assue that the real minimum is identified though this is not
+necessary. Inspection of "lambda" variable (an equivalent to level shifting 
+in QM) from the program output having values 0.05 and below is usually a good 
+indication of convergence. Smaller final value for "lambda" indicates better 
+result of the fitting.
+
+NCONf int  UPOT int  UOUT int  NPERt int [int] 
+
+   NCONf specifies the number of conformations to be used in the
+electrostatic fit. Typically 1 conformation is used.
+   UPOT is the file unit number from which to read the unperturbed ESP
+map. The format of this file is: Number of lines: ngrid(iconf) Format:
+Xgrid Ygrid Zgrid Potential (4f15.6) For NCONf > 1, units UPOT+1,
+UPOT+2, ..., UPOT+NCONf-1 will also be read.  These files should have
+been open before FITCharge execution.
+   UOUT is the scratch file unit. The file is used for temporary storage of
+CHARMM calculated ESP.
+   NPERt is the number of perturbations for each conformation, e.g.  NPERT 40 
+indicates that 40 perturbation ESP maps are calculated in QM jobs and 
+provided for charge fitting. NPERT 40 42 indicates that 40 perturbed ESP maps 
+are available for the first conformation and 42 maps are available for th
+second one. 
+
+TEST
+
+   This is a test case to compare CHARMM Drude and QM electrostatic potentials 
+generated in the position of perturbation ions. This requires perturbation
+ions and grid points being placed at the same locations, giving equal number
+of perturbation ions and grid points. No fitting will be performed in this
+case. CHARMM and QM potential along with differences in static and perturbed
+potential will be printed out on the unit specified by UOUT keyword. The order
+of columns is the following: perturbation ion numer, QM static ESP in the
+position of the specified perturbation ion, CHARMM static ESP, QM perturbed
+ESP, CHARMM perturbed ESP, QM polarization component, CHARMM polarization
+component.
+
+UPPOt int  UCOOrd int  [ALTInput]
+
+   UPPOt is input unit for the perturbed ESP maps. The file format is
+Number of lines:  npert(iconf)*NGRID(iconf) Format:  Potential (1f15.6)
+For NCONF > 1 (multiple conformation fitting), units UPPOT+1, UPPOT+2, ...,
+UPPOT+NCONf-1 will also be read.
+   UCOOrd is the unit number of the first file with model compound coordinates 
+and a perturbation ion. Coordinates are in CHARMM format. NPERt number of such 
+files has to be provided. All files have to be opened before invoking
+FITCharge.
+   ALTInput switches on the alternative input for coordinates. In this mode, 
+the coordinates of the atoms of the second selection are read from UCOOrd, for
+each conformation and perturbation.
+
+[UPRT int] [ASCAle real] [RDIPole real] 
+
+   UPRT is file unit for final printout of the FITCharge results. The data are
+printed in the form of a CHARMM stream file.
+   ASCAle is the polarizability (alpha) scaling factor. Useful to scale
+gas-phase polarizabilities. The scaling keeps atomic charges intact.
+   RDIPole is reference dipole for charge scaling. The charges will be
+scaled to reproduce the reference dipole.
+   VTHOLe allows the fitting of chemical type dependent thole parameters 
+in addition to the charges.  If this flag is not included a constant value of
+a_i = 1.3 for all chemical types will be used to fit the charges. 
+This corresponds to a parameter a = a_i + a_j = 2.6 which is the THOLE parameter
+in the old Drude command syntax.
+
+
+File: Fitcharge, Node: Example, Up: Top, Previous: Function, Next: Limitations
+
+                               Example
+
+set residue cyt
+
+! potential for unperturbed system will be read from this file
+open read  card unit 11 name @residue.pot0
+
+! potential for perturbed systems 
+open read  card unit 21 name @residue.pot
+
+! ESP calculated by CHARMM; a scratch file
+open write card unit 30 name @residue.scratch
+
+! fitcharge results will be stored here
+open write card unit 90 name @residue.charge.optimized
+
+! all the positions of the 0.5 charge; for alternative input
+open read card unit 31 name @residue.all
+
+! set weighting factor for restraints
+scalar wmain set 1.0d-5 select segid @residue end
+
+FITCHARGE -
+   equivalent select type H4* end - ! make atoms H41 and H42 equivalent
+   select segid @residue end -  ! atoms to fit
+   select segid @residue end -  ! ESP contributing atoms
+   restraint para -      ! invoke restrained fitting
+   flat 0.0  dflat 0.1 - ! use flat well potential for polarizability
+   upot 11 uout 30 -
+   NITE 50 -   ! look for input errors if job does not converge in 50 steps
+   NCONF 1 -   ! 1 conformation will be used in fitting
+   NPERT 57 -  ! 57 perturbed QM ESP maps were given on input
+   uppot 21 -
+   ucoord 31 altinput -  ! use alternative input
+   ascale 0.742 -  ! Scale polarizability in analogy with SWM4P water model
+   rdipole 6.72 -  ! Cytosize B3LYP/aug-cc-pVDZ gas-phase dipole moment
+   uprt 90  ! results will be saved in the form of a CHARMM script
+
+Send questions or comments about this document to CHARMM forum or to
+Victor Anisimov at victor@outerbanks.umaryland.edu
+
+References:
+1) Bayly et al, JPC 97 (40), 10269, 1993 
+2) V.M.Anisimov, G.Lamoureux, I.V.Vorobyov, N.Huang, B.Roux,
+                  A.D.MacKerell,Jr.  JCTC, 2004, Vol.1, No.1
+
+Task required for charges/polarizabilility fitting not yet included in CHARMM:
+- ion placement and grid generation around the model compound
+- QM ESP calculation
+- extraction of ESP data from the QM output files
+
+Scripts to perform these functions may be requested on the CHARMM forum.
+
+
+File: Fitcharge, Node: Limitations, Up: Top, Previous: Example, Next: Top
+
+                               Limitations
+
+1. Unperturbed QM ESP map (static) is not included into charge and 
+   polarizability fitting when Drude model is employed. 
+2. In the Lone-Pair case "altinput" keyword is mandatory.

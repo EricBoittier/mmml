@@ -1,0 +1,179 @@
+* This is a testcase for the new Saxon-Wood restraint in MMFP
+*
+
+! This testcase evaluates the Saxon-Wood-typ restraint in the
+! MMFP environment on a discrete grid.
+! Two types of restraints are tested: 
+! a distance and a dihedral angle restraint
+! The script produces two files to visualize the potential
+!
+!---------------------------------------------------
+if ?NOMISC .eq. 1 STOP
+
+stream datadir.def
+!---------------------------------------------------
+! Topology of a simple toy-system
+
+read rtf cards
+* topology 
+*
+   21    1
+
+mass 1 A  10.0
+
+
+Resi A4          0.00  ! 
+Grou                   !
+Atom x1 A        0.00  !   x1      
+Atom x2 A        0.00  !    \      
+Atom x3 A        0.00  !     x2--x3
+Atom x4 A        0.00  !           \
+Bond x1 x2             !            x4
+Bond x2 x3   x3 x4  
+Dihe x1 x2 x3 x4
+ic   x1  x2  x3  x4    0.00 0.00  180.0 0.0  0.0
+ic   x2  x3  x4  BLNK  0.00 0.00    0.0 0.0  0.0
+ic   BLNK  x1  x2  x3  0.00 0.00    0.0 0.0  0.0
+patch first none last none 
+
+end
+!---------------------------------------------------
+! Parameters
+
+read parameters cards
+* bond and angle constants 
+*
+bond 
+A  A  0.0  1.53
+!
+THETAS
+A  A  A  45.0  111.0
+!
+PHI       
+A  A  A  A  0.0  3  0.0
+!
+end
+!---------------------------------------------------
+!---------------------------------------------------
+! build 
+
+read sequ cards
+* molecule
+*
+1
+A4
+generate AA setup
+
+
+ic param
+ic seed 1 x1 1 x2 1 x3
+ic build
+
+
+print psf
+print coor card 
+energy
+
+!-------------------------------------------------------------------
+!-------------------------------------------------------------------
+! set up Saxon-Wood potential
+
+! SAWO  ... select Saxon-Wood restraint
+! force ... force constant
+! droff ... distance of equilibrium point
+! P1    ... steepness of potential
+! P2    ... width of potential (distance between the two inflection points)
+
+
+MMFP
+GEO  maxgeo 10 sphere SAWO P1 0.05 P2 0.5 -
+     forc 5  drof 1.5  -
+     select bynu 3 end  DIST  select bynu 4 end 
+END
+
+
+!-------------------------------------------------------------------
+! visualize distance-potential / print energy and derivative into file
+
+open write form unit 50 name @9sw_dist.dat
+
+set xlen 0.01
+set xinc 0.02
+format (f10.5)
+
+!-----------
+label begin
+!-----------
+
+
+ic edit
+dist 1 x3 1 x4 @xlen
+end
+coor init sele atom AA 1 x4 end
+ic build
+
+print coor card
+energy
+
+
+write title unit 50
+* @xlen ?ener ?geo 
+* 
+incr xlen by @xinc
+
+!---------------------------
+if xlen lt 3.01 goto  begin
+!---------------------------
+
+
+!-------------------------------------------------------------------
+
+MMFP
+GEO RESET
+END
+
+!-------------------------------------------------------------------
+!set up dihedral restraint
+
+MMFP
+GEO  maxgeo 10 sphere SYMM SAWO TREF 50  P1 0.1  P2 1 -
+     forc 2   -
+     select bynu 1 end  DIHE  select bynu 2 end -
+     select bynu 3 end   select bynu 4 end 
+END
+
+
+!----------------------------------------------------------------------
+! visualize potential - print energy into file
+
+open write form unit 50 name @9sw_dihe.dat
+
+set xlen -180.0
+set xinc 5
+format (f10.5)
+
+!-----------
+label begin2
+!-----------
+
+
+ic edit
+dihe 1 x1 1 x2 1 x3 1 x4 @xlen
+end
+coor init sele atom AA 1 x4 end
+ic build
+
+
+print coor card
+energy
+
+
+write title unit 50
+* @xlen ?ener ?geo 
+* 
+incr xlen by @xinc
+
+!------------------------------
+if xlen lt 180.01 goto  begin2
+!------------------------------
+STOP

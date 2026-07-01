@@ -1,0 +1,167 @@
+* Test scrips for CHARMM's GBMV routine
+* Written by Michael S. Lee (6/02)
+*
+
+stream datadir.def
+!************************************
+! Read parameter and topology files
+!************************************
+
+open unit 1 read form name @0toph19.rtf
+read rtf unit 1 card
+close unit 1
+
+open unit 1 read form name @0param19.prm
+read param unit 1 card
+close unit 1
+
+!************************************
+!  Set-up blocked tri-peptide
+!************************************
+read sequ card
+*  blocked tri-peptide
+*
+ 5
+Amn Ala Thr Phe Cbx
+
+generate a3 setup
+
+ic param
+ic seed 1 cl 1 c 1 o
+ic build
+
+faster on
+update cutnb 200 ctofnb 180 ctonnb 170 eps 1 vswi switch
+
+!************************************
+! Set version # to PARAM19, parameters were fitted to PARAM22.
+! However, errors are pretty small < 1.5 % for PARAM19.
+! Errors are ~ 1 % for PARAM22 vs. 0.25 A - PB Calculations
+!************************************
+
+set ver = 19
+if ver .eq. 22 set GBPARAMS = SHIFT -0.102 SLOPE 0.9085
+if ver .eq. 19 set GBPARAMS = SHIFT -0.102 SLOPE 0.9085
+
+!***********************************************
+! Run a grid-based energy evaluation
+!***********************************************
+
+RANDom  OLDRandom
+
+GBMV GRID EPSILON 80 DN 0.2 watr 1.4 GEOM P6 8.0 KAPPA 0.0 -
+     WTYP 0 NPHI 10 SHIFT -0.007998 SLOPE 0.9026 CORR 1 CONV
+
+energy
+
+!****************************************************
+! Test clear statement
+!****************************************************
+
+GBMV CLEAR
+
+!***********************************************
+! Start GBMV, Method II: Recommended parameters
+! Non-zero SA term turns on surface area.
+! By default, no SA term is calculated.
+!***********************************************
+
+GBMV BETA -20 EPSILON 80 DN 1.0 watr 1.4 GEOM -
+     TOL 1e-8 BUFR 0.5 Mem 10 CUTA 20 HSX1 -0.125 HSX2 0.25 -
+     ALFRQ 1 EMP 1.5 P4 0.0 P6 8.0 P3 0.70 ONX 1.9 OFFX 2.1 -
+     SON 0.5 SOFF 1.75 -
+     WTYP 2 NPHI 38 CORR 1 SA 0.00592 SB 0.0 @GBPARAMS
+
+!************************************
+! Simple energy evaluation and alpha show
+!************************************
+energy
+
+scalar gbalpha show
+
+!************************************
+! Derivates should be accurate to 0.000001. Test this.
+!************************************
+
+test first step 1d-6 tol 1d-9 sele bynum 1:10 end
+
+!************************************
+! Minimization should go downhill
+!************************************
+
+mini abnr nstep 20
+
+!************************************
+! Dynamics, no thermostat, alphas update every step
+!************************************
+
+dynamics vver start timestep 0.001 nstep 20 nprint 100 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq 0
+
+!************************************
+! Dynamics, alphas update every 5 steps, thermostat a MUST!
+!************************************
+
+GBMV UPDATE 5
+
+dynamics vver start timestep 0.001 nstep 100 nprint 100 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq 0 -
+        NOSE RSTN TREF 298.0 QREF 10 NCYC 10
+
+shake bonh para fast
+
+dynamics vver start timestep 0.002 nstep 100 nprint 100 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq 0 -
+        NOSE RSTN TREF 298.0 QREF 10 NCYC 10
+        
+shake off 
+
+!****************************************************
+! Test clear statement
+!****************************************************
+
+GBMV CLEAR
+
+!****************************************************
+! Test functionality of Method I
+!****************************************************
+
+GBMV BETA -100 EPSILON 80 DN 1.0 WATR 1.4 -
+     SHIFT -0.5 LAMBDA1 0.1 P1 0.44 TT 2.92 CORR 0 -
+     BUFR 0.5 Mem 20 CUTA 20 P3 0.0 WTYP 0 ESHIFT 0.0
+
+energy 
+
+scalar gbalpha show
+
+mini abnr nstep 20
+
+!************************************
+! Dynamics, no thermostat, alphas update every step
+!************************************
+
+dynamics vver start timestep 0.001 nstep 20 nprint 100 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq 0
+
+!************************************
+! Dynamics, alphas update every 5 steps, thermostat a MUST!
+!************************************
+
+GBMV UPDATE 5
+dynamics vver start timestep 0.001 nstep 100 nprint 100 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq 0 -
+        NOSE RSTN TREF 298.0 QREF 10 NCYC 10
+
+shake bonh para fast
+
+dynamics vver start timestep 0.002 nstep 100 nprint 100 iprfrq 100 -
+        firstt 298 finalt 298 ichecw 0 -
+        iasors 0 iasvel 1 isvfrq 1000 inbfrq 0 -
+        NOSE RSTN TREF 298.0 QREF 10 NCYC 10
+
+stop

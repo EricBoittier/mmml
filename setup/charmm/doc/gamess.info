@@ -1,0 +1,432 @@
+CHARMM Element doc/gamess.info 1.1
+
+File: Gamess, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+   Combined Quantum Mechanical and Molecular Mechanics Method
+                  Based on GAMESS in CHARMM
+
+                     by Milan Hodoscek
+             (hmilan@gmail.com,milan@cmm.ki.si)
+
+
+        Ab initio program GAMESS (General Atomic and Molecular
+Electronic Structure System) is connected to CHARMM program in a QM/MM
+method.  This method is extension of the QUANTUM code which is
+described in J. Comp. Chem., Vol. 11, No. 6, 700-733 (1990).
+
+
+* Menu:
+
+* Description::         Description of the gamess commands.
+* Using::               How to run GAMESS in CHARMM.
+* Replica path::        How to run GAMESS/CHARMM with REPLICA/PATH.
+* Installation::        How to install GAMESS in CHARMM environment.
+* Status::              Status of the interface code.
+* Functionality::       Functionality of the interface code.
+* Implementation::      Implementation.
+
+File: Gamess, Node: Description, Up: Top, Next: Usage, Previous: Top
+
+        The GAMESS QM potential is initialized with the GAMEss command.
+
+[SYNTAX GAMEss]
+
+GAMEss   [REMOve] [EXGRoup] [QINPut] [BLURred] [NOGUess] [FMO] (atom selection)
+
+REMOve:  Classical energies within QM atoms are removed.
+
+EXGRoup: QM/MM Electrostatics for link host groups removed.
+
+QINPut:  Charges are taken from PSF for the QM atoms. Charges
+         may be non integer numbers. Use this with the REMOve!
+
+NOGUess: Obtains initial orbital guess from previous calculation. 
+         Default is to recalculate initial orbitals each time.
+
+FMO:     Enable Fragment MO method with CHARMM
+
+BLURred: MM charges are scaled by a gaussian function (equivalent to ECP)
+         Width of the gaussian function is specified in WMAIN array 
+         (usually by SCALar command)
+         The value for charge is taken from PSF. Some values of WMAIN have
+         special meaning: 
+
+         WMAIN.GT.999.0 ignore this atom from the QM/MM interaction
+         WMAIN.EQ.  0.0 treat this atom as point charge in the QM/MM potential
+                
+
+         The atoms in selection will be treated as QM atoms.
+
+        Link atom may be added between an QM and MM atoms with the
+following command:
+
+
+ADDLinkatom  link-atom-name  QM-atom-spec  MM-atom-spec
+
+      link-atom-name ::= a four character descriptor starting with QQ.
+
+      atom-spec::= {residue-number atom-name}
+                   { segid  resid atom-name }
+                   { BYNUm  atom-number     }
+
+        When using link atoms to break a bond between QM and MM
+regions bond and angle parameters have to be added to parameter file
+or better use READ PARAm APPEnd command. Also note that QQH type has
+to be added in the RTF file (see test/cquantum/gmstst.inp).
+
+        If define is used for selection of QM region put it after all
+ADDLink commands so the numbers of atoms in the selections are not
+changed. Link atoms are always selected as QM atoms.
+
+        If you see the following error in your output script:
+FNIDEL> Cannot find element type for number....
+That means you either have wrong order in the ADDLink command or the atom
+that should be MM is in the QM selection.
+
+=======================================================================
+
+File: Gamess, Node: Usage, Up: Top, Next: Replica Path , Previous: Description
+
+        In order to run GAMESS and CHARMM on parallel machines I/O of
+GAMESS and CHARMM was separated. This is now true even for scalar
+runs. CHARMM input scripts are the same as before except the addition of
+ENVIronment commands and GAMEss command itself. GAMESS commands are in a
+separate file which is pointed to by INPUT environment variable.
+
+        Names of the files for GAMESS are specefied with environment
+variables as follows:
+
+     use ENVIronment command inside CHARMM
+     
+     envi INPUT   "test.gms"          ! quotes needed for lowercase names
+     envi OUTPUT  "test.out"
+     envi PUNCH   "scratch/test.dat"
+     envi DICTNRY "scratch/test.F10"
+     envi WORK15  "scratch/test.F15"
+     envi DASORT  "scratch/test.F20"
+     envi ERICFMT "data/ericfmt.dat"
+     envi DFTGRID "scratch/test.f21"
+     envi DFTINTS "scratch/test.f22"
+     envi RISM01  "scratch/test.f26"
+     envi RISM02  "scratch/test.f27"
+
+     or use (t)csh
+     
+     setenv INPUT   test.gms
+     setenv OUTPUT  test.out
+     setenv PUNCH   scratch/test.dat
+     setenv DICTNRY scratch/test.F10
+     setenv WORK15  scratch/test.F15
+     setenv DASORT  scratch/test.F20
+     ....
+
+     or ksh,sh,bash
+     
+     export INPUT   = test.gms
+     export OUTPUT  = test.out
+     export PUNCH   = scratch/test.dat
+     export DICTNRY = scratch/test.F10
+     export WORK15  = scratch/test.F15
+     export DASORT  = scratch/test.F20
+     ....
+
+
+        For complete information about GAMESS input see docs-input.txt file in
+GAMESS distribution. (NIH: ~milan/gamess/hp/INPUT.DOC)
+
+Example:
+--------
+
+GAMESS commands have to be in a separate file. Example for the GAMESS input
+follows:
+
+-----------------------------------------------------------------------------
+ $CONTRL COORD=CART NOSYM=1 NPRINT=-5    ! This is rarely changed
+         SCFTYP=RHF ICHARG=0             ! This usually has to be changed
+         RunTyp=Gradient                 ! Normally forces are needed
+ !       RunTyp=Energy                   ! If only energy is needed
+ $END
+ $SYSTEM MEMORY=1000000                  ! memory allocation
+         TIMLIM=100000 $END
+ $BASIS  GBASIS=N31 NGAUSS=6 $END          
+ $SCF    DIRSCF=.True.  $END             ! DIRSCF=.true. recommended
+                                         ! if there are convergence problems
+                                         ! try SOSCF=.FALSE.
+ $DATA
+                                         ! This can be empty
+
+ $END
+------------------------------------------------------------------------------
+
+        The above is for 6-31G calculation of any neutral molecule.  $DATA
+section may be left empty or filled with basis set information in the case
+when it cannot be specified by the $BASIS keyword.
+
+
+[NOTE: For more examples look at test/c25test/gmstst.inp]
+
+==========================================================
+
+
+File: Gamess, Node: Replica Path, Up: Top, Next: Installation, Previous: Usage
+
+Replica/Path method (parallel/parallel setup)
+---------------------------------------------
+
+        Running GAMESS/CHARMM interface with Replica/Path method needs
+few additional steps:
+
+        - GAMESS/CHARMM must be compiled with the parallel
+          functionality (CMPI keyword is needed for parallel/paralle
+          replica path). Make sure that the GENCOMM keyword is also
+          specified. (Run CHARMM interactively and type
+          pref). Typically on needs to compil charmm by the following command:
+          configure --gamess -r domdec -a cmpi,gencomm -D GMS_MATHLIB='....'
+
+        - The number of processes must be equal to number of replicas
+          multiplied by an integer (1,2,3...). This ensures that each
+          replica is an independent process. If the factor is more
+          than 1, it means each replica will run itself in parallel
+          (parallel/parallel).
+
+        - GAMESS control file (the one assigned to the INPUT environment
+          variable) must be linked the number of replica times. Each
+          symbolic link must have _<int> appended to the original
+          name:
+              ln -s test.gms test.gms_1
+              ln -s test.gms test.gms_2, etc
+          the number of links must be greater or equal to the number
+          of replicas
+
+        - The path to the above link must be absolute. This depends on
+          the way CHARMM is run in parallel. For example for MPICH-1 (obsolete!)
+          library one must use the following command:
+
+              charmm -p4wd /data/rpath/reaction -p4pg 20cpus < inp > out
+
+              The /data/rpath/reaction must be the same on all the
+              processes, either exact copies or NFS mounted.
+
+        - The gamess output files have also _<int> appended to their names.
+
+
+
+File: Gamess, Node: Installation, Up: Top, Next: Status, Previous: Replica Path
+
+Installation
+------------
+
+        Look at the GAMESS home page for instructions how to obtain the code.
+
+        Installation itself cannot be automated yet so one has to
+follow this procedure (if there are any problems ask milan@cmm.ki.si):
+
+The compilation instructions for individual versions of GAMESS &
+CHARMM are available at:
+
+http://ala.cmm.ki.si/gamess
+
+From version 18 Aug 2016 of GAMESS compilation is performed by cmake
+See bellow for more info.
+
+==========================================================
+
+
+File: Gamess, Node: Status, Up: Top, Next: Functionality, Previous: Installation
+
+GAMESS/CHARMM interface status (July 1996)
+
+- Parallel version is fully functional
+
+- I/O including standard input and output are separated for
+  GAMESS.
+
+- All CHARMM testcases are still OK when CHARMM is compiled
+  with GAMESS inside.
+
+- GAMESS, CADPAC and QUANTUM keywords cannot coexist in pref.dat
+
+- MNDO, AM1, PM3 hamiltonians work only in pure QM
+  calculations. No QM/MM energies and derivatives with this 
+  wavefunctions yet.
+
+- GAMESS recognizes atoms by their masses as specified in the 
+  RTF file
+
+
+
+File: Gamess, Node: Functionality, Up: Top, Next: Implementation, Previous: Status
+
+
+The following methods work with the GAMESS/CHARMM
+(from GAMESS docs-intro.txt file)
+
+  
+       I. A wide range of quantum chemical computations are
+          possible using GAMESS in the CHARMM MM field, which
+ 
+             1. Calculates RHF, UHF, ROHF, GVB, or MCSCF self-
+                consistent field molecular wavefunctions.
+ 
+             2. Calculates CI or MP2 corrections to the energy
+                of these SCF functions.
+ 
+             3. Calculates analytic energy gradients for all SCF
+                wavefunctions, plus closed shell MP2 or CI.
+ 
+             4. Optimizes molecular geometries using the energy
+                gradient, in terms of Cartesian or internal coords.
+ 
+             5. Searches for potential energy surface saddle points.
+ 
+             6. Computes the energy hessian, and thus normal modes,
+                vibrational frequencies, and IR intensities.
+ 
+             7. Traces the intrinsic reaction path from a saddle
+                point to reactants or products.
+ 
+             8. Traces gradient extremal curves, which may lead from
+                one stationary point such as a minimum to another,
+                which might be a saddle point.
+
+             9. Follows the dynamic reaction coordinate, a classical
+                mechanics trajectory on the potential energy surface.
+ 
+            10. Computes radiative transition probabilities.
+
+            11. Evaluates spin-orbit coupled wavefunctions.
+ 
+            12. Applies finite electric fields, extracting the
+                molecule's linear polarizability, and first and
+                second order hyperpolarizabilities.
+
+            13. Evaluates analytic frequency dependent non-linear
+                optical polarizability properties, for RHF functions.
+ 
+            14. Obtains localized orbitals by the Foster-Boys,
+                Edmiston-Ruedenberg, or Pipek-Mezey methods, with
+                optional SCF or MP2 energy analysis of the LMOs.
+ 
+            15. Calculates the following molecular properties:
+                   a. dipole, quadrupole, and octupole moments
+                   b. electrostatic potential
+                   c. electric field and electric field gradients
+                   d. electron density and spin density
+                   e. Mulliken and Lowdin population analysis
+                   f. virial theorem and energy components
+                   g. Stone's distributed multipole analysis
+
+            16. Models solvent effects by
+                   a. effective fragment potentials (EFP)
+                   b. polarizable continuum model (PCM)
+                   c. self-consistent reaction field (SCRF)
+
+
+      II. A quick summary of the current program capabilities
+          is given below.
+
+                         SCFTYP= RHF    ROHF    UHF    GVB    MCSCF
+                                 ---    ----    ---    ---    -----
+          Energy                 CDP    CDP     CDP    CDP     CDP
+
+          analytic gradient      CDP    CDP     CDP    CDP     CDP
+
+          numerical Hessian      CDP    CDP     CDP    CDP     CDP
+
+          analytic Hessian       CDP    CDP      -     CDP      -
+
+          MP2 energy             CDP    CDP     CDP     -       C
+ 
+          MP2 gradient           CD      -       -      -       -
+
+          CI energy              CDP    CDP      -     CDP     CDP
+
+          CI gradient            CD      -       -      -       -
+
+          MOPAC energy           yes    yes     yes    yes      -
+
+          MOPAC gradient         yes    yes     yes     -       -
+
+           C= conventional storage of AO integrals on disk
+           D= direct evaluation of AO integrals
+           P= parallel execution
+
+
+   III. The methods listed above which don't have analytic gradients
+        are not available for CHARMM minimizations and dynamic
+        calculations.
+
+
+   IV.  The following are available only in the pure QM calculations:
+
+             1. Calculates semi-empirical MNDO, AM1, or PM3
+                RHF, UHF, or ROHF wavefunctions.
+
+
+
+File: Gamess, Node: Implementation, Up: Top, Next: Top, Previous: Functionality
+
+Implementation
+--------------
+
+This is for version 5 DEC 2014 R1 of GAMESS or later:
+
+The DDI (Distributed Data Interface) library is used by parallel
+GAMESS. Normally GAMESS uses the simplified emulation of the full
+DDI library implemented in the CHARMM interface
+(source/gamint/ddi.src). However some of the methods (like parallel
+MP2) require the original version of DDI, which can be used by
+specifying DDIMPI keyword in the pref.dat file. Also the libddi.a from
+GAMESS distribution has to be put to build/gnu/mpi directory.
+
+Must be compiled with the default charmm for 360720 atoms.
+
+The following files are modified from original GAMESS:
+
+    gamess/gamint/eigen.src
+    gamess/gamint/grd1.src
+    gamess/gamint/grd2a.src
+    gamess/gamint/guess.src
+    gamess/gamint/inputb.src
+    gamess/gamint/inputc.src
+    gamess/gamint/int1.src
+    gamess/gamint/iolib.src
+    gamess/gamint/mccas.src
+    gamess/gamint/omp_grd1.src
+    gamess/gamint/ompgrd2.src
+    gamess/gamint/prpel.src
+    gamess/gamint/rhfuhf.src
+    gamess/gamint/scflib.src
+    gamess/gamint/trudge.src
+    gamess/gamint/unport.src
+    gamess/gamint/inputa.src
+    gamess/gamint/statpt.src
+    gamess/gamint/parley.src
+    gamess/gamint/surf.src
+    gamess/gamint/rxncrd.src
+    gamess/gamint/gamess.src
+    gamess/gamint/modmdi_empty.src
+
+
+
+Some changes for CHARMM interface into upstream version of the GAMESS
+still didn't made it so for more information see
+
+http://ala.cmm.ki.si/gamess/20230930.2
+
+As of GAMESS version from 18 Aug 2016 (R1) and later, CHARMM is
+compiled with the help of cmake framework. So the instruction on the
+web site (above) for these versions are for the cmake compile and one needs a
+newer version of CHARMM, which is now freely available.
+
+The versions from 20230930.2 and C48b2 (C49a2) on can also calculate
+frequencies with VIBRAN facility in CHARMM. The second derivatives are
+calculated by numerical derivatives of analytical first derivatives.
+For details see gmstst.inp file! For efficiency it also works in parallel.
+
+For older versions look at:
+
+http://ala.cmm.ki.si/gamess
+
+Or contact milan@cmm.ki.si

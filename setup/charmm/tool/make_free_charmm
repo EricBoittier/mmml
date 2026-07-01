@@ -1,0 +1,103 @@
+#!/bin/bash
+
+get_abs_filename() {
+  # $1 : relative filename
+  arg_rel_dir=$(dirname "$1")
+  pushd "$arg_rel_dir" > /dev/null
+  arg_abs_dir=$(pwd)
+  popd > /dev/null
+  arg_base=$(basename "$1")
+  echo $arg_abs_dir/$arg_base
+}
+
+warning_str="**WARNING**: this script copies and DELETES files and may permanently DESTROY things in the current directory"
+
+if [[ $# -ne 2 ]]; then
+    echo "usage: $0 <charmm_path> <patch_path>"
+    echo "charmm_path: a directory containing the charmm source"
+    echo "patch_path: the file free_charmm.patch"
+    echo "    this file can be found in the tool directory"
+    echo "    of the current charmm source"
+    echo $warning_str
+    exit 1
+fi
+
+charmm_dir=$1
+if [[ ! -d $charmm_dir ]]; then
+    echo "$charmm_dir is not a valid directory"
+    echo "please specify a valid charmm source directory"
+    echo $warning_str
+    exit 2
+fi
+charmm_dir=$(get_abs_filename "$charmm_dir")
+
+charmm_patch=$2
+if [[ ! -e $charmm_patch ]]; then
+    echo "$charmm_patch is not a valid file"
+    echo "please specify a valid patch file"
+    echo $warning_str
+    exit 2
+fi
+charmm_patch=$(get_abs_filename "$charmm_patch")
+
+if [[ -d charmm ]]; then
+    echo "**WARNING**: this script will move charmm in the current directory"
+    echo "    to charmm.1 and copy $charmm_dir to ./charmm"
+    echo $warning_str
+    read -r -p "Are you sure? [y/N] " response
+    case $response in
+        [yY][eE][sS]|[yY]) 
+            echo "moving the charmm directory to charmm.1 ..."
+            mv charmm charmm.1
+            ;;
+        *)
+            echo "aborting..."
+            exit 0
+            ;;
+    esac
+fi
+
+cp -r "$charmm_dir" charmm
+
+revid=''
+pushd charmm > /dev/null
+if [[ -d .git ]]; then
+  revid=$(git rev-parse --short HEAD)
+else
+  if [[ -d .svn ]]; then
+    revid=$(svn info | grep 'Revision' | awk '{print $2}')
+  fi
+fi
+popd > /dev/null
+
+rm -rf charmm/.git charmm/.gitignore charmm/.svn
+tar czf charmm_full.tgz charmm
+
+pushd charmm > /dev/null
+
+patch -p1 < "$charmm_patch" && find . -name '*orig' -delete
+
+awk '!/domdec_gpu/' build/UNX/objlibs.mk > objlibs.mk.new
+mv objlibs.mk.new build/UNX/objlibs.mk
+
+pushd source > /dev/null
+
+rm -rf domdec_gpu
+mkdir domdec_tmp
+for f in domdec_common.src nblist_types.src sse_defs.h sse_utils.h; do
+  cp domdec/$f domdec_tmp
+done
+rm -rf domdec
+mv domdec_tmp domdec
+
+popd > /dev/null
+
+sed -e "/set revid = \"\"/s/\"\"/\"$revid\"/" install.com > install.com.new
+mv install.com.new install.com
+chmod +x install.com
+
+popd > /dev/null
+
+tar czf charmm.tgz charmm
+
+rm -rf charmm

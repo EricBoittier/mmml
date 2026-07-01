@@ -1,0 +1,4605 @@
+* ...
+* Topology File for CHARMm Version 22   (All Hydrogens)
+* ...
+* ...
+* Copyright (c) 1986, 1987, 1988, 1989, 1990, 1991, 1992
+* Molecular Simulations Incorporated
+* Confidential and Proprietary: All Rights Reserved
+* ...
+* This file incorporates AMINOH.RTF, AMINO2H.RTF, 
+* and PATCHAH.RTF. It includes:
+* 1) from AMINOH.RTF- topology definitions for the twenty naturally
+* occurring amino acids and water.
+* 2) from AMINO2H.RTF- "abnormal" amino acids as well as other
+* amino acid-like structures.
+* 3) from PATCHAH.RTF- PATCH residues for the C and N terminal ends
+* of polypeptide chains.
+* ...
+* Hydrogens are specified for all atoms, new charges for nonpolar C and H's.
+* ...  
+* Latest modification:  $Date: 2008/08/16 05:41:38 $
+* ...
+*
+   22    0
+MASS     1 c     12.01115 C  ! generic SP3 carbon*
+MASS    13 c=    12.01115 C  ! non aromatic doubly bonded carbon*
+MASS    17 c"    12.01115 C  ! carbon in carbonyl group of aldehydes/ketones*
+MASS    18 c'    12.01115 C  ! carbon in carbonyl group of amides*
+MASS    19 cp    12.01115 C  ! sp2 aromatic carbon in 5 or 6 membered ring*
+MASS    21 c-    12.01115 C  ! in charged carboxylate*
+MASS    23 c+    12.01115 C  ! C in guanidinium group*
+MASS    26 ct    12.01115 C  ! sp carbon involved in a triple bond
+MASS    28 na    14.00670 N  ! sp3 nitrogen in amines*
+MASS    35 n     14.00670 N  ! generic sp2 nitrogen (in amides)*
+MASS    36 np    14.00670 N  ! sp2 nitrogen in 5- or 6- membered ring*
+MASS    38 nh    14.00670 N  ! sp2 nitrogen in 5-or 6-  membered ring  with  3 connections*
+MASS    41 n+    14.00670 N  ! sp3 nitrogen in protonated amines*
+MASS    43 nr    14.00670 N  ! sp2 nitrogen (NH2) in guanidinium group (HN=C(NH2)2)*
+MASS    44 n=    14.00670 N  ! non aromatic doubly bonded nitrogen
+MASS    52 o     15.99940 O  ! generic SP3 oxygen*
+MASS    54 oc    15.99940 O  ! sp3 oxygen  in ether or acetals
+MASS    55 oe    15.99940 O  ! sp3 oxygen  in ester
+MASS    58 o'    15.99940 O  ! oxygen in carbonyl group*
+MASS    60 o*    15.99940 O  ! oxygen in water*
+MASS    61 o-    15.99940 O  ! partial double oxygen carboxylate anion*
+MASS    62 h      1.00797 H  ! generic hydrogen bound to C or S*
+MASS    63 h*     1.00797 H  ! hydrogen bonded to nitrogen, Oxygen*
+MASS    64 h+     1.00797 H  ! charged hydrogen in cations*
+MASS    68 ho     1.00797 H  ! hydrogen bonded to oxygen
+MASS    71 hw     1.00797 H  ! hydrogen in water
+MASS    73 s     32.064   S  ! sp3 sulfur*
+MASS    80 s'    32.064   S  ! sp3 sulfur*
+MASS    82 p     30.9738  P  ! general phosphorous atom*
+MASS    84 Ca    40.08000 Ca ! calcium ion (Ca+)
+MASS    86 cl    35.45300 Cl ! chlorine atom
+MASS    88 br    79.90900 Br ! bromine atom
+!MASS    91 Na    22.98980 Na ! sodium ion (Na+)
+MASS    85 f     18.99840 F  ! fluorine ion
+MASS    90 i    126.90440 I  ! iodine atom
+DECL -CA
+DECL -C
+DECL -O
+DECL +N
+DECL +H
+DECL +CA
+DECL -N
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NTER LAST CTER
+
+!
+! The following residue definitions comprise the 20 naturally occurring
+! amino acids
+!
+
+RESI ALA           0.00  !  Alanine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1590
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM HB3   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA                       N    HN        N    CA        O    C
+BOND C    CA        C    +N        CA   HA        CB   HB1       CB   HB2
+BOND CB   HB3
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   C    CA   CB   HB1    0.0000    0.00  180.00    0.00   0.0000
+IC   HB1  CA   *CB  HB2    0.0000    0.00  120.00    0.00   0.0000
+IC   HB1  CA   *CB  HB3    0.0000    0.00  240.00    0.00   0.0000
+
+RESI ARG           1.00  !  Arginine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM CD    c    0.1048
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM NE    n    -.5823
+ ATOM HE    h*   0.4395
+ ATOM CZ    c+   0.7960
+GROUP
+ ATOM NH1   n    -.8110
+ ATOM HH11  h*   0.4395
+ ATOM HH12  h*   0.4395
+GROUP
+ ATOM NH2   n    -.8110
+ ATOM HH21  h*   0.4395
+ ATOM HH22  h*   0.4395
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD   CG        NE   CD        CZ   NE
+BOND NH1  CZ        NH2  CZ        N    HN        N    CA
+BOND O    C         C    CA        C    +N        CA   HA        CB   HB1
+BOND CB   HB2       CG   HG1       CG   HG2       CD   HD1       CD   HD2
+BOND NE   HE        NH1  HH11      NH1  HH12      NH2  HH21      NH2  HH22
+IMPH C    CA    +N   O
+IMPH N    -C   CA   HN        NH1  HH12 HH11 CZ        NH2  HH22 HH21 CZ
+IMPH NE   CD   CZ   HE        CZ   NH1  NH2  NE
+DONO HN   N
+DONO HE   NE
+DONO HH11 NH1
+DONO HH12 NH1
+DONO HH21 NH2
+DONO HH22 NH2
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   NE     0.0000    0.00  180.00    0.00   0.0000
+IC   NE   CG   *CD  HD1    0.0000    0.00  120.00    0.00   0.0000
+IC   NE   CG   *CD  HD2    0.0000    0.00  240.00    0.00   0.0000
+IC   CG   CD   NE   CZ     0.0000    0.00  180.00    0.00   0.0000
+IC   CZ   CD   *NE  HE     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   NE   CZ   NH1    0.0000    0.00  180.00    0.00   0.0000
+IC   NE   CZ   NH1  HH11   0.0000    0.00  180.00    0.00   0.0000
+IC   HH11 CZ   *NH1 HH12   0.0000    0.00  180.00    0.00   0.0000
+IC   NH1  NE   *CZ  NH2    0.0000    0.00  180.00    0.00   0.0000
+IC   NE   CZ   NH2  HH21   0.0000    0.00  180.00    0.00   0.0000
+IC   HH21 CZ   *NH2 HH22   0.0000    0.00  180.00    0.00   0.0000
+
+RESI ARGN        0.0000  ! Neutral Arginine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM CD    c    0.1048
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM NE    n    -.7203
+ ATOM HE    h*   0.4395
+ ATOM CZ    c=   0.5000
+GROUP
+ ATOM NH1   n    -.9490
+ ATOM HH11  h*   0.4395
+ ATOM HH12  h*   0.4395
+GROUP
+ ATOM NH2   n=   -.6400
+ ATOM HH21  h*   0.2800
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD   CG        NE   CD        CZ   NE
+BOND NH1  CZ        NH2  CZ        N    HN        N    CA
+BOND O    C         C    CA        C    +N        CA   HA        CB   HB1
+BOND CB   HB2       CG   HG1       CG   HG2       CD   HD1       CD   HD2
+BOND NE   HE        NH1  HH11      NH1  HH12      NH2  HH21   
+IMPH C    CA    +N   O
+IMPH N    -C   CA   HN        NH1  HH12 HH11 CZ      
+IMPH NE   CD   CZ   HE        CZ   NH1  NH2  NE
+DONO HN   N
+DONO HE   NE
+DONO HH11 NH1
+DONO HH12 NH1
+DONO HH21 NH2
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   NE     0.0000    0.00  180.00    0.00   0.0000
+IC   NE   CG   *CD  HD1    0.0000    0.00  120.00    0.00   0.0000
+IC   NE   CG   *CD  HD2    0.0000    0.00  240.00    0.00   0.0000
+IC   CG   CD   NE   CZ     0.0000    0.00  180.00    0.00   0.0000
+IC   CZ   CD   *NE  HE     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   NE   CZ   NH1    0.0000    0.00  180.00    0.00   0.0000
+IC   NE   CZ   NH1  HH11   0.0000    0.00  180.00    0.00   0.0000
+IC   HH11 CZ   *NH1 HH12   0.0000    0.00  180.00    0.00   0.0000
+IC   NH1  NE   *CZ  NH2    0.0000    0.00  180.00    0.00   0.0000
+IC   NE   CZ   NH2  HH21   0.0000    0.00  180.00    0.00   0.0000
+
+RESI ASN           0.00  !  Asparagine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    c'   0.3964
+ ATOM OD1   o'   -.3964
+GROUP
+ ATOM ND2   n    -.8790
+ ATOM HD21  h*   0.4395
+ ATOM HD22  h*   0.4395
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        OD1  CG        ND2  CG       
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2       ND2  HD21      ND2  HD22
+IMPH N    -C   CA   HN        CG   ND2  OD1  CB      ND2  HD21 HD22 CG
+IMPH C    CA    +N   O
+DONO HN   N
+DONO HD21 ND2
+DONO HD22 ND2
+ACCE OD1  CG
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   HN   N    CA   CB     0.0000    0.00 -120.00    0.00   0.0000
+IC   HN   N    CA   C      0.0000    0.00    0.00    0.00   0.0000
+IC   HN   N    CA   HA     0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   OD1    0.0000    0.00   90.00    0.00   0.0000
+IC   OD1  CB   *CG  ND2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   ND2  HD21   0.0000    0.00  180.00    0.00   0.0000
+IC   HD21 CG   *ND2 HD22   0.0000    0.00  180.00    0.00   0.0000
+
+RESI ASP          -1.00  !  Aspartic acid
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.3360
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c-   0.2974
+ ATOM OD1   o-   -.5337
+ ATOM OD2   o-   -.5337
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        OD1  CG        OD2  CG 
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2
+IMPH N    -C   CA   HN        CG   OD1  OD2  CB        C    CA    +N   O
+DONO HN   N
+ACCE OD1  CG
+ACCE OD2  CG
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   OD1    0.0000    0.00   90.00    0.00   0.0000
+IC   OD1  CB   *CG  OD2    0.0000    0.00  180.00    0.00   0.0000
+
+RESI ASPH           0.00  !  Aspartic acid - Protonated
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c"   0.3994
+ ATOM OD1   o'   -.3964
+ ATOM OD2   o    -.4271
+ ATOM HD    h*   0.4241
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        OD1  CG        OD2  CG        OD2  HD
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2
+IMPH N    -C   CA   HN        CG   OD1  OD2  CB        C    CA    +N   O
+DONO HN   N
+DONO HD   OD2
+ACCE OD1  CG
+ACCE OD2  CG
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   OD1    0.0000    0.00   90.00    0.00   0.0000
+IC   OD1  CB   *CG  OD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   OD2  HD     0.0000    0.00  180.00    0.00   0.0000
+
+RESI CYS           0.00  !  Cysteine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.0410
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM SG    s    -.2550
+ ATOM HG    h    0.1900
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        SG   CB                       N    HN        N    CA
+BOND O    C         C    CA        C    +N        CA   HA        CB   HB1
+BOND CB   HB2       SG   HG 
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HG   SG
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   SG     0.0000    0.00  180.00    0.00   0.0000
+IC   SG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   SG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   SG   HG     0.0000    0.00  180.00    0.00   0.0000
+
+RESI GLN           0.00  !  Glutamine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM CD    c'   0.3964
+ ATOM OE1   o'   -.3964
+GROUP
+ ATOM NE2   n    -.8790
+ ATOM HE21  h*   0.4395
+ ATOM HE22  h*   0.4395
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD   CG        OE1  CD        NE2  CD
+BOND N    HN        N    CA        O    C         C    CA
+BOND C    +N        CA   HA        CB   HB1       CB   HB2       CG   HG1
+BOND CG   HG2       NE2  HE21      NE2  HE22
+IMPH N    -C   CA   HN        CD   NE2  OE1  CG   
+IMPH C    CA    +N   O        NE2  HE21 HE22 CD
+DONO HN   N
+DONO HE21 NE2
+DONO HE22 NE2
+ACCE OE1  CD
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   OE1    0.0000    0.00  180.00    0.00   0.0000
+IC   OE1  CG   *CD  NE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD   NE2  HE21   0.0000    0.00  180.00    0.00   0.0000
+IC   HE21 CD   *NE2 HE22   0.0000    0.00  180.00    0.00   0.0000
+
+RESI GLU          -1.00  !  Glutamic acid
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    c    -.3360
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD    c-   0.2974
+ ATOM OE1   o-   -.5337
+ ATOM OE2   o-   -.5337
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD   CG        OE1  CD        OE2  CD
+BOND                N    HN        N    CA        O    C         C    CA
+BOND C    +N        CA   HA        CB   HB1       CB   HB2       CG   HG1
+BOND CG   HG2
+IMPH N    -C   CA   HN        CD   OE1  OE2  CG        C    CA    +N   O
+DONO HN   N
+ACCE OE1  CD
+ACCE OE2  CD
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   OE1    0.0000    0.00  180.00    0.00   0.0000
+IC   OE1  CG   *CD  OE2    0.0000    0.00  180.00    0.00   0.0000
+
+RESI GLUH         0.00  !  Glutamic acid-Protonated
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD    c"   0.3994
+ ATOM OE1   o'   -.3964
+ ATOM OE2   o    -.4271
+ ATOM HE    h*   0.4241
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD   CG        OE1  CD        OE2  CD
+BOND                N    HN        N    CA        O    C         C    CA
+BOND C    +N        CA   HA        CB   HB1       CB   HB2       CG   HG1
+BOND CG   HG2       OE2  HE
+IMPH N    -C   CA   HN        CD   OE2  OE1  CG        C    CA    +N   O
+DONO HN   N
+DONO HE   OE2
+ACCE OE1  CD
+ACCE OE2  CD
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   OE2    0.0000    0.00  180.00    0.00   0.0000
+IC   OE2  CG   *CD  OE1    0.0000    0.00  180.00    0.00   0.0000
+IC   HE   OE2  CD   CG     0.0000    0.00  180.00    0.00   0.0000
+
+RESI GLY           0.00  !  Glycine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1048
+ ATOM HA1   h    0.0530
+ ATOM HA2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND                N    HN        N    CA        O    C         C    CA
+BOND  C   +N        CA   HA1       CA   HA2
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  HA1    0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA2    0.0000    0.00  240.00    0.00   0.0000
+PATCH FIRST GLYP LAST CGLY
+
+RESI HIS           0.00  !  Histidine ( uncharged with proton on nd1)
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    cp   0.0778
+ ATOM CD2   cp   -.1038
+ ATOM HD2   h    0.1518
+GROUP
+ ATOM ND1   nh   -.3912
+ ATOM HD1   h*   0.3800
+GROUP
+ ATOM CE1   cp   0.1265
+ ATOM HE1   h    0.1384
+GROUP
+ ATOM NE2   np   -.3795
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        ND1  CG        CD2  CG        CE1  ND1
+BOND NE2  CD2                      N    HN        N    CA        O    C
+BOND C    CA        C    +N        NE2  CE1       CA   HA        CB   HB1
+BOND CB   HB2       ND1  HD1       CD2  HD2       CE1  HE1
+IMPH CE1  ND1  CG   CD2       NE2  CD2  CG   ND1       NE2  CE1  ND1  CG
+IMPH CE1  NE2  CD2  CG        CD2  NE2  CE1  ND1       N    -C   CA   HN
+IMPH CG   ND1  CD2  CB        ND1  CG   CE1  HD1       CD2  CG   NE2  HD2
+IMPH CE1  ND1  NE2  HE1       C    CA    +N   O
+DONO HN   N
+DONO HD1  ND1
+ACCE NE2
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   ND1    0.0000    0.00   90.00    0.00   0.0000 
+IC   ND1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   ND1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  NE2    0.0000    0.00  180.00    0.00   0.0000
+IC   NE2  ND1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *ND1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   NE2  CG   *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+
+RESI HSE           0.00  !  Histidine (uncharged with proton on ne2)
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    cp   0.0480
+ ATOM ND1   np   -.3795
+ ATOM CE1   cp   0.1265
+ ATOM HE1   h    0.1384
+ ATOM NE2   nh   -.3912
+ ATOM HE2   h*   0.3800
+ ATOM CD2   cp   -.1090
+ ATOM HD2   h    0.1868
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        ND1  CG        CD2  CG        CE1  ND1
+BOND NE2  CD2       N    HN        N    CA        O    C
+BOND C    CA        C    +N        NE2  CE1       CA   HA        CB   HB1
+BOND CB   HB2       CD2  HD2       CE1  HE1       NE2  HE2
+IMPH CE1  ND1  CG   CD2       NE2  CD2  CG   ND1       NE2  CE1  ND1  CG
+IMPH CE1  NE2  CD2  CG        CD2  NE2  CE1  ND1       N    -C   CA   HN
+IMPH CG   ND1  CD2  CB        NE2  CD2  CE1  HE2       CD2  CG   NE2  HD2
+IMPH CE1  ND1  NE2  HE1       C    CA    +N   O
+DONO HN   N
+DONO HE2  NE2
+ACCE ND1
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   ND1    0.0000    0.00   90.00    0.00   0.0000 
+IC   ND1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   ND1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  NE2    0.0000    0.00  180.00    0.00   0.0000
+IC   NE2  ND1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CD2  *NE2 HE2    0.0000    0.00  180.00    0.00   0.0000
+IC   NE2  CG   *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+
+RESI HSC           1.00  !  Histidine  ( protonated )
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    cp   0.1844
+ ATOM CD2   cp   -.0205
+ ATOM HD2   h    0.2049
+ ATOM ND1   nh   -.3136
+ ATOM HD1   h*   0.3819
+ ATOM CE1   cp   0.3128
+ ATOM HE1   h    0.1817
+ ATOM NE2   nh   -.3136
+ ATOM HE2   h*   0.3819
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        ND1  CG        CD2  CG        CE1  ND1
+BOND NE2  CD2                      N    HN        N    CA        O    C
+BOND C    CA        C    +N        NE2  CE1       CA   HA        CB   HB1
+BOND CB   HB2       ND1  HD1       NE2  HE2       CD2  HD2       CE1  HE1
+IMPH CE1  ND1  CG   CD2       NE2  CD2  CG   ND1       NE2  CE1  ND1  CG
+IMPH CE1  NE2  CD2  CG        CD2  NE2  CE1  ND1       N    -C   CA   HN
+IMPH CG   ND1  CD2  CB        ND1  CG   CE1  HD1       CD2  CG   NE2  HD2
+IMPH CE1  ND1  NE2  HE1       NE2  CD2  CE1  HE2       C    CA    +N   O
+DONO HN   N
+DONO HD1  ND1
+DONO HE2  NE2
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   ND1    0.0000    0.00   90.00    0.00   0.0000 
+IC   ND1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   ND1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  NE2    0.0000    0.00  180.00    0.00   0.0000
+IC   NE2  ND1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CD2  *NE2 HE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *ND1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   NE2  CG   *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+
+RESI ILE           0.00  !  Isoleucine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.0530
+ ATOM HB    h    0.0530
+ ATOM CG2   c    -.1590
+ ATOM HG21  h    0.0530
+ ATOM HG22  h    0.0530
+ ATOM HG23  h    0.0530
+GROUP
+ ATOM CG1   c    -.1060
+ ATOM HG11  h    0.0530
+ ATOM HG12  h    0.0530
+ ATOM CD1   c    -.1590
+ ATOM HD11  h    0.0530
+ ATOM HD12  h    0.0530
+ ATOM HD13  h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG1  CB        CG2  CB        CD1  CG1
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB        CG1  HG11      CG1  HG12      CG2  HG21
+BOND CG2  HG22      CG2  HG23      CD1  HD11      CD1  HD12      CD1  HD13
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG1    0.0000    0.00  180.00    0.00   0.0000
+IC   CG1  CA   *CB  HB     0.0000    0.00  120.00    0.00   0.0000
+IC   CG1  CA   *CB  CG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG2  HG21   0.0000    0.00  180.00    0.00   0.0000
+IC   HG21 CB   *CG2 HG22   0.0000    0.00  120.00    0.00   0.0000
+IC   HG21 CB   *CG2 HG23   0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG1  CD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CB   *CG1 HG11   0.0000    0.00  120.00    0.00   0.0000
+IC   CD1  CB   *CG1 HG12   0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG1  CD1  HD11   0.0000    0.00  180.00    0.00   0.0000
+IC   HD11 CG1  *CD1 HD12   0.0000    0.00  120.00    0.00   0.0000
+IC   HD11 CG1  *CD1 HD13   0.0000    0.00  240.00    0.00   0.0000
+
+RESI LEU           0.00  !  Leucine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.0530
+ ATOM HG    h    0.0530
+ ATOM CD1   c    -.1590
+ ATOM HD11  h    0.0530
+ ATOM HD12  h    0.0530
+ ATOM HD13  h    0.0530
+ ATOM CD2   c    -.1590
+ ATOM HD21  h    0.0530
+ ATOM HD22  h    0.0530
+ ATOM HD23  h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CD2  CG 
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2       CG   HG        CD1  HD11
+BOND CD1  HD12      CD1  HD13      CD2  HD21      CD2  HD22      CD2  HD23
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CB   *CG  CD2    0.0000    0.00  120.00    0.00   0.0000
+IC   CD1  CB   *CG  HG     0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD1  HD11   0.0000    0.00  180.00    0.00   0.0000
+IC   HD11 CG   *CD1 HD12   0.0000    0.00  120.00    0.00   0.0000
+IC   HD11 CG   *CD1 HD13   0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD2  HD21   0.0000    0.00  180.00    0.00   0.0000
+IC   HD21 CG   *CD2 HD22   0.0000    0.00  120.00    0.00   0.0000
+IC   HD21 CG   *CD2 HD23   0.0000    0.00  240.00    0.00   0.0000
+
+RESI LYS           1.00  !  Lysine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM CD    c    -.1060
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+GROUP
+ ATOM CE    c    0.0990
+ ATOM HE1   h    0.0530
+ ATOM HE2   h    0.0530
+ ATOM NZ    n+   -.0450
+ ATOM HZ1   h+   0.2800
+ ATOM HZ2   h+   0.2800
+ ATOM HZ3   h+   0.2800
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD   CG        CE   CD        NZ   CE
+BOND                N    HN        N    CA        O    C         C    CA
+BOND C    +N        CA   HA        CB   HB1       CB   HB2       CG   HG1
+BOND CG   HG2       CD   HD1       CD   HD2       CE   HE1       CE   HE2
+BOND NZ   HZ1       NZ   HZ2       NZ   HZ3
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HZ1  NZ
+DONO HZ2  NZ
+DONO HZ3  NZ
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   CE     0.0000    0.00  180.00    0.00   0.0000
+IC   CE   CG   *CD  HD1    0.0000    0.00  120.00    0.00   0.0000
+IC   CE   CG   *CD  HD2    0.0000    0.00  240.00    0.00   0.0000
+IC   CG   CD   CE   NZ     0.0000    0.00  180.00    0.00   0.0000
+IC   NZ   CD   *CE  HE1    0.0000    0.00  120.00    0.00   0.0000
+IC   NZ   CD   *CE  HE2    0.0000    0.00  240.00    0.00   0.0000
+IC   CD   CE   NZ   HZ1    0.0000    0.00  180.00    0.00   0.0000
+IC   HZ1  CE   *NZ  HZ2    0.0000    0.00  120.00    0.00   0.0000
+IC   HZ1  CE   *NZ  HZ3    0.0000    0.00  240.00    0.00   0.0000
+
+RESI LYSN          0.00  !  Neutral Lysine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD    c    -.1060
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+GROUP
+ ATOM CE    c    -.0233
+ ATOM HE1   h    0.0530
+ ATOM HE2   h    0.0530
+ ATOM NZ    na   -.5801
+ ATOM HZ1   h*   0.2487
+ ATOM HZ2   h*   0.2487
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD   CG        CE   CD        NZ   CE
+BOND                N    HN        N    CA        O    C         C    CA
+BOND C    +N        CA   HA        CB   HB1       CB   HB2       CG   HG1
+BOND CG   HG2       CD   HD1       CD   HD2       CE   HE1       CE   HE2
+BOND NZ   HZ1       NZ   HZ2     
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HZ1  NZ
+DONO HZ2  NZ
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   CE     0.0000    0.00  180.00    0.00   0.0000
+IC   CE   CG   *CD  HD1    0.0000    0.00  120.00    0.00   0.0000
+IC   CE   CG   *CD  HD2    0.0000    0.00  240.00    0.00   0.0000
+IC   CG   CD   CE   NZ     0.0000    0.00  180.00    0.00   0.0000
+IC   NZ   CD   *CE  HE1    0.0000    0.00  120.00    0.00   0.0000
+IC   NZ   CD   *CE  HE2    0.0000    0.00  240.00    0.00   0.0000
+IC   CD   CE   NZ   HZ1    0.0000    0.00  180.00    0.00   0.0000
+IC   HZ1  CE   *NZ  HZ2    0.0000    0.00  120.00    0.00   0.0000
+
+RESI MET           0.00  !  Methionine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    c    -.0410
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM SD    s    -.1300
+ ATOM CE    c    -.0940
+ ATOM HE1   h    0.0530
+ ATOM HE2   h    0.0530
+ ATOM HE3   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        SD   CG        CE   SD 
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2       CG   HG1       CG   HG2
+BOND CE   HE1       CE   HE2       CE   HE3
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   SD     0.0000    0.00  180.00    0.00   0.0000
+IC   SD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   SD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   SD   CE     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   SD   CE   HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   HE1  SD   *CE  HE2    0.0000    0.00  120.00    0.00   0.0000
+IC   HE1  SD   *CE  HE3    0.0000    0.00  240.00    0.00   0.0000
+
+RESI PHE           0.00  !  Phenylalanine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    cp   0.0000
+ ATOM CD1   cp   -.1305
+ ATOM HD1   h    0.1305
+ ATOM CD2   cp   -.1305
+ ATOM HD2   h    0.1305
+GROUP
+ ATOM CE1   cp   -.1305
+ ATOM HE1   h    0.1305
+ ATOM CE2   cp   -.1305
+ ATOM HE2   h    0.1305
+ ATOM CZ    cp   -.1305
+ ATOM HZ    h    0.1305
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CD2  CG        CE1  CD1
+BOND CE2  CD2       CZ   CE1       CZ   CE2                      N    HN
+BOND N    CA        O    C         C    CA        C    +N        CA   HA
+BOND CB   HB1       CB   HB2       CD1  HD1       CD2  HD2       CE1  HE1
+BOND CE2  HE2       CZ   HZ
+IMPH CE1  CD1  CG   CD2       CE2  CD2  CG   CD1       CZ   CE1  CD1  CG
+IMPH CZ   CE2  CD2  CG        CE2  CZ   CE1  CD1       N    -C   CA   HN
+IMPH CG   CD1  CD2  CB        CD1  CG   CE1  HD1       CD2  CG   CE2  HD2
+IMPH CE1  CZ   CE2  CD2       CE1  CD1  CZ   HE1       CE2  CD2  CZ   HE2
+IMPH CZ   CE1  CE2  HZ        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  240.00    0.00   0.0000  !  90.0?
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00   90.00    0.00   0.0000
+IC   CD1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *CD1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  CE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CG   *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD1  CE1  CZ     0.0000    0.00    0.00    0.00   0.0000
+IC   CZ   CD1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ   CD2  *CE2 HE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CE2  *CZ  HZ     0.0000    0.00  180.00    0.00   0.0000
+
+RESI PRO           0.00  !  Proline
+GROUP
+ ATOM N     n    -.4216
+ ATOM CD    c    0.1048
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND HA   CA        CB   CA        HB1  CB        HB2  CB        CG   CB
+BOND HG1  CG        HG2  CG        CD   CG        HD1  CD        HD2  CD
+BOND                N    CA        O    C         C    CA        C    +N
+BOND N    CD
+IMPH N    CD   CA   -C     C    CA    +N   O
+ACCE O    C
+IC   -C   CA   *N   CD     0.0000    0.00  180.00  108.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  -75.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00    0.00  108.00   0.0000 
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   N    CG   *CD  HD1    0.0000    0.00  120.00    0.00   0.0000
+IC   N    CG   *CD  HD2    0.0000    0.00  240.00    0.00   0.0000
+PATC  FIRS PROP
+
+RESI SER           0.00  !  Serine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    0.0073
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM OG    o    -.5374
+ ATOM HG    h*   0.4241
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        OG   CB                       N    HN        N    CA
+BOND O    C         C    CA        C    +N        CA   HA        CB   HB1
+BOND CB   HB2       OG   HG
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HG   OG
+ACCE OG
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   OG     0.0000    0.00  180.00    0.00   0.0000
+IC   HN   N    CA   CB     0.0000    0.00 -120.00    0.00   0.0000
+IC   HN   N    CA   C      0.0000    0.00    0.00    0.00   0.0000
+IC   HN   N    CA   HA     0.0000    0.00  120.00    0.00   0.0000
+IC   OG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   OG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   OG   HG     0.0000    0.00  180.00    0.00   0.0000
+
+RESI THR           0.00  !  Threonine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    0.0603
+ ATOM HB    h    0.0530
+ ATOM OG1   o    -.5374
+ ATOM HG1   h*   0.4241
+GROUP
+ ATOM CG2   c    -.1590
+ ATOM HG21  h    0.0530
+ ATOM HG22  h    0.0530
+ ATOM HG23  h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        OG1  CB        CG2  CB                       N    HN
+BOND N    CA        O    C         C    CA        C    +N        CA   HA
+BOND CB   HB        OG1  HG1       CG2  HG21      CG2  HG22      CG2  HG23
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HG1  OG1
+ACCE OG1
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   OG1    0.0000    0.00  180.00    0.00   0.0000
+IC   HN   N    CA   CB     0.0000    0.00 -120.00    0.00   0.0000
+IC   HN   N    CA   C      0.0000    0.00    0.00    0.00   0.0000
+IC   HN   N    CA   HA     0.0000    0.00  120.00    0.00   0.0000
+IC   OG1  CA   *CB  HB     0.0000    0.00  120.00    0.00   0.0000
+IC   OG1  CA   *CB  CG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   OG1  HG1    0.0000    0.00  180.00    0.00   0.0000
+IC   CA   CB   CG2  HG21   0.0000    0.00  180.00    0.00   0.0000
+IC   HG21 CB   *CG2 HG22   0.0000    0.00  120.00    0.00   0.0000
+IC   HG21 CB   *CG2 HG23   0.0000    0.00  240.00    0.00   0.0000
+
+RESI TRP           0.00  !  Tryptophan  
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    cp   -.1050
+ ATOM CD2   cp   -.0110
+ ATOM CE2   cp   0.1480
+ ATOM CE3   cp   -.1200
+ ATOM HE3   h    0.1300
+GROUP
+ ATOM CD1   cp   -.0280
+ ATOM HD1   h    0.1610
+ ATOM NE1   nh   -.4440
+ ATOM HE1   h*   0.3690
+GROUP
+ ATOM CZ2   cp   -.1900
+ ATOM HZ2   h    0.1430
+ ATOM CZ3   cp   -.1880
+ ATOM HZ3   h    0.1390
+ ATOM CH2   cp   -.1350
+ ATOM HH2   h    0.1310
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CD2  CG        NE1  CD1
+BOND CE2  CD2       CZ2  CE2       CZ3  CE3       CH2  CZ2       
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CZ3  CH2       CD2  CE3       NE1  CE2       CA   HA        CB   HB1
+BOND CB   HB2       CD1  HD1       NE1  HE1       CE3  HE3       CZ2  HZ2
+BOND CZ3  HZ3       CH2  HH2
+IMPH NE1  CD1  CG   CD2       CE2  CD2  CG   CD1       CE2  NE1  CD1  CG
+IMPH NE1  CE2  CD2  CG        CH2  CZ2  CE2  CD2       CH2  CZ3  CE3  CD2
+IMPH CZ3  CH2  CZ2  CE2       CE3  CZ3  CH2  CZ2       CE2  CD2  CE3  CZ3
+IMPH CD1  NE1  CE2  CD2       N    -C   CA   HN        CG   CD1  CD2  CB
+IMPH CE3  CD2  CE2  CZ2       CD2  CG   CE3  CE2       CE2  NE1  CZ2  CD2
+IMPH CD1  CG   NE1  HD1       NE1  CD1  CE2  HE1
+IMPH CE3  CZ3  CD2  HE3       CZ2  CE2  CH2  HZ2
+IMPH CZ3  CE3  CH2  HZ3       CH2  CZ2  CZ3  HH2       C    CA    +N   O
+DONO HN   N
+DONO HE1  NE1
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  240.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD2    0.0000    0.00   90.00    0.00   0.0000
+IC   CD2  CB   *CG  CD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CG   CD2  CE2    0.0000    0.00    0.00    0.00   0.0000
+IC   CG   CD2  CE2  NE1    0.0000    0.00    0.00    0.00   0.0000
+IC   CE2  CG   *CD2 CE3    0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CD2  CE3  CZ3    0.0000    0.00    0.00    0.00   0.0000
+IC   CD2  CE3  CZ3  CH2    0.0000    0.00    0.00    0.00   0.0000
+IC   CE3  CZ3  CH2  CZ2    0.0000    0.00    0.00    0.00   0.0000
+IC   CZ3  CD2  *CE3 HE3    0.0000    0.00  180.00    0.00   0.0000
+IC   CH2  CE3  *CZ3 HZ3    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ2  CZ3  *CH2 HH2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CH2  *CZ2 HZ2    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CE2  *NE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   NE1  *CD1 HD1    0.0000    0.00  180.00    0.00   0.0000
+
+RESI TYR           0.00  !  Tyrosine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    cp   -.0490
+GROUP
+ ATOM CD1   cp   -.0850
+ ATOM HD1   h    0.1230
+ ATOM CE1   cp   -.2350
+ ATOM HE1   h    0.1520
+GROUP
+ ATOM CD2   cp   -.0850
+ ATOM HD2   h    0.1230
+ ATOM CE2   cp   -.2350
+ ATOM HE2   h    0.1520
+GROUP
+ ATOM CZ    cp   0.2580
+ ATOM OH    o    -.4930
+ ATOM HH    h*   0.3740
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CD2  CG        CE1  CD1
+BOND CE2  CD2       CZ   CE1       CZ   CE2       OH   CZ        
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2       CD1  HD1       CD2  HD2
+BOND CE1  HE1       CE2  HE2       OH   HH
+IMPH CE1  CD1  CG   CD2       CE2  CD2  CG   CD1       CZ   CE1  CD1  CG
+IMPH CZ   CE2  CD2  CG        CE2  CZ   CE1  CD1       CE1  CZ   CE2  CD2
+IMPH N    -C   CA   HN        CG   CD1  CD2  CB        CD1  CG   CE1  HD1
+IMPH CD2  CG   CE2  HD2       CE1  CD1  CZ   HE1       CE2  CD2  CZ   HE2
+IMPH CZ   CE1  CE2  OH        C    CA    +N   O
+DONO HN   N
+DONO HH   OH
+ACCE OH
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  240.00    0.00   0.0000  !  90.0?
+IC   HN   N    CA   CB     0.0000    0.00 -120.00    0.00   0.0000
+IC   HN   N    CA   C      0.0000    0.00    0.00    0.00   0.0000
+IC   HN   N    CA   HA     0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00   90.00    0.00   0.0000
+IC   CD1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *CD1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  CE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CG   *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD1  CE1  CZ     0.0000    0.00    0.00    0.00   0.0000
+IC   CZ   CD1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ   CD2  *CE2 HE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CE2  *CZ  OH     0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CZ   OH   HH     0.0000    0.00  180.00    0.00   0.0000
+
+RESI VAL           0.00  !  Valine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.0530
+ ATOM HB    h    0.0530
+ ATOM CG1   c    -.1590
+ ATOM HG11  h    0.0530
+ ATOM HG12  h    0.0530
+ ATOM HG13  h    0.0530
+ ATOM CG2   c    -.1590
+ ATOM HG21  h    0.0530
+ ATOM HG22  h    0.0530
+ ATOM HG23  h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG1  CB        CG2  CB                       N    HN
+BOND N    CA        O    C         C    CA        C    +N        CA   HA
+BOND CB   HB        CG1  HG11      CG1  HG12      CG1  HG13      CG2  HG21
+BOND CG2  HG22      CG2  HG23
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG1    0.0000    0.00  180.00    0.00   0.0000
+IC   CG1  CA   *CB  CG2    0.0000    0.00  120.00    0.00   0.0000
+IC   CG1  CA   *CB  HB     0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG1  HG11   0.0000    0.00  180.00    0.00   0.0000
+IC   HG11 CB   *CG1 HG12   0.0000    0.00  120.00    0.00   0.0000
+IC   HG11 CB   *CG1 HG13   0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG2  HG21   0.0000    0.00  180.00    0.00   0.0000
+IC   HG21 CB   *CG2 HG22   0.0000    0.00  120.00    0.00   0.0000
+IC   HG21 CB   *CG2 HG23   0.0000    0.00  240.00    0.00   0.0000
+
+RESI ACE          0.00
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+ ATOM CH3   c    -.1590
+ ATOM H1    h    0.0530
+ ATOM H2    h    0.0530
+ ATOM H3    h    0.0530
+BOND   CH3 C   C O   C +N
+BOND   H1 CH3    H2 CH3    H3 CH3 
+IMPH   C CH3 +N O
+IC     CH3 C +N +CA        0.00  0.00  180.00  0.00  0.00
+IC     H1  CH3 C +N        0.00  0.00   60.00  0.00  0.00
+IC     H2  CH3 C +N        0.00  0.00  180.00  0.00  0.00
+IC     H3  CH3 C +N        0.00  0.00  240.00  0.00  0.00
+IC     CH3 +N *C O         0.00  0.00  180.00  0.00  0.00
+PATCH FIRST NONE
+
+! Water models
+
+RESI TIP3    .000   !  TIPS3P
+GROUP
+ ATOM OH2   o*   -.7982
+ ATOM H1    h*   0.3991
+ ATOM H2    h*   0.3991
+BOND OH2  H1        OH2  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+PATC  FIRS NONE LAST NONE
+
+RESI  WAT    .000   !  TIPS3P  used for PDB files with Crystal waters
+GROUP
+ ATOM O     o*   -.7982
+ ATOM H1    h*   0.3991
+ ATOM H2    h*   0.3991
+BOND O  H1        O  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 O H2
+PATC  FIRS NONE LAST NONE
+
+RESI  HOH    .000   !  TIPS3P  used for PDB files with Crystal waters
+GROUP
+ ATOM O     o*   -.7982
+ ATOM H1    h*   0.3991
+ ATOM H2    h*   0.3991
+BOND O  H1        O  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 O H2
+PATC  FIRS NONE LAST NONE
+
+RESI  DOD    .000   !  TIPS3P  used for PDB files with Crystal waters
+GROUP
+ ATOM O     o*   -.7982
+ ATOM D1    h*   0.3991
+ ATOM D2    h*   0.3991
+BOND O  D1        O  D2        D1   D2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  D1 O D2
+PATC  FIRS NONE LAST NONE
+
+RESI  OH2    .000
+GROUP
+ ATOM OH2   o*   -.7982
+ ATOM H1    h*   0.3991
+ ATOM H2    h*   0.3991
+BOND OH2  H1        OH2  H2
+ACCE OH2
+PATC  FIRS NONE LAST NONE
+
+! This section is from AMINO2H.RTF and includes topology definitions 
+! for a number of "abnormal" amino acids as well as other 
+! amino acid-like structures.
+!
+! The following residue definitions comprise other common amino acids
+!
+
+RESI ACC           0.00  !  Cyclohexylglycine
+GROU
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.2108
+GROU
+ ATOM CB1   c    -.1060
+ ATOM HB11  h    0.0530
+ ATOM HB12  h    0.0530
+ ATOM CB2   c    -.1060
+ ATOM HB21  h    0.0530
+ ATOM HB22  h    0.0530
+ ATOM CG1   c    -.1060
+ ATOM HG11  h    0.0530
+ ATOM HG12  h    0.0530
+ ATOM CG2   c    -.1060
+ ATOM HG21  h    0.0530
+ ATOM HG22  h    0.0530
+ ATOM CD    c    -.1060
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+GROU
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA C   C O   C +N
+BOND  CA CB1   CB1 HB11   CB1 HB12   CB1 CG1   CG1 HG11   CG1 HG12
+BOND  CG1 CD   CD HD1   CD HD2   CD CG2   CG2 HG21   CG2 HG22
+BOND  CG2 CB2   CB2 HB21   CB2 HB22   CB2 CA
+!DIHE  -C N CA C   N CA C +N   CA C +N +CA
+!DIHE  N CA CB1 CG1   CA CB1 CG1 CD   CB1 CG1 CD CG2   CG1 CD CG2 CB2
+!DIHE  CD CG2 CB2 CA   CG2 CB2 CA CB1
+IMPH  N -C CA HN   C CA +N O
+DONO  HN N
+ACCE  O C
+IC    -C N CA C         0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN       0.00  0.00  180.00  0.00  0.00
+IC    N CA C +N         0.00  0.00  180.00  0.00  0.00
+IC    CA +N *C O        0.00  0.00  180.00  0.00  0.00
+IC    CA C +N +CA       0.00  0.00  180.00  0.00  0.00
+IC    N C *CA CB1       0.00  0.00  120.00  0.00  0.00
+IC    N C *CA CB2       0.00  0.00  240.00  0.00  0.00
+IC    N CA CB1 CG1      0.00  0.00  240.00  0.00  0.00  !  Check
+IC    CG1 CA *CB1 HB11  0.00  0.00  120.00  0.00  0.00
+IC    CG1 CA *CB1 HB12  0.00  0.00  240.00  0.00  0.00
+IC    CA CB1 CG1 CD     0.00  0.00   51.60  0.00  0.00
+IC    CD CB1 *CG1 HG11  0.00  0.00  120.00  0.00  0.00
+IC    CD CB1 *CG1 HG12  0.00  0.00  240.00  0.00  0.00
+IC    CB1 CG1 CD CG2    0.00  0.00  -51.60  0.00  0.00
+IC    CG2 CG1 *CD HD1   0.00  0.00  120.00  0.00  0.00
+IC    CG2 CG1 *CD HD2   0.00  0.00  240.00  0.00  0.00
+IC    CG1 CD CG2 CB2    0.00  0.00   51.60  0.00  0.00
+IC    CB2 CD *CG2 HG21  0.00  0.00  120.00  0.00  0.00
+IC    CB2 CD *CG2 HG22  0.00  0.00  240.00  0.00  0.00
+IC    CA CG2 *CB2 HB21  0.00  0.00  120.00  0.00  0.00
+IC    CA CG2 *CB2 HB22  0.00  0.00  240.00  0.00  0.00
+
+RESI ANAP          0.00  !  Alphanaphthylphenylalanine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    cp   -.0210
+GROUP
+ ATOM CD1   cp   -.1380
+ ATOM HD1   h    0.1340
+ ATOM CE1   cp   -.1380
+ ATOM HE1   h    0.1340
+GROUP
+ ATOM CD2   cp   0.0500
+ ATOM CE2   cp   0.0500
+GROUP
+ ATOM CZ1   cp   -.1520
+ ATOM HZ1   h    0.1310
+GROUP 
+ ATOM CE3   cp   -.1520
+ ATOM HE3   h    0.1310
+ ATOM CZ3   cp   -.1380
+ ATOM HZ3   h    0.1340
+ ATOM CH    cp   -.1380
+ ATOM HH    h    0.1340
+ ATOM CZ2   cp   -.1520
+ ATOM HZ2   h    0.1310
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CD2  CG        CE1  CD1
+BOND CE2  CD2       CZ1  CE1       CZ1  CE2       
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2       CD1  HD1       
+BOND CE1  HE1       CZ1  HZ1 
+BOND CD2  CE3       CE3  HE3       CE3  CZ3       CZ3  HZ3       CZ3  CH
+BOND CH   HH        CH   CZ2       CZ2  HZ2       CZ2  CE2
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE CG   CB   CA   N         CD1  CG   CB   CA        
+IMPH CE1  CD1  CG   CD2       CE2  CD2  CG   CD1       CZ1  CE1  CD1  CG
+IMPH CZ1  CE2  CD2  CG        CE2  CZ1  CE1  CD1       CE1  CZ1  CE2  CD2
+IMPH N    -C   CA   HN        CG   CD1  CD2  CB        CD1  CG   CE1  HD1
+IMPH CE1  CD1  CZ1  HE1       
+IMPH CZ1  CE1  CE2  HZ1       C    CA    +N   O
+!IMPH CD2  CE2  CG   CE3       CE2  CZ1   CD2  CZ2
+! inverted for new IMPH rules
+IMPH CD2  CG   CE3  CE2       CE2  CZ1   CZ2  CD2  
+IMPH CE2  CD2  CE3  CZ3       CD2  CE3   CZ3  CH       CE3  CZ3  CH   CZ2
+IMPH CZ3  CH   CZ2  CE2       CH   CZ2   CE2  CD2      CE3  CD2  CE2  CZ2
+IMPH CE3  CZ3  CD2  HE3       CZ3  CH    CE3  HZ3      CH   CZ2   CZ3  HH
+IMPH CZ2  CE2  CH   HZ2
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  240.00    0.00   0.0000  !  90.0?
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00   90.00    0.00   0.0000
+IC   CD1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *CD1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  CE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CG   *CD2 CE3    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD1  CE1  CZ1    0.0000    0.00    0.00    0.00   0.0000
+IC   CZ1  CD1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ1  CD2  *CE2 CZ2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CE2  *CZ1  HZ1   0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CD2  CE3  CZ3    0.0000    0.00    0.00    0.00   0.0000
+IC   CZ3  CD2  *CE3 HE3    0.0000    0.00  180.00    0.00   0.0000
+IC   CD2  CE3  CZ3  CH     0.0000    0.00    0.00    0.00   0.0000
+IC   CH   CE3  *CZ3 HZ3    0.0000    0.00  180.00    0.00   0.0000
+IC   CE3  CZ3  CH   CZ2    0.0000    0.00    0.00    0.00   0.0000
+IC   CZ2  CZ3  *CH  HH     0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CH   *CZ2 HZ2    0.0000    0.00  180.00    0.00   0.0000
+
+RESI CHXA          0.00  !  Cyclohexylalanine
+GROU
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROU
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.0530
+ ATOM HG    h    0.0530
+ ATOM CD1   c    -.1060
+ ATOM HD11  h    0.0530
+ ATOM HD12  h    0.0530
+ ATOM CD2   c    -.1060
+ ATOM HD21  h    0.0530
+ ATOM HD22  h    0.0530
+ ATOM CE1   c    -.1060
+ ATOM HE11  h    0.0530
+ ATOM HE12  h    0.0530
+ ATOM CE2   c    -.1060
+ ATOM HE21  h    0.0530
+ ATOM HE22  h    0.0530
+ ATOM CZ    c    -.1060
+ ATOM HZ1   h    0.0530
+ ATOM HZ2   h    0.0530
+GROU
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA C   C O   C +N
+BOND  CA HA   CA CB   CB HB1   CB HB2   CB CG   CG HG
+BOND  CG CD1   CD1 HD11   CD1 HD12   CG CD2   CD2 HD21   CD2 HD22
+BOND  CD1 CE1   CE1 HE11   CE1 HE12   CD2 CE2   CE2 HE21   CE2 HE22
+BOND  CE1 CZ   CE2 CZ   CZ HZ1   CZ HZ2
+!DIHE  -C N CA C   N CA C +N   CA C +N +CA
+!DIHE  N CA CB CG   CA CB CG CD1   CB CG CD1 CE1   CG CD1 CE1 CZ
+!DIHE  CD1 CE1 CZ CE2   CE1 CZ CE2 CD2   CZ CE2 CD2 CG   
+!DIHE  CE2 CD2 CG CD1
+IMPH  N -C CA HN   C CA +N O  
+DONO  HN N
+ACCE  O C
+IC    -C N CA C         0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN       0.00  0.00  180.00  0.00  0.00
+IC    N CA C +N         0.00  0.00  180.00  0.00  0.00
+IC    CA +N *C O        0.00  0.00  180.00  0.00  0.00
+IC    CA C +N +CA       0.00  0.00  180.00  0.00  0.00
+IC    N C *CA CB        0.00  0.00  120.00  0.00  0.00
+IC    N C *CA HA        0.00  0.00  240.00  0.00  0.00
+IC    N CA CB CG        0.00  0.00  180.00  0.00  0.00
+IC    CG CA *CB HB1     0.00  0.00  120.00  0.00  0.00
+IC    CG CA *CB HB2     0.00  0.00  240.00  0.00  0.00
+IC    CA CB CG CD1      0.00  0.00   60.00  0.00  0.00
+IC    CD1 CB *CG CD2    0.00  0.00  120.00  0.00  0.00
+IC    CD1 CB *CG HG     0.00  0.00  240.00  0.00  0.00
+IC    CB CG CD1 CE1     0.00  0.00 -180.00  0.00  0.00
+IC    CE1 CG *CD1 HD11  0.00  0.00  120.00  0.00  0.00
+IC    CE1 CG *CD1 HD12  0.00  0.00  240.00  0.00  0.00
+IC    CG CD1 CE1 CZ     0.00  0.00  -51.60  0.00  0.00
+IC    CZ CD1 *CE1 HE11  0.00  0.00  120.00  0.00  0.00
+IC    CZ CD1 *CE1 HE12  0.00  0.00  240.00  0.00  0.00
+IC    CD1 CE1 CZ CE2    0.00  0.00   51.60  0.00  0.00
+IC    CE2 CE1 *CZ HZ1   0.00  0.00  120.00  0.00  0.00
+IC    CE2 CE1 *CZ HZ2   0.00  0.00  240.00  0.00  0.00
+IC    CE1 CZ CE2 CD2    0.00  0.00  -51.60  0.00  0.00
+IC    CD2 CZ *CE2 HE21  0.00  0.00  120.00  0.00  0.00
+IC    CD2 CZ *CE2 HE22  0.00  0.00  240.00  0.00  0.00
+IC    CE2 CG *CD2 HD21  0.00  0.00  120.00  0.00  0.00
+IC    CE2 CG *CD2 HD22  0.00  0.00  240.00  0.00  0.00
+
+RESI CIT           0.00  !  Citrulline  (check charges)
+GROU
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROU
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROU
+ ATOM CD    c    0.1048
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM NE    n    -.6503
+ ATOM HE    h*   0.4395
+GROU
+ ATOM CZ    c'   0.3964
+ ATOM OH2   o'   -.3964
+GROU
+ ATOM NH1   n    -.8790
+ ATOM HH11  h*   0.4395
+ ATOM HH12  h*   0.4395
+GROU
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA C   C O   C +N
+BOND  CA HA   CA CB   CB HB1   CB HB2   CB CG   CG HG1   CG HG2
+BOND  CG CD   CD HD1   CD HD2   CD NE   NE HE   NE CZ
+BOND  CZ NH1   NH1 HH11   NH1 HH12   CZ OH2
+!DIHE  -C N CA C   N CA C +N   CA C +N +CA
+!DIHE  N CA CB CG   CA CB CG CD   CB CG CD NE
+!DIHE  CG CD NE CZ   CD NE CZ NH1   NE CZ NH1 HH11
+IMPH  N -C CA HN   C CA +N O  
+IMPH  NE CZ CD HE   CZ NH1 OH2  NE 
+!IMPH  NH1 HH11 CZ HH12
+!inverted for new IMPH rules
+IMPH  NH1 HH11 HH12 CZ 
+DONO  HN N
+DONO  HE NE
+DONO  HH11 NH1
+DONO  HH12 NH1
+ACCE  O C
+ACCE  OH2 CZ
+IC    -C N CA C         0.00  0.00  180.00  0.00  0.00
+IC    N CA C +N         0.00  0.00  180.00  0.00  0.00
+IC    CA C +N +CA       0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN       0.00  0.00  180.00  0.00  0.00
+IC    CA +N *C O        0.00  0.00  180.00  0.00  0.00
+IC    N C *CA CB        0.00  0.00  120.00  0.00  0.00
+IC    N C *CA HA        0.00  0.00  240.00  0.00  0.00
+IC    N CA CB CG        0.00  0.00  180.00  0.00  0.00
+IC    CG CA *CB HB1     0.00  0.00  120.00  0.00  0.00
+IC    CG CA *CB HB2     0.00  0.00  240.00  0.00  0.00
+IC    CA CB CG CD       0.00  0.00  180.00  0.00  0.00
+IC    CD CB *CG HG1     0.00  0.00  120.00  0.00  0.00
+IC    CD CB *CG HG2     0.00  0.00  240.00  0.00  0.00
+IC    CB CG CD NE       0.00  0.00  180.00  0.00  0.00
+IC    NE CG *CD HD1     0.00  0.00  120.00  0.00  0.00
+IC    NE CG *CD HD2     0.00  0.00  240.00  0.00  0.00
+IC    CG CD NE CZ       0.00  0.00  180.00  0.00  0.00
+IC    CZ CD *NE HE      0.00  0.00  180.00  0.00  0.00
+IC    CD NE CZ NH1      0.00  0.00  180.00  0.00  0.00
+IC    NH1 NE *CZ OH2    0.00  0.00  180.00  0.00  0.00
+IC    NE CZ NH1 HH11    0.00  0.00  180.00  0.00  0.00
+IC    HH11 CZ *NH1 HH12 0.00  0.00  180.00  0.00  0.00
+
+
+RESI   GLA     -2.0   ! Gamma carboxy glutamic acid
+GROU
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROU
+ ATOM CB    c   -0.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROU
+ ATOM CG    c    -.5130
+ ATOM HG    h    0.0530
+GROU
+ ATOM CD1   c-   0.2974
+ ATOM OE1   o-   -.5337
+ ATOM OE2   o-   -.5337
+GROU
+ ATOM CD2   c-   0.2974
+ ATOM OE3   o-   -.5337
+ ATOM OE4   o-   -.5337
+GROU
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND N    CA        CA   C         C    +N        C    O         N    HN
+BOND CA   CB        CB   CG        CG   CD1       CD1  OE1       CD1  OE2
+BOND CG   CD2       CD2  OE3       CD2  OE4 
+BOND CA   HA        CB   HB1       CB   HB2       CG    HG        
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE N    CA   CB   CG        CA   CB   CG   CD1       CB   CG   CD1  OE1
+!DIHE CB   CG   CD2  OE3
+IMPH N    -C   CA   HN         C    CA   +N   O        
+IMPH CD1  OE1  OE2  CG        CD2  OE3  OE4  CG       
+DONO  HN     N
+ACCE  OE1  CD1
+ACCE  OE2  CD1
+ACCE  OE3  CD2
+ACCE  OE4  CD2
+ACCE  O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CA   CG   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CA   CG   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CD1  *CG  HG     0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CD1  *CG  CD2    0.0000    0.00  120.00    0.00   0.0000 
+IC   CB   CG   CD1  OE1    0.0000    0.00  180.00    0.00   0.0000
+IC   OE1  CG   *CD1 OE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  OE3    0.0000    0.00  180.00    0.00   0.0000
+IC   OE3  CG   *CD2 OE4    0.0000    0.00  180.00    0.00   0.0000
+
+RESI DPRO          0.00  !  D-Proline
+! Note:  This residue may not be used as an N-terminal
+!        For other D-residues, apply the patch LTOD
+GROUP
+ ATOM N     n    -.4216
+ ATOM CD    c    0.1048
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND HA   CA        CB   CA        HB1  CB        HB2  CB        CG   CB
+BOND HG1  CG        HG2  CG        CD   CG        HD1  CD        HD2  CD
+BOND                N    CA        O    C         C    CA        C    +N
+BOND N    CD
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE -C   N    CD   CG        N    CA   CB   CG        CA   CB   CG   CD
+!DIHE N    CD   CG   CB
+IMPH N    CA   CD   -C         C    CA    +N   O
+ACCE O    C
+PATC  FIRS PROP
+IC   -C   CA   *N   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00   60.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  240.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  120.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000  108.00    0.00  108.00   0.0000  !  -60.0?
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   N    CG   *CD  HD1    0.0000    0.00  120.00    0.00   0.0000
+IC   N    CG   *CD  HD2    0.0000    0.00  240.00    0.00   0.0000
+
+RESI HCYS          0.00  !  Homocysteine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    c    -.0410
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM SD    s    -.2550
+ ATOM HD    h    0.1900
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        N    HN        N    CA        CB   CG        CG   SD
+BOND O    C         C    CA        C    +N        CA   HA        CB   HB1
+BOND CB   HB2       CG   HG1       CG   HG2       SD   HD
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE N    CA   CB   CG        CA   CB   CG   SD        CB   CG   SD   HD
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HD   SD
+ACCE SD   CG
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   SD     0.0000    0.00  180.00    0.00   0.0000
+IC   SD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   SD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   SD   HD     0.0000    0.00  180.00    0.00   0.0000
+
+RESI HLYS          1.00  !  5-Hydroxylysine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD1   c    0.0603
+ ATOM HD1   h    0.0530
+ ATOM OD2   o    -.5374
+ ATOM HD2   h*   0.4241
+GROUP
+ ATOM CE    c    0.0990
+ ATOM HE1   h    0.0530
+ ATOM HE2   h    0.0530
+ ATOM NZ    n+   -.0450
+ ATOM HZ1   h+   0.2800
+ ATOM HZ2   h+   0.2800
+ ATOM HZ3   h+   0.2800
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CE   CD1       NZ   CE
+BOND                N    HN        N    CA        O    C         C    CA
+BOND C    +N        CA   HA        CB   HB1       CB   HB2       CG   HG1
+BOND CG   HG2       CD1  HD1       CD1  OD2       CE   HE1       CE   HE2
+BOND NZ   HZ1       NZ   HZ2       NZ   HZ3       OD2  HD2
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE CG   CB   CA   N         CD1  CG   CB   CA        CE   CD1  CG   CB
+!DIHE NZ   CE   CD1  CG
+!DIHE HZ1  NZ   CE   CD1
+!DIHE CG   CD1  OD2  HD2
+IMPH N    -C   CA   HN        C    CA    +N   O       
+DONO HN   N
+DONO HZ1  NZ
+DONO HZ2  NZ
+DONO HZ3  NZ
+DONO HD2  OD2
+ACCE OD2
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD1  CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD1  CE     0.0000    0.00  180.00    0.00   0.0000
+IC   CE   CG   *CD1 HD1    0.0000    0.00  120.00    0.00   0.0000
+IC   CE   CG   *CD1 OD2    0.0000    0.00  240.00    0.00   0.0000
+IC   CG   CD1  OD2  HD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD1  CE   NZ     0.0000    0.00  180.00    0.00   0.0000
+IC   NZ   CD1  *CE  HE1    0.0000    0.00  120.00    0.00   0.0000
+IC   NZ   CD1  *CE  HE2    0.0000    0.00  240.00    0.00   0.0000
+IC   CD1  CE   NZ   HZ1    0.0000    0.00  180.00    0.00   0.0000
+IC   HZ1  CE   *NZ  HZ2    0.0000    0.00  120.00    0.00   0.0000
+IC   HZ1  CE   *NZ  HZ3    0.0000    0.00  240.00    0.00   0.0000
+
+RESI HPHE          0.00  !  Homophenylalanine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD    cp   0.0000
+ ATOM CE1   cp   -.1305
+ ATOM HE1   h    0.1305
+ ATOM CE2   cp   -.1305
+ ATOM HE2   h    0.1305
+GROUP
+ ATOM CZ1   cp   -.1305
+ ATOM HZ1   h    0.1305
+ ATOM CZ2   cp   -.1305
+ ATOM HZ2   h    0.1305
+ ATOM CH    cp   -.1305
+ ATOM HH    h    0.1305
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CE1  CD        CE2  CD        CZ1  CE1
+BOND CZ2  CE2       CH   CZ1       CH   CZ2                      N    HN
+BOND N    CA        O    C         C    CA        C    +N        CA   HA
+BOND CB   HB1       CB   HB2       CE1  HE1       CE2  HE2       CZ1  HZ1
+BOND CZ2  HZ2       CH   HH        CG   CD        CG   HG1       CG   HG2
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE CG   CB   CA   N         CE1  CD   CG   CB        CA   CB   CG   CD
+IMPH CZ1  CE1  CD   CE2       CZ2  CE2  CD   CE1       CH   CZ1  CE1  CD
+IMPH CH   CZ2  CE2  CD        CZ2  CH   CZ1  CE1       N    -C   CA   HN
+!IMPH CD   CB   CE1  CE2       
+! corrected CB to CG and inverted for new IMPH rules
+IMPH CD   CE1  CE2  CG   
+IMPH CE1  CD   CZ1  HE1       CE2  CD   CZ2  HE2
+IMPH CZ1  CH   CZ2  CE2       CZ1  CE1  CH   HZ1       CZ2  CE2  CH   HZ2
+IMPH CH   CZ1  CZ2  HH        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  240.00    0.00   0.0000  !  90.0?
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD     0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   CD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   CD   CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *CD  CE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD   CE1  CZ1    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ1  CD   *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD   CE2  CZ2    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ2  CD   *CE2 HE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CD   CE1  CZ1  CH     0.0000    0.00    0.00    0.00   0.0000
+IC   CH   CE1  *CZ1 HZ1    0.0000    0.00  180.00    0.00   0.0000
+IC   CH   CE2  *CZ2 HZ2    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ1  CZ2  *CH  HH     0.0000    0.00  180.00    0.00   0.0000
+
+RESI HPRO          0.00  !  Hydroxyproline
+GROUP
+ ATOM N     n    -.4216
+ ATOM CD1   c    0.1048
+ ATOM HD11  h    0.0530
+ ATOM HD12  h    0.0530
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    0.0603
+ ATOM HG    h    0.0530
+ ATOM OD2   o    -.5374
+ ATOM HD21  h*   0.4241
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND HA   CA        CB   CA        HB1  CB        HB2  CB        CG   CB
+BOND HG   CG        CD1  CG        HD11 CD1       HD12 CD1
+BOND                N    CA        O    C         C    CA        C    +N
+BOND N    CD1       CG   OD2       OD2  HD21
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE -C   N    CD1  CG        N    CA   CB   CG        CA   CB   CG   CD1
+!DIHE N    CD1  CG   CB        CB   CG   OD2  HD21
+IMPH N    CA   CD1   -C       C    CA   +N   O
+ACCE O    C
+ACCE OD2
+PATC  FIRS HPRP
+IC   -C   N    CA   C      0.0000    0.00  -60.00  108.00   0.0000
+IC   N    CA   C    +N     0.0000  108.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000  108.00  120.00  108.00   0.0000
+IC   N    C    *CA  HA     0.0000  108.00  240.00  108.00   0.0000
+IC   N    CA   CB   CG     0.0000  108.00  -60.00   92.00   0.0000  !  -60.0?
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000   92.00   60.00   92.00   0.0000  !  -60.0?
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CD1  CB   *CG  HG     0.0000    0.00  120.00    0.00   0.0000
+IC   N    CG   *CD1 HD11   0.0000    0.00  120.00    0.00   0.0000
+IC   N    CG   *CD1 HD12   0.0000    0.00  240.00    0.00   0.0000
+IC   CD1  CB   *CG  OD2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   OD2  HD21   0.0000    0.00  180.00    0.00   0.0000
+
+RESI PSER          -1.00  !  PhosphoSerine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    0.0073
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM OG    o    -.4613
+ ATOM PO4   p    1.3220
+ ATOM OC1   o-   -.8130
+ ATOM OC2   o-   -.8130
+ ATOM OT    o    -.7721
+ ATOM HT    h*   0.4241
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        OG   CB                       N    HN        N    CA
+BOND O    C         C    CA        C    +N        CA   HA        CB   HB1
+BOND CB   HB2       OG   PO4       PO4   OC1      PO4  OC2       PO4  OT
+BOND OT   HT
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE OG   CB   CA   N         PO4  OG   CB   CA        OT   PO4  OG   CB
+!DIHE HT   OT   PO4  OG
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HT   OT
+ACCE OC1  PO4
+ACCE OC2  PO4
+ACCE OG
+ACCE OT
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   OG     0.0000    0.00  180.00    0.00   0.0000
+IC   CA   CB   OG   PO4    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   OG   PO4  OT     0.0000    0.00  180.00    0.00   0.0000
+IC   OG   PO4  OT   HT     0.0000    0.00  180.00    0.00   0.0000
+IC   OG   OT   *PO4 OC1    0.0000    0.00  120.00    0.00   0.0000
+IC   OG   OT   *PO4 OC2    0.0000    0.00  240.00    0.00   0.0000
+IC   OG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   OG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   OG   HG     0.0000    0.00  180.00    0.00   0.0000
+
+RESI HSER          0.00  !  Homoserine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM CG    c    0.0073
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM OD    o    -.5374
+ ATOM HD    h*   0.4241
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        N    HN        N    CA        CB   CG        CG   OD
+BOND O    C         C    CA        C    +N        CA   HA        CB   HB1
+BOND CB   HB2       CG   HG1       CG   HG2       OD   HD
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE N    CA   CB   CG        CA   CB   CG   OD        CB   CG   OD   HD
+IMPH N    -C   CA   HN        C    CA    +N   O
+DONO HN   N
+DONO HD   OD
+ACCE OD
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   OD     0.0000    0.00  180.00    0.00   0.0000
+IC   OD   CB   *CG  HG1    0.0000    0.00  120.00    0.00   0.0000
+IC   OD   CB   *CG  HG2    0.0000    0.00  240.00    0.00   0.0000
+IC   CB   CG   OD   HD     0.0000    0.00  180.00    0.00   0.0000
+
+RESI PTYR          -1.00  !  PhosphoTyrosine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    cp   -.0490
+GROUP
+ ATOM CD1   cp   -.0850
+ ATOM HD1   h    0.1230
+ ATOM CE1   cp   -.2350
+ ATOM HE1   h    0.1520
+GROUP
+ ATOM CD2   cp   -.0850
+ ATOM HD2   h    0.1230
+ ATOM CE2   cp   -.2350
+ ATOM HE2   h    0.1520
+GROUP
+ ATOM CZ    cp   0.2580
+ ATOM OH    o    -.4670
+ ATOM PO4   p    1.3220
+ ATOM OC1   o-   -.8130
+ ATOM OC2   o-   -.8130
+ ATOM OT    o    -.7721
+ ATOM HT    h*   0.4241
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CD2  CG        CE1  CD1
+BOND CE2  CD2       CZ   CE1       CZ   CE2       OH   CZ        OH   PO4
+BOND PO4  OC1       PO4  OC2       PO4  OT        OT   HT
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2       CD1  HD1       CD2  HD2
+BOND CE1  HE1       CE2  HE2      
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE CG   CB   CA   N         CD1  CG   CB   CA        PO4   OH   CZ   CE1
+!DIHE CZ   OH   PO4  OT        OH   PO4  OT   HT
+IMPH CE1  CD1  CG   CD2       CE2  CD2  CG   CD1       CZ   CE1  CD1  CG
+IMPH CZ   CE2  CD2  CG        CE2  CZ   CE1  CD1       CE1  CZ   CE2  CD2
+IMPH N    -C   CA   HN        CG   CD1  CD2  CB        CD1  CG   CE1  HD1
+IMPH CD2  CG   CE2  HD2       CE1  CD1  CZ   HE1       CE2  CD2  CZ   HE2
+IMPH CZ   CE1  CE2  OH        C    CA    +N   O
+DONO HN   N
+DONO HT   OT
+ACCE OH
+ACCE OT   PO4
+ACCE OC1  PO4
+ACCE OC2  PO4
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  240.00    0.00   0.0000  !  90.0?
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00   90.00    0.00   0.0000
+IC   CD1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *CD1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  CE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CG   *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD1  CE1  CZ     0.0000    0.00    0.00    0.00   0.0000
+IC   CZ   CD1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ   CD2  *CE2 HE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CE2  *CZ  OH     0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CZ   OH   PO4    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ   OH   PO4  OT     0.0000    0.00  180.00    0.00   0.0000
+IC   OH   PO4  OT   HT     0.0000    0.00  180.00    0.00   0.0000
+IC   OH   OT   *PO4 OC1    0.0000    0.00  120.00    0.00   0.0000
+IC   OH   OT   *PO4 OC2    0.0000    0.00  240.00    0.00   0.0000
+
+RESI ORN           1.00  !  Ornithine
+GROU
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROU
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROU
+ ATOM CD    c    0.0990
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM NE    n+   -.0450
+ ATOM HE1   h+   0.2800
+ ATOM HE2   h+   0.2800
+ ATOM HE3   h+   0.2800
+GROU
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA C   C O   C +N
+BOND  CA HA   CA CB   CB HB1   CB HB2   CB CG   CG HG1   CG HG2
+BOND  CG CD   CD HD1   CD HD2   CD NE   NE HE1   NE HE2   NE HE3
+!DIHE  -C N CA C   N CA C +N   CA C +N +CA
+!DIHE  N CA CB CG   CA CB CG CD   CB CG CD NE
+!DIHE  CG CD NE HE3
+IMPH  N -C CA HN   C CA +N O
+DONO  HN N
+DONO  HE1 NE
+DONO  HE2 NE
+DONO  HE3 NE
+ACCE  O C
+IC    -C N CA C         0.00  0.00  180.00  0.00  0.00
+IC    N CA C +N         0.00  0.00  180.00  0.00  0.00
+IC    CA C +N +CA       0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN       0.00  0.00  180.00  0.00  0.00
+IC    CA +N *C O        0.00  0.00  180.00  0.00  0.00
+IC    N C *CA CB        0.00  0.00  120.00  0.00  0.00
+IC    N C *CA HA        0.00  0.00  240.00  0.00  0.00
+IC    N CA CB CG        0.00  0.00  180.00  0.00  0.00
+IC    CG CA *CB HB1     0.00  0.00  120.00  0.00  0.00
+IC    CG CA *CB HB2     0.00  0.00  240.00  0.00  0.00
+IC    CA CB CG CD       0.00  0.00  180.00  0.00  0.00
+IC    CD CB *CG HG1     0.00  0.00  120.00  0.00  0.00
+IC    CD CB *CG HG2     0.00  0.00  240.00  0.00  0.00
+IC    CB CG CD NE       0.00  0.00  180.00  0.00  0.00
+IC    NE CG *CD HD1     0.00  0.00  120.00  0.00  0.00
+IC    NE CG *CD HD2     0.00  0.00  240.00  0.00  0.00
+IC    CG CD NE HE1      0.00  0.00  180.00  0.00  0.00
+IC    HE1 CD *NE HE2    0.00  0.00  120.00  0.00  0.00
+IC    HE1 CD *NE HE3    0.00  0.00  240.00  0.00  0.00
+
+RESI PCLP          0.00  !  Parachlorophenylalanine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    cp   0.0060
+GROUP
+ ATOM CD1   cp   -.1160
+ ATOM HD1   h    0.1320
+ ATOM CE1   cp   -.1050
+ ATOM HE1   h    0.1420
+GROUP
+ ATOM CD2   cp   -.1160
+ ATOM HD2   h    0.1320
+ ATOM CE2   cp   -.1050
+ ATOM HE2   h    0.1420
+GROU
+ ATOM CZ    cp   -.0070
+ ATOM XCLH  cl   -.1050
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG   CB        CD1  CG        CD2  CG        CE1  CD1
+BOND CE2  CD2       CZ   CE1       CZ   CE2       XCLH CZ        
+BOND N    HN        N    CA        O    C         C    CA        C    +N
+BOND CA   HA        CB   HB1       CB   HB2       CD1  HD1       CD2  HD2
+BOND CE1  HE1       CE2  HE2
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE CG   CB   CA   N         CD1  CG   CB   CA        
+IMPH CE1  CD1  CG   CD2       CE2  CD2  CG   CD1       CZ   CE1  CD1  CG
+IMPH CZ   CE2  CD2  CG        CE2  CZ   CE1  CD1       CE1  CZ   CE2  CD2
+IMPH N    -C   CA   HN        CG   CD1  CD2  CB        CD1  CG   CE1  HD1
+IMPH CD2  CG   CE2  HD2       CE1  CD1  CZ   HE1       CE2  CD2  CZ   HE2
+IMPH CZ   CE1  CE2  XCLH      C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG     0.0000    0.00  240.00    0.00   0.0000  !  90.0?
+IC   CG   CA   *CB  HB1    0.0000    0.00  120.00    0.00   0.0000
+IC   CG   CA   *CB  HB2    0.0000    0.00  240.00    0.00   0.0000
+IC   CA   CB   CG   CD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CB   *CG  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD1  CE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CG   *CD1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG   CD2  CE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE2  CG   *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CG   CD1  CE1  CZ     0.0000    0.00    0.00    0.00   0.0000
+IC   CZ   CD1  *CE1 HE1    0.0000    0.00  180.00    0.00   0.0000
+IC   CZ   CD2  *CE2 HE2    0.0000    0.00  180.00    0.00   0.0000
+IC   CE1  CE2  *CZ  XCLH   0.0000    0.00  180.00    0.00   0.0000
+
+RESI PGLY          0.00  !  Phenylglycine
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROUP
+ ATOM CB    cp   0.0000
+ ATOM CG1   cp   -.1305
+ ATOM HG1   h    0.1305
+ ATOM CG2   cp   -.1305
+ ATOM HG2   h    0.1305
+GROUP
+ ATOM CD1   cp   -.1305
+ ATOM HD1   h    0.1305
+ ATOM CD2   cp   -.1305
+ ATOM HD2   h    0.1305
+ ATOM CE    cp   -.1305
+ ATOM HE    h    0.1305
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND CB   CA        CG1  CB        CG2  CB        CD1  CG1
+BOND CD2  CG2       CE   CD1       CE   CD2                      N    HN
+BOND N    CA        O    C         C    CA        C    +N        CA   HA
+BOND CG1  HG1       CG2  HG2       CD1  HD1
+BOND CD2  HD2       CE   HE
+!DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+!DIHE CG1  CB   CA   N         
+IMPH CD1  CG1  CB   CG2       CD2  CG2  CB   CG1       CE   CD1  CG1  CB
+IMPH CE   CD2  CG2  CB        CD2  CE   CD1  CG1       N    -C   CA   HN
+IMPH CB   CG1  CG2  CA        CG1  CB   CD1  HG1       CG2  CB   CD2  HG2
+IMPH CD1  CE   CD2  CG2       CD1  CG1  CE   HD1       CD2  CG2  CE   HD2
+IMPH CE   CD1  CD2  HE        C    CA    +N   O
+DONO HN   N
+ACCE O    C
+IC   -C   CA   *N   HN     0.0000    0.00  180.00    0.00   0.0000
+IC   -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+IC   +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+IC   CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+IC   N    C    *CA  CB     0.0000    0.00  120.00    0.00   0.0000
+IC   N    C    *CA  HA     0.0000    0.00  240.00    0.00   0.0000
+IC   N    CA   CB   CG1    0.0000    0.00  240.00    0.00   0.0000  !  90.0?
+IC   CG1  CA   *CB  CG2    0.0000    0.00  180.00    0.00   0.0000
+IC   CA   CB   CG1  CD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CB   *CG1 HG1    0.0000    0.00  180.00    0.00   0.0000
+IC   CA   CB   CG2  CD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CD2  CB   *CG2 HG2    0.0000    0.00  180.00    0.00   0.0000
+IC   CB   CG1  CD1  CE     0.0000    0.00    0.00    0.00   0.0000
+IC   CE   CG1  *CD1 HD1    0.0000    0.00  180.00    0.00   0.0000
+IC   CE   CG2  *CD2 HD2    0.0000    0.00  180.00    0.00   0.0000
+IC   CD1  CD2  *CE  HE     0.0000    0.00  180.00    0.00   0.0000
+
+RESI STAO          0.00  !  Statone residue
+GROU
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROU
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.0530
+ ATOM HG    h    0.0530
+ ATOM CD1   c    -.1590
+ ATOM HD11  h    0.0530
+ ATOM HD12  h    0.0530
+ ATOM HD13  h    0.0530
+ ATOM CD2   c    -.1590
+ ATOM HD21  h    0.0530
+ ATOM HD22  h    0.0530
+ ATOM HD23  h    0.0530
+GROU
+ ATOM CP    c"   0.3964
+ ATOM OP    o'   -.3964
+ ATOM CAP   c    -.1060
+ ATOM HA1P  h    0.0530
+ ATOM HA2P  h    0.0530
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA CP   CP OP   CP CAP   CAP C   C O   C +N
+BOND  CA HA   CA CB   CB HB1   CB HB2   CB CG   CG HG   CG CD1   CD1 HD11
+BOND  CD1 HD12   CD1 HD13   CG CD2   CD2 HD21   CD2 HD22   CD2 HD23
+BOND  CAP HA1P   CAP HA2P
+!DIHE  -C N CA CP   N CA CP CAP   CP CAP C +N   CAP C +N +CA
+!DIHE  N CA CB CG   CA CB CG CD1   CA CB CG CD2   CB CG CD1 HD11
+!DIHE  CB CG CD1 HD12    CB CG CD2 HD21   
+IMPH  N -C CA HN   CP CA CAP OP   C CAP +N O   
+DONO  HN N
+ACCE  OP CP
+ACCE  O C
+IC    -C N CA CP          0.00  0.00  180.00  0.00  0.00
+IC    N CA CP CAP         0.00  0.00  180.00  0.00  0.00
+IC    CA CP CAP C         0.00  0.00  180.00  0.00  0.00
+IC    CP CAP C +N         0.00  0.00  180.00  0.00  0.00
+IC    CAP C +N +CA        0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN         0.00  0.00  180.00  0.00  0.00
+IC    CA CAP *CP OP       0.00  0.00  180.00  0.00  0.00
+IC    CAP +N *C O         0.00  0.00  180.00  0.00  0.00
+IC    C CP *CAP HA1P      0.00  0.00  120.00  0.00  0.00
+IC    C CP *CAP HA2P      0.00  0.00  240.00  0.00  0.00
+IC    N CP *CA CB         0.00  0.00  120.00  0.00  0.00
+IC    N CP *CA HA         0.00  0.00  240.00  0.00  0.00
+IC    N CA CB CG          0.00  0.00  180.00  0.00  0.00
+IC    CG CA *CB HB1       0.00  0.00  120.00  0.00  0.00
+IC    CG CA *CB HB2       0.00  0.00  240.00  0.00  0.00
+IC    CA CB CG CD1        0.00  0.00  180.00  0.00  0.00
+IC    CD1 CB *CG HG       0.00  0.00  120.00  0.00  0.00
+IC    CD1 CB *CG CD2      0.00  0.00  240.00  0.00  0.00
+IC    CB CG CD1 HD11      0.00  0.00  180.00  0.00  0.00
+IC    HD11 CG *CD1 HD12   0.00  0.00  120.00  0.00  0.00
+IC    HD11 CG *CD1 HD13   0.00  0.00  240.00  0.00  0.00
+IC    CB CG CD2 HD21      0.00  0.00  180.00  0.00  0.00
+IC    HD21 CG *CD2 HD22   0.00  0.00  120.00  0.00  0.00
+IC    HD21 CG *CD2 HD23   0.00  0.00  240.00  0.00  0.00
+
+RESI STAI          0.00  !  Statine residue
+GROU
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1578
+ ATOM HA    h    0.0530
+GROU
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.0530
+ ATOM HG    h    0.0530
+ ATOM CD1   c    -.1590
+ ATOM HD11  h    0.0530
+ ATOM HD12  h    0.0530
+ ATOM HD13  h    0.0530
+ ATOM CD2   c    -.1590
+ ATOM HD21  h    0.0530
+ ATOM HD22  h    0.0530
+ ATOM HD23  h    0.0530
+GROU
+ ATOM CP    c    0.0603
+ ATOM HCP   h    0.0530
+ ATOM OP    o    -.5374
+ ATOM HOP   h*   0.4241
+ ATOM CAP   c    -.1060
+ ATOM HA1P  h    0.0530
+ ATOM HA2P  h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN  N CA  CA CP  CP OP  CP HCP   CP CAP   CAP C   C O   C +N
+BOND  CA HA   CA CB   CB HB1   CB HB2   CB CG   CG HG   CG CD1   CD1 HD11
+BOND  CD1 HD12   CD1 HD13   CG CD2   CD2 HD21   CD2 HD22   CD2 HD23
+BOND  CAP HA1P   CAP HA2P   OP HOP
+!DIHE  -C N CA CP   N CA CP CAP   CP CAP C +N   CAP C +N +CA
+!DIHE  N CA CB CG   CA CB CG CD1   CA CB CG CD2   CB CG CD1 HD11
+!DIHE  CB CG CD1 HD12     CB CG CD2 HD21  
+!DIHE  CA CP OP HOP
+IMPH  N -C CA HN      C CAP +N O   
+DONO  HN N
+DONO  HOP OP
+ACCE  OP CP
+ACCE  O C
+IC    -C N CA CP          0.00  0.00  180.00  0.00  0.00
+IC    N CA CP CAP         0.00  0.00  180.00  0.00  0.00
+IC    CA CP CAP C         0.00  0.00  180.00  0.00  0.00
+IC    CP CAP C +N         0.00  0.00  180.00  0.00  0.00
+IC    CAP C +N +CA        0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN         0.00  0.00  180.00  0.00  0.00
+IC    CA CAP *CP OP       0.00  0.00  120.00  0.00  0.00
+IC    CA CAP *CP HCP      0.00  0.00  240.00  0.00  0.00
+IC    CAP +N *C O         0.00  0.00  180.00  0.00  0.00
+IC    C CP *CAP HA1P      0.00  0.00  120.00  0.00  0.00
+IC    C CP *CAP HA2P      0.00  0.00  240.00  0.00  0.00
+IC    N CP *CA CB         0.00  0.00  120.00  0.00  0.00
+IC    N CP *CA HA         0.00  0.00  240.00  0.00  0.00
+IC    N CA CB CG          0.00  0.00  180.00  0.00  0.00
+IC    CG CA *CB HB1       0.00  0.00  120.00  0.00  0.00
+IC    CG CA *CB HB2       0.00  0.00  240.00  0.00  0.00
+IC    CA CB CG CD1        0.00  0.00  180.00  0.00  0.00
+IC    CD1 CB *CG HG       0.00  0.00  120.00  0.00  0.00
+IC    CD1 CB *CG CD2      0.00  0.00  240.00  0.00  0.00
+IC    CB CG CD1 HD11      0.00  0.00  180.00  0.00  0.00
+IC    HD11 CG *CD1 HD12   0.00  0.00  120.00  0.00  0.00
+IC    HD11 CG *CD1 HD13   0.00  0.00  240.00  0.00  0.00
+IC    CB CG CD2 HD21      0.00  0.00  180.00  0.00  0.00
+IC    HD21 CG *CD2 HD22   0.00  0.00  120.00  0.00  0.00
+IC    HD21 CG *CD2 HD23   0.00  0.00  240.00  0.00  0.00
+IC    CA   CP  OP  HOP    0.00  0.00  180.00  0.00  0.00
+
+!
+! The following residue definitions comprise extended chain amino acids
+!
+
+RESI BAA           0.00  !  Beta amino propionic acid (beta alanine)
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1048
+ ATOM HA1   h    0.0530
+ ATOM HA2   h    0.0530
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA HA1   CA HA2   CA CB   CB HB1   CB HB2
+BOND  CB C   C O   C +N
+!DIHE  -C N CA CB   N CA CB C   CA CB C +N   CB C +N +CA
+IMPH  N -C CA HN   C CB +N O
+DONO  HN N
+ACCE  O C
+IC    -C N CA CB            0.00  0.00  180.00  0.00  0.00
+IC    N CA CB C             0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN           0.00  0.00  180.00  0.00  0.00
+IC    CA CB C +N            0.00  0.00  180.00  0.00  0.00
+IC    CB C +N +CA           0.00  0.00  180.00  0.00  0.00
+IC    CB +N *C O            0.00  0.00  180.00  0.00  0.00
+IC    N CB *CA HA1          0.00  0.00  120.00  0.00  0.00
+IC    N CB *CA HA2          0.00  0.00  240.00  0.00  0.00
+IC    CA C *CB HB1          0.00  0.00  120.00  0.00  0.00
+IC    CA C *CB HB2          0.00  0.00  240.00  0.00  0.00
+
+RESI ABU           0.00  !  Gamma amino butyric acid
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1048
+ ATOM HA1   h    0.0530
+ ATOM HA2   h    0.0530
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA HA1   CA HA2   CA CB   CB HB1   CB HB2
+BOND  CB CG   CG HG1   CG HG2   CG C   C O   C +N
+!DIHE  -C N CA CB   N CA CB CG   CA CB CG C   CB CG C +N   CG C +N +CA
+IMPH  N -C CA HN   C CB +N O
+DONO  HN N
+ACCE  O C
+IC    -C N CA CB            0.00  0.00  180.00  0.00  0.00
+IC    N CA CB CG            0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN           0.00  0.00  180.00  0.00  0.00
+IC    CA CB CG C            0.00  0.00  180.00  0.00  0.00
+IC    CB CG C +N            0.00  0.00  180.00  0.00  0.00
+IC    CG C +N +CA           0.00  0.00  180.00  0.00  0.00
+IC    CB +N *C O            0.00  0.00  180.00  0.00  0.00
+IC    N CB *CA HA1          0.00  0.00  120.00  0.00  0.00
+IC    N CB *CA HA2          0.00  0.00  240.00  0.00  0.00
+IC    CA CG *CB HB1         0.00  0.00  120.00  0.00  0.00
+IC    CA CG *CB HB2         0.00  0.00  240.00  0.00  0.00
+IC    CB C *CG HG1          0.00  0.00  120.00  0.00  0.00
+IC    CB C *CG HG2          0.00  0.00  240.00  0.00  0.00
+
+RESI GAA           0.00  !  Gamma amino butyric acid
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1048
+ ATOM HA1   h    0.0530
+ ATOM HA2   h    0.0530
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA HA1   CA HA2   CA CB   CB HB1   CB HB2
+BOND  CB CG   CG HG1   CG HG2   CG C   C O   C +N
+!DIHE  -C N CA CB   N CA CB CG   CA CB CG C   CB CG C +N   CG C +N +CA
+IMPH  N -C CA HN   C CB +N O
+DONO  HN N
+ACCE  O C
+IC    -C N CA CB            0.00  0.00  180.00  0.00  0.00
+IC    N CA CB CG            0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN           0.00  0.00  180.00  0.00  0.00
+IC    CA CB CG C            0.00  0.00  180.00  0.00  0.00
+IC    CB CG C +N            0.00  0.00  180.00  0.00  0.00
+IC    CG C +N +CA           0.00  0.00  180.00  0.00  0.00
+IC    CB +N *C O            0.00  0.00  180.00  0.00  0.00
+IC    N CB *CA HA1          0.00  0.00  120.00  0.00  0.00
+IC    N CB *CA HA2          0.00  0.00  240.00  0.00  0.00
+IC    CA CG *CB HB1         0.00  0.00  120.00  0.00  0.00
+IC    CA CG *CB HB2         0.00  0.00  240.00  0.00  0.00
+IC    CB C *CG HG1          0.00  0.00  120.00  0.00  0.00
+IC    CB C *CG HG2          0.00  0.00  240.00  0.00  0.00
+
+RESI GGLU          -1.00  !  GammaGlutamic acid 
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    -.0722
+ ATOM HA1   h    0.0530
+ ATOM CX    c-   0.2974
+ ATOM OX1   o-   -.5337
+ ATOM OX2   o-   -.5337
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA HA1     CA CB   CB HB1   CB HB2
+BOND  CB CG   CG HG1   CG HG2   CG C   C O   C +N
+BOND  CA CX   CX OX1   CX OX2
+!DIHE  -C N CA CB   N CA CB CG   CA CB  CG C   CB CG C +N   CG C +N +CA
+IMPH  N -C CA HN   C CB +N O    
+! IMPH  CX OX2 CA OX1
+! inverted for new IMPH rules
+IMPH  CX OX2 OX1 CA 
+DONO  HN N
+ACCE  O C
+ACCE  OX1 C
+ACCE  OX2 C
+IC    -C N CA CB            0.00  0.00  180.00  0.00  0.00
+IC    N CA CB CG            0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN           0.00  0.00  180.00  0.00  0.00
+IC    CA CB CG C            0.00  0.00  180.00  0.00  0.00
+IC    CB CG C +N            0.00  0.00  180.00  0.00  0.00
+IC    CG C +N +CA           0.00  0.00  180.00  0.00  0.00
+IC    CB +N *C O            0.00  0.00  180.00  0.00  0.00
+IC    N CB *CA HA1          0.00  0.00 -120.00  0.00  0.00
+IC    N CB *CA CX           0.00  0.00  120.00  0.00  0.00
+IC    N CA  CX OX1          0.00  0.00  180.00  0.00  0.00
+IC    OX2 CA *CX OX1        0.00  0.00  180.00  0.00  0.00 
+IC    CA CG *CB HB1         0.00  0.00  120.00  0.00  0.00
+IC    CA CG *CB HB2         0.00  0.00  240.00  0.00  0.00
+IC    CB C *CG HG1          0.00  0.00  120.00  0.00  0.00
+IC    CB C *CG HG2          0.00  0.00  240.00  0.00  0.00
+
+RESI DAA           0.00  !  Delta amino pentanoic acid
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1048
+ ATOM HA1   h    0.0530
+ ATOM HA2   h    0.0530
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD    c    -.1060
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA HA1   CA HA2   CA CB   CB HB1   CB HB2
+BOND  CB CG   CG HG1   CG HG2   CG CD   CD HD1   CD HD2   CD C   C O   C +N
+!DIHE  -C N CA CB   N CA CB CG   CA CB CG CD   CB CG CD C   CG CD C +N
+!DIHE  CD C +N +CA
+IMPH  N -C CA HN   C CB +N O
+DONO  HN N
+ACCE  O C
+IC    -C N CA CB            0.00  0.00  180.00  0.00  0.00
+IC    N CA CB CG            0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN           0.00  0.00  180.00  0.00  0.00
+IC    CA CB CG CD           0.00  0.00  180.00  0.00  0.00
+IC    CB CG CD C            0.00  0.00  180.00  0.00  0.00
+IC    CG CD C +N            0.00  0.00  180.00  0.00  0.00
+IC    CD C +N +CA           0.00  0.00  180.00  0.00  0.00
+IC    CB +N *C O            0.00  0.00  180.00  0.00  0.00
+IC    N CB *CA HA1          0.00  0.00  120.00  0.00  0.00
+IC    N CB *CA HA2          0.00  0.00  240.00  0.00  0.00
+IC    CA CG *CB HB1         0.00  0.00  120.00  0.00  0.00
+IC    CA CG *CB HB2         0.00  0.00  240.00  0.00  0.00
+IC    CB CD *CG HG1         0.00  0.00  120.00  0.00  0.00
+IC    CB CD *CG HG2         0.00  0.00  240.00  0.00  0.00
+IC    CG C *CD HD1          0.00  0.00  120.00  0.00  0.00
+IC    CG C *CD HD2          0.00  0.00  240.00  0.00  0.00
+
+RESI EAA           0.00  !  Epsilon amino hexanoic acid
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1048
+ ATOM HA1   h    0.0530
+ ATOM HA2   h    0.0530
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD    c    -.1060
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM CE    c    -.1060
+ ATOM HE1   h    0.0530
+ ATOM HE2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA HA1   CA HA2   CA CB   CB HB1   CB HB2
+BOND  CB CG   CG HG1   CG HG2   CG CD   CD HD1   CD HD2   CD CE
+BOND  CE HE1   CE HE2   CE C   C O   C +N
+!DIHE  -C N CA CB   N CA CB CG   CA CB CG CD   CB CG CD CE   CG CD CE C
+!DIHE  CD CE C +N   CE C +N +CA
+IMPH  N -C CA HN   C CB +N O
+DONO  HN N
+ACCE  O C
+IC    -C N CA CB            0.00  0.00  180.00  0.00  0.00
+IC    N CA CB CG            0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN           0.00  0.00  180.00  0.00  0.00
+IC    CA CB CG CD           0.00  0.00  180.00  0.00  0.00
+IC    CB CG CD CE           0.00  0.00  180.00  0.00  0.00
+IC    CG CD CE C            0.00  0.00  180.00  0.00  0.00
+IC    CD CE C +N            0.00  0.00  180.00  0.00  0.00
+IC    CE C +N +CA           0.00  0.00  180.00  0.00  0.00
+IC    CB +N *C O            0.00  0.00  180.00  0.00  0.00
+IC    N CB *CA HA1          0.00  0.00  120.00  0.00  0.00
+IC    N CB *CA HA2          0.00  0.00  240.00  0.00  0.00
+IC    CA CG *CB HB1         0.00  0.00  120.00  0.00  0.00
+IC    CA CG *CB HB2         0.00  0.00  240.00  0.00  0.00
+IC    CB CD *CG HG1         0.00  0.00  120.00  0.00  0.00
+IC    CB CD *CG HG2         0.00  0.00  240.00  0.00  0.00
+IC    CG CE *CD HD1         0.00  0.00  120.00  0.00  0.00
+IC    CG CE *CD HD2         0.00  0.00  240.00  0.00  0.00
+IC    CD C *CE HE1          0.00  0.00  120.00  0.00  0.00
+IC    CD C *CE HE2          0.00  0.00  240.00  0.00  0.00
+
+RESI ZAA           0.00  !  Zeta amino heptanoic acid
+GROUP
+ ATOM N     n    -.6503
+ ATOM HN    h*   0.4395
+ ATOM CA    c    0.1048
+ ATOM HA1   h    0.0530
+ ATOM HA2   h    0.0530
+ ATOM CB    c    -.1060
+ ATOM HB1   h    0.0530
+ ATOM HB2   h    0.0530
+ ATOM CG    c    -.1060
+ ATOM HG1   h    0.0530
+ ATOM HG2   h    0.0530
+ ATOM CD    c    -.1060
+ ATOM HD1   h    0.0530
+ ATOM HD2   h    0.0530
+ ATOM CE    c    -.1060
+ ATOM HE1   h    0.0530
+ ATOM HE2   h    0.0530
+ ATOM CZ    c    -.1060
+ ATOM HZ1   h    0.0530
+ ATOM HZ2   h    0.0530
+GROUP
+ ATOM C     c'   0.3964
+ ATOM O     o'   -.3964
+BOND  N HN   N CA   CA HA1   CA HA2   CA CB   CB HB1   CB HB2
+BOND  CB CG   CG HG1   CG HG2   CG CD   CD HD1   CD HD2   CD CE
+BOND  CE HE1   CE HE2   CE CZ   CZ HZ1   CZ HZ2   CZ C   C O   C +N
+!DIHE  -C N CA CB   N CA CB CG   CA CB CG CD   CB CG CD CE   CG CD CE CZ
+!DIHE  CD CE CZ C   CE CZ C +N   CZ C +N +CA
+IMPH  N -C CA HN   C CB +N O
+DONO  HN N
+ACCE  O C
+IC    -C N CA CB            0.00  0.00  180.00  0.00  0.00
+IC    N CA CB CG            0.00  0.00  180.00  0.00  0.00
+IC    -C CA *N HN           0.00  0.00  180.00  0.00  0.00
+IC    CA CB CG CD           0.00  0.00  180.00  0.00  0.00
+IC    CB CG CD CE           0.00  0.00  180.00  0.00  0.00
+IC    CG CD CE CZ           0.00  0.00  180.00  0.00  0.00
+IC    CD CE CZ C            0.00  0.00  180.00  0.00  0.00
+IC    CE CZ C +N            0.00  0.00  180.00  0.00  0.00
+IC    CZ C +N +CA           0.00  0.00  180.00  0.00  0.00
+IC    CB +N *C O            0.00  0.00  180.00  0.00  0.00
+IC    N CB *CA HA1          0.00  0.00  120.00  0.00  0.00
+IC    N CB *CA HA2          0.00  0.00  240.00  0.00  0.00
+IC    CA CG *CB HB1         0.00  0.00  120.00  0.00  0.00
+IC    CA CG *CB HB2         0.00  0.00  240.00  0.00  0.00
+IC    CB CD *CG HG1         0.00  0.00  120.00  0.00  0.00
+IC    CB CD *CG HG2         0.00  0.00  240.00  0.00  0.00
+IC    CG CE *CD HD1         0.00  0.00  120.00  0.00  0.00
+IC    CG CE *CD HD2         0.00  0.00  240.00  0.00  0.00
+IC    CD CZ *CE HE1         0.00  0.00  120.00  0.00  0.00
+IC    CD CZ *CE HE2         0.00  0.00  240.00  0.00  0.00
+IC    CE C *CZ HZ1          0.00  0.00  120.00  0.00  0.00
+IC    CE C *CZ HZ2          0.00  0.00  240.00  0.00  0.00
+
+!
+! Standard patches  to place NH3+ and COO- on the N and C terminal ends
+!
+
+PRES NTER        1.0000
+! This patch is used to provide a charged NH3+ group for the N-terminal
+! This patch will NOT work with a PRO as the first residue (use PROP)
+! This patch will NOT work with a GLY as the first residue (use GLYP)
+! This patch will NOT work with dehydro amino acids as the first residue
+!   (use NTRU)
+GROU
+ ATOM N     n+   -.2471
+ ATOM HT1   h+   0.2800
+ ATOM HT2   h+   0.2800
+ ATOM HT3   h+   0.2800
+ DELETE ATOM HN
+ ATOM CA    c    0.3541
+BOND HT1  N         HT2  N    HT3  N
+!DIHE HT1  N    CA   C
+DONO HT1  N
+DONO HT2  N
+DONO HT3  N
+IC   HT1  N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   HT1   CA  *N   HT2    0.0000    0.00  120.00    0.00   0.0000
+IC   HT1   CA  *N   HT3    0.0000    0.00  240.00    0.00   0.0000
+
+PRES SING          0.1241
+! This patch is used to recharge the CA of a single residue. 
+! It must be applied after the NTER and CTER patches are applied.
+! This patch will NOT work with a GLY or PRO as the residue.
+! This patch will NOT work with dehydro amino acids as the residue.
+ ATOM CA    c      0.1241
+
+PRES GSIN          0.0711
+! patch glycine to correctly charge ca
+ ATOM CA    c      0.0711
+
+PRES NTRA          0.95
+! This patch is used to provide a charged NH3+ group for the N-terminal
+! This patch will NOT work with a PRO as the first residue (use PROP)
+! This patch will NOT work with a GLY as the first residue (use GLYP)
+! This patch will NOT work with dehydro amino acids as the first residue
+!   (use NTRU)
+GROU
+ ATOM N     na   -.0400
+ ATOM HT1   h+   0.2800
+ ATOM HT2   h+   0.2800
+ ATOM HT3   h+   0.2800
+ DELETE ATOM HN
+ ATOM CA    c    0.1500
+BOND HT1  N         HT2  N    HT3  N
+ANGLE HT2  N    CA       HT1  N    CA       HT3  N    CA      
+ANGLE HT2  N    HT3      HT1  N    HT2      HT3  N    HT1
+DIHE  HT1  N    CA   C     HT1  N    CA   HA     HT1  N    CA   CB     
+DIHE  HT2  N    CA   C     HT2  N    CA   HA     HT2  N    CA   CB     
+DIHE  HT3  N    CA   C     HT3  N    CA   HA     HT3  N    CA   CB     
+DONO HT1  N
+DONO HT2  N
+DONO HT3  N
+IC   HT1  N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   HT1   CA  *N   HT2    0.0000    0.00  120.00    0.00   0.0000
+IC   HT1   CA  *N   HT3    0.0000    0.00  240.00    0.00   0.0000
+
+PRES GLYP          0.85
+! This patch is used to provide a charged NH3+ group for the N-terminal
+! of glycine.
+! This patch will NOT work with a PRO as the first residue (use PROP)
+! This patch will NOT work with dehydro amino acids as the first residue
+!   (use NTRU)
+GROU
+ ATOM N     n+   -.2471
+ ATOM HT1   h+   0.2800
+ ATOM HT2   h+   0.2800
+ ATOM HT3   h+   0.2800
+ DELETE ATOM HN
+ ATOM CA    c    0.3011
+BOND HT1  N         HT2  N    HT3  N
+!DIHE HT1  N    CA  C 
+DONO HT1  N
+DONO HT2  N
+DONO HT3  N
+IC   HT1  N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+IC   HT1   CA  *N   HT2    0.0000    0.00  120.00    0.00   0.0000
+IC   HT1   CA  *N   HT3    0.0000    0.00  240.00    0.00   0.0000
+
+PRES PROP          0.80
+! This patch is used to provide a charged NH2+ group for the N-terminal
+! This patch may only be used with a PRO as the first residue
+GROUP
+ ATOM N     n+    -0.3742
+ ATOM HT1   h+     0.2800
+ ATOM HT2   h+     0.2800
+ ATOM CD    c      0.3011
+ ATOM CA    c      0.3541
+BOND HT1  N         HT2  N
+!DIHE HT1  N    CA   C
+DONO HT1  N
+DONO HT2  N
+IC   HT1  CA   *N   CD     0.0000    0.00  120.00    0.00   0.0000
+IC   HT2  CA   *N   HT1    0.0000    0.00  120.00    0.00   0.0000
+IC   C    CA    N   CD     0.0000    0.00  120.00    0.00   0.0000
+
+PRES CTER        -.8422
+! This patch is used to provide a charged COO- group for the C-terminal
+GROU
+ ATOM C     c-   0.2974
+ ATOM OCT1  o-   -.5337
+ ATOM OCT2  o-   -.5337
+ ATOM CA    c    -.0722
+DELETE ATOM O
+BOND C    OCT1       C    OCT2
+!DIHE N    CA    C    OCT2
+IMPH C    OCT2  OCT1 CA
+ACCE OCT1 C
+ACCE OCT2 C
+IC   N    CA    C    OCT2    0.0  0.0  180.0  0.0  0.0
+IC   OCT2 CA    *C   OCT1    0.0  0.0  180.0  0.0  0.0
+
+PRES CGLY        -.6122
+! This patch is used to provide a charged COO- group for the C-terminal
+GROU
+ ATOM C     c-   0.2974
+ ATOM OCT1  o-   -.5337
+ ATOM OCT2  o-   -.5337
+DELETE ATOM O
+ ATOM CA    c    -.1252
+BOND C    OCT1       C    OCT2
+!DIHE N    CA    C    OCT2
+IMPH C    OCT2  OCT1 CA
+ACCE OCT1 C
+ACCE OCT2 C
+IC   N    CA    C    OCT2    0.0  0.0  180.0  0.0  0.0
+IC   OCT2 CA    *C   OCT1    0.0  0.0  180.0  0.0  0.0
+
+PRES DISN        -0.40
+! This patch is used to provide a disulphide bridge between two CYS residues
+! The modification here is for NMR structure generation in which the
+! covalent bond between the sulfurs is excluded and distance
+! constraints used instead.
+
+GROUP
+ ATOM 1CB   c     -0.10
+ ATOM 1SG   s     -0.10
+GROUP
+ ATOM 2SG   s     -0.10
+ ATOM 2CB   c     -0.10
+DELETE ATOM 1HG
+DELETE ATOM 2HG
+!BOND 1SG 2SG
+!ANGLE  1CB 1SG 2SG      1SG 2SG 2CB
+!DIHE   1CA 1CB 1SG 2SG      1HB1 1CB 1SG 2SG      1HB2 1CB 1SG 2SG
+!DIHE   1CB 1SG 2SG 2CB
+!DIHE   1SG 2SG 2CB 2CA      1SG 2SG 2CB 2HB1     1SG 2SG 2CB 2HB2
+IC     1CA 1CB 1SG 2SG    0.0  0.0  180.0  0.0  0.0
+IC     1CB 1SG 2SG 2CB    0.0  0.0  180.0  0.0  0.0
+IC     1SG 2SG 2CB 2CA    0.0  0.0  180.0  0.0  0.0
+
+
+PRES DISU        -0.20  
+! This patch is used to provide a disulphide bridge between two CYS residues
+GROUP
+ ATOM 1CB   c     -0.10
+ ATOM 1SG   s     -0.00
+GROUP
+ ATOM 2SG   s     -0.00
+ ATOM 2CB   c     -0.10
+DELETE ATOM 1HG
+DELETE ATOM 2HG
+BOND 1SG 2SG 
+ANGLE  1CB 1SG 2SG      1SG 2SG 2CB    
+DIHE   1CA 1CB 1SG 2SG      1HB1 1CB 1SG 2SG      1HB2 1CB 1SG 2SG      
+DIHE   1CB 1SG 2SG 2CB    
+DIHE   1SG 2SG 2CB 2CA      1SG 2SG 2CB 2HB1     1SG 2SG 2CB 2HB2     
+IC     1CA 1CB 1SG 2SG    0.0  0.0  180.0  0.0  0.0
+IC     1CB 1SG 2SG 2CB    0.0  0.0  180.0  0.0  0.0
+IC     1SG 2SG 2CB 2CA    0.0  0.0  180.0  0.0  0.0
+
+PRES LTOD          0.00
+! This patch converts an L- residue to a D- residue
+DELE IC N C *CA CB
+DELE IC N C *CA HA
+DELE IC HN N CA CB
+DELE IC HN N CA HA
+IC   N C *CA HA        0.00  0.00  120.00  0.00  0.00
+IC   N C *CA CB        0.00  0.00  240.00  0.00  0.00
+IC   HN N CA HA        0.00  0.00 -120.00  0.00  0.00
+IC   HN N CA CB        0.00  0.00  120.00  0.00  0.00
+
+! This section is from PATCHAH.RTF and includes topology patches 
+! to modify the ends of peptides.
+
+PRES  NH2   -0.10  !  Deprotonated N-terminal (NH2)
+DELETE  ATOM  HT3
+ ATOM HT1   h*      .15
+ ATOM HT2   h*      .15
+ ATOM N     na     -.30
+ ATOM CA    c      -.10
+IC   HT2 CA *N HT1     0.000   0.00   120.0   0.00    0.000
+ 
+PRES  DEAM   -0.05 !  Removes N-terminal, but does not work in Seq Bld 
+DELETE  ATOM  HT3
+DELETE  ATOM  HT2
+DELETE  ATOM  HT1
+DELETE  ATOM  N    
+ ATOM CA    c      -.10
+ ATOM HA2   h       .05
+BOND   HA2  CA
+ANGLE  HA2  CA  C
+IC    HA2  CA  C  +N     0.000   0.00   180.0   0.00    0.000
+
+PRES DCOH     0.0  ! Removes C-Terminus
+DELETE ATOM  OCT1
+DELETE ATOM  OCT2
+DELETE ATOM  O
+ ATOM HX    h       0.0
+BOND CA HX
+ANGLE HA  CA HX   CB CA HX   N CA HX
+IC  -C  N  CA  HX    0.00  0.00   180.00  0.00  0.00
+
+PRES NTME          0.35
+! This patch adds a single methyl group to the N-terminal
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CNT   c      0.05
+ ATOM HT1A  h      0.10
+ ATOM HT1B  h      0.10
+ ATOM HT1G  h      0.10
+ DELE ATOM HT3
+DELETE IC HT1  CA  *N  HT3 
+BOND  N CNT   CNT HT1A   CNT HT1B   CNT HT1G
+THET  CA N CNT   HT1 N CNT   HT2 N CNT
+THET  N CNT HT1A   N CNT HT1B   N CNT HT1G
+THET  HT1A CNT HT1B   HT1A CNT HT1G   HT1B CNT HT1G
+DIHE  C CA N CNT
+DIHE  CB CA N CNT
+DIHE  HA CA N CNT
+DIHE  CA N CNT HT1A
+DIHE  CA N CNT HT2A
+DIHE  CA N CNT HT3A
+DIHE  HT1 N CNT HT1A
+DIHE  HT1 N CNT HT2A
+DIHE  HT1 N CNT HT3A
+DIHE  HT2 N CNT HT1A
+DIHE  HT2 N CNT HT2A
+DIHE  HT2 N CNT HT3A
+IC    HT1 CA *N CNT       0.00  0.00  240.00  0.00  0.00
+IC    CA N CNT HT1A       0.00  0.00  180.00  0.00  0.00
+IC    HT1A N *CNT HT1B    0.00  0.00  120.00  0.00  0.00
+IC    HT1A N *CNT HT1G    0.00  0.00  240.00  0.00  0.00
+
+PRES N3ME          1.20
+! This patch adds three methyl groups to the N-terminal
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CNT1  c      0.05
+ ATOM HT1A  h      0.10
+ ATOM HT1B  h      0.10
+ ATOM HT1G  h      0.10
+ ATOM CNT2  c      0.05
+ ATOM HT2A  h      0.10
+ ATOM HT2B  h      0.10
+ ATOM HT2G  h      0.10
+ ATOM CNT3  c      0.05
+ ATOM HT3A  h      0.10
+ ATOM HT3B  h      0.10
+ ATOM HT3G  h      0.10
+ ATOM CA    c      0.15
+ DELE ATOM HT3
+ DELE ATOM HT2
+ DELE ATOM HT1
+BOND  N CNT1   CNT1 HT1A   CNT1 HT1B   CNT1 HT1G
+BOND  N CNT2   CNT2 HT2A   CNT2 HT2B   CNT2 HT2G
+BOND  N CNT3   CNT3 HT3A   CNT3 HT3B   CNT3 HT3G
+THET  CA N CNT1   CNT3 N CNT1   CNT2 N CNT1
+THET  N CNT1 HT1A   N CNT1 HT1B   N CNT1 HT1G
+THET  HT1A CNT1 HT1B   HT1A CNT1 HT1G   HT1B CNT1 HT1G
+THET  CA N CNT2  
+THET  N CNT2 HT2A   N CNT2 HT2B   N CNT2 HT2G
+THET  HT2A CNT2 HT2B   HT2A CNT2 HT2G   HT2B CNT2 HT2G
+THET  CA N CNT3   CNT3 N CNT2
+THET  N CNT3 HT3A   N CNT3 HT3B   N CNT3 HT3G
+THET  HT3A CNT3 HT3B   HT3A CNT3 HT3G   HT3B CNT3 HT3G
+DIHE  C CA N CNT1       CB CA N CNT1    HA CA N CNT1 
+DIHE  C CA N CNT2       CB CA N CNT2    HA CA N CNT2 
+DIHE  C CA N CNT3       CB CA N CNT3    HA CA N CNT3 
+DIHE  CA N CNT1 HT1A       CA N CNT1 HT1B        CA N CNT1 HT1G  
+DIHE  CNT2 N CNT1 HT1A     CNT2 N CNT1 HT1B      CNT2 N CNT1 HT1G  
+DIHE  CNT3 N CNT1 HT1A     CNT3 N CNT1 HT1B      CNT3 N CNT1 HT1G  
+DIHE  CA N CNT2 HT2A       CA N CNT2 HT2B        CA N CNT2 HT2G  
+DIHE  CNT1 N CNT2 HT2A     CNT1 N CNT2 HT2B      CNT1 N CNT2 HT2G  
+DIHE  CNT3 N CNT2 HT2A     CNT3 N CNT2 HT2B      CNT3 N CNT2 HT2G  
+DIHE  CA N CNT3 HT3A       CA N CNT3 HT3B        CA N CNT3 HT3G  
+DIHE  CNT1 N CNT3 HT3A     CNT1 N CNT3 HT3B      CNT1 N CNT3 HT3G  
+DIHE  CNT2 N CNT3 HT3A     CNT2 N CNT3 HT3B      CNT2 N CNT3 HT3G  
+IC    C   CA  N CNT1       0.00  0.00  180.00  0.00  0.00
+IC    CNT1 CA *N CNT2      0.00  0.00  120.00  0.00  0.00
+IC    CNT1 CA *N CNT3      0.00  0.00  240.00  0.00  0.00
+IC    CA N CNT1 HT1A       0.00  0.00  180.00  0.00  0.00
+IC    HT1A N *CNT1 HT1B    0.00  0.00  120.00  0.00  0.00
+IC    HT1A N *CNT1 HT1G    0.00  0.00  240.00  0.00  0.00
+IC    CA N CNT2 HT2A       0.00  0.00  180.00  0.00  0.00
+IC    HT2A N *CNT2 HT2B    0.00  0.00  120.00  0.00  0.00
+IC    HT2A N *CNT2 HT2G    0.00  0.00  240.00  0.00  0.00
+IC    CA N CNT3 HT3A       0.00  0.00  180.00  0.00  0.00
+IC    HT3A N *CNT3 HT3B    0.00  0.00  120.00  0.00  0.00
+IC    HT3A N *CNT3 HT3G    0.00  0.00  240.00  0.00  0.00
+PRES NDME          0.70
+! This patch adds two methyl groups to the N-terminal
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CNT1  c      0.05
+ ATOM HT1A  h      0.10
+ ATOM HT1B  h      0.10
+ ATOM HT1G  h      0.10
+ ATOM CNT2  c      0.05
+ ATOM HT2A  h      0.10
+ ATOM HT2B  h      0.10
+ ATOM HT2G  h      0.10
+ DELE ATOM HT2
+ DELE ATOM HT3
+DELETE IC HT1  CA  *N  HT2 
+DELETE IC HT1  CA  *N  HT3 
+BOND  N CNT1   CNT1 HT1A   CNT1 HT1B   CNT1 HT1G
+BOND  N CNT2   CNT2 HT2A   CNT2 HT2B   CNT2 HT2G
+THET  CA N CNT1   HT1 N CNT1   CNT2 N CNT1
+THET  N CNT1 HT1A   N CNT1 HT1B   N CNT1 HT1G
+THET  HT1A CNT1 HT1B   HT1A CNT1 HT1G   HT1B CNT1 HT1G
+THET  CA N CNT2   HT1 N CNT2
+THET  N CNT2 HT2A   N CNT2 HT2B   N CNT2 HT2G
+THET  HT2A CNT2 HT2B   HT2A CNT2 HT2G   HT2B CNT2 HT2G
+DIHE  C CA N CNT1       CB CA N CNT1    HA CA N CNT1 
+DIHE  C CA N CNT2       CB CA N CNT2    HA CA N CNT2  
+DIHE  CA N CNT1 HT1A       CA N CNT1 HT1B        CA N CNT1 HT1G  
+DIHE  CNT2 N CNT1 HT1A     CNT2 N CNT1 HT1B      CNT2 N CNT1 HT1G  
+DIHE  HT1 N CNT1 HT1A      HT1 N CNT1 HT1B       HT1 N CNT1 HT1G  
+DIHE  CA N CNT2 HT2A       CA N CNT2 HT2B        CA N CNT2 HT2G  
+DIHE  CNT1 N CNT2 HT2A     CNT1 N CNT2 HT2B      CNT1 N CNT2 HT2G  
+DIHE  HT1 N CNT2 HT2A      HT1 N CNT2 HT2B       HT1 N CNT2 HT2G  
+IC    HT1 CA *N CNT1       0.00  0.00  120.00  0.00  0.00
+IC    HT1 CA *N CNT2       0.00  0.00  240.00  0.00  0.00
+IC    CA N CNT1 HT1A       0.00  0.00  180.00  0.00  0.00
+IC    HT1A N *CNT1 HT1B    0.00  0.00  120.00  0.00  0.00
+IC    HT1A N *CNT1 HT1G    0.00  0.00  240.00  0.00  0.00
+IC    CA N CNT2 HT2A       0.00  0.00  180.00  0.00  0.00
+IC    HT2A N *CNT2 HT2B    0.00  0.00  120.00  0.00  0.00
+IC    HT2A N *CNT2 HT2G    0.00  0.00  240.00  0.00  0.00
+
+PRES NGUA          0.90
+! This patch replaces the N-terminal with a guanidinium group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM NT2   nr    -0.45
+ ATOM HT2A  h+     0.35
+ ATOM HT2B  h+     0.35
+ ATOM NT3   nr    -0.45
+ ATOM HT3A  h+     0.35
+ ATOM HT3B  h+     0.35
+ ATOM CNT   c'     0.50
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.25
+ ATOM CA    c       .05
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT NT2   CNT NT3   NT2 HT2A   NT2 HT2B   
+BOND  NT3 HT3A   NT3 HT3B
+THET  CA N HN   CA N CNT   HN N CNT   N CNT NT2   N CNT NT3   NT2 CNT NT3
+THET  CNT NT2 HT2A   CNT NT2 HT2B   CNT NT3 HT3A   CNT NT3 HT3B
+THET  HT2A NT2 HT2B   HT3A NT3 HT3B
+DIHE  C CA N CNT   CB CA N CNT    HA CA N CNT
+DIHE  C CA N HN    CB CA N HN     HA CA N HN  
+DIHE  CA N CNT NT2     HN N CNT NT2
+DIHE  CA N CNT NT3     HN N CNT NT3
+DIHE  N CNT NT2 HT2A       N CNT NT2 HT2B     
+DIHE  NT3 CNT NT2 HT2A     NT3 CNT NT2 HT2B     
+DIHE  N CNT NT3 HT3A       N CNT NT3 HT3B     
+DIHE  NT2 CNT NT3 HT3A     NT2 CNT NT3 HT3B     
+IMPH  N CNT CA HN   CNT NT2 NT3 N   NT2 HT2A HT2B CNT   NT3 HT3A HT3B CNT
+DONO  HN N
+DONO  HT2A NT2
+DONO  HT2B NT2
+DONO  HT3A NT3
+DONO  HT3B NT3
+IC    C CA N CNT           0.00  0.00  180.00  0.00  0.00
+IC    CNT CA *N HN         0.00  0.00  180.00  0.00  0.00
+IC    CA N CNT NT2         0.00  0.00  180.00  0.00  0.00
+IC    NT2 N *CNT NT3       0.00  0.00  180.00  0.00  0.00
+IC    N CNT NT2 HT2A       0.00  0.00  180.00  0.00  0.00
+IC    HT2A CNT *NT2 HT2B   0.00  0.00  180.00  0.00  0.00
+IC    N CNT NT3 HT3A       0.00  0.00  180.00  0.00  0.00
+IC    HT3A CNT *NT3 HT3B   0.00  0.00  180.00  0.00  0.00
+
+PRES NFRM         -0.10
+! This patch replaces the N-terminal with an formamide group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM HNT   h     -0.10
+ ATOM CNT   c'     0.60
+ ATOM ONT   o'    -0.55
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.30
+ ATOM CA    c       .05
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT ONT   CNT HNT
+ANGL  CA N HN   CA N CNT   HN N CNT   N CNT ONT   N CNT HNT   ONT CNT HNT
+DIHE  C CA N CNT   
+DIHE  C CA N HN
+DIHE  CB CA N CNT   
+DIHE  CB CA N HN
+DIHE  HA CA N CNT   
+DIHE  HA CA N HN
+DIHE  CA N CNT ONT
+DIHE  HN N CNT ONT
+DIHE  CA N CNT HNT
+DIHE  HN N CNT HNT
+IMPH  N CNT CA HN   
+! This may need to be inverted for new IMPH rules
+IMPH  CNT ONT N HNT
+DONO  HN N
+ACCE  ONT CNT
+IC    C CA N CNT          0.00  0.00  180.00  0.00  0.00
+IC    CNT CA *N HN        0.00  0.00  180.00  0.00  0.00
+IC    CA N CNT HNT        0.00  0.00  180.00  0.00  0.00
+IC    HNT N *CNT ONT      0.00  0.00  180.00  0.00  0.00
+
+PRES NACT         -0.10 
+! This patch replaces the N-terminal with an acetamide group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CT2   c     -0.20
+ ATOM HT2A  h      0.05
+ ATOM HT2B  h      0.05
+ ATOM HT2G  h      0.05
+ ATOM CNT   c'     0.60
+ ATOM ONT   o'    -0.55
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.25
+ ATOM CA    c      0.05
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT ONT   CNT CT2   CT2 HT2A   CT2 HT2B   CT2 HT2G
+ANGL  CA N HN   CA N CNT   HN N CNT   N CNT ONT   N CNT CT2   ONT CNT CT2
+ANGL  CNT CT2 HT2A   CNT CT2 HT2B   CNT CT2 HT2G
+ANGL  HT2A CT2 HT2B   HT2A CT2 HT2G   HT2B CT2 HT2G
+DIHE  C CA N CNT   
+DIHE  C CA N HN
+DIHE  CB CA N CNT   
+DIHE  CB CA N HN
+DIHE  HA CA N HN
+DIHE  HA CA N CNT   
+DIHE  CA N CNT ONT
+DIHE  HN N CNT ONT
+DIHE  CA N CNT CT2
+DIHE  HN N CNT CT2
+DIHE  N CNT CT2 HT2A   N CNT CT2 HT2B   N CNT CT2 HT2G
+DIHE  ONT CNT CT2 HT2A   ONT CNT CT2 HT2B   ONT CNT CT2 HT2G
+IMPH  N CNT CA HN   CNT CT2 N ONT
+DONO  HN N
+ACCE  ONT CNT
+IC    C CA N CNT          0.00  0.00  180.00  0.00  0.00
+IC    CNT CA *N HN        0.00  0.00  180.00  0.00  0.00
+IC    CA N CNT CT2        0.00  0.00  180.00  0.00  0.00
+IC    CT2 N *CNT ONT      0.00  0.00  180.00  0.00  0.00
+IC    N CNT CT2 HT2A      0.00  0.00  180.00  0.00  0.00
+IC    HT2A CNT *CT2 HT2B  0.00  0.00  120.00  0.00  0.00
+IC    HT2A CNT *CT2 HT2G  0.00  0.00  240.00  0.00  0.00
+
+PRES NACP         -0.05
+! This patch replaces the N-terminal with an acetamide group
+! Only for PROLINE as first residue
+! Apply this patch ONLY after the Nter Patch PROP  has been applied
+GROU
+ ATOM CT2   c     -0.30
+ ATOM HT2A  h      0.10
+ ATOM HT2B  h      0.10
+ ATOM HT2C  h      0.10
+ ATOM CNT   c'     0.60
+ ATOM ONT   o'    -0.55
+ ATOM N     n     -0.25
+ ATOM CA    c      0.15
+ DELE ATOM HT1
+ DELE ATOM HT2
+BOND  N CNT   CNT ONT   CNT CT2   CT2 HT2A   CT2 HT2B   CT2 HT2C
+ANGL  CA N CNT   N CNT ONT   N CNT CT2   ONT CNT CT2
+ANGL  CNT CT2 HT2A   CNT CT2 HT2B   CNT CT2 HT2C
+ANGL  HT2A CT2 HT2B   HT2A CT2 HT2C   HT2B CT2 HT2C
+ANGL  CD N CNT 
+DIHE  C CA N CNT   
+DIHE  CB CA N CNT   
+DIHE  HA CA N CNT   
+DIHE  HD1 CD N CNT   
+DIHE  HD2 CD N CNT   
+DIHE  CG  CD N CNT   
+DIHE  CA N CNT ONT
+DIHE  CD N CNT ONT
+DIHE  CA N CNT CT2
+DIHE  CD N CNT CT2
+DIHE  N CNT CT2 HT2A   N CNT CT2 HT2B   N CNT CT2 HT2C
+DIHE  ONT CNT CT2 HT2A   ONT CNT CT2 HT2B   ONT CNT CT2 HT2C
+IMPH  CNT CT2 N ONT
+ACCE  ONT CNT
+IC    C CA N CNT          0.00  0.00  240.00  0.00  0.00
+IC    CA N CNT CT2        0.00  0.00  160.00  0.00  0.00
+IC    CT2 N *CNT ONT      0.00  0.00  180.00  0.00  0.00
+IC    N CNT CT2 HT2A      0.00  0.00  180.00  0.00  0.00
+IC    HT2A CNT *CT2 HT2B  0.00  0.00  120.00  0.00  0.00
+IC    HT2A CNT *CT2 HT2C  0.00  0.00  240.00  0.00  0.00
+
+PRES  NPYG -0.05  ! Converts N-terminal glutamic acid to pyroglutamic acid 
+ ATOM N     n     -0.40
+ ATOM H     h*     0.25
+ ATOM OE    o'    -0.55
+ ATOM CD    c'     0.60
+ ATOM CG    c     -0.20
+ ATOM HD1   h       .10
+ ATOM HG2   h       .10
+ ATOM CA    c       0.0
+ ATOM HA    h       .05
+DELETE ATOM  HT1 
+DELETE ATOM  HT2 
+DELETE ATOM  HT3 
+DELETE ATOM  OE1 
+DELETE ATOM  OE2 
+BOND    N  H
+BOND    N  CD
+BOND    CD  OE
+ANGLE    H  N  CA
+ANGLE    H  N  CD
+ANGLE    CA N  CD
+ANGLE   OE  CD N
+ANGLE   OE  CD CG
+ANGLE   CG  CD N
+DIHE    H    N   CA    C
+DIHE    H    N   CA    CB
+DIHE    CD    N   CA    C
+DIHE    CD    N   CA    CB
+DIHE    CG   CD   N   CA
+DIHE    CG   CD   N   H
+DIHE    OE   CD   N   CA
+DIHE    OE   CD   N   H
+DIHE    CB   CG   CD   N
+DIHE    CB   CG   CD   OE
+DIHE    HG1   CG   CD   N
+DIHE    HG1   CG   CD   OE
+DIHE    HG2   CG   CD   N
+DIHE    HG2   CG   CD   OE
+IMPH  N    CA   CD   H
+! inverted for new IMPH rules
+IMPH  CD   N    CG   OE   
+IC  CD  CA  *N  H  0.0   0.0000   180.0   0.0000   0.0
+IC  OE  CG  *CD N   0.0   0.0000   180.0   0.0000   0.0
+IC  CD  N   CA  C   0.0   0.0000   -60.0   0.0000   0.0
+IC  N   CA  CB  CG   0.0 105.0000     0.0   0.0000   0.0
+IC      CA  CB  CG  CD          0.0 105.0000     0.0 105.0000   0.0
+IC      CB  CG  CD  N           0.0 105.0000     0.0   0.0000   0.0
+IC      CG  CD  N   CA          0.0   0.0000     0.0   0.0000   0.0
+DONO    H   N
+ACCE    OE
+
+PRES NMEC         -0.10
+! This patch replaces the N-terminal with a methoxycarbonyl group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CT3   c      0.25
+ ATOM HT3A  h      0.10
+ ATOM HT3B  h      0.10
+ ATOM HT3G  h      0.10
+ ATOM OT2   oe    -0.65
+ ATOM ONT   o'    -0.55
+ ATOM CNT   c'     0.60
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.30
+ ATOM CA    c       .05
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT ONT   CNT OT2   OT2 CT3   CT3 HT3A   CT3 HT3B
+BOND  CT3 HT3G
+ANGL  CA N HN   CA N CNT   HN N CNT   N CNT ONT   N CNT OT2
+ANGL  ONT CNT OT2   CNT OT2 CT3   OT2 CT3 HT3A   OT2 CT3 HT3B
+ANGL  OT2 CT3 HT3G   HT3A CT3 HT3B   HT3A CT3 HT3G   HT3B CT3 HT3G
+DIHE  C CA N CNT   
+DIHE  C CA N HN
+DIHE  CB CA N CNT   
+DIHE  CB CA N HN
+DIHE  HA CA N HN
+DIHE  HA CA N CNT   
+DIHE  CA N CNT ONT
+DIHE  HN N CNT ONT
+DIHE  CA N CNT OT2
+DIHE  HN N CNT OT2
+DIHE  N CNT OT2 CT3
+DIHE  ONT CNT OT2 CT3  
+DIHE  CNT OT2 CT3 HT3A
+DIHE  CNT OT2 CT3 HT3B
+DIHE  CNT OT2 CT3 HT3G
+IMPH  N CNT CA HN   CNT OT2 N ONT
+DONO  HN N
+ACCE  ONT CNT
+ACCE  OT2
+IC    C CA N CNT          0.00  0.00  180.00  0.00  0.00
+IC    CNT CA *N HN        0.00  0.00  180.00  0.00  0.00
+IC    CA N CNT OT2        0.00  0.00  180.00  0.00  0.00
+IC    OT2 N *CNT ONT      0.00  0.00  180.00  0.00  0.00
+IC    N CNT OT2 CT3       0.00  0.00  180.00  0.00  0.00
+IC    CNT OT2 CT3 HT3A    0.00  0.00  180.00  0.00  0.00
+IC    HT3A OT2 *CT3 HT3B  0.00  0.00  120.00  0.00  0.00
+IC    HT3A OT2 *CT3 HT3G  0.00  0.00  240.00  0.00  0.00
+
+PRES NETC         -0.05
+! This patch replaces the N-terminal with a ethoxycarbonyl group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CT4   c     -0.30
+ ATOM HT5A  h      0.10
+ ATOM HT4B  h      0.10
+ ATOM HT4G  h      0.10
+ ATOM CT3   c      0.05
+ ATOM HT3A  h      0.10
+ ATOM HT3B  h      0.10
+ ATOM OT2   oe    -0.40
+ ATOM ONT   o'    -0.55
+ ATOM CNT   c'     0.70
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.25
+ ATOM CA    c       .10
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT ONT   CNT OT2   OT2 CT3   CT3 HT3A   CT3 HT3B
+BOND  CT3 CT4   CT4 HT4A   CT4 HT4B   CT4 HT4G
+ANGL  CA N HN   CA N CNT   HN N CNT   N CNT ONT   N CNT OT2
+ANGL  ONT CNT OT2   CNT OT2 CT3   OT2 CT3 HT3A   OT2 CT3 HT3B   HT3B CT3 HT3A
+ANGL  OT2 CT3 CT4   HT3A CT3 CT4   HT3B CT3 CT4   CT3 CT4 HT4A
+ANGL  CT3 CT4 HT4B   CT3 CT4 HT4G   HT4A CT4 HT4B   HT4A CT4 HT4G
+ANGL  HT4B CT4 HT4G
+DIHE  C CA N CNT   
+DIHE  C CA N HN
+DIHE  CB CA N CNT   
+DIHE  CB CA N HN
+DIHE  HA CA N HN
+DIHE  HA CA N CNT   
+DIHE  CA N CNT ONT
+DIHE  HN N CNT ONT
+DIHE  CA N CNT OT2
+DIHE  HN N CNT OT2
+DIHE  N CNT OT2 CT3
+DIHE  ONT CNT OT2 CT3  
+DIHE  CNT OT2 CT3 HT3A
+DIHE  CNT OT2 CT3 HT3B
+DIHE  CNT OT2 CT3 CT4
+DIHE  OT2 CT3 CT4 HT4A
+DIHE  OT2 CT3 CT4 HT4B
+DIHE  OT2 CT3 CT4 HT4G
+IMPH  N CNT CA HN   CNT OT2 N ONT
+DONO  HN N
+ACCE  ONT CNT
+ACCE  OT2
+IC    C CA N CNT          0.00  0.00  180.00  0.00  0.00
+IC    CNT CA *N HN        0.00  0.00  180.00  0.00  0.00
+IC    CA N CNT OT2        0.00  0.00  180.00  0.00  0.00
+IC    OT2 N *CNT ONT      0.00  0.00  180.00  0.00  0.00
+IC    N CNT OT2 CT3       0.00  0.00  180.00  0.00  0.00
+IC    CNT OT2 CT3 CT4     0.00  0.00  180.00  0.00  0.00
+IC    CT4 OT2 *CT3 HT3A   0.00  0.00  120.00  0.00  0.00
+IC    CT4 OT2 *CT3 HT3B   0.00  0.00  240.00  0.00  0.00
+IC    OT2 CT3 CT4 HT4A    0.00  0.00  180.00  0.00  0.00
+IC    HT4A CT3 *CT4 HT4B  0.00  0.00  120.00  0.00  0.00
+IC    HT4A CT3 *CT4 HT4G  0.00  0.00  240.00  0.00  0.00
+
+PRES NBOC         -0.10
+! This patch replaces the N-terminal with a t-butoxycarbonyl group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CT4A  c     -0.10
+ ATOM HT4A  h      0.05
+ ATOM HT4B  h      0.05
+ ATOM HT4G  h      0.05
+ ATOM CT4B  c     -0.10
+ ATOM HT4D  h      0.05
+ ATOM HT4E  h      0.05
+ ATOM HT4Z  h      0.05
+ ATOM CT4G  c     -0.10
+ ATOM HT4H  h      0.05
+ ATOM HT4I  h      0.05
+ ATOM HT4K  h      0.05
+ ATOM CT3   c      0.40
+ ATOM OT2   oe    -0.65
+ ATOM ONT   o'    -0.55
+ ATOM CNT   c'     0.60
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.30
+ ATOM CA    c       .05
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT ONT   CNT OT2   OT2 CT3
+BOND  CT3 CT4A   CT3 CT4B   CT3 CT4G   
+BOND  CT4A HT4A   CT4A HT4B   CT4A HT4G
+BOND  CT4B HT4D   CT4B HT4E   CT4B HT4Z
+BOND  CT4G HT4H   CT4G HT4I   CT4G HT4K
+ANGL  CA N HN   CA N CNT   HN N CNT   N CNT ONT   N CNT OT2
+ANGL  ONT CNT OT2   CNT OT2 CT3   
+ANGL  OT2 CT3 CT4A   CT4A CT3 CT4B   CT4A CT3 CT4G   CT4B CT3 CT4G
+ANGL  OT2 CT3 CT4B   OT2 CT3 CT4G
+ANGL  CT3 CT4A HT4A   CT3 CT4A HT4B   CT3 CT4A HT4G
+ANGL  HT4A CT4A HT4B  HT4A CT4A HT4G  HT4B  CT4A HT4G  
+ANGL  CT3 CT4B HT4D   CT3 CT4B HT4E   CT3 CT4B HT4Z
+ANGL  HT4D CT4B HT4E  HT4D CT4B HT4Z  HT4Z CT4B HT4E  
+ANGL  CT3 CT4G HT4H   CT3 CT4G HT4I   CT3 CT4G HT4K
+ANGL  HT4H CT4G HT4I  HT4H CT4G HT4K  HT4I CT4G HT4K 
+DIHE  C CA N CNT   
+DIHE  C CA N HN
+DIHE  CB CA N CNT   
+DIHE  CB CA N HN
+DIHE  HA CA N HN
+DIHE  HA CA N CNT   
+DIHE  CA N CNT ONT
+DIHE  HN N CNT ONT
+DIHE  CA N CNT OT2
+DIHE  HN N CNT OT2
+DIHE  N CNT OT2 CT3
+DIHE  ONT CNT OT2 CT3  
+DIHE  CNT OT2 CT3 CT4A
+DIHE  CNT OT2 CT3 CT4B
+DIHE  CNT OT2 CT3 CT4G
+DIHE  OT2 CT3 CT4A HT4A     OT2 CT3 CT4A HT4B    OT2 CT3 CT4A HT4G
+DIHE  CT4B CT3 CT4A HT4A    CT4B CT3 CT4A HT4B   CT4B CT3 CT4A HT4G
+DIHE  CT4G CT3 CT4A HT4A    CT4G CT3 CT4A HT4B   CT4G CT3 CT4A HT4G
+DIHE  OT2 CT3 CT4B HT4D     OT2 CT3 CT4B HT4E    OT2 CT3 CT4B HT4Z
+DIHE  CT4A CT3 CT4B HT4D    CT4A CT3 CT4B HT4E   CT4A CT3 CT4B HT4Z
+DIHE  CT4G CT3 CT4B HT4D    CT4G CT3 CT4B HT4E   CT4G CT3 CT4B HT4Z
+DIHE  OT2 CT3 CT4G HT4H     OT2 CT3 CT4G HT4I    OT2 CT3 CT4G HT4K
+DIHE  CT4B CT3 CT4G HT4H    CT4B CT3 CT4G HT4I   CT4B CT3 CT4G HT4K
+DIHE  CT4A CT3 CT4G HT4H    CT4A CT3 CT4G HT4I   CT4A CT3 CT4G HT4K
+IMPH  N CNT CA HN   CNT OT2 N ONT
+DONO  HN N
+ACCE  ONT CNT
+ACCE  OT2
+IC    C CA N CNT          0.00  0.00  180.00  0.00  0.00
+IC    CNT CA *N HN        0.00  0.00  180.00  0.00  0.00
+IC    CA N CNT OT2        0.00  0.00  180.00  0.00  0.00
+IC    OT2 N *CNT ONT      0.00  0.00  180.00  0.00  0.00
+IC    N CNT OT2 CT3       0.00  0.00  180.00  0.00  0.00
+IC    CNT OT2 CT3 CT4A    0.00  0.00  180.00  0.00  0.00
+IC    CT4A OT2 *CT3 CT4B  0.00  0.00  120.00  0.00  0.00
+IC    CT4A OT2 *CT3 CT4G  0.00  0.00  240.00  0.00  0.00
+IC    OT2 CT3 CT4A HT4A   0.00  0.00  180.00  0.00  0.00
+IC    HT4A CT3 *CT4A HT4B 0.00  0.00  120.00  0.00  0.00
+IC    HT4A CT3 *CT4A HT4G 0.00  0.00  240.00  0.00  0.00
+IC    OT2 CT3 CT4B HT4D   0.00  0.00  180.00  0.00  0.00
+IC    HT4D CT3 *CT4B HT4E 0.00  0.00  120.00  0.00  0.00
+IC    HT4D CT3 *CT4B HT4Z 0.00  0.00  240.00  0.00  0.00
+IC    OT2 CT3 CT4G HT4H   0.00  0.00  180.00  0.00  0.00
+IC    HT4H CT3 *CT4G HT4I 0.00  0.00  120.00  0.00  0.00
+IC    HT4H CT3 *CT4G HT4K 0.00  0.00  240.00  0.00  0.00
+
+PRES NPHC         -0.10
+! This patch replaces the N-terminal with a phenoxycarbonyl group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CT6   cp    -0.13
+ ATOM HT6   h      0.13
+ ATOM CT5A  cp    -0.13
+ ATOM HT5A  h      0.13
+ ATOM CT5B  cp    -0.13
+ ATOM HT5B  h      0.13
+ ATOM CT4A  cp    -0.13
+ ATOM HT4A  h      0.13
+ ATOM CT4B  cp    -0.13
+ ATOM HT4B  h      0.13
+ ATOM CT3   cp     0.25
+ ATOM OT2   oe    -0.35
+ ATOM ONT   o'    -0.55
+ ATOM CNT   c'     0.60
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.30
+ ATOM CA    c       .05
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT ONT   CNT OT2   OT2 CT3   CT3 CT4A
+BOND  CT4A HT4A   CT4A CT5A   CT5A HT5A   CT5A CT6   CT6 HT6
+BOND  CT6 CT5B   CT5B HT5B   CT5B CT4B   CT4B HT4B   CT4B CT3
+ANGL  CA N HN   CA N CNT   HN N CNT   N CNT ONT   N CNT OT2
+ANGL  ONT CNT OT2   CNT OT2 CT3   OT2 CT3 CT4A   OT2 CT3 CT4B  CT4B CT3 CT4A
+ANGL  CT3 CT4A HT4A   CT3 CT4A CT5A   HT4A CT4A CT5A   CT4A CT5A HT5A   
+ANGL  CT4A CT5A CT6   HT5A CT5A CT6   CT5A CT6 HT6   CT5A CT6 CT5B
+ANGL  HT6 CT6 CT5B   CT6 CT5B HT5B   CT6 CT5B CT4B   HT5B CT5B CT4B
+ANGL  CT5B CT4B HT4B   CT5B CT4B CT3   HT4B CT4B CT3
+DIHE  C CA N CNT   
+DIHE  C CA N HN
+DIHE  CB CA N CNT   
+DIHE  CB CA N HN
+DIHE  HA CA N HN
+DIHE  HA CA N CNT   
+DIHE  CA N CNT ONT
+DIHE  HN N CNT ONT
+DIHE  CA N CNT OT2
+DIHE  HN N CNT OT2
+DIHE  N CNT OT2 CT3
+DIHE  ONT CNT OT2 CT3  
+DIHE  CNT OT2 CT3 CT4A
+DIHE  CNT OT2 CT3 CT4B
+DIHE  OT2 CT3 CT4A HT4A     OT2 CT3 CT4A CT5A 
+DIHE  CT4B CT3 CT4A HT4A    CT4B CT3 CT4A CT5A 
+DIHE  OT2 CT3 CT4B HT4B     OT2 CT3 CT4B CT5B    
+DIHE  CT4A CT3 CT4B HT4B    CT4A CT3 CT4B CT5B
+DIHE  CT3 CT4A CT5A CT6     CT3 CT4A CT5A  HT5A
+DIHE  HT4A CT4A CT5A CT6    HT4A CT4A CT5A  HT5A
+DIHE  CT3 CT4B CT5B CT6     CT3 CT4B CT5B  HT5B
+DIHE  HT4B CT4B CT5B CT6    HT4B CT4B CT5B  HT5B
+DIHE  HT6 CT6 CT5A HT5A     HT6 CT6 CT5A CT4A 
+DIHE  CT5B CT6 CT5A HT5A    CT5B CT6 CT5A CT4A 
+DIHE  HT6 CT6 CT5B HT5B     HT6 CT6 CT5B CT4B    
+DIHE  CT5A CT6 CT5B HT5B    CT5A CT6 CT5B CT4B
+IMPH  N CNT CA HN   CNT OT2 N ONT
+IMPH  CT3 CT4A CT4B OT2
+IMPH  CT3 CT4A CT5A CT6   CT4A CT5A CT6 CT5B   CT5A CT6 CT5B CT4B
+IMPH  CT6 CT5B CT4B CT3   CT5B CT4B CT3 CT4A   CT4B CT3 CT4A CT5A
+IMPH  CT4A CT5A CT3 HT4A   CT5A CT6 CT4A HT5A   CT6 CT5B CT5A HT6
+IMPH  CT5B CT4B CT6 HT5B   CT4B CT3 CT5B HT4B
+DONO  HN N
+ACCE  ONT CNT
+ACCE  OT2
+IC    C CA N CNT          0.00   0.00  180.00   0.00  0.00
+IC    CNT CA *N HN        0.00   0.00  180.00   0.00  0.00
+IC    CA N CNT OT2        0.00   0.00  180.00   0.00  0.00
+IC    OT2 N *CNT ONT      0.00   0.00  180.00   0.00  0.00
+IC    N CNT OT2 CT3       0.00   0.00  180.00   0.00  0.00
+IC    CNT OT2 CT3 CT4A    0.00   0.00  180.00   0.00  0.00
+IC    CT4A OT2 *CT3 CT4B  0.00   0.00  180.00   0.00  0.00
+IC    OT2 CT3 CT4A CT5A   0.00   0.00  180.00   0.00  0.00
+IC    CT5A CT3 *CT4A HT4A 0.00   0.00  180.00   0.00  0.00
+IC    CT3 CT4A CT5A CT6   0.00   0.00    0.00   0.00  0.00
+IC    CT6 CT4A *CT5A HT5A 0.00   0.00  180.00   0.00  0.00
+IC    OT2 CT3 CT4B CT5B   0.00   0.00  180.00   0.00  0.00
+IC    CT5B CT3 *CT4B HT4B 0.00   0.00  180.00   0.00  0.00
+IC    CT3 CT4B CT5B CT6   0.00   0.00    0.00   0.00  0.00
+IC    CT6 CT4B *CT5B HT5B 0.00   0.00  180.00   0.00  0.00
+IC    CT5A CT5B *CT6 HT6  0.00   0.00  180.00   0.00  0.00
+
+PRES NCBZ         -0.10
+! This patch replaces the N-terminal with a carbobenzoxyl group
+! This patch will not work with PRO as the first residue
+! Apply this patch ONLY after the NTER patch has been applied
+GROU
+ ATOM CT7   cp    -0.13
+ ATOM HT7   h      0.13
+ ATOM CT6A  cp    -0.13
+ ATOM HT6A  h      0.13
+ ATOM CT6B  cp    -0.13
+ ATOM HT6B  h      0.13
+ ATOM CT5A  cp    -0.13
+ ATOM HT5A  h      0.13
+ ATOM CT5B  cp    -0.13
+ ATOM HT5B  h      0.13
+ ATOM CT4   cp    -0.13
+ ATOM CT3   c      0.23
+ ATOM HT3A  h      0.10
+ ATOM HT3B  h      0.10
+ ATOM OT2   oe    -0.40
+ ATOM ONT   o'    -0.55
+ ATOM CNT   c'     0.60
+ ATOM N     n     -0.40
+ ATOM HN    h*     0.30
+ ATOM CA    c       .05
+ DELE ATOM HT1
+ DELE ATOM HT2
+ DELE ATOM HT3
+BOND  N HN   N CNT   CNT ONT   CNT OT2   OT2 CT3
+BOND  CT3 HT3A   CT3 HT3B   CT3 CT4   CT4 CT5A
+BOND  CT5A HT5A   CT5A CT6A   CT6A HT6A   CT6A CT7   CT7 HT7
+BOND  CT7 CT6B   CT6B HT6B   CT6B CT5B   CT5B HT5B   CT5B CT4
+ANGL  CA N HN   CA N CNT   HN N CNT   N CNT ONT   N CNT OT2
+ANGL  ONT CNT OT2   CNT OT2 CT3
+ANGL  OT2 CT3 HT3A   OT2 CT3 HT3B   OT2 CT3 CT4   
+ANGL  HT3A CT3 CT4   HT3A CT3 HT3B   HT3B CT3 CT4
+ANGL  CT3 CT4 CT5A   CT3 CT4 CT5B    CT5A CT4 CT5B 
+ANGL  CT4 CT5A HT5A   CT4 CT5A CT6A   HT5A CT5A CT6A   CT5A CT6A HT6A   
+ANGL  CT5A CT6A CT7   HT6A CT6A CT7   CT6A CT7 HT7   CT6A CT7 CT6B
+ANGL  HT7 CT7 CT6B   CT7 CT6B HT6B   CT7 CT6B CT5B   HT6B CT6B CT5B
+ANGL  CT6B CT5B HT5B   CT6B CT5B CT4   HT5B CT5B CT4
+DIHE  C CA N CNT   
+DIHE  C CA N HN
+DIHE  CB CA N CNT   
+DIHE  CB CA N HN
+DIHE  HA CA N HN
+DIHE  HA CA N CNT   
+DIHE  CA N CNT ONT
+DIHE  HN N CNT ONT
+DIHE  CA N CNT OT2
+DIHE  HN N CNT OT2
+DIHE  N CNT OT2 CT3
+DIHE  ONT CNT OT2 CT3  
+DIHE  CNT OT2 CT3 CT4
+DIHE  CNT OT2 CT3 HT3A
+DIHE  CNT OT2 CT3 HT3B
+DIHE  CT3 CT4 CT5A HT5A     CT3 CT4 CT5A CT6A 
+DIHE  CT5B CT4 CT5A HT5A    CT5B CT4 CT5A CT6A 
+DIHE  CT3 CT4 CT5B HT5B     CT3 CT4 CT5B CT6B    
+DIHE  CT5A CT4 CT5B HT5B    CT5A CT4 CT5B CT6B
+DIHE  CT4 CT5A CT6A CT7     CT4 CT5A CT6A  HT6A
+DIHE  HT5A CT5A CT6A CT7    HT5A CT5A CT6A  HT6A
+DIHE  CT4 CT5B CT6B CT7     CT4 CT5B CT6B  HT6B
+DIHE  HT5B CT5B CT6B CT7    HT5B CT5B CT6B  HT6B
+DIHE  HT7 CT7 CT6A HT6A     HT7 CT7 CT6A CT5A 
+DIHE  CT6B CT7 CT6A HT6A    CT6B CT7 CT6A CT5A 
+DIHE  HT7 CT7 CT6B HT6B     HT7 CT7 CT6B CT5B    
+DIHE  CT6A CT7 CT6B HT6B    CT6A CT7 CT6B CT5B
+DIHE  OT2 CT3 CT4 CT5A      OT2 CT3 CT4 CT5B
+DIHE  HT3A CT3 CT4 CT5A     HT3A CT3 CT4 CT5B
+DIHE  HT3B CT3 CT4 CT5A     HT3B CT3 CT4 CT5B
+IMPH  N CNT CA HN   CNT OT2 N ONT
+IMPH  CT4 CT5A CT5B OT2
+IMPH  CT4 CT5A CT6A CT7   CT5A CT6A CT7 CT6B   CT6A CT7 CT6B CT5B
+IMPH  CT7 CT6B CT5B CT4   CT6B CT5B CT4 CT5A   CT5B CT4 CT5A CT6A
+IMPH  CT5A CT6A CT4 HT5A   CT6A CT7 CT5A HT6A   CT7 CT6B CT6A HT7
+IMPH  CT6B CT5B CT7 HT6B   CT5B CT4 CT6B HT5B
+DONO  HN N
+ACCE  ONT CNT
+ACCE  OT2
+IC    C CA N CNT          0.00   0.00  180.00   0.00  0.00
+IC    CNT CA *N HN        0.00   0.00  180.00   0.00  0.00
+IC    CA N CNT OT2        0.00   0.00  180.00   0.00  0.00
+IC    OT2 N *CNT ONT      0.00   0.00  180.00   0.00  0.00
+IC    N CNT OT2 CT3       0.00   0.00  180.00   0.00  0.00
+IC    CNT OT2 CT3 CT4     0.00   0.00  180.00   0.00  0.00
+IC    CT4 OT2 *CT3 HT3A   0.00   0.00  120.00   0.00  0.00
+IC    CT4 OT2 *CT3 HT3B   0.00   0.00  240.00   0.00  0.00
+IC    OT2 CT3 CT4 CT5A    0.00   0.00  180.00   0.00  0.00
+IC    CT5A CT3 *CT4 CT5B  0.00   0.00  180.00   0.00  0.00
+IC    CT3 CT4 CT5A CT6A   0.00   0.00  180.00   0.00  0.00
+IC    CT6A CT4 *CT5A HT5A 0.00   0.00  180.00   0.00  0.00
+IC    CT4 CT5A CT6A CT7   0.00   0.00    0.00   0.00  0.00
+IC    CT7 CT5A *CT6A HT6A 0.00   0.00  180.00   0.00  0.00
+IC    CT3 CT4 CT5B CT6B   0.00   0.00  180.00   0.00  0.00
+IC    CT6B CT4 *CT5B HT5B 0.00   0.00  180.00   0.00  0.00
+IC    CT4 CT5B CT6B CT7   0.00   0.00    0.00   0.00  0.00
+IC    CT7 CT5B *CT6B HT6B 0.00   0.00  180.00   0.00  0.00
+IC    CT6A CT6B *CT7 HT7  0.00   0.00  180.00   0.00  0.00
+
+! C-terminal patches
+
+PRES  COOH    0.1000    !   Protonated Carboxyl (COOH) C-terminus
+ ATOM OCT2  o'     -.61
+ ATOM C     c'      .78
+ ATOM OCT1  o      -.67
+ ATOM HCT   h*     0.46
+ ATOM CA    c       .14
+BOND   OCT1  HCT
+THETA  C OCT1 HCT
+DIHE  CA C OCT1 HCT    OCT2  C OCT1 HCT 
+IC   CA  C  OCT1 HCT    0.0000  0.00  180.0  0.00   0.0000    
+DONO HCT  OCT1
+
+PRES CALD          0.10
+! This patch replaces the C-terminal with an aldehyde group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.23
+ ATOM O     o'    -0.43
+ ATOM HCT   h      0.20
+ ATOM CA    c      0.10
+ DELE ATOM OCT1
+ DELE ATOM OCT2
+BOND  C O   C HCT
+ANGL  CA C O   CA C HCT
+DIHE  N CA C O    N CA C HCT
+DIHE  CB CA C O   CB CA C HCT
+DIHE  HA CA C O   HA CA C HCT
+! This may need to be inverted for new IMPH rules
+IMPH  C CA O HCT
+ACCE  O C
+IC   N    CA    C    O      0.0  0.0    0.0  0.0  0.0
+IC   O    CA    *C   HCT    0.0  0.0  180.0  0.0  0.0
+
+PRES CALC        0.10
+! This patch replaces the C-terminal with an alcohol group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c      0.17
+ ATOM HCT1  h      0.04
+ ATOM HCT2  h      0.04
+ ATOM OCT   o     -0.65
+ ATOM HOT   ho     0.40
+ ATOM CA    c      0.10
+DELE ATOM  OCT1
+DELE ATOM  OCT2
+BOND C HCT1   C HCT2   C OCT   OCT HOT
+ANGL CA C HCT1   CA C HCT2   CA C OCT   C OCT HOT
+ANGL OCT C HCT1  OCT C HCT2   HCT1 C HCT2
+DIHE N CA C OCT      N CA C HCT1      N CA C HCT2   
+DIHE HA CA C OCT     HA CA C HCT1     HA CA C HCT2   
+DIHE CB CA C OCT     CB CA C HCT1     CB CA C HCT2   
+DIHE CA C OCT HOT    HCT1 C OCT HOT   HCT2 C OCT HOT
+ACCE OCT
+IC   N CA C OCT           0.00  0.00  180.00  0.00  0.00
+IC   CA C OCT HOT         0.00  0.00  180.00  0.00  0.00
+IC   OCT CA *C HCT1       0.00  0.00  120.00  0.00  0.00
+IC   OCT CA *C HCT2       0.00  0.00  240.00  0.00  0.00
+
+PRES CAMD        0.00
+! This patch replaces the C-terminal with an amide group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.55
+ ATOM O     o'    -0.55
+ ATOM NCT   n     -0.60
+ ATOM HCT1  h*     0.30
+ ATOM HCT2  h*     0.30
+!ATOM  CA   CT    0.10
+DELE  ATOM OCT1
+DELE  ATOM OCT2
+BOND  C O   C NCT   NCT HCT1   NCT HCT2
+ANGL  CA C O   CA C NCT   O C NCT   C NCT HCT1   C NCT HCT2   HCT1 NCT HCT2
+DIHE  N CA C NCT       N CA C O   
+DIHE  HA CA C NCT      HA CA C O   
+DIHE  CB CA C NCT      CB CA C O   
+DIHE  CA C NCT HCT2    CA C NCT HCT1
+DIHE  O  C NCT HCT2    O  C NCT HCT1
+IMPH  C CA NCT O    NCT C HCT2 HCT1
+ACCE  O C
+DONO  HCT1 NCT
+DONO  HCT2 NCT
+IC    N CA C NCT            0.00  0.00  180.00  0.00  0.00
+IC    CA NCT *C O           0.00  0.00  180.00  0.00  0.00
+IC    CA C NCT HCT2         0.00  0.00  180.00  0.00  0.00
+IC    C HCT2 *NCT HCT1      0.00  0.00  180.00  0.00  0.00
+
+PRES CMAM        0.10
+! This patch replaces the C-terminal with an methylamide group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.60
+ ATOM O     o'    -0.55
+ ATOM NCT   n     -0.40
+ ATOM HCT1  h*     0.25
+ ATOM CTB   c      0.00
+ ATOM HTB1  h      0.05
+ ATOM HTB2  h      0.05
+ ATOM HTB3  h      0.05
+ ATOM CA    c      0.05
+ DELE  ATOM OCT1
+ DELE  ATOM OCT2
+BOND  C O   C NCT   NCT HCT1   NCT CTB   CTB HTB1   CTB HTB2   CTB HTB3
+ANGL  CA C O   CA C NCT   O C NCT   C NCT HCT1   C NCT CTB   HCT1 NCT CTB
+ANGL  NCT CTB HTB1   NCT CTB HTB2   NCT CTB HTB3   HTB1 CTB HTB3
+ANGL  HTB2 CTB HTB3  HTB1 CTB HTB2 
+DIHE  N CA C NCT       N CA C O   
+DIHE  HA CA C NCT      HA CA C O   
+DIHE  CB CA C NCT      CB CA C O   
+DIHE  CA C NCT CTB    CA C NCT HCT1
+DIHE  O  C NCT CTB    O  C NCT HCT1
+DIHE  C NCT CTB HTB1       C NCT CTB HTB2        C NCT CTB HTB3
+DIHE  HCT1 NCT CTB HTB1    HCT1 NCT CTB HTB2     HCT1 NCT CTB HTB3
+IMPH  C CA NCT O    NCT C CTB HCT1
+ACCE  O C
+DONO  HCT1 NCT
+IC    N CA C NCT            0.00  0.00  180.00  0.00  0.00
+IC    CA NCT *C O           0.00  0.00  180.00  0.00  0.00
+IC    CA C NCT CTB          0.00  0.00  180.00  0.00  0.00
+IC    C CTB *NCT HCT1       0.00  0.00  180.00  0.00  0.00
+IC    C NCT CTB HTB1        0.00  0.00  180.00  0.00  0.00
+IC    HTB1 NCT *CTB HTB2    0.00  0.00  120.00  0.00  0.00
+IC    HTB1 NCT *CTB HTB3    0.00  0.00  240.00  0.00  0.00
+
+PRES CEOH        0.10
+! This patch replaces the C-terminal with an amide of ethanolamine
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.60
+ ATOM O     o'    -0.55
+ ATOM NCT   n     -0.40
+ ATOM HCT1  h*     0.25
+ ATOM CA    c      0.05
+GROUP
+ ATOM CTB   c      0.05
+ ATOM HTB1  h      0.05
+ ATOM HTB2  h      0.05
+GROUP
+ ATOM CTG   c      0.17
+ ATOM HTG1  h      0.04
+ ATOM HTG2  h      0.04
+ ATOM OTE   o     -0.65
+ ATOM HTE   ho     0.40
+ DELE  ATOM OCT1
+ DELE  ATOM OCT2
+BOND  C O   C NCT   NCT HCT1   NCT CTB   CTB HTB1   CTB HTB2  
+BOND  CTB CTG       CTG OTE    OTE HTE   CTG HTG1   CTG HTG2
+ANGL  CA C O   CA C NCT   O C NCT   C NCT HCT1   C NCT CTB   HCT1 NCT CTB
+ANGL  NCT CTB HTB1   NCT CTB HTB2   NCT CTB CTG   HTB1 CTB CTG  HTB2 CTB CTG
+ANGL  HTB1 CTB HTB2  CTB CTG HTG1   CTB CTG HTG2  HTG1 CTG HTG2 
+ANGL  CTB  CTG OTE   HTG1 CTG OTE  HTG2 CTG OTE    CTG OTE HTE
+DIHE  N CA C NCT       N CA C O   
+DIHE  HA CA C NCT      HA CA C O   
+DIHE  CB CA C NCT      CB CA C O   
+DIHE  CA C NCT CTB    CA C NCT HCT1
+DIHE  O  C NCT CTB    O  C NCT HCT1
+DIHE  C NCT CTB HTB1       C NCT CTB HTB2        C NCT CTB CTG
+DIHE  HCT1 NCT CTB HTB1    HCT1 NCT CTB HTB2     HCT1 NCT CTB CTG
+DIHE  NCT CTB CTG OTE      NCT CTB CTG HTG1      NCT CTB CTG HTG2  
+DIHE  HTB1 CTB CTG OTE     HTB1 CTB CTG HTG1     HTB1 CTB CTG HTG2  
+DIHE  HTB2 CTB CTG OTE     HTB2 CTB CTG HTG1     HTB2 CTB CTG HTG2  
+DIHE  CTB CTG OTE HTE      HTG1 CTG OTE HTE      HTG2 CTG OTE HTE
+IMPH  C CA NCT O    NCT C CTB HCT1
+ACCE  O C
+ACCE  OTE  CTG
+DONO  HCT1 NCT
+DONO  HTE  OTE
+IC    N CA C NCT            0.00  0.00  180.00  0.00  0.00
+IC    CA NCT *C O           0.00  0.00  180.00  0.00  0.00
+IC    CA C NCT CTB          0.00  0.00  180.00  0.00  0.00
+IC    C CTB *NCT HCT1       0.00  0.00  180.00  0.00  0.00
+IC    C NCT CTB CTG         0.00  0.00  180.00  0.00  0.00
+IC    CTG  NCT *CTB HTB1    0.00  0.00  120.00  0.00  0.00
+IC    CTG  NCT *CTB HTB2    0.00  0.00  240.00  0.00  0.00
+IC    NCT  CTB CTG OTE      0.00  0.00  180.00  0.00  0.00
+IC    CTB  OTE *CTG HTG1    0.00  0.00  120.00  0.00  0.00
+IC    CTB  OTE *CTG HTG2    0.00  0.0   240.0   0.00  0.00
+IC    CTB  CTG OTE HTE      0.00  0.00  180.00  0.00  0.00
+
+PRES CMES        0.10
+! This patch replaces the C-terminal with a methyl ester group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.70
+ ATOM O     o'    -0.55
+ ATOM OCT   oe    -0.65
+ ATOM CTB   c      0.20
+ ATOM HTB1  h      0.10
+ ATOM HTB2  h      0.10
+ ATOM HTB3  h      0.10
+ ATOM CA    c      0.10
+ DELE  ATOM OCT1
+ DELE  ATOM OCT2
+BOND  C O   C OCT   OCT CTB   CTB HTB1   CTB HTB2   CTB HTB3
+ANGL  CA C O   CA C OCT   O C OCT   C OCT CTB   OCT CTB HTB1
+ANGL  OCT CTB HTB2   OCT CTB HTB3   HTB1 CTB HTB2   HTB1 CTB HTB3
+ANGL  HTB2 CTB HTB3
+DIHE  N CA C OCT       N CA C O   
+DIHE  HA CA C OCT      HA CA C O   
+DIHE  CB CA C OCT      CB CA C O   
+DIHE  CA C OCT CTB   
+DIHE  O  C OCT CTB    
+DIHE  C OCT CTB HTB1       C OCT CTB HTB2        C OCT CTB HTB3
+IMPH  C CA OCT O
+ACCE  O C
+ACCE  OCT
+IC    N    CA   C    OCT      0.00   0.00   180.00   0.00   0.00
+IC    CA   C    OCT  CTB      0.00   0.00   180.00   0.00   0.00
+IC    OCT  CA   *C   O        0.00   0.00   180.00   0.00   0.00
+IC    C    OCT  CTB  HTB1     0.00   0.00   180.00   0.00   0.00
+IC    HTB1 OCT  *CTB HTB2     0.00   0.00   120.00   0.00   0.00
+IC    HTB1 OCT  *CTB HTB3     0.00   0.00   240.00   0.00   0.00
+
+PRES CETS        0.10
+! This patch replaces the C-terminal with a ethyl ester group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.70
+ ATOM O     o'    -0.55
+ ATOM OCT   oe    -0.65
+ ATOM CTB   c      0.25
+ ATOM HTB1  h      0.10
+ ATOM HTB2  h      0.10
+ ATOM CTG   c     -0.10
+ ATOM HTG1  h      0.05
+ ATOM HTG2  h      0.05
+ ATOM HTG3  h      0.05
+ ATOM CA    c      0.10
+ DELE  ATOM OCT1
+ DELE  ATOM OCT2
+BOND  C O   C OCT   OCT CTB   CTB HTB1   CTB HTB2   CTB CTG
+BOND  CTG HTG1   CTG HTG2   CTG HTG3
+ANGL  CA C O   CA C OCT   O C OCT   C OCT CTB   OCT CTB HTB1
+ANGL  OCT CTB HTB2   OCT CTB CTG   HTB1 CTB CTG   HTB2 CTB CTG
+ANGL  CTB CTG HTG1   CTB CTG HTG2   CTB CTG HTG3   HTG1 CTG HTG2
+ANGL  HTG1 CTG HTG3   HTG2 CTG HTG3
+DIHE  N CA C OCT       N CA C O   
+DIHE  HA CA C OCT      HA CA C O   
+DIHE  CB CA C OCT      CB CA C O   
+DIHE  CA C OCT CTB   
+DIHE  O  C OCT CTB    
+DIHE  C OCT CTB HTB1       C OCT CTB HTB2      C OCT CTB CTG
+DIHE  OCT CTB CTG HTG1     OCT CTB CTG HTG2    OCT CTB CTG HTG3
+DIHE  HTB1 CTB CTG HTG1    HTB1 CTB CTG HTG2   HTB1 CTB CTG HTG3
+DIHE  HTB2 CTB CTG HTG1    HTB2 CTB CTG HTG2   HTB2 CTB CTG HTG3
+IMPH  C CA OCT O
+ACCE  O C
+ACCE  OCT
+IC    N    CA   C    OCT      0.00   0.00   180.00   0.00   0.00
+IC    CA   C    OCT  CTB      0.00   0.00   180.00   0.00   0.00
+IC    OCT  CA   *C   O        0.00   0.00   180.00   0.00   0.00
+IC    C    OCT  CTB  CTG      0.00   0.00   180.00   0.00   0.00
+IC    CTG  OCT  *CTB HTB1     0.00   0.00   120.00   0.00   0.00
+IC    CTG  OCT  *CTB HTB2     0.00   0.00   240.00   0.00   0.00
+IC    OCT  CTB  CTG  HTG1     0.00   0.00   180.00   0.00   0.00
+IC    HTG1 CTB  *CTG HTG2     0.00   0.00   120.00   0.00   0.00
+IC    HTG1 CTB  *CTG HTG3     0.00   0.00   240.00   0.00   0.00
+
+PRES CTBS        0.10
+! This patch replaces the C-terminal with a t-butyl ester group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.70
+ ATOM O     o'    -0.55
+ ATOM OCT   oe    -0.40
+ ATOM CTB   c      0.25
+ ATOM CTG1  c     -0.30
+ ATOM HTG1  h      0.10
+ ATOM HTG2  h      0.10
+ ATOM HTG3  h      0.10
+ ATOM CTG2  c     -0.30
+ ATOM HTG4  h      0.10
+ ATOM HTG5  h      0.10
+ ATOM HTG6  h      0.10
+ ATOM CTG3  c     -0.30
+ ATOM HTG7  h      0.10
+ ATOM HTG8  h      0.10
+ ATOM HTG9  h      0.10
+ ATOM CA    c      0.10
+ DELE  ATOM OCT1
+ DELE  ATOM OCT2
+BOND  C O   C OCT   OCT CTB   CTB CTG1   CTB CTG2   CTB CTG3
+BOND  CTG1 HTG1   CTG1 HTG2   CTG1 HTG3
+BOND  CTG2 HTG4   CTG2 HTG5   CTG2 HTG6
+BOND  CTG3 HTG7   CTG3 HTG8   CTG3 HTG9
+ANGL  CA C O   CA C OCT   O C OCT   C OCT CTB   OCT CTB CTG1
+ANGL  OCT CTB CTG2   OCT CTB CTG3
+ANGL  CTB CTG1 HTG1   CTB CTG1 HTG2   CTB CTG1 HTG3
+ANGL  CTB CTG2 HTG4   CTB CTG2 HTG5   CTB CTG2 HTG6
+ANGL  CTB CTG3 HTG7   CTB CTG3 HTG8   CTB CTG3 HTG9
+ANGL  CTG1 CTB CTG2   CTG1 CTB CTG3   CTG2 CTB CTG3
+ANGL  HTG1 CTG1 HTG2   HTG1 CTG1 HTG3   HTG2 CTG1 HTG3
+ANGL  HTG4 CTG2 HTG5   HTG4 CTG2 HTG6   HTG5 CTG2 HTG6
+ANGL  HTG7 CTG3 HTG8   HTG7 CTG3 HTG9   HTG8 CTG3 HTG9
+DIHE  N CA C OCT       N CA C O   
+DIHE  HA CA C OCT      HA CA C O   
+DIHE  CB CA C OCT      CB CA C O   
+DIHE  CA C OCT CTB   
+DIHE  O  C OCT CTB    
+DIHE  C OCT CTB CTG2       C OCT CTB CTG3      C OCT CTB CTG1
+DIHE  OCT CTB CTG1 HTG1     OCT CTB CTG1 HTG2    OCT CTB CTG1 HTG3
+DIHE  CTG2 CTB CTG1 HTG1    CTG2 CTB CTG1 HTG2   CTG2 CTB CTG1 HTG3
+DIHE  CTG3 CTB CTG1 HTG1    CTG3 CTB CTG1 HTG2   CTG3 CTB CTG1 HTG3
+DIHE  OCT CTB CTG2 HTG4     OCT CTB CTG2 HTG5    OCT CTB CTG2 HTG6
+DIHE  CTG1 CTB CTG2 HTG4    CTG1 CTB CTG2 HTG5   CTG1 CTB CTG2 HTG6
+DIHE  CTG3 CTB CTG2 HTG4    CTG3 CTB CTG2 HTG5   CTG3 CTB CTG2 HTG6
+DIHE  OCT CTB CTG3 HTG7     OCT CTB CTG3 HTG8    OCT CTB CTG3 HTG9
+DIHE  CTG2 CTB CTG3 HTG7    CTG2 CTB CTG3 HTG8   CTG2 CTB CTG3 HTG9
+DIHE  CTG1 CTB CTG3 HTG7    CTG1 CTB CTG3 HTG8   CTG1 CTB CTG3 HTG9
+IMPH  C CA OCT O
+ACCE  O C
+ACCE  OCT
+IC    N    CA   C    OCT      0.00   0.00   180.00   0.00   0.00
+IC    CA   C    OCT  CTB      0.00   0.00   180.00   0.00   0.00
+IC    OCT  CA   *C   O        0.00   0.00   180.00   0.00   0.00
+IC    C    OCT  CTB  CTG1     0.00   0.00   180.00   0.00   0.00
+IC    CTG1 OCT  *CTB CTG2     0.00   0.00   120.00   0.00   0.00
+IC    CTG1 OCT  *CTB CTG3     0.00   0.00   240.00   0.00   0.00
+IC    OCT  CTB  CTG1 HTG1     0.00   0.00   180.00   0.00   0.00
+IC    HTG1 CTB *CTG1 HTG2     0.00   0.00   120.00   0.00   0.00
+IC    HTG1 CTB *CTG1 HTG3     0.00   0.00   240.00   0.00   0.00
+IC    OCT  CTB  CTG2 HTG4     0.00   0.00   180.00   0.00   0.00
+IC    HTG4 CTB *CTG2 HTG5     0.00   0.00   120.00   0.00   0.00
+IC    HTG4 CTB *CTG2 HTG6     0.00   0.00   240.00   0.00   0.00
+IC    OCT  CTB  CTG3 HTG7     0.00   0.00   180.00   0.00   0.00
+IC    HTG7 CTB *CTG3 HTG8     0.00   0.00   120.00   0.00   0.00
+IC    HTG7 CTB *CTG3 HTG9     0.00   0.00   240.00   0.00   0.00
+
+PRES CPHS        0.10
+! This patch replaces the C-terminal with a phenyl ester group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.70
+ ATOM O     o'    -0.55
+ ATOM OCT   oe    -0.40
+ ATOM CTB   cp     0.25
+ ATOM CTG1  cp    -0.13
+ ATOM HTG1  h      0.13
+ ATOM CTD1  cp    -0.13
+ ATOM HTD1  h      0.13
+ ATOM CTE   cp    -0.13
+ ATOM HTE   h      0.13
+ ATOM CTD2  cp    -0.13
+ ATOM HTD2  h      0.13
+ ATOM CTG2  cp    -0.13
+ ATOM HTG2  h      0.13
+ ATOM CA    c      0.10
+ DELE  ATOM OCT1
+ DELE  ATOM OCT2
+BOND  C O   C OCT   OCT CTB   CTB CTG1   CTG1 HTG1   CTG1 CTD1
+BOND  CTD1 HTD1   CTD1 CTE   CTE HTE   CTE CTD2   CTD2 HTD2
+BOND  CTD2 CTG2   CTG2 HTG2   CTG2 CTB
+ANGL  CA C O   CA C OCT   O C OCT   C OCT CTB   OCT CTB CTG1
+ANGL  CTB CTG1 HTG1   CTB CTG1 CTD1   HTG1 CTG1 CTD1   CTG1 CTD1 HTD1
+ANGL  CTG1 CTD1 CTE   HTD1 CTD1 CTE   CTD1 CTE HTE   CTD1 CTE CTD2
+ANGL  HTE CTE CTD2   CTE CTD2 HTD2   CTE CTD2 CTG2   HTD2 CTD2 CTG2
+ANGL  CTD2 CTG2 HTG2   CTD2 CTG2 CTB   HTG2 CTG2 CTB   CTG2 CTB CTG1   
+ANGL  CTG2 CTB OCT 
+DIHE  N CA C OCT       N CA C O   
+DIHE  HA CA C OCT      HA CA C O   
+DIHE  CB CA C OCT      CB CA C O   
+DIHE  CA C OCT CTB   
+DIHE  O  C OCT CTB    
+DIHE  C OCT CTB CTG2        C OCT CTB CTG1
+DIHE  OCT CTB CTG1 HTG1     OCT CTB CTG1 CTD1
+DIHE  CTG2 CTB CTG1 HTG1    CTG2 CTB CTG1 CTD1
+DIHE  OCT CTB CTG2 HTG2     OCT CTB CTG2 CTD2 
+DIHE  CTG1 CTB CTG2 HTG2    CTG1 CTB CTG2 CTD2
+DIHE  CTB CTG2 CTD2 CTE     CTB CTG2 CTD2 HTD2
+DIHE  HTG2 CTG2 CTD2 CTE    HTG2 CTG2 CTD2 HTD2
+DIHE  CTB CTG1 CTD1 CTE     CTB CTG1 CTD1 HTD1
+DIHE  HTG1 CTG1 CTD1 CTE    HTG1 CTG1 CTD1 HTD1
+DIHE  HTE CTE CTD1 HTD1     HTE CTE CTD1 CTG1
+DIHE  CTD2 CTE CTD1 HTD1    CTD2 CTE CTD1 CTG1
+DIHE  HTE CTE CTD2 HTD2     HTE CTE CTD2 CTG2 
+DIHE  CTD1 CTE CTD2 HTD2    CTD1 CTE CTD2 CTG2
+IMPR  C CA OCT O   CTB CTG1 CTG2 OCT
+IMPR  CTB CTG1 CTD1 CTE   CTG1 CTD1 CTE CTD2   CTD1 CTE CTD2 CTG2
+IMPR  CTE CTD2 CTG2 CTB   CTD2 CTG2 CTB CTG1   CTG2 CTB CTG1 CTD1
+IMPR  CTG1 CTB CTD1 HTG1   CTD1 CTG1 CTE HTD1   CTE CTD1 CTD2 HTE
+IMPR  CTD2 CTE CTG2 HTD2   CTG2 CTD2 CTB HTG2
+ACCE  O C
+ACCE  OCT
+IC    N CA C OCT            0.00   0.00  180.00   0.00  0.00
+IC    CA C OCT CTB          0.00   0.00  180.00   0.00  0.00
+IC    CA OCT *C O           0.00   0.00  180.00   0.00  0.00
+IC    C OCT CTB CTG1        0.00   0.00  180.00   0.00  0.00
+IC    CTG1 OCT *CTB CTG2    0.00   0.00  180.00   0.00  0.00
+IC    OCT CTB CTG1 CTD1     0.00   0.00  180.00   0.00  0.00
+IC    CTB CTD1 *CTG1 HTG1   0.00   0.00  180.00   0.00  0.00
+IC    CTB CTG1 CTD1 CTE     0.00   0.00    0.00   0.00  0.00
+IC    CTG1 CTE *CTD1 HTD1   0.00   0.00  180.00   0.00  0.00
+IC    CTG1 CTD1 CTE CTD2    0.00   0.00    0.00   0.00  0.00
+IC    CTD1 CTD2 *CTE HTE    0.00   0.00  180.00   0.00  0.00
+IC    CTD1 CTE CTD2 CTG2    0.00   0.00    0.00   0.00  0.00
+IC    CTE CTG2 *CTD2 HTD2   0.00   0.00  180.00   0.00  0.00
+IC    CTE CTD2 CTG2 CTB     0.00   0.00    0.00   0.00  0.00
+IC    CTD2 CTB *CTG2 HTG2   0.00   0.00  180.00   0.00  0.00
+
+PRES CBZS        0.10
+! This patch replaces the C-terminal with a benzyl ester group
+! Apply this patch ONLY after the CTER patch has been applied
+GROU
+ ATOM C     c'     0.70
+ ATOM O     o'    -0.55
+ ATOM OCT   oe    -0.45
+ ATOM CTB   c      0.23
+ ATOM HTB1  h      0.10
+ ATOM HTB2  h      0.10
+ ATOM CTG   cp    -0.13
+ ATOM CTD1  cp    -0.13
+ ATOM HTD1  h      0.13
+ ATOM CTE1  cp    -0.13
+ ATOM HTE1  h      0.13
+ ATOM CTZ   cp    -0.13
+ ATOM HTZ   h      0.13
+ ATOM CTE2  cp    -0.13
+ ATOM HTE2  h      0.13
+ ATOM CTD2  cp    -0.13
+ ATOM HTD2  h      0.13
+ ATOM CA    c      0.10
+ DELE  ATOM OCT1
+ DELE  ATOM OCT2
+BOND  C O   C OCT   OCT CTB   CTB HTB1   CTB HTB2
+BOND  CTB CTG   CTG CTD1   CTD1 HTD1   CTD1 CTE1
+BOND  CTE1 HTE1   CTE1 CTZ   CTZ HTZ   CTZ CTE2   CTE2 HTE2
+BOND  CTE2 CTD2   CTD2 HTD2   CTD2 CTG
+ANGL  CA C O   CA C OCT   O C OCT   C OCT CTB   OCT CTB HTB1
+ANGL  OCT CTB HTB2   OCT CTB CTG   HTB1 CTB CTG   HTB2 CTB CTG  
+ANGL  HTB1 CTB HTB2  CTB CTG CTD1
+ANGL  CTG CTD1 HTD1   CTG CTD1 CTE1   HTD1 CTD1 CTE1   CTD1 CTE1 HTE1
+ANGL  CTD1 CTE1 CTZ   HTE1 CTE1 CTZ   CTE1 CTZ HTZ   CTE1 CTZ CTE2
+ANGL  HTZ CTZ CTE2   CTZ CTE2 HTE2   CTZ CTE2 CTD2   HTE2 CTE2 CTD2
+ANGL  CTE2 CTD2 HTD2   CTE2 CTD2 CTG   HTD2 CTD2 CTG   CTD2 CTG CTD1   
+ANGL  CTD2 CTG CTB
+DIHE  N CA C OCT       N CA C O   
+DIHE  HA CA C OCT      HA CA C O   
+DIHE  CB CA C OCT      CB CA C O   
+DIHE  CA C OCT CTB   
+DIHE  O  C OCT CTB    
+DIHE  C OCT CTB CTG         C OCT CTB HTB1       C OCT CTB HTB2
+DIHE  OCT CTB CTG CTD1      OCT CTB CTG CTD2
+DIHE  HTB1 CTB CTG CTD1     HTB1 CTB CTG CTD2
+DIHE  HTB2 CTB CTG CTD1     HTB2 CTB CTG CTD2
+DIHE  CTB CTG CTD1 HTD1     CTB CTG CTD1 CTE1
+DIHE  CTD2 CTG CTD1 HTD1    CTD2 CTG CTD1 CTE1
+DIHE  CTB CTG CTD2 HTD2     CTB CTG CTD2 CTE2 
+DIHE  CTD1 CTG CTD2 HTD2    CTD1 CTG CTD2 CTE2
+DIHE  CTG CTD2 CTE2 CTZ     CTG CTD2 CTE2 HTE2
+DIHE  HTD2 CTD2 CTE2 CTZ    HTD2 CTD2 CTE2 HTE2
+DIHE  CTG CTD1 CTE1 CTZ     CTG CTD1 CTE1 HTE1
+DIHE  HTD1 CTD1 CTE1 CTZ    HTD1 CTD1 CTE1 HTE1
+DIHE  HTZ CTZ CTE1 HTE1     HTZ CTZ CTE1 CTD1
+DIHE  CTE2 CTZ CTE1 HTE1    CTE2 CTZ CTE1 CTD1
+DIHE  HTZ CTZ CTE2 HTE2     HTZ CTZ CTE2 CTD2 
+DIHE  CTE1 CTZ CTE2 HTE2    CTE1 CTZ CTE2 CTD2
+DIHE  N CA C OCT   CA C OCT CTB   C OCT CTB CTG   OCT CTB CTG CTD1
+IMPR  C CA OCT O   CTG CTD1 CTD2 CTB
+IMPR  CTG CTD1 CTE1 CTZ   CTD1 CTE1 CTZ CTE2   CTE1 CTZ CTE2 CTD2
+IMPR  CTZ CTE2 CTD2 CTG   CTE2 CTD2 CTG CTD1   CTD2 CTG CTD1 CTE1
+IMPR  CTD1 CTG CTE1 HTD1   CTE1 CTD1 CTZ HTE1   CTZ CTE1 CTE2 HTZ
+IMPR  CTE2 CTZ CTD2 HTE2   CTD2 CTE2 CTG HTD2
+ACCE  O C
+ACCE  OCT
+IC    N CA C OCT            0.00   0.00  180.00   0.00  0.00
+IC    CA C OCT CTB          0.00   0.00  180.00   0.00  0.00
+IC    CA OCT *C O           0.00   0.00  180.00   0.00  0.00
+IC    C OCT CTB CTG         0.00   0.00  180.00   0.00  0.00
+IC    OCT CTG *CTB HTB1     0.00   0.00  120.00   0.00  0.00
+IC    OCT CTG *CTB HTB2     0.00   0.00  240.00   0.00  0.00
+IC    OCT CTB CTG CTD1      0.00   0.00  180.00   0.00  0.00
+IC    CTD1 CTB *CTG CTD2    0.00   0.00  180.00   0.00  0.00
+IC    CTB CTG CTD1 CTE1     0.00   0.00  180.00   0.00  0.00
+IC    CTG CTE1 *CTD1 HTD1   0.00   0.00  180.00   0.00  0.00
+IC    CTG CTD1 CTE1 CTZ     0.00   0.00    0.00   0.00  0.00
+IC    CTD1 CTZ *CTE1 HTE1   0.00   0.00  180.00   0.00  0.00
+IC    CTD1 CTE1 CTZ CTE2    0.00   0.00    0.00   0.00  0.00
+IC    CTE1 CTE2 *CTZ HTZ    0.00   0.00  180.00   0.00  0.00
+IC    CTE1 CTZ CTE2 CTD2    0.00   0.00    0.00   0.00  0.00
+IC    CTZ CTD2 *CTE2 HTE2   0.00   0.00  180.00   0.00  0.00
+IC    CTZ CTE2 CTD2 CTG     0.00   0.00    0.00   0.00  0.00
+IC    CTE2 CTG *CTD2 HTD2   0.00   0.00  180.00   0.00  0.00
+
+! Other patches
+
+PRES  CIS    0.00
+! changes a trans peptide to a cis peptide
+DELE IC -CA -C N CA
+IC -CA -C N CA   0.000   0.00   0.00   0.00  0.00
+
+PRES  CH2    -.35
+! This patch replaces the Carbonyl CO with CH2
+DELETE ATOM  O
+ ATOM C     c      -.10
+ ATOM HC1   h       .05
+ ATOM HC2   h       .05
+ ATOM +N    na     -.35
+BOND  C  HC1   C HC2
+DELETE  IMPH   +N  C  +CA +HN
+ANGLE  CA C HC1   CA C HC2   HC1 C HC2     
+ANGLE  HC1 C +N   HC2 C +N 
+DIHE   N CA C +N   N CA C HC1  N CA C HC2
+DIHE   HA CA C +N   HA CA C HC1  HA CA C HC2
+DIHE   CB CA C +N   CB CA C HC1  CB CA C HC2
+DIHE   CA  C  +N  +HN      CA  C  +N  +CA
+DIHE   HC1  C  +N  +HN     HC1  C  +N  +CA
+DIHE   HC2  C  +N  +HN     HC2  C  +N  +CA
+DELETE IC C +CA *+N +HN  
+IC   CA  +N  *C  HC1      0.000   0.00   120.00   0.00   0.00
+IC   CA  +N  *C  HC2      0.000   0.00   240.00   0.00   0.00
+IC   C   +CA *+N +HN      0.000   0.00   120.00   0.00   0.00
+!IC   C   +CA *+N +HN      0.000   0.00   240.00   0.00   0.00
+
+PRES NPME        -0.15
+! This patch replaces the peptide hydrogen with a methyl group
+! This patch will not work with the first residue of a sequence
+GROU
+ ATOM CNME  c     -0.05
+ ATOM HME1  h      0.05
+ ATOM HME2  h      0.05
+ ATOM HME3  h      0.05
+ ATOM N     n     -0.25
+ DELE  ATOM HN 
+BOND   N CNME  CNME HME1   CNME HME2   CNME HME3
+ANGL   -C N CNME   CNME N CA
+ANGL   N CNME HME1   N CNME HME2   N CNME HME3 
+ANGL   HME1 CNME HME2   HME1 CNME HME3   HME2 CNME HME3 
+DIHE   -CA  -C  N  CNME   -O  -C  N  CNME
+DIHE   CA N CNME HME1     CA N CNME HME2     CA N CNME HME3   
+DIHE   -C N CNME HME1     -C N CNME HME2     -C N CNME HME3   
+DIHE   C  CA  N  CNME     HA  CA  N  CNME     CB  CA  N  CNME
+IMPH   N -C CA CNME
+IC     -C CA *N CNME      0.00  0.00  180.00  0.00  0.00
+IC     CA N CNME HME1     0.00  0.00  180.00  0.00  0.00
+IC     HME1 N *CNME HME2  0.00  0.00  120.00  0.00  0.00
+IC     HME1 N *CNME HME3  0.00  0.00  240.00  0.00  0.00
+
+PRES  NPOH    0.10
+! This patch replaces the peptide hydrogen with a hydroxyl group
+! This patch will not work on the first residue
+GROU
+ ATOM N     n       0.3
+ ATOM ON    o       -.6
+ ATOM HON   ho      0.4
+DELETE ATOM HN
+BOND  N  ON    ON  HON
+ANGLE  -C N ON   N ON HON   CA ON HO
+DIHE   -CA  -C  N  ON   -O  -C  N  ON
+DIHE  CA N ON HON     -C N ON HON   
+DIHE   C  CA  N  ON      HA  CA  N  ON      CB  CA  N  ON 
+IMPH  N  -C CA ON
+IC   -C  CA *N ON    0.00   0.00  180.0   0.00  0.00
+IC   CA  N   ON HON  0.00   0.00  180.0   0.00  0.00
+ 
+PRES CAME         0.05
+! This patch replaces the alpha carbon hydrogen with a methyl group
+! This patch will not work with GLY
+GROU
+ ATOM CB2   c     -0.10
+ ATOM HB21  h      0.05
+ ATOM HB22  h      0.05
+ ATOM HB23  h      0.05
+ DELE  ATOM HA
+BOND   CA CB2   CB2 HB21   CB2 HB22   CB2 HB23
+ANGL   N CA CB2   C CA CB2   CB CA CB2
+ANGL   CA CB2 HB21   CA CB2 HB22   CA CB2 HB23
+ANGL   HB21 CB2 HB22   HB21 CB2 HB23   HB22 CB2 HB23
+DIHE   -C  N  CA CB2   HN N CA CB2
+DIHE   +N  C CA CB2    O C CA CB2
+DIHE   N CA CB2 HB21  N CA CB2 HB22  N CA CB2 HB23
+DIHE   C CA CB2 HB21  C CA CB2 HB22  C CA CB2 HB23
+IMPH   CA C N CB2
+IC     N C *CA CB2       0.00  0.00  240.00  0.00  0.00
+IC     N CA CB2 HB21     0.00  0.00  180.00  0.00  0.00
+IC     HB21 CA *CB2 HB22 0.00  0.00  120.00  0.00  0.00
+IC     HB21 CA *CB2 HB23 0.00  0.00  240.00  0.00  0.00
+
+PRES NTOO          0.00
+! This patch replaces the peptide nitrogen in a residue with an ester oxygen
+! This patch will not work with a residue as the N-terminal
+! This patch will not work with GLY as the ester residue
+! This patch will not work in conjunction with any other patch on the
+!   ester residue (including CTER)
+! This patch requires a sequence of three residues, where the second residue
+!   is the ester residue
+! This patch will not work if the second residue does not have 
+! a CG, HB1, and HB2
+GROU
+ ATOM 1CA   c      0.00
+ ATOM 1C    c'     0.70
+ ATOM 1O    o'    -0.55
+GROU
+ ATOM 2OP   oe    -0.40
+ ATOM 2CA   c      0.25
+ DELE  ATOM 2N
+ DELE  ATOM 2HN
+BOND  1C 2OP   2OP 2CA
+ANGL  1CA 1C 2OP   1O 1C 2OP   1C 2OP 2CA   2OP 2CA 2C  2OP 2CA 2CB   
+ANGL  2OP 2CA 2HA
+DIHE  1N 1CA 1C 2OP      1CB 1CA 1C 2OP       1HA 1CA 1C 2OP   
+DIHE  1CA 1C 2OP 2CA     1O 1C 2OP 2CA     
+DIHE  1C 2OP 2CA 2C      1C 2OP 2CA 2CB       1C 2OP 2CA 2HA    
+DIHE  2OP 2CA 2C 3N  2OP 2CA 2C 2O
+DIHE  2OP 2CA 2CB 2CG  2OP 2CA 2CB 2HB2  2OP 2CA 2CB 2HB1
+IMPH  1C 1CA 2OP 1O
+ACCE  1O 1C
+ACCE  2OP
+IC    1N 1CA 1C 2OP         0.00  0.00  180.00  0.00  0.00
+IC    1CA 1C 2OP 2CA        0.00  0.00  180.00  0.00  0.00
+IC    1C 2OP 2CA 2C         0.00  0.00  180.00  0.00  0.00
+IC    1CA 2OP *1C 1O        0.00  0.00  180.00  0.00  0.00
+IC    2OP 2CA 2C 3N         0.00  0.00  180.00  0.00  0.00
+IC    2OP 2C *2CA 2CB       0.00  0.00  120.00  0.00  0.00
+IC    2OP 2C *2CA 2HA       0.00  0.00  240.00  0.00  0.00
+
+
+! Linking patches
+
+PRES   LINK        .00
+! This patch will join two segments and form a peptide bond .
+! It can also be used to reate a cyclic peptide
+! The patch should be applied as RES(N-term) - RES(C-term)
+ ATOM 2CA   c      0.05
+ ATOM 2C    c'     0.60
+ ATOM 2O    o'    -0.55
+ ATOM 1HN   h*     0.25
+ ATOM 1N    n     -0.40
+ ATOM 1CA   c      0.05
+ DELETE ATOM 2OCT2
+ DELETE ATOM 2OCT1
+ DELETE ATOM 1HT1
+ DELETE ATOM 1HT2 
+ DELETE ATOM 1HT3
+BOND  2C 2O    2C 1N   1N 1HN
+THET  2CA 2C 2O    2CA 2C 1N   2O 2C 1N
+THET  2C 1N 1HN  2C 1N 1CA   1HN 1N 1CA
+DIHE  2N 2CA 2C 1N     2N 2CA 2C 2O     
+DIHE  2CB 2CA 2C 1N     2CB 2CA 2C 2O     
+DIHE  2HA 2CA 2C 1N     2HA 2CA 2C 2O     
+DIHE  2CA 2C 1N 1CA     2CA 2C 1N 1HN   
+DIHE  2O 2C 1N 1CA     2O 2C 1N 1HN   
+DIHE  2C 1N 1CA 1C      2C 1N 1CA 1HA   2C 1N 1CA 1CB
+DIHE  1HN 1N 1CA 1C     1HN 1N 1CA 1HA   1HN 1N 1CA 1CB
+IMPH  2C 2CA 1N 2O   1N 2C 1CA 1HN
+IC    2N 2CA 2C 1N       0.00  0.00  180.00  0.00  0.00
+IC    2CA 2C 1N 1CA      0.00  0.00  180.00  0.00  0.00
+IC    2C 1N 1CA 1C       0.00  0.00  180.00  0.00  0.00
+IC    2CA 1N *2C 2O      0.00  0.00  180.00  0.00  0.00
+IC    2C 1CA *1N 1HN     0.00  0.00  180.00  0.00  0.00
+
+PRES   LIMG       0.00
+! This patch will join a segment and an IMAGe to form a peptide bond .
+! It can  be used to create a cyclic symmetric peptide
+! To use it generate the sequence using FIRST NONE LAST NONE then
+! generate the image and patch 
+! The patch should be applied as RES(C-term) - RES(N-term)
+BOND  1C 2N   
+THET  1CA 1C 2N   
+THET  1C 2N 2HN  1C 2N 2CA   
+DIHE  1N 1CA 1C 2N     
+DIHE  1CB 1CA 1C 2N   
+DIHE  1HA 1CA 1C 2N  
+DIHE  1CA 1C 2N 2CA     1CA 1C 2N 2HN   
+DIHE  1O 1C 2N 2CA     1O 1C 2N 2HN   
+DIHE  1C 2N 2CA 2C      1C 2N 2CA 2HA   1C 2N 2CA 2CB
+IMPH  1C 1CA 2N 1O   2N 1C 2CA 2HN
+IC    1N 1CA 1C 2N       0.00  0.00  180.00  0.00  0.00
+IC    1CA 1C 2N 2CA      0.00  0.00  180.00  0.00  0.00
+IC    1C 2N 2CA 2C       0.00  0.00  180.00  0.00  0.00
+IC    1CA 2N *1C 1O      0.00  0.00  180.00  0.00  0.00
+IC    1C 2CA *2N 2HN     0.00  0.00  180.00  0.00  0.00
+
+PRES   LNK2        0.00
+! This patch will join two segments and form a peptide bond .
+! It can also be used to reate a cyclic peptide
+! The patch should be applied as RES(C-term) - RES(N-term)
+ ATOM 1CA   c      0.05
+ ATOM 1C    c'     0.60
+ ATOM 1O    o'    -0.55
+ ATOM 2HN   h*     0.25
+ ATOM 2N    n     -0.40
+ ATOM 2CA   c      0.05
+ DELETE ATOM 1OCT2
+ DELETE ATOM 1OCT1
+ DELETE ATOM 2HT1
+ DELETE ATOM 2HT2 
+ DELETE ATOM 2HT3
+BOND  1C 1O    1C 2N   2N 2HN
+THET  1CA 1C 1O    1CA 1C 2N   1O 1C 2N
+THET  1C 2N 2HN  1C 2N 2CA   2HN  2N 2CA
+DIHE  1N 1CA 1C 2N     1N 1CA 1C 1O     
+DIHE  1CB 1CA 1C 2N     1CB 1CA 1C 1O     
+DIHE  1HA 1CA 1C 2N     1HA 1CA 1C 1O     
+DIHE  1CA 1C 2N 2CA     1CA 1C 2N 2HN   
+DIHE  1O 1C 2N 2CA     1O 1C 2N 2HN   
+DIHE  1C 2N 2CA 2C      1C 2N 2CA 2HA   1C 2N 2CA 2CB
+DIHE  2HN 2N 2CA 2C     2HN 2N 2CA 2HA   2HN 2N 2CA 2CB
+DIHE  1N 1CA 1C 2N   1CA 1C 2N 2CA   1C 2N 2CA 2C
+IMPH  1C 1CA 2N 1O   2N 1C 2CA 2HN
+IC    1N 1CA 1C 2N       0.00  0.00  180.00  0.00  0.00
+IC    1CA 1C 2N 2CA      0.00  0.00  180.00  0.00  0.00
+IC    1C 2N 2CA 2C       0.00  0.00  180.00  0.00  0.00
+IC    1CA 2N *1C 1O      0.00  0.00  180.00  0.00  0.00
+IC    1C 2CA *2N 2HN     0.00  0.00  180.00  0.00  0.00
+
+PRES  LNP1        0.00
+! This is same as LINK but for case of PROLINE on the N terminus 
+! This patch will join two segments and form a peptide bond or
+! can be used to form a cyclic peptide for PROLINE at N-terminus
+! The patch should be applied as RES(N-term) - RES(C-term) 
+! It is assumed that default patching has already occurred
+ DELETE ATOM 2OCT1
+ DELETE ATOM 2OCT2
+ DELETE ATOM 1HT1
+ DELETE ATOM 1HT2 
+ ATOM 2C    c'     0.60
+ ATOM 2O    o'    -0.55
+ ATOM 1N    n     -0.25
+ ATOM 1CA   c      0.10
+ ATOM 1CD   c      0.10
+BOND  2C 1N    2C  2O     
+THET  2CA 2C 1N    2C 1N 1CA  2CA 2C 2O
+THET  2O  2C 1N
+DIHE  2N 2CA 2C 1N    2HA 2CA 2C 1N   2CB 2CA 2C 1N   
+DIHE  2CA 2C 1N 1CA   2CA 2C 1N 1CD   
+DIHE  2O  2C 1N 1CA   2O  2C 1N 1CD   
+DIHE  2C 1N 1CA 1C    2C 1N 1CA 1HA   2C 1N 1CA 1CB 
+DIHE  2C 1N 1CD 1CG   2C 1N 1CD 1HD1  2C 1N 1CD 1HD2 
+IMPH  2C 2CA 1N 2O                   
+IC    2N 2CA 2C 1N      0.00  0.00  180.00  0.00  0.00
+IC    2CA 2C 1N 1CA     0.00  0.00  180.00  0.00  0.00
+IC    2C 1N 1CA 1C      0.00  0.00  180.00  0.00  0.00
+IC    2N 2CA 2C 2O      0.00  0.00    0.00  0.00  0.00
+IC    1N 2CA *2C 2O     0.00  0.00  180.00  0.00  0.00
+
+PRES   LNP2        0.00
+! Link patch for PROLINE at the N-terminus
+! This patch will join two segments and form a peptide bond .
+! It can also be used to reate a cyclic peptide
+! The patch should be applied as RES(C-term) - RES(N-term)
+ ATOM 1C    c'     0.60
+ ATOM 1O    o'    -0.55
+ ATOM 2N    n     -0.25
+ ATOM 2CA   c      0.10
+ ATOM 2CD   c      0.10
+ DELETE ATOM 1OCT2
+ DELETE ATOM 1OCT1
+ DELETE ATOM 2HT1
+ DELETE ATOM 2HT2 
+BOND  1C 1O    1C 2N   
+THET  1CA 1C 1O    1CA 1C 2N   1O 1C 2N
+THET  1C 2N 2CA   
+DIHE  1N 1CA 1C 2N    1HA 1CA 1C 2N   1CB 1CA 1C 2N   
+DIHE  1CA 1C 2N 2CA   1CA 1C 2N 2CD   
+DIHE  1O  1C 2N 2CA   1O  1C 2N 2CD   
+DIHE  1C 2N 2CA 2C    1C 2N 2CA 2HA   1C 2N 2CA 2CB 
+DIHE  1C 2N 2CD 2CG   1C 2N 2CD 2HD1  1C 2N 2CD 2HD2 
+IMPH  1C 1CA 2N 1O  
+IC    1N 1CA 1C 2N       0.00  0.00  180.00  0.00  0.00
+IC    1CA 1C 2N 2CA      0.00  0.00  180.00  0.00  0.00
+IC    1C 2N 2CA 2C       0.00  0.00  -60.00  0.00  0.00
+IC    1CA 2N *1C 1O      0.00  0.00  180.00  0.00  0.00
+
+PRES  DLNK       -.00
+! This patch will connect the carboxyl group of ASP with the N-terminal
+!   end of a peptide to form a cyclic peptide
+! The patch should be applied as RES(ASP) - RES(N-term)
+ DELE  ATOM  1OD2
+ ATOM 1CG   c'     0.60
+ ATOM 1OD1  o'    -0.55
+ ATOM 2HT1  h*     0.25
+ ATOM 2N    n     -0.40
+ ATOM 1CB   c      0.00
+ ATOM 2CA   c      0.10
+ DELETE ATOM 2HT2 
+ DELETE ATOM 2HT3
+BOND  1CG 2N   2N 2HT1
+THET  1CB 1CG 2N   1OD1 1CG 2N
+THET  1CG 2N 2HT1  1CG 2N 2CA   2HT1 2N 2CA
+DIHE  1CA 1CB 1CG 2N   1HB1 1CB 1CG 2N   1HB2 1CB 1CG 2N 
+DIHE  1CB 1CG 2N 2CA   1CB 1CG 2N 2HT1   
+DIHE  1OD1 1CG 2N 2CA  1OD1 1CG 2N 2HT1   
+DIHE  1CG 2N 2CA 2C    1CG 2N 2CA 2HA    1CG 2N 2CA 2CB 
+IMPH  1CG 1CB 2N 1OD1  2N 1CG 2CA 2HT1
+IC    1CB 1CG 2N 2CA    0.00  0.00  180.00  0.00  0.00
+IC    1CG 2N 2CA 2C     0.00  0.00  180.00  0.00  0.00
+IC    1OD1 1CB *1CG 2N  0.00  0.00  180.00  0.00  0.00
+IC    1CG 2CA *2N 2HT1  0.00  0.00  180.00  0.00  0.00
+
+PRES  KLNK       0.00
+! This patch will connect the amino group of LYS with the C-terminal
+!   end of a peptide to form a cyclic peptide
+! The patch should be applied as RES(LYS) - RES(C-term)
+ DELE  ATOM  1HZ2
+ DELE  ATOM  1HZ3
+ DELE  ATOM  2OCT2
+ ATOM 2OCT1 o'    -0.55
+ ATOM 2C    c'     0.60
+ ATOM 1HZ1  h*     0.25
+ ATOM 1NZ   n     -0.40
+ ATOM 1CE   c      0.10
+BOND  2C 1NZ   
+THET  2CA 2C 1NZ   2OCT1 2C 1NZ
+THET  2C 1NZ 1HZ1  2C 1NZ 1CE   1HZ1 1NZ 1CE
+DIHE  2N 2CA 2C 1NZ   2HA 2CA 2C 1NZ   2CB 2CA 2C 1NZ   
+DIHE  2CA 2C 1NZ 1CE     2CA 2C 1NZ 1HZ1   
+DIHE  2OCT1 2C 1NZ 1CE   2OCT1 2C 1NZ 1HZ1   
+DIHE  2C 1NZ 1CE 1CD     2C 1NZ 1CE 1HE2   2C 1NZ 1CE 1HE1
+IMPH  2C 2CA 1NZ 2OCT1    1NZ 2C 1CE 1HZ1
+IC    2N 2CA 2C 1NZ     0.00  0.00  180.00  0.00  0.00
+IC    2CA 2C 1NZ 1CE    0.00  0.00  180.00  0.00  0.00
+IC    2C 1NZ 1CE 1CD    0.00  0.00  180.00  0.00  0.00
+IC    1NZ 2CA *2C 2OCT1 0.00  0.00  180.00  0.00  0.00
+IC    2C 1CE *1NZ 1HZ1  0.00  0.00  180.00  0.00  0.00
+
+END

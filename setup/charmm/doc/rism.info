@@ -1,0 +1,1816 @@
+CHARMM Element doc/rism.info $Revision: 1.1.1.1 $
+
+File: RISM, Node: Top, Up: (doc/commands.info), Next: Syntax
+ 
+          RISM (Reference Interaction Site Model) module 
+         ------------------------------------------------
+      
+   The RISM module allows the user to calculate the site-site radial
+   distribution functions g(r) and pair correlation functions c(r)
+   for a multi-component molecular liquid. These functions can then
+   be used to determine quantities such as the potential of mean 
+   force or the cavity interaction term between two solute molecules
+   into a solvent, and the excess chemical potential of solvation of
+   a solute into a solvent. The change in the solvent g(r) upon
+   solvation can be determined and this allows for the decomposition
+   of the excess chemical potential into the energy and entropy of
+   solvation.
+
+   The code was written as an independent program by Benoit Roux
+   in 1988. Some routines were added and it was adapted for CHARMM
+   by Georgios Archontis in 1992. The help and advice of Hsiang Ai Yu
+   is greatfully ackgnowledged.
+
+
+* Menu
+
+* Syntax::         Syntax of  the RISM commands
+
+* Commands::       Explanation of the commands
+
+* Theory::         A brief introduction to the RISM theory
+
+* References::     Useful references    
+
+* Examples::       Input files 
+
+
+
+File: RISM, Node: Syntax, Up: Top, Next: Commands, Previous: Top
+
+		   Syntax for RISM calculation
+		   ---------------------------
+
+
+   Invoke of the RISM command in the main charmm input file
+   calls the subroutine RISM() (in rism.src). Once control has 
+   been transferred to this  subroutine the subsequent commands
+   are interpreted using a  parser similar to the CHARMM
+   parser. 
+
+Main command :
+
+         RISM [NSTV int] [NSTU int] [NSOL int]  
+
+    Enters the RISM module.
+    NSTV is the keyword to indicate the maximum number of atoms in the
+         solvent molecule (the default is 6 as defined in
+         source/fcm/rism.fcm), must be less than or equal to the default.
+    NSTU is for the maximum number of atoms in the solute molecule(s)
+         (default is 20), must be less than or equal to the default.
+    NSOL is for the maximum number of solutes (default is 2), the
+         allowed values are 1 or 2.
+
+
+	 STOP
+
+    leaves the RISM module
+
+
+
+Subcommands:
+
+1)    Miscellaneous commands
+      ( compare with *note (doc/miscom.info)Syntax ).
+
+	GOTO
+        ----
+
+	LABEl  labelname
+        ----
+
+	OPEN  { READ   { NAME filename    UNIT   integer } }
+        ----  { WRITE  { NAME filename    UNIT   integer } } 
+
+	STREam  [filename]
+	-----	[ UNIT integer]
+
+	RETUrn
+        ------
+
+	CLOSe  [ UNIT   integer ]
+        -----
+
+	SET   { parameter string }
+	---
+	
+	DECR  { parameter } { BY  value }
+        ----
+
+	INCR  {parameter } { BY value }
+	----
+
+	FORMat { format-description ((f12.5) or (e12.5) default) }
+
+	IF { parameter } { EQ } { string } ... command
+	--		 { NE }
+
+        IF { parameter } { GT } { value }  ... command
+	--		 { GE }
+			 { LT }
+			 { LE }
+
+
+2) Specific RISM commands
+-------------------------
+
+        READ  { PARAmeters                 } [show] [UNIT integer (5)]
+        ----
+	      { STRUcture                                  }
+
+	      { COORdinates   {( SOLVENT )}                }  
+              {	              { SOLUTE { integer (1) }   } }
+
+              {	2COOr           { SOLUTE { integer (1) } } }
+              
+	      { ZMATrix                {(SOLVENT )         }
+              {	               {SOLUTE { integer (1) } } }
+              
+	      {	2ZMAtrix     { SOLUTE { integer (1) } } }
+              
+
+	      { CS(R)  { ( VV )                            }
+	               { [ UV  [ SOLUTE integer (1) ]      }
+	      { US(R)                                      }
+	      { G(R)                                       }
+
+ 
+	      { CH(K)   [ ( VV ) ]                         }
+
+
+	      { DC(R)   [ SOLUTE integer (1) ]             } 
+              { DG(R)                                      }
+
+
+
+
+	WRITe { TITLe                             }[ UNIT integer (6)]
+	-----      
+	      { COORdinates  ( SOLVENT )                  } 
+	      {	             { SOLUTE { (1) integer   } } }
+
+
+
+	      { CS(R)  { ( VV )                           }   
+	               { [ UV  [ SOLUTE (1) integer ]     }
+	      { US(R)                                     }
+	      { G(R)                                      }
+
+
+
+	      { CH(K)   [ ( VV ) ]                        }
+
+
+
+	      { DC(R)   [ SOLUTE (1) integer ]            } 
+              { DG(R)                                     }   -
+
+		 [ PLT2 ] [FROM real THRU real] [FORMAT format-spec]
+
+              
+
+	      {  R(I)                                     }
+
+	      {  RK(I)                                    }
+
+
+
+
+	SETUp [ ( LOGFFT ) ] [ NPOINT (512) ] [ DR (0.02) ] [ RMIN (-5.12) ]
+	----- [   FFT      ]
+
+
+	EDTZm [ ( SOLVENT ) ]
+	----- [   SOLUTE  integer (1) ]
+
+
+	STATe [ TEMP real (300.0) ] 
+        -----
+	      [ DENSITY { segment-name-1 real (0.0) 
+
+	       ... segment-name-n real (0.0) } ] 
+
+	      [ CDIE real (0.0) ]
+
+
+
+	ITERate { VV }  \
+	-----	{ UV }    only one of these options
+		{ UU }  / -------------------------
+
+                	   /   [      (HNC) ] 
+        		       [       PY   ]
+  only one of these options
+  -------------------------    [       PY2  ]
+        		   \   [       XTR { AXTR real (1.0)
+					     RXTR1 real (0.0)
+					     RXTR2 real (0.0)
+					     AXTR(2) real (AXTR(1))
+					     RXTR1(2) real (RXTR1(1))
+					     RXTR2(2) real (RXTR2(1))
+					     ... } ] 
+
+		         [ INIT ] [ NCYCLE integer (1) ] 
+			 [ IUNSCR integer (0) ] [ IUNGR integer (0) ]
+		         [ NPRINT integer (NCYCLE) ]
+	        	 [ RMIX real (0.33) ] [ NDMAX integer (25) ]
+			 [ TOL real (0.01) [ CDIE2 real (CDIE) ]
+
+	       [ US(R) ]  
+	       [ G(R)  ]
+
+	       [ W(R)  ]  \
+	       [ TS(R) ]   
+			    only one of these options
+	       [ CAV(R)]
+	       [ BD(R) ]  /
+
+            [ SW(1) real (1.0) ] 
+     [ SWI(1) real (SW(1)) SWF(1) real (SW(1))  DSW(1) real (0.0) ]
+                    [ SW(2) real (1.0)]  
+     [ SWI(2) real (SW(2)) SWF(2) real (SW(2))  DSW(2) real (0.0) ]
+                    [ SW(3) real (1.0)]  [ SWI(3) real (SW(3)) ]
+     [ SWI(3) real (SW(3)) SWF(3) real (SW(3))  DSW(3) real (0.0) ]
+                    [ SW(4) real (1.0) ] [ SWI(4) real (SW(4)) ]
+     [ SWI(4) real (SW(4)) SWF(4) real (SW(4))  DSW(4) real (0.0) ]
+
+
+
+	DERIvative  [ INIT ] [   SOLU integer (1) ]
+	-----	    [NCYCLE integer (1) ] [ NPRINT integer (NCYCLE) ]
+		    [ RMIX real (0.33) ] [ TOL real (0.01) ]
+                 
+		    [ CLOS (HNC) ] \
+		    [       PY   ]  only one of these options
+		    [       PY2  ] /
+
+	SOLVation   { HNC } [ CHMPOT ] [ ENER ] [ CAVIT ] [ FLUC ]
+        -----
+                    [ SW(1) ] [ SW(2) ] [ SW(3) ] [ SW(4) ]
+
+		    [ SOLUte integer (1) ]
+
+		    [ VERBO ]
+		    
+		    [  PLT2 [ FROM real (RMIN) THRU real (RMAX) ] ]
+
+		    [ UNIT integer (6) ]
+
+
+
+
+
+	ANALysis    [ (VV) ]
+	-----	    [  UV  ]
+		 [ PAIR integer (all pairs) ] [ UNIT integer (6) ]
+
+	STOP
+        ---
+
+
+
+File: RISM, Node: Commands, Up: Syntax, Next: Theory, Previous: Syntax
+
+
+
+		Explanation of the RISM-specific commands
+		-----------------------------------------
+
+
+ 1. Miscellaneous commads
+ ------------------------
+
+
+	These commands are similar to the ones recognised by the 
+ miscom.src routine (see note* (doc/miscom.info)Syntax ). We will
+ only mention the following differences:
+
+
+ a) The command OPEN should not contain the keyword CARD or FILE;
+    all files are opened FORMATTED
+
+ b) The command CLOSe should not be followed by a DESPosition
+    statement; all files are closed with DESPosition KEEP.
+
+ c) The command FORMat defines the format of the internal parameters
+    and should be of the form (format-specification)  and up to 
+    7 characters long (e.g. (f12.6).
+
+
+ 2. RISM-specific commands
+ -------------------------
+
+
+ 			 The READ command
+			------------------
+
+
+
+  READ   PARAmeters  [ show ]                 [ UNIT integer (5) ]
+
+  
+ 	In the beginning of a RISM calculation the parameters for
+ the various atoms should be specified. The option show will print 
+ into the output file the parameters for all possible atom pairs.
+ For all READ options one can explicitly specify an input file
+ from where the information will be read. If a [UNIT integer]
+ option is not given, the default (5) is assumed. The format for 
+ parameter input is:
+
+ READ PARAMeters
+ * title
+ *
+ [COMBIne {(STANDARD)} ]  
+	  { JORGE }
+ NBOND
+ atom-name   epsilon   rmin/2   charge  (free format)
+ .....................................
+ END                                          ! of NBOND  
+ NBFIX
+ atom-name   epsilon   rmin    (free format)
+ END                                          ! of NBFIX
+ END                                          ! of PARAMETERS
+
+ 	The option COMBINE STANDARD (default) uses the addition rule
+ for sigma's whereas JORGE uses the multiplication rule.
+ The epsilon value is the well depth; It can be specified positive
+ or negative since the code converts it to its absolute value.
+
+ ==================================================================
+
+
+ READ	       STRUcture [ show ]        [ UNIT integer (5) ]         
+
+
+    This command reads the information about the atoms in the solvent
+ and solute molecules and the type of sites. Two sites are labeled
+ with the same integer only when they have the same vdw parameters
+ and charge AND they are geometrically equivalent. For example, in
+ tip3p H2O the sites for the 2 hydrogens are equivalent because 
+ they are symetrically placed with respect to oxygen. (NOTE that if
+ two sites are geometrically equivalent but are given different
+ site index this will not affect the calculation; the opposite will
+ lead in erroneous results). The format of the structural input is:
+
+ READ STRUCTURE [show]
+ *title
+ *
+ SOLVENT
+ NSITE integer (0) NTYPE integer
+ atom-1  atom-name  TYPE integer [SEGID name] [RESNAm name] [coordinates]
+ .....................................................................
+ [ZMATRIX]
+ atom
+ atom    atom    bondlength
+ atom    atom    bondlength  atom   theta
+ atom    atom    bondlength  atom   theta   atom   phi
+ SOLUTE 1
+ NSITE  integer (0) NTYPE integer
+ atom-1  atom-name  TYPE integer [SEGID name] [RESNAm name] [coordinates]
+ .....................................................................
+
+ [ZMATRIX]
+ .....................................................................
+ SOLUTE 2
+ NSITE  integer (0) NTYPE integer
+ atom-1  atom-name  TYPE integer [SEGID name] [RESNAm name] [coordinates]
+ .....................................................................
+
+ [ZMATRIX]
+ .....................................................................
+ END                            ! of structure
+
+ 	The  parameter NSITE should be equal to the number of atoms 
+ in the molecule. If no specification is given the default value 
+ NSITE=0 is assumed. NTYPE should equal the number of different sites.
+ If NTYPE is not specified explicitly the default value NTYPE=NSITE
+ is assumed.
+ 	After the line NSITE...NTYPE the various atoms are defined.
+ atom-1 is the (user given) name for the first atom, atom-name is the
+ name of this atom in the parameter list. TYPE is followed by the type
+ of the atom. The keywords SEGID and RESNAm specify the segment id and
+ the name of the residue to which the atom belongs. If the keywords
+ SEGID and RESNAm are not mentioned, the names SOLV, SOLU1,SOLU2 are
+ assumed for the solvent and the two solutes. If they are mentioned,
+ all atoms in the following lines are assigned to the same
+ SEGID and RESNAm until a line with a new explicit specification is
+ encountered. Notice that atoms that have different SEGID belong to
+ different molecules. This has the implication that the w matrix 
+ element for those sites will be set to zero. This is useful when one
+ wants to define a pure solvent mixture of many components.
+ 	The atom-definition line can contain the coordinates for this
+ atom.The coordinate specification is important only because it allows
+ the program to calculate the distances between the various atoms in 
+ the structure and construct the intramolecular matrix w. Since the
+ integral equation technique involves an average over all space, the
+ coordinates of the solvent/solute(s) and their relative location
+ in space (which is important in MD/MC simulations) here does not have
+ any other significance.
+	Alternatively, one can append after the atom-definition lines
+ the ZMATRIX description of the molecule and avoid explicit reference
+ to the atomic coordinates.
+
+
+=====================================================================
+
+
+     READ      COORdinates  ( SOLVENT )       [ UNIT integer (5) ]
+              	             { SOLUTE { (1) integer } } 
+
+
+	 This command allows the program to read the coordinates from
+ an input file in CHARMM format. The meaning of coordinates in RISM
+ was explained a few lines before.
+
+
+======================================================================
+
+
+     READ	2COOr  SOLUTE { 1 } integer }   [UNIT integer (5) ]
+              
+
+	 This command allows the program to read the coordinates for a
+ second structure in CHARMM format. This second set of coordinates is
+ used in calculating the change in chemical potential due to a
+ conformational transition of the solute from the structure 1 (read by
+ READ COOR) into the structure 2.  Note that the keyword SOLUTE must
+ be appended after 2COOR, otherwise the second set of coordinates
+ will be given to the solvent.
+ (see also *note (doc/rism.info)Theory, section 5 ).
+
+
+=====================================================================
+
+
+   READ        ZMATrix      ( SOLVENT )         [ UNIT integer (5) ]
+              	             { SOLUTE { (1) integer  } }
+              
+
+	This command reads explicitly the ZMATRIX. The format is:
+ 
+ READ ZMATRIX SOLVENT
+ * title
+ *
+ atom
+ atom    atom    bondlength
+ atom    atom    bondlength  atom   theta
+ atom    atom    bondlength  atom   theta   atom   phi
+
+
+=====================================================================
+
+
+   READ    2ZMAtrix  { SOLUTE { (1) integer  } } [ UNIT integer (5) ]
+              
+
+ 	This command reads the ZMATRIX for the second structure of 
+ the solute. This structure is used in calculating the change in 
+ chemical  potential due to a conformational transition of the 
+ solute from structure 1 (generated after the command READ...ZMAT 
+ was issued) to structure 2.
+ (see also *note (doc/rism.info)Theory, section 5 ).
+              
+
+======================================================================
+
+
+   READ	      { CS(R)  { ( VV )                       } [UNIT integer]
+	               { [ UV  [ SOLUTE (1) integer ] }
+	               { [ UU  [ SOLUTE integer (1) ] 
+				 [ SOLUTE integer (1) ] }
+              
+	      { US(R)                                 } 
+	              
+	      {  G(R)                                 }
+	              
+
+ 	This command reads the short ranged direct correlation 
+ function cs(r), (see *note (doc/rism.info)Theory, section 2) 
+ the short range potential us(r) (usually van der waals or whatever
+ the user wants to define as short-ranged, provided that it can be
+ fourier transformed) or the radial  distribution function g(r). The
+ short-ranged potential us(r) should not contain the coulombic
+ interaction between the sites, since this is added separately
+ (see *note (doc/rism.info)Theory, section 2)).
+	 The various distribution functions are stored as arrays
+ (dvect X npair). The left index labels the point in r or k-space 
+ and the right index labels the pair. For example, the vv csr(4,1)
+ stores the function for the vv pair 1 at the 4th point of the 
+ discrete representation of space.
+
+	 The format of the files where the distribution functions are
+ stored is the following:
+
+* Title
+*
+NPOINT, N-DISCRETE-PAIR
+SW(1)   SW(2)   SW(3)   SW(4)  
+A(1,1) A(2,1)  A(3,1) ... A(NPOINT,1)
+A(1,2) A(2,2)  A(3,2) ... A(NPOINT,2)
+.....................................
+
+ 	 The keywords VV,UV,UU define whether the input functions
+ refer to the solvent-solvent, solute-solvent or solute-solute
+ pairs respectively. If the selection is not specified the
+ solvent (VV) is asumed as a default. The keyword SOLUTE
+ specifies which solute the uv and uu functions should be 
+ attributed to. Note that the default is SOLUTE 1 (e.g. the 
+ command READ CS(R) UU UNIT 10) will read from unit 10 the 
+ cs(r) and consider it as the solute 1 solute 1 function.
+
+
+=====================================================================
+
+
+   READ	         CH(K)   [ ( VV ) ]         [ UNIT integer ]
+
+
+	
+	This reads the solvent-solvent susceptibility in fourier
+ space. The vv susceptibility is defined as 
+
+	   
+		ch(v,v',k) = w(v,v',k) + rho(v) h(v,v',k) rho(v')
+
+
+ (for an explanation of these symbols see *note
+  (doc/rism.info)Theory, section 1).
+
+
+=====================================================================
+
+
+
+   READ	      { DC(R)   [ SOLUTE (1) integer ]        } [UNIT integer]
+
+              { DG(R)                                 }
+
+
+	Read the derivative of the solvent-solvent direct correlation
+ or radial distribution function with respect to the solute density.
+ The keyword SOLUTE specifies which solute causes the solvent responce.
+ (for an explanation of these functions see *note
+  (doc/rism.info)Theory, section 4).
+
+
+=====================================================================
+
+
+			The WRITe command
+
+
+	The WRITE command is similar with the READ command. The only
+ additional keywords associated with the command WRITE..X (X ==
+ distribution function) are :
+
+
+	[PLT2] [FROM real  THRU real ] [FORMAT format-spec] 
+
+
+ that asks the program to print the data in columns and as a function
+ of the r (or k) coordinate. FROM declares the starting point for
+ the printing and THRU declares the last point (defaults are the 
+ first and last point). The FORMAT is followed by a format 
+ specification (character*80) (default is (1X,25F10.3) ). This is 
+ different than the FORMAT command, that defines the format of the
+ internal parameters.
+
+
+  WRITE  	R(I) 	 			[UNIT integer]
+		RK(I)
+
+
+  will print the points in r- or k-space respectively. (see
+  *notes (doc/rism.info)Theory, Section 2).
+
+
+=====================================================================
+
+
+			The SETUp command
+
+
+
+	SETUp { ( LOGFFT ) } [ NPOINT (512) ] [ DR (0.02) ] [ RMIN (-5.12) ]
+	      {   FFT      }
+
+
+ This command initializes the variables related to the fast fourier
+ transform that is a part of the iteration cycle (see *note
+ (doc/rism.info)Theory, Sections 2, 3  ). The FFT on a logarithmic
+ scale is the default. If the keyword FFT is specified a FFT on a 
+ linear scale will be performed (the logfft works better). 
+
+ KEYWORD	FUNCTION
+
+ LOGFFT		The FFT on a logarithmic scale will be performed (in
+		the CONVEX the program uses the veclib routine). 
+		LOGFFT is the default.
+
+ FFT		Use a linear scale FFT.
+
+ NPOINT		The number of points to be used in the FT (POWER OF 2)
+ 		The default is 512 which gives convergent results for
+ 		most applications with the LOGFFT. Before increasing
+ 		the number of points used, one should first
+		redefine the maximum number of points used (DVECT)
+ 		that is stored in rism.fcm and is currently set to 
+ 		DVECT=512.
+
+ DR		The spacing in r or k space
+
+ RMIN		The minimum value used for the log-scale r and k-space
+ 		variables (see note* (doc/rism.info)Theory,
+		Section 2).
+
+
+=====================================================================
+
+
+			The EDTZm command
+
+
+
+	EDTZm [ ( SOLVENT ) ]
+	      [   SOLUTE  integer (1) ]
+
+
+	 This command edits the ZMATRIX for the solvent or solute. 
+ The format for the command is:
+
+ EDTZm SOLVENT
+ ENTR  integer   BOND  real THETA  real  PHI   real
+ ..................................................
+ END
+
+	The ENTR specifies the # of line of the original ZMATRIX
+ that is to be modified.
+
+
+=====================================================================
+
+
+			The STATe command
+
+
+
+  STATe [ TEMP real (300.0) ] [ DENSITY { segment-name-1 real (0.0)
+               
+	       ... segment-name-n real (0.0) } ] [CDIE real (0.0)]
+
+
+	This command allows the input of various thermodynamically
+ important variables. The meaning of the various keywords is:
+
+ KEYWORD	FUNCTION
+
+ TEMP		defines the temperature of the solution.
+
+ DENSITY	defines the density of the various solvent segments.
+		(this is the numerical density, #of sites/A**3).
+		Each site in RISM is associated with a density 
+ 		(see *note (doc/rism.info)Theory, Section 1). Each 
+ 		segment-name has been defined in the READ STRUcture
+ 		command and defines a distinct solvent molecule (in 
+ 		the usual case of the one-component solvent one needs
+		to define one solvent segment only).
+ 		Therefore, all sites that belong to this segment will
+ 		be assigned the same density. If there are additional
+		solvent segments and they are not explicitly mentioned
+		their density will be set to zero.
+
+ CDIE		defines the macroscopic dielectric constant of the 
+		solution. This macroscopic information is needed to 
+ 		correct for the asymptotic behavior of the direct
+ 		correlation functions c(r).
+ 		(see *note (doc/rism.info)Theory, Sections 2, 3). 
+ 		If CDIE is followed by a negative number the natural 
+		dielectric constant is simply printed in the output,
+ 		but no adjustement of the charges is done. If CDIE
+ 		is positive the coulombic charges are adjusted so 
+ 		that the long range properties of c(r) are consistent
+ 		with the CDIE given. If the keyword CDIE is omitted
+ 		no action is taken. NOTE that because the correction
+		assumes neutral molecules, the CDIE should not be
+ 		specified for salt solutions.
+
+
+=====================================================================
+
+
+			The ITERate command
+
+
+
+	This is the command that starts the iteration cycle that
+ solves the RISM integral equations (see *note (doc/rism.info)Theory
+ Sections 1 and 2). Invoke of the command ITERate transfers control
+ to the subroutine cycles (cycles.src), which parses the command 
+ line and calls the appropriate routines. All keywords that follow
+ the word ITERate should be included in the same line (lines are
+ appended if they end with a hyphen, as usual). The keywords used
+ are:
+
+ KEYWORD		FUNCTION
+
+  VV        Define whether the iteration cycle will solve the
+  UV        solvent-solvent (VV) , solute-solvent (UV) or solute-
+  UU	    solute equation.
+
+  HNC       Define the type of closure used (HNC is the default).
+  PY	    (see *note (doc/rism.info)Theory Section 1)
+  PY2       Currently the XTR closure is implemented only for the
+  XTR       pure solvent calculation. When use XTR one should read
+	    first the vv g(r), since this closure uses g(r) and 
+	    solves for the so called bridge function and the direct 
+	    corellation function cs(r).
+
+  INIT      This keyword signifies that the cycle is initialized.
+
+  NCYCLE    The maximum number of cycles to be executed.
+
+  NPRINT    The frequency of printing out the change in the
+	    direct correlation function cs(r)
+
+  TOL       The tolerance that has to be satisfied in order for the
+	    iteration loop to stop (if icycle < NCYCLE).
+	    At each iteration step the maximum change in the function
+	    csr (dmax) is determined and compared with the tolerance.
+	    If dmax < tol the loop exits.
+
+  RMIX      The mixing coefficient between the most recent cs(r) and
+	    the cs(r) of the previous cycle. 
+	    (see *note (doc/rism.info)Theory Section 2).
+	    If the iteration overflows one should generally restart
+	    the computation with larger rmix.
+
+  NDMAX     The frequency of checking the dmax. In principle, the
+	    iterations should converge by achieving gradually reduced
+	    dmax. If the iterations start to diverge the dmax will
+	    increase with each cycle. Every NDMAX steps the program 
+	    compares DMAX with the value stored in the previous check.
+	    If the new dmax is found larger than before, the 
+	    coefficient RMIX is increased.
+
+  IUNCSR    The unit number of the files to which cs(r) and g(r) are
+  IUNGR     to be stored after the calculation. These keywords can 
+	    be omitted and the functions can be written to files 
+	    using explicit WRITE statements, after the iteration 
+	    loop has been completed.
+
+  CDIE2     Keyword that can be used in the UU calculation to 
+	    determine the diel. constant modifying the molecule-
+	    molecule coulomb energy. The default CDIE value, defined
+	    in the command STATE is otherwise used.
+
+  US(R)     Determines that the short range interaction that has been
+	    read from an input file should be used. In this case the
+	    van der Waals parameters specified in the parameter list
+	    are not used. This is useful if one wants to use a more
+	    general short range potential. This option can also be 
+	    used if one wants to reconstruct the g(r) after having
+	    determined the bridge function via the XTR closure.
+	    NOTE that the input file should contain the potential
+	    us(r)/KT.
+
+  G(R)      Determines that the g(r) should be constructed. This
+	    keyword is not needed in the other closures expect XTR,
+	    since for all other cases the g(r) is automatically 
+	    constructed.
+
+  W(R)      Store the potential of mean force in the auxiliary array
+	    us(r). This can be subsequently written into a file with
+	    the WRITE US(R)... statement.
+
+  TS(R)     Store the function h-c in the auxiliary array us(r).
+
+  BD(R)     Store the function us(r)/KT-bridge in the auxiliary
+	    array us(r). If this  function is read before a vv
+	    calculation and the keywords US(R) and HNC are used, 
+	    the function g(r) (that produced the bridge) can be 
+	    reconstituted. (see *note (doc/rism.info)Theory, section 1).
+
+  CAV(R)    Store the cavity term -KT*(h-c+coulomb/(cdie*KT))
+	    in the auxiliary array us(r). This keyword is used in
+	    the UU calculation only. The coulomb term describes the
+	    coulomb interaction between the solute MOLECULES and is
+	    divided by the dielectric constant cdie (that is equal
+	    to the macroscopic dielectric defined in the command
+	    STATE). For monoatomic solutes the term cav is equal
+	    to the solvent-mediated interaction that the two solutes
+	    would have if their direct coulombic interaction were
+	    equal to coulomb/cdie. Thus, this cavity term can be
+	    added to the CHARMM intramolecular energy for which a
+	    cdie value has been used, to reproduce the total
+	    vacuum + solvent-mediated molecular energy (see also
+	    ref. [10] ).
+
+ SWI(n)     The iteration loop can be executed inside a switching 
+ SWF(n)     loop that gradually switches on the interactions. This
+ DSW(n)     prevents from numerical divergence. The integer n defines
+	    the kind of switch used:
+ SW(n)	    n=1  -    scale the total energy
+	    n=2  -    scale the sigma
+	    n=3  -    scale the coulombic charges
+	    n=4  -    scale the bridge function (used in VV only in
+		      conjuction with the XTR closure.
+            SWI() defines the beginning value of the switching
+	    coefficient, SWF() defines the final value and DSW()
+	    the step used. One can simply specify the switching
+	    coefficients by SW() and perform the iteration for the
+	    particular value of SW() (without looping over the switch).
+
+ AXTR       The following 6 keywords describe switching parameters  
+ RXTR1      associated with the XTR closure and the bridge calculation
+ RXTR2      The switch in this case is performed with a shifting
+ AXTR(n)    function. AXTR describes the maximum value of the 
+ RXTR1(n)   shifting function, RXTR1 the point in r-space (in A)
+ RXTR2(n)   where the shifting function starts diminishing and RXTR2
+	    the point where it vanishes. If the first three keywords
+	    are used then the same values are assume for all pairs.
+	    The explicit appearance of one of the last keywords
+	    defines the value for the respective switch of pair n.
+
+
+=====================================================================
+
+
+			The DERIvative command
+
+
+	This command starts the iteration cycle that calculates the
+ derivatives of the solvent-solvent g(r) and cs(r) with respect to
+ the solute density (see *note (doc/rism.info)Theory, Section 4 and
+ ref. [1]. The syntax of the command is similar to the ITERate command.
+ Below we explain only the keywords that differ from the ones in
+ the ITERate command.
+
+ KEYWORD  	FUNCTION
+
+ INIT      Used in the beginning of the cycle to zero the dcs(r). 
+
+ SOLU      defines the solute, the responce to which we calculate.
+	   (Remember that dcs(r) and dg(r) refer to solvent-solvent
+	   quantities).
+
+
+
+======================================================================
+
+
+			The SOLVation command
+
+
+	This command calculates the excess chemical potential of 
+ solvation (see *note (doc/rism.info)Theory, Section 4 and [2]). 
+ The keywords are:
+
+ KEYWORD	FUNCTION
+
+ CHMPOT		Calculate the chemical potential using the closed
+		form for the HNC-derived huv and cuv.
+
+ ENER		Calculate the solute-solvent interaction energy.
+		This is a part of the total energy of solvation.
+
+ CAVITy		Calculate the solvent reorganization energy. In 
+		order that this term be calculated the solvent
+		responce dg(r) and dcs(r) must have been found
+		first.
+
+ FLUC		Find the change in the chemical potential upon
+		a conformational transition of the solute (see
+		*note (doc/rism.info)Theory, Section 5).
+
+ HNC            The closure used. This should be consistent with
+		the closure used in calculating the g(r) and cs(r).
+		Currently only the HNC closure is implemented for
+		the SOLVation calculation.
+
+ SW(i), i=1,..4 Describes the switch to which the the distribution
+		functions used in the calculation correspond. The
+		default is SW(n)=1.
+		
+ VERBO	        Decompose the chemical potential and the interaction
+		energy into the contribution of the individual
+		solute-solvent site pairs. If the FLUC keyword
+		exists, then VERBO decomposes the change in chemical
+		potential to the contributions of the INTRAMOLECULAR
+		site pair terms.
+
+ PLT2           Plots the integrands in real space of the expression
+ FROM		for the chemical potential and the interaction
+ THRU		energy. Thus, one can get a feeling about which
+		terms contribute and at what distances.
+
+ UNIT		Defines if another output unit than the standard
+		should be used.
+
+
+=====================================================================
+
+
+			The ANALysis command
+
+
+	This command prints the locations of the first three maxima
+ and minima for the g(r) and the coordination numbers.
+
+ KEYWORD	FUNCTION
+
+ VV		Defines whether the vv or uv g(r) is to be printed
+ UV
+
+ PAIR  		Defines if a particular pair is to be printed 
+		(default=all pairs).
+
+ UNIT		Defines if another output unit than the standard
+		should be used.
+
+
+=====================================================================
+
+
+
+
+File: RISM, Node: Theory, Up: Syntax, Next: Examples, Previous: Commands
+
+
+
+
+                  A brief introduction to the RISM theory
+                  ---------------------------------------
+
+ 1. The RISM equations
+ ---------------------
+
+	A basic concept in the statistical mechanical theory of dense 
+ systems is the radial distribution function g(r). This function
+ provides information about the local structure of a liquid, because
+ it gives the number of atoms that exist in a sphere of radius r 
+ around any other atom via the relation:
+
+		N(r) = 4 pi r**2 rho g(r) dr			(1)
+
+ where rho is the bulk density of the system. Using g(r) one can 
+ calculate other useful quantities, such as the average interaction 
+ energy between a solute atom and the solvent
+                           
+		ENER = 4 pi Integral{ r**2 rho g(r) Uuv(r) dr }	(2)
+
+ where Uuv(r) is the direct interaction between the solute and the 
+ solvent atoms at a distance r, or the excess chemical potential
+
+	                                 dUuv(lambda)
+ 		chem. pot. = Integral { <  -------   > dlambda }(3)
+                                         dlambda     lambda
+                         
+	 The radial distribution function has been assumed to depend
+ only on the distance r that separates two atoms. This is true for 
+ isotropic atomic liquids, but the situation becomes more complicated 
+ for the case of molecular liquids. In this case the interaction 
+ between two molecules depends on their relative orientation. 
+ Therefore, the molecular liquid radial distribution function will 
+ depend in general not only on the distance r but also on the solid
+ angles that define the orientation of the molecules.
+
+	The RISM integral equation theory [3-6] assumes that  molecules
+ can be decomposed into atomic sites. A molecular mixture can thus be
+ viewed as a mixture of atomic sites. Each site is surrounded by sites
+ of two kinds: 1) the ones that belong to the same molecule and 2) the
+ ones that belong to different molecules. Sites of the same molecule
+ are constrained to be at specific distances from each other (i.e. the
+ molecules are assumed to be rigid). The objective then is  to 
+ determine the  g(r) between sites that belong to different molecules.
+ Since each site carries along a whole bunch of sites that are rigidly
+ separated from it, the (intermolecular pair) g(r) will depend not 
+ only on the particular pair of sites but also on the other sites of 
+ the two  molecules.
+	
+	The RISM integral equation is a matrix equation of the form:
+                                        ------
+
+	 rho h rho = rho w*c*w rho + rho w*c*rho h rho		(4)
+
+ with rho(i) the array  of atomic sites, h(i,j)=g(i,j)-1 and c(i,j)
+ the direct correlation function between sites i and j. The star * 
+ denotes convolution. Eq. (4) is reminiscent of the atomic Ornstein-
+ Zernike equation  and it can be considered as the defining 
+ equation for c. Since it is a convolution equation, it acquires a
+ very simple form upon fourier transformation, becoming a product of
+ matricies.  The matrix w has elements in Fourier space:
+
+ 
+		w(i,j) = 0            i,j in different molecules
+                        
+		         sin(k Lij)				(5)
+                         ----------   i,j in the same molecule
+                              Lij                         
+
+
+ Thus, in r space the matrix w(i,j) is a delta function which
+ constrains the sites i and j to be at a distance Lij. Sites that
+ belong to different molecules decouple, as (5) indicates.
+
+ 	The array rho runs through all atomic sites of the molecular 
+ mixture. Obviously, all atomic sites that belong to the same 
+ molecular species have the same density (equal to  the density of
+ the species). Equation (4) can be simplified considerably if (at
+ least) one molecular species (and thus all atomic sites associated
+ with it is considered to have zero density (this is called the 
+ limit of infinite dilution). This assumption is made for the case
+ of solute-solvent and solute-solute calculations, where the solute
+ species is assumed to have zero density. Thus, equation (4) can 
+ appear in one of three different forms (v denotes solVent and u
+ denotes solUte sites):
+
+ 1) solvent-solvent
+ ------------------
+ 
+ The solvent density is not zero. Dividing (4) by rho(v)*rho(v') one
+ gets:
+
+ 	
+		h(v,v') = w(v,v')*c(v',v'')*w(v'',v)
+
+		 + w(v,v')*c(v',v'')*rho(v'')h(v'',v)		(6a)
+
+ 2) solute-solvent
+ -----------------
+ 
+ in this case the density of the solute sites rho(u)=0. The resulting
+ equation is:
+
+ 		h(u,v) = w(u,u')*c(u',v')*w(v',v)
+
+		 + w(u,u')*c(u',v')*rho(v')h(v',v)		(6b)
+		
+
+ The assumption rho(u)=0 prevents the intermolecular coupling of 
+ solute-solute sites that would lead to an additional term
+
+	
+		w(u,u')*c(u',u'')*rho(u'')h(u'',v)	 	(7)
+
+
+ Thus, equation (6b) contains only the solvent-solvent distribution
+ function h(v',v) in the r.h.s., that can be calculated separately 
+ in the solvent-solvent calculation.
+
+ 3) solute-solute
+ ----------------
+ 
+ again the solute density rho(u)=0. The solute-solute equation is:
+
+
+		h(u,u') = w(u,u'')*c(u'',u''')*w(u''',u')
+
+                 + w(u,u'')*c(u'',v)*rho(v)h(v,u')		(6c)
+
+ As before, in the zero density limit the r.h.s contains only the solute
+ - solvent distribution function that can be solved separately with
+ equation (6b).
+
+	Equations (6a-6c) contain two unknown functions: the radial 
+ distribution function h=g-1 and the direct correlation function c. In
+ order to solve them one uses a second equation (closure) that 
+ completes the system of equations. The closures used in RISM are
+ inspired by the statistical mechanical theory of the atomic liquids,
+ where a diagrammatic analysis provides with an exact equation between
+ h,c and the so called "bridge function" b [3], to which equation the
+ various closures are approximations. The exact atomic equation is 
+ given by:
+
+                h = exp { -u/KT +h -c +b } -1                   (8)
+ 
+ The bridge function is unknown and thus (8) cannot be used in its 
+ exact form. The simplest approximation is to set b=0 and get the 
+ so called HNC closure (works better for long range interactions). In
+ RISM one makes the assumption that the h(a,b) between the atomic 
+ sites a and b satisfies a closure equation identical to the atomic
+ case equation (8) and then one approximates (8) with one of the 
+ following forms:
+
+----------------------------------------------------------------------
+ CLOSURE                       EQUATION
+
+  HNC :    h(a,b) = exp { -u(a,b)/KT +h(a,b) -c(a,b) } -1	(9a)
+
+  PY :     h(a,b) = exp { -u(a,b)/KT } (1 +h(a,b) -c(a,b) ) -1	(9b)
+
+  PY2 :    h(a,b) = exp { -u(a,b)/KT }   
+
+           X   (1 +h(a,b) -c(a,b) + 0.5 (h(a,b)-c(a,b))**2 )	(9c)
+
+ 	   with a, b  solvent and/or solute sites.
+----------------------------------------------------------------------
+
+ Thus, the approximation made in adopting one of the above closures
+ with RISM is twofold: a) one extends the atomic case equation (8)
+ to RISM and b) one approximates further by simplifying (8). 
+
+	The approximations involved and the uncertainty in the
+ parameters used for the potential u(a,b) result in a calculated
+ g(r) that does not match exactly the experimental (or MD/MC)
+ calculated g(r). One can follow an alternative route and use the
+ g(r) that results from experiment or simulations as an input in
+ equations (6) and (8) to determine the functions h and b. This
+ is referred to as the XTR closure in the RISM module. The function
+ -b can then be added to the short-range potential and the initial 
+ g(r) can be reconstructed using the effective potential u-KT*b and
+ the HNC closure. This is similar to the Reference HNC or RHNC 
+ method explained in [3].
+
+
+ 2. Description of the iteration method
+ --------------------------------------
+
+
+	In order to calculate the g(r) of a molecular mixture one
+ defines first the solvent and the solute (if there is any) 
+ molecular species. The solvent-solvent equation (6a) along with one
+ of eqs (9) is solved first. The direct correlation function c(v,v')
+ tends asymptotically (at large distances) to the form:
+
+
+		c(v,v') --> -coulomb(v,v')/KT			(10)
+
+
+ as can be easily seen from (9). Since the solution of (6) involves
+ fourier transformations and the coulomb potential 1/r decreases
+ very slowly with distance, one separates c(v,v') in a short ranged
+ part cs(v,v') and a long ranged part as follows:
+
+
+		c(v,v') = cs(v,v') + coulomb(v,v')/KT		(11)
+
+
+ 	Using this separation, the HNC (for example) closure becomes:
+
+
+	    h(a,b) = exp { -u*(a,b)/KT +h(a,b) -cs(a,b) } -1	 (9a')
+
+
+ with u*(a,b) the short ranged (van der Waals) interaction between a
+ and b. Denoting as ts the function ts = h-cs, one can write (9a') as
+
+
+	 cs(a,b) = exp { -u*(a,b)/KT +ts(a,b) } -ts(a,b) -1	(9a'')
+
+
+ One can also express (6a) in terms of ts and cs. Then, one starts
+ with the inital guess cs(r)=0 and calculates the fourier transform of
+ (6a) to get ts(k). Taking the inverse F.T of ts(k) and plugging into
+ (9a'') one gets a new guess for csr. Then one F.T. cs(r), substitutes
+ into (6a) and repeats the iteration cycle until the function cs(r) 
+ does not change more than a specified tolerance.
+	To decrease the numerical instability one mixes the cs(r) of
+ the most recent cycle (i)  with the one of the previous cycle (i-1)
+ according to the prescription
+
+
+		csr = (1-rmix) csr + rmix csr 			(12)
+                   i              i          i-1
+
+	
+	After the solvent-solvent h(v,v') has been calculated, one
+ can  follow the same iteration procedure to calculate the
+ solute-solvent h(u,v) from (6b). Subsequently, use of h(u,v) and 
+ equation (6c) gives the solute-solute h(u,u').
+
+	The fast fourier transformation can be performed in a linear
+ scale, where the r-space grid is uniformly spaced, or in a 
+ logarithmic scale (this is the default). In the latter case the grid
+ points are defined by the equation:
+
+
+		r(i) = exp { -rmin + dr (i-1) }			(13)
+
+
+	For a description of the algorithm see [7]. The advantadge of
+ the log fft is that the grid is more dense at small distances, where
+ the distribution functions vary more rapidly. The default values used
+ are rmin=-5.12 and dr=0.02 giving r(1)=0.00598 and r(512)=164.02191
+ for 512 grid points. The log fft with these defaults has been found
+ to give convergent results for most of the cases.
+
+
+ 
+ 3. Long range behavior of the RISM correlation functions
+ --------------------------------------------------------
+
+
+	As was mentioned in the previous section, the closure
+ equations force the site-site c(r) to decay following a coulomb law
+ (for charged sites). This leads to erroneous estimations of long
+ range properties, such as the dielectric constant. It has been
+ shown [8] that a simple modification of the asymptotic form for c(r)
+ restores the consistency with the macroscopically observed 
+ dielectric constant. The modification is achieved by multiplying the
+ coulombic charges of the sites with a constant A that is site
+ independent and is given by the equation
+
+
+                    1 + cdie ( 3 y -1)
+		A = ------------------				(14)
+                     3 y (cdie -1)
+
+
+where y is given by
+
+                 
+                    4 pi rho(v)
+		y = ----------- (dipole**2)			(15)
+                     9 KT
+
+
+and dipole denotes the dipole moment of the solvent (see also [9]).
+
+
+
+ 4. Chemical potential
+ ---------------------
+
+
+	After determining the solute-solvent g(r) one can calculate
+ the excess chemical potential of solvation using eq. (3). The 
+ advantadge of using the HNC closure is that it provides a closed form
+ for the chemical potential (see ref. [2] ) :
+
+ 
+	chem. pot. = KT SUM rho(v) [ 0.5 Integral { huv**2 dV }
+                        u,v
+                         	 -0.5 Integral { huv cuv dV }
+
+                        	  - Integral { cuv dV } ]	(16)
+
+
+	 The chemical potential can be decomposed into the energy and
+ entropy of solvation. The energy of solvation is a sum of two parts:
+
+ a) the solute-solvent interaction energy:
+ -----------------------------------------
+
+
+ interaction energy = SUM rho(v) [ Integral { guv  Uuv dV } ]	(17)
+                      u,v
+
+ b) the cavity reorganization energy:
+ ------------------------------------
+
+ cavity energy = SUM 0.5 rho(v)**2 [ Integral { dgvv' Uvv' dV } ](18)
+                 v,v'
+
+  	In (18) with dgvv' we denote the (of order O(rho(u))) change 
+ in the solvent-solvent density. More specifically, the solvent-solvent
+ g(r) depends on the solute density. If one expresses the dependence
+ as a power series in the solute density:
+
+	
+	g(v,v') = g(v,v',lambda=0) + dg(v,v') rho(u) + ...	(19)
+
+
+ then the function dgvv' of (18) is the second term of (19). With
+ g(v,v',lambda=0) we denoted in (19) the solvent-solvent g(r) without
+ the solute present.
+ 	Since g(v,v') depends on rho(u)  the solvent-solvent energy
+ will be slightly modified upon solvation, contributing to the
+ energy of solvation. As has been shown in [1], the cavity energy
+ persists even in the limit of infinite dilution, but it does not
+ contribute to the chemical potential because it is cancelled exactly
+ by a term in the entropy of solvation.
+ 	In order to use (18) one must of course determine the function
+ dgvv. This is accomplished by solving a set of equations which result
+ from (6) and (9) upon variation with respect to density.  
+	To compare the resulting dgvv with the undisturbed solvent gvv
+ it is useful to multiply dgvv by rho(v) (as suggested by (18)).
+ 
+
+ 5. Dependence of the chemical potential on the solute structure.
+ ----------------------------------------------------------------
+
+
+	As was mentioned in section 1, RISM assumes that the 
+ molecules under consideration are rigid. Upon a change in the
+ molecular structure the environment around a particular pair of
+ sites changes, modifying thus the resulting h and c functions.
+ This is mathematically expressed by the fact that the matrix w
+ appearing in (6) will change. In principle, if one is interested 
+ to explore the dependence of the solvation chemical potential on the
+ solute geometry, one needs to perform a full calculation for each
+ solute structure. For solutes with many degrees of freedom an
+ exhaustive search of the conformational space can be very time
+ consuming. To avoid this, one can start with eqs. (6b) and (9a)
+ and deduce variational expressions for h, c and the matrix w.
+ Then, one can use the closed HNC expression for the chemical 
+ potential to calculate the change in chemical potential upon a
+ conformational change from structure 1 to structure 2 as follows:
+
+
+   chmpot(2) - chmpot(1) = - 0.5 KT SUM Integral { c(u,v,1) x(v,v')
+                                    u,u'
+
+			     c(v',u',1) (w(u,u',2)-w(u,u',1)) }	(20)
+
+
+ As (20) indicates, one needs to perform a full RISM calculation 
+ only once and determine the function c(u,v,1) that corresponds to 
+ a particular structure 1. Then, to estimate the potential of any 
+ structure 2 one only needs to supply (20) with the new coordinates.
+ Note that (20) is a sum over intramolecular site pairs, in contrast
+ to the expression for the chemical potential. Each term of the 
+ sum gives the contribution to the change in chemical potential of
+ the corresponding pair of sites in the structure. By comparing 
+ these terms one can conclude which parts of the structure are 
+ mostly responsible for the change in chemical potential.
+
+
+
+File: RISM, Node: References, Up: Syntax, Next: Examples, Previous: Theory
+
+References
+----------
+
+ [1]  H. A. Yu, and M. Karplus, JCP (1988) 89, 2366-2379. A 
+      thermodynamic analysis of solvation.
+
+ [2]  S.J. Singer and D. Chandler, Mol. Phys. (1985), 55, 621-625.
+      Free energy functions in the extended RISM approximation.
+
+ [3]  J. P. Hansen and I. R. Mcdonald, Theory of Simple Liquids, 2nd Edition,
+      Academic Press, (1986).
+
+ [4]  D. Chandler, The liquid state of matter: Fluids, simple and
+      complex. E.W. Montroll and J.L. Lebowitz (editors), North Holland
+      Publishing Company, 1982, 275-340.
+
+ [5]  F. Hirata and P.J. Rossky, Chem. Phys. Lett. (1981) 83, 329-334.
+      An extended RISM equation for molecular polar fluids.
+
+ [6]  F. Hirata, P.J. Rossky and M. B. Pettitt, JCP (1983), 78, 4133-4144.
+      The interionic potential of mean force in a molecular polar
+      solvent from an extended RISM equation.
+
+ [7]  P. J. Rossky and H. L. Freedman, JCP (1980), 72, 5694.
+      Accurate solutions to integral equations describing weakly 
+      screened ionic systems.
+
+ [8]  P. J. Rossky, M. B. Pettitt and G. Stell, Mol. Phys. (1983), 50, 1263-1267.
+      The coupling of long and short range correlations in ISM liquids.
+ [9]  D. Chandler, JCP (1977), 67, 1113-1124. The dielectric constant
+      and related equilibrium properties of molecular fluids: 
+      Interaction site cluster theory analysis.
+
+ [10] M. B. Pettitt, M. Karplus and P. J. Rossky, JPC (1986), 90, 6335-6345.
+     Integral equation model for aqueous solvation of polyatomic
+     solutes: Application to the determination of the free energy
+     surface for the internal motion of biomolecules.
+
+
+ [11] H. A. Yu, B. Roux and M. Karplus, JCP (1990) 92, 5020-5033.
+      Solvation thermodynamics: An approach from analytic temperature
+      derivatives.
+
+
+
+
+
+File: RISM, Node: Examples, Up: Syntax, Next: Top, Previous: References
+
+ Input files  :  1) vv calculation
+		 2) uv 
+		    uu
+		    derivative
+
+---------------------------------------------------------------------
+
+ FIRST INPUT FILE
+
+---------------------------------------------------------------------
+* CHARMM input file for the RISM calculations
+* test the pure solvent calculation
+* use tip3p water as solvent 
+*
+
+! enter the RISM module
+
+RISM 
+
+! read the parameters
+ 
+read parameters show
+* PARAMETERS for RISM (from CHARMM)
+*
+ NBOND
+ ! Solvent:
+ !        epsilon      Rmin/2     Charge
+ ! epsilon needs not be given as negative
+ !
+ OT       0.1591      1.60000    -0.834
+ HT       0.0498      0.80000     0.417
+ NH1      0.23840     1.60000    -0.350 ! NH1 
+ H        0.04980     0.80000     0.250 ! H   
+ CH1E     0.04860     2.36500     0.100 ! CH1E
+ CH31     0.18110     2.16500     0.100 ! CH3E
+ C       -0.12000     2.10000     0.550 ! C   
+ O       -0.15910     1.60000    -0.550 ! O   
+ CH32    -0.18110     2.16500    -0.100 ! CH3E
+ CH4     -0.294       2.09300     0.00
+ END
+
+ ! the list of specific solute-solvent pairs:
+ NBFIX
+ !Solvent molecule 
+ !              epsilon    Rmin
+ !
+ OT   OT      -0.15207     3.53650
+ HT   OT      -0.08363     1.99270
+ HT   HT      -0.04598     0.44900
+END   ! (of NBFIX)
+
+END   ! (of parameters)
+
+! now read the strucutre
+
+read structure  show
+* structure for the solvent
+*
+! read  the type of solvent sites
+solvent	
+nsite 3 ntype 2
+OT  OT type 1   segid BULK resnam TIP3 
+HT1 HT type 2
+HT2 HT type 2
+
+! and its geometry via a ZMATRIX
+ZMATRIX
+OT
+HT1  OT  0.9572
+HT2  OT  0.9572  HT1  104.52
+END
+
+
+! define the temperature, the density and the macroscopic dielectric
+! constant
+
+state temp 298.15 density BULK 0.03334 cdie 78.6 
+
+
+! start the iteration cycle to calculate the vv cs(r) and g(r)
+
+ iterate vv  hnc ncycle  500  nprint     1  -
+ init	swi(1) 0.01 swf(1) 0.10 dsw(1) 0.01 -
+               tol  0.9  rmix    0.39
+
+
+ iterate vv  hnc ncycle  500  nprint     1  -
+      swi(1) 0.1 swf(1) 1.0 dsw(1) 0.1 -
+               tol  0.9  rmix    0.39
+
+ iterate vv  hnc ncycle  5000  nprint     10  -
+               tol  0.00001  rmix    0.39
+
+! print out the characteristics of g(r) for pair 1
+
+analysis vv   pair 1
+
+! now for all pairs
+
+analysis vv
+
+! write the calculated distribution functions 
+
+! first cs(r)
+open write name tip3p-charmm.csr unit 20
+write cs(r) vv unit 20
+* cs(r) for tip3p calculated with the charmm executable
+*
+close unit 20
+
+! then g(r)
+open write name tip3p-charmm.gr unit 20
+write g(r) vv unit 20
+* g(r) for tip3p water with the charmm-prepared executable 
+*
+close unit 20 
+
+! write the g(r) in formmatted form as a function of distance
+
+open write name tip3p-charmm-plt2.gr unit 20
+write g(r) vv plt2 all from 0.5 thru 10.0 format(1x,10f10.5) unit 20
+* g(r) for water with the charmm-prepared executable
+* r(i)   O-O     O-H      H-H
+*
+close unit 20 
+
+! exit RISM
+
+stop
+
+! exit CHARMM
+
+stop
+
+!---------------------------------------------------------------------
+
+
+			SECOND INPUT FILE
+
+
+----------------------------------------------------------------------
+* input test file for the uv calculation
+*                     the uu calculation
+*                     the derivative calculation
+*
+
+! enter the RISM module
+
+RISM  NSTV 3  NSTU 2  NSOL 2
+
+! test the solute-solvent cs(r) and g(r) calculation 
+! use tip3p water as solvent 
+
+
+! read first the parameters; show will produce a detailed output
+!
+read parameters show
+* PARAMETERS for RISM (from CHARMM)
+*
+ NBOND
+ ! Solvent:
+ !        epsilon     Rmin/2      charge
+ !
+ OT      -0.1591      1.60000    -0.834
+ HT      -0.0498      0.80000     0.417
+ NH1     -0.23840     1.60000    -0.350 ! NH1 
+ H       -0.04980     0.80000     0.250 ! H   
+ CH1E    -0.04860     2.36500     0.100 ! CH1E
+ CH31    -0.18110     2.16500     0.100 ! CH3E
+ C       -0.12000     2.10000     0.550 ! C   
+ O       -0.15910     1.60000    -0.550 ! O   
+ CH32    -0.18110     2.16500    -0.100 ! CH3E
+ CH4     -0.294       2.09300     0.00
+ END
+
+ ! the list of specific solvent-solvent pairs:
+ NBFIX
+ !Solvent molecule 
+ !             epsilon     Rmin
+ !
+ OT   OT      -0.15207     3.53650
+ HT   OT      -0.08363     1.99270
+ HT   HT      -0.04598     0.44900
+END  ! (of NBFIX)
+
+END  ! (of parameters)
+
+read structure  show
+* tip3p as solvent
+*
+! read first the type of solvent sites
+
+SOLVENT
+nsite 3 ntype 2
+OT  OT type 1   segid BULK resnam TIP3 
+HT1 HT type 2
+HT2 HT type 2
+
+! and the solvent geometry
+
+ZMATRIX
+OT
+HT1  OT  0.9572
+HT2  OT  0.9572  HT1  104.52
+
+! now do the same for the solutes
+! monoatomic molecules do not need a ZMATRIX since they do not have
+! any geometry
+
+SOLUTE 1
+nsite 1 ntype 1
+CH31    CH31   type 1 segid SOLU   resnam SOLU
+! 
+! solute 2 is CH1E-CH1E, thus the two sites are of the same type
+!
+SOLUTE 2
+nsite 2 ntype 2
+C1      CH31    type 1  segid SLU2 resnam SLU2
+C2      CH32    type 1  
+ZMATRIX
+C1
+C2      C1  4.0
+
+END
+
+! read the state (temperature, solvent density and cdie)
+
+
+state temp 298.15 density BULK 0.03334 cdie 78.6 
+
+
+! read the converged cs(r) for the solvent-solvent (calculated
+! before).
+
+open read unit 20 name tip3p-charmm.csr
+read cs(r) vv unit 20
+close unit 20
+
+! iterate a few steps to check the convergence
+! and generate the solvent-solvent g(r)
+
+
+ iterate vv  hnc ncycle  500  nprint     10  -
+               tol  0.00001  rmix    0.39
+
+
+ ! now do the uv (solVent-solUte) calculation
+
+ iterate uv   hnc   solute 1 ncycle  500  nprint     1  -
+ init	      swi(1) 0.01 swf(1) 0.1 dsw(1) 0.01        -
+              tol  0.9  rmix    0.39
+
+
+ iterate uv  solute 1 hnc ncycle  500  nprint     1  -
+             swi(1)  0.1  swf(1)   1.0  dsw(1)  0.1  -
+            	   tol  0.9  rmix    0.39
+
+
+ iterate uv solute 1  hnc ncycle  5000  nprint   10    	 -
+               tol  0.001  rmix    0.39
+
+
+! print out the solute-solvent g(r) characteristics
+
+analysis uv  solute 1
+
+! write in files the distribution functions for the solute-solvent
+! site pairs
+
+open write name soluv1-charmm.csr unit 20
+write cs(r) uv solute 1  unit 20
+* cs(r) for CH31 into water with the charmm-prepared executable
+*
+close unit 20 
+
+
+open write name soluv1-charmm.gr unit 20
+write g(r) uv solute 1 unit 20
+* g(r) for CH31 into water with the charmm-prepared executable 
+*
+close unit 20 
+
+
+open write name soluv1-charmm-plt2.gr unit 20
+write g(r) uv  solute 1 plt2 all from 0.5 thru 10.0  -
+  format(1x,10f10.5) unit 20
+* g(r) for CH31 into tip3p water with the charmm-prepared executable
+*
+close unit 20 
+
+! calculate the chemical potential and the solute-solvent
+! interaction energy. The cavity energy cannot be calculated
+! bewcause we have not done the derivative calculation.
+
+solvation chmpot energy  plt2 verbose  solute 1
+
+! ===================================================================
+
+! now do the second solute calculation
+  ------------------------------------
+
+ iterate uv   hnc    solute 2 ncycle  500  nprint     1  -
+ init	      swi(1) 0.01 swf(1) 0.1 dsw(1) 0.01        -
+             	  tol  0.9  rmix    0.39
+
+
+ iterate uv  solute 2 hnc ncycle  500  nprint     1  -
+     	      swi(1) 0.01 swf(1) 0.1 dsw(1) 0.01        -
+            	   tol  0.9  rmix    0.39
+
+
+ iterate uv solute 2  hnc ncycle  5000  nprint   10    	 -
+               tol  0.001  rmix    0.39
+
+
+! print out the solute-solvent g(r) characteristics
+
+analysis uv  solute 2
+
+! write in files the distribution functions for the solute-solvent
+! site pairs
+
+open write name soluv2-charmm.csr unit 20
+write cs(r) uv solute 2  unit 20
+* cs(r) for CH31-CH32 into water with the charmm-prepared executable
+*
+close unit 20 
+
+
+open write name soluv2-charmm.gr unit 20
+write g(r) uv solute 2 unit 20
+* g(r) for CH31-CH32 into water with the charmm-prepared executable 
+*
+close unit 20 
+
+
+
+open write name soluv2-charmm-plt2.gr unit 20
+write g(r) uv  solute 2 plt2 all from 0.5 thru 10.0  -
+  format(1x,10f10.5) unit 20
+* g(r) for CH31-CH32 into tip3p water with the charmm-prepared executable
+*
+close unit 20 
+
+! calculate the chemical potential and the solute-solvent
+! interaction energy
+
+solvation chmpot energy  plt2 verbose  solute 2
+
+
+! ===================================================================
+
+
+! now do the solute 1 - solute 2 calculation
+! store the potential of mean force in us(r)
+
+iterate	uu   hnc w(r)  solute 1   solute 2   ncycle 500  nprint 1 -
+init         tol 0.001    rmix  0.29
+
+open write name sol1-sol2.pmf  unit 20
+write us(r) uu solute 1 solute 2 unit 20
+* pmf for the solutes CH3E and CH31-CH32
+*
+close unit 20
+
+
+open write name sol1-sol2.csr  unit 20
+write cs(r) uu solute 1 solute 2 unit 20
+* cs(r) for the solutes CH3E and CH31-CH32
+*
+close unit 20
+
+
+! ===================================================================
+
+! now do the DERIVATIVE calculation
+
+! test the calculation of the responce of the solvent to the
+! solvation of a solute moleculte (infinite dilution)
+! use tip3p water as solvent 
+
+
+! first for the solute 1
+
+derivative hnc  solute 1 ncycle 5000 nprint 1 -
+init		tol 0.001   rmix 0.39
+
+open write name tip3p-uv1-charmm.dcsr  unit 30
+write dc(r) solute 1 unit 30
+* derivative of cs(r) of tip3p upon solvation of CH31
+*
+close unit 30
+
+open write name tip3p-uv1-charmm.dgr  unit 30
+write dg(r) solute 1 unit 30
+* derivative of g(r) of tip3p upon solvation of CH31
+*
+close unit 30
+
+! calculate the chemical potential, the interaction energy
+! and the cavity formation energy
+
+solvation chmpot energy cavity solute 1 verbose
+
+
+! now do the calculation for solute 2 
+
+
+derivative hnc  solute 2 ncycle 5000 nprint 1 -
+init		tol 0.001   rmix 0.39
+
+open write name tip3p-uv2-charmm.dcsr  unit 30
+write dc(r) solute 2 unit 30
+* derivative of cs(r) of tip3p upon solvation of CH31-CH32
+*
+close unit 30
+
+open write name tip3p-uv2-charmm.dgr  unit 30
+write dg(r) solute 2 unit 30
+* derivative of g(r) of tip3p upon solvation of CH31-CH32
+*
+close unit 30
+
+! calculate the chemical potential, the interaction energy
+! and the cavity formation energy
+
+solvation chmpot energy cavity solute 2 verbose
+
+!exit RISM
+
+stop
+
+!exit CHARMM
+
+stop
+
+----------------------------------------------------------------------

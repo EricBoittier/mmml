@@ -1,0 +1,84 @@
+* SEVB TEST RUN 
+* Two water molecules: rough estimatives for LEPS parameters.
+* Purpouse : illustrate the use of the command LEPS.
+* C.A.
+*
+
+if ?quantum .ne. 1 then stop
+
+BOMBLEV -2
+
+READ RTF CARD
+* topology
+*
+   22     1
+MASS     1 HT     1.00800 !
+MASS     5 OT    15.99900 !
+
+RESI TIP3         0.000 ! tip3p water model, generate using noangle nodihedral
+GROUP
+ATOM OH2  OT     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+END
+
+READ PARAMETERS CARD
+* Parameter file
+*
+BONDS
+HT   HT      0.000     1.5139 ! ALLOW WAT
+                ! FROM TIPS3P GEOMETRY (FOR SHAKE/W PARAM)
+OT   HT    450.000     0.9572 ! ALLOW   WAT
+                ! FROM TIPS3P GEOM
+ANGLES
+HT   OT   HT     55.000   104.5200 ! ALLOW WAT
+                ! TIP3P GEOMETRY, ADM JR.
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+HT     0.000000  -0.046000     0.224500 ! ALLOW WAT
+!                !TIP3P HYDROGEN PARAMETERS, adm jr., NBFIX obsolete
+OT     0.000000  -0.152100     1.768200 ! ALLOW   WAT
+!                !TIP3P OXYGEN PARAMETERS, adm jr., NBFIX obsolete
+END
+
+
+READ SEQUENCE TIP3 2
+GENERATE NOANGLE NODIHEDRAL
+
+READ COOR CARD
+*   H2O (WITH EXPLICIT HYDROGENS) COORDINATES
+*
+    6
+    1    1 TIP3 OH2    0.00527   0.02827   0.03975 1    1      0.00000
+    2    1 TIP3 H1     0.04337   0.01154   0.98719 1    1      0.00000
+    3    1 TIP3 H2     0.90064  -0.07109  -0.25655 1    1      0.00000
+    4    2 TIP3 OH2   -1.42136  -2.45866  -0.74032 1    2      0.00000
+    5    2 TIP3 H1    -2.18151  -2.25808  -1.26777 1    2      0.00000
+    6    2 TIP3 H2    -1.02183  -1.61798  -0.54141 1    2      0.00000
+
+NBONDS CUTNB 8.0 CTONNB 7.0 CTOFNB 7.5 WMIN 1.5 ATOM
+
+DEFINE QMSET SELE ALL END
+
+ QUANTUM SELE QMSET END AM1 - 
+        LEPS LEPA 4 LEPB 6 LEPC 1                    - ! atoms involved
+         D1AB 100.780   D1BC 100.300   D1AC  10.300  - ! am1 bond energies
+         R1AB   1.000   R1BC   1.000   R1AC   2.484  - ! am1 bond lenghts
+         B1AB   1.500   B1BC   1.500   B1AC   0.675  - ! am1 beta exponents
+         S1AB   0.000   S1BC   0.000   S1AC   0.000  - ! am1 sato parameters
+-!
+         D2AB 150.000   D2BC 150.000   D2AC   7.402  - ! ref. bond energies
+         R2AB   0.980   R2BC   0.980   R2AC   2.500  - ! ref. bond lenghts
+         B2AB   1.447   B2BC   1.447   B2AC   0.339  - ! ref. betas exponents
+         S2AB   0.000   S2BC   0.000   S2AC   0.000    ! ref. sato parameters
+
+ ENERGY
+
+ STOP 

@@ -1,0 +1,76 @@
+*  Pull two atoms apart with different methods using Lazaridis implicit solvent
+*
+
+! Old integrator not parallel
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+if ?afm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+SET ProtName   1tit   ! Name of the domain
+SET ActualRun   smd   ! This run
+
+open read card unit 3 name @0toph19_eef1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0param19_eef1.inp
+read para unit 3 card 
+close unit 3
+!
+!
+! { Read coordinates }
+OPEN UNIT 1 READ FORMatted NAME @0@ProtName.crd
+
+READ SEQUENCE COOR UNIT 1
+generate @ProtName setup
+
+READ COORD CARD UNIT 1
+COORdinate COPY COMParison
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+
+! EEF1 does now work in parallel 
+EEF1 SETUP TEMP 298.15 UNIT 93 NAME @0solvpar.inp
+UPDATE CTONNB 7. CTOFNB 9. CUTNB 14. GROUP RDIE
+
+SHAKE BONH PARAM TOL 1E-7
+
+! Defines the two atoms being pulled apart
+DEFINE nc SELE ((ATOM @ProtName 1 N) .OR. (ATOM @ProtName 89 C)) END
+
+! AFM reads ALPHA in pN (magnitude of the force in CF) 
+!                 or pN/A (harmonic constant in SMD/BMD) 
+! AFM reads BETA  in A/ps (pulling speed in SMD) 
+
+! pulls two atoms apart using a constant force
+!AFM CF  IUNJ 45 ALPHA 300 SELE nc END
+ 
+! pulls two atoms apart using biased MD (a time dependend perturbation)
+!AFM BMD IUNJ 45 ALPHA 1.0 SELE nc END 
+
+! pulls two atoms apart using "steered MD"
+AFM SMD IUNJ 45 ALPHA 10.0 BETA 1.0 SELE nc END 
+
+!{perform dynamics}
+
+OPEN WRITE FORMATTED UNIT 45 NAME @9@ActualRun.afm
+
+DYNA START LEAP NOSE QREF 500.0 TREF 300 -
+    NSTEP  500 TIMESTEP 0.002 -
+    IPRFRQ  200 NPRINT 10 NSAVC 50 NSAVV 0 IHBFRQ 0 INBFRQ -1 -
+    ILBFRQ  0   IHTFRQ 0   IEQFRQ 0    NTRFRQ 0 -
+    FIRSTT 300 FINALT 300 TBATH 300 TSTRUC 300 -
+    IUNREA -1 IUNWRI -1 KUNIT -1 IUNCRD -1  -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 1 TWINDH 100.0 TWINDL -100.0
+
+AFM RESET
+
+STOP

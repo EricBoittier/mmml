@@ -1,0 +1,146 @@
+* mmff_gener.inp
+* author:  Ryszard Czerminski (Dec 17, 1993)
+* purpose: to test MMFF parameter reader, energy & derivatives
+* external files: MMFFANG.PAR MMFFBOND.PAR MMFFCHG.PAR MMFFDEF.PAR
+*                 MMFFOOP.PAR MMFFSTBN.PAR MMFFSUP.PAR MMFFSYMB.PAR
+*                 MMFFTOR.PAR MMFFVDW.PAR
+* UPDATED by Josh Buckner 18 April 2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+set tol = 1e-3
+set pass = 1
+set failed =
+
+stream datadir.def
+
+bomlev 5
+
+read rtf  card unit  5
+* TIP3P RTF
+*
+   20    1                   ! Version number
+MASS    31 HOH    1.00794 H  ! HYDROGEN IN H2O
+MASS    70 OH2   15.9994  O  ! OXYGEN ON WATER
+
+AUTOGENERATE ANGLES
+DEFA FIRS NONE LAST NONE
+
+RESI OH2    .000   ! MMFF WATER MODEL
+GROUP
+ATOM OH2  OH2    -0.86
+ATOM H1   HOH     0.43
+ATOM H2   HOH     0.43
+BOND OH2 H1  OH2 H2   !    H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+
+END
+
+stream @0mmff_setup.str
+ 
+read merck name @0am07a.mrk
+generate
+update inbfrq 1 ihbfrq 0 CUTNB 9. CTOFNB 8. CTONNB 3. cdie e14fac 0.75
+energy
+
+set eref = -27.54472
+set gref = 6.94171
+set case = 1
+goto tester
+label 1
+
+read sequence OH2 125
+
+generate SOLV   !use mmff atom types
+
+!open read card unit 1 name @0wat125.crd
+!read coor card unit 1 append
+!close unit 1
+read coor append card name @0wat125.crd
+
+dele atom sele ( .byres. ( segi SOLV .and. type oh2 .and. -
+     ( ( .not. segi SOLV .and. .not. hydrogen ) .around. 2.8 ) ) ) end
+
+energy
+
+set eref = -402.66783
+set gref = 12.78487
+set case = 2
+goto tester
+label 2
+
+print coor
+
+set 6 15.517182
+set 7 15.517182
+set 8 15.517182
+
+!faster on <- this is default
+faster off
+
+! Read in image transformation files and set-up image centering
+open unit 1 read form name @0cubic.img
+read image card unit 1
+image byresidue xcen 0.0 ycen 0.0 zcen 0.0 sele segid SOLV end
+energy ihbfrq 0 inbfrq -1 imgfrq 10 cdie e14fac 0.75 switch vswitch -
+       CUTIM 999. CUTNB 15. CTOFNB 14. CTONNB 11. ! group
+
+set eref = -720.30039
+set gref = 19.35082
+set case = 3
+goto tester
+label 3
+
+mini abnr nstep 10 tolg 0.01
+
+shake bonh tol 1.0e-8 param
+
+open unit 20 write unform name @9mmff.dcd 
+
+! Run dynamics in periodic box
+dynamics verlet strt timestep 0.001 nstep 100 nprint 10  iprfrq 10 -
+     firstt 298.0 finalt 298.0 twindl -5.0 twindh 5.0 -
+     ichecw 1 teminc 0 ihtfrq 0 ieqfrq 20 -
+     iasors 0 iasvel 1 iscvel 0 -
+     iunwri -1 nsavc 10 nsavv 0 iunvel 0 -
+     iunread 0 iuncrd 20                 - !{* Nonbond options *}
+
+mini abnr nstep 10 tolg 0.01
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+if @pass eq 0 then
+      echo FAILING TESTS @failed
+endif
+
+stop
+
+label tester
+
+echo @case new energy ?ener  grms ?grms
+calc ediff = abs ( ?ener - @eref )
+calc gdiff = abs ( ?grms - @gref )
+
+set epass = 0
+set gpass = 0
+
+if @ediff le @tol set epass = 1
+if @gdiff le @tol set gpass = 1
+
+calc egpass = @epass * @gpass
+if egpass le 0 set failed = @failed @case
+
+calc pass = @pass * @egpass
+
+goto @case
+
+stop

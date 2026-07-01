@@ -1,0 +1,54 @@
+#!/bin/csh -f
+# preflx3
+# CHARMM source processing utility with prefx
+#
+# Change log:
+# 01-Jan-92 version for CHARMM22
+#           The environmental variable c22host must be set.
+#           The -k switch keeps .fli files.
+# 20-Oct-92 HPUX version support
+# 21-Feb-93 CHARMM 23 version
+# 13-Jan-94 CHARMM23f3/CHARMM24a1 version: remove flexfort and new prefx
+#           
+# Inquiries to Youngdo Won, chmgr@tammy.harvard.edu (617)495-1782
+#-----------------------------------------------------------------------
+#
+set chmhost = $1; shift;
+set chmroot = $1; shift;
+#if ($?chmhost == 0) then
+#  echo " " 
+#  echo "preflx> Environment variable chmhost is not defined."
+#  exit 1 
+#endif
+#
+if ($#argv == 2) then
+  switch ( $1 )
+    case -k:
+      set del = 0
+      shift
+    breaksw
+    default:
+      echo "unknown option: $1"
+      exit 1
+    breaksw
+  endsw
+else
+   set del = 1
+endif
+#
+set source = $1
+set file = $source:r
+set name = $file:t
+#set name = $name:r # Not working with HP-UX 10.20
+set ext = $source:e
+if ($ext != "src") then
+   echo "Extension not .src"
+   exit 1
+endif
+#
+if( -e FOR021.DAT) /bin/rm FOR*.DAT
+${chmroot}/tool/prefx_$chmhost < $source > $name.f
+cat prefx.msg
+/bin/rm -f  prefx.msg
+#
+exit

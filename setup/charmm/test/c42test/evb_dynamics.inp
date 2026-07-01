@@ -1,0 +1,207 @@
+* Test EVB (Robert Arbon and David Glowacki / E Paci)
+* Malonaldehyde 2 state EVB  
+*
+!            H                                    H          
+!           /                                      \
+!          O1      O2                       O1      O2
+!          |       ||                       ||      | 
+!          |       ||                       ||      | 
+!          C1      C2                       C1      C2
+!         / \\    /  \                     / \     // \
+!       H1   \\  /    H2                 H1   \   //   H2
+!              C3                               C3
+!              |                                |
+!              H3                               H3         
+!        state 1 (malonaldehyde_state1.rtf)      state 2 (malonaldehyde_state2.rtf)
+
+
+if ?ensemble .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 2 then						   
+   echo "This test NOT run"					   
+   echo " Need 2 processors for this test"
+   stop					
+endif					
+
+stream datadir.def 
+
+! nensem : number of EVB states
+ensemble nensem 2
+
+bomlev 0
+prnlev 3 
+wrnlev 2
+
+set node ?whoiam
+
+if @node .EQ. 0 set top state1
+if @node .EQ. 1 set top state2
+
+!
+! READ IN TOPOLOGIES
+!
+ensemble open read unit 11 card name @0/malonaldehyde@node.rtf 
+read rtf card unit 11
+ensemble close unit 11 
+
+!
+! READ IN PARAMETERS
+!
+Faster OFF
+
+use mmff force field 
+
+ensemble open read form unit 1 name @0/mmffsup.par
+read parameter card mmff SUPP unit 1
+ensemble close unit 1
+
+ensemble open unit 1 read form  name @0/mmffprop.par 
+read parameter card mmff PROP unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffsymb.par
+read parameter card mmff SYMB unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffdef.par 
+read parameter card mmff DEFI  unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffbndk.par 
+read parameter card mmff BNDK  unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffhdef.par 
+read parameter card mmff HDEF  unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffarom.par 
+read parameter card mmff AROM  unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffvdw.par 
+read parameter card mmff VDW   unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/adjusted_mmffbond.par  
+read parameter card mmff BOND  unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffchg.par 
+read parameter card mmff CHRG unit 1 
+ensemble close unit 1 
+
+ensemble open read form unit 1 name @0/mmffpbci.par 
+read parameter card mmff PBCI unit 1 
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffang.par 
+read parameter card mmff ANGL unit 1 
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffstbn.par 
+read parameter card mmff STBN unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffdfsb.par 
+read parameter card mmff DFSB unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmffoop.par 
+read parameter card mmff OOPL unit 1
+ensemble close unit 1
+
+ensemble open read form unit 1 name @0/mmfftor.par 
+read parameter card mmff TORS unit 1
+ensemble close unit 1
+
+!
+! GENERATE SEQUENCE
+! 
+ensemble open read unit 21 card name @0/malonaldehyde.crd
+read sequence coor resid unit 21
+ensemble close unit 21
+
+generate mal setup
+
+open read unit 19 card name @0/malonaldehyde.crd
+read coor unit 19 card
+close unit 19 
+
+!
+! CALCULATE DIPOLE
+!
+!  This is needed to allow the calculation of state averaged dipole moments. 
+!  Useful in debugging/analysis. As there is only one molecule then we can use
+!  'sele all end'
+!
+coor dipo sele all end
+
+!
+! CALCULATE NON-EVB ENERGY
+!  
+!  This is here for comparison with EVB energy calculation
+!
+energy
+
+!
+! SET UP EVB CALCULATION
+!
+!  Coupling parameters for 2-D Gaussian + a constant coupling    
+!
+set A 20.0
+set THETA 0.0
+set R01 0.0
+set R02 0.0
+set C1 10.0
+set C2 10.0
+set E1 2.0
+set E2 2.0
+set CONS 3.0
+defi R1 SELE ATOM MAL 1 O1 .or. ATOM MAL 1 H END
+defi R2 SELE ATOM MAL 1 O2 .or. ATOM MAL 1 H END
+
+!
+! INITIALISE EVB CALCULATION 
+!
+!  EVB hamiltonian matrix, H = :
+!
+!  state 1: |[0,0] [0,1]|
+!  state 2: |[1,0] [1,1]|
+!
+!  Only modify upper triangular part as lower triangular part is filled in 
+!  automatically. 
+!
+!   V0 and V1 and the potential energies of state 1 and 2 respectively.
+!
+!   SHFT 0 <VALUE> 			: H[0,0] <- V1 + <VALUE>   
+!   COUP 0 1 CONS <VALUE>   : H[0,1] <- H[0,1] + <VALUE> 
+!   COUP 0 1 GAUS TWOD <PARAMS1> 	:  H[0,1] <- H[0,1] + <2D GAUSSIAN>
+
+ensemble evb
+	SHFT 0 @E1
+    	SHFT 1 @E2
+	COUP 0 1 CONS @CONS
+    COUP 0 1 GAUS TWOD @A @R01 @C1 SELE R1 END @THETA @R02 @C2 SELE R2 END 
+envbi
+
+!
+! RUN NVE DYNAMICS
+!
+energy
+
+ensemble open write card unit 10 name @9/dynamics.energy.@node
+
+dynamics leap verlet nstep 1000 timestep 0.0001 -
+    iprfrq 1000 ihtfrq 0 ieqfrq 0 ntrfrq 1000  inbfrq 25 -
+    kunit 10 -
+    nprint 1 nsavc 1  -
+    iseed 1 2 3 4 
+
+ensemble close unit 10
+
+stop
+

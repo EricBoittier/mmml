@@ -1,0 +1,140 @@
+* Test of hamiltonian reservoir replica exchange
+*
+
+if ?consph .ne. 1 then
+ echo "Discrete-state constant pH code not compiled. Test NOT performed."
+ stop
+endif
+if ?repdstr .ne. 1 then
+ echo "REPDSTR code not compiled. Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card name @0top_all27_prot_na.rtf
+read param card name @0par_all27_prot_na.prm
+read psf card name @0lysine.psf
+read coor card name @0lysine.crd
+
+!*********************************************************
+shake bonh tol 1.0e-8 para
+energy
+
+! open the reservoirs
+iolev 1
+open unit 40 dire recl 136 unfo name @0lambda0-320k.sdcd ! high reservoir input
+open unit 41 dire recl 136 unfo name @0lambda1-320k.sdcd ! low reservoir unput
+open unit 43 read form name @0energies-lambda0.dat
+open unit 44 read form name @0energies-lambda1.dat
+
+repd nrep 4 exlm unit 21 frequency 20 rsrv - ! exchange every 20 steps
+  reshigh boltzmann rhtemp 320.0 rhunit 40 rhsz 1000 fhen 43 -
+  reslow boltzmann rltemp 320.0 rlunit 41 rlsz 1000 flen 44
+
+open unit 21 write card name @9rsvr-hrex.exch
+
+open unit 80 write card name @9rsvr-hrex.out
+outu 80
+
+set i 0
+set l 0
+
+!! note from Tim -- the charges are the old ones here. So, these results
+!! shouldn't be used; this is just to test the code.
+
+label loop
+
+calc c1 =  0.24 * @l  + ( 1 - @l ) * 0.40
+calc c2 =  0.08 * @l  + ( 1 - @l ) * (-0.05)
+calc c3 =  0.08 * @l  + ( 1 - @l ) * (-0.05)
+calc c4 = -0.24 * @l  + ( 1 - @l ) * (-0.98)
+calc c5 =  0.28 * @l  + ( 1 - @l ) * 0.340
+calc c6 =  0.28 * @l  + ( 1 - @l ) * 0.340
+calc c7 =  0.28 * @l  + ( 1 - @l ) * 0.0
+
+if ?myrep .eq. @i scalar charge set @c1 sele resi 1 .and. type ce show end
+if ?myrep .eq. @i scalar charge set @c2 sele resi 1 .and. type he1 show end
+if ?myrep .eq. @i scalar charge set @c3 sele resi 1 .and. type he2 show end
+if ?myrep .eq. @i scalar charge set @c4 sele resi 1 .and. type nz show end
+if ?myrep .eq. @i scalar charge set @c5 sele resi 1 .and. type hz1 show end
+if ?myrep .eq. @i scalar charge set @c6 sele resi 1 .and. type hz2 show end
+if ?myrep .eq. @i scalar charge set @c7 sele resi 1 .and. type hz3 show end
+
+scalar charge show sele resi 1 .and. type ce show end
+scalar charge show sele resi 1 .and. type he1 show end
+scalar charge show sele resi 1 .and. type he2 show end
+scalar charge show sele resi 1 .and. type nz show end
+scalar charge show sele resi 1 .and. type hz1 show end
+scalar charge show sele resi 1 .and. type hz2 show end
+scalar charge show sele resi 1 .and. type hz3 show end
+
+increment i by 1
+increment l by 0.05
+
+if l le 1 goto loop
+
+! done setting charges
+update atom cdie eps 1.0 cutnb 18.0 ctofnb 12.0 ctonnb 10.0 switch vswitch
+
+GBMV BETA -12 EPSILON 80 GEOM -
+     BUFR 0.2 Mem 256 CUTA 20 -
+     ALFRQ 1 P1 0.45 P2 1.25 P6 8.0 P3 0.65 -
+     WTYP 1 NPHI 5 CORR 1 SA 0.020 SB 0.0 SHIFT -0.1 SLOPE 0.9 -
+     FAST 1 SGBFRQ 4 SXD 0.3
+
+
+scalar fbeta set 5.0
+
+dyna lang strt  nstep 100 timestep 0.001 -
+    iprfrq 100 ihtfrq 0 ieqfrq 0 ntrfrq 0  -
+    nprint 10 nsavv 0 inbfrq -1 ihbfrq 0 -
+    firstt 300.0 finalt 300.0 teminc 30.0 tbath 300.0  -
+    iseed 474921 1055991 902345 1234567 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0
+
+print energy
+
+! Test whether the case succeeded or failed. It is easiest
+! to do this when we know exactly how many processors there
+! were.
+
+set passprob = 0
+set passexup = 0
+set passexdn = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 0.628018
+if ?myrep .eq. 0 set referup = 1.0
+if ?myrep .eq. 0 set referdn = 0.0
+if ?myrep .eq. 0 set refener = -26.9838
+if ?myrep .eq. 1 set refprob = 0.978158
+if ?myrep .eq. 1 set referup = 1.0
+if ?myrep .eq. 1 set referdn = 1.0
+if ?myrep .eq. 1 set refener = -21.4826
+if ?myrep .eq. 2 set refprob = 0.588382
+if ?myrep .eq. 2 set referup = 0.33333
+if ?myrep .eq. 2 set referdn = 1.0
+if ?myrep .eq. 2 set refener = -24.5046
+if ?myrep .eq. 3 set refprob = 0.598078
+if ?myrep .eq. 3 set referup = 1.0
+if ?myrep .eq. 3 set referdn = 0.33333
+if ?myrep .eq. 3 set refener = -20.4505
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?exrup .ae. @referup set passexup = 1
+if ?exrdn .ae. @referdn set passexdn = 1
+if ?ener .ae. @refener set passener = 1
+
+calc result = @passprob + @passexup + @passexdn + @passener
+
+repd reset
+
+outu 6
+prnlev 5 node 0
+
+if @result .ne. 4 echo TESTCASE RESULT: FAILED
+if @result .eq. 4 echo TESTCASE RESULT: PASSED
+
+stop
+

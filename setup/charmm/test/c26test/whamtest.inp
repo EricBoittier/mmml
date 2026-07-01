@@ -1,0 +1,177 @@
+* file whamtest.inp
+* Perturbation calculation with WHAM post-processing
+* Lambda=0 : ion charge +1
+* Lambda=1 : ion charge  0
+*
+
+if ?NUMNODE .gt. 1 then
+  echo whamtest testcase result: skip
+  echo "Test NOT performed."
+  stop
+endif
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ echo whamtest test case result: skip
+ stop
+endif
+
+stream datadir.def
+
+! Loop on lambda values
+set LSTART   0.00 
+set LAMBDA   0.05  
+set LSTOP    0.10 
+set PSTART    250 
+set PSTOP    1000 
+
+open write card unit 53 name @9tstwham.prt
+write title unit 53
+** Perturbation file (punit) for window 
+**
+
+label loop
+write title unit 53
+* LSTART @lstart LAMBDA @lambda  LSTOP @lstop PSTART @pstart PSTOP @pstop  PWIND
+*
+
+incr LSTART by   0.1 
+incr LAMBDA by   0.1  
+incr LSTOP  by   0.1  
+incr PSTART by  1000  
+if LSTOP le 1.0  incr PSTOP  by  1000
+
+if LSTOP le 1.0  goto loop
+close unit 53
+  
+!-------------------------------------------------------
+read RTF card
+* TOPLOGY FILE 
+*
+   20    1                ! Version number
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+MASS    62 SOD   22.98977 ! Sodium 
+
+RESI TIP3    .000   ! TIPS3P WATER MODEL
+GROUP
+ATOM OH2  OT     -0.834 
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2  H1        OH2  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+THET H1   OH2  H2 
+!                          NOTE: NO DONORS OR ACCEPTORS FOR TIPS3P
+PATC  FIRS NONE LAST NONE
+
+RESI SOD  1.00000
+GROU
+ATOM SOD  SOD   1.00000
+PATC  FIRS NONE LAST NONE
+
+END
+
+read PARAM card
+* - parameter file PARAM19 -
+*
+
+BOND
+HT   OT     450.0       0.9572 ! from TIPS3P geometry
+HT   HT       0.0       1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+
+THETAS
+HT   OT   HT      55.0     104.52    ! FROM TIPS3P GEOMETRY
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+
+HT       0.0440    -0.0498    0.8000 
+OT       0.8400    -0.1591    1.6000 
+SOD      0.0000    -0.0448    1.532  
+
+END
+
+read sequence tip3  1
+generate BULK noangle nodihedral warning
+
+read sequence SOD 1 
+generate ION setup
+
+coor set xdir 0.0 select type OH2 end
+coor set xdir 3.0 select type SOD end
+hbuild
+
+cons harm force 5.0 select .not. type H* end
+
+energy
+
+! equilibrate the Lambda=0 state before starting the perturbation calculation
+mini abnr nstep 100 
+
+!shake  tolerance 1.0e-06 bonh param
+scalar fbeta set 25.0 
+
+! ==========================================================================
+! save PSF as the LAMBDA=0 state with the pert command
+scalar charge show     select segid ION end
+
+  PERT  
+
+! modify the psf again for the LAMBDA=1 state 
+scalar charge set  0.0 select segid ION end
+
+open read  card unit 53 name @9tstwham.prt
+open write card unit 54 name @9tstwham.dat
+write title unit 54
+** This is a file for WHAM post-processing
+**     Lambda   (E_1-E_0) 
+**
+* 
+
+DYNAMICS  start           nstep   @pstop  timestp   0.001  iprfrq    5000  -
+          nprint    5000  -
+ -
+          iasvel       1  firstt   300.0  finalt    300.0  tstruc    300.0  -
+!          langevin        tbath    300.0  rbuf        0.0  -
+ -
+          inbfrq     100  imgfrq     100  ihbfrq        0  ilbfrq        0  -
+ -
+          iunread     -1  -
+          iunwrite    -1  -
+          iuncrd      -1  nsavcrd      0  -
+          punit       53  wham        54
+
+
+close unit 54
+
+
+open read card unit 54 name @9tstwham.dat
+WHAM MAXWindow 15  MAXTime 1000 unit 54 tol 0.001  nstep 200 
+close unit 54
+@testcheck ?whamfe 29.3713 0.0001 whamtest_1
+
+
+!Illustrate that the results converges rapidly even for short simulations
+open read card unit 54 name @9tstwham.dat
+WHAM MAXWindow 15  MAXTime 10 unit 54 tol 0.001  nstep 200 
+close unit 54
+@testcheck ?whamfe 28.9865 0.0001 whamtest_2
+
+!Illustrate that an initial guess can also accelerate the convergence
+open read card unit 10 name @9tstwham.dat
+WHAM MAXWindow 15  MAXTime 1000 unit 10 tol 0.001  nstep 200 guess
+Window     1   F()      0.00000
+Window     2   F()      1.74108
+Window     3   F()      5.15560
+Window     4   F()      8.46586
+Window     5   F()     11.65167
+Window     6   F()     14.68445
+Window     7   F()     17.51932
+Window     8   F()     20.10223
+Window     9   F()     22.40673
+Window    10   F()     24.44349
+Window    11   F()     26.20948
+Window    12   F()     26.97287
+
+@testcheck ?whamfe 29.3707 0.0001 whamtest_3
+
+stop

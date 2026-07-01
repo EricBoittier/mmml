@@ -1,0 +1,95 @@
+* CHARMM Testcase c30test/in.inp
+* 24-Dec-2002, Benoit Roux 
+* test if-then-else-endif statement
+*
+
+set a =  1.0
+
+set b = -5.0
+
+if A .eq. 1.0 then set line = No
+
+if A .eq. 100.0 then set line = No
+
+if A .eq. 1.0 then  if B .eq. -5.0   set line = yes
+
+if A .eq. 1.0 then if  B .eq. 500.0 set line = maybe
+
+if A .eq. 100.0 then if  B .eq. 500.0 set line = No
+
+! If the IF structure worked, then the line should read:
+! yes
+set junk = @line
+
+
+if a .eq. 1.0 then
+
+       if b .eq. -1.0 then
+          set z = -1.0
+          set y = -2.0
+          set x = -3.0
+          if x .eq. -3 set x = -4.0
+       else
+          set z = 100.0
+          set y = 200.0
+          set x = 300.0
+          if x .ge. 300 set x = 400.0
+       endif
+
+endif
+
+! If the IF structure worked, then the line should read:
+! Z=100.0   Y=200.0   X=400.0
+
+set line =  Z=@z  Y=@y  X=@x 
+
+
+!------------------------------------------------------------------------
+
+set a =  -1.0
+set b = -5.0
+set c = 0.0 
+
+if a .eq. 1.0 then
+
+       if a .eq. 7.0 set c = 5
+
+       if b .eq. -1.0 then
+          if a .eq. 7.0 set c = 5
+          set z = -1.0
+          set y = -2.0
+          set x = -3.0
+       else
+          if a .eq. 7.0 set c = 5
+          set z = 1.0
+          set y = 2.0
+          set x = 3.0
+       endif
+
+else
+
+       if a .eq. 7.0 set c = 7
+
+       if b .eq. -1.0 then
+          if a .eq. 7.0 set c = 5
+          set z = -10.0
+          set y = -20.0
+          set x = -30.0
+       else
+          if a .eq. 7.0 set c = 5
+          set z = 10.0
+          set y = 20.0
+          set x = 30.0
+       endif
+
+endif
+
+!If the IF structure worked, then the line should read Z=10.0   Y=20.0   X=30.0
+ 
+set line =  Z=@z  Y=@y  X=@x 
+
+!and c should be equal to 0.0
+
+set line =  C=@c  
+
+stop

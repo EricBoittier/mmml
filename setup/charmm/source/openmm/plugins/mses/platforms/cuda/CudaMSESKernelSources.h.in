@@ -1,0 +1,25 @@
+#ifndef OPENMM_CUDAMSESKERNELSOURCES_H_
+#define OPENMM_CUDAMSESKERNELSOURCES_H_
+
+/* -------------------------------------------------------------------------- *
+ *                                 OpenMMMSES                                 *
+ * -------------------------------------------------------------------------- */
+
+#include <string>
+
+namespace OpenMMMSES {
+
+/**
+ * This class is a central holding place for the source code of CUDA kernels.
+ * The CMake build script inserts declarations into it based on the .cu files in the
+ * kernels subfolder.
+ */
+
+class CudaMSESKernelSources {
+public:
+@CUDA_FILE_DECLARATIONS@
+};
+
+} // namespace OpenMMMSES
+
+#endif /*OPENMM_CUDAMSESKERNELSOURCES_H_*/

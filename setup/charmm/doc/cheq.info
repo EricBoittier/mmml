@@ -1,0 +1,464 @@
+CHARMM Element doc/cheq.info $Revision: 1.1.1.1 $
+
+File: CHEQ, Node: Top, Up: (doc/commands.info), Next: Description
+
+
+                    The CHarge EQuilibration Method
+
+
+The CHEQ and associated modules implement polarization via the
+fluctuating charge method as based on the CHarge EQuilibration methods 
+outlined in the literature.  While the current forcefield parameters are
+valid for most small molecules and proteins, the force field is
+constantly undergoing refinement and development.
+
+The electrostatic model derives formally from the density functional
+theory of atoms in molecules; polarization is effected as a result of
+chemical potential equalization everywhere within a molecule, forcing
+charge flow from regions of high to low chemical potential based on
+atomic properties.  These properties are the atomic hardness and
+electronegativity.  The parameters are treated as such and are
+determined from fits to density functional calculations of charge
+responses and mono- and dipole moments of small molecules in vacuum.
+
+The method can be used to perform energy, minimization, and dynamics
+calculations for the above-mentioned systems. For dynamics, the
+charges are coupled to Nose-Hoover baths to maintain proper
+adiabaticity.  Several normalization schemes are allowed to maintain
+charge constant over desired partitions.  Several water models are
+supported including the SPC-FQ and TIP4P-FQ models of Rick et al.
+
+* Menu:
+
+* Description::      Description of the CHEQ Function
+* Syntax::           Syntax of the CHEQ commands
+* Options::          CHEQ Command Options
+* Energy::           Usage with Energy and Dynamics commands
+* Scalar::           Usage with the Scalar Command
+* Examples::         Usage Example Script
+* Mixed Systems::    Mixed Polarizable / Non-Polarizable Systems (FQ/MM)
+* References::       References for CHEQ Methods
+
+
+File: CHEQ, Node: Description, Up: Top, Previous: Top, Next:Syntax
+
+The CHarge EQuilibration routines implement the fluctuating charge
+dynamics as described in recent literature (1-9).  The method derives
+from the density functional theory of atoms in molecules.  The model
+is a relatively simple approach to incorporate a means for electronic
+density rearrangement (as reflected grossly in terms of some
+partitioned 'charge' on an atom) due  to changes in chemical
+environment---polarizability.  The mechanism for the redistribution is
+the equalization of electronic chemical potential everywhere within a
+molecule, a statement of Sanderson's principle of electronegativity
+equalization ( since, in DFT, the chemical potential and
+electronegativity  are analogous).  The electrostatic potential
+adopted in this formalism is (for a system with M molecules with N_i
+atoms in molecule 'i':
+                                          __                       __
+                                         /                           \
+     N  N_i                       M   M  |  N   N                     |
+E = sum sum CHI_ia(0) Q_ia + 1/2 sum sum | sum sum ETA_iajb Q_ia Q_jb |
+    i=1 a=1                      i=1 j=1 | a=1 b=1                    |
+                                         \__                       __/
+     
+
+The ETA_iajb term comes from the hardness matrix whose elements are
+determined  via (Ref. 13): 
+
+                             1/2 ( ETA_i + ETA_j)
+        ETA_ij = ---------------------------------------------
+                  sqrt( 1 + 0.25 (ETA_i + ETA_j)**2 R_ij**2)
+
+Atoms involved in bonded interactions, angle interactions, and
+dihedral interactions interact with each other via the combination
+rule.  Atoms in a molecule separated by more than three bonds interact
+with the normal Coulomb 1/R interaction, as do charge sites on
+different molecules.
+
+The model requires parameterization of atomic electronegativities and
+hardnesses.  The hardness are determined via fitting the DFT charge
+responses of small molecules containing the chemical functional groups
+of interest in modelling proteins.  The approach is hierarchical,
+beginning with the fitting of aliphatic groups (methyl carbons,
+hydrogens, for instance), and then carrying these over into the
+determination of other groups.  The electronegativities then are
+determined by fitting to charge distributions and dipole moments of
+isolated small molecules in vacuum.
+
+A fictitious charge dynamics is performed in the spirit of
+Car-Parrinello or 'ab initio' molecular dynamics simulations. The
+charge sites are given masses (much smaller than the nuclei so as to
+maintain the system on the Born-Oppenheimer (BO) surface) and the
+entire system is propagated with an extened Lagrangian which enforces
+the required charge normalization.  The charges are thermostatted to
+heat baths to maintain a relatively low temperature to ensure
+adiabaticity.  Currently this is done via coupling to Nose-Hoover heat
+baths; groupings of charges can be separately coupled so as to avoid
+'hot spots'.
+
+
+File: CHEQ, Node: Syntax, Up: Top, Previous: Description, Next: Options
+
+                         Syntax of the CHEQ commands
+
+CHEQ [ON   ]
+     [OFF  ]
+     [RESEt]
+
+     [NORM ] {BYRE | BYAL | BYSE | BYGP | BYMO} atom_selection
+
+     [QMAS ] CGMA {charge-mass}  TSTA {initial temperature} atom_selection
+
+     [TIP4p] atom_selection
+     [WATEr]
+     [SPC  ]
+     [FLEX ]
+
+      CHEQ {WATE | SPC | FLEX} SELECT {selection} END
+
+
+
+File: CHEQ, Node: Options, Up: Top, Previous: Syntax, Next: Energy
+
+
+                            CHEQ Command Options
+
+
+ON    sets QCG flag to .TRUE. (turns on fluctuating charges). This can
+      be issued anytime in order to switch between non-polarizable and
+      polarizable Hamiltonians
+
+OFF   sets QCG flag to .FALSE. (turns off fluctuating charges). This
+      can be issued anytime in order to switch between non-polarizable
+      and polarizable Hamiltonians.
+
+RESE  turns off CHEQ (QCG=.FALSE.) and resets some CHEQ arrays and 
+      parameters as follows:
+
+      The variable 'QNPART' is set to zero (nullifies CHEQ
+      normalization units; the user will have to respecify these with
+      'CHEQ NORM norm-option atom-selection as discussed under the
+      'NORM' option command. 
+
+      QCG is set to FALSE; thus, ENERGY, MINIMIZATION, and DYNAMICS
+      using the CHEQ method is no longer possible unless the CHEQ
+      option us used with the relevant commands.
+
+      All arrays associated with the partitions, partition counters,
+      and pointers to atoms of partitions are zeroed.
+
+NORM  sets up partitions for charge normalization.  Implemented by 
+      setting total charge force for a partition to zero.  Format for 
+      command:
+      CHEQ NORM {BYRE | BYAL | BYSE | BYGP | BYMO} SELECT {selection} END
+      description of options:
+      BYRE - charge constant within residues in the given selection
+      BYAL - charge constant within all atoms in the given selection
+      BYSE - charge constant within segments in the given selection
+      BYGR - charge constant within groups in the given selection
+      BYMO - charge constant within molecules in the given selection
+      NOFQ - turns off CHEQ for selected atoms
+
+
+QMAS  sets up mass and initial temperature for charges
+
+      QMAS CGMA {charge-mass}  TSTA {initial temperature} {atom selection}
+
+
+TIP4  selects the TIP4P-FQ water model of Rick and Berne
+      Note: Consult the LONEPAIR documentation for properly setting up the 
+            constructs necessary to implement this 4-point water model and/or 
+            check the testcases
+
+WATE  Rigid water, derivatives of intra-molecular hardness elements with
+      respect to coordinates are not computed.
+
+SPC   selects rigid 3-point water using special SPC parameters of Rick and Berne
+
+FLEX  generic CHEQ molecule type (flexible molecule; charge force on
+      nuclei computed).  The above options (WATE, SPC and FLEX, TIP4)
+      are used similarly to the NORM command:
+
+      CHEQ {WATE | SPC | FLEX} SELECT {selection} END
+
+PRIN  Prints out several variables and arrays for CHEQ
+
+WALP  sets parameters for restraint potential to bound charges on
+      atoms; this is to prevent over-polarization in cases where the
+      charges sample regions further away from the minimum determined
+      by the quadratic form of the CHEQ potential.  At this time, only
+      two forms of the restraint are supported.  Can be extended in
+      the future. 
+
+      For PTYP = 1 :
+
+      CHEQ WALP { PTYP integer} { QRQ1 real } { QRQ2 real } { QRK real } -
+           atom_selection
+
+      For PTYP = 2 :
+
+      CHEQ WALP { PTYP integer} { WALN integer } -
+           { QRA1 real } { QRAB1 real } { QRA2 real } { QRB2 real } -
+           { QRQ1 real } { QRQ2 real } { QRK real } atom_selection
+
+      PTYP sets the type of restraint potential; 1=harmonic, 2=Nth
+      order wall potential with switch. (Ref #)
+
+      QRQ1 the upper limit of the values a certain charge can take
+      QRQ2 the lower limit of the values a certain charge can take
+      QRK  the force constant for harmonic restraint or the strength
+           for the wall potential (generally on the order of 10**2)
+  
+      The following are further specifications needed for a
+      non-harmonic wall potential. 
+
+      WALN  integer value setting the hardness of the wall potential
+      QRA1  charge value below which switching function is zero 
+      QRB1  charge value above which switching function is unity
+      ** QRA1 < QRB1
+
+      QRA2  charge value above which switching function is zero
+      QRB2  charge value below which switching function is unity
+      ** QRA2 < QRB2
+
+
+
+File: CHEQ, Node: Energy, Up: Top, Previous: Options, Next: Scalar
+
+
+                        Energy and Dynamics
+
+
+CHEQ can be used with ENERgy, MINImization, and DYNAmics commands.
+Currently, minimization routines supporting CHEQ are the CONJugate
+gradients and STEEPest descents.  For DYNAmics, the leapfrog
+integrator includes charge dymamics.
+        
+For these functions, the CHEQ flag must be specified so that the
+appropriate subroutines are used:
+
+     ENERGY energy_options  CHEQ CHEQ_options
+
+     DYNA dynamics_options  CHEQ CHEQ_options
+
+     MINI minimization_options  CHEQ CHEQ_options
+
+where CHEQ_options are as in the following.
+
+NOCO  sets QNOCO flag to .TRUE.  Freezes coordinates by zeroing DX,DY and DZ
+      resets to .FALSE. when exiting ENERgy, MINImization, or DYNAmics call.
+      Useful for minimizing charge for a fixed conformation.  For a large 
+      system this can be faster than CGIN since the charges tend to converge
+      rapidly.(<100 steps for 216 water system)
+
+CGMD  Used with ENERgy, MINIimization, and DYNAmics calls
+ 
+      int - 0 for normal Hamiltonian with exclusion in  elec.interactions
+              (default) 
+            1 using Hamiltonian without exclusions (Recommended for FLUQ)
+
+CGIN  Used with ENERgy call
+ 
+      charges will be calculated by matrix inversion whenever energy is
+      called. (WARNING: it is slow and memory intensive on big systems)
+      This option does not work with IMAGES.(but does work with BOUND)
+      This keyword must be specified every time it is wanted as the flag
+      CGINV is set to .FALSE. after the command is performed.
+
+
+POLT  Used with ENERgy call
+
+      calculates the components of the molecular polarizability tensor
+      based on the molecular geometry and hardness matrix
+      elements. Used in conjunction with the ENERGY call.
+
+      Use care when comparing to experimental data; usually need to
+      make sure that the same molecular orientations are being
+      compared (i.e, planar water case, depending on the orientation,
+      will get different results for the tensor component values).
+   
+FQPA  Prints out the Eta matrix when doing matrix inversion. (i.e. only works 
+      in conjunction with CGIN keyword)  This is an NATOM by NATOM array so can 
+      get very large.  Flag resets to .FALSE. after command has executed.
+
+
+FQINT  used with DYNAmics call
+
+       sets the charge integration algorithm
+       1 = Nose-Hoover Temperature Control **
+       2 = No temperature control
+       required as input; default does not do charge dynamics 
+
+    ** Note: To use the Nose-Hoover algorithm for propagating the
+       charge dynamics with temperature control, one must specify the
+       degrees of freedom which are to be coupled to a given bath.
+       The method for specifying this is similar to the multi-heat
+       bath calls for the NOSE command to thermostat the nuclear
+       degrees of freedom.  The following command must be issued
+       before the call to DYNAMICS: 
+
+           FQBA  I            
+           CALL J  atom-selection-option
+           COEF J  QREF (0.005) TREF (1.0)
+           .
+           .
+           .
+           . 
+           END
+
+       The integer 'I' indicates the number of baths for groupings of
+       charge degrees of freedom.  For each bath, the 'CALL' and
+       'COEF' commands set the atoms coupled to that bath, the
+       Nose-Hoover fictitious mass, QREF, for that bath, and the
+       temperature, TREF, for that bath.
+
+    ** CHEQ computation now turns on and off with SKIPE command.  Tied
+      to ELEC keyword. If SKIPE ELEC command is given CHEQ energy and
+      derivatives are set to zero.
+       
+
+
+File: CHEQ, Node: Scalar, Up: Top, Previous: Energy, Next: Example
+
+
+                            SCALAR Command
+
+
+The charge array has always been available from the scalar command, but 
+there are now additional arrays specific to Fluc-Q that are accessible, 
+namely the charge derivatives as well as both the eta and chi parameters.
+The keynames that have been added are:
+
+    DCH  - charge derivatives
+    EHA  - hardness parameters for every atom
+    ECH  - electronegativity parameters for every atom
+
+See the description of the * scalar command: (doc/scalar.info). for useage.
+
+For information regarding variables used in conjunction with the CHEQ method,
+consult the include files cheqdyn.fcm and derivq.fcm in the source/fcm
+diretory.
+
+
+File: CHEQ, Node: Example, Up: Top, Previous: Scalar, Next: Mixed
+
+
+                                Examples
+
+
+There are examples of many of the commands described above in the test
+input script that is in the test/c30test directory.  After the
+structure has been generated the CHEQ options can be set up.
+A typical sequence of commands might go something like:
+
+{read RTF}                  ! read appropriate file to obtain CHEQ parameters;
+                            ! treated analogous to charges
+{read standard parameters}
+
+{read sequence}
+GENErate
+
+CHEQ norm byre select all end      ! normalization over residues
+CHEQ flex select all end           ! Flexible molecules 
+
+energy cheq cgmd 1
+
+
+File: CHEQ, Node: Mixed, Up: Top, Previous: Example, Next: References
+
+     The CHEQ module currently allows one to simulate systems where some
+segments are polarizable and others are not (non-polarizable ion in polarizable
+solvent, see Example in this section). This set-up is referred to as FQ/MM by
+analogy to QM/MM methods (since the polarizable region allows for electronic
+response to local chemical environment). The algorithmically, the code checks
+whether atoms are assigned to a charge normalization unit (required for CHEQ
+minimization and dynamics); those charge on atoms which are not implicated in
+a specified charge normalization scheme are not propagated dynamically nor are
+they varied in minimization. In the case of mixed systems, the E14FAC
+parameter is not required to be set explicitly in the operating input script.
+The associated parameter file should use the default value of "1"; the code
+automatically allows for inclusion of 1-4 electrostatic interactions within
+the CHEQ formalism without any user input. The following is an example of
+setting up a mixed system of polarizable solvent (TIP4P-FQ) solvating a
+non-polarizable ion (sodium). The polarizability of the ion is effectively
+turned off by not specifying a normalization scheme for the non-polarizable
+solute (see also the test case /c32test/nawat.inp).
+
+Example: box of 215 TIP4P-FQ water molecules solvation a single,
+NON-POLARIZABLE SODIUM ION
+
+# read rtf and paramater files as usual
+
+read sequ tip4 215
+generate wat first none last none setup noang nodihed
+
+read sequence sod 1
+generate ion first none last none setup noang nodihed
+
+open read unit 1  form name  @0tip4p_sod.crd
+read coor card unit 1
+close unit 1
+
+coor copy comp
+
+lonepair bisector dist 0.15 angle 0.0 dihe 0.0 -
+       sele atom wat * OM end -
+       sele atom wat * OH2 end -
+       sele atom wat * H1 end -
+       sele atom wat * H2 end
+
+! *** To exclude the ion from having polarizability, note that it is assigned
+! to no normalization unit. ***
+
+CHEQ norm byres sele segid wat end
+CHEQ tip4 sele segid wat end
+CHEQ QMAS CGMA 0.000069 TSTA 0.01 sele segid wat  end
+CHEQ NORM NOFQ SELE SEGID ION END       !  ******
+
+The last line above signifies that the sodium ion (treated as a segment here)
+will be treated as a fixed-charge entity.
+
+
+File: CHEQ, Node: References, Up: Top, Previous: Mixed, Next: Top
+
+
+                                References
+
+
+1.  Parr, R. G., and W. Yang. Density-Functional Theory of Atoms and
+    Molecules. 1989. Oxford: Oxford University Press.
+
+2.  Sanderson, R. T. "Chemical Bonds and Bond Energy". 2nd. Edition,
+    1976, New York, Academic. 
+
+3.  Sanderson, R. T. Science. 114. 1951, p.670.
+
+4.  Rick, S. W., S. J. Stuart, B. J. Berne. J. Chem. Phys. 101(7).
+    1994 pp.6141-6156.
+
+5.  Rick, S. W. and B. J. Berne.  JACS. 118, 1996. pp672-679.
+
+6.  Mortier, W. J., S. K. Ghosh, S. Shankar. JACS. 108, 1986. pp.4315-4320.
+
+7.  Mortier, W. J., K. V. Genechten, and J. Gasteiger. JACS. 107,
+    1985. pp.829-835. 
+
+8.  Rappe, A. K. and W. A. Goddard, III. J. Phys. Chem. 95, 1991. pp.3358-3363.
+
+9.  York, D. M. and W. Yang. J. Chem. Phys. 104(1), 1996. p.159.
+
+10. Car. R, and M. Parrinello. Phys. Rev. Lett. 55, 1985. p.2471.
+
+11. Blochl, P. E., and M. Parrinello. Phys. Rev. B. 45(16), 1992. p.9413.
+
+12. Yoshii, N., R. Miyauchi, S. Miura, S. Okazaki. Chem. Phys. Lett. 317,
+    2000. pp.414-420.
+
+13. Naleewajski, R. F., J. Korchowiec, and Z. Zhou. Int. J. Quant. Chem. 
+    Quantum Chemistry Symposium 22, 1988. pp.349-366.
+
+----------------------------------------------------------------------
+   
+  <Known Incompatible with (so far)> 
+   - None.

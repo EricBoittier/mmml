@@ -1,0 +1,198 @@
+* title: benzen dimer for test calculation 
+* Generalized Born for block module
+* Three energy calculation 
+*  First  GB with BLOCK module  (type 1)
+*  Second GB wiht BLOCK module  (type 2)
+*  Third  conventional GB calculation
+* 3/10/00 S.Banba for CHARMM ver. 28
+*
+
+stream datadir.def
+! Read in parameter and topology files.
+open unit 1 read form name @0top_all22_model.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! read in environmental atoms
+read sequ card
+* title
+*
+1
+benz
+
+generate BEN1 setup
+
+! read ligands atoms
+read sequ card
+* title
+*
+2
+benz benz 
+generate BEN2 setup
+
+set return return1
+goto coordinates
+label return1
+
+define lig1 sele atom ben2 1 * end
+define lig2 sele atom ben2 2 * end
+
+! harmonic constraint force for environmental atoms.
+cons harmonic force 1.0 exponent 2 sele segid ben1 end
+
+scalar FBETA set 50.0 sele all .and. .not. hydrogen end
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! energy calculations start
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+block 3
+  call 2  sele lig1 end
+  call 3  sele lig2 end
+  lambda 0.5
+end
+
+skipe all excl GBEnr
+
+! Condition No.1  (GB type 1)
+
+!set up GB term
+scalar wmain = radius
+scalar wmain set 1.50000 sele hydrogen .and. prop radius .lt. 1.50000 end
+GBorn P1 0.448 P2 0.173 P3 0.013 P4 9.015 P5 0.9 Lambda 0.705 Epsilon 80.0 -
+                                                 weight GBTYPE 1
+
+energy cutnb 12.0 ctonnb 8.0 ctofnb 10.0 -
+     cdie eps 1.0 switch vswitch atom vatom 
+
+@qcheck ?ENER -6.45273 0.00001 GB_BLOCK_1
+
+! check forces
+coor force comp
+scalar x set 0
+scalar y set 0
+scalar z set 0
+coor rms
+@qcheck ?RMS 0.746548 0.00001 G_BLOCK_1F
+
+set return return2
+coor init
+goto coordinates
+label return2
+
+GBorn Clear
+
+! Condition No.2 (GB energy Type 2)
+scalar wmain = radius
+scalar wmain set 1.50000 sele hydrogen .and. prop radius .lt. 1.50000 end
+GBorn P1 0.448 P2 0.173 P3 0.013 P4 9.015 P5 0.9 Lambda 0.705 Epsilon 80.0 -
+                                                 weight GBTYPE 2
+
+energy cutnb 12.0 ctonnb 8.0 ctofnb 10.0 -
+     cdie eps 1.0 switch vswitch atom vatom 
+
+@qcheck ?ENER -6.45273 0.00001 GB_BLOCK_2
+
+! check forces
+coor force comp
+scalar x set 0
+scalar y set 0
+scalar z set 0
+coor rms
+@qcheck ?RMS 0.746548 0.00001 G_BLOCK_2F
+
+set return return3
+coor init
+goto coordinates
+label return3
+
+GBorn Clear
+
+! Condition No.3 (conventional GB)
+dele atom sele lig2 end
+
+block
+clear
+end
+
+scalar wmain = radius
+scalar wmain set 1.50000 sele hydrogen .and. prop radius .lt. 1.50000 end
+GBorn P1 0.448 P2 0.173 P3 0.013 P4 9.015 P5 0.9 Lambda 0.705 Epsilon 80.0 weight 
+
+energy cutnb 12.0 ctonnb 8.0 ctofnb 10.0 -
+     cdie eps 1.0 switch vswitch atom vatom
+
+@qcheck ?ENER -6.45273 0.00001 GB_BLOCK_3
+
+coor force comp
+scalar x set 0
+scalar y set 0
+scalar z set 0
+coor rms
+@qcheck ?RMS 1.061845 0.00001 G_BLOCK_3F
+
+set return return4
+coor init
+goto coordinates
+label return4
+
+gborn clear
+
+stop
+
+
+label coordinates
+! read benzene coord.
+read coor card 
+* Environmental benzene
+*
+   12
+    1    1 BENZ CG    -0.65009   1.15348  -0.45996 BEN1 1      0.00000
+    2    1 BENZ HG    -1.15115   2.04252  -0.81447 BEN1 1      0.00000
+    3    1 BENZ CD1   -0.50830   0.93067   0.91661 BEN1 1      0.00000
+    4    1 BENZ HD1   -0.90008   1.64798   1.62308 BEN1 1      0.00000
+    5    1 BENZ CD2   -0.14179   0.22281  -1.37657 BEN1 1      0.00000
+    6    1 BENZ HD2   -0.25107   0.39454  -2.43756 BEN1 1      0.00000
+    7    1 BENZ CE1    0.14179  -0.22281   1.37657 BEN1 1      0.00000
+    8    1 BENZ HE1    0.25107  -0.39454   2.43756 BEN1 1      0.00000
+    9    1 BENZ CE2    0.50830  -0.93067  -0.91661 BEN1 1      0.00000
+   10    1 BENZ HE2    0.90008  -1.64798  -1.62309 BEN1 1      0.00000
+   11    1 BENZ CZ     0.65009  -1.15348   0.45996 BEN1 1      0.00000
+   12    1 BENZ HZ     1.15115  -2.04252   0.81447 BEN1 1      0.00000
+
+
+
+! read benzene coord.
+read coor card append
+* Environmental benzene
+*
+   24
+    1    1 BENZ CG    -5.14797  -0.45371   1.60594 BEN2 1      0.00000
+    2    1 BENZ HG    -5.71974   0.45363   1.73482 BEN2 1      0.00000
+    3    1 BENZ CD1   -3.97360  -0.43896   0.84125 BEN2 1      0.00000
+    4    1 BENZ HD1   -3.63634   0.47834   0.38105 BEN2 1      0.00000
+    5    1 BENZ CD2   -5.57990  -1.64608   2.20328 BEN2 1      0.00000
+    6    1 BENZ HD2   -6.48515  -1.65791   2.79258 BEN2 1      0.00000
+    7    1 BENZ CE1   -3.23158  -1.61575   0.67369 BEN2 1      0.00000
+    8    1 BENZ HE1   -2.32475  -1.60074   0.08603 BEN2 1      0.00000
+    9    1 BENZ CE2   -4.83687  -2.82304   2.03623 BEN2 1      0.00000
+   10    1 BENZ HE2   -5.16923  -3.74188   2.49685 BEN2 1      0.00000
+   11    1 BENZ CZ    -3.66217  -2.80761   1.27158 BEN2 1      0.00000
+   12    1 BENZ HZ    -3.08775  -3.71328   1.14264 BEN2 1      0.00000
+   13    2 BENZ CG    -5.14797  -0.45371   1.60594 BEN2 2      0.00000
+   14    2 BENZ HG    -5.71974   0.45363   1.73482 BEN2 2      0.00000
+   15    2 BENZ CD1   -3.97360  -0.43896   0.84125 BEN2 2      0.00000
+   16    2 BENZ HD1   -3.63634   0.47834   0.38105 BEN2 2      0.00000
+   17    2 BENZ CD2   -5.57990  -1.64608   2.20328 BEN2 2      0.00000
+   18    2 BENZ HD2   -6.48515  -1.65791   2.79258 BEN2 2      0.00000
+   19    2 BENZ CE1   -3.23158  -1.61575   0.67369 BEN2 2      0.00000
+   20    2 BENZ HE1   -2.32475  -1.60074   0.08603 BEN2 2      0.00000
+   21    2 BENZ CE2   -4.83687  -2.82304   2.03623 BEN2 2      0.00000
+   22    2 BENZ HE2   -5.16923  -3.74188   2.49685 BEN2 2      0.00000
+   23    2 BENZ CZ    -3.66217  -2.80761   1.27158 BEN2 2      0.00000
+   24    2 BENZ HZ    -3.08775  -3.71328   1.14264 BEN2 2      0.00000
+
+goto @return

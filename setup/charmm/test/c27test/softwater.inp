@@ -1,0 +1,122 @@
+* Test the SOFTVDW potential on the TIP3 water dimer - BRB/MV  3/19/98
+* Tests the energy of the tip3 water dimer as a function of the O-O diatance
+* The results are writen to the file water.dat, which for each O-O diatance
+* contains one line with the soft core potential and one line with the regular
+* hard core potential
+
+bomlev -2
+stream datadir.def
+
+read   rtf   card
+* SPC WATER TOPOLOGY FILE
+*
+   18    1
+MASS     4 HT     1.00800 ! SPC WATER HYDROGEN
+MASS    58 OT    15.99940 ! SPC WATER OXYGEN
+RESI SPC  .000   ! SPC WATER MODEL
+GROUP
+ATOM OH2  OT     -0.84
+ATOM H1   HT      0.42
+ATOM H2   HT      0.42
+BOND OH2  H1        OH2  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+THET H1   OH2  H2
+PATC  FIRS NONE LAST NONE
+END
+
+read   parameter  card
+* SCP WATER PARAMETER FILE
+*
+BOND
+HT   OT     450.0       1.0 ! from SPC geometry
+HT   HT       0.0       1.63299 ! from SPC geometry (for SHAKE w/PARAM)
+THETAS
+HT   OT   HT      55.0    109.47122  ! FROM SPC GEOMETRY
+!
+NONBONDED   GROUP CDIEL SWITCH VGROUP VSWITCH -
+     CUTNB 11.0  CTOFNB 9.0  CTONNB 9.0  EPS 1.0  E14FAC 1.0  WMIN 1.5
+!
+HT       0.0440    -0.0498    0.8000 ! water hydrogen, see NBFIX below
+OT       0.8400    -0.1591    1.6000 ! water oxygen,   see NBFIX below
+
+NBFIX
+OT   OT      -0.15539   3.55322 ! SPC VDW INTERACTION
+HT   HT      -0.04598   0.4490
+HT   OT      -0.08363   1.9927
+
+HBOND CUTHB 0.5
+END
+
+read      sequence   spc 1
+
+generate wat1
+ic edit
+dihe 1 h1 1 h1 1 *oh2 1 h2   0.0
+end
+ic param
+ic seed 1 h1 1 oh2 1 h2
+coor orient
+coor orie norot sele type OH2 end
+coor trans ydir -0.866025
+print coor
+
+generate wat2 duplicate wat1
+coor duplicate sele segid wat1 end sele segid wat2 end
+coor rotate zdir 1.0 phi 180.0 sele segid wat1 end
+
+coor axis sele atom wat2 1 h2 end sele atom wat1 1 oh2 end
+coor trans axis dist 1.41428 sele segid wat2 end
+print coor
+
+open write card unit 22 name @9water.dat
+
+!
+! file water.dat contains the intermolecule distance dependence
+! of the soft and hard core potentials for the water dimer 
+!
+fast on
+FORMAT (F12.5)
+
+set r 0.1
+incr r by 0.0
+set d 0.1
+
+label loop
+
+coor mindist sele iseg 1 .and. type O* end sele iseg  2 .and. type O* end
+set dist ?mind
+
+!
+! soft core for the distance @d, d is the O-H' distance
+! dist is the O-O' distance
+!
+ENERGY cdie eps 1.0 cutnb 40.0 swit vswi ATOM -
+soft  
+
+!
+! testing first derivatives for the soft core potential 
+!
+test first step 0.00001
+
+write title unit 22 
+*  @dist @r ?ener ?elec ?vdw
+*
+
+!
+! hard core for the distance d
+!
+ENERGY soft  emax 0.0 
+
+
+write title unit 22 
+*  @dist @r ?ener ?elec ?vdw
+*
+
+if r .gt. 0.95 then set d 0.25
+if r .gt. 2.95 then set d 1.00
+incr r by @d
+coor trans axis dist @d sele segid wat2 end
+
+if @r .lt. 10.0 then goto loop
+
+print param
+stop

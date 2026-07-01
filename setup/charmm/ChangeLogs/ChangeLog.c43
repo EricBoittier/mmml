@@ -1,0 +1,1532 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+
+CHARMM 36.0
+     c36a1    Developmental     August    15, 2008
+     c36a2    Developmental     February  15, 2009
+     c36a3    Developmental     August    15, 2009
+     c36a4    Developmental     February  15, 2010
+     c36a4r1  Developmental     May        1, 2010
+     c36a5    Developmental     August    15, 2010
+     c36a6    Developmental     February  15, 2011
+     c36b1    Release           August    15, 2011
+     c36b2    Release           February  15, 2012
+
+CHARMM 37.0
+     c37a1    Developmental     August    15, 2011
+     c37a2    Developmental     February  15, 2012
+     c37b1    Release           September 30, 2012
+     c37b2    Release           February  15, 2013
+
+CHARMM 38.0
+     c38a1    Developmental     September 30, 2012
+     c38a2    Developmental     February  15, 2013
+     c38b1    Release           August    15, 2013
+     c38b2    Release           February  15, 2014
+
+CHARMM 39.0
+     c39a1    Developmental     August    15, 2013
+     c39a2    Developmental     February  15, 2014
+     c39b1    Release           August    15, 2014
+     c39b2    Release           February  15, 2015
+
+CHARMM 40.0
+     c40a1    Developmental     August    15, 2014
+     c40a2    Developmental     February  15, 2015
+     c40b1    Release           August    15, 2015
+     c40b2    Release           February  15, 2016
+
+CHARMM 41.0
+     c41a1    Developmental     August    15, 2015
+     c41a2    Developmental     February  15, 2016
+     c41b1    Release           August    15, 2016
+     c41b2    Release           February  15, 2017
+
+CHARMM 42.0
+     c42a1    Developmental     August    15, 2016
+     c42a2    Developmental     February  15, 2017
+     c42b1    Release           August    15, 2017
+     c42b2    Release           February  15, 2018
+
+CHARMM 43.0
+     c43a1    Developmental     August    15, 2017
+     c43a2    Developmental     February  15, 2018
+     c43b1    Release           August    15, 2018
+     c43b2    Release           February  15, 2019
+---------------------------------------------------------------------------
+
+[0] About CHARMM43 Development
+
+     At the 2017 CHARMM meeting (Harvard University July 14-16, 2017),
+we decided to release CHARMM c42b1 with incorporating enhancements and fixes
+to the developmental c42a1 and c42a2 versions.
+
+The c42b1 release includes the enhancements and fixes to the developmental
+version c42a2 during the development period of February 15, 2017 through
+July 15, 2017.
+
+==============================================================================
+
+[1] c43a1 Change Log
+
+    c43a1 includes additions to the developmental version after the CHARMM
+meeting until August 15, 2017.
+
+------------------------------------------------------------------------------
+1.1 All-atom CpHMD with generalized reaction field or PME
+    Developers : Yandong Huang, Jason Wallace, Wei Chen and Jana Shen
+    Institution: University of Maryland School of Pharmacy
+    Date       : August 3, 2017
+
+     All-atom CpHMD with various electrostatics options including GRF and PME
+Extension of PHMD module to perform fully explicit-solvent constant pH MD
+with long-range electrostatic treatments including force shifting,
+generalized reaction field and particle mesh Ewald.
+
+Check-in: http:/charmm.hanyang.ac.kr/14439
+Subversion committed: Revision 630
+
+prefx Keys: pertains to already existing PHMD key
+
+Files Added:
+test/c43test/hphmd.gbsw.inp
+test/c43test/phmd_grf_lys.inp
+test/c43test/phmd_pme_asp.inp
+test/c43test/phmd_pme_lys.inp
+test/data/par_all22_prot.prm
+test/data/phmd_grf_c22.in
+test/data/phmd_pme_c22.in
+test/data/top_all22_prot.rtf
+test/data/toppar_phmd_c22.str
+
+Files Modified:
+doc/energy.doc
+doc/nbonds.doc
+doc/phmd.doc
+source/energy/energy.src
+source/energy/phmd.src
+source/gukint/gukini.src
+source/ltm/inbnd_ltm.src
+source/misc/hbuild.src
+source/nbonds/enbfast.src
+source/nbonds/enbfs8p.src
+source/nbonds/enbips.src
+source/nbonds/enbond.src
+source/nbonds/enbonda.src
+source/nbonds/ewald.src
+source/nbonds/ewaldf.src
+source/nbonds/nbutil.src
+source/nbonds/pme.src
+source/pert/block.src
+source/pert/block_ltm.src
+
+==============================================================================
+[2] c43a2 Change Log
+
+    The following are introduced and modified during the development period
+of Agust 15, 2017 through February 15, 2018.
+
+
+2.1 University of Michigan Developments
+
+2.1.1 Build Update
+    Developers : Josh Buckner
+    Date       : December 14, 2017
+
+     This set of changes updates and extends the cmake and install.com builds:
+1. the Intel compiler after version 15 requires -qopenmp instead of -openmp
+2. the intel compiler sets a value for the macro gnu which clashes with our use
+   the macro that was gnu is now CHARMM_GNUC
+3. in most cases, the flag -D_GLIBCXX_USE_CXX11_ABI=0 is required to link to
+   OpenMM precompiled binaries
+4. the Intel compiler needs less than -O3 to compile some specific src files
+   this was already implemented in makemod.pl for install.com and has now been
+   implemented for cmake
+5. domdec_gpu crashes when compiled with the intel compiler on entering the
+   chmrealloc in the subroutine add_j_nblist. The reallocation has been
+   rewritten to provide a safe and general workaround
+6. the new cmake 3.10 sets MPI_FOUND to false if MPI_C++ is not found
+   this is a change from earlier behavior so MPI_Fortran_FOUND must be used
+   instead
+7. add repdstr and stringm builds for cmake, and make stringm cmake friendly
+
+Check-in: http:/charmm.hanyang.ac.kr/14547
+Subversion committed: Revision 653
+
+Files Added:
+tool/cmake/omm_abi_test.cpp
+
+Files Modified:
+configure
+install.com
+source/domdec/nblist_pair.src
+source/machdep/cstuff.c
+source/machdep/socket.c
+source/machdep/xdisp.c
+source/stringm/ftsm_io.src
+source/stringm/sm0k.src
+tool/cmake/FindOpenMP_Fortran.cmake
+tool/cmake/prefx_keywords.cmake
+
+..............................................................................
+2.1.2 Cleaner ATOMID failures
+    Developers : Josh Buckner
+    Date       : December 14, 2017
+
+     Add wrndie to the atomid subroutine so that when an atom is not found
+CHARMM fails more gracefully with some kind of error message
+the wrndie also allows the user to continue past the failure by setting
+the bomb level.
+
+Check-in: http:/charmm.hanyang.ac.kr/14554
+Subversion committed: Revision 664
+
+Files Modified:
+source/util/chutil.src
+
+..............................................................................
+2.1.3 cmake domdec_gpu cuda architecture settings
+    Developers : Josh Buckner
+    Date       : December 19, 2017
+
+     For nvcc settings used by domdec_gpu:
+Updated code produced by nvcc to reflect new real architectures added in
+cuda 8 and 9.
+Updated virtual architecture to compute_30 in all cases as recommended in
+the nvcc documentation.
+
+Check-in: http:/charmm.hanyang.ac.kr/14605
+Subversion committed: Revision 673
+
+Files Modified:
+CmakeLists.txt
+
+..............................................................................
+..............................................................................
+2.1.4 Minor macos and testcase updates
+    Developers : Josh Buckner
+    Date       : January 18, 2018
+
+     The macOS version of cuda doesn't include the volta architecture.
+So this option has been wrapped in 'if (NOT Apple)'
+     Many testscripts targeting OpenMM (omm_*.inp) report pass/fail but
+in idiosyncratic messages. These have been standardized to
+'testcase result: pass/fail'
+     The pmel.inp and pmelex.inp do not run in parallel. So a check has
+been added to skip the test if more than one thread is running.
+     The tolerance for qcheck in slowgr_ips.inp was too low, so it has
+been set to 0.5 % of the reference energy.
+
+Check-in: http:/charmm.hanyang.ac.kr/14635
+Subversion committed: Revision 679
+
+Files Modified:
+test/c37test/omm_dynam-vts.inp
+test/c37test/omm_modpsf.inp
+test/c37test/omm_periodic.inp
+test/c37test/omm_restraints.inp
+test/c38test/omm_block-periodic.inp
+test/c38test/omm_block-periodic2.inp
+test/c38test/omm_fixed.inp
+test/c38test/omm_switch-nbfix.inp
+test/c38test/omm_switch.inp
+test/c39test/omm_block_ti.inp
+test/c40test/omm_gbsaobc_stream-test.inp
+test/c41test/omm_cphmdtest.inp
+test/c41test/omm_gbsw_membrane.inp
+test/c41test/omm_gbswtest.inp
+test/c41test/slowgr_ips.inp
+test/c43test/pmel.inp
+test/c43test/pmelex.inp
+
+..............................................................................
+2.1.5 Test and performance updates
+    Developers : Josh Buckner and Ryan Hayes
+    Date       : January 29, 2018
+
+Minor testcase fixes:
+1) test/c22test/stdtest.inp
+   Move test for parallel run above the testcheck call for 'test first'
+   as 'test first' will not pass in parallel
+2) test/c38test/abpo.inp
+   Test must be run with four processes because of 'ensemble nensem 4'.
+   Added an 'if ?numnode .ne. 4' to stop.
+3) test/c41test/ens_pins.inp
+   Similar to (2), test needs 12 processes.
+4) 'sgld ave' parameters
+   'sgld ave' sets some parameters to be used in test scripts with '?'
+   substitution. These were not available in paralell because the
+   set_param call was guarded with prnlev. Moved the 'set_param' calls
+   to a new subroutine called before the prnlev guards.
+5) performance optimizations of domdec_gpu kernels for block
+6) new soft core test for domdec_gpu
+
+To make sure soft cores work:
+correctly by testing that the lambda forces and the spatial forces
+are consistent with the energy and that the domdec gpu off and gpu
+only results agree at a specific randomly chosen point in lambda
+space.
+
+Check-in: http:/charmm.hanyang.ac.kr/14657
+Subversion committed: Revision 680
+
+Files Added:
+test/c43test/soft14benz.inp
+test/data/prep14benz
+
+Files Modified:
+source/domdec/enbxfast.src
+source/domdec_gpu/CudaDirectForce_util.h
+source/domdec_gpu/CudaPMEDirectForceBlock.cu
+source/dynamc/dynamc.src
+source/dynamc/dynamvv2.src
+source/dynamc/sglds.src
+test/c22test/stdtest.inp
+test/c38test/abpo.inp
+test/c41test/ens_pins.inp
+
+------------------------------------------------------------------------------
+2.2 HDGB Improvements
+    Developers : Michael Feig
+    Institution: Michigan State University
+    Date       : December 14, 2017
+
+1. Default a-values in HDGBvdW were updated.
+2. New option for allowing membrane-embedded residues that face an internal
+   water EXCLGB is introduced, which is the variable to exclude residues for
+   HDGB to be used for inward facing residue treatment. Used with atom
+   selection. (see doc/gbmv.doc)
+
+Check-in: http:/charmm.hanyang.ac.kr/14561
+Subversion committed: Revision 665
+
+Files Added:
+test/c43test/hdgb_inout.inp
+
+Files Modified:
+doc/gbmv.doc
+source/energy/gbmvmodule.src
+test/c41test/hdgbvdw.inp
+
+------------------------------------------------------------------------------
+2.3 REPDSTR2
+    Developers : Michael Crowley and Ryan Hayes
+    Institution: NREL and UMich
+    Date       : December 15, 2017
+
+     Recently, the dependency of REPDSTR on CMPI has become a liability
+because it makes REPDSTR incompatible with some newer portions of
+CHARMM, such as DOMDEC. To address this, another version of REPDSTR
+called REPDSTR2 is being written. Currently, not all features are
+supported by both. To compile REPDSTR2, use cmake, and add
+"-a repdstr2" to the various arguments passed to the configure call.
+     Additionally, REPDSTR2 supports limited usage of FAST with EXLM,
+(lambda dynamics biasing potential replica exchange), which enables
+biasing potential replica exchange with DOMDEC.
+
+Check-in: http:/charmm.hanyang.ac.kr/14568
+Subversion committed: Revision 666
+
+prefx Keys: REPDSTR2
+
+Files Added:
+source/ensemble/repd_ensemble.src
+source/ensemble/repd_ensemble_ltm.src
+source/ensemble/repdstr_2.src
+
+Files Modified:
+doc/repdstr.doc
+source/charmm/charmm_main.src
+source/charmm/iniall.src
+source/charmm/miscom.src
+source/domdec/domdec_d2d_comm.src
+source/domdec/domdec_d2r_comm.src
+source/domdec/domdec_dlb.src
+source/domdec/domdec_dr_common.src
+source/domdec/domdec_r2d_comm.src
+source/dynamc/cvio.src
+source/dynamc/dcntrl.src
+source/dynamc/dynio.src
+source/energy/energy.src
+source/ensemble/ensemble_ltm.src
+source/ltm/aaa_sanity_checks.src
+source/ltm/chm_kinds_ltm.src
+source/ltm/parallel_ltm.src
+source/ltm/repdstr_ltm.src
+source/machdep/machio.src
+source/machdep/paral1.src
+source/machdep/paral3.src
+source/manip/rxcons_4.src
+source/mc/mc.src
+source/util/parse.src
+source/util/title.src
+
+------------------------------------------------------------------------------
+2.4 New MSLD Features
+    Developers : Ryan Hayes
+    Institution: University of Michigan
+    Date       : December 17, 2017
+
+1. Fixed lambdas: FFIX  (lambda doesn't move from its starting value)
+Useful for doing FEP or MBAR in systems set up for MSLD
+
+2. "Multisite lambda Dynamics PME Electrostatics"
+The PMEL directive controls how MSLD treats long range electrostatics with
+PME. The PME potential is modified slightly, as described in Huang, Chen,
+Wallace, and Shen, JCTC (2016). PMEL is only compatible with domdec. To use
+PME with MLSD, PMEL must be invoked inside the block directive, but PME must
+also be invoked as described in ewald.doc and domdec.doc by appropriately
+setting the nonbonded options and domdec options.
+PMEL OFF does not use PME electrostatics. PMEL ON scales all charges by the
+lambda of their particular block in the k-space and self energy terms
+(energy terms EWKS and EWSE). PME exclusions (energy term EWEX) are scaled
+by the product of lambdas for substituents at different sites, by zero for
+different substituents at the same site, and by lambda for intrasubstituent
+or substituent-environment interactions. PMEL EX scales all charges by
+lambda just like PMEL ON, but the exclusions are treated differently:
+specifically, since intrasubstituent interactions are scaled by lambda
+squared in the k-space term, they are also scaled by lambda squared in the
+exclusions term. All other exclusion scaling remains the same.
+
+3. "Saving lambda Forces"
+In order to write effective test cases and charmm scripts, sometimes it is
+necessary to be able to examine the forces on lambda. "FLAM string int"
+saves the lambda force for the block specified by int to the CHARMM
+parameter whose name is given in string, much like the set command (see
+*note miscom:(chmdoc/miscom.doc)). That lambda force can then be accessed
+by name using @ like any other CHARMM parameter.
+
+Check-in: http:/charmm.hanyang.ac.kr/14582
+Subversion committed: Revision 669
+
+Files Added:
+source/domdec_gpu/cuda_pme_gather.h
+source/domdec_gpu/cuda_pme_selfe.h
+source/domdec_gpu/cuda_pme_spread.h
+test/c43test/pmel.inp
+test/c43test/pmelex.inp
+test/data/ca_ser.str
+test/data/sele_bb.str
+test/data/sele_ser.str
+
+Files Modified:
+doc/block.doc
+source/domdec/MDsim.cu
+source/domdec/MDsim.h
+source/domdec/NBrecip.cu
+source/domdec/NBrecip.h
+source/domdec/domdec.src
+source/domdec/domdec_gpu.cu
+source/domdec/domdec_gpu_mod.src
+source/domdec/ebonded_domdec.src
+source/domdec/enbfix14_kernel.inc
+source/domdec/nbrecip_gpu.cu
+source/domdec/nbrecip_gpu_mod.src
+source/domdec_gpu/CudaBlock.cu
+source/domdec_gpu/CudaBlock.h
+source/domdec_gpu/CudaBondedForce.cu
+source/domdec_gpu/CudaDirectForce14_util.h
+source/domdec_gpu/CudaDirectForceKernels.cu
+source/domdec_gpu/CudaDirectForce_util.h
+source/domdec_gpu/CudaDomdecRecip.h
+source/domdec_gpu/CudaEnergyVirial.cu
+source/domdec_gpu/CudaNeighborListBuild.cu
+source/domdec_gpu/CudaPMEDirectForceBlock.cu
+source/domdec_gpu/CudaPMERecip.cu
+source/domdec_gpu/CudaPMERecip.h
+source/domdec_gpu/gpu_utils.h
+source/nbonds/colfft_func.src
+source/nbonds/colfft_kernel.src
+source/nbonds/pme.src
+source/pert/block.src
+source/pert/lambdadyn.src
+
+------------------------------------------------------------------------------
+2.5 Enhancements of DFTB/MM for NBO and Free Energy Simulations
+    Developers : Xiya Lu and Qiang Cui
+    Institution: University of Wisconsin-Madison & Boston University
+    Date       : January 30, 2018
+
+1) Allows the generation of NBO related files (nbo.47) for both open and
+   closed shell DFTB calculations.
+2) Additional flexibility for DFTB/MM alchemical free energy simulations.
+3) Reintroduced FIRES code into mmfp [with Chris Rowley, modified by Haiyun
+   Jin].
+4) Adds MCEC (modified Center of Excess Charge) and Zeta coordinate to rxncor
+   for the study of long-rangr proton transfer reactions.
+5) Minor bugfix to the Gaussian/CHARMM interface.
+
+Check-in: http:/charmm.hanyang.ac.kr/14702
+Subversion committed: Revision 688
+
+Files Added:
+test/c43test/malon_nbo.inp
+test/c43test/malon_mcec.inp
+
+Files Modified:
+doc/mmfp.doc
+doc/pert.doc
+doc/sccdftb.doc
+doc/umbrel.doc
+source/dynamc/dynamvv.src
+source/gukint/gukini.src
+source/ltm/sccdftbsrc_ltm.src
+source/ltm/blockscc_ltm.src
+source/ltm/epert_ltm.src
+source/misc/mmfp.src
+source/misc/pbeq.src
+source/nbonds/nbondg.src
+source/nbonds/nbonds.src
+source/pert/pert.src
+source/pert/epert.src
+source/rxncor/rxncom_ltm.src
+source/rxncor/rxndef.src
+source/rxncor/rxnene.src
+source/sccdftbint/sccdftbini.src
+source/sccdftbint/sccdftbsrc/eglcao.src
+source/sccdftbint/sccdftbsrc/ewevge.src
+test/c42test/reus_leap_lang.inp
+
+------------------------------------------------------------------------------
+2.6 Parallelizing VERBOSE output for coor [hbond|cont] command
+    Developers : Milan Hodoscek
+    Institution: NIC, Ljubljana & Free University, Berlin
+    Date       : January 31, 2018
+
+     To analyze h-bond patterns on a long trajectories (~1microseconds) can
+take a month or more of CPU time. Running such analysis on a parallel
+machines makes it more practical. Currently coor hbon ... verbose ... is
+parallelized if keyword PLBL is present which is using parallel blocking
+communication. PLNB for non-blocking communication is as of early 2018
+still in the development.
+
+Check-in: http:/charmm.hanyang.ac.kr/14664
+Subversion committed: Revision 689
+
+prefx Keys: PARALLEL
+
+Files Modified:
+source/manip/hbanal.src
+doc/corman.doc
+
+------------------------------------------------------------------------------
+
+2.7 Fixes and Enhancements
+
+2.7.1 cuda 9.0 compatibility
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : October 4, 2017
+
+     Nvidia CUDA Toolkit versions 9.0 and above have dropped support for
+compute capability 2.0 leading to a compile time error when compiling with
+domdec_gpu.
+
+Check-in: http:/charmm.hanyang.ac.kr/14512
+Subversion committed: Revision 654
+
+Files Modified:
+CMakeLists.txt
+build/UNX/Makefile_em64t
+build/UNX/Makefile_gnu
+build/UNX/Makefile_osx
+
+..............................................................................
+2.7.2 PARMIO and IC Improvements
+    Developers : Jing Huang and Josh Buckner
+    Institution: University of Michigan
+    Date       : December 12, 2017
+
+     Make duplicate bond/angle parameters a more severe warning (from 0 to -1)
+modify the output format of "ic print rtf" command so that it has no
+dependence on io format extended or not put some Drude-related output under
+the control of prnlev
+     The subroutine chckrep sometimes indexes off the end of the array ioff
+creating the possibility for a segfault.
+
+Check-in: http:/charmm.hanyang.ac.kr/14519
+Subversion committed: Revision 655
+
+Files Modified:
+source/io/parmio.src
+source/manip/intcor2.src
+
+..............................................................................
+2.7.3  Update HDGB test cases to report pass/fail
+    Developers : Michael Feig
+    Institution: Michigan State University
+    Date       : December 12, 2017
+
+     The HDGB related tests in test/c41test do not yet report pass/fail.
+
+Check-in: http:/charmm.hanyang.ac.kr/14526
+Subversion committed: Revision 658
+
+Files Modified:
+test/c41test/denbias.inp
+test/c41test/dhdgb_dyna.inp
+test/c41test/dhdgb_ener.inp
+test/c41test/dhdgb_mini.inp
+test/c41test/hdgbvdw.inp
+
+..............................................................................
+2.7.4 Testcase Fixes
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : December 13, 2017
+
+     Some test cases had some easy to fix problems.
+
+Check-in: http:/charmm.hanyang.ac.kr/14533
+Subversion committed: Revision 660
+
+Files Modified:
+test/c38test/fastrepd.inp
+test/c40test/ftsm-fix.inp
+test/c40test/ftsm.inp
+test/c40test/smcv-pos.inp
+test/c40test/smcv-voro.inp
+test/c40test/smcv.inp
+test/c41test/rdc.inp
+test/c41test/sgldg_vv2.inp
+test/c41test/slowgr_ips.inp
+test/c41test/ssnmr.inp
+test/c42test/reus_leap_lang.inp
+
+..............................................................................
+2.7.5 rdc and ssnmr bug fixes
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : December 13, 2017
+
+1. rdc energy is not reported in the output of ener or dyna
+2. rdc and ssnmr storage space is capped at such a low number of entries that
+   the commands are not useful in practice
+
+Check-in: http:/charmm.hanyang.ac.kr/14540
+Subversion committed: Revision 662
+
+Files Modified:
+source/adumb/cmds.src
+source/energy/printe.src
+source/ltm/dimens_ltm.src
+source/misc/noe.src
+source/misc/noe_ltm.src
+source/misc/rdc.src
+source/misc/rdc_ltm.src
+source/misc/ssnmr.src
+source/misc/ssnmr_ltm.src
+
+..............................................................................
+2.7.6 Test case pass/fail
+    Developers : Michael Crowley
+    Institution: NREL
+    Date       : December 16, 2017
+
+     Plenty of test cases still do not report pass/fail.
+
+Check-in: http:/charmm.hanyang.ac.kr/14575
+Subversion committed: Revision 668
+
+Files Modified:
+test/c22test/stdtest.inp
+test/c22test/xtlala1.inp
+
+..............................................................................
+2.7.7 Minor Bugfixes
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : December 15, 2017
+
+1. source/energy/phmd.src
+A comma after 'write(...)' is deprecated and putting one in results in
+a compiler warning
+
+2. test/c29test/quicktst.inp
+The line "quick  bynu 1  5  8  11" was not the correct syntax for what was
+intended. Given the updates to atomid, it results in a wrndie situation.
+
+Check-in: http:/charmm.hanyang.ac.kr/14589
+Subversion committed: Revision 670
+
+Files Modified:
+source/energy/phmd.src
+test/c29test/quicktst.inp
+
+..............................................................................
+2.7.8 IMPATCH command patch_residue name limited to 4 chars
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : December 19, 2017
+
+     The name of the patch_residue (2nd argument) of the command impatch is
+limited to 4 characters even though most other arguments can be up to
+8 chars long.
+
+Check-in: http:/charmm.hanyang.ac.kr/14598
+Subversion committed: Revision 672
+
+Files Modified:
+source/image/images.src
+
+..............................................................................
+2.7.9 segfaults when reading some image patching input files
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : January 2, 2018
+
+     Reading image patching input files with both prim & X-image and prim &
+A-image sometimes segfaults. When reading a file, the logic for expanding the
+size of the array holding the "image group exclusion list" contains a small
+error.
+     After a failed first pass, the actual size of the array is increased
+by 50% + 10 elts, but the variable indicating the max size is set to NATOM.
+
+Check-in: http:/charmm.hanyang.ac.kr/14628
+Subversion committed: Revision 678
+
+Files Modified:
+image/upimag_util.src
+
+..............................................................................
+2.7.10 Makefile_gnu fix for gcc 7
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : January 30, 2018
+
+     Makefile errors out with message about compiler lacking avx for
+gcc series 7. The '-dumpversion' option has changed behaviour after
+4.9 to give only the first number in the x.x.x version scheme.
+
+Check-in: http:/charmm.hanyang.ac.kr/14674
+Subversion committed: Revision 683
+
+Files Modified:
+build/UNX/Makefile_gnu
+
+..............................................................................
+2.7.11 Rrepdstr and intel build fixes
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : January 30, 2018
+
+1) cmake repdstr build did not automatically turn off domdec
+2) makemod.pl detected a use statement for a module in
+   source/ensemble/repd_ensemble.src
+   that it couldn't find during install.com em64t builds
+
+Check-in: http:/charmm.hanyang.ac.kr/14688
+Subversion committed: Revision 685
+
+Files Modified:
+CMakeLists.txt
+source/ensemble/repd_ensemble.src
+
+..............................................................................
+2.7.12 Domdec_gpu device memory leak & FindOpenCL.cmake fix
+    Developers : Ryan Hayes and Josh Buckner
+    Institution: University of Michigan
+    Date       : January 30, 2018
+
+(1) Found and fixed a GPU memory leak in domdec_gpu
+(2) FindOpenCL.cmake did not work most of the time.
+
+Check-in: http:/charmm.hanyang.ac.kr/14696
+Subversion committed: Revision 687
+
+Files Modified:
+source/domdec/Nlist.cu
+tool/cmake/FindOpenCL.cmake
+
+..............................................................................
+2.7.13 PED printout for dihedrals,impropers is missing the fourth atom
+    Developers : Milan Hodoscek
+    Institution: National Institute of Chemistry, Ljubljana
+    Date       : January 25, 2018
+
+     When using new parameters eg CGenFF the atom names do not fit into the
+format for writing dihedrals and improper angles for PED.
+
+Check-in: http:/charmm.hanyang.ac.kr/14654
+Subversion committed: Revision 689
+
+Files Modified:
+vibran/vibsub.src
+
+==============================================================================
+[3] c43b1 Change Log
+
+     At the 2018 CHARMM meeting (The University of Chicago July 13-15, 2018),
+we decided to release CHARMM c43b1 with incorporating enhancements and fixes
+to the developmental c43a1 and c43a2 versions.
+
+The c43b1 release includes the enhancements and fixes to the developmental
+version c43a2 during the development period of February 15, 2018 through
+August 15, 2018.
+
+3.1 Update from University of Michigan Repository
+
+3.1.1 nbonds.doc FSHI FSWI citation
+    Developer  : Ryan Hayes
+    Date       : June 26, 2018
+
+Check-in: http:/charmm.hanyang.ac.kr/14815
+Subversion committed: Revision 713
+
+     Added a note to doc/nbonds.doc to explain FSHI and FSWI funcitonal forms.
+
+Files Modified:
+doc/nbonds.doc
+
+..............................................................................
+3.1.2 ##EXPAND to CPP, build process improvements and other small items
+    Developer  : Josh Buckner
+    Date       : June 26, 2018
+
+Check-in: http:/charmm.hanyang.ac.kr/14822
+Subversion committed: Revision 714
+
+- add 'nocpu' option to 'omm' command
+- call srndie if OpenMM platform specified by 'omm platform <platform>' is
+  unavailable
+- updates for building with PGI compilers
+- prefer Stefan Borech's fix for epert and gcomb
+- improve CMake MKL support
+- replace calls to strncpy with memcpy as strncpy causes portability problems
+  for intel compiled binaries
+- fix memory errors in mmff
+- allow command 'write image psf unit...'
+- fix GCMC segfault
+- move test/c??test subtest files into data as *.str files
+- CMake variables optimization, arch_flag_<lang> and arch_flag_all
+- default --prefix for cmake in place builds
+- modernize cstuff.c mostly using fortran interface blocks, iso_c_binding
+  and bind(c)
+- CMake static build for gcc
+- improve DOMDEC support for Intel compilers
+- add testcheck pass/fail to more tests
+- improve support for OpenMM 7.2
+- improve CMake repdstr build
+- prevent CHARMM from writing uninitialized charaters to output
+- improve install.com support for GCC versions > 4
+- fix CPP warnings involving fortran comments on CPP lines
+- improve CMake OpenCL support
+- improve performance of string handling routines (memory and speed)
+- make dynamic memory safer for repeated calls to pbeq
+- '##EXPAND' directives now accomplished with standard C preprocessor
+  directives
+
+..............................................................................
+3.1.3 prefx install.com and docu update
+    Developer  : Josh Buckner
+    Date       : July 10, 2018
+
+Check-in: http:/charmm.hanyang.ac.kr/14829
+Subversion committed: Revision 715
+
+- install.com has been modified to no longer compile prefx.f90
+- makemod.pl has been modified so that $(FLX) lines are now just
+  'cp $(SRC)/filename.src $(BLD)/filename.F90' lines (paraphrasing).
+- Documentation has been updated to note that prefx is no longer used in the
+  build process.
+
+Files Modified:
+doc/developer.doc
+doc/install.doc
+doc/prefx.doc
+install.com
+tool/makemod.pl
+
+..............................................................................
+3.1.4 Fix for cmake sccdftb build
+    Developer  : Josh Buckner
+    Date       : February 16, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14733
+Subversion committed: Revision 697
+
+prefx keywords were reintroduced into source/sccdftbint/sccdftbini.src
+This causes an error when building with CMake
+The prefx keywords were replaced with standard CPP directives
+
+Files Involved:
+source/sccdftbint/sccdftbini.src
+
+..............................................................................
+3.1.5 domdec_gpu device memory leak & FindOpenCL.cmake fix
+    Developer  : Ryan Hayes and Josh Buckner
+    Date       : January 30, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14696
+Subversion committed: Revision 699
+
+- Found and fixed a GPU memory leak in domdec_gpu
+- FindOpenCL.cmake did not work most of the time.
+
+Files Involved:
+source/domdec/Nlist.cu
+tool/cmake/FindOpenCL.cmake
+
+..............................................................................
+3.1.6 intel 2018 and chngbuf
+    Developer  : Josh Buckner
+    Date       : February 22, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14745
+Subversion committed: Revision 701
+
+Intel 2018 cannot find the function chngbuf from source/machdep/cstuff.c at
+link time after successful compilation.
+The function chngbuf does not do anything anymore. All of its code has been
+commented out for years now.
+
+Files Involved:
+source/machdep/cstuff.c
+source/machdep/machio.src
+source/machdep/startup.src
+
+..............................................................................
+3.1.7 test fixes and Makefile_gnu fix for gcc 7
+    Developer  : Josh Buckner
+    Date       : January 30, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14674
+Subversion committed: Revision 702
+
+- 'sgld ave' sets some parameters to be used in test scripts with '?'
+substitution. These were not available in paralell because the set_param call
+was guarded with prnlev. Moved the 'set_param' calls to a new subroutine
+called before the prnlev guards.
+
+- Many testscripts targeting OpenMM (omm_*.inp) report pass/fail but in
+idiosyncratic messages. These have been standardized to 'testcase result:
+pass/fail'
+
+- The tolerance for qcheck in slowgr_ips.inp was too low, so it has been set
+to 0.5 % of the reference energy.
+
+- Makefile errors out with message about compiler lacking avx for gcc series 7.
+The '-dumpversion' option has changed behaviour after 4.9 to give only the
+first number in the x.x.x version scheme.
+
+Files Involved:
+test/c22test/stdtest.inp
+test/c38test/abpo.inp
+test/c41test/ens_pins.inp
+source/dynamc/dynamc.src
+source/dynamc/dynamvv2.src
+source/dynamc/sglds.src
+test/c37test/omm_dynam-vts.inp
+test/c37test/omm_modpsf.inp
+test/c37test/omm_periodic.inp
+test/c37test/omm_restraints.inp
+test/c38test/omm_block-periodic.inp
+test/c38test/omm_block-periodic2.inp
+test/c38test/omm_fixed.inp
+test/c38test/omm_switch-nbfix.inp
+test/c38test/omm_switch.inp
+test/c39test/omm_block_ti.inp
+test/c40test/omm_gbsaobc_stream-test.inp
+test/c41test/omm_cphmdtest.inp
+test/c41test/omm_gbsw_membrane.inp
+test/c41test/omm_gbswtest.inp
+test/c41test/slowgr_ips.inp
+build/UNX/Makefile_gnu
+
+..............................................................................
+3.1.8 repdstr output filenames
+    Developer  : Josh Buckner
+    Date       : March 6, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14757
+Subversion committed: Revision 703
+
+Repdstr output filenames no longer end in an underscore followed by the node
+number.
+
+Files Involved:
+source/ltm/repdstr_ltm.src
+
+..............................................................................
+3.1.9 post-release alpha bugfixes
+    Developer  : Josh Buckner
+    Date       : March 14, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14764
+Subversion committed: Revision 704
+
+1) In a cmake repdstr build, fftw or mkl might be found automatically
+   causing COLFFT to be included. COLFFT is incompatible with repdstr.
+
+2) builtin SQSEGID is not initialized and prints non-ascii characters
+   to the output. This prevents correct parsing of charmm output.
+
+3) reading rtf files has gotten noticeably slower between c41b and c42b
+
+4) repeated calls to PBEQ without a RESET cause a fatal CHMALLOC error
+
+5) test/c40test/omm_ar-mmfp.inp and test/c40test/omm_mmfpgeo.inp have
+   ideosyncratic pass/fail messages
+
+6) Intel ifort 2018 cannot compile repdstr2
+
+Files Involved:
+CMakeLists.txt
+source/io/psfres.src
+source/machdep/startup.src
+source/util/cmdpar.src
+source/util/parse.src
+source/util/string.src
+source/misc/pbeq.src
+test/c40test/omm_ar-mmfp.inp
+test/c40test/omm_mmfpgeo.inp
+source/ensemble/repd_ensemble.src
+
+..............................................................................
+3.1.10 OpenMM 7.2 compatibility
+    Developer  : Josh Buckner
+    Date       : March 15, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14771
+Subversion committed: Revision 705 and 706
+
+OpenMM 7.2 plugins used std::function which requires the C++11 standard.
+
+Files Involved: (module/file, e.g., source/dynamc/dcntrl.src)
+tool/cmake/omm_cxx11_test.cpp
+CMakeLists.txt
+source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+source/openmm/plugins/MonteCarloBarostat2/Makefile
+source/openmm/plugins/gbsw/platforms/cpu/Makefile
+source/openmm/plugins/gbsw/platforms/cuda/Makefile
+source/openmm/plugins/gbsw/platforms/opencl/Makefile
+
+..............................................................................
+3.1.11 domdec_gpu and intel compiler compatibility
+    Developer  : Josh Buckner
+    Date       : March 28, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14771
+Subversion committed: Revision 709
+
+'domdec gpu on' followed by energy can cause a segmentation fault
+if charmm is compiled with Intel ifort.
+
+Files Involved:
+source/domdec/nblist_tilex.src
+
+------------------------------------------------------------------------------
+3.2 Lonepair Center
+    Developers : Anmol Kumar
+    Institution: University of Maryland
+    Date       : June 26, 2018
+
+Check-in: http:/charmm.hanyang.ac.kr/143808
+Subversion committed: Revision 712
+
+- Added lonepair center functionality to rtfio and genpsf
+- Added deletion of cent, rela, bise and coli lonepair types
+
+Files Added:
+test/c43test/lpcent.inp
+test/data/toppar_drude.str
+
+Files Modified:
+source/gener/genpsf.src
+source/gener/modpsf.src
+source/io/rtfio.src
+source/machdep/paral1.src
+source/util/chutil.src
+
+------------------------------------------------------------------------------
+3.3 Implicit membrane model for curved membranes (IMM1-curv) and small fixes
+    Developer  : Binod Nepal, John Leveritt III, Themis Lazaridis
+    Institution: City College of New York
+    Date       : May 26, 2018
+
+Check-in: http:/charmm.hanyang.ac.kr/14792
+Subversion committed: Revision 710
+
+Implicit membrane model IMM1 has been extended to curved lipid membranes
+(spherical and cylindrical shapes).
+
+Additional small fixes:
+a) a bug was fixed in upimag.src that prevented IMM1 from working with images
+b) a check was added in subroutine RDSLVPAR whether all atom types have
+   a solvation parameter
+c) new top_all36_prot_eef1.1.rtf file to be compatible with current parameter
+   files
+
+Files Added:
+support/aspara/top_all36_prot_eef1.1.rtf
+test/c43test/testimm1-curv.inp
+test/data/imm1_curv.crd
+
+Files Removed:
+support/aspara/top_all36_prot_lipid_eef1.1.rtf
+
+Files Modified:
+source/misc/eef1.src
+image/upimag.src
+doc/eef1.doc
+
+------------------------------------------------------------------------------
+3.4 Developments at NIC Slovenia
+    Developer  : Milan Hodoscek
+    Institution: National Institute of Chemistry, Slovenia
+    Date       : July 13, 2018
+
+3.4.1 Interfacing the new February 14, 2018 (R1) version of GAMESS to CHARMM
+Check-in: http:/charmm.hanyang.ac.kr/14849
+Subversion committed: Revision 717
+
+     There is new version of GAMESS available (February 14, 2018) and
+is interfaced with the CHARMM program. Main changes are in the support
+for OpenMP parallelization in GAMESS and it is now also supported in
+CHARMM.
+
+Files Added:
+tool/addomp.sh
+
+Files Modified:
+source/flucq/fluqqmmm.src
+source/gamint/blur.src
+source/gamint/ddi.src
+source/gamint/CMakeLists.txt
+source/gukint/gukini.src
+tool/gmscomp
+CMakeLists.txt
+
+..............................................................................
+3.4.2 Enabling COLFFT to work with KEY_OPENMP keyword
+Check-in: http:/charmm.hanyang.ac.kr/14852
+Subversion committed: Revision 716
+
+     If CHARMM is compiled with the OPENMP keyword the default ewald method
+is not working unless OMP_NUM_THREADS=1 is specified. The modified
+domdec_local.src enables COLFFT runs without
+
+Files Modified:
+source/domdec/domdec_local.src
+source/ltm/aaa_sanity_checks.src
+
+------------------------------------------------------------------------------
+3.5 IPS for DOMDEC
+    Developers : Xiongwu Wu, Samar Samarjeet, and Bernard R. Brooks
+    Institution: NIH, NHLBI
+    Date       : July 10, 2018
+
+Check-in: http:/charmm.hanyang.ac.kr/14846
+Subversion committed: Revision 718
+
+     The 3D IPS method is implemented to work with DOMDEC to achieve high
+scaling for massive parallel computing.
+
+File Added:
+test/c44test/domdec_ips.inp
+
+Files Modified:
+doc/domdec.doc
+source/nbonds/nbips_ltm.src
+source/nbonds/enbips.src
+source/domdec/enbond_domdec.src
+source/domdec/enbxfast.src
+source/domdec/enbfix14.src
+source/domdec/enbfix14_kernel.inc
+
+------------------------------------------------------------------------------
+3.6 gaussian/charmm compile error
+    Developers : Qiang Cui
+    Institution: University of Wisconsin -- Madison
+    Date       : July 30, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14868
+Subversion commited: Revision 719
+
+    G09 without additional QM/MM options does not compile due an error at
+ewald.src line ~4125
+
+Files Modified:
+source/nbonds/ewald.src
+
+------------------------------------------------------------------------------
+3.7 make domdec ips compatible with 'domdec test' subcommand
+    Developers : Xiongwu Wu
+    Institution: NIH/NHLBI
+    Date       : August 8, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14878
+Subversion commit : Revision 723
+
+    source/c37test/domdec.inp throws a new division-by-zero floating-point
+exception. The source of the new SIGFPE is as follows:
+The 'domdec test' command tests all combinations of electrostatic and
+vdw modes via the subroutine test_build_pftable. Without a preceding
+ips command, lots of the variables needed for the vips vdw mode are
+uninitialized when test_build_pftable tries to test that mode.
+
+Files Modified:
+source/domdec/enbxfast.src
+
+------------------------------------------------------------------------------
+3.8 enbxfast.src overwritten with old revision
+    Developers : Josh Buckner
+    Institution: University of Michigan
+    Date       : August 14, 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14885
+Subversion commit: Revision 725
+
+    The file source/domdec/enbxfast.src was recently overwritten with
+an old revision undoing a couple of one-line performance revisions.
+
+Files Modified:
+source/domdec/enbxfast.src
+
+------------------------------------------------------------------------------
+3.9 Summer 2018 toppar updates
+    Developers : Alex MacKerell
+    Institution: University of Maryland, Baltimore
+    Date       : August 15, 2018
+
+    1) Remove pdb writes from all test cases.
+    
+    2) Rename repeated residue/patch names.
+    
+    toppar_all36_na_nad_ppi.str       ! RESI CTP: cytosine triphosphate
+    top_all36_prot.rtf           ! PRES CTP: protonated C-terminus  rename to PCTE
+    
+    top_all36_prot.rtf                 ! PRES GLYP
+    toppar_all36_lipid_model.str       ! RESI GLYP: lipid model compound: rename to GLPH
+    
+    3) Missing parameter for terminal neutral Asp added to par_all36_prot.prm and par_all36m_prot.prm
+    
+    CC   CT2A CT1  CC       0.2000  3     0.00
+    CC   CT2A CT1  CD       0.2000  3     0.00 ! from CC   CT2A CT1  CC for neutral C-terminal Asp
+    
+    4) Select ion NBFIX parameters from Savelyev and MacKerell, JPCB 2015 added to toppar_water_ions.str
+    
+    ! Chloride
+    CLA    LIT      -0.0187     3.6875 ! Savelyev and MacKerell, JPCB 2015
+    CLA    SOD      -0.0839     3.7310 ! Savelyev and MacKerell, JPCB 2015
+    CLA    POT      -0.1142     4.0810 ! Savelyev and MacKerell, JPCB 2015
+    ! NA
+    LIT    ON3      -0.0167     3.1775 ! Savelyev and MacKerell, JPCB 2015
+    
+    5) Addition of halogen-protein NBFIXes. In addition, these are also
+    extended to the corresponding nucleic acid and carbohydrate atom
+    types. (Lin and MacKerell, to be submitted).
+    
+    In par_all36_cgenff.prm and tests added to test_cgenff.inp
+    
+    !!! IMPORTANT!!!
+    !!! The following topology & parameter files should be read before reading top_all36_cgenff.rtf/par_all36_cgenff.prm
+    !!! for correctly implementing the NBFIX between the chlorine with the lone-pair and the carbonyl oxygen in amides
+    !!! 1) top_all36_prot.rtf/par_all36_prot.rtf
+    !!! 2) top_all36_na.rtf/par_all36_na.rtf
+    !!! 3) top_all36_carb.rtf/par_all36_carb.rtf
+    !!! IMPORTANT!!!
+    
+    6) Ether lipid toppar files added to stream/lipid and new test case added to lipids
+    
+    toppar_all36_lipid_ether.str
+    test_all36_lipid_ether.inp
+    
+    7) rename d_amino acid toppar stream files in stream/prot
+    
+    mv toppar_all36_prot_mod_d_aminoacids.str toppar_all36_prot_c36m_d_aminoacids.str
+    mv toppar_all36_prot_d_aminoacids.str toppar_all36_prot_c36_d_aminoacids.str
+    
+    8) update indole (RESI INDO) and ethylindole (RESI EIND) in
+    toppar_all36_prot_model.str
+    
+    This corrects on oversight where the 2005 update of the CHARMM Trp
+    sidechain parameters were not incorporated into the
+    toppar_all36_prot_model.str even though they were applied to the Trp
+    sidechain itself. This update makes them consistent with, though not
+    identical to those in CGenFF.  Produces new energies for indole and
+    ethylindole.
+
+Files Added:
+    toppar/stream/lipid/toppar_all36_lipid_ether.str
+
+Files Modified:
+    toppar/drude/drude_toppar_2017_7.tgz
+    toppar/par_all36_cgenff.prm
+    toppar/stream/lipid/toppar_all36_lipid_list.str
+    toppar/stream/lipid/toppar_all36_lipid_model.str
+    toppar/stream/na/toppar_all36_na_reactive_rna.str
+    toppar/stream/prot/toppar_all36_prot_model.str
+    toppar/stream/prot/toppar_all36_prot_modify_res.str
+    toppar/top_all36_prot.rtf
+    toppar/toppar_all.history
+    toppar/toppar_all.history
+    move toppar/stream/prot/toppar_all36_prot_d_aminoacids.str
+      to toppar/stream/prot/toppar_all36_prot_c36_d_aminoacids.str
+    move toppar/stream/prot/toppar_all36_prot_mod_d_aminoacids.str
+      to toppar/stream/prot/toppar_all36_prot_c36m_d_aminoacids.str
+
+==============================================================================
+[4] c43b2 Change Log
+
+    The following changes were committed from August 15, 2018 through
+February 15, 2019.
+
+4.1 residue addition and deletion fixes
+    Developers : Anmol Kumar
+    Institution: University of Maryland, Baltimore
+    Date       : 13 September 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14919
+Subversion commit: Revision 736
+
+    1. if a residue is deleted, its alphas and tholes were not updated
+    2. if a file contained multiple residues of the same name,
+       the user may not be alerted of the problem
+    3. a test case is included for (2)
+
+Files Added:
+    test/c43test/gener_correctpsf.inp
+    test/data/toppar_drude_model_2013e_contrepeatingresidacem.str
+    test/data/toppar_drude_master_protein_contrepeatingresid.str
+
+Files Modified:
+    source/io/rtfio.src
+
+------------------------------------------------------------------------------
+4.2 MSLD fixes
+    Developer: Ryan Hayes
+    Institution: University of Michigan
+    Date: 7 September 2018
+
+Check-in: http://charmm.hanyang.ac.kr/14926
+Subversion commit: Revision 738
+
+    Previous to this revision, the MSLD implemention in DOMDEC had
+    several problems:
+ 
+    1. Didn't properly handle soft bonds and scaling of some bonded parameters
+       for constrained atoms.
+       Soft-core implementation didn't include 1-4 interactions.
+       CMAP interactions did not allow MSLD scalings
+       bug in DOMDEC_GPU subroutines range_start
+       (source/domdec/domdec_util_gpu_mod.src)
+ 
+    2. wrong block documentation corrected
+ 
+    3. bug in source/domdec_gpu/CudaPMEDirectForce.cu where
+       shmem_size was allocating too little memory for the kernel.
+ 
+    6. PMEL directive did not handle exclusion scaling.
+       Independent scaling of bonds and urey bradley interactions
+       worked only in domdec and not with the PMEL directive.
+       The maximum number of parameters was increased from 1024 to 10240
+       which is important for adaptive landscape flattening with MSLD.
+       A test case c43test/pmelnn.inp was added to test the bug fixes.
+ 
+    7. bug in domdec cpu "pmel nn"
+
+Files Added:
+    test/c43test/pmelnn.inp
+
+Files Modified:
+    doc/block.doc
+    source/domdec/domdec_bonded_block.src
+    source/domdec/domdec_bonded_block_kernel.inc
+    source/domdec/domdec_bonded_kernel.inc
+    source/domdec/domdec_util_gpu_mod.src
+    source/domdec/ebonded_domdec.src
+    source/domdec/ebonded_domdec_kernel.inc
+    source/domdec/enbfix14.src
+    source/domdec/enbfix14_kernel.inc
+    source/domdec_gpu/CudaBlock.cu
+    source/domdec_gpu/CudaBlock.h
+    source/domdec_gpu/CudaDirectForce14_util.h
+    source/domdec_gpu/CudaDirectForceKernels.cu
+    source/domdec_gpu/CudaPMEDirectForce.cu
+    source/domdec_gpu/CudaPMEDirectForceBlock.cu
+    source/energy/ecmap.src
+    source/pert/block.src
+    source/pert/lambdadyn.src
+    source/util/cmdpar.src
+
+------------------------------------------------------------------------------
+4.3 extra OpenMM GBSW CPHMD dynamics steps
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 January 2019
+
+Check-in: http://charmm.hanyang.ac.kr/14933
+Subversion commit: Revision 740
+
+    1. When gbsw and phmd are used together and dynamics is run,
+       extra steps of dynamics will be taken.
+
+    2. Nvidia Nsight profiler has a warning message when
+       running dynamics with DOMDEC_GPU
+
+    3. domdec needs the arch flag in debug mode for SSE intrinsics
+
+Files Modified:
+    1. source/openmm/omm_main.src
+       source/openmm/plugins/gbsw/openmmapi/GBSWForce.cpp
+       source/openmm/plugins/gbsw/openmmapi/GBSWForce.h
+       source/openmm/plugins/gbsw/openmmapi/GBSWForceImpl.cpp
+       source/openmm/plugins/gbsw/openmmapi/GBSWForceImpl.h
+       source/openmm/plugins/gbsw/openmmapi/GBSWKernels.h
+       source/openmm/plugins/gbsw/platforms/cuda/CudaGBSWKernels.cpp
+       source/openmm/plugins/gbsw/platforms/cuda/CudaGBSWKernels.h
+       source/openmm/plugins/gbsw/wrappers/OpenMMGBSWCWrapper.cpp
+       source/openmm/plugins/gbsw/wrappers/OpenMMGBSWCWrapper.h
+       source/openmm/plugins/gbsw/wrappers/OpenMMGBSWFortranModule.f90
+       source/openmm/plugins/gbsw/wrappers/OpenMMGBSWFortranWrapper.cpp
+       test/c41test/omm_cphmdtest.inp   
+    2. source/domdec_gpu/cuda_utils.cu
+    3. CMakeLists.txt
+
+------------------------------------------------------------------------------
+4.4 MSLD fixes part 2
+    Developer: Ryan Hayes
+    Institution: University of Michigan
+    Date: 30 January 2019
+
+Check-in: http://charmm.hanyang.ac.kr/14947
+Subversion commit: 743
+
+    1. accept multiple fnex
+    2. allow scriptable assignment of blocks to particular MSLD sites
+       If there are too many blocks to assign each to a site in the MSLD
+       command, (due to CHARMM variable and line length limitations),
+       MSLD may be invoked with the NSITe option, e.g. "MSLD NSITe int",
+       where int specifies the number of sites, and blocks may be assigned
+       to sites individually later in the block section using
+       "BLASsign int_block int_site", which assigns block int_block to site
+       int_site.
+    3. correct documentation for FNXS of BLOCK
+
+Files Modified:
+    1. source/pert/lambdadyn.src
+    2. doc/block.doc
+       source/pert/block.src
+       source/pert/lambdadyn.src
+    3. doc/block.doc
+       source/pert/lambdadyn.src
+
+------------------------------------------------------------------------------
+4.5 nvidia nvcc architecture flags
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 13 February 2019
+
+Check-in: http://charmm.hanyang.ac.kr/14961
+Subversion commit: Revision 746
+
+    OpenMM will not use a CUDA platform with a GTX 1080 TI when CHARMM
+is compiled with the Nvidia 9.0 toolkit. The 10.0 toolkit must be used.
+The CUDA platform works fine with 980 cards when compiled with the 9.0
+toolkit.
+
+Files Modified:
+    CMakeLists.txt

@@ -1,0 +1,28 @@
+* Test file to illustrate the evaluation of arithmetic expression with calc
+* c24a3 testing calculator function : 15-Feb-95, Benoit Roux
+*
+
+set length = 10.0
+set radius = 1.0
+
+!parameters don't need to be declared first
+!set area   = 0.0
+!set volume = 0.0
+!set crazy  = 0.0
+
+calc area   = @radius * ?pi **2
+calc volume = @length * @area 
+calc crazy  = cos(37.25* ?pi /360)*exp(-@volume/100.0)
+
+bomlev -3
+! Notice that the ?parameters can be used directly but MUST be surrounded
+! by blanks
+! for example, 
+calc crazy  = ?pi
+! works, but
+calc crazy  = ?pi**2
+! does not...
+
+
+stop
+

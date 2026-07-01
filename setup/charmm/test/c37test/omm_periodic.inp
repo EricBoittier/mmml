@@ -1,0 +1,203 @@
+*  OpenMM energy for trialanine blocked in a cubic box of solvent
+*  using various PBC methods.  Total system contains 1,437 atoms.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+!  box size: 24.534238 x 24.534238 x 24.534238
+
+read rtf card name @0/top_all22_prot.inp
+
+read param card name @0/par_all22_prot.inp
+
+read sequ ala 3
+generate pro0 first ace last ct3 setup
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+
+read coor pdb name @0/ala3_solv-equil.pdb resi
+
+! Dimension of a box
+set size 24.534238
+set 7 = @size
+set theta = 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta
+crystal build cutoff 11 noper 0
+image byres xcen 0 ycen 0 zcen 0 select resname tip3 end
+image byseg xcen 0 ycen 0 zcen 0 select segid pro0 end
+
+!  turn on faster options and set-up SHAKE
+faster on
+
+set cutoffs = cutnb 11 cutim 11 ctofnb 9 ctonnb 9 vswi switch
+
+
+! Ewald without PME
+set ewald = Ewald kappa 0.320
+
+ener eps 1.0 @cutoffs @ewald
+set ech = ?ener
+
+omm clear
+ener eps 1.0 @cutoffs @ewald omm
+
+set status = fail
+calc diff = abs ( ( ?ener - @ech ) / @ech )
+if @diff le 1e-3 then
+  set status = pass
+endif
+echo testcase result: @status TEST 1
+
+! PME
+set ewald = Ewald kappa 0.320 pmEwald order 4 fftx 24 ffty 24 fftz 24
+
+ener eps 1.0 @cutoffs @ewald
+
+format (f16.8)
+set echarmm = ?ener
+coor force comp
+
+set return fromCHARMM
+goto ncharmm
+label fromCHARMM
+
+ener eps 1.0 @cutoffs @ewald omm
+
+set eopenmm = ?ener
+coor force comp
+
+set return fromOpenMM
+goto nopenmm
+label fromOpenMM
+
+Calc ediff = 100 * abs ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm )
+echo Force dot product: @fsum Percent energy error: @ediff
+calc diff = abs ( 1 - @fsum )
+
+set status = fail
+if @ediff le 5e-3 then
+  set status = pass
+endif
+echo testcase result: @status TEST 2 - energy
+
+set status = fail
+if @diff le 1e-3 then
+  set status = pass
+endif
+echo testcase result: @status TEST 2 - forces
+
+stop
+
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+goto @return
+
+Constructed box from following command:
+
+convpdb.pl -center -nsel A:29-31 -out charmm22 -renumber 1 ~/Desktop/Students/MRobertson_REU/M2TMP/M2_CD/M2_Monomer_images/CondDomain.pdb | awk '{sub(/SER/,"ALA",$0);print $0}' | minCHARMM.pl -par blocked,nter=ACE,cter=CT3 | convpdb.pl -out charmm22 -solvate -cutoff 8 -cubic -segnames | convpdb.pl -segnames -renumwatersegs > ala3_solv.pdb

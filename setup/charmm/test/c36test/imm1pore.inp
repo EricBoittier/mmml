@@ -1,0 +1,330 @@
+* CHARMM 36 testcase imm1pore.inp
+* Maja Mihajlovic and Themis Lazaridis, 24-Aug-10, c36a4r1
+* Example file for IMM1-pore: Melittin in a cylindrical, parabolic or
+* circular pore
+*
+
+if ?aspener .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+!if ?numnode .ne. 1 then
+! echo "Test NOT performed in parallel."
+! stop
+!endif
+
+stream datadir.def
+
+open read card unit 3 name @0toph19_eef1.1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0param19_eef1.1.inp
+read para unit 3 card 
+close unit 3
+
+set shape cylinder
+!set shape parabola
+!set shape circle
+
+open read unit 3 card name @0testimm1.crd
+read seque coor unit 3
+close unit 3
+
+generate main first nter last cter setup
+
+open read unit 2 card name @0testimm1.crd
+read coor card unit 2 
+close unit 2
+
+ic param
+ic build 
+
+coor orient          !this aligns it with x axis
+coor rotate xdir 1. ydir 0. zdir 0. phi 180.0
+coor rotate xdir 0. ydir 1. zdir 0. phi 90.0
+coor trans xdir 15
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+! RPRB specifies a parbolic pore of 15 Angstrom radius and
+! APRB specifies the curvature of 10
+if shape eq parabola eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rprb 15  aprb 10
+
+! RCYL specifies a cylindrical pore of 15 Angstrom radius
+if shape eq cylinder eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rcyl 15
+
+! RCRC specifies a circular pore of 15 Angstrom radius
+if shape eq circle eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rcrc 15
+
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+!prnlev 10
+energy
+
+! This is the correct answer:
+! cylindrical pore:
+!ENER>        0   -660.74643      0.00000      0.79187
+!ENER INTERN>        5.95035     35.45922      0.00000     16.68183      5.12102
+!ENER EXTERN>     -131.94035   -414.69598      0.00000   -177.32253      0.00000
+
+if shape eq cylinder calc a ?ENER + 660.75
+if shape eq parabola calc a ?ENER + 688.50
+if shape eq circle calc a ?ENER + 683.00
+calc a abs(@a)
+if @a .gt. 0.01 then
+echo "testimm1pore: energy is wrong"
+stop
+endif
+
+!prnlev 6
+mini abnr nstep 300
+
+!This command prints out solvation free energy for each atom
+eef1 print
+
+shake bonh 
+
+dynamics strt verlet -
+      timestep 0.002 nstep 500 nprint 100 iprfrq 1000 -
+      ieqfrq 200 ichecw 1 -
+      firstt 240 finalt 298 twindh 2.0 -
+      iasors 0 iasvel 1 nsavc 1000 inbfrq 20 -
+      iseed 54858769 3485955 7795875 7868697
+
+shake off
+delete atom sele all end
+
+!set shape cylinder
+set shape parabola
+!set shape circle
+
+open read unit 3 card name @0testimm1.crd
+read seque coor unit 3
+close unit 3
+
+generate main first nter last cter setup
+
+open read unit 2 card name @0testimm1.crd
+read coor card unit 2 
+close unit 2
+
+ic param
+ic build 
+
+coor orient          !this aligns it with x axis
+coor rotate xdir 1. ydir 0. zdir 0. phi 180.0
+coor rotate xdir 0. ydir 1. zdir 0. phi 90.0
+coor trans xdir 15
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+! RPRB specifies a parbolic pore of 15 Angstrom radius and
+! APRB specifies the curvature of 10
+if shape eq parabola eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rprb 15  aprb 10
+
+! RCYL specifies a cylindrical pore of 15 Angstrom radius
+if shape eq cylinder eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rcyl 15
+
+! RCRC specifies a circular pore of 15 Angstrom radius
+if shape eq circle eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rcrc 15
+
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+!prnlev 10
+energy
+
+! This is the correct answer:
+! parabolic pore:
+!ENER>        0   -688.49170      0.00000      0.80034
+!ENER INTERN>        5.95035     35.45922      0.00000     16.68183      5.12102
+!ENER EXTERN>     -131.94035   -402.82669      0.00000   -216.93708      0.00000
+
+if shape eq cylinder calc a ?ENER + 660.75
+if shape eq parabola calc a ?ENER + 688.50
+if shape eq circle calc a ?ENER + 683.00
+calc a abs(@a)
+if @a .gt. 0.01 then
+echo "testimm1pore: energy is wrong"
+stop
+endif
+
+!prnlev 6
+mini abnr nstep 300
+
+!This command prints out solvation free energy for each atom
+eef1 print
+
+shake bonh 
+
+dynamics strt verlet -
+      timestep 0.002 nstep 500 nprint 100 iprfrq 1000 -
+      ieqfrq 200 ichecw 1 -
+      firstt 240 finalt 298 twindh 2.0 -
+      iasors 0 iasvel 1 nsavc 1000 inbfrq 20 -
+      iseed 54858769 3485955 7795875 7868697
+
+shake off
+delete atom sele all end
+
+!set shape cylinder
+!set shape parabola
+set shape circle
+
+open read unit 3 card name @0testimm1.crd
+read seque coor unit 3
+close unit 3
+
+generate main first nter last cter setup
+
+open read unit 2 card name @0testimm1.crd
+read coor card unit 2 
+close unit 2
+
+ic param
+ic build 
+
+coor orient          !this aligns it with x axis
+coor rotate xdir 1. ydir 0. zdir 0. phi 180.0
+coor rotate xdir 0. ydir 1. zdir 0. phi 90.0
+coor trans xdir 15
+
+! IMPLICIT SOLVATION SETUP COMMAND
+! The nonbonded options below are part of the model
+! RPRB specifies a parbolic pore of 15 Angstrom radius and
+! APRB specifies the curvature of 10
+if shape eq parabola eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rprb 15  aprb 10
+
+! RCYL specifies a cylindrical pore of 15 Angstrom radius
+if shape eq cylinder eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rcyl 15
+
+! RCRC specifies a circular pore of 15 Angstrom radius
+if shape eq circle eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rcrc 15
+
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+!prnlev 10
+energy
+
+! This is the correct answer:
+! circular pore:
+!ENER>        0   -682.99235      0.00000      0.79700
+!ENER INTERN>        5.95035     35.45922      0.00000     16.68183      5.12102
+!ENER EXTERN>     -131.94035   -404.09020      0.00000   -210.17423      0.00000
+
+if shape eq cylinder calc a ?ENER + 660.75
+if shape eq parabola calc a ?ENER + 688.50
+if shape eq circle calc a ?ENER + 683.00
+calc a abs(@a)
+if @a .gt. 0.01 then
+echo "testimm1pore: energy is wrong"
+stop
+endif
+
+!prnlev 6
+mini abnr nstep 300
+
+!This command prints out solvation free energy for each atom
+eef1 print
+
+shake bonh 
+
+dynamics strt verlet -
+      timestep 0.002 nstep 500 nprint 100 iprfrq 1000 -
+      ieqfrq 200 ichecw 1 -
+      firstt 240 finalt 298 twindh 2.0 -
+      iasors 0 iasvel 1 nsavc 1000 inbfrq 20 -
+      iseed 54858769 3485955 7795875 7868697
+
+shake off
+delete atom sele all end
+
+! Test EPORE,NSMP
+open read card unit 3 name @0toph19_eef1.1.inp
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0param19_eef1.1.inp
+read para unit 3 card
+close unit 3
+
+open read unit 3 card name @0testimm1.crd
+read seque coor unit 3
+close unit 3
+
+generate main first nter last cter setup
+
+open read unit 2 card name @0testimm1.crd
+read coor card unit 2
+close unit 2
+
+ic param
+ic build
+
+coor orient          !this aligns it with x axis
+coor rotate xdir 1. ydir 0. zdir 0. phi 180.0
+coor rotate xdir 0. ydir 1. zdir 0. phi 90.0
+coor trans xdir 15
+
+eef1 setup membrane slvt water slv2 chex -
+            nsmth 10 width 26.0 -
+            temp 298.15 unit 93 name @0solvpar.inp  aemp 0.85 -
+            rcyl 15 epor nsmp 5
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+
+!prnlev 10
+energy
+
+!This is the correct result    Epore should be 161.27
+!ENER>        0   -503.54500      4.06905      0.83961
+!ENER INTERN>        5.95035     35.45922      0.00000     16.68183      5.12102
+!ENER EXTERN>     -131.94035   -414.62359      0.00000    -20.19349      0.00000
+
+calc a ?ENER + 503.545
+calc a abs(@a)
+if @a .gt. 0.01 then
+echo "testimm1pore: energy is wrong"
+stop
+endif
+
+!prnlev 6
+mini abnr nstep 300
+
+shake bonh 
+
+dynamics strt verlet -
+      timestep 0.002 nstep 500 nprint 100 iprfrq 1000 -
+      ieqfrq 200 ichecw 1 -
+      firstt 240 finalt 298 twindh 2.0 -
+      iasors 0 iasvel 1 nsavc 1000 inbfrq 20 -
+      iseed 54858769 3485955 7795875 7868697
+
+stop

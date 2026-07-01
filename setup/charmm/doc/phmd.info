@@ -1,0 +1,819 @@
+CHARMM Element doc/phmd.info $Revision: 1.1.1.1 $
+
+File: PHMD, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+                Continuous constant pH Molecular Dynamics (PHMD)
+
+ Questions and comments should be directed to 
+ -----------------------------------------------------------
+  Jana Shen (jana.shen@rx.umaryland.edu)
+  University of Maryland School of Pharmacy
+
+
+References:
+1. M.S. Lee, F. R. Salsbury, Jr., and C.L. Brooks III,
+   Proteins, 56, 738-752 (2004).
+
+2. J. Khandogin and C.L. Brooks III,
+   Biophys. J., 89, 141-157 (2005).
+
+3. J. Wallace and J. Shen, 
+   J. Chem. Theory and Comput., 7, 2617-2629 (2011)
+
+4. J. Wallace and J. Shen,
+   J. Chem. Phys., 137, 184105 (2012).
+
+5. W. Chen, J. Wallace, Z. Yue and J. Shen,
+   Biophys. J., 105, L15-L17 (2013).
+
+6. Y. Huang, W. Chen, J. Wallace and J. Shen,
+   J. Chem. Theory and Comput., 12, 5411-5421 (2016).
+                                                                         
+* Menu:
+
+* Description:: Description of the PHMD Commands
+* Syntax::      Syntax of the PHMD Commands
+* Function::    Purpose of each of the commands
+* Format::      Format of the model compound parameter file and how to derive the parameters
+* Examples::    Example input files for various versions of PHMD
+
+^_
+File: PHMD, Node: Description, Up: Top, Previous: Top, Next: Syntax
+
+
+     This module allows one to perform molecular dynamics and simultaneous
+titration of specific ionizable residues under specified pH condition. 
+
+     Titration occurs through the use of lambda variable measuring the
+protonation progress of each titrating group. However, only two physical
+states exist, namely, lambda = 0 for protonated, and lambda = 1 for
+deprotonated states.
+
+     The lambda variables, themselves, are functions of theta variables,
+through lambda(i) = sin^2[theta(i)]. The thetas can freely propagate without
+need for restrictions. When theta = 0, +/- 2n(PI), lambda = 0. When theta = pi
++/- 2n(PI), then lambda = 1. The sin^2 function also provides a natural double
+well for quadratic energy functions of lambda.
+
+     Analogous to the lambda variables, the x variables measure the tautomer
+interconversion progress. The current implementation accounts for two
+tautomeric states for either protonated case, such as the carboxylate group, or
+deprotonated case, such as the histidine group.
+
+     The idea behind titration is that each group has a free energy of
+titration when it is an isolated amino acid. in solution In other words, in the
+absence of protein, the single group in solvent should spend 50% of the time
+protonated and the other 50% of the time deprotonated. To achieve this, a model
+energy function has to be derived, which is the potential of mean force of the
+model compound titration. In the case of single-site titration (non-tautomer),
+the model PMF has a simple quadratic form. In the case of double-site
+titration (tautomer), it is a bivariate polynomial (2-d model potential
+function), quadratic in both lambda and x variables.
+
+     While the same model function can be used for each of the non-termini
+groups in the system. We have found that different model functions have to be
+used for each possible C- and N-terminus residues. The model compound PMF
+parameters are specified in a parameter file, which also serves to select the
+desirable titrating groups. Another way to choose or exclude groups from
+titration is to use the SELEction keyword in the PHMD command. In the Format
+section, the procedure for deriving a model PMF function is explained.
+
+     For a double-site titrating group, a new residue type with dummy hydrogens
+on both titrating sites has to be defined in the CHARMM topology file. The only
+change in the CHARMM parameter file is related to raising the rotation barrier
+to the C-O bond to prevent the dummy protons from losing the ability to titrate
+once it is rotated to the anti-position (see the example section).
+
+     PHMD can be performed in three modes: fully implicit solvent 
+(using GBSW or GBMV to drive both protonation and conformational sampling);
+hybrid solvent (using implicit solvent for protonation sampling and explicit
+solvent for conformational sampling); fully explicit solvent (all atom)
+(using explicit solvent for both protonation and conformational sampling).
+
+     For all-atom PHMD runs, a charge-leveling technique should be used to 
+maintain the system charge neutrality. In this technique, each titratable site
+has a corresponding co-ion or titratable water in the bulk solution.
+As the proton titrates, a co-ion or titratable water titrates as well to absorb
+the change in the charge.
+
+     All-atom PHMD utilizes various electrostatic options. We recommend
+either generalized reaction field (GRF) or particle mesh Ewald (PME). The option
+applies to both protonation and conformational sampling.
+
+     PHMD can also be performed with the GBSW membrane model, preferably
+with a cylinder correction for interior dielectrics.
+
+     For accelerating convergence in both protonation and conformational sampling,
+both temperature and pH based replica exchange protocols have been implemented
+in REPDSTR (see additional documentation in repdstr.info). They have also been
+implemented in MMTSB toolset.
+
+
+File: PHMD, Node: Syntax, Up: Top, Previous: Description, Next: Function
+
+[SYNTAX: PHMD commands]
+
+[starting PHMD]
+
+PHMD { PAR <int> WRIte <int> PH <real> NPRInt <int> MASS <real> PHFRQ <int> BETA <real>
+       BARR <real> BARTAU <real> TEMP <real> MA1 <real> MA2 <real> MA3 <real>
+       [THETa] [DERIv] } [SELE atom-selection END]
+       [QCOUple] <int>
+       [RESI] <int>  [RESC] <int>
+
+[test and manipulation commands for PHMD]
+       used for deriving model PMF parameters
+
+PHTEst { NUM <int> SET <real> }
+       { NUM <int> STEP <real> }
+       { NUM <int> FORCE <real> POS <real> }
+
+
+File: PHMD, Node: Function, Up: Top, Previous: Syntax, Next: Format
+ 
+          -----------------------------------------------------------
+          Parameters of PHMD command 
+          -----------------------------------------------------------
+
+PAR       Unit number for PHMD parameter file (input) MUST specify.
+
+WRITE     Unit number for PHMD trajectory file (output) MUST specify.
+
+PH        Titration pH (default: 1.0) 
+
+NPRINT    Frequency of writing to PHMD trajectory file (default: 100)
+
+MASS      Mass of fictitious theta variable (default: 10)
+
+BARR      Quadratic barrier height for each theta variable (default: 2.0)
+
+PHFRQ     Frequency of updating theta/lambda variables (default :1)
+
+BETA      Friction coefficient (1/ps) for Langevin dynamics of theta/x variables (default: 5.0)
+          If BETA is zero, dynamics run under Nose' thermostat. 
+
+BARTAU    Quadratic barrier height for each x variable (default 2.5)
+
+TEMP      Thermostat temperature for dynamics of theta/thetax variables (default: 298)
+
+MA1,MA2,  Masses in Nose-Hoover thermostat multiplied by MASS.
+MA3       (defaults: 3,5,7)
+
+LAM       Print lambda values in trajectory file. (default: none)
+
+DERI      Print theta and dE/dtheta values (not lambdas) in trajectory file.
+
+SELE      Use the SELE keyword to manually specify desirable titratable groups
+
+QCOU      Number of titratable groups that couples with coions/titratable water
+
+RESI      RESId of the titratable group
+
+RESC      RESId of the coion/titratable water
+
+          -----------------------------------------------------------
+          Parameters of PHTE command 
+          -----------------------------------------------------------
+
+NUM       Specify titratable group #. Use list generated at beginning
+          of PHMD output for reference.
+
+SET       Set value of theta(NUM)
+
+STEP      Increment value of theta(NUM) by STEP
+
+FORCE/POS Place harmonic constraint on theta(NUM) with force constant, FORCE,
+          at equilibrium position, POS.
+
+
+File: PHMD, Node: Format, Up: Top, Previous: Function, Next: Examples
+
+                  Format of the model PMF parameter file and 
+                  How to derive the parameters
+
+The parameter file is a series of entries. Each entry has the format:
+
+1) For single-site titrating groups, such as NTAsp:
+
+(NAME) (EXPERIMENTAL PK_1/2) (A) (B) (BARR)
+  ATOMTYPE_1  PROT_CHARGE_1  UNPROT_CHARGE_1 [PROT_RAD_1 UNPROT_RAD_1]
+  ATOMTYPE_2  PROT_CHARGE_2  UNPROT_CHARGE_2 [PROT_RAD_2 UNPROT_RAD_2]
+    ...           ...              ...           ...
+  ATOMTYPE_N  PROT_CHARGE_N  UNPROT_CHARGE_N [PROT_RAD_N UNPROT_RAD_N]
+
+NAME   : titrating residue name. For C- and N-termini groups, the
+         name consists of CT (NT) and the terminus residue name,
+         e.g., CTASP. 
+
+A/B    : parameters of the PMF function A * ( lambda - B) ^ 2
+
+BARR   : barrier for suppressing population of mixed states, or prolonging 
+         residence time for the pure states (default 1.5)
+
+CHARGE : obtained from the CHARMM topology file. Make sure the difference
+         in the protonated and deprotonated states is 1.
+
+RAD    : only needed for the titrating proton: 1.0 for the protonated
+         form; 0.0 for the deprotonated form
+
+2) for double-site titrating groups, such as ASP, GLU or HIS:
+
+The parameter block for the first tautomer titration has the same look as above:
+NAME   : One needs to specify parameters for each tautomeric form. 
+         In this case, NAME contains a number, e.g. 1 or 2, which distinguishes 
+         between the first vs. the second tautomer forms.
+
+A/B    : coefficients in the quadratic function for the pure tautomeric states.
+         
+CHARGE : the dummy atom is assigned with zero charge in both protonated and 
+         deprotonated forms.
+         Make sure the titrating proton is assigned with VDW radius 1.0 and 0.0.
+         in the protonated and deprotonated forms, respectively.
+
+The parameter block for the second tautomer titration contains additional 
+numbers in the first two lines:
+
+(NAME) (EXPERIMENTAL PK_1/2) (A) (B) (BARR) (A10) (B10) (BARTAU)
+                             R1 R2 R3 R4 R5 R6
+
+A10/B10: coefficients in the quadratic function for tautomer interconversion
+BARTAU : analog to BARR: barrier for the tautomer interconversion  
+R1-R6  : parameters for constructing the 2-d model potential function
+         (bivariate polynomial)
+
+How to derive model parameter values for single-site titration
+(using variant of Thermodynamic Integration):
+
+1a) Prepare a coordinate file of the desirable amino acid 
+    capped by ACE and CT3, or un-capped if the terminus 
+    (CT or NT) is to be titrated.
+
+2a) Specify barr = 0, mass=1.E30 and use DERI keyword in the PHMD 
+    input. Use PHTEST command to specify the titrating residue
+    and its theta value. 
+    Supply a parameter file with pH=exp. pKa and A and B=0.
+
+3a) Run 1ns dynamics at different values of fixed theta between
+    0 to PI/2. For example, theta = 0.4,0.6,0.8,1.0,1.2, 1.4.
+    Put corresponding set residue number and
+
+4a) Use trajectory output of derivatives to calculate average
+    dE/dtheta derivative at each fixed value of theta.
+
+5a) To obtain parameters, A and B, fit the values of dE/dtheta
+    to the following function, which is dE(model)/dtheta:
+
+    2*A*sin(2*theta)*(sin(theta)^2-B)
+ 
+6a) To verify parameters, run PHMD of the model compound with  
+    parameters plugged into parameter file and check whether the
+    model system titrates 50% protonated at its experimental pK_1/2.
+
+How to derive model parameter values for double-site titration:
+
+1b) Prepare coordinate file of the model compound with both titrating
+    sites protonated. A new residue with both sites protonated has to
+    be defined.
+
+2b) Similar to 2a) except that two "groups" need to be specified 
+    following the command PHTEST. The theta value that follows the 
+    first group corresponds to the titration coordinate lambda while the
+    theta (or thetax) value that follows the second group corresponds 
+    to the tautomer interconversion coordinate x. 
+
+3b) Run 1ns dynamics at different combinations of theta and thetax values
+    as given in 3a). It is useful to include combinations corresponding to 
+    the pure tautomeric states (thetax=0.0 and PI/2), and the protonated
+    state (theta=0.0) for carboxyl groups and the deprotonated state 
+    (theta=PI/2) for histidine.
+
+4b) same as in 4a)
+
+5b) Determine A and B as in 5a). For histidine, at theta=PI/2, fit dE/dx to
+    A10*(x-B10)^2 to obtain A10 and B10.
+    For carbxyl groups: 
+    Determine R1 R2 and R3 by fitting A(lambda) to R1 lambda^2 + R2 lambda + R3
+    R4 = 0.5
+    Determine R5 by fitting A(x) to C1 x^2 + C2 x + R5 
+    Determine R6 by fitting B(x) to C1 x^2 + C2 x + R6
+    
+
+File: PHMD, Node: Examples, Up: Top, Previous: Format, Next: Top
+
+                  Usage and topology examples
+
+The examples below illustrate how to use PHMD.
+See test/phmd_*.inp for more examples.
+
+-----
+NOTES
+-----
+1) Parameter file must be specified. 
+2) In implicit or hybrid-solvent mode, it works with GBSW or GBMV  
+   *** note : GBMV does not currently support images, 
+              therefore care should be used when attempting
+              to use GBMV with hybrid solvent PHMD using
+              periodic boundary conditions
+3) In all-atom mode, it works with PME or GRF
+
+Example 1
+*********
+! construct a residue with dummy hydrogens for titration
+
+ set name = asp
+
+ read sequence @name 1
+ generate @name first ace last ct3 setup
+ patch aspp2 @name 1
+ autogen angles dihed
+ ic para all
+ ic seed 1 n 1 ca 1 c
+ ic build
+ hbuild                                                               
+ ic gene
+ ic fill                                                                       
+ ic edit
+  dihe 1 cb 1 cg 1 od1 1 hd1 180.0
+  dihe 1 cb 1 cg 1 od2 1 hd2 180.0
+ end                                                                         
+ coor init sele type hd2 .or. type hd1 end
+ ic build
+ 
+ (write out psf and pdb files)
+
+Example 2
+*********
+
+! Perform a simple PHMD titration simulation on ASP: 
+
+  set name = Asp
+  set barr = 2.25
+  set bartau = 2.5
+  set ph =  4.0
+  set temp = 298.0
+  set phmdpar = phmd-asp.in
+
+  (read in asp_h.psf and asp_h.pdb)
+
+  (invoke gbsw)
+
+  open unit 23 read form name @phmdpar
+  open unit 25 write form name @{name}.ph-@{ph}.lambda
+  PHMD PAR 23 WRI 25 PH @ph NPRI 100 -
+       BARR @barr BARTAU @bartau TEMP @temp
+  
+  (dynamics)
+
+Example 3
+********* 
+
+! Same as above except using Langevin dynamics for theta, 
+  using theta update frequency of 10, and running hybrid solvent phmd.
+
+  set name = Asp
+  set barr = 2.25
+  set bartau = 2.5
+  set ph =  4.0
+  set temp = 298.0
+  set phmdpar = phmd-asp.in
+
+  (read in asp_h_solv.psf and asp_h_solv.pdb)
+
+  (setup periodic boundary conditions)
+
+  (setup images)
+
+  (invoke gbsw or gbmv with keyword hybrid) ***see gbsw.info and gbmv.info 
+
+  open unit 23 read form name @phmdpar
+  open unit 25 write form name @{name}.ph-@{ph}.lambda
+  PHMD PAR 23 WRI 25 PH @ph NPRI 100 BETA 5.0 PHFRQ 10 -
+       BARR @barr BARTAU @bartau TEMP @temp
+
+  (dynamics, where electrostatics option is ewald pmew)
+
+Example 4
+*********
+
+! construct a residue with dummy hydrogens for titration and 
+  a titratable water that couples with the residue.
+
+ set name = asp
+
+ read sequence @name 1
+ generate @name first ace last ct3 setup
+ patch aspp2 @name 1
+ autogen angles dihed
+ ic para all
+ ic seed 1 n 1 ca 1 c
+ ic build
+ hbuild
+ ic gene
+ ic fill
+ ic edit
+  dihe 1 cb 1 cg 1 od1 1 hd1 180.0
+  dihe 1 cb 1 cg 1 od2 1 hd2 180.0
+ end
+ coor init sele type hd2 .or. type hd1 end
+ ic build
+
+ read sequ TIPU 1
+ gene TIPU setup noangle nodihedra
+ read coor card append
+ *
+    3
+    1    1 TIPU OH2    0.95720   0.00000   0.00000 TIPU 1      0.00000
+    2    1 TIPU H1     0.00000   0.00000   0.00000 TIPU 1      0.00000
+    3    1 TIPU H2     1.19719   0.92663   0.00000 TIPU 1      0.00000
+ 
+ coor trans xdir 1 ydir 1 zdir 1 dist 10 sele resn TIPU end
+ coor orient sele all end
+
+ (write out psf and pdb files)
+
+Example 5
+*********
+
+! Same as Example 3 except removing gbsw and gbmv with keyword hybrid and indicating 
+  coupled titratable groups and coions.
+  All-atom phmd is running with the default electrostatics method 
+  pme ***see ewald.info
+
+  set name = Asp
+  set barr = 2.25
+  set bartau = 2.5
+  set ph =  4.0
+  set temp = 298.0
+  set phmdpar = phmd-asp.in
+
+  (read in asp_h_solv.psf and asp_h_solv.pdb)
+
+  (setup periodic boundary conditions)
+  
+  (setup images)
+
+  open unit 23 read form name @phmdpar
+  open unit 25 write form name @{name}.ph-@{ph}.lambda 
+  PHMD PAR 23 WRI 25 PH @ph NPRI 100 BETA 5.0 PHFRQ 10 -
+       BARR @barr BARTAU @bartau TEMP @temp -
+       qcouple 1 -
+       resi 1 resc 2  
+
+  (dynamics with PME electrostatics)
+
+Example 6
+*********
+
+! Same as Example 4 except using grf method for long-range electrostatics.
+  Explicit solvent phmd is running with GRF.
+
+  set name = Asp
+  set barr = 2.25
+  set bartau = 2.5
+  set ph =  4.0
+  set temp = 298.0
+  set phmdpar = phmd-asp.in
+
+  (read in asp_h_solv.psf and asp_h_solv.pdb)
+  
+  (setup periodic boundary conditions)
+  
+  (setup images)
+
+  open unit 23 read form name @phmdpar
+  open unit 25 write form name @{name}.ph-@{ph}.lambda
+  PHMD PAR 23 WRI 25 PH @ph NPRI 100 BETA 5.0 PHFRQ 10 -
+       BARR @barr BARTAU @bartau TEMP @temp
+       qcouple 1 - 
+       resi 1 resc 2
+
+  (dynamics, where electrostatics option is cdie grfe)
+
+Example 7
+*********
+
+! Derive model potential function parameters for NtAla
+
+  set name = Ntala
+  set barr = 0.0
+  set mass = 1.0E30
+  set ph   = 7.5
+  set temp = 298.0
+  set phmdpar = phmd-ntala_blank.in
+  set theta =0.4
+
+  (read in ntala_h.psf and ntala_h.pdb)
+
+  open unit 23 read form name @phmdpar
+  open unit 25 write form name @{name}.ph-@{ph}.lambda
+  phmd par 23 wri 25 ph @ph npri 100 -
+       barr @barr temp @temp
+  
+  phtest num 1 set @theta
+
+  (dynamics)
+
+Example 8
+*********
+
+! Derive model potential function parameters for Asp
+
+  set name = Asp
+  set barr = 0.0
+  set bartau = 0.0
+  set mass = 1.0E30
+  set ph   = 4.0
+  set temp = 298.0
+  set phmdpar = phmd-asp_blank.in
+  set theta =0.4
+  set thetax = 0.4
+
+  (read in asp_h.psf and asp_h.pdb)
+
+  (invoke gbsw)
+
+  open unit 23 read form name @phmdpar
+  open unit 25 write form name @{name}.ph-@{ph}.lambda
+  phmd par 23 wri 25 ph @ph npri 100 
+       barr @barr bartau @bartau temp @temp
+  
+  phtest num 1 set @theta
+  phtest num 2 set @thetax
+ 
+  (dynamics)
+
+Example 9
+*********
+
+!  Do some manipulations of the theta variables:
+
+! Incr theta #1 by 0.1
+  PHTEST NUM 1 STEP 0.1  
+
+! Incr theta #5 to 1.5  
+  PHTEST NUM 5 SET 1.5   
+
+! Place harmonic restraint on theta #3 with
+! force constant 100.0 kcal/mol and
+! equilibrium value 0.5
+  PHTEST NUM 3 FORCE 100.0 POS 0.5 
+
+-----------------------------------------------
+Additional patches in the CHARMM topology file
+-----------------------------------------------
+PRES ASPP2        0.00 ! patch for use in PHMD, proton on od1
+GROUP                  ! and od1 via acetic acid, use in a patch statement
+                       ! ANGLes DIHEdrals are given
+ATOM CB   CT2    -0.21 !
+ATOM HB1  HA      0.09 ! HB1    OD1-HD1
+ATOM HB2  HA      0.09 !  |    /
+ATOM CG   CC      0.75 ! -CB--CG
+ATOM OD1  OC     -0.55 !  |    \
+ATOM OD2  OC     -0.61 ! HB2    OD2-HD2
+ATOM HD1  H       0.0  HD2!
+ATOM HD2  H       0.44 HD1!
+BOND OD1 HD1
+BOND OD2 HD2
+DONOR HD1 OD1
+DONOR HD2 OD2
+IC HD1  OD1  CG   OD2   0.0000  0.0000  0.0000  0.0000  0.0000
+IC HD2  OD2  CG   OD1   0.0000  0.0000  0.0000  0.0000  0.0000
+
+PRES GLUP2        0.00 ! patch for use in PHMD, proton on od1
+GROUP                  ! and od1 via acetic acid, use in a patch statement
+                       ! follow with AUTOGEN
+ATOM CG   CT2    -0.21 !
+ATOM HG1  HA      0.09 ! HG1    OE1-HE1
+ATOM HG2  HA      0.09 !  |    /
+ATOM CD   CC      0.75 ! -CG--CD
+ATOM OE1  OC     -0.55 !  |    \
+ATOM OE2  OC     -0.61 ! HG2    OE2-HE2
+ATOM HE1  H       0.0  HE2!
+ATOM HE2  H       0.44 HE1!
+BOND OE1 HE1
+BOND OE2 HE2
+DONOR HE1 OE1
+DONOR HE2 OE2
+IC HE1  OE1  CD   OE2   0.0000  0.0000  0.0000  0.0000  0.0000
+IC HE2  OE2  CD   OE1   0.0000  0.0000  0.0000  0.0000  0.0000
+
+PRES CTRP2        0.00 ! patch for protonated CTER, proton on ot2
+GROUP                  ! use in a patch statement, use AUTOGEN, ignore charges
+ATOM C    CC      0.72 !   OT1-HC1
+ATOM OT1  OC     -0.55 !   /
+ATOM OT2  OC     -0.61 ! -C
+ATOM HC1  H       0.00 HC2!\
+ATOM HC2  H       0.44 HC1! OT2-HC2
+BOND OT1  HC1
+BOND OT2  HC2
+DONOR HC1 OT1
+DONOR HC2 OT2
+IC HC1  OT1  C   OT2   0.0000  0.0000  0.0000  0.0000  0.0000
+IC HC2  OT2  C   OT1   0.0000  0.0000  0.0000  0.0000  0.0000
+
+RESI TIPP         1.00 ! Hydronium TIP3P - TIPP is resid recognized by pHMD as co-ion
+GROUP
+ATOM OH2 OZ     -0.755 ! From : Sagnella and Voth Biophys. J. (1996) 70:2043-2051
+ATOM H1  HZ      0.585 ! Added by Jason A. Wallace
+ATOM H2  HZ      0.585
+ATOM H3  HZ      0.585
+BOND OH2 H1 OH2 H2 OH2 H3 ! real bonds
+BOND H1 H2
+BOND H2 H3
+BOND H3 H1 ! required for shake
+ANGLE H1 OH2 H2
+ANGLE H2 OH2 H3
+ANGLE H3 OH2 H2
+ACCEPTOR OH2 H1
+ACCEPTOR OH2 H2
+ACCEPTOR OH2 H3
+DONOR H1 OH2
+DONOR H2 OH2
+DONOR H3 OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI HYDM         1.00 ! Hydronium TIP3P - Copy to be used as primary titration site
+GROUP
+ATOM OH2 OZ     -0.755 ! From : Sagnella and Voth Biophys. J. (1996) 70:2043-2051
+ATOM H1  HZ      0.585 ! Added by Jason A. Wallace
+ATOM H2  HZ      0.585
+ATOM H3  HZ      0.585
+BOND OH2 H1 OH2 H2 OH2 H3 ! real bonds
+BOND H1 H2
+BOND H2 H3
+BOND H3 H1 ! required for shake
+ANGLE H1 OH2 H2
+ANGLE H2 OH2 H3
+ANGLE H3 OH2 H2
+ACCEPTOR OH2 H1
+ACCEPTOR OH2 H2
+ACCEPTOR OH2 H3
+DONOR H1 OH2
+DONOR H2 OH2
+DONOR H3 OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI TIPU         0.000 ! Protonated hydroxide, recognized by pHMD as co-ion, copy from TIP3
+GROUP
+ATOM OH2  OXP    -0.834
+ATOM H1   HXP     0.417
+ATOM H2   HXP     0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+RESI HYDX         0.000 ! Protonated hydroxide, to be used as primary titration site, copy from TIP3
+GROUP
+ATOM OH2  OXP    -0.834
+ATOM H1   HXP     0.417
+ATOM H2   HXP     0.417
+BOND OH2 H1 OH2 H2 H1 H2    ! the last bond is needed for shake
+ANGLE H1 OH2 H2             ! required
+ACCEPTOR OH2
+PATCHING FIRS NONE LAST NONE
+
+------------------------------------------------------------------
+Additional parameters and modification in the CHARMM parameter file
+-------------------------------------------------------------------
+! additional parameters for CTRP, ASPP2, TIPP and TIPU
+ATOMS
+MASS  16  OZ   15.99940 ! hydronium oxygen
+MASS  17  HZ    1.00800 ! hydronium hydrogen
+MASS  18  OXP  15.99940 ! oxygen of protonated hydroxide
+MASS  19  HXP   1.00800 ! hydrogen of protonated hydroxide
+
+BONDS
+!
+!V(bond) = Kb(b - b0)**2
+!
+!Kb: kcal/mole/A**2
+!b0: A
+!
+!atom type Kb          b0
+!
+OC   H     545.000     0.9600 ! ALLOW   ALC ARO
+                 ! copy of EMB 11/21/89 methanol vib fit
+HXP  HXP     0.0       1.5139  ! Hydroxide - Wei Chen, copy from TIP3
+OXP  HXP   450.0       0.9572  ! hydroxide - Wei Chen, copy form TIP3
+HZ   HZ      0.0       1.5630  ! hydronium - J. Wallace
+OZ   HZ    400.0       0.9517  ! hydronium - J. Wallace
+
+ANGLES
+!
+!V(angle) = Ktheta(Theta - Theta0)**2
+!
+!V(Urey-Bradley) = Kub(S - S0)**2
+!
+!Ktheta: kcal/mole/rad**2
+!Theta0: degrees
+!Kub: kcal/mole/A**2 (Urey-Bradley)
+!S0: A
+!
+!atom types     Ktheta    Theta0   Kub     S0
+!
+                                                                                
+H    OC   CC     55.000   115.0000 ! ALLOW   ALC ARO PEP POL
+                 ! copy ! adm jr. 5/02/91, acetic acid pure solvent
+HXP  OXP  HXP    55.0      104.52   ! hydroxide - Wei Chen, copy from TIP3
+HZ   OZ   HZ     50.0      110.40   ! hydronium - J. Wallace
+                                                                                
+DIHEDRALS
+!
+!V(dihedral) = Kchi(1 + cos(n(chi) - delta))
+!
+!Kchi: kcal/mole
+!n: multiplicity
+!delta: degrees
+!
+!atom types             Kchi    n   delta
+!
+X    CD   OH1  X        3.0000  2   180.00 ! ALLOW   PEP POL ARO ALC MSL
+!                ! adm jr, 10/17/90, acetic acid C-Oh rotation barrier
+!                 ! Kchi can be modified if needed
+X    CC   OC   X        3.0000  2   180.00 ! ALLOW   PEP POL ARO ALC MSL
+                 ! for CTRP ! Kchi can be modified if needed
+
+IMPROPER
+!
+!V(improper) = Kpsi(psi - psi0)**2
+!
+!Kpsi: kcal/mole/rad**2
+!psi0: degrees
+!note that the second column of numbers (0) is ignored
+!
+!atom types           Kpsi                   psi0
+!
+!OB   X    X    CD    100.0000         0      0.0000 ! ALLOW   ALC ARO POL
+                ! adm jr., 10/17/90, acetic acid vibrations
+OH1  OB  CT2   CD    100.0000         0      0.0000 ! ALLOW   ALC ARO POL
+                ! ASPP1
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+!
+!V(Lennard-Jones) = Eps,i,j[(Rmin,i,j/ri,j)**12 - 2(Rmin,i,j/ri,j)**6]
+!
+!epsilon: kcal/mole, Eps,i,j = sqrt(eps,i * eps,j)
+!Rmin/2: A, Rmin,i,j = Rmin/2,i + Rmin/2,j
+!
+!atom  ignored    epsilon      Rmin/2   ignored   eps,1-4       Rmin/2,1-4
+!
+
+!hydroxide - Wei Chen, copy from TIP3
+HXP      0.0       -0.046     0.2245
+OXP      0.0       -0.1521    1.7682
+
+!hydronium - J. Wallace
+HZ       0.0       -0.046     0.2245
+OZ       0.0       -0.1521    1.7682
+
+NBFIX
+!              Emin         Rmin
+!            (kcal/mol)     (A)
+
+OZ     OXP    -0.1521       4.5       !  adjust to avoid strong electrostatic interaction between hydroxide and hydronium at short distance
+
+END
+
+
+
+File: PHMD, Node: Output, Up: Top, Previous: Examples, Next: Top
+
+                  Output format
+
+The only output from PHMD is a file that contains lambda values at specified 
+trajectory time steps. Following is an example output for the titration of ASP
+(from phmd_2.inp in test directory):
+
+# ititr     1    2
+#  ires     1    1
+# itauto    3    4
+     100 0.86 0.25
+
+line 1: gives the numbering for the titrating groups (runs to the total number)
+line 2: gives the titrating residue number as in the PDB file
+line 3: gives the type of titrating group: 
+        0 - single-site
+        1 - titration of histidine
+        2 - tautomer interconversion in histidine
+        3 - titration of carboxyl groups
+        4 -  tautomer interconversion in carboxyl groups
+        This information can be used in collecting statistics of protonation 
+        populations.
+line 4: column 1: step number; column 2: lambda value; column 3: x value
+
+When PHTEST and DERI commands are used, dU/dtheta is being output. Following is
+an example output for ASP (from phmd_1.inp in the test directory) :
+
+# ititr     1    2
+#  ires     1    1
+# itauto    3    4
+     100    0.4000      5.0330    0.6000      7.5975
+     200    0.4000      5.1584    0.6000      6.7531
+
+line 3: Two numbers are printed out for each lambda or x trajectories. The first
+        is the theta or thetax value and the second is dU/dtheta or dU/dthetax,
+        respectively. 

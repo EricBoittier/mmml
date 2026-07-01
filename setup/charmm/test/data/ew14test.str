@@ -1,0 +1,306 @@
+* STREAM file for testing 1-4 scaling when using Ewald summations.
+* Is called by input file ew14test.inp.
+*
+!! Test with VSWITCH.
+!
+! E14FAC will be done with the interaction off, the interaction scaled by 0.4.
+! Compare delta E when done using Ewald and when done using normal minimum
+! image electrostatics. The delta E's and the difference in the the
+! derivatives should be the same.
+
+!! First do NoEwald case with e14fac 0.0.
+ENERGY IMGFRQ 5 INBFRQ 5 NBXMOD 5 NOEWald -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT E14FAC 0.0
+set tt 1
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! Now do NoEwald case with e14fac 0.4. Delta E will be the 1-4 energy.
+ENERGY IMGFRQ 5 INBFRQ 5  NOEWALD -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT E14FAC 0.4
+set tt 2
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+! The differences are due to the 1-4 interaction. These will be compared
+! with those resulting from the Ewald calculation.
+PRINT COOR SELE SEGID SOLU END
+!! Now store the DIFFERENCES in registers to be used in comparison
+!! with the Ewald case.
+SCALAR X STORE 4
+SCALAR Y STORE 5
+SCALAR Z STORE 6
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+!
+! Now for the Ewald case. We set E14FAC to 0.0 again and do the calculation
+! with Ewald summation.
+!
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6   -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT E14FAC 0.0
+set tt 3
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! We now repeat the Ewald calculation using E14FAC = 0.4. Delta E is
+!! the 1-4 energy using Ewald summations. It should be the same
+!! as Delta E for the NoEwald calculation when E14FAC = 0.4.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6  -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT E14FAC 0.4
+set tt 4
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+!! The differences in the derivatives are due to the 1-4 interactions.
+!! They should be the same as in the NoEwald case.
+PRINT COOR SELE SEGID SOLU END
+!! Now we will compare the DIFFERENCES for the Ewald and NoEwald 1-4
+!! contributions to the derivatives.
+! Put the 1-4 components of the derivatives from the NoEwald in the comparison
+! coordinate set.
+SCALAR XCOMP RECALL 4
+SCALAR YCOMP RECALL 5
+SCALAR ZCOMP RECALL 6
+COOR DIFF SELE SEGID SOLU END
+!! The differences you all be zero.
+PRINT COOR SELE SEGID SOLU END
+
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Test with VSHIFT
+!
+! E14FAC will be done with the interaction off, the interaction scaled by 0.4.
+! Compare delta E when done using Ewald and when done using normal minimum
+! image electrostatics. The delta E's and the difference in the the
+! derivatives should be the same.
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+!! First do NoEwald case with e14fac 0.0.
+ENERGY IMGFRQ 5 INBFRQ 5 NBXMOD 5 NOEWald -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.0
+set tt 5
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! Now do NoEwald case with e14fac 0.4. Delta E will be the 1-4 energy.
+ENERGY IMGFRQ 5 INBFRQ 5  NOEWALD -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.4
+set tt 6
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+! The differences are due to the 1-4 interaction. These will be compared
+! with those resulting from the Ewald calculation.
+PRINT COOR SELE SEGID SOLU END
+!! Now store the DIFFERENCES in registers to be used in comparison
+!! with the Ewald case.
+SCALAR X STORE 4
+SCALAR Y STORE 5
+SCALAR Z STORE 6
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+!
+! Now for the Ewald case. We set E14FAC to 0.0 again and do the calculation
+! with Ewald summation.
+!
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6   -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.0
+set tt 7
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! We now repeat the Ewald calculation using E14FAC = 0.4. Delta E is
+!! the 1-4 energy using Ewald summations. It should be the same
+!! as Delta E for the NoEwald calculation when E14FAC = 0.4.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6  -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.4
+set tt 8
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+!! The differences in the derivatives are due to the 1-4 interactions.
+!! They should be the same as in the NoEwald case.
+PRINT COOR SELE SEGID SOLU END
+!! Now we will compare the DIFFERENCES for the Ewald and NoEwald 1-4
+!! contributions to the derivatives.
+! Put the 1-4 components of the derivatives from the NoEwald in the comparison
+! coordinate set.
+SCALAR XCOMP RECALL 4
+SCALAR YCOMP RECALL 5
+SCALAR ZCOMP RECALL 6
+COOR DIFF SELE SEGID SOLU END
+!! The differences you all be zero.
+PRINT COOR SELE SEGID SOLU END
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Test with Simple Truncation
+!
+! E14FAC will be done with the interaction off, the interaction scaled by 0.4.
+! Compare delta E when done using Ewald and when done using normal minimum
+! image electrostatics. The delta E's and the difference in the the
+! derivatives should be the same.
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+!! First do NoEwald case with e14fac 0.0.
+ENERGY IMGFRQ 5 INBFRQ 5 NBXMOD 5 NOEWald -
+CUTNB 8.0  CTONNB 8.0 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.0
+set tt 9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! Now do NoEwald case with e14fac 0.4. Delta E will be the 1-4 energy.
+ENERGY IMGFRQ 5 INBFRQ 5  NOEWALD -
+CUTNB 8.0  CTONNB 8.0 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.4
+set tt 10
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+! The differences are due to the 1-4 interaction. These will be compared
+! with those resulting from the Ewald calculation.
+PRINT COOR SELE SEGID SOLU END
+!! Now store the DIFFERENCES in registers to be used in comparison
+!! with the Ewald case.
+SCALAR X STORE 4
+SCALAR Y STORE 5
+SCALAR Z STORE 6
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+!
+! Now for the Ewald case. We set E14FAC to 0.0 again and do the calculation
+! with Ewald summation.
+!
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6   -
+CUTNB 8.0  CTONNB 8.0 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.0
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! We now repeat the Ewald calculation using E14FAC = 0.4. Delta E is
+!! the 1-4 energy using Ewald summations. It should be the same
+!! as Delta E for the NoEwald calculation when E14FAC = 0.4.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6  -
+CUTNB 8.0  CTONNB 8.0 CTOFNB 8.0 CUTIM 8.0 VSHI SWIT E14FAC 0.4
+set tt 11
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+!! The differences in the derivatives are due to the 1-4 interactions.
+!! They should be the same as in the NoEwald case.
+PRINT COOR SELE SEGID SOLU END
+!! Now we will compare the DIFFERENCES for the Ewald and NoEwald 1-4
+!! contributions to the derivatives.
+! Put the 1-4 components of the derivatives from the NoEwald in the comparison
+! coordinate set.
+SCALAR XCOMP RECALL 4
+SCALAR YCOMP RECALL 5
+SCALAR ZCOMP RECALL 6
+COOR DIFF SELE SEGID SOLU END
+!! The differences you all be zero.
+PRINT COOR SELE SEGID SOLU END
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! Test with NO VDW
+!
+! E14FAC will be done with the interaction off, the interaction scaled by 0.4.
+! Compare delta E when done using Ewald and when done using normal minimum
+! image electrostatics. The delta E's and the difference in the the
+! derivatives should be the same.
+
+SKIPE VDW
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+!! First do NoEwald case with e14fac 0.0.
+ENERGY IMGFRQ 5 INBFRQ 5 NBXMOD 5 NOEWald -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 SWIT E14FAC 0.0
+set tt 12
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! Now do NoEwald case with e14fac 0.4. Delta E will be the 1-4 energy.
+ENERGY IMGFRQ 5 INBFRQ 5  NOEWALD -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 SWIT E14FAC 0.4
+set tt 13
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+! The differences are due to the 1-4 interaction. These will be compared
+! with those resulting from the Ewald calculation.
+PRINT COOR SELE SEGID SOLU END
+!! Now store the DIFFERENCES in registers to be used in comparison
+!! with the Ewald case.
+SCALAR X STORE 4
+SCALAR Y STORE 5
+SCALAR Z STORE 6
+SKIP EXCL ALL
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+!
+! Now for the Ewald case. We set E14FAC to 0.0 again and do the calculation
+! with Ewald summation.
+!
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6   -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 SWIT E14FAC 0.0
+set tt 14
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+! save glycerol atom forces to comp.
+COOR FORCE COMP SELE SEGID SOLU END
+!! We now repeat the Ewald calculation using E14FAC = 0.4. Delta E is
+!! the 1-4 energy using Ewald summations. It should be the same
+!! as Delta E for the NoEwald calculation when E14FAC = 0.4.
+ENERGY IMGFRQ 5 INBFRQ 5  EWALD KMAX 13 KSQMAX 171 KAPPA .6  -
+CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 SWIT E14FAC 0.4
+set tt 15
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+COOR FORCE SELE SEGID SOLU END
+COOR DIFF SELE SEGID SOLU END
+!! The differences in the derivatives are due to the 1-4 interactions.
+!! They should be the same as in the NoEwald case.
+PRINT COOR SELE SEGID SOLU END
+!! Now we will compare the DIFFERENCES for the Ewald and NoEwald 1-4
+!! contributions to the derivatives.
+! Put the 1-4 components of the derivatives from the NoEwald in the comparison
+! coordinate set.
+SCALAR XCOMP RECALL 4
+SCALAR YCOMP RECALL 5
+SCALAR ZCOMP RECALL 6
+COOR DIFF SELE SEGID SOLU END
+!! The differences you all be zero.
+PRINT COOR SELE SEGID SOLU END
+
+! Restore coordinates.
+SCALAR X RECALL 1
+SCALAR Y RECALL 2
+SCALAR Z RECALL 3
+
+RETURN
+
+

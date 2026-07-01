@@ -1,0 +1,139 @@
+* Test of MSCALE within REPDSTR environment
+* The following 4 replicas can be a starting template
+* for free energy comparison of different QM/MM methods (with BAR).
+* For functionality testing the QM claculations are replaced by MM,
+* thus reducing the number of input scripts and compilation problems
+* Testing the general case where each replica has a different MSCALE setup
+* replica 0 : no mscale, MM=A+B
+* replica 1 : ONIOM (QM=A, MM=B)
+* replica 2 : ONIOM (QM=B, MM=A)
+* replica 3 : mscale, QM=A+B
+* Created by Milan Hodoscek, April 2013
+*
+
+! Choose which model is executed for each of the replicas
+
+if ?myrep .eq. 0 then goto mm
+
+if ?myrep .eq. 1 then goto qmmm
+
+if ?myrep .eq. 2 then goto mmqm
+
+if ?myrep .eq. 3 then goto qm
+
+! if it comes here do nothing ...
+goto end
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! MM !!!!!!!!!!!!!!!!!!!!!!!!!!!
+label mm
+! myrep == 0
+
+echo myrep == 0
+
+! this replica is a MM on the whole system, so no mscale needed
+
+mscale nsub -1
+
+end
+
+energy
+
+echo ?myrep ?ener
+
+goto end
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! QMMM !!!!!!!!!!!!!!!!!!!!!!!!!!!
+label qmmm
+
+echo myrep == 1
+
+! MSCALE setup for replica with atoms QM=Cl, MM=NH4
+
+mscale nsub 3
+
+subs all coef 1.0 prog "../exec/gnu_M/charmm" -
+                   outp "@9clnh4.out_1" inpu "@0clnh4mscl.inp" -
+                   sele all end end
+
+subs qm coef 1.0 prog "../exec/gnu_M/charmm" -
+                   outp "@9clmsclp.out_1" inpu "@0clmscl.inp" -
+                   sele type cl end
+
+subs mm coef -1.0 prog "../exec/gnu_M/charmm" -
+                   outp "@9clmsclm.out_1" inpu "@0clmscl.inp" -
+                   sele type cl end
+!sysd
+
+end
+
+skipe all
+
+energy
+
+echo ?myrep ?ener
+
+goto end
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! MMQM !!!!!!!!!!!!!!!!!!!!!!!!!!!
+label mmqm
+
+echo myrep == 2
+
+! MSCALE setup for replica with atoms MM=Cl, QM=NH4
+
+mscale nsub 3
+
+subs all coef 1.0 prog "../exec/gnu_M/charmm" -
+                   outp "@9clnh4.out_2" inpu "@0clnh4mscl.inp" -
+                   sele all end end
+
+subs qm coef 1.0 prog "../exec/gnu_M/charmm" -
+                   outp "@9nh4msclp.out_2" inpu "@0nh4mscl.inp" -
+                   sele .not. type cl end
+
+subs mm coef -1.0 prog "../exec/gnu_M/charmm" -
+                   outp "@9nh4msclm.out_2" inpu "@0nh4mscl.inp" -
+                   sele .not. type cl end
+!sysd
+
+end
+
+skipe all
+energy
+
+echo ?myrep ?ener
+
+goto end
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! QM !!!!!!!!!!!!!!!!!!!!!!!!!!!
+label qm
+
+echo myrep == 3
+
+
+! MSCALE setup for replica with all atoms as QM
+
+mscale nsub 1
+
+subs allQM coef 1.0 prog "../exec/gnu_M/charmm" -
+                   outp "@9clnh4.out_3" inpu "@0clnh4mscl.inp" -
+                   sele all end end
+
+end
+
+skipe all
+energy
+
+echo ?myrep ?ener
+
+goto end
+
+!!!!!!!!!!!!!!!!!!!!!!! End of individual sections !!!!!!!!!!!!!
+label end
+
+!!!!!!!!!!!!!!!!!!!!!!! Begin the common input script !!!!!!!!!!
+
+mini abnr nstep 1000
+
+
+stop

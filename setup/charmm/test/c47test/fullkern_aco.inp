@@ -1,0 +1,133 @@
+* continue from pc-schumann surftest3
+* starts at 16 ns and finishes at 20 ns
+*
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+PRNLEVEL 5 
+
+stream datadir.def
+
+
+! Topology
+read rtf card 
+* ---- 
+*   TOPOLOGY for ACO  
+* ---- 
+*
+   22    0
+!hydrogens
+MASS   258 HGA3     1.00800  ! alphatic proton, CH3
+!carbons
+MASS   297 CG2O5   12.01100  ! carbonyl C: ketones
+MASS   327 CG331   12.01100  ! aliphatic C for methyl group (-CH3), adjacent to positive N (PROT NTER) (+)
+MASS   372 OG2D3   15.99940  ! carbonyl O: ketones
+
+
+!New compounds from the sugar force field
+RESI ACO           0.0000 ! C3H6O Acetone, adm, Oct 08
+GROUP
+ATOM O1  OG2D3    0.00
+ATOM C1  CG2O5    0.00
+ATOM C2  CG331    0.00 !             O1
+ATOM C3  CG331    0.00 !             ||
+ATOM H21 HGA3     0.00 !             C1
+ATOM H22 HGA3     0.00 !            /  \
+ATOM H23 HGA3     0.00 !     H21--C2    C3--H31
+ATOM H31 HGA3     0.00 !         / |    | \
+ATOM H32 HGA3     0.00 !      H22 H32  H33 H32
+ATOM H33 HGA3     0.00
+
+BOND    C1 C2   C1 C3
+BOND    C2 H21  C2 H22   C2 H23
+BOND    C3 H31  C3 H32   C3 H33
+DOUBLE  O1 C1
+ACCE    O1
+
+END
+
+read para card 
+* ---- 
+*  PARAMETERS for ACO 
+* ---- 
+*
+
+BONDS
+CG2O5  CG331     0.00     1.5000 ! ACO, acetone adm 11/08
+CG2O5  OG2D3     0.00     1.2300 ! ACO, acetone adm 11/08
+CG331  CG331     0.00     1.5300 ! PROT alkane update, adm jr., 3/2/92
+CG331  HGA3      0.00     1.1110 ! PROT alkane update, adm jr., 3/2/92
+
+ANGLES
+CG331  CG2O5  CG331     0.00    115.60 ! ACO, acetone adm 11/08
+CG331  CG2O5  OG2D3     0.00    122.20 ! ACO, acetone adm 11/08
+CG2O5  CG331  HGA3      0.00    109.50 ! methylketones 3ACP, ACO; from PROT Alanine Dipeptide ab initio calc's (LK) consistent with adm 11/08
+HGA3   CG331  HGA3      0.00    108.40    0.00   1.80200 ! PROT alkane update, adm jr., 3/2/92
+
+DIHEDRALS
+
+
+IMPROPERS
+CG2O5  CG331  CG331  OG2D3      0.0000  0     0.00
+
+NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+!see mass list above for better description of atom types
+!hydrogens
+HGA3     0.0        0.0000     1.3400 ! alkane, yin and mackerell, 4/98
+CG2O5    0.0        0.0000     2.0000 ! adm, acetone, 11/08
+CG331    0.0       -0.0000     2.0500   0.0  0.00 1.9 ! alkane (CT3), 4/98, yin, adm jr; Rmin/2 modified from 2.04 to 2.05
+OG2D5    0.0        0.0000     1.6920 ! carbon dioxide, JES
+
+HBOND CUTHB 0.5  ! If you want to do hbond analysis (only), then use
+                 ! READ PARAM APPEND CARD
+                 ! to append hbond parameters from the file: par_hbond.inp
+
+END
+
+
+read sequ card  
+* NMA 
+* 
+1 
+ACO 
+GENErate ACO  WARNing SETUp
+
+read coor card 
+*  DATE:     7/11/20     15:26:51      CREATED BY USER: marcpezz 
+*
+        10  EXT
+         1         1  ACO       O1             12.3867511156       11.0895635866      -12.8259109964  ACO       1               0.0000000000
+         2         1  ACO       C1             12.6853715700       12.2530334517      -12.9987484549  ACO       1               0.0000000000
+         3         1  ACO       C2             11.6649612761       13.3680113418      -12.8955076343  ACO       1               0.0000000000
+         4         1  ACO       C3             14.1103489764       12.6660398725      -13.3314790755  ACO       1               0.0000000000
+         5         1  ACO       H21            11.6067676304       13.9314946025      -13.8430236059  ACO       1               0.0000000000
+         6         1  ACO       H22            10.6745209083       12.9498798068      -12.6530828520  ACO       1               0.0000000000
+         7         1  ACO       H23            11.9612023978       14.0922078882      -12.1151055301  ACO       1               0.0000000000
+         8         1  ACO       H31            14.4925461466       13.3747629350      -12.5712548920  ACO       1               0.0000000000
+         9         1  ACO       H32            14.7570518534       11.7877746868      -13.3792665135  ACO       1               0.0000000000
+        10         1  ACO       H33            14.1354781256       13.2052318281      -14.2996204455  ACO       1               0.0000000000
+
+
+energy 
+
+FLMK read 150  10 45  271  2000  1  10  @0aco_coeff.dat 
+
+energy
+
+mini sd nstep 100 
+mini abnr nstep 25 
+
+
+test first tol 0.000001
+
+
+@testcheck ?ENER -959.18877   0.00001 CONS
+
+
+stop 
+

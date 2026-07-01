@@ -1,0 +1,295 @@
+* String method in collective variables (SMSV) test case
+* alanine dipeptide isomerization in vacuum
+* using positions expressed in a relative frame of reference
+* as collective variables
+*
+!SUMMARY : generate initial path by linear interpolation
+! in phi/psi dihedral angles; perform optimization
+! compute the path and free energy along the path
+
+if ?stringm .ne. 1 then
+   echo "String method code not compiled."
+   echo "Test NOT performed."
+   stop
+endif
+!
+if ?numnode  .lt. 3  then
+  echo "At least three cpu cores are required to run this test."
+  echo "Test NOT performed."
+  STOP
+endif
+!
+if ?numnode  .ne. 8  then
+  echo "Internal PASS/FAIL test only available for 8 cpu cores b/c result depends on # cores."
+  echo "Internal PASS/FAIL test check will be omitted."
+endif
+!
+set myname smcv-pos.inp
+!
+stream datadir.def
+!**********************************************************
+set nrun 0
+set toppar  @0
+set outdir  @9
+set datadir @outdir
+set outputdir @outdir
+! read parameter and topology files
+!
+open unit 1 read form name @TOPPAR/top_all22_model.inp
+read rtf card unit 1
+close unit 1
+!
+open unit 1 read form name @TOPPAR/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! ***************************** generate alanine dipeptide
+read sequence card
+* alanine dipeptide in vacuum
+*
+1
+ALAD
+
+generate dial setup warn
+write psf card name @outdir/diala.psf
+!
+if @?nlocal eq 0 set nlocal 1
+calc nrep = ?numnode / @nlocal
+!
+mcom string @nlocal by @nrep ! set up communication
+string smcv init ! initialize
+!**************************** replica variables ***********
+set ncpu ?nstring
+set me ?mestring
+!
+! set dihedral angles for this replica
+! (1) define range of angles
+calc phis -90.
+calc psis 90.0
+calc phie @phis+180.0
+calc psie @psis-180.0
+
+if @ncpu .gt. 1 then 
+ calc mypsi = @psis + ( @psie - @psis ) * @me / ( @ncpu - 1 )
+ calc myphi = @phis + ( @phie - @phis ) * @me / ( @ncpu - 1 )
+else
+ calc mypsi = @psis
+ calc myphi = @phis
+endif 
+!
+ic edit
+dihe  dial 1 clp   dial 1 nl   dial 1 ca   dial 1 crp @myphi
+dihe  dial 1 nl   dial 1 ca   dial 1 crp   dial 1 nr @mypsi
+end
+!
+! generate coordinates
+IC PARA
+IC SEED 1 CLP 1 NL 1 CA
+IC BUILD
+!
+! specify infinite cutoff
+update cutnb 1000.0
+! gently minimize to avoid instability during MD
+mini sd nstep 20
+! ***************************** DONE generating alanine dipeptide
+! define reference frame
+define frame select type CL .or. type OL .or. type NL .or. type CA end
+string colvar frames add select frame end
+string colvar frames list
+string colvar frames fill ! compute frame axes from current coordinates
+!
+! now add position CVs in this reference frame
+set a1 type CB
+set a2 type CR
+set a3 type NR
+!
+set nposi 3
+set iposi 1
+label cvloop
+ string colvar add posi_com_x sele @a@@iposi end frame 1
+ string colvar add posi_com_y sele @a@@iposi end frame 1
+ string colvar add posi_com_z sele @a@@iposi end frame 1
+ incr iposi by 1
+ if @iposi .le. @nposi -
+goto cvloop
+!
+set f 100
+string colvar set force @f weight 1 all
+!
+string colvar list ! list variables
+!
+! write frames
+string colvar frame align
+string colvar frame print name @datadir/frames_ini.dat
+string colvar frame read name @datadir/frames_ini.dat ! can read frames from file
+string colvar fill ! fill CV values from main set
+!
+! copy to reference set
+string colvar copy main ref ! reference struture
+!
+!save as the reference structure
+string colvar write name @datadir/cv_0.dat col ref
+string colvar weight calc
+string colvar weight write name @datadir/wgt@nrun.dat
+string colvar mmat write name @datadir/mmat@nrun.dat ! to see the metric tensor
+string colvar mmat write name @datadir/minv@nrun.dat inv ! to see its inverse
+!
+string colvar mmat read name @datadir/mmat@nrun.dat ! for reading the matrix from file, for e.g. voronoi calculations
+!
+!
+string colvar test grad step 0.001
+!
+mcom barrier global ! barrier on global communicator (optional)
+!
+! set up statistics
+string colvar stat -
+		rmsd rname @datadir/rmsd.dat  - ! save rmsd & append
+		arcl aname @datadir/arc.dat   -  ! save arclength
+		free fenm @datadir/fe.dat  -    ! free energy file
+		colv cnam @datadir/cv.dat -        ! collective variable file
+		forc fcnm @datadir/force.dat -     ! average force file
+		mmat mnam @datadir/mmat.dat ! metric tensor (should technically be averaged after string is converged)
+
+!set fbeta for langevin
+scalar fbeta set 10 select all end
+!
+set tstep 0.001
+set temp 300
+!
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+!
+!!!!!!!!!!!!!!!!!!!! set up reparameterization
+string colvar repa iter 1 defi 1.021 linear
+!
+!!!!!!!!!!!!!!!!!!! string options
+set nsteps 50000
+set save 10      ! frequency of sampling inst. cv values and M tensor
+set reqfreq 100  ! steps to adjust to new restraints
+set dcdfreq 1000 ! trajectory output frequency
+set freq 1000    ! misc frequency
+set estep 0.02   ! SMCV evolution step
+!
+!*********************************************************
+! test SMCV dynamics
+
+string colvar dyna -
+rstr reeq @reqfreq - ! restrained dynamics 
+repa repf @freq -   ! reparameterization
+hisf @save -        ! time slices
+stat staf @nsteps -   ! statistics output
+evolve evof @freq - ! frequency of string evolution
+evst @estep -       ! evolution step
+evos @reqfreq - ! statistics slices to skip when computing average force/smoothing
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea 67 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel); not used in assignmnt
+iasvel 1 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+! print main CV coords
+string colvar print name @outputdir/cv_@nrun.dat
+!
+!***********************************************************************************************
+! turn off evolution and run more SMCV dynamics
+
+incr nrun by 1
+!set nsteps 10000
+! trajectories
+string open write file unit 68 name @outputdir/diala@nrun_@{me}.dcd
+! restart files
+string open write card unit 69 name @outputdir/diala@nrun_@{me}.rst
+!
+string colvar dyna -
+rstr reeq @reqfreq - ! restrained dynamics 
+hisf @save -        ! time slices
+evolve evof @freq evst 0 - ! NB : in order to compute free energy evolution has to be on (will use  0 step)
+stat staf @nsteps -   ! statistics output
+- ! regular dynamics options follow (must use integrator in dynamc.src)
+lang tbath @Temp ilbfrq 0 rbuffer 0 -
+strt -
+nstep @nsteps -
+timestep @tstep -
+iprfrq 1000 -
+ihtfrq 0 -
+ieqfrq 0 -
+ntrfrq 0 -
+iunrea -1 iunwri 69 iuncrd 68 iunvel -1 kunit -1 -
+nprint 1000 -
+nsavc @dcdfreq -
+isvfrq @dcdfreq - ! frequency for writing a restart file
+nsavv 0 -
+inbfrq -1 -                        ! frequency of nb list gneration
+iasors 1 - ! velocity scaling option at ihtfrq & iefrq freq. ; 0 -- scaling; ne 0 ==> assign (iasvel)
+iasvel 0 - ! velocity assgn during heating/equil +  initial; >0 : Gaussian, <0 uniform, 0 from COMP set
+iscvel 0 - ! velocity scaling: 0 -- same factor for all atoms; >0 different factor for each atom based on KE.
+iseed 1 2 3 4 ! for repeatability
+
+! final coordinates
+string open card write unit 1 name @outputdir/diala@nrun_@me.cor
+write coor card unit 1
+!
+! print main CV coords
+string colvar print name @outputdir/cv_@nrun.dat
+! save frames
+string colvar frames print name @outputdir/frames_@nrun.dat
+!
+!
+string smcv done ! stop string
+bomlev -1 ! mcom done generates level 0 warning
+mcom done ! reset communicators
+!
+!=================== check free energy ==================================
+if ?numnode eq 8 then ! internal PASS/FAIL :  compare free energy profile
+!
+label fecheck
+! read fe.dat file and check that free energy looks reasonable
+! reference free energy
+!
+set FR1 0.00000
+set FR2 2.06594
+set FR3 7.45736
+set FR4 8.04231
+set FR5 7.14041
+set FR6 5.06695
+set FR7 2.88568
+set FR8 2.23791
+!
+! change file to one entry per line : 
+if ?mynode eq 0 system "cat scratch/fe.dat | awk '{for (i = 1; i <= NF; ++i) print $i}' | tail -n8 > scratch/_tmp"
+open read card name scratch/_tmp unit 1
+set i 0
+set mue 0
+set muetol 0.75 ! kcal/mol
+label feloop
+  incr i
+  get unit 1 F@@i
+  calc mue = @mue + abs ( @FR@@i - @F@@i )
+  if @i lt ?numnode -
+goto feloop
+calc mue = @mue / ?numnode ! mean unsigned error
+if @mue le @muetol then
+ echo @myname TESTCASE RESULT: PASS
+else
+ echo @myname TESTCASE RESULT: FAIL
+ incr testfail
+endif 
+endif
+
+stop

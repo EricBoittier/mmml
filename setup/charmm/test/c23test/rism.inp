@@ -1,0 +1,339 @@
+* CHARMM input file for the RISM calculations
+* input test file for the vv calculation
+*                     the uv calculation
+*                     the derivative calculation
+*                     the uu calculation
+*
+
+if ?rism .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+! enter the RISM module
+
+RISM
+
+! read first the parameters; show will produce a detailed output
+!
+read parameters show
+* PARAMETERS for RISM (from CHARMM)
+*
+ NBOND
+ ! Solvent:
+ !        epsilon     Rmin/2      charge
+ !
+ OT      -0.1591      1.60000    -0.834
+ HT      -0.0498      0.80000     0.417
+ NH1     -0.23840     1.60000    -0.350 ! NH1 
+ H       -0.04980     0.80000     0.250 ! H   
+ CH1E    -0.04860     2.36500     0.100 ! CH1E
+ CH31E   -0.18110     2.16500     0.000 ! CH3E
+ C       -0.12000     2.10000     0.550 ! C   
+ O       -0.15910     1.60000    -0.550 ! O   
+ CH32E   -0.18110     2.16500     0.100 ! CH3E
+ CH4     -0.294       2.09300     0.00
+ END
+
+ ! the list of specific solvent-solvent pairs:
+ NBFIX
+ !Solvent molecule 
+ !             epsilon     Rmin
+ !
+ OT   OT      -0.15207     3.53650
+ HT   OT      -0.08363     1.99270
+ HT   HT      -0.04598     0.44900
+END  ! (of NBFIX)
+
+END  ! (of parameters)
+
+read structure  show
+* tip3p as solvent
+*
+! read first the type of solvent sites
+
+SOLVENT
+nsite 3 ntype 2
+OT  OT type 1   segid BULK resnam TIP3 
+HT1 HT type 2
+HT2 HT type 2
+
+! and the solvent geometry
+
+ZMATRIX
+OT
+HT1  OT  0.9572
+HT2  OT  0.9572  HT1  104.52
+
+! now do the same for the solutes
+! monoatomic molecules do not need a ZMATRIX since they do not have
+! any geometry
+
+SOLUTE 1
+nsite 1 ntype 1
+CH31E   CH31E  type 1 segid SOLU   resnam SOLU
+! 
+! solute 2 is CH1E-CH1E, thus the two sites are of the same type
+!
+SOLUTE 2
+nsite 2 ntype 1
+C1      CH1E    type 1  segid SLU2 resnam SLU2
+C2      CH1E    type 1  
+ZMATRIX
+C1
+C2      C1  2.0
+
+END
+
+! read the state (temperature, solvent density and cdie)
+
+
+state temp 298.15 density BULK 0.03334 cdie 78.6 
+
+!--------------------------------------------------------------------
+
+! start the iteration cycle to calculate the vv cs(r) and g(r)
+
+iterate vv  hnc ncycle  500  nprint     1  -
+ init	swi(1) 0.01 swf(1) 0.10 dsw(1) 0.01 -
+               tol  0.9  rmix    0.39
+
+
+iterate vv  hnc ncycle  500  nprint     1  -
+      swi(1) 0.1 swf(1) 1.0 dsw(1) 0.1 -
+               tol  0.9  rmix    0.39
+
+iterate vv  hnc ncycle  5000  nprint     10  -
+               tol  0.00001  rmix    0.39
+
+
+! print out the characteristics of g(r) for pair 1
+
+analysis vv   pair 1
+
+! now for all pairs
+
+analysis vv
+
+! write the calculated distribution functions 
+
+! first cs(r)
+open write form name @9tip3p-charmm.csr unit 20
+write cs(r) vv unit 20
+* cs(r) for tip3p calculated with the charmm executable
+*
+close unit 20
+
+! then g(r)
+open write form name @9tip3p-charmm.gr unit 20
+write g(r) vv unit 20
+* g(r) for tip3p water with the charmm-prepared executable 
+*
+close unit 20 
+
+! write the g(r) in formmatted form as a function of distance
+
+open write form name @9tip3p-charmm-plt2.gr unit 20
+write g(r) vv plt2 all from 0.5 thru 10.0 format(1x,10f10.5) unit 20
+* g(r) for water with the charmm-prepared executable
+* r(i)   O-O     O-H      H-H
+*
+close unit 20 
+! test the solute-solvent cs(r) and g(r) calculation 
+! use tip3p water as solvent 
+
+! ==================================================================
+ ! now do the uv (solVent-solUte) calculation
+
+ iterate uv   hnc   solute 1 ncycle  500  nprint     1  -
+ init	      swi(1) 0.01 swf(1) 0.1 dsw(1) 0.01        -
+              tol  0.9  rmix    0.39
+
+
+ iterate uv  solute 1 hnc ncycle  500  nprint     1  -
+             swi(1)  0.1  swf(1)   1.0  dsw(1)  0.1  -
+            	   tol  0.9  rmix    0.39
+
+
+ iterate uv solute 1  hnc ncycle  5000  nprint   10    	 -
+               tol  0.001  rmix    0.39
+
+
+! print out the solute-solvent g(r) characteristics
+
+analysis uv  solute 1
+
+! write in files the distribution functions for the solute-solvent
+! site pairs
+
+open write form name @9soluv1-charmm.csr unit 20
+write cs(r) uv solute 1  unit 20
+* cs(r) for CH31E into water with the charmm-prepared executable
+*
+close unit 20 
+
+
+open write form name @9soluv1-charmm.gr unit 20
+write g(r) uv solute 1 unit 20
+* g(r) for CH31E into water with the charmm-prepared executable 
+*
+close unit 20 
+
+
+open write form name @9soluv1-charmm-plt2.gr unit 20
+write g(r) uv  solute 1 plt2 all from 0.5 thru 10.0  -
+  format(1x,10f10.5) unit 20
+* g(r) for CH31E into tip3p water with the charmm-prepared executable
+*
+close unit 20 
+
+! calculate the chemical potential and the solute-solvent
+! interaction energy. The cavity energy cannot be calculated
+! bewcause we have not done the derivative calculation.
+
+solvation chmpot energy  plt2 verbose  solute 1
+
+! ===================================================================
+
+! now do the second solute calculation
+
+
+ iterate uv   hnc    solute 2 ncycle  500  nprint     1  -
+ init	      swi(1) 0.01 swf(1) 0.1 dsw(1) 0.01        -
+             	  tol  0.9  rmix    0.39
+
+
+ iterate uv  solute 2 hnc ncycle  500  nprint     1  -
+     	      swi(1) 0.01 swf(1) 0.1 dsw(1) 0.01        -
+            	   tol  0.9  rmix    0.39
+
+
+ iterate uv solute 2  hnc ncycle  5000  nprint   10    	 -
+               tol  0.001  rmix    0.39
+
+
+! print out the solute-solvent g(r) characteristics
+
+analysis uv  solute 2
+
+! write in files the distribution functions for the solute-solvent
+! site pairs
+
+open write form name @9soluv2-charmm.csr unit 20
+write cs(r) uv solute 2  unit 20
+* cs(r) for CH1E into water with the charmm-prepared executable
+*
+close unit 20 
+
+
+open write form name @9soluv2-charmm.gr unit 20
+write g(r) uv solute 2 unit 20
+* g(r) for CH1E into water with the charmm-prepared executable 
+*
+close unit 20 
+
+
+
+open write form name @9soluv2-charmm-plt2.gr unit 20
+write g(r) uv  solute 2 plt2 all from 0.5 thru 10.0  -
+  format(1x,10f10.5) unit 20
+* g(r) for CH1E into tip3p water with the charmm-prepared executable
+*
+close unit 20 
+
+! calculate the chemical potential and the solute-solvent
+! interaction energy
+
+solvation chmpot energy  plt2 verbose  solute 2
+
+
+! ===================================================================
+
+
+! now do the solute-solute calculation
+! store the potential of mean force in us(r)
+
+iterate	uu   hnc w(r)  solute 1   solute 2   ncycle 500  nprint 1 -
+init         tol 0.001    rmix  0.29
+
+open write form name @9sol1-sol2.pmf  unit 20
+write us(r) uu solute 1 solute 2 unit 20
+* pmf for the solutes CH3E and CH1E-CH1E
+*
+close unit 20
+
+
+open write form name @9sol1-sol2.csr  unit 20
+write cs(r) uu solute 1 solute 2 unit 20
+* cs(r) for the solutes CH3E and CH1E-CH1E
+*
+close unit 20
+
+
+
+! ===================================================================
+
+! now do the DERIVATIVE calculation
+
+! test the calculation of the responce of the solvent to the
+! solvation of a solute moleculte (infinite dilution)
+! use tip3p water as solvent 
+
+
+! first for the solute 1
+
+derivative hnc  solute 1 ncycle 5000 nprint 1 -
+init		tol 0.001   rmix 0.39
+
+open write form name @9tip3p-uv1-charmm.dcsr  unit 30
+write dc(r) solute 1 unit 30
+* derivative of cs(r) of tip3p upon solvation of CH31E
+*
+close unit 30
+
+open write form name @9tip3p-uv1-charmm.dgr  unit 30
+write dg(r) unit 30
+* derivative of g(r) of tip3p upon solvation of CH31E
+*
+close unit 30
+
+! calculate the chemical potential, the interaction energy
+! and the cavity formation energy
+
+solvation chmpot energy cavity solute 1
+
+
+
+! now do the calculation for solute 2 
+
+
+derivative hnc  solute 2 ncycle 5000 nprint 1 -
+init		tol 0.001   rmix 0.39
+
+open write form name @9tip3p-uv2-charmm.dcsr  unit 30
+write dc(r) solute 2 unit 30
+* derivative of cs(r) of tip3p upon solvation of CH1E-CH1E
+*
+close unit 30
+
+open write form name @9tip3p-uv2-charmm.dgr  unit 30
+write dg(r) unit 30
+* derivative of g(r) of tip3p upon solvation of CH1E-CH1E
+*
+close unit 30
+
+! calculate the chemical potential, the interaction energy
+! and the cavity formation energy
+
+solvation chmpot energy cavity solute 2
+
+
+! exit the RISM module
+
+stop
+
+! exit CHARMM
+
+stop

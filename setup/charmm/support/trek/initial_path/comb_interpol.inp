@@ -1,0 +1,192 @@
+* COMB_INTERPOL.INP: combine Cartesian and IC interpolation between end-states.
+* By Stefan Fischer & Fabian Ille. Last modified June 29-2006.
+*
+
+! In "gene.str", the fixed atoms (if any) must have been defined as
+! a selection called "fixed" (will be used below) :
+STREAM ../gene.str
+
+! All the user-defined stuff is set in "user_def.str" :
+STRE user_def.str
+
+!**********************************************************************!
+!*         No changes needed from here on.                            *!
+!**********************************************************************!
+
+! Find how many atoms have been fixed, to decide whether to orient the product
+! (done by 2 dummy calls, to set ?NSEL) :
+DEFINE fixed    SELE fixed END
+DEFINE fixed    SELE fixed END
+
+SET nfixed ?NSEL
+
+
+!-----------------------------------------------------------------------!
+open read card unit 1 name    @reactant
+read coor card unit 1
+close unit 1
+
+! Store the reactant-coord. in COMP :
+COOR COPY COMP
+
+IC FILL
+
+! Write the IC Table :
+OPEN WRITE UNIT 1 CARD NAME   @reactant.ic
+IC WRITE UNIT 1 card SAVED
+* IC-table of @reactant
+*
+
+!-----------------------------------------------------------------------!
+open read card unit 1 name    @product
+read coor card unit 1
+close unit 1
+
+! If no fixed atoms, orient the product onto the reactant :
+IF @nfixed LT 1    COOR ORIENT RMS
+
+! Store product coord.
+SCALAR sca4 = x
+SCALAR sca5 = y
+SCALAR sca6 = z
+
+IC FILL
+
+! Write the IC Table :
+OPEN WRITE UNIT 1 CARD NAME   @product.ic
+IC WRITE UNIT 1 card SAVED
+* IC-table of @product
+*
+
+!-----------------------------------------------------------------------!
+! Do the Cartesian interpolation.
+
+! Put reactant coord. back into MAIN :
+COOR COPY
+
+! Store reactant coord.
+SCALAR sca1 = x
+SCALAR sca2 = y
+SCALAR sca3 = z
+
+SCALAR x MULT -1
+SCALAR y MULT -1
+SCALAR z MULT -1
+
+SCALAR sca7 = x
+SCALAR sca8 = y
+SCALAR sca9 = z
+
+! Cartesian [Product - Reactant] vector (S) :
+SCALAR sca7 SUM sca4
+SCALAR sca8 SUM sca5
+SCALAR sca9 SUM sca6
+
+! Interpolation :
+!---------------!
+SET walk 0
+LABEL COMPUTECART
+    INCR walk
+
+    CALC lambda = ( @walk / @steps )
+
+    SCALAR x = sca7
+    SCALAR y = sca8
+    SCALAR z = sca9
+
+    SCALAR x MULT @lambda
+    SCALAR y MULT @lambda
+    SCALAR z MULT @lambda
+
+    SCALAR x SUM sca1
+    SCALAR y SUM sca2
+    SCALAR z SUM sca3
+
+    open write card unit 1 name @outdir/tmp_cart_@walk.crd
+    write coor card unit 1
+* Temporary file. Interpolation in pure Cartesian coord.
+* Intermediate number @walk / @steps .
+*
+
+IF @lambda LT 1 GOTO COMPUTECART
+
+!-----------------------------------------------------------------------!
+! Do the IC interpolation.
+
+! Calculates the IC [Product - Reactant] vector (with vector.pl script) :
+SYSTEM @command
+
+SET walk 0
+LABEL COMPUTEIC
+    INCR walk
+
+    CALC lambda = ( @walk / @steps )
+
+    open read unit 1 card name @vect 
+    IC read unit 1 card
+    CLOSE unit 1
+
+    IC SAVE
+
+    ! Put reactant coord. back into MAIN :
+    COOR COPY SELE ALL END
+
+    IC FILL
+    IC SCALE  BOND @lambda  ANGLE @lambda  DIHE @lambda SAVED
+    IC ADD SAVED
+    ! Shrink side-chains, if desired :
+    IC SCALE BOND @shrink SAVED
+    IC RESTORE
+
+    ! Write the ic table :
+    OPEN WRITE UNIT 1 CARD NAME @outdir/tmp_ic_@walk.ic
+    IC WRITE UNIT 1 card
+* Temporary file. Interpolation in IC coord.
+* Shrinking-factor = @shrink
+* Intermediate number @walk / @steps .
+*
+
+IF @lambda LT 1 GOTO COMPUTEIC
+
+!-----------------------------------------------------------------------!
+! Combine Cartesian and IC coordinates for each interpolated frame :
+
+SET walk 0
+LABEL COMBINE
+INCR walk
+
+    open read card unit 1 name  @outdir/tmp_cart_@walk.crd
+    read coor card unit 1
+    close unit 1
+
+    open read unit 1 card name  @outdir/tmp_ic_@walk.ic 
+    IC read unit 1 card
+    close unit 1
+
+    ! Initiate coordinates for atoms to rebuild in internal coordinates :
+    COOR INIT SELE .NOT.  cart_interpol  END
+
+    IC BUILD
+
+    ! Put reactant coord. back into MAIN to avoid small changes
+    ! in the fixed coordinates :
+    COOR COPY SELE fixed END
+
+    ! The final combined interpolated coordinate-frame :
+    open write card unit 1 name    @final_@walk.crd
+    write coor card unit 1
+* Combined Cartesian/IC interpolation between
+* @reactant and @product
+* Intermediate number @walk / @steps .
+*
+
+IF @walk LT @steps GOTO COMBINE
+
+!-----------------------------------------------------------------------!
+! Brief and constrained minimization of each interpolated frame (optional) :
+! STREAM mini_interpol.str
+
+! Concatenating all the frames into a trajectory (optional) :
+STRE make_traj.str
+
+stop

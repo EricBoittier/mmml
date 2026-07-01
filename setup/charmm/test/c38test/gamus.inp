@@ -1,0 +1,184 @@
+* CHARMM c38a1 testcase
+* Test GAMUS on dihedral angles
+* Author J Spiriti, 2012
+*
+
+if ?GAMUS  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+FASTER ON
+SET SEPS 78.5
+SET ALPHA 1.6
+bomblev -10
+!#========================================================
+!#========================================================
+open unit 11 read form name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+
+open read unit 11 card name @0param19.prm
+read param unit 11 card
+close unit 11
+
+open read unit 1 card name @0acepar19.inp
+read ACEParameters card unit 1
+close unit 1
+read sequ card
+*
+3
+ace ala cbx
+
+
+generate pep setup
+
+open unit 1 write card name @9ala2-ace.psf
+write psf card unit 1
+close unit 1
+
+ic generate
+ic param
+ic seed 2 n 2 ca 2 c
+ic build
+
+nbond atom ace ieps 1.0 seps @SEPS alpha @ALPHA sigma 3.0 switch -
+              vdis vswi cutnb 13.0 ctonnb 8.0 ctofnb 12.0
+
+mini sd nstep 100
+mini abnr nstep 100
+
+
+     !shake bonh param tol 1.0e-8         
+        set temp = 300
+        set timestep = .001 !in ps
+        calc nsavc = 1.0 / @timestep
+        calc gamusfreq = 1
+	!calc nprint = 1.0 / @timestep
+        calc eqnstep = 1 / @timestep
+        calc colnstep = 1 / @timestep
+	calc initnstep = 1 / @timestep
+
+
+open
+
+
+
+
+!initial equilibration
+SCALAR FBETa SET  6.0 SELEct ( ALL )  END
+open unit 8 write formatted name @9restart-col-0.rst
+dynamics strt leap lang timestep @timestep nstep @initnstep iasors 1 iasvel 1 -
+        firstt @temp finalt @temp nprint 5000 echeck 100.0 tbath @temp iunwri 8
+
+close unit 8
+
+
+!write a GAMUS potential
+open unit 1 write formatted name @9gamus-potential.dat
+write title unit 1
+*  1 2
+* -10
+*  0.0
+* -79.0
+* 139.0
+* 0.01
+* 0.00
+* 0.00
+* 0.01
+* 9.2103
+*
+close unit 1
+
+
+    
+open unit 44 read card name @9gamus-potential.dat
+    !in this file CHARMM will record biasing potential and reaction coordinate values encountered during the simulation.
+    !We write to a different file from "gamuse..." to keep this from being used later by the MARE and GMM fits
+open unit 45 write card name @9gamuse-q.dat
+!This activates the GAMUS biasing potential and specifies the reaction coordinate (4 dihedral angles)
+gamus init temp @temp runi 44 wuni 45 ifrq @gamusfreq
+gamus dihe pep 1 c pep 2 n pep 2 ca pep 2 c
+gamus dihe pep 2 n pep 2 ca pep 2 c pep 3 n
+test first select all end
+dynamics strt leap lang timestep @timestep nstep @colnstep iasors 1 iasvel 1 -
+        firstt @temp finalt @temp nprint 5000 echeck 100.0 tbath @temp -
+        iunrea -1 iunwri -1 iuncrd -1
+
+gamus clear
+
+close unit 44
+close unit 45
+
+!write a GAMUS potential
+open unit 1 write formatted name @9gamus-potential2.dat
+write title unit 1
+*  2 2
+* -10
+* -0.693
+* -0.693
+* -79.0
+* 139.0
+* -79.0
+* -39.0
+* 0.01
+* 0.00
+* 0.00
+* 0.01
+* 0.01
+* 0.00
+* 0.00
+* 0.01
+* 9.2103
+* 9.2103
+*
+close unit 1
+
+open unit 44 read card name @9gamus-potential2.dat
+    !in this file CHARMM will record biasing potential and reaction coordinate values encountered during the simulation.
+    !We write to a different file from "gamuse..." to keep this from being used later by the MARE and GMM fits
+open unit 45 write card name @9gamuse-q2.dat
+!This activates the GAMUS biasing potential and specifies the reaction coordinate (4 dihedral angles)
+gamus init temp @temp runi 44 wuni 45 ifrq @gamusfreq
+gamus dihe pep 1 c pep 2 n pep 2 ca pep 2 c
+gamus dihe pep 2 n pep 2 ca pep 2 c pep 3 n
+test first select all end
+dynamics strt leap lang timestep @timestep nstep @colnstep iasors 1 iasvel 1 -
+        firstt @temp finalt @temp nprint 5000 echeck 100.0 tbath @temp -
+        iunrea -1 iunwri -1 iuncrd -1
+
+!gamus clear
+
+close unit 44
+close unit 45
+
+!now test the fitting and 
+
+open unit 11 read card name @9gamus-potential.dat
+open unit 12 read card name @9gamus-potential2.dat
+open unit 13 read card name @9gamuse-q.dat
+open unit 14 read card name @9gamuse-q2.dat
+open unit 15 write card name @9weights
+open unit 16 write card name @9gamus-new-potential.dat
+set ngauss = 5
+gamus reweight nsim 2 puni 11 quni 13 ngauss @ngauss nref 4 nitr 200 sigma 5.0 gamma -25.0 weights 15 
+gamus write unit 16
+close unit 15
+close unit 16
+open unit 15 read formatted name @9weights
+open unit 17 write card name @9gamus-new-potential2.dat
+gamus fit data 15 ngauss @ngauss nref 4 nitr 200 sigma 5.0 gamma -25.0  
+gamus info verbose
+gamus write unit 17
+close unit 11
+close unit 12
+close unit 13
+close unit 14
+close unit 15
+close unit 17
+
+
+stop
+

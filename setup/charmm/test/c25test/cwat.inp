@@ -1,0 +1,126 @@
+* This is water test case for QM/MM (CADPAC/CHARMM)
+* First water is calculated with TIP3P and the
+* second water is QM-STO3G. The Hamiltonian and other
+* CADPAC control commands are found in cwat.str
+* Paul Lyne - September 1995
+*
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -5
+stream datadir.def
+
+system "cp data/libfil.dat libfil.dat"
+system "cp data/modpot.dat fort.2"
+system "cp data/cwat.str  fort.3"
+
+read rtf cards
+* RTF - one group only
+*
+  23
+
+MASS 11 HT   1.00800
+MASS 12 HTQ  1.00800
+MASS 81 OW  15.99940
+MASS 82 OWQ 15.99940
+
+
+! Water models
+
+RESI TIP3    .000   !  TIPS3P
+GROUP
+ ATOM OH2  OW     -0.834
+ ATOM H1   HT      0.417
+ ATOM H2   HT      0.417
+BOND OH2  H1        OH2  H2        H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+PATC  FIRS NONE LAST NONE
+
+RESI QWAT    .000
+GROUP
+ ATOM OH2Q  OWQ     0.000  ! Let the charge be zero so no need to adjust
+ ATOM H1Q   HTQ     0.000  ! NONB lists for eletrostatics
+ ATOM H2Q   HTQ     0.000
+PATC  FIRS NONE LAST NONE
+BOND OH2Q H1Q  OH2Q H2Q    ! This bonds are needed to avoid vdW terms on this atoms!!
+END
+
+read param card
+* Water parameters (from param20.prm)
+*
+
+
+BOND
+HT   OW     450.0      0.9572
+HT   HT       0.0      1.5139
+HTQ  OWQ      0.0      0.9572   ! zero bond term for exclusion of vdw on QM bond
+
+ANGLE
+HT   HT   OW  0.0    127.74
+HT   OW   HT  55.0   104.5
+
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 10.0  CTOFNB 9.0  CTONNB 8.0  EPS 1.0  E14FAC 0.4  WMIN 1.5
+
+OW     0.84    -0.1591    1.6
+HT     0.044   -0.0498    0.800
+OWQ    0.84    -0.1591    1.6
+HTQ    0.044   -0.0498    0.800
+
+NBFIX
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+!
+!       NBFIX is used to make the TIP3P water-water interactions
+!       more like Jorgensen's.  The vdW parameters
+!       specified above will be in effect, therefore, for ONLY
+!       protein (read, protein OR nucleic acid)-water interactions.
+!       OW-OW is exactly Jorgensen's; HT interactions are added
+!       here.
+!
+OW   OW      -0.152073  3.5365
+HT   HT      -0.04598   0.4490
+HT   OW      -0.08363   1.9927 
+OWQ  OW      -0.152073  3.5365
+HTQ  HT      -0.04598   0.4490
+HTQ  OW      -0.08363   1.9927
+HT   OWQ     -0.08363   1.9927  ! these are now many, but
+                                ! NBFIX is only for the water model
+
+
+END
+
+
+read sequ card
+* Waters....
+*
+2
+ tip3 qwat 
+
+gener  2h2o
+ 
+read coor card
+* Last structure of STO-3G optimization (pure QM)
+*
+ 6
+    1    1 TIP3 OH2    -.10771    .04072   -.01534 2H2O 1       .00000
+    2    1 TIP3 H1      .07435    .03728    .95492 2H2O 1       .00000
+    3    1 TIP3 H2      .80720   -.06470   -.37079 2H2O 1       .00000
+    4    2 QWAT OH2Q  -2.17438  -1.56907  -1.02892 2H2O 2       .00000
+    5    2 QWAT H1Q   -2.74998   -.90171  -1.39935 2H2O 2       .00000
+    6    2 QWAT H2Q   -1.43941  -1.04984   -.66492 2H2O 2       .00000
+ 
+print coor
+
+CADPAC sele resn qwat end 
+
+energy
+
+system "rm fort.2"
+system "rm fort.3"
+system "rm libfil.dat"
+
+stop

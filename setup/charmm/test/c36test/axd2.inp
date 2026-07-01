@@ -1,0 +1,75 @@
+* CHARMM c36a1 Testcase test/c36test/axd2.inp
+* Author: David Glowacki and Emanuele Paci
+* Date  : June 24, 2010
+* Test AXD
+*
+
+if ?AXD  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read card name @0toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0param19_eef1.inp
+read param card unit 1
+close unit 1
+
+! read the topology and parameter file
+READ SEQUENCE CARDS
+* PEPT
+*
+10
+ALA ALA ALA ALA ALA ALA ALA ALA ALA ALA
+
+GENERATE PEPT WARN SETUP 
+
+! { Do not read coordinates }
+
+IC PARAMETERS
+IC SEED 1 N 1 CA 1 C
+IC BUILD
+
+HBUILD
+IC PARAMETER
+
+MINI SD NSTEP 200
+
+! Use the SASA standard setup.
+ 
+nbond nbxmod 5 atom rdiel shift vatom vdistance vshift -
+      cutnb 14.0 ctofnb 7.5 ctonnb 6.5 eps 2.0 e14fac 0.4 wmin 1.5
+ 
+sasa selection .not. hydrogen end
+ 
+DEFINE heavy  SELE ((.NOT. TYPE H*) ) END
+DEFINE bb     SELE (( TYPE N .OR. TYPE CA .OR. TYPE C )) END
+DEFINE ca     SELE (( TYPE CA )) END
+
+SCALAR fbeta set 1.0
+
+OPEN WRITE UNFORMATTED UNIT 34 NAME @9axd2.dcd
+OPEN WRITE FORMATTED   UNIT 44 NAME @9axd2.axd
+
+DEFINE nc SELE ((ATOM PEPT 1 N) .OR. (ATOM PEPT 10 C )) END
+
+AXD IUNJ 44 PRANGE 0 4 SELE nc END -
+     NBOUND 15 EVENTS 500 BOUNDS 35 30 28 26 24 22 20 18 16 14 12 10 8 6 0 
+
+! test AXD using LEAPFROG integrator
+! you can request a script to analyze the output to e.paci@leeds.ac.uk
+DYNAMICS LEAP LANGEVIN START NSTEP 20000 TIMESTEP 0.001 -
+         TBATH 300 -
+         IUNREA -1 IUNWRI -1 KUNIT -1 IUNCRD 34   - 
+         IPRFRQ  5000 NPRINT 100 NSAVC 500      -
+         INBFRQ -1 ICHECW 0 IEQFRQ 0 ISEED 483773377  
+
+OPEN UNIT 1 WRITE FORM NAME @9axd2.pdb
+WRITE COOR PDB UNIT 1
+*  COORdinates
+*
+
+STOP

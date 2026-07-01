@@ -1,0 +1,24 @@
+* factors_out.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* Generate an output file that can be used as a stream file to scale
+* charges.
+* 
+
+
+! write coordinates with scaling factors in WMAIN
+SCAL WMAIN = SCA6
+open write unit 1 card name @OUTPUT
+write coordinates card unit 1
+close unit 1
+
+
+! write coordinates with E^solv,cut in WMAIN
+SCAL WMAIN = SCA8
+open write unit 1 card name @OUTPUT1
+write coordinates card unit 1
+close unit 1
+
+
+! SYSTem "./scaling_streamfile.py < @SCRIPTINPUT "
+
+RETURN

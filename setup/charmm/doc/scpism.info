@@ -1,0 +1,267 @@
+CHARMM Element doc/scpism.info $Revision: 1.1.1.1 $
+
+File: SCPISM, Node: Top, Up: (doc/commands.info), Next: Syntax
+ 
+
+    Screened Coulomb Potentials Implicit Solvent Model (SCPISM)
+
+
+     The SCPISM is a continuum model of solvation that treats implicitly the 
+effects of water. The model is based on screened Coulomb potentials (SCP). 
+The screening function are derived from the Lorentz-Debye-Sack theory of polar 
+liquids. In the present implementation the model incorporates a continuum 
+description of electrostatics and calibration of hydrogen bond energies. 
+The model uses (optionally) a cavity term to account for non-polar solvation energy. 
+The current implementation is suitable for dynamics (plain or Langevin) simulations, 
+energy evaluation and minimization of peptides and proteins. The models is to be 
+used in combination with the all-atom representation (either PAR22 or CMAP) 
+ 
+     In the current implementation there is one parameter per atom type. 
+The original parameterization was done based on experimental solvation energies 
+of amino acid side chain analogs [2] (the parameterization was not based on reproducing 
+PB results). Hydrogen bonding strength is treated independently [4]. This was shown to 
+be important for ab initio structure prediction and stabilization [3].
+
+* Menu
+* Syntax::         Syntax of the SCPISM commands
+* Background::     An introduction to the SCPISM (see also URL)
+* References::     Useful references (see URL)    
+* Example::        Input file 
+
+
+File: SCPISM, Node: Syntax, Up: Top, Next: Theory, Previous: Top
+
+    
+                          SCPISM commands
+
+     An effort was made to minimize the number of input options available 
+to the user (i.e., no parameters are allowed to be modified from an input
+file since the physics of the system was already incorporated into the model
+and, then, hardwired into the algorithm). To activate the model the following
+command line is used:
+
+SCPIsm [UISM int]  [LFORM]                                               (1)
+
+where UISM is the unit number for reading the SCP parameters. These
+parameters are stored in scpism.inp and must be opened for reading
+in the usual way before the model is requested (see example below), i.e.,
+
+OPEN READ UNIT int CARD NAME "scpism.inp"
+
+The keyword "LFORM" can be used to for 8 character atom types in the "scpism.inp" parameter file.
+
+Once the model is requested, any options for energy, minimization 
+and dynamics calculations are supported. Electrostatic 
+interactions are truncated using a shift function (any other
+specification of cutoff of electrostatics is automatically disabled 
+once the SCPISM is requested; a shift function was shown to be the best
+option in the SCPISM. 
+
+     Any restraining option that is introduced as an additional term in the 
+potential is supported. Use of the CONS FIX constraints is discouraged
+because they are inconsistent with the way the self-energies are
+calculated: the calculation of atom effective radii in the SCPISM requires the
+positions of all the atoms around each atom to be available, in particular
+the positions of the atoms to be fixed.  
+     It is possible (but not required) to deactivate the model once any 
+of the required tasks (energy evaluation, minimization or dynamics) is 
+completed. To exit the model use
+
+SCPIsm END
+
+in this case CHARMM will return to the default (vacuum) electrostatics  
+options (the model can be turned on again by using the command line (1) above). 
+
+Note that, although the current implementation of the SCPISM describes
+only electrostatic and HB effects, to be consistent with earlier applications, 
+a cavity term proportional to the total solvent accessible surface area (SASA) 
+can be requested by using the subcommand HYDRophobic in the
+command line (1) above (see example). If this term is not activated, 
+other model accounting for hydrophobic interactions should be used.
+
+The CPU time of the serial version of the SCPISM has been improved to be only 
+1.5 times slower than vacuum (default compilation optimization). Since 
+version c34 the models has been parallelized (MPI routines added to
+the scpism.src source code). But from c36 onward the performance has been improved 
+substantially, and is currently as follows (Milan Hodoscek, 2011))
+
+Benchmark for ATPase (>15000 atoms, 100 steps dynamics) using 32 core AMD box:
+
+CPUs           scpism (charmm c34 and 35)    |       scpism (charmm 36)
+               time (sec) speedup efficiency |   time (sec)   speedup   eff.
+ 1               61.7       1.00    100%     |     61.8         1.00    100%
+ 2               43.5       1.42     71%     |     33.0         1.87     94%
+ 4               58.4       1.06     26%     |     17.0         3.63     91%
+ 8              105.4       0.59      7%     |      9.0         6.87     86%
+16              218.4       0.28      2%     |      5.1        12.12     76%
+32              453.4       0.14      0%     |      3.3        18.73     59%
+
+File: SCPISM, Node: Background, Up: Top, Next: References, Previous: Syntax
+
+                  Structure of the parameter input file:
+
+     All the parameters required for the model are atom-type based and are 
+collected in a single file. Determination of these parameters was described in 
+[2,3].  The parameters have been optimized in the context of the all-atom force 
+field.
+
+SCPISM parameter file has the following format (note that not all fields 
+in this file are parameters that controls the electrostatics):
+
+H   0.4906  0.6259  0.5000  0.7004  0.3700  0.0052 PH ! polar H
+HC  0.5300  9.6746  0.5000  0.7280  0.3700  0.0052 PH ! N-ter H
+HA  0.5300  0.5000  0.5000  0.7280  0.3700  0.0052    ! nonpolar H
+HT  0.4906  2.3800  0.5000  0.7004  0.3700  0.0052 PH ! TIPS3P WATER HYDROGEN
+HP  0.5274  0.5000  0.5000  0.7262  0.3700  0.0052    ! aromatic H
+HB  0.4858  0.5000  0.5000  0.6970  0.3700  0.0052    ! backbone H
+HR1 0.4651  0.5000  0.5000  0.6820  0.3700  0.0052    ! his he1, (+)his HG,HD2
+HR2 0.4580  0.5000  0.5000  0.6768  0.3700  0.0052    ! (+) his HE1
+
+
+When using LFORM keyword in the SCPIsm command, upto 8-characters atom types are used, such as:
+CG3C51    0.4538  0.5000  0.5000  0.6736  0.7700  0.0052    ! 
+
+Col. 1: Atom type defined in PAR22
+Col. 2: Alpha_i controls slope of D(r) around atom-type i
+Col. 3: for PH interaction with PA this value controls the effective radius
+        of PH to modulate hydrogen bonding strength (see URL); the
+	increase or decrease of the PH effective radius is defined by the
+	product Col.3(PH)*Col.3(PA) As a rule, the larger the value of
+	this product, the weaker the HB interaction.
+Col. 4: Extension of effective radius R_iw to obtain R_ip, i.e.,
+        R_ip = R_iw + Col.4 (see [1]); only one value for atoms considered
+Col. 5: SQRT(alpha_i); this is needed for alpha_ij=alpha_i alpha_j (see [1,2])
+Col. 6: covalent radius for each atom (only 5 values considered, i.e.,
+        for C,N,O,S,H)  
+Col. 7: gamma_i in hydrophobic energy = sum over i of gamma_i SASA_i (note
+        that all coefficients are equal in this first release) 
+Col. 8: denotes atoms involved in H-bonding (PH = polar proton; PA =
+        proton acceptor) 
+
+
+                           Theoretical background
+
+     The SCPISM is based on a superposition of screened potentials. It 
+uses screening functions D(r) that modulate the potential phi(r) rather
+than on dielectric functions eps(r) that modulate the electric field E(r). 
+Both D(r) and eps(r) are sigmoidal functions of r. Once eps(r) is known 
+from theory or experiments (see [2,5,6]) D(r) is obtained by integration. 
+Based on these results, the SCPISM uses atom type-dependent sigmoidal 
+functions in the context of the all-atom representation.
+
+     In the SCPISM the standard electrostatic component of the force field
+is replaced by terms that describe both the electrostatic interaction energy, 
+and the self energy. The screening functions are continuous functions of the 
+position and describe a dielectric medium that permeates all of space. For the 
+solvated protein, D(r) approaches bulk screening only far from the protein
+(see [2,5,6] for discussion). Therefore, the SCPISM does not introduce either 
+an internal or an external dielectric constant and, then, there is no boundary 
+that separates the protein from the solvent. The form of the screening is 
+derived from basic theory of polar solvation. The model is being constructed 
+incrementally to incorporate all the relevant physical of solvation that are 
+removed when the explicit solvent is eliminated. Most important among these 
+are hydrogen-bond interactions at interfaces, water-exclusion effects, and 
+other solvent-induced forces [6-8].
+
+     Because the effective screening functions that characterize the overall
+modulation of the electrostatics are obtained from properties of bulk solvent, 
+short-range interactions characterizing hydrogen bonding (HB) must be corrected 
+[3,4]. To obtain a reasonable representation of HB strength in solvent medium, 
+all individual HB interactions among amino acids pairs are individually calibrated 
+via the self-energy terms (by adjusting the affective atom radii of polar 
+hydrogens [3,4]). The stabilization of HB energies is carried out based on charge 
+states of the interacting groups, as well as on hybridization states of donor 
+and acceptor atoms. 
+
+File: SCPISM, Node: References, Up: Top, Next: Example, Previous: Background 
+
+
+                               References
+
+
+[1] S A Hassan, E L Mehler, D Zhang and H Weinstein, Molecular Dynamics
+    Simulations of Peptides and Proteins with a Continuum Electrostatic Model
+    based on Screened Coulomb Potentials; Proteins 51, 109 (2003)
+
+[2] S A Hassan, F Guarnieri and E L Mehler, A General Treatment of Solvent 
+    Effects based on Screened Coulomb Potentials; J Phys Chem B 104, 6478 
+    (2000)
+
+[3] S A Hassan, F Guarnieri and E L Mehler, Characterization of Hydrogen 
+    Bonding in a Continuum Solvent Model; J Phys Chem B 104, 6490 (2000)
+
+[4] S A Hassan, Intermolecular Potentials of Mean Force of Amino Acid Side Chain    
+    Interactions in Aqueous Medium; J Phys Chem B 50, 19501 (2004)
+
+[5] S A Hassan and E L Mehler, From Quantum Chemistry and the Classical
+    Theory of Polar Liquids to Continuum Approximations in Molecular Mechanics
+    Calculations; Int. J. Quant. Chem. 102, 986 (2005)
+
+[6] S A Hassan, Liquid Structure Forces and Electrostatic Modulation of
+   Biomolecular Interactions in Solution; J. Phys. Chem. B 111, 227 (2007)
+
+[7] S A Hassan and E L Mehler, A Critical Analysis of Continuum Electrostatics:
+    The screened Coulomb potential-implicit solvent model and the study of
+    the alanine dipeptide and discrimination of misfolded structures of
+    proteins; Proteins 47, 45 (2002)
+
+[8] S A Hassan and E L Mehler, Modeling Aqueous Solvent Effect through Local 
+    Properties of Water, in Modeling Solvent Environments: Applications to 
+    Simulations of Biomolecules, Ed. M Feig, Wiley-VCH (2010)
+
+
+File: SCPISM, Node: Example, Up: Top, Next: Top, Previous: References
+
+                 
+                         SCPISM example input file
+
+---------------------------------------------------------------------
+* energy, minimization and dynamics with the SCPISM
+*
+
+open read card unit 10 name top22.inp
+read rtf unit 10 card
+close unit 10 
+
+open read card unit 10 name par22.inp
+read para unit 10 card 
+close unit 10 
+
+open read unit 10 card name SCPISM.inp
+
+! define system
+generate main setup
+
+open read unit 2 card name filename.crd
+read coor card unit 2 
+close unit 2
+
+! set up all options for the run (nbond cutoff distance, shake, vdW, etc)
+! these options can also be specified in the 'energy' command line, as usual
+
+! request SCPISM 
+
+SCPI HYDR UISM 10
+
+! this will activate electrostatics and a simple hydrophobic term;
+! if other model is used to describe hydrophobic interactions then
+! replace the above command line by: SCPI UISM 3
+
+! now calculate energy, minimize structure and run dynamics
+
+ener 
+
+mini [options] 
+
+dyna [options]
+
+! exit SCPISM
+
+SCPI END
+
+! if needed, the model can be requested again at any point
+
+stop
+-----------------------------------------------------------------------
+
+

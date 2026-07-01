@@ -1,0 +1,1529 @@
+CHARMM Element doc/qmmm.info 1.1
+
+File: qmmm, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+      Combined Quantum and Molecular Mechanical Hamiltonian
+
+
+    A combined quantum (QM) and molecular (MM) mechanical potential
+allows for the study of condensed phase chemical reactions, reactive
+intermediates, and excited state isomerizations.  This is necessary 
+since standard MM force fields are parameterized with experimental 
+data on the potential energy surface which may be far removed from 
+the region of interest, or have the wrong analytical
+form.  A full decription of the theory and application is given in
+J. Computational Chemistry (1990) 6, 700.
+
+    The effective Hamiltonian, Heff, describes the energy and forces on
+each atom.  It is treated as a sum of four terms, Hqm, Hmm, Hqm/mm,
+and Hbrdy.
+
+  Hqm    Describes the quantum mechanical particles.  The semi-
+         empirical methods available are AM1, PM3 and MNDO.  All treat
+         hydrogen, first row elements plus silicon, phosphorus,
+         sulfur, and the halogens.  MNDO has additional parameters
+         for aluminium, phosphorus, chromium, germanium, tin, mercury,
+         and lead.  Full details concerning these theoretical methods
+         can be found in Dewar's original papers, JACS (1985) 107,
+         3902, JACS (1977) 99, 4899, Theoret. Chim. Acta. (1977) 46, 89.
+
+  Hmm    The molecular mechanical Hamiltonian is independent of the
+         coordinates of the electrons and nuclei of the QM atoms.
+         CHARMM22 is used to treat atoms in this region.
+
+  Hqm/mm The combined Hamiltonian describes how QM and MM atoms
+         interact.  This is composed of two electrostatic and one
+         van der Waals terms.  Each MM atom interacts with both the
+         electrons and nuclei of the QM atoms (therefore two terms).
+         The van der Waals term is necessary since some MM atoms
+         possess no charge and would consequently be invisible to
+         the QM atoms, and in other cases often provide the only
+         difference in the interaction (Cl vs. Br).
+
+  Hbrdy  The usual periodic or stochastic boundary conditions are 
+         implemented.
+
+
+    The quantum mechanical package MOPAC 4.0 was interfaced with
+CHARMM22.  This was provided by James P. P. Stewart from the Air Force
+Academy.  There are several limitations with the current program 
+implemntation.  The current plan is to update the quantum mechanical
+procedures to MOPAC 6.0, to include vibrational analysis using
+analytical functions, with the possibility of using free energy
+perturbation.
+
+
+* Menu:
+
+1) QUANTUM module
+* Syntax::         Syntax of QM/MM Commands
+* Description::    Brief Description of Quantum Commands
+* GLINK::          GHO Method and GLNK Command
+* DECO::           DECO Command
+* DAMP::           DAMP Command
+* PERT::           PERT Command
+* pBOUNd::         Simple Periodic Boundary Condition
+* GROUp::          GROUp keyword
+* CHDYn::          CHDYn keyword
+* NEWD::           NEWDS Command
+* EXTE::           EXTErnal File Command
+* LEPS::           LEPS Command
+* SVB::            SVB Command
+* 2DSVB::          2D Usage of SVB
+
+2) SQUANTM module
+* SQUANTUM::       SQUANTUM Module
+* SQM_Syntax::     Syntax of the SQUANTM commands
+* SQM_Install::    Installation of SQUANTM in CHARMM environment
+
+
+File: qmmm, Node: Syntax, Up: Top, Previous: Top, Next: Description
+
+
+                    Syntax for QUANTUM commands
+    
+QUANtum [atom-selection] [GLNK atom-selection] [LEPS int1 int2 int3]
+        [DECO]
+        [PERT REF0 lambda0 PER1 lambda1 PER2 lambda2 TEMP finalT]
+        [NGUEss int]
+        [NEWD int] ewald-spec
+
+        [IFIL int] [ITRMax int]
+        [CAMP] [KING] [PULAy]
+        [SHIFt real] [SCFCriteria real]
+        [UHF] [C.I.] [EXCIted] [NMOS int] [MICR int]
+        [TRIPLET|QUARTET|QUINTET|SEXTET]
+
+        [AM1|PM3|MNDO] [CHARge int] [NOCUtoff]
+        [ALPM real] [RHO0 real] [SFT1 real]
+        [EXCIted] [BIRADical] [C.I.]
+
+        [ITER] [EIG2] [ENERGY] [ PL ]
+        [DEBUG [1ELEC] [DENSITY] [FOCK] [VECTor]]
+ 
+        [LEPS LEPA int LEPB int LEPC int
+          D1AB real D1BC real D1AC real 
+          R1AB real R1BC real R1AC real
+          B1AB real B1BC real B1AC real 
+          S1AB real S1BC real S1AC real 
+          D2AB real D2BC real D2AC real 
+          R2AB real R2BC real R2AC real
+          B2AB real B2BC real B2AC real 
+          S2AB real S2BC real S2AC real] 
+
+      ewald-spec::=  { [ KMAX integer ]                        } KSQMAX integer
+                     { KMXX integer KMXY integer KMXZ integer  }
+
+MULLiken
+
+ADDLinkatom  link-atom-name  atom-spec  atom-spec
+
+RELLinkatom  link-atom-name  atom-spec  atom-spec
+
+      link-atom-name ::= a four character descriptor starting with QQ.
+
+      atom-spec::= {residue-number atom-name}
+                   { segid  resid atom-name }
+                   { BYNUm  atom-number     }
+
+
+
+File: qmmm, Node: Description, Up: Top, Previous: Syntax, Next: GLNK
+
+
+                Description of QUANtum Commands
+
+
+    Most keywords preceed an equal sign followed by an appropriate
+value.  A description of each is given below.
+
+1ELECtron  The final one-electron matrix is printed out. This matrix
+           is composed of atomic orbitals; the array element between
+           orbitals i and j on different atoms is given by,
+
+                H(i,j) = 0.5 (beta(i) + beta(j)(overlap(i,j))
+
+           The matrix elements between orbitals i and j on the  same
+           atom are calculated from the electron-nuclear attraction
+           energy, and also from the U(i) value if i=j.
+   
+           The one-electron matrix is unaffected by (a) the charge and
+           (b)  the electron  density.  It is only a function of the 
+            geometry.  Abbreviation: 1ELEC.
+
+           
+0SCF       The data can be read in and output, but  no  actual
+           calculation is performed  when  this  keyword is used.
+           This is useful as a check on the input data.
+   
+           All obvious errors are trapped, and warning messages printed.
+           A second use is to convert from one format to  another.
+           The input geometry  is printed in various formats at the
+           end of a 0SCF calculation.  If NOINTER is absent, cartesian
+           coordinates are printed.
+           Unconditionally, MOPAC Z-matrix internal coordinates are
+           printed, and if AIGOUT is present, Gaussian Z-matrix
+           internal coordinates  are  printed. 0SCF should now be used
+           in place of DDUM.
+   
+
+1SCF       When users want to examine the results of a single SCF  
+           calculation of a geometry, 1SCF should be used.  1SCF can 
+           be used in conjunction with RESTART, in which case a single
+           SCF calculation will be done, and the results printed.
+   
+           When 1SCF is used on its own (that is, RESTART is not also
+           used) then derivatives will only be calculated if GRAD is 
+           also specified.  1SCF is helpful in a learning situation.
+           MOPAC  normally performs many SCF calculations, and in
+           order to minimize output when following the working of the 
+           SCF calculation, 1SCF is very useful.
+
+AM1        The AM1 method is to be used.  By default MNDO is run.
+
+PM3        The PM3 method is to be used.  By default MNDO is run.
+
+NOCUtoff   QM/MM cutoffs are disabled, such that the QM region
+           interacts with all MM charges. By default the QM region
+           only interacts with those charges that are within the
+           standard CHARMM nonbond cutoffs.
+
+ANALYTical By default, finite difference derivatives of energy with 
+           respect  to geometry  are  used.  If ANALYT is specified,
+           then analytical derivatives are used instead.  Since the 
+           analytical  derivatives  are  over  Gaussian functions  --
+           a  STO-6G  basis set is used -- the overlaps are also over
+           Gaussian functions.  This will result in a  very  small
+           (less  than  0.1 Kcal/mole)  change  in heat of formation.
+           Use analytical derivatives (a) when the mantissa used is
+           less than about 51-53  bits, or (b) when comparison with 
+           finite difference is desired.  Finite difference
+           derivatives are still used when non-variationally optimized
+           wavefunctions are present.
+   
+BIRADical  NOTE:  BIRADICAL is a redundant keyword, and represents a 
+           particular configuration  interaction calculation.  
+           Experienced users of MECI (q.v.) can duplicate the effect 
+           of the  keyword  BIRADICAL by using the MECI keywords 
+           OPEN(2,2) and SINGLET.  For molecules which are believed to
+           have biradicaloid character the option exists to optimize 
+           the lowest singlet energy state which results from the 
+           mixing of three states.  These states are, in order, (1) the
+           (micro)state  arising from a one electron excitation from
+           the HOMO to the LUMO, which is combined with the microstate
+           resulting from the time-reversal operator acting on the 
+           parent microstate, the result being a full singlet state; 
+           (2) the state resulting from de-excitation from the formal 
+           LUMO to the HOMO; and (3) the state resulting from the single
+           electron in the formal HOMO being excited into the LUMO.
+   
+                          Microstate 1         Microstate 2      Microstate 3
+                     Alpha Beta   Alpha Beta    Alpha  Beta       Alpha  Beta
+   
+   
+           LUMO       *                 *                           *    *
+                     ---  ---     ---  ---       ---  ---          ---  ---
+
+                                +
+      
+           HOMO            *       *              *    * 
+                     ---  ---     ---  ---       ---  ---          ---  ---
+   
+           A configuration interaction calculation is involved  here.
+           A  biradical calculation  done  without  C.I. at the RHF 
+           level would be meaningless.  Either rotational invariance 
+           would be lost, as in the D2d form of ethylene, or very 
+           artificial barriers to rotations would be found, such as in
+           a methane molecule "orbiting" a D2d ethylene.  In both
+           cases the inclusion of limited configuration interaction 
+           corrects  the  error.  BIRADICAL should not be used if 
+           either the HOMO or LUMO is degenerate; in
+           this case, the full  manifold of HOMO x LUMO should be
+           included in the  C.I., using MECI options.  The user should
+           be aware  of  this  situation.  When the biradical
+           calculation is performed correctly, the result is normally 
+           a net stabilization.  However,  if  the  first  singlet  
+           excited state is much higher in energy than the
+           closed-shell ground state, BIRADICAL can lead to a 
+           destabilization.  Abbreviation:  BIRAD.  See also MECI,
+           C.I., OPEN, SINGLET.
+   
+CAMKINg
+
+CHARge     When the system being studied is an ion, the charge, n, on
+           the ion must be supplied by CHARGE=n.  For cations n can be
+           1 or 2 or 3, etc, for anions -1 or -2 or -3, etc.
+
+                                      EXAMPLES
+   
+           ION               KEYWORD              ION          KEYWORD
+   
+           NH4(+)           CHARGE=1             CH3COO(-)      CHARGE=-1
+           C2H5(+)          CHARGE=1             (COO)(=)       CHARGE=-2
+           SO4(=)           CHARGE=-2            PO4(3-)        CHARGE=-3
+           HSO4(-)          CHARGE=-1            H2PO4(-)       CHARGE=-1
+
+C.I.       Normally configuration interaction is invoked if any of the
+           keywords which imply a C.I. calculation are used, such as 
+           BIRADICAL, TRIPLET or QUARTET.  Note that ROOT= does not 
+           imply a  C.I. calculation: ROOT= is only used when a C.I. 
+           calculation is done.  However, as these implied C.I.'s
+           involve the minimum number of configurations practical,
+           the user may want to define a larger than minimum C.I., in 
+           which case the keyword C.I.=n can be used. When C.I.=n is 
+           specified, the n M.O.'s which "bracket" the occupied-
+           virtual energy levels will be used.  Thus, C.I.=2 will 
+           include both the HOMO and the LUMO, while C.I.=1 (implied 
+           for odd-electron  systems)  will  only include the HOMO 
+           (This will do nothing for a closed-shell system, and leads 
+           to Dewar's half-electron correction for odd-electron
+           systems).  Users should be aware of the rapid increase
+           in the size of the C.I. with increasing numbers of M.O.'s 
+           being  used.  Numbers of microstates implied by the use of 
+           the keyword C.I.=n on its own are as follows:
+   
+           Keyword        Even-electron systems         Odd-electron systems
+                       No. of electrons, configs     No. of electrons, configs
+                       Alpha   Beta                  Alpha Beta
+       
+            C.I.=1       1      1          1          1     0             1
+            C.I.=2       1      1          4          1     0             2
+            C.I.=3       2      2          9          2     1             9
+            C.I.=4       2      2         36          2     1            24
+            C.I.=5       3      3        100          3     2           100
+            C.I.=6       3      3        400          3     2           300
+            C.I.=7       4      4       1225          4     3          1225
+            C.I.=8   (Do not use unless other keywords also used, see below)
+   
+           If a change of spin is defined, then larger numbers of
+           M.O.'s can be used up to a maximum of 10.  The C.I. matrix 
+           is of size 100 x 100.  For calculations involving up to 100
+           configurations,  the  spin-states  are exact eigenstates of
+           the spin operators.  For systems with more than 100 
+           configurations, the 100 configurations of lowest energy are
+           used.   See also MICROS and the keywords defining spin-states.
+   
+           Note that for any system, use of C.I.=5 or higher normally
+           implies the diagonalization of a 100 by 100 matrix.  As a 
+           geometry optimization using a C.I. requires the derivatives
+           to be calculated using derivatives of the C.I. matrix,  
+           geometry  optimization with large C.I.'s will require more 
+           time than smaller C.I.'s.
+   
+           Associated keywords:  MECI, ROOT=, MICROS, SINGLET, DOUBLET, etc.
+   
+   
+C.I.=(n,m) In addition to specifying the number of M.O.'s in the
+           active space, the number of electrons can also be defined.
+           In C.I.=(n,m), n is the number of M.O.s in the active
+           space, and m is the number of doubly filled levels to be used.
+   
+                                        EXAMPLES
+           Keywords           Number of M.O.s  No. Electrons
+   
+           C.I.=2                   2             2 (1)
+           C.I.=(2,1)               2             2 (3)
+           C.I.=(3,1)               3             2 (3)
+           C.I.=(3,2)               3             4 (5)
+           C.I.=(3,0) OPEN(2,3)     3             2 (N/A)
+           C.I.=(3,1) OPEN(2,2)     3             4 (N/A)
+           C.I.=(3,1) OPEN(1,2)     3           N/A (3)
+   
+           Odd electron systems given in parentheses.
+   
+
+DEBUG      Certain keywords have specific output control meanings, such as
+           FOCK, VECTORS and DENSITY.  If they are used, only the final 
+           arrays of the relevant type are printed.  If DEBUG is supplied,
+           then all arrays are printed.   This is useful in debugging
+           ITER.  DEBUG can also increase the amount of output produced 
+           when certain output keywords are used, e.g. COMPFG.
+
+DCART      The cartesian derivatives which are calculated in DCART for
+           variationally optimized systems are printed if the keyword 
+           DCART is present.  The derivatives are in units of 
+           kcals/Angstrom, and the coordinates are displacements 
+           in x, y, and z.
+
+DENSITY    At the end of a job, when the results are being printed, 
+           the density matrix  is  also  printed.  For RHF the normal 
+           density matrix is printed.  For UHF the sum of the alpha 
+           and beta density matrices is printed.
+           If density is not  requested, then the diagonal of the 
+           density matrix, i.e., the electron density on the atomic 
+           orbitals, will be printed.
+   
+DOUBLet    When a configuration interaction calculation is done,  
+           all spin states are calculated simultaneously, either 
+           for component of spin = 0 or 1/2.  When only doublet states
+           are of interest, then DOUBLET can be specified, and all 
+           other spin states, while calculated, are ignored in the 
+           choice of root to be used.
+   
+           Note that while almost every odd-electron system will have 
+           a doublet ground state, DOUBLET should still be specified 
+           if the desired state must be a doublet.
+   
+           DOUBLET has no meaning in a UHF calculation.
+
+EIGS
+EIG2
+ENERGY
+
+ESR        The unpaired spin density arising from an odd-electron
+           system can be calculated  both RHF and UHF.  In a UHF 
+           calculation the alpha and beta M.O.'s have different
+           spatial forms, so unpaired spin density can naturally 
+           be present on in-plane hydrogen atoms such as in the phenoxy
+           radical.
+   
+           In the RHF formalism a MECI calculation is performed.  If the
+           keywords OPEN and C.I.=  are both absent then only a single
+           state is calculated.  The unpaired spin density is then 
+           calculated from the state function.  In order to have 
+           unpaired spin density on the hydrogens in, for example, 
+           the phenoxy radical, several states should be mixed.
+
+EXCIted    The state to be calculated is the first excited open-shell
+           singlet state.  If the ground state is a singlet, then the 
+           state calculated will be S(1); if the ground state is a 
+           triplet, then S(2).  This  state  would normally be the 
+           state resulting from a one-electron excitation from the
+           HOMO to the LUMO.  Exceptions would be if the lowest
+           singlet state were a biradical, in which case the EXCITED 
+           state could be a closed shell.
+   
+           The EXCITED state will be calculated from a BIRADICAL 
+           calculation in which the second root of the C.I. matrix is 
+           selected.  Note that the eigenvector of the C.I. matrix is 
+           not used in the current formalism.
+           Abbreviation:  EXCI.
+   
+           NOTE:  EXCITED is a redundant keyword, and represents a  
+           particular configuration interaction calculation.   
+           Experienced  users of MECI can duplicate the effect of the 
+           keyword EXCITED by using the MECI keywords OPEN(2,2), 
+           SINGLET, and ROOT=2.
+
+FOCK
+
+FORCE      A force-calculation is to be run.  The Hessian, that is 
+           the  matrix (in millidynes per Angstrom) of second 
+           derivatives of the energy with respect to displacements of 
+           all pairs of atoms in x, y, and z directions, is
+           calculated.  On diagonalization this gives the force 
+           constants for the molecule.  The force matrix, weighted 
+           for isotopic masses, is then used for calculating the 
+           vibrational frequencies.  The system can be characterized
+           as a ground state or a transition state by the presence  of
+           five (for a linear system) or six eigenvalues which are
+           very small (less than about 30 reciprocal centimeters).  A
+           transition  state is further characterized by one, and 
+           exactly one, negative force constant.
+   
+           A FORCE calculation is a prerequisite for a THERMO calculation.
+           Before a FORCE calculation is started, a check is made to  
+           ensure that a stationary point is being used.  This check 
+           involves calculating the gradient norm (GNORM) and if it is
+           significant, the GNORM will be reduced using BFGS.
+   
+           All internal coordinates are optimized, and any symmetry 
+           constraints are ignored at this point.   An implication of
+           this is that if the specification of the geometry relies on
+           any angles being exactly 180 or zero degrees, the
+           calculation may fail.
+   
+           The geometric definition supplied to FORCE should not rely 
+           on angles or dihedrals  assuming  exact  values.  (The test
+           of exact linearity is sufficiently slack that most
+           molecules that are linear, such as acetylene and but-2-yne,
+           should  not  be  stopped.)  See also THERMO, LET, TRANS,
+           ISOTOPE.
+   
+           In a FORCE calculation, PRECISE will eliminate quartic 
+           contamination (part  of  the anharmonicity).  This is
+           normally not important, therefore PRECISE should not
+           routinely be used.
+   
+           In a FORCE calculation, the SCF criterion is automatically 
+           made more stringent; this is the main cause of the SCF 
+           failing  in a FORCE calculation.
+   
+ITER       The default maximum number of SCF iterations is 200.   
+           When  this limit presents difficulty, ITRY=nn can be used 
+           to re-define it.  For example, if ITRY=400 is used, the 
+           maximum number of iterations will be set to 400. ITRY 
+           should normally not be changed until all other means of
+           obtaining a SCF have been exhausted, e.g.  PULAY CAMP-KING etc.
+
+INTERP
+LPULAY
+
+LARGE      Most of the time the  output invoked by keywords is  
+           sufficient. LARGE  will cause less-commonly wanted, but 
+           still useful, output to be printed.
+   
+           1. To save space, DRC and IRC outputs will, by default,
+           only print the line with the percent sign.  Other output 
+           can be obtained by use of the keyword LARGE, according to 
+           the following rules:
+
+           Keyword     Effect
+           LARGE       Print all internal and cartesian coordinates 
+                       and cartesian velocities.
+           LARGE=1     Print all internal coordinates.
+           LARGE=-1    Print all internal and cartesian coordinates 
+                       and cartesian velocities.
+           LARGE=n     Print every n'th set of internal coordinates.
+           LARGE=-n    Print every n'th set of internal and cartesian 
+                       coordinates and cartesian velocities.
+   
+           If LARGE=1 is used, the output will be the same as that of
+           Version 5.0, when LARGE was not used. If LARGE is used, the
+           output will be the same as that of Version 5.0, when LARGE 
+           was used.  To save disk space, do not use LARGE.
+
+MECI       At the end of the calculation  details of the Multi Electron
+           Configuration Interaction calculation are printed if MECI
+           is specified. The state vectors can be printed by
+           specifying  VECTORS.  The MECI calculation is either
+           invoked automatically, or explicitly invoked by the use of 
+           the C.I.=n keyword.
+
+MICRos     The microstates used by MECI are normally generated by use
+           of a permutation operator.  When individually defined 
+           microstates are desired, then MICROS=n can be used, where 
+           n defines the number of microstates to be read in.
+   
+                          Format for Microstates
+   
+           After the geometry data plus any symmetry data are read in,
+           data defining each microstate is read in, using format
+           20I1, one microstate per line.  The microstate data is 
+           preceded by the word "MICROS" on a line by itself.   There 
+           is at present no mechanism for using MICROS with a reaction path.
+   
+           For a system with n M.O.'s in the C.I. (use OPEN=(n1,n) or 
+           C.I.=n to do this), the populations of the n alpha M.O.'s 
+           are defined, followed by the n beta M.O.'s.  Allowed 
+           occupancies are zero and one.  For n=6 the closed-shell 
+           ground  state would be defined as 111000111000, meaning one
+           electron in each of the first three alpha M.O.'s, and one 
+           electron in each of the first three beta M.O.'s.
+   
+           Users are warned that they are responsible for completing 
+           any  spin manifolds.  Thus while the state 111100110000 
+           is a triplet state with component of spin = 1, the state 
+           111000110100, while having a component of spin = 0 is
+           neither a singlet nor a triplet.  In order to complete the 
+           spin manifold the microstate 110100111000 must also be included.
+   
+           If a manifold of spin states is not complete, then the 
+           eigenstates of the spin operator will not be quantized.  
+           When and only when 100 or fewer microstates are supplied, 
+           can spin quantization be conserved.
+
+           There are two other limitations on possible microstates.  
+           First, the number of electrons in every microstate should 
+           be the same.  If they differ, a warning message will be 
+           printed, and the calculation continued (but the results
+           will almost certainly be nonsense).   Second, the component
+           of spin for every microstate must be the same, except for
+           teaching  purposes.  Two microstates of different
+           components of spin will have a zero matrix element
+           connecting them.  No warning will be given as this is a 
+           reasonable operation in a teaching situation.  For example, if
+           all states arising from two electrons in two levels are to 
+           be calculated say for teaching Russel-Saunders coupling, 
+           then the following microstates would be used:
+
+            Microstate   No. of alpha, beta electrons  Ms  State
+   
+              1100            2             0          1   Triplet
+              1010            1             1          0   Singlet
+              1001            1             1          0   Mixed
+              0110            1             1          0   Mixed
+              0101            1             1          0   Singlet
+              0011            0             2         -1   Triplet
+   
+           Constraints on the space manifold are just as rigorous, but
+           much easier to satisfy.  If the energy levels are
+           degenerate, then all components of a manifold of degenerate
+           M.O.'s should be either included or excluded.  If only
+           some, but not all, components are used, the required 
+           degeneracy of the states will be missing.
+   
+           As an example, for the tetrahedral methane cation, if the user
+           supplies the microstates corresponding to a component of
+           spin = 3/2, neglecting Jahn-Teller distortion, the minimum 
+           number of states that can be supplied is 90 = (6!/(1!*5!))*
+           (6!/(4!*2!)).
+           
+           While the total number of electrons should be the same for all
+           microstates, this number does not need to be the same as 
+           the number of electrons supplied to the C.I.; thus in the 
+           example  above, a cationic state could be 110000111000.
+   
+           The format is defined as 20I1 so that spaces can be used  
+           for empty M.O.'s.
+
+MNDO       The default Hamiltonian within MOPAC is MNDO, with the  
+           alternatives of AM1 and MINDO/3.  To use the MINDO/3 
+           Hamiltonian the keyword MINDO/3 should be used.  Acceptable
+           alternatives to the keyword MINDO/3 are MINDO and MINDO3.
+
+NGUEss     The number of steps to regenerate initial guess during molecular
+           dynamics. The default is 100 step. If NGUEss <= 0, then it will
+           be used previous density all over the dynamics. Only applied in
+           the molecular dynamics.
+
+PRECISE    The criteria for terminating all optimizations, electronic and
+           geometric, are to be increased by a factor, normally, 100.
+           This can be used where more precise results are wanted.  If
+           the results are going to be used in a FORCE calculation,
+           where the geometry needs to be known quite precisely, then 
+           PRECISE is recommended; for small systems the extra cost in
+           CPU time is minimal.
+   
+           PRECISE is not recommended for experienced users, instead 
+           GNORM=n.nn and SCFCRT=n.nn are suggested.  PRECISE should
+           only very rarely be necessary in a FORCE calculation: all 
+           it does is remove quartic contamination, which only affects
+           the trivial modes significantly, and is very expensive 
+           in CPU time.
+
+PULAy      The default converger in the SCF calculation is to be 
+           replaced by Pulay's procedure as soon as the density matrix
+           is sufficiently stable.  A considerable improvement in
+           speed can be achieved by the use of PULAY.  If a large 
+           number of SCF calculations are envisaged, a sample calculation
+           using 1SCF and PULAY should be compared with using 1SCF on 
+           its own, and if a saving in time results, then PULAY should
+           be used in the full calculation.  PULAY should be used with
+           care in that its use will prevent the combined package of 
+           convergers  (SHIFT,  PULAY  and the CAMP-KING convergers) 
+           from automatically being used in the event that the system
+           fails to go SCF in (ITRY-10) iterations.
+   
+           The combined set of convergers very seldom fails.
+
+QUARTet    RHF interpretation:  The desired spin-state is a quartet, 
+           i.e., the state with component of spin = 1/2 and spin =
+           3/2. When a configuration interaction calculation is done, 
+           all spin states of spin equal to, or greater than 1/2 are 
+           calculated simultaneously, for component of spin = 1/2.  
+           From these states the quartet states are selected when  
+           QUARTET is specified, and all other spin states, while 
+           calculated, are ignored in the choice of root to be used.
+           If QUARTET is used on its own, then a single state, 
+           corresponding to an alpha electron in each of three M.O.'s
+           is calculated.
+   
+           UHF interpretation:  The system will have three more alpha 
+           electrons than beta electrons.
+   
+QUINTet    RHF interpretation: The desired spin-state is a quintet,  
+           that is, the state with component of spin = 0 and spin = 2.
+           When a configuration interaction calculation is done, all 
+           spin states of spin equal to, or greater than 0 are 
+           calculated simultaneously, for component of spin = 0.
+           From these states the quintet states are selected when 
+           QUINTET is specified, and the septet states, while 
+           calculated, will be ignored in the choice of root to be
+           used.  If QUINTET is used on its own, then a single state, 
+           corresponding to an alpha electron in each of four M.O.'s
+           is calculated.
+   
+           UHF interpretation:  The system will have three more alpha 
+           electrons than beta electrons.
+
+ROOT       The n'th root of a C.I. calculation is to be used in  the
+           calculation.  If a keyword specifying the spin-state is
+           also present, e.g. SINGLET or TRIPLET, then the n'th root 
+           of that state will be selected. Thus ROOT=3 and SINGLET
+           will select the third singlet root.  If ROOT=3 is used on
+           its own, then the third root will be used, which may be a 
+           triplet, the third singlet, or the second singlet (the
+           second root might be a triplet).  In normal use, this 
+           keyword would not be used.  It is retained for educational 
+           and research purposes.  Unusual care should be exercised 
+           when ROOT= is specified.
+   
+SCFCrt     The default SCF criterion is to be replaced by that defined
+           by SCFCRT=.  The SCF criterion is the change in energy in  
+           kcal/mol on two successive iterations.   Other minor 
+           criteria may make the requirements for an SCF slightly more
+           stringent.  The SCF criterion can be varied from about
+           0.001 to 1.D-25, although numbers in the range 0.0001 to 
+           1.D-9 will suffice for most applications.
+   
+           An overly tight criterion can lead to failure to achieve a 
+           SCF, and consequent failure of the run.
+   
+   
+SEXTet     RHF interpretation:  The desired spin-state is a sextet:  
+           the state with component of spin = 1/2 and spin = 5/2.
+           The sextet states are the highest spin states normally  
+           calculable using MOPAC in its unmodified form.  If SEXTET
+           is used on its own, then a single state, corresponding to 
+           one alpha electron in each of five M.O.'s, is calculated.
+           If several sextets are to be calculated, say the second
+           or third, then OPEN(n1,n2) should be used.
+   
+           UHF interpretation:  The system will have five more alpha  
+           electrons than beta electrons.
+
+SHIFt      In an attempt to obtain an SCF by damping oscillations
+           which slow down the convergence or prevent an SCF being 
+           achieved, the virtual M.O. energy levels are shifted up or 
+           down in energy by a shift technique.  The principle is that
+           if the virtual M.O.'s are changed in energy relative to
+           the occupied set, then the polarizability of the occupied  
+           M.O.'s  will change pro rata.  Normally, oscillations are 
+           due to autoregenerative charge fluctuations.
+   
+           The SHIFT method has been re-written so that the value of  
+           SHIFT changes automatically to give a critically-damped  
+           system.  This can result in a positive or negative shift  
+           of the virtual M.O. energy levels.  If a non-zero SHIFT 
+           is specified, it will be used to start the SHIFT technique,
+           rather than the default 15eV.  If SHIFT=0 is  specified,
+           the SHIFT technique will not be used unless normal
+           convergence techniques fail and the automatic "ALL 
+           CONVERGERS..." message is produced.
+
+SINGLet    When a configuration interaction calculation is done, all spin
+           states are calculated simultaneously, either for component 
+           of spin = 0 or 1/2.  When only singlet states are of
+           interest, then SINGLET can be specified, and all other spin
+           states, while calculated, are ignored in the choice of root
+           to be used.
+   
+           Note that while almost every even-electron system  will
+           have a singlet ground state, SINGLET should still be 
+           specified if the desired state must be a singlet.
+   
+           SINGLET has no meaning in a UHF calculation, but see also TRIPLET.
+
+TRIPLet    The triplet state is defined.  If the system has an odd  
+           number of electrons, an error message will be printed.
+   
+           UHF interpretation.  The number of alpha electrons exceeds 
+           that of the beta electrons by 2.  If TRIPLET is not
+           specified, then the numbers of alpha and beta electrons are
+           set equal.  This does not necessarily correspond to a singlet.
+   
+           RHF interpretation.
+   
+           An RHF MECI calculation is performed to calculate the 
+           triplet state.  If no other C.I. keywords are used, then 
+           only one state is calculated by default.  The occupancy of 
+           the M.O.'s in the SCF calculation is defined as 
+           (...2,1,1,0,..), that is, one electron is put in each of 
+           the two highest occupied M.O.'s.
+   
+           See keywords C.I.=n and OPEN(n1,n2).
+
+UHF        The unrestricted Hartree-Fock Hamiltonian is to be used.
+
+VECTors    The eigenvectors are to be printed.  In UHF calculations 
+           both alpha and beta eigenvectors are printed; in all cases 
+           the full set, occupied and virtual, are output.  The
+           eigenvectors are normalized to unity, that is the sum of 
+           the squares of the coefficients is exactly one.  If DEBUG
+           is specified, then ALL eigenvectors on every iteration of  
+           every  SCF calculation will be printed.  This is useful in 
+           a learning context, but would normally be very undesirable.
+
+
+File: qmmm, Node: GLNK, Up: Top, Previous: Description, Next: DECO
+
+          Description of the Generalized Hybrid Orbital (GHO) method 
+               and the GLNK Command
+
+[GLNK atom-selection]
+
+atom-selection: contains a list of atoms that are boundary atoms.
+
+Restrictions: The current implementation of the method requires that
+ALL boundary atoms are placed at the end of the QM residue, or at
+the end of the QM atom list.  It is also strongly advised to treat
+the entire QM fragment as a single residue, without any GROUPping
+of atoms.  This is because the delocalized nature of molecular
+orbitals does not allow for arbitrarily excluding a particular
+fragment or orbitals from interacting with other parts of the system.
+
+
+Description: In addition to the link atom approach, a generalized 
+hybrid orbital (GHO) approach for the treatment of the division across
+a covalent bond between the QM and MM region.  The method recognizes
+a frontier atom, typically carbon which is the only atom that has
+its parameters optimized at this time, both as a QM atom and an MM
+atom.  Thus, standard basis orbitals are assigned to this atom.
+These atomic orbitals on the frontier atoms are transformed into a
+set of equivalent hybrid orbitals (typically the frontier atom is
+of sp3 hybridization type).  One of the four hybrid orbitals, which 
+points directly to the direction of the neighboring QM atom, is
+included in QM-SCF orbital optimizations, and is an active orbital.  
+The other three hybrid orbitals are not optimized. Thus, they are the
+auxillary orbitals.  Since hybridization (contributions from s and
+p orbitals to the hybrid orbitals) is dependent on the local geometry,
+change of bond angles will lead to bond polarization in the active
+orbital.  Also, since the active orbital is being optimized in the
+SCF procedure, charge transfer between the frontier atom and the
+QM fragment is allowed.  Consequently, the GHO method provides a
+convenient way for smooth transition of charge distribution from the
+QM region into the MM region.
+
+The charge density on the auxilary orbitals are determined by equally
+distributing the MM partial charge on the frontier atom.  Thus,
+P(mu mu) = 1 - q(mm)/3.  The neutral group convention adopted by
+the CHARMM force field makes it possible not to alter, to add, or 
+to delete any MM charges.  Furthermore, no extra degrees of freedom
+is introduced in the GHO approach.
+
+The GHO method based on Unrestricted HF theory (GHO-UHF) is implemented 
+at semiempirical level (AM1, PM3) in the quantum module.  With this
+extension, GHO boundary treatment can be used for open shell QM fragments
+in combined QM/MM calculations.
+ 
+For a GHO-UHF wavefunction, we have two sets of auxiliary hybrid 
+orbitals for alpha spin and beta spin electrons respectively.
+The charge density assigned to each of these auxiliary hybrid orbitals 
+is 0.5(1.0-q(mm)/3.0), while q(mm) denotes the MM partial charge of the 
+GHO boundary atom. Similar to GHO-RHF, the hybridization basis
+transformation is carried out between the density matrix and Fock matrix,
+both for the alpha and the beta sets.
+ 
+Analytical gradients and Mulliken population analysis are also implemented 
+for GHO-UHF.
+
+Limitations: The present implementation allows up to 5 QM-boundary
+atoms, which uses psuedo-atomic numbers 91-95.  Thus, elements 91
+through 95 can not be used in QM calculations.
+
+Reference: Reference made to the following paper, which contains
+a more thorough description and discussion of test cases, is appreciated.
+
+Jiali Gao, Patricia Amara, Cristobal Alhambra, and Martin J. Field,
+J. Phys. Chem. 102, 4714-4721 (1998). "A Generalized Hybrid Orbital
+(GHO) Approach for the Treatment of Link-Atoms using Combined
+QM/MM Potentials."
+
+
+File: qmmm, Node: DECO, Up: Top, Previous: GLNK, Next: DAMP
+
+                Description of the DECO Command
+
+[DECO]
+
+     The lone command DECO initiates an qm/mm interaction energy
+decomposition calculation on the fly during a molecular dynamics simulation
+using the QUANtum command.  It is currently implemented only for
+semiempirical Hamiltonians.  The analysis is based on the method reported
+in J. Gao and X. Xia, Science, 258, 631 (1992).  It decomposes the total
+QM/MM electrostatic interaction energy into a vertical interaction energy
+Evert, and a polarization term Epol.  The latter is further separated into
+electrostatic stabilization Estab, and charge distortion Edist.  These
+terms are defined as follows (Y is the wave function of the qm system
+in the presence of mm charges, and Yo is the wave function of the qm
+system in the absence of mm charges, i.e., in the gas phase):
+
+Eqm/mm = <Y|Hqm+Hqmmm(elec)|Y>
+       = Evert + Epol
+Evert  = <Yo|Hqmmm(elec)|Yo>
+Epol   = Eqm/mm - Evert
+
+Epol   = Estab + Edist
+Estab  = <Y|Hqmmm(elec)|Y> - <Yo|Hqmmm(elec)|Yo>
+Edsit  = <Y|Hqm|Y> - <Yo|Hqm|Yo>
+
+where Hqm is the Hamiltonian of the qm system, and Hqmmm(elec) is
+the electrostatic part of the QM/MM interaction Hamiltonian.  Note that
+the van der Waals term is kept track of separately within CHARMM's
+general energy terms.  In addition, the decomposition also averages
+the average "gas-phase" energy <Egas> of the QM system during the QM/MM
+simulation.  Egas, of course, is NOT the true average gas-phase energy,
+but it is one that is restrained by the presence of the MM field.
+It is, however, interesting to note that <Egas> - <Yo|Hqm|Yo> gives
+the "strain energy" due to geometrical strain in the condensed
+phase/protein environment.  JG 12/00
+
+
+
+File: qmmm, Node: DAMP, Up: Top, Previous: DECO, Next: PERT
+
+
+[ DAMP real ]
+
+A simple density damping option is added to the SCF driver for the quantum
+module. The motivation of adding this option is to provide a possibility to
+overcome SCF convergence difficulties. Currently, this damping accelerator is
+only used to limit oscillation behavior in GHO-UHF type calculations.
+
+For an SCF iteration with density damping turned on, the actual density matrix
+used for next iteration is computed by a linear combination of the current
+density with the previous one:
+
+       P    = a x P     + (1-a) x P
+        i          i-1             i
+
+The damping factor "a" is a user defined floating point number between 0 and 1.
+One can specify this damping factor as "DAMP a" in the QUANtum command line.
+The default of this damping factor is 0.0, i.e., no damping at all. Any
+damping factor being less than 0 or greater than 1 will incur a level -5
+warning.
+
+In the current implementation, several "damped" steps (with a user defined
+damping factor "a" ) are carried out until the alpha and beta density matrices
+are partially converged (density changes are smaller than 100 times the density
+convergence criterion), then "undamped" steps (a=0.0) follow until the final
+convergence is reached.
+
+
+File: qmmm, Node: PERT, Up: Top, Previous: DAMP, Next: pBOUND
+
+                Description of the PERT Command
+
+[PERT REF0 lambda0 PER1 lambda1 PER2 lambda2 TEMP finalT]
+
+REF0 lambda0     the reference Lambda value in a FEP calculation
+PER1 lambda1     the forward perturbation Lambda value in a FEP calculation
+PER2 lambda2     the reverse perturbation Lambda value in a FEP calculation
+TEMP finalT      the target or final temperature of the MD simulation
+                 NOTE: this is required. Otherwise an error will occur.
+
+     The PERT command performs electrostatic free energy decoupling
+calculation for QM/MM interactions on the fly of a molecular dynamics
+simulation.  The algorithm is based on a method described in J. Gao,
+J. Phys. Chem. 96, 537 (1992).  Through a series of simulations, the
+electrostatic component of the free energy of solvation can be determined.
+See, other free energy simulation documents.
+
+Delta G(L0->L1) = -RT < exp(-[E{H(L1)}-E{H(L0)}]/RT > _E{H(L0)}
+
+where
+
+E{H(Li)} = <Y|Hqm + Li * Hqmmm(elec) + Hqmmm(vdW)|Y>
+
+JG 12/00
+
+
+File: qmmm, Node: pBOUNd, Up: Top, Previous: PERT Description, Next: GROUp
+
+
+          Simple Periodic Boundary Conditions for QM/MM calculations
+
+     This code is an extension of the algorithm already implemented in 
+CHARMM for MM calculations. The reason for making this extention is to avoid
+duplication of coordinates to save memory in QM/MM calculations.  It takes 
+advantage of the minimum image convention for a periodic cubic (or rectangular
+or any other shapes) box such that crystallographic images are not required to
+be generated in the psf (see images.info).
+
+[Syntax]
+
+BOUNd {CUBOUNdary } {BOXL <real> } CUTNB <real>
+
+       CUBOUN = CUbicBOUNd
+       BOXL   = length of the box edge
+       CUTNB  = cutoff for generating "virtual" images
+
+       Note:  QM/MM PBOUND is INCOMPATIBLE with atom based non-bonded list.
+
+RESTRICTIONS:
+
+     1.  Information about the periodic boundary must be given 
+         to the program through the command READ IMAGE (see image.info)
+
+     2.  The system must be centered using commands:
+         a)  IMAGE (see image.info) when solute and solvent
+             are small molecules (3-5 atoms) 
+         b)  CENT keyword in DYNA command line (see dynamc.info) when solute is
+             a protein or large organic molecule.
+      
+     3. The mm and  qm/mm nonbonded lists (electrostatic and Van der Waals
+        interactions)
+        must be generated by groups, i.e:
+
+        update group fswitch vdw vswitched vgroup ...
+
+     4. Compile with PBOUND in pref.dat
+
+Example:
+     ...
+
+! Set-up image information for cubic periodic boundaries
+! cubig.img file in the /test/data/ directory
+set 6 58.93044
+set 7 58.93044
+set 8 58.93044
+open unit 1 read form name cubic.img
+read image card unit 1
+close unit 1
+
+
+IMAGe byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid prot end
+IMAGe byres xcen 0.0 ycen 0.0 zcen 0.0 select sol end
+
+
+BOUNd CUBOUND BOXL 58.93044  CUTNB 12.0
+
+
+UPDAte group  fswitch noextend  cdie vdw vswitched eps 1.0  -
+           cutnb 12.0 ctofnb 11.5 ctonnb 10.5 vgroup  WMIN 1.2  -
+           inbf 25  imgfrq 1000  cutim 12.0
+
+QUANtum group  sele qms end glnk sele bynu 68:69 end  am1 charge 1 - 
+                 scfc 0.000001 
+
+DYNAmics vverlet rest nstep 15000 timestp 0.001 -
+                ilbfrq 0 iseed 324239 firstt  239.0 finalt 298.15 -
+                teminc 5.0  ihtfrq  5.0   iasor 0 iasvel 1 iscvel 0 -
+                ichecw 1 ieqfrq 200 nprint 100 nsavc 00 -
+                nose tref 298.15 qref 50.0 isvfrq 100 -
+                tstruc 298.15 -
+                twindh 5 twindl -5  iprfrq 2000 wmin 0.9 -
+                iunrea 9 iunwri 10 iuncrd 11 iunvel -1 kunit -12 -
+                CENT ncres 162
+
+    ....
+
+             
+
+File: qmmm, Node: GROUp, Up: Top, Previous: pBOUNd , Next: CHDYn
+
+                Description of the GROUp keyword 
+
+[ GROUp]
+
+      The QM/MM module that was initially implemented into CHARMM allows
+for separate QM group and MM group interactions, where a "QM" molecule
+can be divided into several groups.  The GROUp option allows the QM 
+molecule to be partitioned into separate groups for generating non-bonded
+list, but keeps the interactions between the ENTIRE QM molecule and any 
+MM group that is whithin the cutoff of any one qm group, avoiding the 
+possibility that some MM group only interact with part of the QM molecule.
+This is necessary because the QM molecule is not divisible as the wave
+function is delocalized over the entire molecule.  (June, 2001)
+
+      See also description of the GLNK keyword.
+
+
+File: qmmm, Node: CHDYn, Up: Top, Previous: GROUp , Next: NEWD
+
+               Description of the CHDYn keyword  
+
+[CHDYn]
+
+     CHDYn allows the computation of average Mulliken population charges 
+on quantum atoms during a molecular dynamics simulation. It prints the 
+averaged atomic charges at every IPRFRQ steps.
+     When CHDYn is used along with DECO it will result in the calculation
+of average atomic charges for the same trajectory in the presence of
+the MM bath (condensed phase) and absence of the MM charges (gas phase).
+
+RESTRICTIONS: CHDYn is only implemented for molecular dynamics calculations 
+              with the Leapfrog Verlet and Velocity Verlet integrators.
+
+TESTCASE : qmfep.inp 
+
+
+
+File: qmmm, Node: NEWD, Up: Top, Previous: CHDYn, Next: EXTE
+
+                Description of the NEWDS Command
+
+[ NEWD int ] ewald-spec
+
+    ewald-spec::=  { [ KMAX integer ]                        } KSQMAX integer
+                   { KMXX integer KMXY integer KMXZ integer  }
+
+A simple Ewald sum method is implemented into the QM/MM potential. A full
+description of theory is described in J. Chem. Theory. Comput. (2005) 1, 2.
+This is based on regular Ewald sum method and share similar keywords
+(see ewald.info).
+
+The defaults for the QM/MM-Ewald calculations are set internally
+and are currently set to NEWD 1, KMAX=5, KSQMax=27, where the
+KMAX keyword is the number of kvectors (or images of the
+primary unit cell) that will be summed in any direction.  It is the
+radius of the Ewald summation.  For orthorombic cells, the value of
+kmax may be independently specified in the x, y, and z directions with
+the keywords KMXX, KMXY, and KMXZ.  But, different from regular Ewald in
+CHARMM, it has no limitation on the shape of box, and can be used with PMEwald
+in MM part.
+
+The KSQMax key word should be chosen between  KMAX squared and 3 times
+KMAX squared, and KAPPA value share the exact same number you use in Nonbond
+options.
+
+Specific for SQUANTM: implementation of QM/MM-PME method.
+PME version fo QM/MM-Ewald summation is the default for SQUANTM module. (You
+can use regualr QM/MM-Ewald method by adding a keyword NOPMEwald.) Whenever
+MM-MM long-range electrostatic interactions are computed by using PME method,
+QM-MM interactions in the QM/MM-Ewald are also computed by PME method, where
+the potential at the QM atom sites are computed by PME algorithm. The
+gradients component by QM-MM interactions at the QM and MM atom sites are
+also computed by PME algorithm, which is separatedly calculated from the
+MM-MM PME contributions.  Still, the long-range QM-QM interactions are
+computed by a regular QM/MM-Ewald method, this requires users to specify
+the ewald-spec options, otherwise defauls values will be invoked. The
+QM/MM-PME method is much faster and requires less memory.
+
+
+
+File: qmmm, Node: EXTE, Up: Top, Previous: NEWD, Next: LEPS
+
+[EXTErnal PUNIt int]
+
+EXTE   Allows reading the semi-empirical parameters from an external file.
+       The format is as follows (free format):
+
+       PARNAME1 ATOMTYPE1 PARVALUE1
+       PARNAME2 ATOMTYPE2 PARVALUE2
+       ...
+       END
+
+       Empty lines are ignored
+       Acceptable parameters names are:
+       ALFA(ALP),BETAS,BETAP,BETAD,ZS,ZP,ZD,USS,UPP,UDD,GSS,GPP,GSP,GP2,HSP,
+       VS,VP,K1(FN11),L1(FN21),M1(FN31),K2(FN12),L2(FN22),M2(FN32),K3(FN13),
+       L3(FN23),M3(FN33),K4(FN14),L4(FN24),M4(FN34)
+
+       The following derived parameters are computed automatically:
+       EISOL,DD,QQ,AM,AD,AQ
+
+Example:
+       USS      H          -11.3336021333
+       BETAS    H           -6.1735981344
+       END
+
+
+
+File: qmmm, Node: LEPS, Up: Top, Previous: EXTE, Next: SVB
+
+                Description of the LEPS Command
+
+[LEPS LEPA int LEPB int LEPC int -
+ D1AB real D1BC real D1AC real -
+ R1AB real R1BC real R1AC reat -
+ B1AB real B1BC real B1AC real -
+ S1AB real S1BC real S1AC real -
+ D2AB real D2BC real D2AC real -
+ R2AB real R2BC real R2AC real -
+ B2AB real B2BC real B2AC real -
+ S2AB real S2BC real S2AC real]
+
+Description: The motivation behind the semiempirical valence bond term (SEVB)
+is to improve the quality of the potential energy surface (PES) when using
+semiempirical hamiltonians (AM1 or PM3) to model the reactive event in
+enzyme active sites. NDDO based hamiltonias represent a cheap alternative
+to describe reactions in enzyme active sites. They allow for a quantum
+mechanical description of the active site together with an extensive sampling
+of the protein configurational space when combined qmm/mm techniques are used.
+However the savings in computer time come with sacrifices in the quality of
+the PES due to the NDDO approximation. The SEVB term is introduced in the
+hamiltonian of the system to palliate this problem. It contains two extended
+London-Eiring-Polany-Sato (LEPS) equations for the three body subsystem
+{A,B,C}.  This reduced subsystem mimics the transfer of the particle B
+between centers A and C in the active site. In most of the applications
+B is a light atom like hydrogen and A and C correspond to the donor and
+acceptor sites,
+
+          A-B + C ---> A + B-C
+
+Each of the two extended LEPS functions have different parameters and depend
+on the distances r(A-B), r(B-C), and r(A-C). One LEPS potential (V(ref))is
+fitted to reproduce high ab initio or experimental data for a model reaction
+whilst the second one (V(NDDO)) is fitted to the NDDO hamiltonian in use.
+Finally the SEVB correction is introduced in the hamiltonian of the system
+as the difference V(ref)-V(NDDO).
+
+Syntaxis: The keyword LEPS in the command line QUANtum turns on the
+routine that evaluates the SEVB correction. The three atoms needed to
+evaluate the distances r(A-B), r(B-C), and r(A-C) are indicated by,
+
+ LEPA - donor center.
+ LEPB - transferred atom.
+ LEPC - acceptor center.
+
+ int  - corresponds to the psf number of the respective atom.
+
+ The value of the parameters to build the functions V(NDDO) and V(ref) are,
+
+ . for the NDDO LEPS functions,
+
+ D1AB - dissociation energy for the diatomic A-B
+ D1BC - dissociation energy for the diatomic B-C
+ D1AC - dissociation energy for the diatomic A-C
+ R1AB - equilibrium distance for the diatomic A-B
+ R1BC - equilibrium distance for the diatomic B-C
+ R1AC - equilibrium distance for the diatomic A-C
+ B1AB - beta exponent for the diatomic A-B
+ B1BC - beta exponent for the diatomic B-C
+ B1AC - beta exponent for the diatomic A-C
+ S1AB - Sato parameter for the diatomic A-B
+ S1BC - Sato parameter for the diatomic B-C
+ S1AC - Sato parameter for the diatomic A-C
+
+ . for the reference LEPS functions,
+
+ D2AB - dissociation energy for the diatomic A-B
+ D2BC - dissociation energy for the diatomic B-C
+ D2AC - dissociation energy for the diatomic A-C
+ R2AB - equilibrium distance for the diatomic A-B
+ R2BC - equilibrium distance for the diatomic B-C
+ R2AC - equilibrium distance for the diatomic A-C
+ B2AB - beta exponent for the diatomic A-B
+ B2BC - beta exponent for the diatomic B-C
+ B2AC - beta exponent for the diatomic A-C
+ S2AB - Sato parameter for the diatomic A-B
+ S2BC - Sato parameter for the diatomic B-C
+ S2AC - Sato parameter for the diatomic A-C
+
+ A real value is expected after each one of them.
+
+Limitations: The current implementation is only intended for a single SEVB
+correcting term.
+
+Reference: A detailed description of the LEPS potential energy functionals
+as well as the application to an enzymatic hydride transfer can be found in,
+
+C. Alhambra, J. Corchado, M. L. Sanchez, M. Garcia-Viloca, J. Gao & 
+D. G. Truhlar, Journal of Physical Chemistry B, 2001, 105, 11326-11340.
+"Canonical Variational Theory for Enzyme Kinetics with the Protein Mean 
+Force and Multidimensional Quantum Mechanical Tunneling Dynamics. Theory 
+and Application to Liver Alcohol Dehydrogenase."
+
+
+File: qmmm, Node: SVB, Up: Top, Previous: LEPS, Next: 2DSVB
+
+               Description of SVB command
+
+[ LEPS SVB LEPA int LEPB int LEPC int -
+       D1AB real D1BC real D1AC real -
+       R1AB real R1BC real R1AC reat -
+       B1AB real B1BC real B1AC real ]  
+
+Description: A simple analytical function is included in combined QM/MM 
+potential energy functions using semiempirical Hamiltonian for enzyme
+reactions to obtain more accurate energetic results.  The motivation 
+behind the simple valence bond (SVB) term is to introduce small energy 
+corrections at critical points (reactants, transition state, and products)
+on the QM potential energy surface. The underlying assumption is that the
+general shape of the QM potential energy surface at the semiempirical level
+is in reasonable accord with high-level ab initio result.  The SVB term 
+is a simplified version of the semiempirical valence bond term (SEVB) 
+invoked by the command LEPS.
+
+The SVB term is a combination of two Morse potentials, which depend on 
+the bond distances of the breaking and making bonds, respectively, and 
+a coupling term that is typically (but not exclusively) a function of 
+the donor-acceptor distance.
+
+Specifically, for the reaction   A-B + C ---> A + B-C   
+
+with r1 = distance A-B
+     r2 = distance B-C
+     r3 = distance A-C
+
+the SVB correction along a given reaction coordinate that depends on r1 and r2 
+is:
+
+VSVB = 1/2 [ M1(r1)+M2(r2) - [(M2(r2)-M1(r1))**2+4V12**2)]**1/2]
+
+where M1(r1) and M2(r2) are  Morse potentials:
+
+M1(r1) = D1AB [ exp(-2*B1AB*(r1-R1AB))-2*exp(-B1AB*(r1-R1AB)) ]
+
+M2(r2) = D1BC [ exp(-2*B1BC*(r2-R1BC))-2*exp(-B1BC*(r1-R1BC)) ] 
+
+and the coupling term has the form:
+
+V12 = D1AC * exp(-B1AC*(r3-R1AC))
+
+where,
+
+D1AB = difference in dissociation energy between the reference calculation 
+       or experimental value and the dissociation energy given by 
+       semiempirical method (for the AB bond)
+
+D1BC = difference in dissociation energy between reference calculation 
+       or experimental value and the dissociation energy given by 
+       the semiempirical method (for the BC bond)
+
+B1AB and B1BC = related to the bond force constants  (kij)
+              and to the bond dissociation energies (D1ij) by
+              B1ij = sqrt (kij/2*D1ij). These values can be obtained from 
+              experimentally determined frequencies or from high level
+              calculations.
+
+R1AB, R1BC and R1AC = equilibrium bond length for bonds AB, BC, and AC,
+                      respectively.
+  
+D1AC,R1AC  = adjustable parameters to obtain the desired barrier height.
+
+Note: D1AB and D1BC may be also adjusted to obtain the desired reaction energy.
+The difference D1AB-D1BC is the relative correction of the product state energy
+respect to the reactant state energy. It is recommended to avoid negative values
+for these variables.
+
+Reference: A detailed description of the SVB method
+as well as the application to the nucleophilic addition reaction catalized by  
+haloalkane dehalogenase is found in:
+
+Devi-Kesavan, L.S.; Garcia-Viloca, M.; Gao, J. Theor.Chem.Acc. 2002, in press.
+
+
+Example:
+
+  ...
+
+QUANtum group  sele qms end glnk sele bynu 68:69 end  am1 charge 1 -
+                  scfc 0.000001 -
+         LEPS SVB  LEPA 57 LEPB 58 LEPC 13   -   ! atoms involved
+         D1AB 36.0   D1BC 15.0   D1AC  15.0 - !  energies
+         R1AB   1.101   R1BC   1.1011  R1AC  2.707  - ! equil. bond lenghts
+         B1AB   1.393   B1BC   1.409   B1AC  1.0  - !  exponents
+
+  ...
+
+
+File: qmmm, Node: 2DSVB, Up: Top, Previous: SVB, Next: SQUANTUM
+
+ The following options allow one to construct a two-dimensional simple
+VB-like function to correct the (presumably) semiempirical QM/MM 
+potential energy surface.  This extends beyong the one-dimensional
+correction described above.
+
+        [LEPS
+          [LEPA int LEPB int LEPC int
+          D1AB real D1BC real D1AC real
+          R1AB real R1BC real R1AC real
+          B1AB real B1BC real B1AC real
+          S1AB real S1BC real S1AC real
+          D2AB real D2BC real D2AC real
+          R2AB real R2BC real R2AC real
+          B2AB real B2BC real B2AC real
+          S2AB real S2BC real S2AC real]
+
+          [SVB [SURF] [TEST] [GCOU|G1CO|G2CO]
+          LEPA int LEPB int [LEPC int]
+          D1AB real D1BC real [D1AC real]
+          R1AB real R1BC real [R1AC real]
+          B1AB real B1BC real [B1AC real]
+          [LEPD int LEPE int [LEPF int]
+          D1DE real D1EF real [D1DF real]
+          R1DE real R1EF real [R1DF real]
+          B1DE real B1EF real [B1DF real]
+          [VC12]]]
+
+SVB        SVB turns on the Simple Valence Bond correction function.
+           It requires correction values as difference between experimental
+           or high-level QM level data and the semi-empirical level used.
+           The following keywords work only with the SVB option.
+SURFace    A two-dimensional correction term is employed
+TEST       Additional output regarding SVB term at each energy step. Useful
+           when testing the extent of correction needed.
+GCOUpling  Use a gaussian coupling term which is a function of the reaction
+           coordinate. If SURF is also switched on, this keyword will switch
+           on gaussian terms for both coordinates.
+G1COuple   Use gaussian coupling term for first coordinate.
+G2COuple   Use gaussian coupling term for second coordinate.
+VC12       Add coupling term between two coordinates. This term is currently
+           only a constant number.
+
+If only two atoms are specified (LEPA and LEPB or LEPD and LEPE), a simple
+exponential term between the two atoms will be added. If a gaussian term
+is switched on via the GCOU,G1CO, or G2CO keywords, then a gaussian term
+will be employed instead.
+
+
+File: qmmm, Node: SQUANTUM, Up: Top, Previous: 2DSVB, Next: SQM_Syntax
+
+**********************************************************************
+******                   SQUANTUM MODULE                        ******
+      Combined Quantum Mechanical and Molecular Mechanics Method
+                         Based on SQUANTM in CHARMM
+
+The F90 semiempirical code written by Ross Walker (TSRI, AMBER) and
+Mike Crowley (TSRI, AMBER and CHARMM), the interface to CHARMM has
+been implemented by Kwangho Nam (UMN, nam@chem.umn.edu) including
+GHO and Swithing function implementation. The QM/MM-Ewald summation
+implementation is done as a joint project between TSRI and
+UMN (University of Minnesota).
+
+The new semiempirical code, SQUANTM, is envisioned to eventually
+replace the current semiempirical QM code, which was originally
+incorporated into CHARMM by Martin Field and Paul Bash based on 
+Stewart's MOPAC version 5 program. The SQUANTM was written in 
+Fortran90, and the result is a substantial improvement in 
+computational speed.  However, the two packages are not in conflict
+as long as they are not compiled together.  Therefore, all the
+original MOPAC-based QM/MM options and commands are kept.
+Should a user choose to use the SQUANTM or the MOPAC-based QM/MM
+algorithm, one simply follow the compiling steps highlighted below.
+
+
+File: qmmm, Node: SQM_Syntax, Up: Top, Previous: SQUANTUM, Next: SQM_Install
+
+                    Syntax for SQUANTM commands
+
+QUANtum [atom-selection] [GLNK atom-selection] 
+        [REMOve] [SWITched] 
+
+        [AM1|PM3|MNDO|PDP3|PDMN] [CHARge int] [NOGAussian] [NDIS]
+        [SCFCriteria real] 
+        [DOUBLET|TRIPLET]
+
+        [NEWD int] ewald-spec NOPMEwald
+
+        [DUALqm] { [PERTurbation pert-spec] }
+                 { [MLAYered     mlay-spec] }
+
+      ewald-spec::=  { [KMAX int]                        } [KSQMAX int]
+                     { [KMXX int] [KMXY int] [KMXZ int]  }
+
+      pert-spec ::= [atom-selection] [KHARge int] [GLN2 atom-selection]
+                    [REF0 real] [PEF1 real] [PEF2 real]
+                    [TEMP real]
+                    [PKAP] { [NOMM]               }  
+                           { [NOAN] [NODI] [NOIM] }
+ 
+      mlay-spec ::= [atom-selection] [KHARge int] [LINK atom-selection]
+                    [RCUT real] 
+
+      (**mlay-spec: refer the comments below.)
+
+
+GLNK:     GHO method implementation (refer qmmm.info).
+
+REMOve:   Classical energies within QM atoms are removed.
+
+SWITched: Use switching function from CTONNB to CTOFNB values 
+          based on GROUp method (refer nbonds.info). It is 
+          incompatible with NEWD options
+
+AM1|PM3|MNDO|PDP3|PDMN: AM1 model, PM3 model, MNDO model,
+          PDDG/PM3 (PDP3) model, and PDDG/MNDO (PDMN) model.
+          Note: currently, GHO method only support AM1 and
+          PM3 model.
+          For PDDG/PM3 and PDDG/MNDO model, the reference
+          is Repasky et al. J. Comput. Chem. (2002), 23, 1601.
+
+NOGAussian: This will turn off Gaussian core-core interaction
+          between QM and MM pairs in the AM1 and PM3 model.
+          As a default, the Gaussian core-core interactions 
+          will be computed.
+
+NDIS      : Turn off DIIS converger. (default is .false.)
+
+NEWD and ewald-spec: refer the description for QUANTUM module.
+
+NOPMEwald: Use regualr QM/MM-Ewald summation methods. (Default is false.)
+           This is added for backward compatibility. Note that only for
+           SQUANTM supports QM/MM-PME (refer details for NEWD description.)
+
+DUALqm    : Use dual qm/mm calculations. (Multiple qm/mm region
+            or FEP calculation.)
+
+PERTurbation and pert-spec : Do FEP pKa calculations.
+                             The reactant state (lambda=0) should be 
+                             the protonated state, and the product state
+                             should be the deprotonated state (lambda=1).
+                             The perturbation is only applied to the
+                             electrostatic interactions between QM and
+                             MM pairs.
+
+ H_eff = (1-lambda)*H_reactant + (lambda)*H_product
+
+ atom-selection: atom selection for the product state (lambda=1).
+                 Mostly, this atom selection lacks the H atom that is
+                 annihilated in the FEP calculations.
+ KHARge        : charge for 2nd qm region (product state).
+ GLN2          : use GHO method in the 2nd qm region.
+ REF0/PEF1/PEF2/TEMP : refer section for "Description of the PERT Command"
+                       (above).
+ PKAP          : turn on mm valency terms for pKa calculation, in particular, 
+                 for dummy H-atom.
+                 In the product state, the H atom (for the protonated state)
+                 is changed into mm dummy atom that is not interact with other
+                 atoms (mm and qm atoms) electrostatically, while the bond,
+                 angle, dihedral, and improper terms are maintained to avoid
+                 the end point problem during the FEP calculations. (Refer the
+                 approach of Riccardi et al. J. Phys. Chem. B (2005), 105, 
+                 17715.)
+ NOMM          : turn off the angle/dihedral/improper terms for dummy H-atom.
+ NOAN / NODI / NOIM : specifically turn off either angle, dihedral, or
+                      improper terms. 
+                 ("NOMM" is same as "NOAN NODI NOIM.")
+                 **Note that the bond terms are maintained.**
+
+MLAYered and mlay-spec: Do multi-layered qm/mm calculations.
+                        This is similar to the electronically embedded ONIOM 
+                        type potential. The 1st qm/mm layer has a larger qm
+                        selection, and the 2nd qm/mm layer has a smaller qm
+                        selection but is a subset of the 1st qm selection. 
+                        The total energy is extrapolated from the ab initio
+                        and semiempirical qm/mm calculations. Therefore, it
+                        assumes the potential at the semiempirical level for
+                        the larger qm region is corrected at the ab initio 
+                        level for the smaller qm region, and the 2nd qm region
+                        should be chosen with care. 
+
+ E_tot =  {E_semi-qm/mm (1st qm/mm region)}
+        + {E_ai-qm/mm (2nd qm/mm region) - E_semi-qm/mm (2nd qm/mm region)} 
+
+ **Note that only GAMESS-UK is tested with SQUANTM, and check for future
+   update for GAMESS-US. To compile for this, use both U and SQ in the
+   install.com.
+
+ atom-selection: atom selection for the 2nd qm region. (This should be a subset
+                 of 1st qm selection.)
+ KHARge        : charge for the 2nd qm region.
+ LINK atom-sele: selection for (2nd) qm atoms to which the link H-atom will be 
+                 connected.  (For the 2nd qm region, qm/mm boundary will be
+                 handled only by the H-link atom approach. However, the user 
+                 does not need to invoke ADDLink for this. The position will be 
+                 internally determined and the gradients are projected out.)
+ RCUT          : cutoff distance for mm atoms that are included in the 2nd 
+                 qm/mm calcualtion.
+ **This is one nice way to include long-range electrostatics for the ab initio
+   qm/mm calculations, in which the long-range electrostatics are included at
+   the semiempirical level. For example, users can select the 1st qm region 
+   to be same as the 2nd qm region, and specify RCUT for the 2nd qm region,
+   while the 1st qm region can be calculated with either QM/MM-Ewald sum or 
+   no-cutoff.
+
+
+Note: Currently, the SQUANTM module does not support UHF calculations. 
+      Thus, if you want to run UHF calculations, use QUANTUM or MNDO97 
+      module available for CHARMM QM/MM calculations. 
+
+      For QM-MM interaction, the interaction doesn't include the
+      Gaussian core-core interactions in the PDDG/PM3 model
+      (refer future implementation and changes). However, in the AM1
+      and PM3 model, it is computed as default unless turned off 
+      by using NOGAussian keyword. Depending on your keyword selection,
+      the results could be different from the original implementation in
+      QUANTUM or MNDO97 based on  J. Comput. Chem. (1990) 6, 700.
+
+
+File: qmmm, Node: SQM_Install, Up: Top, Next: Top, Previous: SQM_Syntax
+
+          Installation of SQUANTM module in CHARMM
+
+To compile SQUANTM with CHARMM, one uses:
+
+configure --with-squantm
+make -C build/cmake install
+
+The "--with-squantm" specifies to compile SQUANTM with CHARMM by replacing QUANTUM
+keyword in pref.dat file. Currently, the platform should support 
+compilers that can compile F77 and F90 code simultaneously. The
+platform and compilers tested include ALTIX and GNU using intel fortran
+compilers (ifort and efc), and IBMAIX and IBMAIXMP platform using xlf90 
+and related compiler. For other platforms, install.com and Makefile 
+need to be modified accordingly.

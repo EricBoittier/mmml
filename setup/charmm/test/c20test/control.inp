@@ -1,0 +1,16 @@
+* this input file tests the control flow handling commands of charmm.
+*
+set 1 1.0
+set 2 2.5
+label a
+write title unit 6
+*   @1   @2
+*
+incr 1
+if 1 lt @2 goto a
+incr 1 by 3
+if 1 gt 10 goto b
+if 1 gt 2.5 goto a
+label b
+incr by 0.05 2
+stop

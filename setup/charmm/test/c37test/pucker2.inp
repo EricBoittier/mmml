@@ -1,0 +1,48 @@
+* CHARMM 37 testcase pucker2.inp
+* Author: Antti-Pekka Hynninen
+* External Files: top_all36_carb.rtf, par_all36_carb.prm
+*                 b-glucose_water.psf, b-glucose_water.cor
+* 
+stream datadir.def
+
+read rtf card name @0/top_all36_carb.rtf
+read param card name @0/par_all36_carb.prm
+
+read psf  card name @0/b-glucose_water.psf
+read coor card name @0/b-glucose_water.cor
+
+faster off
+
+quick sugar 1 o5 sugar 1 c1 sugar 1 c2 sugar 1 c3 sugar 1 c4 sugar 1 c5
+
+cons puck sugar 1 o5 sugar 1 c1 sugar 1 c2 sugar 1 c3 sugar 1 c4 sugar 1 c5 -
+     kcon 10.0 10.0 10.0 valu 0.6 0.2 3.3 expo 2.0 2.0 2.0
+
+skipe all excl cpuck
+energy
+
+test first step 0.0001 tol 0.000001
+
+skipe none
+
+!-----------------------------------------
+! Run some dynamics and produce .dcd file
+!-----------------------------------------
+open write unit 1 unform name @9/pucker2.dcd
+
+dyna leap start nstep 100 timestp 0.002 -
+  firstt 300.0 finalt 300.0 -
+  tbath 300.0 twindh 3.0 twindl -3.0 teminc 0 -
+  iasors 0 iscvel 0 ichecw 1 ieqfrq 5000 -
+  ntrfrq 0 inbfrq -1 nsavc 5 nsavv 0 -
+  iprfrq 10 iseed 123456 123456 123456 123456 -
+  iuncrd 1
+
+open read unit 2 file name @9/pucker2.dcd
+
+correl maxtime 20 maxser 5 maxatom 10
+   enter puc1 puck atom sugar 1 o5 sugar 1 c1 sugar 1 c2 sugar 1 c3 sugar 1 c4 sugar 1 c5
+   traj firstu 2 nunit 1 begin 5 stop 20 skip 5
+
+stop
+

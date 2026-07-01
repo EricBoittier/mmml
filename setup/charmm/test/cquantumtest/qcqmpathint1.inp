@@ -1,0 +1,259 @@
+* QM/MM Path-Integral test cases 
+* System same as in: 
+* RHF/6-31G(d) initial coordinates
+* Jeffrey D. Evanseck
+* See Field, M. J., Bash, P. A., & Karplus M. J. Comp. Chem. 1990, 11,
+* 700.
+*---
+*   Test 1: QM-acetone + MM-water interaction energy decomposition
+*   Test 2: QM-acetone + MM-water free energy perturbation
+* JG 12/00
+* Dan T Major 05/20/2005 amend test case for path-integral studies
+* See Major, D.T.; Garcia-Viloca, M.; Gao, J. J. Chem. Theory Comput. 2006, 2, 236-245.
+*
+
+if ?qchem .ne. 1 then stop
+
+stream datadir.def
+
+!prnlev 11
+
+read rtf card
+* Acetone plus water topology file
+*
+   19    1
+mass     2 HA     1.00800  ! Acetone H
+mass     4 C1D    12.01100 ! Peptide C
+mass     5 CT    12.01100  ! Alkane C
+mass     6 OB    15.99940  ! Peptide O
+mass     7 HT     1.00800  ! TIP3P hydrogen
+mass     8 OT    15.99940  ! TIP3P oxygen
+
+auto angles dihedral
+
+resi ACE      0.00000
+
+group
+atom C    C1D  0.52
+atom O    OB  -0.52
+
+group
+atom CT1  CT  -0.27
+atom HZ1  HA   0.09
+atom HZ2  HA   0.09
+atom HZ3  HA   0.09
+
+group
+atom CT2  CT  -0.27
+atom HZ4  HA   0.09
+atom HZ5  HA   0.09
+atom HZ6  HA   0.09
+
+bond O C
+bond C CT1
+bond C CT2
+bond CT1 HZ1
+bond CT1 HZ2
+bond CT1 HZ3
+bond CT2 HZ4
+bond CT2 HZ5
+bond CT2 HZ6
+
+impr C CT1 CT2 O
+impr C CT2 CT1 O
+
+ic HZ1 CT1 C O 0. 0. 0. 0. 0.
+ic HZ2 CT1 C O 0. 0. 0. 0. 0.
+ic HZ3 CT1 C O 0. 0. 0. 0. 0.
+ic HZ4 CT2 C O 0. 0. 0. 0. 0.
+ic HZ5 CT2 C O 0. 0. 0. 0. 0.
+ic HZ6 CT2 C O 0. 0. 0. 0. 0.
+ic HZ1 CT1 C CT2 0. 0. 0. 0. 0.
+ic HZ1 CT1 HZ2 C 0. 0. 0. 0. 0.
+ic CT1 CT2 *O C 0. 0. 0. 0. 0.
+
+patch first none last none
+
+resi TIP3      0.00000
+
+! Make two groups to allow parallel test with 2 procs
+group
+atom OH2  OT  -0.82
+group
+atom H1   HT   0.41
+atom H2   HT   0.41
+
+bond OH2 H1 OH2 H2
+bond H1 H2
+
+theta H1 OH2 H2
+
+patch first none last none
+
+end
+
+read param card
+* Acetone parameters from 6-31G(d).
+*
+bonds
+C1D OB  720.0   1.2200
+C1D CT  200.0   1.5220
+CT HA  317.13  1.1110
+HT OT  450.00  0.9572
+HT HT    0.0   1.5139
+
+theta
+OB C1D CT 90.000 122.
+C1D CT HA 33.000 109.5  30.00  2.163
+CT C1D CT 50.000 116.
+HA CT HA 36.000 108.40  5.20  1.802
+HT OT HT 55.000 104.52
+
+dihedral
+OB  C1D CT HA  0.000  3   180.0
+HA  CT C1D CT  0.020  6   180.0
+
+improper
+OB CT CT C1D  38.000   0     0.0
+
+nonbonded shift atom vswitch vatom cutnb 999. ctonnb 997. -
+ctofnb 998. e14fac 1. cdiel epsilon 1. wmin 1.5
+C1D  0. -0.0500  2.0500
+OB  0. -0.1200  1.7000 0. -0.12 1.4
+CT  0. -0.1562  1.8000
+HA  0. -0.0078  1.4680
+OT  0. -0.1521  1.7682
+HT  0. -0.04598 0.2245
+
+end
+
+read sequence card
+* Acetone 6-31G(d) geometry.
+*
+1
+ACE
+
+generate KET first none last none setup warn
+
+read sequence TIP3 1
+
+generate WAT first none last none setup warn noangle nodihedral
+
+!-- Prepare dynamics trajectory to read ---
+
+open unit 10 read form name @0/quantum1.xyz
+read coor card free unit 10
+close unit 10
+
+print coord
+
+updat inbfrq 1000 ihbfrq 0 cutnb 999.0 ctonnb 997.0 ctofnb 998.0 -
+      cdie
+
+!---------- Needed to define Q-Chem env. vars. ----------
+ envi qchemcnt  "data/qchem_qub.inp"
+ envi qcheminp  "q1.inp"
+ envi qchemexe  "qchem"
+ envi qchemout  "qchem.out"
+!--------------------------------------------------------
+
+qchem remove sele segi ket end
+
+open write unformatt unit 10 name @0/quantum1.trj
+
+dynamics leapfrog strt nstep 30 timestp 0.001 -
+    iseed 4028987 ilbfrq 5 firstt 298.15 finalt 298.15 tbath 298.15 - 
+    nsavc 3 iprfrq  10 -
+    iuncrd 10
+
+close unit 10 
+
+!--Test 1: PI QM/MM ---
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Trajectory settings
+set NSkip           1     ! # of MD steps
+set NSave           1     ! Initialize sampling from
+calc NSkip @NSave*@NSkip  ! Skip configurations from trj
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Any number of bead can be used (2<=NBeads<=1024) although Chin action requires
+! multiples of 3
+
+! Set NMove for first 3 test cases
+if ?numnode .gt. 1 set NMove ?numnode
+if ?numnode .eq. 1 set NMove 2
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 1. QCP test with primitive approximation
+! Path-integral settings
+set NBeads          8 
+set T          298.15
+set Neq         10000     ! Equilibration of beads not necessary when bisecting entire bead
+set Nav            10     ! Use ~ 100
+set RNum           -1     ! Time-dependent randum number seed
+set RNum       618897     ! Should be -1 except for test-case
+
+open read  unit 11 unfo name @0/quantum1.trj  ! read coordinates from trj file
+open write unit 12 form name @0/quantum1.qub
+open write unit 14 form name @0/quantum1.bds
+
+QUB QCP SELE SEGID KET SHOW END FAST FFOCK -
+    TEMP @T MCON @Nav MCEQ @Neq BEAD @NBeads NBMOVE @NMove -
+    IRAN @RNum -
+    FIRST 11 OUNI 12 BDIN -13 BDOUT -14 -
+    NUNI 1 BEGI -1 STOP -1 SKIP @NSkip
+
+close unit 11
+close unit 12
+close unit 14
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 2. QCP test with Takahashi-Imada
+! Path-integral settings
+set NBeads          8
+set T          298.15
+set Neq         10000     ! Equilibration of beads not necessary when bisecting entire bead
+set Nav            10     ! Use ~ 100
+set RNum           -1     ! Time-dependent randum number seed
+set RNum       618897     ! Should be -1 except for test-case
+
+open read  unit 11 unfo name @0/quantum1.trj  ! read coordinates from trj file
+open write unit 12 form name @0/quantum1.qub
+open write unit 14 form name @0/quantum1.bds
+
+QUB QCP TIAC SELE SEGID KET SHOW END FAST FFOCK -
+    TEMP @T MCON @Nav MCEQ @Neq BEAD @NBeads NBMOVE @NMove -
+    IRAN @RNum -
+    FIRST 11 OUNI 12 BDIN -13 BDOUT -14 -
+    NUNI 1 BEGI -1 STOP -1 SKIP @NSkip
+
+close unit 11
+close unit 12
+close unit 14
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! 3. QCP test with Chin
+! Path-integral settings
+set NBeads          9     ! Must use multiple of 3
+set T          298.15
+set Neq         10000     ! Equilibration of beads not necessary when bisecting entire bead
+set Nav            10     ! Use ~ 100
+set RNum           -1     ! Time-dependent randum number seed
+set RNum       618897     ! Should be -1 except for test-case
+
+open read  unit 11 unfo name @0/quantum1.trj  ! read coordinates from trj file
+open write unit 12 form name @0/quantum1.qub
+open write unit 14 form name @0/quantum1.bds
+
+QUB QCP CHAC SELE SEGID KET SHOW END FAST FFOCK -
+    TEMP @T MCON @Nav MCEQ @Neq BEAD @NBeads NBMOVE @NMove -
+    IRAN @RNum -
+    FIRST 11 OUNI 12 BDIN -13 BDOUT -14 -
+    NUNI 1 BEGI -1 STOP -1 SKIP @NSkip
+
+close unit 11
+close unit 12
+close unit 14
+
+stop
+

@@ -1,0 +1,101 @@
+* Example for using SCC-DFTB with replica path or NEB
+* By Qiang Cui based on NEB from Paul Maragakis
+* Need: data/chair.crd,boat.crd,cyclohexane.str
+*
+
+if ?sccdftb .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+bomlev -5
+
+set 0 data/
+set 9 data/
+
+! Generate cyclohexane
+stream "data/cyclohexane.str"
+
+! Number of replicas
+set nrpl 11
+! 1 / nrpl
+set ninv 0.090909090
+! 1 / (nrpl-1)
+set ninv1 0.1
+
+! Read in one end point configuration.
+OPEN UNIT 13 READ FORM NAME @0chair.crd
+READ COOR CARDS UNIT 13
+CLOSE UNIT 13
+
+energy
+
+! Prepare the replica.
+REPLIcate A NREPlica @nrpl SELEct all END
+
+! This is the final replica
+DEFIne active SELE segid cycl END
+
+! linear interpolation path
+coor duplicate sele active end sele segid A@nrpl end
+OPEN UNIT 13 READ FORM NAME @0boat.crd
+READ COOR CARDS UNIT 13
+CLOSE UNIT 13
+coor duplicate sele active end sele segid A1 end
+coor copy comp
+set a 1.0
+set q 2
+label loop1
+  coor comp duplicate sele active end sele segid A@q end
+  decr a by @ninv1
+  coor duplicate sele segid A@nrpl end sele segid A@q end
+  coor average fact @a sele segid A@q end
+  incr q by 1
+  if q .ne. @nrpl goto loop1
+
+! Get rid of the "active" set.
+DELEte ATOM SELEct active END
+
+! Replica interaction coefficients
+define replicas select segid A* end
+block 2
+  call 2 select replicas end
+  coef 1 1 1.0
+  coef 2 2 @ninv
+  coef 2 1 @ninv
+ end
+
+! -----------------------------------------------------------
+
+define qm sele replicas show end
+
+! ...... Do SCC min ......  
+scalar WMAIN set 1.0 sele (all) .and. type O*  SHOW end
+scalar WMAIN set 2.0 sele (all) .and. type N*  SHOW end
+scalar WMAIN set 3.0 sele (all) .and. type C*  SHOW end
+scalar WMAIN set 4.0 sele (all) .and. type H*  SHOW end
+
+! just need to specify how many replica you have for SCC
+sccdftb sele qm end SCFT 0.00000001 NRPL @nrpl
+
+energy
+
+! -----------------------------------------------------------
+
+scalar wmain set 1.0
+
+! Replica path: NEB with some angular force.
+RPATH KNEB 10.0 KMAX 0.0 KRMS 0.0 KANGLE 3.0 COSMax 1.0 NEBA
+cons fix sele segid a1 .or. segid a@nrpl end
+
+! Quick and dirty sd
+mini sd nstep 50
+
+! Write the full replica path coordinates.
+open write unit 15 name @9rp_scc.crd form
+write coor card unit 15
+* final replica for neb relaxation
+*
+
+stop
+

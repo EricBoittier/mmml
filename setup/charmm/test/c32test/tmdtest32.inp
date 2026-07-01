@@ -1,0 +1,158 @@
+* TEST FOR TARGETED MOLECULAR DYNAMICS SIMULATION.
+* Author: Arjan van der Vaart 
+* This is the c32a1 version of Jianpeng Ma's c28a3 tmdtest.inp
+* This test case is for an alpha helix (10-Ala) to unfold towards
+* a linear conformation.
+*
+
+if ?TMD .NE. 1 then
+  echo "Test NOT Performed."
+  STOP
+endif
+
+stream datadir.def
+BOMLEV -4
+
+OPEN READ FORM UNIT 11 NAME  @0toph19.rtf
+READ RTF  CARD UNIT 11
+close unit 11
+
+OPEN READ FORM UNIT 12 NAME  @0param19.prm
+READ PARAM CARD UNIT 12
+close unit 12
+
+READ SEQUence CARD
+* Deca-alanine
+*
+10
+ALA ALA ALA ALA ALA ALA ALA ALA ALA ALA
+
+GENErate helx 
+
+READ COORdinates CARD
+* MINIMIZED DECA-ALANINE (200 SD, 4000 ABNR)
+*  DATE:    12/19/94     15:23:51      CREATED BY USER: nobody
+*
+   63
+    1    1 ALA  HT1   -8.73763  -1.71137   1.25825 ALA  1      0.00000
+    2    1 ALA  HT2   -8.53381  -0.32462   0.29269 ALA  1      0.00000
+    3    1 ALA  N     -8.04634  -1.09148   0.79276 ALA  1      0.00000
+    4    1 ALA  HT3   -7.39639  -0.69714   1.50245 ALA  1      0.00000
+    5    1 ALA  CA    -7.25682  -1.85731  -0.14437 ALA  1      0.00000
+    6    1 ALA  CB    -8.09758  -2.35530  -1.30929 ALA  1      0.00000
+    7    1 ALA  C     -6.16160  -0.93748  -0.66003 ALA  1      0.00000
+    8    1 ALA  O     -5.04944  -1.08198  -0.17129 ALA  1      0.00000
+    9    2 ALA  N     -6.45937   0.08458  -1.47794 ALA  2      0.00000
+   10    2 ALA  H     -7.37938   0.25533  -1.75977 ALA  2      0.00000
+   11    2 ALA  CA    -5.45272   0.94688  -2.09619 ALA  2      0.00000
+   12    2 ALA  CB    -6.13723   2.13263  -2.76245 ALA  2      0.00000
+   13    2 ALA  C     -4.37974   1.49170  -1.16311 ALA  2      0.00000
+   14    2 ALA  O     -3.20528   1.24578  -1.39867 ALA  2      0.00000
+   15    3 ALA  N     -4.77366   2.14448  -0.06492 ALA  3      0.00000
+   16    3 ALA  H     -5.70917   2.39531   0.02593 ALA  3      0.00000
+   17    3 ALA  CA    -3.83302   2.64050   0.93341 ALA  3      0.00000
+   18    3 ALA  CB    -4.60519   3.22500   2.10719 ALA  3      0.00000
+   19    3 ALA  C     -2.89336   1.57199   1.48019 ALA  3      0.00000
+   20    3 ALA  O     -1.68159   1.75284   1.46341 ALA  3      0.00000
+   21    4 ALA  N     -3.44343   0.43522   1.91399 ALA  4      0.00000
+   22    4 ALA  H     -4.40536   0.33758   1.86541 ALA  4      0.00000
+   23    4 ALA  CA    -2.65508  -0.66419   2.45108 ALA  4      0.00000
+   24    4 ALA  CB    -3.57988  -1.79625   2.87732 ALA  4      0.00000
+   25    4 ALA  C     -1.67754  -1.21973   1.42506 ALA  4      0.00000
+   26    4 ALA  O     -0.48997  -1.34119   1.71338 ALA  4      0.00000
+   27    5 ALA  N     -2.15753  -1.50758   0.21350 ALA  5      0.00000
+   28    5 ALA  H     -3.09557  -1.32833   0.01953 ALA  5      0.00000
+   29    5 ALA  CA    -1.32627  -2.04903  -0.84828 ALA  5      0.00000
+   30    5 ALA  CB    -2.17533  -2.30466  -2.08474 ALA  5      0.00000
+   31    5 ALA  C     -0.21872  -1.07882  -1.23002 ALA  5      0.00000
+   32    5 ALA  O      0.94813  -1.46476  -1.27000 ALA  5      0.00000
+   33    6 ALA  N     -0.56203   0.18967  -1.45599 ALA  6      0.00000
+   34    6 ALA  H     -1.49991   0.44428  -1.36650 ALA  6      0.00000
+   35    6 ALA  CA     0.40184   1.21385  -1.81732 ALA  6      0.00000
+   36    6 ALA  CB    -0.29774   2.54958  -2.02938 ALA  6      0.00000
+   37    6 ALA  C      1.44055   1.40122  -0.72385 ALA  6      0.00000
+   38    6 ALA  O      2.63110   1.34654  -1.01062 ALA  6      0.00000
+   39    7 ALA  N      1.01080   1.56174   0.52695 ALA  7      0.00000
+   40    7 ALA  H      0.04864   1.53339   0.70259 ALA  7      0.00000
+   41    7 ALA  CA     1.91961   1.77244   1.64223 ALA  7      0.00000
+   42    7 ALA  CB     1.13243   2.07110   2.90941 ALA  7      0.00000
+   43    7 ALA  C      2.80286   0.57406   1.95136 ALA  7      0.00000
+   44    7 ALA  O      3.92493   0.74970   2.40387 ALA  7      0.00000
+   45    8 ALA  N      2.28900  -0.64484   1.79651 ALA  8      0.00000
+   46    8 ALA  H      1.33906  -0.73654   1.58343 ALA  8      0.00000
+   47    8 ALA  CA     3.08953  -1.83883   2.01758 ALA  8      0.00000
+   48    8 ALA  CB     2.17858  -3.04744   2.17196 ALA  8      0.00000
+   49    8 ALA  C      4.05588  -2.15901   0.88601 ALA  8      0.00000
+   50    8 ALA  O      5.05414  -2.84755   1.09736 ALA  8      0.00000
+   51    9 ALA  N      3.67968  -1.79281  -0.33901 ALA  9      0.00000
+   52    9 ALA  H      2.78881  -1.41082  -0.47029 ALA  9      0.00000
+   53    9 ALA  CA     4.54118  -1.99662  -1.49061 ALA  9      0.00000
+   54    9 ALA  CB     3.71717  -1.93507  -2.76859 ALA  9      0.00000
+   55    9 ALA  C      5.66376  -0.97985  -1.63926 ALA  9      0.00000
+   56    9 ALA  O      6.68542  -1.29574  -2.25843 ALA  9      0.00000
+   57   10 ALA  N      5.38918   0.24881  -1.19819 ALA  10     0.00000
+   58   10 ALA  H      4.50667   0.43584  -0.82420 ALA  10     0.00000
+   59   10 ALA  CA     6.35486   1.33599  -1.20791 ALA  10     0.00000
+   60   10 ALA  CB     5.59082   2.65543  -1.13869 ALA  10     0.00000
+   61   10 ALA  C      7.35650   1.31146  -0.05180 ALA  10     0.00000
+   62   10 ALA  OT1    7.17196   0.53820   0.88728 ALA  10     0.00000
+   63   10 ALA  OT2    8.32447   2.07408  -0.09913 ALA  10     0.00000
+
+!# all TMD commands go here
+TMDInitialize sele all end sele all end inrt 10 
+
+OPEN read UNIT 2 CARD NAME @0tmd_ala10_targ.crd
+read coor UNIT 2 CARD targ
+
+faster ON
+shake bonh param tol 1.0e-8
+ 
+!------------Dynamic loops--------------------
+title
+* TMD simulation. 
+*
+
+open write unit 13   form name @9ala1.res
+open write unit 14 unform name @9ala1.dcd
+
+dynamics  strt              leap                                  -
+          nstep       100   timest      0.001                     -
+          iunread      -1   iunwrite       13     isvfrq   100    -
+          firstt        0   finalt         20     tstruc    20    -
+          tconstant         tcoupling     0.1     trefer    20    -
+          ntrfrq       10   inbfrq         -1                     -
+          iprfrq       10   nprint         10                     -
+          nsavc        50   nsavv           0                     -
+          iuncrd       14   iunvel         -1                     -
+          wmin       1.50   kunit          -1     ihbfrq     0    -
+          ilbfrq        0   iasvel          1                     -
+          iseed    586101
+
+
+!# TMD is deactivated and the target coordinates are cleared after 
+!# each DYNA command.
+!# Re-active TMD before doing a restart.
+
+TMDInitialize sele all end sele all end inrt 10 dincr 0.0025
+
+OPEN read UNIT 2 CARD NAME @0tmd_ala10_targ.crd
+read coor UNIT 2 CARD targ
+
+open write unit 13   form name @9ala2.res
+open write unit 14 unform name @9ala2.dcd
+open read  unit 17   form name @9ala1.res
+
+dynamics  rest              leap                                  -
+          nstep      100    timest      0.001                     -
+          iunread      17   iunwrite       13     isvfrq   100    -
+          firstt       20   finalt         20     tstruc    20    -
+          tconstant         tcoupling     0.5     trefer    20    -
+          ntrfrq       10   inbfrq         -1                     -
+          iprfrq     1000   nprint       1000                     -
+          nsavc        50   nsavv           0                     -
+          iuncrd       14   iunvel         -1                     -
+          wmin       1.50   kunit          -1     ihbfrq     0    -
+          ilbfrq        0   iasvel          1                     -
+          iseed    586101
+
+stop

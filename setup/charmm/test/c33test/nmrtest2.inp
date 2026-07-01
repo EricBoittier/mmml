@@ -1,0 +1,172 @@
+*  CHARMM c33a1 Testcase nmrtest2.inp
+*  TEST THE NMR ANALYSIS FACILITY
+*  DIPOLE-DIPOLE RELAXATIONS
+*  tripeptide used
+*
+
+! MFC looks like not parallel
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+if ?nomisc .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+set pnode
+if ?NUMNODE .gt. 1 set pnode node 0
+
+stream datadir.def
+!set 0 ../data/
+!set 9 .
+
+open read form unit 1 name @0toph19.rtf
+read rtf  card unit 1
+close unit 1
+
+open read form unit 1 name @0param19.prm
+read parameter card unit 1
+close unit 1
+
+
+read sequence  cards
+* 5-ALA sequence
+*
+   3
+ASP ALA ARG
+generate  MAIN setup
+
+read coor card 
+*  TRIPEPTIDE USED
+*
+   35
+    1    1 ASP  HT1    3.08042   5.56145  -4.87908 MAIN 1      0.00000
+    2    1 ASP  HT2    4.11817   4.77139  -3.83878 MAIN 1      0.00000
+    3    1 ASP  N      3.28017   4.63985  -4.44049 MAIN 1      0.00000
+    4    1 ASP  HT3    2.54756   4.30950  -3.78037 MAIN 1      0.00000
+    5    1 ASP  CA     3.57376   3.57806  -5.37130 MAIN 1      0.00000
+    6    1 ASP  CB     4.83412   3.89037  -6.18668 MAIN 1      0.00000
+    7    1 ASP  CG     5.89709   4.58074  -5.35965 MAIN 1      0.00000
+    8    1 ASP  OD1    6.69885   3.92113  -4.71404 MAIN 1      0.00000
+    9    1 ASP  OD2    5.86323   5.80147  -5.28046 MAIN 1      0.00000
+   10    1 ASP  C      3.72200   2.40159  -4.42693 MAIN 1      0.00000
+   11    1 ASP  O      2.69317   2.05787  -3.84854 MAIN 1      0.00000
+   12    2 ALA  N      4.88778   1.79431  -4.20052 MAIN 2      0.00000
+   13    2 ALA  H      5.68615   2.07795  -4.69301 MAIN 2      0.00000
+   14    2 ALA  CA     5.05545   0.79677  -3.15528 MAIN 2      0.00000
+   15    2 ALA  CB     6.40511   0.11801  -3.32828 MAIN 2      0.00000
+   16    2 ALA  C      5.03974   1.44713  -1.77572 MAIN 2      0.00000
+   17    2 ALA  O      4.72242   0.80455  -0.77558 MAIN 2      0.00000
+   18    3 ARG  N      5.43184   2.72133  -1.73997 MAIN 3      0.00000
+   19    3 ARG  H      5.80668   3.13412  -2.54589 MAIN 3      0.00000
+   20    3 ARG  CA     5.31596   3.56472  -0.56425 MAIN 3      0.00000
+   21    3 ARG  CB     6.68687   3.59278   0.17175 MAIN 3      0.00000
+   22    3 ARG  CG     7.98389   3.74828  -0.65417 MAIN 3      0.00000
+   23    3 ARG  CD     8.57405   5.16372  -0.71872 MAIN 3      0.00000
+   24    3 ARG  NE     7.58508   6.09637  -1.21923 MAIN 3      0.00000
+   25    3 ARG  HE     6.92636   6.43311  -0.57650 MAIN 3      0.00000
+   26    3 ARG  CZ     7.35351   6.31002  -2.51585 MAIN 3      0.00000
+   27    3 ARG  NH1    6.19935   6.88086  -2.84352 MAIN 3      0.00000
+   28    3 ARG  HH11   5.93538   6.91571  -3.80742 MAIN 3      0.00000
+   29    3 ARG  HH12   5.45875   6.81220  -2.17508 MAIN 3      0.00000
+   30    3 ARG  NH2    8.19607   5.92117  -3.47415 MAIN 3      0.00000
+   31    3 ARG  HH21   7.85274   5.89756  -4.41306 MAIN 3      0.00000
+   32    3 ARG  HH22   9.00679   5.37663  -3.25917 MAIN 3      0.00000
+   33    3 ARG  C      4.78930   4.94925  -0.97859 MAIN 3      0.00000
+   34    3 ARG  OT1    4.25787   5.09110  -2.08284 MAIN 3      0.00000
+   35    3 ARG  OT2    4.97825   5.92864  -0.25676 MAIN 3      0.00000
+!----------------------------------------------------------------------------
+! Run a short trajectory (test the restart)
+energy
+shake bonh param 
+scalar fbeta set 10.0 select all end
+
+! equilibration
+open write unformatted unit 50 name @9nmrtest1_1.trj
+open write   formatted unit 52 name @9nmrtest1_1.rst
+
+DYNAMICS  strt             nstep      2000  timestp   0.002  nprint  1000 -
+          iasvel        1  firstt    300.0  finalt    300.0  tstruc 300.0 -
+!          langevin         tbath     300.0  -
+          inbfrq        0  ihbfrq        0  ilbfrq        0  -
+          iuncrd       50  nsavcrd     100  -
+          iunread      -1  -
+          iunwrit      52 
+
+! first production
+open write unformatted unit 50 name @9nmrtest1_2.trj
+open read    formatted unit 51 name @9nmrtest1_1.rst
+open write   formatted unit 52 name @9nmrtest1_2.rst
+
+DYNAMICS  restart          nstep     16000  timestp   0.002  nprint  1000 -
+!          langevin         tbath     300.0  -
+          inbfrq        0  ihbfrq        0  ilbfrq        0  -
+          iuncrd       50  nsavcrd     100  -
+          iunread      51  -
+          iunwrit      52
+
+! second production
+open write unformatted unit 50 name @9nmrtest1_3.trj
+open read    formatted unit 51 name @9nmrtest1_2.rst
+open write   formatted unit 52 name @9nmrtest1_3.rst
+
+DYNAMICS  restart          nstep     16000  timestp   0.002  nprint  1000 -
+!          langevin         tbath     300.0  -
+          inbfrq        0  ihbfrq        0  ilbfrq        0  -
+          iuncrd       50  nsavcrd     100  -
+          iunread      51  -
+          iunwrit      52
+
+! use last frame as a reference structure
+coor orient 
+coor copy comp 
+print coor
+scalar wmain set 0.0
+
+!----------------------------------------------------------------------------
+! analysis
+NMR  maxa 40
+prnlev 7 @pnode
+reset  
+
+! Relaxation times for global anisotropic tumbling (axially symmetric
+! shape) 
+! N - H pair
+RTIMES ANIS DRAT 2.0 DTSX 1.0 DTSY 0.0 DTSZ 0.0 -
+       STAT rtumbl  500.0 hfield 11.74 cut 3.4 -
+       select type N end  -
+       select type H end 
+
+END
+
+NMR
+reset
+
+! Relaxation times for global anisotropic tumbling (axially symmetric
+! shape) calculate DD + CSA relaxation 
+! N - H pair
+RTIMES ANIS DRAT 2.0 DTSX 1.0 DTSY 0.0 DTSZ 0.0 -
+       STAT rtumbl  500.0 hfield 11.74 cut 3.4 -
+       CSAR DSIG 170.0 select type N end  -
+       select type H end
+
+END
+
+NMR
+reset
+
+RTIMES ANIS DRAT 1.2 DTSX 1.0 DTSY 0.0 DTSZ 0.0 -
+       rtumbl  500.0 hfield 11.74 cut 3.4 -
+       select type N end  -
+       select type H end
+
+open read unformatted unit 50 name @9nmrtest1_2.trj
+open read unformatted unit 51 name @9nmrtest1_3.trj
+DYNA RTIM nunit 2   firstu 50 begin 2100 stop  34000 skip 100 -
+     rtumbl 500.0   hfield 11.74   cut     3.4   tmax    4.0   -
+     iwrite     6   C(t) modf 6 mfda 6 dsig 170.0 -
+     orient         select type CA end 
+
+STOP

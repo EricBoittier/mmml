@@ -1,0 +1,749 @@
+* Syntax::                Syntax of the MMFP commands
+* Details::               Descriptions of the GEO subcommands
+* Examples::              Examples of GEO subcommands
+* Substitutions::         Description and usage of substitution values
+
+
+File: MMFP, Node: Syntax, Up: Top, Previous: Top, Next: Details
+
+
+                    Syntax of basic MMFP commands
+
+
+GEO reset
+
+GEO [MAXGEO integer] [shape_specification] [position_spec] [RCM] 
+              [potential_spec] [atom_selection] [ DISTANCE atom_selection]
+                        [ ADISTANCE atom_selection atom_selection ] [PERP] 
+                        [ ANGLE atom_selection atom_selection ]
+                        [ AANGLE 3 X atom_selection]
+                        [ DIHEDRAL 3 X atom_selection ]
+                        [ IUMMFP unit]
+
+SSBP reset
+
+SSBP [atom_selection] [atom_selection] [ssbp_specification]
+
+BHEL [atom_selection] 
+
+SHEL [atom_selection] [shell_options-specification] 
+
+VMOD RESEt
+
+VMOD INIT MXMD integer UMDN integer [NATM integer] -
+     KROT real KCGR real UOUT integer NSVQ integer [atom selection]
+
+{ VMOD ADD IMDN integer KMDN real QN real }
+
+{ VMOD CHANge NREStraint integer KMDN real QN real }
+
+EPR NSPINLABELS integer NREPLICA integer KENPP real SIG2EPR real -
+    [atom_selection] -
+    DELPPP real NPTOT integer NPPP integer UNIT 50
+
+BPCMap NBTP integer LAMBDA real DIM integer UNIT integer -
+    DIHE 8x[atom selection]
+
+shape_specification:==  { [SPHERE] } [XREF real] [YREF real] [ZREF real] -
+                                     [TREF real]
+                        { CYLINDER } [XDIR real] [YDIR real] [ZDIR real] 
+                        { PLANAR   }  
+
+potential_spec:== { HARMonic } { INSIDE    } [FORCE real] -
+                                             [DROFF real] [DTOFF real]
+                  { QUARtic  } { OUTSIDE   } [P1 real] [P2 real]  
+                  { EXPOnent } { SYMMETRIC }
+                  { GAUSsian } { RMAX FORCE 3x[atom selection]}
+                  { SAWOod   }
+                     
+
+ssbp_pecification:== KIRKWOOD NMULT [integer (15)]  [DIEC real] [RADI real] 
+                       [DRDIE real] CAVITY HSR ANGU [EMP1 real] [EMP2 real]
+
+shell_options-specification:== 
+           DRSH [real (8.0)] RELA [real (0.00001)] SCO [real (0.0)]
+           PFINAL [real (1.0)] CUT [real (2.0)] RWEL [real (0.25)]
+           FOCO1 [real (3.0)] FOCO2 [real (15.0)] CHCO [real (0.00001)]
+           SPACE [integer (1000000)] UPDF [integer (10)] CHFR [integer (1000)]
+
+atom-selection:== (see *note select:(doc/select.info).)
+
+
+File: MMFP, Node: Details, Up: Top, Previous: Syntax, Next: Examples
+
+
+                    Details of basic MMFP commands
+
+
+1) GEO RESET
+Cancels all restraints in GEO free all space allocated on the HEAP
+
+2) GEO [MAXGEO  int]
+Allocate space on the HEAP to be used for all subsequent GEO potential terms.
+By default, MAXGEO is set to NATOM unless specified. The MMFP subroutine calls
+WRNDIE if there is not enough space allocated. 
+The keyword IUMMFP followed by a unit number will cause the position R,
+or the angle (degrees) for that constraint to be written to that file. 
+By default no writing is performed for each GEO restraint. 
+
+3) RCM key word
+With the keyword RCM any restraints is not applied to each individual
+atoms of a selection but applied to the center of mass of the selected atoms.
+
+
+5) [shape_specification]
+The shape of the potential is chosen from SPHERE, CYLINDER or PLANE key words,
+SPHERE is the default.  The shape specification gives the origin 
+(XREF, YREF, ZREF, or TREF for angles) and the orientation (XDIR, YDIR, ZDIR) 
+of a vector such that a sphere, plane or cylinder may be defined.  Using the 
+shape_specification the potential is calculated from the 
+general distance from a (x,y,z) reference point (SPHERE), distance from 
+an axis (CYLINDER) or distance from a plane (PLANE).  By default, all 
+values are zero and the origin of the boundary is at (0.0,0.0,0.0).
+If the shape of the boundary requires a unit vector (true for cylinder 
+and plane), and no values are given the subroutine will call WRNDIE.
+
+6) [potential_spec] [HARMonic]
+                    [QUARtic]
+                    [EXPOnential]
+                    [GAUSsian]
+                    [SAWOod]
+The potential specification has a number of 
+parameters: [FORCE real] is the amplitude of the potential term
+            [P1 real] is a parameter used in the quartic, the gaussian,
+                      the exponetntial and the Saxon-Wood-type potential
+            [P2 real] parameter used in the Saxon-Wood-type potential 
+            [DROFF real] is an offset distance such that GEO(r) = 0 if r<droff
+            [DTOFF real] is an offset angle such that GEO(theta) = 0
+                         if theta<dtoff 
+            [INSIDE] the potential used only for r-droff<0
+            [OUTSIDE] the potential used is only for r-droff>0
+            [SYMMETRIC] the potential used is for |r-droff|
+They determine which kind of potential function will be used in combination
+with the geometrical shape.  The default is a harmonic potential.  A fourth
+order polynomial can be used with the key word QUARTIC, the potential has
+the form: GEO(r) = FORC*DELTA**2*(DELTA**2-P1), with DELTA=(R-DROFF).
+Using the parameters [FORCE 0.2 P1 2.25] the QUARTIC potential can be used
+to setup a spherical boundary potential with a well depth of -0.25 kcal/mol
+at r=DROFF+1 followed by a smoothly rising repulsion. Such potential is
+appropriate for a water sphere of radius DROFF+1.5 and is  very similar
+to that used in SBOUND, see *note sbound:(doc/sbound.info).
+The key word EXPO defines a exponential potential to mimic interfacial
+solvation effects:
+
+        = HALF*FORC*EXP(-DELTA/P1),       for r > DROFF
+        = FORC*(1 - HALF*EXP(+DELTA/P1),  for r < DROFF
+
+When defined in combination with PLANE shape_specification, this potential
+reproduces the "hydrophobic" potential used for  transmembrane polypeptide
+by O. Edholm.  and F. Jahnig, Biophys. Chem. 30, 279-292 (1988).
+The key word GAUSS defines a similar gaussian potential to mimic interfacial
+solvation effects. The parameter P1 gives the width of the interface.
+
+The keyword SAWO defines an exponential Saxon-Wood-type flat-bottom 
+potential of the form:
+
+        = FORC/( 1 + Exp((P2-DELTA)/P1) ) - V(0)    for r > DROFF
+        = FORC/( 1 + Exp((P2+DELTA)/P1) ) - V(0)    for r < DROFF
+
+where P1 is responsible for the steepness of the potential and P2
+determines the width (the distance between the two inflection points)
+of the restraint. V(0) is an offset correction to ensure a value of
+zero at the equilibrium point.
+This restraint should be helpful e.g., for binding free energy 
+difference calculations (it doesn't perturb the potential energy 
+landscape of the system within an adjustable range).
+
+The RMAX option works with the HARM potential to allow FIRES (
+flexible inner region ensemble separator, Rowley, C. N.; Roux, B.
+J. Chem. Theory Comput. 2012, 8, 3526−3535). The current implementation
+requires three selections. The first selection defines the origin of the
+FIRES potential; the second selection defines the inner region, while the
+third selection defines the outer region. See an example below.
+
+7) DISTANCE key word With the keyword DISTANCE a restraint is setup
+between two sets of atoms or between their center of mass if the key
+word RCM is used.  A second atom selection must be specified.
+
+8) ADISTANCE key word With the keyword ADIS a restraint is setup
+between one atom set, and two other sets of atoms, such that the position
+of the first selection is constrained at some distance parallel to 
+the axis joining the centres of mass of the second and third atom selections.  
+A second and third atom selection must be specified. The keyword PERP
+will instead constrain the first atom selection at a distance 
+perpendicular to the axis vector. 
+
+9) ANGLE keyword With the keyword ANGLE a restraint is setup between 3
+sets of atoms or their center of masses if the keyword RCM is
+used. Three sets of atom selections must be made, note that the force
+constant is per radian**2 and NOT per degree**2 even though the TREF 
+(theta-reference, equivalent to DROFF of v29) 
+variable (angle constraint) is to be specified in degrees. 
+Specification of DTOFF variable can allow shifting of the potential 
+away from TREF, as is useful in the INSIde restraint. 
+
+AANGLE keyword Restrains the angle between two axes, much like the
+ANGLE keyword. The vector from the first to second selection and the
+vector from the third to fourth selection form two axes, and the angle
+between them is restrained.
+
+10) DIHEDRAL keyword With the keyword DIHEDRAL a restraint is setup
+between 4 sets of atoms or their center of masses if the keyword RCM
+is used. Four sets of atom selections must be made, note that the
+force constant is per radian**2 and NOT per degree**2 even though the
+TREF (equivalent to DROFF) variable (dihedral constraint) is to be
+specified in degrees.
+An offset of DTOFF may also be used for this restraint. 
+
+11) SSBP key word
+Stands for Spherical Solvent Boundary Potential.  Current implementation of
+the method described in Beglov & Roux, J. Chem. Phys., 100:9050 (1994).
+The method follows from a rigorous reduction of the multi-dimensional
+configuration integral from N solvent molecules (10**23) to "n" solvent
+molecules (e.g., 1 to 1000).
+The SSBP potential corresponds to a constant temperature and constant
+pressure system.  The non-bonded interactions must be treated with EXTENDED
+electrostatics otherwise the system is unstable.  There are several
+contributions to the boundary potential of mean force:  HSR (hard sphere
+restriction) is a term setting the external pressure and surface tension;
+CAVITY ressembles to the standard stochastic boundary potential and
+corresponds to the van der Waals interactions; KIRKWOOD is the multipolar
+expansion for the reaction field due to a dielectric continuum surrounding a
+cavity containing a charge distribution;  ANGU is an angular correction that
+works for three sites water models and is used to restore the isotropic
+angular distribution near the edge of the sphere.  EMP1 and EMP2
+are two parameters for empirical gaussian potential (Deng, Y and Roux B.
+J. Phys. Chem. B, 108 (42), 16567--16576).
+The magnitude of the gaussian is controlled by EMP1,
+which has a default value of 1.1 kcal/mol.
+The width of the gaussian potential is controlled by EMP2, which
+has a default value of 0.008 angstrom^-2.  The empirical correction
+reduces the pressure in the simulation sphere, which is essential
+for correct free energy simulations.  The variable radius of
+the sphere is calculated on the fly and does not need to be specified. 
+The first atom selection flags the atoms for which the VDW and the ANGU 
+potentials are applied.  It also determines the radius of the boundary sphere.
+The second selection is optional.  If present it flags those atoms that 
+determine the radius of the boundary sphere.  By default, only the first
+flags everything; the second selection is there if one wants to remove
+some part of the system to determine the radius of the boundary sphere
+(such as a large part of a protein in an active site simulation).
+For bulk water sphere simulations, the first atom selection for should 
+be "select type OH2 end".  The second atoms selection is optional and 
+could be "select type OH2 end" or could be "select (.not. type H*) end".
+In NO CASE should the second selection includes the water hydrogens, since
+the results were NOT parametrized for this selection.
+
+12) BHEL  key word
+This key word is used to set up simulations using the primary hydration
+shell (PHS) model as described in Beglov & Roux, Biopolymers 35: 171-178
+(1995). 
+The method was later modified to allow constant pressure simulations, 
+and to improve it's efficiency (for details see: M B Hamaneh, and M Buck, 
+Refinement of the primary hydration shell model for molecular dynamics 
+simulations of large proteins, Journal of Computational Chemistry, in press). 
+In this method the protein of interest is solvated using only a thin shell 
+of water, and, to prevent evaporation of the solvent, a half-harmonic force 
+is applied to the water molecules whose distance from the nearest protein 
+atom is larger than a certain value. To reduce the pressure on the system, 
+a small outward half-harmonic force is also applied to the water molecules 
+that are close to the solvent-vacuum boundary. By adjusting the ratio of the 
+outward and inward forces the pressure of the system is held constant at the 
+desired value. As described above, in the PHS method at each step the nearest 
+protein atom to each water molecule has to be found. To do this two atom
+selections (one selection for protein atoms and the other for water molecules)
+are required. The selection command for the protein atoms comes after the key
+word BHEL. The selection usually contains all heay (not hydrogens) protein
+atoms, but in large systems one can exclude the atoms that are deep inside
+the protein. For water selection the key word SHEL is used (described below).
+It is worth mentioning that the PHS code works in parallel.
+
+13) SHEL  key word
+This key word is used after BHEL to complete the set-up of the 
+primary hydration shell (PHS) method (described above). The atom selection
+should select ALL water oxygen atoms. There are several parameters in the 
+PHS model that can be set by the user. These parameters should be defined after
+the atom selection. Here is a brief description of these parameters:
+
+DRSH      The thickness of the water shell. The initial value of DRSH
+          is set by the user. The program then adjusts this parameter to keep
+          the water density close to the right value. During a simulation the 
+          value of DRSH can be accessed (using ?DRSH), but it is not saved in 
+          restart files, and so the user must re-define this paramter when 
+          the simulation is restarted. In other words, DRSH must be printed 
+          out at the very end of each simulation, so it could be used as a 
+          starting value if the simulation is going to be restatrted.
+          At the beginning of a simulation The thickness of the shell (DRSH) 
+          should be usually set to a value that is about two Angstroms 
+          (approximately the Van der Waals radus of a protein heavy atom)
+          larger than the distance between the farthest water oxygen from
+          the protein. For example, if you keep only water molecules that are
+          within 10 A from any protein atom, DRSh should be initially set
+          to 8 A.
+
+CHFR      The step frequncy at which DRSH is adjusted to have the right
+          water density.
+
+RELA      A relaxation parameter that determines how much DRSH is changed
+          every CHFR steps. In the initial minimization stage this parameter
+          should be set to zero.
+
+PFINAL    The desired pressure.
+
+FOCO1     The force constant of the external force (that prevents evaporation)
+          for water molecules whose nearest protein residue is non-polar.
+          Different force constants may be used depending on the polarity of
+          the nearest protein residue.
+
+FOCO2     The force constant if the nearest protein residue is polar. In Most
+          simulations FOCO2 may safely chosen to be equal to FOCO1. If the
+          simulation results in desolvation of the hydrophbic residues, using
+          a FOCO1 that is larger than FOCO2 usually helps to have a more
+          uniform water distribution. However, the difference between the two 
+          force constants should not be large.
+
+RWEL      RWEL*DRSH is the thickness of the region in which the outward force
+          is applied to the water molecules. This force acts on any water
+          molecule whose distance from the nearest protein atom, d, is between
+          DRSH+a-DRSH*RWEL and DRSH+a where a is the Van der waals radius of
+          the protein atom.
+          
+SCO       The ratio of the outward and inward external forces. Adjusting this
+          parameter at each simulation step controls the pressure. During
+          a simulation the value of SCO can be accessed (using ?SCO), but it
+          is not saved in restart files, and so the user must re-define this
+          paramter when the simulation is restarted. In other words, SCO must
+          be printed out at the very end of each simulation, so it could be
+          used as a starting value if the simulation is going to be restatrted.
+
+
+CHCO      The coefficient that determines how much OSC is changed at each step.
+          In the initial minimization stage this parameter should be set to
+          zero.
+
+SPACE     Determines the size of the grid for volume calculations.
+          See description of the VOLUME command in corman.info.
+
+CUT       The cut-off for determinning whether or not a protein atom is
+          a "neighbor" of a particular water molecule. To efficiently find
+          the nearest protein atom to each water molecule, only the water
+          molecules that are within the region defined by RWEl (described
+          above) are considered for distance calculation. Also for each water
+          in that region a list of neighboring protein atoms is constructed.
+          Any protein heavy atom whose distance from the water molecule is
+          less than DRSH*CUT is a member of the neighbor list. CUT must be
+          bigger than one and should be chosen in such a way that CUT*DRSH is
+          at least 5 Angstrom larger than DRSH.
+          
+UPDF      The step frequency for updating the water and protein lists.
+          For a typical system, the default value (10) should work fine.
+
+14) VMOD  key word
+The VMOD facility  (David Perahia, Sylvain Frederic & Charles H. Robert
+2002-2008) is used to add one or more terms to the potential energy, each
+corresponding to a restraint to a given mrms projection on a normal
+mode or other 3N-dimensional vector. An appropriate reference is Floquet
+et al. (2006) FEBS Lett. 580, 5130-6. This facility is compatible with
+parallel operation.
+
+The command has several forms: initialization, adding a specification
+of a mode restraint, changing the restraint parameters, printing data
+concerning the current structrue, and resetting (to free the heap).
+
+VMOD INIT performs the initialization of the VMOD facility:
+  MXMD maximum number of mode restraints to add
+  KROT harmonic force constant for rotational restraint of the system
+  KCGR harmonic force constant for translational restraint of the system
+  UMDN the unit number of the open modes file. The keyword CARD can be used
+  to specify a card-formatted modefile, the default is a binary file
+  NATM number of atoms in the modefile (defaults to number in current PSF)
+  UOUT unit number (formatted output) to write normal mode mrms coordinates
+       and restraint energies at a given step
+  NSVQ frequency in terms of minimization or dynamics steps for writing
+       detailed data to UOUT
+  An optional atom selection permits restricting the restraint force to the
+  desired subset of atoms present in the mode file.
+  Note: The reference structure (e.g., structure for which the modes were
+  calculated) must be in the main coords when invoking this command!
+
+VMOD ADD restraint statement(s) must (each) specify the following
+  IMDN is the mode number in the mode file
+  KMDN is the harmonic force constant (kcal/mol-A) for the mrms restraint
+  QN is the desired target mrms value
+
+VMOD CHANge restraint statement(s) must (each) specify the following
+  NREStraint is the constraint (not mode) number (i.e., 1...MXMD)
+  KMDN is the new harmonic force constant (defaults to current value)
+  QN is the new desired target mrms value (defaults to current value)
+
+VMOD PRINt summarizes the mode projections and energies for the current structure
+
+VMOD RESET removes all existing VMOD restraints. It will give an error
+unless a VMOD INIT command has already been executed.
+
+In minimization or dynamics runs, the total restraint energy (Emode+Etrans+Erotat)
+is reported in the "MINI MMFP2>" or "DYNA MMFP2>" output, while more detailed
+data is written to the UOUT file at the desired frequency as specified in the
+VMOD INIT statement.
+
+
+14) EPR  key word
+This key word is used to set up the Restrained-Ensemble (RE) Molecular Dynamics 
+simulation (Roux B. and Islam, S. M. J. Phys. Chem. B, 2013, 117, 4733-39) which 
+is shown to be able to systematically correct and refine a series of distorted T4 
+lysozyme structures (Islam, S. M. and Roux B. J. Phys. Chem. B, 2013, 117, 4740-56). 
+In this simulation, it is required to create a system with multiple copies of 
+spin-labels, which yield a total of N2 distances for each pair of spin-labels at 
+every step in a molecular dynamics simulation. The ensemble-averaged instantaneous 
+histogram produced by the multiple replica are then matched with the target experimental 
+EPR/DEER histogram via an energy restraint using a large harmonic force constant. Here 
+is a brief description of various parameters in EPR:
+
+NSPINLABELS		Number of spin-labels at various positions in the system. 
+
+NREPLICA	Number of copies/replicas for each spin-labels in a specific site of the system
+
+KENPP	A large harmonic force constant used to impose the energy restraint
+
+SIG2EPR	Natural spread ? of the Gaussian for each histogram. One may keep this fixed at 1.7
+
+DELPPP	Bin spacing in the EPR/DEER distance distribution. The bin spacing must be equal for all bins.
+
+NPTOT			Number of spin-pair distributions from EPR/DEER spectroscopy. 
+
+NPPP			Total number of bins in the EPR/DEER histogram. 
+
+UNIT 	The number that is used to call the file with the EPR/DEER distributions.
+
+15) BPCMap key word
+
+BPCMap introduces biasing potentials using a 2D grid-based CMAP to any
+set of two (usually consequtive) dihedral angles for use in Hamiltonian 
+replica exchange simulations (Yang M, MacKerell Jr A D. J. Chem. Theory Comput., 
+2015, 11(2): 788-799.). It can be applied, for example, to the peptide backbone 
+phi/psi dihedrals or to glycosidic linkage dihedrals in carbohydrates (Yang M, 
+Huang J, and MacKerell Jr A D., J. Chem. Theory Comput., 2015, 11(6): 2855-2867.).
+
+Following the keyword BPCMAP, the integer NBTP integer indicates the
+number of indvidual bpCMAPs that will be read. Each bpCMAP is then
+specified individually as indicated by the LAMBDA value, the dimension
+DIM of the map, the UNIT from which the specific bpCMAP is read and
+the DIHEdrals to which the bpCMAP is being applied.  Typically the
+same value of lambda is used for each bpCMAP for a given replica
+(though the current implementation allows this to be varied) and the
+same bpCMAP can be read multiple times from the same UNIT.  See the
+example input below. Note that the bpCMAP energy is included with the
+CMAPs energy reported in CHARMM.  To access the bpCMAP energy
+contribution an energy calculation without invoking bpCMAP must be
+perfomed and the difference in the CMAPs energy term obtained.
+
+NBTP [integer]: Number of bpCMAPs.
+
+LAMBDA [real]: scaling factor of the biased potential CMAP: the default value is 1.d0 .
+
+DIM [integer]: The dimensions of the specific bpCMAP: the default value is 24.
+
+UNIT [integer]: The previously opened bpCMAP UNIT number.
+
+DIHE: Specify the two dihedrals to which the bpCMAP is being
+applied. 8x[atom_selection]. Note that each atom selection should only
+select one atom.
+
+END: to finish reading bpCMAPs
+
+File: MMFP, Node: Examples, Up: Top, Previous: Details, Next: Substitutions
+
+
+                      Examples of MMFP GEO subcommnads
+
+
+1) To setup a harmonic spherical restraint on all oxygens around the origin
+   (by default is harmonic potential and a sphere centered at the origin)
+
+MMFP
+GEO  force 100.0 select type O* end
+END
+
+The entirely equivalent detailed command would be
+MMFP
+GEO  sphere harm xref 0.0 yref 0.0 zref 0.0 force 100.0 select type O* end
+END
+
+2) The spherical quartic potential is very similarly to SBOUND potential
+   (Suitable for a sphere of radius of 13.0 angstroms centered at the origin)
+
+MMFP
+GEO  sphere quartic -
+     force 0.2 droff 13.0 p1 2.25 select type OH2 end
+END
+
+
+3) To impose a harmonic restraint on the center of mass of carbon alpha around
+  (x,y,z) = (1.0,2.0,3.0)
+
+MMFP
+GEO  sphere  RCM -
+     xref 1.0 yref 2.0 zref 3.0 -
+     force 10.0 droff 0.0 select type CA end 
+END
+
+
+4) To apply a harmonic cylindrical tube constraint of 8 angstroms radius, 
+   the axis of the cylinder is directed along ydir 1.0 and passes through the 
+   point: xref=4.0,yref=5.0,z=6.0)
+
+MMFP
+GEO  cylinder -
+     xref 4.0 yref 5.0 zref 6.0 xdir 0.0 ydir 1.0 -
+     force 100.0 droff 8.0 select type CA end
+END
+
+5) To apply a planar harmonic constraint with normal in zdir 1.0
+
+MMFP
+GEO  plane -
+     xref 7.0 yref 8.0 zref 9.0 zdir 1.0 -
+     force 100.0 droff 0.0 select type N* end
+END
+
+
+6) To fix the distance between the center of mass of two subset of atoms
+   (e.g., two domains of a protein, two amino acids, etc...)
+
+MMFP
+GEO  sphere  RCM  distance -
+     harmonic symmetric force 10.0 droff 5.0 -
+     select bynu 1:10 end    select bynu 11:20 end
+END
+
+7) To constrain the distance along an axis vector joining the center of mass 
+   of two subset of atoms
+   (e.g., and ion between two domains of a protein, two amino acids, etc...)
+
+MMFP
+GEO  ADIStance  sphere  RCM SELE RESName POT end -
+     harmonic symmetric force 10.0 droff 5.0 -
+     select bynu 1:10 end    select bynu 11:20 end
+END
+
+8) To constrain the angle between the center of mass of 3 subset of atoms
+   (e.g., 3 domains of a protein, 3 amino acids, etc...)
+
+MMFP
+GEO  sphere  RCM  angle -
+     harmonic symmetric force 1000.0 tref 5.0 dtoff 0.0 -
+     select bynu 1:10 end    select bynu 11:20 end   select bynu 21:30 end
+END
+
+Thus, the TREF variable specifies the reference angle value while the DTOFF
+variable specifies the offset to be used if necessary.
+The previous implementation (till c30 version) used DROFF to specify reference 
+angle/dihedral value with no provision for specifying flat-bottom harmonic 
+potential with an offset, the previous command is still valid but is not
+recommended.
+
+9) To constrain the dihedral angle between the center of mass of 4 subset of
+atoms (e.g., 4 domains of a protein, 4 amino acids, etc...)
+
+MMFP
+GEO  sphere  RCM  dihedral -
+     harmonic symmetric force 1000.0 tref 5.0 dtoff 0.0  -
+     select bynu 1:10 end    select bynu 11:20 end -
+     select bynu 21:30 end   select bynu 31:40 end
+END
+
+10) In using VMOD to constrain the system to a given mrms value along a
+normal mode, the modes must have been calculated previously and the binary
+file opened for reading before entering the MMFP facility. Further, when
+the initialization command is given the current coordinates must be those
+of the minimum-energy configuration used for the mode calculation.
+
+To restrain the system to an mrms value of 0.1 along the first vibrational
+mode (mode 7), the following sequence is appropriate:
+
+MMFP
+VMOD INIT MXMD 1 KROT 1000 KCGR 1000 UMDN 10 UOUT 11 NSVQ 10
+VMOD IMDN 7 KMDN 100 QN 0.1
+END
+
+Force constants must of course be adapted to the problem at hand.
+
+11) To reset all GEO potentials to zero and deallocate the HEAP space
+
+MMFP
+GEO reset
+END
+
+12) To use the PHS method (BHEL and SHELL commands) to run constant pressure
+simulations in which the protein is solvated only by a thin shell of water
+
+MMFP
+BHEL SELE .not. (resname TIP3 .or. hydrogen) END
+SHEL  SELE (resname tip3 .and. type oh2) end DRSH 8.0 RWEL 0.25 PFINAL 1.0
+SCO 0 RELA 0.00001 UPDF 10 CHFR 1000 SPACE 1000000 CHCO 0.00001 FOCO1 3 FOCO2 15 CUT 2
+END
+
+
+13) To use the RE method by using the EPR Key word, it is required to have the 
+EPR/DEER distance distributions. A typical EPR/DEER file can be called by the 
+following command:
+
+open read card unit 50 name epr_constraints.dat
+
+The epr_constraints.dat file contains all the experimental spin-pair distance 
+distributions. First, the two spin-label residue numbers must be written which 
+is followed by the corresponding EPR/DEER distance distribution.The distributions 
+must be normalized to 1. Bin spacing must be equal for all the bins and must be 
+same as in the DELPPP. The Number of spin-pair distributions and the total number 
+of bins in the EPR/DEER histogram must be same as in the NPTOT and NPPP.
+
+
+An example of the charmm commands for the RE simulation is as follows:
+ 
+MMFP
+EPR NSPINLABELS 5 NREPLICA 25 KENPP 10000 SIG2EPR 1.7  -
+    select type ON .and. resnam CYR1 end -
+    DELPPP 1.0 NPTOT 3 NPPP 70 UNIT 50 VERBOSE
+END
+
+In the above example, there are 5 spin-labels each of which are replicated 25 times. 
+There are 3 EPR/DEER distributions with a total of 70 bins each with a bin spacing of 
+1.0 Angstrom. A force constant of 10000 (kcal/mol) is used for the energy restraint. 
+
+An example of the CHARMM commands to apply BPCMAPs to a simulation of
+polypeptide follows.  Note that the same bpcmaps could be read for
+each set of dihedrals by specifying the same UNIT number.
+
+!
+open read unit 30 card name cmap_1.bpcmap
+open read unit 31 card name cmap_2.bpcmap
+open read unit 32 card name cmap_3.bpcmap
+
+MMFP
+BPCMAP NBTP 3
+
+LAMBDA 0.5  DIM 24  UNIT 30  DIH -
+ select atom proa 1 CY  end select atom proa 1 N   end -
+ select atom proa 1 CA  end select atom proa 1 C   end -
+ select atom proa 1 N   end select atom proa 1 CA  end -
+ select atom proa 1 C   end select atom proa 2 N   end 
+
+LAMBDA 0.5  DIM 24  UNIT 31  DIH - 
+ select atom proa 1 N   end select atom proa 1 CA  end -
+ select atom proa 1 C   end select atom proa 2 N   end -
+ select atom proa 1 CA  end select atom proa 1 C   end -
+ select atom proa 2 N   end select atom proa 2 CA  end 
+
+LAMBDA 0.5  DIM 24  UNIT 32  DIH -
+ select atom proa 2 N   end select atom proa 2 CA  end -
+ select atom proa 2 C   end select atom proa 2 NT  end -
+ select atom proa 2 CA  end select atom proa 2 C   end -
+ select atom proa 2 NT  end select atom proa 2 CAT end 
+
+END
+
+14) Set up a FIRES potential for adaptive QM/MM simulations. 
+
+Select the water molecules near a copper ion (resname cuii) as the inner region (segid meta),
+the other water as outer region. The potential is computed relative to the position
+of the Cu(II) ion (reference). 
+
+define bslv sele .byres. (resn tip3 .and. .not. (segid meta)) end 
+
+! ...... set up FIRES ...... 
+open write form unit 80 name @d@j_d16_fires.dat
+
+mmfp
+  geo sphere harm RMAX force 100.0 -
+  select (resname cuii)  end - ! reference point for FIRES
+  select (segid meta .and. type OH2) end - ! inner water
+  select (bslv  .and. type OH2) end -      ! outer water
+  iummfp 80
+end
+
+File: MMFP, Node: Substitutions, Up: Top, Previous: Examples, Next: Top
+
+
+                      MMFP Substitution Parameters
+
+
+      There are several different variables that can be substituted in 
+titles or CHARMM commands that are set by some of the MMFP commands 
+(*note doc/miscom.info).  Here is a summary and description of each variable.
+
+----------------------------------------------------------------------------
+'GEO'
+
+      The total energy contribution of the GEO restraining potentials.
+
+
+----------------------------------------------------------------------------
+'XCM','YCM','ZCM'
+
+      The position of the center of mass of the last set of atom is returned.
+
+----------------------------------------------------------------------------
+'XCM2','YCM2','ZCM2'
+
+      The position of the center of mass of the second set of atoms is
+returned if the key word DISTANCE ADISTANCE or ANGLE or DIHEDRAL was issued.
+
+----------------------------------------------------------------------------
+'XCM3','YCM3','ZCM3'
+
+      The position of the center of mass of the third set of atoms is
+returned if the key word ADISTANCE, ANGLE or DIHEDRAL was issued.
+
+----------------------------------------------------------------------------
+'XCM4','YCM4','ZCM4'
+
+      The position of the center of mass of the fourth set of atoms is
+returned if the key word DIHEDRAL was issued.
+
+----------------------------------------------------------------------------
+'RGEO'
+
+      The distance/angle/dihedral used in the last potential calculation 
+      is returned. Set if a MMFP constraint with the keyword DIST, ADIS or
+      ANGLE or DIHEDRAL was used.
+
+----------------------------------------------------------------------------
+'RADI'
+
+      The instantaneous sphere radius for the SSBP method.
+
+----------------------------------------------------------------------------
+
+'SSBPLRC'
+
+      long-range free energy correction for SSBP.  Only set in PERT
+      calculation with SSBP
+
+----------------------------------------------------------------------------
+
+'SSBPLRCS'
+
+     standard deviation of SSBP long-range correction.  Only set in PERT
+     calculation with SSBP
+
+----------------------------------------------------------------------------
+
+'DRSH'
+
+     The thickness of the water shell in the PHS method (SHELL key word)
+
+----------------------------------------------------------------------------
+
+'SCO'
+
+     The ratio of the outward and inward external forces in the PHS method
+     (SHELL key word).
+   
+----------------------------------------------------------------------------
+
+Future developments:
+
+1. The SSBP potential will be implemented for active site solvation (in
+   which a large part of the protein lies outside the spherical region).  
+
+

@@ -1,0 +1,110 @@
+* CHARMM 25 Testcase fastest.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* Test : fast options with various non-bond schemes
+* Model: BPTI coordinates with all but 4 water removed
+*
+
+set pnode
+if ?NUMNODE .gt. 1 set pnode node 0
+
+bomlev -2
+stream datadir.def
+
+open read unit 11 form name  @0toph10.rtf
+read rtf  card unit 11
+close unit 11
+open read unit 12 form name  @0param8.prm
+read parameter card unit 12
+close unit 12
+
+read sequence cards
+* PTI SEQUENCE
+*
+   58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP CYS MET ARG THR CYS GLY GLY ALA
+
+generate  MAIN
+patch disu main  5 main 55
+patch disu main 14 main 38
+patch disu main 30 main 51
+read sequence water    4
+generate  SOLV
+
+open unit 13 read card  name @0bpti.crd
+read coord card unit 13
+close unit 13
+coor copy comp
+
+prnlev 6 @pnode
+
+set  E   ATOM CDIE FSHIF VSHIFT
+
+UPDATE   ALL IHBFRQ 50   @E
+energy
+coor force comp
+
+set L  bygroup
+
+!!!!! 1 first section - test the fast option for std energy call
+fast off
+set FLAG SECT01
+goto ENECALC
+label SECT01
+
+fast ON
+set FLAG SECT02
+goto ENECALC
+label SECT02
+
+!!!!! 2 second section - test the bycube list generation option
+
+set L  bycubes
+fast off
+set FLAG SECT11
+goto ENECALC
+label SECT11
+
+
+!!!!! 3 third section - test the fast option for pert
+if ?NUMNODE .gt. 1 then 
+      echo "Test case section not parallel SKIPPING"
+      goto skipsec
+endif
+
+pert sele resid 21 end   ATOM CDIE FSHIF VSHIFT
+scalar charge set 0.0 sele atom * 21 %H show end
+!!scalar type set 3  sele atom * 21 OH show end
+delete conn   sele atom * 21 *  end    sele atom * 21 *  end
+
+set L  lambda 0.0  bygroup
+fast off
+set FLAG SECT21
+goto ENECALC
+label SECT21
+
+fast on
+set FLAG SECT22
+goto ENECALC
+label SECT22
+label skipsec
+pert off
+
+stop
+
+! internal stream for energy/force calculation 
+label ENECALC
+open unit 13 read card name @0bpti.crd
+read coord card unit 13
+close unit 13
+
+energy all ihbfrq 50  @e  @l
+
+coor force
+coor diff
+coor dist weigh
+
+print coor sele prop wmain .gt. 0.00001 end
+
+goto @FLAG

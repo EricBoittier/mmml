@@ -1,0 +1,15 @@
+core 25000000
+chm append
+title
+qm region for charmm
+charge 1
+adapt off
+nosym
+noprint distance analysis basis vectors hessian
+basis 3-21G
+scftype direct rhf
+runtype gradient
+dft b3lyp
+diis on
+vectors atoms
+enter 1

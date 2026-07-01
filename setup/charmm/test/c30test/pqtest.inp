@@ -1,0 +1,100 @@
+* CHARMM 29 test case.
+* Testing RMSDYN projection of RMSDs onto 2D plane
+* Also tests ECHO command
+* Lennart Nilsson, June 28, 2002
+*
+
+stream datadir.def
+BOMLEV -2
+
+OPEN READ FORM UNIT 1 NAME  @0toph9.rtf
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+OPEN READ FORM UNIT 2 NAME  @0param5.prm
+READ PARAMETER CARD UNIT 2
+CLOSE UNIT 2
+
+READ SEQUENCE  CARD
+*  FIRST SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE A   SETU
+
+READ      SEQUENCE  CARD
+*  SECOND SEQUENCE FOR SECOND DERIVATIVE TEST
+*
+    2
+AMN CBX
+GENERATE B  SETU
+set t 1
+label tloop
+READ COOR CARD
+* INITIAL COORDINATES FOR AMN-CBX *2
+*  DATE:    10/26/83      4:44:54      CREATED BY USER: BROOKSG
+*
+   12
+    1    1 AMN  CL    -3.33267  -1.67441   0.00000 A    1      0.00000
+    2    1 AMN  C     -2.19986  -0.66094   0.00000 A    1      0.00000
+    3    1 AMN  O     -1.02163  -1.01403   0.00000 A    1      0.00000
+    4    2 CBX  N     -2.52876   0.62775   0.00000 A    2      0.00000
+    5    2 CBX  H     -1.82759   1.31241   0.00000 A    2      0.00000
+    6    2 CBX  CA    -3.96329   1.03051   0.00000 A    2      0.00000
+    7    3 AMN  CL     3.33267   1.67441   0.00000 B    1      0.00000
+    8    3 AMN  C      2.19986   0.66094   0.00000 B    1      0.00000
+    9    3 AMN  O      1.02163   1.01403   0.00000 B    1      0.00000
+   10    4 CBX  N      2.52876  -0.62775   0.00000 B    2      0.00000
+   11    4 CBX  H      1.82759  -1.31241   0.00000 B    2      0.00000
+   12    4 CBX  CA     3.96329  -1.03051   0.00000 B    2      0.00000
+ 
+coor copy comp
+! Generate fake trajectory with 10 frames of coordinates in different
+! orientations
+open unit 20 write unform name @9rmsdyn_@t.cor
+traj iwrite 20 nfile 10
+traj write
+set i 1
+label loop
+coor rota xdir 1.0 ydir 1.0 zdir 1.0 phi 20.0
+traj write
+! NO ROTATION. These values should match the ones calculated below
+coor orient rms comp noro
+incr i by 1
+if i lt 10 goto loop
+incr t by 1 
+if t le 2 goto tloop
+! RMSDyn analysis, using SAME trajectory for the analysis
+open unit 21 read unform name @9rmsdyn_1.cor
+prnl 6 node 0! give  a little more information
+! use NOROt to get non-zero RMSDs 
+rmsdyn orient rms NORO iread 21 begin 1 stop 5 iwrite 6 -
+       pqunit 6 pqse 123 sele .not. segid b end
+echo Residual value: ?PQRES
+stop
+! Once more, this time with more frames
+! The (p,q)-scatter plot has a parabolic shape in this case
+open unit 21 read unform name @9rmsdyn_1.cor
+rmsdyn orient rms NORO iread 21  begin 1 stop 10 iwrite 6 -
+       pqunit 6 pqse 123
+echo Residual value: ?PQRES
+
+! will a new seed give different results?
+open unit 21 read unform name @9rmsdyn_1.cor
+rmsdyn orient rms NORO firstu 21 begin 1 stop 10 iwrite 6 -
+       pqunit 6 pqse 456
+echo Residual value: ?PQRES
+
+! or using the second (identical) trajectory file?
+open unit 21 read unform name @9rmsdyn_1.cor
+open unit 31 read unform name @9rmsdyn_2.cor
+rmsdyn orient rms NORO iread 21 jread 31 begin 1 stop 10 iwrite 6 -
+       pqunit 6 pqse 456
+echo Residual value: ?PQRES
+
+! using second part of the trajectory
+open unit 21 read unform name @9rmsdyn_1.cor
+rmsdyn orient rms NORO iread 21 begin 6 stop 10 iwrite 6 -
+       pqunit 6 pqse 456
+echo Residual value: ?PQRES
+
+STOP

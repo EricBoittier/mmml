@@ -1,0 +1,87 @@
+* REPDSTR module + CPHMD 
+*
+
+if ?repdstr .ne. 1 then
+   echo "REPDSTR code not compiled. Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 2 then
+   echo "This test case requires exactly 2 MPI processes. Test NOT performed."
+   stop
+endif
+
+set in = lys
+set exfrq = 10 ! exchange frequency 
+calc ntot = 100 
+
+stream datadir.def
+
+! read topology and parameter files
+open unit 1 read form name @0top_all22_prot_cmap_phmd.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all22_prot_chen_cmap_phmd.inp
+read param card unit 1
+close unit 1
+
+! Read psf and starting structure
+open read form unit 10 name @0lys_solv.psf
+read psf  unit 10 card
+close unit 10
+
+open read form unit 10 name @0lys_solv.pdb
+read coor unit 10 pdb resid
+close unit 10
+
+SET XTLTYPE  = OCTA
+SET A = 33.3993
+SET B = 33.3993
+SET C = 33.3993
+SET ALPHA = 109.4712206344907
+SET BETA  = 109.4712206344907
+SET GAMMA = 109.4712206344907
+CRYSTAL DEFINE @XTLtype @A @B @C @alpha @beta @gamma
+calc cutim = @A / 2
+crystal build cutoff @cutim
+
+! Turn-on Image Atoms
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select resname TIP3 .or. resname CLA .or. resname SOD end
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select .not. ( resname TIP3 .or. resname CLA .or. resname SOD ) end
+
+stream @0radius_gbsw.str
+
+gbsw hybrid sgamma 0.000 nang 50 conc 0.100 -
+     sele .not. ( resn TIP3 .or. resn CLA .or. resn SOD ) end
+energy
+
+open unit 23 read form name @0phmd-hybrid.in
+PHMD PAR 23 wri 25 PH 7.0 NPRI @EXFRQ PHFRQ 1 mass 10 -
+     TEMP 300.0000 LAM
+
+repd nrep 2 EXLM PHMD FREQ @EXFRQ UNIT 17
+open write unit 17 card name @9lys.phmd.rep.log
+open write unit 1 card name @9lys.phmd.rep.out
+if ?myrep .ne. 0 then outu 1
+
+if ?myrep .eq. 0 then set ph = 9.4
+if ?myrep .eq. 1 then set ph = 9.9
+
+PHMD RESPH OLDPH 7.0 NEWPH @ph PKATEMP 300.0
+open unit 25 write form name @9@in.ph@ph.lamb
+
+! Run Dynamics
+! --------------
+DYNA CPT LEAP START time 0.002 nstep @ntot -
+     nprint @exfrq iprfrq @exfrq ntrfrq @exfrq  -
+     iuncrd -1 iunvel -1 kunit -1 -
+     nsavc 0 nsavv 0 IMGfrq -1 echeck -1 -
+     firstt 300.0 finalt 300.0 tstruc 300.0 -
+     pconstant pmass 500.0 pref 1 pgamma 20 tbath 300.0 -
+     hoover reft 300.0 tmass 1000.0 -
+     elec atom cdie shift vdw vswitch -
+     ctonnb 10.0 ctofnb 12.0 cutnb 14.0 cutim 14.0 inbfrq -1 imgfrq -1 -
+     ewald pmew fftx 32 ffty 32 fftz 32  kappa .34 spline order 6     
+
+STOP

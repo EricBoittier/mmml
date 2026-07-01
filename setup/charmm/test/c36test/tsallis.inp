@@ -1,0 +1,139 @@
+* CHARMM c36a1 testcase
+* MD simulations of Di-Alanine peptide.
+* Purpose: Tsallis Scaling of CMAP + torsion potential
+* Author: Hiqmet Kamberaj: December 11, 2007
+*
+
+if ?ace .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+!{control Langevin dynamics}
+set fbeta    = 1.0
+set  ieps    = 1.0
+set  seps    = 78.5
+set  alpha   = 1.6
+set  sigma   = 3.0    
+
+!{Read topology and parameter files}
+OPEN UNIT 1 CARD READ NAME  @0toph19.rtf
+READ RTF CARD UNIT  1
+CLOSE UNIT 1
+
+OPEN UNIT 2 CARD READ NAME  @0param19.prm
+READ PARA CARD  UNIT  2
+CLOSE UNIT 2
+
+OPEN UNIT 2 CARD READ NAME  @0acepar19.inp
+READ ACEP CARD  UNIT  2
+CLOSE UNIT 2
+
+!!{Generate a sequence}
+read sequence card
+* Blocked Ala residue
+*
+3
+ACE ALA CBX
+generate PEP setup warn 
+
+!{read the coordinates}
+read coor card
+* PEPTIDE COORDINATES, ALL-HYDROGEN
+* Minimized Structure
+* DATE:     3/12/ 7     14:46:43      CREATED BY USER: kamberaj
+*
+    12
+    1    1 ACE  CH3   23.64944 -91.16316  71.19678 PEP  1      0.00000
+    2    1 ACE  C     24.87339 -90.22842  71.06221 PEP  1      0.00000
+    3    1 ACE  O     24.76044 -89.21038  70.31726 PEP  1      0.00000
+    4    2 ALA  N     26.06689 -90.44916  71.71917 PEP  2      0.00000
+    5    2 ALA  H     26.11258 -91.31347  72.17883 PEP  2      0.00000
+    6    2 ALA  CA    27.15142 -89.54427  71.69052 PEP  2      0.00000
+    7    2 ALA  CB    27.62743 -89.38056  73.12413 PEP  2      0.00000
+    8    2 ALA  C     28.33251 -90.17051  70.87159 PEP  2      0.00000
+    9    2 ALA  O     29.47110 -90.23265  71.27910 PEP  2      0.00000
+   10    3 CBX  N     27.96432 -90.65663  69.66773 PEP  3      0.00000
+   11    3 CBX  H     27.01242 -90.61948  69.43770 PEP  3      0.00000
+   12    3 CBX  CA    28.94850 -91.39602  68.82207 PEP  3      0.00000
+
+
+!{center the system}
+coor orient
+coor stat
+
+set iseed  3212345
+
+!{Set some parameters for energy calculation}
+set cutoff 12.0
+calc pairlist  ( @cutoff + 1.0 )
+calc ctonnb    ( @cutoff - 1.0 )
+
+!{ langrvin friction coefficient}
+scalar fbeta set @fbeta select all end
+
+!{Shake}
+shake bonh para
+
+!{Non-bounded interaction specification}
+nbond atom ace ieps @ieps seps @seps alpha @alpha sigma @sigma switch -
+      vdis vswi cutnb @pairlist @ctonnb @ctonnb ctofnb @cutoff 
+
+!!!!!!!!!!!!!!!!!!!!!!!!{Task 1 - Equilibration= Minimization, heating/cooling}
+
+!{Minimize, e.g. using SD method}
+minimize sd nsteps 100 nprint 10 tolenr 0.01 step 0.01
+ 
+title 
+* Heating: Langevin MD simulations of 
+* Di-ALA peptide
+*
+
+DYNA start LEAP langevin -
+    NSTEP  100 TIMESTEP 0.002 -
+    FIRSTT 0.0 FINALT 300.0 TEMINC 10.0 -
+    TSTRUC 10.0 TBATH 300.0 -
+    IPRFRQ 50 NPRINT 10 KUNIT -1 -
+    IHBFRQ 0 INBFRQ -1 -
+    ILBFRQ 0 RBUFFER 0.0 -
+    IHTFRG 100 IEQFRQ 10 NTRFRQ 50 -
+    IUNREA -1 IUNWRI -1 ISVFRQ 50 -
+    IUNCRD -1 NSAVC 0 -
+    IUNVEL -1 NSAVV 0 -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 1 ISCALE 0 -
+    TWINDH 10.0 TWINDL -10.0 ECHECK 1000.0 -
+    ISEED @ISEED
+
+
+!!!!!!!!!!!!!!!!!!!!!!!! Task 2: Tsallis dynamics !!!!!!!!!!!!!!!!
+set qtsallis 1.25
+set tsemin   -5.00
+set iseed    999345
+
+!{select atoms for which cmap+tors will be scaled}
+tsallis tors select all end
+
+title 
+* Tsallis dynamics using Langevin MD simulations of 
+* Di-ALA peptide
+*
+
+DYNA start LEAP langevin -
+    NSTEP  100 TIMESTEP 0.002 -
+    FIRSTT 300.0 FINALT 300.0 TEMINC 0.0 -
+    TSTRUC 300.0 TBATH 300.0 -
+    IPRFRQ 50 NPRINT 10 KUNIT -1 -
+    IHBFRQ 0 INBFRQ -1 -
+    ILBFRQ 0 RBUFFER 0.0 -
+    IHTFRG 100 IEQFRQ 10 NTRFRQ 50 -
+    IUNREA -1 IUNWRI -1 ISVFRQ 50 -
+    IUNCRD -1 NSAVC 0 -
+    IUNVEL -1 NSAVV 0 -
+    IASORS 1 IASVEL 1 ISCVEL 0 ICHECW 1 ISCALE 0 -
+    TWINDH 10.0 TWINDL -10.0 ECHECK 1000.0 -
+    ISEED @ISEED -
+    ttsallis qtsallis @qtsallis emin @tsemin
+
+STOP

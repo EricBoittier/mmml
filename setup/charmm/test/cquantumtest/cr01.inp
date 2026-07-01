@@ -1,0 +1,223 @@
+* cr01.inp - Generalized Hybrid Orbital Testcase
+* Cristobal Alhambra : c28a1 22-Jun-2000
+* CHARMMRATE INTERFACE :
+* Direct Dynamics gas phase : chorismate --> prephenate    
+*
+
+if ?charmmra .ne. 1 then stop
+if ?quantum .ne. 1 then stop
+
+stream datadir.def
+
+read rtf card 
+* topology
+*
+   22     1
+MASS     1 H      1.00800 ! 
+MASS     2 HP     1.00800 ! 
+MASS     3 CA    12.01100 ! 
+MASS     4 CC    12.01100 ! 
+MASS     5 OH1   15.99900 ! 
+MASS     6 OC    15.99900 ! 
+
+DEFA FIRS NTER LAST CTER
+AUTO ANGLES DIHE
+
+RESI   CHRM   0.0           ! chorismate 
+GROUP
+ATOM  C1   CA   0.0
+ATOM  C2   CA   0.0
+ATOM  C3   CA   0.0
+ATOM  C4   CA   0.0
+ATOM  C5   CA   0.0
+ATOM  C6   CA   0.0
+ATOM  H2   HP   0.0
+ATOM  H3   HP   0.0
+ATOM  H5   HP   0.0
+ATOM  H6   HP   0.0
+ATOM  O1   OH1  0.0
+ATOM  C7   CA   0.0
+ATOM  C8   CA   0.0
+ATOM  H81  HP   0.0
+ATOM  H82  HP   0.0
+ATOM  C9   CC   0.0
+ATOM  O91  OC   0.0
+ATOM  O92  OC   0.0
+ATOM  C10  CC   0.0
+ATOM  O11  OC   0.0
+ATOM  O12  OC   0.0
+ATOM  H4   HP   0.0
+ATOM  O4   OH1  0.0
+ATOM  H    H    0.0
+PATCHING FIRST NONE LAST NONE
+
+END
+
+read parameter card 
+* Parameter file
+*
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+H      0.000000  -0.046000     0.224500 ! ALLOW PEP POL SUL ARO ALC
+!                ! same as TIP3P hydrogen, adm jr., 7/20/89
+HP     0.000000  -0.030000     1.358200   0.000000  -0.030000     1.358200 ! ALL OW ARO
+!
+CA     0.000000  -0.070000     1.992400 ! ALLOW   ARO
+!                ! benzene (JES)
+CC     0.000000  -0.070000     2.000000 ! ALLOW   PEP POL ARO
+!                ! adm jr. 3/3/92, acetic acid heat of solvation
+OC     0.000000  -0.120000     1.700000 ! ALLOW   POL ION
+!                ! JG 8/27/89
+OH1    0.000000  -0.152100     1.770000 ! ALLOW   ALC ARO
+!
+END
+
+read sequ card
+* chorismate
+*
+1 chrm
+
+gene chrm first none last none noangle nodihedral setup
+
+open read form unit 14 name @0cr01r_ini.crd
+read coor card unit 14 
+close unit 14 
+  
+update atom noextend cdie fswitched eps 1.0 -
+       cutnb 12.0 ctofnb 11.0 ctonnb 10.    -
+       inbf -1 exsg
+
+quantum sele segid chrm end am1 charge -2 scfc 0.000000001
+
+!-----------------------------------------------------------------------------------------
+! Open the units to read in the input coordinates for Reactants, Products and Saddle Point
+!-----------------------------------------------------------------------------------------
+open read form unit 10 name @0cr01r_ini.crd
+open read form unit 11 name @0cr01p_ini.crd
+open read form unit 12 name @0cr01ts_ini.crd 
+
+!----------------------------------------------------
+! Open the units to write out the output over the job
+!----------------------------------------------------
+ open write form unit 14 name @9cr0114.out
+ open write form unit 15 name @9cr0115.out
+ open write form unit 61 name @9cr0161.out
+ open write form unit 25 name @9cr0125.out
+ open write form unit 26 name @9cr0126.out
+ open write form unit 27 name @9cr0127.out
+
+polyrate sele BYNU 1:24 end runit 10 punit 11 tsunit 12 
+*general
+
+ title
+  charmmrate calcul de r i p a partir de les geometries
+  del charmm
+ end
+
+ atoms
+    1  c
+    2  c
+    3  c
+    4  c
+    5  c
+    6  c
+    7  h
+    8  h
+    9  h
+   10  h
+   11  o
+   12  c
+   13  c
+   14  h 
+   15  h 
+   16  c
+   17  o
+   18  o
+   19  c
+   20  o
+   21  o
+   22  h
+   23  o
+   24  h
+ end
+
+*optimization
+
+  print
+
+  gcomp  1.d-4
+  tsgcomp  1.d-5
+  niter 600
+
+*second
+
+  numstep  1.0D-2
+
+*react1
+
+  constant
+  end
+
+  species nonlinrp
+
+  project
+
+*prod1
+
+  constant
+  end
+
+  species nonlinrp
+
+  project
+
+*start
+
+ project
+
+ species nonlints
+
+*path
+
+ scalemass 1.00
+
+ srange
+    slp   0.2
+    slm  -0.2
+ end
+
+ intmu 3
+
+ sstep  0.002
+ inh    10
+
+ prpath
+    freq 67 66 65 64 63 62
+    xmol
+ end
+
+*rate
+
+ tst
+ cvt
+
+ temp
+   250.
+   300.
+   310.
+ end
+
+ bothk
+
+ analysis
+   250.
+   300.
+   310.
+ end
+
+*finish
+!          end of polyrate input deck
+!
+stop

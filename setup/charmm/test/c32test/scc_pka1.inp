@@ -1,0 +1,129 @@
+* First step in QM/MM-FEP pKa calculations for CH3CH2SH in solution
+* CH3CH2SH is mutated into CH3CH2S(-)----D, where D is a dummy atom
+* See JPC, B. 107, 14521-14528 (2003)
+* Once again, the treatment of electrostatics is not recommeneded for
+* realistic applications
+* Guohui Li and Qiang Cui, Univ. Of Wisc., Madison, June. 2003
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/scc_pka1> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+stream datadir.def
+
+! HAVE TO USE FAST OFF (made automatic in new implementation)
+fast off 
+! ...... A few variables ...... 
+set kkk 0.025 ! force constant for dihedral constraint 
+set 3 300.0
+set j etsh
+
+set lam 0.70  ! Some intermediate point
+
+OPEN UNIT 21 NAME @0top_all22_model.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_all22_prot.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @0@j.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @0@j-min.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+coor stat sele all end
+
+COOR TRAN XDIR -?XAVE YDIR -?YAVE ZDIR -?ZAVE SELE ALL END
+
+NBONDS  ATOM  FSHIFT CDIE  VDW VSHIFT  -
+        CUTNB 13.0  CTOFNB 12.0 CTONNB 10.0  WMIN 1.5  EPS 1.0 -
+        inbfrq -1
+
+define qm sele segid ETSH SHOW end
+print coor sele qm end
+define qm1 sele segid ETSH .and. (.not. type H6) SHOW end
+print coor sele qm1 end
+define qmh sele segid ETSH .and. (type H6) SHOW end
+print coor sele qmh end
+
+! Harmonic restraint for the acidic proton
+! You might see warnings in the output about deviations from minimum
+! too large
+CONS DIHE FORCE @kkk main ETSH 1 H6 ETSH 1 S3 ETSH 1 CM2 ETSH 1 H4 
+
+BLOCK 3
+sccdftb stop pkac istp 1 ! step 1 in pKa thermodynamic cycle
+CALL 2 SELE qm1  END ! Conjugate base
+CALL 3 SELE qmh  END ! Acidic proton
+CALL 1 SELE .not. (qm1 .or. qmh) END ! environment
+! The matrix is for MM interactions - QM related terms have been
+! included in the SCC code
+COEF 1  1  1.0
+COEF 1  2  1.0 
+COEF 1  3  1.0 
+COEF 2  2  0.0 
+COEF 2  3  @lam ! bonded terms associated with the acidic proton
+COEF 3  3  0.0 
+
+END
+
+! ...... SCC definition: acid ...... 
+scalar WMAIN set 1.0 sele (qm ) .and. type S*  SHOW end
+scalar WMAIN set 2.0 sele (qm ) .and. type C*  SHOW end
+scalar WMAIN set 3.0 sele (qm ) .and. type H*  SHOW end
+
+OPEN UNIT 31 writ form NAME @9pka1_dvdl.dat
+
+SCCDFTB pkac istp 1 hygn 9 cutf outp 31 - 
+remove SELE qm END TEMP 0.00 SCFT 0.00000001 CHRG  0 - ! AH
+  init @lam pass 0 step 20 -
+  tico 0.1 tiav 5 -
+                   TEMP 0.00 SCFT 0.00000001 chrg -1 - ! A-
+  sele qm end -
+  sele qm1 end
+
+energy
+
+SET 6 32.000000
+SET 7 32.000000
+SET 8 32.000000
+OPEN UNIT 8 READ CARD NAME @0cubic.img
+READ IMAG UNIT 8
+!PRINT IMAGES TRAN
+
+IMAGE BYSEG XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE segid ETSH END
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE .not. (segid ETSH) END
+
+! HAVE TO USE IMAL FOR QM/MM-PBC because no symmetry operation has been
+! implemented
+update imal imgf -1
+
+coor stat 
+coor stat sele segid ETSH end
+
+shake bonh tolerance 1.0e-06 MXIT 1500
+
+open unit 24 form read  name @0@j-pka1-equ-@lam.res 
+open unit 25 form write name @9@j-pka1-dyn-@lam.res
+open unit 26 file write name @9@j-pka1-dyn-@lam.dcd
+
+dynamics rest timestep 0.002 nstep 100 nprint 10 iprfrq 10 -
+    firstt @3 finalt @3 TEMINC 0.0 twindl -10.0 twindh 10.0 -
+    IHTFRQ 0 IEQFRQ 0 NTRFRQ 0 ISVFRQ 100 -
+    IASORS 0 IASVEL 1 ISCVEL 0 ICHECW 0 ISEED 314159 -
+    iunrea 24 iunwri 25 iuncrd 26 iunvel -1 kunit -1 nsavc 100 nsavv 0 -
+    inbfrq -1 imgfrq -1 ihbfrq 0 
+
+close unit 25
+
+STOP
+

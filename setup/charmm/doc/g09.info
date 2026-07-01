@@ -1,0 +1,145 @@
+CHARMM Element doc/g09.info $Revision: 1.1.1.1 $
+
+File: g09, Node: Top, Up: (doc/commands.info), Next: Description
+
+        Combined Quantum Mechanical and Molecular Mechanics Method
+                        Based on Gaussian09 in CHARMM
+
+                       G. Hou, J. Zienau, and Q. Cui
+                             (cui@chem.wisc.edu)
+
+               based on the Q-Chem interface by Lee Woodcock
+
+        Ab initio program Gaussian09 is connected to CHARMM program in a 
+QM/MM method. This method is based on the interface to the GAMESS (US
+version), the latter being an extension of the QUANTUM code which is
+described in J. Comp. Chem., Vol. 11, No. 6, 700-733 (1990).
+
+The interface currently provides basic functionality for QM/MM calculations 
+of energy & gradient. It can also be used in conjunction with the 
+Solvent Macromolecule Boundary Potential (SMBP; see pbeq.info)
+
+
+* Menu:
+
+* Description::            Description of the GAUS commands.
+* Usage::                  How to run Gaussian09 in CHARMM.
+
+
+File: g09, Node: Description, Up: Top, Next: Usage, Previous: Top
+
+        The Gaussian09 QM potential is initialized with the GAUS command.
+
+[SYNTAX GAUS]
+
+GAUS     [REMOve] [EXGRoup] [DIV] (atom selection)
+
+REMOve:  Classical energies within QM atoms are removed.
+
+EXGRoup: QM/MM Electrostatics for link host groups removed.
+
+DIV:     Charge on MM link host atom divided equally among 
+         other MM atoms in the same group.
+
+The NOGUess option (see qchem.info) is always implied!
+
+
+     Example:
+
+     ENVI g09exe     "/share/apps/gaussian/g09/g09"
+     ENVI g09fchk    "/share/apps/gaussian/g09/formchk"
+     ENVI g09cmd     "G09CMD"
+     ENVI g09profile "G09PROFILE"
+     ENVI g09inp     "g1"
+
+     GAUS nogu remove sele QM end
+
+
+
+File: g09, Node: Usage, Up: Top, Next:  Previous: Description
+
+CHARMM input scripts are the same as before except the addition of ENVIronment
+commands and the GAUS command itself. The Gaussian parameters are specified
+in an additional file as defined by the G09CMD environment variable. The 
+environment section in the CHARMM input defines the Gaussian program location,
+the parameter filenames as well as the input/output filenames and scratch 
+directory: 
+
+
+     Use of ENVIronment commands in the CHARMM input file:
+
+     ENVI G09EXE       "/share/apps/gaussian/g09/g09"
+     ENVI G09FCHK      "/share/apps/gaussian/g09/formchk"
+     ENVI G09CMD       "G09CMD"
+     ENVI G09PROFILE   "G09PROFILE"
+     ENVI G09INP       "g1"
+     ENVI GAUSS_SCRDIR "/scratch/"
+
+1. G09EXE and G09FCHK point to the Gaussian as well as the formchk executable
+
+2. G09CMD specifies the file that provides the calculation parameters (see below) 
+
+3. G09PROFILE is a shell input file that can be used to source additional
+   env variables that might be needed for Gaussian; usually, however, an
+   empty file will do (but it has to be provided)
+
+4. G09INP provides the name of the input/output files. For example, "g1"
+   will produce g1.inp and g1.log. The input file is automatically generated
+   by the interface 
+
+5. GAUSS_SCRDIR points to the scratch file; it might be more useful to
+   define this in the submission (pbs) script 
+
+Gaussian parameter file G09CMD
+------------------------------
+
+The structure is evident in the following example for a 
+B3LYP/6-31G* calculation of a neutral molecule. The $pop
+section allows to provide options for population analysis 
+(e.g., calculation of Merz-Kollman ESP charges by specifying 
+"pop=mk" beneath the $pop keyword), $extra allows for general 
+additional options to Gaussian, and $nproc specifies the 
+number of processors Gaussian should use. 
+
+$extend can be used for including extra lines at the end of the
+generated Gaussian input file (for example, for specifying the 
+radius of element(s) when "pop=(mk,readradii)" needs to be used). 
+It should be noted that the $extend section should be the LAST 
+section in the G09CMD file since everything after the $extend 
+keyword is assumed to belong to this section. Also, blank lines 
+between entries in the $extend section are allowed but the line 
+immediately following the line containing $extend should not be 
+a blank line if the $extend section has any entries at all.
+
+-----------------------------------------------------------
+
+$method
+b3lyp
+
+$basis
+6-31g(d)
+
+$title
+test input for g09
+
+$charge
+0
+
+$spin
+1
+
+$pop
+
+
+$extra
+
+
+$nproc
+1
+
+$mem
+1000MB
+
+$extend
+
+-----------------------------------------------------------

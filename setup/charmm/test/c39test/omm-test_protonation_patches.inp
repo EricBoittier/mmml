@@ -1,0 +1,325 @@
+* Test the building and block partitioning of protein patches for 
+* titratable residues. For use in multi-site lambda dynamics.
+* C. L. Brooks III - September, 2013
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+if ?numnode gt 1 envi OPENMM_PLATFORM "Reference"
+
+if ?block .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+read rtf card name @0/top_all36_prot.rtf
+read param card flex name @0/par_all36_prot.prm
+stream @0/toppar_water_ions.str
+stream @0/protonation_patches_toppar36_prot.str
+
+set tol = 2e-4
+
+set resname1 = asp
+set resname2 = glu
+set resname3 = lys
+set resname4 = tyr
+set resname5 = hsp
+set i = 1
+
+label dores
+set res = @resname@@i
+!******************TEST @i - @res****************************
+
+read sequ card
+* title
+*
+3
+ala @res ala
+generate pro0 first ace last ct3 setup
+
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+print coor sele .not. initialized end
+
+mini sd nstep 100 cdie atom cutnb 14 ctofnb 12 ctonnb 10 switch vswitch
+energy cutnb 999 ctofnb 999 ctonnb 999
+omm on
+
+define firstD select segid pro0 .and. resname @res end
+set resid = ?selresi
+
+if @res eq ASP then
+      set reslist = type cb .or. type cg .or. type hb1 .or. type hb2 .or. type od1 .or. type od2
+      set reslist2 = 
+      set p1 = aspp1
+      set p2 = aspp2
+      set n = 2
+
+      set a1 = cb 
+      set a2 = cg 
+      set a3 = hb1 
+      set a4 = hb2 
+      set a5 = od1 
+      set a6 = od2 
+      set nat = 6
+endif
+
+if @res eq GLU then
+      set reslist = type cg .or. type cd .or. type hg1 .or. type hg2 .or. type oe1 .or. type oe2
+      set reslist2 = 
+      set p1 = glup1
+      set p2 = glup2
+      set n = 2
+
+      set a1 = cg 
+      set a2 = cd 
+      set a3 = hg1 
+      set a4 = hg2 
+      set a5 = oe1 
+      set a6 = oe2 
+      set nat = 6
+endif
+
+if @res eq LYS then
+      set reslist = type ce .or. type nz .or. type he1 .or. type he2 .or. type hz1 .or. type hz2 .or. type hz3
+      set reslist2 =
+      set p1 = lysn
+      set n = 1
+
+      set a1 = ce 
+      set a2 = he1 
+      set a3 = he2 
+      set a4 = nz 
+      set a5 = hz1 
+      set a6 = hz2 
+      set a7 = hz3
+      set nat = 7
+endif
+
+if @res eq TYR then
+     set reslist = type ce1 .or. type ce2 .or. type he1 .or. type he2 .or. type cz .or. type oh .or. type hh
+     set reslist2 =
+     set p1 = tyru
+     set n = 1
+
+     set a1 = ce1 
+     set a2 = he1 
+     set a3 = ce2 
+     set a4 = he2 
+     set a5 = cz 
+     set a6 = oh 
+     set a7 = hh
+     set nat = 7
+endif
+
+if @res eq HSP then
+     set reslist = type cb .or. type hb1 .or. type hb2 .or. type nd1 .or. type hd1 .or. type cg .or. type ce1
+     set reslist2 = .or. type he1 .or. type ne2 .or. type he2 .or. type cd2 .or. type hd2
+     set p1 = hsdn
+     set p2 = hsen
+     set n = 2
+
+     set a1 = cb
+     set a2 = hb1
+     set a3 = hb2
+     set a4 = nd1
+     set a5 = hd1
+     set a6 = cg
+     set a7 = ce1
+     set a8 = he1
+     set a9 = ne2
+     set a10 = he2
+     set a11 = cd2
+     set a12 = hd2
+     set nat = 12
+endif
+
+define side select segid pro0 .and. resid @resid .and -
+       ( @reslist @reslist2 ) end
+
+replica r nrep @n select side end
+
+set c = 1
+label renameH
+    set b = @a@@c
+    set d = @{b}m
+    echo @d
+    rename atom @d select atom r1 @resid @a@@c end
+    set d = @{b}p
+    rename atom @d select atom r2 @resid @a@@c end
+   incr c by 1
+if c le @nat goto renameH
+
+write coor card name @9/@p1.chr select segid r1 end
+
+if @n gt 1 then
+      write coor card name @9/@p2.chr select segid r2 end
+endif
+
+replica reset
+delete atom select segid r1 end
+if @n gt 1 delete atom select segid r2 end
+
+define firstD select resname @res end
+set resid = ?selresi
+define side select resid @resid .and -
+      ( @reslist @reslist2 ) end
+
+patch @p1 pro0 @resid setup
+if @n gt 1 then
+      patch @p2 pro0 @resid setup
+endif
+bomlev -2
+autogenerate angle dihedral
+bomlev 0
+
+delete angle select ( @reslist @reslist2 ) end -
+             select ( type *m .or. type *p ) end
+delete dihed select ( @reslist @reslist2 ) end -
+             select ( type *m .or. type *p ) end
+if @n gt 1 delete angle select ( type *m ) end select ( type *p ) end
+if @n gt 1 delete dihed select ( type *m ) end select ( type *p ) end
+
+ic generate
+
+rename segid r1 select segid pro0 end
+read coor card name @9/@p1.chr resid
+rename segid r2 select segid r1 end
+if @n gt 1 then
+      read coor card name @9/@p2.chr resid
+endif
+rename segid pro0 select segid r2 end
+
+ic fill
+ic param
+print coor select .not. initialized end
+
+ic build
+print coor select .not. initialized end
+
+write psf card name @9/@res.psf
+write coor pdb name @9/@res.pdb
+
+energy
+set sumE = ?ener
+
+set keep = wt
+label donextH
+
+      delete atom select all end
+      read psf card name @9/@res.psf
+      read coor pdb name @9/@res.pdb
+
+      define wt select segid pro0 .and. resid @resid .and. -
+            ( @reslist @reslist2 ) end
+
+      define m select segid pro0 .and. resid @resid .and. -
+            ( type *m ) end
+
+      define p select segid pro0 .and. resid @resid .and. -
+            ( type *p ) end
+
+      define env select .not. ( wt .or. m .or. p ) end
+
+     if @keep eq WT delete atom select m .or. p end
+     if @keep eq M  delete atom select wt .or. p end
+     if @keep eq P  delete atom select wt .or. m end
+
+     omm clear
+     
+     energy omm
+
+     set E@keep = ?ener
+
+     if @keep eq P goto doblockH
+     if @keep eq M set keep = p
+     if @keep eq WT set keep = m
+goto donextH
+
+label doblockH
+delete atom select all end
+read psf card name @9/@res.psf
+read coor pdb name @9/@res.pdb
+
+set nb = 3
+set k4 = 
+if @n gt 1 then 
+     set nb = 4
+     set k4 = call 4 select p end
+endif
+block @nb
+  call 2 select wt end
+  call 3 select m  end
+  @k4
+end
+
+block
+  coef 1 2 1
+  coef 1 3 0
+  coef 2 2 1
+  coef 2 3 0
+  coef 3 3 0
+end
+if @n gt 1 then
+   block
+      coef 1 4 0
+      coef 2 4 0
+      coef 3 4 0
+      coef 4 4 0
+  end
+endif
+
+omm clear
+energy omm
+set wt = ?ener
+
+block
+  coef 1 2 0
+  coef 1 3 1
+  coef 2 2 0
+  coef 3 3 1
+end
+
+omm clear
+energy omm
+set m = ?ener
+
+if @n gt 1 then
+   block
+     coef 1 3 0
+     coef 1 4 1
+     coef 3 3 0
+     coef 4 4 1
+   end
+
+   omm clear
+   energy omm
+   set p = ?ener
+else
+   set p = 0
+endif
+
+calc diff = ( @wt + @m + @p ) - ( @Ewt + @Em + @Ep )
+
+if @diff le @tol then
+   echo passed test @i @res
+else
+   echo failed test @i @res
+endif
+
+block
+   clear
+end
+delete atom select all end
+incr i by 1
+if i le 5 goto dores
+
+stop
+
+   

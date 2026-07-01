@@ -1,0 +1,110 @@
+* Membrane System : sys15.inp
+* Minimize the energy of the full structure
+* with dynamic and without Langevin Bath 
+*
+
+stream param.str
+
+set LengthX @BoxSizeX
+set LengthY @BoxSizeY
+set LengthZ @BoxSizeZ
+
+!read topology
+open read card unit 10 name @direcTp/@TopFile
+read rtf card unit 10
+close unit 10
+
+!read parameters
+open read card unit 10 name @direcTp/@ParFile
+read param card unit 10
+close unit 10
+
+stream @direcSequence/peptide.str
+
+read sequence DMPC @Nlipid
+generate DMPC  setup
+
+read sequence TIP3 @NWaterMol
+generate BULK noangle nodihedral
+
+open read card unit 1 name @direcWork/sys14_5.crd
+read coor card unit 1
+close unit 1
+
+define BACK -
+       select ( type N .or. type HN .or. type CA .or. type HA* .or. type C .or. type O )  -
+       .and. segid PEPT end
+define SIDE select ( .not. BACK ) .and. segid PEPT end
+define HEAD select ( type P .or. type N .or. type C1* .or. type O1* ) .and. segid DMPC end
+
+coor stat mass select segid PEPT end
+coor stat mass select segid DMPC end
+set PlanZ ?zave
+
+!----------------------------------------------------------------------
+! Constraints on membrane
+
+MMFP
+
+! cylindrical potential function to prevent drift of PEPT
+GEO  cylinder RCM -
+     xref 0.0 yref 0.0 zdir 1.0 -
+     force 5.00 select segid PEPT end
+
+! planar function to prevent drift of DMPC 
+GEO  plane RCM -
+     zref @PlanZ zdir 1.0 -
+     force 5.00 select segid DMPC end
+
+END
+
+!----------------------------------------------------------------------
+
+open unit 8 read card name @direcCubic/cubic.img
+read imag print init unit 8
+close unit 8
+imag byres sele resnam TIP3 .or. resnam DMPC end
+
+energy group   switch cdiel -                 ! Electrostatics
+       vgroup  vswitch      -                 ! VDW
+       ctonnb 8.0 ctofnb 11.0 cutnb 12.0 cutim 12.0
+
+open read  card unit 50 name @direcWork/sys14_5.rst
+DYNAMICS  restart           nstep         0   iunread      50   
+
+shake bonh param tol 1.0e-6
+
+set I  1
+label DO_1
+
+open write card unit 51 name @direcWork/sys15_@I.rst
+!open write unform unit 52 name @direcWork/sys15_@I.trj
+
+if I eq 1 set word start
+if I ne 1 set word restart
+DYNAMICS  @word             nstep      2500   timestp   0.002   nprint   100  iprfrq      500  -
+          iasvel        1   firstt    330.0   finalt    330.0   tstruc 330.0  -
+          ichecw        1   iscvel        0   ieqfrq      500   twindh   3.0  twindl     -3.0  -
+          iunread      50   -
+          iunwrite     51   -
+          iuncrd       -1   nsavcrd      50  -
+          iunvelo      -1   nsavvelo      0
+
+open write card unit 1 name @direcWork/sys15_@I.crd
+write coor card unit 1
+* Full System 
+* after 5 psec dynamics
+*
+
+open read  card unit 50 name @direcWork/sys15_@I.rst
+
+incr I by 1
+if I le 5 goto DO_1
+
+open write card unit 1 name @direcWork/sys15.pdb 
+write coor pdb unit 1
+* Full pdb system 
+* after 25 psec dynamics from sys14.pdb
+*
+
+stop

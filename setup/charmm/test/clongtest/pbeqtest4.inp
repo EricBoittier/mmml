@@ -1,0 +1,80 @@
+* CHARMM 28 testcase pbeqtest4.inp
+* Test PERIODIC BOUNDARY CONDITION in XYZ
+* Author: Benoit Roux
+*
+
+if ?pbeq .ne. 1 then stop
+
+READ  RTF CARD
+*  TOP
+*
+   22     1
+MASS 1    PCHG  1.00000
+
+RESI Q              1.00 ! point charge
+GROUP
+ATOM PCHG  PCHG     1.00
+PATCHING FIRST NONE LAST NONE
+END
+
+READ PARA CARD
+* PAR
+*
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+PCHG     0.0000    0.0000    2.0000  
+END
+
+READ SEQUENCE Q 1
+GENERATE PCHG warn
+
+read coor card
+* A Point Charge
+*
+   1
+    1    1 Q    PCHG   0.00000   0.00000   0.00000 PCHG 1      0.00000
+
+PBEQ
+   scalar wmain = radius
+   scalar charge set  1.0 sele resid 1 end
+
+   SOLVE epsw 80.0 epsp 1.0 ncel 61 dcel 0.5 conc 0.00 watr 0.0
+   set ener80 = ?ENPB
+
+   SOLVE epsw  1.0 epsp 1.0 ncel 61 dcel 0.5 conc 0.00 watr 0.0
+   set ener1 = ?ENPB
+
+   calc solvnp = @ener80 - @ener1
+
+   SOLVE epsw 80.0 epsp 1.0 ncel 61 dcel 0.5 conc 0.00 watr 0.0 PBC
+   set ener80 = ?ENPB
+
+   SOLVE epsw  1.0 epsp 1.0 ncel 61 dcel 0.5 conc 0.00 watr 0.0 PBC
+   set ener1 = ?ENPB
+
+   calc solvp = @ener80 - @ener1
+
+   calc solvdiff = @solvp - @solvnp
+
+   SOLVE epsw 80.0 epsp 1.0 ncel 121 dcel 0.5 conc 0.00 watr 0.0
+   set ener80 = ?ENPB
+
+   SOLVE epsw  1.0 epsp 1.0 ncel 121 dcel 0.5 conc 0.00 watr 0.0
+   set ener1 = ?ENPB
+
+   calc solvnp = @ener80 - @ener1
+
+   SOLVE epsw 80.0 epsp 1.0 ncel 121 dcel 0.5 conc 0.00 watr 0.0 PBC
+   set ener80 = ?ENPB
+
+   SOLVE epsw  1.0 epsp 1.0 ncel 121 dcel 0.5 conc 0.00 watr 0.0 PBC
+   set ener1 = ?ENPB
+
+   calc solvp = @ener80 - @ener1
+
+   calc solvdiff = @solvp - @solvnp
+
+   RESET
+END
+
+STOP

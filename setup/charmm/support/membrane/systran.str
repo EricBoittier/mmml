@@ -1,0 +1,81 @@
+* systran.str  
+* For systematic displacements of individual lipids in the system
+*
+
+open write card unit 10 name @direcWork/sys4_tran.dat
+write title unit 10
+* LipidNum StepNum TotalBad Memory_Best Current_Bad  Curr_X Curr_Y  Best_X  Best_Y 
+*
+
+!---------------------------------------------------------------------
+! Systematic Translations 
+!---------------------------------------------------------------------
+
+set LipidNumber 1               ! Lipid number
+set Step        1               ! total number of steps
+set BadTotKeep  @BadTotal       ! initial setting for "best" number
+
+label Loop_lip
+
+set XComp 0.0     ! initial setting for best X trans
+set YComp 0.0     ! initial setting for best Y trans
+cons fix  sele .not. ( segid L@LipidNumber ) end  !cut-down on number of contacts to analyze
+
+update imall 
+prnlev 0
+coor dist images cut 2.6 sele (.not. type H* ) .and.        ( segid L@LipidNumber ) end    -
+                         sele (.not. type H* ) .and.  .not. ( segid L@LipidNumber ) end
+prnlev 5
+set BadOld ?npair
+set BadBest @BadOld
+
+set X 1.0    ! Translation X-distance
+label Loop_tranX
+
+set Y 1.0    ! Translation Y-distance
+label Loop_tranY
+
+coor trans xdir @X sele ( segid L@LipidNumber ) end
+coor trans ydir @Y sele ( segid L@LipidNumber ) end
+
+update imall
+prnlev 0
+coor dist images cut 2.6 sele (.not. type H*) .and.        ( segid L@LipidNumber ) end    -
+                         sele (.not. type H*) .and.  .not. ( segid L@LipidNumber ) end
+prnlev 5
+set BadNew ?npair
+
+if @BadNew gt @BadBest goto next_trans
+    decrement BadTotKeep by @BadBest  !update the Grand-Total of bad contacts
+    increment BadTotKeep by @BadNew 
+    set BadBest @BadNew               ! keep the new best number of bad contacts
+    set XComp @X                      ! keep the new best translation
+    set YComp @Y                      ! keep the new best translation
+
+label next_trans
+
+write title unit 10
+* @LipidNumber @Step  @BadTotKeep  @BadBest  @BadNew  @X  @Y @XComp  @YComp  
+*
+
+coor trans xdir -@X sele ( segid L@LipidNumber ) end
+coor trans ydir -@Y sele ( segid L@Lipidnumber ) end
+
+incr Step by 1      ! update total number of steps
+decr Y by 0.25      ! decrease Y distance
+if Y ge -1.0 goto Loop_tranY
+decr X by 0.25      ! decrease X distance
+if X ge -1.0 goto Loop_tranX
+
+! translate back to the best
+coor trans xdir @XComp sele ( segid L@LipidNumber ) end
+coor trans ydir @YComp sele ( segid L@LipidNumber ) end
+
+cons fix select none end
+
+incr LipidNumber by 1
+if LipidNumber le @NLipid goto Loop_lip
+
+return
+stop
+

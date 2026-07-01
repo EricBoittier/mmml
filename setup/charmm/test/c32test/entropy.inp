@@ -1,0 +1,164 @@
+* CHARMM c32a2 Testcase: entropy.inp
+* Victor Anisimov, 2004
+* Randy Bin Lin, 2011
+*
+
+if ?novibran .eq. 1 then 
+ echo "c32test/entropy> Test NOT performed."
+STOP
+endif
+
+read rtf card 
+* Ethanol topology 
+*
+22  1
+
+MASS  1 H      1.00783
+MASS  2 HA     1.00783
+MASS  3 OH1   15.99491
+MASS  4 CT2   12.00000
+MASS  5 CT3   12.00000
+
+RESI ETOH        0.00 ! Ethanol, adm jr.
+GROUP
+ATOM C1   CT2    0.05 !  H21  H11 H12
+ATOM O1   OH1   -0.66 !     \   \  /
+ATOM HO1  H      0.43 ! H22--C2--C1
+ATOM H11  HA     0.09 !     /      \
+ATOM H12  HA     0.09 !  H23        O1--HO1
+GROUP
+ATOM C2   CT3   -0.27
+ATOM H21  HA     0.09
+ATOM H22  HA     0.09
+ATOM H23  HA     0.09
+
+BOND C1  C2   C1  O1   C1  H11  C1  H12  O1  HO1
+BOND C2  H21  C2  H22  C2  H23
+
+THETA  C1 C2 H21   C1 C2 H22   C1 C2 H23
+THETA  O1 C1 C2    O1 C1 H11   O1 C1 H12
+THETA  HO1 O1 C1   H21 C2 H22  H21 C2 H23
+THETA  H22 C2 H23  H11 C1 H12
+
+DIHE   HO1 O1 C1 H11  HO1 O1 C1 H12  HO1 O1 C1 C2
+DIHE   O1 C1 C2 H21   O1 C1 C2 H22   O1 C1 C2 H21
+
+DONO HO1 O1
+ACCE O1
+
+IC O1   C1   C2   H21   0.0000  0.0000 180.0000  0.0000  0.0000
+IC O1   C1   C2   H22   0.0000  0.0000  60.0000  0.0000  0.0000
+IC O1   C1   C2   H23   0.0000  0.0000 300.0000  0.0000  0.0000
+IC H21  C2   C1   H11   0.0000  0.0000 120.0000  0.0000  0.0000
+IC H21  C2   C1   H12   0.0000  0.0000 240.0000  0.0000  0.0000
+IC C2   C1   O1   HO1   0.0000  0.0000 180.0000  0.0000  0.0000
+
+END
+
+read param card 
+* Ethanol parameters
+*
+BONDS
+CT3  CT2   222.500     1.5280 ! ALLOW   ALI
+HA   CT2   309.000     1.1110 ! ALLOW   ALI
+HA   CT3   322.000     1.1110 ! ALLOW   ALI
+OH1  CT2   428.000     1.4200 ! ALLOW   ALI ALC ARO
+OH1  H     545.000     0.9600 ! ALLOW   ALC ARO
+
+ANGLES
+H    OH1  CT2    57.500   106.0000 ! ALLOW   ALC ARO ALI
+HA   CT2  CT3   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT2  HA    35.500    109.00    5.40   1.80200 ! ALLOW   ALI
+HA   CT3  HA    35.500    108.40    5.40   1.80200 ! ALLOW   ALI
+HA   CT3  CT2   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+OH1  CT2  CT3    75.700   110.1000 ! ALLOW   ALI ALC ARO
+OH1  CT2  HA     45.900   108.8900 ! ALLOW   ALI ALC ARO
+
+DIHEDRALS
+H    OH1  CT2  CT3      0.4200  3     0.00 ! ALLOW ALC
+X    CT2  CT3  X        0.1600  3     0.00 ! ALLOW   ALI
+X    CT2  OH1  X        0.1400  3     0.00 ! ALLOW   ALI ALC ARO
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+CT2    0.000000  -0.055000     2.175000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+CT3    0.000000  -0.080000     2.060000   0.000000  -0.010000     1.900000 ! ALLOW   ALI
+H      0.000000  -0.046000     0.224500 ! ALLOW PEP POL SUL ARO ALC
+HA     0.000000  -0.022000     1.320000 ! ALLOW PEP ALI POL SUL ARO PRO ALC
+OH1    0.000000  -0.152100     1.770000 ! ALLOW   ALC ARO
+
+END
+
+read sequence card
+* ethanol
+*
+1
+etoh
+
+generate etoh first none last none setup warn
+
+ic param
+ic seed 1 o1 1 c1 1 c2
+ic build
+ic purge
+ic print
+
+update cutnb 999.0 ctofnb 998.0 ctonnb 997.0
+mini nrap nstep 500 nprint 200
+coor print
+
+! ENTROPY CALCULATION
+! 1) First example 
+!
+! Calculate just rotational and translational entropy components (fast)
+! default standard state is 1M solution
+coor iner sele all end entropy temperature 298.15 sigma 1
+
+write title unit 6
+* Entropy Components
+* Rotational    : ?SROT
+* Translational : ?STRA
+* Vibrational   : ?SVIB
+* Total         : ?SSUM
+*
+
+! explicitly test solution standard state
+coor iner sele all end entropy temperature 298.15 sigma 1 standard solution
+
+write title unit 6
+* Entropy Components
+* Rotational    : ?SROT
+* Translational : ?STRA
+* Vibrational   : ?SVIB
+* Total         : ?SSUM
+*
+
+! test ideal gas standard state
+coor iner sele all end entropy temperature 298.15 sigma 1 standard gas
+
+write title unit 6
+* Entropy Components
+* Rotational    : ?SROT
+* Translational : ?STRA
+* Vibrational   : ?SVIB
+* Total         : ?SSUM
+*
+
+! 2) Second example
+!
+! Calculate all entropy terms (rot + vib + transl)
+vibran
+diagonalize entropy temp 298.15 sigm 1
+diagonalize entropy temp 298.15 sigm 1 standard solution
+diagonalize entropy temp 298.15 sigm 1 standard gas
+end
+
+write title unit 6
+* Entropy Components
+* Rotational    : ?SROT
+* Translational : ?STRA
+* Vibrational   : ?SVIB
+* Total         : ?SSUM
+*
+
+stop

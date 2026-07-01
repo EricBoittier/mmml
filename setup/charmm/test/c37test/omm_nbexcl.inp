@@ -1,0 +1,145 @@
+* This input script is meant to test the non-bonded exclusion structure
+* and exclusion of OpenMM calculations when upsupported options requested
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card name @0/toph19.rtf
+read param card name @0/param19.prm
+
+read sequ trp 1
+
+generate trp first nter last cter warn setup
+
+set return = fromcoor
+goto getcoor
+label fromcoor
+
+nbonds cutnb 999 ctofnb 999 ctonnb 999 switch vswitch
+
+!!!! TEST 1!!!!
+energy
+calc ech = ?ener
+energy omm
+calc diff = abs ( ?ener - @ech )
+if @diff le 1e-3 then
+      echo passed TEST 1
+else
+      echo failed TEST 1
+endif
+
+!!!!!TEST 2!!!!!
+! Change the nbxmod and check that energy matches
+nbonds nbxmod 3
+energy
+set ech = ?ener
+energy omm
+calc diff = abs ( ?ener - @ech )
+if @diff le 1e-3 then
+      echo passed TEST 2
+else
+      echo failed TEST 2
+endif
+
+!!!!!TEST 3!!!!!
+! Check that we can restore nbxmod and OMM calculation ok
+! Note currrently doesn't sense this correctly as change in nbopts
+nbonds nbxmod 5
+energy
+set ech = ?ener
+energy omm
+calc diff = abs ( ?ener - @ech )
+if @diff le 1e-3 then
+      echo passed TEST 3
+else
+      echo failed TEST 3
+endif
+
+!!!!!!TEST 4!!!!!
+! Add some fixed atoms and make sure it doesn't do the calculation
+cons fix select bynu 1:5 end
+energy
+set ech = ?ener
+bomlev -2
+energy omm
+calc diff = abs ( ?ener - @ech )
+bomlev 0
+cons fix select none end
+energy
+set ech = ?ener
+energy omm
+calc diff = abs ( ?ener - @ech )
+if @diff le 1e-3 then
+      echo passed TEST 4
+else
+      echo failed TEST 4
+endif
+
+!!!!!TEST 5!!!!!!
+! Check that turning on replica command produces correct behavior with OMM
+replica a nrep 2 select .not. ( type ht* .or. type n .or. type ca -
+                               .or. type cb .or. type c .or. type ot* ) end
+
+delete atom select segid trp .and. .not. ( type ht* .or. type n .or. type ca -
+                               .or. type cb .or. type c .or. type ot* ) end
+energy
+set ech = ?ener
+! Should throw a wrndie here
+bomlev -2
+energy omm omrn
+! And here
+omm on
+energy omrn
+omm off
+bomlev 0
+energy
+calc diff = abs ( ?ener - @ech )
+if @diff le 1e-3 then
+      echo passed TEST 5
+else
+      echo failed TEST 5
+endif
+
+
+stop
+
+label getcoor
+read coor card
+* THIS INPUT SCRIPT IS MEANT TO TEST THE NON-BONDED EXCLUSION STRUCTURE
+* AND EXCLUSION OF OPENMM CALCULATIONS WHEN UPSUPPORTED OPTIONS REQUESTED
+*  DATE:     8/11/12      9:38:12      CREATED BY USER: brookscl
+*
+   19
+    1    1 TRP  HT1    0.09014  -0.46067   0.48728 TRP  1      0.00000
+    2    1 TRP  HT2   -0.34133   0.59023  -0.83805 TRP  1      0.00000
+    3    1 TRP  N      0.19873  -0.22942  -0.52750 TRP  1      0.00000
+    4    1 TRP  HT3    0.01499  -1.10540  -1.05147 TRP  1      0.00000
+    5    1 TRP  CA     1.61836  -0.06014  -0.60994 TRP  1      0.00000
+    6    1 TRP  CB     2.06979   1.19500   0.14269 TRP  1      0.00000
+    7    1 TRP  CG     3.57606   1.42661   0.09907 TRP  1      0.00000
+    8    1 TRP  CD2    4.34919   1.75825  -0.98349 TRP  1      0.00000
+    9    1 TRP  CE2    5.59329   1.82058  -0.43965 TRP  1      0.00000
+   10    1 TRP  CE3    4.14944   1.70922  -2.34316 TRP  1      0.00000
+   11    1 TRP  CD1    4.34547   1.30948   1.23878 TRP  1      0.00000
+   12    1 TRP  NE1    5.58732   1.54952   0.86910 TRP  1      0.00000
+   13    1 TRP  HE1    6.37165   1.48161   1.45293 TRP  1      0.00000
+   14    1 TRP  CZ2    6.74472   1.83903  -1.18609 TRP  1      0.00000
+   15    1 TRP  CZ3    5.29411   1.75083  -3.12633 TRP  1      0.00000
+   16    1 TRP  CH2    6.56414   1.81441  -2.56097 TRP  1      0.00000
+   17    1 TRP  C      1.95441  -1.34189   0.12303 TRP  1      0.00000
+   18    1 TRP  OT1    2.50590  -2.21882  -0.51844 TRP  1      0.00000
+   19    1 TRP  OT2    1.52764  -1.49249   1.27144 TRP  1      0.00000
+
+goto @return
+
+stop

@@ -1,0 +1,84 @@
+* Test seondary sructure analysis on the 1fsv_vacu structure
+*
+
+set STATUS pass
+set WRITECOOR NO
+stream datadir.def
+
+open unit 10 read form name @0top_all22_prot.inp
+read rtf unit 10 card
+close unit 10
+open unit 10 read form name @0par_all22_prot.inp
+read param unit 10 card
+close unit 10
+open unit 11 read form name @03adk-a.crd
+read sequ coor unit 11
+close unit 11
+
+generate 3adk setup
+read coor card name @03adk-a.crd
+! save original assignments
+scalar wcomp = wmain sele type ca end
+scalar wmain = zero
+HBUILD SELE HYDROGEN END
+! Begin actual tests
+COOR SECS VERBOSE  SELE ALL END SELE ALL END
+echo ?nalpha ?alpha ?nbeta ?beta ?n310 ?h310 ?npi ?hpi
+if WRITECOOR eq YES goto writecoor
+set na1 ?nalpha
+set nb1 ?nbeta
+set n31 ?n310
+set np1 ?npi
+scalar wcomp mult -1.0
+scalar wcomp sum wmain
+! if all is well wcomp (at CA) should now all be zero
+! apart from a few helix and sheet beginnings/ends this assignment agrees
+! with the one for 2ADK in the Kabsch&Sander paper
+scalar wcomp stat select type ca end
+if ?SMIN .ne. 0 set STATUS FAIL
+if ?SMAX .ne. 0 set STATUS FAIL
+! This one is expected to find one alpha helix 3-6, but no beta
+coor secs sele ires 2:15 end verbose
+if ?nalpha .ne. 4 set status FAIL
+if ?nbeta .ne. 0 set status FAIL
+! find 3-10 at 165-167 following alpha
+coor secs sele ires 160:169 end verbose
+if ?nalpha .ne. 4 set status FAIL
+if ?n310   .ne. 3 set status FAIL
+! now both the 3-6 helix and the 10-14 beta strand should be found
+coor secs sele ires 2:15 end sele all end verbose
+if ?nalpha .ne. 4 set status FAIL
+if ?nbeta .ne. 5 set status FAIL
+
+coor secs quiet
+echo ?nalpha ?nbeta ?n310 ?npi
+if ?nalpha .ne. @na1 set status fail
+if ?nbeta  .ne. @nb1 set status fail
+if ?n310  .ne. @n31 set status fail
+if ?npi   .ne. @np1 set status fail
+coor secs sele ires 30:100 end 
+coor secs sele ires 30:100 end sele segid 3adk end
+coor secs sele ires 30:100 end sele ires 110:180 end
+if ?nalpha ne 0 set STATUS FAIL
+coor secs verbose cuth 2.4
+set na2 ?nalpha
+set nb2 ?nbeta
+set n32 ?n310
+set np2 ?npi
+if @na1 .ne. 97 set STATUS FAIL
+if @na2 .ne. 79 set STATUS FAIL
+if @nb1 .ne. 23 set STATUS FAIL 
+if @nb2 .ne. 21 set STATUS FAIL
+if @n31 .ne.  8 set STATUS FAIL 
+if @n32 .ne.  5 set STATUS FAIL
+if @np1 .ne.  0 set STATUS FAIL 
+if @np2 .ne.  0 set STATUS FAIL
+echo secstr testcase result: @STATUS
+
+label writecoor
+if WRITECOOR .eq. YES then
+write coor card name 3adk-a.crd select .NOT. HYDROGEN end
+* 3ADK WITH KABSCH&SANDER LIKE SECONDARY STRUCTURE ASSIGNMENTS IN WMAIN
+* (1=ALPHA,2=BETA,3=3-10,4=PI)
+*
+endif

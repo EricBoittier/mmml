@@ -1,0 +1,39 @@
+* sasa_mpi.inp: Tests MPI parallelization of COOR SURF command. For this to
+* run, pref.dat must include the keyword: MPI
+* James E. Gonzales II (jeg) & Wonmuk Hwang (hwm), April 2024
+*
+if ?numnode .eq. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+! Read toppar
+read rtf card name @0top_all36_prot.rtf
+read para card flex name @0par_all36_prot.prm
+stream @0toppar_water_ions.str
+
+! Read trajectory
+read psf card name @0asparg.psf
+open read unit 101 file name @0asparg.dcd
+traj query unit 101
+
+traj first 101 nunit 1 begin ?start skip ?skip
+traj read
+
+set TARGET_AREA 550.960174
+coor surf rprobe 1.4 sele segi E000 end
+set MPI_AREA ?AREA
+
+calc AREA_DIFF @{TARGET_AREA} - @{MPI_AREA}
+
+if @{AREA_DIFF} .gt. 1e-5 then
+   set OUTCOME FAIL
+else
+   set OUTCOME PASS
+endif
+
+echo TESTCASE RESULT: @OUTCOME
+
+stop

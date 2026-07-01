@@ -1,0 +1,304 @@
+* This test case tests domdec minimization options 
+*
+
+if ?domdec .ne. 1 then
+   echo "Test NOT performed. DOMDEC must be compiled"
+   stop
+endif
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed. Test not compatible with PARALLEL."
+ stop
+endif
+
+stream datadir.def
+
+set tol = 0.02
+set tolr = 0.006
+set nsteps 2500
+system "rm diffs.txt"
+bomlev -2
+read rtf card name @0/top_all36_prot.rtf
+read param card name @0/par_all36_prot.prm
+bomlev 0
+read sequ ala 1
+
+generate ala first ace last ct3 setup
+
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+coor orie
+
+set returnpoint = r1
+set lambda = 0.5
+set temp = 298
+goto msld
+label r1
+
+coor copy compare
+
+scalar x store 1
+scalar y store 2
+scalar z store 3
+
+set L 100
+Crystal define cubic @L @L @L 90 90 90
+open unit 1 read form name @0/cubic.xtl
+crystal read card unit 1
+close unit 1
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select all  end
+
+energy fswitch vswitch
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+
+mini sd nstep @nsteps
+set sener = ?ener
+set sbond = ?bond
+set sangl = ?angl
+set surey = ?urey
+set sdihe = ?dihe
+set simpr = ?impr
+set svdw  = ?vdw
+set selec = ?elec
+
+scalar x store 4
+scalar y store 5
+scalar z store 6
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+
+mini abnr nstep @nsteps
+set aener = ?ener
+set abond = ?bond
+set aangl = ?angl
+set aurey = ?urey
+set adihe = ?dihe
+set aimpr = ?impr
+set avdw  = ?vdw
+set aelec = ?elec
+
+scalar x store 7
+scalar y store 8
+scalar z store 9
+
+set statusall = pass
+set m = 1
+label domini
+      
+      if @m eq 1 set mini = sd
+      if @m eq 2 set mini = abnr
+      set d = 1
+      label dodomdec
+            set status = pass
+            if @d eq 1 set domdec = 
+            if @d eq 2 set domdec = gpu on
+            if @d eq 3 set domdec = gpu only
+
+            scalar x recall 1
+            scalar y recall 2
+            scalar z recall 3
+	    
+            energy domdec @{domdec}
+
+            mini @{mini} nstep @nsteps
+
+            energy domdec @{domdec}
+
+            if @m eq 1 then
+               calc dsener = abs ( @sener - ?ener )
+               calc dsbond = abs ( @sbond - ?bond )
+               calc dsangl = abs ( @sangl - ?angl )
+               calc dsurey = abs ( @surey - ?urey )
+               calc dsdihe = abs ( @sdihe - ?dihe )
+               calc dsimpr = abs ( @simpr - ?impr )
+               calc dsvdw  = abs ( @svdw  - ?vdw  )
+               calc dselec = abs ( @selec - ?elec )
+	       if @{dsener} gt @tol then
+	             echo FAIL: ener @{mini} @{domdec} @sener ?ener
+		     set status = fail
+               else
+	             echo PASS: ener @{mini} @{domdec} @sener ?ener
+	       endif
+	       if @{dsbond} gt @tol then
+	             echo FAIL: bond @{mini} @{domdec} @sbond ?bond
+		     set status = fail
+               else
+	             echo PASS: bond @{mini} @{domdec} @sbond ?bond
+	       endif
+	       if @{dsangl} gt @tol then
+	             echo FAIL: angl @{mini} @{domdec} @sangl ?angl
+		     set status = fail
+               else
+	             echo PASS: angl @{mini} @{domdec} @sangl ?angl
+	       endif
+	       if @{dsurey} gt @tol then
+	             echo FAIL: urey @{mini} @{domdec} @surey ?urey
+		     set status = fail
+               else
+	             echo PASS: urey @{mini} @{domdec} @surey ?urey
+	       endif
+	       if @{dsdihe} gt @tol then
+	             echo FAIL: dihe @{mini} @{domdec} @sdihe ?dihe
+		     set status = fail
+               else
+	             echo PASS: dihe @{mini} @{domdec} @sdihe ?dihe
+	       endif
+	       if @{dsimpr} gt @tol then
+	             echo FAIL: impr @{mini} @{domdec} @simpr ?impr
+		     set status = fail
+               else
+	             echo PASS: impr @{mini} @{domdec} @simpr ?impr
+	       endif
+	       if @{dsvdw}  gt @tol then
+	             echo FAIL: vdw  @{mini} @{domdec} @svdw  ?vdw
+		     set status = fail
+               else
+	             echo PASS: vdw  @{mini} @{domdec} @svdw  ?vdw
+	       endif
+	       if @{dselec} gt @tol then
+	             echo FAIL: elec @{mini} @{domdec} @selec ?elec
+		     set status = fail
+               else
+	             echo PASS: elec @{mini} @{domdec} @selec ?elec
+	       endif
+               scalar xcomp recall 4
+               scalar ycomp recall 5
+               scalar zcomp recall 6
+	       coor rms
+	       if ?rms .gt. @tolr then
+	             echo FAIL: rms @{mini} @{domdec} ?rms
+		     set status = fail
+               else
+	             echo PASS: rms @{mini} @{domdec} ?rms
+	       endif
+
+            else
+
+               calc daener = abs ( @aener - ?ener )
+               calc dabond = abs ( @abond - ?bond )
+               calc daangl = abs ( @aangl - ?angl )
+               calc daurey = abs ( @aurey - ?urey )
+               calc dadihe = abs ( @adihe - ?dihe )
+               calc daimpr = abs ( @aimpr - ?impr )
+               calc davdw  = abs ( @avdw  - ?vdw  )
+               calc daelec = abs ( @aelec - ?elec )
+	       if @{daener} gt @tol then
+	             echo FAIL: ener @{mini} @{domdec} @aener ?ener
+		     set status = fail
+               else
+	             echo PASS: ener @{mini} @{domdec} @aener ?ener
+	       endif
+	       if @{dabond} gt @tol then
+	             echo FAIL: bond @{mini} @{domdec} @abond ?bond
+		     set status = fail
+               else
+	             echo PASS: bond @{mini} @{domdec} @abond ?bond
+	       endif
+	       if @{daangl} gt @tol then
+	             echo FAIL: angl @{mini} @{domdec} @aangl ?angl
+		     set status = fail
+               else
+	             echo PASS: angl @{mini} @{domdec} @aangl ?angl
+	       endif
+	       if @{daurey} gt @tol then
+	             echo FAIL: urey @{mini} @{domdec} @aurey ?urey
+		     set status = fail
+               else
+	             echo PASS: urey @{mini} @{domdec} @aurey ?urey
+	       endif
+	       if @{dadihe} gt @tol then
+	             echo FAIL: dihe @{mini} @{domdec} @adihe ?dihe
+		     set status = fail
+               else
+	             echo PASS: dihe @{mini} @{domdec} @adihe ?dihe
+	       endif
+	       if @{daimpr} gt @tol then
+	             echo FAIL: impr @{mini} @{domdec} @aimpr ?impr
+		     set status = fail
+               else
+	             echo PASS: impr @{mini} @{domdec} @aimpr ?impr
+	       endif
+	       if @{davdw}  gt @tol then
+	             echo FAIL: vdw  @{mini} @{domdec} @avdw  ?vdw
+		     set status = fail
+               else
+	             echo PASS: vdw  @{mini} @{domdec} @avdw  ?vdw
+	       endif
+	       if @{daelec} gt @tol then
+	             echo FAIL: elec @{mini} @{domdec} @aelec ?elec
+		     set status = fail
+               else
+	             echo PASS: elec @{mini} @{domdec} @aelec ?elec
+	       endif
+               scalar xcomp recall 7
+               scalar ycomp recall 8
+               scalar zcomp recall 9
+	       coor rms
+	       if ?rms .gt. @tolr then
+	             echo FAIL: rms @{mini} @{domdec} ?rms
+		     set status = fail
+               else
+	             echo PASS: rms @{mini} @{domdec} ?rms
+               endif
+            endif
+	    
+            echo Status of @{mini} @{domdec} is @status
+	    if @status eq fail set statusall = fail
+      incr d by 1
+      if ?domdec_g eq 1 then
+        if @d le 3 goto dodomdec
+      endif
+      incr m by 1
+if @m le 2 goto domini
+
+echo Status of all @statusall
+stop
+
+label msld
+
+      replica a nrep 1 select ( type cb .or. type hb* ) show end
+
+      print coor
+
+      define side select type cb .or. type hb* show end
+      define g1 select side .and. segid ala show end
+      define g2 select side .and. segid a1 show end
+
+      set lambda2 = @lambda
+      calc lambda1 = 1 - @lambda
+
+
+      BLOCK 3
+         Call 2 sele g1 show end
+         Call 3 sele g2 show end
+
+         qldm theta
+         lang temp @temp
+
+         ldin 1 1.0     0.0  5.0  0.0    5.0
+         ldin 2 @lambda1 0.0  5.0  0.00   5.0 
+         ldin 3 @lambda2 0.0  5.0  0.00   5.0 
+
+         nora       ! no random forces
+         excl 2 3
+         rmla bond thet impr dihe
+
+         msld 0  1  1  ffix
+         msma
+
+         ldbi 0     ! no biasing potentials
+
+         soft on
+         pmel on
+      end
+
+goto @returnpoint
+
+

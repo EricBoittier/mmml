@@ -1,0 +1,177 @@
+* This script provides a simple example of building an
+* alanine dipeptide and minimizing the structure and then
+* calculating the energy to illustrate functionality to be
+* exposed in PyCHARMM.
+*  C.L. Brooks III, April 15, 2019
+*
+
+read rtf card name toppar/top_all36_prot.rtf
+read param card flexible name toppar/par_all36_prot.prm
+stream toppar/toppar_water_ions.str
+
+! This is one mechanism of reading in the
+! sequence of the protein to be generated, but
+! only useful for the same residue
+read sequ ala 1
+
+! An equivalent but alternative is:
+!read sequ card
+!* Sequence
+!*
+!1
+!ala
+
+generate adp first ace last ct3 setup
+
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+! The coor orie command is useful to expose since it allows one to
+! orient the system in preparation for other calculations
+coor orie
+
+print coor
+
+! The nbonds command is where most of the control of how the
+! energy is calculated to compute forces for minimization, dynamics
+! or simply energy commands, this should be exposed to the pyCHARMM
+! interface so that one can set-up exactly how the forces/energy is
+! calculated.
+nbonds cutnb 18 ctonnb 15 ctofnb 13 eps 1 cdie -
+         atom fswitch vatom vfswitch
+
+! Exposing the minimizer is helpful since it will be a widely
+! useful function. Note that if nbonds is available to the PyCHARMM API
+! then this sort of basic minimize command is sufficient, where abnr could
+! be substituted by sd or conj as well.
+minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
+
+energy
+
+! Here it would be useful to have the coordinates available
+! to the python script with the full precision by directly accessing
+! the coordinate arrays in source/ltm/coord_ltm.F90
+! and coordc_ltm.F90 (comparison coordinates).
+print coor
+
+! Here it would be useful to have the forces available
+! to the python script, this could be done through
+! an interface to coor force and then access to the coordinates
+! or by directly accessing the force arrays in source/ltm/dreiv_ltm.F90.
+coor force comp
+print coor comp
+
+write coor pdb name pdb/adp.pdb
+write psf card name pdb/adp.psf
+
+! Just to build on this example and provide examples for reading
+! psf and coordinates, the delete isn't necessary initially, unless its
+! easy.
+delete atom select all end
+
+read psf card name pdb/adp.psf
+read coor pdb name pdb/adp.pdb resid
+
+! This is not needed, just here to enable this processing in this script.
+system "convpdb.pl -solvate -cutoff 10 -cubic -out charmm22 pdb/adp.pdb | convpdb.pl -segnames -nsel TIP3 > pdb/wt00.pdb"
+
+! Here is an alternative means of reading a sequence
+read sequ pdb name pdb/wt00.pdb
+
+! Another example of the generate command
+generate wt00 noangle nodihedral
+
+read coor pdb name pdb/wt00.pdb resid
+
+! This command gives info that is useful in setting up
+! simulation though could be gotten in separate CHARMM
+! preparation.
+coor stat
+
+calc xsize = ?xmax - ?xmin
+calc ysize = ?ymax - ?ymin
+calc zsize = ?zmax - ?zmin
+set boxsize = @xsize
+if @boxsize lt @ysize set boxsize = @ysize
+if @boxsize lt @zsize set boxsize = @zsize
+calc boxhalf = @boxsize / 2
+! To here ^^^^^^^^^
+
+! These next 4 commands are likely needed in setting up
+! a system using PyCHARMM
+crystal define cubic @boxsize @boxsize @boxsize 90 90 90
+crystal build cutoff @boxhalf noper 0
+
+image byseg xcen 0 ycen 0 zcen 0 select segid adp end
+image byres xcen 0 ycen 0 zcen 0 select resname tip3 end
+! To here ^^^^^^^^^
+
+! Again this stuff is not essential
+set cutnb = @boxhalf
+set cutim = @cutnb
+calc ctofnb = @cutnb - 2
+calc ctonnb = @cutnb - 4
+
+! Another nbonds example
+nbonds cutnb @cutnb cutim @cutim ctofnb @ctofnb ctonnb @ctonnb -
+       inbfrq -1 imgfrq -1
+
+! cons fix, cons harm are two sets of commands that could
+! be useful, but not essential on first passes
+cons fix select segid adp end
+
+! Another example of minimization
+mini sd nstep 1000 tole 1e-3 tolgrd 1e-3
+
+! cons fix, cons harm are two sets of commands that could
+! be useful, but not essential on first passes
+cons fix select none end
+
+write psf card name pdb/adp+wat.psf
+write coor pdb name pdb/adp+wat_min.pdb
+
+! It will also be essential to be able to set SHAKE up
+shake bonh tol 1e-7
+
+! This would be required to run Langevin dynamics with
+! PyCHARMM. Note there are two pieces here, the scalar command
+! and its repertoir of sub-commands and the selection command and
+! its syntax
+scalar fbeta set 5 select .not. hydrogen end
+
+! Basic file i/o to open files for writing by other CHARMM processes
+
+open unit 10 write form name res/adp.res
+! This is the dynamics command that contains all the variables
+! that are not set/cannot be set via nbonds
+dynamics langevin start nstep 1000 timestep 0.002 - ! Basic dynamics descriptors
+         firstt 298 finalt 298 tbath 298 tstruct 298 - ! Temperature specifiers
+	 teminc 0 twindh 0 twindl 0 - ! Temperature control variables
+	 iasors 0 iasvel 1 ichew 0 iscale 0 iscvel 0 - ! Temperature set-up
+	                                            - ! and checking variables
+	 echeck -1 - ! energy checking criterion
+	 iuncrd 0 iunvel 0 iunwri 10 kunit 0 - !unit numbers for writing files
+	 nsavc 0 nsavv 0 ntrfrq 100 isvfrq 100 - ! frequencies for saving/writing
+	 iprfrq 200 nprint 100 ihtfrq 0 ieqfrq 0 - ! frequencies for output
+	                                         - ! and heating/equilibration
+	 ilbfrq 0 iseed 2393 121923 12239 143569   !random seed
+
+close unit 10
+open unit 10 write form name res/adp.res
+open unit 11 write unform name dcd/adp.dcd
+! This is the dynamics command that contains all the variables
+! that are not set/cannot be set via nbonds
+dynamics langevin restart nstep 1000 timestep 0.002 - ! Basic dynamics descriptors
+         firstt 298 finalt 298 tbath 298 tstruct 298 - ! Temperature specifiers
+	 teminc 0 twindh 0 twindl 0 - ! Temperature control variables
+	 iasors 0 iasvel 1 ichew 0 iscale 0 iscvel 0 - ! Temperature set-up
+	                                            - ! and checking variables
+	 echeck -1 - ! energy checking criterion
+	 iuncrd 11 iunvel 0 iunwri 10 iunrea 10 kunit 0 - !unit numbers for writing files
+	 nsavc 10 nsavv 0 ntrfrq 100 isvfrq 100 - ! frequencies for saving/writing
+	 iprfrq 200 nprint 100 ihtfrq 0 ieqfrq 0 - ! frequencies for output
+	                                         - ! and heating/equilibration
+	 ilbfrq 0 
+
+stop

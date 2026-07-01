@@ -1,0 +1,46 @@
+* CHARMM 25 testcase anal.inp
+* Bernard R. Brooks, 15-JUL-97, c25b1
+* A simple test case for long/short energy print-out with anal
+*
+
+bomlev -2
+stream datadir.def
+
+open read unit 11 form name  @0toph19.rtf
+read rtf  card unit 11
+close unit 11
+open read unit 12 form name  @0param19.prm
+read parameter card unit 12
+close unit 12
+
+read sequence card
+*  First sequence for second derivative test
+*
+    2
+AMN CBX
+generate main setu
+
+read coor card
+* Initial coordinates for AMN-CBX
+*
+    6
+    1    1 AMN  CL     0.66165  -1.46652   0.00000 MAIN 1      0.00000
+    2    1 AMN  C      0.50411   0.04943   0.00000 MAIN 1      0.00000
+    3    1 AMN  O      1.49715   0.77115   0.00000 MAIN 1      0.00000
+    4    2 CBX  N     -0.68531   0.64870   0.00000 MAIN 2      0.00000
+    5    2 CBX  H     -0.68863   1.62692   0.00000 MAIN 2      0.00000
+    6    2 CBX  CA    -1.97294  -0.10700   0.00000 MAIN 2      0.00000
+
+coor orient mass
+
+anal on
+anal term nonb
+
+long
+energy
+scalar econt show
+
+short
+gete
+
+stop

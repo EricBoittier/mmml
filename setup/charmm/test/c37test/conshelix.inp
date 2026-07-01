@@ -1,0 +1,267 @@
+* CHARMM 37 Testcase conshelix.inp
+* Taehoon Kim, 14-JAN-02, c37a1
+* Test various Helix-Restraint-Potential constraints
+*
+
+if ?consheli .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+
+open read form unit 1 name @0top_all22_prot_na.inp
+read rtf  card unit 1
+close unit 1
+
+open read form unit 1 name @0par_all22_prot_na.inp
+read parameter card unit 1
+close unit 1
+
+read sequence cards
+* sequence
+*
+   10
+ALA ALA ALA ALA ALA ALA ALA ALA ALA ALA
+generate hlx1 setup
+
+read coor card
+* COORDINATE FOR HELIX1 TEST SYSTEM
+*
+  103
+    1    1 ALA  N     -1.41318  -2.34362  -8.32585 HLX1 1      0.00000
+    2    1 ALA  HT1   -1.64883  -3.17920  -8.90077 HLX1 1      0.00000
+    3    1 ALA  HT2   -1.24214  -1.53834  -8.96173 HLX1 1      0.00000
+    4    1 ALA  HT3   -2.22019  -2.12033  -7.70323 HLX1 1      0.00000
+    5    1 ALA  CA    -0.19798  -2.61789  -7.48978 HLX1 1      0.00000
+    6    1 ALA  HA    -0.40607  -3.51321  -6.91468 HLX1 1      0.00000
+    7    1 ALA  CB     1.00380  -2.88588  -8.42718 HLX1 1      0.00000
+    8    1 ALA  HB1    0.79152  -3.73151  -9.11954 HLX1 1      0.00000
+    9    1 ALA  HB2    1.27008  -1.99723  -9.03963 HLX1 1      0.00000
+   10    1 ALA  HB3    1.89775  -3.18616  -7.83337 HLX1 1      0.00000
+   11    1 ALA  C      0.07380  -1.52302  -6.45866 HLX1 1      0.00000
+   12    1 ALA  O     -0.81954  -1.24084  -5.66858 HLX1 1      0.00000
+   13    2 ALA  N      1.27227  -0.89030  -6.47523 HLX1 2      0.00000
+   14    2 ALA  HN     1.92586  -1.10004  -7.19828 HLX1 2      0.00000
+   15    2 ALA  CA     1.89004  -0.02926  -5.46377 HLX1 2      0.00000
+   16    2 ALA  HA     2.61092  -0.65273  -4.94818 HLX1 2      0.00000
+   17    2 ALA  CB     2.67819   1.07456  -6.19638 HLX1 2      0.00000
+   18    2 ALA  HB1    3.39965   0.63209  -6.91601 HLX1 2      0.00000
+   19    2 ALA  HB2    1.99744   1.75114  -6.75482 HLX1 2      0.00000
+   20    2 ALA  HB3    3.26434   1.68745  -5.47508 HLX1 2      0.00000
+   21    2 ALA  C      1.06883   0.60248  -4.33023 HLX1 2      0.00000
+   22    2 ALA  O      1.34304   0.33272  -3.16678 HLX1 2      0.00000
+   23    3 ALA  N      0.03181   1.41935  -4.61844 HLX1 3      0.00000
+   24    3 ALA  HN    -0.19911   1.63256  -5.55868 HLX1 3      0.00000
+   25    3 ALA  CA    -0.74333   2.13733  -3.61313 HLX1 3      0.00000
+   26    3 ALA  HA    -0.07311   2.81012  -3.09108 HLX1 3      0.00000
+   27    3 ALA  CB    -1.83567   2.96317  -4.32270 HLX1 3      0.00000
+   28    3 ALA  HB1   -1.37865   3.66263  -5.05444 HLX1 3      0.00000
+   29    3 ALA  HB2   -2.55262   2.30541  -4.85656 HLX1 3      0.00000
+   30    3 ALA  HB3   -2.40480   3.57252  -3.58509 HLX1 3      0.00000
+   31    3 ALA  C     -1.38079   1.25697  -2.53385 HLX1 3      0.00000
+   32    3 ALA  O     -1.41640   1.61416  -1.36257 HLX1 3      0.00000
+   33    4 ALA  N     -1.84992   0.04965  -2.90639 HLX1 4      0.00000
+   34    4 ALA  HN    -1.78614  -0.23223  -3.85683 HLX1 4      0.00000
+   35    4 ALA  CA    -2.37601  -0.93332  -1.97827 HLX1 4      0.00000
+   36    4 ALA  HA    -3.18688  -0.47519  -1.42405 HLX1 4      0.00000
+   37    4 ALA  CB    -2.91899  -2.13288  -2.78109 HLX1 4      0.00000
+   38    4 ALA  HB1   -3.71103  -1.79276  -3.48082 HLX1 4      0.00000
+   39    4 ALA  HB2   -2.10702  -2.61996  -3.35936 HLX1 4      0.00000
+   40    4 ALA  HB3   -3.36736  -2.88482  -2.09359 HLX1 4      0.00000
+   41    4 ALA  C     -1.36808  -1.42112  -0.93282 HLX1 4      0.00000
+   42    4 ALA  O     -1.71870  -1.65100   0.21598 HLX1 4      0.00000
+   43    5 ALA  N     -0.08201  -1.58426  -1.31125 HLX1 5      0.00000
+   44    5 ALA  HN     0.21101  -1.30858  -2.21945 HLX1 5      0.00000
+   45    5 ALA  CA     0.98081  -1.96658  -0.39740 HLX1 5      0.00000
+   46    5 ALA  HA     0.65875  -2.84096   0.15567 HLX1 5      0.00000
+   47    5 ALA  CB     2.25103  -2.30469  -1.20615 HLX1 5      0.00000
+   48    5 ALA  HB1    2.03474  -3.11467  -1.93249 HLX1 5      0.00000
+   49    5 ALA  HB2    2.62059  -1.41463  -1.75795 HLX1 5      0.00000
+   50    5 ALA  HB3    3.05738  -2.65554  -0.52496 HLX1 5      0.00000
+   51    5 ALA  C      1.29476  -0.89118   0.63997 HLX1 5      0.00000
+   52    5 ALA  O      1.51458  -1.17366   1.81273 HLX1 5      0.00000
+   53    6 ALA  N      1.29357   0.38764   0.21609 HLX1 6      0.00000
+   54    6 ALA  HN     1.10542   0.58701  -0.74043 HLX1 6      0.00000
+   55    6 ALA  CA     1.50529   1.53540   1.07858 HLX1 6      0.00000
+   56    6 ALA  HA     2.43140   1.38178   1.61852 HLX1 6      0.00000
+   57    6 ALA  CB     1.62315   2.79993   0.20498 HLX1 6      0.00000
+   58    6 ALA  HB1    2.44893   2.68028  -0.52696 HLX1 6      0.00000
+   59    6 ALA  HB2    0.67680   2.98653  -0.34603 HLX1 6      0.00000
+   60    6 ALA  HB3    1.84457   3.68376   0.84237 HLX1 6      0.00000
+   61    6 ALA  C      0.41535   1.72993   2.13447 HLX1 6      0.00000
+   62    6 ALA  O      0.66871   2.20412   3.23680 HLX1 6      0.00000
+   63    7 ALA  N     -0.83055   1.33746   1.80974 HLX1 7      0.00000
+   64    7 ALA  HN    -1.00783   0.95690   0.90645 HLX1 7      0.00000
+   65    7 ALA  CA    -1.98270   1.47665   2.67669 HLX1 7      0.00000
+   66    7 ALA  HA    -1.84142   2.32085   3.33918 HLX1 7      0.00000
+   67    7 ALA  CB    -3.21765   1.72816   1.78663 HLX1 7      0.00000
+   68    7 ALA  HB1   -3.04758   2.62463   1.15407 HLX1 7      0.00000
+   69    7 ALA  HB2   -3.40578   0.85738   1.12396 HLX1 7      0.00000
+   70    7 ALA  HB3   -4.11869   1.89905   2.41390 HLX1 7      0.00000
+   71    7 ALA  C     -2.21544   0.24726   3.55934 HLX1 7      0.00000
+   72    7 ALA  O     -3.26145   0.10107   4.18835 HLX1 7      0.00000
+   73    8 ALA  N     -1.22551  -0.66388   3.62387 HLX1 8      0.00000
+   74    8 ALA  HN    -0.39857  -0.54281   3.07866 HLX1 8      0.00000
+   75    8 ALA  CA    -1.25654  -1.84896   4.45309 HLX1 8      0.00000
+   76    8 ALA  HA    -2.12776  -1.83228   5.09637 HLX1 8      0.00000
+   77    8 ALA  CB    -1.28924  -3.09288   3.53690 HLX1 8      0.00000
+   78    8 ALA  HB1   -2.18404  -3.05151   2.87868 HLX1 8      0.00000
+   79    8 ALA  HB2   -0.38525  -3.11200   2.89204 HLX1 8      0.00000
+   80    8 ALA  HB3   -1.32712  -4.02645   4.13796 HLX1 8      0.00000
+   81    8 ALA  C     -0.03367  -1.87738   5.37035 HLX1 8      0.00000
+   82    8 ALA  O      0.39639  -2.93209   5.83822 HLX1 8      0.00000
+   83    9 ALA  N      0.57388  -0.70181   5.62007 HLX1 9      0.00000
+   84    9 ALA  HN     0.18355   0.15144   5.28464 HLX1 9      0.00000
+   85    9 ALA  CA     1.85022  -0.58815   6.28904 HLX1 9      0.00000
+   86    9 ALA  HA     1.94889  -1.37807   7.02298 HLX1 9      0.00000
+   87    9 ALA  CB     2.97346  -0.67226   5.22879 HLX1 9      0.00000
+   88    9 ALA  HB1    2.90796  -1.63928   4.68667 HLX1 9      0.00000
+   89    9 ALA  HB2    2.85794   0.14700   4.48747 HLX1 9      0.00000
+   90    9 ALA  HB3    3.97530  -0.59100   5.69950 HLX1 9      0.00000
+   91    9 ALA  C      1.94121   0.72823   7.05749 HLX1 9      0.00000
+   92    9 ALA  O      3.02063   1.30939   7.18679 HLX1 9      0.00000
+   93   10 ALA  N      0.79907   1.22438   7.56071 HLX1 10     0.00000
+   94   10 ALA  HN    -0.06196   0.71748   7.60930 HLX1 10     0.00000
+   95   10 ALA  CA     0.67986   2.46569   8.28069 HLX1 10     0.00000
+   96   10 ALA  HA     1.59435   2.67495   8.82022 HLX1 10     0.00000
+   97   10 ALA  CB     0.32168   3.60507   7.30231 HLX1 10     0.00000
+   98   10 ALA  HB1    1.12375   3.72941   6.54679 HLX1 10     0.00000
+   99   10 ALA  HB2   -0.62790   3.36341   6.77957 HLX1 10     0.00000
+  100   10 ALA  HB3    0.18899   4.55223   7.86587 HLX1 10     0.00000
+  101   10 ALA  C     -0.45532   2.30743   9.32968 HLX1 10     0.00000
+  102   10 ALA  OT1   -1.16420   1.26221   9.28749 HLX1 10     0.00000
+  103   10 ALA  OT2   -0.62257   3.22998  10.17388 HLX1 10     0.00000
+
+generate hlx2 dupl hlx1
+
+! Copy coordinates from hlx1 to hlx2
+coor dupl sele segid hlx1 end sele segid hlx2 end
+
+! Use your own nonbond options for your own practical applications
+update cutnb 50.0 ctofnb 47.0 ctonnb 45.0
+
+define helx1 sele segid hlx1 .and. type CA end
+define helx2 sele segid hlx2 .and. type CA end
+
+! Translate along y-axis to separate helices.
+coor trans xdir 0.0 ydir  1.0 zdir 0.0 dist 15.0 sele segid hlx1 end
+
+! Tilt 30 degrees to opposite direction
+coor rota xdir 1.0 phi  30 sele segid hlx1 end
+coor rota xdir 1.0 phi -30 sele segid hlx2 end
+
+coor copy comp
+
+!-----------------------------------------------------------------------
+! Helix-helix distance restraint
+
+coor helix sele helx1 end sele helx2 end
+calc dist = ?mind
+
+CONS HELIx DISTance 10.0 FORCe 300.0 -
+     sele helx1 end sele helx2 end -
+     UDIS 90    STEP  100
+
+skipe all excl ECHD
+ENERGY
+
+test first tol 0.0 sele helx1 end
+test first tol 0.0 sele helx2 end
+mini sd nstep 60 nprint 10
+
+CONS HELIx RESEt
+
+! copy original coordinates before next test
+coor copy
+!-----------------------------------------------------------------------
+! Helix-helix crossing angle restraint
+
+coor helix sele helx1 end sele helx2 end
+calc cros = ?omeg
+
+CONS HELIx CROSs ANGLe 20.0 FORCe 50.0 -
+     sele helx1 end sele helx2 end -
+     UANG    90 STEP 100
+
+skipe all excl ECHA
+ENERGY
+
+test first tol 0.0 sele helx1 end
+test first tol 0.0 sele helx2 end
+mini sd nstep 60 nprint 10
+
+CONS HELIx RESEt
+
+! copy original coordinates before next test
+coor copy
+!-----------------------------------------------------------------------
+! Helix-helix hinge angle restraint
+
+coor helix sele helx1 end sele helx2 end
+calc hinge = ?hang
+
+CONS HELIx HINGe ANGLe 80.0 FORCe 50.0 -
+     sele helx1 end sele helx2 end -
+     UANG 90    STEP 100
+
+skipe all excl ECHA
+ENERGY
+
+test first tol 0.0 sele helx1 end
+test first tol 0.0 sele helx2 end
+mini sd nstep 60 nprint 10
+
+CONS HELIx RESEt
+
+! copy original coordinates before next test
+coor copy
+!-----------------------------------------------------------------------
+! Helix tilt angle restraint
+
+coor helix sele helx1 end
+calc tilt = ?tang
+coor helix sele helx2 end
+calc tilt = ?tang
+
+CONS HELIx ANGLe 30.0 FORCe 1000.0 sele helx1 end -
+           UANG   90   STEP  100
+
+CONS HELIx ANGLe 30.0 FORCe 1000.0 sele helx2 end -
+           UANG   90   STEP  100
+
+skipe all excl ECHT
+ENERGY
+
+test first tol 0.0 sele helx1 end
+test first tol 0.0 sele helx2 end
+mini sd nstep 60 nprint 10
+
+CONS HELIx RESEt
+
+! copy original coordinates before next test
+coor copy
+!-----------------------------------------------------------------------
+! Helix rotation angle restraint
+
+coor helix sele helx1 end refa 5
+calc tilt = ?rota
+coor helix sele helx2 end refa 5
+calc tilt = ?rota
+
+CONS HELIx ROTH ANGLe 150.0 FORCe 500.0 sele helx1 end refa 5 -
+           UANG 90    STEP  100
+
+CONS HELIx ROTH ANGLe -30.0 FORCe 500.0 sele helx2 end refa 5 -
+           UANG 90     STEP  100
+
+skipe all excl ECHR
+ENERGY
+
+test first tol 0.0 sele helx1 end
+test first tol 0.0 sele helx2 end
+mini sd nstep 60 nprint 10
+
+CONS HELIx RESEt
+
+stop

@@ -1,0 +1,122 @@
+* tps_leap.inp
+* Author:   Aaron R. Dinner
+* Date:     3 July 2003
+* Version:  c30a2x
+* Test:     Transition Path Sampling
+* Model:    Alanine dipeptide with polar hydrogens
+*
+
+IF ?TPS .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+                                                                                
+BOMLev 0
+PRNLev 3
+STREam datadir.def
+
+open read card unit 3 name @0/toph19.rtf
+read rtf unit 3 card
+close unit 3
+
+open read card unit 3 name @0/param19.prm
+read para unit 3 card 
+close unit 3
+
+! Generate the PSF
+read sequence card
+* blocked alanine
+*
+   3
+ACE ALA CBX
+
+generate main setup
+
+read coor card 
+*
+12
+    1    1 ACE  CH3   -0.50469  -1.90275   1.52587 MAIN 1      0.00000
+    2    1 ACE  C      0.23161  -1.23747   0.36714 MAIN 1      0.00000
+    3    1 ACE  O      1.39771  -1.61191  -0.00107 MAIN 1      0.00000
+    4    2 ALA  N     -0.42949  -0.18860  -0.07927 MAIN 2      0.00000
+    5    2 ALA  H     -1.32984  -0.07815   0.29163 MAIN 2      0.00000
+    6    2 ALA  CA     0.17227   0.59002  -1.15681 MAIN 2      0.00000
+    7    2 ALA  CB    -0.82827   1.64483  -1.76108 MAIN 2      0.00000
+    8    2 ALA  C      1.44518   1.39434  -0.81530 MAIN 2      0.00000
+    9    2 ALA  O      2.19651   1.79284  -1.69148 MAIN 2      0.00000
+   10    3 CBX  N      1.69964   1.49843   0.48235 MAIN 3      0.00000
+   11    3 CBX  H      1.16790   0.86442   1.00741 MAIN 3      0.00000
+   12    3 CBX  CA     2.69627   2.35790   1.21804 MAIN 3      0.00000
+
+NBONDS  ATOM  FSHIFT CDIE  VDW VSHIFT  -
+        CUTNB 999.0  CTOFNB 998.0 CTONNB 997.0  WMIN 1.5  EPS 1.0
+
+energy 
+
+coor copy comp
+shake bonh para
+coor shake
+
+! Set up phi and psi dihedrals as order parameters
+
+rxncor: define c1 point select atom main 1 C  end
+rxncor: define c2 point select atom main 2 N  end
+rxncor: define c3 point select atom main 2 CA end
+rxncor: define c4 point select atom main 2 C  end
+rxncor: define c5 point select atom main 3 CA end
+
+rxncor: define d1 direction c1 c2
+rxncor: define d2 direction c2 c3
+rxncor: define d3 direction c3 c4
+rxncor: define d4 direction c4 c5
+
+rxncor: define d5 direction d1 d2
+rxncor: define d6 direction d2 d3
+rxncor: define d7 direction d3 d4
+
+rxncor: define a1 angle d5 d6 d2
+rxncor: define a2 angle d6 d7 d3
+
+rxncor: define s1 scomb a1 -57.29578 a2 0.0
+rxncor: define s2 scomb a2 -57.29578 a1 0.0
+
+rxncor: set nrxn 2 s1 s2
+
+! Set basin to be alpha and beta regions of Ramachandran map (roughly)
+
+rxncor: basin s1 -180.0 0.0 -180.0 0.0 s2 -120.0 -30.0 50.0 180.0
+
+! Run a trajectory and fire randomly in the hopes of getting a valid
+! path for this simple system
+
+open write   formatted unit 19 name @9ala2_1.rst
+open write   formatted unit 20 name @9ala2_1.ene
+open write unformatted unit 45 name @9ala2_1.dcd
+open write unformatted unit 46 name @9ala2_1.vel
+
+dynamics start leap nstep 600 firstt 300.0 finalt 300.0 tbath 300.0 ihtfrq 0 -
+         teminc 0.0 iunwrite 19 kunit 20 inbfrq 50000 nprint 100 -
+         path ntpath 100 nsavp 10 npraccept 10 pshoot 1.0 ifshoot 50 -
+         vfrac 1.00 nsavc 30 nsavv 30 iuncrd 45 iunvel 46 
+
+! Read the previous trajectory and refine
+
+open read  unformatted unit 47 name @9ala2_1.dcd
+open read  unformatted unit 48 name @9ala2_1.vel
+
+open write   formatted unit 19 name @9ala2_2.rst
+open write   formatted unit 20 name @9ala2_2.ene
+open write unformatted unit 45 name @9ala2_2.dcd
+open write unformatted unit 46 name @9ala2_2.vel
+
+dynamics rtrj leap nstep 600 firstt 300.0 finalt 300.0 tbath 300.0 ihtfrq 0 -
+         teminc 0.0 iunwrite 19 kunit 20 inbfrq 50000 nprint 100 -
+         path ntpath 1000 nsavp 100 npraccept 10 pshoot 0.5 ifshoot 50 -
+         vfrac 0.20 nsavc 30 nsavv 30 iuncrd 45 iunvel 46 ifirst 47 vfirst 48 
+
+stop

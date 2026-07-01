@@ -1,0 +1,75 @@
+* CHARMM c33a1 Testcase neb_sd.inp
+*  Model: alanine dipeptide with PARAM19
+*  Test : perform neb minimization
+*
+
+
+if ?replica .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?rpath .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+set z diala_r1000
+
+set krms 1000
+set kangle 0 
+set cosmax 0.98
+set kmax 0
+set rmax 0.0
+
+bomblev -2
+
+open unit 1 read card name @0/toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0/param19.prm
+read param card unit 1
+close unit 1
+
+
+! GENERATE ALANINE DIPEPTIDE, PARM19
+!
+read sequence card
+3
+AMN ALA CBX
+generate ala setup warn
+!
+!  Build replicas and delete the initial coordinates
+!
+set nrep 25
+replicate a nreplica @nrep select all end setup
+delete atom sele segid ala end
+!
+!  Setup block interaction matrix (which has all replicas at full 
+!
+block 2
+  call 2 select segid a* end
+  coef 1 1 1.0
+  coef 2 2 1.0
+  coef 2 1 1.0
+end
+
+scalar wmain set 1. sele all end
+
+open read card unit 44 name @0/diala_rep.crd
+read coor card unit 44
+close unit 44
+!
+! setup replicas
+!
+rpath krms @krms kmax @kmax rmax @rmax kangle @kangle cosmax @cosmax -
+rota trans mass weigh cycl nebf
+
+nbond cutnb 100.0
+
+minimize sd nstep 1000 step 0.01 nprint 100 cutnb 100.0
+
+stop

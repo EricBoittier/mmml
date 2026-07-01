@@ -1,0 +1,11 @@
+* nucs.str, last modified May/10/2004
+* By Sonja M. Schwarzl & Stefan Fischer
+* Calculation of E^NUCS_I
+*
+
+SCAL CHARGE = SCA2
+INTEraction SELE group END SELE .NOT. group END
+SET ENUCS = ?ELEC
+SCAL SCA6 SET @ENUCS SELECT group END
+
+RETURN

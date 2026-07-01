@@ -1,0 +1,311 @@
+ * Vahid - Density Biased Sampling
+ *
+
+
+stream datadir.def
+
+if ?denbias .ne. 1 then
+   echo "Test NOT performed. DENBIAS must be defined in pref.dat"
+   stop
+endif
+
+read rtf cards
+*  RTF for Helium
+*
+31  1
+MASS    85 HE     4.00260 HE ! helium
+RESI HELM          0.00
+GROUP
+ATOM HE HE          0.00
+
+RESI HELT          0.00
+GROUP
+ATOM HE HE          0.00
+END
+
+
+read para cards
+*  parameter set for helium
+*
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+HE     0.000000  -0.021270     1.4800
+END
+
+
+read sequ cards
+*  short peptide
+*
+   150
+  HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT 
+  HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELT HELM HELM HELM HELM HELM HELM 
+  HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM 
+  HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM 
+  HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM 
+  HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM 
+  HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM 
+  HELM HELM HELM HELM HELM HELM HELM HELM HELM HELM  
+
+generate HLM0 first none last none setup noangl nodihe
+
+read coor card 
+ * Tagged and untagged helium
+ *
+    150
+    1    1 HELT HE   -11.33800   3.59800  44.58500 HLM0 1      1.48000
+    2    2 HELT HE     3.92600 -11.58900   9.39900 HLM0 2      1.48000
+    3    3 HELT HE    15.27300   9.15500 -28.49400 HLM0 3      1.48000
+    4    4 HELT HE    18.47700  11.21200 -92.95400 HLM0 4      1.48000
+    5    5 HELT HE    -7.79100 -22.49900 -70.72400 HLM0 5      1.48000
+    6    6 HELT HE   -24.10000   2.69800  11.67500 HLM0 6      1.48000
+    7    7 HELT HE   -22.63600  -9.01400 -51.84400 HLM0 7      1.48000
+    8    8 HELT HE   -20.85000 -12.75600 -51.00900 HLM0 8      1.48000
+    9    9 HELT HE    -0.93700 -24.96800  88.37000 HLM0 9      1.48000
+   10   10 HELT HE   -25.79900   5.72300 -25.96600 HLM0 10     1.48000
+   11   11 HELT HE     0.54300 -27.33200 -42.97000 HLM0 11     1.48000
+   12   12 HELT HE     8.63600 -26.57800 -69.02600 HLM0 12     1.48000
+   13   13 HELT HE    19.86200 -20.91900 -99.95500 HLM0 13     1.48000
+   14   14 HELT HE    -1.33000  31.65600 -27.73300 HLM0 14     1.48000
+   15   15 HELT HE    19.03100  25.51800  -5.45100 HLM0 15     1.48000
+   16   16 HELT HE    20.71700  26.12300  68.16600 HLM0 16     1.48000
+   17   17 HELT HE   -10.33300 -31.83100 -76.94300 HLM0 17     1.48000
+   18   18 HELT HE   -29.27100 -18.74600  -8.60200 HLM0 18     1.48000
+   19   19 HELT HE    37.19200   6.22000 -90.55100 HLM0 19     1.48000
+   20   20 HELT HE   -37.30600  -8.27400 -82.72200 HLM0 20     1.48000
+   21   21 HELT HE   -21.29300 -32.18600 -81.50700 HLM0 21     1.48000
+   22   22 HELT HE    -3.38300  39.66900 -48.59700 HLM0 22     1.48000
+   23   23 HELT HE     0.24400 -40.12800 -26.94600 HLM0 23     1.48000
+   24   24 HELT HE    44.46800  -5.48700 -22.46100 HLM0 24     1.48000
+   25   25 HELT HE   -10.48500  43.78700  67.53700 HLM0 25     1.48000
+   26   26 HELT HE    31.61400  32.31300  12.00300 HLM0 26     1.48000
+   27   27 HELT HE     7.23100  46.17300 -71.83000 HLM0 27     1.48000
+   28   28 HELT HE    43.25400  18.09800  -5.33300 HLM0 28     1.48000
+   29   29 HELT HE   -46.87900   5.35000 -34.82200 HLM0 29     1.48000
+   30   30 HELT HE    48.50700  -8.75000  10.29500 HLM0 30     1.48000
+   31   31 HELT HE    50.05400  -3.68500 -91.34000 HLM0 31     1.48000
+   32   32 HELT HE   -39.80400 -30.97900 -74.96700 HLM0 32     1.48000
+   33   33 HELT HE     7.11300 -50.21800 -24.32800 HLM0 33     1.48000
+   34   34 HELT HE   -44.26700 -25.07700 -64.68100 HLM0 34     1.48000
+   35   35 HELM HE    40.38800  33.44800 -96.59500 HLM0 35     1.48000
+   36   36 HELM HE   -15.14400 -50.53400  13.89200 HLM0 36     1.48000
+   37   37 HELM HE   -52.21000   8.05700 -99.63200 HLM0 37     1.48000
+   38   38 HELM HE    -1.93700  52.81300 -29.93400 HLM0 38     1.48000
+   39   39 HELM HE    25.79800 -46.45500  83.52000 HLM0 39     1.48000
+   40   40 HELM HE    20.49500  49.77000  13.72300 HLM0 40     1.48000
+   41   41 HELM HE   -45.08700 -29.48600  48.82000 HLM0 41     1.48000
+   42   42 HELM HE    28.44700  45.84800  98.01500 HLM0 42     1.48000
+   43   43 HELM HE    37.84300 -39.03300  10.47700 HLM0 43     1.48000
+   44   44 HELM HE    53.27000 -14.85900  70.82000 HLM0 44     1.48000
+   45   45 HELM HE    55.65900  -2.75900 -67.19400 HLM0 45     1.48000
+   46   46 HELM HE    56.79600   7.03500 -20.53100 HLM0 46     1.48000
+   47   47 HELM HE   -39.80900 -42.21700  38.45000 HLM0 47     1.48000
+   48   48 HELM HE    44.89300  37.19300 -76.88000 HLM0 48     1.48000
+   49   49 HELM HE    -6.17600 -59.68500  42.97200 HLM0 49     1.48000
+   50   50 HELM HE    52.41400  29.24600  -5.96300 HLM0 50     1.48000
+   51   51 HELM HE    41.12000 -43.77400  94.08400 HLM0 51     1.48000
+   52   52 HELM HE    56.71700  20.27600  28.39400 HLM0 52     1.48000
+   53   53 HELM HE    31.79500  53.45400  11.81100 HLM0 53     1.48000
+   54   54 HELM HE   -47.33600  40.90200 -64.70700 HLM0 54     1.48000
+   55   55 HELM HE     8.78600  62.12600 -91.99600 HLM0 55     1.48000
+   56   56 HELM HE   -15.10800  64.56900  15.85400 HLM0 56     1.48000
+   57   57 HELM HE     8.41300 -66.76100 -99.36200 HLM0 57     1.48000
+   58   58 HELM HE    20.21400  64.67300 -55.96600 HLM0 58     1.48000
+   59   59 HELM HE    25.75900  63.37300  70.92800 HLM0 59     1.48000
+   60   60 HELM HE    39.00300  57.18900 -51.46400 HLM0 60     1.48000
+   61   61 HELM HE     2.37200  70.39300 -64.87100 HLM0 61     1.48000
+   62   62 HELM HE    12.65200  69.39100  60.12300 HLM0 62     1.48000
+   63   63 HELM HE     6.21600  70.99400 -45.38500 HLM0 63     1.48000
+   64   64 HELM HE    57.29500  43.35800  15.18400 HLM0 64     1.48000
+   65   65 HELM HE    67.08100  29.44400  10.98600 HLM0 65     1.48000
+   66   66 HELM HE    -0.21000  73.44900  52.50300 HLM0 66     1.48000
+   67   67 HELM HE    34.37700 -65.02400  -8.11100 HLM0 67     1.48000
+   68   68 HELM HE    73.63400  -1.99800 -56.95200 HLM0 68     1.48000
+   69   69 HELM HE    24.86500  69.34500 -66.63400 HLM0 69     1.48000
+   70   70 HELM HE    29.31800  67.86500   2.44200 HLM0 70     1.48000
+   71   71 HELM HE    22.41900 -70.94200 -81.77700 HLM0 71     1.48000
+   72   72 HELM HE    16.16400 -72.62900  43.89500 HLM0 72     1.48000
+   73   73 HELM HE   -31.84600 -67.52900 -57.17600 HLM0 73     1.48000
+   74   74 HELM HE   -71.65500  22.67800 -96.05500 HLM0 74     1.48000
+   75   75 HELM HE   -39.92400  64.32400  28.70900 HLM0 75     1.48000
+   76   76 HELM HE    -6.75700 -75.45800 -75.58100 HLM0 76     1.48000
+   77   77 HELM HE   -35.23100  67.21100  49.50700 HLM0 77     1.48000
+   78   78 HELM HE   -76.33500   1.09600   9.71800 HLM0 78     1.48000
+   79   79 HELM HE   -44.85500 -61.78200  68.37000 HLM0 79     1.48000
+   80   80 HELM HE    71.46500 -27.31700  51.11900 HLM0 80     1.48000
+   81   81 HELM HE    53.08200 -55.19900 -11.23500 HLM0 81     1.48000
+   82   82 HELM HE   -62.40900  44.97000   3.15000 HLM0 82     1.48000
+   83   83 HELM HE    38.19300 -67.25400 -22.38400 HLM0 83     1.48000
+   84   84 HELM HE   -76.33000  13.26700  91.39300 HLM0 84     1.48000
+   85   85 HELM HE   -32.56700  70.59700 -94.05500 HLM0 85     1.48000
+   86   86 HELM HE   -72.64600  28.39000  -4.44900 HLM0 86     1.48000
+   87   87 HELM HE   -63.32700  45.90200 -40.96300 HLM0 87     1.48000
+   88   88 HELM HE   -77.92700  -8.33700  24.84500 HLM0 88     1.48000
+   89   89 HELM HE    45.20900  64.31000  29.32100 HLM0 89     1.48000
+   90   90 HELM HE    29.34000  73.23400 -23.27300 HLM0 90     1.48000
+   91   91 HELM HE   -61.83200  49.30000  46.45800 HLM0 91     1.48000
+   92   92 HELM HE   -76.60800  20.77600 -65.30300 HLM0 92     1.48000
+   93   93 HELM HE   -64.71900 -46.64600 -56.62300 HLM0 93     1.48000
+   94   94 HELM HE   -46.41900 -65.56000 -65.19900 HLM0 94     1.48000
+   95   95 HELM HE   -62.10800 -51.73900   6.60700 HLM0 95     1.48000
+   96   96 HELM HE   -24.43600  77.16500  -3.99800 HLM0 96     1.48000
+   97   97 HELM HE   -37.41400 -72.08400 -56.49100 HLM0 97     1.48000
+   98   98 HELM HE   -72.96700  35.77500 -18.21800 HLM0 98     1.48000
+   99   99 HELM HE    -6.05800 -81.14200 -30.77700 HLM0 99     1.48000
+  100  100 HELM HE    63.00700 -52.60500  32.57200 HLM0 100    1.48000
+  101  101 HELM HE   -81.95100  -5.22900  56.57600 HLM0 101    1.48000
+  102  102 HELM HE    -2.59700 -82.18300   8.68800 HLM0 102    1.48000
+  103  103 HELM HE     1.53900  82.29900  55.16000 HLM0 103    1.48000
+  104  104 HELM HE    -1.30400 -82.53800  32.95800 HLM0 104    1.48000
+  105  105 HELM HE    49.67400 -65.95900  59.31000 HLM0 105    1.48000
+  106  106 HELM HE     9.81900  82.22400  70.60300 HLM0 106    1.48000
+  107  107 HELM HE   -83.25500  -7.98200  -4.29700 HLM0 107    1.48000
+  108  108 HELM HE   -81.11100 -20.52500 -78.60000 HLM0 108    1.48000
+  109  109 HELM HE   -65.55300 -52.68300  -4.63200 HLM0 109    1.48000
+  110  110 HELM HE    32.35300 -77.71000 -42.43100 HLM0 110    1.48000
+  111  111 HELM HE   -64.63800 -54.53500  85.55400 HLM0 111    1.48000
+  112  112 HELM HE   -83.16700 -19.06000 -26.32000 HLM0 112    1.48000
+  113  113 HELM HE    11.53900 -84.69600   0.12300 HLM0 113    1.48000
+  114  114 HELM HE    68.83200 -51.06800   4.73600 HLM0 114    1.48000
+  115  115 HELM HE    -0.15500  86.23100 -21.58300 HLM0 115    1.48000
+  116  116 HELM HE    51.47400 -69.53000  24.49200 HLM0 116    1.48000
+  117  117 HELM HE    78.62500  40.16000  73.84500 HLM0 117    1.48000
+  118  118 HELM HE    84.93600 -26.29100  -4.55300 HLM0 118    1.48000
+  119  119 HELM HE    13.77100 -88.91200 -98.12500 HLM0 119    1.48000
+  120  120 HELM HE   -85.10700  29.74300 -67.56800 HLM0 120    1.48000
+  121  121 HELM HE   -88.39500  18.76800 -95.37100 HLM0 121    1.48000
+  122  122 HELM HE   -63.05700 -65.07700  42.26000 HLM0 122    1.48000
+  123  123 HELM HE    63.52500  64.76500 -26.64600 HLM0 123    1.48000
+  124  124 HELM HE   -83.55100 -35.74400  32.31400 HLM0 124    1.48000
+  125  125 HELM HE   -74.98200 -51.71700  43.12900 HLM0 125    1.48000
+  126  126 HELM HE    28.95300  86.82100  77.74900 HLM0 126    1.48000
+  127  127 HELM HE   -81.77400  42.46000 -17.65200 HLM0 127    1.48000
+  128  128 HELM HE   -84.78800  37.98800  61.27400 HLM0 128    1.48000
+  129  129 HELM HE   -25.90500  89.23700 -46.59000 HLM0 129    1.48000
+  130  130 HELM HE    49.81000 -78.57900 -47.32700 HLM0 130    1.48000
+  131  131 HELM HE   -79.71600  48.20100  38.43600 HLM0 131    1.48000
+  132  132 HELM HE   -76.99700 -52.91600 -74.43600 HLM0 132    1.48000
+  133  133 HELM HE    52.09700  78.28000  88.14700 HLM0 133    1.48000
+  134  134 HELM HE   -53.65600  77.30700 -66.74400 HLM0 134    1.48000
+  135  135 HELM HE   -14.59600 -92.97900 -37.24900 HLM0 135    1.48000
+  136  136 HELM HE    33.95800 -88.01500 -37.00000 HLM0 136    1.48000
+  137  137 HELM HE    60.69700  73.12000  81.61400 HLM0 137    1.48000
+  138  138 HELM HE   -61.56500 -72.47100  -4.82200 HLM0 138    1.48000
+  139  139 HELM HE   -75.52600 -58.41000 -27.35600 HLM0 139    1.48000
+  140  140 HELM HE    42.63000 -85.97400 -48.59300 HLM0 140    1.48000
+  141  141 HELM HE   -50.41500 -81.82900 -42.41600 HLM0 141    1.48000
+  142  142 HELM HE    90.17900  33.63200   5.52200 HLM0 142    1.48000
+  143  143 HELM HE    86.94800 -41.65800 -31.23400 HLM0 143    1.48000
+  144  144 HELM HE   -51.11000 -82.33900 -14.97200 HLM0 144    1.48000
+  145  145 HELM HE    15.33500  96.02800  33.92000 HLM0 145    1.48000
+  146  146 HELM HE   -88.68400 -41.67200 -53.62300 HLM0 146    1.48000
+  147  147 HELM HE   -95.07300  25.45800 -72.21000 HLM0 147    1.48000
+  148  148 HELM HE    51.04400  84.39800  56.33800 HLM0 148    1.48000
+  149  149 HELM HE   -94.52700 -28.37400  20.16800 HLM0 149    1.48000
+  150  150 HELM HE    83.15800 -53.75200 -50.52200 HLM0 150    1.48000
+
+
+bomlev -2
+!hbuild atom cdie eps 80.0 cutnb 10.0 ctofnb 7.5 ctonnb 6.5 shift vshift bygr
+faster on
+update atom CDIE eps 1 cutnb 25.00 ctofnb 20.0 ctonnb 18.0 shift vshift   bygr
+crystal defined ortho 200 200 200 90.0 90.0 90.0
+crystal build cutoff 100 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select .not. resname TIP3 .and. .not. resname TIPT .and. .not. resname HELM .and. .not. resname HELT .and. .not. resname NAP .and. .not. resname SOD end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select resname TIP3 .or. resname TIPT .or. resname HELM .or. resname HELT .or. resname NAP .or. resname SOD end
+update byres cutim 40 imgfrq -1
+
+
+
+!-------------------------------------------------------------------------------
+! Setup the density-biaisng potential
+!-------------------------------------------------------------------------------
+DBIAs DSEL select resn helt end  select resn helm end rcyl 50 rw 1 zup 101.0 zlow -101.0 FORCe 10 TDEN 20.0
+
+
+!-------------------------------------------------------------------------------
+! Test First derivative
+!-------------------------------------------------------------------------------
+test first tol 0.00001 step 0.000001 select (type HE) end
+
+
+!------------------------
+! Get the density values:
+!------------------------
+DBIAs ANAL
+
+
+
+
+!-------------------------------------------------------------------------------
+! Run Molecular Dynamics
+!-------------------------------------------------------------------------------
+open unit 15 write unform name @9/test.C36_imgfrq-1_bygr.dcd
+
+dynamics verl start nstep 1000 time 0.002 -
+inbfrq -1 imgfrq -1 bygr -
+ieqfrq 0 ihtfrq 0 ilbfrq 0 ntrfrq 0 -
+iprfrq 200 isvfrq 100 -
+nsavc 1000 nprint 100 -
+iunrea 13 iunwri 14 iuncrd 15 iunvel -1 kunit 17 -
+firstt 300.0 finalt 300.0 twindl -5.0 twindh 5.0 -
+iasors 0 iasvel 1 iscvel 0 ichecw 1 tstruc 300.0 -
+iseed 314159
+
+!------------------------
+! Get the density values:
+!------------------------
+DBIAs ANAL
+
+energy
+set eref 1997.62143 
+set etol 0.1
+calc ener1 ?HARM
+@qcheck @ener1 @eref @etol denbias_1
+
+!------------------------
+! Clear the module memory
+!------------------------
+DBIAs CLEAr
+
+
+!-------------------------------------------------------------------------------
+! Setup the density-biaisng potential
+!-------------------------------------------------------------------------------
+DBIAs DSEL select resn helt end  select resn helm end rcyl 50 rw 1 zup 101.0 zlow -101.0 FORCe 10 TDEN 10.0
+
+
+!-------------------------------------------------------------------------------
+! Test First derivative
+!-------------------------------------------------------------------------------
+test first tol 0.00001 step 0.000001 select (type HE) end
+
+!-------------------------------------------------------------------------------
+! Run Molecular Dynamics
+!-------------------------------------------------------------------------------
+dynamics verl start nstep 1000 time 0.002 -
+inbfrq -1 imgfrq -1 bygr -
+ieqfrq 0 ihtfrq 0 ilbfrq 0 ntrfrq 0 -
+iprfrq 200 isvfrq 100 -
+nsavc 1000 nprint 100 -
+iunrea 13 iunwri 14 iuncrd 15 iunvel -1 kunit 17 -
+firstt 300.0 finalt 300.0 twindl -5.0 twindh 5.0 -
+iasors 0 iasvel 1 iscvel 0 ichecw 1 tstruc 300.0 -
+iseed 314159
+
+!------------------------
+! Get the density values:
+!------------------------
+DBIAs ANAL
+
+energy
+set eref 499.44537 
+set etol 0.1
+calc ener1 ?HARM
+@qcheck @ener1 @eref @etol denbias_2
+
+open unit 10 write form name @9/prod.denbias.pdb
+write coor pdb unit 10
+*
+close unit 10
+
+stop

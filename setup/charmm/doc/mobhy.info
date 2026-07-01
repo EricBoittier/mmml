@@ -1,0 +1,181 @@
+Molecular Dynamics with Mobile Protons (MOBHY) 
+
+Author: Themis Lazaridis, 2016-2023    
+
+This module allows one to perform classical molecular dynamics simulations 
+with protons hopping between titratable residues and water/hydronium/hydroxide. 
+This is accomplished via hopping attempts every user-specified number of steps. 
+For hopping to occur the residues need to be h-bonded (as determined by the HBOND 
+module according to user specified h-bonding criteria).  At mid-2023 only 
+Asp,Glu,His and water have been sufficiently tested.   
+
+The PSF must be generated with all titratable residues fully protonated and a 
+sufficient number of hydronium/hydroxide ions, so that a place will exist 
+for all possible protons. When a proton hops out it is replaced by a DUMmy atom. 
+The user also provides parameters for the deprotonation energy of each residue. 
+
+This code is work in progress. Please email tlazaridis@ccny.cuny.edu for any 
+issues encountered. 
+
+References: Lazaridis & Hummer, “Classical Molecular Dynamics with Mobile Protons”, 
+		JCIM 57:2833-45 (2017)
+
+	Lazaridis “Molecular origins of asymmetric proton conduction in the influenza 
+		M2 channel”, BJ, 122: 90-98 (2023) 
+
+Syntax
+
+MOBHY IHOPfr int NTITr n NH3O nh3o NOH noh EBBRf file (segid resid p-status)n 
+	H3OS (resid)nh3o OHS (resid)noh [maft nstep N] VOLT volt WIDTH width (atom selection) 
+	[acidic/basic]  
+
+IHOPfr	default	10	frequency of attempting hops
+
+NTITr	default 0	Number of titratable residues
+
+NH3O	default 0	Number of actual hydroniums in the starting configuration
+
+NOH	default 0	Number of actual hydroxides in the starting configuration
+
+EBBRf			Parameter file for bond breaking/making energies & hopping 
+			thresholds (mobhy.prm) 
+
+p-status : for each titratable residue, it must be one of the following: P 
+	(protonated), U (unprotonated), U1, or U2. U1 and U2 are for Histidine; 
+	U1 corresponds to HSD and U2 to HSE.
+
+H3OS	Residue number(s) of nh3o actual hydroniums. If not given, the first nh3o
+	H3O residues are selected.
+
+OHS	Residue number(s) of noh actual hydroxides. If not given, the first noh
+	HOH residues are selected.
+
+VOLT	default 0  Transmembrane voltage, in V. This is an extra term
+		   in the energy function based on an analytical solution
+		   of the PB equation (Mottamal,Lazaridis Biophys Chem 122:50 (2006)
+
+WIDTH	real	Length across the membrane over which the voltage drops
+
+atom-selection	Atoms on which the voltage is applied
+
+acidic/basic	Keyword specifying whether proton hop attempts will be made from H3O to water 
+		or from water to OH. If NH3O>0, then acidic is set automatically. 
+		Similarly, if NOH>0, basic is set automatically.
+
+maft nstep N	keyword specifying that energy minimization for N steps should be done 
+		after hop acceptance 
+
+The MOBHY command must follow the generation of the psf. The PSF must be generated
+with all titratable residues fully protonated (i.e. with ASPP,GLUP patches for
+Asp and Glu and HSP for all histidines). In addition, it must contain sufficient
+number of hydronium ions, at least equal to the titratable sidechains. NH3O is 
+smaller than that number, it is the actual hydronium ions in the starting 
+configuration. All others will be deprotonated (but will contain a DUMMY atom
+that could be replaced by a titrating hydrogen during the dynamics). Similarly,
+residues HOH are waters that can lose a proton to become hydroxide. There has to 
+be sufficient number of them in the system (typically 5 times the number of actual OH).
+(Note: hydroxide is still being developed and tested)
+
+After the MOBHY command, the user may proceed with minimization, dynamics, etc. 
+
+The sum of bond breaking/making energy and voltage energy are reported in the ASP column
+(implicit solvent and proton hopping are incompatible, so no reason to create a new energy term).
+
+Requirements 
+
+1. Two extra files are required and they are found in /support and /test/data. 
+mobhy.str contains the hydronium topology and various parameters needed. 
+It should be streamed after all other topology and parameter files. 
+mobhy.prm has the bond energy offsets and the hopping thresholds and 
+is read by the MOBHY command.
+
+2. The module uses the HBOND facility to track candidates for proton hops,
+which has to be activated with an HBONDS command. However, the H bond energy
+term should be excluded from the total energy using the command "skipe hbond imhb". 
+
+The lowest update frequency must be smaller or equal to IHOPfr. For example, if 
+IHOPfr=10, set INBFRQ=10 and IHBFRQ=10.
+
+Acceptor and donor commands can be used to remove irrelevant hydrogen bond donors 
+and acceptors from consideration (to save computer time). Also, certain atoms that 
+become acceptors upon deprotonation must be declared as such with an "acceptor" command.
+
+3. IC tables are used to reconstruct the coordinates of titratable residues, 
+so they need to be present.
+
+
+Limitations:
+
+1. The current code does not perform proton hops across periodic boundaries.
+This could be fixed in the future by considering primary-image H bonds.  
+
+2. Because the module fixes and unfixes atoms during hop attempts (the IMOVE array)
+to make energy calculation more efficient, the system should contain no fixed atoms, 
+otherwise they will be released after the first hop attempt.
+
+3. The BYGR nonbonded keyword should be used in hopping simulations. BYCB gives 
+segmentation fault. 
+
+4. Only the default leapfrog integrator can be used with MOBHY. 
+
+5. The code makes assumptions about the order of the atoms in the psf (e.g. OH2,H1,H2,H3 
+in hydronium, or that HE2 is the last atom in protonated Glu). If the order of atoms 
+in the topology file changes, the code will fail. 
+
+6. SHAKE needs to be used to keep the dummy atoms from floating away. However, there is
+an issue. The H3O residues switch identity between hydronium and water, whose geometries
+are different. Ideally, the bond constraint values should change when the identity changes. 
+This has not been done yet. As a result, the type of shake command affects significantly 
+the hopping energy changes. For now, it seems best to only shake H3 to the OH2 of the H3O 
+residue, see example below.
+
+Example
+
+(read top_all36_prot.rtf, par_all36m_prot.prm, ..., toppar_water_ions.str)
+
+open read unit 11 card name mobhy.str
+stream unit 11
+
+(generate or read psf)
+
+(if psf is read, read also IC table if you have titratable protein residues) 
+
+(read coordinates, generate images, etc)
+
+nbonds bygr ...  ! bycb doesn't work with Mobhy
+
+shake bonh param sele .not. resname H3O end
+shake bonh param noreset sele atom h3osegid * OH2 end sele atom h3osegid * H3 end
+
+! To save time in H.Bond searches, remove the HB donors and acceptors 
+! that are irrelevant. Leave only H3O, TIP3, and titratable residues
+! This can also be used to disallow certain hops
+donor remove ...
+acceptor remove ... 
+hbonds ihbfrq 10 cuthb 3.1      !sets up H.Bond facility. Frequency of searching and criteria
+skipe hbond imhb		!must omit the H.Bond energy 
+! The following requests hopping attempts every 10 steps. There are 12 titratable residues
+! and 1 real hydronium (if not specified, it is the first in the psf. If desired, the IRES
+! of the hydronium(s) can be given by the h3os keyword). Here all 12 titratable residues start deprotonated. 
+! minimize energy for 40 steps after hop acceptance. Apply a voltage of -2 V in the z direction
+! over a length of 55 Å. The voltage is to be felt only by H3O residues and residues PROA 112 & 185
+mobhy ihopfr 10 ntit 12 nh3o 1 ebbr mobhy.prm proa 112 U proa 123 U proa 130 U -
+  proa 174 U proa 185 U proa 119 U proa 153 U proa 164 U proa 171 U proa 192 U -
+  proa 196 U proa 225 U maft nstep 40 volt -2 width 55 sele resn H3O .or. -
+     (segid proa .and. (resid 112 .or. resid 185)) end 
+
+(minimize, etc)
+
+dyna CPT leap ...     
+
+
+Test cases
+
+c48test: mobhyglu.inp, mobhyhis.inp, mobhym2.inp   
+
+
+
+
+
+
+

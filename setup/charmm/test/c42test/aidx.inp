@@ -1,0 +1,129 @@
+* AIDX: by Stefan Boresch, July 2017
+* given name of a chemical atom type, return integer code used at
+* runtime. Illustrate use in alchemical mutation
+*
+
+set testname aidx
+format (F20.7)
+
+stream datadir.def
+bomlev -1
+
+open read unit 1 card name @0top_all22_model.inp
+read rtf unit 1 card
+close unit 1
+
+open read unit 1 card name @0par_all22_prot.inp
+read para unit 1 card
+close unit 1
+
+! (1) generate acetate for reference purpose
+read sequ card
+* acet
+*
+1
+acet
+
+! generate it
+generate acet
+
+! and read in some (junk) coors; ignore the superfluous atom error!!!
+read coor card
+* ACEH BUILT FROM CHARMM PROTEIN MODEL PARAMS
+* INITIAL COORDINATES BUILD FROM IC / HBUILD
+*  DATE:     1/31/17      8:57:59      CREATED BY USER: stefan
+*
+    8
+    1    1 ACET C1     0.00000   0.00000   0.00000 ACET 1      0.00000
+    2    1 ACET C2     1.52200   0.00000   0.00000 ACET 1      0.00000
+    3    1 ACET H1    -0.37086  -1.04727  -0.00000 ACET 1      0.00000
+    4    1 ACET H2    -0.37533   0.51508  -0.90997 ACET 1      0.00000
+    5    1 ACET H3    -0.37533   0.51508   0.90997 ACET 1      0.00000
+    6    1 ACET O1     2.22176  -0.99937  -0.00000 ACET 1      0.00000
+    7    1 ACET O2     2.01229   1.31134   0.00000 ACET 1      0.00000
+    8    1 ACET HO1    2.96933   1.38666   0.00000 ACET 1      0.00000
+
+energy
+set e1 ?ener
+
+scalar type stat sele atom acet 1 o1 end
+set otyp ?smin ! should be 53, type OC
+scalar type stat sele atom acet 1 c2 end
+set ctyp ?smin ! should be 23, type CC
+
+dele atom sele segi acet end
+
+! (2) generate acetic acid (protonated form)
+read sequ card
+* aceh
+*
+1
+aceh
+
+! generate it
+generate aceh
+
+! and read in some (junk) coors; ignore the superfluous atom error!!!
+read coor card
+* ACEH BUILT FROM CHARMM PROTEIN MODEL PARAMS
+* INITIAL COORDINATES BUILD FROM IC / HBUILD
+*  DATE:     1/31/17      8:57:59      CREATED BY USER: stefan
+*
+    8
+    1    1 ACEH C2     0.00000   0.00000   0.00000 ACEH 1      0.00000
+    2    1 ACEH C1     1.52200   0.00000   0.00000 ACEH 1      0.00000
+    3    1 ACEH H21   -0.37086  -1.04727  -0.00000 ACEH 1      0.00000
+    4    1 ACEH H22   -0.37533   0.51508  -0.90997 ACEH 1      0.00000
+    5    1 ACEH H23   -0.37533   0.51508   0.90997 ACEH 1      0.00000
+    6    1 ACEH O2     2.22176  -0.99937  -0.00000 ACEH 1      0.00000
+    7    1 ACEH O1     2.01229   1.31134   0.00000 ACEH 1      0.00000
+    8    1 ACEH HO1    2.96933   1.38666   0.00000 ACEH 1      0.00000
+    
+energy
+
+! (3) Now test AIDX
+
+aidx cc
+set ctyp2 ?aidx
+aidx oc
+set otyp2 ?aidx
+
+! numbers must be identical
+echo @ctyp @ctyp2
+echo @otyp @otyp2 
+
+! (4) Let's illustrate a brutal alchemical mutation. This results in
+!     acetate (ACET). Normally, this would be done after a PERT statement,
+!     and instead of deleting the proton, it should be mutated into a dummy
+!     atom.
+
+bomlev -1
+scalar char set  0.0  sele atom aceh 1 ho1 end
+scalar char set -0.76 sele atom aceh 1 o*  show end
+scalar char set  0.62 sele atom aceh 1 c1  end
+bomlev 0
+scalar char set -0.37 sele atom aceh 1 c2  end
+scalar char show sele segi aceh end
+
+scalar type set @ctyp2    sele atom aceh 1 c1 end
+scalar type set @otyp2  sele atom aceh 1 o1 end
+scalar type set @otyp2  sele atom aceh 1 o2 end
+
+! don't do this in a real alchemical mutation!!
+dele atom sele atom aceh 1 ho1 end 
+
+energy inbfrq 1
+set e2 ?ener
+
+! the energy obtained must be the same as the energy for ACET in step (1)
+echo @e1 @e2
+
+@testcheck @e1 @e2 .00001 @testname_end
+if @teststat .eq. FAIL stop
+@testcheck @ctyp @ctyp2 0 @testname_end
+if @teststat .eq. FAIL stop
+@testcheck @otyp @otyp2 0 @testname_end
+
+stop
+
+

@@ -1,0 +1,71 @@
+* peptide in water, 60 steps of dynamics
+* PBC in (29A)**3 cubic box with the water and peptide initially 
+* shifted +10A in the x-direction
+* test of the merge recenter ability to move the waters into 
+* a box centered on the peptide
+*
+stream datadir.def
+open unit 1 read form name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0param19.prm
+read param card unit 1
+close unit 1
+
+read sequence card
+* ypgdv
+*
+5
+tyr pro gly asp val
+
+generate pept setup
+
+read sequence tip3 756
+
+generate wat noangles nodihedrals
+
+open unit 1 read form name @0turnwat14.chr
+read coor card unit 1
+close unit 1
+
+set 6 29.0
+set 7 29.0
+set 8 29.0
+
+open unit 1 read form name @0cubic.img
+read image card unit 1
+close unit 1
+
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele segid wat end
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 sele segid pept end
+energy
+! move over
+coor trans xdir 10.0 sele all end
+coor stat sele segid pept end
+coor stat sele segid wat  end
+energy
+coor stat sele segid pept end
+coor stat sele segid wat  end
+faster on 
+
+shake para bonh tol 1.0e-8 
+open unit 21 write unform name @9pept60.cor
+dyna leap verlet strt nstep 60 timestep 0.002 -
+ firstt 295.0 finalt 295.0 twindh 10.0 twindl -10.0 -
+ iasors 1 iasvel 1 ichecw 1 ieqfrq 0 -
+ iunr -1 iunw -1 iunc 21 iunv -1 kuni -1 - 
+ inbfrq 10 imgfrq 10 nsavc 20 nsavv 0 nprint 10 iprfrq 10 -
+ atom cdie fshif vdis vshif  ctofnb 9.0 cutnb 10.0 cutim 10.0
+coor stat sele segid pept end
+coor stat sele segid wat  end
+
+open unit 21 read unform name @9pept60.cor
+open unit 51 write unform name @9pept60r.cor
+merge firstu 21 nunit 1 output 51 select all end recenter sele segid pept end
+open unit 51 read unform name @9pept60r.cor
+read coor file unit 51 ifile 3
+coor stat sele segid pept end
+coor stat sele segid wat  end
+
+stop

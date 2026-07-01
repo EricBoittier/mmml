@@ -1,0 +1,55 @@
+* Membrane System : sys1.inp
+* Determine the effective cross-sectional area of the protein 
+*
+
+stream param.str
+
+!Read topologie
+open read card unit 1 name @direcTp/@TopFile
+read rtf card unit 1
+close unit 1
+
+!Read parameters
+open read card unit 2 name @direcTp/@ParFile
+read param card unit 2
+close unit 2
+
+stream @direcSequence/peptide.str
+
+open read card unit 10 name @direcStruct/@Struct
+read coor card  unit 10
+close unit 10
+
+coor stat
+
+open write card  unit 20 name @direcWork/section.dat
+write title unit 20
+* Cross section along z axis
+*
+
+!-----------------------------------------------------------------
+! Compute the cross-section area (volume of a 1 Angs thick slab)
+
+set a ?ZMIN
+set b ?ZMIN
+incr b by 1
+
+label LOOP
+scalar wmain = radius
+scalar wmain add 1.529
+scalar wmain mult 0.85
+
+coor search -
+     xmin -25.0  xmax 25.0  xgrip 100 -
+     ymin -25.0  ymax 25.0  ygrip 100 -
+     zmin    @a  zmax   @b  zgrip 200
+
+write title unit 20 
+* @b  ?volume 
+*
+
+incr a by 1
+incr b by 1
+if b le ?ZMAX goto LOOP  
+
+stop

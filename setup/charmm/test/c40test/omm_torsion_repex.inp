@@ -1,0 +1,110 @@
+* This test case tests the GPU (CHARMM/OpenMM) based torsion scaling
+* replica exchange methodology.
+* Written by Charles L. Brooks III, November, 2014.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?repdstr .ne. 1 then
+  echo "REPD not compiled in"
+  echo "This test NOT performed"
+  stop
+endif
+
+if ?numnode .eq. 1 then
+  echo "REPD only works in parallel"
+  stop
+endif
+
+if ?numnode .ne. 4 then
+  echo "NREP 4 requires 4 MPI processes"
+  echo "Test NOT performed"
+  stop
+endif
+
+set reptor = 1
+
+stream datadir.def
+
+read rtf card name @0/toph19.rtf
+read param card name @0/param19.prm
+
+read sequ card
+* title
+*
+8
+amn ala tyr glu phe val ala cbx
+generate pro0 setup
+
+ic param
+ic seed 1 cl 1 c 2 n
+ic build
+
+print coor sele .not. initialized end
+
+mini sd nstep 100 cdie atom cutnb 14 ctofnb 12 ctonnb 10 switch vswitch
+
+write coor pdb name @9fastrepd.pdb
+
+repd fast exch unit 30 freq 20 omm ttemp 300 tors nrep 4 -
+  phis0 1 -
+  phis1 0.8 -
+  phis2 0.6 -
+  phis3 0.4
+
+open unit 30 write card name @9fastrepd_t.exch
+open write file unit 50 name @9fastrepd_t.trj
+open write card unit 41 name @9fastrepd_t.res
+open write card unit 42 name @9fastrepd_t.out
+
+outu 42
+
+omm platform cpu
+
+dyna verlet strt nstep 100 timestep 0.002  -
+    iprfrq 10000 ihtfrq 0 ieqfrq 10000 ntrfrq 10000  -
+    iuncrd 50 iunrea -1 iunwri 41 kunit -1 -
+    nprint 1 nsavc 1 nsavv 0 ihbfrq 0 ilbfrq 0 -
+    firstt 300 finalt 300 teminc 0  tstruc 300 -
+    iseed 98123 55012 102978 101300 -
+    iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 10 twindl -10 -
+    switch vswitch omm
+
+set passprob = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 0.332876
+if ?myrep .eq. 0 set refener = -205.398
+if ?myrep .eq. 1 set refprob = 0.357655
+if ?myrep .eq. 1 set refener = -211.065
+if ?myrep .eq. 2 set refprob = 0.256234
+if ?myrep .eq. 2 set refener = -201.172
+if ?myrep .eq. 3 set refprob = 0.321726
+if ?myrep .eq. 3 set refener = -198.989
+
+! NOTE: repeated exchanges and replicas exchanging positions
+! (rather than temperatures), "up" vs. "down" exchanges are
+! a bit more complicated to track. As the doc file notes, it
+! is possible, but a bit unreliable. So, we're just going to
+! check overall exchange probability and final energy, which
+! are invariant to direction.
+
+set tol = 1e-4
+Calc dev = abs ( @refprob - ?reprob ) / @refprob
+if @dev le @tol set passprob = 1
+Calc dev = abs ( ( @refener - ?ener ) / @refener )
+if @dev le @tol set passener = 1
+
+calc result = @passprob + @passener
+
+repd reset
+outu 6
+prnlev 5 node 0
+
+if @result .ne. 2 echo TESTCASE RESULT: failed
+if @result .eq. 2 echo TESTCASE RESULT: passed
+
+stop

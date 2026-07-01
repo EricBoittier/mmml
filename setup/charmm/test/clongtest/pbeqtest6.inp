@@ -1,0 +1,164 @@
+* CHARMM 28 testcase pbeqtest6.inp
+* .Test various PB solvers for Calbindin (75 residues) 
+* .Change NCEL 65 to 129 and DCEL 0.8 to 0.4 (see the difference)
+* Author: Benoit Roux
+*
+
+if ?pbeq .ne. 1 then stop
+
+stream datadir.def
+
+open read card unit 1 name @0top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open read card unit 1 name @0par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+read sequence card
+* Calbindin
+*
+75
+LYS SER PRO GLU GLU LEU LYS GLY ILE PHE GLU LYS
+TYR ALA ALA LYS GLU GLY ASP PRO ASN GLN LEU SER LYS
+GLU GLU LEU LYS LEU LEU LEU GLN THR GLU PHE PRO SER
+LEU LEU LYS GLY GLY SER THR LEU ASP GLU LEU PHE GLU
+GLU LEU ASP LYS ASN GLY ASP GLY GLU VAL SER PHE GLU
+GLU PHE GLN VAL LEU VAL LYS LYS ILE SER GLN        
+generate CALB setup warning
+
+open read card unit 15 name @0str1.crd
+read coor card unit 15
+close unit 15
+
+coor stat
+coor orie
+coor stat
+timer 2
+
+!---------------------------------------------------------------
+PBEQ
+    prnlev 0
+    stream @0radius.str
+    prnlev 5
+
+! VACUUM CALCULATIONs
+!=====================
+! OLD PB SOLVER
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 oldpb
+! NEW PB SOLVER with INTBP
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 intbp
+! NEW PB (OSOR) SOLVER
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 osor intbp
+! NEW PB SOLVER with ZERO
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 zero
+! FMG PB SOLVER
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 -    
+          FMGRid NPRE 2 NPOST 2 NCYC 100
+
+! SOLUTION CALCULATIONs
+!======================
+! OLD PB SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 oldpb
+! NEW PB SOLVER with INTBP
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 intbp
+! NEW PB (OSOR) SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 osor intbp
+! NEW PB SOLVER with ZERO
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 zero
+! FMG PB SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 -    
+          FMGRid NPRE 2 NPOST 2 NCYC 100
+
+! USING smoothed dielectric boundary
+    RESET
+    prnlev 0
+    stream @0radius.str
+    prnlev 5
+    scalar wmain add  0.8
+    scalar wmain mult 0.888
+    scalar wmain set 0.0 sele type H* end
+! NEW PB SOLVER
+    SOLVE epsw 80.0 epsp 1.0 ncel  65 dcel 0.8 -
+          smooth swin 0.8
+! FMG PB SOLVER
+    SOLVE epsw 80.0 epsp 1.0 ncel  65 dcel 0.8 -    
+          FMGRid NPRE 2 NPOST 2 NCYC 100 -
+          smooth swin 0.8
+
+    RESET
+    prnlev 0
+    stream @0radius.str
+    prnlev 5
+
+! SOLUTION CALCULATIONs with SALT 
+!================================
+! OLD PB SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 oldpb
+! NEW PB SOLVER with INTBP
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 intbp
+! NEW PB (OSOR) SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 osor intbp
+! NEW PB SOLVER with ZERO
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 zero
+! FMG PB SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 -
+          FMGRid NPRE 2 NPOST 2 NCYC 100
+
+! USING smoothed dielectric boundary
+    RESET
+    prnlev 0
+    stream @0radius.str
+    prnlev 5
+    scalar wmain add  0.8
+    scalar wmain mult 0.888
+    scalar wmain set 0.0 sele type H* end
+! NEW PB SOLVER
+    SOLVE epsw 80.0 epsp 1.0 ncel  65 dcel 0.8 conc 0.15 -
+          smooth swin 0.8
+! FMG PB SOLVER
+    SOLVE epsw 80.0 epsp 1.0 ncel  65 dcel 0.8 conc 0.15 -    
+          FMGRid NPRE 2 NPOST 2 NCYC 100 -
+          smooth swin 0.8
+
+    RESET
+    prnlev 0
+    stream @0radius.str
+    prnlev 5
+
+! MEMBRANE CALCULATIONs in VACUUM
+!================================
+! OLD PB SOLVER
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 oldpb -
+          Tmemb 10.0 Zmemb 0.0 epsm 1.0
+! NEW PB SOLVER with INTBP
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 intbp -
+          Tmemb 10.0 Zmemb 0.0 epsm 1.0
+! NEW PB (OSOR) SOLVER
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 osor intbp -
+          Tmemb 10.0 Zmemb 0.0 epsm 1.0
+! NEW PB SOLVER with ZERO
+    SOLVE epsw 1.0  epsp 1.0 ncel  65 dcel 0.8 zero -
+          Tmemb 10.0 Zmemb 0.0 epsm 1.0
+
+! MEMBRANE CALCULATIONs in SOLUTION
+!==================================
+! OLD PB SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 oldpb -
+          Tmemb 10.0 Zmemb 0.0 epsm 2.0
+! NEW PB SOLVER with INTBP
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 intbp -
+          Tmemb 10.0 Zmemb 0.0 epsm 2.0
+! NEW PB (OSOR) SOLVER
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 osor intbp -
+          Tmemb 10.0 Zmemb 0.0 epsm 2.0
+! NEW PB SOLVER with ZERO
+    SOLVE epsw 80.0  epsp 1.0 ncel  65 dcel 0.8 conc 0.15 zero -
+          Tmemb 10.0 Zmemb 0.0 epsm 2.0
+
+RESET
+END
+!---------------------------------------------------------------
+
+STOP

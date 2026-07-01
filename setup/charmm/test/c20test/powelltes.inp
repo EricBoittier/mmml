@@ -1,0 +1,63 @@
+* POWELLTES By Axel Brunger, 14-July 1983
+* Modified by Youngdo Won, 15-Jan-91 to use TIP3 instead of ST2 waters.
+* Test case for POWELL-method minimizer including SHAKE constraints.
+* PTI with explicit hydrogens used.
+*
+
+! tries to constrain bonds across parallel partition boundaries
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+OPEN READ FORM UNIT 1 NAME @0toph9.rtf
+READ RTF  CARD UNIT 1
+BOMLEV -2
+OPEN READ FORM UNIT 2 NAME @0param6.prm
+READ PARAMETER CARD UNIT 2
+BOMLEV  0
+
+READ      SEQUENCE  CARDS
+*PTI SEQUENCE
+*
+   58
+ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR 
+THR GLY PRO CYS LYS ALA ARG ILE ILE ARG
+TYR PHE TYR ASN ALA LYS ALA GLY LEU CYS 
+GLN THR PHE VAL TYR GLY GLY CYS ARG ALA
+LYS ARG ASN ASN PHE LYS SER ALA GLU ASP 
+CYS MET ARG THR CYS GLY GLY ALA
+GENERATE  MAIN
+
+PATCH DISU MAIN  5 MAIN 55
+PATCH DISU MAIN 14 MAIN 38
+PATCH DISU MAIN 30 MAIN 51
+
+READ SEQUENCE WATER 4
+GENERATE  SOLV
+
+open unit 3 read card   name @0bpti.crd
+READ COORD card  UNIT 3
+COOR COPY COMP
+
+shake bonds tol 1.0e-8
+cons harm force 10.0
+
+update -
+   ihbfrq 1 inbfrq 1 -
+   acce ctonhb 5.5 ctofhb 6.5 cuthb 7.5 ctonha 60.0 ctofha 80.0 CUTHA 100.0 -
+   elec atom cdie shift eps 2.0 -
+        cutnb 9.0 ctexnb 999.0 ctonnb 7.5 ctofnb 8.0 -
+   vdw nbxmod 5 vswitch vdistance norxn
+
+mini powell nstep 12 step 1.0 tolgradient 0.05 inbfrq 0 ihbfrq 0 -
+     nprint 1
+
+coor rms sele ( hydrogen .or. lone ) end
+coor rms selection ( .not. ( hydrogen .or. lone ) ) end
+
+print coor card sele resid 4:6 .or. resid 21:23 .or. segid solv end
+
+stop

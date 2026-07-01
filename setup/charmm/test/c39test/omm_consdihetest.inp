@@ -1,0 +1,437 @@
+* CHARMM 39 Testcase omm_consdihetest.inp
+* This test evaluates the implementation of the cons dihe
+* commands into the CHARMM/OpenMM interface
+* Written by Charles L. Brooks III, 16-Jan-2014
+*
+
+if ?openmm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+bomlev -1
+set tol = 1e-6
+
+read rtf cards
+* dihedral rtf
+*
+   18
+MASS 3 AR 39
+
+RESI dihe 0
+GROUP
+atom a1 ar 0
+atom a2 ar 0
+atom a3 ar 0
+atom a4 ar 0
+bond a1 a2  a2 a3  a3 a4
+angle a1 a2 a3  a2 a3 a4
+END
+
+READ PARAM CARD
+* PARAMETERS FOR dihedral
+*
+BOND
+ar ar   0  2
+ANGLE
+ar ar ar 0 109
+dihedral
+ar ar ar ar 0 2 180
+
+nonbonded nbxmod 4 atom cdiel switch vswitch cutnb 9999 ctonnb 9999 ctofnb 9999
+ar 0 -0 1
+
+END
+
+READ SEQU dihe 1
+
+generate dihe
+
+print coor
+ic generate
+ic edit
+bond 1 a2 1 a3 1.5
+end
+ic param
+ic seed 1 a1 1 a2 1 a3
+ic build
+print coor
+
+!-----TEST 1
+cons dihe bynum 1 2 3 4 force 10 min 90 periodic 2
+cons dihe bynum 1 2 3 4 force 10 min 90 width 30
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+energy omm
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 1: failed
+else
+      echo Test 1: passed
+endif
+
+!-----TEST 2
+cons cldh
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 2: failed
+else
+      echo Test 2: passed
+endif
+
+!-----TEST 3
+cons dihe bynum 1 2 3 4 force 10 min 32 periodic 6
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 3: failed
+else
+      echo Test 3: passed
+endif
+
+
+!-----TEST 4
+cons dihe bynum 1 2 3 4 force 10 min 90 width 0
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 4: failed
+else
+      echo Test 4: passed
+endif
+
+!-----TEST 5
+cons dihe bynum 1 2 3 4 force 10 min 175 period 2 !width 20
+cons dihe bynum 1 2 3 4 force 100 min 175 period 1 !width 20
+
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 5: failed
+else
+      echo Test 5: passed
+endif
+
+cons cldh
+
+!-----TEST 6
+replica n 1 select segid dihe end
+delete atom select segid dihe end
+print coor
+replica reset
+print coor
+coor translate xdir 12 select segid n2 end
+
+cons dihe bynum 1 2 3 4 force 10 min 175 width 20
+cons dihe bynum 5 6 7 8 force 10 min 175 width 20
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 6: failed
+else
+      echo Test 6: passed
+endif
+
+!-----TEST 7
+cons cldh
+cons dihe bynum 1 2 3 4 force 10 min 75 width 20
+cons dihe bynum 5 6 7 8 force 10 min 75 width 20
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 7: failed
+else
+      echo Test 7: passed
+endif
+
+!-----TEST 8
+cons cldh
+cons dihe bynum 1 2 3 4 force 10 min 175 width 0
+cons dihe bynum 5 6 7 8 force 10 min 175 width 0
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 8: failed
+else
+      echo Test 8: passed
+endif
+
+!-----TEST 8
+cons cldh
+cons dihe bynum 1 2 3 4 force 10 min 175 period 2
+cons dihe bynum 5 6 7 8 force 10 min 175 period 3
+
+energy
+set cener = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+set ommener ?ener
+coor force comp
+scalar xcomp mult -1
+scalar xcomp +store 1
+
+scalar ycomp mult -1
+scalar ycomp +store 2
+scalar zcomp mult -1
+scalar zcomp +store 3
+
+scalar xcomp recall 1
+scalar ycomp recall 2
+scalat zcomp recall 3
+
+coor stat comp
+
+! Check tolerances
+calc dener = abs ( @cener - @ommener )
+calc dforce = sqrt ( ?xave * ?xave + ?yave * ?yave + ?zave * ?zave )
+calc diff = @dforce * @dener
+if @diff gt @tol then
+      echo Test 8: failed
+else
+      echo Test 8: passed
+endif
+
+stop

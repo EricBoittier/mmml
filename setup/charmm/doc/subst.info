@@ -1,0 +1,444 @@
+CHARMM Element doc/subst.info $Revision: 1.1.1.1 $
+
+File: SUBST, Node: Top, Up: (doc/commands.info), Next: Substition:(doc/energy.info), Previous: (doc/commands.info)
+
+
+                  Command Line Substitution Parameters
+
+
+The following are substitution parameters available within CHARMM;
+
+---------------------------------------------------------------------
+General:
+
+'PI  '    - Pi, 3.141592653589793
+'KBLZ'    - The Boltzmann factor (0.001987191)
+'CCELEC'  - 1/(4 PI epsilon) in AKMA units (332.0716)
+'SPEEDL'  - Speed of light
+'CNVFRQ'  - Conversion from root(Kcals/mol/AMU) to frequencies in CM-1.
+'TIMFAC'  - Conversion from AKMA time to picoseconds
+
+---------------------------------------------------------------------
+Control and system variables:
+
+'BOMLEV'  - The error termination level (-5 to 5)
+'WRNLEV'  - The warning print level (-5 to 10)
+'PRNLEV'  - The standard print level (-1 to 15)
+'IOLEV'   - The I/O level (-1 to 1)
+'IOSTAT'  - The status of most recent OPEN command (-1=failed,1=OK)
+'TIMER'   -
+'FASTER'  -
+'LFAST'   -
+'OLMACH'  -
+'OUTU'    -
+'FLUSH'   -
+'FNBL'    -
+'NBFACT'  -
+'LMACH'   -
+'MYNODE'  - Current node number (0 to NUMNODE-1)
+'NUMNODE' - The number of nodes (distributed memory)
+'NCPU'    - The number of CPUs (shared memory use)
+'SYSSTAT' -
+'CPUTIME' - CPU time used at last call to TIMRE (TIMER NOW, TIMER DIFF)
+'ELATIME' - Elapsed time  at last call to TIMRE (TIMER NOW, TIMER DIFF)
+'PID'     - Process ID of the CHARMM process (or the rank 0 process when
+            MPI is used).
+---------------------------------------------------------------------
+PSF counts
+
+'NSEG'    - Number of segments
+'NRES'    - Number of residues
+'NATO'    - Number of atoms
+'NATOM'   -   "
+'NGRP'    - Number of groups
+'NBON'    - Number of bonds
+'NBOND'   -   "
+'NTHE'    - Number of angles
+'NTHETA'  -   "
+'NPHI'    - Number of dihedrals
+'NIMP'    - Number of improper dihedrals
+'NIMPHI'  -   "
+'NACC'    - Number of acceptors
+'NDON'    - Number of donors
+'NNB'     - Number of explicit nonbond exclusions 
+'CGTOT'   - Total system charge
+'MASST'   - Total system mass
+'NATI'    - Total number of image plus primary atoms
+
+---------------------------------------------------------------------
+Parameter counts
+
+'NATC'    - Number of atom types
+'NCB'     - Number of bond parameters
+'NCT'     - Number of angle parameters
+'NCSB'    - Number of stretch-bend parameters
+'NCP'     - Number of diheral parameters
+'NCI'     - Number of improper dihedral parameters
+'NCOOP'   - Number of out-of-plane parameters
+'NCH'     - Number of hydrogen bond parameters
+'NCN'     - Number of vdw parameter pairs
+'NCQ'     - Number of bond charge increments
+          
+---------------------------------------------------------------------
+Other counts
+
+'NCSP'    - Number of restrained dihedral (CONS DIHE command).
+'NTRA'    - Number of image transformations
+'TOTK'    - Number of Ewald K vectors (not PME)
+'NIC'     - Number of Internal Coordinate entries in the IC table
+
+---------------------------------------------------------------------
+Dimension Limits
+
+'MAXA'    - Number of atoms
+'MAXATC'  - Number of atom types
+'MAXB'    - Number of bonds
+'MAXIMP'  - Number of improper dihedrals
+'MAXNB'   - Number of explicit nonbond exclusions
+'MAXP'    - Number of dihedrals
+'MAXPAD'  - Number of donors and acceptors
+'MAXRES'  - Number of residues
+'MAXSEG'  - Number of segments
+'MAXT'    - Number of angles
+
+'MAXCB'   - Number of bond parameters
+'MAXCH'   - Number of hydrogen bond parameters
+'MAXCI'   - Number of improper dihedral parameters
+'MAXCN'   - Number of vdw pair parameters
+'MAXCP'   - Number of dihedral parameters
+'MAXCT'   - Number of angle parameters
+          
+'MAXCSP'  - Number of restrained dihedrals
+
+---------------------------------------------------------------------
+Coordinate manipulation parameters:
+
+'XAXI' - vector of defined axis (set by the COOR {AXIS    } command).
+'YAXI'                                           {ORIE RMS}
+'ZAXI'                                           {LSQP    }
+'RAXI' - length of vector (often 1.0)            {HELIx   }
+'XCEN' - origin/center of axis vector
+'YCEN'
+'ZCEN'
+
+'XMIN' - Extreme values (COOR STAT command)
+'YMIN'
+'ZMIN'
+'WMIN'
+'XMAX'
+'YMAX'
+'ZMAX'
+'WMAX'
+'XAVE' - Average values (COOR STAT command).
+'YAVE'
+'ZAVE'
+'WAVE'
+'MASS' - mass of selected atoms
+
+'RMS'  - Root mean squared difference between two structures.
+'MASS' - mass            (COOR ORIE and COOR RMS commands).
+
+'XMOV' - displacement of atoms from best fit (COOR ORIE command).
+'YMOV' -
+'ZMOV' -
+'THET' - Angle of rotation from best fit (degrees)
+'SHIFT'- Translation of best fit move projected on rotation axis.
+
+'AREA'   - Requested surface area (COOR SURF command).
+
+'VOLUME' - Requested volume (COOR VOLUme command).
+'NVAC'   - Number of vacuum points
+'NOCC'   - Number of occupied points
+'NSEL'   - Number of selected points
+'FREEVOL'- Total free volume
+
+'MIND'  - Minimum distance (COOR MIND command).
+'NPAIR' - Number of pairs (COOR DIST command).
+'NCONTACT' - Number of contacts (COOR DMAT command).
+'RGYR'  - Radius of gyration (COOR RGYR command).
+'XCM'   - Center of mass (COOR RGYR command).
+'YCM'   -
+'ZCM'   -
+'MASS'  - Mass of selected atoms
+
+'XDIP'  - Dipole moment  (COOR DIPOle command)
+'YDIP'  -
+'ZDIP'  -
+'RDIP'  - Dipole magnitude
+'CHARGE'- Charge of selected atoms
+
+'NHBOND' - total number of hydrogen bonds (COOR HBONd command).
+'AVNOHB' - Average number of hydrogen bonds 
+'AVHBLF' - Average hydrogen bond life
+
+'MINDA1' - First  atom of minimum distance atom pair
+'MINDA2' - Second atom of minimum distance atom pair
+
+'NHYDRR' - Average number of solvent molecule -solute contacts (COOR ANALys)
+'NHYDAR' - Average number of solvent atom  - solute contacts (COOR ANALys)
+'NHYDAA' - Average number of solvent atom -solute atom contacts (COOR ANALys)
+
+'ENTROPY' - Configurational entropy estimate (COOR COVA THERmo)
+'SROT'   - Rotational entropy    (COOR INERtia ENTRopy)
+'STRA'   - Translational entropy (COOR INERtia ENTRopy)
+'SVIB'   - Vibrational entropy   (VIBRAN DIAG ENTRopy )
+'SSUM'   = SROT+STRA+SVIB
+
+'NALPHA' - Number of residues in alpha helix
+'ALPHA'  - Fraction of  - " -
+'NBETA'  - Number of residues in beta strands
+'BETA'   - Fraction of  - " -
+
+'PHASE'  - Sugar pucker phase
+'AMP'    - Sugar pucker amplitude
+
+o---------------------------------------------------------------------
+SCALar STATistics command substitution parameters:
+
+'SMIN' - Minimum value
+'SMAX' - Maximum value
+'SAVE' - Average value 
+'SVAR' - Variance about average
+'SWEI' - Total weight used in the averaging
+'STOT' - Total of selected atoms
+'NSEL' - Number of selected atoms
+
+---------------------------------------------------------------------
+Quick command substitution paramteters:
+
+'XVAL' - X position of group of atoms
+'YVAL' - X position of group of atoms
+'ZVAL' - X position of group of atoms
+'DIST' - Distance between two atom analysis
+'THET' - Angle for three atom analysis
+'PHI ' - Dihedral for four atom analysis
+
+---------------------------------------------------------------------
+Shape analysis
+
+'SFIT'  -
+'THET'  -
+'XAXI'  -
+'YAXI'  -
+'ZAXI'  -
+'RAXI'  -
+
+---------------------------------------------------------------------
+Saddle point calculation (TRAVel)
+
+'SADE'  - Saddle point energy
+'SADI'  - Saddle point index
+'SADO'  - Saddle point order
+
+---------------------------------------------------------------------
+Energy calculation results:
+
+'XCM'  - Center of mass (from MMFP energy term calcuation)
+'YCM'  -
+'ZCM'  -
+'XCM2' - Spatial extent
+'YCM2' -
+'ZCM2' -
+'RGEO' - average distance from reference
+
+'ENPB' - electrostatic free energy of solvation (from PBEQ)
+
+'RMAX' - maximum distance to origin for the SSBP energy term
+
+---------------------------------------------------------------------
+Minimization results:
+
+'MINCONVRG' -
+'MINECALLS' -
+'MINGRMS'   -
+'MINSTEPS'  -
+
+---------------------------------------------------------------------
+PERT results:
+
+'TPDEL'   - Thermodynamic Perturbation energy change
+'TPTOT'   - Thermodynamic Perturbation total energy
+'TIDEL'   - Thermodynamic Integration energy change
+'TITOT'   - Thermodynamic Integration total energy
+'SLDEL'   - Slow Growth energy change
+'SLTOT'   - Slow Growth total energy
+'DFLC'    - DIFFLC, ie the fluctuation about the average energy difference
+'AVKE'    - Average kinetic energy
+'KEFL'    - Fluctuation in kinetic energy
+---------------------------------------------------------------------
+Atom selection parameters:
+
+'NSEL' - Number of selected atoms from the most recent atom selection.
+'SELATOM' - Atom number of first selected atom
+'SELCHEM' - Chemical type of first selected atom
+'SELIRES' - Residue number of first selected atom
+'SELISEG' - Segment number of first selected atom
+'SELRESI' - Resid of first selected atom
+'SELRESN' - Residue type of first selected atom
+'SELSEGI' - Segid of first selected atom
+'SELTYPE' - Atom name of first selected atom
+
+---------------------------------------------------------------------
+Crystal parameters
+
+'XTLA'     - Unit cell dimensions
+'XTLB'     -
+'XTLC'     -
+'XTLALPHA' - Unit cell angles
+'XTLBETA'  -
+'XTLGAMMA' -
+'XTLXDIM'  - Number of crystal degrees of freedom (cube=1,triclinic=6,..)
+
+---------------------------------------------------------------------
+Data from most recently read (or current) trajectory file
+
+'NFILE' - Number of frames in the trajectory file
+'START' - Step number for the first frame
+'SKIP'  - Frequency at which frames were saved
+            (NSTEP=NFILE*SKIP when not using restart files)
+'NSTEP' - Total number of steps in the simulation
+'NDEGF' - Number of degrees of freedom in the simulation
+            (Can be use to get the temperature with velocity files).
+'DELTA' - The dynamics step length (in picoseconds).
+'NTOT'  - Total number of frames actually read
+
+---------------------------------------------------------------------
+Nonbond list counts
+
+'NNBA' - Number of atom  pairs (main list)
+'NNBG' - Number of group pairs (main list)
+'NNBI' - Number of crystal atom pairs (Phonons only)
+'NRXA' - Number of atom  exclusions due to replicas
+'NRXG' - Number of group exclusions due to replicas
+
+---------------------------------------------------------------------
+Correlation Function Results
+
+'AVER' - Series average (CORREL's SHOW command)
+'FLUC' - Series fluctuation
+'P2'   - P2 average
+'P2R3' - 
+'P2RA' -
+'R3R'  -
+'R3S'  -
+'P0'   - Polynomial best fit components (MANTime POLY command).
+'P1'   -
+'P2'   -
+'P3'   -
+'P4'   -
+'P5'   -
+'P6'   -
+'P7'   -
+'CFNORM' - Multiplicative normalization factor for correlation function
+
+---------------------------------------------------------------------
+Generalized Born Solvation Calculation Results
+
+'GBAL' - Generalized Born alpha values
+'GBAT' - Generalized Born atomic solvation energy contributions values
+'SIGX' - Partial contribution to GB force, X-direction (diagnostic)
+'SIGY' - Partial contribution to GB force, Y-direction (diagnostic)
+'SIGZ' - Partial contribution to GB force, Z-direction (diagnostic)
+'T_GB' - Partial contribution to GB force, 3-body term (diagnostic)
+
+---------------------------------------------------------------------
+Vibrational analysis of thermodynamic properties:
+
+'FTOT' - Vibrational free energy.
+'STOT' - Vibrational entropy.
+'HTOT' - Vibrational enthalpy.
+'CTOT' - Vibrational heat capacity.
+'ZTOT' - Zero point correction energy.
+'FCTO' - Classical vibrational free energy.
+'ETOT' - Total harmonic limit classical free energy
+         (to compare with free energy perturbation simulations).
+
+'TRAC' - Trace of the Hessian for selected atoms
+
+'SROT' - Rotational entropy    (COOR INERtia ENTRopy)
+'STRA' - Translational entropy (COOR INERtia ENTRopy)
+'SVIB' - Vibrational entropy   (VIBRAN DIAG ENTRopy )
+'SSUM' = SROT+STRA+SVIB
+
+---------------------------------------------------------------------
+Multi-Site lambda-dynamics trajectory analysis:
+
+'TMIN' - Minimum number of transitions for any site in the system
+'TMAX' - Maximum number of transitions for any site in the system
+'FPL'  - Fraction of the snapshots which represent full Physical Ligands
+'POP#' - Population for the substituent associated with indicated BLOCK number at the low threshold value (e.g. the ?pop2 contains the population for substituent in BLOCK 2 given CUTLO threshold)
+'DDG#_#' - Relative free energy between the first and second substituents listed at the low threshold value (e.g. ?ddg2_5 is the relative free energy between the substituents associated with BLOCKS 2 and 5).
+
+---------------------------------------------------------------------
+Replica exchange with REPDSTR:
+
+'EXRUP' - Exchange ratio with the next higher replica
+'EXRDN' - Exchange ratop with the next lower replica
+'REPROB' - Overall calculated probability of a replica exchanging
+'EXRUP2' - Same as 'EXRUP' but for the second dimension in 2D replica
+           exchange
+'EXRDN2' - Same as 'EXRDN' but for the second dimension in 2D replica
+           exchange
+'REPROB2'- Same as 'REPROB' but for the second dimension in 2D replica
+           exchange
+
+NOTE: For REPDSTR with the FAST keyword, replicas change positions relative
+to one another. Therefore, "up" and "down" exchanges change meaning to refer
+to the replica rather than the temperature ladder. Furthermore, unlike in
+non-FAST replica exchange, an exchange that does not occur because there is
+no available neighbor is treated as having a probability of 0 in the
+calculation of ?REPROB.
+
+---------------------------------------------------------------------
+Miscellaneous:
+
+'VIOL'  - Total violation for all NOE restraints (NOE WRITe/PRINt ANAL)
+'DRSH'  - The DRSH value in subroutine PSHEL (undocumented)
+      (also undocumented in fcm/mmfp.fcm in violation of coding stds.)
+'DCOEFF'- The diffusion constant (COOR ANALysis SOLVent command).
+
+'TIME'  - Simulation time(ps) for current frame in trajectory reading
+'STEP'  - Step number for current frame in trajectory reading
+'PQRES' - Final value of target function in RMSDyn 2D-projection
+'TOTRMS' -The sum of all pairwise RMSDs (for RMS or DRMS) in RMSDyn.
+
+'WHAMFE' - total free energy of WHAM
+'SSBPLRC' - long-range free energy correction for SSBP
+'SSBPLRCS' - standard deviation of SSBP long-range correction
+'AIDX'   - result of AIDX command (doc/miscom.info); i.e. integer
+           code corresponding to chemical type name
+
+---------------------------------------------------------------------
+pref.dat Keywords:
+
+The following keywords have substitutions of 0 or 1 for set or not-set,
+respectively.
+
+ACE       FOURD     MOLVIB  	OLDDYN    PNOE     RXNCOR   
+ADUMB     GAMESS    MPI     	PARAFULL  POLAR    SCALAR   
+ASPENER   MTS     	        PARALLEL  PRIMSH   SHAPES   
+BLOCK     GENCOMM   MULTCAN 	PARASCAL  PVM      SINGLE   
+CFF       GENETIC   NIH     	PARVECT   PVMC     SOCKET   
+CMPI      IMCUBES   NOCORREL	PATHINT   QHMCM    SOFTVDW  
+CRAYVEC   LATTICE   NOIMAGES	PBEQ      QTSM     TNPACK   
+DIMB      LDM       NOMISC  	PBOUND             TRAVEL   
+DMCONS    LONEPAIR  NOST2   	PBOUNDC   QUANTUM  VECTOR   
+DOCK      MC        NOVIBRAN	PERT      REPLICA  WCA
+EISPACK   MCSS      NO_BYCC 	PM1       RGYCONS  
+FMA       MMFF      NO_BYCU 	PMEPLSM   RISM     
+
+Example: In this case ACE keyword was in the pref.dat so
+         ?ace is substituted with 1 and the IF test will 
+         evaluate as true.
+
+ 	  if ?ace .eq. 1 then goto doace
+ 
+	   CHARMM>    if ?ace .eq. 1 then goto doace
+ 	   RDCMND substituted energy or value "?ACE" to "1"
+ 	   Comparing "1" and "1".
+ 	   IF test evaluated as true.  Performing command
+
+
+
+---------------------------------------------------------------------
+See energy.info for the energy related substitution parameters.

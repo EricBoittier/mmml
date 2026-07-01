@@ -1,0 +1,259 @@
+* CHARMM 30 testcase cftidist.inp
+* Testing CFTI:one-dimensional conformational thermodynamic integration
+* Coordinate type: distance
+* System: methane dimer in vacuum
+* Author: Krzysztof Kuczera, Lawrence, KS 14-Jan-2003
+* External Files: top_all22_prot.inp and par_all22_prot.inp
+*
+
+if ?qtsm .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+! Multinode execution has file I/O problems.
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+bomlev -1
+stream datadir.def
+
+set 3 meta           ! PSF prefix
+set 4 35             ! C...C distance value [units = 0.1 A]
+set 8 300.0          ! temperature [K]
+set t methane dimer  ! title
+
+! read in topology, parameter and PSF files
+!===========================================
+open read card unit 11 name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+open read card unit 11 name @0par_all22_prot.inp
+read para card unit 11
+close unit 11
+
+read RTF card append
+* Methane all-H topology
+*
+   22     1
+
+RESI META      0.0000    ! Methane CH4
+GROU                     !             H1
+ATOM C1  CT3  -0.3600    !             |
+ATOM H1  HA    0.0900    !         H4--C1--H2
+ATOM H2  HA    0.0900    !             |
+ATOM H3  HA    0.0900    !             H3
+ATOM H4  HA    0.0900    !  
+!
+BOND  C1 H1   C1 H2   C1  H3   C1 H4
+!
+IC H1   H2   C1   H4    0.0000   0.0000   90.0000   0.0000  0.0000
+IC H1   H2   C1   H5    0.0000   0.0000  -90.0000   0.0000  0.0000
+
+patc first none last none
+
+END
+
+! Generate methane dimer
+read sequence META 2
+generate METD setup warn
+
+! Read in test atom coordinates
+!=======================================================
+read coor card free
+* Methane dimer at 3.5 A  C...C distance (artificial geometry)
+*
+    4
+    1    1 META C1    -1.75000   0.00000   0.00000 BUTA 1      0.00000
+    2    1 META H1    -1.75000   0.00000   1.00000 BUTA 1      0.00000
+    6    2 META C1     1.75000   0.00000   0.00000 BUTA 1      0.00000
+    7    2 META H1     1.75000   0.00000  -1.00000 BUTA 1      0.00000
+
+hbuild
+hbuild sele hydrogen end
+
+coor print
+
+define mov1 sele show resi 1 end
+define mov2 sele show resi 2 end
+
+! Use TSM:  for mini and equ fix C...C only
+!==============================================================
+tsm
+  fix dist METD 1 c1  METD 2 c1 toli 1.0e-5
+  maxi 100
+end
+
+! generate full nb list then suppress updates
+update cutnb 99.0 ctofnb 12.0 ctonnb 10.0 wmin 1.2 inbfrq 1
+
+! SHAKE bonds to hydrogen atoms
+SHAKE BONH tolerance 1.0e-6 para
+
+energy 
+
+! energy minimize
+mini abnr nstep 100 nprint 50 inbf 0
+
+! check constraint
+!================
+coor axis sele resi 1 .and. type c1 end sele resi 2 .and. type c1 end
+
+title
+* @3: @t
+* Dynamics with R=@4  A/10
+*
+
+!! USING LANGEVIN GIVES INCORRECT FORCES IN ICP FILE !!
+!scalar FBETA set 50.0
+!! SWITCH TO NOSE-Hoover constant temperature
+faster 1
+
+! Equilibration
+DYNAMICS  -
+  LEAP STRT  NSTEP 1000 TIMESTEP 0.002  - 
+!  NOSE QREF 50.0 TREF 300.0 NCYC 5 STRT NSTEP 1000 TIMEST 0.002 - 
+  inbfrq 0 ihbfrq 0 ilbfrq 0 -
+  IUNCRD -1 IUNVEL -1 KUNIT -1 IUNWRI -1 IUNREA -1 -
+  IPRFRQ 100  NPRINT 100  NSAVC 0 NSAVV  0 ISVFRQ 100 -
+  IASORS 1 IASVEL 1 FIRSTT 240.0 FINALT 300.0 - 
+  IHTFRQ 100 IEQFRQ 1000 ICHECKW 1  TWINDH 20.0 TWINDL -20.0 -
+  TBATH 300.0 ISEED 314159 
+
+! Use TSM:  trajectory generation phase
+! savi: set up data saving - every 10th step, use 2 pert windows
+! move:  define perturbation and moving atoms
+!        (alternate selection: "sele mov2 end" only)
+! cfti:  activate dU/dx calculations so both TP and TI are done
+!==============================================================
+tsm
+    savi icun 10 icfr 10 nwin 2
+    move dist METD 1 c1  METD 2 c1  by -0.10 inte -
+     sele mov2 end sele mov1 end
+    cfti
+end
+
+! generate full nb list then suppress updates
+update cutnb 99.0 ctofnb 12.0 ctonnb 10.0 wmin 1.2 inbfrq 1
+
+! data files for MD
+open unit 10 form write name @9@3d@4.icp
+open unit 30 unfo write name @9@3d@4.cor
+open unit 31 card write name @9@3d@4.crd
+open unit 32 card write name @9@3d@4.pdb
+
+! Trajectory generation
+DYNAMICS  -
+  LEAP STRT  NSTEP 2000 TIMESTEP 0.002  - 
+!  NOSE QREF 50.0 TREF 300.0 NCYC 5 STRT NSTEP 2000 TIMEST 0.002 - 
+  inbfrq  0 ihbfrq 0 ilbfrq 0 -
+  IUNCRD 30 IUNVEL -1 KUNIT -1 IUNWRI -1 IUNREA -1 -
+  IPRFRQ 100  NPRINT 100  NSAVC 10 NSAVV  0 ISVFRQ 100 -
+  IASORS 1 IASVEL 1 FIRSTT 240.0 FINALT 300.0 - 
+  IHTFRQ 100 IEQFRQ 100 ICHECKW 1  TWINDH 20.0 TWINDL -20.0 -
+  TBATH 300.0 ISEED 314159 
+
+
+write coor card unit 31
+* @3: @t
+* Coords after 10ps equil + 40ps MD with R=@4 A/10
+*
+write coor PDB unit 32
+* @3: @t
+* Coords after 10ps equil + 40ps MD with R=@4 A/10
+*
+
+! check constraint
+!================
+coor axis sele resi 1 .and. type c1 end sele resi 2 .and. type c1 end
+
+tsm clear
+
+! Analysis step 1: TI results, total free energy derivative
+!  + energy-entropy decomposition
+! By selecting energy terms to be calculated, free energy component
+! analysis may be performed using this command [E-S are useless then]
+!=====================================================================
+
+open unit 51 unfo read name @9@3d@4.cor
+
+
+! just as in the dynamics phase.
+! update is used after FAST to get correct setup of internal and 
+! nonbonded energy pointer tables.
+! For the TI free energy derivative only the "solute-solvent" energy
+! term is needed; however whenever entropy is being calculated
+! the correct total system potential energy must be evaluated
+! For this small system in gas phase I use
+! 'update cutnb 99.0' ! and 'cfta inbf 0' below
+!  for  other systems think about optimal setup.
+!======================================================================
+FASTER 1
+update cutnb 99.0 ctonnb 10.0 ctofnb 12.0 inbfrq 1 ihbfrq 0
+
+
+! Use TSM:  fix and move have to be the same as in traj generation
+!  move:      alternate selection: "sele mov2 end" only
+!  cfta: TI analysis using trajectory ccordinates
+!==============================================================
+tsm
+  fix dist METD 1 c1  METD 2 c1 toli 1.0e-5
+  maxi 100
+  move dist METD 1 c1  METD 2 c1    by -0.10 inte -
+    sele mov2 end sele mov1 end
+  cfta first 51 nunit 1 temp 300.0 skip 1 cont 100 -
+    inbf 0 ihbf 0 imgf 0
+end
+
+
+! Analysis step 2: TI calculation using the energies and gradients
+! stored in the .icp file
+!=====================================================================
+
+open unit 10 card read name @9@3d@4.icp
+
+! Use TSM: no energy evaluations here, all info read from .icp
+!==============================================================
+tsm
+  cftj uicp 10 temp 300.0 cont 100 npert 2
+end
+
+
+! Analysis step 3: original TSM: TP results - free energy perturbation
+!=====================================================================
+
+open unit 10 form read name @9@3d@4.icp
+
+! Use TSM post-processing command
+!   first,nunit - first file no and no. of files
+!   begin,stop - first and last configuration (as written to file)
+!                to be processed
+!   ic - IC perturbations are considered
+!   surf - print dA as function of IC values at end
+!   inte - print out both total and interaction energies
+!   temp,delt - temperature and temperature step in dA calculations
+!   ctem - additionally print out average T from kinetic energy
+!   bins - use bins of n configurations to estimate errors
+!   maxp - no of coords to be perturbed
+!   maxw - no of windows (i.e. no of steps to reach max. displacement,
+!          times 2, as perturbs are always done in + and - dir).
+!   maxs - max points on surface
+!=====================================================================
+tsm post ic surf inte maxp 1 maxw 6 maxs 200
+ proc firs 10 nuni 1 bins 100 ctem temp 300.0 delt 10.0 -
+  begin 1 stop 2000
+end
+
+tsm clear
+
+! comparing TI with TP (LEAP integrator, gnu version on Red Hat 8.3):
+! TP : A(4.55) = -0.6023 kcal/mol, A(4.45) = -0.2426 kcal/mol
+!      dA/dx = (-0.6023 + 0.2426)/0.10 = -3.60 kcal/(mol A)
+! TI values =   -3.58 kcal/(mol A) (.cor) and  -3.58 (.icp)
+! For energy: dU/dx = -2.34 (TI from .cor and .icp)
+!     compared to TP: (-0.3885 + 0.1542)/0.1 = -2.34 kcal/(mol A) 
+! KK June 2003
+
+stop

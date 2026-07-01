@@ -1,0 +1,214 @@
+* Testing PARAMETERS of C60 releated molecular moieties
+* UPDATED by Josh Buckner 04/17/2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+! energies and GRMS for *.mrk files in the order
+! used in this input file
+!
+!                     ENERgy                      GRMS
+!
+!ENER>        0   1218.46825      0.00000     55.84085
+
+stream datadir.def
+stream @0mmff_setup.str
+
+! open and read the topolgy file
+read rtf card
+* RTF of Fullerene and related compounds
+*
+   24
+MASS   3  HA     1.008   H ! nonpolar H
+MASS  11  CA    12.011   C ! Fullerene C
+MASS  12  CB    12.011   C ! Fullerene C
+MASS  13  CC    12.011   C ! Fullerene C
+MASS  14  CD    12.011   C ! Fullerene C
+MASS  15  CE    12.011   C ! Fullerene C
+
+! autogeneration all angle in topology definitions
+autogen angles dihedrals
+
+! topology definition for c60
+resi c60 0.0
+group
+  atom  c1  ca   0.00
+  atom  c2  ca   0.00
+  atom  c3  ca   0.00
+  atom  c4  ca   0.00
+  atom  c5  ca   0.00
+  atom  c6  cb   0.00
+  atom  c7  cb   0.00
+  atom  c8  cb   0.00
+  atom  c9  cb   0.00
+  atom  c10 cb   0.00
+  atom  c11 cc   0.00
+  atom  c12 cc   0.00
+  atom  c13 cc   0.00
+  atom  c14 cc   0.00
+  atom  c15 cc   0.00
+  atom  c16 cc   0.00
+  atom  c17 cc   0.00
+  atom  c18 cc   0.00
+  atom  c19 cc   0.00
+  atom  c20 cc   0.00
+  atom  c21 cd   0.00
+  atom  c22 cd   0.00
+  atom  c23 cd   0.00
+  atom  c24 cd   0.00
+  atom  c25 cd   0.00
+  atom  c26 cd   0.00
+  atom  c27 cd   0.00
+  atom  c28 cd   0.00
+  atom  c29 cd   0.00
+  atom  c30 cd   0.00
+  atom  c31 ce   0.00
+  atom  c32 ce   0.00
+  atom  c33 ce   0.00
+  atom  c34 ce   0.00
+  atom  c35 ce   0.00
+  atom  c36 ce   0.00
+  atom  c37 ce   0.00
+  atom  c38 ce   0.00
+  atom  c39 ce   0.00
+  atom  c40 ce   0.00
+  atom  c41 cc   0.00
+  atom  c42 cc   0.00
+  atom  c43 cc   0.00
+  atom  c44 cc   0.00
+  atom  c45 cc   0.00
+  atom  c46 cc   0.00
+  atom  c47 cc   0.00
+  atom  c48 cc   0.00
+  atom  c49 cc   0.00
+  atom  c50 cc   0.00
+  atom  c51 cb   0.00
+  atom  c52 cb   0.00
+  atom  c53 cb   0.00
+  atom  c54 cb   0.00
+  atom  c55 cb   0.00
+  atom  c56 ca   0.00
+  atom  c57 ca   0.00
+  atom  c58 ca   0.00
+  atom  c59 ca   0.00
+  atom  c60 ca   0.00
+bond    c1  c2   c2  c3   c3  c4   c4  c5   c5  c1   ! ca-ca, horizontal
+double  c1  c6   c2  c7   c3  c8   c4  c9   c5  c10  ! ca=cb
+bond    c6  c20  c6  c11  c7  c12  c7  c13  c8  c14  ! cb-cc
+bond    c8  c15  c9  c16  c9  c17  c10 c18  c10 c19  ! cb-cc
+double  c11 c12  c13 c14  c15 c16  c17 c18  c19 c20  ! cc=cc, horizontal
+bond    c11 c21  c12 c22  c13 c23  c14 c24  c15 c25  ! cc-cd
+bond    c16 c26  c17 c27  c18 c28  c19 c29  c20 c30  ! cc-cd
+bond    c22 c23  c24 c25  c26 c27  c28 c29  c30 c21  ! cd-cd, horizontal
+double  c21 c31  c22 c32  c23 c33  c24 c34  c25 c35  ! cd=ce
+double  c26 c36  c27 c37  c28 c38  c29 c39  c30 c40  ! cd=ce
+bond    c31 c32  c33 c34  c35 c36  c37 c38  c39 c40  ! ce-ce, horizontal
+bond    c31 c41  c32 c42  c33 c43  c34 c44  c35 c45  ! ce-cc
+bond    c36 c46  c37 c47  c38 c48  c39 c49  c40 c50  ! ce-cc
+double  c42 c43  c44 c45  c46 c47  c48 c49  c50 c41  ! cc=cc, horizontal
+bond    c41 c51  c42 c51  c43 c52  c44 c52  c45 c53  ! cc-cb
+bond    c46 c53  c47 c54  c48 c54  c49 c55  c50 c55  ! cc-cb
+double  c51 c56  c52 c57  c53 c58  c54 c59  c55 c60  ! cb=ca
+bond    c56 c57  c57 c58  c58 c59  c59 c60  c60 c56  ! ca-ca, horizontal
+IC  C1  C2  C3  C4     1.4533  108.0      .00  108.0    1.4533
+IC  C2  C3  C4  C5     1.4533  108.0      .00  108.0    1.4533
+IC  C4  C5  C1  C6     1.4533  108.0  -142.62  120.0    1.3670
+IC  C5  C1  C2  C7     1.4533  108.0  -142.62  120.0    1.3670
+IC  C1  C2  C3  C8     1.4533  108.0  -142.62  120.0    1.3670
+IC  C2  C3  C4  C9     1.4533  108.0  -142.62  120.0    1.3670
+IC  C3  C4  C5  C10    1.4533  108.0  -142.62  120.0    1.3670
+IC  C2  C1  C6  C11    1.4533  120.0      .00  120.0    1.4533
+IC  C3  C2  C7  C12    1.4533  120.0  -138.19  120.0    1.4533
+IC  C1  C2  C7  C13    1.4533  120.0   138.19  120.0    1.4533
+IC  C2  C3  C8  C14    1.4533  120.0      .00  120.0    1.4533
+IC  C2  C3  C8  C15    1.4533  120.0   138.19  120.0    1.4533
+IC  C5  C4  C9  C16    1.4533  120.0  -138.19  120.0    1.4533
+IC  C3  C4  C9  C17    1.4533  120.0   138.19  120.0    1.4533
+IC  C1  C5  C10 C18    1.4533  120.0  -138.19  120.0    1.4533
+IC  C4  C5  C10 C19    1.4533  120.0   138.19  120.0    1.4533
+IC  C2  C1  C6  C20    1.4533  120.0  -138.19  120.0    1.4533
+IC  C1  C6  C11 C21    1.3670  120.0  -142.62  108.0    1.4533
+IC  C21 C11 C12 C22    1.4533  120.0      .00  120.0    1.4533
+IC  C2  C7  C13 C23    1.3670  120.0  -142.62  108.0    1.4533
+IC  C23 C13 C14 C24    1.4533  120.0      .00  120.0    1.4533
+IC  C3  C8  C15 C25    1.3670  120.0  -142.62  108.0    1.4533
+IC  C25 C15 C16 C26    1.4533  120.0      .00  120.0    1.4533
+IC  C4  C9  C17 C27    1.3670  120.0  -142.62  108.0    1.4533
+IC  C27 C17 C18 C28    1.4533  120.0      .00  120.0    1.4533
+IC  C5  C10 C19 C29    1.3670  120.0  -142.62  108.0    1.4533
+IC  C29 C19 C20 C30    1.4533  120.0      .00  120.0    1.4533
+IC  C6  C11 C21 C31    1.4533  108.0   142.62  120.0    1.3670
+IC  C11 C12 C22 C32    1.3670  120.0      .00  120.0    1.3670
+IC  C7  C13 C23 C33    1.4533  108.0   142.62  120.0    1.3670
+IC  C13 C14 C24 C34    1.3670  120.0      .00  120.0    1.3670
+IC  C8  C15 C25 C35    1.4533  108.0   142.62  120.0    1.3670
+IC  C15 C16 C26 C36    1.3670  120.0      .00  120.0    1.3670
+IC  C9  C17 C27 C37    1.4533  108.0   142.62  120.0    1.3670
+IC  C17 C18 C28 C38    1.3670  120.0      .00  120.0    1.3670
+IC  C10 C19 C29 C39    1.4533  108.0   142.62  120.0    1.3670
+IC  C19 C20 C30 C40    1.3670  120.0      .00  120.0    1.3670
+IC  C11 C21 C31 C41    1.4533  120.0  -138.19  120.0    1.4533
+IC  C41 C31 C32 C42    1.4533  108.0      .00  108.0    1.4533
+IC  C13 C23 C33 C43    1.4533  120.0  -138.19  120.0    1.4533
+IC  C43 C33 C34 C44    1.4533  108.0      .00  108.0    1.4533
+IC  C15 C25 C35 C45    1.4533  120.0  -138.19  120.0    1.4533
+IC  C45 C35 C36 C46    1.4533  108.0      .00  108.0    1.4533
+IC  C17 C27 C37 C47    1.4533  120.0  -138.19  120.0    1.4533
+IC  C47 C37 C38 C48    1.4533  108.0      .00  108.0    1.4533
+IC  C19 C29 C39 C49    1.4533  120.0  -138.19  120.0    1.4533
+IC  C49 C39 C40 C50    1.4533  108.0      .00  108.0    1.4533
+IC  C21 C31 C41 C51    1.3670  120.0   142.62  108.0    1.4533
+IC  C23 C33 C43 C52    1.3670  120.0   142.62  108.0    1.4533
+IC  C25 C35 C45 C53    1.3670  120.0   142.62  108.0    1.4533
+IC  C27 C37 C47 C54    1.3670  120.0   142.62  108.0    1.4533
+IC  C29 C39 C49 C55    1.3670  120.0   142.62  108.0    1.4533
+IC  C31 C41 C51 C56    1.4533  108.0  -142.62  120.0    1.3670
+IC  C33 C43 C52 C57    1.4533  108.0  -142.62  120.0    1.3670
+IC  C35 C45 C53 C58    1.4533  108.0  -142.62  120.0    1.3670
+IC  C37 C47 C54 C59    1.4533  108.0  -142.62  120.0    1.3670
+IC  C39 C49 C55 C60    1.4533  108.0  -142.62  120.0    1.3670
+
+end
+
+
+! read the sequence for c60
+read sequ c60 1
+
+! generate the structure
+generate ball setup firs none last none 
+
+! construct coordinates
+ic seed 1 c1 1 c2 1 c3 
+ic build
+
+energy
+
+set tol = 1e-3
+set pass = 1
+set e = 1218.46825
+set grms = 55.84085
+
+echo enew  ?ener  ?grms
+calc ediff = abs ( ?ener - @e )
+calc grmsd = abs ( ?grms - @grms )
+
+set epass = 0
+set gpass = 0
+if @ediff le @tol set epass = 1
+if @grmsd le @tol set gpass = 1
+calc egpass = @epass * @gpass
+calc pass = @pass * @egpass
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+
+stop

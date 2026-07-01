@@ -1,0 +1,328 @@
+* Test for TMscore feature
+*
+stream datadir.def
+
+echo @0
+
+read rtf card name @0/top_all22_prot.inp
+read para card name @0/par_all22_prot.inp
+
+read sequ card
+* Residues for Chignolin (PDB: 1UAO)
+*
+10
+GLY TYR ASP PRO GLU THR GLY THR TRP GLY
+
+generate first GLYP last CTER PRO0 setup warn
+
+GOTO pdb1_sub
+LABEL pdb1_ret
+
+GOTO pdb2_sub
+LABEL pdb2_ret
+
+coor tmsc select type CA end
+
+echo ?tmscore
+echo ?tmd0
+echo ?tm10
+
+! reference impl gives tmscore=0.4371 for these PDBs
+if ?tmscore .ae. 0.4371 then
+   echo 'Passed'
+else
+   echo 'Failed'
+endif
+STOP
+
+LABEL pdb1_sub
+read coor pdb resi
+* Coordinates for Chignolin (1 of 2)
+*
+ATOM      1  N   GLY     1      -5.979  -1.258   3.732  1.00  0.00      PRO0
+ATOM      2  HT1 GLY     1      -6.791  -1.016   4.335  1.00  0.00      PRO0
+ATOM      3  HT2 GLY     1      -5.176  -1.471   4.358  1.00  0.00      PRO0
+ATOM      4  HT3 GLY     1      -6.248  -2.095   3.178  1.00  0.00      PRO0
+ATOM      5  CA  GLY     1      -5.646  -0.116   2.815  1.00  0.00      PRO0
+ATOM      6  HA1 GLY     1      -5.227   0.676   3.418  1.00  0.00      PRO0
+ATOM      7  HA2 GLY     1      -6.553   0.164   2.300  1.00  0.00      PRO0
+ATOM      8  C   GLY     1      -4.630  -0.474   1.767  1.00  0.00      PRO0
+ATOM      9  O   GLY     1      -3.951  -1.488   1.874  1.00  0.00      PRO0
+ATOM     10  N   TYR     2      -4.476   0.364   0.729  1.00  0.00      PRO0
+ATOM     11  HN  TYR     2      -5.064   1.165   0.649  1.00  0.00      PRO0
+ATOM     12  CA  TYR     2      -3.372   0.293  -0.210  1.00  0.00      PRO0
+ATOM     13  HA  TYR     2      -2.887  -0.670  -0.153  1.00  0.00      PRO0
+ATOM     14  CB  TYR     2      -3.878   0.550  -1.659  1.00  0.00      PRO0
+ATOM     15  HB1 TYR     2      -4.498   1.471  -1.684  1.00  0.00      PRO0
+ATOM     16  HB2 TYR     2      -4.512  -0.301  -1.988  1.00  0.00      PRO0
+ATOM     17  CG  TYR     2      -2.741   0.697  -2.633  1.00  0.00      PRO0
+ATOM     18  CD1 TYR     2      -2.000  -0.417  -3.061  1.00  0.00      PRO0
+ATOM     19  HD1 TYR     2      -2.278  -1.408  -2.733  1.00  0.00      PRO0
+ATOM     20  CE1 TYR     2      -0.883  -0.241  -3.892  1.00  0.00      PRO0
+ATOM     21  HE1 TYR     2      -0.313  -1.098  -4.221  1.00  0.00      PRO0
+ATOM     22  CZ  TYR     2      -0.502   1.049  -4.288  1.00  0.00      PRO0
+ATOM     23  OH  TYR     2       0.618   1.235  -5.122  1.00  0.00      PRO0
+ATOM     24  HH  TYR     2       0.855   2.165  -5.090  1.00  0.00      PRO0
+ATOM     25  CD2 TYR     2      -2.359   1.983  -3.048  1.00  0.00      PRO0
+ATOM     26  HD2 TYR     2      -2.911   2.844  -2.702  1.00  0.00      PRO0
+ATOM     27  CE2 TYR     2      -1.238   2.161  -3.866  1.00  0.00      PRO0
+ATOM     28  HE2 TYR     2      -0.947   3.157  -4.163  1.00  0.00      PRO0
+ATOM     29  C   TYR     2      -2.387   1.355   0.253  1.00  0.00      PRO0
+ATOM     30  O   TYR     2      -2.672   2.551   0.192  1.00  0.00      PRO0
+ATOM     31  N   ASP     3      -1.222   0.953   0.788  1.00  0.00      PRO0
+ATOM     32  HN  ASP     3      -0.907   0.009   0.734  1.00  0.00      PRO0
+ATOM     33  CA  ASP     3      -0.417   1.870   1.557  1.00  0.00      PRO0
+ATOM     34  HA  ASP     3      -1.085   2.626   1.942  1.00  0.00      PRO0
+ATOM     35  CB  ASP     3       0.181   1.130   2.775  1.00  0.00      PRO0
+ATOM     36  HB1 ASP     3       1.107   0.581   2.501  1.00  0.00      PRO0
+ATOM     37  HB2 ASP     3      -0.564   0.401   3.160  1.00  0.00      PRO0
+ATOM     38  CG  ASP     3       0.450   2.114   3.883  1.00  0.00      PRO0
+ATOM     39  OD1 ASP     3      -0.514   2.734   4.408  1.00  0.00      PRO0
+ATOM     40  OD2 ASP     3       1.633   2.292   4.262  1.00  0.00      PRO0
+ATOM     41  C   ASP     3       0.669   2.527   0.693  1.00  0.00      PRO0
+ATOM     42  O   ASP     3       1.458   1.817   0.064  1.00  0.00      PRO0
+ATOM     43  N   PRO     4       0.790   3.856   0.604  1.00  0.00      PRO0
+ATOM     44  CD  PRO     4      -0.064   4.823   1.301  1.00  0.00      PRO0
+ATOM     45  HD1 PRO     4      -1.093   4.758   0.887  1.00  0.00      PRO0
+ATOM     46  HD2 PRO     4      -0.082   4.635   2.396  1.00  0.00      PRO0
+ATOM     47  CA  PRO     4       1.673   4.508  -0.360  1.00  0.00      PRO0
+ATOM     48  HA  PRO     4       1.620   3.997  -1.310  1.00  0.00      PRO0
+ATOM     49  CB  PRO     4       1.139   5.951  -0.414  1.00  0.00      PRO0
+ATOM     50  HB1 PRO     4       0.323   5.996  -1.166  1.00  0.00      PRO0
+ATOM     51  HB2 PRO     4       1.918   6.694  -0.689  1.00  0.00      PRO0
+ATOM     52  CG  PRO     4       0.549   6.185   0.979  1.00  0.00      PRO0
+ATOM     53  HG1 PRO     4      -0.200   7.005   0.989  1.00  0.00      PRO0
+ATOM     54  HG2 PRO     4       1.362   6.413   1.700  1.00  0.00      PRO0
+ATOM     55  C   PRO     4       3.120   4.473   0.093  1.00  0.00      PRO0
+ATOM     56  O   PRO     4       3.994   4.893  -0.661  1.00  0.00      PRO0
+ATOM     57  N   GLU     5       3.401   4.010   1.325  1.00  0.00      PRO0
+ATOM     58  HN  GLU     5       2.655   3.703   1.911  1.00  0.00      PRO0
+ATOM     59  CA  GLU     5       4.740   3.857   1.863  1.00  0.00      PRO0
+ATOM     60  HA  GLU     5       5.251   4.803   1.761  1.00  0.00      PRO0
+ATOM     61  CB  GLU     5       4.600   3.490   3.362  1.00  0.00      PRO0
+ATOM     62  HB1 GLU     5       4.509   2.394   3.519  1.00  0.00      PRO0
+ATOM     63  HB2 GLU     5       3.631   3.919   3.696  1.00  0.00      PRO0
+ATOM     64  CG  GLU     5       5.656   4.120   4.299  1.00  0.00      PRO0
+ATOM     65  HG1 GLU     5       5.157   4.317   5.272  1.00  0.00      PRO0
+ATOM     66  HG2 GLU     5       5.996   5.096   3.894  1.00  0.00      PRO0
+ATOM     67  CD  GLU     5       6.879   3.280   4.626  1.00  0.00      PRO0
+ATOM     68  OE1 GLU     5       7.081   2.156   4.105  1.00  0.00      PRO0
+ATOM     69  OE2 GLU     5       7.624   3.763   5.525  1.00  0.00      PRO0
+ATOM     70  C   GLU     5       5.541   2.803   1.107  1.00  0.00      PRO0
+ATOM     71  O   GLU     5       6.679   3.021   0.682  1.00  0.00      PRO0
+ATOM     72  N   THR     6       4.898   1.649   0.854  1.00  0.00      PRO0
+ATOM     73  HN  THR     6       3.995   1.485   1.245  1.00  0.00      PRO0
+ATOM     74  CA  THR     6       5.457   0.498   0.164  1.00  0.00      PRO0
+ATOM     75  HA  THR     6       6.532   0.578   0.091  1.00  0.00      PRO0
+ATOM     76  CB  THR     6       5.071  -0.784   0.899  1.00  0.00      PRO0
+ATOM     77  HB  THR     6       5.312  -1.683   0.292  1.00  0.00      PRO0
+ATOM     78  OG1 THR     6       3.684  -0.777   1.231  1.00  0.00      PRO0
+ATOM     79  HG1 THR     6       3.383  -1.686   1.160  1.00  0.00      PRO0
+ATOM     80  CG2 THR     6       5.844  -0.862   2.220  1.00  0.00      PRO0
+ATOM     81 HG21 THR     6       6.938  -0.869   2.025  1.00  0.00      PRO0
+ATOM     82 HG22 THR     6       5.572  -1.786   2.773  1.00  0.00      PRO0
+ATOM     83 HG23 THR     6       5.613   0.018   2.859  1.00  0.00      PRO0
+ATOM     84  C   THR     6       4.899   0.341  -1.240  1.00  0.00      PRO0
+ATOM     85  O   THR     6       5.558  -0.192  -2.136  1.00  0.00      PRO0
+ATOM     86  N   GLY     7       3.654   0.800  -1.485  1.00  0.00      PRO0
+ATOM     87  HN  GLY     7       3.143   1.254  -0.760  1.00  0.00      PRO0
+ATOM     88  CA  GLY     7       2.900   0.488  -2.694  1.00  0.00      PRO0
+ATOM     89  HA1 GLY     7       3.541   0.573  -3.559  1.00  0.00      PRO0
+ATOM     90  HA2 GLY     7       2.055   1.160  -2.728  1.00  0.00      PRO0
+ATOM     91  C   GLY     7       2.344  -0.914  -2.679  1.00  0.00      PRO0
+ATOM     92  O   GLY     7       2.318  -1.597  -3.701  1.00  0.00      PRO0
+ATOM     93  N   THR     8       1.905  -1.392  -1.502  1.00  0.00      PRO0
+ATOM     94  HN  THR     8       1.934  -0.823  -0.684  1.00  0.00      PRO0
+ATOM     95  CA  THR     8       1.374  -2.741  -1.319  1.00  0.00      PRO0
+ATOM     96  HA  THR     8       1.061  -3.121  -2.281  1.00  0.00      PRO0
+ATOM     97  CB  THR     8       2.345  -3.765  -0.709  1.00  0.00      PRO0
+ATOM     98  HB  THR     8       1.830  -4.734  -0.531  1.00  0.00      PRO0
+ATOM     99  OG1 THR     8       2.928  -3.324   0.511  1.00  0.00      PRO0
+ATOM    100  HG1 THR     8       3.537  -4.018   0.771  1.00  0.00      PRO0
+ATOM    101  CG2 THR     8       3.495  -4.008  -1.691  1.00  0.00      PRO0
+ATOM    102 HG21 THR     8       3.100  -4.319  -2.682  1.00  0.00      PRO0
+ATOM    103 HG22 THR     8       4.171  -4.806  -1.316  1.00  0.00      PRO0
+ATOM    104 HG23 THR     8       4.089  -3.079  -1.828  1.00  0.00      PRO0
+ATOM    105  C   THR     8       0.111  -2.688  -0.485  1.00  0.00      PRO0
+ATOM    106  O   THR     8      -0.237  -1.676   0.120  1.00  0.00      PRO0
+ATOM    107  N   TRP     9      -0.663  -3.791  -0.478  1.00  0.00      PRO0
+ATOM    108  HN  TRP     9      -0.387  -4.617  -0.964  1.00  0.00      PRO0
+ATOM    109  CA  TRP     9      -1.925  -3.881   0.230  1.00  0.00      PRO0
+ATOM    110  HA  TRP     9      -2.382  -2.902   0.263  1.00  0.00      PRO0
+ATOM    111  CB  TRP     9      -2.900  -4.852  -0.487  1.00  0.00      PRO0
+ATOM    112  HB1 TRP     9      -3.837  -4.935   0.104  1.00  0.00      PRO0
+ATOM    113  HB2 TRP     9      -2.440  -5.861  -0.547  1.00  0.00      PRO0
+ATOM    114  CG  TRP     9      -3.258  -4.393  -1.894  1.00  0.00      PRO0
+ATOM    115  CD1 TRP     9      -2.557  -4.562  -3.058  1.00  0.00      PRO0
+ATOM    116  HD1 TRP     9      -1.632  -5.114  -3.143  1.00  0.00      PRO0
+ATOM    117  NE1 TRP     9      -3.190  -3.913  -4.097  1.00  0.00      PRO0
+ATOM    118  HE1 TRP     9      -2.776  -3.683  -4.951  1.00  0.00      PRO0
+ATOM    119  CE2 TRP     9      -4.327  -3.309  -3.608  1.00  0.00      PRO0
+ATOM    120  CD2 TRP     9      -4.406  -3.589  -2.225  1.00  0.00      PRO0
+ATOM    121  CE3 TRP     9      -5.456  -3.098  -1.450  1.00  0.00      PRO0
+ATOM    122  HE3 TRP     9      -5.530  -3.302  -0.392  1.00  0.00      PRO0
+ATOM    123  CZ3 TRP     9      -6.440  -2.327  -2.087  1.00  0.00      PRO0
+ATOM    124  HZ3 TRP     9      -7.267  -1.939  -1.511  1.00  0.00      PRO0
+ATOM    125  CZ2 TRP     9      -5.291  -2.532  -4.236  1.00  0.00      PRO0
+ATOM    126  HZ2 TRP     9      -5.239  -2.313  -5.292  1.00  0.00      PRO0
+ATOM    127  CH2 TRP     9      -6.356  -2.046  -3.460  1.00  0.00      PRO0
+ATOM    128  HH2 TRP     9      -7.124  -1.447  -3.928  1.00  0.00      PRO0
+ATOM    129  C   TRP     9      -1.688  -4.318   1.668  1.00  0.00      PRO0
+ATOM    130  O   TRP     9      -1.034  -5.325   1.933  1.00  0.00      PRO0
+ATOM    131  N   GLY    10      -2.198  -3.532   2.630  1.00  0.00      PRO0
+ATOM    132  HN  GLY    10      -2.784  -2.767   2.376  1.00  0.00      PRO0
+ATOM    133  CA  GLY    10      -1.908  -3.672   4.046  1.00  0.00      PRO0
+ATOM    134  HA1 GLY    10      -2.137  -2.722   4.506  1.00  0.00      PRO0
+ATOM    135  HA2 GLY    10      -0.872  -3.953   4.165  1.00  0.00      PRO0
+ATOM    136  C   GLY    10      -2.777  -4.717   4.751  1.00  0.00      PRO0
+ATOM    137  OT1 GLY    10      -2.190  -5.571   5.471  1.00  0.00      PRO0
+ATOM    138  OT2 GLY    10      -4.029  -4.679   4.633  1.00  0.00      PRO0
+TER     139      GLY    10
+END
+GOTO pdb1_ret
+
+LABEL pdb2_sub
+read coor comp pdb
+* Coordinates for Chignolin (2 of 2)
+*
+ATOM      1  N   GLY     1       0.625  -3.671  -5.113  1.00  0.00      PRO0
+ATOM      2  HT1 GLY     1       0.531  -3.890  -4.101  1.00  0.00      PRO0
+ATOM      3  HT2 GLY     1       1.593  -4.018  -5.273  1.00  0.00      PRO0
+ATOM      4  HT3 GLY     1      -0.100  -4.177  -5.661  1.00  0.00      PRO0
+ATOM      5  CA  GLY     1       0.501  -2.249  -5.308  1.00  0.00      PRO0
+ATOM      6  HA1 GLY     1      -0.236  -1.842  -4.633  1.00  0.00      PRO0
+ATOM      7  HA2 GLY     1       0.304  -2.036  -6.348  1.00  0.00      PRO0
+ATOM      8  C   GLY     1       1.671  -1.424  -5.019  1.00  0.00      PRO0
+ATOM      9  O   GLY     1       2.570  -1.906  -4.310  1.00  0.00      PRO0
+ATOM     10  N   TYR     2       1.680  -0.223  -5.511  1.00  0.00      PRO0
+ATOM     11  HN  TYR     2       1.003   0.096  -6.170  1.00  0.00      PRO0
+ATOM     12  CA  TYR     2       2.837   0.683  -5.258  1.00  0.00      PRO0
+ATOM     13  HA  TYR     2       3.336   0.293  -4.383  1.00  0.00      PRO0
+ATOM     14  CB  TYR     2       3.687   0.588  -6.560  1.00  0.00      PRO0
+ATOM     15  HB1 TYR     2       3.058   0.923  -7.412  1.00  0.00      PRO0
+ATOM     16  HB2 TYR     2       4.041  -0.422  -6.859  1.00  0.00      PRO0
+ATOM     17  CG  TYR     2       5.017   1.359  -6.477  1.00  0.00      PRO0
+ATOM     18  CD1 TYR     2       5.865   1.128  -5.398  1.00  0.00      PRO0
+ATOM     19  HD1 TYR     2       5.610   0.352  -4.692  1.00  0.00      PRO0
+ATOM     20  CE1 TYR     2       7.119   1.809  -5.277  1.00  0.00      PRO0
+ATOM     21  HE1 TYR     2       7.843   1.496  -4.540  1.00  0.00      PRO0
+ATOM     22  CZ  TYR     2       7.441   2.791  -6.269  1.00  0.00      PRO0
+ATOM     23  OH  TYR     2       8.709   3.304  -6.131  1.00  0.00      PRO0
+ATOM     24  HH  TYR     2       9.159   2.939  -5.365  1.00  0.00      PRO0
+ATOM     25  CD2 TYR     2       5.388   2.330  -7.481  1.00  0.00      PRO0
+ATOM     26  HD2 TYR     2       4.725   2.478  -8.320  1.00  0.00      PRO0
+ATOM     27  CE2 TYR     2       6.540   3.145  -7.231  1.00  0.00      PRO0
+ATOM     28  HE2 TYR     2       6.802   3.905  -7.952  1.00  0.00      PRO0
+ATOM     29  C   TYR     2       2.270   2.095  -5.139  1.00  0.00      PRO0
+ATOM     30  O   TYR     2       1.442   2.539  -5.988  1.00  0.00      PRO0
+ATOM     31  N   ASP     3       2.677   2.823  -4.063  1.00  0.00      PRO0
+ATOM     32  HN  ASP     3       3.214   2.380  -3.349  1.00  0.00      PRO0
+ATOM     33  CA  ASP     3       2.455   4.238  -3.883  1.00  0.00      PRO0
+ATOM     34  HA  ASP     3       1.592   4.395  -4.513  1.00  0.00      PRO0
+ATOM     35  CB  ASP     3       2.020   4.416  -2.413  1.00  0.00      PRO0
+ATOM     36  HB1 ASP     3       2.880   4.260  -1.727  1.00  0.00      PRO0
+ATOM     37  HB2 ASP     3       1.236   3.656  -2.206  1.00  0.00      PRO0
+ATOM     38  CG  ASP     3       1.462   5.790  -2.163  1.00  0.00      PRO0
+ATOM     39  OD1 ASP     3       0.232   5.872  -2.336  1.00  0.00      PRO0
+ATOM     40  OD2 ASP     3       2.109   6.810  -1.871  1.00  0.00      PRO0
+ATOM     41  C   ASP     3       3.678   5.089  -4.324  1.00  0.00      PRO0
+ATOM     42  O   ASP     3       4.699   5.121  -3.603  1.00  0.00      PRO0
+ATOM     43  N   PRO     4       3.776   5.689  -5.581  1.00  0.00      PRO0
+ATOM     44  CD  PRO     4       2.852   5.322  -6.613  1.00  0.00      PRO0
+ATOM     45  HD1 PRO     4       3.041   4.296  -6.994  1.00  0.00      PRO0
+ATOM     46  HD2 PRO     4       1.783   5.469  -6.350  1.00  0.00      PRO0
+ATOM     47  CA  PRO     4       4.946   6.363  -6.095  1.00  0.00      PRO0
+ATOM     48  HA  PRO     4       5.833   5.769  -5.930  1.00  0.00      PRO0
+ATOM     49  CB  PRO     4       4.562   6.480  -7.620  1.00  0.00      PRO0
+ATOM     50  HB1 PRO     4       5.033   5.653  -8.194  1.00  0.00      PRO0
+ATOM     51  HB2 PRO     4       4.618   7.488  -8.082  1.00  0.00      PRO0
+ATOM     52  CG  PRO     4       3.079   6.315  -7.681  1.00  0.00      PRO0
+ATOM     53  HG1 PRO     4       2.680   6.039  -8.681  1.00  0.00      PRO0
+ATOM     54  HG2 PRO     4       2.562   7.259  -7.408  1.00  0.00      PRO0
+ATOM     55  C   PRO     4       5.326   7.736  -5.520  1.00  0.00      PRO0
+ATOM     56  O   PRO     4       6.538   8.095  -5.592  1.00  0.00      PRO0
+ATOM     57  N   GLU     5       4.456   8.455  -4.898  1.00  0.00      PRO0
+ATOM     58  HN  GLU     5       3.479   8.261  -4.937  1.00  0.00      PRO0
+ATOM     59  CA  GLU     5       4.934   9.578  -4.134  1.00  0.00      PRO0
+ATOM     60  HA  GLU     5       5.513  10.268  -4.730  1.00  0.00      PRO0
+ATOM     61  CB  GLU     5       3.772  10.501  -3.631  1.00  0.00      PRO0
+ATOM     62  HB1 GLU     5       3.285  10.012  -2.760  1.00  0.00      PRO0
+ATOM     63  HB2 GLU     5       2.982  10.705  -4.385  1.00  0.00      PRO0
+ATOM     64  CG  GLU     5       4.296  11.848  -3.130  1.00  0.00      PRO0
+ATOM     65  HG1 GLU     5       4.989  12.319  -3.859  1.00  0.00      PRO0
+ATOM     66  HG2 GLU     5       4.929  11.708  -2.228  1.00  0.00      PRO0
+ATOM     67  CD  GLU     5       3.301  12.865  -2.760  1.00  0.00      PRO0
+ATOM     68  OE1 GLU     5       2.488  13.354  -3.616  1.00  0.00      PRO0
+ATOM     69  OE2 GLU     5       3.319  13.202  -1.530  1.00  0.00      PRO0
+ATOM     70  C   GLU     5       5.843   9.153  -2.913  1.00  0.00      PRO0
+ATOM     71  O   GLU     5       6.953   9.648  -2.769  1.00  0.00      PRO0
+ATOM     72  N   THR     6       5.263   8.217  -2.103  1.00  0.00      PRO0
+ATOM     73  HN  THR     6       4.324   8.007  -2.364  1.00  0.00      PRO0
+ATOM     74  CA  THR     6       6.016   7.542  -1.043  1.00  0.00      PRO0
+ATOM     75  HA  THR     6       6.515   8.311  -0.472  1.00  0.00      PRO0
+ATOM     76  CB  THR     6       5.158   6.696  -0.094  1.00  0.00      PRO0
+ATOM     77  HB  THR     6       5.863   6.230   0.627  1.00  0.00      PRO0
+ATOM     78  OG1 THR     6       4.349   5.752  -0.735  1.00  0.00      PRO0
+ATOM     79  HG1 THR     6       3.613   6.247  -1.104  1.00  0.00      PRO0
+ATOM     80  CG2 THR     6       4.183   7.564   0.652  1.00  0.00      PRO0
+ATOM     81 HG21 THR     6       3.554   8.189  -0.017  1.00  0.00      PRO0
+ATOM     82 HG22 THR     6       4.837   8.268   1.209  1.00  0.00      PRO0
+ATOM     83 HG23 THR     6       3.518   7.067   1.392  1.00  0.00      PRO0
+ATOM     84  C   THR     6       7.197   6.654  -1.503  1.00  0.00      PRO0
+ATOM     85  O   THR     6       8.243   6.836  -0.857  1.00  0.00      PRO0
+ATOM     86  N   GLY     7       7.142   5.741  -2.527  1.00  0.00      PRO0
+ATOM     87  HN  GLY     7       6.251   5.673  -2.970  1.00  0.00      PRO0
+ATOM     88  CA  GLY     7       8.062   4.680  -2.732  1.00  0.00      PRO0
+ATOM     89  HA1 GLY     7       9.055   4.938  -2.398  1.00  0.00      PRO0
+ATOM     90  HA2 GLY     7       8.195   4.588  -3.800  1.00  0.00      PRO0
+ATOM     91  C   GLY     7       7.638   3.348  -2.162  1.00  0.00      PRO0
+ATOM     92  O   GLY     7       8.531   2.473  -2.024  1.00  0.00      PRO0
+ATOM     93  N   THR     8       6.351   3.155  -1.614  1.00  0.00      PRO0
+ATOM     94  HN  THR     8       5.659   3.835  -1.844  1.00  0.00      PRO0
+ATOM     95  CA  THR     8       6.027   1.978  -0.750  1.00  0.00      PRO0
+ATOM     96  HA  THR     8       6.932   1.561  -0.335  1.00  0.00      PRO0
+ATOM     97  CB  THR     8       5.182   2.265   0.477  1.00  0.00      PRO0
+ATOM     98  HB  THR     8       4.831   1.323   0.951  1.00  0.00      PRO0
+ATOM     99  OG1 THR     8       3.999   3.044   0.105  1.00  0.00      PRO0
+ATOM    100  HG1 THR     8       4.480   3.844  -0.122  1.00  0.00      PRO0
+ATOM    101  CG2 THR     8       5.923   3.087   1.569  1.00  0.00      PRO0
+ATOM    102 HG21 THR     8       6.863   2.580   1.873  1.00  0.00      PRO0
+ATOM    103 HG22 THR     8       5.220   3.125   2.429  1.00  0.00      PRO0
+ATOM    104 HG23 THR     8       6.115   4.121   1.209  1.00  0.00      PRO0
+ATOM    105  C   THR     8       5.265   0.903  -1.542  1.00  0.00      PRO0
+ATOM    106  O   THR     8       4.353   1.116  -2.368  1.00  0.00      PRO0
+ATOM    107  N   TRP     9       5.726  -0.290  -1.325  1.00  0.00      PRO0
+ATOM    108  HN  TRP     9       6.508  -0.446  -0.727  1.00  0.00      PRO0
+ATOM    109  CA  TRP     9       5.063  -1.443  -1.996  1.00  0.00      PRO0
+ATOM    110  HA  TRP     9       4.674  -1.242  -2.984  1.00  0.00      PRO0
+ATOM    111  CB  TRP     9       6.183  -2.550  -2.172  1.00  0.00      PRO0
+ATOM    112  HB1 TRP     9       5.764  -3.517  -2.523  1.00  0.00      PRO0
+ATOM    113  HB2 TRP     9       6.669  -2.752  -1.194  1.00  0.00      PRO0
+ATOM    114  CG  TRP     9       7.231  -2.067  -3.159  1.00  0.00      PRO0
+ATOM    115  CD1 TRP     9       8.466  -1.639  -2.970  1.00  0.00      PRO0
+ATOM    116  HD1 TRP     9       8.864  -1.489  -1.977  1.00  0.00      PRO0
+ATOM    117  NE1 TRP     9       9.115  -1.330  -4.200  1.00  0.00      PRO0
+ATOM    118  HE1 TRP     9       9.959  -0.886  -4.410  1.00  0.00      PRO0
+ATOM    119  CE2 TRP     9       8.153  -1.571  -5.207  1.00  0.00      PRO0
+ATOM    120  CD2 TRP     9       6.952  -2.040  -4.598  1.00  0.00      PRO0
+ATOM    121  CE3 TRP     9       5.877  -2.533  -5.339  1.00  0.00      PRO0
+ATOM    122  HE3 TRP     9       5.008  -2.983  -4.881  1.00  0.00      PRO0
+ATOM    123  CZ3 TRP     9       5.979  -2.417  -6.771  1.00  0.00      PRO0
+ATOM    124  HZ3 TRP     9       5.125  -2.810  -7.303  1.00  0.00      PRO0
+ATOM    125  CZ2 TRP     9       8.128  -1.368  -6.583  1.00  0.00      PRO0
+ATOM    126  HZ2 TRP     9       8.848  -0.731  -7.075  1.00  0.00      PRO0
+ATOM    127  CH2 TRP     9       7.096  -1.873  -7.372  1.00  0.00      PRO0
+ATOM    128  HH2 TRP     9       7.172  -1.797  -8.446  1.00  0.00      PRO0
+ATOM    129  C   TRP     9       4.055  -1.983  -1.140  1.00  0.00      PRO0
+ATOM    130  O   TRP     9       4.224  -2.110   0.090  1.00  0.00      PRO0
+ATOM    131  N   GLY    10       2.848  -2.308  -1.666  1.00  0.00      PRO0
+ATOM    132  HN  GLY    10       2.701  -2.086  -2.627  1.00  0.00      PRO0
+ATOM    133  CA  GLY    10       1.709  -2.711  -0.943  1.00  0.00      PRO0
+ATOM    134  HA1 GLY    10       1.410  -1.936  -0.253  1.00  0.00      PRO0
+ATOM    135  HA2 GLY    10       1.860  -3.610  -0.363  1.00  0.00      PRO0
+ATOM    136  C   GLY    10       0.488  -3.032  -1.829  1.00  0.00      PRO0
+ATOM    137  OT1 GLY    10      -0.315  -2.114  -1.990  1.00  0.00      PRO0
+ATOM    138  OT2 GLY    10       0.236  -4.172  -2.334  1.00  0.00      PRO0
+TER     139      GLY    10
+END
+GOTO pdb2_ret

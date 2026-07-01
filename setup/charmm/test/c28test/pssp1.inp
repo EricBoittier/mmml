@@ -1,0 +1,458 @@
+* Testcase I for the PERT/PSSP code (combination of soft core
+* potentials and PERT)
+* |
+* Build a box of water, mutate one water to a dummy molecule and 
+* calc. energy, forces, dU/dL for the supported nonbonded options.
+* |
+* Does not test Ewald (see pssp2.inp)
+* |
+* NOT a full free energy calculation
+*
+
+! Author: Stefan Boresch (stefan@mdy.univie.ac.at)
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ echo pssp1 TESTCASE RESULT: SKIP
+ stop
+endif
+
+stream datadir.def
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Preliminaries: Set up the system and PERT                           !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+read rtf card
+* tips3p water topology file
+*
+   20    1
+mass     4 ht     1.00800  ! tips3p water hydrogen
+mass    58 ot    15.999940 ! tips3p water oxygen
+mass    94 dh     1.00800  ! dummy water hydrogen
+mass    98 do    15.999940 ! dummy water oxygen
+
+resi tip3    .000   ! tips3p water model
+group
+atom oh2  ot   -0.834 
+atom h1   ht    0.417
+atom h2   ht    0.417
+bond oh2 h1  oh2 h2  h1 h2 ! the last bond is needed for shake
+thet h1   oh2  h2 
+!                            note: no donors or acceptors for tips3p
+patc  firs none last none
+end
+
+read param card
+* tips3p water parameter file
+*
+bond
+ht  ot     450.0   0.9572 ! from tips3p geometry
+ht  ht       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+dh  do     450.0   0.9572 ! from tips3p geometry
+dh  dh       0.0   1.5139 ! from tips3p geometry (for shake w/param)
+thetas
+ht  ot  ht  55.0 104.52   ! from tips3p geometry
+dh  do  dh  55.0 104.52   ! from tips3p geometry
+!
+nonbonded   atom cdiel switch vatom vdistance vswitch -
+     cutnb 8.0  ctofnb 7.5  ctonnb 6.5  eps 1.0  e14fac 1.0  wmin 1.5
+!
+ht       0.0440    1.0       0.8000  
+ot       0.8400    6.0       1.6000  
+
+nbfix
+ot ot -0.1521 3.5364
+ht ht -0.04598 0.4490
+ot ht -0.08363 1.9927
+
+end
+
+! read in 216 tip3 solvent molecules and their
+! equilibrated coordinates.
+
+read sequ tip3 216
+gene solv setu noangle
+
+open read unit 10 card name @0tip216.crd
+read coor unit 10 card
+close unit 10
+coor orient norot
+
+! Set up PERT
+
+define wat1 sele resi 1 show end
+pert sele wat1 end
+scalar char set 0. sele wat1 end
+scalar type set 94 sele wat1 .and. hydrogen end
+scalar type set 98 sele wat1 .and. .not. hydrogen end
+
+! define energy values to check
+goto testdata
+label fromtestdata
+set ind 1
+
+shake bonh para
+energy
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+! setup crystal
+
+! set parameter 9 to 18.856 A, the length of one side
+! of the box of water.  this value will be used as a scale
+! factor for all image transformations.
+
+set 9 18.856
+
+set rc 7.5 ! cutoff
+set ci 6.5 ! inner switching cutoff
+set ctl 9. ! list-cutoff
+set xo 14. ! cutoff for crystal
+
+! Some Ewald parameters
+
+set bxl @9 ! box-length
+calc kp = 5./(2.*@ci) ! Ewald Kappa
+calc kmx = @kp * @bxl ! kmax
+calc ksmx = 2.*@kmx**2 ! ksqm
+
+! open and read the image transformation file for creating
+! 26 image objects around the primary structure
+
+crystal define cubic @9 @9 @9 90.0 90.0 90.0
+crystal build cutoff @xo noperations 0
+image byres xcen 0.0 ycen 0.0 zcen 0.0 sele all end
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Let's get to work                                                   !
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! CASE I: ATOM SHIF VATO VSWIT
+
+! Ia) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      shif lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      shif lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! Ib) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      shif lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      shif lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! Ic) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      shif lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE II: ATOM FSWI VATO VSWIT
+
+! IIa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswif lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 atom vatom vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE III: GROU SWIT VGRO VSWIT
+
+! IIIa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      swit lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      swit lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIIb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      swit lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      switf lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IIIc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      swit lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+
+!----------------------------------------------------------------------
+!----------------------------------------------------------------------
+
+! CASE IV: GROU FSWI VGRO VSWIT
+
+! IVa) lambda = 0. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 0.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 0.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IVb) lambda = 1. PSSP must be equal to NOPSsp
+
+! Standard (NOPS)
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 1.0 nops
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end ! check force on an arb. residue
+
+! Soft core (PSSP)
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswif lstart 0. lstop 1. -
+        lambda 1.0  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+!----------------------------------------------------------------------
+
+! IVc) lambda = 0.5
+
+energy inbfrq 1 imgfrq 1 ihbfrq 0 group vgroup vswitch -
+      cutnb @ctl cutim @ctl ctofnb @rc ctonnb @ci eps 1.0 -
+      fswi lstart 0. lstop 1. -
+        lambda 0.5  pssp
+
+@qcheck ?ENER @e@@ind 0.01 pssp1_@ind
+incr ind
+
+coor forc comp
+print coor comp sele resi 2 end
+
+stop
+
+label testdata
+SET e1 -1507.03390
+SET e2 -2374.86372
+SET e3 -2374.86372
+SET e4 -2354.38690
+SET e5 -2354.38690
+SET e6 -2360.83778
+SET e7 -2176.12869
+SET e8 -2176.12869
+SET e9 -2159.15843
+SET e10 -2159.15843
+SET e11 -2163.79904
+SET e12 -2150.20081
+SET e13 -2150.20081
+SET e14 -2130.42249
+SET e15 -2130.42249
+SET e16 -2136.34640
+SET e17 -2150.20081
+SET e18 -2150.20081
+SET e19 -2130.42249
+SET e20 -2130.42249
+SET e21 -2136.34640
+goto fromtestdata

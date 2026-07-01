@@ -1,0 +1,199 @@
+* MMFF_CUTOFF Jay L. Banks, 02-Dec-1993
+* Test MMFF cutoff schemes on small molecule 
+* 1. No cutoffs (CUTNB etc. very large)
+* All others CUTNB 9. CTOFNB 7. CTONNB 3.
+*          VSWITCH                          VSHIFT
+* 2a. ATOM CDIE SWITCH VATOM VSWITCH          2b.
+* 3a. ATOM CDIE FSWITCH VATOM VSWITCH         3b.
+* 4a. ATOM CDIE SHIFT VATOM VSWITCH           4b.
+* 5a. ATOM CDIE FSHIFT VATOM VSWITCH          5b.
+* 6a. ATOM RDIE SWITCH VATOM VSWITCH          6b.
+* 7a. ATOM RDIE FSWITCH VATOM VSWITCH         7b.
+* 8a. ATOM RDIE SHIFT VATOM VSWITCH           8b.
+* For each, calculate energy and test first and second derivatives
+* (analytic vs. numerical) for molecule am07a.mrk.
+* UPDATED by Josh Buckner 18 April 2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+stream datadir.def
+
+stream @0mmff_setup.str
+read merck name @0am07a.mrk
+generate
+
+update CUTNB 998. CTOFNB 888. CTONNB 777. e14fac 0.75 ihbfrq 0 -
+       switch vswitch cdie
+
+set tol = 1e-3
+set pass = 1
+set failed =
+
+echo 1. No cutoffs (CUTNB etc. very large)
+set case = nocutoffs
+set eref = -53.80229
+set gref = 7.05191
+set settings =
+goto tester
+label nocutoffs
+
+update CUTNB 9. CTOFNB 7. CTONNB 3.
+
+echo 2a. ATOM CDIE SWITCH VATOM VSWITCH
+set case = 2a
+set eref = -57.45798
+set gref = 7.84098
+set settings = cdie switch vswitch
+goto tester
+label 2a
+
+echo 2b. VSHIFT
+set case = 2b
+set eref = -57.44664
+set gref = 7.84007
+set settings = cdie switch vshift 
+goto tester
+label 2b
+
+echo 3a. ATOM CDIE FSWITCH VATOM VSWITCH
+set case = 3a
+set eref = -23.96237
+set gref = 6.94652
+set settings = cdie fswitch vswitch
+goto tester
+label 3a
+
+echo 3b. VSHIFT
+set case = 3b
+set eref = -23.95102
+set gref = 6.94519
+set settings = cdie fswitch vshift
+goto tester
+label 3b
+
+echo 4a. ATOM CDIE SHIFT VATOM VSWITCH
+set case = 4a
+set eref = -38.91926
+set gref = 7.43507
+set settings = cdie shift vswitch
+goto tester
+label 4a
+
+echo 4b. VSHIFT
+set case = 4b
+set eref = -38.90792
+set gref = 7.43352
+set settings = cdie shift vshift
+goto tester
+label 4b
+
+echo 5a. ATOM CDIE FSHIFT VATOM VSWITCH
+set case = 5a
+set eref = -17.86451
+set gref = 6.68965
+set settings = cdie fshift vswitch
+goto tester
+label 5a
+
+echo 5b. VSHIFT
+set case = 5b
+set eref = -17.85317
+set gref = 6.68859
+set settings = cdie fshift vshift
+goto tester
+label 5b
+
+echo 6a. ATOM RDIE SWITCH VATOM VSWITCH 
+set case = 6a
+set eref = -17.86436
+set gref = 6.69319
+set settings = rdie switch vswitch
+goto tester
+label 6a
+
+echo 6b. VSHIFT
+set case = 6b
+set eref = -17.85302
+set gref = 6.69239
+set settings = rdie switch vshift
+goto tester
+label 6b
+
+echo 7a. ATOM RDIE FSWITCH VATOM VSWITCH
+set case = 7a
+set eref = -11.09472
+set gref = 6.47388
+set settings = rdie fswitch vswitch
+goto tester
+label 7a
+
+echo 7b. VSHIFT
+set case = 7b
+set eref = -11.08337
+set gref = 6.47301
+set settings = rdie fswitch vshift
+goto tester
+label 7b
+
+echo 8a. ATOM RDIE SHIFT VATOM VSWITCH
+set case = 8a
+set eref = -11.27060
+set gref = 6.47241
+set settings = rdie shift vswitch
+goto tester
+label 8a
+
+echo 8b. VSHIFT
+set case = 8b
+set eref = -11.25926
+set gref = 6.47160
+set settings = rdie shift vshift
+goto tester
+label 8b
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+
+echo testcase result: @status
+if @pass eq 0 then
+      echo FAILING TESTS @failed
+endif
+
+stop
+
+label tester
+
+energy @settings
+
+echo @case new energy ?ener  grms ?grms
+calc ediff = abs ( ?ener - @eref )
+calc gdiff = abs ( ?grms - @gref )
+
+set epass = 0
+set gpass = 0
+
+if @ediff le @tol set epass = 1
+if @gdiff le @tol set gpass = 1
+
+calc egpass = @epass * @gpass
+if egpass le 0 set failed = @failed @case
+
+calc pass = @pass * @egpass
+
+test first STEP 0.00001 tol 0.
+vibran
+diag
+write seco card unit 6 finite step 0.000001 tol 0.000 ! 1
+end
+
+goto @case
+
+stop

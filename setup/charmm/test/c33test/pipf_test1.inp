@@ -1,0 +1,74 @@
+* CHARMM c33a1 testcase pipf_test1.inp : Jingzhi Pu, 06/2005
+* Test PIPF with POL2 water dimer
+*
+
+stream datadir.def
+
+if ?pipf .ne. 1 then
+ echo "cpipftest/pipf_test1> PIPF test NOT performed."
+ stop
+endif
+
+read rtf card
+* POL2 WATER TOPOLOGY FILE
+*
+   20    1
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+
+RESI POL2        0.00 ! POL2 WATER MODEL, Dang, L. X. JCP 1992, 97, 2659
+GROUP                 ! Generate noangle nodihedral
+ATOM OH2  OT    -0.730
+ATOM H1   HT     0.365
+ATOM H2   HT     0.365
+BOND OH2  H1   OH2  H2   H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+ANGLE  H1 OH2 H2
+ACCE OH2
+END
+
+bomlev -2
+read param card
+* POL2 WATER PARAMETER FILE
+*
+BOND
+OT   HT    450.0   1.0000 ! FROM POL2 GEOM
+HT   HT      0.0   1.6333 ! FROM POL2 GEOMETRY (FOR SHAKE/W PARAM)
+THETAS
+HT  OT  HT  55.0 109.50   ! FROM POL2 GEOMETRY
+!
+NONBONDED   ATOM CDIEL SHIFT VATOM VDISTANCE VSWITCH -
+     CUTNB 14.0  CTOFNB 12.0  CTONNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 0.5
+!
+HT       0.170000  -0.000000     0.000000
+OT       0.528000  -0.160000     1.793694
+
+END
+
+! Read in 125 POL2 solvent molecules and their
+! equilibrated coordinates.
+
+READ SEQU POL2 2
+GENE SOLV SETU NOANGLE
+
+READ COOR CARD
+*   H2O (WITH EXPLICIT HYDROGENS) COORDINATES
+*
+ 6
+    1    1 POL2 OH2    0.00000   0.00000   1.00000
+    2    1 POL2 H1     0.00000   0.00000   0.00000
+    3    1 POL2 H2     0.94264   0.00000   1.33381
+    4    2 POL2 OH2    0.00000   0.00000  -1.81000
+    5    2 POL2 H1    -0.23475  -0.81664  -2.33725
+    6    2 POL2 H2    -0.23475   0.81664  -2.33725
+
+shake bonh param sele all end
+
+! define dipole convergence and max iteration
+pipf conv 0.0001 iter 20
+
+mini abnr nstep 500 tolgrd 0.001 nprint 20
+
+quick 2 4
+quick 1 4
+
+STOP

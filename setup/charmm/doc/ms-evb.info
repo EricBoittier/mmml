@@ -1,0 +1,187 @@
+CHARMM Element doc/ms-evb.info $Revision: 1.1.1.1 $
+
+File: ms-evb,  Node: Top,  Up: (doc/commands.info),  Next: Syntax
+
+                   Multi-State Empirical Valence Bond
+              
+                      David Glowacki, Robert Arbon
+
+The multi-state empirical valence bond (MS-EVB) module of CHARMM
+offers an efficient method for representing reactive potential energy
+surfaces, e.g., such as those which occur in enzymes, where a system
+moves from a reactant topology to a product topology. For a given set
+of Cartesian coordinates at a particular timestep, the CHARMM EVB
+implementation works by evaluating potential energies and forces in
+parallel for multiple topological replicas of the same set of atomic
+Cartesian coordinates. The potential energy corresponding to each
+topology is used to populate the diagonal elements of a matrix H. The
+off-diagonal coupling elements of H are calculated as functions which
+depend on a user-specified set of collective variables which undergo
+significant change as the system switches between topologies (usually
+bond distances). Having constructed H, the system potential energy,
+taken to be some linear combination of the potential energies of each
+topological replica, is calculated as the lowest eigenvalue of this
+matrix.
+
+This CHARMM EVB implementation allows one to construct a potential
+energy surface which smoothly connects different topologies - e.g.,
+from a reactant to a product and vice-versa. Forces on this potential
+energy surface are obtained using the Hellmann-Feynman relationship,
+giving continuous gradients, and good energy conservation. The CHARMM
+EVB implementation utilises MPI to parallelize the energy and force
+calculations of each topological replica at any given timestep,
+achieving near-linear scaling in the number of topological replicas.
+It allows for an arbitrary number of topological replicas limited only
+by the number of MPI threads allowed by the system architecture. It
+allows the user to select from a range of functional forms in the
+coupling elements, including constants, 1D and 2D Gaussian
+functions. Coupling elements of this form can be used to construct
+reactive potential energy surfaces, solute spectra, and vibrational
+frequencies comparable in quality to high-level electronic structure
+theory or QM/MM approaches.
+
+References:
+1) Glowacki DR, Orr-Ewing AJ and Harvey, JN, J Chem Phys, 143, 044120 (2015), DOI:10.1063/1.4926996
+2) Glowacki DR, Orr-Ewing AJ and Harvey, JN, J Chem Phys, 134, 214508 (2011), DOI:10.1063/1.3595259
+
+------------------------------------------------------------------
+NOTES ON BUILDING THE ENSEMBLE CODE:
+
+For gnu compilers using the new CMake build system:
+  $> ./configure -a ENSEMBLE
+  $> make -C build/cmake install
+
+------------------------------------------------------------------
+
+* Menu:
+
+* Syntax::                  Syntax of the ENSEMBLE EVB command
+* General Description::     General info on I/O and other practical matters
+* Test Cases::              Description of c41 tests
+
+
+File: ms-evb,  Node: Syntax,  Up: Top,  Previous: Top,  Next: General Description
+
+Initialize ENSEMBLE:
+--------------------
+
+ENSEMBLE NENSEM integer
+
+General commands:
+-----------------
+
+ENSEMBLE SYNC
+
+ENSEMBLE SEED [ROOT integer]
+
+Force-field averaging (used for "multi-Go", for example)
+--------------------------------------------------------
+
+ENSEMBLE EXPAvg BETA real [ UNIT real ] -
+         OFFSet real_1 real_2 ... real_nensem
+
+
+File: Ensemble,  Node: General Description,  Previous: Syntax,  Up: Top,  Next: Replica Exchange
+
+The following section describes the keywords of the ENSEMBLE command.
+
+General Description
+===================
+
+Ensemble enabled executables run exactly the same as normal parallel
+CHARMM using the normal mpirun/mpiexec or whatever the parallel run
+command is. A charmm script will be processed in the normal parallel
+way until the ensemble initializing command is given. Once ensemble is
+initialized for N replicas, there are N replicas of charmm running
+where the total processors are split evenly among the replicas. (***
+The total number of processors must be evenly divisable by the number
+of replicas. ***)
+
+Once running in ensemble mode, each replica runs independently at
+first, each reading the default input stream. Each replica produces
+its default output to an output file charmm.out.xxx, where xxx is the
+replica number (excepting the 0th replica which still goes to stdout)
+from 1 to N-1.
+
+Each replica can open and close files independently. Take care to not
+open the same file for writing (such as dcd or restart files) on
+different replicas, see example below. 
+
+Each replica can stream a new input file, allowing independent
+simulations to run out of the a large number of processors in the same
+batch run.
+
+Initializing ENSEMBLE
+-----------------------
+
+The command
+
+   ensemble nensem 2
+
+will break the processors into 2 replicas of the current state of the
+charmm run, giving 1/2 of the processors to each replica. The replicas
+are numbered 0,1. The output for rep 0 still goes to stdout, while
+the other go to charmm.out.001. The
+replicas keep reading the input file (though independently) unless
+directed to stream another input file. The identity of the replica can
+be determined from ?whoiam and the total number of replicas can be
+determined from ?nensem.
+
+        set numrep ?nensem
+        set myrep ?whoiam
+
+Each node reads the input file itself and each node maintains a
+completely independent copy of all data.  This allows dynamics to be
+run much as usual, with all nodes happily unaware of the others, apart
+from the communication entailed in replica-exchange or force-field
+averaging. A few points about I/O.  
+
+------------------------------------------------------------------
+trajectories (coord/velocities/..)
+restart files
+energy files from dynamics runs
+any other dynamics output which will differ between replicas
+coordinate writing
+experimental data files for HQBM
+
+Files opened for reading by all reps will be opened by each rep in
+read-only mode, each rep opening the file and reading it
+independently. This may cause io delays for huge numbers of reps.
+
+Some Initialization notes
+-------------------------
+For most ensemble averaged restraints, starting all replicas with the same
+coordinates and velocities this is a waste of time (and is one pathological
+case where an N-replica simulation will behave exactly like a single replica).
+Thusly, one should assign either or both different random seeds (see below) and
+different starting coordinates to different replicas. Bear in mind that not all
+integration schemes in CHARMM actually use a random seed from the dyna command
+(e.g. NOSE does not, but LEAP VERLET does).
+
+e.g. for assigning different seeds
+if ?whoiam .eq. 0 set seed 23832
+if ?whoiam .eq. 1 set seed 9375283
+etc...
+Then use "dyna start ... iseed @seed ..."
+
+Syntax
+------
+
+ensemble evb
+        SHFT 0 @E1
+        SHFT 1 @E2
+        COUP 0 1 CONS @CONS
+    COUP 0 1 GAUS TWOD @A @R01 @C1 SELE R1 END @THETA @R02 @C2 SELE R2 END
+envbi
+
+
+File: ms-evb,  Node: Test Cases,  Previous: Syntax,  Up: Top,  Next: Top
+
+TESTCASES:
+=============================================
+
+c41test:
+--------
+
+evb_dynamics.inp
+evb_scan.inp

@@ -1,0 +1,92 @@
+* nptdyn.inp : Scott Feller, NIH, 7/15/95 
+* Test extended system constant pressure and temperature
+* dynamics with water box.
+*
+
+stream datadir.def
+
+read rtf card
+* TIPS3P WATER TOPOLOGY FILE
+*
+   20    1
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+
+RESI TIP3    .000   ! TIPS3P WATER MODEL
+GROUP
+ATOM OH2  OT   -0.834 
+ATOM H1   HT    0.417
+ATOM H2   HT    0.417
+BOND OH2 H1  OH2 H2  H1 H2 ! THE LAST BOND IS NEEDED FOR SHAKE
+THET H1   OH2  H2 
+!                            NOTE: NO DONORS OR ACCEPTORS FOR TIPS3P
+PATC  FIRS NONE LAST NONE
+END
+
+bomlev -2
+read param card
+* TIPS3P WATER PARAMETER FILE
+*
+BOND
+HT  OT     450.0   0.9572 ! from TIPS3P geometry
+HT  HT       0.0   1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+THETAS
+HT  OT  HT  55.0 104.52   ! FROM TIPS3P GEOMETRY
+OT  HT  HT  0.0  104.52   ! FROM TIPS3P GEOMETRY
+!
+NONBONDED   ATOM CDIEL SHIFT VATOM VDISTANCE VSWITCH -
+     CUTNB 14.0  CTOFNB 12.0  CTONNB 10.0  EPS 1.0  E14FAC 1.0  WMIN 0.5
+!
+HT       0.0       -0.046     0.2245
+OT       0.0       -0.1521    1.7682
+
+END
+
+bomlev -1
+
+! Read in 125 TIP3 solvent molecules and their
+! equilibrated coordinates.
+
+READ SEQU TIP3 125
+GENE SOLV SETU NOANGLE
+
+OPEN READ UNIT 10 CARD NAME @0tip125.crd
+READ COOR UNIT 10 CARD
+CLOSE UNIT 10
+
+! Set parameter 9 to 15.5516 A, the length of one side
+! of the box of water.  This value will be used as a scale
+! factor for all image transformations.
+
+SET 6 15.5516
+
+! Open and read the image transformation file for creating
+! 26 image objects around the primary structure
+
+CRYSTAL DEFINE CUBIC @6 @6 @6 90.0 90.0 90.0
+CRYSTAL BUILD CUTOFF 14.0 NOPERATIONS 0
+
+IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+SHAKE BONH PARAM SELE ALL END
+
+mini sd nstep 1
+
+open unit 11 write card name @9dyn.ptn
+dynamics cpt leap start time 0.001 nstep 40 iseed 314159 -
+        firstt 300.0 finalt 300.0 tstruc 300.0 -
+        ihbfrq 0 iprfrq 20 nprint 5 -
+        iasors 1 iasvel 1 ieqfrq 0 -
+        inbfrq 10 imgfrq 10 cutnb 14.0 cutim 14.0 - 
+        pconstant pmass 100.0 pref 1.0 pgamma 10.0 iupten 11 iptfrq 5 -
+        hoover reft 300.0 tmass 250.0 tbath 300.0 
+
+@testcheck ?ener -1267.63757 0.0001  nptdyn_chk 
+
+longline
+open unit 9 read card name @9dyn.ptn
+get nnpt unit 9
+echo @NNPT
+!@testcheck @NNPT 8 0 iupten_output
+
+STOP

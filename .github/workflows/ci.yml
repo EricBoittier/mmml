@@ -67,7 +67,7 @@ jobs:
             setup/charmm/lib
             setup/api/.ci-charmm-patch-stamp
             ~/.cache/mmml-charmm-build
-          key: charmm-lib-${{ hashFiles('setup/charmm.tar.xz', 'setup/api/api_func.F90', 'setup/api/api_psf.F90', 'scripts/rebuild_charmm_mlpot.sh') }}
+          key: charmm-lib-${{ hashFiles('setup/charmm.tar.xz', 'setup/api/api_func.F90', 'setup/api/api_psf.F90', 'setup/api/api_eval.F90', 'setup/api/api_minimize.F90', 'setup/api/api_dynamics.F90', 'scripts/rebuild_charmm_mlpot.sh') }}
       - name: Build libcharmm.so
         if: steps.charmm-cache.outputs.cache-hit != 'true'
         run: bash scripts/ci/setup_charmm_lib.sh

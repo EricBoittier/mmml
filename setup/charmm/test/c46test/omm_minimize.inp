@@ -1,0 +1,114 @@
+* Test case for CHARMM/OpenMM interface minimizer
+* Created by Charles Brooks
+* 01/29/2021
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed. OPENMM must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+! read the topology and parameter files
+read rtf card name @0/top_all36_prot.rtf
+read param card name @0/par_all36_prot.prm
+
+read sequ ala 2
+generate dala first ace last ct3 setup
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+scalar x store 1
+scalar y store 2
+scalar z store 3
+coor copy comp
+nbonds cutnb 12 ctofnb 10 ctonnb 8 switch vswitch
+!**** TEST1
+prnlev 0
+mini abnr nstep 5000 tolgrd 1e-3
+prnlev 5
+energy
+set ec = ?ener
+coor swap
+mini omm nstep 0 tolgr 1e-3
+energy
+set eomm = ?ener
+calc diff = sqrt(( @ec - @eomm ) * ( @ec - @eomm ))
+set passed1 = 1
+coor rms
+if ?rms gt 2e-2 set passed1 = 0
+if diff gt 2e-3 set passed1 = 0
+if @passed1 eq 1 then
+   echo testcase omm_minimize TEST1: pass
+else
+   echo testcase omm_minimize TEST1: fail  @diff ?rms
+endif
+
+
+!**** TEST2
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+coor copy comp
+cons fix select bynu 1:10 end
+prnlev 0
+mini abnr nstep 5000 tolgrd 1e-3
+prnlev 5
+energy
+set ec = ?ener
+coor swap
+mini omm nstep 0 tolgr 1e-3
+energy
+set eomm = ?ener
+calc diff = sqrt(( @ec - @eomm ) * ( @ec - @eomm ))
+set passed2 = 1
+coor orie rms
+if ?rms gt 2e-2 set passed2 = 0
+if diff gt 2e-3 set passed2 = 0
+if @passed2 eq 1 then
+   echo testcase omm_minimize TEST2: pass
+else
+   echo testcase omm_minimize TEST2: fail  @diff ?rms
+endif
+
+!**** TEST3
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+coor copy compare
+cons fix select none end
+prnlev 0
+mini abnr nstep 5000 tolgrd 1e-3
+prnlev 5
+energy
+set ec = ?ener
+coor swap
+mini omm nstep 0 tolgr 1e-3
+energy
+set eomm = ?ener
+calc diff = sqrt(( @ec - @eomm ) * ( @ec - @eomm ))
+set passed3 = 1
+coor rms
+if ?rms gt 2e-2 set passed3 = 0
+if diff gt 2e-3 set passed3 = 0
+if @passed3 eq 1 then
+   echo testcase omm_minimize TEST2: pass
+else
+   echo testcase omm_minimize TEST2: fail  @diff ?rms
+endif
+
+calc passed = @passed1 * @passed2 * @passed3
+
+if @passed eq 1 then
+   echo testcase omm_minimize: pass
+else
+   echo testcase omm_minimize: fail
+endif
+stop

@@ -1,0 +1,231 @@
+* Test Ewald 1-4 electrostatic scaling using
+* Glycerol in water (taken from a Polygen guide example).
+*
+!
+! This test input will generate the coordinates and psf for a glycerol
+! molecule immersed in a box of water. Periodic images are used. 
+! Both the glycerol solute and the TIP3P water contain non-bond
+! (1-2 and 1-3) exclusions.
+! The solute possesses 1-4 non-bond interactions.
+! To test that the ewald routines are handling these terms correctly,
+! e14fac will be set to 0.0 and 0.4. The calculations will be
+! done with Ewald and with normal electrostatics using the SWITch and
+! VSWItch cutoff options (SHIFt would modify the potential for the
+! non-Ewald calculation for the 1-4 interaction). This will be
+! done for the Slow routines as well as the vector/parallel and fast scalar
+! functions.
+!
+!  Stephen H. Fleischman 11/91
+! 
+
+stream datadir.def
+set testname ew14test
+format (F20.7)
+
+READ RTF CARD
+* Residue topology file for glycerol and tip3p waters
+* ...
+*
+   20    1
+MASS     1 H      1.00800 ! Hydrogen bonding hydrogen (neutral group)
+MASS     3 HA     1.00800 ! Aliphatic or aromatic hydrogen
+MASS     4 HT     1.00800 ! TIPS3P water model hydrogen
+MASS    10 CT    12.01100 ! Aliphatic carbon (tetrahedral)
+MASS    45 OT    15.99940 ! Hydroxyl oxygen (tetrahedral)/Ionizable acid oxygen
+MASS    46 OW    15.99940 ! TIP3P water model oxygen
+
+AUTOGEN ANGLES
+DEFAULT FIRST NONE LAST NONE    
+
+RESIDUE GLYC  0.0    
+
+GROUP                                 !  H11    O1 -- H1
+       ATOM   C1   CT     0.05        !     \  /
+       ATOM   H11  HA     0.10        !      C1
+       ATOM   H12  HA     0.10        !     /  \ 
+       ATOM   O1   OT    -0.65        !  H12    \
+       ATOM   H1   H      0.40        !         |         
+GROUP                                 !         |  
+       ATOM   C2   CT     0.15        !         |
+       ATOM   H21  HA     0.10        !  H21 -- C2 -- O2 -- H2     
+       ATOM   O2   OT    -0.65        !         |
+       ATOM   H2   H      0.40        !         |
+GROUP                                 !         |
+       ATOM   C3   CT     0.05        !  H31    /     
+       ATOM   H31  HA     0.10        !     \  /
+       ATOM   H32  HA     0.10        !      C3
+       ATOM   O3   OT    -0.65        !     /  \ 
+       ATOM   H3   H      0.40        !  H32    O3 -- H3
+
+BOND   C1   H11        C1   H12       C1   O1       O1   H1
+BOND   C1   C2
+BOND   C2   H21        C2   O2        O2   H2
+BOND   C2   C3 
+BOND   C3   H31        C3   H32       C3   O3       O3   H3       
+
+DIHE   H1   O1   C1   C2
+DIHE   O1   C1   C2   C3
+DIHE   H2   O2   C2   C1
+DIHE   O3   C3   C2   C1
+DIHE   H3   O3   C3   C2
+
+IC     H1   O1   C1   C2       0.0000   0.00   180.00   0.00   0.0000
+IC     O1   C1   C2   C3       0.0000   0.00   180.00   0.00   0.0000
+IC     H2   O2   C2   C1       0.0000   0.00   180.00   0.00   0.0000
+IC     O3   C3   C2   C1       0.0000   0.00   180.00   0.00   0.0000
+IC     H3   O3   C3   C2       0.0000   0.00   180.00   0.00   0.0000
+IC     O1   C2  *C1   H11      0.0000   0.00   120.00   0.00   0.0000
+IC     O1   C2  *C1   H12      0.0000   0.00   240.00   0.00   0.0000
+IC     C3   C1  *C2   O2       0.0000   0.00   120.00   0.00   0.0000
+IC     C3   C1  *C2   H21      0.0000   0.00   240.00   0.00   0.0000
+IC     O3   C2  *C3   H31      0.0000   0.00   120.00   0.00   0.0000
+IC     O3   C2  *C3   H32      0.0000   0.00   240.00   0.00   0.0000
+
+RESI TIP3    .000   ! TIPS3P WATER MODEL
+GROUP
+ATOM OH2  OW     -0.834
+ATOM H1   HT      0.417
+ATOM H2   HT      0.417
+BOND OH2  H1           OH2  H2        H1   H2
+ANGL  H1 OH2 H2
+
+END
+
+READ PARA CARD
+* Parameter file  glycerol and water.
+* 
+BOND
+CT   CT     268.0       1.529 
+CT   OT     320.0       1.417 
+H    H        0.0       1.6329931
+H    OT     505.0       0.962 
+H    OW     525.0       0.96
+HA   CT     340.0       1.09
+HT   HT       0.0       1.5139
+HT   OT     450.0       0.9572
+HT   OW     450.0       0.9572
+
+THETAS
+CT   CT   CT      58.35    112.70
+CT   CT   OT      47.0     107.00 
+H    OT   CT      58.0     106.0 
+HA   CT   CT      37.5     110.70
+HA   CT   HA      33.0     107.80
+HA   CT   OT      25.0     106.80 
+HT   HT   OT       0.0     127.74
+HT   HT   OW       0.0     127.74
+HT   OT   HT      55.0     104.5
+HT   OW   HT      55.0     104.5
+OT   CT   OT      50.0     109.47
+
+PHI
+CT   CT   CT   OT       0.88 1    0.0 
+X    CT   CT   X        0.15 3    0.0 
+X    CT   OT   X        0.53 3    0.0
+
+NBONDED  NBXMOD 5  ATOM CDIEL SWITCH VATOM VDISTANCE VSWITCH -
+  CUTNB 15.0 CTONNB 11.0 CTOFNB 14.0 EPS 1.0 E14FAC 0.5 WMIN 1.5
+H        0.044   -0.0498       0.800 
+HA       0.1     -0.0420       1.330 
+HT       0.044   -0.0498       0.920 
+CT       1.65    -0.0903       1.800    1.65  -0.1   1.75 
+OT       0.84    -0.1521       1.800 
+OW       0.84    -0.1521       1.768 
+
+NBFIX
+OW   OW     -0.152073  3.5365
+HT   HT     -0.04598   0.4490
+HT   OW     -0.08363   1.9927
+
+HBOND AEXP 4 REXP 6 HAEX 4 AAEX 2  NOACCEPTORS  HBNOEXCLUSIONS  ALL  -
+  CUTHB 0.5 CTOFHB 5.0 CTONHB 4.0  CUTHA 90.0  CTOFHA 90.0  CTONHA 90.0
+O*   O*      -4.25 2.75
+
+END
+
+READ SEQU CARD
+* Glycerol
+*
+1
+GLYC
+GENE SOLU SETU
+
+READ COOR 13 CARD
+* INITIAL COORDINATES FOR GLYCEROL GENERATED
+*
+   14
+    1    1 GLYC C1     1.43000   0.00000   0.00000 GLYC 1      0.00000
+    2    1 GLYC H11    1.77923  -0.52379  -0.88982 GLYC 1      0.00000
+    3    1 GLYC H12    1.77923  -0.52379   0.88982 GLYC 1      0.00000
+    4    1 GLYC O1     0.00000   0.00000   0.00000 GLYC 1      0.00000
+    5    1 GLYC H1    -0.32045  -0.90494   0.00000 GLYC 1      0.00000
+    6    1 GLYC C2     1.98189   1.43771   0.00000 GLYC 1      0.00000
+    7    1 GLYC H21    1.63266   1.96150   0.88982 GLYC 1      0.00000
+    8    1 GLYC O2     1.54236   2.15536  -1.15616 GLYC 1      0.00000
+    9    1 GLYC H2     1.89801   3.04678  -1.13440 GLYC 1      0.00000
+   10    1 GLYC C3     3.52189   1.43771   0.00000 GLYC 1      0.00000
+   11    1 GLYC H31    3.88574   0.92397   0.88982 GLYC 1      0.00000
+   12    1 GLYC H32    3.88574   0.92397  -0.88982 GLYC 1      0.00000
+   13    1 GLYC O3     4.03435   2.77273   0.00000 GLYC 1      0.00000
+   14    1 GLYC H3     4.99402   2.74760   0.00000 GLYC 1      0.00000
+
+! Center the solute about the origin.
+COOR ORIE
+
+! Read in 125 TIP3 solvent molecules and their
+! equilibrated coordinates.
+
+READ SEQU TIP3 125
+GENE SOLV SETU NOANGLE
+
+OPEN READ UNIT 14 CARD NAME @0tip125.crd
+READ COOR UNIT 14 CARD APPE
+
+! Delete any waters which overlap the solute.
+
+DELE ATOM SELE ( .BYRES. ( SEGID SOLV .AND. TYPE OH2 .AND. -
+     ( ( .NOT. SEGID SOLV .AND. .NOT. HYDROGEN ) -
+     .AROUND. 2.60 ) ) ) END
+
+SET 6 15.5516
+! Open and read the image transformation file for creating
+! 26 image objects around the primary structure
+
+CRYSTAL DEFINE CUBIC @6 @6 @6 90.0 90.0 90.0
+CRYSTAL BUILD CUTOFF 14.0 NOPERATIONS 0
+IMAGE BYGROUPS XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+! Setup is done now do tests of 1-4 scaling
+
+! store the coordinates
+SCALAR X STORE 1
+SCALAR Y STORE 2
+SCALAR Z STORE 3
+
+!!!!!!!!!!!!!!!! TEST SLOW ROUTINES !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FAST OFF
+set case slow
+set refval1  -1165.27648
+set refval2  -1125.10009
+set refval3  -839.25199
+set refval4  -799.07560
+set refval5  -1147.60727
+set refval6  -1107.43088
+set refval7  -821.58278
+set refval8  -781.40639
+set refval9  -1370.49870
+set refval10 -1330.32232
+set refval11 -781.40639
+set refval12 -1530.56225
+set refval13 -1490.38586
+set refval14 -821.58278
+set refval15 -781.40639   
+
+STREAm @0ew14test.str
+
+!!!!!!!!!!!!!!!! TEST FAST scalar PARALLEL ROUTINES !!!!!!!!!!!!!!!!!!
+FAST ON
+set case fast
+STREAm @0ew14test.str
+
+STOP

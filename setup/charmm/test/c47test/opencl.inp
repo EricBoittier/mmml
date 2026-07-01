@@ -1,0 +1,21 @@
+* Test case for choosing opencl devices
+* Written by Josh Buckner 2021-04-29
+*
+
+if ?opencl .ne. 1 then
+   echo "Test NOT performed. OpenCL must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+ocl device show
+
+ocl device select 1
+ocl device show current
+
+ocl device select 2
+ocl device show current

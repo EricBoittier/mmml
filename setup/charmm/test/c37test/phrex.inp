@@ -1,0 +1,128 @@
+* code test of constant pH with replica exchange
+*
+
+if ?repdstr .ne. 1 then
+   echo "REPDSTR code not compiled. Test NOT performed."
+   stop
+endif
+if ?numnode .ne. 4 then
+   echo "This test case must be run on exactly 4 processors."
+   stop
+endif
+
+stream datadir.def
+
+read rtf card name @0/top_all22_prot_na.inp
+read param card name @0/par_all22_prot_na.inp
+read sequ lys 1
+gene lys setup first ace last ct3
+
+ic para
+ic seed 1 N 1 CA 1 C
+ic build
+hbuild
+
+bomlev -2
+
+! set lysine charges to match the
+! protonated charges in ph_param.prm
+scalar charge set  0.24 sele type ce  end
+scalar charge set  0.08 sele type he1 end
+scalar charge set  0.08 sele type he2 end
+scalar charge set -0.24 sele type nz  end
+scalar charge set  0.28 sele type hz1 end
+scalar charge set  0.28 sele type hz2 end
+scalar charge set  0.28 sele type hz3 end
+
+print coor sele resid 1 end
+scalar charge show sele resid 1 end
+
+bomlev 0
+
+energy
+
+open unit 20 read card name @0/ph_param.prm
+read cph card unit 20
+close unit 20
+
+! It is necessary to set up the replica exchange BEFORE picking
+! the constant pH 
+repd phrex nrep 4 unit 21 freq 20 -
+  phval 6.0 -
+  phval 9.0 -
+  phval 12.0 -
+  phval 15.0
+
+open unit 70 write card name @9phrex.out
+outu 70
+
+open unit 21 write card name @9phrex.exch
+
+shake bonh param
+update atom cdie eps 1.0 cutnb 21.0 ctofnb 18.0 ctonnb 16.0 switch vswitch
+
+GBMV BETA -12 EPSILON 80 GEOM -
+     BUFR 0.2 Mem 20 CUTA 20 -
+     ALFRQ 1 P1 0.45 P2 1.25 P6 8.0 P3 0.65 -
+     WTYP 1 NPHI 5 CORR 1 SA 0.020 SB 0.0 SHIFT -0.1 SLOPE 0.9 -
+     FAST 1 SGBFRQ 4 SXD 0.3
+
+if ?myrep .eq. 0 set myph = 6.0
+if ?myrep .eq. 1 set myph = 9.0
+if ?myrep .eq. 2 set myph = 12.0
+if ?myrep .eq. 3 set myph = 15.0
+
+cnsph add sele resid 1 end
+scalar fbeta set 0.5
+open unit 30 write card name @9states.dat
+
+dyna leap langevin start nstep 100 timestep 0.001 -
+  nprint 100 iprfrq 2000 ntrfrq 2000 -
+  firstt 300. finalt 300. tstruct 300. tbath 300. -
+  phcons phexcf 5 phmctr 1 phval @myph phunum 30 -
+  iseed 78765 101492 99018 66004 -
+  iasors 1 iasvel 1 iscvel 0 echeck 1000
+
+scalar charge show sele resid 1 end
+
+! Test whether the case succeeded or failed. It is easiest
+! to do this when we know exactly how many processors there
+! were.
+
+set passprob = 0
+set passexup = 0
+set passexdn = 0
+set passener = 0
+
+if ?myrep .eq. 0 set refprob = 1.0
+if ?myrep .eq. 0 set referup = 1.0
+if ?myrep .eq. 0 set referdn = 0.0
+if ?myrep .eq. 0 set refener = -55.0584
+if ?myrep .eq. 1 set refprob = 0.4006
+if ?myrep .eq. 1 set referup = 0.0
+if ?myrep .eq. 1 set referdn = 1.0
+if ?myrep .eq. 1 set refener = -53.3043
+if ?myrep .eq. 2 set refprob = 0.4006
+if ?myrep .eq. 2 set referup = 1.0
+if ?myrep .eq. 2 set referdn = 0.0
+if ?myrep .eq. 2 set refener = -24.9744
+if ?myrep .eq. 3 set refprob = 1.0
+if ?myrep .eq. 3 set referup = 0.0
+if ?myrep .eq. 3 set referdn = 1.0
+if ?myrep .eq. 3 set refener = -26.1302
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?exrup .ae. @referup set passexup = 1
+if ?exrdn .ae. @referdn set passexdn = 1
+if ?ener .ae. @refener set passener = 1
+
+calc result = @passprob + @passexup + @passexdn + @passener
+
+repd reset
+
+outu 6
+prnlev 5 node 0
+
+@testcheck @result 4 0 PHREX
+
+stop

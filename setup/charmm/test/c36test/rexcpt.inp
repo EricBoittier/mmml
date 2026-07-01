@@ -1,0 +1,195 @@
+* replica exchange MD with explicit solvent and PME
+* in parallel/parallel mode, ie each replica is using 2 CPUs
+* it needs the following external files:
+*      shared by other testcases: wat1000.crd,top...,par...
+*      special for this test: NONE
+* .........................................................
+* by Milan Hodoscek, 03/2010
+*
+
+if ?repdstr .ne. 1 then
+ echo "rexcpt.inp> Test NOT performed."
+ echo "See repdstr.doc for proper compile procedure."
+ stop
+endif
+
+stre datadir.def
+
+set np ?numnode
+if np .lt. 4 then goto erro
+
+format (i0)
+set xx @np
+divi xx by 2
+mult xx by 2
+if xx .ne. @np then goto err
+
+set nreps @np
+
+open read card unit 1 name @0top_all22_prot.inp
+read rtf card unit 1
+
+open read card unit 2 name @0par_all22_prot.inp
+read parameter card unit 2
+
+read sequ card
+* tuftsin
+    4
+thr lys pro arg
+
+generate tuft setup
+
+ic param
+ic seed tuft 1 n tuft 1 ca tuft 1 c
+ic build
+
+mini abnr nstep 150 nprint 50 -
+ cutnb 14.0 ctofnb 12.0 ctonnb 10.0 atom fshift cdie vdw vshift 
+
+coor orien
+
+read sequ tip3 1000
+
+generate wat setup noang nodihe
+
+rena resn wat sele resn tip3 end
+
+open read card unit 2 name @0wat1000.crd
+read coor card unit 2 append
+
+define tuft sele segi tuft end
+define same sele .byres ( tuft .around 1.6 ) end
+delete atom sele segi wat .and. same end
+
+set size 25
+
+crystal define rhdo @size @size @size 60 90 60
+crystal build cutof 10.0 noper 0
+
+image byres sele segi wat end
+
+coor copy comp
+
+energy cutim 6.0 cutnb 5.0 ctofnb 4.0 shift
+
+coor diff
+
+define moved sele .byres ( ( prop x .ne. 0.0 ) .and. ( prop y .ne. 0.0 ) -
+             .and. ( prop z .ne. 0.0 ) ) end
+
+image fixed sele all end
+
+delete atom sele moved end
+
+coor swap
+
+image byres sele segi wat end
+image byseg sele segi tuft end
+
+mini abnr nstep 50 nprint 50 -
+ cutnb 14.0 ctofnb 12.0 ctonnb 10.0 atom fshift cdie vdw vshift 
+
+open write card unit 2 name @9tuft.cor
+write coor card unit 2
+
+set st 300
+set dt 10
+
+! Initialize the Replica Exchange.... 
+repd nrep @nreps EXCHange FREQuency 25 STEMp @st DTEMp @dt unit 18
+
+open write form unit 17 name @9rexcpt.out
+outu 17
+
+open unit 18 write card name @9rexcpt.exch
+
+mult dt by ?myrep
+incr st by @dt
+
+dyna cpt start nstep 100 timestep 0.001 -
+    iprfrq 100 ihtfrq 0 ieqfrq 0 echeck 0 -
+    iuncrd -1 iunrea -1 iunwri -1 iunvel -1 kunit -1 -
+    nprint 10 nsavc 0 nsavv 0 ihbfrq 0 -
+    iseed 54321 43219 99123 12345 -
+    iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+    twindh 100.0 twindl -100.0 ntrfrq 1000 -
+    pcons pint pmass 500.0 pref 1.0 pgamma 25.0 -
+    hoover reft @st tmass 2000.0 tbath @st -
+    firstt @st finalt @st teminc 0.0 tstruc @st -
+    inbfrq -1 atom vatom cutnb 12.0 ctofnb 10. cdie eps 1. -
+    ctonnb 9.99 vshift cutim 13.5 imgfrq -1 wmin .5 -
+    ewald pmewald kappa 0.32 order 6 fftx 32 ffty 32 fftz 32 -
+    spline bycb
+
+! Test whether the case passed or failed. We're
+! only GUARANTEED to be running four replicas, so
+! we're only going to check them
+
+! NOTE -- this is such a big system thgat minor
+! differences can lead to big energy fluctuations;
+! as a result, we're just going to check exchange
+! probabilities, which are relatively invariant 
+! to these.
+
+format
+
+if ?myrep .gt. 3 goto endrepd
+
+set passprob = 0
+set passexup = 0
+set passexdn = 0
+
+if ?myrep .eq. 0 set refprob = 0.496177
+if ?myrep .eq. 0 set referup = 0.5
+if ?myrep .eq. 0 set referdn = 0.0
+if ?myrep .eq. 1 set refprob = 0.473218
+if ?myrep .eq. 1 set referup = 0.0
+if ?myrep .eq. 1 set referdn = 0.5
+if ?myrep .eq. 2 set refprob = 0.479325
+if ?myrep .eq. 2 set referup = 0.5
+if ?myrep .eq. 2 set referdn = 0.0
+if ?myrep .eq. 3 set refprob = 0.508392
+if ?myrep .eq. 3 set referup = 0.0
+if ?myrep .eq. 3 set referdn = 0.5
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?exrup  .ae. @referup set passexup = 1
+if ?exrdn  .ae. @referdn set passexdn = 1
+
+calc passed = @passprob + @passexup + @passexdn
+label endrepd
+repd sync
+
+outu 6
+prnlev 5 node 0
+
+repd ioreset
+
+if ?myrep .eq. 0 @testcheck ?reprob @refprob    0.0001 REXCPT_PROB
+if ?myrep .eq. 0 @testcheck ?exrup  @referup    0.0001 REXCPT_RATEUP
+if ?myrep .eq. 0 @testcheck ?exrdn  @referdn    0.0001 REXCPT_RATEDN
+if ?myrep .eq. 0 @testcheck ?ener   -3169.19164 0.0001 REXCPT_EPOT0
+if ?myrep .eq. 0 @testcheck ?tote   -1984.84773 0.0001 REXCPT_TOTE0
+
+
+repd reset
+stop
+
+label err
+
+echo Please use even number of CPUs
+echo REXCPT TESTCASE RESULT: SKIP
+
+stop
+
+label erro
+
+echo Please use 4 or more processors (Even number)
+echo REXCPT TESTCASE RESULT: SKIP
+
+stop
+
+label fail
+
+echo TESTCASE RESULT: FAILED
+stop

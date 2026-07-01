@@ -1,0 +1,133 @@
+* pathint.inp
+* author: Benoit Roux
+* Classical trajectories for acetylacetone close to the transition state
+* external files: top_all22_prot.inp and par_all22_prot.inp
+*
+
+!  ---MFC uses old integrator/not parallel
+!if ?NUMNODE .gt. 1 then
+! echo "Test NOT performed."
+! stop
+!endif
+
+if ?PATHINT .ne. 1 then
+ echo "Test NOT performed."
+ echo pathint testcase result: skip
+ stop
+endif
+
+if ?REPLICA .ne. 1 then
+ echo "Test NOT performed."
+ echo pathint testcase result: skip
+ stop
+endif
+
+stream datadir.def
+
+! Temperature
+set temp 300.
+! Number of beads
+set nbeads 12
+
+open read card unit 11 name @0top_all22_prot.inp
+read rtf card unit 11
+close unit 11
+
+open read card  unit 11 name @0par_all22_prot.inp
+read para card unit 11
+close unit 11
+
+! Segid for the EVB molecule
+set segid A
+
+read sequence card
+* alanine
+*
+ 1
+ ALA
+generate @segid first ACE last CT3 setup
+
+ic seed 1 N 1 CA 1 C
+ic param
+ic build
+print coor
+
+!coor set xdir 0.0
+!scalar mass set 1.0
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Path Integral setup
+!   NBEADS  number of beads
+!   SEGID   segid of the quantum molecule
+!   TEMP    temperature
+
+! Define replicas and delete original
+
+replica @segid nreplica  @nbeads  select segid @segid show end  setup
+delete atom select segid @segid show end
+
+! Set up the correct energy/force scaling
+set scale = 1.0
+divide scale by @nbeads
+BLOCK 2
+   CALL 2 SELEct ( segid @{segid}* ) show end
+   COEF 1 2 @scale
+   COEF 2 2 @scale
+END
+
+! Add springs
+
+pint temp @temp beads @nbeads select segid @{segid}1 end -
+     select none end
+
+print coor
+
+!calc force 0.5/@nbeads
+!cons harm force @force 
+
+update -
+  inbfrq     -1  -
+  ctonnb   990.0 ctofnb   995.0 cutnb   999.0  wmin     0.5  -
+  elec         switch        atom        cdie         eps      1.0  -
+  vdw          vswitch       vatom
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+scalar fbeta set 5.0 select all end
+scalar mass divid @nbeads
+
+open write unformatted unit 50 name @9feynman.trj
+
+DYNAMICS    strt  -
+            nstep   2000  timestp   0.001    iprfrq   1000  -
+	    nprint   500    -
+ -
+	    iasvel       1  firstt   @temp  finalt    @temp    -
+!	    langevin        tbath    @temp  rbuf        0.0    -
+ -
+	    inbfrq  2000  ihbfrq       0  ilbfrq        0  -
+ -
+	    iunread     -1  -
+	    iunwrite    -1  -
+	    iuncrd      50  nsavcrd    100  -
+	    iunvelo     -1  nsavvelo     0  -
+	    kunit       -1
+
+open read unformatted unit 50 name @9feynman.trj
+
+CORREL  MAXTime  5000  MAXSeries 50
+
+set i 1
+label do_1
+enter P@i ATOM XYZ    A@i  1 O
+incr i by 1
+if i le @nbeads goto do_1
+
+TRAJ nunit  1   firstu 50   skip  100
+
+END
+
+@testcheck ?ener 165.51 -0.5 pathint
+
+stop

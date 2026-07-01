@@ -1,0 +1,211 @@
+* CHARMM c36a1 Testcase test/c36test/epmf.inp
+* Author: Michael Feig
+* Date  : July 24, 2008
+* Test EPMF
+*
+
+! Uses data/epmf1d.dat and data/epmf2d.dat
+
+if ?EPMF  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read card name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+OPEN UNIT 11 READ FORM NAME @0epmf1d.dat
+OPEN UNIT 17 READ FORM NAME @0epmf2d.dat
+
+
+read sequ cards
+*  short peptide
+*
+   5
+ SER TRP THR TRP GLU
+
+generate PRO0 first nter last cter setup warn
+
+
+read coor card 
+*
+   91
+    1    1 SER  N     -3.15022   8.62312  -0.11170 PRO0 1      1.85000
+    2    1 SER  HT1   -2.11110   8.70469  -0.16596 PRO0 1      0.22450
+    3    1 SER  HT2   -3.53736   9.59797  -0.05155 PRO0 1      0.22450
+    4    1 SER  HT3   -3.46779   8.21392  -1.01647 PRO0 1      0.22450
+    5    1 SER  CA    -3.57054   7.78287   1.04202 PRO0 1      2.27500
+    6    1 SER  HA    -3.18634   8.24890   1.93673 PRO0 1      1.32000
+    7    1 SER  CB    -5.12051   7.69607   1.10528 PRO0 1      2.17500
+    8    1 SER  HB1   -5.49710   7.05845   0.27363 PRO0 1      1.32000
+    9    1 SER  HB2   -5.55836   8.70772   0.96202 PRO0 1      1.32000
+   10    1 SER  OG    -5.58316   7.17621   2.35481 PRO0 1      1.77000
+   11    1 SER  HG1   -6.54987   7.05276   2.27542 PRO0 1      0.22450
+   12    1 SER  C     -3.01377   6.37994   0.95454 PRO0 1      2.00000
+   13    1 SER  O     -3.05382   5.75007  -0.10489 PRO0 1      1.70000
+   14    2 TRP  N     -2.47377   5.83021   2.06247 PRO0 2      1.85000
+   15    2 TRP  HN    -2.44245   6.33742   2.92882 PRO0 2      0.22450
+   16    2 TRP  CA    -2.00693   4.45410   2.11210 PRO0 2      2.27500
+   17    2 TRP  HA    -1.35583   4.29402   1.26271 PRO0 2      1.32000
+   18    2 TRP  CB    -1.20672   4.16090   3.40520 PRO0 2      2.17500
+   19    2 TRP  HB1   -1.00827   3.06847   3.48524 PRO0 2      1.32000
+   20    2 TRP  HB2   -1.81973   4.45442   4.28555 PRO0 2      1.32000
+   21    2 TRP  CG     0.13868   4.85952   3.47596 PRO0 2      1.99240
+   22    2 TRP  CD1    0.52796   5.91947   4.24822 PRO0 2      1.99240
+   23    2 TRP  HD1   -0.11696   6.43557   4.94575 PRO0 2      1.35820
+   24    2 TRP  NE1    1.85375   6.22169   4.01127 PRO0 2      1.85000
+   25    2 TRP  HE1    2.37531   6.94265   4.43839 PRO0 2      0.22450
+   26    2 TRP  CE2    2.33328   5.36115   3.04917 PRO0 2      1.80000
+   27    2 TRP  CD2    1.28504   4.48520   2.69016 PRO0 2      1.80000
+   28    2 TRP  CE3    1.47166   3.49237   1.72853 PRO0 2      1.99240
+   29    2 TRP  HE3    0.68186   2.81589   1.43735 PRO0 2      1.35820
+   30    2 TRP  CZ3    2.72215   3.42059   1.09991 PRO0 2      1.99240
+   31    2 TRP  HZ3    2.89513   2.66476   0.34641 PRO0 2      1.35820
+   32    2 TRP  CZ2    3.58191   5.26242   2.44891 PRO0 2      1.99240
+   33    2 TRP  HZ2    4.38698   5.93153   2.70597 PRO0 2      1.35820
+   34    2 TRP  CH2    3.76920   4.27772   1.46620 PRO0 2      1.99240
+   35    2 TRP  HH2    4.72199   4.19130   0.96119 PRO0 2      1.35820
+   36    2 TRP  C     -3.15191   3.45636   1.98964 PRO0 2      2.00000
+   37    2 TRP  O     -4.04587   3.38586   2.83371 PRO0 2      1.70000
+   38    3 THR  N     -3.14929   2.66764   0.90041 PRO0 3      1.85000
+   39    3 THR  HN    -2.38717   2.70676   0.24751 PRO0 3      0.22450
+   40    3 THR  CA    -4.25108   1.77991   0.55031 PRO0 3      2.27500
+   41    3 THR  HA    -4.99310   1.77684   1.33612 PRO0 3      1.32000
+   42    3 THR  CB    -4.93828   2.16465  -0.75300 PRO0 3      2.27500
+   43    3 THR  HB    -4.23732   2.05125  -1.61309 PRO0 3      1.32000
+   44    3 THR  OG1   -5.36768   3.51839  -0.69235 PRO0 3      1.77000
+   45    3 THR  HG1   -4.57393   4.03834  -0.49836 PRO0 3      0.22450
+   46    3 THR  CG2   -6.19862   1.31617  -0.99164 PRO0 3      2.06000
+   47    3 THR  HG21  -6.90126   1.40447  -0.13585 PRO0 3      1.32000
+   48    3 THR  HG22  -5.94559   0.24442  -1.13140 PRO0 3      1.32000
+   49    3 THR  HG23  -6.71621   1.66053  -1.91174 PRO0 3      1.32000
+   50    3 THR  C     -3.72660   0.37601   0.40905 PRO0 3      2.00000
+   51    3 THR  O     -2.77363   0.11744  -0.32608 PRO0 3      1.70000
+   52    4 TRP  N     -4.32938  -0.57875   1.14011 PRO0 4      1.85000
+   53    4 TRP  HN    -5.07257  -0.33454   1.76488 PRO0 4      0.22450
+   54    4 TRP  CA    -4.00139  -1.98683   1.08005 PRO0 4      2.27500
+   55    4 TRP  HA    -2.94485  -2.08503   1.29469 PRO0 4      1.32000
+   56    4 TRP  CB    -4.80734  -2.71749   2.18902 PRO0 4      2.17500
+   57    4 TRP  HB1   -5.89199  -2.60222   1.96738 PRO0 4      1.32000
+   58    4 TRP  HB2   -4.60234  -2.19478   3.14837 PRO0 4      1.32000
+   59    4 TRP  CG    -4.50113  -4.19255   2.39022 PRO0 4      1.99240
+   60    4 TRP  CD1   -5.20554  -5.27321   1.93763 PRO0 4      1.99240
+   61    4 TRP  HD1   -6.10273  -5.20516   1.33873 PRO0 4      1.35820
+   62    4 TRP  NE1   -4.59701  -6.44233   2.33843 PRO0 4      1.85000
+   63    4 TRP  HE1   -4.89563  -7.35988   2.12569 PRO0 4      0.22450
+   64    4 TRP  CE2   -3.46129  -6.12366   3.04592 PRO0 4      1.80000
+   65    4 TRP  CD2   -3.36630  -4.71557   3.10334 PRO0 4      1.80000
+   66    4 TRP  CE3   -2.30596  -4.09028   3.75773 PRO0 4      1.99240
+   67    4 TRP  HE3   -2.21474  -3.01555   3.80699 PRO0 4      1.35820
+   68    4 TRP  CZ3   -1.34118  -4.90772   4.36502 PRO0 4      1.99240
+   69    4 TRP  HZ3   -0.51018  -4.45433   4.88915 PRO0 4      1.35820
+   70    4 TRP  CZ2   -2.49990  -6.92855   3.64043 PRO0 4      1.99240
+   71    4 TRP  HZ2   -2.56275  -8.00496   3.59639 PRO0 4      1.35820
+   72    4 TRP  CH2   -1.43750  -6.30677   4.31291 PRO0 4      1.99240
+   73    4 TRP  HH2   -0.67365  -6.91215   4.78209 PRO0 4      1.35820
+   74    4 TRP  C     -4.24718  -2.61647  -0.29346 PRO0 4      2.00000
+   75    4 TRP  O     -5.30229  -2.43897  -0.90592 PRO0 4      1.70000
+   76    5 GLU  N     -3.26546  -3.38544  -0.79081 PRO0 5      1.85000
+   77    5 GLU  HN    -2.40344  -3.51600  -0.30824 PRO0 5      0.22450
+   78    5 GLU  CA    -3.38235  -4.14120  -2.01609 PRO0 5      2.27500
+   79    5 GLU  HA    -4.39291  -4.51604  -2.10982 PRO0 5      1.32000
+   80    5 GLU  CB    -3.02333  -3.30022  -3.26993 PRO0 5      2.17500
+   81    5 GLU  HB1   -1.98306  -2.92554  -3.16882 PRO0 5      1.32000
+   82    5 GLU  HB2   -3.70195  -2.41660  -3.30245 PRO0 5      1.32000
+   83    5 GLU  CG    -3.18240  -4.09748  -4.58851 PRO0 5      2.17500
+   84    5 GLU  HG1   -4.24418  -4.39798  -4.71027 PRO0 5      1.32000
+   85    5 GLU  HG2   -2.56537  -5.01842  -4.55342 PRO0 5      1.32000
+   86    5 GLU  CD    -2.75925  -3.31432  -5.81177 PRO0 5      2.00000
+   87    5 GLU  OE1   -3.65045  -2.85018  -6.56885 PRO0 5      1.70000
+   88    5 GLU  OE2   -1.53278  -3.15345  -6.03670 PRO0 5      1.70000
+   89    5 GLU  C     -2.44128  -5.36362  -1.91715 PRO0 5      2.00000
+   90    5 GLU  OT1   -1.23273  -5.18848  -1.60879 PRO0 5      1.70000
+   91    5 GLU  OT2   -2.91413  -6.50907  -2.13961 PRO0 5      1.70000
+
+update atom CDIE eps 1 cutnb 20 ctofnb 18 ctonnb 16 switch vswitch
+
+!!!!!!!!TEST 1D PMF!!!!!!!!!!!
+EPMF DIST PMF1 11 PMF2 11 PMF3 11 PMFN 11 DONO select type N end  ACCP select type O end
+
+!-------------------------------------------------------------------------------
+! Test First derivative 1D EPMF
+!-------------------------------------------------------------------------------
+test first tol 0.00001 step 0.000001 select all end
+
+!-------------------------------------------------------------------------------
+! Molecular dynamics 1D EPMF 
+!-------------------------------------------------------------------------------
+nbonds elec atom cdie switch -
+       vdw vatom vswitch -
+       bycu -
+       cutnb 20 ctofnb 18 ctonnb 16 
+dyna leap - 
+     start nstep 10 timestep 0.001 -
+     firstt 300 finalt 300 tbath 300 tstruc 300 -
+     ichecw 0 ihtfrq 0 ieqfrq 0 twindl 0 twindh 0 -
+     iasors 0 iscvel 0 - 
+     ntrfrq 0 -
+     inbfrq -1 imgfreq -1 bycb - 
+     iunwri -1 iuncrd -1 iunrea -1 kunit -1 -
+     iprfrq 50 nprint 1 nsavc 0 nsavv 0  -
+     iseed 123561
+
+!-------------------------------------------------------------------------------
+! Molecular dynamics 1D EPMF
+!-------------------------------------------------------------------------------
+
+nbonds elec atom cdie switch -
+       vdw vatom vswitch -
+       bycu -
+       cutnb 20 ctofnb 18 ctonnb 16
+dyna leap -
+     start nstep 10 timestep 0.001 -
+     firstt 300 finalt 300 tbath 300 tstruc 300 -
+     ichecw 0 ihtfrq 0 ieqfrq 0 twindl 0 twindh 0 -
+     iasors 0 iscvel 0 -
+     ntrfrq 0 -
+     inbfrq -1 imgfreq -1 bycb -
+     iunwri -1 iuncrd -1 iunrea -1 kunit -1 -
+     iprfrq 50 nprint 1 nsavc 0 nsavv 0  -
+     iseed 123561
+
+!!!! HBON !!!!
+
+EPMF HBON ATM1 CA F1 -.6736 ATM2 -C F2 -.7627  - 
+     BLEN .997 PMF1 17 PMF2 17 PMF3 17 PMFN 17 -
+     DONO SELECT TYPE N END ACCP SELECT TYPE O END
+
+!-------------------------------------------------------------------------------
+! Test First derivative 2D HBON PMF
+!-------------------------------------------------------------------------------
+test first tol 0.00001 step 0.000001 select all end
+
+!-------------------------------------------------------------------------------
+! Molecular dynamics 1D EPMF
+!-------------------------------------------------------------------------------
+                                                                                                                                    
+nbonds elec atom cdie switch -
+       vdw vatom vswitch -
+       bycu -
+       cutnb 20 ctofnb 18 ctonnb 16
+dyna leap -
+     start nstep 10 timestep 0.001 -
+     firstt 300 finalt 300 tbath 300 tstruc 300 -
+     ichecw 0 ihtfrq 0 ieqfrq 0 twindl 0 twindh 0 -
+     iasors 0 iscvel 0 -
+     ntrfrq 0 -
+     inbfrq -1 imgfreq -1 bycb -
+     iunwri -1 iuncrd -1 iunrea -1 kunit -1 -
+     iprfrq 50 nprint 1 nsavc 0 nsavv 0  -
+     iseed 123561
+
+CLOSE UNIT 11
+CLOSE UNIT 17
+
+STOP

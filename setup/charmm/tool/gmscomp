@@ -1,0 +1,3410 @@
+#! /bin/csh
+#
+# set verbose
+#
+#
+#   5 Dec 2014 - script to compile one GAMESS source file
+#  Invoke this script by './comp MODULE >& MODULE.log &'.
+#
+#------------------------
+#  23 Mar 1993 - MH
+#  Modified to be part of CHARMM make procedure
+#------------------------
+#  24 Jul 1997 - MH
+#  Modified for automatic creation for various systems
+#  from CHARMM install.com
+#------------------------
+#  10 May 2008 - MH
+#  Upgrade to current comp script
+#------------------------
+#  23 Feb 2009 - MH
+#  Upgrade to current comp script
+#------------------------
+#  23 Mar 2012 - MH
+#  Upgrade to current comp script
+#------------------------
+#  25 June 2013 - MH
+#  Upgrade to current comp script
+#------------------------
+#  25 June 2015 - MH
+#  Upgrade to current comp script
+#------------------------
+#  24 January 2017 - MH
+#  Upgrade to current comp script
+#------------------------
+#  17 June 2018 - MH
+#  Upgrade to current comp script
+#------------------------
+#  14 January 2019 - MH
+#  Upgrade to current comp script
+#------------------------
+#
+#------------------------
+#  16 January 2021 - MH
+#  Upgrade to current comp script from version: 30 SEP 2020 (R2)
+#------------------------
+#------------------------
+#  12 January 2022 - MH
+#  Upgrade to current comp script from version: 30 SEP 2021 (R2)
+#------------------------
+#------------------------
+#  24 January 2023 - MH
+#  Upgrade to current comp script from version: 30 SEP 2022 (R2)
+#------------------------
+#------------------------
+#  9 January 2024 - MH
+#  Upgrade to current comp script from version: 30 SEP 2023 (R2)
+#------------------------
+#
+#  This script no longer requires customization, as it starts off by
+#  reading information about the compilation from a configuration file.
+#
+#
+#  Please send your issues to the GAMESS public
+#  issue tracker on GitHub:
+#  https://github.com/gms-bbg/gamess-issues/issues
+#
+#if (-e install.info) then
+#   source install.info
+#else if (-e ../install.info) then
+#   source ../install.info
+#else
+#   echo "Please run 'config' first, to set up GAMESS compiling information" >> /dev/stderr
+#   exit 4
+#endif
+# CHARMM modification (no configuration step)
+# For CHARMM we define everything here:
+# For CHARMM this could also go into charmm_install.info
+# and also get the info from cmake variables!!
+set GMS_TARGET='linux64'
+set GMS_PATH=''
+set GMS_BUILD_DIR=''
+set GMS_HPC_SYSTEM_TARGET='generic'
+# now it gets this from cmake: set GMS_FORTRAN='gfortran'
+set GMS_GFORTRAN_VERNO='12.1'
+set GMS_DEBUG_FLAGS=''
+# from cmake: set GMS_MATHLIB='openblas' # could be openblas (if charmm cmake supports it ??)
+set GMS_DDI_COMM='sockets'
+set GMS_LIBCCHEM='false'
+set GMS_HPCCHEM='false'
+set GMS_LIBXC='false'
+set GMS_MSUCC='false'
+set GMS_MSUAUTO='false'
+# now in cmake: set GMS_OPENMP='false'
+#
+#            the following may optionally be set to non-blank below,
+#            but will be left uninitialized in many cases.
+set GMS_MATHLIB_PATH=''
+set GMS_IFORT_VERNO='16'
+set GMS_PHI=''
+set GMS_MKL_VERNO=''
+set GMS_SUN_OS_VERNO=''
+set GMS_SUN_FORT_VERNO=''
+set GMS_WIN_OPT=''
+set GMS_WIN_FLAGS=''
+set GMS_WIN_TP=''
+set GMS_BG_MODEL=''
+set GMS_MPI_LIB=''
+set GMS_MPI_PATH=''
+set GMS_OFED_PATH=''
+set GMS_ARMCI_PATH=''
+set GMS_MDI='false'
+set GMS_VM2='false'
+set GMS_TINKER='false'
+set GMS_VB2000='false'
+set GMS_XMVB='false'
+set GMS_NEO='false'
+set GMS_NBO='false'
+set TINKER='false'
+set VB2000='false'
+set XMVB='false'
+set NEO='false'
+set NBO='false'
+set RISM='false'
+set GMS_FPE_FLAGS='-ffpe-trap=invalid,zero,overflow'
+# CHARMM: cmake writes the directories (source; binary is the default?)
+# make this one so that any of the above can be specified on a main cmake command...
+# using -DGMS_...='...' /of course we start with the openblas/
+source charmm_install.info
+#echo $chmsrc
+# as of 20200930.2 this is not needed anymore...
+#if (!(-x ./actvte.x)) then
+#    gfortran -O -o actvte.x $chmsrc/../../tool/actvte.f
+#endif
+# end CHARMM
+#
+#  the configuration file read just above provides the next two variables,
+#  and possibly several other GMS_XXX values that may be used below.
+#
+set TARGET=$GMS_TARGET
+#        allow for "dry run" that doesn't actually do anything
+#
+if ($?GMS_COMP_DRYRUN) then
+   echo $0 $argv
+   exit 0
+endif
+#
+# Allow debug flags to override $OPT
+#
+if ($?GMS_DEBUG_FLAGS == 0) then
+   set GMS_DEBUG_FLAGS=''
+endif
+#
+#        make sure any exotic variable touched below is not an error
+#
+if (!($?GMS_BG_MODEL)) set GMS_BG_MODEL=' '
+#
+#    ---- and now the script begins...
+#
+unset echo
+#set MODULE=$1
+set   MODULE=$1:t
+set   MODULE=$MODULE:r
+set   ENVMT=charmm
+# CHARMM: (not $chmsrc/gamint here ???)
+set   chmsrc=$chmsrc
+set   PARALLEL=true
+set ACTONLY=$2   # this argument is almost always omitted
+if (null$MODULE == null) then
+   echo "No compile module name given..." >> /dev/stderr
+   exit
+endif
+#
+#     in case a module was in free format style
+switch ($MODULE)
+   case modcc:
+   case modmdi:
+   case modmdi_empty:
+   case modmcpdft:
+   case modmnfun:
+   case mpcdatpm6:
+   case mod_sformas:
+   case mpchbond:
+   case secor:
+   case prec:
+   case params:
+   case hrmrst:
+   case grd2_consts:
+   case mx_limits:
+   case blkint:
+   case mod_nosp_basis:
+   case mod_grid_storage:
+   case mod_dft_partfunc:
+   case mod_dft_molgrid:
+   case mod_dft_fuzzycell:
+   case mod_dft_gridint:
+   case mod_gauss_hermite:
+   case mod_shell_tools:
+   case mod_1e_primitives:
+   case mod_vvos:
+   case mod_lutiotc:
+   case omp*:
+   case riccutils:
+   case riccints:
+   case riccdiag:
+   case riccrhf:
+   case rimp2grd:
+   case rimp2omp:
+   case efpmodule:
+   case efteiomp:
+   case norm2:
+   case dftbpb:
+   case constants:
+   case gausshermite:
+   case modules_dft:
+   case functionals:
+   case mod_nameio:
+   case libxc:
+   case libxc_empty:
+   case utils_strings:
+   case modules_common:
+   case hpcchem_molecule_module:
+   case hpcchem_runner_module:
+   case hpcchem_stubs:
+   case hpcchem_module:
+   case hpcchem_driver:
+   case gamess_version:
+   case messages:
+   case ccsd3aacgreorder:
+   case ccsd3aacgsum:
+      set MODULE_F=$MODULE.F90
+      breaksw
+   case ccsdt:
+   case gamess:
+   case grd2a:
+   case int2a:
+   case ryspol:
+   case rimp2:
+   case rimp2omp:
+   case unport:
+   case vb2000:
+      set MODULE_F=$MODULE.F
+      breaksw
+   default:
+      set MODULE_F=$MODULE.f
+      breaksw
+endsw
+set MODULE_OBJ=$MODULE.o
+#CHARMM: chdir $GMS_BUILD_DIR/object
+#
+echo ======================== $MODULE ==============================
+date
+#
+#   Let's be sure they typed the intended target correctly
+#
+#   This also serves as a full list of compiler clauses allowed in
+#   this script, some of which are hidden by the gms-config.  For
+#   example, there are a number of ancient Cray products below,
+#   and the NEC and Fujitsu products probably aren't well tested.
+#
+set OK=false
+if ($TARGET =~ hpe-*)          set OK=true
+if ($TARGET == cray-xt)        set OK=true
+if ($TARGET == cray-xc)        set OK=true
+if ($TARGET == fj-a64fx)       set OK=true
+if ($TARGET == ibm64)          set OK=true
+if ($TARGET == linux64)        set OK=true
+if ($TARGET == mac64)          set OK=true
+if ($TARGET == win64)          set OK=true
+if ($OK == false) then
+   echo "The comp script does not select a correct TARGET machine type." >> /dev/stderr
+   echo "What you typed when editing this script was $TARGET" >> /dev/stderr
+   exit 4
+endif
+#
+#        Normally we are sitting above the source code and objects,
+#        and want to make sure they go in their normal directory.
+#
+#        N.B.  A few places below prepare temporary copies of the
+#        code being compiled in the current directory level (.),
+#        and these are always deleted at the end of this script.
+#        These places are valence bond, and sed hacking.
+#
+set SRCDIR=$GMS_PATH/source
+set OBJDIR=$GMS_BUILD_DIR/object
+# CHARMM:
+set SRCDIR=$chmsrc/gamess
+# temporary
+#    set SRCDIR=/home/milan/charmm/cmake-models/gamint/gamess
+#
+#
+#        a few source files are kept in non-standard places, defined here
+#
+if ($MODULE == serial)   set SRCDIR=$GMS_PATH/misc
+if ($MODULE == vbdum)    set SRCDIR=$GMS_PATH/misc
+#     if we want the other source directory, we must point to it.
+if ($?GMS_OTHER_SRCDIR) then
+   set SRCDIR=$GMS_OTHER_SRCDIR
+endif
+#
+#        optional SIMOMM method using Tinker MM program
+#        if you do select this option, also set the number of MM atoms in
+#        mx_limit.src to match your choice in Tinker's sizes.i file
+#
+#        don't edit anything about Tinker below this point...
+set TINKCODE=no
+if ($MODULE == Libtad)  set TINKCODE=yes
+if ($MODULE == Libteac) set TINKCODE=yes
+if ($MODULE == Libtedl) set TINKCODE=yes
+if ($MODULE == Libtemo) set TINKCODE=yes
+if ($MODULE == Libterx) set TINKCODE=yes
+if ($MODULE == Libtfi)  set TINKCODE=yes
+if ($MODULE == Libtjo)  set TINKCODE=yes
+if ($MODULE == Libtpr)  set TINKCODE=yes
+if ($MODULE == Libtsx)  set TINKCODE=yes
+if ($MODULE == Tdrive)  set TINKCODE=yes
+if ($MODULE == Tinkin)  set TINKCODE=yes
+if ($MODULE == Toys)    set TINKCODE=yes
+#       We must compile directly out of the Tinker directory,
+#       so that its INCLUDE statements will work.
+#       Note that Tinker must also skip the code deletion at end!
+if ($TINKCODE == yes) then
+   chdir $GMS_PATH/tinker
+   set SRCDIR=$GMS_PATH/tinker
+   goto cmp
+endif
+#
+#        Valence Bond method using VB2000
+#
+set VB2000=false
+if ($MODULE == vb2000) set VB2000=true
+if ($MODULE == vb2gms) set VB2000=true
+if ($MODULE == mod_vb2000) set VB2000=true
+if ($VB2000 == true ) then
+   set VBPATH=$GMS_PATH/vb2000/SRC
+   echo Copying $MODULE.src from VB2000 directory named $VBPATH
+   cp $VBPATH/$MODULE.src $SRCDIR/$MODULE.src
+endif
+#
+#        Nuclear Electronic Orbital (NEO) method plugin
+#
+# CHARMM: no neo support for now :-(
+#-#set NEOCMP=false
+#-#if ($MODULE =~ neo*)   set NEOCMP=true
+#-#if ($MODULE == neostb) set NEOCMP=false
+#-#if ($NEOCMP == true && $ACTONLY != true) set SRCDIR=$GMS_PATH/qmnuc/neo
+# end CHARMM
+#
+#        MSUAUTO plugin, including CCSDt, CC(t;3), and DEA/DIP-EOMCCSD
+#
+if ($MODULE =~ ccsd3a* ) set SRCDIR=$GMS_PATH/msuauto/src
+if ($MODULE =~ deaeom* ) set SRCDIR=$GMS_PATH/msuauto/src
+if ($MODULE =~ eomdip* ) set SRCDIR=$GMS_PATH/msuauto/src
+#
+#
+#        RISM-SCF-cSED plugin
+if ($MODULE =~ rsm_* ) set SRCDIR=$GMS_PATH/rsmcsed/src
+#
+#   All other modules are straight FORTRAN, just copy them.
+#
+echo Copying source code, $MODULE.src does not require activation.
+cp $SRCDIR/$MODULE.src $MODULE_F
+#
+#   --------- Now we are ready to compile on the target machine ----------
+#
+cmp:
+#
+#   Optionally, save pure FORTRAN in temporary directory for
+#   syntax scan by the nifty FORTRAN analysis program FTNCHEK.
+#
+if ($ACTONLY == true) then
+   if ($VB2000 == true && -f "$SRCDIR/$MODULE.src" && -w "$SRCDIR/$MODULE") rm "$SRCDIR/$MODULE.src"
+   exit
+endif
+#
+#     --- now begins many system specific sections that actually compile ---
+#             Begin by erasing any previously generated object code,
+#        so that a failure to compile is very obvious when we can't link.
+#
+if (-f "$OBJDIR/$MODULE_OBJ " && -w "$OBJDIR/$MODULE_OBJ") rm "$OBJDIR/$MODULE_OBJ"
+#
+#   HPE Cray Series:
+#
+if ($TARGET =~ hpe-*) then
+   # If you load a PrgEnv-(aocc,cray,gnu,intel-nvidia) the FC (Fortran compiler name) will
+   # be 'ftn'. However, we also account for situations where the user
+   # what want to unload a PrgEnv and load a compiler directly. In those
+   # situations we specify the LDR explicitly.
+   set FC = 'ftn'
+
+   if ( $?CRAY_FTN_VERSION ) then
+      set GMS_HPE_CRAY_COMP = cray
+   endif
+
+   if ( $?INTEL_VERSION ) then
+      set GMS_HPE_CRAY_COMP = intel
+      if ( $?PE_ENV ) then
+         if ( $PE_ENV != "INTEL") set FC = ifort
+      endif
+   endif
+
+   if ( $?GNU_VERSION ) then
+      set GMS_HPE_CRAY_COMP = gnu
+      if ( $?PE_ENV ) then
+         if ( $PE_ENV != "GNU") set FC = gfortran
+      endif
+   endif
+
+   if ( $?NVIDIA_VERSION ) then
+      set GMS_HPE_CRAY_COMP = nvidia
+      if ( $?PE_ENV ) then
+         if ( $PE_ENV != "NVIDIA") set FC = nvfortran
+      endif
+   endif
+
+   if ( $?AOCC_VERSION ) then
+      set GMS_HPE_CRAY_COMP = aocc
+      if ( $?PE_ENV ) then
+         if ( $PE_ENV != "AOCC") set FC = flang
+      endif
+   endif
+
+   if ( $?CRAY_AMD_COMPILER_VERSION ) then
+      set GMS_HPE_CRAY_COMP = rocm
+      if ( $?PE_ENV ) then
+         if ( $PE_ENV != "AMD") set FC = amdflang
+      endif
+   endif
+
+   # Previous Cray platforms there has been a need to also take into
+   # account the CPU target. We have found that $CRAY_CPU_TARGET is
+   # typically available when a PrgEnv is loaded. However, $CPU seems
+   # to always be avilable.
+   if  ( $?CRAY_CPU_TARGET ) then
+      set GMS_HPE_CRAY_ARCH = $CRAY_CPU_TARGET
+   else
+      set GMS_HPE_CRAY_ARCH = $CPU
+   endif
+
+   switch ($GMS_HPE_CRAY_COMP)
+      case cray:
+         set CRAY_FTN_MAJOR_VERSION=`echo $CRAY_FTN_VERSION | cut -d. -f1`
+         # -m = 0 for all messages (Error, Warning, Caution, Note, and Comment)
+         # -m = 3 (default) is Error Warning, but there are many 'warnings'.
+         # -m = 4 Error only  (note that 1 and 2 are also available)
+         set MLEVEL = 4
+         set OPT    = " -e o"       # Displays optimization flags used
+         set OPT    = " "
+         set BASE   = "-s default64 -m $MLEVEL"
+         set INFO   = "-rm"
+         set HPE_CRAY_OPT = " "
+         switch($CRAY_FTN_VERSION)
+            case 10.*:
+            case 11.*:
+            case 12.*:
+            case 13.*:
+            case 14.*:
+            case 15.*:
+            case 16.*:
+            case 17.*:
+               #./fmo/parallel/samples/2021/DFTB_PBC.inp
+               if ($MODULE == dftbpb)    set HPE_CRAY_OPT = "-O2 -h scalar0"
+
+               #./dftb/parallel/exam04.inp
+               #./solvent/efp1/parallel/fmo-h2o4-efp4-ddi.inp
+               #./solvent/pcm/parallel/fmo-pcm.inp
+               #./travis-ci/parallel/exam37.inp
+               if ($MODULE == fmoio)    set HPE_CRAY_OPT = "-O2 -h scalar0"
+
+               #./dft-new/parallel/dft-etoh.inp
+               #./dft-new/parallel/dft-etoh-mk.inp
+               #./dft-new/parallel/dft-etoh-ssf-erf.inp
+               #./dft-new/parallel/dft-etoh-ssf-smstep2.inp
+               #./dft-new/parallel/dft-etoh-ssf-smstep3.inp
+               #./dft-new/parallel/dft-etoh-ssf-smstep4.inp
+               #./dft-new/parallel/dft-etoh-ssf-smstep5.inp
+               #./dft-new/parallel/dft-etoh-ssf-ssf.inp
+               #./dft-new/parallel/dft-etoh-ta.inp
+               #./dft-new/parallel/dft-etoh-wtoff.inp
+               #./dft/parallel/bibenz-dc.inp
+               #./dft/parallel/bibenz-lrd.inp
+               #./dft/parallel/c32h16.inp
+               #./dft/parallel/dft-etoh.inp
+               #./dft/parallel/dft-hfcnh.inp
+               #./ecp/parallel/ecp-auxe-cation.inp
+               #./ecp/parallel/ecp-bisn-grad.inp
+               #./ecp/parallel/ecp-cr-wat6.inp
+               #./ecp/parallel/ecp-hg2.inp
+               #./ecp/parallel/ecp-luclhoh.inp
+               #./ecp/parallel/ecp-luf3.inp
+               #./ecp/parallel/ecp-moocl4.inp
+               #./ecp/parallel/ecp_nlp3_sixth-h-ul.inp
+               #./ecp/parallel/ecp-pbi2-h-ul.inp
+               #./ecp/parallel/ecp-ptcl6.inp
+               #./ecp/parallel/ecp-rn2f3.inp
+               #./exotic/parallel/inttyp.inp
+               #./gvb/parallel/gvb-ncccco-pp3.inp
+               #./mcp/parallel/mcp-vn12.inp
+               #./mcscf/psi/parallel/mc-psi-asn.inp
+               #./mcscf/psi/parallel/mc-psi-aza-s1.inp
+               #./mcscf/psi/parallel/mc-psi-si09h12.inp
+               #./mp2/parallel/ddi-rhf-mp2-h2so4.inp
+               #./mp2/parallel/ddi-rhf-mp2-quinone.inp
+               #./mp2/parallel/ddi-uhf-mp2-nicotine.inp
+               #./numdiff/parallel/e36-seminum-protect.inp
+               #./pes/parallel/opt-vt-dmso.inp
+               #./pes/parallel/sadpt-ihrep.inp
+               #./quanpol/parallel/water-mp2mmpol-opt.inp
+               #./relwfn/parallel/agh-grad-resc.inp
+               #./relwfn/parallel/cuh-nesc.inp
+               #./rhf/parallel/arsenicin.inp
+               #./rhf/parallel/c28.inp
+               #./rhf/parallel/ga4se4.inp
+               #./solvent/efp1/parallel/efp1-glycyl-ump2.inp
+               #./solvent/efp1/parallel/efp1-h2co-pbc.inp
+               #./solvent/efp1/parallel/h2co-4wat-tddft.inp
+               #./solvent/mnsol/parallel/smd-rdft-grad.inp
+               #./solvent/mnsol/parallel/smd-rhf-grad.inp
+               #./solvent/mnsol/parallel/smd-rmp2-opt.inp
+               #./solvent/pcm/parallel/cpcm-psi.inp
+               #./solvent/pcm/parallel/pcm-acetate-es.inp
+               #./solvent/pcm/parallel/pcm-cobalt.inp
+               #./solvent/pcm/parallel/pcm-efp-benzoic.inp
+               #./solvent/pcm/parallel/pcm-hcn-hess.inp
+               #./solvent/pcm/parallel/pcm-i3.inp
+               #./solvent/pcm/parallel/pcm-rmp2-meoh.inp
+               #./solvent/pcm/parallel/pcm-zapt-cuh2o.inp
+               #./solvent/scrf/parallel/scrf-fsioc2n.inp
+               #./spectra/parallel/raman-h2co.inp
+               #./tddft/parallel/tddft-co-tammd-trnsd.inp
+               #./tddft/parallel/tddft-pna.inp
+               #./travis-ci/parallel/exam07.inp
+               #./travis-ci/parallel/exam12.inp
+               #./travis-ci/parallel/exam22.inp
+               #./travis-ci/parallel/exam30.inp
+               #./travis-ci/parallel/exam31.inp
+               #./travis-ci/parallel/exam33.inp
+               #./travis-ci/parallel/exam34.inp
+               #./travis-ci/parallel/exam38.inp
+               #./travis-ci/parallel/exam40.inp
+               #./travis-ci/parallel/exam41.inp
+               #./travis-ci/parallel/exam43.inp
+               if ($MODULE == grd2c)    set HPE_CRAY_OPT = "-O1 -h scalar1"
+
+               #./dft/parallel/criegee-udft-hess.inp
+               #./mp2/parallel/ddi-uhf-mp2-tmm.inp
+               #./pes/parallel/grdxtr-1.inp
+               if ($MODULE == eigen)    set HPE_CRAY_OPT = "-O2 -h fp1"
+
+               #./solvent/efp1/parallel/acetone-2h2o-td-g.inp
+               #./solvent/efp1/parallel/acetone-pbc-md.inp
+               #./solvent/efp1/parallel/efp1-o2-zapt.inp
+               #./solvent/efp1/parallel/efp1-qm-c-hess.inp
+               #./solvent/efp1/parallel/efp1-qm-hess.inp
+               #./solvent/efp1/parallel/efp1-qm-md-rest.inp
+               if ($MODULE == efgrda)   set HPE_CRAY_OPT = "-O2 -h scalar0"
+
+               #./relwfn/parallel/aro-soc.inp
+               #./relwfn/parallel/ch2-soc.inp
+               #./relwfn/parallel/h-spinor-soc.inp
+               #./relwfn/parallel/i-soc.inp
+               #./relwfn/parallel/na-soc.inp
+               #./relwfn/parallel/nicl-soc.inp
+               #./relwfn/parallel/o2-mcp-soc.inp
+               #./travis-ci/parallel/exam19.inp
+               if ($MODULE == mthlib)   set HPE_CRAY_OPT = "-O2 -h scalar0"
+
+               #./quanpol/parallel/pep10only-mm-md.inp
+               #.fin/quanpol/parallel/pep10only-qmmm-md.inp
+               if ($MODULE == quanpob)  set HPE_CRAY_OPT = "-O2 -h scalar1"
+
+               if ($MODULE == rimp2)    set HPE_CRAY_OPT = "-O2 -h scalar0"
+               breaksw
+            default:
+               echo "Unknown HPE Cray Fortran compiler version" >> /dev/stderr
+               exit
+               breaksw
+         endsw
+         #
+         if ($GMS_OPENMP == true)  then
+            switch ($MODULE)
+               case omp*:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+            if ($MODULE == int2r)    set HPE_CRAY_OPT = "-O1"
+            if ($MODULE == rimp2grd) set HPE_CRAY_OPT = "-O1"
+            set HPE_CRAY_OPT = "-h omp $HPE_CRAY_OPT"
+         else
+            set HPE_CRAY_OPT = "-h noomp $HPE_CRAY_OPT"
+         endif
+         if(-e $MODULE_F) then
+            echo "Compiling FORTRAN file $MODULE_F"
+            (set echo; $FC -c $BASE $OPT $HPE_CRAY_OPT $INFO $MODULE_F)
+         else
+            echo "ERROR: FORTRAN Source for module $MODULE was not found" >> /dev/stderr
+            exit 4
+         endif
+         breaksw
+      case intel:
+         set OPT = '-O2'
+         switch ($INTEL_VERSION)
+            case 2021.*:
+            case 2022.*:
+               if  ($MODULE == eigen)  set OPT='-O0' # read note just above.
+               if  ($MODULE == fmo)    set OPT='-O1' # 12.0.4, exam37
+               if  ($MODULE == guess)  set OPT='-O0' # 10.0, exam39
+               if  ($MODULE == locpol) set OPT='-O1' # 10.0, makefp/gmres
+               if  ($MODULE == morokm) set OPT='-O0' # Jan Fredin
+               if  ($MODULE == mcpinp) set OPT='-O1' # exam38 is affected with Intel PS-2020.x.xxx
+               if  ($MODULE == nucbas) set OPT='-O0' # 12.x, various NEO examples
+               if  ($MODULE == prpel)  set OPT='-O1' # 10.0, exam13
+               if  ($MODULE == rohfcc) set OPT='-O0' # exam42+exam47 (op.sh.CC,IP-EOM)
+               if  ($MODULE == tdxitr) set OPT='-O1' # 10.0, exam39
+               if  ($MODULE == vscf)   set OPT='-O0' # intensities for combinations
+               breaksw
+            default:
+               echo "ERROR: Unknown Intel version" >> /dev/stderr
+               exit 4
+               breaksw
+         endsw
+
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+         set EXTRAOPT=""
+
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -DVB2000_GMS"
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+               if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         set EXTRAOPT="$EXTRAOPT -assume byterecl"
+         set EXTRAOPT="$EXTRAOPT -qopt-report=0"
+         set EXTRAOPT="$EXTRAOPT -warn nousage -inline-level=0"
+         if  ($MODULE =~ "omp*") set EXTRAOPT="$EXTRAOPT -inline-level=2"
+         if  ($MODULE =~ "mod_*") set EXTRAOPT="$EXTRAOPT -inline-level=2"
+
+         if ($GMS_MSUAUTO == true) then
+            set OPT="$OPT -mcmodel=medium"
+         endif
+
+         if ($GMS_OPENMP == true)  then
+            set OPT="$OPT -qopenmp"
+
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+
+         switch ($MODULE)
+            case mod_gauss_hermite:
+            case mod_shell_tools:
+            case mod_1e_primitives:
+            case omp_*:
+               set EXTRAOPT="$EXTRAOPT -align -ipo -ip -O3 -no-prec-div -fp-model fast=2 -inline-level=2"
+         endsw
+         (set echo; $FC -c -i8 -g $GMS_FPE_FLAGS $OPT -ftz -auto $EXTRAOPT $MODULE_F)
+         breaksw
+      case gnu:
+         set OPT='-O2'
+         #
+         set EXTRAOPT=" "
+         if (($MODULE_F:e == f90) || ($MODULE_F:e == F90)) then
+            set EXTRAOPT="$EXTRAOPT -ffree-line-length-none"
+         endif
+         if ($MODULE == nameio) set EXTRAOPT="$EXTRAOPT -std=legacy"
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -std=legacy -DVB2000_GMS"
+         #
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+               #
+               if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         #
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         switch ($GNU_VERSION)
+            case 8.1.0:
+            case 8.2.0:
+            case 8.3.0:
+            case 8.4.0:
+            case 8.5.0:
+            case 9.1.0:
+            case 9.2.0:
+            case 9.3.0:
+            case 9.4.0:
+            case 9.5.0:
+            case 10.1.0:
+            case 10.2.0:
+            case 10.3.0:
+            case 11.1.0:
+            case 11.2.0:
+               #
+               # A lot of the machine generated files exceed the limit on the number of "variable assignment tracking".
+               # We pass the flag "-fno-var-tracking-assignments" to completely shutdown variable assignment tracking
+               # for these files which will speed up compilation and reduce warnings **BUT** at the cost of debugging.
+               #
+               # Besides - who is even debugging autogenerated code anyways?
+               #
+               # But if you want to increase the limit and debug the code then consider replacing:
+               # "-fno-var-tracking-assignments" with "--param=max-vartrack-size=500000000"
+               # But be warned! Compilation times will be extremely slow! And memory consumption will
+               # very high if compiling in parallel!
+               #
+               # Source: https://stackoverflow.com/questions/23499909/adjust-variable-tracking-assignment-length
+               #
+               if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+              #if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+               if ($MODULE == cimi ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments -Wno-maybe-uninitialized"
+               if ($MODULE == gugdm2 ) set OPT="-O0" #fixes failure of exam05
+               #
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               breaksw
+            default:
+               echo "Unrecognized gfortran version for linux64" >> /dev/stderr
+               exit 4
+               breaksw
+         endsw
+         switch ($MODULE)
+            case mod_gauss_hermite:
+            case mod_shell_tools:
+            case mod_1e_primitives:
+            case omp_*:
+               set EXTRAOPT=" -Ofast -ffast-math" # -funconstrained-commons"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+         endsw
+         set GF_VER = `echo $GNU_VERSION | tr -d "."`
+         if($GF_VER >= 100) then
+            set EXTRAOPT="$EXTRAOPT -fallow-argument-mismatch"
+         endif
+         unset GF_VER
+         #
+         # A backdoor way to set optimization level differently.
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+         #
+         # Optional OpenMP support
+         if ($GMS_OPENMP == true)  then
+            set OPT="$OPT -fopenmp"
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         (set echo; $FC -c -fdefault-integer-8 -g $GMS_FPE_FLAGS $OPT $EXTRAOPT $MODULE_F)
+         breaksw
+      case nvidia:
+         set FAST="-fast"
+         #
+         set OPT = "$FAST"
+         #
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+         #
+         # Need to drop to -O1 if using NVIDIA HPC SDK v. 21.9
+         if ($MODULE == tddxca)         set OPT="-O1"
+         if ($MODULE == tddxcd_m06)     set OPT="-O1"
+         if ($MODULE == tddxcd_m08)     set OPT="-O1"
+         if ($MODULE == tddxcd_pkzb)    set OPT="-O1"
+         if ($MODULE == tddxcd_revtpss) set OPT="-O1"
+         if ($MODULE == tddxcd_tpss)    set OPT="-O1"
+         #
+         # Defensive compiling taken from pgfortran
+         if ($MODULE == dftgrd) set OPT='-O1'
+         if ($MODULE == dgeev)  set OPT='-O1'
+         if ($MODULE == efelec) set OPT=$FAST
+         if ($MODULE == efmo)   set OPT=$FAST
+         if ($MODULE == gradex) set OPT=$FAST
+         if ($MODULE == grd1)   set OPT=$FAST
+         if ($MODULE == guess)  set OPT='-O1'
+         if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == mcpgrd) set OPT='-O1'
+         if ($MODULE == mnsol)  set OPT=$FAST
+         if ($MODULE == mthlib) set OPT=$FAST
+         if ($MODULE == ormas1) set OPT=$FAST
+         if ($MODULE == prppop) set OPT=$FAST
+         if ($MODULE == riint)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == rxncrd) set OPT=$FAST
+         if ($MODULE == solib)  set OPT=$FAST
+         if ($MODULE == statpt) set OPT=$FAST
+         if ($MODULE == tddefp) set OPT=$FAST
+         if ($MODULE == trnstn) set OPT=$FAST
+         if ($MODULE =~ mpc*)   set OPT='-O0'
+         #
+         # Defensive compiling identified with EPA COSE tool
+         if ($MODULE == dftxca)   set OPT='-Mlre -Mautoinline -Mcache_align'
+         if ($MODULE == omp_int1) set OPT='-Mlre -Mautoinline -Mcache_align'
+         if ($MODULE == omp_grd1) set OPT='-Mlre -Mautoinline -Mcache_align'
+         if ($MODULE == riccints) set OPT='-Mlre -Mautoinline -Mcache_align'
+         #
+         #set OPT='-O0'
+         #
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+               #
+               if ($MODULE == cchem) set OPT="${OPT} -DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set OPT="$OPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set OPT="$OPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set OPT="$OPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         #
+         # Optional OpenMP support
+         if ($GMS_OPENMP == true)  then
+
+            set OPT="-mp -Minfo=mp $OPT"
+
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         #
+         (set echo; $FC -c -i8 -m64 -mcmodel=medium $GMS_FPE_FLAGS $OPT $MODULE_F)
+         breaksw
+      case rocm:
+         set CRAY_AMD_COMPILER_MAJOR_VERSION=`echo $CRAY_AMD_COMPILER_VERSION | cut -d. -f1`
+         set OPT    = "-O3"
+         set BASE   = "-m64 -fdefault-integer-8"
+         set INFO   = " "
+         set HPE_CRAY_OPT = " "
+         switch($CRAY_AMD_COMPILER_VERSION)
+            case 5.1.0:
+               breaksw
+            default:
+               echo "Unknown HPE Cray AMD compiler version" >> /dev/stderr
+               exit
+               breaksw
+         endsw
+         #
+         if ($GMS_OPENMP == true)  then
+            switch ($MODULE)
+               case omp*:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+            set HPE_CRAY_OPT = "-fopenmp $HPE_CRAY_OPT"
+         else
+            set HPE_CRAY_OPT = "$HPE_CRAY_OPT"
+         endif
+         if(-e $MODULE_F) then
+            echo "Compiling FORTRAN file $MODULE_F"
+            (set echo; $FC -c $BASE $OPT $HPE_CRAY_OPT $INFO $MODULE_F)
+         else
+            echo "ERROR: FORTRAN Source for module $MODULE was not found" >> /dev/stderr
+            exit 4
+         endif
+         breaksw
+      case aocc:
+         echo "Need to define compilation block for GMS_HPE_CRAY_COMP = aocc in comp" >> /dev/stderr
+         exit 1
+         breaksw
+      default:
+         echo "Invalid HPE Cray compiler" >> /dev/stderr
+         exit 1
+         breaksw
+   endsw
+endif
+#
+#   Cray XT Series:
+#
+if ($TARGET == cray-xt) then
+   #
+   #     To use Portland Group compilers, might need to uncomment next two lines
+   #--module swap PrgEnv-cray PrgEnv-pgi
+   #--module load acml
+   #     echo out the loaded modules, but only once at the top of 'compall'
+   if ($MODULE == aldeci) then
+      echo "--------------------------------"
+      echo "Cray XT system software setup is"
+      echo "--------------------------------"
+      module list
+      echo "----------------------------------------------------"
+      echo "Hopefully that includes PrgEnv-pgi and acml modules."
+      echo "----------------------------------------------------"
+   endif
+   #
+   #     next seems to be always 'ftn', which is how 'config' sets this.
+   set FC = $GMS_FORTRAN
+   #
+   #         two choices not included in the configuration step
+   #         These must match 'compddi' and 'lked', and loaded software modules.
+   #            valid choices: intel, cray, pgi
+   set GMS_XT_COMP = 'pgi'
+   #            valid choices: i7, barcelona, shanghai, or blank
+   set GMS_XT_ARCH = ' '
+
+   switch ($GMS_XT_COMP)
+      case pgi:
+         echo "** Compiler: PGI"
+         set OPT = '-fastsse -O2 -Munroll'
+         #       increase the optimization level on the following:
+         if ($MODULE == int2a)  set OPT = '$OPT -Minline'
+         if ($MODULE == prppop) set OPT = '$OPT -Minline'
+         if ($MODULE == dftgrd) set OPT = '$OPT -Minline'
+         if ($MODULE == mp2ddi) set OPT = '-fastsse -O3 -Munroll'
+         if ($MODULE == dftgrd) set OPT = '-fastsse -O3 -Munroll'
+         #       back off the optimization level on the following:
+         if ($MODULE == basccn) set OPT = '-O2'
+         if ($MODULE == cphf)   set OPT = '-O2'
+         if ($MODULE == int2b)  set OPT = '-O2 -Mnounroll'
+         if ($MODULE =~ mpc*)   set OPT = '-O0'
+         if ($MODULE == symslc) set OPT = '-O2'
+         set BASE   = '-i8 -mcmodel=medium'
+         set INFO   = '-Minfo=all -Mneginfo=loop' # if analyzing performance
+         set INFO   = ' '
+         switch ($GMS_XT_ARCH)
+            case barcelona:
+               echo "Using Quadcore Barcelona flags"
+               set XT_OPT = '-tp barcelona-64 -Mfpmisalign'
+               breaksw
+            case shanghai:
+               echo "Using Quadcore Shanghai flags"
+               set XT_OPT = '-tp shanghai-64 -Mfpmisalign'
+               breaksw
+            case i7:
+               set XT_OPT = '-tp x64'
+               breaksw
+            default:
+               echo "Using default K8 flags"
+               set XT_OPT = ' '
+               breaksw
+         endsw
+         breaksw
+      case cray:
+         # -m = 0 for all messages (Error, Warning, Caution, Note, and Comment)
+         # -m = 3 (default) is Error Warning, but there are many 'warnings'.
+         # -m = 4 Error only  (note that 1 and 2 are also available)
+         echo "** Compiler: Cray"
+         set OPT    = " "
+         set BASE   = "-target=linux -sdefault64 -m 4 -h noomp"
+         set INFO   = "-rm"
+         set XT_OPT = " "
+         breaksw
+      case intel:
+         echo "** Compiler: Intel"
+         set FC = ifort
+         set OPT = "-O2"
+         if ($MODULE == mp2ddi) set OPT='-O3'
+         if ($MODULE == dftgrd) set OPT='-O0'
+         if ($MODULE == guess)  set OPT='-O0' # 10.0, exam39
+         if ($MODULE == morokm) set OPT='-O0' # Jan Fredin
+         if ($MODULE == prpel)  set OPT='-O1' # 10.0, exam13
+         if ($MODULE == tdxitr) set OPT='-O1' # 10.0, exam39
+         if ($MODULE == prppop) set OPT='-O0' # defensive compiling
+         set BASE   = "-i8 -auto -ftz -assume byterecl -w95 -cm"
+         set INFO   = "-opt-report -vec-report3"
+         set INFO   = " "
+         set XT_OPT = "-xSSE4.2"
+         breaksw
+      default:
+         echo "Invalid Cray XT compiler" >> /dev/stderr
+         exit
+         breaksw
+   endsw
+
+   #
+   #              now, actually compile the module for the XT.
+   #
+   if(-e $MODULE_F) then
+      echo "Compiling fixed format FORTRAN file $MODULE_F"
+      (set echo; $FC -c $BASE $OPT $XT_OPT $INFO $MODULE_F)
+   else if(-e $MODULE.f90) then
+      echo "Compiling free format FORTRAN file $MODULE.f90"
+      (set echo; $FC -c $BASE $OPT $XT_OPT $INFO $MODULE.f90)
+   else
+      echo "ERROR: FORTRAN Source for module $MODULE was not found" >> /dev/stderr
+      exit 4
+   endif
+endif
+#
+if ($TARGET == ibm64) then
+   switch($GMS_FORTRAN)
+      case xlf:
+         set OVERRIDE=''
+         switch ($MODULE_F:e)
+            case F90:
+            case f90:
+               set F90FLAGS='-qsuffix=f=f90 -qfree=f90'
+               if (($GMS_OPENMP == true) )  then
+                  set FORT='xlf90_r'
+                  set FORT2003='xlf2003_r'
+                  set FORT2008='xlf2008_r'
+               else
+                  set FORT='xlf90'
+                  set FORT2003='xlf2003'
+                  set FORT2008='xlf2008'
+               endif
+               # Some files need to be compiled with xlf2003
+               if ($MODULE == mod_nameio) set FORT=$FORT2003
+               if ($MODULE == functionals)set FORT=$FORT2003
+               if ($MODULE == libxc)      set FORT=$FORT2003
+               if ($MODULE == modmdi)     set FORT=$FORT2003
+               if ($MODULE == riccdiag)   set FORT=$FORT2003
+               if ($MODULE == riccints)   set FORT=$FORT2003
+               if ($MODULE == riccrhf)    set FORT=$FORT2003
+               if ($MODULE == riccutils)  set FORT=$FORT2003
+               if ($MODULE == modules_common)         set FORT=$FORT2003
+               if ($MODULE_F == mod_grid_storage.F90) set FORT=$FORT2003
+               if ($MODULE_F == mod_dft_partfunc.F90) set FORT=$FORT2003
+               if ($MODULE_F == mod_dft_molgrid.F90) set FORT=$FORT2003
+               if ($MODULE_F == mod_dft_gridint.F90) set FORT=$FORT2003
+               if ($MODULE_F == mod_shell_tools.F90) set FORT=$FORT2003
+               if ($MODULE_F == omp_pcm.F90) set FORT=$FORT2008
+               set FORT="$FORT $F90FLAGS"
+               breaksw
+            case f:
+            case F:
+            default:
+               set FORT='xlf'
+               if (($GMS_OPENMP == true) ) set FORT='xlf_r'
+               breaksw
+         endsw
+         #         64 bit workstations (or SP) is sure to be Power3 or higher chip.
+         #         ISU's AIX systems are a mix of Power3 and Power4, while our
+         #         Linux systems are all Power5 (else clause).  Please change
+         #         the arch/tuning to better match your system, as you like.
+         #
+         #         xlf 5.1.1 and 6.1.0 and 7.1.0 and 8.1.0 and 9.1.0 are mostly OK,
+         #         but 10.1.0 has a few more problems than usual.  Ever notice that
+         #         IBM never puts out anything but x.1.x?
+         set BITS='-q64 -qintsize=8'
+         set OPT='-O2'
+         if (`uname` == AIX) then
+            set ARCH='pwr3'
+            set TUNE='pwr3'
+         else
+            set ARCH='pwr8'
+            set TUNE='pwr8'
+            if ( $?GMS_HPC_SYSTEM_TARGET ) then
+               if ( $GMS_HPC_SYSTEM_TARGET == summit ) then
+                  set ARCH='pwr9'
+                  set TUNE='pwr9'
+               endif
+               if ( $GMS_HPC_SYSTEM_TARGET == hokulea ) then
+                  set ARCH='pwr8'
+                  set TUNE='pwr8'
+               endif
+            endif
+            if ($MODULE == mcpgrd) set ARCH='pwr3'  # or: -O2/pwr5 in xlf 9.1
+            if ($MODULE == mcpgrd) set TUNE='pwr3'
+         endif
+         if ($MODULE == fmoint)  set OPT="-O3 -qstrict"
+         if ($MODULE == gugdga)  set OPT="-O2"  # 10.1 (OK on older xlf)
+         if ($MODULE == gugdgb)  set OPT="-O2"  # 10.1 (OK on older xlf)
+         if ($MODULE == mpcmol)  set OPT="-O2"  # 10.1 (OK on older xlf)
+         if ($MODULE == pcmcv2)  set OPT="-O2"  # exam31, as of 2011 changes
+         if ($MODULE == omp_pcm) set OPT="-DGAMESS_NO_NORM2_INTRINSIC_PROVIDED"
+         #
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               if ($MODULE == cchem) then
+                  set OPT="$OPT -DHAVE_CCHEM"
+                  set OPT="$OPT -qextname=cchem_initialize"
+                  set OPT="$OPT -qextname=molecule_new_gamess,basis_new_gamess,cchem_hf_fock"
+                  set OPT="$OPT -qextname=new_wavefunction,wavefunction_set_occupied,wavefunction_set_single_occupied,wavefunction_set_double_occupied,wavefunction_set_virtuals,wavefunction_set_c,wavefunction_set_e,wavefunction_normalize,cchem_runtime_set_double,cchem_mp2_energy"
+                  set OPT="$OPT -qextname=auxbasis_new_gamess,new_ri_wavefunction,wavefunction_set_spherical_coeff,cchem_runtime_set_char,delete_wavefunction,delete_basis,delete_molecule,cchem_rimp2_gradient,cchem_rimp2_energy"
+                  set OPT="$OPT -qextname=cchem_df_rhf"
+                  set OPT="$OPT -qextname=wavefunction_set_f,cchem_runtime_set_int,cchem_cc_energy"
+                  set OPT="$OPT -qextname=basis_recenter,cchem_dft_fock"
+               endif
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set OPT="$OPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set OPT="$OPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set OPT="$OPT -I$GMS_GA_PATH/include"
+                     set OPT="$OPT -qextname=ga_acc,ga_nnodes,ga_brdcst,ga_create,ga_error,ga_destroy,ga_distribution,ga_sync,ga_get,ga_dgop,ga_igop,ga_fill,ga_initialize,ga_terminate,ga_put,ga_nodeid"
+                     set OPT="$OPT -qextname=ga_read_inc,ga_pgroup_brdcst,ga_pgroup_dgop,ga_uses_ma,ga_initialize_ltd,ga_cluster_nnodes,ga_cluster_nodeid,ga_cluster_procid,ga_pgroup_create,ga_cluster_nprocs"
+                     set OPT="$OPT -qextname=gamess_mpi_init,ma_sizeof,ma_init"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set OPT="$OPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         if ($GMS_LIBCCHEM == true) then
+            if ($MODULE == eigen) set OPT="$OPT -qextname=dspev"
+
+            set OPT="$OPT -qextname=ddi_nproc,ddi_smp_nproc,ddi_masters_gsumi,ddi_masters_gsumf,ddi_masters_bcast,ddi_dlbnext,ddi_sync,ddi_dlbreset,ddi_gsumi,ddi_gsumf,ddi_bcast"
+            set OPT="$OPT -qextname=nshel,auxbas,infoa,spheri,sphehi"
+         endif
+
+         if (($GMS_OPENMP == true) && ($MODULE != basccn) )  then
+            set OPT="$OPT -qsmp=omp"
+            if ($GMS_OPENMP_OFFLOAD == true) set OPT="${OPT} -qoffload"
+            #
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $chmsrc/../../tool/addomp.sh $MODULE_F
+#                  $GMS_BUILD_DIR/tool/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+
+         (set echo; $FORT -c $OPT $BITS -g -qarch=$ARCH -qtune=$TUNE -qflag=W:W -qhalt=W -qspillsize=2500 -qnosave -qxlf90=autodealloc -qxlf77=leadzero $OVERRIDE $MODULE_F)
+         breaksw
+      case gfortran:
+         #
+         #        Flags are
+         #           -fdefault-integer-8 makes for 64 bit binaries.
+         #           -finit-real=<zero|inf|-inf|nan>  could be interesting debug opt
+         #           -fno-automatic  forces static storage of all local variables
+         #           -fno-whole-file suppresses argument's data type checking.
+         #                           This exists in at least the 4.6.1 version,
+         #                           but was later removed with no equivalent added.
+         #                           If your 4.6.x doesn't like it, switch to the
+         #                           suppression of all warnings by -w.
+         #           -fno-aggressive-loop-optimization turns off some aggressive
+         #                           optimization introduced in 4.8, which caused
+         #                           40 out of 47 test examples to fail.
+         #
+         #         first, initialize OPT and EXTRAOPT
+         #
+         set OPT='-O2'
+
+         set EXTRAOPT=" "
+         if (($MODULE_F:e == f90) || ($MODULE_F:e == F90)) then
+            set EXTRAOPT="$EXTRAOPT -ffree-line-length-none"
+         endif
+         if ($MODULE == nameio) set EXTRAOPT="$EXTRAOPT -std=legacy"
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -std=legacy -DVB2000_GMS"
+
+         #           some extra twiddling, iff using LIBCCHEM add-on code,
+         #           but then only for its two interface files.
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+               if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         switch ($GMS_GFORTRAN_VERNO)
+            case 5.1:
+            case 5.2:
+            case 5.3:
+            case 5.4:
+            case 5.5:
+            case 6.1:
+            case 6.2:
+            case 6.3:
+            case 6.4:
+            case 6.5:
+               #
+               # A lot of the machine generated files exceed the limit on the number of "variable assignment tracking".
+               # We pass the flag "-fno-var-tracking-assignments" to completely shutdown variable assignment tracking
+               # for these files which will speed up compilation and reduce warnings **BUT** at the cost of debugging.
+               #
+               # Besides - who is even debugging autogenerated code anyways?
+               #
+               # But if you want to increase the limit and debug the code then consider replacing:
+               # "-fno-var-tracking-assignments" with "--param=max-vartrack-size=500000000"
+               # But be warned! Compilation times will be extremely slow! And memory consumption will
+               # very high if compiling in parallel!
+               #
+               # Source: https://stackoverflow.com/questions/23499909/adjust-variable-tracking-assignment-length
+               #
+               if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+              #if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+               if ($MODULE == cosmo)  set OPT='-O0'  # same issue as seen in 4.6
+               if ($MODULE == dcscf)  set OPT='-O0'  # exam44, continues from 4.7
+               if ($MODULE == rohfcc) set OPT='-O0'  # exam47, first seen in 4.7
+               if ($MODULE == tddgrd) set OPT='-O0'  # exam41, continues from 4.6
+               if ($MODULE == tduprp) set OPT='-O0'  # ethylene_benzene_fed
+               #
+               # The -funconstrained-commons flag was added to address:
+               # https://github.com/gms-bbg/gamess/issues/24 and to allow
+               # standard exams to pass test validations.
+               #
+               # http://www.lahey.com/docs/lfpro78help/gcc/Optimize-Options.html#Optimize-Options
+               # This option tells the compiler that variables declared in common blocks (e.g. Fortran)
+               # may later be overridden with longer trailing arrays. This prevents certain optimizations
+               # that depend on knowing the array bounds.
+               #
+               # This flag should not be applied across all source files. But is added as an alternative
+               # to not being able to build a GAMESS binary at all.
+               #
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -w"
+               breaksw
+            case 7.1:
+            case 7.2:
+            case 7.3:
+            case 7.4:
+            case 7.5:
+            case 8.1:
+            case 8.2:
+            case 8.3:
+            case 8.4:
+            case 8.5:
+            case 9.1:
+            case 9.2:
+            case 9.3:
+            case 9.4:
+            case 9.5:
+            case 10.1:
+            case 10.2:
+            case 10.3:
+            case 10.4:
+            case 10.5:
+            case 11.0:
+            case 11.1:
+            case 11.2:
+            case 11.3:
+            case 11.4:
+            case 12.0:
+            case 12.1:
+            case 12.2:
+            case 12.3:
+            case 13.1:
+               if ($GMS_MATHLIB == libflame) then
+                  #keeping these in to fix exam30
+                  if ($MODULE == efgrda) set OPT='-O0'
+                  if ($MODULE == efgrdb) set OPT='-O0'
+                  if ($MODULE == efgrdc) set OPT='-O0'
+                  if ($MODULE == efinp)  set OPT='-O0'
+                 #if ($MODULE == iolib) set OPT='-O0'
+
+                 #fix exams 45-47
+                 #if ($MODULE == eaipcc) set OPT='-O0'
+                 #if ($MODULE == mm23)   set OPT='-O0'
+                 #if ($MODULE == eomcc)  set OPT='-O0'
+                  if ($MODULE == roeom)  set OPT='-O0'
+               endif
+               if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+              #if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+               if ($MODULE == gugdm2 ) set OPT="-O0" #fixes failure of exam05
+
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -w"
+               breaksw
+            default:
+               echo "Unrecognized gfortran version for linux64" >> /dev/stderr
+               exit 4
+               breaksw
+         endsw
+
+         set GF_VER = `echo $GMS_GFORTRAN_VERNO | tr -d "."`
+         if($GF_VER >= 100) then
+            set EXTRAOPT="$EXTRAOPT -fallow-argument-mismatch"
+         endif
+         unset GF_VER
+
+         # A backdoor way to set optimization level differently.
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+
+         # Optional OpenMP support
+         if ($GMS_OPENMP == true)  then
+
+            set OPT="$OPT -fopenmp"
+
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         (set echo; gfortran -c -fdefault-integer-8 -g $OPT $EXTRAOPT $MODULE_F)
+         breaksw
+      case pgfortran:
+      case pgf77:
+         if ($GMS_L64_OPT == testing) then
+            set OPT = "$GMS_PGI_OPT $GMS_IPA_OPT"
+            #set OPT = "-O0"
+            if ($MODULE == efelec) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == efmo)   set OPT="$GMS_PGI_OPT"
+            if ($MODULE == gradex) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == grd1)   set OPT="$GMS_PGI_OPT"
+            if ($MODULE == guess)  set OPT='-O1'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            if ($MODULE == mnsol)  set OPT="$GMS_PGI_OPT"
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+            if ($MODULE == mthlib) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == ormas1) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == prppop) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == rxncrd) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == solib)  set OPT="$GMS_PGI_OPT"
+            if ($MODULE == statpt) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == tddefp) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == trnstn) set OPT="$GMS_PGI_OPT"
+         else
+            set OPT = '-fast -Mipa=fast,safe'
+            #set OPT = '-O1'
+            #if ($MODULE == efelec) set OPT='-fast'
+            if ($MODULE == efelec) set OPT='-fast'
+            if ($MODULE == dftxcb) set OPT='-O0'
+            if ($MODULE == dftxce) set OPT='-O0'
+            if ($MODULE == dftxcg) set OPT='-O0'
+            #if ($MODULE == efmo)   set OPT='-fast'
+            #if ($MODULE == gradex) set OPT='-fast'
+            #if ($MODULE == grd1)   set OPT='-fast'
+            if ($MODULE == guess)  set OPT='-O1'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            #if ($MODULE == mnsol)  set OPT='-fast'
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+            #if ($MODULE == mthlib) set OPT='-fast'
+            #if ($MODULE == ormas1) set OPT='-fast'
+            #if ($MODULE == prppop) set OPT='-fast'
+            #if ($MODULE == rxncrd) set OPT='-fast'
+            #if ($MODULE == solib)  set OPT='-fast'
+            #if ($MODULE == statpt) set OPT='-fast'
+            #if ($MODULE == tddefp) set OPT='-fast'
+            #if ($MODULE == trnstn) set OPT='-fast'
+         endif
+
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_AHFOCK == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_AHFOCK"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+               if ($MODULE == cchem) set OPT="${OPT} -DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set OPT="$OPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set OPT="$OPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set OPT="$OPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+
+         if ($GMS_OPENMP == true) then
+             echo "PGFORTRAN does not honor omp_set_dynamic()." >> /dev/stderr
+             echo "Results are wrong. Aborting compilation" >> /dev/stderr
+             exit 1
+         endif
+
+         if ( `uname` == Darwin ) then
+            (set echo; $GMS_FORTRAN $GMS_LIN_FLAGS -c -i8 $OPT $MODULE_F)
+         else
+            (set echo; $GMS_FORTRAN $GMS_LIN_FLAGS -c -i8 -mcmodel=medium $OPT $MODULE_F)
+         endif
+         breaksw
+         case nvfortran:
+            set FAST="-fast"
+            #
+            set OPT = "$FAST"
+            #
+            if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+            #
+            # Need to drop to -O1 if using NVIDIA HPC SDK v. 21.9
+            if ($MODULE == tddxca)         set OPT="-O1"
+            if ($MODULE == tddxcd_m06)     set OPT="-O1"
+            if ($MODULE == tddxcd_m08)     set OPT="-O1"
+            if ($MODULE == tddxcd_pkzb)    set OPT="-O1"
+            if ($MODULE == tddxcd_revtpss) set OPT="-O1"
+            if ($MODULE == tddxcd_tpss)    set OPT="-O1"
+            #
+            # Defensive compiling taken from pgfortran
+            if ($MODULE == dftgrd) set OPT='-O1'
+            if ($MODULE == dgeev)  set OPT='-O1'
+            if ($MODULE == efelec) set OPT=$FAST
+            if ($MODULE == efmo)   set OPT=$FAST
+            if ($MODULE == gradex) set OPT=$FAST
+            if ($MODULE == grd1)   set OPT=$FAST
+            if ($MODULE == guess)  set OPT='-O1'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            if ($MODULE == mnsol)  set OPT=$FAST
+            if ($MODULE == mthlib) set OPT=$FAST
+            if ($MODULE == ormas1) set OPT=$FAST
+            if ($MODULE == prppop) set OPT=$FAST
+            if ($MODULE == riint)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == rxncrd) set OPT=$FAST
+            if ($MODULE == solib)  set OPT=$FAST
+            if ($MODULE == statpt) set OPT=$FAST
+            if ($MODULE == tddefp) set OPT=$FAST
+            if ($MODULE == trnstn) set OPT=$FAST
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+            #
+            # Defensive compiling identified with EPA COSE tool
+            if ($MODULE == dftxca)   set OPT='-O1'
+            if ($MODULE == omp_int1) set OPT='-O1'
+            if ($MODULE == omp_grd1) set OPT='-O1'
+            if ($MODULE == riccints) set OPT='-O1'
+            #
+            #set OPT='-O1 -Mnounroll'
+            #
+            if (($MODULE == cchem) || ($MODULE == ga)) then
+               mv $MODULE.f $MODULE.F
+               set MODULE_F=$MODULE.F
+               if ($GMS_LIBCCHEM == true) then
+                  set CCHEM_MODULES = ""
+                  if ($GMS_CCHEM_HF == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+                  if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+                  if ($GMS_CCHEM_RI == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+                  if ($GMS_CCHEM_CC == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+                  #
+                  if ($MODULE == cchem) set OPT="${OPT} -DHAVE_CCHEM ${CCHEM_MODULES}"
+                  if ($MODULE == ga) then
+                     switch ($GMS_MPI_LIB)
+                        case impi:
+                           set OPT="$OPT -I$GMS_MPI_PATH/intel64/include"
+                           breaksw
+                        default:
+                           set OPT="$OPT -I$GMS_MPI_PATH/include"
+                           breaksw
+                     endsw
+                     if(-e $GMS_GA_PATH/include/global.fh) then
+                        set OPT="$OPT -I$GMS_GA_PATH/include"
+                     else
+                        echo "ERROR: Global Arrays not found." >> /dev/stderr
+                        exit 4
+                     endif
+                  endif
+               endif
+            endif
+            #
+            # Optional OpenMP support
+            if ($GMS_OPENMP == true)  then
+               if ($GMS_OPENMP_OFFLOAD == true) then
+                  set OPT="$OPT -gopt -mp=gpu -gpu=cc70 -DSETDEVICEID -Minfo=mp,accel -i8"
+               else
+                  set OPT="$OPT -mp -Minfo=mp"
+               endif
+               switch ($MODULE)
+                  case omp*:
+                  case riccutils:
+                  case riccints:
+                  case riccdiag:
+                  case riccrhf:
+                  case rimp2grd:
+                  case rimp2omp:
+                  case libxc:
+                  case modules_common:
+                     breaksw
+                  default:
+                     $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                     breaksw
+               endsw
+            endif
+            #
+            (set echo; $GMS_FORTRAN -c -i8 -m64 -mcmodel=medium $GMS_FPE_FLAGS $OPT $MODULE_F)
+            breaksw
+      default:
+         echo "ERROR: Unknown Fortran compiler for ibm64 target" >> /dev/stderr
+         exit 4
+         breaksw
+   endsw
+endif
+#
+if ($TARGET == cray-xc) then
+   if ($GMS_HPC_SYSTEM_TARGET == cori) then
+      set FC = 'ftn'
+
+      if ( $?INTEL_VERSION ) then
+         set GMS_HPE_CRAY_COMP = intel
+         if ( $?PE_ENV ) then
+            if ( $PE_ENV != "INTEL") set FC = ifort
+         endif
+      endif
+
+      if ( $?GNU_VERSION ) then
+         set GMS_HPE_CRAY_COMP = gnu
+         if ( $?PE_ENV ) then
+            if ( $PE_ENV != "GNU") set FC = gfortran
+         endif
+      endif
+
+      if ( $?I_MPI_ROOT ) set FC = mpiifort
+
+      if  ( $?CRAY_CPU_TARGET ) then
+         set GMS_HPE_CRAY_ARCH = $CRAY_CPU_TARGET
+      else
+         set GMS_HPE_CRAY_ARCH = $CPU
+      endif
+
+      switch ($GMS_HPE_CRAY_COMP)
+         case intel:
+            set OPT = '-O2'
+            switch ($INTEL_VERSION)
+               case 18.0.1.163:
+               case 18.0.3.222:
+               case 19.0.0.117:
+               case 19.0.3.199:
+               case 19.0.8.324:
+               case 19.1.0.166:
+               case 19.1.1.217:
+               case 19.1.2.254:
+               case 19.1.2.275:
+               case 19.1.3.304:
+               case 2021.1:
+                  if  ($MODULE == eigen)  set OPT='-O0' # read note just above.
+                  if  ($MODULE == fmo)    set OPT='-O1' # 12.0.4, exam37
+                  if  ($MODULE == guess)  set OPT='-O0' # 10.0, exam39
+                  if  ($MODULE == locpol) set OPT='-O1' # 10.0, makefp/gmres
+                  if  ($MODULE == mcpinp) set OPT='-O1' # exam38 is affected with Intel PS-2020.x.xxx
+                  if  ($MODULE == morokm) set OPT='-O0' # Jan Fredin
+                  if  ($MODULE == nucbas) set OPT='-O0' # 12.x, various NEO examples
+                  if  ($MODULE == prpel)  set OPT='-O1' # 10.0, exam13
+                  if  ($MODULE == rohfcc) set OPT='-O0' # exam42+exam47 (op.sh.CC,IP-EOM)
+                  if  ($MODULE == tdxitr) set OPT='-O1' # 10.0, exam39
+                  if  ($MODULE == vscf)   set OPT='-O0' # intensities for combinations
+                  breaksw
+               default:
+                  echo "ERROR: Unknown Intel version" >> /dev/stderr
+                  exit 4
+                  breaksw
+            endsw
+
+            if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+            set EXTRAOPT=""
+
+            if (($MODULE == cchem) || ($MODULE == ga)) then
+               mv $MODULE.f $MODULE.F
+               set MODULE_F=$MODULE.F
+               if ($GMS_LIBCCHEM == true) then
+                  set CCHEM_MODULES = ""
+                  if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+                  if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+                  if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+                  if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+                  if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+                  if ($MODULE == ga) then
+                     switch ($GMS_MPI_LIB)
+                        case impi:
+                           set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                           breaksw
+                        default:
+                           set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                           breaksw
+                     endsw
+                     if(-e $GMS_GA_PATH/include/global.fh) then
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                     else
+                        echo "ERROR: Global Arrays not found." >> /dev/stderr
+                        exit 4
+                     endif
+                  endif
+               endif
+            endif
+
+            set EXTRAOPT="$EXTRAOPT -assume byterecl"
+            set EXTRAOPT="$EXTRAOPT -qopt-report=0"
+            set EXTRAOPT="$EXTRAOPT -warn nousage -inline-level=0"
+            if  ($MODULE =~ "omp*") set EXTRAOPT="$EXTRAOPT -inline-level=2"
+            if  ($MODULE =~ "mod_*") set EXTRAOPT="$EXTRAOPT -inline-level=2"
+
+            if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -DVB2000_GMS"
+
+            if ($GMS_MSUAUTO == true) then
+               set OPT="$OPT -mcmodel=medium"
+            endif
+
+            if ($GMS_OPENMP == true)  then
+               set OPT="$OPT -qopenmp"
+
+               switch ($MODULE)
+                  case omp*:
+                  case riccutils:
+                  case riccints:
+                  case riccdiag:
+                  case riccrhf:
+                  case rimp2grd:
+                  case rimp2omp:
+                  case libxc:
+                     breaksw
+                  default:
+                     $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                     breaksw
+               endsw
+            endif
+
+            switch ($MODULE)
+               case mod_gauss_hermite:
+               case mod_shell_tools:
+               case mod_1e_primitives:
+               case omp_*:
+                  set EXTRAOPT="$EXTRAOPT -align -ipo -ip -O3 -no-prec-div -fp-model fast=2 -inline-level=2"
+            endsw
+            (set echo; $FC -c -i8 -mcmodel=medium -g $GMS_FPE_FLAGS $OPT -ftz -auto $EXTRAOPT $MODULE_F)
+            breaksw
+         case gnu:
+            set OPT='-O2'
+            #
+            set EXTRAOPT=" "
+            if (($MODULE_F:e == f90) || ($MODULE_F:e == F90)) then
+               set EXTRAOPT="$EXTRAOPT -ffree-line-length-none"
+            endif
+            if ($MODULE == nameio) set EXTRAOPT="$EXTRAOPT -std=legacy"
+            if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -std=legacy -DVB2000_GMS"
+            #
+            if (($MODULE == cchem) || ($MODULE == ga)) then
+               mv $MODULE.f $MODULE.F
+               set MODULE_F=$MODULE.F
+               if ($GMS_LIBCCHEM == true) then
+                  set CCHEM_MODULES = ""
+                  if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+                  if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+                  if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+                  if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+                  #
+                  if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+                  if ($MODULE == ga) then
+                     switch ($GMS_MPI_LIB)
+                        case impi:
+                           set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                           breaksw
+                        default:
+                           set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                           breaksw
+                     endsw
+                     if(-e $GMS_GA_PATH/include/global.fh) then
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                     else
+                        echo "ERROR: Global Arrays not found." >> /dev/stderr
+                        exit 4
+                     endif
+                  endif
+               endif
+            endif
+            #
+            switch ($GNU_VERSION)
+               case 6.1.0:
+               case 7.3.0:
+               case 8.1.0:
+               case 8.2.0:
+               case 8.3.0:
+               case 9.3.0:
+               case 10.1.0:
+                  #
+                  if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+                 #if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+                  if ($MODULE == cimi ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments -Wno-maybe-uninitialized"
+                  if ($MODULE == gugdm2 ) set OPT="-O0" #fixes failure of exam05
+                  #
+                  set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+                  set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+                  if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+                  breaksw
+               default:
+                  echo "Unrecognized gfortran version for linux64" >> /dev/stderr
+                  exit 4
+                  breaksw
+            endsw
+            #
+            switch ($MODULE)
+               case mod_gauss_hermite:
+               case mod_shell_tools:
+               case mod_1e_primitives:
+               case omp_*:
+                  set EXTRAOPT="-flto -Ofast -ffast-math" # -funconstrained-commons"
+                  if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+            endsw
+            set GF_VER = `echo $GNU_VERSION | tr -d "."`
+            if($GF_VER >= 100) then
+               set EXTRAOPT="$EXTRAOPT -fallow-argument-mismatch"
+            endif
+            unset GF_VER
+            #
+            # A backdoor way to set optimization level differently.
+            if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+            #
+            # Optional OpenMP support
+            if ($GMS_OPENMP == true)  then
+               set OPT="$OPT -fopenmp"
+               switch ($MODULE)
+                  case omp*:
+                  case riccutils:
+                  case riccints:
+                  case riccdiag:
+                  case riccrhf:
+                  case rimp2grd:
+                  case rimp2omp:
+                  case libxc:
+                     breaksw
+                  default:
+                     $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                     breaksw
+               endsw
+            endif
+            (set echo; $FC -c -fdefault-integer-8 -g $GMS_FPE_FLAGS $OPT $EXTRAOPT $MODULE_F)
+            breaksw
+         default:
+            echo "Invalid HPE Cray compiler" >> /dev/stderr
+            exit 1
+            breaksw
+      endsw
+
+   else
+      #     Fortran compiler is always 'ftn'.
+      set FC = $GMS_FORTRAN
+      #
+      # Need to read these variables from config
+      set GMS_XC_COMP = 'intel'
+      if (! $?GMS_IFORT_VERNO ) then
+         set GMS_IFORT_VERNO = '16'
+      endif
+      #
+      switch ($GMS_XC_COMP)
+         case intel:
+            # These are ifort flags
+            #     -i4/-i8 set default integer length
+            #     -On can have n=1,2,3.  Use of 3 caused problems with earlier
+            #          compilers, so it isn't being used here.  Try it if you like.
+            #     stack storage for locals is governed by -auto versus -save.
+            #     -assume byterecl was introduced at ifort 8.0 (older versions will
+            #        print a message saying this flag is ignored).  Newer versions
+            #        need this so that direct access file opens are measured in
+            #        bytes rather than the new default in v8.0, namely 4-byte units.
+            #     -vec-report0 suppresses loop vectorization messages (new in 10.0)
+            #     -w95 suppresses Hollerith initialization and other f90-like warnings
+            #     -cm  means suppress comments about programming practices,
+            #          these two options spelled '-warn nousage' at version 12.
+            #     -WB means warn but don't fail on out-of-bounds array references
+            #     -ftz flushes underflow results to zero
+            #
+            set OPT = '-O2'
+            if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+            #       alas, I'm so tired of hearing about so many versions failing to
+            #       diagonalize, that this time critical code is run w/o optimization.
+            #       Very many (all?) ifort versions have problems with eigen.src.
+            if  ($MODULE == eigen)  set OPT='-O0' # read note just above.
+            if  ($MODULE == fmo)    set OPT='-O1' # 12.0.4, exam37
+            if  ($MODULE == guess)  set OPT='-O0' # 10.0, exam39
+            if (($MODULE == int2b) && ($GMS_IFORT_VERNO == 13)) set OPT='-O1' # vers. 13.0.1.117 only
+            if (($MODULE == int2s) && ($GMS_IFORT_VERNO == 13)) set OPT='-O1' # vers. 13.0.1.117 only
+            if  ($MODULE == locpol) set OPT='-O1' # 10.0, makefp/gmres
+            if  ($MODULE == morokm) set OPT='-O0' # Jan Fredin
+            if  ($MODULE == nucbas) set OPT='-O0' # 12.x, various NEO examples
+            if  ($MODULE == prpel)  set OPT='-O1' # 10.0, exam13
+            if (($MODULE == rohfcc) && ($GMS_IFORT_VERNO >= 12))  set OPT='-O0' # exam42+exam47 (op.sh.CC,IP-EOM)
+            if  ($MODULE == tdxitr) set OPT='-O1' # 10.0, exam39
+            if  ($MODULE == vscf)   set OPT='-O0' # intensities for combinations
+            #     if  ($MODULE == grd2a)  set OPT='-O0' # defensive compiling for Intel compiler 18
+            #     if  ($MODULE == grd2c)  set OPT='-O0' # defensive compiling for Intel compiler 18
+
+            set EXTRAOPT=" "
+
+            if ($GMS_IFORT_VERNO >=  8) set EXTRAOPT="$EXTRAOPT -assume byterecl"
+            if ($GMS_IFORT_VERNO == 10) set EXTRAOPT="$EXTRAOPT -vec-report0"
+            if ($GMS_IFORT_VERNO == 11) set EXTRAOPT="$EXTRAOPT -vec-report0"
+            if ($GMS_IFORT_VERNO == 12) set EXTRAOPT="$EXTRAOPT -vec-report0"
+            if ($GMS_IFORT_VERNO == 13) set EXTRAOPT="$EXTRAOPT -vec-report0"
+            if ($GMS_IFORT_VERNO >= 14) set EXTRAOPT="$EXTRAOPT -qopt-report=0"
+            if ($GMS_IFORT_VERNO  < 12) set EXTRAOPT="$EXTRAOPT -w95 -cm"
+            if ($GMS_IFORT_VERNO >= 12) set EXTRAOPT="$EXTRAOPT -warn nousage -inline-level=0"
+
+            if (($MODULE == cchem) || ($MODULE == ga)) then
+               mv $MODULE.f $MODULE.F
+               set MODULE_F=$MODULE.F
+               if ($GMS_LIBCCHEM == true) then
+                  set CCHEM_MODULES = ""
+                  if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+                  if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+                  if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+                  if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+                  if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM -I$GMS_MPI_PATH/include ${CCHEM_MODULES}"
+                  if ($MODULE == ga) then
+                     switch ($GMS_MPI_LIB)
+                        case impi:
+                           set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                           breaksw
+                        default:
+                           set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                           breaksw
+                     endsw
+                     if(-e $GMS_GA_PATH/include/global.fh) then
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                     else
+                        echo "ERROR: Global Arrays not found." >> /dev/stderr
+                        exit 4
+                     endif
+                  endif
+               endif
+            endif
+
+            if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -DVB2000_GMS"
+
+            if ( $?GMS_HPC_SYSTEM_TARGET ) then
+               if ( $GMS_HPC_SYSTEM_TARGET == onyx ) then
+                  if ($GMS_PHI == knl) then
+                     set EXTRAOPT="$EXTRAOPT -xMIC-AVX512"
+                  else if ($GMS_PHI == none) then
+                     set EXTRAOPT="$EXTRAOPT -xCORE-AVX2"
+                  endif
+               endif
+               #
+               if ( $GMS_HPC_SYSTEM_TARGET == theta ) then
+                  if ($GMS_PHI == knl) then
+                     set EXTRAOPT="$EXTRAOPT -xMIC-AVX512"
+                  else if ($GMS_PHI == knc) then
+                     set EXTRAOPT="$EXTRAOPT -mmic"
+                  endif
+               endif
+            endif
+            if ($GMS_OPENMP == true)  then
+               if ($GMS_IFORT_VERNO > 13) then
+                  set OPT="$OPT -qopenmp"
+               else
+                  set OPT="$OPT -openmp"
+               endif
+               switch ($MODULE)
+                  case omp*:
+                  case riccutils:
+                  case riccints:
+                  case riccdiag:
+                  case riccrhf:
+                  case rimp2grd:
+                  case rimp2omp:
+                  case libxc:
+                  case modules_common:
+                     breaksw
+                  default:
+                     $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                     breaksw
+               endsw
+            endif
+            #
+            switch ($MODULE)
+               case mod_gauss_hermite:
+               case mod_shell_tools:
+               case mod_1e_primitives:
+               case omp_*:
+                  set EXTRAOPT="$EXTRAOPT -align -ipo -ip -O3 -no-prec-div -fp-model fast=2 -inline-level=2"
+            endsw
+            #
+            (set echo; $FC -g -c -i8 $OPT -ftz -auto $EXTRAOPT $MODULE_F)
+            breaksw
+         default:
+            echo "Please spell your FORTRAN compiler name correctly." >> /dev/stderr
+            exit 4
+            breaksw
+      endsw
+   endif
+   #                     ... end of Cray-XC.
+endif
+
+if ($TARGET == fj-a64fx) then
+   #
+   #  Assumes that Fortran compiler either frt or frtpx (set via $GMS_FORTRAN)
+   #
+   set OPT = '-Kfast'
+   set EXTRAOPT=""
+   if ($MODULE == eigen)     set OPT="-O0"  # exam 23 is affected
+   if ($MODULE == hess)      set OPT="-O3"  # exam 42 is affected if binary linked to SSL2 library
+   if ($MODULE == hss1a)     set OPT="-O2"  # segfault if compiled with -Kfast (frt 1.2.27a)
+   if ($MODULE == int2s)     set OPT="-O0"  # exam 07,12,13,15,18,22,26,31-34,36,38,40-43,45-47 affected
+   if ($MODULE == mcpgrd)    set OPT="-O0"  # exam38 is affected
+   if ($MODULE == rimp2omp)  set OPT="-O2"  # rimp2-mpiomp/c60-omp and cor-omp are affected
+   if ($MODULE == ompmod)    set OPT="-O3"  # rimp2grd-mpiomp/benz_optimize.log segfaulted with -Kfast
+   if ($MODULE == vb2000)    set OPT="-O3"  # exam-vb41 fails verification with -Kfast, REFerr=3.3e-05 with treshold 1.e-06, -O2 gives REFerr=1.0e-05
+   if ($MODULE =~ ccsd3aacg* ) set OPT="-O1 -Knohpctag" # any optimization, even -O1 takes ages to compile
+   if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+#   if ($GMS_MSUAUTO == true) then
+#      set OPT="$OPT -Kcmodel=large"
+#   endif
+   switch ($MODULE)
+#     These modules written in Fortran 2003 and require to be identified as such
+      case cimi:
+      case functionals:
+      case libxc:
+      case libxc_empty:
+      case mod_dft_gridint:
+      case mod_dft_molgrid:
+      case mod_grid_storage:
+      case mod_nameio:
+      case mod_nosp_basis:
+      case modules_common:
+      case riccrhf:
+      case riccutils:
+      case rimp2grd:
+      case rimp2omp:
+      case utils_strings:
+         set OPT="$OPT -X03"
+#        set OPT="$OPT -X03 -Nalloc_assign" for Fujitsu Fortran 4.2.1a and earlier
+         breaksw
+      case vb2000:
+         set EXTRAOPT="$EXTRAOPT -DVB2000_GMS"
+         breaksw
+      case gamess_version:
+         if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         breaksw
+      default:
+         breaksw
+   endsw
+   if ($GMS_OPENMP == true)  then
+      switch ($MODULE)
+         case omp*:
+         case riccutils:
+         case riccints:
+         case riccdiag:
+         case riccrhf:
+         case rimp2grd:
+         case rimp2omp:
+         case libxc:
+         case modules_common:
+            echo "Don't apply addomp.sh on $MODULE"
+            breaksw
+         default:
+             $chmsrc/../../tool/addomp.sh $MODULE_F
+#            $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+            breaksw
+      endsw
+      set OPT="$OPT -Kopenmp"
+   endif
+   (set echo; $GMS_FORTRAN -CcdII8 -c $OPT $EXTRAOPT $MODULE_F)
+   #                     ... end of fj-a64fx
+endif
+#
+#   ------ Linux on 64 bit chips ------
+#   This should work on any 64 bit Linux release, for any type of
+#   chip, ranging from AXP to SPARC to PowerPC to AMD to Intel,
+#   if you are using 'gfortran'.  The commercial compilers tend to
+#   be more chip-specific.
+#
+#   Typical software requirement:
+#     Fedora (or other Linux distribution) in a 64 bit version,
+#     the 64 bit gcc 4.x included for free in this Linux distribution,
+#     one of the possible FORTRAN compilers: gfortran, ifort, pgf77
+#     and an appropriate math library containing the BLAS.
+#
+#  sources for FORTRAN
+#  ===================
+#
+#  Gnu's gfortran:
+#     This is included in recent Linux distributions, free compiler.
+#     gfortran is a mature software product, and any version higher
+#     than 4.1 should work properly.  Execution speed is similar to,
+#     or a bit slower than Intel's compiler, depeding on kind of run.
+#
+#  Intel's ifort:
+#     Intel's compilers are commercially licensed software, see
+#         http://software.intel.com/en-us/intel-composer-xe
+#     for the compiler bundled with a math library called MKL.
+#     Note that GAMESS makes no use of icc.
+#
+#  Portland Group's pgf77:   (note that you don't need pgcc)
+#     You need a "pgf77 workstation" license, which was priced at $449
+#     for academic use in the US as of June 2006: www.pgroup.com
+#     You can install a math library called ACML (AMD core math library),
+#     most easily while installing pgf77, or as a free download from AMD.
+#     Be sure to set up the use of this compiler, in .cshrc for example,
+#         setenv PATH $PATH\:/usr/pgi/linux86-64/bin
+#         setenv PGI /usr/pgi
+#
+#  sources for math library
+#  ========================
+#     MKL is a very fast library for 32 or 64 bit Intel chips,
+#         and can be called from gfortran as well as ifort.
+#         Look at the same developer's web site as for ifort.
+#
+#     Atlas is packaged as a RPM for Linux, e.g. rpmfind.net will help
+#         you find atlas-3.6.0-11.fc6.x86_64.rpm  (or other processor)
+#         Take .ia64.   for 'uname -p'=ia64   means Itanium2     64 bit chips
+#         Take .x86_64. for 'uname -p'=x86_64 means Intel or AMD 64 bit chips
+#
+#     ACML is a free download from AMD, from
+#         http:/developer.amd.com -> developer tools -> libraries ->
+#               ACML for Linux built with GFORTRAN (INT*8)
+#
+
+if ($TARGET == linux64) then
+   #
+   switch ($GMS_FORTRAN)
+
+      case gfortran:
+
+         #     early versions of gfortran does not support all required OpenMP features
+         set GF_VER = `echo $GMS_GFORTRAN_VERNO | tr -d "."`
+         if (($GMS_OPENMP == true) && ($GF_VER < 49)) then
+            echo 'This version of gfortran does not implement all needed OpenMP features' >> /dev/stderr
+            echo 'Please, update your compiler at least to version 4.9' >> /dev/stderr
+            echo 'or set GMS_OPENMP to "false" in install.info' >> /dev/stderr
+            exit 1
+         endif
+         unset GF_VER
+         #
+         #        gfortran was included with Fedora Core distributions around FC4.
+         #        This compiler is found for linux64/mac64, which
+         #        share the same options and problems, so notes about gfortran
+         #        are kept only here.
+         #
+         #        Flags are
+         #           -fdefault-integer-8 makes for 64 bit binaries.
+         #           -finit-real=<zero|inf|-inf|nan>  could be interesting debug opt
+         #           -fno-automatic  forces static storage of all local variables
+         #           -fno-whole-file suppresses argument's data type checking.
+         #                           This exists in at least the 4.6.1 version,
+         #                           but was later removed with no equivalent added.
+         #                           If your 4.6.x doesn't like it, switch to the
+         #                           suppression of all warnings by -w.
+         #           -fno-aggressive-loop-optimization turns off some aggressive
+         #                           optimization introduced in 4.8, which caused
+         #                           40 out of 47 test examples to fail.
+         #
+         #         first, initialize OPT and EXTRAOPT
+         #
+         set OPT='-O2'
+         #
+         set EXTRAOPT=" "
+         #
+         if (($MODULE_F:e == f90) || ($MODULE_F:e == F90)) then
+            set EXTRAOPT="$EXTRAOPT -ffree-line-length-none"
+         endif
+         if ($MODULE == nameio) set EXTRAOPT="$EXTRAOPT -std=legacy"
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -std=legacy -DVB2000_GMS"
+
+         #           some extra twiddling, iff using LIBCCHEM add-on code,
+         #           but then only for its two interface files.
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_AHFOCK == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_AHFOCK"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+               if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         switch ($GMS_GFORTRAN_VERNO)
+            case 5.1:
+            case 5.2:
+            case 5.3:
+            case 5.4:
+            case 5.5:
+            case 6.1:
+            case 6.2:
+            case 6.3:
+            case 6.4:
+            case 6.5:
+               #
+               # A lot of the machine generated files exceed the limit on the number of "variable assignment tracking".
+               # We pass the flag "-fno-var-tracking-assignments" to completely shutdown variable assignment tracking
+               # for these files which will speed up compilation and reduce warnings **BUT** at the cost of debugging.
+               #
+               # Besides - who is even debugging autogenerated code anyways?
+               #
+               # But if you want to increase the limit and debug the code then consider replacing:
+               # "-fno-var-tracking-assignments" with "--param=max-vartrack-size=500000000"
+               # But be warned! Compilation times will be extremely slow! And memory consumption will
+               # very high if compiling in parallel!
+               #
+               # Source: https://stackoverflow.com/questions/23499909/adjust-variable-tracking-assignment-length
+               #
+               if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+              #if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+               if ($MODULE == cosmo)  set OPT='-O0'  # same issue as seen in 4.6
+               if ($MODULE == dcscf)  set OPT='-O0'  # exam44, continues from 4.7
+               if ($MODULE == rohfcc) set OPT='-O0'  # exam47, first seen in 4.7
+               if ($MODULE == mp2grd-defensive) set OPT='-O0'
+               if ($MODULE == tddgrd) set OPT='-O0'  # exam41, continues from 4.6
+               if ($MODULE == tduprp) set OPT='-O0'  # ethylene_benzene_fed
+               #
+               # The -funconstrained-commons flag was added to address:
+               # https://github.com/gms-bbg/gamess/issues/24 and to allow
+               # standard exams to pass test validations.
+               #
+               # http://www.lahey.com/docs/lfpro78help/gcc/Optimize-Options.html#Optimize-Options
+               # This option tells the compiler that variables declared in common blocks (e.g. Fortran)
+               # may later be overridden with longer trailing arrays. This prevents certain optimizations
+               # that depend on knowing the array bounds.
+               #
+               # This flag should not be applied across all source files. But is added as an alternative
+               # to not being able to build a GAMESS binary at all.
+               #
+               if ($MODULE == cimi ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments -Wno-maybe-uninitialized"
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               breaksw
+            case 7.1:
+            case 7.2:
+            case 7.3:
+            case 7.4:
+            case 7.5:
+            case 8.1:
+            case 8.2:
+            case 8.3:
+            case 8.4:
+            case 8.5:
+            case 9.1:
+            case 9.2:
+            case 9.3:
+            case 9.4:
+            case 9.5:
+            case 10.1:
+            case 10.2:
+            case 10.3:
+            case 10.4:
+            case 10.5:
+            case 11.0:
+            case 11.1:
+            case 11.2:
+            case 11.3:
+            case 11.4:
+            case 12.0:
+            case 12.1:
+            case 12.2:
+            case 12.3:
+            case 13.1:
+               if ($GMS_MATHLIB == libflame) then
+                  #keeping these in to fix exam30
+                  if ($MODULE == efgrda) set OPT='-O0'
+                  if ($MODULE == efgrdb) set OPT='-O0'
+                  if ($MODULE == efgrdc) set OPT='-O0'
+                  if ($MODULE == efinp) set OPT='-O0'
+                  #if ($MODULE == iolib) set OPT='-O0'
+
+                  #fix exams 45-47
+                  #if ($MODULE == eaipcc) set OPT='-O0'
+                  #if ($MODULE == mm23) set OPT='-O0'
+                  #if ($MODULE == eomcc) set OPT='-O0'
+                  if ($MODULE == roeom) set OPT='-O0'
+               endif
+               if ($MODULE == gugdm2 ) set OPT="-O0" #fixes failure of exam05
+               if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+               if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments"
+              #if ($MODULE =~ ccsd3aacg* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ deaeom3* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+              #if ($MODULE =~ eomdip3a* ) set EXTRAOPT="$EXTRAOPT --param=max-vartrack-size=500000000"  #--for debugging
+               if ($MODULE == cimi ) set EXTRAOPT="$EXTRAOPT -fno-var-tracking-assignments -Wno-maybe-uninitialized"
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               breaksw
+            default:
+               echo "Unrecognized gfortran version for linux64" >> /dev/stderr
+               exit 4
+               breaksw
+         endsw
+
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         switch ($MODULE)
+            case mod_gauss_hermite:
+            case mod_shell_tools:
+            case mod_1e_primitives:
+            case omp_*:
+               set EXTRAOPT=" -Ofast -ffast-math" # -funconstrained-commons"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+         endsw
+         set GF_VER = `echo $GMS_GFORTRAN_VERNO | tr -d "."`
+         if($GF_VER >= 100) then
+            set EXTRAOPT="$EXTRAOPT -fallow-argument-mismatch"
+         endif
+         unset GF_VER
+         switch ($MODULE)
+            case omp_int1:
+            case omp_grd1:
+            case omp_fmogrd1:
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations"
+         endsw
+
+         #              a backdoor way to set optimization level differently.
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+
+         # Optional OpenMP support
+         if ($GMS_OPENMP == true)  then
+
+            set OPT="$OPT -fopenmp"
+
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $chmsrc/../../tool/addomp.sh $MODULE_F
+#                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         #
+         # ARM64 ThunderX2
+         if (`uname -p` == aarch64) set EXTRAOPT="-mcpu=native $EXTRAOPT"
+         #
+         # charmm - maybe doesn't like?? set EXTRAOPT="-mcmodel=medium $EXTRAOPT"
+         #
+         # this is executed in CHARMM !!!
+         (set echo; gfortran -c -fdefault-integer-8 -g $GMS_FPE_FLAGS $OPT $EXTRAOPT -I../.. $MODULE_F)
+         breaksw
+
+      case armflang:
+         #
+         #         first, initialize OPT and EXTRAOPT
+         #
+         set OPT='-O3'
+
+         set EXTRAOPT=" "
+         if ($MODULE_F:e == f90) then
+            set EXTRAOPT="$EXTRAOPT -ffree-line-length-none"
+         endif
+         if ($MODULE == nameio) set EXTRAOPT="$EXTRAOPT -std=legacy"
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -std=legacy -DVB2000_GMS"
+
+         if ($MODULE == gamess_version) then
+           if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         #           some extra twiddling, iff using LIBCCHEM add-on code,
+         #           but then only for its two interface files.
+         #           LIBCCHEM has not been test with the armflang build
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_AHFOCK == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_AHFOCK"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+               if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         #
+         #              a backdoor way to set optimization level differently.
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+
+         # Optional OpenMP support
+         if ($GMS_OPENMP == true)  then
+
+            set OPT="$OPT -fopenmp"
+
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $chmsrc/../../tool/addomp.sh $MODULE_F
+                  #$GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         #
+         # ARM64 ThunderX2
+         if (`uname -p` == aarch64) set EXTRAOPT="-mcpu=native $EXTRAOPT"
+         #
+         (set echo; armflang -c -i8 $OPT $EXTRAOPT $MODULE_F)
+         breaksw
+
+      case oneapi-ifort:
+      case oneapi-ifx:
+      case ifort:
+         #     -i4/-i8 set default integer length
+         #     -On can have n=1,2,3.  Use of 3 caused problems with earlier
+         #          compilers, so it isn't being used here.  Try it if you like.
+         #     stack storage for locals is governed by -auto versus -save.
+         #     -assume byterecl was introduced at ifort 8.0 (older versions will
+         #        print a message saying this flag is ignored).  Newer versions
+         #        need this so that direct access file opens are measured in
+         #        bytes rather than the new default in v8.0, namely 4-byte units.
+         #     -vec-report0 suppresses loop vectorization messages (new in 10.0)
+         #     -w95 suppresses Hollerith initialization and other f90-like warnings
+         #     -cm  means suppress comments about programming practices,
+         #          these two options spelled '-warn nousage' at version 12.
+         #     -WB means warn but don't fail on out-of-bounds array references
+         #     -ftz flushes underflow results to zero
+         #
+         set OPT = '-O2'
+         #       alas, I'm so tired of hearing about so many versions failing to
+         #       diagonalize, that this time critical code is run w/o optimization.
+         #       Very many (all?) ifort versions have problems with eigen.src.
+         if  ($MODULE == eigen)   set OPT='-O0' # read note just above.
+         if  ($MODULE == fmo)     set OPT='-O1' # 12.0.4, exam37
+         if  ($MODULE == guess)   set OPT='-O0' # 10.0, exam39
+         if (($MODULE == int2b) && ($GMS_IFORT_VERNO == 13)) set OPT='-O1' # vers. 13.0.1.117 only
+         if (($MODULE == int2s) && ($GMS_IFORT_VERNO == 13)) set OPT='-O1' # vers. 13.0.1.117 only
+         if  ($MODULE == locpol)  set OPT='-O1' # 10.0, makefp/gmres
+         if  ($MODULE == morokm)  set OPT='-O0' # Jan Fredin
+         if  ($MODULE == mcpinp)  set OPT="-O1" # exam38 is affected with Intel PS-2020.x.xxx
+         if  ($MODULE == nucbas)  set OPT='-O0' # 12.x, various NEO examples
+         if  ($MODULE == prpel)   set OPT='-O1' # 10.0, exam13
+         if (($MODULE == rohfcc) && ($GMS_IFORT_VERNO >= 12)) set OPT='-O0' # exam42+exam47 (op.sh.CC,IP-EOM)
+         if  ($MODULE == tdxitr)  set OPT='-O1' # 10.0, exam39
+         if  ($MODULE == vscf)    set OPT='-O0' # intensities for combinations
+         if  ($MODULE == nebpath) set OPT='-O0' # added by authors of NEBPATH implementation
+
+         # On the GAMESS testing server we down-optimize these four MSUAUTO source files to save 5 hours in compilation time
+         if ( $?JENKINS_URL ) then
+            if ( $JENKINS_URL =~ *bolt*) then
+               if ($MODULE == ccsd3aacgt3A2) set OPT='-O1'
+               if ($MODULE == ccsd3aacgt3B2) set OPT='-O1'
+               if ($MODULE == ccsd3aacgt3C2) set OPT='-O1'
+               if ($MODULE == ccsd3aacgt3D2) set OPT='-O1'
+            endif
+         endif
+
+         if (".$GMS_DEBUG_FLAGS" != ".") set OPT="$GMS_DEBUG_FLAGS"
+         set EXTRAOPT=""
+
+         if (($MODULE != vb2000) && ($GMS_FORTRAN != oneapi-ifx)) set EXTRAOPT="${EXTRAOPT} -auto"
+
+         # the following is for Intel Mac and MKL
+         if ((`uname` == Darwin) && ($GMS_MATHLIB == mkl)) then
+            set EXTRAOPT="${EXTRAOPT} -I${MKLROOT}/include"
+         endif
+
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_AHFOCK == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_AHFOCK"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+
+               if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set EXTRAOPT="$EXTRAOPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set EXTRAOPT="$EXTRAOPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -DVB2000_GMS"
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         if ($GMS_IFORT_VERNO >=  8) set EXTRAOPT="$EXTRAOPT -assume byterecl"
+         if ($GMS_IFORT_VERNO == 10) set EXTRAOPT="$EXTRAOPT -vec-report0"
+         if ($GMS_IFORT_VERNO == 11) set EXTRAOPT="$EXTRAOPT -vec-report0"
+         if ($GMS_IFORT_VERNO == 12) set EXTRAOPT="$EXTRAOPT -vec-report0"
+         if ($GMS_IFORT_VERNO == 13) set EXTRAOPT="$EXTRAOPT -vec-report0"
+         if ($GMS_IFORT_VERNO >= 14) set EXTRAOPT="$EXTRAOPT -qopt-report=0"
+         if ($GMS_IFORT_VERNO  < 12) set EXTRAOPT="$EXTRAOPT -w95 -cm"
+         if ($GMS_IFORT_VERNO >= 12) then
+            if ($GMS_FORTRAN != oneapi-ifx) then
+               set EXTRAOPT="$EXTRAOPT -warn nousage -inline-level=0"
+               if  ($MODULE =~ "omp*") set EXTRAOPT="$EXTRAOPT -inline-level=2"
+               if  ($MODULE =~ "mod_*") set EXTRAOPT="$EXTRAOPT -inline-level=2"
+            endif
+         endif
+
+         if ($GMS_PHI == knl) then
+            set EXTRAOPT="$EXTRAOPT -xMIC-AVX512"
+         else if ($GMS_PHI == knc) then
+            set EXTRAOPT="$EXTRAOPT -mmic"
+         endif
+         if ($GMS_MSUAUTO == true) then
+            set OPT="$OPT -mcmodel=medium"
+         endif
+         if ($GMS_OPENMP == true)  then
+            if ($GMS_FORTRAN != oneapi-ifx) then
+               if ($GMS_IFORT_VERNO > 13) then
+                  set OPT="$OPT -qopenmp"
+               else
+                  set OPT="$OPT -openmp"
+               endif
+            else
+               set OPT="$OPT -D__intel_workaround__ -fiopenmp -fopenmp-targets=spir64"
+            endif
+            #
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+
+         switch ($MODULE)
+            case mod_gauss_hermite:
+            case mod_shell_tools:
+            case mod_1e_primitives:
+            case omp_*:
+            if ($GMS_FORTRAN == oneapi-ifx) then
+               set EXTRAOPT="$EXTRAOPT -align"
+            else
+               set EXTRAOPT="$EXTRAOPT -align -ipo -ip -O3 -no-prec-div -fp-model fast=2 -inline-level=2"
+            endif
+         endsw
+         #
+         if ($GMS_FORTRAN == oneapi-ifx) then
+            (set echo; ifx -c -i8 -I../.. -g $GMS_FPE_FLAGS $OPT $EXTRAOPT $MODULE_F)
+         else
+            (set echo; ifort -c -i8 -I../.. -g $GMS_FPE_FLAGS -ftz -auto $OPT $EXTRAOPT $MODULE_F)
+         endif
+         breaksw
+      case nvfortran:
+         set FAST="-fast"
+         #
+         set OPT = "$FAST"
+         #
+         set EXTRAOPT=" "
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -DVB2000_GMS"
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+         #
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+         #
+         # Need to drop to -O1 if using NVIDIA HPC SDK v. 21.9
+         if ($MODULE == tddxca)         set OPT="-O1"
+         if ($MODULE == tddxcd_m06)     set OPT="-O1"
+         if ($MODULE == tddxcd_m08)     set OPT="-O1"
+         if ($MODULE == tddxcd_pkzb)    set OPT="-O1"
+         if ($MODULE == tddxcd_revtpss) set OPT="-O1"
+         if ($MODULE == tddxcd_tpss)    set OPT="-O1"
+         #
+         # Defensive compiling taken from pgfortran
+         if ($MODULE == dftgrd) set OPT='-O1'
+         if ($MODULE == dgeev)  set OPT='-O1'
+         if ($MODULE == efelec) set OPT=$FAST
+         if ($MODULE == efmo)   set OPT=$FAST
+         if ($MODULE == gradex) set OPT=$FAST
+         if ($MODULE == grd1)   set OPT=$FAST
+         if ($MODULE == guess)  set OPT='-O1'
+         if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == mcpgrd) set OPT='-O1'
+         if ($MODULE == mnsol)  set OPT=$FAST
+         if ($MODULE == mthlib) set OPT=$FAST
+         if ($MODULE == ormas1) set OPT=$FAST
+         if ($MODULE == prppop) set OPT=$FAST
+         if ($MODULE == riint)  set OPT="$OPT -Mnounroll"
+         if ($MODULE == rxncrd) set OPT=$FAST
+         if ($MODULE == solib)  set OPT=$FAST
+         if ($MODULE == statpt) set OPT=$FAST
+         if ($MODULE == tddefp) set OPT=$FAST
+         if ($MODULE == trnstn) set OPT=$FAST
+         if ($MODULE =~ mpc*)   set OPT='-O0'
+         #
+         # Defensive compiling identified with EPA COSE tool
+         if ($MODULE == dftxca)   set OPT='-O1'
+         if ($MODULE == omp_int1) set OPT='-O1'
+         if ($MODULE == omp_grd1) set OPT='-O1'
+         if ($MODULE == riccints) set OPT='-O1'
+         #
+         #set OPT='-O1 -Mnounroll'
+         #
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true)  set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+               #
+               if ($MODULE == cchem) set OPT="${OPT} -DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set OPT="$OPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set OPT="$OPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set OPT="$OPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         #
+         # Optional OpenMP support
+         if ($GMS_OPENMP == true)  then
+
+            set OPT="-mp -Minfo=mp $OPT"
+
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         #
+         (set echo; $GMS_FORTRAN -c -i8 -m64 -mcmodel=medium $GMS_FPE_FLAGS $OPT $EXTRAOPT $MODULE_F)
+         breaksw
+      case pgfortran:
+      case pgf77:
+         set FAST="-fastsse"
+         #
+         #
+         if ($GMS_L64_OPT == testing) then
+            set OPT = "$GMS_PGI_OPT $GMS_IPA_OPT"
+            if ($MODULE == efelec) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == efmo)   set OPT="$GMS_PGI_OPT"
+            if ($MODULE == gradex) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == grd1)   set OPT="$GMS_PGI_OPT"
+            if ($MODULE == guess)  set OPT='-O1'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            if ($MODULE == mnsol)  set OPT="$GMS_PGI_OPT"
+            if ($MODULE == mthlib) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == ormas1) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == prppop) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == rxncrd) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == solib)  set OPT="$GMS_PGI_OPT"
+            if ($MODULE == statpt) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == tddefp) set OPT="$GMS_PGI_OPT"
+            if ($MODULE == trnstn) set OPT="$GMS_PGI_OPT"
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+         else
+            set OPT = $FAST
+            if ($MODULE == dftgrd) set OPT='-O1' # issue 394: FPE in exam12, exam38?, exam41
+            if ($MODULE == efelec) set OPT=$FAST
+            if ($MODULE == efmo)   set OPT=$FAST
+            if ($MODULE == gradex) set OPT=$FAST
+            if ($MODULE == grd1)   set OPT=$FAST
+            if ($MODULE == guess)  set OPT='-O1'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            if ($MODULE == mnsol)  set OPT=$FAST
+            if ($MODULE == mthlib) set OPT=$FAST
+            if ($MODULE == ormas1) set OPT=$FAST
+            if ($MODULE == prppop) set OPT=$FAST
+            if ($MODULE == riint)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == rxncrd) set OPT=$FAST
+            if ($MODULE == solib)  set OPT=$FAST
+            if ($MODULE == statpt) set OPT=$FAST
+            if ($MODULE == tddefp) set OPT=$FAST
+            if ($MODULE == trnstn) set OPT=$FAST
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+         endif
+         #
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_AHFOCK == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_AHFOCK"
+               if ($GMS_CCHEM_MP2 == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+               #
+               if ($MODULE == cchem) set OPT="${OPT} -DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set OPT="$OPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set OPT="$OPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set OPT="$OPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+         #
+         if ( `uname` == Darwin ) then
+            (set echo; $GMS_FORTRAN -c -i8 -m64 $GMS_FPE_FLAGS $GMS_LIN_FLAGS $OPT $MODULE_F)
+         else
+            (set echo; $GMS_FORTRAN -c -i8 -m64 -mcmodel=medium $GMS_FPE_FLAGS $GMS_LIN_FLAGS $OPT $MODULE_F)
+         endif
+         breaksw
+      case aocc:
+         set OPT='-O2'
+
+         set EXTRAOPT=" "
+         #
+         if ($MODULE_F:e == f90 || $MODULE_F:e == F90) then
+            set EXTRAOPT="$EXTRAOPT -Mfreeform"
+         else
+            set EXTRAOPT="$EXTRAOPT -Mfixed"
+         endif
+         #
+         if ($MODULE == mctwo)  set OPT='-O1'
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -std=legacy -DVB2000_GMS"
+         if ($MODULE == mctwo-defensive)  set OPT='-O1'
+         #
+         if (($MODULE == cchem) || ($MODULE == ga)) then
+            mv $MODULE.f $MODULE.F
+            set MODULE_F=$MODULE.F
+            if ($GMS_LIBCCHEM == true) then
+               set CCHEM_MODULES = ""
+               if ($GMS_CCHEM_HF == true)     set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_HF"
+               if ($GMS_CCHEM_AHFOCK == true) set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_AHFOCK"
+               if ($GMS_CCHEM_MP2 == true)    set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_MP2"
+               if ($GMS_CCHEM_RI == true)     set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_RI"
+               if ($GMS_CCHEM_CC == true)     set CCHEM_MODULES="${CCHEM_MODULES} -DBUILD_CC"
+               #
+               if ($MODULE == cchem) set EXTRAOPT="-DHAVE_CCHEM ${CCHEM_MODULES}"
+               if ($MODULE == ga) then
+                  switch ($GMS_MPI_LIB)
+                     case impi:
+                        set OPT="$OPT -I$GMS_MPI_PATH/intel64/include"
+                        breaksw
+                     default:
+                        set OPT="$OPT -I$GMS_MPI_PATH/include"
+                        breaksw
+                  endsw
+                  if(-e $GMS_GA_PATH/include/global.fh) then
+                     set OPT="$OPT -I$GMS_GA_PATH/include"
+                  else
+                     echo "ERROR: Global Arrays not found." >> /dev/stderr
+                     exit 4
+                  endif
+               endif
+            endif
+         endif
+
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         if ($GMS_MATHLIB == libflame) then
+           #
+           # Defensive compling for libflame
+           #if ($MODULE == xxx)  set OPT=''
+         endif
+         #
+         # A backdoor way to set optimization level differently.
+         if (".$GMS_DEBUG_FLAGS" != .) set OPT="$GMS_DEBUG_FLAGS"
+         #
+         # Optional openmp support (untested in aocc as of now)
+         if ($GMS_OPENMP == true)  then
+            set OPT="$OPT -mp"
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         (set echo; flang -c -fdefault-integer-8 -Kieee -Mallocatable=03 $GMS_FPE_FLAGS $OPT $EXTRAOPT $MODULE_F)
+         breaksw
+      default:
+         echo "Please spell your Linux 64 bit FORTRAN compiler name correctly." >> /dev/stderr
+         exit 4
+         breaksw
+   endsw
+   #                     ... end of Linux on 64 bit processors.
+endif
+#
+#   Apple Macintosh system using OS X
+#    jargon: 10.0=cheetah, 10.1=puma,     10.2=jaguar,   10.3=panther,
+#            10.4=tiger,   10.5=leopard,  10.6=snow leopard
+#            10.7=lion,    10.8=mountain lion,
+#            10.9=mavericks   10.10=Yosimete   10.11=El Capitan
+#   for OS X 10.5 and above,           you should use 'mac64'
+#
+#   On Apple, we support only the use of the gfortran compiler.
+#
+#   Either target will work for PowerPC or Intel processors, but if you
+#   have both types, you must compile twice, once for each chip.
+#
+#   Software setup is painless:
+#
+#   Step 1 is to install the "Xcode" software to get a C compiler, gcc.
+#   The Xcode development environment is available for download at
+#          http://developer.apple.com
+#   but Xcode can also be found on the installation media, as of Tiger.
+#   The Xcode must match your OS X version, and also must be new enough
+#   to match the requirement shown on the web page in the next step.
+#   The only way to learn the Xcode version is reading its PDF file.
+#   In 10.7, Xcode (from the Apple store) was horrendously difficult
+#            to instal, so one might try the gcc from Gourav's website!
+#
+#   Step 2 is to download the FORTRAN compiler from
+#          http://hpc.sourceforge.net
+#   Thanks to Gourav Khanna for making FORTRAN so easy!
+#   Take note of the Xcode release he used, and download the appropriate
+#   chip- specific 'gfortran' if you have Leopard.
+#   Don't download a C compiler if you are using the one from Xcode!
+#
+#   Step 3 is to install gfortran, requiring admin priveledges:
+#       sudo tar -xvf gfortran-leopard-intel-bin.tar -C /
+#   which installs under /usr/local.  Add /usr/local/bin to your path.
+#
+#   If you prefer to install a .dmg file instead of unpacking a tar
+#   file, you might try the gfortran build from the "R project".  A
+#   link that, and other FORTRAN resources, is
+#          http://www.webmo.net/support/fortran_osx.html
+#
+if ($TARGET == mac64) then
+   #
+   switch ($GMS_FORTRAN)
+      #
+      #        see the 'linux64' section's notes about gfortran.
+      #
+      case gfortran:
+         #
+         if($GMS_MAC_OSX_VERNO == '11') then
+             set OPT='-O3'
+         else
+             set OPT='-O2'
+         endif
+
+         set EXTRAOPT=" "
+         if (($MODULE_F:e == f90) || ($MODULE_F:e == F90) ) then
+            set EXTRAOPT="$EXTRAOPT -ffree-line-length-none"
+         endif
+         if ($MODULE == nameio) set EXTRAOPT="$EXTRAOPT -std=legacy"
+         if ($MODULE == vb2000) set EXTRAOPT="$EXTRAOPT -std=legacy -DVB2000_GMS"
+         if ($MODULE == gamess_version) then
+            if (-d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -D__GIT_COMMIT_HASH__='`git rev-parse HEAD`'"
+         endif
+
+         switch ($GMS_GFORTRAN_VERNO)
+            case 5.1:
+            case 5.2:
+            case 5.3:
+            case 5.4:
+            case 5.5:
+               if ($MODULE == cosmo)  set OPT='-O0'
+               if ($MODULE == dcscf)  set OPT='-O0'
+               if ($MODULE == tddgrd) set OPT='-O0'
+               if ($MODULE == tduprp) set OPT='-O0'  # ethylene_benzene_fed
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -w"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               breaksw
+            case 6.1:
+            case 6.2:
+            case 6.3:
+            case 6.4:
+            case 6.5:
+            case 7.1:
+            case 7.2:
+            case 7.3:
+            case 7.4:
+            case 7.5:
+            case 8.1:
+            case 8.2:
+            case 8.3:
+            case 8.4:
+            case 8.5:
+            case 9.1:
+            case 9.2:
+            case 9.3:
+            case 9.4:
+            case 9.5:
+            case 10.0:
+            case 10.1:
+            case 10.2:
+            case 10.3:
+            case 10.4:
+            case 10.5:
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -w"
+               breaksw
+            case 11.0:
+            case 11.1:
+            case 11.2:
+            case 11.3:
+            case 11.4:
+            case 12.0:
+            case 12.1:
+            case 12.2:
+            case 12.3:
+            case 13.1:
+            case 13.2:
+            case 13.3:
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -w"
+               if (($MODULE == qeigen) || ($MODULE == int2c) && (($GMS_GFORTRAN_VERNO == 11.0) || ($GMS_GFORTRAN_VERNO == 11.1))) then
+                  echo "gfortran 11 on the Apple M1 does not support quadruple precision"
+               endif
+               breaksw
+            case 11.0:
+#               set EXTRAOPT="$EXTRAOPT -w -fno-aggressive-loop-optimizations -funconstrained-commons"
+#               set EXTRAOPT="$EXTRAOPT -Werror=uninitialized -Werror=align-commons -Wtabs"
+#               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               set EXTRAOPT="$EXTRAOPT -fno-aggressive-loop-optimizations -funconstrained-commons"
+               set EXTRAOPT="$EXTRAOPT -Werror=align-commons -Wtabs -Wuninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+               if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -w"
+               if (($MODULE == qeigen) || ($MODULE == int2c) && ($GMS_GFORTRAN_VERNO == 11.0)) then
+                  echo "gfortran 11 on the Apple M1 does not support quadruple precision"
+                  mv -f $MODULE_F $MODULE.junk
+                  sed -e "s/Q-/D-/g" \
+                      -e "s/Q+00/D+00/g" \
+                      -e "s/REAL\*16/DOUBLE PRECISION/" $MODULE.junk > $MODULE_F
+                  rm -f $MODULE.junk
+               endif
+               breaksw
+            default:
+               echo "Unrecognized gfortran version for mac64" >> /dev/stderr
+               exit 4
+               breaksw
+         endsw
+
+         set GF_VER = `echo $GMS_GFORTRAN_VERNO | tr -d "."`
+         if($GF_VER >= 100) then
+            set EXTRAOPT="$EXTRAOPT -fallow-argument-mismatch"
+            switch ($MODULE)
+               case omp_int1:
+               case rimp2omp:
+               case rimp2grd:
+               case efteiomp:
+               case riccrhf:
+               case serial:
+                  set EXTRAOPT="$EXTRAOPT -fallow-argument-mismatch"
+                  if (! -d $GMS_PATH/.git) set EXTRAOPT="$EXTRAOPT -Wno-maybe-uninitialized"
+            endsw
+         endif
+         unset GF_VER
+
+         if($GMS_GFORTRAN_VERNO == 11.0) then
+            (set echo; gfortran -c -fdefault-integer-8 $GMS_FPE_FLAGS $OPT $EXTRAOPT $MODULE_F)
+         else
+            (set echo; gfortran -c -m64 -fdefault-integer-8 $GMS_FPE_FLAGS $OPT $EXTRAOPT $MODULE_F)
+         endif
+
+         breaksw
+
+      default:
+         echo "unrecognized compiler passed to -mac64- target: $GMS_FORTRAN" >> /dev/stderr
+         exit 55
+         breaksw
+   endsw
+endif
+#
+#   ------ Windows on 64 bit chips ------
+#
+if ($TARGET == win64) then
+   set OPT=''
+   switch ($GMS_FORTRAN)
+      case oneapi-ifort:
+      case oneapi-ifx:
+      case ifort:
+         if ($GMS_FORTRAN == oneapi-ifx) then
+            set FC='ifx'
+         else
+            set FC='ifort'
+         endif
+         #
+         set EXTRAOPT='-fpp'
+         #
+         if ($GMS_WIN_OPT == linux)    set OPT='-O2'
+         if ($GMS_WIN_OPT == samara)   set OPT='-O3'
+         if ($GMS_WIN_OPT == fast)     set OPT='-fast'
+         if ($GMS_WIN_OPT == testing)  set OPT="$GMS_INT_OPT $GMS_IPO_OPT"
+         #
+         #   We carry over special compilar optimization cases from Linux when
+         #   using the Intel compiler (just to be cautious)
+         #
+         #   Very many (all?) ifort versions have problems with eigen.src.
+         #
+         if  ($MODULE == eigen)   set OPT='-Od' # read note just above.
+         if  ($MODULE == fmo)     set OPT='-O1' # 12.0.4, exam37
+         if  ($MODULE == guess)   set OPT='-Od' # 10.0, exam39
+         if (($MODULE == int2b) && ($GMS_IFORT_VERNO == 13)) set OPT='-O1' # vers. 13.0.1.117 only
+         if (($MODULE == int2s) && ($GMS_IFORT_VERNO == 13)) set OPT='-O1' # vers. 13.0.1.117 only
+         if  ($MODULE == locpol)  set OPT='-O1' # 10.0, makefp/gmres
+         if  ($MODULE == morokm)  set OPT='-Od' # Jan Fredin
+         if  ($MODULE == mcpinp)  set OPT="-O1" # exam38 is affected with Intel PS-2020.x.xxx
+         if  ($MODULE == nucbas)  set OPT='-Od' # 12.x, various NEO examples
+         if  ($MODULE == prpel)   set OPT='-O1' # 10.0, exam13
+         if (($MODULE == rohfcc) && ($GMS_IFORT_VERNO >= 12)) set OPT='-Od' # exam42+exam47 (op.sh.CC,IP-EOM)
+         if  ($MODULE == tdxitr)  set OPT='-O1' # 10.0, exam39
+         if  ($MODULE == vscf)    set OPT='-Od' # intensities for combinations
+         #
+         #   We move the 'baseline' to the bottom in order to override -O1 in the above list
+         #
+         if ($GMS_WIN_OPT == baseline) set OPT='-Od'
+         #
+         if ($GMS_IFORT_VERNO >= 12) then
+            if ($GMS_FORTRAN != oneapi-ifx) then
+               if ($GMS_FORTRAN == oneapi-ifort) set EXTRAOPT="$EXTRAOPT -warn:nousage /Ob0"
+               if ($GMS_FORTRAN == ifort) set EXTRAOPT="$EXTRAOPT -warn nousage /Ob0"
+               if ($MODULE =~ "omp*") set EXTRAOPT="$EXTRAOPT /Ob2"
+               if ($MODULE =~ "mod_*") set EXTRAOPT="$EXTRAOPT /Ob2"
+            endif
+         endif
+         #
+         if ($GMS_OPENMP == true)  then
+            if ($GMS_FORTRAN != oneapi-ifx) then
+               if ($GMS_IFORT_VERNO > 13) then
+                  set OPT="$OPT -qopenmp"
+               else
+                  set OPT="$OPT -openmp"
+               endif
+            else
+               set OPT="$OPT -D__intel_workaround__ -fiopenmp -fopenmp-targets=spir64"
+            endif
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+         #
+         if (".$GMS_DEBUG_FLAGS" != ".") set OPT="$GMS_DEBUG_FLAGS"
+         #
+         if ($GMS_FORTRAN == ifort) then
+            set EXTRAOPT="$EXTRAOPT -Qvec-report0"
+         else
+            set EXTRAOPT="$EXTRAOPT -Qopt-report:0"
+         endif
+         #
+         (set echo; $FC -Qm64 $GMS_WIN_TP -c -integer-size:64 -Qzero -Qftz $OPT -auto $EXTRAOPT $GMS_WIN_FLAGS $MODULE_F)
+         #
+         if (-e $MODULE.obj) mv -v $MODULE.obj $MODULE_OBJ
+         breaksw
+      case pgfortran:
+         if ($GMS_WIN_OPT == baseline) then
+            set OPT='-O0'
+         endif
+         if ($GMS_WIN_OPT == linux) then
+            #       set OPT='-fastsse -Mipa=fast,safe' #The -Mipa flag is only valid for V15.6 and older
+            set OPT='-fastsse' #The -Mipa flag is only valid for V15.6 and older
+            if ($MODULE == efelec) set OPT='-fastsse'
+            if ($MODULE == efmo)   set OPT='-fastsse'
+            if ($MODULE == gradex) set OPT='-fastsse'
+            if ($MODULE == grd1)   set OPT='-fastsse'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            if ($MODULE == mnsol)  set OPT='-fastsse'
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+            if ($MODULE == mthlib) set OPT='-fastsse'
+            if ($MODULE == ormas1) set OPT='-fastsse'
+            if ($MODULE == prppop) set OPT='-fastsse'
+            if ($MODULE == rxncrd) set OPT='-fastsse'
+            if ($MODULE == solib)  set OPT='-fastsse'
+            if ($MODULE == statpt) set OPT='-fastsse'
+            if ($MODULE == tddefp) set OPT='-fastsse'
+            if ($MODULE == trnstn) set OPT='-fastsse'
+         endif
+         if ($GMS_WIN_OPT == samara) then
+            #       set OPT='-O3 -Mipa=fast,safe' #The -Mipa flag is only valid for V15.6 and older
+            set OPT='-O3' #The -Mipa flag is only valid for V15.6 and older
+            if ($MODULE == efelec) set OPT='-O3'
+            if ($MODULE == efmo)   set OPT='-O3'
+            if ($MODULE == gradex) set OPT='-O3'
+            if ($MODULE == grd1)   set OPT='-O3'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            if ($MODULE == mnsol)  set OPT='-O3'
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+            if ($MODULE == mthlib) set OPT='-O3'
+            if ($MODULE == ormas1) set OPT='-O3'
+            if ($MODULE == prppop) set OPT='-O3'
+            if ($MODULE == rxncrd) set OPT='-O3'
+            if ($MODULE == solib)  set OPT='-O3'
+            if ($MODULE == statpt) set OPT='-O3'
+            if ($MODULE == tddefp) set OPT='-O3'
+            if ($MODULE == trnstn) set OPT='-O3'
+         endif
+         if ($GMS_WIN_OPT == fast) then
+            set OPT='-fastsse -Mipa=fast,inline,safe' #The -Mipa flag is only valid for V15.6 and older
+            if ($MODULE == efelec) set OPT='-fastsse'
+            if ($MODULE == efmo)   set OPT='-fastsse'
+            if ($MODULE == gradex) set OPT='-fastsse'
+            if ($MODULE == grd1)   set OPT='-fastsse'
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT='-O1'
+            if ($MODULE == mnsol)  set OPT='-fastsse'
+            if ($MODULE =~ mpc*)   set OPT='-O0'
+            if ($MODULE == mthlib) set OPT='-fastsse'
+            if ($MODULE == ormas1) set OPT='-fastsse'
+            if ($MODULE == prppop) set OPT='-fastsse'
+            if ($MODULE == rxncrd) set OPT='-fastsse'
+            if ($MODULE == solib)  set OPT='-fastsse'
+            if ($MODULE == statpt) set OPT='-fastsse'
+            if ($MODULE == tddefp) set OPT='-fastsse'
+            if ($MODULE == trnstn) set OPT='-fastsse'
+         endif
+         if ($GMS_WIN_OPT == testing) then
+            set OPT="$GMS_PGI_OPT $GMS_IPA_OPT"
+            if ($MODULE == efelec) set OPT=$GMS_PGI_OPT
+            if ($MODULE == efmo)   set OPT=$GMS_PGI_OPT
+            if ($MODULE == gradex) set OPT=$GMS_PGI_OPT
+            if ($MODULE == grd1)   set OPT=$GMS_PGI_OPT
+            if ($MODULE == int2b)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2r)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == int2s)  set OPT="$OPT -Mnounroll"
+            if ($MODULE == mcpgrd) set OPT=$GMS_PGI_OPT
+            if ($MODULE == mnsol)  set OPT=$GMS_PGI_OPT
+            if ($MODULE =~ mpc*)   set OPT='-O1'
+            if ($MODULE == mthlib) set OPT='-O0'
+            if ($MODULE == ormas1) set OPT=$GMS_PGI_OPT
+            if ($MODULE == prppop) set OPT=$GMS_PGI_OPT
+            if ($MODULE == rxncrd) set OPT=$GMS_PGI_OPT
+            if ($MODULE == solib)  set OPT=$GMS_PGI_OPT
+            if ($MODULE == statpt) set OPT=$GMS_PGI_OPT
+            if ($MODULE == tddefp) set OPT=$GMS_PGI_OPT
+            if ($MODULE == trnstn) set OPT=$GMS_PGI_OPT
+         endif
+         #
+         if ($MODULE == unport) then
+            set OPT="$OPT -Mbackslash"
+         else
+            set OPT="$OPT -Mnobackslash"
+         endif
+         #
+         #     IMS MP2 has problems when building with pgfortran.
+         #     This problem does not persist for optimization levels with '-Mipa=fast,safe'
+         #     for win64/winazure.
+         #     Work around:
+         #     - used the DDI version of MP2, $mp2 code=ddi $end
+         #     - take the winazure route below and set GMS_FORTRAN to pgf77
+         #
+         #     Note that $MP2RES will write to fort.35 since F77 and F90 runtime
+         #     libraries are different and do not know about filepaths set but the other.
+         #
+         #     if ($TARGET == winazure) then
+         #       if ($MODULE == dcmp2)  set GMS_FORTRAN=pgf77
+         #       if ($MODULE == mp2ims) set GMS_FORTRAN=pgf77
+         #     endif
+         #
+         #     For more detailed information as to which flags are being used
+         #     by the compiler during the build - uncomment the line below.
+         #
+         #     set OPT="$OPT -v"
+         #
+
+         # Optional OpenMP support
+         if ($GMS_OPENMP == true)  then
+
+            set OPT="$OPT -mp"
+
+            switch ($MODULE)
+               case omp*:
+               case riccutils:
+               case riccints:
+               case riccdiag:
+               case riccrhf:
+               case rimp2grd:
+               case rimp2omp:
+               case libxc:
+               case modules_common:
+                  breaksw
+               default:
+                  $GMS_BUILD_DIR/tools/addomp.sh $MODULE_F
+                  breaksw
+            endsw
+         endif
+
+         (set echo; $GMS_FORTRAN $GMS_WIN_FLAGS -m64 -c -i8 -Mnobackslash -Minform=inform -Bstatic $OPT $GMS_WIN_TP -o $MODULE_OBJ $MODULE_F)
+         breaksw
+         #
+      default:
+         echo "Please spell your Windows 64 bit FORTRAN compiler name correctly." >> /dev/stderr
+         exit 4
+         breaksw
+   endsw
+   #                     ... end of Windows on 64 bit processors.
+endif
+#
+#  Store the generated object code, clean up, and quit
+#
+if ($TINKCODE == yes) then
+   # CHARMM keeps it in place 
+   #mv -f $MODULE.o $OBJDIR/$MODULE_OBJ
+   exit
+endif
+#
+if ($SRCDIR == . && -f "$MODULE.src" && -w "$MODULE.src") rm $MODULE.src    # delete copy with no scalar code
+if ($VB2000 == true && -f "$SRCDIR/$MODULE.src" && -w "$SRCDIR/$MODULE.src") rm "$SRCDIR/$MODULE.src"
+#
+#  Exit gracelessly if we fail to generate the object file
+#
+date
+time
+# CHARMM not needed:
+#if (-e $MODULE_OBJ ) then
+#   exit
+#else
+#   echo "Compilation failure for $MODULE, please fix the problem." >> /dev/stderr
+#   exit 1
+#endif

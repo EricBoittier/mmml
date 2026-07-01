@@ -1,0 +1,79 @@
+* mctest07.inp
+* Author:   Aaron R. Dinner 
+* Date:     15 June 2001
+* Version:  c29a1
+* Test:     Monte Carlo with the EEF1 potential
+* Model:    Polar hydrogen representation of alanine dipeptide 
+*
+
+IF ?MC .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+if ?domdec eq 1 then
+  echo "Test NOT performed with DOMDEC."
+  stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+BOMLev 0
+STREam datadir.def
+
+! Read standard topology and parameter files
+
+OPEN READ CARD UNIT 1 NAME @0/toph19_eef1.inp
+READ RTF  CARD UNIT 1
+CLOSE UNIT 1
+
+OPEN READ CARD UNIT 2 NAME @0/param19_eef1.inp
+READ PARA CARD UNIT 2
+CLOSE UNIT 2
+
+! Generate the PSF
+
+READ SEQUence CARD
+* Blocked alanine
+*
+   3
+ACE ALA CBX
+
+GENErate MAIN SETUP
+
+! Build the coordinates
+
+IC PARAM
+IC SEED 2 N     2 CA    2 C
+IC BUILD
+
+! Define energy parameters (activate EEF1)
+EEF1 TEMP 298.15 UNIT 93 NAME @0/solvpar.inp
+UPDATE CTONNB 7.0 CTOFNB 9.0 CUTNB 10.0 GROUP SWITCH VSWITCH RDIE
+
+! Create the MC move set by a series of calls to MOVE ADD
+
+! Single atom moves for the peptide atoms
+MOVE ADD MVTP RTRN BYATom WEIGht 12.0 DMAX 0.2 LABEL SING -
+        ARMP 0.40 ARMA 0.4 ARMB 0.4 DOMCf 3.0 ANISotropic 1 -
+        SELE (.NOT. RESNAME TIP3) END
+
+! Individual rotation of the peptide torsions
+MOVE ADD MVTP TORS WEIGht 4.0 DMAX  40.0 FEWEr 1 LABEL DIHE -
+         ARMP 0.20 ARMA 0.4 ARMB 0.4 DOMCf 5.0 -
+         SELE ALL END
+
+! Run with the EEF1 potential.  Delta-E should be zero.
+
+MC TEMPerature 300.00 NSTEps 1000 ISEEd 518282 IARMfrq 20 IECHeck 100 
+
+
+! Check memory usage
+
+MOVE DELE LABEL SING
+MOVE DELE LABEL DIHE
+
+STOP

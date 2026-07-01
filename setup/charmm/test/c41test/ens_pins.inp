@@ -1,0 +1,165 @@
+* CHARMM 41 Testcase ens_pins.inp
+* Florent Hedin, c41a2
+* Test file for Partial Infinite Swapping (PINS) module
+* Project: PES exploration using partial infinite swapping, implicit solvent
+*
+
+if ?pins .ne. 1 then
+   echo "Test NOT performed. PINS must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 12 then
+  echo "Wrong number of processors. Test NOT performed."
+  stop
+endif
+
+stream datadir.def
+
+! Read standard topology and parameter files
+open read card unit 11 name @0/toph19.rtf
+read rtf  card unit 11
+close unit 11
+
+open read unit 11 card name @0/param19.prm
+read param unit 11 card
+close unit 11
+
+!read ACE parameters from file:
+open read unit 11 card name @0/acepar19.inp
+read ACEParameters card unit 11
+close unit 11
+
+! Generate the PSF
+
+READ SEQUence CARD
+* Blocked alanine
+*
+   3
+ACE ALA CBX
+
+GENErate MAIN SETUP
+
+! Build the coordinates
+
+IC PARAM
+IC SEED 2 N     2 CA    2 C
+IC BUILD
+
+ENERGY  ATOM ACE  IEPS 1.0 SEPS 80.0 ALPHA 1.3 SIGMA 3.0 SWITCH -
+VDIS VSWI CUTNB 999.0 CTONNB 8.0 CTOFNB 12.0  IDEAL
+
+UPDATE
+
+! replica variables
+ensemble nensem 12
+set nrep ?nensem
+set myrep ?whoiam
+
+! random seeds
+set iseed0 21567464
+set iseed1 78965516
+set iseed2 12154845
+set iseed3 32458645
+set iseed4 94515468
+set iseed5 47423630
+
+calc seed1 = @iseed0 + @iseed1 * @myrep + @iseed2 * @myrep 
+calc seed2 = @iseed1 + @iseed2 * @myrep + @iseed3 * @myrep 
+calc seed3 = @iseed2 + @iseed3 * @myrep + @iseed4 * @myrep 
+calc seed4 = @iseed3 + @iseed4 * @myrep + @iseed5 * @myrep 
+
+! limit I/O to node 0
+if @myrep .eq. 0  then
+  open unit 50 write card name @9/rep2t.dat
+  open unit 51 write card name @9/t2rep.dat
+endif
+
+! note the line starting with 'pins'
+! this is how the partial infinite swapping module is enabled
+! current implementation is limited to 2 chains : nbm1 and nbm2
+! first number after nbm1 or nbm2 is the number of temperature blocks
+! then follow the temperature distribution of the blocks
+! so the nbm1 config is : 3 6 3 and for nbm2 : 4 4 4
+! need to be sure that the sum of the numbers is equal to the number of temperatures defined below
+! other parameters are standard parameters from the ensemble module
+ensemble exchange freq 100 -
+pins nbm1 3 3 6 3 nbm2 3 4 4 4 -
+rep2to 50 t2repo 51 -
+300.0000 345.0000 396.7500 456.2625 -
+524.7019 603.4072 693.9182 798.0060 -
+917.7069 1055.3629 1213.6673 1395.7174
+
+!--------------------------------------------------------------------------
+
+! limit I/O to node 0
+if @myrep .eq. 0  then
+
+  OPEN UNIT 1 FORMatted WRITE NAME @9/struct.psf
+  WRITE PSF CARD UNIT 1
+  CLOSE UNIT 1
+  
+  OPEN UNIT 1 WRITe CARD NAME @9/init.cor
+  WRITe COOR CARD UNIT 1
+  CLOSE UNIT 1
+  
+endif
+
+set T ?ensmyt
+
+ensemble info
+
+!quick equilibration without exchange
+
+ensemble swoff
+
+OPEN WRITE FOrmatted   UNIT 31 NAME @9/equil_@myrep.rst
+
+DYNA STRT LEAP VERL -
+  NSTE 1000 TIME 0.001 -
+  inbfrq -1 imgfrq -1 - !nb updated heuristicly
+  iprfrq 1000 - !freq for calculating averages
+  IUNWRI 31 IUNCRD -1 KUNIT -1 IUNVEL -1 - !units for rst, dcd, temp & energy
+  NPRINT 500 nsavc 0 nsavv 0 - ! freq of print for ener, coordinates, velocity (disabled) 
+  IEQFRQ 10 iasors 1 iasvel 1 iscvel 0 ichecw 10 teminc 0.0 twindh 2.0 twindl -2.0 -
+  firstt @T finalt @T -
+  ISEEd  @seed1 @seed2 @seed3 @seed4
+
+close unit 31
+close unit 32
+close unit 33
+
+OPEN UNIT 1 WRITe CARD NAME @9/equil_@myrep.cor
+WRITe COOR CARD UNIT 1
+CLOSE UNIT 1
+
+!real simulation with exchanges
+
+ensemble swon
+
+OPEN READ FOrmatted    UNIT 19 NAME @9/equil_@myrep.rst
+OPEN WRITE FOrmatted   UNIT 31 NAME @9/run_@myrep.rst
+OPEN WRITE UNFOrmatted UNIT 32 NAME @9/run_@myrep.dcd
+OPEN WRITE FOrmatted   UNIT 33 NAME @9/run_@myrep.dat
+
+dynamics leap verlet restart nstep 2500 timestep 0.001 -
+  iprfrq 1000 -
+  inbfrq -1 imgfrq -1 -
+  iunrea 19 -
+  IUNWRI 31 IUNCRD 32 KUNIT 33 IUNVEL -1 -
+  ECHEck 250.0 - !tolerate big energy change because it is replica exchange 
+  nprint 100 nsavc 10 nsavv 0 -
+  iasors 1 iasvel 1 iscvel 0 ichecw 10 teminc 0.0 twindh 2.0 twindl -2.0 -
+  firstt @T finalt @T -
+  ISEEd  @seed1 @seed2 @seed3 @seed4
+
+close unit 19
+close unit 31
+close unit 32
+close unit 33
+
+OPEN UNIT 1 WRITe CARD NAME @9/end_@myrep.cor
+WRITe COOR CARD UNIT 1
+CLOSE UNIT 1
+
+stop

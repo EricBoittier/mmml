@@ -1,0 +1,342 @@
+*  Test the Miscelaneous-Mean-Field-Potentials GEO
+*  in CHARMM/OpenMM
+*  tripeptide used
+*
+
+stream datadir.def
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+read rtf  card name @0toph19.rtf
+read parameter card name @0param19.prm
+
+read sequence  card
+* sequence
+*
+   3
+asp ala arg
+generate main setup
+
+read coor card
+* tripeptide
+*
+   35
+    1    1 ASP  HT1    3.08042   5.56145  -4.87908 MAIN 1      0.00000
+    2    1 ASP  HT2    4.11817   4.77139  -3.83878 MAIN 1      0.00000
+    3    1 ASP  N      3.28017   4.63985  -4.44049 MAIN 1      0.00000
+    4    1 ASP  HT3    2.54756   4.30950  -3.78037 MAIN 1      0.00000
+    5    1 ASP  CA     3.57376   3.57806  -5.37130 MAIN 1      0.00000
+    6    1 ASP  CB     4.83412   3.89037  -6.18668 MAIN 1      0.00000
+    7    1 ASP  CG     5.89709   4.58074  -5.35965 MAIN 1      0.00000
+    8    1 ASP  OD1    6.69885   3.92113  -4.71404 MAIN 1      0.00000
+    9    1 ASP  OD2    5.86323   5.80147  -5.28046 MAIN 1      0.00000
+   10    1 ASP  C      3.72200   2.40159  -4.42693 MAIN 1      0.00000
+   11    1 ASP  O      2.69317   2.05787  -3.84854 MAIN 1      0.00000
+   12    2 ALA  N      4.88778   1.79431  -4.20052 MAIN 2      0.00000
+   13    2 ALA  H      5.68615   2.07795  -4.69301 MAIN 2      0.00000
+   14    2 ALA  CA     5.05545   0.79677  -3.15528 MAIN 2      0.00000
+   15    2 ALA  CB     6.40511   0.11801  -3.32828 MAIN 2      0.00000
+   16    2 ALA  C      5.03974   1.44713  -1.77572 MAIN 2      0.00000
+   17    2 ALA  O      4.72242   0.80455  -0.77558 MAIN 2      0.00000
+   18    3 ARG  N      5.43184   2.72133  -1.73997 MAIN 3      0.00000
+   19    3 ARG  H      5.80668   3.13412  -2.54589 MAIN 3      0.00000
+   20    3 ARG  CA     5.31596   3.56472  -0.56425 MAIN 3      0.00000
+   21    3 ARG  CB     6.68687   3.59278   0.17175 MAIN 3      0.00000
+   22    3 ARG  CG     7.98389   3.74828  -0.65417 MAIN 3      0.00000
+   23    3 ARG  CD     8.57405   5.16372  -0.71872 MAIN 3      0.00000
+   24    3 ARG  NE     7.58508   6.09637  -1.21923 MAIN 3      0.00000
+   25    3 ARG  HE     6.92636   6.43311  -0.57650 MAIN 3      0.00000
+   26    3 ARG  CZ     7.35351   6.31002  -2.51585 MAIN 3      0.00000
+   27    3 ARG  NH1    6.19935   6.88086  -2.84352 MAIN 3      0.00000
+   28    3 ARG  HH11   5.93538   6.91571  -3.80742 MAIN 3      0.00000
+   29    3 ARG  HH12   5.45875   6.81220  -2.17508 MAIN 3      0.00000
+   30    3 ARG  NH2    8.19607   5.92117  -3.47415 MAIN 3      0.00000
+   31    3 ARG  HH21   7.85274   5.89756  -4.41306 MAIN 3      0.00000
+   32    3 ARG  HH22   9.00679   5.37663  -3.25917 MAIN 3      0.00000
+   33    3 ARG  C      4.78930   4.94925  -0.97859 MAIN 3      0.00000
+   34    3 ARG  OT1    4.25787   5.09110  -2.08284 MAIN 3      0.00000
+   35    3 ARG  OT2    4.97825   5.92864  -0.25676 MAIN 3      0.00000
+
+scalar charge set 0
+delete atom select .not. ( type ca .or. resid 2 .and. type n ) end
+skip all excl GEO
+energy wmin 0.0 cutnb 999 ctofnb 999 ctonnb 999 switch vswitch
+
+!-----------------------------------------------------------------------------
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TEST 1!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!SPHERICAL GEO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Center of mass constraint
+MMFP
+  GEO sphere  RCM -
+     xref 1 yref 2 zref 3 -
+     force 10.0 droff 0.0 select type CA show end
+  GEO print
+END
+
+skip all excl GEO
+energy wmin 0.0 cutnb 999 ctofnb 999 ctonnb 999 switch vswitch
+
+format (f16.8)
+set echarmm = ?ener
+coor force comp
+prnlev 0 @pnode
+
+set return fromC1
+goto ncharmm
+label fromC1
+
+prnlev 7 @pnode 0
+energy omm
+prnlev 0 @pnode 0
+
+set eopenmm = ?ener
+coor force comp
+
+set return fromO1
+goto nopenmm
+label fromO1
+prnlev 5 @pnode
+
+Calc ediff = 100 * abs ( ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+echo Force dot product: @fsum Percent energy error: @ediff
+Calc diff = abs ( 1 - @fsum )
+
+set status = fail
+if @ediff le 1e-3 then
+  set status = pass
+endif
+echo testcase result: @status TEST 1 - energy
+
+set status = fail
+if @diff le 1e-4 then
+  set status = pass
+endif
+echo testcase result: @status TEST 1 - forces
+
+label test2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TEST 2!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!PLANE/SPHERICAL GEO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Center of mass constraint
+MMFP
+  GEO reset
+  GEO plane harm inside -
+     xref 0  yref 0 zref 0 -
+     xdir 1 -
+     force 10 droff 0 select resid 2 .and. type n end
+  GEO sphere harm RCM  -
+     xref 1 yref 2 zref 3 -
+     force 10 droff 0 select type CA show end
+  GEO print
+END
+
+energy
+
+format (f16.8)
+set echarmm = ?ener
+prnlev 0 @pnode
+coor force comp
+
+set return fromC2
+goto ncharmm
+label fromC2
+
+prnlev 7 @pnode
+energy omm
+prnlev 0 @pnode
+set eopenmm = ?ener
+coor force comp
+
+set return fromO2
+goto nopenmm
+label fromO2
+prnlev 5 @pnode
+
+Calc ediff = 100 * abs ( ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+echo Force dot product: @fsum Percent energy error: @ediff
+Calc diff = abs ( 1 - @fsum )
+
+set status = fail
+if @ediff le 1e-3 then
+  set status = pass
+endif
+echo testcase result: @status TEST 2 - energy
+
+set status = fail
+if @diff le 1e-4 then
+  set status = pass
+endif
+echo testcase result: @status TEST 2 - forces
+
+print coor
+stop
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TEST 3!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!---------------------------------------------------
+! cylindrical tube constraint
+coor stat
+coor orie
+coor stat
+MMFP
+   GEO  reset
+   GEO  cylinder harm outside -
+        xref 0 yref 0 zref 0 xdir 1 - !cylinder pointing along x axis
+        force 100 droff 3 select hydrogen .and. property abs x .gt. 3 show end !atom main 3 he end !select type H* end
+   GEO print
+END
+
+coor stat
+coor orie
+coor stat
+define involved select hydrogen .and. property abs x .gt. 3 show end
+coor stat select involved end
+!stop
+energy
+format (f16.8)
+set echarmm = ?ener
+coor force comp
+
+set return fromC3
+goto ncharmm
+label fromC3
+
+prnlev 7 @pnode
+energy omm
+prnlev 5 @pnode
+
+set eopenmm = ?ener
+coor force comp
+
+set return fromO3
+goto nopenmm
+label fromO3
+
+Calc ediff = 100 * abs ( ( @echarmm - @eopenmm ) / sqrt ( @echarmm * @eopenmm ) )
+echo Force dot product: @fsum Percent energy error: @ediff
+Calc diff = abs ( 1 - @fsum )
+
+set status = fail
+if @ediff le 1e-3 then
+  set status = pass
+endif
+echo testcase result: @status TEST 3 - energy
+
+set status = fail
+if @diff le 1e-4 then
+  set status = pass
+endif
+echo testcase result: @status TEST 3 - forces
+
+stop
+
+! ----------------
+label ncharmm  ! Normalize CHARMM forces in 4, 5, 6
+   prnlev 0 @pnode
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp store 4
+   scalar xcomp *store 4
+   scalar ycomp store 5
+   scalar ycomp *store 5
+   scalar zcomp store 6
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   echo @fsum
+
+   scalar xcomp store 4
+   scalar ycomp store 5
+   scalar zcomp store 6
+
+   prnlev 5 @pnode
+goto @return
+
+! ----------------
+label nopenmm   ! Normalize openmm forces stored in 7, 8, 9
+                ! Compute dot product of forces in 4-6 vs 7-9
+   prnlev 0 @pnode
+   scalar xcomp store 7
+   scalar ycomp store 8
+   scalar zcomp store 9
+
+   scalar xcomp *store 7
+   scalar ycomp *store 8
+   scalar zcomp *store 9
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 8
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 9
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+   Calc fsum =  sqrt ( @fsum )
+
+   scalar xcomp divi @fsum
+   scalar ycomp divi @fsum
+   scalar zcomp divi @fsum
+
+   scalar xcomp *store 4
+   scalar ycomp *store 5
+   scalar zcomp *store 6
+
+   scalar wcomp recall 4
+   scalar wcomp stat
+   set fsum = ?stot
+
+   scalar wcomp recall 5
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   scalar wcomp recall 6
+   scalar wcomp stat
+   Calc fsum = @fsum + ?stot
+
+   prnlev 5 @pnode
+goto @return
+
+! ----------------

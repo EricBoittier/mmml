@@ -1,0 +1,146 @@
+* PATCHTEST by Axel Brunger, JAN-1983
+* Test case for the PATCH command
+*
+
+stream datadir.def
+
+OPEN READ FORM UNIT 1 NAME  @0toph9.rtf
+read rtf  card unit 1
+close unit 1
+bomlev -2
+OPEN READ FORM UNIT 2 NAME  @0param6.prm
+read param card unit 2
+close unit 2
+nobomb
+
+read rtf card append
+*RTF APPEND FILE PROTONATION DEGREE OF HISTIDINES
+*
+
+DECLARE BLNK
+
+PRES HISE         0.00 ! Patch to change doubly protonated HIS to singly
+!                      ! protonated histidine (HE2)
+GROUP
+ATOM 1CB   CH2E    0.0
+ATOM 1CG   C       0.0
+GROUP
+ATOM 1ND1  NR     -0.24
+ATOM 1CE1  CR1E    0.24
+GROUP
+ATOM 1CD2  CR1E    0.10
+ATOM 1NE2  NH1    -0.32
+ATOM 1HE2  H       0.22
+DELETE ATOM 1HD1
+!
+ACCE 1ND1
+
+PRES HISD         0.00 ! Patch to change doubly protonated HIS to singly
+!                      ! protonated histidine (HD1)
+GROUP
+ATOM 1CB   CH2E    0.00
+ATOM 1CG   C       0.03
+GROUP
+ATOM 1ND1  NH1    -0.31
+ATOM 1HD1  H       0.22
+GROUP
+ATOM 1CD2  CR1E    0.09
+ATOM 1NE2  NR     -0.25
+ATOM 1CE1  CR1E    0.22
+DONO BLNK  CB           ! this is of course garbage. but it shows how to
+!                       ! implement an extended donor in a patch.
+DELETE ATOM 1HE2
+!
+ACCE 1NE2
+
+PRES HIST         1.0  ! INVERSE PATCH TO HISD (except for the DONO BLNK...)
+GROUP
+ATOM 1CB   CH2E    0.10
+ATOM 1CG   C       0.15
+ATOM 1CD2  CR1E    0.20
+GROUP
+ATOM 1ND1  NH1    -0.25
+ATOM 1HD1  H       0.32
+GROUP
+ATOM 1CE1  CR1E    0.41
+GROUP
+ATOM 1NE2  NH1    -0.25
+ATOM 1HE2  H       0.32 ! This atom is added
+!
+BOND 1NE2 1HE2
+ANGLE 1HE2 1NE2 1CD2     1HE2 1NE2 1CE1
+IMPH  1NE2 1CE1 1CD2 1HE2
+DONO  1HE2 1NE2
+DELETE ACCE 1NE2
+BUILD 1CE1 1CD2 *1NE2 1HE2 0.0 0.0 180.0 0.0 0.0
+
+PRES HISU          1.00 ! INVERSE PATCH TO HISE
+!
+GROUP
+ATOM CB    CH2E    0.10
+ATOM CG    C       0.15
+ATOM CD2   CR1E    0.20
+GROUP
+ATOM ND1   NH1    -0.25
+ATOM HD1   H       0.32 ! This atom added
+GROUP
+ATOM CE1   CR1E    0.41
+GROUP
+ATOM NE2   NH1    -0.25
+ATOM HE2   H       0.32
+!
+BOND ND1   HD1
+ANGLE CG ND1 HD1    HD1 ND1 CE1
+IMPH  ND1 CG CE1 HD1
+DONO  HD1 ND1
+DELETE ACCE ND1
+BUILD CE1 CG *ND1 HD1    0.0 0.0 180.0 0.0 0.0
+
+! the following patch is somewhat strange:
+! it shows what happens if one attempts to form groups between
+! different residues in different segments
+! some day that might be useful
+!
+PRES TEST  0.00
+GROUP
+ATOM 1XX C 0.00
+ATOM 1YY C 0.00
+ATOM 2YY C 0.00
+ATOM 2CA CH1E 0.00
+DELETE BOND 1HT1 1N
+END
+
+read sequence cards
+* HISTIDINE TESTS
+*
+   2
+HSC HSC
+GENERATE MAIN SETUP WARN
+
+READ SEQUENCE CARDS
+* HISTIDINE TESTS
+*
+   5
+HSC HSC HSC HSC HSC
+GENERATE comp setup WARN
+
+cons fix selection atom * * H* end
+patch hise comp 1 warn SETUP
+patch hisd comp 2 warn SETUP
+patch hist comp 2 warn SETUP
+delete ATOM SELECTION atom comp 3 * .OR. atom comp 4 * .OR. atom comp 5 * END
+patch test main 1 comp 2
+PRINT PSF
+!
+! this call to analysis should show that everything is fine
+! even with the strange PSF...
+!
+!ANAL
+!BUILD ATOM NUMBER $
+!PRINT TABLE COLUMN SORT SEGID $ RESID $ TAG $ $$
+!END
+PRINT COOR
+DELETE BONDS SELE ATOM COMP 1 * END SELE ATOM COMP 2 * END
+DELETE CONNECTIVITY SELE ATOM COMP 1 * END SELE ATOM COMP 2 * END
+PRINT PSF
+STOP

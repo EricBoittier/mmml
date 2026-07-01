@@ -1,0 +1,84 @@
+CHARMM Element doc/blade.info 1.1
+
+File: BLaDE, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+     BLaDE is a Basic Lambda Dynamics Engine for fast alchemical
+simulations on GPUs. BLaDE was designed as a standalone MD engine, but has
+also been ported for use as a library in CHARMM. BLaDE can also run
+standard molecular dynamics simulations, though the CHARMM OpenMM port is
+likely faster for such simulations. BLaDE is optimized for system sizes of
+a few to 100k atoms; beyond 1M atoms performance is likely to suffer, and
+domdec may be a better platform.
+
+* Menu:
+
+* Syntax::              Syntax of the blade commands
+* Function::            What the syntax means
+* Limitations::         Some warnings...
+
+File: BLOCK, Node: Syntax, Up: Top, Next: Function
+
+                Syntax of BLaDE commands
+
+BLaDE [ON | OFF | FILE filename]
+
+ENERgy [energy_opts] BLADE [ABIC]
+DYNAmics [dynamics_opts] BLADE [blade_cpt_opts] [ABIC]
+
+blade_cpt_opts::=  [PRMC [IPRS int] [PREF real] [PRDV real]]
+                    [FINALT real]
+
+
+File: BLaDE, Node: Function, Up: Top, Previous: Syntax, Next: Limitations
+
+BLaDE requires a GPU to run, and does not use MPI parallelism. To
+parallelize the system over multiple GPUs, use a separate OpenMP thread for
+each GPU. Note that BLaDE expects the number of OpenMP threads to be equal
+to the number of available GPUs. If there are more OpenMP threads than
+GPUs, BLaDE will crash.
+
+1) BLADE can be turned on and off with BLADE ON or BLADE OFF. BLADE ON
+overrides domdec and openmm for energy and dynamics calculations. BLaDE is
+also maintained as a standalone program with its own scripting language. To
+read in a blade script to perform additional BLaDE commands after
+initializing the system with charmm but before running dynamics, use BLADE
+FILE [filename].
+
+2) Add the BLADE keyword to an energy or dynamics calculation to perform
+that calculation with BLaDE. BLaDE does not recognize DYNAMICS CPT
+keywords. To run a constant pressure simulation, specify the BLaDE option
+PRMC (PRessure Monte Carlo). The options for the Monte Carlo barostat are
+IPRS, the frequency to attempt volume changes (default 50 steps), PREF, the
+reference pressure in atmospheres (default 1), and PRDV, the standard
+deviation of the Gaussian distribution from which volume changes are drawn
+in Angstroms cubed (default 100 A^3). The temperature of the Langevin
+thermostat is set with FINALT. The ABIC option stands for "assume BLaDE is
+current", and will prevent the BLaDE system from reinitializing. Only
+spatial and alchemical coordinates and velocities will be updated. If
+anything else has changed since the last time BLaDE was called, ABIC will
+give incorrect results. Not reinitializing BLaDE can result in significant
+performance improvements.
+
+
+File: BLaDE, Node: Limitations, Up: Top, Previous: Function, Next: Top
+
+BLaDE is designed to be simple and fast, so many features are unavailable.
+
+BLaDE requires PME electrostatics and VFSWITCH van der Waals interactions.
+
+Restraints are not implemented, and the only constraints supported are
+hydrogen bond length constraints.
+
+Only a Langevin thermostat (or constant energy) and Monte Carlo barostat
+(or constant volume) are supported. If other integrators are requested with
+dynamics, the specification is silently ignored and dynamics run with a
+Langevin thermostat. All spatial degrees of freedom use the same drag
+coefficient (set by scalar fbeta), and all alchemical degrees of freedom
+use the same drag coefficient (set by BLOCK LDIN). If drag coefficients
+differ, the first atom and the last block prevail. To run a constant energy
+simulation, set the drag coefficients to 0.
+
+BLaDE was optimized to run MSLD simulations fast, so most MSLD
+functionality in BLOCK is supported. BLaDE can also be used to run
+standard, non-alchemical simulations, the number of BLOCKs is just set to 1
+internally.

@@ -1,0 +1,169 @@
+*  test of Crambin polarizable model with GBMV
+*  test
+*
+
+
+set pnode
+! if ?numnode .gt. 1 then set pnode node 0
+! this test is incompatible with CHEQ (which is in default)
+! but only in parallel
+if ?NUMNODE .gt. 1 then
+  echo "Test NOT performed."
+  stop
+endif
+
+prnlev 5 @pnode
+
+if ?cheq .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+
+stream datadir.def
+
+open unit 1 read form name @0top_all30_cheq_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all30_cheq_prot.inp
+read param card unit 1
+close unit 1
+
+read sequ card
+* 1ab1, crambin
+*
+46
+THR THR CYS CYS PRO SER ILE VAL ALA ARG SER ASN PHE
+ASN VAL CYS ARG LEU PRO GLY THR SER GLU ALA ILE CYS
+ALA THR TYR THR GLY CYS ILE ILE ILE PRO GLY ALA THR
+CYS PRO GLY ASP TYR ALA ASN
+generate 1ab1 first NTER last CTER  angle dihedral setup
+
+! DISUPLHIDES FOR 1AB1
+!
+PATCH DISU 1AB1 3  1AB1 40
+PATCH DISU 1AB1 4  1AB1 32
+PATCH DISU 1AB1 16  1AB1 26
+
+open unit 1 read form name  @01ab1gbtest.crd
+read coor card unit 1
+close unit 1
+
+scalar wmain store 1
+scalar charge recall 1
+
+cheq norm byres select all end
+cheq flex select segid 1ab1  end
+cheq QMAS CGMA 0.0070 TSTA 0.00001 sele segid 1ab1 end
+
+cheq wall
+cheq WTYP PTYP 1 QRQ1 0.9 QRQ2 0.2 QRK 200.0 sele (type H*) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele (type OM) end
+cheq WTYP PTYP 1 QRQ1 0.9 QRQ2 0.2 QRK 200.0  sele ( type H1 .or. type H2 ) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele (type O* .and. .not. type OH2) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele (type N*) end
+cheq WTYP PTYP 1 QRQ1 -0.1 QRQ2 -1.45 QRK 100.0  sele (type S* ) end
+cheq WTYP PTYP 1 QRQ1 1.55 QRQ2 -1.55 QRK 100.0 sele (type C*) end
+
+!  turn on faster options and set-up SHAKE
+faster on
+shake bonh tol 1e-08 param
+
+!GB PARAMS and SETUP
+
+!  increase radii by 10% of original (mafalda radii)
+
+update atom CDIE eps 1 cutnb 999 ctofnb 999 ctonnb 999 switch vswitch
+scalar wmain = radius
+scalar wmain set 2.26 sele (type CAY .or. type CAT) end    ! orig = 2.06
+scalar wmain set 2.24 sele type CY end    ! orig = 2.04
+scalar wmain set 1.67 sele type OY end    ! orig = 1.52
+scalar wmain set 2.45 sele type NT end    ! orig = 2.23
+scalar wmain set 1.54 sele type OT* end    ! orig = 1.40
+scalar wmain set 2.24 sele type C  end    ! orig = 2.04
+scalar wmain set 1.67 sele type O  end    ! orig = 1.52
+scalar wmain set 2.45 sele type N  end    ! orig = 2.23
+scalar wmain set 3.14 sele type CA  end    ! orig = 2.86
+scalar wmain set 2.61 sele (resnam GLY .and. type CA) end     !  orig = 2.38
+scalar wmain set 0.1 sele type H* end                        !  orig = 0.00
+scalar wmain set 2.93 sele type CB end                        !  orig = 2.67
+scalar wmain set 2.70 sele type CG* end                        !  orig = 2.46
+scalar wmain set 3.04 sele type CG .and. resnam GLU end                        !  orig = 2.77
+scalar wmain set 2.92 sele type CD* end                        !  orig = 2.44
+scalar wmain set 2.18 sele (resnam GLN .and. type CD) .or. (resnam ASN .and. type CG) .or. -
+  (resnam GLU .and. type CD) .or. (resnam ASP .and. type CG) end
+scalar wmain set 2.18 sele (resnam PRO .and. (type CB .or. type CG .or. type CD)) end
+scalar wmain set 2.20 sele (resnam TYR .and. (type CE* .or. type CD* .or. -
+  type CZ)) .or. (resnam PHE .and. (type CE* .or. -
+  type CD* .or. type CZ))  end
+scalar wmain set 1.95 sele (resnam TRP .and. (type CE* .or. type CD* .or. -
+  type CZ* .or. type CH2)) end
+scalar wmain set 2.31 sele type CE end
+scalar wmain set 3.08 sele (resnam ARG .and. type CZ) .or. (resnam LYS .and. type CE) end
+scalar wmain set 2.18 select (resnam HSD .and. type CE1) .or. (resnam HSD .and. type CD2) end
+scalar wmain set 1.54 sele (resnam GLU .or. resnam ASP) .and. (type OE* .or. type OD*) end
+scalar wmain set 1.56 sele (resnam ASN .or. resnam GLN) .and. (type OE* .or. type OD*) end
+scalar wmain set 1.80 sele type OG* end
+scalar wmain set 2.03 sele (resnam TYR .and. type OH) end
+scalar wmain set 2.42 select resname TIP3 .and. type OH2 end
+scalar wmain set 1.98 sele resnam HSD .and. (type NE2 .or. type ND1) end
+scalar wmain set 2.52 sele resnam HSP .and. (type NE2 .or. type ND1) end
+scalar wmain set 2.34 sele resnam ARG .and. (type NH* .or. type NE) .or. -
+ (resnam LYS .and. type NZ) end
+scalar wmain set 2.36 sele (resnam GLN .and. type NE2) .or. (resnam ASN .and. type ND2) end
+scalar wmain set 2.64 sele resnam TRP .and. type NE1 end
+scalar wmain set 2.20 sele type S* end
+
+GBMV TOL 1E-8 MEM 20 CUTA 20 DN 1.0 -
+BUFR 0.1 -
+EPSILON 80 -
+BETA -20 -
+SHIFT -0.052 -
+SLOPE 0.9085 -
+LAMBDA1 0.5 -
+P1 0.45 -
+P2 1.25 -
+P3 0.7 -
+P6 8 -
+ONX 1.9 -
+OFFX 2.1 -
+CORR 1 -
+ALFRQ 4 -
+EMP 999999.0 -
+SON 1.2 SOFF 1.5 -
+WTYP 1 NPHI 8 SA 0.020 SB 0.9 WEIGHT
+
+! UPDATE REQUIRED FOR GB
+!  set up GB parameters
+
+cheq on
+
+! Set-up Langevin friction
+scalar fbeta set 50.0 sele all end
+
+open unit 12 write form name @9t.restart
+open unit 13 write unform name @9t1.dcd
+
+FQBA 1
+CALL 1 sele atom 1ab1 * * end
+COEF 1  QREF  0.005  TREF 1.0
+END
+
+!dynamics leap lang start timestep 0.0005 nstep 30 - 
+dynamics leap start timestep 0.0005 nstep 30 - 
+cheq cgmd 1 cgeq 1 fqint  1 -
+inbfreq -1 imgfreq -1 bycb -
+tbath 298.0 rbuffer 0.0  - 
+iasors 1 iasvel 1 -
+ntrfrq 200 -
+firstt 298.0  finalt 298.0 teminc 0.0 ihtfrq 0 -
+ichecw 1 ieqfrq 0 twindl 0.0 twindh 0.0 -
+nprint 50 iprfrq 100 nsavc 50 nsavv 0 iunvel -1 -
+e14fac 0.0 nbxmod -5 -
+eps 1.0 cutnb 999 ctofnb 998 ctonnb 997 -
+echeck 100000 -
+isvfrq 100 -
+iunrea -1 iunwri 12 iuncrd 13 kunit -1 
+
+stop

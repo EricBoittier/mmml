@@ -1,0 +1,29 @@
+* rtf2
+*
+
+! author  : Ryszard Czerminski (April 24, 1992)
+! purpose : to test removing old residues
+! required: rtftest.rtf top9.rtf     toph10.rtf    toph19.rtf toph8.rtf
+!           toph9.rtf   topnah1r.rtf toprna10r.rtf
+!
+
+stream datadir.def
+
+open read card unit 1 name @0rtftest.rtf
+read rtf  card unit 1
+open read card unit 1 name @0top9.rtf
+read rtf  card unit 1 appe
+open read card unit 1 name @0toph10.rtf
+read rtf  card unit 1 appe
+open read card unit 1 name @0toph19.rtf
+read rtf  card unit 1 appe
+open read card unit 1 name @0toph8.rtf
+read rtf  card unit 1 appe
+open read card unit 1 name @0toph9.rtf
+read rtf  card unit 1 appe
+open read card unit 1 name @0topnah1r.rtf
+read rtf  card unit 1 appe
+open read card unit 1 name @0toprna10r.rtf
+read rtf  card unit 1 appe
+
+stop

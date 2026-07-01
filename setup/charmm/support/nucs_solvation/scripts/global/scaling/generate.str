@@ -1,0 +1,19 @@
+* Generation of the protein (will be used for everything).
+* 
+
+! Directory from which to generate the protein :
+SET       GENERATE  "../../../test/"
+
+STREAM   @GENERATE/gene.str
+
+! Read the oriented coordinates for which the NUCS is to be determined:
+! (if not oriented yet, run GET_BOX.INP first) :
+OPEN UNIT 3 READ CARD NAME     @GENERATE/bpti_oriented.crd
+READ COOR  card UNIT 3
+CLOSE UNIT 3
+
+SKIP ALL EXCL ELEC
+! This energy-call must be successfull:
+ENER
+
+RETURN

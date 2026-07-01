@@ -1,0 +1,259 @@
+* CHARMM c32a2 Testcase: fitcharge.inp
+* Charge fitting of polarizable methanol
+* Victor Anisimov, 2007
+* Data Files: fitcharge.pot, fitcharge.pot0, fitcharge.qpos
+* 
+
+if ?numnode .ne. 1 then
+ echo "c32test/fitcharge.inp> Test NOT performed in parallel."
+ stop
+endif
+
+if ?fitchg .ne. 1 then
+ echo "c32test/fitcharge.inp> Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+! this is necessary to work with non-integer total charge
+bomlev -1
+
+! read topology data
+read rtf card
+*  methanol topology
+*
+ 31 1
+
+MASS 1   CT3  12.011000 C
+MASS 2   OH1  15.999400 O
+MASS 3   HA3   1.008000 H
+MASS 4   H     1.008000 H
+MASS 5   CAL  40.080000 CA
+MASS 6   LP    0.000000
+MASS 7   DCB   0.100000
+MASS 8   DOG   0.100000
+
+default first none last none
+autogenerate angles dihedrals
+
+RESI MEOH 0.0  ! Methanol
+GROUP
+ATOM CB   CT3   -0.04 !  HB1
+ATOM OG   OH1   -0.66 !     \
+ATOM HG1  H      0.43 ! HB2--CB--OG
+ATOM HB1  HA3    0.09 !     /      \
+ATOM HB2  HA3    0.09 !  HB3       HG1
+ATOM HB3  HA3    0.09 !
+BOND CB  OG  OG HG1
+BOND CB HB1  CB HB2  CB  HB3
+DONO HG1 OG
+ACCE OG
+IC HG1  OG   CB   HB1   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB3   0.0000  0.0000 180.0000  0.0000  0.0000
+IC OG   CB   HB1  HB2   0.0000  0.0000 180.0000  0.0000  0.0000
+IC HG1  OG   CB   HB1   0.0000  0.0000 180.0000  0.0000  0.0000
+
+PATCH FIRST NONE LAST NONE
+
+PRES  MELP -0.66
+ATOM OG   OH1  0.00
+ATOM OLP1 LP  -0.33
+ATOM OLP2 LP  -0.33
+BOND OG OLP1  OG OLP2
+BOND CB OLP1  CB OLP2
+
+RESI CAL       2.00 ! Calcium Ion
+GROUP
+ATOM CAL  CAL  2.00
+PATCHING FIRST NONE LAST NONE
+
+end
+
+
+! read parameter data
+read para card 
+* methanol parameters
+*
+
+BONDS
+CT3  HA3   322.0  1.111
+OH1  CT3   442.0  1.427
+OH1  H     536.5  0.970
+OH1  DOG   500.0  0.0
+CT3  DCB   500.0  0.0
+OH1  LP      0.0  0.0
+CT3  LP      0.0  0.0
+
+ANGLES
+HA3  CT3 HA3   35.500   108.40
+H    OH1  CT3    58.2   106.00
+OH1  CT3  HA3    61.0   108.89
+CT3  OH1  LP      0.0    91.00
+LP   OH1  LP      0.0     0.00
+
+DIHEDRALS
+HA3 CT3  OH1  H    0.0790  3   0.00
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+
+CT3  0.0  -0.078 2.04  0.0 -0.01 1.9
+OH1  0.0  -0.09  1.72
+HA3  0.0  -0.024 1.34
+H    0.0  -0.01  0.40
+CAL  0.0  -0.12  1.71
+LP   0.0  -0.00  0.00
+DCB  0.0  -0.00  0.00
+DOG  0.0  -0.00  0.00
+
+end
+
+
+read sequence card
+* meoh
+*
+1
+meoh
+
+generate meoh first none last none setup warn
+
+read sequence card
+* Calcium
+*
+1
+CAL
+generate CAL warn setup
+! assign charge
+scalar charge set 0.5 select segid CAL end
+
+read coor card free
+* meoh.qpos.1.crd
+* 
+    7
+    1    1 MEOH CB    -0.36212   0.00297   0.00000 MEOH    1   0.00000
+    2    1 MEOH OG     0.95337   0.54863  -0.00001 MEOH    1   0.00000
+    3    1 MEOH HG1    1.57548  -0.19576   0.00000 MEOH    1   0.00000
+    4    1 MEOH HB1   -0.56069  -0.60412  -0.89207 MEOH    1   0.00000
+    5    1 MEOH HB2   -1.04534   0.85236  -0.00002 MEOH    1   0.00000
+    6    1 MEOH HB3   -0.56070  -0.60408   0.89210 MEOH    1   0.00000
+    7    2 CAL  CAL    2.66361   1.17111  -0.00001 CAL     2   0.00000
+
+patch melp meoh 1 setup warn
+
+set lpdist     0.35
+set lpangle  110.
+set lpdihe1   91.
+
+calc lpdihe2 = 360.0 - @lpdihe1
+
+LONEPAIR relative dist @lpdist angle @lpangle dihe @lpdihe1 -
+    select atom meoh * OLP1 end -
+    select atom meoh * OG   end -
+    select atom meoh * CB   end -
+    select atom meoh * HG1  end
+LONEPAIR relative dist @lpdist angle @lpangle dihe @lpdihe2 -
+    select atom meoh * OLP2 end -
+    select atom meoh * OG   end -
+    select atom meoh * CB   end -
+    select atom meoh * HG1  end
+
+coor shake
+scalar charge show
+coor print
+
+
+! set polarizabilities on non-hydrogen atoms
+scalar wmain  set  -2.223  select resn meoh .and. type CB   END
+scalar wmain  set  -1.024  select resn meoh .and. type OG   END
+
+
+! generate the Drude particles
+DRUDE thole 2.6 mass 0.1 kdrude 500 -
+  select .not. ( type H* .or. type *LP* .or. type CAL ) end
+
+update inbfrq -1 ihbfrq 0 -
+  switch atom vatom vswitch cutnb 990. ctofnb 950. ctonnb 900.
+
+set fname fitcharge
+
+! potential for unperturbed system
+open read  card unit 11 name @0@fname.pot0
+
+! potential for perturbed systems
+open read  card unit 21 name @0@fname.pot
+
+! all the positions of the 0.5 charge
+open read  card unit 31 name @0@fname.qpos
+
+! scratch file
+open write card unit 30 name @9@fname.scr
+
+prnlev 3
+
+! set restraints
+scalar wmain set 1.0d-5 select segid meoh end  ! put a mild restraint on all atomic charges
+scalar wmain set 0.1    select type OG end     ! put a higher restraint on oxygen charge
+define excluded select .not. ( type CAL ) end
+scalar wmain show
+
+! enable this unit to have the fitted charges saved in a stream file
+!open write card unit 90 name meoh.charge.optimized.lp
+
+FITCHARGE -
+    equivalent select type HB* end -
+    equivalent select type *LP* end  -
+    select excluded end -  ! atoms to fit 
+    select excluded end -  ! ESP source
+    restraint resp para -
+    flat 0.0  dflat 0.1 -
+    upot 11 uout 30 -
+    NITE 50 -
+    NCONF 1 -
+    NPERT 3 -             ! number of perturbation ions used in QM ESP
+    uppot 21 -
+    ucoord 31  altinput -
+    ascale 0.7 -          ! post-computational polarizability scaling
+    rdipole 1.88          ! target dipole moment 
+!    uprt 90
+
+close unit 30 disposition delete
+
+! show final fitted charges
+scalar charge show
+
+! prepare a comparison set
+scalar wmain  set  1.9356    select resn meoh .and. type  CB    END
+scalar wmain  set -1.9816    select resn meoh .and. type  DCB   END
+scalar wmain  set  1.5608    select resn meoh .and. type  OG    END
+scalar wmain  set -1.5608    select resn meoh .and. type  DOG   END
+scalar wmain  set -0.2400    select resn meoh .and. type  OLP1  END
+scalar wmain  set -0.2400    select resn meoh .and. type  OLP2  END
+scalar wmain  set  0.3310    select resn meoh .and. type  HG1   END
+scalar wmain  set  0.65E-01  select resn meoh .and. type  HB1   END
+scalar wmain  set  0.65E-01  select resn meoh .and. type  HB2   END
+scalar wmain  set  0.65E-01  select resn meoh .and. type  HB3   END
+scalar wmain  set  0.000000  select resn meoh .and. type  CAL   END
+
+scalar wmain mult -1.0
+scalar wmain  show
+
+! compute differences
+scalar wmain sum charge  ! Q_diff(i) = Q_computed(i) + Q(target)
+scalar wmain abs         ! Q_diff(i) = abs( Q_diff(i) ) 
+scalar wmain show
+
+! perform test
+set THRESHOLD 0.02
+define check select all .and. (property wmain .gt. @THRESHOLD) end
+if ?nsel ne 0  then
+  echo TEST FAILED
+  echo DIFFERENCES IN FOLLOWING ATOMIC CHARGES EXCEED THRESHOLD VALUE
+  define check select all .and. (property wmain .gt. @THRESHOLD) show end
+else
+  echo TEST PASSED
+endif
+
+stop
+

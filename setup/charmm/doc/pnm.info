@@ -1,0 +1,229 @@
+CHARMM Element doc/pnm.info $Revision: 1.1.1.1 $
+
+File: PNM,  Node: Top, Up: (doc/commands.info), Next: Description
+
+
+                  Plastic Network Model (PNM)
+
+            -------------------------------------------- 
+            Jingzhi Pu
+            Paul Maragakis (Paul.Maragakis@deshaw.com)
+            Martin Karplus
+            Victor Ovchinnikov (ovchinnv/at/georgetown/dot/edu)
+
+The PNM module provides an implementation of the plastic network
+model (Maragakis and Karplus, 2005) for studying conformational
+changes at a coarse-grained level.
+
+* Menu:
+
+* Description::      Description of the PNM method
+* Syntax::           Syntax of the PNM commands
+* Options::          Command-line Options
+* Examples::         Usage examples
+* Installation::     Compiling CHARMM with PNM
+* Status::           Status of the code
+* References::       References
+
+
+File: PNM, Node: Description, Up: Top, Previous: Top, Next:Syntax
+
+                  Description of the PNM method
+
+For a system with multiple energy basins, with each basin described by an
+elastic network model, a combined energy function can be represented
+by the plastic network model (PNM). PNMs can be used to model pathways
+and dynamics between metastable states.  For example, for a system
+expressed as a PNM of two conformations (labeled 1 and 2),
+we can construct  a phenomenological energy Hamiltonian in a
+diabatic representation (a 2 x 2 matrix):
+
+              H  =  [ G11  G12 ]
+                    [ G21  G21 ]
+
+where G11 and G22 are the configurational free energy functionals
+for conformer 1 and 2, respectively. Following Tirion's elastic 
+network model (ENM), G11 and G22 can be calculated as a harmonic 
+deformation of each conformer with respect to its equilibrium 
+network configuration:
+                          
+ G11 = G_0(1) + 1/2 Sum { D_ab(1) C(1) [r_ab(1) - r_ab,0(1)]^2 }
+                    a,b 
+             
+ G22 = G_0(2) + 1/2 Sum { D_ab(2) C(2) [r_ab(1) - r_ab,0(2)]^2 }
+                    a,b
+
+where G_0(i) represents the equilibrium free energy of the 
+conformer i; D_a,b(i) is the network connectivity matrix for the
+conformer i, whose element is 1 for an atom pair (a,b) if their 
+distance is smaller than a cutoff distance, 0 otherwise; C(i) 
+is a uniform elastic constant for elastic i; r_ab(i) and 
+r_ab,0(i) denote the distance between atoms (a,b) in the 
+network i obtained from the instantaneous and equilibrium 
+positions, respectively.
+
+Given a constant coupling term (G12=G21=epsilon), the adiabatic 
+free energy (G) of the PNM is expressed as the lowest eigen-energy 
+of the eigen-states that diagonalize the above energy Hamiltonian:
+
+      (G11 + G22) - sqrt[(G11 - G22)^2 + 4 epsilon^2] 
+  G = ------------------------------------------------
+                            2 
+
+More generally, for a system with n>2 metastable basins and n
+corresponding elastic energy functions, the above Hamiltonian matrix will
+be of size n x n.  As for the case with n=2, the PNM energy corresponds to the
+smallest eigenvalue of the matrix, which can be obtained by numerical matrix
+diagonalization.
+
+Alternative mixing models that do not involve diagonalization are also
+possible. One such model available in the present implementation (as of
+CHARMM v. c39) is based on exponential function, whereby, given a network
+comprised of N elastic models, the network free energy is computed as:
+
+  G = - 1 / \beta * log ( \Sum_{i=1}^n exp [ - \beta Gii ] )
+
+Note that the inverse temperature \beta will generally be much higher
+than the room temperature value ( ~ 1.7 ) to facilitate transitions
+between the constituent ENMs on relatively short simulation timescales.
+Values \beta are typically be explored by trial and error.
+
+In addition to its utility for modeling conformational changes
+at a coarse-grained level, the PNM potential function can be added
+as an additional (`rigidification`) potential to standard force fields. This can
+be useful in an all-atom transition simulations, whereby the two (or more)
+conformational states are connected via coarse-grained PNM potentials, 
+while the fine-grain interatomic forces are computed by the underlying force
+field.
+
+The syntax of PNM invocation has been changed in CHARMM v. c39 to allow
+greater functionality and flexibility.
+
+
+File: PNM, Node: Syntax, Up: Top, Previous: Description, Next: Options
+
+                      Syntax of the PNM commands
+
+PNM           < [{ INITialize int }] |
+                [{ DONE }]           |
+                [{ NEWModel }]       |
+                [{ EXP <on|true|t|yes|off|false|f|no> [TEMP real] }]       |
+                [{ ADD [FORC real]
+                       [CUT real]
+                       [ZERO real]
+                       [PMIX real]
+                       [atom-selection]
+                       [REMO atom-selection atom-selection]
+                       [COMP] }]     |
+                [ { PARA <on|true|t|yes|off|false|f|no> } ]
+                [ { HELP } ] >
+
+Note: the PNM energy can be conditionally skipped by the 'SKIP' command  
+      in CHARMM, e.g., 'SKIP PNME' will remove the PNM energy and related 
+      force from the energy calculation.
+
+
+File: PNM, Node: Options, Up: Top, Previous: Syntax, Next: Examples
+
+                         PNM Command Options
+
+1) INIT   : initialize PNM module with a maximum number of
+networks (default=2); can be called multiple times
+
+2) DONE   : finalize PNM module; can be called multiple times
+
+3) ADD    : add a new elastic model with the following optional parameters:
+FORC real : elastic spring constant (default 2)
+CUT  real : cutoff for constructing nearest neighbors (default 10)
+ZERO      : equilibrium value of elastic energy function (default 0)
+PMIX      : the mixing constant (eps) for this elastic model (default 0.5)
+            the (i,j) off-diagonal entry in the Hamiltonian matrix is 
+            computed as Gij = 1/2 ( eps_i + eps_j )
+REMO      : remove the connections between two groups of atoms
+            specified in a double selection following this keyword
+            (all atoms selected by default)
+atom-selection: define the atom selection that PNM nodes reside on
+COMP      : when specified, equilibrium coordinates for the elastic
+            network will be taken from the comparison set 
+            (the main set is used by default)
+
+4)NEWM    : construct a new PNM model (in addition to the ones present, if any);
+the elastic models that are ADDed after this command will be part of the
+new PNM model (e.g. they correspond to a separate Hamiltonian matrix);
+with this functionality it is possible to simulate multiple interacting 
+molecules, each described by a separate PNM.
+
+5)EXP     : specify whether the exponential mixing is to be used for the
+active network model (default : EXP = off) and supply an optional
+temperature in K (default: 300K)
+
+6)PARA    : turn on or off parallel force computation in PNM (on by default)
+
+7)HELP    : print usage syntax
+
+
+File: PNM, Node: Examples, Up: Top, Previous: Syntax, Next: Installation
+
+                          Examples of using PNM 
+
+An example is provided in the test suite to demonstrate the usage 
+of the PNM command: 
+
+pnm_test1.inp
+
+   This testcase shows a MD simulation for one beta subunit in the open
+conformation of the F1-ATPase.  The coarse-grained potential used for
+PNM is defined by CA atom positions in the conformation taken from
+PDB:1BMF.  The system is simulated for 1000 MD steps. Energy and first
+derivatives are also tested.
+
+pnm_test2.inp
+
+    A test case designed to demonstrate the flexibility of the PNM code.
+Sets up and performs a MD simulation of a hexameric AAA protein machine, 
+with each monomer described by a separate PNM with six constituent ENMs
+(for a total of 36 ENMs).  The six individual monomers interact via LJ
+and electrostatic forces. The  BLOCK module is used to switch off
+unwanted monomer self-interactions.
+
+pnm_test3.inp
+
+    Identical to pnm_test3.inp except that the exponential version of
+mixing is used.
+
+
+File: PNM, Node: Installation, Up: Top, Previous: Examples, Next: Status
+
+                        Installation of PNM
+
+Currently, the PNM module is not activated by default in a standard 
+installation. To compile the PNM code under the CHARMM environment,
+execute the following commands.
+
+    ./configure --add pnm
+    make -C build/cmake install
+
+
+File: PNM, Node: Status, Up: Top, Previous: Installation, Next: References
+
+                       Status of the PNM code
+
+The PNM energy calculations are parallelized under the atom decomposition
+model in CHARMM.  However, because of the simplicity of the elastic energy 
+networks that constitute the PNMs and the communication overhead associated
+with parallelization, the serial version of the code may actually run
+faster for some (usually smaller) systems.
+
+
+File: PNM, Node: References, Up: Top, Previous: Status, Next: Top
+
+                          References
+
+[1].  Maragakis, P.; Karplus, M. J. Mol. Biol. 2005, 352, 807.
+
+[2].  Tirion, M. M. Phys. Rev. Lett. 1996, 77, 1905. 
+
+[3].  Schlitter, J.; Engels, M.; Kruger, P. J. Mol. Graphics 1994, 12, 84.
+
+[4].  Pu, J.; Karplus, M., PNAS, 2008, 105, 1192
+

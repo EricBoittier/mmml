@@ -1,0 +1,39 @@
+* Test of COOR DIST RESI command
+* by Wonmuk Hwang, 2014/10
+*
+stream datadir.def
+
+read rtf card name @0top_all36_prot.rtf
+read para card name @0par_all36_prot.prm
+
+read sequ pdb segi A7NA name @0tcr.pdb
+gene A7NA setup
+read sequ pdb segi A7NB name @0tcr.pdb
+gene A7NB setup
+
+read coor pdb resi name @0tcr.pdb
+!print coor
+
+set r0 3.0
+
+define a1 sele (segi A7NA .and. (property abs CHARGE .lt. 0.30)) end
+define a2 sele (segi A7NB .and. (property abs CHARGE .lt. 0.30)) end
+
+! All nonpolar contacts within a segment
+! Output contains only for the first ires less than the second ires
+coor dist resi cut @{r0} sele a1 end 
+set n ?npair
+
+! Using two selections: 
+! Output contains the first and second ires occuring in two orders
+coor dist resi cut @{r0} sele a1 end sele a1 end
+set n ?npair
+
+! Traditional way for comparison
+coor dist cut @{r0} sele a1 end sele a1 end
+
+! Inter-segment contacts
+coor dist resi cut @{r0} sele a1 end sele a2 end
+set n ?npair
+
+stop

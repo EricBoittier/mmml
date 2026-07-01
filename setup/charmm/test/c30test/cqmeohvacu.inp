@@ -1,0 +1,94 @@
+*  test of acetamide 
+*  test
+*
+
+!  This script reads in a coordinate file for methanol
+!  and does a  charge inversion to determine the equilibrium
+!  charge distribution for the given geometry.
+
+!  The charges are then reset to 0 and a minimization, holding
+!  the geometry fixed, is performed.
+
+!   The energies and charges for each case should be equivalent.
+!   The results are compared finally via the difference array '1'
+!   which displays the difference in the two sets of charges. This
+!   will naturally be an array of small values.
+
+if ?cheq .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @0top_all30_cheq_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0par_all30_cheq_prot.inp
+read param card unit 1
+close unit 1
+
+read sequ meoh 1
+generate meoh setup angle dihedral
+
+open unit 1 read form name @0meoh.crd
+READ COOR CARD unit 1
+close unit 1
+
+cheq norm byres sele all end
+cheq flex select all end
+cheq QMAS CGMA 0.000069 TSTA 0.01   sele all end
+!
+fast ON
+shake fast  bonh param tol 1.0e-8  mxit 2000
+
+set cutoff 9999
+Calc ctofnb = @cutoff - 1.0
+Calc ctonnb = @cutoff - 1.5
+
+!  call energy; the CGINV flag invokes the charge inversion routine
+
+!  NOTE:  need to set the e14fac to 0.0 since the intramolecular
+!   electrostatics includes 1-4 shielded interactions via the hardness
+!   matrix elements
+
+energy cheq cginv cgmd 1 -
+atom vatom vdistance cdie eps 1.0 vswitch wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+e14fac 0 nbxmod -5
+
+coor dipole
+
+scalar charge show
+coor dipole sele all end
+scalar charge store 1    !  store the charges for later comparison
+scalar charge mult 0.0   !  set the charges to 0; will perform minimization next
+
+!  Obtain equilibrium charges by steepest descents minimization
+!   Takes a few steps
+!   Freeze the nuclear coordinates to original positions; allows only
+!      the charges to equilibrate
+
+!  NOTE:  need to set the e14fac to 0.0 since the intramolecular
+!   electrostatics includes 1-4 shielded interactions via the hardness
+!   matrix elements
+
+mini sd noco cheq cgmd 1 nstep 60000  nprint 20000 -
+atom vatom vdistance cdie eps 1.0 vswitch wmin 1.2 -
+cutnb @cutoff ctofnb @ctofnb ctonnb @ctonnb -
+nbxmod -5 e14fac 0.0
+
+scalar charge show         ! show the equilibrium charges
+coor dipole sele all end   ! compute the dipolar moment
+scalar charge mult -1      ! multiply charges by -1
+scalar charge +store 1     ! subtract from orinal charges
+scalar 1 show              ! compare
+
+stop
+

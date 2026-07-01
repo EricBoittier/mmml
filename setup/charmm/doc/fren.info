@@ -1,0 +1,204 @@
+File: FREN -=- Node: Top
+Up: (commands.info) -=- Next: Syntax
+
+A general purpose calculator for various free energy differences using Bennett's acceptance ratio, Non-Boltzmann Bennett, and the Zwanzig equation
+
+The free energy (FREN) module allows the analysis of potential energy data from one or two different states to calculate their free energy difference. Depending on the supplied data, it either uses the Zwanzig equation or Bennett's acceptance ratio method (BAR) to obtain the free energy difference. It is also possible to employ reweighting for each of the trajectories, thus allowing multiscale free energy calculations. The module also includes some simple commands to adjust bonded parameters (QMFIx) and generate dummy atoms (MKDUmmy). 
+
+Implemented in CHARMM by Gerhard König, Tim Miller and Bernard R. Brooks
+
+For more information, please read (and possibly cite) the following works:
+
+For BAR:
+
+Bennett CH. J. Comp. Phys. 22:245-268 (1976)
+
+
+For Zwanzig/Exponential Formula/Thermodynamic Perturbation/Free Energy Perturbation:
+
+Zwanzig RW. J. Chem. Phys. 22:1420 (1954)
+
+
+Reweighting:
+
+Torrie GM, Valleau JP. Chem. Phys. Let. 28:578-81 (1974)
+Koenig G, Boresch S. J. Comput. Chem. 32:1082-1090 (2011)
+
+
+Multiscale Free Energy Calculations with Reweighting:
+
+Koenig G, Hudson PS, Boresch S, Woodcock HL. J. Chem. Theory Comput. 10:1406-1419 (2014)
+Koenig G, Pickard FC 4th, Mei Y, Brooks BR. J. Comput. Aided Mol. Des. 28:245-57 (2014) 
+
+* Menu:
+* Syntax::              Syntax of the FREN command
+* Examples::          FREN usage examples
+* Notes::               Usage notes and hints
+
+
+File: FREN -=- Node: Syntax
+Up: Top -=- Previous: Top -=- Next: Examples
+
+FREN
+
+LOAD [state-selection] [NPT integer]  [COLU integer] [SKIP integer] [OFFS integer] 
+
+BAR [TEMPerature real] [IGUEss real] [NOCHecks]
+
+NBB [TEMPerature real] [IGUEss real] [NOCHecks]
+
+ZWANzig [BACKward] 
+
+NBZWanzig [BACKward]
+
+END
+
+Additional commands:
+
+QMFIx [ BONDs ] [ ANGLes ] 
+
+MKDUmmy [ USTReam integer ] [ UTOPology integer ] [ UPARameter integer ] [ CSCAle real ] [RSCAle real ] [ REDIstribute ]  atom-selection 
+
+
+state-selection ::=
+One can either specify a unit of a file containing a series of potential energies (U):
+{ U00 integer} ! trajectory of initial state analyzed with Hamiltonian of initial state
+{ U01 integer} ! trajectory of initial state analyzed with Hamiltonian of final   state
+{ U10 integer} ! trajectory of final   state analyzed with Hamiltonian of initial state
+{ U11 integer} ! trajectory of final   state analyzed with Hamiltonian of final   state
+{ US0 integer} ! trajectory of initial state analyzed with Hamiltonian of the state that was used for sampling the initial state
+{ US1 integer} ! trajectory of final   state analyzed with Hamiltonian of the state that was used for sampling the final state
+
+or a unit of a file containing potential energy differences (delta U)
+{ DU0 integer} ! forward perturbation, i.e. U01-U00  
+{ DU1 integer} ! backward perturbation, i.e. U10-U11
+{ VB0 integer} ! biasing potential for initial state trajectory, i.e. US0-U00
+{ VB1 integer} ! biasing potential for final state trajectory, i.e. US1-U11
+
+
+Meaning of individual keywords:
+
+FREN - perform a new free energy calculation 
+
+LOAD - load potential eneriges or potential energy differences from a file 
+NPT - number of data points in file (default: automatic determinatinon of file length)
+COLUmn - which column to read from in file  (default: 1)
+SKIP - skip rate for reading file (default: 1)
+OFFSet - how many lines in the file are skiped at the beginning before we start reading (default: 0)
+
+BAR - perform a free energy calculation with Bennett's acceptance ratio method once data is loaded.
+TEMP - at which temperature the simulation was performed (default = 300)
+IGUEss - initial guess of free energy difference for BAR (default = automatic determination based on overlap)
+NOCHechks - do not automatically check potential energy data for corrupted data and outliers 
+
+NBB - perform a free energy calculation with Non-Boltzmann Bennett depending on provided data. If VB0 or US0 are provided the initial trajectory will be reweighted, if VB1 or US1 are provided the final trajectory will be reweighted. If biasing potentials for both trajectories are provided, both will be reweighted.   
+
+ZWANzig - perform a free energy calculation using the Zwanzig equation (also known as the exponential formula or Thermodynamic Perturbation). The default is using the forward perturbation (DU0). 
+BACKward  - perform a free energy calculation in the backward direction (based on DU1). 
+
+NBZWanzig - perform a free energy calculation using the Non-Boltzmann Zwanzig equation (Zwanzig with reweighting). 
+
+END - must be specified to end FREN block
+
+Additional commands:
+
+QMFIx - generate a new set of bonded parameters for each bond and/or angle and set the equilibrium structure to the current value. If the BOND keyword is specified, only the individualized bond terms are generated. If the ANGL keyword is specified, only individualized angle terms are generated. 
+
+MKDUmmy - the selected atoms are converted to dummy atoms without charges or van der Waals interactions. Proper function requires the specification of a stream file for the new parameters. The unit for the new stream file has to be specified with the USTR command. Alternatively, a topology file and a parameter file can be written based on the unites specified with the UTOP and UPAR keywords. Instead of creating dummy atoms, it is also possible to multiply the charges of the selected atoms with a scaling factor specified with the CSCA keyword. Also the Lennard Jones parameters can be scaled with the RSCA keyword. To make sure that the total charge of the molecule remains an integer, the charges of the dummy atoms can be redistributed to neighboring atoms with the REDIstribute keyword. 
+
+
+
+File: FREN -=- Node: Examples
+Up: Top -=- Previous: Syntax -=- Next: Notes
+                  
+                    
+The following example shows how to use the BAR command to conduct a BAR calculation with reweighting (an NBB calculation). In this case, we already have files that contain potential energy differences and biasing potentials in their first (and only) column. All the data in the files is used.  
+
+open unit 50 read form name du0.dat 
+open unit 51 read form name du1.dat 
+open unit 52 read form name vb0.dat 
+open unit 53 read form name vb1.dat 
+
+FREN
+   LOAD DU0 50
+   LOAD DU1 51
+   LOAD VB0 52
+   LOAD VB1 53
+   BAR TEMP 298.0
+END                                    
+
+
+Alternatively, it is also possible to store all the data in one file.
+
+
+open unit 11 read form name frentest.dat 
+
+FREN
+    ! Load data - the first line in the file is the header, so we specify an offset of 1. Here, we only use potential energies.
+    LOAD U00 11 COLUmn 2 OFFSet 1 
+    LOAD U01 11 COLUmn 3 OFFSet 1 
+    LOAD U10 11 COLUmn 4 OFFSet 1 
+    LOAD U11 11 COLUmn 5 OFFSet 1 
+    LOAD US0 11 COLUmn 1 OFFSet 1 
+    LOAD US1 11 COLUmn 6 OFFSet 1 
+
+    ! Do an BAR calculation - the result is stored in ?FREN
+    BAR TEMP 300 
+ 
+    ! Do an NBB calculation - the result is stored in ?FREN
+    NBB TEMP 300 
+
+    ! Use Zwanzig equation with reweighting
+    NBZWANZIG TEMP 300 
+ 
+    ! Use Zwanzig equation with reweighting in the backward direction
+    NBZWANZIG TEMP 300 BACK
+
+END                                
+                                      
+
+File: FREN -=- Node: Notes
+Up: Top -=- Previous: Examples -=- Next: Top
+
+
+BAR allows the calculation of free energy differences (Delta A) between two states, where the initial state is called 0 and the final state is called 1.  Their potential energy functions are U_0 and U_1, respectively. In order to calculate Delta A, the potential energy difference, Delta U, has to be calculated for each frame of the trajectory. If the trajectory of state 0 is evaluated, one usually evaluates the potential energy difference in forward direction, i.e. 
+Delta U_fw = U^0_1 - U^0_0, 
+where ^0 denotes that the frames of trajectory 0 are used. Conversely, the potential energy difference of trajectory 1 is usually in backward direction, i.e. 
+Delta U_bw = U^1_0 - U^1_1,
+where ^1 denotes that the frames of trajectory 1 are used. Since each trajectory usually consists of more than one frame, both Delta U's and potential energies U constitute vectors. Those vectors are assumed to be stored either in different files or in different columns of one or more files (in kcal/mol). To specify which file contains which information, the unit numbers, columns, begin frame, and skip rate can be set by the user. The following naming convention is used:
+
+U = potential energy data, followed by two numbers. The first number denotes the trajectory that has been used, the second number specifies the potential energy function that has been used. E.g., U^0_1 is abbreviated as U01 and means that the trajectory of state 0 has been analyzed with the potential energy function of state 1. 
+
+DU = potential energy differnence data, followed by a number. If the number is 0, it means the file contains Delta U_fw, if the number is 1 it contains Delta U_bw data. 
+
+It is sometimes more efficient to conduct the simulation with a potential energy function that is different from state 0 and state 1. For example, the potential energy fuction can be modified to lower energy barriers (i.e. improve sampling), or it is possible to simulate a system with molecular mechanics and then analyze it with quantum mechanics (multiscale free energy calculations). If this is the case, the simulation is biased, and reweighting is required to obtain the right Boltzmann probabilities for the states of interest. Thus, 0 and 1 are denoted as "target states" (the states of physical interest), while the trajectories were generated with "sampling states" (states that are used to sample phase space). A sampling state has a potential energy function of U_S. Since different sampling states can be used to generate conformations for state 0 and 1, the potential energy function of the sampling state for state 0 is denoted U_{S0} and the sampling state used to sample coordinates for state 1 is called U_{S1}. 
+
+For reweighting, on has to account for the differences between the potential energies of the sampling states and the target states. This is done with the so-called biasing potential, V^b, which is defined as 
+V^b_0 = U_{S0} - U_0, 
+for state 0 and
+V^b_1 = U_{S1} - U_1,
+for state one. Similarly to the abbreviations used before the following naming convention is used to specify the data: 
+
+US = potential energy data for a sampling state. The number denotes the state for which the trajectory has been generated. E.g., U_{S0} is abbreviated as US0 and means that a trajectory for state 0 has been generated using the potential energy function U_{S0}. 
+
+VB = biasing potential, followed by one number. If the number is 0, it means the  file contains V^b_0, if 1, it containts V^b_1.
+
+For maximum flexibility, both potential energies, potential energy differences and biasing potentials can be specified in whatever combination is desired by the user. Notably, at a technical level, all calculations are performed as NBB and NBZWanzig calculations, but the biasing potentials are set to zero if BAR or Zwanzig calculations are requested. 
+
+To run BAR, DU0 (or U00, U01), DU1 (or U10, U11) need to be specified. 
+
+To run NBB, DU0 (or U00, U01), DU1 (or U10, U11), VB0 (or US0, U00) and VB1 (or US1, US11) need to be specified. 
+
+To run NBZWanzig, DU0 (or U00, U01) or DU1 (or U10, U11), as well as the corresponding biasing potentials VB0 (or US0, U00) or VB1 (or US1, US11) need to be specified. 
+
+To run a ZWANzig calculation , DU0 (or U00, U01) or DU1 (or U10, U11) need to be specified. 
+
+Additional information for debugging the free energy calculation is provided when using a higher PRNLEV (e.g. histograms of the the Delta U distributions, averages of Delta U and the biasing potentials, the corresponding standard deviations, Zwanzig equation results during a BAR calculation etc.). 
+
+The number of frames in trajectory 0 and trajectory 1 can be different, but, within each trajectory, the data has to be consistent (e.g. U00, U01 and US0 have to have equal lenght). 
+
+The fluctuations of the potential energy differences and especially the biasing potentials should not be too large, otherwise the efficiency will be suboptimal. The fluctuations can be minimized by introducing intermediate (lambda) states, using soft core potentials, a proper dual topology setup of the alchemical mutation, or constraints. 
+
+As a rule of thumb, the phase space overlap between the end states (see output) should be at least one percent. If this is not the case, intermediate states have to be introduced (e.g. with PERT or MSCALE). 
+
+Free energy results are stored in the ?FREN variable. 

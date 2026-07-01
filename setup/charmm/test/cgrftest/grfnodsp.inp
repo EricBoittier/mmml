@@ -1,0 +1,124 @@
+* graphics test; requires NODISPLAY pref.dat keyword at compile time
+* read BPTI coords and make several output files
+* RM Venable :: July 1995 :: FDA Biophysics Lab :: NIH Bldg 29
+* E-mail to rvenable at deimos.cber.nih.gov
+*
+
+stream datadir.def
+
+open unit 1 read card name @0toph19.rtf
+read rtf card unit 1
+close unit 1
+
+open unit 1 read card name @0param19.prm
+read param card unit 1
+close unit 1
+
+open unit 2 read card name @0bpti.crd
+read sequ coor unit 2
+close unit 2
+
+gener main setup first nter last none
+patch cter main 58 setup
+delete atom sele resn OH2 end
+read sequ OH2 4
+gener solv noang nodihe
+
+open unit 2 read card name @0bpti.crd
+read coor card unit 2
+close unit 2
+
+! CENTER AND CREATE 90 DEG ROTATED COPY
+coor orient
+coor copy comp
+coor rota ydir 1. phi 90. comp
+define back sele type N .or. type CA .or. type C .or. type O end
+
+graphics
+! CENTER IN DISPLAY WINDOW, MAKE LONG AXIS VERTICAL
+center
+draw sele back end
+rot 0 0 90
+! REDUCE SIZE, BROADER LINES, INVOKE STEREO AND DEPTH CUEING
+scale 0.45
+line 3
+stereo 16.
+color orange sele type OH2 end
+zcue 5. -15.
+! DEFINE LABELS AND ENABLE THEIR DISPLAY
+lbl resn sele type O end color green size medium
+rad 0.2
+display label atom
+text stereo view of bpti
+font medium
+
+! POSTSCRIPT OUTPUT, GREYSCALE; REVERSE C AND H COLORS
+color white sele type C* end
+color black sele type H* end
+open unit 22 write card name cgrftest/bpti1.ps
+psc unit 22
+! POSTSCRIPT OUTPUT, COLOR; RESTORE C AND H COLORS
+color black sele type C* end
+color white sele type H* end
+open unit 22 write card name cgrftest/bpti2.ps
+psc color unit 22
+
+! REVERT TO MONO VIEW, DISPLAY ROTATED COORDS IN COMP SET; LABELING CHANGE
+stereo off
+draw sele .not. type H* end
+text "BPTI: 2 orthogonal viewpoints simultaneously"
+coor tran ydir -16.
+coor tran ydir  16. comp
+display comp
+rad 1.5
+lbl init
+lbl resid sele type CA .and. ( resid 1 .or. resid *0 .or. resid *5 .or. -
+   resid 58 ) end size medium color green
+
+! POSTSCRIPT OUTPUT, GREYSCALE; REVERSE C AND H COLORS
+color white sele type C* end
+color black sele type H* end
+color white sele type C* end comp
+color black sele type H* end comp
+open unit 22 write card name cgrftest/bpti3.ps
+psc unit 22
+! POSTSCRIPT OUTPUT, COLOR, WHITE BACKGROUND; COLOR SOME ATOMS DARKER
+colo dkblue sele type N* end
+colo purple sele type OH2 end
+colo orange sele type S* end
+colo dkblue sele type N* end comp
+colo purple sele type OH2 end comp
+colo orange sele type S* end comp
+open unit 22 write card name cgrftest/bpti4.ps
+psc color unit 22 bwrev
+! RESTORE C AND H COLORS
+color black sele type C* end
+color white sele type H* end
+color yellow sele type S* end
+
+! OUTPUT FORMAT USED BY 'LIGHT' PROGRAM; 3/4 SIZE RADII
+display comp off
+coor tran ydir 16.
+center
+rot 0 90 -90
+display atom
+scale 2.0
+rad defa 0.75
+open unit 24 write card name cgrftest/bpti.atm
+mak unit 24
+
+! CRUDEST POSSIBLE FDAT OUTPUT; EACH ATOM NAME SHOULD REALLY BE UNIQUE
+! CSD FDAT FORMAT IS C1 C2 C3 N1 N2  ... ; NOTE THAT CA == CALCIUM, ETC.
+! MUST TEMPORARILY EXIT GRAPHICS PARSER WITH 'END' TO USE 'RENAME'
+! THE RENAME BELOW WILL FAIL AT DEFAULT BOMLEV 0; NON-UNIQUE ATOM NAMES
+end
+bomlev -1
+rename atom C sele type C* end
+rename atom N sele type N* end
+rename atom O sele type O* end
+rename atom H sele type H* end
+rename atom S sele type S* end
+graphics
+open unit 25 write card name cgrftest/bpti.fdat
+pluto unit 25
+

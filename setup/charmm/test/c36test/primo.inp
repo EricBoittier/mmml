@@ -1,0 +1,128 @@
+* CHARMM c36a1 Testcase test/c36test/epmf.inp
+* Author: Michael Feig
+* Date  : July 14, 2010
+* Test PRIMOMODULE
+* 
+
+if ?PRIMO  .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+open unit 1 read card name @0/toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/param19_eef1.inp
+read param card unit 1
+close unit 1
+
+
+read sequ cards
+*  short peptide
+*
+   5
+    SER TRP THR TRP GLU
+
+generate PEP2  setup warn
+
+read coor card 
+*
+   62
+    1    1 SER  HT1   -2.31049   9.07600  -0.10297 PEP2 1      0.22000
+    2    1 SER  HT2   -3.95483   9.56232  -0.07702 PEP2 1      0.22000
+    3    1 SER  N     -3.29844   8.73599  -0.12518 PEP2 1      1.85000
+    4    1 SER  HT3   -3.45039   8.20946  -1.01374 PEP2 1      0.22000
+    5    1 SER  CA    -3.58659   7.81074   1.00610 PEP2 1      2.27000
+    6    1 SER  CB    -5.13714   7.57669   1.18946 PEP2 1      2.17000
+    7    1 SER  OG    -5.47370   7.01176   2.46975 PEP2 1      1.77000
+    8    1 SER  HG    -5.04091   6.15675   2.57447 PEP2 1      0.00000
+    9    1 SER  C     -2.98614   6.40926   0.88094 PEP2 1      2.00000
+   10    1 SER  O     -3.13218   5.82429  -0.19731 PEP2 1      1.70000
+   11    2 TRP  N     -2.35811   5.90173   1.99898 PEP2 2      1.85000
+   12    2 TRP  H     -2.07737   6.46937   2.77352 PEP2 2      0.22000
+   13    2 TRP  CA    -2.01986   4.45545   2.26871 PEP2 2      2.27000
+   14    2 TRP  CB    -1.23176   4.12980   3.60092 PEP2 2      2.17000
+   15    2 TRP  CG     0.19682   4.78543   3.51964 PEP2 2      1.99000
+   16    2 TRP  CD2    1.31690   4.54523   2.66088 PEP2 2      1.80000
+   17    2 TRP  CE2    2.36644   5.42814   2.98469 PEP2 2      1.80000
+   18    2 TRP  CE3    1.49782   3.55968   1.73915 PEP2 2      1.99000
+   19    2 TRP  CD1    0.58057   5.84068   4.28061 PEP2 2      1.99000
+   20    2 TRP  NE1    1.87217   6.21727   3.97507 PEP2 2      1.85000
+   21    2 TRP  HE1    2.46907   6.67456   4.57156 PEP2 2      0.22000
+   22    2 TRP  CZ2    3.64864   5.34884   2.36220 PEP2 2      1.99000
+   23    2 TRP  CZ3    2.73890   3.45034   1.12330 PEP2 2      1.99000
+   24    2 TRP  CH2    3.83879   4.30322   1.41596 PEP2 2      1.99000
+   25    2 TRP  C     -3.21636   3.49440   2.06926 PEP2 2      2.00000
+   26    2 TRP  O     -4.25161   3.56169   2.72186 PEP2 2      1.70000
+   27    3 THR  N     -3.19085   2.60709   1.04110 PEP2 3      1.85000
+   28    3 THR  H     -2.37471   2.47092   0.47638 PEP2 3      0.22000
+   29    3 THR  CA    -4.32637   1.75439   0.59021 PEP2 3      2.27000
+   30    3 THR  CB    -4.95482   2.08702  -0.75603 PEP2 3      2.27000
+   31    3 THR  OG1   -5.27243   3.47418  -0.80136 PEP2 3      1.77000
+   32    3 THR  HG1   -4.41165   3.94664  -0.77916 PEP2 3      0.22000
+   33    3 THR  CG2   -6.21773   1.29055  -1.06970 PEP2 3      2.06000
+   34    3 THR  C     -3.70780   0.38441   0.39098 PEP2 3      2.00000
+   35    3 THR  O     -2.70439   0.15967  -0.27461 PEP2 3      1.70000
+   36    4 TRP  N     -4.33110  -0.51682   1.10670 PEP2 4      1.85000
+   37    4 TRP  H     -5.08872  -0.18437   1.65067 PEP2 4      0.22000
+   38    4 TRP  CA    -4.06600  -1.94824   1.08873 PEP2 4      2.27000
+   39    4 TRP  CB    -4.91345  -2.70958   2.15336 PEP2 4      2.17000
+   40    4 TRP  CG    -4.48601  -4.14155   2.42375 PEP2 4      1.99000
+   41    4 TRP  CD2   -3.36799  -4.70796   3.12167 PEP2 4      1.80000
+   42    4 TRP  CE2   -3.49127  -6.10830   2.99211 PEP2 4      1.80000
+   43    4 TRP  CE3   -2.21145  -4.13978   3.71638 PEP2 4      1.99000
+   44    4 TRP  CD1   -5.17761  -5.17232   1.85265 PEP2 4      1.99000
+   45    4 TRP  NE1   -4.61704  -6.37445   2.21319 PEP2 4      1.85000
+   46    4 TRP  HE1   -4.88748  -7.29733   1.84076 PEP2 4      0.22000
+   47    4 TRP  CZ2   -2.54679  -6.96520   3.61455 PEP2 4      1.99000
+   48    4 TRP  CZ3   -1.34259  -4.99358   4.39685 PEP2 4      1.99000
+   49    4 TRP  CH2   -1.54897  -6.36731   4.41879 PEP2 4      1.99000
+   50    4 TRP  C     -4.22826  -2.59414  -0.27981 PEP2 4      2.00000
+   51    4 TRP  O     -5.28785  -2.40116  -0.85885 PEP2 4      1.70000
+   52    5 GLU  N     -3.26065  -3.37992  -0.77490 PEP2 5      1.85000
+   53    5 GLU  H     -2.38327  -3.59071  -0.36952 PEP2 5      0.22000
+   54    5 GLU  CA    -3.38517  -4.14579  -2.00450 PEP2 5      2.27000
+   55    5 GLU  CB    -3.01793  -3.26419  -3.21717 PEP2 5      2.17000
+   56    5 GLU  CG    -3.16990  -4.04186  -4.54610 PEP2 5      2.17000
+   57    5 GLU  CD    -2.73441  -3.31484  -5.81907 PEP2 5      2.00000
+   58    5 GLU  OE1   -3.70040  -2.96218  -6.54181 PEP2 5      1.70000
+   59    5 GLU  OE2   -1.51654  -3.19056  -6.15790 PEP2 5      1.70000
+   60    5 GLU  C     -2.44538  -5.40908  -1.89939 PEP2 5      2.00000
+   61    5 GLU  OT1   -1.23868  -5.21287  -1.73049 PEP2 5      1.70000
+   62    5 GLU  OT2   -2.83457  -6.59087  -1.96924 PEP2 5      1.70000
+
+
+shake bonh tol 1e-08 param
+update atom CDIE eps 1 cutnb 20 ctofnb 18 ctonnb 16 shift vshift bygr
+
+
+!!!!!!!!TEST PRIMO !!!!!!!!!!!
+!construct a virtual hydrogen atom on CZ3 atom TRP(using CZ3,CE2,CD2 atoms)
+!apply a harmonic distance potential between virtual hydrogen atom and CZ2
+!apply an angle potential between virtual hydrogen. CH2 and CZ2 atoms
+primo resn trp atm1 CZ3 atm2 CE2 atm3 CD2 vs1 b1 1.08 t1 112.0 q1 180.0 -
+      dis1 dsel1 sele (resn trp .and. atom * * CD2) show end kdt1 5.0 mnd1 3.38 -
+      ang1 asel1 sele (resn trp .and. atom * * CH2) show end - 
+      asel2 sele (resn trp .and. atom * * CZ2) show end kth1 5.00  mnt1 150.0
+
+!-------------------------------------------------------------------------------
+! Test First derivative
+!-------------------------------------------------------------------------------
+skipe all excl primo
+test first tol 0.00001 step 0.000001 select all end
+skipe none
+
+
+!-------------------------------------------------------------------------------
+! Molecular dynamics 
+!-------------------------------------------------------------------------------
+shake bonh tol 1e-08 param
+dyna leap start timestep 0.002 nstep 500 finalt 298 -
+       inbfreq -1 imgfreq -1 bycb  iasors 1 iasvel 1 -
+       ichecw 1 ieqfrq 100 twindl -5.96 twindh +5.96 -
+       nprint 10 iprfrq 1000 nsavc 50 nsavv 0 iunvel -1 -
+       tstru 298 firstt 298 iseed 5197611 -
+       iunrea -1 iunwri -1 iuncrd -1 kunit -1
+STOP

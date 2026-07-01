@@ -1,0 +1,65 @@
+* parameter file for titratable residues
+* Tim Miller, May, 2011. Based on charges from Ana Damjanovic
+* and Satoru Itoh.
+*
+
+! format is
+! RESI NAME <X> ! X = number of states
+! RFPK <DEL PKA STATE 1 STATE 2> ... <PKA STATE 1 STATE X>
+! RFDG <DF STATE 1 STATE 2> ... <DF STATE 1 STATE X>
+! ATOM <TYPE> <CHARGE STATE 1> ... <CHARGE STATE X>
+
+! Note that the protonized state should be listed FIRST
+! and deltas/charges of deprotonized states afterwards
+
+RESI ASP 2
+RFPK 4.0
+RFDG 35.8
+ATOM CB  -0.21 -0.28
+ATOM CG   0.75  0.62
+ATOM OD1 -0.55 -0.76
+ATOM OD2 -0.61 -0.76
+ATOM HD2  0.44  0.00
+
+RESI GLU 2
+RFPK 4.4
+RFDG 39.9
+ATOM CG  -0.21 -0.28
+ATOM CD   0.75  0.62
+ATOM OE1 -0.55 -0.76
+ATOM OE2 -0.61 -0.76
+ATOM HE2  0.44  0.00
+
+RESI LYS 2
+RFPK 10.4
+RFDG -27.8
+ATOM CE   0.24  0.40
+ATOM HE1  0.08 -0.05
+ATOM HE2  0.08 -0.05
+ATOM NZ  -0.24 -0.98
+ATOM HZ1  0.28  0.34
+ATOM HZ2  0.28  0.34
+ATOM HZ3  0.28  0.00
+
+RESI TYR 2
+RFPK 9.6
+RFDG 84.25
+ATOM CZ   0.11 -0.29
+ATOM OH  -0.54 -0.71
+ATOM HH   0.43  0.00
+
+RESI HSP 3
+RFPK 6.5 7.1
+RFDG -18.15 -3.05
+ATOM CB  -0.05 -0.09 -0.08
+ATOM CD2  0.19  0.22 -0.05
+ATOM HD2  0.13  0.10  0.09
+ATOM CG   0.19 -0.05  0.22
+ATOM NE2 -0.51 -0.70 -0.36
+ATOM HE2  0.44  0.00  0.32
+ATOM ND1 -0.51 -0.36 -0.70
+ATOM HD1  0.44  0.32  0.00
+ATOM CE1  0.32  0.25  0.25
+ATOM HE1  0.18  0.13  0.13
+
+END

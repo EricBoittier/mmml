@@ -1,0 +1,346 @@
+* Test scrips for PHMD module
+* test dU facility for building model potential function of ASP
+* PHEnr is not shown because biasing potential is turned off
+* Written by Jana Khandogin (Dec 2005)
+*
+
+if ?phmd .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINSETUP=0
+
+calc tol = 1.e-6
+! read topology and parameter files
+open unit 1 read form name @0top_all22_prot_cmap_phmd.inp
+read rtf card unit 1
+close unit 1
+                                                       
+open unit 1 read form name @0par_all22_prot_chen_cmap_phmd.inp
+read param card unit 1
+close unit 1
+
+! read coordinate
+open unit 1 read card name @0asp_h.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read card name @0asp_h.pdb
+read coor pdb unit 1
+close unit 1
+                               
+nbond bycb atom switch cdie vdw vswitch -
+         cutnb 24 ctonnb 18 ctofnb 18
+
+
+!################## GBSW PORTION                          
+prnlev 0 @pnode
+stream @0radius_gbsw.str
+gbsw sgamma 0.005 nang 50
+
+prnlev 5 @pnode
+
+! energy before PHMD
+energy    
+
+set Ebefore = ?ener
+
+! Note, vdW part of energy from titrating group was moved from pHEn to vdW
+! make adjustment so test 1 correctly compares for pass/fail
+set EvdWB4 = ?vdw
+
+test first step 0.00001
+
+label ENDSETUP=0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=0
+! single-point PHMD
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri -1 ph 4.0 npri -1 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+ 
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+! energy of protonated ASP
+energy
+
+calc Eafter = ?ener - ?phen - ?vdw + @EvdWB4
+
+show @Eafter
+show @Ebefore
+calc Ediff = abs( @Eafter - @Ebefore ) ! these energies should be identical
+if @Ediff .gt. 0.00001 then
+      echo TEST=0 FAILED
+else
+      echo TEST=0 PASSED
+endif
+
+label ENDTEST=0
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=1
+test first step 0.00001 select all end
+calculate diff = abs ( ?nok - ?nsel * 3 )
+
+if diff gt @tol then
+     echo TEST=1  FAILED first
+endif
+
+scalar x store 1
+scalar y store 2
+scalar z store 3
+label ENDTEST=1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+PHMD reset
+
+! pHMD can use the Nose' integrator in the "old" leapfrog
+! Verlet integrator and hence this does not run dynamics in parallel
+if ?numnode gt 1 then
+      echo "TEST=2 skipped, old integrator not parallel"
+      goto ENDTEST=2
+endif
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+! Test dynamics with old integrator (Not parallel)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=2
+
+! PHMD dynamics
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri 26 ph 4.0 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+dynamics leap start timestep 0.002 nstep 20 nprint 10 iprfrq 100 -
+  firstt 298 finalt 298 ichecw 0 iseed 314159 -
+  iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200 -
+  nose rstn tref 298.0 qref 10 ncyc 10
+
+phmd reset
+label ENDTEST=2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+! Test dynamics with current integrator (LeapFrog and Langevin)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=3      !LeapFrog
+
+! PHMD dynamics
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri 26 ph 4.0 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+dynamics leap start timestep 0.002 nstep 20 nprint 10 iprfrq 100 -
+  firstt 298 finalt 298 ichecw 0 iseed 314159 -
+  iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200
+
+phmd reset
+label ENDTEST=3
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Test dynamics with current integrator (LeapFrog)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=4    !Langevin dynamics for theta
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+! PHMD dynamics
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri 26 ph 4.0 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0 -
+     beta 15  ! Langevin dynamics for theta variables
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+dynamics leap start timestep 0.002 nstep 20 nprint 10 iprfrq 100 -
+  firstt 298 finalt 298 ichecw 0 iseed 314159 -
+  iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200 
+
+phmd reset
+label ENDTEST=4
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+gbsw reset
+
+
+!########### GBMV PORTION
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINSETUP=5
+
+open unit 1 read card name @0asp_h.pdb
+read coor pdb unit 1
+close unit 1
+                               
+nbond bycb atom switch cdie vdw vswitch -
+         cutnb 24 ctonnb 18 ctofnb 18
+                          
+!***********************************************
+! Start GBMV, Method II: Recommended parameters
+! Non-zero SA term turns on surface area.
+! By default, no SA term is calculated.
+!***********************************************
+
+GBMV BETA -20 EPSILON 80 DN 1.0 watr 1.4 GEOM -
+     TOL 1e-8 BUFR 0.5 Mem 10 CUTA 20 HSX1 -0.125 HSX2 0.25 -
+     ALFRQ 1 EMP 1.5 P4 0.0 P6 8.0 P3 0.70 ONX 1.9 OFFX 2.1 -
+     SON 0.5 SOFF 1.75 -
+     WTYP 2 NPHI 38 CORR 1 SA 0.00592 SB 0.0 SHIFT -0.102 SLOPE 0.9085
+
+prnlev 5 @pnode
+
+! energy before PHMD
+energy    
+
+set Ebefore = ?ener
+
+! Note, vdW part of energy from titrating group was moved from pHEn to vdW
+! make adjustment so test 1 correctly compares for pass/fail
+set EvdWB4 = ?vdw
+
+test first step 0.00001
+
+label ENDSETUP=5
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=5
+! single-point PHMD
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri -1 ph 4.0 npri -1 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+ 
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+! energy of protonated ASP
+energy
+
+calc Eafter = ?ener - ?phen - ?vdw + @EvdWB4
+
+show @Eafter
+show @Ebefore
+calc Ediff = abs( @Eafter - @Ebefore ) ! these energies should be identical
+if @Ediff .gt. 0.00001 then
+      echo TEST=0 FAILED
+else
+      echo TEST=0 PASSED
+endif
+
+label ENDTEST=5
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=6
+test first step 0.00001 select all end
+calculate diff = abs ( ?nok - ?nsel * 3 )
+
+if diff gt @tol then
+     echo TEST=1  FAILED first
+endif
+
+scalar x store 1
+scalar y store 2
+scalar z store 3
+label ENDTEST=6
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+PHMD reset
+
+! pHMD can use the Nose' integrator in the "old" leapfrog
+! Verlet integrator and hence this does not run dynamics in parallel
+if ?numnode gt 1 then
+      echo "TEST=7 skipped, old integrator not parallel"
+      goto ENDTEST=7
+endif
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+! Test dynamics with old integrator (Not parallel)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=7
+
+! PHMD dynamics
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri 26 ph 4.0 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+dynamics leap start timestep 0.002 nstep 20 nprint 10 iprfrq 100 -
+  firstt 298 finalt 298 ichecw 0 iseed 314159 -
+  iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200 -
+  nose rstn tref 298.0 qref 10 ncyc 10
+
+phmd reset
+label ENDTEST=7
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+! Test dynamics with current integrator (LeapFrog and Langevin)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=8      !LeapFrog
+
+! PHMD dynamics
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri 26 ph 4.0 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+dynamics leap start timestep 0.002 nstep 20 nprint 10 iprfrq 100 -
+  firstt 298 finalt 298 ichecw 0 iseed 314159 -
+  iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200
+
+phmd reset
+label ENDTEST=8
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! Test dynamics with current integrator (LeapFrog)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+label BEGINTEST=9    !Langevin dynamics for theta
+
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+! PHMD dynamics
+open unit 23 read form name @0phmd_asp.in
+PHMD par 23 wri 26 ph 4.0 npri 10 mass 10 -
+     barr 1.0 bartau 1.0 temp 298.0 -
+     beta 15  ! Langevin dynamics for theta variables
+
+phtest num 1 set 0.0
+phtest num 2 set 0.0
+
+dynamics leap start timestep 0.002 nstep 20 nprint 10 iprfrq 100 -
+  firstt 298 finalt 298 ichecw 0 iseed 314159 -
+  iasors 0 iasvel 1 isvfrq 1000 inbfrq -1 ntrfrq 200 
+
+phmd reset
+label ENDTEST=9
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+gbmv clear
+
+stop
+

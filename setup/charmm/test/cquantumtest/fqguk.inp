@@ -1,0 +1,57 @@
+* Fluctuating charge charge solution for a QM/MM water dimer
+* The QM region is LDA/STO3G (GAMESS-UK), and the MM region is TIP4P/FQ
+* Ben Webb: c28a3 29th November 2000
+*
+
+if ?flucq .ne. 1 then stop
+
+BOMLEV -2
+stream datadir.def
+
+! Read in standard RTF, and modified FlucQ parameters
+OPEN READ CARD UNIT 8 NAME @0flucq.rtf
+READ RTF CARD UNIT 8
+OPEN READ CARD UNIT 8 NAME @0flucq.prm
+READ PARAM CARD UNIT 8
+
+READ SEQU TIP4 1
+READ SEQU QWAT 1
+GENE WATR SETUP NOANGL NODI
+
+OPEN READ CARD UNIT 8 NAME @0flucq.crd
+READ COOR CARD UNIT 8
+CLOSE UNIT 5
+
+! Constrain M site to be 0.15 Angstroms along the H-O-H bisector
+LONE BISE DIST 0.15 ANGLE 0.0 DIHE 0.0 -
+     SELE TYPE M1 END -
+     SELE TYPE OH2 END -
+     SELE TYPE H1 END -
+     SELE TYPE H2 END
+
+! Constrain all bonds at equilibrium values
+SHAKE BONH PARA
+
+! Set up GAMESS-UK
+envi "ed3" "charmm.ed3"
+envi "gamess.in" "data/fq_guk.in"
+
+! Activate the QM region (LDA)
+GAMESS SELE RESN QWAT END REMO
+
+! Model the TIP4 water in the MM region with FlucQ
+FLUCQ ON SELE RESN TIP4 END
+
+! Get the minimum energy charges for the starting Cartesian coordinates
+FLUCQ EXACT
+
+ENERGY
+
+! Print out the charges on the TIP4P water
+! If FlucQ is working, the water should be polarised by the QM
+! region; i.e. charges should be roughly H1=0.528 H2=0.421
+! If H1=H2, then you probably haven't modified GAMESS-UK to call
+! FlucQ; see flucq.doc for details of the change required
+SCALAR CHAR SHOW SELE RESN TIP4 END
+
+STOP

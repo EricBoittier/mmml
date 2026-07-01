@@ -1,0 +1,278 @@
+*  ALFA DECAGLYCINE    NOV/28/1979
+*  TEST RUN FOR CHECKING THE ENERGY AND MINIMIZATION
+*
+
+set testname cortst
+format (F20.7)
+
+! commented, adm jr. FEB/6/1991
+stream datadir.def
+bomblev -1
+
+goto readrtf
+label backrtf
+
+READ      SEQUENCE  CARD
+* ALFA DECAGLYCINE SEQUENCE
+*
+   12
+ACE GLY GLY GLY GLY GLY GLY GLY GLY GLY GLY CBX
+GENERATE MAIN
+
+goto readcoor
+label backcoor
+
+! RUN SHORT TRAJECTORY AND SAVE 
+open unit 10 write file name @9cortst.trj
+
+dynamics VERLET strt timestep 0.001 nstep 100  -
+      iprfrq 100 ihtfrq 0 ntrfrq 0 ieqfrq 100 -
+      iunrea -1 iunwri -1 iuncrd 10  kunit -1 iunvel -1  -
+      nprint 50 nsavv -1 nsavc 1 inbfrq 20 ihbfrq 0 -
+      firstt 285.0 finalt 285.0 teminc 0.0 isvfrq 0 -
+      iasors 0 iasvel 1 iscvel 0 ichecw 0 twindh 5.0 twindl -5.0
+
+
+open unit 10 read file name @9cortst.trj
+
+open write card unit 81 name @9cortst.taa
+open write card unit 90 name @9cortst.tcc
+open write card unit 82 name @9cortst.aad
+open write card unit 83 name @9cortst.aaf
+open write card unit 84 name @9cortst.abd
+open write card unit 85 name @9cortst.abf
+open write card unit 91 name @9cortst.acd
+open write card unit 92 name @9cortst.acf
+open write card unit 93 name @9cortst.cad
+open write card unit 94 name @9cortst.can
+
+correl  maxt 500 maxs 3
+  enter aa  torsion main  6 c main 7 n main 7 ca main 7 c
+  enter bb  torsion main  6 c main 7 n main 7 ca main 7 c
+  enter cc  torsion main  7 n main 7 ca main 7 c main 8 n
+  ! adm jr.
+  !TRAJ  FIRSTU 10 NUNIT 1 BEGIN 17510 STOP 37500 SKIP 10
+  traj  firstu 10 nunit 1 begin 1 stop 100 skip 1
+  edit all delta 0.001
+  show all
+  mantime aa daverage
+  mantime bb daverage
+  mantime cc daverage
+  write aa unit 81 dumb time
+  write cc unit 90 dumb time
+  corfun aa aa dire ltc  p0
+@testcheck ?aver 0.538465 .000001 @testname_1aver
+@testcheck ?fluc 0.417198 .000001 @testname_1fluc
+  write corr  unit 82 dumb time
+
+  corfun aa aa fft ltc  p0
+@testcheck ?aver 0.538465 .000001 @testname_2aver
+@testcheck ?fluc 0.417198 .000001 @testname_2fluc
+  write corr  unit 83 dumb time
+
+  corfun aa bb dire ltc p0
+@testcheck ?aver 0.538465 .000001 @testname_3aver
+@testcheck ?fluc 0.417198 .000001 @testname_3fluc
+  write corr unit 84 dumb time
+
+  corfun aa bb fft ltc p0
+@testcheck ?aver 0.538465 .000001 @testname_4aver
+@testcheck ?fluc 0.417198 .000001 @testname_4fluc
+  write corr unit 85 dumb time
+
+  corfun aa cc dire ltc p0
+@testcheck ?aver -0.301193 .000001 @testname_5aver
+@testcheck ?fluc  0.165763 .00001 @testname_5fluc
+  write corr unit 91 dumb time
+
+  corfun aa cc fft ltc p0
+@testcheck ?aver -0.301193 .000001 @testname_6aver
+@testcheck ?fluc  0.165763 .00001 @testname_6fluc
+  write corr unit 92 dumb time
+
+  corfun cc aa dire ltc p0
+@testcheck ?aver 0.402873 .00001 @testname_7aver
+@testcheck ?fluc 0.485458 .000001 @testname_7fluc
+  write corr unit 93 dumb time
+
+  corfun cc aa dire nltc p0
+@testcheck ?aver 0.402873 .00001 @testname_8aver
+@testcheck ?fluc 0.485458 .000001 @testname_8fluc
+stop
+  write corr unit 94 dumb time
+end
+
+stop
+
+
+!==============================================================
+label readrtf
+
+READ      RTF       CARD
+*   RESIDUE TOPOLOGY FILE FOR PROTEINS USING EXPLICIT HYDROGEN
+*   ATOMS -- VERSION 2 -- SNS AND BDO -- 4/4/79
+*   IMPROPER TORSIONS AND HYDROGEN DONOR ANTECEDENTS ADDED
+*
+  18   1
+MASS      1 H      1.0080
+MASS     11 C     12.011
+MASS     13 CH2E  14.027
+MASS     38 NH1   14.0067
+MASS     51 O     15.9994
+
+DECL -C
+DECL -O
+DECL +N
+DECL +H
+DECL +CA
+
+RESI ACE     0.08000
+ATOM CL   CH2E    0.09
+ATOM C    C       0.345
+ATOM O    O      -0.355
+BOND CL   C         C    +N        C    O
+THET CL   C    +N             CL   C    O              O    C    +N
+DIHE CL   C    +N   +CA      CL  C  +N  O
+ACCE O
+BILD +N   CL   *C   O      0.0000    0.00  180.00    0.00   0.0000
+BILD CL   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+PATC  FIRS NONE LAST NONE
+
+RESI GLY     0.00000
+ATOM N    NH1    -0.20
+ATOM H    H       0.12
+ATOM CA   CH2E    0.09
+ATOM C    C       0.345
+ATOM O    O      -0.355
+BOND N    CA        CA   C         C    +N        C    O         N    H
+THET -C   N    CA             N    CA   C              CA   C    +N
+THET CA   C    O              O    C    +N             -C   N    H
+THET H    N    CA
+DIHE -C   N    CA   C         N    CA   C    +N        CA   C    +N   +CA
+DIHE  -C    N   CA   H         CA    C   +N   O
+DONO H    N
+ACCE O
+BILD -C   CA   *N   H      0.0000    0.00  180.00    0.00   0.0000
+BILD -C   N    CA   C      0.0000    0.00  180.00    0.00   0.0000
+BILD N    CA   C    +N     0.0000    0.00  180.00    0.00   0.0000
+BILD +N   CA   *C   O      0.0000    0.00  180.00    0.00   0.0000
+BILD CA   C    +N   +CA    0.0000    0.00  180.00    0.00   0.0000
+
+
+RESI CBX     0.00000
+ATOM N    NH1    -0.20
+ATOM H    H       0.12
+ATOM CA   CH2E    0.09
+BOND N    CA        N    H
+THET -C   N    CA             -C   N    H              H    N    CA
+DIHE -C    N   CA   H
+DONO H    N
+BILD -C   CA   *N   H      0.0000    0.00  180.00    0.00   0.0000
+PATC  FIRS NONE LAST NONE
+
+END
+
+
+READ      PARAMETER CARD
+*  PARAMETER TITLE
+*
+BONDS
+C    CH2E   187.0000    1.5300
+O    C      595.0000    1.21500
+NH1  H      405.0000    0.9800
+NH1  C      403.0000    1.3050
+NH1  CH2E   261.0000    1.4900
+THETAS
+O    C    CH2E    40.9000  120.0000
+H    NH1  C       38.2000  120.0000
+H    NH1  CH2E    31.4000  120.0000
+NH1  C    CH2E    33.1000  120.0000
+NH1  CH2E C       21.0000  109.5000
+C    NH1  CH2E    54.5000  120.0000
+O    C    NH1     48.5000  120.0000
+PHI
+X    C    CH2E X        0.2000    3    0.0000
+X    NH1  C    X        5.7500    2     180.0000
+!X    NH1  CH2E X        0.7000    2     180.0000
+!X    NH1  C    X        2.9000    2  180.0000
+X    NH1  CH2E X        0.3500    3    0.0000
+IMPHI
+O    X    X    C        0.0000   0     0.0000
+NONBONDED
+O        0.8400    6.0000    1.6000
+C        1.6500    5.0000    1.8000
+CH2E     1.7700    7.0000    1.9000
+NH1      1.1000    6.0000    1.6000
+H        0.4200    1.0000    1.2000
+HBOND
+H    O       -2.5000    1.9500
+END
+
+goto backrtf
+
+!========================================================================
+label readcoor
+
+READ COOR CARDS
+*  ALFA DECAGLYCINE    NOV/28/1979
+*  TEST RUN FOR CHECKING THE ENERGY AND MINIMIZATION
+*
+   56
+    1    1 ACE  CL     0.35871   3.67891   1.93786 MAIN 1      0.00000
+    2    1 ACE  C      0.71280   2.80863   0.76283 MAIN 1      0.00000
+    3    1 ACE  O     -0.08304   2.10113   0.15125 MAIN 1      0.00000
+    4    2 GLY  N      2.00090   2.58815   0.57907 MAIN 2      0.00000
+    5    2 GLY  H      2.65613   2.90855   1.23693 MAIN 2      0.00000
+    6    2 GLY  CA     2.64614   2.01715  -0.66199 MAIN 2      0.00000
+    7    2 GLY  C      1.74934   2.39295  -2.00209 MAIN 2      0.00000
+    8    2 GLY  O      1.16572   3.42946  -2.02076 MAIN 2      0.00000
+    9    3 GLY  N      1.67159   1.62632  -3.03442 MAIN 3      0.00000
+   10    3 GLY  H      1.80438   0.66723  -2.96128 MAIN 3      0.00000
+   11    3 GLY  CA     1.08765   2.13666  -4.31224 MAIN 3      0.00000
+   12    3 GLY  C     -0.28075   2.82990  -4.18876 MAIN 3      0.00000
+   13    3 GLY  O     -0.53151   4.07525  -4.45638 MAIN 3      0.00000
+   14    4 GLY  N     -1.26517   2.08567  -3.80288 MAIN 4      0.00000
+   15    4 GLY  H     -1.13281   1.16486  -3.46749 MAIN 4      0.00000
+   16    4 GLY  CA    -2.63464   2.67888  -3.60936 MAIN 4      0.00000
+   17    4 GLY  C     -2.62337   3.75237  -2.47439 MAIN 4      0.00000
+   18    4 GLY  O     -3.21724   4.76849  -2.71026 MAIN 4      0.00000
+   19    5 GLY  N     -2.07315   3.49232  -1.28634 MAIN 5      0.00000
+   20    5 GLY  H     -1.35677   2.81395  -1.17432 MAIN 5      0.00000
+   21    5 GLY  CA    -2.14117   4.60847  -0.22184 MAIN 5      0.00000
+   22    5 GLY  C     -1.33372   5.81998  -0.76953 MAIN 5      0.00000
+   23    5 GLY  O     -1.80029   6.91379  -0.78119 MAIN 5      0.00000
+   24    6 GLY  N     -0.27449   5.60747  -1.49177 MAIN 6      0.00000
+   25    6 GLY  H     -0.19260   4.75545  -1.93556 MAIN 6      0.00000
+   26    6 GLY  CA     0.64712   6.71708  -1.98355 MAIN 6      0.00000
+   27    6 GLY  C     -0.37016   7.41539  -2.90100 MAIN 6      0.00000
+   28    6 GLY  O     -0.48723   8.57887  -2.67176 MAIN 6      0.00000
+   29    7 GLY  N     -0.99803   6.76939  -3.86604 MAIN 7      0.00000
+   30    7 GLY  H     -1.04445   5.81819  -3.88548 MAIN 7      0.00000
+   31    7 GLY  CA    -2.01182   7.50076  -4.74341 MAIN 7      0.00000
+   32    7 GLY  C     -3.06506   8.31409  -4.04029 MAIN 7      0.00000
+   33    7 GLY  O     -3.43333   9.36358  -4.42639 MAIN 7      0.00000
+   34    8 GLY  N     -3.62205   7.62907  -3.09266 MAIN 8      0.00000
+   35    8 GLY  H     -3.33006   6.69287  -2.97397 MAIN 8      0.00000
+   36    8 GLY  CA    -4.85155   8.13555  -2.37304 MAIN 8      0.00000
+   37    8 GLY  C     -4.27796   9.27882  -1.48461 MAIN 8      0.00000
+   38    8 GLY  O     -5.03431  10.19744  -1.33011 MAIN 8      0.00000
+   39    9 GLY  N     -3.08870   9.26133  -0.89313 MAIN 9      0.00000
+   40    9 GLY  H     -2.70838   8.46544  -0.45180 MAIN 9      0.00000
+   41    9 GLY  CA    -2.37132  10.48269  -0.51355 MAIN 9      0.00000
+   42    9 GLY  C     -2.04086  11.45875  -1.65943 MAIN 9      0.00000
+   43    9 GLY  O     -2.09555  12.65704  -1.33199 MAIN 9      0.00000
+   44   10 GLY  N     -1.47645  11.26259  -2.81123 MAIN 10     0.00000
+   45   10 GLY  H     -1.28326  10.30836  -3.12750 MAIN 10     0.00000
+   46   10 GLY  CA    -1.33684  12.38985  -3.89280 MAIN 10     0.00000
+   47   10 GLY  C     -2.73260  12.87636  -4.41873 MAIN 10     0.00000
+   48   10 GLY  O     -2.74698  13.85384  -5.13826 MAIN 10     0.00000
+   49   11 GLY  N     -3.80916  12.14391  -4.12196 MAIN 11     0.00000
+   50   11 GLY  H     -3.74106  11.19449  -4.26697 MAIN 11     0.00000
+   51   11 GLY  CA    -5.20372  12.56143  -4.40592 MAIN 11     0.00000
+   52   11 GLY  C     -5.53768  13.48277  -3.15086 MAIN 11     0.00000
+   53   11 GLY  O     -6.05684  14.55964  -3.38499 MAIN 11     0.00000
+   54   12 CBX  N     -5.13459  13.11290  -1.93556 MAIN 12     0.00000
+   55   12 CBX  H     -4.91056  12.19009  -1.77893 MAIN 12     0.00000
+   56   12 CBX  CA    -5.06000  14.07845  -0.75344 MAIN 12     0.00000
+
+goto backcoor

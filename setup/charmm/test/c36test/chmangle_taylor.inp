@@ -1,0 +1,141 @@
+* CHARMM c36a5 test case gromacs_angle.inp
+* Test gromacs angle potential and mixing CHARMM/GROMACS angle potentials
+* Authors: Benjamin T. Miller, Michael G. Lerner
+* January, 2011
+* Note: Don't panic if some of the .ae. tests fail, as long as the error is
+* on the order of 10^-4 -- the CHARMM angle potential is quite steep in places!
+*
+
+read rtf card
+* RTF for dummy system
+*
+   27 1
+
+MASS    1 D      1.00000 E ! Dummy atom (CHARMM angles)
+MASS    2 E      1.00000 E ! Dummy atom (CHARMM angles)
+
+RESI DUC0         0.00 ! dummy residue, CHARMM potential, 0 degree minimum
+GROUP
+ATOM D1   D      0.00
+ATOM D2   D      0.00
+ATOM D3   D      0.00
+BOND D1 D2 D2 D3
+ANGL D1 D2 D3
+
+RESI DUC1         0.00 ! dummy residue, CHARMM potential, 180 degree minimum
+GROUP
+ATOM E1   E      0.00
+ATOM E2   E      0.00
+ATOM E3   E      0.00
+BOND E1 E2 E2 E3
+ANGL E1 E2 E3
+
+END
+
+read param card
+* Parameters for dummy atoms
+*
+
+BOND
+D       D             5.000000    2.000000
+E       E             5.000000    2.000000
+
+ANGLE
+D       D       D             6.000000    0.000000
+E       E       E             6.000000  180.000000
+
+DIHEDRAL
+! we don't need no stinkin' dihedrals
+
+NONBONDED NBXMOD 4 ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+CUTNB 16 CTOFNB 12 EPS 1.0 WMIN 1.5 E14FAC 0.7
+!atom
+D          0.0       0.8    4.700000
+E          0.0       0.8    4.700000
+
+END
+
+read sequ card
+* one CHARMM style angle, one Gromacs style
+*
+2
+DUC0 DUC1
+
+generate tst setup first none last none
+
+! skip all energies except for the angles 
+skip all excl angle
+
+! set initial coordinates
+scalar x set  0.0 select resname duc0 end
+scalar y set  0.0 select resname duc0 end
+scalar z set -5.0 select resname duc0 end
+scalar x set  0.0 select resname duc1 end
+scalar y set  0.0 select resname duc1 end
+scalar z set  5.0 select resname duc1 end
+scalar x set  2.0 select type d3 .or. type e3 end
+scalar x set  2.0 select type d1 .or. type e1 end
+
+! initial coordinates are 0.0 degrees (unphysical normally due to VDW
+! replusion, but this is just a test).
+set angle = 0.0
+
+! --- begin loop, test from 0 to 0.5 degrees at 0.01 degree increments
+label loop1
+
+calc angr = ( @angle / 180.0 ) * ?pi
+calc tote1 = 6.0 * abs( @angr - 0.0 )**2
+calc tote2 = 6.0 * abs( @angr - 3.1415962 )**2
+calc tote = @tote1 + @tote2
+
+! rotate d1 and e1
+calc newx = 2.0 * ( cos( @angr ) )
+calc newy = 2.0 * ( sin( @angr ) )
+scalar x set @newx select type d1 .or. type e1 end
+scalar y set @newy select type d1 .or. type e1 end
+
+update
+
+! Print out the energy
+energy
+if ?angl .ae. @tote then echo TEST PASSED
+
+! now run test first to make sure that the forces are OK
+! (second derivatives do not run with Gromacs-style angles)
+test first step 0.0001
+
+! --- check for exit condition and iterate
+calc angle = @angle + 0.01
+if @angle .le. 0.5 then goto loop1
+
+!--- next loop, test from 179.5 to 180 degrees at 0.01 degree increments
+set angle = 179.5
+label loop2
+
+calc angr = ( @angle / 180.0 ) * ?pi
+calc tote1 = 6.0 * abs( @angr - 0.0 )**2
+calc tote2 = 6.0 * abs( @angr - 3.1415962 )**2
+calc tote = @tote1 + @tote2
+
+! rotate d1 and e1
+calc newx = 2.0 * ( cos( @angr ) )
+calc newy = 2.0 * ( sin( @angr ) )
+scalar x set @newx select type d1 .or. type e1 end
+scalar y set @newy select type d1 .or. type e1 end
+
+update
+
+! Print out the energy
+energy
+if ?angl .ae. @tote then echo TEST PASSED
+
+! now run test first to make sure that the forces are OK
+! (note: CHARMM's angle potential fails test first very close
+! to 0 and 180 degrees, so this should not always pass).
+test first step 0.0001
+
+! --- check for exit condition and iterate
+calc angle = @angle + 0.01
+if @angle .le. 180.0 then goto loop2
+
+stop

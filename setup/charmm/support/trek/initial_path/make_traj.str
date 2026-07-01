@@ -1,0 +1,46 @@
+* MAKE_TRAJ.INP
+* Creates a trajectory file with all the frames (including the product
+* but not the reactant), all oriented upon the reactant.
+*
+
+open read card unit 1 name    @reactant
+read coor card unit 1
+close unit 1
+
+! Just for viewing in VMD :
+OPEN UNIT 2 WRITE CARD NAME   @traj.pdb
+WRITE COOR pdb UNIT 2
+* Same as @reactant
+*
+
+!----------------------------------------------------------------------------!
+
+DECR steps
+
+TREK
+
+        ! The reactant is only used for orientation, is not part of the path :
+        TRAJ READ noORIENT REFER
+          @reactant
+        DONE
+
+        SET walk = 0
+
+        LABEL TRAJEKTORIEN
+    	INCR walk
+
+           TRAJ READ ORIENT
+    	     @final_@walk.crd
+!             @final_mini_@walk.crd
+           DONE
+
+        IF @walk LT @steps THEN GOTO TRAJEKTORIEN
+
+        TRAJ READ ORIENT
+          @product
+        DONE
+
+	TRAJ WRITE NAME  @traj  RESTART /dev/null
+QUIT
+
+RETURN

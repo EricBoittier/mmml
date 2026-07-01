@@ -99,9 +99,13 @@ coverage.xml
 *.mo
 *.pot
 
-# CHARMM
-setup/charmm
-setup/charmm/*
+# CHARMM (extracted tree may be tracked; ignore local build artifacts)
+setup/charmm/lib/
+setup/charmm/libcharmm.so
+setup/charmm/build/
+setup/charmm/bin/
+setup/charmm/exec
+setup/charmm/charmm
 
 # Django stuff:
 *.log

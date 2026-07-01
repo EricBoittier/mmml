@@ -1,0 +1,279 @@
+* UMBRELLA : Jeyapandian Kottalam & Youngdo Won, 10-Dec-91
+* RXNCOR test using all-H cyclohexane
+*
+
+!* 10-Dec-91, YW constructs this testcase based on
+!*            heat_chair.inp, rxn1.inp and rxn2.inp found in
+!*            tammy.harvard.edu:/data/kottalam/rxncor/new_cyclo
+!*            No external data files required.
+
+if ?rxncor .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+! phase 1: heat_chair.inp
+! geterate cyclohexane PSF
+
+read rtf card
+* All-atom topology file of cyclohexane : CYCLO.TOP
+* Shortened version (for cyclohexane) of ALK_ALLH.TOP By Stefan 12-12-1988.
+* HA charge has been increased 5% from .09 to .095
+*
+   20    1
+Mass   3  HA   1.00800
+Mass  16  CT  12.01100
+
+Decl -c
+Decl -cm
+decl -h1
+decl -h2
+decl -h3
+Decl +n
+Decl +ca
+
+Auto angle ! Automaticaly builds all possible angles, based on the bond-info.
+
+resi CYCL 0.0
+Atom h1 ha 0.0950
+Atom h2 ha 0.0950
+Atom h3 ha 0.0950
+Atom h4 ha 0.0950
+Atom h5 ha 0.0950
+Atom h6 ha 0.0950
+Atom h7 ha 0.0950
+Atom h8 ha 0.0950
+Atom h9 ha 0.0950
+Atom h10 ha 0.0950
+Atom h11 ha 0.0950
+Atom h12 ha 0.0950
+Atom c1 ct -0.190
+Atom c2 ct -0.190
+Atom c3 ct -0.190
+Atom c4 ct -0.190
+Atom c5 ct -0.190
+Atom c6 ct -0.190
+Bond c1 h1  c1 h2  c1 c2
+Bond c2 h3  c2 h4  c2 c3
+Bond c3 h5  c3 h6  c3 c4
+Bond c4 h7  c4 h8  c4 c5
+Bond c5 h9  c5 h10 c5 c6
+Bond c6 h11 c6 h12 c6 c1
+dihe c6  c1 c2 c3   c6  c1 c2 h3   c6  c1 c2 h4
+dihe h1  c1 c2 c3   h1  c1 c2 h3   h1  c1 c2 h4
+dihe h2  c1 c2 c3   h2  c1 c2 h3   h2  c1 c2 h4
+dihe c1  c2 c3 c4   c1  c2 c3 h5   c1  c2 c3 h6
+dihe h3  c2 c3 c4   h3  c2 c3 h5   h3  c2 c3 h6
+dihe h4  c2 c3 c4   h4  c2 c3 h5   h4  c2 c3 h6
+dihe c2  c3 c4 c5   c2  c3 c4 h7   c2  c3 c4 h8
+dihe h5  c3 c4 c5   h5  c3 c4 h7   h5  c3 c4 h8
+dihe h6  c3 c4 c5   h6  c3 c4 h7   h6  c3 c4 h8
+dihe c3  c4 c5 c6   c3  c4 c5 h9   c3  c4 c5 h10
+dihe h7  c4 c5 c6   h7  c4 c5 h9   h7  c4 c5 h10
+dihe h8  c4 c5 c6   h8  c4 c5 h9   h8  c4 c5 h10
+dihe c4  c5 c6 c1   c4  c5 c6 h11  c4  c5 c6 h12
+dihe h9  c5 c6 c1   h9  c5 c6 h11  h9  c5 c6 h12
+dihe h10 c5 c6 c1   h10 c5 c6 h11  h10 c5 c6 h12
+dihe c5  c6 c1 c2   c5  c6 c1 h1   c5  c6 c1 h2
+dihe h11 c6 c1 c2   h11 c6 c1 h1   h11 c6 c1 h2
+dihe h12 c6 c1 c2   h12 c6 c1 h1   h12 c6 c1 h2
+ic  c5  c6  c1 c2  0.00 0.00    0.0 0.00   0.0
+ic  c6  c1  c2 c3  0.00 0.00    0.0 0.00  0.0
+ic  c1  c2  c3 c4  0.00 0.00    0.0 0.00  0.0
+ic  c2  c3  c4 c5  0.00 0.00    0.0 0.00  0.0
+ic  c3  c4  c5 c6  0.00 0.00    0.0 0.00  0.0
+ic  c4  c5  c6 c1  0.00 0.00    0.0 0.00  0.0
+ic  h1  c1  c2 c3  0.00 0.00    0.0 0.00  0.0
+ic  h2  c1  c2 c3  0.00 0.00    0.0 0.00  0.0
+ic  h3  c2  c3 c4  0.00 0.00    0.0 0.00  0.0
+ic  h4  c2  c3 c4  0.00 0.00    0.0 0.00  0.0
+ic  h5  c3  c4 c5  0.00 0.00    0.0 0.00  0.0
+ic  h6  c3  c4 c5  0.00 0.00    0.0 0.00  0.0
+ic  h7  c4  c5 c6  0.00 0.00    0.0 0.00  0.0
+ic  h8  c4  c5 c6  0.00 0.00    0.0 0.00  0.0
+ic  h9  c5  c6 c1  0.00 0.00    0.0 0.00  0.0
+ic  h10 c5  c6 c1  0.00 0.00    0.0 0.00  0.0
+ic  h11 c6  c1 c2  0.00 0.00    0.0 0.00  0.0
+ic  h12 c6  c1 c2  0.00 0.00    0.0 0.00  0.0
+patc first none last none
+
+end
+
+read param card
+* Parameter-set 430 : UBALKANE.PAR430
+* Martin's force constants,as in th:[FIELD2.PARMFIT]parmhc1.inp;1 (17-NOV-1986)
+* All Lennard-Johnes radii left unchanged.
+* Stefan's geometries.
+* HA charge has been increased 5% (from .09 to .095) in the topology file.
+*
+
+Bond
+HA  CT   317.13  1.111
+CT  CT   229.63  1.531
+
+Theta
+HA  CT  HA   36.00  108.4    5.20   1.802
+HA  CT  CT   33.43  110.1   22.53   2.179
+CT  CT  CT   58.35  113.5   11.16   2.561
+
+Phi
+X   CT  CT  X    0.157  3    0.0
+
+! Non-bonded cut-distance (shift pot.) and switch-on/switch-off distances. !
+!--------------------------------------------------------------------------!
+! Rem: Of all the alkanes, only TTBM has declared charge GROUPS.
+! Defaults :	NBXMOD 5   up to 1-3 interact. excl., 1-4 scaled with E14FAC
+!		WMIN 1.5   Warning distance
+!		ATOM
+!		VATOM
+!		VDISTANCE
+!		VSWITCH
+!		CDIEL
+!		EPS 1.
+!		CUTNB = CTOFNB + 1.
+! 
+! To be tryed:  E14FAC	CTONNB	CTOFNB	SHIFT/SWITCH(electr)
+!-----------------------------------------------------------
+! Sets 1,2,3 	1.0	998.	998.	SHIFT
+!      4..      1.0     998.    998.    SWITCH
+!      5        >       998.    998.    SWITCH
+
+NONBONDED NBXMOD 5 ATOM CDIEL EPS 1.0 WMIN 1.5  switch  -
+       VATOM VDISTANCE VSWITCH ctonnb 998. ctofnb 998. cutnb 999. e14fac 1.0
+
+! Non-bonded Lennard-Jones parameters (the first value was for polarisability).
+HA     0.00    -0.0045     1.468
+CT     0.00    -0.0903     1.8
+
+
+! Following line for now obsolete H-bonds (by giving a value of .5 A to CUTHB).
+!-----------------------------------------------------------------------------!
+Hbond aexp 4 rexp 6 haex 4 aaex 0 noacceptors hbnoexclusions all -
+    cuthb 0.5 ctofhb 5.0 ctonhb 4.0 cutha 5.0 ctofha 90.0 ctonha 90.0
+
+End                                             
+
+read sequence cards
+* cyclohexane
+*
+1
+cycl
+
+generate CYCL setup warn
+
+read coor cards
+* CYCLOHEXANE CHAIR CONFORMATION.
+* MINIMIZED WITH UBALKANE.PAR430 AND ALIGNED WITH "COOR ORIENT".
+*  DATE:    12/29/88     20:47:11      CREATED BY USER: FISCHER
+*
+   18
+    1    1 CYCL H1    -1.86892   1.67298   0.16702 CYCL 1      0.00000
+    2    1 CYCL H2    -1.14375   1.02384  -1.33979 CYCL 1      0.00000
+    3    1 CYCL H3     0.31480   1.50242   1.33978 CYCL 1      0.00000
+    4    1 CYCL H4     0.51438   2.45502  -0.16701 CYCL 1      0.00000
+    5    1 CYCL H5     2.38331   0.78204   0.16702 CYCL 1      0.00000
+    6    1 CYCL H6     1.45854   0.47860  -1.33979 CYCL 1      0.00000
+    7    1 CYCL H7     1.14375  -1.02384   1.33979 CYCL 1      0.00000
+    8    1 CYCL H8     1.86892  -1.67298  -0.16701 CYCL 1      0.00000
+    9    1 CYCL H9    -0.51439  -2.45502   0.16701 CYCL 1      0.00000
+   10    1 CYCL H10   -0.31480  -1.50243  -1.33979 CYCL 1      0.00000
+   11    1 CYCL H11   -1.45854  -0.47860   1.33979 CYCL 1      0.00000
+   12    1 CYCL H12   -2.38330  -0.78204  -0.16701 CYCL 1      0.00000
+   13    1 CYCL C1    -1.09480   0.98003  -0.22862 CYCL 1      0.00000
+   14    1 CYCL C2     0.30132   1.43813   0.22864 CYCL 1      0.00000
+   15    1 CYCL C3     1.39611   0.45811  -0.22863 CYCL 1      0.00000
+   16    1 CYCL C4     1.09480  -0.98001   0.22862 CYCL 1      0.00000
+   17    1 CYCL C5    -0.30132  -1.43814  -0.22863 CYCL 1      0.00000
+   18    1 CYCL C6    -1.39613  -0.45811   0.22863 CYCL 1      0.00000
+
+!
+! reduced heating dynamics: original design was 50000 step with ihtfrq 5000
+open write unit 18 form name @9heat_chair.xyz
+open write unit 19 form name @9heat_chair.rst
+open write unit 20 form name @9heat_chair.ene
+
+dynamics nstep 500 firstt 0.0 finalt 300.0 ihtfrq 50 -
+         teminc 50.0 iunwrite 19 kunit 20 inbfrq 500 nprint 100
+
+write coor card unit 18
+*  cyclohexane chair heated to 300K
+*
+
+! Phase 2: rxn1.inp
+open read  unit 17 form name @9heat_chair.rst
+open write unit 18 form name @9rxn1.xyz
+open write unit 19 form name @9rxn1.rst
+open write unit 20 form name @9rxn1.ene
+open write unit 21 form name @9rxn1.stt
+open write unit 22 form name @9rxn1alf1.trc
+open write unit 23 form name @9rxn1alf2.trc
+open write unit 24 form name @9rxn1alf3.trc
+open write unit 25 form name @9rxn1mean.trc
+
+rxncor: define c1 point select atom cycl 1 c1 end
+rxncor: define c2 point select atom cycl 1 c2 end
+rxncor: define c3 point select atom cycl 1 c3 end
+rxncor: define c4 point select atom cycl 1 c4 end
+rxncor: define c5 point select atom cycl 1 c5 end
+rxncor: define c6 point select atom cycl 1 c6 end
+rxncor: define d13 direction c1 c3
+rxncor: define d35 direction c3 c5
+rxncor: define d51 direction c5 c1
+rxncor: define d12 direction c1 c2
+rxncor: define d34 direction c3 c4
+rxncor: define d56 direction c5 c6
+rxncor: define norc direction d35 d13
+rxncor: define nor1 direction d13 d12
+rxncor: define nor2 direction d35 d34
+rxncor: define nor3 direction d51 d56
+rxncor: define alf1 angle norc nor1 d13
+rxncor: define alf2 angle norc nor2 d35
+rxncor: define alf3 angle norc nor3 d51
+rxncor: define mean combi alf1 1.0 alf2 1.0 alf3 1.0
+rxncor: set mean
+
+rxncor: trace alf1 unit 22
+rxncor: trace alf2 unit 23
+rxncor: trace alf3 unit 24
+rxncor: trace mean unit 25
+
+rxncor: statistics lowdelta -0.7 hidelta -0.3 deldel 0.005 -
+             start 500
+
+dynamics rest nstep 1500 firstt 300.0 finalt 300.0 ihtfrq 0 -
+      teminc 0.0 iunwrite 19 kunit 20 iunread 17 inbfrq 500 nprint 100
+
+rxncor: write unit 21
+close unit 21
+
+write coor card unit 18
+*  cyclohexane chair after rxn1
+*
+
+! Phase 3: rxn2.inp
+open read  unit 17 form name @9rxn1.rst
+open write unit 18 form name @9rxn2.xyz
+open write unit 19 form name @9rxn2.rst
+open write unit 20 form name @9rxn2.ene
+open write unit 21 form name @9rxn2.stt
+open write unit 22 form name @9rxn2alf1.trc
+open write unit 23 form name @9rxn2alf2.trc
+open write unit 24 form name @9rxn2alf3.trc
+open write unit 25 form name @9rxn2mean.trc
+
+rxncor: umbrella kumb 15.0 form 1 del0 -0.4
+rxncor: statistics lowdelta -0.6 hidelta -0.4 deldel 0.002 -
+             start 500
+
+dynamics rest nstep 1500 firstt 300.0 finalt 300.0 ihtfrq 0 -
+      teminc 0.0 iunwrite 19 kunit 20 iunread 17 inbfrq 500 nprint 100
+
+rxncor: write unit 21
+close unit 21
+
+write coor card unit 18
+*  cyclohexane chair after rxn2
+*
+
+stop

@@ -1,0 +1,275 @@
+* CHARMM 25 test: coul_test.inp [Bernard R. Brooks, 15-JUL-97, c25b1]
+* Test : calculate coulomb interaction of 2 protons
+* fb:  ctonnb = 11 ctofnb = 12
+*
+
+bomlev -1
+stream datadir.def
+
+read rtf card
+* protons
+*
+   22    1
+mass 1 h 1.
+
+resi prot 0.1
+atom h1  h 0.1
+end
+
+read param card unit 5
+* proton parm file
+*
+NONBONDED  NBXMOD 5  ATOM CDIEL SHIFT VATOM VDISTANCE VSHIFT -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 0.4  WMIN 1.5
+!                  Emin       Rmin
+!                  (kcal/mol) (A)
+H        0.0440    -0.0498    0.8000
+END
+
+read sequence card
+* Proton
+*
+1
+prot
+
+generate p1
+generate p2 duplicate p1
+
+set  1  CDIE
+set  3  SHIFT
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_sh.plt
+set  8  OFF
+set flag sect1
+goto called
+label sect1
+
+set  1  CDIE
+set  3  SWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_sw.plt
+set  8  OFF
+set flag sect2
+goto called
+label sect2
+
+set  1  CDIE
+set  3  SWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  12.0
+set  7  coul_tr.plt
+set  8  OFF
+set flag sect3
+goto called
+label sect3
+
+set  1  CDIE
+set  3  FSHIFT
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_fsh.plt
+set  8  OFF
+set flag sect4
+goto called
+label sect4
+
+set  1  CDIE
+set  3  FSWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_fsw.plt
+set  8  OFF
+set flag sect5
+goto called
+label sect5
+
+set  1  CDIE
+set  3  FSWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  12.0
+set  7  coul_ftr.plt
+set  8  OFF
+set flag sect6
+goto called
+label sect6
+
+set  1  CDIE
+set  3  SHIFT
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_sh_s.plt
+set  8  SCALAR
+set flag sect11
+goto called
+label sect11
+
+set  1  CDIE
+set  3  SWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_sw_s.plt
+set  8  SCALAR
+set flag sect12
+goto called
+label sect12
+
+set  1  CDIE
+set  3  SWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  12.0
+set  7  coul_tr_s.plt
+set  8  SCALAR
+set flag sect13
+goto called
+label sect13
+
+set  1  CDIE
+set  3  FSHIFT
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_fsh_s.plt
+set  8  SCALAR
+set flag sect14
+goto called
+label sect14
+
+set  1  CDIE
+set  3  FSWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_fsw_s.plt
+set  8  SCALAR
+set flag sect15
+goto called
+label sect15
+
+set  1  CDIE
+set  3  FSWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  12.0
+set  7  coul_ftr_s.plt
+set  8  SCALAR
+set flag sect16
+goto called
+label sect16
+
+set  1  CDIE
+set  3  SHIFT
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_sh_v.plt
+set  8  VECTOR
+set flag sect21
+goto called
+label sect21
+
+set  1  CDIE
+set  3  SWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_sw_v.plt
+set  8  VECTOR
+set flag sect22
+goto called
+label sect22
+
+set  1  CDIE
+set  3  SWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  12.0
+set  7  coul_tr_v.plt
+set  8  VECTOR
+set flag sect23
+goto called
+label sect23
+
+set  1  CDIE
+set  3  FSHIFT
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_fsh_v.plt
+set  8  VECTOR
+set flag sect24
+goto called
+label sect24
+
+set  1  CDIE
+set  3  FSWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  11.0
+set  7  coul_fsw_v.plt
+set  8  VECTOR
+set flag sect25
+goto called
+label sect25
+
+set  1  CDIE
+set  3  FSWITCH
+set  4  VSHIFT
+set  5  ATOM
+set  6  12.0
+set  7  coul_ftr_v.plt
+set  8  ON
+set flag sect26
+goto called
+label sect26
+
+STOP                                                                                                                    
+label called
+read coor card free
+* coords for both protons
+*
+2
+1  1  prot h1  0.  0.  0.
+1  2  prot h1  2.  0.  0.
+
+print coor
+skipe all excl elec
+FAST @8
+
+open write card unit 33 name @9@7
+     
+coor dupli sele segid p1 end sele segid p2 end
+
+format (f18.10)
+set x 0.05
+set 2 1.0
+coor trans sele segid p2 end xdir @2 ydir 0.0  zdir 0.0    
+
+label loop
+incr 2 by @x
+coor trans sele segid p2 end xdir @x ydir 0.0  zdir 0.0    
+energy @1 @3 @4 @5 inbfrq 25 cutnb 13.0 ctofnb 12.0 ctonnb @6
+coor force comp
+coor axis sele segid p2 end comp
+vibran
+write seco card finite sele segid p2 end unit 6 tol 0.0
+end
+write title unit 33
+*  @2  ?elec ?xaxi ?trac
+*
+if 2 lt 12.21 goto loop
+
+goto @flag
+
+
+

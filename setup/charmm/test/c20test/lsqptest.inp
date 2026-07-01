@@ -1,0 +1,68 @@
+* TEST OF LSQP COMMAND
+* USING A SIMPLE DINUCLEOTIDE
+*
+
+stream datadir.def
+bomlev -2
+
+OPEN READ FORM UNIT 11 NAME  @0toprna10r.rtf
+read rtf card unit 11
+OPEN READ FORM UNIT 12 NAME  @0pardna10.prm
+read param card unit 12
+
+read sequence cards
+* GpC
+*
+2
+GUA CYT
+
+generate GC setup first 5ter
+
+ic param
+ic seed 1 C1' 1 C2' 1 C3'
+ic build
+
+! Look at the two bases only:
+coor lsqp sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) .and. -
+               atom * 1 * end ! GUA only
+! Now orient to put GUA base in XY-plane:
+coor orie sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) .and. -
+               atom * 1 * end ! GUA only
+
+coor lsqp sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) .and. -
+               atom * 1 * end ! GUA only
+
+coor lsqp sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) .and. -
+               atom * 2 * end ! CYT only
+
+coor lsqp mass sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) -
+               .and. atom * 1 * end ! GUA only
+
+coor lsqp verb sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) -
+               .and. atom * 2 * end ! CYT only
+
+! What happens if atoms are undefined:
+coor lsqp sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) -
+               .and. atom * 2 * end  COMP ! CYT only
+coor copy comp ! So define them
+coor lsqp sele (.not.(atom * * *P .or. atom * * *' .or. atom * * *T)) -
+               .and. atom * 2 * end  COMP ! CYT only
+
+! And if there are only two atoms chosen:
+coor lsqp sele atom * * C1' end
+
+! Or if three collinear atoms:
+scalar x set 0.0 sele atom * 1 C1' end
+scalar y set 0.0 sele atom * 1 C1' end
+scalar z set 0.0 sele atom * 1 C1' end
+scalar x set 0.0 sele atom * 1 C2' end
+scalar y set 0.0 sele atom * 1 C2' end
+scalar z set 1.0 sele atom * 1 C2' end
+scalar x set 0.0 sele atom * 1 C3' end
+scalar y set 0.0 sele atom * 1 C3' end
+scalar z set 2.0 sele atom * 1 C3' end
+coor lsqp verb sele atom * 1 C1' .or. atom * 1 C2' .or. atom * 1 C3' end
+
+! Or something 'bad', all atoms:
+
+coor lsqp mass verb

@@ -1,0 +1,121 @@
+* RIGIDST2  by Axel Brunger, 25-APR-1983
+* Test rigid ST2 algorithm (routine FIXST2)
+*
+
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if ?nost2 .eq. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+OPEN READ FORM UNIT 11 NAME  @0toph9.rtf
+read rtf  card unit 11
+close unit 11
+BOMLEV -2
+OPEN READ FORM UNIT 12 NAME  @0param6.prm
+read parameter card unit 12
+close unit 12
+BOMLEV  0
+
+read sequ card
+* two ST2 molecules
+*
+    2
+ST2  ST2
+generate STST
+
+read coor card
+* Coordinates for STST potential test
+*
+    5
+         1 ST2  OX2    0.00000   0.00000   0.00000
+         1 ST2  HX1    1.00000   0.00000   0.00000
+         1 ST2  HX2   -0.33333   0.94281   0.00000
+         2 ST2  LX1    2.00000   0.00000   0.00000
+         2 ST2  OX2    2.80000   0.00000   0.00000
+
+hbuild selection ( ( hydrogen .or. lone ) .and. .not. initial ) end -
+     phistp 10.0 -
+     acce ctonhb 5.5 ctofhb 6.5 cuthb 7.5 ctonha 50.0 ctofha 70.0 CUTHA 90.0 -
+     elec group cdie switch eps 2.0 -
+          cutnb 8.0 ctexnb 999.0 ctonnb 6.5 ctofnb 7.5 -
+     vdw nbxmod 5 vswitch vdistance norxn
+
+print coordinates
+
+OPEN WRITE FILE UNIT 17 NAME @9FOR017.DAT
+WRITE COOR FILE UNIT 17
+* RIGIDST2 TEST CASE COORDINATES
+*
+coordinates copy comparison
+
+update elec group cdie switch eps 2.0 -
+       cutnb 8.0 ctexnb 999.0 ctonnb 6.5 ctofnb 7.5 -
+       vdw nbxmod 5 vswitch vdistance norxn
+
+coordinates rms
+
+test first mass 0 step 0.005
+test first mass 1 step 0.005
+test first mass -1 step 0.005
+
+!!!!! 1 free dynamics
+coor copy
+scalar xcomp set 0.0
+scalar ycomp set 0.0
+scalar zcomp set 0.0
+
+dynamics verlet strt    -
+   nstep 5  inbfrq 5  ihbfrq 5  iprfrq  10   -
+   finalt 300.0  ntrfrq 0  ieqfrq 0  iasors 0  -
+   iasvel 1 ihtfrq  0
+
+OPEN READ FILE UNIT 17 NAME @9FOR017.DAT
+READ COOR COMP FILE UNIT 17 RESTART
+coor rms
+
+print coor
+
+!!!!! 2 free minimization
+coor copy
+minimize powell nstep 10 step 0.02 tolgradient 0.002 nprint 1
+minimize sd nstep 4 nprint 1 step 0.02
+coor rms
+print coor
+
+!!!!! 3 apply fixed constraints; dynamics
+coor copy
+constraints fix selection type OX2 end
+test first mass 0
+test first mass 1
+test first mass -1
+
+!!!!! 3 dynamics with fixed oxygens
+scalar xcomp set 0.0
+scalar ycomp set 0.0
+scalar zcomp set 0.0
+
+dynamics verlet strt    -
+   nstep 5  inbfrq 5  ihbfrq 5  iprfrq  10   -
+   finalt 300.0  ntrfrq 0  ieqfrq 0  iasors 0  -
+   iasvel 0  ihtfrq  0
+
+OPEN READ FILE UNIT 17 NAME @9FOR017.DAT
+READ COOR COMP FILE UNIT 17 RESTART
+coor rms
+print coor
+
+!!!!! 4 minimization with fixed oxygens
+coor copy
+minimize powell nstep 10 step 0.02  tolgradient 0.005 nprint 1
+minimize sd nstep 4 nprint 1 step 0.02
+coor rms
+print coor
+
+stop

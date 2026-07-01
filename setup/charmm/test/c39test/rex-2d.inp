@@ -1,0 +1,123 @@
+* 2D-REX example on ALA3
+* Dimension 1 (freq 200) is temperature.
+* Dimension 2 (freq 1000) is Hamiltonian w/ reduced backbone torsion
+*
+
+if ?repdstr .ne. 1 then
+ echo "REPDSTR code not compiled. Test NOT performed."
+ stop
+endif
+
+if ?numnode .ne. 4 then
+ echo "Wrong number of processors. Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card name @0top_all27_prot_lipid_chiral.dat
+read para card name @0par_all27_prot_lipid_chiral.dat
+read psf card name @0ala3.psf
+read coor card name @0ala3.min.cor
+
+energy
+
+repd twod dim1 2 dim2 2 d1criteria temp d2criteria ham -
+     d1freq 10 d2freq 20 unit 40 -
+     temp 300. temp 340.
+
+open unit 40 write form name @92d-rex.exch
+open unit 50 write form name @92d-rex.out
+outu 50
+
+echo ?myrepd1
+echo ?myrepd2
+
+if ?myrepd1 .eq. 0 set mytemp = 300.
+if ?myrepd1 .eq. 1 set mytemp = 340.
+
+define backbone sele type N .or. type CA .or. type C .or. type O end
+
+if ?myrepd2 .eq. 0 set dhstrength = 1.0
+if ?myrepd2 .eq. 1 set dhstrength = 0.7
+
+endif
+
+block 2
+call 1 sele backbone end                               
+call 2 sele .not. backbone end
+coef 1 1 1.0 dihe @dhstrength
+coef 2 2 1.0
+coef 1 2 1.0
+end
+
+shake bonh param
+
+scalar fbeta set 10.0
+
+dyna leap lang start nstep 100 timestep 0.001 nprint 10 -
+  nsavc 1000 iuncrd 32 iunwri 31 iprfrq 1000 -
+  firstt @mytemp finalt @mytemp tstruct @mytemp tbath @mytemp -
+  iseed 57590210 9902 8463252 38252523 -
+  iasors 1 iasvel 1 iscvel 0 ichecw 0 
+
+
+set passprob  = 0
+set passprob2 = 0
+set passexup  = 0
+set passexup2 = 0
+set passexdn  = 0
+set passexdn2 = 0
+set passener  = 0
+
+if ?myrep .eq. 0 set refprob  = 0.4361
+if ?myrep .eq. 0 set referup  = 1.0
+if ?myrep .eq. 0 set referdn  = 0.0
+if ?myrep .eq. 0 set refprob2 = 0.9507
+if ?myrep .eq. 0 set referup2 = 1.0
+if ?myrep .eq. 0 set referdn2 = 0.0
+if ?myrep .eq. 0 set refener  = 35.90547
+
+if ?myrep .eq. 1 set refprob  = 0.4361
+if ?myrep .eq. 1 set referup  = 0.0
+if ?myrep .eq. 1 set referdn  = 1.0
+if ?myrep .eq. 1 set refprob2 = 0.8507
+if ?myrep .eq. 1 set referup2 = 1.0
+if ?myrep .eq. 1 set referdn2 = 0.0
+if ?myrep .eq. 1 set refener  = 39.40625
+
+if ?myrep .eq. 2 set refprob  = 0.7946
+if ?myrep .eq. 2 set referup  = 0.6667
+if ?myrep .eq. 2 set referdn  = 0.0
+if ?myrep .eq. 2 set refprob2 = 0.9507
+if ?myrep .eq. 2 set referup2 = 0.0
+if ?myrep .eq. 2 set referdn2 = 1.0
+if ?myrep .eq. 2 set refener  = 42.58077
+
+if ?myrep .eq. 3 set refprob  = 0.7946
+if ?myrep .eq. 3 set referup  = 0.0
+if ?myrep .eq. 3 set referdn  = 0.6667
+if ?myrep .eq. 3 set refprob2 = 0.8507
+if ?myrep .eq. 3 set referup2 = 0.0
+if ?myrep .eq. 3 set referdn2 = 1.0
+if ?myrep .eq. 3 set refener  = 42.44522
+
+if ?reprob .ae. @refprob set passprob = 1
+if ?reprob2 .ae. @refprob2 set passprob2 = 1
+if ?exrup .ae. @referup set passexup = 1
+if ?exrup2 .ae. @referup2 set passexup2 = 1
+if ?exrdn .ae. @referdn set passexdn = 1
+if ?exrdn2 .ae. @referdn2 set passexdn2 = 1
+if ?ener .ae. @refener set passener = 1
+
+calc result = @passprob + @passexup + @passexdn + @passener
+calc result = @result + @passprob2 + @passexup2 + @passexdn2
+
+repd reset
+
+outu 6
+prnlev 5 node 0
+
+@testcheck @result 7 0 REX2D
+
+stop

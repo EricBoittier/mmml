@@ -1,0 +1,135 @@
+* PNM model topology 
+*
+31  1
+
+MASS     1 CA    12.01100 C ! C_alpha 
+MASS     2 CG    12.01100 C ! C_alpha  (gamma)
+
+DECL -CA
+DECL +CA
+DECL -CG
+DECL +CG
+
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE   
+
+RESI ALA          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI ARG          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI ASN          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI ASP          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI CYS          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI GLN          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI GLU          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI GLY          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI HIS          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI HSD          0.00  
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI HSE          0.00  
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI HSP          0.00  
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI ILE          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI LEU          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI LYS          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI MET          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI PHE          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI PRO          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI SER          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI THR          0.00
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI TRP          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI TYR          0.00
+GROUP
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI VAL          0.00
+GROUP   
+ATOM CA   CA      0.00
+BOND CA  +CA
+
+RESI GAM          0.00
+GROUP
+ATOM CG   CG      0.00
+BOND CG  +CG
+
+END

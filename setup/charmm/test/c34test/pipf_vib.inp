@@ -1,0 +1,256 @@
+* CHARMM Testcase: c34test/pipf_vid.inp
+* Author:  Wangshen Xie
+* Date:    December 30, 2006
+* Version: c34a2
+* Test:    PIPF with N-methylacetamide(NMA) monomer
+*
+
+stream datadir.def
+
+if ?pipf .ne. 1 then
+ echo "cpipftest/pipf_vib> PIPF test NOT performed."
+ stop
+endif
+
+set name NMA
+read rtf card
+* NMA TOPOLOGY FILE
+*
+   27    1
+MASS     1 H      1.00800 H ! polar H
+MASS     3 HA     1.00800 H ! nonpolar H
+MASS    20 C     12.01100 C ! polar C
+MASS    24 CT3   12.01100 C ! aliphatic sp3 C for CH3
+MASS    54 NH1   14.00700 N ! peptide nitrogen
+MASS    70 O     15.99900 O ! carbonyl oxygen
+
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE
+
+RESI NMA         0.00 ! Polarizable NMA, W. Xie, J. Gao, unpublished result
+GROUP
+ATOM CL   CT3   -0.09
+ATOM HL1  HA     0.03
+ATOM HL2  HA     0.03
+ATOM HL3  HA     0.03
+ATOM C    C      0.45
+ATOM O    O     -0.45
+ATOM N    NH1   -0.49
+ATOM H    H      0.29
+ATOM CR   CT3    0.02
+ATOM HR1  HA     0.06
+ATOM HR2  HA     0.06
+ATOM HR3  HA     0.06
+BOND  HL1 CL   HL2 CL   HL3 CL  !          N-Methylacetamide:
+BOND  CL  C    C   N    N   CR  !      HL1\       O            /HR1
+BOND  N   H                     !    HL2-- CL  -- C -- N -- CR --HR2
+BOND  HR1 CR   HR2 CR   HR3 CR  !      HL3/            H       \HR3
+DOUBLE C  O
+! multiple dihedrals (check)
+!DIHE  CL C  N  CR
+IMPR  N  C  CR H
+IMPR  C  CL N  O
+
+ic  o   c   n   h      1.2233 122.84  180. 119.23 0.9933 ! variable 1
+ic  h   n   c   cl     0.9933 119.23    0. 116.25 1.5118 ! variable 8
+ic  o   c   n   cr     1.2233 122.84    0. 122.57 1.4488 ! variable 8
+ic  n   c   cl  hl1    1.3418 116.25  180. 109.3  1.109  ! variable 2
+ic  n   c   cl  hl2    1.3418 116.25   60. 109.3  1.109  ! variable 3
+ic  n   c   cl  hl3    1.3418 116.25  300. 109.3  1.109  ! variable 4
+ic  c   n   cr  hr1    1.3418 122.57  180. 110.7  1.113  ! variable 5
+ic  c   n   cr  hr2    1.3418 122.57   60. 110.7  1.113  ! variable 6
+ic  c   n   cr  hr3    1.3418 122.57  300. 110.7  1.113  ! variable 7
+END
+
+bomlev -2
+read param card
+* Polarizable NMA parameter file
+*
+BONDS
+CT3  C     250.000     1.4900
+HA   CT3   322.000     1.1110 
+NH1  C     370.000     1.3450
+NH1  CT3   320.000     1.4300
+NH1  H     440.000     0.9970
+O    C     620.000     1.2300
+
+ANGLES
+CT3  NH1  C      50.000   120.0000
+H    NH1  C      34.000   123.0000
+H    NH1  CT3    35.000   117.0000
+HA   CT3  C     33.000    109.50   30.00   2.16300 
+HA   CT3  HA    35.500    108.40    5.40   1.80200 
+NH1  C    CT3    80.000   116.5000
+NH1  CT3  HA     51.500   109.5000
+O    C    CT3    80.000   121.0000 
+O    C    NH1    80.000   122.5000 
+
+DIHEDRALS
+CT3  C    NH1  CT3      1.2000  1     0.00
+CT3  C    NH1  CT3      2.5000  2   180.00
+H    NH1  C    CT3      2.5000  2   180.00
+HA   CT3  NH1  C        0.0000  3     0.00
+HA   CT3  NH1  H        0.1100  3     0.00
+NH1  C    CT3  HA       0.0000  3     0.00 
+O    C    CT3  HA       0.0400  3   180.00
+O    C    NH1  CT3      2.5000  2   180.00
+O    C    NH1  H        2.5000  2   180.00
+
+IMPROPER
+NH1  X    X    H      20.0000         0      0.0000
+O    X    X    C     120.0000         0      0.0000
+
+!
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+!
+C      1.334000  -0.110000     1.960000
+CT3    1.334000  -0.080000     2.020000   0.000000  -0.010000     1.900000
+H      0.496     -0.015000     0.757700
+HA     0.496     -0.025000     1.340000
+NH1    1.073000  -0.200000     1.850000   0.000000  -0.200000     1.550000
+O      0.837     -0.120000     1.730000   0.000000  -0.120000     1.400000
+
+END
+
+read sequ cards
+* @name
+*
+1
+@name
+generate @name setup
+
+READ COOR CARD
+*   NMA (WITH EXPLICIT HYDROGENS) COORDINATES
+*
+   12
+    1    1 NMA  CL     0.13545  12.32180  -5.84031 NMA  1      0.00000
+    2    1 NMA  HL1   -0.83374  12.33183  -5.29667 NMA  1      0.00000
+    3    1 NMA  HL2    0.06810  13.01780  -6.70444 NMA  1      0.00000
+    4    1 NMA  HL3    0.93496  12.67811  -5.15562 NMA  1      0.00000
+    5    1 NMA  C      0.44312  10.94397  -6.31570 NMA  1      0.00000
+    6    1 NMA  O      0.58727  10.69223  -7.50535 NMA  1      0.00000
+    7    1 NMA  N      0.55509   9.99129  -5.38099 NMA  1      0.00000
+    8    1 NMA  H      0.43702  10.20192  -4.41751 NMA  1      0.00000
+    9    1 NMA  CR     0.85079   8.63413  -5.75707 NMA  1      0.00000
+   10    1 NMA  HR1    0.90625   7.98421  -4.85700 NMA  1      0.00000
+   11    1 NMA  HR2    1.82582   8.58173  -6.29176 NMA  1      0.00000
+   12    1 NMA  HR3    0.06046   8.23610  -6.43255 NMA  1      0.00000
+
+!shake bonh param sele all end
+
+! define dipole convergence and max iteration
+update fswitch noextend cdie vdw vshift eps 1.0  -
+           cutnb 999.5 ctofnb 999.0 ctonnb 998.0 WMIN 1.2  -
+           inbf 5
+
+pipf  minv vpol damp 1 afac 0.572 excl
+
+mini abnr nstep 10000 nprint 1
+
+COOR ORIE MASS
+!!!!! 1 marker for the first section of vibran testing
+VIBRAN
+DIAG
+END
+
+test second TOL 0.0 STEP 0.000001
+
+MOLVIB NDI1 30 NDI2 30 NDI3 34 SECO
+GFX
+DIM    30   30   34
+PRNT 3
+IC
+  1  1  5  0  0  ! 1,  C4-C5
+  1  1  2  0  0  ! 2,  C4-H
+  1  1  3  0  0  ! 3,  C4-H
+  1  1  4  0  0  ! 4,  C4-H
+  1  5  6  0  0  ! 5,  C5=O6
+  1  5  7  0  0  ! 6,  C5-N7
+  1  7  8  0  0  ! 7,  N7-H
+  1  7  9  0  0  ! 8,  N7-C9
+  1  9 10  0  0  ! 9,  C9-H
+  1  9 11  0  0  ! 10, C9-H
+  1  9 12  0  0  ! 11, C9-H
+  2  1  5  6  0  ! 12, C4-C5-O6
+  2  1  5  7  0  ! 13, C4-C5-N7
+  2  5  1  2  0  ! 14, C4, b1
+  2  5  1  3  0  ! 15,     b2
+  2  5  1  4  0  ! 16,     b3
+  2  2  1  3  0  ! 17,     a1
+  2  2  1  4  0  ! 18,     a2
+  2  3  1  4  0  ! 19,     a3
+  2  6  5  7  0  ! 20, O6-C5-N7
+  2  5  7  8  0  ! 21, C5-N7-H8
+  2  9  7  8  0  ! 22, C9-N7-H8
+  2  5  7  9  0  ! 23, C5-N7-C9
+  2  7  9 10  0  ! 24, C9, b1
+  2  7  9 11  0  ! 25,     b2
+  2  7  9 12  0  ! 26,     b3
+  2 11  9 10  0  ! 27,     a1
+  2 12  9 10  0  ! 28,     a2
+  2 11  9 12  0  ! 29,     a3
+  3  6  1  7  5  ! 30, O6 wag
+  3  8  5  9  7  ! 31, H8 wag
+  4  2  1  5  7  ! 32, torC4-C5
+  4 10  9  7  5  ! 33, torC9-N7
+  4  4  5  7  9  ! 34, torC5-N7
+UMAT     0    1    0           ! row normalization
+  1  1     1.
+  2  2     1.       2  3      1.      2  4      1.
+  3  2     2.       3  3     -1.      3  4     -1.
+  4  3     1.       4  4     -1.
+  5  5     1.
+  6  6     1.
+  7  7     1.
+  8  8     1.
+  9  9     1.       9 10      1.      9 11      1.
+ 10  9     2.      10 10     -1.     10 11     -1.
+ 11 10     1.      11 11     -1.
+ 12 17     1.      12 18      1.     12 19      1.
+ 12 14    -1.      12 15     -1.     12 16     -1.
+ 13 17     2.      13 18     -1.     13 19     -1.
+ 14 18     1.      14 19     -1.
+ 15 14     2.      15 15     -1.     15 16     -1.
+ 16 15     1.      16 16     -1.
+ 17 27     1.      17 28      1.     17 29      1.
+ 17 24    -1.      17 25     -1.     17 26     -1.
+ 18 27     2.      18 28     -1.     18 29     -1.
+ 19 28     1.      19 29     -1.
+ 20 24     2.      20 25     -1.     20 26     -1.
+ 21 25     1.      21 26     -1.
+ 22 12     1.      22 20     -1.
+ 23 13     2.      23 12     -1.     23 20     -1.
+ 24 21     1.      24 22     -1.
+ 25 23     2.      25 21     -1.     25 22     -1.
+ 26 30     1.
+ 27 31     1.
+ 28 32     1.
+ 29 33     1.
+ 30 34     1.
+-1
+PED    8   15
+  2  2  9
+  2  3 10
+  2  4 11
+  2 12 17
+  2 13 18
+  2 14 19
+  2 15 20
+  2 16 21
+  1  sC4-C5      2  sCH3s       3  sCH3as      4  sCH3as'
+  5  sC5=O       6  sC5-N7      7  sN7-H       8  sN7-C9
+ 12  bCH3s
+ 13  bCH3as     14  bCH3as'    15  rCH3       16  rCH3'
+ 22  bC6=O      23  bCCN       24  bN7-H      25  bCNC
+ 26  wC6=O      27  wN7-H      28  tC5CH3     29  tN7CH3
+ 30  tCN
+ -1
+END
+
+coor dipole
+!PRINT NORM
+!DIAG RAISE
+!PRINT NORM
+
+stop

@@ -1,0 +1,134 @@
+* Ewh2oexcl by Stephen Fleischman 11/20/91
+* Tests Ewald non-bond exclusions. 
+*
+
+stream datadir.def
+set testname ewh2oexcl
+format (F20.7)
+
+read rtf card
+* TIPS3P WATER TOPOLOGY FILE
+*
+   20    1
+MASS     4 HT     1.00800 ! TIPS3P WATER HYDROGEN
+MASS    58 OT    15.99940 ! TIPS3P WATER OXYGEN
+
+AUTOGEN OFF 
+RESI TIP3    .000   ! TIPS3P WATER MODEL
+GROUP
+ATOM OH2  OT   -0.834 
+ATOM H1   HT    0.417
+ATOM H2   HT    0.417
+BOND OH2 H1  OH2 H2  H1 H2 ! THE LAST BOND IS NEEDED FOR SHAKE
+THET H1   OH2  H2 
+!                            NOTE: NO DONORS OR ACCEPTORS FOR TIPS3P
+PATC  FIRS NONE LAST NONE
+END
+
+bomlev -2
+read param card
+* TIPS3P WATER PARAMETER FILE
+*
+BOND
+HT  OT     450.0   0.9572 ! from TIPS3P geometry
+HT  HT       0.0   1.5139 ! from TIPS3P geometry (for SHAKE w/PARAM)
+THETAS
+HT  OT  HT  55.0 104.52   ! FROM TIPS3P GEOMETRY
+!
+NONBONDED   ATOM CDIEL SWITCH VATOM VDISTANCE VSWITCH -
+     CUTNB 8.0  CTOFNB 7.5  CTONNB 6.5  EPS 1.0  E14FAC 1.0  WMIN 1.5
+!
+HT       0.0440    1.0       0.8000  
+OT       0.8400    6.0       1.6000  
+
+NBFIX
+!OT  OT -0.152073  3.5365 ! TIPS3P VDW INTERACTION
+!HT  OT -0.05      1.0    ! MODIFIED TIPS3P WITH CATASTROPHY ZONE REMOVED
+!                           FOR NOW, USE CHARLIE'S PARAMETERS
+OT OT -0.1521 3.5364
+HT HT -0.04598 0.4490
+OT HT -0.08363 1.9927
+
+END
+bomlev -1
+
+!  Set up a box of 125 water molecules
+read sequence tips 125
+generate solv
+
+OPEN UNIT 4 FORM READ NAME @0tip125.crd
+READ COOR CARD UNIT 4
+CLOSE UNIT 4
+
+SET 6 15.517182
+! Open and read the image transformation file for creating
+! 26 image objects around the primary structure
+CRYSTAL DEFINE CUBIC @6 @6 @6 90.0 90.0 90.0
+CRYSTAL BUILD CUTOFF 14.0 NOPERATIONS 0
+
+IMAGE BYGROUPS XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! (1) Ewald summation with exclusions.
+! (2) Ewald summation with no exclusions.  Note delta E.  This will be
+!     the difference in the energy due to the excluded interactions.
+!     It should be the same as the no ewald case.
+! (3) Normal minimum image electrostatics with exclusions.
+! (4) Normal minimum image electrostatics with no exclusions.
+!     Note delta E.  This will be the difference in the energy due to
+!     the excluded interactions.  It should be the same as the ewald
+!     case. 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+set refval1  -1181.69753
+set refval2  108566.51961
+set refval3  -1665.52706
+set refval4  108082.69008
+
+! SLOW routines
+FASTER OFF
+set case slow
+set tt 1
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM 5 EWALD KMAX 9 KSQMAX 83  KAPPA .45  -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+set tt 2
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM -1 EWALD KMAX 9 KSQMAX 83  KAPPA .45  -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+set tt 3
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM 5 NOEWALD -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+set tt 4
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM -1 NOEWALD -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+
+! Fast scalar routines
+FASTER ON
+set case fast
+set tt 1
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM 5 EWALD KMAX 9 KSQMAX 83  KAPPA .45  -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+set tt 2
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM -1 EWALD KMAX 9 KSQMAX 83  KAPPA .45  -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+set tt 3
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM 5 NOEWALD -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+set tt 4
+ENERGY IMGFRQ 5 INBFRQ 5 NBXM -1 NOEWALD -
+  CUTNB 8.0  CTONNB 7.75891 CTOFNB 8.0 CUTIM 8.0 VSWIT SWIT  WMIN 0.9
+@testcheck ?ener @refval@@tt .000001 @testname_ener_@tt_@case
+
+STOP

@@ -1,0 +1,124 @@
+*  Benchmark dynamics for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
+*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*
+
+pref
+
+if @?list eq 0 set list = bycb
+if @?fast eq 0 set fast = on
+if @?lookup eq 0 set lookup = 0
+if @?nstep eq 0 set nstep = 1000
+if @?gpu eq 0 set gpu = 0
+if @?openmm eq 0 set openmm = 0
+if @?dt eq 0 set dt = 0.001
+if @?ctonnb eq 0 set ctonnb = 7.5
+if @?ctofnb eq 0 set ctofnb = 9
+
+! Do so sanity checks
+if @gpu eq 1 then
+      if @lookup eq 1 then
+            echo "Setting lookup to 0, incompatible with gpu"
+            set lookup = 0
+      endif
+
+      set nbond = inbfrq @nstep imgfrq @nstep
+      set grape = grape 11
+      envi VG_LDIMX 6
+      envi VG_LDIMY 6
+      envi VG_LDIMZ 6
+else
+      set nbond = inbfrq -1 imgfrq -1
+      set grape = 
+endif
+
+set cnsT = hoover reft 298 tmass 250 tbath 298 @grape ! Constant temperature
+
+set do_omm =
+if @openmm gt 0 then
+      if @?var ne 0 then
+         set var = variable vtol @var
+      else
+         set var = 
+      endif
+      set nve = omm @var
+      set cnsT = omm langevin gamma 5 @var
+      set do_omm = @cnsT
+      if @?consE ne 0 set do_omm = @nve
+endif
+      
+
+read rtf card name "top_all22_prot.inp"
+read param card name "par_all22_prot.inp"
+
+read sequ coor name 5dfr_minimized.crd
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+read coor pdb resi name "5dfr_solv-cube_equil.pdb"
+
+! Dimension of a box
+set size 62.23
+Calc 7 = @size 
+set  theta = 90.0
+Crystal define cubic @7 @7 @7 @theta @theta @theta    
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+calc nwat = ?nsel / 3
+
+!  turn on faster options and set-up SHAKE
+faster @fast
+
+!repd fast exch unit 30 freq 10 nrep 4 -
+!  temp0 300. -
+!  temp1 325. -
+!  temp2 350. -
+!  temp3 375.
+!repd nrep 4 verbose
+!open unit 17 write formatted name rout
+!outu 17
+
+domdec
+energy  -
+   e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi - 
+   Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+!repd esync
+!repd reset
+stop
+
+if @?domdec gt 0 then
+     energy  e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi - 
+           Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 -
+           domdec dlb on
+else
+     energy  e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi - 
+           Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+endif
+
+shake bonh tol 1.0e-8 para fast
+
+if lookup gt 0 then
+     energy  eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi - 
+           Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+     lookup sele segid wat end 
+endif
+
+calc nprnt = @nstep / 10
+! Run dynamics in periodic box
+dynamics @list leap start timestep @dt nstep @nstep nprint @nprnt  iprfrq @nprnt -
+     firstt 298 finalt 298 twindl -5.0 twindh 5.0 -
+     ichecw 0 teminc 30.0 ihtfrq @nprnt ieqfrq @nstep -
+     iasors 1 iasvel 1 iscvel 0  -
+     @nbond ilbfrq 0 echeck -1 iseed 121239 2329 328241 32111 -
+     eps 1.0 cutnb 11 cutim 11 ctofnb @ctofnb ctonnb @ctonnb vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64 ntrfq 200 - !PME
+     @{do_omm}
+stop
+

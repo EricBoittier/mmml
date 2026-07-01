@@ -1,0 +1,278 @@
+* octane crystal
+* for testing cryst building code in CHARMM22 and CHARMM25 
+* using X-cryst fractional coor as starting struct
+* H. Mathisen and N. Norman acta chemica scandinavica 15,1961,1747
+* 
+
+stream datadir.def
+
+fast on
+
+! truncation scheme
+set 3 9.0  ! cutim
+set 4 9.0  ! cutnb
+set 5 7.0  ! ctonnb
+set 6 8.0  ! ctofnb
+set A shift
+set B atom
+set C vatom
+
+read rtf card
+* alkanes, not reliable for energies
+*
+   22     1
+MASS     3 HA     1.00800 ! nonpolar H
+MASS     4 HA2    1.00800 ! nonpolar H
+MASS    13 CT1   12.01100 ! aliphatic sp3 C for CH
+MASS    14 CT2   12.01100 ! aliphatic sp3 C for CH2
+MASS    15 CT3   12.01100 ! aliphatic sp3 C for CH3
+
+Decl +c1
+Decl -c1
+Decl -c2
+Decl -h4
+Decl -h5
+
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE
+
+RESI oct2    0.0    ! 1/2 octane for getting the crystal data
+GROUP
+ ATOM H11  HA      0.09
+ ATOM H12  HA      0.09
+ atom h13  ha      0.09
+ ATOM C1   CT3    -0.27
+GROUP
+ ATOM H21  HA2     0.090
+ ATOM H22  HA2     0.090
+ ATOM C2   CT2    -0.180
+GROUP
+ ATOM H31  HA2     0.090
+ ATOM H32  HA2     0.090
+ ATOM C3   CT2    -0.180
+GROUP
+ ATOM H41  HA2     0.090
+ ATOM H42  HA2     0.090
+ ATOM C4   CT2    -0.180
+
+BOND  C1   C2     C2   C3     C3   C4   
+BOND  C1   H11    C1   H12    c1   h13
+bond  C2   H21    C2   H22
+BOND  C3   H31    C3   H32  
+bond  C4   H41    C4   H42 
+
+IC   H11  C1   C2   C3   0.0000    0.00  180.00    0.00   0.0000
+IC   C1   C2   C3   C4   0.0000    0.00  180.00    0.00   0.0000
+IC   H11  C2  *C1   H12  0.0000    0.00  120.00    0.00   0.0000
+IC   H11  C2  *C1   H13  0.0000    0.00 -120.00    0.00   0.0000
+IC   C1   C3  *C2   H21  0.0000    0.00  120.00    0.00   0.0000
+IC   C1   C3  *C2   H22  0.0000    0.00 -120.00    0.00   0.0000
+IC   C2   C4  *C3   H31  0.0000    0.00  120.00    0.00   0.0000
+IC   C2   C4  *C3   H32  0.0000    0.00 -120.00    0.00   0.0000
+IC   C2   C3   C4   H41  0.0000    0.00   60.00    0.00   0.0000
+IC   C2   C3   C4   H42  0.0000    0.00  -60.00    0.00   0.0000
+PATC FIRS NONE LAST NONE
+
+END
+
+read para card 
+* alkane parameters
+*
+
+Bond
+CT1  CT1   222.500     1.5000 ! ALLOW   ALI
+CT2  CT1   222.500     1.5380 ! ALLOW   ALI
+CT2  CT2   222.500     1.5300 ! ALLOW   ALI
+CT3  CT1   222.500     1.5380 ! ALLOW   ALI
+CT3  CT2   222.500     1.5280 ! ALLOW   ALI
+CT3  CT3   222.500     1.5300 ! ALLOW   ALI
+HA   CT1   309.000     1.1110 ! ALLOW   ALI
+HA2  CT2   309.000     1.1110 ! ALLOW   ALI
+HA   CT2   309.000     1.1110 ! ALLOW   ALI
+HA   CT3   322.000     1.1110 ! ALLOW   ALI
+
+angle
+CT1  CT1  CT1   53.350    111.00    8.00   2.56100 ! ALLOW ALI
+CT1  CT2  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+CT2  CT1  CT1   53.350    111.00    8.00   2.56100 ! ALLOW   ALI
+CT2  CT2  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+CT2  CT2  CT2   58.350    113.60   11.16   2.56100 ! ALLOW   ALI
+CT2  CT3  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+CT3  CT1  CT1   53.350    108.50    8.00   2.56100 ! ALLOW   ALI
+CT3  CT1  CT2   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+CT3  CT1  CT3   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+CT3  CT2  CT1   58.350    113.50   11.16   2.56100 ! ALLOW   ALI
+CT3  CT2  CT2   58.000    115.00    8.00   2.56100 ! ALLOW   ALI
+CT3  CT2  CT3   53.350    114.00    8.00   2.56100 ! ALLOW   ALI
+HA   CT1  CT1   34.500    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT1  CT2   34.500    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT1  CT3   34.500    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT1  HA    35.500    109.00    5.40   1.80200 ! TEST for test cpd
+HA   CT2  CT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+!HA   CT2  CT2   26.500    110.10   22.53   2.17900 ! ALLOW   ALI
+HA2  CT2  CT2   26.500    110.10   22.53   2.17900 ! ALLOW   ALI
+HA2  CT2  CT3   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+HA2  CT2  HA2   35.500    109.00    5.40   1.80200 ! ALLOW   ALI
+HA   CT3  CT1   33.430    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT3  CT2   34.600    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT3  CT3   37.500    110.10   22.53   2.17900 ! ALLOW   ALI
+HA   CT3  HA    35.500    109.00    5.40   1.80200 ! TEST for test cpd
+
+dihedrals
+X    CT1  CT1  X        0.2000  3     0.00 ! ALLOW   ALI
+X    CT1  CT2  X        0.2000  3     0.00 ! ALLOW   ALI
+X    CT1  CT3  X        0.2000  3     0.00 ! ALLOW   ALI
+X    CT2  CT2  X        0.1900  3     0.00 ! ALLOW   ALI
+X    CT2  CT3  X        0.1600  3     0.00 ! ALLOW   ALI
+X    CT3  CT3  X        0.1525  3     0.00 ! ALLOW   ALI
+
+ NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+CT1    0.000000  -0.020000     2.275000   0.000000  -0.010000     1.900000
+CT2    0.000000  -0.056000     2.010000   0.000000  -0.010000     1.900000
+CT3    0.000000  -0.078000     2.040000   0.000000  -0.010000     1.900000
+HA     0.000000  -0.024000     1.340000
+HA2    0.000000  -0.028000     1.340000
+
+end
+
+read sequence card
+* Octane
+*
+1
+oct2
+
+generate oct first none last none setup warn
+
+! read X-cryst fractional coordinates
+read coor card
+* OCTANE CRYSTAL
+* FROM CRYSTAL EXPERIMENTAL DATA
+* FRACTIONAL ATOMIC COORDINATES
+* ACTA CHEMICA SCANDINAVICA 15 (1961)1747-17
+* N. NORMAN and H. MATHISEN
+*  DATE:     6/25/96     14: 4:41      CREATED BY USER:
+*
+   13
+    1    1 OCT2 H11    0.325     0.150     0.449   OCT  1      0.00000
+    2    1 OCT2 H12    0.550     0.380     0.360   OCT  1      0.00000
+    3    1 OCT2 H13    0.117     0.379     0.390   OCT  1      0.00000
+    4    1 OCT2 C1     0.3037    0.2447    0.3811  OCT  1      0.00000
+    5    1 OCT2 H21    0.390    -0.126     0.267   OCT  1      0.00000
+    6    1 OCT2 H22   -0.083    -0.120     0.297   OCT  1      0.00000
+    7    1 OCT2 C2     0.1715    0.0161    0.2777  OCT  1      0.00000
+    8    1 OCT2 H31    0.387     0.293     0.140   OCT  1      0.00000
+    9    1 OCT2 H32   -0.033     0.295     0.166   OCT  1      0.00000
+   10    1 OCT2 C3     0.1417    0.1585    0.1620  OCT  1      0.00000
+   11    1 OCT2 H41    0.242    -0.223     0.050   OCT  1      0.00000
+   12    1 OCT2 H42   -0.235    -0.191     0.075   OCT  1      0.00000
+   13    1 OCT2 C4     0.0176   -0.0699    0.0576  OCT  1      0.00000
+
+
+coor print
+
+! Converting fractional to symmetric coordinate
+coor conv FRAC SYMM -
+4.16 4.75 11.00 94.8 84.5 105.1
+
+coor print
+
+crystal define triclinic 4.16 4.75 11.00 94.8 84.5 105.1
+
+! primary atoms represent half unitcell, P-1 space group
+crystal build noper 1 cutoff @3
+(-X,-Y,-Z)
+
+update inbfrq 20 ihbfrq 0 imgfrq 20 -
+@A @B vswitch @C cutim @3 cutnb @4 ctonnb @5 ctofnb @6 imall
+
+! reported distances C1 - C1 in xtal paper
+! 4.47, 3.62, 3.92, 4.33
+!
+coor dist images cut 4.50 sele atom OCT 1 c1 end -
+sele type c1 .and. .not. segid OCT end
+
+! reported distances C1 - C2 in xtal paper
+! 4.11
+!
+coor dist images cut 4.20 sele atom OCT 1 c1 end -
+sele type c2 .and. .not. segid OCT end
+
+! reported distances C2 - C3 in xtal paper
+! 4.14
+!
+coor dist images cut 4.20 sele atom OCT 1 c2 end -
+sele type c3 .and. .not. segid OCT end
+
+
+! test coor convert command
+! NOTE: crystal calculations on non-orthoganal systems require 
+! coordinates in the symmetric transformation.  The aligned
+! tranformation corresponds to the standard charmm format.  For
+! orthagonal crystal (cubic and orthorhombic) the symmetric and
+! aligned tranformations may both be used.
+!
+coor print
+coor conv SYMM ALIG -
+4.16 4.75 11.00 94.8 84.5 105.1
+coor print
+coor conv ALIG FRAC -
+4.16 4.75 11.00 94.8 84.5 105.1
+coor print
+! test xtal substitution parameters
+coor conv FRAC SYMM -
+?xtla ?xtlb ?xtlc ?xtlalpha ?xtlbeta ?xtlgamma
+coor print
+
+! test minimization 
+mini abnr lattice nstep 5 nprint 1
+
+open unit 32 unfo write name @9xtl_oct_1.trj
+
+! test NPT dynamics
+dynamics cpt leap start time 0.001 nstep 10 iseed 314159 -
+        firstt 300.0 finalt 300.0 tstruc 300.0 -
+        inbfrq 10 imgfrq 10 iprfrq 1 nprint 1 -
+        iasors 1 iasvel 1 ieqfrq 0 -
+        iunrea -1 iunwri -1 iuncrd 32 kunit -1 nsavc 1 isvfrq 0 -
+        pconstant pmass 500.0 pref 1.0 pgamma 0.0 tbath 300.0 -
+        hoover reft 300.0 tmass 1000.0 echeck 10000.
+
+! reopen traj file and perform distance analysis
+open unit 32 unfor read name @9xtl_oct_1.trj
+traj iread 32 nread 1 begin 1 stop 10 skip 2
+traj read
+! check lattice substitution parameters
+show builtins
+traj read
+show builtins
+
+! reported distances C1 - C1 in xtal paper
+! 4.47, 3.62, 3.92, 4.33
+!
+coor dist images cut 4.50 sele atom OCT 1 c1 end -
+sele type c1 .and. .not. segid OCT end
+
+! reported distances C1 - C2 in xtal paper
+! 4.11
+!
+coor dist images cut 4.20 sele atom OCT 1 c1 end -
+sele type c2 .and. .not. segid OCT end
+
+! reported distances C2 - C3 in xtal paper
+! 4.14
+!
+coor dist images cut 4.20 sele atom OCT 1 c2 end -
+sele type c3 .and. .not. segid OCT end
+
+traj read
+
+coor conv SYMM ALIG -
+?xtla ?xtlb ?xtlc ?xtlalpha ?xtlbeta ?xtlgamma
+
+! NOTE to users: the final coordinate set should be converted
+! to the aligned tranformation (standard charmm) and the 
+! unit cell parameters saved for restarting or analysis
+
+
+stop

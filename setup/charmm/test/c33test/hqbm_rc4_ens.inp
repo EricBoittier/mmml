@@ -1,0 +1,121 @@
+* CHARMM c33a1 Testcase hqbm_rc4_ens.inp
+* hydrogen exchange bias for ci2 with a multiple replicas
+*
+
+ensemble nensem 4
+
+set node ?whoiam
+set nrep ?nensem
+
+bomlev -1
+
+stream datadir.def 
+
+if ?ensemble .ne. 1 then
+    echo "Test NOT performed"
+    stop
+endif
+if ?hqbm .ne. 1 then
+    echo "Test NOT performed"
+    stop
+endif
+
+set prot 1ypa
+set t 300.0
+set seed 27041994
+
+open unit 1 read card name @0/toph19_eef1.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read card name @0/param19_eef1.inp
+read para card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT.psf
+read psf card unit 1
+close unit 1
+
+open unit 1 read card name @0/@PROT_minim.pdb
+coor read pdb unit 1
+close unit 1
+coor copy comp
+
+faster on
+
+eef1 setup temp @T unit 95 name @0/solvpar.inp
+update ctonnb 7.0 ctofnb 9.0 cutnb 10.0 group rdie
+
+eef1 print
+
+nbonds elec  switch  group  rdie vdw  vswitch vgroup - 
+       cutnb 13.0 ctofnb 9.0 ctonnb 7.0 -
+       wmin 1.2 eps 1.0 e14f 0.4 nbxm 5 
+
+shake bonh param tol 1e-7
+
+energy
+
+! random seeds
+if @NODE .eq. 0  set seed 21422150
+if @NODE .eq. 1  set seed 5490565
+if @NODE .eq. 2  set seed 1265980
+if @NODE .eq. 3  set seed 1999290
+if @NODE .eq. 4  set seed 27041994
+if @NODE .eq. 5  set seed 2061999
+if @NODE .eq. 6  set seed 1238721
+if @NODE .eq. 7  set seed 2430748
+
+
+! ======================================================================
+!             S2 restraint test
+! ======================================================================
+
+set HXFC 0.35
+set HXFH 2
+set test rc4_ensemble
+set a 100
+
+open unit 30 write card name -
+@9/@TEST_iunj.dat
+open unit 31 write card name -
+@9/@TEST_iunk.dat
+
+open unit 40 read card name @0/logp_@PROT.dat
+
+define backbone sele ( type CA ) .or. ( type C ) .or. ( type N ) -
+	.or. ( type O ) end
+define conts sele ( .not. type H ) end
+
+hqbm reset
+hqbm rc4 nhcon -
+        iunp 40 iunj 30 iunk 31 iund -1 alpha @A -
+        hxfc @HXFC hxfh @HXFH rcut 6.5 hcut 2.4 -
+        beta 5.0 beth 10.0 tol 0.0 excl 2 -
+        sele conts end sele ( type O ) end -
+        sele ( type N ) end sele ( type H ) end
+
+open unit 20 write form name -
+@9/TEST_nd@NODE.restart
+open unit 21 write unform name -
+@9/@TEST_nd@NODE.dcd
+open unit 23 write form name -
+@9/@TEST_nd@NODE.ene
+dynamics leap verlet start nstep 2000 timestep 0.001 iseed @SEED -
+        iprfrq 500 ihtfrq 0 ieqfrq 200 ntrfrq 0 ihbfrq 0 -
+        inbfrq -1 ilbfrq 0 isvfrq 0 -
+        iunrea -1 iunwri 20 iuncrd 21 kunit 23 - 
+        nprint 500 nsavc 500 nsavv 0 -
+        firstt @T finalt @T twindh 1 twindl -1 -
+        iasors 0 iasvel 1 iscvel 0 ichecw 1 
+
+close unit 20
+close unit 21
+close unit 23
+close unit 30
+close unit 31
+close unit 40
+
+ensemble sync
+! ...etc
+
+stop

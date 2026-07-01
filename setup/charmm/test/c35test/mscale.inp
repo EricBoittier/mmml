@@ -1,0 +1,74 @@
+* testcase mscale.inp
+* Test the mscale module with water trimer
+* Requires sys1.str and sys2.str for each subsystem
+* Authors: Milan Hodoscek, Lee Woodcock
+* July 2007
+*
+
+if ?mscale .ne. 1 then
+ echo "mscale.inp> Test NOT performed."
+ stop
+endif
+
+! Read in the standard test definitions
+stream datadir.def
+
+open read unit 1 card name @0top_all22_prot.inp
+read rtf unit 1 card
+
+open read unit 1 card name @0par_all22_prot.inp
+read param unit 1 card
+
+read sequ tip3 3
+
+generate w setup noang nodihe
+
+read  coor card
+* 3 WATERs
+*  DATE:     5/22/ 7     13:14: 7      CREATED BY USER: milan
+*
+    9
+    1    1 TIP3 OH2    0.03112  -0.05455   0.00000 W    1      0.00000
+    2    1 TIP3 H1     0.98695  -0.00338   0.00000 W    1      0.00000
+    3    1 TIP3 H2    -0.25806   0.85792   0.00000 W    1      0.00000
+    4    2 TIP3 OH2    0.03112  -0.05455   5.00000 W    2      0.00000
+    5    2 TIP3 H1     0.98695  -0.00338   5.00000 W    2      0.00000
+    6    2 TIP3 H2    -0.25806   0.85792   5.00000 W    2      0.00000
+    7    3 TIP3 OH2    0.03112  -0.05455  10.00000 W    3      0.00000
+    8    3 TIP3 H1     0.98695  -0.00338  10.00000 W    3      0.00000
+    9    3 TIP3 H2    -0.25806   0.85792  10.00000 W    3      0.00000
+
+
+energy cdie cutnb 14.0 ctofnb 12.0 fshift vshift atom
+
+
+mscale nsubs 3
+
+subs first coef 1.0 prog "../bin/charmm" -
+                   outp "output/sys1.out" inpu "@0/sys1.str" -
+                   sele resid 1 .or. resid 2 end
+
+subs second coef 1.0 prog "../bin/charmm" -
+                   outp "output/sys2.out" inpu "@0/sys2.str" -
+                   sele resid 2 .or. resid 3 end
+
+subs third coef 1.0 prog "../bin/charmm" -
+                   outp "output/sys3.out" inpu "@0/sys3.str" -
+                   sele resid 1 .or. resid 3 end
+sysd
+
+end
+
+
+BLOCK 1
+  coef 1 1 -1.00
+END
+
+skip elec vdw 
+
+
+energy cdie cutnb 14.0 ctofnb 12.0 fshift vshift atom
+
+test first step 0.00001 tol 0.0
+
+stop

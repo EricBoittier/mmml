@@ -1,0 +1,5 @@
+namdpsf.inp creates topology file for NAMD program from CHAMM psf file
+fix_solute.inp creates pdb file for NAMD program needed for fixed solute
+               simulations
+harm_rest_solute.inp creates pdb file for NAMD program for harmonically
+               restrained solute simulations 

@@ -1,0 +1,2392 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+
+CHARMM 36.0
+     c36a1    Developmental     August    15, 2008
+     c36a2    Developmental     February  15, 2009
+     c36a3    Developmental     August    15, 2009
+     c36a4    Developmental     February  15, 2010
+     c36a4r1  Developmental     May        1, 2010
+     c36a5    Developmental     August    15, 2010
+     c36a6    Developmental     February  15, 2011
+     c36b1    Release           August    15, 2011
+     c36b2    Release           February  15, 2012
+
+CHARMM 37.0
+     c37a1    Developmental     August    15, 2011
+     c37a2    Developmental     February  15, 2012
+     c37b1    Release           September 30, 2012
+     c37b2    Release           February  15, 2013
+
+CHARMM 38.0
+     c38a1    Developmental     September 30, 2012
+     c38a2    Developmental     February  15, 2013
+     c38b1    Release           August    15, 2013
+     c38b2    Release           February  15, 2014
+
+CHARMM 39.0
+     c39a1    Developmental     August    15, 2013
+     c39a2    Developmental     February  15, 2014
+     c39b1    Release           August    15, 2014
+     c39b2    Release           February  15, 2015
+
+CHARMM 40.0
+     c40a1    Developmental     August    15, 2014
+     c40a2    Developmental     February  15, 2015
+     c40b1    Release           August    15, 2015
+     c40b2    Release           February  15, 2016
+
+CHARMM 41.0
+     c41a1    Developmental     August    15, 2015
+     c41a2    Developmental     February  15, 2016
+     c41b1    Release           August    15, 2016
+     c41b2    Release           February  15, 2017
+
+CHARMM 42.0
+     c42a1    Developmental     August    15, 2016
+     c42a2    Developmental     February  15, 2017
+     c42b1    Release           August    15, 2017
+     c42b2    Release           February  15, 2018
+
+CHARMM 43.0
+     c43a1    Developmental     August    15, 2017
+     c43a2    Developmental     February  15, 2018
+     c43b1    Release           August    15, 2018
+     c43b2    Release           February  15, 2019
+
+CHARMM 44.0
+     c44a1    Developmental     August    15, 2018
+     c44a2    Developmental     February  15, 2019
+     c44b1    Release           August    15, 2019
+
+CHARMM 45.0
+     c45a1    Developmental     August    15, 2019
+     c45a2    Developmental     February  15, 2020
+     c45b1    Release           August    15, 2020
+     c45b2    Release           February  15, 2021
+
+CHARMM 46.0
+     c46a1    Developmental     August    15, 2020
+     c46a2    Developmental     February  15, 2021
+     c46b1    Release           August    15, 2021
+     c46b2    Release           August    15, 2022
+---------------------------------------------------------------------------
+
+[0] About CHARMM46 Development
+
+     At the 2020 CHARMM meeting (virtual July 17-18, 2020)
+we decided to release CHARMM c45b1 incorporating enhancements and fixes
+from the development versions c45a1 and c45a2.
+
+The c45b1 release includes the enhancements and fixes to the development
+version c45a2 during the period of August 15, 2019 through August 15, 2020.
+
+==============================================================================
+
+[1] c46a1 Change Log
+
+1.1 omm_softcore.inp typos and charmm copyright date
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 26 February 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/52
+Git commit: 4a60f1808c7a1af8b8b71677045b270abd0e387f
+
+1. test/c44tgest/omm_softcore.inp contains 'if ix' and
+since the '@' is missing, 'ix' is always evaluated as 0.
+
+2. the copyright date in the header says 2014
+
+Files Involved:
+1. test/c44test/omm_softcore.inp
+2. source/charmm/iniall.F90
+
+------------------------------------------------------------------------------
+1.2 Xiping Gong's OpenMM Improvements
+Developer: Xiping Gong
+Institution: UMass
+Date: 20 Feb 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/53
+Git commit: c51c25b22f8961fff22697987034b748fd47a355
+
+Improvements to OpenMM plugins and dynamics with OpenMM:
+
+MSES Plugin:
+improve the flexibility of OMM MSES module and take
+an OpenMM plugin example on how to add the extra interaction
+term that is not included in the CHARMM force field.
+GBMV2/SA Plugin:
+
+Add the switch function for GB energy calculations.
+GBMV2/SA ignore the contributions from these atoms with
+zero atomic input radii.
+
+Temperature in the omm dynamic simulations:
+when changing temperature, the expensive action tearing down the
+OpenMM context will be avoided, and the existing new_temperature
+subroutine will update the temperature with a cheaper cost.
+
+Files Modified:
+source/ltm/inbnd_ltm.F90
+source/openmm/omm_bonded.F90
+source/openmm/omm_ctrl.F90
+source/openmm/omm_dynopts.F90
+source/openmm/omm_gbmv.F90
+source/openmm/omm_main.F90
+source/openmm/omm_mses.F90
+source/openmm/omm_nbopts.F90
+source/openmm/omm_switching.F90
+source/openmm/plugins/gbmv/openmmapi/GBMVForce.cpp
+source/openmm/plugins/gbmv/openmmapi/GBMVForce.h
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.cpp
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.h
+source/openmm/plugins/gbmv/platforms/cuda/kernels/gbmv1.cu
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVCWrapper.cpp
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVCWrapper.h
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVFortranModule.f90
+source/openmm/plugins/gbmv/wrappers/OpenMMGBMVFortranWrapper.cpp
+source/openmm/plugins/mses/openmmapi/MSESForce.cpp
+source/openmm/plugins/mses/openmmapi/MSESForce.h
+source/openmm/plugins/mses/openmmapi/MSESForceImpl.cpp
+source/openmm/plugins/mses/platforms/cuda/CudaMSESKernels.cpp
+source/openmm/plugins/mses/platforms/cuda/CudaMSESKernels.h
+source/openmm/plugins/mses/platforms/cuda/kernels/msesForce.cu
+source/openmm/plugins/mses/platforms/reference/ReferenceMSESKernels.cpp
+source/openmm/plugins/mses/platforms/reference/ReferenceMSESKernels.h
+source/openmm/plugins/mses/wrappers/OpenMMMSESCWrapper.cpp
+source/openmm/plugins/mses/wrappers/OpenMMMSESCWrapper.h
+source/openmm/plugins/mses/wrappers/OpenMMMSESFortranModule.f90
+source/openmm/plugins/mses/wrappers/OpenMMMSESFortranWrapper.cpp
+test/c45test/omm_msestest.inp
+test/data/contact.list
+
+------------------------------------------------------------------------------
+1.3 read rtfs with > 1000 lonepairs; clean end of username for banner
+Developer: Anmol Kumar and Josh Buckner
+Institution: University of Maryland and University of Michigan
+Date: 6 March 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/54
+Git commit: 68decc324269439b643072e5d2f7e2d0147d40ac
+
+1. LIMIT EXCEEDED error while reading Drude FF while reading rtf files with more than 1000 lone pair parameter
+2. The username in the banner is padded with C null characters instead of spaces.
+
+Files Involved:
+
+lonepair fixes:
+source/gener/genpsf.F90
+source/gener/modpsf.F90
+source/io/rtfio.F90
+test/c44test/readlpsin_rtf.inp
+test/data/manylp_toppar_drude.str
+test/data/manylp_toppar_drude/toppar_drude_carbohydrate_2018a.str
+test/data/manylp_toppar_drude/toppar_drude_lipid_2017c.str
+test/data/manylp_toppar_drude/toppar_drude_master_protein_2013f.str
+test/data/manylp_toppar_drude/toppar_drude_model_2013f.str
+test/data/manylp_toppar_drude/toppar_drude_nucleic_acid_2017c.str
+test/data/readlpsin1.crd
+test/data/readlpsin2.crd
+
+username fix:
+source/charmm/iniall.F90
+source/machdep/startup.F90
+
+------------------------------------------------------------------------------
+1.4 unprotected mod(*, 0) and 2. dftbmkl
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 13 April 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/55
+Git commit: 9d88db5f212651e298e5dfb4e19954384a20d579
+
+1. There were several lines of if statements containing mod that were effectively unprotected from mod(, 0). For example, 'if (nsavc > 0 .and. mod(, nsavc) == 0)' In Fortran, both the > and the mod may be evaluated even if the > statment is false. These constructs cause crashes on macOS with GCC 9.3.0.
+
+2. When --with-sccdftb is specified and MKL is found, the prefx keyword DFTBMKL needs to be included in pref.dat.
+
+Files Involved:
+source/misc/msmmpt.F90
+source/dynamc/dynamc.F90
+tool/cmake/prefx_keywords.cmake
+
+------------------------------------------------------------------------------
+1.5 gcc with mkl and cmake openmm improvements
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 16 April 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/56
+Git commit: fffffdcbe021af95156f595221e5a715a755ac62
+
+1. Updated tool/cmake/FindMKL.cmake to pass include dir and libraries necessary to link with MKL when using the GNU or PGI compilers
+
+2. Updated OpenMM to fix some warning messages from cmake and generally improve ability to find OpenMM in weird places.
+
+Files involved:
+CMakeLists.txt
+configure
+tool/cmake/FindMKL.cmake
+tool/cmake/FindOpenMM.cmake
+
+------------------------------------------------------------------------------
+1.6 fallback for finding mkl when mkl_link_tool NA
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 19 May 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/57
+Git commit: 2fa3e143f93f1df9357b6f7a3c9a3a72d2b7d68b
+
+FindMKL.cmake uses mkl_link_tool to find the MKL library directory and libraries,
+but mkl_link_tool is not available for every install of Intel compilers.
+The new features uses default values to set MKL lib dir and libs in case
+mkl_link_tool is not available.
+
+Files Modified:
+tool/cmake/FindMKL.cmake
+
+------------------------------------------------------------------------------
+1.7 SD minmiz prints trajectories if requested
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 24 April 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/58
+Git commit: 8862561b0dde84c6a9684167b77f322d31c2aa2b
+
+Steepest descent minimization now prints trajectories if requested, just like other minimization routines.
+
+Files Modified:
+source/minmiz/steepd.F90
+
+------------------------------------------------------------------------------
+1.8 quoted file names retain mixed case
+Developer: Ryan Hayes
+Institution: University of Michigan
+Date: 2 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/59
+Git commit: 0194f2d7b8065c6ea33a97f4f453b5c817c82116
+
+In the Biovia patches, quoted file names were stripped of their quotes and
+converted to all lower case. The bug fix in this merge retains the case of
+the file name.
+
+Files Involved:
+source/util/string.F90
+
+------------------------------------------------------------------------------
+1.9 Generalized self-guiding molecular simulation method: SGMDg/SGLDg
+Developer: Xiongwu Wu
+Institution: NIH
+Date: 21 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/60
+Git commit: cdec0eadab9e7af82ed12508391e111908484f4f
+
+This development implements SGMDg/SGLDg method to replace previous SGMD-SGLD related implementation. SGMDg/SGLDg stands for generalized self-guided simulation method.  This new method uses apparent friction constants from molecular interaction to define momentum guiding force and uses the deviation of local average force to define force guiding force.  The guiding factors are directly related to conformational distribution.  This new method makes the chose of guiding factors system independent and the bias effect from the guiding forces much smaller.
+
+Files Modified:
+test/c41test/sgld_vv2.inp
+source/dynamc/sglds.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/dynamc/dynavv2.F90
+source/gener/repdstr.F90
+source/image/image_util.F90
+source/manip/scalar.F90
+
+New/Modified Documentation:
+
+doc/sgld.info
+doc/scalar.info
+
+New/Modified Testcase:
+test/c41test/sgldg_vv2.inp
+
+------------------------------------------------------------------------------
+1.10 Double exponential (DE) potential for VDW interaction
+Developer: Xiongwu Wu
+Institution: NIH
+Date: 21 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/61
+Git commit: 28d3b70927e3eb6e345ee4b86842cddfe48ab7b6
+
+This development implements the double exponential (DE) potential for
+VDW interaction.  DE has a flexible shape that can be adjusted by
+four parameters.  Two exponential parameters define the shape of
+repulsive and attractive interactions, and two well parameters define
+the depth and position of the potential well.  DE has a faster covergency than
+Lennard-Jones potential which allows shorter cutoff to speed up calculation.
+DE has a softcore that's convenient for free energy calculation.  Current
+implementation comes with the isotropic periodic sum (IPS) term to include
+long-range interaction.
+
+Files Added:
+test/c46test/dbexp_test.inp
+
+Files Modified:
+source/nbonds/enbips.F90
+source/nbonds/nbips_ltm.F90
+
+New/Modified Documentation:
+doc/nbonds.info
+
+New/Modified Testcase:
+test/c46test/dbexp_test.inp
+
+------------------------------------------------------------------------------
+1.11 FULLK
+Developer: Marco Pezzella, Debasish Koner, Markus Meuwly
+Institution: University of Basel
+Date: 11.07.2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/62
+Git commit: 008dd12e4c7461c3b4c090970f207aae252fcbce
+
+FULLKERN provides a way to flexibly implement RKHS based potentials for small molecules
+inside CHARMM. At the moment the interactions between atoms are set to zero, with the
+aim  of automatically setting to zero internally the intramolecular interactions.The
+PSF remains unchanged.The new interactions are not explicitly added to the PSF file and
+only exist for the duration of a CHARMM run. FULLKERN is called via the FLMK keyword.
+prefx Keys:FLMK
+Files Added:
+
+source/misc/fullkern.F90
+docs/fullkern.info
+test/c45/fullkern_aco.inp
+test/data/aco_coeff.dat
+
+Files Modified:
+
+source/energy/energy.F90 - line 383,1985-1987
+source/charmm/charmm_main.f90 - line 758, 1387-1388
+
+------------------------------------------------------------------------------
+1.12 BLaDe, MSLD in parallel with GPUs
+Developer: Ryan Hayes
+Institution: University of Michigan
+Date: 15 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/63
+Git commit: f23204adbefc870555fa51d9db7fc0e9c8e48a47
+
+The goal of this module is to implement MSLD in a manner similar to pre-existing methods but with better porting to GPU and better parallelization.
+
+Files added:
+source/blade
+source/blade_api
+source/domdec_gpu/CudaRandom.cpp
+test/c45test/blade.inp
+test/c45test/blade_dynamics.inp
+test/c45test/blade_energy.inp
+tool/cmake/blade_cuda_files.cmake
+tool/cmake/blade_cxx_files.cmake
+tool/cmake/domdec_cxx_files.cmake
+
+Files modified:
+.gitignore
+CMakeLists.txt
+source/charmm/charmm_main.F90
+source/charmm/iniall.F90
+source/domdec_gpu/CudaRandom.h
+source/dynamc/dcntrl.F90
+source/energy/eutil.F90
+source/util/new_timer.F90
+source/util/title.F90
+test/c44test/omm_softcore.inp
+tool/cmake/cxx_files.cmake
+tool/cmake/domdec_cuda_files.cmake
+tool/cmake/fortran_files.cmake
+tool/cmake/prefx_keywords.cmake
+
+Files removed:
+source/domdec_gpu/CudaRandom.cu
+
+------------------------------------------------------------------------------
+1.13 config.py gui for building charmm
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 16 July 2020
+
+The python script config.py is a graphical user interface (GUI) for building CHARMM. The user can select features, run cmake, and run make to build CHARMM from the convenience of the GUI.
+
+Files Added:
+tool/config.py
+tool/config.pdf
+
+------------------------------------------------------------------------------
+1.14 This is a fix to CHARMM files in order to compile GAMESS version 30 JUN 2020 (R1)
+Developer: Milan Hodoscek
+Institution: National Institute of Chemistry, Slovenia
+Date: 27 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/65
+Git commit: b1fdf5e2f6a58bee329b06bee1745bd55e565f16
+
+This is a fix to CHARMM files in order to compile GAMESS version30
+JUN 2020 (R1). It takes care of the additional files that were not in
+the previous version of GAMESS and it also takes care of importing
+OpenMP compilation flag from the main CHARMM install. This provides
+efficient hybrid MPI/OpenMP parallel scheme to GAMESS.
+
+Files modified:
+source/gamint/CMakeLists.txt
+source/gamint/ddi.F90
+tool/gmscomp
+
+------------------------------------------------------------------------------
+1.15 add KEY_BLOCK CPP #if guards to BLaDE code to fix lite build
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 22 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/66
+Git commit: f2e879325818b0dd9ade2d5917071ea43a20b667
+
+The BLaDE code was missing some KEY_BLOCK CPP if guards. This caused
+the lite build to error out during compile time.
+
+The BLaDE test cases did not contain a ?blade block to skip the test
+if BLaDE isn't compiled in.
+
+Files Involved:
+source/blade_api/blade.F90
+source/blade_api/blade_coords.F90
+source/blade_api/blade_main.F90
+test/c45test/blade.inp
+test/c45test/blade_dynamics.inp
+
+------------------------------------------------------------------------------
+1.16 2019 to 2020 charmm toppar updates
+Developer: Alex MacKerell
+Institution: University of Maryland Baltimore
+Date: 23 July 2020
+
+Merge Request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/67
+Git commit: f5a8320cacb3975c5cdf1d967c27361913718266
+
+2019 to 2020 charmm toppar updates. see toppar_all.history for details
+added 'source/misc/fullkern.F90' to tool/cmake/fortran_files.F90
+
+Files Added:
+toppar/drude/drude_toppar_2019.tgz
+toppar/non_charmm/gromacs/charmm36-mar2019.ff.tgz
+
+Files Modified:
+toppar/par_all36_cgenff.prm
+toppar/par_all36_prot.prm
+toppar/par_all36m_prot.prm
+toppar/stream/carb/toppar_all36_carb_glycolipid.str
+toppar/stream/carb/toppar_all36_carb_imlab.str
+toppar/stream/lipid/toppar_all36_lipid_sphingo.str
+toppar/stream/na/toppar_all36_na_modifications.str
+toppar/stream/na/toppar_all36_na_rna_modified.str
+toppar/stream/prot/toppar_all36_prot_fluoro_alkanes.str
+toppar/stream/prot/toppar_all36_prot_modify_res.str
+toppar/stream/prot/toppar_all36_prot_na_combined.str
+toppar/top_all36_cgenff.rtf
+toppar/top_all36_prot.rtf
+toppar/toppar_all.history
+toppar/toppar_water_ions.str
+tool/cmake/fortran_files.F90
+
+Files Removed:
+toppar/drude/drude_toppar_2018_10.tgz
+
+------------------------------------------------------------------------------
+1.17 update for colfft+repdstr, new cuda, and new openmm
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 29 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/68
+Git commit: c662b0c8d93fee02a17aedc1aea9de46abd6dbba
+
+Updates to accommodate compiling repdstr with colfft, CUDA version 11,
+and OpenMM version > 7.4
+
+Files Added:
+tool/cmake/omm_avx_test.cpp
+
+Files Modified:
+CMakeLists.txt
+source/ltm/aaa_sanity_checks.F90
+source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+source/openmm/plugins/MonteCarloBarostat2/platforms/cuda/src/CudaCharmmKernels.cpp
+source/openmm/plugins/gbsw/CMakeLists.txt
+
+------------------------------------------------------------------------------
+1.18 fullkern fix for parallel runs
+Developer: Marco Pezzella
+Institution: Universität Basel
+Date: 30 July 2020
+
+test case test/c45test/fullkern_aco.inp failed for parallel mpi runs.
+
+Files Involved: source/misc/fullkern.F90
+
+------------------------------------------------------------------------------
+1.19 quick fix for gfortran 10
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 30 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/70
+Git commit: 7417bfe310f202fd47b1a874d1cf59fe8c114dee
+
+Compiling with GCC gfortran 10.1 and above leads to compile time errors due to two changes in the compiler's behavior.
+
+From the release notes:
+
+Mismatches between actual and dummy argument lists in a single file are now rejected with an error. Use the new option -fallow-argument-mismatch to turn these errors into warnings; this option is implied with -std=legacy. -Wargument-mismatch has been removed.
+
+The handling of a BOZ literal constant has been reworked to provide better conformance to the Fortran 2008 and 2018 standards. In these Fortran standards, a BOZ literal constant is a typeless and kindless entity. As a part of the rework, documented and undocumented extensions to the Fortran standard now emit errors during compilation. Some of these extensions are permitted with the -fallow-invalid-boz option, which degrades the error to a warning and the code is compiled as with older gfortran.
+
+Files Involved:
+CMakeLists.txt
+
+------------------------------------------------------------------------------
+1.20 Move new tests and update version
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 31 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/71
+Git commit: 03854886b3081b1717e56a9871899d0582729669
+
+The version number is updated to c46a1. Tests are moved into the correct folder according to the stable version in which they might first appear.
+
+Files Modified:
+source/ltm/version_ltm.F90
+test/test.com
+test/c44test/domdec_minimize.inp moved to test/c45test/domdec_minimize.inp
+test/c44test/readlpsin_rtf.inp moved to test/c45test/readlpsin_rtf.inp
+test/c45test/blade.inp moved to test/c46test/blade.inp
+test/c45test/blade_dynamics.inp moved to test/c46test/blade_dynamics.inp
+test/c45test/blade_energy.inp moved to test/c46test/blade_energy.inp
+test/c45test/dcm-ti.inp moved to test/c46test/dcm-ti.inp
+test/c45test/fftdock.inp moved to test/c46test/fftdock.inp
+test/c45test/fullkern_aco.inp moved to test/c46test/fullkern_aco.inp
+test/c45test/ms_cluster.inp moved to test/c46test/ms_cluster.inp
+test/c45test/omm_gbmvtest.inp moved to test/c46test/omm_gbmvtest.inp
+test/c45test/omm_msestest.inp moved to test/c46test/omm_msestest.inp
+test/c44test/omm_softcore.inp moved to test/c46test/omm_softcore.inp
+test/c45test/openmm_dock.inp moved to test/c46test/openmm_dock.inp
+test/c45test/triakern_heh2.inp moved to test/c46test/triakern_heh2.inp
+test/c45test/xtbd_nma.inp moved to test/c46test/xtbd_nma.inp
+
+
+------------------------------------------------------------------------------
+1.21 isnan fix for pgi fortran
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 31 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/72
+Git commit: d6698b513d99576b7fb569be7d266ad80cb49b57
+
+PGI fortran has no isnan, ieee_is_nan from the module ieee_arithmetic must be used.
+
+Files Involved: source/energy/extbond.F90
+
+------------------------------------------------------------------------------
+1.22 blade compile and dcm.doc -> dcm.info
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 6 August 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/74
+Git commit: 95c9a6b2f5248e7e9cde72723a750b40fdac406f
+
+Adding '-std=c++11' to NVCC sometimes causes problems when the host compiler is Intel.
+Blade needs GCC 8 or greater for error free compilation
+Blade's independent 'int main...' should not be compiled when CHARMM is compiled
+doc/dcm.doc is moved to doc/dcm.info
+
+Files Involved:
+
+CMakeLists.txt
+tool/cmake/blade_cxx_files.cmake
+doc/dcm.doc and doc/dcm.info
+
+------------------------------------------------------------------------------
+1.23 last minute test and build fixes
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 10 August 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/75
+Git commit: fdefb887909f38e47210089f6424a2455184e037
+
+1. add some --with-* docu
+2. do not run some tests in parallel
+3. increase gpu pressi tol to 0.002
+4. LJPME incompatibilities
+   - add warning about block and ljpme
+   - msldtest2 not compatible with ljpme builds
+5. compiling with intel compilers takes a really long time
+
+Files involved:
+1. configure
+2. tests not to be run in parallel updated
+test/c37test/omm_acetate.inp
+test/c37test/omm_dynam-vts.inp
+test/c37test/omm_dynamics.inp
+test/c37test/omm_exception.inp
+test/c37test/omm_modpsf.inp
+test/c37test/omm_nbexcl.inp
+test/c37test/omm_nbfix.inp
+test/c37test/omm_nonperiodic.inp
+test/c37test/omm_periodic.inp
+test/c37test/omm_restraints.inp
+test/c38test/omm_block-periodic.inp
+test/c38test/omm_block-periodic2.inp
+test/c38test/omm_block1.inp
+test/c38test/omm_fixed.inp
+test/c38test/omm_go-model.inp
+test/c38test/omm_lj-vts.inp
+test/c38test/omm_switch-nbfix.inp
+test/c38test/omm_switch.inp
+test/c38test/omm_switch14.inp
+test/c38test/omm_switchpair.inp
+test/c39test/omm_block_ti.inp
+test/c39test/omm_consdihetest.inp
+test/c39test/omm_dynamics_baro2.inp
+test/c39test/omm_resdtest.inp
+test/c40test/omm_ar-mmfp.inp
+test/c40test/omm_device.inp
+test/c40test/omm_ecomponent.inp
+test/c40test/omm_fastrepd.inp
+test/c40test/omm_gbsaobc_stream-test.inp
+test/c40test/omm_mmfpgeo.inp
+test/c41test/omm_block_coeff.inp
+test/c41test/omm_cphmdtest.inp
+test/c41test/omm_gbsw_membrane.inp
+test/c41test/omm_gbswtest.inp
+test/c46test/fullkern_aco.inp
+3. test/c43test/domdec_ips.inp
+4. LJPME incompatibilities
+CMakeLists.txt
+test/c39test/msldtest2.inp
+5. source/misc/msmmpt.F90
+
+------------------------------------------------------------------------------
+1.24 update test bin path for cmake builds
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 11 August 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/76
+Git commit: 311dd28235af21e5182622b13c2cf78161cd0659
+
+The paths for the charmm executable and qchem executable in test case scripts need to be updated to '../bin' to reflect the CMake install path instead of the deprecated install.com install path.
+
+Files Involved:
+test/c35test/mscale.inp
+test/c35test/qmmm_dgmm.inp
+test/c35test/qmmm_normal_modes.inp
+test/c36test/csatest.inp
+test/c36test/mscalepert.inp
+test/c36test/vibran_mscale.inp
+test/c37test/eds.inp
+
+------------------------------------------------------------------------------
+1.25 put subtests in data dir with suffix str
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 12 August 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/77
+Git commit: f1717a3590d0d6c5a352ee78d7c2513744746228
+
+c35test/mscale.inp and c36test/csatest.inp run other test cases that can't be run on their own. These subtests have been moved to the data directory and given the file extension 'str'. The change will prevent users and test.com from running these tests as if they were stand alone test cases.
+
+Files Involved:
+test/c35test/mscale.inp
+test/c36test/csatest.inp
+move test/c36test/csamin.inp to test/data/csamin.str
+move test/c35test/sys1.inp to test/data/sys1.str
+move test/c35test/sys2.inp to test/data/sys2.str
+move test/c35test/sys3.inp to test/data/sys3.str
+
+------------------------------------------------------------------------------
+1.26 Title: initialize name before passing to vinqre
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 14 August 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/78
+Git commit: 42b33fcaabfc3c113edbc5213d18a5285bb21049
+
+Description: Any time a title is read, valgrind complains
+because the 'name' argument passed to vinqre is not initialized.
+
+Files Involved:
+source/charmm/iniall.F90
+source/util/title.F90
+
+------------------------------------------------------------------------------
+1.27 fix info format docu
+Developer: Richard Venable
+Institution: NIH
+Date: 14 August 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/79
+Git commit: 62b6b9e02d4f3880d85030b2fe0cde77cece850a
+
+Fixes to the info formatting for two documentation files.
+
+Files Involved:
+doc/openmm.info
+doc/shapes.info
+
+==============================================================================
+[2] c46a2 Change Log
+
+    The following changes were committed from August 15, 2020 through
+February 15, 2021.
+
+------------------------------------------------------------------------------
+2.1 fix CudaRandom symbol not defined error for old versions of cmake
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 25 August 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/80
+Git commit: 6ff984fe0fbc953caee9887871d2e86c25eb9eb7
+
+Some older versions of cmake, if used to configure a build with domdec_gpu, would produce an error during compilation: symbol CudaRandom undefined.
+
+Sample input to reproduce the problem (or testcase): configure a domdec_gpu build with cmake 2.18 on a RedHat 6.9 system
+
+Files Involved: CMakeLists.txt
+
+Detailed description of fixes per each file:
+add '-DKEY_DOMDEC_GPU' to cmake variable nvcc_host_flags
+remove target_compile_definitions(charmm_cuda ... which doesn't work on older versions of cmake
+
+------------------------------------------------------------------------------
+2.2 move KEY_DOMDEC_GPU from nvcc host flags to add_definitions
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 22 Oct 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/81
+Git commit: dfdf62436a1c4f465aba2640db4b1d0e65a4cac3
+
+A developer reported truncated flags to the nvcc compiler.
+To resolve this issue, I have moved KEY_DOMDEC_GPU macro to
+the CMake add_definitions command.
+
+Files Involved:
+CMakeLists.txt
+
+Detailed description of fixes per each file:
+Move '-DKEY_DOMDEC_GPU=1' from 'set(nvcc_host_flags ...)' to a new 'add_definitions' call.
+
+------------------------------------------------------------------------------
+2.3 remove repdstr2 code
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 22 October 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/82
+Git commit: e652ee192fe388ba13917c6181221e8cf8945a4f
+
+REPDSTR has been substantially rewritten.
+The developer community has decided to go with the rewrite
+as the successor to the previous REPDSTR.
+The code for REPDSTR2 is removed to improve code maintainablity,
+decrease code complexity, and remove any potential source of
+confusion for users.
+
+prefx Keys: removed REPDSTR2 keyword
+
+Files Modified:
+doc/repdstr.info
+source/charmm/charmm_main.F90
+source/charmm/iniall.F90
+source/charmm/miscom.F90
+source/dynamc/cvio.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynio.F90
+source/energy/energy.F90
+source/ltm/aaa_sanity_checks.F90
+source/ltm/parallel_ltm.F90
+source/ltm/repdstr_ltm.F90
+source/machdep/machio.F90
+source/manip/rxcons_4.F90
+source/mc/mc.F90
+source/util/parse.F90
+source/util/title.F90
+tool/cmake/fortran_files.cmake
+
+Files Removed:
+source/ensemble/repd_ensemble.F90
+source/ensemble/repd_ensemble_ltm.F90
+source/ensemble/repdstr_2.F90
+
+------------------------------------------------------------------------------
+2.4 extension of SECS code
+    Developer: Rick Venable
+    Institution: NIH/NHLBI
+    Date: 8 Oct 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/83
+Git commit: 4ffa2fc3e79b9c0120bbae5403d5d6572b10fae7
+
+These changes extend the SECS analysis to include 3-10 and pi helices,
+in a manner analogous to alpha helices.
+An additional line is output by COOR SECS with statistics for
+the two added helix types.
+The SECS time series type was extended to 4 columns,
+to include the fraction of 3-10 and pi as the 3rd and 4th columns.
+Also, support for the STRICT keyword was added in CORREL,
+as part of the ENTER command.
+The permissions for test/triage.csh were also corrected.
+
+Files Modified:
+doc/corman.info
+doc/correl.info
+source/correl/anacor.F90
+source/correl/correl.F90
+source/manip/secstr.F90
+test/triage.csh
+
+------------------------------------------------------------------------------
+2.5 SECSTR test case, ref data updated, 2 bugs fixed
+    Developer: Rick Venable
+    Institution: NIH
+    Date: 29 October 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/84
+Git commit: 4e89c4e23de8d3657484b1947ec662ccd2ce0bf6
+
+Modification of the existing secstr.inp testcase
+to include the extension to check for 3-10 and pi helix types,
+and fix an existing bug in the script.
+Fixes a minor bug in secstr.F90 related to recent changes.
+
+Files Modified:
+source/manip/secstr.F90
+test/c33test/secstr.inp
+test/data/3adk-a.crd
+
+------------------------------------------------------------------------------
+2.6 Subroutine ENBIPS does not handle pairlist from BYCC
+    Developer: Xiongwu Wu
+    Institution: NIH, NHLBI
+    Date: 10 January 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/85
+Git commit: 7c0baa0b1e22b9b2e2f962f42bf5afa804990d53
+
+When pairlist is built with IMCUBE, subroutine ENBIPS does not handle it correctly.
+Sample input to reproduce the problem (or testcase):
+energy ips pxyz bycc
+
+Detailed description of fixes per each file:
+source/nbonds/enbips.F90: add #if KEY_IMCUBES==1 related statements
+source/nbonds/enbond.F90: add #if KEY_IMCUBES==1 related statements
+
+------------------------------------------------------------------------------
+2.7 fix tol for domdec_elec.inp; fix writing xyz traj files
+    Developer: Charlie Brooks (1) and Rick Venable (2)
+    Institution: University of Michigan (1) and NIH (2)
+    Date: 12 Jan 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/86
+Git commit: 98c273fb3da543312e8407859ce65b184a58cfc9
+
+1) the test case c37test/domdec_elec.inp has been failing
+2) xyz trajectory files are written with atom names truncated to one character as written, these one character atom names are not unique ie one character is not enough to identify the atom name
+
+Sample input to reproduce the problem (or testcase):
+1) test/c37test/domdec_elec.inp
+
+Detailed description of fixes per each file:
+1) change domdec_gpu test tolerance to 0.6 from 0.5
+2)in the subroutine WRXYZ, change
+WRITE(IUN,'(A1,1X,3E25.15)') ATYPE(I)(1:1)
+to
+WRITE(IUN,'(A2,1X,3E25.15)') ATYPE(I)(1:2)
+
+------------------------------------------------------------------------------
+2.8 GCC-10 compiler support in CHARMM
+    Developer: Milan Hodoscek
+    Institution: National Institute of Chemistry, Ljubljana, Slovenia
+    Date: 15 January 15 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/87
+Git commit: 09663e2871cef2cf874b24ac04d6f7248839afd3
+
+Some of the non-bonded data structure's NBNBD arrays are uninitialized before calling for the first time. Added the checks for such cases before the failing calls.
+During the debugging proces also some of the warning messages were fixed by replacing zeros with the corrected rank, eg 0 -> [0].
+
+Sample input to reproduce the problem (or testcase):
+Majority of test cases fail with the gcc-10 compiled CHARMM
+
+Description of fixes per each file:
+Some of the NBNBD non-bonded arrays are uninitialized before calling for the first time. Added the checks for such cases before the failing calls.
+
+------------------------------------------------------------------------------
+
+2.9 compile GAMESS version 30
+    Developer: Milan Hodoscek
+    Institution: National Institute of Chemistry, Ljubljana, Slovenia
+    Date: 15 January 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/88
+Git commit: a53c4d0c203f058692df996cd8fb1936e3b25803
+
+This is a new support in CHARMM in order to compile GAMESS version 30 SEP 2020 (R2). A new GAMES compilation scheme does not need the precompiler - actvte.f step anymore, so it is deleted from tool directory.
+
+Files Modified:
+tool/gmscomp
+doc/gamess.info
+
+Files Removed:
+tool/actvte-t3e.f
+tool/actvte.f
+
+------------------------------------------------------------------------------
+2.10 do not run omm_softcore.inp in parallel; remove source/solvation/msm.F90 from source files
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 1 Feb 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/89
+Git commit: 22c70a92e251cecc44f0086d7e953318a44d3660
+
+1) A source file that does not exist was accidentally added to tool/cmake/fortran_files.cmake
+causing cmake to error out
+
+2)the test case test/c46test/omm_softcore.inp should not be run in parallel; it produces a DECODEF error in this case.
+
+Sample input to reproduce the problem:
+2) test/c46test/omm_softcore.inp
+
+Files Involved:
+1) tool/cmake/fortran_files.cmake
+2) test/c46test/omm_softcore.inp
+
+Detailed description of fixes per each file:
+1) remove source/solvation/msm.F90 from the next to last line of the file
+2) add the following near the top of the file
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+------------------------------------------------------------------------------
+2.11 initialize some strings before passing to other procedures
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 3 Feb 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/90
+Git commit: 18ca07cce0244a510fbc38a1839b74a123a7bdc2
+
+The profiler valgrind complains about a couple of uninitialized strings.
+Sample input to reproduce the problem (or testcase):
+valgrind ../bin/charmm -i c39test/emaprestraint.inp
+
+Files Involved:
+source/emap/emapsubs.F90
+source/util/title.F90
+
+Detailed description of fixes per each file:
+source/emap/emapsubs.F90
+initialize fname to ' ' on line 826 of the routine emaprest
+
+source/util/title.F90
+initialize name to ' ' on line 348 of the routine CLOLGU
+
+------------------------------------------------------------------------------
+2.12 cdocker adjustable hydrogen bond grids
+     Developer: Yujin Wu
+     Institution: University of Michigan
+     Date: 19 January 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/91
+Git commit: 79f03a4ebb014eed685e1b5753fa032cee9b60d1
+
+cdocker improvements:
+Added a hydrogen bond grid for docking in both cpu and gpu.
+Made the grid adjustable (rcta rctb hmax).
+
+Files Modified:
+source/energy/energy.F90
+source/energy/energym.F90
+source/energy/eutil.F90
+source/energy/intere.F90
+source/energy/printe.F90
+source/fftdock/GPUGridPot.cu
+source/fftdock/fftdock.F90
+source/fftdock/openmm_dock.F90
+source/mc/mcener.F90
+source/misc/genetic.F90
+source/misc/grid_dock.F90
+
+------------------------------------------------------------------------------
+2.13 several BLaDE fixes
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: 2021-02-05
+
+Implemented a functional interface for BLaDE. BLaDE is a basic lambda dynamics engine for running MSLD and MD simulations fully on a GPU. The interface was modified to allow running on multiple GPUs and adjustments were made to several input guards. Test cases were updated and documentation introduced.
+
+Files Added:
+test/c46test/blade_msld.inp
+doc/blade.info
+source/blade/CompileIntel.sh
+
+Files Modified:
+doc/commands.info
+doc/dynamc.info
+source/blade/src/CMakeLists.txt
+source/blade/src/holonomic/holonomic.cu
+source/blade/src/io/control.cxx
+source/blade/src/io/io.cxx
+source/blade/src/main/blade.cxx
+source/blade/src/main/real3.h
+source/blade/src/msld/msld.cu
+source/blade/src/msld/msld.h
+source/blade/src/system/parameters.cxx
+source/blade/src/system/potential.cxx
+source/blade/src/system/state.cxx
+source/blade/src/system/structure.cxx
+source/blade/src/system/system.cxx
+source/blade/test/T4L_peptide/input
+source/blade/test/ec2acc/input
+source/blade_api/blade.F90
+source/blade_api/blade_coords.F90
+source/blade_api/blade_main.F90
+source/blade_api/dynamics.cxx
+source/pert/lambdadyn.F90
+test/c30test/mmfp_test5.inp
+test/c46test/blade_dynamics.inp
+test/c46test/blade_energy.inp
+test/data/prep14benz/full_ligand.prm
+test/data/prep14benz/par_all36_msld.prm
+
+Files Removed: test/c46test/blade.inp
+
+------------------------------------------------------------------------------
+2.14 charmm as shared object with python interface
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 11 Feb 2021
+
+Pycharmm is a python package for the pip package manager.
+Pycharmm implements a thin API for calling CHARMM routines from python.
+In many cases, a python module corresponds to a single command in charmm script.
+Pycharmm requires CHARMM to be compiled as a shared library rather than a binary.
+A new API has been implemented in Fortran for pycharmm functions to call.
+
+prefx Keys: KEY_LIBRARY
+
+Files Added:
+doc/pycharmm.info
+source/api/Dict.cpp
+source/api/Dict.h
+source/api/api_charmm_file.F90
+source/api/api_cons_fix.F90
+source/api/api_cons_harm.F90
+source/api/api_coor.F90
+source/api/api_crystal.F90
+source/api/api_custom.F90
+source/api/api_dynamics.F90
+source/api/api_energy.F90
+source/api/api_eval.F90
+source/api/api_func.F90
+source/api/api_generate.F90
+source/api/api_ic.F90
+source/api/api_image.F90
+source/api/api_init.F90
+source/api/api_minimize.F90
+source/api/api_nbonds.F90
+source/api/api_param.F90
+source/api/api_pbound.F90
+source/api/api_psf.F90
+source/api/api_read.F90
+source/api/api_scalar.F90
+source/api/api_select.F90
+source/api/api_shake.F90
+source/api/api_stream.F90
+source/api/api_types.F90
+source/api/api_util.F90
+source/api/api_write.F90
+source/api/charmm.h
+source/api/fict.f90
+source/energy/exporte.F90
+source/minmiz/minmiz_util.F90
+source/rxncor/lupcns.F90
+test/c46test/omm_minimize.inp
+tool/pycharmm/.gitignore
+tool/pycharmm/LICENSE
+tool/pycharmm/README.md
+tool/pycharmm/pycharmm/__init__.py
+tool/pycharmm/pycharmm/atom_info.py
+tool/pycharmm/pycharmm/charmm_file.py
+tool/pycharmm/pycharmm/cons_fix.py
+tool/pycharmm/pycharmm/cons_harm.py
+tool/pycharmm/pycharmm/convert.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/pycharmm/dynamics.py
+tool/pycharmm/pycharmm/energy.py
+tool/pycharmm/pycharmm/energy_func.py
+tool/pycharmm/pycharmm/fict.py
+tool/pycharmm/pycharmm/generate.py
+tool/pycharmm/pycharmm/ic.py
+tool/pycharmm/pycharmm/image.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/lingo.py
+tool/pycharmm/pycharmm/minimize.py
+tool/pycharmm/pycharmm/nbonds.py
+tool/pycharmm/pycharmm/param.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/read.py
+tool/pycharmm/pycharmm/scalar.py
+tool/pycharmm/pycharmm/script.py
+tool/pycharmm/pycharmm/select.py
+tool/pycharmm/pycharmm/select_atoms.py
+tool/pycharmm/pycharmm/settings.py
+tool/pycharmm/pycharmm/shake.py
+tool/pycharmm/pycharmm/write.py
+tool/pycharmm/setup.py
+tool/pycharmm/tests/aldidpep_build.inp
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/data/par_all22_prot.inp
+tool/pycharmm/tests/data/par_all36_prot.prm
+tool/pycharmm/tests/data/sodium_oxygen_nbfixes.prm
+tool/pycharmm/tests/data/top_all22_prot.inp
+tool/pycharmm/tests/data/top_all36_prot.rtf
+tool/pycharmm/tests/data/water_ions.prm
+tool/pycharmm/tests/data/water_ions.rtf
+tool/pycharmm/tests/data/ws.psf
+tool/pycharmm/tests/data/ws0.pdb
+tool/pycharmm/tests/testCrystalImage.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testDynamics.py
+tool/pycharmm/tests/testSelect.py
+tool/pycharmm/tests/testUserE.py
+tool/pycharmm/tests/test_charmm.py
+tool/pycharmm/tests/test_select.py
+tool/pycharmm/tests/toppar/par_all22_prot.inp
+tool/pycharmm/tests/toppar/par_all36_prot.prm
+tool/pycharmm/tests/toppar/radii_c36gbmvop.str
+tool/pycharmm/tests/toppar/top_all22_prot.inp
+tool/pycharmm/tests/toppar/top_all36_prot.rtf
+tool/pycharmm/tests/toppar/toppar_water_ions.str
+
+Files Modified:
+CMakeLists.txt
+configure
+doc/minimiz.info
+doc/openmm.info
+source/blade_api/blade.F90
+source/blade_api/blade_coords.F90
+source/blade_api/blade_main.F90
+source/charmm/charmm_main.F90
+source/charmm/iniall.F90
+source/charmm/miscom.F90
+source/correl/anacor.F90
+source/correl/rdfsol.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/dynamc/dynsub.F90
+source/dynamc/nose.F90
+source/dynamc/tamd.F90
+source/energy/energy.F90
+source/energy/eutil.F90
+source/energy/intere.F90
+source/gener/genpsf.F90
+source/gener/modpsf.F90
+source/gener/psfsum.F90
+source/gener/repdstr.F90
+source/image/crystal.F90
+source/image/images.F90
+source/image/upimag.F90
+source/image/xtlfrq.F90
+source/io/mainio.F90
+source/io/parmio.F90
+source/io/trajio.F90
+source/ltm/exfunc_ltm.F90
+source/manip/corman.F90
+source/manip/cstran.F90
+source/mc/mcma.F90
+source/mc/mcmini.F90
+source/minmiz/abner.F90
+source/minmiz/conjug.F90
+source/minmiz/egrad1.F90
+source/minmiz/minmiz.F90
+source/minmiz/nraph.F90
+source/minmiz/steepd.F90
+source/misc/distrib.F90
+source/misc/fitcharge.F90
+source/misc/freene_calc.F90
+source/misc/nmr.F90
+source/misc/pbeq.F90
+source/misc/testch.F90
+source/mscale/mscale.F90
+source/nbonds/helpme_wrapper.F90
+source/nbonds/nbonds.F90
+source/openmm/omm_main.F90
+source/pert/epert.F90
+source/pert/icpert.F90
+source/pert/puic.F90
+source/pipf/pfdyn.F90
+source/rxncor/adiab.F90
+source/rxncor/lupopt.F90
+source/solvation/rism.F90
+source/util/parse.F90
+source/util/random.F90
+source/util/title.F90
+source/zerom/zerom1.F90
+tool/cmake/cxx_files.cmake
+tool/cmake/fortran_files.cmake
+tool/cmake/prefx_keywords.cmake
+
+------------------------------------------------------------------------------
+2.15 mmfp bias and theta biasing for msld
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: 16 Sept 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/94
+Git commit: c951243f080fdd24b614e52080b50542cc4682c0
+
+1. mmfp bias
+
+Add an option to GEO command: AANGLE 3 X atom_selection
+AANGLE keyword Restrains the angle between two axes, much like the ANGLE keyword. The vector from the first to second selection and the vector from the third to fourth selection form two axes, and the angle between them is restrained.
+
+See doc/mmfp.info
+
+2. theta biasing for msld
+
+New block subcommand THBV: THBV real
+
+THBV uses theta biasing during MSLD theta dynamics to reduce the amount of time spent sampling alchemical intermediates which allows simulations with increased numbers of substituents
+
+THBV COEF will set the coefficient of the bias to the number COEF. kT is generally a good choice. The potential is given by
+
+    nhigh(s) = sum((0.5*sin(theta(s,i))+0.5)**2,i)
+    nlow(s) = sum((-0.5*sin(theta(s,i))+0.5)**2,i)
+    V = sum(0.5*COEF*((nhigh(s)-1)**2+(nlow(s)-nsub(s)+1)**2),s)
+
+where s and i are site and substituent indices, respectively.
+
+See doc/block.info
+
+Files Modified:
+doc/mmfp.info
+source/misc/mmfp.F90
+doc/block.info
+source/nbonds/nbexcl.F90
+source/pert/block.F90
+source/pert/lambdadyn.F90
+
+------------------------------------------------------------------------------
+2.16 allow goto inside 'if' for repdstr with wnrdie -3
+     Developer: Ryan Hayes
+     Institution: University of Michigan
+     Date: 17 Sept 2020
+
+Adjusted multisite lambda dynamics variable biasing replica exchange (which uses goto statements inside if blocks) to work with repd. This required only throwing a -3 bomb when gotos were encountered rather than setting a flag to alter charmm's parsing of if blocks.
+
+Files Modified: source/charmm/miscom.F90
+
+------------------------------------------------------------------------------
+2.17 several new features for the emap module
+     Developer: Xiongwu Wu
+     Institution: NIH
+     Date: 4 March 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/96
+Git commit: 582039c3f9bd751ac9d1e09407a4059ec040b7b9
+
+1. Add map initiation for map generation from PDB files.
+2. Add options to allow selective rotation about x, y, z axis in
+   many-body Monte Carlo motion.
+4. FMAP generation to allow net charges in molecules.
+5. Set limit for map objects to move.
+6. Update data/tcr.pdb file for changes in emapsubs.F90 RDSEGID
+
+Files Modified:
+source/emap/emapdock.F90
+source/emap/emapfield.F90
+source/emap/emapop.F90
+source/emap/emapsubs.F90
+test/data/tcr.pdb
+
+------------------------------------------------------------------------------
+2.18 backward compatible cdocker grids, test cases for h bond grids
+     Developer: Yujin Wu
+     Institution: University of Michigan
+     Date: 22 February 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/97
+Git commit: b3ceccf310e3d41d413309f2da5e22aaf042857f
+
+Both CPU and GPU cdocker will generate grid files with 2 hydrogen bond grids
+present by default.
+
+In CPU cdocker, one could use the flag "nohg", which stands for
+"no hydrogen bond grids", to calculate grid files without these
+2 hydrogen bond grids and read in grid files generated by previous
+CHARMM version.
+
+GPU cdocker will always generate these 2 hydrogen bond grids.
+
+If a user wants CPU only for cdocker, they must add the keyword "nohg"
+to the CHRMM script.
+
+The previous grid file formats are not compatible with CDOCKER running on GPU.
+But one could quickly regenerate the grids and run docking
+with the same scripts.
+
+Another new keyword "grhb" has been added (grid hydrogen bond energy).
+If a user specifies "grhb" then cdocker (both cpu and gpu)
+will use hydrogen bond grids for energy calculations.
+If this keyword is not specified, then by default,
+cdocker (both cpu and gpu) will not use the hydrogen bond grids for
+energy calculations.
+
+Test cases for these features have been added.
+
+Files Added:
+test/c46test/cpu_cdocker_h_1.inp
+test/c46test/cpu_cdocker_h_2.inp
+test/c46test/openmm_dock_h.inp
+test/data/grid_3ptb_h.ascii
+test/data/methanol.ascii
+test/data/methanol.pdb
+test/data/methanol.str
+test/data/probes_c36prot-cgenff.prm
+test/data/probes_c36prot-cgenff.rtf
+
+Files Modified:
+source/fftdock/GPUGridPot.cu
+source/fftdock/fftdock.F90
+source/fftdock/openmm_dock.F90
+source/misc/grid_dock.F90
+test/c28test/grid_2.inp
+
+------------------------------------------------------------------------------
+2.19 fix shakef error for c41test/dhdgb_dyna.inp
+     Developer: Michael Feig
+     Institution: Michigan State University
+     Date: 23 February 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/98
+Git commit: 17e0f2bba7a050b96af6851fe029f65c4070bdc3
+
+The test case test/c41test/dhdgb_dyna.inp ends in a segfault after an error about 'force resetting' from the SHAKEF subroutine.
+
+Sample input to reproduce the problem (or testcase):
+test/c41test/dhdgb_dyna.inp
+
+Files Involved:
+source/energy/gbmvmodule.F90
+
+Detailed description of fixes per each file:
+test/c41test/dhdgb_dyna.inp
+diff --git a/source/energy/gbmvmodule.F90 b/source/energy/gbmvmodule.F90
+index 33355800f..5edc1bd37 100644
+--- a/source/energy/gbmvmodule.F90
++++ b/source/energy/gbmvmodule.F90
+@@ -3788,6 +3788,10 @@ contains
+              ENDDO
+              SUP(NDT_FHDGB+1)=SUP(1)
+              SLO(NDT_FHDGB+1)=SLO(1)
++
++             SUP(INCT_FHDGB)=SUP(1)
++             SLO(INCT_FHDGB)=SLO(1)
++
+              CALL FIND_DEF_ENER(UN_FHDGB,CIRCLERAD,SUP, &
+                                  THETAZ, &
+                                  DEF_ENERUP,DE_UP, &
+@@ -9679,7 +9683,6 @@ use dhdgb,only:MATHICK_FHDGB,MITHICK_FHDGB,MITHICK_FHDGB
+          ENDDO
+         ENDDO
+        ENDDO
+-       CLOSE(LU)
+       ENDIF ERRORCHECK
+      ELSE
+ !IF QSMALL
+
+------------------------------------------------------------------------------
+2.20 mcbarostat2 plugin linking and two tests to skip
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 28 Feb 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/99
+Git commit: 41f43579bb3d9394aa9777cedfaa4635913826dd
+
+1. test/c36test/test_drude.inp
+
+The energy reported during this test in parallel blows up (sometimes to NaN) because of harmonic constraints. So the test is now skipped in parallel.
+
+2. test/c46test/openmm_dock_h.inp
+
+This test must be skipped if openmm is not present and during parallel runs.
+
+3. source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+
+The CHARMM OpenMM plugin MonteCarloBarostat2 is not linked with CUDA or OpenCL OpenMM plugins at link time. This can result in 'symbol not found' errors during runtime for test/c39test/omm_dynamics_baro2.inp
+
+Sample input to reproduce the problem (or testcase):
+1. test/c36test/test_drude.inp
+2. test/c46test/openmm_dock_h.inp
+3. test/c39test/omm_dynamics_baro2.inp
+
+Files Involved:
+1. test/c36test/test_drude.inp
+2. test/c46test/openmm_dock_h.inp
+3. source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+
+Detailed description of fixes per each file:
+1. test/c36test/test_drude.inp
+```
+--- a/test/c36test/test_drude.inp
++++ b/test/c36test/test_drude.inp
+@@ -1,6 +1,13 @@
+ * DRUDE model protein test case
+ *
+
++if ?numnode .ne. 1 then
++ echo "Test NOT performed in parallel."
++ echo "WARNING: In parallel, this test shows that"
++ echo "the energy blows up because of the harmonic constraint."
++ stop
++endif
++
+ stream datadir.def
+ set charmmversion c36a5
+ set minimize yes   !perform energy minimization
+```
+
+2. test/c46test/openmm_dock_h.inp
+```
+--- a/test/c46test/openmm_dock_h.inp
++++ b/test/c46test/openmm_dock_h.inp
+@@ -1,9 +1,24 @@
+-* openmm_dock_h.inp
++* openmm_dock_h.inp
+ * This is used for test hydrogen bond grids in gpu CDOCKER.
+ * Created by Yujin Wu (wyujin_at_umich.edu)
+ * at 2021/02/19
+ *
+
++if ?fftdock .ne. 1 then
++   echo "Test NOT performed. FFTDOCK must be defined in pref.dat"
++   stop
++endif
++
++if ?openmm .ne. 1 then
++   echo "Test NOT performed. OPENMM must be defined in pref.dat"
++   stop
++endif
++
++if ?numnode .ne. 1 then
++ echo "Test NOT performed in parallel."
++ stop
++endif
++
+ stream datadir.def
+
+ !! Read the topology and parameter files
+```
+
+3. source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+```
+--- a/source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
++++ b/source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+@@ -60,8 +60,11 @@ if(CUDA_FOUND)
+       ${CUDA_TOOLKIT_ROOT_DIR}/lib/libcuda.dylib)
+     set_property(TARGET mcbarostat2CUDA
+       PROPERTY MACOSX_RPATH ON)
++  else()
++    target_link_libraries(mcbarostat2CUDA
++      ${OPENMM_LIBRARIES}
++      ${OPENMM_PLUGIN_DIR}/libOpenMMCUDA.so)
+   endif()
+-
+   set(MCBAROSTAT2_TARGS ${MCBAROSTAT2_TARGS} mcbarostat2CUDA)
+ endif(CUDA_FOUND)
+
+@@ -88,6 +91,11 @@ if(OpenCL_FOUND)
+       ${OpenCL_LIBRARY})
+     set_property(TARGET mcbarostat2OpenCL
+       PROPERTY MACOSX_RPATH ON)
++  else()
++    target_link_libraries(mcbarostat2OpenCL
++      ${OPENMM_LIBRARIES}
++      ${OPENMM_PLUGIN_DIR}/libOpenMMOpenCL.so
++      ${OpenCL_LIBRARY})
+   endif()
+   set(MCBAROSTAT2_TARGS ${MCBAROSTAT2_TARGS} mcbarostat2OpenCL)
+ endif()
+``` 
+
+==============================================================================
+[3] c46b1 Change Log
+
+     At the 2021 CHARMM meeting (Michigan State, virtual, July 16-17, 2021),
+we decided to release CHARMM c46b1 incorporating enhancements and fixes
+from the developmental c46a1 and c46a2 versions into the stable version.
+
+The c46b1 release includes the following enhancements and fixes from the
+developmental versions c46a1 and c46a2 during the development period of
+August 15, 2020 through August 15, 2021. These have been added to the
+stable version c45b2 to create the stable version c46b1.
+
+3.1 remove the name of a harvard server from the documentation
+    Developer: Victor Ovchinnikov & Josh Buckner
+    Institution: Harvard & University of Michigan
+    Date: 12 March 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/47
+Git commit: c40f4c529d1e02bb01dcdafb9a5b84e9da95aae9
+
+A server at Harvard was named several times in the documentation
+Sample input to reproduce the problem (or testcase): doc/install.info
+Files Involved:
+
+doc/block.info
+doc/cadpac.info
+doc/changelog.info
+doc/install.info
+doc/pnm.info
+
+------------------------------------------------------------------------------
+3.2 remove repdstr2 code
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 22 October 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/48
+Git commit: ac64df895ece9119da58ebb7f7fff0a4c040072b
+
+REPDSTR has been substantially rewritten. The developer community has decided to go with the rewrite as the successor to the previous REPDSTR. The code for REPDSTR2 is removed to improve code maintainablity, decrease code complexity, and remove any potential source of confusion for users.
+
+Prefx keys: removed REPDSTR2 keyword
+
+Files added: none
+
+Files modified:
+doc/repdstr.info
+source/charmm/charmm_main.F90
+source/charmm/iniall.F90
+source/charmm/miscom.F90
+source/dynamc/cvio.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynio.F90
+source/energy/energy.F90
+source/ltm/aaa_sanity_checks.F90
+source/ltm/parallel_ltm.F90
+source/ltm/repdstr_ltm.F90
+source/machdep/machio.F90
+source/manip/rxcons_4.F90
+source/mc/mc.F90
+source/util/parse.F90
+source/util/title.F90
+tool/cmake/fortran_files.cmake
+
+Files removed:
+source/ensemble/repd_ensemble.F90
+source/ensemble/repd_ensemble_ltm.F90
+source/ensemble/repdstr_2.F90
+
+------------------------------------------------------------------------------
+3.3 Minimization using openmm
+    Developer: Charles L. Brooks III
+    Institution: University of Michigan
+    Date: 11 February 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/49
+Git commit: 203409423a14c0795a15d63f7d53f78920b2ea30
+
+Minimize can take the omm option. In this case, minimization is done on a device using Openmm.
+
+prefx Keys: no change
+
+Files Added:
+test/c46test/omm_minimize.inp
+
+Files Modified:
+source/minmiz/minmiz.F90
+source/openmm/omm_main.F90
+
+Files Removed: none removed
+
+------------------------------------------------------------------------------
+3.4 Biovia patches: domdec gpuid; call imcent if qcenter
+    Developer: Josh Buckner, David Zhang, and Rohith Mohan
+    Institution: University of Michigan and Biovia
+    Date: 7 June 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/50
+Git commit: 1009df0e8c97684789627fc8fc3a89ffa2842000
+
+1. If the domdec keyword gpuid is set to -1 or not specified, pick the gpu with highest compute number and then most processors available from the environment variable CUDA_VISIBLE_DEVICES. Otherwise, if gpuid is specified as n, pick the n-th gpu available from the environment variable CUDA_VISIBLE_DEVICES.
+
+2. Allow the output DCD to be processed and recentered around (0,0,0) for solvated systems when running through OpenMM. In terms of the actual code, it's a minor change that moves an IMCENT call outside the scope of an if statement so that recentering to a null selection can occur (in the MERGEO subroutine in dynasub.F90).
+
+Prefx keys: no change
+
+Files added: none added
+
+Files modified:
+source/domdec/domdec.F90 (1)
+source/domdec/domdec_gpu.cu (1)
+source/domdec_gpu/cuda_utils.cu (1)
+source/domdec_gpu/cuda_utils.h (1)
+source/dynamc/dynsub.F90 (2)
+
+Files Removed: none removed
+
+------------------------------------------------------------------------------
+3.5 Several new features for the emap module
+    Developer: Xiongwu Wu
+    Institution: NIH
+    Date: 4 March 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/51
+Git commit: 8d0fbd025d26f51f4c140dfb3d05811f8420499c
+
+Add map initiation for map generation from PDB files.
+Add options to allow selective rotation about x, y, z axis in many-body Monte Carlo motion.
+FMAP generation to allow net charges in molecules.
+Set limit for map objects to move.
+Update data/tcr.pdb file for changes in emapsubs.F90 RDSEGID
+
+Prefx keys: no change
+
+Files added: none added
+
+Files modified:
+source/emap/emapdock.F90
+source/emap/emapfield.F90
+source/emap/emapop.F90
+source/emap/emapsubs.F90
+test/data/tcr.pdb
+
+Files removed: none removed
+
+------------------------------------------------------------------------------
+3.6 Double exponential (DE) potential for VDW interaction
+    Developer: Xiongwu Wu
+    Institution: NIH
+    Date: 9 July 2020
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/52
+Git commit: 22db213c06b0907dc43f12916b73d325bc1d3113
+
+This development implements the double exponential (DE) potential for VDW interaction. DE has a flexible shape that can be adjusted by four parameters. Two exponential parameters define the shape of repulsive and attractive interactions, and two well parameters define the depth and position of the potential well. DE has a faster covergency than Lennard-Jones potential which allows shorter cutoff to speed up calculation. DE has a softcore that's convenient for free energy calculation. Current implementation comes with the isotropic periodic sum (IPS) term to include long-range interaction.
+
+Prefx keys: NBIPS
+
+Files added: test/c46test/dbexp_test.inp
+
+Files removed: none
+
+Files modified:
+source/nbonds/enbips.F90
+source/nbonds/nbips_ltm.F90
+doc/nbonds.info
+
+------------------------------------------------------------------------------
+3.7 Distributed Charge Model (DCM)
+    Developer: Mike Devereux, Oliver Unke, Eric Michoulier and Markus Meuwly
+    Institution: University of Basel
+    Date: 13 February 2019
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/53
+Git commit: 83860ec63f4eb9a2e2a5fafe8ee7434cb9c01145
+
+Added the DCM command to allow the use of the Distributed Charge Model to
+compute the electrostatic energy and force. See doc/dcm.doc for details.
+
+Files added:
+doc/dcm.info
+source/nbonds/dcm.F90
+test/c46test/dcm-ti.inp
+test/data/dcm-charge-coords.xyz
+test/data/lambda_0.0.dcm
+test/data/lambda_1.0.dcm
+test/data/sphere37.crd
+test/data/top_wat_chb_dcm.inp
+test/data/wat512-1.pdb
+test/data/wat512.pdb
+test/data/water-wpolwq.par
+test/data/water.solute.pdb
+test/data/zeroed.top
+
+Files modified:
+source/charmm/miscom.F90
+source/energy/energy.F90
+source/energy/printe.F90
+source/gener/genpsf.F90
+source/image/eimage.F90
+source/image/upimag.F90
+source/nbonds/enbond.F90
+source/nbonds/ewald.F90
+source/nbonds/ewaldf.F90
+source/nbonds/nbonds.F90
+source/nbonds/pme.F90
+source/pert/epert.F90
+source/pert/pert.F90
+source/util/new_timer.F90
+
+------------------------------------------------------------------------------
+3.8 fftdock and openmm_dock
+    Developers: Xinqiang Ding
+    Institution: University of Michigan
+    Date: December 22, 2017
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/54
+Git commit: bb1abdfd6a88273ff5200ac621c601d22317c840
+
+fftdock
+Fast Fourier transform (FFT) algorithm has been successfully used for rigid
+protein-protein docking. The basic idea is as the following. The interaction
+energy between two proteins (in fixed orientations) for all possible relative
+positions can be formulated as a cross correlation function between two 3
+dimenstional grid, each of which can be calculated based of a protein's
+structure. The FFT algorithm can be used to greatly accelerate the calculation
+of the cross correlation function. Here the same idea is adapted for protein-
+ligand docking. Given a protein structure, potential grids can be calculated
+around the ligand binding pocket (See grid.doc for further information). Given
+a ligand with a fixed conformation and a fixed orientation, similar grid be
+calculated. Then the FFT algorithm is used to calculate interaction energies
+between the proteina and ligand for all possible translations of the ligand
+inside the binding pocket. The FFT calculation for multiple ligand orientations
+are parallized on graphic processing units (GPUs).
+(see fftdock.doc for examples of commands)
+
+openmm_dock
+This routine is for flexible protein-ligand docking, in which both the ligand
+and part of the protein (usually the amino acid side chains around the binding
+pocket) are flexible. The remaining part of the system is fixed. Simulated
+anneling is used to search for low energy  conformations. To accelerate the
+search, three tricks are used:
+The nonbonded interaction between the flexible part and the fixed part are
+calculated and stored using grid potentials, as the dock.src does.
+The flexible part of the system is copied for multiple times. The simulated
+annealing can be run simultaneously for these copies. Copies of the
+flexible part do not interact with each other.
+An OpenMM system is used for the simulated annealing, which makes it run
+on GPUs.
+(see openmm_dock.doc for examples of commands)
+
+Prefx keys: FFTDOCK
+
+Files added:
+doc/fftdock.info
+doc/openmm_dock.info
+source/fftdock
+source/fftdock/batchFFT.cu
+source/fftdock/fftdock.F90
+source/fftdock/openmm_dock.F90
+test/c46test/fftdock.inp
+test/c46test/openmm_dock.inp
+test/data/benzene.pdb
+test/data/benzene.stream
+test/data/fft_dock_grid.txt
+test/data/openmm_dock_grid.txt
+test/data/t4l.pdb
+
+Files modified:
+CMakeLists.txt
+configure
+install.com
+source/charmm/charmm_main.F90
+source/misc/grid_dock.F90
+source/openmm/omm_bonded.F90
+source/openmm/omm_main.F90
+test/c43test/pmel.inp
+test/c43test/pmelex.inp
+tool/cmake/prefx_keywords.cmake
+
+------------------------------------------------------------------------------
+3.9 Bug fixes back ported from dev-release for Summer 2021
+
+Developers:
+Josh Buckner
+Kai Töpfer
+Xiping Gong
+Arjan van der Vaart
+
+Institutions:
+University of Michigan
+University of Basel
+Univeristy of Massachusetts
+University of South Florida
+
+Date: 16 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/55
+Git commit: 469f346f43e64df0920c4ce8563679e1d013b0bc
+
+1. When using GCC 10 for a domdec_gpu or blade build, there are lots of 'undefined' errors for functions compiled by the C++ compiler but called by code in .cu files (code compiled by nvcc). Adding the flag '-std=c++11' to the C++ compiler flags fixes the problem.
+
+2. Indexing error produces wrong electrostatic potential that lead to potential jumps at certain system conformation.
+
+3. segfault resolved by optimizing sccdftb code at -O1 and changing some arrays to allocatable
+
+4. For OpenMM 7.5, exclusion tiles must be int2 and cannot be ushort2, and the GCC implementation of OpenMP throws an error for line 633 of source/nbonds/colfft_func.inc
+
+5. Issue in block that Eelec was not scaled properly when using vdwa or vdwr, and vdw scaling was ignored when both vdwa and vdwr are set to the same value
+
+Sample input to reproduce the problem (or testcase):
+1. compile time problem
+2. intermittent problem; see description
+3. test/c30test/alanine_scc.inp
+4. test/c41test/omm_gbswtest.inp
+
+Files Involved:
+1. CMakeLists.txt
+2. source/nbonds/mtpl.src
+3. Files:
+CMakeLists.txt
+source/sccdftbint/sccdftbsrc/eglcao.F
+source/sccdftbint/sccdftbsrc/shift.f
+4. Files:
+source/openmm/plugins/gbmv/platforms/cuda/CMakeLists.txt
+source/openmm/plugins/gbmv/platforms/cuda/CudaGBMVKernels.cpp
+source/openmm/plugins/gbmv/platforms/cuda/kernels/gbmv1.cu
+source/openmm/plugins/gbsw/platforms/cuda/CudaGBSWKernels.cpp
+source/openmm/plugins/gbsw/platforms/cuda/kernels/gbsw1.cu
+source/nbonds/colfft_func.inc
+5. Files:
+source/nbonds/enbaexp_subr_expand.inc
+source/nbonds/enbfast.F90
+source/pert/block.F90
+
+------------------------------------------------------------------------------
+3.10 Fix LJPME with MSLD and BLOCK
+     Developer: Andy Simmonett
+     Institution: NIH
+     Date: 7/8/21
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/56
+Git commit: 788119a9dd2501cdabefa398b2ca5c3ffd0dc8e0
+
+The original LJPME implementation in DOMDEC only covered the non-BLOCK case, causing problems for binaries that compiled in LJPME and BLOCK, while activating the latter within a DOMDEC run. This patch makes the necessary real space fixes in DOMDEC, while also implementing the reciprocal space terms in COLFFT to permit LJPME to be activated in jobs that also use BLOCK. The LJPME test cases previously submitted assumed that DOMDEC was activated at compile time; this patch also relaxes this requirement.
+
+Sample input to reproduce the problem (or testcase): test/c39test/msldtest2.inp
+
+Files Involved:
+source/domdec/enb_core.F90
+source/energy/energy_util.F90
+source/nbonds/colfft.F90
+source/nbonds/colfft_func.F90
+source/nbonds/colfft_func.inc
+source/nbonds/colfft_kernel_precision.inc
+source/nbonds/pme.F90
+test/c45test/ljpme_argon_kappa_sweep.inp
+test/c45test/ljpme_cutoff_continuity_checks.inp
+test/c45test/ljpme_dhfr_energy_test.inp
+test/c45test/ljpme_domdec_solvent_solute.inp
+test/c39test/msldtest2.inp
+
+------------------------------------------------------------------------------
+3.11 Update build process for anaconda openmm
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 3 March 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/57
+Git commit: 300e2bffb8a365f5c04864be799c33ecf842296c
+
+On macOS, with anaconda python, to compile and link any code using openmm '-std=c++11' is needed. The necessary flags are automatically detected in using cmake and code in CMakeLists.txt. However, '-std=c++' is second in the tests for flags, so the first test always fails. The tests have been consolidated into a single test that tries all permutations of flags that might be required.
+
+Sample input to reproduce the problem (or testcase): compile time issue
+
+Files Involved:
+CMakeLists.txt
+source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+source/openmm/plugins/gbmv/CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+source/openmm/plugins/mses/CMakeLists.txt
+tool/cmake/omm_avx_test.cpp
+tool/cmake/omm_cxx11_test.cpp
+tool/cmake/omm_abi_test.cpp
+tool/cmake/omm_flags_test.cpp
+
+------------------------------------------------------------------------------
+3.12 Several bug fixes; long-range C6 reading in the parameter reader
+     Developer: Bernard Brooks
+     Institution: NIH
+     Date: 27 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/58
+Git commit: fc20b4ee66421e7162c9078cafb4bba93ecd6af2
+
+Removing unfinished (and never will be finished) drude code from from dynamc
+
+dcntrl.F90 and dynamc.F90
+This is straightforward code removal, but it's about 1200 lines of code. Testcases run with this vestigial code gone.
+
+New long-range C6 reading in the parameter reader.
+
+param_ltm.F90 parmio.F90 update.F90
+This is simply the addition of a long-range c6 coefficient array with flexible specification that is used by LJ-PME codes. It allows us to avoid the usual combination rules. Or more specifically, it allows us to change the short range terms while preserving our long-range c6 coefficients. (e.g. replace the usual 6-12 terms with a double exponential) And this gives us more flexibility with the LJ when using the Wennberg mid-range switching method.
+
+Rewrite of the atom selection's .around. function.
+
+selcta.F90
+This improves it's speed by more than an order of magnitude. The current atom selection test cases continue to run.
+
+simple fixes for some compiler warnings
+
+Files Involved:
+CMakeLists.txt
+source/dynamc/consph.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/dynamc/tamd.F90
+source/energy/energym.F90
+source/energy/eutil.F90
+source/gener/update.F90
+source/io/parmio.F90
+source/ltm/fourd_ltm.F90
+source/ltm/param_ltm.F90
+source/manip/fsshake.F90
+source/minmiz/minmiz.F90
+source/minmiz/tnpack.F90
+source/misc/msmmpt.F90
+source/pert/puic.F90
+source/util/selcta.F90
+test/c46test/blade_md.inp
+test/c46test/cpu_cdocker_h_2.inp
+test/data/methanol.ascii
+
+------------------------------------------------------------------------------
+3.13 Bug fixes while fixing warnings for PSND*
+     Developer: Milan Hodoscek
+     Institution: National Institute of Chemistry, Ljubljana, Slovenia
+     Date: July 26, 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/59
+Git commit: 42427cc4419a770da7b461106d32cfacc55ad6e0
+
+I found these bugs, which are not related to the warning fixes, but are real bugs! So I think they need to be fixed for a and b versions.
+
+Later on we also take care of the warnings. I already got rid of about 200 warnings, by introducing the interface to PSNDx routines in ltm/parallel_ltm.F90, and implemented the various combinations in the machedep/paral1.F90. Then there are few places in the source tree to add something like:
+use parallel,only:psnd8
+or
+use parallel,only:psnd4
+or both.
+
+But these changes will come after the August 15 release I think??
+
+These are the real bugs, here:
+
+Files involved:
+source/dynamc/dcntrl.F90
+source/flucq/fluqdyn.F90
+source/io/rtfio.F90
+source/misc/pbeq.F90
+
+------------------------------------------------------------------------------
+3.14 Fix two errors for the ljpme build
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 29 July 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/60
+Git commit: a9479ff822da193105760d929d867a9e8055efc7
+
+1. Compiler error regarding 'call pme' arguments in source/nbonds/dcm.F90
+
+2. link time error:
+libcharmm_fortran.a(update.F90.o): In function `update_ljpme_':
+update.F90:(.text+0x4796): undefined reference to `c6def_'
+
+Sample input to reproduce the problem (or testcase):
+configure with '--with-ljpme' and then compile
+
+Files Involved:
+1. source/nbonds/dcm.F90
+2. source/gener/update.F90
+
+------------------------------------------------------------------------------
+3.15 2020 to 2021 charmm toppar updates
+     Developer: Alex MacKerell
+     Institution: University of Maryland, Baltimore
+     Date: 2 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/61
+Git commit: 282c0166629954f94ccd5c2f5fbc702ca6bc6659
+
+See toppar/toppar_all.history for details.
+
+Prefx keys: no change
+
+Files added: none added
+
+Files modified:
+toppar/drude/drude_toppar_2019.tgz
+toppar/gbsw/radius_gbsw.str
+toppar/par_all36_cgenff.prm
+toppar/par_all36m_prot.prm
+toppar/stream/carb/toppar_all36_carb_glycolipid.str
+toppar/stream/carb/toppar_all36_carb_imlab.str
+toppar/stream/lipid/toppar_all36_lipid_model.str
+toppar/stream/prot/toppar_all36_prot_model.str
+toppar/stream/prot/toppar_all36_prot_modify_res.str
+toppar/top_all22_prot.rtf
+toppar/top_all36_cgenff.rtf
+toppar/top_all36_prot.rtf
+toppar/toppar_all.history
+
+Files Removed:
+toppar/non_charmm/gromacs/charmm36-mar2019.ff.tgz
+toppar/par_all36_prot.prm
+toppar/stream/prot/toppar_all36_prot_c36_d_aminoacids.str
+
+------------------------------------------------------------------------------
+3.16 Summer 2021 bug fixes
+
+Developers:
+Stefan Boresch
+Rick Venable
+Alex MacKerell
+Arjan van der Vaart
+Arnaud Blondel
+Charles Brooks
+Bernard Brooks
+Milan Hodoscek
+Lennart Nilsson
+Josh Buckner
+
+Institutions:
+University of Vienna
+NIH
+Univeristy of Maryland Baltimore
+University of South Florida
+Institut Pasteur
+University of Michigan
+NIH
+The National Institute of Chemistry of Slovenia
+Karolinska Institutet
+University of Michigan
+
+Date: 10 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/62
+Git commit: e5a4b6b61f84df4fd34a77bb5ea044bc7381c201
+
+1. fix for massive memory leak while reading rtfs
+2. add note to sccdftb to set ulimit to unlimited for stack problems
+3. fix segfault during parmio
+4. require OPENMM_OPENCL_FOUND to build mcbarostat2 OpenCL plugin
+5. fix mc mcener and move link segfaults
+6. fix non 0 charge correction for PME if PMEPLSMA inactive
+7. fix MTS build segfaults during nbonds
+
+Sample input to reproduce the problem (or testcase):
+1. one will be added soon
+2. any sccdftb test with ulimit set low
+3. test/c20test/brbtest.inp
+4. compile time error if OpenMM OpenCL plugin is missing but system has OpenCL
+5. test cases causing this segfault:
+c32test/argc_cbias.inp
+c32test/argc_grid.inp
+c32test/argc_rndm.inp
+c34test/mc_pert_pbc.inp
+c29test/mctest03.inp
+c29test/mctest04.inp
+6. unknown
+7. c20test/brbtest.inp when configured with '-a mts' before compiling
+
+Files Involved:
+1. source/io/rtfio.F90
+2. doc/sccdftb.info
+3. source/io/parmio.F90
+4. source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+5. files edited:
+source/mc/mcener.F90
+source/mc/mcimge.F90
+source/mc/moveln.F90
+6. source/nbonds/pme.F90
+7. source/nbonds/nbonds.F90
+
+------------------------------------------------------------------------------
+3.17 Remove install.com
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 11 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/63
+Git commit: 81679429418b45d7942bf427a94592dd6138702d
+
+Remove deprecated and, in some situations broken, install.com.
+Replace it with a script that prints some helpful information.
+Put the old install.com in tool/ for die-hard fans.
+
+Sample input to reproduce the problem (or testcase): install.com
+
+Files Involved:
+install.com
+
+------------------------------------------------------------------------------
+3.18 Update version numbers
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 11 August 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/64
+Git commit: 43bdcbc7e43af7ab54f400710fce34d88f400d4e
+
+Update version number from c46a2 to c46b1 in the CHARMM banner and CMakeLists.txt file.
+
+prefx Keys: no change
+
+Files Added: none
+
+Files Modified:
+CMakeLists.txt
+source/ltm/version_ltm.F90
+
+==============================================================================
+[4] c46b2 Change Log
+
+    The following changes were merged from August 15, 2021 through
+February 15, 2022.
+
+4.1 bug fix for gpu grid generation
+    Developer: Yujin Wu
+    Institution: University of Michigan
+    Date: 16 September 2021
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/65
+Git commit: f30c8ca0105a2f77b83549119fa9c3933372eac9
+
+There are two errors in GPU protein grid generation.
+
+CCELEC parameters are set to be an integer number for the electrostatic grid calculation.
+The soft-core potential for the VDW grids are incorrect.
+
+Sample input to reproduce the problem (or testcase):
+test/c46test/fftdock.inp
+Files Involved:
+source/fftdock/GPUGridPot.cu
+Detailed description of fixes per each file:
+For source/fftdock/GPUGridPot.cu :
+Argument CCELEC to generateProtGrid kernel changed from int to float.
+In generateProtGrid kernel, remove alpha variable, update formula for beta to
+beta = 24.0 * eps_sqrt/VdwEmax * (vdwconst*vdwconst-vdwconst);
+Update formula for the grid potential to
+VdwEmax *(1 - 0.5 * powf(r/rc, beta));
+
+------------------------------------------------------------------------------
+4.2 fixes compiler warnings for PSND calls
+    Developer: Milan Hodoscek
+    Institution: National Institute of Chemistry Ljubljana, Slovenia
+    Date: January 7, 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/66
+Git commit: 22e388f333145360094e2d614a049ab58b1ccc3b
+
+As of CHARMM c47a1 there are over 250 compiler warnings regarding the PSND{C,4,8} calls,
+using recent gfortran compiler.
+
+This patch is to fix all the warnings to calls of PSND{C,4,8} routines.
+It works through F90 interface statements, basically defining the 3 generic (overloading)
+PSND routines, so the changes to existing calls are minimal, or none.
+
+------------------------------------------------------------------------------
+4.3 Changes needed to support new version of GAMESS (version 20210930R2)
+    Developer: Milan Hodoscek
+    Institution: National Institute of Chemistry Ljubljana, Slovenia
+    Date: 19 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/67
+Git commit: d27f4a275f4c59d7ea80a74fb853fbf890048381
+
+Some changes are needed in CHARMM to support the new version of GAMESS
+from September 30, 2021. There is new information also in the doc/gamess.info file.
+
+------------------------------------------------------------------------------
+4.4 Fixes for the psnd4 and psnd8 generic routines
+    Developer: Milan Hodoscek
+    Institution: National Institute of Chemistry Ljubljana, Slovenia
+    Date: 17 January 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/68
+Git commit: c554571dba799b58f791c8c69b5f446a9c48ae73
+
+Description: Fixes for the psnd4 and psnd8 generic routines.
+Because the two and more dimensional arrays are not supported some of
+the routines have to be used directly and not through the interface.
+This will probably change in the future, because the compilers might
+become more strict.
+
+Sample input to reproduce the problem (or testcase):
+Compile errors with '--with-gamus', '--with-mndo97', and '--with-stringm'
+
+Detailed description of fixes per each file:
+The line use parallel,only:psnd4,psnd8 was added to the files.
+Then the multidimensional arrays were taken care of by explicit routines
+implemented in paral1.src
+
+------------------------------------------------------------------------------
+4.5 Fixes to compile charmm on apple m1 machines
+    Developer: Thanh Lai, Yujin Wu, Charlie Brooks, and Josh Buckner
+    Institution: University of Michigan
+    Date: 4 February 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/69
+Git commit: d24dd21a8c623b48fb60282049fa8c43c73a0e7b
+
+Description:
+The clang compiler suite does not accept -march=native on Apple M1 platforms.
+Header files for some versions of OpenMM's CPU platform contain
+Intel intrinsics that do not compile on Apple M1 platforms.
+
+Files Involved:
+CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+tool/cmake/omm_flags_test.cpp
+
+Detailed description of fixes per each file:
+
+CMakeLists.txt
+default arch flag for apple m1 platform is set to -march=armv8.5-a
+
+source/openmm/plugins/gbsw/CMakeLists.txt
+CPU platform disabled for the gbsw plugin
+
+tool/cmake/omm_flags_test.cpp
+put CPP guards around offending OpenMM header file
+
+------------------------------------------------------------------------------
+4.4 More PSND4,PSND8 fixes for corrio.F90 and grid_dock.F90
+    Developer: Milan Hodoscek
+    Institution: National Institute of Chemistry Ljubljana, Slovenia
+    Date: 5 February 2022
+
+Merge request: https://charmm-dev.org:1976/bucknerj/stable-release/-/merge_requests/70
+Git commit: 33f3e7e8867c2d4882c5739221b53e25be0d2370
+
+There were some wrong argument specifications to PSND routines.
+Tested with test.com M 4 gnu
+
+ On branch corrio-grid_dock-fix
+ Changes to be committed:
+	modified:   source/correl/corrio.F90
+	modified:   source/misc/grid_dock.F90

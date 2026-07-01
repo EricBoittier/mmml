@@ -1,0 +1,111 @@
+* mctest06.inp
+* Author:   Aaron R. Dinner 
+* Date:     14 June 2002
+* Version:  c29a2
+* Test:     Monte Carlo with the ACE/ACS potential
+* Model:    Polar hydrogen representation of alanine dipeptide 
+*
+
+IF ?MC  .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+if ?domdec eq 1 then
+  echo "Test NOT performed with DOMDEC."
+  stop
+endif
+
+IF ?ACE .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+BOMLev 0
+STREam datadir.def
+
+! Read standard topology and parameter files
+
+open read card unit 11 name @0/toph19.rtf
+read rtf  card unit 11
+close unit 11
+
+open read unit 11 card name @0/param19.prm
+read param unit 11 card
+close unit 11
+
+! read ACE parameters from file:
+open read unit 11 card name @0/acepar19.inp
+read ACEParameters card unit 11
+close unit 11
+
+! Generate the PSF
+
+READ SEQUence CARD
+* Blocked alanine
+*
+   3
+ACE ALA CBX
+
+GENErate MAIN SETUP
+
+! Build the coordinates
+
+IC PARAM
+IC SEED 2 N     2 CA    2 C
+IC BUILD
+
+! Define energy parameters (activate ACE1).
+! For reasons not very clear to me, activation of ACE results in
+! reordering of the angle terms in the PSF by CODES (called by UPDATE).
+! As a result, ACE must be activated BEFORE generating the move set.
+
+ENERGY  ATOM ACE  IEPS 1.0 SEPS 80.0 ALPHA 1.3 SIGMA 3.0 SWITCH -
+        VDIS VSWI CUTNB 999.0 CTONNB 8.0 CTOFNB 12.0  IDEAL
+
+
+! Create the MC move set by a series of calls to MOVE ADD
+
+! Single atom moves for the peptide atoms
+
+MOVE ADD MVTP RTRN BYATom WEIGht 12.0 DMAX 0.2 LABEL SING -
+         SELE ALL END
+
+! Individual rotation of the peptide torsions
+
+MOVE ADD MVTP TORS WEIGht 4.0 DMAX  40.0 FEWEr 1 LABEL DIHE -
+         SELE ALL END
+
+
+! Run with the exact ACE potential.  Delta-E should be zero.
+MC TEMPerature 300.00 NSTEps 1000 IECHeck 100 ACECut 0.0 ISEED 405829
+
+! Set ACECut to a reasonable value and check degree of error with IECHeck.
+MC TEMPerature 300.00 NSTEps 1000 IECHeck 100 ACECut 0.01
+
+
+! Switch ACE off 
+ENERGY ATOM RDIE SWITCH -
+       VDIS VSWI CUTNB 999.0 CTONNB 8.0 CTOFNB 12.0 
+
+! Delta-E should be zero.
+MC TEMPerature 300.00 NSTEps 1000 IECHeck 100 
+
+
+! Re-define energy parameters (activate ACE2).
+ENERGY  ATOM ACE2 IEPS 1.0 SEPS 80.0 ALPHA 1.3 SIGMA 2.5 SWITCH -
+        VDIS VSWI CUTNB 999.0 CTONNB 8.0 CTOFNB 12.0
+
+! Run with the exact ACE potential.  Delta-E should be zero.
+MC TEMPerature 300.00 NSTEps 1000 IECHeck 100 ACECut 0.00
+
+! Set ACECut to a reasonable value and check degree of error with IECHeck.
+MC TEMPerature 300.00 NSTEps 1000 IECHeck 100 ACECut 0.01
+
+
+! Check memory usage (should be non-zero due to ACE).
+
+MOVE DELE LABEL SING
+MOVE DELE LABEL DIHE
+
+STOP

@@ -1,0 +1,13 @@
+core 5000000
+chm append
+title
+qm region for charmm 
+charge 0
+adapt off
+nosym
+noprint distance analysis
+basis sto3g
+scftype rhf
+runtype gradient
+vectors atoms
+enter 1

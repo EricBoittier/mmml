@@ -1,0 +1,27 @@
+* BRIEF MINIMIZATION UNDER POSITIONAL HARMONIC CONSTRAINTS FOR ALL FRAMES.
+*
+
+SET walk = 0
+LABEL TRAJEKTORIEN
+INCR walk
+
+   open read card unit 1 name    @final_@walk.crd
+   read coor card unit 1
+   close unit 1
+
+   ! Constraints with respect to coord. of current frame (i.e. no COMP):
+   CONS HARM FORCE 10  ALL END
+
+   mini sd nstep 500 nprint 100 tolgrd 1.0
+
+   open write card unit 1 name    @final_mini_@walk.crd
+   write coor card unit 1
+* Minimized (w. harmonic constraints) Cartesian/IC intermediates between
+* @reactant and @product
+* Intermediate number @walk / @steps .
+* Energy = ?ener , Gradient = ?grms
+*
+
+IF @walk LT @steps THEN GOTO TRAJEKTORIEN
+
+RETURN

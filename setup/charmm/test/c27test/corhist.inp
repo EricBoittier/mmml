@@ -1,0 +1,72 @@
+* CHARMM Testcase c26test/corhist.inp
+* Author: Lennart Nilsson
+* Date  : March 16, 1998
+* Model : N-methyl alanyl acetamide
+* Files : toph19.rtf and param19.prm
+* Test  : build NMA using internal coordinates and then computes
+*         density histogram of various atoms
+* COMMAND: COOR HIST ...
+*
+
+stream datadir.def
+
+open read form unit 11 name @0toph19.rtf
+read rtf card unit 11
+close unit 11
+open read form unit 11 name @0param19.prm
+read param card unit 11
+close unit 11
+
+! Read in the sequence and generate the psf (protein structure file - an
+! internal CHARMM data structure describing the specific connectivity for
+! the specific structure of interest.  It is created using the information
+! from the topology and parameter files
+Read sequ card
+* maa
+*
+3
+AMN ALA CBX
+
+Generate maa setup !the segment identifier is called maa and the setup
+                   !command indicates that the internal coordinate tables
+                   !(based upon ic information in the rtf) will be created
+
+ic parameters  !fill the current ic table based upon values from the
+               !parameter and/or rtf files
+ic seed 1 cl 1 c 1 o  !provide the three atoms to "seed" building
+ic build  !build the structure based upon the internal coordinates (ics)
+
+coor orie  !orient molecule so CM is at origin and principal axes are along
+           !cartesian directions
+print coor
+coor hist x hmin -5.0 hmax 5.0 hnum 20 hprint
+coor hist y hmin -5.0 hmax 5.0 hnum 20 hprint
+coor hist z hmin -5.0 hmax 5.0 hnum 20 hprint
+coor hist z hmin -5.0 hmax 5.0 hnum 20 hprint hnorm 10.0
+coor hist r hmin -2.0 hmax 10.0 hnum 20 hprint
+scalar wmain = charge
+print coordinates
+coor hist y  hmin -2.0 hmax 2.0 hnum 20 hprint weigh
+scalar wmain = mass
+print coordinates
+coor hist y  hmin -2.0 hmax 2.0 hnum 20 hprint weigh
+
+coor hist r hmin -2.0 hmax 10.0 hnum 20 hprint hnorm 2.0
+coor hist r hmin -2.0 hmax 10.0 hnum 20 hprint hdens 3.0
+coor hist r hmin -2.0 hmax 10.0 hnum 20 hprint hdens 3.0 hnorm 2.0
+
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select .not. hydrogen end hprint
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select .not. hydrogen end hprint - 
+  hnorm 3.0
+
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select hydrogen end hprint
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select .not. hydrogen end  hprint
+
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select .not. hydrogen end hsave
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select .not. hydrogen end hsave
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select .not. hydrogen end hsave hprint
+
+set N ?NCONFIG
+bomblevel -1 ! to bypass the level 0 zero atom selected warning
+coor hist x hmin -5.0 hmax 5.0 hnum 20 select none end hprint -
+ hnorm @N

@@ -1,0 +1,66 @@
+* pbeq.str, last modified Oct/17/2001
+* By Sonja M. Schwarzl & Stefan Fischer
+* Calculation of electrostatic potential with PBEQ
+* no subfocusing possible, because potential does not converge
+*
+
+PBEQ
+
+  SCAL WMAIN = SCA1
+  SCAL WMAIN ADD @offset
+  SCAL WMAIN SET 0.0 SELECT TYPE H* END
+
+     ! SCAL WMAIN SHOW
+
+     ! Calculate electrostatic field using focusing series.
+     ! Set charges only to source group atoms.
+  SCAL CHARGE = SCA2 SELE  GROUP END
+  SCAL CHARGE SET 0.0 SELE .NOT. GROUP END
+
+     ! First step: 
+     !    grid size at @DCEL1 : @NCLX1,@NCLY1,@NCLZ1 grid points
+   
+  SOLVE EPSW @EPSWAT EPSP @EPSPROT CONC @CON TEMP @TEM -
+       TMEMB @NTMEMB ZMEMB @NZMEMB EPSM @NEPSM -
+       HEAD @NHEAD EPSH @NEPSH VMEMB @NVMEMB -
+       NCLX @NCLX1 NCLY @NCLY1 NCLZ @NCLZ1 DCEL @DCEL1 -
+       SMOO SWIN @sw
+     ! smooth does not work with IONR and WATR
+     
+     ! Second step - focusing:
+     !    grid size at dcel@DCEL2: @NCLX2,@NCLY2,@NCLZ2 grid points
+     
+  SOLVE EPSW @EPSWAT EPSP @EPSPROT CONC @CON TEMP @TEM -
+       TMEMB @NTMEMB ZMEMB @NZMEMB EPSM @NEPSM -
+       HEAD @NHEAD EPSH @NEPSH VMEMB @NVMEMB -
+       FOCUS NCLX @NCLX2 NCLY @NCLY2 NCLZ @NCLZ2 DCEL @DCEL2 - 
+       SMOO SWIN @sw
+     
+     ! Third step - focusing: 
+     !    grid size at dcel @DCEL3: @NCLX3,@NCLY3,@NCLZ3  grid points
+     
+  SOLVE EPSW @EPSWAT EPSP @EPSPROT CONC @CON TEMP @TEM -
+      TMEMB @NTMEMB ZMEMB @NZMEMB EPSM @NEPSM -
+      HEAD @NHEAD EPSH @NEPSH VMEMB @NVMEMB -
+      FOCUS NCLX @NCLX3 NCLY @NCLY3 NCLZ @NCLZ3 DCEL @DCEL3 -
+      SMOO SWIN @sw
+
+     ! interpolate potential to atom positions
+  SCAL CHARGE SET 1.0 SELEct all END
+  ENPB
+     ! SCAL WMAIN SHOW       
+  SCAL SCA9 = WMAIN
+
+
+  RESET
+END
+
+RETURN
+
+
+
+
+
+
+
+

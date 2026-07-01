@@ -1,0 +1,107 @@
+* mmff_h2o.inp
+* author:  Ryszard Czerminski (May 11, 1993)
+* purpose: to test MMFF parameter reader
+* external files: MMFFANG.PAR MMFFBOND.PAR MMFFCHG.PAR MMFFDEF.PAR
+*                 MMFFOOP.PAR MMFFSTBN.PAR MMFFSUP.PAR MMFFSYMB.PAR
+*                 MMFFTOR.PAR MMFFVDW.PAR
+* UPDATED by Josh Buckner 18 April 2019
+*
+
+if ?numnode gt 1 then
+  echo "mmff not compatible with parallel runs"
+  echo "testcase result: skip"
+  stop
+endif
+
+set tol = 1e-3
+set pass = 1
+set eref = 66.44888
+set gref = 179.44419
+
+stream datadir.def
+bomlev 5
+
+read rtf  card unit  5
+* TOPOLOGY FILE FOR METHANOL TO METHANOL
+*
+   20    1                  ! Version number
+MASS    31 HOH    1.00794 H ! HYDROGEN IN H2O
+MASS    70 OH2   15.9994  O ! OXYGEN ON WATER
+
+AUTOGENERATE ANGLES
+DEFA FIRS NTER LAST CTER
+
+RESI H2O    .000   ! MMFF WATER MODEL
+GROUP
+ATOM OH2  OH2    -0.86
+ATOM H1   HOH     0.43
+ATOM H2   HOH     0.43
+BOND OH2  H1      OH2  H2  !   H1   H2  ! THE LAST BOND IS NEEDED FOR SHAKE
+PATC  FIRS NONE LAST NONE
+END
+
+stream @0mmff_setup.str
+
+!read parameter card unit 5
+!* From Parameter File for CHARMM version 20
+!*
+!BOND
+!OH2  HOH    225.0       0.96
+!
+!THETAS
+!HOH   OH2   HOH      41.0     109.47
+!
+!END
+
+read sequence card
+* water dimer
+*
+ 2
+H2O H2O
+ 
+generate solv setup warn first none last none nodi
+
+print psf
+
+read coor card unit 5
+* initial minimized coordinates
+*
+    6
+    1    1 H2O  OH2    0.00000   0.0000    0.00000 SOLV 1      0.00000
+    2    1 H2O  H1    -0.2       0.0000    0.9389  SOLV 1      0.00000
+    3    1 H2O  H2     0.96      0.0000    0.00000 SOLV 1      0.00000
+    4    2 H2O  OH2    2.8       0.0000    0.00000 SOLV 2      0.00000
+    5    2 H2O  H1     3.2       0.5300   -0.4     SOLV 2      0.00000
+    6    2 H2O  H2     3.2      -0.5300   -0.4     SOLV 2      0.00000
+
+write merck unit 6
+* test merck molecular structure format
+*
+
+energy CUTNB 999. CTOFNB 888. cdie e14fac 0.75
+
+calc ediff = abs ( ?ener - @eref )
+calc gdiff = abs ( ?grms - @gref )
+
+set epass = 0
+set gpass = 0
+
+if @ediff le @tol set epass = 1
+if @gdiff le @tol set gpass = 1
+
+calc egpass = @epass * @gpass
+calc pass = @pass * @egpass
+
+update inbfrq 0 ihbfrq 0
+mini conj nstep 10 npri 1 tolg 0.1
+mini abnr nstep 10 npri 1 tolg 0.000001
+dyna nstep 10 npri 1
+
+if @pass gt 0 then
+      set status = PASS
+else
+      set status = FAIL
+endif
+echo testcase result: @status
+
+stop

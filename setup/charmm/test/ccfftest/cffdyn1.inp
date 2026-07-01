@@ -1,0 +1,239 @@
+* TESTS A NUMBER OF DYNAMICS CALCULATIONS
+*
+
+! MFC Appears to be broken for parallel
+if ?NUMNODE .gt. 1 then stop
+
+stream datadir.def
+BOMLEV -1
+USE CFF
+
+open unit 1 read form name @0"aminoh_cff.rtf"
+read rtf card unit 1
+close unit 1
+
+OPEN READ UNIT 20 CARD NAME @0"cff93.frc"
+READ PARA UNIT 20 CARD
+CLOSE UNIT 20
+
+READ SEQUENCE CARDS
+* TRYPTOPHAN
+*
+    1
+TRP
+GENERATE TRYP SETUP
+
+open write unit 18 file name @9dyntest1.psf
+WRITE PSF FILE UNIT 18
+* TRYPTOPHAN USING EXPLICIT HYDROGEN
+*
+
+READ COORD CARD
+* TRYPTOPHAN BUILT AND MINIMIZED WITH SD 50 STEPS, ABNR 500 STEP,
+* AND CG 50 STEPS
+* EPS=R POTENTIAL
+*
+   27
+    1    1 TRP  N     -2.30142  -1.58934   0.46270 HELI 1      0.00000
+    2    1 TRP  HT1   -1.39917  -2.04531   0.50689 HELI 1      0.00000
+    3    1 TRP  HT2   -2.83853  -1.86409   1.27509 HELI 1      0.00000
+    4    1 TRP  HT3   -2.78409  -1.91531  -0.36477 HELI 1      0.00000
+    5    1 TRP  CA    -2.13366  -0.08070   0.42116 HELI 1      0.00000
+    6    1 TRP  HA    -1.58203   0.20789   1.32924 HELI 1      0.00000
+    7    1 TRP  CB    -1.38546   0.32635  -0.85344 HELI 1      0.00000
+    8    1 TRP  HB1   -1.13394  -0.55874  -1.45804 HELI 1      0.00000
+    9    1 TRP  HB2   -2.00173   0.99884  -1.47001 HELI 1      0.00000
+   10    1 TRP  CG    -0.12232   1.03316  -0.45608 HELI 1      0.00000
+   11    1 TRP  CD2    1.08389   0.28835  -0.25801 HELI 1      0.00000
+   12    1 TRP  CE2    2.27424   0.98734   0.12065 HELI 1      0.00000
+   13    1 TRP  CE3    1.05942  -1.13054  -0.44523 HELI 1      0.00000
+   14    1 TRP  HE3    0.11801  -1.58979  -0.73275 HELI 1      0.00000
+   15    1 TRP  CD1   -0.12213   2.45301  -0.27465 HELI 1      0.00000
+   16    1 TRP  HD1   -0.46026   3.48405  -0.22513 HELI 1      0.00000
+   17    1 TRP  NE1    2.07432   2.34193   0.24510 HELI 1      0.00000
+   18    1 TRP  HE1    2.93736   2.78344   0.51130 HELI 1      0.00000
+   19    1 TRP  CZ2    3.40032   0.24407   0.29943 HELI 1      0.00000
+   20    1 TRP  HZ2    4.31264   0.75870   0.58695 HELI 1      0.00000
+   21    1 TRP  CZ3    2.26563  -1.87534  -0.24716 HELI 1      0.00000
+   22    1 TRP  HZ3    2.22938  -2.95104  -0.39340 HELI 1      0.00000
+   23    1 TRP  CH2    3.45598  -1.17635   0.13150 HELI 1      0.00000
+   24    1 TRP  HH2    4.36235  -1.75684   0.27767 HELI 1      0.00000
+   25    1 TRP  C     -3.46908   0.69978   0.35246 HELI 1      0.00000
+   26    1 TRP  OCT1  -4.48427  -0.00147   0.34066 HELI 1      0.00000
+   27    1 TRP  OCT2  -3.35545   1.92795   0.31787 HELI 1      0.00000
+
+open write unit 17 file name @9dyntest1.crd
+WRITE COOR FILE UNIT 17
+* TRYPTOPHAN BUILT AND MINIMIZED WITH SD 50 STEPS, ABNR 500 STEP,
+* AND CG 50 STEPS
+* EPS=R POTENTIAL
+*
+
+PRINT COOR
+IC PURGE
+IC FILL
+NBONDS CUTNB 100.0 CTONNB 99.0 CTOFNB 99.5
+
+!!!!! 1 marker for the first section of dynamics testing
+UPDATE  INBFRQ 10 CUTHA 65.0 CTONHA 55.0 CTOFHA 60.0
+!!!!! 2 second section of dynamics
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+DYNA VERL NSTEP 20  AKMASTP .005 INBFRQ 10 FIRSTT 1000. NPRINT 1 -
+     ISEED 311 IPRFRQ 10 IHTFRQ 0 IEQFRQ 0
+PRINT COOR
+!!!!! 3 third section
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+CONS FIX PURGE sele bynum 6 : 16 end
+!!!!! 4 fourth section
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+DYNA VERL NSTEP 20  AKMASTP .005 INBFRQ 10 FIRSTT 1000. NPRINT 1 -
+     ISEED 311 IPRFRQ 10 IHTFRQ 0 IEQFRQ 0
+PRINT COOR
+!!!!! 5 fifth section
+open read unit 18 file name @9dyntest1.psf
+READ PSF FILE UNIT 18
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+SHAKE BONH PURGE
+DYNA  NSTEP 20  AKMASTP .02 INBFRQ 10 FIRSTT 1000. NPRINT 1 -
+     ISEED 311 IPRFRQ 10 IHTFRQ 0 IEQFRQ 0
+PRINT COOR
+!ANAL
+!COMPARE COOR UNIT 17$
+!BUILD DIFF BOND GEOMETRY
+!PRINT TABLE PRETTY
+!END
+!!!!! 6 sixth section
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+SHAKE BOND PURGE
+DYNA  NSTEP 20  AKMASTP .04 INBFRQ 10 FIRSTT 1000. NPRINT 1 -
+     ISEED 311 IPRFRQ 10 IHTFRQ 0 IEQFRQ 0
+PRINT COOR
+!ANAL
+!COMPARE COOR UNIT 17$
+!BUILD DIFF BOND GEOMETRY
+!PRINT TABLE PRETTY
+!END
+!!!!! 7 seventh section
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+CONS FIX PURGE sele bynum 6 : 16 end
+SHAKE BOND PURGE
+
+open write unit 40 file name @9for040.dat
+open write unit 50 file name @9for050.dat
+open write unit 99 CARD name @9for099.dat
+
+DYNA  NSTEP 100  AKMASTP .04 INBFRQ 10 FIRSTT 1000. NPRINT 1 -
+     IPRFRQ 10 IHTFRQ 0 IEQFRQ 0 NSAVC 2 NSAVV 2 AVERAGE IUNCRD 40 IUNVEL 50 -
+     ISEED 311 IUNWRI 99
+
+open write unit 41 file name @9for041.dat
+open write unit 51 file name @9for051.dat
+open read  unit 99 CARD name @9for099.dat
+DYNA REST IUNREA 99 AVERAGE IUNCRD 41 IUNVEL 51 IUNWRI -1 NSTEP 100
+PRINT COOR
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+DYNA  NSTEP 200  AKMASTP .04 INBFRQ 10 FIRSTT 1000. NPRINT 20 -
+     IPRFRQ 200 IHTFRQ 0 IEQFRQ 0 NSAVC 1000 NSAVV 1000 IUNCRD -1 IUNVEL -1 -
+     ISEED 311 IUNWRI -1
+PRINT COOR
+!!!!! 8 eight section
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+
+open read  unit 40 file name @9for040.dat
+open read  unit 41 file name @9for041.dat
+open write unit 80 file name @9for080.dat
+open write unit 81 file name @9for081.dat
+open write unit 82 file name @9for082.dat
+open write unit 83 file name @9for083.dat
+open write unit 84 file name @9for084.dat
+MERGE COOR FIRSTU 40 NUNIT 2 SKIP 2 NFILE 20 OUTPUTU 80
+
+open read unit 80 file name @9for080.dat
+open read unit 81 file name @9for081.dat
+open read unit 82 file name @9for082.dat
+open read unit 83 file name @9for083.dat
+open read unit 84 file name @9for084.dat
+open WRITE unit 85 file name @9for085.dat
+MERGE FIRSTU 80 NUNIT 5 OUTPUTU 85
+open read  unit 50 file name @9for050.dat
+open read  unit 51 file name @9for051.dat
+open write unit 88 file name @9for088.dat
+MERGE VEL FIRSTU 50 NUNIT 2 OUTPUTU 88
+
+!!!!! 9 nine section
+READ COOR FILE UNIT 17 RESTART
+
+print ic
+open read  unit 40 file name @9for040.dat
+open read  unit 41 file name @9for041.dat
+ic dyna aver firstu 40 nunit 2
+print ic
+open read  unit 40 file name @9for040.dat
+open read  unit 41 file name @9for041.dat
+ic dyna fluc firstu 40 nunit 2
+print ic
+
+!!!!! 10 ten section
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+COOR COPY COMP
+
+open read unit 40 file name @9for040.dat
+open read unit 41 file name @9for041.dat
+open WRITE unit 60 file name @9for060.dat
+open WRITE unit 61 file name @9for061.dat
+open WRITE unit 62 file name @9for062.dat
+open WRITE unit 63 file name @9for063.dat
+open WRITE unit 64 file name @9for064.dat
+MERGE FIRSTU 40 NUNIT 2 NFILE 4 SKIP 5 OUTPUTU 60 -
+      ORIENT MASS SELE ALL END ! PRINT
+COOR ORIE RMS MASS
+
+open READ unit 60 file name @9for060.dat
+open READ unit 61 file name @9for061.dat
+open READ unit 62 file name @9for062.dat
+open READ unit 63 file name @9for063.dat
+open READ unit 64 file name @9for064.dat
+open WRITE unit 70 file name @9for070.dat
+open WRITE unit 71 file name @9for071.dat
+open WRITE unit 72 file name @9for072.dat
+open WRITE unit 73 file name @9for073.dat
+open WRITE unit 74 file name @9for074.dat
+MERGE FIRSTU 60 NUNIT 5 NFILE 4 OUTPUTU 70 -
+      ORIENT MASS SELE ALL END ! PRINT
+READ COOR FILE UNIT 17 RESTART
+!!!!! 13 section thirteen
+MINI CONJ NSTEP 10
+PRINT COOR
+!open read unit 41 file name @9for041.dat
+!READ COOR FILE UNIT 41 IFILE -328 RESTART
+!PRINT COOR
+!!!!! 14 section fourteen
+open read unit 41 file name @9for041.dat
+READ COOR FILE UNIT 41 IFILE 349234 RESTART
+PRINT COOR
+!!!!! 15 section fifteen
+open read unit 41 file name @9for041.dat
+READ COOR FILE UNIT 41 IFILE 50 RESTART
+PRINT COOR
+!!!!! 16 section sixteen - longer run to test equilibration and heating
+open read unit 17 file name @9dyntest1.crd
+READ COOR FILE UNIT 17 RESTART
+open write unit 40 file name @9for040.dat
+open write unit 50 file name @9for050.dat
+open write unit 99 CARD name @9for099.dat
+DYNA NSTEP 100 AKMASTP .02 INBFRQ 10 NPRINT 5 IPRFRQ 20 -
+     FIRSTT 200. finalt 300. teminc 25. IHTFRQ 10 IEQFRQ 10 -
+     NSAVC 2 NSAVV 2 AVERAGE IUNCRD 40 IUNVEL 50 -
+     ISEED 311 IUNWRI 99
+open read unit 99 CARD name @9for099.dat
+DYNA REST IUNREA 99 IUNCRD -1 IUNVEL -1 IUNWRI -1 NSTEP 100  ichecw 0
+PRINT COOR

@@ -1,0 +1,110 @@
+* Test case for FFT dock
+* Created by Xinqiang Ding (xqding_at_umich.edu)
+* at 2017/09/19 14:42:45
+* Changed by Yujin Wu
+* at 2021/04/04
+*
+
+if ?fftdock .ne. 1 then
+   echo "Test NOT performed. FFTDOCK must be defined in pref.dat"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+! read the topology and parameter files
+read rtf card name @0/top_all36_prot.rtf
+read rtf card name @0/top_all36_cgenff.rtf append
+read param card name @0/par_all36_prot.prm
+read param card name @0/par_all36_cgenff.prm append
+
+! read protein
+read sequ pdb name @0/t4l.pdb
+gene PRO setup
+auto angle dihe
+
+read coor pdb name @0/t4l.pdb resid
+ic fill
+ic param
+ic build
+hbuild sele all end
+PRINt COORdinate SELEct .NOT. INITialized END
+
+! specify parameters for protein grid potentials
+set xcen = 26.912
+set ycen = 6.126
+set zcen = 4.179
+set emax = 2
+set mine = -20
+set maxe = 40
+set space = 0.5
+set xmax = 8
+set ymax = 8
+set zmax = 8
+
+! read van der Waals radii
+open unit 10 read form name @0/fftdock_c36prot_cgenff_probes.txt
+fftg radii unit 10
+
+! generate protein potential grid
+fftg pgen xmax @xmax ymax @xmax zmax @xmax -
+    xcen @xcen ycen @ycen zcen @zcen -
+    dgrid @space emax @EMAX mine @MINE maxe @MAXE -
+    sele segid pro end -
+    rdie epsilon 3
+
+! save grid
+open unit 11 write form name @9/fft_dock_grid.txt
+fftg pwri form unit 11
+fftg clear
+grid clear
+
+! read ligand
+stream @0/benzene.stream
+
+! real ligand pdb
+read sequ pdb name @0/benzene.pdb
+generate LIGA setup
+read coor pdb name @0benzene.pdb resid
+print coor sele .not. init end
+
+! copy the native coordinate to comparison coordinates
+print coor selec segid LIGA end
+coor copy comp
+
+! translate ligand by a random amount
+calc xoff = 10*?RAND
+calc yoff = 10*?RAND
+calc zoff = 10*?RAND
+coor tran xdir @xoff ydir @yoff zdir @zoff selec segid LIGA end
+print coor selec segid LIGA end
+
+! read grid potentials
+open unit 30 read form name @9/fft_dock_grid.txt
+FFTG read UNIT 30 form
+
+! FFT docking
+FFTG LCON NCON 10 ICON 1 NROK 2 NQUA 1 IQUA sele segi LIGA end
+
+! open unit 40 read form name @0/fftdock_rotation_1.qua
+! FFTG LCON NCON 10 ICON 1 NROK 2 QUAU 40 sele segi LIGA end
+! stop
+
+! copy coordinate of docked ligand to main coordinate set
+FFTG COOR ICON 1 IROT 1
+print coor selec segid LIGA end
+
+! calculated rmsd between docked structure and native structure
+coor rms selec segid LIGA end comp
+
+! the value of rms should be less than 0.5. It is about 0.373899
+show ?rms
+@testcheck ?rms 0.3739 0.01 FFT_DOCK
+
+!show ?FFTE
+stop

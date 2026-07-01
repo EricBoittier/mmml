@@ -1,0 +1,93 @@
+* CHARMM c35a2 testcase
+* Full QM/MM Hessian Test Case 
+* Water Dimer
+* Author: H. Lee Woodcock, 06/2007
+*
+
+IF ?QCHEM .NE. 1 THEN
+ echo "Test NOT performed."
+ STOP
+endif
+
+bomlev -1
+STREam datadir.def
+
+read rtf  card name @0top_all22_prot.inp
+read para card name @0par_all22_prot.inp
+
+read sequ tip3 2
+
+GENERATE WAT noang nodihe 
+
+print coor
+print psf
+!print param
+
+READ COOR CARD
+*   WATER
+*
+    6
+    1    1 TIP3 OH2   -1.32020   0.00907   0.00046 WAT  1      0.00000
+    2    1 TIP3 H1    -1.80478   0.41425   0.75911 WAT  1      0.00000
+    3    1 TIP3 H2    -1.80525   0.41199  -0.75911 WAT  1      0.00000
+    4    2 TIP3 OH2    1.48865   0.01937  -0.00061 WAT  2      0.00000
+    5    2 TIP3 H1     1.66731  -0.91980   0.00038 WAT  2      0.00000
+    6    2 TIP3 H2     0.51882   0.06029  -0.00023 WAT  2      0.00000
+
+print coor 
+
+ energy
+
+ coor orient mass
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!! Set options for pure QM Calc !!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ envi qchemcnt  "data/qchem_pc.inp"
+ envi qcheminp  "q1.inp"
+ envi qchemexe  "../bin/qchem"
+ envi qchemout  "q1.out"
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ qchem remove sele resid 1 show end
+ energy 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!! Set options for Blurred QM Calc !!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ envi qchemcnt  "data/qchem_gpc.inp"
+ envi qcheminp  "q1.inp"
+ envi qchemexe  "../bin/qchem"
+ envi qchemout  "q1.out"
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Set BLURred charges to point charges 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ scalar WMAIN set 0.0 select resid 2 show end  
+
+ qchem remove blur sele resid 1 show end
+ energy 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Set BLURred charges to width of 5000.0 Ang. 
+! (i.e. infinite delocalization)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ scalar WMAIN set 5000.0 select resid 2 show end 
+
+ qchem remove blur sele resid 1 show end
+ energy
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Set BLURred charges to width of 5000.0 Ang. 
+! (i.e. infinite delocalization) but use RECALL instead
+! of WMAIN 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ scalar WMAIN STORe 5
+ scalar 5 show 
+
+ qchem remove blur recall 5 sele resid 1 show end
+ energy
+
+stop
+

@@ -1,0 +1,72 @@
+* Testcase for MTPL module--water dimer
+* Author: Tristan Bereau (01.16.13)
+*
+
+stream datadir.def
+
+
+read rtf   card
+* Custom water topology 
+* (no point charges, will be defined in lpun file)
+*
+31 1
+
+MASS     4 HT     1.00800 H ! TIPS3P WATER HYDROGEN
+MASS    75 OT    15.99940 O ! TIPS3P WATER OXYGEN
+
+RESI TIP3         0.000 ! tip3p water model without charges (MTP below)
+GROUP   
+ATOM OH2  OT      0.000
+ATOM H1   HT      0.000
+ATOM H2   HT      0.000
+BOND OH2 H1 OH2 H2 H1 H2    
+ANGLE H1 OH2 H2             
+ACCEPTOR OH2   
+PATCHING FIRS NONE LAST NONE 
+END
+
+read param card
+* Custom water parameter file
+* (no point charges, will be defined in lpun file)
+*
+BONDS
+HT   HT      0.000     1.5139
+OT   HT    450.000     0.9572
+
+ANGLES
+HT   OT   HT     55.000   104.5200
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5 
+HT     0.000000  -0.046000     0.224500
+OT     0.000000  -0.152100     1.768200
+END
+
+read sequ tip3 2
+
+generate w setup noang nodihe
+
+read coor card
+* 2 WATERs
+*  DATE:     1/16/13     13:14: 7      CREATED BY USER: bereau
+*
+    6
+    1    1 TIP3 OH2   -0.91036  -0.00000   0.37097 W    1      0.00000
+    2    1 TIP3 H1    -0.69087  -0.75480  -0.17446 W    1      0.00000
+    3    1 TIP3 H2    -0.69087   0.75480  -0.17446 W    1      0.00000
+    4    2 TIP3 OH2    2.66027   0.00000  -0.41071 W    2      0.00000
+    5    2 TIP3 H1     2.81881  -0.75545   0.15479 W    2      0.00000
+    6    2 TIP3 H2     2.81881   0.75545   0.15479 W    2      0.00000
+
+
+open unit 40 card read name @0mtpl_water-dimer.lpun
+mtpl mtpunit 40
+close unit 40
+
+energy
+
+dyna leap start nstep 10 timestep 0.0001 -
+     nprint 1 nsavc -1 iuncrd 0 ntrfrq 1000 -
+     iprfrq 1000
+
+energy
