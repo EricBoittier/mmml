@@ -1867,11 +1867,14 @@ def mlpot_spherical_forces_ev_angstrom(
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
+        _DeferredDecomposedMlpotCalculator,
     )
 
     if not isinstance(pyCModel, DecomposedMlpotModel):
         return None
     calc = pyCModel.get_pycharmm_calculator()
+    if isinstance(calc, _DeferredDecomposedMlpotCalculator):
+        calc = calc._ensure_real()
     if not isinstance(calc, DecomposedMlpotCalculator) or calc.spherical_fn is None:
         return None
 
@@ -2906,6 +2909,9 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     if mlpot_ctx.sd_watchdog_baseline_grms is None:
         mlpot_ctx.sd_watchdog_baseline_grms = float(hybrid_grms)
+
+    if ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing:
+        setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
 
     return float(hybrid_grms), float(user)
 

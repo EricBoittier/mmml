@@ -1256,7 +1256,14 @@ def _run_minimize_in_chunks(
             materialize_deferred_mlpot_jax_before_sd(
                 config.mlpot_ctx,
                 verbose=config.verbose,
+                force_ener_probe=True,
+                sync_lists=True,
             )
+            from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+                recover_mpi_for_charmm_after_jax,
+            )
+
+            recover_mpi_for_charmm_after_jax(phase="before MLpot SD chunk")
         step = min(_effective_mlpot_sd_chunk_nstep(config, previous_grms=previous_grms), remaining)
         kw = {**base_kw, "nstep": step}
         _prepare_mlpot_sd_list_frequencies(pycharmm, sd_kw=kw)
@@ -5781,12 +5788,6 @@ def minimize_with_mlpot(
         materialize_deferred_mlpot_jax_before_sd,
     )
 
-    if config.mlpot_ctx is not None:
-        materialize_deferred_mlpot_jax_before_sd(
-            config.mlpot_ctx,
-            verbose=config.verbose,
-        )
-
     try:
         if config.verbose and config.show_energy:
             print("CHARMM energy before minimization:")
@@ -5841,6 +5842,13 @@ def minimize_with_mlpot(
                         note="post calculator pre-minimize",
                         quiet=False,
                     )
+        if config.mlpot_ctx is not None:
+            materialize_deferred_mlpot_jax_before_sd(
+                config.mlpot_ctx,
+                verbose=config.verbose,
+                force_ener_probe=True,
+                sync_lists=True,
+            )
         with charmm_mlpot_sd_jax_cpu_guard(pyC_model):
             sd_result = _run_mlpot_sd_then_abnr(
                 minimize,

@@ -609,7 +609,12 @@ def test_run_minimize_in_chunks_materializes_deferred_jax_before_first_sd():
             run_attr="run_sd",
         )
 
-    materialize.assert_called_once_with(ctx, verbose=False)
+    materialize.assert_called_once_with(
+        ctx,
+        verbose=False,
+        force_ener_probe=True,
+        sync_lists=True,
+    )
 
 
 def test_materialize_deferred_mlpot_jax_before_sd_skips_without_mpi_defer():

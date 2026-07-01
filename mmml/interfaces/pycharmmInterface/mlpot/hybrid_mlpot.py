@@ -1163,6 +1163,8 @@ def materialize_deferred_mlpot_jax_before_sd(
     *,
     verbose: bool = False,
     probe_charmm_ener: bool = True,
+    force_ener_probe: bool = False,
+    sync_lists: bool = False,
 ) -> bool:
     """Build deferred JAX on CPU and probe CHARMM ``ENER`` before MLpot SD.
 
@@ -1170,6 +1172,10 @@ def materialize_deferred_mlpot_jax_before_sd(
     ``steepd`` ``gete`` can corrupt OpenMPI pools so the next ``enbond`` step
     segfaults. Materialize the callback and run one ``ENER FORCE`` outside SD
     first (with ``recover_mpi_for_charmm_after_jax`` between JAX and Fortran).
+
+    When ``sync_lists`` is set, run CHARMM ``ENER`` + ``UPDATE`` after the probe
+    so ``inbfrq=0`` SD starts from fresh NB/MLpot lists (avoids ``enbond``
+    segfaults on stale pair buffers after prep/coordinate moves).
     """
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
@@ -1227,11 +1233,14 @@ def materialize_deferred_mlpot_jax_before_sd(
                 flush=True,
             )
 
-    if probe_charmm_ener and not bool(
-        getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
-    ):
+    should_probe = probe_charmm_ener and (
+        force_ener_probe
+        or not bool(getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False))
+    )
+    if should_probe:
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
             _ensure_domdec_off_for_mlpot_energy,
+            sync_charmm_lists_after_mini,
         )
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
             charmm_grms_after_ener_force,
@@ -1245,6 +1254,9 @@ def materialize_deferred_mlpot_jax_before_sd(
         recover_mpi_for_charmm_after_jax(phase="after pre-MLpot SD ENER probe")
         setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
         did_work = True
+        if sync_lists:
+            sync_charmm_lists_after_mini(quiet=True)
+            recover_mpi_for_charmm_after_jax(phase="after pre-MLpot SD list sync")
         if verbose:
             print(
                 f"Pre-MLpot SD: CHARMM ENER probe OK "
