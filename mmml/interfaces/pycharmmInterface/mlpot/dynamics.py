@@ -3354,6 +3354,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
     quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     restart_read_path = kw.pop("_restart_read_path", None)
+    post_dyna_restart_write = kw.pop("_post_dyna_restart_write", None)
     bussi_active = _bussi_heat_ramp_active(kw)
     _ensure_bussi_heat_continuation_iasvel(kw)
     _strip_non_charmm_dynamics_keywords(kw)
