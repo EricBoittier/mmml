@@ -1108,3 +1108,65 @@ def test_integrated_step_from_restart_negative_aborted_step(tmp_path):
     )
 
 
+def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _harmonize_overlap_chunk_frequencies,
+        _rewrite_overlap_readyn_restart_from_memory,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_nsavv,
+    )
+
+    scratch = tmp_path / "heat.a.res"
+    scratch.write_text(
+        "REST     1        50\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "       400         0        50        49       500        50\n",
+        encoding="ascii",
+    )
+    captured: dict[str, int] = {}
+
+    def fake_rewrite(path, *, write_unit=92, global_step=None, nsavc=None, nsavv=None):
+        captured["path"] = Path(path)
+        captured["global_step"] = int(global_step)
+        captured["nsavc"] = int(nsavc)
+        captured["nsavv"] = int(nsavv)
+        Path(path).write_text(
+            "REST     1       500\n"
+            " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+            f"       400         0       500        {nsavc:10d}{nsavv:10d}       500\n"
+            " !X, Y, Z\n"
+            " 0.100000000000000D+00 0.200000000000000D+00 0.300000000000000D+00\n",
+            encoding="ascii",
+        )
+        return True
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.rewrite_dynamics_restart_validated",
+        fake_rewrite,
+    )
+
+    chunk_kw = {
+        "nstep": 50,
+        "nsavc": 320,
+        "isvfrq": 500,
+        "nsavv": 500,
+        "iprfrq": 500,
+    }
+    _harmonize_overlap_chunk_frequencies(chunk_kw, 50, global_step_start=450)
+    assert chunk_kw["nsavc"] == 49
+    assert chunk_kw["nsavv"] == 50
+
+    _rewrite_overlap_readyn_restart_from_memory(
+        scratch,
+        chunk_kw,
+        chunk_nstep=50,
+        global_step=500,
+        overlap_context="HEAT",
+    )
+
+    assert captured["global_step"] == 500
+    assert captured["nsavc"] == 49
+    assert captured["nsavv"] == 50
+    assert read_restart_nsavv(scratch) == 50
+

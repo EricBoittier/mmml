@@ -73,6 +73,28 @@ def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
     assert "9.000000000000000D-01" in text
 
 
+def test_write_charmm_restart_from_memory_sets_nsavv(tmp_path):
+    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+        write_charmm_restart_from_memory,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_nsavv,
+    )
+
+    pos = np.array([[0.1, 0.2, 0.3]], dtype=float)
+    res = tmp_path / "heat.a.res"
+    write_charmm_restart_from_memory(
+        res,
+        positions=pos,
+        global_step=500,
+        nsavc=49,
+        nsavv=50,
+        include_crystal=False,
+        include_velocities=False,
+    )
+    assert read_restart_nsavv(res) == 50
+
+
 def test_rewrite_dynamics_restart_avoids_charmm_script():
     block = (
         _read("mmml/interfaces/pycharmmInterface/mlpot/bonded_mm_recovery.py")
