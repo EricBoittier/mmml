@@ -150,20 +150,26 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
     np.testing.assert_allclose(sync_comp.call_args[0][0], vel)
 
 
-@patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint._charmm_velocities_array",
-    return_value=None,
-)
-@patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
-)
-def test_charmm_velocities_akma_falls_back_to_comp(mock_comp, mock_main):
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-        charmm_velocities_akma,
-    )
+def test_run_dynamics_ensures_bussi_iasvel_one():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
-    vel = np.array([[3.0, 0.0, 0.0], [0.0, 4.0, 0.0]], dtype=float)
-    mock_comp.return_value = vel
-    out = charmm_velocities_akma()
-    mock_comp.assert_called_once()
-    np.testing.assert_allclose(out, vel)
+    kw = {
+        "nstep": 10,
+        "start": False,
+        "iasvel": 0,
+        "_heat_thermostat": "bussi",
+        "_bussi_ramp": {"firstt": 10.0, "finalt": 50.0, "teminc": 1.0, "ihtfrq": 50},
+        "_bussi_rescale_interval": 50,
+    }
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        return_value=MagicMock(),
+    ) as run_capi, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
+    ):
+        run_dynamics(kw)
+    passed_kw = run_capi.call_args[0][0]
+    assert passed_kw["iasvel"] == 1

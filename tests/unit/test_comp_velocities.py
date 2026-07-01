@@ -244,23 +244,67 @@ def test_sync_comparison_velocities_from_main_missing(mock_vel):
     return_value=False,
 )
 @patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi",
-)
-def test_sync_comparison_velocities_from_comparison_warm(mock_get, mock_cold):
-    mock_get.return_value = np.array([[10.0, 0.0, 0.0, 0.0], [0.0, 20.0, 0.0, 0.0]])
-    assert sync_comparison_velocities_from_comparison() is True
-    mock_get.assert_called_once()
-
-
-@patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
     return_value=True,
 )
 @patch(
     "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.coor_get_comparison_capi",
 )
-def test_sync_comparison_velocities_from_comparison_cold(mock_get, mock_cold):
-    mock_get.return_value = np.zeros((2, 4))
+def test_sync_comparison_velocities_from_comparison_rejects_positions(
+    mock_get, mock_pos, mock_cold
+):
+    mock_get.return_value = np.array([[1.0, 2.0, 3.0, 0.0]])
+    assert sync_comparison_velocities_from_comparison() is False
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm",
+)
+def test_comparison_matches_main_positions_true(mock_import, mock_comp):
+    mock_import.return_value.coor.get_positions.return_value = pd.DataFrame(
+        {"x": [1.0], "y": [2.0], "z": [3.0]}
+    )
+    mock_comp.return_value = np.array([[1.0, 2.0, 3.0]])
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        comparison_matches_main_positions,
+    )
+
+    assert comparison_matches_main_positions() is True
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+)
+def test_sync_comparison_velocities_from_comparison_warm(mock_comp, mock_cold, mock_pos):
+    mock_comp.return_value = np.array([[10.0, 0.0, 0.0], [0.0, 20.0, 0.0]])
+    assert sync_comparison_velocities_from_comparison() is True
+    mock_comp.assert_called_once()
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+)
+def test_sync_comparison_velocities_from_comparison_cold(mock_comp, mock_cold, mock_pos):
+    mock_comp.return_value = np.zeros((2, 3))
     assert sync_comparison_velocities_from_comparison() is False
 
 

@@ -3370,6 +3370,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     )
 
     import pycharmm
+    _ensure_bussi_heat_continuation_iasvel(kw)
     clamp_velocity_assignment_dynamics_kw(kw)
     # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
     mirror_comparison_velocities_for_dynamics(

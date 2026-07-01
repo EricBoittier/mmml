@@ -170,12 +170,29 @@ def sync_comparison_velocities_from_main() -> bool:
     return True
 
 
+def comparison_matches_main_positions(*, atol: float = 1.0e-4) -> bool:
+    """True when COMP x/y/z match the main coordinate set (not AKMA velocities)."""
+    try:
+        comp = comparison_velocities_akma()
+        if comp is None:
+            return False
+        pycharmm = _import_pycharmm()
+        main = pycharmm.coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+        if comp.shape != main.shape:
+            return False
+        return bool(np.allclose(comp, main, rtol=0.0, atol=float(atol)))
+    except Exception:
+        return False
+
+
 def sync_comparison_velocities_from_comparison() -> bool:
     """True when COMP already holds warm AKMA velocities (post-dyna / handoff)."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         velocities_are_cold,
     )
 
+    if comparison_matches_main_positions():
+        return False
     vel = comparison_velocities_akma()
     if vel is None or velocities_are_cold(vel):
         return False
