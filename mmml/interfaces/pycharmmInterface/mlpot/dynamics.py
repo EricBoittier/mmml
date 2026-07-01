@@ -3364,10 +3364,16 @@ def _resolve_dynamics_init_velocities(
         raw = last_synced_velocities_akma_raw()
         if raw is not None:
             v = np.asarray(raw, dtype=np.float64).reshape(-1, 3)
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                velocities_are_pathological,
+            )
+
             if (
                 v.size > 0
                 and np.all(np.isfinite(v))
                 and float(np.max(np.abs(v))) >= 1.0e-8
+                and not velocities_are_cold(v)
+                and not velocities_are_pathological(v)
             ):
                 return None
 
@@ -5624,8 +5630,10 @@ def _run_bussi_heat_subchunked(
             ihtfrq=interval,
             step=global_after,
         )
-        restart_path = None
-        if sub_io is not None and getattr(sub_io, "restart_write", None) is not None:
+        restart_path = sub_kw.pop("_post_dyna_last_restart_path", None)
+        if restart_path is not None:
+            restart_path = Path(restart_path)
+        elif sub_io is not None and getattr(sub_io, "restart_write", None) is not None:
             candidates = resolve_restart_velocities_read_paths(sub_io.restart_write)
             restart_path = next(
                 (p for p in candidates if p.is_file() and p.stat().st_size > 0),
