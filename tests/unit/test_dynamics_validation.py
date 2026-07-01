@@ -1046,7 +1046,7 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
 
     path = tmp_path / "baseline.res"
 
-    def fake_rewrite(p, *, write_unit=92):
+    def fake_rewrite(p, *, write_unit=92, global_step=None, nsavc=None, nsavv=None):
         Path(p).write_text(
             _minimal_restart_text(
                 natom=1,
