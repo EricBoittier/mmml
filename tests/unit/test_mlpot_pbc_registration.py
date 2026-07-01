@@ -198,7 +198,9 @@ def test_finalize_pbc_exclusions_restores_lattice_with_image_byres():
     fake_sel = MagicMock()
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.restore_charmm_cubic_crystal_lattice",
-    ) as restore, patch.object(
+    ) as restore, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+    ) as apply_nb, patch.object(
         mlpot_setup,
         "_install_ml_exclusions",
     ) as install, patch.object(
@@ -212,9 +214,10 @@ def test_finalize_pbc_exclusions_restores_lattice_with_image_byres():
             cubic_box_side_A=32.0,
             verbose=False,
         )
-    restore.assert_called_once_with(32.0, quiet=True)
+    restore.assert_called_once_with(32.0, quiet=True, apply_nbonds=False)
     install.assert_called_once_with(fake_sel, update=False)
-    fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
+    apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0)
+    fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
     fake_pycharmm.image.update_bimag.assert_called_once()
 
 

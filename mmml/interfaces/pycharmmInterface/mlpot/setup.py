@@ -1295,26 +1295,35 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
 ) -> None:
     """Rebuild crystal/nb lists after READ PARAM, then apply ML exclusions once.
 
-    ``read_param_file`` (append or not) always clears NONBOND/HBOND lists and IMAGE
-    atoms (``api_read.F90``). Installing ML exclusions via ``set_iblo_inb`` before
-    rebuilding PBC leaves ``upinb`` operating on a cleared image table → segfault.
+    ``read_param_file`` clears NONBOND/HBOND lists and IMAGE atoms (``api_read.F90``).
+    Order matters:
+
+    1. Crystal build + ``image byres`` (repopulate NATIM; no ``upinb`` yet).
+    2. ML ``iblo/inb`` via ``set_iblo_inb_no_update``.
+    3. One ``apply_pbc_nbonds`` / ``upinb`` with exclusions and image tables ready.
+
+    Running ``upinb`` before step 2 leaves central-cell lists inconsistent; running
+    it before step 1 segfaults in ``MAKGRP`` when NTRANS>0 and NATIM=0.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        apply_pbc_nbonds,
         restore_charmm_cubic_crystal_lattice,
     )
 
+    side = float(cubic_box_side_A)
     restore_charmm_cubic_crystal_lattice(
-        float(cubic_box_side_A),
+        side,
         quiet=not verbose,
+        apply_nbonds=False,
     )
     _install_ml_exclusions(ml_selection, update=False)
+    apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
     pycharmm = _import_pycharmm()
-    pycharmm.nbonds.update_bnbnd()
     pycharmm.image.update_bimag()
     if verbose:
         print(
             "MLpot PBC: rebuilt crystal/nb lists after CGENFF param read "
-            f"(L={float(cubic_box_side_A):.3f} Å)",
+            f"(L={side:.3f} Å)",
             flush=True,
         )
 
