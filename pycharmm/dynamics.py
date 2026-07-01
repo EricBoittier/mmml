@@ -801,6 +801,12 @@ def _configure_known_only(**kwargs):
         elif k in valid_toggles and v:
             valid_toggles[k]()
         elif k in valid_setters:
+            # Integer unit numbers are for DynamicsScript; paths are opened earlier.
+            if k in ("iunwri", "iuncrd", "iunrea") and not isinstance(v, str):
+                continue
+            if k == "timestep":
+                set_timest(float(v))
+                continue
             valid_setters[k](v)
 
     return options

@@ -42,6 +42,17 @@ def test_run_dynamics_uses_c_api_when_available():
     assert "_run_dynamics_via_c_api" in block
 
 
+def test_configure_known_only_skips_integer_io_units():
+    block = (
+        Path("pycharmm/dynamics.py")
+        .read_text(encoding="utf-8")
+        .split("def _configure_known_only(")[1]
+        .split("\ndef ")[0]
+    )
+    assert 'not isinstance(v, str)' in block
+    assert '("iunwri", "iuncrd", "iunrea")' in block
+
+
 def test_run_dynamics_c_api_path_invoked():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
@@ -53,6 +64,7 @@ def test_run_dynamics_c_api_path_invoked():
         "start": True,
         "iasvel": 1,
         "echeck": -1.0,
+        "iunrea": -1,
     }
     fake_dyn = MagicMock()
     fake_pycharmm = MagicMock()
