@@ -22,7 +22,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install ".[dev]"
       - name: Build docs
-        run: mkdocs build --strict
+        run: |
+          python scripts/generate_cli_docs.py --check
+          mkdocs build --strict
 
   pdf:
     name: PDF Export

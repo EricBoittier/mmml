@@ -38,17 +38,93 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - Package Architecture: package-architecture.md
-  - DCMNet Calculators: dcmnet_calculators.md
-  - md-system YAML configs: md-system-configs.md
-  - MLpot Settings: mlpot-settings.md
-  - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
-  - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
-  - Cross-backend MD handoff: handoff.md
-  - QC supplementary cross-check: qc-cross-check.md
-  - Spatial ML MPI: mlpot-spatial-mpi.md
-  - PyCHARMM Threading: pycharmm-threading.md
-  - FFTW for CHARMM: fftw-build.md
-  - Development: development.md
-  - Units Summary: UNITS_SUMMARY.md
-  - API Reference: api.md
+  - CLI:
+      - Overview: cli/index.md
+      - Tab completion: cli/completion.md
+      # CLI_NAV_START
+      - Structure & boxes:
+          - make-res: cli/commands/make-res.md
+          - make-box: cli/commands/make-box.md
+          - build-crystal: cli/commands/build-crystal.md
+          - liquid-box: cli/commands/liquid-box.md
+      - MD & campaigns:
+          - md-system: cli/commands/md-system.md
+          - run: cli/commands/run.md
+          - run-pycharmm: cli/commands/run-pycharmm.md
+          - warmup-mlpot-jax: cli/commands/warmup-mlpot-jax.md
+          - mpi-check: cli/commands/mpi-check.md
+          - health-check: cli/commands/health-check.md
+          - lambda-mbar: cli/commands/lambda-mbar.md
+          - pycharmm-two-residue-sample: cli/commands/pycharmm-two-residue-sample.md
+      - QM & data:
+          - pyscf-dft: cli/commands/pyscf-dft.md
+          - pyscf-mp2: cli/commands/pyscf-mp2.md
+          - pyscf-evaluate: cli/commands/pyscf-evaluate.md
+          - pyscf-evaluate-mp2: cli/commands/pyscf-evaluate-mp2.md
+          - fix-and-split: cli/commands/fix-and-split.md
+          - xml2npz: cli/commands/xml2npz.md
+          - validate: cli/commands/validate.md
+          - verify-esp-alignment: cli/commands/verify-esp-alignment.md
+          - normal-mode-sample: cli/commands/normal-mode-sample.md
+          - compare-npz: cli/commands/compare-npz.md
+          - cross-check: cli/commands/cross-check.md
+      - ML training & sampling:
+          - physnet-train: cli/commands/physnet-train.md
+          - physnet-evaluate: cli/commands/physnet-evaluate.md
+          - physnet-md: cli/commands/physnet-md.md
+          - efield-train: cli/commands/efield-train.md
+          - efield-evaluate: cli/commands/efield-evaluate.md
+          - efield-md: cli/commands/efield-md.md
+          - active-learning: cli/commands/active-learning.md
+          - kernel-fit: cli/commands/kernel-fit.md
+          - sample-diverse-xyz: cli/commands/sample-diverse-xyz.md
+          - interpolate-xyz: cli/commands/interpolate-xyz.md
+          - train-joint: cli/commands/train-joint.md
+          - extract-checkpoint-metrics: cli/commands/extract-checkpoint-metrics.md
+          - diagnose-lc-outliers: cli/commands/diagnose-lc-outliers.md
+          - orbax-to-json: cli/commands/orbax-to-json.md
+      - Workflow helpers:
+          - configure: cli/commands/configure.md
+          - env: cli/commands/env.md
+          - commands: cli/commands/commands.md
+          - examples: cli/commands/examples.md
+          - completion: cli/commands/completion.md
+          - gui: cli/commands/gui.md
+          - unwrap-traj: cli/commands/unwrap-traj.md
+          - downstream: cli/commands/downstream.md
+      - ORCA external:
+          - orca-server: cli/commands/orca-server.md
+          - orca-client: cli/commands/orca-client.md
+          - orca-external: cli/commands/orca-external.md
+      - Deprecated & legacy:
+          - train: cli/commands/train.md
+          - evaluate: cli/commands/evaluate.md
+          - ef-train: cli/commands/ef-train.md
+          - ef-evaluate: cli/commands/ef-evaluate.md
+          - ef-md: cli/commands/ef-md.md
+      # CLI_NAV_END
+  - MD workflows:
+      - md-system YAML configs: md-system-configs.md
+      - Liquid box workflow: liquid-box-workflow.md
+      - Cross-backend handoff: handoff.md
+      - Long-range solver tutorial: long-range-solver-tutorial.md
+  - MLpot:
+      - Settings: mlpot-settings.md
+      - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
+      - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
+      - Spatial ML MPI: mlpot-spatial-mpi.md
+  - PyCHARMM & cluster:
+      - MPI operations: pycharmm-mpi.md
+      - Threading & launchers: pycharmm-threading.md
+      - FFTW for CHARMM: fftw-build.md
+      - Agent handoff (9-mer): agent-handoff-pycharmm-9mer.md
+  - QC & calculators:
+      - QC cross-check: qc-cross-check.md
+      - DCMNet calculators: dcmnet_calculators.md
+  - Reference:
+      - Package architecture: package-architecture.md
+      - Units summary: UNITS_SUMMARY.md
+      - API reference: api.md
+  - Development:
+      - Contributor guide: development.md
+      - Releasing: releasing.md
