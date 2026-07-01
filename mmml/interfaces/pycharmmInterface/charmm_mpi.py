@@ -2493,12 +2493,12 @@ def mpirun_launch_hint(argv0: str = "mmml md-system") -> str:
     return "\n".join(lines)
 
 
-def assert_mpi_launcher_for_mlpot_sd(*, context: str = "MLpot SD") -> None:
-    """Refuse serial ``python`` for MPI-linked CHARMM MLpot SD / minimize.
+def assert_mpi_launcher_for_mlpot(*, context: str = "MLpot") -> None:
+    """Refuse serial ``python`` for MPI-linked CHARMM MLpot (registration or SD).
 
-    JAX inside the MLpot Fortran callback during ``steepd`` can corrupt OpenMPI
-    registered-memory pools when MPI was not initialized by ``mpirun`` before
-    CHARMM loaded; the next Fortran ``enbond`` step then segfaults.
+    Serial runs often segfault in Fortran ``upinb`` during PBC MLpot registration or
+    in ``enbond`` during the first MLpot SD step when OpenMPI was not initialized
+    by ``mpirun`` before CHARMM loaded.
     """
     if _truthy("MMML_ALLOW_SERIAL_MPI_CHARMM"):
         return
@@ -2508,13 +2508,18 @@ def assert_mpi_launcher_for_mlpot_sd(*, context: str = "MLpot SD") -> None:
         return
     raise RuntimeError(
         f"{context} requires OpenMPI launch for MPI-linked libcharmm.so. "
-        "Serial python often segfaults in Fortran enbond during the first "
-        "MLpot SD step. Re-run under:\n"
+        "Serial python often segfaults in Fortran upinb (PBC registration) or "
+        "enbond (MLpot SD). Re-run under:\n"
         f"  {_repo_root_hint() / 'scripts/mmml-charmm-mpirun.sh'} md-system ...\n"
         "or:\n  "
         + mpirun_launch_hint("mmml md-system")
         + "\nSet MMML_ALLOW_SERIAL_MPI_CHARMM=1 only for deliberate A/B debugging."
     )
+
+
+def assert_mpi_launcher_for_mlpot_sd(*, context: str = "MLpot SD") -> None:
+    """Backward-compatible alias for :func:`assert_mpi_launcher_for_mlpot`."""
+    assert_mpi_launcher_for_mlpot(context=context)
 
 
 def _repo_root_hint() -> Path:

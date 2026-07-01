@@ -1380,9 +1380,6 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
 
     side = float(cubic_box_side_A)
     prepare_charmm_pbc(side)
-    recover_mpi_for_charmm_after_jax(
-        phase="after MLpot PBC crystal/IMAGE build",
-    )
     print(
         f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
         flush=True,
@@ -1490,7 +1487,14 @@ def register_mlpot(
         n_ml, pbc=bool(use_pbc), box_side_A=budget_box
     )
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        assert_mpi_launcher_for_mlpot,
+        charmm_lib_links_mpi,
+    )
     from mmml.interfaces.pycharmmInterface.nbonds_config import CGENFF_PRM_BOMLEV
+
+    if use_pbc and charmm_lib_links_mpi():
+        assert_mpi_launcher_for_mlpot(context="MLpot PBC registration")
 
     with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         skip_iblo_inb_update = False

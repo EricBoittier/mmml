@@ -502,3 +502,56 @@ def test_run_hybrid_calculator_bfgs_stops_on_safe_grms():
     assert stopped_spike is False
     assert stopped_safe is True
     assert opt.get_number_of_steps() == 1
+
+
+def test_commit_hybrid_calculator_mini_defer_path_skips_update_and_calls_prime():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _commit_hybrid_calculator_mini_result,
+    )
+
+    atoms = MagicMock()
+    atoms.get_positions.return_value = np.zeros((6, 3))
+    atoms.get_forces.return_value = np.zeros((6, 3))
+    atoms.get_potential_energy.return_value = -1.0
+
+    mlpot_ctx = MagicMock()
+    best = _BestMinimizationFrame(
+        positions=np.zeros((6, 3)),
+        fmax_ev_a=0.1,
+        energy_ev=-1.0,
+        grms_kcalmol_A=0.5,
+        step=1,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ) as sync_lists, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.prime_charmm_hybrid_energy_before_mlpot_sd",
+    ) as prime, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.mlpot_hybrid_grms_from_calculator",
+        return_value=0.5,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize._update_calculator_mini_historical_best",
+    ):
+        grms = _commit_hybrid_calculator_mini_result(
+            mlpot_ctx,
+            atoms,
+            best,
+            context_prefix="Test",
+            grms0=1.0,
+            stopped_on_spike=False,
+            optimizer_name="BFGS",
+            step_count=1,
+            verbose=False,
+        )
+
+    assert grms == pytest.approx(0.5)
+    sync_lists.assert_not_called()
+    prime.assert_called_once()

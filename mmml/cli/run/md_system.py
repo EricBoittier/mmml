@@ -2895,11 +2895,6 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
 
         _apply_charmm_omp_threads_env(args)
         prepare_serial_charmm_mpi_env()
-        from mmml.cli.run.warmup_mlpot_jax import maybe_auto_warmup_mlpot_jax_from_md_system
-
-        warm_rc = maybe_auto_warmup_mlpot_jax_from_md_system(args)
-        if warm_rc is not None and int(warm_rc) != 0:
-            return int(warm_rc)
         campaign_active = False
         if getattr(args, "config", None):
             from mmml.cli.run.md_config import config_is_campaign, load_yaml_config
@@ -2915,6 +2910,11 @@ def run_backend(backend: str, argv: list[str], args: argparse.Namespace) -> int:
             rerun_code = maybe_rerun_md_system_under_mpirun(sys.argv[1:])
             if rerun_code is not None:
                 return rerun_code
+        from mmml.cli.run.warmup_mlpot_jax import maybe_auto_warmup_mlpot_jax_from_md_system
+
+        warm_rc = maybe_auto_warmup_mlpot_jax_from_md_system(args)
+        if warm_rc is not None and int(warm_rc) != 0:
+            return int(warm_rc)
         if charmm_lib_links_mpi() and not _under_mpirun():
             print(
                 "mmml: OpenMPI-linked CHARMM — for large MLpot clusters prefer:\n  "
