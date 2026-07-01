@@ -812,6 +812,21 @@ def _configure_known_only(**kwargs):
     return options
 
 
+def _dynamics_velocity_ctypes_arrays(
+    init_velocities: dict,
+    natom: int,
+) -> tuple[ctypes.Array, ctypes.Array, ctypes.Array, list]:
+    """Build stable ``(c_double * natom)`` buffers for ``dynamics_run_kw``."""
+    keepalive: list[ctypes.Array] = []
+    out: list[ctypes.Array] = []
+    for comp in ("vx", "vy", "vz"):
+        vals = init_velocities[comp]
+        buf = (ctypes.c_double * natom)(*(vals[i] for i in range(natom)))
+        keepalive.append(buf)
+        out.append(buf)
+    return out[0], out[1], out[2], keepalive
+
+
 def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     """Run dynamics via ``dynopt`` keyword line (KEY_LIBRARY; no ``dynamics`` script)."""
     if not dynamics_run_kw_available():
@@ -822,10 +837,11 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     from pycharmm.charmm_file import c_api_string_buffer
 
     natom = coor.get_natom()
+    vel_keepalive: list[ctypes.Array] = []
     if init_velocities:
-        init_vx = (ctypes.c_double * natom)(*(init_velocities["vx"][0:natom]))
-        init_vy = (ctypes.c_double * natom)(*(init_velocities["vy"][0:natom]))
-        init_vz = (ctypes.c_double * natom)(*(init_velocities["vz"][0:natom]))
+        init_vx, init_vy, init_vz, vel_keepalive = _dynamics_velocity_ctypes_arrays(
+            init_velocities, natom
+        )
         out_vx = (ctypes.c_double * natom)()
         out_vy = (ctypes.c_double * natom)()
         out_vz = (ctypes.c_double * natom)()

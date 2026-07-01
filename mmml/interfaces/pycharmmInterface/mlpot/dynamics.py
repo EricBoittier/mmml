@@ -3505,6 +3505,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         fallback_paths=bussi_restart_fallbacks,
     )
     _strip_non_charmm_dynamics_keywords(kw)
+    comp_handoff_via_sync = False
     if init_velocities is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
             sync_charmm_velocities_akma,
@@ -3524,6 +3525,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             )
 
             sync_comparison_velocities_akma(v)
+            comp_handoff_via_sync = True
     else:
         # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
         mirror_comparison_velocities_for_dynamics(
@@ -3542,6 +3544,10 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
+    if comp_handoff_via_sync and bussi_active:
+        # ``dynamics_run_kw`` optional velocity CFI descriptors crash on some
+        # gfortran builds during in-memory Bussi legs; COMP already mirrors AKMA.
+        init_velocities = None
     if _dynamics_c_api_available():
         dyn = _run_dynamics_via_c_api(
             kw,
