@@ -156,15 +156,13 @@ def warmup_jax_pme_hybrid_host(
     c6_sqrt: np.ndarray | None = None,
     include_dispersion: bool | None = None,
 ) -> dict[str, int]:
-    """Pre-warm full-system and representative intra jax-pme hybrid shapes.
-
-    The hybrid correction repeatedly evaluates the full system plus one
-    monomer-slice shape per unique monomer size, separately for Coulomb and
-    r^-6 dispersion.  This helper exercises those shapes with the production
-    method/cutoff so the first MLpot callback is less likely to absorb compile
-    and cache setup time.
-    """
+    """Pre-warm jax-pme hybrid shapes (cross-monomer fused or legacy intra loop)."""
     from jaxpme import prefactors as jpref
+
+    from mmml.interfaces.pycharmmInterface.jax_pme_cross_monomer import (
+        compute_jax_pme_cross_monomer_power_law,
+        resolve_jax_pme_intra_mode,
+    )
 
     pos = np.asarray(positions_A, dtype=np.float64)
     charges = np.asarray(charges_e, dtype=np.float64).reshape(-1)
@@ -172,9 +170,12 @@ def warmup_jax_pme_hybrid_host(
     counts = {
         "coulomb_full": 0,
         "coulomb_intra": 0,
+        "coulomb_cross": 0,
         "dispersion_full": 0,
         "dispersion_intra": 0,
+        "dispersion_cross": 0,
     }
+    use_cross = resolve_jax_pme_intra_mode(method) == "cross"
 
     def _nonzero(values: np.ndarray) -> bool:
         arr = np.asarray(values, dtype=np.float64)
@@ -195,56 +196,82 @@ def warmup_jax_pme_hybrid_host(
 
     reps = _representative_slices()
     if _nonzero(charges):
-        warmup_jax_pme_power_law_host(
-            pos,
-            charges,
-            box_length_A=float(box_length_A),
-            method=method,
-            sr_cutoff_A=float(sr_cutoff_A),
-            exponent=1,
-            prefactor=float(jpref.kcalmol_A),
-        )
-        counts["coulomb_full"] += 1
-        for sl in reps:
-            if not _nonzero(charges[sl]):
-                continue
-            warmup_jax_pme_power_law_host(
-                pos[sl],
-                charges[sl],
+        if use_cross:
+            compute_jax_pme_cross_monomer_power_law(
+                pos,
+                charges,
+                offsets,
                 box_length_A=float(box_length_A),
                 method=method,
                 sr_cutoff_A=float(sr_cutoff_A),
                 exponent=1,
                 prefactor=float(jpref.kcalmol_A),
             )
-            counts["coulomb_intra"] += 1
+            counts["coulomb_cross"] += 1
+        else:
+            warmup_jax_pme_power_law_host(
+                pos,
+                charges,
+                box_length_A=float(box_length_A),
+                method=method,
+                sr_cutoff_A=float(sr_cutoff_A),
+                exponent=1,
+                prefactor=float(jpref.kcalmol_A),
+            )
+            counts["coulomb_full"] += 1
+            for sl in reps:
+                if not _nonzero(charges[sl]):
+                    continue
+                warmup_jax_pme_power_law_host(
+                    pos[sl],
+                    charges[sl],
+                    box_length_A=float(box_length_A),
+                    method=method,
+                    sr_cutoff_A=float(sr_cutoff_A),
+                    exponent=1,
+                    prefactor=float(jpref.kcalmol_A),
+                )
+                counts["coulomb_intra"] += 1
 
     if c6_sqrt is not None and resolve_jax_pme_dispersion(include_dispersion):
         c6 = np.asarray(c6_sqrt, dtype=np.float64).reshape(-1)
         if _nonzero(c6):
-            warmup_jax_pme_power_law_host(
-                pos,
-                c6,
-                box_length_A=float(box_length_A),
-                method=method,
-                sr_cutoff_A=float(sr_cutoff_A),
-                exponent=6,
-                prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
-            )
-            counts["dispersion_full"] += 1
-            for sl in reps:
-                if not _nonzero(c6[sl]):
-                    continue
-                warmup_jax_pme_power_law_host(
-                    pos[sl],
-                    c6[sl],
+            if use_cross:
+                compute_jax_pme_cross_monomer_power_law(
+                    pos,
+                    c6,
+                    offsets,
                     box_length_A=float(box_length_A),
                     method=method,
                     sr_cutoff_A=float(sr_cutoff_A),
                     exponent=6,
                     prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
                 )
-                counts["dispersion_intra"] += 1
+                counts["dispersion_cross"] += 1
+            else:
+                warmup_jax_pme_power_law_host(
+                    pos,
+                    c6,
+                    box_length_A=float(box_length_A),
+                    method=method,
+                    sr_cutoff_A=float(sr_cutoff_A),
+                    exponent=6,
+                    prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
+                )
+                counts["dispersion_full"] += 1
+                for sl in reps:
+                    if not _nonzero(c6[sl]):
+                        continue
+                    warmup_jax_pme_power_law_host(
+                        pos[sl],
+                        c6[sl],
+                        box_length_A=float(box_length_A),
+                        method=method,
+                        sr_cutoff_A=float(sr_cutoff_A),
+                        exponent=6,
+                        prefactor=DEFAULT_JAX_PME_LJ_PREFACTOR,
+                    )
+                    counts["dispersion_intra"] += 1
     return counts
 
 
