@@ -106,6 +106,7 @@ nav:
       # CLI_NAV_END
   - MD workflows:
       - md-system YAML configs: md-system-configs.md
+      - Tri-alanine water box: trialanine-water-box.md
       - Liquid box workflow: liquid-box-workflow.md
       - Cross-backend handoff: handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md

@@ -77,17 +77,20 @@ def test_resolve_cmap_key_forward_and_reverse() -> None:
 
 
 def test_parse_protein_prm_skips_cmap_blocks() -> None:
-    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
-        have_protein_toppar,
-        protein_toppar_paths,
-    )
+    from pathlib import Path
+
     from mmml.interfaces.pycharmmInterface.cgenff_topology import (
         _merge_charmm_prm_parameters,
     )
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
 
-    if not have_protein_toppar():
+    base = Path(CHARMM_HOME) / "toppar"
+    protein_prm = base / "par_all36m_prot.prm"
+    if not protein_prm.is_file():
+        protein_prm = base / "par_all36_prot.prm"
+    if not protein_prm.is_file():
         pytest.skip("protein toppar not available")
-    _, protein_prm = protein_toppar_paths()
+
     bonds, angles, dihedrals = _merge_charmm_prm_parameters(protein_prm)
     assert bonds
     assert angles

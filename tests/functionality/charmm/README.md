@@ -29,10 +29,11 @@ Uses a single TIP3 water (`setupRes`) — CGENFF only:
 - Physical forces equal negative energy gradient from `coor.get_forces()`
 - Short Hoover CPT NVT segment (`pmass=0`, fixed volume) completes without NaN
 
-### Tri-alanine water box (protein toppar + CGENFF TIP3)
+### Tri-alanine water box (CGENFF TRIA + TIP3)
 
-See [`README_trialanine_water_box.md`](README_trialanine_water_box.md). Requires
-`CHARMM_HOME/toppar` protein files; grid-placed waters (no Packmol).
+See [`README_trialanine_water_box.md`](README_trialanine_water_box.md) and
+[`docs/trialanine-water-box.md`](../../../docs/trialanine-water-box.md). Requires
+bundled ``top_trialanine_cgenff.rtf`` only (no protein toppar).
 
 ```bash
 pytest tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v

@@ -359,14 +359,119 @@ def figure_liquid_box_schematic(out: Path) -> None:
     plt.close(fig)
 
 
+def _trialanine_docs_atoms() -> Atoms:
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        synthetic_trialanine_water_atoms_for_docs,
+    )
+
+    return synthetic_trialanine_water_atoms_for_docs()
+
+
+def figure_trialanine_water_box(out: Path) -> None:
+    atoms = _trialanine_docs_atoms()
+    _save_structure_figure(
+        atoms,
+        out,
+        title="trialanine-water-box: CGENFF TRIA + 10× TIP3 (28 Å cube)",
+        rotation="55x,25y,0z",
+        scale=_SCALE_TRIALANINE_BOX,
+    )
+
+
+def figure_trialanine_peptide_zoom(out: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        peptide_only_atoms_from_box,
+    )
+
+    full = _trialanine_docs_atoms()
+    peptide = peptide_only_atoms_from_box(full, n_peptide_atoms=12)
+    _save_structure_figure(
+        peptide,
+        out,
+        title="TRIA peptide backbone (illustrative; full RESI has 42 atoms)",
+        rotation="25x,15y,0z",
+        scale=_SCALE_TRIALANINE_PEPTIDE,
+    )
+
+
+def figure_trialanine_build_pipeline(out: Path) -> None:
+    """Schematic build steps for ``build_trialanine_water_box_in_charmm``."""
+    import matplotlib.pyplot as plt
+    from matplotlib.patches import FancyBboxPatch
+
+    _style_matplotlib_rc()
+    stages = [
+        "CGENFF\n+ TRIA RTF",
+        "sequence\n+ IC",
+        "center\npeptide",
+        "grid\nTIP3",
+        "PBC\nNBOND",
+    ]
+    fig, ax = plt.subplots(figsize=(7.0, 2.4), dpi=150, facecolor=_STYLE["figure_facecolor"])
+    ax.set_facecolor(_STYLE["axes_facecolor"])
+    ax.set_xlim(0, len(stages))
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+
+    for i, label in enumerate(stages):
+        x = i + 0.5
+        box = FancyBboxPatch(
+            (x - 0.38, 0.28),
+            0.76,
+            0.44,
+            boxstyle="round,pad=0.04,rounding_size=0.08",
+            facecolor="#e0f2fe",
+            edgecolor="#2563eb",
+            linewidth=1.4,
+        )
+        ax.add_patch(box)
+        ax.text(x, 0.5, label, ha="center", va="center", fontsize=9, color=_STYLE["title_color"])
+        if i < len(stages) - 1:
+            ax.annotate(
+                "",
+                xy=(x + 0.42, 0.5),
+                xytext=(x + 0.58, 0.5),
+                arrowprops=dict(arrowstyle="->", color="#64748b", lw=1.5),
+            )
+
+    ax.set_title(
+        "trialanine_water_box: CGENFF-only build (no Packmol)",
+        fontweight="500",
+        fontsize=11,
+        color=_STYLE["title_color"],
+        pad=12,
+    )
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def _write_bundled_trialanine_reference_extxyz() -> None:
+    """Refresh illustrative ASE reference under ``mmml/data/charmm/``."""
+    import ase.io
+
+    from mmml.paths import bundled_file
+
+    atoms = _trialanine_docs_atoms()
+    extxyz = bundled_file("data", "charmm", "trialanine-water-smoke.extxyz")
+    extxyz.parent.mkdir(parents=True, exist_ok=True)
+    ase.io.write(extxyz, atoms)
+
+
 def figure_compose_workflow(out: Path) -> None:
     """Bar chart: typical atom counts for structure builders."""
     import matplotlib.pyplot as plt
 
     _style_matplotlib_rc()
-    labels = ["make-res\n(1 monomer)", "make-box\n(8× ACO)", "build-crystal\n(supercell)"]
-    counts = [10, 80, 48]
-    colors = ["#059669", "#2563eb", "#7c3aed"]
+    labels = [
+        "make-res\n(1 monomer)",
+        "make-box\n(8× ACO)",
+        "trialanine\n(42+30 H₂O)",
+        "build-crystal\n(supercell)",
+    ]
+    counts = [10, 80, 72, 48]
+    colors = ["#059669", "#2563eb", "#0d9488", "#7c3aed"]
 
     fig, ax = plt.subplots(figsize=(6.2, 3.5), dpi=150, facecolor=_STYLE["figure_facecolor"])
     ax.set_facecolor(_STYLE["axes_facecolor"])

@@ -32,6 +32,19 @@ Default smoke: 10 waters in a 28 Å box (~72 atoms).
 - Importable **PyCHARMM** / `libcharmm` (`pytest -m pycharmm`)
 - Bundled CGENFF + ``top_trialanine_cgenff.rtf`` (no protein ``toppar``)
 
+## Run
+
+```bash
+./scripts/mmml-charmm-mpirun.sh python -m pytest \
+  tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v
+```
+
+Fast unit coverage (no CHARMM):
+
+```bash
+uv run pytest tests/unit/test_mm_system_energy.py -q
+```
+
 ## Electrostatic / nonbond setups
 
 The JAX path in `mm_system_energy.py` mirrors CHARMM **cdie + fswitch/vswitch** with
