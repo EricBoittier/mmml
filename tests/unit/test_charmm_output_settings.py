@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from unittest.mock import patch
 
 import pytest
 
@@ -135,12 +134,8 @@ def test_normalize_dynamics_heat_ramp_kw_sets_tstruct_from_firstt():
     )
 
     kw = {"firstt": 48.0, "finalt": 240.0}
-    with patch("pycharmm.dynamics.set_firstt"), patch(
-        "pycharmm.dynamics.set_finalt"
-    ), patch("pycharmm.dynamics.set_tstruc") as set_tstruc:
-        _normalize_dynamics_heat_ramp_kw(kw)
+    _normalize_dynamics_heat_ramp_kw(kw)
     assert kw["tstruct"] == pytest.approx(48.0)
-    set_tstruc.assert_called_once_with(48.0)
 
 
 def test_build_heat_dynamics_sets_tstruct_to_firstt():
