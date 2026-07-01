@@ -2910,7 +2910,10 @@ def prepare_mlpot_hybrid_state_for_sd(
     if mlpot_ctx.sd_watchdog_baseline_grms is None:
         mlpot_ctx.sd_watchdog_baseline_grms = float(hybrid_grms)
 
-    if ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing:
+    if (
+        not skip_pre_sd_ener
+        and (ran_calculator_mini or ran_calculator_fire or ran_bonded_recovery or ran_geometry_packing)
+    ):
         setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
 
     return float(hybrid_grms), float(user)

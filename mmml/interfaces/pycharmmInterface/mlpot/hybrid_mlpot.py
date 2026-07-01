@@ -1181,12 +1181,16 @@ def materialize_deferred_mlpot_jax_before_sd(
     force_ener_probe: bool = False,
     sync_lists: bool = False,
 ) -> bool:
-    """Build deferred JAX on CPU and probe CHARMM ``ENER`` before MLpot SD.
+    """Build deferred JAX on CPU and optionally probe CHARMM before MLpot SD.
 
     MPI-linked CHARMM defers JAX until SD. Lazy materialization inside the first
     ``steepd`` ``gete`` can corrupt OpenMPI pools so the next ``enbond`` step
-    segfaults. Materialize the callback and run one ``ENER FORCE`` outside SD
-    first (with ``recover_mpi_for_charmm_after_jax`` between JAX and Fortran).
+    segfaults. Materialize the callback via hybrid forces (with
+    ``recover_mpi_for_charmm_after_jax`` between JAX and Fortran).
+
+    A standalone ``ENER FORCE`` probe runs only when JAX was materialized in this
+    call and calculator prep has not already primed CHARMM. Redundant probes after
+    calculator pre-minimize can segfault in Fortran ``upinb`` on PBC all-ML builds.
 
     When ``sync_lists`` is set, run CHARMM ``ENER`` + ``UPDATE`` after the probe.
     Do **not** enable before the first MLpot SD step with MLpot registered: ``UPDATE``
@@ -1199,6 +1203,7 @@ def materialize_deferred_mlpot_jax_before_sd(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
+        mlpot_sd_charmm_ener_already_primed,
         mlpot_skip_charmm_ener_force_before_first_sd,
     )
 
@@ -1213,8 +1218,9 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not getattr(pyCModel, "_defer_jax_until_after_sd", False):
         return False
 
+    jax_was_ready = getattr(pyCModel, "_spherical_fn", None) is not None
     did_work = False
-    if getattr(pyCModel, "_spherical_fn", None) is None:
+    if not jax_was_ready:
         calc = pyCModel.get_pycharmm_calculator()
         if isinstance(calc, _DeferredDecomposedMlpotCalculator):
             calc._ensure_real()
@@ -1255,10 +1261,8 @@ def materialize_deferred_mlpot_jax_before_sd(
                 flush=True,
             )
 
-    should_probe = probe_charmm_ener and (
-        force_ener_probe
-        or not bool(getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False))
-    )
+    already_primed = mlpot_sd_charmm_ener_already_primed(mlpot_ctx)
+    should_probe = probe_charmm_ener and did_work and not already_primed
     if should_probe:
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
             _ensure_domdec_off_for_mlpot_energy,

@@ -543,8 +543,13 @@ def _commit_hybrid_calculator_mini_result(
     invalidate_mlpot_calculator_caches(mlpot_ctx)
     mlpot_ctx.reregister_mlpot(verbose=False, reregister_params=False)
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        mlpot_skip_charmm_ener_force_before_first_sd,
+    )
 
     charmm_grms_after_ener_force()
+    if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+        setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
     grms1 = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
     if grms1 is None or not np.isfinite(grms1):
         raise RuntimeError("hybrid GRMS unavailable after calculator minimize")
