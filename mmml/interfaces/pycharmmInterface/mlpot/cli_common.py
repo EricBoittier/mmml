@@ -75,14 +75,25 @@ def add_charmm_output_args(parser: argparse.ArgumentParser) -> None:
         help="Dynamics: detailed status every N steps (default: 2000)",
     )
     group.add_argument(
+        "--dyn-freq-cadence",
+        type=int,
+        default=50,
+        metavar="N",
+        help=(
+            "Align heat/list/print cadence (ihtfrq, inbfrq, imgfrq, nprint, …) to N steps; "
+            "decoupled from DCD nsavc (default: 50). Use 0 for legacy "
+            "(ihtfrq≈--dyn-nprint, overlap chunks disable interior list updates)."
+        ),
+    )
+    group.add_argument(
         "--heat-ihtfrq",
         type=int,
         default=0,
         metavar="N",
         help=(
             "Heating with --heat-thermostat scale: CHARMM ihtfrq (velocity rescaling "
-            "every N steps). 0 = use --dyn-nprint (or full stage length when --quiet). "
-            "Ignored for --heat-thermostat hoover."
+            "every N steps). 0 = use --dyn-freq-cadence (else --dyn-nprint; full stage "
+            "when --quiet). Ignored for --heat-thermostat hoover."
         ),
     )
     group.add_argument(
