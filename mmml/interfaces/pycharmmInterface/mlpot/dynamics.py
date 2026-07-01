@@ -3150,6 +3150,8 @@ def _dynamics_script_append_for_heat_ramp(kw: dict[str, Any]) -> str:
 def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     """Instantiate and run ``pycharmm.DynamicsScript``."""
     kw = dict(dynamics_kwargs)
+    skip_ase_cold = bool(kw.pop("_skip_ase_cold_velocity_assign", False))
+    quiet_ase = bool(kw.pop("_quiet_ase_velocity_assign", False))
     _strip_non_charmm_dynamics_keywords(kw)
     nstep = int(kw.get("nstep", 0) or 0)
     if nstep < 1:
@@ -3168,10 +3170,8 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
 
     import pycharmm
     clamp_velocity_assignment_dynamics_kw(kw)
-    maybe_assign_velocities_via_ase_if_cold(
-        kw,
-        quiet=bool(kw.pop("_quiet_ase_velocity_assign", False)),
-    )
+    if not skip_ase_cold:
+        maybe_assign_velocities_via_ase_if_cold(kw, quiet=quiet_ase)
     # PyCHARMM omits ``start`` from the script when start=False, so CHARMM may keep
     # START active after a prior Boltzmann assign. With iasvel=0 that reads COMP
     # coordinates as velocities — zero COMP defensively.
@@ -3565,10 +3565,13 @@ def _overlap_chunk_uses_memory_handoff(
     so global step/time counters continue.  CPT stability *sub-chunks* within one
     overlap chunk also stay in-memory (``_run_cpt_stability_subchunked``).
     """
-    if mlpot_ctx is None or n_chunks <= 1:
+    del chunk_index
+    if n_chunks <= 1:
         return False
     if cpt and _cpt_subchunk_use_in_memory_handoff():
         return True
+    if mlpot_ctx is None:
+        return False
     if overlap is not None and overlap.memory_handoff:
         return True
     return False
@@ -5310,9 +5313,14 @@ def run_dynamics_with_io(
                             trajectory_unit=chunk_io.trajectory_unit,
                         )
                 if mem_handoff and chunk_index == 1 and not logged_mem_handoff:
+                    cpt_note = (
+                        " (Hoover CPT barostat kept in RAM between chunks)"
+                        if bool(chunk_kw.get("cpt"))
+                        else ""
+                    )
                     print(
                         f"overlap ({overlap_context}): in-memory handoff between "
-                        f"{n_chunks} chunks",
+                        f"{n_chunks} chunks{cpt_note}",
                         flush=True,
                     )
                     logged_mem_handoff = True
@@ -5567,15 +5575,31 @@ def run_dynamics_with_io(
                             header_step is None
                             or header_step < expected_after - 1
                         )
-                        if needs_step_fix:
-                            if (
+                        cpt_overlap_memory = bool(chunk_kw.get("cpt")) and (
+                            mem_handoff
+                            or _overlap_chunk_uses_memory_handoff(
+                                mlpot_ctx,
+                                chunk_index=chunk_index,
+                                n_chunks=n_chunks,
+                                overlap=overlap,
+                                cpt=True,
+                            )
+                        )
+                        if needs_step_fix or cpt_overlap_memory:
+                            scratch_handoff = (
                                 n_chunks > 1
                                 and final_restart is not None
                                 and _is_overlap_scratch_restart(
                                     restart_path, final_restart
                                 )
-                                and chunk_index < n_chunks - 1
-                                and _valid_restart_file(restart_path) is None
+                            )
+                            if (
+                                cpt_overlap_memory
+                                and scratch_handoff
+                                and (
+                                    header_step is None
+                                    or header_step < steps_done
+                                )
                             ):
                                 try:
                                     _materialize_overlap_chunk_restart_handoff(
@@ -5590,10 +5614,32 @@ def run_dynamics_with_io(
                                         f"{exc}",
                                         flush=True,
                                     )
-                            else:
-                                patch_restart_global_step(
-                                    restart_path, steps_done
-                                )
+                                    patch_restart_global_step(
+                                        restart_path, steps_done
+                                    )
+                            elif needs_step_fix:
+                                if (
+                                    scratch_handoff
+                                    and chunk_index < n_chunks - 1
+                                    and _valid_restart_file(restart_path) is None
+                                ):
+                                    try:
+                                        _materialize_overlap_chunk_restart_handoff(
+                                            restart_path,
+                                            global_step=steps_done,
+                                            overlap_context=overlap_context,
+                                            mlpot_ctx=mlpot_ctx,
+                                        )
+                                    except RuntimeError as exc:
+                                        print(
+                                            f"WARN: overlap ({overlap_context}): "
+                                            f"{exc}",
+                                            flush=True,
+                                        )
+                                else:
+                                    patch_restart_global_step(
+                                        restart_path, steps_done
+                                    )
                 if final_restart is not None and chunk_io is not None:
                     _overlap_refresh_or_validate_scratch_restart(
                         chunk_io.restart_write,
