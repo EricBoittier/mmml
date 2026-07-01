@@ -148,3 +148,22 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
     fake_coor.set_velocity.assert_called_once()
     sync_comp.assert_called_once()
     np.testing.assert_allclose(sync_comp.call_args[0][0], vel)
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint._charmm_velocities_array",
+    return_value=None,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+)
+def test_charmm_velocities_akma_falls_back_to_comp(mock_comp, mock_main):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        charmm_velocities_akma,
+    )
+
+    vel = np.array([[3.0, 0.0, 0.0], [0.0, 4.0, 0.0]], dtype=float)
+    mock_comp.return_value = vel
+    out = charmm_velocities_akma()
+    mock_comp.assert_called_once()
+    np.testing.assert_allclose(out, vel)

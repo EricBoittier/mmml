@@ -228,6 +228,18 @@ def test_sync_comparison_velocities_from_main_warm(mock_cold, mock_vel, mock_syn
 
 
 @patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+    return_value=None,
+)
+def test_sync_comparison_velocities_from_main_missing(mock_vel):
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        sync_comparison_velocities_from_main,
+    )
+
+    assert sync_comparison_velocities_from_main() is False
+
+
+@patch(
     "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
     return_value=False,
 )
