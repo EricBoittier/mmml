@@ -80,6 +80,34 @@ def test_prepare_bussi_heat_dynamics_kw_disables_charmm_ihtfrq():
     assert ramp["thermostat"] == "bussi"
 
 
+def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        capture_charmm_velocities_for_bussi,
+    )
+
+    restart = tmp_path / "dyn.res"
+    restart.write_text(
+        "REST     0     1\n"
+        "       1 !NTITLE followed by title\n"
+        "* t\n"
+        "\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "         1           0           0           0           0           0           0\n"
+        " !X, Y, Z\n"
+        " 0.000000000000000D+00 0.000000000000000D+00 0.000000000000000D+00\n"
+        " !VELOCITIES\n"
+        " 1.000000000000000D+02 0.000000000000000D+00 0.000000000000000D+00\n",
+        encoding="ascii",
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+    ) as sync:
+        out = capture_charmm_velocities_for_bussi(restart_path=restart)
+    assert out is not None
+    assert out.shape == (1, 3)
+    sync.assert_called_once()
+
+
 def test_apply_bussi_velocity_rescale_syncs_charmm():
     masses = np.array([12.0, 1.0, 1.0], dtype=float)
     v_akma = np.ones((3, 3), dtype=float) * 100.0
@@ -87,7 +115,7 @@ def test_apply_bussi_velocity_rescale_syncs_charmm():
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
         side_effect=[v_akma, v_akma * 1.1],
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
@@ -116,7 +144,7 @@ def test_apply_bussi_velocity_rescale_assigns_when_velocities_missing():
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
         return_value=masses,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma_for_thermostat",
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
         side_effect=[None, v_akma, v_akma],
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.assign_maxwell_boltzmann_velocities_via_ase",
