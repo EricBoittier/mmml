@@ -541,6 +541,34 @@ def test_with_mlpot_detached_unset_and_reregister():
     assert result == 42
 
 
+def test_unset_skips_cgenff_restore_when_coordinates_unsafe():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    mlpot = MagicMock()
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1, 1, 1], dtype=int),
+        use_pbc=True,
+        cubic_box_side_A=31.0,
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_charmm_mm_block",
+    ) as apply_block, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.clear_mlpot_energy_block",
+    ):
+        ctx.unset()
+
+    mlpot.unset_mlpot.assert_called_once()
+    apply_block.assert_not_called()
+
+
 def test_reregister_mlpot_default_reattach_only():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 

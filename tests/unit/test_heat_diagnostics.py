@@ -95,6 +95,35 @@ def test_infer_heat_velocity_init_post_assign_scale_path():
     assert "ihtfrq velocity scaling" in label
 
 
+def test_infer_iasors_meaning_hoover_cpt_unused():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _infer_iasors_meaning,
+        describe_heat_dynamics_setup,
+    )
+
+    kw = build_hoover_heat_dynamics(
+        timestep_ps=0.00025,
+        duration_ps=0.0375,
+        save_interval_ps=0.004,
+        temp=300.0,
+        firstt=2.0,
+        finalt=10.0,
+        use_pbc=True,
+        tmass=1200,
+    )
+    kw.update(start=True, restart=False, iasvel=1, ihtfrq=0)
+    meaning = _infer_iasors_meaning(kw, heat_thermostat="hoover")
+    assert "Hoover CPT bath" in meaning
+    assert "iasors unused" in meaning
+
+    info = describe_heat_dynamics_setup(
+        kw,
+        heat_thermostat="hoover",
+        use_pbc=True,
+    )
+    assert "Hoover CPT bath" in info["dyna_flags"]["iasors_meaning"]
+
+
 def test_build_heat_dynamics_dashboard_sections():
     kw = build_hoover_heat_dynamics(
         timestep_ps=0.00025,

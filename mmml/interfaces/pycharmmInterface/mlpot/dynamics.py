@@ -1939,6 +1939,22 @@ def _infer_heat_velocity_init_label(
     return f"custom flags (start={start}, restart={restart}, iasvel={iasvel})"
 
 
+def _infer_iasors_meaning(
+    kw: dict[str, Any],
+    *,
+    heat_thermostat: str,
+) -> str:
+    """Human-readable label for ``iasors`` on the HEAT dyna line."""
+    if int(kw.get("iasors", 0) or 0) == 1:
+        return "Gaussian reassignment each ihtfrq (legacy)"
+    if heat_thermostat == "hoover" and bool(kw.get("cpt")):
+        if int(kw.get("ihtfrq", 0) or 0) == 0:
+            return "Hoover CPT bath (ihtfrq=0; iasors unused)"
+    if int(kw.get("ihtfrq", 0) or 0) > 0:
+        return "velocity scaling at ihtfrq (preferred for ML heat)"
+    return "iasors inactive (ihtfrq=0)"
+
+
 def _classify_heat_thermostat_mode(
     kw: dict[str, Any],
     *,
@@ -2049,10 +2065,8 @@ def describe_heat_dynamics_setup(
             "new": bool(kw.get("new")),
             "iasvel": kw.get("iasvel"),
             "iasors": kw.get("iasors"),
-            "iasors_meaning": (
-                "Gaussian reassignment each ihtfrq (legacy)"
-                if int(kw.get("iasors", 0) or 0) == 1
-                else "velocity scaling at ihtfrq (preferred for ML heat)"
+            "iasors_meaning": _infer_iasors_meaning(
+                kw, heat_thermostat=heat_thermostat
             ),
             "iscale": kw.get("iscale"),
             "iscvel": kw.get("iscvel"),

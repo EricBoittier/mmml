@@ -151,9 +151,18 @@ class MlpotContext:
             apply_charmm_mm_block,
             clear_mlpot_energy_block,
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            charmm_dynamics_state_is_finite,
+        )
 
         if self.ml_selection is not None and self.registration_uses_block:
             clear_mlpot_energy_block(self.ml_selection, block_tag=self.block_tag)
+        if not charmm_dynamics_state_is_finite():
+            print(
+                "MMML: skip CGENFF param restore on unset (unsafe coordinates after dynamics)",
+                flush=True,
+            )
+            return
         apply_charmm_mm_block()
 
     def reregister_mlpot(
