@@ -17,7 +17,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
     resolve_heat_thermostat,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+    _apply_bussi_in_memory_continuation_kw,
     _bussi_heat_chunk_nstep,
+    _ensure_bussi_heat_continuation_iasvel,
     bussi_heat_ramp_spec_from_kw,
     heat_ramp_spec_from_kw,
     prepare_bussi_heat_dynamics_kw,
@@ -121,3 +123,38 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
         lambda *_a, **_k: True,
     )
     assert resolve_heat_thermostat(args) == "bussi"
+
+
+def test_apply_bussi_in_memory_continuation_keeps_iasvel_one():
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    _apply_bussi_in_memory_continuation_kw(kw)
+    assert kw["iasvel"] == 1
+    assert kw["start"] is False
+    assert kw["_skip_ase_cold_velocity_assign"] is True
+
+
+def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_overlap_chunk_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+        "start": False,
+        "iasvel": 0,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
+    assert kw["iasvel"] == 1
+    assert kw["start"] is False
+    _ensure_bussi_heat_continuation_iasvel(kw)
+    assert kw["iasvel"] == 1

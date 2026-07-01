@@ -1960,7 +1960,9 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     kw["restart"] = False
     kw["new"] = False
     kw["start"] = False
-    kw["iasvel"] = 0
+    # Bussi rescale keeps velocities in the main set; iasvel=0 reads COMP and can
+    # treat comparison coordinates as AKMA velocities (COMP_AND_HEATING.md).
+    kw["iasvel"] = 1
     kw["iasors"] = 0
     kw["ihtfrq"] = 0
     kw.pop("TEMINC", None)
@@ -4641,6 +4643,15 @@ def _bussi_heat_ramp_active(kw: dict[str, Any]) -> bool:
     return bussi_heat_ramp_spec_from_kw(kw) is not None
 
 
+def _ensure_bussi_heat_continuation_iasvel(chunk_kw: dict[str, Any]) -> None:
+    """Keep ``iasvel=1`` on Bussi in-memory continuation (never COMP-as-velocity)."""
+    if not _bussi_heat_ramp_active(chunk_kw):
+        return
+    chunk_kw["iasvel"] = 1
+    chunk_kw["start"] = False
+    chunk_kw["iasors"] = 0
+
+
 def _python_heat_ramp_active(kw: dict[str, Any]) -> bool:
     return _scale_heat_ramp_active(kw) or _bussi_heat_ramp_active(kw)
 
@@ -4769,6 +4780,8 @@ def _apply_overlap_chunk_dynamics_kw(
         chunk_kw["restart"] = False
         chunk_kw.pop("iunrea", None)
         chunk_kw["iunrea"] = -1
+    if int(chunk_index) > 0:
+        _ensure_bussi_heat_continuation_iasvel(chunk_kw)
 
 
 def _cleanup_overlap_restart_slots(io: Optional[CharmmTrajectoryFiles]) -> None:
@@ -5766,7 +5779,10 @@ def run_dynamics_with_io(
                     chunk_kw["restart"] = False
                     chunk_kw["new"] = False
                     chunk_kw["start"] = False
-                    chunk_kw["iasvel"] = 0
+                    if _bussi_heat_ramp_active(chunk_kw):
+                        _ensure_bussi_heat_continuation_iasvel(chunk_kw)
+                    else:
+                        chunk_kw["iasvel"] = 0
                     chunk_kw.pop("iunrea", None)
                     chunk_kw["iunrea"] = -1
                     _strip_stale_heat_ramp_keywords(chunk_kw)
@@ -5776,7 +5792,10 @@ def run_dynamics_with_io(
                     chunk_kw["restart"] = True
                     chunk_kw["new"] = False
                     chunk_kw["start"] = False
-                    chunk_kw["iasvel"] = 0
+                    if _bussi_heat_ramp_active(chunk_kw):
+                        _ensure_bussi_heat_continuation_iasvel(chunk_kw)
+                    else:
+                        chunk_kw["iasvel"] = 0
                     chunk_kw.pop("iunrea", None)
                 elif hoover_heat_ramp_spec is not None:
                     apply_hoover_cpt_heat_ramp_overlap_chunk(
