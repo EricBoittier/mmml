@@ -335,6 +335,11 @@ class DecomposedMlpotCalculator:
         else:
             mm_pair_idx, mm_pair_mask = update_fn(pos)
         if mm_pair_idx is None or mm_pair_mask is None:
+            if self._cell or box is not None:
+                raise RuntimeError(
+                    "PBC MM neighbor update returned no pair list; "
+                    "cannot evaluate switched MM without mm_pair_idx/mm_pair_mask."
+                )
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
         return jnp.asarray(mm_pair_idx), jnp.asarray(mm_pair_mask), True
 
@@ -1343,7 +1348,13 @@ def warmup_decomposed_mlpot(
                 mm_pair_idx, mm_pair_mask = update_fn(r, box=box_np)
             else:
                 mm_pair_idx, mm_pair_mask = update_fn(r)
-            use_mm_pairs = True
+            if mm_pair_idx is None or mm_pair_mask is None:
+                if pbc_cell:
+                    raise RuntimeError(
+                        "warmup_decomposed_mlpot: PBC MM neighbor update returned no pairs"
+                    )
+            else:
+                use_mm_pairs = True
 
     if verbose:
         msg = f"Decomposed MLpot JAX warmup: {len(z)} atoms, {model._n_monomers} monomers"

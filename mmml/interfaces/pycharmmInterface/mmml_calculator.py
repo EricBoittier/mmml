@@ -1084,52 +1084,13 @@ def setup_calculator(
         )
         if isinstance(result_jaxmd, tuple):
             mm_fn_jaxmd, update_fn = result_jaxmd
-            mm_fn_cell = build_mm_energy_forces_fn(
-                R,
-                total_atoms=total_atoms,
-                n_monomers=N_MONOMERS,
-                monomer_offsets=monomer_offsets,
-                atoms_per_monomer_list=atoms_per_monomer_list,
-                lambda_monomer=lambda_monomer,
-                ml_switch_width=ml_switch_width,
-                mm_switch_on=mm_switch_on,
-                mm_switch_width=mm_switch_width,
-                complementary_handoff=complementary_handoff,
-                ep_scale=ep_scale,
-                sig_scale=sig_scale,
-                at_codes_override=at_codes_override,
-                atomic_numbers=_mm_atomic_numbers,
-                pbc_cell=cell_for_build,
-                max_pairs=max_pairs,
-                cell_list_safety_factor=cell_list_safety_factor,
-                cell_list_density_estimate=cell_list_density_estimate,
-                use_smooth_mic=use_smooth_mic,
-                use_jax_md_neighbor_list=False,
-                mm_r_min=mm_r_min,
-                jax_md_capacity_multiplier=jax_md_capacity_multiplier,
-                jax_md_capacity_growth_factor=jax_md_capacity_growth_factor,
-                jax_md_max_overflow_retries=jax_md_max_overflow_retries,
-                jax_md_overflow_fallback_to_cell_list=jax_md_overflow_fallback_to_cell_list,
-                jax_md_update_interval=jax_md_update_interval,
-                jax_md_skin_distance=_jax_md_skin_distance,
-                debug=debug,
-                ml_compute_dtype=ml_compute_dtype,
-                defer_xla_gpu_warmup=defer_xla_gpu_warmup,
-                lr_solver=lr_solver,
-                jax_pme_method=jax_pme_method,
-                jax_pme_sr_cutoff_A=jax_pme_sr_cutoff_A,
-                jax_pme_dispersion=jax_pme_dispersion,
-                force_static_mm_eval=True,
-            )
-            if isinstance(mm_fn_cell, tuple):
-                mm_fn_cell = mm_fn_cell[0]
-            return (mm_fn_jaxmd, mm_fn_cell), update_fn
+            return mm_fn_jaxmd, update_fn
         return result_jaxmd, None
 
     # Lazy cache for the pre-computed MM energy/force function.
     # Must be built once with *concrete* positions (outside JIT) so that
     # the cell-list path can call NumPy without hitting TracerArrayConversion.
-    _cached_mm_fn = [None]          # [0] = calculate_mm_energy_and_forces | None
+    _cached_mm_fn = [None]          # [0] = MM energy/force callable (dynamic or static)
     _cached_update_mm_pairs = [None]  # [0] = update_mm_pairs | None (jax_md path)
     _cached_mm_cutoff_key = [None]  # hashable key to detect cutoff-param changes
     _lambda_version = [0]
@@ -1919,14 +1880,22 @@ def setup_calculator(
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
         mm_fn_val = _cached_mm_fn[0]
+        update_fn = _cached_update_mm_pairs[0]
+        # Legacy caches may still store (dynamic_fn, static_fallback); ignore static fallback.
         if isinstance(mm_fn_val, tuple):
-            mm_fn_jaxmd, mm_fn_cell = mm_fn_val
-            if isinstance(mm_fn_cell, tuple):
-                mm_fn_cell = mm_fn_cell[0]
-            if mm_pair_idx is not None and mm_pair_mask is not None:
-                mm_E, mm_grad = mm_fn_jaxmd(positions, mm_pair_idx, mm_pair_mask, box_override=box)
-            else:
-                mm_E, mm_grad = mm_fn_cell(positions)
+            mm_fn_val, _legacy_static_mm_fn = mm_fn_val
+            if isinstance(mm_fn_val, tuple):
+                mm_fn_val = mm_fn_val[0]
+        if update_fn is not None:
+            if mm_pair_idx is None or mm_pair_mask is None:
+                raise RuntimeError(
+                    "MM pair indices are required for PBC dynamic neighbor lists. "
+                    "Call get_update_fn / DecomposedMlpotCalculator._resolve_mm_pairs "
+                    "outside JIT before spherical_cutoff_calculator."
+                )
+            mm_E, mm_grad = mm_fn_val(
+                positions, mm_pair_idx, mm_pair_mask, box_override=box
+            )
         else:
             mm_E, mm_grad = mm_fn_val(positions)
         
