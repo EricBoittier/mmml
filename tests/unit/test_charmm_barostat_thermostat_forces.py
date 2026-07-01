@@ -240,16 +240,16 @@ def test_run_dynamics_clears_comp_when_iasvel_zero_without_start():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript.return_value = fake_dyn
-    with patch(
+    with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
-    ) as clear_comp, patch(
+    ) as clear_comp, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
-    ), patch(
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=False,
-    ), patch(
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
-    ), patch.dict(
+    ), mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
         clear=False,
