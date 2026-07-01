@@ -11,10 +11,13 @@ from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
     MinimizeWithMlpotConfig,
     MlpotSdChunkResult,
     _effective_mlpot_sd_chunk_nstep,
+    _effective_sd_stall_patience_chunks,
     _maybe_abort_sd_on_grms,
     _maybe_abort_sd_on_grms_stall,
+    _maybe_abort_sd_on_stress_grms,
     _mlpot_sd_chunk_nstep,
     _resolved_sd_converged_grms,
+    _resolved_sd_stress_abort_ceiling,
     _should_stop_sd_on_converged_grms,
     _run_minimize_in_chunks,
     invalidate_mlpot_calculator_caches,
@@ -468,6 +471,69 @@ def test_minimize_with_mlpot_continues_after_rollback():
 
     sync_lists.assert_called()
     refresh_grms.assert_called_once()
+
+
+def test_maybe_abort_sd_on_stress_grms_aborts_above_ceiling():
+    cfg = MinimizeWithMlpotConfig(mlpot_ctx=MagicMock(), verbose=False)
+    assert _resolved_sd_stress_abort_ceiling(cfg) == pytest.approx(500.0)
+    assert _maybe_abort_sd_on_stress_grms(
+        cfg,
+        current_grms=20004.0,
+        pass_label="pass 1",
+        step_label="before SD",
+    )
+    assert not _maybe_abort_sd_on_stress_grms(
+        cfg,
+        current_grms=400.0,
+        pass_label="pass 1",
+        step_label="before SD",
+    )
+
+
+def test_effective_sd_stall_patience_one_chunk_under_stress():
+    cfg = MinimizeWithMlpotConfig(
+        mlpot_ctx=MagicMock(),
+        sd_stall_patience_chunks=3,
+    )
+    assert _effective_sd_stall_patience_chunks(cfg, current_grms=20004.0) == 1
+    assert _effective_sd_stall_patience_chunks(cfg, current_grms=100.0) == 3
+
+
+def test_run_minimize_in_chunks_aborts_before_first_chunk_on_stress_grms():
+    ctx = MagicMock(use_pbc=True)
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    config = MinimizeWithMlpotConfig(
+        nstep=600,
+        mlpot_ctx=ctx,
+        sd_chunk_nstep=25,
+        sd_watchdog_initial_grms=20004.0,
+        verbose=False,
+    )
+    base_kw = {"inbfrq": 0, "ihbfrq": 0}
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_mlpot_sd_list_frequencies",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+    ):
+        result = _run_minimize_in_chunks(
+            minimize,
+            pycharmm,
+            config,
+            base_kw,
+            total_nstep=600,
+            pass_label="pass 1",
+            method="SD",
+            run_attr="run_sd",
+        )
+
+    assert result.completed is False
+    assert result.stalled is True
+    assert result.last_grms == pytest.approx(20004.0)
+    minimize.run_sd.assert_not_called()
 
 
 def test_maybe_abort_sd_on_grms_stall_detects_plateau():

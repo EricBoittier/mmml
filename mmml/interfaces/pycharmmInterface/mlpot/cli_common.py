@@ -2490,7 +2490,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         charmm_grms_after_ener_force()
     diag = measure_hybrid_charmm_grms(
         mlpot_ctx,
-        prefer_calculator=not skip_pre_sd_ener,
+        prefer_calculator=True,
     )
     _print_hybrid_charmm_grms_diag(
         f"{context_prefix} hybrid GRMS check" if verbose else "",
@@ -2509,7 +2509,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             "(Packmol at lower density, then compress with MC/NPT)."
         )
 
-    if diag.kind == "desync_suspected" and not skip_pre_sd_ener:
+    if diag.kind == "desync_suspected":
         hybrid_grms = light_resync_mlpot_state(
             mlpot_ctx,
             context=f"{context_prefix} light resync" if verbose else "",
@@ -2687,10 +2687,6 @@ def prepare_mlpot_hybrid_state_for_sd(
         """Short MLpot SD pass for all-ML / geometry_stress (bonded-MM ineffective)."""
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_bonded_recovery
         stress_ceiling = 500.0
-        if grms_limit is not None:
-            stress_ceiling = max(stress_ceiling, float(grms_limit))
-        if intervention_grms is not None:
-            stress_ceiling = max(stress_ceiling, 5.0 * float(intervention_grms))
         if float(hybrid_grms) > stress_ceiling:
             if verbose:
                 print(

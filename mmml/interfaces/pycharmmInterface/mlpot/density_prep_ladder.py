@@ -19,6 +19,8 @@ DensityPrepMode = Literal["off", "resilient"]
 
 _DEFAULT_GEOMETRY_PREP_REGRESS_RATIO = 1.25
 _DEFAULT_GEOMETRY_PREP_REGRESS_MIN_DELTA = 50.0
+# Lattice ABNR rebuilds IMAGE/MAKINB lists; unsafe on catastrophic overlaps.
+_LATTICE_ABNR_GRMS_STRESS_CEILING = 500.0
 
 
 def _geometry_prep_regressed(
@@ -688,50 +690,60 @@ def run_density_prep_ladder(
             break
 
         if charmm_pbc and lattice_steps > 0:
-            for nocoords, tag in ((False, "lattice_full"), (True, "lattice_box")):
-                step_label = f"round{round_idx + 1}:{tag}"
-                try:
-                    pos_before = np.asarray(
-                        get_charmm_positions_array(), dtype=np.float64
-                    ).copy()
-                    grms_before = float(grms)
-                    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
-                        run_charmm_lattice_abnr,
-                    )
-
-                    new_side = run_charmm_lattice_abnr(
-                        nstep=lattice_steps,
-                        tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
-                        tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
-                        nocoords=nocoords,
-                        verbose=not quiet,
-                        fallback_side_A=box_side,
-                        allow_prepare_pbc=mlpot_ctx is None,
-                    )
-                    if new_side is not None:
-                        box_side = float(new_side)
-                        mlpot_ctx.cubic_box_side_A = box_side
-                        mlpot_ctx.charmm_cubic_box_side_A = box_side
-                    grms_after = float(_refresh_after_step(step_label))
-                    if _geometry_prep_regressed(grms_before, grms_after):
-                        if not quiet:
-                            print(
-                                f"{step_label}: rollback {tag} "
-                                f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
-                                flush=True,
-                            )
-                        grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
-                        journal.skip_step(
-                            step_label,
-                            f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+            if float(grms) > _LATTICE_ABNR_GRMS_STRESS_CEILING:
+                journal.skip_step(
+                    f"round{round_idx + 1}:lattice_skipped",
+                    (
+                        f"hybrid GRMS {float(grms):.1f} > "
+                        f"{_LATTICE_ABNR_GRMS_STRESS_CEILING:.0f} kcal/mol/Å "
+                        "(lattice ABNR unsafe on geometry_stress)"
+                    ),
+                )
+            else:
+                for nocoords, tag in ((False, "lattice_full"), (True, "lattice_box")):
+                    step_label = f"round{round_idx + 1}:{tag}"
+                    try:
+                        pos_before = np.asarray(
+                            get_charmm_positions_array(), dtype=np.float64
+                        ).copy()
+                        grms_before = float(grms)
+                        from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+                            run_charmm_lattice_abnr,
                         )
-                    else:
-                        grms = grms_after
-                        result.steps_applied.append(step_label)
-                except Exception as exc:
-                    journal.skip_step(step_label, str(exc))
-                if grms <= max_grms:
-                    break
+
+                        new_side = run_charmm_lattice_abnr(
+                            nstep=lattice_steps,
+                            tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+                            tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+                            nocoords=nocoords,
+                            verbose=not quiet,
+                            fallback_side_A=box_side,
+                            allow_prepare_pbc=mlpot_ctx is None,
+                        )
+                        if new_side is not None:
+                            box_side = float(new_side)
+                            mlpot_ctx.cubic_box_side_A = box_side
+                            mlpot_ctx.charmm_cubic_box_side_A = box_side
+                        grms_after = float(_refresh_after_step(step_label))
+                        if _geometry_prep_regressed(grms_before, grms_after):
+                            if not quiet:
+                                print(
+                                    f"{step_label}: rollback {tag} "
+                                    f"(GRMS {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å)",
+                                    flush=True,
+                                )
+                            grms = _rollback_charmm_geometry(pos_before, mlpot_ctx, quiet=quiet)
+                            journal.skip_step(
+                                step_label,
+                                f"GRMS regressed {grms_before:.1f} -> {grms_after:.1f} kcal/mol/Å",
+                            )
+                        else:
+                            grms = grms_after
+                            result.steps_applied.append(step_label)
+                    except Exception as exc:
+                        journal.skip_step(step_label, str(exc))
+                    if grms <= max_grms:
+                        break
 
         if grms <= max_grms:
             break
