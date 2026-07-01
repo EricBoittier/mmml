@@ -354,6 +354,10 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
     )
 
     rebind_mlpot_calculator_from_pycmodel(mlpot_ctx, verbose=False)
+    ensure_ml_exclusions_before_mlpot_charmm_energy(
+        mlpot_ctx,
+        context=f"{context} ENER prime",
+    )
     _ensure_domdec_off_for_mlpot_energy(context=f"{context} CHARMM ENER prime")
     grms = float(charmm_grms_after_ener_force(silent=not verbose))
     recover_mpi_for_charmm_after_jax(phase=f"after {context} CHARMM ENER prime")
@@ -1246,6 +1250,66 @@ def _build_ml_exclusion_lists(
     return ml_iblo, ml_inb
 
 
+def _expected_ml_ml_exclusion_pairs(n_ml: int) -> int:
+    """Upper-triangle ML–ML pair count for ``n_ml`` atoms."""
+    n = int(n_ml)
+    if n < 2:
+        return 0
+    return n * (n - 1) // 2
+
+
+def _verify_ml_exclusion_lists_installed(
+    ml_selection: Any,
+    *,
+    context: str = "MLpot PBC exclusions",
+) -> int:
+    """Raise when PSF ``inb`` lacks ML–ML exclusions (``upinb`` would see PSF-only ~1k)."""
+    pycharmm = _import_pycharmm()
+    ml_indices = ml_selection.get_atom_indexes()
+    n_ml = len(ml_indices)
+    min_nnb = _expected_ml_ml_exclusion_pairs(n_ml)
+    nnb = int(pycharmm.psf.get_nnb())
+    if nnb >= min_nnb:
+        return nnb
+    raise RuntimeError(
+        f"{context}: PSF exclusion list too short after ML install "
+        f"(nnb={nnb}, need>={min_nnb} for n_ml={n_ml}); refusing upinb"
+    )
+
+
+def ensure_ml_exclusions_before_mlpot_charmm_energy(
+    mlpot_ctx: Any,
+    *,
+    context: str = "MLpot CHARMM energy",
+) -> int:
+    """Reinstall ML ``iblo/inb`` when PSF-only exclusions precede ``ENER``/``upinb``.
+
+    ``update_bnbnd`` before ML exclusions are visible to PSF leaves ~O(n) bonded
+    exclusions (e.g. 1000 for DCM:100) and ``MAKINB`` rebuilds huge pair lists
+    for all-ML PBC clusters → resize segfault in ``upinb``.
+    """
+    if not bool(getattr(mlpot_ctx, "use_pbc", False)):
+        return 0
+    ml_selection = getattr(mlpot_ctx, "ml_selection", None)
+    if ml_selection is None:
+        return 0
+    ml_indices = ml_selection.get_atom_indexes()
+    n_ml = len(ml_indices)
+    min_nnb = _expected_ml_ml_exclusion_pairs(n_ml)
+    if min_nnb <= 0:
+        return 0
+    pycharmm = _import_pycharmm()
+    nnb = int(pycharmm.psf.get_nnb())
+    if nnb < min_nnb:
+        _install_ml_exclusions(ml_selection, update=False)
+        nnb = _verify_ml_exclusion_lists_installed(
+            ml_selection,
+            context=context,
+        )
+        pycharmm.image.update_bimag()
+    return nnb
+
+
 def _install_ml_exclusions(ml_selection: Any, *, update: bool = True) -> None:
     """Add ML–ML exclusions; optionally rebuild CHARMM nonbond lists (``upinb``)."""
     pycharmm = _import_pycharmm()
@@ -1362,11 +1426,12 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     Order matters:
 
     1. Crystal build + ``image byres`` (repopulate NATIM; no ``upinb`` yet).
-    2. ML ``iblo/inb`` via ``set_iblo_inb_no_update``.
-    3. One ``apply_pbc_nbonds`` / ``upinb`` with exclusions and image tables ready.
+    2. PBC nonbond **cutoffs only** (no ``update_bnbnd`` — it rebuilds PSF-only lists).
+    3. ML ``iblo/inb`` via ``set_iblo_inb_no_update``.
+    4. One ``update_bnbnd`` / ``upinb`` with ML exclusions installed.
 
-    Running ``upinb`` before step 2 leaves central-cell lists inconsistent; running
-    it before step 1 segfaults in ``MAKGRP`` when NTRANS>0 and NATIM=0.
+    Installing exclusions before ``apply_pbc_nbonds`` left PSF-only exclusions (~1000
+    for DCM:100) and ``MAKINB`` resize segfaults at the first MLpot SD ``ENER``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
@@ -1380,15 +1445,28 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
 
     side = float(cubic_box_side_A)
     prepare_charmm_pbc(side)
+    recover_mpi_for_charmm_after_jax(
+        phase="after MLpot PBC crystal/IMAGE build",
+    )
     print(
         f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
         flush=True,
     )
-    _install_ml_exclusions(ml_selection, update=False)
-    print("MLpot PBC: rebuilding nonbond lists (upinb)…", flush=True)
+    print("MLpot PBC: configuring PBC nonbond cutoffs (defer upinb)…", flush=True)
     with charmm_relaxed_bomlev():
-        apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
+        apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side, rebuild=False)
+    _install_ml_exclusions(ml_selection, update=False)
+    nnb = _verify_ml_exclusion_lists_installed(
+        ml_selection,
+        context="MLpot PBC registration",
+    )
+    print(
+        f"MLpot PBC: rebuilding nonbond lists (upinb, nnb={nnb})…",
+        flush=True,
+    )
     pycharmm = _import_pycharmm()
+    with charmm_relaxed_bomlev():
+        pycharmm.nbonds.update_bnbnd()
     pycharmm.image.update_bimag()
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC upinb during registration",
@@ -1396,7 +1474,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     if verbose:
         print(
             "MLpot PBC: rebuilt crystal/nb lists after CGENFF param read "
-            f"(L={side:.3f} Å)",
+            f"(L={side:.3f} Å, nnb={nnb})",
             flush=True,
         )
 
@@ -1569,7 +1647,7 @@ def register_mlpot(
             context="MLpot registration",
             cubic_box_side_A=reg_box,
         )
-    return MlpotContext(
+    ctx = MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,
         params=None,
@@ -1586,3 +1664,6 @@ def register_mlpot(
         periodic_external=bool(periodic_external),
         periodic_charmm_vdw=bool(periodic_charmm_vdw),
     )
+    if use_pbc:
+        setattr(ctx, "_mlpot_pbc_nb_lists_built", True)
+    return ctx

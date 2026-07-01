@@ -244,6 +244,7 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
     fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = [0, 1, 2, 3]
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as prepare, patch(
@@ -253,8 +254,14 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
         "_install_ml_exclusions",
     ) as install, patch.object(
         mlpot_setup,
+        "_verify_ml_exclusion_lists_installed",
+        return_value=6,
+    ) as verify, patch.object(
+        mlpot_setup,
         "_import_pycharmm",
-    ) as import_py:
+    ) as import_py, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ):
         fake_pycharmm = MagicMock()
         import_py.return_value = fake_pycharmm
         mlpot_setup._finalize_pbc_mlpot_exclusions_after_param_read(
@@ -263,9 +270,10 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
             verbose=False,
         )
     prepare.assert_called_once_with(32.0)
+    apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0, rebuild=False)
     install.assert_called_once_with(fake_sel, update=False)
-    apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0)
-    fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
+    verify.assert_called_once()
+    fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
     fake_pycharmm.image.update_bimag.assert_called_once()
 
 

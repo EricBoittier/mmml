@@ -1136,11 +1136,58 @@ def test_spherical_forward_fn_cached_across_callbacks(monkeypatch):
 
 
 def test_build_ml_exclusion_lists_upper_triangle():
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import _build_ml_exclusion_lists
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _build_ml_exclusion_lists,
+        _expected_ml_ml_exclusion_pairs,
+    )
 
     iblo, inb = _build_ml_exclusion_lists([0, 2, 4], natom=6)
     assert list(iblo) == [2, 2, 3, 3, 3, 3]
     assert inb == [3, 5, 5]
+    assert _expected_ml_ml_exclusion_pairs(500) == 124_750
+    assert len(inb) == _expected_ml_ml_exclusion_pairs(3)
+
+
+def test_ensure_ml_exclusions_before_mlpot_charmm_energy_reinstalls_when_short():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = list(range(4))
+    ctx = MagicMock(use_pbc=True, ml_selection=fake_sel)
+    fake_psf = MagicMock()
+    fake_psf.get_nnb.side_effect = [1000, 6]
+
+    with patch.object(mlpot_setup, "_import_pycharmm") as import_py, patch.object(
+        mlpot_setup,
+        "_install_ml_exclusions",
+    ) as install, patch.object(
+        mlpot_setup,
+        "_verify_ml_exclusion_lists_installed",
+        return_value=6,
+    ) as verify:
+        fake_pycharmm = MagicMock()
+        fake_pycharmm.psf = fake_psf
+        import_py.return_value = fake_pycharmm
+        nnb = mlpot_setup.ensure_ml_exclusions_before_mlpot_charmm_energy(
+            ctx,
+            context="test",
+        )
+
+    assert nnb == 6
+    install.assert_called_once_with(fake_sel, update=False)
+    verify.assert_called_once()
+    fake_pycharmm.image.update_bimag.assert_called_once()
+
+
+def test_apply_nbonds_kwargs_can_defer_rebuild():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
+
+    with patch("pycharmm.nbonds.configure") as configure, patch(
+        "pycharmm.nbonds.update_bnbnd"
+    ) as rebuild:
+        apply_nbonds_kwargs({"cutnb": 12.0, "ctonnb": 10.0, "ctofnb": 11.0}, rebuild=False)
+    configure.assert_called_once()
+    rebuild.assert_not_called()
 
 
 def test_calculator_wrapping_translation_invariance():

@@ -1015,6 +1015,8 @@ def test_prime_charmm_hybrid_energy_before_mlpot_sd_under_mpirun():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.ensure_ml_exclusions_before_mlpot_charmm_energy",
+    ) as ensure_excl, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
@@ -1027,6 +1029,7 @@ def test_prime_charmm_hybrid_energy_before_mlpot_sd_under_mpirun():
     ):
         grms = prime_charmm_hybrid_energy_before_mlpot_sd(ctx, verbose=False)
 
+    ensure_excl.assert_called_once()
     assert grms == pytest.approx(4.2)
     assert ctx._mlpot_pre_sd_ener_probed is True
 

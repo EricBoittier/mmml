@@ -613,6 +613,7 @@ def apply_pbc_nbonds(
     nbxmod: int = 5,
     cutnb: float = 18.0,
     cubic_box_side_A: float | None = None,
+    rebuild: bool = True,
 ) -> PbcNbondCutoffs:
     """Nonbond list for periodic CHARMM (``cutim >= cutnb``).
 
@@ -641,7 +642,7 @@ def apply_pbc_nbonds(
         )
     from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 
-    apply_nbonds_kwargs(cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod))
+    apply_nbonds_kwargs(cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod), rebuild=rebuild)
     return cuts
 
 

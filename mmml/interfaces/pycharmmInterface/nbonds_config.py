@@ -331,12 +331,15 @@ def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:
     return path
 
 
-def apply_nbonds_kwargs(kw: dict[str, Any]) -> None:
+def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     """Apply nonbond settings via the KEY_LIBRARY C API (no ``nbonds`` script).
 
     ``libcharmm.so`` built with ``as_library=ON`` does not link the ``nbonds``
     parser command; use :mod:`pycharmm.nbonds` setters instead. ``nbxmod`` has no
     C setter — it is dropped here (CGENFF ``NONBONDED nbxmod`` from READ PARAM).
+
+    When ``rebuild=False``, only cutoffs/frequencies are configured; callers must
+  run ``update_bnbnd`` after PSF ML exclusions are installed (PBC registration).
     """
     import pycharmm.nbonds as nbonds
 
@@ -354,7 +357,8 @@ def apply_nbonds_kwargs(kw: dict[str, Any]) -> None:
         nbonds.set_inbfrq(int(inbfrq))
     if imgfrq is not None:
         nbonds.set_imgfrq(int(imgfrq))
-    nbonds.update_bnbnd()
+    if rebuild:
+        nbonds.update_bnbnd()
 
 
 def apply_vacuum_nbonds(*, nbxmod: int = 5) -> None:
