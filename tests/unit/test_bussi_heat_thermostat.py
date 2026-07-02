@@ -984,6 +984,56 @@ def test_run_bussi_heat_subchunked_keeps_trajectory_when_split():
     assert captured[0]["iokw"] == {"iuncrd": 1}
 
 
+def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
+    """Second Bussi micro-chunk must not reopen per-chunk DCD (dynio format error)."""
+    from pathlib import Path
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _run_bussi_heat_subchunked,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.00025,
+        "nstep": 50,
+        "nsavc": 24,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=25, timestep_ps=0.00025)
+    io = CharmmTrajectoryFiles(trajectory=Path("/tmp/heat.0000.dcd"))
+    captured: list[dict[str, Any]] = []
+
+    def fake_chunk(sub_kw, sub_io, **kwargs):
+        captured.append({"iokw": kwargs.get("extra_iokw")})
+        return mock.Mock()
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        return_value=(50.0, 1.0),
+    ):
+        _run_bussi_heat_subchunked(
+            kw,
+            io,
+            overlap_context="overlap (HEAT) chunk 1/160",
+            rng_base=None,
+            chunk_nstep=25,
+            total_nstep=50,
+            extra_iokw={"iuncrd": 90},
+            log_banner=False,
+            quiet_bussi=True,
+            split_trajectory=True,
+        )
+    assert len(captured) == 2
+    assert captured[0]["iokw"] == {"iuncrd": 90}
+    assert captured[1]["iokw"] == {}
+
+
 def test_overlap_chunk_bussi_ramp_prep_strips_bath():
     from unittest.mock import patch
 

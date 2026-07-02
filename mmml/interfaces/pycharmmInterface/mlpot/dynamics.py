@@ -6154,13 +6154,15 @@ def _run_bussi_heat_subchunked(
         )
         suppress_sub_traj = bool(sub_kw.get("_suppress_trajectory", False))
         sub_io = _drop_trajectory_io(io) if suppress_sub_traj or "nsavc" not in sub_kw else io
+        # Match CPT sub-chunking: pass iuncrd only on the first in-memory leg so
+        # CHARMM does not reopen an existing DCD (formatted vs unformatted crash).
         sub_traj_iokw = (
             extra_iokw
             if (
                 extra_iokw
+                and steps_done == 0
                 and "nsavc" in sub_kw
                 and not suppress_sub_traj
-                and (traj_split or steps_done == 0)
             )
             else {}
         )
