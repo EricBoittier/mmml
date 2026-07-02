@@ -355,6 +355,36 @@ def assert_pre_mlpot_intermonomer_geometry(
     )
 
 
+def _open_intermonomer_contacts_to_distance(
+    positions: np.ndarray,
+    atoms_per_list: list[int],
+    *,
+    min_distance_A: float,
+    box_side: float | None,
+    charmm_pbc: bool,
+) -> np.ndarray:
+    """Push inter-monomer atom pairs apart to at least ``min_distance_A`` (Å)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
+    )
+    from mmml.utils.geometry_checks import separate_intermonomer_overlaps
+
+    offsets = monomer_offsets_from_atoms_per(atoms_per_list)
+    cell = (
+        np.diag([float(box_side), float(box_side), float(box_side)])
+        if box_side and charmm_pbc
+        else None
+    )
+    return separate_intermonomer_overlaps(
+        np.asarray(positions, dtype=np.float64),
+        offsets,
+        min_distance=float(min_distance_A),
+        margin=0.2,
+        cell=cell,
+        symmetric=True,
+    )
+
+
 def _step_mc_density_at_fraction(
     args: argparse.Namespace,
     positions: np.ndarray,
@@ -1050,6 +1080,13 @@ def run_pre_mlpot_geometry_gate(
 
     quiet = bool(getattr(args, "quiet", False))
     min_overlap = resolve_pre_mlpot_overlap_min_distance(args)
+    from mmml.utils.intermonomer_geometry import (
+        resolve_dynamics_overlap_reference_A,
+        resolve_overlap_last_chance_separation_A,
+    )
+
+    last_chance_sep = resolve_overlap_last_chance_separation_A(args)
+    dynamics_open_min = resolve_dynamics_overlap_reference_A(args)
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
     lattice_steps = resolve_density_prep_lattice_abnr_steps(args)
@@ -1216,33 +1253,28 @@ def run_pre_mlpot_geometry_gate(
     except RuntimeError as exc:
         step_label = "pre_mlpot:overlap_last_chance"
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
-                monomer_offsets_from_atoms_per,
-            )
-            from mmml.utils.geometry_checks import separate_intermonomer_overlaps
-
-            offsets = monomer_offsets_from_atoms_per(atoms_per_list)
-            cell = (
-                np.diag([float(side), float(side), float(side)])
-                if side and charmm_pbc
-                else None
-            )
+            if not quiet and last_chance_sep > min_overlap + 1.0e-9:
+                print(
+                    f"Pre-MLpot gate: overlap_last_chance separation "
+                    f"{last_chance_sep:.2f} Å (prep floor {min_overlap:.2f} Å, "
+                    f"dynamics guard {dynamics_open_min:.2f} Å)",
+                    flush=True,
+                )
             new_pos = _step_monomer_repack(
                 pos,
                 atoms_per_list=list(atoms_per_list),
                 box_side=side,
-                min_distance=min_overlap,
+                min_distance=last_chance_sep,
                 spacing=float(spacing) if spacing is not None else None,
                 seed=int(seed) + 17 if seed is not None else None,
                 scratch_dir=_packmol_repack_scratch_dir(args),
             )
-            new_pos = separate_intermonomer_overlaps(
+            new_pos = _open_intermonomer_contacts_to_distance(
                 new_pos,
-                offsets,
-                min_distance=float(min_overlap),
-                margin=0.2,
-                cell=cell,
-                symmetric=True,
+                list(atoms_per_list),
+                min_distance_A=last_chance_sep,
+                box_side=side,
+                charmm_pbc=charmm_pbc,
             )
             side = _sync_pbc_after_box_change(
                 positions=new_pos,
@@ -1271,6 +1303,51 @@ def run_pre_mlpot_geometry_gate(
             raise RuntimeError(
                 f"{exc}\nPre-MLpot geometry gate: overlap persists after preventive ladder."
             ) from exc
+
+    if (
+        result.worst_intermonomer_A is not None
+        and float(result.worst_intermonomer_A) < float(dynamics_open_min) - 1.0e-9
+    ):
+        step_label = "pre_mlpot:dynamics_open"
+        try:
+            if not quiet:
+                print(
+                    f"Pre-MLpot gate: opening tight contact "
+                    f"{float(result.worst_intermonomer_A):.3f} Å → "
+                    f"dynamics guard {dynamics_open_min:.2f} Å",
+                    flush=True,
+                )
+            new_pos = _open_intermonomer_contacts_to_distance(
+                pos,
+                list(atoms_per_list),
+                min_distance_A=float(dynamics_open_min),
+                box_side=side,
+                charmm_pbc=charmm_pbc,
+            )
+            side = _sync_pbc_after_box_change(
+                positions=new_pos,
+                box_side=side,
+                charmm_pbc=charmm_pbc,
+                mlpot_ctx=None,
+                args=args,
+                quiet=quiet,
+            )
+            pos = new_pos
+            sync_charmm_positions(pos)
+            result.steps_applied.append(step_label)
+            _record_gate_step(step_label)
+            worst = assert_pre_mlpot_intermonomer_geometry(
+                pos,
+                atoms_per_list,
+                min_distance_A=min_overlap,
+                box_side=side,
+                use_pbc=charmm_pbc,
+                context="Pre-MLpot gate (after dynamics open)",
+            )
+            result.worst_intermonomer_A = float(worst)
+        except Exception as exc:
+            if not quiet:
+                print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
 
     sync_charmm_positions(pos)
     result.reason = "ok"

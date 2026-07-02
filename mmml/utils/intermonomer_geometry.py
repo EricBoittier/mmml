@@ -98,6 +98,18 @@ def resolve_dynamics_overlap_reference_A(args: argparse.Namespace | None) -> flo
     return float(DYNAMICS_OVERLAP_REFERENCE_A)
 
 
+def resolve_overlap_last_chance_separation_A(args: argparse.Namespace) -> float:
+    """Separation target (Å) for prep-gate ``overlap_last_chance`` repack/separate.
+
+    The prep certification floor (default 1.0 Å) only rejects true clashes.  Last-chance
+    recovery should open contacts toward the dynamics overlap guard (default 1.5 Å) so
+    MLpot mini does not inherit barely-legal tight pairs (e.g. 1.06 Å H–C).
+    """
+    prep_floor = resolve_pre_mlpot_overlap_min_distance(args)
+    dynamics = resolve_dynamics_overlap_reference_A(args)
+    return max(float(prep_floor), float(dynamics))
+
+
 def resolve_mc_min_intermonomer_distance_A(args: argparse.Namespace) -> float:
     """Minimum contact distance for MC / box-compression moves (Å).
 

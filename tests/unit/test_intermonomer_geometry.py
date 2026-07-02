@@ -33,6 +33,26 @@ def test_resolve_pre_mlpot_explicit_override():
     assert resolve_pre_mlpot_overlap_min_distance(args) == 0.8
 
 
+def test_resolve_overlap_last_chance_uses_dynamics_guard():
+    from mmml.utils.intermonomer_geometry import (
+        resolve_overlap_last_chance_separation_A,
+    )
+
+    args = argparse.Namespace(
+        pre_mlpot_overlap_min_distance=None,
+        min_intermonomer_atom_distance=1.0,
+        dynamics_overlap_min_distance=1.5,
+    )
+    assert resolve_overlap_last_chance_separation_A(args) == pytest.approx(1.5)
+
+    args_high_prep = argparse.Namespace(
+        pre_mlpot_overlap_min_distance=1.8,
+        min_intermonomer_atom_distance=0.1,
+        dynamics_overlap_min_distance=1.5,
+    )
+    assert resolve_overlap_last_chance_separation_A(args_high_prep) == pytest.approx(1.8)
+
+
 def test_resolve_mc_min_uses_prep_floor_under_liquid_prep():
     from mmml.utils.intermonomer_geometry import (
         DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,

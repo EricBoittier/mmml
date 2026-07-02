@@ -611,3 +611,133 @@ def test_lattice_abnr_prep_passes_only_lattice_full():
     # because when minimize_run_abnr_lattice is absent, the SD fallback ignores
     # nocoords and XTLABC stays zero → CHARMM BOMLEV-5 abort at first putxtl/mbuild.
     assert _LATTICE_ABNR_PREP_PASSES == ((False, "lattice_full"),)
+
+
+def test_overlap_last_chance_separates_to_dynamics_guard(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        run_pre_mlpot_geometry_gate,
+    )
+
+    args = _args(
+        liquid_prep=True,
+        pre_mlpot_overlap_min_distance=1.0,
+        dynamics_overlap_min_distance=1.5,
+    )
+    pos = np.array([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0]], dtype=float)
+    repacked = pos.copy()
+    separate_targets: list[float] = []
+    repack_targets: list[float] = []
+
+    def _fake_assert(_pos, _atoms_per_list, *, min_distance_A, box_side, use_pbc, context):
+        if "final" in context and "after" not in context:
+            raise RuntimeError("below prep floor")
+        return 1.6
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        _fake_assert,
+    )
+
+    def _fake_repack(_pos, *, min_distance, **_kw):
+        repack_targets.append(float(min_distance))
+        return repacked.copy()
+
+    def _fake_open(_pos, _atoms_per_list, *, min_distance_A, **_kw):
+        separate_targets.append(float(min_distance_A))
+        return _pos
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        _fake_repack,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._open_intermonomer_contacts_to_distance",
+        _fake_open,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        lambda **_kw: 20.0,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda _arr: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        lambda *_a, **_kw: None,
+    )
+
+    _, _, summary = run_pre_mlpot_geometry_gate(
+        args,
+        positions=pos,
+        atoms_per_list=[1, 1],
+        composition={"DCM": 2},
+        box_side=20.0,
+        charmm_pbc=False,
+        n_mol=2,
+        n_atoms=2,
+    )
+
+    assert summary.reason == "ok"
+    assert "pre_mlpot:overlap_last_chance" in summary.steps_applied
+    assert repack_targets[-1] == pytest.approx(1.5)
+    assert separate_targets == [pytest.approx(1.5)]
+
+
+def test_dynamics_open_runs_when_prep_passes_but_contact_tight(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        run_pre_mlpot_geometry_gate,
+    )
+
+    args = _args(
+        liquid_prep=True,
+        pre_mlpot_overlap_min_distance=1.0,
+        dynamics_overlap_min_distance=1.5,
+    )
+    pos = np.array([[0.0, 0.0, 0.0], [1.06, 0.0, 0.0]], dtype=float)
+    open_targets: list[float] = []
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        lambda *_a, **_kw: 1.06,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        lambda pos, **_kw: pos.copy(),
+    )
+
+    def _fake_open(_pos, _atoms_per_list, *, min_distance_A, **_kw):
+        open_targets.append(float(min_distance_A))
+        return _pos
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._open_intermonomer_contacts_to_distance",
+        _fake_open,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        lambda **_kw: 20.0,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda _arr: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        lambda *_a, **_kw: None,
+    )
+
+    _, _, summary = run_pre_mlpot_geometry_gate(
+        args,
+        positions=pos,
+        atoms_per_list=[1, 1],
+        composition={"DCM": 2},
+        box_side=20.0,
+        charmm_pbc=False,
+        n_mol=2,
+        n_atoms=2,
+    )
+
+    assert summary.reason == "ok"
+    assert "pre_mlpot:dynamics_open" in summary.steps_applied
+    assert open_targets == [pytest.approx(1.5)]
