@@ -303,6 +303,7 @@ mmml = [
     "data/charmm/trialanine-water-smoke.pdb",
     "data/charmm/top_trialanine_cgenff.rtf",
     "data/charmm/par_trialanine_backbone_cmap.prm",
+    "data/external/aaa_ama_dataset_summary.json",
     "data/charmm/alad_reference.pdb",
     "data/charmm/alad_reference.psf",
     "data/structures/make-box-aco-8x22A.pdb",

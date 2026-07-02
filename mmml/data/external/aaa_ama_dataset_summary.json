@@ -1,0 +1,120 @@
+{
+  "n_frames": 12500,
+  "n_atoms": 34,
+  "net_charge": 1.0,
+  "molecule_label": "ACE\u2013ALA\u00d73\u2013CT3 peptide (34 atoms, training topology)",
+  "formula": "C9H18N3O4",
+  "element_species": [
+    {
+      "symbol": "H",
+      "atomic_number": 1,
+      "atom_indices": [
+        1,
+        2,
+        3,
+        5,
+        7,
+        8,
+        9,
+        13,
+        15,
+        17,
+        18,
+        19,
+        23,
+        25,
+        27,
+        28,
+        29,
+        33
+      ],
+      "n_atoms": 18
+    },
+    {
+      "symbol": "C",
+      "atomic_number": 6,
+      "atom_indices": [
+        4,
+        6,
+        10,
+        14,
+        16,
+        20,
+        24,
+        26,
+        30
+      ],
+      "n_atoms": 9
+    },
+    {
+      "symbol": "N",
+      "atomic_number": 7,
+      "atom_indices": [
+        0,
+        12,
+        22
+      ],
+      "n_atoms": 3
+    },
+    {
+      "symbol": "O",
+      "atomic_number": 8,
+      "atom_indices": [
+        11,
+        21,
+        31,
+        32
+      ],
+      "n_atoms": 4
+    }
+  ],
+  "energy_ev": {
+    "min": -134.75719554552165,
+    "max": -125.27577641504824,
+    "mean": -132.57438778418393,
+    "std": 1.511563646870449
+  },
+  "force_mag_ev_A": {
+    "min": 0.021675132600392718,
+    "max": 30.06637604130034,
+    "mean": 2.191697334284535,
+    "std": 1.9106692154374194
+  },
+  "z_frame0": [
+    7,
+    1,
+    1,
+    1,
+    6,
+    1,
+    6,
+    1,
+    1,
+    1,
+    6,
+    8,
+    7,
+    1,
+    6,
+    1,
+    6,
+    1,
+    1,
+    1,
+    6,
+    8,
+    7,
+    1,
+    6,
+    1,
+    6,
+    1,
+    1,
+    1,
+    6,
+    8,
+    8,
+    1
+  ],
+  "source_url": "https://github.com/MMunibas/aaa.ama/raw/main/aaa_model/dataset_aaa.npz"
+}

@@ -110,6 +110,7 @@ nav:
       - Protein force fields (CHARMM + jax-md): protein-force-fields.md
       - Tri-alanine water box: trialanine-water-box.md
       - Liquid box workflow: liquid-box-workflow.md
+      - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
       - Cross-backend handoff: handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
   - MLpot:
