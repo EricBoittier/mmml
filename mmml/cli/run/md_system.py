@@ -2445,11 +2445,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     cmd.extend(
         ["--dynamics-overlap-min-distance", str(args.dynamics_overlap_min_distance)]
     )
-    cmd.extend(
-        [
-            "--dynamics-intra-min-distance",
-            str(getattr(args, "dynamics_intra_min_distance", 0.5)),
-        ]
+    _append_optional(
+        cmd,
+        "--dynamics-intra-min-distance",
+        getattr(args, "dynamics_intra_min_distance", None),
     )
     if getattr(args, "no_dynamics_intra_exclude_1_3", False):
         cmd.append("--no-dynamics-intra-exclude-1-3")

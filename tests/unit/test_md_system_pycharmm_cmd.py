@@ -219,9 +219,14 @@ def test_build_pycharmm_command_forwards_bonded_recovery_backend():
 
 
 def test_build_pycharmm_command_forwards_intra_monomer_guard():
-    cmd = build_pycharmm_command(_pycharmm_args())
+    cmd = build_pycharmm_command(_pycharmm_args(dynamics_intra_min_distance=0.5))
     idx = cmd.index("--dynamics-intra-min-distance")
     assert cmd[idx + 1] == "0.5"
+
+
+def test_build_pycharmm_command_omits_intra_monomer_guard_when_none():
+    cmd = build_pycharmm_command(_pycharmm_args(dynamics_intra_min_distance=None))
+    assert "--dynamics-intra-min-distance" not in cmd
 
 
 def test_build_pycharmm_command_forwards_no_scale_max_grms():
