@@ -220,6 +220,23 @@ def test_charmm_io_alias_read_symlink(tmp_path):
     assert alias.alias.read_text(encoding="ascii") == "restart\n"
 
 
+def test_charmm_io_alias_read_symlink_idempotent(tmp_path, monkeypatch):
+    monkeypatch.setenv("MMML_CHARMM_IO_SCOPE", "test-scope")
+    original = tmp_path / "zeroed_bonded_par_all36_cgenff.prm"
+    original.write_text("prm\n", encoding="ascii")
+    staging = tmp_path / "staging"
+
+    first = charmm_paths.charmm_io_alias(
+        original, for_write=False, staging_root=staging
+    )
+    second = charmm_paths.charmm_io_alias(
+        original, for_write=False, staging_root=staging
+    )
+    assert first is not None and second is not None
+    assert first.alias.resolve() == second.alias.resolve() == original.resolve()
+    assert first.alias.parent == second.alias.parent
+
+
 def test_charmm_io_alias_write_copy_back(tmp_path):
     upper_dir = tmp_path / "boxes" / "dcm60_L32" / "pretreat"
     target = upper_dir / "mini_box_equil.res"

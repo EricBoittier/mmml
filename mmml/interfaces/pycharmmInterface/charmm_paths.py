@@ -231,6 +231,39 @@ def charmm_io_staging_root() -> Path:
     return Path(os.environ.get("TMPDIR", "/tmp")) / "mmml-charmm-io"
 
 
+def _charmm_io_alias_scope() -> str:
+    """Isolate staging aliases per job/process (shared ``/tmp`` on compute nodes)."""
+    for key in ("SLURM_JOB_ID", "MMML_CHARMM_IO_SCOPE"):
+        raw = (os.environ.get(key) or "").strip()
+        if raw:
+            return raw
+    return str(os.getpid())
+
+
+def _ensure_read_symlink(alias: Path, original: Path) -> None:
+    """Create or reuse a read symlink; tolerate concurrent creators on shared ``/tmp``."""
+    target = original.resolve()
+    if alias.is_symlink():
+        try:
+            if alias.resolve() == target:
+                return
+        except OSError:
+            pass
+        alias.unlink()
+    elif alias.exists():
+        alias.unlink()
+    try:
+        alias.symlink_to(target)
+    except FileExistsError:
+        if alias.is_symlink():
+            try:
+                if alias.resolve() == target:
+                    return
+            except OSError:
+                pass
+        raise
+
+
 @dataclass
 class CharmmIoAlias:
     """Lowercase staging path for CHARMM ``OPEN`` when the real path has capitals."""
@@ -268,7 +301,8 @@ def charmm_io_alias(
         return None
 
     root = staging_root or charmm_io_staging_root()
-    tag = hashlib.sha256(str(original).encode()).hexdigest()[:16]
+    scope = _charmm_io_alias_scope()
+    tag = hashlib.sha256(f"{original.resolve()}|{scope}".encode()).hexdigest()[:16]
     alias_dir = root / tag
     alias_dir.mkdir(parents=True, exist_ok=True)
     alias = alias_dir / original.name.lower()
@@ -279,9 +313,7 @@ def charmm_io_alias(
     else:
         if not original.is_file():
             raise FileNotFoundError(f"restart not found: {original}")
-        if alias.is_symlink() or alias.exists():
-            alias.unlink()
-        alias.symlink_to(original)
+        _ensure_read_symlink(alias, original)
 
     return CharmmIoAlias(original=original, alias=alias, for_write=for_write)
 
