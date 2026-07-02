@@ -123,7 +123,6 @@ nav:
       - MPI operations: pycharmm-mpi.md
       - Threading & launchers: pycharmm-threading.md
       - FFTW for CHARMM: fftw-build.md
-      - Agent handoff (9-mer): agent-handoff-pycharmm-9mer.md
   - QC & calculators:
       - QC cross-check: qc-cross-check.md
       - DCMNet calculators: dcmnet_calculators.md

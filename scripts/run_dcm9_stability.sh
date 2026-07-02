@@ -2,7 +2,7 @@
 # DCM:9 free-space stability: CHARMM MM pre-min → MLpot SD → heating.
 #
 # Based on the validated DCM:2 smoke (no cons_fix, no bonded-mm-mini). See
-# docs/agent-handoff-pycharmm-9mer.md for pass/fail checks and VMD notes.
+# docs/mlpot-settings.md (staged heating) and ./scripts/run_dcm9_stability.sh --help.
 #
 # Packmol sphere radius (initial guess, same scaling as run_dcm90_free_nvt.sh):
 #   R ≈ 18 * (9/60)^(1/3) ≈ 9.6 Å  (override with PACKMOL_R=...)

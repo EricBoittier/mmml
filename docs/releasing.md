@@ -15,7 +15,7 @@ pip install mmml            # or: uv pip install mmml
 
 The wheel/sdist are ~11 MB (they exclude large repo data such as `mmml/models/EF/data/`,
 trajectories, and `setup/charmm.tar.xz`). pyCHARMM and a GPU are optional — see the README
-and `AGENTS.md`.
+and [Getting started](getting-started.md).
 
 ## Cut an alpha release
 
