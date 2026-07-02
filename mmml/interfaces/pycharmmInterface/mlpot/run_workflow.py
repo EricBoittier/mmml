@@ -452,6 +452,7 @@ def run_charmm_mm_pretreat_before_mlpot(
                     use_pbc=use_pbc,
                     inbfrq=pretreat.inbfrq,
                     ihbfrq=pretreat.imgfrq if use_pbc else 0,
+                    restore_full_nonbonded=True,
                 )
             )
 
