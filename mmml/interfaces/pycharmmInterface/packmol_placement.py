@@ -136,29 +136,83 @@ def resolve_packmol_cube_side(
     )
 
 
+def packmol_center_for_cold_start(args) -> tuple[float, float, float]:
+    """Packmol restraint center: explicit ``--packmol-center`` or sim-cell center."""
+    center = getattr(args, "packmol_center", None)
+    if center is not None:
+        if len(center) != 3:
+            raise ValueError("--packmol-center requires three floats: CX CY CZ")
+        return (float(center[0]), float(center[1]), float(center[2]))
+    sim = getattr(args, "_cold_start_sim_cell_side_A", None)
+    if sim is not None and float(sim) > 0.0:
+        half = 0.5 * float(sim)
+        return (half, half, half)
+    return (0.0, 0.0, 0.0)
+
+
 def resolve_packmol_cube_side_from_args(args) -> float:
-    """Cube edge (Å) for Packmol from explicit box flags or ``--box-auto density``."""
-    try:
-        return resolve_packmol_cube_side(
-            box_size=getattr(args, "box_size", None),
-            packmol_box_size=getattr(args, "packmol_box_size", None),
-            packmol_radius=getattr(args, "packmol_radius", None),
-            flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+    """Cube edge (Å) for Packmol: inner cube sized below the simulation cell."""
+    if getattr(args, "packmol_box_size", None) is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            parse_composition_dict,
+            resolve_initial_pbc_box_side,
+            resolve_packmol_cube_side_for_sim_cell,
         )
-    except ValueError:
-        pass
+
+        comp = parse_composition_dict(getattr(args, "composition", None))
+        n_mol = int(getattr(args, "n_molecules", 0) or 0) or None
+        if comp is not None and n_mol is None:
+            n_mol = int(sum(comp.values()))
+        sim_side, _source = resolve_initial_pbc_box_side(
+            args,
+            np.zeros((1, 3), dtype=float),
+            composition=comp,
+            n_molecules=n_mol,
+        )
+        setattr(args, "_cold_start_sim_cell_side_A", float(sim_side))
+        return resolve_packmol_cube_side_for_sim_cell(args, sim_side)
+
+    # Legacy radius-only estimate (no --box-size / density sizing).
+    if getattr(args, "packmol_radius", None) is not None or getattr(
+        args, "flat_bottom_radius", None
+    ) is not None:
+        if getattr(args, "box_size", None) is None:
+            try:
+                return resolve_packmol_cube_side(
+                    packmol_radius=getattr(args, "packmol_radius", None),
+                    flat_bottom_radius=getattr(args, "flat_bottom_radius", None),
+                )
+            except ValueError:
+                pass
+
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
-        resolve_box_auto_mode,
-        resolve_density_packmol_cube_side,
+        parse_composition_dict,
+        resolve_initial_pbc_box_side,
+        resolve_packmol_box_padding_A,
+        resolve_packmol_cube_side_for_sim_cell,
     )
 
-    if resolve_box_auto_mode(args) == "density":
-        return resolve_density_packmol_cube_side(args)
-    raise ValueError(
-        "Packmol cube placement requires --box-size > 0 (or --packmol-box-size, "
-        "or --box-auto density with --target-density-g-cm3 / --bulk-density-fraction, "
-        "or legacy --packmol-radius / --flat-bottom-radius for a diameter estimate)."
+    comp = parse_composition_dict(getattr(args, "composition", None))
+    n_mol = int(getattr(args, "n_molecules", 0) or 0) or None
+    if comp is not None and n_mol is None:
+        n_mol = int(sum(comp.values()))
+    sim_side, source = resolve_initial_pbc_box_side(
+        args,
+        np.zeros((1, 3), dtype=float),
+        composition=comp,
+        n_molecules=n_mol,
     )
+    setattr(args, "_cold_start_sim_cell_side_A", float(sim_side))
+    packmol_side = resolve_packmol_cube_side_for_sim_cell(args, sim_side)
+    if not getattr(args, "quiet", False):
+        padding = resolve_packmol_box_padding_A(args)
+        print(
+            "Cold-start box sizing: "
+            f"Packmol cube {packmol_side:.3f} Å inside sim cell {sim_side:.3f} Å "
+            f"(source={source}; padding={padding:.1f} Å/side)",
+            flush=True,
+        )
+    return packmol_side
 
 
 def packmol_cube_origin(

@@ -13,6 +13,11 @@ from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_length_fro
 
 AVOGADRO = 6.02214076e23
 
+# Margin between Packmol ``inside cube`` and the CHARMM/PBC simulation cell (per side).
+DEFAULT_PACKMOL_BOX_PADDING_A = 10.0
+# Cap per-side margin so small cells still fit a Packmol cube (20% of L_sim per side).
+MAX_PACKMOL_MARGIN_FRAC_PER_SIDE = 0.20
+
 # Experimental bulk liquid densities (~298 K) for auto-sizing.
 SOLVENT_BULK_PROPS: dict[str, dict[str, float]] = {
     "DCM": {"rho_g_cm3": 1.326, "mw_g_mol": 84.93},
@@ -310,6 +315,98 @@ def resolve_density_box_side(
     )
 
 
+def resolve_packmol_box_padding_A(args: argparse.Namespace) -> float:
+    """Requested Packmol–sim-cell margin (Å per side) for cold-start cube placement."""
+    explicit = getattr(args, "packmol_box_padding", None)
+    if explicit is not None:
+        val = float(explicit)
+        if val < 0.0:
+            raise ValueError(f"--packmol-box-padding must be >= 0, got {val}")
+        return val
+    return float(DEFAULT_PACKMOL_BOX_PADDING_A)
+
+
+def _effective_packmol_margin_per_side_A(
+    sim_side_A: float,
+    requested_padding_A: float,
+) -> float:
+    sim = float(sim_side_A)
+    if sim <= 0.0:
+        raise ValueError(f"simulation cell side must be positive, got {sim}")
+    cap = float(MAX_PACKMOL_MARGIN_FRAC_PER_SIDE) * sim
+    return min(float(requested_padding_A), cap)
+
+
+def cubic_side_from_cluster_extent(
+    positions: np.ndarray,
+    *,
+    margin_A: float,
+    ml_cutoff: float = 12.0,
+) -> float:
+    """Cubic side (Å) from cluster max axis span + margin (cubic from extents)."""
+    r = np.asarray(positions, dtype=float)
+    if r.size == 0:
+        return max(2.0 * float(ml_cutoff) + float(margin_A), 2.0 * float(ml_cutoff))
+    span = float(np.max(np.ptp(r, axis=0)))
+    return max(span + 2.0 * float(margin_A), 2.0 * float(ml_cutoff) + float(margin_A))
+
+
+def resolve_packmol_cube_side_for_sim_cell(
+    args: argparse.Namespace,
+    sim_side_A: float,
+    positions: np.ndarray | None = None,
+) -> float:
+    """Packmol cube edge (Å), strictly below the simulation cell, cubic from extents."""
+    sim = float(sim_side_A)
+    if sim <= 0.0:
+        raise ValueError(f"simulation cell side must be positive, got {sim}")
+
+    explicit = getattr(args, "packmol_box_size", None)
+    if explicit is not None:
+        side = float(explicit)
+        if side <= 0.0:
+            raise ValueError(f"--packmol-box-size must be positive, got {side}")
+        if side >= sim:
+            raise ValueError(
+                f"--packmol-box-size ({side:.3f} Å) must be smaller than the "
+                f"simulation cell ({sim:.3f} Å)."
+            )
+        return side
+
+    padding = resolve_packmol_box_padding_A(args)
+    margin = _effective_packmol_margin_per_side_A(sim, padding)
+    max_packmol = sim - 2.0 * margin
+    ml_cut = float(getattr(args, "ml_cutoff", 12.0))
+    tol = float(getattr(args, "packmol_tolerance", 2.0) or 2.0)
+    space = float(getattr(args, "spacing", 5.0) or 5.0)
+    inner_margin = max(tol, 0.5 * space)
+
+    extent_side: float | None = None
+    if positions is not None and np.asarray(positions).size > 0:
+        extent_side = cubic_side_from_cluster_extent(
+            positions,
+            margin_A=inner_margin,
+            ml_cutoff=ml_cut,
+        )
+    elif resolve_box_auto_mode(args) == "density":
+        extent_side = float(resolve_density_packmol_cube_side(args))
+
+    if extent_side is not None:
+        packmol = min(float(extent_side), max_packmol)
+    else:
+        packmol = max_packmol
+
+    min_packmol = 2.0 * ml_cut + inner_margin
+    if packmol >= sim:
+        packmol = max(min_packmol, sim * 0.85)
+    if packmol >= sim:
+        raise ValueError(
+            f"Cannot fit Packmol cube inside simulation cell: L_sim={sim:.3f} Å, "
+            f"padding={padding:.3f} Å per side."
+        )
+    return float(packmol)
+
+
 def resolve_density_packmol_cube_side(
     args: argparse.Namespace,
     *,
@@ -421,8 +518,30 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         metavar="ANG",
         help=(
-            "Fixed cubic box side (Å) for Packmol cube and PBC cell. "
+            "Fixed cubic simulation cell side (Å) for PBC/CHARMM. Packmol placement "
+            "uses a smaller inner cube (see --packmol-box-padding). "
             "With --box-auto count, scales --composition to target ρ at this side."
+        ),
+    )
+    group.add_argument(
+        "--packmol-box-size",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help=(
+            "Explicit Packmol ``inside cube`` edge (Å). Must be smaller than the "
+            "simulation cell (--box-size or density-sized L_sim)."
+        ),
+    )
+    group.add_argument(
+        "--packmol-box-padding",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help=(
+            "Cold-start margin (Å per side) between Packmol cube and simulation cell "
+            f"(default: {DEFAULT_PACKMOL_BOX_PADDING_A:.0f}; capped at "
+            f"{int(MAX_PACKMOL_MARGIN_FRAC_PER_SIDE * 100)}%% of L_sim for small boxes)."
         ),
     )
     group.add_argument(

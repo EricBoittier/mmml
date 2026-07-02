@@ -1468,10 +1468,10 @@ def build_cluster_from_args_with_tag(
         _build_cluster_from_composition_packmol,
         _build_cluster_from_composition_pyxtal,
         _parse_composition,
-        packmol_sphere_center_from_args,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        packmol_center_for_cold_start,
         resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
@@ -1527,7 +1527,7 @@ def build_cluster_from_args_with_tag(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
             )
-            center = packmol_sphere_center_from_args(args)
+            center = packmol_center_for_cold_start(args)
             tolerance = float(getattr(args, "packmol_tolerance", 2.0))
             cube_side: float | None = None
             radius: float | None = None
@@ -1582,7 +1582,7 @@ def build_cluster_from_args_with_tag(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
             )
-            center = packmol_sphere_center_from_args(args)
+            center = packmol_center_for_cold_start(args)
             cube_side: float | None = None
             radius: float | None = None
             if placement == "sphere":
