@@ -295,6 +295,7 @@ def build_minimized_monomer_for_packmol(
                 tolgrd=float(tolgrd),
                 verbose=verbose,
                 show_energy=False,
+                restore_full_nonbonded=True,
             )
         )
         coords = get_charmm_positions_array()
@@ -529,6 +530,7 @@ def build_packmol_composition_cluster(
                 tolenr=float(charmm_tolenr),
                 tolgrd=float(charmm_tolgrd),
                 verbose=verbose,
+                restore_full_nonbonded=True,
             )
         )
         shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
@@ -758,6 +760,7 @@ def build_pyxtal_composition_cluster(
                 tolenr=float(charmm_tolenr),
                 tolgrd=float(charmm_tolgrd),
                 verbose=verbose,
+                restore_full_nonbonded=True,
             )
         )
         shifted = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
