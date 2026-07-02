@@ -26,12 +26,31 @@ def test_resolve_charmm_energy_term_policies_custom_terms():
         resolve_charmm_energy_term_policies,
     )
 
+    # periodic_external keeps CHARMM IMAGE VDW on by default, so only the
+    # explicitly requested terms are enforced.
     args = argparse.Namespace(
+        mm_nonbond_mode="periodic_external",
         periodic_charmm_vdw=True,
         charmm_zero_energy_terms="elec,bonded",
     )
     policies = resolve_charmm_energy_term_policies(args)
     assert [p.name for p in policies] == ["elec", "bonded"]
+
+
+def test_resolve_charmm_energy_term_policies_jax_mic_adds_vdw():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        resolve_charmm_energy_term_policies,
+    )
+
+    # jax_mic: CHARMM IMAGE VDW must be zeroed to avoid double-counting;
+    # vdw policy is added implicitly even when periodic_charmm_vdw=True (not explicit).
+    args = argparse.Namespace(
+        mm_nonbond_mode="jax_mic",
+        periodic_charmm_vdw=True,
+        charmm_zero_energy_terms="elec,bonded",
+    )
+    policies = resolve_charmm_energy_term_policies(args)
+    assert [p.name for p in policies] == ["elec", "bonded", "vdw"]
 
 
 def test_nonbond_only_prm_text_zeros_eps():

@@ -143,6 +143,46 @@ def test_resolve_periodic_charmm_vdw_off_when_no_include_mm():
     assert resolve_periodic_charmm_vdw(args_explicit) is True
 
 
+def test_resolve_periodic_charmm_vdw_off_for_jax_mic():
+    """jax_mic already covers all periodic LJ; CHARMM IMAGE VDW would double-count."""
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        resolve_periodic_charmm_vdw,
+    )
+
+    # Default (no explicit override) → False for jax_mic to prevent double-counting.
+    args = argparse.Namespace(mm_nonbond_mode="jax_mic", periodic_charmm_vdw=True)
+    assert resolve_periodic_charmm_vdw(args) is False
+
+    # Explicit --periodic-charmm-vdw on CLI overrides even in jax_mic mode.
+    args_explicit = argparse.Namespace(
+        mm_nonbond_mode="jax_mic",
+        periodic_charmm_vdw=True,
+        _cli_explicit={"periodic_charmm_vdw"},
+    )
+    assert resolve_periodic_charmm_vdw(args_explicit) is True
+
+
+def test_resolve_periodic_charmm_vdw_on_for_periodic_external():
+    """periodic_external uses CHARMM IMAGE as VDW backend — must stay True."""
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
+        resolve_periodic_charmm_vdw,
+    )
+
+    args = argparse.Namespace(
+        mm_nonbond_mode="periodic_external",
+        periodic_charmm_vdw=True,
+    )
+    assert resolve_periodic_charmm_vdw(args) is True
+
+    # Explicit --no-periodic-charmm-vdw still turns it off.
+    args_off = argparse.Namespace(
+        mm_nonbond_mode="periodic_external",
+        periodic_charmm_vdw=False,
+        _cli_explicit={"periodic_charmm_vdw"},
+    )
+    assert resolve_periodic_charmm_vdw(args_off) is False
+
+
 def test_periodic_mm_status_line_no_vdw():
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         PeriodicMmConfig,
