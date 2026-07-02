@@ -3208,9 +3208,16 @@ def _release_charmm_dynamics_api_buffers() -> None:
             fn()
 
 
-def _strip_non_charmm_dynamics_keywords(kw: dict[str, Any]) -> None:
+def _strip_non_charmm_dynamics_keywords(
+    kw: dict[str, Any],
+    *,
+    preserve: frozenset[str] | None = None,
+) -> None:
     """Remove MMML-only metadata before ``DynamicsScript`` (not CHARMM ``dyna`` keys)."""
+    keep = preserve or frozenset()
     for key in list(kw):
+        if key in keep:
+            continue
         if key.startswith("_") or key == "dcd_interval_ps":
             kw.pop(key, None)
 
@@ -3320,6 +3327,22 @@ def _normalize_dynamics_heat_ramp_kw(kw: dict[str, Any]) -> None:
         cold_start = bool(kw.get("start")) and int(kw.get("iasvel", 0) or 0) == 1
         if cold_start:
             _strip_bussi_scale_heat_pollution_keywords(kw, cold_start=True)
+            _zero_bussi_scale_heat_fortran_keep_firstt(kw)
+            return
+        if int(kw.get("iasvel", 0) or 0) == 1 and not bool(kw.get("start")):
+            # ``iasvel=1`` Boltzmann fallback after failed C-API handoff: keep bath target.
+            _strip_stale_heat_ramp_keywords(kw)
+            for key in (
+                "finalt",
+                "FINALT",
+                "tbath",
+                "TEMINC",
+                "teminc",
+                "twindh",
+                "twindl",
+            ):
+                kw.pop(key, None)
+            _sync_tstruct_with_bath_kw(kw)
             _zero_bussi_scale_heat_fortran_keep_firstt(kw)
             return
         if int(kw.get("iasvel", 0) or 0) == 0 or not bool(kw.get("start")):
@@ -3735,7 +3758,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         restart_read_path=restart_read_path,
         fallback_paths=bussi_restart_fallbacks,
     )
-    _strip_non_charmm_dynamics_keywords(kw)
+    _bussi_handoff_preserve = frozenset({"_bussi_ramp", "_bussi_global_step"})
+    _strip_non_charmm_dynamics_keywords(
+        kw,
+        preserve=_bussi_handoff_preserve if bussi_active else None,
+    )
     handoff_vel: np.ndarray | None = None
     if init_velocities is not None:
         handoff_vel = np.column_stack(
@@ -3758,12 +3785,6 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     apply_charmm_dynamics_timestep_kw(kw)
     if int(kw.get("ihtfrq", 0) or 0) > 0:
         apply_heat_ramp_frequencies(kw, nstep=nstep, ihtfrq=int(kw["ihtfrq"]))
-    _normalize_dynamics_heat_ramp_kw(kw)
-    if bussi_active and not bool(kw.get("start")):
-        _ensure_bussi_plain_verlet_fortran_state()
-    _apply_dynamics_io_setters(kw)
-    _prepare_dynamics_list_frequencies(kw, nstep=nstep)
-    heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
     if _requires_init_velocities_handoff(kw):
         if not _dynamics_c_api_available():
@@ -3780,6 +3801,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             fallback_paths=bussi_restart_fallbacks,
             quiet=bool(kw.get("_quiet_bussi_rescale", False)),
         )
+    _normalize_dynamics_heat_ramp_kw(kw)
+    _strip_non_charmm_dynamics_keywords(kw)
+    _apply_dynamics_io_setters(kw)
+    _prepare_dynamics_list_frequencies(kw, nstep=nstep)
+    heat_append = _dynamics_script_append_for_heat_ramp(kw)
     if _dynamics_c_api_available():
         dyn = _run_dynamics_via_c_api(
             kw,

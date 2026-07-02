@@ -327,3 +327,104 @@ def test_run_dynamics_c_api_path_invoked():
         out = run_dynamics(kw)
     assert out is fake_dyn
     run_c_api.assert_called_once()
+
+
+def test_run_dynamics_bussi_iasvel_one_fallback_keeps_ramp_temperature():
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    fake_dyn = MagicMock()
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
+    kw_in = {
+        "nstep": 50,
+        "timestep": 0.00025,
+        "start": False,
+        "iasvel": 0,
+        "_skip_ase_cold_velocity_assign": True,
+        "_heat_thermostat": "bussi",
+        "_bussi_rescale_interval": 50,
+        "_bussi_ramp": {
+            "firstt": 10.0,
+            "finalt": 50.0,
+            "teminc": 0.8,
+            "ihtfrq": 50,
+        },
+        "_bussi_global_step": 350,
+    }
+    with (
+        patch.dict(sys.modules, {"pycharmm": fake_pycharmm}),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+            return_value=None,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
+            side_effect=lambda kw, *_a, **_k: (
+                kw.update({"iasvel": 1, "firstt": 50.0, "tstruct": 50.0}) or None
+            ),
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+            return_value=fake_dyn,
+        ) as run_capi,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._zero_bussi_scale_heat_fortran_keep_firstt",
+        ) as keep_firstt,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.capture_charmm_velocities_for_bussi",
+        ),
+    ):
+        run_dynamics(dict(kw_in))
+
+    passed_kw = run_capi.call_args.args[0]
+    assert passed_kw["iasvel"] == 1
+    assert passed_kw["firstt"] == pytest.approx(50.0)
+    assert passed_kw["tstruct"] == pytest.approx(50.0)
+    assert "_bussi_ramp" not in passed_kw
+    keep_firstt.assert_called_once()
+
+
+def test_normalize_bussi_iasvel_one_continuation_keeps_firstt():
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _normalize_dynamics_heat_ramp_kw,
+    )
+
+    kw = {
+        "start": False,
+        "iasvel": 1,
+        "firstt": 50.0,
+        "tstruct": 50.0,
+        "finalt": 50.0,
+        "tbath": 50.0,
+        "_heat_thermostat": "bussi",
+        "_bussi_rescale_interval": 50,
+        "_bussi_ramp": {
+            "firstt": 10.0,
+            "finalt": 50.0,
+            "teminc": 0.8,
+            "ihtfrq": 50,
+        },
+    }
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._zero_bussi_scale_heat_fortran_keep_firstt",
+    ) as keep_firstt:
+        _normalize_dynamics_heat_ramp_kw(kw)
+    assert kw["firstt"] == pytest.approx(50.0)
+    assert kw["tstruct"] == pytest.approx(50.0)
+    assert "finalt" not in kw
+    keep_firstt.assert_called_once_with(kw)
