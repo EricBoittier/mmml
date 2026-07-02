@@ -25,10 +25,22 @@ from campaign_lib import (  # noqa: E402
     run_output_dir,
 )
 
-_GRMS_POST_MINI = re.compile(
-    r"Post MLpot SD pass 1[\s\S]*?\|\s*\|\s*([0-9.]+)\s*\|\s*([0-9.]+)\s*\|"
+_ANSI = re.compile(r"\x1b\[[0-9;]*(?:[0-9;]*[A-Za-z])|\x1b\][^\x07]*(?:\x07|\x1b\\)")
+_POST_MINI_CONTEXTS = (
+    "Post MLpot SD pass 1",
+    "Post MLpot mini",
+    "Post MLpot mini GRMS",
 )
-_GRMS_PRE_DYN = re.compile(
+_GRMS_PARTIAL = re.compile(r"GRMS≈([0-9.]+)\s*kcal/mol/Å")
+_GRMS_HYBRID_KV = re.compile(
+    r"hybrid GRMS[= ]+([0-9.]+)\s*kcal/mol/Å",
+    re.IGNORECASE,
+)
+_GRMS_HYBRID_LABEL = re.compile(
+    r"Hybrid GRMS[^\d\n]*([\d.]+)\s*kcal/mol/Å",
+    re.IGNORECASE,
+)
+_GRMS_PRE_DYN_OK = re.compile(
     r"Pre-dynamics GRMS OK:\s*([0-9.]+)\s*kcal/mol/Å\s*\(limit\s*([0-9.]+)\)"
 )
 _GRMS_PRE_DYN_FAIL = re.compile(
@@ -42,7 +54,75 @@ _FAIL = re.compile(
     r"(?:pycharmm_mlpot: error:|Unknown config key\(s\)|setup-compare campaign failed|Traceback \(most recent call last\))",
     re.MULTILINE,
 )
-_DONE = re.compile(r"Campaign summary", re.MULTILINE)
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI.sub("", text)
+
+
+def _hybrid_grms_after_context(text: str, context: str) -> float | None:
+    stripped = _strip_ansi(text)
+    idx = stripped.rfind(context)
+    if idx < 0:
+        return None
+    window = stripped[idx : idx + 2500]
+    for pat in (_GRMS_HYBRID_LABEL, _GRMS_HYBRID_KV, _GRMS_PARTIAL):
+        m = pat.search(window)
+        if m:
+            return float(m.group(1))
+    return None
+
+
+def _last_float(pattern: re.Pattern[str], text: str) -> float | None:
+    hits = pattern.findall(_strip_ansi(text))
+    if not hits:
+        return None
+    last = hits[-1]
+    if isinstance(last, tuple):
+        return float(last[0])
+    return float(last)
+
+
+def _extract_grms_metrics(stdout: str) -> dict[str, Any]:
+    """Best-effort hybrid GRMS from stdout (Rich tables / plain text)."""
+    pre_ok = _last_match(_GRMS_PRE_DYN_OK, stdout)
+    pre_fail = _last_match(_GRMS_PRE_DYN_FAIL, stdout)
+
+    post_mini: float | None = None
+    for context in _POST_MINI_CONTEXTS:
+        val = _hybrid_grms_after_context(stdout, context)
+        if val is not None:
+            post_mini = val
+
+    if post_mini is None:
+        post_mini = _last_float(_GRMS_PARTIAL, stdout)
+
+    pre_dyn: float | None = None
+    pre_limit: float | None = None
+    if pre_ok:
+        parts = pre_ok.split("|")
+        pre_dyn = float(parts[0])
+        if len(parts) > 1:
+            pre_limit = float(parts[1])
+    elif pre_fail:
+        parts = pre_fail.split("|")
+        pre_dyn = float(parts[0])
+        if len(parts) > 1:
+            pre_limit = float(parts[1])
+
+    gate_grms = pre_dyn if pre_dyn is not None else post_mini
+    under_50: str | bool = ""
+    if gate_grms is not None:
+        under_50 = gate_grms <= 50.0
+
+    return {
+        "post_mini_grms": f"{post_mini:.4f}" if post_mini is not None else "",
+        "pre_dynamics_grms": f"{pre_dyn:.4f}" if pre_dyn is not None else "",
+        "pre_dynamics_limit": f"{pre_limit:.1f}" if pre_limit is not None else "",
+        "pre_dynamics_grms_fail": pre_fail or "",
+        "gate_grms": f"{gate_grms:.4f}" if gate_grms is not None else "",
+        "under_50": under_50,
+    }
 
 
 def _read_text(path: Path) -> str:
@@ -94,14 +174,13 @@ def _row_for_cell(cfg: dict[str, Any], cell: Any) -> dict[str, Any]:
     elif stdout:
         status = "failed" if _FAIL.search(stdout) else "running_or_incomplete"
 
+    metrics = _extract_grms_metrics(stdout)
     return {
         "run_tag": cell_run_tag(cell, cfg),
         "sweep_id": cell.sweep_id or "",
         "status": status,
         "exit_code": _campaign_exit(summary),
-        "post_mini_grms": _last_match(_GRMS_POST_MINI, stdout),
-        "pre_dynamics_grms": _last_match(_GRMS_PRE_DYN, stdout),
-        "pre_dynamics_grms_fail": _last_match(_GRMS_PRE_DYN_FAIL, stdout),
+        **metrics,
         "overlap_rescue_grms_fail": _last_match(_GRMS_OVERLAP_FAIL, stdout),
         "error": _last_match(_ERROR, stdout),
         "dt_fs": defaults.get("dt_fs", ""),
@@ -144,7 +223,8 @@ def main() -> None:
 
     done = sum(1 for r in rows if r["status"] == "done")
     failed = sum(1 for r in rows if r["status"] == "failed")
-    print(f"Wrote {len(rows)} rows -> {args.csv} (done={done}, failed={failed})")
+    passed = sum(1 for r in rows if r.get("under_50") is True)
+    print(f"Wrote {len(rows)} rows -> {args.csv} (done={done}, failed={failed}, gate_grms<=50={passed})")
     print(f"Repo root: {repo_root()}")
 
 
