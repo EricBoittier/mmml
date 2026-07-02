@@ -191,6 +191,10 @@ def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         flags.update(pretreat_job_flags(strategy))
     else:
         flags.update(dense_cell_mlpot_overrides(cell, effective))
+    # Workflow config.yaml overrides cleanup defaults (e.g. bonded_mm_mini: false).
+    for key in ("bonded_mm_mini", "bonded_mm_mini_after", "bonded_mm_mini_steps"):
+        if key in cfg:
+            flags[key] = cfg[key]
     return flags
 
 

@@ -115,8 +115,9 @@ def test_minimal_setup_disables_prep(cfg: dict, cell: RunCell) -> None:
 
 
 def test_burst_hybrid_enables_pretreat(cfg: dict) -> None:
-    cell = cell_from_cli(cfg, "burst_hybrid", "DCM", 77, temperature=300.0, box_size=32.0)
-    mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
+    cfg_bh = {k: v for k, v in cfg.items() if k != "bonded_mm_mini"}
+    cell = cell_from_cli(cfg_bh, "burst_hybrid", "DCM", 77, temperature=300.0, box_size=32.0)
+    mini = build_campaign(cfg_bh, cell)["runs"]["pycharmm_mini"]
     assert mini.get("charmm_mm_pretreat") is True
     assert mini.get("dynamics_overlap_action") == "rescue"
     assert mini.get("bonded_mm_mini") is True
@@ -133,6 +134,21 @@ def test_liquid_prep_dense_flags(cfg: dict) -> None:
     mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
     assert mini.get("liquid_prep") is True
     assert mini.get("density_prep_ladder") is True
+
+
+def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    ckpt = tmp_path / "params.json"
+    ckpt.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    cfg = load_config(WORKFLOW / "config.yaml")
+    cell = cell_from_cli(cfg, "resilient", "DCM", 52, temperature=100.0, box_size=28.0)
+    mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
+    assert mini.get("liquid_prep") is True
+    assert mini.get("calculator_pre_minimize") is True
+    assert mini.get("bonded_mm_mini") is False
+    assert mini.get("charmm_mm_pretreat") is True
 
 
 def test_bulk_density_fraction(cfg: dict, cell: RunCell) -> None:
@@ -170,15 +186,13 @@ def test_build_md_system_campaign_argv(tmp_path: Path, cfg: dict, cell: RunCell)
 def test_matrix_setup_ids_from_config() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
     ids = matrix_setup_ids(cfg)
-    assert "minimal" in ids
-    assert "resilient" in ids
-    assert len(ids) == 5
+    assert ids == ["resilient"]
 
 
 def test_default_config_matrix_job_count() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
-    # 5 setups × 2 fractions × 3 boxes = 30
-    assert matrix_job_count(cfg) == 30
+    # resilient × 0.25× bulk × 3 boxes = 3
+    assert matrix_job_count(cfg) == 3
 
 
 def test_slurm_resources_cli(cfg: dict) -> None:

@@ -1,24 +1,23 @@
 # DCM density × setup comparison (mini-only smoke campaigns).
 #
+# Convergence-first matrix: resilient prep @ 0.25× bulk density only.
+# Re-enable additional setups / 0.5× fractions for full setup comparison.
+#
 # Matrix: setups × bulk_density_fractions × box_sizes × temperature
-# Densities match workflows/pbc_solvent_burst/ (fraction × 298 K bulk liquid N).
-#
-# Each cell runs one pycharmm_mini leg to compare which prep/minimization
-# stack survives Packmol placement at that density.
-#
 # Output: artifacts/dcm_density_setup_compare/{setup}_dcm_{n}_t{T}_l{L}/
 
 setups:
-  - minimal
-  - calculator_pre_sd
-  - liquid_prep_dense
-  - burst_hybrid
   - resilient
+  # Full comparison matrix (uncomment when comparing prep stacks):
+  # - minimal
+  # - calculator_pre_sd
+  # - liquid_prep_dense
+  # - burst_hybrid
 
 solvents: [DCM]
 
-# Same bulk-density fractions and box sizes as pbc_solvent_burst.
-bulk_density_fractions: [0.25, 0.5]
+bulk_density_fractions: [0.25]
+# bulk_density_fractions: [0.25, 0.5]
 bulk_density_n_min: 10
 temperatures: [100.0]
 box_sizes: [28.0, 30.0, 32.0]
@@ -29,10 +28,27 @@ seed_base: 4242
 
 dt_fs: 0.25
 pressure: 1.0
-spacing: 4.0
-packmol_tolerance: 1.0
+# Easier Packmol convergence (see md_system.dense_liquid_prep.example.yaml).
+spacing: 4.5
+packmol_tolerance: 1.5
 # Keep Packmol cube near L_sim (N is bulk-sized for the full cell, not an inset cube).
 packmol_box_padding: 1.0
+
+# Resilient density prep (merged into resilient setup; reinforces variant defaults).
+liquid_prep: true
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 5
+density_prep_lattice_abnr_steps: 300
+mini_lattice_abnr_steps: 300
+mc_density_equalize: true
+mc_density_steps: 128
+min_intermonomer_atom_distance: 1.0
+max_grms_before_dyn: 50.0
+mini_box_equil_ps: 5.0
+calculator_pre_minimize: true
+
+# Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
+bonded_mm_mini: false
 
 mm_switch_on: 5.0
 mm_switch_width: 3.0
@@ -71,4 +87,4 @@ slurm_gpu_nodes_slow:
   - gpu23
 
 # exclude_run_tags:
-#   - minimal_dcm_206_t300_l28
+#   - resilient_dcm_77_t100_l32
