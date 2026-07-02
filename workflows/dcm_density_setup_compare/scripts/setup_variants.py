@@ -215,7 +215,8 @@ def resolve_setup_variant(setup_id: str) -> SetupVariant:
 def merge_setup_into_config(cfg: dict[str, Any], setup_id: str) -> dict[str, Any]:
     """Return cfg copy with setup variant defaults applied."""
     variant = resolve_setup_variant(setup_id)
-    merged = {**cfg, **variant.config_overrides}
+    # Variant defaults first; workflow config.yaml wins on conflict.
+    merged = {**variant.config_overrides, **cfg}
     if variant.cleanup_strategy is not None:
         merged["cleanup_strategy"] = variant.cleanup_strategy
     return merged
