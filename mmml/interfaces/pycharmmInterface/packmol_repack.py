@@ -40,7 +40,7 @@ def _resolve_packmol_tolerance(
     candidates = [2.0, float(min_distance)]
     if spacing is not None and float(spacing) > 0.0:
         candidates.append(float(spacing))
-    return float(max(1.0, min(3.0, max(candidates)))
+    return float(max(1.0, min(3.0, max(candidates))))
 
 
 def _charmm_atom_metadata(n_atoms: int) -> tuple[list[str], np.ndarray] | None:

@@ -712,7 +712,19 @@ def _separate_intermonomer_overlaps_fn():
 
 @lru_cache(maxsize=1)
 def _repack_monomers_clear_overlap_fn():
-    return _geometry_checks_mod().repack_monomers_clear_overlap
+    from mmml.interfaces.pycharmmInterface import packmol_repack
+
+    return packmol_repack.repack_monomers_clear_overlap
+
+
+def _packmol_repack_scratch_dir(config: DynamicsOverlapConfig) -> Path | None:
+    if config.segment_out_dir is not None:
+        return Path(config.segment_out_dir) / "packmol_repack"
+    registry = getattr(config, "artifact_registry", None)
+    out_dir = getattr(registry, "out_dir", None) if registry is not None else None
+    if out_dir is not None:
+        return Path(out_dir) / "packmol_repack"
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -1096,8 +1108,11 @@ def apply_overlap_repack_last_resort(
 
     repack_fn = _repack_monomers_clear_overlap_fn()
     new_pos = None
+    scratch_dir = _packmol_repack_scratch_dir(config)
     if mlpot_ctx is not None:
-        from mmml.utils.geometry_checks import repack_selected_monomers_clear_overlap
+        from mmml.interfaces.pycharmmInterface.packmol_repack import (
+            repack_selected_monomers_clear_overlap,
+        )
         from mmml.utils.monomer_force_diag import resolve_selective_repack_monomers
 
         diag = resolve_selective_repack_monomers(
@@ -1124,6 +1139,7 @@ def apply_overlap_repack_last_resort(
                 margin=config.separate_margin_A,
                 seed=config.recovery_seed,
                 cell=cell,
+                scratch_dir=scratch_dir,
             )
 
     if new_pos is None:
@@ -1135,6 +1151,7 @@ def apply_overlap_repack_last_resort(
             margin=config.separate_margin_A,
             seed=config.recovery_seed,
             cell=cell,
+            scratch_dir=scratch_dir,
         )
     sync_charmm_positions(new_pos)
     best_dist, _ = find_overlap(new_pos, offsets, cell=cell)
@@ -1400,12 +1417,14 @@ def _handle_extent_cleanup_rescue(
         get_charmm_positions_array,
         sync_charmm_positions,
     )
+    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+        repack_monomers_clear_overlap,
+        repack_selected_monomers_clear_overlap,
+    )
     from mmml.utils.geometry_checks import (
         coords_pathological_for_repack,
         find_worst_monomer_extent,
         rebuild_monomers_from_reference,
-        repack_monomers_clear_overlap,
-        repack_selected_monomers_clear_overlap,
     )
 
     pos = get_charmm_positions_array()
@@ -1454,6 +1473,7 @@ def _handle_extent_cleanup_rescue(
         cell=cell,
         template_positions=ref_pos,
         max_monomer_radius_A=extent_cap if extent_cap > 0.0 else None,
+        scratch_dir=_packmol_repack_scratch_dir(config),
     )
     setattr(mlpot_ctx, "_mlpot_pbc_exclusions_upinb_done", False)
     setattr(mlpot_ctx, "_overlap_extent_polish_mlpot_sd_done", False)
