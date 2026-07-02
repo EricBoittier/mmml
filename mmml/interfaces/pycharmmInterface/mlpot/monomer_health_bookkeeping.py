@@ -99,6 +99,20 @@ class MonomerHealthReport:
   restored: bool = False
 
 
+def _safe_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _safe_float(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
 def monomer_health_config_from_args(args: Any | None) -> MonomerHealthConfig:
     if args is None:
         return MonomerHealthConfig()
@@ -112,31 +126,32 @@ def monomer_health_config_from_args(args: Any | None) -> MonomerHealthConfig:
             getattr(args, "no_dynamics_monomer_jax_after_restore", False)
         ),
         max_restore_per_check=max(
-            1, int(getattr(args, "dynamics_monomer_health_max_restore", 4) or 4)
+            1,
+            _safe_int(getattr(args, "dynamics_monomer_health_max_restore", 4), 4),
         ),
-        velocity_warn_ratio=float(
-            getattr(args, "dynamics_monomer_velocity_warn_ratio", 3.0) or 3.0
+        velocity_warn_ratio=_safe_float(
+            getattr(args, "dynamics_monomer_velocity_warn_ratio", 3.0), 3.0
         ),
-        velocity_bad_ratio=float(
-            getattr(args, "dynamics_monomer_velocity_bad_ratio", 6.0) or 6.0
+        velocity_bad_ratio=_safe_float(
+            getattr(args, "dynamics_monomer_velocity_bad_ratio", 6.0), 6.0
         ),
-        velocity_warn_abs_akma=float(
-            getattr(args, "dynamics_monomer_velocity_warn_akma", 5000.0) or 5000.0
+        velocity_warn_abs_akma=_safe_float(
+            getattr(args, "dynamics_monomer_velocity_warn_akma", 5000.0), 5000.0
         ),
-        velocity_bad_abs_akma=float(
-            getattr(args, "dynamics_monomer_velocity_bad_akma", 15000.0) or 15000.0
+        velocity_bad_abs_akma=_safe_float(
+            getattr(args, "dynamics_monomer_velocity_bad_akma", 15000.0), 15000.0
         ),
-        force_warn_ratio=float(
-            getattr(args, "dynamics_monomer_force_warn_ratio", 2.5) or 2.5
+        force_warn_ratio=_safe_float(
+            getattr(args, "dynamics_monomer_force_warn_ratio", 2.5), 2.5
         ),
-        force_bad_ratio=float(
-            getattr(args, "dynamics_monomer_force_bad_ratio", 5.0) or 5.0
+        force_bad_ratio=_safe_float(
+            getattr(args, "dynamics_monomer_force_bad_ratio", 5.0), 5.0
         ),
-        energy_warn_ratio=float(
-            getattr(args, "dynamics_monomer_energy_warn_ratio", 2.0) or 2.0
+        energy_warn_ratio=_safe_float(
+            getattr(args, "dynamics_monomer_energy_warn_ratio", 2.0), 2.0
         ),
-        energy_bad_ratio=float(
-            getattr(args, "dynamics_monomer_energy_bad_ratio", 4.0) or 4.0
+        energy_bad_ratio=_safe_float(
+            getattr(args, "dynamics_monomer_energy_bad_ratio", 4.0), 4.0
         ),
         verbose=not bool(getattr(args, "quiet", False)),
     )

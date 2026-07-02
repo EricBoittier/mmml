@@ -35,6 +35,7 @@ class MonomerGeometryLimits:
     inter_min_distance_A: float
     reference_max_extent_A: float
     reference_intra_min_A: float
+    reference_geminal_hh_min_A: float | None
     min_bond_length_A: float
     max_bond_length_A: float
     notes: str = ""
@@ -80,24 +81,49 @@ def _bond_lengths_in_monomer(
     return lengths
 
 
-def _min_nonexcluded_intra_distance(
+def _is_hydrogen(z: int | None) -> bool:
+    return z is not None and int(z) == 1
+
+
+def _min_intra_reference_distance(
     positions: np.ndarray,
     offsets: np.ndarray,
     monomer: int,
     excluded_pairs: frozenset[tuple[int, int]],
-) -> float | None:
+    *,
+    atomic_numbers: np.ndarray | None = None,
+) -> tuple[float | None, float | None]:
+    """Minimum intra-monomer contact distances for limit derivation.
+
+    Returns ``(min_nonbonded, min_geminal_hh)``.  Geminal H–H (PSF 1–3) is
+    included even when excluded, matching runtime ``clash_floor`` piercing in
+    :func:`find_worst_intramonomer_close_contact`.
+    """
     pos = np.asarray(positions, dtype=np.float64)
     si, ei = int(offsets[monomer]), int(offsets[monomer + 1])
-    best = float("inf")
+    z_arr = (
+        np.asarray(atomic_numbers, dtype=int).reshape(-1)
+        if atomic_numbers is not None
+        else None
+    )
+    best_nonbonded = float("inf")
+    best_geminal_hh = float("inf")
     for gi in range(si, ei):
         for gj in range(gi + 1, ei):
             pair = normalize_atom_pair(gi, gj)
-            if pair in excluded_pairs:
-                continue
             dist = float(np.linalg.norm(pos[gj] - pos[gi]))
-            if dist < best:
-                best = dist
-    return None if not np.isfinite(best) else float(best)
+            zi = int(z_arr[gi]) if z_arr is not None and gi < z_arr.size else None
+            zj = int(z_arr[gj]) if z_arr is not None and gj < z_arr.size else None
+            geminal_hh = _is_hydrogen(zi) and _is_hydrogen(zj)
+            if pair in excluded_pairs:
+                if geminal_hh and dist < best_geminal_hh:
+                    best_geminal_hh = dist
+                continue
+            if dist < best_nonbonded:
+                best_nonbonded = dist
+    nonbonded = None if not np.isfinite(best_nonbonded) else float(best_nonbonded)
+    geminal = None if not np.isfinite(best_geminal_hh) else float(best_geminal_hh)
+    return nonbonded, geminal
 
 
 def compute_monomer_geometry_limits(
@@ -131,13 +157,29 @@ def compute_monomer_geometry_limits(
 
     ref_extents: list[float] = []
     ref_intra_mins: list[float] = []
+    ref_geminal_hh_mins: list[float] = []
     all_bond_lengths: list[float] = []
+
+    z_arr = (
+        np.asarray(atomic_numbers, dtype=int).reshape(-1)
+        if atomic_numbers is not None
+        else None
+    )
 
     for mi in range(n_monomers):
         ref_extents.append(float(monomer_axis_extent(pos, offsets, mi)))
-        intra_min = _min_nonexcluded_intra_distance(pos, offsets, mi, excluded)
-        if intra_min is not None:
-            ref_intra_mins.append(intra_min)
+        nonbonded, geminal_hh = _min_intra_reference_distance(
+            pos,
+            offsets,
+            mi,
+            excluded,
+            atomic_numbers=z_arr,
+        )
+        candidates = [d for d in (nonbonded, geminal_hh) if d is not None]
+        if candidates:
+            ref_intra_mins.append(float(min(candidates)))
+        if geminal_hh is not None:
+            ref_geminal_hh_mins.append(float(geminal_hh))
         if bonds_12:
             all_bond_lengths.extend(_bond_lengths_in_monomer(pos, offsets, mi, bonds_12))
 
@@ -184,9 +226,18 @@ def compute_monomer_geometry_limits(
                 float(inter_vdw_fraction) * float(np.min(hints)),
             )
 
+    ref_geminal_hh_min = (
+        float(np.min(ref_geminal_hh_mins)) if ref_geminal_hh_mins else None
+    )
+
     notes = (
         f"ref_extent={ref_max_extent:.2f} Å, ref_intra_min="
         f"{ref_intra_min:.2f} Å"
+        + (
+            f", ref_geminal_HH={ref_geminal_hh_min:.2f} Å"
+            if ref_geminal_hh_min is not None
+            else ""
+        )
         + (
             f", bonds [{min_bond:.2f}, {max_bond:.2f}] Å"
             if all_bond_lengths
@@ -199,6 +250,7 @@ def compute_monomer_geometry_limits(
         inter_min_distance_A=inter_min,
         reference_max_extent_A=ref_max_extent,
         reference_intra_min_A=ref_intra_min,
+        reference_geminal_hh_min_A=ref_geminal_hh_min,
         min_bond_length_A=min_bond,
         max_bond_length_A=max_bond,
         notes=notes,
