@@ -111,7 +111,25 @@ def scale_vacuum_switch_cutoffs(
     ctofnb = max(ctofnb, ctonnb + 0.5)
     ctonnb = max(float(PBC_NBOND_MIN_CUTNB_A), min(ctonnb, ctofnb - 0.5))
     ctofnb = max(ctonnb + 0.5, min(ctofnb, nb - 0.5))
+    _nb, ctonnb, ctofnb = enforce_switch_cutoff_order(nb, ctonnb, ctofnb)
     return ctonnb, ctofnb
+
+
+def enforce_switch_cutoff_order(
+    cutnb: float,
+    ctonnb: float,
+    ctofnb: float,
+) -> tuple[float, float, float]:
+    """Guarantee ``ctonnb < ctofnb < cutnb`` for CHARMM nbonds setters."""
+    nb = float(cutnb)
+    on = float(ctonnb)
+    of = float(ctofnb)
+    of = min(of, nb - 0.5)
+    on = min(on, of - 0.5)
+    on = max(float(PBC_NBOND_MIN_CUTNB_A), on)
+    of = max(on + 0.5, of)
+    nb = max(of + 0.5, nb)
+    return nb, on, of
 
 
 def pbc_nbond_cutoffs(
@@ -144,6 +162,7 @@ def pbc_nbond_cutoffs(
         ctonnb_ref=float(ctonnb_max),
         ctofnb_ref=float(ctofnb_max),
     )
+    cutnb, ctonnb, ctofnb = enforce_switch_cutoff_order(cutnb, ctonnb, ctofnb)
     return PbcNbondCutoffs(
         cubic_box_side_A=L,
         cutnb=cutnb,
@@ -356,10 +375,9 @@ def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     imgfrq = cfg.pop("imgfrq", None)
     cfg.pop("ctexnb", None)  # CHARMM bumps ctexnb internally when cutnb/cutim change
 
-    # Apply switched cutoffs in descending order (cutnb > ctofnb > ctonnb).  The C
-    # API checks ordering after each setter; vacuum presets set ctonnb before ctofnb
-    # in the dict and CGENFF prm may still have ctofnb=12 when ctonnb→13 is applied.
-    for key in ("cutnb", "ctofnb", "ctonnb"):
+    # Apply switched cutoffs low-to-high (ctonnb, ctofnb, cutnb) so lowering ``cutnb``
+    # never leaves stale switch values above the new primary cutoff.
+    for key in ("ctonnb", "ctofnb", "cutnb"):
         if key in cfg:
             nbonds.configure(**{key: cfg.pop(key)})
     if cfg:

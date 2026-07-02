@@ -706,6 +706,14 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
     mock_forward.assert_called_once()
 
 
+def test_pbc_nbond_cutoffs_small_liquid_box():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+
+    cuts = pbc_nbond_cutoffs(31.079)
+    assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
+    assert cuts.cutnb < 0.5 * 31.079
+
+
 def test_pbc_nbond_cutoffs_respects_half_box():
     from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
 

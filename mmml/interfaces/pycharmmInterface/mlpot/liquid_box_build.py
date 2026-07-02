@@ -425,25 +425,39 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     r = get_charmm_positions_array()
 
     gate_summary: dict[str, Any] | None = None
+    gate_failed = False
+    gate_fail_message = ""
     if liquid_prep_enabled(args) and atoms_per_list is not None:
-        r, box_side, gate_result = run_pre_mlpot_geometry_gate(
-            args,
-            positions=get_charmm_positions_array(),
-            atoms_per_list=list(atoms_per_list),
-            composition=getattr(args, "_cluster_composition_summary", None),
-            box_side=box_side,
-            charmm_pbc=charmm_pbc,
-            n_mol=n_mol,
-            n_atoms=len(z),
-            atomic_numbers=np.asarray(z, dtype=int),
-        )
-        sync_charmm_positions(r)
-        gate_summary = gate_result.to_dict()
-        steps_applied.extend(gate_result.steps_applied)
+        try:
+            r, box_side, gate_result = run_pre_mlpot_geometry_gate(
+                args,
+                positions=get_charmm_positions_array(),
+                atoms_per_list=list(atoms_per_list),
+                composition=getattr(args, "_cluster_composition_summary", None),
+                box_side=box_side,
+                charmm_pbc=charmm_pbc,
+                n_mol=n_mol,
+                n_atoms=len(z),
+                atomic_numbers=np.asarray(z, dtype=int),
+            )
+            sync_charmm_positions(r)
+            gate_summary = gate_result.to_dict()
+            steps_applied.extend(gate_result.steps_applied)
+        except RuntimeError as exc:
+            gate_failed = True
+            gate_fail_message = str(exc)
+            r = get_charmm_positions_array()
+            gate_summary = {
+                "aborted": True,
+                "reason": "overlap_abort_post_ladder",
+                "message": gate_fail_message,
+            }
+            if not getattr(args, "quiet", False):
+                print(f"Pre-MLpot geometry gate: FAIL — {exc}", flush=True)
 
     mm_grms_after_prep = measure_mm_pretreat_grms()
     r = get_charmm_positions_array()
-    if should_run_mini_lattice_abnr(args, charmm_pbc=charmm_pbc, stages=mm_stages):
+    if not gate_failed and should_run_mini_lattice_abnr(args, charmm_pbc=charmm_pbc, stages=mm_stages):
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
@@ -468,7 +482,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             steps_applied.append("mini_lattice_abnr")
             mm_grms_after_prep = measure_mm_pretreat_grms()
 
-    if should_run_mini_box_equil(
+    if not gate_failed and should_run_mini_box_equil(
         args,
         charmm_pbc=charmm_pbc,
         pretreat_mm=False,
@@ -529,7 +543,10 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     worst: float | None = None
     passed = True
     cert_message = ""
-    if atoms_per_list is not None:
+    if gate_failed:
+        passed = False
+        cert_message = gate_fail_message or "Pre-MLpot geometry gate failed"
+    elif atoms_per_list is not None:
         worst, passed, cert_message = certify_intermonomer_geometry(
             r,
             list(atoms_per_list),

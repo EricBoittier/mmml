@@ -1201,11 +1201,63 @@ def run_pre_mlpot_geometry_gate(
         )
         result.worst_intermonomer_A = float(worst)
     except RuntimeError as exc:
-        result.aborted = True
-        result.reason = "overlap_abort_post_ladder"
-        raise RuntimeError(
-            f"{exc}\nPre-MLpot geometry gate: overlap persists after preventive ladder."
-        ) from exc
+        step_label = "pre_mlpot:overlap_last_chance"
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+                monomer_offsets_from_atoms_per,
+            )
+            from mmml.utils.geometry_checks import separate_intermonomer_overlaps
+
+            offsets = monomer_offsets_from_atoms_per(atoms_per_list)
+            cell = (
+                np.diag([float(side), float(side), float(side)])
+                if side and charmm_pbc
+                else None
+            )
+            new_pos = _step_monomer_repack(
+                pos,
+                atoms_per_list=list(atoms_per_list),
+                box_side=side,
+                min_distance=min_overlap,
+                spacing=float(spacing) if spacing is not None else None,
+                seed=int(seed) + 17 if seed is not None else None,
+                scratch_dir=_packmol_repack_scratch_dir(args),
+            )
+            new_pos = separate_intermonomer_overlaps(
+                new_pos,
+                offsets,
+                min_distance=float(min_overlap),
+                margin=0.2,
+                cell=cell,
+                symmetric=True,
+            )
+            side = _sync_pbc_after_box_change(
+                positions=new_pos,
+                box_side=side,
+                charmm_pbc=charmm_pbc,
+                mlpot_ctx=None,
+                args=args,
+                quiet=quiet,
+            )
+            pos = new_pos
+            sync_charmm_positions(pos)
+            result.steps_applied.append(step_label)
+            _record_gate_step(step_label)
+            worst = assert_pre_mlpot_intermonomer_geometry(
+                pos,
+                atoms_per_list,
+                min_distance_A=min_overlap,
+                box_side=side,
+                use_pbc=charmm_pbc,
+                context="Pre-MLpot gate (after last-chance repack)",
+            )
+            result.worst_intermonomer_A = float(worst)
+        except RuntimeError:
+            result.aborted = True
+            result.reason = "overlap_abort_post_ladder"
+            raise RuntimeError(
+                f"{exc}\nPre-MLpot geometry gate: overlap persists after preventive ladder."
+            ) from exc
 
     sync_charmm_positions(pos)
     result.reason = "ok"
