@@ -6380,6 +6380,18 @@ def run_dynamics_with_io(
             context=overlap_context,
         )
     _cleanup_overlap_restart_slots(io)
+    if overlap is not None and mlpot_ctx is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+            apply_geometry_limits_to_overlap_config,
+        )
+
+        wf_args = getattr(mlpot_ctx, "workflow_args", None)
+        overlap = apply_geometry_limits_to_overlap_config(
+            overlap,
+            mlpot_ctx,
+            wf_args,
+            verbose=not bool(getattr(wf_args, "quiet", False)) if wf_args else False,
+        )
     check_dynamics_overlap(
         overlap,
         context=f"before {overlap_context}",

@@ -409,7 +409,7 @@ no_echeck_heat: true
 dynamics_overlap_action: rescue
 dynamics_overlap_min_distance: 1.5
 dynamics_intra_min_distance: 0.5
-dynamics_overlap_check_interval: 250
+dynamics_overlap_check_interval: 50
 ```
 
 #### Fixed `box_size` + resilient (Packmol cube = PBC cell)

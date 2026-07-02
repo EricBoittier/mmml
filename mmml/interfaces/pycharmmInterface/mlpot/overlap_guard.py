@@ -12,6 +12,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
+from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+    DEFAULT_INTRA_MIN_DISTANCE_A,
+    DEFAULT_MAX_MONOMER_EXTENT_A,
+)
+
 if TYPE_CHECKING:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
@@ -130,11 +135,12 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-intra-min-distance",
         type=float,
-        default=0.5,
+        default=None,
         metavar="ANG",
         help=(
             "Minimum allowed nonbonded atom distance within each monomer (1–2 and 1–3 "
-            "pairs excluded from PSF bonds). Set 0 to disable (default: 0.5 Å)."
+            f"pairs excluded from PSF bonds). Default: auto from reference geometry "
+            f"(else {DEFAULT_INTRA_MIN_DISTANCE_A:.1f} Å). Set 0 to disable."
         ),
     )
     group.add_argument(
@@ -203,12 +209,19 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-max-monomer-extent",
         type=float,
-        default=12.0,
+        default=None,
         metavar="ANG",
         help=(
             "Maximum allowed axis-aligned monomer extent in Å during dynamics "
-            "(default: 12.0, aligned with CHARMM NBONDA group limit). "
-            "On violation, restore the prior segment restart and run bonded-MM SD."
+            f"(default: auto from reference bond geometry, else {DEFAULT_MAX_MONOMER_EXTENT_A:.1f} Å)."
+        ),
+    )
+    group.add_argument(
+        "--no-dynamics-geometry-limits-auto",
+        action="store_true",
+        help=(
+            "Use fixed --dynamics-max-monomer-extent / --dynamics-intra-min-distance "
+            "defaults instead of bond-length-derived limits from reference geometry."
         ),
     )
     group.add_argument(
@@ -344,7 +357,9 @@ def resolve_dynamics_overlap_config(
         action=action,  # type: ignore[arg-type]
         min_distance_A=float(min_dist),
         intra_min_distance_A=float(
-            getattr(args, "dynamics_intra_min_distance", 0.5) or 0.0
+            getattr(args, "dynamics_intra_min_distance", None)
+            if getattr(args, "dynamics_intra_min_distance", None) is not None
+            else DEFAULT_INTRA_MIN_DISTANCE_A
         ),
         intra_exclude_1_3=not bool(
             getattr(args, "no_dynamics_intra_exclude_1_3", False)
@@ -375,7 +390,11 @@ def resolve_dynamics_overlap_config(
         max_monomer_extent_A=(
             0.0
             if bool(getattr(args, "no_dynamics_max_monomer_extent", False))
-            else float(getattr(args, "dynamics_max_monomer_extent", 12.0))
+            else float(
+                getattr(args, "dynamics_max_monomer_extent", None)
+                if getattr(args, "dynamics_max_monomer_extent", None) is not None
+                else DEFAULT_MAX_MONOMER_EXTENT_A
+            )
         ),
         memory_handoff=resolve_overlap_memory_handoff(args),
         heat_segment_boundary_only=bool(
@@ -574,6 +593,30 @@ def attach_prior_segment_restart(
     return replace(tagged, prior_segment_restart=prior)
 
 
+def resolve_overlap_monomer_offsets(
+    config: DynamicsOverlapConfig,
+    mlpot_ctx: "MlpotContext | None" = None,
+) -> np.ndarray:
+    """Monomer offsets from PSF atom counts when available, else uniform split."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    pos = get_charmm_positions_array()
+    n_atoms = int(pos.shape[0])
+    if mlpot_ctx is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+            resolve_monomer_offsets_for_limits,
+        )
+
+        offsets = resolve_monomer_offsets_for_limits(
+            mlpot_ctx,
+            n_monomers=int(config.n_monomers),
+            n_atoms=n_atoms,
+        )
+        if offsets is not None:
+            return offsets
+    return monomer_offsets(n_atoms, int(config.n_monomers))
+
+
 def monomer_offsets(n_atoms: int, n_monomers: int) -> np.ndarray:
     """Uniform monomer atom offsets (length ``n_monomers + 1``)."""
     n_atoms = int(n_atoms)
@@ -716,11 +759,12 @@ def _overlap_check(
     config: DynamicsOverlapConfig,
     *,
     context: str,
+    mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
@@ -739,11 +783,12 @@ def _intramonomer_check(
     config: DynamicsOverlapConfig,
     *,
     context: str,
+    mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
@@ -833,11 +878,12 @@ def _extent_check(
     config: DynamicsOverlapConfig,
     *,
     context: str,
+    mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     assert_monomer_extent_within_limit = _assert_monomer_extent_within_limit_fn()
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
@@ -1194,6 +1240,34 @@ def _handle_intramonomer_rescue(
     exc: RuntimeError,
     mlpot_ctx: "MlpotContext",
 ) -> float:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+        restore_monomer_from_template_for_violation,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from mmml.utils.geometry_checks import find_worst_intramonomer_close_contact
+
+    pos = get_charmm_positions_array()
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
+    cell = _overlap_cell(
+        use_pbc=config.use_pbc,
+        fallback_box_side_A=config.fallback_box_side_A,
+    )
+    excluded = _bond_exclusion_pairs(exclude_1_3=config.intra_exclude_1_3)
+    _, violation = find_worst_intramonomer_close_contact(
+        pos,
+        offsets,
+        excluded,
+        cell=cell,
+        min_distance=float(config.intra_min_distance_A),
+    )
+    if violation is not None:
+        restore_monomer_from_template_for_violation(
+            mlpot_ctx,
+            int(violation.monomer),
+            context=f"{label} intra-monomer template restore",
+            restart_path=config.prior_segment_restart,
+        )
+
     sd_steps = config.intra_rescue_sd_steps
     if sd_steps is None:
         sd_steps = config.rescue.nstep_sd
@@ -1661,10 +1735,10 @@ def _run_extent_guard(
     mlpot_ctx: "MlpotContext | None",
 ) -> tuple[float, bool]:
     if config.action == "error":
-        return _extent_check(config, context=label), False
+        return _extent_check(config, context=label, mlpot_ctx=mlpot_ctx), False
 
     try:
-        return _extent_check(config, context=label), False
+        return _extent_check(config, context=label, mlpot_ctx=mlpot_ctx), False
     except RuntimeError as exc:
         if config.action == "warn":
             print(f"WARNING: {exc}", flush=True)
@@ -1745,7 +1819,7 @@ def check_dynamics_overlap(
 
     if config.enabled:
         dist, did_rescue = _run_geometry_guard(
-            lambda ctx: _overlap_check(config, context=ctx),
+            lambda ctx: _overlap_check(config, context=ctx, mlpot_ctx=mlpot_ctx),
             config=config,
             label=label,
             mlpot_ctx=mlpot_ctx,
@@ -1757,7 +1831,7 @@ def check_dynamics_overlap(
 
     if config.intra_enabled:
         dist, did_rescue = _run_geometry_guard(
-            lambda ctx: _intramonomer_check(config, context=ctx),
+            lambda ctx: _intramonomer_check(config, context=ctx, mlpot_ctx=mlpot_ctx),
             config=config,
             label=label,
             mlpot_ctx=mlpot_ctx,

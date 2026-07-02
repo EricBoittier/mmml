@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Export real CHARMM / Packmol structures for MkDocs figures.
 
-Requires PyCHARMM (``CHARMM_HOME``) and the bundled Packmol binary.
+Requires PyCHARMM (``CHARMM_HOME``) for tri-alanine; Packmol for ``make-box`` ACO.
+ALAD falls back to the OpenMM benchmark PDB when CHARMM protein build is unavailable.
 
 Run from repo root::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py
+    export CHARMM_HOME=... CHARMM_LIB_DIR=... LD_LIBRARY_PATH=...
+    uv run python scripts/export_docs_structure_assets.py
 
 Writes under ``mmml/data/charmm/`` and ``mmml/data/structures/``.
 """
@@ -17,26 +19,49 @@ import os
 import shutil
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 import numpy as np
 
 REPO = Path(__file__).resolve().parents[1]
-DATA = REPO / "mmml" / "data"
-CHARMM_DATA = DATA / "charmm"
-STRUCT_DATA = DATA / "structures"
 PACKMOL = REPO / "mmml" / "generate" / "packmol" / "packmol"
+
+OPENMM_ALAD_PDB_URL = (
+    "https://raw.githubusercontent.com/openmm/openmm/master/"
+    "wrappers/python/tests/systems/alanine-dipeptide-implicit.pdb"
+)
 
 
 def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
+    """CHARMM CGENFF TRIA + TIP3 grid (same recipe as ``build_trialanine_water_box_in_charmm``)."""
+    import os
+
+    import pandas as pd
     from ase.io import read as ase_read, write as ase_write
 
+    import pycharmm.coor as coor
+    import pycharmm.generate as generate
+    import pycharmm.ic as ic
+    import pycharmm.read as read
+    import pycharmm.settings as settings
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        crystal_free_charmm_for_param_append,
+        ensure_pycharmm_loaded,
+        pycharmm,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        apply_pbc_nbonds,
+        prepare_charmm_pbc,
+    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
         TRIA_RESI_NAME,
-        build_trialanine_water_box_in_charmm,
+        _grid_oxygen_sites,
+        _load_cgenff_with_trialanine,
+        _tip3_template,
         n_peptide_atoms_in_trialanine_box,
     )
     from mmml.paths import bundled_file
@@ -47,22 +72,61 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
-    box = build_trialanine_water_box_in_charmm(
-        n_waters=10,
-        box_side_A=28.0,
-        seed=seed,
-        workdir=workdir,
-    )
-    pdb_local = workdir / "trialanine-water-smoke.pdb"
-    write.pdb(str(pdb_local))
+    n_waters = 10
+    box_side_A = 28.0
+    crystal_free_charmm_for_param_append()
+    pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+    # Skip reset_block() here — it can block >100s on an empty session in some envs.
 
+    _load_cgenff_with_trialanine()
+    settings.set_verbosity(0)
+    read.sequence_string(TRIA_RESI_NAME)
+    generate.new_segment(seg_name="PEPT", setup_ic=True)
+    ic_prm_fill(replace_all=True)
+    ic.build()
+
+    rng = np.random.default_rng(seed)
+    peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
+    peptide -= peptide.mean(axis=0)
+    peptide += np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
+    coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))
+
+    tip3 = _tip3_template()
+    tip3_com = tip3.mean(axis=0)
+    oxygen_sites = _grid_oxygen_sites(
+        n_waters=n_waters,
+        box_side_A=box_side_A,
+        spacing_A=2.85,
+        margin_A=3.0,
+        existing=peptide,
+        min_dist_A=2.4,
+        rng=rng,
+        water_template=tip3,
+    )
+    water_coords = np.vstack([site + (tip3 - tip3_com) for site in oxygen_sites])
+    read.sequence_string(" ".join(["TIP3"] * n_waters))
+    generate.new_segment(seg_name="SOLV", setup_ic=False)
+    all_pos = np.vstack([peptide, water_coords])
+    coor.set_positions(pd.DataFrame(all_pos, columns=["x", "y", "z"]))
+    prepare_charmm_pbc(box_side_A)
+    apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)
+
+    prev_cwd = os.getcwd()
+    try:
+        os.chdir(workdir)
+        write.psf_card("trialanine-water.psf")
+        write.coor_pdb("trialanine-water.pdb")
+    finally:
+        os.chdir(prev_cwd)
+
+    psf_path = workdir / "trialanine-water.psf"
+    pdb_local = workdir / "trialanine-water.pdb"
     atoms = ase_read(pdb_local)
-    side = float(box.box_side_A)
-    atoms.cell = np.diag([side, side, side])
+    atoms.cell = np.diag([box_side_A, box_side_A, box_side_A])
     atoms.pbc = True
     atoms.info["comment"] = (
-        f"CGENFF {TRIA_RESI_NAME} + 10× TIP3 from build_trialanine_water_box_in_charmm "
-        f"(seed={seed})"
+        f"CGENFF {TRIA_RESI_NAME} + {n_waters}× TIP3 "
+        f"(build_trialanine_water_box_in_charmm, seed={seed})"
     )
 
     extxyz = bundled_file("data", "charmm", "trialanine-water-smoke.extxyz")
@@ -71,10 +135,10 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
     ase_write(extxyz, atoms)
     shutil.copy2(pdb_local, pdb)
 
-    n_pep = n_peptide_atoms_in_trialanine_box(box.psf_path)
+    n_pep = n_peptide_atoms_in_trialanine_box(psf_path)
     print(
-        f"trialanine-water: {box.positions.shape[0]} atoms "
-        f"({n_pep} peptide + {box.n_waters * 3} water) -> {extxyz.name}"
+        f"trialanine-water: {all_pos.shape[0]} atoms "
+        f"({n_pep} peptide + {n_waters * 3} water) -> {extxyz.name}"
     )
     return extxyz, pdb
 
@@ -90,10 +154,7 @@ def export_aco_make_box(*, n_molecules: int = 8, side_length: float = 22.0, seed
     (workdir / "pdb").mkdir(parents=True)
     (workdir / "packmol").mkdir(parents=True)
 
-    monomer_pdb = default_aco_template_pdb()
-    initial = workdir / "pdb" / "initial.pdb"
-    shutil.copy2(monomer_pdb, initial)
-
+    shutil.copy2(default_aco_template_pdb(), workdir / "pdb" / "initial.pdb")
     packmol_inp = workdir / "packmol" / "packmol.inp"
     packmol_inp.write_text(
         f"""#
@@ -123,9 +184,6 @@ end structure
         )
 
     packed = workdir / "pdb" / "init-packmol.pdb"
-    if not packed.is_file():
-        raise FileNotFoundError(f"Packmol did not write {packed}")
-
     atoms = ase_read(packed)
     atoms.cell = np.diag([side_length, side_length, side_length])
     atoms.pbc = True
@@ -136,45 +194,53 @@ end structure
     return out
 
 
-def export_alad_reference() -> Path:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
-    from mmml.interfaces.pycharmmInterface.protein_charmm_build import write_alad_artifacts
+def export_alad_reference(*, prefer_charmm: bool = True) -> Path:
     from mmml.paths import bundled_file
 
-    ensure_pycharmm_loaded()
-    workdir = REPO / ".docs_export" / "alad"
-    if workdir.exists():
-        shutil.rmtree(workdir)
-    workdir.mkdir(parents=True, exist_ok=True)
-
-    pdb_path, psf_path, build = write_alad_artifacts(workdir, minimize=True)
     out_pdb = bundled_file("data", "charmm", "alad_reference.pdb")
     out_psf = bundled_file("data", "charmm", "alad_reference.psf")
     out_pdb.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(pdb_path, out_pdb)
-    shutil.copy2(psf_path, out_psf)
-    print(f"ALAD: {build.n_atoms} atoms -> {out_pdb.name}, {out_psf.name}")
+
+    if prefer_charmm:
+        try:
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+            from mmml.interfaces.pycharmmInterface.protein_charmm_build import write_alad_artifacts
+
+            ensure_pycharmm_loaded()
+            workdir = REPO / ".docs_export" / "alad"
+            if workdir.exists():
+                shutil.rmtree(workdir)
+            workdir.mkdir(parents=True, exist_ok=True)
+            pdb_path, psf_path, build = write_alad_artifacts(workdir, minimize=False)
+            shutil.copy2(pdb_path, out_pdb)
+            shutil.copy2(psf_path, out_psf)
+            print(f"ALAD (CHARMM36): {build.n_atoms} atoms -> {out_pdb.name}")
+            return out_pdb
+        except Exception as exc:
+            print(f"CHARMM ALAD export failed ({exc}); fetching OpenMM benchmark PDB", file=sys.stderr)
+
+    urllib.request.urlretrieve(OPENMM_ALAD_PDB_URL, out_pdb)
+    if out_psf.is_file():
+        out_psf.unlink()
+    print(f"ALAD (OpenMM benchmark): -> {out_pdb.name}")
     return out_pdb
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--skip-alad",
+        "--skip-charmm",
         action="store_true",
-        help="Skip protein ALAD export (no protein toppar)",
+        help="Skip CHARMM exports (trialanine); fetch ALAD from OpenMM only",
     )
     args = parser.parse_args()
 
     os.chdir(REPO)
     try:
-        export_trialanine_water_box()
+        if not args.skip_charmm:
+            export_trialanine_water_box()
         export_aco_make_box()
-        if not args.skip_alad:
-            try:
-                export_alad_reference()
-            except FileNotFoundError as exc:
-                print(f"ALAD export skipped: {exc}", file=sys.stderr)
+        export_alad_reference(prefer_charmm=not args.skip_charmm)
     finally:
         export_tmp = REPO / ".docs_export"
         if export_tmp.exists():
