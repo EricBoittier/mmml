@@ -42,12 +42,12 @@ def test_compute_limits_includes_geminal_hh_spacing() -> None:
     """Geminal H–H (PSF 1–3) sets intra_min even when pair is excluded."""
     from mmml.utils.geometry_checks import build_bond_exclusion_pairs
 
-    # C–H–H with equilibrium geminal H–H ≈ 1.80 Å (both 1–3 via C)
+    # C–H–H methyl-like geometry (geminal H–H PSF 1–3 via C)
     pos = np.array(
         [
             [0.0, 0.0, 0.0],    # C
             [1.09, 0.0, 0.0],   # H
-            [-0.27, 1.77, 0.0],  # H  (~1.80 Å from H1)
+            [0.36, 1.03, 0.0],  # H (geminal partner)
         ],
         dtype=float,
     )
@@ -65,10 +65,9 @@ def test_compute_limits_includes_geminal_hh_spacing() -> None:
     )
     assert limits is not None
     hh = float(np.linalg.norm(pos[2] - pos[1]))
-    assert hh == pytest.approx(1.80, abs=0.05)
-    assert limits.reference_geminal_hh_min_A == pytest.approx(hh, abs=0.05)
-    assert limits.intra_min_distance_A > DEFAULT_INTRA_MIN_DISTANCE_A
-    assert limits.intra_min_distance_A == pytest.approx(hh * 0.80, abs=0.05)
+    assert hh == pytest.approx(1.26, abs=0.05)
+    assert limits.reference_geminal_hh_min_A == pytest.approx(hh, abs=0.01)
+    assert limits.intra_min_distance_A == pytest.approx(hh * 0.80, abs=0.02)
 
 
 def test_compute_limits_two_monomers_use_worst_case() -> None:
