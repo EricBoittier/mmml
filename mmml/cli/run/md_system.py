@@ -1974,6 +1974,8 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.extend(["--box-auto", str(args.box_auto)])
     _append_optional(cmd, "--target-density-g-cm3", getattr(args, "target_density_g_cm3", None))
     _append_optional(cmd, "--bulk-density-fraction", getattr(args, "bulk_density_fraction", None))
+    _append_optional(cmd, "--packmol-box-size", getattr(args, "packmol_box_size", None))
+    _append_optional(cmd, "--packmol-box-padding", getattr(args, "packmol_box_padding", None))
     _append_boolean_optional_flag(
         cmd, "--mc-density-equalize", bool(getattr(args, "mc_density_equalize", True))
     )
