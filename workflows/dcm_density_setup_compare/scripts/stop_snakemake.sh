@@ -40,4 +40,4 @@ if ((${#LEFT[@]} > 0)); then
   echo "WARNING: still running: ${LEFT[*]}" >&2
   exit 1
 fi
-echo "Done. Run: snakemake --profile profiles/slurm --unlock"
+echo "Done. Run: uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --profile profiles/slurm --unlock"

@@ -49,7 +49,7 @@ if [[ "${MMML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
   if ((${#_existing[@]} > 0)); then
     echo "snakemake_slurm.sh: driver already running in ${WORKFLOW_ROOT} (PIDs: ${_existing[*]})." >&2
     echo "  bash scripts/stop_snakemake.sh" >&2
-    echo "  snakemake --profile profiles/slurm --unlock" >&2
+    echo "  uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --profile profiles/slurm --unlock" >&2
     echo "  Or force a second driver: MMML_SNAKEMAKE_FORCE=1 bash scripts/snakemake_slurm.sh ..." >&2
     exit 1
   fi

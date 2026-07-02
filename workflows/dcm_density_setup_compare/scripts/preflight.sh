@@ -12,9 +12,8 @@ PY="${MMML_PYTHON}"
 "$PY" -c "
 from pathlib import Path
 import sys
+# Workflow scripts first; campaign_lib adds pbc_solvent_burst/scripts for bulk_density.
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
-sys.path.insert(0, '${WORKFLOW_ROOT}/../pbc_solvent_burst/scripts')
-from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 from campaign_lib import (
     cell_bulk_density_fraction,
     iter_matrix_cells,
@@ -30,6 +29,7 @@ from campaign_lib import (
     slurm_tier_resource_pools,
 )
 from setup_variants import resolve_setup_variant
+from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 ckpt = resolve_checkpoint(str(cfg['checkpoint']))
 print('Preflight OK')

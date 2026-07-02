@@ -86,7 +86,8 @@ bash scripts/preflight.sh
 
 # One driver only — stop old ones before relaunching:
 bash scripts/stop_snakemake.sh 2>/dev/null || true
-snakemake --profile profiles/slurm --unlock
+uv run --with snakemake --with snakemake-executor-plugin-slurm \
+  snakemake --profile profiles/slurm --unlock
 
 # Full matrix (30 cells, tiered 3080/5090 pools from config.yaml):
 nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &
