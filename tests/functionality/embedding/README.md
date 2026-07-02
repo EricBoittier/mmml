@@ -18,6 +18,10 @@ cd /path/to/mmml
 uv run mmml md-embedding train -o artifacts/md_embedding/aaa
 ```
 
+By default the train phase uses **`mmml fix-and-split`** (`--preserve-units`) for a reproducible
+90/10 split and `units_manifest.json` under `splits/`. Use `--simple-split` to skip fix-and-split.
+Structure plots (ASE bonds, docs style) land in `figures/peptide_frame0.png` unless `--no-plot`.
+
 Pass criteria:
 
 - `artifacts/md_embedding/aaa/train_manifest.json` exists
@@ -40,6 +44,7 @@ uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10 --box
 Pass criteria:
 
 - `model.psf`, `model.crd`, `box.json` under output dir
+- `figures/embedding_box.png` and `figures/embedding_peptide.png` (unless `--no-plot`)
 - `box.json` records `ml_seg_id: PEPT`, `training_n_atoms: 34`, `n_peptide_atoms: 42`
 - Optional: `bonded_report.json` with finite bonded terms
 

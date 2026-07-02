@@ -31,32 +31,24 @@ def _use_agg() -> None:
 
 
 def _structure_figure(data: dict[str, np.ndarray], out: Path) -> None:
-    from ase import Atoms
-    from ase.io import write as ase_write
+    from mmml.data.external.aaa_ama import atoms_from_npz_frame, inspect_dataset_aaa
+    from mmml.utils.ase_structure_plot import (
+        SCALE_PEPTIDE_ML,
+        save_structure_figure,
+        use_matplotlib_agg,
+    )
 
-    z = np.asarray(data["Z"][0], dtype=int)
-    r = np.asarray(data["R"][0], dtype=float)
-    symbols = ["H", "C", "N", "O", "F", "P", "S", "Cl", "Br", "I"]
-    sym = [symbols[i - 1] if 1 <= i <= len(symbols) else "X" for i in z]
-    atoms = Atoms(symbols=sym, positions=r)
-    atoms.center()
+    use_matplotlib_agg()
+    report = inspect_dataset_aaa(data)
+    atoms = atoms_from_npz_frame(data, frame=0)
     out.parent.mkdir(parents=True, exist_ok=True)
-    ase_write(out.with_suffix(".png"), atoms, rotation="10x,10y,10z")
-    # Also emit matplotlib 2D projection for docs consistency
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(5, 4), dpi=140)
-    colors = {1: "#ffffff", 6: "#909090", 7: "#3050f8", 8: "#ff0d0d"}
-    for zi, pos in zip(z, r):
-        ax.scatter(pos[0], pos[1], s=80, c=colors.get(int(zi), "#333"), edgecolors="k", linewidths=0.4)
-    ax.set_aspect("equal")
-    ax.set_xlabel("x (Å)")
-    ax.set_ylabel("y (Å)")
-    ax.set_title("aaa.ama frame 0 (peptide)")
-    ax.set_facecolor("#f8fafc")
-    fig.tight_layout()
-    fig.savefig(out, bbox_inches="tight")
-    plt.close(fig)
+    save_structure_figure(
+        atoms,
+        out.with_suffix(".png"),
+        title=f"aaa.ama frame 0 — {report.molecule_label}",
+        rotation="25x,15y,0z",
+        scale=SCALE_PEPTIDE_ML,
+    )
 
 
 def _histogram_figures(data: dict[str, np.ndarray], img_dir: Path) -> None:

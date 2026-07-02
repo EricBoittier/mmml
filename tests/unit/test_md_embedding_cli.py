@@ -91,6 +91,8 @@ def test_run_train_phase_skip_train_writes_manifest(tmp_path: Path, monkeypatch)
         npz_path=npz,
         download=False,
         skip_train=True,
+        use_fix_and_split=False,
+        write_plots=False,
     )
     assert result.manifest_path.is_file()
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
@@ -118,7 +120,47 @@ def test_main_train_dispatch(tmp_path: Path, monkeypatch):
             str(npz),
             "--no-download",
             "--skip-train",
+            "--simple-split",
+            "--no-plot",
         ]
     )
     assert code == 0
     assert (tmp_path / "artifacts" / "train_manifest.json").is_file()
+
+
+def test_prepare_train_valid_npz_fix_and_split(tmp_path: Path, monkeypatch):
+    npz = tmp_path / "dataset_aaa.npz"
+    _minimal_aaa_npz(npz, n_frames=12)
+    out = tmp_path / "out"
+    train_p = out / "train.npz"
+    valid_p = out / "valid.npz"
+    split_root = out / "splits"
+
+    def _fake_fix_and_split(**kwargs):
+        split_root.mkdir(parents=True, exist_ok=True)
+        data = np.load(npz, allow_pickle=True)
+        n = len(data["E"])
+        idx = np.arange(n)
+        train_idx = idx[:9]
+        valid_idx = idx[9:]
+        subset = lambda idc: {k: np.asarray(data[k])[idc] for k in data.files}
+        np.savez(split_root / "energies_forces_dipoles_train.npz", **subset(train_idx))
+        np.savez(split_root / "energies_forces_dipoles_valid.npz", **subset(valid_idx))
+        (split_root / "units_manifest.json").write_text("{}", encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(
+        "mmml.cli.misc.fix_and_split.fix_and_split_data",
+        _fake_fix_and_split,
+    )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.embedding_workflow import (
+        prepare_train_valid_npz,
+    )
+
+    t, v, sdir = prepare_train_valid_npz(npz, out, use_fix_and_split=True, seed=0)
+    assert t == train_p
+    assert v == valid_p
+    assert sdir == split_root
+    assert train_p.is_file()
+    assert valid_p.is_file()

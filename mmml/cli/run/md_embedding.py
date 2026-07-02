@@ -67,6 +67,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional YAML overrides merged into generated train config.",
     )
+    train.add_argument(
+        "--simple-split",
+        action="store_true",
+        help="Use shuffle split only (skip mmml fix-and-split manifest).",
+    )
+    train.add_argument(
+        "--no-plot",
+        action="store_true",
+        help="Skip ASE structure figures under output-dir/figures/.",
+    )
 
     build = sub.add_parser(
         "build",
@@ -92,6 +102,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-charmm-minimize",
         action="store_true",
         help="Skip CHARMM SD after box build.",
+    )
+    build.add_argument(
+        "--no-plot",
+        action="store_true",
+        help="Skip ASE box/peptide figures under output-dir/figures/.",
     )
 
     run = sub.add_parser(
@@ -121,6 +136,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run.add_argument("--mini-nstep", type=int, default=0, help="MLpot SD steps (0=energy only).")
     run.add_argument("--box-side-A", type=float, default=None, help="Override box.json side.")
+    run.add_argument(
+        "--mlmm-cutoff",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help="ML–MM electrostatic outer cutoff (Å); forwarded to MLpot (Phase 2).",
+    )
+    run.add_argument(
+        "--mlmm-cuton",
+        type=float,
+        default=None,
+        metavar="ANG",
+        help="ML–MM electrostatic inner cuton (Å); forwarded to MLpot (Phase 2).",
+    )
 
     return parser
 
@@ -147,6 +176,8 @@ def _cmd_train(args: argparse.Namespace) -> int:
         skip_export_json=args.skip_export_json,
         tag=args.tag,
         config_overrides=overrides,
+        use_fix_and_split=not args.simple_split,
+        write_plots=not args.no_plot,
     )
     print(json.dumps(result.report, indent=2))
     print(f"Wrote {result.manifest_path}")
@@ -178,6 +209,7 @@ def _cmd_build(args: argparse.Namespace) -> int:
             seed=args.seed,
             charmm_mm_minimize=not args.no_charmm_minimize,
             charmm_sd_steps=args.charmm_sd_steps,
+            write_plots=not args.no_plot,
         )
     except ModuleNotFoundError as exc:
         if "pycharmm" in str(exc).lower() or "charmm" in str(exc).lower():
@@ -215,6 +247,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
             ml_fq=args.ml_fq,
             mini_nstep=args.mini_nstep,
             box_side_A=args.box_side_A,
+            mlmm_cutoff=args.mlmm_cutoff,
+            mlmm_cuton=args.mlmm_cuton,
         )
     except ModuleNotFoundError as exc:
         if "pycharmm" in str(exc).lower() or "charmm" in str(exc).lower():

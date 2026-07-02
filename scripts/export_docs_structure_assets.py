@@ -68,8 +68,10 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
     finally:
         os.chdir(prev_cwd)
 
+    from mmml.utils.charmm_ase import element_symbols_from_psf
+
     side = float(box.box_side_A)
-    symbols = _element_symbols_from_psf(box.psf_path, n_atoms=box.positions.shape[0])
+    symbols = element_symbols_from_psf(box.psf_path, n_atoms=box.positions.shape[0])
     atoms = Atoms(
         symbols=symbols,
         positions=box.positions,
@@ -93,47 +95,6 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
         f"({n_pep} peptide + {box.n_waters * 3} water) -> {extxyz.name}"
     )
     return extxyz, pdb
-
-
-def _element_symbols_from_psf(psf_path: Path, *, n_atoms: int) -> list[str]:
-    """Heavy-atom element letter + H for hydrogens (PSF atom-name heuristic)."""
-    symbols: list[str] = []
-    in_atoms = False
-    with psf_path.open(encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            if line.strip().startswith("*"):
-                in_atoms = False
-                continue
-            if "!NATOM" in line:
-                in_atoms = True
-                continue
-            if not in_atoms:
-                continue
-            parts = line.split()
-            if len(parts) < 4:
-                continue
-            try:
-                int(parts[0])
-            except ValueError:
-                continue
-            name = parts[3]
-            if name.startswith("H"):
-                symbols.append("H")
-            elif name.startswith("O"):
-                symbols.append("O")
-            elif name.startswith("N"):
-                symbols.append("N")
-            elif name.startswith("S"):
-                symbols.append("S")
-            else:
-                symbols.append("C")
-            if len(symbols) >= n_atoms:
-                break
-    if len(symbols) != n_atoms:
-        raise RuntimeError(
-            f"PSF parse got {len(symbols)} symbols, expected {n_atoms} from {psf_path}"
-        )
-    return symbols
 
 
 def export_aco_make_box(*, n_molecules: int = 8, side_length: float = 22.0, seed: int = 42) -> Path:

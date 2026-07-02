@@ -160,3 +160,18 @@ def per_element_force_magnitudes(
     for sp in report.element_species:
         out[sp.symbol] = f_mag[:, sp.atom_indices].ravel()
     return out
+
+
+def atoms_from_npz_frame(data: dict[str, np.ndarray], frame: int = 0):
+    """ASE ``Atoms`` for one NPZ frame (training topology)."""
+    from ase import Atoms
+
+    z = np.asarray(data["Z"], dtype=int)
+    r = np.asarray(data["R"], dtype=float)
+    if z.ndim == 1:
+        z0 = np.asarray(z, dtype=int)
+        r0 = np.asarray(r[frame] if r.ndim == 3 else r, dtype=float)
+    else:
+        z0 = np.asarray(z[frame], dtype=int)
+        r0 = np.asarray(r[frame], dtype=float)
+    return Atoms(numbers=z0, positions=r0)
