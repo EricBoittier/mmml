@@ -67,7 +67,7 @@ From `nbonds_config.pbc_nbond_cutoffs` for cubic `L`:
 - `cutnb`, `cutim` capped below `L/2 − 1 Å`
 - `ctonnb`, `ctofnb` scaled with switching region
 - CGENFF PRM defaults: **`fshift`** (elec) + **`vfswitch`** (VDW); `apply_pbc_nbonds` also sets **`fswitch`** via PyCHARMM C API
-- JAX ``mm_system_energy`` uses one Brooks-style switch for both terms — see [trialanine-water-box.md](../../../docs/trialanine-water-box.md#jax-vs-pycharmm-total-mm-cross-check)
+- JAX ``mm_system_energy`` defaults to **`fswitch`** + **`vfswitch``** (legacy ``pswitch`` available) — see [cgenff-jax-clone.md](../../../docs/cgenff-jax-clone.md)
 - `NBXMOD 5` — exclude 1–2/1–3; scale 1–4 electrostatics via `e14fac`
 
 ### Future: mixed ML/MM on tri-alanine

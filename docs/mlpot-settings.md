@@ -2,6 +2,8 @@
 
 Visual reference for ML/MM handoff switches and staged heating. **Start here for the full picture (monomer colors, radius ladder, LR solvers, force quivers):** [Hybrid potential: cutoffs, regions, and long-range solvers](hybrid-potential-regions.md).
 
+For **CHARMM atom-pair** switching (`fshift` / `fswitch` / `vfswitch` on VDW and cdie Coulomb) used in the CGenFF JAX clone, see [CHARMM CGenFF JAX clone](cgenff-jax-clone.md#nonbonded-switching-mm_system_energypy). That layer is independent of the COM handoff below.
+
 Dimer **force vector** panels (DCM / ACO at COM distances across switch zones): `dcm_dimer_forces_cutoffs.png`, `aco_dimer_forces_cutoffs.png` in `docs/images/mlpot-settings/`.
 
 Figures are generated locally by:
@@ -75,6 +77,12 @@ s_MM(r) = (1 - s_ML(r)) *
 ```
 
 With current constants, `GAMMA_ON = 1.0` and `GAMMA_OFF = 3.0`. `sharpstep` clips to `[0, 1]`, raises to `gamma`, then applies smoothstep `s²(3 - 2s)`.
+
+Implementation: `CutoffParameters.ml_mm_scales_complementary()` in `cutoffs.py` (NumPy reference) and `_sharpstep` / `get_switching_function` in `mm_energy_forces.py` (JAX runtime). Forces use the product rule: `F = s·F_term − E_term·∇s` per switched term.
+
+### JAX-native helpers (`calculator_utils.py`)
+
+Legacy cosine tapers (`ml_switch_simple`, `mm_switch_simple`) remain for plotting and older paths. Production MLpot uses `sharpstep` via `cutoffs.GAMMA_ON` / `GAMMA_OFF`.
 
 `--ml-cutoff`, `--ml-cutoff-distance`, and `--mm-cutoff` are legacy aliases. In this code path:
 

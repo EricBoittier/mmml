@@ -126,6 +126,8 @@ Two independent neighbor systems run each step ([NONBOND_LISTS.md](https://githu
 | JAX MM pairs | Python callback | `mm_switch_on + mm_switch_width` = 13 Å |
 | ML dimers | PhysNet batches | COM &lt; `mm_switch_on` (8 Å default) |
 
+CHARMM **atom-pair** VDW/ELEC switching (`fswitch`/`vfswitch` at `ctonnb`–`ctofnb`) is documented in [CHARMM CGenFF JAX clone](cgenff-jax-clone.md). MLpot **COM handoff** switching (this page) scales whole dimer pair energies by monomer separation.
+
 Campaign YAML should set the same `mm_switch_on` / `mm_switch_width` / `ml_switch_width` on **PyCHARMM** and **JAX-MD** legs so handoffs stay aligned.
 
 ---

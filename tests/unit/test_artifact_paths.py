@@ -6,6 +6,8 @@ from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
     alternate_overlap_scratch,
     is_overlap_scratch_restart_path,
     overlap_chunk_dcd_paths,
+    overlap_chunk_restart_path,
+    overlap_chunk_restart_paths,
     overlap_chunk_trajectory_path,
     overlap_restart_slot_paths,
     staged_artifact_paths,
@@ -55,6 +57,18 @@ def test_overlap_chunk_dcd_naming(tmp_path: Path) -> None:
     chunk1.write_bytes(b"")
     assert chunk0.name == "heat.0000.dcd"
     assert overlap_chunk_dcd_paths(dcd) == [chunk0, chunk1]
+
+
+def test_overlap_chunk_restart_naming(tmp_path: Path) -> None:
+    restart = tmp_path / "heat.res"
+    restart.write_bytes(b"")
+    chunk0 = overlap_chunk_restart_path(restart, 0)
+    chunk0.write_bytes(b"")
+    chunk1 = overlap_chunk_restart_path(restart, 7)
+    chunk1.write_bytes(b"")
+    assert chunk0.name == "heat.0000.res"
+    assert chunk1.name == "heat.0007.res"
+    assert overlap_chunk_restart_paths(restart) == [chunk0, chunk1]
 
 
 def test_vmd_script_uses_basename_paths(tmp_path: Path) -> None:

@@ -3173,6 +3173,20 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
     io = CharmmTrajectoryFiles(restart_write=tmp_path / "heat.res", trajectory=dcd)
     chunk_paths: list[Path | None] = []
     expected_chunks = [_overlap_chunk_trajectory_path(dcd, i) for i in range(3)]
+    expected_restarts = [tmp_path / f"heat.{i:04d}.res" for i in range(3)]
+    written_restarts: list[Path] = []
+
+    def fake_numbered_restart(**kwargs):
+        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+            overlap_chunk_restart_path,
+        )
+
+        target = overlap_chunk_restart_path(
+            kwargs["final_restart"], kwargs["chunk_index"]
+        )
+        target.write_text("REST\n", encoding="utf-8")
+        written_restarts.append(target)
+        return target
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         chunk_paths.append(_io.trajectory if _io is not None else None)
@@ -3189,6 +3203,9 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=pos_ok,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._write_overlap_chunk_numbered_restart",
+        side_effect=fake_numbered_restart,
+    ), mock.patch(
         "mmml.utils.dcd_writer.concat_dcd_files",
     ) as merge:
         run_dynamics_with_io(
@@ -3199,6 +3216,7 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
         )
 
     assert chunk_paths == expected_chunks
+    assert written_restarts == expected_restarts
     merge.assert_not_called()
 
 

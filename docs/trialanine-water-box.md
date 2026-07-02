@@ -84,10 +84,12 @@ On a simpler **2× ACO** PBC dimer (MIC, ``lr_solver=mic``): VDW Δ ≈ +2 kcal/
 
 ### Root causes (implementation gaps)
 
-1. **Switching models** — Bundled CGENFF declares ``fshift`` (elec) + ``vfswitch`` (VDW) in
-   ``par_all36_cgenff.prm``; ``apply_pbc_nbonds`` turns on ``fswitch`` + ``vfswitch`` via the
-   PyCHARMM C API. JAX uses a **single Brooks-style potential switch** (``charmm_switch_factor``)
-   for **both** VDW and elec. That is not the same as CHARMM ``fshift`` + ``vfswitch``.
+1. **Switching models** — JAX ``mm_system_energy`` now implements CHARMM **``fswitch``** (cdie)
+   and **``vfswitch``** (VDW) by default, matching ``apply_pbc_nbonds``. Legacy **``pswitch``**
+   (Brooks-style ``charmm_switch_factor``) remains available via ``CharmmNbondSettings``. PRM
+   declares ``fshift`` for elec, but PyCHARMM runtime uses ``fswitch``; residual energy gaps
+   are dominated by pair-list / IMAGE differences, not the switch functional form. See
+   [CHARMM CGenFF JAX clone](cgenff-jax-clone.md#nonbonded-switching-mm_system_energypy).
 2. **Pair list / IMAGE** — JAX builds an O(N²) MIC list from PSF bond exclusions (PyCHARMM
    ``get_iblo_inb()`` returns ``nnb=0`` here, so bond-graph 1–2/1–3 exclusions are used).
    CHARMM uses IMAGE neighbor lists; small residual differences remain even when exclusions look correct.
@@ -100,8 +102,8 @@ On a simpler **2× ACO** PBC dimer (MIC, ``lr_solver=mic``): VDW Δ ≈ +2 kcal/
 ### Practical guidance
 
 - Treat the tri-alanine box as validated for **CHARMM build + bonded JAX**; use the total-MM
-  test as a **regression target**, not a pass/fail gate, until ``mm_system_energy`` implements
-  CHARMM ``fshift``/``vfswitch`` and tighter IMAGE parity.
+  test as a **regression target**, not a pass/fail gate, until IMAGE / pair-list parity
+  tightens (``fswitch``/``vfswitch`` are implemented; see [cgenff-jax-clone.md](cgenff-jax-clone.md)).
 - For production MLpot paths, prefer ``mm_nonbond_mode=periodic_external`` or documented LR solvers
   (see [long-range-solver-tutorial.md](long-range-solver-tutorial.md)), not raw ``mm_system_energy`` MIC.
 
