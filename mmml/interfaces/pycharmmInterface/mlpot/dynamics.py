@@ -3432,6 +3432,42 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     kw["_skip_ase_cold_velocity_assign"] = True
 
 
+def _init_velocities_handoff_looks_valid(
+    init_velocities: dict[str, np.ndarray],
+) -> bool:
+    """Non-raising check for AKMA handoff arrays (positions / absurd T)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        MAX_REASONABLE_VELOCITY_TEMP_K,
+        charmm_masses_amu,
+        estimate_kinetic_temperature_k,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        comparison_comp_looks_like_spatial_coords,
+        velocity_array_matches_main_coordinates,
+    )
+
+    v = np.column_stack(
+        [
+            np.asarray(init_velocities["vx"], dtype=np.float64),
+            np.asarray(init_velocities["vy"], dtype=np.float64),
+            np.asarray(init_velocities["vz"], dtype=np.float64),
+        ]
+    )
+    if (
+        comparison_comp_looks_like_spatial_coords(v)
+        or velocity_array_matches_main_coordinates(v)
+    ):
+        return False
+    t_est = estimate_kinetic_temperature_k(v, charmm_masses_amu())
+    if (
+        t_est is None
+        or not np.isfinite(t_est)
+        or float(t_est) > float(MAX_REASONABLE_VELOCITY_TEMP_K)
+    ):
+        return False
+    return True
+
+
 def _validate_init_velocities_handoff(
     init_velocities: dict[str, np.ndarray],
     *,
@@ -3446,6 +3482,7 @@ def _validate_init_velocities_handoff(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         comparison_comp_looks_like_spatial_coords,
+        velocity_array_matches_main_coordinates,
     )
 
     v = np.column_stack(
@@ -3455,7 +3492,10 @@ def _validate_init_velocities_handoff(
             np.asarray(init_velocities["vz"], dtype=np.float64),
         ]
     )
-    if comparison_comp_looks_like_spatial_coords(v):
+    if (
+        comparison_comp_looks_like_spatial_coords(v)
+        or velocity_array_matches_main_coordinates(v)
+    ):
         raise RuntimeError(
             f"{context}: init_velocities look like Cartesian coordinates (Å), "
             "not AKMA velocity components (would yield T≫target at dyna step 0)"
@@ -3485,39 +3525,67 @@ def _finalize_init_velocities_handoff(
     init_velocities: dict[str, np.ndarray] | None,
     *,
     handoff_vel: np.ndarray | None = None,
+    restart_read_path: Path | str | None = None,
+    fallback_paths: list[Path] | None = None,
     quiet: bool = False,
-) -> dict[str, np.ndarray]:
+) -> dict[str, np.ndarray] | None:
     """Re-sync main/COMP and return a fresh ``init_velocities`` dict immediately before ``dyna``."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _resolve_bussi_rescale_velocities,
         last_synced_velocities_akma_raw,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         refresh_bussi_comp_velocity_handoff,
     )
 
-    v = handoff_vel
-    if v is None and init_velocities is not None:
-        v = np.column_stack(
-            [
-                np.asarray(init_velocities["vx"], dtype=np.float64),
-                np.asarray(init_velocities["vy"], dtype=np.float64),
-                np.asarray(init_velocities["vz"], dtype=np.float64),
-            ]
+    def _akma_from_sources() -> np.ndarray | None:
+        v_local = handoff_vel
+        if v_local is None and init_velocities is not None:
+            v_local = np.column_stack(
+                [
+                    np.asarray(init_velocities["vx"], dtype=np.float64),
+                    np.asarray(init_velocities["vy"], dtype=np.float64),
+                    np.asarray(init_velocities["vz"], dtype=np.float64),
+                ]
+            )
+        if v_local is None:
+            cached = last_synced_velocities_akma_raw()
+            if cached is not None:
+                v_local = np.asarray(cached, dtype=np.float64).copy()
+        return v_local
+
+    v = _akma_from_sources()
+    out = _init_velocities_dict_from_akma(v) if v is not None else None
+    if out is None or not _init_velocities_handoff_looks_valid(out):
+        target = _bussi_ramp_target_k_for_kw(kw)
+        if target is None:
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                resolve_assignment_temperature_k,
+            )
+
+            target = resolve_assignment_temperature_k(kw, default_K=300.0)
+        v = _resolve_bussi_rescale_velocities(
+            restart_path=restart_read_path,
+            temperature_K=float(target),
+            quiet=quiet,
+            fallback_paths=fallback_paths,
         )
-    if v is None:
-        cached = last_synced_velocities_akma_raw()
-        if cached is not None:
-            v = np.asarray(cached, dtype=np.float64).copy()
-    if v is None:
-        raise RuntimeError(
-            "run_dynamics: iasvel=0 continuation missing warm AKMA velocities "
-            f"(start={kw.get('start')}, iasvel={kw.get('iasvel')})"
-        )
+        out = _init_velocities_dict_from_akma(v)
+    if not _init_velocities_handoff_looks_valid(out):
+        target = _bussi_ramp_target_k_for_kw(kw)
+        target_txt = f"{float(target):.2f}" if target is not None else "?"
+        if not quiet:
+            print(
+                "run_dynamics: init_velocities handoff still invalid after re-resolve; "
+                f"Boltzmann at {target_txt} K (iasvel=1 continuation)",
+                flush=True,
+            )
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return None
     refresh_bussi_comp_velocity_handoff(
         v,
         context="run_dynamics in-memory continuation",
     )
-    out = _init_velocities_dict_from_akma(v)
     _validate_init_velocities_handoff(out, quiet=quiet, context="run_dynamics")
     return out
 
@@ -3556,8 +3624,15 @@ def _resolve_dynamics_init_velocities(
         fallback_paths=fallback_paths,
     )
     v = np.asarray(v, dtype=np.float64).reshape(-1, 3)
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        comparison_comp_looks_like_spatial_coords,
+        velocity_array_matches_main_coordinates,
+    )
+
     if (
         v.size == 0
+        or velocity_array_matches_main_coordinates(v)
+        or comparison_comp_looks_like_spatial_coords(v)
         or float(np.max(np.abs(v))) < 1.0e-8
         or velocities_are_cold(v)
         or velocities_are_pathological(v)
@@ -3661,31 +3736,16 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         fallback_paths=bussi_restart_fallbacks,
     )
     _strip_non_charmm_dynamics_keywords(kw)
-    comp_handoff_via_sync = False
-    bussi_comp_handoff_vel: np.ndarray | None = None
+    handoff_vel: np.ndarray | None = None
     if init_velocities is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-            sync_charmm_velocities_akma,
-        )
-
-        v = np.column_stack(
+        handoff_vel = np.column_stack(
             [
                 np.asarray(init_velocities["vx"], dtype=np.float64),
                 np.asarray(init_velocities["vy"], dtype=np.float64),
                 np.asarray(init_velocities["vz"], dtype=np.float64),
             ]
         )
-        sync_charmm_velocities_akma(v)
-        if int(kw.get("iasvel", 0) or 0) == 0:
-            from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-                sync_comparison_velocities_akma,
-            )
-
-            sync_comparison_velocities_akma(v)
-            comp_handoff_via_sync = True
-            if bussi_active:
-                bussi_comp_handoff_vel = np.asarray(v, dtype=np.float64).copy()
-    else:
+    elif _requires_init_velocities_handoff(kw):
         # Populate COMP before the cold check: ``iasvel=0`` dyna reads COMP, not main.
         mirror_comparison_velocities_for_dynamics(
             kw,
@@ -3715,7 +3775,9 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         init_velocities = _finalize_init_velocities_handoff(
             kw,
             init_velocities,
-            handoff_vel=bussi_comp_handoff_vel,
+            handoff_vel=handoff_vel,
+            restart_read_path=restart_read_path,
+            fallback_paths=bussi_restart_fallbacks,
             quiet=bool(kw.get("_quiet_bussi_rescale", False)),
         )
     if _dynamics_c_api_available():
@@ -4705,6 +4767,11 @@ def _prepare_post_rescue_overlap_handoff(
     if _bussi_heat_ramp_active(chunk_kw):
         _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
         _apply_bussi_in_memory_continuation_kw(chunk_kw)
+        _restore_bussi_velocities_after_overlap_recovery(
+            chunk_kw,
+            restart_path=chunk_kw.get("_restart_read_path"),
+            global_step=int(chunk_kw.get("_bussi_global_step", 0) or 0),
+        )
         return
     _prepare_post_rescue_bath_and_crystal(chunk_kw, mlpot_ctx=mlpot_ctx)
     chunk_kw["restart"] = False

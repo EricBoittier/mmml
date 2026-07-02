@@ -114,13 +114,17 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
+            return_value=True,
         ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         ),
     ):
         run_dynamics(
@@ -170,13 +174,11 @@ def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.sync_comparison_velocities_akma",
-        ) as sync_comp,
-        patch(
             "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
         ) as refresh_comp,
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
+            return_value=True,
         ),
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
@@ -199,7 +201,6 @@ def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
                 },
             }
         )
-    sync_comp.assert_called_once()
     refresh_comp.assert_called_once()
     passed = run_capi.call_args.kwargs.get("init_velocities")
     assert passed is not None
@@ -248,7 +249,49 @@ def test_validate_init_velocities_handoff_rejects_position_like_arrays():
         _validate_init_velocities_handoff(pos_like, quiet=True)
 
 
+def test_finalize_init_velocities_handoff_falls_back_to_iasvel_one():
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _finalize_init_velocities_handoff,
+    )
+
+    pos_like = {
+        "vx": np.full(4, 9500.0),
+        "vy": np.zeros(4),
+        "vz": np.zeros(4),
+    }
+    kw = {
+        "iasvel": 0,
+        "start": False,
+        "_bussi_ramp": {
+            "firstt": 10.0,
+            "finalt": 50.0,
+            "teminc": 0.08,
+            "ihtfrq": 50,
+        },
+        "_bussi_global_step": 50,
+    }
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
+        return_value=np.full((4, 3), 9500.0),
+    ):
+        out = _finalize_init_velocities_handoff(
+            kw,
+            pos_like,
+            handoff_vel=np.column_stack(
+                [pos_like["vx"], pos_like["vy"], pos_like["vz"]]
+            ),
+            quiet=True,
+        )
+    assert out is None
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == pytest.approx(10.08)
+
+
 def test_run_dynamics_c_api_path_invoked():
+    from unittest.mock import MagicMock, patch
+
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
     kw = {

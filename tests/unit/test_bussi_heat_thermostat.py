@@ -157,6 +157,38 @@ def test_capture_charmm_velocities_for_bussi_skips_cold_restart(tmp_path):
     sync.assert_called_once()
 
 
+def test_capture_charmm_velocities_for_bussi_rejects_position_like_comp(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        capture_charmm_velocities_for_bussi,
+    )
+
+    positions = np.array([[1.5, 2.0, -3.0]], dtype=float)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_velocities_akma",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
+        return_value=positions,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._velocity_array_matches_psf",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.velocity_array_matches_main_coordinates",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._read_restart_velocities_akma",
+        return_value=None,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._try_bussi_finite_difference_velocities",
+        return_value=None,
+    ):
+        out = capture_charmm_velocities_for_bussi(restart_path=tmp_path / "missing.res")
+    assert out is None
+
+
 def test_capture_charmm_velocities_for_bussi_from_restart(tmp_path):
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         capture_charmm_velocities_for_bussi,
@@ -1050,8 +1082,13 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
-    ):
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._restore_bussi_velocities_after_overlap_recovery",
+    ) as restore_vel:
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
+
+    restore_vel.assert_called_once()
+    assert restore_vel.call_args.kwargs["global_step"] == 0
 
     assert chunk_kw["restart"] is False
     assert chunk_kw["iasvel"] == 0
