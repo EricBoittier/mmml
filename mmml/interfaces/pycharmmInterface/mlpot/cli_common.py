@@ -1256,6 +1256,11 @@ def validate_cluster_geometry(
             "Cluster has 0 atoms after PSF/CRD load — CHARMM topology did not load "
             "(PSF EXT XPLOR requires read_psf_card_file, not read.psf_card)."
         )
+    if np.any(np.abs(r) > 9000.0):
+        raise ValueError(
+            "Cluster coordinates are uninitialized (CHARMM 9999 sentinel) — "
+            "CRD did not load; check model.crd matches model.psf."
+        )
     span = r.max(axis=0) - r.min(axis=0)
     if float(span[1]) < min_axis_span or float(span[2]) < min_axis_span:
         raise ValueError(

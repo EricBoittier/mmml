@@ -7992,6 +7992,18 @@ def load_minimized_coordinates(crd_path: PathLike) -> None:
         raise FileNotFoundError(f"CRD not found: {path}")
     with charmm_relaxed_bomlev():
         read.coor_card(str(path))
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        _charmm_coords_are_placeholder,
+        get_charmm_positions_array,
+    )
+
+    if _charmm_coords_are_placeholder(get_charmm_positions_array()):
+        # PyCHARMM read.coor_card often leaves 9999 sentinels after PSF EXT XPLOR load.
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+            apply_crd_file_to_charmm,
+        )
+
+        apply_crd_file_to_charmm(path)
     from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
         clear_comparison_coordinates,
     )

@@ -27,6 +27,18 @@ def _positions_xyzw_dataframe(arr: np.ndarray) -> pd.DataFrame:
     )
 
 
+def _charmm_coords_are_placeholder(pos: np.ndarray) -> bool:
+    """True for uninitialized CHARMM coordinate buffers (zeros or 9999 sentinel)."""
+    arr = np.asarray(pos, dtype=float)
+    if arr.size == 0:
+        return True
+    if np.allclose(arr, 0.0):
+        return True
+    if np.any(np.abs(arr) > 9000.0):
+        return True
+    return False
+
+
 def sync_charmm_positions(positions: np.ndarray) -> None:
     """Push ``(N, 3)`` into CHARMM main and auxiliary coordinate sets."""
     import pycharmm.coor as coor
@@ -76,7 +88,7 @@ def get_charmm_positions_array() -> np.ndarray:
     for getter in (coor.get_main, coor.get_positions, coor.get_comparison):
         df = getter()
         pos = df[["x", "y", "z"]].to_numpy(dtype=float)
-        if pos.shape[0] and not np.allclose(pos, 0.0):
+        if pos.shape[0] and not _charmm_coords_are_placeholder(pos):
             n = int(coor.get_natom())
             if n > 0 and pos.shape[0] > n:
                 pos = np.asarray(pos[:n], dtype=float)

@@ -17,6 +17,11 @@ def test_validate_cluster_geometry_rejects_empty_positions():
         validate_cluster_geometry(np.zeros((0, 3)), n_molecules=1)
 
 
+def test_validate_cluster_geometry_rejects_placeholder_coordinates():
+    with pytest.raises(ValueError, match="9999 sentinel"):
+        validate_cluster_geometry(np.full((5, 3), 9999.0), n_molecules=1)
+
+
 def test_load_cluster_from_artifacts_uses_xplor_psf_reader(tmp_path: Path, monkeypatch):
     psf = tmp_path / "model.psf"
     crd = tmp_path / "model.crd"

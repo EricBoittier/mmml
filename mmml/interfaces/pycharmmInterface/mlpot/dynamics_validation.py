@@ -463,6 +463,16 @@ def read_crd_coordinates(path: Path) -> np.ndarray | None:
     return pos
 
 
+def apply_crd_file_to_charmm(path: Path) -> None:
+    """Parse EXT CRD and push coordinates into CHARMM (safe after PSF EXT XPLOR load)."""
+    pos = read_crd_coordinates(path)
+    if pos is None:
+        raise RuntimeError(f"failed to parse CRD coordinates: {path}")
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+
+    sync_charmm_positions(pos)
+
+
 def restart_has_nonfinite_coordinates(path: Path | None) -> bool:
     """Return True when a restart file contains non-finite Cartesian coordinates."""
     if path is None:
