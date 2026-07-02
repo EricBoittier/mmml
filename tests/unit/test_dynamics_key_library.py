@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
+import pytest
 import sys
 
 
@@ -118,6 +119,9 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
         patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
+        ),
     ):
         run_dynamics(
             {
@@ -129,7 +133,9 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
         )
     resolve_init.assert_called_once()
     run_capi.assert_called_once()
-    assert run_capi.call_args.kwargs.get("init_velocities") is init
+    assert run_capi.call_args.kwargs.get("init_velocities") is not None
+    passed = run_capi.call_args.kwargs["init_velocities"]
+    assert np.allclose(passed["vx"], init["vx"])
 
 
 def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
@@ -173,6 +179,9 @@ def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
             "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma",
         ),
         patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
+        ),
+        patch(
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
         ),
     ):
@@ -197,6 +206,46 @@ def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
     assert np.allclose(passed["vx"], init["vx"])
     assert np.allclose(passed["vy"], init["vy"])
     assert np.allclose(passed["vz"], init["vz"])
+
+
+def test_apply_bussi_in_memory_continuation_uses_iasvel_one_without_c_api():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_bussi_in_memory_continuation_kw,
+    )
+
+    kw = {
+        "iasvel": 0,
+        "start": False,
+        "_bussi_ramp": {
+            "firstt": 0.0,
+            "finalt": 100.0,
+            "teminc": 0.5,
+            "ihtfrq": 50,
+        },
+        "_bussi_global_step": 50,
+    }
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=False,
+    ):
+        _apply_bussi_in_memory_continuation_kw(kw)
+    assert kw["iasvel"] == 1
+    assert kw["firstt"] == 0.5
+    assert kw.get("_skip_ase_cold_velocity_assign") is None
+
+
+def test_validate_init_velocities_handoff_rejects_position_like_arrays():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _validate_init_velocities_handoff,
+    )
+
+    pos_like = {
+        "vx": np.full(100, 9500.0),
+        "vy": np.zeros(100),
+        "vz": np.zeros(100),
+    }
+    with pytest.raises(RuntimeError, match="Cartesian coordinates"):
+        _validate_init_velocities_handoff(pos_like, quiet=True)
 
 
 def test_run_dynamics_c_api_path_invoked():

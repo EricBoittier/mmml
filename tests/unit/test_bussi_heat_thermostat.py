@@ -703,6 +703,8 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
 
 
 def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
+    from unittest.mock import patch
+
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -712,7 +714,11 @@ def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
         "nstep": 50,
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
-    _apply_bussi_in_memory_continuation_kw(kw)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ):
+        _apply_bussi_in_memory_continuation_kw(kw)
     assert kw["iasvel"] == 0
     assert kw["start"] is False
     assert kw["iunrea"] == -1
@@ -888,6 +894,8 @@ def test_run_bussi_heat_subchunked_clears_fortran_after_each_leg():
 
 
 def test_overlap_chunk_bussi_ramp_prep_strips_bath():
+    from unittest.mock import patch
+
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
         _apply_overlap_chunk_heat_ramp,
@@ -917,11 +925,15 @@ def test_overlap_chunk_bussi_ramp_prep_strips_bath():
         steps_done=50,
         ramp_spec=ramp_spec,
     )
-    _apply_overlap_chunk_dynamics_kw(
-        chunk_kw,
-        chunk_index=1,
-        has_restart_read=False,
-    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ):
+        _apply_overlap_chunk_dynamics_kw(
+            chunk_kw,
+            chunk_index=1,
+            has_restart_read=False,
+        )
     assert chunk_kw["iasvel"] == 0
     assert chunk_kw["start"] is False
     assert chunk_kw["iunrea"] == -1
@@ -960,6 +972,8 @@ def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder
 
 
 def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
+    from unittest.mock import patch
+
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
     )
@@ -974,7 +988,11 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
         "iasvel": 1,
     }
     prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
-    _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ):
+        _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
     assert kw["iasvel"] == 0
     assert kw["start"] is False
     assert "firstt" not in kw
@@ -1029,6 +1047,9 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw():
     )
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.ensure_charmm_crystal_for_cpt",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
     ):
         _prepare_post_rescue_overlap_handoff(chunk_kw, mlpot_ctx=ctx)
 

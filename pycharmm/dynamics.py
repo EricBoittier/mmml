@@ -838,7 +838,7 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
 
     natom = coor.get_natom()
     vel_keepalive: list[ctypes.Array] = []
-    if init_velocities:
+    if init_velocities is not None:
         init_vx, init_vy, init_vz, vel_keepalive = _dynamics_velocity_ctypes_arrays(
             init_velocities, natom
         )
@@ -852,7 +852,7 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     options = _configure_known_only(**kwargs)
     buf, buflen = c_api_string_buffer(command_line)
     fn = lib.charmm.dynamics_run_kw
-    if init_velocities:
+    if init_velocities is not None:
         success = fn(
             ctypes.byref(options),
             buf,
@@ -917,7 +917,7 @@ def run(init_velocities=None, **kwargs):
         traditional dynamics energy output entry names
     """
     natom = coor.get_natom()
-    if init_velocities:
+    if init_velocities is not None:
         init_vx = (ctypes.c_double * natom)(*(init_velocities['vx'][0:natom]))
         init_vy = (ctypes.c_double * natom)(*(init_velocities['vy'][0:natom]))
         init_vz = (ctypes.c_double * natom)(*(init_velocities['vz'][0:natom]))
@@ -939,7 +939,7 @@ def run(init_velocities=None, **kwargs):
                                       init_vx, init_vy, init_vz,
                                       out_vx, out_vy, out_vz)
 
-    if not init_velocities:
+    if init_velocities is None:
         out_vx = (ctypes.c_double * natom)()
         out_vy = (ctypes.c_double * natom)()
         out_vz = (ctypes.c_double * natom)()

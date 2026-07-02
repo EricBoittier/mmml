@@ -1960,18 +1960,16 @@ def _apply_bussi_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     """In-process ``dyna`` continuation between Bussi micro-chunks."""
     kw["restart"] = False
     kw["new"] = False
-    kw["start"] = False
-    # Continue in-memory velocities via COMP (mirrored from main before ``dyna``).
-    # ``iasvel=1`` re-draws Boltzmann every sub-chunk and drifts the box.
-    kw["iasvel"] = 0
-    kw["iasors"] = 0
+    _configure_bussi_in_memory_continuation_iasvel(kw)
     kw["ihtfrq"] = 0
     kw.pop("TEMINC", None)
     kw.pop("teminc", None)
-    kw["_skip_ase_cold_velocity_assign"] = True
+    if int(kw.get("iasvel", 0) or 0) == 0:
+        kw["_skip_ase_cold_velocity_assign"] = True
     kw.pop("iunrea", None)
     kw["iunrea"] = -1
-    _strip_bussi_in_memory_heat_bath_keywords(kw)
+    if int(kw.get("iasvel", 0) or 0) == 0:
+        _strip_bussi_in_memory_heat_bath_keywords(kw)
     _ensure_bussi_plain_verlet_fortran_state()
 
 
@@ -1988,14 +1986,12 @@ def apply_bussi_heat_ramp_overlap_chunk(
     # Bath target is applied by ASE Bussi rescale via ``_bussi_ramp``; do not pass
     # scale-heat ``FIRSTT`` / ``FINALT`` keywords to plain Verlet ``dyna`` legs
     # (lingering heat-ramp state can segfault ``dynopt`` on in-memory handoffs).
-    chunk_kw["iasvel"] = 0
-    chunk_kw["iasors"] = 0
-    chunk_kw["start"] = False
+    _configure_bussi_in_memory_continuation_iasvel(chunk_kw)
     chunk_kw["ihtfrq"] = 0
     chunk_kw.pop("TEMINC", None)
     chunk_kw.pop("teminc", None)
-    chunk_kw["_skip_ase_cold_velocity_assign"] = True
-    _strip_bussi_in_memory_heat_bath_keywords(chunk_kw)
+    if int(chunk_kw.get("iasvel", 0) or 0) == 0:
+        _strip_bussi_in_memory_heat_bath_keywords(chunk_kw)
     _ensure_bussi_plain_verlet_fortran_state()
 
 
@@ -3398,6 +3394,134 @@ def _init_velocities_dict_from_akma(v_akma: np.ndarray) -> dict[str, np.ndarray]
     }
 
 
+def _bussi_ramp_target_k_for_kw(kw: dict[str, Any]) -> float | None:
+    """Schedule bath target (K) from ``_bussi_ramp`` + ``_bussi_global_step``."""
+    ramp = kw.get("_bussi_ramp")
+    if not isinstance(ramp, dict):
+        return None
+    global_step = int(kw.get("_bussi_global_step", 0) or 0)
+    return heat_ramp_bath_target_K(
+        firstt=float(ramp.get("firstt", 0.0)),
+        finalt=float(ramp.get("finalt", 0.0)),
+        teminc=float(ramp.get("teminc", 0.0)),
+        ihtfrq=int(ramp.get("ihtfrq", 0) or 0),
+        step=global_step,
+    )
+
+
+def _apply_bussi_iasvel_one_at_ramp_target(kw: dict[str, Any]) -> None:
+    """Boltzmann at ramp target when ``dynopt`` cannot take ``init_velocities`` (COMP path unsafe)."""
+    target = _bussi_ramp_target_k_for_kw(kw)
+    if target is not None:
+        kw["firstt"] = float(target)
+        kw["tstruct"] = float(target)
+    kw["iasvel"] = 1
+    kw["iasors"] = 0
+    kw["start"] = False
+    kw.pop("_skip_ase_cold_velocity_assign", None)
+
+
+def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
+    """Pick ``iasvel=0`` + C-API injection, or ``iasvel=1`` Boltzmann when ``dynamics_run_kw`` is absent."""
+    if not _dynamics_c_api_available():
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
+        return
+    kw["iasvel"] = 0
+    kw["iasors"] = 0
+    kw["start"] = False
+    kw["_skip_ase_cold_velocity_assign"] = True
+
+
+def _validate_init_velocities_handoff(
+    init_velocities: dict[str, np.ndarray],
+    *,
+    quiet: bool = False,
+    context: str = "run_dynamics",
+) -> None:
+    """Raise when AKMA handoff arrays look like positions or imply T≫target."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        MAX_REASONABLE_VELOCITY_TEMP_K,
+        charmm_masses_amu,
+        estimate_kinetic_temperature_k,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        comparison_comp_looks_like_spatial_coords,
+    )
+
+    v = np.column_stack(
+        [
+            np.asarray(init_velocities["vx"], dtype=np.float64),
+            np.asarray(init_velocities["vy"], dtype=np.float64),
+            np.asarray(init_velocities["vz"], dtype=np.float64),
+        ]
+    )
+    if comparison_comp_looks_like_spatial_coords(v):
+        raise RuntimeError(
+            f"{context}: init_velocities look like Cartesian coordinates (Å), "
+            "not AKMA velocity components (would yield T≫target at dyna step 0)"
+        )
+    t_est = estimate_kinetic_temperature_k(v, charmm_masses_amu())
+    if (
+        t_est is None
+        or not np.isfinite(t_est)
+        or float(t_est) > float(MAX_REASONABLE_VELOCITY_TEMP_K)
+    ):
+        txt = f"{t_est:.2e}" if t_est is not None and np.isfinite(t_est) else "?"
+        raise RuntimeError(
+            f"{context}: init_velocities handoff T_est≈{txt} K "
+            f"(limit {MAX_REASONABLE_VELOCITY_TEMP_K:.0f} K); "
+            "CHARMM would integrate at absurd temperature"
+        )
+    if not quiet:
+        print(
+            f"Bussi handoff: injecting init_velocities at dynopt "
+            f"(T_est≈{float(t_est):.2f} K, dynamics_run_kw)",
+            flush=True,
+        )
+
+
+def _finalize_init_velocities_handoff(
+    kw: dict[str, Any],
+    init_velocities: dict[str, np.ndarray] | None,
+    *,
+    handoff_vel: np.ndarray | None = None,
+    quiet: bool = False,
+) -> dict[str, np.ndarray]:
+    """Re-sync main/COMP and return a fresh ``init_velocities`` dict immediately before ``dyna``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        last_synced_velocities_akma_raw,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+        refresh_bussi_comp_velocity_handoff,
+    )
+
+    v = handoff_vel
+    if v is None and init_velocities is not None:
+        v = np.column_stack(
+            [
+                np.asarray(init_velocities["vx"], dtype=np.float64),
+                np.asarray(init_velocities["vy"], dtype=np.float64),
+                np.asarray(init_velocities["vz"], dtype=np.float64),
+            ]
+        )
+    if v is None:
+        cached = last_synced_velocities_akma_raw()
+        if cached is not None:
+            v = np.asarray(cached, dtype=np.float64).copy()
+    if v is None:
+        raise RuntimeError(
+            "run_dynamics: iasvel=0 continuation missing warm AKMA velocities "
+            f"(start={kw.get('start')}, iasvel={kw.get('iasvel')})"
+        )
+    refresh_bussi_comp_velocity_handoff(
+        v,
+        context="run_dynamics in-memory continuation",
+    )
+    out = _init_velocities_dict_from_akma(v)
+    _validate_init_velocities_handoff(out, quiet=quiet, context="run_dynamics")
+    return out
+
+
 def _resolve_dynamics_init_velocities(
     kw: dict[str, Any],
     *,
@@ -3581,32 +3705,19 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
-    if comp_handoff_via_sync and bussi_active:
-        from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
-            refresh_bussi_comp_velocity_handoff,
-        )
-
-        if bussi_comp_handoff_vel is None:
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-                last_synced_velocities_akma_raw,
-            )
-
-            cached = last_synced_velocities_akma_raw()
-            if cached is not None:
-                bussi_comp_handoff_vel = np.asarray(cached, dtype=np.float64).copy()
-        if bussi_comp_handoff_vel is None:
+    if _requires_init_velocities_handoff(kw):
+        if not _dynamics_c_api_available():
             raise RuntimeError(
-                "run_dynamics: Bussi overlap continuation missing warm AKMA "
-                f"velocities (start={kw.get('start')}, iasvel={kw.get('iasvel')})"
+                "run_dynamics: iasvel=0 in-memory continuation requires "
+                "libcharmm.dynamics_run_kw (KEY_LIBRARY rebuild); "
+                "Bussi sub-chunks should use iasvel=1 Boltzmann fallback instead"
             )
-        refresh_bussi_comp_velocity_handoff(
-            bussi_comp_handoff_vel,
-            context="run_dynamics Bussi overlap continuation",
+        init_velocities = _finalize_init_velocities_handoff(
+            kw,
+            init_velocities,
+            handoff_vel=bussi_comp_handoff_vel,
+            quiet=bool(kw.get("_quiet_bussi_rescale", False)),
         )
-        # Inject at dynopt entry (``present(in_vx)``); do not rely on COMP alone —
-        # lingering START + ``iasvel=0`` reads XCOMP after Fortran prep may still
-        # see main Å coordinates even when COMP was refreshed from Python.
-        init_velocities = _init_velocities_dict_from_akma(bussi_comp_handoff_vel)
     if _dynamics_c_api_available():
         dyn = _run_dynamics_via_c_api(
             kw,
@@ -5072,15 +5183,12 @@ def _restore_bussi_velocities_after_overlap_recovery(
 
 
 def _ensure_bussi_heat_continuation_iasvel(chunk_kw: dict[str, Any]) -> None:
-    """Bussi continuation: ``iasvel=0`` + COMP mirror (not re-Boltzmann each chunk)."""
+    """Bussi continuation: ``iasvel=0`` + ``init_velocities``, or ``iasvel=1`` when C API absent."""
     if not _bussi_heat_ramp_active(chunk_kw):
         return
     if bool(chunk_kw.get("start")):
         return
-    chunk_kw["iasvel"] = 0
-    chunk_kw["start"] = False
-    chunk_kw["iasors"] = 0
-    chunk_kw["_skip_ase_cold_velocity_assign"] = True
+    _configure_bussi_in_memory_continuation_iasvel(chunk_kw)
 
 
 def _python_heat_ramp_active(kw: dict[str, Any]) -> bool:

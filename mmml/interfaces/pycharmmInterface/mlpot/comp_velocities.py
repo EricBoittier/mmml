@@ -163,10 +163,8 @@ def refresh_bussi_comp_velocity_handoff(
 ) -> None:
     """Re-mirror warm AKMA velocities into main + COMP immediately before ``dyna``.
 
-    Bussi in-memory legs avoid ``init_velocities`` CFI on some gfortran builds and
-    rely on COMP instead (lingering START + ``iasvel=0``).  Fortran prep /
-    ``velos_del`` between the first sync and ``dynopt`` can restore COMP from main
-    coordinates — refresh here so CHARMM does not integrate at T≈10^12 K.
+    Also used as a COMP backup when ``dynamics_run_kw`` is unavailable (script path).
+    Primary Bussi continuation injects ``init_velocities`` at ``dynopt`` entry.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         sync_charmm_velocities_akma,
