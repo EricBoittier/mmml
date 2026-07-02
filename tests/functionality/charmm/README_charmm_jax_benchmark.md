@@ -52,6 +52,6 @@ pytest tests/unit/test_charmm_jax_energy_benchmark.py -q
 
 ## Notes
 
-- **CMAP** on TRIA is ignored in total-MM comparison (JAX bonded path may omit it).
+- **CMAP** on TRIA uses bundled ``par_trialanine_backbone_cmap.prm`` (alanine backbone grid with CGENFF type headers); included in bonded and total-MM comparisons.
 - **Urey–Bradley** 1–3 distance terms are included in the JAX bonded kernel (parsed from CHARMM PRM angle lines).
 - Long-range PME is not benchmarked here; only ``lr_solver=mic`` truncated Coulomb.

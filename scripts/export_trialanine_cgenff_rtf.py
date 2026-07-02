@@ -17,6 +17,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 OUT_RTF = REPO / "mmml" / "data" / "charmm" / "top_trialanine_cgenff.rtf"
 OUT_RES = REPO / "mmml" / "data" / "charmm" / "CGENFF.RES"
+OUT_CMAP_PRM = REPO / "mmml" / "data" / "charmm" / "par_trialanine_backbone_cmap.prm"
 RESI_NAME = "TRIA"  # ACE–ALA×3–CT3 tri-alanine (CHARMM sequence names ≤ 4 characters)
 
 # Protein → CGENFF atom-type map (bonded params live in ``par_all36_cgenff.prm``).
@@ -147,6 +148,57 @@ def _atom_names_in_psf_order() -> list[str]:
     return unique
 
 
+def _cmap_lines_from_psf() -> list[str]:
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    import pycharmm.write as write
+
+    write.psf_card("export_tria.psf")
+    psf = parse_psf_ext("export_tria.psf")
+    names = _atom_names_in_psf_order()
+    if psf.cmaps.size == 0:
+        return []
+    lines: list[str] = []
+    for row in psf.cmaps:
+        atoms = " ".join(f"{names[int(i)]:<4}" for i in row)
+        lines.append(f"CMAP {atoms}")
+    return lines
+
+
+def _write_backbone_cmap_prm() -> None:
+    from mmml.interfaces.pycharmmInterface.cgenff_cmap import parse_cmap_types_from_prm
+
+    _rtf, prm = _protein_toppar_paths()
+    cmap_types = parse_cmap_types_from_prm(prm)
+    key = ("C", "NH1", "CT1", "C", "NH1", "CT1", "C", "NH1")
+    if key not in cmap_types:
+        raise KeyError(f"Alanine CMAP grid not found in {prm}")
+    cmap = cmap_types[key]
+    cg_key = (
+        "CG2O1",
+        "NG2S1",
+        "CG311",
+        "CG2O1",
+        "NG2S1",
+        "CG311",
+        "CG2O1",
+        "NG2S1",
+    )
+    lines = [
+        "* TRIA backbone CMAP (alanine grid from protein PRM, CGENFF types)",
+        "* Regenerate: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py",
+        "CMAP",
+        "! alanine backbone map",
+        " ".join(cg_key) + f"  {cmap.resolution}",
+    ]
+    energies = list(cmap.energies)
+    for i in range(0, len(energies), 5):
+        chunk = energies[i : i + 5]
+        lines.append(" ".join(f"{x:8.2f}" for x in chunk))
+    lines.append("END")
+    OUT_CMAP_PRM.parent.mkdir(parents=True, exist_ok=True)
+    OUT_CMAP_PRM.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _format_rtf_block() -> str:
     import pycharmm.psf as psf
 
@@ -188,6 +240,9 @@ def _format_rtf_block() -> str:
         chunk = bond_chunks[i : i + 8]
         lines.append("BOND " + " ".join(f"{tok:<4}" for tok in chunk))
 
+    for cmap_line in _cmap_lines_from_psf():
+        lines.append(cmap_line)
+
     lines.append("PATC FIRS NONE LAST NONE")
     lines.append("")
     return "\n".join(lines) + "\n"
@@ -216,8 +271,12 @@ def main() -> int:
         _build_minimized_trialanine()
         OUT_RTF.parent.mkdir(parents=True, exist_ok=True)
         OUT_RTF.write_text(_format_rtf_block(), encoding="utf-8")
+        _write_backbone_cmap_prm()
         _ensure_cgenff_res_entry()
         print(f"wrote {OUT_RTF.relative_to(REPO)} ({OUT_RTF.stat().st_size} bytes)")
+        print(
+            f"wrote {OUT_CMAP_PRM.relative_to(REPO)} ({OUT_CMAP_PRM.stat().st_size} bytes)"
+        )
         return 0
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

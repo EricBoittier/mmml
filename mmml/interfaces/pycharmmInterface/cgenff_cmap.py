@@ -21,6 +21,14 @@ from jax_md.util import normalize
 
 _TWO_PI = 2.0 * np.pi
 
+# CGENFF backbone types on ``RESI TRIA`` map to protein CMAP grids in
+# ``par_trialanine_backbone_cmap.prm`` (and par_all36m_prot.prm).
+CGENFF_BACKBONE_CMAP_ALIASES: dict[str, str] = {
+    "CG2O1": "C",
+    "NG2S1": "NH1",
+    "CG311": "CT1",
+}
+
 # OpenMM bicubic patch coefficient weights (16x16).
 _WT = np.array(
     [
@@ -189,18 +197,40 @@ def cmap_type_key(atom_types: Sequence[str], atom_indices: Sequence[int]) -> tup
     return tuple(atom_types[int(i)] for i in atom_indices)
 
 
+def _alias_cmap_type_key(key: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(CGENFF_BACKBONE_CMAP_ALIASES.get(t, t) for t in key)
+
+
 def _resolve_cmap_type_key(
     atom_types: Sequence[str],
     atom_indices: Sequence[int],
     cmap_types: dict[tuple[str, ...], CmapType],
 ) -> tuple[str, ...] | None:
-    key = cmap_type_key(atom_types, atom_indices)
-    if key in cmap_types:
-        return key
-    rev = tuple(reversed(key))
-    if rev in cmap_types:
-        return rev
+    raw = cmap_type_key(atom_types, atom_indices)
+    candidates = [raw]
+    aliased = _alias_cmap_type_key(raw)
+    if aliased != raw:
+        candidates.append(aliased)
+    for key in candidates:
+        if key in cmap_types:
+            return key
+        rev = tuple(reversed(key))
+        if rev in cmap_types:
+            return rev
     return None
+
+
+def trialanine_backbone_cmap_prm_path() -> Path:
+    """Bundled alanine-backbone CMAP grid with CGENFF type headers."""
+    from mmml.paths import default_trialanine_backbone_cmap_prm
+
+    return default_trialanine_backbone_cmap_prm()
+
+
+def trialanine_backbone_cmap_extra_prm_files() -> tuple[Path, ...]:
+    """Extra PRM path(s) for JAX/CHARMM CMAP on ``RESI TRIA``."""
+    path = trialanine_backbone_cmap_prm_path()
+    return (path,) if path.is_file() else ()
 
 
 def build_cmap_arrays(

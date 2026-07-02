@@ -28,6 +28,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_
 from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
     build_trialanine_water_box_in_charmm,
     have_trialanine_cgenff,
+    have_trialanine_cmap_prm,
 )
 from tests.conftest import bonded_block_hangs_under_mpi_mpirun, can_import_pycharmm
 
@@ -39,6 +40,10 @@ pytestmark = [
     pytest.mark.skipif(
         not have_trialanine_cgenff(),
         reason="bundled CGENFF TRIA (TRIALANINE) RTF not available",
+    ),
+    pytest.mark.skipif(
+        not have_trialanine_cmap_prm(),
+        reason="bundled TRIA backbone CMAP PRM not available",
     ),
 ]
 
@@ -82,6 +87,7 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
         box.psf_path,
         positions,
         prm_file=box.cgenff_prm,
+        extra_prm_files=box.cmap_extra_prm_files,
     )
     components, forces = bonded_energy_and_forces(
         jnp.asarray(positions),
@@ -143,6 +149,7 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         box.psf_path,
         positions,
         prm_file=box.cgenff_prm,
+        extra_prm_files=box.cmap_extra_prm_files,
     )
     nbond_data = load_nonbonded_system_from_charmm(
         box.psf_path,

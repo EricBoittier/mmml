@@ -67,3 +67,8 @@ def default_alad_reference_pdb() -> Path:
 def default_trialanine_cgenff_rtf() -> Path:
     """Bundled ``RESI TRIA`` (TRIALANINE) supplemental CGENFF topology."""
     return bundled_file("data", "charmm", "top_trialanine_cgenff.rtf")
+
+
+def default_trialanine_backbone_cmap_prm() -> Path:
+    """Bundled CMAP grid for TRIA backbone (CGENFF atom-type headers)."""
+    return bundled_file("data", "charmm", "par_trialanine_backbone_cmap.prm")

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 import jax.numpy as jnp
 import numpy as np
@@ -129,7 +129,7 @@ def _assert_within_tolerance(
     jax_forces: np.ndarray,
     *,
     tolerances: dict[LayerName, dict[str, float]] | None = None,
-    ignore_charmm_bonded_terms: tuple[str, ...] = ("cmap",),
+    ignore_charmm_bonded_terms: tuple[str, ...] = (),
 ) -> tuple[bool, str]:
     tol = (tolerances or DEFAULT_TOLERANCES)[layer]
     try:
@@ -191,6 +191,7 @@ def benchmark_bonded_layer(
     psf_path: Path | str,
     *,
     prm_path: Path | str | None = None,
+    extra_prm_files: Sequence[Path | str] = (),
 ) -> LayerBenchmark:
     """Bonded-only CHARMM BLOCK vs JAX ``bonded_energy_and_forces``."""
     from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
@@ -210,7 +211,12 @@ def benchmark_bonded_layer(
     charmm_terms = charmm_bonded_energy_components_kcalmol()
     charmm_forces = charmm_bonded_forces_kcalmol_A()
 
-    bonded = load_bonded_system_from_psf(psf_path, pos, prm_file=prm_path)
+    bonded = load_bonded_system_from_psf(
+        psf_path,
+        pos,
+        prm_file=prm_path,
+        extra_prm_files=extra_prm_files,
+    )
     jax_terms_raw, jax_forces = bonded_energy_and_forces(
         jnp.asarray(pos),
         bonded.topology,
@@ -321,6 +327,8 @@ def benchmark_total_mm_layer(
     prm_path: Path | str,
     cell: np.ndarray,
     nbond_settings: Any,
+    *,
+    extra_prm_files: Sequence[Path | str] = (),
 ) -> LayerBenchmark:
     """Full MM (bonded + MIC switched nonbonded) vs PyCHARMM ``ENER FORCE``."""
     import pycharmm.energy as energy
@@ -346,11 +354,15 @@ def benchmark_total_mm_layer(
 
     charmm_bonded = charmm_bonded_energy_components_kcalmol()
     charmm_nb = charmm_nonbonded_energy_components_kcalmol()
-    ignored_cmap = float(charmm_bonded.get("cmap", 0.0))
-    charmm_total = float(energy.get_total()) - ignored_cmap
+    charmm_total = float(energy.get_total())
     charmm_forces = charmm_bonded_forces_kcalmol_A()
 
-    bonded = load_bonded_system_from_psf(psf_path, pos, prm_file=prm_path)
+    bonded = load_bonded_system_from_psf(
+        psf_path,
+        pos,
+        prm_file=prm_path,
+        extra_prm_files=extra_prm_files,
+    )
     nbond_data = load_nonbonded_system_from_charmm(psf_path, prm_path)
     result = mm_system_energy_and_forces(
         pos,
@@ -367,7 +379,7 @@ def benchmark_total_mm_layer(
         "total": float(result.total_energy),
     }
     charmm_terms = {
-        "bonded_total": float(charmm_bonded.get("total", 0.0)) - ignored_cmap,
+        "bonded_total": float(charmm_bonded.get("total", 0.0)),
         "vdw": float(charmm_nb["vdw"]),
         "elec": float(charmm_nb["elec"]),
         "total": charmm_total,
@@ -605,10 +617,23 @@ def run_trialanine_water_benchmark(
 ) -> SystemBenchmark:
     pos = perturb_positions(box.positions, seed=seed, scale=0.02)
     nb_settings = _nbond_settings_from_cutoffs(box.nbond_cutoffs)
+    extra_prm = box.cmap_extra_prm_files
     layers = (
-        benchmark_bonded_layer(pos, box.psf_path, prm_path=box.cgenff_prm),
+        benchmark_bonded_layer(
+            pos,
+            box.psf_path,
+            prm_path=box.cgenff_prm,
+            extra_prm_files=extra_prm,
+        ),
         benchmark_nonbonded_layer(pos, box.psf_path, box.cgenff_prm, box.cell, nb_settings),
-        benchmark_total_mm_layer(pos, box.psf_path, box.cgenff_prm, box.cell, nb_settings),
+        benchmark_total_mm_layer(
+            pos,
+            box.psf_path,
+            box.cgenff_prm,
+            box.cell,
+            nb_settings,
+            extra_prm_files=extra_prm,
+        ),
     )
     return SystemBenchmark(
         name="trialanine_water",

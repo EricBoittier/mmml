@@ -33,6 +33,7 @@ class TrialanineWaterBox:
     box_side_A: float
     peptide_rtf: Path
     cgenff_prm: Path
+    cmap_extra_prm_files: tuple[Path, ...]
     n_waters: int
     nbond_cutoffs: PbcNbondCutoffs
 
@@ -53,6 +54,28 @@ def have_trialanine_cgenff() -> bool:
     return trialanine_cgenff_rtf_path().is_file()
 
 
+def trialanine_backbone_cmap_prm_path() -> Path:
+    """Bundled CMAP grid for ``RESI TRIA`` backbone (CGENFF type headers)."""
+    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+        trialanine_backbone_cmap_prm_path as _cmap_prm_path,
+    )
+
+    return _cmap_prm_path()
+
+
+def trialanine_cmap_extra_prm_files() -> tuple[Path, ...]:
+    """Extra PRM path(s) for CMAP on the bundled TRIA residue."""
+    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+        trialanine_backbone_cmap_extra_prm_files as _extra,
+    )
+
+    return _extra()
+
+
+def have_trialanine_cmap_prm() -> bool:
+    return trialanine_backbone_cmap_prm_path().is_file()
+
+
 def _load_cgenff_with_trialanine() -> None:
     import pycharmm.read as read
 
@@ -66,6 +89,8 @@ def _load_cgenff_with_trialanine() -> None:
     with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
         read_cgenff_prm(bomlev=False)
+        for cmap_prm in trialanine_cmap_extra_prm_files():
+            read.prm(str(cmap_prm), append=True)
         read.rtf(str(trialanine_cgenff_rtf_path()), append=True)
 
 
@@ -312,6 +337,7 @@ def build_trialanine_water_box_in_charmm(
         box_side_A=float(box_side_A),
         peptide_rtf=peptide_rtf,
         cgenff_prm=Path(CGENFF_PRM),
+        cmap_extra_prm_files=trialanine_cmap_extra_prm_files(),
         n_waters=n_waters,
         nbond_cutoffs=nbond_cutoffs,
     )

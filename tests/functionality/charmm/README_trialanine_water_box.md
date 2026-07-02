@@ -16,7 +16,8 @@ Tests live in `tests/functionality/charmm/test_trialanine_water_box_mm.py`.
 ## System build (`trialanine_water_box.py`)
 
 1. **Tri-alanine** — CGENFF residue ``TRIA`` (TRIALANINE: ACE–ALA×3–CT3) from
-   ``mmml/data/charmm/top_trialanine_cgenff.rtf``; coordinates via ``ic.build`` /
+   ``mmml/data/charmm/top_trialanine_cgenff.rtf`` with backbone **CMAP** from
+   ``par_trialanine_backbone_cmap.prm``; coordinates via ``ic.build`` /
    ``setupRes.generate_coordinates`` when needed.
 2. **Waters** — TIP3 on a simple cubic grid (~2.85 Å spacing); no Packmol.
 3. **PBC** — cubic cell via `prepare_charmm_pbc`; `apply_pbc_nbonds` caps cutoffs to `L/2`.

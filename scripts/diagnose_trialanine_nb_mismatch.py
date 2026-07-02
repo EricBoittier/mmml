@@ -53,7 +53,10 @@ def _jax_components(pos, box) -> dict[str, float]:
     )
 
     bonded = load_bonded_system_from_psf(
-        box.psf_path, pos, prm_file=box.cgenff_prm
+        box.psf_path,
+        pos,
+        prm_file=box.cgenff_prm,
+        extra_prm_files=box.cmap_extra_prm_files,
     )
     nb = load_nonbonded_system_from_charmm(box.psf_path, box.cgenff_prm)
     cuts = box.nbond_cutoffs

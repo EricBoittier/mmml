@@ -76,6 +76,62 @@ def test_resolve_cmap_key_forward_and_reverse() -> None:
     assert _resolve_cmap_type_key(atom_types, row, {}) is None
 
 
+def test_resolve_cmap_key_with_cgenff_aliases() -> None:
+    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+        CmapType,
+        _resolve_cmap_type_key,
+    )
+
+    cmap_types = {
+        ("C", "NH1", "CT1", "C", "NH1", "CT1", "C", "NH1"): CmapType(
+            2, (0.0, 1.0, 2.0, 3.0)
+        )
+    }
+    row = (0, 1, 2, 3, 4, 5, 6, 7)
+    atom_types = [
+        "CG2O1",
+        "NG2S1",
+        "CG311",
+        "CG2O1",
+        "NG2S1",
+        "CG311",
+        "CG2O1",
+        "NG2S1",
+    ]
+    assert _resolve_cmap_type_key(atom_types, row, cmap_types) is not None
+
+
+def test_build_cmap_arrays_from_bundled_tria_prm() -> None:
+    from mmml.interfaces.pycharmmInterface.cgenff_cmap import (
+        build_cmap_arrays,
+        trialanine_backbone_cmap_prm_path,
+    )
+
+    prm = trialanine_backbone_cmap_prm_path()
+    if not prm.is_file():
+        pytest.skip("bundled TRIA CMAP PRM not available")
+
+    cmap_atoms = np.array(
+        [[0, 1, 2, 3, 4, 5, 6, 7]],
+        dtype=np.int32,
+    )
+    atom_types = [
+        "CG2O1",
+        "NG2S1",
+        "CG311",
+        "CG2O1",
+        "NG2S1",
+        "CG311",
+        "CG2O1",
+        "NG2S1",
+    ]
+    atoms, map_idx, coeffs = build_cmap_arrays(cmap_atoms, atom_types, [prm])
+    assert atoms is not None and map_idx is not None and coeffs is not None
+    assert atoms.shape == (1, 8)
+    assert map_idx.shape == (1,)
+    assert coeffs.shape[0] == 1
+
+
 def test_parse_protein_prm_skips_cmap_blocks() -> None:
     from pathlib import Path
 

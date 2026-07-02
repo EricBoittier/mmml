@@ -261,7 +261,7 @@ def compare_mm_system_to_charmm(
     energy_atol: float = 2e-2,
     force_rtol: float = 5e-3,
     force_atol: float = 5e-2,
-    ignore_charmm_bonded_terms: tuple[str, ...] = ("cmap",),
+    ignore_charmm_bonded_terms: tuple[str, ...] = (),
 ) -> None:
     """Assert full JAX MM (bonded + nonbonded) matches PyCHARMM ``ENER FORCE``."""
     import pycharmm.energy as energy
