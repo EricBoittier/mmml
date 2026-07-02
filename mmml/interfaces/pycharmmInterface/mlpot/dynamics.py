@@ -1040,14 +1040,24 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
         )
 
 
-def _rewrap_mlpot_pbc_after_sd(config: Any, *, verbose: bool = False) -> None:
-    """Re-wrap CHARMM primary-cell coords after an MLpot SD pass.
+def _rewrap_mlpot_pbc_after_sd(
+    config: Any,
+    *,
+    verbose: bool = False,
+    context: str = "Post-SD",
+) -> None:
+    """Re-wrap CHARMM primary-cell coords before or after an MLpot SD pass.
 
-    During ``inbfrq=0`` SD, monomers drift freely and may exit the CHARMM primary cell
-    (``|z| > L/2``).  JAX MIC collapses ``dr = L`` to 0, creating phantom zero-distance
-    contacts that pin GRMS at ~937.  This function detects and corrects such drift by
-    applying :func:`~mmml.cli.run.md_handoff.rewrap_charmm_pbc_molecules` and syncing
-    corrected positions back to CHARMM.
+    During ``inbfrq=0`` SD (and during MM pre-minimize), monomers drift freely and may
+    exit the CHARMM primary cell (``|z| > L/2``).  JAX's MIC formula collapses
+    ``dr = L`` to 0 when atoms sit on opposite box faces, creating near-singular pair
+    gradients that pin GRMS at ~937 kcal/mol/Å.
+
+    Parameters
+    ----------
+    context:
+        Short label printed in the verbose message, e.g. ``"Pre-SD"``,
+        ``"Post-SD pass 1"``, or ``"Post-SD pass 2"``.
     """
     if config is None:
         return
@@ -1076,7 +1086,7 @@ def _rewrap_mlpot_pbc_after_sd(config: Any, *, verbose: bool = False) -> None:
     if verbose:
         max_delta = float(delta.max())
         print(
-            f"Post-SD PBC rewrap: {n_shifted} atoms re-centered into primary cell "
+            f"{context} PBC rewrap: {n_shifted} atoms re-centered into primary cell "
             f"(max drift {max_delta:.3f} Å, L={float(box_side):.3f} Å)",
             flush=True,
         )
@@ -7769,7 +7779,7 @@ def minimize_with_mlpot(
                 verbose=config.verbose,
             )
         # Fix any atoms that drifted outside [-L/2, L/2] during MM pre-minimize.
-        _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose)
+        _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose, context="Pre-SD")
         with charmm_mlpot_sd_jax_cpu_guard(pyC_model):
             sd_result = _run_mlpot_sd_then_abnr(
                 minimize,
@@ -7829,7 +7839,7 @@ def minimize_with_mlpot(
                         "(lists/forces diverged during inbfrq=0 minimization)"
                     )
             sync_charmm_lists_after_mini(quiet=not config.verbose)
-            _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose)
+            _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose, context="Post-SD pass 1")
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)
             if config.verbose and config.mlpot_ctx is not None:
                 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -7874,7 +7884,7 @@ def minimize_with_mlpot(
                             "hybrid GRMS watchdog triggered"
                         )
                 sync_charmm_lists_after_mini(quiet=not config.verbose)
-                _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose)
+                _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose, context="Post-SD pass 2")
                 invalidate_mlpot_calculator_caches(config.mlpot_ctx)
                 if config.verbose and config.mlpot_ctx is not None:
                     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
