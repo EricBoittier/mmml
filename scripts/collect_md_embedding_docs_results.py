@@ -34,9 +34,12 @@ RESULTS_MD = REPO / "docs" / "examples" / "md-embedding-results.md"
 SHORT_CONFIG = REPO / "mmml" / "cli" / "run" / "md_embedding_aaa_train_short.yaml"
 
 
-def _run(cmd: list[str], *, cwd: Path | None = None) -> None:
+def _run(cmd: list[str], *, cwd: Path | None = None, charmm_mpi: bool = False) -> None:
     print("+", " ".join(cmd), flush=True)
-    subprocess.run(cmd, check=True, cwd=cwd or REPO)
+    env = os.environ.copy()
+    if not charmm_mpi:
+        env["MMML_NO_CHARMM_MPI"] = "1"
+    subprocess.run(cmd, check=True, cwd=cwd or REPO, env=env)
 
 
 def _load_json(path: Path) -> dict:

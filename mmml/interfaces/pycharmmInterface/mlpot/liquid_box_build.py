@@ -414,66 +414,49 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         run_mini_lattice_abnr,
         should_run_mini_lattice_abnr,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        MAX_MM_PRETREAT_DYNAMICS_GRMS,
+        mm_geometry_safe_for_pretreat_dynamics,
+        maybe_run_mini_box_equilibration,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
     mm_stages = ["mini"]
+    r = get_charmm_positions_array()
+    mm_grms_after_pre = float(charmm_grms())
+    lattice_safe, lattice_skip_reason = mm_geometry_safe_for_pretreat_dynamics(
+        grms_kcalmol_A=mm_grms_after_pre,
+        positions=r,
+    )
     if should_run_mini_lattice_abnr(args, charmm_pbc=charmm_pbc, stages=mm_stages):
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-            sync_workflow_pbc_box_side_after_mm_pretreat,
-        )
-
-        new_side = run_mini_lattice_abnr(
-            args,
-            box_side=box_side,
-            use_pbc=charmm_pbc,
-            pretreat_restart=pretreat_restart_path,
-        )
-        if new_side is not None:
-            box_side = float(new_side)
-        if charmm_pbc and box_side is not None:
-            box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
-                box_side,
-                pretreat_restart=None,
-                args=args,
-                quiet=bool(getattr(args, "quiet", False)),
+        if lattice_safe:
+            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                sync_workflow_pbc_box_side_after_mm_pretreat,
             )
-        r = get_charmm_positions_array()
-        steps_applied.append("mini_lattice_abnr")
 
-    if should_run_mini_box_equil(
-        args,
-        charmm_pbc=charmm_pbc,
-        pretreat_mm=False,
-        stages=mm_stages,
-    ):
-        from mmml.interfaces.pycharmmInterface.mlpot.box_equil import run_mini_box_equilibration
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-            sync_workflow_pbc_box_side_after_mm_pretreat,
-        )
-
-        dt_fs = float(getattr(args, "dt_fs", 0.25))
-        timestep_ps = dt_fs * 1.0e-3
-        temp = float(getattr(args, "temperature", getattr(args, "temp", 300.0)))
-        echeck = float(getattr(args, "echeck", 100.0))
-        run_mini_box_equilibration(
-            args,
-            paths=paths,
-            timestep_ps=timestep_ps,
-            temp=temp,
-            echeck=echeck,
-            duration_ps=float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0),
-            use_pbc=charmm_pbc,
-            box_side=box_side,
-        )
-        if charmm_pbc and box_side is not None:
-            box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
-                box_side,
-                pretreat_restart=paths.get("mini_box_equil_res"),
-                args=args,
-                quiet=bool(getattr(args, "quiet", False)),
+            new_side = run_mini_lattice_abnr(
+                args,
+                box_side=box_side,
+                use_pbc=charmm_pbc,
+                pretreat_restart=pretreat_restart_path,
             )
-        r = get_charmm_positions_array()
-        steps_applied.append("mini_box_equil")
+            if new_side is not None:
+                box_side = float(new_side)
+            if charmm_pbc and box_side is not None:
+                box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
+                    box_side,
+                    pretreat_restart=None,
+                    args=args,
+                    quiet=bool(getattr(args, "quiet", False)),
+                )
+            r = get_charmm_positions_array()
+            steps_applied.append("mini_lattice_abnr")
+        elif not getattr(args, "quiet", False):
+            print(
+                f"Mini lattice ABNR: skipped — {lattice_skip_reason}",
+                flush=True,
+            )
 
     gate_summary: dict[str, Any] | None = None
     if liquid_prep_enabled(args) and atoms_per_list is not None:
@@ -491,6 +474,44 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         sync_charmm_positions(r)
         gate_summary = gate_result.to_dict()
         steps_applied.extend(gate_result.steps_applied)
+
+    if should_run_mini_box_equil(
+        args,
+        charmm_pbc=charmm_pbc,
+        pretreat_mm=False,
+        stages=mm_stages,
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            sync_workflow_pbc_box_side_after_mm_pretreat,
+        )
+
+        dt_fs = float(getattr(args, "dt_fs", 0.25))
+        timestep_ps = dt_fs * 1.0e-3
+        temp = float(getattr(args, "temperature", getattr(args, "temp", 300.0)))
+        echeck = float(getattr(args, "echeck", 100.0))
+        r = get_charmm_positions_array()
+        equil_ran = maybe_run_mini_box_equilibration(
+            args,
+            paths=paths,
+            timestep_ps=timestep_ps,
+            temp=temp,
+            echeck=echeck,
+            duration_ps=float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0),
+            use_pbc=charmm_pbc,
+            box_side=box_side,
+            grms_kcalmol_A=float(charmm_grms()),
+            positions=r,
+        )
+        if equil_ran:
+            if charmm_pbc and box_side is not None:
+                box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
+                    box_side,
+                    pretreat_restart=paths.get("mini_box_equil_res"),
+                    args=args,
+                    quiet=bool(getattr(args, "quiet", False)),
+                )
+            r = get_charmm_positions_array()
+            steps_applied.append("mini_box_equil")
     else:
         r = get_charmm_positions_array()
 
@@ -525,6 +546,16 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         worst_raw = gate_summary.get("worst_intermonomer_A")
         worst = float(worst_raw) if worst_raw is not None else None
         cert_message = str(gate_summary.get("reason", ""))
+
+    if mm_grms > MAX_MM_PRETREAT_DYNAMICS_GRMS:
+        passed = False
+        grms_msg = (
+            f"CHARMM MM GRMS {mm_grms:.1f} kcal/mol/Å exceeds safe ceiling "
+            f"{MAX_MM_PRETREAT_DYNAMICS_GRMS:.1f} — box too dense or overlaps "
+            f"persist after prep (try --profile conservative, lower density, "
+            f"or larger --box-size)"
+        )
+        cert_message = f"{cert_message}; {grms_msg}" if cert_message else grms_msg
 
     density = estimate_density_g_cm3(
         composition=comp,

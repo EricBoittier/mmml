@@ -1116,6 +1116,7 @@ def run_pre_mlpot_geometry_gate(
             quiet=quiet,
         )
         pos = new_pos
+        sync_charmm_positions(pos)
         result.steps_applied.append(step_label)
         _record_gate_step(step_label)
     except Exception as exc:
