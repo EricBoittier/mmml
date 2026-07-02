@@ -1142,8 +1142,7 @@ def load_cluster_from_artifacts(
     if not crd_path.is_file():
         raise FileNotFoundError(f"CRD not found: {crd_path}")
 
-    pycharmm = _import_pycharmm()
-    import pycharmm.read as read
+    _import_pycharmm()
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
 
@@ -1159,12 +1158,21 @@ def load_cluster_from_artifacts(
             flush=True,
         )
 
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+
     read_cgenff_toppar()
     with charmm_relaxed_bomlev():
-        read.psf_card(str(topology_psf))
+        # PSF EXT XPLOR (liquid-box model.psf) needs the Fortran C API reader;
+        # CommandScript read.psf_card can leave natom=0 silently.
+        read_psf_card_file(topology_psf)
         load_minimized_coordinates(crd_path)
     z = np.asarray(get_Z_from_psf(), dtype=int)
     r = get_charmm_positions_array()
+    if int(z.size) == 0 or int(r.shape[0]) == 0:
+        raise ValueError(
+            f"PSF/CRD load produced 0 atoms in CHARMM ({topology_psf.name}, {crd_path.name}). "
+            "Use PSF EXT XPLOR from liquid-box (model.psf) with matching model.crd."
+        )
 
     n_mol = int(getattr(args, "n_molecules", 0) or 0)
     if getattr(args, "composition", None):

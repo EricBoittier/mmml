@@ -1251,6 +1251,11 @@ def validate_cluster_geometry(
     r = np.asarray(positions, dtype=float)
     if r.ndim != 2 or r.shape[1] != 3:
         raise ValueError(f"positions must be (N, 3), got {r.shape}")
+    if r.shape[0] == 0:
+        raise ValueError(
+            "Cluster has 0 atoms after PSF/CRD load — CHARMM topology did not load "
+            "(PSF EXT XPLOR requires read_psf_card_file, not read.psf_card)."
+        )
     span = r.max(axis=0) - r.min(axis=0)
     if float(span[1]) < min_axis_span or float(span[2]) < min_axis_span:
         raise ValueError(

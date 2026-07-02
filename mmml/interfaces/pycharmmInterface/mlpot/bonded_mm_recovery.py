@@ -1148,7 +1148,11 @@ def _reload_pre_mlpot_topology(
         pycharmm.lingo.charmm_script(
             "DELETE ATOM SELE ALL END\nDELETE PSF SELE ALL END"
         )
-        read.psf_card(str(Path(topology_psf).expanduser().resolve()))
+        from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+            read_psf_card_file,
+        )
+
+        read_psf_card_file(Path(topology_psf).expanduser().resolve())
     sync_charmm_positions(current_positions)
     charmm_side = getattr(ctx, "charmm_cubic_box_side_A", None) or (
         ctx.cubic_box_side_A if ctx.use_pbc else None

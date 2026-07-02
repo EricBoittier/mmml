@@ -119,6 +119,10 @@ def main(argv: list[str] | None = None) -> int:
     ckpt_root = out / "checkpoints"
     ckpt_json = out / f"{tag}_params.json"
     restart: str | None = None
+    existing = _latest_run_dir(ckpt_root, tag)
+    if existing is not None:
+        restart = str(existing)
+        print(f"Resuming training run {restart}", flush=True)
     history: list[dict] = []
 
     for round_idx in range(1, int(args.max_rounds) + 1):
@@ -148,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
         if epoch_dir is None:
             raise RuntimeError(f"No orbax epoch found under {ckpt_root}")
         _export_json(epoch_dir, ckpt_json)
-        restart = str(epoch_dir)
+        restart = str(run_dir)
 
         eval_dir = out / "eval" / f"round_{round_idx:02d}"
         metrics = _evaluate(ckpt_json, valid_npz, eval_dir)
