@@ -30,11 +30,13 @@ seed_base: 4242
 
 dt_fs: 0.25
 pressure: 1.0
-# Prep sweep winners: spacing50 + mm_vdw_off (tighter lattice, no periodic CHARMM VDW).
+# Prep sweep winners: spacing50 + mm_vdw_off + jax_mic nonbond + CHARMM pretreat.
 spacing: 5.0
 periodic_charmm_vdw: false
 packmol_tolerance: 2.0
 packmol_box_padding: 1.0
+mm_nonbond_mode: jax_mic
+charmm_mm_pretreat: true
 
 # Stricter pre-dynamics GRMS gate (do not scale up with bad per-monomer stats).
 no_scale_max_grms: true
@@ -56,6 +58,7 @@ min_intermonomer_atom_distance: 1.2
 
 # Heat DCD cadence (lower nsavc = more frequent frames; dcd25 winner on anchor).
 dcd_nsavc: 25
+dyn_inbfrq: -1
 
 # Resilient density prep (merged into resilient setup; reinforces variant defaults).
 liquid_prep: true
