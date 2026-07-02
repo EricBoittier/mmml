@@ -7773,13 +7773,16 @@ def minimize_with_mlpot(
                         note="post calculator pre-minimize",
                         quiet=False,
                     )
+        # Rewrap BEFORE materialize/ENER-prime so the ENER prime builds nonbond
+        # lists from the corrected positions.  Moving it after would leave the
+        # lists populated with 0-Å boundary contacts (MKIMAT2 Min-Distance=0),
+        # causing a spurious GRMS spike at the first inter-chunk UPDATE.
+        _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose, context="Pre-SD")
         if config.mlpot_ctx is not None:
             materialize_deferred_mlpot_jax_before_sd(
                 config.mlpot_ctx,
                 verbose=config.verbose,
             )
-        # Fix any atoms that drifted outside [-L/2, L/2] during MM pre-minimize.
-        _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose, context="Pre-SD")
         with charmm_mlpot_sd_jax_cpu_guard(pyC_model):
             sd_result = _run_mlpot_sd_then_abnr(
                 minimize,
