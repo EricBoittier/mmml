@@ -112,7 +112,7 @@ prep_sweep:
   variants:
     baseline: {}
     dt050:
-      dt_fs: 0.5
+      dt_fs: 0.05
     pmtol25:
       packmol_tolerance: 2.5
     pmtol30:
