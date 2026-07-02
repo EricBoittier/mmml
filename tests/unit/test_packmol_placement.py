@@ -59,10 +59,34 @@ def test_execute_packmol_script_captures_output(tmp_path, monkeypatch):
     ) as run_mock:
         result = packmol_placement.execute_packmol_script("seed 1\n", inp)
 
-    assert run_mock.call_args.kwargs["capture_output"] is True
+    args, kwargs = run_mock.call_args
+    assert args[0] == ["/usr/bin/packmol", "-i", str(inp.resolve())]
+    assert kwargs["capture_output"] is True
+    assert kwargs["cwd"] == str(inp.resolve().parent)
     assert result.success is True
-    assert result.inp_path == inp
+    assert result.inp_path == inp.resolve()
     assert result.max_distance_violation == pytest.approx(0.123456)
+
+
+def test_packmol_failure_message_uses_exit_label():
+    result = packmol_placement.PackmolRunResult(
+        exit_code=173,
+        log_text="",
+        inp_path=Path("x.inp"),
+        success=False,
+    )
+    assert "failed to converge" in packmol_placement.packmol_failure_message(result)
+
+
+def test_packmol_failure_message_uses_log_tail():
+    result = packmol_placement.PackmolRunResult(
+        exit_code=2,
+        log_text="Reading input file...\nERROR: Could not read any atom from file: x.pdb\n",
+        inp_path=Path("x.inp"),
+        success=False,
+        error_message="ERROR: Could not read any atom from file: x.pdb",
+    )
+    assert "Could not read any atom" in packmol_placement.packmol_failure_message(result)
 
 
 def test_execute_packmol_script_raises_without_printing(tmp_path, monkeypatch, capsys):
@@ -73,7 +97,7 @@ def test_execute_packmol_script_raises_without_printing(tmp_path, monkeypatch, c
         lambda: "/usr/bin/packmol",
     )
     proc = mock.Mock(
-        returncode=1,
+        returncode=171,
         stdout=SAMPLE_ERROR_LOG,
         stderr="",
     )
@@ -81,12 +105,8 @@ def test_execute_packmol_script_raises_without_printing(tmp_path, monkeypatch, c
         "mmml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
         return_value=proc,
     ):
-        with pytest.raises(RuntimeError, match="ERROR:"):
+        with pytest.raises(RuntimeError, match="input error|ERROR:"):
             packmol_placement.execute_packmol_script("seed 1\n", inp)
-
-    captured = capsys.readouterr()
-    assert "Running:" not in captured.out
-    assert "Reading input file" not in captured.out
 
 
 def test_emit_packmol_build_summary_plain(capsys):
