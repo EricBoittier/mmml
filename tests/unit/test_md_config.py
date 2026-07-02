@@ -178,3 +178,47 @@ def test_parse_md_system_args_applies_defaults_block(tmp_path: Path) -> None:
     assert args.no_echeck_heat is True
     assert args.composition == "DCM:52"
 
+
+def test_merge_campaign_job_config_resolves_mmml_ckpt(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from mmml.cli.run.md_config import merge_campaign_job_config
+
+    ckpt = tmp_path / "ckpt.json"
+    ckpt.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    campaign = {
+        "defaults": {"checkpoint": "${MMML_CKPT}", "composition": "DCM:10"},
+        "runs": {"mini": {"backend": "pycharmm", "md_stages": "mini"}},
+    }
+    merged = merge_campaign_job_config(campaign, "mini")
+    assert merged["checkpoint"] == str(ckpt.resolve())
+
+
+def test_parse_md_system_args_resolves_campaign_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from mmml.cli.run.md_system import parse_md_system_args
+
+    ckpt = tmp_path / "params.json"
+    ckpt.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    cfg = tmp_path / "campaign.yaml"
+    cfg.write_text(
+        textwrap.dedent(
+            """
+            defaults:
+              checkpoint: ${MMML_CKPT}
+              composition: DCM:52
+            runs:
+              pycharmm_mini:
+                backend: pycharmm
+                md_stages: mini
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    args = parse_md_system_args(["--config", str(cfg), "--run-all"])
+    assert Path(args.checkpoint).resolve() == ckpt.resolve()
+

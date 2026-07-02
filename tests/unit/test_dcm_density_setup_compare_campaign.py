@@ -147,6 +147,16 @@ def test_setup_variants_known_ids() -> None:
         assert v.description
 
 
+def test_build_campaign_resolves_mmml_ckpt(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, cfg: dict, cell: RunCell) -> None:
+    ckpt = tmp_path / "params.json"
+    ckpt.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    cfg = dict(cfg)
+    cfg["checkpoint"] = "${MMML_CKPT}"
+    campaign = build_campaign(cfg, cell)
+    assert campaign["defaults"]["checkpoint"] == str(ckpt.resolve())
+
+
 def test_build_md_system_campaign_argv(tmp_path: Path, cfg: dict, cell: RunCell) -> None:
     cfg = dict(cfg)
     cfg["output_root"] = str(tmp_path / "out")
