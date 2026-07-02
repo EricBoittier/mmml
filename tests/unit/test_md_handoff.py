@@ -382,6 +382,48 @@ def test_align_handoff_positions_for_charmm_pbc_shifts_jaxmd_wrap():
     assert not np.allclose(aligned, pos)
 
 
+def test_align_fresh_cluster_positions_for_charmm_pbc_from_mc_recipe():
+    from mmml.cli.run.md_handoff import (
+        align_fresh_cluster_positions_for_charmm_pbc,
+        cluster_positions_use_jaxmd_primary_cell_frame,
+    )
+
+    L = 80.0
+    pos = np.zeros((10, 3), dtype=float)
+    pos[:, 0] = np.linspace(10.0, 70.0, 10)
+    pos[:, 1] = 40.0
+    pos[:, 2] = 40.0
+    assert cluster_positions_use_jaxmd_primary_cell_frame(pos, L)
+    aligned = align_fresh_cluster_positions_for_charmm_pbc(
+        pos,
+        atoms_per_list=[5, 5],
+        box_side_A=L,
+        quiet=True,
+    )
+    assert np.all(aligned[:, 0] >= -0.5 * L - 1.0e-6)
+    assert np.all(aligned[:, 0] <= 0.5 * L + 1.0e-6)
+    assert np.allclose(aligned.mean(axis=0), 0.0, atol=1.0)
+
+
+def test_align_fresh_cluster_skips_origin_centered_packmol():
+    from mmml.cli.run.md_handoff import (
+        align_fresh_cluster_positions_for_charmm_pbc,
+        cluster_positions_use_jaxmd_primary_cell_frame,
+    )
+
+    L = 80.0
+    pos = np.zeros((6, 3), dtype=float)
+    pos[:, 0] = np.linspace(-20.0, 20.0, 6)
+    assert not cluster_positions_use_jaxmd_primary_cell_frame(pos, L)
+    aligned = align_fresh_cluster_positions_for_charmm_pbc(
+        pos,
+        atoms_per_list=[3, 3],
+        box_side_A=L,
+        quiet=True,
+    )
+    assert np.allclose(aligned, pos)
+
+
 def test_align_handoff_positions_skips_pycharmm_handoff():
     from mmml.cli.run.md_handoff import (
         MdHandoffState,
