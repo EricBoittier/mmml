@@ -297,20 +297,61 @@ def prepare_rescue_lists_safe(
     *,
     context: str = "bonded-MM rescue",
 ) -> None:
-    """Refresh pair lists with ``UPDATE`` only (no ``upinb`` / ``update_bnbnd``).
+    """Refresh pair lists before bonded-MM ``ENER`` (PBC-aware).
 
-    For bonded+VDW rescue on hybrid systems, call :func:`apply_recovery_nbonds`
-    before BLOCK setup — ``NBXMOD`` changes require ``upinb``, which segfaults on
-    large all-ML PBC clusters.
+    After ``unset()`` / ``READ PARAM APPEND``, CHARMM runs ``crystal free`` and
+    IMAGE lists are stale.  A bare ``UPDATE`` on all-ML PBC clusters then
+    segfaults in ``enbav2e2b2_`` (force-switched IMAGE VDW).  When
+    ``ctx.use_pbc`` is set, rebuild crystal + ML exclusions via
+    :func:`~mmml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read`
+    instead of a vacuum ``UPDATE``.
+
+    Vacuum clusters use scripting ``UPDATE`` only (no ``update_bnbnd`` / ``upinb``).
     """
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         assert_bonded_mm_energy_active,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
+        maybe_snapshot_nbond_state,
     )
 
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+
+    maybe_snapshot_nbond_state(ctx, context=f"{context} (pre-list-refresh)")
+
+    if bool(getattr(ctx, "use_pbc", False)) and ctx.ml_selection is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            _finalize_pbc_mlpot_exclusions_after_param_read,
+            _resolve_mlpot_ctx_pbc_box_side,
+        )
+
+        side = _resolve_mlpot_ctx_pbc_box_side(ctx)
+        if side is not None:
+            _finalize_pbc_mlpot_exclusions_after_param_read(
+                ctx.ml_selection,
+                cubic_box_side_A=float(side),
+                verbose=False,
+            )
+            try:
+                assert_bonded_mm_energy_active(context=context)
+            except RuntimeError:
+                pre_iblo = getattr(ctx, "pre_mlpot_iblo", None)
+                pre_inb = getattr(ctx, "pre_mlpot_inb", None)
+                if pre_iblo is not None and pre_inb is not None:
+                    import pycharmm.psf as psf
+
+                    psf.set_iblo_inb_no_update(pre_iblo, pre_inb)
+                    with charmm_relaxed_bomlev():
+                        pycharmm.lingo.charmm_script("UPDATE")
+                    assert_bonded_mm_energy_active(
+                        context=f"{context} (restored pre-MLpot iblo/inb)"
+                    )
+                else:
+                    raise
+            return
 
     with charmm_relaxed_bomlev():
         pycharmm.lingo.charmm_script("UPDATE")
@@ -330,7 +371,11 @@ def prepare_rescue_lists_safe(
             raise
 
 
-def _apply_recovery_block(mode: BondedRecoveryMode) -> None:
+def _apply_recovery_block(
+    mode: BondedRecoveryMode,
+    *,
+    restore_params: bool = True,
+) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
         apply_bonded_mm_only_block,
         apply_bonded_vdw_recovery_block,
@@ -338,11 +383,22 @@ def _apply_recovery_block(mode: BondedRecoveryMode) -> None:
     )
 
     if mode == BondedRecoveryMode.BONDED_ONLY:
-        apply_bonded_mm_only_block()
+        apply_bonded_mm_only_block(restore_params=restore_params)
     elif mode == BondedRecoveryMode.BONDED_VDW:
-        apply_bonded_vdw_recovery_block()
+        if restore_params:
+            apply_bonded_vdw_recovery_block()
+        else:
+            raise ValueError(
+                "BONDED_VDW recovery requires CGENFF param restore; "
+                "call with restore_params=True"
+            )
     elif mode == BondedRecoveryMode.FULL_MM:
-        apply_charmm_mm_block()
+        if restore_params:
+            apply_charmm_mm_block()
+        else:
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block
+
+            reset_block()
     else:
         raise ValueError(f"unknown BondedRecoveryMode: {mode!r}")
 
@@ -458,7 +514,7 @@ def measure_mm_strain_inplace(
     *,
     topology_psf: PathLike | None = None,
 ) -> "MmStrainBaseline":
-    """Measure MM bonded strain with full MM BLOCK and MLpot detached (no PSF reload)."""
+    """Measure MM bonded strain with bonded-only BLOCK and MLpot detached (no PSF reload)."""
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import MmStrainBaseline
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -479,7 +535,9 @@ def measure_mm_strain_inplace(
     )
 
     def _measure() -> MmStrainBaseline:
-        _apply_recovery_block(BondedRecoveryMode.FULL_MM)
+        # unset() already restored CGENFF via apply_charmm_mm_block; avoid a second
+        # READ PARAM APPEND (crystal free) before list refresh.
+        _apply_recovery_block(BondedRecoveryMode.BONDED_ONLY, restore_params=False)
         prepare_rescue_lists_safe(ctx, context="MM strain measurement")
         run_charmm_script_quiet("ENER")
         return MmStrainBaseline(

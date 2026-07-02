@@ -101,11 +101,10 @@ def apply_full_cgenff_params(*, verbose: bool = False) -> None:
     before any bonded-MM recovery or strain measurement.
 
     In PBC context, ``READ PARAM APPEND`` calls ``suspend_pbc_before_cgenff_param_append``
-    (``crystal free``) then CHARMM's parameter reader, which clears IMAGE lists.
-    ``_finalize_pbc_mlpot_exclusions_after_param_read`` (called by
-    ``reregister_mlpot``) rebuilds crystal + lists via ``CHARMM UPDATE`` — the
-    scripting-layer UPDATE is safe even after long SD, unlike ``update_bnbnd``/
-    ``upinb`` which segfaults on all-ML PBC clusters post-SD.
+    (``crystal free``) and clears IMAGE tables.  Callers that run ``UPDATE`` afterward
+    must rebuild crystal + ML exclusions first (see
+    ``_finalize_pbc_mlpot_exclusions_after_param_read`` /
+    :func:`~mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe`).
     """
     global _active_mode
     path = bonded_cgenff_prm_path()

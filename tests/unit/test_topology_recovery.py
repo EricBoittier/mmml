@@ -228,6 +228,7 @@ def test_prepare_rescue_lists_safe_update_only_no_upinb():
 
     mock_py = MagicMock()
     ctx = MagicMock()
+    ctx.use_pbc = False
     ctx.pre_mlpot_iblo = None
     ctx.pre_mlpot_inb = None
     with patch.dict(
@@ -239,9 +240,46 @@ def test_prepare_rescue_lists_safe_update_only_no_upinb():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.assert_bonded_mm_energy_active",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ):
         prepare_rescue_lists_safe(ctx, context="test")
     mock_py.UpdateNonBondedScript.assert_not_called()
     mock_py.lingo.charmm_script.assert_called_with("UPDATE")
+
+
+def test_prepare_rescue_lists_safe_pbc_uses_finalize_not_bare_update():
+    import sys
+
+    from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+        prepare_rescue_lists_safe,
+    )
+
+    mock_py = MagicMock()
+    ctx = MagicMock()
+    ctx.use_pbc = True
+    ctx.ml_selection = MagicMock()
+    ctx.cubic_box_side_A = 28.894
+    ctx.pre_mlpot_iblo = None
+    ctx.pre_mlpot_inb = None
+    with patch.dict(
+        sys.modules,
+        {
+            "pycharmm": mock_py,
+            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.assert_bonded_mm_energy_active",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._resolve_mlpot_ctx_pbc_box_side",
+        return_value=28.894,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._finalize_pbc_mlpot_exclusions_after_param_read",
+    ) as finalize:
+        prepare_rescue_lists_safe(ctx, context="test-pbc")
+    finalize.assert_called_once()
+    mock_py.lingo.charmm_script.assert_not_called()

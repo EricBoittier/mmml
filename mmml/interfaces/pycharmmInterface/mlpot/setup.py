@@ -1560,11 +1560,9 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     pycharmm = _import_pycharmm()
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
 
-    # Use the CHARMM scripting-layer UPDATE rather than pycharmm.nbonds.update_bnbnd()
-    # (upinb).  Both rebuild pair lists, but update_bnbnd() segfaults on all-ML PBC
-    # clusters after long SD (enbav2e2b2_ crash in force-switched VDW code).  The
-    # scripting UPDATE goes through CHARMM's command dispatch with safety guards and
-    # is the same path used by prepare_rescue_lists_safe(), which is known to be safe.
+    # Rebuild pair lists after ML exclusions are installed.  Use scripting UPDATE
+    # (not pycharmm.nbonds.update_bnbnd) and only after prepare_charmm_pbc +
+    # apply_pbc_nbonds — bare UPDATE after crystal free segfaults in IMAGE VDW.
     with charmm_relaxed_bomlev():
         with charmm_quiet_output():
             pycharmm.lingo.charmm_script("UPDATE")

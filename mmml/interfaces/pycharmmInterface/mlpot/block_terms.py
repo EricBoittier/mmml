@@ -163,13 +163,18 @@ def apply_charmm_mm_block(*, verbose: bool = False) -> None:
     reset_block()
 
 
-def apply_bonded_mm_only_block(*, verbose: bool = False) -> None:
+def apply_bonded_mm_only_block(
+    *,
+    verbose: bool = False,
+    restore_params: bool = True,
+) -> None:
     """Bonded MM terms only (BOND/ANGL/DIHE); zero VDW/ELEC for geometry recovery."""
-    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
-        apply_full_cgenff_params,
-    )
+    if restore_params:
+        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+            apply_full_cgenff_params,
+        )
 
-    apply_full_cgenff_params(verbose=verbose)
+        apply_full_cgenff_params(verbose=verbose)
     block = """BLOCK
 CALL 1 SELE ALL END
 COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 0.0
