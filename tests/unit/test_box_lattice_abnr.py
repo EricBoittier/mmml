@@ -142,6 +142,7 @@ def test_run_charmm_lattice_abnr_reinstalls_before_box_only_when_crystal_looks_r
         27.307,
         quiet=True,
         allow_prepare_pbc=True,
+        force=True,
     )
 
 
@@ -188,6 +189,7 @@ def test_run_charmm_lattice_abnr_uses_fallback_when_pbound_inactive():
         35.0,
         quiet=True,
         allow_prepare_pbc=True,
+        force=False,
     )
     resolve_side.assert_called_once_with(
         fallback_side_A=35.0,
@@ -235,6 +237,7 @@ def test_run_charmm_lattice_abnr_skips_restart_when_crystal_active():
         35.0,
         quiet=True,
         allow_prepare_pbc=True,
+        force=False,
     )
     resolve_side.assert_called_once_with(
         fallback_side_A=35.0,

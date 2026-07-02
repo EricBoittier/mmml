@@ -442,6 +442,7 @@ def reinstall_charmm_crystal_for_lattice_abnr(
     nbxmod: int = 5,
     quiet: bool = False,
     allow_prepare_pbc: bool = True,
+    force: bool = False,
 ) -> float:
     """Reinstall CRYSTAL/IMAGE before LATT ABNR (avoids singular ``XTLABC`` in ``MBUILD``).
 
@@ -451,12 +452,15 @@ def reinstall_charmm_crystal_for_lattice_abnr(
     :func:`restore_charmm_cubic_crystal_lattice` (no ``pbcset``) can still leave
     ``charmm_crystal_lattice_ready()`` true while ``MBUILD`` dies on a singular
     metric — lattice ABNR therefore uses full :func:`prepare_charmm_pbc` when safe.
+
+    Set ``force=True`` before box-only (``NOCO``) lattice ABNR: the readiness probe
+    can stay true while ``MBUILD`` still sees a singular metric after coords+box work.
     """
     side = float(cubic_box_side_A)
     if side <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {side}")
 
-    if charmm_crystal_abnr_ready(side):
+    if not force and charmm_crystal_abnr_ready(side):
         return side
 
     if allow_prepare_pbc:

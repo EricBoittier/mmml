@@ -102,6 +102,7 @@ def run_charmm_lattice_abnr(
                 float(restore_side),
                 quiet=not verbose,
                 allow_prepare_pbc=bool(allow_prepare_pbc),
+                force=bool(nocoords),
             )
     if verbose:
         mode = "box only" if nocoords else "coords + box"

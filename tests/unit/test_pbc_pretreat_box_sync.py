@@ -385,6 +385,32 @@ def test_reinstall_charmm_crystal_for_lattice_abnr_restore_only_when_prepare_dis
     mock_prepare.assert_not_called()
 
 
+def test_reinstall_charmm_crystal_for_lattice_abnr_force_skips_ready_shortcut() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        reinstall_charmm_crystal_for_lattice_abnr,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+        side_effect=[True],
+    ) as mock_ready, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
+    ) as mock_prepare, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env._free_charmm_crystal_if_available",
+        return_value=True,
+    ):
+        side = reinstall_charmm_crystal_for_lattice_abnr(
+            28.5,
+            quiet=True,
+            force=True,
+        )
+    assert side == pytest.approx(28.5)
+    mock_ready.assert_called_once_with(28.5)
+    mock_prepare.assert_called_once_with(28.5)
+
+
 def test_reinstall_charmm_crystal_for_lattice_abnr_raises_without_prepare() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         reinstall_charmm_crystal_for_lattice_abnr,
