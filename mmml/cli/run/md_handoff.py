@@ -870,6 +870,43 @@ def handoff_needs_jaxmd_pbc_alignment(handoff: MdHandoffState) -> bool:
     return str(meta.get("backend", "")).strip().lower() == "pycharmm"
 
 
+def cluster_positions_use_jaxmd_primary_cell_frame(
+    positions: np.ndarray,
+    box_side_A: float,
+) -> bool:
+    """True when the cluster COM sits near ``(L/2, L/2, L/2)`` (MC / jaxmd recipe)."""
+    com = np.asarray(positions, dtype=float).mean(axis=0)
+    L = float(box_side_A)
+    if L <= 0.0:
+        return False
+    tol = 0.35 * L
+    target = 0.5 * L
+    return bool(np.all(np.abs(com - target) < tol))
+
+
+def align_fresh_cluster_positions_for_charmm_pbc(
+    positions: np.ndarray,
+    *,
+    atoms_per_list: list[int],
+    box_side_A: float,
+    quiet: bool = False,
+) -> np.ndarray:
+    """Map fresh Packmol/MC coords in ``[0, L)`` to CHARMM image-centered frame."""
+    if not cluster_positions_use_jaxmd_primary_cell_frame(positions, box_side_A):
+        return np.asarray(positions, dtype=np.float64)
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
+    )
+
+    offsets = monomer_offsets_from_atoms_per(atoms_per_list)
+    return align_handoff_positions_for_charmm_pbc(
+        positions,
+        monomer_offsets=offsets,
+        box_side_A=float(box_side_A),
+        quiet=quiet,
+    )
+
+
 def align_handoff_positions_for_charmm_pbc(
     positions: np.ndarray,
     *,

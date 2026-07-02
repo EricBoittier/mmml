@@ -384,6 +384,18 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         if mc_result.ran:
             steps_applied.append("mc_density_equalize")
 
+    if charmm_pbc and box_side is not None and atoms_per_list is not None:
+        from mmml.cli.run.md_handoff import (
+            align_fresh_cluster_positions_for_charmm_pbc,
+        )
+
+        r = align_fresh_cluster_positions_for_charmm_pbc(
+            r,
+            atoms_per_list=list(atoms_per_list),
+            box_side_A=float(box_side),
+            quiet=bool(getattr(args, "quiet", False)),
+        )
+
     mini_nprint = apply_charmm_output_from_args(args)
     setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)

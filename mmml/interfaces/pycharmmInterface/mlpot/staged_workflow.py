@@ -1419,6 +1419,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     f"MC density equalization: skipped ({mc_density_summary.reason})",
                     flush=True,
                 )
+    if (
+        charmm_pbc
+        and box_side is not None
+        and handoff_in is None
+        and atoms_per_list is not None
+    ):
+        from mmml.cli.run.md_handoff import (
+            align_fresh_cluster_positions_for_charmm_pbc,
+        )
+
+        r = align_fresh_cluster_positions_for_charmm_pbc(
+            r,
+            atoms_per_list=list(atoms_per_list),
+            box_side_A=float(box_side),
+            quiet=bool(args.quiet),
+        )
     if charmm_pbc and not args.quiet:
         from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
             parse_composition_dict,
