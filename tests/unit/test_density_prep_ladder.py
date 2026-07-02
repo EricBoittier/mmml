@@ -532,3 +532,71 @@ def test_build_pycharmm_command_forwards_density_prep_flags():
     assert "5" in cmd
     assert "--density-prep-lattice-abnr-steps" in cmd
     assert "150" in cmd
+
+
+def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch):
+    """Initial overlap (e.g. after mini lattice ABNR) must not abort before repack."""
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        run_pre_mlpot_geometry_gate,
+    )
+
+    args = _args(liquid_prep=True, pre_mlpot_overlap_min_distance=1.0)
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    repacked = pos.copy()
+    repacked[1] = [5.0, 0.0, 0.0]
+    repacked[3] = [15.0, 0.0, 0.0]
+    contexts: list[str] = []
+
+    def _fake_assert(_pos, _atoms_per_list, *, min_distance_A, box_side, use_pbc, context):
+        contexts.append(context)
+        if "initial" in context:
+            raise RuntimeError("inter-monomer atom overlap detected")
+        return 2.5
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        _fake_assert,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._step_monomer_repack",
+        lambda *_a, **_kw: repacked.copy(),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder._sync_pbc_after_box_change",
+        lambda **_kw: 20.0,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda _arr: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.recovery_progress.RecoveryProgressStore.for_prep_ladder",
+        lambda *_a, **_kw: None,
+    )
+
+    out_pos, side, summary = run_pre_mlpot_geometry_gate(
+        args,
+        positions=pos,
+        atoms_per_list=[2, 2],
+        composition={"DCM": 2},
+        box_side=20.0,
+        charmm_pbc=False,
+        n_mol=2,
+        n_atoms=4,
+    )
+
+    assert "Pre-MLpot gate (initial)" in contexts
+    assert "Pre-MLpot gate (final)" in contexts
+    assert summary.reason == "ok"
+    assert not summary.aborted
+    assert "pre_mlpot:monomer_repack" in summary.steps_applied
+    assert np.allclose(out_pos, repacked)
+    assert side == 20.0

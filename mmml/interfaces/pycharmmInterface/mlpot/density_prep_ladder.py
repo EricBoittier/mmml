@@ -1087,14 +1087,20 @@ def run_pre_mlpot_geometry_gate(
             context="Pre-MLpot gate (initial)",
         )
         result.worst_intermonomer_A = float(worst)
+        _record_gate_step(
+            "initial",
+            note=f"worst inter-monomer {result.worst_intermonomer_A:.3f} Å",
+        )
     except RuntimeError as exc:
-        result.aborted = True
-        result.reason = "overlap_abort"
-        raise RuntimeError(
-            f"{exc}\nPre-MLpot geometry gate: rebuild the box (Packmol/MC) or "
-            f"increase spacing before MLpot registration."
-        ) from exc
-    _record_gate_step("initial", note=f"worst inter-monomer {result.worst_intermonomer_A:.3f} Å")
+        # Lattice ABNR / box sync can introduce overlaps after a clean Packmol build;
+        # run the preventive ladder instead of aborting before repack/MC can repair.
+        if not quiet:
+            print(
+                f"WARN: {exc}\nPre-MLpot geometry gate: initial overlap; "
+                "running preventive ladder before MLpot registration.",
+                flush=True,
+            )
+        _record_gate_step("initial", note="overlap before ladder")
 
     step_label = "pre_mlpot:monomer_repack"
     try:
