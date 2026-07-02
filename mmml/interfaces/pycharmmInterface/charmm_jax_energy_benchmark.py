@@ -375,26 +375,59 @@ def perturb_positions(positions: np.ndarray, *, seed: int = 19, scale: float = 0
     return np.asarray(positions, dtype=np.float64) + rng.normal(scale=scale, size=positions.shape)
 
 
-def load_tip3_monomer_from_charmm() -> tuple[Path, np.ndarray]:
-    """Build CGENFF TIP3 via ``setupRes`` (same path as functionality tests)."""
-    from pathlib import Path
+def load_tip3_monomer_from_charmm(
+    *,
+    workdir: Path | None = None,
+) -> tuple[Path, np.ndarray]:
+    """Load CGENFF TIP3 PSF + coordinates from the committed functionality fixture.
 
+    Uses ``tests/functionality/pycharmmETC/pdb/initial.pdb`` (real CHARMM-minimized
+    TIP3) instead of ``setupRes.generate_coordinates()`` so the benchmark is fast
+    and does not depend on live minimization.
+    """
+    import pycharmm.generate as generate
+    import pycharmm.read as read
+    import pycharmm.settings as settings
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface import setupRes
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import charmm_positions_xyz_array
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+        charmm_positions_xyz_array,
+        read_pdb_file,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        reset_block,
-        reset_block_no_internal,
+        CGENFF_PRM,
+        CGENFF_RTF,
+        crystal_free_charmm_for_param_append,
+        pycharmm,
     )
 
-    setupRes.main("TIP3")
-    setupRes.generate_coordinates()
-    reset_block()
-    reset_block_no_internal()
-    reset_block()
-    psf_path = Path("psf/tip3-1.psf")
+    fixture_pdb = (
+        Path(__file__).resolve().parents[3]
+        / "tests"
+        / "functionality"
+        / "pycharmmETC"
+        / "pdb"
+        / "initial.pdb"
+    )
+    if not fixture_pdb.is_file():
+        raise FileNotFoundError(f"Missing TIP3 fixture PDB: {fixture_pdb}")
+
+    out_dir = Path(workdir or Path.cwd())
+    out_dir.mkdir(parents=True, exist_ok=True)
+    psf_path = out_dir / "tip3-1.psf"
+
+    crystal_free_charmm_for_param_append()
+    pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+    with charmm_relaxed_bomlev():
+        read.rtf(CGENFF_RTF)
+        read.prm(CGENFF_PRM)
+    settings.set_verbosity(0)
+    read.sequence_string("TIP3")
+    generate.new_segment(seg_name="TIP3", setup_ic=False)
+    read_pdb_file(fixture_pdb, resid=True)
     write.psf_card(str(psf_path))
+
     return psf_path.resolve(), charmm_positions_xyz_array()
 
 
@@ -492,10 +525,11 @@ def run_tip3_monomer_benchmark(
     *,
     seed: int = 11,
     prm_path: Path | str | None = None,
+    workdir: Path | None = None,
 ) -> SystemBenchmark:
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 
-    psf_path, positions = load_tip3_monomer_from_charmm()
+    psf_path, positions = load_tip3_monomer_from_charmm(workdir=workdir)
     pos = perturb_positions(positions, seed=seed, scale=0.02)
     prm = prm_path or CGENFF_PRM
     bonded = benchmark_bonded_layer(pos, psf_path, prm_path=prm)

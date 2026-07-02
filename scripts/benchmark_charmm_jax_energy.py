@@ -77,7 +77,9 @@ def main() -> int:
     results = []
     if "tip3_monomer" in selected:
         print("Benchmarking tip3_monomer (bonded)...", flush=True)
-        results.append(run_tip3_monomer_benchmark(seed=args.seed))
+        results.append(
+            run_tip3_monomer_benchmark(seed=args.seed, workdir=workdir / "tip3_monomer")
+        )
 
     if "tip3_water_box" in selected:
         print("Benchmarking tip3_water_box (bonded + nonbonded + total)...", flush=True)

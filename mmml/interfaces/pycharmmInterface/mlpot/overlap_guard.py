@@ -269,7 +269,7 @@ def _truthy_env(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
 
 
-def resolve_overlap_memory_handoff(args: argparse.Namespace) -> bool:
+def resolve_overlap_memory_handoff(args: argparse.Namespace | Any | None) -> bool:
     """Whether overlap chunks continue in-process without ``READYN`` on scratch restarts.
 
     Explicit ``--dynamics-overlap-memory-handoff`` always wins.  Otherwise default on
@@ -323,82 +323,122 @@ def overlap_config_for_stage(
     return replace(overlap, check_interval=n)
 
 
+def _workflow_arg(args: Any | None, name: str, default: Any = None) -> Any:
+    """Read a workflow CLI/config attribute; tolerate ``args is None``."""
+    if args is None:
+        return default
+    return getattr(args, name, default)
+
+
+def _workflow_arg_int(args: Any | None, name: str, default: int) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        _safe_int,
+    )
+
+    return _safe_int(_workflow_arg(args, name, default), default)
+
+
+def _workflow_arg_float(args: Any | None, name: str, default: float) -> float:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        _safe_float,
+    )
+
+    return _safe_float(_workflow_arg(args, name, default), default)
+
+
+def _optional_positive_float(args: Any | None, name: str) -> float | None:
+    raw = _workflow_arg(args, name, None)
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0.0 else None
+
+
 def resolve_dynamics_overlap_config(
-    args: argparse.Namespace,
+    args: argparse.Namespace | Any | None,
     *,
     n_monomers: int,
     use_pbc: bool,
     fallback_box_side_A: float | None = None,
 ) -> DynamicsOverlapConfig:
-    action = str(
-        getattr(args, "dynamics_overlap_action", "rescue")
-    ).lower()
+    action = str(_workflow_arg(args, "dynamics_overlap_action", "rescue") or "rescue").lower()
     if action not in ("error", "warn", "rescue", "off"):
         raise ValueError(f"unknown dynamics_overlap_action: {action!r}")
 
-    min_dist = getattr(args, "dynamics_overlap_min_distance", None)
+    min_dist = _workflow_arg(args, "dynamics_overlap_min_distance", None)
     if min_dist is None:
-        min_dist = getattr(args, "min_intermonomer_atom_distance", 1.5)
+        min_distance_A = _workflow_arg_float(args, "min_intermonomer_atom_distance", 1.5)
+    else:
+        min_distance_A = _workflow_arg_float(args, "dynamics_overlap_min_distance", 1.5)
 
-    interval = int(getattr(args, "dynamics_overlap_check_interval", 100))
+    interval = _workflow_arg_int(args, "dynamics_overlap_check_interval", 100)
     if use_pbc and fallback_box_side_A is None:
-        box_size = getattr(args, "box_size", None)
+        box_size = _workflow_arg(args, "box_size", None)
         if box_size is not None:
-            fallback_box_side_A = float(box_size)
+            fallback_box_side_A = _workflow_arg_float(args, "box_size", 0.0)
     rescue = OverlapRescueConfig(
-        nstep_sd=int(getattr(args, "dynamics_overlap_charmm_sd_steps", 200)),
-        nstep_abnr=int(getattr(args, "dynamics_overlap_charmm_abnr_steps", 400)),
-        nprint=max(1, int(getattr(args, "dyn_nprint", 50))),
-        tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
-        tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
-        verbose=not bool(getattr(args, "quiet", False)),
+        nstep_sd=_workflow_arg_int(args, "dynamics_overlap_charmm_sd_steps", 200),
+        nstep_abnr=_workflow_arg_int(args, "dynamics_overlap_charmm_abnr_steps", 400),
+        nprint=max(1, _workflow_arg_int(args, "dyn_nprint", 50)),
+        tolenr=_workflow_arg_float(args, "charmm_tolenr", 1e-3),
+        tolgrd=_workflow_arg_float(args, "charmm_tolgrd", 1e-3),
+        verbose=not bool(_workflow_arg(args, "quiet", False)),
     )
+    intra_raw = _workflow_arg(args, "dynamics_intra_min_distance", None)
+    if intra_raw is None:
+        intra_min_distance_A = float(DEFAULT_INTRA_MIN_DISTANCE_A)
+    else:
+        intra_min_distance_A = _workflow_arg_float(
+            args,
+            "dynamics_intra_min_distance",
+            DEFAULT_INTRA_MIN_DISTANCE_A,
+        )
+    extent_raw = _workflow_arg(args, "dynamics_max_monomer_extent", None)
+    if bool(_workflow_arg(args, "no_dynamics_max_monomer_extent", False)):
+        max_monomer_extent_A = 0.0
+    elif extent_raw is None:
+        max_monomer_extent_A = float(DEFAULT_MAX_MONOMER_EXTENT_A)
+    else:
+        max_monomer_extent_A = _workflow_arg_float(
+            args,
+            "dynamics_max_monomer_extent",
+            DEFAULT_MAX_MONOMER_EXTENT_A,
+        )
+    fallback_side: float | None = None
+    if use_pbc and fallback_box_side_A is not None:
+        try:
+            side = float(fallback_box_side_A)
+        except (TypeError, ValueError):
+            side = 0.0
+        fallback_side = side if side > 0.0 else None
     return DynamicsOverlapConfig(
         action=action,  # type: ignore[arg-type]
-        min_distance_A=float(min_dist),
-        intra_min_distance_A=float(
-            getattr(args, "dynamics_intra_min_distance", None)
-            if getattr(args, "dynamics_intra_min_distance", None) is not None
-            else DEFAULT_INTRA_MIN_DISTANCE_A
-        ),
+        min_distance_A=min_distance_A,
+        intra_min_distance_A=intra_min_distance_A,
         intra_exclude_1_3=not bool(
-            getattr(args, "no_dynamics_intra_exclude_1_3", False)
+            _workflow_arg(args, "no_dynamics_intra_exclude_1_3", False)
         ),
-        intra_rescue_sd_steps=getattr(args, "dynamics_intra_rescue_sd_steps", None),
+        intra_rescue_sd_steps=_workflow_arg(args, "dynamics_intra_rescue_sd_steps", None),
         check_interval=max(1, interval),
         n_monomers=int(n_monomers),
         use_pbc=bool(use_pbc),
-        fallback_box_side_A=(
-            float(fallback_box_side_A)
-            if use_pbc and fallback_box_side_A is not None and float(fallback_box_side_A) > 0.0
-            else None
-        ),
+        fallback_box_side_A=fallback_side,
         rescue=rescue,
         bonded_recovery_backend=str(
-            getattr(args, "bonded_recovery_backend", "auto") or "auto"
+            _workflow_arg(args, "bonded_recovery_backend", "auto") or "auto"
         ),
         separate_on_rescue_fail=not bool(
-            getattr(args, "no_dynamics_overlap_separate", False)
+            _workflow_arg(args, "no_dynamics_overlap_separate", False)
         ),
-        separate_margin_A=float(getattr(args, "dynamics_overlap_separate_margin", 0.2)),
-        repack_spacing_A=(
-            float(spacing)
-            if (spacing := getattr(args, "spacing", None)) is not None
-            and float(spacing) > 0.0
-            else None
-        ),
-        max_monomer_extent_A=(
-            0.0
-            if bool(getattr(args, "no_dynamics_max_monomer_extent", False))
-            else float(
-                getattr(args, "dynamics_max_monomer_extent", None)
-                if getattr(args, "dynamics_max_monomer_extent", None) is not None
-                else DEFAULT_MAX_MONOMER_EXTENT_A
-            )
-        ),
+        separate_margin_A=_workflow_arg_float(args, "dynamics_overlap_separate_margin", 0.2),
+        repack_spacing_A=_optional_positive_float(args, "spacing"),
+        max_monomer_extent_A=max_monomer_extent_A,
         memory_handoff=resolve_overlap_memory_handoff(args),
         heat_segment_boundary_only=bool(
-            getattr(args, "heat_overlap_segment_boundary_only", False)
+            _workflow_arg(args, "heat_overlap_segment_boundary_only", False)
         ),
         density_prep_ladder_fallback=_cleanup_overlap_fallback_from_args(args),
         cleanup_mode=_cleanup_mode_from_args(args),
@@ -406,7 +446,7 @@ def resolve_dynamics_overlap_config(
     )
 
 
-def _monomer_health_config_from_args(args: argparse.Namespace) -> Any:
+def _monomer_health_config_from_args(args: argparse.Namespace | Any | None) -> Any:
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         monomer_health_config_from_args,
     )
@@ -444,7 +484,7 @@ def augment_overlap_config_for_rescue(
         candidate = Path(topology_psf).expanduser()
         if candidate.is_file():
             topo_path = candidate.resolve()
-    mini_nstep = int(getattr(args, "charmm_sd_steps", 25) or 25)
+    mini_nstep = _workflow_arg_int(args, "charmm_sd_steps", 25)
     return replace(
         config,
         topology_psf=topo_path,

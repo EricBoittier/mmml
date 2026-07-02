@@ -622,6 +622,37 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     assert cfg.memory_handoff is False
 
 
+def test_resolve_dynamics_overlap_config_tolerates_none_args():
+    cfg = resolve_dynamics_overlap_config(None, n_monomers=4, use_pbc=False)
+    assert cfg.action == "rescue"
+    assert cfg.min_distance_A == pytest.approx(1.5)
+    assert cfg.intra_min_distance_A == pytest.approx(0.5)
+    assert cfg.max_monomer_extent_A == pytest.approx(12.0)
+    assert cfg.monomer_health.enabled is True
+
+
+def test_resolve_dynamics_overlap_config_tolerates_explicit_none_fields():
+    args = argparse.Namespace(
+        dynamics_overlap_action=None,
+        dynamics_overlap_min_distance=None,
+        min_intermonomer_atom_distance=None,
+        dynamics_intra_min_distance=None,
+        dynamics_max_monomer_extent=None,
+        dynamics_overlap_check_interval=None,
+        dynamics_overlap_charmm_sd_steps=None,
+        dynamics_overlap_charmm_abnr_steps=None,
+        dynamics_overlap_separate_margin=None,
+    )
+    cfg = resolve_dynamics_overlap_config(args, n_monomers=4, use_pbc=False)
+    assert cfg.action == "rescue"
+    assert cfg.min_distance_A == pytest.approx(1.5)
+    assert cfg.intra_min_distance_A == pytest.approx(0.5)
+    assert cfg.max_monomer_extent_A == pytest.approx(12.0)
+    assert cfg.check_interval == 100
+    assert cfg.rescue.nstep_sd == 200
+    assert cfg.separate_margin_A == pytest.approx(0.2)
+
+
 def test_resolve_overlap_memory_handoff_explicit_and_mpi_default(monkeypatch):
     args = argparse.Namespace(dynamics_overlap_memory_handoff=True)
     assert resolve_overlap_memory_handoff(args) is True

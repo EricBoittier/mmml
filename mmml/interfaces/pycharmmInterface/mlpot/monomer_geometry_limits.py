@@ -358,9 +358,15 @@ def apply_geometry_limits_to_overlap_config(
     if mlpot_ctx is None or not geometry_limits_auto_enabled(args):
         return overlap
 
-    explicit_extent = getattr(args, "dynamics_max_monomer_extent", None)
-    explicit_intra = getattr(args, "dynamics_intra_min_distance", None)
-    explicit_inter = getattr(args, "dynamics_overlap_min_distance", None)
+    explicit_extent = (
+        getattr(args, "dynamics_max_monomer_extent", None) if args is not None else None
+    )
+    explicit_intra = (
+        getattr(args, "dynamics_intra_min_distance", None) if args is not None else None
+    )
+    explicit_inter = (
+        getattr(args, "dynamics_overlap_min_distance", None) if args is not None else None
+    )
 
     limits = compute_geometry_limits_from_mlpot_ctx(
         mlpot_ctx,

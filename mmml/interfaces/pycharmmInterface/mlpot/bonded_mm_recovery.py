@@ -306,8 +306,14 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
     if n_monomers <= 1:
         return
     health_cfg = getattr(config, "monomer_health", None)
+    if health_cfg is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+            monomer_health_config_from_args,
+        )
+
+        health_cfg = monomer_health_config_from_args(getattr(ctx, "workflow_args", None))
     flagged: tuple[int, ...] = ()
-    if health_cfg is not None and getattr(health_cfg, "enabled", True):
+    if getattr(health_cfg, "enabled", True):
         from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
             audit_monomer_health,
             restore_flagged_monomers_from_template,
