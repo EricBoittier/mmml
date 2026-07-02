@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+import os
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 
 
 def _set_charmm_levels(
@@ -35,23 +36,33 @@ def _restore_charmm_levels(old: dict[str, int]) -> None:
         settings.set_bomb_level(int(old["bomlev"]))
 
 
+@contextmanager
+def suppress_charmm_fortran_io():
+    """Redirect CHARMM Fortran stdout/stderr (IMAGE/NB list banners ignore PRNLev 0)."""
+    with open(os.devnull, "w", encoding="utf-8") as devnull:
+        with redirect_stdout(devnull), redirect_stderr(devnull):
+            yield
+
+
 def run_charmm_script_quiet(script: str) -> None:
     """Run a CHARMM script at PRNLev/WRNLev 0; restore prior levels on exit."""
     import pycharmm
 
     old = _set_charmm_levels(prnlev=0, warnlev=0)
     try:
-        pycharmm.lingo.charmm_script(script)
+        with suppress_charmm_fortran_io():
+            pycharmm.lingo.charmm_script(script)
     finally:
         _restore_charmm_levels(old)
 
 
 @contextmanager
 def charmm_quiet_output():
-    """Temporarily set PRNLev/WRNLev 0 (e.g. SD mini, overlap rescue)."""
+    """Temporarily set PRNLev/WRNLev 0 and swallow Fortran stdout/stderr."""
     old = _set_charmm_levels(prnlev=0, warnlev=0)
     try:
-        yield
+        with suppress_charmm_fortran_io():
+            yield
     finally:
         _restore_charmm_levels(old)
 
@@ -61,7 +72,8 @@ def charmm_silent_command(*, bomlev: int = -2):
     """Minimal console output with relaxed bomb level (ENER/UPDATE, USER checks)."""
     old = _set_charmm_levels(prnlev=0, warnlev=0, bomlev=int(bomlev))
     try:
-        yield
+        with suppress_charmm_fortran_io():
+            yield
     finally:
         _restore_charmm_levels(old)
 

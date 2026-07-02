@@ -377,7 +377,7 @@ def prime_charmm_hybrid_energy_before_mlpot_sd(
     if not _under_mpirun():
         return None
     _ensure_domdec_off_for_mlpot_energy(context=f"{context} CHARMM ENER prime")
-    grms = float(charmm_grms_after_ener_force(silent=not verbose))
+    grms = float(charmm_grms_after_ener_force(silent=True))
     recover_mpi_for_charmm_after_jax(phase=f"after {context} CHARMM ENER prime")
     setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", True)
 

@@ -72,6 +72,18 @@ def test_run_charmm_script_quiet_does_not_echo_level_commands(monkeypatch):
     assert mock_settings.set_verbosity.call_args_list == [call(0), call(5)]
 
 
+def test_suppress_charmm_fortran_io_redirects_stdout_stderr(capsys):
+    from mmml.interfaces.pycharmmInterface.charmm_levels import suppress_charmm_fortran_io
+
+    with suppress_charmm_fortran_io():
+        print("fortran banner", file=sys.stdout)
+        print("fortran error", file=sys.stderr)
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""
+
+
 def test_topology_loaders_do_not_pin_bomlev_zero():
     root = Path(__file__).resolve().parents[2] / "mmml/interfaces/pycharmmInterface"
     for name in ("nbonds_config.py", "mm_energy_forces.py"):

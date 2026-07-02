@@ -280,8 +280,14 @@ def read_cgenff_prm(
     if append:
         suspend_pbc_before_cgenff_param_append()
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        charmm_quiet_output,
+        suppress_charmm_fortran_io,
+    )
+
     def _read() -> None:
-        read.prm(path, append=append, flex=True)
+        with charmm_quiet_output(), suppress_charmm_fortran_io():
+            read.prm(path, append=append, flex=True)
 
     if bomlev:
         with charmm_relaxed_bomlev(level):

@@ -587,6 +587,10 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
     """Install CHARMM crystal + IMAGE for a cubic cell."""
     import pycharmm.crystal as crystal
 
+    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        charmm_quiet_output,
+        suppress_charmm_fortran_io,
+    )
     from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         PBC_NBOND_BOX_MARGIN_A,
@@ -598,14 +602,15 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
     if L <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {L}")
 
-    # SET BOXTYPE/FFTX/... still parse on KEY_LIBRARY builds; open/crystal do not.
-    mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
-    if not crystal.define_cubic(L):
-        raise RuntimeError(f"crystal.define_cubic failed for L={L} Å")
-    build_cut = min(float(VACUUM_CUTNB), max(L / 2.0 - PBC_NBOND_BOX_MARGIN_A, 6.0))
-    if not crystal.build(build_cut):
-        raise RuntimeError(f"crystal.build failed for cutoff={build_cut} Å (L={L})")
-    _image_setup_byres_all(0.0, 0.0, 0.0)
+    with charmm_quiet_output(), suppress_charmm_fortran_io():
+        # SET BOXTYPE/FFTX/... still parse on KEY_LIBRARY builds; open/crystal do not.
+        mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
+        if not crystal.define_cubic(L):
+            raise RuntimeError(f"crystal.define_cubic failed for L={L} Å")
+        build_cut = min(float(VACUUM_CUTNB), max(L / 2.0 - PBC_NBOND_BOX_MARGIN_A, 6.0))
+        if not crystal.build(build_cut):
+            raise RuntimeError(f"crystal.build failed for cutoff={build_cut} Å (L={L})")
+        _image_setup_byres_all(0.0, 0.0, 0.0)
 
 
 def apply_pbc_nbonds(

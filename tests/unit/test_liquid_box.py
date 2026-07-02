@@ -53,6 +53,48 @@ def test_apply_liquid_box_profile_dense_enables_liquid_prep():
     assert float(args.min_intermonomer_atom_distance) == pytest.approx(1.0)
 
 
+def test_liquid_box_uses_packmol_by_default():
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import use_packmol_placement
+
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--composition",
+            "DCM:60",
+            "--output-dir",
+            "/tmp/x",
+            "--target-density-g-cm3",
+            "1.326",
+        ]
+    )
+    apply_liquid_box_profile(args)
+    assert use_packmol_placement(args) is True
+    assert getattr(args, "packmol", None) is None
+
+
+def test_liquid_box_density_auto_sizes_packmol_cube():
+    from mmml.cli.run.liquid_box import build_parser
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_cube_side_from_args,
+    )
+
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "--composition",
+            "DCM:60",
+            "--output-dir",
+            "/tmp/x",
+            "--target-density-g-cm3",
+            "1.326",
+        ]
+    )
+    apply_liquid_box_profile(args)
+    side = resolve_packmol_cube_side_from_args(args)
+    assert 15.0 < side < 30.0
+
+
 def test_apply_liquid_box_profile_standard_skips_liquid_prep():
     args = _args(profile="standard")
     name = apply_liquid_box_profile(args)
