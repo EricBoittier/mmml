@@ -60,6 +60,13 @@ def resolve_checkpoint(raw: str) -> Path:
     return path
 
 
+def checkpoint_path_for_yaml(raw: str) -> str:
+    """Resolve ``${MMML_CKPT}`` when writing campaign YAML on the submit host."""
+    if str(raw).strip() == "${MMML_CKPT}":
+        return str(resolve_checkpoint(str(raw)))
+    return str(os.path.expandvars(str(raw)))
+
+
 @dataclass(frozen=True)
 class RunCell:
     setup_id: str
@@ -224,7 +231,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
 
     defaults: dict[str, Any] = {
         "composition": comp,
-        "checkpoint": str(effective["checkpoint"]),
+        "checkpoint": checkpoint_path_for_yaml(str(effective["checkpoint"])),
         "box_size": float(cell.box_size),
         "output_root": str(cell_root),
         "packmol_cache_dir": str(cell_root / ".packmol_cache"),

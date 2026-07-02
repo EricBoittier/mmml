@@ -1602,6 +1602,10 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
             from mmml.cli.run.md_campaign import strip_campaign_metadata_keys
 
             merged.update(strip_campaign_metadata_keys(defaults_block))
+        if config_is_campaign(cfg) and merged.get("checkpoint") is not None:
+            from mmml.cli.run.md_config import resolve_campaign_checkpoint_value
+
+            merged["checkpoint"] = resolve_campaign_checkpoint_value(merged["checkpoint"])
         for key, value in cfg.items():
             if key in {"defaults", "runs", "jobs", "include"}:
                 continue

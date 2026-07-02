@@ -64,7 +64,7 @@ from campaign_lib import load_config, resolve_checkpoint, cell_from_tag
 cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
 resolve_checkpoint(str(cfg['checkpoint']))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
-print('Preflight OK:', cfg['checkpoint'], cell, flush=True)
+print('Preflight OK:', resolve_checkpoint(str(cfg['checkpoint'])), cell, flush=True)
 "
 
 exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" --tag "$RUN_TAG" \

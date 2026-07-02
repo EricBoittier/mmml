@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from pathlib import Path
 from typing import Any, Mapping
@@ -207,6 +208,21 @@ def namespace_from_yaml(path: str | Path, parse_args_fn) -> argparse.Namespace:
     return args
 
 
+def resolve_campaign_checkpoint_value(raw: Any) -> str:
+    """Expand ``${MMML_CKPT}`` and env vars for campaign YAML / job merge."""
+    text = str(raw).strip()
+    if text == "${MMML_CKPT}":
+        env = os.environ.get("MMML_CKPT", "").strip()
+        if not env:
+            raise RuntimeError("MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})")
+        path = Path(env).expanduser().resolve()
+    else:
+        path = Path(os.path.expandvars(text)).expanduser().resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {path}")
+    return str(path)
+
+
 def merge_campaign_job_config(
     campaign: dict[str, Any],
     job_id: str,
@@ -229,6 +245,8 @@ def merge_campaign_job_config(
         merged["output_dir"] = str(output_dir)
     elif "output_dir" not in merged and "output_root" in campaign:
         merged["output_dir"] = str(Path(str(campaign["output_root"])) / job_id)
+    if merged.get("checkpoint") is not None:
+        merged["checkpoint"] = resolve_campaign_checkpoint_value(merged["checkpoint"])
     return merged
 
 
