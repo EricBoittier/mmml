@@ -144,6 +144,32 @@ Common causes:
 
 Some matrix cells are **expected** to fail mini (overlap / prep stack comparison). That is not a workflow bug — use `campaign_summary.json` per cell to compare which setups reached handoff.
 
+## Prep-parameter sweep (anchor cell × variants)
+
+To compare **what actually moves prep** (timestep, Packmol tolerance, cutoffs, MM on/off) without the full 108-cell matrix, use `config.prep_sweep.yaml`:
+
+| Setting | Role |
+|---------|------|
+| `prep_sweep.anchor` | Single cell (default: resilient, 0.25× bulk, T=50 K, L=28 Å) |
+| `prep_sweep.variants` | Named one-at-a-time overrides vs shared baseline |
+| `prep_sweep.stages` | `mini` (default) or `mini,heat` |
+| Tag suffix | `_sw_{variant}` e.g. `resilient_dcm_52_t50_l28_sw_pmtol30` |
+
+Default variants: `baseline`, `dt050`, `pmtol25/30`, `spacing50/70`, `cut_tight/wide`, `mm_bonded_on`, `mm_pretreat_off`, `mm_vdw_off`.
+
+```bash
+cd workflows/dcm_density_setup_compare
+export MMML_CKPT=/path/to/DESdimers_params.json
+bash scripts/preflight.sh
+snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm -n
+nohup snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm \
+  > snakemake_prep_sweep.log 2>&1 &
+bash scripts/collect_prep_sweep.sh
+# -> results/prep_sweep_summary.csv
+```
+
+Add your own variant under `prep_sweep.variants` (lowercase id, mapping of md-system keys). Set `prep_sweep.stages: mini,heat` and `anchor.heat_thermostat: bussi` to test heat/overlap on the same anchor.
+
 ## Customize
 
 - Add/remove setups in `config.yaml` → `setups:` (ids defined in `scripts/setup_variants.py`).

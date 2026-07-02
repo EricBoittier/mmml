@@ -102,6 +102,13 @@ from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_
 toppar = assert_cgenff_toppar_readable()
 print('CGENFF RTF:', toppar.rtf)
 print('CGENFF PRM:', toppar.prm)
+from campaign_lib import prep_sweep_enabled, prep_sweep_variant_ids, prep_sweep_anchor_cell, matrix_job_count
+if prep_sweep_enabled(cfg):
+    anchor = prep_sweep_anchor_cell(cfg)
+    print('prep_sweep: enabled')
+    print('prep_sweep anchor:', anchor)
+    print('prep_sweep variants:', prep_sweep_variant_ids(cfg))
+    print('prep_sweep jobs:', matrix_job_count(cfg))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then

@@ -55,6 +55,8 @@ matrix_setup_ids = cl.matrix_setup_ids
 matrix_heat_thermostats = cl.matrix_heat_thermostats
 heat_compare_enabled = cl.heat_compare_enabled
 parse_dynamics_legs = cl.parse_dynamics_legs
+prep_sweep_enabled = cl.prep_sweep_enabled
+prep_sweep_variant_ids = cl.prep_sweep_variant_ids
 slurm_launch_jobs = cl.slurm_launch_jobs
 slurm_resources_cli = cl.slurm_resources_cli
 resolve_setup_variant = sv.resolve_setup_variant
@@ -329,3 +331,84 @@ def test_slurm_resources_cli(cfg: dict) -> None:
     assert "gpu_fast=" in cli
     assert "charmm_slot=" in cli
     assert slurm_launch_jobs(cfg) == 18
+
+
+def test_prep_sweep_expands_variants(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini",
+            "anchor": {
+                "setup_id": "resilient",
+                "bulk_density_fraction": 0.25,
+                "temperature": 50.0,
+                "box_size": 28.0,
+            },
+            "variants": {
+                "baseline": {},
+                "dt050": {"dt_fs": 0.5},
+            },
+        },
+    }
+    tags = [cell_run_tag(c, sweep_cfg) for c in iter_matrix_cells(sweep_cfg)]
+    assert len(tags) == 2
+    assert tags[0].endswith("_sw_baseline")
+    assert tags[1].endswith("_sw_dt050")
+    assert matrix_job_count(sweep_cfg) == 2
+
+
+def test_prep_sweep_applies_overrides_to_campaign(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 28.0,
+            },
+            "variants": {
+                "baseline": {},
+                "pmtol30": {"packmol_tolerance": 3.0},
+            },
+        },
+    }
+    cell = cell_from_tag(sweep_cfg, "resilient_dcm_52_t50_l28_sw_pmtol30")
+    campaign = build_campaign(sweep_cfg, cell)
+    assert campaign["defaults"]["prep_sweep_id"] == "pmtol30"
+    assert campaign["defaults"]["packmol_tolerance"] == 3.0
+    assert list(campaign["runs"]) == ["pycharmm_mini"]
+    mini = campaign["runs"]["pycharmm_mini"]
+    assert mini["md_stages"] == "mini"
+
+
+def test_prep_sweep_mini_heat_stage(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini,heat",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 28.0,
+                "heat_thermostat": "hoover",
+            },
+            "variants": {"baseline": {}},
+        },
+    }
+    cell = cell_from_tag(sweep_cfg, "resilient_dcm_52_t50_l28_ht_hoover_sw_baseline")
+    campaign = build_campaign(sweep_cfg, cell)
+    mini = campaign["runs"]["pycharmm_mini"]
+    assert mini["md_stages"] == "mini,heat"
+    assert mini["heat_thermostat"] == "hoover"

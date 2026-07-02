@@ -130,3 +130,5 @@ slurm_gpu_nodes_slow:
 
 # exclude_run_tags:
 #   - resilient_dcm_77_t100_l32
+
+# Prep-parameter sweep (anchor cell × variants): see config.prep_sweep.yaml and README.

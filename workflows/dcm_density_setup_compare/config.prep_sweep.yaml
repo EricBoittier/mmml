@@ -1,0 +1,138 @@
+# Prep-parameter sweep on a single anchor cell (one-at-a-time vs baseline).
+#
+# Run:
+#   cd workflows/dcm_density_setup_compare
+#   snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm -n
+#   bash scripts/collect_prep_sweep.sh
+#
+# Tags: {setup}_dcm_{N}_t{T}_l{L}[_ht_{thermostat}]_sw_{variant}
+# Example: resilient_dcm_52_t50_l28_sw_baseline
+
+setups: [resilient]
+solvents: [DCM]
+
+# Ignored while prep_sweep.enabled (anchor defines the cell).
+bulk_density_fractions: [0.25]
+temperatures: [50.0]
+box_sizes: [28.0]
+
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/dcm_density_setup_compare
+seed_base: 4242
+
+dt_fs: 0.25
+pressure: 1.0
+spacing: 6.0
+packmol_tolerance: 2.0
+packmol_box_padding: 1.0
+
+no_scale_max_grms: true
+max_grms_before_dyn: 50.0
+
+mini_nstep: 2000
+charmm_sd_steps: 4000
+charmm_abnr_steps: 4000
+pre_min_steps: 500
+
+dynamics_overlap_check_interval: 100
+dynamics_overlap_charmm_sd_steps: 400
+dynamics_overlap_charmm_abnr_steps: 800
+dynamics_overlap_min_distance: 1.5
+min_intermonomer_atom_distance: 1.2
+
+liquid_prep: true
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 8
+density_prep_lattice_abnr_steps: 300
+mini_lattice_abnr_steps: 300
+mc_density_equalize: true
+mc_density_steps: 128
+mini_box_equil_ps: 5.0
+calculator_pre_minimize: true
+bonded_mm_mini: false
+
+mm_switch_on: 5.0
+mm_switch_width: 3.0
+ml_switch_width: 0.2
+mm_nonbond_mode: jax_mic
+periodic_charmm_vdw: true
+charmm_mm_pretreat: true
+
+# Mini-only sweep (fastest). Use stages: mini,heat to test heat/overlap rescue too.
+heat_thermostats: []
+dynamics_legs:
+  pycharmm_equi: false
+  pycharmm_prod: false
+  jaxmd: false
+  ase: false
+
+ml_gpu_count: 1
+ml_batch_size: 128
+
+slurm_small_cluster_max_n: 30
+slurm_max_concurrent_fast: 6
+slurm_max_concurrent_slow: 4
+slurm_partition: gpu
+slurm_nodes: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 3000
+slurm_runtime_min: 1440
+slurm_gpu_nodes_fast:
+  - gpu08
+  - gpu09
+  - gpu10
+  - gpu11
+  - gpu06
+  - gpu26
+  - gpu04
+  - gpu25
+slurm_gpu_nodes_slow:
+  - gpu01
+  - gpu02
+  - gpu03
+  - gpu12
+  - gpu13
+  - gpu18
+  - gpu20
+  - gpu21
+  - gpu22
+  - gpu23
+
+prep_sweep:
+  enabled: true
+  stages: mini
+  full_dynamics: false
+  anchor:
+    setup_id: resilient
+    solvent: DCM
+    bulk_density_fraction: 0.25
+    temperature: 50.0
+    box_size: 28.0
+  variants:
+    baseline: {}
+    dt050:
+      dt_fs: 0.5
+    pmtol25:
+      packmol_tolerance: 2.5
+    pmtol30:
+      packmol_tolerance: 3.0
+    spacing50:
+      spacing: 5.0
+    spacing70:
+      spacing: 7.0
+    cut_tight:
+      mm_switch_on: 4.0
+      mm_switch_width: 2.0
+      ml_switch_width: 0.1
+    cut_wide:
+      mm_switch_on: 7.0
+      mm_switch_width: 5.0
+      ml_switch_width: 1.5
+    mm_bonded_on:
+      bonded_mm_mini: true
+      bonded_mm_mini_steps: 500
+    mm_pretreat_off:
+      charmm_mm_pretreat: false
+    mm_vdw_off:
+      periodic_charmm_vdw: false

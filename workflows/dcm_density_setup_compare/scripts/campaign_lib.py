@@ -80,6 +80,7 @@ class RunCell:
     temperature: float
     box_size: float
     heat_thermostat: str | None = None
+    sweep_id: str | None = None
 
 
 def matrix_setup_ids(cfg: dict[str, Any]) -> list[str]:
@@ -128,6 +129,20 @@ def heat_compare_enabled(cfg: dict[str, Any]) -> bool:
 
 
 def iter_heat_thermostats(cfg: dict[str, Any]) -> Iterator[str | None]:
+    if prep_sweep_enabled(cfg):
+        stages = prep_sweep_stages(cfg)
+        if stages == "mini":
+            yield None
+            return
+        anchor = prep_sweep_section(cfg).get("anchor") or {}
+        ht = anchor.get("heat_thermostat")
+        if ht:
+            key = str(ht).strip().lower()
+            if key not in _VALID_HEAT_THERMOSTATS:
+                known = ", ".join(sorted(_VALID_HEAT_THERMOSTATS))
+                raise ValueError(f"unknown prep_sweep.anchor heat_thermostat {ht!r} (known: {known})")
+            yield key
+            return
     hts = matrix_heat_thermostats(cfg)
     if not hts:
         yield None
@@ -136,7 +151,150 @@ def iter_heat_thermostats(cfg: dict[str, Any]) -> Iterator[str | None]:
         yield ht
 
 
+_PREP_SWEEP_VARIANT_KEY = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+
+
+def prep_sweep_section(cfg: dict[str, Any]) -> dict[str, Any]:
+    raw = cfg.get("prep_sweep")
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def prep_sweep_enabled(cfg: dict[str, Any]) -> bool:
+    return bool(prep_sweep_section(cfg).get("enabled", False))
+
+
+def prep_sweep_stages(cfg: dict[str, Any]) -> str:
+    stages = str(prep_sweep_section(cfg).get("stages", "mini")).strip().lower()
+    if stages not in {"mini", "mini,heat"}:
+        raise ValueError(
+            f"prep_sweep.stages must be 'mini' or 'mini,heat', got {stages!r}"
+        )
+    return stages
+
+
+def prep_sweep_variant_ids(cfg: dict[str, Any]) -> list[str]:
+    variants = prep_sweep_section(cfg).get("variants") or {}
+    if not isinstance(variants, dict) or not variants:
+        raise ValueError("prep_sweep.enabled requires non-empty prep_sweep.variants")
+    ids: list[str] = []
+    for key in sorted(variants.keys()):
+        vid = str(key).strip().lower()
+        if not _PREP_SWEEP_VARIANT_KEY.match(vid):
+            raise ValueError(
+                f"invalid prep_sweep variant id {key!r} "
+                "(use lowercase letters, digits, underscore; max 32 chars)"
+            )
+        ids.append(vid)
+    return ids
+
+
+def prep_sweep_variant_overrides(cfg: dict[str, Any], sweep_id: str) -> dict[str, Any]:
+    variants = prep_sweep_section(cfg).get("variants") or {}
+    key = str(sweep_id).strip().lower()
+    if key not in variants:
+        known = ", ".join(prep_sweep_variant_ids(cfg))
+        raise KeyError(f"unknown prep_sweep variant {sweep_id!r} (known: {known})")
+    raw = variants[key]
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise TypeError(f"prep_sweep.variants[{key!r}] must be a mapping")
+    return dict(raw)
+
+
+def _resolve_prep_sweep_n_monomers(cfg: dict[str, Any], anchor: dict[str, Any]) -> int:
+    if anchor.get("n_monomers") is not None:
+        return int(anchor["n_monomers"])
+    frac = anchor.get("bulk_density_fraction")
+    if frac is None:
+        raise ValueError(
+            "prep_sweep.anchor requires n_monomers or bulk_density_fraction"
+        )
+    solvent = str(anchor.get("solvent") or cfg.get("solvents", ["DCM"])[0]).strip().upper()
+    box = float(anchor["box_size"])
+    return n_monomers_at_bulk_density(
+        solvent,
+        box,
+        float(frac),
+        min_n=int(cfg.get("bulk_density_n_min", 1)),
+        max_n=int(anchor["bulk_density_n_max"])
+        if anchor.get("bulk_density_n_max") is not None
+        else None,
+    )
+
+
+def prep_sweep_anchor_cell(cfg: dict[str, Any]) -> RunCell:
+    anchor = dict(prep_sweep_section(cfg).get("anchor") or {})
+    setup_id = str(anchor.get("setup_id") or matrix_setup_ids(cfg)[0]).strip()
+    resolve_setup_variant(setup_id)
+    solvent = str(anchor.get("solvent") or cfg.get("solvents", ["DCM"])[0]).strip().upper()
+    temperature = float(anchor.get("temperature", matrix_temperatures(cfg)[0]))
+    box_size = float(anchor.get("box_size", matrix_box_sizes(cfg)[0]))
+    n_monomers = _resolve_prep_sweep_n_monomers(cfg, anchor)
+    heat_thermostat: str | None = None
+    if prep_sweep_stages(cfg) == "mini,heat":
+        ht_raw = anchor.get("heat_thermostat") or cfg.get("default_heat_thermostat", "bussi")
+        heat_thermostat = str(ht_raw).strip().lower()
+        if heat_thermostat not in _VALID_HEAT_THERMOSTATS:
+            known = ", ".join(sorted(_VALID_HEAT_THERMOSTATS))
+            raise ValueError(f"unknown prep_sweep.anchor heat_thermostat {ht_raw!r} (known: {known})")
+    return RunCell(
+        setup_id=setup_id,
+        solvent=solvent,
+        n_monomers=n_monomers,
+        temperature=temperature,
+        box_size=box_size,
+        heat_thermostat=heat_thermostat,
+        sweep_id=None,
+    )
+
+
+def iter_prep_sweep_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
+    anchor = prep_sweep_anchor_cell(cfg)
+    for sweep_id in prep_sweep_variant_ids(cfg):
+        yield RunCell(
+            setup_id=anchor.setup_id,
+            solvent=anchor.solvent,
+            n_monomers=anchor.n_monomers,
+            temperature=anchor.temperature,
+            box_size=anchor.box_size,
+            heat_thermostat=anchor.heat_thermostat,
+            sweep_id=sweep_id,
+        )
+
+
+def cell_workflow_cfg(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
+    """Per-cell config: prep_sweep variant overrides and sweep stage scope."""
+    if not cell.sweep_id:
+        return cfg
+    out = dict(cfg)
+    out.update(prep_sweep_variant_overrides(cfg, cell.sweep_id))
+    sweep = prep_sweep_section(cfg)
+    if not sweep.get("full_dynamics", False):
+        out["dynamics_legs"] = {
+            "pycharmm_equi": False,
+            "pycharmm_prod": False,
+            "jaxmd": False,
+            "ase": False,
+        }
+    if prep_sweep_stages(cfg) == "mini":
+        out["heat_thermostats"] = []
+    elif cell.heat_thermostat:
+        out["heat_thermostats"] = [cell.heat_thermostat]
+    return out
+
+
 def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
+    if prep_sweep_enabled(cfg):
+        skip = {str(t).strip() for t in (cfg.get("exclude_run_tags") or [])}
+        seen_tags: set[str] = set()
+        for cell in iter_prep_sweep_cells(cfg):
+            tag = cell_run_tag(cell, cfg)
+            if tag in skip or tag in seen_tags:
+                continue
+            seen_tags.add(tag)
+            yield cell
+        return
     solvents = [str(s).strip().upper() for s in cfg.get("solvents", ["DCM"])]
     setups = matrix_setup_ids(cfg)
     if matrix_uses_bulk_density(cfg):
@@ -183,7 +341,9 @@ def cell_run_tag(cell: RunCell, cfg: dict[str, Any] | None = None) -> str:
     box = int(round(cell.box_size))
     base = f"{cell.setup_id}_{sol}_{int(cell.n_monomers)}_t{t}_l{box}"
     if cell.heat_thermostat:
-        return f"{base}_ht_{cell.heat_thermostat}"
+        base = f"{base}_ht_{cell.heat_thermostat}"
+    if cell.sweep_id:
+        base = f"{base}_sw_{cell.sweep_id}"
     return base
 
 
@@ -204,6 +364,9 @@ def run_seed(cell: RunCell, *, seed_base: int = 4242) -> int:
     heat_off = 0
     if cell.heat_thermostat:
         heat_off = {"bussi": 11, "hoover": 22, "scale": 33}[cell.heat_thermostat]
+    sweep_off = 0
+    if cell.sweep_id:
+        sweep_off = sum(ord(c) for c in cell.sweep_id) % 997
     return (
         int(seed_base)
         + int(cell.n_monomers) * 10000
@@ -212,6 +375,7 @@ def run_seed(cell: RunCell, *, seed_base: int = 4242) -> int:
         + temp_off * 17
         + box_off * 131
         + heat_off * 7
+        + sweep_off * 13
     )
 
 
@@ -243,6 +407,16 @@ _WORKFLOW_JOB_OVERRIDE_KEYS = (
     "dynamics_intra_min_distance",
     "dynamics_overlap_action",
     "overlap_run_state_every_chunks",
+    "mm_nonbond_mode",
+    "periodic_charmm_vdw",
+    "charmm_mm_pretreat",
+    "dt_fs",
+    "spacing",
+    "packmol_tolerance",
+    "packmol_box_padding",
+    "mm_switch_on",
+    "mm_switch_width",
+    "ml_switch_width",
 )
 
 
@@ -253,8 +427,9 @@ def _apply_workflow_job_overrides(flags: dict[str, Any], effective: dict[str, An
 
 
 def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
+    cell_cfg = cell_workflow_cfg(cfg, cell)
     variant = resolve_setup_variant(cell.setup_id)
-    effective = merge_setup_into_config(cfg, cell.setup_id)
+    effective = merge_setup_into_config(cell_cfg, cell.setup_id)
     flags: dict[str, Any] = dict(variant.job_overrides)
     if variant.use_cleanup_strategy:
         strategy = resolve_cleanup_strategy(effective)
@@ -362,12 +537,13 @@ def _init_stage_overrides(
     cfg: dict[str, Any], cell: RunCell, effective: dict[str, Any]
 ) -> dict[str, Any]:
     """Resolve ``md_stages`` / heat kwargs for the first PyCHARMM leg."""
-    heat = _heat_job_overrides(cfg, cell, effective)
+    cell_cfg = cell_workflow_cfg(cfg, cell)
+    heat = _heat_job_overrides(cell_cfg, cell, effective)
     if heat:
         return heat
-    if dynamics_campaign_enabled(cfg):
+    if dynamics_campaign_enabled(cell_cfg):
         strategy = resolve_cleanup_strategy(effective)
-        default_ht = str(cfg.get("default_heat_thermostat", "bussi")).strip().lower()
+        default_ht = str(cell_cfg.get("default_heat_thermostat", "bussi")).strip().lower()
         heat_thermostat = _resolve_cell_heat_thermostat(
             {**effective, "heat_thermostat": default_ht},
             strategy,
@@ -575,7 +751,8 @@ def cell_bulk_density_fraction(cell: RunCell, cfg: dict[str, Any]) -> float | No
 
 
 def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
-    effective = merge_setup_into_config(cfg, cell.setup_id)
+    cell_cfg = cell_workflow_cfg(cfg, cell)
+    effective = merge_setup_into_config(cell_cfg, cell.setup_id)
     comp = composition_string(cell)
     tag = cell_run_tag(cell, cfg)
     seed = run_seed(cell, seed_base=int(cfg.get("seed_base", 4242)))
@@ -605,6 +782,9 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "setup_description": variant.description,
         "bulk_density_fraction": frac,
     }
+    if cell.sweep_id:
+        defaults["prep_sweep_id"] = cell.sweep_id
+        defaults["prep_sweep_overrides"] = prep_sweep_variant_overrides(cfg, cell.sweep_id)
     for key in (
         "liquid_prep",
         "density_prep_ladder",
@@ -622,13 +802,13 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         if key in effective:
             defaults[key] = effective[key]
 
-    if dynamics_campaign_enabled(cfg):
-        defaults["handoff_write_res"] = bool(cfg.get("handoff_write_res", True))
-        defaults["continue_velocities"] = bool(cfg.get("continue_velocities", True))
+    if dynamics_campaign_enabled(cell_cfg):
+        defaults["handoff_write_res"] = bool(cell_cfg.get("handoff_write_res", True))
+        defaults["continue_velocities"] = bool(cell_cfg.get("continue_velocities", True))
 
     mini_flags = _mini_job_flags(cfg, cell)
     mini_flags.update(_init_stage_overrides(cfg, cell, effective))
-    init_id = init_job_id(cfg)
+    init_id = init_job_id(cell_cfg)
     md_stages = str(mini_flags.get("md_stages", "mini"))
     ht = mini_flags.get("heat_thermostat")
     ht_note = f" heat={ht}" if ht else ""
@@ -654,12 +834,12 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     }
 
     prev = init_id
-    legs = parse_dynamics_legs(cfg)
+    legs = parse_dynamics_legs(cell_cfg)
     if legs["pycharmm_equi"] or legs["pycharmm_prod"]:
         repair = _equi_prod_flags(mini_flags)
         prev = _append_pycharmm_equi_prod_legs(
             runs,
-            cfg=cfg,
+            cfg=cell_cfg,
             cell=cell,
             cell_root=cell_root,
             comp=comp,
@@ -669,7 +849,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     if legs["jaxmd"]:
         prev = _append_jaxmd_leg(
             runs,
-            cfg=cfg,
+            cfg=cell_cfg,
             cell=cell,
             cell_root=cell_root,
             comp=comp,
@@ -679,7 +859,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     if legs["ase"]:
         _append_ase_leg(
             runs,
-            cfg=cfg,
+            cfg=cell_cfg,
             cell=cell,
             cell_root=cell_root,
             comp=comp,
@@ -811,8 +991,9 @@ def slurm_resources_cli(cfg: dict[str, Any]) -> str:
 
 
 def paths_for_run(cfg: dict[str, Any], cell: RunCell) -> dict[str, Path]:
+    cell_cfg = cell_workflow_cfg(cfg, cell)
     out = run_output_dir(cfg, cell)
-    final_job = campaign_final_job_id(cfg)
+    final_job = campaign_final_job_id(cell_cfg)
     return {
         "out_dir": out,
         "campaign_yaml": out / "campaign.yaml",
@@ -829,7 +1010,7 @@ def parse_run_tag(cfg: dict[str, Any], tag: str) -> RunCell:
             continue
         tail = tag[len(prefix) :]
         m = re.match(
-            r"([a-z]+)_(\d+)_t(\d+)_l(\d+)(?:_ht_(bussi|hoover|scale))?$",
+            r"([a-z]+)_(\d+)_t(\d+)_l(\d+)(?:_ht_(bussi|hoover|scale))?(?:_sw_([a-z0-9_]+))?$",
             tail,
         )
         if not m:
@@ -842,6 +1023,7 @@ def parse_run_tag(cfg: dict[str, Any], tag: str) -> RunCell:
             temperature=float(m.group(3)),
             box_size=float(m.group(4)),
             heat_thermostat=m.group(5),
+            sweep_id=m.group(6),
         )
     raise KeyError(f"run tag {tag!r} not in config matrix")
 
