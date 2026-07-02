@@ -389,6 +389,42 @@ def test_prep_sweep_applies_overrides_to_campaign(cfg: dict) -> None:
     assert mini["md_stages"] == "mini"
 
 
+def test_prep_sweep_placement_seed_ignores_heat_thermostat(cfg: dict) -> None:
+    mini_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 28.0,
+            },
+            "variants": {"baseline": {}},
+        },
+    }
+    heat_cfg = {
+        **mini_cfg,
+        "prep_sweep": {
+            **mini_cfg["prep_sweep"],
+            "stages": "mini,heat",
+            "placement_seed_ignore_heat": True,
+            "anchor": {
+                **mini_cfg["prep_sweep"]["anchor"],
+                "heat_thermostat": "bussi",
+            },
+        },
+    }
+    mini_cell = cell_from_tag(mini_cfg, "resilient_dcm_52_t50_l28_sw_baseline")
+    heat_cell = cell_from_tag(heat_cfg, "resilient_dcm_52_t50_l28_ht_bussi_sw_baseline")
+    mini_seed = cl.run_seed(mini_cell, seed_base=4242, cfg=mini_cfg)
+    heat_seed = cl.run_seed(heat_cell, seed_base=4242, cfg=heat_cfg)
+    assert mini_seed == heat_seed
+
+
 def test_prep_sweep_vdw_anchor_dt_freq_overrides(cfg: dict) -> None:
     sweep_cfg = {
         **cfg,

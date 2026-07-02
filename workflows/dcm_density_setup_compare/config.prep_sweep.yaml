@@ -115,6 +115,8 @@ prep_sweep:
   enabled: true
   stages: mini,heat
   full_dynamics: false
+  # Keep Packmol / liquid_prep seed identical to mini-only sweep (do not offset by heat thermostat).
+  placement_seed_ignore_heat: true
   anchor:
     setup_id: resilient
     solvent: DCM

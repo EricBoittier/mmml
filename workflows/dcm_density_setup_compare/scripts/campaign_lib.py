@@ -382,13 +382,25 @@ def run_output_dir(cfg: dict[str, Any], cell: RunCell) -> Path:
     return (root / cell_run_tag(cell, cfg)).resolve()
 
 
-def run_seed(cell: RunCell, *, seed_base: int = 4242) -> int:
+def prep_sweep_placement_seed_ignore_heat(cfg: dict[str, Any]) -> bool:
+    """When true, heat thermostat does not shift Packmol seed for prep_sweep cells."""
+    if not prep_sweep_enabled(cfg):
+        return False
+    return bool(prep_sweep_section(cfg).get("placement_seed_ignore_heat", True))
+
+
+def run_seed(cell: RunCell, *, seed_base: int = 4242, cfg: dict[str, Any] | None = None) -> int:
     setup_off = sum(ord(c) for c in cell.setup_id) % 1000
     solvent_off = sum(ord(c) for c in solvent_slug(cell.solvent)) % 1000
     temp_off = int(round(cell.temperature)) % 100
     box_off = int(round(cell.box_size)) % 100
     heat_off = 0
-    if cell.heat_thermostat:
+    ignore_heat_seed = (
+        cfg is not None
+        and cell.sweep_id
+        and prep_sweep_placement_seed_ignore_heat(cfg)
+    )
+    if cell.heat_thermostat and not ignore_heat_seed:
         heat_off = {"bussi": 11, "hoover": 22, "scale": 33}[cell.heat_thermostat]
     sweep_off = 0
     if cell.sweep_id:
@@ -784,7 +796,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     effective = merge_setup_into_config(cell_cfg, cell.setup_id)
     comp = composition_string(cell)
     tag = cell_run_tag(cell, cfg)
-    seed = run_seed(cell, seed_base=int(cfg.get("seed_base", 4242)))
+    seed = run_seed(cell, seed_base=int(cfg.get("seed_base", 4242)), cfg=cfg)
     cell_root = run_output_dir(cfg, cell)
     variant = resolve_setup_variant(cell.setup_id)
     frac = cell_bulk_density_fraction(cell, cfg)
