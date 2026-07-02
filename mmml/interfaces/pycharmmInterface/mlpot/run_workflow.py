@@ -123,10 +123,9 @@ def _charmm_pre_minimize_before_mlpot(
             save_energy_json_path=save_energy_json_path,
             save_title=save_title,
             use_pbc=use_pbc,
-            # Restore full NONBONDED so VDW is active for pre-MLpot clash resolution.
-            # apply_full_cgenff_params() reads a bonded-only file that resets the
-            # NONBONDED table; re-reading the full PRM here repairs it.
-            restore_full_nonbonded=True,
+            # Full CGENFF (including NONBONDED) is already loaded; skip the bonded-only
+            # READ PARAM APPEND that would reset NONBONDED to zero (VDW ε=0).
+            skip_cgenff_restore=True,
         )
     )
     r_mm = get_charmm_positions_array()
@@ -452,7 +451,7 @@ def run_charmm_mm_pretreat_before_mlpot(
                     use_pbc=use_pbc,
                     inbfrq=pretreat.inbfrq,
                     ihbfrq=pretreat.imgfrq if use_pbc else 0,
-                    restore_full_nonbonded=True,
+                    skip_cgenff_restore=True,
                 )
             )
 
