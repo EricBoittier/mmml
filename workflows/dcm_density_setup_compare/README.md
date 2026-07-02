@@ -95,6 +95,11 @@ tail -f snakemake_slurm.log
 
 # Monitor driver:
 pgrep -af 'snakemake --profile profiles/slurm'
+
+# tmux dashboard (driver log + squeue + triage; optional cell stdout):
+bash scripts/monitor_tmux.sh
+bash scripts/monitor_tmux.sh --tag resilient_dcm_52_t50_l28_ht_bussi
+bash scripts/monitor_tmux.sh --log snakemake_prep_sweep.log --replace
 ```
 
 Single-cell smoke (still from login — Snakemake submits one GPU jobstep):
