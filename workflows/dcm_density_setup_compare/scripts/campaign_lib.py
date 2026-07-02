@@ -589,12 +589,22 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         if key in effective:
             defaults[key] = effective[key]
 
+    if dynamics_campaign_enabled(cfg):
+        defaults["handoff_write_res"] = bool(cfg.get("handoff_write_res", True))
+        defaults["continue_velocities"] = bool(cfg.get("continue_velocities", True))
+
     mini_flags = _mini_job_flags(cfg, cell)
-    mini_flags.update(_heat_job_overrides(cfg, cell, effective))
-    stage_label = "mini+heat" if cell.heat_thermostat else "mini-only"
-    ht_note = f" heat={cell.heat_thermostat}" if cell.heat_thermostat else ""
+    mini_flags.update(_init_stage_overrides(cfg, cell, effective))
+    init_id = init_job_id(cfg)
+    md_stages = str(mini_flags.get("md_stages", "mini"))
+    ht = mini_flags.get("heat_thermostat")
+    ht_note = f" heat={ht}" if ht else ""
+    if "heat" in md_stages:
+        stage_label = "mini+heat"
+    else:
+        stage_label = "mini-only"
     runs: dict[str, Any] = {
-        "pycharmm_mini": _attach_leg_output_dir(
+        init_id: _attach_leg_output_dir(
             {
                 "description": (
                     f"{comp} setup={cell.setup_id} {frac_s} "
@@ -602,13 +612,46 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 ),
                 "backend": "pycharmm",
                 "setup": "pbc_npt",
-                "md_stages": mini_flags.get("md_stages", "mini"),
+                "md_stages": md_stages,
                 **mini_flags,
             },
             cell_root,
-            "pycharmm_mini",
+            init_id,
         ),
     }
+
+    prev = init_id
+    legs = parse_dynamics_legs(cfg)
+    if legs["pycharmm_equi"] or legs["pycharmm_prod"]:
+        repair = _equi_prod_flags(mini_flags)
+        prev = _append_pycharmm_equi_prod_legs(
+            runs,
+            cfg=cfg,
+            cell=cell,
+            cell_root=cell_root,
+            comp=comp,
+            repair=repair,
+            prev=prev,
+        )
+    if legs["jaxmd"]:
+        prev = _append_jaxmd_leg(
+            runs,
+            cfg=cfg,
+            cell=cell,
+            cell_root=cell_root,
+            comp=comp,
+            effective=effective,
+            prev=prev,
+        )
+    if legs["ase"]:
+        _append_ase_leg(
+            runs,
+            cfg=cfg,
+            cell=cell,
+            cell_root=cell_root,
+            comp=comp,
+            prev=prev,
+        )
 
     return {
         "defaults": defaults,
@@ -736,11 +779,12 @@ def slurm_resources_cli(cfg: dict[str, Any]) -> str:
 
 def paths_for_run(cfg: dict[str, Any], cell: RunCell) -> dict[str, Path]:
     out = run_output_dir(cfg, cell)
+    final_job = campaign_final_job_id(cfg)
     return {
         "out_dir": out,
         "campaign_yaml": out / "campaign.yaml",
         "campaign_summary": out / "campaign_summary.json",
-        "final_handoff": out / "pycharmm_mini" / "handoff" / "state.npz",
+        "final_handoff": out / final_job / "handoff" / "state.npz",
         "done": out / "done.txt",
     }
 
