@@ -78,6 +78,46 @@ class PackmolRunResult:
     error_message: str | None = None
 
 
+PACKMOL_EXIT_LABELS: dict[int, str] = {
+    170: "general error",
+    171: "input error",
+    172: "file open error",
+    173: "failed to converge",
+    174: "command-line error",
+}
+
+
+def _summarize_packmol_log_tail(log_text: str, *, max_lines: int = 12) -> str:
+    lines = [ln.rstrip() for ln in (log_text or "").splitlines() if ln.strip()]
+    if not lines:
+        return "(no Packmol output captured)"
+    interesting = [
+        ln
+        for ln in lines
+        if re.search(
+            r"ERROR|STOP:|WARNING|Success!|converge|GENCAN|outside|file-open",
+            ln,
+            flags=re.IGNORECASE,
+        )
+    ]
+    if interesting:
+        return "\n".join(interesting[-max_lines:])
+    return "\n".join(lines[-max_lines:])
+
+
+def packmol_failure_message(result: PackmolRunResult) -> str:
+    if result.error_message:
+        return result.error_message
+    label = PACKMOL_EXIT_LABELS.get(int(result.exit_code))
+    if label:
+        return f"packmol {label} (exit {result.exit_code})"
+    tail = _summarize_packmol_log_tail(result.log_text, max_lines=3)
+    if tail != "(no Packmol output captured)":
+        one_line = tail.replace("\n", " | ")
+        return f"packmol failed (exit {result.exit_code}): {one_line}"
+    return f"packmol failed with exit code {result.exit_code}"
+
+
 def parse_packmol_log(log_text: str) -> dict[str, Any]:
     """Extract success metrics and the first error line from Packmol output."""
     log = log_text or ""
@@ -108,12 +148,19 @@ def parse_packmol_log(log_text: str) -> dict[str, Any]:
 
     for line in log.splitlines():
         stripped = line.strip()
-        if "ERROR:" in stripped or stripped.startswith("STOP:"):
+        upper = stripped.upper()
+        if (
+            "ERROR:" in stripped
+            or stripped.startswith("STOP:")
+            or "FILE-OPEN ERROR" in upper
+            or "FORTRAN RUNTIME ERROR" in upper
+            or "STOP " in upper
+        ):
             error_message = stripped
             break
-    if error_message is None and " STOP " in log:
+    if error_message is None:
         for line in log.splitlines():
-            if " STOP" in line:
+            if "GENCAN loops achieved" in line or "failed to converge" in line.lower():
                 error_message = line.strip()
                 break
 
@@ -231,15 +278,16 @@ def emit_packmol_build_summary(
 
 def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResult:
     """Run Packmol with captured stdout/stderr (no Fortran spam on the terminal)."""
+    inp_path = Path(inp_path).expanduser().resolve()
     os.makedirs(inp_path.parent, exist_ok=True)
     inp_path.write_text(packmol_input)
     packmol_bin = packmol_executable()
     proc = subprocess.run(
-        [packmol_bin],
-        input=packmol_input,
+        [packmol_bin, "-i", str(inp_path)],
         capture_output=True,
         text=True,
         check=False,
+        cwd=str(inp_path.parent),
     )
     log_text = (proc.stdout or "") + (
         ("\n" + proc.stderr) if proc.stderr else ""
@@ -259,10 +307,11 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResu
     if not result.success:
         from mmml.utils.rich_report import emit_panel, is_verbose
 
-        if is_verbose() and log_text.strip():
-            emit_panel("Packmol log", log_text.strip(), border_style="red")
-        msg = result.error_message or f"packmol failed with exit code {result.exit_code}"
-        raise RuntimeError(msg)
+        tail = _summarize_packmol_log_tail(result.log_text)
+        emit_panel("Packmol failed", tail, border_style="red")
+        if is_verbose() and result.log_text.strip():
+            emit_panel("Packmol log (full)", result.log_text.strip(), border_style="red")
+        raise RuntimeError(packmol_failure_message(result))
     return result
 
 
@@ -680,7 +729,7 @@ def run_packmol_mixed(
         cube_side=cube_side,
         radius=radius,
     )
-    out = Path(output_pdb)
+    out = Path(output_pdb).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
 
     structure_lines: list[str] = []
@@ -688,7 +737,7 @@ def run_packmol_mixed(
         if count <= 0:
             continue
         structure_lines.append(
-            f"structure {pdb_path}\n"
+            f"structure {Path(pdb_path).expanduser().resolve()}\n"
             f"  chain A\n"
             f"  resnumbers 2\n"
             f"  number {int(count)}\n"
@@ -711,7 +760,11 @@ def run_packmol_mixed(
     default_inp = (
         "packmol_cube.inp" if placement == "cube" else "packmol_sphere.inp"
     )
-    inp_path = Path(input_path) if input_path is not None else Path("packmol") / default_inp
+    inp_path = (
+        Path(input_path).expanduser().resolve()
+        if input_path is not None
+        else (Path("packmol") / default_inp).resolve()
+    )
     result = execute_packmol_script(packmol_input, inp_path)
     if emit_summary:
         emit_packmol_build_summary(
