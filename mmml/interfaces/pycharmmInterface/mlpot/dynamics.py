@@ -1040,6 +1040,48 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
         )
 
 
+def _rewrap_mlpot_pbc_after_sd(config: Any, *, verbose: bool = False) -> None:
+    """Re-wrap CHARMM primary-cell coords after an MLpot SD pass.
+
+    During ``inbfrq=0`` SD, monomers drift freely and may exit the CHARMM primary cell
+    (``|z| > L/2``).  JAX MIC collapses ``dr = L`` to 0, creating phantom zero-distance
+    contacts that pin GRMS at ~937.  This function detects and corrects such drift by
+    applying :func:`~mmml.cli.run.md_handoff.rewrap_charmm_pbc_molecules` and syncing
+    corrected positions back to CHARMM.
+    """
+    if config is None:
+        return
+    mlpot_ctx = getattr(config, "mlpot_ctx", None)
+    if mlpot_ctx is None:
+        return
+    box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+    atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if box_side is None or atoms_per is None:
+        return
+
+    import numpy as _np
+    from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    pos = get_charmm_positions_array()
+    pos_wrapped = rewrap_charmm_pbc_molecules(pos, list(atoms_per), float(box_side))
+    delta = _np.abs(pos - pos_wrapped)
+    n_shifted = int(_np.any(delta > 1e-4, axis=1).sum())
+    if n_shifted == 0:
+        return
+    sync_charmm_positions(pos_wrapped)
+    if verbose:
+        max_delta = float(delta.max())
+        print(
+            f"Post-SD PBC rewrap: {n_shifted} atoms re-centered into primary cell "
+            f"(max drift {max_delta:.3f} Å, L={float(box_side):.3f} Å)",
+            flush=True,
+        )
+
+
 def invalidate_mlpot_calculator_caches(mlpot_ctx: Any | None) -> None:
     """Drop JAX MM pair-list caches after CHARMM UPDATE (positions moved)."""
     if mlpot_ctx is None:
@@ -7726,6 +7768,8 @@ def minimize_with_mlpot(
                 config.mlpot_ctx,
                 verbose=config.verbose,
             )
+        # Fix any atoms that drifted outside [-L/2, L/2] during MM pre-minimize.
+        _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose)
         with charmm_mlpot_sd_jax_cpu_guard(pyC_model):
             sd_result = _run_mlpot_sd_then_abnr(
                 minimize,
@@ -7785,6 +7829,7 @@ def minimize_with_mlpot(
                         "(lists/forces diverged during inbfrq=0 minimization)"
                     )
             sync_charmm_lists_after_mini(quiet=not config.verbose)
+            _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose)
             invalidate_mlpot_calculator_caches(config.mlpot_ctx)
             if config.verbose and config.mlpot_ctx is not None:
                 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -7829,6 +7874,7 @@ def minimize_with_mlpot(
                             "hybrid GRMS watchdog triggered"
                         )
                 sync_charmm_lists_after_mini(quiet=not config.verbose)
+                _rewrap_mlpot_pbc_after_sd(config, verbose=config.verbose)
                 invalidate_mlpot_calculator_caches(config.mlpot_ctx)
                 if config.verbose and config.mlpot_ctx is not None:
                     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (

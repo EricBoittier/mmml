@@ -102,6 +102,54 @@ def wrap_monomers_primary_cell(
     return pos
 
 
+def ensure_monomers_inside_cell(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: Any,
+    *,
+    margin_A: float = 1.5,
+) -> np.ndarray:
+    """Shift monomers whose atoms are outside ``[margin_A, L - margin_A]`` back inward.
+
+    Call AFTER :func:`wrap_monomers_primary_cell` (which places COMs in ``[0, L)``).
+    A monomer with COM near 0 can have atoms at ``z < 0``; its JAX MIC image coincides
+    with atoms near ``z = L`` on the opposite face, producing a spurious 0 Å contact
+    that stalls MLpot SD.  This function applies a minimal rigid shift per monomer so
+    the most extreme atom in each dimension reaches the margin boundary.  For typical
+    small molecules (extent ≪ L/2) the shift is at most ``margin_A + max_atom_extent``.
+
+    The convention-mismatch mechanism:
+    * CHARMM frame ``[-L/2, L/2]``:  atoms can drift to ``|z| > L/2`` during SD.
+    * JAX MIC: ``dr_mic = dr - L·round(dr/L)``; when ``|dr| = L``, ``dr_mic = 0``.
+    * Atoms at ``+L/2`` and ``-L/2`` are at the **same** periodic position → distance 0.
+    * ``ensure_monomers_inside_cell`` (applied in the JAX ``[0, L)`` frame before the
+      CHARMM ``−L/2`` shift) prevents atoms from reaching the ``0`` / ``L`` boundaries,
+      eliminating the degenerate ``dr = L`` case.
+    """
+    pos = np.asarray(positions, dtype=float).copy()
+    cell_mat = _cell_matrix(cell)
+    if cell_mat is None:
+        return pos
+    Lx = float(cell_mat[0, 0])
+    Ly = float(cell_mat[1, 1])
+    Lz = float(cell_mat[2, 2])
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    n_mol = int(len(offsets) - 1)
+    for mi in range(n_mol):
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        for d, L_d in enumerate([Lx, Ly, Lz]):
+            if L_d <= 0:
+                continue
+            col = pos[s:e, d]
+            lo = float(col.min())
+            hi = float(col.max())
+            if lo < margin_A:
+                pos[s:e, d] += margin_A - lo
+            elif hi > L_d - margin_A:
+                pos[s:e, d] += (L_d - margin_A) - hi
+    return pos
+
+
 def find_worst_intermonomer_overlap(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,

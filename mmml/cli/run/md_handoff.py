@@ -925,7 +925,7 @@ def align_handoff_positions_for_charmm_pbc(
     if handoff is not None and not handoff_needs_charmm_pbc_alignment(handoff):
         return np.asarray(positions, dtype=np.float64)
 
-    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+    from mmml.utils.geometry_checks import ensure_monomers_inside_cell, wrap_monomers_primary_cell
 
     L = float(box_side_A)
     if L <= 0.0:
@@ -936,6 +936,11 @@ def align_handoff_positions_for_charmm_pbc(
         np.asarray(monomer_offsets, dtype=int),
         cell,
     )
+    # Shift boundary-straddling monomers inward so no atom sits at the [0, L] face.
+    # COM-only wrapping leaves atoms that extend past the face (COM at z=0.1 Å, atom
+    # at z=-1.9 Å); the atom's JAX MIC image coincides with atoms at z≈L-1.9 on the
+    # opposite face, giving a spurious 0 Å contact that stalls MLpot SD at GRMS≈937.
+    pos = ensure_monomers_inside_cell(pos, np.asarray(monomer_offsets, dtype=int), cell)
     aligned = pos - 0.5 * L
     if not quiet:
         print(
@@ -944,6 +949,40 @@ def align_handoff_positions_for_charmm_pbc(
             flush=True,
         )
     return aligned
+
+
+def rewrap_charmm_pbc_molecules(
+    pos_charmm: np.ndarray,
+    atoms_per_monomer: list[int],
+    box_side_A: float,
+    *,
+    margin_A: float = 1.5,
+) -> np.ndarray:
+    """Re-wrap CHARMM primary-cell coords after MLpot SD drift.
+
+    During MLpot SD, monomers can drift so their atoms exceed ``|z| > L/2`` in
+    CHARMM's ``[-L/2, L/2]`` frame.  JAX MIC: ``dr_mic = dr - L·round(dr/L)``
+    collapses to 0 when ``|dr| = L``, creating phantom zero-distance contacts between
+    atoms on opposite box faces that stall minimisation (GRMS pinned at ~937).
+
+    This function:
+    1. Converts to JAX ``[0, L)`` frame  (``pos + L/2``).
+    2. Applies COM-based integer-lattice wrapping (:func:`wrap_monomers_primary_cell`).
+    3. Shifts boundary-straddling monomers inward by ``margin_A`` per dimension
+       (:func:`ensure_monomers_inside_cell`).
+    4. Converts back to CHARMM ``[-L/2, L/2]`` frame  (``pos - L/2``).
+    """
+    import numpy as _np
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
+    from mmml.utils.geometry_checks import ensure_monomers_inside_cell, wrap_monomers_primary_cell
+
+    L = float(box_side_A)
+    pos_jax = _np.asarray(pos_charmm, dtype=_np.float64) + 0.5 * L
+    offsets = monomer_offsets_from_atoms_per(list(atoms_per_monomer))
+    cell = _np.diag([L, L, L])
+    pos_jax = wrap_monomers_primary_cell(pos_jax, offsets, cell)
+    pos_jax = ensure_monomers_inside_cell(pos_jax, offsets, cell, margin_A=margin_A)
+    return pos_jax - 0.5 * L
 
 
 def align_handoff_positions_for_jaxmd_pbc(
