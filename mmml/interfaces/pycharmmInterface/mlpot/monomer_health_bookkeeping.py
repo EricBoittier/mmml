@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
@@ -34,6 +35,7 @@ class MonomerHealthConfig:
     debug_dot_matrix: bool = False
     template_restore_on_bad: bool = True
     per_monomer_jax_after_restore: bool = True
+    velocity_restore_on_template: bool = True
     max_restore_per_check: int = 4
     velocity_warn_ratio: float = 3.0
     velocity_bad_ratio: float = 6.0
@@ -124,6 +126,9 @@ def monomer_health_config_from_args(args: Any | None) -> MonomerHealthConfig:
         ),
         per_monomer_jax_after_restore=not bool(
             getattr(args, "no_dynamics_monomer_jax_after_restore", False)
+        ),
+        velocity_restore_on_template=not bool(
+            getattr(args, "no_dynamics_monomer_velocity_restore", False)
         ),
         max_restore_per_check=max(
             1,
@@ -483,6 +488,117 @@ def emit_monomer_health_dot_matrix(
         emit(f"{context}\n{body}", quiet=quiet)
 
 
+def _resolve_health_velocity_temperature_K(mlpot_ctx: Any) -> float:
+    """Target bath temperature for per-monomer velocity redraw after template restore."""
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if args is None:
+        return 300.0
+    for attr in ("heat_finalt", "heat_firstt", "temperature", "temp"):
+        raw = getattr(args, attr, None)
+        if raw is None:
+            continue
+        try:
+            temp = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if temp > 0.0:
+            return temp
+    return 300.0
+
+
+def _current_velocities_akma(n_atoms: int) -> np.ndarray | None:
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+            charmm_synced_velocities_akma,
+        )
+
+        vel = charmm_synced_velocities_akma()
+        if vel is not None and int(vel.shape[0]) >= int(n_atoms):
+            return np.asarray(vel[:n_atoms], dtype=np.float64).copy()
+    except Exception:
+        pass
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+            _charmm_velocities_array,
+        )
+
+        vel = _charmm_velocities_array()
+        if vel is not None and int(vel.shape[0]) >= int(n_atoms):
+            return np.asarray(vel[:n_atoms], dtype=np.float64).copy()
+    except Exception:
+        pass
+    return None
+
+
+def restore_monomer_velocities_from_template(
+    mlpot_ctx: Any,
+    flagged: tuple[int, ...] | list[int],
+    *,
+    offsets: np.ndarray,
+    template_source: Path | str,
+    temperature_K: float | None = None,
+    verbose: bool = False,
+) -> bool:
+    """Splice template restart velocities onto flagged monomers (or MB redraw)."""
+    if not flagged:
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _maxwell_boltzmann_akma_numpy,
+        _read_restart_velocities_akma,
+        charmm_masses_amu,
+        sync_charmm_velocities_akma,
+        velocities_are_pathological,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_velocities,
+    )
+
+    n_atoms = int(offsets[-1])
+    vel = _current_velocities_akma(n_atoms)
+    if vel is None:
+        vel = np.zeros((n_atoms, 3), dtype=np.float64)
+
+    source = Path(template_source)
+    ref_vel = read_restart_velocities(source)
+    if ref_vel is None:
+        ref_vel = _read_restart_velocities_akma(source, quiet=True)
+    if ref_vel is not None:
+        ref_vel = np.asarray(ref_vel, dtype=np.float64).reshape(-1, 3)
+
+    masses = charmm_masses_amu()
+    temp = float(temperature_K if temperature_K is not None else _resolve_health_velocity_temperature_K(mlpot_ctx))
+    modified = False
+    for mi in flagged:
+        start = int(offsets[int(mi)])
+        end = int(offsets[int(mi) + 1])
+        if end <= start:
+            continue
+        if (
+            ref_vel is not None
+            and ref_vel.shape[0] >= end
+            and not velocities_are_pathological(
+                ref_vel[start:end],
+                masses_amu=masses[start:end],
+            )
+        ):
+            vel[start:end] = ref_vel[start:end]
+            modified = True
+            continue
+        vel[start:end] = _maxwell_boltzmann_akma_numpy(masses[start:end], temp)
+        modified = True
+
+    if not modified:
+        return False
+    sync_charmm_velocities_akma(vel)
+    if verbose:
+        print(
+            f"Template velocity restore: monomer(s) {list(flagged)} "
+            f"from {source.name} (fallback T={temp:.1f} K where needed)",
+            flush=True,
+        )
+    return True
+
+
 def restore_flagged_monomers_from_template(
     mlpot_ctx: Any,
     flagged: tuple[int, ...] | list[int],
@@ -490,6 +606,8 @@ def restore_flagged_monomers_from_template(
     context: str,
     restart_path: Any | None = None,
     verbose: bool = False,
+    velocity_restore: bool = True,
+    temperature_K: float | None = None,
 ) -> bool:
     """Rigid-body template restore for unhealthy monomers only."""
     if not flagged:
@@ -535,6 +653,15 @@ def restore_flagged_monomers_from_template(
             f"{selected} from {source.name}",
             flush=True,
         )
+    if velocity_restore:
+        restore_monomer_velocities_from_template(
+            mlpot_ctx,
+            selected,
+            offsets=offsets,
+            template_source=source,
+            temperature_K=temperature_K,
+            verbose=verbose,
+        )
     return True
 
 
@@ -544,6 +671,7 @@ def _run_per_monomer_jax_on_indices(
     monomer_indices: tuple[int, ...],
     *,
     context: str,
+    restart_path: Any | None = None,
 ) -> None:
     if not monomer_indices:
         return
@@ -558,13 +686,37 @@ def _run_per_monomer_jax_on_indices(
     topo = getattr(overlap_config, "topology_psf", None) or getattr(
         mlpot_ctx, "topology_psf_path", None
     )
-    minimize_bonded_jax_per_monomer_recovery(
+    grms = minimize_bonded_jax_per_monomer_recovery(
         mlpot_ctx,
         bonded_cfg,
         n_monomers=int(getattr(overlap_config, "n_monomers", 1) or 1),
         topology_psf=topo,
         context=f"{context} (per-monomer JAX)",
         monomer_indices=monomer_indices,
+    )
+    if grms is not None:
+        return
+
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
+        monomer_physnet_mini_enabled,
+        run_selective_monomer_physnet_mini,
+        selective_monomer_physnet_mini_config_from_args,
+    )
+
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    if not monomer_physnet_mini_enabled(args):
+        return
+    physnet_cfg = selective_monomer_physnet_mini_config_from_args(
+        args,
+        verbose=bool(getattr(bonded_cfg, "verbose", False)),
+        quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)) if args is not None else False,
+    )
+    run_selective_monomer_physnet_mini(
+        mlpot_ctx,
+        config=physnet_cfg,
+        context_prefix=f"{context} monomer PhysNet",
+        flagged=monomer_indices,
+        restart_path=restart_path,
     )
 
 
@@ -623,6 +775,8 @@ def maybe_intervene_monomer_health(
         context=context,
         restart_path=restart_path,
         verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
+        velocity_restore=bool(health_cfg.velocity_restore_on_template),
+        temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
     )
     if not restored:
         return False
@@ -633,6 +787,7 @@ def maybe_intervene_monomer_health(
             overlap_config,
             tuple(to_restore),
             context=context,
+            restart_path=restart_path,
         )
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (

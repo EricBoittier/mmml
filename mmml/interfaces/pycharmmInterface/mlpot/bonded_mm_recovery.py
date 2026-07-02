@@ -317,6 +317,7 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
         from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
             audit_monomer_health,
             restore_flagged_monomers_from_template,
+            _resolve_health_velocity_temperature_K,
         )
 
         report = audit_monomer_health(
@@ -349,6 +350,10 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
                         restart_path=getattr(config, "prior_segment_restart", None),
                         verbose=getattr(health_cfg, "verbose", False)
                         or getattr(health_cfg, "debug_dot_matrix", False),
+                        velocity_restore=bool(
+                            getattr(health_cfg, "velocity_restore_on_template", True)
+                        ),
+                        temperature_K=_resolve_health_velocity_temperature_K(ctx),
                     )
     bonded_cfg = _bonded_cfg_from_overlap_config(config)
     if not bool(getattr(bonded_cfg, "per_monomer_jax", True)):

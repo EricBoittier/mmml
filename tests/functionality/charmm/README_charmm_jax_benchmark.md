@@ -7,7 +7,7 @@ Compare **native PyCHARMM** ``ENER FORCE`` against **MMML JAX** loaders
 
 | Case | System | Layers |
 |------|--------|--------|
-| `tip3_monomer` | CGENFF TIP3 via `make-res` / `setupRes` | bonded |
+| `tip3_monomer` | CGENFF TIP3 from committed fixture PDB (`pycharmmETC/pdb/initial.pdb`) | bonded |
 | `tip3_water_box` | 10× TIP3 in 28 Å cube (grid placement) | bonded, nonbonded, total_mm |
 | `trialanine_water` | TRIA peptide + 10× TIP3 (bundled RTF) | bonded, nonbonded, total_mm |
 

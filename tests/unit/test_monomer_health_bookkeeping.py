@@ -158,3 +158,64 @@ def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert "DCM" in out
     assert "G O R" in out or "G" in out
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.sync_charmm_velocities_akma"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
+    return_value=False,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+    return_value=np.ones(4),
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_velocities"
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._current_velocities_akma"
+)
+def test_restore_monomer_velocities_splices_template_slice(
+    current_vel: MagicMock,
+    read_restart: MagicMock,
+    _masses: MagicMock,
+    _pathological: MagicMock,
+    sync_vel: MagicMock,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        restore_monomer_velocities_from_template,
+    )
+
+    current_vel.return_value = np.array(
+        [
+            [50000.0, 0.0, 0.0],
+            [50000.0, 0.0, 0.0],
+            [100.0, 0.0, 0.0],
+            [100.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    read_restart.return_value = np.array(
+        [
+            [200.0, 0.0, 0.0],
+            [300.0, 0.0, 0.0],
+            [400.0, 0.0, 0.0],
+            [500.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 2, 4], dtype=int)
+    ok = restore_monomer_velocities_from_template(
+        SimpleNamespace(workflow_args=SimpleNamespace(temperature=100.0)),
+        (0,),
+        offsets=offsets,
+        template_source="/tmp/baseline.res",
+        verbose=False,
+    )
+    assert ok
+    synced = sync_vel.call_args[0][0]
+    assert synced[0, 0] == pytest.approx(200.0)
+    assert synced[1, 0] == pytest.approx(300.0)
+    assert synced[2, 0] == pytest.approx(100.0)

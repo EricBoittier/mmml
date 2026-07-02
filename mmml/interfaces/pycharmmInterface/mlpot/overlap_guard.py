@@ -256,6 +256,14 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         help="Skip per-monomer JAX bonded mini after template restore.",
     )
     group.add_argument(
+        "--no-dynamics-monomer-velocity-restore",
+        action="store_true",
+        help=(
+            "Template-restore positions only; do not splice baseline restart "
+            "velocities (or Maxwell-Boltzmann redraw) onto restored monomers."
+        ),
+    )
+    group.add_argument(
         "--dynamics-monomer-health-max-restore",
         type=int,
         default=4,
