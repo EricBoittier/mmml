@@ -1250,6 +1250,20 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--jax-mm-spoof",
+        action="store_true",
+        help=(
+            "Use JAX CGenFF bonded clone instead of PhysNet for ML terms "
+            "(no checkpoint; box / calculator infrastructure testing)."
+        ),
+    )
+    parser.add_argument(
+        "--jax-mm-spoof-psf",
+        type=Path,
+        default=None,
+        help="Optional cluster PSF for --jax-mm-spoof bonded parameters.",
+    )
+    parser.add_argument(
         "--residue",
         type=str,
         default="MEOH",
@@ -2558,6 +2572,9 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     if not bool(getattr(args, "include_mm", True)):
         cmd.append("--no-include-mm")
+    if bool(getattr(args, "jax_mm_spoof", False)):
+        cmd.append("--jax-mm-spoof")
+    _append_optional(cmd, "--jax-mm-spoof-psf", getattr(args, "jax_mm_spoof_psf", None))
     _append_optional(
         cmd,
         "--min-com-restraint-distance",
