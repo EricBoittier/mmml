@@ -15,6 +15,13 @@ MAX_MM_PRETREAT_DYNAMICS_GRMS = 500.0
 MAX_MM_PRETREAT_COORD_SPAN_A = 500.0
 
 
+def measure_mm_pretreat_grms() -> float:
+    """Fresh CHARMM GRMS (kcal/mol/Å) after ``ENER FORCE``."""
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms_after_ener_force
+
+    return float(charmm_grms_after_ener_force(silent=True))
+
+
 def mm_geometry_safe_for_pretreat_dynamics(
     *,
     grms_kcalmol_A: float,
@@ -70,10 +77,8 @@ def maybe_run_mini_box_equilibration(
     )
     pos = positions
     if grms is None or pos is None:
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
-
         if grms is None:
-            grms = float(charmm_grms())
+            grms = measure_mm_pretreat_grms()
         if pos is None:
             pos = get_charmm_positions_array()
     safe, reason = mm_geometry_safe_for_pretreat_dynamics(
@@ -140,6 +145,21 @@ def run_mini_box_equilibration(
         return
     if not use_pbc:
         raise ValueError("mini box equilibration requires PBC")
+    grms = measure_mm_pretreat_grms()
+    pos = get_charmm_positions_array()
+    safe, reason = mm_geometry_safe_for_pretreat_dynamics(
+        grms_kcalmol_A=grms,
+        positions=pos,
+    )
+    if not safe:
+        if not getattr(args, "quiet", False):
+            print(
+                f"Mini box equilibration: skipped — {reason}. "
+                "Rebuild with a looser density (--profile conservative, lower "
+                "--bulk-density-fraction, or larger --box-size).",
+                flush=True,
+            )
+        return
     if box_side is not None:
         configure_liquid_box_mini_equil_args(args, box_side_A=float(box_side))
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (

@@ -400,3 +400,44 @@ def test_apply_charmm_dynamics_timestep_kw_sets_global_state(monkeypatch):
     apply_charmm_dynamics_timestep_kw(kw)
     assert kw["timestep"] == 0.0005
     assert calls == [0.0005]
+
+
+def test_mm_geometry_safe_rejects_catastrophic_grms():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        MAX_MM_PRETREAT_DYNAMICS_GRMS,
+        mm_geometry_safe_for_pretreat_dynamics,
+    )
+
+    safe, reason = mm_geometry_safe_for_pretreat_dynamics(
+        grms_kcalmol_A=428_016_825.0,
+        positions=None,
+    )
+    assert not safe
+    assert str(MAX_MM_PRETREAT_DYNAMICS_GRMS)[:3] in reason or "500" in reason
+
+
+def test_run_mini_lattice_abnr_skips_when_grms_unsafe(monkeypatch):
+    import argparse
+
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        run_mini_lattice_abnr,
+    )
+
+    args = argparse.Namespace(
+        mini_lattice_abnr_steps=200,
+        charmm_tolenr=1e-3,
+        charmm_tolgrd=1e-3,
+        mini_lattice_abnr_nocoords=False,
+        quiet=False,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.box_equil.measure_mm_pretreat_grms",
+        lambda: 1.0e8,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr.get_charmm_positions_array",
+        lambda: __import__("numpy").zeros((4, 3)),
+    )
+    side, ran = run_mini_lattice_abnr(args, box_side=32.0, use_pbc=True)
+    assert side == 32.0
+    assert ran is False

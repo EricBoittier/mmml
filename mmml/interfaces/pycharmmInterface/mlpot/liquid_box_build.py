@@ -416,47 +416,13 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     )
     from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
         MAX_MM_PRETREAT_DYNAMICS_GRMS,
-        mm_geometry_safe_for_pretreat_dynamics,
+        measure_mm_pretreat_grms,
         maybe_run_mini_box_equilibration,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import should_run_mini_box_equil
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
 
     mm_stages = ["mini"]
     r = get_charmm_positions_array()
-    mm_grms_after_pre = float(charmm_grms())
-    lattice_safe, lattice_skip_reason = mm_geometry_safe_for_pretreat_dynamics(
-        grms_kcalmol_A=mm_grms_after_pre,
-        positions=r,
-    )
-    if should_run_mini_lattice_abnr(args, charmm_pbc=charmm_pbc, stages=mm_stages):
-        if lattice_safe:
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-                sync_workflow_pbc_box_side_after_mm_pretreat,
-            )
-
-            new_side = run_mini_lattice_abnr(
-                args,
-                box_side=box_side,
-                use_pbc=charmm_pbc,
-                pretreat_restart=pretreat_restart_path,
-            )
-            if new_side is not None:
-                box_side = float(new_side)
-            if charmm_pbc and box_side is not None:
-                box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
-                    box_side,
-                    pretreat_restart=None,
-                    args=args,
-                    quiet=bool(getattr(args, "quiet", False)),
-                )
-            r = get_charmm_positions_array()
-            steps_applied.append("mini_lattice_abnr")
-        elif not getattr(args, "quiet", False):
-            print(
-                f"Mini lattice ABNR: skipped — {lattice_skip_reason}",
-                flush=True,
-            )
 
     gate_summary: dict[str, Any] | None = None
     if liquid_prep_enabled(args) and atoms_per_list is not None:
@@ -474,6 +440,33 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
         sync_charmm_positions(r)
         gate_summary = gate_result.to_dict()
         steps_applied.extend(gate_result.steps_applied)
+
+    mm_grms_after_prep = measure_mm_pretreat_grms()
+    r = get_charmm_positions_array()
+    if should_run_mini_lattice_abnr(args, charmm_pbc=charmm_pbc, stages=mm_stages):
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            sync_workflow_pbc_box_side_after_mm_pretreat,
+        )
+
+        new_side, lattice_ran = run_mini_lattice_abnr(
+            args,
+            box_side=box_side,
+            use_pbc=charmm_pbc,
+            pretreat_restart=pretreat_restart_path,
+        )
+        if lattice_ran:
+            if new_side is not None:
+                box_side = float(new_side)
+            if charmm_pbc and box_side is not None:
+                box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
+                    box_side,
+                    pretreat_restart=None,
+                    args=args,
+                    quiet=bool(getattr(args, "quiet", False)),
+                )
+            r = get_charmm_positions_array()
+            steps_applied.append("mini_lattice_abnr")
+            mm_grms_after_prep = measure_mm_pretreat_grms()
 
     if should_run_mini_box_equil(
         args,
@@ -499,7 +492,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             duration_ps=float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0),
             use_pbc=charmm_pbc,
             box_side=box_side,
-            grms_kcalmol_A=float(charmm_grms()),
+            grms_kcalmol_A=mm_grms_after_prep,
             positions=r,
         )
         if equil_ran:
@@ -515,10 +508,13 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     else:
         r = get_charmm_positions_array()
 
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        MAX_MM_PRETREAT_DYNAMICS_GRMS,
+        measure_mm_pretreat_grms,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import save_minimization_results
 
-    mm_grms = float(charmm_grms())
+    mm_grms = measure_mm_pretreat_grms()
     model_crd = out_dir / "model.crd"
     save_minimization_results(
         pdb_path=model_pdb,

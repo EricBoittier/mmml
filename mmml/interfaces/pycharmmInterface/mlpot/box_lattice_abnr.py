@@ -140,13 +140,32 @@ def run_mini_lattice_abnr(
     box_side: float | None,
     use_pbc: bool,
     pretreat_restart: PathLike | None = None,
-) -> float | None:
-    """Lattice ABNR leg between coordinate CHARMM MM mini and MLpot registration."""
+) -> tuple[float | None, bool]:
+    """Lattice ABNR leg between coordinate CHARMM MM mini and MLpot registration.
+
+    Returns ``(box_side, ran)``; ``ran`` is False when skipped (unsafe GRMS or
+    ``mini_lattice_abnr_steps`` is zero).
+    """
     if not use_pbc:
         raise ValueError("mini lattice ABNR requires PBC")
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        measure_mm_pretreat_grms,
+        mm_geometry_safe_for_pretreat_dynamics,
+    )
+
+    grms = measure_mm_pretreat_grms()
+    pos = get_charmm_positions_array()
+    safe, reason = mm_geometry_safe_for_pretreat_dynamics(
+        grms_kcalmol_A=grms,
+        positions=pos,
+    )
+    if not safe:
+        if not getattr(args, "quiet", False):
+            print(f"Mini lattice ABNR: skipped — {reason}", flush=True)
+        return box_side, False
     nstep = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
     if nstep <= 0:
-        return box_side
+        return box_side, False
     tolenr = float(getattr(args, "charmm_tolenr", 1e-3))
     tolgrd = float(getattr(args, "charmm_tolgrd", 1e-3))
     nocoords = bool(getattr(args, "mini_lattice_abnr_nocoords", False))
@@ -166,5 +185,5 @@ def run_mini_lattice_abnr(
     )
     sync_charmm_positions(get_charmm_positions_array())
     if new_side is not None:
-        return float(new_side)
-    return box_side
+        return float(new_side), True
+    return box_side, True

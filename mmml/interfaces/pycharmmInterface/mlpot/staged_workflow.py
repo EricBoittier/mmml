@@ -1718,13 +1718,13 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             sync_workflow_pbc_box_side_after_mm_pretreat,
         )
 
-        new_side = run_mini_lattice_abnr(
+        new_side, lattice_ran = run_mini_lattice_abnr(
             args,
             box_side=box_side,
             use_pbc=charmm_pbc,
             pretreat_restart=pretreat_restart_path,
         )
-        if new_side is not None:
+        if lattice_ran and new_side is not None:
             box_side = float(new_side)
         if charmm_pbc and box_side is not None:
             box_side = sync_workflow_pbc_box_side_after_mm_pretreat(
