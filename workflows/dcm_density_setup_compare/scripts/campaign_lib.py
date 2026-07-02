@@ -223,6 +223,35 @@ def _attach_leg_output_dir(job: dict[str, Any], cell_root: Path, job_id: str) ->
     return {**job, "output_dir": leg_output_dir(cell_root, job_id)}
 
 
+# Workflow config.yaml overrides cleanup / dense-cell defaults (applied last).
+_WORKFLOW_JOB_OVERRIDE_KEYS = (
+    "bonded_mm_mini",
+    "bonded_mm_mini_after",
+    "bonded_mm_mini_steps",
+    "no_echeck_heat",
+    "no_scale_max_grms",
+    "mini_nstep",
+    "charmm_sd_steps",
+    "charmm_abnr_steps",
+    "charmm_pre_minimize",
+    "pre_min_steps",
+    "pre_min_fmax",
+    "dynamics_overlap_check_interval",
+    "dynamics_overlap_charmm_sd_steps",
+    "dynamics_overlap_charmm_abnr_steps",
+    "dynamics_overlap_min_distance",
+    "dynamics_intra_min_distance",
+    "dynamics_overlap_action",
+    "overlap_run_state_every_chunks",
+)
+
+
+def _apply_workflow_job_overrides(flags: dict[str, Any], effective: dict[str, Any]) -> None:
+    for key in _WORKFLOW_JOB_OVERRIDE_KEYS:
+        if key in effective:
+            flags[key] = effective[key]
+
+
 def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     variant = resolve_setup_variant(cell.setup_id)
     effective = merge_setup_into_config(cfg, cell.setup_id)
@@ -234,15 +263,7 @@ def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         flags.update(pretreat_job_flags(strategy))
     else:
         flags.update(dense_cell_mlpot_overrides(cell, effective))
-    # Workflow config.yaml overrides cleanup defaults (e.g. bonded_mm_mini: false).
-    for key in (
-        "bonded_mm_mini",
-        "bonded_mm_mini_after",
-        "bonded_mm_mini_steps",
-        "no_echeck_heat",
-    ):
-        if key in cfg:
-            flags[key] = cfg[key]
+    _apply_workflow_job_overrides(flags, effective)
     return flags
 
 
@@ -594,6 +615,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "mc_density_steps",
         "min_intermonomer_atom_distance",
         "max_grms_before_dyn",
+        "no_scale_max_grms",
         "mini_box_equil_ps",
         "calculator_pre_minimize",
     ):

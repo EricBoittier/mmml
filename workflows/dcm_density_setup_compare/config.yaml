@@ -28,10 +28,27 @@ seed_base: 4242
 dt_fs: 0.25
 pressure: 1.0
 # Easier Packmol convergence (see md_system.dense_liquid_prep.example.yaml).
-spacing: 4.5
-packmol_tolerance: 1.5
-# Keep Packmol cube near L_sim (N is bulk-sized for the full cell, not an inset cube).
+spacing: 5.0
+packmol_tolerance: 2.0
 packmol_box_padding: 1.0
+
+# Stricter pre-dynamics GRMS gate (do not scale up with bad per-monomer stats).
+no_scale_max_grms: true
+max_grms_before_dyn: 50.0
+
+# More mini / rescue capacity before heat (override resilient cleanup defaults).
+mini_nstep: 1000
+charmm_sd_steps: 2000
+charmm_abnr_steps: 2000
+pre_min_steps: 300
+
+# Overlap checks during heat/dynamics: smaller interval = more frequent (steps).
+# Resilient default is 250; dense-cell helper may bump N≥150 to 500 unless overridden here.
+dynamics_overlap_check_interval: 100
+dynamics_overlap_charmm_sd_steps: 400
+dynamics_overlap_charmm_abnr_steps: 800
+dynamics_overlap_min_distance: 1.5
+min_intermonomer_atom_distance: 1.2
 
 # Resilient density prep (merged into resilient setup; reinforces variant defaults).
 liquid_prep: true
@@ -41,8 +58,6 @@ density_prep_lattice_abnr_steps: 300
 mini_lattice_abnr_steps: 300
 mc_density_equalize: true
 mc_density_steps: 128
-min_intermonomer_atom_distance: 1.0
-max_grms_before_dyn: 50.0
 mini_box_equil_ps: 5.0
 calculator_pre_minimize: true
 
