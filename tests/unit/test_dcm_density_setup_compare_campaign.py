@@ -57,6 +57,10 @@ heat_compare_enabled = cl.heat_compare_enabled
 parse_dynamics_legs = cl.parse_dynamics_legs
 prep_sweep_enabled = cl.prep_sweep_enabled
 prep_sweep_variant_ids = cl.prep_sweep_variant_ids
+temperature_ladder_enabled = cl.temperature_ladder_enabled
+temperature_ladder_prior_cell = cl.temperature_ladder_prior_cell
+temperature_ladder_prior_tag = cl.temperature_ladder_prior_tag
+temperature_ladder_prior_temperature = cl.temperature_ladder_prior_temperature
 slurm_launch_jobs = cl.slurm_launch_jobs
 slurm_resources_cli = cl.slurm_resources_cli
 resolve_setup_variant = sv.resolve_setup_variant
@@ -174,7 +178,95 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
     assert init.get("charmm_mm_pretreat") is True
     assert init.get("md_stages") == "mini,heat"
     assert init.get("heat_thermostat") == "bussi"
-    assert init.get("ps_heat") == 5.0
+    assert init.get("ps_heat") == 2.0
+
+
+def test_temperature_ladder_prior_cell(cfg: dict) -> None:
+    cfg_ladder = {
+        **cfg,
+        "setups": ["resilient"],
+        "bulk_density_fractions": [0.25],
+        "temperatures": [50.0, 75.0, 100.0],
+        "box_sizes": [28.0],
+        "heat_thermostats": ["bussi"],
+        "temperature_ladder": True,
+    }
+    base = cell_from_cli(
+        cfg_ladder, "resilient", "DCM", 52, temperature=50.0, box_size=28.0, heat_thermostat="bussi"
+    )
+    mid = cell_from_cli(
+        cfg_ladder, "resilient", "DCM", 52, temperature=75.0, box_size=28.0, heat_thermostat="bussi"
+    )
+    top = cell_from_cli(
+        cfg_ladder, "resilient", "DCM", 52, temperature=100.0, box_size=28.0, heat_thermostat="bussi"
+    )
+    assert temperature_ladder_prior_cell(base, cfg_ladder) is None
+    assert temperature_ladder_prior_temperature(cfg_ladder, 50.0) is None
+    prior_mid = temperature_ladder_prior_cell(mid, cfg_ladder)
+    assert prior_mid is not None
+    assert prior_mid.temperature == pytest.approx(50.0)
+    assert temperature_ladder_prior_tag(mid, cfg_ladder) == cell_run_tag(base, cfg_ladder)
+    prior_top = temperature_ladder_prior_cell(top, cfg_ladder)
+    assert prior_top is not None
+    assert prior_top.temperature == pytest.approx(75.0)
+
+
+def test_temperature_ladder_build_campaign_continue_from(
+    tmp_path: Path, cfg: dict
+) -> None:
+    cfg_ladder = {
+        **cfg,
+        "setups": ["resilient"],
+        "bulk_density_fractions": [0.25],
+        "temperatures": [50.0, 75.0],
+        "box_sizes": [28.0],
+        "heat_thermostats": ["bussi"],
+        "temperature_ladder": True,
+        "output_root": str(tmp_path / "out"),
+        "dynamics_legs": {
+            "pycharmm_equi": False,
+            "pycharmm_prod": False,
+            "jaxmd": False,
+            "ase": False,
+        },
+    }
+    base = cell_from_cli(
+        cfg_ladder, "resilient", "DCM", 52, temperature=50.0, box_size=28.0, heat_thermostat="bussi"
+    )
+    warm = cell_from_cli(
+        cfg_ladder, "resilient", "DCM", 52, temperature=75.0, box_size=28.0, heat_thermostat="bussi"
+    )
+    base_campaign = build_campaign(cfg_ladder, base)
+    assert "continue_from" not in base_campaign["defaults"]
+    warm_campaign = build_campaign(cfg_ladder, warm)
+    prior_tag = cell_run_tag(base, cfg_ladder)
+    expected_handoff = (
+        tmp_path / "out" / prior_tag / "pycharmm_mini" / "handoff" / "state.npz"
+    )
+    assert warm_campaign["defaults"]["continue_from"] == str(expected_handoff)
+    assert warm_campaign["defaults"]["temperature_ladder_from_tag"] == prior_tag
+    assert warm_campaign["defaults"]["heat_firstt"] == pytest.approx(50.0)
+    init_id = init_job_id(cfg_ladder)
+    init = warm_campaign["runs"][init_id]
+    assert init["heat_firstt"] == pytest.approx(50.0)
+    assert init["heat_finalt"] == pytest.approx(75.0)
+
+
+def test_temperature_ladder_disabled_no_continue_from(cfg: dict) -> None:
+    cfg_flat = {
+        **cfg,
+        "setups": ["resilient"],
+        "bulk_density_fractions": [0.25],
+        "temperatures": [50.0, 75.0],
+        "box_sizes": [28.0],
+        "heat_thermostats": ["bussi"],
+        "temperature_ladder": False,
+    }
+    warm = cell_from_cli(
+        cfg_flat, "resilient", "DCM", 52, temperature=75.0, box_size=28.0, heat_thermostat="bussi"
+    )
+    campaign = build_campaign(cfg_flat, warm)
+    assert "continue_from" not in campaign["defaults"]
 
 
 def test_heat_compare_coerces_scale_when_pretreat(cfg: dict) -> None:
@@ -266,7 +358,8 @@ def test_matrix_setup_ids_from_config() -> None:
 def test_default_config_matrix_job_count() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
     assert heat_compare_enabled(cfg)
-    assert matrix_heat_thermostats(cfg) == ["bussi", "hoover", "scale"]
+    assert matrix_heat_thermostats(cfg) == ["bussi"]
+    assert temperature_ladder_enabled(cfg)
     assert dynamics_campaign_enabled(cfg)
     assert parse_dynamics_legs(cfg) == {
         "pycharmm_equi": True,
@@ -281,8 +374,8 @@ def test_default_config_matrix_job_count() -> None:
         "jaxmd_prod",
         "ase_prod",
     ]
-    # resilient × 4 fractions × 3 T × 3 L × 3 thermostats = 108
-    assert matrix_job_count(cfg) == 108
+    # resilient × 2 fractions × 3 T × 3 L × 1 thermostat = 18
+    assert matrix_job_count(cfg) == 18
 
 
 def test_full_dynamics_campaign_chain(cfg: dict, cell: RunCell) -> None:

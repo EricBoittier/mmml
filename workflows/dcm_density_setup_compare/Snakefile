@@ -30,6 +30,7 @@ from campaign_lib import (  # noqa: E402
     iter_matrix_cells,
     slurm_nodelist_for_tier,
     slurm_tier_enabled,
+    temperature_ladder_prior_tag,
 )
 
 _MATRIX = list(iter_matrix_cells(dict(config)))
@@ -59,6 +60,14 @@ def _sched_gpu_slow(wildcards) -> int:
     return 1 if _burst_tier(wildcards) == "slow" else 0
 
 
+def _temperature_ladder_done(wildcards) -> list:
+    """Snakemake input: prior successful cell when temperature_ladder is enabled."""
+    prior_tag = temperature_ladder_prior_tag(cell_from_tag(_CFG, wildcards.tag), _CFG)
+    if prior_tag is None:
+        return []
+    return [f"{_ARTIFACT_ROOT}/{prior_tag}/done.txt"]
+
+
 def _slurm_extra(wildcards) -> str:
     mail = str(config.get("slurm_mail_user", "") or "").strip()
     if _TIER_ENABLED:
@@ -83,6 +92,8 @@ rule all:
 
 
 rule run_setup_compare:
+    input:
+        ladder_done=_temperature_ladder_done,
     output:
         touch("{root}/{tag}/done.txt"),
     log:

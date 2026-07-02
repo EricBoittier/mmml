@@ -128,6 +128,79 @@ def heat_compare_enabled(cfg: dict[str, Any]) -> bool:
     return bool(matrix_heat_thermostats(cfg))
 
 
+def temperature_ladder_enabled(cfg: dict[str, Any]) -> bool:
+    """When true, higher-T cells continue from the prior successful lower-T handoff."""
+    if prep_sweep_enabled(cfg):
+        return False
+    return bool(cfg.get("temperature_ladder", False))
+
+
+def temperature_ladder_prior_temperature(
+    cfg: dict[str, Any], temperature: float
+) -> float | None:
+    """Next lower matrix temperature (K), or ``None`` at the ladder base."""
+    temps = sorted(matrix_temperatures(cfg))
+    t = float(temperature)
+    lower = [x for x in temps if x < t - 1e-6]
+    if not lower:
+        return None
+    return float(max(lower))
+
+
+def temperature_ladder_prior_cell(cell: RunCell, cfg: dict[str, Any]) -> RunCell | None:
+    """Matching cell at the next lower matrix temperature, if ladder mode is on."""
+    prior_t = temperature_ladder_prior_temperature(cfg, cell.temperature)
+    if prior_t is None:
+        return None
+    if not temperature_ladder_enabled(cfg):
+        return None
+    return RunCell(
+        setup_id=cell.setup_id,
+        solvent=cell.solvent,
+        n_monomers=cell.n_monomers,
+        temperature=prior_t,
+        box_size=cell.box_size,
+        heat_thermostat=cell.heat_thermostat,
+        sweep_id=cell.sweep_id,
+    )
+
+
+def temperature_ladder_prior_tag(cell: RunCell, cfg: dict[str, Any]) -> str | None:
+    prior = temperature_ladder_prior_cell(cell, cfg)
+    if prior is None:
+        return None
+    return cell_run_tag(prior, cfg)
+
+
+def temperature_ladder_prior_handoff(cfg: dict[str, Any], cell: RunCell) -> Path | None:
+    prior = temperature_ladder_prior_cell(cell, cfg)
+    if prior is None:
+        return None
+    return paths_for_run(cfg, prior)["final_handoff"]
+
+
+def _apply_temperature_ladder(
+    cfg: dict[str, Any],
+    cell: RunCell,
+    defaults: dict[str, Any],
+    init_flags: dict[str, Any],
+) -> str | None:
+    """Set ``continue_from`` and heat ramp for ladder continuation cells."""
+    prior = temperature_ladder_prior_cell(cell, cfg)
+    if prior is None:
+        return None
+    prior_paths = paths_for_run(cfg, prior)
+    prior_tag = cell_run_tag(prior, cfg)
+    defaults["continue_from"] = str(prior_paths["final_handoff"])
+    defaults["temperature_ladder_from_tag"] = prior_tag
+    defaults["temperature_ladder_from_temp_K"] = float(prior.temperature)
+    prior_t = float(prior.temperature)
+    defaults["heat_firstt"] = prior_t
+    init_flags["heat_firstt"] = prior_t
+    init_flags["heat_finalt"] = float(cell.temperature)
+    return prior_tag
+
+
 def iter_heat_thermostats(cfg: dict[str, Any]) -> Iterator[str | None]:
     if prep_sweep_enabled(cfg):
         stages = prep_sweep_stages(cfg)
@@ -855,11 +928,14 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
 
     mini_flags = _mini_job_flags(cfg, cell)
     mini_flags.update(_init_stage_overrides(cfg, cell, effective))
+    ladder_from = _apply_temperature_ladder(cfg, cell, defaults, mini_flags)
     init_id = init_job_id(cell_cfg)
     md_stages = str(mini_flags.get("md_stages", "mini"))
     ht = mini_flags.get("heat_thermostat")
     ht_note = f" heat={ht}" if ht else ""
-    if "heat" in md_stages:
+    if ladder_from is not None:
+        stage_label = f"heat ladder from {defaults['temperature_ladder_from_temp_K']:.0f}K"
+    elif "heat" in md_stages:
         stage_label = "mini+heat"
     else:
         stage_label = "mini-only"
@@ -869,6 +945,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 "description": (
                     f"{comp} setup={cell.setup_id} {frac_s} "
                     f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å {stage_label}{ht_note}"
+                    + (f" ← {ladder_from}" if ladder_from else "")
                 ),
                 "backend": "pycharmm",
                 "setup": "pbc_npt",

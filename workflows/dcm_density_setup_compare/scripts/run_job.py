@@ -28,6 +28,8 @@ from campaign_lib import (  # noqa: E402
     load_config,
     paths_for_run,
     resolve_checkpoint,
+    temperature_ladder_prior_cell,
+    temperature_ladder_prior_handoff,
     workflow_root,
 )
 
@@ -82,6 +84,33 @@ def main() -> int:
     resolve_checkpoint(str(cfg["checkpoint"]))
     paths = paths_for_run(cfg, cell)
     paths["out_dir"].mkdir(parents=True, exist_ok=True)
+
+    prior = temperature_ladder_prior_cell(cell, cfg)
+    if prior is not None:
+        prior_paths = paths_for_run(cfg, prior)
+        prior_tag = cell_run_tag(prior, cfg)
+        prior_done = prior_paths["done"]
+        prior_handoff = temperature_ladder_prior_handoff(cfg, cell)
+        if not prior_done.is_file():
+            print(
+                f"Temperature ladder: prior cell {prior_tag!r} not complete "
+                f"(missing {prior_done})",
+                file=sys.stderr,
+            )
+            return 1
+        if prior_handoff is None or not prior_handoff.is_file():
+            print(
+                f"Temperature ladder: prior handoff missing for {prior_tag!r} "
+                f"(expected {prior_handoff})",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"Temperature ladder: continuing from {prior_tag} "
+            f"({prior.temperature:.0f}→{cell.temperature:.0f} K) "
+            f"handoff={prior_handoff}",
+            flush=True,
+        )
 
     md_argv = build_md_system_campaign_argv(cfg, cell, out_dir=paths["out_dir"])
     os.chdir(_repo_root())
