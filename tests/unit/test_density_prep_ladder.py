@@ -600,3 +600,14 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
     assert "pre_mlpot:monomer_repack" in summary.steps_applied
     assert np.allclose(out_pos, repacked)
     assert side == 20.0
+
+
+def test_lattice_abnr_prep_pass_order_is_box_only_before_full():
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        _LATTICE_ABNR_PREP_PASSES,
+    )
+
+    assert _LATTICE_ABNR_PREP_PASSES == (
+        (True, "lattice_box"),
+        (False, "lattice_full"),
+    )

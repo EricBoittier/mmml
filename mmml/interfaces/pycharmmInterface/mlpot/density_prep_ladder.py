@@ -21,6 +21,12 @@ _DEFAULT_GEOMETRY_PREP_REGRESS_RATIO = 1.25
 _DEFAULT_GEOMETRY_PREP_REGRESS_MIN_DELTA = 50.0
 # Lattice ABNR rebuilds IMAGE/MAKINB lists; unsafe on catastrophic overlaps.
 _LATTICE_ABNR_GRMS_STRESS_CEILING = 500.0
+# Box-only (NOCO) before coords+box: full-after-box-only leaves XTLABC usable;
+# box-only after lattice_full triggers MBUILD "singular metric" even after crystal reinstall.
+_LATTICE_ABNR_PREP_PASSES: tuple[tuple[bool, str], ...] = (
+    (True, "lattice_box"),
+    (False, "lattice_full"),
+)
 
 
 def _geometry_prep_regressed(
@@ -719,7 +725,7 @@ def run_density_prep_ladder(
                     ),
                 )
             else:
-                for nocoords, tag in ((False, "lattice_full"), (True, "lattice_box")):
+                for nocoords, tag in _LATTICE_ABNR_PREP_PASSES:
                     step_label = f"round{round_idx + 1}:{tag}"
                     try:
                         pos_before = np.asarray(
@@ -1172,7 +1178,7 @@ def run_pre_mlpot_geometry_gate(
                     print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
 
     if charmm_pbc and lattice_steps > 0:
-        for nocoords, tag in ((False, "lattice_full"), (True, "lattice_box")):
+        for nocoords, tag in _LATTICE_ABNR_PREP_PASSES:
             step_label = f"pre_mlpot:{tag}"
             try:
                 from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
