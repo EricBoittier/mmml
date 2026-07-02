@@ -52,7 +52,7 @@ def test_bonded_only_skips_nonbonded():
     assert "-0.0450" in out
 
 
-def test_zero_prm_text_omits_nonbonded_header():
+def test_zero_prm_text_omits_nonbonded_control_lines():
     text = (
         "NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -\n"
         "cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5\n"
@@ -61,6 +61,7 @@ def test_zero_prm_text_omits_nonbonded_header():
         "END\n"
     )
     out = zero_prm_text(text)
+    assert "NONBONDED\n" in out
     assert "nbxmod" not in out
     assert "cutnb" not in out
     assert "HGA1" in out
