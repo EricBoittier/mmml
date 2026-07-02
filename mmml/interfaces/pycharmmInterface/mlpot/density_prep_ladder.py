@@ -238,6 +238,15 @@ class DensityPrepLadderResult:
         }
 
 
+def _packmol_repack_scratch_dir(args: argparse.Namespace | None) -> Path | None:
+    if args is None:
+        return None
+    out = getattr(args, "output_dir", None)
+    if out is None:
+        return None
+    return Path(out) / "packmol_repack"
+
+
 def _step_monomer_repack(
     positions: np.ndarray,
     *,
@@ -249,17 +258,25 @@ def _step_monomer_repack(
     mlpot_ctx: Any | None = None,
     max_select: int = 2,
     verbose: bool = False,
+    scratch_dir: Path | str | None = None,
 ) -> np.ndarray:
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
-    from mmml.utils.geometry_checks import (
+    from mmml.interfaces.pycharmmInterface.packmol_repack import (
         repack_monomers_clear_overlap,
         repack_selected_monomers_clear_overlap,
     )
 
     offsets = monomer_offsets_from_atoms_per(atoms_per_list)
     cell = np.diag([float(box_side), float(box_side), float(box_side)]) if box_side else None
+    repack_kw = dict(
+        min_distance=float(min_distance),
+        spacing=spacing,
+        seed=seed,
+        cell=cell,
+        scratch_dir=scratch_dir,
+    )
 
     if mlpot_ctx is not None:
         from mmml.utils.monomer_force_diag import resolve_selective_repack_monomers
@@ -286,20 +303,13 @@ def _step_monomer_repack(
                 positions,
                 offsets,
                 list(diag.flagged),
-                min_distance=float(min_distance),
-                spacing=spacing,
-                margin=0.2,
-                seed=seed,
-                cell=cell,
+                **repack_kw,
             )
 
     return repack_monomers_clear_overlap(
         positions,
         offsets,
-        min_distance=float(min_distance),
-        spacing=spacing,
-        seed=seed,
-        cell=cell,
+        **repack_kw,
     )
 
 
@@ -610,6 +620,7 @@ def run_density_prep_ladder(
                 seed=int(seed) + round_idx if seed is not None else None,
                 mlpot_ctx=mlpot_ctx,
                 verbose=not quiet,
+                scratch_dir=_packmol_repack_scratch_dir(args),
             )
             box_side = _sync_pbc_after_box_change(
                 positions=new_pos,
@@ -1094,6 +1105,7 @@ def run_pre_mlpot_geometry_gate(
             min_distance=min_overlap,
             spacing=float(spacing) if spacing is not None else None,
             seed=int(seed) if seed is not None else None,
+            scratch_dir=_packmol_repack_scratch_dir(args),
         )
         side = _sync_pbc_after_box_change(
             positions=new_pos,
@@ -1319,6 +1331,7 @@ def run_geometry_packing_recovery(
             seed=int(seed) if seed is not None else None,
             mlpot_ctx=mlpot_ctx,
             verbose=verbose,
+            scratch_dir=_packmol_repack_scratch_dir(args),
         )
         box_side = _sync_pbc_after_box_change(
             positions=new_pos,
