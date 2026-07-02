@@ -1,0 +1,72 @@
+# DCM density × setup comparison (mini-only smoke campaigns).
+#
+# Matrix: setups × bulk_density_fractions × box_sizes × temperature
+# Densities match workflows/pbc_solvent_burst/ (fraction × 298 K bulk liquid N).
+#
+# Each cell runs one pycharmm_mini leg to compare which prep/minimization
+# stack survives Packmol placement at that density.
+#
+# Output: artifacts/dcm_density_setup_compare/{setup}_dcm_{n}_t{T}_l{L}/
+
+setups:
+  - minimal
+  - calculator_pre_sd
+  - liquid_prep_dense
+  - burst_hybrid
+  - resilient
+
+solvents: [DCM]
+
+# Same bulk-density fractions and box sizes as pbc_solvent_burst.
+bulk_density_fractions: [0.25, 0.5]
+bulk_density_n_min: 10
+temperatures: [300.0]
+box_sizes: [28.0, 30.0, 32.0]
+
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/dcm_density_setup_compare
+seed_base: 4242
+
+dt_fs: 0.25
+pressure: 1.0
+spacing: 4.0
+packmol_tolerance: 1.0
+
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
+ml_gpu_count: 1
+ml_batch_size: 2048
+
+slurm_small_cluster_max_n: 30
+slurm_max_concurrent_fast: 10
+slurm_max_concurrent_slow: 8
+slurm_partition: gpu
+slurm_nodes: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 3000
+slurm_runtime_min: 1440
+slurm_gpu_nodes_fast:
+  - gpu08   # RTX5090 ×2
+  - gpu09
+  - gpu10
+  - gpu11
+  - gpu06   # RTX4090 ×1
+  - gpu26
+  - gpu04   # RTX3090 ×2
+  - gpu25   # RTX3090 Ti ×2
+slurm_gpu_nodes_slow:
+  - gpu01   # RTX3080 ×2, smoke / N≤30
+  - gpu02
+  - gpu03
+  - gpu12
+  - gpu13
+  - gpu18
+  - gpu20
+  - gpu21
+  - gpu22
+  - gpu23
+
+# exclude_run_tags:
+#   - minimal_dcm_206_t300_l28
