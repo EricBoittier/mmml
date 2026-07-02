@@ -132,7 +132,7 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
     assert run_capi.call_args.kwargs.get("init_velocities") is init
 
 
-def test_run_dynamics_bussi_uses_comp_not_c_api_init_velocities():
+def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
     import sys
     from unittest.mock import MagicMock, patch
 
@@ -192,7 +192,11 @@ def test_run_dynamics_bussi_uses_comp_not_c_api_init_velocities():
         )
     sync_comp.assert_called_once()
     refresh_comp.assert_called_once()
-    assert run_capi.call_args.kwargs.get("init_velocities") is None
+    passed = run_capi.call_args.kwargs.get("init_velocities")
+    assert passed is not None
+    assert np.allclose(passed["vx"], init["vx"])
+    assert np.allclose(passed["vy"], init["vy"])
+    assert np.allclose(passed["vz"], init["vz"])
 
 
 def test_run_dynamics_c_api_path_invoked():

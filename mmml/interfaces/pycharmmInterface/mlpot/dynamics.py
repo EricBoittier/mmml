@@ -3582,10 +3582,6 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     _release_charmm_dynamics_api_buffers()
     if comp_handoff_via_sync and bussi_active:
-        # ``dynamics_run_kw`` optional velocity CFI descriptors crash on some
-        # gfortran builds during in-memory Bussi legs; use COMP instead of
-        # ``init_velocities``.  Refresh COMP after ``velos_del`` / Fortran prep —
-        # otherwise lingering START + ``iasvel=0`` reads main Å coords as AKMA v.
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
             refresh_bussi_comp_velocity_handoff,
         )
@@ -3600,14 +3596,17 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
                 bussi_comp_handoff_vel = np.asarray(cached, dtype=np.float64).copy()
         if bussi_comp_handoff_vel is None:
             raise RuntimeError(
-                "run_dynamics: Bussi COMP handoff missing warm AKMA velocities "
-                f"(start={kw.get('start')}, iasvel={kw.get('iasvel')})"
+                "run_dynamics: Bussi overlap continuation missing warm AKMA "
+                f"velocities (start={kw.get('start')}, iasvel={kw.get('iasvel')})"
             )
         refresh_bussi_comp_velocity_handoff(
             bussi_comp_handoff_vel,
             context="run_dynamics Bussi overlap continuation",
         )
-        init_velocities = None
+        # Inject at dynopt entry (``present(in_vx)``); do not rely on COMP alone —
+        # lingering START + ``iasvel=0`` reads XCOMP after Fortran prep may still
+        # see main Å coordinates even when COMP was refreshed from Python.
+        init_velocities = _init_velocities_dict_from_akma(bussi_comp_handoff_vel)
     if _dynamics_c_api_available():
         dyn = _run_dynamics_via_c_api(
             kw,
