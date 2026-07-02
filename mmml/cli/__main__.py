@@ -109,6 +109,11 @@ def main():
         sys.argv = ["mmml liquid-box"] + args.args
         return liquid_box.main()
 
+    elif command == "md-embedding":
+        from .run import md_embedding
+        sys.argv = ["mmml md-embedding"] + args.args
+        return md_embedding.main()
+
     elif command == "mpi-check":
         from .run import mpi_check
         sys.argv = ["mmml mpi-check"] + args.args

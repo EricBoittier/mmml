@@ -2,7 +2,9 @@
 
 End-to-end example using the public [MMunibas/aaa.ama](https://github.com/MMunibas/aaa.ama) repository: download the **34-atom capped tri-alanine** ML training set, inspect energies and forces, rebuild the solvated system in CHARMM, train a small PhysNet model, and register **peptide ML + water MM** (the mixed embedding pattern from upstream `dyna.sol.py`).
 
-Functionality tests: [`tests/functionality/aaa_ama/README.md`](../../tests/functionality/aaa_ama/README.md).
+**Canonical CLI:** [`mmml md-embedding`](md-embedding-design.md) (`train` → `build` → `run`) automates the same pipeline; the sections below remain useful for manual steps and inspection.
+
+Functionality tests: [`tests/functionality/aaa_ama/README.md`](../../tests/functionality/aaa_ama/README.md) and [`tests/functionality/embedding/README.md`](../../tests/functionality/embedding/README.md).
 
 ## 1. Fetch and identify the dataset
 
@@ -96,7 +98,13 @@ For JAX vs CHARMM bonded cross-checks on CGENFF, see [cgenff-jax-clone.md](../cg
 
 ## 3. Train a small PhysNet model
 
-The NPZ matches MMML's standard schema (`E`, `F`, `R`, `Z`, `N`). Split train/validation, then train with a **small** model (smoke / teaching run):
+One-shot via `md-embedding` (download, split, smoke train, manifest):
+
+```bash
+mmml md-embedding train -o artifacts/md_embedding/aaa
+```
+
+Manual equivalent: the NPZ matches MMML's standard schema (`E`, `F`, `R`, `Z`, `N`). Split train/validation, then train with a **small** model (smoke / teaching run):
 
 ```bash
 # Optional: hold out 10% frames

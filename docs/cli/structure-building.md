@@ -19,7 +19,8 @@ uv run python scripts/generate_docs_figures.py
 | Command | Input | Output | Backend |
 |---------|-------|--------|---------|
 | [`make-res`](commands/make-res.md) | CGENFF residue name | `pdb/`, `psf/`, `xyz/` | PyCHARMM |
-| [`make-box`](commands/make-box.md) | Residue + count + box length | Packed periodic box | Packmol + PyCHARMM |
+| [`liquid-box`](commands/liquid-box.md) | Composition + density target | Certified MM liquid box | Packmol + CHARMM |
+| [`md-embedding`](commands/md-embedding.md) | aaa.ama NPZ + checkpoint | Solvated peptide partial MLpot | TRIA box + PhysNet |
 | [`build-crystal`](commands/build-crystal.md) | Literature CIF + make-res or SMILES/XYZ | `.pdb`, `.xyz`, `.cif`, `.npz` | CIF mapper / PyXtal |
 | Protein MM (CHARMM + jax-md) | [protein-force-fields.md](../protein-force-fields.md) | ALAD PDB/PSF, JAX energies | PyCHARMM + jax-md |
 

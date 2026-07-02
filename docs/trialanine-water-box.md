@@ -2,6 +2,8 @@
 
 A minimal **periodic peptide + water** system for PyCHARMM and JAX MM cross-checks — no Packmol, no protein `toppar`, no MLpot.
 
+For **peptide ML + solvent MM** (partial MLpot), use [`mmml md-embedding`](examples/md-embedding-design.md) `build` — it reuses this box builder and registers PhysNet on segment `PEPT`.
+
 The peptide is a single CGENFF residue **`TRIA`** (documented as **TRIALANINE**: ACE–ALA×3–CT3) in `mmml/data/charmm/top_trialanine_cgenff.rtf`. Waters are TIP3 on a simple cubic grid inside a cubic cell.
 
 ![Tri-alanine + TIP3 periodic box](images/structures/trialanine-water-box.png)

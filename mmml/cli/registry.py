@@ -37,6 +37,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     ),
     CommandSpec("md-system", "mmml.cli.run.md_system", "Mixed-composition MD (ASE/JAX-MD/PyCHARMM)"),
     CommandSpec("liquid-box", "mmml.cli.run.liquid_box", "Build/certify periodic liquid boxes (MM only)"),
+    CommandSpec(
+        "md-embedding",
+        "mmml.cli.run.md_embedding",
+        "Solvated peptide partial MLpot (train/build/run)",
+    ),
     CommandSpec("mpi-check", "mmml.cli.run.mpi_check", "Validate OpenMPI/CHARMM/mpi4py for MLpot"),
     CommandSpec("health-check", "mmml.cli.run.health_check", "Validate MMML/PyCHARMM/JAX interface health"),
     CommandSpec("env", "mmml.cli.env", "Find resolved/bundled checkpoints and CHARMM paths"),

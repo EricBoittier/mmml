@@ -48,6 +48,7 @@ nav:
           - make-box: cli/commands/make-box.md
           - build-crystal: cli/commands/build-crystal.md
           - liquid-box: cli/commands/liquid-box.md
+          - md-embedding: cli/commands/md-embedding.md
       - MD & campaigns:
           - md-system: cli/commands/md-system.md
           - run: cli/commands/run.md
@@ -110,6 +111,7 @@ nav:
       - Protein force fields (CHARMM + jax-md): protein-force-fields.md
       - Tri-alanine water box: trialanine-water-box.md
       - Liquid box workflow: liquid-box-workflow.md
+      - MD embedding (solvated peptide): examples/md-embedding-design.md
       - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
       - Cross-backend handoff: handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
