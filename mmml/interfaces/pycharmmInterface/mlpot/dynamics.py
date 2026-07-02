@@ -5902,6 +5902,7 @@ def _run_bussi_heat_subchunked(
     log_banner: bool = True,
     global_step_offset: int = 0,
     quiet_bussi: bool = False,
+    split_trajectory: bool = False,
 ) -> Any:
     """Integrate Verlet heat in short segments with ASE Bussi rescales between them."""
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
@@ -5935,12 +5936,17 @@ def _run_bussi_heat_subchunked(
         sub_kw["nstep"] = n
         if steps_done > 0:
             _apply_bussi_in_memory_continuation_kw(sub_kw)
-        sub_kw["_bussi_global_step"] = int(global_step_offset) + steps_done
+        global_start = int(global_step_offset) + steps_done
+        global_end = global_start + n
+        sub_kw["_bussi_global_step"] = global_start
+        traj_active = io is not None and io.trajectory is not None
+        traj_split = bool(split_trajectory or traj_active)
         _harmonize_overlap_chunk_frequencies(
             sub_kw,
             n,
             loose_pbc=loose_pbc,
-            global_step_start=int(global_step_offset) + steps_done,
+            global_step_start=global_start,
+            split_trajectory=traj_split,
         )
         suppress_sub_traj = bool(sub_kw.get("_suppress_trajectory", False))
         sub_io = _drop_trajectory_io(io) if suppress_sub_traj or "nsavc" not in sub_kw else io
@@ -5948,12 +5954,25 @@ def _run_bussi_heat_subchunked(
             extra_iokw
             if (
                 extra_iokw
-                and steps_done == 0
                 and "nsavc" in sub_kw
                 and not suppress_sub_traj
+                and (traj_split or steps_done == 0)
             )
             else {}
         )
+        if n_subchunks > 1 or traj_active:
+            t0 = global_start * timestep_ps
+            t1 = global_end * timestep_ps
+            traj_note = ""
+            if suppress_sub_traj:
+                traj_note = "; DCD suppressed"
+            elif sub_io is not None and sub_io.trajectory is not None:
+                traj_note = f"; DCD -> {Path(sub_io.trajectory).name}"
+            print(
+                f"{overlap_context}: dyna global steps {global_start}–{global_end} "
+                f"(t={t0:.4f}–{t1:.4f} ps{traj_note})",
+                flush=True,
+            )
         last_dyn = _run_dynamics_chunk(
             sub_kw,
             sub_io,
@@ -6716,6 +6735,7 @@ def run_dynamics_with_io(
                         log_banner=False,
                         global_step_offset=steps_before_chunk,
                         quiet_bussi=bool(chunk_kw.get("_quiet_bussi_rescale", False)),
+                        split_trajectory=split_trajectory,
                     )
                 else:
                     last_dyn = _run_dynamics_chunk(

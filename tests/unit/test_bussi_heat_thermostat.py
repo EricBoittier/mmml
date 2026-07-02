@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import numpy as np
@@ -923,6 +924,64 @@ def test_run_bussi_heat_subchunked_clears_fortran_after_each_leg():
             quiet_bussi=True,
         )
     assert len(clear_calls) == 3  # post-rescale x2 + continuation prep x1
+
+
+def test_run_bussi_heat_subchunked_keeps_trajectory_when_split():
+    from pathlib import Path
+    from unittest.mock import patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _run_bussi_heat_subchunked,
+        prepare_bussi_heat_dynamics_kw,
+    )
+
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "timestep": 0.00025,
+        "nstep": 50,
+        "nsavc": 499,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.00025)
+    io = CharmmTrajectoryFiles(trajectory=Path("/tmp/heat.0003.dcd"))
+    captured: list[dict[str, Any]] = []
+
+    def fake_chunk(sub_kw, sub_io, **_k):
+        captured.append(
+            {
+                "suppress": bool(sub_kw.get("_suppress_trajectory")),
+                "nsavc": sub_kw.get("nsavc"),
+                "traj": None if sub_io is None else sub_io.trajectory,
+                "iokw": _k.get("extra_iokw"),
+            }
+        )
+        return mock.Mock()
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_chunk",
+        side_effect=fake_chunk,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.apply_bussi_velocity_rescale",
+        return_value=(50.0, 1.0),
+    ):
+        _run_bussi_heat_subchunked(
+            kw,
+            io,
+            overlap_context="HEAT",
+            rng_base=None,
+            chunk_nstep=50,
+            total_nstep=50,
+            extra_iokw={"iuncrd": 1},
+            log_banner=False,
+            quiet_bussi=True,
+            split_trajectory=True,
+        )
+    assert len(captured) == 1
+    assert captured[0]["suppress"] is False
+    assert captured[0]["nsavc"] == 49
+    assert captured[0]["traj"] == Path("/tmp/heat.0003.dcd")
+    assert captured[0]["iokw"] == {"iuncrd": 1}
 
 
 def test_overlap_chunk_bussi_ramp_prep_strips_bath():
