@@ -128,6 +128,7 @@ def test_build_periodic_mm_config_charmm_vdw_flag():
 
 
 def test_resolve_periodic_charmm_vdw_off_when_no_include_mm():
+    """--no-include-mm means ML-only; CHARMM VDW is unconditionally off."""
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         resolve_periodic_charmm_vdw,
     )
@@ -135,31 +136,39 @@ def test_resolve_periodic_charmm_vdw_off_when_no_include_mm():
     args = argparse.Namespace(include_mm=False, periodic_charmm_vdw=True)
     assert resolve_periodic_charmm_vdw(args) is False
 
+    # --periodic-charmm-vdw cannot override --no-include-mm (no MM at all).
     args_explicit = argparse.Namespace(
         include_mm=False,
         periodic_charmm_vdw=True,
         _cli_explicit={"periodic_charmm_vdw"},
     )
-    assert resolve_periodic_charmm_vdw(args_explicit) is True
+    assert resolve_periodic_charmm_vdw(args_explicit) is False
 
 
 def test_resolve_periodic_charmm_vdw_off_for_jax_mic():
-    """jax_mic already covers all periodic LJ; CHARMM IMAGE VDW would double-count."""
+    """jax_mic always zeroes CHARMM IMAGE VDW — not overridable.
+
+    JAX MIC covers all periodic LJ pairs; enabling CHARMM IMAGE VDW at the
+    same time always double-counts (IMNBvdw in ENER IMAGES).  The guard must
+    fire even when --periodic-charmm-vdw is explicitly present on the CLI
+    (e.g. carried over from a periodic_external test run).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import (
         resolve_periodic_charmm_vdw,
     )
 
-    # Default (no explicit override) → False for jax_mic to prevent double-counting.
+    # Default (no explicit override) → False.
     args = argparse.Namespace(mm_nonbond_mode="jax_mic", periodic_charmm_vdw=True)
     assert resolve_periodic_charmm_vdw(args) is False
 
-    # Explicit --periodic-charmm-vdw on CLI overrides even in jax_mic mode.
+    # Explicit --periodic-charmm-vdw is silently ignored for jax_mic to prevent
+    # double-counting.  The jax_mic guard is unconditional.
     args_explicit = argparse.Namespace(
         mm_nonbond_mode="jax_mic",
         periodic_charmm_vdw=True,
         _cli_explicit={"periodic_charmm_vdw"},
     )
-    assert resolve_periodic_charmm_vdw(args_explicit) is True
+    assert resolve_periodic_charmm_vdw(args_explicit) is False
 
 
 def test_resolve_periodic_charmm_vdw_on_for_periodic_external():

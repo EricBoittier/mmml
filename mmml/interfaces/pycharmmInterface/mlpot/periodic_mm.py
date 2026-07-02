@@ -79,23 +79,25 @@ def resolve_periodic_charmm_vdw(args: Any | None) -> bool:
     Defaults:
 
     * ``periodic_external`` — True (CHARMM IMAGE LJ is the VDW backend).
-    * ``jax_mic`` — **False** (JAX MIC already covers all periodic LJ pairs;
-      keeping CHARMM IMAGE VDW on causes double-counting, visible as non-zero
-      ``IMNBvdw`` in ``ENER IMAGES``).
+    * ``jax_mic`` — **False** and **not overridable**: JAX MIC covers all
+      periodic LJ pairs; enabling CHARMM IMAGE VDW simultaneously always
+      double-counts (``IMNBvdw`` in ``ENER IMAGES``).  ``--periodic-charmm-vdw``
+      is silently ignored in this mode.
     * ``--no-include-mm`` — False (ML-only; no CHARMM nonbond at all).
 
-    Pass ``--periodic-charmm-vdw`` explicitly to override in any mode.
+    Pass ``--periodic-charmm-vdw`` / ``--no-periodic-charmm-vdw`` explicitly
+    to override the ``periodic_external`` default.
     """
     if args is None:
         return True
+    if not bool(getattr(args, "include_mm", True)):
+        return False
+    # jax_mic: CHARMM IMAGE VDW always double-counts with JAX MIC — no override.
+    if resolve_mm_nonbond_mode(args) == "jax_mic":
+        return False
     explicit = getattr(args, "_cli_explicit", None) or set()
     if "periodic_charmm_vdw" in explicit:
         return bool(getattr(args, "periodic_charmm_vdw", True))
-    if not bool(getattr(args, "include_mm", True)):
-        return False
-    # jax_mic: JAX handles all periodic LJ; CHARMM IMAGE VDW would double-count.
-    if resolve_mm_nonbond_mode(args) == "jax_mic":
-        return False
     return bool(getattr(args, "periodic_charmm_vdw", True))
 
 
