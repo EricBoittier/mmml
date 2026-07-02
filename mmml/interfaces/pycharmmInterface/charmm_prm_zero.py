@@ -121,9 +121,22 @@ def bonded_only_prm_text(text: str, *, zero_constants: bool = True) -> str:
 
 
 def nonbond_only_prm_text(text: str) -> str:
-    """Append-safe overlay with zeroed NONBONDED/NBFIX atom lines only."""
+    """Append-safe overlay with zeroed NONBONDED/NBFIX atom lines only.
+
+    FLEX ``READ PARAM APPEND`` needs bare section headers (no ``nbxmod`` control
+    lines) so appended atom rows update the live nonbond tables; headerless
+    overlays are ignored and IMAGE VDW (IMNB) stays non-zero after reload.
+    """
     section: str | None = None
+    out_section: str | None = None
     out: list[str] = []
+
+    def _emit_section_header(sec: str) -> None:
+        nonlocal out_section
+        if out_section != sec:
+            out.append(f"{sec}\n")
+            out_section = sec
+
     for raw in text.splitlines(keepends=True):
         body = raw.rstrip("\r\n")
         newline = raw[len(body) :]
@@ -144,6 +157,13 @@ def nonbond_only_prm_text(text: str) -> str:
                 continue
             if not _nonbonded_atom_line(body):
                 continue
+        elif section == "NBFIX":
+            stripped = body.strip()
+            if not stripped or stripped.startswith("!"):
+                continue
+            if _NBFIX.match(body) is None:
+                continue
+        _emit_section_header(section)
         out.append(zero_prm_line(body, section) + newline)
     return "".join(out)
 
@@ -167,7 +187,11 @@ def zero_prm_text(text: str, *, bonded_only: bool = False) -> str:
                 continue
             section = new_section
             omit_section = False
-            if section in ("NONBONDED", "HBOND"):
+            if section == "NONBONDED":
+                # Bare section keyword only (skip nbxmod/cutnb control lines).
+                out.append("NONBONDED\n")
+                continue
+            if section == "HBOND":
                 continue
             out.append(raw)
             continue

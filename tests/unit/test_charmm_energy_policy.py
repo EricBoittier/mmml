@@ -48,7 +48,9 @@ def test_nonbond_only_prm_text_zeros_eps():
     )
     out = nonbond_only_prm_text(sample)
     assert "0.0" in out
-    assert "NONBONDED" not in out
+    assert "NONBONDED" in out
+    assert "NBFIX" in out
+    assert "nbxmod" not in out.lower()
     assert "CL" in out
 
 
@@ -86,6 +88,25 @@ def test_policy_violation_detects_imnb():
     )
     assert bad
     assert hits == {"IMNB": pytest.approx(-0.0528)}
+
+
+def test_nonbond_only_prm_text_includes_section_headers(tmp_path: Path):
+    from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
+        write_prm_policy_overlay,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import cgenff_prm_path
+
+    dst = tmp_path / "overlay.prm"
+    write_prm_policy_overlay(
+        cgenff_prm_path(),
+        dst,
+        zero_bonded=False,
+        zero_nonbond=True,
+    )
+    text = dst.read_text(encoding="utf-8")
+    assert "NONBONDED\n" in text or text.lstrip().startswith("*") and "\nNONBONDED\n" in text
+    assert "\nNBFIX\n" in text
+    assert "nbxmod" not in text.lower()
 
 
 def test_enforce_skips_when_terms_already_zero(monkeypatch):
