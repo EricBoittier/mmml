@@ -202,6 +202,16 @@ class CharmmMmMinimizeConfig:
     use_pbc: bool = False
     inbfrq: int | None = None
     ihbfrq: int | None = None
+    restore_full_nonbonded: bool = False
+    """Re-read the full CGENFF PRM (including NONBONDED) after apply_charmm_mm_block.
+
+    Set True for pre-MLpot minimizations where VDW must be active.
+    ``apply_full_cgenff_params()`` reads only bonded sections (no NONBONDED); CHARMM's
+    ``READ PARAM APPEND FLEX`` on a bonded-only file silently resets the NONBONDED table,
+    leaving VDW epsilon = 0 even though the original PRM has non-zero values.
+    Must remain False for post-MLpot bonded-only recovery (energy policy zeroes VDW
+    after MLpot registration; re-enabling NONBONDED would reintroduce double-counting).
+    """
 
 
 def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
@@ -229,6 +239,18 @@ def minimize_charmm_mm_only(config: CharmmMmMinimizeConfig) -> None:
         pbc_side_before_block, _ = probe_charmm_cubic_box_side_A()
 
     apply_charmm_mm_block()
+    if bool(config.restore_full_nonbonded):
+        # apply_full_cgenff_params() reads a bonded-only PRM (no NONBONDED section).
+        # CHARMM READ PARAM APPEND FLEX on a bonded-only file resets the NONBONDED
+        # table to zeros, leaving VDW ε = 0 even though the original PRM has finite
+        # values.  Re-read the full PRM here to restore NONBONDED before pre-MLpot
+        # minimizations where VDW must be active to repel overlapping atoms.
+        # Do NOT set this flag for post-MLpot bonded-only recovery (energy policy
+        # keeps NONBONDED zeroed after MLpot registration).
+        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import cgenff_prm_path
+        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
+
+        read_cgenff_prm(cgenff_prm_path(), append=True)
     if bool(config.use_pbc):
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             restore_charmm_cubic_crystal_lattice,
