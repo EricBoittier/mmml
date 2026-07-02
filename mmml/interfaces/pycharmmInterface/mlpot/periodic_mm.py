@@ -71,10 +71,11 @@ def resolve_lr_solver_arg(args: Any | None) -> str | None:
 
 
 def resolve_periodic_charmm_vdw(args: Any | None) -> bool:
-    """Whether periodic_external keeps CHARMM IMAGE VDW on (default True).
+    """Whether CHARMM IMAGE / primary VDW should contribute (default True).
 
-    With ``--no-include-mm`` (ML-only), CHARMM IMAGE VDW double-counts Lennard-Jones
-    already in the MLpot USER term unless the user explicitly enables it.
+    When False (``--no-periodic-charmm-vdw``), post-registration energy policy
+    enforcement zeroes VDW+IMNB via PSF/.prm reload (see ``charmm_energy_policy``).
+    With ``--no-include-mm``, defaults to False unless explicitly set on CLI.
     """
     if args is None:
         return True
