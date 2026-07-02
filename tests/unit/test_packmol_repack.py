@@ -74,6 +74,31 @@ def test_packmol_selective_repack_writes_fixed_and_movable_blocks(tmp_path, monk
     assert out[0, 0] == pytest.approx(0.0)
 
 
+def test_read_packmol_monomer_coords_splits_sequential_atoms_not_residue_ids(tmp_path):
+    from mmml.interfaces.pycharmmInterface.packmol_repack import (
+        _read_packmol_monomer_coords,
+    )
+
+    out = tmp_path / "repack.pdb"
+    # Three 2-atom monomers; Packmol often leaves all fixed atoms on residue 1.
+    lines = []
+    serial = 1
+    for atom_idx in range(6):
+        x = float(atom_idx + 1)
+        lines.append(
+            f"ATOM      {serial}  C   FIX A   1       {x:.3f}   0.000   0.000  1.00  0.00           C"
+        )
+        serial += 1
+    lines.append("END")
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    packed = _read_packmol_monomer_coords(out, expected_atoms_per_monomer=[2, 2, 2])
+    assert len(packed) == 3
+    assert packed[0].shape == (2, 3)
+    assert packed[1][0, 0] == pytest.approx(3.0)
+    assert packed[2][1, 0] == pytest.approx(6.0)
+
+
 def test_packmol_repack_falls_back_to_grid_when_binary_missing(monkeypatch):
     from mmml.interfaces.pycharmmInterface import packmol_repack
 

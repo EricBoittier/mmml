@@ -68,33 +68,32 @@ def _read_packmol_monomer_coords(
     *,
     expected_atoms_per_monomer: list[int],
 ) -> list[np.ndarray]:
-    """Return per-residue coordinates in PDB residue order."""
-    _names, resids, positions = _parse_pdb_atom_records(pdb_path)
-    order: list[int] = []
-    groups: dict[int, list[np.ndarray]] = {}
-    for resid, coord in zip(resids, positions):
-        ri = int(resid)
-        if ri not in groups:
-            order.append(ri)
-            groups[ri] = []
-        groups[ri].append(np.asarray(coord, dtype=float))
+    """Return per-monomer coordinates in Packmol structure order.
 
-    out: list[np.ndarray] = []
-    for idx, resid in enumerate(order):
-        coords = np.asarray(groups[resid], dtype=float)
-        if idx < len(expected_atoms_per_monomer):
-            n_expect = int(expected_atoms_per_monomer[idx])
-            if int(coords.shape[0]) != n_expect:
-                raise RuntimeError(
-                    f"Packmol residue {resid} has {coords.shape[0]} atoms, "
-                    f"expected {n_expect}"
-                )
-        out.append(coords)
-    if len(out) != len(expected_atoms_per_monomer):
+    Packmol concatenates many ``fixed`` structures into one PDB; residue IDs are
+    not unique per monomer (e.g. 198×5-atom fixed blocks → residue 1 with 990
+    atoms). Split sequentially by ``expected_atoms_per_monomer`` instead.
+    """
+    _names, _resids, positions = _parse_pdb_atom_records(pdb_path)
+    coords = np.asarray(positions, dtype=float)
+    expected = [int(n) for n in expected_atoms_per_monomer]
+    n_total = int(sum(expected))
+    if int(coords.shape[0]) != n_total:
         raise RuntimeError(
-            f"Packmol output has {len(out)} residues, expected "
-            f"{len(expected_atoms_per_monomer)}"
+            f"Packmol output has {int(coords.shape[0])} atoms, expected {n_total} "
+            f"({len(expected)} monomers)"
         )
+    out: list[np.ndarray] = []
+    start = 0
+    for n_expect in expected:
+        block = coords[start : start + n_expect]
+        if int(block.shape[0]) != n_expect:
+            raise RuntimeError(
+                f"Packmol atom block at offset {start} has {block.shape[0]} atoms, "
+                f"expected {n_expect}"
+            )
+        out.append(np.asarray(block, dtype=float))
+        start += n_expect
     return out
 
 
