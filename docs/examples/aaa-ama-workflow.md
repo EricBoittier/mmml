@@ -98,10 +98,13 @@ For JAX vs CHARMM bonded cross-checks on CGENFF, see [cgenff-jax-clone.md](../cg
 
 ## 3. Train a small PhysNet model
 
-One-shot via `md-embedding` (download, **`mmml fix-and-split`** by default, smoke train, manifest, ASE peptide figure):
+See [md-embedding smoke results](md-embedding-results.md) for a short training run (8 epochs),
+validation parity plots, and CHARMM box figures.
 
 ```bash
-mmml md-embedding train -o artifacts/md_embedding/aaa
+# One-shot docs pipeline (train → eval → build → figures)
+export CHARMM_HOME=... CHARMM_LIB_DIR=... LD_LIBRARY_PATH=...
+JAX_PLATFORMS=cpu MMML_NO_CHARMM_MPI=1 uv run python scripts/collect_md_embedding_docs_results.py
 ```
 
 Equivalent manual split with fix-and-split:

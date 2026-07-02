@@ -156,10 +156,11 @@ def _write_results_md(summary: dict) -> None:
         _row("Eval samples", eval_m.get("num_samples", "—")),
         "",
     ]
-    for name in ("parity_plots.png", "training_loss.png"):
-        if name in [Path(f).name for f in figures]:
-            lines.append(f"![{name}](../images/examples/md-embedding/{name})")
-            lines.append("")
+    if "parity_plots.png" in [Path(f).name for f in figures]:
+        lines += [
+            "![Energy/force parity](../images/examples/md-embedding/parity_plots.png)",
+            "",
+        ]
     lines += [
         "## Build (CHARMM TRIA + TIP3)",
         "",

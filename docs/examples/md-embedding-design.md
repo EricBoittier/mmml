@@ -66,7 +66,7 @@ mmml md-embedding run -o artifacts/md_embedding/aaa \
 ```
 
 See [`tests/functionality/embedding/README.md`](../../tests/functionality/embedding/README.md)
-for pass criteria.
+for pass criteria. Published smoke metrics: [md-embedding-results.md](md-embedding-results.md).
 
 ## Topology: 34 vs 42 atoms
 

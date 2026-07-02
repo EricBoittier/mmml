@@ -112,6 +112,7 @@ nav:
       - Tri-alanine water box: trialanine-water-box.md
       - Liquid box workflow: liquid-box-workflow.md
       - MD embedding (solvated peptide): examples/md-embedding-design.md
+      - md-embedding smoke results: examples/md-embedding-results.md
       - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
       - Cross-backend handoff: handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md

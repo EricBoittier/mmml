@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-07-02",
+  "artifacts_dir": "artifacts/md_embedding/aaa_docs",
+  "training": {
+    "num_epochs": 8,
+    "train_frames": 12500,
+    "valid_frames": 1249,
+    "checkpoint_json": "/home/ericb/mmml/artifacts/md_embedding/aaa_docs/aaa_smoke_params.json",
+    "best_valid_loss": 102.65313720703125
+  },
+  "evaluation": {
+    "energy_mae_kcal_mol": 6.23443556918873,
+    "energy_rmse_kcal_mol": 7.869658358803783,
+    "force_mae_kcal_mol_A": 6.250538485566922,
+    "force_rmse_kcal_mol_A": 8.869026315270178,
+    "num_samples": 6
+  },
+  "build": {
+    "n_peptide_atoms": 42,
+    "n_waters": 10,
+    "box_side_A": 28.0,
+    "bonded_total_kcal_mol": null
+  },
+  "run": {},
+  "figures": [
+    "docs/images/examples/md-embedding/embedding_box.png",
+    "docs/images/examples/md-embedding/embedding_peptide.png",
+    "docs/images/examples/md-embedding/parity_plots.png",
+    "docs/images/examples/md-embedding/peptide_frame0.png",
+    "docs/images/examples/md-embedding/training_loss.png"
+  ]
+}
