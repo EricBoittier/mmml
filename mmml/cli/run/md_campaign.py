@@ -120,6 +120,8 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
         "no_stage_summary",
         "handoff_template_res",
         "handoff_pre_minimize",
+        "setup_variant",
+        "setup_description",
     }
 )
 

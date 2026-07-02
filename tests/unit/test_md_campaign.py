@@ -567,3 +567,18 @@ def test_resolve_dcd_nsavc_caps_frames_for_short_legs() -> None:
     assert resolve_dcd_nsavc(dcd_nsavc=1, nstep=400, dcd_max_frames=25) == 16
     assert resolve_dcd_nsavc(dcd_nsavc=1, nstep=400, dcd_max_frames=0) == 1
     assert resolve_dcd_nsavc(dcd_nsavc=500, nstep=4000, dcd_max_frames=25) == 500
+
+
+def test_strip_campaign_metadata_keys_drops_setup_compare_fields() -> None:
+    from mmml.cli.run.md_campaign import strip_campaign_metadata_keys
+
+    raw = {
+        "setup_variant": "liquid_prep_dense",
+        "setup_description": "liquid_prep + density_prep_ladder",
+        "composition": "DCM:127",
+        "box_size": 30.0,
+    }
+    stripped = strip_campaign_metadata_keys(raw)
+    assert "setup_variant" not in stripped
+    assert "setup_description" not in stripped
+    assert stripped["composition"] == "DCM:127"
