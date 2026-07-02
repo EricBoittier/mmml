@@ -160,8 +160,11 @@ def resolve_monomer_offsets_for_ctx(
         if pyCModel is not None:
             atoms_per = getattr(pyCModel, "_atoms_per_monomer", None)
     if atoms_per is not None:
-        per = [int(x) for x in atoms_per]
-        if int(sum(per)) == int(n_atoms) and len(per) == int(n_monomers):
+        try:
+            per = [int(x) for x in atoms_per]
+        except TypeError:
+            per = []
+        if per and int(sum(per)) == int(n_atoms) and len(per) == int(n_monomers):
             return monomer_offsets_from_atoms_per(per)
     if int(n_monomers) > 0 and int(n_atoms) % int(n_monomers) == 0:
         return monomer_offsets(int(n_atoms), int(n_monomers))

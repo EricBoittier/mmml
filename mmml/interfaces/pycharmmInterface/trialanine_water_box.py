@@ -214,6 +214,7 @@ def build_trialanine_water_box_in_charmm(
     min_peptide_water_dist_A: float = 2.4,
     seed: int = 11,
     workdir: Path | None = None,
+    skip_reset_block: bool = False,
 ) -> TrialanineWaterBox:
     """Construct CGENFF ``TRIA`` + TIP3 waters in CHARMM and return PSF-ordered coordinates."""
     import pycharmm.coor as coor
@@ -247,7 +248,8 @@ def build_trialanine_water_box_in_charmm(
 
     crystal_free_charmm_for_param_append()
     pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
-    reset_block()
+    if not skip_reset_block:
+        reset_block()
 
     _load_cgenff_with_trialanine()
     settings.set_verbosity(0)

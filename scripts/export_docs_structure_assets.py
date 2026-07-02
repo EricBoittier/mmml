@@ -34,34 +34,15 @@ OPENMM_ALAD_PDB_URL = (
 
 
 def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
-    """CHARMM CGENFF TRIA + TIP3 grid (same recipe as ``build_trialanine_water_box_in_charmm``)."""
-    import os
+    from ase import Atoms
+    from ase.io import write as ase_write
 
-    import pandas as pd
-    from ase.io import read as ase_read, write as ase_write
-
-    import pycharmm.coor as coor
-    import pycharmm.generate as generate
-    import pycharmm.ic as ic
-    import pycharmm.read as read
-    import pycharmm.settings as settings
     import pycharmm.write as write
 
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        crystal_free_charmm_for_param_append,
-        ensure_pycharmm_loaded,
-        pycharmm,
-    )
-    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        apply_pbc_nbonds,
-        prepare_charmm_pbc,
-    )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
         TRIA_RESI_NAME,
-        _grid_oxygen_sites,
-        _load_cgenff_with_trialanine,
-        _tip3_template,
+        build_trialanine_water_box_in_charmm,
         n_peptide_atoms_in_trialanine_box,
     )
     from mmml.paths import bundled_file
@@ -72,60 +53,31 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
 
-    n_waters = 10
-    box_side_A = 28.0
-    crystal_free_charmm_for_param_append()
-    pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
-    # Skip reset_block() here — it can block >100s on an empty session in some envs.
-
-    _load_cgenff_with_trialanine()
-    settings.set_verbosity(0)
-    read.sequence_string(TRIA_RESI_NAME)
-    generate.new_segment(seg_name="PEPT", setup_ic=True)
-    ic_prm_fill(replace_all=True)
-    ic.build()
-
-    rng = np.random.default_rng(seed)
-    peptide = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
-    peptide -= peptide.mean(axis=0)
-    peptide += np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
-    coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))
-
-    tip3 = _tip3_template()
-    tip3_com = tip3.mean(axis=0)
-    oxygen_sites = _grid_oxygen_sites(
-        n_waters=n_waters,
-        box_side_A=box_side_A,
-        spacing_A=2.85,
-        margin_A=3.0,
-        existing=peptide,
-        min_dist_A=2.4,
-        rng=rng,
-        water_template=tip3,
+    box = build_trialanine_water_box_in_charmm(
+        n_waters=10,
+        box_side_A=28.0,
+        seed=seed,
+        workdir=workdir,
+        skip_reset_block=True,
     )
-    water_coords = np.vstack([site + (tip3 - tip3_com) for site in oxygen_sites])
-    read.sequence_string(" ".join(["TIP3"] * n_waters))
-    generate.new_segment(seg_name="SOLV", setup_ic=False)
-    all_pos = np.vstack([peptide, water_coords])
-    coor.set_positions(pd.DataFrame(all_pos, columns=["x", "y", "z"]))
-    prepare_charmm_pbc(box_side_A)
-    apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)
-
+    pdb_local = workdir / "trialanine-water.pdb"
     prev_cwd = os.getcwd()
     try:
         os.chdir(workdir)
-        write.psf_card("trialanine-water.psf")
-        write.coor_pdb("trialanine-water.pdb")
+        write.coor_pdb(pdb_local.name)
     finally:
         os.chdir(prev_cwd)
 
-    psf_path = workdir / "trialanine-water.psf"
-    pdb_local = workdir / "trialanine-water.pdb"
-    atoms = ase_read(pdb_local)
-    atoms.cell = np.diag([box_side_A, box_side_A, box_side_A])
-    atoms.pbc = True
+    side = float(box.box_side_A)
+    symbols = _element_symbols_from_psf(box.psf_path, n_atoms=box.positions.shape[0])
+    atoms = Atoms(
+        symbols=symbols,
+        positions=box.positions,
+        cell=np.diag([side, side, side]),
+        pbc=True,
+    )
     atoms.info["comment"] = (
-        f"CGENFF {TRIA_RESI_NAME} + {n_waters}× TIP3 "
+        f"CGENFF {TRIA_RESI_NAME} + 10× TIP3 "
         f"(build_trialanine_water_box_in_charmm, seed={seed})"
     )
 
@@ -135,12 +87,53 @@ def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
     ase_write(extxyz, atoms)
     shutil.copy2(pdb_local, pdb)
 
-    n_pep = n_peptide_atoms_in_trialanine_box(psf_path)
+    n_pep = n_peptide_atoms_in_trialanine_box(box.psf_path)
     print(
-        f"trialanine-water: {all_pos.shape[0]} atoms "
-        f"({n_pep} peptide + {n_waters * 3} water) -> {extxyz.name}"
+        f"trialanine-water: {box.positions.shape[0]} atoms "
+        f"({n_pep} peptide + {box.n_waters * 3} water) -> {extxyz.name}"
     )
     return extxyz, pdb
+
+
+def _element_symbols_from_psf(psf_path: Path, *, n_atoms: int) -> list[str]:
+    """Heavy-atom element letter + H for hydrogens (PSF atom-name heuristic)."""
+    symbols: list[str] = []
+    in_atoms = False
+    with psf_path.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if line.strip().startswith("*"):
+                in_atoms = False
+                continue
+            if "!NATOM" in line:
+                in_atoms = True
+                continue
+            if not in_atoms:
+                continue
+            parts = line.split()
+            if len(parts) < 4:
+                continue
+            try:
+                int(parts[0])
+            except ValueError:
+                continue
+            name = parts[3]
+            if name.startswith("H"):
+                symbols.append("H")
+            elif name.startswith("O"):
+                symbols.append("O")
+            elif name.startswith("N"):
+                symbols.append("N")
+            elif name.startswith("S"):
+                symbols.append("S")
+            else:
+                symbols.append("C")
+            if len(symbols) >= n_atoms:
+                break
+    if len(symbols) != n_atoms:
+        raise RuntimeError(
+            f"PSF parse got {len(symbols)} symbols, expected {n_atoms} from {psf_path}"
+        )
+    return symbols
 
 
 def export_aco_make_box(*, n_molecules: int = 8, side_length: float = 22.0, seed: int = 42) -> Path:
