@@ -6386,6 +6386,16 @@ def run_dynamics_with_io(
         step=0,
         mlpot_ctx=mlpot_ctx,
     )
+    if mlpot_ctx is not None and overlap is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+            record_monomer_health_baseline,
+        )
+
+        record_monomer_health_baseline(
+            mlpot_ctx,
+            n_monomers=int(getattr(overlap, "n_monomers", 1) or 1),
+            global_step=0,
+        )
 
     n_chunks = total_nstep // interval
     post_rescue_in_memory_mode = False
@@ -7213,6 +7223,22 @@ def run_dynamics_with_io(
                         step=steps_done,
                         mlpot_ctx=mlpot_ctx,
                     )
+                    health_rescued = False
+                    if mlpot_ctx is not None and overlap is not None:
+                        from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                            maybe_intervene_monomer_health,
+                        )
+
+                        health_rescued = maybe_intervene_monomer_health(
+                            mlpot_ctx,
+                            overlap,
+                            context=overlap_context,
+                            global_step=steps_done,
+                            restart_path=(
+                                chunk_io.restart_write if chunk_io is not None else None
+                            ),
+                        )
+                    rescued = bool(rescued or health_rescued)
                     if not rescued and overlap is not None and overlap.extent_enabled:
                         from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
                             refresh_overlap_prior_segment_restart,

@@ -69,6 +69,7 @@ class DynamicsOverlapConfig:
     heat_segment_boundary_only: bool = False
     density_prep_ladder_fallback: bool = False
     cleanup_mode: bool = False
+    monomer_health: Any = field(default=None, compare=False, hash=False)
 
     @property
     def enabled(self) -> bool:
@@ -215,6 +216,38 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Disable max monomer extent / fly-off guard.",
     )
+    group.add_argument(
+        "--no-dynamics-monomer-health",
+        action="store_true",
+        help=(
+            "Disable per-monomer velocity/force/energy bookkeeping and early "
+            "template restore during dynamics."
+        ),
+    )
+    group.add_argument(
+        "--dynamics-monomer-health-debug",
+        action="store_true",
+        help=(
+            "Print per-residue monomer health dot matrix (green/yellow/red for "
+            "velocity, force, MM energy) at each dynamics health check."
+        ),
+    )
+    group.add_argument(
+        "--no-dynamics-monomer-template-restore",
+        action="store_true",
+        help="Audit monomer health but do not template-restore bad monomers.",
+    )
+    group.add_argument(
+        "--no-dynamics-monomer-jax-after-restore",
+        action="store_true",
+        help="Skip per-monomer JAX bonded mini after template restore.",
+    )
+    group.add_argument(
+        "--dynamics-monomer-health-max-restore",
+        type=int,
+        default=4,
+        help="Max monomers to template-restore per health check (default: 4).",
+    )
 
 
 def _truthy_env(name: str) -> bool:
@@ -350,7 +383,16 @@ def resolve_dynamics_overlap_config(
         ),
         density_prep_ladder_fallback=_cleanup_overlap_fallback_from_args(args),
         cleanup_mode=_cleanup_mode_from_args(args),
+        monomer_health=_monomer_health_config_from_args(args),
     )
+
+
+def _monomer_health_config_from_args(args: argparse.Namespace) -> Any:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        monomer_health_config_from_args,
+    )
+
+    return monomer_health_config_from_args(args)
 
 
 def _cleanup_mode_from_args(args: argparse.Namespace) -> bool:

@@ -270,6 +270,7 @@ def minimize_bonded_jax_per_monomer_recovery(
     n_monomers: int,
     topology_psf: PathLike | None = None,
     context: str = "per-monomer bonded JAX",
+    monomer_indices: Sequence[int] | None = None,
 ) -> float | None:
     """Relax internal bonded strain one monomer at a time (others frozen)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
@@ -304,12 +305,23 @@ def minimize_bonded_jax_per_monomer_recovery(
                 )
             return None
         if config.verbose:
+            mono_list = (
+                [int(i) for i in monomer_indices]
+                if monomer_indices is not None
+                else list(range(int(n_monomers)))
+            )
             print(
                 f"{context}: JAX bonded FIRE per monomer "
-                f"({int(n_monomers)} monomers, ≤{nstep} steps each, MLpot stays attached)",
+                f"({len(mono_list)} monomer(s), ≤{nstep} steps each, "
+                f"MLpot stays attached)",
                 flush=True,
             )
-        for mono_i in range(int(n_monomers)):
+        mono_loop = (
+            [int(i) for i in monomer_indices]
+            if monomer_indices is not None
+            else list(range(int(n_monomers)))
+        )
+        for mono_i in mono_loop:
             a = int(offsets[mono_i])
             b = int(offsets[mono_i + 1])
             freeze = {j for j in range(n_atoms) if j < a or j >= b}

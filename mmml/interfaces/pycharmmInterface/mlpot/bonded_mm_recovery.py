@@ -305,6 +305,45 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
     n_monomers = int(getattr(config, "n_monomers", 0) or 0)
     if n_monomers <= 1:
         return
+    health_cfg = getattr(config, "monomer_health", None)
+    flagged: tuple[int, ...] = ()
+    if health_cfg is not None and getattr(health_cfg, "enabled", True):
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+            audit_monomer_health,
+            restore_flagged_monomers_from_template,
+        )
+
+        report = audit_monomer_health(
+            ctx,
+            health_cfg,
+            n_monomers=n_monomers,
+        )
+        if report is not None and not report.baseline_recorded:
+            if getattr(health_cfg, "debug_dot_matrix", False) or report.flagged_bad:
+                from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+                    emit_monomer_health_dot_matrix,
+                )
+
+                emit_monomer_health_dot_matrix(
+                    report,
+                    context=f"{context} monomer health preflight",
+                    quiet=not getattr(health_cfg, "verbose", False)
+                    and not getattr(health_cfg, "debug_dot_matrix", False),
+                )
+            if report.flagged_bad:
+                to_restore = report.flagged_bad[
+                    : int(getattr(health_cfg, "max_restore_per_check", 4))
+                ]
+                flagged = tuple(to_restore)
+                if getattr(health_cfg, "template_restore_on_bad", True):
+                    restore_flagged_monomers_from_template(
+                        ctx,
+                        to_restore,
+                        context=f"{context} preflight",
+                        restart_path=getattr(config, "prior_segment_restart", None),
+                        verbose=getattr(health_cfg, "verbose", False)
+                        or getattr(health_cfg, "debug_dot_matrix", False),
+                    )
     bonded_cfg = _bonded_cfg_from_overlap_config(config)
     if not bool(getattr(bonded_cfg, "per_monomer_jax", True)):
         return
@@ -320,6 +359,7 @@ def _maybe_run_per_monomer_bonded_jax_preflight(
             n_monomers=n_monomers,
             topology_psf=topo,
             context=f"{context} (per-monomer JAX preflight)",
+            monomer_indices=flagged if flagged else None,
         )
     except Exception as exc:
         if bonded_cfg.verbose:

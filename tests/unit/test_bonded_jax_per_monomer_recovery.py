@@ -29,6 +29,7 @@ def test_maybe_run_per_monomer_preflight_calls_jax() -> None:
     ctx = MagicMock()
     config = MagicMock(
         n_monomers=4,
+        monomer_health=MagicMock(enabled=False),
         rescue=MagicMock(
             nstep_sd=20,
             nprint=5,
