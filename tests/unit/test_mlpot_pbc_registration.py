@@ -273,7 +273,10 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0, rebuild=False)
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
-    fake_pycharmm.nbonds.update_bnbnd.assert_called_once()
+    # update_bnbnd() was replaced with charmm_script("UPDATE") to avoid
+    # enbav2e2b2_ segfault on all-ML PBC clusters after long SD.
+    fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
+    fake_pycharmm.lingo.charmm_script.assert_called_once_with("UPDATE")
     fake_pycharmm.image.update_bimag.assert_called_once()
 
 
