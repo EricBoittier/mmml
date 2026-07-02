@@ -1,17 +1,17 @@
-# Prep-parameter sweep on a single anchor cell (one-at-a-time vs baseline).
+# Prep-parameter sweep stage 2: vdw_off anchor × mini+heat × dt / overlap / CHARMM freq.
 #
 # Run:
 #   cd workflows/dcm_density_setup_compare
-#   snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm -n
+#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
+#   nohup bash scripts/snakemake_prep_sweep.sh > snakemake_prep_sweep.log 2>&1 &
 #   bash scripts/collect_prep_sweep.sh
 #
-# Tags: {setup}_dcm_{N}_t{T}_l{L}[_ht_{thermostat}]_sw_{variant}
-# Example: resilient_dcm_52_t50_l28_sw_baseline
+# Tags: {setup}_dcm_{N}_t{T}_l{L}_ht_{thermostat}_sw_{variant}
+# Example: resilient_dcm_52_t50_l28_ht_bussi_sw_dt010
 
 setups: [resilient]
 solvents: [DCM]
 
-# Ignored while prep_sweep.enabled (anchor defines the cell).
 bulk_density_fractions: [0.25]
 temperatures: [50.0]
 box_sizes: [28.0]
@@ -20,11 +20,14 @@ checkpoint: ${MMML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 
-dt_fs: 0.25
-pressure: 1.0
-spacing: 6.0
+# Stage-1 winners: spacing50 (GRMS≈22) + mm_vdw_off (GRMS≈27).
+spacing: 5.0
+periodic_charmm_vdw: false
 packmol_tolerance: 2.0
 packmol_box_padding: 1.0
+
+dt_fs: 0.25
+pressure: 1.0
 
 no_scale_max_grms: true
 max_grms_before_dyn: 50.0
@@ -34,11 +37,16 @@ charmm_sd_steps: 4000
 charmm_abnr_steps: 4000
 pre_min_steps: 500
 
+# Baseline overlap check every 100 heat/dynamics steps; variants tighten below.
 dynamics_overlap_check_interval: 100
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
 min_intermonomer_atom_distance: 1.2
+
+# Trajectory / neighbor-list cadence (resilient cleanup default dcd_nsavc=100).
+dcd_nsavc: 100
+dyn_inbfrq: -1
 
 liquid_prep: true
 density_prep_ladder: true
@@ -55,10 +63,14 @@ mm_switch_on: 5.0
 mm_switch_width: 3.0
 ml_switch_width: 0.2
 mm_nonbond_mode: jax_mic
-periodic_charmm_vdw: true
 charmm_mm_pretreat: true
 
-# Mini-only sweep (fastest). Use stages: mini,heat to test heat/overlap rescue too.
+# Heat leg (single thermostat on anchor; no equi/prod/jaxmd/ase).
+default_heat_thermostat: bussi
+ps_heat: 5.0
+n_heat_segments: 3
+heat_firstt: 10.0
+no_echeck_heat: true
 heat_thermostats: []
 dynamics_legs:
   pycharmm_equi: false
@@ -101,7 +113,7 @@ slurm_gpu_nodes_slow:
 
 prep_sweep:
   enabled: true
-  stages: mini
+  stages: mini,heat
   full_dynamics: false
   anchor:
     setup_id: resilient
@@ -109,30 +121,33 @@ prep_sweep:
     bulk_density_fraction: 0.25
     temperature: 50.0
     box_size: 28.0
+    heat_thermostat: bussi
   variants:
+    # vdw_off + spacing50 anchor (no extra overrides).
     baseline: {}
+    # Smaller integration timestep (fs).
     dt050:
       dt_fs: 0.05
-    pmtol25:
-      packmol_tolerance: 2.5
-    pmtol30:
-      packmol_tolerance: 3.0
-    spacing50:
-      spacing: 5.0
-    spacing70:
-      spacing: 7.0
-    cut_tight:
-      mm_switch_on: 4.0
-      mm_switch_width: 2.0
-      ml_switch_width: 0.1
-    cut_wide:
-      mm_switch_on: 7.0
-      mm_switch_width: 5.0
-      ml_switch_width: 1.5
-    mm_bonded_on:
-      bonded_mm_mini: true
-      bonded_mm_mini_steps: 500
-    mm_pretreat_off:
-      charmm_mm_pretreat: false
-    mm_vdw_off:
-      periodic_charmm_vdw: false
+    dt010:
+      dt_fs: 0.10
+    dt015:
+      dt_fs: 0.15
+    # More frequent overlap rescue checks during heat (steps between checks).
+    ovlp50:
+      dynamics_overlap_check_interval: 50
+    ovlp25:
+      dynamics_overlap_check_interval: 25
+    # More frequent DCD frames (lower nsavc = higher recording frequency).
+    dcd50:
+      dcd_nsavc: 50
+    dcd25:
+      dcd_nsavc: 25
+    # More frequent CHARMM neighbor-list rebuild during heat/dynamics.
+    inbfrq25:
+      dyn_inbfrq: 25
+    inbfrq10:
+      dyn_inbfrq: 10
+    # Combo: smallest dt + tightest overlap polling from stage-1 spacing50 follow-up.
+    dt050_ovlp50:
+      dt_fs: 0.05
+      dynamics_overlap_check_interval: 50

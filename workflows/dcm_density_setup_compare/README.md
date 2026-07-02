@@ -155,7 +155,9 @@ To compare **what actually moves prep** (timestep, Packmol tolerance, cutoffs, M
 | `prep_sweep.stages` | `mini` (default) or `mini,heat` |
 | Tag suffix | `_sw_{variant}` e.g. `resilient_dcm_52_t50_l28_sw_pmtol30` |
 
-Default variants: `baseline`, `dt050`, `pmtol25/30`, `spacing50/70`, `cut_tight/wide`, `mm_bonded_on`, `mm_pretreat_off`, `mm_vdw_off`.
+Default variants (stage 1): `baseline`, `dt050`, `pmtol25/30`, `spacing50/70`, `cut_tight/wide`, `mm_bonded_on`, `mm_pretreat_off`, `mm_vdw_off`.
+
+**Stage 2** (`config.prep_sweep.yaml` as committed): anchor **vdw_off + spacing50**, `stages: mini,heat`, variants `baseline`, `dt050`/`dt010`/`dt015`, `ovlp50`/`ovlp25`, `dcd50`/`dcd25`, `inbfrq25`/`inbfrq10`, `dt050_ovlp50`. Tags include `_ht_bussi_`, e.g. `resilient_dcm_52_t50_l28_ht_bussi_sw_dt010`.
 
 ```bash
 cd workflows/dcm_density_setup_compare

@@ -389,6 +389,50 @@ def test_prep_sweep_applies_overrides_to_campaign(cfg: dict) -> None:
     assert mini["md_stages"] == "mini"
 
 
+def test_prep_sweep_vdw_anchor_dt_freq_overrides(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "spacing": 5.0,
+        "periodic_charmm_vdw": False,
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini,heat",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 28.0,
+                "heat_thermostat": "bussi",
+            },
+            "variants": {
+                "baseline": {},
+                "dt010": {"dt_fs": 0.10},
+                "dcd50": {"dcd_nsavc": 50},
+                "inbfrq25": {"dyn_inbfrq": 25},
+            },
+        },
+    }
+    cell = cell_from_tag(sweep_cfg, "resilient_dcm_52_t50_l28_ht_bussi_sw_dt010")
+    campaign = build_campaign(sweep_cfg, cell)
+    assert campaign["defaults"]["dt_fs"] == 0.10
+    assert campaign["defaults"]["periodic_charmm_vdw"] is False
+    assert campaign["defaults"]["spacing"] == 5.0
+    mini = campaign["runs"]["pycharmm_mini"]
+    assert mini["md_stages"] == "mini,heat"
+    assert mini["dt_fs"] == 0.10
+    assert mini["heat_thermostat"] == "bussi"
+
+    cell_dcd = cell_from_tag(sweep_cfg, "resilient_dcm_52_t50_l28_ht_bussi_sw_dcd50")
+    mini_dcd = build_campaign(sweep_cfg, cell_dcd)["runs"]["pycharmm_mini"]
+    assert mini_dcd["dcd_nsavc"] == 50
+
+    cell_inb = cell_from_tag(sweep_cfg, "resilient_dcm_52_t50_l28_ht_bussi_sw_inbfrq25")
+    mini_inb = build_campaign(sweep_cfg, cell_inb)["runs"]["pycharmm_mini"]
+    assert mini_inb["dyn_inbfrq"] == 25
+
+
 def test_prep_sweep_tag_auto_loads_from_prep_sweep_yaml(cfg: dict) -> None:
     tag = "resilient_dcm_52_t50_l28_sw_baseline"
     cell = cell_from_tag(cfg, tag)

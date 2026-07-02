@@ -229,6 +229,12 @@ def _row_for_cell(cfg: dict[str, Any], cell: Any) -> dict[str, Any]:
         "mm_switch_width": defaults.get("mm_switch_width", ""),
         "ml_switch_width": defaults.get("ml_switch_width", ""),
         "bonded_mm_mini": defaults.get("bonded_mm_mini", ""),
+        "periodic_charmm_vdw": defaults.get("periodic_charmm_vdw", ""),
+        "dynamics_overlap_check_interval": defaults.get(
+            "dynamics_overlap_check_interval", ""
+        ),
+        "dcd_nsavc": defaults.get("dcd_nsavc", ""),
+        "dyn_inbfrq": defaults.get("dyn_inbfrq", ""),
         "stdout_log": str(out_dir / "stdout.log"),
     }
 

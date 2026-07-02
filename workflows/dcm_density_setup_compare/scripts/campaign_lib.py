@@ -443,6 +443,9 @@ _WORKFLOW_JOB_OVERRIDE_KEYS = (
     "mm_switch_on",
     "mm_switch_width",
     "ml_switch_width",
+    "dcd_nsavc",
+    "dyn_inbfrq",
+    "dyn_nprint",
 )
 
 
@@ -824,6 +827,12 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "no_scale_max_grms",
         "mini_box_equil_ps",
         "calculator_pre_minimize",
+        "periodic_charmm_vdw",
+        "dcd_nsavc",
+        "dyn_inbfrq",
+        "dynamics_overlap_check_interval",
+        "bonded_mm_mini",
+        "charmm_mm_pretreat",
     ):
         if key in effective:
             defaults[key] = effective[key]

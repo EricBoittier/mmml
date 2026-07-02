@@ -27,8 +27,9 @@ seed_base: 4242
 
 dt_fs: 0.25
 pressure: 1.0
-# Easier Packmol convergence (see md_system.dense_liquid_prep.example.yaml).
-spacing: 6.0
+# Prep sweep winners: spacing50 + mm_vdw_off (tighter lattice, no periodic CHARMM VDW).
+spacing: 5.0
+periodic_charmm_vdw: false
 packmol_tolerance: 2.0
 packmol_box_padding: 1.0
 
