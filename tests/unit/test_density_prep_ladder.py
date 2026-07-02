@@ -602,12 +602,12 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
     assert side == 20.0
 
 
-def test_lattice_abnr_prep_pass_order_is_box_only_before_full():
+def test_lattice_abnr_prep_passes_only_lattice_full():
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         _LATTICE_ABNR_PREP_PASSES,
     )
 
-    assert _LATTICE_ABNR_PREP_PASSES == (
-        (True, "lattice_box"),
-        (False, "lattice_full"),
-    )
+    # Only the coupled coords+box pass is included.  NOCO (lattice_box) is omitted
+    # because when minimize_run_abnr_lattice is absent, the SD fallback ignores
+    # nocoords and XTLABC stays zero → CHARMM BOMLEV-5 abort at first putxtl/mbuild.
+    assert _LATTICE_ABNR_PREP_PASSES == ((False, "lattice_full"),)

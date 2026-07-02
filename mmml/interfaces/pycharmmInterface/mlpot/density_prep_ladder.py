@@ -21,10 +21,11 @@ _DEFAULT_GEOMETRY_PREP_REGRESS_RATIO = 1.25
 _DEFAULT_GEOMETRY_PREP_REGRESS_MIN_DELTA = 50.0
 # Lattice ABNR rebuilds IMAGE/MAKINB lists; unsafe on catastrophic overlaps.
 _LATTICE_ABNR_GRMS_STRESS_CEILING = 500.0
-# Box-only (NOCO) before coords+box: full-after-box-only leaves XTLABC usable;
-# box-only after lattice_full triggers MBUILD "singular metric" even after crystal reinstall.
+# The prep ladder runs only the coupled coords+box pass (lattice_full).
+# NOCO (box-only / lattice_box) is omitted: when minimize_run_abnr_lattice is
+# absent from libcharmm the fallback SD does not honour nocoords, leaving
+# XTLABC zero when putxtl/mbuild are first called → CHARMM BOMLEV-5 abort.
 _LATTICE_ABNR_PREP_PASSES: tuple[tuple[bool, str], ...] = (
-    (True, "lattice_box"),
     (False, "lattice_full"),
 )
 
