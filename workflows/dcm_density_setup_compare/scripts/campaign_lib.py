@@ -154,7 +154,30 @@ def iter_heat_thermostats(cfg: dict[str, Any]) -> Iterator[str | None]:
 _PREP_SWEEP_VARIANT_KEY = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 
-def prep_sweep_section(cfg: dict[str, Any]) -> dict[str, Any]:
+def prep_sweep_config_path() -> Path:
+    return workflow_root() / "config.prep_sweep.yaml"
+
+
+def is_prep_sweep_run_tag(tag: str) -> bool:
+    return "_sw_" in str(tag)
+
+
+def config_for_run_tag(cfg: dict[str, Any], tag: str) -> dict[str, Any]:
+    """Use ``config.prep_sweep.yaml`` when the tag is a sweep cell and the active config is not."""
+    if is_prep_sweep_run_tag(tag) and not prep_sweep_enabled(cfg):
+        sweep_path = prep_sweep_config_path()
+        if sweep_path.is_file():
+            return load_config(sweep_path)
+    return cfg
+
+
+def default_workflow_config_path(*, run_tag: str | None = None) -> Path:
+    """Default config file for Snakemake / job_shell (sweep tags → prep_sweep config)."""
+    if run_tag and is_prep_sweep_run_tag(run_tag):
+        sweep_path = prep_sweep_config_path()
+        if sweep_path.is_file():
+            return sweep_path
+    return workflow_root() / "config.yaml"
     raw = cfg.get("prep_sweep")
     return dict(raw) if isinstance(raw, dict) else {}
 
