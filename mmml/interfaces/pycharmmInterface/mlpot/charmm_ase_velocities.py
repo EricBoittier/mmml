@@ -400,8 +400,10 @@ def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
         return vel
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            comparison_comp_looks_like_spatial_coords,
             comparison_matches_main_positions,
             comparison_velocities_akma,
+            velocity_array_matches_main_coordinates,
         )
 
         comp = comparison_velocities_akma()
@@ -409,6 +411,8 @@ def charmm_velocities_akma_for_thermostat() -> np.ndarray | None:
             comp is not None
             and _velocity_array_matches_psf(comp)
             and not comparison_matches_main_positions()
+            and not velocity_array_matches_main_coordinates(comp)
+            and not comparison_comp_looks_like_spatial_coords(comp)
             and not velocities_are_cold(comp)
             and not velocities_are_pathological(comp)
         ):
@@ -457,8 +461,10 @@ def capture_charmm_velocities_for_bussi(
 
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
+            comparison_comp_looks_like_spatial_coords,
             comparison_matches_main_positions,
             comparison_velocities_akma,
+            velocity_array_matches_main_coordinates,
         )
 
         comp = comparison_velocities_akma()
@@ -466,6 +472,8 @@ def capture_charmm_velocities_for_bussi(
             comp is not None
             and _velocity_array_matches_psf(comp)
             and not comparison_matches_main_positions()
+            and not velocity_array_matches_main_coordinates(comp)
+            and not comparison_comp_looks_like_spatial_coords(comp)
             and not velocities_are_cold(comp)
             and not velocities_are_pathological(comp)
         ):

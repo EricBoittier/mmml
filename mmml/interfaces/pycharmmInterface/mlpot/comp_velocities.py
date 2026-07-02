@@ -215,6 +215,25 @@ def comparison_matches_main_positions(*, atol: float = 1.0e-4) -> bool:
         return False
 
 
+def velocity_array_matches_main_coordinates(
+    vel: np.ndarray,
+    *,
+    atol: float = 1.0e-4,
+) -> bool:
+    """True when AKMA-shaped ``vel`` matches main Cartesian coordinates (Å)."""
+    try:
+        v = np.asarray(vel, dtype=np.float64).reshape(-1, 3)
+        if v.size == 0:
+            return False
+        pycharmm = _import_pycharmm()
+        main = pycharmm.coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+        if v.shape != main.shape:
+            return False
+        return bool(np.allclose(v, main, rtol=0.0, atol=float(atol)))
+    except Exception:
+        return False
+
+
 def comparison_comp_looks_like_spatial_coords(vel: np.ndarray) -> bool:
     """True when COMP x/y/z look like Cartesian Å, not AKMA velocity components."""
     v = np.asarray(vel, dtype=np.float64).reshape(-1, 3)
