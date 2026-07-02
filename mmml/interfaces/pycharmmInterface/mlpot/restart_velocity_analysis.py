@@ -70,15 +70,19 @@ def _speeds_akma(vel: np.ndarray) -> np.ndarray:
 
 def _temperature_uniform_mass_k(vel: np.ndarray) -> float:
     """Kinetic T (K) with unit mass per atom (diagnostic when masses unavailable)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _AMU_ANG_PS2_TO_KCALMOL,
+        _KCALMOL_PER_K,
+    )
+
     v = np.asarray(vel, dtype=np.float64).reshape(-1, 3)
     n = v.shape[0]
     if n == 0:
         return 0.0
-    # AKMA → Å/ps with m=1 amu
     v_ang_ps = v / 1000.0
-    ke_kcal = 0.5 * float(np.sum(v_ang_ps * v_ang_ps)) * 0.5 * 1.66053906660e-24 * 6.02214076e23
+    ke_kcal = 0.5 * float(np.sum(v_ang_ps * v_ang_ps)) * _AMU_ANG_PS2_TO_KCALMOL
     dof = max(1, 3 * n)
-    return 2.0 * ke_kcal / (dof * 1.987204259e-3)
+    return 2.0 * ke_kcal / (float(dof) * _KCALMOL_PER_K)
 
 
 def find_velocity_outliers(
