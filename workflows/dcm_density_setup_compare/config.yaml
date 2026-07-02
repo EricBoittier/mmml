@@ -31,6 +31,8 @@ dt_fs: 0.25
 pressure: 1.0
 spacing: 4.0
 packmol_tolerance: 1.0
+# Keep Packmol cube near L_sim (N is bulk-sized for the full cell, not an inset cube).
+packmol_box_padding: 1.0
 
 mm_switch_on: 8.0
 mm_switch_width: 5.0

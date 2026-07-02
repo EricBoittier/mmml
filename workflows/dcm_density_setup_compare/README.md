@@ -123,6 +123,27 @@ uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --versi
 snakemake --profile profiles/local -n
 ```
 
+## Troubleshooting failed cells
+
+Snakemake marks a cell failed when `done.txt` is missing. Check the per-cell log:
+
+```bash
+TAG=liquid_prep_dense_dcm_127_t300_l30
+grep -E 'Packmol failed|pycharmm_mlpot: error|ERROR|failed to converge' \
+  ../../artifacts/dcm_density_setup_compare/${TAG}/stdout.log | tail -20
+```
+
+Common causes:
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `Packmol failed` / `failed to converge` | Inner cube too small vs N (fixed: `packmol_box_padding: 1.0` in config) |
+| `libOpenCL.so.1 not found` | Job ran on login node — use Snakemake Slurm profile |
+| `MMML_CKPT is not set` | Export `MMML_CKPT` before `snakemake` (passed via `envvars` in Slurm profile) |
+| `Checkpoint not found` | Wrong path in `MMML_CKPT` |
+
+Some matrix cells are **expected** to fail mini (overlap / prep stack comparison). That is not a workflow bug — use `campaign_summary.json` per cell to compare which setups reached handoff.
+
 ## Customize
 
 - Add/remove setups in `config.yaml` → `setups:` (ids defined in `scripts/setup_variants.py`).

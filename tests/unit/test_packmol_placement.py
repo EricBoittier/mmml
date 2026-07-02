@@ -68,6 +68,36 @@ def test_execute_packmol_script_captures_output(tmp_path, monkeypatch):
     assert result.max_distance_violation == pytest.approx(0.123456)
 
 
+def test_execute_packmol_script_falls_back_to_stdin(tmp_path, monkeypatch):
+    inp = tmp_path / "pack.inp"
+    inp.write_text("seed 1\n")
+    monkeypatch.setattr(
+        packmol_placement,
+        "packmol_executable",
+        lambda: "/usr/bin/packmol",
+    )
+    cli_fail = mock.Mock(
+        returncode=174,
+        stdout="ERROR: packmol command-line error\n",
+        stderr="",
+    )
+    cli_ok = mock.Mock(
+        returncode=0,
+        stdout=SAMPLE_SUCCESS_LOG,
+        stderr="",
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.packmol_placement.subprocess.run",
+        side_effect=[cli_fail, cli_ok],
+    ) as run_mock:
+        result = packmol_placement.execute_packmol_script("seed 1\n", inp)
+
+    assert run_mock.call_count == 2
+    assert run_mock.call_args_list[0].args[0] == ["/usr/bin/packmol", "-i", str(inp.resolve())]
+    assert run_mock.call_args_list[1].args[0] == ["/usr/bin/packmol"]
+    assert result.success is True
+
+
 def test_packmol_failure_message_uses_exit_label():
     result = packmol_placement.PackmolRunResult(
         exit_code=173,

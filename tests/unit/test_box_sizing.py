@@ -157,6 +157,31 @@ def test_resolve_packmol_cube_side_from_args_explicit_box_size():
     assert side == pytest.approx(60.0)
 
 
+def test_resolve_packmol_box_padding_defaults_small_for_fixed_box_composition():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A,
+        resolve_packmol_box_padding_A,
+        resolve_packmol_cube_side_for_sim_cell,
+    )
+
+    args = argparse.Namespace(
+        packmol_box_padding=None,
+        box_size=30.0,
+        composition="DCM:127",
+        n_molecules=127,
+        packmol_tolerance=1.0,
+        spacing=4.0,
+        ml_cutoff=12.0,
+        box_auto=None,
+    )
+    assert resolve_packmol_box_padding_A(args) == pytest.approx(
+        FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A
+    )
+    packmol = resolve_packmol_cube_side_for_sim_cell(args, 30.0)
+    assert packmol == pytest.approx(28.0)
+    assert packmol > 25.0
+
+
 def test_n_molecules_for_target_density_in_fixed_box_dcm32():
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         n_molecules_for_target_density_in_fixed_box,

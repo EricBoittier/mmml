@@ -15,6 +15,9 @@ AVOGADRO = 6.02214076e23
 
 # Margin between Packmol ``inside cube`` and the CHARMM/PBC simulation cell (per side).
 DEFAULT_PACKMOL_BOX_PADDING_A = 10.0
+# When ``--box-size`` and ``--composition`` are both set (density-targeted fixed cell),
+# keep Packmol near the full cell so N sized for L_sim fits the placement cube.
+FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A = 1.0
 # Cap per-side margin so small cells still fit a Packmol cube (20% of L_sim per side).
 MAX_PACKMOL_MARGIN_FRAC_PER_SIDE = 0.20
 
@@ -323,6 +326,10 @@ def resolve_packmol_box_padding_A(args: argparse.Namespace) -> float:
         if val < 0.0:
             raise ValueError(f"--packmol-box-padding must be >= 0, got {val}")
         return val
+    if getattr(args, "box_size", None) is not None:
+        comp = parse_composition_dict(getattr(args, "composition", None))
+        if comp:
+            return float(FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A)
     return float(DEFAULT_PACKMOL_BOX_PADDING_A)
 
 
@@ -390,6 +397,21 @@ def resolve_packmol_cube_side_for_sim_cell(
         )
     elif resolve_box_auto_mode(args) == "density":
         extent_side = float(resolve_density_packmol_cube_side(args))
+    elif getattr(args, "box_size", None) is not None:
+        comp = parse_composition_dict(getattr(args, "composition", None))
+        if comp:
+            n_mol = int(getattr(args, "n_molecules", 0) or 0) or int(sum(comp.values()))
+            mass_g = total_mass_g_for_composition(comp)
+            vol_cm3 = (sim * 1.0e-8) ** 3
+            if n_mol > 0 and vol_cm3 > 0.0 and mass_g > 0.0:
+                rho_g_cm3 = float(mass_g) / float(vol_cm3)
+                extent_side = float(
+                    cubic_box_side_from_target_density(
+                        n_molecules=n_mol,
+                        total_mass_g=mass_g,
+                        target_density_g_cm3=rho_g_cm3,
+                    )
+                )
 
     if extent_side is not None:
         packmol = min(float(extent_side), max_packmol)

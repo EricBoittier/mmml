@@ -282,13 +282,7 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResu
     os.makedirs(inp_path.parent, exist_ok=True)
     inp_path.write_text(packmol_input)
     packmol_bin = packmol_executable()
-    proc = subprocess.run(
-        [packmol_bin, "-i", str(inp_path)],
-        capture_output=True,
-        text=True,
-        check=False,
-        cwd=str(inp_path.parent),
-    )
+    proc = _run_packmol_subprocess(packmol_bin, inp_path)
     log_text = (proc.stdout or "") + (
         ("\n" + proc.stderr) if proc.stderr else ""
     )
@@ -313,6 +307,35 @@ def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResu
             emit_panel("Packmol log (full)", result.log_text.strip(), border_style="red")
         raise RuntimeError(packmol_failure_message(result))
     return result
+
+
+def _packmol_log_suggests_cli_rejection(log_text: str, exit_code: int) -> bool:
+    log = (log_text or "").lower()
+    if exit_code == 174:
+        return True
+    return (
+        "command-line error" in log
+        or "unrecognized command-line argument" in log
+        or "packmol must be run with" in log
+    )
+
+
+def _run_packmol_subprocess(packmol_bin: str, inp_path: Path) -> subprocess.CompletedProcess[str]:
+    """Invoke Packmol; fall back to stdin redirection for pre-CLI binaries."""
+    common = {
+        "capture_output": True,
+        "text": True,
+        "check": False,
+        "cwd": str(inp_path.parent),
+    }
+    proc = subprocess.run([packmol_bin, "-i", str(inp_path)], **common)
+    log_text = (proc.stdout or "") + (("\n" + proc.stderr) if proc.stderr else "")
+    if int(proc.returncode) == 0 or not _packmol_log_suggests_cli_rejection(
+        log_text, int(proc.returncode)
+    ):
+        return proc
+    with inp_path.open(encoding="utf-8") as fh:
+        return subprocess.run([packmol_bin], stdin=fh, **common)
 
 
 def resolve_packmol_use(
