@@ -105,27 +105,20 @@ mmml md-system \
 
 Full Packmol reference: [packmol-placement.md](../packmol-placement.md).
 
-![Illustrative acetone box](../images/structures/make-box-acetone.png)
+![Packed acetone box (Packmol + ACO monomer)](../images/structures/make-box-acetone.png)
 
 Packmol writes `pdb/init-packmol.pdb`; PyCHARMM then builds PSF, applies PBC, and
 minimizes contacts. For production liquid workflows see
 [liquid-box workflow](../liquid-box-workflow.md).
 
-### Regenerating the figure (ASE)
+### Regenerating the figure
 
-```python
-import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-from ase import Atoms
-from ase.build import molecule
-from ase.visualize.plot import plot_atoms
-import matplotlib.pyplot as plt
+The PNG uses a **Packmol-packed** 8× ACO / 22 Å cube committed as
+`mmml/data/structures/make-box-aco-8x22A.pdb` (monomer from `make-res` / `default_aco_template_pdb()`).
 
-side = 22.0
-monomer = molecule("CH3COCH3")
-offsets = [(4, 4, 4), (12, 4, 6), (6, 11, 5), (14, 12, 8)]
-# ... place monomers, set cell=[side, side, side], pbc=True
+```bash
+uv run python scripts/export_docs_structure_assets.py   # Packmol + CHARMM exports
+uv run python scripts/generate_docs_figures.py          # ASE orthographic PNG
 ```
 
 ---
@@ -284,8 +277,8 @@ mmml build-crystal -m monomer.xyz --spg 4 --supercell 2,2,2 -o super.cif
 ![DCM crystal / periodic cell (experimental Pbcn)](../images/structures/build-crystal.png)
 
 The doc figure uses the bundled COD 2100015 coordinates when ASE is available.
-Without the CIF, the generator falls back to PyXtal (Pbcn) or an illustrative
-benzene dimer cell.
+Without the CIF, the generator falls back to PyXtal (Pbcn) or the bundled benzene
+P2₁/c CIF (COD 4501704).
 
 See also: [PyXtal tests on GitHub](https://github.com/EricBoittier/mmml/blob/main/tests/functionality/pyxtal/README.md).
 

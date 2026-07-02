@@ -144,7 +144,7 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
         ("Acetone monomer (ACO)", "../../images/structures/make-res-aco.png"),
     ],
     "make-box": [
-        ("Packed acetone box (illustrative)", "../../images/structures/make-box-acetone.png"),
+        ("Packed acetone box (Packmol)", "../../images/structures/make-box-acetone.png"),
     ],
     "build-crystal": [
         ("DCM crystal / periodic cell (experimental Pbcn)", "../../images/structures/build-crystal.png"),

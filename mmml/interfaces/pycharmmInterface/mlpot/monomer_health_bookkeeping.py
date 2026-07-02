@@ -166,7 +166,7 @@ def resolve_monomer_offsets_for_ctx(
             per = []
         if per and int(sum(per)) == int(n_atoms) and len(per) == int(n_monomers):
             return monomer_offsets_from_atoms_per(per)
-    if int(n_monomers) > 0 and int(n_atoms) % int(n_monomers) == 0:
+    if int(n_monomers) > 0 and int(n_atoms) > 0 and int(n_atoms) % int(n_monomers) == 0:
         return monomer_offsets(int(n_atoms), int(n_monomers))
     return None
 
@@ -280,10 +280,14 @@ def record_monomer_health_baseline(
     n_monomers: int,
     global_step: int | None = None,
 ) -> MonomerHealthBaseline | None:
+    if int(n_monomers) <= 1:
+        return None
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm.coor as coor
 
     n_atoms = int(coor.get_natom())
+    if n_atoms <= 0:
+        return None
     offsets = resolve_monomer_offsets_for_ctx(
         mlpot_ctx, n_monomers=int(n_monomers), n_atoms=n_atoms
     )

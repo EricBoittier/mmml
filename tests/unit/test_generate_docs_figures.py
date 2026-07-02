@@ -12,8 +12,11 @@ EXPECTED_IMAGES = (
     "docs/images/structures/make-res-aco.png",
     "docs/images/structures/make-box-acetone.png",
     "docs/images/structures/build-crystal.png",
+    "docs/images/structures/trialanine-water-box.png",
+    "docs/images/structures/trialanine-peptide-zoom.png",
     "docs/images/plots/liquid-box-density-ladder.png",
     "docs/images/plots/structure-builder-sizes.png",
+    "docs/images/plots/trialanine-build-pipeline.png",
 )
 
 

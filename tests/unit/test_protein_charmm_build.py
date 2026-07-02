@@ -28,3 +28,19 @@ def test_alad_dataclass_fields() -> None:
     result = AladBuildResult(positions=pos, n_atoms=3)
     assert result.n_atoms == 3
     assert result.segment == "ALAD"
+
+
+def test_load_trialanine_water_atoms_for_docs_real_coords() -> None:
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        load_trialanine_water_atoms_for_docs,
+        peptide_atoms_from_trialanine_box,
+    )
+    from mmml.paths import default_trialanine_water_smoke_extxyz
+
+    assert default_trialanine_water_smoke_extxyz().is_file()
+    atoms = load_trialanine_water_atoms_for_docs()
+    pos = atoms.get_positions()
+    assert len(atoms) == 72
+    assert float(pos[:42].std()) > 0.5
+    peptide = peptide_atoms_from_trialanine_box(atoms)
+    assert len(peptide) == 42

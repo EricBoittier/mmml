@@ -126,10 +126,15 @@ See also: [`tests/functionality/charmm/README_trialanine_water_box.md`](../tests
 
 ## Doc figures
 
-Illustrative ASE structures (no PyCHARMM) for MkDocs:
+Bundled CHARMM-built coordinates (`mmml/data/charmm/trialanine-water-smoke.extxyz`) feed MkDocs figures.
 
 ```bash
+# Once per release (PyCHARMM + CHARMM_HOME):
+export CHARMM_HOME=... CHARMM_LIB_DIR=... LD_LIBRARY_PATH=...
+uv run python scripts/export_docs_structure_assets.py
+
+# Render PNGs (CI-safe, no PyCHARMM):
 uv run python scripts/generate_docs_figures.py
 ```
 
-Writes `docs/images/structures/trialanine-water-box.png`, peptide zoom, pipeline plot, and refreshes `mmml/data/charmm/trialanine-water-smoke.extxyz`.
+Writes `docs/images/structures/trialanine-water-box.png`, peptide zoom, and pipeline plot.

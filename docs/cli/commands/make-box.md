@@ -63,7 +63,7 @@ See [Packmol placement](../../packmol-placement.md).
 
 ## Example structures
 
-![Packed acetone box (illustrative)](../../images/structures/make-box-acetone.png)
+![Packed acetone box (Packmol)](../../images/structures/make-box-acetone.png)
 
 More detail: [Structure building guide](../structure-building.md).
 

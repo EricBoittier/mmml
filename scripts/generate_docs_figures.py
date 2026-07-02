@@ -5,6 +5,11 @@ Run from repo root::
 
     uv run python scripts/generate_docs_figures.py
 
+Structure coordinates come from bundled assets under ``mmml/data/`` (CHARMM /
+Packmol). Refresh those first when coordinates change::
+
+    uv run python scripts/export_docs_structure_assets.py
+
 Writes PNGs under ``docs/images/`` for use in Markdown (MkDocs does not execute
 inline Python). Structures use **orthographic** ASE projection (fixed scale per
 view), Jmol colors, covalent bonds, and a light styled background.
