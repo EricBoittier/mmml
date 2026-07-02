@@ -146,17 +146,17 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=None,
         help=(
-            "Bonded-only SD steps for intra-monomer close-contact rescue "
+            "Bonded+VDW SD steps for intra-monomer close-contact rescue "
             "(default: --dynamics-overlap-charmm-sd-steps)."
         ),
     )
     group.add_argument(
         "--dynamics-overlap-check-interval",
         type=int,
-        default=500,
+        default=100,
         help=(
             "Integration steps between overlap/extent checks during dynamics "
-            "(default: 500). Effective interval is the largest divisor of the stage "
+            "(default: 100). Effective interval is the largest divisor of the stage "
             "step count not exceeding this value (and at least dcd-nsavc + 1 when set). "
             "Heat uses this mid-segment interval by default; see "
             "--heat-overlap-segment-boundary-only for legacy end-only checks."

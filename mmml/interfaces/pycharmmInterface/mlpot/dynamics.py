@@ -444,7 +444,7 @@ def _with_mlpot_detached(ctx: "MlpotContext", fn):
 
 @dataclass
 class BondedMmMiniConfig:
-    """Short bonded-only recovery mini (JAX FIRE and/or CHARMM SD)."""
+    """Short bonded recovery mini (JAX FIRE and/or CHARMM SD with optional VDW)."""
 
     nstep_sd: int = 50
     nprint: int = 10
@@ -454,6 +454,8 @@ class BondedMmMiniConfig:
     show_energy: bool = False
     backend: str = "auto"
     nstep_jax: int | None = None
+    include_vdw: bool = True
+    verify_jax_parity: bool = True
 
 
 def bonded_mm_mini_config_from_namespace(
@@ -555,7 +557,7 @@ def minimize_bonded_mm_recovery(
     *,
     topology_psf: PathLike | None = None,
 ) -> float | None:
-    """Bonded-only recovery mini (JAX FIRE when enabled, else CHARMM SD with MLpot detached)."""
+    """Bonded recovery mini (bonded+VDW CHARMM SD by default; JAX when bonded-only)."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
 
     if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
@@ -566,7 +568,10 @@ def minimize_bonded_mm_recovery(
     pos_before = np.asarray(get_charmm_positions_array(), dtype=np.float64, copy=True)
 
     backend = str(getattr(config, "backend", "auto")).lower()
-    if backend in ("auto", "jax"):
+    include_vdw = bool(getattr(config, "include_vdw", True))
+    if include_vdw and backend == "auto":
+        backend = "charmm"
+    if backend in ("auto", "jax") and not include_vdw:
         from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
             minimize_bonded_jax_recovery,
         )
@@ -612,12 +617,21 @@ def minimize_bonded_mm_recovery(
 
         return charmm_grms_after_ener_force()
 
-    grms = _minimize_bonded_charmm_recovery(ctx, config)
+    grms = _minimize_bonded_charmm_recovery(
+        ctx,
+        config,
+        topology_psf=topology_psf,
+    )
+    label = (
+        "bonded+VDW recovery (CHARMM SD)"
+        if include_vdw
+        else "bonded-MM recovery (CHARMM SD)"
+    )
     _print_bonded_recovery_geometry_diff(
         pos_before,
         ctx,
         topology_psf=topology_psf,
-        label="bonded-MM recovery (CHARMM SD)",
+        label=label,
     )
     return grms
 
@@ -646,20 +660,45 @@ def _print_bonded_recovery_geometry_diff(
 def _minimize_bonded_charmm_recovery(
     ctx: "MlpotContext",
     config: BondedMmMiniConfig,
+    *,
+    topology_psf: PathLike | None = None,
 ) -> float | None:
-    """Bonded-only CHARMM SD (BOND/ANGL/DIHE); MLpot detached for pure CHARMM minimization."""
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_bonded_mm_only_block
+    """CHARMM SD recovery with bonded+VDW (default) or bonded-only terms."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        apply_bonded_mm_only_block,
+        apply_bonded_vdw_recovery_block,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         MlpotContext,
+        apply_recovery_nbonds,
         get_charmm_positions_array,
+        restore_workflow_nbonds,
     )
 
     if not isinstance(ctx, MlpotContext) and not hasattr(ctx, "mock_calls"):
         raise TypeError("ctx must be MlpotContext")
 
+    include_vdw = bool(getattr(config, "include_vdw", True))
+
     def _run_sd() -> float | None:
-        apply_bonded_mm_only_block()
-        _prepare_bonded_mm_rescue_environment(ctx)
+        if include_vdw:
+            apply_recovery_nbonds(ctx)
+            apply_bonded_vdw_recovery_block(verbose=bool(config.verbose))
+            _prepare_overlap_rescue_lists(ctx)
+        else:
+            apply_bonded_mm_only_block()
+            _prepare_bonded_mm_rescue_environment(ctx)
+        if include_vdw and bool(getattr(config, "verify_jax_parity", True)):
+            from mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report import (
+                maybe_emit_recovery_mm_parity,
+            )
+
+            maybe_emit_recovery_mm_parity(
+                ctx,
+                topology_psf=topology_psf,
+                context="bonded+VDW recovery mini",
+                quiet=not config.verbose,
+            )
         pycharmm, cons_fix, *_ = _import_pycharmm_modules()
         minimize = _import_pycharmm_modules()[3]
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
@@ -674,38 +713,50 @@ def _minimize_bonded_charmm_recovery(
         grms_before = charmm_grms_after_ener_force()
         angl_before = charmm_bonded_term_kcalmol("ANGL")
         bond_before = charmm_bonded_term_kcalmol("BOND")
+        vdw_before = charmm_bonded_term_kcalmol("VDW") if include_vdw else None
         _log_bonded_term_diagnostics(verbose=config.verbose)
         if config.verbose:
+            mode = "bonded+VDW" if include_vdw else "bonded terms only"
             msg = (
                 f"Bonded-MM mini start: GRMS={grms_before:.4f} kcal/mol/Å "
-                "(bonded terms only, MLpot detached)"
+                f"({mode}, MLpot detached)"
             )
             if angl_before is not None:
                 msg += f", ANGL={angl_before:.4f} kcal/mol"
             if bond_before is not None:
                 msg += f", BOND={bond_before:.4f} kcal/mol"
+            if vdw_before is not None:
+                msg += f", VDW={vdw_before:.4f} kcal/mol"
             print(msg, flush=True)
         sd_kw = _bonded_recovery_sd_kwargs(ctx, config)
         if config.verbose and config.show_energy:
             _maybe_show_energy(True)
 
-        with charmm_quiet_output():
-            minimize.run_sd(**sd_kw)
-        grms = charmm_grms_after_ener_force()
-        angl_after = charmm_bonded_term_kcalmol("ANGL")
-        if config.verbose:
-            internal_after = charmm_internal_energy_kcalmol()
-            msg = f"Bonded-MM mini end: GRMS={grms:.4f} kcal/mol/Å"
-            if angl_after is not None:
-                msg += f", ANGL={angl_after:.4f} kcal/mol"
-                if angl_before is not None:
-                    msg += f" (Δ={angl_after - angl_before:+.4f})"
-            if internal_after is not None:
-                msg += f", internal={internal_after:.4f} kcal/mol"
-            print(msg, flush=True)
-        cons_fix.turn_off()
-        _ = get_charmm_positions_array()
-        return grms
+        try:
+            with charmm_quiet_output():
+                minimize.run_sd(**sd_kw)
+            grms = charmm_grms_after_ener_force()
+            angl_after = charmm_bonded_term_kcalmol("ANGL")
+            if config.verbose:
+                internal_after = charmm_internal_energy_kcalmol()
+                msg = f"Bonded-MM mini end: GRMS={grms:.4f} kcal/mol/Å"
+                if angl_after is not None:
+                    msg += f", ANGL={angl_after:.4f} kcal/mol"
+                    if angl_before is not None:
+                        msg += f" (Δ={angl_after - angl_before:+.4f})"
+                if internal_after is not None:
+                    msg += f", internal={internal_after:.4f} kcal/mol"
+                if include_vdw:
+                    vdw_after = charmm_bonded_term_kcalmol("VDW")
+                    if vdw_after is not None:
+                        msg += f", VDW={vdw_after:.4f} kcal/mol"
+                print(msg, flush=True)
+            return grms
+        finally:
+            cons_fix.turn_off()
+            if include_vdw:
+                restore_workflow_nbonds(ctx)
+            _ = get_charmm_positions_array()
 
     return _with_mlpot_detached(ctx, _run_sd)
 

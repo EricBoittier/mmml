@@ -28,7 +28,9 @@ def test_bonded_mm_mini_config_from_namespace_defaults():
 
 def test_minimize_bonded_mm_recovery_uses_jax_when_auto_succeeds():
     ctx = MagicMock()
-    cfg = BondedMmMiniConfig(nstep_sd=10, backend="auto", verbose=False)
+    cfg = BondedMmMiniConfig(
+        nstep_sd=10, backend="auto", verbose=False, include_vdw=False
+    )
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((2, 3)),
@@ -51,7 +53,9 @@ def test_minimize_bonded_mm_recovery_uses_jax_when_auto_succeeds():
 
 def test_minimize_bonded_mm_recovery_falls_back_to_charmm_on_jax_error():
     ctx = MagicMock()
-    cfg = BondedMmMiniConfig(nstep_sd=10, backend="auto", verbose=False)
+    cfg = BondedMmMiniConfig(
+        nstep_sd=10, backend="auto", verbose=False, include_vdw=False
+    )
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
         return_value=np.zeros((2, 3)),
@@ -73,6 +77,29 @@ def test_minimize_bonded_mm_recovery_falls_back_to_charmm_on_jax_error():
                     ):
                         grms = minimize_bonded_mm_recovery(ctx, cfg)
     assert grms == pytest.approx(2.0)
+    charmm_mini.assert_called_once()
+
+
+def test_minimize_bonded_mm_recovery_auto_with_vdw_uses_charmm():
+    ctx = MagicMock()
+    cfg = BondedMmMiniConfig(nstep_sd=10, backend="auto", verbose=False)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        return_value=np.zeros((2, 3)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.minimize_bonded_jax_recovery",
+    ) as jax_mini, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._minimize_bonded_charmm_recovery",
+        return_value=1.5,
+    ) as charmm_mini, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._print_bonded_recovery_geometry_diff",
+    ):
+        grms = minimize_bonded_mm_recovery(ctx, cfg)
+    assert grms == pytest.approx(1.5)
+    jax_mini.assert_not_called()
     charmm_mini.assert_called_once()
 
 

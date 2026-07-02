@@ -352,7 +352,7 @@ def test_clear_mmfp_noops_before_setup():
     pycharmm.lingo.charmm_script.assert_not_called()
 
 
-def test_minimize_bonded_recovery_uses_bonded_only_block():
+def test_minimize_bonded_recovery_uses_bonded_vdw_block():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         BondedMmMiniConfig,
         minimize_bonded_mm_recovery,
@@ -366,9 +366,13 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
         side_effect=lambda _ctx, fn: fn(),
     ) as detached, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
     ) as bonded_block, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_bonded_mm_rescue_environment",
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
@@ -379,6 +383,8 @@ def test_minimize_bonded_recovery_uses_bonded_only_block():
         return_value=np.zeros((4, 3)),
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.run_charmm_script_quiet",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.restore_workflow_nbonds",
     ):
         imp.return_value = (MagicMock(), MagicMock(), MagicMock(), MagicMock())
         minimize_bonded_mm_recovery(ctx, BondedMmMiniConfig(nstep_sd=0, backend="charmm"))
@@ -410,9 +416,13 @@ def test_minimize_bonded_recovery_runs_sd_and_reports_angl():
     ) as detached, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._log_bonded_term_diagnostics",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_bonded_mm_rescue_environment",
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
@@ -450,10 +460,25 @@ def test_minimize_bonded_recovery_unset_and_reregister():
 
     ctx = MagicMock(spec=MlpotContext)
     ctx.use_pbc = False
+
+    def _fake_detach(_ctx, fn):
+        _ctx.unset()
+        try:
+            return fn()
+        finally:
+            _ctx.reregister_mlpot()
+
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_mm_only_block",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._with_mlpot_detached",
+        side_effect=_fake_detach,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_bonded_mm_rescue_environment",
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_bonded_vdw_recovery_block",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.apply_recovery_nbonds",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._prepare_overlap_rescue_lists",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.jax_charmm_parity_report.maybe_emit_recovery_mm_parity",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
     ) as imp, patch(
