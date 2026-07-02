@@ -83,6 +83,7 @@ def run_charmm_lattice_abnr(
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
+        charmm_crystal_abnr_ready,
         charmm_crystal_is_active,
         probe_charmm_cubic_box_side_A,
         reinstall_charmm_crystal_for_lattice_abnr,
@@ -93,11 +94,10 @@ def run_charmm_lattice_abnr(
         probed, _ = probe_charmm_cubic_box_side_A()
         restore_side = probed
     if restore_side is not None and float(restore_side) > 0.0:
-        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-            charmm_crystal_abnr_ready,
-        )
-
-        if not charmm_crystal_abnr_ready(float(restore_side)):
+        # Box-only (NOCO) lattice work needs a fresh metric after coords+box ABNR;
+        # ``charmm_crystal_abnr_ready`` can stay true while MBUILD still sees singular XTLABC.
+        need_reinstall = bool(nocoords) or not charmm_crystal_abnr_ready(float(restore_side))
+        if need_reinstall:
             reinstall_charmm_crystal_for_lattice_abnr(
                 float(restore_side),
                 quiet=not verbose,

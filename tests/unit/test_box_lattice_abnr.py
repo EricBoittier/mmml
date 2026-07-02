@@ -103,6 +103,48 @@ def test_run_charmm_lattice_abnr_uses_minimize_c_api():
     apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=42.5)
 
 
+def test_run_charmm_lattice_abnr_reinstalls_before_box_only_when_crystal_looks_ready():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
+        run_charmm_lattice_abnr,
+    )
+
+    run_abnr = MagicMock(return_value=True)
+    with (
+        _fake_pycharmm_minimize_module(run_abnr),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_abnr_ready",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reinstall_charmm_crystal_for_lattice_abnr",
+        ) as restore_lattice,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.resolve_charmm_cubic_box_side_A",
+            return_value=(27.307, "xucell"),
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_quiet_output",
+        ),
+    ):
+        side = run_charmm_lattice_abnr(
+            nstep=200,
+            tolenr=1e-3,
+            tolgrd=1e-3,
+            nocoords=True,
+            fallback_side_A=27.307,
+            verbose=False,
+        )
+    assert side == pytest.approx(27.307)
+    restore_lattice.assert_called_once_with(
+        27.307,
+        quiet=True,
+        allow_prepare_pbc=True,
+    )
+
+
 def test_run_charmm_lattice_abnr_skips_zero_steps():
     from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
         run_charmm_lattice_abnr,
