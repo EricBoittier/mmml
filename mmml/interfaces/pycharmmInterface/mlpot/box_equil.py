@@ -6,7 +6,100 @@ from pathlib import Path
 
 import argparse
 
+import numpy as np
+
 from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array, sync_charmm_positions
+
+# Lattice ABNR and Hoover mini-equil share the same MM-only stress ceiling.
+MAX_MM_PRETREAT_DYNAMICS_GRMS = 500.0
+MAX_MM_PRETREAT_COORD_SPAN_A = 500.0
+
+
+def mm_geometry_safe_for_pretreat_dynamics(
+    *,
+    grms_kcalmol_A: float,
+    positions: np.ndarray | None = None,
+    max_grms: float = MAX_MM_PRETREAT_DYNAMICS_GRMS,
+    max_coord_span_A: float = MAX_MM_PRETREAT_COORD_SPAN_A,
+) -> tuple[bool, str]:
+    """Return whether CHARMM MM pretreat dynamics (lattice / mini equil) is safe."""
+    if not np.isfinite(float(grms_kcalmol_A)):
+        return False, "non-finite CHARMM GRMS after MM minimize"
+    grms = float(grms_kcalmol_A)
+    if grms > float(max_grms):
+        return (
+            False,
+            f"CHARMM GRMS {grms:.1f} kcal/mol/Å exceeds safe ceiling "
+            f"{float(max_grms):.1f} kcal/mol/Å for MM pretreat dynamics",
+        )
+    if positions is not None:
+        pos = np.asarray(positions, dtype=float)
+        if pos.size and not np.all(np.isfinite(pos)):
+            return False, "non-finite coordinates after MM minimize"
+        if pos.size:
+            max_abs = float(np.max(np.abs(pos)))
+            if max_abs > float(max_coord_span_A):
+                return (
+                    False,
+                    f"coordinate span {max_abs:.1f} Å exceeds "
+                    f"{float(max_coord_span_A):.1f} Å before MM pretreat dynamics",
+                )
+    return True, "ok"
+
+
+def maybe_run_mini_box_equilibration(
+    args: argparse.Namespace,
+    *,
+    paths: dict[str, Path],
+    timestep_ps: float,
+    temp: float,
+    echeck: float,
+    duration_ps: float,
+    use_pbc: bool,
+    box_side: float | None,
+    grms_kcalmol_A: float | None = None,
+    positions: np.ndarray | None = None,
+) -> bool:
+    """Run mini box equil when geometry is safe; otherwise skip with a warning."""
+    if float(duration_ps) <= 0.0:
+        return False
+    grms = (
+        float(grms_kcalmol_A)
+        if grms_kcalmol_A is not None
+        else None
+    )
+    pos = positions
+    if grms is None or pos is None:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_grms
+
+        if grms is None:
+            grms = float(charmm_grms())
+        if pos is None:
+            pos = get_charmm_positions_array()
+    safe, reason = mm_geometry_safe_for_pretreat_dynamics(
+        grms_kcalmol_A=grms,
+        positions=pos,
+    )
+    if not safe:
+        if not getattr(args, "quiet", False):
+            print(
+                f"Mini box equilibration: skipped — {reason}. "
+                "Rebuild with a looser density (--profile conservative, lower "
+                "--bulk-density-fraction, or larger --box-size).",
+                flush=True,
+            )
+        return False
+    run_mini_box_equilibration(
+        args,
+        paths=paths,
+        timestep_ps=timestep_ps,
+        temp=temp,
+        echeck=echeck,
+        duration_ps=float(duration_ps),
+        use_pbc=use_pbc,
+        box_side=box_side,
+    )
+    return True
 
 
 def configure_liquid_box_mini_equil_args(
