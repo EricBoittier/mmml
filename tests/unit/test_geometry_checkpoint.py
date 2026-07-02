@@ -269,8 +269,27 @@ def test_pretreat_stage_complete_uses_integrated_step(tmp_path):
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.resolve_integrated_restart_step",
         return_value=950,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_has_nonfinite_coordinates",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_coordinates_are_unsafe",
+        return_value=False,
     ):
         assert pretreat_stage_complete(res, expected_nstep=1000) is True
+
+
+def test_pretreat_stage_complete_rejects_unsafe_restart(tmp_path):
+    res = tmp_path / "heat.res"
+    res.write_text("REST\n", encoding="utf-8")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._valid_restart_file",
+        return_value=res.resolve(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.restart_coordinates_are_unsafe",
+        return_value=True,
+    ):
+        assert pretreat_stage_complete(res, expected_nstep=1000) is False
 
 
 def test_is_overlap_scratch_restart_path():

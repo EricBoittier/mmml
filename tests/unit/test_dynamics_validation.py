@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import struct
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -715,6 +716,49 @@ def test_restart_coordinates_are_unsafe_detects_flyoff(tmp_path):
         )
     )
     assert restart_coordinates_are_unsafe(path) is True
+
+
+def test_validate_charmm_dynamics_quarantines_stale_unsafe_restart_when_memory_ok(
+    tmp_path,
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        validate_charmm_dynamics_state_after_chunk,
+    )
+
+    bad = tmp_path / "heat.res"
+    bad.write_text(
+        _minimal_restart_text(
+            natom=1,
+            coord_lines=[
+                " 0.130231826800000D+08 0.200000000000000D+00 0.300000000000000D+00"
+            ],
+        )
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_state_is_finite",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
+        return_value=True,
+    ):
+        validate_charmm_dynamics_state_after_chunk(
+            context="CHARMM_MM_PRETREAT_HEAT",
+            restart_path=bad,
+        )
+    assert not bad.exists()
+    assert list(tmp_path.glob("heat.stale_unsafe*.res"))
 
 
 def test_assert_stage_dynamics_completed_accepts_single_step_heat(tmp_path):

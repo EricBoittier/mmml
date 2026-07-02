@@ -517,6 +517,21 @@ def restart_coordinates_are_unsafe(
     return float(np.max(np.abs(pos))) > float(max_abs_A)
 
 
+def quarantine_restart_file(path: Path | str, *, reason: str = "corrupt") -> Path | None:
+    """Rename a restart aside so resume/validation cannot reuse it."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    tag = re.sub(r"[^\w.-]+", "_", str(reason).strip().lower()) or "corrupt"
+    dest = p.with_name(f"{p.stem}.{tag}{p.suffix}")
+    n = 0
+    while dest.exists():
+        n += 1
+        dest = p.with_name(f"{p.stem}.{tag}{n}{p.suffix}")
+    p.rename(dest)
+    return dest
+
+
 def charmm_coordinates_are_finite() -> bool:
     """True when all CHARMM Cartesian coordinates are finite."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -620,15 +635,34 @@ def validate_charmm_dynamics_state_after_chunk(
     restart_path: Path | None = None,
 ) -> None:
     """Raise when coordinates or energies are non-finite (barostat / MLpot blow-up)."""
-    if restart_path is not None and restart_has_nonfinite_coordinates(Path(restart_path)):
-        raise RuntimeError(
-            f"{context}: restart {Path(restart_path).name} has non-finite coordinates "
-            "after dynamics (MLpot integration blow-up). Do not continue integration — "
-            "Fortran image updates can segfault on bad coordinates."
+    restart_bad = False
+    if restart_path is not None:
+        rp = Path(restart_path)
+        restart_bad = restart_has_nonfinite_coordinates(rp) or restart_coordinates_are_unsafe(
+            rp
         )
-    if restart_path is not None and restart_coordinates_are_unsafe(Path(restart_path)):
+        if restart_bad and charmm_dynamics_state_is_finite():
+            quarantined = quarantine_restart_file(
+                rp,
+                reason="stale_unsafe",
+            )
+            if quarantined is not None:
+                print(
+                    f"WARN: {context}: quarantined stale restart {rp.name} "
+                    f"(unsafe on disk; in-memory CHARMM state OK) -> {quarantined.name}",
+                    flush=True,
+                )
+            restart_bad = False
+    if restart_path is not None and restart_bad:
+        rp = Path(restart_path)
+        if restart_has_nonfinite_coordinates(rp):
+            raise RuntimeError(
+                f"{context}: restart {rp.name} has non-finite coordinates "
+                "after dynamics (MLpot integration blow-up). Do not continue integration — "
+                "Fortran image updates can segfault on bad coordinates."
+            )
         raise RuntimeError(
-            f"{context}: restart {Path(restart_path).name} has unphysical coordinates "
+            f"{context}: restart {rp.name} has unphysical coordinates "
             f"(>|{2000.0:.0f}| Å) after dynamics (MLpot integration blow-up). "
             "Do not continue integration — Fortran image updates can segfault on "
             "fly-off coordinates."

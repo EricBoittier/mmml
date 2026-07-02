@@ -455,6 +455,20 @@ def run_charmm_mm_pretreat_before_mlpot(
             heat_firstt, heat_finalt = resolve_heat_firstt_finalt(args, default_temp=temp)
             heat_integrated = max(0, int(pretreat_resume.heat_integrated_step))
             n_heat_run = max(1, n_heat - heat_integrated) if heat_integrated > 0 else n_heat
+            if heat_integrated == 0:
+                from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                    quarantine_restart_file,
+                    restart_coordinates_are_unsafe,
+                    restart_has_nonfinite_coordinates,
+                )
+
+                heat_res = paths.get("charmm_mm_heat_res")
+                if heat_res is not None and Path(heat_res).is_file():
+                    hr = Path(heat_res)
+                    if restart_has_nonfinite_coordinates(hr) or restart_coordinates_are_unsafe(
+                        hr
+                    ):
+                        quarantine_restart_file(hr, reason="pretreat_heat_fresh")
             heat_echeck = echeck
             if getattr(args, "no_echeck", False) or getattr(args, "no_echeck_heat", False):
                 heat_echeck = -1.0

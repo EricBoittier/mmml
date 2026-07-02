@@ -554,6 +554,13 @@ def pretreat_stage_complete(
     valid = _valid_restart_file(restart_path)
     if valid is None:
         return False
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        restart_coordinates_are_unsafe,
+        restart_has_nonfinite_coordinates,
+    )
+
+    if restart_has_nonfinite_coordinates(valid) or restart_coordinates_are_unsafe(valid):
+        return False
     step = resolve_integrated_restart_step(
         valid,
         expected_nstep=expected_nstep,
