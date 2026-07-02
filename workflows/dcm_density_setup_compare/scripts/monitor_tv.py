@@ -585,16 +585,23 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", help="workflow config (default: MMML_WORKFLOW_CONFIG)")
-    parser.add_argument("--tags", nargs="*", help="explicit channel list")
-    parser.add_argument("--interval", type=float, default=12.0, help="auto-rotate seconds")
-    parser.add_argument("--include-done", action="store_true", help="keep finished cells in rotation")
-    parser.add_argument("--driver-log", default="snakemake_slurm.log")
     sub = parser.add_subparsers(dest="cmd")
 
-    sub.add_parser("live", help="full-screen TV dashboard (default)")
-    sub.add_parser("init", help="seed .monitor_tv/state.json channel list")
-    p_list = sub.add_parser("list", help="print channel list")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--config", help="workflow config (default: MMML_WORKFLOW_CONFIG)")
+    common.add_argument("--tags", nargs="*", help="explicit channel list")
+    common.add_argument(
+        "--include-done",
+        action="store_true",
+        help="keep finished cells in rotation",
+    )
+
+    live = argparse.ArgumentParser(add_help=False, parents=[common])
+    live.add_argument("--interval", type=float, default=12.0, help="auto-rotate seconds")
+    live.add_argument("--driver-log", default="snakemake_slurm.log")
+    sub.add_parser("live", parents=[live], help="full-screen TV dashboard (default)")
+    sub.add_parser("init", parents=[common], help="seed .monitor_tv/state.json channel list")
+    sub.add_parser("list", parents=[common], help="print channel list")
 
     p_ctl = sub.add_parser("ctl", help="next|prev|pause (for tmux bindings)")
     p_ctl.add_argument("action", choices=["next", "prev", "pause"])
@@ -606,8 +613,18 @@ def main() -> int:
         return cmd_init(args)
     if args.cmd == "list":
         return cmd_list(args)
-    # default: live dashboard
-    return run_live(args)
+    if args.cmd == "live":
+        return run_live(args)
+    # default: live dashboard with defaults
+    return run_live(
+        argparse.Namespace(
+            config=None,
+            tags=None,
+            include_done=False,
+            interval=12.0,
+            driver_log="snakemake_slurm.log",
+        )
+    )
 
 
 if __name__ == "__main__":
