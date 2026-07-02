@@ -159,6 +159,15 @@ def _reload_prm_overlay(
         pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
 
 
+def _run_silent_ener() -> None:
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+    with charmm_silent_command():
+        pycharmm.lingo.charmm_script("ENER")
+
+
 def enforce_charmm_energy_term_policies(
     args: argparse.Namespace | None,
     *,
@@ -172,16 +181,11 @@ def enforce_charmm_energy_term_policies(
     if not policies:
         return []
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
     from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         cgenff_prm_path,
     )
 
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
-
-    with charmm_silent_command():
-        pycharmm.lingo.charmm_script("ENER")
+    _run_silent_ener()
     terms = measure_charmm_energy_terms()
 
     violated: list[CharmmEnergyTermPolicy] = []
@@ -239,8 +243,7 @@ def enforce_charmm_energy_term_policies(
         verbose=verbose,
     )
 
-    with charmm_silent_command():
-        pycharmm.lingo.charmm_script("ENER")
+    _run_silent_ener()
     terms_after = measure_charmm_energy_terms()
     still_bad: list[str] = []
     for policy in violated:

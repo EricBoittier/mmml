@@ -104,8 +104,9 @@ def test_enforce_skips_when_terms_already_zero(monkeypatch):
         lambda: {"VDW": 0.0, "IMNB": 0.0, "USER": -1.0},
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
-        lambda: _NullCtx(),
+        cep,
+        "_run_silent_ener",
+        lambda: None,
     )
 
     applied = cep.enforce_charmm_energy_term_policies(
@@ -116,11 +117,3 @@ def test_enforce_skips_when_terms_already_zero(monkeypatch):
         verbose=False,
     )
     assert applied == []
-
-
-class _NullCtx:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
