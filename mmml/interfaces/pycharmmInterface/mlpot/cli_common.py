@@ -1567,8 +1567,15 @@ def build_cluster_from_args_with_tag(
                     f"Packmol sphere: center={center} R={radius:.1f} Å tol={tolerance:.1f} Å"
                 )
             else:
+                sim_side = getattr(args, "_cold_start_sim_cell_side_A", None)
+                sim_txt = (
+                    f" sim_cell={float(sim_side):.1f} Å"
+                    if sim_side is not None
+                    else ""
+                )
                 print(
-                    f"Packmol cube: center={center} side={cube_side:.1f} Å tol={tolerance:.1f} Å"
+                    f"Packmol cube: center={center} side={cube_side:.1f} Å"
+                    f"{sim_txt} tol={tolerance:.1f} Å"
                 )
         else:
             from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder

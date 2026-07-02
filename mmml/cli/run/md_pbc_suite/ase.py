@@ -578,6 +578,7 @@ def build_initial_cluster_from_args(
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str], dict[str, int] | None]:
     """Build cluster geometry; returns z, r0, atoms_per_list, residue_labels, composition_summary."""
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        packmol_center_for_cold_start,
         resolve_packmol_cube_side_from_args,
         resolve_packmol_placement_mode,
         resolve_packmol_sphere_radius,
@@ -633,7 +634,7 @@ def build_initial_cluster_from_args(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
             )
-            center = packmol_sphere_center_from_args(args)
+            center = packmol_center_for_cold_start(args)
             tolerance = float(getattr(args, "packmol_tolerance", 2.0))
             cube_side: float | None = None
             radius: float | None = None
@@ -689,7 +690,7 @@ def build_initial_cluster_from_args(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
             )
-            center = packmol_sphere_center_from_args(args)
+            center = packmol_center_for_cold_start(args)
             cube_side: float | None = None
             radius: float | None = None
             if placement == "sphere":

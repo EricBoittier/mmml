@@ -77,8 +77,13 @@ def test_resolve_packmol_cube_side_from_args_uses_density_auto():
     args = argparse.Namespace(
         box_size=None,
         packmol_box_size=None,
+        packmol_box_padding=None,
         packmol_radius=None,
         flat_bottom_radius=None,
+        packmol_tolerance=2.0,
+        spacing=5.0,
+        ml_cutoff=12.0,
+        quiet=True,
         box_auto="density",
         target_density_g_cm3=0.9,
         bulk_density_fraction=None,
@@ -86,7 +91,70 @@ def test_resolve_packmol_cube_side_from_args_uses_density_auto():
         n_molecules=100,
     )
     side = resolve_packmol_cube_side_from_args(args)
-    assert 20.0 < side < 30.0
+    sim = float(args._cold_start_sim_cell_side_A)
+    assert side < sim
+    assert 10.0 < side < 30.0
+    assert 20.0 < sim < 35.0
+
+
+def test_resolve_packmol_cube_side_smaller_than_explicit_sim_cell():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        resolve_packmol_cube_side_for_sim_cell,
+    )
+
+    args = argparse.Namespace(
+        packmol_box_size=None,
+        packmol_box_padding=10.0,
+        packmol_tolerance=2.0,
+        spacing=5.0,
+        ml_cutoff=12.0,
+        box_auto=None,
+    )
+    sim = 80.0
+    packmol = resolve_packmol_cube_side_for_sim_cell(args, sim)
+    assert packmol == pytest.approx(60.0)
+    assert packmol < sim
+
+
+def test_cubic_side_from_cluster_extent_uses_max_axis_span():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        cubic_side_from_cluster_extent,
+    )
+
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [30.0, 5.0, 2.0],
+            [1.0, 20.0, 3.0],
+        ],
+        dtype=float,
+    )
+    side = cubic_side_from_cluster_extent(pos, margin_A=5.0, ml_cutoff=12.0)
+    assert side == pytest.approx(40.0)
+
+
+def test_resolve_packmol_cube_side_from_args_explicit_box_size():
+    from mmml.interfaces.pycharmmInterface.packmol_placement import (
+        resolve_packmol_cube_side_from_args,
+    )
+
+    args = argparse.Namespace(
+        box_size=80.0,
+        packmol_box_size=None,
+        packmol_box_padding=10.0,
+        packmol_radius=None,
+        flat_bottom_radius=None,
+        packmol_tolerance=2.0,
+        spacing=5.0,
+        ml_cutoff=12.0,
+        quiet=True,
+        box_auto=None,
+        composition="DCM:200",
+        n_molecules=200,
+    )
+    side = resolve_packmol_cube_side_from_args(args)
+    assert args._cold_start_sim_cell_side_A == pytest.approx(80.0)
+    assert side == pytest.approx(60.0)
 
 
 def test_n_molecules_for_target_density_in_fixed_box_dcm32():
