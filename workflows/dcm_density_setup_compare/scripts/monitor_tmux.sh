@@ -1,38 +1,54 @@
 #!/usr/bin/env bash
-# tmux dashboard: driver log, Slurm queue, Snakemake triage, optional cell stdout.
+# tmux "TV studio" for dcm_density_setup_compare: rotating job channels + driver log.
 #
 # Usage (from ~/mmml/workflows/dcm_density_setup_compare):
 #   bash scripts/monitor_tmux.sh
-#   bash scripts/monitor_tmux.sh --tag resilient_dcm_52_t50_l28_ht_bussi
-#   bash scripts/monitor_tmux.sh --log snakemake_prep_sweep.log --replace
-#   bash scripts/monitor_tmux.sh --session prep --log snakemake_prep_sweep.log
+#   bash scripts/monitor_tmux.sh --tags resilient_dcm_77_t50_l32_ht_bussi resilient_dcm_52_t50_l28_ht_bussi
+#   bash scripts/monitor_tmux.sh --interval 8 --include-done --replace
+#   bash scripts/monitor_tmux.sh --log snakemake_prep_sweep.log --session prep
 #
-# Layout (2×2):
-#   driver log (tail)     | cell stdout or driver pgrep
-#   squeue watch          | debug_snakemake watch
+# Layout:
+#   left (38%):  Snakemake driver log (tail -F)
+#   right (62%): Rich TV dashboard — auto-rotates matrix cells like channels
+#
+# Keys (Ctrl-b then):
+#   n       next channel
+#   p       previous channel
+#   Space   pause / resume auto-rotate
+#   d       detach
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$WORKFLOW_ROOT"
+REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 # shellcheck source=debug_lib.sh
 source "$WORKFLOW_ROOT/scripts/debug_lib.sh"
+# shellcheck source=../../../scripts/resolve_mmml_env.sh
+source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
+mmml_resolve_env "$REPO_ROOT"
 
-SESSION="dcm"
+SESSION="dcm-tv"
 DRIVER_LOG=""
-TAG=""
+TAGS=()
 REPLACE=false
 ATTACH=true
+INTERVAL=12
+INCLUDE_DONE=false
+CONFIG="${MMML_WORKFLOW_CONFIG:-config.yaml}"
 
 usage() {
-  sed -n '2,12p' "$0"
+  sed -n '2,18p' "$0"
   echo
   echo "Options:"
-  echo "  --session NAME   tmux session name (default: dcm)"
-  echo "  --log FILE       driver log under workflow root (default: snakemake_slurm.log)"
-  echo "  --tag RUN_TAG    tail artifacts/.../RUN_TAG/stdout.log in top-right pane"
-  echo "  --replace        kill existing session before creating layout"
-  echo "  --no-attach      create session and exit (attach later: tmux attach -t NAME)"
-  echo "  -h, --help       show this help"
+  echo "  --session NAME      tmux session (default: dcm-tv)"
+  echo "  --log FILE          driver log (default: snakemake_slurm.log or prep sweep log)"
+  echo "  --tags TAG [TAG..]    explicit TV channels (default: auto-discover matrix)"
+  echo "  --interval SEC      auto-rotate interval (default: 12)"
+  echo "  --include-done      keep finished cells in rotation"
+  echo "  --config FILE       workflow config for channel discovery"
+  echo "  --replace           kill existing session and recreate"
+  echo "  --no-attach         create detached (tmux attach -t NAME)"
+  echo "  -h, --help"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -45,8 +61,23 @@ while [[ $# -gt 0 ]]; do
       DRIVER_LOG="$2"
       shift 2
       ;;
-    --tag)
-      TAG="$2"
+    --tags)
+      shift
+      while [[ $# -gt 0 && "$1" != --* ]]; do
+        TAGS+=("$1")
+        shift
+      done
+      ;;
+    --interval)
+      INTERVAL="$2"
+      shift 2
+      ;;
+    --include-done)
+      INCLUDE_DONE=true
+      shift
+      ;;
+    --config)
+      CONFIG="$2"
       shift 2
       ;;
     --replace)
@@ -74,8 +105,10 @@ if ! command -v tmux >/dev/null 2>&1; then
   exit 1
 fi
 
+export MMML_WORKFLOW_CONFIG="$CONFIG"
+
 if [[ -z "$DRIVER_LOG" ]]; then
-  case "${MMML_WORKFLOW_CONFIG:-config.yaml}" in
+  case "$CONFIG" in
     *prep_sweep*) DRIVER_LOG="snakemake_prep_sweep.log" ;;
     *) DRIVER_LOG="snakemake_slurm.log" ;;
   esac
@@ -84,62 +117,88 @@ if [[ "$DRIVER_LOG" != /* ]]; then
   DRIVER_LOG="$WORKFLOW_ROOT/$DRIVER_LOG"
 fi
 
+CTL="$WORKFLOW_ROOT/scripts/monitor_tv_ctl.sh"
+PY="$MMML_PYTHON"
+TV="$WORKFLOW_ROOT/scripts/monitor_tv.py"
+
+TV_ARGS=(live --interval "$INTERVAL" --driver-log "$(basename "$DRIVER_LOG")")
+if $INCLUDE_DONE; then
+  TV_ARGS+=(--include-done)
+fi
+if [[ -n "$CONFIG" ]]; then
+  TV_ARGS+=(--config "$CONFIG")
+fi
+if ((${#TAGS[@]} > 0)); then
+  TV_ARGS+=(--tags "${TAGS[@]}")
+fi
+
+# Seed channel state for ctl + list
+INIT_ARGS=(init --config "$CONFIG")
+if $INCLUDE_DONE; then
+  INIT_ARGS+=(--include-done)
+fi
+if ((${#TAGS[@]} > 0)); then
+  INIT_ARGS+=(--tags "${TAGS[@]}")
+fi
+"$PY" "$TV" "${INIT_ARGS[@]}" >/dev/null 2>&1 || true
+
+LAUNCH="$WORKFLOW_ROOT/.monitor_tv/launch.sh"
+{
+  printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail'
+  printf 'export MMML_WORKFLOW_CONFIG=%q\n' "$CONFIG"
+  printf 'exec %q ' "$PY" "$TV"
+  printf '%q ' "${TV_ARGS[@]}"
+  printf '\n'
+} >"$LAUNCH"
+chmod +x "$LAUNCH"
+
 if tmux has-session -t "$SESSION" 2>/dev/null; then
   if $REPLACE; then
     tmux kill-session -t "$SESSION"
   else
-    echo "tmux session '$SESSION' already exists — attaching (use --replace to recreate layout)"
+    echo "Session '$SESSION' exists — attaching (use --replace to rebuild)"
     exec tmux attach-session -t "$SESSION"
   fi
 fi
 
-CELL_LOG=""
-if [[ -n "$TAG" ]]; then
-  CELL_LOG="$(debug_cell_log "$TAG")"
-fi
+mkdir -p "$WORKFLOW_ROOT/.monitor_tv"
 
-# 2×2 grid: pane 0 top-left, 1 top-right, 2 bottom-left, 3 bottom-right
-tmux new-session -d -s "$SESSION" -c "$WORKFLOW_ROOT" -n monitor
-
-tmux split-window -h -t "$SESSION:0" -p 50
-tmux select-pane -t "$SESSION:0.0"
-tmux split-window -v -t "$SESSION:0.0" -p 50
-tmux select-pane -t "$SESSION:0.1"
-tmux split-window -v -t "$SESSION:0.1" -p 50
+tmux new-session -d -s "$SESSION" -c "$WORKFLOW_ROOT" -n "📺 TV"
+tmux split-window -h -t "$SESSION:0" -p 62
 
 tmux select-pane -t "$SESSION:0.0" -T "driver"
 tmux send-keys -t "$SESSION:0.0" \
-  "echo '=== driver log: ${DRIVER_LOG} ==='; tail -F '${DRIVER_LOG}'" C-m
+  "printf '%s\n' '╔══════════════════════════════════════╗' '║  SNAKEMAKE DRIVER LOG                ║' '╚══════════════════════════════════════╝' '' '  tail -F ${DRIVER_LOG}' '' ; tail -F '${DRIVER_LOG}'" C-m
 
-tmux select-pane -t "$SESSION:0.1" -T "cell"
-if [[ -n "$CELL_LOG" ]]; then
-  tmux send-keys -t "$SESSION:0.1" \
-    "echo '=== cell stdout: ${TAG} ==='; tail -F '${CELL_LOG}'" C-m
-else
-  tmux send-keys -t "$SESSION:0.1" \
-    "watch -n 15 'echo \"=== Snakemake driver ===\"; pgrep -af \"snakemake --profile profiles/slurm\" 2>/dev/null || echo \"(not running — nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &)\"; echo; echo \"Tip: bash scripts/monitor_tmux.sh --replace --tag RUN_TAG\"'" C-m
-fi
+tmux select-pane -t "$SESSION:0.1" -T "channels"
+tmux send-keys -t "$SESSION:0.1" "exec '$LAUNCH'" C-m
 
-tmux select-pane -t "$SESSION:0.2" -T "queue"
-tmux send-keys -t "$SESSION:0.2" \
-  "watch -n 10 'squeue -u \"\${USER}\" -o \"%.10i %.9P %.12M %.8T %.6D %R %.40j\" 2>/dev/null | head -25'" C-m
+# Studio look + on-screen key hints
+tmux set-option -t "$SESSION" status-style 'bg=colour235,fg=colour141'
+tmux set-option -t "$SESSION" status-left-length 40
+tmux set-option -t "$SESSION" status-right-length 60
+tmux set-option -t "$SESSION" status-left '#[bold fg=colour213] 📺 DCM-TV #[fg=colour81]|#[default] '
+tmux set-option -t "$SESSION" status-right '#[dim]n next · p prev · Space pause · #{?client_prefix,^B ,}#[default] #[fg=colour213]%H:%M#[default]'
+tmux set-window-option -t "$SESSION:0" window-status-current-style 'bg=colour236,fg=colour213,bold'
 
-tmux select-pane -t "$SESSION:0.3" -T "triage"
-tmux send-keys -t "$SESSION:0.3" \
-  "watch -n 30 'bash scripts/debug_snakemake.sh 2>/dev/null | tail -45'" C-m
+# Remote channel surf (works from any pane)
+tmux bind-key -T prefix n run-shell "bash '$CTL' next"
+tmux bind-key -T prefix p run-shell "bash '$CTL' prev"
+tmux bind-key -T prefix Space run-shell "bash '$CTL' pause"
 
-tmux select-pane -t "$SESSION:0.0"
+tmux select-pane -t "$SESSION:0.1"
 
-echo "Created tmux session '$SESSION' in $WORKFLOW_ROOT"
-echo "  top-left:  tail -F $(basename "$DRIVER_LOG")"
-if [[ -n "$TAG" ]]; then
-  echo "  top-right: tail -F $TAG/stdout.log"
-else
-  echo "  top-right: driver pgrep (pass --tag RUN_TAG for cell log)"
-fi
-echo "  bottom:    squeue + debug_snakemake (refreshed)"
+echo "Created tmux TV session '$SESSION'"
+echo "  left:  tail -F $(basename "$DRIVER_LOG")"
+echo "  right: rotating channels (every ${INTERVAL}s)"
 echo
-echo "Detach: Ctrl-b d   Reattach: tmux attach -t $SESSION"
+echo "  Ctrl-b n     next channel"
+echo "  Ctrl-b p     previous channel"
+echo "  Ctrl-b Space pause / resume"
+echo "  Ctrl-b d     detach"
+echo
+echo "  Channel list: $PY scripts/monitor_tv.py list --config $CONFIG"
+echo "  Reattach:     tmux attach -t $SESSION"
 
 if $ATTACH; then
   exec tmux attach-session -t "$SESSION"
