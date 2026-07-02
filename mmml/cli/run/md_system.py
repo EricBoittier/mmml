@@ -1215,8 +1215,19 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "With periodic_external: CHARMM IMAGE VDW on (default). "
-            "--no-periodic-charmm-vdw disables CHARMM LJ (ScaFaCoS Coulomb only)."
+            "CHARMM IMAGE / primary VDW on (default). --no-periodic-charmm-vdw enforces "
+            "VDW+IMNB≈0 via PSF/.prm reload after MLpot registration (all MM modes)."
+        ),
+    )
+    parser.add_argument(
+        "--charmm-zero-energy-terms",
+        type=str,
+        default=None,
+        metavar="TERMS",
+        help=(
+            "Comma-separated CHARMM ENER components to enforce at zero via PSF/.prm "
+            "reload after MLpot registration: vdw, elec, bonded, hbond. "
+            "--no-periodic-charmm-vdw implies vdw."
         ),
     )
     parser.add_argument(
@@ -2526,6 +2537,11 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd,
         "--periodic-charmm-vdw",
         bool(getattr(args, "periodic_charmm_vdw", True)),
+    )
+    _append_optional(
+        cmd,
+        "--charmm-zero-energy-terms",
+        getattr(args, "charmm_zero_energy_terms", None),
     )
     if not bool(getattr(args, "include_mm", True)):
         cmd.append("--no-include-mm")

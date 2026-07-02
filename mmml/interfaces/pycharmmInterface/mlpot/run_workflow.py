@@ -756,6 +756,7 @@ def _register_mlpot_context(
             if args is not None and bool(getattr(args, "mlpot_use_block", False))
             else None
         ),
+        workflow_args=args,
     )
     recover_mpi_for_charmm_after_jax(phase="after MLpot registration")
     from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env

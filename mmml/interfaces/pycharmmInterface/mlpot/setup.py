@@ -1,8 +1,6 @@
 """Register PhysNet (or other) models with ``pycharmm.MLpot``."""
 
-from __future__ import annotations
-
-import ctypes
+import argparse
 import inspect
 from dataclasses import dataclass
 from pathlib import Path
@@ -1613,6 +1611,7 @@ def register_mlpot(
     periodic_charmm_vdw: bool = True,
     verbose: bool = False,
     use_block_registration: bool | None = None,
+    workflow_args: argparse.Namespace | None = None,
     **kwargs: Any,
 ) -> MlpotContext:
     """Register ``pycharmm.MLpot`` and return a context manager-like handle."""
@@ -1764,4 +1763,16 @@ def register_mlpot(
     )
     if use_pbc:
         setattr(ctx, "_mlpot_pbc_nb_lists_built", True)
+    if workflow_args is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+            enforce_charmm_energy_term_policies,
+        )
+
+        enforce_charmm_energy_term_policies(
+            workflow_args,
+            ml_selection=ml_selection,
+            use_pbc=bool(use_pbc),
+            cubic_box_side_A=reg_box,
+            verbose=verbose,
+        )
     return ctx
