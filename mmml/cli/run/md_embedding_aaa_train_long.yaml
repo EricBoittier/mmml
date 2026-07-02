@@ -1,0 +1,19 @@
+# Longer PhysNet training for aaa.ama peptide (target: E/F MAE < 1 kcal/mol).
+tag: aaa_long
+num_atoms: 34
+max_atomic_number: 8
+features: 64
+num_basis_functions: 64
+num_iterations: 3
+n_res: 3
+cutoff: 5.0
+batch_size: 32
+num_epochs: 40
+n_train: 0
+n_valid: 0
+learning_rate: 0.0005
+energy_weight: 1.0
+forces_weight: 50.0
+objective: valid_loss
+seed: 42
+early_stop_patience: 15
