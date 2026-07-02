@@ -448,6 +448,10 @@ def _build_cluster_from_composition_packmol(
     reuse_packmol_cache: bool = True,
     packmol_cache_dir: str | Path | None = None,
     force_rebuild_packmol_cache: bool = False,
+    sim_cell_side: float | None = None,
+    box_sizing_source: str | None = None,
+    packmol_padding_A: float | None = None,
+    quiet: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
@@ -468,6 +472,10 @@ def _build_cluster_from_composition_packmol(
         reuse_packmol_cache=reuse_packmol_cache,
         packmol_cache_dir=packmol_cache_dir,
         force_rebuild_packmol_cache=force_rebuild_packmol_cache,
+        sim_cell_side=sim_cell_side,
+        box_sizing_source=box_sizing_source,
+        packmol_padding_A=packmol_padding_A,
+        quiet=quiet,
     )
 
 
@@ -668,23 +676,11 @@ def build_initial_cluster_from_args(
                 force_rebuild_packmol_cache=bool(
                     getattr(args, "rebuild_packmol", False)
                 ),
+                sim_cell_side=getattr(args, "_cold_start_sim_cell_side_A", None),
+                box_sizing_source=getattr(args, "_cold_start_box_sizing_source", None),
+                packmol_padding_A=getattr(args, "_cold_start_packmol_padding_A", None),
+                quiet=bool(getattr(args, "quiet", False)),
             )
-            if placement == "sphere":
-                fb_r = getattr(args, "flat_bottom_radius", None)
-                print(
-                    f"Cluster built with Packmol sphere: center={center}, "
-                    f"packmol_radius={radius:.3f} Å"
-                    + (
-                        f", flat_bottom_radius={float(fb_r):.3f} Å"
-                        if fb_r is not None and float(fb_r) > 0
-                        else ""
-                    )
-                )
-            else:
-                print(
-                    f"Cluster built with Packmol cube: center={center}, "
-                    f"side={cube_side:.3f} Å, tol={tolerance:.1f} Å"
-                )
         else:
             placement = resolve_packmol_placement_mode(
                 packmol_placement=getattr(args, "packmol_placement", None),

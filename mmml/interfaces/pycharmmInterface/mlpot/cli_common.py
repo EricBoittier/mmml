@@ -1561,22 +1561,11 @@ def build_cluster_from_args_with_tag(
                 force_rebuild_packmol_cache=bool(
                     getattr(args, "rebuild_packmol", False)
                 ),
+                sim_cell_side=getattr(args, "_cold_start_sim_cell_side_A", None),
+                box_sizing_source=getattr(args, "_cold_start_box_sizing_source", None),
+                packmol_padding_A=getattr(args, "_cold_start_packmol_padding_A", None),
+                quiet=bool(getattr(args, "quiet", False)),
             )
-            if placement == "sphere":
-                print(
-                    f"Packmol sphere: center={center} R={radius:.1f} Å tol={tolerance:.1f} Å"
-                )
-            else:
-                sim_side = getattr(args, "_cold_start_sim_cell_side_A", None)
-                sim_txt = (
-                    f" sim_cell={float(sim_side):.1f} Å"
-                    if sim_side is not None
-                    else ""
-                )
-                print(
-                    f"Packmol cube: center={center} side={cube_side:.1f} Å"
-                    f"{sim_txt} tol={tolerance:.1f} Å"
-                )
         else:
             from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
 

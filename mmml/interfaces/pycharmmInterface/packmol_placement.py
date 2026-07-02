@@ -668,7 +668,8 @@ def run_packmol_mixed(
     sim_cell_side: float | None = None,
     box_sizing_source: str | None = None,
     packmol_padding_A: float | None = None,
-) -> str:
+    emit_summary: bool = True,
+) -> tuple[str, PackmolRunResult]:
     """Pack multiple structure types inside one cube or sphere (composition order)."""
     if not blocks:
         raise ValueError("run_packmol_mixed: no structure blocks")
@@ -712,23 +713,24 @@ def run_packmol_mixed(
     )
     inp_path = Path(input_path) if input_path is not None else Path("packmol") / default_inp
     result = execute_packmol_script(packmol_input, inp_path)
-    emit_packmol_build_summary(
-        placement=placement,
-        blocks=blocks,
-        center=center,
-        tolerance=float(tolerance),
-        seed=randint,
-        output_pdb=out,
-        inp_path=inp_path,
-        cube_side=cube_side,
-        radius=radius,
-        sim_cell_side=sim_cell_side,
-        box_sizing_source=box_sizing_source,
-        packmol_padding_A=packmol_padding_A,
-        result=result,
-        quiet=quiet,
-    )
-    return str(out)
+    if emit_summary:
+        emit_packmol_build_summary(
+            placement=placement,
+            blocks=blocks,
+            center=center,
+            tolerance=float(tolerance),
+            seed=randint,
+            output_pdb=out,
+            inp_path=inp_path,
+            cube_side=cube_side,
+            radius=radius,
+            sim_cell_side=sim_cell_side,
+            box_sizing_source=box_sizing_source,
+            packmol_padding_A=packmol_padding_A,
+            result=result,
+            quiet=quiet,
+        )
+    return str(out), result
 
 
 def run_packmol_sphere(
@@ -742,7 +744,7 @@ def run_packmol_sphere(
     seed: int | None = None,
 ) -> str:
     """Pack *n_molecules* copies of one structure inside a sphere."""
-    return run_packmol_sphere_mixed(
+    out, _result = run_packmol_sphere_mixed(
         [(Path(structure_pdb), int(n_molecules))],
         center=center,
         radius=float(radius),
@@ -750,6 +752,7 @@ def run_packmol_sphere(
         tolerance=tolerance,
         seed=seed,
     )
+    return out
 
 
 def run_packmol_cube_mixed(
@@ -765,7 +768,8 @@ def run_packmol_cube_mixed(
     sim_cell_side: float | None = None,
     box_sizing_source: str | None = None,
     packmol_padding_A: float | None = None,
-) -> str:
+    emit_summary: bool = True,
+) -> tuple[str, PackmolRunResult]:
     """Pack multiple structure types inside one cube (composition order)."""
     return run_packmol_mixed(
         blocks,
@@ -780,6 +784,7 @@ def run_packmol_cube_mixed(
         sim_cell_side=sim_cell_side,
         box_sizing_source=box_sizing_source,
         packmol_padding_A=packmol_padding_A,
+        emit_summary=emit_summary,
     )
 
 
@@ -796,7 +801,8 @@ def run_packmol_sphere_mixed(
     sim_cell_side: float | None = None,
     box_sizing_source: str | None = None,
     packmol_padding_A: float | None = None,
-) -> str:
+    emit_summary: bool = True,
+) -> tuple[str, PackmolRunResult]:
     """Pack multiple structure types inside one sphere (composition order)."""
     return run_packmol_mixed(
         blocks,
@@ -811,4 +817,5 @@ def run_packmol_sphere_mixed(
         sim_cell_side=sim_cell_side,
         box_sizing_source=box_sizing_source,
         packmol_padding_A=packmol_padding_A,
+        emit_summary=emit_summary,
     )

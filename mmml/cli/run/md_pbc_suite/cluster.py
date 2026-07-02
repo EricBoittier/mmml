@@ -488,15 +488,16 @@ def build_packmol_composition_cluster(
         "sim_cell_side": sim_cell_side,
         "box_sizing_source": box_sizing_source,
         "packmol_padding_A": packmol_padding_A,
+        "emit_summary": False,
     }
     if placement == "sphere":
-        packmol_placement.run_packmol_sphere_mixed(
+        _out, packmol_result = packmol_placement.run_packmol_sphere_mixed(
             packmol_blocks,
             radius=float(radius),
             **packmol_kwargs,
         )
     else:
-        packmol_placement.run_packmol_cube_mixed(
+        _out, packmol_result = packmol_placement.run_packmol_cube_mixed(
             packmol_blocks,
             cube_side=float(cube_side),
             **packmol_kwargs,
@@ -554,7 +555,7 @@ def build_packmol_composition_cluster(
         sim_cell_side=sim_cell_side,
         box_sizing_source=box_sizing_source,
         packmol_padding_A=packmol_padding_A,
-        cache_status="miss" if reuse_packmol_cache else None,
+        result=packmol_result,
         n_atoms=len(atom_names),
         span_A=(float(span[0]), float(span[1]), float(span[2])),
         quiet=quiet,
