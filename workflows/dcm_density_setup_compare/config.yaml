@@ -44,12 +44,15 @@ charmm_abnr_steps: 4000
 pre_min_steps: 500
 
 # Overlap checks during heat/dynamics: smaller interval = more frequent (steps).
-# Resilient default is 250; dense-cell helper may bump N≥150 to 500 unless overridden here.
-dynamics_overlap_check_interval: 100
+# Prep sweep stage 2: 50 beat 100 on anchor mini+heat (avoid dt=0.05 for heat).
+dynamics_overlap_check_interval: 50
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
 min_intermonomer_atom_distance: 1.2
+
+# Heat DCD cadence (lower nsavc = more frequent frames; dcd25 winner on anchor).
+dcd_nsavc: 25
 
 # Resilient density prep (merged into resilient setup; reinforces variant defaults).
 liquid_prep: true
@@ -65,10 +68,10 @@ calculator_pre_minimize: true
 # Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
 bonded_mm_mini: false
 
-# Heat thermostat comparison (omit or [] for mini-only box prep).
-heat_thermostats: [bussi, hoover, scale]
-ps_heat: 5.0
-n_heat_segments: 3
+# Heat (prep sweep: bussi + short smoke heat until anchor stable; expand thermostats later).
+heat_thermostats: [bussi]
+ps_heat: 2.0
+n_heat_segments: 1
 heat_firstt: 10.0
 no_echeck_heat: true
 
