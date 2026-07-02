@@ -16,10 +16,10 @@ setups:
 
 solvents: [DCM]
 
-bulk_density_fractions: [0.25]
+bulk_density_fractions: [0.25, 0.5, 0.75, 1.0]
 # bulk_density_fractions: [0.25, 0.5]
 bulk_density_n_min: 10
-temperatures: [100.0]
+temperatures: [50.0, 75.0, 100.0]
 box_sizes: [28.0, 30.0, 32.0]
 
 checkpoint: ${MMML_CKPT}
