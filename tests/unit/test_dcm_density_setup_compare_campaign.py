@@ -46,12 +46,15 @@ cell_from_cli = cl.cell_from_cli
 cell_from_tag = cl.cell_from_tag
 cell_run_tag = cl.cell_run_tag
 composition_string = cl.composition_string
+dynamics_campaign_enabled = cl.dynamics_campaign_enabled
+init_job_id = cl.init_job_id
 iter_matrix_cells = cl.iter_matrix_cells
 load_config = cl.load_config
 matrix_job_count = cl.matrix_job_count
 matrix_setup_ids = cl.matrix_setup_ids
 matrix_heat_thermostats = cl.matrix_heat_thermostats
 heat_compare_enabled = cl.heat_compare_enabled
+parse_dynamics_legs = cl.parse_dynamics_legs
 slurm_launch_jobs = cl.slurm_launch_jobs
 slurm_resources_cli = cl.slurm_resources_cli
 resolve_setup_variant = sv.resolve_setup_variant
@@ -68,6 +71,12 @@ def cfg() -> dict:
         "temperatures": [300.0],
         "box_sizes": [28.0, 32.0],
         "heat_thermostats": [],
+        "dynamics_legs": {
+            "pycharmm_equi": False,
+            "pycharmm_prod": False,
+            "jaxmd": False,
+            "ase": False,
+        },
     }
 
 
@@ -155,14 +164,15 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
         box_size=28.0,
         heat_thermostat="bussi",
     )
-    mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
-    assert mini.get("liquid_prep") is True
-    assert mini.get("calculator_pre_minimize") is True
-    assert mini.get("bonded_mm_mini") is False
-    assert mini.get("charmm_mm_pretreat") is True
-    assert mini.get("md_stages") == "mini,heat"
-    assert mini.get("heat_thermostat") == "bussi"
-    assert mini.get("ps_heat") == 5.0
+    init_id = init_job_id(cfg)
+    init = build_campaign(cfg, cell)["runs"][init_id]
+    assert init.get("liquid_prep") is True
+    assert init.get("calculator_pre_minimize") is True
+    assert init.get("bonded_mm_mini") is False
+    assert init.get("charmm_mm_pretreat") is True
+    assert init.get("md_stages") == "mini,heat"
+    assert init.get("heat_thermostat") == "bussi"
+    assert init.get("ps_heat") == 5.0
 
 
 def test_heat_compare_coerces_scale_when_pretreat(cfg: dict) -> None:
@@ -255,8 +265,63 @@ def test_default_config_matrix_job_count() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
     assert heat_compare_enabled(cfg)
     assert matrix_heat_thermostats(cfg) == ["bussi", "hoover", "scale"]
+    assert dynamics_campaign_enabled(cfg)
+    assert parse_dynamics_legs(cfg) == {
+        "pycharmm_equi": True,
+        "pycharmm_prod": True,
+        "jaxmd": True,
+        "ase": True,
+    }
+    assert campaign_job_order(cfg) == [
+        "pycharmm_init",
+        "pycharmm_equi_01",
+        "pycharmm_prod_01",
+        "jaxmd_prod",
+        "ase_prod",
+    ]
     # resilient × 4 fractions × 3 T × 3 L × 3 thermostats = 108
     assert matrix_job_count(cfg) == 108
+
+
+def test_full_dynamics_campaign_chain(cfg: dict, cell: RunCell) -> None:
+    cfg_dyn = {
+        **cfg,
+        "dynamics_legs": {
+            "pycharmm_equi": True,
+            "pycharmm_prod": True,
+            "jaxmd": True,
+            "ase": True,
+        },
+        "pycharmm_equi_ps": 5.0,
+        "pycharmm_prod_ps": 8.0,
+        "jaxmd_ps": 3.0,
+        "ase_ps": 4.0,
+    }
+    order = campaign_job_order(cfg_dyn)
+    campaign = build_campaign(cfg_dyn, cell)
+    assert list(campaign["runs"]) == order
+    init = campaign["runs"]["pycharmm_init"]
+    assert init["md_stages"] == "mini,heat"
+    assert init["heat_thermostat"] == "bussi"
+    equi = campaign["runs"]["pycharmm_equi_01"]
+    prod = campaign["runs"]["pycharmm_prod_01"]
+    jaxmd = campaign["runs"]["jaxmd_prod"]
+    ase = campaign["runs"]["ase_prod"]
+    assert equi["depends_on"] == "pycharmm_init"
+    assert equi["ps_equi"] == 5.0
+    assert prod["depends_on"] == "pycharmm_equi_01"
+    assert prod["ps_prod"] == 8.0
+    assert jaxmd["depends_on"] == "pycharmm_prod_01"
+    assert jaxmd["backend"] == "jaxmd"
+    assert jaxmd["ps"] == 3.0
+    assert ase["depends_on"] == "jaxmd_prod"
+    assert ase["backend"] == "ase"
+    assert ase["integrator"] == "nvt_nhc"
+    assert ase["ps"] == 4.0
+    assert campaign["defaults"]["handoff_write_res"] is True
+    assert campaign["defaults"]["continue_velocities"] is True
+    paths = cl.paths_for_run(cfg_dyn, cell)
+    assert paths["final_handoff"].as_posix().endswith("ase_prod/handoff/state.npz")
 
 
 def test_slurm_resources_cli(cfg: dict) -> None:

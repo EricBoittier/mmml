@@ -16,6 +16,8 @@ import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import (
     cell_bulk_density_fraction,
+    campaign_job_order,
+    dynamics_campaign_enabled,
     heat_compare_enabled,
     iter_matrix_cells,
     load_config,
@@ -24,6 +26,7 @@ from campaign_lib import (
     matrix_job_count,
     matrix_setup_ids,
     matrix_temperatures,
+    parse_dynamics_legs,
     resolve_checkpoint,
     slurm_launch_jobs,
     slurm_small_cluster_max_n,
@@ -43,6 +46,9 @@ for sid in matrix_setup_ids(cfg):
 print('matrix jobs:', matrix_job_count(cfg))
 print('heat compare:', heat_compare_enabled(cfg))
 print('heat_thermostats:', matrix_heat_thermostats(cfg) or ['<mini-only>'])
+print('dynamics legs:', parse_dynamics_legs(cfg))
+if dynamics_campaign_enabled(cfg):
+    print('campaign job order:', campaign_job_order(cfg))
 print('temperatures:', matrix_temperatures(cfg))
 print('box_sizes:', matrix_box_sizes(cfg))
 if matrix_uses_bulk_density(cfg):

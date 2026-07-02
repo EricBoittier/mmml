@@ -22,6 +22,7 @@ from campaign_lib import (  # noqa: E402
     cell_from_cli,
     cell_from_tag,
     cell_run_tag,
+    init_job_id,
     load_config,
     paths_for_run,
     resolve_checkpoint,
@@ -85,13 +86,14 @@ def main() -> int:
 
     tag = cell_run_tag(cell, cfg)
     campaign = yaml.safe_load(paths["campaign_yaml"].read_text(encoding="utf-8"))
-    mini_job = campaign["runs"]["pycharmm_mini"]
-    ht = cell.heat_thermostat or mini_job.get("heat_thermostat")
+    first_id = init_job_id(cfg)
+    init_job = campaign["runs"][first_id]
+    ht = cell.heat_thermostat or init_job.get("heat_thermostat")
     print(
-        f"pycharmm_mini: setup={cell.setup_id} md_stages={mini_job.get('md_stages')} "
-        f"heat_thermostat={ht} liquid_prep={mini_job.get('liquid_prep')} "
-        f"calculator_pre_minimize={mini_job.get('calculator_pre_minimize')} "
-        f"charmm_mm_pretreat={mini_job.get('charmm_mm_pretreat')}",
+        f"{first_id}: setup={cell.setup_id} md_stages={init_job.get('md_stages')} "
+        f"heat_thermostat={ht} liquid_prep={init_job.get('liquid_prep')} "
+        f"calculator_pre_minimize={init_job.get('calculator_pre_minimize')} "
+        f"charmm_mm_pretreat={init_job.get('charmm_mm_pretreat')}",
         flush=True,
     )
     print(f"Campaign jobs ({tag}): {campaign_job_order(cfg)}", flush=True)
