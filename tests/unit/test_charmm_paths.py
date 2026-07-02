@@ -284,3 +284,48 @@ def test_charmm_io_alias_long_write_copy_back(tmp_path):
     alias.finalize()
     assert target.is_file()
     assert target.read_text(encoding="ascii") == "crd via alias\n"
+
+
+def test_resolve_cgenff_toppar_paths_prefers_mmml_data(tmp_path):
+    repo = tmp_path / "repo"
+    data = repo / "mmml" / "data" / "charmm"
+    toppar = repo / "setup" / "charmm" / "toppar"
+    data.mkdir(parents=True)
+    toppar.mkdir(parents=True)
+    (data / "top_all36_cgenff.rtf").write_bytes(b"x" * charmm_paths._MIN_CGENFF_RTF_BYTES)
+    (data / "par_all36_cgenff.prm").write_bytes(b"y" * charmm_paths._MIN_CGENFF_PRM_BYTES)
+    (toppar / "top_all36_cgenff.rtf").write_bytes(b"z" * charmm_paths._MIN_CGENFF_RTF_BYTES)
+    (toppar / "par_all36_cgenff.prm").write_bytes(b"w" * charmm_paths._MIN_CGENFF_PRM_BYTES)
+
+    paths = charmm_paths.resolve_cgenff_toppar_paths(repo_root=repo)
+
+    assert paths.rtf == (data / "top_all36_cgenff.rtf").resolve()
+    assert paths.prm == (data / "par_all36_cgenff.prm").resolve()
+
+
+def test_resolve_cgenff_toppar_paths_falls_back_to_setup_toppar(tmp_path):
+    repo = tmp_path / "repo"
+    toppar = repo / "setup" / "charmm" / "toppar"
+    toppar.mkdir(parents=True)
+    (toppar / "top_all36_cgenff.rtf").write_bytes(b"x" * charmm_paths._MIN_CGENFF_RTF_BYTES)
+    (toppar / "par_all36_cgenff.prm").write_bytes(b"y" * charmm_paths._MIN_CGENFF_PRM_BYTES)
+
+    paths = charmm_paths.resolve_cgenff_toppar_paths(repo_root=repo)
+
+    assert paths.rtf == (toppar / "top_all36_cgenff.rtf").resolve()
+
+
+def test_assert_cgenff_toppar_readable_rejects_truncated_prm(tmp_path):
+    repo = tmp_path / "repo"
+    data = repo / "mmml" / "data" / "charmm"
+    data.mkdir(parents=True)
+    (data / "top_all36_cgenff.rtf").write_bytes(b"x" * charmm_paths._MIN_CGENFF_RTF_BYTES)
+    (data / "par_all36_cgenff.prm").write_bytes(b"short")
+
+    try:
+        charmm_paths.assert_cgenff_toppar_readable(repo_root=repo)
+    except FileNotFoundError as exc:
+        assert "too small" in str(exc)
+        assert "read_param_file" in str(exc)
+    else:
+        raise AssertionError("expected FileNotFoundError for truncated PRM")
