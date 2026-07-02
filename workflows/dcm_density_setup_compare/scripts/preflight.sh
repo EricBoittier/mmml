@@ -98,6 +98,10 @@ print(
     f'(max_Npr={NPR_TIERS[tier]}, PBC pairs)'
 )
 validate_mlpot_system_size(max_n_ml, pbc=True, box_side_A=budget_box)
+from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
+toppar = assert_cgenff_toppar_readable()
+print('CGENFF RTF:', toppar.rtf)
+print('CGENFF PRM:', toppar.prm)
 "
 
 if ! command -v packmol >/dev/null 2>&1; then

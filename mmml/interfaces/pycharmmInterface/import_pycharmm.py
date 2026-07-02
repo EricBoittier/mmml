@@ -9,7 +9,7 @@ cwd = Path(__file__).parent
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env
+from mmml.interfaces.pycharmmInterface.charmm_paths import bootstrap_charmm_env, resolve_cgenff_toppar_paths
 
 CHARMM_HOME, CHARMM_LIB_DIR = bootstrap_charmm_env(repo_root=_REPO_ROOT)
 
@@ -32,13 +32,9 @@ if CHARMM_HOME:
     if str(chmhp) not in sys.path:
         sys.path.append(str(chmhp))
 
-CGENFF_RTF = cwd / ".." / ".." / "data" / "charmm" / "top_all36_cgenff.rtf"
-CGENFF_RTF = CGENFF_RTF.resolve()
-CGENFF_PRM = cwd / ".." / ".." / "data" / "charmm" / "par_all36_cgenff.prm"
-CGENFF_PRM = CGENFF_PRM.resolve()
-
-CGENFF_RTF = str(CGENFF_RTF)
-CGENFF_PRM = str(CGENFF_PRM)
+_cgenff_toppar = resolve_cgenff_toppar_paths(repo_root=_REPO_ROOT)
+CGENFF_RTF = str(_cgenff_toppar.rtf)
+CGENFF_PRM = str(_cgenff_toppar.prm)
 
 from mmml.interfaces.pycharmmInterface.charmm_mpi import (  # noqa: E402
     charmm_lib_available,

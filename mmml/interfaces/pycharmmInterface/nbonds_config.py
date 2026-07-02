@@ -330,14 +330,17 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.charmm_paths import assert_cgenff_toppar_readable
     from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
+
+    toppar = assert_cgenff_toppar_readable()
 
     with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
         if enable_drude:
-            read.rtf(CGENFF_RTF)
+            read.rtf(str(toppar.rtf))
         else:
-            read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
-        read_cgenff_prm(bomlev=False)
+            read.rtf(_rtf_path_without_drude_autogen(toppar.rtf))
+        read_cgenff_prm(prm_path=toppar.prm, bomlev=False)
 
 
 def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:

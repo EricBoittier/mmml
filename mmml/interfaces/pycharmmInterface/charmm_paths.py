@@ -8,6 +8,12 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+_CGENFF_RTF_NAME = "top_all36_cgenff.rtf"
+_CGENFF_PRM_NAME = "par_all36_cgenff.prm"
+# Bundled CGENFF toppar shipped in git (bytes); catches empty/partial checkouts.
+_MIN_CGENFF_RTF_BYTES = 1_000_000
+_MIN_CGENFF_PRM_BYTES = 500_000
+
 _CHARMM_LIB_NAMES = ("libcharmm.so", "libcharmm.dylib", "charmm.so", "charmm.dylib")
 _CHARMMSETUP_KEYS = frozenset({"CHARMM_HOME", "CHARMM_LIB_DIR"})
 
@@ -297,3 +303,69 @@ def charmm_fortran_path(
     if alias is None:
         return str(Path(path).expanduser().resolve()), None
     return alias.fortran_path, alias
+
+
+@dataclass(frozen=True)
+class CgenffTopparPaths:
+    """Resolved CGENFF RTF/PRM pair under the MMML repo."""
+
+    rtf: Path
+    prm: Path
+
+
+def _cgenff_toppar_search_dirs(repo_root: Path) -> list[Path]:
+    return [
+        repo_root / "mmml" / "data" / "charmm",
+        repo_root / "setup" / "charmm" / "toppar",
+    ]
+
+
+def resolve_cgenff_toppar_paths(*, repo_root: Path | None = None) -> CgenffTopparPaths:
+    """Locate bundled CGENFF toppar (``mmml/data/charmm`` first, then ``setup/charmm/toppar``)."""
+    root = repo_root or mmml_repo_root()
+    for base in _cgenff_toppar_search_dirs(root):
+        rtf = base / _CGENFF_RTF_NAME
+        prm = base / _CGENFF_PRM_NAME
+        if rtf.is_file() and prm.is_file():
+            return CgenffTopparPaths(rtf=rtf.resolve(), prm=prm.resolve())
+    tried = "\n".join(
+        f"  {base / _CGENFF_RTF_NAME} ({'found' if (base / _CGENFF_RTF_NAME).is_file() else 'missing'}), "
+        f"{base / _CGENFF_PRM_NAME} ({'found' if (base / _CGENFF_PRM_NAME).is_file() else 'missing'})"
+        for base in _cgenff_toppar_search_dirs(root)
+    )
+    raise FileNotFoundError(
+        "CGENFF toppar not found. Expected both "
+        f"{_CGENFF_RTF_NAME!r} and {_CGENFF_PRM_NAME!r} in the repo.\n"
+        f"Searched:\n{tried}\n"
+        "Run `git pull` (or `git lfs pull`) on the cluster checkout."
+    )
+
+
+def assert_cgenff_toppar_readable(
+    paths: CgenffTopparPaths | None = None,
+    *,
+    repo_root: Path | None = None,
+) -> CgenffTopparPaths:
+    """Fail fast before CHARMM ``read_param_file`` with a misleading RTF I/O message."""
+    resolved = paths or resolve_cgenff_toppar_paths(repo_root=repo_root)
+    issues: list[str] = []
+    for label, path, min_bytes in (
+        ("RTF", resolved.rtf, _MIN_CGENFF_RTF_BYTES),
+        ("PRM", resolved.prm, _MIN_CGENFF_PRM_BYTES),
+    ):
+        if not path.is_file():
+            issues.append(f"CGENFF {label} missing: {path}")
+            continue
+        size = path.stat().st_size
+        if size < min_bytes:
+            issues.append(
+                f"CGENFF {label} too small ({size} bytes, expected >= {min_bytes}): {path}"
+            )
+    if issues:
+        raise FileNotFoundError(
+            "CGENFF toppar is missing or incomplete on disk.\n"
+            + "\n".join(f"  - {line}" for line in issues)
+            + "\nCHARMM may report `read_param_file: io error opening/closing rtf file` "
+            "when the PRM open/read fails."
+        )
+    return resolved
