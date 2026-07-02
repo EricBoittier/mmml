@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# Matrix-wide health report for dcm_density_setup_compare artifacts.
+# Matrix-wide health report (pc-studix login node).
 #
-# Usage:
+# Usage (from ~/mmml/workflows/dcm_density_setup_compare):
 #   bash scripts/debug_matrix.sh
 #   bash scripts/debug_matrix.sh --failed-only
 #   bash scripts/debug_matrix.sh --grep 'post-overlap-rescue'
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$WORKFLOW_ROOT"
 # shellcheck source=debug_lib.sh
 source "$WORKFLOW_ROOT/scripts/debug_lib.sh"
+debug_bootstrap_cluster
 
 ROOT="$(debug_artifact_root)"
 FAILED_ONLY=false
@@ -42,10 +44,14 @@ if [[ ! -d "$ROOT" ]]; then
 fi
 
 echo "=== dcm_density_setup_compare matrix debug ==="
+echo "host:          $(hostname)"
 echo "artifact_root: $ROOT"
 echo
 
-# Cells without done.txt
+echo "=== Your Slurm queue (mmml / setup_compare) ==="
+debug_user_gpu_queue || true
+echo
+
 echo "=== Cells without done.txt (running or failed) ==="
 missing=0
 for d in "$ROOT"/*/; do
@@ -59,6 +65,7 @@ done
 if [[ "$missing" -eq 0 ]]; then
   echo "  (none — all cells have done.txt)"
 fi
+echo "pending/failed count: $missing"
 echo
 
 if [[ -n "$EXTRA_GREP" ]]; then
@@ -78,6 +85,13 @@ echo
 
 echo "=== Heat / overlap failures ==="
 grep -rlE 'heat segment.*overlap detected|post-overlap-rescue hybrid GRMS' \
+  "$ROOT"/*/stdout.log 2>/dev/null \
+  | sed "s|$ROOT/||; s|/stdout.log||" \
+  | sort || echo "  (no matches)"
+echo
+
+echo "=== MPI BLOCK / hang signatures ==="
+grep -rlE 'apply_bonded_mm_only_block|bonded-MM-mini: skipping' \
   "$ROOT"/*/stdout.log 2>/dev/null \
   | sed "s|$ROOT/||; s|/stdout.log||" \
   | sort || echo "  (no matches)"
