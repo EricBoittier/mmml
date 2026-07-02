@@ -3403,7 +3403,13 @@ def _dynamics_c_api_available() -> bool:
 
 
 def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
-    """True when CHARMM would read COMP as velocities (``iasvel=0`` + lingering START)."""
+    """True when CHARMM would read COMP as velocities (``iasvel=0`` + lingering START).
+
+    When ``restart=True``, READYN loads velocities from the restart file; do not
+    inject COMP / C-API handoff or fall back to ``iasvel=1`` Boltzmann.
+    """
+    if bool(kw.get("restart")):
+        return False
     return not bool(kw.get("start")) and int(kw.get("iasvel", 0) or 0) == 0
 
 
@@ -5189,6 +5195,32 @@ def _materialize_dynamics_restart_handoff(
     return valid
 
 
+def _write_overlap_chunk_numbered_restart(
+    *,
+    final_restart: Path,
+    chunk_index: int,
+    global_step: int,
+    overlap_context: str,
+) -> Path | None:
+    """Write ``heat.NNNN.res`` from in-memory state for a split overlap chunk."""
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        overlap_chunk_restart_path,
+    )
+
+    target = overlap_chunk_restart_path(final_restart, chunk_index)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        return _materialize_dynamics_restart_handoff(
+            target,
+            global_step=global_step,
+            overlap_context=overlap_context,
+            label=f"per-chunk restart {target.name}",
+        )
+    except RuntimeError as exc:
+        print(f"WARN: overlap ({overlap_context}): {exc}", flush=True)
+        return None
+
+
 def _materialize_cpt_subchunk_restart_handoff(
     write_path: Path,
     *,
@@ -6303,6 +6335,7 @@ def run_dynamics_with_io(
     trajectory_files: list[Any] = []
     trajectory_iokw: dict[str, int] = {}
     chunk_dcd_paths: list[Path] = []
+    chunk_res_paths: list[Path] = []
     logged_mem_handoff = False
     split_trajectory = (
         io is not None
@@ -6894,6 +6927,22 @@ def run_dynamics_with_io(
                         header_step = read_restart_last_step(restart_path)
                         if header_step is None or header_step < expected_after - 1:
                             patch_restart_global_step(restart_path, steps_done)
+                if (
+                    split_trajectory
+                    and final_restart is not None
+                    and chunk_io is not None
+                    and chunk_io.trajectory is not None
+                    and steps_done >= expected_after - 1
+                    and not chunk_outcome.charmm_aborted
+                ):
+                    numbered_res = _write_overlap_chunk_numbered_restart(
+                        final_restart=final_restart,
+                        chunk_index=chunk_index,
+                        global_step=steps_done,
+                        overlap_context=overlap_context,
+                    )
+                    if numbered_res is not None:
+                        chunk_res_paths.append(numbered_res)
                 if chunk_outcome.charmm_aborted:
                     print(
                         f"overlap ({overlap_context}): CHARMM abort at step "
@@ -7245,9 +7294,11 @@ def run_dynamics_with_io(
                 if header_step is None or header_step < total_nstep - 1:
                     patch_restart_global_step(restart_path, steps_done)
         if split_trajectory and chunk_dcd_paths:
+            kept = [f"{len(chunk_dcd_paths)} per-chunk DCD file(s)"]
+            if chunk_res_paths:
+                kept.append(f"{len(chunk_res_paths)} matching .res checkpoint(s)")
             print(
-                f"overlap ({overlap_context}): kept {len(chunk_dcd_paths)} "
-                "per-chunk DCD file(s)",
+                f"overlap ({overlap_context}): kept {' and '.join(kept)}",
                 flush=True,
             )
     finally:

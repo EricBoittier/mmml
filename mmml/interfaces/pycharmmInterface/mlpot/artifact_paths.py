@@ -110,6 +110,15 @@ def overlap_chunk_trajectory_path(trajectory: PathLike, chunk_index: int) -> Pat
     return p.with_name(f"{p.stem}.{chunk_index:04d}{p.suffix}")
 
 
+def overlap_chunk_restart_path(restart: PathLike, chunk_index: int) -> Path:
+    """Per-chunk restart paired with :func:`overlap_chunk_trajectory_path`.
+
+    Example: stage ``heat.res`` → ``heat.0000.res`` for overlap chunk 0.
+    """
+    p = Path(restart)
+    return p.with_name(f"{p.stem}.{chunk_index:04d}{p.suffix}")
+
+
 def _is_numbered_chunk_dcd_name(name: str, stem: str, suffix: str) -> bool:
     return bool(re.fullmatch(re.escape(stem) + r"\.\d{4}" + re.escape(suffix), name))
 
@@ -131,6 +140,26 @@ def overlap_chunk_dcd_paths(dcd_path: PathLike) -> list[Path]:
 def overlap_chunk_dcd_glob_pattern(trajectory_stem: str) -> str:
     """Glob for cleanup of per-chunk DCDs (new + legacy)."""
     return f"{trajectory_stem}.*.dcd"
+
+
+def _is_numbered_chunk_restart_name(name: str, stem: str, suffix: str) -> bool:
+    return bool(re.fullmatch(re.escape(stem) + r"\.\d{4}" + re.escape(suffix), name))
+
+
+def overlap_chunk_restart_paths(restart_path: PathLike) -> list[Path]:
+    """Sorted per-chunk ``.res`` siblings for an overlap stage restart."""
+    p = Path(restart_path)
+    stem, suffix = p.stem, p.suffix
+    return sorted(
+        cp
+        for cp in p.parent.glob(f"{stem}.*{suffix}")
+        if _is_numbered_chunk_restart_name(cp.name, stem, suffix)
+    )
+
+
+def overlap_chunk_restart_glob_pattern(restart_stem: str) -> str:
+    """Glob for per-chunk restart siblings (``heat.0000.res``, …)."""
+    return f"{restart_stem}.*.res"
 
 
 def staged_artifact_paths(out_dir: PathLike, tag: str) -> dict[str, Path]:

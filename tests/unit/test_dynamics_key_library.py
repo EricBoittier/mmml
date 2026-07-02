@@ -428,3 +428,68 @@ def test_normalize_bussi_iasvel_one_continuation_keeps_firstt():
     assert kw["tstruct"] == pytest.approx(50.0)
     assert "finalt" not in kw
     keep_firstt.assert_called_once_with(kw)
+
+
+def test_requires_init_velocities_handoff_false_for_restart_read():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _requires_init_velocities_handoff,
+    )
+
+    assert not _requires_init_velocities_handoff(
+        {"start": False, "restart": True, "iasvel": 0}
+    )
+    assert _requires_init_velocities_handoff(
+        {"start": False, "restart": False, "iasvel": 0}
+    )
+
+
+def test_run_dynamics_restart_read_skips_boltzmann_fallback():
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    fake_dyn = MagicMock()
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
+    kw_in = {
+        "nstep": 500,
+        "timestep": 0.00025,
+        "start": False,
+        "restart": True,
+        "iasvel": 0,
+        "firstt": 20.0,
+        "iunrea": 90,
+    }
+    with (
+        patch.dict(sys.modules, {"pycharmm": fake_pycharmm}),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+            return_value=None,
+        ) as resolve_init,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+            return_value=fake_dyn,
+        ) as run_capi,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
+        ),
+    ):
+        run_dynamics(dict(kw_in))
+
+    resolve_init.assert_called_once()
+    passed_kw = run_capi.call_args.args[0]
+    assert passed_kw["restart"] is True
+    assert passed_kw["iasvel"] == 0
+    assert passed_kw.get("firstt") == pytest.approx(20.0)
+    assert run_capi.call_args.kwargs.get("init_velocities") is None
