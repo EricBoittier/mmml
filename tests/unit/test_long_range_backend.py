@@ -23,7 +23,11 @@ def test_resolve_lr_solver_accepts_known_names():
     assert resolve_lr_solver("scafacos") == "scafacos"
     assert resolve_lr_solver("nvalchemiops_pme") == "nvalchemiops_pme"
     assert resolve_lr_solver("nval_pme") == "nvalchemiops_pme"
-    assert resolve_lr_solver(None) == "auto"
+    assert resolve_lr_solver(None) == "mic"
+
+
+def test_resolve_lr_solver_auto_alias():
+    assert resolve_lr_solver("auto") == "auto"
 
 
 def test_resolve_lr_solver_rejects_unknown():
@@ -39,7 +43,7 @@ def test_resolve_jax_pme_dispersion_env(monkeypatch):
     assert resolve_jax_pme_dispersion(True) is True
 
 
-def test_pick_lr_solver_auto_prefers_jax_pme():
+def test_pick_lr_solver_auto_is_mic():
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=True,
@@ -49,64 +53,24 @@ def test_pick_lr_solver_auto_prefers_jax_pme():
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
         return_value=True,
-    ):
-        assert pick_lr_solver("auto") == "jax_pme"
-
-
-def test_pick_lr_solver_auto_falls_back_to_nvalchemiops_without_jax_pme():
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
-        return_value=True,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
-        return_value=False,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
-        return_value=True,
-    ):
-        assert pick_lr_solver("auto") == "nvalchemiops_pme"
-
-
-def test_pick_lr_solver_auto_falls_back_to_scafacos_without_jax_pme_or_nval():
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
-        return_value=True,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
-        return_value=False,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
-        return_value=False,
-    ):
-        assert pick_lr_solver("auto") == "scafacos"
-
-
-def test_pick_lr_solver_auto_falls_back_to_jax_pme():
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
-        return_value=False,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
-        return_value=True,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
-        return_value=False,
-    ):
-        assert pick_lr_solver("auto") == "jax_pme"
-
-
-def test_pick_lr_solver_auto_falls_back_to_mic():
-    with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
-        return_value=False,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
-        return_value=False,
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.have_nvalchemiops_pme",
-        return_value=False,
     ):
         assert pick_lr_solver("auto") == "mic"
+
+
+def test_pick_lr_solver_default_unset_is_mic():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        assert pick_lr_solver(None) == "mic"
+
+
+def test_pick_lr_solver_explicit_jax_pme_when_available():
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
+        return_value=True,
+    ):
+        assert pick_lr_solver("jax_pme") == "jax_pme"
 
 
 def test_pick_lr_solver_requested_scafacos_missing_falls_back():
@@ -259,14 +223,8 @@ def test_collect_lr_solver_mapping_auto_fallback():
     assert "truncated MIC" in mapping["coulomb_mode"]
 
 
-def test_collect_lr_solver_mapping_auto_in_jax_mic():
+def test_collect_lr_solver_mapping_auto_is_mic_in_jax_mic():
     with mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.pick_lr_solver",
-        return_value="jax_pme",
-    ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.long_range_backend.resolve_lr_solver",
-        return_value="auto",
-    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
         return_value=True,
     ), mock.patch(
@@ -277,10 +235,10 @@ def test_collect_lr_solver_mapping_auto_in_jax_mic():
         return_value=False,
     ):
         mapping = collect_lr_solver_mapping(lr_solver="auto", do_mm=True)
-    assert mapping["lr_solver"] == "jax_pme"
-    assert mapping["lr_solver_active"] == "jax_pme"
+    assert mapping["lr_solver"] == "mic"
+    assert mapping["lr_solver_active"] == "mic"
     assert mapping["lr_solver_requested"] == "auto"
-    assert "switched MM" in mapping["coulomb_mode"]
+    assert "truncated MIC" in mapping["coulomb_mode"]
     assert "note" not in mapping
 
 

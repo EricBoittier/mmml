@@ -93,9 +93,9 @@ On a simpler **2× ACO** PBC dimer (MIC, ``lr_solver=mic``): VDW Δ ≈ +2 kcal/
    CHARMM uses IMAGE neighbor lists; small residual differences remain even when exclusions look correct.
 3. **Single ``RESI TRIA`` (42 atoms)** — All peptide atoms share one residue; CHARMM and JAX
    agree on graph-distance ≥3 pairs, but CHARMM net intra-peptide VDW is much smaller than JAX.
-4. **Long-range backend** — ``nonbonded_energy_and_forces`` defaults to ``MMML_LR_SOLVER=auto``,
-   which picks **jax-pme** when installed. The test **must** set ``MMML_LR_SOLVER=mic`` (or pass
-   ``lr_solver='mic'``); otherwise Coulomb is not comparable to truncated CHARMM ``cdie``.
+4. **Long-range backend** — default ``lr_solver`` is **MIC** (truncated pair loop). For CHARMM
+   comparison tests that require explicit MIC, pass ``lr_solver='mic'`` or ``MMML_LR_SOLVER=mic``.
+   Opt into jax-pme with ``lr_solver: jax_pme`` when you need k-space Coulomb.
 
 ### Practical guidance
 

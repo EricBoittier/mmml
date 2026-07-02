@@ -164,7 +164,7 @@ def test_materialize_jax_pme_host_numpy_returns_host_arrays():
     np.testing.assert_allclose(f, np.ones((2, 3)), rtol=0, atol=1e-12)
 
 
-def test_pick_lr_solver_jax_pme_when_scafacos_absent(monkeypatch):
+def test_pick_lr_solver_auto_is_mic_when_scafacos_absent(monkeypatch):
     monkeypatch.delenv("MMML_LR_SOLVER", raising=False)
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_scafacos",
@@ -173,4 +173,4 @@ def test_pick_lr_solver_jax_pme_when_scafacos_absent(monkeypatch):
         "mmml.interfaces.pycharmmInterface.long_range_backend.have_jax_pme",
         return_value=True,
     ):
-        assert pick_lr_solver("auto") == "jax_pme"
+        assert pick_lr_solver("auto") == "mic"

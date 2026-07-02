@@ -831,7 +831,7 @@ Hybrid ML/MM potentials use **monomer COM–COM distance** (not atom–atom dist
 | `mlpot_mm_internal_scale` | Scale CGENFF BOND/ANGL/DIHE on ML atoms during MLpot BLOCK (0=off) | 0.0 |
 | `mm_nonbond_mode` | `jax_mic` (JAX real-space MM) or `periodic_external` (external Coulomb + CHARMM) | `jax_mic` |
 | `include_mm` | JAX switched MM pairs (LJ + MIC Coulomb) in hybrid calculator | `true` |
-| `lr_solver` | Long-range Coulomb: `auto`, `mic`, `scafacos`, `jax_pme`, `nvalchemiops_pme` (`jax_mic`: MIC or jax-pme elec + switched LJ; `periodic_external`: jax-pme, nvalchemiops PME, or ScaFaCoS) | env / `auto` → **jax_pme** |
+| `lr_solver` | Long-range Coulomb: `mic` (default), `jax_pme`, `scafacos`, `nvalchemiops_pme`, or legacy `auto` (= `mic`). `jax_mic`: MIC or jax-pme elec + switched LJ; `periodic_external`: full-box Coulomb backends | `mic` |
 | `jax_pme_method` | jax-pme variant when `lr_solver: jax_pme`: `ewald`, `pme`, `p3m` | `ewald` |
 | `jax_pme_sr_cutoff` | jax-pme real-space cutoff (Å) | `6.0` |
 | `jax_pme_dispersion` | Include reciprocal r⁻⁶ LJ-PME tail when `lr_solver: jax_pme`; set false for Coulomb-only long range | env / true |

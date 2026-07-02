@@ -695,7 +695,7 @@ def _charmm_domdec_ener_smoke(args: argparse.Namespace) -> int:
             print(domdec_summary())
 
     _log("ener", "loading PhysNet checkpoint / building model")
-    lr_solver = os.environ.get("MMML_LR_SOLVER", "auto")
+    lr_solver = os.environ.get("MMML_LR_SOLVER", "mic")
     if rank == 0:
         print(f"Live ENER lr_solver={lr_solver} (CPU smoke defaults to mic)", flush=True)
     ase_atoms = ase.Atoms(numbers=z, positions=r)

@@ -3852,9 +3852,8 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme"),
         default=None,
         help=(
-            "Long-range Coulomb solver (default: env MMML_LR_SOLVER or auto). "
-            "jax_mic: mic or jax_pme; periodic_external: scafacos, jax_pme, "
-            "or nvalchemiops_pme."
+            "Long-range Coulomb solver (default: mic; env MMML_LR_SOLVER overrides). "
+            "Opt in: jax_pme, scafacos, nvalchemiops_pme. Legacy alias: auto (= mic)."
         ),
     )
     group.add_argument(

@@ -58,8 +58,10 @@ python -c "from mmml.interfaces.long_range_backend import describe_lr_solver; pr
 | Mechanism | Example |
 |-----------|---------|
 | Environment | `export MMML_LR_SOLVER=scafacos` |
-| Auto (default) | `scafacos` if `libfcs` loads, else `jax_pme` if importable, else `mic` |
-| Explicit MIC only | `MMML_LR_SOLVER=mic` |
+| Auto (default) | `mic` — truncated MIC in the switched-MM pair loop |
+| Explicit MIC | `MMML_LR_SOLVER=mic` |
+| jax-pme (opt-in) | `MMML_LR_SOLVER=jax_pme` or `lr_solver: jax_pme` in YAML |
+| ScaFaCoS (opt-in) | `MMML_LR_SOLVER=scafacos` |
 
 Additional ScaFaCoS options:
 

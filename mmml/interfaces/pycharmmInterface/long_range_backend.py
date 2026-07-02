@@ -9,9 +9,9 @@ outer radius (~13 Å by default).  Optional backends can supply k-space correcti
 * ``scafacos`` — ScaFaCoS ``libfcs`` (PME / P³M / P²NFFT / …)
 
 Selection mirrors ``nl_backend.py``: CLI/YAML may pass an explicit name; otherwise
-``MMML_LR_SOLVER`` and ``auto`` pick the first available backend.  ``auto`` prefers
-``jax_pme`` (hybrid switched-MM add-on with full−intra handoff), then
-``nvalchemiops_pme`` / ScaFaCoS for full-box Coulomb, then truncated MIC.
+``MMML_LR_SOLVER`` or the implicit default selects ``mic``.  Set ``lr_solver: jax_pme``,
+``scafacos``, or ``nvalchemiops_pme`` to opt into k-space backends.  ``auto`` is a
+legacy alias for ``mic`` (it no longer auto-picks jax-pme).
 
 See ``mlpot/LONG_RANGE_ELECTROSTATICS.md`` for how these layers interact with
 CHARMM IMAGE lists and MLpot BLOCK terms.
@@ -326,8 +326,8 @@ def have_scafacos() -> bool:
 
 
 def resolve_lr_solver(name: str | None = None) -> LrSolverName:
-    """Resolve solver from argument, ``MMML_LR_SOLVER`` env, or ``auto``."""
-    raw = (name or os.environ.get("MMML_LR_SOLVER", "auto")).strip().lower()
+    """Resolve solver from argument, ``MMML_LR_SOLVER`` env, or ``mic`` (default)."""
+    raw = (name or os.environ.get("MMML_LR_SOLVER", "mic")).strip().lower()
     if raw in ("nvalchemiops", "nvalchemiops_pme", "nval_pme"):
         return "nvalchemiops_pme"
     if raw in ("auto", "mic", "jax_pme", "nvalchemiops_pme", "scafacos"):
@@ -340,13 +340,7 @@ def resolve_lr_solver(name: str | None = None) -> LrSolverName:
 def pick_lr_solver(requested: str | None = None) -> LrSolverName:
     """Choose the active long-range electrostatic backend."""
     name = resolve_lr_solver(requested)
-    if name == "auto":
-        if have_jax_pme():
-            return "jax_pme"
-        if have_nvalchemiops_pme():
-            return "nvalchemiops_pme"
-        if have_scafacos():
-            return "scafacos"
+    if name in ("auto", "mic"):
         return "mic"
     if name == "scafacos" and not have_scafacos():
         if have_jax_pme():

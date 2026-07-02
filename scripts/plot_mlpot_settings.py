@@ -742,7 +742,7 @@ def plot_lr_solvers_overview() -> Path:
     ax.text(
         5.0,
         0.35,
-        "Default auto → jax_pme when installed. MIC is pair-loop only beyond 13 Å unless jax-pme is active.",
+        "Default mic (truncated pair loop). Opt in: jax_pme, scafacos, nvalchemiops_pme. Legacy auto = mic.",
         ha="center",
         fontsize=8.5,
         color="#475569",

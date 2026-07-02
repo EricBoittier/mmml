@@ -1173,10 +1173,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("auto", "mic", "scafacos", "jax_pme", "nvalchemiops_pme"),
         default=None,
         help=(
-            "Long-range Coulomb backend. jax_mic (default): mic=truncated MIC in the "
-            "pair loop; jax_pme=jax-pme Ewald/PME/P3M for Coulomb + switched LJ pairs. "
-            "periodic_external: scafacos, jax_pme, or nvalchemiops_pme for full-box "
-            "Coulomb (+ CHARMM VDW)."
+            "Long-range Coulomb backend. Default: truncated MIC in the switched-MM "
+            "pair loop. Opt in: jax_pme, scafacos, nvalchemiops_pme (periodic_external "
+            "for full-box Coulomb). Legacy alias: auto (= mic)."
         ),
     )
     parser.add_argument(

@@ -57,7 +57,7 @@ flowchart TB
 
 1. **Keep MLpot callback structure** — Python still returns USER energy/forces; no change to CHARMM integrator ownership.
 2. **Optional dependencies** — default install works without ScaFaCoS binaries; `have_scafacos()` probes at runtime.
-3. **Mirror `nl_backend.py`** — env `MMML_LR_SOLVER`, `auto` fallback chain, explicit `mic` for regression tests.
+3. **Mirror `nl_backend.py`** — env `MMML_LR_SOLVER`, default `mic`, explicit opt-in for k-space backends.
 4. **CHARMM unit consistency** — \(k = 332.063711\) kcal·Å/e² throughout.
 
 ---
@@ -68,10 +68,11 @@ Implementation: [`long_range_backend.py`](../long_range_backend.py).
 
 | Name | When chosen | Status |
 |------|-------------|--------|
-| `auto` | Default | `jax_pme` → `scafacos` → `mic` |
-| `mic` | Explicit or fallback | **Production default** — all Coulomb in pair loop |
-| `scafacos` | `MMML_LR_SOLVER=scafacos` and `libfcs` loads | **Interface ready** — session + one-shot API |
-| `jax_pme` | Auto when ScaFaCoS absent and `jax-pme` importable | Reserved (dependency pinned, wiring pending) |
+| `mic` | Default (unset env/YAML) or explicit | **Production default** — truncated MIC in pair loop |
+| `auto` | Legacy alias | Same as `mic` |
+| `jax_pme` | `lr_solver: jax_pme` or `MMML_LR_SOLVER=jax_pme` | Opt-in — jax-pme Ewald/PME/P3M + switched MM |
+| `scafacos` | `MMML_LR_SOLVER=scafacos` and `libfcs` loads | Opt-in — full-box Coulomb via ScaFaCoS |
+| `nvalchemiops_pme` | Explicit opt-in | Opt-in — full-box PME via nvalchemiops |
 
 Log probe:
 
