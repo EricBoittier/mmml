@@ -23,6 +23,7 @@ from campaign_lib import (  # noqa: E402
     cell_from_tag,
     cell_run_tag,
     cell_workflow_cfg,
+    config_for_run_tag,
     init_job_id,
     load_config,
     paths_for_run,
@@ -62,6 +63,7 @@ def main() -> int:
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    cfg = config_for_run_tag(cfg, args.tag or "")
     if args.tag:
         cell = cell_from_tag(cfg, args.tag)
     else:

@@ -18,7 +18,13 @@ PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
-_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+if [[ -n "${MMML_WORKFLOW_CONFIG:-}" ]]; then
+  _cfg_raw="${MMML_WORKFLOW_CONFIG}"
+elif [[ "$RUN_TAG" == *_sw_* ]]; then
+  _cfg_raw="config.prep_sweep.yaml"
+else
+  _cfg_raw="config.yaml"
+fi
 if [[ "$_cfg_raw" = /* ]]; then
   CFG="${_cfg_raw}"
 else
