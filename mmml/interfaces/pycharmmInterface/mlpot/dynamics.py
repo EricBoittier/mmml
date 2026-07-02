@@ -456,6 +456,7 @@ class BondedMmMiniConfig:
     nstep_jax: int | None = None
     include_vdw: bool = True
     verify_jax_parity: bool = True
+    per_monomer_jax: bool = True
 
 
 def bonded_mm_mini_config_from_namespace(

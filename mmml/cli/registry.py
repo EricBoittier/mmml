@@ -135,6 +135,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     CommandSpec("orca-client", "mmml.interfaces.orca_external.client", "ORCA client → orca-server"),
     CommandSpec("orca-external", "mmml.interfaces.orca_external.runner", "Standalone ORCA external wrapper"),
     CommandSpec("configure", "mmml.cli.configure", "Interactive config / Snakemake wizard"),
+    CommandSpec(
+        "plot-restart-velocities",
+        "mmml.cli.plot.plot_restart_velocities",
+        "Plot |v| distributions and outliers from CHARMM .res files",
+    ),
     CommandSpec("commands", "mmml.cli.commands_help", "Browse subcommands (grouped)"),
     CommandSpec("examples", "mmml.cli.commands_help", "Copy-paste example invocations"),
     CommandSpec("completion", "mmml.cli.completion", "Shell tab-completion setup"),

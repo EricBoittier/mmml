@@ -74,6 +74,11 @@ def main():
 
         return configure_main(args.args)
 
+    elif command == "plot-restart-velocities":
+        from .plot.plot_restart_velocities import main as plot_restart_velocities_main
+
+        return plot_restart_velocities_main(args.args)
+
     elif command == "make-res":
         from .misc import make_res_cli
         sys.argv = ["mmml make-res"] + args.args

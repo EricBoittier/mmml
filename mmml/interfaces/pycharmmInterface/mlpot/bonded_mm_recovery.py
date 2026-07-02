@@ -295,6 +295,40 @@ def _bonded_cfg_from_overlap_config(config: Any) -> BondedMmMiniConfig:
     )
 
 
+def _maybe_run_per_monomer_bonded_jax_preflight(
+    ctx: MlpotContext,
+    config: Any,
+    *,
+    context: str,
+) -> None:
+    """JAX bonded mini per monomer before CHARMM / MLpot overlap recovery stages."""
+    n_monomers = int(getattr(config, "n_monomers", 0) or 0)
+    if n_monomers <= 1:
+        return
+    bonded_cfg = _bonded_cfg_from_overlap_config(config)
+    if not bool(getattr(bonded_cfg, "per_monomer_jax", True)):
+        return
+    topo = getattr(config, "topology_psf", None) or getattr(ctx, "topology_psf_path", None)
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
+            minimize_bonded_jax_per_monomer_recovery,
+        )
+
+        minimize_bonded_jax_per_monomer_recovery(
+            ctx,
+            bonded_cfg,
+            n_monomers=n_monomers,
+            topology_psf=topo,
+            context=f"{context} (per-monomer JAX preflight)",
+        )
+    except Exception as exc:
+        if bonded_cfg.verbose:
+            print(
+                f"WARN: {context}: per-monomer JAX bonded preflight skipped ({exc})",
+                flush=True,
+            )
+
+
 def _resolve_mlpot_recovery_nstep(
     bonded_cfg: BondedMmMiniConfig,
     config: Any | None = None,
@@ -408,9 +442,11 @@ def _run_hybrid_bonded_mlpot_recovery(
     context: str,
     config: Any | None = None,
 ) -> None:
-    """Hybrid recovery: CHARMM bonded-MM SD, then MLpot SD mini."""
+    """Hybrid recovery: per-monomer JAX, CHARMM bonded-MM SD, then MLpot SD mini."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
 
+    if config is not None:
+        _maybe_run_per_monomer_bonded_jax_preflight(ctx, config, context=context)
     if bonded_cfg.verbose:
         print(
             f"{context}: bonded-MM SD ({int(bonded_cfg.nstep_sd)} steps, MLpot detached)",
@@ -452,6 +488,7 @@ def _run_all_ml_extent_recovery(
         )
     sync_charmm_positions(np.asarray(positions, dtype=float))
     clear_mmfp_restraints()
+    _maybe_run_per_monomer_bonded_jax_preflight(ctx, config, context="Fly-off recovery")
     _run_hybrid_bonded_mlpot_recovery(
         ctx,
         bonded_cfg,
@@ -712,6 +749,9 @@ def _run_all_ml_intra_overlap_rescue(
     """Intra-monomer rescue: preflight, then JAX bonded mini or legacy CHARMM BLOCK SD."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_bonded_mm_recovery
 
+    _maybe_run_per_monomer_bonded_jax_preflight(
+        ctx, config, context="Intra overlap rescue"
+    )
     _preflight_intra_overlap_rescue(config, bonded_cfg)
     sd_steps = int(
         getattr(config, "intra_rescue_sd_steps", None) or bonded_cfg.nstep_sd
@@ -820,6 +860,9 @@ def _run_all_ml_inter_overlap_rescue(
     """Inter-monomer rescue: optional noise, then MLpot SD/ABNR or legacy CHARMM BLOCK SD."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import minimize_overlap_rescue
 
+    _maybe_run_per_monomer_bonded_jax_preflight(
+        ctx, config, context="Inter overlap rescue"
+    )
     rescue = config.rescue
     noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
     seed = getattr(config, "recovery_seed", None)

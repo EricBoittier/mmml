@@ -261,3 +261,80 @@ def minimize_bonded_jax_recovery(
         return grms
     finally:
         psf_source.cleanup()
+
+
+def minimize_bonded_jax_per_monomer_recovery(
+    ctx: Any,
+    config: "BondedMmMiniConfig",
+    *,
+    n_monomers: int,
+    topology_psf: PathLike | None = None,
+    context: str = "per-monomer bonded JAX",
+) -> float | None:
+    """Relax internal bonded strain one monomer at a time (others frozen)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        invalidate_mlpot_calculator_caches,
+        sync_charmm_lists_after_mini,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import monomer_offsets
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        get_charmm_positions_array,
+        sync_charmm_positions,
+    )
+
+    positions = np.asarray(get_charmm_positions_array(), dtype=np.float64)
+    n_atoms = int(positions.shape[0])
+    offsets = monomer_offsets(n_atoms, int(n_monomers))
+    ml_indices = set(int(i) for i in _ml_atom_indices(ctx))
+    system, psf_source = load_bonded_system_for_recovery(
+        ctx,
+        positions,
+        topology_psf=topology_psf,
+        ml_atom_indices=tuple(ml_indices),
+    )
+    nstep = int(config.nstep_jax if config.nstep_jax is not None else config.nstep_sd)
+    max_grms = 0.0
+    try:
+        n_bonds = int(np.asarray(system.topology.bonds).shape[0])
+        if n_bonds <= 0:
+            if config.verbose:
+                print(
+                    f"{context}: skipped (no MM bonded terms in recovery topology)",
+                    flush=True,
+                )
+            return None
+        if config.verbose:
+            print(
+                f"{context}: JAX bonded FIRE per monomer "
+                f"({int(n_monomers)} monomers, ≤{nstep} steps each, MLpot stays attached)",
+                flush=True,
+            )
+        for mono_i in range(int(n_monomers)):
+            a = int(offsets[mono_i])
+            b = int(offsets[mono_i + 1])
+            freeze = {j for j in range(n_atoms) if j < a or j >= b}
+            freeze.update(ml_indices)
+            freeze_idx = np.fromiter(sorted(freeze), dtype=np.int32)
+            positions, grms = _run_jax_bonded_fire(
+                positions,
+                system,
+                nstep=nstep,
+                nprint=max(1, int(config.nprint)),
+                tolgrd=float(config.tolgrd),
+                verbose=bool(config.verbose),
+                freeze_indices=freeze_idx,
+            )
+            max_grms = max(max_grms, float(grms))
+            if config.verbose:
+                print(
+                    f"{context}: monomer {mono_i + 1}/{n_monomers} "
+                    f"GRMS={grms:.4f} kcal/mol/Å",
+                    flush=True,
+                )
+        sync_charmm_positions(positions)
+        sync_charmm_lists_after_mini(quiet=True)
+        invalidate_mlpot_calculator_caches(ctx)
+        _ = get_charmm_positions_array()
+        return max_grms
+    finally:
+        psf_source.cleanup()
