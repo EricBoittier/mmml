@@ -339,6 +339,23 @@ def test_build_campaign_resolves_mmml_ckpt(monkeypatch: pytest.MonkeyPatch, tmp_
     assert campaign["defaults"]["checkpoint"] == str(ckpt.resolve())
 
 
+def test_resolve_checkpoint_defaults_to_bundled_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    bundled = tmp_path / "examples" / "ckpts_json" / "DESdimers_params.json"
+    bundled.parent.mkdir(parents=True)
+    bundled.write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("MMML_CKPT", raising=False)
+    monkeypatch.setattr(cl, "repo_root", lambda: tmp_path)
+    assert cl.resolve_checkpoint("${MMML_CKPT}") == bundled.resolve()
+
+
+def test_validate_checkpoint_rejects_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MMML_CKPT", "/no/such/checkpoint.json")
+    with pytest.raises(RuntimeError, match="Checkpoint not found"):
+        cl.resolve_checkpoint("${MMML_CKPT}")
+
+
 def test_build_md_system_campaign_argv(tmp_path: Path, cfg: dict, cell: RunCell) -> None:
     cfg = dict(cfg)
     cfg["output_root"] = str(tmp_path / "out")

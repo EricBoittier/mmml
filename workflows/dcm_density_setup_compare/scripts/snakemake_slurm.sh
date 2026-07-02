@@ -22,6 +22,17 @@ source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
+# Forwarded to Slurm jobs via profiles/slurm/config.yaml envvars — must exist on driver start.
+export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
+if [[ ! -f "${MMML_CKPT}" ]]; then
+  echo "ERROR: checkpoint not found: ${MMML_CKPT}" >&2
+  echo "  export MMML_CKPT=${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json" >&2
+  exit 1
+fi
+export MMML_CKPT="$(readlink -f "${MMML_CKPT}")"
+export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+echo "snakemake_slurm.sh: MMML_CKPT=${MMML_CKPT}" >&2
+
 _cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
 if [[ "$_cfg_raw" = /* ]]; then
   CFG_PATH="$_cfg_raw"

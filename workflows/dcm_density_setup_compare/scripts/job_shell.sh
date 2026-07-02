@@ -18,6 +18,9 @@ PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
+# Slurm profile forwards MMML_CKPT from the driver; fall back to bundled ckpt on compute nodes.
+export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
+
 if [[ -n "${MMML_WORKFLOW_CONFIG:-}" ]]; then
   _cfg_raw="${MMML_WORKFLOW_CONFIG}"
 elif [[ "$RUN_TAG" == *_sw_* ]]; then

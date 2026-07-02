@@ -49,16 +49,38 @@ def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def default_checkpoint_path() -> Path:
+    """Bundled DES dimer PhysNet JSON when ``MMML_CKPT`` is unset."""
+    return repo_root() / "examples" / "ckpts_json" / "DESdimers_params.json"
+
+
+def validate_checkpoint(path: Path) -> None:
+    text = str(path)
+    placeholders = ("/path/to", "your/checkpoint", "REPLACE_ME")
+    if any(p in text for p in placeholders):
+        raise RuntimeError(
+            f"Checkpoint path looks like a placeholder: {path}\n"
+            "Set a real file, e.g.\n"
+            f"  export MMML_CKPT={default_checkpoint_path()}"
+        )
+    if not path.is_file():
+        raise RuntimeError(
+            f"Checkpoint not found: {path}\n"
+            "Export MMML_CKPT before launching Snakemake, e.g.\n"
+            f"  export MMML_CKPT={default_checkpoint_path()}"
+        )
+
+
 def resolve_checkpoint(raw: str) -> Path:
     if raw == "${MMML_CKPT}":
         env = os.environ.get("MMML_CKPT", "").strip()
-        if not env:
-            raise RuntimeError("MMML_CKPT is not set (config checkpoint: ${MMML_CKPT})")
-        path = Path(env).expanduser().resolve()
+        if env:
+            path = Path(env).expanduser().resolve()
+        else:
+            path = default_checkpoint_path()
     else:
         path = Path(os.path.expandvars(str(raw))).expanduser().resolve()
-    if not path.exists():
-        raise RuntimeError(f"Checkpoint not found: {path}")
+    validate_checkpoint(path)
     return path
 
 
