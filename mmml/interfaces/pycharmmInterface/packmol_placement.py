@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -62,15 +64,206 @@ def packmol_executable() -> str:
     )
 
 
-def execute_packmol_script(packmol_input: str, inp_path: Path) -> None:
+@dataclass(frozen=True)
+class PackmolRunResult:
+    """Captured Packmol subprocess outcome (stdout/stderr parsed for summary)."""
+
+    exit_code: int
+    log_text: str
+    inp_path: Path
+    success: bool
+    objective: float | None = None
+    max_distance_violation: float | None = None
+    max_constraint_violation: float | None = None
+    error_message: str | None = None
+
+
+def parse_packmol_log(log_text: str) -> dict[str, Any]:
+    """Extract success metrics and the first error line from Packmol output."""
+    log = log_text or ""
+    success = "Success!" in log
+    objective: float | None = None
+    max_dist: float | None = None
+    max_constraint: float | None = None
+    error_message: str | None = None
+
+    mobj = re.search(
+        r"Final objective function value:\s*([-\d.eE+]+)",
+        log,
+    )
+    if mobj:
+        objective = float(mobj.group(1))
+    dist_m = re.search(
+        r"Maximum violation of target distance:\s*([-\d.eE+]+)",
+        log,
+    )
+    if dist_m:
+        max_dist = float(dist_m.group(1))
+    constr_m = re.search(
+        r"Maximum violation of the constraints:\s*([-\d.eE+]+)",
+        log,
+    )
+    if constr_m:
+        max_constraint = float(constr_m.group(1))
+
+    for line in log.splitlines():
+        stripped = line.strip()
+        if "ERROR:" in stripped or stripped.startswith("STOP:"):
+            error_message = stripped
+            break
+    if error_message is None and " STOP " in log:
+        for line in log.splitlines():
+            if " STOP" in line:
+                error_message = line.strip()
+                break
+
+    return {
+        "success": success,
+        "objective": objective,
+        "max_distance_violation": max_dist,
+        "max_constraint_violation": max_constraint,
+        "error_message": error_message,
+    }
+
+
+def _format_composition_summary(blocks: list[tuple[Path, int]]) -> str:
+    parts = [
+        f"{path.stem.upper()}:{int(count)}"
+        for path, count in blocks
+        if int(count) > 0
+    ]
+    return ", ".join(parts) if parts else "(none)"
+
+
+def emit_packmol_build_summary(
+    *,
+    placement: PackmolPlacement,
+    blocks: list[tuple[Path, int]] | None = None,
+    composition: list[tuple[str, int]] | None = None,
+    center: tuple[float, float, float],
+    tolerance: float,
+    seed: int | None,
+    output_pdb: str | Path,
+    inp_path: Path | None = None,
+    cube_side: float | None = None,
+    radius: float | None = None,
+    sim_cell_side: float | None = None,
+    box_sizing_source: str | None = None,
+    packmol_padding_A: float | None = None,
+    result: PackmolRunResult | None = None,
+    cache_status: str | None = None,
+    cache_key: str | None = None,
+    n_atoms: int | None = None,
+    span_A: tuple[float, float, float] | None = None,
+    quiet: bool = False,
+) -> None:
+    """Emit one Rich table instead of Packmol's verbose Fortran stdout."""
+    if composition is not None:
+        comp_txt = ", ".join(f"{str(r).upper()}:{int(n)}" for r, n in composition)
+    elif blocks is not None:
+        comp_txt = _format_composition_summary(blocks)
+    else:
+        comp_txt = "(unknown)"
+
+    rows: list[tuple[str, Any]] = [
+        ("Placement", placement),
+        ("Composition", comp_txt),
+        (
+            "Center (Å)",
+            f"({float(center[0]):.3f}, {float(center[1]):.3f}, {float(center[2]):.3f})",
+        ),
+        ("Tolerance (Å)", f"{float(tolerance):.3f}"),
+    ]
+    if seed is not None:
+        rows.append(("Seed", int(seed)))
+    if placement == "cube" and cube_side is not None:
+        rows.append(("Packmol cube (Å)", f"{float(cube_side):.3f}"))
+    if placement == "sphere" and radius is not None:
+        rows.append(("Packmol radius (Å)", f"{float(radius):.3f}"))
+    if sim_cell_side is not None:
+        rows.append(("Simulation cell (Å)", f"{float(sim_cell_side):.3f}"))
+    if packmol_padding_A is not None:
+        rows.append(("Cube padding (Å/side)", f"{float(packmol_padding_A):.3f}"))
+    if box_sizing_source:
+        rows.append(("Box sizing", box_sizing_source))
+    if cache_status:
+        cache_txt = cache_status if not cache_key else f"{cache_status} ({cache_key})"
+        rows.append(("Cache", cache_txt))
+    if inp_path is not None:
+        rows.append(("Input", str(inp_path)))
+    rows.append(("Output", str(output_pdb)))
+    if result is not None:
+        rows.append(("Status", "success" if result.success else "failed"))
+        if result.objective is not None:
+            rows.append(("Objective", f"{result.objective:.5e}"))
+        if result.max_distance_violation is not None:
+            rows.append(
+                ("Max distance violation (Å)", f"{result.max_distance_violation:.6f}")
+            )
+        if result.max_constraint_violation is not None:
+            rows.append(
+                ("Max constraint violation", f"{result.max_constraint_violation:.5e}")
+            )
+        if result.error_message:
+            rows.append(("Error", result.error_message))
+    elif cache_status:
+        rows.append(("Status", "cached"))
+    if n_atoms is not None:
+        rows.append(("Atoms", int(n_atoms)))
+    if span_A is not None:
+        rows.append(
+            (
+                "Span (Å)",
+                f"x={span_A[0]:.1f} y={span_A[1]:.1f} z={span_A[2]:.1f}",
+            )
+        )
+
+    border = "green"
+    if result is not None and not result.success:
+        border = "red"
+    elif cache_status:
+        border = "cyan"
+
+    from mmml.utils.rich_report import emit_table
+
+    emit_table("Packmol", rows, border_style=border, quiet=quiet)
+
+
+def execute_packmol_script(packmol_input: str, inp_path: Path) -> PackmolRunResult:
+    """Run Packmol with captured stdout/stderr (no Fortran spam on the terminal)."""
     os.makedirs(inp_path.parent, exist_ok=True)
     inp_path.write_text(packmol_input)
     packmol_bin = packmol_executable()
-    cmd = f"{packmol_bin} < {inp_path}"
-    print(f"Running: {cmd}")
-    ret = os.system(cmd)
-    if ret != 0:
-        raise RuntimeError(f"packmol failed with exit code {ret}")
+    proc = subprocess.run(
+        [packmol_bin],
+        input=packmol_input,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    log_text = (proc.stdout or "") + (
+        ("\n" + proc.stderr) if proc.stderr else ""
+    )
+    parsed = parse_packmol_log(log_text)
+    success = int(proc.returncode) == 0 and bool(parsed["success"])
+    result = PackmolRunResult(
+        exit_code=int(proc.returncode),
+        log_text=log_text,
+        inp_path=inp_path,
+        success=success,
+        objective=parsed["objective"],
+        max_distance_violation=parsed["max_distance_violation"],
+        max_constraint_violation=parsed["max_constraint_violation"],
+        error_message=parsed["error_message"],
+    )
+    if not result.success:
+        from mmml.utils.rich_report import emit_panel, is_verbose
+
+        if is_verbose() and log_text.strip():
+            emit_panel("Packmol log", log_text.strip(), border_style="red")
+        msg = result.error_message or f"packmol failed with exit code {result.exit_code}"
+        raise RuntimeError(msg)
+    return result
 
 
 def resolve_packmol_use(
@@ -204,14 +397,9 @@ def resolve_packmol_cube_side_from_args(args) -> float:
     )
     setattr(args, "_cold_start_sim_cell_side_A", float(sim_side))
     packmol_side = resolve_packmol_cube_side_for_sim_cell(args, sim_side)
-    if not getattr(args, "quiet", False):
-        padding = resolve_packmol_box_padding_A(args)
-        print(
-            "Cold-start box sizing: "
-            f"Packmol cube {packmol_side:.3f} Å inside sim cell {sim_side:.3f} Å "
-            f"(source={source}; padding={padding:.1f} Å/side)",
-            flush=True,
-        )
+    padding = resolve_packmol_box_padding_A(args)
+    setattr(args, "_cold_start_packmol_padding_A", float(padding))
+    setattr(args, "_cold_start_box_sizing_source", str(source))
     return packmol_side
 
 
@@ -476,6 +664,10 @@ def run_packmol_mixed(
     input_path: str | Path | None = None,
     tolerance: float = 2.0,
     seed: int | None = None,
+    quiet: bool = False,
+    sim_cell_side: float | None = None,
+    box_sizing_source: str | None = None,
+    packmol_padding_A: float | None = None,
 ) -> str:
     """Pack multiple structure types inside one cube or sphere (composition order)."""
     if not blocks:
@@ -519,8 +711,23 @@ def run_packmol_mixed(
         "packmol_cube.inp" if placement == "cube" else "packmol_sphere.inp"
     )
     inp_path = Path(input_path) if input_path is not None else Path("packmol") / default_inp
-    execute_packmol_script(packmol_input, inp_path)
-    print(f"Generated {out}", flush=True)
+    result = execute_packmol_script(packmol_input, inp_path)
+    emit_packmol_build_summary(
+        placement=placement,
+        blocks=blocks,
+        center=center,
+        tolerance=float(tolerance),
+        seed=randint,
+        output_pdb=out,
+        inp_path=inp_path,
+        cube_side=cube_side,
+        radius=radius,
+        sim_cell_side=sim_cell_side,
+        box_sizing_source=box_sizing_source,
+        packmol_padding_A=packmol_padding_A,
+        result=result,
+        quiet=quiet,
+    )
     return str(out)
 
 
@@ -554,6 +761,10 @@ def run_packmol_cube_mixed(
     input_path: str | Path | None = None,
     tolerance: float = 2.0,
     seed: int | None = None,
+    quiet: bool = False,
+    sim_cell_side: float | None = None,
+    box_sizing_source: str | None = None,
+    packmol_padding_A: float | None = None,
 ) -> str:
     """Pack multiple structure types inside one cube (composition order)."""
     return run_packmol_mixed(
@@ -565,6 +776,10 @@ def run_packmol_cube_mixed(
         input_path=input_path,
         tolerance=tolerance,
         seed=seed,
+        quiet=quiet,
+        sim_cell_side=sim_cell_side,
+        box_sizing_source=box_sizing_source,
+        packmol_padding_A=packmol_padding_A,
     )
 
 
@@ -577,6 +792,10 @@ def run_packmol_sphere_mixed(
     input_path: str | Path | None = None,
     tolerance: float = 2.0,
     seed: int | None = None,
+    quiet: bool = False,
+    sim_cell_side: float | None = None,
+    box_sizing_source: str | None = None,
+    packmol_padding_A: float | None = None,
 ) -> str:
     """Pack multiple structure types inside one sphere (composition order)."""
     return run_packmol_mixed(
@@ -588,4 +807,8 @@ def run_packmol_sphere_mixed(
         input_path=input_path,
         tolerance=tolerance,
         seed=seed,
+        quiet=quiet,
+        sim_cell_side=sim_cell_side,
+        box_sizing_source=box_sizing_source,
+        packmol_padding_A=packmol_padding_A,
     )

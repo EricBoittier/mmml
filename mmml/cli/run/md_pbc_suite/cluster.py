@@ -331,6 +331,10 @@ def build_packmol_composition_cluster(
     reuse_packmol_cache: bool = True,
     packmol_cache_dir: str | Path | None = None,
     force_rebuild_packmol_cache: bool = False,
+    sim_cell_side: float | None = None,
+    box_sizing_source: str | None = None,
+    packmol_padding_A: float | None = None,
+    quiet: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, Packmol cube/sphere pack, cluster PSF, then cluster MM relax."""
     from mmml.cli.run.md_pbc_suite.ase import (
@@ -364,12 +368,6 @@ def build_packmol_composition_cluster(
             cache_root=cache_root,
         )
         if cached is not None:
-            if verbose:
-                key = cached["manifest"].get("cache_key", "?")
-                print(
-                    f"[cluster] Packmol cache hit ({key}): skip monomer/Packmol/MM build",
-                    flush=True,
-                )
             z = cached["z"]
             shifted = cached["positions"]
             atoms_per_list = cached["atoms_per_list"]
@@ -401,10 +399,24 @@ def build_packmol_composition_cluster(
                 pd.DataFrame(shifted, columns=["x", "y", "z"])
             )
             span = np.ptp(shifted, axis=0)
-            print(
-                f"Packmol cluster (cached): {len(atom_names)} atoms, "
-                f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f}",
-                flush=True,
+            cache_key = str(cached["manifest"].get("cache_key", "?"))
+            packmol_placement.emit_packmol_build_summary(
+                placement=placement,  # type: ignore[arg-type]
+                composition=composition,
+                center=center,
+                tolerance=float(tolerance),
+                seed=seed,
+                output_pdb=scratch_root / "init-packmol-sphere.pdb",
+                cube_side=cube_side,
+                radius=radius,
+                sim_cell_side=sim_cell_side,
+                box_sizing_source=box_sizing_source,
+                packmol_padding_A=packmol_padding_A,
+                cache_status="hit",
+                cache_key=cache_key,
+                n_atoms=len(atom_names),
+                span_A=(float(span[0]), float(span[1]), float(span[2])),
+                quiet=quiet,
             )
             return z, shifted, atoms_per_list, ordered_residue_names
 
@@ -466,25 +478,28 @@ def build_packmol_composition_cluster(
             )
 
     inp_name = "packmol_sphere.inp" if placement == "sphere" else "packmol_cube.inp"
+    packmol_kwargs = {
+        "center": center,
+        "output_pdb": output_pdb,
+        "input_path": scratch_root / inp_name,
+        "tolerance": float(tolerance),
+        "seed": seed,
+        "quiet": quiet,
+        "sim_cell_side": sim_cell_side,
+        "box_sizing_source": box_sizing_source,
+        "packmol_padding_A": packmol_padding_A,
+    }
     if placement == "sphere":
         packmol_placement.run_packmol_sphere_mixed(
             packmol_blocks,
-            center=center,
             radius=float(radius),
-            output_pdb=output_pdb,
-            input_path=scratch_root / inp_name,
-            tolerance=float(tolerance),
-            seed=seed,
+            **packmol_kwargs,
         )
     else:
         packmol_placement.run_packmol_cube_mixed(
             packmol_blocks,
-            center=center,
             cube_side=float(cube_side),
-            output_pdb=output_pdb,
-            input_path=scratch_root / inp_name,
-            tolerance=float(tolerance),
-            seed=seed,
+            **packmol_kwargs,
         )
 
     if verbose:
@@ -526,10 +541,23 @@ def build_packmol_composition_cluster(
             )
 
     span = np.ptp(shifted, axis=0)
-    print(
-        f"Packmol cluster: {len(atom_names)} atoms, "
-        f"span Å x={span[0]:.1f} y={span[1]:.1f} z={span[2]:.1f}",
-        flush=True,
+    packmol_placement.emit_packmol_build_summary(
+        placement=placement,  # type: ignore[arg-type]
+        composition=composition,
+        center=center,
+        tolerance=float(tolerance),
+        seed=seed,
+        output_pdb=output_pdb,
+        inp_path=scratch_root / inp_name,
+        cube_side=cube_side,
+        radius=radius,
+        sim_cell_side=sim_cell_side,
+        box_sizing_source=box_sizing_source,
+        packmol_padding_A=packmol_padding_A,
+        cache_status="miss" if reuse_packmol_cache else None,
+        n_atoms=len(atom_names),
+        span_A=(float(span[0]), float(span[1]), float(span[2])),
+        quiet=quiet,
     )
     if reuse_packmol_cache:
         cache_key = packmol_cache.packmol_cache_key(
