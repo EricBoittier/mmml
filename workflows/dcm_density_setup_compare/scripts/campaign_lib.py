@@ -21,6 +21,7 @@ from bulk_density import (  # noqa: E402
     n_monomers_at_bulk_density,
 )
 from cleanup_strategy import (  # noqa: E402
+    CleanupStrategy,
     dense_cell_mlpot_overrides,
     pretreat_job_flags,
     pycharmm_job_flags,
@@ -67,6 +68,9 @@ def checkpoint_path_for_yaml(raw: str) -> str:
     return str(os.path.expandvars(str(raw)))
 
 
+_VALID_HEAT_THERMOSTATS = frozenset({"bussi", "hoover", "scale"})
+
+
 @dataclass(frozen=True)
 class RunCell:
     setup_id: str
@@ -74,6 +78,7 @@ class RunCell:
     n_monomers: int
     temperature: float
     box_size: float
+    heat_thermostat: str | None = None
 
 
 def matrix_setup_ids(cfg: dict[str, Any]) -> list[str]:
@@ -102,6 +107,34 @@ def matrix_density_fractions(cfg: dict[str, Any]) -> list[float]:
     return [float(x) for x in raw]
 
 
+def matrix_heat_thermostats(cfg: dict[str, Any]) -> list[str]:
+    """Non-empty list enables mini+heat campaigns with one cell per thermostat."""
+    raw = cfg.get("heat_thermostats")
+    if not raw:
+        return []
+    thermostats: list[str] = []
+    for item in raw:
+        key = str(item).strip().lower()
+        if key not in _VALID_HEAT_THERMOSTATS:
+            known = ", ".join(sorted(_VALID_HEAT_THERMOSTATS))
+            raise ValueError(f"unknown heat_thermostat {item!r} (known: {known})")
+        thermostats.append(key)
+    return thermostats
+
+
+def heat_compare_enabled(cfg: dict[str, Any]) -> bool:
+    return bool(matrix_heat_thermostats(cfg))
+
+
+def iter_heat_thermostats(cfg: dict[str, Any]) -> Iterator[str | None]:
+    hts = matrix_heat_thermostats(cfg)
+    if not hts:
+        yield None
+        return
+    for ht in hts:
+        yield ht
+
+
 def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
     solvents = [str(s).strip().upper() for s in cfg.get("solvents", ["DCM"])]
     setups = matrix_setup_ids(cfg)
@@ -119,18 +152,20 @@ def iter_matrix_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
                 sizes = matrix_cluster_sizes_for_cell(cfg, solvent=sol, box_size=box)
                 for n in sizes:
                     for temp in matrix_temperatures(cfg):
-                        cell = RunCell(
-                            setup_id=setup_id,
-                            solvent=sol,
-                            n_monomers=n,
-                            temperature=temp,
-                            box_size=box,
-                        )
-                        tag = cell_run_tag(cell, cfg)
-                        if tag in skip or tag in seen_tags:
-                            continue
-                        seen_tags.add(tag)
-                        yield cell
+                        for heat_thermostat in iter_heat_thermostats(cfg):
+                            cell = RunCell(
+                                setup_id=setup_id,
+                                solvent=sol,
+                                n_monomers=n,
+                                temperature=temp,
+                                box_size=box,
+                                heat_thermostat=heat_thermostat,
+                            )
+                            tag = cell_run_tag(cell, cfg)
+                            if tag in skip or tag in seen_tags:
+                                continue
+                            seen_tags.add(tag)
+                            yield cell
 
 
 def matrix_tag_includes_TL(cfg: dict[str, Any]) -> bool:
@@ -145,7 +180,10 @@ def cell_run_tag(cell: RunCell, cfg: dict[str, Any] | None = None) -> str:
     sol = solvent_slug(cell.solvent).lower()
     t = int(round(cell.temperature))
     box = int(round(cell.box_size))
-    return f"{cell.setup_id}_{sol}_{int(cell.n_monomers)}_t{t}_l{box}"
+    base = f"{cell.setup_id}_{sol}_{int(cell.n_monomers)}_t{t}_l{box}"
+    if cell.heat_thermostat:
+        return f"{base}_ht_{cell.heat_thermostat}"
+    return base
 
 
 def composition_string(cell: RunCell) -> str:
@@ -162,6 +200,9 @@ def run_seed(cell: RunCell, *, seed_base: int = 4242) -> int:
     solvent_off = sum(ord(c) for c in solvent_slug(cell.solvent)) % 1000
     temp_off = int(round(cell.temperature)) % 100
     box_off = int(round(cell.box_size)) % 100
+    heat_off = 0
+    if cell.heat_thermostat:
+        heat_off = {"bussi": 11, "hoover": 22, "scale": 33}[cell.heat_thermostat]
     return (
         int(seed_base)
         + int(cell.n_monomers) * 10000
@@ -169,6 +210,7 @@ def run_seed(cell: RunCell, *, seed_base: int = 4242) -> int:
         + solvent_off
         + temp_off * 17
         + box_off * 131
+        + heat_off * 7
     )
 
 
@@ -192,10 +234,51 @@ def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     else:
         flags.update(dense_cell_mlpot_overrides(cell, effective))
     # Workflow config.yaml overrides cleanup defaults (e.g. bonded_mm_mini: false).
-    for key in ("bonded_mm_mini", "bonded_mm_mini_after", "bonded_mm_mini_steps"):
+    for key in (
+        "bonded_mm_mini",
+        "bonded_mm_mini_after",
+        "bonded_mm_mini_steps",
+        "no_echeck_heat",
+    ):
         if key in cfg:
             flags[key] = cfg[key]
     return flags
+
+
+def _resolve_cell_heat_thermostat(cfg: dict[str, Any], strategy: CleanupStrategy) -> str:
+    """Resolve heat thermostat for campaign YAML (supports bussi, hoover, scale).
+
+    When the cleanup strategy enables CHARMM MM pretreat, ``scale`` is coerced to
+    ``hoover`` (same rule as ``pbc_solvent_burst``). ``bussi`` is preserved.
+    """
+    requested = str(cfg.get("heat_thermostat", "bussi") or "bussi").strip().lower()
+    if requested not in _VALID_HEAT_THERMOSTATS:
+        known = ", ".join(sorted(_VALID_HEAT_THERMOSTATS))
+        raise ValueError(f"unknown heat_thermostat {requested!r} (known: {known})")
+    pretreat = bool(strategy.charmm_mm.get("pretreat_on_pycharmm", False))
+    if pretreat and requested == "scale":
+        return "hoover"
+    return requested
+
+
+def _heat_job_overrides(cfg: dict[str, Any], cell: RunCell, effective: dict[str, Any]) -> dict[str, Any]:
+    """Mini+heat leg flags when ``heat_thermostats`` is set in workflow config."""
+    if not cell.heat_thermostat:
+        return {}
+    strategy = resolve_cleanup_strategy(effective)
+    cell_effective = {**effective, "heat_thermostat": cell.heat_thermostat}
+    heat_thermostat = _resolve_cell_heat_thermostat(cell_effective, strategy)
+    dense = dense_cell_mlpot_overrides(cell, effective)
+    return {
+        "md_stages": "mini,heat",
+        "ps_heat": float(effective.get("ps_heat", 5.0)),
+        "n_heat_segments": int(
+            dense.get("n_heat_segments", effective.get("n_heat_segments", 3))
+        ),
+        "heat_firstt": float(effective.get("heat_firstt", 10.0)),
+        "heat_finalt": float(cell.temperature),
+        "heat_thermostat": heat_thermostat,
+    }
 
 
 def campaign_job_order(cfg: dict[str, Any] | None = None) -> list[str]:
@@ -271,16 +354,19 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
             defaults[key] = effective[key]
 
     mini_flags = _mini_job_flags(cfg, cell)
+    mini_flags.update(_heat_job_overrides(cfg, cell, effective))
+    stage_label = "mini+heat" if cell.heat_thermostat else "mini-only"
+    ht_note = f" heat={cell.heat_thermostat}" if cell.heat_thermostat else ""
     runs: dict[str, Any] = {
         "pycharmm_mini": _attach_leg_output_dir(
             {
                 "description": (
                     f"{comp} setup={cell.setup_id} {frac_s} "
-                    f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å mini-only"
+                    f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å {stage_label}{ht_note}"
                 ),
                 "backend": "pycharmm",
                 "setup": "pbc_npt",
-                "md_stages": "mini",
+                "md_stages": mini_flags.get("md_stages", "mini"),
                 **mini_flags,
             },
             cell_root,
@@ -429,7 +515,10 @@ def parse_run_tag(cfg: dict[str, Any], tag: str) -> RunCell:
         if not tag.startswith(prefix):
             continue
         tail = tag[len(prefix) :]
-        m = re.match(r"([a-z]+)_(\d+)_t(\d+)_l(\d+)$", tail)
+        m = re.match(
+            r"([a-z]+)_(\d+)_t(\d+)_l(\d+)(?:_ht_(bussi|hoover|scale))?$",
+            tail,
+        )
         if not m:
             break
         sol = m.group(1).upper()
@@ -439,6 +528,7 @@ def parse_run_tag(cfg: dict[str, Any], tag: str) -> RunCell:
             n_monomers=int(m.group(2)),
             temperature=float(m.group(3)),
             box_size=float(m.group(4)),
+            heat_thermostat=m.group(5),
         )
     raise KeyError(f"run tag {tag!r} not in config matrix")
 
@@ -464,11 +554,26 @@ def cell_from_cli(
     *,
     temperature: float | None = None,
     box_size: float | None = None,
+    heat_thermostat: str | None = None,
 ) -> RunCell:
     sol = solvent_slug(solvent)
     n = int(n_monomers)
     temps = matrix_temperatures(cfg) if temperature is None else [float(temperature)]
     boxes = matrix_box_sizes(cfg) if box_size is None else [float(box_size)]
+    hts = matrix_heat_thermostats(cfg)
+    if heat_thermostat is None:
+        if len(hts) == 1:
+            heat_thermostat = hts[0]
+        elif len(hts) > 1:
+            raise ValueError(
+                "Specify --heat-thermostat when config heat_thermostats lists multiple values"
+            )
+    elif hts and str(heat_thermostat).strip().lower() not in hts:
+        raise ValueError(
+            f"heat_thermostat {heat_thermostat!r} not in config heat_thermostats {hts}"
+        )
+    elif heat_thermostat is not None:
+        heat_thermostat = str(heat_thermostat).strip().lower()
     if len(temps) != 1 or len(boxes) != 1:
         raise ValueError("Specify --temperature and --box-size when matrix lists have multiple values")
     cell = RunCell(
@@ -477,6 +582,7 @@ def cell_from_cli(
         n_monomers=n,
         temperature=temps[0],
         box_size=boxes[0],
+        heat_thermostat=heat_thermostat,
     )
     valid_tags = {cell_run_tag(c, cfg) for c in iter_matrix_cells(cfg)}
     if cell_run_tag(cell, cfg) not in valid_tags:

@@ -16,9 +16,11 @@ import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import (
     cell_bulk_density_fraction,
+    heat_compare_enabled,
     iter_matrix_cells,
     load_config,
     matrix_box_sizes,
+    matrix_heat_thermostats,
     matrix_job_count,
     matrix_setup_ids,
     matrix_temperatures,
@@ -39,6 +41,8 @@ for sid in matrix_setup_ids(cfg):
     v = resolve_setup_variant(sid)
     print(f'  {sid}: {v.description}')
 print('matrix jobs:', matrix_job_count(cfg))
+print('heat compare:', heat_compare_enabled(cfg))
+print('heat_thermostats:', matrix_heat_thermostats(cfg) or ['<mini-only>'])
 print('temperatures:', matrix_temperatures(cfg))
 print('box_sizes:', matrix_box_sizes(cfg))
 if matrix_uses_bulk_density(cfg):
@@ -55,7 +59,8 @@ print()
 print('Sample matrix cells:')
 for i, cell in enumerate(iter_matrix_cells(cfg)):
     frac = cell_bulk_density_fraction(cell, cfg)
-    print(f'  {cell.setup_id} DCM:{cell.n_monomers} T={cell.temperature:.0f}K L={cell.box_size:.0f} ({frac:.2f}x bulk)')
+    ht = f' ht={cell.heat_thermostat}' if cell.heat_thermostat else ''
+    print(f'  {cell.setup_id} DCM:{cell.n_monomers} T={cell.temperature:.0f}K L={cell.box_size:.0f}{ht} ({frac:.2f}x bulk)')
     if i >= 7:
         print('  ...')
         break

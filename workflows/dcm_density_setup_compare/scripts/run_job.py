@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one DCM density × setup mini-only campaign via mmml md-system --run-all."""
+"""Run one DCM density × setup campaign via mmml md-system --run-all."""
 
 from __future__ import annotations
 
@@ -47,6 +47,11 @@ def main() -> int:
     parser.add_argument("--temperature", type=float, default=None, help="Temperature (K)")
     parser.add_argument("--box-size", type=float, default=None, help="Cubic box side (Å)")
     parser.add_argument(
+        "--heat-thermostat",
+        default=None,
+        help="Heat thermostat (bussi, hoover, scale) when matrix lists multiple",
+    )
+    parser.add_argument(
         "--config",
         type=Path,
         default=workflow_root() / "config.yaml",
@@ -67,6 +72,7 @@ def main() -> int:
             args.n_monomers,
             temperature=args.temperature,
             box_size=args.box_size,
+            heat_thermostat=args.heat_thermostat,
         )
 
     resolve_checkpoint(str(cfg["checkpoint"]))
@@ -80,8 +86,10 @@ def main() -> int:
     tag = cell_run_tag(cell, cfg)
     campaign = yaml.safe_load(paths["campaign_yaml"].read_text(encoding="utf-8"))
     mini_job = campaign["runs"]["pycharmm_mini"]
+    ht = cell.heat_thermostat or mini_job.get("heat_thermostat")
     print(
-        f"pycharmm_mini: setup={cell.setup_id} liquid_prep={mini_job.get('liquid_prep')} "
+        f"pycharmm_mini: setup={cell.setup_id} md_stages={mini_job.get('md_stages')} "
+        f"heat_thermostat={ht} liquid_prep={mini_job.get('liquid_prep')} "
         f"calculator_pre_minimize={mini_job.get('calculator_pre_minimize')} "
         f"charmm_mm_pretreat={mini_job.get('charmm_mm_pretreat')}",
         flush=True,

@@ -50,6 +50,8 @@ iter_matrix_cells = cl.iter_matrix_cells
 load_config = cl.load_config
 matrix_job_count = cl.matrix_job_count
 matrix_setup_ids = cl.matrix_setup_ids
+matrix_heat_thermostats = cl.matrix_heat_thermostats
+heat_compare_enabled = cl.heat_compare_enabled
 slurm_launch_jobs = cl.slurm_launch_jobs
 slurm_resources_cli = cl.slurm_resources_cli
 resolve_setup_variant = sv.resolve_setup_variant
@@ -65,6 +67,7 @@ def cfg() -> dict:
         "bulk_density_fractions": [0.25, 0.5],
         "temperatures": [300.0],
         "box_sizes": [28.0, 32.0],
+        "heat_thermostats": [],
     }
 
 
@@ -115,7 +118,7 @@ def test_minimal_setup_disables_prep(cfg: dict, cell: RunCell) -> None:
 
 
 def test_burst_hybrid_enables_pretreat(cfg: dict) -> None:
-    cfg_bh = {k: v for k, v in cfg.items() if k != "bonded_mm_mini"}
+    cfg_bh = {k: v for k, v in cfg.items() if k not in ("bonded_mm_mini", "heat_thermostats")}
     cell = cell_from_cli(cfg_bh, "burst_hybrid", "DCM", 77, temperature=300.0, box_size=32.0)
     mini = build_campaign(cfg_bh, cell)["runs"]["pycharmm_mini"]
     assert mini.get("charmm_mm_pretreat") is True
@@ -143,12 +146,71 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
     ckpt.write_text("{}", encoding="utf-8")
     monkeypatch.setenv("MMML_CKPT", str(ckpt))
     cfg = load_config(WORKFLOW / "config.yaml")
-    cell = cell_from_cli(cfg, "resilient", "DCM", 52, temperature=100.0, box_size=28.0)
+    cell = cell_from_cli(
+        cfg,
+        "resilient",
+        "DCM",
+        52,
+        temperature=100.0,
+        box_size=28.0,
+        heat_thermostat="bussi",
+    )
     mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
     assert mini.get("liquid_prep") is True
     assert mini.get("calculator_pre_minimize") is True
     assert mini.get("bonded_mm_mini") is False
     assert mini.get("charmm_mm_pretreat") is True
+    assert mini.get("md_stages") == "mini,heat"
+    assert mini.get("heat_thermostat") == "bussi"
+    assert mini.get("ps_heat") == 5.0
+
+
+def test_heat_compare_coerces_scale_when_pretreat(cfg: dict) -> None:
+    cfg_ht = {
+        **cfg,
+        "heat_thermostats": ["scale"],
+        "setups": ["burst_hybrid"],
+        "temperatures": [100.0],
+        "box_sizes": [28.0],
+        "bulk_density_fractions": [0.25],
+    }
+    cell = cell_from_cli(
+        cfg_ht,
+        "burst_hybrid",
+        "DCM",
+        52,
+        temperature=100.0,
+        box_size=28.0,
+        heat_thermostat="scale",
+    )
+    mini = build_campaign(cfg_ht, cell)["runs"]["pycharmm_mini"]
+    assert mini["heat_thermostat"] == "hoover"
+
+
+def test_heat_compare_run_tag_suffix(cfg: dict) -> None:
+    cfg_ht = {
+        **cfg,
+        "heat_thermostats": ["bussi", "hoover"],
+        "temperatures": [100.0],
+        "box_sizes": [28.0],
+        "bulk_density_fractions": [0.25],
+        "setups": ["minimal"],
+    }
+    cell = cell_from_cli(
+        cfg_ht,
+        "minimal",
+        "DCM",
+        52,
+        temperature=100.0,
+        box_size=28.0,
+        heat_thermostat="hoover",
+    )
+    assert cell_run_tag(cell, cfg_ht) == "minimal_dcm_52_t100_l28_ht_hoover"
+    campaign = build_campaign(cfg_ht, cell)
+    mini = campaign["runs"]["pycharmm_mini"]
+    assert mini["md_stages"] == "mini,heat"
+    assert mini["heat_thermostat"] == "hoover"
+    assert mini["heat_finalt"] == 100.0
 
 
 def test_bulk_density_fraction(cfg: dict, cell: RunCell) -> None:
@@ -191,8 +253,10 @@ def test_matrix_setup_ids_from_config() -> None:
 
 def test_default_config_matrix_job_count() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
-    # resilient × 0.25× bulk × 3 boxes = 3
-    assert matrix_job_count(cfg) == 3
+    assert heat_compare_enabled(cfg)
+    assert matrix_heat_thermostats(cfg) == ["bussi", "hoover", "scale"]
+    # resilient × 4 fractions × 3 T × 3 L × 3 thermostats = 108
+    assert matrix_job_count(cfg) == 108
 
 
 def test_slurm_resources_cli(cfg: dict) -> None:

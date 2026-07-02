@@ -1,10 +1,8 @@
-# DCM density × setup comparison (mini-only smoke campaigns).
+# DCM density × setup comparison (box prep + optional heat thermostat sweep).
 #
-# Convergence-first matrix: resilient prep @ 0.25× bulk density only.
-# Re-enable additional setups / 0.5× fractions for full setup comparison.
-#
-# Matrix: setups × bulk_density_fractions × box_sizes × temperature
-# Output: artifacts/dcm_density_setup_compare/{setup}_dcm_{n}_t{T}_l{L}/
+# Matrix: setups × bulk_density_fractions × box_sizes × temperatures
+#         × heat_thermostats (when set)
+# Output: artifacts/dcm_density_setup_compare/{setup}_dcm_{n}_t{T}_l{L}[_ht_{thermostat}]/
 
 setups:
   - resilient
@@ -49,6 +47,13 @@ calculator_pre_minimize: true
 
 # Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
 bonded_mm_mini: false
+
+# Heat thermostat comparison (omit or [] for mini-only box prep).
+heat_thermostats: [bussi, hoover, scale]
+ps_heat: 5.0
+n_heat_segments: 3
+heat_firstt: 10.0
+no_echeck_heat: true
 
 mm_switch_on: 5.0
 mm_switch_width: 3.0
