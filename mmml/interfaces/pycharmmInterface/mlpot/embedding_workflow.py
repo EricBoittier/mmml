@@ -241,7 +241,7 @@ def default_train_config_dict(
     num_atoms: int = TRAINING_N_ATOMS_AAA,
 ) -> dict[str, Any]:
     """Small PhysNet smoke hyperparameters for aaa.ama peptide."""
-    root = Path(output_dir)
+    root = Path(output_dir).resolve()
     return {
         "data": str(root / "train.npz"),
         "valid_data": str(root / "valid.npz"),
@@ -261,6 +261,8 @@ def default_train_config_dict(
         "forces_weight": 50.0,
         "objective": "valid_loss",
         "seed": 42,
+        "n_train": 0,
+        "n_valid": 0,
     }
 
 
@@ -359,7 +361,7 @@ def run_train_phase(
             "--config",
             str(train_config),
         ]
-        subprocess.run(cmd, check=True, cwd=out)
+        subprocess.run(cmd, check=True)
         if not skip_export_json:
             run_dir = _latest_train_run_dir(out / "checkpoints", tag)
             epoch_dir = _latest_orbax_epoch(run_dir) if run_dir is not None else None
