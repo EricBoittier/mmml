@@ -1,0 +1,40 @@
+# DCM liquid boxes at L=27 Å — MM-only certification at several bulk-density fractions.
+#
+# Build all density variants (run on CHARMM GPU node):
+#   for frac in 0.5 0.75 1.0 1.25 1.5; do
+#     MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh liquid-box \
+#       --composition "DCM:$(python -c "from workflows.pbc_solvent_burst.scripts.bulk_density import n_monomers_at_bulk_density; print(min(32, n_monomers_at_bulk_density('DCM', 27.0, $frac)))")" \
+#       --box-size 27 \
+#       --bulk-density-fraction "$frac" \
+#       --profile dense \
+#       -o ~/tests/boxes/dcm27_rho${frac/./} \
+#       --quiet
+#   done
+#
+# Hybrid calculator smoke (no PhysNet checkpoint) on a certified box:
+#   MMML_MPI_NP=1 ~/mmml/scripts/mmml-charmm-mpirun.sh md-system \
+#     --config ~/mmml/mmml/cli/run/dcm27_liquid_box.example.yaml \
+#     --from-psf ~/tests/boxes/dcm27_rho100/model.psf \
+#     --from-crd ~/tests/boxes/dcm27_rho100/model.crd \
+#     --jax-mm-spoof --jax-mm-spoof-psf ~/tests/boxes/dcm27_rho100/model.psf \
+#     --md-stages mini --mini-nstep 10 --output-dir ~/tests/runs/dcm27_spoof_smoke
+
+include:
+  - presets/certified-box-handoff.yaml
+
+setup: pbc_npt
+backend: pycharmm
+composition: "DCM:32"
+skip_cluster_build: true
+from_psf: ~/tests/boxes/dcm27_rho100/model.psf
+from_crd: ~/tests/boxes/dcm27_rho100/model.crd
+box_size: 27
+output_dir: ~/tests/runs/dcm27_jax_mm_spoof_smoke
+jax_mm_spoof: true
+jax_mm_spoof_psf: ~/tests/boxes/dcm27_rho100/model.psf
+md_stages: mini
+mini_nstep: 20
+charmm_pre_minimize: false
+bonded_mm_mini: false
+no_echeck: true
+quiet: true

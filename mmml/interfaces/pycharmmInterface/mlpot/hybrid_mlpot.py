@@ -877,10 +877,16 @@ def build_decomposed_mlpot_model(
     defer_jax_until_mlpot_registered: bool = False,
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel:
-    ckpt = Path(checkpoint).expanduser().resolve()
-    from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
+    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import jax_mm_spoof_enabled
 
-    assert_hybrid_ml_compatible(ckpt)
+    _spoof = jax_mm_spoof_enabled(args)
+    if _spoof:
+        ckpt = Path("/dev/null")
+    else:
+        ckpt = Path(checkpoint).expanduser().resolve()
+        from mmml.interfaces.energy_forces.ml import assert_hybrid_ml_compatible
+
+        assert_hybrid_ml_compatible(ckpt)
     if args is not None and ml_compute_dtype is None:
         ml_compute_dtype = getattr(args, "ml_compute_dtype", None)
     cutoff_params = (
@@ -1023,7 +1029,7 @@ def build_decomposed_mlpot_model(
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
-        model_restart_path=str(ckpt),
+        model_restart_path=None if _spoof else str(ckpt),
         doMM=do_mm,
         doML=do_ml,
         doML_dimer=do_ml_dimer,
@@ -1055,6 +1061,10 @@ def build_decomposed_mlpot_model(
         mm_nonbond_mode=mm_nonbond_mode,
         periodic_charmm_vdw=(
             resolve_periodic_charmm_vdw(args) if args is not None else True
+        ),
+        ml_potential_mode="jax_mm_clone" if _spoof else "physnet",
+        jax_mm_spoof_psf=(
+            getattr(args, "jax_mm_spoof_psf", None) if args is not None else None
         ),
     )
     if verbose:

@@ -378,6 +378,8 @@ def setup_calculator(
     jax_pme_dispersion: bool | None = None,
     mm_nonbond_mode: str = "jax_mic",
     periodic_charmm_vdw: bool = True,
+    ml_potential_mode: str = "physnet",
+    jax_mm_spoof_psf: Path | str | None = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -436,7 +438,9 @@ def setup_calculator(
             ``MMML_ML_DTYPE`` when unset.
     """
     if model_restart_path is None:
-        raise ValueError("model_restart_path must be provided")
+        _ml_mode = str(ml_potential_mode or "physnet").strip().lower()
+        if _ml_mode not in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}:
+            raise ValueError("model_restart_path must be provided")
 
     ml_jnp_dtype = resolve_ml_compute_dtype(ml_compute_dtype)
     ml_np_dtype = ml_numpy_dtype(ml_jnp_dtype)
@@ -621,20 +625,32 @@ def setup_calculator(
     N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    setup_rows.append(("model_restart_path", restart_path.resolve()))
+    _jax_mm_spoof_mode = str(ml_potential_mode or "physnet").strip().lower() in {
+        "jax_mm_clone",
+        "jax-mm-clone",
+        "jax_mm_spoof",
+    }
+    if _jax_mm_spoof_mode:
+        setup_rows.append(("ml_backend", "JAX CGenFF bonded clone (spoof PhysNet)"))
+        if restart_path is not None:
+            setup_rows.append(("model_restart_path", "(spoof; checkpoint unused)"))
+    else:
+        setup_rows.append(("model_restart_path", restart_path.resolve()))
 
     # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
-    is_json_checkpoint = (
-        (restart_path.is_file() and restart_path.suffix == ".json")
-        or ((restart_path / "params.json").exists())
-    )
+    is_json_checkpoint = False
     is_joint_checkpoint = False
-    try:
-        from mmml.interfaces.calculators.checkpoint_loading import detect_checkpoint_format
+    if not _jax_mm_spoof_mode and restart_path is not None:
+        is_json_checkpoint = (
+            (restart_path.is_file() and restart_path.suffix == ".json")
+            or ((restart_path / "params.json").exists())
+        )
+        try:
+            from mmml.interfaces.calculators.checkpoint_loading import detect_checkpoint_format
 
-        is_joint_checkpoint = detect_checkpoint_format(restart_path) == "pickle_joint"
-    except FileNotFoundError:
-        pass
+            is_joint_checkpoint = detect_checkpoint_format(restart_path) == "pickle_joint"
+        except FileNotFoundError:
+            pass
 
     from contextlib import ExitStack
     from mmml.interfaces.pycharmmInterface.jax_device_policy import jax_cpu_until_mlpot_registered
@@ -644,7 +660,32 @@ def setup_calculator(
         _mlpot_jax_defer_stack.enter_context(jax_cpu_until_mlpot_registered())
 
     checkpoint_meta: dict[str, Any] | None = None
-    if is_joint_checkpoint:
+    _jax_mm_spoof_monomer_eval = None
+    _jax_mm_spoof_batch_apply = None
+    if _jax_mm_spoof_mode:
+        from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import (
+            build_jax_mm_spoof_batch_apply,
+            resolve_monomer_bonded_evaluator,
+        )
+
+        if not _all_same_size:
+            raise ValueError("jax_mm_clone spoof requires uniform atoms_per_monomer")
+        _jax_mm_spoof_monomer_eval = resolve_monomer_bonded_evaluator(
+            atoms_per_monomer=int(atoms_per_monomer_list[0]),
+            monomer_psf=jax_mm_spoof_psf,
+            energy_unit="eV",
+        )
+        _jax_mm_spoof_batch_apply = build_jax_mm_spoof_batch_apply(
+            atoms_per_monomer=int(atoms_per_monomer_list[0]),
+            max_atoms=max_atoms,
+            monomer_eval=_jax_mm_spoof_monomer_eval,
+        )
+        MODEL = None
+        params = None
+        is_spooky_model = False
+        is_json_checkpoint = False
+        is_joint_checkpoint = False
+    elif is_joint_checkpoint:
         from mmml.interfaces.calculators.checkpoint_loading import load_physnet_for_hybrid_mlpot
 
         try:
@@ -799,7 +840,8 @@ def setup_calculator(
             restart, natoms=max_atoms, quiet=True, return_meta=True
         )
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
-    MODEL.max_padded_atoms = max_atoms
+    if not _jax_mm_spoof_mode:
+        MODEL.max_padded_atoms = max_atoms
 
     from mmml.utils.rich_report import emit_hybrid_ml_setup, emit_tagged
     from mmml.data.units import HARTREE_TO_EV, calculator_results_units
@@ -893,7 +935,7 @@ def setup_calculator(
     if use_smooth_mic is None:
         use_smooth_mic = bool(cell)
 
-    if cell:
+    if cell and not _jax_mm_spoof_mode:
         MODEL.use_pbc = True
         cell_arr = jnp.asarray(cell)
         if cell_arr.ndim == 0:
@@ -925,7 +967,9 @@ def setup_calculator(
             "total_atoms": total_atoms,
             "max_atoms": max_atoms,
             "ml_compute_dtype": str(ml_jnp_dtype),
-            "checkpoint_dir": str(restart_path.resolve()),
+            "checkpoint_dir": "(jax_mm_clone spoof)"
+            if _jax_mm_spoof_mode
+            else str(restart_path.resolve()),
         },
         handoff={
             "ml_switch_width_Å": f"{ml_switch_width:.4f}",
@@ -933,7 +977,7 @@ def setup_calculator(
             "mm_switch_width_Å": f"{mm_switch_width:.4f}",
             "complementary": complementary_handoff,
             "mm_r_min_Å": f"{mm_r_min:.4f}" if mm_r_min is not None else "—",
-            "model_cutoff_Å": getattr(MODEL, "cutoff", "—"),
+            "model_cutoff_Å": getattr(MODEL, "cutoff", "—") if MODEL is not None else "—",
         },
         neighbor_lists={
             "ml_sparse_dimers": ml_sparse_dimers,
@@ -1588,6 +1632,8 @@ def setup_calculator(
             positions: Array,  # Shape: (batch_size * num_atoms, 3)
         ) -> Dict[str, Array]:
             """Applies the ML model to batched inputs (with optional chunking)."""
+            if _jax_mm_spoof_mode:
+                return _jax_mm_spoof_batch_apply(atomic_numbers, positions, batches["N"])
             if _do_chunked:
                 R_full = positions.reshape(_effective_batch_size, max_atoms, 3)
                 Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)

@@ -3922,6 +3922,23 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
             "(default: on). Use --no-include-mm for ML-only (PhysNet terms only)."
         ),
     )
+    group.add_argument(
+        "--jax-mm-spoof",
+        action="store_true",
+        help=(
+            "Use JAX CGenFF bonded clone instead of PhysNet for ML monomer/dimer terms "
+            "(no checkpoint; infrastructure / box testing)."
+        ),
+    )
+    group.add_argument(
+        "--jax-mm-spoof-psf",
+        type=Path,
+        default=None,
+        help=(
+            "Optional cluster PSF for --jax-mm-spoof bonded parameters "
+            "(first monomer slice). Default: minimal harmonic chain."
+        ),
+    )
 
 
 def resolve_dyn_inbfrq(args: argparse.Namespace) -> int | None:
