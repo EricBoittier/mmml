@@ -1030,7 +1030,16 @@ def paths_for_run(cfg: dict[str, Any], cell: RunCell) -> dict[str, Path]:
 
 
 def parse_run_tag(cfg: dict[str, Any], tag: str) -> RunCell:
-    for setup_id in sorted(matrix_setup_ids(cfg), key=len, reverse=True):
+    setup_ids = list(matrix_setup_ids(cfg))
+    try:
+        from setup_variants import all_setup_variants
+
+        for sid in all_setup_variants():
+            if sid not in setup_ids:
+                setup_ids.append(sid)
+    except Exception:
+        pass
+    for setup_id in sorted(setup_ids, key=len, reverse=True):
         prefix = f"{setup_id}_"
         if not tag.startswith(prefix):
             continue
