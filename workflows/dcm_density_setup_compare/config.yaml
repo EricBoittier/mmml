@@ -20,7 +20,7 @@ solvents: [DCM]
 # Same bulk-density fractions and box sizes as pbc_solvent_burst.
 bulk_density_fractions: [0.25, 0.5]
 bulk_density_n_min: 10
-temperatures: [300.0]
+temperatures: [100.0]
 box_sizes: [28.0, 30.0, 32.0]
 
 checkpoint: ${MMML_CKPT}
@@ -34,11 +34,11 @@ packmol_tolerance: 1.0
 # Keep Packmol cube near L_sim (N is bulk-sized for the full cell, not an inset cube).
 packmol_box_padding: 1.0
 
-mm_switch_on: 8.0
-mm_switch_width: 5.0
-ml_switch_width: 1.5
+mm_switch_on: 5.0
+mm_switch_width: 3.0
+ml_switch_width: 0.2
 ml_gpu_count: 1
-ml_batch_size: 2048
+ml_batch_size: 128
 
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 10
