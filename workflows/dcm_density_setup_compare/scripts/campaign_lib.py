@@ -178,6 +178,9 @@ def default_workflow_config_path(*, run_tag: str | None = None) -> Path:
         if sweep_path.is_file():
             return sweep_path
     return workflow_root() / "config.yaml"
+
+
+def prep_sweep_section(cfg: dict[str, Any]) -> dict[str, Any]:
     raw = cfg.get("prep_sweep")
     return dict(raw) if isinstance(raw, dict) else {}
 
@@ -1052,10 +1055,26 @@ def parse_run_tag(cfg: dict[str, Any], tag: str) -> RunCell:
 
 
 def cell_from_tag(cfg: dict[str, Any], tag: str) -> RunCell:
+    cfg = config_for_run_tag(cfg, tag)
     by_tag = {cell_run_tag(c, cfg): c for c in iter_matrix_cells(cfg)}
     if tag in by_tag:
         return by_tag[tag]
     parsed = parse_run_tag(cfg, tag)
+    if parsed.sweep_id:
+        if not prep_sweep_enabled(cfg):
+            raise KeyError(
+                f"run tag {tag!r} is a prep sweep tag but prep_sweep.enabled is false "
+                f"in {default_workflow_config_path(run_tag=tag)}. "
+                "Set MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml or use "
+                "bash scripts/snakemake_prep_sweep.sh"
+            )
+        variant_ids = prep_sweep_variant_ids(cfg)
+        if parsed.sweep_id not in variant_ids:
+            raise KeyError(
+                f"run tag {tag!r} uses unknown prep_sweep variant {parsed.sweep_id!r} "
+                f"(known: {', '.join(variant_ids)})"
+            )
+        return parsed
     if cell_run_tag(parsed, cfg) in by_tag:
         return by_tag[cell_run_tag(parsed, cfg)]
     raise KeyError(
