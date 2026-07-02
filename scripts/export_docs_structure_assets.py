@@ -28,12 +28,6 @@ STRUCT_DATA = DATA / "structures"
 PACKMOL = REPO / "mmml" / "generate" / "packmol" / "packmol"
 
 
-def _positions_to_extxyz(atoms) -> None:
-    import ase.io
-
-    return atoms  # noqa: RET504 — used by callers via ase.io.write
-
-
 def export_trialanine_water_box(*, seed: int = 11) -> tuple[Path, Path]:
     from ase.io import read as ase_read, write as ase_write
 

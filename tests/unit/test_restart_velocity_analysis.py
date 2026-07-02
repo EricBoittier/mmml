@@ -64,7 +64,6 @@ def test_analyze_restart_velocities_inferred_from_coords(tmp_path: Path) -> None
     p1 = tmp_path / "heat.0001.res"
     _minimal_restart(p0, natom=2)
     _minimal_restart(p1, natom=2)
-  # shift coords on atom 0 by 0.01 Å over 10 steps @ 0.00025 ps -> v ~ 4 Å/ps -> 4000 AKMA
     text1 = p1.read_text(encoding="ascii").splitlines()
     text1[7] = " 1.000000000000000E-02 0.000000000000000E+00 0.000000000000000E+00"
     p1.write_text("\n".join(text1) + "\n", encoding="ascii")
@@ -88,3 +87,56 @@ def test_analyze_restart_velocities_report(tmp_path: Path) -> None:
     rep = analyze_restart_velocities(p)
     assert rep.has_velocities
     assert rep.speed_max > 0.0
+
+
+def test_plot_dashboard_log_scale_smoke(tmp_path: Path) -> None:
+    from mmml.cli.plot.plot_restart_velocities import _plot_dashboard
+    from mmml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
+        RestartVelocityReport,
+        VelocityOutlier,
+    )
+
+    outlier = VelocityOutlier(
+        restart="heat.0001.res",
+        atom_index=1,
+        speed_akma=1.0e5,
+        vx=1.0e5,
+        vy=0.0,
+        vz=0.0,
+        z_score=10.0,
+    )
+    reports = [
+        RestartVelocityReport(
+            path=tmp_path / "heat.0000.res",
+            natom=2,
+            global_step=10,
+            has_velocities=True,
+            inferred_from_coords=False,
+            coords_as_velocities=False,
+            temperature_K=1.0,
+            speed_mean=10.0,
+            speed_std=5.0,
+            speed_max=100.0,
+            speed_p99=80.0,
+            outliers=(),
+            vel_akma=np.array([[10.0, 0.0, 0.0], [5.0, 0.0, 0.0]]),
+        ),
+        RestartVelocityReport(
+            path=tmp_path / "heat.0001.res",
+            natom=2,
+            global_step=20,
+            has_velocities=True,
+            inferred_from_coords=False,
+            coords_as_velocities=False,
+            temperature_K=1.0e4,
+            speed_mean=1.0e3,
+            speed_std=5.0e4,
+            speed_max=2.0e5,
+            speed_p99=1.5e5,
+            outliers=(outlier,),
+            vel_akma=np.array([[10.0, 0.0, 0.0], [2.0e5, 0.0, 0.0]]),
+        ),
+    ]
+    out = tmp_path / "dashboard.png"
+    _plot_dashboard(reports, out, z_threshold=4.0)
+    assert out.is_file() and out.stat().st_size > 0

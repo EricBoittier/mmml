@@ -139,69 +139,65 @@ def _grid_oxygen_sites(
     return sites
 
 
-def synthetic_trialanine_water_atoms_for_docs(
-    *,
-    n_waters: int = 10,
-    box_side_A: float = 28.0,
-    water_spacing_A: float = 2.85,
-    min_peptide_water_dist_A: float = 2.4,
-    seed: int = 11,
-) -> Atoms:
-    """Illustrative ASE periodic system for MkDocs (no PyCHARMM).
+def n_peptide_atoms_in_trialanine_box(psf_path: Path | str) -> int:
+    """Atom count in the ``PEPT`` segment (``RESI TRIA``) from a CHARMM PSF."""
+    path = Path(psf_path)
+    in_atoms = False
+    count = 0
+    with path.open(encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if line.strip().startswith("*"):
+                in_atoms = False
+                continue
+            if "!NATOM" in line:
+                in_atoms = True
+                continue
+            if not in_atoms:
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            try:
+                int(parts[0])
+            except ValueError:
+                continue
+            if parts[1] == "PEPT":
+                count += 1
+    if count == 0:
+        raise ValueError(f"No PEPT segment atoms found in {path}")
+    return count
 
-    Regenerate figures with ``uv run python scripts/generate_docs_figures.py``.
+
+def load_trialanine_water_atoms_for_docs() -> Atoms:
+    """Bundled CHARMM-built tri-alanine + TIP3 box for MkDocs figures.
+
+    Refresh with::
+
+        ./scripts/mmml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py
     """
+    from ase.io import read
+
+    from mmml.paths import default_trialanine_water_smoke_extxyz
+
+    path = default_trialanine_water_smoke_extxyz()
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Missing bundled trialanine box at {path}. "
+            "Run: ./scripts/mmml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py"
+        )
+    return read(path)
+
+
+def peptide_atoms_from_trialanine_box(
+    atoms: Atoms,
+    *,
+    n_peptide_atoms: int | None = None,
+) -> Atoms:
+    """Peptide-only subset (``RESI TRIA``, 42 atoms) from a trialanine water box."""
     from ase import Atoms
 
-    centre = np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2], dtype=np.float64)
-    backbone_offsets = np.array(
-        [
-            [-4.2, -0.3, -0.8],
-            [-3.5, 0.1, 0.2],
-            [-2.6, -0.2, -0.5],
-            [-1.8, 0.4, 0.6],
-            [-0.9, -0.1, -0.4],
-            [-0.1, 0.3, 0.5],
-            [0.7, -0.2, -0.6],
-            [1.5, 0.5, 0.7],
-            [2.4, -0.1, -0.3],
-            [3.2, 0.2, 0.4],
-            [4.0, -0.4, -0.7],
-            [4.8, 0.3, 0.5],
-        ],
-        dtype=np.float64,
-    )
-    peptide_symbols = list("CNCOCNCOCNCO")
-    peptide = centre + backbone_offsets
-
-    rng = np.random.default_rng(seed)
-    tip3 = _tip3_template()
-    tip3_com = tip3.mean(axis=0)
-    oxygen_sites = _grid_oxygen_sites(
-        n_waters=n_waters,
-        box_side_A=box_side_A,
-        spacing_A=water_spacing_A,
-        margin_A=3.0,
-        existing=peptide,
-        min_dist_A=min_peptide_water_dist_A,
-        rng=rng,
-        water_template=tip3,
-    )
-    water_blocks = [site + (tip3 - tip3_com) for site in oxygen_sites]
-    water_symbols = ["O", "H", "H"] * len(oxygen_sites)
-    water_positions = np.vstack(water_blocks)
-
-    symbols = peptide_symbols + water_symbols
-    positions = np.vstack([peptide, water_positions])
-    cell = np.diag([float(box_side_A)] * 3)
-    return Atoms(symbols=symbols, positions=positions, cell=cell, pbc=True)
-
-
-def peptide_only_atoms_from_box(atoms: Atoms, *, n_peptide_atoms: int = 12) -> Atoms:
-    """First *n_peptide_atoms* from :func:`synthetic_trialanine_water_atoms_for_docs`."""
-    from ase import Atoms
-
-    n = min(int(n_peptide_atoms), len(atoms))
+    n = int(n_peptide_atoms) if n_peptide_atoms is not None else 42
+    n = min(n, len(atoms))
     return Atoms(
         symbols=atoms.get_chemical_symbols()[:n],
         positions=atoms.get_positions()[:n],

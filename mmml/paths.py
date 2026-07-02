@@ -45,8 +45,23 @@ def default_benzene_crystal_cif() -> Path:
 
 
 def default_trialanine_water_smoke_extxyz() -> Path:
-    """Bundled illustrative tri-alanine + TIP3 grid (docs / figure CI)."""
+    """Bundled CHARMM-built tri-alanine + TIP3 box (docs / figure CI)."""
     return bundled_file("data", "charmm", "trialanine-water-smoke.extxyz")
+
+
+def default_trialanine_water_smoke_pdb() -> Path:
+    """CHARMM PDB for the bundled trialanine water smoke box."""
+    return bundled_file("data", "charmm", "trialanine-water-smoke.pdb")
+
+
+def default_make_box_aco_pdb() -> Path:
+    """Packmol-packed 8× ACO in a 22 Å cube (``make-box`` docs figure)."""
+    return bundled_file("data", "structures", "make-box-aco-8x22A.pdb")
+
+
+def default_alad_reference_pdb() -> Path:
+    """CHARMM36 ACE–ALA–CT3 reference (protein docs figure)."""
+    return bundled_file("data", "charmm", "alad_reference.pdb")
 
 
 def default_trialanine_cgenff_rtf() -> Path:

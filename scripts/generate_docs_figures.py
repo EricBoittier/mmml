@@ -196,58 +196,39 @@ def figure_make_res(out: Path) -> None:
 
 
 def figure_make_box(out: Path) -> None:
-    """Periodic box of acetone monomers (illustrates make-box / Packmol output)."""
-    from ase import Atoms
-    from ase.build import molecule
+    """Periodic box of acetone monomers from Packmol (``make-box`` workflow)."""
+    import ase.io
 
-    side = 22.0
-    monomer = molecule("CH3COCH3")
-    monomer.center(vacuum=3.0)
+    from mmml.paths import default_make_box_aco_pdb
 
-    offsets = [
-        (4.0, 4.0, 4.0),
-        (12.0, 4.0, 6.0),
-        (6.0, 11.0, 5.0),
-        (14.0, 12.0, 8.0),
-        (5.0, 15.0, 14.0),
-        (13.0, 6.0, 15.0),
-        (8.0, 9.0, 12.0),
-        (16.0, 14.0, 4.0),
-    ]
-    symbols: list[str] = []
-    positions: list[np.ndarray] = []
-    for dx, dy, dz in offsets:
-        for sym, pos in zip(monomer.get_chemical_symbols(), monomer.get_positions()):
-            symbols.append(sym)
-            positions.append(pos + np.array([dx, dy, dz]))
-
-    box = Atoms(symbols=symbols, positions=positions, cell=[side, side, side], pbc=True)
+    pdb = default_make_box_aco_pdb()
+    if not pdb.is_file():
+        raise FileNotFoundError(
+            f"Missing {pdb}. Run: "
+            "./scripts/mmml-charmm-mpirun.sh python scripts/export_docs_structure_assets.py"
+        )
+    box = ase.io.read(pdb)
+    side = float(box.cell.lengths()[0]) if box.cell is not None else 22.0
+    n_monomers = sum(1 for s in box.get_chemical_symbols() if s == "O")
     _save_structure_figure(
         box,
         out,
-        title=f"make-box: 8× acetone in {side:.0f} Å cube (illustrative)",
+        title=f"make-box: {n_monomers}× acetone in {side:.0f} Å cube (Packmol)",
         rotation="55x,25y,0z",
         scale=_SCALE_BOX,
     )
 
 
 def _fallback_crystal_atoms() -> Atoms:
-    """Orthorhombic benzene dimer when PyXtal is not installed."""
-    from ase import Atoms
-    from ase.build import molecule
+    """Experimental benzene P2₁/c cell (COD 4501704) when DCM CIF / PyXtal unavailable."""
+    from ase.io import read
 
-    benzene = molecule("C6H6")
-    benzene.translate([2.5, 2.5, 2.0])
-    benzene2 = molecule("C6H6")
-    benzene2.translate([8.0, 7.0, 9.0])
-    symbols = benzene.get_chemical_symbols() + benzene2.get_chemical_symbols()
-    positions = list(benzene.get_positions()) + list(benzene2.get_positions())
-    return Atoms(
-        symbols=symbols,
-        positions=positions,
-        cell=[14.0, 12.0, 16.0],
-        pbc=True,
-    )
+    from mmml.paths import default_benzene_crystal_cif
+
+    cif = default_benzene_crystal_cif()
+    if not cif.is_file():
+        raise FileNotFoundError(f"Missing bundled benzene CIF: {cif}")
+    return read(str(cif))
 
 
 def figure_build_crystal(out: Path) -> bool:
@@ -292,9 +273,9 @@ def figure_build_crystal(out: Path) -> bool:
             else:
                 raise ImportError("pyxtal not installed")
         except Exception as exc2:
-            print(f"build-crystal figure: benzene dimer fallback ({exc2})", file=sys.stderr)
+            print(f"build-crystal figure: benzene CIF fallback ({exc2})", file=sys.stderr)
             atoms = _fallback_crystal_atoms()
-            title = "build-crystal: benzene dimer in periodic cell (illustrative)"
+            title = "build-crystal: benzene P2₁/c (COD 4501704)"
             rotation = "30x,55y,0z"
 
     _save_structure_figure(
@@ -361,10 +342,10 @@ def figure_liquid_box_schematic(out: Path) -> None:
 
 def _trialanine_docs_atoms() -> Atoms:
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
-        synthetic_trialanine_water_atoms_for_docs,
+        load_trialanine_water_atoms_for_docs,
     )
 
-    return synthetic_trialanine_water_atoms_for_docs()
+    return load_trialanine_water_atoms_for_docs()
 
 
 def figure_trialanine_water_box(out: Path) -> None:
@@ -380,15 +361,15 @@ def figure_trialanine_water_box(out: Path) -> None:
 
 def figure_trialanine_peptide_zoom(out: Path) -> None:
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
-        peptide_only_atoms_from_box,
+        peptide_atoms_from_trialanine_box,
     )
 
     full = _trialanine_docs_atoms()
-    peptide = peptide_only_atoms_from_box(full, n_peptide_atoms=12)
+    peptide = peptide_atoms_from_trialanine_box(full)
     _save_structure_figure(
         peptide,
         out,
-        title="TRIA peptide backbone (illustrative; full RESI has 42 atoms)",
+        title="TRIA peptide (RESI TRIA, 42 atoms; CHARMM CGENFF build)",
         rotation="25x,15y,0z",
         scale=_SCALE_TRIALANINE_PEPTIDE,
     )
@@ -448,15 +429,7 @@ def figure_trialanine_build_pipeline(out: Path) -> None:
 
 
 def _write_bundled_trialanine_reference_extxyz() -> None:
-    """Refresh illustrative ASE reference under ``mmml/data/charmm/``."""
-    import ase.io
-
-    from mmml.paths import bundled_file
-
-    atoms = _trialanine_docs_atoms()
-    extxyz = bundled_file("data", "charmm", "trialanine-water-smoke.extxyz")
-    extxyz.parent.mkdir(parents=True, exist_ok=True)
-    ase.io.write(extxyz, atoms)
+    """No-op: trialanine reference is exported by ``export_docs_structure_assets.py``."""
 
 
 def figure_compose_workflow(out: Path) -> None:

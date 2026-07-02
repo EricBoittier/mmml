@@ -69,6 +69,17 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _positive_log_bins(values: np.ndarray, *, n_bins: int = 40) -> np.ndarray:
+    """Log-spaced histogram edges for strictly positive data."""
+    arr = np.asarray(values, dtype=np.float64)
+    arr = arr[np.isfinite(arr) & (arr > 0.0)]
+    if arr.size == 0:
+        return np.logspace(0.0, 3.0, int(n_bins))
+    lo = max(float(np.min(arr)), 1.0e-3)
+    hi = max(float(np.max(arr)), lo * 10.0)
+    return np.logspace(np.log10(lo), np.log10(hi), int(n_bins))
+
+
 def _plot_dashboard(
     reports: list[RestartVelocityReport],
     out_path: Path,
@@ -90,18 +101,24 @@ def _plot_dashboard(
         if vel is None:
             continue
         speeds = np.linalg.norm(vel, axis=1)
-        all_speeds.extend(speeds.tolist())
+        positive = speeds[speeds > 0.0]
+        if positive.size == 0:
+            continue
+        all_speeds.extend(positive.tolist())
         label = rep.path.stem
+        bins = _positive_log_bins(positive)
         ax_hist.hist(
-            speeds,
-            bins=40,
+            positive,
+            bins=bins,
             alpha=0.35,
             density=True,
+            histtype="stepfilled",
             label=label if len(valid) <= 12 else None,
         )
 
     if all_speeds:
-        ax_hist.set_xlabel("|v| (AKMA)")
+        ax_hist.set_xscale("log")
+        ax_hist.set_xlabel("|v| (AKMA, log scale)")
         ax_hist.set_ylabel("density")
         ax_hist.set_title("Speed distribution (all restarts)")
         if len(valid) <= 12:
@@ -109,16 +126,22 @@ def _plot_dashboard(
 
     steps = [r.global_step for r in valid if r.global_step is not None]
     temps = [r.temperature_K for r in valid if r.temperature_K is not None]
-    names = [r.path.stem for r in valid if r.global_step is not None]
-    if steps and temps:
-        ax_t.plot(steps, temps, "o-", markersize=3)
+    if steps and temps and len(steps) == len(temps):
+        temps_plot = np.clip(np.asarray(temps, dtype=np.float64), 1.0e-3, None)
+        ax_t.plot(steps, temps_plot, "o-", markersize=3)
+        ax_t.set_yscale("log")
         ax_t.set_xlabel("global step (JHSTRT)")
-        ax_t.set_ylabel("T (K, unit mass)")
+        ax_t.set_ylabel("T (K, unit mass, log scale)")
         ax_t.set_title("Restart kinetic temperature")
 
-    max_speeds = [r.speed_max for r in valid]
+    max_speeds = np.clip(
+        np.asarray([r.speed_max for r in valid], dtype=np.float64),
+        1.0e-3,
+        None,
+    )
     x_idx = np.arange(len(valid))
     ax_max.bar(x_idx, max_speeds, color="steelblue", alpha=0.8)
+    ax_max.set_yscale("log")
     ax_max.set_xticks(x_idx[:: max(1, len(valid) // 20)])
     ax_max.set_xticklabels(
         [valid[i].path.stem for i in x_idx[:: max(1, len(valid) // 20)]],
@@ -126,20 +149,29 @@ def _plot_dashboard(
         ha="right",
         fontsize=6,
     )
-    ax_max.set_ylabel("max |v| (AKMA)")
+    ax_max.set_ylabel("max |v| (AKMA, log scale)")
     ax_max.set_title("Per-restart max speed")
 
-    outlier_counts = [len(r.outliers) for r in valid]
-    ax_scatter.scatter(
-        [r.speed_mean for r in valid],
-        outlier_counts,
-        c=[r.speed_p99 for r in valid],
+    mean_speeds = np.clip(
+        np.asarray([r.speed_mean for r in valid], dtype=np.float64),
+        1.0e-3,
+        None,
+    )
+    outlier_counts = np.asarray([len(r.outliers) for r in valid], dtype=np.float64)
+    outlier_y = np.clip(outlier_counts, 0.5, None)
+    sc = ax_scatter.scatter(
+        mean_speeds,
+        outlier_y,
+        c=np.clip([r.speed_p99 for r in valid], 1.0e-3, None),
         cmap="viridis",
         s=28,
     )
-    ax_scatter.set_xlabel("mean |v| (AKMA)")
-    ax_scatter.set_ylabel(f"outliers (z ≥ {z_threshold})")
+    ax_scatter.set_xscale("log")
+    ax_scatter.set_yscale("log")
+    ax_scatter.set_xlabel("mean |v| (AKMA, log scale)")
+    ax_scatter.set_ylabel(f"outliers (z ≥ {z_threshold}, log scale)")
     ax_scatter.set_title("Outlier count vs mean speed")
+    fig.colorbar(sc, ax=ax_scatter, label="p99 |v| (AKMA)")
 
     fig.suptitle(f"Restart velocities — {valid[0].path.parent.name}", fontsize=12)
     fig.tight_layout()
