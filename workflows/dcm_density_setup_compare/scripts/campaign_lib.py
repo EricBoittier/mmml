@@ -23,6 +23,7 @@ from bulk_density import (  # noqa: E402
 from cleanup_strategy import (  # noqa: E402
     CleanupStrategy,
     dense_cell_mlpot_overrides,
+    jaxmd_job_flags,
     pretreat_job_flags,
     pycharmm_job_flags,
     resolve_cleanup_strategy,
@@ -281,8 +282,243 @@ def _heat_job_overrides(cfg: dict[str, Any], cell: RunCell, effective: dict[str,
     }
 
 
+def parse_dynamics_legs(cfg: dict[str, Any]) -> dict[str, bool]:
+    """Which post-prep dynamics legs to append (PyCHARMM equi/prod, JAX-MD, ASE)."""
+    raw = cfg.get("dynamics_legs")
+    if raw is None:
+        return {
+            "pycharmm_equi": False,
+            "pycharmm_prod": False,
+            "jaxmd": False,
+            "ase": False,
+        }
+    if isinstance(raw, bool):
+        return {
+            "pycharmm_equi": bool(raw),
+            "pycharmm_prod": bool(raw),
+            "jaxmd": bool(raw),
+            "ase": bool(raw),
+        }
+    return {
+        "pycharmm_equi": bool(raw.get("pycharmm_equi", False)),
+        "pycharmm_prod": bool(raw.get("pycharmm_prod", False)),
+        "jaxmd": bool(raw.get("jaxmd", False)),
+        "ase": bool(raw.get("ase", False)),
+    }
+
+
+def dynamics_campaign_enabled(cfg: dict[str, Any]) -> bool:
+    return any(parse_dynamics_legs(cfg).values())
+
+
+def init_job_id(cfg: dict[str, Any]) -> str:
+    """First PyCHARMM leg id (``pycharmm_init`` when dynamics legs are enabled)."""
+    return "pycharmm_init" if dynamics_campaign_enabled(cfg) else "pycharmm_mini"
+
+
 def campaign_job_order(cfg: dict[str, Any] | None = None) -> list[str]:
-    return ["pycharmm_mini"]
+    cfg = cfg or {}
+    legs = parse_dynamics_legs(cfg)
+    order = [init_job_id(cfg)]
+    if legs["pycharmm_equi"]:
+        n_equi = max(1, int(cfg.get("pycharmm_equi_legs", 1)))
+        order.extend(f"pycharmm_equi_{i:02d}" for i in range(1, n_equi + 1))
+    if legs["pycharmm_prod"]:
+        n_prod = max(1, int(cfg.get("pycharmm_prod_legs", 1)))
+        order.extend(f"pycharmm_prod_{i:02d}" for i in range(1, n_prod + 1))
+    if legs["jaxmd"]:
+        order.append("jaxmd_prod")
+    if legs["ase"]:
+        order.append("ase_prod")
+    return order
+
+
+def campaign_final_job_id(cfg: dict[str, Any]) -> str:
+    return campaign_job_order(cfg)[-1]
+
+
+def _init_stage_overrides(
+    cfg: dict[str, Any], cell: RunCell, effective: dict[str, Any]
+) -> dict[str, Any]:
+    """Resolve ``md_stages`` / heat kwargs for the first PyCHARMM leg."""
+    heat = _heat_job_overrides(cfg, cell, effective)
+    if heat:
+        return heat
+    if dynamics_campaign_enabled(cfg):
+        strategy = resolve_cleanup_strategy(effective)
+        default_ht = str(cfg.get("default_heat_thermostat", "bussi")).strip().lower()
+        heat_thermostat = _resolve_cell_heat_thermostat(
+            {**effective, "heat_thermostat": default_ht},
+            strategy,
+        )
+        dense = dense_cell_mlpot_overrides(cell, effective)
+        return {
+            "md_stages": "mini,heat",
+            "ps_heat": float(effective.get("ps_heat", 5.0)),
+            "n_heat_segments": int(
+                dense.get("n_heat_segments", effective.get("n_heat_segments", 3))
+            ),
+            "heat_firstt": float(effective.get("heat_firstt", 10.0)),
+            "heat_finalt": float(cell.temperature),
+            "heat_thermostat": heat_thermostat,
+        }
+    return {"md_stages": "mini"}
+
+
+def _equi_prod_flags(mini_flags: dict[str, Any]) -> dict[str, Any]:
+    skip = {
+        "md_stages",
+        "ps_heat",
+        "n_heat_segments",
+        "heat_firstt",
+        "heat_finalt",
+        "heat_thermostat",
+    }
+    return {k: v for k, v in mini_flags.items() if k not in skip}
+
+
+def _append_pycharmm_equi_prod_legs(
+    runs: dict[str, Any],
+    *,
+    cfg: dict[str, Any],
+    cell: RunCell,
+    cell_root: Path,
+    comp: str,
+    repair: dict[str, Any],
+    prev: str,
+) -> str:
+    legs = parse_dynamics_legs(cfg)
+    equi_ps = float(cfg.get("pycharmm_equi_ps", 10.0))
+    prod_ps = float(cfg.get("pycharmm_prod_ps", 10.0))
+    prod_setup = str(cfg.get("prod_ensemble", "pbc_npt"))
+    optional = {str(x) for x in (cfg.get("optional_legs") or [])}
+
+    if legs["pycharmm_equi"]:
+        n_equi = max(1, int(cfg.get("pycharmm_equi_legs", 1)))
+        for i in range(1, n_equi + 1):
+            jid = f"pycharmm_equi_{i:02d}"
+            job = _attach_leg_output_dir(
+                {
+                    "description": (
+                        f"{comp} NPT equil {i}/{n_equi} ({equi_ps} ps) "
+                        f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å"
+                    ),
+                    "backend": "pycharmm",
+                    "setup": "pbc_npt",
+                    "md_stage": "equi",
+                    "ps_equi": equi_ps,
+                    "depends_on": prev,
+                    **repair,
+                },
+                cell_root,
+                jid,
+            )
+            if jid in optional:
+                job["optional"] = True
+            runs[jid] = job
+            prev = jid
+
+    if legs["pycharmm_prod"]:
+        n_prod = max(1, int(cfg.get("pycharmm_prod_legs", 1)))
+        for i in range(1, n_prod + 1):
+            jid = f"pycharmm_prod_{i:02d}"
+            job = _attach_leg_output_dir(
+                {
+                    "description": (
+                        f"{comp} {prod_setup} prod {i}/{n_prod} ({prod_ps} ps) "
+                        f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å"
+                    ),
+                    "backend": "pycharmm",
+                    "setup": prod_setup,
+                    "md_stage": "prod",
+                    "ps_prod": prod_ps,
+                    "depends_on": prev,
+                    **repair,
+                },
+                cell_root,
+                jid,
+            )
+            if jid in optional:
+                job["optional"] = True
+            runs[jid] = job
+            prev = jid
+    return prev
+
+
+def _append_jaxmd_leg(
+    runs: dict[str, Any],
+    *,
+    cfg: dict[str, Any],
+    cell: RunCell,
+    cell_root: Path,
+    comp: str,
+    effective: dict[str, Any],
+    prev: str,
+) -> str:
+    strategy = resolve_cleanup_strategy(effective)
+    jaxmd_extra = jaxmd_job_flags(strategy)
+    ps = float(cfg.get("jaxmd_ps", 10.0))
+    setup = str(cfg.get("jaxmd_setup", "pbc_nvt"))
+    optional = {str(x) for x in (cfg.get("optional_legs") or [])}
+    jid = "jaxmd_prod"
+    job = _attach_leg_output_dir(
+        {
+            "description": (
+                f"{comp} JAX-MD {setup} ({ps} ps) "
+                f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å"
+            ),
+            "backend": "jaxmd",
+            "setup": setup,
+            "ps": ps,
+            "depends_on": prev,
+            **jaxmd_extra,
+        },
+        cell_root,
+        jid,
+    )
+    if jid in optional:
+        job["optional"] = True
+    runs[jid] = job
+    return jid
+
+
+def _append_ase_leg(
+    runs: dict[str, Any],
+    *,
+    cfg: dict[str, Any],
+    cell: RunCell,
+    cell_root: Path,
+    comp: str,
+    prev: str,
+) -> str:
+    ps = float(cfg.get("ase_ps", 10.0))
+    setup = str(cfg.get("ase_setup", "pbc_nvt"))
+    integrator = str(cfg.get("ase_integrator", "nvt_nhc"))
+    optional = {str(x) for x in (cfg.get("optional_legs") or [])}
+    extra = cfg.get("ase_extra_args")
+    if not extra:
+        extra = ["--log-every", "100", "--traj-every", "100"]
+    jid = "ase_prod"
+    job = _attach_leg_output_dir(
+        {
+            "description": (
+                f"{comp} ASE {integrator} {setup} ({ps} ps) "
+                f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å"
+            ),
+            "backend": "ase",
+            "setup": setup,
+            "integrator": integrator,
+            "ps": ps,
+            "depends_on": prev,
+            "extra_args": list(extra),
+        },
+        cell_root,
+        jid,
+    )
+    if jid in optional:
+        job["optional"] = True
+    runs[jid] = job
+    return jid
 
 
 def cell_bulk_density_fraction(cell: RunCell, cfg: dict[str, Any]) -> float | None:
