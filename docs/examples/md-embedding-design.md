@@ -51,8 +51,11 @@ for homogeneous hybrid liquids.
 ## CLI phases
 
 ```bash
-# 1. Train small PhysNet on peptide NPZ (aaa.ama default)
+# 1. Train small PhysNet on peptide NPZ (aaa.ama default; fix-and-split + ASE figure)
 mmml md-embedding train -o artifacts/md_embedding/aaa
+
+# 1b. Shuffle-only split (no fix-and-split manifest)
+mmml md-embedding train -o artifacts/md_embedding/aaa --simple-split
 
 # 2. Build solvated box (CHARMM MM only)
 mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
@@ -87,6 +90,8 @@ a 34-atom export).
 | Dataset helpers | [`aaa_ama.py`](../../mmml/data/external/aaa_ama.py) |
 | CLI | [`md_embedding.py`](../../mmml/cli/run/md_embedding.py) |
 | Train config | [`md_embedding_aaa_train.example.yaml`](../../mmml/cli/run/md_embedding_aaa_train.example.yaml) |
+| ASE figures | [`ase_structure_plot.py`](../../mmml/utils/ase_structure_plot.py) (bonds, orthographic) |
+| Split tool | [`fix-and-split`](../cli/commands/fix-and-split.md) (default train phase) |
 
 ## Phase 2 — ML/MM electrostatic embedding
 

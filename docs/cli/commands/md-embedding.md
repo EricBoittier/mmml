@@ -16,8 +16,8 @@ mmml md-embedding run --help
 
 | Phase | CHARMM | Purpose |
 |-------|--------|---------|
-| `train` | No | Download/split aaa.ama NPZ, PhysNet smoke, JSON checkpoint |
-| `build` | Yes | PEPT + TIP3 box, MM SD minimize, `model.psf` / `box.json` |
+| `train` | No | Download, **`mmml fix-and-split`** (default), PhysNet smoke, JSON checkpoint |
+| `build` | Yes | PEPT + TIP3 box, MM SD minimize, `model.psf` / `box.json` + ASE figures |
 | `run` | Yes | Partial MLpot on `PEPT`, optional MLpot SD |
 
 ## Examples

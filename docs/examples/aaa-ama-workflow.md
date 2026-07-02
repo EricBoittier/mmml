@@ -98,13 +98,21 @@ For JAX vs CHARMM bonded cross-checks on CGENFF, see [cgenff-jax-clone.md](../cg
 
 ## 3. Train a small PhysNet model
 
-One-shot via `md-embedding` (download, split, smoke train, manifest):
+One-shot via `md-embedding` (download, **`mmml fix-and-split`** by default, smoke train, manifest, ASE peptide figure):
 
 ```bash
 mmml md-embedding train -o artifacts/md_embedding/aaa
 ```
 
-Manual equivalent: the NPZ matches MMML's standard schema (`E`, `F`, `R`, `Z`, `N`). Split train/validation, then train with a **small** model (smoke / teaching run):
+Equivalent manual split with fix-and-split:
+
+```bash
+mmml fix-and-split --efd mmml/data/external/dataset_aaa.npz -o artifacts/md_embedding/aaa/splits \
+  --preserve-units --coords-in angstrom --energy-in ev --force-in ev-angstrom \
+  --train-frac 0.9 --valid-frac 0.1 --test-frac 0
+```
+
+Manual equivalent (shuffle split only):
 
 ```bash
 # Optional: hold out 10% frames
