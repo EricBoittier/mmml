@@ -59,6 +59,28 @@ def test_find_velocity_outliers_flags_hot_atom(tmp_path: Path) -> None:
     assert outliers[0].atom_index == 3
 
 
+def test_analyze_restart_velocities_inferred_from_coords(tmp_path: Path) -> None:
+    p0 = tmp_path / "heat.0000.res"
+    p1 = tmp_path / "heat.0001.res"
+    _minimal_restart(p0, natom=2)
+    _minimal_restart(p1, natom=2)
+  # shift coords on atom 0 by 0.01 Å over 10 steps @ 0.00025 ps -> v ~ 4 Å/ps -> 4000 AKMA
+    text1 = p1.read_text(encoding="ascii").splitlines()
+    text1[7] = " 1.000000000000000E-02 0.000000000000000E+00 0.000000000000000E+00"
+    p1.write_text("\n".join(text1) + "\n", encoding="ascii")
+
+    rep = analyze_restart_velocities(
+        p1,
+        prev_path=p0,
+        dt_ps=0.00025,
+        allow_inferred=True,
+    )
+    assert rep.has_velocities
+    assert rep.inferred_from_coords
+    assert rep.vel_akma is not None
+    assert rep.speed_max > 100.0
+
+
 def test_analyze_restart_velocities_report(tmp_path: Path) -> None:
     vel = np.ones((2, 3), dtype=float)
     p = tmp_path / "heat.0007.res"

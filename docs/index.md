@@ -10,6 +10,7 @@ Use this site for installation, the **CLI reference**, MD workflow guides, and d
 - [CLI overview](cli/index.md) — `mmml commands`, `mmml examples`, tab completion, per-command `--help`
 - [md-system YAML configs](md-system-configs.md) — single runs, campaigns, condensed-phase builders
 - [Packmol placement](packmol-placement.md) — default composition builder
+- [Protein force fields](protein-force-fields.md) — CHARMM36 + jax-md peptide examples
 - [CHARMM CGenFF JAX clone](cgenff-jax-clone.md) — bonded + switched nonbonded JAX vs PyCHARMM
 - [MLpot guides](mlpot-settings.md) — COM handoff switches, medium PBC, spatial MPI, long-range electrostatics
 - [Calculator profiling](calculator-profiling.md) — JAX compile vs run, jax-pme primitives, cProfile / TensorBoard

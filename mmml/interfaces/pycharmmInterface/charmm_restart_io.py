@@ -115,14 +115,24 @@ def write_charmm_restart_from_memory(
     lines.extend(_restart_section_coord_lines(pos))
 
     if include_velocities:
+        vel = None
         try:
-            from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
-                _charmm_velocities_array,
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                charmm_synced_velocities_akma,
             )
 
-            vel = _charmm_velocities_array()
+            vel = charmm_synced_velocities_akma()
         except Exception:
             vel = None
+        if vel is None:
+            try:
+                from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+                    _charmm_velocities_array,
+                )
+
+                vel = _charmm_velocities_array()
+            except Exception:
+                vel = None
         if vel is not None:
             vel = np.asarray(vel, dtype=float)
             if vel.shape == pos.shape and np.all(np.isfinite(vel)):

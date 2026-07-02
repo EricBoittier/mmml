@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+    read_restart_coordinates,
     read_restart_last_step,
     read_restart_natom,
     read_restart_velocities,
@@ -33,6 +34,7 @@ class RestartVelocityReport:
     natom: int
     global_step: int | None
     has_velocities: bool
+    inferred_from_coords: bool
     coords_as_velocities: bool
     temperature_K: float | None
     speed_mean: float
@@ -40,6 +42,7 @@ class RestartVelocityReport:
     speed_max: float
     speed_p99: float
     outliers: tuple[VelocityOutlier, ...]
+    vel_akma: np.ndarray | None = None
 
 
 def collect_numbered_restart_paths(
@@ -117,15 +120,47 @@ def find_velocity_outliers(
     return tuple(outliers)
 
 
+def infer_velocities_akma_from_coords(
+    path: Path,
+    *,
+    prev_path: Path | None,
+    dt_ps: float,
+) -> np.ndarray | None:
+    """Finite-difference |v| proxy (AKMA, unit mass) from consecutive restart coords."""
+    pos = read_restart_coordinates(path)
+    if pos is None:
+        return None
+    if prev_path is None:
+        return None
+    pos0 = read_restart_coordinates(prev_path)
+    if pos0 is None or pos0.shape != pos.shape:
+        return None
+    step1 = read_restart_last_step(path) or 0
+    step0 = read_restart_last_step(prev_path) or 0
+    dstep = max(1, int(step1) - int(step0))
+    dt = float(dt_ps) * float(dstep)
+    if dt <= 0.0:
+        return None
+    v_ang_ps = (pos - pos0) / dt
+    return v_ang_ps * 1000.0
+
+
 def analyze_restart_velocities(
     path: Path,
     *,
     z_threshold: float = 4.0,
+    prev_path: Path | None = None,
+    dt_ps: float | None = None,
+    allow_inferred: bool = True,
 ) -> RestartVelocityReport:
     """Build a velocity summary for one ``.res`` file."""
     p = Path(path)
     natom = read_restart_natom(p) or 0
     vel = read_restart_velocities(p)
+    inferred = False
+    if vel is None and allow_inferred and prev_path is not None and dt_ps is not None:
+        vel = infer_velocities_akma_from_coords(p, prev_path=prev_path, dt_ps=float(dt_ps))
+        inferred = vel is not None
     has_vel = vel is not None
     coords_bug = bool(has_vel and restart_velocities_match_coordinates(p, vel))
     if not has_vel:
@@ -134,6 +169,7 @@ def analyze_restart_velocities(
             natom=int(natom),
             global_step=read_restart_last_step(p),
             has_velocities=False,
+            inferred_from_coords=False,
             coords_as_velocities=False,
             temperature_K=None,
             speed_mean=0.0,
@@ -141,6 +177,7 @@ def analyze_restart_velocities(
             speed_max=0.0,
             speed_p99=0.0,
             outliers=(),
+            vel_akma=None,
         )
     speeds = _speeds_akma(vel)
     return RestartVelocityReport(
@@ -148,6 +185,7 @@ def analyze_restart_velocities(
         natom=int(natom),
         global_step=read_restart_last_step(p),
         has_velocities=True,
+        inferred_from_coords=inferred,
         coords_as_velocities=coords_bug,
         temperature_K=_temperature_uniform_mass_k(vel),
         speed_mean=float(np.mean(speeds)),
@@ -155,4 +193,5 @@ def analyze_restart_velocities(
         speed_max=float(np.max(speeds)),
         speed_p99=float(np.percentile(speeds, 99)),
         outliers=find_velocity_outliers(p, vel, z_threshold=z_threshold),
+        vel_akma=np.asarray(vel, dtype=np.float64).reshape(-1, 3),
     )

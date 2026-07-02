@@ -21,6 +21,7 @@ uv run python scripts/generate_docs_figures.py
 | [`make-res`](commands/make-res.md) | CGENFF residue name | `pdb/`, `psf/`, `xyz/` | PyCHARMM |
 | [`make-box`](commands/make-box.md) | Residue + count + box length | Packed periodic box | Packmol + PyCHARMM |
 | [`build-crystal`](commands/build-crystal.md) | Literature CIF + make-res or SMILES/XYZ | `.pdb`, `.xyz`, `.cif`, `.npz` | CIF mapper / PyXtal |
+| Protein MM (CHARMM + jax-md) | [protein-force-fields.md](../protein-force-fields.md) | ALAD PDB/PSF, JAX energies | PyCHARMM + jax-md |
 
 ---
 

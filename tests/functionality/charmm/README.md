@@ -71,6 +71,7 @@ See [`docs/pycharmm-mpi.md`](../../../docs/pycharmm-mpi.md) for Phases 0–2 des
 | Topic | Path |
 |-------|------|
 | PyCHARMM MPI Phases 0–2 | `docs/pycharmm-mpi.md` |
+| Protein CHARMM + jax-md | `docs/protein-force-fields.md` |
 | Spatial ML MPI (Tier 2) | `docs/mlpot-spatial-mpi.md` |
 | Thermostat / CPT keywords | `mmml/interfaces/pycharmmInterface/mlpot/THERMOSTAT_INVESTIGATION.md` |
 | Stage presets | `mmml/interfaces/pycharmmInterface/mlpot/CHARMM_SETTINGS.md` |

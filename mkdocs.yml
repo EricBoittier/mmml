@@ -107,6 +107,7 @@ nav:
   - MD workflows:
       - md-system YAML configs: md-system-configs.md
       - Packmol placement: packmol-placement.md
+      - Protein force fields (CHARMM + jax-md): protein-force-fields.md
       - Tri-alanine water box: trialanine-water-box.md
       - Liquid box workflow: liquid-box-workflow.md
       - Cross-backend handoff: handoff.md

@@ -9,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 
-from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_velocities
 from mmml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
     RestartVelocityReport,
     analyze_restart_velocities,
@@ -50,6 +49,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write PNG dashboard (default: <directory>/<stem>_velocity_dashboard.png)",
     )
     p.add_argument(
+        "--dt-ps",
+        type=float,
+        default=0.00025,
+        help="Timestep in ps for coord-delta velocity inference (default: 0.00025 = 0.25 fs)",
+    )
+    p.add_argument(
+        "--no-infer-velocities",
+        action="store_true",
+        help="Do not infer velocities from consecutive restart coordinates",
+    )
+    p.add_argument(
         "--max-outliers",
         type=int,
         default=20,
@@ -76,7 +86,7 @@ def _plot_dashboard(
 
     all_speeds: list[float] = []
     for rep in valid:
-        vel = read_restart_velocities(rep.path)
+        vel = rep.vel_akma
         if vel is None:
             continue
         speeds = np.linalg.norm(vel, axis=1)
@@ -146,6 +156,7 @@ def _emit_summary(
     quiet: bool,
 ) -> int:
     n_missing = sum(1 for r in reports if not r.has_velocities)
+    n_inferred = sum(1 for r in reports if r.inferred_from_coords)
     n_coord_bug = sum(1 for r in reports if r.coords_as_velocities)
     all_outliers = [o for r in reports for o in r.outliers]
     all_outliers.sort(key=lambda o: o.z_score, reverse=True)
@@ -153,6 +164,7 @@ def _emit_summary(
     overview = {
         "restarts": len(reports),
         "with velocities": sum(1 for r in reports if r.has_velocities),
+        "inferred (Δcoords)": n_inferred,
         "missing velocities": n_missing,
         "coords-as-vel bug": n_coord_bug,
         "outliers (z≥" + str(z_threshold) + ")": len(all_outliers),
@@ -203,10 +215,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No numbered {args.stem}.*.res files under {directory}", file=sys.stderr)
         return 1
 
-    reports = [
-        analyze_restart_velocities(p, z_threshold=float(args.z_threshold))
-        for p in paths
-    ]
+    reports: list[RestartVelocityReport] = []
+    for i, pth in enumerate(paths):
+        prev = paths[i - 1] if i > 0 else None
+        reports.append(
+            analyze_restart_velocities(
+                pth,
+                z_threshold=float(args.z_threshold),
+                prev_path=prev,
+                dt_ps=float(args.dt_ps),
+                allow_inferred=not bool(args.no_infer_velocities),
+            )
+        )
 
     out = args.output
     if out is None:

@@ -43,51 +43,10 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _protein_toppar_paths() -> tuple[str, str]:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
-
-    base = Path(CHARMM_HOME) / "toppar"
-    rtf = base / "top_all36_prot.rtf"
-    prm = base / "par_all36m_prot.prm"
-    if not rtf.is_file() or not prm.is_file():
-        raise FileNotFoundError(
-            f"Protein toppar not found under {base}. "
-            "Set CHARMM_HOME to a full CHARMM installation (workshop smoke)."
-        )
-    return str(rtf), str(prm)
-
-
 def _build_alad_and_minimize_base() -> None:
-    from pycharmm import generate, ic, minimize, read, settings
-    from pycharmm.scripts import NonBondedScript
+    from mmml.interfaces.pycharmmInterface.protein_charmm_build import build_alad_dipeptide
 
-    rtf, prm = _protein_toppar_paths()
-    settings.set_verbosity(5)
-    settings.set_warn_level(-5)
-    read.rtf(rtf)
-    read.prm(prm)
-    read.sequence_string("ALA")
-    generate.new_segment(
-        seg_name="ALAD",
-        first_patch="ACE",
-        last_patch="CT3",
-        setup_ic=True,
-    )
-    ic.prm_fill(replace_all=True)
-    ic.seed(1, "CAY", 1, "CY", 1, "N")
-    ic.build()
-    NonBondedScript(
-        cutnb=16,
-        ctofnb=14,
-        ctonnb=12,
-        atom=True,
-        vatom=True,
-        eps=1,
-        switch=True,
-        vswitch=True,
-        cdie=True,
-    ).run()
-    minimize.run_abnr(nstep=500, tolenr=1e-3, tolgrd=1e-3)
+    build_alad_dipeptide(minimize=True, mini_steps=500)
 
 
 def _minimize_at_dihedrals(phi: float, psi: float, *, k: float, nstep: int) -> float:
