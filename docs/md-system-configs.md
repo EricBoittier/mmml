@@ -143,15 +143,15 @@ sequenceDiagram
 
 `composition` uses `RES:N` entries such as `DCM:60` or `DCM:40,ACO:20`. A bare `RES` means one molecule. The builder determines the initial coordinates before minimization.
 
-**Liquid grid is the default for `composition`.** It is the normal liquid-box builder (`builder: liquid`). Use `box_size` as both the initial cubic grid edge and the PBC cell side. The builder places whole molecules on a cubic or spherical grid, then relies on CHARMM MM minimization / short refinement stages to remove bad contacts before MLpot or handoff workflows.
+**Packmol is the default for `composition`.** When `composition` is set, MMML packs minimized monomer templates with Packmol (cube inside `--box-size` for PBC liquids, or sphere with `--packmol-radius`). CHARMM SD/ABNR follows to relax contacts before MLpot registration. See [Packmol placement](packmol-placement.md) for CLI/YAML examples.
 
-**Spherical liquid/cluster starts are still supported.** Use `packmol_placement: sphere` plus `packmol_radius` when you want a finite cluster or spherical initial packing. The option name is legacy; the default backend is now grid placement unless `packmol: true` is set. For PBC liquids, prefer cube packing so the initial geometry matches the periodic cell.
+**Grid placement is the fast alternative.** Set `packmol: false` and `builder: liquid` (or `--no-packmol --builder liquid`) to place whole molecules on a cubic/spherical grid without the Packmol binary. Useful for CI smoke tests and quick JAX-MD probes.
 
-**Crystal starts use PyXtal plus CHARMM refinement.** Enable with `builder: crystal` (or legacy `pyxtal: true`) and install `mmml[chem]`. Useful knobs are `pyxtal_spg`, `pyxtal_factor`, `pyxtal_stoichiometry`, `pyxtal_supercell`, `pyxtal_attempts`, and `pyxtal_trim`. This path is still less tested than liquid grid placement, so keep smoke tests small while improving the crystal builder.
+**Spherical liquid/cluster starts.** Use `packmol_placement: sphere` plus `packmol_radius` for finite clusters or flat-bottom restraints. For PBC liquids, prefer cube packing (`packmol_placement: cube`, default) so the initial geometry matches the periodic cell.
+
+**Crystal starts use PyXtal plus CHARMM refinement.** Enable with `builder: crystal` (or legacy `pyxtal: true`) and install `mmml[chem]`. Useful knobs are `pyxtal_spg`, `pyxtal_factor`, `pyxtal_stoichiometry`, `pyxtal_supercell`, `pyxtal_attempts`, and `pyxtal_trim`. This path is still less tested than Packmol liquid placement.
 
 **Reference/handoff builders reuse prior states.** `depends_on` loads a campaign predecessor handoff. `continue_from` can start from a handoff NPZ or CHARMM restart. This is the safest route after equilibration because it preserves box, coordinates, and optionally velocities.
-
-**Packmol remains an explicit compatibility fallback.** Set `packmol: true` (or pass `--packmol`) to use the older Packmol cube/sphere path with `packmol_tolerance`, `packmol_center`, `reuse_packmol_cache`, `packmol_cache_dir`, and `rebuild_packmol`. New workflows should prefer `builder: gas`, `builder: liquid`, or `builder: crystal`.
 
 ## Box and density choices
 

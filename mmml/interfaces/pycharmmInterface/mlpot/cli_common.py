@@ -970,8 +970,8 @@ def add_cluster_args(parser: argparse.ArgumentParser) -> None:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Explicitly use Packmol for --composition. "
-            "Default uses grid placement plus CHARMM refinement."
+            "Pack --composition with Packmol (default). "
+            "Use --no-packmol or --builder liquid/gas for grid placement."
         ),
     )
     parser.add_argument(

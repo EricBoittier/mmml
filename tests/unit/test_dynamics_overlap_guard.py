@@ -3192,6 +3192,11 @@ def test_overlap_multi_chunk_splits_dcd_per_chunk(tmp_path):
         chunk_paths.append(_io.trajectory if _io is not None else None)
         if _io is not None and _io.restart_write is not None:
             Path(_io.restart_write).write_text("REST\n", encoding="utf-8")
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            _maybe_write_numbered_restart_after_dyna,
+        )
+
+        _maybe_write_numbered_restart_after_dyna(kw, _io)
         return mock.Mock()
 
     with mock.patch(

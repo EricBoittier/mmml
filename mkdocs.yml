@@ -106,7 +106,7 @@ nav:
       # CLI_NAV_END
   - MD workflows:
       - md-system YAML configs: md-system-configs.md
-      - CHARMM CGenFF JAX clone: cgenff-jax-clone.md
+      - Packmol placement: packmol-placement.md
       - Tri-alanine water box: trialanine-water-box.md
       - Liquid box workflow: liquid-box-workflow.md
       - Cross-backend handoff: handoff.md
@@ -128,6 +128,7 @@ nav:
       - QC cross-check: qc-cross-check.md
       - DCMNet calculators: dcmnet_calculators.md
   - Reference:
+      - CHARMM CGenFF JAX clone: cgenff-jax-clone.md
       - Package architecture: package-architecture.md
       - Units summary: UNITS_SUMMARY.md
       - API reference: api.md

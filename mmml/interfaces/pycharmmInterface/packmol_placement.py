@@ -80,16 +80,20 @@ def resolve_packmol_use(
     pyxtal: bool | None = None,
     builder: str | None = None,
 ) -> bool:
-    """Use Packmol only when explicitly requested for ``--composition``."""
-    if pyxtal is True and composition is not None:
+    """Use Packmol for ``--composition`` unless grid builder or ``--no-packmol``."""
+    if composition is None:
         return False
-    if builder is not None and str(builder).strip().lower() == "crystal":
+    if pyxtal is True:
         return False
-    if packmol is True:
-        return composition is not None
+    if builder is not None:
+        name = str(builder).strip().lower()
+        if name in ("crystal", "gas", "liquid"):
+            return False
     if packmol is False:
         return False
-    return False
+    if packmol is True:
+        return True
+    return True
 
 
 def resolve_packmol_placement_mode(

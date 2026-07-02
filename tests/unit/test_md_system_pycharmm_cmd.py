@@ -369,9 +369,17 @@ def test_build_pycharmm_command_forwards_ml_compute_dtype_when_set():
     assert cmd[idx + 1] == "float64"
 
 
-def test_build_pycharmm_command_uses_grid_builder_by_default():
+def test_build_pycharmm_command_uses_packmol_by_default():
     cmd = build_pycharmm_command(
         _pycharmm_args(packmol_sphere=None, packmol_placement="cube")
+    )
+    assert "--packmol-placement" in cmd
+    assert cmd[cmd.index("--packmol-placement") + 1] == "cube"
+
+
+def test_build_pycharmm_command_grid_builder_omits_packmol():
+    cmd = build_pycharmm_command(
+        _pycharmm_args(builder="liquid", packmol_sphere=None, packmol_placement="cube")
     )
     assert "--packmol-placement" not in cmd
     assert "--packmol" not in cmd

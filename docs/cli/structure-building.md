@@ -72,12 +72,37 @@ ax.add_collection(LineCollection(seg, colors="#64748b", linewidths=1.3, zorder=1
 
 ## `mmml make-box`
 
-Packs copies of a residue into a cubic periodic cell (optionally with explicit solvent).
+Packs copies of a residue into a cubic periodic cell (optionally with explicit solvent). Uses **Packmol** for initial placement.
 
 ```bash
 mmml make-res --res ACO
 mmml make-box --res ACO --n 50 --side_length 25.0
 ```
+
+### More Packmol examples
+
+Mixed-solvent cube:
+
+```bash
+mmml make-res --res DCM --skip-energy-show
+mmml make-res --res ACO --skip-energy-show
+# Use md-system or liquid-box for multi-residue Packmol; make-box is single-residue.
+mmml md-system --composition "DCM:30,ACO:10" --box-size 28.0 --no-packmol --builder liquid
+```
+
+PBC liquid with default Packmol (recommended):
+
+```bash
+export MMML_CKPT=/path/to/checkpoint.json
+mmml md-system \
+  --composition DCM:100 \
+  --box-size 32.0 \
+  --setup pbc_nvt \
+  --md-stages mini \
+  --output-dir /tmp/dcm100_packmol
+```
+
+Full Packmol reference: [packmol-placement.md](../packmol-placement.md).
 
 ![Illustrative acetone box](../images/structures/make-box-acetone.png)
 

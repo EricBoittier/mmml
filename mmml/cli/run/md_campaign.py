@@ -468,8 +468,6 @@ def build_benchmark_md_system_argv(
         str(job["backend"]),
         "--composition",
         str(cfg["composition"]),
-        "--builder",
-        "liquid",
         "--checkpoint",
         str(resolve_checkpoint(str(cfg["checkpoint"]))),
         "--output-dir",
@@ -493,6 +491,16 @@ def build_benchmark_md_system_argv(
         "--ml-switch-width",
         str(cfg["ml_switch_width"]),
     ]
+    placement = str(cfg.get("packmol_placement") or "cube").strip().lower()
+    if placement == "sphere" or cfg.get("packmol_radius") is not None:
+        argv.append("--packmol-placement")
+        argv.append("sphere")
+        if cfg.get("packmol_radius") is not None:
+            argv.extend(["--packmol-radius", str(cfg["packmol_radius"])])
+    else:
+        argv.extend(["--packmol-placement", "cube"])
+    if cfg.get("packmol_tolerance") is not None:
+        argv.extend(["--packmol-tolerance", str(cfg["packmol_tolerance"])])
     if cfg.get("min_com_restraint_distance") is not None:
         argv.extend(
             [

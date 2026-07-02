@@ -142,9 +142,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("gas", "liquid", "crystal"),
         default=None,
         help=(
-            "Starting-coordinate builder: gas=open grid, liquid=cube/sphere grid plus "
-            "CHARMM refinement, crystal=PyXtal plus CHARMM refinement. "
-            "Default: liquid for --composition, gas otherwise."
+            "Grid-based builder (skips Packmol): gas=open grid, liquid=cube/sphere grid "
+            "plus CHARMM refinement, crystal=PyXtal. "
+            "Default for --composition is Packmol unless --builder or --no-packmol is set."
         ),
     )
     parser.add_argument(
@@ -158,8 +158,8 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Explicitly pack --composition with Packmol. "
-            "Default uses grid placement plus CHARMM refinement."
+            "Pack --composition with Packmol (default when --composition is set). "
+            "Use --no-packmol or --builder liquid/gas for grid placement."
         ),
     )
     parser.add_argument(
@@ -193,7 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--packmol-tolerance",
         type=float,
         default=2.0,
-        help="Legacy Packmol distance tolerance (Å) for explicit --packmol runs.",
+        help="Packmol distance tolerance (Å) for cluster placement (default: 2.0).",
     )
     parser.add_argument(
         "--reuse-packmol-cache",

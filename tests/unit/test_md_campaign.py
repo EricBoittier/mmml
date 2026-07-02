@@ -349,7 +349,7 @@ def test_namespace_from_merged_keeps_extra_args_last() -> None:
     assert "--continue-from" not in args.extra_args
 
 
-def test_build_command_jaxmd_liquid_grid_default_omits_packmol_argv() -> None:
+def test_build_command_jaxmd_liquid_packmol_default_includes_placement_argv() -> None:
     from argparse import Namespace
 
     from mmml.cli.run.md_system import build_command
@@ -386,9 +386,51 @@ def test_build_command_jaxmd_liquid_grid_default_omits_packmol_argv() -> None:
     )
     backend, argv = build_command(args)
     assert backend == "jaxmd"
-    assert "--packmol-placement" not in argv
+    assert "--packmol-placement" in argv
+    assert argv[argv.index("--packmol-placement") + 1] == "cube"
     assert "--steps-per-recording" in argv
     assert "--jax-md-update-interval" in argv
+
+
+def test_build_command_jaxmd_grid_builder_omits_packmol_argv() -> None:
+    from argparse import Namespace
+
+    from mmml.cli.run.md_system import build_command
+
+    args = Namespace(
+        backend="jaxmd",
+        setup="pbc_nvt",
+        composition="BENZ:30",
+        builder="liquid",
+        spacing=5.0,
+        ps=50.0,
+        dt_fs=0.25,
+        temperature=260.0,
+        pressure=1.0,
+        traj_chunk_frames=0,
+        n_molecules=30,
+        box_size=32.0,
+        checkpoint="/tmp/ckpt.json",
+        output_dir="/tmp/out",
+        template_pdb=None,
+        seed=123,
+        min_intermonomer_atom_distance=0.1,
+        packmol=None,
+        packmol_placement=None,
+        packmol_sphere=None,
+        packmol_radius=None,
+        packmol_tolerance=2.0,
+        packmol_center=None,
+        flat_bottom_radius=None,
+        flat_bottom_k=1.0,
+        flat_bottom_mode="system",
+        nvt_integrator="nhc",
+        traj_export_molecular_wrap=False,
+        extra_args=[],
+    )
+    backend, argv = build_command(args)
+    assert backend == "jaxmd"
+    assert "--packmol-placement" not in argv
 
 
 def test_build_command_forwards_jaxmd_neighbor_tuning_args() -> None:

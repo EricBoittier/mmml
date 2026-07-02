@@ -4,13 +4,13 @@ Dense periodic liquid boxes are a solved problem in classical MD. In MMML the di
 
 This document defines a **two-phase workflow** that separates box certification (MM-only) from hybrid MD, and describes the `mmml liquid-box` spike that implements Phase A.
 
-See also: [md-system-configs.md § Resilient density prep](md-system-configs.md#resilient-density-prep-liquid_prep-true).
+See also: [md-system-configs.md § Resilient density prep](md-system-configs.md#resilient-density-prep-liquid_prep-true), [Packmol placement](packmol-placement.md).
 
 ---
 
 ## Problem statement
 
-Today, `mmml md-system` runs Packmol, MC density equalization, CHARMM MM relaxation, pre-MLpot geometry recovery, MLpot registration, minimization, GRMS waterfalls, density prep ladders, and dynamics overlap rescue in one long `staged_workflow`. Each failure mode gained its own hook; the same recovery steps (monomer repack, MC volume moves, lattice ABNR) appear in four different places.
+Today, `mmml md-system` runs Packmol (default for `composition`), MC density equalization, CHARMM MM relaxation, pre-MLpot geometry recovery, MLpot registration, minimization, GRMS waterfalls, density prep ladders, and dynamics overlap rescue in one long `staged_workflow`. Each failure mode gained its own hook; the same recovery steps (monomer repack, MC volume moves, lattice ABNR) appear in four different places.
 
 **Symptoms:**
 

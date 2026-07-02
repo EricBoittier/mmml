@@ -177,8 +177,8 @@ def main(argv: list[str] | None = None) -> int:
         action=argparse.BooleanOptionalAction,
         default=None,
         help=(
-            "Explicitly pack --composition with Packmol. "
-            "Default uses grid placement plus refinement."
+            "Pack --composition with Packmol (default). "
+            "Use --no-packmol or --builder liquid/gas for grid placement."
         ),
     )
     p.add_argument(

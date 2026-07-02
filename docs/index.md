@@ -9,6 +9,7 @@ Use this site for installation, the **CLI reference**, MD workflow guides, and d
 - [Getting started](getting-started.md) — install with `uv`, serve docs locally
 - [CLI overview](cli/index.md) — `mmml commands`, `mmml examples`, tab completion, per-command `--help`
 - [md-system YAML configs](md-system-configs.md) — single runs, campaigns, condensed-phase builders
+- [Packmol placement](packmol-placement.md) — default composition builder
 - [CHARMM CGenFF JAX clone](cgenff-jax-clone.md) — bonded + switched nonbonded JAX vs PyCHARMM
 - [MLpot guides](mlpot-settings.md) — COM handoff switches, medium PBC, spatial MPI, long-range electrostatics
 - [Calculator profiling](calculator-profiling.md) — JAX compile vs run, jax-pme primitives, cProfile / TensorBoard

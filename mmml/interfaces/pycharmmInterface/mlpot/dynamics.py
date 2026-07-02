@@ -5221,6 +5221,32 @@ def _write_overlap_chunk_numbered_restart(
         return None
 
 
+def _maybe_write_numbered_restart_after_dyna(
+    kw: dict[str, Any],
+    io: Optional[CharmmTrajectoryFiles],
+) -> None:
+    """Materialize ``heat.NNNN.res`` after each PyCHARMM ``dyna`` when split I/O is active."""
+    stage = kw.get("_numbered_restart_stage_path")
+    chunk_index = kw.get("_numbered_restart_chunk_index")
+    global_step = kw.get("_numbered_restart_global_step")
+    if stage is None or chunk_index is None or global_step is None:
+        return
+    if io is None or io.trajectory is None:
+        return
+    overlap_context = str(kw.get("_numbered_restart_context", "dynamics"))
+    numbered_res = _write_overlap_chunk_numbered_restart(
+        final_restart=Path(stage),
+        chunk_index=int(chunk_index),
+        global_step=int(global_step),
+        overlap_context=overlap_context,
+    )
+    if numbered_res is None:
+        return
+    paths_out = kw.get("_numbered_restart_paths_out")
+    if isinstance(paths_out, list) and numbered_res not in paths_out:
+        paths_out.append(numbered_res)
+
+
 def _materialize_cpt_subchunk_restart_handoff(
     write_path: Path,
     *,
@@ -5703,6 +5729,7 @@ def _run_dynamics_chunk(
             )
             if restart_path is not None:
                 kw["_post_dyna_last_restart_path"] = str(restart_path)
+        _maybe_write_numbered_restart_after_dyna(kw, io)
 
 
 def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | None:
@@ -5868,6 +5895,9 @@ def _run_cpt_stability_subchunked(
             )
             else {}
         )
+        global_end = int(global_step_offset) + steps_done + n
+        if "_numbered_restart_stage_path" in sub_kw:
+            sub_kw["_numbered_restart_global_step"] = global_end
         last_dyn = _run_dynamics_chunk(
             sub_kw,
             sub_io,
@@ -6005,6 +6035,8 @@ def _run_bussi_heat_subchunked(
                 f"(t={t0:.4f}–{t1:.4f} ps{traj_note})",
                 flush=True,
             )
+        if "_numbered_restart_stage_path" in sub_kw:
+            sub_kw["_numbered_restart_global_step"] = global_end
         last_dyn = _run_dynamics_chunk(
             sub_kw,
             sub_io,
@@ -6691,6 +6723,16 @@ def run_dynamics_with_io(
                     and chunk_io.trajectory is not None
                 ):
                     chunk_dcd_paths.append(Path(chunk_io.trajectory))
+                if (
+                    split_trajectory
+                    and final_restart is not None
+                    and chunk_io is not None
+                    and chunk_io.trajectory is not None
+                ):
+                    chunk_kw["_numbered_restart_stage_path"] = final_restart
+                    chunk_kw["_numbered_restart_chunk_index"] = chunk_index
+                    chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
+                    chunk_kw["_numbered_restart_context"] = overlap_context
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
                         mlpot_ctx,
@@ -6771,6 +6813,10 @@ def run_dynamics_with_io(
                         split_trajectory=split_trajectory,
                     )
                 else:
+                    if "_numbered_restart_stage_path" in chunk_kw:
+                        chunk_kw["_numbered_restart_global_step"] = (
+                            steps_before_chunk + chunk_nstep
+                        )
                     last_dyn = _run_dynamics_chunk(
                         chunk_kw,
                         chunk_io,
@@ -6927,22 +6973,6 @@ def run_dynamics_with_io(
                         header_step = read_restart_last_step(restart_path)
                         if header_step is None or header_step < expected_after - 1:
                             patch_restart_global_step(restart_path, steps_done)
-                if (
-                    split_trajectory
-                    and final_restart is not None
-                    and chunk_io is not None
-                    and chunk_io.trajectory is not None
-                    and steps_done >= expected_after - 1
-                    and not chunk_outcome.charmm_aborted
-                ):
-                    numbered_res = _write_overlap_chunk_numbered_restart(
-                        final_restart=final_restart,
-                        chunk_index=chunk_index,
-                        global_step=steps_done,
-                        overlap_context=overlap_context,
-                    )
-                    if numbered_res is not None:
-                        chunk_res_paths.append(numbered_res)
                 if chunk_outcome.charmm_aborted:
                     print(
                         f"overlap ({overlap_context}): CHARMM abort at step "
