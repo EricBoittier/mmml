@@ -1320,6 +1320,15 @@ def _sync_mlpot_lists_after_sd_chunk(
     nstep: int = 0,
 ) -> float | None:
     """CHARMM UPDATE + hybrid GRMS after one SD/ABNR chunk."""
+    # Re-wrap boundary-drifted atoms BEFORE the UPDATE so the new nonbond lists
+    # are built from corrected positions.  Without this, atoms that drifted to
+    # ≈±L/2 during inbfrq=0 SD cause the next UPDATE to see Min-Distance=0
+    # contacts, spiking GRMS at every other chunk (e.g. 118→253→131→154).
+    _rewrap_mlpot_pbc_after_sd(
+        config,
+        verbose=config.verbose,
+        context=f"Inter-chunk {chunk_index}",
+    )
     sync_charmm_lists_after_mini(quiet=True)
     invalidate_mlpot_calculator_caches(config.mlpot_ctx)
     if config.mlpot_ctx is None:
