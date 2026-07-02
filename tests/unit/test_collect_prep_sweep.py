@@ -45,6 +45,33 @@ def test_extract_grms_from_sd_partial() -> None:
     assert m["gate_grms"] == "406.9370"
 
 
+def test_extract_grms_from_rich_table_row() -> None:
+    text = """
+╭────────────────────────────── Post MLpot mini ───────────────────────────────╮
+│ │ ┃ Hybrid GRMS ┃ CHARMM GRMS ┃ USER energy ┃ Diag        ┃ Note         ┃ │ │
+│ │ │ 41.2500 kcal/mol/Å (0.1788 eV/Å) │ 193.4801 kcal/mol/Å (0.8391 eV/Å) │ │ │
+╰──────────────────────────────────────────────────────────────────────────────╯
+"""
+    m = _extract_grms_metrics(text)
+    assert m["post_mini_grms"] == "41.2500"
+    assert m["gate_grms"] == "41.2500"
+
+
+def test_extract_grms_baseline_stall_partial() -> None:
+    text = """
+MLpot SD pass 1 stalled: hybrid GRMS plateaued (GRMS≈452.6729 kcal/mol/Å); CHARMM SD ineffective
+MLpot SD pass 1 partial: watchdog stopped further chunks; geometry restored (GRMS≈262.1532 kcal/mol/Å)
+╭────────────────────────────── Post MLpot mini ───────────────────────────────╮
+│ │ ┃ Hybrid GRMS ┃ CHARMM GRMS ┃ USER energy ┃ Diag        ┃ Note         ┃ │ │
+│ │ │ 262.1532 kcal/mol/Å (1.1356 eV/Å) │ 0.0000 kcal/mol/Å (0.0000 eV/Å) │ │ │
+╰──────────────────────────────────────────────────────────────────────────────╯
+"""
+    m = _extract_grms_metrics(text)
+    assert m["sd_stall_grms"] == "452.6729"
+    assert m["sd_partial_grms"] == "262.1532"
+    assert m["post_mini_grms"] == "262.1532"
+    assert m["under_50"] is False
+
 def test_extract_grms_prefers_post_mini_over_partial() -> None:
     text = """
 MLpot SD pass 1 partial: geometry restored (GRMS≈500.0000 kcal/mol/Å)

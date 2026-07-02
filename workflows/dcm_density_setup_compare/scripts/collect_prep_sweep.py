@@ -26,12 +26,16 @@ from campaign_lib import (  # noqa: E402
 )
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*(?:[0-9;]*[A-Za-z])|\x1b\][^\x07]*(?:\x07|\x1b\\)")
-_POST_MINI_CONTEXTS = (
-    "Post MLpot SD pass 1",
-    "Post MLpot mini",
-    "Post MLpot mini GRMS",
-)
 _GRMS_PARTIAL = re.compile(r"GRMS≈([0-9.]+)\s*kcal/mol/Å")
+_GRMS_SD_STALL = re.compile(
+    r"MLpot SD pass 1 stalled.*?GRMS≈([0-9.]+)\s*kcal/mol/Å",
+    re.DOTALL,
+)
+_GRMS_SD_PARTIAL = re.compile(
+    r"MLpot SD pass 1 partial.*?GRMS≈([0-9.]+)\s*kcal/mol/Å",
+    re.DOTALL,
+)
+_RICH_GRMS_CELL = re.compile(r"([\d.]+)\s*kcal/mol/Å")
 _GRMS_HYBRID_KV = re.compile(
     r"hybrid GRMS[= ]+([0-9.]+)\s*kcal/mol/Å",
     re.IGNORECASE,
@@ -60,7 +64,26 @@ def _strip_ansi(text: str) -> str:
     return _ANSI.sub("", text)
 
 
+def _rich_hybrid_grms_after_context(text: str, context: str) -> float | None:
+    """First hybrid GRMS value cell after each Rich ``Hybrid GRMS`` header in a panel."""
+    stripped = _strip_ansi(text)
+    idx = stripped.rfind(context)
+    if idx < 0:
+        return None
+    window = stripped[idx : idx + 4000]
+    best: float | None = None
+    for hdr in re.finditer("Hybrid GRMS", window):
+        chunk = window[hdr.end() : hdr.end() + 600]
+        m = _RICH_GRMS_CELL.search(chunk)
+        if m:
+            best = float(m.group(1))
+    return best
+
+
 def _hybrid_grms_after_context(text: str, context: str) -> float | None:
+    rich = _rich_hybrid_grms_after_context(text, context)
+    if rich is not None:
+        return rich
     stripped = _strip_ansi(text)
     idx = stripped.rfind(context)
     if idx < 0:
@@ -71,6 +94,27 @@ def _hybrid_grms_after_context(text: str, context: str) -> float | None:
         if m:
             return float(m.group(1))
     return None
+
+
+def _extract_post_mini_grms(stdout: str) -> tuple[float | None, float | None, float | None]:
+    """Return (final post-mini hybrid GRMS, SD stall GRMS, SD partial GRMS)."""
+    stall = _last_float(_GRMS_SD_STALL, stdout)
+    partial = _last_float(_GRMS_SD_PARTIAL, stdout)
+
+    final: float | None = None
+    for context in ("Post MLpot mini", "Post MLpot mini GRMS"):
+        val = _hybrid_grms_after_context(stdout, context)
+        if val is not None:
+            final = val
+            break
+
+    if final is None:
+        final = _hybrid_grms_after_context(stdout, "Post MLpot SD pass 1")
+
+    if final is None:
+        final = partial if partial is not None else stall
+
+    return final, stall, partial
 
 
 def _last_float(pattern: re.Pattern[str], text: str) -> float | None:
@@ -88,14 +132,7 @@ def _extract_grms_metrics(stdout: str) -> dict[str, Any]:
     pre_ok = _last_match(_GRMS_PRE_DYN_OK, stdout)
     pre_fail = _last_match(_GRMS_PRE_DYN_FAIL, stdout)
 
-    post_mini: float | None = None
-    for context in _POST_MINI_CONTEXTS:
-        val = _hybrid_grms_after_context(stdout, context)
-        if val is not None:
-            post_mini = val
-
-    if post_mini is None:
-        post_mini = _last_float(_GRMS_PARTIAL, stdout)
+    post_mini, sd_stall, sd_partial = _extract_post_mini_grms(stdout)
 
     pre_dyn: float | None = None
     pre_limit: float | None = None
@@ -117,6 +154,8 @@ def _extract_grms_metrics(stdout: str) -> dict[str, Any]:
 
     return {
         "post_mini_grms": f"{post_mini:.4f}" if post_mini is not None else "",
+        "sd_stall_grms": f"{sd_stall:.4f}" if sd_stall is not None else "",
+        "sd_partial_grms": f"{sd_partial:.4f}" if sd_partial is not None else "",
         "pre_dynamics_grms": f"{pre_dyn:.4f}" if pre_dyn is not None else "",
         "pre_dynamics_limit": f"{pre_limit:.1f}" if pre_limit is not None else "",
         "pre_dynamics_grms_fail": pre_fail or "",
