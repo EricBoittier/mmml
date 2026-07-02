@@ -1514,6 +1514,18 @@ def maybe_run_bonded_mm_mini_after_stage(
     """
     if not bonded_mm_mini_watches_stage(args, stage):
         return False
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        selective_bonded_block_unsafe_under_mpi,
+    )
+
+    if selective_bonded_block_unsafe_under_mpi():
+        if not args.quiet:
+            print(
+                f"bonded-MM-mini: skipping after {stage}: selective COEFF BLOCK "
+                "hangs on MPI-linked libcharmm under mpirun",
+                flush=True,
+            )
+        return False
     always = bonded_mm_mini_always(args)
     if baseline is None and not always:
         if not args.quiet:

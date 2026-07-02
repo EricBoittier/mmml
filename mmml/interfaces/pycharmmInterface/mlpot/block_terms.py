@@ -143,8 +143,34 @@ def apply_mlpot_registration_mm_off(
     )
 
 
-def _run_block_script(summary: str, script: str, *, verbose: bool = False) -> None:
+class SelectiveBondedBlockUnsupportedUnderMPI(RuntimeError):
+    """Selective COEFF BLOCK hangs on MPI-linked libcharmm under ``mpirun``."""
+
+
+def _assert_selective_block_safe(*, context: str = "") -> None:
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        selective_bonded_block_unsafe_under_mpi,
+    )
+
+    if selective_bonded_block_unsafe_under_mpi():
+        where = f" ({context})" if context else ""
+        raise SelectiveBondedBlockUnsupportedUnderMPI(
+            "selective COEFF BLOCK hangs on MPI-linked libcharmm under mpirun"
+            f"{where}; use --no-bonded-mm-mini or serial python"
+        )
+
+
+def _run_block_script(
+    summary: str,
+    script: str,
+    *,
+    verbose: bool = False,
+    selective: bool = False,
+    context: str = "",
+) -> None:
     """Apply a BLOCK script quietly and optionally emit a one-line Python summary."""
+    if selective:
+        _assert_selective_block_safe(context=context or summary)
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
     from mmml.utils.rich_report import emit_charmm_block
 
@@ -184,6 +210,8 @@ END
         "CHARMM BLOCK: bonded-only (BOND/ANGL/DIHE on, ELEC/VDW off)",
         block,
         verbose=verbose,
+        selective=True,
+        context="apply_bonded_mm_only_block",
     )
 
 
@@ -208,6 +236,8 @@ END
         "CHARMM BLOCK: bonded+VDW recovery (ELEC off)",
         block,
         verbose=verbose,
+        selective=True,
+        context="apply_bonded_vdw_recovery_block",
     )
 
 

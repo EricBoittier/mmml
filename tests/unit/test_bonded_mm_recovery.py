@@ -886,6 +886,43 @@ def test_bonded_mm_mini_watches_heat_even_when_after_is_mini_only():
     ) is False
 
 
+def test_apply_bonded_mm_only_block_raises_under_mpi_mpirun():
+    from mmml.interfaces.pycharmmInterface.mlpot import block_terms
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.selective_bonded_block_unsafe_under_mpi",
+        return_value=True,
+    ):
+        with pytest.raises(block_terms.SelectiveBondedBlockUnsupportedUnderMPI):
+            block_terms.apply_bonded_mm_only_block(restore_params=False)
+
+
+def test_maybe_run_bonded_mm_mini_skips_under_mpi_mpirun():
+    from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
+
+    ctx = MagicMock()
+    args = argparse_namespace(
+        bonded_mm_mini=True,
+        bonded_mm_mini_after="mini",
+        quiet=False,
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.selective_bonded_block_unsafe_under_mpi",
+        return_value=True,
+    ), patch.object(
+        bonded_mm_recovery,
+        "_measure_stage_bonded_strain",
+    ) as measure:
+        ran = bonded_mm_recovery.maybe_run_bonded_mm_mini_after_stage(
+            ctx,
+            args,
+            stage="mini",
+            baseline=MmStrainBaseline(grms_kcalmol_A=1.0),
+        )
+    assert ran is False
+    measure.assert_not_called()
+
+
 def test_maybe_run_bonded_mm_mini_skips_when_grms_ok():
     from mmml.interfaces.pycharmmInterface.mlpot import bonded_mm_recovery
 

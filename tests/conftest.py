@@ -127,11 +127,10 @@ def bonded_block_hangs_under_mpi_mpirun() -> bool:
     """
     try:
         from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-            _under_mpirun,
-            charmm_lib_links_mpi,
+            selective_bonded_block_unsafe_under_mpi,
         )
 
-        return bool(charmm_lib_links_mpi() and _under_mpirun())
+        return selective_bonded_block_unsafe_under_mpi()
     except Exception:
         return False
 

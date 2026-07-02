@@ -337,6 +337,27 @@ def test_prepare_serial_charmm_mpi_env_skips_import_reset_block_under_mpirun(mon
     assert os.environ["MMML_SKIP_VACUUM_CHARMM_INIT"] == "1"
 
 
+def test_selective_bonded_block_unsafe_under_mpi(monkeypatch):
+    monkeypatch.delenv("MMML_ALLOW_SELECTIVE_BONDED_BLOCK", raising=False)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert charmm_mpi.selective_bonded_block_unsafe_under_mpi() is True
+    monkeypatch.setenv("MMML_ALLOW_SELECTIVE_BONDED_BLOCK", "1")
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi._under_mpirun",
+        return_value=True,
+    ):
+        assert charmm_mpi.selective_bonded_block_unsafe_under_mpi() is False
+
+
 def test_configure_mpi4py_charmm_owned_init(monkeypatch):
     pytest.importorskip("mpi4py")
     monkeypatch.delenv("MMML_MPI_PY_INIT", raising=False)

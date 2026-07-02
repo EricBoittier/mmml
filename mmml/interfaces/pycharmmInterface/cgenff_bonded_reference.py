@@ -198,6 +198,11 @@ def compare_bonded_to_charmm(
 
 def setup_nonbonded_only_charmm() -> None:
     """Zero bonded terms so ``ENER FORCE`` reports VDW/ELEC only."""
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        _assert_selective_block_safe,
+    )
+
+    _assert_selective_block_safe(context="setup_nonbonded_only_charmm")
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
     block = """BLOCK

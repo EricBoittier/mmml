@@ -235,6 +235,18 @@ def charmm_lib_links_mpi() -> bool:
     return "libmpi" in _run_ldd(lib).lower()
 
 
+def selective_bonded_block_unsafe_under_mpi() -> bool:
+    """True when selective COEFF BLOCK scripts must not run (MPI-linked libcharmm + mpirun).
+
+    ``apply_bonded_mm_only_block`` (ELEC/VDW off) and bonded-off nonbond BLOCK scripts
+    hang indefinitely. Full ``reset_block`` / ``apply_charmm_mm_block`` (COEFF 1.0 all
+    terms) remain safe.
+    """
+    if _truthy("MMML_ALLOW_SELECTIVE_BONDED_BLOCK"):
+        return False
+    return bool(charmm_lib_links_mpi() and _under_mpirun())
+
+
 def _needs_mpi_setup() -> bool:
     return charmm_lib_links_mpi() or _openmpi_env_without_launch() or _under_mpirun()
 
