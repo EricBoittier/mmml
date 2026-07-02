@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
     ForceDelta,
     LayerBenchmark,
@@ -16,8 +18,8 @@ from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import (
 
 
 def test_relative_diff():
-    assert _relative_diff(100.0, 100.1) == 0.001
-    assert _relative_diff(0.0, 0.01) == 0.01 / 1e-12  # large when ref ~ 0
+    assert _relative_diff(100.0, 100.1) == pytest.approx(0.001)
+    assert _relative_diff(0.0, 0.01) == pytest.approx(0.01 / 1e-12)
 
 
 def test_render_markdown_and_json_smoke():

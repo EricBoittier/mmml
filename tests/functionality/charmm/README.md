@@ -39,6 +39,15 @@ bundled ``top_trialanine_cgenff.rtf`` only (no protein toppar).
 pytest tests/functionality/charmm/test_trialanine_water_box_mm.py -m pycharmm -v
 ```
 
+### CHARMM vs JAX-MM energy benchmark
+
+See [`README_charmm_jax_benchmark.md`](README_charmm_jax_benchmark.md). Reports
+per-term energy deltas for TIP3 and tri-alanine water (bonded / nonbonded / total).
+
+```bash
+JAX_PLATFORMS=cpu uv run python scripts/benchmark_charmm_jax_energy.py -o /tmp/charmm_jax_bench
+```
+
 ## Layer 2 — MPI workshop smoke (CHARMM node + OpenMPI)
 
 Port of [pyCHARMM Workshop 3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample): phi/psi grid sharded across mpi4py ranks.

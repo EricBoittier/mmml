@@ -219,19 +219,23 @@ def benchmark_bonded_layer(
     jax_terms = {k: float(v) for k, v in jax_terms_raw.items()}
     jax_forces_np = np.asarray(jax_forces, dtype=np.float64)
 
-    charmm_for_report = {
-        BONDED_TERM_MAP.get(k, k): float(charmm_terms.get(BONDED_TERM_MAP.get(k, k), 0.0))
-        for k in ("bond", "angle", "torsion", "improper", "cmap", "total")
-        if k in jax_terms
-    }
-    terms = _term_deltas_from_maps(jax_terms, charmm_for_report, mapping=BONDED_TERM_MAP)
+    terms_list: list[TermDelta] = []
+    for jax_key, charmm_key in BONDED_TERM_MAP.items():
+        if jax_key not in jax_terms or charmm_key not in charmm_terms:
+            continue
+        terms_list.append(
+            TermDelta.from_pair(jax_key, charmm_terms[charmm_key], jax_terms[jax_key])
+        )
     if "total" in jax_terms:
         charmm_mapped_total = sum(
             float(charmm_terms.get(BONDED_TERM_MAP[k], 0.0))
-            for k in ("bond", "angle", "torsion", "improper", "cmap")
+            for k in BONDED_TERM_MAP
             if k in jax_terms and BONDED_TERM_MAP[k] in charmm_terms
         )
-        terms = terms + (TermDelta.from_pair("total", charmm_mapped_total, jax_terms["total"]),)
+        terms_list.append(
+            TermDelta.from_pair("total", charmm_mapped_total, jax_terms["total"])
+        )
+    terms = tuple(terms_list)
 
     passed, message = _assert_within_tolerance("bonded", jax_terms, jax_forces_np)
     return LayerBenchmark(
