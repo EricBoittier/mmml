@@ -24,6 +24,8 @@ def test_ic_prm_fill_uses_relaxed_bomlev():
 def test_read_cgenff_prm_defaults_to_cgenff_bomlev():
     src = inspect.getsource(read_cgenff_prm)
     assert "CGENFF_PRM_BOMLEV" in src
+    assert "charmm_quiet_prnlev" in src
+    assert "charmm_quiet_output" not in src
 
 
 def test_ic_prm_fill_calls_ic_under_bomlev():

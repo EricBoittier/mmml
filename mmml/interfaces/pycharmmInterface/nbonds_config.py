@@ -300,12 +300,12 @@ def read_cgenff_prm(
         suspend_pbc_before_cgenff_param_append()
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import (
-        charmm_quiet_output,
+        charmm_quiet_prnlev,
         suppress_charmm_fortran_io,
     )
 
     def _read() -> None:
-        with charmm_quiet_output(), suppress_charmm_fortran_io():
+        with charmm_quiet_prnlev(), suppress_charmm_fortran_io():
             read.prm(path, append=append, flex=True)
 
     if bomlev:

@@ -57,8 +57,23 @@ def run_charmm_script_quiet(script: str) -> None:
 
 
 @contextmanager
+def charmm_quiet_prnlev():
+    """Mute PRNLev only; preserve warnlev/bomlev (needed for CGENFF PARRDR at -3)."""
+    old = _set_charmm_levels(prnlev=0)
+    try:
+        yield
+    finally:
+        _restore_charmm_levels(old)
+
+
+@contextmanager
 def charmm_quiet_output():
-    """Temporarily set PRNLev/WRNLev 0 and swallow Fortran stdout/stderr."""
+    """Temporarily set PRNLev/WRNLev 0 and swallow Fortran stdout/stderr.
+
+    Do not nest inside :func:`charmm_relaxed_bomlev` for CGENFF ``READ PARAM`` —
+    WRNLev 0 prints PARRDR level -3 ``Null nonbond group`` banners. Prefer
+    :func:`charmm_quiet_prnlev` plus :func:`suppress_charmm_fortran_io` there.
+    """
     old = _set_charmm_levels(prnlev=0, warnlev=0)
     try:
         with suppress_charmm_fortran_io():
