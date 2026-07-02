@@ -316,7 +316,7 @@ def test_full_dynamics_campaign_chain(cfg: dict, cell: RunCell) -> None:
     assert jaxmd["ps"] == 3.0
     assert ase["depends_on"] == "jaxmd_prod"
     assert ase["backend"] == "ase"
-    assert ase["integrator"] == "nvt_nhc"
+    assert ase["nvt_integrator"] == "nhc"
     assert ase["ps"] == 4.0
     assert campaign["defaults"]["handoff_write_res"] is True
     assert campaign["defaults"]["continue_velocities"] is True

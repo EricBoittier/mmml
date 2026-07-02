@@ -108,19 +108,43 @@ def main() -> int:
         try:
             payload = json.loads(summary_path.read_text(encoding="utf-8"))
             jobs = payload.get("jobs", payload if isinstance(payload, list) else [])
-            failed = [
-                j.get("job_id")
-                for j in jobs
-                if int(j.get("exit_code", 0)) != 0
-            ]
+            failed = [j for j in jobs if int(j.get("exit_code", 0)) != 0]
             if failed:
-                print(f"Campaign summary reports failed legs: {failed}", file=sys.stderr)
+                for job in failed:
+                    jid = job.get("job_id", "?")
+                    backend = job.get("backend", "?")
+                    stages = job.get("stages") or []
+                    stage_note = ""
+                    if stages:
+                        last = stages[-1]
+                        stage_note = (
+                            f" stage={last.get('stage')} status={last.get('status')}"
+                        )
+                    print(
+                        f"Failed leg {jid} backend={backend} "
+                        f"exit_code={job.get('exit_code')}{stage_note}",
+                        file=sys.stderr,
+                    )
+                print(
+                    f"Campaign summary reports failed legs: "
+                    f"{[j.get('job_id') for j in failed]}",
+                    file=sys.stderr,
+                )
                 return 1
         except (json.JSONDecodeError, TypeError) as exc:
             print(f"Could not parse {summary_path}: {exc}", file=sys.stderr)
             return 1
-    else:
-        print(f"Warning: missing campaign summary {summary_path}", flush=True)
+    elif paths["out_dir"].is_dir():
+        # Campaign may have aborted before writing summary; hint where to look.
+        print(
+            f"Warning: missing campaign summary {summary_path}",
+            flush=True,
+        )
+        for leg in reversed(campaign_job_order(cfg)):
+            leg_dir = paths["out_dir"] / leg
+            if leg_dir.is_dir():
+                print(f"Last leg directory present: {leg_dir}", file=sys.stderr)
+                break
 
     if not paths["final_handoff"].is_file():
         print(

@@ -1,4 +1,4 @@
-"""Generate md-system mini-only campaigns for DCM density × setup comparison."""
+"""Generate md-system campaigns for DCM density × setup comparison."""
 
 from __future__ import annotations
 
@@ -493,7 +493,18 @@ def _append_ase_leg(
 ) -> str:
     ps = float(cfg.get("ase_ps", 10.0))
     setup = str(cfg.get("ase_setup", "pbc_nvt"))
-    integrator = str(cfg.get("ase_integrator", "nvt_nhc"))
+    raw_integrator = str(cfg.get("ase_integrator", "nvt_nhc")).strip().lower()
+    if raw_integrator in {"nvt_nhc", "nhc"}:
+        nvt_integrator = "nhc"
+    elif raw_integrator in {"nvt_langevin", "langevin"}:
+        nvt_integrator = "langevin"
+    elif raw_integrator == "auto":
+        nvt_integrator = "auto"
+    else:
+        raise ValueError(
+            f"unknown ase_integrator {raw_integrator!r} "
+            "(use nvt_nhc, nvt_langevin, or auto)"
+        )
     optional = {str(x) for x in (cfg.get("optional_legs") or [])}
     extra = cfg.get("ase_extra_args")
     if not extra:
@@ -502,12 +513,12 @@ def _append_ase_leg(
     job = _attach_leg_output_dir(
         {
             "description": (
-                f"{comp} ASE {integrator} {setup} ({ps} ps) "
+                f"{comp} ASE {raw_integrator} {setup} ({ps} ps) "
                 f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å"
             ),
             "backend": "ase",
             "setup": setup,
-            "integrator": integrator,
+            "nvt_integrator": nvt_integrator,
             "ps": ps,
             "depends_on": prev,
             "extra_args": list(extra),
