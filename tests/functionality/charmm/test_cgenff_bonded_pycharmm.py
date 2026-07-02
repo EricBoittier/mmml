@@ -77,6 +77,8 @@ def _compare_psf_bonded_to_charmm(psf_path: Path, positions: np.ndarray, **compa
         jnp.asarray(positions),
         system.topology,
         system.bonded,
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
         energy_unit="kcal/mol",
     )
     compare_bonded_to_charmm(components, np.asarray(forces), **compare_kw)

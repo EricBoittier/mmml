@@ -67,10 +67,12 @@ def prepare_mm_bonded_system(
 ) -> tuple[CgenffBondedSystem, Array]:
     """Filter bonded topology to MM-only interactions for embedding."""
     mm_mask = mm_atom_mask_complement(ml_atom_indices, system.n_atoms)
-    topology, bonded = filter_bonded_topology_for_mm(
+    topology, bonded, urey_k, urey_r0 = filter_bonded_topology_for_mm(
         system.topology,
         system.bonded,
         mm_mask,
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
     )
     filtered = CgenffBondedSystem(
         positions=system.positions,
@@ -78,6 +80,8 @@ def prepare_mm_bonded_system(
         bonded=bonded,
         atom_types=system.atom_types,
         charges=system.charges,
+        urey_k=urey_k,
+        urey_r0=urey_r0,
     )
     return filtered, mm_mask
 
@@ -103,6 +107,8 @@ def build_mixed_ml_mm_energy_fn(
     mm_bonded_fn = build_bonded_energy_fn(
         mm_system.topology,
         mm_system.bonded,
+        urey_k=mm_system.urey_k,
+        urey_r0=mm_system.urey_r0,
         energy_unit=config.energy_unit,
     )
     ml_indices = jnp.asarray(config.ml_atom_indices, dtype=jnp.int32)

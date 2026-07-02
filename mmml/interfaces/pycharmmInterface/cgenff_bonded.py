@@ -1,7 +1,9 @@
-"""JAX CGENFF bonded energy and forces (bond/angle/torsion/improper).
+"""JAX CGENFF bonded energy and forces (bond/angle/torsion/improper/urey-bradley).
 
 Formulas follow :mod:`jax_md.mm_forcefields.oplsaa.energy` so MMML bonded terms
-can be cross-checked against the jax-md reference implementation.
+can be cross-checked against the jax-md reference implementation.  Urey–Bradley
+1–3 distance terms (from CHARMM angle lines with ``K_ub`` / ``S0``) are evaluated
+alongside angle terms using the same ``topology.angles`` index rows.
 """
 
 from __future__ import annotations
@@ -26,11 +28,30 @@ def free_space_displacement() -> space.DisplacementFn:
     return disp_fn
 
 
+def urey_bradley_energy(
+    positions: Array,
+    topology: Topology,
+    urey_k: Array | None,
+    urey_r0: Array | None,
+    displacement_fn: space.DisplacementFn,
+) -> Array:
+    """Urey–Bradley 1–3 distance energy for each angle row (kcal/mol)."""
+    if urey_k is None or urey_r0 is None or topology.angles.shape[0] == 0:
+        return jnp.array(0.0, dtype=positions.dtype)
+    i, _, k = topology.angles[:, 0], topology.angles[:, 1], topology.angles[:, 2]
+    disp = vmap(displacement_fn)(positions[i], positions[k])
+    r = safe_norm(disp)
+    return jnp.sum(urey_k * (r - urey_r0) ** 2)
+
+
 def bonded_energy_components(
     positions: Array,
     topology: Topology,
     bonded: BondedParameters,
     displacement_fn: space.DisplacementFn | None = None,
+    *,
+    urey_k: Array | None = None,
+    urey_r0: Array | None = None,
 ) -> dict[str, Array]:
     """Return bonded energy components in kcal/mol (jax-md convention)."""
     if displacement_fn is None:
@@ -124,13 +145,17 @@ def bonded_energy_components(
 
     e_bond = bond_energy()
     e_angle = angle_energy()
+    e_urey = urey_bradley_energy(
+        positions, topology, urey_k, urey_r0, displacement_fn
+    )
     e_torsion = torsion_energy()
     e_improper = improper_energy()
     e_cmap = cmap_energy(positions, topology, bonded, displacement_fn)
-    e_total = e_bond + e_angle + e_torsion + e_improper + e_cmap
+    e_total = e_bond + e_angle + e_urey + e_torsion + e_improper + e_cmap
     return {
         "bond": e_bond,
         "angle": e_angle,
+        "urey": e_urey,
         "torsion": e_torsion,
         "improper": e_improper,
         "cmap": e_cmap,
@@ -144,6 +169,8 @@ def bonded_energy_and_forces(
     bonded: BondedParameters,
     displacement_fn: space.DisplacementFn | None = None,
     *,
+    urey_k: Array | None = None,
+    urey_r0: Array | None = None,
     energy_unit: str = "kcal/mol",
 ) -> tuple[dict[str, Array], Array]:
     """Bonded energy (dict) and forces (N, 3) for a CGENFF bonded model."""
@@ -151,9 +178,23 @@ def bonded_energy_and_forces(
         displacement_fn = free_space_displacement()
 
     def total_energy(pos: Array) -> Array:
-        return bonded_energy_components(pos, topology, bonded, displacement_fn)["total"]
+        return bonded_energy_components(
+            pos,
+            topology,
+            bonded,
+            displacement_fn,
+            urey_k=urey_k,
+            urey_r0=urey_r0,
+        )["total"]
 
-    components = bonded_energy_components(positions, topology, bonded, displacement_fn)
+    components = bonded_energy_components(
+        positions,
+        topology,
+        bonded,
+        displacement_fn,
+        urey_k=urey_k,
+        urey_r0=urey_r0,
+    )
     forces = -jax.grad(total_energy)(positions)
 
     scale = 1.0
@@ -172,6 +213,8 @@ def build_bonded_energy_fn(
     bonded: BondedParameters,
     displacement_fn: space.DisplacementFn | None = None,
     *,
+    urey_k: Array | None = None,
+    urey_r0: Array | None = None,
     energy_unit: str = "kcal/mol",
 ) -> Callable[[Array], tuple[dict[str, Array], Array]]:
     """Return ``(positions) -> (components, forces)`` for reuse in calculators."""
@@ -182,6 +225,8 @@ def build_bonded_energy_fn(
             topology,
             bonded,
             displacement_fn,
+            urey_k=urey_k,
+            urey_r0=urey_r0,
             energy_unit=energy_unit,
         )
 

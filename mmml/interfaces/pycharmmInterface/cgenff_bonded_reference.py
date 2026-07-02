@@ -138,19 +138,11 @@ def compare_bonded_to_charmm(
     charmm_forces = charmm_bonded_forces_kcalmol_A()
 
     ignored = sum(float(charmm.get(term, 0.0)) for term in ignore_charmm_terms)
-    unsupported_charmm = sum(
-        abs(float(charmm.get(term, 0.0)))
-        for term in ("urey", "ub")
-        if term in charmm
-    )
-    if unsupported_charmm > 1e-6:
-        # JAX bonded path omits Urey–Bradley; relax force gate when CHARMM reports it.
-        force_rtol = max(force_rtol, 5e-2)
-        force_atol = max(force_atol, 1.0)
 
     mapping = {
         "bond": "bond",
         "angle": "angl",
+        "urey": ("urey", "ub"),
         "torsion": "dihe",
         "improper": "impr",
         "cmap": "cmap",
@@ -159,9 +151,14 @@ def compare_bonded_to_charmm(
         if jax_key not in jax_components:
             continue
         jax_val = float(jax_components[jax_key])
-        if charmm_key not in charmm:
-            continue
-        charmm_val = float(charmm[charmm_key])
+        if isinstance(charmm_key, tuple):
+            charmm_val = sum(float(charmm.get(k, 0.0)) for k in charmm_key)
+            if not any(k in charmm for k in charmm_key):
+                continue
+        else:
+            if charmm_key not in charmm:
+                continue
+            charmm_val = float(charmm[charmm_key])
         np.testing.assert_allclose(
             jax_val,
             charmm_val,
@@ -171,11 +168,17 @@ def compare_bonded_to_charmm(
         )
 
     if "total" in jax_components:
-        mapped_charmm_total = sum(
-            float(charmm[mapping[k]])
-            for k in mapping
-            if k in jax_components and mapping[k] in charmm
-        ) - ignored
+        mapped_charmm_total = 0.0
+        for k, charmm_key in mapping.items():
+            if k not in jax_components:
+                continue
+            if isinstance(charmm_key, tuple):
+                mapped_charmm_total += sum(
+                    float(charmm[m]) for m in charmm_key if m in charmm
+                )
+            elif charmm_key in charmm:
+                mapped_charmm_total += float(charmm[charmm_key])
+        mapped_charmm_total -= ignored
         np.testing.assert_allclose(
             float(jax_components["total"]),
             mapped_charmm_total,

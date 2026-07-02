@@ -19,6 +19,7 @@ LayerName = Literal["bonded", "nonbonded", "total_mm"]
 BONDED_TERM_MAP: dict[str, str] = {
     "bond": "bond",
     "angle": "angl",
+    "urey": "urey",
     "torsion": "dihe",
     "improper": "impr",
     "cmap": "cmap",
@@ -214,6 +215,8 @@ def benchmark_bonded_layer(
         jnp.asarray(pos),
         bonded.topology,
         bonded.bonded,
+        urey_k=bonded.urey_k,
+        urey_r0=bonded.urey_r0,
         energy_unit="kcal/mol",
     )
     jax_terms = {k: float(v) for k, v in jax_terms_raw.items()}
@@ -221,17 +224,32 @@ def benchmark_bonded_layer(
 
     terms_list: list[TermDelta] = []
     for jax_key, charmm_key in BONDED_TERM_MAP.items():
-        if jax_key not in jax_terms or charmm_key not in charmm_terms:
+        if jax_key not in jax_terms:
             continue
+        if jax_key == "urey":
+            charmm_val = float(charmm_terms.get("urey", 0.0)) + float(
+                charmm_terms.get("ub", 0.0)
+            )
+            if "urey" not in charmm_terms and "ub" not in charmm_terms:
+                continue
+        elif charmm_key not in charmm_terms:
+            continue
+        else:
+            charmm_val = float(charmm_terms[charmm_key])
         terms_list.append(
-            TermDelta.from_pair(jax_key, charmm_terms[charmm_key], jax_terms[jax_key])
+            TermDelta.from_pair(jax_key, charmm_val, jax_terms[jax_key])
         )
     if "total" in jax_terms:
-        charmm_mapped_total = sum(
-            float(charmm_terms.get(BONDED_TERM_MAP[k], 0.0))
-            for k in BONDED_TERM_MAP
-            if k in jax_terms and BONDED_TERM_MAP[k] in charmm_terms
-        )
+        charmm_mapped_total = 0.0
+        for k, charmm_key in BONDED_TERM_MAP.items():
+            if k not in jax_terms:
+                continue
+            if k == "urey":
+                charmm_mapped_total += float(charmm_terms.get("urey", 0.0)) + float(
+                    charmm_terms.get("ub", 0.0)
+                )
+            elif charmm_key in charmm_terms:
+                charmm_mapped_total += float(charmm_terms[charmm_key])
         terms_list.append(
             TermDelta.from_pair("total", charmm_mapped_total, jax_terms["total"])
         )

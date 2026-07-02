@@ -637,6 +637,8 @@ def mm_system_energy_and_forces(
         jnp.asarray(positions),
         bonded_system.topology,
         bonded_system.bonded,
+        urey_k=bonded_system.urey_k,
+        urey_r0=bonded_system.urey_r0,
         energy_unit="kcal/mol",
     )
     nb_comp, nb_forces = nonbonded_energy_and_forces(

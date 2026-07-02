@@ -87,6 +87,8 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
         jnp.asarray(positions),
         bonded.topology,
         bonded.bonded,
+        urey_k=bonded.urey_k,
+        urey_r0=bonded.urey_r0,
         energy_unit="kcal/mol",
     )
     compare_bonded_to_charmm(

@@ -80,10 +80,12 @@ def load_bonded_system_for_recovery(
         ml_atom_indices = _ml_atom_indices(ctx)
     if ml_atom_indices:
         mm_mask = mm_atom_mask_complement(ml_atom_indices, system.n_atoms)
-        topology, bonded = filter_bonded_topology_for_mm(
+        topology, bonded, urey_k, urey_r0 = filter_bonded_topology_for_mm(
             system.topology,
             system.bonded,
             mm_mask,
+            urey_k=system.urey_k,
+            urey_r0=system.urey_r0,
         )
         system = CgenffBondedSystem(
             positions=system.positions,
@@ -91,6 +93,8 @@ def load_bonded_system_for_recovery(
             bonded=bonded,
             atom_types=system.atom_types,
             charges=system.charges,
+            urey_k=urey_k,
+            urey_r0=urey_r0,
         )
     return system, psf_source
 
@@ -148,6 +152,8 @@ def _run_jax_bonded_fire(
     bonded_eval = build_bonded_energy_fn(
         system.topology,
         system.bonded,
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
         energy_unit="kcal/mol",
     )
     pos0 = jnp.asarray(positions, dtype=jnp.float64)

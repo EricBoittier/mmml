@@ -113,6 +113,8 @@ def _jax_recovery_reference(
             jnp.asarray(positions),
             system.topology,
             system.bonded,
+            urey_k=system.urey_k,
+            urey_r0=system.urey_r0,
             energy_unit="kcal/mol",
         )
         nbond_data = load_nonbonded_system_from_charmm(psf_source.path, CGENFF_PRM)

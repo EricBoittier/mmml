@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
+import re
 import tempfile
 
 import jax.numpy as jnp
@@ -37,6 +38,8 @@ class CgenffBondedSystem:
     bonded: BondedParameters
     atom_types: tuple[str, ...]
     charges: Array
+    urey_k: Array
+    urey_r0: Array
 
     @property
     def n_atoms(self) -> int:
@@ -84,6 +87,50 @@ def _parse_prm_skip_cmap(prm_path: Path | str):
         return parse_prm(tmp_path)
     finally:
         Path(tmp_path).unlink(missing_ok=True)
+
+
+_ANGLE_UB_LINE = re.compile(
+    r"^(\S+)\s+(\S+)\s+(\S+)\s+[\d.-]+\s+[\d.-]+\s+([\d.-]+)\s+([\d.-]+)"
+)
+
+
+def parse_charmm_prm_urey_bradley(
+    prm_path: Path | str,
+) -> dict[tuple[str, str, str], tuple[float, float]]:
+    """Parse Urey–Bradley ``K_ub`` / ``S0`` from CHARMM PRM angle lines."""
+    params: dict[tuple[str, str, str], tuple[float, float]] = {}
+    section: str | None = None
+    for raw in Path(prm_path).read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("!") or line.startswith("*"):
+            continue
+        if line.startswith("ANGLE"):
+            section = "ANGLE"
+            continue
+        if line.startswith("END"):
+            break
+        if section != "ANGLE":
+            continue
+        m = _ANGLE_UB_LINE.match(line)
+        if m is None:
+            continue
+        type1, type2, type3, kub, s0 = m.groups()
+        kub_f = float(kub)
+        s0_f = float(s0)
+        if kub_f == 0.0:
+            continue
+        params[(type1, type2, type3)] = (kub_f, s0_f)
+        params[(type3, type2, type1)] = (kub_f, s0_f)
+    return params
+
+
+def _merge_charmm_prm_urey_parameters(
+    *prm_paths: Path | str,
+) -> dict[tuple[str, str, str], tuple[float, float]]:
+    merged: dict[tuple[str, str, str], tuple[float, float]] = {}
+    for path in prm_paths:
+        merged.update(parse_charmm_prm_urey_bradley(path))
+    return merged
 
 
 def _merge_charmm_prm_parameters(
@@ -365,7 +412,8 @@ def _build_bonded_parameters(
     bond_params: dict,
     angle_params: dict,
     dihedral_params: dict,
-) -> BondedParameters:
+    urey_params: dict[tuple[str, str, str], tuple[float, float]] | None = None,
+) -> tuple[BondedParameters, Array, Array, np.ndarray, np.ndarray]:
     bond_k = np.zeros(len(bonds), dtype=np.float64)
     bond_r0 = np.zeros(len(bonds), dtype=np.float64)
     for i, (idx1, idx2) in enumerate(bonds):
@@ -376,11 +424,15 @@ def _build_bonded_parameters(
 
     angle_k = np.zeros(len(angles), dtype=np.float64)
     angle_theta0 = np.zeros(len(angles), dtype=np.float64)
+    urey_k = np.zeros(len(angles), dtype=np.float64)
+    urey_r0 = np.zeros(len(angles), dtype=np.float64)
     for i, (idx1, idx2, idx3) in enumerate(angles):
         key = (atom_types[int(idx1)], atom_types[int(idx2)], atom_types[int(idx3)])
         if key in angle_params:
             angle_k[i] = angle_params[key].k
             angle_theta0[i] = np.radians(angle_params[key].theta0)
+        if urey_params and key in urey_params:
+            urey_k[i], urey_r0[i] = urey_params[key]
 
     torsion_rows: list[list[int]] = []
     torsion_k: list[float] = []
@@ -440,19 +492,25 @@ def _build_bonded_parameters(
         else np.zeros((0, 4), dtype=np.int32)
     )
 
-    return BondedParameters(
-        bond_k=jnp.asarray(bond_k),
-        bond_r0=jnp.asarray(bond_r0),
-        angle_k=jnp.asarray(angle_k),
-        angle_theta0=jnp.asarray(angle_theta0),
-        torsion_k=jnp.asarray(torsion_k, dtype=jnp.float64),
-        torsion_n=jnp.asarray(torsion_n, dtype=np.int32),
-        torsion_gamma=jnp.asarray(torsion_gamma, dtype=jnp.float64),
-        improper_k=jnp.asarray(improper_k, dtype=jnp.float64),
-        improper_n=jnp.asarray(improper_n, dtype=np.int32),
-        improper_gamma=jnp.asarray(improper_gamma, dtype=jnp.float64),
-        cmap_maps=None,
-    ), torsion_idx, improper_idx
+    return (
+        BondedParameters(
+            bond_k=jnp.asarray(bond_k),
+            bond_r0=jnp.asarray(bond_r0),
+            angle_k=jnp.asarray(angle_k),
+            angle_theta0=jnp.asarray(angle_theta0),
+            torsion_k=jnp.asarray(torsion_k, dtype=jnp.float64),
+            torsion_n=jnp.asarray(torsion_n, dtype=np.int32),
+            torsion_gamma=jnp.asarray(torsion_gamma, dtype=jnp.float64),
+            improper_k=jnp.asarray(improper_k, dtype=jnp.float64),
+            improper_n=jnp.asarray(improper_n, dtype=np.int32),
+            improper_gamma=jnp.asarray(improper_gamma, dtype=jnp.float64),
+            cmap_maps=None,
+        ),
+        jnp.asarray(urey_k),
+        jnp.asarray(urey_r0),
+        torsion_idx,
+        improper_idx,
+    )
 
 
 def load_cgenff_bonded_from_psf(
@@ -473,8 +531,9 @@ def load_cgenff_bonded_from_psf(
     prm_path = Path(prm_file) if prm_file is not None else default_cgenff_paths()[1]
     prm_paths = [prm_path, *extra_prm_files]
     bond_params, angle_params, dihedral_params = _merge_charmm_prm_parameters(*prm_paths)
+    urey_params = _merge_charmm_prm_urey_parameters(*prm_paths)
 
-    bonded, torsions, impropers = _build_bonded_parameters(
+    bonded, urey_k, urey_r0, torsions, impropers = _build_bonded_parameters(
         psf.atom_types,
         psf.bonds,
         psf.angles,
@@ -483,6 +542,7 @@ def load_cgenff_bonded_from_psf(
         bond_params,
         angle_params,
         dihedral_params,
+        urey_params,
     )
     cmap_atoms, cmap_map_idx, cmap_coeffs = build_cmap_arrays(
         psf.cmaps,
@@ -519,6 +579,8 @@ def load_cgenff_bonded_from_psf(
         bonded=bonded,
         atom_types=psf.atom_types,
         charges=psf.charges,
+        urey_k=urey_k,
+        urey_r0=urey_r0,
     )
 
 
@@ -548,6 +610,7 @@ def load_cgenff_bonded_from_charmm_files(
         rtf_source = rtf_path.read_text(encoding="utf-8", errors="replace")
 
     bond_params, angle_params, dihedral_params, _ = parse_prm(str(prm_path))
+    urey_params = parse_charmm_prm_urey_bradley(prm_path)
     pdb_atom_names, positions = parse_pdb_simple(str(pdb_path))
 
     n_atoms = len(pdb_atom_names)
@@ -607,11 +670,15 @@ def load_cgenff_bonded_from_charmm_files(
 
     angle_k = np.zeros(len(angles), dtype=np.float64)
     angle_theta0 = np.zeros(len(angles), dtype=np.float64)
+    urey_k = np.zeros(len(angles), dtype=np.float64)
+    urey_r0 = np.zeros(len(angles), dtype=np.float64)
     for i, (idx1, idx2, idx3) in enumerate(angles):
         key = (atom_types[int(idx1)], atom_types[int(idx2)], atom_types[int(idx3)])
         if key in angle_params:
             angle_k[i] = angle_params[key].k
             angle_theta0[i] = np.radians(angle_params[key].theta0)
+        if key in urey_params:
+            urey_k[i], urey_r0[i] = urey_params[key]
 
     torsion_k = np.zeros(len(torsions), dtype=np.float64)
     torsion_n = np.zeros(len(torsions), dtype=np.int32)
@@ -661,6 +728,8 @@ def load_cgenff_bonded_from_charmm_files(
         bonded=bonded,
         atom_types=atom_types,
         charges=charges,
+        urey_k=jnp.asarray(urey_k),
+        urey_r0=jnp.asarray(urey_r0),
     )
 
 
@@ -684,7 +753,10 @@ def filter_bonded_topology_for_mm(
     topology: Topology,
     bonded: BondedParameters,
     mm_mask: Array,
-) -> tuple[Topology, BondedParameters]:
+    *,
+    urey_k: Array | None = None,
+    urey_r0: Array | None = None,
+) -> tuple[Topology, BondedParameters, Array, Array]:
     """Keep bonded interactions whose atoms are all MM (embedding boundary safe)."""
     mm_np = np.asarray(mm_mask, dtype=bool)
 
@@ -731,7 +803,15 @@ def filter_bonded_topology_for_mm(
         improper_gamma=_slice_params(bonded.improper_gamma, improper_keep),
         cmap_maps=bonded.cmap_maps,
     )
-    return filtered_topology, filtered_bonded
+    if urey_k is None:
+        urey_k_out = jnp.zeros((int(angle_keep.sum()),), dtype=jnp.float64)
+    else:
+        urey_k_out = _slice_params(urey_k, angle_keep)
+    if urey_r0 is None:
+        urey_r0_out = jnp.zeros((int(angle_keep.sum()),), dtype=jnp.float64)
+    else:
+        urey_r0_out = _slice_params(urey_r0, angle_keep)
+    return filtered_topology, filtered_bonded, urey_k_out, urey_r0_out
 
 
 def concat_cgenff_systems(systems: Iterable[CgenffBondedSystem]) -> CgenffBondedSystem:
@@ -751,6 +831,8 @@ def concat_cgenff_systems(systems: Iterable[CgenffBondedSystem]) -> CgenffBonded
     bond_r0s: list[Array] = []
     angle_ks: list[Array] = []
     angle_theta0s: list[Array] = []
+    urey_ks: list[Array] = []
+    urey_r0s: list[Array] = []
     torsion_ks: list[Array] = []
     torsion_ns: list[Array] = []
     torsion_gammas: list[Array] = []
@@ -782,6 +864,8 @@ def concat_cgenff_systems(systems: Iterable[CgenffBondedSystem]) -> CgenffBonded
         bond_r0s.append(system.bonded.bond_r0)
         angle_ks.append(system.bonded.angle_k)
         angle_theta0s.append(system.bonded.angle_theta0)
+        urey_ks.append(system.urey_k)
+        urey_r0s.append(system.urey_r0)
         torsion_ks.append(system.bonded.torsion_k)
         torsion_ns.append(system.bonded.torsion_n)
         torsion_gammas.append(system.bonded.torsion_gamma)
@@ -822,4 +906,6 @@ def concat_cgenff_systems(systems: Iterable[CgenffBondedSystem]) -> CgenffBonded
         bonded=bonded,
         atom_types=tuple(atom_types),
         charges=jnp.concatenate(charges),
+        urey_k=jnp.concatenate(urey_ks),
+        urey_r0=jnp.concatenate(urey_r0s),
     )
