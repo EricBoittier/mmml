@@ -122,6 +122,9 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
         "handoff_pre_minimize",
         "setup_variant",
         "setup_description",
+        "prep_sweep_id",
+        "prep_sweep_overrides",
+        "campaign_output",
     }
 )
 

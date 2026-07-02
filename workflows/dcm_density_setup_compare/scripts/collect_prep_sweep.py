@@ -38,6 +38,10 @@ _GRMS_OVERLAP_FAIL = re.compile(
     r"post-overlap-rescue hybrid GRMS\s+([0-9.]+)\s*kcal/mol/Å\s*>\s*([0-9.]+)"
 )
 _ERROR = re.compile(r"pycharmm_mlpot: error:\s*(.+)", re.MULTILINE)
+_FAIL = re.compile(
+    r"(?:pycharmm_mlpot: error:|Unknown config key\(s\)|setup-compare campaign failed|Traceback \(most recent call last\))",
+    re.MULTILINE,
+)
 _DONE = re.compile(r"Campaign summary", re.MULTILINE)
 
 
@@ -88,7 +92,7 @@ def _row_for_cell(cfg: dict[str, Any], cell: Any) -> dict[str, Any]:
     if (out_dir / "done.txt").is_file():
         status = "done"
     elif stdout:
-        status = "failed" if _ERROR.search(stdout) else "running_or_incomplete"
+        status = "failed" if _FAIL.search(stdout) else "running_or_incomplete"
 
     return {
         "run_tag": cell_run_tag(cell, cfg),

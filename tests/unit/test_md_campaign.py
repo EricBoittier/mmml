@@ -575,10 +575,16 @@ def test_strip_campaign_metadata_keys_drops_setup_compare_fields() -> None:
     raw = {
         "setup_variant": "liquid_prep_dense",
         "setup_description": "liquid_prep + density_prep_ladder",
+        "prep_sweep_id": "baseline",
+        "prep_sweep_overrides": {"spacing": 6.0},
+        "campaign_output": "/tmp/out",
         "composition": "DCM:127",
         "box_size": 30.0,
     }
     stripped = strip_campaign_metadata_keys(raw)
     assert "setup_variant" not in stripped
     assert "setup_description" not in stripped
+    assert "prep_sweep_id" not in stripped
+    assert "prep_sweep_overrides" not in stripped
+    assert "campaign_output" not in stripped
     assert stripped["composition"] == "DCM:127"
