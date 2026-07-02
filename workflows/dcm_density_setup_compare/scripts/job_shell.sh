@@ -2,6 +2,7 @@
 # Run one DCM density × setup mini campaign (called from Snakemake).
 # Usage: job_shell.sh RUN_TAG
 #   e.g. job_shell.sh minimal_dcm_77_t300_l32
+#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/job_shell.sh resilient_dcm_52_t50_l28_sw_baseline
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,6 +18,14 @@ PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
+_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+if [[ "$_cfg_raw" = /* ]]; then
+  CFG="${_cfg_raw}"
+else
+  CFG="${WORKFLOW_ROOT}/${_cfg_raw}"
+fi
+export MMML_WORKFLOW_CONFIG="$CFG"
+
 if ! ldconfig -p 2>/dev/null | grep -q 'libOpenCL\.so'; then
   echo "ERROR: libOpenCL.so.1 not found on this host ($(hostname))." >&2
   echo "PyCHARMM/CHARMM must run on a GPU compute node." >&2
@@ -27,6 +36,7 @@ fi
 
 echo "=== dcm_density_setup_compare: ${RUN_TAG} ==="
 echo "REPO_ROOT=${REPO_ROOT}"
+echo "WORKFLOW_CONFIG=${CFG}"
 echo "PY=${PY}"
 echo "MMML_CKPT=${MMML_CKPT:-<unset>}"
 echo "JAX_ENABLE_X64=${JAX_ENABLE_X64}"
@@ -37,7 +47,7 @@ from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, cell_from_tag
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import estimate_ml_atoms
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cfg = load_config(Path('${CFG}'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(estimate_ml_atoms(cell.n_monomers, solvent=cell.solvent))
 ")"
@@ -46,7 +56,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, cell_from_tag
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cfg = load_config(Path('${CFG}'))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print(cell.box_size)
 ")"
@@ -61,11 +71,11 @@ import sys
 from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, resolve_checkpoint, cell_from_tag
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cfg = load_config(Path('${CFG}'))
 resolve_checkpoint(str(cfg['checkpoint']))
 cell = cell_from_tag(cfg, '${RUN_TAG}')
 print('Preflight OK:', resolve_checkpoint(str(cfg['checkpoint'])), cell, flush=True)
 "
 
 exec "$PY" "$WORKFLOW_ROOT/scripts/run_job.py" --tag "$RUN_TAG" \
-  --config "$WORKFLOW_ROOT/config.yaml"
+  --config "$CFG"

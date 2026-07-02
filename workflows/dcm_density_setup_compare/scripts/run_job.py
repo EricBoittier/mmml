@@ -22,6 +22,7 @@ from campaign_lib import (  # noqa: E402
     cell_from_cli,
     cell_from_tag,
     cell_run_tag,
+    cell_workflow_cfg,
     init_job_id,
     load_config,
     paths_for_run,
@@ -85,18 +86,20 @@ def main() -> int:
     cmd = _resolve_mmml_cmd(md_argv)
 
     tag = cell_run_tag(cell, cfg)
+    cell_cfg = cell_workflow_cfg(cfg, cell)
     campaign = yaml.safe_load(paths["campaign_yaml"].read_text(encoding="utf-8"))
-    first_id = init_job_id(cfg)
+    first_id = init_job_id(cell_cfg)
     init_job = campaign["runs"][first_id]
     ht = cell.heat_thermostat or init_job.get("heat_thermostat")
     print(
         f"{first_id}: setup={cell.setup_id} md_stages={init_job.get('md_stages')} "
         f"heat_thermostat={ht} liquid_prep={init_job.get('liquid_prep')} "
         f"calculator_pre_minimize={init_job.get('calculator_pre_minimize')} "
-        f"charmm_mm_pretreat={init_job.get('charmm_mm_pretreat')}",
+        f"charmm_mm_pretreat={init_job.get('charmm_mm_pretreat')} "
+        f"sweep={cell.sweep_id or '-'}",
         flush=True,
     )
-    print(f"Campaign jobs ({tag}): {campaign_job_order(cfg)}", flush=True)
+    print(f"Campaign jobs ({tag}): {campaign_job_order(cell_cfg)}", flush=True)
     print(f"Running: {' '.join(cmd)}", flush=True)
     rc = subprocess.call(cmd)
     if rc != 0:
@@ -140,7 +143,7 @@ def main() -> int:
             f"Warning: missing campaign summary {summary_path}",
             flush=True,
         )
-        for leg in reversed(campaign_job_order(cfg)):
+        for leg in reversed(campaign_job_order(cell_cfg)):
             leg_dir = paths["out_dir"] / leg
             if leg_dir.is_dir():
                 print(f"Last leg directory present: {leg_dir}", file=sys.stderr)

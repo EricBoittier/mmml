@@ -4,6 +4,14 @@ WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
 cd "$REPO_ROOT"
 
+_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+if [[ "$_cfg_raw" = /* ]]; then
+  CFG="${_cfg_raw}"
+else
+  CFG="${WORKFLOW_ROOT}/${_cfg_raw}"
+fi
+export MMML_WORKFLOW_CONFIG="$CFG"
+
 # shellcheck source=../../../scripts/resolve_mmml_env.sh
 source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
@@ -27,6 +35,9 @@ from campaign_lib import (
     matrix_setup_ids,
     matrix_temperatures,
     parse_dynamics_legs,
+    prep_sweep_anchor_cell,
+    prep_sweep_enabled,
+    prep_sweep_variant_ids,
     resolve_checkpoint,
     slurm_launch_jobs,
     slurm_small_cluster_max_n,
@@ -35,7 +46,7 @@ from campaign_lib import (
 )
 from setup_variants import resolve_setup_variant
 from bulk_density import bulk_reference_table, matrix_uses_bulk_density
-cfg = load_config(Path('${WORKFLOW_ROOT}/config.yaml'))
+cfg = load_config(Path('${CFG}'))
 ckpt = resolve_checkpoint(str(cfg['checkpoint']))
 print('Preflight OK')
 print('checkpoint:', ckpt)
@@ -109,6 +120,7 @@ if prep_sweep_enabled(cfg):
     print('prep_sweep anchor:', anchor)
     print('prep_sweep variants:', prep_sweep_variant_ids(cfg))
     print('prep_sweep jobs:', matrix_job_count(cfg))
+print('workflow_config:', Path('${CFG}'))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then

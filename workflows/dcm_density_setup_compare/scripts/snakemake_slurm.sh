@@ -2,7 +2,11 @@
 # Launch dcm_density_setup_compare on Slurm via Snakemake executor plugin.
 #
 # Usage: snakemake_slurm.sh [MAX_JOBS] [extra snakemake args...]
-#   MAX_JOBS defaults to tier pools from config.yaml (fast + slow when tiering on).
+#   MAX_JOBS defaults to tier pools from the workflow config (fast + slow when tiering on).
+#
+# Prep sweep (must export config to compute jobs via MMML_WORKFLOW_CONFIG):
+#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/snakemake_slurm.sh
+#   bash scripts/snakemake_prep_sweep.sh
 #
 # From pc-studix login node (no OpenCL on login — jobs run on GPU compute nodes):
 #   export MMML_CKPT=/path/to/DESdimers_params.json
@@ -18,18 +22,30 @@ source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
+_cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+if [[ "$_cfg_raw" = /* ]]; then
+  CFG_PATH="$_cfg_raw"
+elif [[ "$_cfg_raw" == */* ]]; then
+  CFG_PATH="$(cd "$(dirname "$_cfg_raw")" && pwd)/$(basename "$_cfg_raw")"
+else
+  CFG_PATH="${WORKFLOW_ROOT}/${_cfg_raw}"
+fi
+export MMML_WORKFLOW_CONFIG="$CFG_PATH"
+CONFIG_ARGS=(--configfile "$CFG_PATH")
+
 IFS=$'\t' read -r DEFAULT_JOBS DEFAULT_RES <<EOF
 $("$PY" -c "
 import sys
+from pathlib import Path
 sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
 from campaign_lib import load_config, slurm_launch_jobs, slurm_resources_cli
-cfg = load_config()
+cfg = load_config(Path('${CFG_PATH}'))
 print(f\"{slurm_launch_jobs(cfg)}\t{slurm_resources_cli(cfg)}\")
 ")
 EOF
 
 if [[ -z "${DEFAULT_RES:-}" ]]; then
-  echo "snakemake_slurm.sh: failed to resolve --resources from config.yaml" >&2
+  echo "snakemake_slurm.sh: failed to resolve --resources from ${CFG_PATH}" >&2
   exit 1
 fi
 
@@ -55,11 +71,12 @@ if [[ "${MMML_SNAKEMAKE_FORCE:-}" != "1" ]]; then
   fi
 fi
 
-echo "Snakemake Slurm: -j${JOBS} --resources ${DEFAULT_RES}" >&2
+echo "Snakemake Slurm: config=${CFG_PATH} -j${JOBS} --resources ${DEFAULT_RES}" >&2
 
 # shellcheck disable=SC2086
 exec uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake \
   --profile profiles/slurm \
+  "${CONFIG_ARGS[@]}" \
   -j"$JOBS" \
   --resources ${DEFAULT_RES} \
   --keep-going \

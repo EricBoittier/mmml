@@ -389,6 +389,23 @@ def test_prep_sweep_applies_overrides_to_campaign(cfg: dict) -> None:
     assert mini["md_stages"] == "mini"
 
 
+def test_prep_sweep_tag_unknown_in_default_config(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini",
+            "anchor": {"setup_id": "resilient", "n_monomers": 52, "temperature": 50.0, "box_size": 28.0},
+            "variants": {"baseline": {}},
+        },
+    }
+    tag = "resilient_dcm_52_t50_l28_sw_baseline"
+    with pytest.raises(KeyError):
+        cell_from_tag(cfg, tag)
+    cell = cell_from_tag(sweep_cfg, tag)
+    assert cell.sweep_id == "baseline"
+
+
 def test_prep_sweep_mini_heat_stage(cfg: dict) -> None:
     sweep_cfg = {
         **cfg,

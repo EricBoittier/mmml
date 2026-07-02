@@ -160,13 +160,17 @@ Default variants: `baseline`, `dt050`, `pmtol25/30`, `spacing50/70`, `cut_tight/
 ```bash
 cd workflows/dcm_density_setup_compare
 export MMML_CKPT=/path/to/DESdimers_params.json
-bash scripts/preflight.sh
+bash scripts/preflight.sh   # uses config.yaml unless MMML_WORKFLOW_CONFIG is set
+
+# Prep sweep (11 jobs) — must set MMML_WORKFLOW_CONFIG for driver AND Slurm jobs:
+MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
 snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm -n
-nohup snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm \
-  > snakemake_prep_sweep.log 2>&1 &
+nohup bash scripts/snakemake_prep_sweep.sh > snakemake_prep_sweep.log 2>&1 &
 bash scripts/collect_prep_sweep.sh
 # -> results/prep_sweep_summary.csv
 ```
+
+**Important:** Do not pass only `--configfile` to Snakemake without `MMML_WORKFLOW_CONFIG` — compute jobs would still read `config.yaml` and fail on `_sw_*` tags. Use `snakemake_prep_sweep.sh` or export `MMML_WORKFLOW_CONFIG` before launching.
 
 Add your own variant under `prep_sweep.variants` (lowercase id, mapping of md-system keys). Set `prep_sweep.stages: mini,heat` and `anchor.heat_thermostat: bussi` to test heat/overlap on the same anchor.
 

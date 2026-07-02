@@ -40,7 +40,12 @@ debug_artifact_root() {
   local wf repo cfg raw py
   wf="$(debug_workflow_root)"
   repo="$(debug_repo_root)"
-  cfg="$wf/config.yaml"
+  cfg_raw="${MMML_WORKFLOW_CONFIG:-config.yaml}"
+  if [[ "$cfg_raw" = /* ]]; then
+    cfg="$cfg_raw"
+  else
+    cfg="$wf/$cfg_raw"
+  fi
   if [[ -f "$cfg" ]]; then
     py="$(debug_python)"
     raw="$("$py" -c "
