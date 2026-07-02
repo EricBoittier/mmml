@@ -94,26 +94,20 @@ def apply_zeroed_cgenff_params(
 def apply_full_cgenff_params(*, verbose: bool = False) -> None:
     """Restore bonded CGENFF parameters (append-safe) and verify PSF bonds.
 
-    In PBC+MLpot context the bonded parameters were already loaded at session
-    start (full CGenFF read).  ``READ PARAM APPEND`` of the bonded-only file
-    is a no-op for bonded terms but has a fatal side effect: it triggers
-    ``suspend_pbc_before_cgenff_param_append()`` (``crystal free``) followed by
-    ``_finalize_pbc_mlpot_exclusions_after_param_read()`` (``CHARMM UPDATE``),
-    which invokes ``enbav2e2b2_`` with PBC crystal + force-switched cutoffs and
-    segfaults.  When PBC is active we skip the re-read and update the mode
-    tracker only.
+    MLpot registration zeroes bonded force constants via
+    ``apply_zeroed_cgenff_params(bonded_only=True)`` so that CHARMM's bonded
+    evaluator does not double-count bonds/angles/dihedrals already handled by
+    the ML potential.  This function restores them via ``READ PARAM APPEND``
+    before any bonded-MM recovery or strain measurement.
+
+    In PBC context, ``READ PARAM APPEND`` calls ``suspend_pbc_before_cgenff_param_append``
+    (``crystal free``) then CHARMM's parameter reader, which clears IMAGE lists.
+    ``_finalize_pbc_mlpot_exclusions_after_param_read`` (called by
+    ``reregister_mlpot``) rebuilds crystal + lists via ``CHARMM UPDATE`` — the
+    scripting-layer UPDATE is safe even after long SD, unlike ``update_bnbnd``/
+    ``upinb`` which segfaults on all-ML PBC clusters post-SD.
     """
     global _active_mode
-    if _pbc_crystal_is_active():
-        n_bond = assert_psf_bonds_present(context="CGENFF MM restore (PBC skip)")
-        _active_mode = "full"
-        summary = f"CGENFF params: bonded restore skipped (PBC active; PSF bonds={n_bond})"
-        from mmml.utils.rich_report import emit_charmm_block
-
-        emit_charmm_block(summary, verbose=verbose)
-        if verbose:
-            print(summary, flush=True)
-        return
     path = bonded_cgenff_prm_path()
     _read_cgenff_prm(path)
     n_bond = assert_psf_bonds_present(context="CGENFF MM restore")
@@ -124,38 +118,6 @@ def apply_full_cgenff_params(*, verbose: bool = False) -> None:
     emit_charmm_block(summary, verbose=verbose)
     if verbose:
         print(summary, flush=True)
-
-
-def _pbc_crystal_is_active() -> bool:
-    """Return True when CHARMM has a live PBC crystal (``pbound > 0`` or ``ntrans > 1``)."""
-    try:
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import PYCHARMM_AVAILABLE
-
-        if not PYCHARMM_AVAILABLE:
-            return False
-        try:
-            import pycharmm.image as image
-
-            if int(image.get_ntrans()) > 1:
-                return True
-        except Exception:
-            pass
-        try:
-            import ctypes
-
-            import pycharmm.lib as lib
-
-            sx = ctypes.c_double(0.0)
-            sy = ctypes.c_double(0.0)
-            sz = ctypes.c_double(0.0)
-            lib.charmm.pbound_get_size(ctypes.byref(sx), ctypes.byref(sy), ctypes.byref(sz))
-            if min(float(sx.value), float(sy.value), float(sz.value)) > 0.0:
-                return True
-        except Exception:
-            pass
-    except Exception:
-        pass
-    return False
 
 
 def active_cgenff_prm_mode() -> _CgenffPrmMode | None:
