@@ -13,7 +13,6 @@ from typing import Callable, Sequence
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 from jax import Array
 from jax_md.mm_forcefields.base import BondedParameters, Topology
 from jax_md.mm_forcefields.oplsaa.topology import create_topology
@@ -178,6 +177,32 @@ def build_jax_mm_spoof_batch_apply(
 ) -> Callable[[Array, Array, Array], dict[str, Array]]:
     """Return ``apply_model(Z, R, N)`` compatible with MLpot batching."""
     mono_n = int(atoms_per_monomer)
+    mono_n_j = jnp.asarray(mono_n, dtype=jnp.int32)
+
+    def _eval_one(R: Array, N: Array) -> tuple[Array, Array]:
+        e_mono, f_mono = monomer_eval(R[:mono_n])
+        mono_forces = jnp.zeros_like(R).at[:mono_n].set(f_mono)
+
+        e_a, f_a = monomer_eval(R[:mono_n])
+        e_b, f_b = monomer_eval(R[mono_n : 2 * mono_n])
+        dimer_pos = R[: 2 * mono_n]
+        e_nb, f_nb = _inter_monomer_soft_repulsion(dimer_pos, mono_n)
+        dimer_forces = jnp.zeros_like(R)
+        dimer_forces = dimer_forces.at[:mono_n].set(f_a + f_nb[:mono_n])
+        dimer_forces = dimer_forces.at[mono_n : 2 * mono_n].set(f_b + f_nb[mono_n : 2 * mono_n])
+        dimer_energy = e_a + e_b + e_nb
+
+        is_dimer = N > mono_n_j
+
+        def _take_dimer(_):
+            return dimer_energy, dimer_forces
+
+        def _take_mono(_):
+            return e_mono, mono_forces
+
+        return jax.lax.cond(is_dimer, _take_dimer, _take_mono, operand=None)
+
+    vmapped = jax.vmap(_eval_one, in_axes=(0, 0))
 
     def apply_model(
         atomic_numbers: Array,
@@ -185,31 +210,13 @@ def build_jax_mm_spoof_batch_apply(
         batch_n: Array,
     ) -> dict[str, Array]:
         _ = atomic_numbers  # Z unused; topology is fixed in spoof mode
-        batch_size = int(batch_n.shape[0])
+        batch_size = positions.shape[0] // max_atoms
         R = positions.reshape(batch_size, max_atoms, 3)
-        N = np.asarray(batch_n, dtype=np.int32).reshape(batch_size)
-        energies: list[Array] = []
-        forces_out: list[Array] = []
-        for i in range(batch_size):
-            n = int(N[i])
-            R_i = R[i]
-            if n > mono_n:
-                e_a, f_a = monomer_eval(R_i[:mono_n])
-                e_b, f_b = monomer_eval(R_i[mono_n:n])
-                e_nb, f_nb = _inter_monomer_soft_repulsion(R_i[:n], mono_n)
-                energy = e_a + e_b + e_nb
-                forces = jnp.zeros_like(R_i)
-                forces = forces.at[:mono_n].set(f_a)
-                forces = forces.at[mono_n:n].set(f_b + f_nb)
-            else:
-                energy, f_mono = monomer_eval(R_i[:n])
-                forces = jnp.zeros_like(R_i)
-                forces = forces.at[:n].set(f_mono)
-            energies.append(jnp.asarray(energy))
-            forces_out.append(forces.reshape(-1, 3))
+        N = jnp.asarray(batch_n, dtype=jnp.int32).reshape(batch_size)
+        energies, forces = vmapped(R, N)
         return {
-            "energy": jnp.stack(energies),
-            "forces": jnp.concatenate(forces_out, axis=0),
+            "energy": energies.reshape(batch_size),
+            "forces": forces.reshape(batch_size * max_atoms, 3),
         }
 
     return apply_model

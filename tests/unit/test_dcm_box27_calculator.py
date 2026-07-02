@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import os
+from unittest.mock import patch
 
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 
@@ -61,11 +64,23 @@ def test_dcm_box27_hybrid_calculator_jax_mm_spoof(case_name: str) -> None:
     n_atoms = int(pos.shape[0])
     atoms_per_monomer = n_atoms // n_monomers
     z = jnp.full((n_atoms,), 6, dtype=jnp.int32)
-    fake_mm_fn = MagicMock(return_value=(jnp.array(0.0), jnp.zeros((n_atoms, 3))))
+    fake_mm_fn = lambda *args, **kwargs: (
+        jnp.array(0.0, dtype=jnp.float32),
+        jnp.zeros((n_atoms, 3), dtype=jnp.float32),
+    )
+    fake_update_fn = lambda *args, **kwargs: (
+        jnp.zeros((1, 2), dtype=jnp.int32),
+        jnp.ones((1,), dtype=bool),
+    )
+
+    def fake_build_mm(*args, **kwargs):
+        if kwargs.get("use_jax_md_neighbor_list", True):
+            return fake_mm_fn, fake_update_fn
+        return fake_mm_fn
 
     with patch(
         "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
-        return_value=fake_mm_fn,
+        side_effect=fake_build_mm,
     ):
         factory = setup_calculator(
             ATOMS_PER_MONOMER=atoms_per_monomer,
@@ -81,7 +96,7 @@ def test_dcm_box27_hybrid_calculator_jax_mm_spoof(case_name: str) -> None:
             verbose=False,
             ml_sparse_dimers=False,
         )
-        spherical_fn, _, _ = factory(
+        _, spherical_fn, _ = factory(
             atomic_numbers=z,
             atomic_positions=jnp.asarray(pos, dtype=jnp.float64),
             n_monomers=n_monomers,
