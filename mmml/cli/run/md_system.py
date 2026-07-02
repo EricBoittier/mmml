@@ -686,7 +686,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "pycharmm: CGENFF minimize + CHARMM heat/equi/prod before MLpot (no PhysNet); "
             "see --charmm-mm-pretreat-ps-* and --charmm-mm-pretreat-heat-nstep. "
-            "Skipped when continuing from handoff unless --charmm-mm-pretreat-on-handoff"
+            "Skipped with --liquid-prep unless --charmm-mm-pretreat-with-liquid-prep; "
+            "skipped on handoff unless --charmm-mm-pretreat-on-handoff"
         ),
     )
     parser.add_argument(
@@ -695,6 +696,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "pycharmm: run CHARMM MM pretreat even when jaxmd/PyCHARMM handoff coords "
             "are already in memory (default: pretreat only on cold composition starts)"
+        ),
+    )
+    parser.add_argument(
+        "--charmm-mm-pretreat-with-liquid-prep",
+        action="store_true",
+        help=(
+            "pycharmm: run CHARMM MM pretreat heat/equi/prod even when --liquid-prep "
+            "already built the box (default: skip redundant pretreat on dense-liquid prep)"
         ),
     )
     parser.add_argument(
@@ -2585,6 +2594,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.append("--charmm-mm-pretreat")
     if getattr(args, "charmm_mm_pretreat_on_handoff", False):
         cmd.append("--charmm-mm-pretreat-on-handoff")
+    if getattr(args, "charmm_mm_pretreat_with_liquid_prep", False):
+        cmd.append("--charmm-mm-pretreat-with-liquid-prep")
     _append_optional(
         cmd,
         "--charmm-mm-pretreat-ps-heat",

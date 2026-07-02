@@ -566,6 +566,24 @@ def test_resolve_charmm_mm_pretreat_for_staged_skips_handoff():
     )
 
 
+def test_resolve_charmm_mm_pretreat_for_staged_skips_liquid_prep():
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_charmm_mm_pretreat_for_staged,
+    )
+
+    args = argparse.Namespace(charmm_mm_pretreat=True, liquid_prep=True)
+    assert not resolve_charmm_mm_pretreat_for_staged(args, handoff_coords_in_memory=False)
+
+    args_force = argparse.Namespace(
+        charmm_mm_pretreat=True,
+        liquid_prep=True,
+        charmm_mm_pretreat_with_liquid_prep=True,
+    )
+    assert resolve_charmm_mm_pretreat_for_staged(
+        args_force, handoff_coords_in_memory=False
+    )
+
+
 def test_build_stage_dynamics_kw_heat_scale_pbc_avoids_cpt():
     args = argparse.Namespace(heat_thermostat="scale", heat_firstt=40.0, heat_finalt=200.0)
     dyn_print = {"nprint": 100, "iprfrq": 500, "isvfrq": 500}

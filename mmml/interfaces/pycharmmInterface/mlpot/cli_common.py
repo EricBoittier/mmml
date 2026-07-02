@@ -525,6 +525,11 @@ def resolve_charmm_mm_pretreat_for_staged(
     Pretreat relaxes Packmol clashes on cold starts.  When continuing from a jaxmd
     or PyCHARMM handoff, coordinates are already in CHARMM memory — pretreat is
     skipped unless ``--charmm-mm-pretreat-on-handoff`` is set.
+
+    When ``--liquid-prep`` (or resilient density-prep mode) already ran Packmol, MC
+    density, and the pre-MLpot ladder, pretreat heat/equi/prod is redundant and can
+    blow up on dense boxes (``no_echeck`` + scale heat).  Skip unless
+    ``--charmm-mm-pretreat-with-liquid-prep`` is set.
     """
     if not bool(getattr(args, "charmm_mm_pretreat", False)):
         return False
@@ -532,6 +537,13 @@ def resolve_charmm_mm_pretreat_for_staged(
         getattr(args, "charmm_mm_pretreat_on_handoff", False)
     ):
         return False
+    if not bool(getattr(args, "charmm_mm_pretreat_with_liquid_prep", False)):
+        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            liquid_prep_enabled,
+        )
+
+        if liquid_prep_enabled(args):
+            return False
     return True
 
 

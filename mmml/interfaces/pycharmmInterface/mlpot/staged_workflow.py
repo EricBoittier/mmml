@@ -1617,16 +1617,27 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         handoff_coords_in_memory=handoff_coords_in_memory,
     )
     if (
-        handoff_coords_in_memory
-        and bool(getattr(args, "charmm_mm_pretreat", False))
+        bool(getattr(args, "charmm_mm_pretreat", False))
         and not pretreat_mm
         and not args.quiet
     ):
-        print(
-            "CHARMM MM pretreat: skipped (handoff coords in memory; "
-            "use --charmm-mm-pretreat-on-handoff to force)",
-            flush=True,
-        )
+        if handoff_coords_in_memory:
+            print(
+                "CHARMM MM pretreat: skipped (handoff coords in memory; "
+                "use --charmm-mm-pretreat-on-handoff to force)",
+                flush=True,
+            )
+        elif not bool(getattr(args, "charmm_mm_pretreat_with_liquid_prep", False)):
+            from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+                liquid_prep_enabled,
+            )
+
+            if liquid_prep_enabled(args):
+                print(
+                    "CHARMM MM pretreat: skipped (--liquid-prep already relaxes the box; "
+                    "use --charmm-mm-pretreat-with-liquid-prep to force)",
+                    flush=True,
+                )
     pretreat_restart_path: Path | None = None
     if pretreat_mm:
         r = run_charmm_mm_pretreat_before_mlpot(
