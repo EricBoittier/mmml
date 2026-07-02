@@ -49,7 +49,7 @@ def test_load_cluster_from_artifacts_uses_xplor_psf_reader(tmp_path: Path, monke
         lambda _p: None,
     )
     monkeypatch.setattr(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_Z_from_psf",
+        "mmml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
         lambda: np.array([6, 1, 1, 17, 17], dtype=int),
     )
     monkeypatch.setattr(
