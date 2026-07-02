@@ -50,6 +50,8 @@ iter_matrix_cells = cl.iter_matrix_cells
 load_config = cl.load_config
 matrix_job_count = cl.matrix_job_count
 matrix_setup_ids = cl.matrix_setup_ids
+slurm_launch_jobs = cl.slurm_launch_jobs
+slurm_resources_cli = cl.slurm_resources_cli
 resolve_setup_variant = sv.resolve_setup_variant
 
 
@@ -167,3 +169,10 @@ def test_default_config_matrix_job_count() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
     # 5 setups × 2 fractions × 3 boxes = 30
     assert matrix_job_count(cfg) == 30
+
+
+def test_slurm_resources_cli(cfg: dict) -> None:
+    cli = slurm_resources_cli(cfg)
+    assert "gpu_fast=" in cli
+    assert "charmm_slot=" in cli
+    assert slurm_launch_jobs(cfg) == 18

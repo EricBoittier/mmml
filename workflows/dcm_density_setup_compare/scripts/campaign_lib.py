@@ -395,6 +395,12 @@ def slurm_launch_jobs(cfg: dict[str, Any]) -> int:
     return int(pools["gpu_fast"]) + int(pools["gpu_slow"])
 
 
+def slurm_resources_cli(cfg: dict[str, Any]) -> str:
+    """Space-separated ``NAME=N`` for ``snakemake --resources``."""
+    pools = slurm_tier_resource_pools(cfg)
+    return " ".join(f"{key}={value}" for key, value in pools.items())
+
+
 def paths_for_run(cfg: dict[str, Any], cell: RunCell) -> dict[str, Path]:
     out = run_output_dir(cfg, cell)
     return {
