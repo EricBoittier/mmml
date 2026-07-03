@@ -61,6 +61,8 @@ calculator_pre_minimize: true
 bonded_mm_mini: false
 # Isolated CHARMM subprocess for bonded recovery (no MLpot param toggle).
 bonded_recovery_backend: sidecar
+# Orbax sidecar every overlap chunk (recovery ranks above baseline mid-heat).
+overlap_run_state_every_chunks: 1
 
 mm_switch_on: 5.0
 mm_switch_width: 3.0

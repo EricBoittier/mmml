@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+import numpy as np
 
 from tests.unit.conftest import write_minimal_restart
 
@@ -568,6 +569,86 @@ def test_build_early_abort_recovery_candidates_prefers_overlap_read(tmp_path):
     assert ladder[0] == scratch.resolve()
     assert heat in ladder
     assert baseline in ladder
+
+
+def test_build_early_abort_recovery_candidates_includes_numbered_chunk_restart(
+    tmp_path,
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        build_early_abort_recovery_candidates,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+
+    baseline = tmp_path / "geometry_baseline_dcm_10.res"
+    write_minimal_restart(baseline)
+    stage = tmp_path / "heat_dcm_10.res"
+    write_minimal_restart(stage)
+    prev_chunk = tmp_path / "heat_dcm_10.0001.res"
+    write_minimal_restart(prev_chunk)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        geometry_fallback_restarts=(),
+    )
+    ladder = build_early_abort_recovery_candidates(
+        cfg,
+        stage_final_restart=stage,
+        chunk_index=2,
+    )
+    assert prev_chunk.resolve() in ladder
+    assert ladder.index(prev_chunk.resolve()) < ladder.index(baseline.resolve())
+
+
+def test_attempt_overlap_early_abort_recovery_prefers_run_state_before_baseline_mid_heat(
+    tmp_path,
+):
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        attempt_overlap_early_abort_recovery,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import DynamicsOverlapConfig
+    from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+        save_overlap_run_state,
+    )
+
+    baseline = tmp_path / "geometry_baseline_dcm_10.res"
+    write_minimal_restart(baseline)
+    run_state_dir = tmp_path / "run_state" / "overlap"
+    positions = np.array([[3.0, 0.0, 0.0], [4.0, 0.0, 0.0]], dtype=float)
+    save_overlap_run_state(
+        run_state_dir,
+        step=200,
+        segment="HEAT",
+        chunk_index=1,
+        positions=positions,
+        quiet=True,
+    )
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=2,
+        geometry_baseline_restart=baseline,
+        geometry_fallback_restarts=(),
+    )
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint.restore_geometry_from_ladder",
+        side_effect=RuntimeError("no restart"),
+    ) as restore, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as sync_pos:
+        recovery = attempt_overlap_early_abort_recovery(
+            cfg,
+            chunk_nstep=100,
+            steps_done=250,
+            steps_before_chunk=200,
+            overlap_context="HEAT",
+            overlap_run_state_dir=run_state_dir,
+            chunk_index=2,
+        )
+    assert recovery.ok is True
+    assert recovery.source == "run_state"
+    restore.assert_not_called()
+    sync_pos.assert_called_once()
+    np.testing.assert_allclose(sync_pos.call_args[0][0], positions)
 
 
 def test_build_early_abort_recovery_candidates_includes_segment_restart(tmp_path):

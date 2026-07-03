@@ -7,10 +7,28 @@ import pytest
 from tests.conftest import can_import_pycharmm
 
 
-pytestmark = pytest.mark.skipif(
-    not can_import_pycharmm(),
-    reason="pycharmm / libcharmm not available",
-)
+def _under_mpirun() -> bool:
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun as under
+
+        return bool(under())
+    except Exception:
+        return False
+
+
+pytestmark = [
+    pytest.mark.skipif(
+        not can_import_pycharmm(),
+        reason="pycharmm / libcharmm not available",
+    ),
+    pytest.mark.skipif(
+        not _under_mpirun(),
+        reason=(
+            "requires mpirun; use "
+            "MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh pytest tests/charmm_mpi/test_mpi_live_energy.py"
+        ),
+    ),
+]
 
 
 def test_mpi_rank_size_under_mpirun():

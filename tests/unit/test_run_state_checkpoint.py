@@ -54,3 +54,19 @@ def test_save_overlap_run_state_overwrites_existing_chunk(tmp_path):
     tree = load_run_state_tree(directory / "chunk_0003")
     np.testing.assert_allclose(tree["positions"], updated)
     assert tree["metadata"]["step"] == 4
+
+
+def test_load_overlap_run_state_prefers_chunk_index(tmp_path):
+    directory = tmp_path / "overlap"
+    for idx, x in enumerate((0.0, 1.0, 2.0)):
+        save_overlap_run_state(
+            directory,
+            step=100 * (idx + 1),
+            segment="HEAT",
+            chunk_index=idx,
+            positions=np.array([[x, 0.0, 0.0]], dtype=float),
+            quiet=True,
+        )
+    tree = load_overlap_run_state(directory, preferred_chunk_index=1)
+    np.testing.assert_allclose(tree["positions"], np.array([[1.0, 0.0, 0.0]]))
+    assert tree["metadata"]["chunk_index"] == 1

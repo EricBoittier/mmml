@@ -341,19 +341,46 @@ def resolve_extent_recovery_source(
     return first_valid_restart_path(candidates) or first_valid_geometry_crd_path(candidates)
 
 
+def _split_recovery_candidates_at_baseline(
+    candidates: list[Path],
+    overlap: Any,
+) -> tuple[list[Path], list[Path]]:
+    """Split ladder into pre-baseline (recent segment) vs baseline + fallbacks."""
+    baseline = getattr(overlap, "geometry_baseline_restart", None)
+    if baseline is None:
+        return list(candidates), []
+    baseline_resolved = Path(baseline).expanduser().resolve()
+    pre: list[Path] = []
+    post: list[Path] = []
+    for cand in candidates:
+        if Path(cand).expanduser().resolve() == baseline_resolved:
+            post.append(cand)
+        elif not post:
+            pre.append(cand)
+        else:
+            post.append(cand)
+    if post:
+        return pre, post
+    return list(candidates), []
+
+
 def build_early_abort_recovery_candidates(
     overlap: Any,
     *,
     overlap_restart_read: Path | str | None = None,
     segment_restart_read: Path | str | None = None,
+    stage_final_restart: Path | str | None = None,
+    chunk_index: int | None = None,
 ) -> list[Path]:
     """Recovery ladder after a short overlap chunk abort.
 
     Unlike :func:`build_geometry_recovery_candidates`, the upcoming overlap
     ``READYN`` source (``.overlap_a/.b.res`` from the previous good chunk) is
     tried first so equi/prod does not rewind to an earlier stage (e.g. heat).
-    ``segment_restart_read`` is the stage handoff checkpoint (e.g. equi ``.res``
-    before prod overlap chunk 0).
+    When Bussi heat uses in-memory handoff (no scratch ``WRIDYN``), numbered
+    per-chunk restarts ``heat.NNNN.res`` from the last good chunk(s) are tried
+    next.  ``segment_restart_read`` is the stage handoff checkpoint (e.g. equi
+    ``.res`` before prod overlap chunk 0).
     """
     seen: set[str] = set()
     ordered: list[Path] = []
@@ -381,6 +408,15 @@ def build_early_abort_recovery_candidates(
             alt = alternate_overlap_scratch(read)
             if alt is not None:
                 add(alt, allow_scratch=True)
+
+    if stage_final_restart is not None and chunk_index is not None and chunk_index > 0:
+        from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+            overlap_chunk_restart_path,
+        )
+
+        stage = Path(stage_final_restart)
+        for idx in range(int(chunk_index) - 1, max(-1, int(chunk_index) - 3), -1):
+            add(overlap_chunk_restart_path(stage, idx))
 
     if segment_restart_read is not None:
         add(segment_restart_read)
@@ -803,6 +839,7 @@ def attempt_overlap_early_abort_recovery(
     overlap_run_state_dir: Path | None = None,
     overlap_restart_read: Path | str | None = None,
     segment_restart_read: Path | str | None = None,
+    stage_final_restart: Path | str | None = None,
     mlpot_ctx: Any | None = None,
     cpt: bool = False,
     chunk_index: int = 0,
@@ -826,20 +863,61 @@ def attempt_overlap_early_abort_recovery(
         overlap,
         overlap_restart_read=overlap_restart_read,
         segment_restart_read=segment_restart_read,
+        stage_final_restart=stage_final_restart,
+        chunk_index=chunk_index,
     )
+    pre_baseline, baseline_tail = _split_recovery_candidates_at_baseline(
+        candidates,
+        overlap,
+    )
+    mid_segment = int(steps_before_chunk) > 0
 
     label = f"early-abort recovery ({overlap_context})"
-    try:
-        path = restore_geometry_from_ladder(candidates, label=label, allow_in_memory=False)
-        return GeometryRecoveryResult(True, _geometry_recovery_source_from_path(path))
-    except RuntimeError:
-        tried = ", ".join(p.name for p in candidates) or "(none)"
-        print(
-            f"{label}: no valid restart among {len(candidates)} candidate(s): {tried}",
-            flush=True,
+
+    def _try_restart_ladder(paths: list[Path]) -> GeometryRecoveryResult | None:
+        if not paths:
+            return None
+        try:
+            path = restore_geometry_from_ladder(
+                paths,
+                label=label,
+                allow_in_memory=False,
+            )
+            return GeometryRecoveryResult(
+                True,
+                _geometry_recovery_source_from_path(path),
+            )
+        except RuntimeError:
+            return None
+
+    recent = _try_restart_ladder(pre_baseline)
+    if recent is not None:
+        return recent
+
+    if mid_segment and overlap_run_state_dir is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
+            restore_positions_from_overlap_run_state,
         )
 
-    if overlap_run_state_dir is not None:
+        preferred = max(0, int(chunk_index) - 1)
+        if restore_positions_from_overlap_run_state(
+            overlap_run_state_dir,
+            preferred_chunk_index=preferred,
+            label=label,
+        ):
+            return GeometryRecoveryResult(True, "run_state")
+
+    baseline = _try_restart_ladder(baseline_tail if baseline_tail else candidates)
+    if baseline is not None:
+        return baseline
+
+    tried = ", ".join(p.name for p in candidates) or "(none)"
+    print(
+        f"{label}: no valid restart among {len(candidates)} candidate(s): {tried}",
+        flush=True,
+    )
+
+    if not mid_segment and overlap_run_state_dir is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (
             restore_positions_from_overlap_run_state,
         )

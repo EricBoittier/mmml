@@ -5384,6 +5384,29 @@ def _write_overlap_chunk_numbered_restart(
         return None
 
 
+def _persist_bussi_inmemory_overlap_chunk_restart(
+    *,
+    final_restart: Path | None,
+    chunk_index: int,
+    global_step: int,
+    overlap_context: str,
+    chunk_res_paths: list[Path],
+    mem_handoff: bool,
+    chunk_kw: dict[str, Any],
+) -> None:
+    """Materialize ``heat.NNNN.res`` when Bussi overlap skips scratch ``WRIDYN``."""
+    if final_restart is None or not mem_handoff or not _bussi_heat_ramp_active(chunk_kw):
+        return
+    numbered = _write_overlap_chunk_numbered_restart(
+        final_restart=Path(final_restart),
+        chunk_index=int(chunk_index),
+        global_step=int(global_step),
+        overlap_context=overlap_context,
+    )
+    if numbered is not None and numbered not in chunk_res_paths:
+        chunk_res_paths.append(numbered)
+
+
 def _maybe_write_numbered_restart_after_dyna(
     kw: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
@@ -6920,6 +6943,15 @@ def run_dynamics_with_io(
                     chunk_kw["_numbered_restart_chunk_index"] = chunk_index
                     chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
                     chunk_kw["_numbered_restart_context"] = overlap_context
+                elif (
+                    final_restart is not None
+                    and mem_handoff
+                    and _bussi_heat_ramp_active(chunk_kw)
+                ):
+                    chunk_kw["_numbered_restart_stage_path"] = final_restart
+                    chunk_kw["_numbered_restart_chunk_index"] = chunk_index
+                    chunk_kw["_numbered_restart_paths_out"] = chunk_res_paths
+                    chunk_kw["_numbered_restart_context"] = overlap_context
                 if has_restart_read:
                     _prepare_overlap_chunk_after_restart(
                         mlpot_ctx,
@@ -7180,6 +7212,7 @@ def run_dynamics_with_io(
                         overlap_run_state_dir=overlap_run_state_dir,
                         overlap_restart_read=overlap_restart_read_for_chunk,
                         segment_restart_read=segment_restart_read,
+                        stage_final_restart=final_restart,
                         mlpot_ctx=mlpot_ctx,
                         cpt=bool(chunk_kw.get("cpt")),
                         chunk_index=chunk_index,
@@ -7487,6 +7520,16 @@ def run_dynamics_with_io(
                         segment=overlap_context,
                         chunk_index=chunk_index,
                         restart_path=refresh_path,
+                    )
+                if not segment_aborted:
+                    _persist_bussi_inmemory_overlap_chunk_restart(
+                        final_restart=final_restart,
+                        chunk_index=chunk_index,
+                        global_step=steps_done,
+                        overlap_context=overlap_context,
+                        chunk_res_paths=chunk_res_paths,
+                        mem_handoff=mem_handoff,
+                        chunk_kw=chunk_kw,
                     )
                 if segment_aborted:
                     raise RuntimeError(

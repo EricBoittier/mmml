@@ -152,45 +152,85 @@ def save_overlap_run_state(
     return save_run_state(chunk_dir, tree, quiet=quiet)
 
 
-def load_overlap_run_state(directory: Path) -> dict[str, Any]:
-    """Load the newest overlap run-state sidecar under ``directory``."""
+def overlap_run_state_chunk_dirs(
+    directory: Path,
+    *,
+    preferred_chunk_index: int | None = None,
+) -> list[Path]:
+    """Ordered overlap sidecar chunk directories (preferred index first, then newest)."""
     root = Path(directory).expanduser().resolve()
     if not root.is_dir():
-        raise FileNotFoundError(f"No overlap run state directory at {root}")
-    candidates = sorted(root.glob("chunk_*"))
+        return []
+    ordered: list[Path] = []
+    seen: set[str] = set()
+
+    def add(path: Path) -> None:
+        key = str(path)
+        if key in seen or not path.is_dir():
+            return
+        seen.add(key)
+        ordered.append(path)
+
+    if preferred_chunk_index is not None:
+        add(root / f"chunk_{int(preferred_chunk_index):04d}")
+    for path in sorted(root.glob("chunk_*"), reverse=True):
+        add(path)
+    return ordered
+
+
+def load_overlap_run_state(
+    directory: Path,
+    *,
+    preferred_chunk_index: int | None = None,
+) -> dict[str, Any]:
+    """Load an overlap run-state sidecar (preferred chunk index, else newest)."""
+    candidates = overlap_run_state_chunk_dirs(
+        directory,
+        preferred_chunk_index=preferred_chunk_index,
+    )
     if not candidates:
-        raise FileNotFoundError(f"No overlap chunk run state under {root}")
-    return load_run_state_tree(candidates[-1])
+        raise FileNotFoundError(f"No overlap chunk run state under {directory}")
+    return load_run_state_tree(candidates[0])
 
 
 def restore_positions_from_overlap_run_state(
     directory: Path,
     *,
+    preferred_chunk_index: int | None = None,
     label: str = "overlap run-state recovery",
 ) -> bool:
-    """Reload CHARMM positions from the latest overlap sidecar."""
-    try:
-        tree = load_overlap_run_state(directory)
-    except FileNotFoundError:
-        return False
-    positions = tree.get("positions")
-    if positions is None:
-        return False
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
-
-    sync_charmm_positions(np.asarray(positions, dtype=np.float64))
-    velocities = tree.get("velocities")
-    if velocities is not None:
+    """Reload CHARMM positions from an overlap sidecar (preferred chunk, else newest)."""
+    for chunk_dir in overlap_run_state_chunk_dirs(
+        directory,
+        preferred_chunk_index=preferred_chunk_index,
+    ):
         try:
-            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-            import pycharmm.coor as coor
+            tree = load_run_state_tree(chunk_dir)
+        except (FileNotFoundError, OSError):
+            continue
+        positions = tree.get("positions")
+        if positions is None:
+            continue
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
-            v = np.asarray(velocities, dtype=np.float64)
-            coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])
-        except Exception:
-            pass
-    print(f"{label}: restored positions from {directory}", flush=True)
-    return True
+        sync_charmm_positions(np.asarray(positions, dtype=np.float64))
+        velocities = tree.get("velocities")
+        if velocities is not None:
+            try:
+                import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+                import pycharmm.coor as coor
+
+                v = np.asarray(velocities, dtype=np.float64)
+                coor.set_velocity(v[:, 0], v[:, 1], v[:, 2])
+            except Exception:
+                pass
+        print(
+            f"{label}: restored positions from {chunk_dir.name} "
+            f"({directory})",
+            flush=True,
+        )
+        return True
+    return False
 
 
 def maybe_save_overlap_run_state(

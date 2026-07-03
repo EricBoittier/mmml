@@ -29,7 +29,8 @@ help:
 	@echo "  make docker-clean      - Remove all Docker containers and images"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test              - Run all tests"
+	@echo "  make test              - Run unit/integration tests (skip live PyCHARMM/GPU/MLpot)"
+	@echo "  make test-all          - Run full pytest suite (needs mpirun for charmm_mpi live tests)"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
 	@echo "  make deadcode          - Report dead/unused code (Ruff + Vulture)"
@@ -152,6 +153,9 @@ docker-clean:
 # ==============================================================================
 
 test:
+	cd tests && uv run pytest . -m "not pycharmm and not gpu and not mlpot"
+
+test-all:
 	cd tests && uv run pytest .
 
 test-quick:

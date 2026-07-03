@@ -88,6 +88,9 @@ bonded_mm_mini_steps: 1000
 # All-ML DCM overlap / density ladder still routes bonded recovery to MLpot SD at runtime.
 bonded_recovery_backend: sidecar
 
+# Orbax/NPZ sidecar after every successful overlap chunk (Bussi in-memory handoff).
+overlap_run_state_every_chunks: 1
+
 # Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
 bonded_mm_mini: false
 

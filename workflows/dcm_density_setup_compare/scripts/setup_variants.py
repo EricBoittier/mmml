@@ -44,7 +44,7 @@ _BURST_HYBRID_CLEANUP: dict[str, Any] = {
         "dcd_nsavc": 100,
         "dyn_nprint": 100,
         "save_run_state": True,
-        "overlap_run_state_every_chunks": 4,
+        "overlap_run_state_every_chunks": 1,
     },
     "jaxmd_pbc": {},
 }
@@ -77,7 +77,7 @@ _RESILIENT_CLEANUP: dict[str, Any] = {
         "dcd_nsavc": 100,
         "dyn_nprint": 100,
         "save_run_state": True,
-        "overlap_run_state_every_chunks": 4,
+        "overlap_run_state_every_chunks": 1,
     },
     "jaxmd_pbc": {},
 }
