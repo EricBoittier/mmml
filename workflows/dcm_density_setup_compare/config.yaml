@@ -122,8 +122,8 @@ ml_gpu_count: 1
 ml_batch_size: 128
 
 slurm_small_cluster_max_n: 30
-slurm_max_concurrent_fast: 10
-slurm_max_concurrent_slow: 8
+slurm_max_concurrent_fast: 16
+slurm_max_concurrent_slow: 12
 slurm_partition: gpu
 slurm_nodes: 1
 slurm_ntasks: 1

@@ -477,7 +477,7 @@ def test_slurm_resources_cli(cfg: dict) -> None:
     cli = slurm_resources_cli(cfg)
     assert "gpu_fast=" in cli
     assert "charmm_slot=" in cli
-    assert slurm_launch_jobs(cfg) == 18
+    assert slurm_launch_jobs(cfg) == 28
 
 
 def test_prep_sweep_expands_variants(cfg: dict) -> None:

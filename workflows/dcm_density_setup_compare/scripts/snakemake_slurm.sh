@@ -3,6 +3,8 @@
 #
 # Usage: snakemake_slurm.sh [MAX_JOBS] [extra snakemake args...]
 #   MAX_JOBS defaults to tier pools from the workflow config (fast + slow when tiering on).
+#   Snakemake flags may be passed without a leading job count, e.g.:
+#     bash scripts/snakemake_slurm.sh --forcerun run_setup_compare
 #
 # Prep sweep (must export config to compute jobs via MMML_WORKFLOW_CONFIG):
 #   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/snakemake_slurm.sh
@@ -60,8 +62,9 @@ if [[ -z "${DEFAULT_RES:-}" ]]; then
   exit 1
 fi
 
-JOBS="${1:-$DEFAULT_JOBS}"
+JOBS="$DEFAULT_JOBS"
 if [[ $# -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
+  JOBS="$1"
   shift || true
 fi
 
