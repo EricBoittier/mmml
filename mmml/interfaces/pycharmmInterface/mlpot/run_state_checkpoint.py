@@ -58,21 +58,34 @@ def save_run_state(
     try:
         import orbax.checkpoint as ocp
 
-        ocp.PyTreeCheckpointer().save(path / "orbax", tree)
+        orbax_dir = path / "orbax"
+        checkpointer = ocp.PyTreeCheckpointer()
+        try:
+            checkpointer.save(orbax_dir, tree, force=True)
+        except TypeError:
+            # Older orbax without force= on PyTreeCheckpointer.save
+            if orbax_dir.exists():
+                import shutil
+
+                shutil.rmtree(orbax_dir)
+            checkpointer.save(orbax_dir, tree)
         (path / "format.txt").write_text("orbax\n", encoding="utf-8")
         if not quiet:
-            print(f"Run state saved (orbax): {path / 'orbax'}", flush=True)
-        return path / "orbax"
+            print(f"Run state saved (orbax): {orbax_dir}", flush=True)
+        return orbax_dir
     except ImportError:
-        np.savez(path / "run_state.npz", **tree)
+        npz_path = path / "run_state.npz"
+        if npz_path.is_file():
+            npz_path.unlink()
+        np.savez(npz_path, **tree)
         (path / "format.txt").write_text("npz\n", encoding="utf-8")
         (path / "metadata.json").write_text(
             json.dumps(tree.get("metadata", {}), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         if not quiet:
-            print(f"Run state saved (npz): {path / 'run_state.npz'}", flush=True)
-        return path / "run_state.npz"
+            print(f"Run state saved (npz): {npz_path}", flush=True)
+        return npz_path
 
 
 def load_run_state_tree(path: Path) -> dict[str, Any]:
