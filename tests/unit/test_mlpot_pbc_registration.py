@@ -53,6 +53,9 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
         return_value=False,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
+        side_effect=lambda **kwargs: (call_order.append("image_gate") or 6.0),
     ):
         fake_pycharmm.MLpot = _FakeMLpot
         mlpot_setup.register_mlpot(
@@ -69,6 +72,7 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
         "finalize_pbc_exclusions",
         "mlpot",
         "skip_iblo",
+        "image_gate",
     ]
 
 
@@ -121,6 +125,9 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         return_value=False,
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
+        side_effect=lambda **kwargs: (call_order.append("image_gate") or 6.0),
     ):
         fake_pycharmm.MLpot = _FakeMLpot
         mlpot_setup.register_mlpot(
@@ -133,7 +140,7 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         )
 
     assert "crystal_free" not in call_order
-    assert call_order == ["block", "finalize_pbc_exclusions", "mlpot"]
+    assert call_order == ["block", "finalize_pbc_exclusions", "mlpot", "image_gate"]
 
 
 def test_register_mlpot_vacuum_skips_pre_block_exclusions():
