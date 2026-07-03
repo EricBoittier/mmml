@@ -23,8 +23,10 @@ PY="${MMML_PYTHON}"
 
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
 
-# Slurm profile forwards MMML_CKPT from the driver; fall back to bundled ckpt on compute nodes.
-export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
+# Slurm profile forwards MMML_CKPT from the driver; fall back to dcm1 on cluster.
+# shellcheck source=ckpt_defaults.sh
+source "$WORKFLOW_ROOT/scripts/ckpt_defaults.sh"
+export MMML_CKPT="${MMML_CKPT:-$(default_mmml_ckpt "$REPO_ROOT")}"
 
 if [[ -n "${MMML_WORKFLOW_CONFIG:-}" ]]; then
   _cfg_raw="${MMML_WORKFLOW_CONFIG}"

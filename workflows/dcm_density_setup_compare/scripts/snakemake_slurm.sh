@@ -11,7 +11,7 @@
 #   bash scripts/snakemake_prep_sweep.sh
 #
 # From pc-studix login node (no OpenCL on login — jobs run on GPU compute nodes):
-#   export MMML_CKPT=/path/to/DESdimers_params.json
+#   export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json
 #   nohup bash scripts/snakemake_slurm.sh > snakemake_slurm.log 2>&1 &
 set -euo pipefail
 
@@ -25,10 +25,12 @@ mmml_resolve_env "$REPO_ROOT"
 PY="${MMML_PYTHON}"
 
 # Forwarded to Slurm jobs via profiles/slurm/config.yaml envvars — must exist on driver start.
-export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json}"
+# shellcheck source=ckpt_defaults.sh
+source "$WORKFLOW_ROOT/scripts/ckpt_defaults.sh"
+export MMML_CKPT="${MMML_CKPT:-$(default_mmml_ckpt "$REPO_ROOT")}"
 if [[ ! -f "${MMML_CKPT}" ]]; then
   echo "ERROR: checkpoint not found: ${MMML_CKPT}" >&2
-  echo "  export MMML_CKPT=${REPO_ROOT}/examples/ckpts_json/DESdimers_params.json" >&2
+  echo "  export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json" >&2
   exit 1
 fi
 export MMML_CKPT="$(readlink -f "${MMML_CKPT}")"
