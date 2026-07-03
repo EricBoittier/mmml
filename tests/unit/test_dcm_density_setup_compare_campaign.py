@@ -180,6 +180,20 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
     assert init.get("md_stages") == "mini,heat"
     assert init.get("heat_thermostat") == "bussi"
     assert init.get("ps_heat") == 2.0
+    assert init.get("allow_high_grms") is True
+
+
+def test_campaign_forwards_allow_high_grms(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ckpt = tmp_path / "params.json"
+    ckpt.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    cfg = load_config(WORKFLOW / "config.yaml")
+    cell = cell_from_cli(
+        cfg, "resilient", "DCM", 52, temperature=50.0, box_size=28.0, heat_thermostat="bussi"
+    )
+    mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
+    assert mini.get("allow_high_grms") is True
+    assert cfg.get("allow_high_grms") is True
 
 
 def test_temperature_ladder_prior_cell(cfg: dict) -> None:

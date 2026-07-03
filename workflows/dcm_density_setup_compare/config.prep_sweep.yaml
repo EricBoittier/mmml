@@ -31,6 +31,7 @@ pressure: 1.0
 
 no_scale_max_grms: true
 max_grms_before_dyn: 50.0
+allow_high_grms: true
 
 mini_nstep: 2000
 charmm_sd_steps: 4000

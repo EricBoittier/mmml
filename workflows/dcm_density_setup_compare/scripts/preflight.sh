@@ -121,6 +121,8 @@ if prep_sweep_enabled(cfg):
     print('prep_sweep variants:', prep_sweep_variant_ids(cfg))
     print('prep_sweep jobs:', matrix_job_count(cfg))
 print('workflow_config:', Path('${CFG}'))
+allow_hg = cfg.get('allow_high_grms', False)
+print('allow_high_grms:', bool(allow_hg))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then
@@ -132,6 +134,5 @@ if [[ -n "${MMML_CKPT:-}" ]]; then
 fi
 
 if [[ -n "${MMML_MLPOT_ALLOW_HIGH_GRMS:-}" ]]; then
-  echo "WARNING: MMML_MLPOT_ALLOW_HIGH_GRMS=${MMML_MLPOT_ALLOW_HIGH_GRMS} — unset before batch." >&2
-  echo "  High-GRMS bypass lets mini proceed above max_grms_before_dyn and usually fails in overlap rescue." >&2
+  echo "NOTE: MMML_MLPOT_ALLOW_HIGH_GRMS=${MMML_MLPOT_ALLOW_HIGH_GRMS} (env override; config allow_high_grms also applies via campaign.yaml)" >&2
 fi
