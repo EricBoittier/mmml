@@ -16,8 +16,11 @@ AVOGADRO = 6.02214076e23
 # Margin between Packmol ``inside cube`` and the CHARMM/PBC simulation cell (per side).
 DEFAULT_PACKMOL_BOX_PADDING_A = 10.0
 # When ``--box-size`` and ``--composition`` are both set (density-targeted fixed cell),
-# keep Packmol near the full cell so N sized for L_sim fits the placement cube.
-FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A = 1.0
+# keep Packmol in an inner cube [margin, L-margin] so MIC checks at full L do not see
+# face-to-face periodic overlaps that Packmol never validated.
+FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A = 2.5
+# Floor for dense periodic liquid prep (DCM-like); Packmol does not enforce MIC.
+MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A = 2.5
 # Cap per-side margin so small cells still fit a Packmol cube (20% of L_sim per side).
 MAX_PACKMOL_MARGIN_FRAC_PER_SIDE = 0.20
 
@@ -325,12 +328,54 @@ def resolve_packmol_box_padding_A(args: argparse.Namespace) -> float:
         val = float(explicit)
         if val < 0.0:
             raise ValueError(f"--packmol-box-padding must be >= 0, got {val}")
-        return val
-    if getattr(args, "box_size", None) is not None:
+        padding = val
+    elif getattr(args, "box_size", None) is not None:
         comp = parse_composition_dict(getattr(args, "composition", None))
         if comp:
-            return float(FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A)
-    return float(DEFAULT_PACKMOL_BOX_PADDING_A)
+            padding = float(FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A)
+        else:
+            padding = float(DEFAULT_PACKMOL_BOX_PADDING_A)
+    else:
+        padding = float(DEFAULT_PACKMOL_BOX_PADDING_A)
+
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            liquid_prep_enabled,
+        )
+
+        if liquid_prep_enabled(args):
+            padding = max(padding, float(MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A))
+    except ImportError:
+        pass
+    return float(padding)
+
+
+def resolve_packmol_inner_cube_side_A(
+    sim_side_A: float,
+    args: argparse.Namespace | None = None,
+    *,
+    margin_A: float | None = None,
+) -> tuple[float, float]:
+    """Return ``(inner_cube_side, margin_per_side)`` for Packmol ``inside cube``."""
+    sim = float(sim_side_A)
+    if sim <= 0.0:
+        raise ValueError(f"simulation cell side must be positive, got {sim}")
+    margin = (
+        float(margin_A)
+        if margin_A is not None
+        else resolve_packmol_box_padding_A(args)  # type: ignore[arg-type]
+        if args is not None
+        else float(MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A)
+    )
+    margin = _effective_packmol_margin_per_side_A(sim, margin)
+    inner = sim - 2.0 * margin
+    min_inner = 2.0 * float(getattr(args, "ml_cutoff", 12.0) if args is not None else 12.0) * 0.1
+    if inner <= min_inner:
+        raise ValueError(
+            f"Packmol inner cube non-positive: L_sim={sim:.3f} Å, margin={margin:.3f} Å "
+            f"per side → inner={inner:.3f} Å."
+        )
+    return float(inner), float(margin)
 
 
 def _effective_packmol_margin_per_side_A(

@@ -156,6 +156,10 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     if getattr(args, "liquid_prep_staged_density_fraction", None) is None:
         args.liquid_prep_staged_density_fraction = 0.55
 
+    if getattr(args, "density_prep_lattice_abnr_steps", None) is None:
+        # Lattice ABNR can shrink L and create MIC face contacts after a borderline repack.
+        args.density_prep_lattice_abnr_steps = 0
+
     if getattr(args, "box_size", None) is not None:
         args.mini_lattice_abnr_allow_fixed_box = True
         args.mini_box_equil_allow_fixed_box = True
@@ -279,6 +283,7 @@ def _step_monomer_repack(
     verbose: bool = False,
     scratch_dir: Path | str | None = None,
     packmol_tolerance: float | None = None,
+    packmol_margin_A: float | None = None,
 ) -> np.ndarray:
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
@@ -297,6 +302,7 @@ def _step_monomer_repack(
         cell=cell,
         scratch_dir=scratch_dir,
         packmol_tolerance=packmol_tolerance,
+        packmol_margin_A=packmol_margin_A,
     )
 
     if mlpot_ctx is not None:
@@ -408,6 +414,90 @@ def _verify_mic_contacts_after_wrap(
         context=context,
         args=args,
         atomic_numbers=atomic_numbers,
+    )
+
+
+def probe_pre_mlpot_mic_contacts(
+    args: argparse.Namespace,
+    *,
+    positions: np.ndarray,
+    atoms_per_list: list[int],
+    box_side: float | None,
+    charmm_pbc: bool,
+    atomic_numbers: np.ndarray | list[int] | None,
+    context: str,
+    abort: bool = False,
+) -> float:
+    """Log worst MIC inter-monomer contact; optionally abort on prep-floor violation."""
+    from mmml.utils.intermonomer_geometry import (
+        find_worst_pre_mlpot_mic_violation,
+        resolve_dynamics_overlap_reference_A,
+        resolve_pre_mlpot_overlap_min_distance,
+        summarize_worst_intermonomer_contact,
+    )
+
+    floor = resolve_pre_mlpot_overlap_min_distance(args)
+    dyn_ref = resolve_dynamics_overlap_reference_A(args)
+    summary = summarize_worst_intermonomer_contact(
+        positions,
+        atoms_per_list,
+        box_side=box_side,
+        use_pbc=charmm_pbc,
+        threshold_A=floor,
+        atomic_numbers=atomic_numbers,
+        dynamics_reference_A=dyn_ref,
+    )
+    if not getattr(args, "quiet", False):
+        print(f"{context}: {summary.format_log_line()}", flush=True)
+
+    violation = find_worst_pre_mlpot_mic_violation(
+        positions,
+        atoms_per_list,
+        box_side=box_side,
+        use_pbc=charmm_pbc,
+        args=args,
+        atomic_numbers=atomic_numbers,
+    )
+    if violation is not None:
+        msg = f"{context}: {violation.format_message()}"
+        if abort:
+            raise RuntimeError(
+                f"{msg}. Repack at lower density, expand the box, or abort — do not enable MLpot."
+            )
+        if not getattr(args, "quiet", False):
+            print(f"WARN: {msg}", flush=True)
+    return float(summary.distance_A)
+
+
+def maybe_probe_packmol_mic_pipeline(
+    args: argparse.Namespace,
+    *,
+    positions: np.ndarray,
+    atoms_per_list: list[int],
+    box_side: float | None,
+    charmm_pbc: bool,
+    atomic_numbers: np.ndarray | list[int] | None,
+    context: str,
+    fresh_packmol_build: bool = True,
+) -> float | None:
+    """Diagnostic MIC probe after Packmol / CHARMM PBC steps (no abort by default)."""
+    if not liquid_prep_enabled(args) or not charmm_pbc or box_side is None:
+        return None
+    if not fresh_packmol_build:
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import use_packmol_placement
+
+    if not use_packmol_placement(args):
+        return None
+    return probe_pre_mlpot_mic_contacts(
+        args,
+        positions=positions,
+        atoms_per_list=atoms_per_list,
+        box_side=box_side,
+        charmm_pbc=charmm_pbc,
+        atomic_numbers=atomic_numbers,
+        context=context,
+        abort=False,
     )
 
 
@@ -1178,6 +1268,13 @@ def run_pre_mlpot_geometry_gate(
     staged_fraction = float(getattr(args, "liquid_prep_staged_density_fraction", 0.55) or 0.55)
     packmol_tol = getattr(args, "packmol_tolerance", None)
     packmol_tol_f = float(packmol_tol) if packmol_tol is not None else None
+    packmol_margin_A: float | None = None
+    if side is not None and charmm_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            resolve_packmol_box_padding_A,
+        )
+
+        packmol_margin_A = resolve_packmol_box_padding_A(args)
 
     def _mic_check(step_context: str, pos_arr: np.ndarray) -> float:
         return _verify_mic_contacts_after_wrap(
@@ -1257,6 +1354,7 @@ def run_pre_mlpot_geometry_gate(
             seed=int(seed) if seed is not None else None,
             scratch_dir=_packmol_repack_scratch_dir(args),
             packmol_tolerance=packmol_tol_f,
+            packmol_margin_A=packmol_margin_A,
         )
         side = _sync_pbc_after_box_change(
             positions=new_pos,
@@ -1324,6 +1422,7 @@ def run_pre_mlpot_geometry_gate(
     if charmm_pbc and lattice_steps > 0:
         for nocoords, tag in _LATTICE_ABNR_PREP_PASSES:
             step_label = f"pre_mlpot:{tag}"
+            side_before_lattice = float(side) if side is not None else None
             try:
                 from mmml.interfaces.pycharmmInterface.mlpot.box_lattice_abnr import (
                     run_charmm_lattice_abnr,
@@ -1338,7 +1437,30 @@ def run_pre_mlpot_geometry_gate(
                     fallback_side_A=side,
                     allow_prepare_pbc=True,
                 )
-                if new_side is not None:
+                if (
+                    new_side is not None
+                    and side_before_lattice is not None
+                    and float(new_side) + 1.0e-6 < float(side_before_lattice)
+                ):
+                    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                        push_charmm_cubic_box_side_A,
+                    )
+                    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                        get_charmm_positions_array,
+                    )
+
+                    if not quiet:
+                        print(
+                            "Pre-MLpot gate: lattice ABNR shrank "
+                            f"L {float(side_before_lattice):.3f} → {float(new_side):.3f} Å; "
+                            f"restoring L={float(side_before_lattice):.3f} Å "
+                            "(MIC gate active — expansion only).",
+                            flush=True,
+                        )
+                    push_charmm_cubic_box_side_A(float(side_before_lattice), quiet=quiet)
+                    side = float(side_before_lattice)
+                    pos = get_charmm_positions_array()
+                elif new_side is not None:
                     side = float(new_side)
                 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
                     get_charmm_positions_array,
