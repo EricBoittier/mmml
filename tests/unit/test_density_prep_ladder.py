@@ -555,7 +555,7 @@ def test_run_pre_mlpot_geometry_gate_runs_ladder_on_initial_overlap(monkeypatch)
     repacked[3] = [15.0, 0.0, 0.0]
     contexts: list[str] = []
 
-    def _fake_assert(_pos, _atoms_per_list, *, min_distance_A, box_side, use_pbc, context):
+    def _fake_assert(_pos, _atoms_per_list, *, min_distance_A, box_side, use_pbc, context, **kwargs):
         contexts.append(context)
         if "initial" in context:
             raise RuntimeError("inter-monomer atom overlap detected")
@@ -613,10 +613,11 @@ def test_lattice_abnr_prep_passes_only_lattice_full():
     assert _LATTICE_ABNR_PREP_PASSES == ((False, "lattice_full"),)
 
 
-def test_overlap_last_chance_separates_to_dynamics_guard(monkeypatch):
+def test_overlap_last_chance_separates_to_ml_safe_h_heavy_floor(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_pre_mlpot_geometry_gate,
     )
+    from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A
 
     args = _args(
         liquid_prep=True,
@@ -628,7 +629,7 @@ def test_overlap_last_chance_separates_to_dynamics_guard(monkeypatch):
     separate_targets: list[float] = []
     repack_targets: list[float] = []
 
-    def _fake_assert(_pos, _atoms_per_list, *, min_distance_A, box_side, use_pbc, context):
+    def _fake_assert(_pos, _atoms_per_list, *, min_distance_A, box_side, use_pbc, context, **kwargs):
         if "final" in context and "after" not in context:
             raise RuntimeError("below prep floor")
         return 1.6
@@ -680,8 +681,8 @@ def test_overlap_last_chance_separates_to_dynamics_guard(monkeypatch):
 
     assert summary.reason == "ok"
     assert "pre_mlpot:overlap_last_chance" in summary.steps_applied
-    assert repack_targets[-1] == pytest.approx(1.5)
-    assert separate_targets == [pytest.approx(1.5)]
+    assert repack_targets[-1] == pytest.approx(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A)
+    assert separate_targets == [pytest.approx(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A)]
 
 
 def test_dynamics_open_runs_when_prep_passes_but_contact_tight(monkeypatch):

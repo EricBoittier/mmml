@@ -167,7 +167,7 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
         "DCM",
         52,
         temperature=50.0,
-        box_size=28.0,
+        box_size=32.0,
         heat_thermostat="bussi",
     )
     init_id = init_job_id(cfg)
@@ -210,7 +210,7 @@ def test_resilient_all_ml_keeps_sidecar_backend_for_overlap_recovery(
         "DCM",
         52,
         temperature=50.0,
-        box_size=28.0,
+        box_size=32.0,
         heat_thermostat="bussi",
     )
     init = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
@@ -224,7 +224,7 @@ def test_campaign_forwards_allow_high_grms(monkeypatch: pytest.MonkeyPatch, tmp_
     monkeypatch.setenv("MMML_CKPT", str(ckpt))
     cfg = load_config(WORKFLOW / "config.yaml")
     cell = cell_from_cli(
-        cfg, "resilient", "DCM", 52, temperature=50.0, box_size=28.0, heat_thermostat="bussi"
+        cfg, "resilient", "DCM", 52, temperature=50.0, box_size=32.0, heat_thermostat="bussi"
     )
     mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
     assert mini.get("allow_high_grms") is False
@@ -334,7 +334,7 @@ def test_heat_compare_coerces_scale_when_pretreat(cfg: dict) -> None:
         "DCM",
         52,
         temperature=100.0,
-        box_size=28.0,
+        box_size=32.0,
         heat_thermostat="scale",
     )
     mini = build_campaign(cfg_ht, cell)["runs"]["pycharmm_mini"]
@@ -356,7 +356,7 @@ def test_heat_compare_run_tag_suffix(cfg: dict) -> None:
         "DCM",
         52,
         temperature=100.0,
-        box_size=28.0,
+        box_size=32.0,
         heat_thermostat="hoover",
     )
     assert cell_run_tag(cell, cfg_ht) == "minimal_dcm_52_t100_l28_ht_hoover"
@@ -448,7 +448,7 @@ def test_main_config_placement_seed_ignores_heat_thermostat() -> None:
         "DCM",
         52,
         temperature=50.0,
-        box_size=28.0,
+        box_size=32.0,
         heat_thermostat="bussi",
     )
     without_ht = RunCell(
@@ -456,7 +456,7 @@ def test_main_config_placement_seed_ignores_heat_thermostat() -> None:
         solvent="DCM",
         n_monomers=52,
         temperature=50.0,
-        box_size=28.0,
+        box_size=32.0,
     )
     assert cl.run_seed(with_ht, seed_base=4242, cfg=cfg) == cl.run_seed(
         without_ht, seed_base=4242, cfg=cfg

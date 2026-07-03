@@ -111,8 +111,8 @@ def test_assert_pre_mlpot_mic_geometry_aborts_tight_dcm_contact():
         [
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
-            [10.0, 0.0, 0.0],
-            [10.5, 0.0, 0.0],
+            [0.4, 0.0, 0.0],
+            [1.4, 0.0, 0.0],
         ],
         dtype=float,
     )
