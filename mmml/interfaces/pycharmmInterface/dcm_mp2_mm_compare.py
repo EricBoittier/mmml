@@ -311,6 +311,32 @@ class DcmVacuumMmSession:
     workdir: Path
 
 
+def _charmm_mm_unavailable_message() -> str:
+    import os
+
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_lib_available
+
+    lib_dir = (os.environ.get("CHARMM_LIB_DIR") or "").strip()
+    if charmm_lib_available():
+        return (
+            "PyCHARMM failed to initialize. Run via ./scripts/mmml-charmm-mpirun.sh "
+            f"(CHARMM_LIB_DIR={lib_dir!r})."
+        )
+    return (
+        "CHARMM is not available for MM evaluation "
+        f"(CHARMM_LIB_DIR={lib_dir!r}; libcharmm.so not found). "
+        "Export CHARMM_LIB_DIR and use ./scripts/mmml-charmm-mpirun.sh for MM, "
+        "or pass --hybrid-only to compare ML without CHARMM."
+    )
+
+
+def _require_charmm_for_mm() -> None:
+    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
+
+    if not ipy.ensure_pycharmm_loaded():
+        raise RuntimeError(_charmm_mm_unavailable_message())
+
+
 def build_dcm_vacuum_mm_session(
     workdir: Path | str,
     *,
@@ -319,8 +345,7 @@ def build_dcm_vacuum_mm_session(
     vacuum_box_side_A: float = 40.0,
 ) -> DcmVacuumMmSession:
     """Build a vacuum DCM cluster PSF for MM evaluation (no MLpot)."""
-    import pycharmm.coor as coor
-    import pycharmm.write as write
+    _require_charmm_for_mm()
 
     from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
     from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
@@ -334,8 +359,6 @@ def build_dcm_vacuum_mm_session(
         vacuum_nbond_kwargs,
     )
 
-    if not ipy.ensure_pycharmm_loaded():
-        raise RuntimeError("PyCHARMM not available")
     out = Path(workdir)
     out.mkdir(parents=True, exist_ok=True)
 
@@ -355,6 +378,8 @@ def build_dcm_vacuum_mm_session(
     prev = os.getcwd()
     try:
         os.chdir(out)
+        import pycharmm.write as write
+
         write.psf_card(psf_path.name)
     finally:
         os.chdir(prev)
@@ -470,38 +495,40 @@ def _force_rmse_ev_A(pred_ev_A: np.ndarray, ref_ev_A: np.ndarray) -> float:
 
 
 def compare_mm_to_mp2_frame(
-    mm: MmFrameResult,
     frame: Mp2Frame,
+    *,
+    mm: MmFrameResult | None = None,
     hybrid: list[HybridEvalResult] | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
         "index": frame.index,
         "source_index": frame.source_index,
-        "jax_energy_kcal": mm.jax_energy_kcal,
-        "charmm_energy_kcal": mm.charmm_energy_kcal,
-        "jax_charmm_energy_delta_kcal": mm.jax_energy_kcal - mm.charmm_energy_kcal,
         "mp2_energy_eV": frame.e_ref_eV,
     }
-    jax_f_ev = forces_kcal_to_ev(mm.jax_forces_kcal_A)
-    ch_f_ev = forces_kcal_to_ev(mm.charmm_forces_kcal_A)
-    out["jax_charmm_force_rmse_ev_A"] = float(
-        np.sqrt(np.mean((jax_f_ev - ch_f_ev) ** 2))
-    )
-    if frame.f_ref_ev_A is not None:
-        mp2_f = np.asarray(frame.f_ref_ev_A, dtype=np.float64)
-        d_jax = jax_f_ev - mp2_f
-        d_ch = ch_f_ev - mp2_f
-        out["mp2_jax_force_rmse_ev_A"] = float(np.sqrt(np.mean(d_jax**2)))
-        out["mp2_charmm_force_rmse_ev_A"] = float(np.sqrt(np.mean(d_ch**2)))
-        out["mp2_jax_force_mae_ev_A"] = float(np.mean(np.abs(d_jax)))
-        out["mp2_charmm_force_mae_ev_A"] = float(np.mean(np.abs(d_ch)))
-    if mm.interaction_energy_kcal is not None and mm.mp2_interaction_eV is not None:
-        from mmml.data.units import convert_energy
+    if mm is not None:
+        out["jax_energy_kcal"] = mm.jax_energy_kcal
+        out["charmm_energy_kcal"] = mm.charmm_energy_kcal
+        out["jax_charmm_energy_delta_kcal"] = mm.jax_energy_kcal - mm.charmm_energy_kcal
+        jax_f_ev = forces_kcal_to_ev(mm.jax_forces_kcal_A)
+        ch_f_ev = forces_kcal_to_ev(mm.charmm_forces_kcal_A)
+        out["jax_charmm_force_rmse_ev_A"] = float(
+            np.sqrt(np.mean((jax_f_ev - ch_f_ev) ** 2))
+        )
+        if frame.f_ref_ev_A is not None:
+            mp2_f = np.asarray(frame.f_ref_ev_A, dtype=np.float64)
+            d_jax = jax_f_ev - mp2_f
+            d_ch = ch_f_ev - mp2_f
+            out["mp2_jax_force_rmse_ev_A"] = float(np.sqrt(np.mean(d_jax**2)))
+            out["mp2_charmm_force_rmse_ev_A"] = float(np.sqrt(np.mean(d_ch**2)))
+            out["mp2_jax_force_mae_ev_A"] = float(np.mean(np.abs(d_jax)))
+            out["mp2_charmm_force_mae_ev_A"] = float(np.mean(np.abs(d_ch)))
+        if mm.interaction_energy_kcal is not None and mm.mp2_interaction_eV is not None:
+            from mmml.data.units import convert_energy
 
-        mm_int_ev = float(convert_energy(mm.interaction_energy_kcal, "kcal_mol", "ev"))
-        out["jax_interaction_eV"] = mm_int_ev
-        out["mp2_interaction_eV"] = float(mm.mp2_interaction_eV)
-        out["interaction_delta_eV"] = mm_int_ev - float(mm.mp2_interaction_eV)
+            mm_int_ev = float(convert_energy(mm.interaction_energy_kcal, "kcal_mol", "ev"))
+            out["jax_interaction_eV"] = mm_int_ev
+            out["mp2_interaction_eV"] = float(mm.mp2_interaction_eV)
+            out["interaction_delta_eV"] = mm_int_ev - float(mm.mp2_interaction_eV)
     if hybrid:
         out["hybrid"] = {}
         for hres in hybrid:
@@ -564,7 +591,7 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
         summary[f"hybrid_{slug}_interaction_delta_eV"] = _agg(
             f"hybrid_{slug}_interaction_delta_eV"
         )
-    if rows and "mp2_energy_eV" in rows[0]:
+    if rows and "jax_energy_kcal" in rows[0]:
         e_mp2 = np.asarray([r["mp2_energy_eV"] for r in rows], dtype=np.float64)
         e_jax = np.asarray([r["jax_energy_kcal"] for r in rows], dtype=np.float64)
         from mmml.data.units import convert_energy
@@ -592,7 +619,13 @@ def run_dcm_mp2_mm_comparison(
     checkpoint: Path | str | None = None,
     hybrid_calculators: tuple[str, ...] = ("hybrid-ml",),
     hybrid_cutoff: float = 10.0,
+    run_mm: bool = True,
 ) -> dict[str, Any]:
+    if not run_mm and checkpoint is None:
+        raise ValueError("--hybrid-only requires --checkpoint")
+    if run_mm:
+        _require_charmm_for_mm()
+
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     wdir = Path(workdir or out / "charmm_work")
@@ -607,11 +640,14 @@ def run_dcm_mp2_mm_comparison(
         stride=stride,
         seed=seed,
     )
-    session = build_dcm_vacuum_mm_session(wdir, n_monomers=2)
+    session: DcmVacuumMmSession | None = None
     mono_session: DcmVacuumMmSession | None = None
     mono_mean_eV: float | None = None
+    if run_mm:
+        session = build_dcm_vacuum_mm_session(wdir, n_monomers=2)
+        if compute_interaction:
+            mono_session = build_dcm_vacuum_mm_session(wdir / "mono_pool", n_monomers=1)
     if compute_interaction:
-        mono_session = build_dcm_vacuum_mm_session(wdir / "mono_pool", n_monomers=1)
         mono_mean_eV = load_monomer_mean_energy_eV(
             npz_path, reference_energy_unit=reference_energy_unit
         )
@@ -630,12 +666,14 @@ def run_dcm_mp2_mm_comparison(
             if mono_mean_eV is not None
             else None
         )
-        mm = evaluate_mm_at_positions(
-            session,
-            frame.r,
-            mono_session=mono_session,
-            mp2_interaction_eV=mp2_int,
-        )
+        mm: MmFrameResult | None = None
+        if session is not None:
+            mm = evaluate_mm_at_positions(
+                session,
+                frame.r,
+                mono_session=mono_session,
+                mp2_interaction_eV=mp2_int,
+            )
         hybrid_results: list[HybridEvalResult] | None = None
         if hybrid_eval is not None:
             hybrid_results = hybrid_eval.evaluate_frame(
@@ -644,12 +682,13 @@ def run_dcm_mp2_mm_comparison(
                 compute_interaction=compute_interaction,
                 mp2_interaction_eV=mp2_int,
             )
-        row = compare_mm_to_mp2_frame(mm, frame, hybrid=hybrid_results)
+        row = compare_mm_to_mp2_frame(frame, mm=mm, hybrid=hybrid_results)
         rows.append(row)
 
     summary = aggregate_comparison(rows)
     payload = {
         "load": load_meta,
+        "mm": {"enabled": bool(run_mm)},
         "hybrid": (
             None
             if checkpoint is None
@@ -674,24 +713,37 @@ def _write_comparison_md(
     rows: list[dict[str, Any]],
 ) -> None:
     lines = [
-        "# DCM MP2 vs CHARMM/JAX MM",
+        "# DCM MP2 vs CHARMM/JAX MM and hybrid ML",
         "",
         f"Dataset: `{load_meta['path']}` ({load_meta['n_loaded']} dimer frames, "
         f"N={load_meta['n_atoms']}).",
         f"Reference: E in **{load_meta['reference_energy_unit']}**, "
         f"F in **{load_meta['reference_force_unit']}**.",
         "",
-        "## Summary",
-        "",
-        "| Metric | n | mean | RMSE | max |",
-        "|--------|---|------|------|-----|",
     ]
-    for key, label in (
-        ("jax_charmm_force_rmse_ev_A", "JAX vs CHARMM force RMSE (eV/Å)"),
-        ("mp2_jax_force_rmse_ev_A", "MP2 vs JAX force RMSE (eV/Å)"),
-        ("mp2_charmm_force_rmse_ev_A", "MP2 vs CHARMM force RMSE (eV/Å)"),
-        ("interaction_delta_eV", "Interaction E: JAX MM−MP2 (eV)"),
-    ):
+    has_mm = any("jax_energy_kcal" in row for row in rows)
+    if has_mm:
+        lines.extend(
+            [
+                "## MM summary",
+                "",
+                "| Metric | n | mean | RMSE | max |",
+                "|--------|---|------|------|-----|",
+            ]
+        )
+    else:
+        lines.extend(["MM evaluation skipped (hybrid-only run).", ""])
+    mm_rows = (
+        [
+            ("jax_charmm_force_rmse_ev_A", "JAX vs CHARMM force RMSE (eV/Å)"),
+            ("mp2_jax_force_rmse_ev_A", "MP2 vs JAX force RMSE (eV/Å)"),
+            ("mp2_charmm_force_rmse_ev_A", "MP2 vs CHARMM force RMSE (eV/Å)"),
+            ("interaction_delta_eV", "Interaction E: JAX MM−MP2 (eV)"),
+        ]
+        if has_mm
+        else []
+    )
+    for key, label in mm_rows:
         block = summary.get(key, {})
         lines.append(
             f"| {label} | {block.get('n', 0)} | "
@@ -730,7 +782,7 @@ def _write_comparison_md(
             "",
         ]
     )
-    if rows:
+    if has_mm and rows:
         worst = sorted(rows, key=lambda r: r.get("mp2_jax_force_rmse_ev_A", 0.0), reverse=True)[:5]
         lines.extend(
             [

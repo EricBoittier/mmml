@@ -13,12 +13,11 @@ Examples (CHARMM node)::
       --reference-energy-unit hartree --reference-force-unit ev_angstrom \\
       --max-frames 200 --stride 10
 
-    # Multiple hybrid modes (checkpoint direct inference + hybrid-ml + monomer-only)
-    ./scripts/mmml-charmm-mpirun.sh python scripts/compare_dcm_mp2_mm.py \\
+    # Hybrid-only: no CHARMM / mpirun required (doMM=False)
+    uv run python scripts/compare_dcm_mp2_mm.py \\
       --data new-dcm-round-2-only_MP2_41950.npz \\
       --checkpoint /path/to/checkpoint.json \\
-      --calculators hybrid-ml checkpoint \\
-      -o artifacts/dcm_mp2_mm_compare --max-frames 50
+      --hybrid-only -o artifacts/dcm_mp2_hybrid_compare --max-frames 200
 """
 
 from __future__ import annotations
@@ -105,6 +104,11 @@ def _parse_args() -> argparse.Namespace:
         help="Skip MM/ML and MP2 interaction-energy comparison",
     )
     parser.add_argument(
+        "--hybrid-only",
+        action="store_true",
+        help="Skip CHARMM/JAX MM; compare hybrid ML only (no libcharmm required)",
+    )
+    parser.add_argument(
         "--monomer-permutation",
         default="0,3,4,1,2",
         help="NPZ→PSF atom reorder per monomer (default: 0,3,4,1,2)",
@@ -116,6 +120,8 @@ def main() -> int:
     args = _parse_args()
     if args.jax_platform:
         os.environ["JAX_PLATFORM_NAME"] = args.jax_platform
+    if args.hybrid_only and args.checkpoint is None:
+        raise SystemExit("--hybrid-only requires --checkpoint")
     if args.checkpoint is None and args.calculators != ["hybrid-ml"]:
         raise SystemExit("--calculators requires --checkpoint")
 
@@ -139,16 +145,18 @@ def main() -> int:
         checkpoint=args.checkpoint,
         hybrid_calculators=tuple(args.calculators),
         hybrid_cutoff=args.cutoff,
+        run_mm=not args.hybrid_only,
     )
     summary = payload["summary"]
-    jax_ch = summary.get("jax_charmm_force_rmse_ev_A", {})
-    mp2_jax = summary.get("mp2_jax_force_rmse_ev_A", {})
     print(f"Wrote {args.output_dir / 'comparison.json'} and report.md")
-    print(
-        f"Frames: {summary['n_frames']} | "
-        f"JAX−CHARMM force RMSE mean: {jax_ch.get('mean', float('nan')):.4g} eV/Å | "
-        f"MP2−JAX MM force RMSE mean: {mp2_jax.get('mean', float('nan')):.4g} eV/Å"
-    )
+    print(f"Frames: {summary['n_frames']}")
+    if payload.get("mm", {}).get("enabled"):
+        jax_ch = summary.get("jax_charmm_force_rmse_ev_A", {})
+        mp2_jax = summary.get("mp2_jax_force_rmse_ev_A", {})
+        print(
+            f"  JAX−CHARMM force RMSE mean: {jax_ch.get('mean', float('nan')):.4g} eV/Å | "
+            f"MP2−JAX MM force RMSE mean: {mp2_jax.get('mean', float('nan')):.4g} eV/Å"
+        )
     if args.checkpoint is not None:
         for calc_name in args.calculators:
             slug = calc_name.replace("-", "_")

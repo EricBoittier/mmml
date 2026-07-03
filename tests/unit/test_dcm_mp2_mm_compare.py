@@ -130,13 +130,36 @@ def test_compare_and_aggregate_frame_metrics() -> None:
         interaction_energy_kcal=0.5,
         mp2_interaction_eV=0.02,
     )
-    row = compare_mm_to_mp2_frame(mm, frame)
+    row = compare_mm_to_mp2_frame(frame, mm=mm)
     assert row["source_index"] == 7
     assert "mp2_jax_force_rmse_ev_A" in row
     assert "interaction_delta_eV" in row
     summary = aggregate_comparison([row, row])
     assert summary["n_frames"] == 2
     assert summary["mp2_jax_force_rmse_ev_A"]["n"] == 2
+
+
+def test_compare_hybrid_only_frame_without_mm() -> None:
+    frame = Mp2Frame(
+        index=0,
+        source_index=1,
+        n_atoms=10,
+        z=np.ones(10, dtype=np.int32),
+        r=np.zeros((10, 3)),
+        e_ref_raw=-43.0,
+        e_ref_eV=-1170.0,
+        f_ref_ev_A=np.ones((10, 3), dtype=np.float64),
+    )
+    hybrid = [
+        HybridEvalResult(
+            calculator="hybrid-ml",
+            energy_eV=-1169.9,
+            forces_ev_A=np.ones((10, 3)),
+        )
+    ]
+    row = compare_mm_to_mp2_frame(frame, hybrid=hybrid)
+    assert "jax_energy_kcal" not in row
+    assert row["hybrid"]["hybrid-ml"]["mp2_force_rmse_ev_A"] == 0.0
 
 
 def test_compare_hybrid_metrics_in_frame_and_summary() -> None:
@@ -166,7 +189,7 @@ def test_compare_hybrid_metrics_in_frame_and_summary() -> None:
             mp2_interaction_eV=0.02,
         )
     ]
-    row = compare_mm_to_mp2_frame(mm, frame, hybrid=hybrid)
+    row = compare_mm_to_mp2_frame(frame, mm=mm, hybrid=hybrid)
     assert row["hybrid"]["hybrid-ml"]["mp2_force_rmse_ev_A"] == pytest.approx(0.1, abs=1e-12)
     assert row["hybrid_hybrid_ml_interaction_delta_eV"] == pytest.approx(0.03, abs=1e-12)
     summary = aggregate_comparison([row])
