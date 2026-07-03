@@ -1616,17 +1616,11 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         flush=True,
     )
     pycharmm = _import_pycharmm()
-    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
-        assert_charmm_image_min_distance_after_update,
-        capture_charmm_script_output,
-        parse_mkimat2_min_distances,
-    )
-
     # Rebuild pair lists after ML exclusions are installed.  Use scripting UPDATE
     # (not pycharmm.nbonds.update_bnbnd) and only after prepare_charmm_pbc +
     # apply_pbc_nbonds — bare UPDATE after crystal free segfaults in IMAGE VDW.
     with charmm_relaxed_bomlev():
-        update_log = capture_charmm_script_output("UPDATE", replay=True)
+        pycharmm.lingo.charmm_script("UPDATE")
     pycharmm.image.update_bimag()
     rewrap_charmm_coords_for_mlpot_pbc(
         cubic_box_side_A=side,
@@ -1634,17 +1628,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         verbose=verbose,
     )
     with charmm_relaxed_bomlev():
-        post_rewrap_log = capture_charmm_script_output("UPDATE", replay=True)
+        pycharmm.lingo.charmm_script("UPDATE")
     pycharmm.image.update_bimag()
-    image_log = "\n".join(s for s in (update_log, post_rewrap_log) if s.strip())
-    with charmm_relaxed_bomlev():
-        assert_charmm_image_min_distance_after_update(
-            workflow_args=workflow_args,
-            context="MLpot PBC registration (post-upinb)",
-            cubic_box_side_A=side,
-            charmm_log=image_log if parse_mkimat2_min_distances(image_log) else None,
-            post_bimag=True,
-        )
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC upinb during registration",
     )
@@ -1807,6 +1792,7 @@ def register_mlpot(
             )
 
             pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+            pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
     ml_z = np.asarray(ml_Z, dtype=int)
     reg_box = (
         float(box_side)
@@ -1825,6 +1811,16 @@ def register_mlpot(
         assert_charmm_pbc_lattice_ready_for_mlpot(
             context="MLpot registration",
             cubic_box_side_A=reg_box,
+        )
+        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+            run_mlpot_pbc_image_registration_gate,
+        )
+
+        run_mlpot_pbc_image_registration_gate(
+            cubic_box_side_A=float(reg_box),
+            workflow_args=workflow_args,
+            context="MLpot PBC registration (post-MLpot)",
+            verbose=verbose,
         )
     ctx = MlpotContext(
         mlpot=mlpot,

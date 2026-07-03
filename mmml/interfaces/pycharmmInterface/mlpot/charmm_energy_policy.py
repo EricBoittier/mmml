@@ -153,6 +153,16 @@ def _reload_prm_overlay(
             verbose=verbose,
             workflow_args=workflow_args,
         )
+        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+            run_mlpot_pbc_image_registration_gate,
+        )
+
+        run_mlpot_pbc_image_registration_gate(
+            cubic_box_side_A=float(cubic_box_side_A),
+            workflow_args=workflow_args,
+            context="MLpot PBC registration (post energy-policy reload)",
+            verbose=verbose,
+        )
     else:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm

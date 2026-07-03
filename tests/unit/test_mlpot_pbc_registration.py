@@ -290,12 +290,8 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0, rebuild=False)
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
-    image_gate.assert_called_once()
-    assert image_gate.call_args.kwargs["cubic_box_side_A"] == 32.0
-    assert image_gate.call_args.kwargs.get("post_bimag") is True
-    assert _MKIMAT2_SAFE_LOG.strip() in str(image_gate.call_args.kwargs.get("charmm_log", ""))
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
-    fake_pycharmm.lingo.charmm_script.assert_not_called()
+    assert fake_pycharmm.lingo.charmm_script.call_count == 2
     assert fake_pycharmm.image.update_bimag.call_count == 2
 
 
