@@ -215,6 +215,261 @@ def _term_comparison(term: str, charmm: float, jax: float) -> TermComparison:
     return TermComparison(term=term, charmm_kcal=float(charmm), jax_kcal=float(jax))
 
 
+def _charmm_dict_to_category_totals(
+    charmm_cats: dict[str, dict[str, float | np.ndarray]],
+) -> tuple[CategoryNonbondedTotals, ...]:
+    out: list[CategoryNonbondedTotals] = []
+    for cat in (_PairCat.PEP_PEP.value, _PairCat.PEP_WATER.value, _PairCat.WATER_WATER.value):
+        row = charmm_cats.get(cat)
+        if row is None:
+            out.append(CategoryNonbondedTotals(cat, 0, 0.0, 0.0, 0.0))
+            continue
+        out.append(
+            CategoryNonbondedTotals(
+                category=cat,
+                n_pairs=0,
+                vdw_kcal=float(row["vdw"]),
+                elec_kcal=float(row["elec"]),
+                mean_r_A=0.0,
+            )
+        )
+    return tuple(out)
+
+
+def _mic_unit_vector(
+    positions: np.ndarray,
+    i: int,
+    j: int,
+    cell: np.ndarray,
+) -> np.ndarray:
+    cell_mat = np.asarray(cell, dtype=np.float64)
+    if cell_mat.shape == (3,):
+        cell_mat = np.diag(cell_mat)
+    inv = np.linalg.inv(cell_mat)
+    dr = np.asarray(positions[j], dtype=np.float64) - np.asarray(positions[i], dtype=np.float64)
+    frac = dr @ inv.T
+    frac = frac - np.round(frac)
+    disp = frac @ cell_mat
+    norm = float(np.linalg.norm(disp))
+    if norm < 1e-12:
+        return np.zeros(3, dtype=np.float64)
+    return disp / norm
+
+
+def _single_pair_nb_energies(
+    positions: np.ndarray,
+    pair_i: int,
+    pair_j: int,
+    nbond_data: Any,
+    cell: np.ndarray,
+    settings: Any,
+) -> tuple[float, float]:
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        decompose_nonbonded_pair_energies,
+    )
+
+    pi = np.asarray([pair_i], dtype=np.int32)
+    pj = np.asarray([pair_j], dtype=np.int32)
+    decomp = decompose_nonbonded_pair_energies(
+        positions,
+        nbond_data,
+        cell,
+        settings,
+        pair_i=pi,
+        pair_j=pj,
+    )
+    return float(decomp.vdw_kcal[0]), float(decomp.elec_kcal[0])
+
+
+def _single_pair_analytic_dedr(
+    positions: np.ndarray,
+    pair_i: int,
+    pair_j: int,
+    nbond_data: Any,
+    cell: np.ndarray,
+    settings: Any,
+    r_hat: np.ndarray,
+) -> tuple[float, float]:
+    import jax
+    import jax.numpy as jnp
+
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        decompose_nonbonded_pair_energies,
+    )
+
+    pos = jnp.asarray(positions, dtype=jnp.float64)
+    pi = np.asarray([pair_i], dtype=np.int32)
+    pj = np.asarray([pair_j], dtype=np.int32)
+
+    def _vdw_energy(p: jnp.ndarray) -> jnp.ndarray:
+        d = decompose_nonbonded_pair_energies(
+            p, nbond_data, cell, settings, pair_i=pi, pair_j=pj
+        )
+        return jnp.asarray(d.vdw_kcal[0], dtype=jnp.float64)
+
+    def _elec_energy(p: jnp.ndarray) -> jnp.ndarray:
+        d = decompose_nonbonded_pair_energies(
+            p, nbond_data, cell, settings, pair_i=pi, pair_j=pj
+        )
+        return jnp.asarray(d.elec_kcal[0], dtype=jnp.float64)
+
+    grad_vdw = np.asarray(jax.grad(_vdw_energy)(pos), dtype=np.float64)
+    grad_elec = np.asarray(jax.grad(_elec_energy)(pos), dtype=np.float64)
+    fi_v = grad_vdw[pair_i] + grad_vdw[pair_j]
+    # dE/dr along i→j: F_j·r̂ − F_i·r̂ for conservative two-body MIC pair energy.
+    dedr_v = float(np.dot(grad_vdw[pair_j] - grad_vdw[pair_i], r_hat))
+    dedr_e = float(np.dot(grad_elec[pair_j] - grad_elec[pair_i], r_hat))
+    _ = fi_v  # silence unused
+    return dedr_v, dedr_e
+
+
+def _relative_deriv_error(analytic: float, numeric: float) -> float:
+    denom = max(abs(analytic), abs(numeric), 1e-12)
+    return abs(analytic - numeric) / denom
+
+
+def audit_switch_derivatives(
+    positions: np.ndarray,
+    decomp: Any,
+    nbond_data: Any,
+    cell: np.ndarray,
+    settings: Any,
+    *,
+    top_k: int = 10,
+    dr: float = 1e-4,
+) -> tuple[PairSwitchAudit, ...]:
+    """Compare JAX autodiff dE/dr vs central difference for top |VDW| pairs."""
+    order = np.argsort(-np.abs(decomp.vdw_kcal))[:top_k]
+    pos = np.asarray(positions, dtype=np.float64)
+    audits: list[PairSwitchAudit] = []
+    for k in order:
+        i = int(decomp.pair_i[k])
+        j = int(decomp.pair_j[k])
+        r_hat = _mic_unit_vector(pos, i, j, cell)
+        if float(np.linalg.norm(r_hat)) < 1e-12:
+            continue
+        vdw0, elec0 = _single_pair_nb_energies(pos, i, j, nbond_data, cell, settings)
+        pos_plus = pos.copy()
+        pos_minus = pos.copy()
+        pos_plus[i] -= 0.5 * dr * r_hat
+        pos_plus[j] += 0.5 * dr * r_hat
+        pos_minus[i] += 0.5 * dr * r_hat
+        pos_minus[j] -= 0.5 * dr * r_hat
+        vdw_p, elec_p = _single_pair_nb_energies(pos_plus, i, j, nbond_data, cell, settings)
+        vdw_m, elec_m = _single_pair_nb_energies(pos_minus, i, j, nbond_data, cell, settings)
+        dedr_v_num = (vdw_p - vdw_m) / dr
+        dedr_e_num = (elec_p - elec_m) / dr
+        dedr_v_ana, dedr_e_ana = _single_pair_analytic_dedr(
+            pos, i, j, nbond_data, cell, settings, r_hat
+        )
+        audits.append(
+            PairSwitchAudit(
+                atom_i=i + 1,
+                atom_j=j + 1,
+                r_A=float(decomp.r_A[k]),
+                vdw_kcal=vdw0,
+                vdw_dedr_analytic=dedr_v_ana,
+                vdw_dedr_numeric=dedr_v_num,
+                vdw_dedr_rel_err=_relative_deriv_error(dedr_v_ana, dedr_v_num),
+                elec_kcal=elec0,
+                elec_dedr_analytic=dedr_e_ana,
+                elec_dedr_numeric=dedr_e_num,
+                elec_dedr_rel_err=_relative_deriv_error(dedr_e_ana, dedr_e_num),
+            )
+        )
+    return tuple(audits)
+
+
+def _collect_charmm_category_breakdown(
+    jax_by_category: tuple[CategoryNonbondedTotals, ...],
+    jax_cat_forces: dict[str, np.ndarray],
+) -> tuple[
+    tuple[CategoryNonbondedTotals, ...],
+    tuple[TermComparison, ...],
+    tuple[CategoryForceDelta, ...],
+    dict[str, Any],
+]:
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+        charmm_nonbonded_by_segment_category,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+        selective_bonded_block_unsafe_under_mpi,
+    )
+
+    meta: dict[str, Any] = {}
+    if selective_bonded_block_unsafe_under_mpi():
+        meta["charmm_category_skipped"] = "selective_BLOCK_unsafe_under_mpi"
+        return (), (), (), meta
+    try:
+        charmm_raw = charmm_nonbonded_by_segment_category(restore_full_mm_block=True)
+    except Exception as exc:
+        meta["charmm_category_error"] = str(exc)
+        return (), (), (), meta
+    meta["charmm_category_method"] = "segment_BLOCK"
+    charmm_by = _charmm_dict_to_category_totals(charmm_raw)
+    jax_map = {row.category: row for row in jax_by_category}
+    vdw_terms: list[TermComparison] = []
+    force_rows: list[CategoryForceDelta] = []
+    for cat in (_PairCat.PEP_PEP.value, _PairCat.PEP_WATER.value, _PairCat.WATER_WATER.value):
+        ch_row = next((r for r in charmm_by if r.category == cat), None)
+        jax_row = jax_map.get(cat)
+        if ch_row is None or jax_row is None:
+            continue
+        vdw_terms.append(_term_comparison(f"vdw_{cat}", ch_row.vdw_kcal, jax_row.vdw_kcal))
+        ch_f = np.asarray(charmm_raw[cat]["forces"], dtype=np.float64)
+        jax_f = jax_cat_forces.get(cat, np.zeros_like(ch_f))
+        force_rows.append(
+            CategoryForceDelta(
+                category=cat,
+                jax_force_rms=_force_rms(jax_f),
+                charmm_force_rms=_force_rms(ch_f),
+                delta_force_rms=_force_delta_rms(jax_f, ch_f),
+                vdw_delta_kcal=jax_row.vdw_kcal - ch_row.vdw_kcal,
+            )
+        )
+    return charmm_by, tuple(vdw_terms), tuple(force_rows), meta
+
+
+def _jax_category_forces(
+    positions: np.ndarray,
+    nbond_data: Any,
+    cell: np.ndarray,
+    settings: Any,
+    decomp: Any,
+    categories: np.ndarray,
+) -> dict[str, np.ndarray]:
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        nonbonded_energy_and_forces,
+    )
+
+    out: dict[str, np.ndarray] = {}
+    for cat in (_PairCat.PEP_PEP.value, _PairCat.PEP_WATER.value, _PairCat.WATER_WATER.value):
+        mask = categories == cat
+        if not np.any(mask):
+            out[cat] = np.zeros((positions.shape[0], 3), dtype=np.float64)
+            continue
+        _, forces = nonbonded_energy_and_forces(
+            positions,
+            nbond_data,
+            cell,
+            settings,
+            pair_i=decomp.pair_i[mask],
+            pair_j=decomp.pair_j[mask],
+        )
+        out[cat] = np.asarray(forces, dtype=np.float64)
+    return out
+
+
+def _force_rms(forces: np.ndarray) -> float:
+    f = np.asarray(forces, dtype=np.float64)
+    return float(np.sqrt(np.mean(np.sum(f * f, axis=-1))))
+
+
+def _force_delta_rms(a: np.ndarray, b: np.ndarray) -> float:
+    d = np.asarray(a, dtype=np.float64) - np.asarray(b, dtype=np.float64)
+    return float(np.sqrt(np.mean(np.sum(d * d, axis=-1))))
+
+
 def collect_trialanine_nb_parity(
     box: Any,
     positions: np.ndarray,
@@ -297,10 +552,33 @@ def collect_trialanine_nb_parity(
     n_pep = n_peptide_atoms_in_trialanine_box(box.psf_path)
     categories = classify_pair_categories(decomp.pair_i, decomp.pair_j, n_pep)
     by_cat = _aggregate_by_category(decomp, categories)
+    jax_cat_forces = _jax_category_forces(
+        pos, nbond_data, box.cell, settings, decomp, categories
+    )
+    charmm_by_cat, category_vdw, category_force_delta, cat_meta = (
+        _collect_charmm_category_breakdown(by_cat, jax_cat_forces)
+    )
+    switch_audits = audit_switch_derivatives(
+        pos, decomp, nbond_data, box.cell, settings, top_k=10
+    )
 
     n_pp = int(np.sum(categories == _PairCat.PEP_PEP.value))
     n_pw = int(np.sum(categories == _PairCat.PEP_WATER.value))
     n_ww = int(np.sum(categories == _PairCat.WATER_WATER.value))
+
+    report_meta = {
+        "psf": str(box.psf_path),
+        "include_cmap": include_cmap,
+        "lr_solver": "mic",
+        **cat_meta,
+    }
+    if switch_audits:
+        report_meta["switch_vdw_max_dedr_rel_err"] = max(
+            a.vdw_dedr_rel_err for a in switch_audits
+        )
+        report_meta["switch_elec_max_dedr_rel_err"] = max(
+            a.elec_dedr_rel_err for a in switch_audits
+        )
 
     return TrialanineNbParityReport(
         seed=int(getattr(box, "seed", -1)),
@@ -326,6 +604,9 @@ def collect_trialanine_nb_parity(
         nb_total=_term_comparison("nb_total", charmm_nb_total, jax_nb_total),
         mm_total=_term_comparison("mm_total", charmm_mm_total, jax_mm_total),
         jax_by_category=by_cat,
+        charmm_by_category=charmm_by_cat,
+        category_vdw=category_vdw,
+        category_force_delta=category_force_delta,
         top_vdw_pairs=_top_pairs(
             decomp,
             categories,
@@ -334,13 +615,10 @@ def collect_trialanine_nb_parity(
             category_filter=_PairCat.PEP_PEP.value,
         ),
         top_elec_pairs=_top_pairs(decomp, categories, term="elec", n=top_n_pairs),
+        switch_derivative_audits=switch_audits,
         force_rms_delta=force_rms,
         force_max_delta=force_max,
-        metadata={
-            "psf": str(box.psf_path),
-            "include_cmap": include_cmap,
-            "lr_solver": "mic",
-        },
+        metadata=report_meta,
     )
 
 
