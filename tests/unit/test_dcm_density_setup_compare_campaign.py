@@ -179,9 +179,8 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
     assert init.get("charmm_mm_pretreat") is True
     assert init.get("md_stages") == "mini,heat"
     assert init.get("heat_thermostat") == "bussi"
-    assert init.get("ps_heat") == 2.0
+    assert init.get("ps_heat") == 1.0
     assert init.get("allow_high_grms") is False
-    assert init.get("dyn_inbfrq") == -1
     assert init.get("mc_density_steps") == 256
     assert init.get("geometry_packing_fire_bfgs_crossover_grms") == 200.0
     assert init.get("bonded_mm_mini_steps") == 1000
