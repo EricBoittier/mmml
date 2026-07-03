@@ -30,10 +30,14 @@ export MMML_CKPT="${MMML_CKPT:-$(default_mmml_ckpt "$REPO_ROOT")}"
 
 if [[ -n "${MMML_WORKFLOW_CONFIG:-}" ]]; then
   _cfg_raw="${MMML_WORKFLOW_CONFIG}"
-elif [[ "$RUN_TAG" == *_sw_* ]]; then
-  _cfg_raw="config.prep_sweep.yaml"
 else
-  _cfg_raw="config.yaml"
+  _cfg_raw="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import default_workflow_config_path
+print(default_workflow_config_path(run_tag='${RUN_TAG}'))
+")"
 fi
 if [[ "$_cfg_raw" = /* ]]; then
   CFG="${_cfg_raw}"

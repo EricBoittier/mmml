@@ -257,22 +257,47 @@ def is_prep_sweep_run_tag(tag: str) -> bool:
     return "_sw_" in str(tag)
 
 
+def _tag_in_matrix(cfg: dict[str, Any], tag: str) -> bool:
+    return tag in {cell_run_tag(c, cfg) for c in iter_matrix_cells(cfg)}
+
+
+def _prep_sweep_config_resolves_tag(sweep_cfg: dict[str, Any], tag: str) -> bool:
+    if not prep_sweep_enabled(sweep_cfg):
+        return False
+    if _tag_in_matrix(sweep_cfg, tag) or is_prep_sweep_run_tag(tag):
+        return True
+    anchor_tag = cell_run_tag(prep_sweep_anchor_cell(sweep_cfg), sweep_cfg)
+    return tag == anchor_tag
+
+
 def config_for_run_tag(cfg: dict[str, Any], tag: str) -> dict[str, Any]:
-    """Use ``config.prep_sweep.yaml`` when the tag is a sweep cell and the active config is not."""
-    if is_prep_sweep_run_tag(tag) and not prep_sweep_enabled(cfg):
-        sweep_path = prep_sweep_config_path()
-        if sweep_path.is_file():
-            return load_config(sweep_path)
+    """Pick ``config.prep_sweep.yaml`` when the tag belongs to the sweep matrix."""
+    if prep_sweep_enabled(cfg):
+        return cfg
+    if _tag_in_matrix(cfg, tag):
+        return cfg
+    sweep_path = prep_sweep_config_path()
+    if sweep_path.is_file():
+        sweep_cfg = load_config(sweep_path)
+        if _prep_sweep_config_resolves_tag(sweep_cfg, tag):
+            return sweep_cfg
     return cfg
 
 
 def default_workflow_config_path(*, run_tag: str | None = None) -> Path:
     """Default config file for Snakemake / job_shell (sweep tags → prep_sweep config)."""
-    if run_tag and is_prep_sweep_run_tag(run_tag):
-        sweep_path = prep_sweep_config_path()
-        if sweep_path.is_file():
+    main_path = workflow_root() / "config.yaml"
+    if not run_tag:
+        return main_path
+    main_cfg = load_config(main_path)
+    if _tag_in_matrix(main_cfg, run_tag):
+        return main_path
+    sweep_path = prep_sweep_config_path()
+    if sweep_path.is_file():
+        sweep_cfg = load_config(sweep_path)
+        if _prep_sweep_config_resolves_tag(sweep_cfg, run_tag):
             return sweep_path
-    return workflow_root() / "config.yaml"
+    return main_path
 
 
 def prep_sweep_section(cfg: dict[str, Any]) -> dict[str, Any]:
@@ -1226,6 +1251,10 @@ def cell_from_tag(cfg: dict[str, Any], tag: str) -> RunCell:
     by_tag = {cell_run_tag(c, cfg): c for c in iter_matrix_cells(cfg)}
     if tag in by_tag:
         return by_tag[tag]
+    if prep_sweep_enabled(cfg):
+        anchor = prep_sweep_anchor_cell(cfg)
+        if cell_run_tag(anchor, cfg) == tag:
+            return anchor
     parsed = parse_run_tag(cfg, tag)
     if parsed.sweep_id:
         if not prep_sweep_enabled(cfg):

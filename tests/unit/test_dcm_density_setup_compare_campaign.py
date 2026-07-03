@@ -694,6 +694,26 @@ def test_prep_sweep_tag_auto_loads_from_prep_sweep_yaml(cfg: dict) -> None:
     assert cell.sweep_id == "baseline"
 
 
+def test_prep_sweep_anchor_tag_loads_from_prep_sweep_when_main_is_l32() -> None:
+    """L=28 prep-sweep anchor still resolves when config.yaml anchor is L=32."""
+    cfg = load_config(WORKFLOW / "config.yaml")
+    tag = "resilient_dcm_52_t50_l28_ht_bussi"
+    cell = cell_from_tag(cfg, tag)
+    assert cell.n_monomers == 52
+    assert cell.box_size == 28.0
+    assert cell.sweep_id is None
+    assert cl.default_workflow_config_path(run_tag=tag).name == "config.prep_sweep.yaml"
+
+
+def test_main_matrix_tag_stays_on_config_yaml() -> None:
+    cfg = load_config(WORKFLOW / "config.yaml")
+    tag = "resilient_dcm_77_t50_l32_ht_bussi"
+    cell = cell_from_tag(cfg, tag)
+    assert cell.n_monomers == 77
+    assert cell.box_size == 32.0
+    assert cl.default_workflow_config_path(run_tag=tag).name == "config.yaml"
+
+
 def test_prep_sweep_tag_fails_without_prep_sweep_yaml(cfg: dict, monkeypatch) -> None:
     monkeypatch.setattr(cl, "prep_sweep_config_path", lambda: WORKFLOW / "nonexistent_prep_sweep.yaml")
     with pytest.raises(KeyError, match="prep_sweep.enabled is false"):
