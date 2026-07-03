@@ -724,10 +724,11 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
     def _agg(key: str) -> dict[str, float | int]:
         vals = np.asarray([r[key] for r in rows if key in r and np.isfinite(r[key])], dtype=np.float64)
         if vals.size == 0:
-            return {"n": 0, "mean": float("nan"), "rmse": float("nan"), "max_abs": float("nan")}
+            return {"n": 0, "mean": float("nan"), "median": float("nan"), "rmse": float("nan"), "max_abs": float("nan")}
         return {
             "n": int(vals.size),
             "mean": float(np.mean(vals)),
+            "median": float(np.median(vals)),
             "rmse": float(np.sqrt(np.mean(vals**2))),
             "max_abs": float(np.max(np.abs(vals))),
         }
@@ -779,13 +780,17 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
             bins = com_binned_force_rmse(rows, key)
             if bins:
                 summary[f"hybrid_{slug}_com_binned_rmse_ev_A"] = bins
-            rmse_vals = np.asarray(
-                [r[key] for r in rows if key in r and np.isfinite(r[key])],
-                dtype=np.float64,
-            )
-            if rmse_vals.size >= 2:
+            rmse_vals: list[float] = []
+            com_vals: list[float] = []
+            for r in rows:
+                if key not in r or not np.isfinite(r[key]):
+                    continue
+                rmse_vals.append(float(r[key]))
+                if com_key := "dimer_com_distance_A" in r:
+                    com_vals.append(float(r["dimer_com_distance_A"]))
+            if len(rmse_vals) >= 2 and len(com_vals) == len(rmse_vals):
                 summary[f"hybrid_{slug}_corr_com_rmse"] = float(
-                    np.corrcoef(com[: rmse_vals.size], rmse_vals)[0, 1]
+                    np.corrcoef(np.asarray(com_vals), np.asarray(rmse_vals))[0, 1]
                 )
     pair = hybrid_calculator_pairwise_summary(rows, "checkpoint", "hybrid-ml")
     if pair is not None:
@@ -990,7 +995,7 @@ def _write_comparison_md(
             lines.append(f"### `{calc_name}`")
             lines.append(
                 f"- MP2 force RMSE: mean={force_block.get('mean', float('nan')):.4g} eV/Å, "
-                f"median={force_block.get('rmse', float('nan')):.4g} eV/Å "
+                f"median={force_block.get('median', float('nan')):.4g} eV/Å "
                 f"(n={force_block.get('n', 0)})"
             )
             corr = summary.get(f"hybrid_{slug}_corr_com_rmse")
