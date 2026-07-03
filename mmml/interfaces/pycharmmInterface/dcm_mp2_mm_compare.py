@@ -628,6 +628,98 @@ def compare_mm_to_mp2_frame(
     return out
 
 
+COM_BIN_EDGES_A: tuple[tuple[float, float], ...] = (
+    (0.0, 6.0),
+    (6.0, 8.0),
+    (8.0, 10.0),
+    (10.0, float("inf")),
+)
+
+
+def com_binned_force_rmse(
+    rows: list[dict[str, Any]],
+    rmse_key: str,
+    *,
+    com_key: str = "dimer_com_distance_A",
+    bins: tuple[tuple[float, float], ...] = COM_BIN_EDGES_A,
+) -> list[dict[str, Any]]:
+    """Bin MP2 force RMSE by dimer COM distance (Å)."""
+    if not rows or com_key not in rows[0] or rmse_key not in rows[0]:
+        return []
+    com = np.asarray([r[com_key] for r in rows], dtype=np.float64)
+    rmse = np.asarray([r.get(rmse_key, float("nan")) for r in rows], dtype=np.float64)
+    out: list[dict[str, Any]] = []
+    for lo, hi in bins:
+        mask = (com >= lo) & (com < hi)
+        if not np.any(mask):
+            continue
+        vals = rmse[mask]
+        finite = vals[np.isfinite(vals)]
+        hi_label = "∞" if not np.isfinite(hi) else f"{hi:g}"
+        out.append(
+            {
+                "com_min_A": float(lo),
+                "com_max_A": float(hi) if np.isfinite(hi) else None,
+                "com_bin_label": f"[{lo:g},{hi_label})",
+                "n": int(finite.size),
+                "median_rmse_ev_A": float(np.median(finite)) if finite.size else float("nan"),
+                "mean_rmse_ev_A": float(np.mean(finite)) if finite.size else float("nan"),
+                "p90_rmse_ev_A": float(np.percentile(finite, 90)) if finite.size else float("nan"),
+            }
+        )
+    return out
+
+
+def hybrid_calculator_pairwise_summary(
+    rows: list[dict[str, Any]],
+    calc_a: str,
+    calc_b: str,
+) -> dict[str, Any] | None:
+    """Compare per-frame MP2 force RMSE between two hybrid calculators."""
+    key_a = f"hybrid_{_calculator_slug(calc_a)}_mp2_force_rmse_ev_A"
+    key_b = f"hybrid_{_calculator_slug(calc_b)}_mp2_force_rmse_ev_A"
+    if not rows or key_a not in rows[0] or key_b not in rows[0]:
+        return None
+    a = np.asarray([r.get(key_a, float("nan")) for r in rows], dtype=np.float64)
+    b = np.asarray([r.get(key_b, float("nan")) for r in rows], dtype=np.float64)
+    mask = np.isfinite(a) & np.isfinite(b)
+    if not np.any(mask):
+        return None
+    a = a[mask]
+    b = b[mask]
+    delta = a - b
+    abs_delta = np.abs(delta)
+    com = (
+        np.asarray([r["dimer_com_distance_A"] for r in rows], dtype=np.float64)[mask]
+        if rows and "dimer_com_distance_A" in rows[0]
+        else None
+    )
+    corr_com = float("nan")
+    if com is not None and com.size >= 2:
+        corr_com = float(np.corrcoef(com, a)[0, 1])
+    worst_idx = int(np.argmax(abs_delta))
+    row_at_worst = rows[int(np.where(mask)[0][worst_idx])]
+    return {
+        "calculator_a": calc_a,
+        "calculator_b": calc_b,
+        "n": int(a.size),
+        "mean_rmse_a_ev_A": float(np.mean(a)),
+        "mean_rmse_b_ev_A": float(np.mean(b)),
+        "median_rmse_a_ev_A": float(np.median(a)),
+        "median_rmse_b_ev_A": float(np.median(b)),
+        "mean_abs_delta_ev_A": float(np.mean(abs_delta)),
+        "max_abs_delta_ev_A": float(np.max(abs_delta)),
+        "rmse_delta_ev_A": float(np.sqrt(np.mean(delta**2))),
+        "corr_com_rmse_a": corr_com,
+        "worst_abs_delta": {
+            "source_index": int(row_at_worst["source_index"]),
+            "rmse_a_ev_A": float(a[worst_idx]),
+            "rmse_b_ev_A": float(b[worst_idx]),
+            "delta_ev_A": float(delta[worst_idx]),
+        },
+    }
+
+
 def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
     def _agg(key: str) -> dict[str, float | int]:
         vals = np.asarray([r[key] for r in rows if key in r and np.isfinite(r[key])], dtype=np.float64)
@@ -681,6 +773,23 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "p90": float(np.percentile(com, 90)),
             "max": float(np.max(com)),
         }
+        for calc_name in hybrid_names:
+            slug = _calculator_slug(calc_name)
+            key = f"hybrid_{slug}_mp2_force_rmse_ev_A"
+            bins = com_binned_force_rmse(rows, key)
+            if bins:
+                summary[f"hybrid_{slug}_com_binned_rmse_ev_A"] = bins
+            rmse_vals = np.asarray(
+                [r[key] for r in rows if key in r and np.isfinite(r[key])],
+                dtype=np.float64,
+            )
+            if rmse_vals.size >= 2:
+                summary[f"hybrid_{slug}_corr_com_rmse"] = float(
+                    np.corrcoef(com[: rmse_vals.size], rmse_vals)[0, 1]
+                )
+    pair = hybrid_calculator_pairwise_summary(rows, "checkpoint", "hybrid-ml")
+    if pair is not None:
+        summary["hybrid_checkpoint_vs_hybrid_ml"] = pair
     return summary
 
 
@@ -880,14 +989,68 @@ def _write_comparison_md(
             int_block = summary.get(f"hybrid_{slug}_interaction_delta_eV", {})
             lines.append(f"### `{calc_name}`")
             lines.append(
-                f"- MP2 force RMSE: mean={force_block.get('mean', float('nan')):.4g} eV/Å "
+                f"- MP2 force RMSE: mean={force_block.get('mean', float('nan')):.4g} eV/Å, "
+                f"median={force_block.get('rmse', float('nan')):.4g} eV/Å "
                 f"(n={force_block.get('n', 0)})"
             )
+            corr = summary.get(f"hybrid_{slug}_corr_com_rmse")
+            if corr is not None and np.isfinite(corr):
+                lines.append(f"- corr(COM, RMSE) = {corr:.4g}")
             if int_block.get("n", 0):
                 lines.append(
                     f"- Interaction Δ (hybrid−MP2): mean={int_block.get('mean', float('nan')):.4g} eV"
                 )
             lines.append("")
+        # COM-binned RMSE (first hybrid calculator with bins, or each)
+        for calc_name in hybrid_calc_names:
+            slug = _calculator_slug(calc_name)
+            bins = summary.get(f"hybrid_{slug}_com_binned_rmse_ev_A", [])
+            if not bins:
+                continue
+            lines.extend(
+                [
+                    f"### MP2 force RMSE by COM (`{calc_name}`)",
+                    "",
+                    "| COM bin (Å) | n | median | mean | p90 |",
+                    "|-------------|---|--------|------|-----|",
+                ]
+            )
+            for block in bins:
+                lines.append(
+                    f"| {block['com_bin_label']} | {block['n']} | "
+                    f"{block['median_rmse_ev_A']:.4f} | "
+                    f"{block['mean_rmse_ev_A']:.4f} | "
+                    f"{block['p90_rmse_ev_A']:.4f} |"
+                )
+            lines.append("")
+            break
+        pair = summary.get("hybrid_checkpoint_vs_hybrid_ml")
+        if pair is not None:
+            lines.extend(
+                [
+                    "## Checkpoint vs hybrid-ml",
+                    "",
+                    "| Metric | checkpoint | hybrid-ml |",
+                    "|--------|------------|-----------|",
+                    f"| Mean MP2 force RMSE (eV/Å) | {pair['mean_rmse_a_ev_A']:.4g} | "
+                    f"{pair['mean_rmse_b_ev_A']:.4g} |",
+                    f"| Median MP2 force RMSE (eV/Å) | {pair['median_rmse_a_ev_A']:.4g} | "
+                    f"{pair['median_rmse_b_ev_A']:.4g} |",
+                    f"| Mean |Δ| per frame (eV/Å) | — | {pair['mean_abs_delta_ev_A']:.4g} |",
+                    f"| Max |Δ| per frame (eV/Å) | — | {pair['max_abs_delta_ev_A']:.4g} |",
+                    f"| RMSE of Δ (eV/Å) | — | {pair['rmse_delta_ev_A']:.4g} |",
+                    "",
+                ]
+            )
+            worst = pair.get("worst_abs_delta", {})
+            if worst:
+                lines.append(
+                    f"Largest |Δ| at source_index **{worst.get('source_index')}**: "
+                    f"checkpoint={worst.get('rmse_a_ev_A', float('nan')):.4f}, "
+                    f"hybrid-ml={worst.get('rmse_b_ev_A', float('nan')):.4f} eV/Å "
+                    f"(Δ={worst.get('delta_ev_A', float('nan')):.4g})."
+                )
+                lines.append("")
     lines.extend(
         [
             "",
