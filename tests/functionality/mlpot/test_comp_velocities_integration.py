@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
-
-from tests.conftest import charmm_rebuild_psf_unsafe_under_mpirun
 
 from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     apply_selective_force_damp_recipe,
@@ -21,35 +21,35 @@ from tests.conftest import can_import_pycharmm
 
 
 @pytest.fixture(scope="module")
-def charmm_aco_dimer():
+def charmm_tip3_water(pycharmm_workdir: Path):
+    """TIP3 water (MPI-safe setupRes path; no in-process CGENFF cluster rebuild)."""
     if not can_import_pycharmm():
         pytest.skip("pycharmm / libcharmm not available")
-    if charmm_rebuild_psf_unsafe_under_mpirun():
-        pytest.skip(
-            "build_ase_cluster (CGENFF read) segfaults on MPI-linked libcharmm "
-            "after other PyCHARMM tests in the same mpirun pytest session; "
-            "run serially: pytest tests/functionality/mlpot/test_comp_velocities_integration.py"
-        )
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from mmml.interfaces.pycharmmInterface import setupRes
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        ensure_pycharmm_loaded,
+        reset_block,
+        reset_block_no_internal,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
 
     ensure_pycharmm_loaded()
-
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-        build_ase_cluster,
-        setup_charmm_nbonds,
-    )
-
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm.energy as energy
-
-    build_ase_cluster("ACO", 2, spacing=6.0)
-    setup_charmm_nbonds()
-    energy.show()
-    yield
+    atoms = setupRes.main("TIP3")
+    atoms = setupRes.generate_coordinates()
+    reset_block()
+    reset_block_no_internal()
+    reset_block()
+    apply_charmm_mm_block()
+    setup_default_nbonds()
+    yield atoms
+    reset_block()
+    reset_block_no_internal()
+    reset_block()
 
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
-def test_comparison_array_roundtrip(charmm_aco_dimer):
+def test_comparison_array_roundtrip(charmm_tip3_water):
     import pycharmm.coor as coor
 
     n = coor.get_natom()
@@ -70,7 +70,7 @@ def test_comparison_array_roundtrip(charmm_aco_dimer):
 
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
-def test_scalar_zero_clears_comparison_array(charmm_aco_dimer):
+def test_scalar_zero_clears_comparison_array(charmm_tip3_water):
     import pycharmm.coor as coor
 
     n = coor.get_natom()
@@ -83,7 +83,7 @@ def test_scalar_zero_clears_comparison_array(charmm_aco_dimer):
 
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
-def test_selective_force_damp_respects_threshold(charmm_aco_dimer):
+def test_selective_force_damp_respects_threshold(charmm_tip3_water):
     run_charmm_script("ENER")
     mags = force_magnitudes_kcalmol_A()
     high_threshold = float(np.max(mags) + 1.0)
@@ -113,7 +113,7 @@ def test_selective_force_damp_respects_threshold(charmm_aco_dimer):
 
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
-def test_lower_threshold_includes_more_atoms(charmm_aco_dimer):
+def test_lower_threshold_includes_more_atoms(charmm_tip3_water):
     run_charmm_script("ENER")
     mags = force_magnitudes_kcalmol_A()
     p90 = float(np.percentile(mags, 90))
@@ -132,7 +132,7 @@ def test_lower_threshold_includes_more_atoms(charmm_aco_dimer):
 
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
-def test_prepare_comp_zero_only(charmm_aco_dimer):
+def test_prepare_comp_zero_only(charmm_tip3_water):
     n = prepare_comp_for_iasvel0(zero_only=True)
     assert n == 0
     comp = get_comparison_array()

@@ -65,6 +65,10 @@ def _nbond_settings_from_box(box) -> CharmmNbondSettings:
 
 @pytest.fixture(scope="module")
 def trialanine_water_box(tmp_path_factory):
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+
+    if not ensure_pycharmm_loaded():
+        pytest.skip("PyCHARMM not available (libcharmm / deferred import)")
     workdir = tmp_path_factory.mktemp("trialanine_water")
     return build_trialanine_water_box_in_charmm(
         n_waters=10,

@@ -72,10 +72,8 @@ _MLPOT_PATH_PREFIXES = (
     "functionality/mlpot/test_comp_velocities_integration.py",
 )
 
-# Live PyCHARMM tests that rebuild PSF/CGENFF in-process (segfault on MPI-linked libcharmm).
-_CHARMM_SERIAL_PATH_PREFIXES = (
-    "functionality/mlpot/test_comp_velocities_integration.py",
-)
+# Paths that rebuild PSF/CGENFF in-process (unsafe under MPI-linked libcharmm + mpirun).
+_CHARMM_SERIAL_PATH_PREFIXES: tuple[str, ...] = ()
 
 
 def charmm_rebuild_psf_unsafe_under_mpirun() -> bool:

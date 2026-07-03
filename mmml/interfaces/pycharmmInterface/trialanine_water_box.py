@@ -269,16 +269,21 @@ def build_trialanine_water_box_in_charmm(
 
     from mmml.interfaces.pycharmmInterface import setupRes
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
-        crystal_free_charmm_for_param_append,
-        pycharmm,
-        reset_block,
-    )
+    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
     from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
+
+    if not ipy.ensure_pycharmm_loaded():
+        raise RuntimeError(
+            "PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so). "
+            "Set CHARMM_LIB_DIR or unset MMML_WARMUP_MLPOT_JAX_ONLY=0 for live tests."
+        )
+    pycharmm = ipy.pycharmm
+    reset_block = ipy.reset_block
+    crystal_free_charmm_for_param_append = ipy.crystal_free_charmm_for_param_append
 
     if not have_trialanine_cgenff():
         raise FileNotFoundError(
