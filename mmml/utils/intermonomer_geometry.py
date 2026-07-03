@@ -25,6 +25,8 @@ DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A = 3.5
 # 52-monomer DCM @ L≈28 Å: MKIMAT2 ≈4.9 Å still yields hybrid GRMS >2000 at registration.
 DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A = 5.0
 DENSE_DCM_MLPOT_MONOMER_COUNT = 40
+# When MKIMAT2 cannot be captured, MIC must clear the IMAGE floor plus slack.
+DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A = 0.5
 
 # Dynamics overlap guard default (CHARMM close-contact scale); looser than vdW sums.
 DYNAMICS_OVERLAP_REFERENCE_A = 1.5

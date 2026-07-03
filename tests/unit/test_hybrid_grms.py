@@ -405,7 +405,7 @@ def test_prepare_mlpot_hybrid_state_resyncs_stale_charmm_after_session_best_rest
         "mmml.interfaces.pycharmmInterface.mlpot.setup.rewrap_charmm_coords_for_mlpot_pbc",
         return_value=0,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_min_distance_after_update",
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
         return_value=6.0,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",

@@ -10,6 +10,8 @@ from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
     assert_charmm_image_min_distance,
     assert_charmm_image_min_distance_after_update,
     parse_mkimat2_min_distances,
+    resolve_mic_registration_fallback_min_A,
+    resolve_mkimat2_min_distance_A,
     summarize_mkimat2_min_distances,
 )
 
@@ -395,6 +397,18 @@ def test_assert_charmm_image_min_distance_after_update_uses_mkimat_floor(monkeyp
             context="test gate",
             post_bimag=True,
         )
+
+
+def test_resolve_mic_registration_fallback_adds_slack_for_dense_dcm():
+    args = argparse.Namespace(
+        solvents=["DCM"],
+        _cluster_atoms_per_list=[5] * 52,
+    )
+    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(5.0)
+    assert resolve_mic_registration_fallback_min_A(args) == pytest.approx(5.5)
+    assert resolve_mic_registration_fallback_min_A(None) == pytest.approx(3.5)
+    sparse = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 10)
+    assert resolve_mic_registration_fallback_min_A(sparse) == pytest.approx(3.5)
 
 
 def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):

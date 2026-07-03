@@ -15,6 +15,7 @@ import numpy as np
 from mmml.utils.intermonomer_geometry import (
     DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A,
     DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A,
+    DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A,
     DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
     DENSE_DCM_MLPOT_MONOMER_COUNT,
     is_dcm_like_prep,
@@ -367,6 +368,21 @@ def resolve_mkimat2_min_distance_A(
     return floor
 
 
+def resolve_mic_registration_fallback_min_A(
+    workflow_args: argparse.Namespace | None,
+) -> float:
+    """MIC floor when ``<MKIMAT2>`` is unavailable at MLpot registration."""
+    mkimat_floor = resolve_mkimat2_min_distance_A(workflow_args)
+    if is_dcm_like_prep(workflow_args):
+        n_monomers = _resolve_n_monomers_for_image_gate(workflow_args)
+        if (
+            n_monomers is not None
+            and n_monomers >= int(DENSE_DCM_MLPOT_MONOMER_COUNT)
+        ):
+            return mkimat_floor + float(DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A)
+    return mkimat_floor
+
+
 def run_mlpot_pbc_image_registration_gate(
     *,
     cubic_box_side_A: float,
@@ -390,15 +406,10 @@ def run_mlpot_pbc_image_registration_gate(
         verbose=verbose,
     )
     with charmm_relaxed_bomlev():
+        pycharmm.image.update_bimag()
         update_log = capture_charmm_script_output("UPDATE", replay=False)
     pycharmm.image.update_bimag()
-    chunks = [update_log] if update_log.strip() else []
-    if not parse_mkimat2_min_distances("\n".join(chunks)):
-        with charmm_relaxed_bomlev():
-            ener_log = capture_charmm_script_output("ENER", replay=False)
-        if ener_log.strip():
-            chunks.append(ener_log)
-    image_log = "\n".join(chunks)
+    image_log = update_log.strip()
     return assert_charmm_image_min_distance_after_update(
         workflow_args=workflow_args,
         context=context,
@@ -443,12 +454,13 @@ def assert_charmm_image_min_distance_after_update(
 
     print(
         f"{context}: <MKIMAT2> not emitted (MPI/cached IMAGE); "
-        f"using MIC registration fallback (floor {mkimat_floor:.2f} Å)",
+        f"using MIC registration fallback "
+        f"(floor {resolve_mic_registration_fallback_min_A(workflow_args):.2f} Å)",
         flush=True,
     )
     return assert_charmm_image_mic_fallback(
         workflow_args=workflow_args,
         box_side_A=cubic_box_side_A,
-        min_distance_A=mkimat_floor,
+        min_distance_A=resolve_mic_registration_fallback_min_A(workflow_args),
         context=context,
     )
