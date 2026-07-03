@@ -66,6 +66,8 @@ if matrix_uses_bulk_density(cfg):
     print('bulk_density_fractions:', cfg.get('bulk_density_fractions'))
     print('bulk N at L (298 K liquid, DCM monomers per box):')
     print(bulk_reference_table(matrix_box_sizes(cfg)))
+else:
+    print('cluster_sizes:', cfg.get('cluster_sizes'))
 print('solvents:', cfg['solvents'])
 print('slurm tiering:', slurm_tier_enabled(cfg))
 if slurm_tier_enabled(cfg):
@@ -77,7 +79,9 @@ print('Sample matrix cells:')
 for i, cell in enumerate(iter_matrix_cells(cfg)):
     frac = cell_bulk_density_fraction(cell, cfg)
     ht = f' ht={cell.heat_thermostat}' if cell.heat_thermostat else ''
-    print(f'  {cell.setup_id} DCM:{cell.n_monomers} T={cell.temperature:.0f}K L={cell.box_size:.0f}{ht} ({frac:.2f}x bulk)')
+    frac_s = f'{frac:.2f}x bulk' if frac is not None else 'custom N'
+    sweep = f' sw={cell.sweep_id}' if cell.sweep_id else ''
+    print(f'  {cell.setup_id} DCM:{cell.n_monomers} T={cell.temperature:.0f}K L={cell.box_size:.0f}{ht}{sweep} ({frac_s})')
     if i >= 7:
         print('  ...')
         break
