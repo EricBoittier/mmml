@@ -3988,11 +3988,12 @@ def add_bonded_mm_mini_args(parser: argparse.ArgumentParser) -> None:
     )
     group.add_argument(
         "--bonded-recovery-backend",
-        choices=("auto", "jax", "charmm"),
+        choices=("auto", "jax", "charmm", "sidecar"),
         default="auto",
         help=(
             "Bonded recovery minimizer: JAX FIRE without MLpot detach (auto tries JAX "
-            "first), CHARMM SD with MLpot detach, or auto (default: auto)"
+            "first), CHARMM SD with MLpot detach, isolated CHARMM subprocess (sidecar), "
+            "or auto (default: auto)"
         ),
     )
     group.add_argument(

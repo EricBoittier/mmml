@@ -149,6 +149,7 @@ _SETUPS: dict[str, SetupVariant] = {
             "cleanup": True,
             "dynamics_overlap_action": "rescue",
             "bonded_mm_mini": True,
+            "bonded_recovery_backend": "jax",
             "bonded_mm_mini_after": "mini",
             "bonded_mm_mini_steps": 500,
             "mini_nstep": 500,

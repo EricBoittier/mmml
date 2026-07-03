@@ -594,10 +594,22 @@ def build_benchmark_md_system_argv(
                         str(int(cfg.get("bonded_mm_mini_steps", 50))),
                     ]
                 )
+                backend = job.get(
+                    "bonded_recovery_backend",
+                    cfg.get("bonded_recovery_backend"),
+                )
+                if backend is not None:
+                    argv.extend(["--bonded-recovery-backend", str(backend)])
                 if cfg.get("bonded_mm_mini_always") or job.get("bonded_mm_mini_always"):
                     argv.append("--bonded-mm-mini-always")
             else:
                 argv.append("--no-bonded-mm-mini")
+            backend = job.get(
+                "bonded_recovery_backend",
+                cfg.get("bonded_recovery_backend"),
+            )
+            if backend is not None:
+                argv.extend(["--bonded-recovery-backend", str(backend)])
 
     if str(job["setup"]) == "pbc_npt":
         argv.extend(["--pressure", str(job.get("pressure", cfg["pressure"]))])

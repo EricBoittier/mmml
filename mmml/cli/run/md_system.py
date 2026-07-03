@@ -837,11 +837,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--bonded-recovery-backend",
-        choices=("auto", "jax", "charmm"),
+        choices=("auto", "jax", "charmm", "sidecar"),
         default="auto",
         help=(
             "pycharmm: bonded recovery minimizer — JAX FIRE without MLpot detach "
-            "(auto tries JAX first), CHARMM SD, or auto (default: auto)"
+            "(auto tries JAX first), CHARMM SD, isolated subprocess (sidecar), "
+            "or auto (default: auto)"
         ),
     )
     parser.add_argument(

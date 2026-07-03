@@ -597,6 +597,34 @@ def minimize_bonded_mm_recovery(
     include_vdw = bool(getattr(config, "include_vdw", True))
     if include_vdw and backend == "auto":
         backend = "charmm"
+
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        _mlpot_covers_all_atoms,
+        _run_mlpot_recovery_mini,
+    )
+
+    if _mlpot_covers_all_atoms(ctx):
+        if config.verbose:
+            print(
+                "Bonded-MM CHARMM SD skipped: all-ML cluster "
+                "(CGENFF bonded on ML atoms distorts PhysNet geometry; "
+                "using MLpot SD recovery)",
+                flush=True,
+            )
+        _run_mlpot_recovery_mini(
+            ctx,
+            config,
+            pyCModel=getattr(ctx, "pyCModel", None),
+            context="Bonded recovery (all-ML)",
+            nstep=int(config.nstep_sd),
+            calculator_pre_minimize=False,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_grms_after_ener_force,
+        )
+
+        return charmm_grms_after_ener_force()
+
     if backend in ("auto", "jax") and not include_vdw:
         from mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery import (
             minimize_bonded_jax_recovery,
@@ -625,23 +653,16 @@ def minimize_bonded_mm_recovery(
                     flush=True,
                 )
 
-    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
-        _mlpot_covers_all_atoms,
-    )
-
-    if _mlpot_covers_all_atoms(ctx):
-        if config.verbose:
-            print(
-                "Bonded-MM CHARMM SD skipped: all-ML cluster "
-                "(CGENFF bonded on ML atoms distorts PhysNet geometry; "
-                "use MLpot SD recovery instead)",
-                flush=True,
-            )
-        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-            charmm_grms_after_ener_force,
+    if backend == "sidecar":
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_recovery_sidecar import (
+            run_charmm_recovery_sidecar,
         )
 
-        return charmm_grms_after_ener_force()
+        return run_charmm_recovery_sidecar(
+            ctx,
+            config,
+            topology_psf=topology_psf,
+        )
 
     grms = _minimize_bonded_charmm_recovery(
         ctx,

@@ -51,6 +51,32 @@ def test_minimize_bonded_mm_recovery_uses_jax_when_auto_succeeds():
     charmm_mini.assert_not_called()
 
 
+def test_minimize_bonded_mm_recovery_all_ml_uses_mlpot_sd():
+    ctx = MagicMock()
+    ctx.pyCModel = MagicMock()
+    cfg = BondedMmMiniConfig(
+        nstep_sd=25, backend="jax", verbose=False, include_vdw=False
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._mlpot_covers_all_atoms",
+        return_value=True,
+    ):
+        with patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+        ) as mlpot_mini:
+            with patch(
+                "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+                return_value=4.2,
+            ):
+                with patch(
+                    "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+                    return_value=np.zeros((3, 3)),
+                ):
+                    grms = minimize_bonded_mm_recovery(ctx, cfg)
+    assert grms == pytest.approx(4.2)
+    mlpot_mini.assert_called_once()
+
+
 def test_minimize_bonded_mm_recovery_falls_back_to_charmm_on_jax_error():
     ctx = MagicMock()
     cfg = BondedMmMiniConfig(
