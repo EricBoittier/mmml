@@ -88,6 +88,14 @@ def test_resolve_charmm_cubic_box_side_A_uses_xucell_when_pbound_zero() -> None:
     assert source == "xucell"
 
 
+def test_pbc_nbond_cutoffs_ordered_for_restored_l28_box():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+
+    for side in (25.685, 27.993, 28.0):
+        cuts = pbc_nbond_cutoffs(side)
+        assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
+
+
 def test_push_charmm_cubic_box_side_A_skips_when_already_matched() -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         push_charmm_cubic_box_side_A,
