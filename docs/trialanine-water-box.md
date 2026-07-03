@@ -81,6 +81,13 @@ Outputs under ``artifacts/trialanine_nb_parity/``:
 | ``jax_nb_by_category.png`` | JAX VDW+elec stacked by pep–pep / pep–water / water–water |
 | ``pair_distance_hist.png`` | MIC distance histograms per category (ctonnb/ctofnb marked) |
 | ``top_pep_pep_vdw.png`` | Largest peptide–peptide VDW pair contributors (JAX) |
+| ``category_vdw_comparison.png`` | CHARMM segment BLOCK vs JAX VDW per category |
+| ``force_by_category.png`` | Force RMS Δ (JAX masked pairs − CHARMM BLOCK) per category |
+| ``switch_derivative_audit.png`` | JAX autodiff vs finite-difference dE/dr (fswitch/vfswitch) |
+
+CHARMM per-category terms use selective ``BLOCK`` (``SEGID PEPT`` / ``SOLV``). Under
+``mpirun`` + MPI-linked libcharmm this may be skipped unless
+``MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1``.
 
 The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` is marked
 **xfail** (regression target). Use the report above to see *where* the gap lives.

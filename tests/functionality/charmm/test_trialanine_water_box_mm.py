@@ -25,7 +25,6 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     mm_system_energy_and_forces,
     nonbonded_energy_and_forces,
 )
-from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
 from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
     build_trialanine_water_box_in_charmm,
     have_trialanine_cgenff,
@@ -140,8 +139,8 @@ def test_trialanine_water_nonbonded_matches_pycharmm(trialanine_water_box) -> No
 @pytest.mark.xfail(
     strict=False,
     reason=(
-        "Known JAX MIC vs CHARMM IMAGE nonbonded gap on 72-atom box "
-        "(~7–15 kcal/mol); regression target — see docs/trialanine-water-box.md"
+        "Residual JAX MIC vs CHARMM IMAGE gap may remain after PSF INB/IBLO fix; "
+        "regression target — see docs/trialanine-water-box.md"
     ),
 )
 @pytest.mark.parametrize("lr_solver", ["mic"])
@@ -157,12 +156,8 @@ def test_trialanine_water_total_mm_matches_pycharmm(
     positions = _perturb_positions(box.positions, seed=31)
     set_charmm_positions(positions)
 
-    # Box build calls mark_cgenff_params_full() so apply_charmm_mm_block skips
-    # READ PARAM APPEND (and crystal free). Do not restore PBC here — redundant
-    # restore corrupts nbond cutoffs (ctofnb > cutnb) when IMAGE was never cleared.
-    apply_charmm_mm_block()
+    set_charmm_positions(positions)
     run_charmm_bonded_ener_force(silent=True)
-    include_cmap = charmm_cmap_is_active()
 
     bonded = load_bonded_system_from_psf(
         box.psf_path,
@@ -180,6 +175,6 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         nbond_data,
         box.cell,
         _nbond_settings_from_box(box),
-        include_cmap=include_cmap,
+        include_cmap=True,
     )
     compare_mm_system_to_charmm(result)

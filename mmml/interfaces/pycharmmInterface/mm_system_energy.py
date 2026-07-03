@@ -355,12 +355,34 @@ def fully_excluded_pairs(iblo: Iterable[int], inb: Iterable[int], natom: int) ->
     return frozenset(excluded)
 
 
+def excluded_pairs_from_psf_inb_iblo(
+    inb: np.ndarray,
+    iblo: np.ndarray,
+    natom: int,
+) -> frozenset[tuple[int, int]]:
+    """Build exclusion pairs from PSF ``INB`` + ``IBLO`` (CHARMM formatted PSF)."""
+    if int(natom) <= 0 or inb.size == 0 or iblo.size == 0:
+        return frozenset()
+    return fully_excluded_pairs(iblo, inb, int(natom))
+
+
 def excluded_pairs_from_psf_nnb(
     nnb_indices: np.ndarray,
     natom: int,
+    *,
+    iblo_indices: np.ndarray | None = None,
 ) -> frozenset[tuple[int, int]]:
-    """Build fully excluded pairs from a PSF ``!NNB`` / ``INB`` index list (1-based)."""
+    """Build fully excluded pairs from PSF ``!NNB`` data.
+
+    CHARMM PSF EXT files store a flat ``INB`` partner list plus per-atom ``IBLO``
+    pointers (see ``psfres.F90``).  When ``iblo_indices`` is supplied, use the
+    Fortran layout via :func:`fully_excluded_pairs`.  Otherwise fall back to the
+    legacy packed ``count + partners`` encoding (rare in MMML PSF fixtures).
+    """
+    iblo = np.asarray(iblo_indices, dtype=np.int32) if iblo_indices is not None else None
     inb = np.asarray(nnb_indices, dtype=np.int32)
+    if iblo is not None and iblo.size > 0 and inb.size > 0:
+        return excluded_pairs_from_psf_inb_iblo(inb, iblo, natom)
     if inb.size == 0 or natom <= 0:
         return frozenset()
     excluded: set[tuple[int, int]] = set()
@@ -382,18 +404,48 @@ def excluded_pairs_from_psf_nnb(
     return frozenset(excluded)
 
 
+def _excluded_pairs_from_psf_file(
+    psf_path: Path | str,
+    bonds: np.ndarray,
+    *,
+    natom: int,
+) -> frozenset[tuple[int, int]]:
+    """Load exclusions from a PSF on disk (``INB``/``IBLO`` or bond fallback)."""
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+
+    psf_data = parse_psf_ext(psf_path)
+    if psf_data.nnb_indices.size > 0 and psf_data.iblo_indices.size > 0:
+        from_psf = excluded_pairs_from_psf_inb_iblo(
+            psf_data.nnb_indices,
+            psf_data.iblo_indices,
+            natom,
+        )
+        if from_psf:
+            return from_psf
+    if psf_data.nnb_indices.size > 0:
+        from_packed = excluded_pairs_from_psf_nnb(psf_data.nnb_indices, natom)
+        if from_packed:
+            return from_packed
+    return excluded_pairs_from_psf_bonds(bonds)
+
+
 def resolve_nonbonded_excluded_pairs(
     psf_path: Path | str,
     bonds: np.ndarray,
     *,
     natom: int,
 ) -> frozenset[tuple[int, int]]:
-    """Return CHARMM-style 1–2/1–3 exclusions for JAX MIC pair lists.
+    """Return CHARMM-style excluded pairs for JAX MIC pair lists.
 
-    Prefer live PyCHARMM ``IBLO``/``INB`` when populated; else PSF ``!NNB`` when
-    present; else bond-derived 1–2 and 1–3 pairs.
+    Prefer PSF ``INB``/``IBLO`` from ``psf_path`` (written after ``upinb`` at box
+    build).  Live PyCHARMM ``get_iblo_inb()`` often returns ``nnb=0`` after param
+    reads even though the saved PSF carries the full exclusion table.  Fall back to
+    bond-derived 1–2/1–3 pairs only when neither PSF nor live lists are available.
     """
-    excluded: frozenset[tuple[int, int]] = frozenset()
+    from_psf = _excluded_pairs_from_psf_file(psf_path, bonds, natom=natom)
+    if from_psf:
+        return from_psf
+
     try:
         import pycharmm.nbonds as nbonds
         import pycharmm.psf as psf
@@ -409,14 +461,6 @@ def resolve_nonbonded_excluded_pairs(
 
     if excluded:
         return excluded
-
-    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
-
-    psf_data = parse_psf_ext(psf_path)
-    if psf_data.nnb_indices.size > 0:
-        from_psf = excluded_pairs_from_psf_nnb(psf_data.nnb_indices, natom)
-        if from_psf:
-            return from_psf
 
     return excluded_pairs_from_psf_bonds(bonds)
 

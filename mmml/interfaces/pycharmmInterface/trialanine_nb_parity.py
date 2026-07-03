@@ -834,6 +834,78 @@ def render_parity_plots(
     plt.close(fig)
     written.append(p)
 
+    # 3b. CHARMM vs JAX VDW by category
+    if report.category_vdw:
+        fig, ax = plt.subplots(figsize=(7.5, 4.5))
+        labels = [t.term.replace("vdw_", "").replace("_", "–") for t in report.category_vdw]
+        x = np.arange(len(labels))
+        w = 0.35
+        ax.bar(
+            x - w / 2,
+            [t.charmm_kcal for t in report.category_vdw],
+            w,
+            label="CHARMM BLOCK",
+            color="#4c72b0",
+        )
+        ax.bar(
+            x + w / 2,
+            [t.jax_kcal for t in report.category_vdw],
+            w,
+            label="JAX MIC",
+            color="#dd8452",
+        )
+        ax.set_xticks(x, labels, rotation=15, ha="right")
+        ax.set_ylabel("VDW kcal/mol")
+        ax.set_title("VDW by pair category")
+        ax.axhline(0, color="0.5", lw=0.8)
+        ax.legend()
+        fig.tight_layout()
+        p = out / "category_vdw_comparison.png"
+        fig.savefig(p, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        written.append(p)
+
+    # 3c. Force RMS delta by category
+    if report.category_force_delta:
+        fig, ax = plt.subplots(figsize=(7, 4))
+        labels = [r.category.replace("_", "–") for r in report.category_force_delta]
+        vals = [r.delta_force_rms for r in report.category_force_delta]
+        ax.bar(labels, vals, color="#c44e52")
+        ax.set_ylabel("kcal/mol/Å")
+        ax.set_title("Force RMS Δ (JAX masked − CHARMM BLOCK)")
+        fig.tight_layout()
+        p = out / "force_by_category.png"
+        fig.savefig(p, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        written.append(p)
+
+    # 3d. Switch derivative audit
+    if report.switch_derivative_audits:
+        fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+        audits = report.switch_derivative_audits
+        vdw_ana = [a.vdw_dedr_analytic for a in audits]
+        vdw_num = [a.vdw_dedr_numeric for a in audits]
+        elec_ana = [a.elec_dedr_analytic for a in audits]
+        elec_num = [a.elec_dedr_numeric for a in audits]
+        lim_v = max(max(map(abs, vdw_ana + vdw_num), default=1.0), 1e-6)
+        lim_e = max(max(map(abs, elec_ana + elec_num), default=1.0), 1e-6)
+        axes[0].scatter(vdw_num, vdw_ana, c="#8172b3", s=36)
+        axes[0].plot([-lim_v, lim_v], [-lim_v, lim_v], "k--", lw=0.8)
+        axes[0].set_xlabel("dVDW/dr numeric")
+        axes[0].set_ylabel("dVDW/dr autodiff")
+        axes[0].set_title("VDW switch derivative")
+        axes[1].scatter(elec_num, elec_ana, c="#64b5cd", s=36)
+        axes[1].plot([-lim_e, lim_e], [-lim_e, lim_e], "k--", lw=0.8)
+        axes[1].set_xlabel("dElec/dr numeric")
+        axes[1].set_ylabel("dElec/dr autodiff")
+        axes[1].set_title("Elec fswitch derivative")
+        fig.suptitle("Switching derivative self-consistency (JAX)", y=1.02)
+        fig.tight_layout()
+        p = out / "switch_derivative_audit.png"
+        fig.savefig(p, dpi=150, bbox_inches="tight")
+        plt.close(fig)
+        written.append(p)
+
     # 4. Pair distance histograms by category
     fig, axes = plt.subplots(1, 3, figsize=(10, 3.2), sharey=True)
     for ax, cat in zip(axes, (_PairCat.PEP_PEP.value, _PairCat.PEP_WATER.value, _PairCat.WATER_WATER.value), strict=True):

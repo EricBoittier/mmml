@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.trialanine_nb_parity import (
     CategoryNonbondedTotals,
@@ -65,3 +66,27 @@ def test_top_pairs_ranks_by_abs_vdw() -> None:
 def test_category_nonbonded_totals_total() -> None:
     row = CategoryNonbondedTotals("pep_pep", 3, 1.5, -2.0, 4.0)
     assert row.total_kcal == -0.5
+
+
+def test_segment_category_block_script_flags() -> None:
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+        segment_category_block_script,
+    )
+
+    pp = segment_category_block_script("pep_pep")
+    assert "SEGID PEPT" in pp
+    assert "SEGID SOLV" in pp
+    assert "COEFF 1 1" in pp and "VDW 1.0" in pp
+    assert "COEFF 1 2" in pp and "VDW 0.0" in pp
+    pw = segment_category_block_script("pep_water")
+    assert "COEFF 1 2" in pw and "VDW 1.0" in pw.split("COEFF 1 2")[1][:80]
+    ww = segment_category_block_script("water_water")
+    assert "COEFF 2 2" in ww and "VDW 1.0" in ww.split("COEFF 2 2")[1][:80]
+
+
+def test_relative_deriv_error() -> None:
+    from mmml.interfaces.pycharmmInterface.trialanine_nb_parity import (
+        _relative_deriv_error,
+    )
+
+    assert _relative_deriv_error(10.0, 10.1) == pytest.approx(0.01, rel=1e-2)

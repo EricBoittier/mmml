@@ -287,15 +287,27 @@ def test_excluded_pairs_from_psf_nnb_mini_mlpot_fixture() -> None:
     from pathlib import Path
 
     from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        excluded_pairs_from_psf_inb_iblo,
+        excluded_pairs_from_psf_nnb,
+    )
 
     psf = Path("tests/functionality/mlpot/output/minimize/mini_full_mlpot.psf")
     if not psf.is_file():
         pytest.skip("mini_full_mlpot.psf fixture missing")
     data = parse_psf_ext(psf)
     assert data.nnb_indices.size == 190
-    pairs = excluded_pairs_from_psf_nnb(data.nnb_indices, data.n_atoms)
+    assert data.iblo_indices.size == data.n_atoms
+    pairs = excluded_pairs_from_psf_inb_iblo(
+        data.nnb_indices,
+        data.iblo_indices,
+        data.n_atoms,
+    )
     assert (0, 2) in pairs
     assert len(pairs) > 50
+    # IBLO/INB must differ from legacy packed mis-parse of the same flat array.
+    packed_wrong = excluded_pairs_from_psf_nnb(data.nnb_indices, data.n_atoms)
+    assert len(packed_wrong) != len(pairs)
 
 
 def test_vdw14fac_scales_one_four_lj_only() -> None:
