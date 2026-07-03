@@ -75,10 +75,10 @@ _MLPOT_PATH_PREFIXES = (
     "functionality/mlpot/test_comp_velocities_integration.py",
 )
 
-# Paths that rebuild complex PSF/CGENFF state in-process and are unsafe under
-# MPI-linked libcharmm + mpirun smoke selection.
+# Live CHARMM functionality tests mutate global CHARMM state in-process and are
+# unsafe under MPI-linked libcharmm + mpirun smoke selection.
 _CHARMM_SERIAL_PATH_PREFIXES: tuple[str, ...] = (
-    "functionality/charmm/test_trialanine_water_box_mm.py",
+    "functionality/charmm/",
 )
 
 
