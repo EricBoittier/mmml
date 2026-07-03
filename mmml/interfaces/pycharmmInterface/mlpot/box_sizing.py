@@ -879,6 +879,33 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
             "Overrides dense-DCM defaults when set."
         ),
     )
+    group.add_argument(
+        "--pre-mlpot-h-heavy-min-distance",
+        type=float,
+        default=None,
+        dest="pre_mlpot_h_heavy_min_distance",
+        metavar="ANG",
+        help="Pre-MLpot H–heavy element-pair MIC floor (Å); default 2.4.",
+    )
+    group.add_argument(
+        "--pre-mlpot-heavy-heavy-min-distance",
+        type=float,
+        default=None,
+        dest="pre_mlpot_heavy_heavy_min_distance",
+        metavar="ANG",
+        help="Pre-MLpot heavy–heavy element-pair MIC floor (Å); default 2.9.",
+    )
+    group.add_argument(
+        "--mlpot-registration-max-grms",
+        type=float,
+        default=None,
+        dest="mlpot_registration_max_grms",
+        metavar="KCAL",
+        help=(
+            "Abort MLpot registration when hybrid GRMS exceeds this limit "
+            "(kcal/mol/Å; default 50). Use with --allow-high-grms to warn only."
+        ),
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args
     from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         add_recovery_artifact_args,

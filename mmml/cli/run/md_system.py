@@ -2093,6 +2093,9 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     image_floor = getattr(args, "charmm_image_mlpot_min_distance_A", None)
     if image_floor is not None:
         cmd.extend(["--charmm-image-mlpot-min-distance", str(image_floor)])
+    reg_grms = getattr(args, "mlpot_registration_max_grms", None)
+    if reg_grms is not None:
+        cmd.extend(["--mlpot-registration-max-grms", str(reg_grms)])
     from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         CLEANUP_SUBDIR,
         PREP_LADDER_SUBDIR,

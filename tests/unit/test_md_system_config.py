@@ -162,6 +162,26 @@ def test_apply_mapping_geometry_packing_passthrough_prefix() -> None:
     assert args.geometry_packing_custom_knob == pytest.approx(42.0)
 
 
+def test_apply_mapping_prep_gate_keys() -> None:
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    apply_mapping_to_namespace(
+        args,
+        {
+            "mlpot_registration_max_grms": 200.0,
+            "pre_mlpot_h_heavy_min_distance": 2.4,
+            "pre_mlpot_heavy_heavy_min_distance": 2.9,
+            "charmm_image_mlpot_min_distance_A": 4.0,
+        },
+        source="test",
+    )
+    assert args.mlpot_registration_max_grms == pytest.approx(200.0)
+    assert args.pre_mlpot_h_heavy_min_distance == pytest.approx(2.4)
+    assert args.pre_mlpot_heavy_heavy_min_distance == pytest.approx(2.9)
+    assert args.charmm_image_mlpot_min_distance_A == pytest.approx(4.0)
+
+
 def test_validate_packmol_skips_certified_box_handoff() -> None:
     from mmml.cli.run.md_system import _validate_packmol_args, parse_args
 
