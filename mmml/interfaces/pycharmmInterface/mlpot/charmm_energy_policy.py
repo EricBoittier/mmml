@@ -151,6 +151,7 @@ def _reload_prm_overlay(
             ml_selection,
             cubic_box_side_A=float(cubic_box_side_A),
             verbose=verbose,
+            workflow_args=workflow_args,
         )
     else:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -242,6 +243,7 @@ def enforce_charmm_energy_term_policies(
         ml_selection=ml_selection,
         zero_ml_charges=zero_charges,
         verbose=verbose,
+        workflow_args=args,
     )
 
     _run_silent_ener()

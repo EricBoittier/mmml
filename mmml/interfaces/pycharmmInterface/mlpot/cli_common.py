@@ -2546,6 +2546,33 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     remember_monomer_template_restart_path(mlpot_ctx, restart_path)
 
+    if getattr(mlpot_ctx, "use_pbc", False) is True:
+        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+            assert_charmm_image_min_distance_after_update,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            rewrap_charmm_coords_for_mlpot_pbc,
+        )
+
+        workflow_args = getattr(mlpot_ctx, "workflow_args", None)
+        box_side = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+        if box_side is None:
+            box_side = getattr(mlpot_ctx, "cubic_box_side_A", None)
+        try:
+            side_f = float(box_side) if box_side is not None else None
+        except (TypeError, ValueError):
+            side_f = None
+        if side_f is not None and side_f > 0.0:
+            rewrap_charmm_coords_for_mlpot_pbc(
+                cubic_box_side_A=side_f,
+                workflow_args=workflow_args,
+                verbose=verbose,
+            )
+        assert_charmm_image_min_distance_after_update(
+            workflow_args=workflow_args,
+            context=f"{context_prefix} CHARMM IMAGE gate",
+        )
+
     skip_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
     if skip_pre_sd_ener:
         user = 0.0

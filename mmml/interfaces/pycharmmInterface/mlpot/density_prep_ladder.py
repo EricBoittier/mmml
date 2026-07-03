@@ -1470,6 +1470,16 @@ def run_pre_mlpot_geometry_gate(
                     push_charmm_cubic_box_side_A(float(side_before_lattice), quiet=quiet)
                     side = float(side_before_lattice)
                     pos = get_charmm_positions_array()
+                    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                        rewrap_charmm_coords_for_mlpot_pbc,
+                    )
+
+                    rewrap_charmm_coords_for_mlpot_pbc(
+                        cubic_box_side_A=float(side),
+                        workflow_args=args,
+                        verbose=not quiet,
+                    )
+                    pos = get_charmm_positions_array()
                 elif new_side is not None:
                     side = float(new_side)
                 from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -1605,6 +1615,19 @@ def run_pre_mlpot_geometry_gate(
         except Exception as exc:
             if not quiet:
                 print(f"Pre-MLpot gate: skip {step_label} ({exc})", flush=True)
+
+    if charmm_pbc and side is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            get_charmm_positions_array,
+            rewrap_charmm_coords_for_mlpot_pbc,
+        )
+
+        rewrap_charmm_coords_for_mlpot_pbc(
+            cubic_box_side_A=float(side),
+            workflow_args=args,
+            verbose=not quiet,
+        )
+        pos = get_charmm_positions_array()
 
     sync_charmm_positions(pos)
     result.reason = "ok"

@@ -16,7 +16,7 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
     fake_sel = MagicMock()
     fake_sel.get_atom_indexes.return_value = [0, 1, 2, 3]
 
-    def _finalize(_sel, *, cubic_box_side_A, verbose=False):
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None):
         call_order.append("finalize_pbc_exclusions")
 
     def _suspend(*, verbose=False):
@@ -87,7 +87,7 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         call_order.append("block")
         return "all"
 
-    def _finalize(_sel, *, cubic_box_side_A, verbose=False):
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None):
         call_order.append("finalize_pbc_exclusions")
 
     def _install(_sel, *, update=True):
@@ -240,6 +240,13 @@ def test_register_mlpot_pbc_requires_mpirun_for_mpi_lib():
         )
 
 
+_MKIMAT2_SAFE_LOG = """
+ <MKIMAT2>: updating the image atom lists and remapping
+ Transformation   Atoms  Groups  Residues  Min-Distance
+    1  Z0Z0N1R1 has      80      16      16        6.18
+"""
+
+
 def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
@@ -250,6 +257,16 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     ) as prepare, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
     ) as apply_nb, patch.object(
+        mlpot_setup,
+        "rewrap_charmm_coords_for_mlpot_pbc",
+        return_value=0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_update_capture_image_log",
+        return_value=_MKIMAT2_SAFE_LOG,
+    ) as capture_update, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_min_distance_after_update",
+        return_value=6.18,
+    ) as image_gate, patch.object(
         mlpot_setup,
         "_install_ml_exclusions",
     ) as install, patch.object(
@@ -273,10 +290,11 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0, rebuild=False)
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
-    # update_bnbnd() was replaced with charmm_script("UPDATE") to avoid
-    # enbav2e2b2_ segfault on all-ML PBC clusters after long SD.
+    capture_update.assert_called_once()
+    image_gate.assert_called_once()
+    # update_bnbnd() was replaced with captured UPDATE to parse <MKIMAT2> gates.
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
-    fake_pycharmm.lingo.charmm_script.assert_called_once_with("UPDATE")
+    fake_pycharmm.lingo.charmm_script.assert_not_called()
     fake_pycharmm.image.update_bimag.assert_called_once()
 
 
