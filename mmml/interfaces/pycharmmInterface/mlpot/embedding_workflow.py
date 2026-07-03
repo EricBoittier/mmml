@@ -416,6 +416,7 @@ def build_embedding_box(
     charmm_mm_minimize: bool = True,
     charmm_sd_steps: int = 200,
     write_plots: bool = True,
+    write_bonded_report: bool = False,
 ) -> BuildPhaseResult:
     """Build CGENFF TRIA + TIP3 box; MM-only minimize; write PSF/CRD/box.json."""
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
@@ -463,17 +464,18 @@ def build_embedding_box(
         os.chdir(prev)
 
     bonded_report: dict[str, float] | None = None
-    try:
-        setup_bonded_only_charmm()
-        run_charmm_bonded_ener_force(silent=True)
-        bonded = charmm_bonded_energy_components_kcalmol()
-        bonded_report = {k: float(v) for k, v in bonded.items()}
-        (out / "bonded_report.json").write_text(
-            json.dumps(bonded_report, indent=2) + "\n",
-            encoding="utf-8",
-        )
-    except Exception:
-        bonded_report = None
+    if write_bonded_report:
+        try:
+            setup_bonded_only_charmm()
+            run_charmm_bonded_ener_force(silent=True)
+            bonded = charmm_bonded_energy_components_kcalmol()
+            bonded_report = {k: float(v) for k, v in bonded.items()}
+            (out / "bonded_report.json").write_text(
+                json.dumps(bonded_report, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            bonded_report = None
 
     box_meta = {
         "workflow": "md-embedding",
@@ -635,6 +637,9 @@ def run_embedding_phase(
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        prepare_charmm_for_trialanine_box_psf,
+    )
 
     out = Path(output_dir)
     box_json = out / "box.json"
@@ -645,6 +650,7 @@ def run_embedding_phase(
     psf_path = out / str(meta.get("psf", "model.psf"))
     crd_path = out / str(meta.get("crd", "model.crd"))
 
+    prepare_charmm_for_trialanine_box_psf()
     read_psf_card_file(psf_path)
     read.coor_card(str(crd_path))
     prepare_charmm_pbc(side)

@@ -94,6 +94,24 @@ def _load_cgenff_with_trialanine() -> None:
         read.rtf(str(trialanine_cgenff_rtf_path()), append=True)
 
 
+def prepare_charmm_for_trialanine_box_psf(*, skip_reset_block: bool = True) -> None:
+    """Clear CHARMM and load CGENFF+TRIA toppar before reading a saved TRIA+water PSF."""
+    import pycharmm.settings as settings
+
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+        crystal_free_charmm_for_param_append,
+        pycharmm,
+        reset_block,
+    )
+
+    crystal_free_charmm_for_param_append()
+    pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+    if not skip_reset_block:
+        reset_block()
+    _load_cgenff_with_trialanine()
+    settings.set_verbosity(0)
+
+
 def _tip3_template() -> np.ndarray:
     """TIP3 coordinates (Å) from bundled ``tip3.pdb`` (OH2, H1, H2)."""
     from mmml.paths import bundled_file

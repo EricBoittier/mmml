@@ -75,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     json_path = Path(args.json) if args.json is not None else out / "aaa_long_epoch49_params.json"
 
     from mmml.interfaces.pycharmmInterface.mlpot.embedding_hybrid import (
+        EmbeddingValidationResult,
         export_embedding_checkpoint,
         prepare_trialanine_hybrid_session,
         validate_embedding_monomer_potential,
@@ -106,6 +107,18 @@ def main(argv: list[str] | None = None) -> int:
                 "continuing (use --target-mae to tighten)",
                 flush=True,
             )
+    else:
+        metrics_path = out / "monomer_potential_validation" / "metrics.json"
+        if metrics_path.is_file():
+            metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+            validation = EmbeddingValidationResult(
+                checkpoint_json=json_path,
+                valid_npz=Path(args.valid_npz),
+                metrics_path=metrics_path,
+                energy_mae_kcal_mol=float(metrics.get("energy", {}).get("mae_kcal_mol", 0.0)),
+                force_mae_kcal_mol_A=float(metrics.get("forces", {}).get("mae_kcal_mol", 0.0)),
+                metrics=metrics,
+            )
 
     hybrid_info: dict[str, object] = {}
     if not args.skip_hybrid:
@@ -122,10 +135,16 @@ def main(argv: list[str] | None = None) -> int:
             e_charmm = session.charmm_total_energy_kcalmol()
             hybrid_info["charmm_total_energy_kcalmol"] = e_charmm
             hybrid_info["n_atoms"] = len(session.atoms)
+            hybrid_info["n_peptide_atoms"] = int(session.box_meta.get("n_peptide_atoms", 0))
+            hybrid_info["training_n_atoms"] = int(session.box_meta.get("training_n_atoms", 0))
             if args.mini_probe:
-                e_ase = float(session.atoms.get_potential_energy())
-                hybrid_info["ase_hybrid_energy_ev"] = e_ase
-                print(f"  ASE hybrid E = {e_ase:.6f} eV", flush=True)
+                try:
+                    e_ase = float(session.atoms.get_potential_energy())
+                    hybrid_info["ase_hybrid_energy_ev"] = e_ase
+                    print(f"  ASE hybrid E = {e_ase:.6f} eV", flush=True)
+                except RuntimeError as exc:
+                    hybrid_info["ase_hybrid_error"] = str(exc)
+                    print(f"  WARNING: ASE hybrid probe failed: {exc}", flush=True)
             print(f"  CHARMM ENER total = {e_charmm:.4f} kcal/mol", flush=True)
         finally:
             session.close()

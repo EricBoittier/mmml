@@ -166,6 +166,9 @@ def prepare_trialanine_hybrid_session(
         apply_pbc_nbonds,
         prepare_charmm_pbc,
     )
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        prepare_charmm_for_trialanine_box_psf,
+    )
     from mmml.utils.charmm_ase import atoms_from_psf_box
 
     out = Path(output_dir)
@@ -185,10 +188,26 @@ def prepare_trialanine_hybrid_session(
     psf_path = out / str(meta.get("psf", "model.psf"))
     crd_path = out / str(meta.get("crd", "model.crd"))
 
+    prepare_charmm_for_trialanine_box_psf()
     read_psf_card_file(psf_path)
     read.coor_card(str(crd_path))
     prepare_charmm_pbc(side)
     apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side)
+
+    import pycharmm.psf as psf
+
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import select_by_seg_id
+
+    n_pept = len(tuple(select_by_seg_id(ml_seg_id).get_atom_indexes()))
+    if n_pept != TRAINING_N_ATOMS_AAA:
+        import warnings
+
+        warnings.warn(
+            f"PEPT segment has {n_pept} atoms but training NPZ uses "
+            f"{TRAINING_N_ATOMS_AAA}; MLpot E/F may fail until PSF matches "
+            "aaa.ama topology (see docs/examples/aaa-ama-workflow.md).",
+            stacklevel=2,
+        )
 
     ctx = register_embedding_mlpot(
         checkpoint_json,
