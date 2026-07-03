@@ -1,4 +1,4 @@
-# Prep-parameter sweep stage 2: vdw_off anchor × mini+heat × dt / overlap / CHARMM freq.
+# Prep-parameter sweep stage 2: vdw_off anchor × mini+heat × Packmol / dt / overlap / CHARMM freq.
 #
 # Run:
 #   cd workflows/dcm_density_setup_compare
@@ -130,29 +130,64 @@ prep_sweep:
   variants:
     # vdw_off + spacing50 anchor (no extra overrides).
     baseline: {}
-    # Smaller integration timestep (fs).
+    # --- Packmol / placement (stage-1 style; anchor pmtol=2.0, pad=1.0, spacing=5.0) ---
+    pmtol25:
+      packmol_tolerance: 2.5
+    pmtol30:
+      packmol_tolerance: 3.0
+    pmtol50:
+      packmol_tolerance: 5.0
+    pad20:
+      packmol_box_padding: 2.0
+    spacing70:
+      spacing: 7.0
+    # --- ML/MM cutoffs ---
+    cut_tight:
+      mm_switch_on: 4.0
+      mm_switch_width: 2.0
+    cut_wide:
+      mm_switch_on: 8.0
+      mm_switch_width: 5.0
+    # --- MM mode toggles (anchor: vdw_off, pretreat_on, bonded_mm off) ---
+    mm_vdw_on:
+      periodic_charmm_vdw: true
+    mm_pretreat_off:
+      charmm_mm_pretreat: false
+    bonded_on:
+      bonded_mm_mini: true
+    # --- Density prep capacity ---
+    mc256:
+      mc_density_steps: 256
+    # --- Integration timestep (fs) ---
     dt050:
       dt_fs: 0.05
     dt010:
       dt_fs: 0.10
     dt015:
       dt_fs: 0.15
-    # More frequent overlap rescue checks during heat (steps between checks).
+    # --- Overlap rescue cadence during heat (steps between checks) ---
     ovlp50:
       dynamics_overlap_check_interval: 50
     ovlp25:
       dynamics_overlap_check_interval: 25
-    # More frequent DCD frames (lower nsavc = higher recording frequency).
+    # --- DCD frame cadence (lower nsavc = more frequent) ---
     dcd50:
       dcd_nsavc: 50
     dcd25:
       dcd_nsavc: 25
-    # More frequent CHARMM neighbor-list rebuild during heat/dynamics.
+    # --- CHARMM neighbor-list rebuild during heat/dynamics ---
     inbfrq25:
       dyn_inbfrq: 25
     inbfrq10:
       dyn_inbfrq: 10
-    # Combo: smallest dt + tightest overlap polling from stage-1 spacing50 follow-up.
+    # --- Shorter heat smoke (main config: 2 ps × 1 segment) ---
+    heat2ps:
+      ps_heat: 2.0
+      n_heat_segments: 1
+    # --- Combos ---
     dt050_ovlp50:
       dt_fs: 0.05
       dynamics_overlap_check_interval: 50
+    pmtol50_pad20:
+      packmol_tolerance: 5.0
+      packmol_box_padding: 2.0

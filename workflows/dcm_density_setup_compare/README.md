@@ -172,16 +172,29 @@ To compare **what actually moves prep** (timestep, Packmol tolerance, cutoffs, M
 | `prep_sweep.stages` | `mini` (default) or `mini,heat` |
 | Tag suffix | `_sw_{variant}` e.g. `resilient_dcm_52_t50_l28_sw_pmtol30` |
 
-Default variants (stage 1): `baseline`, `dt050`, `pmtol25/30`, `spacing50/70`, `cut_tight/wide`, `mm_bonded_on`, `mm_pretreat_off`, `mm_vdw_off`.
+Default variants (stage 1, historical): `baseline`, `dt050`, `pmtol25/30`, `spacing50/70`, `cut_tight/wide`, `mm_bonded_on`, `mm_pretreat_off`, `mm_vdw_off`.
 
-**Stage 2** (`config.prep_sweep.yaml` as committed): anchor **vdw_off + spacing50**, `stages: mini,heat`, variants `baseline`, `dt050`/`dt010`/`dt015`, `ovlp50`/`ovlp25`, `dcd50`/`dcd25`, `inbfrq25`/`inbfrq10`, `dt050_ovlp50`. Tags include `_ht_bussi_`, e.g. `resilient_dcm_52_t50_l28_ht_bussi_sw_dt010`.
+**Stage 2** (`config.prep_sweep.yaml` as committed): anchor **vdw_off + spacing 5.0 Å**, `packmol_tolerance: 2.0`, `packmol_box_padding: 1.0`, `stages: mini,heat`, **24 variants**:
+
+| Group | Variants |
+|-------|----------|
+| Packmol / placement | `baseline`, `pmtol25`, `pmtol30`, `pmtol50`, `pad20`, `spacing70`, `pmtol50_pad20` |
+| ML/MM cutoffs | `cut_tight`, `cut_wide` |
+| MM toggles | `mm_vdw_on`, `mm_pretreat_off`, `bonded_on` |
+| Density prep | `mc256` |
+| Integration | `dt050`, `dt010`, `dt015` |
+| Overlap cadence | `ovlp50`, `ovlp25`, `dt050_ovlp50` |
+| Trajectory / neighbor list | `dcd50`, `dcd25`, `inbfrq25`, `inbfrq10` |
+| Heat smoke | `heat2ps` |
+
+Tags include `_ht_bussi_`, e.g. `resilient_dcm_52_t50_l28_ht_bussi_sw_pmtol50`.
 
 ```bash
 cd workflows/dcm_density_setup_compare
 export MMML_CKPT=/path/to/DESdimers_params.json
 bash scripts/preflight.sh   # uses config.yaml unless MMML_WORKFLOW_CONFIG is set
 
-# Prep sweep (11 jobs) — must set MMML_WORKFLOW_CONFIG for driver AND Slurm jobs:
+# Prep sweep (24 jobs) — must set MMML_WORKFLOW_CONFIG for driver AND Slurm jobs:
 MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
 snakemake --configfile config.prep_sweep.yaml --profile profiles/slurm -n
 nohup bash scripts/snakemake_prep_sweep.sh > snakemake_prep_sweep.log 2>&1 &

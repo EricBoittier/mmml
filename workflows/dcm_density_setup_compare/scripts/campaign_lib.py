@@ -937,6 +937,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "packmol_cache_dir": str(cell_root / ".packmol_cache"),
         "spacing": float(effective.get("spacing", 4.0)),
         "packmol_tolerance": float(effective.get("packmol_tolerance", 1.0)),
+        "packmol_box_padding": float(effective.get("packmol_box_padding", 1.0)),
         "dt_fs": float(effective.get("dt_fs", 0.25)),
         "temperature": float(cell.temperature),
         "pressure": float(effective.get("pressure", 1.0)),
@@ -961,6 +962,9 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "mini_lattice_abnr_steps",
         "mc_density_equalize",
         "mc_density_steps",
+        "charmm_mm_pretreat",
+        "ps_heat",
+        "n_heat_segments",
         "bonded_mm_mini_steps",
         "min_intermonomer_atom_distance",
         "max_grms_before_dyn",
@@ -974,7 +978,6 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "dynamics_overlap_check_interval",
         "bonded_mm_mini",
         "bonded_recovery_backend",
-        "charmm_mm_pretreat",
     ):
         if key in effective:
             defaults[key] = effective[key]

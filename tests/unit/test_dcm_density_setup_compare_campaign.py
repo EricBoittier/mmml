@@ -647,6 +647,48 @@ def test_prep_sweep_vdw_anchor_dt_freq_overrides(cfg: dict) -> None:
     assert mini_inb["dyn_inbfrq"] == 25
 
 
+def test_prep_sweep_packing_overrides(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "packmol_tolerance": 2.0,
+        "packmol_box_padding": 1.0,
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini,heat",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 28.0,
+                "heat_thermostat": "bussi",
+            },
+            "variants": {
+                "baseline": {},
+                "pad20": {"packmol_box_padding": 2.0},
+                "pmtol50_pad20": {
+                    "packmol_tolerance": 5.0,
+                    "packmol_box_padding": 2.0,
+                },
+            },
+        },
+    }
+    cell = cell_from_tag(sweep_cfg, "resilient_dcm_52_t50_l28_ht_bussi_sw_pad20")
+    campaign = build_campaign(sweep_cfg, cell)
+    assert campaign["defaults"]["packmol_box_padding"] == 2.0
+    assert campaign["defaults"]["packmol_tolerance"] == 2.0
+    mini = campaign["runs"]["pycharmm_mini"]
+    assert mini["packmol_box_padding"] == 2.0
+
+    combo = cell_from_tag(
+        sweep_cfg, "resilient_dcm_52_t50_l28_ht_bussi_sw_pmtol50_pad20"
+    )
+    combo_campaign = build_campaign(sweep_cfg, combo)
+    assert combo_campaign["defaults"]["packmol_tolerance"] == 5.0
+    assert combo_campaign["defaults"]["packmol_box_padding"] == 2.0
+
+
 def test_prep_sweep_tag_auto_loads_from_prep_sweep_yaml(cfg: dict) -> None:
     tag = "resilient_dcm_52_t50_l28_sw_baseline"
     cell = cell_from_tag(cfg, tag)

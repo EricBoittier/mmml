@@ -225,6 +225,7 @@ def _row_for_cell(cfg: dict[str, Any], cell: Any) -> dict[str, Any]:
         "dt_fs": defaults.get("dt_fs", ""),
         "spacing": defaults.get("spacing", ""),
         "packmol_tolerance": defaults.get("packmol_tolerance", ""),
+        "packmol_box_padding": defaults.get("packmol_box_padding", ""),
         "mm_switch_on": defaults.get("mm_switch_on", ""),
         "mm_switch_width": defaults.get("mm_switch_width", ""),
         "ml_switch_width": defaults.get("ml_switch_width", ""),
@@ -235,6 +236,10 @@ def _row_for_cell(cfg: dict[str, Any], cell: Any) -> dict[str, Any]:
         ),
         "dcd_nsavc": defaults.get("dcd_nsavc", ""),
         "dyn_inbfrq": defaults.get("dyn_inbfrq", ""),
+        "mc_density_steps": defaults.get("mc_density_steps", ""),
+        "charmm_mm_pretreat": defaults.get("charmm_mm_pretreat", ""),
+        "ps_heat": defaults.get("ps_heat", ""),
+        "n_heat_segments": defaults.get("n_heat_segments", ""),
         "stdout_log": str(out_dir / "stdout.log"),
     }
 
