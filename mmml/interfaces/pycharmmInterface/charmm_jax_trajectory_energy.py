@@ -234,6 +234,9 @@ def compare_frame_mm_energy(
 
     pos = np.asarray(positions, dtype=np.float64)
     set_charmm_positions(pos)
+    import pycharmm
+
+    pycharmm.lingo.charmm_script("UPDATE")
     run_charmm_bonded_ener_force(silent=True)
 
     charmm_terms = _charmm_mm_energy_components_kcalmol()
@@ -439,6 +442,9 @@ def render_trajectory_markdown(report: TrajectoryEnergyComparison) -> str:
         "",
         report.description,
         f"System: **{report.name}**  |  Atoms: {report.n_atoms}  |  Frames: {report.n_frames}",
+        "",
+        "CHARMM nonbonded components aggregate PBC image terms "
+        "(``vdw`` = VDW+IMNB, ``elec`` = ELEC+IMEL[+EXTE]) to match JAX MIC pair totals.",
         "",
         "## Aggregate term errors (kcal/mol)",
         "",

@@ -213,14 +213,27 @@ END
     run_charmm_script_quiet(block)
 
 
-def charmm_nonbonded_energy_components_kcalmol() -> dict[str, float]:
-    """VDW/ELEC components (kcal/mol) after the last ``ENER``."""
+def _charmm_nb_term_sum(*names: str) -> float:
+    """Sum CHARMM ENER terms (kcal/mol); missing names contribute 0."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
-    vdw = charmm_bonded_term_kcalmol("VDW")
-    elec = charmm_bonded_term_kcalmol("ELEC")
-    vdw_f = 0.0 if vdw is None else float(vdw)
-    elec_f = 0.0 if elec is None else float(elec)
+    total = 0.0
+    for name in names:
+        val = charmm_bonded_term_kcalmol(name)
+        if val is not None:
+            total += float(val)
+    return total
+
+
+def charmm_nonbonded_energy_components_kcalmol() -> dict[str, float]:
+    """VDW/ELEC components (kcal/mol) after the last ``ENER``.
+
+    Under PBC, CHARMM splits pair and image contributions (``VDW`` + ``IMNB``,
+    ``ELEC`` + ``IMEL``). JAX MIC reports the combined switched pair totals, so
+    map CHARMM keys to match JAX ``vdw`` / ``elec`` decomposition.
+    """
+    vdw_f = _charmm_nb_term_sum("VDW", "IMNB")
+    elec_f = _charmm_nb_term_sum("ELEC", "IMEL", "EXTE")
     return {"vdw": vdw_f, "elec": elec_f, "total": vdw_f + elec_f}
 
 
