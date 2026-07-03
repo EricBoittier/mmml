@@ -359,12 +359,72 @@ def build_trialanine_water_box_in_charmm(
     if not psf_path.is_file():
         raise RuntimeError(f"CHARMM did not write PSF to {psf_path}")
 
+    crd_path = out_dir / "trialanine-water.crd"
+    try:
+        os.chdir(out_dir)
+        write.coor_card(crd_path.name)
+    finally:
+        os.chdir(prev_cwd)
+
     positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     return TrialanineWaterBox(
         positions=positions,
         psf_path=psf_path,
         box_side_A=float(box_side_A),
         peptide_rtf=peptide_rtf,
+        cgenff_prm=Path(CGENFF_PRM),
+        cmap_extra_prm_files=trialanine_cmap_extra_prm_files(),
+        n_waters=n_waters,
+        nbond_cutoffs=nbond_cutoffs,
+    )
+
+
+def reload_trialanine_water_box_in_charmm(
+    workdir: Path | str,
+    *,
+    box_side_A: float = 28.0,
+    n_waters: int = 10,
+    seed: int = -1,
+) -> TrialanineWaterBox:
+    """Reload a saved TRIA+water PSF/CRD into CHARMM (for fast parity re-runs).
+
+    Expects ``trialanine-water.psf`` and ``trialanine-water.crd`` under ``workdir``
+    from :func:`build_trialanine_water_box_in_charmm`.
+    """
+    import pycharmm.coor as coor
+    import pycharmm.read as read
+
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+        apply_pbc_nbonds,
+        prepare_charmm_pbc,
+    )
+
+    out_dir = Path(workdir)
+    psf_path = out_dir / "trialanine-water.psf"
+    crd_path = out_dir / "trialanine-water.crd"
+    if not psf_path.is_file():
+        raise FileNotFoundError(f"Missing PSF: {psf_path}")
+    if not crd_path.is_file():
+        raise FileNotFoundError(
+            f"Missing CRD: {crd_path}. Re-run build_trialanine_water_box_in_charmm "
+            "once to write trialanine-water.crd alongside the PSF."
+        )
+
+    prepare_charmm_for_trialanine_box_psf()
+    read_psf_card_file(psf_path)
+    read.coor_card(str(crd_path))
+    prepare_charmm_pbc(box_side_A)
+    nbond_cutoffs = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)
+    mark_cgenff_params_full()
+
+    positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    return TrialanineWaterBox(
+        positions=positions,
+        psf_path=psf_path.resolve(),
+        box_side_A=float(box_side_A),
+        peptide_rtf=trialanine_cgenff_rtf_path(),
         cgenff_prm=Path(CGENFF_PRM),
         cmap_extra_prm_files=trialanine_cmap_extra_prm_files(),
         n_waters=n_waters,

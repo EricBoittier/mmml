@@ -110,36 +110,18 @@ def main() -> int:
     workdir = (args.workdir or out_dir / "charmm_work").resolve()
 
     if args.no_build:
-        from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
-            charmm_positions_xyz_array,
-        )
-
-        psf = workdir / "trialanine-water.psf"
-        if not psf.is_file():
-            print(f"Missing PSF at {psf}; run without --no-build first", file=sys.stderr)
-            return 2
-        # Minimal box-like namespace for parity collector
-        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
-        from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
         from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
-            trialanine_cgenff_rtf_path,
-            trialanine_cmap_extra_prm_files,
+            reload_trialanine_water_box_in_charmm,
         )
 
-        class _Box:
-            pass
-
-        box = _Box()
-        box.psf_path = psf
-        box.positions = charmm_positions_xyz_array()
-        box.cell = np.diag([args.box_side_A] * 3)
-        box.nbond_cutoffs = pbc_nbond_cutoffs(args.box_side_A)
-        box.cgenff_prm = CGENFF_PRM
-        box.cmap_extra_prm_files = trialanine_cmap_extra_prm_files()
-        box.peptide_rtf = trialanine_cgenff_rtf_path()
-        box.n_waters = args.n_waters
-        box.box_side_A = args.box_side_A
-        box.seed = args.seed
+        print(f"Reloading box from {workdir}...", flush=True)
+        box = reload_trialanine_water_box_in_charmm(
+            workdir,
+            box_side_A=args.box_side_A,
+            n_waters=args.n_waters,
+            seed=args.seed,
+        )
+        print("Reload complete.", flush=True)
     else:
         print("Building TRIA water box in CHARMM (may take ~30s)...", flush=True)
         box = build_trialanine_water_box_in_charmm(
