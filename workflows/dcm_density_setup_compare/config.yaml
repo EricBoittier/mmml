@@ -96,10 +96,10 @@ bonded_mm_mini: false
 
 # Heat (prep sweep: bussi + short smoke heat until anchor stable; expand thermostats later).
 heat_thermostats: [bussi]
-ps_heat: 2.0
+ps_heat: 1.0
 n_heat_segments: 1
 heat_firstt: 10.0
-no_echeck_heat: true
+no_echeck: true
 
 # Re-enable after anchor passes mini+heat (Pre-dynamics GRMS OK, heat completes).
 dynamics_legs:
@@ -107,26 +107,27 @@ dynamics_legs:
   pycharmm_prod: false
   jaxmd: false
   ase: false
+
 default_heat_thermostat: bussi
 handoff_write_res: true
 continue_velocities: true
-pycharmm_equi_ps: 10.0
+pycharmm_equi_ps: 1.0
 pycharmm_equi_legs: 1
-pycharmm_prod_ps: 10.0
+pycharmm_prod_ps: 1.0
 pycharmm_prod_legs: 1
 prod_ensemble: pbc_npt
 jaxmd_setup: pbc_nvt
 jaxmd_ps: 10.0
 ase_setup: pbc_nvt
 ase_integrator: nvt_nhc
-ase_ps: 10.0
+ase_ps: 1.0
 # optional_legs: [jaxmd_prod, ase_prod]
 
-mm_switch_on: 5.0
-mm_switch_width: 3.0
-ml_switch_width: 0.2
+mm_switch_on: 6.0
+mm_switch_width: 4.0
+ml_switch_width: 1.0
 ml_gpu_count: 1
-ml_batch_size: 128
+ml_batch_size: 256
 
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 16
