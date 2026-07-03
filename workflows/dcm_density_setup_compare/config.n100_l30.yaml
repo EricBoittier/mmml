@@ -6,6 +6,7 @@
 #   cd workflows/dcm_density_setup_compare
 #   export MMML_CKPT=...
 #   export JAX_ENABLE_X64=1
+#   export MMML_WORKFLOW_CONFIG=config.n100_l30.yaml
 #   bash scripts/preflight.sh
 #   TAG=resilient_dcm_100_t50_l30_ht_bussi
 #   srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --mem=32G \
@@ -25,10 +26,12 @@ output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 placement_seed_ignore_heat: true
 
-spacing: 8.0
+# Packmol: inner cube ≈25 Å (L=30, liquid_prep margin 2.5 Å/side). spacing 8.0
+# cannot fit N=100 (GENCAN limit); use ~4 Å like dense burst cells.
+spacing: 4.0
 periodic_charmm_vdw: false
 packmol_tolerance: 5.0
-packmol_box_padding: 2.0
+packmol_box_padding: 1.0
 mm_nonbond_mode: jax_mic
 charmm_mm_pretreat: true
 
@@ -42,7 +45,7 @@ pre_mlpot_overlap_min_distance: 2.3
 pre_mlpot_h_heavy_min_distance: 2.4
 pre_mlpot_heavy_heavy_min_distance: 2.9
 mlpot_registration_max_grms: 200.0
-liquid_prep_staged_density_fraction: 0.50
+liquid_prep_staged_density_fraction: 0.40
 
 mini_nstep: 20000
 charmm_sd_steps: 40000

@@ -54,12 +54,15 @@ Default matrix size: **30 cells** (5 setups × 2 density fractions × 3 boxes).
 Single-cell matrix: **100 DCM** in a **30 Å** cube (~**0.39× bulk**, ρ ≈ 0.52 g/cm³). Skips the sparse 52@38 anchor; uses the same resilient mini+heat stack. Tags auto-resolve to `config.n100_l30.yaml` (no `MMML_WORKFLOW_CONFIG` needed).
 
 ```bash
+export MMML_WORKFLOW_CONFIG=config.n100_l30.yaml
 TAG=resilient_dcm_100_t50_l30_ht_bussi
 bash scripts/preflight.sh
 srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --mem=32G \
   bash scripts/job_shell.sh "${TAG}"
 # Or: bash scripts/snakemake_n100_l30.sh
 ```
+
+Use `spacing: 4.0` (not the sparse-anchor `8.0`) — Packmol's inner cube is only ~25 Å and cannot place 100 monomers at 8 Å spacing.
 
 ## Campaign legs (per cell)
 
