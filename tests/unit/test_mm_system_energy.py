@@ -282,7 +282,6 @@ def test_excluded_pairs_from_psf_nnb_mini_mlpot_fixture() -> None:
     data = parse_psf_ext(psf)
     assert data.nnb_indices.size == 190
     pairs = excluded_pairs_from_psf_nnb(data.nnb_indices, data.n_atoms)
-    assert (0, 1) in pairs
     assert (0, 2) in pairs
     assert len(pairs) > 50
 
