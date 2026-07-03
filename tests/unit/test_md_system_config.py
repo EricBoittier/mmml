@@ -184,6 +184,41 @@ def test_apply_mapping_geometry_packing_passthrough_prefix() -> None:
     assert args.geometry_packing_custom_knob == pytest.approx(42.0)
 
 
+def test_apply_mapping_liquid_prep_passthrough_prefix() -> None:
+    from mmml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    apply_mapping_to_namespace(
+        args,
+        {"liquid_prep_staged_density_fraction": 0.25},
+        source="test",
+        allowed_prefixes=CONFIG_PASSTHROUGH_PREFIXES,
+    )
+    assert args.liquid_prep_staged_density_fraction == pytest.approx(0.25)
+
+
+def test_campaign_defaults_liquid_prep_staged_density_fraction(tmp_path: Path) -> None:
+    cfg = tmp_path / "campaign.yaml"
+    cfg.write_text(
+        """
+defaults:
+  composition: DCM:52
+  liquid_prep: true
+  liquid_prep_staged_density_fraction: 0.25
+  bulk_ramp_from_tag: resilient_dcm_52_t50_l38_ht_bussi_sw_baseline
+runs:
+  pycharmm_mini:
+    backend: pycharmm
+    setup: resilient
+""".strip()
+    )
+    args = parse_md_system_args(["--config", str(cfg), "--run-all"])
+    assert args.liquid_prep is True
+    assert args.liquid_prep_staged_density_fraction == pytest.approx(0.25)
+    assert not hasattr(args, "bulk_ramp_from_tag")
+
+
 def test_apply_mapping_prep_gate_keys() -> None:
     from mmml.cli.run.md_system import parse_args
 

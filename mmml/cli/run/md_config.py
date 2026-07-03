@@ -30,6 +30,7 @@ _CONFIG_ALIASES: dict[str, str] = {
 CONFIG_PASSTHROUGH_PREFIXES: tuple[str, ...] = (
     "geometry_packing_",
     "monomer_physnet_mini",
+    "liquid_prep_",
 )
 
 

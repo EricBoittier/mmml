@@ -125,6 +125,9 @@ _CAMPAIGN_ONLY_KEYS = frozenset(
         "prep_sweep_id",
         "prep_sweep_overrides",
         "campaign_output",
+        "bulk_ramp_from_tag",
+        "temperature_ladder_from_tag",
+        "temperature_ladder_from_temp_K",
     }
 )
 
