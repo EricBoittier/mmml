@@ -125,6 +125,7 @@ nav:
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
       - Spatial ML MPI: mlpot-spatial-mpi.md
   - PyCHARMM & cluster:
+      - Periodic boundaries (IMAGE super system): pbc-super-system.md
       - MPI operations: pycharmm-mpi.md
       - Threading & launchers: pycharmm-threading.md
       - FFTW for CHARMM: fftw-build.md

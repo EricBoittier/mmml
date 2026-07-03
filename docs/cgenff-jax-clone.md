@@ -53,6 +53,8 @@ Live cross-check (requires PyCHARMM):
   tests/functionality/charmm/test_cgenff_bonded_pycharmm.py -m pycharmm -v
 ```
 
+Background on **CHARMM IMAGE** vs JAX **MIC**: [Periodic boundaries (IMAGE super system)](pbc-super-system.md).
+
 ---
 
 ## Nonbonded switching (`mm_system_energy.py`)

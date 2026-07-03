@@ -184,7 +184,8 @@ def _run_mini_box_equil_heat_leg(
     finalt: float,
     echeck: float,
     use_pbc: bool,
-    restart_from_file: bool,
+    coords_in_memory: bool,
+    restart_read_key: str | None = None,
     overlap_context: str,
 ) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -230,7 +231,6 @@ def _run_mini_box_equil_heat_leg(
     kw["nstep"] = nstep
     apply_dynamics_print_kwargs(kw, dyn_print)
     kw["iasors"] = 0
-    kw["iasvel"] = 0 if restart_from_file else 1
     apply_heat_ramp_frequencies(
         kw, nstep=nstep, ihtfrq=resolve_heat_ihtfrq(args, nstep=nstep)
     )
@@ -240,22 +240,27 @@ def _run_mini_box_equil_heat_leg(
         use_pbc=use_pbc,
         dt_fs=float(timestep_ps) * 1000.0,
     )
+    restart_from_file = (
+        not coords_in_memory
+        and restart_read_key is not None
+        and Path(paths[restart_read_key]).is_file()
+    )
     io = CharmmTrajectoryFiles(
-        restart_read=paths.get(res_key) if restart_from_file else None,
+        restart_read=paths.get(restart_read_key) if restart_from_file else None,
         restart_write=paths[res_key],
         trajectory=paths.get(dcd_key) if save else None,
     )
     _configure_heat_dynamics_start(
         kw,
         io,
-        coords_in_memory=not restart_from_file,
+        coords_in_memory=coords_in_memory,
         restart_from_file=restart_from_file,
         timestep_ps=timestep_ps,
         use_pbc=use_pbc,
         quiet=True,
         heat_thermostat="scale",
     )
-    if save and io.trajectory is not None and not restart_from_file:
+    if save and io.trajectory is not None:
         _reset_stage_trajectory(
             Path(io.trajectory),
             rescue_old=bool(getattr(args, "rescue_old_dcd", False)),
@@ -364,12 +369,12 @@ def run_mini_box_equilibration(
                 finalt=hot_K,
                 echeck=echeck,
                 use_pbc=use_pbc,
-                restart_from_file=False,
+                coords_in_memory=True,
+                restart_read_key=None,
                 overlap_context="MINI_BOX_EQUIL_HOT",
             )
             sync_charmm_positions(get_charmm_positions_array())
         if ps_cool > 0.0:
-            cool_restart_from_file = ps_heat > 0.0
             _run_mini_box_equil_heat_leg(
                 args,
                 paths=paths,
@@ -377,11 +382,12 @@ def run_mini_box_equilibration(
                 dcd_key="mini_box_equil_dcd",
                 timestep_ps=pretreat.timestep_ps,
                 duration_ps=float(ps_cool),
-                firstt=hot_K if cool_restart_from_file else target_K,
+                firstt=hot_K if ps_heat > 0.0 else target_K,
                 finalt=target_K,
                 echeck=echeck,
                 use_pbc=use_pbc,
-                restart_from_file=cool_restart_from_file,
+                coords_in_memory=True,
+                restart_read_key="mini_box_equil_hot_res" if ps_heat <= 0.0 else None,
                 overlap_context="MINI_BOX_EQUIL_COLD",
             )
             sync_charmm_positions(get_charmm_positions_array())

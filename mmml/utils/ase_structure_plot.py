@@ -16,6 +16,11 @@ SCALE_CRYSTAL = 24.0
 SCALE_TRIALANINE_BOX = 11.5
 SCALE_TRIALANINE_PEPTIDE = 38.0
 SCALE_PEPTIDE_ML = 38.0
+# PBC pedagogy (four waters): lower scale + larger radii so O/H stay visible in docs.
+SCALE_PBC_WATER = 18.0
+SCALE_PBC_WATER_SUPER = 15.5
+PBC_ATOM_RADII = 1.15
+PBC_ROTATION = "20x,12y,0z"
 
 DOCS_STRUCTURE_STYLE = {
     "figure_facecolor": "#f8fafc",

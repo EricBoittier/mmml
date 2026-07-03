@@ -281,7 +281,9 @@ def plot_mic_convention(path: Path | str, *, side_A: float = 14.0) -> Path:
     pos = primary.get_positions()
     i, j = 0, 3
     vec = pos[j] - pos[i]
-    mic_vec, _ = find_mic(vec.reshape(1, 3), primary.cell, primary.pbc)[0]
+    mic_vec = find_mic(vec.reshape(1, 3), primary.cell, primary.pbc)
+    if isinstance(mic_vec, tuple):
+        mic_vec = mic_vec[0]
     partner = pos[i] + mic_vec[0]
     im_i = writer.to_image_plane_positions(pos[[i]])[0, :2]
     im_j = writer.to_image_plane_positions(partner.reshape(1, 3))[0, :2]
