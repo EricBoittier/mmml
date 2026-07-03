@@ -15,6 +15,7 @@ from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
     aggregate_comparison,
     apply_atom_permutation,
     compare_mm_to_mp2_frame,
+    dcm_dimer_com_distance_A,
     forces_kcal_to_ev,
     load_monomer_mean_energy_eV,
     load_mp2_frames,
@@ -137,6 +138,12 @@ def test_compare_and_aggregate_frame_metrics() -> None:
     summary = aggregate_comparison([row, row])
     assert summary["n_frames"] == 2
     assert summary["mp2_jax_force_rmse_ev_A"]["n"] == 2
+
+
+def test_dcm_dimer_com_distance() -> None:
+    r = np.arange(30, dtype=np.float64).reshape(10, 3)
+    d = dcm_dimer_com_distance_A(r)
+    assert d > 0.0
 
 
 def test_compare_hybrid_only_frame_without_mm() -> None:

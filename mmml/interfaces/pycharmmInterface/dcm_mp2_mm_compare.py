@@ -776,6 +776,9 @@ def run_dcm_mp2_mm_comparison(
         rows.append(row)
 
     summary = aggregate_comparison(rows)
+    if hybrid_eval is not None:
+        summary["hybrid_mm_switch_on_A"] = float(hybrid_eval.mm_switch_on)
+        summary["hybrid_model_cutoff_A"] = float(hybrid_eval.model_cutoff)
     payload = {
         "load": load_meta,
         "mm": {"enabled": bool(run_mm)},
@@ -855,12 +858,20 @@ def _write_comparison_md(
     )
     if hybrid_calc_names:
         lines.extend(["", "## Hybrid calculators vs MP2", ""])
-        hybrid_meta = summary.get("hybrid_mm_switch_on_A")
-        if hybrid_meta is None and rows and rows[0].get("hybrid"):
+        mm_on = summary.get("hybrid_mm_switch_on_A")
+        if mm_on is not None:
             lines.append(
-                "Hybrid uses vacuum reference settings (large `mm_switch_on` so dimer ML "
-                "is not COM-tapered; prior runs with `--cutoff 6` as switch had "
-                "`interaction_eV=0` when COM > switch)."
+                f"Hybrid `mm_switch_on` = **{mm_on:g} Å** "
+                f"(model cutoff **{summary.get('hybrid_model_cutoff_A', float('nan')):g} Å**). "
+                "Values ≪ COM distance are required for dimer ML; production MD uses ~6–8 Å."
+            )
+            lines.append("")
+        com_block = summary.get("dimer_com_distance_A", {})
+        if com_block:
+            lines.append(
+                f"Dimer COM distance: median **{com_block.get('median', float('nan')):.2f} Å**, "
+                f"p90 **{com_block.get('p90', float('nan')):.2f} Å**, "
+                f"max **{com_block.get('max', float('nan')):.2f} Å**."
             )
             lines.append("")
         for calc_name in hybrid_calc_names:
