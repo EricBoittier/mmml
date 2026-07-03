@@ -17,7 +17,7 @@ if [[ ! -f "${CHARMM_LIB_DIR:-}/libcharmm.so" ]]; then
   exit 1
 fi
 
-MARK_EXPR="${MMML_PYTEST_MARK:-pycharmm and not gpu}"
+MARK_EXPR="${MMML_PYTEST_MARK:-pycharmm and not gpu and not charmm_serial}"
 MPI_NP="${MMML_MPI_NP:-1}"
 
 exec mpirun -np "$MPI_NP" "$MMML_PYTHON" -m pytest --color=yes -m "$MARK_EXPR" "$@"

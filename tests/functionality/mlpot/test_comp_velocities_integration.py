@@ -5,6 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from tests.conftest import charmm_rebuild_psf_unsafe_under_mpirun
+
 from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     apply_selective_force_damp_recipe,
     force_magnitudes_kcalmol_A,
@@ -15,23 +17,22 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     set_comparison_array,
     zero_comparison_scalars,
 )
-
-
-def _can_import(name: str) -> bool:
-    try:
-        __import__(name)
-        return True
-    except Exception:
-        return False
+from tests.conftest import can_import_pycharmm
 
 
 @pytest.fixture(scope="module")
 def charmm_aco_dimer():
+    if not can_import_pycharmm():
+        pytest.skip("pycharmm / libcharmm not available")
+    if charmm_rebuild_psf_unsafe_under_mpirun():
+        pytest.skip(
+            "build_ase_cluster (CGENFF read) segfaults on MPI-linked libcharmm "
+            "after other PyCHARMM tests in the same mpirun pytest session; "
+            "run serially: pytest tests/functionality/mlpot/test_comp_velocities_integration.py"
+        )
     from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
 
     ensure_pycharmm_loaded()
-    if not _can_import("pycharmm"):
-        pytest.skip("pycharmm not available")
 
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
         build_ase_cluster,
@@ -47,7 +48,7 @@ def charmm_aco_dimer():
     yield
 
 
-@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
 def test_comparison_array_roundtrip(charmm_aco_dimer):
     import pycharmm.coor as coor
 
@@ -68,7 +69,7 @@ def test_comparison_array_roundtrip(charmm_aco_dimer):
     assert np.allclose(out[:, 3], 0.0, atol=1e-6)
 
 
-@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
 def test_scalar_zero_clears_comparison_array(charmm_aco_dimer):
     import pycharmm.coor as coor
 
@@ -81,7 +82,7 @@ def test_scalar_zero_clears_comparison_array(charmm_aco_dimer):
     assert np.allclose(scalars, 0.0, atol=1e-8)
 
 
-@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
 def test_selective_force_damp_respects_threshold(charmm_aco_dimer):
     run_charmm_script("ENER")
     mags = force_magnitudes_kcalmol_A()
@@ -111,7 +112,7 @@ def test_selective_force_damp_respects_threshold(charmm_aco_dimer):
     assert np.allclose(comp[~high_mask, :3], 0.0, atol=1e-8)
 
 
-@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
 def test_lower_threshold_includes_more_atoms(charmm_aco_dimer):
     run_charmm_script("ENER")
     mags = force_magnitudes_kcalmol_A()
@@ -130,7 +131,7 @@ def test_lower_threshold_includes_more_atoms(charmm_aco_dimer):
     assert n_loose >= n_strict
 
 
-@pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
+@pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
 def test_prepare_comp_zero_only(charmm_aco_dimer):
     n = prepare_comp_for_iasvel0(zero_only=True)
     assert n == 0

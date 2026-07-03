@@ -42,13 +42,13 @@ def test_mpi_rank_size_under_mpirun():
 def test_mpi_check_cli_under_mpirun():
     from mmml.cli.run.mpi_check import main, run_mpi_check
 
-    report = run_mpi_check()
+    report = run_mpi_check(prelaunch=True)
     if not report.ok:
         detail = "\n".join(
             [*(f"error: {e}" for e in report.errors), *(f"warning: {w}" for w in report.warnings)]
         )
         pytest.fail(f"mpi-check failed under mpirun:\n{detail}")
-    assert main(["--json"]) == 0
+    assert main(["--json", "--prelaunch"]) == 0
 
 
 def test_tip3_energy_finite_under_mpirun(tip3_charmm_ff):

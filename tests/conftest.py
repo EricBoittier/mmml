@@ -72,6 +72,24 @@ _MLPOT_PATH_PREFIXES = (
     "functionality/mlpot/test_comp_velocities_integration.py",
 )
 
+# Live PyCHARMM tests that rebuild PSF/CGENFF in-process (segfault on MPI-linked libcharmm).
+_CHARMM_SERIAL_PATH_PREFIXES = (
+    "functionality/mlpot/test_comp_velocities_integration.py",
+)
+
+
+def charmm_rebuild_psf_unsafe_under_mpirun() -> bool:
+    """True when a second in-process PSF/CGENFF read is unsafe (MPI-linked libcharmm)."""
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_mpi import (
+            _under_mpirun,
+            charmm_lib_links_mpi,
+        )
+
+        return bool(_under_mpirun() and charmm_lib_links_mpi())
+    except Exception:
+        return False
+
 
 def _rel_test_path(item: pytest.Item) -> str:
     path = Path(str(item.fspath))
@@ -163,6 +181,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.gpu)
         if _matches_any(rel, _MLPOT_PATH_PREFIXES):
             item.add_marker(pytest.mark.mlpot)
+        if _matches_any(rel, _CHARMM_SERIAL_PATH_PREFIXES):
+            item.add_marker(pytest.mark.charmm_serial)
 
     if any(item.get_closest_marker("pycharmm") is not None for item in items):
         try:
