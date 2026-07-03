@@ -339,6 +339,7 @@ def build_packmol_composition_cluster(
     spacing: float | None = None,
     prep_gate_settings: dict[str, Any] | None = None,
     quiet: bool = False,
+    geometry_store: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, Packmol cube/sphere pack, cluster PSF, then cluster MM relax."""
     from mmml.cli.run.md_pbc_suite.ase import (
@@ -346,6 +347,9 @@ def build_packmol_composition_cluster(
         _load_packmol_sphere_positions,
     )
     from mmml.interfaces.pycharmmInterface import packmol_cache, packmol_placement
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        remember_cluster_residue_geometries,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         CharmmMmMinimizeConfig,
         minimize_charmm_mm_only,
@@ -425,6 +429,10 @@ def build_packmol_composition_cluster(
                 n_atoms=len(atom_names),
                 span_A=(float(span[0]), float(span[1]), float(span[2])),
                 quiet=quiet,
+            )
+            remember_cluster_residue_geometries(
+                geometry_store,
+                residue_geometries,
             )
             return z, shifted, atoms_per_list, ordered_residue_names
 
@@ -636,6 +644,7 @@ def build_packmol_composition_cluster(
         )
         if verbose:
             print(f"[cluster] Packmol cache saved: {entry}", flush=True)
+    remember_cluster_residue_geometries(geometry_store, residue_geometries)
     return z, shifted, atoms_per_list, ordered_residue_names
 
 
@@ -658,6 +667,7 @@ def build_pyxtal_composition_cluster(
     optimize_ase: bool = False,
     optimize_ase_emt: bool = False,
     trim_to_composition: bool = True,
+    geometry_store: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, PyXtal crystal build, PSF map, then cluster MM relax."""
     from mmml.cli.run.md_pbc_suite.ase import _build_cluster_psf_from_composition
@@ -834,4 +844,9 @@ def build_pyxtal_composition_cluster(
         f"(spg={result.space_group}, attempts={result.attempts})",
         flush=True,
     )
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        remember_cluster_residue_geometries,
+    )
+
+    remember_cluster_residue_geometries(geometry_store, residue_geometries)
     return z, shifted, atoms_per_list, ordered_residue_names

@@ -134,6 +134,165 @@ def apply_same_residue_template_to_positions(
     return build_same_residue_reference_cluster(pos, offsets, labels)
 
 
+def remember_cluster_residue_geometries(
+    store: Any,
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] | None,
+) -> None:
+    """Persist CHARMM-minimized monomer coords (PSF order) for later template restore."""
+    if store is None or not residue_geometries:
+        return
+    coords_only = {
+        str(residue).upper(): np.asarray(coords, dtype=np.float64)
+        for residue, (coords, _names, _z) in residue_geometries.items()
+    }
+    setattr(store, "_cluster_residue_geometries", coords_only)
+
+
+def build_packmol_template_reference_cluster(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    residue_labels: list[str],
+    residue_geometries: dict[str, np.ndarray],
+) -> np.ndarray | None:
+    """Rebuild cluster internal geometry from isolated Packmol/CGENFF monomer templates."""
+    pos = np.asarray(positions, dtype=np.float64).copy()
+    offsets = np.asarray(monomer_offsets, dtype=int).reshape(-1)
+    if len(residue_labels) != int(len(offsets) - 1):
+        return None
+    out = pos.copy()
+    for i, res in enumerate(residue_labels):
+        key = str(res).upper()
+        tmpl = residue_geometries.get(key)
+        if tmpl is None:
+            continue
+        tmpl_arr = np.asarray(tmpl, dtype=np.float64)
+        s, e = int(offsets[i]), int(offsets[i + 1])
+        if tmpl_arr.shape != (e - s, 3) or not np.all(np.isfinite(tmpl_arr)):
+            return None
+        com = out[s:e].mean(axis=0, keepdims=True)
+        out[s:e] = tmpl_arr + com
+    if out.size == 0 or not np.all(np.isfinite(out)):
+        return None
+    return out
+
+
+def resolve_cluster_residue_geometries_from_args(
+    args: Any | None,
+) -> dict[str, np.ndarray] | None:
+    """Return stored or cached Packmol monomer templates keyed by residue name."""
+    if args is None:
+        return None
+    stored = getattr(args, "_cluster_residue_geometries", None)
+    if stored:
+        return {
+            str(k).upper(): np.asarray(v, dtype=np.float64)
+            for k, v in stored.items()
+        }
+    composition = getattr(args, "composition", None)
+    if not composition:
+        residue = getattr(args, "residue", None)
+        n_mol = int(getattr(args, "n_molecules", 0) or 0)
+        if residue and n_mol > 0:
+            composition = [(str(residue).upper(), n_mol)]
+    if not composition:
+        return None
+    try:
+        from mmml.interfaces.pycharmmInterface.packmol_cache import (
+            load_monomer_geometries,
+            packmol_cache_key,
+            packmol_cache_root,
+            packmol_prep_settings_from_namespace,
+        )
+        from mmml.interfaces.pycharmmInterface.packmol_placement import (
+            packmol_center_for_cold_start,
+            resolve_packmol_cube_side_from_args,
+            resolve_packmol_placement_mode,
+            resolve_packmol_sphere_radius,
+        )
+
+        comp = [(str(r).upper(), int(n)) for r, n in composition]
+        placement = resolve_packmol_placement_mode(
+            packmol_placement=getattr(args, "packmol_placement", None),
+            packmol_sphere=getattr(args, "packmol_sphere", None),
+        )
+        center = packmol_center_for_cold_start(args)
+        cube_side = None
+        radius = None
+        if placement == "sphere":
+            radius = resolve_packmol_sphere_radius(
+                getattr(args, "packmol_radius", None),
+                getattr(args, "flat_bottom_radius", None),
+            )
+        else:
+            cube_side = resolve_packmol_cube_side_from_args(args)
+        cache_root = packmol_cache_root(
+            output_dir=getattr(args, "output_dir", None),
+            override=getattr(args, "packmol_cache_dir", None),
+        )
+        cache_key = packmol_cache_key(
+            composition=comp,
+            placement=str(placement),
+            center=center,
+            cube_side=cube_side,
+            radius=radius,
+            tolerance=float(getattr(args, "packmol_tolerance", 2.0)),
+            seed=getattr(args, "seed", None),
+            charmm_sd_steps=int(getattr(args, "charmm_sd_steps", 50)),
+            charmm_abnr_steps=int(getattr(args, "charmm_abnr_steps", 100)),
+            charmm_tolenr=float(getattr(args, "charmm_tolenr", 1e-3)),
+            charmm_tolgrd=float(getattr(args, "charmm_tolgrd", 1e-3)),
+            packmol_padding_A=getattr(args, "_cold_start_packmol_padding_A", None),
+            spacing=float(getattr(args, "spacing", 5.0)),
+            sim_cell_side=getattr(args, "_cold_start_sim_cell_side_A", None),
+            prep_gate_settings=packmol_prep_settings_from_namespace(args),
+        )
+        monomers = load_monomer_geometries(cache_root / cache_key, comp)
+        if not monomers:
+            return None
+        return {
+            str(residue).upper(): np.asarray(coords, dtype=np.float64)
+            for residue, (coords, _names, _z) in monomers.items()
+        }
+    except Exception:
+        return None
+
+
+def packmol_template_reference_from_ctx(
+    mlpot_ctx: Any,
+    *,
+    n_atoms: int | None = None,
+) -> np.ndarray | None:
+    """Cluster reference from isolated CHARMM-minimized monomer templates."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+    args = getattr(mlpot_ctx, "workflow_args", None)
+    geometries = resolve_cluster_residue_geometries_from_args(args)
+    if not geometries:
+        return None
+    pos = get_charmm_positions_array()
+    if pos is None:
+        return None
+    arr = np.asarray(pos, dtype=np.float64)
+    if n_atoms is not None and int(arr.shape[0]) != int(n_atoms):
+        return None
+    atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+    if atoms_per is None:
+        pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+        atoms_per = getattr(pyCModel, "_atoms_per_monomer", None) if pyCModel else None
+    if not atoms_per:
+        return None
+    per = [int(x) for x in atoms_per]
+    n_monomers = len(per)
+    if n_monomers <= 0 or int(sum(per)) != int(arr.shape[0]):
+        return None
+    offsets = monomer_offsets_from_atoms_per(per)
+    labels = resolve_cluster_residue_labels(mlpot_ctx, n_monomers)
+    return build_packmol_template_reference_cluster(arr, offsets, labels, geometries)
+
+
 def resolve_cluster_residue_labels(mlpot_ctx: Any, n_monomers: int) -> list[str]:
     args = getattr(mlpot_ctx, "workflow_args", None)
     if args is not None:

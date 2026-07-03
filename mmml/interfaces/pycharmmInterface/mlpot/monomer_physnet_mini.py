@@ -176,13 +176,18 @@ def resolve_monomer_template_reference_positions(
         ref_arr = np.asarray(ref, dtype=np.float64)
     except RuntimeError:
         from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+            packmol_template_reference_from_ctx,
             same_residue_cluster_reference_from_ctx,
         )
 
-        ref_arr = same_residue_cluster_reference_from_ctx(mlpot_ctx, n_atoms=n_atoms)
-        if ref_arr is None:
-            return None
-        source = Path("<same-residue-cluster>")
+        ref_arr = packmol_template_reference_from_ctx(mlpot_ctx, n_atoms=n_atoms)
+        if ref_arr is not None:
+            source = Path("<packmol-monomer-template>")
+        else:
+            ref_arr = same_residue_cluster_reference_from_ctx(mlpot_ctx, n_atoms=n_atoms)
+            if ref_arr is None:
+                return None
+            source = Path("<same-residue-cluster>")
     if n_atoms is not None and int(ref_arr.shape[0]) != int(n_atoms):
         return None
     if ref_arr.size == 0 or not np.all(np.isfinite(ref_arr)):
@@ -328,6 +333,12 @@ def run_selective_monomer_physnet_mini(
                     f"{context_prefix}: no external template residue; "
                     f"copying and adjusting positions from same residue type "
                     f"for monomer(s) {list(selected)}",
+                    flush=True,
+                )
+            elif source.name == "<packmol-monomer-template>":
+                print(
+                    f"{context_prefix}: restored monomer(s) {list(selected)} from "
+                    f"CHARMM-minimized Packmol monomer template at current COM",
                     flush=True,
                 )
             else:
