@@ -230,6 +230,64 @@ contains
   end function image_get_ntrans
   
   
+  !> @brief Export image nonbond exclusion list sizes (post-UPIMNB/MKIMNB).
+  !
+  !> Lets Python observe MKIMNB buffer use without parsing ``RESIZING`` logs.
+  !> ``niminb`` is the filled image-primary exclusion count; ``iminb_capacity``
+  !> is ``size(bimag%IMINB)`` after any resize. When capacity equals niminb the
+  !> next rebuild may resize again.
+  function image_get_iminb_stats( &
+       out_natom, out_natim, out_ntrans, out_nnb, &
+       out_niminb, out_iminb_capacity, &
+       out_nimnb, out_imjnb_capacity, &
+       out_niming, out_mlpot_active) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use api_util, only: f2c_logical
+    use bases_fcm, only: bimag
+    use image, only: ntrans, natim
+    use psf, only: natom, nnb
+    use api_func, only: mlpot_is_set
+    
+    implicit none
+    
+    integer(c_int), intent(out) :: out_natom
+    integer(c_int), intent(out) :: out_natim
+    integer(c_int), intent(out) :: out_ntrans
+    integer(c_int), intent(out) :: out_nnb
+    integer(c_int), intent(out) :: out_niminb
+    integer(c_int), intent(out) :: out_iminb_capacity
+    integer(c_int), intent(out) :: out_nimnb
+    integer(c_int), intent(out) :: out_imjnb_capacity
+    integer(c_int), intent(out) :: out_niming
+    integer(c_int), intent(out) :: out_mlpot_active
+    integer(c_int) :: success
+    
+    out_natom = natom
+    out_natim = natim
+    out_ntrans = ntrans
+    out_nnb = nnb
+    out_niminb = bimag%NIMINB
+    out_nimnb = bimag%NIMNB
+    out_niming = bimag%NIMING
+    out_mlpot_active = f2c_logical(mlpot_is_set())
+    
+    if (allocated(bimag%IMINB)) then
+       out_iminb_capacity = size(bimag%IMINB)
+    else
+       out_iminb_capacity = 0
+    endif
+    
+    if (allocated(bimag%IMJNB)) then
+       out_imjnb_capacity = size(bimag%IMJNB)
+    else
+       out_imjnb_capacity = 0
+    endif
+    
+    success = 1
+    
+  end function image_get_iminb_stats
+  
+  
   !> @brief Update image - primary atoms non bonded exclusion list
   !
   subroutine image_update_bimag() bind(c)

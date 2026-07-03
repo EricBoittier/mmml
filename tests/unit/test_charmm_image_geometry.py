@@ -450,3 +450,28 @@ def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch)
         cubic_box_side_A=28.0,
     )
     assert worst == pytest.approx(2.5)
+
+
+def test_format_charmm_image_nb_stats_tight_buffer():
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        CharmmImageNbStats,
+        format_charmm_image_nb_stats,
+    )
+
+    stats = CharmmImageNbStats(
+        natom=260,
+        natim=690,
+        ntrans=9,
+        nnb=33670,
+        niminb=50000,
+        iminb_capacity=50001,
+        nimnb=2774,
+        imjnb_capacity=9714,
+        niming=120,
+        mlpot_active=True,
+    )
+    text = format_charmm_image_nb_stats(stats)
+    assert "niminb=50000/50001" in text
+    assert " tight" in text
+    assert " MLpot" in text
+    assert stats.iminb_headroom == 1

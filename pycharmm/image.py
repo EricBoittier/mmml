@@ -178,3 +178,50 @@ def update_bimag():
     lib.charmm.image_update_bimag()
     
     return
+
+
+def get_iminb_stats():
+    """Return image nonbond list sizes after ``UPIMNB`` / ``MKIMNB``.
+
+    Requires a CHARMM build that exports ``image_get_iminb_stats`` (MMML
+    ``api_image.F90``).  Returns ``None`` when the symbol is unavailable.
+
+    Returns
+    -------
+    dict or None
+        Keys: ``natom``, ``natim``, ``ntrans``, ``nnb``, ``niminb``,
+        ``iminb_capacity``, ``nimnb``, ``imjnb_capacity``, ``niming``,
+        ``mlpot_active``.
+    """
+    try:
+        getter = lib.charmm.image_get_iminb_stats
+    except AttributeError:
+        return None
+
+    out = (ctypes.c_int * 10)()
+    status = getter(
+        ctypes.byref(out[0]),
+        ctypes.byref(out[1]),
+        ctypes.byref(out[2]),
+        ctypes.byref(out[3]),
+        ctypes.byref(out[4]),
+        ctypes.byref(out[5]),
+        ctypes.byref(out[6]),
+        ctypes.byref(out[7]),
+        ctypes.byref(out[8]),
+        ctypes.byref(out[9]),
+    )
+    if not bool(status):
+        raise RuntimeError("image_get_iminb_stats failed")
+    return {
+        "natom": int(out[0]),
+        "natim": int(out[1]),
+        "ntrans": int(out[2]),
+        "nnb": int(out[3]),
+        "niminb": int(out[4]),
+        "iminb_capacity": int(out[5]),
+        "nimnb": int(out[6]),
+        "imjnb_capacity": int(out[7]),
+        "niming": int(out[8]),
+        "mlpot_active": bool(out[9]),
+    }

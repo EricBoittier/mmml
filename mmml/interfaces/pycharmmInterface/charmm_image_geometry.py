@@ -34,6 +34,83 @@ class CharmmImageMinDistanceReport:
     worst: float | None
 
 
+@dataclass(frozen=True)
+class CharmmImageNbStats:
+    """Sizes of CHARMM image nonbond exclusion buffers (post-UPIMNB/MKIMNB)."""
+
+    natom: int
+    natim: int
+    ntrans: int
+    nnb: int
+    niminb: int
+    iminb_capacity: int
+    nimnb: int
+    imjnb_capacity: int
+    niming: int
+    mlpot_active: bool
+
+    @property
+    def iminb_headroom(self) -> int:
+        return max(0, int(self.iminb_capacity) - int(self.niminb))
+
+    @property
+    def iminb_tight(self) -> bool:
+        cap = int(self.iminb_capacity)
+        return cap > 0 and int(self.niminb) >= cap - 1
+
+
+def fetch_charmm_image_nb_stats() -> CharmmImageNbStats | None:
+    """Read image list sizes via ``pycharmm.image.get_iminb_stats()``."""
+    try:
+        import pycharmm.image as charmm_image
+    except (ImportError, OSError):
+        return None
+    raw = charmm_image.get_iminb_stats()
+    if raw is None:
+        return None
+    return CharmmImageNbStats(
+        natom=int(raw["natom"]),
+        natim=int(raw["natim"]),
+        ntrans=int(raw["ntrans"]),
+        nnb=int(raw["nnb"]),
+        niminb=int(raw["niminb"]),
+        iminb_capacity=int(raw["iminb_capacity"]),
+        nimnb=int(raw["nimnb"]),
+        imjnb_capacity=int(raw["imjnb_capacity"]),
+        niming=int(raw["niming"]),
+        mlpot_active=bool(raw["mlpot_active"]),
+    )
+
+
+def format_charmm_image_nb_stats(
+    stats: CharmmImageNbStats,
+    *,
+    prefix: str = "CHARMM image NB",
+) -> str:
+    tight = " tight" if stats.iminb_tight else ""
+    mlpot = " MLpot" if stats.mlpot_active else ""
+    return (
+        f"{prefix}: natom={stats.natom} natim={stats.natim} ntrans={stats.ntrans} "
+        f"nnb={stats.nnb} niminb={stats.niminb}/{stats.iminb_capacity}{tight} "
+        f"nimnb={stats.nimnb}/{stats.imjnb_capacity} niming={stats.niming}{mlpot}"
+    )
+
+
+def log_charmm_image_nb_stats(
+    *,
+    context: str = "CHARMM image NB",
+    verbose: bool = True,
+) -> CharmmImageNbStats | None:
+    """Emit one-line image exclusion buffer stats when the C API is available."""
+    if not verbose:
+        return fetch_charmm_image_nb_stats()
+    stats = fetch_charmm_image_nb_stats()
+    if stats is None:
+        return None
+    print(format_charmm_image_nb_stats(stats, prefix=context), flush=True)
+    return stats
+
+
 def parse_mkimat2_min_distances(charmm_log: str) -> list[float]:
     """Parse ``Min-Distance`` values from the latest ``<MKIMAT2>`` block."""
     text = str(charmm_log)
@@ -298,6 +375,7 @@ def run_charmm_post_bimag_image_probe_log() -> str:
         capture_log = _run_charmm_script_capture_fortran(command.upper(), replay=True)
         if capture_log:
             chunks.append(capture_log)
+        log_charmm_image_nb_stats(context=f"CHARMM image NB after {command.upper()}")
         if parse_mkimat2_min_distances("\n".join(chunks)):
             return "\n".join(chunks)
         file_log = _probe_command_via_charmm_log_file(command)
@@ -408,6 +486,7 @@ def run_mlpot_pbc_image_registration_gate(
     )
     with charmm_relaxed_bomlev():
         pycharmm.image.update_bimag()
+        log_charmm_image_nb_stats(context="MLpot PBC registration image NB")
         update_log = capture_charmm_script_output("UPDATE", replay=False)
     pycharmm.image.update_bimag()
     image_log = update_log.strip()
