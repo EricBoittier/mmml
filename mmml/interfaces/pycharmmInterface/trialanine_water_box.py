@@ -367,6 +367,7 @@ def build_trialanine_water_box_in_charmm(
         os.chdir(prev_cwd)
 
     positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    np.save(out_dir / "trialanine-water.npy", positions)
     return TrialanineWaterBox(
         positions=positions,
         psf_path=psf_path,
@@ -379,6 +380,18 @@ def build_trialanine_water_box_in_charmm(
     )
 
 
+def trialanine_water_box_coords_path(workdir: Path | str) -> Path | None:
+    """Return saved coordinates under ``workdir`` (``.crd`` preferred, else ``.npy``)."""
+    out_dir = Path(workdir)
+    crd_path = out_dir / "trialanine-water.crd"
+    if crd_path.is_file():
+        return crd_path
+    npy_path = out_dir / "trialanine-water.npy"
+    if npy_path.is_file():
+        return npy_path
+    return None
+
+
 def reload_trialanine_water_box_in_charmm(
     workdir: Path | str,
     *,
@@ -386,15 +399,18 @@ def reload_trialanine_water_box_in_charmm(
     n_waters: int = 10,
     seed: int = -1,
 ) -> TrialanineWaterBox:
-    """Reload a saved TRIA+water PSF/CRD into CHARMM (for fast parity re-runs).
+    """Reload a saved TRIA+water PSF and coordinates into CHARMM (fast parity re-runs).
 
-    Expects ``trialanine-water.psf`` and ``trialanine-water.crd`` under ``workdir``
-    from :func:`build_trialanine_water_box_in_charmm`.
+    Expects ``trialanine-water.psf`` plus ``trialanine-water.crd`` or
+    ``trialanine-water.npy`` from :func:`build_trialanine_water_box_in_charmm`.
     """
     import pycharmm.coor as coor
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+        read_psf_card_file,
+        set_charmm_positions,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         apply_pbc_nbonds,
@@ -404,17 +420,23 @@ def reload_trialanine_water_box_in_charmm(
     out_dir = Path(workdir)
     psf_path = out_dir / "trialanine-water.psf"
     crd_path = out_dir / "trialanine-water.crd"
+    npy_path = out_dir / "trialanine-water.npy"
     if not psf_path.is_file():
         raise FileNotFoundError(f"Missing PSF: {psf_path}")
-    if not crd_path.is_file():
+    coords_path = trialanine_water_box_coords_path(out_dir)
+    if coords_path is None:
         raise FileNotFoundError(
-            f"Missing CRD: {crd_path}. Re-run build_trialanine_water_box_in_charmm "
-            "once to write trialanine-water.crd alongside the PSF."
+            f"Missing coordinates under {out_dir} "
+            f"(expected {crd_path.name} or {npy_path.name}). "
+            "Re-run diagnose without --no-build once to refresh the workdir."
         )
 
     prepare_charmm_for_trialanine_box_psf()
     read_psf_card_file(psf_path)
-    read.coor_card(str(crd_path))
+    if coords_path.suffix.lower() == ".crd":
+        read.coor_card(str(coords_path))
+    else:
+        set_charmm_positions(np.load(coords_path))
     prepare_charmm_pbc(box_side_A)
     nbond_cutoffs = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)
     mark_cgenff_params_full()

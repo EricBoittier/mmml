@@ -112,9 +112,28 @@ def main() -> int:
     if args.no_build:
         from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
             reload_trialanine_water_box_in_charmm,
+            trialanine_water_box_coords_path,
         )
 
-        print(f"Reloading box from {workdir}...", flush=True)
+        psf_path = workdir / "trialanine-water.psf"
+        coords_path = trialanine_water_box_coords_path(workdir)
+        if not psf_path.is_file():
+            print(
+                f"Missing PSF at {psf_path}; run once without --no-build first.",
+                file=sys.stderr,
+            )
+            return 2
+        if coords_path is None:
+            print(
+                f"Workdir {workdir} has PSF only (no .crd/.npy). "
+                "Re-run once without --no-build to write coordinates:\n"
+                f"  ./scripts/mmml-charmm-mpirun.sh python {Path(__file__).name} "
+                f"-o {out_dir} --workdir {workdir}",
+                file=sys.stderr,
+            )
+            return 2
+
+        print(f"Reloading box from {workdir} ({coords_path.name})...", flush=True)
         box = reload_trialanine_water_box_in_charmm(
             workdir,
             box_side_A=args.box_side_A,
