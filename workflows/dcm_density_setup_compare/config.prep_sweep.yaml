@@ -1,5 +1,8 @@
 # Prep-parameter sweep stage 2: vdw_off anchor × mini+heat × Packmol / dt / overlap / CHARMM freq.
 #
+# Anchor (2026-07): fixed N=52 @ L=36 Å (~0.22 g/cm³) — passes Packmol/MM prep on pc-studix;
+# L=28/L=34 with bulk_fraction sizing hit MIC registration (5.50 Å) before heat.
+#
 # Run:
 #   cd workflows/dcm_density_setup_compare
 #   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/preflight.sh
@@ -7,24 +10,25 @@
 #   bash scripts/collect_prep_sweep.sh
 #
 # Tags: {setup}_dcm_{N}_t{T}_l{L}_ht_{thermostat}_sw_{variant}
-# Example: resilient_dcm_52_t50_l28_ht_bussi_sw_dt010
+# Example: resilient_dcm_52_t50_l36_ht_bussi_sw_baseline
 
 setups: [resilient]
 solvents: [DCM]
 
-bulk_density_fractions: [0.25]
+# Used only if prep_sweep.enabled is false; sweep matrix uses prep_sweep.anchor below.
+cluster_sizes: [52]
 temperatures: [50.0]
-box_sizes: [28.0]
+box_sizes: [36.0]
 
 checkpoint: ${MMML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 
-# Stage-1 winners: spacing50 (GRMS≈22) + mm_vdw_off (GRMS≈27).
-spacing: 5.0
+# Aligned with main config.yaml L=36 smoke (spacing 8, pmtol 5, cut_wide-ish handoff).
+spacing: 8.0
 periodic_charmm_vdw: false
-packmol_tolerance: 2.0
-packmol_box_padding: 2.5
+packmol_tolerance: 5.0
+packmol_box_padding: 2.0
 
 dt_fs: 0.25
 pressure: 1.0
@@ -36,23 +40,22 @@ pre_mlpot_overlap_min_distance: 2.3
 pre_mlpot_h_heavy_min_distance: 2.4
 pre_mlpot_heavy_heavy_min_distance: 2.9
 mlpot_registration_max_grms: 50.0
-liquid_prep_staged_density_fraction: 0.50
+liquid_prep_staged_density_fraction: 0.30
 
-mini_nstep: 2000
-charmm_sd_steps: 4000
-charmm_abnr_steps: 4000
-pre_min_steps: 500
+mini_nstep: 5000
+charmm_sd_steps: 8000
+charmm_abnr_steps: 8000
+pre_min_steps: 1000
 
-# Baseline overlap check every 100 heat/dynamics steps; variants tighten below.
-dynamics_overlap_check_interval: 100
+# Prep sweep stage 2: ovlp50 beat ovlp100 on anchor mini+heat.
+dynamics_overlap_check_interval: 50
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
 min_intermonomer_atom_distance: 2.3
 pre_mlpot_overlap_min_distance: 2.3
 
-# Trajectory / neighbor-list cadence (resilient cleanup default dcd_nsavc=100).
-dcd_nsavc: 100
+dcd_nsavc: 25
 dyn_inbfrq: -1
 
 liquid_prep: true
@@ -61,25 +64,23 @@ density_prep_ladder_max_rounds: 8
 density_prep_lattice_abnr_steps: 300
 mini_lattice_abnr_steps: 300
 mc_density_equalize: true
-mc_density_steps: 128
+mc_density_steps: 256
 mini_box_equil_ps: 5.0
 calculator_pre_minimize: true
 bonded_mm_mini: false
-# Isolated CHARMM subprocess for bonded recovery (no MLpot param toggle).
 bonded_recovery_backend: sidecar
-# Orbax sidecar every overlap chunk (recovery ranks above baseline mid-heat).
-overlap_run_state_every_chunks: 1
+overlap_run_state_every_chunks: 25
 
-mm_switch_on: 5.0
-mm_switch_width: 3.0
-ml_switch_width: 0.2
+mm_switch_on: 8.0
+mm_switch_width: 5.0
+ml_switch_width: 1.5
 mm_nonbond_mode: jax_mic
 charmm_mm_pretreat: true
 
-# Heat leg (single thermostat on anchor; no equi/prod/jaxmd/ase).
+# Short heat smoke (variants can lengthen via heat2ps).
 default_heat_thermostat: bussi
-ps_heat: 5.0
-n_heat_segments: 3
+ps_heat: 1.0
+n_heat_segments: 1
 heat_firstt: 10.0
 no_echeck_heat: true
 heat_thermostats: []
@@ -90,7 +91,7 @@ dynamics_legs:
   ase: false
 
 ml_gpu_count: 1
-ml_batch_size: 128
+ml_batch_size: 256
 
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 6
@@ -126,37 +127,36 @@ prep_sweep:
   enabled: true
   stages: mini,heat
   full_dynamics: false
-  # Keep Packmol / liquid_prep seed identical to mini-only sweep (do not offset by heat thermostat).
   placement_seed_ignore_heat: true
   anchor:
     setup_id: resilient
     solvent: DCM
-    bulk_density_fraction: 0.25
+    n_monomers: 52
+    box_size: 36.0
     temperature: 50.0
-    box_size: 28.0
     heat_thermostat: bussi
   variants:
-    # vdw_off + spacing50 anchor (no extra overrides).
     baseline: {}
-    # --- Packmol / placement (stage-1 style; anchor pmtol=2.0, pad=1.0, spacing=5.0) ---
+    # --- Packmol / placement (anchor: spacing 8, pmtol 5, pad 2) ---
     pmtol25:
       packmol_tolerance: 2.5
     pmtol30:
       packmol_tolerance: 3.0
-    pmtol50:
-      packmol_tolerance: 5.0
     pad20:
-      packmol_box_padding: 2.0
+      packmol_box_padding: 1.5
     spacing70:
       spacing: 7.0
-    # --- ML/MM cutoffs ---
+    spacing90:
+      spacing: 9.0
+    # --- ML/MM cutoffs (anchor already cut_wide) ---
+    cut_mid:
+      mm_switch_on: 6.0
+      mm_switch_width: 4.0
+      ml_switch_width: 1.0
     cut_tight:
       mm_switch_on: 4.0
       mm_switch_width: 2.0
-    cut_wide:
-      mm_switch_on: 8.0
-      mm_switch_width: 5.0
-    # --- MM mode toggles (anchor: vdw_off, pretreat_on, bonded_mm off) ---
+    # --- MM mode toggles ---
     mm_vdw_on:
       periodic_charmm_vdw: true
     mm_pretreat_off:
@@ -164,8 +164,8 @@ prep_sweep:
     bonded_on:
       bonded_mm_mini: true
     # --- Density prep capacity ---
-    mc256:
-      mc_density_steps: 256
+    ladder_light:
+      liquid_prep_staged_density_fraction: 0.20
     # --- Integration timestep (fs) ---
     dt050:
       dt_fs: 0.05
@@ -173,22 +173,17 @@ prep_sweep:
       dt_fs: 0.10
     dt015:
       dt_fs: 0.15
-    # --- Overlap rescue cadence during heat (steps between checks) ---
-    ovlp50:
-      dynamics_overlap_check_interval: 50
+    # --- Overlap rescue cadence during heat ---
     ovlp25:
       dynamics_overlap_check_interval: 25
-    # --- DCD frame cadence (lower nsavc = more frequent) ---
+    # --- DCD / neighbor list ---
     dcd50:
       dcd_nsavc: 50
-    dcd25:
-      dcd_nsavc: 25
-    # --- CHARMM neighbor-list rebuild during heat/dynamics ---
     inbfrq25:
       dyn_inbfrq: 25
     inbfrq10:
       dyn_inbfrq: 10
-    # --- Shorter heat smoke (main config: 2 ps × 1 segment) ---
+    # --- Longer heat smoke ---
     heat2ps:
       ps_heat: 2.0
       n_heat_segments: 1
@@ -196,6 +191,6 @@ prep_sweep:
     dt050_ovlp50:
       dt_fs: 0.05
       dynamics_overlap_check_interval: 50
-    pmtol50_pad20:
-      packmol_tolerance: 5.0
-      packmol_box_padding: 2.0
+    pmtol30_pad15:
+      packmol_tolerance: 3.0
+      packmol_box_padding: 1.5
