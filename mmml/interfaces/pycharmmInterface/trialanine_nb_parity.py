@@ -315,11 +315,9 @@ def _single_pair_analytic_dedr(
 
     grad_vdw = np.asarray(jax.grad(_vdw_energy)(pos), dtype=np.float64)
     grad_elec = np.asarray(jax.grad(_elec_energy)(pos), dtype=np.float64)
-    fi_v = grad_vdw[pair_i] + grad_vdw[pair_j]
-    # dE/dr along i→j: F_j·r̂ − F_i·r̂ for conservative two-body MIC pair energy.
-    dedr_v = float(np.dot(grad_vdw[pair_j] - grad_vdw[pair_i], r_hat))
-    dedr_e = float(np.dot(grad_elec[pair_j] - grad_elec[pair_i], r_hat))
-    _ = fi_v  # silence unused
+    # dE/dr along i→j: ∂E/∂x_j · r̂  (equivalently −∂E/∂x_i · r̂).
+    dedr_v = float(np.dot(grad_vdw[pair_j], r_hat))
+    dedr_e = float(np.dot(grad_elec[pair_j], r_hat))
     return dedr_v, dedr_e
 
 
@@ -669,6 +667,73 @@ def render_markdown_report(report: TrialanineNbParityReport) -> str:
             f"| {row.category} | {row.n_pairs} | {row.vdw_kcal:.4f} | "
             f"{row.elec_kcal:.4f} | {row.total_kcal:.4f} | {row.mean_r_A:.2f} |"
         )
+    if report.charmm_by_category:
+        lines.extend(
+            [
+                "",
+                "## CHARMM nonbonded by segment BLOCK",
+                "",
+                "| Category | VDW | Elec | total |",
+                "|----------|-----|------|-------|",
+            ]
+        )
+        for row in report.charmm_by_category:
+            lines.append(
+                f"| {row.category} | {row.vdw_kcal:.4f} | "
+                f"{row.elec_kcal:.4f} | {row.total_kcal:.4f} |"
+            )
+    if report.category_vdw:
+        lines.extend(
+            [
+                "",
+                "## VDW gap by category (JAX − CHARMM)",
+                "",
+                "| Category | CHARMM | JAX | Δ |",
+                "|----------|--------|-----|---|",
+            ]
+        )
+        for term in report.category_vdw:
+            lines.append(
+                f"| {term.term.replace('vdw_', '')} | {term.charmm_kcal:.4f} | "
+                f"{term.jax_kcal:.4f} | {term.delta_kcal:+.4f} |"
+            )
+    if report.category_force_delta:
+        lines.extend(
+            [
+                "",
+                "## Force RMS by category (masked pair lists)",
+                "",
+                "| Category | JAX RMS | CHARMM RMS | Δ RMS | ΔVDW |",
+                "|----------|---------|------------|-------|------|",
+            ]
+        )
+        for row in report.category_force_delta:
+            lines.append(
+                f"| {row.category} | {row.jax_force_rms:.4f} | "
+                f"{row.charmm_force_rms:.4f} | {row.delta_force_rms:.4f} | "
+                f"{row.vdw_delta_kcal:+.4f} |"
+            )
+    if report.switch_derivative_audits:
+        lines.extend(
+            [
+                "",
+                "## Switching derivative audit (top |VDW| pairs)",
+                "",
+                "Central difference vs JAX autodiff dE/dr (fswitch/vfswitch). "
+                "Large rel errors implicate switch implementation, not pair lists.",
+                "",
+                "| atoms | r Å | VDW | dVDW/dr ana | dVDW/dr num | rel err | "
+                "dElec/dr rel err |",
+                "|-------|-----|-----|-------------|-------------|---------|"
+                "----------------|",
+            ]
+        )
+        for a in report.switch_derivative_audits:
+            lines.append(
+                f"| {a.atom_i}–{a.atom_j} | {a.r_A:.3f} | {a.vdw_kcal:.4f} | "
+                f"{a.vdw_dedr_analytic:.4f} | {a.vdw_dedr_numeric:.4f} | "
+                f"{a.vdw_dedr_rel_err:.2e} | {a.elec_dedr_rel_err:.2e} |"
+            )
     lines.extend(["", "## Top peptide–peptide VDW pairs (JAX)", ""])
     lines.append("| rank | atoms (1-based) | r Å | VDW | Elec |")
     lines.append("|------|-----------------|-----|-----|------|")

@@ -316,6 +316,12 @@ class PsfConnectivity:
     impropers: np.ndarray
     cmaps: np.ndarray
     nnb_indices: np.ndarray
+    iblo_indices: np.ndarray
+
+    @property
+    def inb_indices(self) -> np.ndarray:
+        """Flat ``INB`` exclusion partner list (alias for ``nnb_indices``)."""
+        return self.nnb_indices
 
 
 def _read_psf_section_ints(
@@ -348,7 +354,7 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
     natom = None
     atom_types: list[str] = []
     charges: list[float] = []
-    bonds = angles = torsions = impropers = cmaps = nnb_indices = None
+    bonds = angles = torsions = impropers = cmaps = nnb_indices = iblo_indices = None
 
     i = 0
     while i < len(lines):
@@ -386,19 +392,45 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
         if "!NNB" in line:
             n_inb = int(line.split()[0])
             if n_inb > 0:
+                if natom is None:
+                    raise ValueError(f"PSF !NNB before !NATOM in {psf_path}")
                 values: list[int] = []
                 idx = i + 1
                 while len(values) < n_inb:
                     if idx >= len(lines):
                         raise ValueError(
-                            f"PSF !NNB section ended before {n_inb} integers were read"
+                            f"PSF !NNB INB ended before {n_inb} integers were read"
                         )
-                    values.extend(int(x) for x in lines[idx].split())
+                    stripped = lines[idx].strip()
+                    if stripped.startswith("!"):
+                        break
+                    values.extend(int(x) for x in stripped.split())
                     idx += 1
-                nnb_indices = np.asarray(values[:n_inb], dtype=np.int32)
+                if len(values) != n_inb:
+                    raise ValueError(
+                        f"PSF !NNB expected {n_inb} INB integers, found {len(values)}"
+                    )
+                nnb_indices = np.asarray(values, dtype=np.int32)
+                iblo_values: list[int] = []
+                while len(iblo_values) < natom:
+                    if idx >= len(lines):
+                        raise ValueError(
+                            f"PSF !NNB IBLO ended before {natom} integers were read"
+                        )
+                    stripped = lines[idx].strip()
+                    if stripped.startswith("!"):
+                        break
+                    iblo_values.extend(int(x) for x in stripped.split())
+                    idx += 1
+                if len(iblo_values) != natom:
+                    raise ValueError(
+                        f"PSF !NNB IBLO expected {natom} integers, found {len(iblo_values)}"
+                    )
+                iblo_indices = np.asarray(iblo_values, dtype=np.int32)
                 i = idx
             else:
                 nnb_indices = np.zeros(0, dtype=np.int32)
+                iblo_indices = np.zeros(0, dtype=np.int32)
                 i += 1
             continue
         i += 1
@@ -413,6 +445,9 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
     nnb_indices = (
         nnb_indices if nnb_indices is not None else np.zeros(0, dtype=np.int32)
     )
+    iblo_indices = (
+        iblo_indices if iblo_indices is not None else np.zeros(0, dtype=np.int32)
+    )
     return PsfConnectivity(
         n_atoms=natom,
         atom_types=tuple(atom_types),
@@ -423,6 +458,7 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
         impropers=impropers,
         cmaps=cmaps,
         nnb_indices=nnb_indices,
+        iblo_indices=iblo_indices,
     )
 
 
