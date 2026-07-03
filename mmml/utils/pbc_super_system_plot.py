@@ -373,7 +373,7 @@ def plot_lr_methods_schematic(path: Path | str) -> Path:
 
     # MIC panel
     ax0 = axes[0]
-    ax0.scatter([3, 7, 4, 6], [3, 7, 7, 3], s=55, c="#3b82f6", zorder=3)
+    ax0.scatter([3, 7, 4, 6], [3, 7, 7, 3], s=120, c="#3b82f6", edgecolors="#1e293b", linewidths=0.6, zorder=3)
     ax0.add_patch(Circle((5, 5), 3.2, fill=False, edgecolor="#dc2626", linewidth=1.5, linestyle=(0, (4, 3))))
     ax0.text(5, 1.2, "cutnb sphere\n(all pairs inside)", ha="center", fontsize=8.5, color="#64748b")
 
@@ -383,7 +383,7 @@ def plot_lr_methods_schematic(path: Path | str) -> Path:
         ax1.axvline(x, color="#cbd5e1", lw=0.6, zorder=0)
     for y in np.linspace(1.2, 8.8, 8):
         ax1.axhline(y, color="#cbd5e1", lw=0.6, zorder=0)
-    ax1.scatter([3, 7, 4, 6], [3, 7, 7, 3], s=45, c="#3b82f6", zorder=3)
+    ax1.scatter([3, 7, 4, 6], [3, 7, 7, 3], s=100, c="#3b82f6", edgecolors="#1e293b", linewidths=0.6, zorder=3)
     ax1.text(5, 1.2, "short-range pairs +\nk-space reciprocal sum", ha="center", fontsize=8.5, color="#64748b")
 
     # FMM panel
@@ -403,7 +403,7 @@ def plot_lr_methods_schematic(path: Path | str) -> Path:
                 zorder=1,
             )
         )
-    ax2.scatter([5], [5], s=40, c="#3b82f6", zorder=4)
+    ax2.scatter([5], [5], s=90, c="#3b82f6", edgecolors="#1e293b", linewidths=0.6, zorder=4)
     ax2.text(5, 1.2, "hierarchical\nmultipole far field", ha="center", fontsize=8.5, color="#64748b")
 
     fig.suptitle(
