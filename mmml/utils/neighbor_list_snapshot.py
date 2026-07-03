@@ -153,6 +153,170 @@ def capture_charmm_inter_monomer_pairs(
     )
 
 
+def capture_charmm_jnb_inter_monomer_pairs(
+    *,
+    cutoff_A: float,
+    monomer_offsets: Sequence[int],
+    positions: np.ndarray | None = None,
+) -> NeighborListSnapshot | None:
+    """Capture inter-monomer pairs from CHARMM primary ``JNB/INBLO`` (not DMAT)."""
+    import pycharmm.nbonds as nbonds
+
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        apply_mm_pair_filters,
+        filter_pairs_under_cutoff,
+        inter_monomer_pair_set,
+        walk_charmm_primary_jnb_pair_set,
+    )
+
+    nbonds.update_bnbnd()
+    exported = nbonds.export_primary_pairs()
+    if exported is None:
+        return None
+    pair_i, pair_j = exported
+    raw = walk_charmm_primary_jnb_pair_set(pair_i, pair_j)
+
+    if positions is None:
+        import pandas as pd
+
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+
+        positions = coor.get_positions().to_numpy(dtype=np.float64)
+    else:
+        positions = np.asarray(positions, dtype=np.float64)
+
+    offsets = np.asarray(monomer_offsets, dtype=np.int32)
+    mid = monomer_id_from_offsets(offsets, positions.shape[0])
+    inter = inter_monomer_pair_set(raw, monomer_id=mid)
+    cutoff = float(cutoff_A)
+    filtered = apply_mm_pair_filters(inter, monomer_id=mid, positions=positions, cell=None)
+    mic_filtered = {
+        pair
+        for pair in filtered
+        if float(np.linalg.norm(positions[pair[1]] - positions[pair[0]])) < cutoff
+    }
+    pairs = _pair_records(mic_filtered, positions=positions, cell=None, monomer_id=mid)
+    return NeighborListSnapshot(
+        source="charmm_jnb",
+        cutoff_A=cutoff,
+        pairs=pairs,
+        meta={
+            "n_primary_pairs_total": len(raw),
+            "n_inter_monomer_pairs": len(pairs),
+        },
+    )
+
+
+def capture_mlpot_mlmm_inter_monomer_pairs(
+    *,
+    cutoff_A: float,
+    monomer_offsets: Sequence[int],
+    natom: int,
+    positions: np.ndarray | None = None,
+    cell: np.ndarray | None = None,
+    mm_r_min: float | None = None,
+) -> NeighborListSnapshot | None:
+    """Capture inter-monomer ML–MM pairs from Fortran ``idxu/idxv`` (callback path)."""
+    from pycharmm.energy_mlpot import export_mlpot_mlmm_pairs
+
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        apply_mm_pair_filters,
+        canonical_half_pair,
+        filter_pairs_under_cutoff,
+        inter_monomer_pair_set,
+    )
+
+    exported = export_mlpot_mlmm_pairs()
+    if exported is None:
+        return None
+    pair_u, pair_v = exported
+    primary: set[tuple[int, int]] = set()
+    for u, v in zip(pair_u, pair_v, strict=False):
+        if int(u) >= int(natom) or int(v) >= int(natom):
+            continue
+        primary.add(canonical_half_pair(u, v))
+
+    if positions is None:
+        import pandas as pd
+
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+
+        positions = coor.get_positions().to_numpy(dtype=np.float64)
+    else:
+        positions = np.asarray(positions, dtype=np.float64)
+
+    offsets = np.asarray(monomer_offsets, dtype=np.int32)
+    mid = monomer_id_from_offsets(offsets, positions.shape[0])
+    inter = inter_monomer_pair_set(primary, monomer_id=mid)
+    cutoff = float(cutoff_A)
+    filtered = apply_mm_pair_filters(
+        inter,
+        monomer_id=mid,
+        positions=positions,
+        cell=cell,
+        mm_r_min=mm_r_min,
+        monomer_offsets=offsets,
+    )
+    if cell is not None:
+        mic_filtered = filter_pairs_under_cutoff(filtered, positions, cell, cutoff)
+    else:
+        mic_filtered = {
+            pair
+            for pair in filtered
+            if float(np.linalg.norm(positions[pair[1]] - positions[pair[0]])) < cutoff
+        }
+    pairs = _pair_records(mic_filtered, positions=positions, cell=cell, monomer_id=mid)
+    return NeighborListSnapshot(
+        source="mlpot_mlmm",
+        cutoff_A=cutoff,
+        pairs=pairs,
+        meta={
+            "n_mlmm_pairs_exported": len(pair_u),
+            "n_primary_inter_monomer_pairs": len(pairs),
+        },
+    )
+
+
+def compare_snapshots_aligned(
+    left: NeighborListSnapshot,
+    right: NeighborListSnapshot,
+    *,
+    positions: np.ndarray,
+    cell: np.ndarray | None = None,
+    monomer_offsets: Sequence[int],
+    mm_r_min: float | None = None,
+) -> dict[str, Any]:
+    """Pair diff plus semantic tags (cutoff skew, ``mm_r_min``, true mismatch)."""
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        canonical_half_pair,
+        classify_inter_monomer_diff,
+    )
+
+    base = compare_snapshots(left, right)
+    offsets = np.asarray(monomer_offsets, dtype=np.int32)
+    mid = monomer_id_from_offsets(offsets, np.asarray(positions).shape[0])
+    left_set = {
+        canonical_half_pair(p.i, p.j) for p in left.pairs
+    }
+    right_set = {
+        canonical_half_pair(p.i, p.j) for p in right.pairs
+    }
+    tags = classify_inter_monomer_diff(
+        only_left=left_set - right_set,
+        only_right=right_set - left_set,
+        positions=np.asarray(positions, dtype=np.float64),
+        cell=cell,
+        monomer_id=mid,
+        left_cutoff_A=float(left.cutoff_A),
+        right_cutoff_A=float(right.cutoff_A),
+        mm_r_min=mm_r_min,
+        monomer_offsets=offsets,
+    )
+    base["semantic_tags"] = tags
+    base["common_cutoff_A"] = min(float(left.cutoff_A), float(right.cutoff_A))
+    return base
+
+
 def capture_mmml_inter_monomer_pairs(
     *,
     positions: np.ndarray,

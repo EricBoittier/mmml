@@ -389,5 +389,76 @@ contains
     
   end subroutine nbonds_update_bnbnd
 
+
+  !> @brief Count primary-cell pairs in the current CHARMM JNB list.
+  function nbonds_get_primary_pair_count() bind(c) result(n_pairs)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use bases_fcm, only: bnbnd
+    use psf, only: natom
+
+    implicit none
+
+    integer(c_int) :: n_pairs
+    integer :: i, w, istart
+
+    n_pairs = 0
+    if (.not. associated(bnbnd%jnb) .or. .not. associated(bnbnd%inblo)) return
+    if (natom <= 0) return
+    do i = 1, natom
+       if (i > 1) then
+          istart = bnbnd%inblo(i-1) + 1
+       else
+          istart = 1
+       endif
+       if (istart > bnbnd%inblo(i)) cycle
+       n_pairs = n_pairs + (bnbnd%inblo(i) - istart + 1)
+    end do
+  end function nbonds_get_primary_pair_count
+
+
+  !> @brief Export primary-cell JNB pairs as 0-based ``(i, j)`` with ``i < j``.
+  function nbonds_export_primary_pairs( &
+       out_i, out_j, max_pairs, out_count) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use bases_fcm, only: bnbnd
+    use psf, only: natom
+
+    implicit none
+
+    integer(c_int), dimension(*), intent(out) :: out_i, out_j
+    integer(c_int), value :: max_pairs
+    integer(c_int), intent(out) :: out_count
+    integer(c_int) :: success
+    integer :: i, w, istart, ai, aj, c
+
+    success = 0
+    out_count = 0
+    if (max_pairs <= 0) return
+    if (.not. associated(bnbnd%jnb) .or. .not. associated(bnbnd%inblo)) return
+    if (natom <= 0) return
+
+    c = 0
+    do i = 1, natom
+       if (i > 1) then
+          istart = bnbnd%inblo(i-1) + 1
+       else
+          istart = 1
+       endif
+       do w = istart, bnbnd%inblo(i)
+          if (c >= max_pairs) exit
+          ai = i - 1
+          aj = bnbnd%jnb(w) - 1
+          if (ai < aj) then
+             c = c + 1
+             out_i(c) = ai
+             out_j(c) = aj
+          endif
+       end do
+       if (c >= max_pairs) exit
+    end do
+    out_count = c
+    success = 1
+  end function nbonds_export_primary_pairs
+
 #endif /* KEY_LIBRARY */
 end module api_nbonds

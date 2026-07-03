@@ -57,7 +57,8 @@ module api_func
 
   public :: func_set, func_call, func_is_set, func_unset,       &
             mlpot_set_func, mlpot_set_properties,               &
-            mlpot_update, mlpot_call, mlpot_is_set, mlpot_unset
+            mlpot_update, mlpot_call, mlpot_is_set, mlpot_unset, &
+            mlpot_get_pair_counts, mlpot_export_mlmm_pairs, mlpot_export_mlml_pairs
 
 contains
 
@@ -361,5 +362,58 @@ contains
   logical function mlpot_is_set()
     mlpot_is_set = associated(user_mlpot)
   end function mlpot_is_set
+
+
+  function mlpot_get_pair_counts(out_nmlp, out_nmlmmp) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
+    implicit none
+    integer(c_int), intent(out) :: out_nmlp, out_nmlmmp
+    integer(c_int) :: success
+    out_nmlp = Nmlp
+    out_nmlmmp = Nmlmmp
+    success = 1
+  end function mlpot_get_pair_counts
+
+
+  function mlpot_export_mlmm_pairs(out_u, out_v, max_pairs, out_count) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
+    implicit none
+    integer(c_int), dimension(*), intent(out) :: out_u, out_v
+    integer(c_int), value :: max_pairs
+    integer(c_int), intent(out) :: out_count
+    integer(c_int) :: success
+    integer :: n, k
+    success = 0
+    out_count = 0
+    if (max_pairs <= 0) return
+    n = min(Nmlmmp, int(max_pairs))
+    do k = 1, n
+       out_u(k) = idxu(k)
+       out_v(k) = idxv(k)
+    end do
+    out_count = n
+    success = 1
+  end function mlpot_export_mlmm_pairs
+
+
+  function mlpot_export_mlml_pairs(out_i, out_j, max_pairs, out_count) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
+    implicit none
+    integer(c_int), dimension(*), intent(out) :: out_i, out_j
+    integer(c_int), value :: max_pairs
+    integer(c_int), intent(out) :: out_count
+    integer(c_int) :: success
+    integer :: n, k
+    success = 0
+    out_count = 0
+    if (max_pairs <= 0) return
+    n = min(Nmlp, int(max_pairs))
+    do k = 1, n
+       out_i(k) = idxi(k)
+       out_j(k) = idxj(k)
+    end do
+    out_count = n
+    success = 1
+  end function mlpot_export_mlml_pairs
   
 end module api_func

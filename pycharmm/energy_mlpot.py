@@ -226,3 +226,58 @@ class MLpot():
         nml = (ctypes.c_int * 1)(self.ml_Natoms)
         pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
         self.is_set = True
+
+
+def get_mlpot_pair_counts():
+    """Return ``(n_mlml, n_mlmm)`` from the last ``mlpot_update`` call."""
+    try:
+        getter = pycharmm.lib.charmm.mlpot_get_pair_counts
+    except AttributeError:
+        return None
+    out_nmlp = (ctypes.c_int * 1)()
+    out_nmlmmp = (ctypes.c_int * 1)()
+    status = getter(out_nmlp, out_nmlmmp)
+    if not bool(status):
+        raise RuntimeError("mlpot_get_pair_counts failed")
+    return int(out_nmlp[0]), int(out_nmlmmp[0])
+
+
+def export_mlpot_mlmm_pairs(*, max_pairs: int | None = None):
+    """Export Fortran ``idxu/idxv`` (0-based) after ``mlpot_update``."""
+    try:
+        exporter = pycharmm.lib.charmm.mlpot_export_mlmm_pairs
+    except AttributeError:
+        return None
+    _nmlp, nmlmmp = get_mlpot_pair_counts() or (0, 0)
+    cap = int(max_pairs) if max_pairs is not None else int(nmlmmp)
+    if cap <= 0:
+        return [], []
+    out_u = (ctypes.c_int * cap)()
+    out_v = (ctypes.c_int * cap)()
+    out_count = (ctypes.c_int * 1)()
+    status = exporter(out_u, out_v, ctypes.c_int(cap), out_count)
+    if not bool(status):
+        raise RuntimeError("mlpot_export_mlmm_pairs failed")
+    n = int(out_count[0])
+    return [int(out_u[k]) for k in range(n)], [int(out_v[k]) for k in range(n)]
+
+
+def export_mlpot_mlml_pairs(*, max_pairs: int | None = None):
+    """Export Fortran ``idxi/idxj`` (0-based) after ``mlpot_update``."""
+    try:
+        exporter = pycharmm.lib.charmm.mlpot_export_mlml_pairs
+    except AttributeError:
+        return None
+    nmlp, _nmlmmp = get_mlpot_pair_counts() or (0, 0)
+    cap = int(max_pairs) if max_pairs is not None else int(nmlp)
+    if cap <= 0:
+        return [], []
+    out_i = (ctypes.c_int * cap)()
+    out_j = (ctypes.c_int * cap)()
+    out_count = (ctypes.c_int * 1)()
+    status = exporter(out_i, out_j, ctypes.c_int(cap), out_count)
+    if not bool(status):
+        raise RuntimeError("mlpot_export_mlml_pairs failed")
+    n = int(out_count[0])
+    return [int(out_i[k]) for k in range(n)], [int(out_j[k]) for k in range(n)]
+

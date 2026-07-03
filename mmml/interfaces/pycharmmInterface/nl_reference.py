@@ -160,6 +160,132 @@ def apply_mm_pair_filters(
     return filtered
 
 
+def canonical_half_pair(ai: int, aj: int) -> tuple[int, int]:
+    """Normalize atom pair to ``(i, j)`` with ``i < j``."""
+    i, j = int(ai), int(aj)
+    return (i, j) if i < j else (j, i)
+
+
+def walk_charmm_primary_jnb_pair_set(
+    pair_i: Sequence[int],
+    pair_j: Sequence[int],
+) -> set[tuple[int, int]]:
+    """Build a half-list set from exported CHARMM JNB ``(i, j)`` arrays."""
+    return {
+        canonical_half_pair(i, j)
+        for i, j in zip(pair_i, pair_j, strict=False)
+    }
+
+
+def inter_monomer_pair_set(
+    pairs: Iterable[tuple[int, int]],
+    *,
+    monomer_id: np.ndarray,
+) -> set[tuple[int, int]]:
+    mid = np.asarray(monomer_id, dtype=np.int32)
+    return {
+        canonical_half_pair(i, j)
+        for i, j in pairs
+        if int(mid[i]) != int(mid[j])
+    }
+
+
+def classify_inter_monomer_diff(
+    *,
+    only_left: set[tuple[int, int]],
+    only_right: set[tuple[int, int]],
+    positions: np.ndarray,
+    cell: np.ndarray | None,
+    monomer_id: np.ndarray,
+    left_cutoff_A: float,
+    right_cutoff_A: float,
+    mm_r_min: float | None = None,
+    monomer_offsets: Sequence[int] | None = None,
+) -> dict[str, list[dict[str, float | int]]]:
+    """Tag pair mismatches with likely semantic causes (cutoff, COM handoff)."""
+    R = np.asarray(positions, dtype=np.float64)
+    mid = np.asarray(monomer_id, dtype=np.int32)
+    cell_mat = cell_matrix_3x3(cell) if cell is not None else None
+    common_cut = min(float(left_cutoff_A), float(right_cutoff_A))
+
+    def _rows(pairs: set[tuple[int, int]], tag: str) -> list[dict[str, float | int]]:
+        out: list[dict[str, float | int]] = []
+        for i, j in sorted(pairs):
+            dist = (
+                float(np.linalg.norm(R[j] - R[i]))
+                if cell_mat is None
+                else mic_distance(R, i, j, cell_mat)
+            )
+            out.append(
+                {
+                    "i": int(i),
+                    "j": int(j),
+                    "distance_A": dist,
+                    "monomer_i": int(mid[i]),
+                    "monomer_j": int(mid[j]),
+                    "tag": tag,
+                }
+            )
+        return out
+
+    cutoff_left = set()
+    cutoff_right = set()
+    handoff_left = set()
+    handoff_right = set()
+    true_left = set(only_left)
+    true_right = set(only_right)
+
+    for pair in list(only_left):
+        i, j = pair
+        dist = mic_distance(R, i, j, cell_mat) if cell_mat is not None else float(np.linalg.norm(R[j] - R[i]))
+        if dist >= common_cut:
+            cutoff_left.add(pair)
+            true_left.discard(pair)
+    for pair in list(only_right):
+        i, j = pair
+        dist = mic_distance(R, i, j, cell_mat) if cell_mat is not None else float(np.linalg.norm(R[j] - R[i]))
+        if dist >= common_cut:
+            cutoff_right.add(pair)
+            true_right.discard(pair)
+
+    if mm_r_min is not None and monomer_offsets is not None:
+        offsets = np.asarray(monomer_offsets, dtype=np.int32)
+        coms = np.zeros((len(offsets) - 1, 3), dtype=np.float64)
+        for k in range(len(offsets) - 1):
+            s, e = int(offsets[k]), int(offsets[k + 1])
+            coms[k] = R[s:e].mean(axis=0)
+        inv_cell = np.linalg.inv(cell_mat) if cell_mat is not None else None
+        for pair in list(true_left):
+            mi, mj = int(mid[pair[0]]), int(mid[pair[1]])
+            dr = coms[mj] - coms[mi]
+            if inv_cell is not None and cell_mat is not None:
+                frac = dr @ inv_cell.T
+                frac = frac - np.round(frac)
+                dr = frac @ cell_mat
+            if float(np.linalg.norm(dr)) < float(mm_r_min):
+                handoff_left.add(pair)
+                true_left.discard(pair)
+        for pair in list(true_right):
+            mi, mj = int(mid[pair[0]]), int(mid[pair[1]])
+            dr = coms[mj] - coms[mi]
+            if inv_cell is not None and cell_mat is not None:
+                frac = dr @ inv_cell.T
+                frac = frac - np.round(frac)
+                dr = frac @ cell_mat
+            if float(np.linalg.norm(dr)) < float(mm_r_min):
+                handoff_right.add(pair)
+                true_right.discard(pair)
+
+    return {
+        "cutoff_only_left": _rows(cutoff_left, "cutoff_only"),
+        "cutoff_only_right": _rows(cutoff_right, "cutoff_only"),
+        "handoff_only_left": _rows(handoff_left, "mm_r_min"),
+        "handoff_only_right": _rows(handoff_right, "mm_r_min"),
+        "true_mismatch_left": _rows(true_left, "true_mismatch"),
+        "true_mismatch_right": _rows(true_right, "true_mismatch"),
+    }
+
+
 def brute_force_mic_pairs(
     positions: np.ndarray,
     cell: np.ndarray,
