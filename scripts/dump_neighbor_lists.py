@@ -42,7 +42,9 @@ if str(_REPO) not in sys.path:
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_crd_coordinates  # noqa: E402
 from mmml.utils.neighbor_list_snapshot import (  # noqa: E402
     capture_charmm_inter_monomer_pairs,
+    capture_charmm_jnb_inter_monomer_pairs,
     capture_mmml_inter_monomer_pairs,
+    compare_snapshots_aligned,
     cubic_cell_matrix,
     find_artifact_geometry,
     save_neighbor_list_artifacts,
@@ -92,7 +94,18 @@ def main() -> int:
     parser.add_argument(
         "--with-charmm",
         action="store_true",
-        help="Load PSF+CRD into PyCHARMM and capture CHARMM DMAT pairs",
+        help="Load PSF+CRD into PyCHARMM and capture CHARMM pairs",
+    )
+    parser.add_argument(
+        "--charmm-source",
+        choices=("jnb", "dmat", "both"),
+        default="jnb",
+        help="CHARMM pair source: JNB list (preferred), DMAT, or both",
+    )
+    parser.add_argument(
+        "--aligned-compare",
+        action="store_true",
+        help="Tag pair diffs as cutoff/handoff/true mismatch",
     )
     parser.add_argument("--n-monomers", type=int, required=True)
     parser.add_argument("--atoms-per-monomer", type=int, required=True)
@@ -122,6 +135,7 @@ def main() -> int:
     cell = cubic_cell_matrix(args.box_size)
     mm_r_min = _default_mm_r_min(args.mm_switch_on, args.ml_switch_width)
     charmm_snap = None
+    charmm_jnb_snap = None
     psf_used: Path | None = None
 
     if args.with_charmm:
@@ -140,11 +154,19 @@ def main() -> int:
             box_side=float(args.box_size),
             charmm_cutoff_A=float(args.charmm_cutoff),
         )
-        charmm_snap = capture_charmm_inter_monomer_pairs(
-            cutoff_A=eff_charmm_cut,
-            monomer_offsets=offsets,
-            positions=positions,
-        )
+        if args.charmm_source in ("jnb", "both"):
+            charmm_jnb_snap = capture_charmm_jnb_inter_monomer_pairs(
+                cutoff_A=eff_charmm_cut,
+                monomer_offsets=offsets,
+                positions=positions,
+            )
+        if args.charmm_source in ("dmat", "both"):
+            charmm_snap = capture_charmm_inter_monomer_pairs(
+                cutoff_A=eff_charmm_cut,
+                monomer_offsets=offsets,
+                positions=positions,
+            )
+        charmm_snap = charmm_jnb_snap or charmm_snap
         charmm_cutoff = eff_charmm_cut
     else:
         charmm_cutoff = float(args.charmm_cutoff)
@@ -165,9 +187,26 @@ def main() -> int:
         "atoms_per_monomer": int(args.atoms_per_monomer),
         "box_size_A": float(args.box_size),
         "charmm_cutoff_A": charmm_cutoff,
+        "charmm_source": args.charmm_source if args.with_charmm else None,
         "mm_cutoff_A": float(args.mm_cutoff),
         "mm_r_min_A": mm_r_min,
     }
+    comparison = None
+    if charmm_snap is not None:
+        if args.aligned_compare:
+            comparison = compare_snapshots_aligned(
+                charmm_snap,
+                mmml_snap,
+                positions=positions,
+                cell=cell,
+                monomer_offsets=offsets,
+                mm_r_min=mm_r_min,
+            )
+        else:
+            from mmml.utils.neighbor_list_snapshot import compare_snapshots
+
+            comparison = compare_snapshots(charmm_snap, mmml_snap)
+
     paths = save_neighbor_list_artifacts(
         args.output_dir,
         positions=positions,
@@ -178,6 +217,10 @@ def main() -> int:
         extra_meta=meta,
         top_pairs=int(args.top_pairs),
     )
+    if comparison is not None and args.aligned_compare:
+        cmp_path = args.output_dir / "comparison_aligned.json"
+        cmp_path.write_text(json.dumps(comparison, indent=2), encoding="utf-8")
+        paths["comparison_aligned"] = cmp_path
 
     print(json.dumps({"written": {k: str(v) for k, v in paths.items()}}, indent=2))
     if charmm_snap is not None and charmm_snap.pairs:
@@ -192,14 +235,26 @@ def main() -> int:
             f"MMML closest inter-monomer pair: {w.distance_A:.4f} Å "
             f"(mon {w.monomer_i}/{w.monomer_j}, atoms {w.i}/{w.j})"
         )
-    if paths.get("comparison") is not None:
-        cmp = json.loads(paths["comparison"].read_text(encoding="utf-8"))
+    if paths.get("comparison") is not None or paths.get("comparison_aligned") is not None:
+        cmp_path = paths.get("comparison_aligned") or paths["comparison"]
+        cmp = json.loads(cmp_path.read_text(encoding="utf-8"))
         print(
             "comparison:",
             f"shared={cmp['n_shared']}",
             f"only_charmm={cmp['n_only_left']}",
             f"only_mmml={cmp['n_only_right']}",
         )
+        tags = cmp.get("semantic_tags")
+        if tags:
+            print(
+                "semantic:",
+                f"cutoff_only L/R={len(tags.get('cutoff_only_left', []))}/"
+                f"{len(tags.get('cutoff_only_right', []))}",
+                f"handoff L/R={len(tags.get('handoff_only_left', []))}/"
+                f"{len(tags.get('handoff_only_right', []))}",
+                f"true_mismatch L/R={len(tags.get('true_mismatch_left', []))}/"
+                f"{len(tags.get('true_mismatch_right', []))}",
+            )
     return 0
 
 
