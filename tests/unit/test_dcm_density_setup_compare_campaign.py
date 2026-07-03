@@ -839,3 +839,111 @@ def test_prep_sweep_mini_heat_stage(cfg: dict) -> None:
     mini = campaign["runs"]["pycharmm_mini"]
     assert mini["md_stages"] == "mini,heat"
     assert mini["heat_thermostat"] == "hoover"
+
+
+def test_bulk_ramp_config_resolves_compress_tag(cfg: dict) -> None:
+    tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_compress_025"
+    path = cl.default_workflow_config_path(run_tag=tag)
+    assert path.name == "config.bulk_ramp.yaml"
+    bulk_cfg = load_config(WORKFLOW / "config.bulk_ramp.yaml")
+    cell = cell_from_tag(bulk_cfg, tag)
+    assert cell.sweep_id == "compress_025"
+
+
+def test_bulk_ramp_handoff_from_baseline(cfg: dict, tmp_path: Path) -> None:
+    sparse_tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_baseline"
+    ramp_cfg = {
+        **cfg,
+        "output_root": str(tmp_path / "out"),
+        "checkpoint": cfg["checkpoint"],
+        "bulk_ramp": {"enabled": True, "sparse_variant": "baseline"},
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini,heat",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 38.0,
+                "heat_thermostat": "bussi",
+            },
+            "variants": {
+                "baseline": {},
+                "compress_025": {
+                    "bulk_ramp_compress": True,
+                    "bulk_density_fraction": 0.25,
+                    "liquid_prep_staged_density_fraction": 0.25,
+                    "rebuild_packmol": False,
+                    "enable_dynamics": True,
+                    "dynamics_legs": {"pycharmm_equi": True, "pycharmm_prod": True},
+                },
+            },
+        },
+    }
+    sparse_cell = cell_from_tag(ramp_cfg, sparse_tag)
+    sparse_out = cl.run_output_dir(ramp_cfg, sparse_cell)
+    handoff = sparse_out / "pycharmm_mini" / "handoff" / "state.npz"
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_bytes(b"stub")
+
+    compress_cell = cell_from_tag(
+        ramp_cfg, "resilient_dcm_52_t50_l38_ht_bussi_sw_compress_025"
+    )
+    campaign = build_campaign(ramp_cfg, compress_cell)
+    assert campaign["defaults"]["continue_from"] == str(handoff)
+    assert campaign["defaults"]["bulk_density_fraction"] == pytest.approx(0.25)
+    assert campaign["defaults"]["liquid_prep_staged_density_fraction"] == pytest.approx(0.25)
+    assert campaign["defaults"]["bulk_ramp_from_tag"] == sparse_tag
+    assert campaign["defaults"]["rebuild_packmol"] is False
+    assert "pycharmm_init" in campaign["runs"]
+    assert "pycharmm_equi_01" in campaign["runs"]
+    assert "pycharmm_prod_01" in campaign["runs"]
+    init = campaign["runs"]["pycharmm_init"]
+    assert init["bulk_density_fraction"] == pytest.approx(0.25)
+    assert "baseline" in init["description"]
+
+
+def test_bulk_ramp_chain_handoff_from_prior_compress(cfg: dict, tmp_path: Path) -> None:
+    ramp_cfg = {
+        **cfg,
+        "output_root": str(tmp_path / "out"),
+        "checkpoint": cfg["checkpoint"],
+        "bulk_ramp": {"enabled": True, "sparse_variant": "baseline"},
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini,heat",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 38.0,
+                "heat_thermostat": "bussi",
+            },
+            "variants": {
+                "compress_025": {
+                    "bulk_ramp_compress": True,
+                    "bulk_density_fraction": 0.25,
+                    "enable_dynamics": True,
+                    "dynamics_legs": {"pycharmm_prod": True},
+                },
+                "compress_050": {
+                    "bulk_ramp_compress": True,
+                    "handoff_from_variant": "compress_025",
+                    "bulk_density_fraction": 0.50,
+                    "enable_dynamics": True,
+                    "dynamics_legs": {"pycharmm_prod": True},
+                },
+            },
+        },
+    }
+    prior_tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_compress_025"
+    prior_cell = cell_from_tag(ramp_cfg, prior_tag)
+    prior_out = cl.run_output_dir(ramp_cfg, prior_cell)
+    handoff = prior_out / "pycharmm_prod_01" / "handoff" / "state.npz"
+    handoff.parent.mkdir(parents=True, exist_ok=True)
+    handoff.write_bytes(b"stub")
+
+    cell = cell_from_tag(ramp_cfg, "resilient_dcm_52_t50_l38_ht_bussi_sw_compress_050")
+    campaign = build_campaign(ramp_cfg, cell)
+    assert campaign["defaults"]["continue_from"] == str(handoff)
+    assert campaign["defaults"]["bulk_ramp_from_tag"] == prior_tag

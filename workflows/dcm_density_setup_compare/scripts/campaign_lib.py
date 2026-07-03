@@ -223,6 +223,55 @@ def _apply_temperature_ladder(
     return prior_tag
 
 
+def _apply_bulk_ramp_handoff(
+    cfg: dict[str, Any],
+    cell: RunCell,
+    defaults: dict[str, Any],
+    init_flags: dict[str, Any],
+) -> str | None:
+    """Continue compress cells from a prior sparse (or prior compress) handoff."""
+    if not cell.sweep_id:
+        return None
+    variant = prep_sweep_variant_overrides(cfg, cell.sweep_id)
+    if not variant.get("bulk_ramp_compress"):
+        return None
+    source_id = str(
+        variant.get("handoff_from_variant")
+        or bulk_ramp_section(cfg).get("sparse_variant")
+        or "baseline"
+    )
+    source = RunCell(
+        setup_id=cell.setup_id,
+        solvent=cell.solvent,
+        n_monomers=cell.n_monomers,
+        temperature=cell.temperature,
+        box_size=cell.box_size,
+        heat_thermostat=cell.heat_thermostat,
+        sweep_id=source_id,
+    )
+    source_tag = cell_run_tag(source, cfg)
+    handoff = paths_for_run(cfg, source)["final_handoff"]
+    defaults["continue_from"] = str(handoff)
+    defaults["bulk_ramp_from_tag"] = source_tag
+    frac = variant.get("bulk_density_fraction")
+    if frac is not None:
+        defaults["bulk_density_fraction"] = float(frac)
+        init_flags["bulk_density_fraction"] = float(frac)
+    staged = variant.get("liquid_prep_staged_density_fraction")
+    if staged is not None:
+        staged_f = float(staged)
+        defaults["liquid_prep_staged_density_fraction"] = staged_f
+        init_flags["liquid_prep_staged_density_fraction"] = staged_f
+    elif frac is not None:
+        staged_f = float(frac)
+        defaults["liquid_prep_staged_density_fraction"] = staged_f
+        init_flags["liquid_prep_staged_density_fraction"] = staged_f
+    if variant.get("packmol") is False or variant.get("rebuild_packmol") is False:
+        defaults["rebuild_packmol"] = False
+        init_flags["rebuild_packmol"] = False
+    return source_tag
+
+
 def iter_heat_thermostats(cfg: dict[str, Any]) -> Iterator[str | None]:
     if prep_sweep_enabled(cfg):
         stages = prep_sweep_stages(cfg)
@@ -251,6 +300,19 @@ _PREP_SWEEP_VARIANT_KEY = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 
 def prep_sweep_config_path() -> Path:
     return workflow_root() / "config.prep_sweep.yaml"
+
+
+def bulk_ramp_config_path() -> Path:
+    return workflow_root() / "config.bulk_ramp.yaml"
+
+
+def bulk_ramp_section(cfg: dict[str, Any]) -> dict[str, Any]:
+    raw = cfg.get("bulk_ramp")
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def bulk_ramp_enabled(cfg: dict[str, Any]) -> bool:
+    return bool(bulk_ramp_section(cfg).get("enabled", False))
 
 
 def is_prep_sweep_run_tag(tag: str) -> bool:
@@ -292,6 +354,11 @@ def default_workflow_config_path(*, run_tag: str | None = None) -> Path:
     main_cfg = load_config(main_path)
     if _tag_in_matrix(main_cfg, run_tag):
         return main_path
+    bulk_path = bulk_ramp_config_path()
+    if bulk_path.is_file():
+        bulk_cfg = load_config(bulk_path)
+        if _prep_sweep_config_resolves_tag(bulk_cfg, run_tag):
+            return bulk_path
     sweep_path = prep_sweep_config_path()
     if sweep_path.is_file():
         sweep_cfg = load_config(sweep_path)
@@ -1062,6 +1129,13 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "pyxtal_factor",
         "pyxtal_attempts",
         "rebuild_packmol",
+        "bulk_density_fraction",
+        "liquid_prep_staged_density_fraction",
+        "target_density_g_cm3",
+        "pycharmm_prod_ps",
+        "pycharmm_equi_ps",
+        "prod_ensemble",
+        "packmol",
     ):
         if key in effective:
             defaults[key] = effective[key]
@@ -1073,11 +1147,16 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     mini_flags = _mini_job_flags(cfg, cell)
     mini_flags.update(_init_stage_overrides(cfg, cell, effective))
     ladder_from = _apply_temperature_ladder(cfg, cell, defaults, mini_flags)
+    ramp_from = _apply_bulk_ramp_handoff(cfg, cell, defaults, mini_flags)
+    if ramp_from is not None and defaults.get("bulk_density_fraction") is not None:
+        frac_s = f"{float(defaults['bulk_density_fraction']):.2f}×bulk target"
     init_id = init_job_id(cell_cfg)
     md_stages = str(mini_flags.get("md_stages", "mini"))
     ht = mini_flags.get("heat_thermostat")
     ht_note = f" heat={ht}" if ht else ""
-    if ladder_from is not None:
+    if ramp_from is not None:
+        stage_label = "bulk compress"
+    elif ladder_from is not None:
         stage_label = f"heat ladder from {defaults['temperature_ladder_from_temp_K']:.0f}K"
     elif "heat" in md_stages:
         stage_label = "mini+heat"
@@ -1089,7 +1168,8 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
                 "description": (
                     f"{comp} setup={cell.setup_id} {frac_s} "
                     f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å {stage_label}{ht_note}"
-                    + (f" ← {ladder_from}" if ladder_from else "")
+                    + (f" ← {ramp_from}" if ramp_from else "")
+                    + (f" ← {ladder_from}" if ladder_from and ramp_from is None else "")
                 ),
                 "backend": "pycharmm",
                 "setup": "pbc_npt",

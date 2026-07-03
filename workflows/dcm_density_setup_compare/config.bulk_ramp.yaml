@@ -1,0 +1,165 @@
+# Bulk-density ramp: compress sparse N=52 DCM handoff toward liquid bulk (1.33 g/cm³).
+#
+# Prerequisite (sparse melt with done.txt):
+#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml \
+#     bash scripts/job_shell.sh resilient_dcm_52_t50_l38_ht_bussi_sw_baseline
+#
+# Single compress leg:
+#   MMML_WORKFLOW_CONFIG=config.bulk_ramp.yaml \
+#     bash scripts/job_shell.sh resilient_dcm_52_t50_l38_ht_bussi_sw_compress_025
+#
+# Full ramp matrix (Slurm):
+#   bash scripts/snakemake_bulk_ramp.sh
+#
+# Tags: {setup}_dcm_{N}_t{T}_l{L}_ht_{thermostat}_sw_{variant}
+# Variants: compress_025, compress_050, compress_075, compress_100
+
+setups: [resilient]
+solvents: [DCM]
+cluster_sizes: [52]
+temperatures: [50.0]
+box_sizes: [38.0]
+
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/dcm_density_setup_compare
+seed_base: 4242
+
+spacing: 8.0
+periodic_charmm_vdw: false
+packmol_tolerance: 5.0
+packmol_box_padding: 2.0
+
+dt_fs: 0.25
+pressure: 1.0
+prod_ensemble: pbc_npt
+
+pre_mlpot_overlap_min_distance: 2.3
+pre_mlpot_h_heavy_min_distance: 2.4
+pre_mlpot_heavy_heavy_min_distance: 2.9
+
+mini_nstep: 5000
+charmm_sd_steps: 8000
+charmm_abnr_steps: 8000
+pre_min_steps: 1000
+
+dynamics_overlap_check_interval: 50
+dynamics_overlap_charmm_sd_steps: 400
+dynamics_overlap_charmm_abnr_steps: 800
+dynamics_overlap_min_distance: 1.5
+min_intermonomer_atom_distance: 2.3
+
+liquid_prep: true
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 12
+density_prep_lattice_abnr_steps: 300
+mini_lattice_abnr_steps: 300
+mc_density_equalize: true
+mc_density_steps: 512
+mini_box_equil_ps: 5.0
+calculator_pre_minimize: true
+bonded_mm_mini: false
+
+mm_switch_on: 12.0
+mm_switch_width: 6.0
+ml_switch_width: 2.0
+mm_nonbond_mode: jax_mic
+charmm_mm_pretreat: true
+
+allow_high_grms: true
+no_scale_max_grms: true
+max_grms_before_dyn: 50.0
+mlpot_registration_max_grms: 500.0
+no_echeck_heat: true
+
+default_heat_thermostat: bussi
+ps_heat: 1.0
+n_heat_segments: 1
+heat_firstt: 10.0
+heat_thermostats: []
+
+pycharmm_equi_ps: 20.0
+pycharmm_equi_legs: 1
+pycharmm_prod_ps: 50.0
+pycharmm_prod_legs: 1
+
+ml_gpu_count: 1
+ml_batch_size: 128
+
+slurm_small_cluster_max_n: 30
+slurm_max_concurrent_fast: 4
+slurm_max_concurrent_slow: 2
+slurm_partition: gpu
+slurm_nodes: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 8000
+slurm_runtime_min: 1440
+slurm_gpu_nodes_fast:
+  - gpu08
+  - gpu09
+  - gpu10
+  - gpu11
+
+bulk_ramp:
+  enabled: true
+  # Sparse mini+heat handoff source (config.prep_sweep.yaml variant).
+  sparse_variant: baseline
+
+prep_sweep:
+  enabled: true
+  stages: mini,heat
+  full_dynamics: false
+  placement_seed_ignore_heat: true
+  anchor:
+    setup_id: resilient
+    solvent: DCM
+    n_monomers: 52
+    box_size: 38.0
+    temperature: 50.0
+    heat_thermostat: bussi
+  variants:
+    # 0.25× bulk (~0.33 g/cm³, L≈28 Å after MC compress)
+    compress_025:
+      bulk_ramp_compress: true
+      bulk_density_fraction: 0.25
+      liquid_prep_staged_density_fraction: 0.25
+      rebuild_packmol: false
+      enable_dynamics: true
+      dynamics_legs:
+        pycharmm_equi: true
+        pycharmm_prod: true
+    # 0.50× bulk (~0.66 g/cm³)
+    compress_050:
+      bulk_ramp_compress: true
+      bulk_density_fraction: 0.50
+      liquid_prep_staged_density_fraction: 0.50
+      rebuild_packmol: false
+      enable_dynamics: true
+      dynamics_legs:
+        pycharmm_equi: true
+        pycharmm_prod: true
+    # 0.75× bulk (~1.0 g/cm³)
+    compress_075:
+      bulk_ramp_compress: true
+      bulk_density_fraction: 0.75
+      liquid_prep_staged_density_fraction: 0.75
+      rebuild_packmol: false
+      enable_dynamics: true
+      dynamics_legs:
+        pycharmm_equi: true
+        pycharmm_prod: true
+      pycharmm_prod_ps: 75.0
+    # 1.00× bulk liquid (~1.33 g/cm³, L≈18 Å)
+    compress_100:
+      bulk_ramp_compress: true
+      bulk_density_fraction: 1.00
+      liquid_prep_staged_density_fraction: 1.00
+      rebuild_packmol: false
+      enable_dynamics: true
+      dynamics_legs:
+        pycharmm_equi: true
+        pycharmm_prod: true
+      pycharmm_equi_ps: 30.0
+      pycharmm_prod_ps: 100.0
+      density_prep_ladder_max_rounds: 16
+      mc_density_steps: 768
