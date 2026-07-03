@@ -129,6 +129,17 @@ def test_packmol_repack_falls_back_to_grid_when_binary_missing(monkeypatch):
     assert np.linalg.norm(out[2:] - pos[2:]) > 0.1
 
 
+def test_resolve_packmol_tolerance_honors_large_config_value():
+    from mmml.interfaces.pycharmmInterface.packmol_repack import _resolve_packmol_tolerance
+
+    tol = _resolve_packmol_tolerance(
+        min_distance=2.3,
+        spacing=5.0,
+        packmol_tolerance=5.0,
+    )
+    assert tol == pytest.approx(5.0)
+
+
 def test_overlap_guard_repack_fn_uses_packmol_module():
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
         _repack_monomers_clear_overlap_fn,
