@@ -735,6 +735,120 @@ def nonbonded_energy_and_forces(
     return components, forces
 
 
+@dataclass(frozen=True, slots=True)
+class NonbondedPairDecomposition:
+    """Per-pair MIC nonbonded contributions (kcal/mol) aligned with ``pair_i``/``pair_j``."""
+
+    pair_i: np.ndarray
+    pair_j: np.ndarray
+    r_A: np.ndarray
+    vdw_kcal: np.ndarray
+    elec_kcal: np.ndarray
+
+    @property
+    def n_pairs(self) -> int:
+        return int(self.pair_i.shape[0])
+
+    def totals(self) -> dict[str, float]:
+        return {
+            "vdw": float(np.sum(self.vdw_kcal)),
+            "elec": float(np.sum(self.elec_kcal)),
+            "total": float(np.sum(self.vdw_kcal) + np.sum(self.elec_kcal)),
+        }
+
+
+def decompose_nonbonded_pair_energies(
+    positions: Array | np.ndarray,
+    nbond_data: NonbondedSystemData,
+    cell: Array | np.ndarray,
+    settings: CharmmNbondSettings,
+    *,
+    pair_i: np.ndarray | None = None,
+    pair_j: np.ndarray | None = None,
+    lr_solver: str | None = None,
+) -> NonbondedPairDecomposition:
+    """Return per-pair switched VDW and Coulomb energies (MIC, ``lr_solver=mic`` only)."""
+    if pick_lr_solver(lr_solver) == "jax_pme":
+        raise ValueError("decompose_nonbonded_pair_energies supports lr_solver=mic only")
+    pos = jnp.asarray(positions, dtype=jnp.float64)
+    cell_j = jnp.asarray(cell, dtype=jnp.float64)
+    if cell_j.ndim == 1 and cell_j.shape[0] == 3:
+        cell_j = jnp.diag(cell_j)
+
+    excluded_pairs = nbond_data.excluded_pairs
+    if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
+        excluded_pairs = resolve_nonbonded_excluded_pairs(
+            nbond_data.psf_path,
+            nbond_data.psf_bonds,
+            natom=int(np.asarray(nbond_data.charges).shape[0]),
+        )
+
+    if pair_i is None or pair_j is None:
+        host_i, host_j = _build_pair_indices(
+            np.asarray(positions),
+            np.asarray(cell),
+            excluded_pairs,
+            settings.cutnb,
+        )
+        pair_i = host_i
+        pair_j = host_j
+
+    pi = jnp.asarray(pair_i, dtype=jnp.int32)
+    pj = jnp.asarray(pair_j, dtype=jnp.int32)
+
+    e14_scale_np = np.ones(len(pair_i), dtype=np.float64)
+    vdw14_scale_np = np.ones(len(pair_i), dtype=np.float64)
+    for k, (i, j) in enumerate(zip(pair_i, pair_j, strict=True)):
+        if (int(i), int(j)) in nbond_data.e14_pairs:
+            e14_scale_np[k] = settings.e14fac
+            vdw14_scale_np[k] = settings.vdw14fac
+
+    q = jnp.asarray(nbond_data.charges, dtype=jnp.float64)
+    eps_tbl = jnp.asarray(nbond_data.epsilon, dtype=jnp.float64)
+    rm_tbl = jnp.asarray(nbond_data.rmin, dtype=jnp.float64)
+    e14_scale = jnp.asarray(e14_scale_np, dtype=jnp.float64)
+    vdw14_scale = jnp.asarray(vdw14_scale_np, dtype=jnp.float64)
+    vfswitch_coeffs = charmm_vfswitch_coeffs(settings)
+    fswitch_coeffs = charmm_fswitch_coeffs(settings)
+    c2of = settings.c2ofnb
+
+    ri = pos[pi]
+    rj = pos[pj]
+    disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j))(ri, rj)
+    r = jnp.linalg.norm(disp, axis=-1)
+    r_sq = r * r
+    within_ctof = r_sq < c2of
+
+    ep_i = eps_tbl[pi]
+    ep_j = eps_tbl[pj]
+    rm_i = rm_tbl[pi]
+    rm_j = rm_tbl[pj]
+    sig = rm_i + rm_j
+    ep = _pair_lj_epsilon(ep_i, ep_j)
+    qq = q[pi] * q[pj] * e14_scale / settings.eps
+
+    vdw = _pair_vdw_energy(
+        r,
+        ep,
+        sig,
+        settings,
+        vfswitch_coeffs,
+        use_jax_pme_dispersion=False,
+    )
+    vdw = vdw * vdw14_scale
+    elec = _pair_elec_energy(r, qq, settings, fswitch_coeffs)
+    vdw = jnp.where(within_ctof, vdw, 0.0)
+    elec = jnp.where(within_ctof, elec, 0.0)
+
+    return NonbondedPairDecomposition(
+        pair_i=np.asarray(pair_i, dtype=np.int32),
+        pair_j=np.asarray(pair_j, dtype=np.int32),
+        r_A=np.asarray(r, dtype=np.float64),
+        vdw_kcal=np.asarray(vdw, dtype=np.float64),
+        elec_kcal=np.asarray(elec, dtype=np.float64),
+    )
+
+
 def mm_system_energy_and_forces(
     positions: Array | np.ndarray,
     bonded_system: CgenffBondedSystem,

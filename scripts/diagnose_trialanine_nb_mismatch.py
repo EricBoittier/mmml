@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
-"""Diagnose JAX vs PyCHARMM nonbonded mismatch for TRIA water box."""
+"""Diagnose JAX MIC vs PyCHARMM nonbonded mismatch for the TRIA water box.
+
+Writes metrics tables, JSON, and matplotlib plots — not just scalar deltas.
+
+Examples (CHARMM node)::
+
+    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
+      -o artifacts/trialanine_nb_parity
+
+    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
+      -o /tmp/tria_diag --perturb-seed 31 --no-build --workdir /tmp/tria_box
+"""
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -19,123 +31,117 @@ def _perturb(pos: np.ndarray, seed: int) -> np.ndarray:
     return pos + rng.normal(scale=0.02, size=pos.shape)
 
 
-def _charmm_nb_components() -> dict[str, float]:
-    import pycharmm.energy as energy
-
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
-        charmm_bonded_energy_components_kcalmol,
-        charmm_nonbonded_energy_components_kcalmol,
-        run_charmm_bonded_ener_force,
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="JAX MIC vs PyCHARMM nonbonded parity report (metrics + plots)",
     )
-
-    run_charmm_bonded_ener_force(silent=True)
-    bonded = charmm_bonded_energy_components_kcalmol()
-    nb = charmm_nonbonded_energy_components_kcalmol()
-    return {
-        "bonded_total": bonded["total"],
-        "urey": bonded.get("urey", 0.0),
-        "vdw": nb["vdw"],
-        "elec": nb["elec"],
-        "nb_total": nb["total"],
-        "ener_total": float(energy.get_total()),
-    }
-
-
-def _jax_components(pos, box) -> dict[str, float]:
-    import jax.numpy as jnp
-
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
-        CharmmNbondSettings,
-        bonded_energy_and_forces,
-        load_bonded_system_from_psf,
-        load_nonbonded_system_from_charmm,
-        nonbonded_energy_and_forces,
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        type=Path,
+        default=Path("artifacts/trialanine_nb_parity"),
+        help="Write report.md, report.json, and PNG plots here",
     )
-
-    bonded = load_bonded_system_from_psf(
-        box.psf_path,
-        pos,
-        prm_file=box.cgenff_prm,
-        extra_prm_files=box.cmap_extra_prm_files,
+    parser.add_argument("--seed", type=int, default=11, help="Box build RNG seed")
+    parser.add_argument(
+        "--perturb-seed",
+        type=int,
+        default=31,
+        help="Gaussian coordinate perturbation seed (matches functionality test)",
     )
-    nb = load_nonbonded_system_from_charmm(box.psf_path, box.cgenff_prm)
-    cuts = box.nbond_cutoffs
-    settings = CharmmNbondSettings(
-        cutnb=float(cuts.cutnb),
-        ctonnb=float(cuts.ctonnb),
-        ctofnb=float(cuts.ctofnb),
+    parser.add_argument("--n-waters", type=int, default=10)
+    parser.add_argument("--box-side-A", type=float, default=28.0)
+    parser.add_argument(
+        "--workdir",
+        type=Path,
+        default=None,
+        help="CHARMM scratch for box build (default: output-dir/charmm_work)",
     )
-    bc, _ = bonded_energy_and_forces(
-        jnp.asarray(pos), bonded.topology, bonded.bonded, energy_unit="kcal/mol"
+    parser.add_argument(
+        "--no-build",
+        action="store_true",
+        help="Reuse PSF/coordinates from --workdir (must exist)",
     )
-    nc, _ = nonbonded_energy_and_forces(pos, nb, box.cell, settings)
-    return {
-        "bonded_total": float(bc["total"]),
-        "vdw": float(nc["vdw"]),
-        "elec": float(nc["elec"]),
-        "nb_total": float(nc["total"]),
-        "n_excl": len(nb.excluded_pairs),
-        "n_e14": len(nb.e14_pairs),
-        "n_pairs": len(
-            __import__(
-                "mmml.interfaces.pycharmmInterface.mm_system_energy",
-                fromlist=["_build_pair_indices"],
-            )._build_pair_indices(pos, box.cell, nb.excluded_pairs, settings.cutnb)[0]
-        ),
-    }
-
-
-def _reapply_nbonds(box, *, vfswitch: bool) -> None:
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
-
-    cuts = box.nbond_cutoffs
-    kw = cuts.as_pbc_nbond_kwargs(nbxmod=5)
-    kw["vfswitch"] = vfswitch
-    kw["fswitch"] = True
-    apply_nbonds_kwargs(kw, rebuild=True)
+    parser.add_argument("--top-n-pairs", type=int, default=20)
+    return parser.parse_args()
 
 
 def main() -> int:
-    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    args = _parse_args()
+    os.environ.setdefault("MMML_LR_SOLVER", "mic")
 
-    ensure_pycharmm_loaded()
-    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import set_charmm_positions
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from mmml.interfaces.pycharmmInterface.trialanine_nb_parity import (
+        collect_and_render_trialanine_nb_parity,
+        render_markdown_report,
+    )
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
         build_trialanine_water_box_in_charmm,
+        have_trialanine_cgenff,
     )
 
-    os.environ.setdefault("MMML_LR_SOLVER", "mic")
-    workdir = Path("/tmp/tria_nb_diag")
-    box = build_trialanine_water_box_in_charmm(
-        n_waters=10, box_side_A=28.0, seed=11, workdir=workdir
+    if not ensure_pycharmm_loaded():
+        print("PyCHARMM not available", file=sys.stderr)
+        return 2
+    if not have_trialanine_cgenff():
+        print("Bundled TRIA RTF missing", file=sys.stderr)
+        return 2
+
+    out_dir = args.output_dir.expanduser().resolve()
+    workdir = (args.workdir or out_dir / "charmm_work").resolve()
+
+    if args.no_build:
+        from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+            charmm_positions_xyz_array,
+        )
+
+        psf = workdir / "trialanine-water.psf"
+        if not psf.is_file():
+            print(f"Missing PSF at {psf}; run without --no-build first", file=sys.stderr)
+            return 2
+        # Minimal box-like namespace for parity collector
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
+        from mmml.interfaces.pycharmmInterface.nbonds_config import pbc_nbond_cutoffs
+        from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+            trialanine_cgenff_rtf_path,
+            trialanine_cmap_extra_prm_files,
+        )
+
+        class _Box:
+            pass
+
+        box = _Box()
+        box.psf_path = psf
+        box.positions = charmm_positions_xyz_array()
+        box.cell = np.diag([args.box_side_A] * 3)
+        box.nbond_cutoffs = pbc_nbond_cutoffs(args.box_side_A)
+        box.cgenff_prm = CGENFF_PRM
+        box.cmap_extra_prm_files = trialanine_cmap_extra_prm_files()
+        box.peptide_rtf = trialanine_cgenff_rtf_path()
+        box.n_waters = args.n_waters
+        box.box_side_A = args.box_side_A
+        box.seed = args.seed
+    else:
+        box = build_trialanine_water_box_in_charmm(
+            n_waters=args.n_waters,
+            box_side_A=args.box_side_A,
+            seed=args.seed,
+            workdir=workdir,
+        )
+
+    pos = _perturb(box.positions, seed=args.perturb_seed)
+    report = collect_and_render_trialanine_nb_parity(
+        box,
+        pos,
+        out_dir,
+        perturb_seed=args.perturb_seed,
+        top_n_pairs=args.top_n_pairs,
     )
-    pos = _perturb(box.positions, seed=31)
-    set_charmm_positions(pos)
-    apply_charmm_mm_block()
 
-    jax = _jax_components(pos, box)
-    print("=== JAX (fswitch-style switch on VDW + elec) ===")
-    for k, v in jax.items():
-        print(f"  {k}: {v}")
-
-    for vfswitch in (True, False):
-        _reapply_nbonds(box, vfswitch=vfswitch)
-        ch = _charmm_nb_components()
-        label = "vfswitch ON" if vfswitch else "vfswitch OFF"
-        print(f"\n=== CHARMM ({label}) ===")
-        for k, v in ch.items():
-            print(f"  {k}: {v}")
-        print(
-            f"  delta nb vs JAX: vdw {ch['vdw']-jax['vdw']:+.3f}, "
-            f"elec {ch['elec']-jax['elec']:+.3f}, "
-            f"nb {ch['nb_total']-jax['nb_total']:+.3f}"
-        )
-        print(
-            f"  delta total (bonded+nb): "
-            f"{(ch['bonded_total']+ch['nb_total'])-(jax['bonded_total']+jax['nb_total']):+.3f}"
-        )
-
+    print(render_markdown_report(report))
+    print(f"Wrote {out_dir / 'report.md'}")
+    print(f"Wrote {out_dir / 'report.json'}")
+    print(f"Plots in {out_dir}/ (*.png)")
     return 0
 
 

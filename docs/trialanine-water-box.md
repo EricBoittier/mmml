@@ -65,9 +65,25 @@ The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` compa
 **does not pass** at tight tolerance (~10–15 kcal/mol on a 72-atom box). The box build
 and **bonded** cross-check are fine; the gap is in **nonbonded** implementation parity.
 
-Run the diagnostic locally::
+Run the parity report (metrics tables, JSON, and PNG plots)::
 
-    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py
+    ./scripts/mmml-charmm-mpirun.sh python scripts/diagnose_trialanine_nb_mismatch.py \\
+      -o artifacts/trialanine_nb_parity
+
+Outputs under ``artifacts/trialanine_nb_parity/``:
+
+| File | Contents |
+|------|----------|
+| ``report.md`` | Per-term CHARMM vs JAX table, pair-list stats, top offending pairs |
+| ``report.json`` | Machine-readable metrics (CI / regression tracking) |
+| ``term_comparison.png`` | Grouped bar: bonded, VDW, elec, total |
+| ``delta_breakdown.png`` | JAX−CHARMM ΔVDW, ΔElec, ΔMM |
+| ``jax_nb_by_category.png`` | JAX VDW+elec stacked by pep–pep / pep–water / water–water |
+| ``pair_distance_hist.png`` | MIC distance histograms per category (ctonnb/ctofnb marked) |
+| ``top_pep_pep_vdw.png`` | Largest peptide–peptide VDW pair contributors (JAX) |
+
+The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` is marked
+**xfail** (regression target). Use the report above to see *where* the gap lives.
 
 ### What we ruled out
 

@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     CharmmFswitchCoeffs,
     CharmmNbondSettings,
     CharmmVfswitchCoeffs,
+    NonbondedSystemData,
     _pair_lj_epsilon,
     charmm_fshift_elec,
     charmm_fswitch_coeffs,
@@ -21,9 +22,11 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     charmm_switch_factor,
     charmm_vfswitch_coeffs,
     charmm_vfswitch_vdw,
+    decompose_nonbonded_pair_energies,
     excluded_pairs_from_psf_bonds,
     excluded_pairs_from_psf_nnb,
     fully_excluded_pairs,
+    nonbonded_energy_and_forces,
     one_four_pairs_from_bonds,
 )
 
@@ -318,3 +321,29 @@ def test_vdw14fac_scales_one_four_lj_only() -> None:
     )
     assert full != 0.0
     assert full * settings.vdw14fac == pytest.approx(0.0)
+
+
+def test_decompose_nonbonded_pair_energies_matches_aggregate() -> None:
+    rng = np.random.default_rng(0)
+    n = 8
+    pos = rng.normal(size=(n, 3)) * 3.0
+    cell = np.diag([20.0, 20.0, 20.0])
+    bonds = np.asarray([[0, 1], [1, 2], [2, 3]], dtype=np.int32)
+    excluded = excluded_pairs_from_psf_bonds(bonds)
+    e14 = one_four_pairs_from_bonds(bonds, n) - excluded
+    nbond = NonbondedSystemData(
+        charges=rng.normal(size=n) * 0.2,
+        at_codes=np.zeros(n, dtype=np.int32),
+        epsilon=np.abs(rng.normal(size=n) * 0.1) + 0.05,
+        rmin=np.abs(rng.normal(size=n)) + 1.5,
+        excluded_pairs=excluded,
+        e14_pairs=e14,
+        psf_path=None,
+        psf_bonds=None,
+    )
+    settings = CharmmNbondSettings(cutnb=12.0, ctonnb=8.0, ctofnb=10.0)
+    comp, _ = nonbonded_energy_and_forces(pos, nbond, cell, settings)
+    decomp = decompose_nonbonded_pair_energies(pos, nbond, cell, settings)
+    totals = decomp.totals()
+    assert totals["vdw"] == pytest.approx(float(comp["vdw"]), rel=1e-10, abs=1e-10)
+    assert totals["elec"] == pytest.approx(float(comp["elec"]), rel=1e-10, abs=1e-10)
