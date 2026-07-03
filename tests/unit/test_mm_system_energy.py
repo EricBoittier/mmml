@@ -283,6 +283,29 @@ def test_pair_lj_epsilon_uses_abs_product() -> None:
     assert float(got[1]) == pytest.approx(0.0)
 
 
+def test_resolve_nonbonded_excluded_pairs_prefers_psf_iblo_inb() -> None:
+    from pathlib import Path
+
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        excluded_pairs_from_psf_bonds,
+        resolve_nonbonded_excluded_pairs,
+    )
+
+    psf = Path("tests/functionality/mlpot/output/minimize/mini_full_mlpot.psf")
+    if not psf.is_file():
+        pytest.skip("mini_full_mlpot.psf fixture missing")
+    data = parse_psf_ext(psf)
+    resolved = resolve_nonbonded_excluded_pairs(
+        psf,
+        data.bonds,
+        natom=data.n_atoms,
+    )
+    bond_only = excluded_pairs_from_psf_bonds(data.bonds)
+    assert len(resolved) > len(bond_only)
+    assert len(resolved) >= 170
+
+
 def test_excluded_pairs_from_psf_nnb_mini_mlpot_fixture() -> None:
     from pathlib import Path
 

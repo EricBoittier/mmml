@@ -115,9 +115,11 @@ On a simpler **2× ACO** PBC dimer (MIC, ``lr_solver=mic``): VDW Δ ≈ +2 kcal/
    declares ``fshift`` for elec, but PyCHARMM runtime uses ``fswitch``; residual energy gaps
    are dominated by pair-list / IMAGE differences, not the switch functional form. See
    [CHARMM CGenFF JAX clone](cgenff-jax-clone.md#nonbonded-switching-mm_system_energypy).
-2. **Pair list / IMAGE** — JAX builds an O(N²) MIC list from PSF bond exclusions (PyCHARMM
-   ``get_iblo_inb()`` returns ``nnb=0`` here, so bond-graph 1–2/1–3 exclusions are used).
-   CHARMM uses IMAGE neighbor lists; small residual differences remain even when exclusions look correct.
+2. **Pair list / IMAGE** — JAX builds an O(N²) MIC list using PSF ``INB``/``IBLO``
+   exclusions (written after ``upinb`` at box build).  Prior to 2026-07, ``parse_psf_ext``
+   mis-read the flat ``INB`` array as a packed per-atom list and ignored ``IBLO``; that
+   under-excluded peptide pairs and inflated JAX VDW.  Small residual IMAGE differences may
+   remain even when exclusions match.
 3. **Single ``RESI TRIA`` (42 atoms)** — All peptide atoms share one residue; CHARMM and JAX
    agree on graph-distance ≥3 pairs, but CHARMM net intra-peptide VDW is much smaller than JAX.
 4. **Long-range backend** — default ``lr_solver`` is **MIC** (truncated pair loop). For CHARMM

@@ -410,12 +410,42 @@ def compare_mm_system_to_charmm(
     ignored = sum(float(charmm_bonded.get(t, 0.0)) for t in ignore_charmm_bonded_terms)
     charmm_total = float(energy.get_total()) - ignored
 
+    jax_bonded = float(result.bonded.get("total", sum(result.bonded.values())))
+    jax_nb = float(result.nonbonded.get("total", 0.0))
+
+    np.testing.assert_allclose(
+        jax_bonded,
+        float(charmm_bonded.get("total", 0.0)) - ignored,
+        rtol=energy_rtol,
+        atol=energy_atol,
+        err_msg=(
+            "bonded MM energy mismatch vs PyCHARMM "
+            f"(jax={jax_bonded:.4f}, charmm={charmm_bonded.get('total', 0.0):.4f})"
+        ),
+    )
+    for key in ("vdw", "elec", "total"):
+        np.testing.assert_allclose(
+            float(result.nonbonded[key]),
+            float(charmm_nb[key]),
+            rtol=energy_rtol,
+            atol=energy_atol,
+            err_msg=(
+                f"nonbonded energy mismatch for {key} "
+                f"(jax={float(result.nonbonded[key]):.4f}, "
+                f"charmm={float(charmm_nb[key]):.4f})"
+            ),
+        )
+
     np.testing.assert_allclose(
         result.total_energy,
         charmm_total,
         rtol=energy_rtol,
         atol=energy_atol,
-        err_msg="total MM energy mismatch vs PyCHARMM",
+        err_msg=(
+            "total MM energy mismatch vs PyCHARMM "
+            f"(jax={result.total_energy:.4f}, charmm={charmm_total:.4f}, "
+            f"jax_bonded={jax_bonded:.4f}, jax_nb={jax_nb:.4f})"
+        ),
     )
     charmm_forces = charmm_total_forces_kcalmol_A()
     np.testing.assert_allclose(
