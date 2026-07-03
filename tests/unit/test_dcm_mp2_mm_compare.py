@@ -14,9 +14,11 @@ from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
     MmFrameResult,
     aggregate_comparison,
     apply_atom_permutation,
+    com_binned_force_rmse,
     compare_mm_to_mp2_frame,
     dcm_dimer_com_distance_A,
     forces_kcal_to_ev,
+    hybrid_calculator_pairwise_summary,
     load_monomer_mean_energy_eV,
     load_mp2_frames,
     parse_monomer_permutation,
@@ -201,3 +203,34 @@ def test_compare_hybrid_metrics_in_frame_and_summary() -> None:
     assert row["hybrid_hybrid_ml_interaction_delta_eV"] == pytest.approx(0.03, abs=1e-12)
     summary = aggregate_comparison([row])
     assert summary["hybrid_hybrid_ml_mp2_force_rmse_ev_A"]["n"] == 1
+
+
+def test_com_binned_force_rmse_and_pairwise_summary() -> None:
+    rows = []
+    for i, (com, rmse_c, rmse_h) in enumerate(
+        [
+            (4.0, 0.10, 0.10),
+            (5.0, 0.20, 0.21),
+            (7.0, 0.15, 0.15),
+            (12.0, 0.30, 0.28),
+        ]
+    ):
+        rows.append(
+            {
+                "source_index": i,
+                "dimer_com_distance_A": com,
+                "hybrid_checkpoint_mp2_force_rmse_ev_A": rmse_c,
+                "hybrid_hybrid_ml_mp2_force_rmse_ev_A": rmse_h,
+                "hybrid": {"checkpoint": {}, "hybrid-ml": {}},
+            }
+        )
+    bins = com_binned_force_rmse(rows, "hybrid_hybrid_ml_mp2_force_rmse_ev_A")
+    assert len(bins) >= 2
+    assert bins[0]["com_bin_label"] == "[0,6)"
+    pair = hybrid_calculator_pairwise_summary(rows, "checkpoint", "hybrid-ml")
+    assert pair is not None
+    assert pair["n"] == 4
+    assert pair["max_abs_delta_ev_A"] == pytest.approx(0.02, abs=1e-12)
+    summary = aggregate_comparison(rows)
+    assert "hybrid_hybrid_ml_com_binned_rmse_ev_A" in summary
+    assert "hybrid_checkpoint_vs_hybrid_ml" in summary

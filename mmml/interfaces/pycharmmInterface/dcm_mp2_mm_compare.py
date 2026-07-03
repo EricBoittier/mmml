@@ -786,7 +786,7 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 if key not in r or not np.isfinite(r[key]):
                     continue
                 rmse_vals.append(float(r[key]))
-                if com_key := "dimer_com_distance_A" in r:
+                if "dimer_com_distance_A" in r:
                     com_vals.append(float(r["dimer_com_distance_A"]))
             if len(rmse_vals) >= 2 and len(com_vals) == len(rmse_vals):
                 summary[f"hybrid_{slug}_corr_com_rmse"] = float(
