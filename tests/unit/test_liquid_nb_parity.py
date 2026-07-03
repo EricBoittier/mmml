@@ -8,6 +8,7 @@ import pytest
 from mmml.interfaces.pycharmmInterface.liquid_nb_parity import (
     CategoryNonbondedTotals,
     _aggregate_liquid_by_category,
+    aggregate_tip3_oo_inter_pairs,
     classify_liquid_pair_categories,
     classify_liquid_pair_category,
     diagnose_inter_monomer_vdw,
@@ -65,3 +66,23 @@ def test_diagnose_inter_monomer_vdw() -> None:
     diag = diagnose_inter_monomer_vdw(-1.0, by_cat)
     assert diag.charmm_implied_inter_vdw_kcal == pytest.approx(-1.2)
     assert diag.inter_vdw_delta_kcal == pytest.approx(3.6)
+
+
+class _OoDecomp:
+    def __init__(self) -> None:
+        self.pair_i = np.array([0, 0, 3, 3], dtype=np.int32)
+        self.pair_j = np.array([1, 3, 6, 9], dtype=np.int32)
+        self.r_A = np.array([2.8, 3.5, 4.0, 5.5])
+        self.vdw_kcal = np.array([0.0, 1.0, 2.0, -0.5])
+        self.elec_kcal = np.array([0.0, -0.1, -0.2, 0.1])
+
+
+def test_aggregate_tip3_oo_inter_pairs() -> None:
+    decomp = _OoDecomp()
+    mid = np.array([0, 0, 0, 1, 1, 1, 2, 2, 2, 3], dtype=np.int32)
+    cats = classify_liquid_pair_categories(decomp.pair_i, decomp.pair_j, mid)
+    oxy = np.array([True, False, False] * 3 + [True], dtype=bool)[:10]
+    oo = aggregate_tip3_oo_inter_pairs(decomp, cats, oxy, inter_vdw_kcal=2.5)
+    assert oo.n_pairs == 3
+    assert oo.vdw_kcal == pytest.approx(2.5)
+    assert oo.fraction_of_inter_vdw == pytest.approx(1.0)

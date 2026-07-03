@@ -95,6 +95,18 @@ class InterMonomerVdwDiagnosis:
 
 
 @dataclass(frozen=True, slots=True)
+class Tip3OoInterTotals:
+    """Inter-monomer O–O pairs only (TIP3 OT–OT MIC pairs within cutnb)."""
+
+    n_pairs: int
+    vdw_kcal: float
+    elec_kcal: float
+    mean_r_A: float
+    min_r_A: float
+    fraction_of_inter_vdw: float
+
+
+@dataclass(frozen=True, slots=True)
 class LiquidNbParityReport:
     seed: int
     perturb_seed: int
@@ -108,12 +120,91 @@ class LiquidNbParityReport:
     mm_total: TermComparison
     jax_by_category: tuple[CategoryNonbondedTotals, ...]
     inter_monomer_vdw: InterMonomerVdwDiagnosis
+    tip3_oo_inter: Tip3OoInterTotals | None
     top_inter_vdw_pairs: tuple[TopPairRecord, ...]
+    top_oo_vdw_pairs: tuple[TopPairRecord, ...]
     top_intra_vdw_pairs: tuple[TopPairRecord, ...]
     switch_derivative_audits: tuple[PairSwitchAudit, ...]
     force_rms_delta: float
     force_max_delta: float
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def oxygen_atom_mask_from_psf(psf_path: Path | str) -> np.ndarray:
+    """True for CHARMM water oxygens (CGENFF ``OT`` / ``OW`` types)."""
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+
+    psf_data = parse_psf_ext(psf_path)
+    oxygen_types = frozenset({"OT", "OW", "OH"})
+    return np.array(
+        [str(t).strip().upper() in oxygen_types for t in psf_data.atom_types],
+        dtype=bool,
+    )
+
+
+def aggregate_tip3_oo_inter_pairs(
+    decomp: Any,
+    categories: np.ndarray,
+    oxygen_mask: np.ndarray,
+    *,
+    inter_vdw_kcal: float,
+) -> Tip3OoInterTotals:
+    oxy = np.asarray(oxygen_mask, dtype=bool)
+    inter = categories == _LiqCat.INTER.value
+    pi = np.asarray(decomp.pair_i, dtype=np.int32)
+    pj = np.asarray(decomp.pair_j, dtype=np.int32)
+    mask = inter & oxy[pi] & oxy[pj]
+    n = int(np.sum(mask))
+    if n == 0:
+        return Tip3OoInterTotals(0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    r = np.asarray(decomp.r_A[mask], dtype=np.float64)
+    vdw = float(np.sum(decomp.vdw_kcal[mask]))
+    elec = float(np.sum(decomp.elec_kcal[mask]))
+    frac = vdw / float(inter_vdw_kcal) if abs(inter_vdw_kcal) > 1e-12 else 0.0
+    return Tip3OoInterTotals(
+        n_pairs=n,
+        vdw_kcal=vdw,
+        elec_kcal=elec,
+        mean_r_A=float(np.mean(r)),
+        min_r_A=float(np.min(r)),
+        fraction_of_inter_vdw=frac,
+    )
+
+
+def _top_oo_vdw_pairs(
+    decomp: Any,
+    categories: np.ndarray,
+    oxygen_mask: np.ndarray,
+    *,
+    n: int = 10,
+) -> tuple[TopPairRecord, ...]:
+    oxy = np.asarray(oxygen_mask, dtype=bool)
+    inter = categories == _LiqCat.INTER.value
+    pi = np.asarray(decomp.pair_i, dtype=np.int32)
+    pj = np.asarray(decomp.pair_j, dtype=np.int32)
+    mask = inter & oxy[pi] & oxy[pj]
+    if not np.any(mask):
+        return ()
+    sub_i = pi[mask]
+    sub_j = pj[mask]
+    sub_vdw = np.asarray(decomp.vdw_kcal[mask], dtype=np.float64)
+    sub_elec = np.asarray(decomp.elec_kcal[mask], dtype=np.float64)
+    sub_r = np.asarray(decomp.r_A[mask], dtype=np.float64)
+    order = np.argsort(-np.abs(sub_vdw))[:n]
+    records: list[TopPairRecord] = []
+    for rank, k in enumerate(order, start=1):
+        records.append(
+            TopPairRecord(
+                rank=rank,
+                atom_i=int(sub_i[k]) + 1,
+                atom_j=int(sub_j[k]) + 1,
+                category=_LiqCat.INTER.value,
+                r_A=float(sub_r[k]),
+                vdw_kcal=float(sub_vdw[k]),
+                elec_kcal=float(sub_elec[k]),
+            )
+        )
+    return tuple(records)
 
 
 def _aggregate_liquid_by_category(
@@ -244,6 +335,25 @@ def collect_liquid_nb_parity(
     by_cat = _aggregate_liquid_by_category(decomp, categories)
     inter_diag = diagnose_inter_monomer_vdw(charmm_nb["vdw"], by_cat)
 
+    oxygen_mask = oxygen_atom_mask_from_psf(box.psf_path)
+    tip3_oo: Tip3OoInterTotals | None = None
+    top_oo: tuple[TopPairRecord, ...] = ()
+    if int(np.sum(oxygen_mask)) >= 2:
+        tip3_oo = aggregate_tip3_oo_inter_pairs(
+            decomp,
+            categories,
+            oxygen_mask,
+            inter_vdw_kcal=inter_diag.jax_inter_vdw_kcal,
+        )
+        top_oo = _top_oo_vdw_pairs(decomp, categories, oxygen_mask, n=min(top_n_pairs, 15))
+        report_meta_oo = {
+            "tip3_oo_vdw_kcal": tip3_oo.vdw_kcal,
+            "tip3_oo_mean_r_A": tip3_oo.mean_r_A,
+            "tip3_oo_n_pairs": tip3_oo.n_pairs,
+        }
+    else:
+        report_meta_oo = {}
+
     switch_audits: tuple[PairSwitchAudit, ...] = ()
     if run_switch_audit:
         _log(
@@ -262,6 +372,7 @@ def collect_liquid_nb_parity(
         "include_cmap": include_cmap,
         "lr_solver": "mic",
         "inter_monomer_vdw_delta_kcal": inter_diag.inter_vdw_delta_kcal,
+        **report_meta_oo,
     }
     if switch_audits:
         report_meta["switch_vdw_max_dedr_rel_err"] = max(
@@ -292,6 +403,7 @@ def collect_liquid_nb_parity(
         mm_total=_term_comparison("mm_total", charmm_mm_total, jax_mm_total),
         jax_by_category=by_cat,
         inter_monomer_vdw=inter_diag,
+        tip3_oo_inter=tip3_oo,
         top_inter_vdw_pairs=_top_pairs(
             decomp,
             categories,
@@ -299,6 +411,7 @@ def collect_liquid_nb_parity(
             n=top_n_pairs,
             category_filter=_LiqCat.INTER.value,
         ),
+        top_oo_vdw_pairs=top_oo,
         top_intra_vdw_pairs=_top_pairs(
             decomp,
             categories,
@@ -374,6 +487,26 @@ def render_liquid_markdown_report(report: LiquidNbParityReport) -> str:
             f"| {row.category} | {row.n_pairs} | {row.vdw_kcal:.4f} | "
             f"{row.elec_kcal:.4f} | {row.total_kcal:.4f} | {row.mean_r_A:.2f} |"
         )
+    if report.tip3_oo_inter is not None and report.tip3_oo_inter.n_pairs > 0:
+        oo = report.tip3_oo_inter
+        lines.extend(
+            [
+                "",
+                "## TIP3 O–O inter-monomer pairs (JAX)",
+                "",
+                "Oxygen–oxygen MIC pairs between different waters (``OT`` types only). "
+                "For TIP3-only boxes this is the VDW-relevant subset of inter-monomer pairs.",
+                "",
+                "| Quantity | Value |",
+                "|----------|-------|",
+                f"| n O–O pairs | {oo.n_pairs} |",
+                f"| VDW | {oo.vdw_kcal:.4f} kcal/mol |",
+                f"| Elec | {oo.elec_kcal:.4f} kcal/mol |",
+                f"| ⟨r⟩ | {oo.mean_r_A:.2f} Å |",
+                f"| min r | {oo.min_r_A:.2f} Å |",
+                f"| Share of inter VDW | {oo.fraction_of_inter_vdw:.1%} |",
+            ]
+        )
     if report.switch_derivative_audits:
         lines.extend(
             [
@@ -407,12 +540,29 @@ def render_liquid_markdown_report(report: LiquidNbParityReport) -> str:
                 f"| {row.rank} | {row.atom_i}–{row.atom_j} | {row.r_A:.3f} | "
                 f"{row.vdw_kcal:.4f} | {row.elec_kcal:.4f} |"
             )
+    if report.top_oo_vdw_pairs:
+        lines.extend(
+            [
+                "",
+                "## Top O–O inter-monomer VDW pairs (JAX)",
+                "",
+                "| rank | atoms (1-based) | r Å | VDW | Elec |",
+                "|------|-----------------|-----|-----|------|",
+            ]
+        )
+        for row in report.top_oo_vdw_pairs[:10]:
+            lines.append(
+                f"| {row.rank} | {row.atom_i}–{row.atom_j} | {row.r_A:.3f} | "
+                f"{row.vdw_kcal:.4f} | {row.elec_kcal:.4f} |"
+            )
     return "\n".join(lines) + "\n"
 
 
 def render_liquid_json_report(report: LiquidNbParityReport) -> str:
     payload = asdict(report)
     payload["inter_monomer_vdw"] = asdict(report.inter_monomer_vdw)
+    if report.tip3_oo_inter is not None:
+        payload["tip3_oo_inter"] = asdict(report.tip3_oo_inter)
     return json.dumps(payload, indent=2, default=str) + "\n"
 
 
@@ -421,6 +571,8 @@ def render_liquid_parity_plots(
     decomp: Any,
     categories: np.ndarray,
     out_dir: Path | str,
+    *,
+    oxygen_mask: np.ndarray | None = None,
 ) -> list[Path]:
     try:
         import matplotlib.pyplot as plt
@@ -525,6 +677,29 @@ def render_liquid_parity_plots(
         plt.close(fig)
         written.append(p)
 
+    if oxygen_mask is not None and report.tip3_oo_inter is not None:
+        oxy = np.asarray(oxygen_mask, dtype=bool)
+        inter = categories == _LiqCat.INTER.value
+        pi = np.asarray(decomp.pair_i, dtype=np.int32)
+        pj = np.asarray(decomp.pair_j, dtype=np.int32)
+        oo_mask = inter & oxy[pi] & oxy[pj]
+        if np.any(oo_mask):
+            fig, ax = plt.subplots(figsize=(5, 3))
+            ax.hist(decomp.r_A[oo_mask], bins=30, alpha=0.8, color="#4c72b0")
+            ax.axvline(report.pair_stats.ctonnb_A, color="g", ls="--", label="ctonnb")
+            ax.axvline(report.pair_stats.ctofnb_A, color="r", ls="--", label="ctofnb")
+            ax.set_xlabel("O–O MIC distance (Å)")
+            ax.set_ylabel("pair count")
+            ax.set_title(
+                f"O–O inter VDW sum = {report.tip3_oo_inter.vdw_kcal:.3f} kcal/mol"
+            )
+            ax.legend(fontsize=8)
+            fig.tight_layout()
+            p = out / "oo_inter_distance_hist.png"
+            fig.savefig(p, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            written.append(p)
+
     return written
 
 
@@ -571,6 +746,9 @@ def collect_and_render_liquid_nb_parity(
     _log("Writing report and plots...", verbose=verbose)
     (out / "report.md").write_text(render_liquid_markdown_report(report), encoding="utf-8")
     (out / "report.json").write_text(render_liquid_json_report(report), encoding="utf-8")
-    plot_paths = render_liquid_parity_plots(report, decomp, categories, out)
+    oxy_mask = oxygen_atom_mask_from_psf(box.psf_path)
+    plot_paths = render_liquid_parity_plots(
+        report, decomp, categories, out, oxygen_mask=oxy_mask
+    )
     (out / "plots.txt").write_text("\n".join(str(p) for p in plot_paths) + "\n", encoding="utf-8")
     return report
