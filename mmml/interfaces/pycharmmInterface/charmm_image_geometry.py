@@ -9,7 +9,10 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+from mmml.utils.intermonomer_geometry import (
+    DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A,
+    DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
+)
 
 _MKIMAT2_MARKER = "<MKIMAT2>"
 _MKIMAT2_ROW_RE = re.compile(
@@ -224,8 +227,27 @@ def _probe_command_via_charmm_log_file(command: str) -> str:
     return text
 
 
-def run_charmm_image_probe_log() -> str:
-    """Force IMAGE remap and collect ``<MKIMAT2>`` output (file redirect + fd capture)."""
+def run_charmm_post_bimag_image_probe_log() -> str:
+    """Collect ``<MKIMAT2>`` after ``update_bimag`` (ENER rebuilds IMAGE tables)."""
+    chunks: list[str] = []
+    for command in ("ener", "update"):
+        file_log = _probe_command_via_charmm_log_file(command)
+        if file_log:
+            chunks.append(file_log)
+        if parse_mkimat2_min_distances("\n".join(chunks)):
+            return "\n".join(chunks)
+        capture_log = _run_charmm_script_capture_fortran(command.upper(), replay=True)
+        if capture_log:
+            chunks.append(capture_log)
+        if parse_mkimat2_min_distances("\n".join(chunks)):
+            return "\n".join(chunks)
+    return "\n".join(chunks)
+
+
+def run_charmm_image_probe_log(*, post_bimag: bool = False) -> str:
+    """Collect ``<MKIMAT2>`` from CHARMM output (file redirect + fd capture)."""
+    if post_bimag:
+        return run_charmm_post_bimag_image_probe_log()
     _force_charmm_image_remap_for_probe()
     chunks: list[str] = []
 
@@ -263,6 +285,18 @@ def resolve_charmm_image_min_distance_A(
     return float(resolve_pre_mlpot_overlap_min_distance(workflow_args))
 
 
+def resolve_mkimat2_min_distance_A(
+    workflow_args: argparse.Namespace | None,
+) -> float:
+    """Floor for ``<MKIMAT2>`` group Min-Distance (≥ MIC prep; default 3.5 Å)."""
+    if workflow_args is not None:
+        explicit = getattr(workflow_args, "charmm_image_mlpot_min_distance_A", None)
+        if explicit is not None:
+            return float(explicit)
+    mic_floor = resolve_charmm_image_min_distance_A(workflow_args)
+    return max(float(mic_floor), float(DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A))
+
+
 def assert_charmm_image_min_distance_after_update(
     *,
     min_distance_A: float | None = None,
@@ -270,23 +304,29 @@ def assert_charmm_image_min_distance_after_update(
     context: str = "MLpot PBC",
     charmm_log: str | None = None,
     cubic_box_side_A: float | None = None,
+    post_bimag: bool = False,
 ) -> float:
     """Enforce IMAGE Min-Distance before MLpot USER/ENER (MKIMAT2 or MIC fallback)."""
-    floor = (
+    mkimat_floor = (
         float(min_distance_A)
         if min_distance_A is not None
-        else resolve_charmm_image_min_distance_A(workflow_args)
+        else resolve_mkimat2_min_distance_A(workflow_args)
     )
-    log = charmm_log if charmm_log is not None else run_charmm_image_probe_log()
+    mic_floor = resolve_charmm_image_min_distance_A(workflow_args)
+    log = (
+        charmm_log
+        if charmm_log is not None
+        else run_charmm_image_probe_log(post_bimag=post_bimag)
+    )
     if parse_mkimat2_min_distances(log):
         worst = assert_charmm_image_min_distance(
             log,
-            min_distance_A=floor,
+            min_distance_A=mkimat_floor,
             context=context,
         )
         print(
             f"{context}: CHARMM IMAGE Min-Distance OK "
-            f"(worst {worst:.2f} Å, prep floor {floor:.2f} Å; MKIMAT2)",
+            f"(worst {worst:.2f} Å, MKIMAT2 floor {mkimat_floor:.2f} Å)",
             flush=True,
         )
         return worst
@@ -299,6 +339,6 @@ def assert_charmm_image_min_distance_after_update(
     return assert_charmm_image_mic_fallback(
         workflow_args=workflow_args,
         box_side_A=cubic_box_side_A,
-        min_distance_A=floor,
+        min_distance_A=mic_floor,
         context=context,
     )

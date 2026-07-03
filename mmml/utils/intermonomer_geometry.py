@@ -19,6 +19,10 @@ DEFAULT_PRE_MLPOT_H_H_MIN_A = 2.3
 # Hard abort before MLpot SD when hybrid forces are already catastrophic.
 DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A = 50.0
 
+# CHARMM <MKIMAT2> group Min-Distance before MLpot USER (tighter than MIC prep floor).
+# Dense all-ML PBC liquids can pass MIC ~3.0 Å yet still hit GRMS >2000 when MKIMAT2 ≈3.0.
+DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A = 3.5
+
 # Dynamics overlap guard default (CHARMM close-contact scale); looser than vdW sums.
 DYNAMICS_OVERLAP_REFERENCE_A = 1.5
 

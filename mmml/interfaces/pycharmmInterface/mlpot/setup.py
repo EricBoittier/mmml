@@ -1624,12 +1624,20 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     # (not pycharmm.nbonds.update_bnbnd) and only after prepare_charmm_pbc +
     # apply_pbc_nbonds — bare UPDATE after crystal free segfaults in IMAGE VDW.
     with charmm_relaxed_bomlev():
+        pycharmm.lingo.charmm_script("UPDATE")
+    pycharmm.image.update_bimag()
+    rewrap_charmm_coords_for_mlpot_pbc(
+        cubic_box_side_A=side,
+        workflow_args=workflow_args,
+        verbose=verbose,
+    )
+    with charmm_relaxed_bomlev():
         assert_charmm_image_min_distance_after_update(
             workflow_args=workflow_args,
             context="MLpot PBC registration (post-upinb)",
             cubic_box_side_A=side,
+            post_bimag=True,
         )
-    pycharmm.image.update_bimag()
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC upinb during registration",
     )
