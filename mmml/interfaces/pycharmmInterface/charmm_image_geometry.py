@@ -153,6 +153,11 @@ def _force_charmm_image_remap_for_probe() -> None:
     _image_setup_byres_all(0.0, 0.0, 0.0)
 
 
+def capture_charmm_script_output(script: str, *, replay: bool = True) -> str:
+    """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
+    return _run_charmm_script_capture_fortran(script, replay=replay)
+
+
 def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> str:
     """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -228,17 +233,17 @@ def _probe_command_via_charmm_log_file(command: str) -> str:
 
 
 def run_charmm_post_bimag_image_probe_log() -> str:
-    """Collect ``<MKIMAT2>`` after ``update_bimag`` (ENER rebuilds IMAGE tables)."""
+    """Collect ``<MKIMAT2>`` after ``update_bimag`` (UPDATE emits IMAGE tables on fd 1)."""
     chunks: list[str] = []
-    for command in ("ener", "update"):
-        file_log = _probe_command_via_charmm_log_file(command)
-        if file_log:
-            chunks.append(file_log)
-        if parse_mkimat2_min_distances("\n".join(chunks)):
-            return "\n".join(chunks)
+    for command in ("update", "ener"):
         capture_log = _run_charmm_script_capture_fortran(command.upper(), replay=True)
         if capture_log:
             chunks.append(capture_log)
+        if parse_mkimat2_min_distances("\n".join(chunks)):
+            return "\n".join(chunks)
+        file_log = _probe_command_via_charmm_log_file(command)
+        if file_log:
+            chunks.append(file_log)
         if parse_mkimat2_min_distances("\n".join(chunks)):
             return "\n".join(chunks)
     return "\n".join(chunks)

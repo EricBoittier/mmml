@@ -99,6 +99,35 @@ def test_assert_charmm_image_min_distance_after_update_uses_provided_log(monkeyp
     assert called["update"] == 0
 
 
+def test_run_charmm_post_bimag_probe_prefers_fd_capture(monkeypatch):
+    calls: list[str] = []
+
+    def _fake_capture(script: str, *, replay: bool = True) -> str:
+        calls.append(script)
+        if script == "UPDATE":
+            return _SAMPLE_LOG
+        return ""
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
+        _fake_capture,
+    )
+    def _fail_outu_probe(_cmd: str) -> str:
+        raise AssertionError("OUTU probe should not run")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
+        _fail_outu_probe,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        run_charmm_post_bimag_image_probe_log,
+    )
+
+    log = run_charmm_post_bimag_image_probe_log()
+    assert calls == ["UPDATE"]
+    assert parse_mkimat2_min_distances(log) == pytest.approx([6.18, 7.17, 8.93])
+
+
 def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
     calls: list[str] = []
 

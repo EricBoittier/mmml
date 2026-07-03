@@ -2549,6 +2549,8 @@ def prepare_mlpot_hybrid_state_for_sd(
     if getattr(mlpot_ctx, "use_pbc", False) is True:
         from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
             assert_charmm_image_min_distance_after_update,
+            capture_charmm_script_output,
+            parse_mkimat2_min_distances,
         )
         from mmml.interfaces.pycharmmInterface.mlpot.setup import (
             rewrap_charmm_coords_for_mlpot_pbc,
@@ -2562,6 +2564,7 @@ def prepare_mlpot_hybrid_state_for_sd(
             side_f = float(box_side) if box_side is not None else None
         except (TypeError, ValueError):
             side_f = None
+        image_log = ""
         if side_f is not None and side_f > 0.0:
             rewrap_charmm_coords_for_mlpot_pbc(
                 cubic_box_side_A=side_f,
@@ -2576,12 +2579,13 @@ def prepare_mlpot_hybrid_state_for_sd(
             )
 
             with charmm_relaxed_bomlev():
-                pycharmm.lingo.charmm_script("UPDATE")
+                image_log = capture_charmm_script_output("UPDATE", replay=True)
             pycharmm.image.update_bimag()
         assert_charmm_image_min_distance_after_update(
             workflow_args=workflow_args,
             context=f"{context_prefix} CHARMM IMAGE gate",
             cubic_box_side_A=side_f,
+            charmm_log=image_log if side_f is not None and parse_mkimat2_min_distances(image_log) else None,
             post_bimag=True,
         )
 
