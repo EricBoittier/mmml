@@ -36,11 +36,14 @@ def _resolve_packmol_tolerance(
     *,
     min_distance: float,
     spacing: float | None,
+    packmol_tolerance: float | None = None,
 ) -> float:
     candidates = [2.0, float(min_distance)]
     if spacing is not None and float(spacing) > 0.0:
         candidates.append(float(spacing))
-    return float(max(1.0, min(3.0, max(candidates))))
+    if packmol_tolerance is not None and float(packmol_tolerance) > 0.0:
+        candidates.append(float(packmol_tolerance))
+    return float(max(candidates))
 
 
 def _charmm_atom_metadata(n_atoms: int) -> tuple[list[str], np.ndarray] | None:
@@ -237,8 +240,8 @@ def _run_packmol_repack(
 
     print(
         f"Packmol repack ({placement_label}): patched monomers "
-        f"{[i + 1 for i in movable]} "
-        f"(fixed {len(fixed)}, tolerance {float(tolerance):.2f} Å)",
+        f"{sorted(i + 1 for i in movable)} "
+        f"(1-based; fixed {len(fixed)}, tolerance {float(tolerance):.2f} Å)",
         flush=True,
     )
     return new_pos
@@ -259,6 +262,7 @@ def repack_monomers_clear_overlap(
     scratch_dir: Path | str | None = None,
     atom_names: list[str] | None = None,
     atomic_numbers: np.ndarray | None = None,
+    packmol_tolerance: float | None = None,
 ) -> np.ndarray:
     """Repack all monomers with Packmol; fall back to grid placement on failure."""
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -269,7 +273,11 @@ def repack_monomers_clear_overlap(
         if scratch_dir is not None
         else Path("packmol_repack")
     )
-    tolerance = _resolve_packmol_tolerance(min_distance=min_distance, spacing=spacing)
+    tolerance = _resolve_packmol_tolerance(
+        min_distance=min_distance,
+        spacing=spacing,
+        packmol_tolerance=packmol_tolerance,
+    )
     try:
         return _run_packmol_repack(
             positions,
@@ -320,6 +328,7 @@ def repack_selected_monomers_clear_overlap(
     scratch_dir: Path | str | None = None,
     atom_names: list[str] | None = None,
     atomic_numbers: np.ndarray | None = None,
+    packmol_tolerance: float | None = None,
 ) -> np.ndarray:
     """Repack only selected monomers with Packmol; fall back to grid on failure."""
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -329,7 +338,11 @@ def repack_selected_monomers_clear_overlap(
         if scratch_dir is not None
         else Path("packmol_repack")
     )
-    tolerance = _resolve_packmol_tolerance(min_distance=min_distance, spacing=spacing)
+    tolerance = _resolve_packmol_tolerance(
+        min_distance=min_distance,
+        spacing=spacing,
+        packmol_tolerance=packmol_tolerance,
+    )
     try:
         return _run_packmol_repack(
             positions,

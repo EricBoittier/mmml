@@ -148,6 +148,14 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
 
         args.min_intermonomer_atom_distance = float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
 
+    if getattr(args, "pre_mlpot_overlap_min_distance", None) is None:
+        from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+
+        args.pre_mlpot_overlap_min_distance = float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
+
+    if getattr(args, "liquid_prep_staged_density_fraction", None) is None:
+        args.liquid_prep_staged_density_fraction = 0.55
+
     if getattr(args, "box_size", None) is not None:
         args.mini_lattice_abnr_allow_fixed_box = True
         args.mini_box_equil_allow_fixed_box = True
@@ -270,6 +278,7 @@ def _step_monomer_repack(
     max_select: int = 2,
     verbose: bool = False,
     scratch_dir: Path | str | None = None,
+    packmol_tolerance: float | None = None,
 ) -> np.ndarray:
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
@@ -287,6 +296,7 @@ def _step_monomer_repack(
         seed=seed,
         cell=cell,
         scratch_dir=scratch_dir,
+        packmol_tolerance=packmol_tolerance,
     )
 
     if mlpot_ctx is not None:
@@ -300,13 +310,13 @@ def _step_monomer_repack(
         )
         if diag is not None:
             if verbose:
-                flagged_txt = ", ".join(str(i) for i in diag.flagged)
+                flagged_txt = ", ".join(str(i + 1) for i in diag.flagged)
                 grms_txt = ", ".join(
-                    f"{i}:{diag.grms_per_monomer[i]:.1f}" for i in diag.flagged
+                    f"{i + 1}:{diag.grms_per_monomer[i]:.1f}" for i in diag.flagged
                 )
                 print(
-                    f"Selective monomer repack: patch [{flagged_txt}] "
-                    f"(per-mono GRMS {grms_txt} kcal/mol/Å; "
+                    f"Selective monomer repack: patch monomers [{flagged_txt}] "
+                    f"(1-based; per-mono GRMS {grms_txt} kcal/mol/Å; "
                     f"cluster {diag.cluster_grms:.1f})",
                     flush=True,
                 )
@@ -339,8 +349,25 @@ def assert_pre_mlpot_intermonomer_geometry(
     box_side: float | None,
     use_pbc: bool,
     context: str = "Pre-MLpot geometry gate",
+    args: argparse.Namespace | None = None,
+    atomic_numbers: np.ndarray | list[int] | None = None,
 ) -> float:
-    """Abort when inter-monomer atoms are closer than ``min_distance_A``."""
+    """Abort when post-wrap MIC contacts violate ML-safe prep floors."""
+    if args is not None or atomic_numbers is not None:
+        from mmml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
+
+        return float(
+            assert_pre_mlpot_mic_geometry(
+                positions,
+                atoms_per_list,
+                box_side=box_side,
+                use_pbc=use_pbc,
+                args=args,
+                atomic_numbers=atomic_numbers,
+                context=context,
+            )
+        )
+
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
@@ -357,6 +384,60 @@ def assert_pre_mlpot_intermonomer_geometry(
             context=context,
         )
     )
+
+
+def _verify_mic_contacts_after_wrap(
+    positions: np.ndarray,
+    *,
+    atoms_per_list: list[int],
+    box_side: float | None,
+    charmm_pbc: bool,
+    args: argparse.Namespace | None,
+    atomic_numbers: np.ndarray | list[int] | None,
+    context: str,
+) -> float:
+    """Post-wrap MIC certification after repack / lattice / PBC sync."""
+    return assert_pre_mlpot_intermonomer_geometry(
+        positions,
+        atoms_per_list,
+        min_distance_A=resolve_pre_mlpot_overlap_min_distance(args)
+        if args is not None
+        else 2.3,
+        box_side=box_side,
+        use_pbc=charmm_pbc,
+        context=context,
+        args=args,
+        atomic_numbers=atomic_numbers,
+    )
+
+
+def assert_ml_safe_before_mlpot_registration(
+    args: argparse.Namespace,
+    *,
+    positions: np.ndarray,
+    atoms_per_list: list[int],
+    box_side: float | None,
+    charmm_pbc: bool,
+    atomic_numbers: np.ndarray | list[int] | None = None,
+) -> float:
+    """Hard abort when MIC contacts are too tight for MLpot registration."""
+    worst = _verify_mic_contacts_after_wrap(
+        positions,
+        atoms_per_list=list(atoms_per_list),
+        box_side=box_side,
+        charmm_pbc=charmm_pbc,
+        args=args,
+        atomic_numbers=atomic_numbers,
+        context="ML-safe geometry before MLpot registration",
+    )
+    floor = resolve_pre_mlpot_overlap_min_distance(args)
+    if float(worst) + 1.0e-9 < float(floor):
+        raise RuntimeError(
+            f"ML-safe geometry before MLpot registration: worst MIC contact "
+            f"{float(worst):.3f} Å < floor {float(floor):.2f} Å. "
+            "Repack at lower density, expand the box, or abort."
+        )
+    return float(worst)
 
 
 def _open_intermonomer_contacts_to_distance(
@@ -1094,7 +1175,20 @@ def run_pre_mlpot_geometry_gate(
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
     lattice_steps = resolve_density_prep_lattice_abnr_steps(args)
-    staged_fraction = float(getattr(args, "liquid_prep_staged_density_fraction", 0.70) or 0.70)
+    staged_fraction = float(getattr(args, "liquid_prep_staged_density_fraction", 0.55) or 0.55)
+    packmol_tol = getattr(args, "packmol_tolerance", None)
+    packmol_tol_f = float(packmol_tol) if packmol_tol is not None else None
+
+    def _mic_check(step_context: str, pos_arr: np.ndarray) -> float:
+        return _verify_mic_contacts_after_wrap(
+            pos_arr,
+            atoms_per_list=list(atoms_per_list),
+            box_side=side,
+            charmm_pbc=charmm_pbc,
+            args=args,
+            atomic_numbers=atomic_numbers,
+            context=step_context,
+        )
 
     result = PreMlpotGeometryGateResult(
         enabled=True,
@@ -1133,6 +1227,8 @@ def run_pre_mlpot_geometry_gate(
             box_side=side,
             use_pbc=charmm_pbc,
             context="Pre-MLpot gate (initial)",
+            args=args,
+            atomic_numbers=atomic_numbers,
         )
         result.worst_intermonomer_A = float(worst)
         _record_gate_step(
@@ -1160,6 +1256,7 @@ def run_pre_mlpot_geometry_gate(
             spacing=float(spacing) if spacing is not None else None,
             seed=int(seed) if seed is not None else None,
             scratch_dir=_packmol_repack_scratch_dir(args),
+            packmol_tolerance=packmol_tol_f,
         )
         side = _sync_pbc_after_box_change(
             positions=new_pos,
@@ -1171,6 +1268,8 @@ def run_pre_mlpot_geometry_gate(
         )
         pos = new_pos
         sync_charmm_positions(pos)
+        worst = _mic_check("Pre-MLpot gate (post-repack MIC)", pos)
+        result.worst_intermonomer_A = float(worst)
         result.steps_applied.append(step_label)
         _record_gate_step(step_label)
     except Exception as exc:
@@ -1213,6 +1312,9 @@ def run_pre_mlpot_geometry_gate(
                     quiet=quiet,
                 )
                 pos = new_pos
+                sync_charmm_positions(pos)
+                worst = _mic_check(f"Pre-MLpot gate (post-{tag} MIC)", pos)
+                result.worst_intermonomer_A = float(worst)
                 result.steps_applied.append(step_label)
                 _record_gate_step(step_label)
             except Exception as exc:
@@ -1238,6 +1340,15 @@ def run_pre_mlpot_geometry_gate(
                 )
                 if new_side is not None:
                     side = float(new_side)
+                from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                    get_charmm_positions_array,
+                    sync_charmm_positions as _sync_pos,
+                )
+
+                pos = get_charmm_positions_array()
+                _sync_pos(pos)
+                worst = _mic_check(f"Pre-MLpot gate (post-{tag} MIC)", pos)
+                result.worst_intermonomer_A = float(worst)
                 result.steps_applied.append(step_label)
                 _record_gate_step(step_label)
             except Exception as exc:
@@ -1252,6 +1363,8 @@ def run_pre_mlpot_geometry_gate(
             box_side=side,
             use_pbc=charmm_pbc,
             context="Pre-MLpot gate (final)",
+            args=args,
+            atomic_numbers=atomic_numbers,
         )
         result.worst_intermonomer_A = float(worst)
     except RuntimeError as exc:
@@ -1272,6 +1385,7 @@ def run_pre_mlpot_geometry_gate(
                 spacing=float(spacing) if spacing is not None else None,
                 seed=int(seed) + 17 if seed is not None else None,
                 scratch_dir=_packmol_repack_scratch_dir(args),
+                packmol_tolerance=packmol_tol_f,
             )
             new_pos = _open_intermonomer_contacts_to_distance(
                 new_pos,
@@ -1290,6 +1404,8 @@ def run_pre_mlpot_geometry_gate(
             )
             pos = new_pos
             sync_charmm_positions(pos)
+            worst = _mic_check("Pre-MLpot gate (post last-chance repack MIC)", pos)
+            result.worst_intermonomer_A = float(worst)
             result.steps_applied.append(step_label)
             _record_gate_step(step_label)
             worst = assert_pre_mlpot_intermonomer_geometry(
@@ -1299,6 +1415,8 @@ def run_pre_mlpot_geometry_gate(
                 box_side=side,
                 use_pbc=charmm_pbc,
                 context="Pre-MLpot gate (after last-chance repack)",
+                args=args,
+                atomic_numbers=atomic_numbers,
             )
             result.worst_intermonomer_A = float(worst)
         except RuntimeError:
@@ -1347,6 +1465,8 @@ def run_pre_mlpot_geometry_gate(
                 box_side=side,
                 use_pbc=charmm_pbc,
                 context="Pre-MLpot gate (after dynamics open)",
+                args=args,
+                atomic_numbers=atomic_numbers,
             )
             result.worst_intermonomer_A = float(worst)
         except Exception as exc:

@@ -44,10 +44,14 @@ mm_nonbond_mode: jax_mic
 charmm_mm_pretreat: true
 
 # Stricter pre-dynamics GRMS gate (do not scale up with bad per-monomer stats).
-# no_scale_max_grms: true
-max_grms_before_dyn: 2000.0
-# Smoke/debug: proceed when mini GRMS > max_before_dyn (overlap rescue may still fail).
-allow_high_grms: true
+no_scale_max_grms: true
+max_grms_before_dyn: 50.0
+allow_high_grms: false
+pre_mlpot_overlap_min_distance: 2.3
+pre_mlpot_h_heavy_min_distance: 2.4
+pre_mlpot_heavy_heavy_min_distance: 2.9
+mlpot_registration_max_grms: 50.0
+liquid_prep_staged_density_fraction: 0.50
 
 # More mini / rescue capacity before heat (override resilient cleanup defaults).
 mini_nstep: 20000
@@ -61,7 +65,8 @@ dynamics_overlap_check_interval: 50
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
-min_intermonomer_atom_distance: 1.2
+min_intermonomer_atom_distance: 2.3
+pre_mlpot_overlap_min_distance: 2.3
 
 # Heat DCD cadence (lower nsavc = more frequent frames; dcd25 winner on anchor).
 dcd_nsavc: 25

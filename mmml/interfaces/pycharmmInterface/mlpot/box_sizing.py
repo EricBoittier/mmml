@@ -818,10 +818,9 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         metavar="ANG",
         help=(
-            "Pre-MLpot geometry gate: minimum inter-monomer atom distance in Å "
-            "(default: 1.0; independent of --dynamics-overlap-min-distance). "
-            "Catches true cross-monomer clashes while allowing tight liquid "
-            "contacts that hybrid mini relaxes."
+            "Pre-MLpot geometry gate: minimum inter-monomer MIC distance in Å "
+            "(default: 2.3; independent of --dynamics-overlap-min-distance). "
+            "Structures must be ML-safe before USER is enabled."
         ),
     )
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args

@@ -31,7 +31,12 @@ pressure: 1.0
 
 no_scale_max_grms: true
 max_grms_before_dyn: 50.0
-allow_high_grms: true
+allow_high_grms: false
+pre_mlpot_overlap_min_distance: 2.3
+pre_mlpot_h_heavy_min_distance: 2.4
+pre_mlpot_heavy_heavy_min_distance: 2.9
+mlpot_registration_max_grms: 50.0
+liquid_prep_staged_density_fraction: 0.50
 
 mini_nstep: 2000
 charmm_sd_steps: 4000
@@ -43,7 +48,8 @@ dynamics_overlap_check_interval: 100
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
-min_intermonomer_atom_distance: 1.2
+min_intermonomer_atom_distance: 2.3
+pre_mlpot_overlap_min_distance: 2.3
 
 # Trajectory / neighbor-list cadence (resilient cleanup default dcd_nsavc=100).
 dcd_nsavc: 100

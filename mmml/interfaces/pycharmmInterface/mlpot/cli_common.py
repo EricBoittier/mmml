@@ -2531,10 +2531,9 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     if allow_high_grms is None:
         workflow_args = getattr(mlpot_ctx, "workflow_args", None)
-        if workflow_args is not None and getattr(workflow_args, "allow_high_grms", False):
-            allow_high_grms = True
-        else:
-            allow_high_grms = bool(os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"))
+        allow_high_grms = bool(
+            workflow_args is not None and getattr(workflow_args, "allow_high_grms", False)
+        )
 
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
         remember_monomer_template_restart_path,
@@ -3131,10 +3130,10 @@ def prepare_mlpot_hybrid_state_for_sd(
             if verbose:
                 print(msg, flush=True)
         elif not allow_high_grms:
-            msg += "; refusing MLpot SD. Try more pretreat/--mini-nstep, a composition checkpoint, or MMML_MLPOT_ALLOW_HIGH_GRMS (not recommended)."
+            msg += "; refusing MLpot SD. Try more pretreat/--mini-nstep, a composition checkpoint, or --allow-high-grms (not recommended)."
             raise RuntimeError(msg)
         else:
-            msg += "; proceeding (MMML_MLPOT_ALLOW_HIGH_GRMS)."
+            msg += "; proceeding (--allow-high-grms)."
             print(f"WARN: {msg}", flush=True)
 
     if mlpot_ctx.sd_watchdog_baseline_grms is None:
@@ -3441,6 +3440,49 @@ def resolve_max_grms_before_dyn(
     return scaled
 
 
+def assert_initial_mlpot_grms_before_sd(
+    mlpot_ctx: Any,
+    *,
+    args: argparse.Namespace | None = None,
+    context: str = "MLpot registration",
+    verbose: bool = True,
+) -> float:
+    """Abort when hybrid GRMS is already too large to recover in MLpot SD."""
+    from mmml.utils.intermonomer_geometry import resolve_mlpot_registration_max_grms
+
+    limit = resolve_mlpot_registration_max_grms(args)
+    grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)
+    if grms is None or not np.isfinite(grms):
+        grms = float(
+            refresh_mlpot_energy_and_grms(
+                mlpot_ctx,
+                context=f"{context} hybrid GRMS probe",
+                silent_charmm=True,
+            )
+        )
+    grms = float(grms)
+    if grms > float(limit):
+        allow = bool(args is not None and getattr(args, "allow_high_grms", False))
+        msg = (
+            f"{context}: initial hybrid GRMS {grms:.2f} kcal/mol/Å > "
+            f"{float(limit):.1f}. The structure is not ML-safe; repack/expand the "
+            "box before enabling USER. BFGS/FIRE/CHARMM SD cannot recover from "
+            "this starting force."
+        )
+        if allow:
+            if verbose:
+                print(f"WARN: {msg} (--allow-high-grms)", flush=True)
+        else:
+            raise RuntimeError(msg)
+    elif verbose:
+        print(
+            f"{context}: initial hybrid GRMS {grms:.2f} kcal/mol/Å "
+            f"(limit {float(limit):.1f})",
+            flush=True,
+        )
+    return grms
+
+
 def assert_dynamics_ready(
     *,
     max_grms: float = 50.0,
@@ -3531,8 +3573,14 @@ def assert_dynamics_ready(
         "Try more --mini-nstep, a composition-specific checkpoint, or "
         "--allow-high-grms (not recommended)."
     )
-    if abort and not os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"):
-        raise RuntimeError(msg)
+    if abort:
+        workflow_args = (
+            getattr(mlpot_ctx, "workflow_args", None) if mlpot_ctx is not None else None
+        )
+        if not bool(
+            workflow_args is not None and getattr(workflow_args, "allow_high_grms", False)
+        ):
+            raise RuntimeError(msg)
     print(f"WARN: {msg}", flush=True)
     return grms
 

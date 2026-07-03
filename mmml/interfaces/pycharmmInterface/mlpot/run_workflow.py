@@ -1412,10 +1412,10 @@ def build_charmm_mm_pretreat_handoff_sections(
             mic_cell = np.diag([float(ml_side), float(ml_side), float(ml_side)])
             worst_mic, _ = find_worst_intermonomer_overlap(r, offsets, cell=mic_cell)
             pbc["worst_MIC_intermonomer_Å"] = f"{worst_mic:.3f}"
-            if worst_mic < 1.5:
+            if worst_mic < 2.3:
                 warnings.append(
                     f"tight MIC inter-monomer contact {worst_mic:.3f} Å "
-                    "(<1.5 Å; MLpot may explode at registration)"
+                    "(<2.3 Å; MLpot may explode at registration)"
                 )
             sparse = validate_sparse_dimer_cap(
                 r,

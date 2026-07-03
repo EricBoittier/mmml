@@ -1849,6 +1849,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
 
     r = get_charmm_positions_array()
+    if liquid_prep_enabled(args) and atoms_per_list is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+            assert_ml_safe_before_mlpot_registration,
+        )
+
+        assert_ml_safe_before_mlpot_registration(
+            args,
+            positions=r,
+            atoms_per_list=list(atoms_per_list),
+            box_side=box_side,
+            charmm_pbc=charmm_pbc,
+            atomic_numbers=np.asarray(z, dtype=int),
+        )
+
     ctx, pyCModel = _register_mlpot_context(
         z,
         r,
@@ -1890,6 +1904,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         context="MLpot list sync before SD minimize" if not args.quiet else "",
         verbose=not args.quiet,
         restart_path=pretreat_restart_path,
+    )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        assert_initial_mlpot_grms_before_sd,
+    )
+
+    assert_initial_mlpot_grms_before_sd(
+        ctx,
+        args=args,
+        context="Before MLpot SD minimize",
+        verbose=not args.quiet,
     )
 
     restart_from = (

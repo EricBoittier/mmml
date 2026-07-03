@@ -8,8 +8,16 @@ from typing import Any
 
 import numpy as np
 
-# Prep gate: reject true cross-monomer clashes, not equilibrium liquid contacts.
-DEFAULT_PRE_MLPOT_OVERLAP_MIN_A = 1.0
+# Prep gate: ML-safe inter-monomer MIC floor before USER potential is enabled.
+DEFAULT_PRE_MLPOT_OVERLAP_MIN_A = 2.3
+
+# Element-pair prep floors for dense halogenated liquids (e.g. DCM).
+DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A = 2.4
+DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A = 2.9
+DEFAULT_PRE_MLPOT_H_H_MIN_A = 2.3
+
+# Hard abort before MLpot SD when hybrid forces are already catastrophic.
+DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A = 50.0
 
 # Dynamics overlap guard default (CHARMM close-contact scale); looser than vdW sums.
 DYNAMICS_OVERLAP_REFERENCE_A = 1.5
@@ -68,13 +76,97 @@ def vdw_contact_hint_A(label_i: str, label_j: str) -> float | None:
     return None
 
 
-def resolve_pre_mlpot_overlap_min_distance(args: argparse.Namespace) -> float:
-    """Minimum inter-monomer atom distance for the pre-MLpot geometry gate (Å).
+def _is_hydrogen_symbol(label: str) -> bool:
+    return str(label).strip().upper() == "H"
 
-  Intentionally **not** tied to ``--dynamics-overlap-min-distance`` (default 1.5 Å).
-  Dense liquid prep in a periodic box often leaves transient contacts between
-  1.0–1.5 Å that hybrid minimization and overlap rescue relax before dynamics.
-  """
+
+def _is_heavy_symbol(label: str) -> bool:
+    return not _is_hydrogen_symbol(label) and str(label).strip() not in ("", "?")
+
+
+def is_dcm_like_prep(args: argparse.Namespace | None) -> bool:
+    """True when workflow targets chlorinated dense liquids (stricter pair floors)."""
+    if args is None:
+        return False
+    solvents = getattr(args, "solvents", None) or []
+    for raw in solvents:
+        if str(raw).strip().upper() == "DCM":
+            return True
+    for attr in ("composition", "_cluster_composition_summary"):
+        comp = getattr(args, attr, None)
+        if comp is None:
+            continue
+        if isinstance(comp, dict):
+            for key in comp:
+                if str(key).strip().upper() == "DCM":
+                    return True
+        else:
+            text = str(comp).upper()
+            if text.startswith("DCM:") or ",DCM:" in text or " DCM:" in text:
+                return True
+    return False
+
+
+def resolve_pre_mlpot_element_pair_min_distance(
+    label_i: str,
+    label_j: str,
+    *,
+    args: argparse.Namespace | None = None,
+) -> float:
+    """Minimum MIC distance (Å) for an element pair before MLpot registration."""
+    global_floor = (
+        resolve_pre_mlpot_overlap_min_distance(args)
+        if args is not None
+        else float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
+    )
+    explicit_hh = getattr(args, "pre_mlpot_h_heavy_min_distance", None) if args else None
+    explicit_heavy = (
+        getattr(args, "pre_mlpot_heavy_heavy_min_distance", None) if args else None
+    )
+    h_heavy = (
+        float(explicit_hh)
+        if explicit_hh is not None and float(explicit_hh) > 0.0
+        else float(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A)
+    )
+    heavy_heavy = (
+        float(explicit_heavy)
+        if explicit_heavy is not None and float(explicit_heavy) > 0.0
+        else float(DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A)
+    )
+    h_h = float(getattr(args, "pre_mlpot_h_h_min_distance", DEFAULT_PRE_MLPOT_H_H_MIN_A) or DEFAULT_PRE_MLPOT_H_H_MIN_A)
+
+    li, lj = label_i, label_j
+    hi = _is_hydrogen_symbol(li)
+    hj = _is_hydrogen_symbol(lj)
+    if hi and hj:
+        pair_floor = max(global_floor, h_h)
+    elif hi ^ hj:
+        pair_floor = max(global_floor, h_heavy)
+    else:
+        pair_floor = max(global_floor, heavy_heavy)
+
+    if is_dcm_like_prep(args):
+        return float(pair_floor)
+    # Non-DCM liquid prep still uses the global MIC floor; pair floors apply when set explicitly.
+    if explicit_hh is not None or explicit_heavy is not None:
+        return float(pair_floor)
+    return float(global_floor)
+
+
+def resolve_mlpot_registration_max_grms(args: argparse.Namespace | None) -> float:
+    explicit = getattr(args, "mlpot_registration_max_grms", None) if args is not None else None
+    if explicit is not None and float(explicit) > 0.0:
+        return float(explicit)
+    return float(DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A)
+
+
+def resolve_pre_mlpot_overlap_min_distance(args: argparse.Namespace) -> float:
+    """Minimum inter-monomer MIC distance for the pre-MLpot geometry gate (Å).
+
+    Intentionally **not** tied to ``--dynamics-overlap-min-distance`` (default 1.5 Å).
+    Structures must be ML-safe before the USER potential is enabled; sub-2.3 Å MIC
+    contacts routinely explode hybrid GRMS at registration.
+    """
     explicit = getattr(args, "pre_mlpot_overlap_min_distance", None)
     if explicit is not None:
         val = float(explicit)
@@ -83,7 +175,7 @@ def resolve_pre_mlpot_overlap_min_distance(args: argparse.Namespace) -> float:
         return float("inf")
 
     build = getattr(args, "min_intermonomer_atom_distance", None)
-    if build is not None and float(build) > 0.1 + 1.0e-9:
+    if build is not None and float(build) >= float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A) - 1.0e-9:
         return float(build)
 
     return float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
@@ -101,13 +193,14 @@ def resolve_dynamics_overlap_reference_A(args: argparse.Namespace | None) -> flo
 def resolve_overlap_last_chance_separation_A(args: argparse.Namespace) -> float:
     """Separation target (Å) for prep-gate ``overlap_last_chance`` repack/separate.
 
-    The prep certification floor (default 1.0 Å) only rejects true clashes.  Last-chance
-    recovery should open contacts toward the dynamics overlap guard (default 1.5 Å) so
-    MLpot mini does not inherit barely-legal tight pairs (e.g. 1.06 Å H–C).
+    Opens contacts to the ML-safe prep floor (H–heavy / heavy–heavy when DCM-like),
+    not the dynamics overlap guard (1.5 Å).
     """
     prep_floor = resolve_pre_mlpot_overlap_min_distance(args)
-    dynamics = resolve_dynamics_overlap_reference_A(args)
-    return max(float(prep_floor), float(dynamics))
+    pair_target = resolve_pre_mlpot_element_pair_min_distance("H", "C", args=args)
+    if is_dcm_like_prep(args):
+        return max(float(prep_floor), float(pair_target))
+    return max(float(prep_floor), float(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A))
 
 
 def resolve_mc_min_intermonomer_distance_A(args: argparse.Namespace) -> float:
@@ -159,13 +252,13 @@ class IntermonomerContactSummary:
         head += ")"
 
         if d < floor:
-            status = "FAIL: below prep floor — true cross-monomer clash"
+            status = "FAIL: below prep MIC floor — repack/expand box before MLpot"
         elif d >= dyn:
             status = f"OK: above dynamics guard ({dyn:.1f} Å)"
         else:
             status = (
-                f"tight for dynamics ({dyn:.1f} Å) but passes prep — "
-                "hybrid mini / overlap rescue expected to open this before MD"
+                f"tight for dynamics ({dyn:.1f} Å) but passes prep MIC floor — "
+                "verify element-pair floors before MLpot registration"
             )
 
         chem = _chemical_note(self.label_i, self.label_j, d, vdw)
@@ -239,4 +332,149 @@ def summarize_worst_intermonomer_contact(
         label_i=li,
         label_j=lj,
         dynamics_reference_A=float(dynamics_reference_A),
+    )
+
+
+@dataclass(frozen=True)
+class PreMlpotMicViolation:
+    distance_A: float
+    required_A: float
+    monomer_i: int
+    monomer_j: int
+    atom_i: int
+    atom_j: int
+    label_i: str
+    label_j: str
+
+    def format_message(self) -> str:
+        return (
+            f"monomers {self.monomer_i + 1}/{self.monomer_j + 1} (1-based), "
+            f"atoms {self.label_i}–{self.label_j}, "
+            f"MIC distance {self.distance_A:.3f} Å < required {self.required_A:.2f} Å"
+        )
+
+
+def find_worst_pre_mlpot_mic_violation(
+    positions: np.ndarray,
+    atoms_per_list: list[int],
+    *,
+    box_side: float | None,
+    use_pbc: bool,
+    args: argparse.Namespace | None = None,
+    atomic_numbers: np.ndarray | list[int] | None = None,
+) -> PreMlpotMicViolation | None:
+    """Return the tightest MIC contact that violates prep element-pair floors."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
+    )
+    from mmml.utils.geometry_checks import find_worst_intermonomer_overlap
+
+    pos = np.asarray(positions, dtype=float)
+    offsets = monomer_offsets_from_atoms_per(atoms_per_list)
+    cell: Any | None = None
+    if use_pbc and box_side is not None:
+        cell = np.diag([float(box_side), float(box_side), float(box_side)])
+
+    z: np.ndarray | None = None
+    if atomic_numbers is not None:
+        z = np.asarray(atomic_numbers, dtype=int).reshape(-1)
+
+    global_floor = (
+        resolve_pre_mlpot_overlap_min_distance(args)
+        if args is not None
+        else float(DEFAULT_PRE_MLPOT_OVERLAP_MIN_A)
+    )
+
+    worst: PreMlpotMicViolation | None = None
+    n_monomers = int(len(offsets) - 1)
+    for mi in range(n_monomers):
+        si, ei = int(offsets[mi]), int(offsets[mi + 1])
+        for mj in range(mi + 1, n_monomers):
+            sj, ej = int(offsets[mj]), int(offsets[mj + 1])
+            for gi in range(si, ei):
+                for gj in range(sj, ej):
+                    from mmml.utils.geometry_checks import _mic_displacement
+
+                    disp = _mic_displacement(pos[gi], pos[gj], cell)
+                    dist = float(np.linalg.norm(disp))
+                    li = _element_symbol(int(z[gi])) if z is not None else "?"
+                    lj = _element_symbol(int(z[gj])) if z is not None else "?"
+                    required = resolve_pre_mlpot_element_pair_min_distance(
+                        li, lj, args=args
+                    )
+                    required = max(required, global_floor)
+                    if dist + 1.0e-9 < required:
+                        if worst is None or dist < worst.distance_A:
+                            worst = PreMlpotMicViolation(
+                                distance_A=dist,
+                                required_A=float(required),
+                                monomer_i=mi,
+                                monomer_j=mj,
+                                atom_i=gi,
+                                atom_j=gj,
+                                label_i=li,
+                                label_j=lj,
+                            )
+    if worst is not None:
+        return worst
+
+    # Fast path when no pair scan violations: still honour global MIC floor.
+    dist, violation = find_worst_intermonomer_overlap(pos, offsets, cell=cell)
+    if violation is None or dist + 1.0e-9 >= global_floor:
+        return None
+    li = _element_symbol(int(z[violation.atom_i])) if z is not None else "?"
+    lj = _element_symbol(int(z[violation.atom_j])) if z is not None else "?"
+    required = max(
+        global_floor,
+        resolve_pre_mlpot_element_pair_min_distance(li, lj, args=args),
+    )
+    if dist + 1.0e-9 >= required:
+        return None
+    return PreMlpotMicViolation(
+        distance_A=float(dist),
+        required_A=float(required),
+        monomer_i=int(violation.monomer_i),
+        monomer_j=int(violation.monomer_j),
+        atom_i=int(violation.atom_i),
+        atom_j=int(violation.atom_j),
+        label_i=li,
+        label_j=lj,
+    )
+
+
+def assert_pre_mlpot_mic_geometry(
+    positions: np.ndarray,
+    atoms_per_list: list[int],
+    *,
+    box_side: float | None,
+    use_pbc: bool,
+    args: argparse.Namespace | None = None,
+    atomic_numbers: np.ndarray | list[int] | None = None,
+    context: str = "Pre-MLpot MIC geometry",
+) -> float:
+    """Abort when post-wrap MIC contacts violate ML-safe prep floors."""
+    violation = find_worst_pre_mlpot_mic_violation(
+        positions,
+        atoms_per_list,
+        box_side=box_side,
+        use_pbc=use_pbc,
+        args=args,
+        atomic_numbers=atomic_numbers,
+    )
+    if violation is not None:
+        raise RuntimeError(
+            f"{context}: {violation.format_message()}. "
+            "Repack at lower density, expand the box, or abort — do not enable MLpot."
+        )
+    from mmml.interfaces.pycharmmInterface.mlpot.liquid_box_build import (
+        measure_worst_intermonomer_A,
+    )
+
+    return float(
+        measure_worst_intermonomer_A(
+            positions,
+            atoms_per_list,
+            box_side=box_side,
+            use_pbc=use_pbc,
+        )
     )
