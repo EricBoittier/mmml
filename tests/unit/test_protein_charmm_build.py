@@ -30,6 +30,29 @@ def test_alad_dataclass_fields() -> None:
     assert result.segment == "ALAD"
 
 
+def test_trialanine_water_box_coords_path_prefers_crd(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        trialanine_water_box_coords_path,
+    )
+
+    crd = tmp_path / "trialanine-water.crd"
+    npy = tmp_path / "trialanine-water.npy"
+    crd.write_text("dummy\n", encoding="utf-8")
+    npy.write_bytes(b"\x00")
+    assert trialanine_water_box_coords_path(tmp_path) == crd
+
+
+def test_trialanine_water_box_coords_path_falls_back_to_npy(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
+        trialanine_water_box_coords_path,
+    )
+
+    npy = tmp_path / "trialanine-water.npy"
+    npy.write_bytes(b"\x00")
+    assert trialanine_water_box_coords_path(tmp_path) == npy
+    assert trialanine_water_box_coords_path(tmp_path / "missing") is None
+
+
 def test_load_trialanine_water_atoms_for_docs_real_coords() -> None:
     from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
         load_trialanine_water_atoms_for_docs,
