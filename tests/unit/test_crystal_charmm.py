@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest import mock
+
 import pytest
 
 
@@ -35,6 +38,23 @@ def test_build_literature_dcm_unit_cell_matches_cif():
         assert result.cell_lengths_a[axis] == pytest.approx(
             lit.lengths_a[axis], rel=1e-3
         )
+
+
+def test_literature_preset_uses_bundled_template_when_no_explicit_monomer():
+    from mmml.interfaces import crystal_charmm
+
+    expected = crystal_charmm.default_make_res_monomer_pdb("DCM").resolve()
+    with mock.patch.object(
+        crystal_charmm,
+        "build_charmm_literature_supercell",
+    ) as build:
+        crystal_charmm.build_literature_charmm_supercell(
+            "dcm",
+            supercell_reps=(1, 1, 1),
+            min_box_side_a=None,
+        )
+
+    assert Path(build.call_args.kwargs["monomer_pdb"]) == expected
 
 
 def test_build_literature_dcm_supercell_density_and_count():

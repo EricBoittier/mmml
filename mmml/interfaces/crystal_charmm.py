@@ -379,12 +379,17 @@ def build_literature_charmm_supercell(
             f"unknown literature preset {preset!r}; choose from {sorted(LITERATURE_CRYSTAL_PRESETS)}"
         )
     spec = LITERATURE_CRYSTAL_PRESETS[key]
+    template_pdb = (
+        Path(monomer_pdb).expanduser().resolve()
+        if monomer_pdb is not None
+        else default_make_res_monomer_pdb(str(spec["residue"]))
+    )
     return build_charmm_literature_supercell(
         residue=str(spec["residue"]),
         cif_path=Path(spec["cif"]()),
         supercell_reps=supercell_reps,
         min_box_side_a=min_box_side_a,
-        monomer_pdb=monomer_pdb,
+        monomer_pdb=template_pdb,
         pdb_out=pdb_out,
         target_density_g_cm3=target_density_g_cm3,
     )
