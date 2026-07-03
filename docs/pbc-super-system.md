@@ -10,7 +10,7 @@ Figures regenerate with:
 uv run python scripts/plot_pbc_super_system.py
 ```
 
-Related: [Tri-alanine water box](trialanine-water-box.md), [CHARMM CGenFF JAX clone](cgenff-jax-clone.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [Spatial ML MPI](mlpot-spatial-mpi.md), [MLpot nonbond lists](../mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md).
+Related: [Tri-alanine water box](trialanine-water-box.md), [CHARMM CGenFF JAX clone](cgenff-jax-clone.md), [Long-range solver tutorial](long-range-solver-tutorial.md), [Spatial ML MPI](mlpot-spatial-mpi.md), and the source note `mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md`.
 
 ---
 

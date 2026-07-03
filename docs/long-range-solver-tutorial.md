@@ -10,10 +10,10 @@ For COM-distance cutoffs, colored monomer regions, and how the dual stack fits t
 
 Related:
 
-- `[scripts/run_dcm_liquid_workflow.sh](../scripts/run_dcm_liquid_workflow.sh)` — baseline DCM liquid pipeline
-- `[scripts/run_dcm_long_range_workflow.sh](../scripts/run_dcm_long_range_workflow.sh)` — solver comparison sweep
-- `[tests/functionality/long_range/](../tests/functionality/long_range/)` — standalone validation
-- `[mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md](../mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md)` — architecture
+- `scripts/run_dcm_liquid_workflow.sh` — baseline DCM liquid pipeline
+- `scripts/run_dcm_long_range_workflow.sh` — solver comparison sweep
+- `tests/functionality/long_range/` — standalone validation
+- `mmml/interfaces/pycharmmInterface/mlpot/LONG_RANGE_ELECTROSTATICS.md` — architecture
 
 ---
 
@@ -67,7 +67,7 @@ export SCAFACOS_METHOD=ewald
 
 YAML keys use underscores: `lr_solver`, `jax_pme_method`, `jax_pme_sr_cutoff`, `mm_nonbond_mode`.
 
-Example config: `[mmml/cli/run/dcm_long_range_solvers.example.yaml](../mmml/cli/run/dcm_long_range_solvers.example.yaml)`.
+Example config: `mmml/cli/run/dcm_long_range_solvers.example.yaml`.
 
 ---
 
@@ -99,7 +99,7 @@ python tests/functionality/long_range/04_scafacos_methods.py
 
 ## 4. Example: jax-pme Ewald on a certified DCM box
 
-After `[run_dcm_liquid_workflow.sh](../scripts/run_dcm_liquid_workflow.sh)` produces `~/tests/boxes/dcm60_l32/`:
+After `scripts/run_dcm_liquid_workflow.sh` produces `~/tests/boxes/dcm60_l32/`:
 
 ```bash
 export MMML_CKPT=~/mmml/mmml/models/physnetjax/defaults/hf_json/<checkpoint>_portable.json
@@ -168,7 +168,7 @@ runtime):
 
 ## 6. Automated solver sweep
 
-`[run_dcm_long_range_workflow.sh](../scripts/run_dcm_long_range_workflow.sh)` runs validation, optional liquid-box certification, then one short `md-system` mini per solver configuration.
+`scripts/run_dcm_long_range_workflow.sh` runs validation, optional liquid-box certification, then one short `md-system` mini per solver configuration.
 
 ```bash
 # Default: MIC + jax-pme (ewald, pme, p3m) in jax_mic mode

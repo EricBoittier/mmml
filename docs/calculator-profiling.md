@@ -284,7 +284,7 @@ Warmup: `warmup_jax_pme_hybrid_host` JIT-warms COM switch (`counts["com_switch_j
 | Duplicate `warmup_decomposed_mlpot` | `_jax_warmup_done` on `DecomposedMlpotModel` |
 | CPU `_finalize_jax_factory` then GPU promote | `defer_jax_until_after_sd` + skip CPU finalize when deferring |
 | New `_get_spherical_forward_fn` every eval | `_forward_cache_key` caches `jit` wrapper on model |
-| `CutoffParameters` / dtype / box changes | Keep static args stable across mini legs; see [md-system-configs](md-system-configs.md#jax--setup_calculator-compile-churn) |
+| `CutoffParameters` / dtype / box changes | Keep static args stable across mini legs; see [md-system-configs](md-system-configs.md) |
 | First `spherical_cutoff` compile | `mmml warmup-mlpot-jax` or `warmup_decomposed_mlpot` once before timed MD |
 
 `spherical_cutoff_calculator` itself is `@jax.jit(static_argnames=[...])` — cost is **one** large XLA compile per distinct shape/cutoff key, not per MD step.
@@ -337,7 +337,7 @@ export MMML_MLPOT_PROFILE=1 MMML_JAX_COMPILE_TIMERS=1 MMML_JAX_PME_PROFILE=1
   md-system --config md_system.yaml --mlpot-profile
 ```
 
-**Compile churn tips** (see [md-system-configs](md-system-configs.md#jax--setup_calculator-compile-churn)):
+**Compile churn tips** (see [md-system-configs](md-system-configs.md)):
 
 - Do not change `MMML_JAX_PME_INTRA_MODE`, `ml_compute_dtype`, or cutoffs between mini legs.
 - `calculator_pre_minimize` + deferred JAX avoids duplicate CPU→GPU recompiles.

@@ -261,9 +261,6 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
         "rewrap_charmm_coords_for_mlpot_pbc",
         return_value=0,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_update_capture_image_log",
-        return_value=_MKIMAT2_SAFE_LOG,
-    ) as capture_update, patch(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_min_distance_after_update",
         return_value=6.18,
     ) as image_gate, patch.object(
@@ -290,8 +287,8 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0, rebuild=False)
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
-    capture_update.assert_called_once()
     image_gate.assert_called_once()
+    assert image_gate.call_args.kwargs["cubic_box_side_A"] == 32.0
     # update_bnbnd() was replaced with captured UPDATE to parse <MKIMAT2> gates.
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
     fake_pycharmm.lingo.charmm_script.assert_not_called()

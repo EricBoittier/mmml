@@ -4,7 +4,7 @@ End-to-end example using the public [MMunibas/aaa.ama](https://github.com/MMunib
 
 **Canonical CLI:** [`mmml md-embedding`](md-embedding-design.md) (`train` → `build` → `run`) automates the same pipeline; the sections below remain useful for manual steps and inspection.
 
-Functionality tests: [`tests/functionality/aaa_ama/README.md`](../../tests/functionality/aaa_ama/README.md) and [`tests/functionality/embedding/README.md`](../../tests/functionality/embedding/README.md).
+Functionality tests: `tests/functionality/aaa_ama/README.md` and `tests/functionality/embedding/README.md`.
 
 ## 1. Fetch and identify the dataset
 
@@ -29,17 +29,17 @@ Bundled summary (after running the script): `mmml/data/external/aaa_ama_dataset_
 
 ### Structure (frame 0)
 
-![Peptide frame 0](../../images/examples/aaa-ama/peptide_frame0.png)
+![Peptide frame 0](../images/examples/aaa-ama/peptide_frame0.png)
 
 ### Energy and forces
 
-![Energy histogram](../../images/examples/aaa-ama/energy_histogram.png)
+![Energy histogram](../images/examples/aaa-ama/energy_histogram.png)
 
-![Force magnitude histogram](../../images/examples/aaa-ama/force_histogram.png)
+![Force magnitude histogram](../images/examples/aaa-ama/force_histogram.png)
 
-![Force magnitude by element](../../images/examples/aaa-ama/force_by_element.png)
+![Force magnitude by element](../images/examples/aaa-ama/force_by_element.png)
 
-![Energy trace](../../images/examples/aaa-ama/energy_trace.png)
+![Energy trace](../images/examples/aaa-ama/energy_trace.png)
 
 Regenerate figures:
 
@@ -199,7 +199,7 @@ ctx = register_mlpot_partial_mm(
 )
 ```
 
-Then `energy.show()` / `minimize.run_sd` / dynamics as in [`mlpot/README.md`](../../mmml/interfaces/pycharmmInterface/mlpot/README.md).
+Then `energy.show()` / `minimize.run_sd` / dynamics as in `mmml/interfaces/pycharmmInterface/mlpot/README.md`.
 
 ### Current limitations
 
@@ -226,4 +226,4 @@ For solvated peptide MD, the **partial segment** pattern above matches [aaa.ama 
 - [aaa.ama repository](https://github.com/MMunibas/aaa.ama)
 - [Hybrid potential regions](../hybrid-potential-regions.md)
 - [Tri-alanine water box](../trialanine-water-box.md) (CGENFF MM cross-check)
-- [Partial ML module](../../mmml/interfaces/pycharmmInterface/mlpot/partial_mm.py)
+- Partial ML module: `mmml/interfaces/pycharmmInterface/mlpot/partial_mm.py`

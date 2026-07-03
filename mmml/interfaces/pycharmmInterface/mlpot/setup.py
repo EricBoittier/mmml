@@ -1618,19 +1618,17 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     pycharmm = _import_pycharmm()
     from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_min_distance_after_update,
-        run_charmm_update_capture_image_log,
     )
 
     # Rebuild pair lists after ML exclusions are installed.  Use scripting UPDATE
     # (not pycharmm.nbonds.update_bnbnd) and only after prepare_charmm_pbc +
     # apply_pbc_nbonds — bare UPDATE after crystal free segfaults in IMAGE VDW.
     with charmm_relaxed_bomlev():
-        mkimat_log = run_charmm_update_capture_image_log()
-    assert_charmm_image_min_distance_after_update(
-        workflow_args=workflow_args,
-        context="MLpot PBC registration (post-upinb)",
-        charmm_log=mkimat_log,
-    )
+        assert_charmm_image_min_distance_after_update(
+            workflow_args=workflow_args,
+            context="MLpot PBC registration (post-upinb)",
+            cubic_box_side_A=side,
+        )
     pycharmm.image.update_bimag()
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC upinb during registration",

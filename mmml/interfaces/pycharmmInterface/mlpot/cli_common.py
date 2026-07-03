@@ -2571,6 +2571,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         assert_charmm_image_min_distance_after_update(
             workflow_args=workflow_args,
             context=f"{context_prefix} CHARMM IMAGE gate",
+            cubic_box_side_A=side_f,
         )
 
     skip_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)

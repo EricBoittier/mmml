@@ -150,7 +150,7 @@ bonded exact; VDW **≈0.3–0.6 kcal/mol** on the all-in-one ``TRIA`` residue.
 uv run pytest tests/unit/test_mm_system_energy.py -q
 ```
 
-See also: [`tests/functionality/charmm/README_trialanine_water_box.md`](../tests/functionality/charmm/README_trialanine_water_box.md).
+See also: `tests/functionality/charmm/README_trialanine_water_box.md`.
 
 ---
 

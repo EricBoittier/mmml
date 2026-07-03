@@ -33,7 +33,7 @@ flowchart TB
 
 Waters do **not** receive PhysNet monomer energy. They may receive **ML–MM electrostatic**
 coupling to the peptide when Phase 2 wires CHARMM `idxu`/`idxv` pair lists into
-[`PyCharmm_Calculator`](../../mmml/models/physnetjax/physnetjax/calc/pycharmm_calculator.py).
+`mmml/models/physnetjax/physnetjax/calc/pycharmm_calculator.py`.
 
 ## vs `mmml md-system`
 
@@ -65,7 +65,7 @@ mmml md-embedding run -o artifacts/md_embedding/aaa \
   --checkpoint artifacts/md_embedding/aaa/aaa_smoke_params.json
 ```
 
-See [`tests/functionality/embedding/README.md`](../../tests/functionality/embedding/README.md)
+See `tests/functionality/embedding/README.md`
 for pass criteria. Published smoke metrics: [md-embedding-results.md](md-embedding-results.md).
 
 ## Topology: 34 vs 42 atoms
@@ -73,7 +73,7 @@ for pass criteria. Published smoke metrics: [md-embedding-results.md](md-embeddi
 | Source | Atoms | Notes |
 |--------|-------|-------|
 | [aaa.ama `dataset_aaa.npz`](https://github.com/MMunibas/aaa.ama/tree/main/aaa_model) | 34 | Training labels (`Z`, `E`, `F`) |
-| MMML `TRIA` CGENFF build | 42 | [`trialanine_water_box.py`](../../mmml/interfaces/pycharmmInterface/trialanine_water_box.py) |
+| MMML `TRIA` CGENFF build | 42 | `mmml/interfaces/pycharmmInterface/trialanine_water_box.py` |
 
 **Phase 1 training** uses NPZ arrays directly (`num_atoms: 34`).  
 **Phase 1 MD build** uses the bundled CGENFF `TRIA` box for convenience; `box.json` records
@@ -85,12 +85,12 @@ a 34-atom export).
 
 | Component | Path |
 |-----------|------|
-| Orchestration | [`embedding_workflow.py`](../../mmml/interfaces/pycharmmInterface/mlpot/embedding_workflow.py) |
-| Partial registration | [`partial_mm.py`](../../mmml/interfaces/pycharmmInterface/mlpot/partial_mm.py) |
-| Dataset helpers | [`aaa_ama.py`](../../mmml/data/external/aaa_ama.py) |
-| CLI | [`md_embedding.py`](../../mmml/cli/run/md_embedding.py) |
-| Train config | [`md_embedding_aaa_train.example.yaml`](../../mmml/cli/run/md_embedding_aaa_train.example.yaml) |
-| ASE figures | [`ase_structure_plot.py`](../../mmml/utils/ase_structure_plot.py) (bonds, orthographic) |
+| Orchestration | `mmml/interfaces/pycharmmInterface/mlpot/embedding_workflow.py` |
+| Partial registration | `mmml/interfaces/pycharmmInterface/mlpot/partial_mm.py` |
+| Dataset helpers | `mmml/data/external/aaa_ama.py` |
+| CLI | `mmml/cli/run/md_embedding.py` |
+| Train config | `mmml/cli/run/md_embedding_aaa_train.example.yaml` |
+| ASE figures | `mmml/utils/ase_structure_plot.py` (bonds, orthographic) |
 | Split tool | [`fix-and-split`](../cli/commands/fix-and-split.md) (default train phase) |
 
 ## Phase 2 — ML/MM electrostatic embedding
@@ -99,7 +99,7 @@ a 34-atom export).
 2. Enable `PartialMlMmConfig.use_mlmm_pair_lists=True` once pair lists are wired.
 3. Forward `mlmm_ctonnb` / `mlmm_ctofnb` from MLpot registration (already in API).
 
-Reference: [`NONBOND_LISTS.md`](../../mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md).
+Reference: `mmml/interfaces/pycharmmInterface/mlpot/NONBOND_LISTS.md`.
 
 ## Phase 3 — Multi-peptide / extended hybrid zone
 

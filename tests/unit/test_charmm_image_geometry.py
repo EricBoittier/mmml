@@ -99,8 +99,17 @@ def test_assert_charmm_image_min_distance_after_update_uses_provided_log(monkeyp
     assert called["update"] == 0
 
 
-def test_run_charmm_update_capture_image_log_falls_back_to_ener(monkeypatch):
+def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
     calls: list[str] = []
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._force_charmm_image_remap_for_probe",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
+        lambda _cmd: "",
+    )
 
     def _fake_capture(script: str, *, replay: bool = True) -> str:
         calls.append(script)
@@ -113,9 +122,26 @@ def test_run_charmm_update_capture_image_log_falls_back_to_ener(monkeypatch):
         _fake_capture,
     )
     from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
-        run_charmm_update_capture_image_log,
+        run_charmm_image_probe_log,
     )
 
-    log = run_charmm_update_capture_image_log()
+    log = run_charmm_image_probe_log()
     assert calls == ["UPDATE", "ENER"]
     assert parse_mkimat2_min_distances(log) == pytest.approx([6.18, 7.17, 8.93])
+
+
+def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
+        lambda: "no mkimat here",
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_mic_fallback",
+        lambda **kwargs: 2.5,
+    )
+    worst = assert_charmm_image_min_distance_after_update(
+        workflow_args=argparse.Namespace(),
+        context="test",
+        cubic_box_side_A=28.0,
+    )
+    assert worst == pytest.approx(2.5)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,8 +85,74 @@ def assert_charmm_image_min_distance(
     return worst
 
 
+def _resolve_atoms_per_for_image_gate(
+    workflow_args: argparse.Namespace | None,
+) -> list[int] | None:
+    if workflow_args is not None:
+        atoms_per = getattr(workflow_args, "_cluster_atoms_per_list", None)
+        if atoms_per is not None:
+            return [int(x) for x in atoms_per]
+    try:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+            atoms_per_monomer_from_psf,
+        )
+
+        return atoms_per_monomer_from_psf()
+    except Exception:
+        return None
+
+
+def assert_charmm_image_mic_fallback(
+    *,
+    workflow_args: argparse.Namespace | None,
+    box_side_A: float | None,
+    min_distance_A: float,
+    context: str,
+) -> float:
+    """MIC prep gate when ``<MKIMAT2>`` is unavailable (MPI / cached IMAGE lists)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from mmml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
+
+    atoms_per = _resolve_atoms_per_for_image_gate(workflow_args)
+    if not atoms_per or box_side_A is None or float(box_side_A) <= 0.0:
+        raise RuntimeError(
+            f"{context}: cannot run MIC image fallback "
+            "(missing atoms_per_monomer or cubic box side)."
+        )
+    pos = get_charmm_positions_array()
+    z_arr = (
+        getattr(workflow_args, "_cluster_atomic_numbers", None)
+        if workflow_args is not None
+        else None
+    )
+    worst = assert_pre_mlpot_mic_geometry(
+        pos,
+        atoms_per,
+        min_distance_A=float(min_distance_A),
+        box_side=float(box_side_A),
+        use_pbc=True,
+        args=workflow_args,
+        atomic_numbers=z_arr,
+        context=f"{context} (MIC fallback)",
+    )
+    print(
+        f"{context}: MIC image fallback OK "
+        f"(worst inter-monomer {worst:.2f} Å, prep floor {float(min_distance_A):.2f} Å)",
+        flush=True,
+    )
+    return float(worst)
+
+
+def _force_charmm_image_remap_for_probe() -> None:
+    """Re-run ``image byres`` so the next UPDATE/ENER rebuilds ``<MKIMAT2>`` tables."""
+    from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _image_setup_byres_all
+
+    _image_setup_byres_all(0.0, 0.0, 0.0)
+
+
 def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> str:
-    """Run a CHARMM script and return captured Fortran stdout/stderr."""
+    """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
@@ -113,14 +180,78 @@ def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> s
                 pass
 
 
+def _probe_command_via_charmm_log_file(command: str) -> str:
+    """Run one CHARMM command with ``OUTU`` redirected to a temp file (MPI-safe)."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import (
+        _restore_charmm_levels,
+        _set_charmm_levels,
+        charmm_relaxed_bomlev,
+    )
+
+    log_path = (
+        Path(os.environ.get("TMPDIR", "/tmp"))
+        / f"mmml-mkimat-{os.getpid()}-{uuid.uuid4().hex[:8]}.log"
+    )
+    path_quoted = str(log_path)
+    script = (
+        f'open unit 99 write form name "{path_quoted}"\n'
+        "outu 99\n"
+        "prnlev 2\n"
+        "wrnlev 5\n"
+        f"{command.strip()}\n"
+        "close unit 99\n"
+        "outu 6\n"
+    )
+    old = _set_charmm_levels(prnlev=2, warnlev=5, bomlev=-2)
+    try:
+        with charmm_relaxed_bomlev():
+            pycharmm.lingo.charmm_script(script)
+    finally:
+        _restore_charmm_levels(old)
+    if not log_path.is_file():
+        return ""
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+    finally:
+        try:
+            log_path.unlink()
+        except OSError:
+            pass
+    if text.strip():
+        print(text, end="", flush=True)
+    return text
+
+
+def run_charmm_image_probe_log() -> str:
+    """Force IMAGE remap and collect ``<MKIMAT2>`` output (file redirect + fd capture)."""
+    _force_charmm_image_remap_for_probe()
+    chunks: list[str] = []
+
+    for command in ("update", "ener"):
+        file_log = _probe_command_via_charmm_log_file(command)
+        if file_log:
+            chunks.append(file_log)
+        if parse_mkimat2_min_distances("\n".join(chunks)):
+            return "\n".join(chunks)
+
+    capture_log = _run_charmm_script_capture_fortran("UPDATE", replay=True)
+    if capture_log:
+        chunks.append(capture_log)
+    if parse_mkimat2_min_distances("\n".join(chunks)):
+        return "\n".join(chunks)
+
+    ener_log = _run_charmm_script_capture_fortran("ENER", replay=True)
+    if ener_log:
+        chunks.append(ener_log)
+    return "\n".join(chunks)
+
+
 def run_charmm_update_capture_image_log() -> str:
-    """Run ``UPDATE``/``ENER`` and capture Fortran output for ``<MKIMAT2>`` parsing."""
-    log = _run_charmm_script_capture_fortran("UPDATE")
-    if parse_mkimat2_min_distances(log):
-        return log
-    # UPDATE often skips MKIMAT2 when IMAGE tables are already current; ENER rebuilds them.
-    ener_log = _run_charmm_script_capture_fortran("ENER")
-    return f"{log}\n{ener_log}"
+    """Backward-compatible alias for :func:`run_charmm_image_probe_log`."""
+    return run_charmm_image_probe_log()
 
 
 def resolve_charmm_image_min_distance_A(
@@ -139,22 +270,36 @@ def assert_charmm_image_min_distance_after_update(
     workflow_args: argparse.Namespace | None = None,
     context: str = "MLpot PBC",
     charmm_log: str | None = None,
+    cubic_box_side_A: float | None = None,
 ) -> float:
-    """Run ``UPDATE`` (unless ``charmm_log`` given) and enforce IMAGE Min-Distance."""
+    """Enforce IMAGE Min-Distance before MLpot USER/ENER (MKIMAT2 or MIC fallback)."""
     floor = (
         float(min_distance_A)
         if min_distance_A is not None
         else resolve_charmm_image_min_distance_A(workflow_args)
     )
-    log = charmm_log if charmm_log is not None else run_charmm_update_capture_image_log()
-    worst = assert_charmm_image_min_distance(
-        log,
+    log = charmm_log if charmm_log is not None else run_charmm_image_probe_log()
+    if parse_mkimat2_min_distances(log):
+        worst = assert_charmm_image_min_distance(
+            log,
+            min_distance_A=floor,
+            context=context,
+        )
+        print(
+            f"{context}: CHARMM IMAGE Min-Distance OK "
+            f"(worst {worst:.2f} Å, prep floor {floor:.2f} Å; MKIMAT2)",
+            flush=True,
+        )
+        return worst
+
+    print(
+        f"{context}: <MKIMAT2> not emitted (MPI/cached IMAGE); "
+        "using MIC prep gate fallback",
+        flush=True,
+    )
+    return assert_charmm_image_mic_fallback(
+        workflow_args=workflow_args,
+        box_side_A=cubic_box_side_A,
         min_distance_A=floor,
         context=context,
     )
-    print(
-        f"{context}: CHARMM IMAGE Min-Distance OK "
-        f"(worst {worst:.2f} Å, prep floor {floor:.2f} Å)",
-        flush=True,
-    )
-    return worst
