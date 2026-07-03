@@ -135,6 +135,52 @@ def test_resolve_monomer_template_reference_positions_same_residue_fallback(monk
     )
 
 
+def test_resolve_monomer_template_reference_positions_prefers_packmol_template(monkeypatch):
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [9.0, 0.0, 0.0],
+            [0.0, 9.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [40.0, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    tmpl = np.array(
+        [[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [0.0, 1.5, 0.0]],
+        dtype=np.float64,
+    )
+    ctx = _ctx(positions=pos)
+    ctx.workflow_args = SimpleNamespace(
+        residue="DCM",
+        _cluster_residue_geometries={"DCM": tmpl},
+    )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.build_monomer_template_recovery_candidates",
+        lambda *a, **k: [],
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.resolve_extent_reference_positions",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no ref")),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: pos,
+    )
+
+    resolved = resolve_monomer_template_reference_positions(ctx, n_atoms=6)
+    assert resolved is not None
+    arr, source = resolved
+    assert source.name == "<packmol-monomer-template>"
+    np.testing.assert_allclose(
+        arr[3:6] - arr[3:6].mean(axis=0),
+        tmpl - tmpl.mean(axis=0),
+        atol=1e-12,
+    )
+
+
 def test_run_selective_monomer_physnet_mini_skips_without_flagged(monkeypatch):
     ctx = _ctx(positions=np.zeros((6, 3)))
     monkeypatch.setattr(

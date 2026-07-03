@@ -179,3 +179,88 @@ def test_same_residue_cluster_reference_from_ctx(monkeypatch: pytest.MonkeyPatch
         ref[:3] - ref[:3].mean(axis=0),
         atol=1e-12,
     )
+
+
+def test_build_packmol_template_reference_cluster_uses_isolated_template():
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        build_packmol_template_reference_cluster,
+    )
+
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [9.0, 0.0, 0.0],
+            [0.0, 9.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [40.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    offsets = np.array([0, 3, 6], dtype=int)
+    tmpl = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=float,
+    )
+    out = build_packmol_template_reference_cluster(
+        pos,
+        offsets,
+        ["DCM", "DCM"],
+        {"DCM": tmpl},
+    )
+    assert out is not None
+    np.testing.assert_allclose(
+        out[3:6] - out[3:6].mean(axis=0),
+        tmpl - tmpl.mean(axis=0),
+        atol=1e-12,
+    )
+
+
+def test_packmol_template_reference_from_ctx():
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.cluster_geometry import (
+        packmol_template_reference_from_ctx,
+    )
+
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [9.0, 0.0, 0.0],
+            [0.0, 9.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [30.0, 0.0, 0.0],
+            [40.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    tmpl = np.array(
+        [[0.0, 0.0, 0.0], [1.2, 0.0, 0.0], [0.0, 1.2, 0.0]],
+        dtype=float,
+    )
+    ctx = SimpleNamespace(
+        workflow_args=SimpleNamespace(
+            residue="DCM",
+            _cluster_residue_geometries={"DCM": tmpl},
+        ),
+        pyCModel=SimpleNamespace(_atoms_per_monomer=[3, 3]),
+    )
+
+    def _fake_pos():
+        return pos
+
+    import mmml.interfaces.pycharmmInterface.mlpot.setup as setup_mod
+
+    orig = setup_mod.get_charmm_positions_array
+    setup_mod.get_charmm_positions_array = _fake_pos
+    try:
+        ref = packmol_template_reference_from_ctx(ctx, n_atoms=6)
+    finally:
+        setup_mod.get_charmm_positions_array = orig
+
+    assert ref is not None
+    np.testing.assert_allclose(
+        ref[3:6] - ref[3:6].mean(axis=0),
+        tmpl - tmpl.mean(axis=0),
+        atol=1e-12,
+    )
