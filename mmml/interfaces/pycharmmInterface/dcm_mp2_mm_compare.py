@@ -20,6 +20,30 @@ from mmml.data.units import (
 DCM_PSF_MONOMER_PERM = np.array([0, 3, 4, 1, 2], dtype=int)
 ATOMS_PER_DCM = 5
 HYBRID_CALCULATOR_CHOICES = ("checkpoint", "hybrid-ml", "hybrid-monomer")
+# Vacuum MP2 reference: keep dimer ML active (production mm_switch_on tapers ml_2b to 0 beyond R_COM).
+VACUUM_REF_MM_SWITCH_ON_A = 99.0
+
+
+def dcm_dimer_com_distance_A(
+    positions: np.ndarray,
+    *,
+    atoms_per_monomer: int = ATOMS_PER_DCM,
+) -> float:
+    """COM–COM distance (Å) for a DCM dimer in PSF order."""
+    pos = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+    n = int(atoms_per_monomer)
+    if pos.shape[0] < 2 * n:
+        raise ValueError(f"need at least {2 * n} atoms for a dimer, got {pos.shape[0]}")
+    com_a = pos[:n].mean(axis=0)
+    com_b = pos[n : 2 * n].mean(axis=0)
+    return float(np.linalg.norm(com_b - com_a))
+
+
+def default_model_cutoff_from_checkpoint(checkpoint: Path | str) -> float:
+    from mmml.interfaces.calculators.checkpoint_loading import load_checkpoint_bundle
+
+    bundle = load_checkpoint_bundle(Path(checkpoint))
+    return float(bundle.config.get("physnet_config", {}).get("cutoff", 6.0))
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,9 +62,16 @@ def _calculator_slug(name: str) -> str:
 class DcmHybridEvaluator:
     """ASE hybrid / checkpoint calculators for DCM (energies and forces in eV)."""
 
-    def __init__(self, checkpoint: Path | str, *, cutoff: float = 10.0) -> None:
+    def __init__(
+        self,
+        checkpoint: Path | str,
+        *,
+        model_cutoff: float = 6.0,
+        mm_switch_on: float = VACUUM_REF_MM_SWITCH_ON_A,
+    ) -> None:
         self.checkpoint = Path(checkpoint)
-        self.cutoff = float(cutoff)
+        self.model_cutoff = float(model_cutoff)
+        self.mm_switch_on = float(mm_switch_on)
         self._checkpoint_calc: Any | None = None
         self._hybrid_cache: dict[tuple[int, bool], Any] = {}
 
@@ -52,7 +83,7 @@ class DcmHybridEvaluator:
 
             self._checkpoint_calc = create_calculator_from_checkpoint(
                 self.checkpoint,
-                cutoff=self.cutoff,
+                cutoff=self.model_cutoff,
             )
         return self._checkpoint_calc
 
@@ -76,11 +107,12 @@ class DcmHybridEvaluator:
                 model_restart_path=str(self.checkpoint),
                 MAX_ATOMS_PER_SYSTEM=int(n_atoms),
                 ml_sparse_dimers=False,
+                mm_switch_on=self.mm_switch_on,
                 verbose=False,
             )
             cutoff_params = CutoffParameters(
                 ml_switch_width=0.01,
-                mm_switch_on=self.cutoff,
+                mm_switch_on=self.mm_switch_on,
                 mm_switch_width=0.0,
             )
             calc, _spherical_fn, _get_update_fn = factory(
@@ -543,6 +575,8 @@ def compare_mm_to_mp2_frame(
         "source_index": frame.source_index,
         "mp2_energy_eV": frame.e_ref_eV,
     }
+    if frame.n_atoms == 10:
+        out["dimer_com_distance_A"] = dcm_dimer_com_distance_A(frame.r)
     if mm is not None:
         out["jax_energy_kcal"] = mm.jax_energy_kcal
         out["charmm_energy_kcal"] = mm.charmm_energy_kcal
@@ -639,6 +673,14 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
         summary["total_energy_note"] = (
             "Absolute totals differ by QM/MM offset; use interaction_delta_eV for physics."
         )
+    if rows and "dimer_com_distance_A" in rows[0]:
+        com = np.asarray([r["dimer_com_distance_A"] for r in rows], dtype=np.float64)
+        summary["dimer_com_distance_A"] = {
+            "mean": float(np.mean(com)),
+            "median": float(np.median(com)),
+            "p90": float(np.percentile(com, 90)),
+            "max": float(np.max(com)),
+        }
     return summary
 
 
@@ -656,7 +698,8 @@ def run_dcm_mp2_mm_comparison(
     monomer_permutation: np.ndarray | None = DCM_PSF_MONOMER_PERM,
     checkpoint: Path | str | None = None,
     hybrid_calculators: tuple[str, ...] = ("hybrid-ml",),
-    hybrid_cutoff: float = 10.0,
+    hybrid_model_cutoff: float | None = None,
+    hybrid_mm_switch_on: float = VACUUM_REF_MM_SWITCH_ON_A,
     run_mm: bool = True,
 ) -> dict[str, Any]:
     if not run_mm and checkpoint is None:
@@ -695,7 +738,16 @@ def run_dcm_mp2_mm_comparison(
         from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
 
         ensure_jax_x64(context="run_dcm_mp2_mm_comparison")
-        hybrid_eval = DcmHybridEvaluator(checkpoint, cutoff=hybrid_cutoff)
+        model_cutoff = (
+            float(hybrid_model_cutoff)
+            if hybrid_model_cutoff is not None
+            else default_model_cutoff_from_checkpoint(checkpoint)
+        )
+        hybrid_eval = DcmHybridEvaluator(
+            checkpoint,
+            model_cutoff=model_cutoff,
+            mm_switch_on=hybrid_mm_switch_on,
+        )
 
     rows: list[dict[str, Any]] = []
     for frame in frames:
@@ -732,8 +784,13 @@ def run_dcm_mp2_mm_comparison(
             if checkpoint is None
             else {
                 "checkpoint": str(Path(checkpoint)),
-                "cutoff": float(hybrid_cutoff),
+                "model_cutoff_A": float(hybrid_eval.model_cutoff),
+                "mm_switch_on_A": float(hybrid_eval.mm_switch_on),
                 "calculators": list(hybrid_calculators),
+                "note": (
+                    "Vacuum MP2 reference uses large mm_switch_on so dimer ML is not "
+                    "tapered by COM distance (production MD uses ~6–8 Å)."
+                ),
             }
         ),
         "summary": summary,
@@ -798,6 +855,14 @@ def _write_comparison_md(
     )
     if hybrid_calc_names:
         lines.extend(["", "## Hybrid calculators vs MP2", ""])
+        hybrid_meta = summary.get("hybrid_mm_switch_on_A")
+        if hybrid_meta is None and rows and rows[0].get("hybrid"):
+            lines.append(
+                "Hybrid uses vacuum reference settings (large `mm_switch_on` so dimer ML "
+                "is not COM-tapered; prior runs with `--cutoff 6` as switch had "
+                "`interaction_eV=0` when COM > switch)."
+            )
+            lines.append("")
         for calc_name in hybrid_calc_names:
             slug = _calculator_slug(calc_name)
             force_block = summary.get(f"hybrid_{slug}_mp2_force_rmse_ev_A", {})

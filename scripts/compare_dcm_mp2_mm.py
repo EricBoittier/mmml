@@ -74,10 +74,22 @@ def _parse_args() -> argparse.Namespace:
         help="Hybrid calculators to run when --checkpoint is set (default: hybrid-ml)",
     )
     parser.add_argument(
+        "--model-cutoff",
+        type=float,
+        default=None,
+        help="PhysNet graph cutoff Å (default: read from checkpoint, usually 6)",
+    )
+    parser.add_argument(
         "--cutoff",
         type=float,
-        default=10.0,
-        help="ML cutoff / mm_switch_on for hybrid calculators (default: 10 Å)",
+        default=None,
+        help="Deprecated alias for --model-cutoff",
+    )
+    parser.add_argument(
+        "--mm-switch-on",
+        type=float,
+        default=99.0,
+        help="Hybrid dimer ML taper onset Å (default: 99 = full dimer ML for vacuum MP2; use 6–8 for production-style)",
     )
     parser.add_argument(
         "--jax-platform",
@@ -131,6 +143,7 @@ def main() -> int:
     )
 
     perm = parse_monomer_permutation(args.monomer_permutation)
+    model_cutoff = args.model_cutoff if args.model_cutoff is not None else args.cutoff
     payload = run_dcm_mp2_mm_comparison(
         args.data,
         args.output_dir,
@@ -144,7 +157,8 @@ def main() -> int:
         monomer_permutation=perm,
         checkpoint=args.checkpoint,
         hybrid_calculators=tuple(args.calculators),
-        hybrid_cutoff=args.cutoff,
+        hybrid_model_cutoff=model_cutoff,
+        hybrid_mm_switch_on=args.mm_switch_on,
         run_mm=not args.hybrid_only,
     )
     summary = payload["summary"]
