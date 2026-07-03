@@ -129,7 +129,6 @@ def assert_charmm_image_mic_fallback(
     worst = assert_pre_mlpot_mic_geometry(
         pos,
         atoms_per,
-        min_distance_A=float(min_distance_A),
         box_side=float(box_side_A),
         use_pbc=True,
         args=workflow_args,

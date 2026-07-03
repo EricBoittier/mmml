@@ -130,7 +130,48 @@ def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
     assert parse_mkimat2_min_distances(log) == pytest.approx([6.18, 7.17, 8.93])
 
 
-def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):
+def test_assert_charmm_image_mic_fallback_calls_mic_geometry(monkeypatch):
+    import numpy as np
+
+    captured: dict[str, object] = {}
+
+    def _fake_mic_geometry(pos, atoms_per, *, box_side, use_pbc, args=None, atomic_numbers=None, context=""):
+        captured.update(
+            {
+                "box_side": box_side,
+                "use_pbc": use_pbc,
+                "context": context,
+                "n_atoms": len(pos),
+            }
+        )
+        return 3.42
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: np.zeros((10, 3)),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
+        lambda _args: [5, 5],
+    )
+    monkeypatch.setattr(
+        "mmml.utils.intermonomer_geometry.assert_pre_mlpot_mic_geometry",
+        _fake_mic_geometry,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        assert_charmm_image_mic_fallback,
+    )
+
+    worst = assert_charmm_image_mic_fallback(
+        workflow_args=argparse.Namespace(),
+        box_side_A=27.993,
+        min_distance_A=2.3,
+        context="test gate",
+    )
+    assert worst == pytest.approx(3.42)
+    assert captured["box_side"] == pytest.approx(27.993)
+    assert captured["use_pbc"] is True
+    assert "MIC fallback" in str(captured["context"])
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         lambda: "no mkimat here",
