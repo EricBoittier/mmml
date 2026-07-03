@@ -2,7 +2,7 @@
 #
 # Matrix: setups × bulk_density_fractions × box_sizes × temperatures
 #         × heat_thermostats (when set)
-# Campaign per cell: pycharmm_init → equi → prod → jaxmd → ase (when dynamics_legs enabled)
+# Campaign per cell: pycharmm_mini (mini+heat) until dynamics_legs are re-enabled
 # Output: artifacts/dcm_density_setup_compare/{setup}_dcm_{n}_t{T}_l{L}[_ht_{thermostat}]/
 
 setups:
@@ -15,18 +15,23 @@ setups:
 
 solvents: [DCM]
 
-bulk_density_fractions: [0.25, 0.5]
-# bulk_density_fractions: [0.25, 0.5, 0.75, 1.0]
-bulk_density_n_min: 10
-temperatures: [50.0, 75.0, 100.0]
-# Higher-T cells wait for the next-lower T done.txt and continue from its handoff
-# (Packmol + mini skipped; heat ramps prior_T → target_T).
-temperature_ladder: true
-box_sizes: [28.0, 30.0, 32.0]
+# Anchor-only while validating prep (Pre-dynamics GRMS OK on 52_t50_l28).
+# Full matrix (uncomment after anchor passes):
+# bulk_density_fractions: [0.25, 0.5]
+# temperatures: [50.0, 75.0, 100.0]
+# temperature_ladder: true
+# box_sizes: [28.0, 30.0, 32.0]
+bulk_density_fractions: [0.25]
+temperatures: [50.0]
+temperature_ladder: false
+box_sizes: [28.0]
 
 checkpoint: ${MMML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
+
+# Same Packmol seed as prep_sweep anchor (do not offset by heat_thermostat name).
+placement_seed_ignore_heat: true
 
 dt_fs: 0.25
 pressure: 1.0
@@ -81,12 +86,12 @@ n_heat_segments: 1
 heat_firstt: 10.0
 no_echeck_heat: true
 
-# Post-prep dynamics legs (short smoke ps; increase for production runs).
+# Re-enable after anchor passes mini+heat (Pre-dynamics GRMS OK, heat completes).
 dynamics_legs:
-  pycharmm_equi: true
-  pycharmm_prod: true
-  jaxmd: true
-  ase: true
+  pycharmm_equi: false
+  pycharmm_prod: false
+  jaxmd: false
+  ase: false
 default_heat_thermostat: bussi
 handoff_write_res: true
 continue_velocities: true

@@ -166,11 +166,12 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
         "resilient",
         "DCM",
         52,
-        temperature=100.0,
+        temperature=50.0,
         box_size=28.0,
         heat_thermostat="bussi",
     )
     init_id = init_job_id(cfg)
+    assert init_id == "pycharmm_mini"
     init = build_campaign(cfg, cell)["runs"][init_id]
     assert init.get("liquid_prep") is True
     assert init.get("calculator_pre_minimize") is True
@@ -376,23 +377,41 @@ def test_default_config_matrix_job_count() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
     assert heat_compare_enabled(cfg)
     assert matrix_heat_thermostats(cfg) == ["bussi"]
-    assert temperature_ladder_enabled(cfg)
-    assert dynamics_campaign_enabled(cfg)
+    assert not temperature_ladder_enabled(cfg)
+    assert not dynamics_campaign_enabled(cfg)
     assert parse_dynamics_legs(cfg) == {
-        "pycharmm_equi": True,
-        "pycharmm_prod": True,
-        "jaxmd": True,
-        "ase": True,
+        "pycharmm_equi": False,
+        "pycharmm_prod": False,
+        "jaxmd": False,
+        "ase": False,
     }
-    assert campaign_job_order(cfg) == [
-        "pycharmm_init",
-        "pycharmm_equi_01",
-        "pycharmm_prod_01",
-        "jaxmd_prod",
-        "ase_prod",
-    ]
-    # resilient × 2 fractions × 3 T × 3 L × 1 thermostat = 18
-    assert matrix_job_count(cfg) == 18
+    assert campaign_job_order(cfg) == ["pycharmm_mini"]
+    # Anchor-only matrix while validating prep on 52_t50_l28
+    assert matrix_job_count(cfg) == 1
+
+
+def test_main_config_placement_seed_ignores_heat_thermostat() -> None:
+    cfg = load_config(WORKFLOW / "config.yaml")
+    assert cfg.get("placement_seed_ignore_heat") is True
+    with_ht = cell_from_cli(
+        cfg,
+        "resilient",
+        "DCM",
+        52,
+        temperature=50.0,
+        box_size=28.0,
+        heat_thermostat="bussi",
+    )
+    without_ht = RunCell(
+        setup_id="resilient",
+        solvent="DCM",
+        n_monomers=52,
+        temperature=50.0,
+        box_size=28.0,
+    )
+    assert cl.run_seed(with_ht, seed_base=4242, cfg=cfg) == cl.run_seed(
+        without_ht, seed_base=4242, cfg=cfg
+    )
 
 
 def test_full_dynamics_campaign_chain(cfg: dict, cell: RunCell) -> None:

@@ -130,3 +130,8 @@ fi
 if [[ -n "${MMML_CKPT:-}" ]]; then
   echo "MMML_CKPT=${MMML_CKPT} (optional override when config uses \${MMML_CKPT})"
 fi
+
+if [[ -n "${MMML_MLPOT_ALLOW_HIGH_GRMS:-}" ]]; then
+  echo "WARNING: MMML_MLPOT_ALLOW_HIGH_GRMS=${MMML_MLPOT_ALLOW_HIGH_GRMS} — unset before batch." >&2
+  echo "  High-GRMS bypass lets mini proceed above max_grms_before_dyn and usually fails in overlap rescue." >&2
+fi

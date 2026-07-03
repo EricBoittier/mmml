@@ -484,17 +484,20 @@ def prep_sweep_placement_seed_ignore_heat(cfg: dict[str, Any]) -> bool:
     return bool(prep_sweep_section(cfg).get("placement_seed_ignore_heat", True))
 
 
+def placement_seed_ignore_heat(cfg: dict[str, Any]) -> bool:
+    """When true, heat thermostat name does not shift Packmol / placement seed."""
+    if bool(cfg.get("placement_seed_ignore_heat", False)):
+        return True
+    return prep_sweep_placement_seed_ignore_heat(cfg)
+
+
 def run_seed(cell: RunCell, *, seed_base: int = 4242, cfg: dict[str, Any] | None = None) -> int:
     setup_off = sum(ord(c) for c in cell.setup_id) % 1000
     solvent_off = sum(ord(c) for c in solvent_slug(cell.solvent)) % 1000
     temp_off = int(round(cell.temperature)) % 100
     box_off = int(round(cell.box_size)) % 100
     heat_off = 0
-    ignore_heat_seed = (
-        cfg is not None
-        and cell.sweep_id
-        and prep_sweep_placement_seed_ignore_heat(cfg)
-    )
+    ignore_heat_seed = cfg is not None and placement_seed_ignore_heat(cfg)
     if cell.heat_thermostat and not ignore_heat_seed:
         heat_off = {"bussi": 11, "hoover": 22, "scale": 33}[cell.heat_thermostat]
     sweep_off = 0
@@ -575,6 +578,18 @@ def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     else:
         flags.update(dense_cell_mlpot_overrides(cell, effective))
     _apply_workflow_job_overrides(flags, effective)
+    # Global workflow yaml (resilient-focused) must not override setup-specific disables.
+    for key in (
+        "cleanup",
+        "calculator_pre_minimize",
+        "liquid_prep",
+        "density_prep_ladder",
+        "charmm_mm_pretreat",
+        "charmm_pre_minimize",
+        "bonded_mm_mini",
+    ):
+        if key in variant.job_overrides:
+            flags[key] = variant.job_overrides[key]
     return flags
 
 
