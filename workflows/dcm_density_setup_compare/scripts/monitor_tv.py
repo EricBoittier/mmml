@@ -7,9 +7,12 @@ import argparse
 import json
 import os
 import re
+import select
 import subprocess
 import sys
+import termios
 import time
+import tty
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -434,7 +437,7 @@ def render_dashboard(
         (driver_log, "dim cyan"),
     )
     controls = Text(
-        "Ctrl-b n next  ·  Ctrl-b p prev  ·  Ctrl-b Space pause  ·  Ctrl-b d detach",
+        "Focus this pane: n next · p prev · Space pause  │  any pane: Ctrl-b then n/p/Space",
         style="dim italic",
     )
 
@@ -463,6 +466,58 @@ def render_dashboard(
     return root
 
 
+def _channel_status_line(state: dict[str, Any]) -> str:
+    channels = state.get("channels") or []
+    n = max(len(channels), 1)
+    idx = int(state.get("index", 0)) % n
+    tag = channels[idx] if channels else "(empty)"
+    paused = " ⏸" if state.get("paused") else ""
+    return f"CH {idx + 1}/{n}{paused} · {tag}"
+
+
+def _apply_ctl_action(state: dict[str, Any], action: str) -> dict[str, Any]:
+    channels = state.get("channels") or []
+    n = max(len(channels), 1)
+    idx = int(state.get("index", 0))
+    if action == "next":
+        state["index"] = (idx + 1) % n
+    elif action == "prev":
+        state["index"] = (idx - 1) % n
+    elif action == "pause":
+        state["paused"] = not bool(state.get("paused", False))
+    else:
+        raise ValueError(f"unknown action: {action}")
+    return state
+
+
+def _poll_keyboard(timeout: float) -> str | None:
+    """Non-blocking single-key read when stdin is a tty (TV pane focused)."""
+    if not sys.stdin.isatty():
+        return None
+    ready, _, _ = select.select([sys.stdin], [], [], timeout)
+    if not ready:
+        return None
+    ch = sys.stdin.read(1)
+    if not ch:
+        return None
+    if ch == "\x1b":  # arrow keys / escape sequences
+        extra, _, _ = select.select([sys.stdin], [], [], 0.02)
+        if extra:
+            seq = ch + sys.stdin.read(2)
+            if seq.endswith("C"):
+                return "next"
+            if seq.endswith("D"):
+                return "prev"
+        return None
+    if ch in ("n", "N"):
+        return "next"
+    if ch in ("p", "P"):
+        return "prev"
+    if ch == " ":
+        return "pause"
+    return None
+
+
 def run_live(args: argparse.Namespace) -> int:
     cfg_path = _resolve_config(args.config)
     cfg = load_config(cfg_path)
@@ -486,63 +541,73 @@ def run_live(args: argparse.Namespace) -> int:
     console = Console()
     last_rotate = 0.0
     last_mtime = 0.0
+    stdin_mode: list[Any] | None = None
+    if sys.stdin.isatty():
+        stdin_mode = termios.tcgetattr(sys.stdin)
+        tty.setcbreak(sys.stdin.fileno())
 
-    with Live(console=console, refresh_per_second=4, screen=True) as live:
-        while True:
-            state = _load_state()
-            channels = state.get("channels") or channels
-            if not channels:
-                channels = ["(empty)"]
-            idx = int(state.get("index", 0)) % len(channels)
-            paused = bool(state.get("paused", False))
+    try:
+        with Live(console=console, refresh_per_second=4, screen=True) as live:
+            while True:
+                state = _load_state()
+                channels = state.get("channels") or channels
+                if not channels:
+                    channels = ["(empty)"]
+                idx = int(state.get("index", 0)) % len(channels)
+                paused = bool(state.get("paused", False))
 
-            rows = _squeue_rows()
-            snapshots = {
-                t: _parse_log(t, art / t, rows) for t in channels if t != "(empty)"
-            }
+                rows = _squeue_rows()
+                snapshots = {
+                    t: _parse_log(t, art / t, rows) for t in channels if t != "(empty)"
+                }
 
-            live.update(
-                render_dashboard(
-                    channels,
-                    idx,
-                    snapshots,
-                    interval=args.interval,
-                    paused=paused,
-                    driver_log=args.driver_log,
+                live.update(
+                    render_dashboard(
+                        channels,
+                        idx,
+                        snapshots,
+                        interval=args.interval,
+                        paused=paused,
+                        driver_log=args.driver_log,
+                    )
                 )
-            )
 
-            # External ctl (tmux keys) bumps mtime on state file
-            st_path = _state_path()
-            mtime = st_path.stat().st_mtime if st_path.is_file() else 0.0
-            if mtime != last_mtime:
-                last_mtime = mtime
-                last_rotate = time.time()
+                # Keys in this pane (no Ctrl-b prefix needed)
+                key_action = _poll_keyboard(0.25)
+                if key_action:
+                    state = _apply_ctl_action(state, key_action)
+                    _save_state(state)
+                    last_rotate = time.time()
+                    last_mtime = _state_path().stat().st_mtime
+                    continue
 
-            if not paused and (time.time() - last_rotate) >= args.interval:
-                state["index"] = (idx + 1) % len(channels)
-                _save_state(state)
-                last_rotate = time.time()
-                last_mtime = _state_path().stat().st_mtime
+                # External ctl (tmux / monitor_tv_ctl.sh)
+                st_path = _state_path()
+                mtime = st_path.stat().st_mtime if st_path.is_file() else 0.0
+                if mtime != last_mtime:
+                    last_mtime = mtime
+                    last_rotate = time.time()
 
-            time.sleep(0.25)
+                if not paused and (time.time() - last_rotate) >= args.interval:
+                    state["index"] = (idx + 1) % len(channels)
+                    _save_state(state)
+                    last_rotate = time.time()
+                    last_mtime = _state_path().stat().st_mtime
+    finally:
+        if stdin_mode is not None:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, stdin_mode)
+    return 0
 
 
-def cmd_ctl(action: str) -> int:
-    state = _load_state()
-    channels = state.get("channels") or []
-    n = max(len(channels), 1)
-    idx = int(state.get("index", 0))
-    if action == "next":
-        state["index"] = (idx + 1) % n
-    elif action == "prev":
-        state["index"] = (idx - 1) % n
-    elif action == "pause":
-        state["paused"] = not bool(state.get("paused", False))
-    else:
-        print(f"unknown action: {action}", file=sys.stderr)
+def cmd_ctl(action: str, *, message: bool = False) -> int:
+    try:
+        state = _apply_ctl_action(_load_state(), action)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
     _save_state(state)
+    if message:
+        print(_channel_status_line(state))
     return 0
 
 
@@ -584,9 +649,6 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    sub = parser.add_subparsers(dest="cmd")
-
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--config", help="workflow config (default: MMML_WORKFLOW_CONFIG)")
     common.add_argument("--tags", nargs="*", help="explicit channel list")
@@ -596,35 +658,36 @@ def main() -> int:
         help="keep finished cells in rotation",
     )
 
-    live = argparse.ArgumentParser(add_help=False, parents=[common])
-    live.add_argument("--interval", type=float, default=12.0, help="auto-rotate seconds")
-    live.add_argument("--driver-log", default="snakemake_slurm.log")
-    sub.add_parser("live", parents=[live], help="full-screen TV dashboard (default)")
-    sub.add_parser("init", parents=[common], help="seed .monitor_tv/state.json channel list")
-    sub.add_parser("list", parents=[common], help="print channel list")
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        parents=[common],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--interval", type=float, default=12.0, help="auto-rotate seconds")
+    parser.add_argument("--driver-log", default="snakemake_slurm.log")
+
+    sub = parser.add_subparsers(dest="cmd", required=False)
+    sub.add_parser("live", help="full-screen TV dashboard (default)")
+    sub.add_parser("init", help="seed .monitor_tv/state.json channel list")
+    sub.add_parser("list", help="print channel list")
 
     p_ctl = sub.add_parser("ctl", help="next|prev|pause (for tmux bindings)")
     p_ctl.add_argument("action", choices=["next", "prev", "pause"])
+    p_ctl.add_argument(
+        "--message",
+        action="store_true",
+        help="print channel status line (for tmux display-message)",
+    )
 
     args = parser.parse_args()
-    if args.cmd == "ctl":
-        return cmd_ctl(args.action)
-    if args.cmd == "init":
+    cmd = args.cmd or "live"
+    if cmd == "ctl":
+        return cmd_ctl(args.action, message=bool(args.message))
+    if cmd == "init":
         return cmd_init(args)
-    if args.cmd == "list":
+    if cmd == "list":
         return cmd_list(args)
-    if args.cmd == "live":
-        return run_live(args)
-    # default: live dashboard with defaults
-    return run_live(
-        argparse.Namespace(
-            config=None,
-            tags=None,
-            include_done=False,
-            interval=12.0,
-            driver_log="snakemake_slurm.log",
-        )
-    )
+    return run_live(args)
 
 
 if __name__ == "__main__":

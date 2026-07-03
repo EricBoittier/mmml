@@ -100,7 +100,7 @@ pgrep -af 'snakemake --profile profiles/slurm'
 bash scripts/monitor_tmux.sh
 bash scripts/monitor_tmux.sh --interval 8 --tags resilient_dcm_77_t50_l32_ht_bussi resilient_dcm_52_t50_l28_ht_bussi
 bash scripts/monitor_tmux.sh --log snakemake_prep_sweep.log --session prep --replace
-# Keys: Ctrl-b n/p/Space (next/prev/pause). Channel list:
+# Keys: focus TV pane n/p/Space, or Ctrl-b n/p/←/→. Channel list:
 uv run python scripts/monitor_tv.py list --config config.yaml
 ```
 

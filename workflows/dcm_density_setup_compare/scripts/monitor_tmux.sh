@@ -121,6 +121,17 @@ CTL="$WORKFLOW_ROOT/scripts/monitor_tv_ctl.sh"
 PY="$MMML_PYTHON"
 TV="$WORKFLOW_ROOT/scripts/monitor_tv.py"
 
+_apply_tv_bindings() {
+  # User bindings (override tmux default n/p = next/prev *window*).
+  tmux bind-key -T prefix n run-shell "bash '$CTL' next"
+  tmux bind-key -T prefix p run-shell "bash '$CTL' prev"
+  tmux bind-key -T prefix Space run-shell "bash '$CTL' pause"
+  tmux bind-key -T prefix N run-shell "bash '$CTL' next"
+  tmux bind-key -T prefix P run-shell "bash '$CTL' prev"
+  tmux bind-key -T prefix Right run-shell "bash '$CTL' next"
+  tmux bind-key -T prefix Left run-shell "bash '$CTL' prev"
+}
+
 TV_ARGS=(live --interval "$INTERVAL" --driver-log "$(basename "$DRIVER_LOG")")
 if $INCLUDE_DONE; then
   TV_ARGS+=(--include-done)
@@ -156,7 +167,8 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
   if $REPLACE; then
     tmux kill-session -t "$SESSION"
   else
-    echo "Session '$SESSION' exists — attaching (use --replace to rebuild)"
+    echo "Session '$SESSION' exists — refreshing key bindings (use --replace to rebuild panes)"
+    _apply_tv_bindings
     exec tmux attach-session -t "$SESSION"
   fi
 fi
@@ -178,13 +190,10 @@ tmux set-option -t "$SESSION" status-style 'bg=colour235,fg=colour141'
 tmux set-option -t "$SESSION" status-left-length 40
 tmux set-option -t "$SESSION" status-right-length 60
 tmux set-option -t "$SESSION" status-left '#[bold fg=colour213] 📺 DCM-TV #[fg=colour81]|#[default] '
-tmux set-option -t "$SESSION" status-right '#[dim]n next · p prev · Space pause · #{?client_prefix,^B ,}#[default] #[fg=colour213]%H:%M#[default]'
+tmux set-option -t "$SESSION" status-right '#[dim]focus TV: n/p/Space · ^B n/p/←/→ · %H:%M#[default]'
 tmux set-window-option -t "$SESSION:0" window-status-current-style 'bg=colour236,fg=colour213,bold'
 
-# Remote channel surf (works from any pane)
-tmux bind-key -T prefix n run-shell "bash '$CTL' next"
-tmux bind-key -T prefix p run-shell "bash '$CTL' prev"
-tmux bind-key -T prefix Space run-shell "bash '$CTL' pause"
+_apply_tv_bindings
 
 tmux select-pane -t "$SESSION:0.1"
 
@@ -192,10 +201,9 @@ echo "Created tmux TV session '$SESSION'"
 echo "  left:  tail -F $(basename "$DRIVER_LOG")"
 echo "  right: rotating channels (every ${INTERVAL}s)"
 echo
-echo "  Ctrl-b n     next channel"
-echo "  Ctrl-b p     previous channel"
-echo "  Ctrl-b Space pause / resume"
-echo "  Ctrl-b d     detach"
+echo "  Focus TV pane (right):  n / p / Space"
+echo "  From any pane:          Ctrl-b n/p/Space or Ctrl-b ←/→"
+echo "  Ctrl-b d                detach"
 echo
 echo "  Channel list: $PY scripts/monitor_tv.py list --config $CONFIG"
 echo "  Reattach:     tmux attach -t $SESSION"
