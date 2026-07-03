@@ -398,25 +398,17 @@ def restore_charmm_cubic_crystal_lattice(
     """Reinstall CUBI crystal after ``crystal free`` or ``READ PARAM`` IMAGE clear.
 
     ``read_param_file`` (append) and ``crystal free`` drop IMAGE atom tables while
-    lattice transforms may still be active.  After ``crystal build``, run
-    ``image byres`` (via :func:`_image_setup_byres_all`) before ``upinb`` /
-    ``UPIMNB`` — otherwise ``MAKGRP`` can segfault with NTRANS>0 and NATIM=0.
+    lattice transforms may still be active.  Uses the same ``define_cubic`` +
+    ``crystal build`` + ``image byres`` path as :func:`prepare_charmm_pbc` so
+    switching cutoffs stay ordered (``ctonnb < ctofnb < cutnb``).
 
     Set ``apply_nbonds=False`` when ML exclusions must be installed before the first
     ``upinb`` (PBC registration after CGENFF param read).
     """
-    import pycharmm.crystal as crystal
-
-    from mmml.interfaces.pycharmmInterface.charmm_mpi import mpi_charmm_script
-    from mmml.interfaces.pycharmmInterface.pycharmmCommands import pbcset
-
     side = float(cubic_box_side_A)
     if side <= 0.0:
         raise ValueError(f"cubic box side must be > 0, got {side}")
-    mpi_charmm_script(pbcset.format(SIDELENGTH=side), quiet=True)
-    if not crystal.set_cubic_side(side):
-        raise RuntimeError(f"crystal.set_cubic_side failed for L={side} Å")
-    _image_setup_byres_all(0.0, 0.0, 0.0)
+    prepare_charmm_pbc(side)
     if apply_nbonds:
         apply_pbc_nbonds(nbxmod=nbxmod, cubic_box_side_A=side)
     if not quiet:
