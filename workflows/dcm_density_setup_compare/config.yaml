@@ -38,14 +38,14 @@ pressure: 1.0
 # Prep sweep winners: spacing50 + mm_vdw_off + jax_mic nonbond + CHARMM pretreat.
 spacing: 5.0
 periodic_charmm_vdw: false
-packmol_tolerance: 2.0
-packmol_box_padding: 1.0
+packmol_tolerance: 5.0
+packmol_box_padding: 2.0
 mm_nonbond_mode: jax_mic
 charmm_mm_pretreat: true
 
 # Stricter pre-dynamics GRMS gate (do not scale up with bad per-monomer stats).
-no_scale_max_grms: true
-max_grms_before_dyn: 50.0
+# no_scale_max_grms: true
+max_grms_before_dyn: 200.0
 # Smoke/debug: proceed when mini GRMS > max_before_dyn (overlap rescue may still fail).
 allow_high_grms: true
 

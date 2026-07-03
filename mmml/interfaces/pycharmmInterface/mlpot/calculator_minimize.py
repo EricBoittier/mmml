@@ -129,6 +129,11 @@ def _hybrid_grms_from_ase_atoms(atoms: Any) -> float:
     return forces_grms_kcalmol_A(forces_ev * EV_TO_KCAL_MOL)
 
 
+def hybrid_calculators_synced(diag_kind: str) -> bool:
+    """True when hybrid ASE mini is safe (hybrid/CHARMM GRMS are not desynced)."""
+    return str(diag_kind) != "desync_suspected"
+
+
 def hybrid_calculator_mini_eligible(
     hybrid_grms: float,
     *,
@@ -137,11 +142,16 @@ def hybrid_calculator_mini_eligible(
     grms_hot: bool,
     user_hot: bool,
 ) -> bool:
-    """Whether ASE hybrid BFGS is appropriate (bonded recovery should run first when False)."""
-    max_start = float(grms_limit) if grms_limit is not None else 50.0
-    if float(hybrid_grms) > max_start:
-        return False
-    return bool(grms_hot or diag_kind == "geometry_stress" or user_hot)
+    """Whether ASE hybrid BFGS/FIRE may run (synced calculators; GRMS may be high)."""
+    del hybrid_grms, grms_limit, grms_hot, user_hot  # kept for call-site compatibility
+    return hybrid_calculators_synced(diag_kind)
+
+
+def _max_start_grms_kcalmol_A(max_start: float | None) -> float:
+    """GRMS ceiling to *start* calculator mini; ``None`` means no cap (sync-gated elsewhere)."""
+    if max_start is None:
+        return float("inf")
+    return float(max_start)
 
 
 def spike_fmax_limit_ev_a(
@@ -1032,10 +1042,13 @@ def minimize_hybrid_calculator_before_sd(
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=config.verbose)
     pos0 = get_charmm_positions_array()
     grms0 = mlpot_hybrid_grms_from_calculator(mlpot_ctx, positions=pos0)
-    max_start = config.max_start_grms_kcalmol_A
-    if max_start is None:
-        max_start = 50.0
-    if grms0 is not None and np.isfinite(grms0) and float(grms0) > float(max_start):
+    max_start = _max_start_grms_kcalmol_A(config.max_start_grms_kcalmol_A)
+    if (
+        np.isfinite(max_start)
+        and grms0 is not None
+        and np.isfinite(grms0)
+        and float(grms0) > float(max_start)
+    ):
         if config.verbose:
             print(
                 f"{context_prefix}: skip calculator BFGS "
@@ -1164,10 +1177,13 @@ def minimize_hybrid_calculator_fire_before_sd(
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=config.verbose)
     pos0 = get_charmm_positions_array()
     grms0 = mlpot_hybrid_grms_from_calculator(mlpot_ctx, positions=pos0)
-    max_start = config.max_start_grms_kcalmol_A
-    if max_start is None:
-        max_start = 50.0
-    if grms0 is not None and np.isfinite(grms0) and float(grms0) > float(max_start):
+    max_start = _max_start_grms_kcalmol_A(config.max_start_grms_kcalmol_A)
+    if (
+        np.isfinite(max_start)
+        and grms0 is not None
+        and np.isfinite(grms0)
+        and float(grms0) > float(max_start)
+    ):
         if config.verbose:
             print(
                 f"{context_prefix}: skip calculator FIRE "
