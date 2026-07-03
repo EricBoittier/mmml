@@ -167,6 +167,9 @@ prep_sweep:
     pyxtal:
       builder: crystal
       pyxtal: true
+      pyxtal_spg: 60
+      pyxtal_stoichiometry: [4]
+      pyxtal_attempts: 60
     pmtol25:
       packmol_tolerance: 2.5
     pmtol30:

@@ -320,7 +320,58 @@ def resolve_pyxtal_unit_stoichiometry(
         if any(z <= 0 for z in vals):
             raise ValueError(f"--pyxtal-stoichiometry entries must be positive: {vals}")
         return vals
+    if len(species) == 1 and species[0] == "DCM":
+        return [4]
     return [2] * len(species)
+
+
+def resolve_pyxtal_space_group(
+    composition: Sequence[tuple[str, int]],
+    pyxtal_spg: int | None = None,
+) -> int:
+    """Default space group: literature Pbcn (60) for homogeneous DCM when spg unset/14."""
+    spg = 14 if pyxtal_spg is None else int(pyxtal_spg)
+    species = unique_residue_species(composition)
+    if len(species) == 1 and species[0] == "DCM" and spg == 14:
+        return 60
+    return spg
+
+
+def resolve_pyxtal_molecule_spec(residue: str) -> str | None:
+    """Return a PyXtal-friendly molecule spec when CHARMM PDB is known to fail."""
+    key = str(residue).strip().upper()
+    if key == "DCM":
+        from mmml.paths import default_dcm_molecule_xyz
+
+        return str(default_dcm_molecule_xyz())
+    return None
+
+
+def resolve_pyxtal_supercell_for_composition(
+    composition: Sequence[tuple[str, int]],
+    unit_stoichiometry: Sequence[int] | None = None,
+    *,
+    explicit_reps: Sequence[int] | None = None,
+) -> tuple[int, int, int]:
+    """Choose supercell reps so PyXtal builds at least as many molecules as composition."""
+    if explicit_reps is not None:
+        reps = tuple(int(r) for r in explicit_reps)
+        if len(reps) != 3 or any(r <= 0 for r in reps):
+            raise ValueError(f"supercell repetitions must be three positive ints: {reps}")
+        return reps  # type: ignore[return-value]
+
+    n_target = int(sum(int(cnt) for _res, cnt in composition))
+    if n_target <= 0:
+        return (1, 1, 1)
+    stoich = resolve_pyxtal_unit_stoichiometry(composition, unit_stoichiometry)
+    per_cell = int(sum(stoich))
+    if per_cell <= 0:
+        return (1, 1, 1)
+    cells_needed = (n_target + per_cell - 1) // per_cell
+    side = max(1, int(round(float(cells_needed) ** (1.0 / 3.0) + 0.499)))
+    while side**3 < cells_needed:
+        side += 1
+    return (side, side, side)
 
 
 def validate_pyxtal_cluster_args(

@@ -39,6 +39,24 @@ def test_parse_stoichiometry_defaults_and_repeat():
     assert parse_stoichiometry(["a.xyz"], None, None) == [2]
 
 
+def test_resolve_pyxtal_dcm_defaults() -> None:
+    from mmml.interfaces.pyxtal_placement import (
+        resolve_pyxtal_molecule_spec,
+        resolve_pyxtal_space_group,
+        resolve_pyxtal_supercell_for_composition,
+        resolve_pyxtal_unit_stoichiometry,
+    )
+
+    comp = [("DCM", 52)]
+    assert resolve_pyxtal_unit_stoichiometry(comp, None) == [4]
+    assert resolve_pyxtal_space_group(comp, None) == 60
+    assert resolve_pyxtal_space_group(comp, 60) == 60
+    assert resolve_pyxtal_supercell_for_composition(comp, [4]) == (3, 3, 3)
+    spec = resolve_pyxtal_molecule_spec("DCM")
+    assert spec is not None
+    assert spec.endswith(".xyz")
+
+
 def test_crystal_mass_density_and_scale():
     from ase import Atoms
 

@@ -598,6 +598,8 @@ _WORKFLOW_JOB_OVERRIDE_KEYS = (
     "pyxtal_dim",
     "pyxtal_factor",
     "pyxtal_attempts",
+    "pyxtal_stoichiometry",
+    "pyxtal_supercell",
     "rebuild_packmol",
 )
 

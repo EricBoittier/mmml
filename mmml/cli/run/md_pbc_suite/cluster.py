@@ -673,6 +673,9 @@ def build_pyxtal_composition_cluster(
         build_molecular_crystal_random,
         have_pyxtal,
         require_pyxtal,
+        resolve_pyxtal_molecule_spec,
+        resolve_pyxtal_space_group,
+        resolve_pyxtal_supercell_for_composition,
         resolve_pyxtal_unit_stoichiometry,
         unique_residue_species,
     )
@@ -682,7 +685,13 @@ def build_pyxtal_composition_cluster(
         require_pyxtal()
 
     scratch_root = Path(scratch_dir) if scratch_dir is not None else Path("pdb/pyxtal_cluster")
-    reps = supercell_reps if supercell_reps is not None else (1, 1, 1)
+    stoich = resolve_pyxtal_unit_stoichiometry(composition, unit_stoichiometry)
+    spg = resolve_pyxtal_space_group(composition, space_group)
+    reps = resolve_pyxtal_supercell_for_composition(
+        composition,
+        stoich,
+        explicit_reps=supercell_reps,
+    )
 
     if verbose:
         print(
@@ -711,6 +720,16 @@ def build_pyxtal_composition_cluster(
     molecule_paths: list[str] = []
     for residue in species:
         coords, atom_names, monomer_z = residue_geometries[residue]
+        spec = resolve_pyxtal_molecule_spec(residue)
+        if spec is not None:
+            molecule_paths.append(spec)
+            if verbose:
+                print(
+                    f"PyXtal molecule {residue}: using {spec} "
+                    f"(CHARMM PDB not passed to from_random)",
+                    flush=True,
+                )
+            continue
         pdb_path = monomer_dir / f"{residue.lower()}.pdb"
         packmol_placement.write_monomer_pdb_for_packmol(
             pdb_path,
@@ -721,10 +740,9 @@ def build_pyxtal_composition_cluster(
         )
         molecule_paths.append(str(pdb_path.resolve()))
 
-    stoich = resolve_pyxtal_unit_stoichiometry(composition, unit_stoichiometry)
     if verbose:
         print(
-            f"[cluster] 3/4 PyXtal from_random (spg={int(space_group)}, "
+            f"[cluster] 3/4 PyXtal from_random (spg={int(spg)}, "
             f"Z={stoich}, supercell={reps[0]}×{reps[1]}×{reps[2]})",
             flush=True,
         )
@@ -733,7 +751,7 @@ def build_pyxtal_composition_cluster(
         molecules=molecule_paths,
         stoichiometry=stoich,
         dimension=int(dimension),
-        space_group=int(space_group),
+        space_group=int(spg),
         factor=float(factor),
         seed=seed,
         max_attempts=int(max_attempts),
