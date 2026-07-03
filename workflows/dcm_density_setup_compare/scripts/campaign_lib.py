@@ -573,12 +573,12 @@ def _bonded_recovery_job_flags(
     effective: dict[str, Any],
     flags: dict[str, Any],
 ) -> None:
-    """Forward bonded recovery backend; default JAX when hybrid bonded-MM is enabled."""
+    """Forward bonded recovery backend; default sidecar when hybrid bonded-MM is enabled."""
     explicit = effective.get("bonded_recovery_backend")
     if explicit is not None:
         flags["bonded_recovery_backend"] = str(explicit)
     elif flags.get("bonded_mm_mini"):
-        flags["bonded_recovery_backend"] = "jax"
+        flags["bonded_recovery_backend"] = "sidecar"
 
 
 def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:

@@ -185,21 +185,21 @@ def test_resilient_disables_bonded_mm_mini_for_mini_smoke(
     assert init.get("mc_density_steps") == 256
     assert init.get("geometry_packing_fire_bfgs_crossover_grms") == 200.0
     assert init.get("bonded_mm_mini_steps") == 1000
-    assert init.get("bonded_recovery_backend") == "jax"
+    assert init.get("bonded_recovery_backend") == "sidecar"
 
 
-def test_burst_hybrid_forwards_bonded_recovery_backend_jax(cfg: dict) -> None:
+def test_burst_hybrid_forwards_bonded_recovery_backend_sidecar(cfg: dict) -> None:
     cfg_bh = {k: v for k, v in cfg.items() if k not in ("bonded_mm_mini", "heat_thermostats")}
     cell = cell_from_cli(cfg_bh, "burst_hybrid", "DCM", 77, temperature=300.0, box_size=32.0)
     mini = build_campaign(cfg_bh, cell)["runs"]["pycharmm_mini"]
     assert mini.get("bonded_mm_mini") is True
-    assert mini.get("bonded_recovery_backend") == "jax"
+    assert mini.get("bonded_recovery_backend") == "sidecar"
 
 
-def test_resilient_all_ml_keeps_jax_backend_for_overlap_recovery(
+def test_resilient_all_ml_keeps_sidecar_backend_for_overlap_recovery(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """All-ML DCM: jax backend in campaign; runtime routes bonded recovery to MLpot SD."""
+    """All-ML DCM: sidecar in campaign; runtime routes bonded recovery to MLpot SD."""
     ckpt = tmp_path / "params.json"
     ckpt.write_text("{}", encoding="utf-8")
     monkeypatch.setenv("MMML_CKPT", str(ckpt))
@@ -215,7 +215,7 @@ def test_resilient_all_ml_keeps_jax_backend_for_overlap_recovery(
     )
     init = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
     assert init.get("bonded_mm_mini") is False
-    assert init.get("bonded_recovery_backend") == "jax"
+    assert init.get("bonded_recovery_backend") == "sidecar"
 
 
 def test_campaign_forwards_allow_high_grms(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
