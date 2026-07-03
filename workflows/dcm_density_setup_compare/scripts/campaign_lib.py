@@ -306,6 +306,10 @@ def bulk_ramp_config_path() -> Path:
     return workflow_root() / "config.bulk_ramp.yaml"
 
 
+def n100_l30_config_path() -> Path:
+    return workflow_root() / "config.n100_l30.yaml"
+
+
 def bulk_ramp_section(cfg: dict[str, Any]) -> dict[str, Any]:
     raw = cfg.get("bulk_ramp")
     return dict(raw) if isinstance(raw, dict) else {}
@@ -333,37 +337,52 @@ def _prep_sweep_config_resolves_tag(sweep_cfg: dict[str, Any], tag: str) -> bool
 
 
 def config_for_run_tag(cfg: dict[str, Any], tag: str) -> dict[str, Any]:
-    """Pick ``config.prep_sweep.yaml`` when the tag belongs to the sweep matrix."""
+    """Pick workflow YAML when the tag belongs to a sibling matrix."""
     if prep_sweep_enabled(cfg):
         return cfg
     if _tag_in_matrix(cfg, tag):
         return cfg
+    n100_path = n100_l30_config_path()
+    if n100_path.is_file():
+        n100_cfg = load_config(n100_path)
+        if _tag_in_matrix(n100_cfg, tag):
+            return n100_cfg
     sweep_path = prep_sweep_config_path()
     if sweep_path.is_file():
         sweep_cfg = load_config(sweep_path)
         if _prep_sweep_config_resolves_tag(sweep_cfg, tag):
             return sweep_cfg
+    bulk_path = bulk_ramp_config_path()
+    if bulk_path.is_file():
+        bulk_cfg = load_config(bulk_path)
+        if _prep_sweep_config_resolves_tag(bulk_cfg, tag):
+            return bulk_cfg
     return cfg
 
 
 def default_workflow_config_path(*, run_tag: str | None = None) -> Path:
-    """Default config file for Snakemake / job_shell (sweep tags → prep_sweep config)."""
+    """Default config file for Snakemake / job_shell (tag → matching matrix YAML)."""
     main_path = workflow_root() / "config.yaml"
     if not run_tag:
         return main_path
     main_cfg = load_config(main_path)
     if _tag_in_matrix(main_cfg, run_tag):
         return main_path
-    bulk_path = bulk_ramp_config_path()
-    if bulk_path.is_file():
-        bulk_cfg = load_config(bulk_path)
-        if _prep_sweep_config_resolves_tag(bulk_cfg, run_tag):
-            return bulk_path
+    n100_path = n100_l30_config_path()
+    if n100_path.is_file():
+        n100_cfg = load_config(n100_path)
+        if _tag_in_matrix(n100_cfg, run_tag):
+            return n100_path
     sweep_path = prep_sweep_config_path()
     if sweep_path.is_file():
         sweep_cfg = load_config(sweep_path)
         if _prep_sweep_config_resolves_tag(sweep_cfg, run_tag):
             return sweep_path
+    bulk_path = bulk_ramp_config_path()
+    if bulk_path.is_file():
+        bulk_cfg = load_config(bulk_path)
+        if _prep_sweep_config_resolves_tag(bulk_cfg, run_tag):
+            return bulk_path
     return main_path
 
 

@@ -1,0 +1,126 @@
+# N=100 DCM @ L=30 Å (~0.39× bulk liquid, ρ≈0.52 g/cm³).
+#
+# Direct moderate-density prep (no sparse 52@38 anchor). ML atoms=500 → fast GPU tier.
+#
+# Run:
+#   cd workflows/dcm_density_setup_compare
+#   export MMML_CKPT=...
+#   export JAX_ENABLE_X64=1
+#   bash scripts/preflight.sh
+#   TAG=resilient_dcm_100_t50_l30_ht_bussi
+#   srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --mem=32G \
+#     bash scripts/job_shell.sh "${TAG}"
+#
+# Or Slurm matrix:
+#   bash scripts/snakemake_n100_l30.sh
+
+setups: [resilient]
+solvents: [DCM]
+cluster_sizes: [100]
+temperatures: [50.0]
+box_sizes: [30.0]
+
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/dcm_density_setup_compare
+seed_base: 4242
+placement_seed_ignore_heat: true
+
+spacing: 8.0
+periodic_charmm_vdw: false
+packmol_tolerance: 5.0
+packmol_box_padding: 2.0
+mm_nonbond_mode: jax_mic
+charmm_mm_pretreat: true
+
+dt_fs: 0.25
+pressure: 1.0
+
+no_scale_max_grms: true
+max_grms_before_dyn: 50.0
+allow_high_grms: true
+pre_mlpot_overlap_min_distance: 2.3
+pre_mlpot_h_heavy_min_distance: 2.4
+pre_mlpot_heavy_heavy_min_distance: 2.9
+mlpot_registration_max_grms: 200.0
+liquid_prep_staged_density_fraction: 0.50
+
+mini_nstep: 20000
+charmm_sd_steps: 40000
+charmm_abnr_steps: 40000
+pre_min_steps: 5000
+
+dynamics_overlap_check_interval: 50
+dynamics_overlap_charmm_sd_steps: 400
+dynamics_overlap_charmm_abnr_steps: 800
+dynamics_overlap_min_distance: 1.5
+min_intermonomer_atom_distance: 2.3
+
+dcd_nsavc: 25
+
+liquid_prep: true
+density_prep_ladder: true
+density_prep_ladder_max_rounds: 8
+density_prep_lattice_abnr_steps: 300
+mini_lattice_abnr_steps: 300
+mc_density_equalize: true
+mc_density_steps: 256
+mini_box_equil_ps: 5.0
+calculator_pre_minimize: true
+geometry_packing_fire_bfgs_crossover_grms: 200.0
+bonded_mm_mini_steps: 1000
+bonded_recovery_backend: sidecar
+overlap_run_state_every_chunks: 25
+bonded_mm_mini: false
+
+mm_switch_on: 12.0
+mm_switch_width: 6.0
+ml_switch_width: 2.0
+
+heat_thermostats: [bussi]
+default_heat_thermostat: bussi
+ps_heat: 1.0
+n_heat_segments: 1
+heat_firstt: 10.0
+no_echeck: true
+
+dynamics_legs:
+  pycharmm_equi: false
+  pycharmm_prod: false
+  jaxmd: false
+  ase: false
+
+handoff_write_res: true
+continue_velocities: true
+
+ml_gpu_count: 1
+ml_batch_size: 128
+
+slurm_small_cluster_max_n: 30
+slurm_max_concurrent_fast: 4
+slurm_max_concurrent_slow: 2
+slurm_partition: gpu
+slurm_nodes: 1
+slurm_ntasks: 1
+slurm_cpus_per_task: 4
+slurm_mem_mb_per_cpu: 8000
+slurm_runtime_min: 1440
+slurm_gpu_nodes_fast:
+  - gpu08
+  - gpu09
+  - gpu10
+  - gpu11
+  - gpu06
+  - gpu26
+  - gpu04
+  - gpu25
+slurm_gpu_nodes_slow:
+  - gpu01
+  - gpu02
+  - gpu03
+  - gpu12
+  - gpu13
+  - gpu18
+  - gpu20
+  - gpu21
+  - gpu22
+  - gpu23

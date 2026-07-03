@@ -167,4 +167,6 @@ slurm_gpu_nodes_slow:
 # exclude_run_tags:
 #   - resilient_dcm_77_t100_l32
 
+# Moderate-density direct prep (N=100 @ L=30 Å, ~0.39× bulk): config.n100_l30.yaml
+#
 # Prep-parameter sweep (anchor cell × variants): see config.prep_sweep.yaml and README.

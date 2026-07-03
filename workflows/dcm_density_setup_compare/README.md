@@ -49,6 +49,18 @@ Example run tag: `liquid_prep_dense_dcm_77_t300_l32` (0.25× bulk DCM in L=32).
 
 Default matrix size: **30 cells** (5 setups × 2 density fractions × 3 boxes).
 
+### N=100 @ L=30 Å (moderate density, `config.n100_l30.yaml`)
+
+Single-cell matrix: **100 DCM** in a **30 Å** cube (~**0.39× bulk**, ρ ≈ 0.52 g/cm³). Skips the sparse 52@38 anchor; uses the same resilient mini+heat stack. Tags auto-resolve to `config.n100_l30.yaml` (no `MMML_WORKFLOW_CONFIG` needed).
+
+```bash
+TAG=resilient_dcm_100_t50_l30_ht_bussi
+bash scripts/preflight.sh
+srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --mem=32G \
+  bash scripts/job_shell.sh "${TAG}"
+# Or: bash scripts/snakemake_n100_l30.sh
+```
+
 ## Campaign legs (per cell)
 
 | Leg | Stages |
