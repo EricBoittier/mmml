@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import jax
 import jax.numpy as jnp
@@ -30,6 +30,13 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 COULOMB_KCAL = 332.063711
+
+
+def _numpy_if_concrete(x: Array | np.ndarray | float, *, dtype: type = np.float64) -> Any:
+    """Materialize host arrays; leave JAX tracers unchanged (for ``jax.grad`` through decompose)."""
+    if isinstance(x, jax.core.Tracer):
+        return x
+    return np.asarray(x, dtype=dtype)
 
 
 @dataclass(frozen=True, slots=True)
@@ -887,9 +894,9 @@ def decompose_nonbonded_pair_energies(
     return NonbondedPairDecomposition(
         pair_i=np.asarray(pair_i, dtype=np.int32),
         pair_j=np.asarray(pair_j, dtype=np.int32),
-        r_A=np.asarray(r, dtype=np.float64),
-        vdw_kcal=np.asarray(vdw, dtype=np.float64),
-        elec_kcal=np.asarray(elec, dtype=np.float64),
+        r_A=_numpy_if_concrete(r, dtype=np.float64),
+        vdw_kcal=_numpy_if_concrete(vdw, dtype=np.float64),
+        elec_kcal=_numpy_if_concrete(elec, dtype=np.float64),
     )
 
 

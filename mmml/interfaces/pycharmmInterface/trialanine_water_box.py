@@ -381,14 +381,14 @@ def build_trialanine_water_box_in_charmm(
 
 
 def trialanine_water_box_coords_path(workdir: Path | str) -> Path | None:
-    """Return saved coordinates under ``workdir`` (``.crd`` preferred, else ``.npy``)."""
+    """Return saved coordinates under ``workdir`` (``.npy`` preferred, else ``.crd``)."""
     out_dir = Path(workdir)
-    crd_path = out_dir / "trialanine-water.crd"
-    if crd_path.is_file():
-        return crd_path
     npy_path = out_dir / "trialanine-water.npy"
     if npy_path.is_file():
         return npy_path
+    crd_path = out_dir / "trialanine-water.crd"
+    if crd_path.is_file():
+        return crd_path
     return None
 
 
@@ -405,11 +405,13 @@ def reload_trialanine_water_box_in_charmm(
     ``trialanine-water.npy`` from :func:`build_trialanine_water_box_in_charmm`.
     """
     import pycharmm.coor as coor
-    import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_psf_card_file,
         set_charmm_positions,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        apply_crd_file_to_charmm,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -433,15 +435,21 @@ def reload_trialanine_water_box_in_charmm(
 
     prepare_charmm_for_trialanine_box_psf()
     read_psf_card_file(psf_path)
-    if coords_path.suffix.lower() == ".crd":
-        read.coor_card(str(coords_path))
-    else:
+    if coords_path.suffix.lower() == ".npy":
         set_charmm_positions(np.load(coords_path))
+    else:
+        # PyCHARMM read.coor_card is unreliable after PSF EXT load under mpirun.
+        apply_crd_file_to_charmm(coords_path)
     prepare_charmm_pbc(box_side_A)
     nbond_cutoffs = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)
     mark_cgenff_params_full()
 
     positions = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    if positions.shape[0] == 0 or float(np.std(positions)) < 1e-6:
+        raise RuntimeError(
+            f"Coordinates not loaded into CHARMM from {coords_path} "
+            f"(natom={positions.shape[0]}, std={float(np.std(positions)):.3g})"
+        )
     return TrialanineWaterBox(
         positions=positions,
         psf_path=psf_path.resolve(),
