@@ -83,6 +83,9 @@ calculator_pre_minimize: true
 geometry_packing_fire_bfgs_crossover_grms: 200.0
 # MLpot SD recovery inside geometry packing (default 200; resilient cleanup uses 500+).
 bonded_mm_mini_steps: 1000
+# JAX bonded recovery avoids CGENFF param swap on the MLpot session (hybrid cells).
+# All-ML DCM overlap / density ladder still routes bonded recovery to MLpot SD at runtime.
+bonded_recovery_backend: jax
 
 # Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
 bonded_mm_mini: false

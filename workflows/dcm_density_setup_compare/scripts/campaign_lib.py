@@ -528,6 +528,7 @@ _WORKFLOW_JOB_OVERRIDE_KEYS = (
     "bonded_mm_mini",
     "bonded_mm_mini_after",
     "bonded_mm_mini_steps",
+    "bonded_recovery_backend",
     "no_echeck_heat",
     "no_scale_max_grms",
     "allow_high_grms",
@@ -568,6 +569,18 @@ def _apply_workflow_job_overrides(flags: dict[str, Any], effective: dict[str, An
             flags[key] = effective[key]
 
 
+def _bonded_recovery_job_flags(
+    effective: dict[str, Any],
+    flags: dict[str, Any],
+) -> None:
+    """Forward bonded recovery backend; default JAX when hybrid bonded-MM is enabled."""
+    explicit = effective.get("bonded_recovery_backend")
+    if explicit is not None:
+        flags["bonded_recovery_backend"] = str(explicit)
+    elif flags.get("bonded_mm_mini"):
+        flags["bonded_recovery_backend"] = "jax"
+
+
 def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     cell_cfg = cell_workflow_cfg(cfg, cell)
     variant = resolve_setup_variant(cell.setup_id)
@@ -581,6 +594,7 @@ def _mini_job_flags(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     else:
         flags.update(dense_cell_mlpot_overrides(cell, effective))
     _apply_workflow_job_overrides(flags, effective)
+    _bonded_recovery_job_flags(effective, flags)
     # Global workflow yaml (resilient-focused) must not override setup-specific disables.
     for key in (
         "cleanup",
@@ -959,6 +973,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "dyn_inbfrq",
         "dynamics_overlap_check_interval",
         "bonded_mm_mini",
+        "bonded_recovery_backend",
         "charmm_mm_pretreat",
     ):
         if key in effective:

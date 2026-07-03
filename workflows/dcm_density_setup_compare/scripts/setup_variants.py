@@ -34,6 +34,7 @@ _BURST_HYBRID_CLEANUP: dict[str, Any] = {
         "dynamics_overlap_check_interval": 250,
         "dynamics_overlap_memory_handoff": True,
         "bonded_mm_mini": True,
+        "bonded_recovery_backend": "jax",
         "bonded_mm_mini_after": "mini",
         "bonded_mm_mini_steps": 1000,
         "charmm_pre_minimize": True,
