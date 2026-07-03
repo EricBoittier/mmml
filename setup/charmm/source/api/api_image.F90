@@ -319,8 +319,8 @@ contains
     endif
 
     if (ntrans == 0 .or. natim <= natom) return
-    if (.not. associated(bimag%imattr)) return
-    if (.not. associated(bimag%imjnb) .or. .not. associated(bimag%imblo)) return
+    if (.not. allocated(bimag%imattr)) return
+    if (.not. allocated(bimag%imjnb) .or. .not. allocated(bimag%imblo)) return
 
     do v = natom + 1, natim
        pi = bimag%imattr(v)
@@ -388,8 +388,8 @@ contains
     endif
 
     if (c < max_pairs .and. ntrans /= 0 .and. natim > natom) then
-       if (associated(bimag%imattr) .and. associated(bimag%imjnb) &
-            .and. associated(bimag%imblo)) then
+       if (allocated(bimag%imattr) .and. allocated(bimag%imjnb) &
+            .and. allocated(bimag%imblo)) then
           do v = natom + 1, natim
              if (c >= max_pairs) exit
              pi = bimag%imattr(v)
