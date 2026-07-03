@@ -48,6 +48,7 @@ _PYCHARMM_PATH_PREFIXES = (
     "charmm_mpi/test_mpi_live",
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
     "functionality/mlpot/test_mlpot_dynamics_smoke.py",
+    "functionality/mlpot/test_live_optimizers_dynamics.py",
     "functionality/mlpot/test_comp_velocities_integration.py",
     "functionality/mmml_tests/test_mmml_calc.py",
     "functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py",
@@ -59,6 +60,7 @@ _PYCHARMM_PATH_PREFIXES = (
 _GPU_PATH_PREFIXES = (
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
     "functionality/mlpot/test_mlpot_dynamics_smoke.py",
+    "functionality/mlpot/test_live_optimizers_dynamics.py",
     "functionality/mmml_tests/test_mmml_calc.py",
     "functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py",
     "functionality/pycharmmETC/test_physnetjax_calc.py",
@@ -69,6 +71,7 @@ _GPU_PATH_PREFIXES = (
 _MLPOT_PATH_PREFIXES = (
     "functionality/mlpot/test_mlpot_energy_matches_ase.py",
     "functionality/mlpot/test_mlpot_dynamics_smoke.py",
+    "functionality/mlpot/test_live_optimizers_dynamics.py",
     "functionality/mlpot/test_comp_velocities_integration.py",
 )
 

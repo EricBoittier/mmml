@@ -16,6 +16,7 @@
 #   pycharmm — -m pycharmm            (all live PyCHARMM tests)
 #   smoke    — -m "pycharmm and not gpu" (CHARMM-only, no checkpoint/GPU ML)
 #   mlpot    — -m mlpot               (MLpot-focused subset incl. test_mlpot_dynamics_smoke)
+#   live     — optimizer + dynamics live validation (test_live_optimizers_dynamics.py)
 #   quick    — fast mocked CLI/unit checks before the heavy suite
 #
 set -euo pipefail
@@ -39,6 +40,11 @@ case "$SELECTION" in
   pycharmm) MARK_EXPR='pycharmm' ;;
   smoke) MARK_EXPR='pycharmm and not gpu' ;;
   mlpot) MARK_EXPR='mlpot' ;;
+  live)
+    exec "$ROOT/scripts/mmml-charmm-mpirun.sh" python -m pytest --color=yes \
+      tests/functionality/mlpot/test_live_optimizers_dynamics.py \
+      "$@"
+    ;;
   quick)
     exec "$ROOT/scripts/mmml-charmm-mpirun.sh" python -m pytest --color=yes \
       tests/unit/test_monomer_constraints.py \
@@ -50,7 +56,7 @@ case "$SELECTION" in
     ;;
   *)
     echo "run_pycharmm_pytest_gpu: unknown MMML_PYTEST_SELECTION=$SELECTION" >&2
-    echo "Valid: gpu, pycharmm, smoke, mlpot, quick" >&2
+    echo "Valid: gpu, pycharmm, smoke, mlpot, live, quick" >&2
     exit 2
     ;;
 esac

@@ -143,6 +143,50 @@ pytest tests/functionality/mlpot/test_mlpot_energy_matches_ase.py -q
 pytest tests/functionality/mlpot/test_pycharmm_conversion.py -q
 ```
 
+## Live GPU validation (optimizers + dynamics)
+
+Reserved GPU node — run in order (fast → thorough):
+
+```bash
+cd ~/mmml
+source CHARMMSETUP   # or export CHARMM_HOME / CHARMM_LIB_DIR
+export JAX_ENABLE_X64=1
+export MMML_CKPT=/mmhome/boittier/home/mmml_tutorial/acodcm/ckpts/dcm1/dcm1_params.json
+
+# 0) Environment + symbols
+python tests/functionality/mlpot/00_check_environment.py
+
+# 1) Mocked / unit guards (seconds, no CHARMM)
+./scripts/run_pycharmm_pytest_gpu.sh quick
+
+# 2) Live optimizer + dynamics battery (~5–15 min)
+./scripts/run_pycharmm_pytest_gpu.sh live -v
+
+# 3) Existing MLpot smoke (NVE + heat I/O)
+./scripts/run_pycharmm_pytest_gpu.sh mlpot -q
+
+# 4) Manual stubs (writes DCD under tests/functionality/mlpot/output/)
+python tests/functionality/mlpot/04_mlpot_minimize_stub.py --run --n-molecules 4 \
+  --fix-resids 1,3 --nstep 30
+python tests/functionality/mlpot/05_mlpot_dynamics_stub.py --run --n-molecules 4 \
+  --fix-resids 1,3 --constrain-resids 1 --mini-nstep 20 --nstep 100
+
+# 5) Full GPU-marked pytest slice
+./scripts/run_pycharmm_pytest_gpu.sh gpu -q
+```
+
+| Test file | What it validates |
+|-----------|-------------------|
+| `test_live_optimizers_dynamics.py` | SD lowers GRMS; FIRE+BFGS pre-SD; `cons_fix` pass 2 + NVE freeze; DCM:2 smoke |
+| `test_mlpot_dynamics_smoke.py` | Short NVE + heat write restart/DCD |
+| `04_mlpot_minimize_stub.py` | Two-pass SD + optional DCD export |
+| `05_mlpot_dynamics_stub.py` | Mini → NVE with overlap/echeck knobs |
+
+Pass criteria: no `RuntimeError` / segfault; `charmm_dynamics_state_is_finite()` after NVE;
+fixed monomer max displacement &lt; 1e-3 Å during `cons_fix` MD.
+
+Constraints ladder: [`../constraints/README.md`](../constraints/README.md).
+
 ## `md-system --dyna-probe` (evaluate + 1-step NVE)
 
 Compares all PyCHARMM force lanes **before and after** one NVE integration step — useful when
