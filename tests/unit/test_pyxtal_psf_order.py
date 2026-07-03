@@ -90,6 +90,63 @@ def test_assign_ase_cluster_trims_excess_atoms(tmp_path):
     np.testing.assert_allclose(out, mol_a)
 
 
+def test_assign_ase_cluster_connectivity_split_scrambled_order(tmp_path):
+    """PyXtal exports atoms in crystal order, not contiguous per-molecule blocks."""
+    from mmml.interfaces.pyxtal_placement import assign_ase_cluster_to_psf_order
+
+    tmpl_pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.5, 0.5, 0.5],
+        ],
+        dtype=float,
+    )
+    tmpl_names = ["C1", "H1", "H2", "Cl1", "Cl2"]
+    tmpl_z = np.array([6, 1, 1, 17, 17], dtype=int)
+    residue_geometries = {"DCM": (tmpl_pos, tmpl_names, tmpl_z)}
+
+    mol_a = tmpl_pos + np.array([0.0, 0.0, 0.0])
+    mol_b = tmpl_pos + np.array([8.0, 0.0, 0.0])
+    # Interleave atoms as PyXtal might: not [mol_a block][mol_b block].
+    scrambled = np.vstack(
+        [
+            mol_a[0],
+            mol_b[0],
+            mol_a[1],
+            mol_b[1],
+            mol_a[2],
+            mol_b[2],
+            mol_a[3],
+            mol_b[3],
+            mol_a[4],
+            mol_b[4],
+        ]
+    )
+    symbols = ["C", "C", "H", "H", "H", "H", "Cl", "Cl", "Cl", "Cl"]
+    atoms = Atoms(
+        symbols=symbols,
+        positions=scrambled,
+        cell=np.diag([30.0, 30.0, 30.0]),
+        pbc=True,
+    )
+
+    psf_names = tmpl_names + tmpl_names
+    out = assign_ase_cluster_to_psf_order(
+        atoms,
+        psf_atom_names=psf_names,
+        atoms_per_list=[5, 5],
+        ordered_residue_names=["DCM", "DCM"],
+        residue_geometries=residue_geometries,
+        pdb_path=tmp_path / "scrambled.pdb",
+    )
+    assert out.shape == (10, 3)
+    np.testing.assert_allclose(out[:5], mol_a, atol=1.0e-6)
+    np.testing.assert_allclose(out[5:], mol_b, atol=1.0e-6)
+
+
 def test_resolve_pyxtal_use_and_packmol_exclusion():
     from mmml.interfaces.pycharmmInterface.packmol_placement import resolve_packmol_use
     from mmml.interfaces.pyxtal_placement import resolve_pyxtal_use

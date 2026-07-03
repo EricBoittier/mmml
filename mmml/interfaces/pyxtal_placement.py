@@ -497,6 +497,39 @@ def _split_ase_atoms_into_molecules(
     return blocks
 
 
+def _molecule_blocks_from_ase_atoms(
+    atoms: Any,
+    atoms_per_list: Sequence[int],
+    *,
+    max_molecules: int | None = None,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Split ASE atoms into molecules; use connectivity when PyXtal order is scrambled."""
+    apm_list = [int(n) for n in atoms_per_list]
+    if not apm_list:
+        return []
+    if len(set(apm_list)) == 1:
+        apm = apm_list[0]
+        from mmml.interfaces.crystal_charmm import split_crystal_molecules
+
+        blocks = split_crystal_molecules(atoms, apm)
+        if max_molecules is not None:
+            blocks = blocks[: int(max_molecules)]
+        return blocks
+    if max_molecules is not None:
+        trimmed = list(atoms_per_list)[: int(max_molecules)]
+        n_atoms = int(np.sum(trimmed))
+        from ase import Atoms
+
+        sub = Atoms(
+            symbols=atoms.get_chemical_symbols()[:n_atoms],
+            positions=atoms.get_positions()[:n_atoms],
+            cell=atoms.cell,
+            pbc=atoms.pbc,
+        )
+        return _split_ase_atoms_into_molecules(sub, trimmed)
+    return _split_ase_atoms_into_molecules(atoms, atoms_per_list)
+
+
 def _match_atoms_to_template_names(
     positions: np.ndarray,
     atomic_numbers: np.ndarray,
@@ -628,6 +661,7 @@ def assign_ase_cluster_to_psf_order(
     target_molecules = len(ordered_residue_names)
     expected_atoms = int(np.sum(atoms_per_list))
     n_atoms = len(atoms)
+    uniform_apm = len(set(atoms_per_list)) == 1
     if n_atoms > expected_atoms:
         if trim_to_composition:
             print(
@@ -635,12 +669,22 @@ def assign_ase_cluster_to_psf_order(
                 f"({expected_atoms}); trimming to first {target_molecules} molecule(s)",
                 flush=True,
             )
-            atoms = Atoms(
-                symbols=atoms.get_chemical_symbols()[:expected_atoms],
-                positions=atoms.get_positions()[:expected_atoms],
-                cell=atoms.cell,
-                pbc=atoms.pbc,
-            )
+            if uniform_apm:
+                blocks = _molecule_blocks_from_ase_atoms(
+                    atoms,
+                    atoms_per_list,
+                    max_molecules=target_molecules,
+                )
+            else:
+                from ase import Atoms
+
+                atoms = Atoms(
+                    symbols=atoms.get_chemical_symbols()[:expected_atoms],
+                    positions=atoms.get_positions()[:expected_atoms],
+                    cell=atoms.cell,
+                    pbc=atoms.pbc,
+                )
+                blocks = _molecule_blocks_from_ase_atoms(atoms, atoms_per_list)
         else:
             raise RuntimeError(
                 f"PyXtal ASE atom count ({n_atoms}) exceeds composition "
@@ -652,8 +696,8 @@ def assign_ase_cluster_to_psf_order(
             f"PyXtal ASE atom count ({n_atoms}) is below composition "
             f"({expected_atoms}). Adjust --pyxtal-stoichiometry and/or --pyxtal-supercell."
         )
-
-    blocks = _split_ase_atoms_into_molecules(atoms, atoms_per_list)
+    else:
+        blocks = _molecule_blocks_from_ase_atoms(atoms, atoms_per_list)
     ordered_blocks = _match_molecule_blocks_to_psf_order(
         blocks,
         ordered_residue_names,
