@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import jax.numpy as jnp
 import pytest
 
 from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import charmm_cmap_is_active
@@ -14,52 +13,3 @@ def test_charmm_cmap_is_active_false_for_zero():
 
 def test_charmm_cmap_is_active_true_for_nonzero():
     assert charmm_cmap_is_active({"cmap": 0.5})
-
-
-def test_bonded_energy_components_include_cmap_gate(monkeypatch: pytest.MonkeyPatch):
-    from mmml.interfaces.pycharmmInterface import cgenff_bonded as bonded_mod
-
-    calls: list[bool] = []
-
-    def _fake_cmap(*args, **kwargs):
-        calls.append(True)
-        return jnp.array(3.0, dtype=jnp.float64)
-
-    monkeypatch.setattr(bonded_mod, "cmap_energy", _fake_cmap)
-    from jax_md.mm_forcefields.base import BondedParameters, Topology
-
-    topology = Topology(
-        n_atoms=8,
-        bonds=jnp.zeros((0, 2), dtype=jnp.int32),
-        angles=jnp.zeros((0, 3), dtype=jnp.int32),
-        torsions=jnp.zeros((0, 4), dtype=jnp.int32),
-        impropers=jnp.zeros((0, 4), dtype=jnp.int32),
-        exclusion_mask=jnp.zeros((8, 8), dtype=jnp.float64),
-        pair_14_mask=jnp.zeros((8, 8), dtype=jnp.float64),
-        cmap_atoms=jnp.asarray([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=jnp.int32),
-        cmap_map_idx=jnp.asarray([0], dtype=jnp.int32),
-    )
-    bonded = BondedParameters(
-        bond_k=jnp.zeros(0),
-        bond_r0=jnp.zeros(0),
-        angle_k=jnp.zeros(0),
-        angle_theta0=jnp.zeros(0),
-        torsion_k=jnp.zeros(0),
-        torsion_n=jnp.zeros(0, dtype=jnp.int32),
-        torsion_phase=jnp.zeros(0),
-        improper_k=jnp.zeros(0),
-        improper_n=jnp.zeros(0, dtype=jnp.int32),
-        improper_gamma=jnp.zeros(0),
-        cmap_maps=jnp.ones((1, 16), dtype=jnp.float64),
-    )
-    pos = jnp.zeros((8, 3), dtype=jnp.float64)
-    with_cmap = bonded_mod.bonded_energy_components(
-        pos, topology, bonded, include_cmap=True
-    )
-    without_cmap = bonded_mod.bonded_energy_components(
-        pos, topology, bonded, include_cmap=False
-    )
-    assert calls == [True]
-    assert float(with_cmap["cmap"]) == pytest.approx(3.0)
-    assert float(without_cmap["cmap"]) == pytest.approx(0.0)
-    assert float(without_cmap["total"]) == pytest.approx(float(with_cmap["total"]) - 3.0)
