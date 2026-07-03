@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
-from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Iterator
 
 
 def _set_charmm_levels(
@@ -37,11 +39,52 @@ def _restore_charmm_levels(old: dict[str, int]) -> None:
 
 
 @contextmanager
+def capture_fortran_stdio() -> Iterator[str]:
+    """Redirect OS fds 1/2 so Fortran unit-6 output is captured to a temp file.
+
+    ``redirect_stdout`` only affects Python ``sys.stdout``; CHARMM Fortran writes
+    directly to file descriptor 1.  The caller must read and unlink ``tmp_path``.
+    """
+    import tempfile
+
+    saved_out = os.dup(1)
+    saved_err = os.dup(2)
+    tmp = tempfile.NamedTemporaryFile(
+        mode="wb",
+        delete=False,
+        prefix="mmml-charmm-capture-",
+        suffix=".log",
+    )
+    tmp_path = tmp.name
+    tmp.close()
+    log_fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+    try:
+        os.dup2(log_fd, 1)
+        os.dup2(log_fd, 2)
+        yield tmp_path
+    finally:
+        os.dup2(saved_out, 1)
+        os.dup2(saved_err, 2)
+        os.close(saved_out)
+        os.close(saved_err)
+        os.close(log_fd)
+
+
+@contextmanager
 def suppress_charmm_fortran_io():
-    """Redirect CHARMM Fortran stdout/stderr (IMAGE/NB list banners ignore PRNLev 0)."""
+    """Redirect CHARMM Fortran stdout/stderr to devnull (fd-level, not sys.stdout)."""
     with open(os.devnull, "w", encoding="utf-8") as devnull:
-        with redirect_stdout(devnull), redirect_stderr(devnull):
+        saved_out = os.dup(1)
+        saved_err = os.dup(2)
+        try:
+            os.dup2(devnull.fileno(), 1)
+            os.dup2(devnull.fileno(), 2)
             yield
+        finally:
+            os.dup2(saved_out, 1)
+            os.dup2(saved_err, 2)
+            os.close(saved_out)
+            os.close(saved_err)
 
 
 def run_charmm_script_quiet(script: str) -> None:

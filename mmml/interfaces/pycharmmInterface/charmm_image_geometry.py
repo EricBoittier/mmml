@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
-import io
+import os
 import re
-from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
+from pathlib import Path
 
 from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
 
@@ -84,24 +84,43 @@ def assert_charmm_image_min_distance(
     return worst
 
 
-def run_charmm_update_capture_image_log() -> str:
-    """Run ``UPDATE`` and capture Fortran stdout (includes ``<MKIMAT2>``)."""
+def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> str:
+    """Run a CHARMM script and return captured Fortran stdout/stderr."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import (
         _restore_charmm_levels,
         _set_charmm_levels,
+        capture_fortran_stdio,
     )
 
-    buf = io.StringIO()
     old = _set_charmm_levels(prnlev=2, warnlev=5, bomlev=-2)
+    tmp_path = ""
     try:
-        with redirect_stdout(buf), redirect_stderr(buf):
-            pycharmm.lingo.charmm_script("UPDATE")
+        with capture_fortran_stdio() as tmp_path:
+            pycharmm.lingo.charmm_script(script)
+        text = Path(tmp_path).read_text(encoding="utf-8", errors="replace")
+        if replay and text:
+            print(text, end="", flush=True)
+        return text
     finally:
         _restore_charmm_levels(old)
-    return buf.getvalue()
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+def run_charmm_update_capture_image_log() -> str:
+    """Run ``UPDATE``/``ENER`` and capture Fortran output for ``<MKIMAT2>`` parsing."""
+    log = _run_charmm_script_capture_fortran("UPDATE")
+    if parse_mkimat2_min_distances(log):
+        return log
+    # UPDATE often skips MKIMAT2 when IMAGE tables are already current; ENER rebuilds them.
+    ener_log = _run_charmm_script_capture_fortran("ENER")
+    return f"{log}\n{ener_log}"
 
 
 def resolve_charmm_image_min_distance_A(

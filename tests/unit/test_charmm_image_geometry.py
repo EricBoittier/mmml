@@ -97,3 +97,25 @@ def test_assert_charmm_image_min_distance_after_update_uses_provided_log(monkeyp
     )
     assert worst == pytest.approx(6.18)
     assert called["update"] == 0
+
+
+def test_run_charmm_update_capture_image_log_falls_back_to_ener(monkeypatch):
+    calls: list[str] = []
+
+    def _fake_capture(script: str, *, replay: bool = True) -> str:
+        calls.append(script)
+        if script == "UPDATE":
+            return "UPDATE only output\n"
+        return _SAMPLE_LOG
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
+        _fake_capture,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        run_charmm_update_capture_image_log,
+    )
+
+    log = run_charmm_update_capture_image_log()
+    assert calls == ["UPDATE", "ENER"]
+    assert parse_mkimat2_min_distances(log) == pytest.approx([6.18, 7.17, 8.93])
