@@ -337,6 +337,41 @@ def _require_charmm_for_mm() -> None:
         raise RuntimeError(_charmm_mm_unavailable_message())
 
 
+_active_mm_session_psf: str | None = None
+
+
+def activate_dcm_vacuum_mm_session(session: DcmVacuumMmSession) -> None:
+    """Load ``session.psf_path`` into the active PyCHARMM session (vacuum nbonds)."""
+    global _active_mm_session_psf
+
+    psf_key = str(session.psf_path.resolve())
+    if _active_mm_session_psf == psf_key:
+        return
+
+    from mmml.interfaces.pycharmmInterface import import_pycharmm as ipy
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import mark_cgenff_params_full
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import prepare_charmm_vacuum
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        apply_nbonds_kwargs,
+        vacuum_nbond_kwargs,
+    )
+
+    ipy.pycharmm.lingo.charmm_script("DELETE ATOM SELE ALL END")
+    ipy.reset_block()
+    prepare_charmm_vacuum()
+    read_psf_card_file(session.psf_path)
+    apply_nbonds_kwargs(vacuum_nbond_kwargs())
+    mark_cgenff_params_full()
+    _active_mm_session_psf = psf_key
+
+
+def reset_active_mm_session_cache() -> None:
+    """Clear PSF activation cache (for tests)."""
+    global _active_mm_session_psf
+    _active_mm_session_psf = None
+
+
 def build_dcm_vacuum_mm_session(
     workdir: Path | str,
     *,
@@ -386,6 +421,8 @@ def build_dcm_vacuum_mm_session(
 
     side = float(vacuum_box_side_A)
     cell = np.diag([side, side, side])
+    global _active_mm_session_psf
+    _active_mm_session_psf = str(psf_path.resolve())
     return DcmVacuumMmSession(
         psf_path=psf_path.resolve(),
         cgenff_prm=Path(ipy.CGENFF_PRM),
@@ -437,6 +474,7 @@ def evaluate_mm_at_positions(
 
     ensure_jax_x64(context="evaluate_mm_at_positions")
     pos = np.asarray(positions, dtype=np.float64)
+    activate_dcm_vacuum_mm_session(session)
     set_charmm_positions(pos)
     apply_charmm_mm_block()
     run_charmm_bonded_ener_force(silent=True)

@@ -663,6 +663,8 @@ def load_nonbonded_system_from_charmm(
         import pycharmm.psf as psf
 
         iac = np.asarray(psf.get_iac(), dtype=np.int32)
+        if iac.shape[0] != natom:
+            iac = np.ones(natom, dtype=np.int32)
     except Exception:
         iac = np.ones(natom, dtype=np.int32)
     # TIP3 ``HT`` and other types with ``iac==0`` carry no CHARMM VDW term.
