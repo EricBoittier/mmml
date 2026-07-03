@@ -259,6 +259,9 @@ def collect_liquid_nb_parity(
     verbose: bool = True,
 ) -> LiquidNbParityReport:
     """Compare JAX MIC nonbonded decomposition to active PyCHARMM ``ENER FORCE``."""
+    from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+
+    ensure_jax_x64(context="collect_liquid_nb_parity")
     import jax.numpy as jnp
 
     _log("Collecting parity metrics (PyCHARMM ENER + JAX MIC)...", verbose=verbose)

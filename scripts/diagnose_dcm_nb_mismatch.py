@@ -18,6 +18,9 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+
+os.environ.setdefault("JAX_ENABLE_X64", "1")
+
 from pathlib import Path
 
 import numpy as np

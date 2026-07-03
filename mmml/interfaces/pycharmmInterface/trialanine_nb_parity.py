@@ -327,6 +327,9 @@ def audit_switch_derivatives(
     dr: float = 1e-4,
 ) -> tuple[PairSwitchAudit, ...]:
     """Compare JAX autodiff dE/dr vs central difference for top |VDW| pairs."""
+    from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+
+    ensure_jax_x64(context="audit_switch_derivatives")
     order = np.argsort(-np.abs(decomp.vdw_kcal))[:top_k]
     pos = np.asarray(positions, dtype=np.float64)
     audits: list[PairSwitchAudit] = []
@@ -485,6 +488,9 @@ def collect_trialanine_nb_parity(
     verbose: bool = True,
 ) -> TrialanineNbParityReport:
     """Compare JAX MIC nonbonded decomposition to active PyCHARMM ``ENER FORCE``."""
+    from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+
+    ensure_jax_x64(context="collect_trialanine_nb_parity")
     import jax.numpy as jnp
 
     _log("Collecting parity metrics (PyCHARMM ENER + JAX MIC)...", verbose=verbose)
