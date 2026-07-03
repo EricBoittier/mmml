@@ -204,6 +204,8 @@ def resolve_density_prep_lattice_abnr_steps(args: argparse.Namespace) -> int:
     steps = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
     if steps > 0:
         return steps
+    if getattr(args, "density_prep_lattice_abnr_steps", None) is not None:
+        return 0
     steps = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
     if steps > 0:
         return steps
@@ -762,6 +764,13 @@ def run_density_prep_ladder(
     lattice_steps = resolve_density_prep_lattice_abnr_steps(args)
     bonded_steps = int(getattr(args, "bonded_mm_mini_steps", 200) or 200)
     quiet = bool(getattr(args, "quiet", False))
+    packmol_margin_A: float | None = None
+    if box_side is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            resolve_packmol_box_padding_A,
+        )
+
+        packmol_margin_A = resolve_packmol_box_padding_A(args)
 
     result = DensityPrepLadderResult(
         enabled=True,
@@ -833,6 +842,7 @@ def run_density_prep_ladder(
                 mlpot_ctx=mlpot_ctx,
                 verbose=not quiet,
                 scratch_dir=_packmol_repack_scratch_dir(args),
+                packmol_margin_A=packmol_margin_A,
             )
             box_side = _sync_pbc_after_box_change(
                 positions=new_pos,
@@ -1508,6 +1518,7 @@ def run_pre_mlpot_geometry_gate(
                 seed=int(seed) + 17 if seed is not None else None,
                 scratch_dir=_packmol_repack_scratch_dir(args),
                 packmol_tolerance=packmol_tol_f,
+                packmol_margin_A=packmol_margin_A,
             )
             new_pos = _open_intermonomer_contacts_to_distance(
                 new_pos,
@@ -1663,6 +1674,13 @@ def run_geometry_packing_recovery(
     min_overlap = resolve_pre_mlpot_overlap_min_distance(args)
     spacing = getattr(args, "spacing", None)
     seed = getattr(args, "seed", None)
+    packmol_margin_A: float | None = None
+    if box_side is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            resolve_packmol_box_padding_A,
+        )
+
+        packmol_margin_A = resolve_packmol_box_padding_A(args)
     journal = PrepLadderJournal(title=context_prefix, quiet=quiet)
     from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         RecoveryProgressStore,
@@ -1721,6 +1739,7 @@ def run_geometry_packing_recovery(
             mlpot_ctx=mlpot_ctx,
             verbose=verbose,
             scratch_dir=_packmol_repack_scratch_dir(args),
+            packmol_margin_A=packmol_margin_A,
         )
         box_side = _sync_pbc_after_box_change(
             positions=new_pos,

@@ -100,6 +100,31 @@ def _read_packmol_monomer_coords(
     return out
 
 
+def _positions_to_packmol_primary_frame(
+    positions: np.ndarray,
+    box_side: float,
+) -> tuple[np.ndarray, bool]:
+    """Map CHARMM image-centered coords to jaxmd primary cell ``[0, L)`` for Packmol."""
+    from mmml.cli.run.md_handoff import cluster_positions_use_jaxmd_primary_cell_frame
+
+    pos = np.asarray(positions, dtype=float)
+    if cluster_positions_use_jaxmd_primary_cell_frame(pos, float(box_side)):
+        return pos, False
+    half = 0.5 * float(box_side)
+    return pos + half, True
+
+
+def _positions_from_packmol_primary_frame(
+    positions: np.ndarray,
+    box_side: float,
+    *,
+    was_charmm_centered: bool,
+) -> np.ndarray:
+    if not was_charmm_centered:
+        return np.asarray(positions, dtype=float)
+    return np.asarray(positions, dtype=float) - 0.5 * float(box_side)
+
+
 def _run_packmol_repack(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
@@ -112,6 +137,7 @@ def _run_packmol_repack(
     scratch_dir: Path,
     atom_names: list[str] | None,
     atomic_numbers: np.ndarray | None,
+    packmol_margin_A: float | None = None,
 ) -> np.ndarray:
     from mmml.utils.geometry_checks import _monomer_internal_templates, wrap_monomers_primary_cell
 
@@ -145,11 +171,27 @@ def _run_packmol_repack(
     output_order: list[int] = []
 
     box_side = _cell_box_side(cell)
+    was_charmm_centered = False
     if box_side is not None:
-        center = (0.5 * box_side, 0.5 * box_side, 0.5 * box_side)
-        x0, y0, z0 = packmol_cube_origin(center, float(box_side))
-        restraint = f"  inside cube {x0} {y0} {z0} {float(box_side)}"
-        placement_label = "cube"
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A,
+            resolve_packmol_inner_cube_side_A,
+        )
+
+        pos, was_charmm_centered = _positions_to_packmol_primary_frame(pos, float(box_side))
+        margin = (
+            float(packmol_margin_A)
+            if packmol_margin_A is not None and float(packmol_margin_A) > 0.0
+            else float(MIN_PERIODIC_LIQUID_PACKMOL_PADDING_A)
+        )
+        inner_side, margin = resolve_packmol_inner_cube_side_A(
+            float(box_side),
+            margin_A=margin,
+        )
+        center = (0.5 * float(box_side), 0.5 * float(box_side), 0.5 * float(box_side))
+        x0, y0, z0 = packmol_cube_origin(center, float(inner_side))
+        restraint = f"  inside cube {x0} {y0} {z0} {float(inner_side)}"
+        placement_label = f"cube (inner {float(inner_side):.2f} Å, margin {margin:.2f} Å/side)"
     else:
         span = float(np.ptp(pos, axis=0).max()) if pos.size else 10.0
         radius = max(8.0, 0.6 * span + 4.0)
@@ -238,6 +280,13 @@ def _run_packmol_repack(
     if cell is not None:
         new_pos = wrap_monomers_primary_cell(new_pos, offsets, cell)
 
+    if box_side is not None:
+        new_pos = _positions_from_packmol_primary_frame(
+            new_pos,
+            float(box_side),
+            was_charmm_centered=was_charmm_centered,
+        )
+
     print(
         f"Packmol repack ({placement_label}): patched monomers "
         f"{sorted(i + 1 for i in movable)} "
@@ -263,6 +312,7 @@ def repack_monomers_clear_overlap(
     atom_names: list[str] | None = None,
     atomic_numbers: np.ndarray | None = None,
     packmol_tolerance: float | None = None,
+    packmol_margin_A: float | None = None,
 ) -> np.ndarray:
     """Repack all monomers with Packmol; fall back to grid placement on failure."""
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -290,6 +340,7 @@ def repack_monomers_clear_overlap(
             scratch_dir=workdir,
             atom_names=atom_names,
             atomic_numbers=atomic_numbers,
+            packmol_margin_A=packmol_margin_A,
         )
     except Exception as exc:
         print(
@@ -329,6 +380,7 @@ def repack_selected_monomers_clear_overlap(
     atom_names: list[str] | None = None,
     atomic_numbers: np.ndarray | None = None,
     packmol_tolerance: float | None = None,
+    packmol_margin_A: float | None = None,
 ) -> np.ndarray:
     """Repack only selected monomers with Packmol; fall back to grid on failure."""
     offsets = np.asarray(monomer_offsets, dtype=int)
@@ -355,6 +407,7 @@ def repack_selected_monomers_clear_overlap(
             scratch_dir=workdir,
             atom_names=atom_names,
             atomic_numbers=atomic_numbers,
+            packmol_margin_A=packmol_margin_A,
         )
     except Exception as exc:
         print(

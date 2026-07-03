@@ -24,7 +24,7 @@ seed_base: 4242
 spacing: 5.0
 periodic_charmm_vdw: false
 packmol_tolerance: 2.0
-packmol_box_padding: 1.0
+packmol_box_padding: 2.5
 
 dt_fs: 0.25
 pressure: 1.0

@@ -1270,6 +1270,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_condensed_phase_md_defaults,
         liquid_prep_enabled,
+        maybe_probe_packmol_mic_pipeline,
         run_pre_mlpot_geometry_gate,
     )
 
@@ -1387,6 +1388,22 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
     atoms_per_list = getattr(args, "_cluster_atoms_per_list", None)
     if atoms_per_list is None and int(n_mol) > 0 and int(n_atoms) % int(n_mol) == 0:
         atoms_per_list = [int(n_atoms // int(n_mol))] * int(n_mol)
+    _fresh_packmol = (
+        handoff_in is None
+        and not getattr(args, "skip_cluster_build", False)
+        and getattr(args, "from_psf", None) is None
+    )
+    if atoms_per_list is not None:
+        maybe_probe_packmol_mic_pipeline(
+            args,
+            positions=r,
+            atoms_per_list=list(atoms_per_list),
+            box_side=box_side,
+            charmm_pbc=charmm_pbc,
+            atomic_numbers=np.asarray(z, dtype=int),
+            context="MIC probe after Packmol (before MC/align)",
+            fresh_packmol_build=_fresh_packmol,
+        )
     if atoms_per_list is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
             apply_mc_density_equalization,
@@ -1447,6 +1464,16 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             atoms_per_list=list(atoms_per_list),
             box_side_A=float(box_side),
             quiet=bool(args.quiet),
+        )
+        maybe_probe_packmol_mic_pipeline(
+            args,
+            positions=r,
+            atoms_per_list=list(atoms_per_list),
+            box_side=box_side,
+            charmm_pbc=charmm_pbc,
+            atomic_numbers=np.asarray(z, dtype=int),
+            context="MIC probe after CHARMM PBC align",
+            fresh_packmol_build=_fresh_packmol,
         )
     if charmm_pbc and not args.quiet:
         from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
@@ -1570,6 +1597,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
         )
 
     setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
+    if atoms_per_list is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+
+        r = get_charmm_positions_array()
+        maybe_probe_packmol_mic_pipeline(
+            args,
+            positions=r,
+            atoms_per_list=list(atoms_per_list),
+            box_side=box_side,
+            charmm_pbc=charmm_pbc,
+            atomic_numbers=np.asarray(z, dtype=int),
+            context="MIC probe after CHARMM crystal restore",
+            fresh_packmol_build=_fresh_packmol,
+        )
     handoff_coords_in_memory = False
     if handoff_in is not None:
         from dataclasses import replace

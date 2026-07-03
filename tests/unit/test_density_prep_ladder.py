@@ -102,7 +102,7 @@ def test_resolve_density_prep_lattice_steps_zero_stays_disabled():
         mini_lattice_abnr_steps=0,
         density_prep_lattice_abnr_steps=0,
     )
-    assert resolve_density_prep_lattice_abnr_steps(args) == 100
+    assert resolve_density_prep_lattice_abnr_steps(args) == 0
 
     handoff = _args(
         from_psf="boxes/dcm52/model.psf",

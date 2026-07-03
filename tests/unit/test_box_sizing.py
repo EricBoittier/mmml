@@ -178,8 +178,8 @@ def test_resolve_packmol_box_padding_defaults_small_for_fixed_box_composition():
         FIXED_BOX_COMPOSITION_PACKMOL_PADDING_A
     )
     packmol = resolve_packmol_cube_side_for_sim_cell(args, 30.0)
-    assert packmol == pytest.approx(28.0)
-    assert packmol > 25.0
+    assert packmol == pytest.approx(25.0)
+    assert packmol > 20.0
 
 
 def test_n_molecules_for_target_density_in_fixed_box_dcm32():

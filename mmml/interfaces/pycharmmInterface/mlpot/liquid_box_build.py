@@ -319,6 +319,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     )
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         liquid_prep_enabled,
+        maybe_probe_packmol_mic_pipeline,
         run_pre_mlpot_geometry_gate,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -396,9 +397,31 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
             quiet=bool(getattr(args, "quiet", False)),
         )
 
+    maybe_probe_packmol_mic_pipeline(
+        args,
+        positions=r,
+        atoms_per_list=list(atoms_per_list) if atoms_per_list is not None else [],
+        box_side=box_side,
+        charmm_pbc=charmm_pbc,
+        atomic_numbers=np.asarray(z, dtype=int),
+        context="MIC probe after Packmol (before CHARMM setup)",
+        fresh_packmol_build=use_packmol_placement(args),
+    )
+
     mini_nprint = apply_charmm_output_from_args(args)
     setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
     sync_charmm_positions(r)
+
+    maybe_probe_packmol_mic_pipeline(
+        args,
+        positions=get_charmm_positions_array(),
+        atoms_per_list=list(atoms_per_list) if atoms_per_list is not None else [],
+        box_side=box_side,
+        charmm_pbc=charmm_pbc,
+        atomic_numbers=np.asarray(z, dtype=int),
+        context="MIC probe after CHARMM crystal restore",
+        fresh_packmol_build=use_packmol_placement(args),
+    )
 
     vmd_files = save_cluster_topology_for_vmd(
         out_dir, r, stem="model", title="liquid-box cluster"
