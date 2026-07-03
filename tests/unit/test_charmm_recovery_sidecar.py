@@ -40,6 +40,8 @@ def test_sidecar_manifest_round_trip(tmp_path: Path) -> None:
 
 
 def test_build_sidecar_manifest_exports_psf_and_crd(tmp_path: Path) -> None:
+    import sys
+
     ctx = MagicMock()
     ctx.use_pbc = True
     ctx.charmm_cubic_box_side_A = 30.0
@@ -48,14 +50,22 @@ def test_build_sidecar_manifest_exports_psf_and_crd(tmp_path: Path) -> None:
     psf = tmp_path / "live.psf"
     psf.write_text("psf", encoding="utf-8")
 
-    with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.resolve_recovery_psf_source",
-        return_value=MagicMock(path=psf, temporary=False, cleanup=lambda: None),
+    fake_write = MagicMock()
+    with patch.dict(
+        sys.modules,
+        {
+            "pycharmm": MagicMock(write=fake_write),
+            "pycharmm.write": fake_write,
+        },
     ):
-        with patch("pycharmm.write.coor_card") as write_crd:
+        with patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.bonded_jax_recovery.resolve_recovery_psf_source",
+            return_value=MagicMock(path=psf, temporary=False, cleanup=lambda: None),
+        ):
             manifest = build_sidecar_manifest(ctx, cfg, tmp_path)
     assert Path(manifest.psf) == psf.resolve()
-    write_crd.assert_called_once()
+    assert Path(manifest.input_crd) == (tmp_path / "input.crd").resolve()
+    fake_write.coor_card.assert_called_once()
 
 
 def test_run_charmm_recovery_sidecar_applies_output_crd(tmp_path: Path) -> None:
