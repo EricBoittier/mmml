@@ -233,15 +233,21 @@ def assert_charmm_image_mic_fallback(
     min_distance_A: float,
     context: str,
 ) -> float:
-    """MIC prep gate when ``<MKIMAT2>`` is unavailable (MPI / cached IMAGE lists)."""
+    """MIC prep gate when ``<MKIMAT2>`` is unavailable (MPI / cached IMAGE lists).
+
+    Uses the same element-pair prep floors as Packmol/MC certification (≈2.3–2.9 Å),
+    not the CHARMM ``<MKIMAT2>`` group Min-Distance margin (3.5–4.5 Å).
+    """
     import numpy as np
 
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
         monomer_offsets_from_atoms_per,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
-    from mmml.utils.intermonomer_geometry import summarize_worst_intermonomer_contact
+    from mmml.utils.intermonomer_geometry import (
+        assert_pre_mlpot_mic_geometry,
+        summarize_worst_intermonomer_contact,
+    )
 
     atoms_per = _resolve_atoms_per_for_image_gate(workflow_args)
     if not atoms_per or box_side_A is None or float(box_side_A) <= 0.0:
@@ -249,30 +255,30 @@ def assert_charmm_image_mic_fallback(
             f"{context}: cannot run MIC image fallback "
             "(missing atoms_per_monomer or cubic box side)."
         )
-    floor = float(min_distance_A)
+    prep_global = resolve_charmm_image_min_distance_A(workflow_args)
     pos = get_charmm_positions_array()
     z_arr = _resolve_atomic_numbers_for_image_gate(workflow_args)
     if z_arr is None:
         print(
             f"{context}: MIC fallback untyped (no element data); "
-            f"using registration floor {floor:.2f} Å only",
+            f"using prep global floor {prep_global:.2f} Å only",
             flush=True,
         )
-    offsets = monomer_offsets_from_atoms_per(atoms_per)
-    cell = np.diag([float(box_side_A), float(box_side_A), float(box_side_A)])
-    worst = assert_no_intermonomer_atom_overlap(
+    worst = assert_pre_mlpot_mic_geometry(
         pos,
-        offsets,
-        min_distance=floor,
-        cell=cell,
-        context=f"{context} (MIC registration floor {floor:.2f} Å)",
+        atoms_per,
+        box_side=float(box_side_A),
+        use_pbc=True,
+        args=workflow_args,
+        atomic_numbers=z_arr,
+        context=f"{context} (MIC prep element-pair floors)",
     )
     summary = summarize_worst_intermonomer_contact(
         pos,
         atoms_per,
         box_side=float(box_side_A),
         use_pbc=True,
-        threshold_A=floor,
+        threshold_A=float(min_distance_A) if min_distance_A > 0 else prep_global,
         atomic_numbers=z_arr,
     )
     print(
@@ -450,16 +456,13 @@ def resolve_mkimat2_min_distance_A(
 def resolve_mic_registration_fallback_min_A(
     workflow_args: argparse.Namespace | None,
 ) -> float:
-    """MIC floor when ``<MKIMAT2>`` is unavailable at MLpot registration."""
-    mkimat_floor = resolve_mkimat2_min_distance_A(workflow_args)
-    if is_dcm_like_prep(workflow_args):
-        n_monomers = _resolve_n_monomers_for_image_gate(workflow_args)
-        if (
-            n_monomers is not None
-            and n_monomers >= int(DENSE_DCM_MLPOT_MONOMER_COUNT)
-        ):
-            return mkimat_floor + float(DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A)
-    return mkimat_floor
+    """Global prep MIC floor for logging when ``<MKIMAT2>`` is unavailable.
+
+    Atom-pair abort logic uses :func:`assert_pre_mlpot_mic_geometry` (element-aware
+    prep floors), not the CHARMM ``<MKIMAT2>`` group margin from
+    :func:`resolve_mkimat2_min_distance_A`.
+    """
+    return resolve_charmm_image_min_distance_A(workflow_args)
 
 
 def run_mlpot_pbc_image_registration_gate(
@@ -534,8 +537,8 @@ def assert_charmm_image_min_distance_after_update(
 
     print(
         f"{context}: <MKIMAT2> not emitted (MPI/cached IMAGE); "
-        f"using MIC registration fallback "
-        f"(floor {resolve_mic_registration_fallback_min_A(workflow_args):.2f} Å)",
+        f"using MIC prep element-pair fallback "
+        f"(global floor {resolve_mic_registration_fallback_min_A(workflow_args):.2f} Å)",
         flush=True,
     )
     return assert_charmm_image_mic_fallback(

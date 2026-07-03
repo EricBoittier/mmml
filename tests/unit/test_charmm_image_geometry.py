@@ -164,10 +164,14 @@ def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
 def test_assert_charmm_image_mic_fallback_uses_registration_floor(monkeypatch):
     import numpy as np
 
-    args = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 52)
+    args = argparse.Namespace(
+        solvents=["DCM"],
+        _cluster_atoms_per_list=[5] * 52,
+        pre_mlpot_overlap_min_distance=2.3,
+    )
 
     def _fail_prep_geometry(*a, **k):
-        raise RuntimeError("3.358 Å < required 5.00 Å")
+        raise RuntimeError("2.100 Å < required 2.40 Å (H–Cl)")
 
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
@@ -182,14 +186,14 @@ def test_assert_charmm_image_mic_fallback_uses_registration_floor(monkeypatch):
         lambda _args: np.array([17, 17, 17, 17, 17, 17, 17, 17, 17, 17], dtype=int),
     )
     monkeypatch.setattr(
-        "mmml.utils.geometry_checks.assert_no_intermonomer_atom_overlap",
+        "mmml.utils.intermonomer_geometry.assert_pre_mlpot_mic_geometry",
         _fail_prep_geometry,
     )
     from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_min_distance_after_update,
     )
 
-    with pytest.raises(RuntimeError, match="5.00 Å"):
+    with pytest.raises(RuntimeError, match="2.40 Å"):
         assert_charmm_image_min_distance_after_update(
             workflow_args=args,
             context="MLpot PBC registration (post-MLpot)",
@@ -215,29 +219,29 @@ def test_assert_charmm_image_mic_fallback_aborts_below_registration_floor(monkey
         lambda _args: np.full(10, 17, dtype=int),
     )
 
-    def _overlap(pos, offsets, *, min_distance, cell=None, context=""):
-        assert float(min_distance) == pytest.approx(5.5)
+    def _prep_fail(*a, **k):
         raise RuntimeError(
-            f"{context}: inter-monomer atom overlap detected: "
-            "monomers 3/20, atoms 12/98, distance=3.4690 A "
+            "registration gate (MIC prep element-pair floors): "
+            "monomers 3/20, atoms Cl–Cl, distance=2.1000 Å < required 2.9000 Å"
         )
 
     monkeypatch.setattr(
-        "mmml.utils.geometry_checks.assert_no_intermonomer_atom_overlap",
-        _overlap,
+        "mmml.utils.intermonomer_geometry.assert_pre_mlpot_mic_geometry",
+        _prep_fail,
     )
     from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_mic_fallback,
     )
 
-    with pytest.raises(RuntimeError, match="3.4690"):
+    with pytest.raises(RuntimeError, match="2.1000"):
         assert_charmm_image_mic_fallback(
             workflow_args=argparse.Namespace(
                 solvents=["DCM"],
                 _cluster_atoms_per_list=[5] * 52,
+                pre_mlpot_overlap_min_distance=2.3,
             ),
             box_side_A=32.0,
-            min_distance_A=5.5,
+            min_distance_A=2.3,
             context="registration gate",
         )
 
@@ -247,13 +251,8 @@ def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
 
     captured: dict[str, object] = {}
 
-    def _fake_overlap(pos, offsets, *, min_distance, cell=None, context=""):
-        captured.update(
-            {
-                "min_distance": float(min_distance),
-                "context": context,
-            }
-        )
+    def _fake_prep(*a, **k):
+        captured["context"] = k.get("context", "")
         return 2.577
 
     monkeypatch.setattr(
@@ -269,8 +268,8 @@ def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
         lambda _args: np.array([1, 1, 1, 1, 1, 6, 6, 6, 6, 17], dtype=int),
     )
     monkeypatch.setattr(
-        "mmml.utils.geometry_checks.assert_no_intermonomer_atom_overlap",
-        _fake_overlap,
+        "mmml.utils.intermonomer_geometry.assert_pre_mlpot_mic_geometry",
+        _fake_prep,
     )
     monkeypatch.setattr(
         "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
@@ -290,14 +289,13 @@ def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
     )
 
     worst = assert_charmm_image_mic_fallback(
-        workflow_args=argparse.Namespace(solvents=["DCM"]),
+        workflow_args=argparse.Namespace(solvents=["DCM"], pre_mlpot_overlap_min_distance=2.3),
         box_side_A=28.0,
         min_distance_A=2.3,
         context="test gate",
     )
     assert worst == pytest.approx(2.577)
-    assert captured["min_distance"] == pytest.approx(2.3)
-    assert "MIC registration floor" in str(captured["context"])
+    assert "MIC prep element-pair floors" in str(captured["context"])
 
 
 def test_assert_charmm_image_mic_fallback_calls_registration_floor(monkeypatch):
@@ -305,15 +303,8 @@ def test_assert_charmm_image_mic_fallback_calls_registration_floor(monkeypatch):
 
     captured: dict[str, object] = {}
 
-    def _fake_overlap(pos, offsets, *, min_distance, cell=None, context=""):
-        captured.update(
-            {
-                "min_distance": float(min_distance),
-                "box_diag": float(cell[0, 0]) if cell is not None else None,
-                "context": context,
-                "n_atoms": len(pos),
-            }
-        )
+    def _fake_prep(*a, **k):
+        captured.update({"box_side": k.get("box_side"), "n_atoms": len(a[0])})
         return 3.42
 
     monkeypatch.setattr(
@@ -329,8 +320,8 @@ def test_assert_charmm_image_mic_fallback_calls_registration_floor(monkeypatch):
         lambda _args: np.ones(10, dtype=int),
     )
     monkeypatch.setattr(
-        "mmml.utils.geometry_checks.assert_no_intermonomer_atom_overlap",
-        _fake_overlap,
+        "mmml.utils.intermonomer_geometry.assert_pre_mlpot_mic_geometry",
+        _fake_prep,
     )
     monkeypatch.setattr(
         "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
@@ -341,15 +332,14 @@ def test_assert_charmm_image_mic_fallback_calls_registration_floor(monkeypatch):
     )
 
     worst = assert_charmm_image_mic_fallback(
-        workflow_args=argparse.Namespace(),
+        workflow_args=argparse.Namespace(pre_mlpot_overlap_min_distance=2.3),
         box_side_A=27.993,
         min_distance_A=2.3,
         context="test gate",
     )
     assert worst == pytest.approx(3.42)
-    assert captured["min_distance"] == pytest.approx(2.3)
-    assert captured["box_diag"] == pytest.approx(27.993)
-    assert "MIC registration floor" in str(captured["context"])
+    assert captured["box_side"] == pytest.approx(27.993)
+    assert captured["n_atoms"] == 10
 
 
 def test_assert_charmm_image_min_distance_aborts_on_dense_pbc_margin():
@@ -423,16 +413,17 @@ def test_assert_charmm_image_min_distance_after_update_uses_mkimat_floor(monkeyp
         )
 
 
-def test_resolve_mic_registration_fallback_adds_slack_for_dense_dcm():
+def test_resolve_mic_registration_fallback_uses_prep_floor_not_mkimat():
     args = argparse.Namespace(
         solvents=["DCM"],
         _cluster_atoms_per_list=[5] * 52,
+        pre_mlpot_overlap_min_distance=2.3,
     )
     assert resolve_mkimat2_min_distance_A(args) == pytest.approx(4.5)
-    assert resolve_mic_registration_fallback_min_A(args) == pytest.approx(4.5)
-    assert resolve_mic_registration_fallback_min_A(None) == pytest.approx(3.5)
+    assert resolve_mic_registration_fallback_min_A(args) == pytest.approx(2.3)
+    assert resolve_mic_registration_fallback_min_A(None) == pytest.approx(2.3)
     sparse = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 10)
-    assert resolve_mic_registration_fallback_min_A(sparse) == pytest.approx(3.5)
+    assert resolve_mic_registration_fallback_min_A(sparse) == pytest.approx(2.3)
 
 
 def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):
