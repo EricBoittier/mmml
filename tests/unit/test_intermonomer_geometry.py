@@ -123,6 +123,31 @@ def test_dcm_pair_floors_for_h_heavy_and_heavy_heavy():
     )
 
 
+def test_hh_contact_at_2577_passes_dcm_prep_gate():
+    from mmml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
+
+    pos = np.array(
+        [
+            [5.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [2.577, 0.0, 0.0],
+            [8.0, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    args = argparse.Namespace(solvents=["DCM"])
+    worst = assert_pre_mlpot_mic_geometry(
+        pos,
+        [2, 2],
+        box_side=28.0,
+        use_pbc=False,
+        args=args,
+        atomic_numbers=[6, 1, 1, 6],
+        context="test",
+    )
+    assert worst == pytest.approx(2.577)
+
+
 def test_assert_pre_mlpot_mic_geometry_aborts_tight_dcm_contact():
     from mmml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
 

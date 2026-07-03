@@ -226,18 +226,28 @@ def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
     assert captured["atomic_numbers"] == [1, 1, 1, 1, 1, 6, 6, 6, 6, 17]
 
 
-def test_assert_charmm_image_mic_fallback_calls_mic_geometry(monkeypatch):
+def test_assert_charmm_image_mic_fallback_calls_prep_geometry(monkeypatch):
     import numpy as np
 
     captured: dict[str, object] = {}
 
-    def _fake_mic_geometry(pos, atoms_per, *, box_side, use_pbc, args=None, atomic_numbers=None, context=""):
+    def _fake_prep_geometry(
+        positions,
+        atoms_per_list,
+        *,
+        min_distance_A,
+        box_side,
+        use_pbc,
+        context="",
+        args=None,
+        atomic_numbers=None,
+    ):
         captured.update(
             {
                 "box_side": box_side,
                 "use_pbc": use_pbc,
                 "context": context,
-                "n_atoms": len(pos),
+                "n_atoms": len(positions),
             }
         )
         return 3.42
@@ -251,8 +261,16 @@ def test_assert_charmm_image_mic_fallback_calls_mic_geometry(monkeypatch):
         lambda _args: [5, 5],
     )
     monkeypatch.setattr(
-        "mmml.utils.intermonomer_geometry.assert_pre_mlpot_mic_geometry",
-        _fake_mic_geometry,
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
+        lambda _args: np.ones(10, dtype=int),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        _fake_prep_geometry,
+    )
+    monkeypatch.setattr(
+        "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
+        lambda *a, **k: type("S", (), {"format_log_line": lambda self: "worst inter-monomer contact 3.42 Å"})(),
     )
     from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
         assert_charmm_image_mic_fallback,
