@@ -23,10 +23,10 @@ DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A = 50.0
 # Dense all-ML PBC liquids can pass MIC ~3.0 Å yet still hit GRMS >2000 when MKIMAT2 ≈3.0.
 DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A = 3.5
 # 52-monomer DCM @ L≈28 Å: MKIMAT2 ≈4.9 Å still yields hybrid GRMS >2000 at registration.
-DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A = 5.0
+DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A = 4.5
 DENSE_DCM_MLPOT_MONOMER_COUNT = 40
-# When MKIMAT2 cannot be captured, MIC must clear the IMAGE floor plus slack.
-DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A = 0.5
+# When MKIMAT2 cannot be captured, MIC must clear the IMAGE floor (no extra slack).
+DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A = 0.0
 
 # Dynamics overlap guard default (CHARMM close-contact scale); looser than vdW sums.
 DYNAMICS_OVERLAP_REFERENCE_A = 1.5

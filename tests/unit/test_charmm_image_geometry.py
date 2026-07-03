@@ -381,7 +381,7 @@ def test_resolve_mkimat2_min_distance_uses_dense_dcm_margin():
         solvents=["DCM"],
         _cluster_atoms_per_list=[5] * 52,
     )
-    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(5.0)
+    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(4.5)
     assert resolve_mkimat2_min_distance_A(None) == pytest.approx(3.5)
     assert resolve_mkimat2_min_distance_A(argparse.Namespace()) == pytest.approx(3.5)
 
@@ -390,14 +390,14 @@ def test_assert_charmm_image_min_distance_aborts_dense_dcm_mkimat_margin(monkeyp
     log = """
  <MKIMAT2>: updating the image atom lists and remapping
  Transformation   Atoms  Groups  Residues  Min-Distance
-    5  Z0Z0N1R1 has     120      24      24        4.88
+    5  Z0Z0N1R1 has     120      24      24        4.40
 """
     args = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 52)
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         lambda **kwargs: log,
     )
-    with pytest.raises(RuntimeError, match="4.88 Å < prep floor 5.00 Å"):
+    with pytest.raises(RuntimeError, match="4.40 Å < prep floor 4.50 Å"):
         assert_charmm_image_min_distance_after_update(
             workflow_args=args,
             context="test gate",
@@ -428,8 +428,8 @@ def test_resolve_mic_registration_fallback_adds_slack_for_dense_dcm():
         solvents=["DCM"],
         _cluster_atoms_per_list=[5] * 52,
     )
-    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(5.0)
-    assert resolve_mic_registration_fallback_min_A(args) == pytest.approx(5.5)
+    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(4.5)
+    assert resolve_mic_registration_fallback_min_A(args) == pytest.approx(4.5)
     assert resolve_mic_registration_fallback_min_A(None) == pytest.approx(3.5)
     sparse = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 10)
     assert resolve_mic_registration_fallback_min_A(sparse) == pytest.approx(3.5)

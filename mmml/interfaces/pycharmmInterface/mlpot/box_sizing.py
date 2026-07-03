@@ -868,6 +868,17 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
             "Structures must be ML-safe before USER is enabled."
         ),
     )
+    group.add_argument(
+        "--charmm-image-mlpot-min-distance",
+        type=float,
+        default=None,
+        dest="charmm_image_mlpot_min_distance_A",
+        metavar="ANG",
+        help=(
+            "CHARMM <MKIMAT2> / MIC registration floor (Å) before MLpot USER. "
+            "Overrides dense-DCM defaults when set."
+        ),
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.cleanup_mode import add_cleanup_args
     from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         add_recovery_artifact_args,

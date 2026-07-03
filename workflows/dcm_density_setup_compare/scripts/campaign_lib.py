@@ -416,9 +416,21 @@ def cell_workflow_cfg(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
     if not cell.sweep_id:
         return cfg
     out = dict(cfg)
-    out.update(prep_sweep_variant_overrides(cfg, cell.sweep_id))
+    variant = prep_sweep_variant_overrides(cfg, cell.sweep_id)
+    out.update(variant)
     sweep = prep_sweep_section(cfg)
-    if not sweep.get("full_dynamics", False):
+    if variant.get("enable_dynamics"):
+        legs = variant.get("dynamics_legs")
+        if isinstance(legs, dict):
+            out["dynamics_legs"] = dict(legs)
+        else:
+            out["dynamics_legs"] = {
+                "pycharmm_equi": False,
+                "pycharmm_prod": True,
+                "jaxmd": False,
+                "ase": False,
+            }
+    elif not sweep.get("full_dynamics", False):
         out["dynamics_legs"] = {
             "pycharmm_equi": False,
             "pycharmm_prod": False,
@@ -1011,6 +1023,11 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "max_grms_before_dyn",
         "no_scale_max_grms",
         "allow_high_grms",
+        "pre_mlpot_overlap_min_distance",
+        "pre_mlpot_h_heavy_min_distance",
+        "pre_mlpot_heavy_heavy_min_distance",
+        "mlpot_registration_max_grms",
+        "charmm_image_mlpot_min_distance_A",
         "mini_box_equil_ps",
         "calculator_pre_minimize",
         "periodic_charmm_vdw",

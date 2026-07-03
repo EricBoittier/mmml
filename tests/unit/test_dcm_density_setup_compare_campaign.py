@@ -752,6 +752,38 @@ def test_prep_sweep_placement_and_box_overrides(cfg: dict) -> None:
     assert mini_xtal["pyxtal"] is True
 
 
+def test_prep_sweep_dyn_probe_enables_prod_leg(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini,heat",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 38.0,
+                "heat_thermostat": "bussi",
+            },
+            "variants": {
+                "dyn_probe": {
+                    "enable_dynamics": True,
+                    "pycharmm_prod_ps": 15.0,
+                    "dynamics_legs": {"pycharmm_prod": True},
+                },
+            },
+        },
+    }
+    cell = cell_from_tag(
+        sweep_cfg, "resilient_dcm_52_t50_l38_ht_bussi_sw_dyn_probe"
+    )
+    campaign = build_campaign(sweep_cfg, cell)
+    assert "pycharmm_prod_01" in campaign["runs"]
+    assert campaign["runs"]["pycharmm_prod_01"]["ps_prod"] == 15.0
+
+
 def test_prep_sweep_tag_auto_loads_from_prep_sweep_yaml(cfg: dict) -> None:
     tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_baseline"
     cell = cell_from_tag(cfg, tag)

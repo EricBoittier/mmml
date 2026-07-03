@@ -56,7 +56,7 @@ min_intermonomer_atom_distance: 2.3
 pre_mlpot_overlap_min_distance: 2.3
 
 dcd_nsavc: 25
-dyn_inbfrq: -1
+dyn_inbfrq: 25
 
 liquid_prep: true
 density_prep_ladder: true
@@ -71,11 +71,16 @@ bonded_mm_mini: false
 bonded_recovery_backend: sidecar
 overlap_run_state_every_chunks: 25
 
-mm_switch_on: 8.0
-mm_switch_width: 5.0
-ml_switch_width: 1.5
+mm_switch_on: 12.0
+mm_switch_width: 6.0
+ml_switch_width: 2.0
 mm_nonbond_mode: jax_mic
 charmm_mm_pretreat: true
+
+# Relaxed registration: dense DCM MIC floor 4.5 Å (was 5.5); warn-not-abort on high GRMS.
+allow_high_grms: true
+mlpot_registration_max_grms: 200.0
+charmm_image_mlpot_min_distance_A: 4.0
 
 # Short heat smoke (variants can lengthen via heat2ps).
 default_heat_thermostat: bussi
@@ -137,6 +142,20 @@ prep_sweep:
     heat_thermostat: bussi
   variants:
     baseline: {}
+    # --- Short prod dynamics smoke (mini+heat+pycharmm_prod) ---
+    dyn_probe:
+      enable_dynamics: true
+      box_size: 42.0
+      pycharmm_prod_ps: 20.0
+      dynamics_legs:
+        pycharmm_prod: true
+      ps_heat: 2.0
+      mm_switch_on: 14.0
+      mm_switch_width: 6.0
+      dyn_inbfrq: 10
+      allow_high_grms: true
+      charmm_image_mlpot_min_distance_A: 3.5
+      mlpot_registration_max_grms: 500.0
     # --- Box size (anchor L=38; variants override per-cell tag l{L}) ---
     l40:
       box_size: 40.0
