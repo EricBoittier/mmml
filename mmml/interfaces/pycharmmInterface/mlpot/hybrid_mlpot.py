@@ -48,15 +48,6 @@ MmPairSource = Literal["jax", "charmm_callback"]
 
 def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
     """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback)."""
-    raw = os.environ.get("MMML_MM_PAIR_SOURCE", "").strip().lower()
-    if raw in ("charmm_callback", "callback", "charmm"):
-        return "charmm_callback"
-    if raw in ("jax", ""):
-        pass
-    else:
-        raise ValueError(
-            f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
-        )
     if args is not None:
         src = getattr(args, "mm_pair_source", None)
         if src is not None:
@@ -66,7 +57,14 @@ def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
             if norm == "jax":
                 return "jax"
             raise ValueError(f"mm_pair_source must be jax or charmm_callback; got {src!r}")
-    return "jax"
+    raw = os.environ.get("MMML_MM_PAIR_SOURCE", "").strip().lower()
+    if raw in ("charmm_callback", "callback", "charmm"):
+        return "charmm_callback"
+    if raw in ("jax", ""):
+        return "jax"
+    raise ValueError(
+        f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
+    )
 
 
 def _monomer_offsets_from_atoms_per_monomer(
