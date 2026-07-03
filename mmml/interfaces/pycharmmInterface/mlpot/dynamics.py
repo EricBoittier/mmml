@@ -4568,10 +4568,10 @@ def _overlap_should_split_trajectory(
     """Write per-chunk ``*.chunk.NNNN.dcd`` files for multi-segment overlap runs."""
     if n_chunks <= 1:
         return False
+    if n_chunks > 8:
+        return False
     if traj_nsavc is not None and int(traj_nsavc) <= 1:
         if n_chunks > _OVERLAP_MAX_CHUNK_DCD_FILES:
-            return False
-        if n_chunks > 8:
             return False
     return True
 

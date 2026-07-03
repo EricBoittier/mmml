@@ -100,7 +100,8 @@ dynamics_legs:
   ase: false
 
 ml_gpu_count: 1
-ml_batch_size: 256
+# 128 reduces JAX/LLVM compile RAM on 12–16 GB Slurm steps (OOM on heat chunk 1 @ N=52).
+ml_batch_size: 128
 
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 6
@@ -109,7 +110,8 @@ slurm_partition: gpu
 slurm_nodes: 1
 slurm_ntasks: 1
 slurm_cpus_per_task: 4
-slurm_mem_mb_per_cpu: 3000
+# MLpot heat (JAX X64 + CHARMM + GPU): 12 GB (4×3000) OOM-kills on gpu08/09 at chunk 1/80.
+slurm_mem_mb_per_cpu: 8000
 slurm_runtime_min: 1440
 slurm_gpu_nodes_fast:
   - gpu08
