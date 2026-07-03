@@ -317,6 +317,35 @@ def run_selective_monomer_physnet_mini(
                 f"(per-mono GRMS {grms_txt} kcal/mol/Å; cluster {diag.cluster_grms:.1f})",
                 flush=True,
             )
+            from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+                monomer_offsets_from_atoms_per,
+            )
+            from mmml.utils.monomer_force_diag import (
+                format_worst_atom_force_peaks,
+                mlpot_hybrid_forces_kcalmol_A,
+                worst_atom_force_peaks,
+            )
+
+            atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
+            if atoms_per is None:
+                pyCModel = getattr(mlpot_ctx, "pyCModel", None)
+                atoms_per = (
+                    getattr(pyCModel, "_atoms_per_monomer", None) if pyCModel else None
+                )
+            forces = mlpot_hybrid_forces_kcalmol_A(mlpot_ctx, positions=pos)
+            if forces is not None and atoms_per:
+                offsets = monomer_offsets_from_atoms_per([int(x) for x in atoms_per])
+                peaks = worst_atom_force_peaks(
+                    forces,
+                    offsets,
+                    top_n=3,
+                    monomer_filter=selected,
+                )
+                print(
+                    f"{context_prefix}: worst atom |F| before template restore: "
+                    f"{format_worst_atom_force_peaks(peaks)}",
+                    flush=True,
+                )
 
     remember_monomer_template_restart_path(mlpot_ctx, restart_path)
     ref_info = resolve_monomer_template_reference_positions(

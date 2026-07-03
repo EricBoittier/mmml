@@ -454,6 +454,7 @@ def _build_cluster_from_composition_packmol(
     spacing: float | None = None,
     prep_gate_settings: dict[str, Any] | None = None,
     quiet: bool = False,
+    geometry_store: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
 
@@ -480,6 +481,7 @@ def _build_cluster_from_composition_packmol(
         spacing=spacing,
         prep_gate_settings=prep_gate_settings,
         quiet=quiet,
+        geometry_store=geometry_store,
     )
 
 
@@ -502,6 +504,7 @@ def _build_cluster_from_composition_pyxtal(
     optimize_ase: bool = False,
     optimize_ase_emt: bool = False,
     trim_to_composition: bool = True,
+    geometry_store: Any | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_pyxtal_composition_cluster
 
@@ -523,6 +526,7 @@ def _build_cluster_from_composition_pyxtal(
         optimize_ase=optimize_ase,
         optimize_ase_emt=optimize_ase_emt,
         trim_to_composition=trim_to_composition,
+        geometry_store=geometry_store,
     )
 
 

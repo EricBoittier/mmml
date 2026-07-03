@@ -62,6 +62,10 @@ liquid_prep: true
 density_prep_ladder: true
 density_prep_ladder_max_rounds: 8
 density_prep_lattice_abnr_steps: 300
+monomer_physnet_mini_max_select: 4
+monomer_physnet_mini_min_grms: 15.0
+monomer_physnet_mini_steps: 120
+geometry_packing_fire_bfgs_crossover_grms: 80.0
 mini_lattice_abnr_steps: 300
 mc_density_equalize: true
 mc_density_steps: 256
@@ -156,6 +160,11 @@ prep_sweep:
       allow_high_grms: true
       charmm_image_mlpot_min_distance: 3.5
       mlpot_registration_max_grms: 500.0
+      density_prep_ladder_max_rounds: 12
+      monomer_physnet_mini_max_select: 4
+      monomer_physnet_mini_min_grms: 12.0
+      monomer_physnet_mini_steps: 150
+      geometry_packing_fire_bfgs_crossover_grms: 60.0
     # --- Box size (anchor L=38; variants override per-cell tag l{L}) ---
     l40:
       box_size: 40.0

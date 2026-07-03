@@ -11,6 +11,69 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import forces_grms_kcalm
 
 
 @dataclass(frozen=True)
+class AtomForcePeak:
+    """Largest |F| on one atom (hybrid forces)."""
+
+    monomer: int
+    atom: int
+    force_kcal: float
+    force_ev: float
+
+
+def worst_atom_force_peaks(
+    forces_kcal: np.ndarray,
+    monomer_offsets: np.ndarray,
+    *,
+    top_n: int = 5,
+    monomer_filter: tuple[int, ...] | list[int] | None = None,
+) -> tuple[AtomForcePeak, ...]:
+    """Return the largest per-atom force magnitudes (kcal/mol/Å and eV/Å)."""
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import kcalmol2ev
+
+    f = np.asarray(forces_kcal, dtype=np.float64).reshape(-1, 3)
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    allowed = (
+        None
+        if monomer_filter is None
+        else {int(i) for i in monomer_filter}
+    )
+    peaks: list[AtomForcePeak] = []
+    for mi in range(int(len(offsets) - 1)):
+        if allowed is not None and mi not in allowed:
+            continue
+        s, e = int(offsets[mi]), int(offsets[mi + 1])
+        block = f[s:e]
+        if block.size == 0:
+            continue
+        mag = np.linalg.norm(block, axis=1)
+        atom = int(s + np.argmax(mag))
+        peak = float(mag[int(atom - s)])
+        peaks.append(
+            AtomForcePeak(
+                monomer=int(mi),
+                atom=int(atom),
+                force_kcal=peak,
+                force_ev=float(peak * kcalmol2ev),
+            )
+        )
+    peaks.sort(key=lambda p: p.force_kcal, reverse=True)
+    n = max(1, int(top_n))
+    return tuple(peaks[:n])
+
+
+def format_worst_atom_force_peaks(
+    peaks: tuple[AtomForcePeak, ...] | list[AtomForcePeak],
+) -> str:
+    if not peaks:
+        return "(none)"
+    return ", ".join(
+        f"mono{p.monomer}:atom{p.atom} {p.force_kcal:.1f} kcal/mol/Å "
+        f"({p.force_ev:.1f} eV/Å)"
+        for p in peaks
+    )
+
+
+@dataclass(frozen=True)
 class MonomerForceDiag:
     """Per-monomer GRMS from hybrid forces and indices flagged for patching."""
 

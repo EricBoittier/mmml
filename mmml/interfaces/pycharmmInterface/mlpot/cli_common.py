@@ -1531,6 +1531,7 @@ def build_cluster_from_args_with_tag(
                 optimize_ase=bool(getattr(args, "optimize_pyxtal", False)),
                 optimize_ase_emt=bool(getattr(args, "optimize_pyxtal_emt", False)),
                 trim_to_composition=bool(getattr(args, "pyxtal_trim", True)),
+                geometry_store=args,
             )
             print(
                 f"PyXtal crystal: spg={int(getattr(args, 'pyxtal_spg', 14))} "
@@ -1582,6 +1583,7 @@ def build_cluster_from_args_with_tag(
                 spacing=float(getattr(args, "spacing", 5.0)),
                 prep_gate_settings=packmol_prep_settings_from_namespace(args),
                 quiet=bool(getattr(args, "quiet", False)),
+                geometry_store=args,
             )
         else:
             from mmml.interfaces.pycharmmInterface.grid_placement import resolve_system_builder
