@@ -74,23 +74,35 @@ def draw_orthographic_structure(
     rotation: str,
     scale: float,
     show_unit_cell: int,
-) -> None:
-    """Orthographic ASE view: bonds under atoms, equal aspect, styled patches."""
+    radii: float = 0.88,
+    charmm_image_tags: "np.ndarray | None" = None,
+    writer: "Matplotlib | None" = None,
+) -> "Matplotlib":
+    """Orthographic ASE view: bonds under atoms, equal aspect, styled patches.
+
+    When ``charmm_image_tags`` is set (0 = primary, 1 = IMAGE translation), image
+    sites are drawn in orange at lower opacity; primaries use Jmol element colors.
+
+    Pass an existing ``writer`` (e.g. after drawing cell outlines) to reuse the
+    same projection.
+    """
+    import numpy as np
     from ase.io.utils import make_patch_list
     from ase.visualize.plot import Matplotlib
     from matplotlib.collections import LineCollection
     from matplotlib.patches import Circle, PathPatch
 
     style = DOCS_STRUCTURE_STYLE
-    writer = Matplotlib(
-        atoms,
-        ax,
-        rotation=rotation,
-        radii=0.88,
-        scale=scale,
-        show_unit_cell=show_unit_cell,
-        auto_bbox_size=1.1,
-    )
+    if writer is None:
+        writer = Matplotlib(
+            atoms,
+            ax,
+            rotation=rotation,
+            radii=radii,
+            scale=scale,
+            show_unit_cell=show_unit_cell,
+            auto_bbox_size=1.1,
+        )
 
     segments = bond_segments_2d(atoms, writer)
     if len(segments):
@@ -104,12 +116,25 @@ def draw_orthographic_structure(
             )
         )
 
-    for patch in make_patch_list(writer):
-        patch.set_zorder(3)
+    tags = None
+    if charmm_image_tags is not None:
+        tags = np.asarray(charmm_image_tags, dtype=np.int8).reshape(-1)
+        if int(tags.shape[0]) != len(atoms):
+            raise ValueError(
+                f"charmm_image_tags length {tags.shape[0]} != n_atoms {len(atoms)}"
+            )
+
+    for idx, patch in enumerate(make_patch_list(writer)):
+        is_image = tags is not None and int(tags[idx]) == 1
+        patch.set_zorder(2 if is_image else 3)
         if isinstance(patch, Circle):
             patch.set_edgecolor(style["atom_edge"])
             patch.set_linewidth(style["atom_edge_width"])
-            patch.set_alpha(0.97)
+            if is_image:
+                patch.set_facecolor("#fb923c")
+                patch.set_alpha(0.45)
+            else:
+                patch.set_alpha(0.97)
         elif isinstance(patch, PathPatch):
             patch.set_edgecolor("#3b82f6")
             patch.set_facecolor("none")
@@ -122,6 +147,7 @@ def draw_orthographic_structure(
     ax.set_ylim(0, writer.h)
     ax.set_aspect("equal", adjustable="box")
     ax.set_axis_off()
+    return writer
 
 
 def save_structure_figure(
@@ -174,9 +200,13 @@ def save_structure_figure(
 
 __all__ = [
     "DOCS_STRUCTURE_STYLE",
+    "PBC_ATOM_RADII",
+    "PBC_ROTATION",
     "SCALE_BOX",
     "SCALE_CRYSTAL",
     "SCALE_MONOMER",
+    "SCALE_PBC_WATER",
+    "SCALE_PBC_WATER_SUPER",
     "SCALE_PEPTIDE_ML",
     "SCALE_TRIALANINE_BOX",
     "SCALE_TRIALANINE_PEPTIDE",

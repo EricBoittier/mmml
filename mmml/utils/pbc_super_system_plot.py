@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable
 
 import numpy as np
 
-from mmml.utils.ase_structure_plot import DOCS_STRUCTURE_STYLE, use_matplotlib_agg
-
-# Orthographic scale for the small 4×TIP3 teaching cell (Å per cm).
-SCALE_PBC_DEMO = 28.0
+from mmml.utils.ase_structure_plot import (
+    DOCS_STRUCTURE_STYLE,
+    PBC_ATOM_RADII,
+    PBC_ROTATION,
+    SCALE_PBC_WATER,
+    SCALE_PBC_WATER_SUPER,
+    draw_orthographic_structure,
+    use_matplotlib_agg,
+)
 
 
 def four_waters_cubic_cell(*, side_A: float = 14.0) -> "Atoms":
@@ -114,71 +119,23 @@ def _draw_cell_outline(ax, writer, cell: np.ndarray, origin: np.ndarray, *, colo
         )
 
 
-def _draw_atoms_colored(
-    ax,
-    writer,
-    positions: np.ndarray,
-    symbols: Sequence[str],
-    mask: np.ndarray,
-    *,
-    face_primary: str = "#3b82f6",
-    face_image: str = "#fb923c",
-    radius: float = 0.42,
-) -> None:
-    from matplotlib.patches import Circle
-
-    xy = writer.to_image_plane_positions(positions)[:, :2]
-    radii = np.array([radius if s == "O" else radius * 0.55 for s in symbols], dtype=np.float64)
-    for idx, (x, y) in enumerate(xy):
-        color = face_primary if mask[idx] == 0 else face_image
-        r = float(radii[idx])
-        ax.add_patch(
-            Circle(
-                (x, y),
-                r,
-                facecolor=color,
-                edgecolor="#1e293b",
-                linewidth=0.55,
-                alpha=0.92 if mask[idx] == 0 else 0.45,
-                zorder=4 if mask[idx] == 0 else 2,
-            )
-        )
-
-
 def plot_primary_cell(path: Path | str, *, side_A: float = 14.0) -> Path:
     """Unit cell only: four waters and the simulation box."""
     import matplotlib.pyplot as plt
-    from ase.visualize.plot import Matplotlib
 
     use_matplotlib_agg()
     primary = four_waters_cubic_cell(side_A=side_A)
     style = DOCS_STRUCTURE_STYLE
     fig, ax = plt.subplots(figsize=(6.5, 5.2), dpi=150, facecolor=style["figure_facecolor"])
     ax.set_facecolor(style["axes_facecolor"])
-    writer = Matplotlib(
+    draw_orthographic_structure(
         primary,
         ax,
-        rotation="20x,12y,0z",
-        radii=0.9,
-        scale=SCALE_PBC_DEMO,
+        rotation=PBC_ROTATION,
+        scale=SCALE_PBC_WATER,
         show_unit_cell=2,
-        auto_bbox_size=1.15,
+        radii=PBC_ATOM_RADII,
     )
-    _draw_cell_outline(
-        ax,
-        writer,
-        primary.cell.array,
-        np.zeros(3),
-        color="#3b82f6",
-        alpha=0.85,
-        lw=1.4,
-    )
-    mask = np.zeros(len(primary), dtype=np.int8)
-    _draw_atoms_colored(ax, writer, primary.get_positions(), primary.get_chemical_symbols(), mask)
-    ax.set_xlim(0, writer.w)
-    ax.set_ylim(0, writer.h)
-    ax.set_aspect("equal")
-    ax.set_axis_off()
     ax.set_title(
         "Primary unit cell (N atoms in PSF)",
         fontsize=11.5,
@@ -208,9 +165,9 @@ def plot_charmm_super_system(path: Path | str, *, side_A: float = 14.0, shell: i
     writer = Matplotlib(
         super_atoms,
         ax,
-        rotation="20x,12y,0z",
-        radii=0.9,
-        scale=SCALE_PBC_DEMO * 0.82,
+        rotation=PBC_ROTATION,
+        radii=PBC_ATOM_RADII,
+        scale=SCALE_PBC_WATER_SUPER,
         show_unit_cell=0,
         auto_bbox_size=1.12,
     )
@@ -227,19 +184,18 @@ def plot_charmm_super_system(path: Path | str, *, side_A: float = 14.0, shell: i
             alpha=0.9 if is_home else 0.35,
             lw=1.5 if is_home else 0.9,
         )
-    _draw_atoms_colored(
+    draw_orthographic_structure(
+        super_atoms,
         ax,
-        writer,
-        super_atoms.get_positions(),
-        super_atoms.get_chemical_symbols(),
-        tags,
+        rotation=PBC_ROTATION,
+        scale=SCALE_PBC_WATER_SUPER,
+        show_unit_cell=0,
+        radii=PBC_ATOM_RADII,
+        charmm_image_tags=tags,
+        writer=writer,
     )
-    ax.set_xlim(0, writer.w)
-    ax.set_ylim(0, writer.h)
-    ax.set_aspect("equal")
-    ax.set_axis_off()
     ax.set_title(
-        "CHARMM super system: primary (blue) + image translations (orange)",
+        "CHARMM super system: primary (element colors) + image translations (orange)",
         fontsize=11.0,
         fontweight="500",
         color=style["title_color"],
@@ -267,15 +223,22 @@ def plot_mic_convention(path: Path | str, *, side_A: float = 14.0) -> Path:
     writer = Matplotlib(
         primary,
         ax,
-        rotation="20x,12y,0z",
-        radii=0.9,
-        scale=SCALE_PBC_DEMO,
+        rotation=PBC_ROTATION,
+        radii=PBC_ATOM_RADII,
+        scale=SCALE_PBC_WATER,
         show_unit_cell=0,
         auto_bbox_size=1.15,
     )
     _draw_cell_outline(ax, writer, primary.cell.array, np.zeros(3), color="#3b82f6", alpha=0.85, lw=1.4)
-    mask = np.zeros(len(primary), dtype=np.int8)
-    _draw_atoms_colored(ax, writer, primary.get_positions(), primary.get_chemical_symbols(), mask)
+    writer = draw_orthographic_structure(
+        primary,
+        ax,
+        rotation=PBC_ROTATION,
+        scale=SCALE_PBC_WATER,
+        show_unit_cell=0,
+        radii=PBC_ATOM_RADII,
+        writer=writer,
+    )
 
     # Highlight O–O pair across the box boundary (waters 0 and 3 are diagonally placed).
     pos = primary.get_positions()
@@ -304,10 +267,6 @@ def plot_mic_convention(path: Path | str, *, side_A: float = 14.0) -> Path:
         fontweight="600",
         zorder=7,
     )
-    ax.set_xlim(0, writer.w)
-    ax.set_ylim(0, writer.h)
-    ax.set_aspect("equal")
-    ax.set_axis_off()
     ax.set_title(
         "Minimum-image (MIC): N stored atoms, periodic shift in pair loop",
         fontsize=10.5,
