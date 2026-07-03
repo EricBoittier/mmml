@@ -265,20 +265,13 @@ def _single_pair_nb_energies(
     settings: Any,
 ) -> tuple[float, float]:
     from mmml.interfaces.pycharmmInterface.mm_system_energy import (
-        decompose_nonbonded_pair_energies,
+        single_pair_mic_nonbonded_energies,
     )
 
-    pi = np.asarray([pair_i], dtype=np.int32)
-    pj = np.asarray([pair_j], dtype=np.int32)
-    decomp = decompose_nonbonded_pair_energies(
-        positions,
-        nbond_data,
-        cell,
-        settings,
-        pair_i=pi,
-        pair_j=pj,
+    vdw, elec = single_pair_mic_nonbonded_energies(
+        positions, pair_i, pair_j, nbond_data, cell, settings
     )
-    return float(decomp.vdw_kcal[0]), float(decomp.elec_kcal[0])
+    return float(vdw), float(elec)
 
 
 def _single_pair_analytic_dedr(
@@ -294,28 +287,25 @@ def _single_pair_analytic_dedr(
     import jax.numpy as jnp
 
     from mmml.interfaces.pycharmmInterface.mm_system_energy import (
-        decompose_nonbonded_pair_energies,
+        single_pair_mic_nonbonded_energies,
     )
 
     pos = jnp.asarray(positions, dtype=jnp.float64)
-    pi = np.asarray([pair_i], dtype=np.int32)
-    pj = np.asarray([pair_j], dtype=np.int32)
 
     def _vdw_energy(p: jnp.ndarray) -> jnp.ndarray:
-        d = decompose_nonbonded_pair_energies(
-            p, nbond_data, cell, settings, pair_i=pi, pair_j=pj
+        vdw, _ = single_pair_mic_nonbonded_energies(
+            p, pair_i, pair_j, nbond_data, cell, settings
         )
-        return jnp.asarray(d.vdw_kcal[0], dtype=jnp.float64)
+        return vdw
 
     def _elec_energy(p: jnp.ndarray) -> jnp.ndarray:
-        d = decompose_nonbonded_pair_energies(
-            p, nbond_data, cell, settings, pair_i=pi, pair_j=pj
+        _, elec = single_pair_mic_nonbonded_energies(
+            p, pair_i, pair_j, nbond_data, cell, settings
         )
-        return jnp.asarray(d.elec_kcal[0], dtype=jnp.float64)
+        return elec
 
     grad_vdw = np.asarray(jax.grad(_vdw_energy)(pos), dtype=np.float64)
     grad_elec = np.asarray(jax.grad(_elec_energy)(pos), dtype=np.float64)
-    # dE/dr along i→j: ∂E/∂x_j · r̂  (equivalently −∂E/∂x_i · r̂).
     dedr_v = float(np.dot(grad_vdw[pair_j], r_hat))
     dedr_e = float(np.dot(grad_elec[pair_j], r_hat))
     return dedr_v, dedr_e

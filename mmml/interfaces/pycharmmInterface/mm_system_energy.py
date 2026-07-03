@@ -33,10 +33,97 @@ COULOMB_KCAL = 332.063711
 
 
 def _numpy_if_concrete(x: Array | np.ndarray | float, *, dtype: type = np.float64) -> Any:
-    """Materialize host arrays; leave JAX tracers unchanged (for ``jax.grad`` through decompose)."""
-    if isinstance(x, jax.core.Tracer):
+    """Materialize host arrays; leave JAX tracers unchanged (for ``jax.grad``)."""
+    try:
+        return np.asarray(x, dtype=dtype)
+    except jax.errors.TracerArrayConversionError:
         return x
-    return np.asarray(x, dtype=dtype)
+
+
+def _cell_matrix_jax(cell: Array | np.ndarray) -> Array:
+    cell_j = jnp.asarray(cell, dtype=jnp.float64)
+    if cell_j.ndim == 1 and cell_j.shape[0] == 3:
+        cell_j = jnp.diag(cell_j)
+    return cell_j
+
+
+def _eval_mic_pair_nonbonded_energies_jax(
+    positions: Array,
+    pair_i: Array,
+    pair_j: Array,
+    *,
+    charges: Array,
+    epsilon: Array,
+    rmin: Array,
+    e14_scale: Array,
+    vdw14_scale: Array,
+    cell: Array | np.ndarray,
+    settings: CharmmNbondSettings,
+) -> tuple[Array, Array, Array]:
+    """JAX-differentiable per-pair switched VDW and Coulomb (kcal/mol) + MIC distances."""
+    pos = jnp.asarray(positions, dtype=jnp.float64)
+    cell_j = _cell_matrix_jax(cell)
+    pi = jnp.asarray(pair_i, dtype=jnp.int32)
+    pj = jnp.asarray(pair_j, dtype=jnp.int32)
+    vfswitch_coeffs = charmm_vfswitch_coeffs(settings)
+    fswitch_coeffs = charmm_fswitch_coeffs(settings)
+    c2of = settings.c2ofnb
+
+    ri = pos[pi]
+    rj = pos[pj]
+    disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j))(ri, rj)
+    r = jnp.linalg.norm(disp, axis=-1)
+    within_ctof = r * r < c2of
+
+    ep = _pair_lj_epsilon(epsilon[pi], epsilon[pj])
+    sig = rmin[pi] + rmin[pj]
+    qq = charges[pi] * charges[pj] * e14_scale / settings.eps
+
+    vdw = _pair_vdw_energy(
+        r,
+        ep,
+        sig,
+        settings,
+        vfswitch_coeffs,
+        use_jax_pme_dispersion=False,
+    )
+    vdw = vdw * vdw14_scale
+    elec = _pair_elec_energy(r, qq, settings, fswitch_coeffs)
+    vdw = jnp.where(within_ctof, vdw, 0.0)
+    elec = jnp.where(within_ctof, elec, 0.0)
+    return vdw, elec, r
+
+
+def single_pair_mic_nonbonded_energies(
+    positions: Array | np.ndarray,
+    atom_i: int,
+    atom_j: int,
+    nbond_data: NonbondedSystemData,
+    cell: Array | np.ndarray,
+    settings: CharmmNbondSettings,
+) -> tuple[Array, Array]:
+    """Differentiable switched VDW and elec (kcal/mol) for one MIC atom pair."""
+    i, j = int(atom_i), int(atom_j)
+    e14_s = 1.0
+    vdw14_s = 1.0
+    if (i, j) in nbond_data.e14_pairs:
+        e14_s = float(settings.e14fac)
+        vdw14_s = float(settings.vdw14fac)
+    pi = jnp.asarray([i], dtype=jnp.int32)
+    pj = jnp.asarray([j], dtype=jnp.int32)
+    vdw, elec, _ = _eval_mic_pair_nonbonded_energies_jax(
+        positions,
+        pi,
+        pj,
+        charges=jnp.asarray(nbond_data.charges, dtype=jnp.float64),
+        epsilon=jnp.asarray(nbond_data.epsilon, dtype=jnp.float64),
+        rmin=jnp.asarray(nbond_data.rmin, dtype=jnp.float64),
+        e14_scale=jnp.asarray([e14_s], dtype=jnp.float64),
+        vdw14_scale=jnp.asarray([vdw14_s], dtype=jnp.float64),
+        cell=cell,
+        settings=settings,
+    )
+    return vdw[0], elec[0]
 
 
 @dataclass(frozen=True, slots=True)
@@ -822,9 +909,6 @@ def decompose_nonbonded_pair_energies(
     if pick_lr_solver(lr_solver) == "jax_pme":
         raise ValueError("decompose_nonbonded_pair_energies supports lr_solver=mic only")
     pos = jnp.asarray(positions, dtype=jnp.float64)
-    cell_j = jnp.asarray(cell, dtype=jnp.float64)
-    if cell_j.ndim == 1 and cell_j.shape[0] == 3:
-        cell_j = jnp.diag(cell_j)
 
     excluded_pairs = nbond_data.excluded_pairs
     if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
@@ -854,42 +938,18 @@ def decompose_nonbonded_pair_energies(
             e14_scale_np[k] = settings.e14fac
             vdw14_scale_np[k] = settings.vdw14fac
 
-    q = jnp.asarray(nbond_data.charges, dtype=jnp.float64)
-    eps_tbl = jnp.asarray(nbond_data.epsilon, dtype=jnp.float64)
-    rm_tbl = jnp.asarray(nbond_data.rmin, dtype=jnp.float64)
-    e14_scale = jnp.asarray(e14_scale_np, dtype=jnp.float64)
-    vdw14_scale = jnp.asarray(vdw14_scale_np, dtype=jnp.float64)
-    vfswitch_coeffs = charmm_vfswitch_coeffs(settings)
-    fswitch_coeffs = charmm_fswitch_coeffs(settings)
-    c2of = settings.c2ofnb
-
-    ri = pos[pi]
-    rj = pos[pj]
-    disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j))(ri, rj)
-    r = jnp.linalg.norm(disp, axis=-1)
-    r_sq = r * r
-    within_ctof = r_sq < c2of
-
-    ep_i = eps_tbl[pi]
-    ep_j = eps_tbl[pj]
-    rm_i = rm_tbl[pi]
-    rm_j = rm_tbl[pj]
-    sig = rm_i + rm_j
-    ep = _pair_lj_epsilon(ep_i, ep_j)
-    qq = q[pi] * q[pj] * e14_scale / settings.eps
-
-    vdw = _pair_vdw_energy(
-        r,
-        ep,
-        sig,
-        settings,
-        vfswitch_coeffs,
-        use_jax_pme_dispersion=False,
+    vdw, elec, r = _eval_mic_pair_nonbonded_energies_jax(
+        pos,
+        pi,
+        pj,
+        charges=jnp.asarray(nbond_data.charges, dtype=jnp.float64),
+        epsilon=jnp.asarray(nbond_data.epsilon, dtype=jnp.float64),
+        rmin=jnp.asarray(nbond_data.rmin, dtype=jnp.float64),
+        e14_scale=jnp.asarray(e14_scale_np, dtype=jnp.float64),
+        vdw14_scale=jnp.asarray(vdw14_scale_np, dtype=jnp.float64),
+        cell=cell,
+        settings=settings,
     )
-    vdw = vdw * vdw14_scale
-    elec = _pair_elec_energy(r, qq, settings, fswitch_coeffs)
-    vdw = jnp.where(within_ctof, vdw, 0.0)
-    elec = jnp.where(within_ctof, elec, 0.0)
 
     return NonbondedPairDecomposition(
         pair_i=np.asarray(pair_i, dtype=np.int32),

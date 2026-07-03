@@ -28,6 +28,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     fully_excluded_pairs,
     nonbonded_energy_and_forces,
     one_four_pairs_from_bonds,
+    single_pair_mic_nonbonded_energies,
 )
 
 _SETTINGS = CharmmNbondSettings(cutnb=14.0, ctonnb=10.0, ctofnb=12.0)
@@ -382,3 +383,65 @@ def test_decompose_nonbonded_pair_energies_matches_aggregate() -> None:
     totals = decomp.totals()
     assert totals["vdw"] == pytest.approx(float(comp["vdw"]), rel=1e-10, abs=1e-10)
     assert totals["elec"] == pytest.approx(float(comp["elec"]), rel=1e-10, abs=1e-10)
+
+
+def test_single_pair_mic_nonbonded_energies_jax_grad() -> None:
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        single_pair_mic_nonbonded_energies,
+    )
+
+    rng = np.random.default_rng(1)
+    n = 8
+    pos = rng.normal(size=(n, 3)) * 3.0
+    cell = np.diag([20.0, 20.0, 20.0])
+    bonds = np.asarray([[0, 1], [1, 2], [2, 3]], dtype=np.int32)
+    excluded = excluded_pairs_from_psf_bonds(bonds)
+    e14 = one_four_pairs_from_bonds(bonds, n) - excluded
+    nbond = NonbondedSystemData(
+        charges=rng.normal(size=n) * 0.2,
+        at_codes=np.zeros(n, dtype=np.int32),
+        epsilon=np.abs(rng.normal(size=n) * 0.1) + 0.05,
+        rmin=np.abs(rng.normal(size=n)) + 1.5,
+        excluded_pairs=excluded,
+        e14_pairs=e14,
+        psf_path=None,
+        psf_bonds=None,
+    )
+    settings = CharmmNbondSettings(cutnb=12.0, ctonnb=8.0, ctofnb=10.0)
+
+    def _vdw_sum(p):
+        v, _ = single_pair_mic_nonbonded_energies(p, 0, 5, nbond, cell, settings)
+        return v
+
+    grad = jax.grad(_vdw_sum)(jnp.asarray(pos, dtype=jnp.float64))
+    assert grad.shape == pos.shape
+    assert jnp.all(jnp.isfinite(grad))
+
+
+def test_decompose_nonbonded_pair_energies_jax_grad_single_pair() -> None:
+    """Switch audit uses ``jax.grad`` through per-pair decompose — must not host-convert tracers."""
+    pos = jnp.asarray([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]], dtype=jnp.float64)
+    cell = jnp.diag(jnp.asarray([20.0, 20.0, 20.0], dtype=jnp.float64))
+    nbond = NonbondedSystemData(
+        charges=jnp.asarray([0.2, -0.2], dtype=jnp.float64),
+        at_codes=jnp.zeros(2, dtype=jnp.int32),
+        epsilon=jnp.asarray([0.1, 0.1], dtype=jnp.float64),
+        rmin=jnp.asarray([1.8, 1.8], dtype=jnp.float64),
+        excluded_pairs=frozenset(),
+        e14_pairs=frozenset(),
+        psf_path=None,
+        psf_bonds=None,
+    )
+    settings = CharmmNbondSettings(cutnb=12.0, ctonnb=8.0, ctofnb=10.0)
+    pi = np.asarray([0], dtype=np.int32)
+    pj = np.asarray([1], dtype=np.int32)
+
+    def vdw_sum(p: jnp.ndarray) -> jnp.ndarray:
+        d = decompose_nonbonded_pair_energies(
+            p, nbond, cell, settings, pair_i=pi, pair_j=pj
+        )
+        return jnp.sum(d.vdw_kcal)
+
+    grad = jax.grad(vdw_sum)(pos)
+    assert grad.shape == pos.shape
+    assert float(jnp.linalg.norm(grad)) > 0.0
