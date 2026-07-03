@@ -252,6 +252,56 @@ def test_charmm_io_alias_write_copy_back(tmp_path):
     assert target.read_text(encoding="ascii") == "written via alias\n"
 
 
+def test_charmm_io_alias_fresh_write_removes_stale_staging(tmp_path):
+    target = tmp_path / "pretreat" / "mini_box_equil.dcd"
+    staging = tmp_path / "staging"
+    target.parent.mkdir(parents=True)
+
+    first = charmm_paths.charmm_io_alias(target, for_write=True, staging_root=staging)
+    assert first is not None
+    first.alias.write_bytes(b"partial-dcd")
+    assert first.alias.is_file()
+
+    second = charmm_paths.charmm_io_alias(target, for_write=True, staging_root=staging)
+    assert second is not None
+    assert not second.alias.is_file()
+
+
+def test_remove_charmm_io_write_staging_alias_without_original(tmp_path):
+    target = tmp_path / "pretreat" / "mini_box_equil.dcd"
+    staging = tmp_path / "staging"
+    target.parent.mkdir(parents=True)
+
+    alias = charmm_paths.charmm_io_alias(target, for_write=True, staging_root=staging)
+    assert alias is not None
+    alias.alias.write_bytes(b"stale")
+
+    assert charmm_paths.remove_charmm_io_write_staging_alias(
+        target, staging_root=staging
+    )
+    assert not alias.alias.is_file()
+
+
+def test_reset_stage_trajectory_clears_staging_without_output_file(tmp_path, monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        _reset_stage_trajectory,
+    )
+
+    staging = tmp_path / "staging"
+    target = tmp_path / "pretreat" / "mini_box_equil.dcd"
+    target.parent.mkdir(parents=True)
+    monkeypatch.setenv("MMML_CHARMM_IO_STAGING", str(staging))
+
+    alias = charmm_paths.charmm_io_alias(target, for_write=True, staging_root=staging)
+    assert alias is not None
+    alias.alias.write_bytes(b"stale")
+    assert not target.is_file()
+
+    _reset_stage_trajectory(target)
+    assert not alias.alias.is_file()
+    assert not target.is_file()
+
+
 def test_charmm_fortran_path_stages_writes_even_when_lowercase(tmp_path):
     path = tmp_path / "pretreat" / "mini_box_equil.res"
     path.parent.mkdir()

@@ -752,6 +752,19 @@ def _reset_stage_trajectory(
         return
 
     dcd_path = Path(path)
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import (
+            remove_charmm_io_write_staging_alias,
+        )
+
+        if remove_charmm_io_write_staging_alias(dcd_path):
+            rank0_print(
+                f"Removed prior staged DCD alias for: {dcd_path.name}",
+                flush=True,
+            )
+    except ImportError:
+        pass
+
     if not dcd_path.exists():
         return
 

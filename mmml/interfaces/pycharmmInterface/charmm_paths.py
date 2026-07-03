@@ -288,6 +288,45 @@ class CharmmIoAlias:
         shutil.copy2(self.alias, self.original)
 
 
+def _charmm_io_staging_alias_path(
+    path: str | Path,
+    *,
+    for_write: bool = False,
+    staging_root: Path | None = None,
+) -> Path | None:
+    """Lowercase Fortran staging path for *path*, or ``None`` when staging is off."""
+    original = Path(path).expanduser().resolve()
+    if not fortran_path_needs_alias(original, for_write=for_write):
+        return None
+    root = staging_root or charmm_io_staging_root()
+    scope = _charmm_io_alias_scope()
+    tag = hashlib.sha256(f"{original.resolve()}|{scope}".encode()).hexdigest()[:16]
+    return root / tag / original.name.lower()
+
+
+def remove_charmm_io_write_staging_alias(
+    path: str | Path,
+    *,
+    staging_root: Path | None = None,
+) -> bool:
+    """Delete a staged write alias so the next DCD open starts from an empty file.
+
+    ``_reset_stage_trajectory`` only removes the real output path; aborted runs can
+    leave a partial binary DCD under ``$TMPDIR/mmml-charmm-io``.  Reopening that
+    alias via ``dynamics_set_iuncrd`` then triggers formatted/unformatted READ errors
+    in ``dynio.F90``.
+    """
+    alias = _charmm_io_staging_alias_path(
+        path,
+        for_write=True,
+        staging_root=staging_root,
+    )
+    if alias is None or not alias.is_file():
+        return False
+    alias.unlink()
+    return True
+
+
 def charmm_io_alias(
     path: str | Path,
     *,
@@ -297,19 +336,22 @@ def charmm_io_alias(
 ) -> CharmmIoAlias | None:
     """Return a lowercase alias when CHARMM cannot open *path* directly."""
     original = Path(path).expanduser().resolve()
-    if not fortran_path_needs_alias(original, for_write=for_write):
+    alias_path = _charmm_io_staging_alias_path(
+        original,
+        for_write=for_write,
+        staging_root=staging_root,
+    )
+    if alias_path is None:
         return None
 
-    root = staging_root or charmm_io_staging_root()
-    scope = _charmm_io_alias_scope()
-    tag = hashlib.sha256(f"{original.resolve()}|{scope}".encode()).hexdigest()[:16]
-    alias_dir = root / tag
-    alias_dir.mkdir(parents=True, exist_ok=True)
-    alias = alias_dir / original.name.lower()
+    alias_path.parent.mkdir(parents=True, exist_ok=True)
+    alias = alias_path
 
     if for_write:
         if append and original.is_file() and not alias.is_file():
             shutil.copy2(original, alias)
+        elif not append and alias.is_file():
+            alias.unlink()
     else:
         if not original.is_file():
             raise FileNotFoundError(f"restart not found: {original}")
