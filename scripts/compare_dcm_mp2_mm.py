@@ -176,8 +176,21 @@ def main() -> int:
             slug = calc_name.replace("-", "_")
             block = summary.get(f"hybrid_{slug}_mp2_force_rmse_ev_A", {})
             print(
-                f"  MP2−{calc_name} force RMSE mean: "
-                f"{block.get('mean', float('nan')):.4g} eV/Å"
+                f"  MP2−{calc_name} force RMSE mean: {block.get('mean', float('nan')):.4g} eV/Å, "
+                f"median: {block.get('median', float('nan')):.4g} eV/Å"
+            )
+        bins = summary.get("hybrid_hybrid_ml_com_binned_rmse_ev_A") or summary.get(
+            f"hybrid_{args.calculators[0].replace('-', '_')}_com_binned_rmse_ev_A"
+        )
+        if bins:
+            print("  COM-binned median RMSE (eV/Å):")
+            for b in bins:
+                print(f"    {b['com_bin_label']}: n={b['n']} median={b['median_rmse_ev_A']:.4f}")
+        pair = summary.get("hybrid_checkpoint_vs_hybrid_ml")
+        if pair is not None:
+            print(
+                f"  checkpoint vs hybrid-ml: mean|Δ|={pair['mean_abs_delta_ev_A']:.4g}, "
+                f"max|Δ|={pair['max_abs_delta_ev_A']:.4g} eV/Å"
             )
     return 0
 
