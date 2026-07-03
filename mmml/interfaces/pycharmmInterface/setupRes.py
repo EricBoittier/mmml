@@ -210,29 +210,15 @@ def generate_coordinates(skip_energy_show: bool = False, validate: bool = True) 
 
 def mini(nbxmod=5, skip_energy_show: bool = False):
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        apply_nbonds_kwargs,
+        vacuum_nbond_kwargs,
+    )
 
     print("*" * 5, "Minimizing", "*" * 5)
-    # ``NonBondedScript.run()`` can emit ``nbon`` warnings; default BOMLEV 0 aborts
-    # under pytest / notebook imports that never ran ``apply_charmm_verbosity``.
     with charmm_relaxed_bomlev(-2):
         pycharmm_quiet()
-        # Specify nonbonded python object called my_nbonds - this just sets it up
-        # equivalant CHARMM scripting command: nbonds cutnb 18 ctonnb 13 ctofnb 17 cdie eps 1 atom vatom fswitch vfswitch
-        my_nbonds = pycharmm.NonBondedScript(
-            cutnb=18.0,
-            ctonnb=13.0,
-            ctofnb=17.0,
-            eps=1.0,
-            cdie=True,
-            atom=True,
-            vatom=True,
-            fswitch=True,
-            vfswitch=True,
-            nbxmod=nbxmod,  # remove all exclusions
-        )
-
-        # Implement these non-bonded parameters by "running" them.
-        my_nbonds.run()
+        apply_nbonds_kwargs(vacuum_nbond_kwargs(nbxmod=nbxmod))
 
         # equivalent CHARMM scripting command: minimize abnr nstep 1000 tole 1e-3 tolgr 1e-3
         minimize.run_abnr(nstep=1000, tolenr=1e-3, tolgrd=1e-3)

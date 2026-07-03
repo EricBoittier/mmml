@@ -60,15 +60,7 @@ def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: 
     fake_lingo = types.ModuleType("pycharmm.lingo")
     fake_lingo.charmm_script = lambda script: calls.append(f"script:{script.strip().splitlines()[0]}")
 
-    class FakeNonBondedScript:
-        def __init__(self, **kwargs):
-            calls.append(f"nbonds_init:{kwargs['nbxmod']}")
-
-        def run(self):
-            calls.append("nbonds_run")
-
     fake_pycharmm = types.ModuleType("pycharmm")
-    fake_pycharmm.NonBondedScript = FakeNonBondedScript
     fake_pycharmm.lingo = fake_lingo
     monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
     monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
@@ -105,6 +97,21 @@ def _install_fake_setupres_dependencies(monkeypatch: pytest.MonkeyPatch, calls: 
     fake_settings.set_warn_level = lambda level: 0
     monkeypatch.setitem(sys.modules, "pycharmm.settings", fake_settings)
 
+    def fake_apply_nbonds_kwargs(kw, *, rebuild=True):
+        calls.append(f"apply_nbonds:{kw.get('nbxmod')}")
+
+    def fake_vacuum_nbond_kwargs(*, nbxmod=1, **kwargs):
+        return {"nbxmod": nbxmod}
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_kwargs",
+        fake_apply_nbonds_kwargs,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.vacuum_nbond_kwargs",
+        fake_vacuum_nbond_kwargs,
+    )
+
 
 def _import_setupres_with_fakes(monkeypatch: pytest.MonkeyPatch, calls: list[str]):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2]))
@@ -119,7 +126,7 @@ def test_mini_sets_nbonds_before_abnr_and_uses_safe_energy(monkeypatch: pytest.M
 
     setup_res.mini(nbxmod=1, skip_energy_show=False)
 
-    assert calls[-4:] == ["nbonds_init:1", "nbonds_run", "run_abnr", "safe_energy_show"]
+    assert calls[-3:] == ["apply_nbonds:1", "run_abnr", "safe_energy_show"]
 
 
 def test_mini_can_skip_energy_show(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -128,7 +135,7 @@ def test_mini_can_skip_energy_show(monkeypatch: pytest.MonkeyPatch) -> None:
 
     setup_res.mini(nbxmod=5, skip_energy_show=True)
 
-    assert calls[-3:] == ["nbonds_init:5", "nbonds_run", "run_abnr"]
+    assert calls[-2:] == ["apply_nbonds:5", "run_abnr"]
     assert "safe_energy_show" not in calls
 
 
