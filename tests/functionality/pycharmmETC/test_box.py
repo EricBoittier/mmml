@@ -13,6 +13,14 @@ def _can_import(name: str) -> bool:
 
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
 def test_setup_box_generic_smoke(pycharmm_workdir: Path):
+    from mmml.interfaces.pycharmmInterface.charmm_mpi import _under_mpirun
+
+    if _under_mpirun():
+        pytest.skip(
+            "setup_box_generic uses direct read.prm (not MPI-safe); "
+            "run tests/functionality/pycharmmETC/test_box.py serially"
+        )
+
     from mmml.interfaces.pycharmmInterface import setupBox
 
     from tests.functionality.pycharmmETC._paths import workdir_pdb

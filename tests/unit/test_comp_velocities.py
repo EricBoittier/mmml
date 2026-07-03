@@ -18,6 +18,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     coor_get_comparison_capi,
     coor_set_comparison_capi,
     get_comparison_array,
+    get_comparison_scalars_array,
     mirror_comparison_velocities_for_dynamics,
     prepare_comp_for_heat,
     prepare_comp_for_iasvel0,
@@ -71,6 +72,22 @@ def test_get_comparison_array_uses_capi(mock_get_capi):
     mock_get_capi.assert_called_once()
     assert out.shape == (1, 4)
     assert out[0, 0] == pytest.approx(1.0)
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+def test_get_comparison_scalars_array(mock_import):
+    pycharmm = _mock_pycharmm_module()
+    pycharmm.psf.get_natom.return_value = 2
+    pycharmm.select.get_property.side_effect = [
+        [1.0, 2.0],
+        [3.0, 4.0],
+        [5.0, 6.0],
+        [0.0, 0.0],
+    ]
+    mock_import.return_value = pycharmm
+    out = get_comparison_scalars_array()
+    assert out.shape == (2, 4)
+    np.testing.assert_allclose(out, [[1.0, 3.0, 5.0, 0.0], [2.0, 4.0, 6.0, 0.0]])
 
 
 def test_coor_set_comparison_capi():
@@ -430,8 +447,9 @@ def test_clear_comparison_coordinates_zeros_comp(mock_import, mock_set_capi):
     assert np.all(zeros == 0.0)
 
 
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")
-def test_zero_comparison_scalars(mock_script):
+def test_zero_comparison_scalars(mock_script, mock_clear):
     zero_comparison_scalars()
     assert mock_script.call_count == 4
     scripts = [c.args[0] for c in mock_script.call_args_list]
@@ -441,6 +459,7 @@ def test_zero_comparison_scalars(mock_script):
         "scalar zcomp set 0 select all end",
         "scalar wcomp set 0 select all end",
     ]
+    mock_clear.assert_called_once()
 
 
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.run_charmm_script")

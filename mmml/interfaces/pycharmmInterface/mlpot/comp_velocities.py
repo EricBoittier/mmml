@@ -110,6 +110,21 @@ def get_comparison_array() -> np.ndarray:
         return df[["x", "y", "z", "w"]].to_numpy(dtype=float)
 
 
+def get_comparison_scalars_array() -> np.ndarray:
+    """Read xcomp/ycomp/zcomp/wcomp scalar properties as ``(N, 4)``."""
+    pycharmm = _import_pycharmm()
+    n_atoms = int(pycharmm.psf.get_natom())
+    if n_atoms <= 0:
+        return np.zeros((0, 4), dtype=np.float64)
+    select = pycharmm.select
+    return np.column_stack(
+        [
+            np.asarray(select.get_property(comp), dtype=np.float64)
+            for comp in _COMP_COMPONENTS
+        ]
+    )
+
+
 def run_charmm_script(script: str, *, quiet: bool = False) -> None:
     """Run a single CHARMM script line."""
     if quiet:
@@ -126,6 +141,8 @@ def zero_comparison_scalars(sele: str = "all", *, quiet: bool = False) -> None:
     """Zero COMP scalar components via ``scalar xcomp/ycomp/zcomp/wcomp set 0``."""
     for comp in _COMP_COMPONENTS:
         run_charmm_script(f"scalar {comp} set 0 select {sele} end", quiet=quiet)
+    if sele.strip().lower() == "all":
+        clear_comparison_coordinates()
 
 
 def clear_comparison_coordinates() -> None:

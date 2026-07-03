@@ -9,6 +9,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     apply_selective_force_damp_recipe,
     force_magnitudes_kcalmol_A,
     get_comparison_array,
+    get_comparison_scalars_array,
     prepare_comp_for_iasvel0,
     run_charmm_script,
     set_comparison_array,
@@ -76,6 +77,8 @@ def test_scalar_zero_clears_comparison_array(charmm_aco_dimer):
     zero_comparison_scalars()
     out = get_comparison_array()
     assert np.allclose(out, 0.0, atol=1e-8)
+    scalars = get_comparison_scalars_array()
+    assert np.allclose(scalars, 0.0, atol=1e-8)
 
 
 @pytest.mark.skipif(not _can_import("pycharmm"), reason="pycharmm not available")
@@ -87,7 +90,7 @@ def test_selective_force_damp_respects_threshold(charmm_aco_dimer):
         min_force_kcalmol_A=high_threshold,
         force_scale=0.01,
     )
-    comp_high = get_comparison_array()
+    comp_high = get_comparison_scalars_array()
     assert np.allclose(comp_high[:, :3], 0.0, atol=1e-8)
 
     run_charmm_script("ENER")
@@ -97,7 +100,7 @@ def test_selective_force_damp_respects_threshold(charmm_aco_dimer):
         min_force_kcalmol_A=low_threshold,
         force_scale=scale,
     )
-    comp = get_comparison_array()
+    comp = get_comparison_scalars_array()
     import pycharmm.coor as coor
 
     forces = coor.get_forces()[["dx", "dy", "dz"]].to_numpy(dtype=float)
@@ -116,12 +119,12 @@ def test_lower_threshold_includes_more_atoms(charmm_aco_dimer):
     p50 = float(np.percentile(mags, 50))
 
     apply_selective_force_damp_recipe(min_force_kcalmol_A=p90, force_scale=0.01)
-    comp_strict = get_comparison_array()
+    comp_strict = get_comparison_scalars_array()
     n_strict = int(np.count_nonzero(np.linalg.norm(comp_strict[:, :3], axis=1)))
 
     run_charmm_script("ENER")
     apply_selective_force_damp_recipe(min_force_kcalmol_A=p50, force_scale=0.01)
-    comp_loose = get_comparison_array()
+    comp_loose = get_comparison_scalars_array()
     n_loose = int(np.count_nonzero(np.linalg.norm(comp_loose[:, :3], axis=1)))
 
     assert n_loose >= n_strict
@@ -133,3 +136,5 @@ def test_prepare_comp_zero_only(charmm_aco_dimer):
     assert n == 0
     comp = get_comparison_array()
     assert np.allclose(comp, 0.0, atol=1e-8)
+    scalars = get_comparison_scalars_array()
+    assert np.allclose(scalars, 0.0, atol=1e-8)
