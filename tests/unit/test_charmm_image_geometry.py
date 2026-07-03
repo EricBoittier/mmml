@@ -172,6 +172,9 @@ def test_assert_charmm_image_mic_fallback_calls_mic_geometry(monkeypatch):
     assert captured["box_side"] == pytest.approx(27.993)
     assert captured["use_pbc"] is True
     assert "MIC fallback" in str(captured["context"])
+
+
+def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         lambda: "no mkimat here",
