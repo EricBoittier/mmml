@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -39,12 +40,68 @@ def _restore_charmm_levels(old: dict[str, int]) -> None:
 
 
 @contextmanager
-def capture_fortran_stdio() -> Iterator[str]:
-    """Redirect OS fds 1/2 so Fortran unit-6 output is captured to a temp file.
+def tee_fortran_stdio() -> Iterator[str]:
+    """Duplicate Fortran stdout/stderr to the terminal and a temp capture file."""
+    import select
+    import tempfile
+
+    saved_out = os.dup(1)
+    saved_err = os.dup(2)
+    read_fd, write_fd = os.pipe()
+    tmp = tempfile.NamedTemporaryFile(
+        mode="wb",
+        delete=False,
+        prefix="mmml-charmm-tee-",
+        suffix=".log",
+    )
+    tmp_path = tmp.name
+    tmp.close()
+    capture_fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+    os.dup2(write_fd, 1)
+    os.dup2(write_fd, 2)
+    os.close(write_fd)
+
+    stop = threading.Event()
+
+    def _forward() -> None:
+        with os.fdopen(read_fd, "rb", buffering=0) as reader:
+            while True:
+                if stop.is_set():
+                    r, _, _ = select.select([reader], [], [], 0.05)
+                    if not r:
+                        break
+                data = reader.read(65536)
+                if not data:
+                    break
+                os.write(saved_out, data)
+                os.write(capture_fd, data)
+
+    thread = threading.Thread(target=_forward, daemon=True)
+    thread.start()
+    try:
+        yield tmp_path
+    finally:
+        os.dup2(saved_out, 1)
+        os.dup2(saved_err, 2)
+        os.close(saved_out)
+        os.close(saved_err)
+        stop.set()
+        thread.join(timeout=10.0)
+        os.close(capture_fd)
+
+
+@contextmanager
+def capture_fortran_stdio(*, tee: bool = False) -> Iterator[str]:
+    """Redirect (or tee) OS fds 1/2 so Fortran unit-6 output is captured to a temp file.
 
     ``redirect_stdout`` only affects Python ``sys.stdout``; CHARMM Fortran writes
     directly to file descriptor 1.  The caller must read and unlink ``tmp_path``.
     """
+    if tee:
+        with tee_fortran_stdio() as tmp_path:
+            yield tmp_path
+        return
+
     import tempfile
 
     saved_out = os.dup(1)

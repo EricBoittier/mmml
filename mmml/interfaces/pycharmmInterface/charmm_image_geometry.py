@@ -12,8 +12,11 @@ from pathlib import Path
 import numpy as np
 
 from mmml.utils.intermonomer_geometry import (
+    DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A,
     DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A,
     DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
+    DENSE_DCM_MLPOT_MONOMER_COUNT,
+    is_dcm_like_prep,
 )
 
 _MKIMAT2_MARKER = "<MKIMAT2>"
@@ -108,6 +111,23 @@ def _resolve_atoms_per_for_image_gate(
         return None
 
 
+def _resolve_n_monomers_for_image_gate(
+    workflow_args: argparse.Namespace | None,
+) -> int | None:
+    atoms_per = _resolve_atoms_per_for_image_gate(workflow_args)
+    if atoms_per:
+        return int(len(atoms_per))
+    if workflow_args is not None:
+        for attr in ("n_monomers", "_cluster_n_monomers"):
+            raw = getattr(workflow_args, attr, None)
+            if raw is not None:
+                try:
+                    return int(raw)
+                except (TypeError, ValueError):
+                    pass
+    return None
+
+
 def _resolve_atomic_numbers_for_image_gate(
     workflow_args: argparse.Namespace | None,
 ) -> np.ndarray | None:
@@ -189,12 +209,17 @@ def _force_charmm_image_remap_for_probe() -> None:
     _image_setup_byres_all(0.0, 0.0, 0.0)
 
 
-def capture_charmm_script_output(script: str, *, replay: bool = True) -> str:
+def capture_charmm_script_output(script: str, *, replay: bool = True, tee: bool = True) -> str:
     """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
-    return _run_charmm_script_capture_fortran(script, replay=replay)
+    return _run_charmm_script_capture_fortran(script, replay=replay, tee=tee)
 
 
-def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> str:
+def _run_charmm_script_capture_fortran(
+    script: str,
+    *,
+    replay: bool = True,
+    tee: bool = True,
+) -> str:
     """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
@@ -208,10 +233,10 @@ def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> s
     old = _set_charmm_levels(prnlev=2, warnlev=5, bomlev=-2)
     tmp_path = ""
     try:
-        with capture_fortran_stdio() as tmp_path:
+        with capture_fortran_stdio(tee=tee) as tmp_path:
             pycharmm.lingo.charmm_script(script)
         text = Path(tmp_path).read_text(encoding="utf-8", errors="replace")
-        if replay and text:
+        if replay and text and not tee:
             print(text, end="", flush=True)
         return text
     finally:
@@ -335,7 +360,56 @@ def resolve_mkimat2_min_distance_A(
         if explicit is not None:
             return float(explicit)
     mic_floor = resolve_charmm_image_min_distance_A(workflow_args)
-    return max(float(mic_floor), float(DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A))
+    floor = max(float(mic_floor), float(DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A))
+    if is_dcm_like_prep(workflow_args):
+        n_monomers = _resolve_n_monomers_for_image_gate(workflow_args)
+        if (
+            n_monomers is not None
+            and n_monomers >= int(DENSE_DCM_MLPOT_MONOMER_COUNT)
+        ):
+            floor = max(floor, float(DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A))
+    return floor
+
+
+def run_mlpot_pbc_image_registration_gate(
+    *,
+    cubic_box_side_A: float,
+    workflow_args: argparse.Namespace | None = None,
+    context: str = "MLpot PBC registration (post-MLpot)",
+    verbose: bool = False,
+) -> float:
+    """IMAGE gate after MLpot USER is registered (MKIMAT2 tables are built)."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        rewrap_charmm_coords_for_mlpot_pbc,
+    )
+
+    side = float(cubic_box_side_A)
+    rewrap_charmm_coords_for_mlpot_pbc(
+        cubic_box_side_A=side,
+        workflow_args=workflow_args,
+        verbose=verbose,
+    )
+    with charmm_relaxed_bomlev():
+        update_log = capture_charmm_script_output("UPDATE", replay=False, tee=True)
+    pycharmm.image.update_bimag()
+    chunks = [update_log] if update_log.strip() else []
+    if not parse_mkimat2_min_distances("\n".join(chunks)):
+        with charmm_relaxed_bomlev():
+            ener_log = capture_charmm_script_output("ENER", replay=False, tee=True)
+        if ener_log.strip():
+            chunks.append(ener_log)
+    image_log = "\n".join(chunks)
+    return assert_charmm_image_min_distance_after_update(
+        workflow_args=workflow_args,
+        context=context,
+        cubic_box_side_A=side,
+        charmm_log=image_log if parse_mkimat2_min_distances(image_log) else None,
+        post_bimag=True,
+    )
 
 
 def assert_charmm_image_min_distance_after_update(
