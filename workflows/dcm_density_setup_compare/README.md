@@ -111,11 +111,21 @@ bash scripts/snakemake_slurm.sh 1 \
   ../../artifacts/dcm_density_setup_compare/minimal_dcm_52_t300_l28/done.txt
 ```
 
-Or direct `srun` on a GPU node:
+Or direct `srun` on a GPU node (default tag: prep-sweep `ovlp25` anchor):
+
+```bash
+cd workflows/dcm_density_setup_compare
+srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 bash scripts/job_shell.sh
+# same as:
+srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 \
+  bash scripts/job_shell.sh resilient_dcm_52_t50_l28_ht_bussi_sw_ovlp25
+```
+
+Main-matrix smoke (no prep sweep):
 
 ```bash
 srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 \
-  bash scripts/job_shell.sh minimal_dcm_52_t300_l28
+  bash scripts/job_shell.sh resilient_dcm_52_t50_l28_ht_bussi
 ```
 
 Requires `snakemake` + `snakemake-executor-plugin-slurm` (Snakemake 8+):

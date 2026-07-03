@@ -2,6 +2,7 @@
 # Triage one matrix cell (pc-studix login node).
 #
 # Usage (from ~/mmml/workflows/dcm_density_setup_compare):
+#   bash scripts/debug_cell.sh
 #   bash scripts/debug_cell.sh resilient_dcm_52_t50_l28_ht_hoover
 #   bash scripts/debug_cell.sh TAG --tail 50
 #   bash scripts/debug_cell.sh TAG --job 203595   # also show Slurm sacct + rule log
@@ -13,7 +14,8 @@ cd "$WORKFLOW_ROOT"
 source "$WORKFLOW_ROOT/scripts/debug_lib.sh"
 debug_bootstrap_cluster
 
-TAG="${1:?usage: debug_cell.sh RUN_TAG [--tail N] [--job SLURM_ID]}"
+DEFAULT_RUN_TAG="${MMML_DEFAULT_RUN_TAG:-resilient_dcm_52_t50_l28_ht_bussi_sw_ovlp25}"
+TAG="${1:-$DEFAULT_RUN_TAG}"
 shift || true
 
 TAIL_ONLY=false

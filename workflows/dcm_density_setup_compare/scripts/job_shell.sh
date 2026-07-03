@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # Run one DCM density × setup mini campaign (called from Snakemake).
-# Usage: job_shell.sh RUN_TAG
-#   e.g. job_shell.sh minimal_dcm_77_t300_l32
-#   MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/job_shell.sh resilient_dcm_52_t50_l28_sw_baseline
+# Usage: job_shell.sh [RUN_TAG]
+#   Default (prep-sweep ovlp25 anchor):
+#     bash scripts/job_shell.sh
+#     srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 bash scripts/job_shell.sh
+#   Other tags:
+#     bash scripts/job_shell.sh minimal_dcm_77_t300_l32
+#     MMML_WORKFLOW_CONFIG=config.prep_sweep.yaml bash scripts/job_shell.sh resilient_dcm_52_t50_l28_sw_baseline
 set -euo pipefail
 
 WORKFLOW_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "$WORKFLOW_ROOT/../.." && pwd)"
-RUN_TAG="${1:?usage: job_shell.sh RUN_TAG (e.g. minimal_dcm_77_t300_l32)}"
+DEFAULT_RUN_TAG="${MMML_DEFAULT_RUN_TAG:-resilient_dcm_52_t50_l28_ht_bussi_sw_ovlp25}"
+RUN_TAG="${1:-$DEFAULT_RUN_TAG}"
 
 cd "$REPO_ROOT"
 
@@ -39,6 +44,7 @@ if ! ldconfig -p 2>/dev/null | grep -q 'libOpenCL\.so'; then
   echo "ERROR: libOpenCL.so.1 not found on this host ($(hostname))." >&2
   echo "PyCHARMM/CHARMM must run on a GPU compute node." >&2
   echo "Submit via Slurm, e.g.:" >&2
+  echo "  srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 bash scripts/job_shell.sh" >&2
   echo "  srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 bash scripts/job_shell.sh ${RUN_TAG}" >&2
   exit 1
 fi
