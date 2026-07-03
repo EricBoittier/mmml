@@ -398,12 +398,14 @@ def prep_sweep_anchor_cell(cfg: dict[str, Any]) -> RunCell:
 def iter_prep_sweep_cells(cfg: dict[str, Any]) -> Iterator[RunCell]:
     anchor = prep_sweep_anchor_cell(cfg)
     for sweep_id in prep_sweep_variant_ids(cfg):
+        overrides = prep_sweep_variant_overrides(cfg, sweep_id)
+        box_size = float(overrides.get("box_size", anchor.box_size))
         yield RunCell(
             setup_id=anchor.setup_id,
             solvent=anchor.solvent,
             n_monomers=anchor.n_monomers,
             temperature=anchor.temperature,
-            box_size=anchor.box_size,
+            box_size=box_size,
             heat_thermostat=anchor.heat_thermostat,
             sweep_id=sweep_id,
         )
@@ -585,6 +587,18 @@ _WORKFLOW_JOB_OVERRIDE_KEYS = (
     "dyn_nprint",
     "mc_density_steps",
     "geometry_packing_fire_bfgs_crossover_grms",
+    "packmol_placement",
+    "packmol_radius",
+    "packmol_sphere",
+    "packmol_center",
+    "builder",
+    "packmol",
+    "pyxtal",
+    "pyxtal_spg",
+    "pyxtal_dim",
+    "pyxtal_factor",
+    "pyxtal_attempts",
+    "rebuild_packmol",
 )
 
 
@@ -1003,6 +1017,18 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "dynamics_overlap_check_interval",
         "bonded_mm_mini",
         "bonded_recovery_backend",
+        "packmol_placement",
+        "packmol_radius",
+        "packmol_sphere",
+        "packmol_center",
+        "builder",
+        "packmol",
+        "pyxtal",
+        "pyxtal_spg",
+        "pyxtal_dim",
+        "pyxtal_factor",
+        "pyxtal_attempts",
+        "rebuild_packmol",
     ):
         if key in effective:
             defaults[key] = effective[key]

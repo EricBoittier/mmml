@@ -688,6 +688,70 @@ def test_prep_sweep_packing_overrides(cfg: dict) -> None:
     assert combo_campaign["defaults"]["packmol_box_padding"] == 2.0
 
 
+def test_prep_sweep_placement_and_box_overrides(cfg: dict) -> None:
+    sweep_cfg = {
+        **cfg,
+        "setups": ["resilient"],
+        "checkpoint": cfg["checkpoint"],
+        "prep_sweep": {
+            "enabled": True,
+            "stages": "mini,heat",
+            "anchor": {
+                "setup_id": "resilient",
+                "n_monomers": 52,
+                "temperature": 50.0,
+                "box_size": 38.0,
+                "heat_thermostat": "bussi",
+            },
+            "variants": {
+                "baseline": {},
+                "sphere_r16": {
+                    "packmol_placement": "sphere",
+                    "packmol_radius": 16.0,
+                },
+                "l40_sphere_r17": {
+                    "box_size": 40.0,
+                    "packmol_placement": "sphere",
+                    "packmol_radius": 17.0,
+                },
+                "grid_liquid": {"builder": "liquid", "packmol": False},
+                "pyxtal": {"builder": "crystal", "pyxtal": True},
+            },
+        },
+    }
+    cell_sphere = cell_from_tag(
+        sweep_cfg, "resilient_dcm_52_t50_l38_ht_bussi_sw_sphere_r16"
+    )
+    campaign_sphere = build_campaign(sweep_cfg, cell_sphere)
+    assert campaign_sphere["defaults"]["packmol_placement"] == "sphere"
+    assert campaign_sphere["defaults"]["packmol_radius"] == 16.0
+    mini_sphere = campaign_sphere["runs"]["pycharmm_mini"]
+    assert mini_sphere["packmol_placement"] == "sphere"
+    assert mini_sphere["packmol_radius"] == 16.0
+
+    cell_l40 = cell_from_tag(
+        sweep_cfg, "resilient_dcm_52_t50_l40_ht_bussi_sw_l40_sphere_r17"
+    )
+    assert cell_l40.box_size == 40.0
+    campaign_l40 = build_campaign(sweep_cfg, cell_l40)
+    assert campaign_l40["defaults"]["box_size"] == 40.0
+    assert campaign_l40["defaults"]["packmol_radius"] == 17.0
+
+    cell_grid = cell_from_tag(
+        sweep_cfg, "resilient_dcm_52_t50_l38_ht_bussi_sw_grid_liquid"
+    )
+    mini_grid = build_campaign(sweep_cfg, cell_grid)["runs"]["pycharmm_mini"]
+    assert mini_grid["builder"] == "liquid"
+    assert mini_grid["packmol"] is False
+
+    cell_xtal = cell_from_tag(
+        sweep_cfg, "resilient_dcm_52_t50_l38_ht_bussi_sw_pyxtal"
+    )
+    mini_xtal = build_campaign(sweep_cfg, cell_xtal)["runs"]["pycharmm_mini"]
+    assert mini_xtal["builder"] == "crystal"
+    assert mini_xtal["pyxtal"] is True
+
+
 def test_prep_sweep_tag_auto_loads_from_prep_sweep_yaml(cfg: dict) -> None:
     tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_baseline"
     cell = cell_from_tag(cfg, tag)

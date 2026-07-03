@@ -137,7 +137,36 @@ prep_sweep:
     heat_thermostat: bussi
   variants:
     baseline: {}
+    # --- Box size (anchor L=38; variants override per-cell tag l{L}) ---
+    l40:
+      box_size: 40.0
+    l42:
+      box_size: 42.0
     # --- Packmol / placement (anchor: spacing 8, pmtol 5, pad 2) ---
+    sphere_r16:
+      packmol_placement: sphere
+      packmol_radius: 16.0
+    sphere_r17:
+      packmol_placement: sphere
+      packmol_radius: 17.0
+    l40_sphere_r17:
+      box_size: 40.0
+      packmol_placement: sphere
+      packmol_radius: 17.0
+    grid_liquid:
+      builder: liquid
+      packmol: false
+    grid_liq_sphere:
+      builder: liquid
+      packmol: false
+      packmol_placement: sphere
+      packmol_radius: 16.0
+    grid_gas:
+      builder: gas
+      packmol: false
+    pyxtal:
+      builder: crystal
+      pyxtal: true
     pmtol25:
       packmol_tolerance: 2.5
     pmtol30:
