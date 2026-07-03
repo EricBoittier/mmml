@@ -97,5 +97,6 @@ See [`NONBOND_LISTS.md`](../../mmml/interfaces/pycharmmInterface/mlpot/NONBOND_L
 
 ## Related tools
 
+- [`scripts/dump_neighbor_lists.py`](../../scripts/dump_neighbor_lists.py) — save CHARMM DMAT + MMML pairs (JSON/CSV/PNG) from CRD or campaign artifacts
 - [`scripts/validate_mlpot_pair_lists.py`](../../scripts/validate_mlpot_pair_lists.py) — post-MD geometry audit (CRD/DCD)
 - [`tests/functionality/mmml_tests/test_ase_jaxmd_pbc_consistency.py`](../mmml_tests/test_ase_jaxmd_pbc_consistency.py) — pytest integration
