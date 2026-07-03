@@ -1036,6 +1036,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "max_grms_before_dyn",
         "no_scale_max_grms",
         "allow_high_grms",
+        "no_echeck_heat",
         "pre_mlpot_overlap_min_distance",
         "pre_mlpot_h_heavy_min_distance",
         "pre_mlpot_heavy_heavy_min_distance",
