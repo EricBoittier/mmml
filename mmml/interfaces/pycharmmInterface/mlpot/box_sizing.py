@@ -675,8 +675,39 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         default=0.0,
         metavar="PS",
         help=(
-            "PyCHARMM mini: short CPT NPT equilibration (ps) after coordinate-only "
-            "CHARMM MM mini and before MLpot SD. 0=off. Skipped when pretreat NPT equi runs."
+            "PyCHARMM mini: MM pretreat hot→cold equilibration (ps total) after lattice "
+            "ABNR and before MLpot SD. Default 200 with --liquid-prep (100 ps heat + "
+            "100 ps cool). 0=off. Skipped when pretreat NPT equi runs."
+        ),
+    )
+    group.add_argument(
+        "--mini-box-equil-ps-heat",
+        type=float,
+        default=None,
+        metavar="PS",
+        help=(
+            "Pretreat hot-leg length (ps). Default: half of --mini-box-equil-ps. "
+            "Ramp from --temperature to --mini-box-equil-hot-temp."
+        ),
+    )
+    group.add_argument(
+        "--mini-box-equil-ps-cool",
+        type=float,
+        default=None,
+        metavar="PS",
+        help=(
+            "Pretreat cold-leg length (ps). Default: half of --mini-box-equil-ps. "
+            "Ramp from hot peak back to --temperature."
+        ),
+    )
+    group.add_argument(
+        "--mini-box-equil-hot-temp",
+        type=float,
+        default=None,
+        metavar="K",
+        help=(
+            "Peak temperature for pretreat hot leg (K). "
+            "Default: max(1.5×--temperature, --temperature+100)."
         ),
     )
     group.add_argument(

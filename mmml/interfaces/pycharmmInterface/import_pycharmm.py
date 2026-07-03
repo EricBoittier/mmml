@@ -156,7 +156,7 @@ def reset_block() -> None:
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
     from mmml.utils.rich_report import emit_charmm_block, is_verbose
 
-    run_charmm_script_quiet(block)
+    # run_charmm_script_quiet(block)
     if is_verbose():
         try:
             emit_charmm_block("full MM (all atoms, COEFF 1.0)", verbose=True)

@@ -48,7 +48,7 @@ def test_resilient_defaults_bump_mini_and_enable_ladder():
     assert args.charmm_abnr_steps == 1000
     assert args.mini_nstep == 500
     assert args.mini_lattice_abnr_steps == 200
-    assert args.mini_box_equil_ps == 2.0
+    assert args.mini_box_equil_ps == 200.0
 
 
 def test_resilient_defaults_respect_explicit_box_and_ladder_off():

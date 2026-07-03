@@ -304,6 +304,46 @@ def test_should_run_mini_box_equil_true_for_pbc_mini():
     )
 
 
+def test_resolve_mini_box_equil_durations_splits_total_evenly():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        resolve_mini_box_equil_durations_ps,
+    )
+
+    args = argparse.Namespace(mini_box_equil_ps=200.0)
+    assert resolve_mini_box_equil_durations_ps(args) == pytest.approx((100.0, 100.0))
+
+
+def test_resolve_mini_box_equil_durations_explicit_legs():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        resolve_mini_box_equil_durations_ps,
+    )
+
+    args = argparse.Namespace(
+        mini_box_equil_ps=200.0,
+        mini_box_equil_ps_heat=120.0,
+        mini_box_equil_ps_cool=80.0,
+    )
+    assert resolve_mini_box_equil_durations_ps(args) == pytest.approx((120.0, 80.0))
+
+
+def test_resolve_mini_box_equil_hot_temp_default():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        resolve_mini_box_equil_hot_temp_K,
+    )
+
+    args = argparse.Namespace(mini_box_equil_hot_temp=None)
+    assert resolve_mini_box_equil_hot_temp_K(args, target_K=300.0) == pytest.approx(450.0)
+
+
+def test_resolve_mini_box_equil_hot_temp_explicit():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
+        resolve_mini_box_equil_hot_temp_K,
+    )
+
+    args = argparse.Namespace(mini_box_equil_hot_temp=500.0)
+    assert resolve_mini_box_equil_hot_temp_K(args, target_K=300.0) == pytest.approx(500.0)
+
+
 def test_apply_certified_box_size_from_box_json(tmp_path) -> None:
     import json
 

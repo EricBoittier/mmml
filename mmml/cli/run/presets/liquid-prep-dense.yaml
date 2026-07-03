@@ -6,7 +6,7 @@ defaults:
   density_prep_lattice_abnr_steps: 200
   mini_lattice_abnr_steps: 200
   mini_lattice_abnr_allow_fixed_box: true
-  mini_box_equil_ps: 2.0
+  mini_box_equil_ps: 200.0
   mini_box_equil_allow_fixed_box: true
   mini_box_equil_fixed_nvt: true
   box_auto: density

@@ -2037,6 +2037,9 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     ps = float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0)
     if ps > 0.0:
         cmd.extend(["--mini-box-equil-ps", str(ps)])
+    _append_optional(cmd, "--mini-box-equil-ps-heat", getattr(args, "mini_box_equil_ps_heat", None))
+    _append_optional(cmd, "--mini-box-equil-ps-cool", getattr(args, "mini_box_equil_ps_cool", None))
+    _append_optional(cmd, "--mini-box-equil-hot-temp", getattr(args, "mini_box_equil_hot_temp", None))
     if getattr(args, "mini_box_equil_allow_fixed_box", False):
         cmd.append("--mini-box-equil-allow-fixed-box")
     jax_ps = float(getattr(args, "jaxmd_mini_box_equil_ps", 0.0) or 0.0)

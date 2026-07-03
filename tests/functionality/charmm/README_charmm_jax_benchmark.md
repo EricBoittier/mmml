@@ -55,3 +55,24 @@ pytest tests/unit/test_charmm_jax_energy_benchmark.py -q
 - **CMAP** on TRIA uses bundled ``par_trialanine_backbone_cmap.prm`` (alanine backbone grid with CGENFF type headers); included in bonded and total-MM comparisons.
 - **Urey–Bradley** 1–3 distance terms are included in the JAX bonded kernel (parsed from CHARMM PRM angle lines).
 - Long-range PME is not benchmarked here; only ``lr_solver=mic`` truncated Coulomb.
+
+## Trajectory demo (per-frame component errors)
+
+Compare live PyCHARMM ``ENER FORCE`` vs the JAX CGenFF clone on every frame of a
+short NVT segment (or an existing DCD):
+
+```bash
+    JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 uv run python scripts/demo_charmm_jax_trajectory_energy.py \\
+      -o /tmp/charmm_jax_traj
+```
+
+Outputs ``trajectory_report.md`` and ``trajectory_report.json`` with per-term
+ΔE and force RMS for bond, angle, Urey–Bradley, torsion, improper, CMAP, VDW,
+electrostatics, and totals. Use ``--synthetic`` for a fast coordinate series
+without MD, or ``--dcd PATH --skip-dynamics`` to analyze a saved trajectory.
+
+Unit tests (no CHARMM):
+
+```bash
+pytest tests/unit/test_charmm_jax_trajectory_energy.py -q
+```
