@@ -1453,6 +1453,7 @@ def run_pre_mlpot_geometry_gate(
                     and float(new_side) + 1.0e-6 < float(side_before_lattice)
                 ):
                     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+                        apply_pbc_nbonds,
                         push_charmm_cubic_box_side_A,
                     )
                     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -1468,6 +1469,11 @@ def run_pre_mlpot_geometry_gate(
                             flush=True,
                         )
                     push_charmm_cubic_box_side_A(float(side_before_lattice), quiet=quiet)
+                    apply_pbc_nbonds(
+                        nbxmod=5,
+                        cubic_box_side_A=float(side_before_lattice),
+                        rebuild=False,
+                    )
                     side = float(side_before_lattice)
                     pos = get_charmm_positions_array()
                     from mmml.interfaces.pycharmmInterface.mlpot.setup import (

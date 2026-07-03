@@ -159,6 +159,73 @@ def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
     assert parse_mkimat2_min_distances(log) == pytest.approx([6.18, 7.17, 8.93])
 
 
+def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
+    import numpy as np
+
+    captured: dict[str, object] = {}
+
+    def _fake_prep_geometry(
+        positions,
+        atoms_per_list,
+        *,
+        min_distance_A,
+        box_side,
+        use_pbc,
+        context="",
+        args=None,
+        atomic_numbers=None,
+    ):
+        captured.update(
+            {
+                "atomic_numbers": None if atomic_numbers is None else np.asarray(atomic_numbers).tolist(),
+                "context": context,
+            }
+        )
+        return 2.577
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: np.zeros((10, 3)),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
+        lambda _args: [5, 5],
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
+        lambda _args: np.array([1, 1, 1, 1, 1, 6, 6, 6, 6, 17], dtype=int),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        _fake_prep_geometry,
+    )
+    monkeypatch.setattr(
+        "mmml.utils.intermonomer_geometry.summarize_worst_intermonomer_contact",
+        lambda *a, **k: type(
+            "S",
+            (),
+            {
+                "format_log_line": lambda self: (
+                    "worst inter-monomer contact 2.577 Å "
+                    "(monomers 50/51, atoms H–H; prep floor 2.30 Å)"
+                )
+            },
+        )(),
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        assert_charmm_image_mic_fallback,
+    )
+
+    worst = assert_charmm_image_mic_fallback(
+        workflow_args=argparse.Namespace(solvents=["DCM"]),
+        box_side_A=28.0,
+        min_distance_A=2.3,
+        context="test gate",
+    )
+    assert worst == pytest.approx(2.577)
+    assert captured["atomic_numbers"] == [1, 1, 1, 1, 1, 6, 6, 6, 6, 17]
+
+
 def test_assert_charmm_image_mic_fallback_calls_mic_geometry(monkeypatch):
     import numpy as np
 

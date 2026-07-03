@@ -88,6 +88,25 @@ def test_resolve_mc_min_keeps_packmol_floor_without_liquid_prep():
     assert resolve_mc_min_intermonomer_distance_A(args) == pytest.approx(0.1)
 
 
+def test_unknown_element_pair_uses_global_floor_not_heavy_heavy():
+    from mmml.utils.intermonomer_geometry import (
+        DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A,
+        DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
+        resolve_pre_mlpot_element_pair_min_distance,
+    )
+
+    args = argparse.Namespace(solvents=["DCM"])
+    assert resolve_pre_mlpot_element_pair_min_distance("?", "?", args=args) == pytest.approx(
+        DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+    )
+    assert resolve_pre_mlpot_element_pair_min_distance("H", "?", args=args) == pytest.approx(
+        DEFAULT_PRE_MLPOT_OVERLAP_MIN_A
+    )
+    assert resolve_pre_mlpot_element_pair_min_distance("C", "Cl", args=args) == pytest.approx(
+        DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A
+    )
+
+
 def test_dcm_pair_floors_for_h_heavy_and_heavy_heavy():
     from mmml.utils.intermonomer_geometry import (
         DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A,

@@ -139,7 +139,11 @@ def resolve_pre_mlpot_element_pair_min_distance(
     )
     h_h = float(getattr(args, "pre_mlpot_h_h_min_distance", DEFAULT_PRE_MLPOT_H_H_MIN_A) or DEFAULT_PRE_MLPOT_H_H_MIN_A)
 
-    li, lj = label_i, label_j
+    li, lj = str(label_i).strip(), str(label_j).strip()
+    if "?" in (li, lj):
+        # Missing element typing: never apply heavy–heavy floor by mistake.
+        return float(global_floor)
+
     hi = _is_hydrogen_symbol(li)
     hj = _is_hydrogen_symbol(lj)
     if hi and hj:

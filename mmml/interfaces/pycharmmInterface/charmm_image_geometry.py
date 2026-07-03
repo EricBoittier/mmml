@@ -9,6 +9,8 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 from mmml.utils.intermonomer_geometry import (
     DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A,
     DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
@@ -106,6 +108,25 @@ def _resolve_atoms_per_for_image_gate(
         return None
 
 
+def _resolve_atomic_numbers_for_image_gate(
+    workflow_args: argparse.Namespace | None,
+) -> np.ndarray | None:
+    if workflow_args is not None:
+        z = getattr(workflow_args, "_cluster_atomic_numbers", None)
+        if z is not None:
+            return np.asarray(z, dtype=int).reshape(-1)
+        z = getattr(workflow_args, "ml_Z", None)
+        if z is not None:
+            return np.asarray(z, dtype=int).reshape(-1)
+    try:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+
+        return np.asarray(get_Z_from_psf(), dtype=int).reshape(-1)
+    except Exception:
+        return None
+
+
 def assert_charmm_image_mic_fallback(
     *,
     workflow_args: argparse.Namespace | None,
@@ -114,8 +135,13 @@ def assert_charmm_image_mic_fallback(
     context: str,
 ) -> float:
     """MIC prep gate when ``<MKIMAT2>`` is unavailable (MPI / cached IMAGE lists)."""
+    import numpy as np
+
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        assert_pre_mlpot_intermonomer_geometry,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    from mmml.utils.intermonomer_geometry import assert_pre_mlpot_mic_geometry
+    from mmml.utils.intermonomer_geometry import summarize_worst_intermonomer_contact
 
     atoms_per = _resolve_atoms_per_for_image_gate(workflow_args)
     if not atoms_per or box_side_A is None or float(box_side_A) <= 0.0:
@@ -124,23 +150,33 @@ def assert_charmm_image_mic_fallback(
             "(missing atoms_per_monomer or cubic box side)."
         )
     pos = get_charmm_positions_array()
-    z_arr = (
-        getattr(workflow_args, "_cluster_atomic_numbers", None)
-        if workflow_args is not None
-        else None
+    z_arr = _resolve_atomic_numbers_for_image_gate(workflow_args)
+    if z_arr is None:
+        print(
+            f"{context}: MIC fallback untyped (no element data); "
+            f"using global prep floor {float(min_distance_A):.2f} Å only",
+            flush=True,
+        )
+    worst = assert_pre_mlpot_intermonomer_geometry(
+        pos,
+        atoms_per,
+        min_distance_A=float(min_distance_A),
+        box_side=float(box_side_A),
+        use_pbc=True,
+        context=f"{context} (MIC fallback)",
+        args=workflow_args,
+        atomic_numbers=z_arr,
     )
-    worst = assert_pre_mlpot_mic_geometry(
+    summary = summarize_worst_intermonomer_contact(
         pos,
         atoms_per,
         box_side=float(box_side_A),
         use_pbc=True,
-        args=workflow_args,
+        threshold_A=float(min_distance_A),
         atomic_numbers=z_arr,
-        context=f"{context} (MIC fallback)",
     )
     print(
-        f"{context}: MIC image fallback OK "
-        f"(worst inter-monomer {worst:.2f} Å, prep floor {float(min_distance_A):.2f} Å)",
+        f"{context}: MIC image fallback OK ({summary.format_log_line()})",
         flush=True,
     )
     return float(worst)

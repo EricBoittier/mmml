@@ -253,6 +253,11 @@ def push_charmm_cubic_box_side_A(
     live, source = probe_charmm_cubic_box_side_A(fallback_side_A=target)
     if live is not None and abs(live - target) <= tol:
         if charmm_crystal_lattice_ready():
+            apply_pbc_nbonds(
+                nbxmod=int(nbxmod),
+                cubic_box_side_A=target,
+                rebuild=False,
+            )
             return float(live), source or "pbound"
         restore_charmm_cubic_crystal_lattice(target, nbxmod=nbxmod, quiet=quiet)
         side, out_source = resolve_charmm_cubic_box_side_A(fallback_side_A=target)
@@ -606,6 +611,13 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
         build_cut = min(float(VACUUM_CUTNB), max(L / 2.0 - PBC_NBOND_BOX_MARGIN_A, 6.0))
         if not crystal.build(build_cut):
             raise RuntimeError(f"crystal.build failed for cutoff={build_cut} Å (L={L})")
+        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+            apply_nbonds_kwargs,
+            pbc_nbond_cutoffs,
+        )
+
+        cuts = pbc_nbond_cutoffs(L)
+        apply_nbonds_kwargs(cuts.as_pbc_nbond_kwargs(nbxmod=5), rebuild=False)
         _image_setup_byres_all(0.0, 0.0, 0.0)
 
 

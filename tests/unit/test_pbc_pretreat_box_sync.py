@@ -100,12 +100,15 @@ def test_push_charmm_cubic_box_side_A_skips_when_already_matched() -> None:
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.charmm_crystal_lattice_ready",
         return_value=True,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+    ) as mock_nbonds, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as mock_prepare:
         side, source = push_charmm_cubic_box_side_A(30.0, quiet=True)
     assert side == pytest.approx(30.0)
     assert source == "pbound"
     mock_prepare.assert_not_called()
+    mock_nbonds.assert_called_once_with(nbxmod=5, cubic_box_side_A=30.0, rebuild=False)
 
 
 def test_push_charmm_cubic_box_side_A_restores_when_xucell_only() -> None:
