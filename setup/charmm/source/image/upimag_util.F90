@@ -38,7 +38,7 @@ contains
 
     type(imageDataStructure) BIMAG
     !
-    INTEGER I,MAXNNG,IATMXB
+    INTEGER I,MAXNNG,IATMXB,MXIM
     LOGICAL CMPLTD
     !
     !
@@ -53,18 +53,41 @@ contains
     !
     NBONDT=NBOND+NIMBON
     NBONDT2=NBONDT ! hwm220722
-    I=NIMEXCL+1
-    call IMGROW(bimag%IMINB, I)
+    ! Match UPINB (nbexcl.F90) initial guess so MKIMNB/MKIMNB_MLPOT need not resize.
+    MXIM=MAX(NIMEXCL+1, 3*NBONDT2)
+    IF(IABS(NBXMOD) > 3) MXIM=MXIM*2
+    IF(NBXMOD > 0) MXIM=MAX(NNB+1, MXIM)
+    IF(QDRUDE) MXIM=INT(MXIM*1.5)
+    IF(MLPOT_IS_SET() .AND. NATIM > NATOM .AND. NATOM > 0) THEN
+       MXIM=MAX(MXIM, (NNB+1)*((NATIM+NATOM-1)/NATOM))
+    ENDIF
 
-    CALL MKIMNB(NATOM,NATIM,NIMEXCL,IMEXCLI,IMEXCLJ,IMEXCLT, &
-                    BIMAG%IMINB,BIMAG%IMIBLO,BIMAG%NIMINB,(I), &
-                    NBXMOD,CMPLTD)
-    
     IF(MLPOT_IS_SET()) THEN
-        CALL MKIMNB_MLPOT(NATOM,NATIM,NTRANS,INB,IBLO,NNB, &
-                          BIMAG%IMATPT,BIMAG%IMATTR, &
-                          BIMAG%IMINB,BIMAG%IMIBLO,BIMAG%NIMINB,(I))
-    END IF
+       ! Primary INB/IBLO already include ML exclusions; rebuild image list from them.
+       call IMGROW(bimag%IMINB, MXIM)
+       CMPLTD=.FALSE.
+       DO WHILE(.NOT.CMPLTD)
+          I=size(bimag%IMINB)
+          CALL MKIMNB_MLPOT(NATOM,NATIM,NTRANS,INB,IBLO,NNB, &
+               BIMAG%IMATPT,BIMAG%IMATTR, &
+               BIMAG%IMINB,BIMAG%IMIBLO,BIMAG%NIMINB,(I),CMPLTD)
+          IF(.NOT.CMPLTD) THEN
+             call IMGROW(bimag%IMINB, 1.5, 10)
+          ENDIF
+       ENDDO
+    ELSE
+       call IMGROW(bimag%IMINB, MXIM)
+       CMPLTD=.FALSE.
+       DO WHILE(.NOT.CMPLTD)
+          I=size(bimag%IMINB)
+          CALL MKIMNB(NATOM,NATIM,NIMEXCL,IMEXCLI,IMEXCLJ,IMEXCLT, &
+               BIMAG%IMINB,BIMAG%IMIBLO,BIMAG%NIMINB,(I), &
+               NBXMOD,CMPLTD)
+          IF(.NOT.CMPLTD) THEN
+             call IMGROW(bimag%IMINB, 1.5, 10)
+          ENDIF
+       ENDDO
+    ENDIF
 
     ! generate image group exclusion lists
 
@@ -235,7 +258,7 @@ contains
 
 ! Addition Kai Toepfer May 2022
   SUBROUTINE MKIMNB_MLPOT(NATOM,NATIM,NTRANS,INB,IBLO,NNB, &
-       IMATPT,IMATTR,INB14,IBLO14,NNB14,MXNB14)
+       IMATPT,IMATTR,INB14,IBLO14,NNB14,MXNB14,CMPLTD)
     !-----------------------------------------------------------------------
     !     THIS ROUTINE TAKES THE PSF INFORMATION AND GENERATES
     !     A NONBONDED EXCLUSION LIST (INB14 and IBLO14) 
@@ -257,8 +280,9 @@ contains
     INTEGER IPK(MXNB14),JPK(MXNB14)
     INTEGER NPAIR,MAXWRK,ILAST,ITRANS
     INTEGER I,J,K,I2,J2,J3,I2L,J2L,IATOM,NX14,NEXT14
-    LOGICAL LEX14
+    LOGICAL LEX14,CMPLTD
 
+    CMPLTD=.FALSE.
     ! Get primary cell exclusion pairs
     NPAIR=0
     MAXWRK=MXNB14
@@ -357,6 +381,7 @@ contains
          ' interactions(ml-iml)')
 988 FORMAT(' <MKIMNB>: Ran out of space. RESIZING')
     
+    CMPLTD=.TRUE.
     RETURN
   
   END SUBROUTINE MKIMNB_MLPOT
