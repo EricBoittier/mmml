@@ -399,8 +399,15 @@ def test_prepare_mlpot_hybrid_state_resyncs_stale_charmm_after_session_best_rest
     ctx = mock.Mock()
     ctx.sd_watchdog_baseline_grms = None
     ctx.use_pbc = True
+    ctx.charmm_cubic_box_side_A = 28.0
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rewrap_charmm_coords_for_mlpot_pbc",
+        return_value=0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_min_distance_after_update",
+        return_value=6.0,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
         return_value=-1000.0,
     ), mock.patch(
