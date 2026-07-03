@@ -42,8 +42,24 @@ def dcm_dimer_com_distance_A(
 def default_model_cutoff_from_checkpoint(checkpoint: Path | str) -> float:
     from mmml.interfaces.calculators.checkpoint_loading import load_checkpoint_bundle
 
-    bundle = load_checkpoint_bundle(Path(checkpoint))
+    bundle = load_checkpoint_bundle(resolve_hybrid_checkpoint(checkpoint))
     return float(bundle.config.get("physnet_config", {}).get("cutoff", 6.0))
+
+
+def resolve_hybrid_checkpoint(path: Path | str | None) -> Path:
+    """Resolve and validate a hybrid/checkpoint path."""
+    if path is None:
+        raise ValueError("--checkpoint is required for hybrid ML evaluation")
+    text = str(path).strip()
+    if not text:
+        raise ValueError(
+            "Empty --checkpoint path. Set MMML_CKPT, e.g. "
+            "export MMML_CKPT=~/mmml/examples/ckpts_json/DESdimers_params.json"
+        )
+    ckpt = Path(text).expanduser().resolve()
+    if not ckpt.exists():
+        raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
+    return ckpt
 
 
 @dataclass(frozen=True, slots=True)
@@ -848,17 +864,19 @@ def run_dcm_mp2_mm_comparison(
         )
 
     hybrid_eval: DcmHybridEvaluator | None = None
+    ckpt_path: Path | None = None
     if checkpoint is not None:
         from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
 
+        ckpt_path = resolve_hybrid_checkpoint(checkpoint)
         ensure_jax_x64(context="run_dcm_mp2_mm_comparison")
         model_cutoff = (
             float(hybrid_model_cutoff)
             if hybrid_model_cutoff is not None
-            else default_model_cutoff_from_checkpoint(checkpoint)
+            else default_model_cutoff_from_checkpoint(ckpt_path)
         )
         hybrid_eval = DcmHybridEvaluator(
-            checkpoint,
+            ckpt_path,
             model_cutoff=model_cutoff,
             mm_switch_on=hybrid_mm_switch_on,
         )
@@ -898,9 +916,9 @@ def run_dcm_mp2_mm_comparison(
         "mm": {"enabled": bool(run_mm)},
         "hybrid": (
             None
-            if checkpoint is None
+            if hybrid_eval is None
             else {
-                "checkpoint": str(Path(checkpoint)),
+                "checkpoint": str(ckpt_path),
                 "model_cutoff_A": float(hybrid_eval.model_cutoff),
                 "mm_switch_on_A": float(hybrid_eval.mm_switch_on),
                 "calculators": list(hybrid_calculators),

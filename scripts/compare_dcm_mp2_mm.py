@@ -139,11 +139,18 @@ def main() -> int:
 
     from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
         parse_monomer_permutation,
+        resolve_hybrid_checkpoint,
         run_dcm_mp2_mm_comparison,
     )
 
     perm = parse_monomer_permutation(args.monomer_permutation)
     model_cutoff = args.model_cutoff if args.model_cutoff is not None else args.cutoff
+    checkpoint = None
+    if args.checkpoint is not None or args.hybrid_only or args.calculators != ["hybrid-ml"]:
+        try:
+            checkpoint = resolve_hybrid_checkpoint(args.checkpoint)
+        except (ValueError, FileNotFoundError) as exc:
+            raise SystemExit(str(exc)) from exc
     payload = run_dcm_mp2_mm_comparison(
         args.data,
         args.output_dir,
@@ -155,7 +162,7 @@ def main() -> int:
         seed=args.seed,
         compute_interaction=not args.no_interaction,
         monomer_permutation=perm,
-        checkpoint=args.checkpoint,
+        checkpoint=checkpoint,
         hybrid_calculators=tuple(args.calculators),
         hybrid_model_cutoff=model_cutoff,
         hybrid_mm_switch_on=args.mm_switch_on,

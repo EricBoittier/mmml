@@ -22,6 +22,7 @@ from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
     load_monomer_mean_energy_eV,
     load_mp2_frames,
     parse_monomer_permutation,
+    resolve_hybrid_checkpoint,
     repeat_monomer_permutation,
     select_frame_indices,
 )
@@ -203,6 +204,13 @@ def test_compare_hybrid_metrics_in_frame_and_summary() -> None:
     assert row["hybrid_hybrid_ml_interaction_delta_eV"] == pytest.approx(0.03, abs=1e-12)
     summary = aggregate_comparison([row])
     assert summary["hybrid_hybrid_ml_mp2_force_rmse_ev_A"]["n"] == 1
+
+
+def test_resolve_hybrid_checkpoint_rejects_empty(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Empty --checkpoint"):
+        resolve_hybrid_checkpoint("")
+    with pytest.raises(FileNotFoundError):
+        resolve_hybrid_checkpoint(tmp_path / "missing.json")
 
 
 def test_com_binned_force_rmse_and_pairwise_summary() -> None:
