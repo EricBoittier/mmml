@@ -165,7 +165,7 @@ RUN ln -s /workspace/mmml /root/mmml
 CMD ["bash"]
 
 # ============================================================================
-# Stage 5: GPU variant (CUDA 13 + Python 3.14)
+# Stage 5: GPU variant (CUDA 13 + Python 3.13)
 # ============================================================================
 FROM nvidia/cuda:${CUDA13_VERSION}-cudnn9-devel-ubuntu24.04 AS runtime-gpu-cuda13
 
@@ -173,16 +173,16 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PYTHON=python3.14
+    UV_PYTHON=python3.13
 
-# Install Python 3.14 and system dependencies
+# Install Python 3.13 and system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
-    python3.14 \
-    python3.14-dev \
-    python3.14-venv \
+    python3.13 \
+    python3.13-dev \
+    python3.13-venv \
     build-essential \
     gfortran \
     cmake \

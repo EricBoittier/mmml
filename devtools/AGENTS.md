@@ -8,7 +8,7 @@ plus a FastAPI + React molecular-viewer GUI under `mmml/gui/`. Standard commands
 caveats for working in the cloud VM.
 
 ### Python environment
-- The startup update script runs `uv sync --extra dev`, which creates `.venv` with Python 3.13 or 3.14 free-threaded
+- The startup update script runs `uv sync --extra dev`, which creates `.venv` with Python 3.13
   (the system `python3` is 3.12 and is the wrong version). Always run project code via
   `uv run ...` (e.g. `uv run python`, `uv run pytest`, `uv run mmml ...`).
 - `uv` is installed at `~/.local/bin/uv` and symlinked into `/usr/local/bin/uv`, so it is on PATH
