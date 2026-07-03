@@ -242,17 +242,33 @@ def test_run_dynamics_skips_ase_cold_velocity_when_flag_set():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript.return_value = fake_dyn
+    v = np.ones((3, 3), dtype=np.float64)
+    init = {"vx": v[:, 0], "vy": v[:, 1], "vz": v[:, 2]}
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        return_value=init,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ) as maybe_assign, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
     ) as mirror_comp, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.refresh_bussi_comp_velocity_handoff",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
-        return_value=False,
+        return_value=True,
     ), mock.patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        return_value=fake_dyn,
+    ) as run_capi, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
+        return_value=init,
     ), mock.patch.dict(
         __import__("sys").modules,
         {"pycharmm": fake_pycharmm},
@@ -267,8 +283,9 @@ def test_run_dynamics_skips_ase_cold_velocity_when_flag_set():
             }
         )
     maybe_assign.assert_not_called()
-    mirror_comp.assert_called_once()
-    passed = fake_pycharmm.DynamicsScript.call_args.kwargs
+    mirror_comp.assert_not_called()
+    run_capi.assert_called_once()
+    passed = run_capi.call_args.args[0]
     assert "_skip_ase_cold_velocity_assign" not in passed
 
 
@@ -306,11 +323,21 @@ def test_run_dynamics_mirror_noops_after_ase_cold_assign():
     assert passed["start"] is False
 
 
-def test_run_dynamics_mirrors_comp_when_iasvel_zero_without_start():
+def test_run_dynamics_falls_back_to_iasvel_one_when_cold_without_start():
     fake_dyn = mock.MagicMock()
     fake_pycharmm = mock.MagicMock()
     fake_pycharmm.DynamicsScript.return_value = fake_dyn
+
+    def _resolve_cold(kw, **kwargs):
+        kw["iasvel"] = 1
+        kw["start"] = False
+        kw["firstt"] = 300.0
+        return None
+
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
+        side_effect=_resolve_cold,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.maybe_assign_velocities_via_ase_if_cold",
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.mirror_comparison_velocities_for_dynamics",
@@ -327,5 +354,8 @@ def test_run_dynamics_mirrors_comp_when_iasvel_zero_without_start():
         clear=False,
     ):
         run_dynamics({"nstep": 5, "iasvel": 0, "start": False})
-    mirror_comp.assert_called_once()
+    mirror_comp.assert_not_called()
     fake_pycharmm.DynamicsScript.assert_called_once()
+    passed = fake_pycharmm.DynamicsScript.call_args.kwargs
+    assert passed["iasvel"] == 1
+    assert passed["start"] is False
