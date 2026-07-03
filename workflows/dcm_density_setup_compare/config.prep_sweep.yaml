@@ -1,7 +1,7 @@
 # Prep-parameter sweep stage 2: vdw_off anchor × mini+heat × Packmol / dt / overlap / CHARMM freq.
 #
-# Anchor (2026-07): fixed N=52 @ L=36 Å (~0.22 g/cm³) — passes Packmol/MM prep on pc-studix;
-# L=28/L=34 with bulk_fraction sizing hit MIC registration (5.50 Å) before heat.
+# Anchor (2026-07): fixed N=52 @ L=38 Å (~0.13 g/cm³). L=36 baseline smoke reached
+# MIC 5.042 Å after prep ladder (floor 5.50 Å); MKIMAT2 image groups still ~3.0 Å.
 #
 # Run:
 #   cd workflows/dcm_density_setup_compare
@@ -10,7 +10,7 @@
 #   bash scripts/collect_prep_sweep.sh
 #
 # Tags: {setup}_dcm_{N}_t{T}_l{L}_ht_{thermostat}_sw_{variant}
-# Example: resilient_dcm_52_t50_l36_ht_bussi_sw_baseline
+# Example: resilient_dcm_52_t50_l38_ht_bussi_sw_baseline
 
 setups: [resilient]
 solvents: [DCM]
@@ -18,7 +18,7 @@ solvents: [DCM]
 # Used only if prep_sweep.enabled is false; sweep matrix uses prep_sweep.anchor below.
 cluster_sizes: [52]
 temperatures: [50.0]
-box_sizes: [36.0]
+box_sizes: [38.0]
 
 checkpoint: ${MMML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
@@ -40,7 +40,7 @@ pre_mlpot_overlap_min_distance: 2.3
 pre_mlpot_h_heavy_min_distance: 2.4
 pre_mlpot_heavy_heavy_min_distance: 2.9
 mlpot_registration_max_grms: 50.0
-liquid_prep_staged_density_fraction: 0.30
+liquid_prep_staged_density_fraction: 0.25
 
 mini_nstep: 5000
 charmm_sd_steps: 8000
@@ -132,7 +132,7 @@ prep_sweep:
     setup_id: resilient
     solvent: DCM
     n_monomers: 52
-    box_size: 36.0
+    box_size: 38.0
     temperature: 50.0
     heat_thermostat: bussi
   variants:
@@ -165,7 +165,7 @@ prep_sweep:
       bonded_mm_mini: true
     # --- Density prep capacity ---
     ladder_light:
-      liquid_prep_staged_density_fraction: 0.20
+      liquid_prep_staged_density_fraction: 0.15
     # --- Integration timestep (fs) ---
     dt050:
       dt_fs: 0.05

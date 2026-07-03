@@ -689,7 +689,7 @@ def test_prep_sweep_packing_overrides(cfg: dict) -> None:
 
 
 def test_prep_sweep_tag_auto_loads_from_prep_sweep_yaml(cfg: dict) -> None:
-    tag = "resilient_dcm_52_t50_l36_ht_bussi_sw_baseline"
+    tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_baseline"
     cell = cell_from_tag(cfg, tag)
     assert cell.sweep_id == "baseline"
 
@@ -697,10 +697,10 @@ def test_prep_sweep_tag_auto_loads_from_prep_sweep_yaml(cfg: dict) -> None:
 def test_prep_sweep_anchor_tag_loads_from_prep_sweep_when_main_is_l32() -> None:
     """L=36 prep-sweep anchor resolves when config.yaml matrix is L=32."""
     cfg = load_config(WORKFLOW / "config.yaml")
-    tag = "resilient_dcm_52_t50_l36_ht_bussi"
+    tag = "resilient_dcm_52_t50_l38_ht_bussi"
     cell = cell_from_tag(cfg, tag)
     assert cell.n_monomers == 52
-    assert cell.box_size == 36.0
+    assert cell.box_size == 38.0
     assert cell.sweep_id is None
     assert cl.default_workflow_config_path(run_tag=tag).name == "config.prep_sweep.yaml"
 
