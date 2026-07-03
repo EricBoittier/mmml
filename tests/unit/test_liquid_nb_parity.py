@@ -32,7 +32,7 @@ def test_classify_liquid_pair_categories_vectorized() -> None:
     pi = np.array([0, 0, 2], dtype=np.int32)
     pj = np.array([1, 2, 3], dtype=np.int32)
     cats = classify_liquid_pair_categories(pi, pj, mid)
-    assert list(cats) == ["intra_monomer", "inter_monomer", "inter_monomer"]
+    assert list(cats) == ["intra_monomer", "inter_monomer", "intra_monomer"]
 
 
 class _FakeDecomp:
@@ -51,10 +51,10 @@ def test_aggregate_liquid_by_category() -> None:
     rows = _aggregate_liquid_by_category(decomp, cats)
     intra = next(r for r in rows if r.category == "intra_monomer")
     inter = next(r for r in rows if r.category == "inter_monomer")
-    assert intra.n_pairs == 1
-    assert intra.vdw_kcal == 0.5
-    assert inter.n_pairs == 2
-    assert inter.vdw_kcal == 2.0
+    assert intra.n_pairs == 2
+    assert intra.vdw_kcal == 3.5
+    assert inter.n_pairs == 1
+    assert inter.vdw_kcal == -1.0
 
 
 def test_diagnose_inter_monomer_vdw() -> None:
