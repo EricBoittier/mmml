@@ -61,9 +61,11 @@ Pass criteria: finite coordinates, PSF written, position std ≫ 0 (not collapse
 ## JAX vs PyCHARMM total-MM cross-check
 
 The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` compares
-``mm_system_energy.py`` (MIC pair loop) to CHARMM ``ENER FORCE``. As of this writing it
-**does not pass** at tight tolerance (~10–15 kcal/mol on a 72-atom box). The box build
-and **bonded** cross-check are fine; the gap is in **nonbonded** implementation parity.
+``mm_system_energy.py`` (MIC pair loop) to CHARMM ``ENER FORCE`` term components
+(bonded + ``VDW``/``IMNB`` + ``ELEC``/``IMEL``). After the PSF ``INB``/``IBLO`` fix,
+total-MM Δ is typically **≲0.5 kcal/mol** on the 72-atom smoke box (same order as
+DCM liquid parity). Do **not** compare against ``energy.get_total()`` under PBC — it
+can differ from the MIC-mapped component sum by several kcal/mol.
 
 Run the parity report (metrics tables, JSON, and PNG plots)::
 
@@ -90,8 +92,8 @@ CHARMM per-category terms use selective ``BLOCK`` (``SEGID PEPT`` / ``SOLV``). P
 ``MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1`` — default run skips it and still reports
 JAX category breakdown + switch audit.
 
-The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` is marked
-**xfail** (regression target). Use the report above to see *where* the gap lives.
+The functionality test uses ``energy_atol=0.7`` kcal/mol on the 72-atom TRIA box
+(residual single-residue pep–pep VDW). Use the report above for per-term breakdown.
 
 ### What we ruled out
 
@@ -99,14 +101,15 @@ The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` is ma
   on a 2× acetone dimer; tri-alanine is similar).
 - **Bonded terms match** (bond/angle/dihedral; Urey–Bradley ≈0.2 kcal is omitted in JAX).
 
-### Main contributors (tri-alanine + 10 TIP3, seed 31)
+### Main contributors (historical — pre INB/IBLO fix)
 
 | Term | PyCHARMM | JAX (MIC) | Notes |
 |------|----------|-----------|--------|
-| VDW | ≈ −2 kcal/mol | ≈ +12–32 kcal/mol | JAX **pep–pep** pairs dominate (+≈10 kcal); CHARMM net VDW ≈ 0 |
+| VDW | ≈ −2 kcal/mol | ≈ +12–32 kcal/mol | **Fixed**: wrong PSF exclusion parse inflated pep–pep VDW |
 | Elec | ≈ −12 kcal/mol | ≈ −15 kcal/mol | Smaller gap when ``MMML_LR_SOLVER=mic`` |
 
-On a simpler **2× ACO** PBC dimer (MIC, ``lr_solver=mic``): VDW Δ ≈ +2 kcal/mol, elec Δ ≈ −14 kcal/mol.
+After the fix, typical deltas (seed 31 perturb): total MM **≈0.2–0.5 kcal/mol**;
+bonded exact; VDW **≈0.3–0.6 kcal/mol** on the all-in-one ``TRIA`` residue.
 
 ### Root causes (implementation gaps)
 
@@ -129,10 +132,9 @@ On a simpler **2× ACO** PBC dimer (MIC, ``lr_solver=mic``): VDW Δ ≈ +2 kcal/
 
 ### Practical guidance
 
-- Treat the tri-alanine box as validated for **CHARMM build + bonded JAX**; use the total-MM
-  test as a **regression target**, not a pass/fail gate, until IMAGE / pair-list parity
-  tightens (``fswitch``/``vfswitch`` are implemented; see [cgenff-jax-clone.md](cgenff-jax-clone.md)).
-- For production MLpot paths, prefer ``mm_nonbond_mode=periodic_external`` or documented LR solvers
+- Treat the tri-alanine box as validated for **CHARMM build + bonded JAX** and as a
+  **MIC regression target** for ``mm_system_energy`` (≲0.5 kcal/mol total on gpu09
+  with ``JAX_ENABLE_X64=1``). For production MLpot paths, prefer ``mm_nonbond_mode=periodic_external`` or documented LR solvers
   (see [long-range-solver-tutorial.md](long-range-solver-tutorial.md)), not raw ``mm_system_energy`` MIC.
 
 ---

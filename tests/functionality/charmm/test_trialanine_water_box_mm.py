@@ -137,13 +137,6 @@ def test_trialanine_water_nonbonded_matches_pycharmm(trialanine_water_box) -> No
     compare_nonbonded_to_charmm(components, np.asarray(forces))
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "Residual JAX MIC vs CHARMM IMAGE gap may remain after PSF INB/IBLO fix; "
-        "regression target — see docs/trialanine-water-box.md"
-    ),
-)
 @pytest.mark.parametrize("lr_solver", ["mic"])
 def test_trialanine_water_total_mm_matches_pycharmm(
     trialanine_water_box,
@@ -156,9 +149,8 @@ def test_trialanine_water_total_mm_matches_pycharmm(
     box = trialanine_water_box
     positions = _perturb_positions(box.positions, seed=31)
     set_charmm_positions(positions)
-
-    set_charmm_positions(positions)
     run_charmm_bonded_ener_force(silent=True)
+    include_cmap = charmm_cmap_is_active()
 
     bonded = load_bonded_system_from_psf(
         box.psf_path,
@@ -176,11 +168,16 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         nbond_data,
         box.cell,
         _nbond_settings_from_box(box),
-        include_cmap=True,
+        include_cmap=include_cmap,
     )
+    ignore_charmm_bonded = ("urey", "ub")
     print(
         f"\nTRIA MM parity ({len(nbond_data.excluded_pairs)} excluded pairs): "
-        f"{summarize_mm_system_charmm_delta(result)}\n",
+        f"{summarize_mm_system_charmm_delta(result, ignore_charmm_bonded_terms=ignore_charmm_bonded)}\n",
         flush=True,
     )
-    compare_mm_system_to_charmm(result)
+    compare_mm_system_to_charmm(
+        result,
+        ignore_charmm_bonded_terms=ignore_charmm_bonded,
+        energy_atol=0.7,
+    )
