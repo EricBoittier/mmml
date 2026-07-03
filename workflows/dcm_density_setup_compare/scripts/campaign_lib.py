@@ -557,6 +557,7 @@ _WORKFLOW_JOB_OVERRIDE_KEYS = (
     "dcd_nsavc",
     "dyn_inbfrq",
     "dyn_nprint",
+    "mc_density_steps",
     "geometry_packing_fire_bfgs_crossover_grms",
 )
 
