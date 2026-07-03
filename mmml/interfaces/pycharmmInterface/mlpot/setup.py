@@ -1477,6 +1477,7 @@ def _apply_mlpot_psf_mm_off_and_pbc(ctx: MlpotContext, *, verbose: bool = False)
                 ctx.ml_selection,
                 cubic_box_side_A=float(box_side),
                 verbose=verbose,
+                workflow_args=getattr(ctx, "workflow_args", None),
             )
     return block_tag
 
@@ -1507,11 +1508,63 @@ def _suspend_pbc_for_cgenff_param_read(*, verbose: bool = False) -> None:
         )
 
 
+def _resolve_atoms_per_for_mlpot_rewrap(
+    workflow_args: argparse.Namespace | None,
+) -> list[int] | None:
+    if workflow_args is not None:
+        atoms_per = getattr(workflow_args, "_cluster_atoms_per_list", None)
+        if atoms_per is not None:
+            return [int(x) for x in atoms_per]
+    try:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
+            atoms_per_monomer_from_psf,
+        )
+
+        return atoms_per_monomer_from_psf()
+    except Exception:
+        return None
+
+
+def rewrap_charmm_coords_for_mlpot_pbc(
+    *,
+    cubic_box_side_A: float,
+    workflow_args: argparse.Namespace | None = None,
+    verbose: bool = False,
+) -> int:
+    """Re-wrap monomers into the CHARMM primary cell before MLpot PBC ``upinb``."""
+    atoms_per = _resolve_atoms_per_for_mlpot_rewrap(workflow_args)
+    if not atoms_per:
+        return 0
+    from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+
+    pos = get_charmm_positions_array()
+    pos_wrapped = rewrap_charmm_pbc_molecules(
+        pos,
+        list(atoms_per),
+        float(cubic_box_side_A),
+    )
+    delta = np.abs(pos - pos_wrapped)
+    n_shifted = int(np.any(delta > 1.0e-4, axis=1).sum())
+    if n_shifted > 0:
+        sync_charmm_positions(pos_wrapped)
+        if verbose:
+            max_delta = float(delta.max())
+            print(
+                "MLpot PBC rewrap: "
+                f"{n_shifted} atoms re-centered into primary cell "
+                f"(max drift {max_delta:.3f} Å, L={float(cubic_box_side_A):.3f} Å)",
+                flush=True,
+            )
+    return n_shifted
+
+
 def _finalize_pbc_mlpot_exclusions_after_param_read(
     ml_selection: Any,
     *,
     cubic_box_side_A: float,
     verbose: bool = False,
+    workflow_args: argparse.Namespace | None = None,
 ) -> None:
     """Rebuild crystal/nb lists after READ PARAM, then apply ML exclusions once.
 
@@ -1537,6 +1590,11 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     )
 
     side = float(cubic_box_side_A)
+    rewrap_charmm_coords_for_mlpot_pbc(
+        cubic_box_side_A=side,
+        workflow_args=workflow_args,
+        verbose=verbose,
+    )
     prepare_charmm_pbc(side)
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC crystal/IMAGE build",
@@ -1558,14 +1616,21 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         flush=True,
     )
     pycharmm = _import_pycharmm()
-    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_quiet_output
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        assert_charmm_image_min_distance_after_update,
+        run_charmm_update_capture_image_log,
+    )
 
     # Rebuild pair lists after ML exclusions are installed.  Use scripting UPDATE
     # (not pycharmm.nbonds.update_bnbnd) and only after prepare_charmm_pbc +
     # apply_pbc_nbonds — bare UPDATE after crystal free segfaults in IMAGE VDW.
     with charmm_relaxed_bomlev():
-        with charmm_quiet_output():
-            pycharmm.lingo.charmm_script("UPDATE")
+        mkimat_log = run_charmm_update_capture_image_log()
+    assert_charmm_image_min_distance_after_update(
+        workflow_args=workflow_args,
+        context="MLpot PBC registration (post-upinb)",
+        charmm_log=mkimat_log,
+    )
     pycharmm.image.update_bimag()
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC upinb during registration",
@@ -1703,6 +1768,7 @@ def register_mlpot(
                 ml_selection,
                 cubic_box_side_A=box_side,
                 verbose=verbose,
+                workflow_args=workflow_args,
             )
             skip_iblo_inb_update = True
         else:
@@ -1763,6 +1829,7 @@ def register_mlpot(
         registration_uses_block=uses_block,
         periodic_external=bool(periodic_external),
         periodic_charmm_vdw=bool(periodic_charmm_vdw),
+        workflow_args=workflow_args,
     )
     if use_pbc:
         setattr(ctx, "_mlpot_pbc_nb_lists_built", True)

@@ -131,6 +131,7 @@ def _reload_prm_overlay(
     ml_selection: Any,
     zero_ml_charges: bool,
     verbose: bool,
+    workflow_args: argparse.Namespace | None = None,
 ) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         _finalize_pbc_mlpot_exclusions_after_param_read,
