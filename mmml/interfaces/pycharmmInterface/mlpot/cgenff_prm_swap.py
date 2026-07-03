@@ -131,3 +131,15 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
 
 def active_cgenff_prm_mode() -> _CgenffPrmMode | None:
     return _active_mode
+
+
+def mark_cgenff_params_full() -> None:
+    """Record that full CGENFF parameters are already loaded in the active session.
+
+    ``READ PARAM APPEND`` for bonded restore calls ``crystal free`` and clears IMAGE
+    tables.  Call this after loading ``par_all36_cgenff.prm`` (or equivalent) during
+    box build so later ``apply_full_cgenff_params`` / ``apply_charmm_mm_block`` can
+    skip redundant append and leave PBC intact.
+    """
+    global _active_mode
+    _active_mode = "full"

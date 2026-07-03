@@ -20,7 +20,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
 from tests.conftest import can_import_pycharmm
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def charmm_tip3_water(pycharmm_workdir: Path):
     """TIP3 water (MPI-safe setupRes path; no in-process CGENFF cluster rebuild)."""
     if not can_import_pycharmm():

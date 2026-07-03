@@ -53,6 +53,17 @@ def test_apply_full_cgenff_params_reads_bonded_restore_and_checks_bonds():
     assert cgenff_prm_swap.active_cgenff_prm_mode() == "full"
 
 
+def test_mark_cgenff_params_full_skips_redundant_bonded_restore():
+    cgenff_prm_swap.mark_cgenff_params_full()
+    try:
+        assert cgenff_prm_swap.active_cgenff_prm_mode() == "full"
+        with mock.patch.object(cgenff_prm_swap, "_read_cgenff_prm") as read_fn:
+            cgenff_prm_swap.apply_full_cgenff_params(verbose=False, force=False)
+        read_fn.assert_not_called()
+    finally:
+        cgenff_prm_swap._active_mode = None
+
+
 def test_apply_full_cgenff_params_skips_when_already_full():
     cgenff_prm_swap._active_mode = "full"
     try:

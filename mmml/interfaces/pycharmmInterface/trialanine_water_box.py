@@ -339,6 +339,12 @@ def build_trialanine_water_box_in_charmm(
     prepare_charmm_pbc(box_side_A)
     nbond_cutoffs = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=box_side_A)
 
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        mark_cgenff_params_full,
+    )
+
+    mark_cgenff_params_full()
+
     out_dir = Path(workdir or Path.cwd())
     out_dir.mkdir(parents=True, exist_ok=True)
     psf_path = out_dir / "trialanine-water.psf"
