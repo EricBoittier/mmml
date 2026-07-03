@@ -24,7 +24,7 @@ solvents: [DCM]
 bulk_density_fractions: [0.25]
 temperatures: [50.0]
 temperature_ladder: false
-box_sizes: [28.0]
+box_sizes: [32.0]
 
 checkpoint: ${MMML_CKPT}
 output_root: artifacts/dcm_density_setup_compare
@@ -45,15 +45,15 @@ charmm_mm_pretreat: true
 
 # Stricter pre-dynamics GRMS gate (do not scale up with bad per-monomer stats).
 # no_scale_max_grms: true
-max_grms_before_dyn: 200.0
+max_grms_before_dyn: 2000.0
 # Smoke/debug: proceed when mini GRMS > max_before_dyn (overlap rescue may still fail).
 allow_high_grms: true
 
 # More mini / rescue capacity before heat (override resilient cleanup defaults).
-mini_nstep: 2000
-charmm_sd_steps: 4000
-charmm_abnr_steps: 4000
-pre_min_steps: 500
+mini_nstep: 20000
+charmm_sd_steps: 40000
+charmm_abnr_steps: 40000
+pre_min_steps: 5000
 
 # Overlap checks during heat/dynamics: smaller interval = more frequent (steps).
 # Prep sweep stage 2: 50 beat 100 on anchor mini+heat (avoid dt=0.05 for heat).
