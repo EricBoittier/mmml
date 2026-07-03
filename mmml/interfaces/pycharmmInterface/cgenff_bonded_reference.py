@@ -283,6 +283,79 @@ def charmm_nonbonded_energy_components_kcalmol() -> dict[str, float]:
     return {"vdw": vdw_f, "elec": elec_f, "total": vdw_f + elec_f}
 
 
+def segment_category_block_script(
+    category: str,
+    *,
+    pep_seg: str = "PEPT",
+    solv_seg: str = "SOLV",
+) -> str:
+    """CHARMM BLOCK script enabling nonbonded terms for one segment-pair class only.
+
+    Block 1 = peptide (``PEPT``), block 2 = solvent (``SOLV``).  Bonded terms are
+    off; only the requested ``pep_pep`` / ``pep_water`` / ``water_water`` class has
+    ``ELEC`` and ``VDW`` enabled.
+    """
+    flags = {
+        "pep_pep": (1.0, 1.0, 0.0, 0.0, 0.0, 0.0),
+        "pep_water": (0.0, 0.0, 1.0, 1.0, 0.0, 0.0),
+        "water_water": (0.0, 0.0, 0.0, 0.0, 1.0, 1.0),
+    }
+    if category not in flags:
+        raise ValueError(f"unknown segment category {category!r}")
+    e11, v11, e12, v12, e22, v22 = flags[category]
+    return f"""BLOCK
+CALL 1 SELE SEGID {pep_seg} END
+CALL 2 SELE SEGID {solv_seg} END
+COEFF 1 1 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC {e11} VDW {v11}
+COEFF 1 2 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC {e12} VDW {v12}
+COEFF 2 2 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC {e22} VDW {v22}
+END
+"""
+
+
+def charmm_nonbonded_by_segment_category(
+    categories: tuple[str, ...] = ("pep_pep", "pep_water", "water_water"),
+    *,
+    pep_seg: str = "PEPT",
+    solv_seg: str = "SOLV",
+    restore_full_mm_block: bool = True,
+) -> dict[str, dict[str, float | np.ndarray]]:
+    """Per-class VDW/ELEC energies and forces via selective BLOCK + ``ENER FORCE``.
+
+    Requires an active PBC solvated PSF with ``SEGID`` ``PEPT`` and ``SOLV``.
+    Under MPI-linked libcharmm + ``mpirun``, selective BLOCK may hang unless
+    ``MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1``.
+    """
+    from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import (
+        _assert_selective_block_safe,
+        apply_charmm_mm_block,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
+
+    _assert_selective_block_safe(context="charmm_nonbonded_by_segment_category")
+    out: dict[str, dict[str, float | np.ndarray]] = {}
+    for category in categories:
+        block = segment_category_block_script(
+            category,
+            pep_seg=pep_seg,
+            solv_seg=solv_seg,
+        )
+        run_charmm_script_quiet(block)
+        run_charmm_bonded_ener_force(silent=True)
+        nb = charmm_nonbonded_energy_components_kcalmol()
+        forces = np.asarray(charmm_total_forces_kcalmol_A(), dtype=np.float64)
+        out[category] = {
+            "vdw": float(nb["vdw"]),
+            "elec": float(nb["elec"]),
+            "total": float(nb["total"]),
+            "forces": forces,
+        }
+    if restore_full_mm_block:
+        apply_charmm_mm_block()
+    return out
+
+
 def run_charmm_nonbonded_ener_force(*, silent: bool = True) -> None:
     """Evaluate nonbonded-only CHARMM energy and forces."""
     run_charmm_bonded_ener_force(silent=silent)

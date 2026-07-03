@@ -105,6 +105,32 @@ class PairListStats:
 
 
 @dataclass(frozen=True, slots=True)
+class CategoryForceDelta:
+    category: PairCategory
+    jax_force_rms: float
+    charmm_force_rms: float
+    delta_force_rms: float
+    vdw_delta_kcal: float
+
+
+@dataclass(frozen=True, slots=True)
+class PairSwitchAudit:
+    """Analytic vs finite-difference dE/dr for one MIC pair (fswitch/vfswitch)."""
+
+    atom_i: int
+    atom_j: int
+    r_A: float
+    vdw_kcal: float
+    vdw_dedr_analytic: float
+    vdw_dedr_numeric: float
+    vdw_dedr_rel_err: float
+    elec_kcal: float
+    elec_dedr_analytic: float
+    elec_dedr_numeric: float
+    elec_dedr_rel_err: float
+
+
+@dataclass(frozen=True, slots=True)
 class TrialanineNbParityReport:
     """Full CHARMM vs JAX nonbonded parity snapshot for the TRIA water box."""
 
@@ -119,8 +145,12 @@ class TrialanineNbParityReport:
     nb_total: TermComparison
     mm_total: TermComparison
     jax_by_category: tuple[CategoryNonbondedTotals, ...]
+    charmm_by_category: tuple[CategoryNonbondedTotals, ...]
+    category_vdw: tuple[TermComparison, ...]
+    category_force_delta: tuple[CategoryForceDelta, ...]
     top_vdw_pairs: tuple[TopPairRecord, ...]
     top_elec_pairs: tuple[TopPairRecord, ...]
+    switch_derivative_audits: tuple[PairSwitchAudit, ...]
     force_rms_delta: float
     force_max_delta: float
     metadata: dict[str, Any] = field(default_factory=dict)
