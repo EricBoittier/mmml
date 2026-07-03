@@ -159,6 +159,44 @@ def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
     assert parse_mkimat2_min_distances(log) == pytest.approx([6.18, 7.17, 8.93])
 
 
+def test_assert_charmm_image_mic_fallback_uses_registration_floor(monkeypatch):
+    import numpy as np
+
+    args = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 52)
+
+    def _fail_prep_geometry(*a, **k):
+        raise RuntimeError("3.358 Å < required 5.00 Å")
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: np.zeros((10, 3)),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atoms_per_for_image_gate",
+        lambda _args: [5, 5],
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._resolve_atomic_numbers_for_image_gate",
+        lambda _args: np.array([17, 17, 17, 17, 17, 17, 17, 17, 17, 17], dtype=int),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.assert_pre_mlpot_intermonomer_geometry",
+        _fail_prep_geometry,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        assert_charmm_image_min_distance_after_update,
+    )
+
+    with pytest.raises(RuntimeError, match="5.00 Å"):
+        assert_charmm_image_min_distance_after_update(
+            workflow_args=args,
+            context="MLpot PBC registration (post-MLpot)",
+            cubic_box_side_A=28.0,
+            charmm_log="no mkimat",
+            post_bimag=False,
+        )
+
+
 def test_assert_charmm_image_mic_fallback_uses_psf_elements(monkeypatch):
     import numpy as np
 

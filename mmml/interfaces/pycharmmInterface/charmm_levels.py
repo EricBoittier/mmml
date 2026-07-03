@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Iterator
 
 
@@ -15,7 +15,7 @@ def _set_charmm_levels(
     warnlev: int | None = None,
     bomlev: int | None = None,
 ) -> dict[str, int]:
-    """Set CHARMM print/warning/bomb levels via the stream API (no ``CHARMM>`` echo)."""
+    """Set CHARMM print/warning levels via the stream API (no ``CHARMM>`` echo)."""
     import pycharmm.settings as settings
 
     old: dict[str, int] = {}
@@ -40,68 +40,92 @@ def _restore_charmm_levels(old: dict[str, int]) -> None:
 
 
 @contextmanager
-def tee_fortran_stdio() -> Iterator[str]:
-    """Duplicate Fortran stdout/stderr to the terminal and a temp capture file."""
+def _capture_fortran_stdio_pty() -> Iterator[str]:
+    """Capture Fortran stdout through a pseudo-TTY (Linux MPI clusters)."""
+    import pty
     import select
     import tempfile
 
     saved_out = os.dup(1)
     saved_err = os.dup(2)
-    read_fd, write_fd = os.pipe()
+    master, slave = pty.openpty()
     tmp = tempfile.NamedTemporaryFile(
         mode="wb",
         delete=False,
-        prefix="mmml-charmm-tee-",
+        prefix="mmml-charmm-pty-",
         suffix=".log",
     )
     tmp_path = tmp.name
     tmp.close()
     capture_fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
-    os.dup2(write_fd, 1)
-    os.dup2(write_fd, 2)
-    os.close(write_fd)
+
+    os.dup2(slave, 1)
+    os.dup2(slave, 2)
+    os.close(slave)
 
     stop = threading.Event()
 
-    def _forward() -> None:
-        with os.fdopen(read_fd, "rb", buffering=0) as reader:
+    def _drain_master() -> None:
+        try:
             while True:
                 if stop.is_set():
-                    r, _, _ = select.select([reader], [], [], 0.05)
+                    r, _, _ = select.select([master], [], [], 0.05)
                     if not r:
                         break
-                data = reader.read(65536)
+                else:
+                    r, _, _ = select.select([master], [], [], 0.25)
+                    if not r:
+                        continue
+                try:
+                    data = os.read(master, 65536)
+                except OSError:
+                    break
                 if not data:
                     break
-                os.write(saved_out, data)
-                os.write(capture_fd, data)
+                try:
+                    os.write(saved_out, data)
+                except OSError:
+                    pass
+                try:
+                    os.write(capture_fd, data)
+                except OSError:
+                    break
+        except OSError:
+            pass
 
-    thread = threading.Thread(target=_forward, daemon=True)
+    thread = threading.Thread(target=_drain_master, daemon=True)
     thread.start()
     try:
         yield tmp_path
     finally:
         os.dup2(saved_out, 1)
         os.dup2(saved_err, 2)
-        os.close(saved_out)
-        os.close(saved_err)
         stop.set()
         thread.join(timeout=10.0)
+        try:
+            while True:
+                r, _, _ = select.select([master], [], [], 0.05)
+                if not r:
+                    break
+                data = os.read(master, 65536)
+                if not data:
+                    break
+                try:
+                    os.write(saved_out, data)
+                    os.write(capture_fd, data)
+                except OSError:
+                    break
+        except OSError:
+            pass
+        os.close(master)
         os.close(capture_fd)
+        os.close(saved_out)
+        os.close(saved_err)
 
 
 @contextmanager
-def capture_fortran_stdio(*, tee: bool = False) -> Iterator[str]:
-    """Redirect (or tee) OS fds 1/2 so Fortran unit-6 output is captured to a temp file.
-
-    ``redirect_stdout`` only affects Python ``sys.stdout``; CHARMM Fortran writes
-    directly to file descriptor 1.  The caller must read and unlink ``tmp_path``.
-    """
-    if tee:
-        with tee_fortran_stdio() as tmp_path:
-            yield tmp_path
-        return
-
+def _capture_fortran_stdio_file() -> Iterator[str]:
+    """Redirect Fortran stdout/stderr to a temp file (no live terminal copy)."""
     import tempfile
 
     saved_out = os.dup(1)
@@ -125,6 +149,26 @@ def capture_fortran_stdio(*, tee: bool = False) -> Iterator[str]:
         os.close(saved_out)
         os.close(saved_err)
         os.close(log_fd)
+
+
+@contextmanager
+def capture_fortran_stdio() -> Iterator[str]:
+    """Capture Fortran unit-6 output to a temp file (PTY on Linux when available).
+
+    ``redirect_stdout`` only affects Python ``sys.stdout``; CHARMM Fortran writes
+    directly to file descriptor 1.  The caller must read and unlink ``tmp_path``.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            import pty  # noqa: F401
+
+            with _capture_fortran_stdio_pty() as tmp_path:
+                yield tmp_path
+            return
+        except (ImportError, OSError):
+            pass
+    with _capture_fortran_stdio_file() as tmp_path:
+        yield tmp_path
 
 
 @contextmanager
@@ -168,12 +212,7 @@ def charmm_quiet_prnlev():
 
 @contextmanager
 def charmm_quiet_output():
-    """Temporarily set PRNLev/WRNLev 0 and swallow Fortran stdout/stderr.
-
-    Do not nest inside :func:`charmm_relaxed_bomlev` for CGENFF ``READ PARAM`` —
-    WRNLev 0 prints PARRDR level -3 ``Null nonbond group`` banners. Prefer
-    :func:`charmm_quiet_prnlev` plus :func:`suppress_charmm_fortran_io` there.
-    """
+    """Temporarily set PRNLev/WRNLev 0 and swallow Fortran stdout/stderr."""
     old = _set_charmm_levels(prnlev=0, warnlev=0)
     try:
         with suppress_charmm_fortran_io():
@@ -195,14 +234,7 @@ def charmm_silent_command(*, bomlev: int = -2):
 
 @contextmanager
 def charmm_relaxed_bomlev(level: int = -2):
-    """Relax BOMBlev/WRNLev for RTF/PRM/PSF/CARD reads; restore on exit.
-
-    Use ``level=-5`` for ``READ PARAM APPEND`` (CGENFF zeroed/full swaps) so PARMIO
-    / PARRDR level -3 nonbond rebuild warnings do not abort at default ``-2``.
-
-    Do not leave ``bomlev 0`` after parameter loads — benign read warnings would
-    abort the job on the next CHARMM command (e.g. MLpot registration).
-    """
+    """Relax BOMBlev/WRNLev for RTF/PRM/PSF/CARD reads; restore on exit."""
     old = _set_charmm_levels(warnlev=int(level), bomlev=int(level))
     try:
         yield

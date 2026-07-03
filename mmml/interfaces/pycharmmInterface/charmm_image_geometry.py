@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import sys
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -209,17 +210,12 @@ def _force_charmm_image_remap_for_probe() -> None:
     _image_setup_byres_all(0.0, 0.0, 0.0)
 
 
-def capture_charmm_script_output(script: str, *, replay: bool = True, tee: bool = True) -> str:
+def capture_charmm_script_output(script: str, *, replay: bool = True) -> str:
     """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
-    return _run_charmm_script_capture_fortran(script, replay=replay, tee=tee)
+    return _run_charmm_script_capture_fortran(script, replay=replay)
 
 
-def _run_charmm_script_capture_fortran(
-    script: str,
-    *,
-    replay: bool = True,
-    tee: bool = True,
-) -> str:
+def _run_charmm_script_capture_fortran(script: str, *, replay: bool = True) -> str:
     """Run a CHARMM script and return captured Fortran stdout/stderr (fd-level)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
@@ -233,10 +229,10 @@ def _run_charmm_script_capture_fortran(
     old = _set_charmm_levels(prnlev=2, warnlev=5, bomlev=-2)
     tmp_path = ""
     try:
-        with capture_fortran_stdio(tee=tee) as tmp_path:
+        with capture_fortran_stdio() as tmp_path:
             pycharmm.lingo.charmm_script(script)
         text = Path(tmp_path).read_text(encoding="utf-8", errors="replace")
-        if replay and text and not tee:
+        if replay and text and not sys.platform.startswith("linux"):
             print(text, end="", flush=True)
         return text
     finally:
@@ -394,12 +390,12 @@ def run_mlpot_pbc_image_registration_gate(
         verbose=verbose,
     )
     with charmm_relaxed_bomlev():
-        update_log = capture_charmm_script_output("UPDATE", replay=False, tee=True)
+        update_log = capture_charmm_script_output("UPDATE", replay=False)
     pycharmm.image.update_bimag()
     chunks = [update_log] if update_log.strip() else []
     if not parse_mkimat2_min_distances("\n".join(chunks)):
         with charmm_relaxed_bomlev():
-            ener_log = capture_charmm_script_output("ENER", replay=False, tee=True)
+            ener_log = capture_charmm_script_output("ENER", replay=False)
         if ener_log.strip():
             chunks.append(ener_log)
     image_log = "\n".join(chunks)
@@ -408,7 +404,7 @@ def run_mlpot_pbc_image_registration_gate(
         context=context,
         cubic_box_side_A=side,
         charmm_log=image_log if parse_mkimat2_min_distances(image_log) else None,
-        post_bimag=True,
+        post_bimag=False,
     )
 
 
@@ -427,7 +423,6 @@ def assert_charmm_image_min_distance_after_update(
         if min_distance_A is not None
         else resolve_mkimat2_min_distance_A(workflow_args)
     )
-    mic_floor = resolve_charmm_image_min_distance_A(workflow_args)
     log = (
         charmm_log
         if charmm_log is not None
@@ -448,12 +443,12 @@ def assert_charmm_image_min_distance_after_update(
 
     print(
         f"{context}: <MKIMAT2> not emitted (MPI/cached IMAGE); "
-        "using MIC prep gate fallback",
+        f"using MIC registration fallback (floor {mkimat_floor:.2f} Å)",
         flush=True,
     )
     return assert_charmm_image_mic_fallback(
         workflow_args=workflow_args,
         box_side_A=cubic_box_side_A,
-        min_distance_A=mic_floor,
+        min_distance_A=mkimat_floor,
         context=context,
     )
