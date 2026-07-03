@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -335,6 +336,8 @@ def build_packmol_composition_cluster(
     sim_cell_side: float | None = None,
     box_sizing_source: str | None = None,
     packmol_padding_A: float | None = None,
+    spacing: float | None = None,
+    prep_gate_settings: dict[str, Any] | None = None,
     quiet: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """CHARMM-minimize monomers, Packmol cube/sphere pack, cluster PSF, then cluster MM relax."""
@@ -367,6 +370,10 @@ def build_packmol_composition_cluster(
             charmm_tolenr=float(charmm_tolenr),
             charmm_tolgrd=float(charmm_tolgrd),
             cache_root=cache_root,
+            packmol_padding_A=packmol_padding_A,
+            spacing=spacing,
+            sim_cell_side=sim_cell_side,
+            prep_gate_settings=prep_gate_settings,
         )
         if cached is not None:
             z = cached["z"]
@@ -575,11 +582,33 @@ def build_packmol_composition_cluster(
             charmm_abnr_steps=int(charmm_abnr_steps),
             charmm_tolenr=float(charmm_tolenr),
             charmm_tolgrd=float(charmm_tolgrd),
+            packmol_padding_A=packmol_padding_A,
+            spacing=spacing,
+            sim_cell_side=sim_cell_side,
+            prep_gate_settings=prep_gate_settings,
+        )
+        fingerprint = packmol_cache.packmol_cache_fingerprint(
+            composition=composition,
+            placement=str(placement),
+            center=center,
+            cube_side=cube_side,
+            radius=radius,
+            tolerance=float(tolerance),
+            seed=seed,
+            charmm_sd_steps=int(charmm_sd_steps),
+            charmm_abnr_steps=int(charmm_abnr_steps),
+            charmm_tolenr=float(charmm_tolenr),
+            charmm_tolgrd=float(charmm_tolgrd),
+            packmol_padding_A=packmol_padding_A,
+            spacing=spacing,
+            sim_cell_side=sim_cell_side,
+            prep_gate_settings=prep_gate_settings,
         )
         entry = cache_root / cache_key
         manifest = {
             "version": packmol_cache.CACHE_VERSION,
             "cache_key": cache_key,
+            "fingerprint": fingerprint,
             "composition": [[r, n] for r, n in composition],
             "placement": str(placement),
             "center": list(center),
@@ -587,7 +616,14 @@ def build_packmol_composition_cluster(
             "radius": None if radius is None else float(radius),
             "tolerance": float(tolerance),
             "seed": seed,
+            "packmol_padding_A": (
+                None if packmol_padding_A is None else float(packmol_padding_A)
+            ),
+            "spacing": None if spacing is None else float(spacing),
+            "sim_cell_side": None if sim_cell_side is None else float(sim_cell_side),
         }
+        if prep_gate_settings:
+            manifest["prep_gate_settings"] = dict(prep_gate_settings)
         packmol_cache.save_packmol_cluster_cache(
             entry,
             manifest=manifest,

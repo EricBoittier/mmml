@@ -1482,6 +1482,9 @@ def build_cluster_from_args_with_tag(
         _parse_composition,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    from mmml.interfaces.pycharmmInterface.packmol_cache import (
+        packmol_prep_settings_from_namespace,
+    )
     from mmml.interfaces.pycharmmInterface.packmol_placement import (
         packmol_center_for_cold_start,
         resolve_packmol_cube_side_from_args,
@@ -1576,6 +1579,8 @@ def build_cluster_from_args_with_tag(
                 sim_cell_side=getattr(args, "_cold_start_sim_cell_side_A", None),
                 box_sizing_source=getattr(args, "_cold_start_box_sizing_source", None),
                 packmol_padding_A=getattr(args, "_cold_start_packmol_padding_A", None),
+                spacing=float(getattr(args, "spacing", 5.0)),
+                prep_gate_settings=packmol_prep_settings_from_namespace(args),
                 quiet=bool(getattr(args, "quiet", False)),
             )
         else:

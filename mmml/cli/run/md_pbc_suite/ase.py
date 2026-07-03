@@ -451,6 +451,8 @@ def _build_cluster_from_composition_packmol(
     sim_cell_side: float | None = None,
     box_sizing_source: str | None = None,
     packmol_padding_A: float | None = None,
+    spacing: float | None = None,
+    prep_gate_settings: dict[str, Any] | None = None,
     quiet: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     from mmml.cli.run.md_pbc_suite.cluster import build_packmol_composition_cluster
@@ -475,6 +477,8 @@ def _build_cluster_from_composition_packmol(
         sim_cell_side=sim_cell_side,
         box_sizing_source=box_sizing_source,
         packmol_padding_A=packmol_padding_A,
+        spacing=spacing,
+        prep_gate_settings=prep_gate_settings,
         quiet=quiet,
     )
 
@@ -638,6 +642,10 @@ def build_initial_cluster_from_args(
                 f"dim={int(getattr(args, 'pyxtal_dim', 3))}"
             )
         elif use_packmol:
+            from mmml.interfaces.pycharmmInterface.packmol_cache import (
+                packmol_prep_settings_from_namespace,
+            )
+
             placement = resolve_packmol_placement_mode(
                 packmol_placement=getattr(args, "packmol_placement", None),
                 packmol_sphere=getattr(args, "packmol_sphere", None),
@@ -679,6 +687,8 @@ def build_initial_cluster_from_args(
                 sim_cell_side=getattr(args, "_cold_start_sim_cell_side_A", None),
                 box_sizing_source=getattr(args, "_cold_start_box_sizing_source", None),
                 packmol_padding_A=getattr(args, "_cold_start_packmol_padding_A", None),
+                spacing=float(getattr(args, "spacing", 5.0)),
+                prep_gate_settings=packmol_prep_settings_from_namespace(args),
                 quiet=bool(getattr(args, "quiet", False)),
             )
         else:

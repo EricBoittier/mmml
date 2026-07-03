@@ -6,12 +6,26 @@ import hashlib
 import json
 import os
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-CACHE_VERSION = 2
+CACHE_VERSION = 3
+
+# Prep / overlap gates forwarded from md-system; bust cache when tuning sweep variants.
+PREP_GATE_CACHE_KEYS = (
+    "max_grms_before_dyn",
+    "mlpot_registration_max_grms",
+    "geometry_packing_fire_bfgs_crossover_grms",
+    "no_scale_max_grms",
+    "allow_high_grms",
+    "pre_mlpot_overlap_min_distance",
+    "pre_mlpot_h_heavy_min_distance",
+    "pre_mlpot_heavy_heavy_min_distance",
+    "min_intermonomer_atom_distance",
+)
 
 
 def packmol_cache_root(
@@ -30,7 +44,29 @@ def packmol_cache_root(
     return Path.home() / ".cache" / "mmml" / "packmol"
 
 
-def packmol_cache_key(
+def packmol_prep_settings_from_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
+    """Normalize prep gate / overlap settings that should bust Packmol cache."""
+    out: dict[str, Any] = {}
+    for key in PREP_GATE_CACHE_KEYS:
+        if key not in data:
+            continue
+        val = data[key]
+        if val is None:
+            continue
+        if isinstance(val, bool):
+            out[key] = bool(val)
+        else:
+            out[key] = float(val)
+    return out
+
+
+def packmol_prep_settings_from_namespace(args: Any) -> dict[str, Any]:
+    """Extract prep gate settings from an argparse / md-system namespace."""
+    data = {key: getattr(args, key) for key in PREP_GATE_CACHE_KEYS if hasattr(args, key)}
+    return packmol_prep_settings_from_mapping(data)
+
+
+def packmol_cache_fingerprint(
     *,
     composition: list[tuple[str, int]],
     placement: str,
@@ -43,8 +79,12 @@ def packmol_cache_key(
     charmm_abnr_steps: int,
     charmm_tolenr: float,
     charmm_tolgrd: float,
-) -> str:
-    """Stable cache directory name from placement and CHARMM pre-relax parameters."""
+    packmol_padding_A: float | None = None,
+    spacing: float | None = None,
+    sim_cell_side: float | None = None,
+    prep_gate_settings: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Canonical fingerprint for a Packmol cluster build (hashed into cache dir names)."""
     payload: dict[str, Any] = {
         "version": CACHE_VERSION,
         "composition": [[str(r).upper(), int(n)] for r, n in composition],
@@ -58,7 +98,54 @@ def packmol_cache_key(
         "charmm_abnr_steps": int(charmm_abnr_steps),
         "charmm_tolenr": float(charmm_tolenr),
         "charmm_tolgrd": float(charmm_tolgrd),
+        "packmol_padding_A": (
+            None if packmol_padding_A is None else float(packmol_padding_A)
+        ),
+        "spacing": None if spacing is None else float(spacing),
+        "sim_cell_side": None if sim_cell_side is None else float(sim_cell_side),
     }
+    gates = packmol_prep_settings_from_mapping(prep_gate_settings or {})
+    if gates:
+        payload["prep_gate_settings"] = gates
+    return payload
+
+
+def packmol_cache_key(
+    *,
+    composition: list[tuple[str, int]],
+    placement: str,
+    center: tuple[float, float, float],
+    cube_side: float | None = None,
+    radius: float | None = None,
+    tolerance: float,
+    seed: int | None,
+    charmm_sd_steps: int,
+    charmm_abnr_steps: int,
+    charmm_tolenr: float,
+    charmm_tolgrd: float,
+    packmol_padding_A: float | None = None,
+    spacing: float | None = None,
+    sim_cell_side: float | None = None,
+    prep_gate_settings: Mapping[str, Any] | None = None,
+) -> str:
+    """Stable cache directory name from placement and CHARMM pre-relax parameters."""
+    payload = packmol_cache_fingerprint(
+        composition=composition,
+        placement=placement,
+        center=center,
+        cube_side=cube_side,
+        radius=radius,
+        tolerance=tolerance,
+        seed=seed,
+        charmm_sd_steps=charmm_sd_steps,
+        charmm_abnr_steps=charmm_abnr_steps,
+        charmm_tolenr=charmm_tolenr,
+        charmm_tolgrd=charmm_tolgrd,
+        packmol_padding_A=packmol_padding_A,
+        spacing=spacing,
+        sim_cell_side=sim_cell_side,
+        prep_gate_settings=prep_gate_settings,
+    )
     blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
 
@@ -134,7 +221,11 @@ def save_packmol_cluster_cache(
         save_monomer_geometries(entry_dir, residue_geometries)
 
 
-def load_packmol_cluster_cache(entry_dir: Path) -> dict[str, Any] | None:
+def load_packmol_cluster_cache(
+    entry_dir: Path,
+    *,
+    expected_fingerprint: Mapping[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Load cached cluster if manifest version and cluster.npz match."""
     manifest_path = entry_dir / "manifest.json"
     npz_path = entry_dir / "cluster.npz"
@@ -144,6 +235,10 @@ def load_packmol_cluster_cache(entry_dir: Path) -> dict[str, Any] | None:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if int(manifest.get("version", 0)) != CACHE_VERSION:
             return None
+        if expected_fingerprint is not None:
+            stored = manifest.get("fingerprint")
+            if stored != dict(expected_fingerprint):
+                return None
         data = np.load(npz_path, allow_pickle=False)
         monomers = load_monomer_geometries(
             entry_dir,
@@ -176,7 +271,28 @@ def try_load_packmol_cluster_cache(
     charmm_tolenr: float,
     charmm_tolgrd: float,
     cache_root: Path,
+    packmol_padding_A: float | None = None,
+    spacing: float | None = None,
+    sim_cell_side: float | None = None,
+    prep_gate_settings: Mapping[str, Any] | None = None,
 ) -> dict[str, Any] | None:
+    fingerprint = packmol_cache_fingerprint(
+        composition=composition,
+        placement=placement,
+        center=center,
+        cube_side=cube_side,
+        radius=radius,
+        tolerance=tolerance,
+        seed=seed,
+        charmm_sd_steps=charmm_sd_steps,
+        charmm_abnr_steps=charmm_abnr_steps,
+        charmm_tolenr=charmm_tolenr,
+        charmm_tolgrd=charmm_tolgrd,
+        packmol_padding_A=packmol_padding_A,
+        spacing=spacing,
+        sim_cell_side=sim_cell_side,
+        prep_gate_settings=prep_gate_settings,
+    )
     key = packmol_cache_key(
         composition=composition,
         placement=placement,
@@ -189,5 +305,12 @@ def try_load_packmol_cluster_cache(
         charmm_abnr_steps=charmm_abnr_steps,
         charmm_tolenr=charmm_tolenr,
         charmm_tolgrd=charmm_tolgrd,
+        packmol_padding_A=packmol_padding_A,
+        spacing=spacing,
+        sim_cell_side=sim_cell_side,
+        prep_gate_settings=prep_gate_settings,
     )
-    return load_packmol_cluster_cache(_entry_dir(cache_root, key))
+    return load_packmol_cluster_cache(
+        _entry_dir(cache_root, key),
+        expected_fingerprint=fingerprint,
+    )
