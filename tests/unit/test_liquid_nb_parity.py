@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.liquid_nb_parity import (
     CategoryNonbondedTotals,
@@ -64,7 +65,3 @@ def test_diagnose_inter_monomer_vdw() -> None:
     diag = diagnose_inter_monomer_vdw(-1.0, by_cat)
     assert diag.charmm_implied_inter_vdw_kcal == pytest.approx(-1.2)
     assert diag.inter_vdw_delta_kcal == pytest.approx(3.6)
-
-
-# late import for pytest.approx
-import pytest  # noqa: E402

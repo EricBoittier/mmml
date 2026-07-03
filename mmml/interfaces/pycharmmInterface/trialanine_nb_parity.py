@@ -688,6 +688,23 @@ def render_markdown_report(report: TrialanineNbParityReport) -> str:
             f"| {row.category} | {row.n_pairs} | {row.vdw_kcal:.4f} | "
             f"{row.elec_kcal:.4f} | {row.total_kcal:.4f} | {row.mean_r_A:.2f} |"
         )
+    jax_map = {row.category: row for row in report.jax_by_category}
+    pp_vdw = float(jax_map.get(_PairCat.PEP_PEP.value, CategoryNonbondedTotals(_PairCat.PEP_PEP.value, 0, 0, 0, 0)).vdw_kcal)
+    pw_vdw = float(jax_map.get(_PairCat.PEP_WATER.value, CategoryNonbondedTotals(_PairCat.PEP_WATER.value, 0, 0, 0, 0)).vdw_kcal)
+    ww_vdw = float(jax_map.get(_PairCat.WATER_WATER.value, CategoryNonbondedTotals(_PairCat.WATER_WATER.value, 0, 0, 0, 0)).vdw_kcal)
+    charmm_implied_ww = float(report.vdw.charmm_kcal) - pp_vdw - pw_vdw
+    lines.extend(
+        [
+            "",
+            "## Water–water VDW (no BLOCK)",
+            "",
+            "CHARMM implied ww = total VDW − JAX pep_pep − JAX pep_water.",
+            "",
+            f"- JAX water_water VDW: {ww_vdw:.4f} kcal/mol",
+            f"- CHARMM implied water_water VDW: {charmm_implied_ww:.4f} kcal/mol",
+            f"- Δ ww VDW (JAX−CHARMM): {ww_vdw - charmm_implied_ww:+.4f} kcal/mol",
+        ]
+    )
     if report.charmm_by_category:
         lines.extend(
             [
