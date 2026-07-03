@@ -148,6 +148,20 @@ def test_apply_mapping_no_scale_max_grms() -> None:
     assert args.max_grms_before_dyn == pytest.approx(80.0)
 
 
+def test_apply_mapping_geometry_packing_passthrough_prefix() -> None:
+    from mmml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    apply_mapping_to_namespace(
+        args,
+        {"geometry_packing_custom_knob": 42.0},
+        source="test",
+        allowed_prefixes=CONFIG_PASSTHROUGH_PREFIXES,
+    )
+    assert args.geometry_packing_custom_knob == pytest.approx(42.0)
+
+
 def test_validate_packmol_skips_certified_box_handoff() -> None:
     from mmml.cli.run.md_system import _validate_packmol_args, parse_args
 

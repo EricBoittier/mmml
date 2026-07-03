@@ -26,6 +26,9 @@ _CONFIG_ALIASES: dict[str, str] = {
     "campaign-output": "campaign_output_dir",
 }
 
+# Keys with these prefixes may be set on args without an argparse dest (density prep, etc.).
+CONFIG_PASSTHROUGH_PREFIXES: tuple[str, ...] = ("geometry_packing_",)
+
 
 def _normalize_config_key(key: str) -> str:
     k = str(key).strip()

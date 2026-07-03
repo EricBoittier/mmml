@@ -1619,6 +1619,7 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
     from mmml.cli.run.md_config import (
         apply_mapping_to_namespace,
         config_is_campaign,
+        CONFIG_PASSTHROUGH_PREFIXES,
         load_yaml_config,
     )
 
@@ -1645,7 +1646,12 @@ def parse_md_system_args(argv: list[str] | None = None) -> argparse.Namespace:
                 continue
             merged[key] = value
         tmp = argparse.Namespace(**defaults)
-        apply_mapping_to_namespace(tmp, merged, source="config")
+        apply_mapping_to_namespace(
+            tmp,
+            merged,
+            source="config",
+            allowed_prefixes=CONFIG_PASSTHROUGH_PREFIXES,
+        )
         defaults.update(vars(tmp))
         defaults["config"] = pre_args.config
     parser = build_parser()
