@@ -553,6 +553,7 @@ def test_prepare_mlpot_hybrid_state_post_recovery_calculator_mini_when_still_hot
 def test_prepare_mlpot_hybrid_state_allow_high_grms_from_workflow_args():
     ctx = mock.Mock()
     ctx.sd_watchdog_baseline_grms = None
+    ctx.use_pbc = False
     ctx.workflow_args = argparse.Namespace(
         quiet=True,
         composition="DCM:2",
