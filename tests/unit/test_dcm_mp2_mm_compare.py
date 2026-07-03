@@ -9,6 +9,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
     DCM_PSF_MONOMER_PERM,
+    HybridEvalResult,
     Mp2Frame,
     MmFrameResult,
     aggregate_comparison,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,143 @@ from mmml.data.units import (
 
 DCM_PSF_MONOMER_PERM = np.array([0, 3, 4, 1, 2], dtype=int)
 ATOMS_PER_DCM = 5
+HYBRID_CALCULATOR_CHOICES = ("checkpoint", "hybrid-ml", "hybrid-monomer")
+
+
+@dataclass(frozen=True, slots=True)
+class HybridEvalResult:
+    calculator: str
+    energy_eV: float
+    forces_ev_A: np.ndarray
+    interaction_eV: float | None = None
+    mp2_interaction_eV: float | None = None
+
+
+def _calculator_slug(name: str) -> str:
+    return str(name).replace("-", "_")
+
+
+class DcmHybridEvaluator:
+    """ASE hybrid / checkpoint calculators for DCM (energies and forces in eV)."""
+
+    def __init__(self, checkpoint: Path | str, *, cutoff: float = 10.0) -> None:
+        self.checkpoint = Path(checkpoint)
+        self.cutoff = float(cutoff)
+        self._checkpoint_calc: Any | None = None
+        self._hybrid_cache: dict[tuple[int, bool], Any] = {}
+
+    def _checkpoint_calculator(self) -> Any:
+        if self._checkpoint_calc is None:
+            from mmml.interfaces.calculators.checkpoint_loading import (
+                create_calculator_from_checkpoint,
+            )
+
+            self._checkpoint_calc = create_calculator_from_checkpoint(
+                self.checkpoint,
+                cutoff=self.cutoff,
+            )
+        return self._checkpoint_calc
+
+    def _hybrid_calculator(self, n_atoms: int, *, do_ml_dimer: bool) -> Any:
+        n_monomers = int(n_atoms) // ATOMS_PER_DCM
+        if n_monomers * ATOMS_PER_DCM != int(n_atoms):
+            raise ValueError(
+                f"hybrid calculators expect DCM {ATOMS_PER_DCM}-atom monomers, got N={n_atoms}"
+            )
+        key = (n_monomers, bool(do_ml_dimer))
+        if key not in self._hybrid_cache:
+            from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+            from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
+            factory = setup_calculator(
+                ATOMS_PER_MONOMER=[ATOMS_PER_DCM] * n_monomers,
+                N_MONOMERS=n_monomers,
+                doML=True,
+                doMM=False,
+                doML_dimer=do_ml_dimer,
+                model_restart_path=str(self.checkpoint),
+                MAX_ATOMS_PER_SYSTEM=int(n_atoms),
+                ml_sparse_dimers=False,
+                verbose=False,
+            )
+            cutoff_params = CutoffParameters(
+                ml_switch_width=0.01,
+                mm_switch_on=self.cutoff,
+                mm_switch_width=0.0,
+            )
+            calc, _spherical_fn, _get_update_fn = factory(
+                atomic_numbers=np.ones(int(n_atoms), dtype=np.int32),
+                atomic_positions=np.zeros((int(n_atoms), 3), dtype=np.float64),
+                n_monomers=n_monomers,
+                cutoff_params=cutoff_params,
+                doML=True,
+                doMM=False,
+                doML_dimer=do_ml_dimer,
+                backprop=False,
+                debug=False,
+                verbose=False,
+            )
+            self._hybrid_cache[key] = calc
+        return self._hybrid_cache[key]
+
+    def _ase_calculator(self, name: str, n_atoms: int) -> Any:
+        if name == "checkpoint":
+            return self._checkpoint_calculator()
+        if name == "hybrid-ml":
+            return self._hybrid_calculator(n_atoms, do_ml_dimer=True)
+        if name == "hybrid-monomer":
+            return self._hybrid_calculator(n_atoms, do_ml_dimer=False)
+        raise ValueError(f"Unknown hybrid calculator: {name!r}")
+
+    def evaluate(
+        self,
+        name: str,
+        numbers: np.ndarray,
+        positions: np.ndarray,
+    ) -> tuple[float, np.ndarray]:
+        from ase import Atoms
+
+        pos = np.asarray(positions, dtype=np.float64)
+        z = np.asarray(numbers, dtype=np.int32)
+        atoms = Atoms(numbers=z, positions=pos)
+        atoms.calc = self._ase_calculator(name, len(z))
+        energy_eV = float(atoms.get_potential_energy())
+        forces_ev_A = np.asarray(atoms.get_forces(), dtype=np.float64)
+        return energy_eV, forces_ev_A
+
+    def evaluate_frame(
+        self,
+        frame: Mp2Frame,
+        calculators: tuple[str, ...],
+        *,
+        compute_interaction: bool,
+        mp2_interaction_eV: float | None,
+    ) -> list[HybridEvalResult]:
+        results: list[HybridEvalResult] = []
+        mono_cache: dict[tuple[int, ...], float] = {}
+        for name in calculators:
+            energy_eV, forces_ev_A = self.evaluate(name, frame.z, frame.r)
+            interaction_eV: float | None = None
+            if compute_interaction and frame.n_atoms == 10 and name in ("hybrid-ml", "checkpoint"):
+                key_a = tuple(frame.r[:5].ravel().tolist())
+                key_b = tuple(frame.r[5:].ravel().tolist())
+                if key_a not in mono_cache:
+                    e_a, _ = self.evaluate("hybrid-monomer", frame.z[:5], frame.r[:5])
+                    mono_cache[key_a] = e_a
+                if key_b not in mono_cache:
+                    e_b, _ = self.evaluate("hybrid-monomer", frame.z[5:], frame.r[5:])
+                    mono_cache[key_b] = e_b
+                interaction_eV = float(energy_eV - mono_cache[key_a] - mono_cache[key_b])
+            results.append(
+                HybridEvalResult(
+                    calculator=name,
+                    energy_eV=energy_eV,
+                    forces_ev_A=forces_ev_A,
+                    interaction_eV=interaction_eV,
+                    mp2_interaction_eV=mp2_interaction_eV,
+                )
+            )
+        return results
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,9 +464,15 @@ def forces_kcal_to_ev(forces_kcal_A: np.ndarray) -> np.ndarray:
     )
 
 
+def _force_rmse_ev_A(pred_ev_A: np.ndarray, ref_ev_A: np.ndarray) -> float:
+    d = np.asarray(pred_ev_A, dtype=np.float64) - np.asarray(ref_ev_A, dtype=np.float64)
+    return float(np.sqrt(np.mean(d**2)))
+
+
 def compare_mm_to_mp2_frame(
     mm: MmFrameResult,
     frame: Mp2Frame,
+    hybrid: list[HybridEvalResult] | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
         "index": frame.index,
@@ -359,6 +502,30 @@ def compare_mm_to_mp2_frame(
         out["jax_interaction_eV"] = mm_int_ev
         out["mp2_interaction_eV"] = float(mm.mp2_interaction_eV)
         out["interaction_delta_eV"] = mm_int_ev - float(mm.mp2_interaction_eV)
+    if hybrid:
+        out["hybrid"] = {}
+        for hres in hybrid:
+            slug = _calculator_slug(hres.calculator)
+            block: dict[str, Any] = {
+                "energy_eV": hres.energy_eV,
+                "mp2_energy_delta_eV": hres.energy_eV - frame.e_ref_eV,
+            }
+            if frame.f_ref_ev_A is not None:
+                block["mp2_force_rmse_ev_A"] = _force_rmse_ev_A(
+                    hres.forces_ev_A, frame.f_ref_ev_A
+                )
+                block["mp2_force_mae_ev_A"] = float(
+                    np.mean(np.abs(hres.forces_ev_A - frame.f_ref_ev_A))
+                )
+            if hres.interaction_eV is not None and hres.mp2_interaction_eV is not None:
+                block["interaction_eV"] = hres.interaction_eV
+                block["mp2_interaction_eV"] = float(hres.mp2_interaction_eV)
+                block["interaction_delta_eV"] = hres.interaction_eV - float(
+                    hres.mp2_interaction_eV
+                )
+            out["hybrid"][hres.calculator] = block
+            out[f"hybrid_{slug}_mp2_force_rmse_ev_A"] = block.get("mp2_force_rmse_ev_A")
+            out[f"hybrid_{slug}_interaction_delta_eV"] = block.get("interaction_delta_eV")
     return out
 
 
@@ -382,6 +549,21 @@ def aggregate_comparison(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "mp2_charmm_force_rmse_ev_A": _agg("mp2_charmm_force_rmse_ev_A"),
         "interaction_delta_eV": _agg("interaction_delta_eV"),
     }
+    hybrid_names = sorted(
+        {
+            calc_name
+            for row in rows
+            for calc_name in (row.get("hybrid") or {})
+        }
+    )
+    for calc_name in hybrid_names:
+        slug = _calculator_slug(calc_name)
+        summary[f"hybrid_{slug}_mp2_force_rmse_ev_A"] = _agg(
+            f"hybrid_{slug}_mp2_force_rmse_ev_A"
+        )
+        summary[f"hybrid_{slug}_interaction_delta_eV"] = _agg(
+            f"hybrid_{slug}_interaction_delta_eV"
+        )
     if rows and "mp2_energy_eV" in rows[0]:
         e_mp2 = np.asarray([r["mp2_energy_eV"] for r in rows], dtype=np.float64)
         e_jax = np.asarray([r["jax_energy_kcal"] for r in rows], dtype=np.float64)
@@ -407,6 +589,9 @@ def run_dcm_mp2_mm_comparison(
     seed: int = 31,
     compute_interaction: bool = True,
     monomer_permutation: np.ndarray | None = DCM_PSF_MONOMER_PERM,
+    checkpoint: Path | str | None = None,
+    hybrid_calculators: tuple[str, ...] = ("hybrid-ml",),
+    hybrid_cutoff: float = 10.0,
 ) -> dict[str, Any]:
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -431,6 +616,13 @@ def run_dcm_mp2_mm_comparison(
             npz_path, reference_energy_unit=reference_energy_unit
         )
 
+    hybrid_eval: DcmHybridEvaluator | None = None
+    if checkpoint is not None:
+        from mmml.interfaces.pycharmmInterface.jax_x64_config import ensure_jax_x64
+
+        ensure_jax_x64(context="run_dcm_mp2_mm_comparison")
+        hybrid_eval = DcmHybridEvaluator(checkpoint, cutoff=hybrid_cutoff)
+
     rows: list[dict[str, Any]] = []
     for frame in frames:
         mp2_int = (
@@ -444,11 +636,32 @@ def run_dcm_mp2_mm_comparison(
             mono_session=mono_session,
             mp2_interaction_eV=mp2_int,
         )
-        row = compare_mm_to_mp2_frame(mm, frame)
+        hybrid_results: list[HybridEvalResult] | None = None
+        if hybrid_eval is not None:
+            hybrid_results = hybrid_eval.evaluate_frame(
+                frame,
+                hybrid_calculators,
+                compute_interaction=compute_interaction,
+                mp2_interaction_eV=mp2_int,
+            )
+        row = compare_mm_to_mp2_frame(mm, frame, hybrid=hybrid_results)
         rows.append(row)
 
     summary = aggregate_comparison(rows)
-    payload = {"load": load_meta, "summary": summary, "frames": rows}
+    payload = {
+        "load": load_meta,
+        "hybrid": (
+            None
+            if checkpoint is None
+            else {
+                "checkpoint": str(Path(checkpoint)),
+                "cutoff": float(hybrid_cutoff),
+                "calculators": list(hybrid_calculators),
+            }
+        ),
+        "summary": summary,
+        "frames": rows,
+    }
     (out / "comparison.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     _write_comparison_md(out / "report.md", load_meta, summary, rows)
     return payload
@@ -477,7 +690,7 @@ def _write_comparison_md(
         ("jax_charmm_force_rmse_ev_A", "JAX vs CHARMM force RMSE (eV/Å)"),
         ("mp2_jax_force_rmse_ev_A", "MP2 vs JAX force RMSE (eV/Å)"),
         ("mp2_charmm_force_rmse_ev_A", "MP2 vs CHARMM force RMSE (eV/Å)"),
-        ("interaction_delta_eV", "Interaction E: JAX−MP2 (eV)"),
+        ("interaction_delta_eV", "Interaction E: JAX MM−MP2 (eV)"),
     ):
         block = summary.get(key, {})
         lines.append(
@@ -486,6 +699,29 @@ def _write_comparison_md(
             f"{block.get('rmse', float('nan')):.4g} | "
             f"{block.get('max_abs', float('nan')):.4g} |"
         )
+    hybrid_calc_names = sorted(
+        {
+            calc_name
+            for row in rows
+            for calc_name in (row.get("hybrid") or {})
+        }
+    )
+    if hybrid_calc_names:
+        lines.extend(["", "## Hybrid calculators vs MP2", ""])
+        for calc_name in hybrid_calc_names:
+            slug = _calculator_slug(calc_name)
+            force_block = summary.get(f"hybrid_{slug}_mp2_force_rmse_ev_A", {})
+            int_block = summary.get(f"hybrid_{slug}_interaction_delta_eV", {})
+            lines.append(f"### `{calc_name}`")
+            lines.append(
+                f"- MP2 force RMSE: mean={force_block.get('mean', float('nan')):.4g} eV/Å "
+                f"(n={force_block.get('n', 0)})"
+            )
+            if int_block.get("n", 0):
+                lines.append(
+                    f"- Interaction Δ (hybrid−MP2): mean={int_block.get('mean', float('nan')):.4g} eV"
+                )
+            lines.append("")
     lines.extend(
         [
             "",
@@ -498,7 +734,7 @@ def _write_comparison_md(
         worst = sorted(rows, key=lambda r: r.get("mp2_jax_force_rmse_ev_A", 0.0), reverse=True)[:5]
         lines.extend(
             [
-                "## Worst MP2 vs JAX force RMSE (top 5)",
+                "## Worst MP2 vs JAX MM force RMSE (top 5)",
                 "",
                 "| source_index | MP2−JAX RMSE | MP2−CHARMM RMSE | JAX−CHARMM RMSE |",
                 "|--------------|--------------|-----------------|-----------------|",
@@ -511,4 +747,25 @@ def _write_comparison_md(
                 f"{row.get('mp2_charmm_force_rmse_ev_A', float('nan')):.4f} | "
                 f"{row.get('jax_charmm_force_rmse_ev_A', float('nan')):.4f} |"
             )
+        if hybrid_calc_names:
+            for calc_name in hybrid_calc_names:
+                key = f"hybrid_{_calculator_slug(calc_name)}_mp2_force_rmse_ev_A"
+                worst_h = sorted(
+                    rows,
+                    key=lambda r, k=key: r.get(k) or 0.0,
+                    reverse=True,
+                )[:5]
+                lines.extend(
+                    [
+                        "",
+                        f"## Worst MP2 vs `{calc_name}` force RMSE (top 5)",
+                        "",
+                        "| source_index | MP2−hybrid RMSE |",
+                        "|--------------|-----------------|",
+                    ]
+                )
+                for row in worst_h:
+                    lines.append(
+                        f"| {row['source_index']} | {row.get(key, float('nan')):.4f} |"
+                    )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare DCM CHARMM/JAX MM energies and forces to MP2 reference NPZ geometries.
+"""Compare DCM CHARMM/JAX MM and hybrid ML energies/forces to MP2 reference NPZ.
 
 MP2 totals are electronic energies; compare **forces** and **interaction** trends,
 not absolute MM vs MP2 total energies.
@@ -8,9 +8,17 @@ Examples (CHARMM node)::
 
     ./scripts/mmml-charmm-mpirun.sh python scripts/compare_dcm_mp2_mm.py \\
       --data new-dcm-round-2-only_MP2_41950.npz \\
+      --checkpoint /path/to/checkpoint.json \\
       -o artifacts/dcm_mp2_mm_compare \\
       --reference-energy-unit hartree --reference-force-unit ev_angstrom \\
       --max-frames 200 --stride 10
+
+    # Multiple hybrid modes (checkpoint direct inference + hybrid-ml + monomer-only)
+    ./scripts/mmml-charmm-mpirun.sh python scripts/compare_dcm_mp2_mm.py \\
+      --data new-dcm-round-2-only_MP2_41950.npz \\
+      --checkpoint /path/to/checkpoint.json \\
+      --calculators hybrid-ml checkpoint \\
+      -o artifacts/dcm_mp2_mm_compare --max-frames 50
 """
 
 from __future__ import annotations
@@ -29,8 +37,10 @@ if str(REPO) not in sys.path:
 
 
 def _parse_args() -> argparse.Namespace:
+    from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import HYBRID_CALCULATOR_CHOICES
+
     parser = argparse.ArgumentParser(
-        description="DCM MP2 reference geometries vs CHARMM/JAX MM energies and forces",
+        description="DCM MP2 geometries vs CHARMM/JAX MM and hybrid ML calculators",
     )
     parser.add_argument(
         "--data",
@@ -52,6 +62,31 @@ def _parse_args() -> argparse.Namespace:
         help="CHARMM scratch for vacuum PSF build (default: output-dir/charmm_work)",
     )
     parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        default=None,
+        help="MMML checkpoint for hybrid / direct ML calculators",
+    )
+    parser.add_argument(
+        "--calculators",
+        nargs="+",
+        default=["hybrid-ml"],
+        choices=list(HYBRID_CALCULATOR_CHOICES),
+        help="Hybrid calculators to run when --checkpoint is set (default: hybrid-ml)",
+    )
+    parser.add_argument(
+        "--cutoff",
+        type=float,
+        default=10.0,
+        help="ML cutoff / mm_switch_on for hybrid calculators (default: 10 Å)",
+    )
+    parser.add_argument(
+        "--jax-platform",
+        choices=["cpu", "gpu", "tpu"],
+        default=None,
+        help="Set JAX_PLATFORM_NAME before loading calculators",
+    )
+    parser.add_argument(
         "--reference-energy-unit",
         default="hartree",
         help="Unit of E in the NPZ (default: hartree; do not rely on auto-infer)",
@@ -67,7 +102,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--no-interaction",
         action="store_true",
-        help="Skip MM and MP2 interaction-energy comparison",
+        help="Skip MM/ML and MP2 interaction-energy comparison",
     )
     parser.add_argument(
         "--monomer-permutation",
@@ -79,6 +114,11 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
+    if args.jax_platform:
+        os.environ["JAX_PLATFORM_NAME"] = args.jax_platform
+    if args.checkpoint is None and args.calculators != ["hybrid-ml"]:
+        raise SystemExit("--calculators requires --checkpoint")
+
     from mmml.interfaces.pycharmmInterface.dcm_mp2_mm_compare import (
         parse_monomer_permutation,
         run_dcm_mp2_mm_comparison,
@@ -96,6 +136,9 @@ def main() -> int:
         seed=args.seed,
         compute_interaction=not args.no_interaction,
         monomer_permutation=perm,
+        checkpoint=args.checkpoint,
+        hybrid_calculators=tuple(args.calculators),
+        hybrid_cutoff=args.cutoff,
     )
     summary = payload["summary"]
     jax_ch = summary.get("jax_charmm_force_rmse_ev_A", {})
@@ -104,8 +147,16 @@ def main() -> int:
     print(
         f"Frames: {summary['n_frames']} | "
         f"JAX−CHARMM force RMSE mean: {jax_ch.get('mean', float('nan')):.4g} eV/Å | "
-        f"MP2−JAX force RMSE mean: {mp2_jax.get('mean', float('nan')):.4g} eV/Å"
+        f"MP2−JAX MM force RMSE mean: {mp2_jax.get('mean', float('nan')):.4g} eV/Å"
     )
+    if args.checkpoint is not None:
+        for calc_name in args.calculators:
+            slug = calc_name.replace("-", "_")
+            block = summary.get(f"hybrid_{slug}_mp2_force_rmse_ev_A", {})
+            print(
+                f"  MP2−{calc_name} force RMSE mean: "
+                f"{block.get('mean', float('nan')):.4g} eV/Å"
+            )
     return 0
 
 
