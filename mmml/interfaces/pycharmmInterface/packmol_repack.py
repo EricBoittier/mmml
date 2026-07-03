@@ -103,15 +103,20 @@ def _read_packmol_monomer_coords(
 def _positions_to_packmol_primary_frame(
     positions: np.ndarray,
     box_side: float,
+    monomer_offsets: np.ndarray,
+    cell: Any | None,
 ) -> tuple[np.ndarray, bool]:
-    """Map CHARMM image-centered coords to jaxmd primary cell ``[0, L)`` for Packmol."""
-    from mmml.cli.run.md_handoff import cluster_positions_use_jaxmd_primary_cell_frame
+    """Map coords to jaxmd primary cell ``[0, L)`` for Packmol (CHARMM → shift by ``L/2``)."""
+    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
 
     pos = np.asarray(positions, dtype=float)
-    if cluster_positions_use_jaxmd_primary_cell_frame(pos, float(box_side)):
-        return pos, False
-    half = 0.5 * float(box_side)
-    return pos + half, True
+    offsets = np.asarray(monomer_offsets, dtype=int)
+    if cell is not None:
+        pos = wrap_monomers_primary_cell(pos, offsets, cell)
+    L = float(box_side)
+    if float(np.min(pos)) < -0.05 * L:
+        return pos + 0.5 * L, True
+    return pos, False
 
 
 def _positions_from_packmol_primary_frame(
@@ -178,7 +183,9 @@ def _run_packmol_repack(
             resolve_packmol_inner_cube_side_A,
         )
 
-        pos, was_charmm_centered = _positions_to_packmol_primary_frame(pos, float(box_side))
+        pos, was_charmm_centered = _positions_to_packmol_primary_frame(
+            pos, float(box_side), offsets, cell
+        )
         margin = (
             float(packmol_margin_A)
             if packmol_margin_A is not None and float(packmol_margin_A) > 0.0

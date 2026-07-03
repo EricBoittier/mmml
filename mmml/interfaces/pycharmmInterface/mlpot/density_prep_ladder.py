@@ -1278,13 +1278,6 @@ def run_pre_mlpot_geometry_gate(
     staged_fraction = float(getattr(args, "liquid_prep_staged_density_fraction", 0.55) or 0.55)
     packmol_tol = getattr(args, "packmol_tolerance", None)
     packmol_tol_f = float(packmol_tol) if packmol_tol is not None else None
-    packmol_margin_A: float | None = None
-    if side is not None and charmm_pbc:
-        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
-            resolve_packmol_box_padding_A,
-        )
-
-        packmol_margin_A = resolve_packmol_box_padding_A(args)
 
     def _mic_check(step_context: str, pos_arr: np.ndarray) -> float:
         return _verify_mic_contacts_after_wrap(
@@ -1304,6 +1297,13 @@ def run_pre_mlpot_geometry_gate(
     )
     pos = np.asarray(positions, dtype=np.float64)
     side = box_side
+    packmol_margin_A: float | None = None
+    if side is not None and charmm_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+            resolve_packmol_box_padding_A,
+        )
+
+        packmol_margin_A = resolve_packmol_box_padding_A(args)
     from mmml.interfaces.pycharmmInterface.mlpot.recovery_progress import (
         RecoveryProgressStore,
     )

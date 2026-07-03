@@ -57,14 +57,14 @@ def test_probe_pre_mlpot_mic_contacts_aborts_on_violation():
         pre_mlpot_heavy_heavy_min_distance=2.9,
         solvents=["DCM"],
     )
-    pos = np.array([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [5.0, 0.0, 0.0], [5.4, 0.0, 0.0]])
+    pos = np.array([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0], [0.6, 0.0, 0.0], [1.0, 0.0, 0.0]])
     with pytest.raises(RuntimeError, match="MIC probe abort"):
         probe_pre_mlpot_mic_contacts(
             args,
             positions=pos,
             atoms_per_list=[2, 2],
             box_side=20.0,
-            charmm_pbc=True,
+            charmm_pbc=False,
             atomic_numbers=np.array([17, 1, 17, 1], dtype=int),
             context="MIC probe abort",
             abort=True,
@@ -110,8 +110,8 @@ def test_packmol_repack_uses_inner_cube_margin(tmp_path, monkeypatch):
         packmol_margin_A=2.5,
     )
 
-    # L=10, margin=2.5 → inner side 5, origin (2.5, 2.5, 2.5)
-    assert "inside cube 2.5 2.5 2.5 5.0" in captured["input"]
+    # L=10, margin capped at 20% → 2.0 Å/side, inner cube 6.0 Å, origin (2, 2, 2)
+    assert "inside cube 2.0 2.0 2.0 6.0" in captured["input"]
 
 
 def test_apply_density_prep_resilient_defaults_disables_pre_mlpot_lattice_abnr():
