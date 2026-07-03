@@ -13,7 +13,7 @@ mmml md-system --help
 
 ```text
 usage: mmml md-system [-h]
-                      [--setup {free_nve,free_nvt,pbc_nve,pbc_nvt,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}]
+                      [--setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}]
                       [--backend {auto,ase,jaxmd,pycharmm}]
                       [--checkpoint CHECKPOINT] [--output-dir OUTPUT_DIR]
                       [--job-name JOB_NAME] [--jobs-dir JOBS_DIR]
@@ -40,6 +40,7 @@ usage: mmml md-system [-h]
                       [--pyxtal-attempts PYXTAL_ATTEMPTS]
                       [--pyxtal-trim | --no-pyxtal-trim] [--optimize-pyxtal]
                       [--optimize-pyxtal-emt] [--box-size ANG]
+                      [--packmol-box-size ANG] [--packmol-box-padding ANG]
                       [--box-auto {geometry,density,count}]
                       [--box-auto-count-min-molecules N]
                       [--box-auto-count-max-molecules N]
@@ -50,7 +51,9 @@ usage: mmml md-system [-h]
                       [--mc-density-step-scale LOGSCALE]
                       [--mc-density-temperature T] [--mc-density-seed SEED]
                       [--mc-density-min-scale S] [--mc-density-max-scale S]
-                      [--mini-box-equil-ps PS]
+                      [--mini-box-equil-ps PS] [--mini-box-equil-ps-heat PS]
+                      [--mini-box-equil-ps-cool PS]
+                      [--mini-box-equil-hot-temp K]
                       [--mini-box-equil-allow-fixed-box]
                       [--mini-box-equil-fixed-nvt]
                       [--jaxmd-mini-box-equil-ps PS]
@@ -80,8 +83,9 @@ usage: mmml md-system [-h]
                       [--echeck ECHECK] [--no-echeck] [--no-echeck-heat]
                       [--allow-incomplete-dynamics] [--nprint NPRINT]
                       [--dyn-nprint DYN_NPRINT] [--dyn-iprfrq DYN_IPRFRQ]
-                      [--heat-ihtfrq N] [--heat-thermostat {scale,hoover}]
-                      [--heat-firstt K] [--heat-finalt K]
+                      [--heat-ihtfrq N] [--heat-bussi-taut PS]
+                      [--heat-thermostat {bussi,scale,hoover}] [--heat-firstt K]
+                      [--heat-finalt K] [--heat-mode {ramp,hold}]
                       [--heat-hoover-tmass M] [--nve-boltzmann-temp K]
                       [--heat-comp-damp | --no-heat-comp-damp]
                       [--heat-comp-hydrogen-only | --no-heat-comp-hydrogen-only]
@@ -106,6 +110,7 @@ usage: mmml md-system [-h]
                       [--md-stage {mini,heat,nve,equi,prod}] [--tag TAG]
                       [--ps-heat PS_HEAT] [--charmm-mm-pretreat]
                       [--charmm-mm-pretreat-on-handoff]
+                      [--charmm-mm-pretreat-with-liquid-prep]
                       [--charmm-mm-pretreat-ps-heat PS]
                       [--charmm-mm-pretreat-heat-nstep N]
                       [--charmm-mm-pretreat-ps-equi PS]
@@ -128,7 +133,7 @@ usage: mmml md-system [-h]
                       [--bonded-mm-mini | --no-bonded-mm-mini]
                       [--bonded-mm-mini-after BONDED_MM_MINI_AFTER]
                       [--bonded-mm-mini-steps BONDED_MM_MINI_STEPS]
-                      [--bonded-recovery-backend {auto,jax,charmm}]
+                      [--bonded-recovery-backend {auto,jax,charmm,sidecar}]
                       [--bonded-mm-mini-always]
                       [--bonded-mm-internal-margin BONDED_MM_INTERNAL_MARGIN]
                       [--bonded-mm-grms-margin BONDED_MM_GRMS_MARGIN]
@@ -150,12 +155,19 @@ usage: mmml md-system [-h]
                       [--no-dynamics-overlap-separate]
                       [--dynamics-overlap-separate-margin ANG]
                       [--dynamics-max-monomer-extent ANG]
+                      [--no-dynamics-geometry-limits-auto]
                       [--no-dynamics-max-monomer-extent]
+                      [--no-dynamics-monomer-health]
+                      [--dynamics-monomer-health-debug]
+                      [--no-dynamics-monomer-template-restore]
+                      [--no-dynamics-monomer-jax-after-restore]
+                      [--no-dynamics-monomer-velocity-restore]
+                      [--dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE]
                       [--restart-from RESTART_FROM] [--from-psf FROM_PSF]
                       [--from-crd FROM_CRD] [--skip-cluster-build]
                       [--skip-if-crd-exists] [--no-save-vmd-topology]
                       [--free-space] [--mlpot-pbc] [--dyn-inbfrq DYN_INBFRQ]
-                      [--dyn-imgfrq N]
+                      [--dyn-imgfrq N] [--dyn-freq-cadence N]
                       [--pre-nve-charmm-update | --no-pre-nve-charmm-update]
                       [--lambda-md-mode {free_nve,free_nvt,pbc_nve,pbc_nvt}]
                       [--couple-residues COUPLE_RESIDUES]
@@ -171,6 +183,7 @@ usage: mmml md-system [-h]
                       [--calculator-pre-minimize | --no-calculator-pre-minimize]
                       [--calculator-safe-grms KCAL] [--pre-min-safe-grms KCAL]
                       [--geometry-packing-safe-grms KCAL]
+                      [--geometry-packing-fire-bfgs-crossover-grms KCAL]
                       [--charmm-sd-steps CHARMM_SD_STEPS]
                       [--charmm-abnr-steps CHARMM_ABNR_STEPS]
                       [--charmm-tolenr CHARMM_TOLENR]
@@ -195,7 +208,9 @@ usage: mmml md-system [-h]
                       [--jax-pme-dispersion | --no-jax-pme-dispersion]
                       [--scafacos-method SCAFACOS_METHOD]
                       [--periodic-charmm-vdw | --no-periodic-charmm-vdw]
-                      [--include-mm | --no-include-mm] [--residue RESIDUE]
+                      [--charmm-zero-energy-terms TERMS]
+                      [--include-mm | --no-include-mm] [--jax-mm-spoof]
+                      [--jax-mm-spoof-psf JAX_MM_SPOOF_PSF] [--residue RESIDUE]
                       [--skip-jit-warmup]
                       [--auto-warmup-mlpot-jax | --no-auto-warmup-mlpot-jax]
                       [--resume] [--config CONFIG] [--job-id JOB_ID] [--run-all]
@@ -245,7 +260,7 @@ mmml.cli.run.lambda_dynamics (lambda_ti). MBAR: mmml lambda-mbar --run-dir
 
 options:
   -h, --help            show this help message and exit
-  --setup {free_nve,free_nvt,pbc_nve,pbc_nvt,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}
+  --setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}
                         Simulation setup preset. lambda_ti: alchemical TI with
                         CHARMM+MMML minimization per λ window (--lambda-md-mode,
                         --backend ase|jaxmd); mmml lambda-mbar afterward.
@@ -255,6 +270,9 @@ options:
                         pycharmm: same staged pipeline with CHARMM
                         crystal/IMAGE. free_nve/free_nvt with --backend
                         pycharmm: mini + NVE or mini + heat.
+                        free_thermalize/pbc_thermalize: minimize then heat to
+                        --temperature (ramp by default) and optional NVT equi
+                        (pbc only); use presets/thermalize.yaml.
   --backend {auto,ase,jaxmd,pycharmm}
                         MD engine: ase runs md_pbc_suite.ase; jaxmd runs
                         md_pbc_suite.jaxmd; pycharmm runs CHARMM MLpot (vacuum,
@@ -298,16 +316,17 @@ options:
   --pressure PRESSURE   Target pressure in atm (NPT).
   --seed SEED           Random seed for initial placement and velocities.
   --builder {gas,liquid,crystal}
-                        Starting-coordinate builder: gas=open grid,
+                        Grid-based builder (skips Packmol): gas=open grid,
                         liquid=cube/sphere grid plus CHARMM refinement,
-                        crystal=PyXtal plus CHARMM refinement. Default: liquid
-                        for --composition, gas otherwise.
+                        crystal=PyXtal. Default for --composition is Packmol
+                        unless --builder or --no-packmol is set.
   --min-intermonomer-atom-distance MIN_INTERMONOMER_ATOM_DISTANCE
                         Abort if atoms from different monomers get closer than
                         this distance in Angstrom (<=0 disables).
   --packmol, --no-packmol
-                        Explicitly pack --composition with Packmol. Default uses
-                        grid placement plus CHARMM refinement.
+                        Pack --composition with Packmol (default when
+                        --composition is set). Use --no-packmol or --builder
+                        liquid/gas for grid placement.
   --packmol-placement {cube,sphere}
                         Initial placement constraint: cube (default) or sphere
                         (--packmol-radius).
@@ -318,8 +337,8 @@ options:
   --packmol-center CX CY CZ
                         Initial placement center in Angstrom (default: 0 0 0).
   --packmol-tolerance PACKMOL_TOLERANCE
-                        Legacy Packmol distance tolerance (Å) for explicit
-                        --packmol runs.
+                        Packmol distance tolerance (Å) for cluster placement
+                        (default: 2.0).
   --reuse-packmol-cache, --no-reuse-packmol-cache
                         pycharmm: reuse disk cache for Packmol cluster builds
                         (default: on).
@@ -389,18 +408,24 @@ options:
   --dyn-iprfrq DYN_IPRFRQ
                         pycharmm: detailed dynamics status every N steps
                         (default: 2000)
-  --heat-ihtfrq N       pycharmm: heating velocity rescale every N steps when
-                        --heat-thermostat scale (0 = match --dyn-nprint).
-                        Ignored for hoover.
-  --heat-thermostat {scale,hoover}
-                        pycharmm heat stage: scale=IHTFRQ velocity rescaling;
-                        hoover=CHARMM Hoover NVT (vacuum hoover reft/tmass, no
-                        CPT / no ML PBC required).
+  --heat-ihtfrq N       pycharmm: heat rescale cadence for bussi (ASE) or scale
+                        (CHARMM ihtfrq); 0 = match --dyn-freq-cadence, else
+                        --dyn-nprint. Ignored for hoover.
+  --heat-bussi-taut PS  pycharmm: Bussi coupling time taut (ps) when --heat-
+                        thermostat bussi.
+  --heat-thermostat {bussi,scale,hoover}
+                        pycharmm heat stage: bussi=ASE Bussi rescaling
+                        (default); scale=CHARMM IHTFRQ; hoover=CHARMM Hoover
+                        NVT.
   --heat-firstt K       pycharmm: heat start temperature (FIRSTT). Default
                         0.2×--temperature; use 0 for cold start + IHTFRQ
                         scaling.
   --heat-finalt K       pycharmm: heat end temperature (FINALT). Default
                         --temperature; DCM:9 stability often uses 240.
+  --heat-mode {ramp,hold}
+                        pycharmm: heat protocol — ramp=gradual FIRSTT→FINALT
+                        (default); hold=Boltzmann at target T then NVT hold (no
+                        ramp).
   --heat-hoover-tmass M
                         pycharmm Hoover heat only: thermostat mass tmass
                         (kcal·mol⁻¹·ps²). Default clamps PSF tmass to 400–1200.
@@ -497,12 +522,18 @@ options:
   --ps-heat PS_HEAT     pycharmm: heating length in ps (default: 10)
   --charmm-mm-pretreat  pycharmm: CGENFF minimize + CHARMM heat/equi/prod before
                         MLpot (no PhysNet); see --charmm-mm-pretreat-ps-* and
-                        --charmm-mm-pretreat-heat-nstep. Skipped when continuing
-                        from handoff unless --charmm-mm-pretreat-on-handoff
+                        --charmm-mm-pretreat-heat-nstep. Skipped with --liquid-
+                        prep unless --charmm-mm-pretreat-with-liquid-prep;
+                        skipped on handoff unless --charmm-mm-pretreat-on-
+                        handoff
   --charmm-mm-pretreat-on-handoff
                         pycharmm: run CHARMM MM pretreat even when
                         jaxmd/PyCHARMM handoff coords are already in memory
                         (default: pretreat only on cold composition starts)
+  --charmm-mm-pretreat-with-liquid-prep
+                        pycharmm: run CHARMM MM pretreat heat/equi/prod even
+                        when --liquid-prep already built the box (default: skip
+                        redundant pretreat on dense-liquid prep)
   --charmm-mm-pretreat-ps-heat PS
                         pycharmm: pretreat CHARMM heat length in ps (overrides
                         --charmm-mm-pretreat-heat-nstep when set)
@@ -573,10 +604,10 @@ options:
                         mini,heat; heat always)
   --bonded-mm-mini-steps BONDED_MM_MINI_STEPS
                         pycharmm: bonded recovery mini steps (default: 50)
-  --bonded-recovery-backend {auto,jax,charmm}
+  --bonded-recovery-backend {auto,jax,charmm,sidecar}
                         pycharmm: bonded recovery minimizer — JAX FIRE without
-                        MLpot detach (auto tries JAX first), CHARMM SD, or auto
-                        (default: auto)
+                        MLpot detach (auto tries JAX first), CHARMM SD, isolated
+                        subprocess (sidecar), or auto (default: auto)
   --bonded-mm-mini-always
                         pycharmm: bonded SD after every --bonded-mm-mini-after
                         stage (ignore strain margins)
@@ -622,6 +653,10 @@ options:
                         50=vacuum default)
   --dyn-imgfrq N        pycharmm PBC: image/HB list rebuild every N steps
                         (default 50; larger=faster)
+  --dyn-freq-cadence N  pycharmm: align heat/print cadence (ihtfrq, nprint, …)
+                        to N steps; decoupled from DCD nsavc (default: 50).
+                        Overlap CPT chunks still disable interior inbfrq/imgfrq.
+                        Use 0 for legacy behavior.
   --pre-nve-charmm-update, --no-pre-nve-charmm-update
                         pycharmm: ENER+UPDATE after mini before vacuum NVE
                         (default: on)
@@ -669,6 +704,9 @@ options:
                         Hybrid GRMS (kcal/mol/Å) to stop geometry-packing
                         FIRE/BFGS early (default: inherit calculator-safe-grms
                         or 30; 0 disables).
+  --geometry-packing-fire-bfgs-crossover-grms KCAL
+                        Run FIRE before BFGS in geometry packing when hybrid
+                        GRMS exceeds this threshold (default: 30 kcal/mol/Å).
   --charmm-sd-steps CHARMM_SD_STEPS
   --charmm-abnr-steps CHARMM_ABNR_STEPS
   --charmm-tolenr CHARMM_TOLENR
@@ -716,11 +754,10 @@ options:
                         periodic_external (external Coulomb + CHARMM IMAGE VDW;
                         requires pbc_*).
   --lr-solver {auto,mic,scafacos,jax_pme,nvalchemiops_pme}
-                        Long-range Coulomb backend. jax_mic (default):
-                        mic=truncated MIC in the pair loop; jax_pme=jax-pme
-                        Ewald/PME/P3M for Coulomb + switched LJ pairs.
-                        periodic_external: scafacos, jax_pme, or
-                        nvalchemiops_pme for full-box Coulomb (+ CHARMM VDW).
+                        Long-range Coulomb backend. Default: truncated MIC in
+                        the switched-MM pair loop. Opt in: jax_pme, scafacos,
+                        nvalchemiops_pme (periodic_external for full-box
+                        Coulomb). Legacy alias: auto (= mic).
   --jax-pme-method {ewald,pme,p3m}
                         jax-pme method when --lr-solver=jax_pme (default: env
                         JAX_PME_METHOD or ewald).
@@ -734,14 +771,25 @@ options:
                         ScaFaCoS fcs_init method when --lr-solver=scafacos
                         (default: ewald).
   --periodic-charmm-vdw, --no-periodic-charmm-vdw
-                        With periodic_external: CHARMM IMAGE VDW on (default).
-                        --no-periodic-charmm-vdw disables CHARMM LJ (ScaFaCoS
-                        Coulomb only).
+                        CHARMM IMAGE / primary VDW on (default). --no-periodic-
+                        charmm-vdw enforces VDW+IMNB≈0 via PSF/.prm reload after
+                        MLpot registration (all MM modes).
+  --charmm-zero-energy-terms TERMS
+                        Comma-separated CHARMM ENER components to enforce at
+                        zero via PSF/.prm reload after MLpot registration: vdw,
+                        elec, bonded, hbond. --no-periodic-charmm-vdw implies
+                        vdw.
   --include-mm, --no-include-mm
                         Include switched JAX MM pairs (LJ + MIC Coulomb) in the
                         hybrid calculator. --no-include-mm evaluates PhysNet ML
                         only (doMM=False); cutoff keys are ignored for MM pair
                         lists.
+  --jax-mm-spoof        Use JAX CGenFF bonded clone instead of PhysNet for ML
+                        terms (no checkpoint; box / calculator infrastructure
+                        testing).
+  --jax-mm-spoof-psf JAX_MM_SPOOF_PSF
+                        Optional cluster PSF for --jax-mm-spoof bonded
+                        parameters.
   --residue RESIDUE     Single-residue name when --composition is not set
                         (ignored when --composition is set; lambda_ti default
                         MEOH).
@@ -929,9 +977,18 @@ PyXtal crystal placement (requires mmml[chem]):
                         Use ASE EMT for --optimize-pyxtal (smoke tests only).
 
 PBC box sizing:
-  --box-size ANG        Fixed cubic box side (Å) for Packmol cube and PBC cell.
-                        With --box-auto count, scales --composition to target ρ
-                        at this side.
+  --box-size ANG        Fixed cubic simulation cell side (Å) for PBC/CHARMM.
+                        Packmol placement uses a smaller inner cube (see
+                        --packmol-box-padding). With --box-auto count, scales
+                        --composition to target ρ at this side.
+  --packmol-box-size ANG
+                        Explicit Packmol ``inside cube`` edge (Å). Must be
+                        smaller than the simulation cell (--box-size or density-
+                        sized L_sim).
+  --packmol-box-padding ANG
+                        Cold-start margin (Å per side) between Packmol cube and
+                        simulation cell (default: 10; capped at 20% of L_sim for
+                        small boxes).
   --box-auto {geometry,density,count}
                         How to choose the cubic box / molecule count:
                         geometry=span+padding (default); density=box side from
@@ -974,9 +1031,20 @@ PBC box sizing:
                         Maximum allowed final box side relative to the initial
                         side (default: 1.50).
   --mini-box-equil-ps PS
-                        PyCHARMM mini: short CPT NPT equilibration (ps) after
-                        coordinate-only CHARMM MM mini and before MLpot SD.
+                        PyCHARMM mini: MM pretreat hot→cold equilibration (ps
+                        total) after lattice ABNR and before MLpot SD. Default
+                        200 with --liquid-prep (100 ps heat + 100 ps cool).
                         0=off. Skipped when pretreat NPT equi runs.
+  --mini-box-equil-ps-heat PS
+                        Pretreat hot-leg length (ps). Default: half of --mini-
+                        box-equil-ps. Ramp from --temperature to --mini-box-
+                        equil-hot-temp.
+  --mini-box-equil-ps-cool PS
+                        Pretreat cold-leg length (ps). Default: half of --mini-
+                        box-equil-ps. Ramp from hot peak back to --temperature.
+  --mini-box-equil-hot-temp K
+                        Peak temperature for pretreat hot leg (K). Default:
+                        max(1.5×--temperature, --temperature+100).
   --mini-box-equil-allow-fixed-box
                         Allow --mini-box-equil-ps CPT NPT even when --box-size
                         is set (default: fixed --box-size uses Hoover NVT only
@@ -1024,11 +1092,10 @@ PBC box sizing:
                         Lattice ABNR steps inside the density prep ladder (0=use
                         --mini-lattice-abnr-steps or 100).
   --pre-mlpot-overlap-min-distance ANG
-                        Pre-MLpot geometry gate: minimum inter-monomer atom
-                        distance in Å (default: 1.0; independent of --dynamics-
-                        overlap-min-distance). Catches true cross-monomer
-                        clashes while allowing tight liquid contacts that hybrid
-                        mini relaxes.
+                        Pre-MLpot geometry gate: minimum inter-monomer MIC
+                        distance in Å (default: 2.3; independent of --dynamics-
+                        overlap-min-distance). Structures must be ML-safe before
+                        USER is enabled.
 
 Recovery artifact folders:
   --prep-ladder-dir PREP_LADDER_DIR
@@ -1071,17 +1138,18 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         often appear near this).
   --dynamics-intra-min-distance ANG
                         Minimum allowed nonbonded atom distance within each
-                        monomer (1–2 and 1–3 pairs excluded from PSF bonds). Set
-                        0 to disable (default: 0.5 Å).
+                        monomer (1–2 and 1–3 pairs excluded from PSF bonds).
+                        Default: auto from reference geometry (else 0.5 Å). Set
+                        0 to disable.
   --no-dynamics-intra-exclude-1-3
                         Intra-monomer checks: only exclude PSF 1–2 bonds, not
                         1–3 pairs.
   --dynamics-intra-rescue-sd-steps DYNAMICS_INTRA_RESCUE_SD_STEPS
-                        Bonded-only SD steps for intra-monomer close-contact
+                        Bonded+VDW SD steps for intra-monomer close-contact
                         rescue (default: --dynamics-overlap-charmm-sd-steps).
   --dynamics-overlap-check-interval DYNAMICS_OVERLAP_CHECK_INTERVAL
                         Integration steps between overlap/extent checks during
-                        dynamics (default: 500). Effective interval is the
+                        dynamics (default: 100). Effective interval is the
                         largest divisor of the stage step count not exceeding
                         this value (and at least dcd-nsavc + 1 when set). Heat
                         uses this mid-segment interval by default; see --heat-
@@ -1108,11 +1176,33 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         automatically (default: 0.2).
   --dynamics-max-monomer-extent ANG
                         Maximum allowed axis-aligned monomer extent in Å during
-                        dynamics (default: 12.0, aligned with CHARMM NBONDA
-                        group limit). On violation, restore the prior segment
-                        restart and run bonded-MM SD.
+                        dynamics (default: auto from reference bond geometry,
+                        else 12.0 Å).
+  --no-dynamics-geometry-limits-auto
+                        Use fixed --dynamics-max-monomer-extent / --dynamics-
+                        intra-min-distance defaults instead of bond-length-
+                        derived limits from reference geometry.
   --no-dynamics-max-monomer-extent
                         Disable max monomer extent / fly-off guard.
+  --no-dynamics-monomer-health
+                        Disable per-monomer velocity/force/energy bookkeeping
+                        and early template restore during dynamics.
+  --dynamics-monomer-health-debug
+                        Print per-residue monomer health dot matrix
+                        (green/yellow/red for velocity, force, MM energy) at
+                        each dynamics health check.
+  --no-dynamics-monomer-template-restore
+                        Audit monomer health but do not template-restore bad
+                        monomers.
+  --no-dynamics-monomer-jax-after-restore
+                        Skip per-monomer JAX bonded mini after template restore.
+  --no-dynamics-monomer-velocity-restore
+                        Template-restore positions only; do not splice baseline
+                        restart velocities (or Maxwell-Boltzmann redraw) onto
+                        restored monomers.
+  --dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE
+                        Max monomers to template-restore per health check
+                        (default: 4).
 ```
 
 

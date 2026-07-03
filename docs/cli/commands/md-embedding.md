@@ -1,39 +1,37 @@
 # `mmml md-embedding`
 
-Solvated-peptide partial MLpot workflow (train → build → run), separate from homogeneous
-cluster [`md-system`](md-system.md).
+Solvated peptide partial MLpot (train/build/run).
+
 
 ## Usage
 
 ```bash
 mmml md-embedding --help
-mmml md-embedding train --help
-mmml md-embedding build --help
-mmml md-embedding run --help
 ```
 
-## Phases
+## Options
 
-| Phase | CHARMM | Purpose |
-|-------|--------|---------|
-| `train` | No | Download, **`mmml fix-and-split`** (default), PhysNet smoke, JSON checkpoint |
-| `build` | Yes | PEPT + TIP3 box, MM SD minimize, `model.psf` / `box.json` + ASE figures |
-| `run` | Yes | Partial MLpot on `PEPT`, optional MLpot SD |
+```text
+usage: mmml md-embedding [-h] {train,build,run} ...
 
-## Examples
+Solvated-peptide MD embedding: train PhysNet on peptide NPZ, build CHARMM
+PEPT+TIP3 box, register partial MLpot (n_monomers=1). See docs/examples/md-
+embedding-design.md.
 
-```bash
-mmml md-embedding train -o artifacts/md_embedding/aaa
-mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
-mmml md-embedding run -o artifacts/md_embedding/aaa \
-  --checkpoint artifacts/md_embedding/aaa/aaa_smoke_params.json --mini-nstep 20
+positional arguments:
+  {train,build,run}
+    train            Download/split aaa.ama NPZ, run PhysNet smoke, export JSON
+                     checkpoint.
+    build            Build CGENFF TRIA + TIP3 box; MM SD minimize; write
+                     model.psf/crd/box.json.
+    run              Load built box, register partial MLpot on PEPT, optional
+                     MLpot SD.
+
+options:
+  -h, --help         show this help message and exit
 ```
 
-## Related docs
 
-- [MD embedding design](../../examples/md-embedding-design.md)
-- [aaa.ama peptide workflow](../../examples/aaa-ama-workflow.md)
-- [Functionality smoke steps](../../../tests/functionality/embedding/README.md)
 
 ---
 

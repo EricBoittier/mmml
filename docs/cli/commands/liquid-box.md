@@ -25,7 +25,9 @@ usage: mmml liquid-box [-h] --composition COMPOSITION --output-dir OUTPUT_DIR
                        [--reuse-packmol-cache | --no-reuse-packmol-cache]
                        [--rebuild-packmol]
                        [--packmol-cache-dir PACKMOL_CACHE_DIR] [--quiet]
-                       [--box-size ANG] [--box-auto {geometry,density,count}]
+                       [--box-size ANG] [--packmol-box-size ANG]
+                       [--packmol-box-padding ANG]
+                       [--box-auto {geometry,density,count}]
                        [--box-auto-count-min-molecules N]
                        [--box-auto-count-max-molecules N]
                        [--target-density-g-cm3 RHO]
@@ -35,7 +37,9 @@ usage: mmml liquid-box [-h] --composition COMPOSITION --output-dir OUTPUT_DIR
                        [--mc-density-step-scale LOGSCALE]
                        [--mc-density-temperature T] [--mc-density-seed SEED]
                        [--mc-density-min-scale S] [--mc-density-max-scale S]
-                       [--mini-box-equil-ps PS]
+                       [--mini-box-equil-ps PS] [--mini-box-equil-ps-heat PS]
+                       [--mini-box-equil-ps-cool PS]
+                       [--mini-box-equil-hot-temp K]
                        [--mini-box-equil-allow-fixed-box]
                        [--mini-box-equil-fixed-nvt]
                        [--jaxmd-mini-box-equil-ps PS]
@@ -103,9 +107,18 @@ Dynamics stability (ECHECK):
                         a clear error.
 
 PBC box sizing:
-  --box-size ANG        Fixed cubic box side (Å) for Packmol cube and PBC cell.
-                        With --box-auto count, scales --composition to target ρ
-                        at this side.
+  --box-size ANG        Fixed cubic simulation cell side (Å) for PBC/CHARMM.
+                        Packmol placement uses a smaller inner cube (see
+                        --packmol-box-padding). With --box-auto count, scales
+                        --composition to target ρ at this side.
+  --packmol-box-size ANG
+                        Explicit Packmol ``inside cube`` edge (Å). Must be
+                        smaller than the simulation cell (--box-size or density-
+                        sized L_sim).
+  --packmol-box-padding ANG
+                        Cold-start margin (Å per side) between Packmol cube and
+                        simulation cell (default: 10; capped at 20% of L_sim for
+                        small boxes).
   --box-auto {geometry,density,count}
                         How to choose the cubic box / molecule count:
                         geometry=span+padding (default); density=box side from
@@ -148,9 +161,20 @@ PBC box sizing:
                         Maximum allowed final box side relative to the initial
                         side (default: 1.50).
   --mini-box-equil-ps PS
-                        PyCHARMM mini: short CPT NPT equilibration (ps) after
-                        coordinate-only CHARMM MM mini and before MLpot SD.
+                        PyCHARMM mini: MM pretreat hot→cold equilibration (ps
+                        total) after lattice ABNR and before MLpot SD. Default
+                        200 with --liquid-prep (100 ps heat + 100 ps cool).
                         0=off. Skipped when pretreat NPT equi runs.
+  --mini-box-equil-ps-heat PS
+                        Pretreat hot-leg length (ps). Default: half of --mini-
+                        box-equil-ps. Ramp from --temperature to --mini-box-
+                        equil-hot-temp.
+  --mini-box-equil-ps-cool PS
+                        Pretreat cold-leg length (ps). Default: half of --mini-
+                        box-equil-ps. Ramp from hot peak back to --temperature.
+  --mini-box-equil-hot-temp K
+                        Peak temperature for pretreat hot leg (K). Default:
+                        max(1.5×--temperature, --temperature+100).
   --mini-box-equil-allow-fixed-box
                         Allow --mini-box-equil-ps CPT NPT even when --box-size
                         is set (default: fixed --box-size uses Hoover NVT only
@@ -198,11 +222,10 @@ PBC box sizing:
                         Lattice ABNR steps inside the density prep ladder (0=use
                         --mini-lattice-abnr-steps or 100).
   --pre-mlpot-overlap-min-distance ANG
-                        Pre-MLpot geometry gate: minimum inter-monomer atom
-                        distance in Å (default: 1.0; independent of --dynamics-
-                        overlap-min-distance). Catches true cross-monomer
-                        clashes while allowing tight liquid contacts that hybrid
-                        mini relaxes.
+                        Pre-MLpot geometry gate: minimum inter-monomer MIC
+                        distance in Å (default: 2.3; independent of --dynamics-
+                        overlap-min-distance). Structures must be ML-safe before
+                        USER is enabled.
 
 Recovery artifact folders:
   --prep-ladder-dir PREP_LADDER_DIR

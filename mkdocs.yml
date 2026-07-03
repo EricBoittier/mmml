@@ -48,7 +48,6 @@ nav:
           - make-box: cli/commands/make-box.md
           - build-crystal: cli/commands/build-crystal.md
           - liquid-box: cli/commands/liquid-box.md
-          - md-embedding: cli/commands/md-embedding.md
       - MD & campaigns:
           - md-system: cli/commands/md-system.md
           - run: cli/commands/run.md
@@ -104,6 +103,9 @@ nav:
           - ef-train: cli/commands/ef-train.md
           - ef-evaluate: cli/commands/ef-evaluate.md
           - ef-md: cli/commands/ef-md.md
+      - Other utilities:
+          - md-embedding: cli/commands/md-embedding.md
+          - plot-restart-velocities: cli/commands/plot-restart-velocities.md
       # CLI_NAV_END
   - MD workflows:
       - md-system YAML configs: md-system-configs.md
