@@ -322,14 +322,13 @@ def test_resolve_mkimat2_min_distance_uses_dense_dcm_margin():
     assert resolve_mkimat2_min_distance_A(argparse.Namespace()) == pytest.approx(3.5)
 
 
-def test_assert_charmm_image_min_distance_aborts_dense_dcm_mkimat_margin():
+def test_assert_charmm_image_min_distance_aborts_dense_dcm_mkimat_margin(monkeypatch):
     log = """
  <MKIMAT2>: updating the image atom lists and remapping
  Transformation   Atoms  Groups  Residues  Min-Distance
     5  Z0Z0N1R1 has     120      24      24        4.88
 """
     args = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 52)
-    monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
         lambda **kwargs: log,
@@ -340,7 +339,6 @@ def test_assert_charmm_image_min_distance_aborts_dense_dcm_mkimat_margin():
             context="test gate",
             post_bimag=True,
         )
-    monkeypatch.undo()
 
 
 def test_assert_charmm_image_min_distance_after_update_uses_mkimat_floor(monkeypatch):

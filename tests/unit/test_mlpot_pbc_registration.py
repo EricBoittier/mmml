@@ -260,13 +260,7 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
         mlpot_setup,
         "rewrap_charmm_coords_for_mlpot_pbc",
         return_value=0,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.capture_charmm_script_output",
-        return_value=_MKIMAT2_SAFE_LOG,
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_min_distance_after_update",
-        return_value=6.18,
-    ) as image_gate, patch.object(
+    ), patch.object(
         mlpot_setup,
         "_install_ml_exclusions",
     ) as install, patch.object(
