@@ -418,6 +418,51 @@ def test_single_pair_mic_nonbonded_energies_jax_grad() -> None:
     assert jnp.all(jnp.isfinite(grad))
 
 
+def test_single_pair_dedr_numeric_matches_autodiff() -> None:
+    from mmml.interfaces.pycharmmInterface.trialanine_nb_parity import (
+        _mic_unit_vector,
+        _single_pair_analytic_dedr,
+        _single_pair_nb_energies,
+    )
+
+    rng = np.random.default_rng(2)
+    n = 8
+    pos = rng.normal(size=(n, 3)) * 3.0
+    cell = np.diag([20.0, 20.0, 20.0])
+    bonds = np.asarray([[0, 1], [1, 2], [2, 3]], dtype=np.int32)
+    excluded = excluded_pairs_from_psf_bonds(bonds)
+    e14 = one_four_pairs_from_bonds(bonds, n) - excluded
+    nbond = NonbondedSystemData(
+        charges=rng.normal(size=n) * 0.2,
+        at_codes=np.zeros(n, dtype=np.int32),
+        epsilon=np.abs(rng.normal(size=n) * 0.1) + 0.05,
+        rmin=np.abs(rng.normal(size=n)) + 1.5,
+        excluded_pairs=excluded,
+        e14_pairs=e14,
+        psf_path=None,
+        psf_bonds=None,
+    )
+    settings = CharmmNbondSettings(cutnb=12.0, ctonnb=8.0, ctofnb=10.0)
+    i, j = 0, 5
+    r_hat = _mic_unit_vector(pos, i, j, cell)
+    dr = 1e-4
+    pos_plus = pos.copy()
+    pos_minus = pos.copy()
+    pos_plus[i] -= 0.5 * dr * r_hat
+    pos_plus[j] += 0.5 * dr * r_hat
+    pos_minus[i] += 0.5 * dr * r_hat
+    pos_minus[j] -= 0.5 * dr * r_hat
+    vdw_p, elec_p = _single_pair_nb_energies(pos_plus, i, j, nbond, cell, settings)
+    vdw_m, elec_m = _single_pair_nb_energies(pos_minus, i, j, nbond, cell, settings)
+    dedr_v_num = (vdw_p - vdw_m) / (2.0 * dr)
+    dedr_e_num = (elec_p - elec_m) / (2.0 * dr)
+    dedr_v_ana, dedr_e_ana = _single_pair_analytic_dedr(
+        pos, i, j, nbond, cell, settings, r_hat
+    )
+    assert dedr_v_ana == pytest.approx(dedr_v_num, rel=1e-4, abs=1e-3)
+    assert dedr_e_ana == pytest.approx(dedr_e_num, rel=1e-4, abs=1e-3)
+
+
 def test_decompose_nonbonded_pair_energies_jax_grad_single_pair() -> None:
     """Switch audit uses ``jax.grad`` through per-pair decompose — must not host-convert tracers."""
     pos = jnp.asarray([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]], dtype=jnp.float64)

@@ -345,8 +345,9 @@ def audit_switch_derivatives(
         pos_minus[j] -= 0.5 * dr * r_hat
         vdw_p, elec_p = _single_pair_nb_energies(pos_plus, i, j, nbond_data, cell, settings)
         vdw_m, elec_m = _single_pair_nb_energies(pos_minus, i, j, nbond_data, cell, settings)
-        dedr_v_num = (vdw_p - vdw_m) / dr
-        dedr_e_num = (elec_p - elec_m) / dr
+        # Plus/minus configs change MIC separation by ±dr, so ΔE ≈ 2·(dE/dr)·dr.
+        dedr_v_num = (vdw_p - vdw_m) / (2.0 * dr)
+        dedr_e_num = (elec_p - elec_m) / (2.0 * dr)
         dedr_v_ana, dedr_e_ana = _single_pair_analytic_dedr(
             pos, i, j, nbond_data, cell, settings, r_hat
         )
