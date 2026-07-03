@@ -1069,6 +1069,17 @@ def build_parser() -> argparse.ArgumentParser:
             "(default: inherit calculator-safe-grms or 30; 0 disables)."
         ),
     )
+    parser.add_argument(
+        "--geometry-packing-fire-bfgs-crossover-grms",
+        type=float,
+        default=None,
+        metavar="KCAL",
+        dest="geometry_packing_fire_bfgs_crossover_grms",
+        help=(
+            "Run FIRE before BFGS in geometry packing when hybrid GRMS exceeds this "
+            "threshold (default: 30 kcal/mol/Å)."
+        ),
+    )
     parser.add_argument("--charmm-sd-steps", type=int, default=25)
     parser.add_argument("--charmm-abnr-steps", type=int, default=100)
     parser.add_argument("--charmm-tolenr", type=float, default=1e-3)
