@@ -541,3 +541,42 @@ def test_prepare_mlpot_hybrid_state_post_recovery_calculator_mini_when_still_hot
     bonded.assert_not_called()
     assert hybrid == pytest.approx(3.0)
     assert ctx.sd_watchdog_baseline_grms == pytest.approx(3.0)
+
+
+def test_prepare_mlpot_hybrid_state_allow_high_grms_from_workflow_args():
+    ctx = mock.Mock()
+    ctx.sd_watchdog_baseline_grms = None
+    ctx.workflow_args = argparse.Namespace(
+        quiet=True,
+        composition="DCM:2",
+        monomer_physnet_mini=False,
+        allow_high_grms=True,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+        return_value=-100.0,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common._geometry_recovery_context",
+        return_value=(ctx.workflow_args, None),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        return_value=mock.Mock(hybrid=138.0, charmm=130.0, ratio=1.06, kind="ok"),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
+        return_value=(138.0, False),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
+    ):
+        hybrid, user = prepare_mlpot_hybrid_state_for_sd(
+            ctx,
+            grms_limit=50.0,
+            energy_limit=None,
+            bonded_recovery_nstep=25,
+            verbose=False,
+        )
+
+    assert hybrid == pytest.approx(138.0)
+    assert user == pytest.approx(-100.0)

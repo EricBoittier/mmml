@@ -2530,7 +2530,11 @@ def prepare_mlpot_hybrid_state_for_sd(
     )
 
     if allow_high_grms is None:
-        allow_high_grms = bool(os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"))
+        workflow_args = getattr(mlpot_ctx, "workflow_args", None)
+        if workflow_args is not None and getattr(workflow_args, "allow_high_grms", False):
+            allow_high_grms = True
+        else:
+            allow_high_grms = bool(os.environ.get("MMML_MLPOT_ALLOW_HIGH_GRMS"))
 
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini import (
         remember_monomer_template_restart_path,
