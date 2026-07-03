@@ -871,12 +871,12 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--charmm-image-mlpot-min-distance",
         type=float,
-        default=None,
+        default=1.0,
         dest="charmm_image_mlpot_min_distance",
         metavar="ANG",
         help=(
-            "CHARMM <MKIMAT2> / MIC registration floor (Å) before MLpot USER. "
-            "Overrides dense-DCM defaults when set."
+            "CHARMM <MKIMAT2> / MIC registration floor (Å) before MLpot USER "
+            "(default: 1.0; atom-pair prep gates remain stricter)."
         ),
     )
     group.add_argument(

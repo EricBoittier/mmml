@@ -81,10 +81,9 @@ ml_switch_width: 2.0
 mm_nonbond_mode: jax_mic
 charmm_mm_pretreat: true
 
-# Relaxed registration: dense DCM MIC floor 4.5 Å (was 5.5); warn-not-abort on high GRMS.
+# Relaxed registration: warn-not-abort on high GRMS (MKIMAT2 floor uses code default 1.0 Å).
 allow_high_grms: true
 mlpot_registration_max_grms: 200.0
-charmm_image_mlpot_min_distance: 4.0
 
 # Short heat smoke (variants can lengthen via heat2ps).
 default_heat_thermostat: bussi
@@ -160,7 +159,6 @@ prep_sweep:
       mm_switch_width: 6.0
       dyn_inbfrq: 10
       allow_high_grms: true
-      charmm_image_mlpot_min_distance: 3.5
       mlpot_registration_max_grms: 500.0
       density_prep_ladder_max_rounds: 12
       monomer_physnet_mini_max_select: 4

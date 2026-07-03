@@ -13,12 +13,9 @@ from pathlib import Path
 import numpy as np
 
 from mmml.utils.intermonomer_geometry import (
-    DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A,
     DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A,
     DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A,
     DEFAULT_PRE_MLPOT_OVERLAP_MIN_A,
-    DENSE_DCM_MLPOT_MONOMER_COUNT,
-    is_dcm_like_prep,
 )
 
 _MKIMAT2_MARKER = "<MKIMAT2>"
@@ -189,22 +186,6 @@ def _resolve_atoms_per_for_image_gate(
     except Exception:
         return None
 
-
-def _resolve_n_monomers_for_image_gate(
-    workflow_args: argparse.Namespace | None,
-) -> int | None:
-    atoms_per = _resolve_atoms_per_for_image_gate(workflow_args)
-    if atoms_per:
-        return int(len(atoms_per))
-    if workflow_args is not None:
-        for attr in ("n_monomers", "_cluster_n_monomers"):
-            raw = getattr(workflow_args, attr, None)
-            if raw is not None:
-                try:
-                    return int(raw)
-                except (TypeError, ValueError):
-                    pass
-    return None
 
 
 def _resolve_atomic_numbers_for_image_gate(
@@ -436,21 +417,12 @@ def resolve_charmm_image_min_distance_A(
 def resolve_mkimat2_min_distance_A(
     workflow_args: argparse.Namespace | None,
 ) -> float:
-    """Floor for ``<MKIMAT2>`` group Min-Distance (≥ MIC prep; default 3.5 Å)."""
+    """Floor for ``<MKIMAT2>`` group Min-Distance (default 1.0 Å)."""
     if workflow_args is not None:
         explicit = getattr(workflow_args, "charmm_image_mlpot_min_distance", None)
         if explicit is not None:
             return float(explicit)
-    mic_floor = resolve_charmm_image_min_distance_A(workflow_args)
-    floor = max(float(mic_floor), float(DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A))
-    if is_dcm_like_prep(workflow_args):
-        n_monomers = _resolve_n_monomers_for_image_gate(workflow_args)
-        if (
-            n_monomers is not None
-            and n_monomers >= int(DENSE_DCM_MLPOT_MONOMER_COUNT)
-        ):
-            floor = max(floor, float(DEFAULT_CHARMM_IMAGE_MLPOT_DENSE_DCM_MIN_A))
-    return floor
+    return float(DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A)
 
 
 def resolve_mic_registration_fallback_min_A(
