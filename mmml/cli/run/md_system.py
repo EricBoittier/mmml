@@ -2090,7 +2090,7 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     pre_mlpot = getattr(args, "pre_mlpot_overlap_min_distance", None)
     if pre_mlpot is not None:
         cmd.extend(["--pre-mlpot-overlap-min-distance", str(pre_mlpot)])
-    image_floor = getattr(args, "charmm_image_mlpot_min_distance_A", None)
+    image_floor = getattr(args, "charmm_image_mlpot_min_distance", None)
     if image_floor is not None:
         cmd.extend(["--charmm-image-mlpot-min-distance", str(image_floor)])
     reg_grms = getattr(args, "mlpot_registration_max_grms", None)

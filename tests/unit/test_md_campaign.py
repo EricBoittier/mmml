@@ -349,6 +349,19 @@ def test_namespace_from_merged_keeps_extra_args_last() -> None:
     assert "--continue-from" not in args.extra_args
 
 
+def test_namespace_from_merged_charmm_image_min_distance_flag() -> None:
+    from mmml.cli.run.md_campaign import namespace_from_merged
+
+    args = namespace_from_merged(
+        {
+            "composition": "DCM:2",
+            "box_size": 32.0,
+            "charmm_image_mlpot_min_distance": 3.5,
+        }
+    )
+    assert args.charmm_image_mlpot_min_distance == pytest.approx(3.5)
+
+
 def test_build_command_jaxmd_liquid_packmol_default_includes_placement_argv() -> None:
     from argparse import Namespace
 

@@ -1027,7 +1027,7 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "pre_mlpot_h_heavy_min_distance",
         "pre_mlpot_heavy_heavy_min_distance",
         "mlpot_registration_max_grms",
-        "charmm_image_mlpot_min_distance_A",
+        "charmm_image_mlpot_min_distance",
         "mini_box_equil_ps",
         "calculator_pre_minimize",
         "periodic_charmm_vdw",

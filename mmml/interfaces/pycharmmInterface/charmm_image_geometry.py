@@ -354,7 +354,7 @@ def resolve_mkimat2_min_distance_A(
 ) -> float:
     """Floor for ``<MKIMAT2>`` group Min-Distance (≥ MIC prep; default 3.5 Å)."""
     if workflow_args is not None:
-        explicit = getattr(workflow_args, "charmm_image_mlpot_min_distance_A", None)
+        explicit = getattr(workflow_args, "charmm_image_mlpot_min_distance", None)
         if explicit is not None:
             return float(explicit)
     mic_floor = resolve_charmm_image_min_distance_A(workflow_args)

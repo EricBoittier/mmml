@@ -872,7 +872,7 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         "--charmm-image-mlpot-min-distance",
         type=float,
         default=None,
-        dest="charmm_image_mlpot_min_distance_A",
+        dest="charmm_image_mlpot_min_distance",
         metavar="ANG",
         help=(
             "CHARMM <MKIMAT2> / MIC registration floor (Å) before MLpot USER. "

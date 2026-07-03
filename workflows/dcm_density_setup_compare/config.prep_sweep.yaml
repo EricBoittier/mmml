@@ -80,7 +80,7 @@ charmm_mm_pretreat: true
 # Relaxed registration: dense DCM MIC floor 4.5 Å (was 5.5); warn-not-abort on high GRMS.
 allow_high_grms: true
 mlpot_registration_max_grms: 200.0
-charmm_image_mlpot_min_distance_A: 4.0
+charmm_image_mlpot_min_distance: 4.0
 
 # Short heat smoke (variants can lengthen via heat2ps).
 default_heat_thermostat: bussi
@@ -154,7 +154,7 @@ prep_sweep:
       mm_switch_width: 6.0
       dyn_inbfrq: 10
       allow_high_grms: true
-      charmm_image_mlpot_min_distance_A: 3.5
+      charmm_image_mlpot_min_distance: 3.5
       mlpot_registration_max_grms: 500.0
     # --- Box size (anchor L=38; variants override per-cell tag l{L}) ---
     l40:

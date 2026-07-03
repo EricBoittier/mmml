@@ -172,14 +172,14 @@ def test_apply_mapping_prep_gate_keys() -> None:
             "mlpot_registration_max_grms": 200.0,
             "pre_mlpot_h_heavy_min_distance": 2.4,
             "pre_mlpot_heavy_heavy_min_distance": 2.9,
-            "charmm_image_mlpot_min_distance_A": 4.0,
+            "charmm_image_mlpot_min_distance": 4.0,
         },
         source="test",
     )
     assert args.mlpot_registration_max_grms == pytest.approx(200.0)
     assert args.pre_mlpot_h_heavy_min_distance == pytest.approx(2.4)
     assert args.pre_mlpot_heavy_heavy_min_distance == pytest.approx(2.9)
-    assert args.charmm_image_mlpot_min_distance_A == pytest.approx(4.0)
+    assert args.charmm_image_mlpot_min_distance == pytest.approx(4.0)
 
 
 def test_validate_packmol_skips_certified_box_handoff() -> None:
