@@ -14,9 +14,10 @@ Examples (CHARMM node)::
       --max-frames 200 --stride 10
 
     # Hybrid-only: no CHARMM / mpirun required (doMM=False)
+    export MMML_CKPT=~/mmml/examples/ckpts_json/DESdimers_params.json
     uv run python scripts/compare_dcm_mp2_mm.py \\
       --data new-dcm-round-2-only_MP2_41950.npz \\
-      --checkpoint /path/to/checkpoint.json \\
+      --checkpoint "$MMML_CKPT" \\
       --hybrid-only -o artifacts/dcm_mp2_hybrid_compare --max-frames 200
 """
 
