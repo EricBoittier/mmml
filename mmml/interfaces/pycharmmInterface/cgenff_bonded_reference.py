@@ -238,8 +238,29 @@ END
     run_charmm_script_quiet(block)
 
 
+def _charmm_active_energy_terms() -> dict[str, float]:
+    """Active CHARMM ``ETERM`` values (kcal/mol) after the last ``ENER``."""
+    try:
+        import pycharmm.energy as energy
+
+        statuses = energy.get_term_statuses()
+        tnames = energy.get_term_names()
+        terms = energy.get_terms()
+        return {
+            str(name).strip().upper(): float(val)
+            for active, name, val in zip(statuses, tnames, terms, strict=False)
+            if active
+        }
+    except Exception:
+        return {}
+
+
 def _charmm_nb_term_sum(*names: str) -> float:
     """Sum CHARMM ENER terms (kcal/mol); missing names contribute 0."""
+    active = _charmm_active_energy_terms()
+    if active:
+        return sum(float(active.get(str(name).strip().upper(), 0.0)) for name in names)
+
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import charmm_bonded_term_kcalmol
 
     total = 0.0

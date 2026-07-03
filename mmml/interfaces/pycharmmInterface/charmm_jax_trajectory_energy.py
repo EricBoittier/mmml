@@ -323,6 +323,14 @@ def compare_trajectory_mm_energy(
             print("Restoring full CGENFF params (no BLOCK)...", flush=True)
         ensure_full_cgenff_mm_session(ctx, reregister_cgenff=True)
 
+    box_side = _box_side_from_cell(ctx.cell)
+    if box_side is not None and box_side > 0.0:
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            ensure_charmm_crystal_for_cpt,
+        )
+
+        ensure_charmm_crystal_for_cpt(box_side, quiet=not progress)
+
     frame_reports: list[FrameEnergyComparison] = []
     for i, frame_idx in enumerate(indices, start=1):
         if progress:

@@ -182,6 +182,8 @@ class NonbondedSystemData:
     rmin: np.ndarray
     excluded_pairs: frozenset[tuple[int, int]]
     e14_pairs: frozenset[tuple[int, int]]
+    psf_path: Path | None = None
+    psf_bonds: np.ndarray | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -453,6 +455,29 @@ def one_four_pairs_from_bonds(bonds: np.ndarray, natom: int) -> frozenset[tuple[
     return frozenset(pairs)
 
 
+def _pair_lj_epsilon(ep_i: Array, ep_j: Array) -> Array:
+    """CHARMM geometric ε_ij = sqrt(|ε_i ε_j|) (kcal/mol, positive)."""
+    return jnp.sqrt(jnp.abs(ep_i * ep_j))
+
+
+def _live_charmm_nonbonded_arrays(
+    natom: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """Per-atom charges, ε, and Rmin/2 from the active PyCHARMM session."""
+    try:
+        import pycharmm.param as param
+        import pycharmm.psf as psf
+
+        charges = np.asarray(psf.get_charges(), dtype=np.float64)
+        epsilon = np.asarray(param.get_epsilon(), dtype=np.float64)
+        rmin = np.asarray(param.get_vdwr(), dtype=np.float64)
+        if charges.shape[0] != natom or epsilon.shape[0] != natom or rmin.shape[0] != natom:
+            return None
+        return charges, epsilon, rmin
+    except Exception:
+        return None
+
+
 def parse_lj_tables_from_prm(prm_path: Path | str) -> dict[str, tuple[float, float]]:
     """Parse CHARMM NONBONDED epsilon (kcal/mol) and Rmin/2 (Å) by atom type."""
     tables: dict[str, tuple[float, float]] = {}
@@ -480,25 +505,32 @@ def load_nonbonded_system_from_charmm(
     psf_data = parse_psf_ext(psf_path)
     natom = psf_data.n_atoms
 
-    lj: dict[str, tuple[float, float]] = {}
-    for prm_path in prm_paths:
-        lj.update(parse_lj_tables_from_prm(prm_path))
+    live = _live_charmm_nonbonded_arrays(natom)
+    if live is not None:
+        charges, atom_eps, atom_rmin = live
+    else:
+        lj: dict[str, tuple[float, float]] = {}
+        for prm_path in prm_paths:
+            lj.update(parse_lj_tables_from_prm(prm_path))
+        atom_eps = np.array(
+            [lj.get(str(t), (0.0, 0.0))[0] for t in psf_data.atom_types],
+            dtype=np.float64,
+        )
+        atom_rmin = np.array(
+            [lj.get(str(t), (0.0, 0.0))[1] for t in psf_data.atom_types],
+            dtype=np.float64,
+        )
+        charges = np.asarray(psf_data.charges, dtype=np.float64)
     try:
         import pycharmm.psf as psf
 
         iac = np.asarray(psf.get_iac(), dtype=np.int32)
     except Exception:
         iac = np.ones(natom, dtype=np.int32)
-    atom_eps = np.array(
-        [lj.get(str(t), (0.0, 0.0))[0] for t in psf_data.atom_types],
-        dtype=np.float64,
-    )
-    atom_rmin = np.array(
-        [lj.get(str(t), (0.0, 0.0))[1] for t in psf_data.atom_types],
-        dtype=np.float64,
-    )
     # TIP3 ``HT`` and other types with ``iac==0`` carry no CHARMM VDW term.
     zero_lj = iac <= 0
+    atom_eps = np.asarray(atom_eps, dtype=np.float64)
+    atom_rmin = np.asarray(atom_rmin, dtype=np.float64)
     atom_eps[zero_lj] = 0.0
     atom_rmin[zero_lj] = 0.0
     at_codes = np.zeros(natom, dtype=np.int32)
@@ -511,12 +543,14 @@ def load_nonbonded_system_from_charmm(
     e14 = one_four_pairs_from_bonds(psf_data.bonds, natom) - excluded
 
     return NonbondedSystemData(
-        charges=np.asarray(psf_data.charges, dtype=np.float64),
+        charges=charges,
         at_codes=at_codes,
-        epsilon=-np.abs(atom_eps),
+        epsilon=atom_eps,
         rmin=atom_rmin,
         excluded_pairs=excluded,
         e14_pairs=e14,
+        psf_path=Path(psf_path),
+        psf_bonds=np.asarray(psf_data.bonds, dtype=np.int32),
     )
 
 
@@ -581,11 +615,19 @@ def nonbonded_energy_and_forces(
     if cell_j.ndim == 1 and cell_j.shape[0] == 3:
         cell_j = jnp.diag(cell_j)
 
+    excluded_pairs = nbond_data.excluded_pairs
+    if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
+        excluded_pairs = resolve_nonbonded_excluded_pairs(
+            nbond_data.psf_path,
+            nbond_data.psf_bonds,
+            natom=int(np.asarray(nbond_data.charges).shape[0]),
+        )
+
     if pair_i is None or pair_j is None:
         host_i, host_j = _build_pair_indices(
             np.asarray(positions),
             np.asarray(cell),
-            nbond_data.excluded_pairs,
+            excluded_pairs,
             settings.cutnb,
         )
         pair_i = host_i
@@ -623,7 +665,7 @@ def nonbonded_energy_and_forces(
         rm_i = rm_tbl[pi]
         rm_j = rm_tbl[pj]
         sig = rm_i + rm_j
-        ep = jnp.sqrt(ep_i * ep_j)
+        ep = _pair_lj_epsilon(ep_i, ep_j)
 
         qq = q[pi] * q[pj] * e14_scale / settings.eps
         vdw = _pair_vdw_energy(

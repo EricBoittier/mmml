@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     CharmmFswitchCoeffs,
     CharmmNbondSettings,
     CharmmVfswitchCoeffs,
+    _pair_lj_epsilon,
     charmm_fshift_elec,
     charmm_fswitch_coeffs,
     charmm_fswitch_elec,
@@ -269,6 +270,14 @@ def test_charmm_nbond_settings_default_vdw14fac_zero() -> None:
     settings = CharmmNbondSettings(cutnb=14.0, ctonnb=10.0, ctofnb=12.0)
     assert settings.vdw14fac == 0.0
     assert settings.e14fac == 1.0
+
+
+def test_pair_lj_epsilon_uses_abs_product() -> None:
+    ep_i = jnp.asarray([-0.15, 0.0], dtype=jnp.float64)
+    ep_j = jnp.asarray([-0.20, 0.1], dtype=jnp.float64)
+    got = _pair_lj_epsilon(ep_i, ep_j)
+    assert float(got[0]) == pytest.approx(float(np.sqrt(0.03)), rel=1e-12)
+    assert float(got[1]) == pytest.approx(0.0)
 
 
 def test_excluded_pairs_from_psf_nnb_mini_mlpot_fixture() -> None:
