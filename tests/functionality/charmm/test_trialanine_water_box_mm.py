@@ -26,9 +26,6 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     nonbonded_energy_and_forces,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
-from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-    restore_charmm_cubic_crystal_lattice,
-)
 from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
     build_trialanine_water_box_in_charmm,
     have_trialanine_cgenff,
@@ -153,10 +150,10 @@ def test_trialanine_water_total_mm_matches_pycharmm(
     positions = _perturb_positions(box.positions, seed=31)
     set_charmm_positions(positions)
 
+    # Box build calls mark_cgenff_params_full() so apply_charmm_mm_block skips
+    # READ PARAM APPEND (and crystal free). Do not restore PBC here — redundant
+    # restore corrupts nbond cutoffs (ctofnb > cutnb) when IMAGE was never cleared.
     apply_charmm_mm_block()
-    # apply_full_cgenff_params (inside apply_charmm_mm_block) can crystal-free PBC;
-    # rebuild IMAGE/nb lists before ENER so CHARMM matches JAX MIC nonbonded.
-    restore_charmm_cubic_crystal_lattice(float(box.box_side_A), quiet=True)
     run_charmm_bonded_ener_force(silent=True)
     include_cmap = charmm_cmap_is_active()
 

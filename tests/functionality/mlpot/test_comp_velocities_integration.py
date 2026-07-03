@@ -84,30 +84,33 @@ def test_scalar_zero_clears_comparison_array(charmm_tip3_water):
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
 def test_selective_force_damp_respects_threshold(charmm_tip3_water):
+    import pycharmm.coor as coor
+
     run_charmm_script("ENER")
     mags = force_magnitudes_kcalmol_A()
     high_threshold = float(np.max(mags) + 1.0)
-    apply_selective_force_damp_recipe(
+    n_high = apply_selective_force_damp_recipe(
         min_force_kcalmol_A=high_threshold,
         force_scale=0.01,
     )
+    assert n_high == 0
     comp_high = get_comparison_scalars_array()
     assert np.allclose(comp_high[:, :3], 0.0, atol=1e-8)
 
     run_charmm_script("ENER")
-    low_threshold = float(np.percentile(mags, 50))
+    mags = force_magnitudes_kcalmol_A()
+    low_threshold = float(np.min(mags) - 1.0e-6)
     scale = 0.01
-    apply_selective_force_damp_recipe(
+    n_sel = apply_selective_force_damp_recipe(
         min_force_kcalmol_A=low_threshold,
         force_scale=scale,
     )
     comp = get_comparison_scalars_array()
-    import pycharmm.coor as coor
-
     forces = coor.get_forces()[["dx", "dy", "dz"]].to_numpy(dtype=float)
     expected = scale * forces
     high_mask = mags >= low_threshold
-    assert np.any(high_mask)
+    assert np.all(high_mask)
+    assert n_sel == int(np.sum(high_mask))
     assert np.allclose(comp[high_mask, :3], expected[high_mask], rtol=1e-4, atol=1e-6)
     assert np.allclose(comp[~high_mask, :3], 0.0, atol=1e-8)
 
@@ -117,18 +120,15 @@ def test_lower_threshold_includes_more_atoms(charmm_tip3_water):
     run_charmm_script("ENER")
     mags = force_magnitudes_kcalmol_A()
     p90 = float(np.percentile(mags, 90))
-    p50 = float(np.percentile(mags, 50))
-
-    apply_selective_force_damp_recipe(min_force_kcalmol_A=p90, force_scale=0.01)
-    comp_strict = get_comparison_scalars_array()
-    n_strict = int(np.count_nonzero(np.linalg.norm(comp_strict[:, :3], axis=1)))
+    n_strict = apply_selective_force_damp_recipe(min_force_kcalmol_A=p90, force_scale=0.01)
 
     run_charmm_script("ENER")
-    apply_selective_force_damp_recipe(min_force_kcalmol_A=p50, force_scale=0.01)
-    comp_loose = get_comparison_scalars_array()
-    n_loose = int(np.count_nonzero(np.linalg.norm(comp_loose[:, :3], axis=1)))
+    mags = force_magnitudes_kcalmol_A()
+    p50 = float(np.percentile(mags, 50))
+    n_loose = apply_selective_force_damp_recipe(min_force_kcalmol_A=p50, force_scale=0.01)
 
     assert n_loose >= n_strict
+    assert n_loose > 0
 
 
 @pytest.mark.skipif(not can_import_pycharmm(), reason="pycharmm / libcharmm not available")
