@@ -557,6 +557,7 @@ _WORKFLOW_JOB_OVERRIDE_KEYS = (
     "dcd_nsavc",
     "dyn_inbfrq",
     "dyn_nprint",
+    "geometry_packing_fire_bfgs_crossover_grms",
 )
 
 
@@ -945,6 +946,8 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         "mini_lattice_abnr_steps",
         "mc_density_equalize",
         "mc_density_steps",
+        "geometry_packing_fire_bfgs_crossover_grms",
+        "bonded_mm_mini_steps",
         "min_intermonomer_atom_distance",
         "max_grms_before_dyn",
         "no_scale_max_grms",

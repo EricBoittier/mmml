@@ -65,7 +65,8 @@ min_intermonomer_atom_distance: 1.2
 
 # Heat DCD cadence (lower nsavc = more frequent frames; dcd25 winner on anchor).
 dcd_nsavc: 25
-dyn_inbfrq: 25
+# Prep sweep winner: defer CHARMM inbfrq rebuild until dynamics (SD uses inbfrq=0 chunks).
+dyn_inbfrq: -1
 
 # Resilient density prep (merged into resilient setup; reinforces variant defaults).
 liquid_prep: true
@@ -74,9 +75,14 @@ density_prep_ladder_max_rounds: 8
 density_prep_lattice_abnr_steps: 300
 mini_lattice_abnr_steps: 300
 mc_density_equalize: true
-mc_density_steps: 128
+# Extra MC capacity (mc_density dropped anchor GRMS 261→129 in latest run).
+mc_density_steps: 256
 mini_box_equil_ps: 5.0
 calculator_pre_minimize: true
+# FIRE-first when GRMS > crossover (BFGS spikes on severe overlap at ~140 kcal/mol/Å).
+geometry_packing_fire_bfgs_crossover_grms: 200.0
+# MLpot SD recovery inside geometry packing (default 200; resilient cleanup uses 500+).
+bonded_mm_mini_steps: 1000
 
 # Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
 bonded_mm_mini: false
