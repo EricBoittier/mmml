@@ -126,15 +126,20 @@ def get_comparison_scalars_array() -> np.ndarray:
 
 
 def run_charmm_script(script: str, *, quiet: bool = False) -> None:
-    """Run a single CHARMM script line."""
+    """Run a single CHARMM script line.
+
+    Keywords are uppercased: ``maincomx`` matches 4-char tokens case-sensitively
+    (``scalar`` → unrecognized ``scal``; ``SCALar`` → ``SCAL``).
+    """
+    line = script.upper()
     if quiet:
         from mmml.interfaces.pycharmmInterface.charmm_levels import (
             run_charmm_script_quiet,
         )
 
-        run_charmm_script_quiet(script)
+        run_charmm_script_quiet(line)
         return
-    _import_pycharmm().lingo.charmm_script(script)
+    _import_pycharmm().lingo.charmm_script(line)
 
 
 def zero_comparison_scalars(sele: str = "all", *, quiet: bool = False) -> None:

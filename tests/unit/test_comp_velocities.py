@@ -22,6 +22,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.comp_velocities import (
     mirror_comparison_velocities_for_dynamics,
     prepare_comp_for_heat,
     prepare_comp_for_iasvel0,
+    run_charmm_script,
     set_comparison_array,
     sync_comparison_velocities_akma,
     sync_comparison_velocities_from_comparison,
@@ -445,6 +446,16 @@ def test_clear_comparison_coordinates_zeros_comp(mock_import, mock_set_capi):
     zeros = mock_set_capi.call_args[0][0]
     assert zeros.shape == (3, 4)
     assert np.all(zeros == 0.0)
+
+
+@patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities._import_pycharmm")
+def test_run_charmm_script_uppercases_keywords(mock_import):
+    pycharmm = MagicMock()
+    mock_import.return_value = pycharmm
+    run_charmm_script("scalar xcomp copy dx select highf end")
+    pycharmm.lingo.charmm_script.assert_called_once_with(
+        "SCALAR XCOMP COPY DX SELECT HIGHF END"
+    )
 
 
 @patch("mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates")
