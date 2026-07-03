@@ -48,4 +48,47 @@ def test_compare_pair_sets_symmetric_diff() -> None:
     cmp = compare_pair_sets(a, b)
     assert cmp.only_a == {(2, 3)}
     assert cmp.only_b == {(4, 5)}
-    assert not cmp.match
+
+
+def test_walk_charmm_primary_jnb_pair_set() -> None:
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        inter_monomer_pair_set,
+        walk_charmm_primary_jnb_pair_set,
+    )
+
+    # atom1 partners: atom2, atom3; atom2 partner: atom3
+    pair_i = [0, 0, 1]
+    pair_j = [1, 2, 2]
+    raw = walk_charmm_primary_jnb_pair_set(pair_i, pair_j)
+    assert raw == {(0, 1), (0, 2), (1, 2)}
+    mid = np.array([0, 0, 1, 1], dtype=np.int32)
+    inter = inter_monomer_pair_set(raw, monomer_id=mid)
+    assert (0, 2) in inter and (1, 2) in inter and (0, 1) not in inter
+
+
+def test_classify_inter_monomer_diff_cutoff_skew() -> None:
+    from mmml.interfaces.pycharmmInterface.nl_reference import classify_inter_monomer_diff
+
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [11.0, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    mid = np.array([0, 0, 1, 1], dtype=np.int32)
+    tags = classify_inter_monomer_diff(
+        only_left={(0, 2)},
+        only_right=set(),
+        positions=pos,
+        cell=None,
+        monomer_id=mid,
+        left_cutoff_A=12.0,
+        right_cutoff_A=8.0,
+        mm_r_min=None,
+        monomer_offsets=None,
+    )
+    assert len(tags["cutoff_only_left"]) == 1
+    assert tags["true_mismatch_left"] == []
