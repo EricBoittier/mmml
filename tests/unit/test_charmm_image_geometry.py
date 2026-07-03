@@ -475,3 +475,50 @@ def test_format_charmm_image_nb_stats_tight_buffer():
     assert " tight" in text
     assert " MLpot" in text
     assert stats.iminb_headroom == 1
+
+
+def test_get_iminb_stats_uses_ctypes_out_pointers(monkeypatch) -> None:
+    import importlib.util
+    import sys
+    import types
+    from pathlib import Path
+
+    calls: list[tuple] = []
+
+    def _fake_getter(*args) -> int:
+        calls.append(args)
+        return 1
+
+    fake_lib = types.SimpleNamespace(
+        charmm=types.SimpleNamespace(image_get_iminb_stats=_fake_getter)
+    )
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_pycharmm.lib = fake_lib  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.lib", fake_lib)
+
+    repo_root = Path(__file__).resolve().parents[2]
+    spec = importlib.util.spec_from_file_location(
+        "pycharmm_image_isolated",
+        repo_root / "pycharmm" / "image.py",
+    )
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    raw = mod.get_iminb_stats()
+    assert raw is not None
+    assert set(raw) == {
+        "natom",
+        "natim",
+        "ntrans",
+        "nnb",
+        "niminb",
+        "iminb_capacity",
+        "nimnb",
+        "imjnb_capacity",
+        "niming",
+        "mlpot_active",
+    }
+    assert len(calls) == 1
+    assert len(calls[0]) == 10

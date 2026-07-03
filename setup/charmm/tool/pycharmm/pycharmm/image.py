@@ -198,32 +198,41 @@ def get_iminb_stats():
     except AttributeError:
         return None
 
-    out = (ctypes.c_int * 10)()
+    out_natom = ctypes.c_int()
+    out_natim = ctypes.c_int()
+    out_ntrans = ctypes.c_int()
+    out_nnb = ctypes.c_int()
+    out_niminb = ctypes.c_int()
+    out_iminb_capacity = ctypes.c_int()
+    out_nimnb = ctypes.c_int()
+    out_imjnb_capacity = ctypes.c_int()
+    out_niming = ctypes.c_int()
+    out_mlpot_active = ctypes.c_int()
     status = getter(
-        ctypes.byref(out[0]),
-        ctypes.byref(out[1]),
-        ctypes.byref(out[2]),
-        ctypes.byref(out[3]),
-        ctypes.byref(out[4]),
-        ctypes.byref(out[5]),
-        ctypes.byref(out[6]),
-        ctypes.byref(out[7]),
-        ctypes.byref(out[8]),
-        ctypes.byref(out[9]),
+        ctypes.byref(out_natom),
+        ctypes.byref(out_natim),
+        ctypes.byref(out_ntrans),
+        ctypes.byref(out_nnb),
+        ctypes.byref(out_niminb),
+        ctypes.byref(out_iminb_capacity),
+        ctypes.byref(out_nimnb),
+        ctypes.byref(out_imjnb_capacity),
+        ctypes.byref(out_niming),
+        ctypes.byref(out_mlpot_active),
     )
     if not bool(status):
         raise RuntimeError("image_get_iminb_stats failed")
     return {
-        "natom": int(out[0]),
-        "natim": int(out[1]),
-        "ntrans": int(out[2]),
-        "nnb": int(out[3]),
-        "niminb": int(out[4]),
-        "iminb_capacity": int(out[5]),
-        "nimnb": int(out[6]),
-        "imjnb_capacity": int(out[7]),
-        "niming": int(out[8]),
-        "mlpot_active": bool(out[9]),
+        "natom": int(out_natom.value),
+        "natim": int(out_natim.value),
+        "ntrans": int(out_ntrans.value),
+        "nnb": int(out_nnb.value),
+        "niminb": int(out_niminb.value),
+        "iminb_capacity": int(out_iminb_capacity.value),
+        "nimnb": int(out_nimnb.value),
+        "imjnb_capacity": int(out_imjnb_capacity.value),
+        "niming": int(out_niming.value),
+        "mlpot_active": bool(out_mlpot_active.value),
     }
 
 
