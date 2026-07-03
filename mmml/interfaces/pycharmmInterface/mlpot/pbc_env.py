@@ -608,15 +608,26 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
         mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
         if not crystal.define_cubic(L):
             raise RuntimeError(f"crystal.define_cubic failed for L={L} Å")
-        build_cut = min(float(VACUUM_CUTNB), max(L / 2.0 - PBC_NBOND_BOX_MARGIN_A, 6.0))
-        if not crystal.build(build_cut):
-            raise RuntimeError(f"crystal.build failed for cutoff={build_cut} Å (L={L})")
+        from mmml.interfaces.pycharmmInterface.cutoffs import (
+            DEFAULT_MM_SWITCH_ON,
+            DEFAULT_MM_SWITCH_WIDTH,
+        )
         from mmml.interfaces.pycharmmInterface.nbonds_config import (
             apply_nbonds_kwargs,
-            pbc_nbond_cutoffs,
+            pbc_nbond_cutoffs_from_mlpot_switches,
         )
 
-        cuts = pbc_nbond_cutoffs(L)
+        cuts = pbc_nbond_cutoffs_from_mlpot_switches(
+            L,
+            mm_switch_on=DEFAULT_MM_SWITCH_ON,
+            mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
+        )
+        build_cut = min(
+            float(cuts.cutnb),
+            max(L / 2.0 - PBC_NBOND_BOX_MARGIN_A, 6.0),
+        )
+        if not crystal.build(build_cut):
+            raise RuntimeError(f"crystal.build failed for cutoff={build_cut} Å (L={L})")
         apply_nbonds_kwargs(cuts.as_pbc_nbond_kwargs(nbxmod=5), rebuild=False)
         _image_setup_byres_all(0.0, 0.0, 0.0)
 
@@ -624,34 +635,53 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
 def apply_pbc_nbonds(
     *,
     nbxmod: int = 5,
-    cutnb: float = 18.0,
+    cutnb: float | None = None,
     cubic_box_side_A: float | None = None,
     rebuild: bool = True,
+    mm_switch_on: float | None = None,
+    mm_switch_width: float | None = None,
 ) -> PbcNbondCutoffs:
     """Nonbond list for periodic CHARMM (``cutim >= cutnb``).
 
     When ``cubic_box_side_A`` is set, clamp all cutoffs to stay below half the box.
-    Returns the cutoffs actually applied.
+    By default (no explicit ``cutnb``), ``cutnb`` follows MMML switches
+    ``mm_switch_on + mm_switch_width``.  Returns the cutoffs actually applied.
     """
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         PbcNbondCutoffs,
         apply_nbonds_kwargs,
         pbc_nbond_cutoffs,
+        pbc_nbond_cutoffs_from_mlpot_switches,
         scale_vacuum_switch_cutoffs,
     )
 
+    mm_on = DEFAULT_MM_SWITCH_ON if mm_switch_on is None else float(mm_switch_on)
+    mm_w = DEFAULT_MM_SWITCH_WIDTH if mm_switch_width is None else float(mm_switch_width)
+
     if cubic_box_side_A is not None:
-        cuts = pbc_nbond_cutoffs(cubic_box_side_A, cutnb_max=cutnb)
+        if cutnb is not None:
+            cuts = pbc_nbond_cutoffs(cubic_box_side_A, cutnb_max=float(cutnb))
+        else:
+            cuts = pbc_nbond_cutoffs_from_mlpot_switches(
+                cubic_box_side_A,
+                mm_switch_on=mm_on,
+                mm_switch_width=mm_w,
+            )
     else:
-        ctonnb, ctofnb = scale_vacuum_switch_cutoffs(float(cutnb))
-        cutim = float(cutnb) + 4.0
+        nb = float(cutnb) if cutnb is not None else mm_on + mm_w
+        ctonnb, ctofnb = scale_vacuum_switch_cutoffs(nb)
+        cutim = nb + 4.0
         cuts = PbcNbondCutoffs(
             cubic_box_side_A=float("nan"),
-            cutnb=float(cutnb),
+            cutnb=nb,
             cutim=cutim,
             ctonnb=ctonnb,
             ctofnb=ctofnb,
-            ctexnb=float(cutnb),
+            ctexnb=nb,
         )
     from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 

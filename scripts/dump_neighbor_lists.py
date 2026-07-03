@@ -41,6 +41,7 @@ if str(_REPO) not in sys.path:
 
 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_crd_coordinates  # noqa: E402
 from mmml.utils.neighbor_list_snapshot import (  # noqa: E402
+    capture_charmm_image_inter_monomer_pairs,
     capture_charmm_inter_monomer_pairs,
     capture_charmm_jnb_inter_monomer_pairs,
     capture_mmml_inter_monomer_pairs,
@@ -98,9 +99,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--charmm-source",
-        choices=("jnb", "dmat", "both"),
+        choices=("jnb", "image", "dmat", "both"),
         default="jnb",
-        help="CHARMM pair source: JNB list (preferred), DMAT, or both",
+        help="CHARMM pair source: JNB, image MIC, DMAT, or both (jnb+dmat legacy)",
     )
     parser.add_argument(
         "--aligned-compare",
@@ -110,14 +111,15 @@ def main() -> int:
     parser.add_argument("--n-monomers", type=int, required=True)
     parser.add_argument("--atoms-per-monomer", type=int, required=True)
     parser.add_argument("--box-size", type=float, required=True, help="Cubic box side (Å)")
-    parser.add_argument("--charmm-cutoff", type=float, default=18.0, help="CHARMM cutnb (Å)")
-    parser.add_argument("--mm-cutoff", type=float, default=13.0, help="MMML switched-MM cutoff (Å)")
+    parser.add_argument("--charmm-cutoff", type=float, default=None, help="CHARMM cutnb override (Å)")
+    parser.add_argument("--mm-cutoff", type=float, default=None, help="MMML switched-MM cutoff override (Å)")
     parser.add_argument(
         "--mm-backend",
         choices=("auto", "vesin", "cell_list", "jax_md"),
         default="vesin",
     )
     parser.add_argument("--mm-switch-on", type=float, default=8.0)
+    parser.add_argument("--mm-switch-width", type=float, default=5.0)
     parser.add_argument("--ml-switch-width", type=float, default=1.5)
     parser.add_argument("--top-pairs", type=int, default=30, help="Closest pairs drawn in PNG")
     parser.add_argument("--output-dir", type=Path, default=Path("neighbor_list_dump"))
@@ -134,8 +136,14 @@ def main() -> int:
 
     cell = cubic_cell_matrix(args.box_size)
     mm_r_min = _default_mm_r_min(args.mm_switch_on, args.ml_switch_width)
+    mm_cutoff = (
+        float(args.mm_cutoff)
+        if args.mm_cutoff is not None
+        else float(args.mm_switch_on) + float(args.mm_switch_width)
+    )
     charmm_snap = None
     charmm_jnb_snap = None
+    charmm_image_snap = None
     psf_used: Path | None = None
 
     if args.with_charmm:
@@ -152,7 +160,9 @@ def main() -> int:
             psf_path=psf_used,
             crd_path=crd.expanduser().resolve(),
             box_side=float(args.box_size),
-            charmm_cutoff_A=float(args.charmm_cutoff),
+            charmm_cutoff_A=args.charmm_cutoff,
+            mm_switch_on=float(args.mm_switch_on),
+            mm_switch_width=float(args.mm_switch_width),
         )
         if args.charmm_source in ("jnb", "both"):
             charmm_jnb_snap = capture_charmm_jnb_inter_monomer_pairs(
@@ -160,21 +170,33 @@ def main() -> int:
                 monomer_offsets=offsets,
                 positions=positions,
             )
+        if args.charmm_source == "image":
+            charmm_image_snap = capture_charmm_image_inter_monomer_pairs(
+                cutoff_A=eff_charmm_cut,
+                monomer_offsets=offsets,
+                positions=positions,
+                cell=cell,
+                mm_r_min=mm_r_min,
+            )
         if args.charmm_source in ("dmat", "both"):
             charmm_snap = capture_charmm_inter_monomer_pairs(
                 cutoff_A=eff_charmm_cut,
                 monomer_offsets=offsets,
                 positions=positions,
             )
-        charmm_snap = charmm_jnb_snap or charmm_snap
+        charmm_snap = charmm_image_snap or charmm_jnb_snap or charmm_snap
         charmm_cutoff = eff_charmm_cut
     else:
-        charmm_cutoff = float(args.charmm_cutoff)
+        charmm_cutoff = (
+            float(args.charmm_cutoff)
+            if args.charmm_cutoff is not None
+            else float(args.mm_switch_on) + float(args.mm_switch_width)
+        )
 
     mmml_snap = capture_mmml_inter_monomer_pairs(
         positions=positions,
         cell=cell,
-        cutoff_A=float(args.mm_cutoff),
+        cutoff_A=mm_cutoff,
         monomer_offsets=offsets,
         backend=args.mm_backend,
         mm_r_min=mm_r_min,
@@ -188,7 +210,7 @@ def main() -> int:
         "box_size_A": float(args.box_size),
         "charmm_cutoff_A": charmm_cutoff,
         "charmm_source": args.charmm_source if args.with_charmm else None,
-        "mm_cutoff_A": float(args.mm_cutoff),
+        "mm_cutoff_A": mm_cutoff,
         "mm_r_min_A": mm_r_min,
     }
     comparison = None

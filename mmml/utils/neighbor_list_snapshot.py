@@ -207,6 +207,70 @@ def capture_charmm_jnb_inter_monomer_pairs(
     )
 
 
+def capture_charmm_image_inter_monomer_pairs(
+    *,
+    cutoff_A: float,
+    monomer_offsets: Sequence[int],
+    positions: np.ndarray | None = None,
+    cell: np.ndarray | None = None,
+    mm_r_min: float | None = None,
+) -> NeighborListSnapshot | None:
+    """Capture inter-monomer pairs from CHARMM image MIC export (JNB + IMJNB)."""
+    import pycharmm.image as image
+
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        apply_mm_pair_filters,
+        filter_pairs_under_cutoff,
+        inter_monomer_pair_set,
+        walk_charmm_mic_pair_set,
+    )
+
+    image.update_bimag()
+    exported = image.export_mic_pairs()
+    if exported is None:
+        return None
+    pair_i, pair_j = exported
+    raw = walk_charmm_mic_pair_set(pair_i, pair_j)
+
+    if positions is None:
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
+
+        positions = coor.get_positions().to_numpy(dtype=np.float64)
+    else:
+        positions = np.asarray(positions, dtype=np.float64)
+
+    offsets = np.asarray(monomer_offsets, dtype=np.int32)
+    mid = monomer_id_from_offsets(offsets, positions.shape[0])
+    inter = inter_monomer_pair_set(raw, monomer_id=mid)
+    cutoff = float(cutoff_A)
+    filtered = apply_mm_pair_filters(
+        inter,
+        monomer_id=mid,
+        positions=positions,
+        cell=cell,
+        mm_r_min=mm_r_min,
+        monomer_offsets=offsets,
+    )
+    if cell is not None:
+        mic_filtered = filter_pairs_under_cutoff(filtered, positions, cell, cutoff)
+    else:
+        mic_filtered = {
+            pair
+            for pair in filtered
+            if float(np.linalg.norm(positions[pair[1]] - positions[pair[0]])) < cutoff
+        }
+    pairs = _pair_records(mic_filtered, positions=positions, cell=cell, monomer_id=mid)
+    return NeighborListSnapshot(
+        source="charmm_image_mic",
+        cutoff_A=cutoff,
+        pairs=pairs,
+        meta={
+            "n_mic_pairs_total": len(raw),
+            "n_inter_monomer_pairs": len(pairs),
+        },
+    )
+
+
 def capture_mlpot_mlmm_inter_monomer_pairs(
     *,
     cutoff_A: float,
@@ -614,7 +678,9 @@ def setup_charmm_from_psf_crd(
     psf_path: Path,
     crd_path: Path,
     box_side: float,
-    charmm_cutoff_A: float,
+    charmm_cutoff_A: float | None = None,
+    mm_switch_on: float | None = None,
+    mm_switch_width: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, float]:
     """Load PSF+CRD into PyCHARMM, apply PBC nbonds, return positions and effective cutoff."""
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import read_psf_card_file
@@ -633,8 +699,10 @@ def setup_charmm_from_psf_crd(
     prepare_charmm_pbc(float(box_side))
     cuts = apply_pbc_nbonds(
         nbxmod=5,
-        cutnb=float(charmm_cutoff_A),
+        cutnb=charmm_cutoff_A,
         cubic_box_side_A=float(box_side),
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
     )
     positions = np.asarray(get_charmm_positions_array(), dtype=np.float64)
     return positions, cubic_cell_matrix(box_side), float(cuts.cutnb)

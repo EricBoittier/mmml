@@ -225,3 +225,40 @@ def get_iminb_stats():
         "niming": int(out[8]),
         "mlpot_active": bool(out[9]),
     }
+
+
+def get_mic_pair_count():
+    """Return MIC-mapped primary pair count from JNB + image IMJNB.
+
+    Requires CHARMM build exporting ``image_get_mic_pair_count``.
+    Returns ``None`` when unavailable.
+    """
+    try:
+        getter = lib.charmm.image_get_mic_pair_count
+    except AttributeError:
+        return None
+    return int(getter())
+
+
+def export_mic_pairs(*, max_pairs: int | None = None):
+    """Export MIC-mapped primary pairs as 0-based ``(i, j)`` with ``i < j``.
+
+    Merges primary ``JNB`` with image ``IMJNB`` neighbors mapped through
+    ``IMATTR``.  Returns ``None`` when the C API is unavailable.
+    """
+    try:
+        exporter = lib.charmm.image_export_mic_pairs
+        counter = lib.charmm.image_get_mic_pair_count
+    except AttributeError:
+        return None
+    cap = int(max_pairs) if max_pairs is not None else int(counter())
+    if cap <= 0:
+        return [], []
+    out_i = (ctypes.c_int * cap)()
+    out_j = (ctypes.c_int * cap)()
+    out_count = (ctypes.c_int * 1)()
+    status = exporter(out_i, out_j, ctypes.c_int(cap), out_count)
+    if not bool(status):
+        raise RuntimeError("image_export_mic_pairs failed")
+    n = int(out_count[0])
+    return [int(out_i[k]) for k in range(n)], [int(out_j[k]) for k in range(n)]

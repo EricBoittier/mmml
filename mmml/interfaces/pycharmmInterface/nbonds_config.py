@@ -132,6 +132,48 @@ def enforce_switch_cutoff_order(
     return nb, on, of
 
 
+def mlpot_mm_nl_cutoff_A(
+    *,
+    mm_switch_on: float,
+    mm_switch_width: float,
+) -> float:
+    """Outer MM neighbor-list radius used by JAX switched-MM (Å)."""
+    return float(mm_switch_on) + float(mm_switch_width)
+
+
+def pbc_nbond_cutoffs_from_mlpot_switches(
+    cubic_box_side_A: float,
+    *,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    margin_A: float = PBC_NBOND_BOX_MARGIN_A,
+) -> PbcNbondCutoffs:
+    """PBC CHARMM cutoffs aligned with MMML ``mm_switch_on + mm_switch_width``."""
+    cutnb_max = mlpot_mm_nl_cutoff_A(
+        mm_switch_on=float(mm_switch_on),
+        mm_switch_width=float(mm_switch_width),
+    )
+    return pbc_nbond_cutoffs(
+        cubic_box_side_A,
+        cutnb_max=cutnb_max,
+        ctonnb_max=float(ctonnb_max_for_cutnb(cutnb_max)),
+        ctofnb_max=float(ctofnb_max_for_cutnb(cutnb_max)),
+        margin_A=margin_A,
+    )
+
+
+def ctonnb_max_for_cutnb(cutnb: float) -> float:
+    """Scale vacuum ``ctonnb`` reference to a target ``cutnb``."""
+    ctonnb, _ = scale_vacuum_switch_cutoffs(float(cutnb))
+    return ctonnb
+
+
+def ctofnb_max_for_cutnb(cutnb: float) -> float:
+    """Scale vacuum ``ctofnb`` reference to a target ``cutnb``."""
+    _, ctofnb = scale_vacuum_switch_cutoffs(float(cutnb))
+    return ctofnb
+
+
 def pbc_nbond_cutoffs(
     cubic_box_side_A: float,
     *,

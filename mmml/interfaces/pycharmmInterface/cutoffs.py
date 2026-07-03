@@ -108,6 +108,16 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Legacy MM window: MM starts at mm_switch_on instead of filling the ML taper handoff.",
     )
+    parser.add_argument(
+        "--mm-pair-source",
+        choices=("jax", "charmm_callback"),
+        default=None,
+        help=(
+            "Decomposed MLpot MM pair provider: JAX neighbor rebuild (default) or "
+            "Fortran callback idxu/idxv for parity diagnostics. "
+            "Override with env MMML_MM_PAIR_SOURCE."
+        ),
+    )
 
 
 def _resolve_ml_switch_width(

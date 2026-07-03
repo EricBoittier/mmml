@@ -286,6 +286,141 @@ contains
     success = 1
     
   end function image_get_iminb_stats
+
+
+  !> @brief Count MIC-mapped primary pairs in JNB + image IMJNB lists.
+  function image_get_mic_pair_count() bind(c) result(n_pairs)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use bases_fcm, only: bimag, bnbnd
+    use image, only: natim, ntrans
+    use psf, only: natom
+
+    implicit none
+
+    integer(c_int) :: n_pairs
+    integer :: i, w, istart, v, nb, pi, pj, ai, aj
+
+    n_pairs = 0
+    if (natom <= 0) return
+
+    if (associated(bnbnd%jnb) .and. associated(bnbnd%inblo)) then
+       do i = 1, natom
+          if (i > 1) then
+             istart = bnbnd%inblo(i-1) + 1
+          else
+             istart = 1
+          endif
+          do w = istart, bnbnd%inblo(i)
+             ai = i - 1
+             aj = bnbnd%jnb(w) - 1
+             if (ai < aj) n_pairs = n_pairs + 1
+          enddo
+       enddo
+    endif
+
+    if (ntrans == 0 .or. natim <= natom) return
+    if (.not. associated(bimag%imattr)) return
+    if (.not. associated(bimag%imjnb) .or. .not. associated(bimag%imblo)) return
+
+    do v = natom + 1, natim
+       pi = bimag%imattr(v)
+       if (v > 1) then
+          istart = bimag%imblo(v-1) + 1
+       else
+          istart = 1
+       endif
+       do w = istart, bimag%imblo(v)
+          nb = bimag%imjnb(w)
+          if (nb <= natom) then
+             pj = nb
+          else
+             pj = bimag%imattr(nb)
+          endif
+          ai = pi - 1
+          aj = pj - 1
+          if (ai < aj) n_pairs = n_pairs + 1
+       enddo
+    enddo
+  end function image_get_mic_pair_count
+
+
+  !> @brief Export MIC-mapped primary pairs from JNB + image IMJNB (0-based, i < j).
+  function image_export_mic_pairs( &
+       out_i, out_j, max_pairs, out_count) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use bases_fcm, only: bimag, bnbnd
+    use image, only: natim, ntrans
+    use psf, only: natom
+
+    implicit none
+
+    integer(c_int), dimension(*), intent(out) :: out_i, out_j
+    integer(c_int), value :: max_pairs
+    integer(c_int), intent(out) :: out_count
+    integer(c_int) :: success
+    integer :: i, w, istart, v, nb, pi, pj, ai, aj, c
+
+    success = 0
+    out_count = 0
+    if (max_pairs <= 0) return
+    if (natom <= 0) return
+
+    c = 0
+    if (associated(bnbnd%jnb) .and. associated(bnbnd%inblo)) then
+       do i = 1, natom
+          if (i > 1) then
+             istart = bnbnd%inblo(i-1) + 1
+          else
+             istart = 1
+          endif
+          do w = istart, bnbnd%inblo(i)
+             if (c >= max_pairs) exit
+             ai = i - 1
+             aj = bnbnd%jnb(w) - 1
+             if (ai < aj) then
+                c = c + 1
+                out_i(c) = ai
+                out_j(c) = aj
+             endif
+          enddo
+          if (c >= max_pairs) exit
+       enddo
+    endif
+
+    if (c < max_pairs .and. ntrans /= 0 .and. natim > natom) then
+       if (associated(bimag%imattr) .and. associated(bimag%imjnb) &
+            .and. associated(bimag%imblo)) then
+          do v = natom + 1, natim
+             if (c >= max_pairs) exit
+             pi = bimag%imattr(v)
+             if (v > 1) then
+                istart = bimag%imblo(v-1) + 1
+             else
+                istart = 1
+             endif
+             do w = istart, bimag%imblo(v)
+                if (c >= max_pairs) exit
+                nb = bimag%imjnb(w)
+                if (nb <= natom) then
+                   pj = nb
+                else
+                   pj = bimag%imattr(nb)
+                endif
+                ai = pi - 1
+                aj = pj - 1
+                if (ai < aj) then
+                   c = c + 1
+                   out_i(c) = ai
+                   out_j(c) = aj
+                endif
+             enddo
+          enddo
+       endif
+    endif
+
+    out_count = c
+    success = 1
+  end function image_export_mic_pairs
   
   
   !> @brief Update image - primary atoms non bonded exclusion list

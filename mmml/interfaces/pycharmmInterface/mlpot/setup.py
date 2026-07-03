@@ -1604,8 +1604,24 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         flush=True,
     )
     print("MLpot PBC: configuring PBC nonbond cutoffs (defer upinb)…", flush=True)
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        CutoffParameters,
+        cutoff_parameters_from_args,
+    )
+
+    cp = (
+        cutoff_parameters_from_args(workflow_args)
+        if workflow_args is not None
+        else CutoffParameters()
+    )
     with charmm_relaxed_bomlev():
-        apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=side, rebuild=False)
+        apply_pbc_nbonds(
+            nbxmod=5,
+            cubic_box_side_A=side,
+            rebuild=False,
+            mm_switch_on=cp.mm_switch_on,
+            mm_switch_width=cp.mm_switch_width,
+        )
     _install_ml_exclusions(ml_selection, update=False)
     nnb = _verify_ml_exclusion_lists_installed(
         ml_selection,

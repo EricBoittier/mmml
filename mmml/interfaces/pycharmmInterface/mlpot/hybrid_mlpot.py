@@ -6,7 +6,7 @@ import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Literal, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -30,6 +30,8 @@ from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
 
 __all__ = [
     "resolve_ml_batch_size",
+    "resolve_mm_pair_source",
+    "MmPairSource",
     "DecomposedMlpotCalculator",
     "DecomposedMlpotModel",
     "build_decomposed_mlpot_model",
@@ -40,6 +42,40 @@ __all__ = [
 
 _DUMMY_MM_PAIR_IDX = jnp.zeros((1, 2), dtype=jnp.int32)
 _DUMMY_MM_PAIR_MASK = jnp.zeros((1,), dtype=jnp.bool_)
+
+MmPairSource = Literal["jax", "charmm_callback"]
+
+
+def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
+    """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback)."""
+    raw = os.environ.get("MMML_MM_PAIR_SOURCE", "").strip().lower()
+    if raw in ("charmm_callback", "callback", "charmm"):
+        return "charmm_callback"
+    if raw in ("jax", ""):
+        pass
+    else:
+        raise ValueError(
+            f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
+        )
+    if args is not None:
+        src = getattr(args, "mm_pair_source", None)
+        if src is not None:
+            norm = str(src).strip().lower()
+            if norm in ("charmm_callback", "callback", "charmm"):
+                return "charmm_callback"
+            if norm == "jax":
+                return "jax"
+            raise ValueError(f"mm_pair_source must be jax or charmm_callback; got {src!r}")
+    return "jax"
+
+
+def _monomer_offsets_from_atoms_per_monomer(
+    atoms_per_monomer: Sequence[int],
+) -> np.ndarray:
+    offsets = [0]
+    for n in atoms_per_monomer:
+        offsets.append(offsets[-1] + int(n))
+    return np.asarray(offsets, dtype=np.int32)
 
 
 def _box_cache_key(box: jnp.ndarray | None) -> bool:
@@ -119,6 +155,8 @@ class DecomposedMlpotCalculator:
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
         periodic_mm_config: Any | None = None,
+        mm_pair_source: MmPairSource = "jax",
+        mm_r_min: float | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
@@ -141,6 +179,9 @@ class DecomposedMlpotCalculator:
         self.last_ml_forces: np.ndarray | None = None
         self._spherical_forward_fn: Any | None = None
         self._forward_cache_key: tuple[Any, ...] | None = None
+        self._mm_pair_source: MmPairSource = str(mm_pair_source)  # type: ignore[assignment]
+        self._mm_r_min = float(mm_r_min) if mm_r_min is not None else None
+        self._callback_pair_warned = False
 
     def _grad_cache_owner(self) -> DecomposedMlpotCalculator | DecomposedMlpotModel:
         parent = getattr(self, "_parent_model", None)
@@ -343,6 +384,76 @@ class DecomposedMlpotCalculator:
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
         return jnp.asarray(mm_pair_idx), jnp.asarray(mm_pair_mask), True
 
+    def _resolve_mm_pairs_from_callback(
+        self,
+        idxu,
+        idxv,
+        idxup,
+        idxvp,
+        *,
+        natom: int,
+        nmlmmp: int,
+        pos: np.ndarray,
+        box: jnp.ndarray | None,
+    ) -> tuple[jnp.ndarray, jnp.ndarray, bool]:
+        from mmml.interfaces.pycharmmInterface.nl_reference import (
+            apply_mm_pair_filters,
+            callback_mlmm_pairs_to_half_set,
+            callback_pairs_to_padded_arrays,
+            filter_pairs_under_cutoff,
+            inter_monomer_pair_set,
+            monomer_id_from_offsets,
+        )
+
+        n_pairs = int(nmlmmp)
+        if n_pairs <= 0:
+            if not self._callback_pair_warned:
+                print(
+                    "Decomposed MLpot: charmm_callback MM pairs empty (all-ML or stale "
+                    "mlpot_update); falling back to JAX neighbor rebuild",
+                    flush=True,
+                )
+                self._callback_pair_warned = True
+            return self._resolve_mm_pairs(pos, box)
+
+        offsets = _monomer_offsets_from_atoms_per_monomer(self._atoms_per_monomer)
+        mid = monomer_id_from_offsets(offsets, int(natom))
+        raw = callback_mlmm_pairs_to_half_set(
+            idxup,
+            idxvp,
+            nmlmmp=n_pairs,
+            natom=int(natom),
+        )
+        inter = inter_monomer_pair_set(raw, monomer_id=mid)
+        cutoff = float(self.cutoff_params.mm_switch_on) + float(
+            self.cutoff_params.mm_switch_width
+        )
+        mm_r_min = self._mm_r_min
+        if mm_r_min is None:
+            handoff = float(self.cutoff_params.mm_switch_on) - float(
+                self.cutoff_params.ml_switch_width
+            )
+            mm_r_min = handoff * 0.9 if handoff > 0.0 else 0.0
+        box_np = _box_numpy_for_update(box)
+        filtered = apply_mm_pair_filters(
+            inter,
+            monomer_id=mid,
+            positions=pos,
+            cell=box_np,
+            mm_r_min=mm_r_min,
+            monomer_offsets=offsets,
+        )
+        if box_np is not None:
+            mic_filtered = filter_pairs_under_cutoff(filtered, pos, box_np, cutoff)
+        else:
+            mic_filtered = {
+                pair
+                for pair in filtered
+                if float(np.linalg.norm(pos[pair[1]] - pos[pair[0]])) < cutoff
+            }
+        pair_idx, pair_mask = callback_pairs_to_padded_arrays(mic_filtered)
+        return jnp.asarray(pair_idx), jnp.asarray(pair_mask), True
+
     def _mlpot_eval_device_context(self):
         """CPU while MPI defer keeps the JAX factory off-GPU; else configured device."""
         parent = getattr(self, "_parent_model", None)
@@ -417,7 +528,23 @@ class DecomposedMlpotCalculator:
         )
         if run_ml:
             with self._mlpot_eval_device_context():
-                mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
+                if self._mm_pair_source == "charmm_callback":
+                    mm_pair_idx, mm_pair_mask, use_mm_pairs = (
+                        self._resolve_mm_pairs_from_callback(
+                            idxu,
+                            idxv,
+                            idxup,
+                            idxvp,
+                            natom=n,
+                            nmlmmp=int(Nmlmmp),
+                            pos=pos,
+                            box=box,
+                        )
+                    )
+                else:
+                    mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(
+                        pos, box
+                    )
                 positions_jax = as_ml_array(
                     pos,
                     dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),
@@ -585,6 +712,8 @@ class DecomposedMlpotModel:
         periodic_mm_config: Any | None = None,
         lr_solver: str | None = None,
         jax_pme_method: str | None = None,
+        mm_pair_source: MmPairSource = "jax",
+        mm_r_min: float | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -622,6 +751,8 @@ class DecomposedMlpotModel:
         self._verbose = bool(verbose)
         self._lr_solver = lr_solver
         self._jax_pme_method = jax_pme_method
+        self._mm_pair_source: MmPairSource = str(mm_pair_source)  # type: ignore[assignment]
+        self._mm_r_min = float(mm_r_min) if mm_r_min is not None else None
         self._jax_pme_hybrid_first_ener_done = not self._defer_jax_pme_gpu_promote_initial()
 
     def _jax_pme_lr_active(self) -> bool:
@@ -831,6 +962,8 @@ class DecomposedMlpotModel:
             spatial_mpi=self._spatial_mpi,
             atoms_per_monomer=self._atoms_per_monomer,
             periodic_mm_config=self._periodic_mm_config,
+            mm_pair_source=self._mm_pair_source,
+            mm_r_min=self._mm_r_min,
         )
         calc._parent_model = self
         self._registered_calculator = calc
@@ -1026,6 +1159,14 @@ def build_decomposed_mlpot_model(
             f"r^-6 dispersion={disp_text} when lr_solver=jax_pme)",
             flush=True,
         )
+    mm_pair_source = resolve_mm_pair_source(args)
+    mm_r_min_arg = getattr(args, "mm_r_min", None) if args is not None else None
+    if verbose and mm_pair_source == "charmm_callback":
+        print(
+            "Decomposed MLpot: mm_pair_source=charmm_callback "
+            "(Fortran idxu/idxv primary pairs for parity diagnostics)",
+            flush=True,
+        )
     factory = setup_calculator(
         ATOMS_PER_MONOMER=per,
         N_MONOMERS=int(n_monomers),
@@ -1093,6 +1234,8 @@ def build_decomposed_mlpot_model(
             periodic_mm_config=periodic_mm_config,
             lr_solver=lr_solver,
             jax_pme_method=jax_pme_method,
+            mm_pair_source=mm_pair_source,
+            mm_r_min=mm_r_min_arg,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -1131,6 +1274,8 @@ def build_decomposed_mlpot_model(
         periodic_mm_config=periodic_mm_config,
         lr_solver=lr_solver,
         jax_pme_method=jax_pme_method,
+        mm_pair_source=mm_pair_source,
+        mm_r_min=mm_r_min_arg,
     )
     return model
 

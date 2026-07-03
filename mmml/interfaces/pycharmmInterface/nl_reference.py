@@ -177,6 +177,51 @@ def walk_charmm_primary_jnb_pair_set(
     }
 
 
+def walk_charmm_mic_pair_set(
+    pair_i: Sequence[int],
+    pair_j: Sequence[int],
+) -> set[tuple[int, int]]:
+    """Build a deduplicated half-list from exported MIC-mapped primary pairs."""
+    return walk_charmm_primary_jnb_pair_set(pair_i, pair_j)
+
+
+def callback_mlmm_pairs_to_half_set(
+    idxup: Sequence[int],
+    idxvp: Sequence[int],
+    *,
+    nmlmmp: int,
+    natom: int,
+) -> set[tuple[int, int]]:
+    """Map Fortran ML–MM callback primary indices to a half pair set."""
+    n = int(nmlmmp)
+    nat = int(natom)
+    pairs: set[tuple[int, int]] = set()
+    for k in range(n):
+        up = int(idxup[k])
+        vp = int(idxvp[k])
+        if up < 0 or vp < 0 or up >= nat or vp >= nat:
+            continue
+        pairs.add(canonical_half_pair(up, vp))
+    return pairs
+
+
+def callback_pairs_to_padded_arrays(
+    pairs: set[tuple[int, int]],
+    *,
+    min_capacity: int = 1,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Pack a half pair set into padded ``(capacity, 2)`` + mask arrays."""
+    ordered = sorted(pairs)
+    capacity = max(int(min_capacity), len(ordered), 1)
+    pair_idx = np.zeros((capacity, 2), dtype=np.int32)
+    pair_mask = np.zeros(capacity, dtype=bool)
+    for k, (i, j) in enumerate(ordered):
+        pair_idx[k, 0] = int(i)
+        pair_idx[k, 1] = int(j)
+        pair_mask[k] = True
+    return pair_idx, pair_mask
+
+
 def inter_monomer_pair_set(
     pairs: Iterable[tuple[int, int]],
     *,

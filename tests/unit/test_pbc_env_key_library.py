@@ -14,6 +14,7 @@ def test_apply_pbc_nbonds_uses_nbonds_api() -> None:
         cuts = apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=32.0)
     mock_apply.assert_called_once()
     assert cuts.cubic_box_side_A == pytest.approx(32.0)
+    assert cuts.cutnb == pytest.approx(13.0)
 
 
 def test_restore_crystal_lattice_runs_prepare_pbc_before_nbonds() -> None:

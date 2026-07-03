@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.nl_reference import (
     brute_force_mic_pairs,
@@ -92,3 +93,36 @@ def test_classify_inter_monomer_diff_cutoff_skew() -> None:
     )
     assert len(tags["cutoff_only_left"]) == 1
     assert tags["true_mismatch_left"] == []
+
+
+def test_callback_mlmm_pairs_to_half_set_maps_primary_indices() -> None:
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        callback_mlmm_pairs_to_half_set,
+        callback_pairs_to_padded_arrays,
+    )
+
+    idxup = [0, 2]
+    idxvp = [5, 7]
+    pairs = callback_mlmm_pairs_to_half_set(idxup, idxvp, nmlmmp=2, natom=10)
+    assert pairs == {(0, 5), (2, 7)}
+    pair_idx, pair_mask = callback_pairs_to_padded_arrays(pairs)
+    assert pair_idx.shape == (2, 2)
+    assert pair_mask.tolist() == [True, True]
+    assert pair_idx[0].tolist() == [0, 5]
+
+
+def test_pbc_nbond_cutoffs_from_mlpot_switches_aligns_outer_radius() -> None:
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        mlpot_mm_nl_cutoff_A,
+        pbc_nbond_cutoffs_from_mlpot_switches,
+    )
+
+    outer = mlpot_mm_nl_cutoff_A(mm_switch_on=8.0, mm_switch_width=5.0)
+    assert outer == pytest.approx(13.0)
+    cuts = pbc_nbond_cutoffs_from_mlpot_switches(
+        55.0,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+    )
+    assert cuts.cutnb == pytest.approx(13.0)
+    assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
