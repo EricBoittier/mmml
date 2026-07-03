@@ -201,6 +201,19 @@ Add your own variant under `prep_sweep.variants` (lowercase id, mapping of md-sy
 
 ## Tests
 
+Unit tests live under the **repo root** (`tests/unit/`), not in this workflow folder. From anywhere in the repo:
+
 ```bash
-uv run pytest tests/unit/test_dcm_density_setup_compare_campaign.py -q
+cd "$(git rev-parse --show-toplevel)"
+uv run pytest tests/unit/test_dcm_density_setup_compare_campaign.py \
+  tests/unit/test_bonded_jax_recovery.py \
+  tests/unit/test_charmm_recovery_sidecar.py -q
+```
+
+From this directory only, use relative paths:
+
+```bash
+uv run pytest ../../tests/unit/test_dcm_density_setup_compare_campaign.py \
+  ../../tests/unit/test_bonded_jax_recovery.py \
+  ../../tests/unit/test_charmm_recovery_sidecar.py -q
 ```
