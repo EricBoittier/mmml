@@ -52,6 +52,7 @@ def bonded_energy_components(
     *,
     urey_k: Array | None = None,
     urey_r0: Array | None = None,
+    include_cmap: bool = True,
 ) -> dict[str, Array]:
     """Return bonded energy components in kcal/mol (jax-md convention)."""
     if displacement_fn is None:
@@ -150,7 +151,11 @@ def bonded_energy_components(
     )
     e_torsion = torsion_energy()
     e_improper = improper_energy()
-    e_cmap = cmap_energy(positions, topology, bonded, displacement_fn)
+    e_cmap = (
+        cmap_energy(positions, topology, bonded, displacement_fn)
+        if include_cmap
+        else jnp.array(0.0, dtype=positions.dtype)
+    )
     e_total = e_bond + e_angle + e_urey + e_torsion + e_improper + e_cmap
     return {
         "bond": e_bond,
@@ -172,6 +177,7 @@ def bonded_energy_and_forces(
     urey_k: Array | None = None,
     urey_r0: Array | None = None,
     energy_unit: str = "kcal/mol",
+    include_cmap: bool = True,
 ) -> tuple[dict[str, Array], Array]:
     """Bonded energy (dict) and forces (N, 3) for a CGENFF bonded model."""
     if displacement_fn is None:
@@ -185,6 +191,7 @@ def bonded_energy_and_forces(
             displacement_fn,
             urey_k=urey_k,
             urey_r0=urey_r0,
+            include_cmap=include_cmap,
         )["total"]
 
     components = bonded_energy_components(
@@ -194,6 +201,7 @@ def bonded_energy_and_forces(
         displacement_fn,
         urey_k=urey_k,
         urey_r0=urey_r0,
+        include_cmap=include_cmap,
     )
     forces = -jax.grad(total_energy)(positions)
 

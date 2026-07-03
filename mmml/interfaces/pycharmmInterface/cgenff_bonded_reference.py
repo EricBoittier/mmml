@@ -80,6 +80,24 @@ def read_pdb_file(path: str | Path, **kwargs: Any) -> None:
     read.pdb(fortran_path, **kwargs)
 
 
+def charmm_cmap_is_active(
+    charmm_bonded: dict[str, float] | None = None,
+    *,
+    atol: float = 1e-8,
+) -> bool:
+    """True when PyCHARMM reports a non-zero CMAP term after ``ENER`` / ``ENER FORCE``.
+
+    JAX CMAP should be gated off when this returns False so parity checks match
+    live CHARMM (e.g. TRIA CGENFF backbone grids not active in PyCHARMM ``ENER``).
+    """
+    bonded = (
+        charmm_bonded
+        if charmm_bonded is not None
+        else charmm_bonded_energy_components_kcalmol()
+    )
+    return abs(float(bonded.get("cmap", 0.0))) > float(atol)
+
+
 def setup_bonded_only_charmm() -> None:
     """Zero nonbonded terms so ``ENER FORCE`` reports bonded MM only."""
     from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_bonded_mm_only_block
@@ -132,10 +150,13 @@ def compare_bonded_to_charmm(
     force_rtol: float = 1e-3,
     force_atol: float = 1e-3,
     ignore_charmm_terms: tuple[str, ...] = (),
+    include_cmap: bool | None = None,
 ) -> None:
     """Assert JAX bonded E/F match PyCHARMM bonded-only reference."""
     charmm = charmm_bonded_energy_components_kcalmol()
     charmm_forces = charmm_bonded_forces_kcalmol_A()
+    if include_cmap is None:
+        include_cmap = charmm_cmap_is_active(charmm)
 
     ignored = sum(float(charmm.get(term, 0.0)) for term in ignore_charmm_terms)
 
@@ -149,6 +170,8 @@ def compare_bonded_to_charmm(
     }
     for jax_key, charmm_key in mapping.items():
         if jax_key not in jax_components:
+            continue
+        if jax_key == "cmap" and not include_cmap:
             continue
         jax_val = float(jax_components[jax_key])
         if isinstance(charmm_key, tuple):
@@ -171,6 +194,8 @@ def compare_bonded_to_charmm(
         mapped_charmm_total = 0.0
         for k, charmm_key in mapping.items():
             if k not in jax_components:
+                continue
+            if k == "cmap" and not include_cmap:
                 continue
             if isinstance(charmm_key, tuple):
                 mapped_charmm_total += sum(

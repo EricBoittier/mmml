@@ -8,6 +8,7 @@ import pytest
 
 from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
 from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+    charmm_cmap_is_active,
     compare_bonded_to_charmm,
     compare_mm_system_to_charmm,
     compare_nonbonded_to_charmm,
@@ -82,6 +83,7 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
 
     setup_bonded_only_charmm()
     run_charmm_bonded_ener_force(silent=True)
+    include_cmap = charmm_cmap_is_active()
 
     bonded = load_bonded_system_from_psf(
         box.psf_path,
@@ -96,12 +98,14 @@ def test_trialanine_water_bonded_matches_pycharmm(trialanine_water_box) -> None:
         urey_k=bonded.urey_k,
         urey_r0=bonded.urey_r0,
         energy_unit="kcal/mol",
+        include_cmap=include_cmap,
     )
     compare_bonded_to_charmm(
         components,
         np.asarray(forces),
         energy_rtol=2e-4,
         force_rtol=5e-3,
+        include_cmap=include_cmap,
     )
 
 
@@ -144,6 +148,7 @@ def test_trialanine_water_total_mm_matches_pycharmm(
 
     apply_charmm_mm_block()
     run_charmm_bonded_ener_force(silent=True)
+    include_cmap = charmm_cmap_is_active()
 
     bonded = load_bonded_system_from_psf(
         box.psf_path,
@@ -161,5 +166,6 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         nbond_data,
         box.cell,
         _nbond_settings_from_box(box),
+        include_cmap=include_cmap,
     )
     compare_mm_system_to_charmm(result)

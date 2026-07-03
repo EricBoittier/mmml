@@ -193,14 +193,25 @@ def apply_bonded_mm_only_block(
     *,
     verbose: bool = False,
     restore_params: bool = True,
+    force_restore_params: bool = False,
 ) -> None:
-    """Bonded MM terms only (BOND/ANGL/DIHE); zero VDW/ELEC for geometry recovery."""
+    """Bonded MM terms only (BOND/ANGL/DIHE); zero VDW/ELEC for geometry recovery.
+
+    **Hang / stall note:** With ``restore_params=True`` (default), this calls
+    :func:`apply_full_cgenff_params` before BLOCK.  That issues ``READ PARAM APPEND``
+    on ``bonded_par_all36_cgenff.prm`` after ``crystal free`` when PBC is active.
+    On solvated periodic systems that step can take a long time (appearing hung at
+    ``MMML: crystal free before CGENFF READ PARAM APPEND``).  It is skipped when
+    bonded params are already restored unless ``force_restore_params=True``.
+    Under ``mpirun`` with MPI-linked libcharmm, selective BLOCK itself may hang —
+    see :func:`_assert_selective_block_safe`.
+    """
     if restore_params:
         from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
             apply_full_cgenff_params,
         )
 
-        apply_full_cgenff_params(verbose=verbose)
+        apply_full_cgenff_params(verbose=verbose, force=force_restore_params)
     block = """BLOCK
 CALL 1 SELE ALL END
 COEFF 1 1 1.0 BOND 1.0 ANGL 1.0 DIHEdral 1.0 ELEC 0.0 VDW 0.0

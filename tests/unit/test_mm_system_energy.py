@@ -21,6 +21,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     charmm_vfswitch_coeffs,
     charmm_vfswitch_vdw,
     excluded_pairs_from_psf_bonds,
+    excluded_pairs_from_psf_nnb,
     fully_excluded_pairs,
     one_four_pairs_from_bonds,
 )
@@ -262,3 +263,50 @@ def test_one_four_pairs_from_bonds_chain() -> None:
     bonds = np.asarray([[0, 1], [1, 2], [2, 3]], dtype=np.int32)
     pairs = one_four_pairs_from_bonds(bonds, natom=4)
     assert (0, 3) in pairs
+
+
+def test_charmm_nbond_settings_default_vdw14fac_zero() -> None:
+    settings = CharmmNbondSettings(cutnb=14.0, ctonnb=10.0, ctofnb=12.0)
+    assert settings.vdw14fac == 0.0
+    assert settings.e14fac == 1.0
+
+
+def test_excluded_pairs_from_psf_nnb_mini_mlpot_fixture() -> None:
+    from pathlib import Path
+
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+
+    psf = Path("tests/functionality/mlpot/output/minimize/mini_full_mlpot.psf")
+    if not psf.is_file():
+        pytest.skip("mini_full_mlpot.psf fixture missing")
+    data = parse_psf_ext(psf)
+    assert data.nnb_indices.size == 190
+    pairs = excluded_pairs_from_psf_nnb(data.nnb_indices, data.n_atoms)
+    assert (0, 1) in pairs
+    assert (0, 2) in pairs
+    assert len(pairs) > 50
+
+
+def test_vdw14fac_scales_one_four_lj_only() -> None:
+    settings = CharmmNbondSettings(
+        cutnb=14.0,
+        ctonnb=10.0,
+        ctofnb=12.0,
+        vdw14fac=0.0,
+    )
+    coeffs = charmm_vfswitch_coeffs(settings)
+    r = 4.0
+    ep, sig = 0.1, 3.5
+    a = ep * sig**12
+    b = 2.0 * ep * sig**6
+    full = float(
+        charmm_vfswitch_vdw(
+            jnp.asarray(r),
+            jnp.asarray(a),
+            jnp.asarray(b),
+            settings,
+            coeffs,
+        )
+    )
+    assert full != 0.0
+    assert full * settings.vdw14fac == pytest.approx(0.0)

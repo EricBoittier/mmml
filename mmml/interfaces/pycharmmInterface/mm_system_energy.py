@@ -49,6 +49,7 @@ class CharmmNbondSettings:
     ctofnb: float
     eps: float = 1.0
     e14fac: float = 1.0
+    vdw14fac: float = 0.0
     elec_switch: str = "fswitch"
     vdw_switch: str = "vfswitch"
 
@@ -352,6 +353,72 @@ def fully_excluded_pairs(iblo: Iterable[int], inb: Iterable[int], natom: int) ->
     return frozenset(excluded)
 
 
+def excluded_pairs_from_psf_nnb(
+    nnb_indices: np.ndarray,
+    natom: int,
+) -> frozenset[tuple[int, int]]:
+    """Build fully excluded pairs from a PSF ``!NNB`` / ``INB`` index list (1-based)."""
+    inb = np.asarray(nnb_indices, dtype=np.int32)
+    if inb.size == 0 or natom <= 0:
+        return frozenset()
+    excluded: set[tuple[int, int]] = set()
+    cursor = 0
+    for i in range(natom):
+        if cursor >= inb.size:
+            break
+        n_excl = int(inb[cursor])
+        cursor += 1
+        for _ in range(n_excl):
+            if cursor >= inb.size:
+                break
+            j = int(inb[cursor]) - 1
+            cursor += 1
+            if j < 0 or j >= natom:
+                continue
+            a, b = (i, j) if i < j else (j, i)
+            excluded.add((a, b))
+    return frozenset(excluded)
+
+
+def resolve_nonbonded_excluded_pairs(
+    psf_path: Path | str,
+    bonds: np.ndarray,
+    *,
+    natom: int,
+) -> frozenset[tuple[int, int]]:
+    """Return CHARMM-style 1–2/1–3 exclusions for JAX MIC pair lists.
+
+    Prefer live PyCHARMM ``IBLO``/``INB`` when populated; else PSF ``!NNB`` when
+    present; else bond-derived 1–2 and 1–3 pairs.
+    """
+    excluded: frozenset[tuple[int, int]] = frozenset()
+    try:
+        import pycharmm.nbonds as nbonds
+        import pycharmm.psf as psf
+
+        try:
+            nbonds.update_bnbnd()
+        except Exception:
+            pass
+        iblo, inb = psf.get_iblo_inb()
+        excluded = fully_excluded_pairs(iblo, inb, natom)
+    except Exception:
+        excluded = frozenset()
+
+    if excluded:
+        return excluded
+
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
+
+    psf_data = parse_psf_ext(psf_path)
+    if psf_data.nnb_indices.size > 0:
+        from_psf = excluded_pairs_from_psf_nnb(psf_data.nnb_indices, natom)
+        if from_psf:
+            return from_psf
+
+    return excluded_pairs_from_psf_bonds(bonds)
+
+
 def excluded_pairs_from_psf_bonds(bonds: np.ndarray) -> frozenset[tuple[int, int]]:
     """Build CHARMM-style 1–2 and 1–3 exclusion pairs from PSF bonds (0-based)."""
     from mmml.utils.geometry_checks import build_bond_exclusion_pairs
@@ -408,18 +475,20 @@ def load_nonbonded_system_from_charmm(
     *prm_paths: Path | str,
 ) -> NonbondedSystemData:
     """Load charges, LJ tables, and exclusions from the active PyCHARMM PSF."""
-    import pycharmm.psf as psf
-
     from mmml.interfaces.pycharmmInterface.cgenff_topology import parse_psf_ext
 
     psf_data = parse_psf_ext(psf_path)
     natom = psf_data.n_atoms
-    iblo, inb = psf.get_iblo_inb()
 
     lj: dict[str, tuple[float, float]] = {}
     for prm_path in prm_paths:
         lj.update(parse_lj_tables_from_prm(prm_path))
-    iac = np.asarray(psf.get_iac(), dtype=np.int32)
+    try:
+        import pycharmm.psf as psf
+
+        iac = np.asarray(psf.get_iac(), dtype=np.int32)
+    except Exception:
+        iac = np.ones(natom, dtype=np.int32)
     atom_eps = np.array(
         [lj.get(str(t), (0.0, 0.0))[0] for t in psf_data.atom_types],
         dtype=np.float64,
@@ -434,9 +503,11 @@ def load_nonbonded_system_from_charmm(
     atom_rmin[zero_lj] = 0.0
     at_codes = np.zeros(natom, dtype=np.int32)
 
-    excluded = fully_excluded_pairs(iblo, inb, natom)
-    if not excluded:
-        excluded = excluded_pairs_from_psf_bonds(psf_data.bonds)
+    excluded = resolve_nonbonded_excluded_pairs(
+        psf_path,
+        psf_data.bonds,
+        natom=natom,
+    )
     e14 = one_four_pairs_from_bonds(psf_data.bonds, natom) - excluded
 
     return NonbondedSystemData(
@@ -524,14 +595,17 @@ def nonbonded_energy_and_forces(
     pj = jnp.asarray(pair_j, dtype=jnp.int32)
 
     e14_scale_np = np.ones(len(pair_i), dtype=np.float64)
+    vdw14_scale_np = np.ones(len(pair_i), dtype=np.float64)
     for k, (i, j) in enumerate(zip(pair_i, pair_j, strict=True)):
         if (int(i), int(j)) in nbond_data.e14_pairs:
             e14_scale_np[k] = settings.e14fac
+            vdw14_scale_np[k] = settings.vdw14fac
 
     q = jnp.asarray(nbond_data.charges, dtype=jnp.float64)
     eps_tbl = jnp.asarray(nbond_data.epsilon, dtype=jnp.float64)
     rm_tbl = jnp.asarray(nbond_data.rmin, dtype=jnp.float64)
     e14_scale = jnp.asarray(e14_scale_np, dtype=jnp.float64)
+    vdw14_scale = jnp.asarray(vdw14_scale_np, dtype=jnp.float64)
     vfswitch_coeffs = charmm_vfswitch_coeffs(settings)
     fswitch_coeffs = charmm_fswitch_coeffs(settings)
     c2of = settings.c2ofnb
@@ -560,6 +634,7 @@ def nonbonded_energy_and_forces(
             vfswitch_coeffs,
             use_jax_pme_dispersion=use_jax_pme_dispersion,
         )
+        vdw = vdw * vdw14_scale
         elec = _pair_elec_energy(r, qq, settings, fswitch_coeffs)
 
         vdw = jnp.where(within_ctof, vdw, 0.0)
@@ -626,6 +701,7 @@ def mm_system_energy_and_forces(
     settings: CharmmNbondSettings,
     *,
     prm_file: Path | str | None = None,
+    include_cmap: bool = True,
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
@@ -640,6 +716,7 @@ def mm_system_energy_and_forces(
         urey_k=bonded_system.urey_k,
         urey_r0=bonded_system.urey_r0,
         energy_unit="kcal/mol",
+        include_cmap=include_cmap,
     )
     nb_comp, nb_forces = nonbonded_energy_and_forces(
         positions,

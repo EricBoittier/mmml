@@ -91,7 +91,7 @@ def apply_zeroed_cgenff_params(
         print(summary, flush=True)
 
 
-def apply_full_cgenff_params(*, verbose: bool = False) -> None:
+def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> None:
     """Restore bonded CGENFF parameters (append-safe) and verify PSF bonds.
 
     MLpot registration zeroes bonded force constants via
@@ -105,8 +105,18 @@ def apply_full_cgenff_params(*, verbose: bool = False) -> None:
     must rebuild crystal + ML exclusions first (see
     ``_finalize_pbc_mlpot_exclusions_after_param_read`` /
     :func:`~mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe`).
+
+    When ``force=False`` (default) and bonded params were already restored
+    (``active_cgenff_prm_mode() == "full"``), this is a no-op.  That avoids
+    redundant ``READ PARAM APPEND`` on every ``setup_bonded_only_charmm`` call,
+    which otherwise suspends PBC (``crystal free``) and can stall for minutes on
+    solvated boxes while CHARMM rebuilds parameter/NBOND state.
     """
     global _active_mode
+    if not force and _active_mode == "full":
+        if verbose:
+            print("CGENFF params: bonded restore skipped (already full)", flush=True)
+        return
     path = bonded_cgenff_prm_path()
     _read_cgenff_prm(path)
     n_bond = assert_psf_bonds_present(context="CGENFF MM restore")

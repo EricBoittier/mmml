@@ -222,6 +222,7 @@ def compare_frame_mm_energy(
     import pycharmm.energy as energy
 
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
+        charmm_cmap_is_active,
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
@@ -241,6 +242,7 @@ def compare_frame_mm_energy(
 
     charmm_terms = _charmm_mm_energy_components_kcalmol()
     charmm_forces = charmm_total_forces_kcalmol_A()
+    include_cmap = charmm_cmap_is_active({"cmap": charmm_terms.get("cmap", 0.0)})
 
     result = mm_system_energy_and_forces(
         pos,
@@ -248,6 +250,7 @@ def compare_frame_mm_energy(
         ctx.nbond_data,
         ctx.cell,
         ctx.nb_settings,
+        include_cmap=include_cmap,
     )
     jax_terms = _jax_mm_energy_components_kcalmol(result)
     terms = term_deltas_from_component_maps(jax_terms, charmm_terms)

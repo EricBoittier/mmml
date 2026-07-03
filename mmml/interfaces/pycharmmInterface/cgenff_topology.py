@@ -315,6 +315,7 @@ class PsfConnectivity:
     torsions: np.ndarray
     impropers: np.ndarray
     cmaps: np.ndarray
+    nnb_indices: np.ndarray
 
 
 def _read_psf_section_ints(
@@ -347,7 +348,7 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
     natom = None
     atom_types: list[str] = []
     charges: list[float] = []
-    bonds = angles = torsions = impropers = cmaps = None
+    bonds = angles = torsions = impropers = cmaps = nnb_indices = None
 
     i = 0
     while i < len(lines):
@@ -382,6 +383,24 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
             raw, i = _read_psf_section_ints(lines, i, n_per_entry=8)
             cmaps = np.asarray(raw, dtype=np.int32).reshape(-1, 8) - 1
             continue
+        if "!NNB" in line:
+            n_inb = int(line.split()[0])
+            if n_inb > 0:
+                values: list[int] = []
+                idx = i + 1
+                while len(values) < n_inb:
+                    if idx >= len(lines):
+                        raise ValueError(
+                            f"PSF !NNB section ended before {n_inb} integers were read"
+                        )
+                    values.extend(int(x) for x in lines[idx].split())
+                    idx += 1
+                nnb_indices = np.asarray(values[:n_inb], dtype=np.int32)
+                i = idx
+            else:
+                nnb_indices = np.zeros(0, dtype=np.int32)
+                i += 1
+            continue
         i += 1
 
     if natom is None:
@@ -391,6 +410,9 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
     torsions = torsions if torsions is not None else np.zeros((0, 4), dtype=np.int32)
     impropers = impropers if impropers is not None else np.zeros((0, 4), dtype=np.int32)
     cmaps = cmaps if cmaps is not None else np.zeros((0, 8), dtype=np.int32)
+    nnb_indices = (
+        nnb_indices if nnb_indices is not None else np.zeros(0, dtype=np.int32)
+    )
     return PsfConnectivity(
         n_atoms=natom,
         atom_types=tuple(atom_types),
@@ -400,6 +422,7 @@ def parse_psf_ext(psf_path: Path | str) -> PsfConnectivity:
         torsions=torsions,
         impropers=impropers,
         cmaps=cmaps,
+        nnb_indices=nnb_indices,
     )
 
 
