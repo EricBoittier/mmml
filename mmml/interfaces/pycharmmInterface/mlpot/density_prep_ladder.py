@@ -905,7 +905,7 @@ def run_density_prep_ladder(
                 fmax_ev_a=fire_fmax,
                 fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
                 verbose=not quiet,
-                max_start_grms_kcalmol_A=float(max_grms),
+                max_start_grms_kcalmol_A=float("inf"),
                 safe_grms_kcalmol_A=safe_grms,
             )
             bfgs_config = HybridCalculatorMinimizeConfig(
@@ -914,7 +914,7 @@ def run_density_prep_ladder(
                 bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05) or 0.05),
                 verbose=not quiet,
                 quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
-                max_start_grms_kcalmol_A=float(max_grms),
+                max_start_grms_kcalmol_A=float("inf"),
                 safe_grms_kcalmol_A=safe_grms,
             )
 
@@ -1602,7 +1602,7 @@ def run_geometry_packing_recovery(
             if calculator_fire_fmax_ev_a is not None
             else float(calculator_minimize_fmax_ev_a)
         )
-        start_cap = float(grms_limit) if grms_limit is not None else float("inf")
+        start_cap = float("inf")
         fire_bfgs_crossover = float(
             getattr(args, "geometry_packing_fire_bfgs_crossover_grms", 30.0) or 30.0
         )

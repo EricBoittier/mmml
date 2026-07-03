@@ -2612,7 +2612,7 @@ def prepare_mlpot_hybrid_state_for_sd(
         HybridCalculatorFireConfig,
         HybridCalculatorMinimizeConfig,
         coerce_hybrid_minimize_result,
-        hybrid_calculator_mini_eligible,
+        hybrid_calculators_synced,
         minimize_hybrid_calculator_before_sd,
         minimize_hybrid_calculator_fire_before_sd,
         resolve_calculator_mini_safe_grms,
@@ -2622,7 +2622,6 @@ def prepare_mlpot_hybrid_state_for_sd(
         minimize_bonded_mm_recovery,
     )
 
-    max_start_grms = float(grms_limit) if grms_limit is not None else 50.0
     fire_fmax = (
         float(calculator_fire_fmax_ev_a)
         if calculator_fire_fmax_ev_a is not None
@@ -2638,33 +2637,18 @@ def prepare_mlpot_hybrid_state_for_sd(
     ran_geometry_packing = False
     ran_monomer_physnet_mini = False
 
-    def _effective_max_start(*, force: bool) -> float:
-        if force:
-            return float("inf")
-        return max_start_grms
-
     def _run_calculator_mini(phase: str, *, force: bool = False) -> None:
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_calculator_mini
         if not calculator_minimize:
             return
-        if not force and float(hybrid_grms) > max_start_grms:
+        if not force and not hybrid_calculators_synced(str(diag.kind)):
             if verbose:
                 print(
                     f"{context_prefix}: defer calculator BFGS ({phase}) "
-                    f"(GRMS {hybrid_grms:.1f} > {max_start_grms:.1f} kcal/mol/Å); "
-                    "MLpot SD / geometry recovery runs next",
+                    "(hybrid/CHARMM desync — resync before ASE mini)",
                     flush=True,
                 )
             return
-        if not force and not hybrid_calculator_mini_eligible(
-            hybrid_grms,
-            grms_limit=grms_limit,
-            diag_kind=str(diag.kind),
-            grms_hot=grms_hot,
-            user_hot=user_hot,
-        ):
-            return
-        start_cap = _effective_max_start(force=force)
         max_initial_fmax = 1000.0 if force else 100.0
         mini = coerce_hybrid_minimize_result(
             minimize_hybrid_calculator_before_sd(
@@ -2675,7 +2659,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                     bfgs_maxstep=float(calculator_bfgs_maxstep),
                     verbose=verbose,
                     quiet_bfgs=quiet_bfgs,
-                    max_start_grms_kcalmol_A=start_cap,
+                    max_start_grms_kcalmol_A=None,
                     max_initial_fmax_ev_a=max_initial_fmax,
                     safe_grms_kcalmol_A=safe_grms,
                 ),
@@ -2748,11 +2732,11 @@ def prepare_mlpot_hybrid_state_for_sd(
         nonlocal hybrid_grms, user, diag, grms_hot, user_hot, ran_calculator_fire
         if not calculator_minimize or int(calculator_fire_steps) <= 0:
             return
-        if not force and float(hybrid_grms) > max_start_grms:
+        if not force and not hybrid_calculators_synced(str(diag.kind)):
             if verbose:
                 print(
                     f"{context_prefix}: defer calculator FIRE ({phase}) "
-                    f"(GRMS {hybrid_grms:.1f} > {max_start_grms:.1f} kcal/mol/Å)",
+                    "(hybrid/CHARMM desync — resync before ASE mini)",
                     flush=True,
                 )
             return
@@ -2765,7 +2749,7 @@ def prepare_mlpot_hybrid_state_for_sd(
                     fmax_ev_a=float(fire_fmax),
                     fire_maxstep=float(calculator_fire_maxstep),
                     verbose=verbose,
-                    max_start_grms_kcalmol_A=_effective_max_start(force=force),
+                    max_start_grms_kcalmol_A=None,
                     max_initial_fmax_ev_a=max_initial_fmax,
                     safe_grms_kcalmol_A=safe_grms,
                 ),
@@ -3101,7 +3085,7 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     still_hot = grms_limit is not None and hybrid_grms > float(grms_limit)
     if calculator_minimize and not ran_calculator_mini and not ran_geometry_packing and (
-        hybrid_grms <= max_start_grms or ran_bonded_recovery
+        hybrid_calculators_synced(str(diag.kind)) or ran_bonded_recovery
     ):
         _run_calculator_mini(
             "post-recovery",

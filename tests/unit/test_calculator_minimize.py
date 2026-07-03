@@ -89,18 +89,18 @@ def test_should_abort_bfgs_fmax_running_best_spike():
     )
 
 
-def test_hybrid_calculator_mini_eligible_respects_grms_cap():
-    assert not hybrid_calculator_mini_eligible(
+def test_hybrid_calculator_mini_eligible_requires_sync():
+    assert hybrid_calculator_mini_eligible(
         1428.0,
         grms_limit=50.0,
         diag_kind="geometry_stress",
         grms_hot=True,
         user_hot=False,
     )
-    assert hybrid_calculator_mini_eligible(
+    assert not hybrid_calculator_mini_eligible(
         9.8,
         grms_limit=50.0,
-        diag_kind="geometry_stress",
+        diag_kind="desync_suspected",
         grms_hot=False,
         user_hot=False,
     )
