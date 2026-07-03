@@ -66,7 +66,7 @@ min_intermonomer_atom_distance: 1.2
 # Heat DCD cadence (lower nsavc = more frequent frames; dcd25 winner on anchor).
 dcd_nsavc: 25
 # Prep sweep winner: defer CHARMM inbfrq rebuild until dynamics (SD uses inbfrq=0 chunks).
-dyn_inbfrq: -1
+#dyn_inbfrq: -1
 
 # Resilient density prep (merged into resilient setup; reinforces variant defaults).
 liquid_prep: true
@@ -89,7 +89,7 @@ bonded_mm_mini_steps: 1000
 bonded_recovery_backend: sidecar
 
 # Orbax/NPZ sidecar after every successful overlap chunk (Bussi in-memory handoff).
-overlap_run_state_every_chunks: 1
+overlap_run_state_every_chunks: 25
 
 # Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
 bonded_mm_mini: false
