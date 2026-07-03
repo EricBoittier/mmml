@@ -113,8 +113,9 @@ def add_handoff_cutoff_args(parser: argparse.ArgumentParser) -> None:
         choices=("jax", "charmm_callback"),
         default=None,
         help=(
-            "Decomposed MLpot MM pair provider: JAX neighbor rebuild (default) or "
-            "Fortran callback idxu/idxv for parity diagnostics. "
+            "Decomposed MLpot MM pair provider: Fortran callback idxu/idxv (default) "
+            "or JAX neighbor rebuild (--mm-pair-source jax). "
+            "All-ML bulk systems with empty callback lists auto-fall back to JAX. "
             "Override with env MMML_MM_PAIR_SOURCE."
         ),
     )

@@ -44,10 +44,16 @@ _DUMMY_MM_PAIR_IDX = jnp.zeros((1, 2), dtype=jnp.int32)
 _DUMMY_MM_PAIR_MASK = jnp.zeros((1,), dtype=jnp.bool_)
 
 MmPairSource = Literal["jax", "charmm_callback"]
+_DEFAULT_MM_PAIR_SOURCE: MmPairSource = "charmm_callback"
 
 
 def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
-    """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback)."""
+    """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback).
+
+    Default is ``charmm_callback`` (Fortran ``idxu/idxv`` primary pairs). All-ML
+    bulk systems with empty callback lists fall back to JAX rebuild automatically.
+    Set ``MMML_MM_PAIR_SOURCE=jax`` or ``--mm-pair-source jax`` to force Vesin/cell-list.
+    """
     if args is not None:
         src = getattr(args, "mm_pair_source", None)
         if src is not None:
@@ -58,13 +64,15 @@ def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
                 return "jax"
             raise ValueError(f"mm_pair_source must be jax or charmm_callback; got {src!r}")
     raw = os.environ.get("MMML_MM_PAIR_SOURCE", "").strip().lower()
+    if raw == "jax":
+        return "jax"
     if raw in ("charmm_callback", "callback", "charmm"):
         return "charmm_callback"
-    if raw in ("jax", ""):
-        return "jax"
-    raise ValueError(
-        f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
-    )
+    if raw:
+        raise ValueError(
+            f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
+        )
+    return _DEFAULT_MM_PAIR_SOURCE
 
 
 def _monomer_offsets_from_atoms_per_monomer(
@@ -153,7 +161,7 @@ class DecomposedMlpotCalculator:
         spatial_mpi: bool = False,
         atoms_per_monomer: Sequence[int] | None = None,
         periodic_mm_config: Any | None = None,
-        mm_pair_source: MmPairSource = "jax",
+        mm_pair_source: MmPairSource = _DEFAULT_MM_PAIR_SOURCE,
         mm_r_min: float | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
@@ -407,8 +415,8 @@ class DecomposedMlpotCalculator:
         if n_pairs <= 0:
             if not self._callback_pair_warned:
                 print(
-                    "Decomposed MLpot: charmm_callback MM pairs empty (all-ML or stale "
-                    "mlpot_update); falling back to JAX neighbor rebuild",
+                    "Decomposed MLpot: charmm_callback pairs empty (all-ML or stale "
+                    "mlpot_update); using JAX MM neighbor rebuild",
                     flush=True,
                 )
                 self._callback_pair_warned = True
@@ -710,7 +718,7 @@ class DecomposedMlpotModel:
         periodic_mm_config: Any | None = None,
         lr_solver: str | None = None,
         jax_pme_method: str | None = None,
-        mm_pair_source: MmPairSource = "jax",
+        mm_pair_source: MmPairSource = _DEFAULT_MM_PAIR_SOURCE,
         mm_r_min: float | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
