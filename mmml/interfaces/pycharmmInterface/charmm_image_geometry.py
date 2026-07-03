@@ -159,10 +159,11 @@ def assert_charmm_image_mic_fallback(
     """MIC prep gate when ``<MKIMAT2>`` is unavailable (MPI / cached IMAGE lists)."""
     import numpy as np
 
-    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
-        assert_pre_mlpot_intermonomer_geometry,
+    from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
+        monomer_offsets_from_atoms_per,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
     from mmml.utils.intermonomer_geometry import summarize_worst_intermonomer_contact
 
     atoms_per = _resolve_atoms_per_for_image_gate(workflow_args)
@@ -171,30 +172,30 @@ def assert_charmm_image_mic_fallback(
             f"{context}: cannot run MIC image fallback "
             "(missing atoms_per_monomer or cubic box side)."
         )
+    floor = float(min_distance_A)
     pos = get_charmm_positions_array()
     z_arr = _resolve_atomic_numbers_for_image_gate(workflow_args)
     if z_arr is None:
         print(
             f"{context}: MIC fallback untyped (no element data); "
-            f"using global prep floor {float(min_distance_A):.2f} Å only",
+            f"using registration floor {floor:.2f} Å only",
             flush=True,
         )
-    worst = assert_pre_mlpot_intermonomer_geometry(
+    offsets = monomer_offsets_from_atoms_per(atoms_per)
+    cell = np.diag([float(box_side_A), float(box_side_A), float(box_side_A)])
+    worst = assert_no_intermonomer_atom_overlap(
         pos,
-        atoms_per,
-        min_distance_A=float(min_distance_A),
-        box_side=float(box_side_A),
-        use_pbc=True,
-        context=f"{context} (MIC fallback)",
-        args=workflow_args,
-        atomic_numbers=z_arr,
+        offsets,
+        min_distance=floor,
+        cell=cell,
+        context=f"{context} (MIC registration floor {floor:.2f} Å)",
     )
     summary = summarize_worst_intermonomer_contact(
         pos,
         atoms_per,
         box_side=float(box_side_A),
         use_pbc=True,
-        threshold_A=float(min_distance_A),
+        threshold_A=floor,
         atomic_numbers=z_arr,
     )
     print(
