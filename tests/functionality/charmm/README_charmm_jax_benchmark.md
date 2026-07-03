@@ -59,7 +59,8 @@ pytest tests/unit/test_charmm_jax_energy_benchmark.py -q
 ## Trajectory demo (per-frame component errors)
 
 Compare live PyCHARMM ``ENER FORCE`` vs the JAX CGenFF clone on every frame of a
-short NVT segment (or an existing DCD):
+short NVT segment (or an existing DCD). No CHARMM BLOCK scripts — assumes full
+CGENFF is already loaded (box build) or pass ``--reregister-cgenff`` after MLpot.
 
 ```bash
     JAX_PLATFORMS=cpu JAX_ENABLE_X64=1 uv run python scripts/demo_charmm_jax_trajectory_energy.py \\

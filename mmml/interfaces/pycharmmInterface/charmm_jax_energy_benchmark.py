@@ -340,7 +340,9 @@ def benchmark_total_mm_layer(
         run_charmm_bonded_ener_force,
         set_charmm_positions,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import apply_charmm_mm_block
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_total_forces_kcalmol_A,
+    )
     from mmml.interfaces.pycharmmInterface.mm_system_energy import (
         load_bonded_system_from_psf,
         load_nonbonded_system_from_charmm,
@@ -349,7 +351,6 @@ def benchmark_total_mm_layer(
 
     pos = np.asarray(positions, dtype=np.float64)
     set_charmm_positions(pos)
-    apply_charmm_mm_block()
     run_charmm_bonded_ener_force(silent=True)
 
     charmm_bonded = charmm_bonded_energy_components_kcalmol()

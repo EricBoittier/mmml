@@ -508,7 +508,6 @@ __all__ = [
     "compare_trajectory_mm_energy",
     "ensure_full_cgenff_mm_session",
     "load_trajectory_mm_context",
-    "prepare_charmm_for_trajectory_mm_eval",
     "read_trajectory_positions",
     "render_trajectory_json",
     "render_trajectory_markdown",

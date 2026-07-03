@@ -108,7 +108,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reregister-cgenff",
         action="store_true",
-        help="Re-read full CGENFF via READ PARAM APPEND before comparing (slow; use after MLpot)",
+        help="Re-read full CGENFF bonded params via READ PARAM APPEND (after MLpot zeroing)",
     )
     return parser.parse_args()
 
