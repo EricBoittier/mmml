@@ -85,9 +85,10 @@ Outputs under ``artifacts/trialanine_nb_parity/``:
 | ``force_by_category.png`` | Force RMS Δ (JAX masked pairs − CHARMM BLOCK) per category |
 | ``switch_derivative_audit.png`` | JAX autodiff vs finite-difference dE/dr (fswitch/vfswitch) |
 
-CHARMM per-category terms use selective ``BLOCK`` (``SEGID PEPT`` / ``SOLV``). Under
-``mpirun`` + MPI-linked libcharmm this may be skipped unless
-``MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1``.
+CHARMM per-category terms use selective ``BLOCK`` (``SEGID PEPT`` / ``SOLV``). Pass
+``--category-block`` to the diagnostic script. Under ``mpirun`` this can hang unless
+``MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1`` — default run skips it and still reports
+JAX category breakdown + switch audit.
 
 The functionality test ``test_trialanine_water_total_mm_matches_pycharmm`` is marked
 **xfail** (regression target). Use the report above to see *where* the gap lives.

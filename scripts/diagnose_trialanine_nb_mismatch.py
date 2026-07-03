@@ -63,6 +63,25 @@ def _parse_args() -> argparse.Namespace:
         help="Reuse PSF/coordinates from --workdir (must exist)",
     )
     parser.add_argument("--top-n-pairs", type=int, default=20)
+    parser.add_argument(
+        "--category-block",
+        action="store_true",
+        help=(
+            "Run CHARMM segment BLOCK per-category VDW/force breakdown. "
+            "Can hang under mpirun unless MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1."
+        ),
+    )
+    parser.add_argument(
+        "--skip-switch-audit",
+        action="store_true",
+        help="Skip JAX fswitch/vfswitch derivative self-check (faster)",
+    )
+    parser.add_argument(
+        "--switch-audit-top-k",
+        type=int,
+        default=5,
+        help="Top |VDW| pairs for switching derivative audit (default: 5)",
+    )
     return parser.parse_args()
 
 
@@ -122,12 +141,14 @@ def main() -> int:
         box.box_side_A = args.box_side_A
         box.seed = args.seed
     else:
+        print("Building TRIA water box in CHARMM (may take ~30s)...", flush=True)
         box = build_trialanine_water_box_in_charmm(
             n_waters=args.n_waters,
             box_side_A=args.box_side_A,
             seed=args.seed,
             workdir=workdir,
         )
+        print("Box build complete.", flush=True)
 
     pos = _perturb(box.positions, seed=args.perturb_seed)
     report = collect_and_render_trialanine_nb_parity(
@@ -136,6 +157,10 @@ def main() -> int:
         out_dir,
         perturb_seed=args.perturb_seed,
         top_n_pairs=args.top_n_pairs,
+        run_category_block=args.category_block,
+        run_switch_audit=not args.skip_switch_audit,
+        switch_audit_top_k=args.switch_audit_top_k,
+        verbose=True,
     )
 
     print(render_markdown_report(report))

@@ -378,9 +378,16 @@ def audit_switch_derivatives(
     return tuple(audits)
 
 
+def _log(msg: str, *, verbose: bool = True) -> None:
+    if verbose:
+        print(msg, flush=True)
+
+
 def _collect_charmm_category_breakdown(
     jax_by_category: tuple[CategoryNonbondedTotals, ...],
     jax_cat_forces: dict[str, np.ndarray],
+    *,
+    enabled: bool,
 ) -> tuple[
     tuple[CategoryNonbondedTotals, ...],
     tuple[TermComparison, ...],
@@ -395,9 +402,16 @@ def _collect_charmm_category_breakdown(
     )
 
     meta: dict[str, Any] = {}
-    if selective_bonded_block_unsafe_under_mpi():
-        meta["charmm_category_skipped"] = "selective_BLOCK_unsafe_under_mpi"
+    if not enabled:
+        meta["charmm_category_skipped"] = "disabled (pass --category-block to enable)"
         return (), (), (), meta
+    if selective_bonded_block_unsafe_under_mpi():
+        meta["charmm_category_skipped"] = (
+            "selective_BLOCK_unsafe_under_mpi "
+            "(set MMML_ALLOW_SELECTIVE_BONDED_BLOCK=1 and use --category-block)"
+        )
+        return (), (), (), meta
+    _log("Running CHARMM segment BLOCK category breakdown (3× ENER FORCE)...")
     try:
         charmm_raw = charmm_nonbonded_by_segment_category(restore_full_mm_block=True)
     except Exception as exc:
@@ -474,10 +488,15 @@ def collect_trialanine_nb_parity(
     *,
     perturb_seed: int = 31,
     top_n_pairs: int = 20,
+    run_category_block: bool = False,
+    run_switch_audit: bool = True,
+    switch_audit_top_k: int = 5,
+    verbose: bool = True,
 ) -> TrialanineNbParityReport:
     """Compare JAX MIC nonbonded decomposition to active PyCHARMM ``ENER FORCE``."""
     import jax.numpy as jnp
 
+    _log("Collecting parity metrics (PyCHARMM ENER + JAX MIC)...", verbose=verbose)
     from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_and_forces
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         charmm_bonded_energy_components_kcalmol,
@@ -501,6 +520,7 @@ def collect_trialanine_nb_parity(
 
     pos = np.asarray(positions, dtype=np.float64)
     set_charmm_positions(pos)
+    _log("Applying CHARMM MM block + ENER FORCE...", verbose=verbose)
     apply_charmm_mm_block()
     run_charmm_bonded_ener_force(silent=True)
     include_cmap = charmm_cmap_is_active()
@@ -525,6 +545,7 @@ def collect_trialanine_nb_parity(
         extra_prm_files=box.cmap_extra_prm_files,
     )
     nbond_data = load_nonbonded_system_from_charmm(box.psf_path, box.cgenff_prm)
+    _log("JAX bonded + nonbonded evaluation...", verbose=verbose)
     bonded_comp, bonded_forces = bonded_energy_and_forces(
         jnp.asarray(pos),
         bonded.topology,
@@ -550,15 +571,24 @@ def collect_trialanine_nb_parity(
     n_pep = n_peptide_atoms_in_trialanine_box(box.psf_path)
     categories = classify_pair_categories(decomp.pair_i, decomp.pair_j, n_pep)
     by_cat = _aggregate_by_category(decomp, categories)
+    _log("JAX masked-pair forces by category...", verbose=verbose)
     jax_cat_forces = _jax_category_forces(
         pos, nbond_data, box.cell, settings, decomp, categories
     )
     charmm_by_cat, category_vdw, category_force_delta, cat_meta = (
-        _collect_charmm_category_breakdown(by_cat, jax_cat_forces)
+        _collect_charmm_category_breakdown(
+            by_cat, jax_cat_forces, enabled=run_category_block
+        )
     )
-    switch_audits = audit_switch_derivatives(
-        pos, decomp, nbond_data, box.cell, settings, top_k=10
-    )
+    switch_audits: tuple[PairSwitchAudit, ...] = ()
+    if run_switch_audit:
+        _log(
+            f"Switching derivative audit (top {switch_audit_top_k} |VDW| pairs)...",
+            verbose=verbose,
+        )
+        switch_audits = audit_switch_derivatives(
+            pos, decomp, nbond_data, box.cell, settings, top_k=switch_audit_top_k
+        )
 
     n_pp = int(np.sum(categories == _PairCat.PEP_PEP.value))
     n_pw = int(np.sum(categories == _PairCat.PEP_WATER.value))
@@ -952,6 +982,10 @@ def collect_and_render_trialanine_nb_parity(
     *,
     perturb_seed: int = 31,
     top_n_pairs: int = 20,
+    run_category_block: bool = False,
+    run_switch_audit: bool = True,
+    switch_audit_top_k: int = 5,
+    verbose: bool = True,
 ) -> TrialanineNbParityReport:
     """Collect metrics, write ``report.md``, ``report.json``, and PNG plots."""
     from mmml.interfaces.pycharmmInterface.mm_system_energy import (
@@ -970,6 +1004,10 @@ def collect_and_render_trialanine_nb_parity(
         positions,
         perturb_seed=perturb_seed,
         top_n_pairs=top_n_pairs,
+        run_category_block=run_category_block,
+        run_switch_audit=run_switch_audit,
+        switch_audit_top_k=switch_audit_top_k,
+        verbose=verbose,
     )
     cuts = box.nbond_cutoffs
     settings = CharmmNbondSettings(
@@ -982,6 +1020,7 @@ def collect_and_render_trialanine_nb_parity(
     n_pep = n_peptide_atoms_in_trialanine_box(box.psf_path)
     categories = classify_pair_categories(decomp.pair_i, decomp.pair_j, n_pep)
 
+    _log("Writing report and plots...", verbose=verbose)
     (out / "report.md").write_text(render_markdown_report(report), encoding="utf-8")
     (out / "report.json").write_text(render_json_report(report), encoding="utf-8")
     plot_paths = render_parity_plots(report, decomp, categories, out)

@@ -16,6 +16,7 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
     set_charmm_positions,
     setup_bonded_only_charmm,
     setup_nonbonded_only_charmm,
+    summarize_mm_system_charmm_delta,
 )
 from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_PRM
 from mmml.interfaces.pycharmmInterface.mm_system_energy import (
@@ -176,5 +177,10 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         box.cell,
         _nbond_settings_from_box(box),
         include_cmap=True,
+    )
+    print(
+        f"\nTRIA MM parity ({len(nbond_data.excluded_pairs)} excluded pairs): "
+        f"{summarize_mm_system_charmm_delta(result)}\n",
+        flush=True,
     )
     compare_mm_system_to_charmm(result)

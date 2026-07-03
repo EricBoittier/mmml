@@ -391,6 +391,37 @@ def compare_nonbonded_to_charmm(
     )
 
 
+def summarize_mm_system_charmm_delta(
+    result: Any,
+    *,
+    ignore_charmm_bonded_terms: tuple[str, ...] = (),
+) -> str:
+    """One-line CHARMM vs JAX MM energy breakdown (for gpu parity logs)."""
+    import pycharmm.energy as energy
+
+    charmm_bonded = charmm_bonded_energy_components_kcalmol()
+    charmm_nb = charmm_nonbonded_energy_components_kcalmol()
+    ignored = sum(float(charmm_bonded.get(t, 0.0)) for t in ignore_charmm_bonded_terms)
+    charmm_bonded_total = float(charmm_bonded.get("total", 0.0)) - ignored
+    charmm_total = float(energy.get_total()) - ignored
+
+    jax_bonded = float(result.bonded.get("total", sum(result.bonded.values())))
+    jax_vdw = float(result.nonbonded.get("vdw", 0.0))
+    jax_elec = float(result.nonbonded.get("elec", 0.0))
+    jax_nb = float(result.nonbonded.get("total", jax_vdw + jax_elec))
+
+    return (
+        f"bonded jax={jax_bonded:.4f} charmm={charmm_bonded_total:.4f} "
+        f"Δ={jax_bonded - charmm_bonded_total:+.4f} | "
+        f"vdw jax={jax_vdw:.4f} charmm={float(charmm_nb['vdw']):.4f} "
+        f"Δ={jax_vdw - float(charmm_nb['vdw']):+.4f} | "
+        f"elec jax={jax_elec:.4f} charmm={float(charmm_nb['elec']):.4f} "
+        f"Δ={jax_elec - float(charmm_nb['elec']):+.4f} | "
+        f"total jax={float(result.total_energy):.4f} charmm={charmm_total:.4f} "
+        f"Δ={float(result.total_energy) - charmm_total:+.4f}"
+    )
+
+
 def compare_mm_system_to_charmm(
     result: Any,
     *,
