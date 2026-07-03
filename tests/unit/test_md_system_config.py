@@ -148,6 +148,28 @@ def test_apply_mapping_no_scale_max_grms() -> None:
     assert args.max_grms_before_dyn == pytest.approx(80.0)
 
 
+def test_apply_mapping_monomer_physnet_mini_passthrough_prefix() -> None:
+    from mmml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
+    from mmml.cli.run.md_system import parse_args
+
+    args = parse_args([])
+    apply_mapping_to_namespace(
+        args,
+        {
+            "monomer_physnet_mini": True,
+            "monomer_physnet_mini_max_select": 4,
+            "monomer_physnet_mini_min_grms": 15.0,
+            "monomer_physnet_mini_steps": 120,
+        },
+        source="test",
+        allowed_prefixes=CONFIG_PASSTHROUGH_PREFIXES,
+    )
+    assert args.monomer_physnet_mini is True
+    assert args.monomer_physnet_mini_max_select == 4
+    assert args.monomer_physnet_mini_min_grms == pytest.approx(15.0)
+    assert args.monomer_physnet_mini_steps == 120
+
+
 def test_apply_mapping_geometry_packing_passthrough_prefix() -> None:
     from mmml.cli.run.md_config import CONFIG_PASSTHROUGH_PREFIXES, apply_mapping_to_namespace
     from mmml.cli.run.md_system import parse_args

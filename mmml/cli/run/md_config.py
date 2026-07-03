@@ -27,7 +27,10 @@ _CONFIG_ALIASES: dict[str, str] = {
 }
 
 # Keys with these prefixes may be set on args without an argparse dest (density prep, etc.).
-CONFIG_PASSTHROUGH_PREFIXES: tuple[str, ...] = ("geometry_packing_",)
+CONFIG_PASSTHROUGH_PREFIXES: tuple[str, ...] = (
+    "geometry_packing_",
+    "monomer_physnet_mini",
+)
 
 
 def _normalize_config_key(key: str) -> str:
