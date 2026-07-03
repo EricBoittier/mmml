@@ -289,9 +289,10 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     verify.assert_called_once()
     image_gate.assert_called_once()
     assert image_gate.call_args.kwargs["cubic_box_side_A"] == 32.0
+    assert image_gate.call_args.kwargs.get("post_bimag") is True
     # update_bnbnd() was replaced with captured UPDATE to parse <MKIMAT2> gates.
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
-    fake_pycharmm.lingo.charmm_script.assert_not_called()
+    fake_pycharmm.lingo.charmm_script.assert_called_once_with("UPDATE")
     fake_pycharmm.image.update_bimag.assert_called_once()
 
 

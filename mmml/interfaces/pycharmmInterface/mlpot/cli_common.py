@@ -2568,10 +2568,21 @@ def prepare_mlpot_hybrid_state_for_sd(
                 workflow_args=workflow_args,
                 verbose=verbose,
             )
+            import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+            import pycharmm
+
+            from mmml.interfaces.pycharmmInterface.charmm_levels import (
+                charmm_relaxed_bomlev,
+            )
+
+            with charmm_relaxed_bomlev():
+                pycharmm.lingo.charmm_script("UPDATE")
+            pycharmm.image.update_bimag()
         assert_charmm_image_min_distance_after_update(
             workflow_args=workflow_args,
             context=f"{context_prefix} CHARMM IMAGE gate",
             cubic_box_side_A=side_f,
+            post_bimag=True,
         )
 
     skip_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)

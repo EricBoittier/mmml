@@ -174,10 +174,48 @@ def test_assert_charmm_image_mic_fallback_calls_mic_geometry(monkeypatch):
     assert "MIC fallback" in str(captured["context"])
 
 
+def test_assert_charmm_image_min_distance_aborts_on_dense_pbc_margin():
+    log = """
+ <MKIMAT2>: updating the image atom lists and remapping
+ Transformation   Atoms  Groups  Residues  Min-Distance
+    5  Z0Z0N1R1 has     120      24      24        3.00
+    8  N1Z0Z0R1 has     145      29      29        3.00
+"""
+    with pytest.raises(RuntimeError, match="3.00 Å < prep floor 3.50 Å"):
+        assert_charmm_image_min_distance(log, min_distance_A=3.5, context="test")
+
+
+def test_resolve_mkimat2_min_distance_uses_mlpot_margin():
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        resolve_mkimat2_min_distance_A,
+    )
+
+    assert resolve_mkimat2_min_distance_A(None) == pytest.approx(3.5)
+    assert resolve_mkimat2_min_distance_A(argparse.Namespace()) == pytest.approx(3.5)
+
+
+def test_assert_charmm_image_min_distance_after_update_uses_mkimat_floor(monkeypatch):
+    dense_log = """
+ <MKIMAT2>: updating the image atom lists and remapping
+ Transformation   Atoms  Groups  Residues  Min-Distance
+    5  Z0Z0N1R1 has     120      24      24        3.00
+"""
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
+        lambda **kwargs: dense_log,
+    )
+    with pytest.raises(RuntimeError, match="3.00 Å < prep floor 3.50 Å"):
+        assert_charmm_image_min_distance_after_update(
+            workflow_args=argparse.Namespace(),
+            context="test gate",
+            post_bimag=True,
+        )
+
+
 def test_assert_charmm_image_min_distance_after_update_mic_fallback(monkeypatch):
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
-        lambda: "no mkimat here",
+        lambda **kwargs: "no mkimat here",
     )
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_mic_fallback",
