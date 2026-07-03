@@ -26,8 +26,10 @@ output_root: artifacts/dcm_density_setup_compare
 seed_base: 4242
 placement_seed_ignore_heat: true
 
-# Packmol: inner cube ≈25 Å (L=30, liquid_prep margin 2.5 Å/side). spacing 8.0
-# cannot fit N=100 (GENCAN limit); use ~4 Å like dense burst cells.
+# Placement: Packmol cannot converge 100 monomers in the ~25 Å inner cube
+# (liquid_prep margin 2.5 Å/side). Use liquid grid builder (prep_sweep grid_liquid).
+builder: liquid
+packmol: false
 spacing: 4.0
 periodic_charmm_vdw: false
 packmol_tolerance: 5.0

@@ -62,7 +62,7 @@ srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --mem=32G \
 # Or: bash scripts/snakemake_n100_l30.sh
 ```
 
-Use `spacing: 4.0` (not the sparse-anchor `8.0`) — Packmol's inner cube is only ~25 Å and cannot place 100 monomers at 8 Å spacing.
+Use `builder: liquid` + `packmol: false` (grid placement, same as prep_sweep `grid_liquid`) — Packmol's ~25 Å inner cube cannot place 100 DCM monomers even at tolerance 5.0.
 
 ## Campaign legs (per cell)
 

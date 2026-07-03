@@ -819,7 +819,12 @@ def test_n100_l30_tag_resolves_config_and_density() -> None:
     assert cell.sweep_id is None
     assert cl.default_workflow_config_path(run_tag=tag).name == "config.n100_l30.yaml"
     n100_cfg = load_config(WORKFLOW / "config.n100_l30.yaml")
-    assert float(n100_cfg["spacing"]) <= 5.0
+    assert n100_cfg["builder"] == "liquid"
+    assert n100_cfg["packmol"] is False
+    campaign = build_campaign(n100_cfg, cell)
+    mini = campaign["runs"]["pycharmm_mini"]
+    assert mini["builder"] == "liquid"
+    assert mini["packmol"] is False
     frac = cl.cell_bulk_density_fraction(cell, n100_cfg)
     assert frac is None
     from workflows.pbc_solvent_burst.scripts.bulk_density import n_monomers_at_bulk_density
