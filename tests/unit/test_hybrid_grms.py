@@ -576,6 +576,9 @@ def test_prepare_mlpot_hybrid_state_allow_high_grms_from_workflow_args():
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_before_sd",
         return_value=(138.0, False),
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize.minimize_hybrid_calculator_fire_before_sd",
+        return_value=(138.0, False),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_bonded_mm_recovery",
     ):
         hybrid, user = prepare_mlpot_hybrid_state_for_sd(
