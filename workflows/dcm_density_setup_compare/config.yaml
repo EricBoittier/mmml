@@ -65,7 +65,7 @@ min_intermonomer_atom_distance: 1.2
 
 # Heat DCD cadence (lower nsavc = more frequent frames; dcd25 winner on anchor).
 dcd_nsavc: 25
-dyn_inbfrq: -1
+dyn_inbfrq: 25
 
 # Resilient density prep (merged into resilient setup; reinforces variant defaults).
 liquid_prep: true

@@ -480,7 +480,8 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
         )
 
     resync.assert_called_once()
-    calc_mini.assert_not_called()
+    calc_mini.assert_called_once()
+    assert calc_mini.call_args.kwargs["context_prefix"] == "Pre-SD (post-recovery)"
     bonded.assert_called_once()
     assert hybrid == pytest.approx(3.0)
     assert user == pytest.approx(-100.0)
