@@ -163,10 +163,14 @@ def test_mini_box_equil_heat_leg_resets_trajectory_before_dynamics(tmp_path):
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_stage_dynamics_completed",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.box_equil.apply_pretreat_dyn_freq_kwargs",
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.apply_pretreat_dyn_freq_kwargs",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.box_equil.resolve_heat_ihtfrq",
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_dcd_nsavc",
+            return_value=100,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_heat_ihtfrq",
             return_value=100,
         ),
     ):
@@ -228,10 +232,14 @@ def test_mini_box_equil_cold_leg_resets_only_cold_dcd(tmp_path):
             "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_stage_dynamics_completed",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.box_equil.apply_pretreat_dyn_freq_kwargs",
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.apply_pretreat_dyn_freq_kwargs",
         ),
         patch(
-            "mmml.interfaces.pycharmmInterface.mlpot.box_equil.resolve_heat_ihtfrq",
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_dcd_nsavc",
+            return_value=100,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_heat_ihtfrq",
             return_value=100,
         ),
     ):
