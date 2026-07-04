@@ -334,6 +334,24 @@ contains
     lvfswt = .true.
   end function nbonds_use_vfswitch
 
+  !> @brief get distance cutoff for generating the list of pairs
+  !
+  !> param[out] old_cutnb current cutnb value
+  !> @return success 1 on success
+  function nbonds_get_cutnb(old_cutnb) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_double, c_int
+    use inbnd, only: cutnb
+
+    implicit none
+
+    real(c_double) :: old_cutnb
+    integer(c_int) :: success
+
+    success = 0
+    old_cutnb = cutnb
+    success = 1
+  end function nbonds_get_cutnb
+
   ! Addition Kai Toepfer May 2022
   !> @brief get distance from which switching function is used
   !

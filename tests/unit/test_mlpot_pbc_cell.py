@@ -1395,6 +1395,25 @@ def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
     assert cuts.cutnb < 0.5 * 38.0
 
 
+def test_charmm_has_vacuum_nbond_preset_detects_defaults():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        VACUUM_CTONNB,
+        VACUUM_CTOFNB,
+        charmm_has_vacuum_nbond_preset,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
+        return_value=(VACUUM_CTONNB, VACUUM_CTOFNB),
+    ):
+        assert charmm_has_vacuum_nbond_preset()
+    with patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
+        return_value=(9.0, 12.28),
+    ):
+        assert not charmm_has_vacuum_nbond_preset()
+
+
 def test_calculator_wrapping_translation_invariance():
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters

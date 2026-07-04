@@ -706,47 +706,42 @@ def reassert_pbc_nbond_cutoffs(
     mm_switch_width: float | None = None,
     rebuild: bool = False,
     context: str = "PBC nbonds",
+    strict: bool = False,
 ) -> PbcNbondCutoffs:
     """Re-apply capped PBC cutoffs after ``READ PARAM`` / ``UPDATE`` may reset defaults.
 
-    ``GTNBCT`` during parameter reads restores vacuum ``cutnb=18`` etc.; domdec
+    ``GTNBCT INIT`` during parameter reads restores vacuum ``cutnb=18`` etc.; domdec
     ``crystal.build`` can assign ``cutnb`` before switch radii are lowered.  Call
     after image registration ``UPDATE`` and before hybrid ``ENER``.
     """
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
-        charmm_nbond_cutoffs_orderly,
-        read_charmm_switch_cutoffs,
+        apply_switch_nbond_cutoffs_before_cutnb,
+        charmm_has_vacuum_nbond_preset,
+        charmm_nbond_cutoffs_match_target,
+        log_charmm_pbc_nbond_cutoffs,
     )
 
-    cuts = apply_pbc_nbonds(
-        cubic_box_side_A=float(cubic_box_side_A),
-        rebuild=rebuild,
-        mm_switch_on=mm_switch_on,
-        mm_switch_width=mm_switch_width,
-    )
-    ctonnb, ctofnb = read_charmm_switch_cutoffs()
-    if not charmm_nbond_cutoffs_orderly(cuts.cutnb, ctonnb, ctofnb):
-        print(
-            f"{context}: CHARMM switch cutoffs out of order after reapply "
-            f"(cutnb={cuts.cutnb:.2f}, ctonnb={ctonnb:.2f}, ctofnb={ctofnb:.2f}); "
-            "retrying switch-first apply",
-            flush=True,
-        )
-        from mmml.interfaces.pycharmmInterface.nbonds_config import (
-            apply_switch_nbond_cutoffs_before_cutnb,
-        )
-
-        apply_switch_nbond_cutoffs_before_cutnb(
-            cuts.ctonnb,
-            cuts.ctofnb,
-            rebuild=False,
-        )
-        apply_pbc_nbonds(
+    def _apply() -> PbcNbondCutoffs:
+        return apply_pbc_nbonds(
             cubic_box_side_A=float(cubic_box_side_A),
             rebuild=rebuild,
             mm_switch_on=mm_switch_on,
             mm_switch_width=mm_switch_width,
         )
+
+    cuts = _apply()
+    if charmm_has_vacuum_nbond_preset() or not charmm_nbond_cutoffs_match_target(cuts):
+        print(
+            f"{context}: re-applying PBC cutoffs (vacuum preset or target mismatch)…",
+            flush=True,
+        )
+        apply_switch_nbond_cutoffs_before_cutnb(
+            cuts.ctonnb,
+            cuts.ctofnb,
+            rebuild=False,
+        )
+        cuts = _apply()
+    log_charmm_pbc_nbond_cutoffs(cuts, context=context, strict=strict)
     return cuts
 
 

@@ -1385,8 +1385,8 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
         recover_mpi_for_charmm_after_jax,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        apply_pbc_nbonds,
         prepare_charmm_pbc,
+        reassert_pbc_nbond_cutoffs,
     )
 
     prepare_charmm_pbc(float(side))
@@ -1394,7 +1394,11 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
         phase=f"after {context} PBC crystal/IMAGE build",
     )
     with charmm_relaxed_bomlev():
-        apply_pbc_nbonds(nbxmod=5, cubic_box_side_A=float(side), rebuild=False)
+        reassert_pbc_nbond_cutoffs(
+            float(side),
+            rebuild=False,
+            context=f"{context} (pre-upinb)",
+        )
     # Always reinstall ML iblo/inb before upinb (same as registration finalize).
     # prepare_charmm_pbc / READ PARAM can leave PSF-only ~1k bonded exclusions while
     # psf_get_nnb() still reports the pre-clear count.
@@ -1593,8 +1597,8 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     for DCM:100) and ``MAKINB`` resize segfaults at the first MLpot SD ``ENER``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-        apply_pbc_nbonds,
         prepare_charmm_pbc,
+        reassert_pbc_nbond_cutoffs,
     )
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
@@ -1628,12 +1632,12 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         else CutoffParameters()
     )
     with charmm_relaxed_bomlev():
-        apply_pbc_nbonds(
-            nbxmod=5,
-            cubic_box_side_A=side,
+        cuts = reassert_pbc_nbond_cutoffs(
+            side,
             rebuild=False,
             mm_switch_on=cp.mm_switch_on,
             mm_switch_width=cp.mm_switch_width,
+            context="MLpot PBC registration (pre-upinb)",
         )
     _install_ml_exclusions(ml_selection, update=False)
     nnb = _verify_ml_exclusion_lists_installed(
@@ -1649,6 +1653,13 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     # (not pycharmm.nbonds.update_bnbnd) and only after prepare_charmm_pbc +
     # apply_pbc_nbonds — bare UPDATE after crystal free segfaults in IMAGE VDW.
     with charmm_relaxed_bomlev():
+        reassert_pbc_nbond_cutoffs(
+            side,
+            rebuild=False,
+            mm_switch_on=cp.mm_switch_on,
+            mm_switch_width=cp.mm_switch_width,
+            context="MLpot PBC registration (before UPDATE 1)",
+        )
         pycharmm.lingo.charmm_script("UPDATE")
     pycharmm.image.update_bimag()
     rewrap_charmm_coords_for_mlpot_pbc(
@@ -1657,8 +1668,23 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         verbose=verbose,
     )
     with charmm_relaxed_bomlev():
+        reassert_pbc_nbond_cutoffs(
+            side,
+            rebuild=False,
+            mm_switch_on=cp.mm_switch_on,
+            mm_switch_width=cp.mm_switch_width,
+            context="MLpot PBC registration (before UPDATE 2)",
+        )
         pycharmm.lingo.charmm_script("UPDATE")
     pycharmm.image.update_bimag()
+    reassert_pbc_nbond_cutoffs(
+        side,
+        rebuild=False,
+        mm_switch_on=cp.mm_switch_on,
+        mm_switch_width=cp.mm_switch_width,
+        context="MLpot PBC registration (post-upinb)",
+        strict=False,
+    )
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC upinb during registration",
     )

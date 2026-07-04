@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -406,6 +407,69 @@ def read_charmm_switch_cutoffs() -> tuple[float, float]:
     import pycharmm.nbonds as nbonds
 
     return float(nbonds.get_ctonnb()), float(nbonds.get_ctofnb())
+
+
+def read_charmm_nbond_cutoffs() -> tuple[float, float, float]:
+    """Return live ``(cutnb, ctonnb, ctofnb)`` from CHARMM (Å)."""
+    import pycharmm.nbonds as nbonds
+
+    cutnb = getattr(nbonds, "get_cutnb", None)
+    if callable(cutnb):
+        return float(cutnb()), float(nbonds.get_ctonnb()), float(nbonds.get_ctofnb())
+    ctonnb, ctofnb = read_charmm_switch_cutoffs()
+    return float("nan"), ctonnb, ctofnb
+
+
+def charmm_has_vacuum_nbond_preset(*, tol: float = 0.05) -> bool:
+    """True when live switch cutoffs match the vacuum cluster preset."""
+    ctonnb, ctofnb = read_charmm_switch_cutoffs()
+    return (
+        abs(ctonnb - float(VACUUM_CTONNB)) <= tol
+        and abs(ctofnb - float(VACUUM_CTOFNB)) <= tol
+    )
+
+
+def charmm_nbond_cutoffs_match_target(
+    cuts: PbcNbondCutoffs,
+    *,
+    tol: float = 0.05,
+) -> bool:
+    """True when live CHARMM cutoffs match capped PBC targets."""
+    cutnb, ctonnb, ctofnb = read_charmm_nbond_cutoffs()
+    if math.isfinite(cutnb):
+        if abs(cutnb - float(cuts.cutnb)) > tol:
+            return False
+    return (
+        charmm_nbond_cutoffs_orderly(float(cuts.cutnb), ctonnb, ctofnb)
+        and abs(ctonnb - float(cuts.ctonnb)) <= tol
+        and abs(ctofnb - float(cuts.ctofnb)) <= tol
+    )
+
+
+def log_charmm_pbc_nbond_cutoffs(
+    cuts: PbcNbondCutoffs,
+    *,
+    context: str = "PBC nbonds",
+    strict: bool = False,
+) -> None:
+    """Log live vs target PBC cutoffs; optionally raise when vacuum preset persists."""
+    cutnb, ctonnb, ctofnb = read_charmm_nbond_cutoffs()
+    target = (
+        f"target cutnb/ctonnb/ctofnb="
+        f"{cuts.cutnb:.2f}/{cuts.ctonnb:.2f}/{cuts.ctofnb:.2f} Å"
+    )
+    if math.isfinite(cutnb):
+        live = f"live cutnb/ctonnb/ctofnb={cutnb:.2f}/{ctonnb:.2f}/{ctofnb:.2f} Å"
+    else:
+        live = f"live ctonnb/ctofnb={ctonnb:.2f}/{ctofnb:.2f} Å"
+    ok = charmm_nbond_cutoffs_match_target(cuts)
+    level = "OK" if ok else "MISMATCH"
+    print(f"{context}: {level} ({live}; {target})", flush=True)
+    if strict and not ok:
+        raise RuntimeError(
+            f"{context}: CHARMM nonbond cutoffs still at vacuum or out of range "
+            f"({live}; {target}). Rebuild libcharmm if get_cutnb is unavailable."
+        )
 
 
 def charmm_nbond_cutoffs_orderly(

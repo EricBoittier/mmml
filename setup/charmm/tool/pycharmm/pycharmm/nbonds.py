@@ -337,6 +337,21 @@ def configure(**kwargs):
 
 
 # Addition Kai Toepfer May 2022
+def get_cutnb():
+    """Get cutnb, the distance cutoff for interacting particle pairs.
+
+    Returns
+    -------
+    cutnb : float
+        the current cutnb (Å)
+    """
+    old_cutnb = (ctypes.c_double * 1)()
+    status = lib.charmm.nbonds_get_cutnb(old_cutnb)
+    if not bool(status):
+        raise RuntimeError('There was a problem fetching cutnb.')
+    return float(old_cutnb[0])
+
+
 def get_ctonnb():
     """Get ctonnb, distance after which the switching function is active
 
@@ -350,7 +365,7 @@ def get_ctonnb():
     status = lib.charmm.nbonds_get_ctonnb(old_ctonnb)
     qstatus = bool(status)
     if not qstatus:
-        raise RuntimeError('There was a problem fetching unit cell data.')
+        raise RuntimeError('There was a problem fetching ctonnb.')
 
     return list(old_ctonnb)[0]
 
@@ -368,7 +383,7 @@ def get_ctofnb():
     status = lib.charmm.nbonds_get_ctofnb(old_ctofnb)
     qstatus = bool(status)
     if not qstatus:
-        raise RuntimeError('There was a problem fetching unit cell data.')
+        raise RuntimeError('There was a problem fetching ctofnb.')
 
     return list(old_ctofnb)[0]
 

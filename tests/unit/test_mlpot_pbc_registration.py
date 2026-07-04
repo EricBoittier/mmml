@@ -269,7 +269,7 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.prepare_charmm_pbc",
     ) as prepare, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.apply_pbc_nbonds",
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reassert_pbc_nbond_cutoffs",
     ) as apply_nb, patch.object(
         mlpot_setup,
         "rewrap_charmm_coords_for_mlpot_pbc",
@@ -295,12 +295,12 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
             verbose=False,
         )
     prepare.assert_called_once_with(32.0)
-    apply_nb.assert_called_once_with(
-        nbxmod=5,
-        cubic_box_side_A=32.0,
+    apply_nb.assert_any_call(
+        32.0,
         rebuild=False,
         mm_switch_on=8.0,
         mm_switch_width=5.0,
+        context="MLpot PBC registration (pre-upinb)",
     )
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
