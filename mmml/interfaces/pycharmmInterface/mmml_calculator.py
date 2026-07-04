@@ -1773,8 +1773,9 @@ def setup_calculator(
         f = output["forces"] * ml_force_conversion_factor
         e = output["energy"] * ml_energy_conversion_factor
 
+        sparse_active = batches.get("_sparse_active_indices")
         # Scatter sparse dimer output back to full format when applicable
-        if "_sparse_active_indices" in batches:
+        if sparse_active is not None:
             active_indices = batches["_sparse_active_indices"]
             n_dimers_full = batches["_sparse_n_dimers"]
             if "_spatial_monomer_indices" in batches:
@@ -1831,6 +1832,7 @@ def setup_calculator(
             cutoff_params,
             debug,
             mic_pbc_cell=mic_pbc_cell,
+            active_dimer_indices=sparse_active,
         )
 
         debug_print(debug, f"DEBUG dimer_contribs: {dimer_contribs}")
@@ -2626,6 +2628,7 @@ def setup_calculator(
         cutoff_params: CutoffParameters,
         debug: bool = False,
         mic_pbc_cell: Optional[Array] = None,
+        active_dimer_indices: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate energy and force contributions from dimers (heterogeneous-safe)."""
         # Get dimer energies and forces
@@ -2646,21 +2649,29 @@ def setup_calculator(
         )
         dimer_int_energies = dimer_int_energies * dimer_lambda
 
+        # Convert model dimer forces into interaction forces matching
+        # E_int = E_dimer - E_monomer_a - E_monomer_b before switching.
+        ml_dimer_forces_2d = ml_dimer_forces.reshape(n_dimers, max_atoms, 3)
+        monomer_pair_forces = monomer_forces[dimer_idx_arr_jnp]
+        dimer_interaction_forces_2d = (
+            (ml_dimer_forces_2d - monomer_pair_forces)
+            * dimer_lambda[:, None, None]
+            * dimer_atom_mask_jnp[:, :, None]
+        )
+        if active_dimer_indices is not None:
+            idx = jnp.asarray(active_dimer_indices, dtype=jnp.int32)
+            active_mask = jnp.zeros(n_dimers, dtype=jnp.bool_).at[idx].set(True)
+            dimer_int_energies = jnp.where(active_mask, dimer_int_energies, 0.0)
+            dimer_interaction_forces_2d = jnp.where(
+                active_mask[:, None, None], dimer_interaction_forces_2d, 0.0
+            )
+        dimer_interaction_forces_flat = dimer_interaction_forces_2d.reshape(-1, 3)
+
         debug_print(debug, "Dimer int energies:",
             dimer_int_energies=dimer_int_energies,
             ml_dimer_energy=ml_dimer_energy,
             monomer_contrib=monomer_contrib,
         )
-
-        # Convert model dimer forces into interaction forces matching
-        # E_int = E_dimer - E_monomer_a - E_monomer_b before switching.
-        ml_dimer_forces_2d = ml_dimer_forces.reshape(n_dimers, max_atoms, 3)
-        monomer_pair_forces = monomer_forces[dimer_idx_arr_jnp]
-        dimer_interaction_forces_flat = (
-            (ml_dimer_forces_2d - monomer_pair_forces)
-            * dimer_lambda[:, None, None]
-            * dimer_atom_mask_jnp[:, :, None]
-        ).reshape(-1, 3)
 
         # Apply switching functions
         switched_results = apply_dimer_switching(
@@ -2671,6 +2682,7 @@ def setup_calculator(
             max_atoms,
             debug,
             mic_pbc_cell=mic_pbc_cell,
+            active_dimer_indices=active_dimer_indices,
         )
 
         debug_print(debug, "Dimer Contributions:",
@@ -2741,18 +2753,39 @@ def setup_calculator(
         max_atoms: int,
         debug: bool,
         mic_pbc_cell: Optional[Array] = None,
+        active_dimer_indices: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Apply switching functions to dimer energies and forces (heterogeneous-safe).
 
         Forces are computed using the product rule:
         ``F = -d/dR [E * s(R)] = -[dE/dR * s(R) + E * ds/dR]``
+
+        When ``active_dimer_indices`` is set (sparse ML dimers), switching runs only
+        on that subset instead of all ``n_dimers`` slots.
         """
         cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
-        n_dimers = len(all_dimer_idxs)
-        force_segments = calculate_dimer_force_segments(n_dimers)
+        n_dimers_full = len(all_dimer_idxs)
+        force_segments_full = calculate_dimer_force_segments(n_dimers_full)
 
         # Gather dimer positions: (n_dimers, max_atoms, 3)
         dimer_pos_padded = positions[padded_dimer_idx_arr_jnp]
+        dimer_energies_all = dimer_energies
+        dimer_forces_all = dimer_forces_flat
+        atom_mask_all = dimer_atom_mask_jnp
+        force_segments = force_segments_full
+
+        if active_dimer_indices is not None:
+            idx = jnp.asarray(active_dimer_indices, dtype=jnp.int32)
+            dimer_pos_padded = dimer_pos_padded[idx]
+            dimer_energies_all = dimer_energies[idx]
+            dimer_forces_all = dimer_forces_flat.reshape(n_dimers_full, max_atoms, 3)[idx].reshape(-1, 3)
+            atom_mask_all = dimer_atom_mask_jnp[idx]
+            force_segments = dimer_idx_arr_jnp[idx].reshape(-1)
+            na_arr = dimer_n_atoms_a_jnp[idx]
+            nb_arr = dimer_n_atoms_b_jnp[idx]
+        else:
+            na_arr = dimer_n_atoms_a_jnp
+            nb_arr = dimer_n_atoms_b_jnp
         mic_fn = (
             mic_displacement_smooth if use_smooth_mic else mic_displacement
         ) if cell_for_mic is not None else None
@@ -2774,11 +2807,8 @@ def setup_calculator(
                 return pos_di + shift_b * mask_b[:, None]
 
             dimer_pos_padded = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(
-                dimer_pos_padded, dimer_n_atoms_a_jnp, dimer_n_atoms_b_jnp
+                dimer_pos_padded, na_arr, nb_arr
             )
-
-        na_arr = dimer_n_atoms_a_jnp
-        nb_arr = dimer_n_atoms_b_jnp
 
         def _dimer_com_sep(pos_di, na, nb):
             max_n = pos_di.shape[0]
@@ -2813,14 +2843,14 @@ def setup_calculator(
             cutoff_params.mm_switch_on,
             gamma=GAMMA_ON,
         )
-        switched_energy = dimer_energies * switching_scales
+        switched_energy = dimer_energies_all * switching_scales
         switched_grad = jax.vmap(
             lambda x, e, na, nb: _ml_switch_scale_grad(x, na, nb) * e,
             in_axes=(0, 0, 0, 0),
-        )(dimer_pos_padded, dimer_energies, na_arr, nb_arr)
+        )(dimer_pos_padded, dimer_energies_all, na_arr, nb_arr)
 
         dimer_switching_grads_flat = (
-            switched_grad * dimer_atom_mask_jnp[:, :, None]
+            switched_grad * atom_mask_all[:, :, None]
         ).reshape(-1, 3)
 
         # optimization_barrier discourages XLA constant folding of segment_ids.
@@ -2834,10 +2864,10 @@ def setup_calculator(
         # Per-dimer-entry switching scale: expand per-dimer scale to each padded
         # atom entry and zero padded slots before scattering forces back.
         switching_scales_per_atom = (
-            switching_scales[:, None] * dimer_atom_mask_jnp
+            switching_scales[:, None] * atom_mask_all
         ).reshape(-1)
 
-        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces_flat), dimer_forces_flat, 0.0)
+        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces_all), dimer_forces_all, 0.0)
         scaled_dimer_forces_flat = dimer_forces_safe * switching_scales_per_atom[:, None]
         scaled_dimer_forces = jax.ops.segment_sum(
             scaled_dimer_forces_flat,
@@ -2848,6 +2878,11 @@ def setup_calculator(
         energy_weighted_grad_safe = jnp.where(jnp.isfinite(energy_weighted_grad), energy_weighted_grad, 0.0)
         switched_forces = scaled_dimer_forces - energy_weighted_grad_safe
         switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
+
+        if active_dimer_indices is not None:
+            switched_energy = jnp.zeros(n_dimers_full, dtype=switched_energy.dtype).at[
+                active_dimer_indices
+            ].set(switched_energy)
 
         return {
             "energies": switched_energy,

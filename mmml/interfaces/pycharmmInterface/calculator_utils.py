@@ -275,46 +275,52 @@ def apply_com_lower_wall(
     ``V = 0.5 * k * (min_distance - r)^2`` for COM-COM distance ``r < min_distance``.
     Returns ``(E, F, min_com_distance)``.
     """
-    if jnp is None:
+    if jnp is None or jax is None:
         raise RuntimeError("apply_com_lower_wall requires JAX")
     from ase.data import atomic_masses as ase_atomic_masses
 
+    n = int(n_monomers)
+    if n < 2:
+        z = jnp.array(0.0, dtype=positions.dtype)
+        return z, jnp.zeros_like(base_forces), z
+
     masses = jnp.take(jnp.array(ase_atomic_masses, dtype=positions.dtype), atomic_numbers)
-    coms = _monomer_coms(
+    pair_i_np, pair_j_np = dimer_pair_index_arrays(n)
+    pair_i_j = jnp.asarray(pair_i_np, dtype=jnp.int32)
+    pair_j_j = jnp.asarray(pair_j_np, dtype=jnp.int32)
+    k_f = float(k)
+    min_d = float(min_distance)
+
+    def _pair_distances(coms: Array) -> Array:
+        com_a = coms[pair_i_j]
+        com_b = coms[pair_j_j]
+        if pbc_cell is not None:
+            d = jax.vmap(lambda a, b: mic_fn(a, b, pbc_cell))(com_a, com_b)
+        else:
+            d = com_b - com_a
+        return jnp.linalg.norm(d, axis=1)
+
+    coms_now = _monomer_coms(
         positions,
         masses,
         monomer_offsets=monomer_offsets,
-        n_monomers=n_monomers,
+        n_monomers=n,
     )
-    flat_E = jnp.array(0.0, dtype=positions.dtype)
-    flat_F = jnp.zeros_like(base_forces)
-    min_dist = jnp.array(jnp.inf, dtype=positions.dtype)
-    mo_np = np.asarray(monomer_offsets, dtype=np.int32)
-    for i in range(int(n_monomers)):
-        for j in range(i + 1, int(n_monomers)):
-            if pbc_cell is not None:
-                d = mic_fn(coms[i], coms[j], pbc_cell)
-            else:
-                d = coms[j] - coms[i]
-            dist = jnp.linalg.norm(d)
-            min_dist = jnp.minimum(min_dist, dist)
-            excess = jnp.maximum(0.0, float(min_distance) - dist)
-            flat_E = flat_E + 0.5 * float(k) * excess ** 2
-            unit_d = d / (dist + 1e-12)
-            force_i = -float(k) * excess * unit_d
-            force_j = float(k) * excess * unit_d
-            si, ei = int(mo_np[i]), int(mo_np[i + 1])
-            sj, ej = int(mo_np[j]), int(mo_np[j + 1])
-            mass_i = masses[si:ei]
-            mass_j = masses[sj:ej]
-            flat_F = flat_F.at[si:ei].add(
-                (mass_i[:, None] / jnp.sum(mass_i)) * force_i[None, :]
-            )
-            flat_F = flat_F.at[sj:ej].add(
-                (mass_j[:, None] / jnp.sum(mass_j)) * force_j[None, :]
-            )
-    if int(n_monomers) < 2:
-        min_dist = jnp.array(0.0, dtype=positions.dtype)
+    min_dist = jnp.min(_pair_distances(coms_now))
+
+    def wall_energy(pos: Array) -> Array:
+        coms = _monomer_coms(
+            pos,
+            masses,
+            monomer_offsets=monomer_offsets,
+            n_monomers=n,
+        )
+        excess = jnp.maximum(0.0, min_d - _pair_distances(coms))
+        return 0.5 * k_f * jnp.sum(excess ** 2)
+
+    flat_E = wall_energy(positions)
+    flat_F = -jax.grad(wall_energy)(positions)
+    flat_F = jnp.where(jnp.isfinite(flat_F), flat_F, 0.0)
     return flat_E, flat_F, min_dist
 
 

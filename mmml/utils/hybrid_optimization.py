@@ -467,8 +467,17 @@ def create_hybrid_fitting_factory(
                 monomer_offsets_val = np.zeros(n_monomers_val + 1, dtype=int)
                 for i, n in enumerate(atoms_per_monomer_list_val):
                     monomer_offsets_val[i + 1] = monomer_offsets_val[i] + n
-
-                # Prepare monomer and dimer indices (matching calculator logic)
+                monomer_segment_idxs_j = jnp.asarray(
+                    np.concatenate(
+                        [
+                            np.arange(atoms_per_monomer_list_val[i], dtype=np.int32)
+                            + monomer_offsets_val[i]
+                            for i in range(n_monomers_val)
+                        ]
+                    )
+                )
+                atoms_per_mono_j = jnp.asarray(atoms_per_monomer_list_val, dtype=jnp.int32)
+                total_atoms_val = int(monomer_offsets_val[-1])
                 all_monomer_idxs = []
                 for a in range(1, n_monomers_val + 1):
                     idxs = indices_of_monomer(
@@ -582,34 +591,19 @@ def create_hybrid_fitting_factory(
                 ml_monomer_forces_batched = ml_forces_batched[:n_monomer_atoms_batched]
                 
                 # Map monomer forces back to full system (using segment_sum with proper indices)
-                monomer_segment_idxs = jnp.concatenate([
-                    jnp.arange(atoms_per_monomer_list_val[i]) + int(monomer_offsets_val[i])
-                    for i in range(n_monomers_val)
-                ])
-
-                # Reshape monomer forces and extract only valid atoms
                 monomer_forces_reshaped = ml_monomer_forces_batched.reshape(n_monomers_val, max_atoms, 3)
-                atom_mask = jnp.arange(max_atoms)[None, :] < jnp.array(atoms_per_monomer_list_val)[:, None]
-                monomer_forces_masked = jnp.where(
-                    atom_mask[..., None],
-                    monomer_forces_reshaped,
-                    0.0
-                )
-                # Sum forces using segment_sum (variable atoms per monomer)
-                total_atoms_val = int(monomer_offsets_val[-1])
-                monomer_forces_flat = jnp.concatenate([
-                    monomer_forces_masked[i, :atoms_per_monomer_list_val[i], :].reshape(-1, 3)
-                    for i in range(n_monomers_val)
-                ])
+                atom_mask = jnp.arange(max_atoms)[None, :] < atoms_per_mono_j[:, None]
+                monomer_forces_flat = (
+                    monomer_forces_reshaped * atom_mask[..., None]
+                ).reshape(-1, 3)
                 ml_monomer_forces = jax.ops.segment_sum(
                     monomer_forces_flat,
-                    monomer_segment_idxs,
-                    num_segments=total_atoms_val
+                    monomer_segment_idxs_j,
+                    num_segments=total_atoms_val,
                 )
                 
                 # Step 2: Extract and map dimer forces (if dimers exist)
                 if n_dimers > 0 and not skip_ml_dimers:
-                    # Calculate force segments for dimers (heterogeneous: use monomer_offsets)
                     dimer_perms_list = dimer_permutations(n_monomers_val)
                     dimer_force_segments_list = []
                     for di, (mi, mj) in enumerate(dimer_perms_list):
@@ -620,26 +614,26 @@ def create_hybrid_fitting_factory(
                         dimer_force_segments_list.extend(
                             [off_a + a for a in range(n_a)] + [off_b + b for b in range(n_b)]
                         )
-                    dimer_force_segments = jnp.array(dimer_force_segments_list)
+                    dimer_force_segments = jnp.asarray(
+                        np.asarray(dimer_force_segments_list, dtype=np.int32)
+                    )
+                    dimer_atom_mask = jnp.arange(max_atoms)[None, :] < jnp.asarray(
+                        dimer_atom_counts, dtype=jnp.int32
+                    )[:, None]
 
                     # Extract dimer forces (after monomer forces in batched array)
                     dimer_start_idx = n_monomer_atoms_batched
                     dimer_end_idx = dimer_start_idx + n_dimers * max_atoms
                     if ml_forces_batched.shape[0] >= dimer_end_idx:
                         ml_dimer_forces_batched = ml_forces_batched[dimer_start_idx:dimer_end_idx]
-
-                        # Reshape and extract valid atoms per dimer
                         dimer_forces_reshaped = ml_dimer_forces_batched.reshape(n_dimers, max_atoms, 3)
-                        dimer_forces_flat = jnp.concatenate([
-                            dimer_forces_reshaped[i, :dimer_atom_counts[i], :].reshape(-1, 3)
-                            for i in range(n_dimers)
-                        ])
-
-                        # Map dimer forces back to full system
+                        dimer_forces_flat = (
+                            dimer_forces_reshaped * dimer_atom_mask[..., None]
+                        ).reshape(-1, 3)
                         ml_dimer_forces = jax.ops.segment_sum(
                             dimer_forces_flat,
                             dimer_force_segments,
-                            num_segments=total_atoms_val
+                            num_segments=total_atoms_val,
                         )
                     else:
                         ml_dimer_forces = jnp.zeros((total_atoms_val, 3))
