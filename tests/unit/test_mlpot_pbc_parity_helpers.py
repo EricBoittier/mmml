@@ -118,3 +118,16 @@ def test_route_mlpot_callback_energy_subtracts_mm_from_user(monkeypatch):
     }
     e_user = route_mlpot_callback_energy_kcalmol(10.0, components, route=True)
     assert e_user == pytest.approx(6.25)
+
+
+def test_route_mlpot_callback_keeps_user_when_routing_would_zero_hybrid(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    components = {
+        "vdw_primary": -15000.0,
+        "vdw_image": -10000.0,
+        "elec_primary": -6000.0,
+        "elec_image": -729.4,
+        "mm_total": -31729.4,
+    }
+    e_user = route_mlpot_callback_energy_kcalmol(-31729.4, components, route=True)
+    assert e_user == pytest.approx(-31729.4)

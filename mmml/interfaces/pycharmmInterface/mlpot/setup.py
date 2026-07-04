@@ -291,6 +291,32 @@ def _mlpot_user_registration_diag(ctx: MlpotContext) -> str:
     fortran = _fortran_mlpot_callback_active()
     if fortran is not None:
         parts.append(f"Fortran mlpot_is_set={fortran}")
+    calc = getattr(ctx.mlpot, "calculator", None)
+    callback_user = getattr(calc, "_last_callback_user_return_kcal", None)
+    if callback_user is not None and np.isfinite(float(callback_user)):
+        parts.append(f"callback USER return={float(callback_user):.2f} kcal/mol")
+    callback_hybrid = getattr(calc, "_last_callback_hybrid_energy_kcal", None)
+    if (
+        callback_hybrid is not None
+        and np.isfinite(float(callback_hybrid))
+        and (
+            callback_user is None
+            or abs(float(callback_hybrid) - float(callback_user)) > 1.0e-3
+        )
+    ):
+        parts.append(f"callback hybrid E={float(callback_hybrid):.2f} kcal/mol")
+    try:
+        terms = _read_mlpot_charmm_energy_terms_kcal()
+        routed = {
+            key: float(terms.get(key, 0.0))
+            for key in ("VDW", "ELEC", "IMNB", "IMEL")
+            if abs(float(terms.get(key, 0.0))) > 1.0e-6
+        }
+        if routed:
+            detail = ", ".join(f"{k}={v:.2f}" for k, v in routed.items())
+            parts.append(f"CHARMM routed ({detail})")
+    except Exception:
+        pass
     hybrid_e = _probe_mlpot_hybrid_energy_kcal(ctx)
     if hybrid_e is not None and np.isfinite(hybrid_e):
         parts.append(f"JAX hybrid E={hybrid_e:.2f} kcal/mol")
@@ -336,7 +362,10 @@ def _read_mlpot_user_energy_kcal(
     force: bool = True,
     ctx: MlpotContext | None = None,
 ) -> float | None:
-    """Read CHARMM USER energy (kcal/mol) after ``ENER`` or ``ENER FORCE``."""
+    """Read MLpot hybrid energy in CHARMM (kcal/mol) after ``ENER`` or ``ENER FORCE``.
+
+    When MM eterm routing is active, counts USER + routed VDW/ELEC/IMNB/IMEL.
+    """
     import math
 
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -345,44 +374,38 @@ def _read_mlpot_user_energy_kcal(
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
+    script = "ENER FORCE" if force else "ENER"
+    zero_tol = 1.0e-12
+
+    def _probe_once() -> float | None:
+        with charmm_silent_command():
+            pycharmm.lingo.charmm_script(script)
+        terms = _read_mlpot_charmm_energy_terms_kcal()
+        try:
+            user = float(energy.get_term_by_name("USER"))
+        except (ValueError, IndexError, TypeError):
+            user = float(terms.get("USER", 0.0))
+        if not math.isfinite(user):
+            return None
+        if _mlpot_ml_energy_missing_in_charmm(user, terms, zero_tol_kcalmol=zero_tol):
+            return None
+        return _effective_mlpot_user_kcal(user, terms)
+
     if ctx is not None:
         sync_mlpot_fortran_registration(ctx, verbose=False)
-    script = "ENER FORCE" if force else "ENER"
-    with charmm_silent_command():
-        pycharmm.lingo.charmm_script(script)
-    terms = _read_mlpot_charmm_energy_terms_kcal()
-    try:
-        value = float(energy.get_term_by_name("USER"))
-    except (ValueError, IndexError, TypeError):
-        value = float(terms.get("USER", 0.0))
-    if not math.isfinite(value):
-        return None
-    if (
-        ctx is not None
-        and abs(float(value)) <= 1.0e-12
-        and _mlpot_ml_energy_missing_in_charmm(value, terms, zero_tol_kcalmol=1.0e-12)
-    ):
+    effective = _probe_once()
+    if effective is not None:
+        return effective
+
+    if ctx is not None:
         calc = getattr(ctx.mlpot, "calculator", None)
         callback_user = getattr(calc, "_last_callback_user_return_kcal", None)
-        callback_hybrid = getattr(calc, "_last_callback_hybrid_energy_kcal", None)
-        if callback_user is not None and abs(float(callback_user)) > 1.0e-6:
+        if callback_user is not None and abs(float(callback_user)) > zero_tol:
             sync_mlpot_fortran_registration(ctx, verbose=False)
-            with charmm_silent_command():
-                pycharmm.lingo.charmm_script(script)
-            terms = _read_mlpot_charmm_energy_terms_kcal()
-            try:
-                value = float(energy.get_term_by_name("USER"))
-            except (ValueError, IndexError, TypeError):
-                value = float(terms.get("USER", 0.0))
-            if (
-                abs(float(value)) <= 1.0e-12
-                and callback_hybrid is not None
-                and abs(float(callback_hybrid)) > 1.0e-6
-            ):
-                return _effective_mlpot_user_kcal(value, terms)
-    if _mlpot_ml_energy_missing_in_charmm(value, terms, zero_tol_kcalmol=1.0e-12):
-        return None
-    return _effective_mlpot_user_kcal(value, terms)
+            effective = _probe_once()
+            if effective is not None:
+                return effective
+    return None
 
 
 _MLPOT_CHARMM_HYBRID_ETERM_KEYS: tuple[str, ...] = (
@@ -666,11 +689,11 @@ def assert_mlpot_user_active(
         if diag:
             msg = f"{msg} ({diag})"
         hybrid_e = _probe_mlpot_hybrid_energy_kcal(ctx)
-        if hybrid_e is not None and abs(float(hybrid_e)) > float(zero_tol_kcalmol):
+        if hybrid_e is not None and abs(float(hybrid_e)) > 1.0e-6:
             msg = (
                 f"{msg}. JAX hybrid energy is active but CHARMM USER is not — "
                 "the MLpot ctypes callback is not wired into ENER (check "
-                "mlpot_set_func / mpirun launcher / PBC list rebuild order)"
+                "mlpot_set_func / qeterm(user) / PBC list rebuild order)"
             )
         raise RuntimeError(msg)
     if not quiet:

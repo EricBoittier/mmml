@@ -27,17 +27,21 @@ _DIAG_NOTES = {
 
 
 def try_user_energy_kcal(mlpot_ctx: Any | None = None) -> float | None:
-    """Best-effort CHARMM USER term (kcal/mol); None when unavailable."""
+    """Best-effort MLpot hybrid energy in CHARMM (kcal/mol); None when unavailable."""
     if mlpot_ctx is None:
         return None
     try:
-        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        import pycharmm.energy as energy
+        from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+            _effective_mlpot_user_kcal,
+            _read_mlpot_charmm_energy_terms_kcal,
+        )
 
-        user = float(energy.get_term_by_name("USER"))
-        if not np.isfinite(user):
+        terms = _read_mlpot_charmm_energy_terms_kcal()
+        user = float(terms.get("USER", 0.0))
+        effective = _effective_mlpot_user_kcal(user, terms)
+        if not np.isfinite(effective):
             return None
-        return user
+        return float(effective)
     except Exception:
         return None
 
