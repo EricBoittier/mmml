@@ -341,6 +341,13 @@ def mlpot_sd_charmm_ener_already_primed(mlpot_ctx: Any) -> bool:
     return getattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", None) is True
 
 
+def mlpot_defer_charmm_hybrid_ener(mlpot_ctx: Any) -> bool:
+    """True when hybrid ``ENER``/``ENER FORCE`` must wait for pre-SD JAX materialize."""
+    if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+        return False
+    return getattr(mlpot_ctx, "_mlpot_sd_jax_materialized", None) is not True
+
+
 def invalidate_mlpot_pre_sd_ener_probe(mlpot_ctx: Any) -> None:
     """Clear deferred-path ENER prime so the next probe runs at current coordinates."""
     setattr(mlpot_ctx, "_mlpot_pre_sd_ener_probed", False)
@@ -420,6 +427,15 @@ def assert_mlpot_user_active(
     In all-ML workflows CHARMM bonded/nonbonded terms are intentionally zeroed by
     BLOCK, so a missing USER term leaves dynamics integrating a free gas.
     """
+    if mlpot_defer_charmm_hybrid_ener(ctx):
+        rebind_mlpot_calculator_from_pycmodel(ctx, verbose=False)
+        if not quiet:
+            print(
+                f"{context}: deferring USER ENER probe until MLpot SD JAX materialize "
+                "(PBC + MPI-linked CHARMM deferred JAX)",
+                flush=True,
+            )
+        return 0.0
     rebind_mlpot_calculator_from_pycmodel(ctx, verbose=not quiet)
     user = _read_mlpot_user_energy_kcal(force=True)
     missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)

@@ -1519,10 +1519,17 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         return False
 
+    import jax
+
+    backend = str(jax.default_backend()).lower()
+    device_note = (
+        "CPU XLA compile may idle host CPU"
+        if backend == "cpu"
+        else "GPU XLA compile may idle host CPU"
+    )
     print(
         "Pre-MLpot SD: JAX hybrid compile/warmup starting "
-        "(CPU may look idle during GPU XLA compile; several minutes is normal for "
-        "large PBC clusters)",
+        f"({device_note}; several minutes is normal for large PBC clusters)",
         flush=True,
     )
 

@@ -3304,6 +3304,19 @@ def refresh_mlpot_energy_and_grms(
     ``reregister=True`` (default) reattaches the MLpot callback only — it does **not**
     re-read CGENFF parameters (``READ PARAM APPEND`` clears PBC lists).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        mlpot_defer_charmm_hybrid_ener,
+    )
+
+    if mlpot_ctx is not None and mlpot_defer_charmm_hybrid_ener(mlpot_ctx):
+        if context:
+            print(
+                f"{context}: deferring ENER FORCE until MLpot SD JAX materialize "
+                "(PBC + MPI-linked CHARMM deferred JAX)",
+                flush=True,
+            )
+        return float("nan")
+
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
     import pycharmm
 
