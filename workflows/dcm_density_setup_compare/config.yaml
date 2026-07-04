@@ -104,7 +104,7 @@ bonded_mm_mini_steps: 1000
 bonded_recovery_backend: sidecar
 
 # Orbax/NPZ sidecar after every successful overlap chunk (Bussi in-memory handoff).
-overlap_run_state_every_chunks: 25
+overlap_run_state_every_chunks: 100
 
 # Mini-only smoke: skip post-mini bonded-MM strain path (fragile on dense PBC all-ML).
 bonded_mm_mini: false
@@ -142,12 +142,12 @@ mm_switch_on: 6.0
 mm_switch_width: 4.0
 ml_switch_width: 1.0
 ml_gpu_count: 1
-ml_batch_size: 256
+ml_batch_size: 64
 
 # Serial JAX compile cache before MPI-linked MLpot (jax-pme hybrid path).
 warmup_mlpot_jax: true
 warmup_do_mm: true
-warmup_compile_threads: 4
+warmup_compile_threads: 12
 
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 16
@@ -155,7 +155,7 @@ slurm_max_concurrent_slow: 12
 slurm_partition: gpu
 slurm_nodes: 1
 slurm_ntasks: 1
-slurm_cpus_per_task: 4
+slurm_cpus_per_task: 12
 slurm_mem_mb_per_cpu: 3000
 slurm_runtime_min: 1440
 slurm_gpu_nodes_fast:
