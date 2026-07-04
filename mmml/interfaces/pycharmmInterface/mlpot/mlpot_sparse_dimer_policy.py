@@ -116,6 +116,59 @@ def mic_displacement_numpy(a: np.ndarray, b: np.ndarray, cell: Optional[np.ndarr
     return (frac @ cell).reshape(3)
 
 
+def _mic_lattice_shift_numpy(
+    a: np.ndarray,
+    b: np.ndarray,
+    cell: Optional[np.ndarray],
+) -> np.ndarray:
+    """Integer lattice translation (fractional units) for the MIC image of ``b`` relative to ``a``."""
+    d = np.asarray(b, dtype=np.float64) - np.asarray(a, dtype=np.float64)
+    if cell is None:
+        return np.zeros(3, dtype=np.int32)
+    cell = np.asarray(cell, dtype=np.float64)
+    inv = np.linalg.inv(cell.T)
+    frac = (inv @ d.T).T
+    return np.round(frac).astype(np.int32)
+
+
+def image_aware_dimer_com_distance_numpy(
+    positions: np.ndarray,
+    dimer_indices: np.ndarray,
+    n_a: int,
+    n_b: int,
+    cell: Optional[np.ndarray],
+) -> float:
+    """MIC COM–COM distance with explicit one-cell-shell image search (cubic-safe).
+
+    For cubic cells this matches ``mic_displacement`` on COMs; the explicit shell
+    guards edge cases when monomers straddle box faces before molecular rewrap.
+    """
+    pos = positions[dimer_indices]
+    com_a = pos[:n_a].mean(axis=0)
+    com_b = pos[n_a : n_a + n_b].mean(axis=0)
+    if cell is None:
+        return float(np.linalg.norm(com_b - com_a))
+
+    cell = np.asarray(cell, dtype=np.float64)
+    side = float(cell[0, 0])
+    if (
+        cell.shape == (3, 3)
+        and np.allclose(cell - np.diag(np.diag(cell)), 0.0)
+        and np.allclose(np.diag(cell), side)
+    ):
+        best = np.inf
+        for tx in (-1, 0, 1):
+            for ty in (-1, 0, 1):
+                for tz in (-1, 0, 1):
+                    shift = np.array([tx, ty, tz], dtype=np.float64) * side
+                    d = com_b + shift - com_a
+                    best = min(best, float(np.linalg.norm(d)))
+        return float(best)
+
+    d = mic_displacement_numpy(com_a, com_b, cell)
+    return float(np.linalg.norm(d))
+
+
 def dimer_com_distance_numpy(
     positions: np.ndarray,
     dimer_indices: np.ndarray,
@@ -153,7 +206,9 @@ def count_near_dimer_pairs(
     n_dimers = len(dimer_idx)
     dists = np.array(
         [
-            dimer_com_distance_numpy(pos, dimer_idx[di], int(dimer_n_a[di]), int(dimer_n_b[di]), cell)
+            image_aware_dimer_com_distance_numpy(
+                pos, dimer_idx[di], int(dimer_n_a[di]), int(dimer_n_b[di]), cell
+            )
             for di in range(n_dimers)
         ],
         dtype=np.float64,

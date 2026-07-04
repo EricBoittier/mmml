@@ -1117,6 +1117,29 @@ def _rewrap_mlpot_pbc_after_sd(
         )
 
 
+def maybe_rewrap_mlpot_pbc_from_mlpot_ctx(
+    mlpot_ctx: Any | None,
+    *,
+    context: str = "NVE block",
+    verbose: bool = False,
+) -> None:
+    """Re-wrap primary-cell coords at dynamics block boundaries when PBC is active."""
+    if mlpot_ctx is None:
+        return
+    if not bool(getattr(mlpot_ctx, "use_pbc", False)):
+        return
+    if getattr(mlpot_ctx, "charmm_cubic_box_side_A", None) is None:
+        return
+
+    class _RewrapConfig:
+        pass
+
+    cfg = _RewrapConfig()
+    cfg.mlpot_ctx = mlpot_ctx
+    cfg.verbose = verbose
+    _rewrap_mlpot_pbc_after_sd(cfg, verbose=verbose, context=context)
+
+
 def invalidate_mlpot_calculator_caches(mlpot_ctx: Any | None) -> None:
     """Drop JAX MM pair-list caches after CHARMM UPDATE (positions moved)."""
     if mlpot_ctx is None:
@@ -6635,6 +6658,11 @@ def run_dynamics_with_io(
                 steps_before_chunk = steps_done
                 chunk_kw = dict(kw)
                 chunk_kw["nstep"] = chunk_nstep
+                maybe_rewrap_mlpot_pbc_from_mlpot_ctx(
+                    mlpot_ctx,
+                    context=f"{overlap_context} block {chunk_index + 1}/{n_chunks}",
+                    verbose=bool(getattr(mlpot_ctx, "verbose", False)) if mlpot_ctx else False,
+                )
                 if _bussi_heat_ramp_active(chunk_kw):
                     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
                         bussi_restart_fallback_paths_from_overlap,

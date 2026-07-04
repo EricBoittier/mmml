@@ -467,6 +467,36 @@ class DecomposedMlpotCalculator:
             return jax_cpu_until_mlpot_registered()
         return mlpot_jax_device_context()
 
+    def _maybe_rewrap_primary_cell_in_callback(
+        self,
+        pos: np.ndarray,
+        n: int,
+        x,
+        y,
+        z,
+    ) -> np.ndarray:
+        """Re-center molecules in the CHARMM primary cell before MIC evaluation."""
+        if not self._cell or not self._atoms_per_monomer:
+            return pos
+        from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+
+        side = float(self._cell)
+        wrapped = rewrap_charmm_pbc_molecules(
+            np.asarray(pos[:n], dtype=np.float64),
+            list(self._atoms_per_monomer),
+            side,
+        )
+        delta = np.abs(wrapped - pos[:n])
+        if float(delta.max()) <= 1e-4:
+            return pos
+        for i in range(n):
+            x[i] = float(wrapped[i, 0])
+            y[i] = float(wrapped[i, 1])
+            z[i] = float(wrapped[i, 2])
+        out = np.array(pos, dtype=np.float64, copy=True)
+        out[:n] = wrapped
+        return out
+
     def calculate_charmm(
         self,
         Natom: int,
@@ -491,6 +521,7 @@ class DecomposedMlpotCalculator:
     ) -> float:
         n = int(Natom)
         pos = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
+        pos = self._maybe_rewrap_primary_cell_in_callback(pos, n, x, y, z)
         box = None
         if self._cell or self._requires_callback_pbc_box():
             from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -526,6 +557,9 @@ class DecomposedMlpotCalculator:
         run_ml = mlpot_runs_on_this_rank()
         e_kcal = 0.0
         forces = np.zeros((n, 3), dtype=np.float64)
+        mm_pair_idx = None
+        mm_pair_mask = None
+        use_mm_pairs = False
         rank, mpi_size = mpi_rank_size()
         use_spatial = (
             bool(getattr(self, "_spatial_mpi", False) or spatial_mpi_enabled())
@@ -651,6 +685,20 @@ class DecomposedMlpotCalculator:
             dx[i] -= forces[i, 0]
             dy[i] -= forces[i, 1]
             dz[i] -= forces[i, 2]
+        if run_ml and use_mm_pairs:
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
+                decompose_and_route_mlpot_mm_from_callback,
+            )
+
+            e_kcal = decompose_and_route_mlpot_mm_from_callback(
+                self,
+                pos,
+                mm_pair_idx,
+                mm_pair_mask,
+                box,
+                float(e_kcal),
+                use_mm_pairs=bool(use_mm_pairs),
+            )
         return e_kcal
 
 
@@ -1141,16 +1189,51 @@ def build_decomposed_mlpot_model(
             f"Decomposed MLpot: max_pairs={int(max_pairs)} (PBC cell-list buffer)",
             flush=True,
         )
-    lr_solver = getattr(args, "lr_solver", None) if args is not None else None
+    lr_solver = None
     jax_pme_method = getattr(args, "jax_pme_method", None) if args is not None else None
-    jax_pme_sr_cutoff = (
-        float(getattr(args, "jax_pme_sr_cutoff", 6.0) or 6.0)
-        if args is not None
-        else 6.0
-    )
-    jax_pme_dispersion = (
-        getattr(args, "jax_pme_dispersion", None) if args is not None else None
-    )
+    jax_pme_sr_cutoff = 6.0
+    jax_pme_dispersion = getattr(args, "jax_pme_dispersion", None) if args is not None else None
+    mlpot_pbc = not free_space and bool(cell)
+    if args is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            resolve_jax_pme_sr_cutoff_for_mlpot,
+            resolve_lr_solver_for_mlpot,
+            resolve_mlpot_use_pbc,
+            warn_if_mic_pbc_without_lr,
+        )
+
+        mlpot_pbc = resolve_mlpot_use_pbc(args) or mlpot_pbc
+        lr_solver = resolve_lr_solver_for_mlpot(
+            args,
+            mlpot_pbc=mlpot_pbc,
+            mm_nonbond_mode=mm_nonbond_mode,
+        )
+        jax_pme_sr_cutoff = resolve_jax_pme_sr_cutoff_for_mlpot(args, cutoff_params)
+        warn_if_mic_pbc_without_lr(
+            lr_solver=lr_solver,
+            mlpot_pbc=mlpot_pbc,
+            mm_nonbond_mode=mm_nonbond_mode,
+            verbose=verbose,
+        )
+    elif mlpot_pbc:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            resolve_jax_pme_sr_cutoff_for_mlpot,
+            resolve_lr_solver_for_mlpot,
+            warn_if_mic_pbc_without_lr,
+        )
+
+        lr_solver = resolve_lr_solver_for_mlpot(
+            args,
+            mlpot_pbc=True,
+            mm_nonbond_mode=mm_nonbond_mode,
+        )
+        jax_pme_sr_cutoff = resolve_jax_pme_sr_cutoff_for_mlpot(args, cutoff_params)
+        warn_if_mic_pbc_without_lr(
+            lr_solver=lr_solver,
+            mlpot_pbc=True,
+            mm_nonbond_mode=mm_nonbond_mode,
+            verbose=verbose,
+        )
     if verbose and do_mm and lr_solver:
         from mmml.interfaces.pycharmmInterface.long_range_backend import describe_lr_solver
 

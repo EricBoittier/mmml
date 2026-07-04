@@ -1396,6 +1396,8 @@ def setup_calculator(
                     mm_F = mm_F[:n_atoms]
             
             outputs["mm_E"] = mm_E
+            outputs["mm_vdw_E"] = mm_out.get("mm_vdw_E", 0)
+            outputs["mm_elec_E"] = mm_out.get("mm_elec_E", 0)
             outputs["mm_F"] = mm_F
             outputs["out_E"] = outputs.get("out_E", 0) + outputs["mm_E"]
             outputs["out_F"] = outputs.get("out_F", 0) + outputs["mm_F"]
@@ -1474,6 +1476,8 @@ def setup_calculator(
             com=com,
             com_dist=com_dist,
             com_restraint_min_dist=com_restraint_min_dist,
+            mm_vdw_E=outputs.get("mm_vdw_E", 0),
+            mm_elec_E=outputs.get("mm_elec_E", 0),
         )
 
     def get_ML_energy_fn(
@@ -1578,6 +1582,18 @@ def setup_calculator(
             mm_switch_on = cutoff_params.mm_switch_on
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
+            def _cubic_side_from_cell(cell_arr):
+                if cell_arr is None:
+                    return None
+                c = jnp.asarray(cell_arr)
+                if c.ndim == 1:
+                    return float(c.reshape(-1)[0])
+                if c.shape == (3, 3) and jnp.allclose(c - jnp.diag(jnp.diag(c)), 0.0):
+                    return float(c[0, 0])
+                return None
+
+            _cubic_side = _cubic_side_from_cell(cell_for_mic)
+
             def _dimer_com_dist(pos_di, na, nb):
                 # Masked reduction for vmap compatibility (na, nb can be traced)
                 max_n = pos_di.shape[0]
@@ -1588,6 +1604,16 @@ def setup_calculator(
                 n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
                 com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
                 com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
+                if _cubic_side is not None:
+                    side = jnp.asarray(_cubic_side, dtype=pos_di.dtype)
+                    offsets = jnp.array([-1.0, 0.0, 1.0], dtype=pos_di.dtype)
+                    tx, ty, tz = jnp.meshgrid(offsets, offsets, offsets, indexing="ij")
+                    shifts = (
+                        jnp.stack([tx.reshape(-1), ty.reshape(-1), tz.reshape(-1)], axis=1)
+                        * side
+                    )
+                    dists = jnp.linalg.norm(com_b[None, :] + shifts - com_a[None, :], axis=1)
+                    return jnp.min(dists)
                 d = mic_fn(com_a, com_b, cell_for_mic) if cell_for_mic is not None else com_b - com_a
                 return jnp.linalg.norm(d)
 
@@ -1922,6 +1948,8 @@ def setup_calculator(
         with that box (no cache).
         """
         
+        from mmml.interfaces.pycharmmInterface.mm_energy_forces import _unpack_mm_energy_forces
+
         # Ensure positions are finite
         positions = jnp.where(jnp.isfinite(positions), positions, 0.0)
 
@@ -1939,19 +1967,25 @@ def setup_calculator(
                     "Call get_update_fn / DecomposedMlpotCalculator._resolve_mm_pairs "
                     "outside JIT before spherical_cutoff_calculator."
                 )
-            mm_E, mm_grad = mm_fn_val(
+            mm_E, mm_grad, mm_vdw, mm_elec = _unpack_mm_energy_forces(
+                mm_fn_val(
                 positions, mm_pair_idx, mm_pair_mask, box_override=box
             )
+            )
         else:
-            mm_E, mm_grad = mm_fn_val(positions)
+            mm_E, mm_grad, mm_vdw, mm_elec = _unpack_mm_energy_forces(mm_fn_val(positions))
         
         # Check for NaN/Inf in MM energy and forces
         mm_E = jnp.where(jnp.isfinite(mm_E), mm_E, 0.0)
         mm_grad = jnp.where(jnp.isfinite(mm_grad), mm_grad, 0.0)
+        mm_vdw = jnp.where(jnp.isfinite(mm_vdw), mm_vdw, 0.0)
+        mm_elec = jnp.where(jnp.isfinite(mm_elec), mm_elec, 0.0)
 
         # # MM outputs are in kcal/mol and kcal/mol/Å. Convert to eV and eV/Å.
         mm_E = mm_E * kcalmol2ev
         mm_grad = mm_grad * kcalmol2ev
+        mm_vdw = mm_vdw * kcalmol2ev
+        mm_elec = mm_elec * kcalmol2ev
         
         # Ensure MM forces match the full system size
         n_atoms = positions.shape[0]
@@ -1969,6 +2003,8 @@ def setup_calculator(
             "dH": mm_E,
             "mm_E": mm_E,
             "mm_F": mm_grad,
+            "mm_vdw_E": mm_vdw,
+            "mm_elec_E": mm_elec,
         }
 
     if _HAVE_ASE:

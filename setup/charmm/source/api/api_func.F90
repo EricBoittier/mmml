@@ -55,10 +55,17 @@ module api_func
   procedure(callback), pointer :: user_func
   procedure(callback_mlpot), pointer :: user_mlpot
 
+  real(c_double), save :: mlpot_e_vdw = 0.d0
+  real(c_double), save :: mlpot_e_elec = 0.d0
+  real(c_double), save :: mlpot_e_imvdw = 0.d0
+  real(c_double), save :: mlpot_e_imel = 0.d0
+  logical, save :: mlpot_route_nb_eterms = .false.
+
   public :: func_set, func_call, func_is_set, func_unset,       &
             mlpot_set_func, mlpot_set_properties,               &
             mlpot_update, mlpot_call, mlpot_is_set, mlpot_unset, &
-            mlpot_get_pair_counts, mlpot_export_mlmm_pairs, mlpot_export_mlml_pairs
+            mlpot_get_pair_counts, mlpot_export_mlmm_pairs, mlpot_export_mlml_pairs, &
+            mlpot_set_nb_components
 
 contains
 
@@ -327,6 +334,7 @@ contains
              jnb, inblo,            &
              imattr, imjnb, imblo) bind(c)
     use, intrinsic :: iso_c_binding, only: c_double, c_int
+    use energym, only: eterm, qeterm, vdw, elec, imvdw, imelec
     implicit none
     real(c_double) :: out_energy
     real(c_double) :: out_euser
@@ -357,11 +365,36 @@ contains
     ! Add ML potential and (if active) ML-MM electrostatic energy
     out_euser = out_euser + out_energy
 
+    if (mlpot_route_nb_eterms) then
+      if (qeterm(vdw)) eterm(vdw) = eterm(vdw) + mlpot_e_vdw
+      if (qeterm(elec)) eterm(elec) = eterm(elec) + mlpot_e_elec
+      if (qeterm(imvdw)) eterm(imvdw) = eterm(imvdw) + mlpot_e_imvdw
+      if (qeterm(imelec)) eterm(imelec) = eterm(imelec) + mlpot_e_imel
+      mlpot_route_nb_eterms = .false.
+      mlpot_e_vdw = 0.d0
+      mlpot_e_elec = 0.d0
+      mlpot_e_imvdw = 0.d0
+      mlpot_e_imel = 0.d0
+    endif
+
   end subroutine mlpot_call
 
   logical function mlpot_is_set()
     mlpot_is_set = associated(user_mlpot)
   end function mlpot_is_set
+
+
+  subroutine mlpot_set_nb_components(e_vdw, e_elec, e_imvdw, e_imel, route_eterms) bind(c)
+    use, intrinsic :: iso_c_binding, only: c_double, c_int
+    implicit none
+    real(c_double), value :: e_vdw, e_elec, e_imvdw, e_imel
+    integer(c_int), value :: route_eterms
+    mlpot_e_vdw = e_vdw
+    mlpot_e_elec = e_elec
+    mlpot_e_imvdw = e_imvdw
+    mlpot_e_imel = e_imel
+    mlpot_route_nb_eterms = (route_eterms /= 0)
+  end subroutine mlpot_set_nb_components
 
 
   function mlpot_get_pair_counts(out_nmlp, out_nmlmmp) bind(c) result(success)

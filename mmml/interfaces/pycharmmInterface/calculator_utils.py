@@ -183,6 +183,12 @@ class ModelOutput(NamedTuple):
     com: Array  # mass-weighted system COM (3,); zeros in monomer mode
     com_dist: Array  # |COM - center| (Å), or max_m |COM_m - center| in monomer mode
     com_restraint_min_dist: Array  # minimum inter-monomer COM distance (Å)
+    mm_vdw_E: Array = 0.0  # switched MM LJ (eV)
+    mm_elec_E: Array = 0.0  # switched MM Coulomb (eV)
+    mm_vdw_primary_E: Array = 0.0  # primary-cell MM LJ (kcal/mol bookkeeping)
+    mm_vdw_image_E: Array = 0.0  # image MM LJ (kcal/mol bookkeeping)
+    mm_elec_primary_E: Array = 0.0  # primary-cell MM Coulomb (kcal/mol bookkeeping)
+    mm_elec_image_E: Array = 0.0  # image MM Coulomb (kcal/mol bookkeeping)
 
 
 FLAT_BOTTOM_MODES = ("system", "monomer")

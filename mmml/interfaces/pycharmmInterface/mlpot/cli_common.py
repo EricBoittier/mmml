@@ -4337,3 +4337,77 @@ def resolve_pbc_box_side(args: argparse.Namespace, positions: np.ndarray) -> flo
         ml_cutoff=float(getattr(args, "ml_cutoff", 12.0)),
     )
     return float(side)
+
+
+def resolve_lr_solver_for_mlpot(
+    args: argparse.Namespace | None,
+    *,
+    mlpot_pbc: bool,
+    mm_nonbond_mode: str = "jax_mic",
+) -> str:
+    """Resolve long-range Coulomb backend for MLpot hybrid MM.
+
+    Explicit ``--lr-solver`` or ``MMML_LR_SOLVER`` wins.  For periodic ML MIC
+    (``pbc_*`` / ``--mlpot-pbc`` with ``jax_mic``), default to ``jax_pme`` so
+    bulk boxes get k-space electrostatics instead of truncated MIC-only Coulomb.
+    """
+    import os
+
+    explicit = None
+    if args is not None:
+        explicit = getattr(args, "lr_solver", None)
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip().lower()
+    env = (os.environ.get("MMML_LR_SOLVER") or "").strip().lower()
+    if env:
+        return env
+    if mlpot_pbc and str(mm_nonbond_mode).strip().lower() in ("jax_mic", "mic", "jax"):
+        return "jax_pme"
+    return "mic"
+
+
+def resolve_jax_pme_sr_cutoff_for_mlpot(
+    args: argparse.Namespace | None,
+    cutoff_params: Any | None = None,
+) -> float:
+    """Real-space jax-pme cutoff (Å), aligned with switched-MM outer edge by default."""
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.long_range_backend import (
+        DEFAULT_JAX_PME_SR_CUTOFF_A,
+    )
+
+    if args is not None:
+        explicit = getattr(args, "jax_pme_sr_cutoff", None)
+        if explicit is not None and float(explicit) > 0.0:
+            return float(explicit)
+    cp = cutoff_params if cutoff_params is not None else CutoffParameters()
+    return float(cp.mm_switch_on) + float(cp.mm_switch_width)
+
+
+def warn_if_mic_pbc_without_lr(
+    *,
+    lr_solver: str | None,
+    mlpot_pbc: bool,
+    mm_nonbond_mode: str = "jax_mic",
+    verbose: bool = False,
+) -> None:
+    """Emit a loud warning when truncated MIC Coulomb is used under PBC."""
+    from mmml.interfaces.pycharmmInterface.long_range_backend import pick_lr_solver
+
+    if not mlpot_pbc:
+        return
+    if str(mm_nonbond_mode).strip().lower() not in ("jax_mic", "mic", "jax"):
+        return
+    if pick_lr_solver(lr_solver) != "mic":
+        return
+    msg = (
+        "PBC MLpot with lr_solver=mic uses truncated MIC Coulomb (~mm_switch_on+width Å) "
+        "without k-space correction; bulk liquids may drift from CHARMM Ewald/PME. "
+        "Use --lr-solver jax_pme (default for pbc_* when unset)."
+    )
+    if verbose:
+        print(f"WARNING: {msg}", flush=True)
+    else:
+        import warnings
+
+        warnings.warn(msg, stacklevel=2)

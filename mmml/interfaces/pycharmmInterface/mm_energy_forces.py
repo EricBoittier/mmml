@@ -23,6 +23,16 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 
 # Verlet skin for jax-md MM pair reuse: ≤ dr_threshold/2 (dr_threshold=0.5 Å in bundle).
 DEFAULT_JAX_MD_CAPACITY_MULTIPLIER = 1.75
+
+
+def _unpack_mm_energy_forces(
+    result: Tuple[Array, Array] | Tuple[Array, Array, Array, Array],
+) -> Tuple[Array, Array, Array, Array]:
+    if isinstance(result, tuple) and len(result) == 4:
+        return result
+    energy, forces = result
+    zero = jnp.zeros_like(energy)
+    return energy, forces, zero, zero
 DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
 
 try:
@@ -663,8 +673,10 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
             pair_idx: Array,
             pair_mask: Array,
             box_override: Optional[Array] = None,
-        ) -> Tuple[Array, Array]:
-            e_sr, f_sr = mm_fn(positions, pair_idx, pair_mask, box_override=box_override)
+        ) -> Tuple[Array, Array, Array, Array]:
+            e_sr, f_sr, vdw_sr, elec_sr = _unpack_mm_energy_forces(
+                mm_fn(positions, pair_idx, pair_mask, box_override=box_override)
+            )
             e_lr, f_lr = _jax_pme_hybrid_mm_pure_callback(
                 positions,
                 box_override,
@@ -673,12 +685,12 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
                 pair_mask,
                 **callback_kw,
             )
-            return e_sr + e_lr, f_sr + f_lr
+            return e_sr + e_lr, f_sr + f_lr, vdw_sr, elec_sr + e_lr
 
         return wrapped
 
-    def wrapped(positions: Array) -> Tuple[Array, Array]:
-        e_sr, f_sr = mm_fn(positions)
+    def wrapped(positions: Array) -> Tuple[Array, Array, Array, Array]:
+        e_sr, f_sr, vdw_sr, elec_sr = _unpack_mm_energy_forces(mm_fn(positions))
         e_lr, f_lr = _jax_pme_hybrid_mm_pure_callback(
             positions,
             None,
@@ -687,7 +699,7 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
             static_mask,
             **callback_kw,
         )
-        return e_sr + e_lr, f_sr + f_lr
+        return e_sr + e_lr, f_sr + f_lr, vdw_sr, elec_sr + e_lr
 
     return wrapped
 
@@ -1086,10 +1098,10 @@ def build_mm_energy_forces_fn(
     if not _use_dynamic_nbrs and (_n_static_pairs == 0 or int(q_per_system.shape[0]) == 0):
 
         @jax.jit
-        def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array]:
+        def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array, Array, Array]:
             return jnp.array(0.0, dtype=ml_jnp_dtype), jnp.zeros(
                 (total_atoms, 3), dtype=ml_jnp_dtype
-            )
+            ), jnp.array(0.0, dtype=ml_jnp_dtype), jnp.array(0.0, dtype=ml_jnp_dtype)
 
         return calculate_mm_energy_and_forces
 
@@ -1218,23 +1230,29 @@ def build_mm_energy_forces_fn(
         pair_mask = (pair_idx_atom_atom[:, 0] < pair_idx_atom_atom[:, 1])
         vdw_energies = _pair_vdw_energies(distances, pair_rm, pair_ep, pair_mask)
         if _use_jax_pme_coulomb:
-            return vdw_energies
+            zeros = jnp.zeros_like(vdw_energies)
+            return vdw_energies, zeros, vdw_energies
         electrostatic_energies = coulomb(distances, pair_qq) * pair_mask
-        return vdw_energies + electrostatic_energies
+        return vdw_energies, electrostatic_energies, vdw_energies + electrostatic_energies
 
     def switched_mm_energy(positions: Array) -> Array:
-        pair_energies = calculate_mm_pair_energies(positions)
+        _, _, pair_energies = calculate_mm_pair_energies(positions)
         return apply_switching_function(positions, pair_energies)
 
     switched_mm_grad = jax.grad(switched_mm_energy)
 
     @jax.jit
-    def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array]:
-        pair_energies = calculate_mm_pair_energies(positions)
+    def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array, Array, Array]:
+        vdw_pe, elec_pe, pair_energies = calculate_mm_pair_energies(positions)
         switched_energy = apply_switching_function(positions, pair_energies)
+        switched_vdw = apply_switching_function(positions, vdw_pe)
+        switched_elec = apply_switching_function(positions, elec_pe)
         forces = -1.0 * switched_mm_grad(positions)
         forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
-        return switched_energy, forces
+        switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
+        switched_vdw = jnp.where(jnp.isfinite(switched_vdw), switched_vdw, 0.0)
+        switched_elec = jnp.where(jnp.isfinite(switched_elec), switched_elec, 0.0)
+        return switched_energy, forces, switched_vdw, switched_elec
 
     if _use_dynamic_nbrs:
         # Dynamic path: compute pair quantities from pair_idx, pair_mask
@@ -1939,3 +1957,128 @@ def build_mm_energy_forces_fn(
             static_pair_mask=_static_mask,
         )
     return mm_fn
+
+
+def decompose_mlpot_mm_nb_eterms_kcalmol(
+    positions_A: np.ndarray,
+    pair_idx: np.ndarray,
+    pair_mask: np.ndarray,
+    pbc_cell: np.ndarray | None,
+    *,
+    charges_e: np.ndarray,
+    rmins_A: np.ndarray,
+    epsilons_kcal: np.ndarray,
+    monomer_id: np.ndarray,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    ml_switch_width: float = 1.5,
+    complementary_handoff: bool = True,
+    pair_dimer_idx: np.ndarray | None = None,
+    com_distances_A: np.ndarray | None = None,
+) -> dict[str, float]:
+    """Split switched MM nonbond energy into CHARMM-style primary/image buckets (kcal/mol).
+
+    Primary pairs have zero MIC lattice shift; image pairs use a non-zero translation.
+    """
+    from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        _mic_lattice_shift_numpy,
+        mic_displacement_numpy,
+    )
+
+    def _np_sharpstep(r: float, x0: float, x1: float, gamma: float) -> float:
+        denom = x1 - x0
+        if abs(denom) < 1e-12:
+            return 1.0 if r >= x0 else 0.0
+        s = np.clip((r - x0) / denom, 0.0, 1.0) ** gamma
+        return float(s * s * (3.0 - 2.0 * s))
+
+    pos = np.asarray(positions_A, dtype=np.float64)
+    pi = np.asarray(pair_idx[:, 0], dtype=np.int64)
+    pj = np.asarray(pair_idx[:, 1], dtype=np.int64)
+    mask = np.asarray(pair_mask, dtype=bool) & (pi < pj)
+    if not np.any(mask):
+        zeros = {
+            "vdw_primary": 0.0,
+            "vdw_image": 0.0,
+            "elec_primary": 0.0,
+            "elec_image": 0.0,
+            "mm_total": 0.0,
+        }
+        return zeros
+
+    cell = None if pbc_cell is None else np.asarray(pbc_cell, dtype=np.float64)
+    if cell is not None and cell.ndim == 1:
+        cell = np.diag(cell)
+
+    vdw_pri = vdw_im = elec_pri = elec_im = 0.0
+    charges = np.asarray(charges_e, dtype=np.float64)
+    rmins = np.asarray(rmins_A, dtype=np.float64)
+    eps = np.asarray(epsilons_kcal, dtype=np.float64)
+    mid = np.asarray(monomer_id, dtype=np.int64)
+
+    for k in np.where(mask)[0]:
+        i = int(pi[k])
+        j = int(pj[k])
+        if mid[i] == mid[j]:
+            continue
+        ri = pos[i]
+        rj = pos[j]
+        if cell is not None:
+            shift = _mic_lattice_shift_numpy(ri, rj, cell)
+            is_primary = bool(np.all(shift == 0))
+            dr = mic_displacement_numpy(ri, rj, cell)
+        else:
+            is_primary = True
+            dr = rj - ri
+        r = float(np.linalg.norm(dr))
+        if r < 1e-12:
+            continue
+
+        if pair_dimer_idx is not None and com_distances_A is not None:
+            di = int(pair_dimer_idx[k])
+            if di >= 0:
+                r_com = float(com_distances_A[di])
+            else:
+                r_com = r
+        else:
+            r_com = r
+
+        if complementary_handoff:
+            handoff = _np_sharpstep(r_com, mm_switch_on - ml_switch_width, mm_switch_on, GAMMA_ON)
+            taper = 1.0 - _np_sharpstep(
+                r_com, mm_switch_on, mm_switch_on + mm_switch_width, GAMMA_OFF
+            )
+            mm_scale = handoff * taper
+        else:
+            mm_on = _np_sharpstep(r_com, mm_switch_on, mm_switch_on + mm_switch_width, GAMMA_ON)
+            mm_off = _np_sharpstep(
+                r_com,
+                mm_switch_on + mm_switch_width,
+                mm_switch_on + 2.0 * mm_switch_width,
+                GAMMA_OFF,
+            )
+            mm_scale = mm_on * (1.0 - mm_off)
+
+        rm = float(rmins[i] + rmins[j])
+        ep = float((eps[i] * eps[j]) ** 0.5)
+        sig = rm / (2.0 ** (1.0 / 6.0))
+        vdw = ep * ((sig / r) ** 12 - 2.0 * (sig / r) ** 6)
+        elec = 332.063711 * charges[i] * charges[j] / r
+        vdw *= mm_scale
+        elec *= mm_scale
+        if is_primary:
+            vdw_pri += vdw
+            elec_pri += elec
+        else:
+            vdw_im += vdw
+            elec_im += elec
+
+    mm_total = vdw_pri + vdw_im + elec_pri + elec_im
+    return {
+        "vdw_primary": float(vdw_pri),
+        "vdw_image": float(vdw_im),
+        "elec_primary": float(elec_pri),
+        "elec_image": float(elec_im),
+        "mm_total": float(mm_total),
+    }
