@@ -2753,9 +2753,11 @@ def setup_calculator(
 
         # Gather dimer positions: (n_dimers, max_atoms, 3)
         dimer_pos_padded = positions[padded_dimer_idx_arr_jnp]
+        mic_fn = (
+            mic_displacement_smooth if use_smooth_mic else mic_displacement
+        ) if cell_for_mic is not None else None
 
         if cell_for_mic is not None:
-            mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
             def _wrap_dimer_coords(pos_di, na, nb):
                 max_n = pos_di.shape[0]
@@ -2775,47 +2777,47 @@ def setup_calculator(
                 dimer_pos_padded, dimer_n_atoms_a_jnp, dimer_n_atoms_b_jnp
             )
 
-        # vmap switch_ML over dimers (avoids Python loop)
         na_arr = dimer_n_atoms_a_jnp
         nb_arr = dimer_n_atoms_b_jnp
 
-        def _switch_ml_vmapped(x, e, na, nb):
-            return switch_ML(
-                x,
-                e,
-                ml_switch_width=cutoff_params.ml_switch_width,
-                mm_switch_on=cutoff_params.mm_switch_on,
-                n_atoms_a=na,
-                n_atoms_b=nb,
-                pbc_cell=cell_for_mic,
+        def _dimer_com_sep(pos_di, na, nb):
+            max_n = pos_di.shape[0]
+            i = jnp.arange(max_n, dtype=jnp.int32)
+            mask_a = (i < na).astype(pos_di.dtype)
+            mask_b = ((i >= na) & (i < na + nb)).astype(pos_di.dtype)
+            n_a = jnp.maximum(jnp.sum(mask_a), 1e-10)
+            n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
+            com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
+            com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
+            if mic_fn is not None:
+                return jnp.linalg.norm(mic_fn(com_a, com_b, cell_for_mic))
+            return jnp.linalg.norm(com_b - com_a)
+
+        def _ml_switch_scale(pos_di, na, nb):
+            r = _dimer_com_sep(pos_di, na, nb)
+            return 1.0 - _sharpstep(
+                r,
+                cutoff_params.mm_switch_on - cutoff_params.ml_switch_width,
+                cutoff_params.mm_switch_on,
+                gamma=GAMMA_ON,
             )
 
-        def _switch_ml_grad_vmapped(x, e, na, nb):
-            return switch_ML_grad(
-                x,
-                e,
-                ml_switch_width=cutoff_params.ml_switch_width,
-                mm_switch_on=cutoff_params.mm_switch_on,
-                n_atoms_a=na,
-                n_atoms_b=nb,
-                pbc_cell=cell_for_mic,
-            )
+        _ml_switch_scale_grad = jax.grad(_ml_switch_scale)
 
-        switched_energy = jax.vmap(_switch_ml_vmapped, in_axes=(0, 0, 0, 0))(
-            dimer_pos_padded, dimer_energies, na_arr, nb_arr)
-        switching_scales = jax.vmap(
-            lambda x, na, nb: switch_ML(
-                x,
-                1.0,
-                ml_switch_width=cutoff_params.ml_switch_width,
-                mm_switch_on=cutoff_params.mm_switch_on,
-                n_atoms_a=na,
-                n_atoms_b=nb,
-                pbc_cell=cell_for_mic,
-            ),
-            in_axes=(0, 0, 0))(dimer_pos_padded, na_arr, nb_arr)
-        switched_grad = jax.vmap(_switch_ml_grad_vmapped, in_axes=(0, 0, 0, 0))(
-            dimer_pos_padded, dimer_energies, na_arr, nb_arr)  # (n_dimers, max_atoms, 3)
+        com_seps = jax.vmap(_dimer_com_sep, in_axes=(0, 0, 0))(
+            dimer_pos_padded, na_arr, nb_arr
+        )
+        switching_scales = 1.0 - _sharpstep(
+            com_seps,
+            cutoff_params.mm_switch_on - cutoff_params.ml_switch_width,
+            cutoff_params.mm_switch_on,
+            gamma=GAMMA_ON,
+        )
+        switched_energy = dimer_energies * switching_scales
+        switched_grad = jax.vmap(
+            lambda x, e, na, nb: _ml_switch_scale_grad(x, na, nb) * e,
+            in_axes=(0, 0, 0, 0),
+        )(dimer_pos_padded, dimer_energies, na_arr, nb_arr)
 
         dimer_switching_grads_flat = (
             switched_grad * dimer_atom_mask_jnp[:, :, None]

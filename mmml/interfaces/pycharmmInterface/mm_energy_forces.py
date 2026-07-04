@@ -1053,6 +1053,7 @@ def build_mm_energy_forces_fn(
     q_per_system = jnp.array(charges)
 
     _monomer_ids_np = per_atom_monomer_ids(total_atoms, monomer_offsets, n_monomers)
+    _monomer_id_jnp = jnp.asarray(_monomer_ids_np, dtype=jnp.int32)
     _jax_pme_charges_np = (
         scale_per_atom_coefficients_by_monomer_lambda(
             charges, _monomer_ids_np, np.asarray(lambda_monomer, dtype=np.float64)
@@ -1170,10 +1171,14 @@ def build_mm_energy_forces_fn(
             pair_dimer_idx_arg: Optional[Array] = None,
             box_override: Optional[Array] = None,
         ) -> Array:
-            coms = jnp.stack([
-                positions[monomer_offsets[k]:monomer_offsets[k + 1]].mean(axis=0)
-                for k in range(n_monomers)
-            ])
+            mono_counts = jax.ops.segment_sum(
+                jnp.ones(positions.shape[0], dtype=positions.dtype),
+                _monomer_id_jnp,
+                num_segments=n_monomers,
+            )
+            coms = jax.ops.segment_sum(
+                positions, _monomer_id_jnp, num_segments=n_monomers
+            ) / jnp.maximum(mono_counts[:, None], 1e-10)
             com_i = coms[_dimer_perms_np[:, 0]]
             com_j = coms[_dimer_perms_np[:, 1]]
             cell_for_com = box_override if box_override is not None else pbc_cell
@@ -1205,10 +1210,10 @@ def build_mm_energy_forces_fn(
                 safe_idx = jnp.where(pdi >= 0, pdi, len(mm_scale))
                 mm_scale_expanded = mm_scale_with_dummy[safe_idx]
             else:
-                mm_scale_expanded = jnp.concatenate([
-                    jnp.full((int(n_pairs_per_dimer_arr[d]),), mm_scale[d])
-                    for d in range(len(_dp))
-                ])
+                n_pairs_per_dimer_jnp = jnp.asarray(
+                    n_pairs_per_dimer_arr, dtype=jnp.int32
+                )
+                mm_scale_expanded = jnp.repeat(mm_scale, n_pairs_per_dimer_jnp)
             return (pair_energies * mm_scale_expanded).sum()
         return apply_switching_function
 
