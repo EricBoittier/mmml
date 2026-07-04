@@ -1,6 +1,7 @@
 """Deprecated alias for :mod:`mmml.interfaces.pycharmmInterface`.
 
 Prefer ``from mmml.interfaces.pycharmmInterface import ...`` in new code.
+See :mod:`mmml.interfaces.pycharmmInterface.legacy_paths` for the full map.
 """
 
 from __future__ import annotations
@@ -12,6 +13,17 @@ import sys
 from types import ModuleType
 
 _REAL_PREFIX = "mmml.interfaces.pycharmmInterface"
+_ALIAS_WARNED = False
+
+
+def _warn_alias_once() -> None:
+    global _ALIAS_WARNED
+    if _ALIAS_WARNED:
+        return
+    _ALIAS_WARNED = True
+    from mmml.interfaces.pycharmmInterface.legacy_paths import DEPRECATED, warn_legacy
+
+    warn_legacy("mmml.pycharmmInterface", DEPRECATED["mmml.pycharmmInterface"], stacklevel=4)
 
 _SUBMODULES = (
     "calculator_utils",
@@ -44,6 +56,7 @@ class _CompatAliasLoader(importlib.abc.Loader):
         return sys.modules.get(self._target_name)
 
     def exec_module(self, module: ModuleType) -> None:
+        _warn_alias_once()
         target = importlib.import_module(self._target_name)
         sys.modules[self._alias_name] = target
         sys.modules[self._target_name] = target
