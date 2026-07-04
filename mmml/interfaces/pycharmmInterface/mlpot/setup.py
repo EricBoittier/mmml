@@ -1670,7 +1670,13 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 2)",
         )
-        pycharmm.lingo.charmm_script("UPDATE")
+        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+            capture_charmm_script_output,
+            stash_mkimat2_registration_log,
+        )
+
+        mkimat_log = capture_charmm_script_output("UPDATE", replay=False)
+        stash_mkimat2_registration_log(workflow_args, mkimat_log)
     pycharmm.image.update_bimag()
     reassert_pbc_nbond_cutoffs(
         side,

@@ -161,6 +161,103 @@ def test_run_charmm_image_probe_log_falls_back_to_fd_capture(monkeypatch):
     assert parse_mkimat2_min_distances(log) == pytest.approx([6.18, 7.17, 8.93])
 
 
+def test_run_charmm_image_probe_log_skip_ener_never_calls_ener(monkeypatch):
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._force_charmm_image_remap_for_probe",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._probe_command_via_charmm_log_file",
+        lambda _cmd: "",
+    )
+
+    def _fake_capture(script: str, *, replay: bool = True) -> str:
+        calls.append(script)
+        return "UPDATE only\n"
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry._run_charmm_script_capture_fortran",
+        _fake_capture,
+    )
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        run_charmm_image_probe_log,
+    )
+
+    log = run_charmm_image_probe_log(skip_ener=True)
+    assert calls == ["UPDATE"]
+    assert parse_mkimat2_min_distances(log) == []
+
+
+def test_stash_mkimat2_registration_log_roundtrip():
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        _get_stashed_mkimat2_log,
+        stash_mkimat2_registration_log,
+    )
+
+    args = argparse.Namespace()
+    stash_mkimat2_registration_log(args, _SAMPLE_LOG)
+    assert parse_mkimat2_min_distances(_get_stashed_mkimat2_log(args)) == pytest.approx(
+        [6.18, 7.17, 8.93]
+    )
+    stash_mkimat2_registration_log(args, "no mkimat")
+    assert parse_mkimat2_min_distances(_get_stashed_mkimat2_log(args)) == pytest.approx(
+        [6.18, 7.17, 8.93]
+    )
+
+
+def test_assert_after_update_skip_ener_probe_passes_flag(monkeypatch):
+    probe_calls: list[dict] = []
+
+    def _probe(**kwargs):
+        probe_calls.append(dict(kwargs))
+        return ""
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_charmm_image_probe_log",
+        _probe,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.assert_charmm_image_mic_fallback",
+        lambda **kwargs: 2.5,
+    )
+
+    worst = assert_charmm_image_min_distance_after_update(
+        workflow_args=argparse.Namespace(),
+        context="test",
+        cubic_box_side_A=38.0,
+        skip_hybrid_ener_probe=True,
+    )
+    assert worst == pytest.approx(2.5)
+    assert probe_calls == [{"post_bimag": False, "skip_ener": True}]
+
+
+def test_image_probe_skip_hybrid_ener_when_mlpot_active(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        CharmmImageNbStats,
+        _image_probe_skip_hybrid_ener,
+    )
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.fetch_charmm_image_nb_stats",
+        lambda: CharmmImageNbStats(
+            natom=260,
+            natim=610,
+            ntrans=12,
+            nnb=33670,
+            niminb=47250,
+            iminb_capacity=721440,
+            nimnb=1328,
+            imjnb_capacity=1553,
+            niming=1932,
+            mlpot_active=True,
+        ),
+    )
+    assert _image_probe_skip_hybrid_ener(None) is True
+    assert _image_probe_skip_hybrid_ener(None, explicit=False) is False
+
+
 def test_assert_charmm_image_mic_fallback_uses_registration_floor(monkeypatch):
     import numpy as np
 

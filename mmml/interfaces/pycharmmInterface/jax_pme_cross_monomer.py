@@ -133,6 +133,7 @@ def _masked_cross_energy(
     n_mono: int,
     for_ewald: bool,
 ):
+    import jax
     import jax.numpy as jnp
     from jaxpme.kspace import generate_kvectors, get_reciprocal
     from jaxpme.utils import get_distances
@@ -167,10 +168,14 @@ def _masked_cross_energy(
         return jnp.sum(q * phi)
 
     base = _energy_for_charges(charges)
-    intra = jnp.asarray(0.0, dtype=positions.dtype)
-    for m in range(n_mono):
+    if n_mono <= 1:
+        return jnp.asarray(0.0, dtype=positions.dtype)
+
+    def _mono_energy(m):
         mask = (monomer_id == m).astype(charges.dtype)
-        intra = intra + _energy_for_charges(charges * mask)
+        return _energy_for_charges(charges * mask)
+
+    intra = jnp.sum(jax.lax.map(_mono_energy, jnp.arange(n_mono, dtype=jnp.int32)))
     return base - intra
 
 
@@ -235,12 +240,17 @@ def _structure_factor_cross_energy(
     e_corr = _correction_energy_scalar(
         pot, smearing, charges, volume, positions, cell, pbc
     )
-    for m in range(n_mono):
+
+    def _mono_correction(m):
         mask = (monomer_id == m).astype(charges.dtype)
-        e_corr = e_corr - _correction_energy_scalar(
+        return _correction_energy_scalar(
             pot, smearing, charges * mask, volume, positions, cell, pbc
         )
-    e_corr = prefactor * e_corr
+
+    intra_corr = jnp.sum(
+        jax.lax.map(_mono_correction, jnp.arange(n_mono, dtype=jnp.int32))
+    )
+    e_corr = prefactor * (e_corr - intra_corr)
     return e_rs + e_k + e_corr
 
 

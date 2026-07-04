@@ -269,6 +269,51 @@ def assert_charmm_image_mic_fallback(
     return float(worst)
 
 
+_MKIMAT2_STASH_ATTR = "_charmm_mkimat2_registration_log"
+
+
+def stash_mkimat2_registration_log(
+    workflow_args: argparse.Namespace | None,
+    charmm_log: str,
+) -> None:
+    """Retain a pre-MLpot ``<MKIMAT2>`` block for post-registration gates."""
+    if workflow_args is None or not str(charmm_log).strip():
+        return
+    if not parse_mkimat2_min_distances(charmm_log):
+        return
+    setattr(workflow_args, _MKIMAT2_STASH_ATTR, str(charmm_log))
+
+
+def _get_stashed_mkimat2_log(
+    workflow_args: argparse.Namespace | None,
+) -> str | None:
+    if workflow_args is None:
+        return None
+    log = getattr(workflow_args, _MKIMAT2_STASH_ATTR, None)
+    if log is None:
+        return None
+    text = str(log).strip()
+    return text if text else None
+
+
+def _mlpot_active_in_charmm() -> bool:
+    stats = fetch_charmm_image_nb_stats()
+    return bool(stats is not None and stats.mlpot_active)
+
+
+def _image_probe_skip_hybrid_ener(
+    workflow_args: argparse.Namespace | None,
+    *,
+    explicit: bool | None = None,
+) -> bool:
+    """True when CHARMM ``ENER`` would invoke the hybrid MLpot callback (avoid at registration)."""
+    if explicit is not None:
+        return bool(explicit)
+    if _mlpot_active_in_charmm():
+        return True
+    return bool(getattr(workflow_args, "_mlpot_image_probe_skip_hybrid_ener", False))
+
+
 def _force_charmm_image_remap_for_probe() -> None:
     """Re-run ``image byres`` so the next UPDATE/ENER rebuilds ``<MKIMAT2>`` tables."""
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import _image_setup_byres_all
@@ -355,10 +400,11 @@ def _probe_command_via_charmm_log_file(command: str) -> str:
     return text
 
 
-def run_charmm_post_bimag_image_probe_log() -> str:
+def run_charmm_post_bimag_image_probe_log(*, skip_ener: bool = False) -> str:
     """Collect ``<MKIMAT2>`` after ``update_bimag`` (UPDATE emits IMAGE tables on fd 1)."""
     chunks: list[str] = []
-    for command in ("update", "ener"):
+    commands = ("update",) if skip_ener else ("update", "ener")
+    for command in commands:
         capture_log = _run_charmm_script_capture_fortran(command.upper(), replay=True)
         if capture_log:
             chunks.append(capture_log)
@@ -373,14 +419,18 @@ def run_charmm_post_bimag_image_probe_log() -> str:
     return "\n".join(chunks)
 
 
-def run_charmm_image_probe_log(*, post_bimag: bool = False) -> str:
-    """Collect ``<MKIMAT2>`` from CHARMM output (file redirect + fd capture)."""
+def run_charmm_image_probe_log(*, post_bimag: bool = False, skip_ener: bool = False) -> str:
+    """Collect ``<MKIMAT2>`` from CHARMM output (file redirect + fd capture).
+
+    When ``skip_ener`` is set (MLpot registered), never run CHARMM ``ENER`` — that
+    would trigger a full hybrid JAX compile just to scrape IMAGE tables.
+    """
     if post_bimag:
-        return run_charmm_post_bimag_image_probe_log()
+        return run_charmm_post_bimag_image_probe_log(skip_ener=skip_ener)
     _force_charmm_image_remap_for_probe()
     chunks: list[str] = []
 
-    for command in ("update", "ener"):
+    for command in ("update",):
         file_log = _probe_command_via_charmm_log_file(command)
         if file_log:
             chunks.append(file_log)
@@ -391,6 +441,9 @@ def run_charmm_image_probe_log(*, post_bimag: bool = False) -> str:
     if capture_log:
         chunks.append(capture_log)
     if parse_mkimat2_min_distances("\n".join(chunks)):
+        return "\n".join(chunks)
+
+    if skip_ener:
         return "\n".join(chunks)
 
     ener_log = _run_charmm_script_capture_fortran("ENER", replay=True)
@@ -463,6 +516,18 @@ def run_mlpot_pbc_image_registration_gate(
         pycharmm.image.update_bimag()
         log_charmm_image_nb_stats(context="MLpot PBC registration image NB")
         update_log = capture_charmm_script_output("UPDATE", replay=False)
+    if not parse_mkimat2_min_distances(update_log):
+        file_log = _probe_command_via_charmm_log_file("update")
+        if file_log:
+            update_log = "\n".join(filter(None, [update_log, file_log]))
+    stashed = _get_stashed_mkimat2_log(workflow_args)
+    if not parse_mkimat2_min_distances(update_log) and stashed:
+        if verbose:
+            print(
+                f"{context}: reusing pre-MLpot <MKIMAT2> log for post-registration gate",
+                flush=True,
+            )
+        update_log = stashed
     pycharmm.image.update_bimag()
     image_log = update_log.strip()
     return assert_charmm_image_min_distance_after_update(
@@ -471,6 +536,7 @@ def run_mlpot_pbc_image_registration_gate(
         cubic_box_side_A=side,
         charmm_log=image_log if parse_mkimat2_min_distances(image_log) else None,
         post_bimag=False,
+        skip_hybrid_ener_probe=True,
     )
 
 
@@ -482,6 +548,7 @@ def assert_charmm_image_min_distance_after_update(
     charmm_log: str | None = None,
     cubic_box_side_A: float | None = None,
     post_bimag: bool = False,
+    skip_hybrid_ener_probe: bool | None = None,
 ) -> float:
     """Enforce IMAGE Min-Distance before MLpot USER/ENER (MKIMAT2 or MIC fallback)."""
     mkimat_floor = (
@@ -489,10 +556,18 @@ def assert_charmm_image_min_distance_after_update(
         if min_distance_A is not None
         else resolve_mkimat2_min_distance_A(workflow_args)
     )
+    skip_ener = _image_probe_skip_hybrid_ener(
+        workflow_args,
+        explicit=skip_hybrid_ener_probe,
+    )
+    if charmm_log is None:
+        stashed = _get_stashed_mkimat2_log(workflow_args)
+        if stashed and parse_mkimat2_min_distances(stashed):
+            charmm_log = stashed
     log = (
         charmm_log
         if charmm_log is not None
-        else run_charmm_image_probe_log(post_bimag=post_bimag)
+        else run_charmm_image_probe_log(post_bimag=post_bimag, skip_ener=skip_ener)
     )
     if parse_mkimat2_min_distances(log):
         worst = assert_charmm_image_min_distance(
