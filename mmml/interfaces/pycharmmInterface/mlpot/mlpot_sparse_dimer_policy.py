@@ -24,14 +24,6 @@ def resolve_max_active_dimers(
     *,
     free_space: bool = False,
 ) -> int:
-    """Max PhysNet dimer slots per step when ``ml_sparse_dimers`` is enabled.
-
-    Periodic systems `` because the active-pair
-    count is bounded by local density.  Free-space clusters have no comparable
-    geometric bound: the largest safe static allocation is every unique dimer,
-    ``n * (n - 1) // 2`` (DCM:90 -> 4005 slots).  Lower explicit/env caps are
-    promoted in free-space mode so sparse packing cannot silently drop pairs.
-    """
     if n_dimers_total is None:
         n_dimers_total = max_dimer_pairs(n_monomers)
     n_dimers_total = int(n_dimers_total)
