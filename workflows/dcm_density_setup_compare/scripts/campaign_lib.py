@@ -1279,6 +1279,129 @@ def build_md_system_campaign_argv(
     ]
 
 
+def discover_heat_resume_restart(
+    leg_dir: Path,
+    tag: str,
+    *,
+    n_heat_segments: int = 1,
+) -> Path | None:
+    """Best on-disk ``.res`` for heat-only continuation under a PyCHARMM leg dir."""
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import (
+        geometry_baseline_res,
+        stage_restart,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.geometry_checkpoint import (
+        discover_resume_restart,
+    )
+
+    leg = Path(leg_dir).resolve()
+    paths = {
+        "heat_res": stage_restart(leg, "heat"),
+        "geometry_baseline_res": geometry_baseline_res(leg),
+    }
+    return discover_resume_restart(
+        leg,
+        tag,
+        paths=paths,
+        n_heat_segments=n_heat_segments,
+    )
+
+
+def build_heat_resume_campaign(
+    cfg: dict[str, Any],
+    cell: RunCell,
+    *,
+    restart_path: Path,
+    leg_id: str | None = None,
+) -> dict[str, Any]:
+    """One-job campaign: heat-only from an existing ``.res`` (skip mini/prep ladder)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import model_psf
+
+    cell_cfg = cell_workflow_cfg(cfg, cell)
+    init_id = leg_id or init_job_id(cell_cfg)
+    cell_root = run_output_dir(cfg, cell)
+    leg_dir = Path(leg_output_dir(cell_root, init_id))
+    psf = model_psf(leg_dir)
+    restart = Path(restart_path).expanduser().resolve()
+
+    campaign = build_campaign(cfg, cell)
+    defaults = dict(campaign.get("defaults") or {})
+    for drop in ("continue_from", "continue_from_frame", "bulk_ramp_from_tag"):
+        defaults.pop(drop, None)
+
+    init_job = dict(campaign["runs"][init_id])
+    init_job.update(
+        {
+            "description": (
+                f"{composition_string(cell)} heat resume from {restart.name} "
+                f"T={cell.temperature:.0f}K L={cell.box_size:.0f}Å"
+            ),
+            "md_stages": "heat",
+            "skip_cluster_build": True,
+            "from_psf": str(psf),
+            "restart_from": str(restart),
+            "dynamics_overlap_memory_handoff": False,
+            "liquid_prep": False,
+            "density_prep_ladder": False,
+            "charmm_mm_pretreat": False,
+            "calculator_pre_minimize": False,
+        }
+    )
+    return {
+        "defaults": defaults,
+        "campaign_output": str(cell_root),
+        "runs": {init_id: _attach_leg_output_dir(init_job, cell_root, init_id)},
+    }
+
+
+def write_heat_resume_campaign_yaml(
+    cfg: dict[str, Any],
+    cell: RunCell,
+    *,
+    restart_path: Path,
+    leg_id: str | None = None,
+    out_dir: Path | None = None,
+) -> Path:
+    campaign = build_heat_resume_campaign(
+        cfg,
+        cell,
+        restart_path=restart_path,
+        leg_id=leg_id,
+    )
+    root = out_dir or run_output_dir(cfg, cell)
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "resume_heat_campaign.yaml"
+    with path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(campaign, f, sort_keys=False, default_flow_style=False)
+    return path
+
+
+def build_heat_resume_md_argv(
+    cfg: dict[str, Any],
+    cell: RunCell,
+    *,
+    restart_path: Path,
+    leg_id: str | None = None,
+    out_dir: Path | None = None,
+) -> list[str]:
+    root = out_dir or run_output_dir(cfg, cell)
+    campaign_path = write_heat_resume_campaign_yaml(
+        cfg,
+        cell,
+        restart_path=restart_path,
+        leg_id=leg_id,
+        out_dir=root,
+    )
+    return [
+        "--config",
+        str(campaign_path),
+        "--run-all",
+        "--resume",
+        "--campaign-output-dir",
+        str(root),
+    ]
+
+
 def matrix_job_count(cfg: dict[str, Any]) -> int:
     return sum(1 for _ in iter_matrix_cells(cfg))
 

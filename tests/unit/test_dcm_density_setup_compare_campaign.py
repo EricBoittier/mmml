@@ -39,7 +39,9 @@ sv = _load_script_module(_SETUP_MOD, SCRIPTS / "setup_variants.py")
 
 RunCell = cl.RunCell
 build_campaign = cl.build_campaign
+build_heat_resume_campaign = cl.build_heat_resume_campaign
 build_md_system_campaign_argv = cl.build_md_system_campaign_argv
+discover_heat_resume_restart = cl.discover_heat_resume_restart
 campaign_job_order = cl.campaign_job_order
 cell_bulk_density_fraction = cl.cell_bulk_density_fraction
 cell_from_cli = cl.cell_from_cli
@@ -970,3 +972,63 @@ def test_bulk_ramp_chain_handoff_from_prior_compress(cfg: dict, tmp_path: Path) 
     campaign = build_campaign(ramp_cfg, cell)
     assert campaign["defaults"]["continue_from"] == str(handoff)
     assert campaign["defaults"]["bulk_ramp_from_tag"] == prior_tag
+
+
+def test_build_heat_resume_campaign_heat_only_from_res(cfg: dict, tmp_path: Path) -> None:
+    from tests.unit.conftest import write_minimal_restart
+
+    prep_cfg = yaml.safe_load(
+        (WORKFLOW / "config.prep_sweep.yaml").read_text(encoding="utf-8")
+    )
+    prep_cfg = {
+        **prep_cfg,
+        "output_root": str(tmp_path / "out"),
+        "checkpoint": cfg["checkpoint"],
+    }
+    tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_baseline"
+    cell = cell_from_tag(prep_cfg, tag)
+    leg_dir = cl.run_output_dir(prep_cfg, cell) / "pycharmm_mini"
+    leg_dir.mkdir(parents=True)
+    restart = leg_dir / "heat.res"
+    write_minimal_restart(restart)
+    (leg_dir / "model.psf").write_text("stub psf\n", encoding="utf-8")
+
+    campaign = build_heat_resume_campaign(
+        prep_cfg,
+        cell,
+        restart_path=restart,
+    )
+    assert list(campaign["runs"]) == ["pycharmm_mini"]
+    job = campaign["runs"]["pycharmm_mini"]
+    assert job["md_stages"] == "heat"
+    assert job["skip_cluster_build"] is True
+    assert job["restart_from"] == str(restart.resolve())
+    assert job["dynamics_overlap_memory_handoff"] is False
+    assert job["liquid_prep"] is False
+    assert job["density_prep_ladder"] is False
+    assert job["charmm_mm_pretreat"] is False
+    assert "continue_from" not in campaign["defaults"]
+
+
+def test_discover_heat_resume_restart_prefers_heat_res(cfg: dict, tmp_path: Path) -> None:
+    from tests.unit.conftest import write_minimal_restart
+
+    prep_cfg = yaml.safe_load(
+        (WORKFLOW / "config.prep_sweep.yaml").read_text(encoding="utf-8")
+    )
+    prep_cfg = {
+        **prep_cfg,
+        "output_root": str(tmp_path / "out"),
+        "checkpoint": cfg["checkpoint"],
+    }
+    tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_baseline"
+    cell = cell_from_tag(prep_cfg, tag)
+    leg_dir = cl.run_output_dir(prep_cfg, cell) / "pycharmm_mini"
+    leg_dir.mkdir(parents=True)
+    baseline = leg_dir / "geometry_baseline.res"
+    heat = leg_dir / "heat.res"
+    write_minimal_restart(baseline)
+    write_minimal_restart(heat)
+
+    found = discover_heat_resume_restart(leg_dir, tag)
+    assert found == heat.resolve()
