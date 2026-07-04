@@ -747,7 +747,7 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     mock_py.settings = mock_settings
     mock_energy = types.ModuleType("pycharmm.energy")
     mock_energy.get_term_by_name = MagicMock()
-    mock_energy.get_term_by_name.side_effect = [0.0, -123.4]
+    mock_energy.get_term_by_name.side_effect = [0.0, -123.4, -123.4]
     mlpot.unset_mlpot = MagicMock()
     with patch.dict(
         sys.modules,
@@ -758,16 +758,15 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
             "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
-        return_value="all",
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
-        return_value=False,
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        return_value=True,
+    ), patch.object(
+        ctx,
+        "reregister_mlpot",
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
-    ctx.mlpot.reattach_mlpot.assert_called_once_with(force=True)
-    ctx.mlpot.unset_mlpot.assert_called_once()
+    ctx.reregister_mlpot.assert_called_once_with(force=True, reregister_params=False)
     assert user == pytest.approx(-123.4)
 
 
@@ -790,6 +789,7 @@ def test_rebind_mlpot_calculator_from_pycmodel_updates_callback():
     mlpot.ml_indices = np.array([0, 1], dtype=int)
     mlpot.ml_Z = np.array([6, 1], dtype=int)
     mlpot.func_type = ctypes.CFUNCTYPE(ctypes.c_double)
+    mlpot.unset_mlpot = MagicMock()
     ctx = MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,
@@ -807,6 +807,7 @@ def test_rebind_mlpot_calculator_from_pycmodel_updates_callback():
     ):
         ok = rebind_mlpot_calculator_from_pycmodel(ctx, verbose=False)
     assert ok is True
+    mlpot.unset_mlpot.assert_called_once()
     pyCModel.get_pycharmm_calculator.assert_called_once()
     mock_py.lib.charmm.mlpot_set_func.assert_called_once()
     mock_py.lib.charmm.mlpot_set_properties.assert_called_once()
@@ -840,7 +841,7 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     mock_settings.set_bomb_level.return_value = 0
     mock_py.settings = mock_settings
     mock_energy = types.ModuleType("pycharmm.energy")
-    mock_energy.get_term_by_name = MagicMock(side_effect=[0.0, -123.4])
+    mock_energy.get_term_by_name = MagicMock(side_effect=[0.0, -123.4, -123.4])
 
     def _reattach(*, force: bool = False) -> None:
         mlpot.is_set = True
@@ -856,16 +857,16 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
             "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
-        return_value="all",
-    ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
-        return_value=False,
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        return_value=True,
+    ), patch.object(
+        ctx,
+        "reregister_mlpot",
+        side_effect=_reattach,
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
-    ctx.mlpot.reattach_mlpot.assert_called_once_with(force=True)
-    ctx.mlpot.unset_mlpot.assert_called_once()
+    ctx.reregister_mlpot.assert_called_once_with(force=True, reregister_params=False)
     assert mlpot.is_set is True
     assert user == pytest.approx(-123.4)
 

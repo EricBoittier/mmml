@@ -430,9 +430,21 @@ def _sum_mlpot_charmm_hybrid_energy_kcal(terms: dict[str, float]) -> float:
 
 
 def _read_mlpot_charmm_energy_terms_kcal() -> dict[str, float]:
-    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
 
-    return dict(charmm_energy_row())
+        return dict(charmm_energy_row())
+    except Exception:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import pycharmm.energy as energy
+
+        terms: dict[str, float] = {}
+        for key in _MLPOT_CHARMM_HYBRID_ETERM_KEYS:
+            try:
+                terms[key] = float(energy.get_term_by_name(key))
+            except (ValueError, IndexError, TypeError, AttributeError):
+                terms[key] = 0.0
+        return terms
 
 
 def _mlpot_ml_energy_missing_in_charmm(
