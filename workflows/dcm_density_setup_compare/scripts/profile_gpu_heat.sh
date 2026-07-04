@@ -46,6 +46,22 @@ echo "CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-<default>}" | tee -a "$LOG"
 cd "$WORKFLOW_ROOT"
 bash scripts/preflight.sh 2>&1 | tee -a "$LOG"
 
+if [[ "$HEAT_ONLY" != "1" ]]; then
+  echo "=== build + validate cluster (Packmol) ===" | tee -a "$LOG"
+  # shellcheck source=../../../scripts/resolve_mmml_env.sh
+  source "$REPO_ROOT/scripts/resolve_mmml_env.sh"
+  mmml_resolve_env "$REPO_ROOT"
+  set +e
+  "${MMML_PYTHON}" "$WORKFLOW_ROOT/scripts/build_validate_cluster.py" \
+    --config "$CFG" --tag "$TAG" --mic-check 2>&1 | tee -a "$LOG"
+  BUILD_RC=${PIPESTATUS[0]}
+  set -e
+  if [[ "$BUILD_RC" != "0" ]]; then
+    echo "ERROR: cluster build/validation failed (exit $BUILD_RC)" | tee -a "$LOG"
+    exit "$BUILD_RC"
+  fi
+fi
+
 if [[ "$HEAT_ONLY" == "1" ]]; then
   BASELINE="${HEAT_RESTART:-$REPO_ROOT/artifacts/dcm_density_setup_compare/profile_dcm30_l30/${TAG}/pycharmm_mini/baseline.res}"
   if [[ ! -f "$BASELINE" ]]; then

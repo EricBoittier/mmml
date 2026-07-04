@@ -26,12 +26,13 @@ mm_nonbond_mode: jax_mic
 periodic_charmm_vdw: false
 charmm_mm_pretreat: false
 
-# Grid placement — sparse 30-mer in 30 Å (no Packmol).
-builder: liquid
-packmol: false
-spacing: 6.0
+# Packmol placement via bundled mmml binary (see packmol_executable()).
+# Do not set builder: liquid — that forces grid placement.
+spacing: 5.0
 packmol_tolerance: 2.0
-packmol_box_padding: 1.0
+packmol_box_padding: 2.0
+rebuild_packmol: true
+pre_mlpot_overlap_min_distance: 2.0
 
 dt_fs: 0.25
 pressure: 1.0
