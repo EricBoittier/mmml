@@ -441,11 +441,11 @@ def test_prepare_mlpot_hybrid_state_resyncs_stale_charmm_after_session_best_rest
             calculator_minimize=False,
         )
 
-    resync.assert_called_once()
+    resync.assert_not_called()
     fire.assert_not_called()
     bfgs.assert_not_called()
     bonded.assert_not_called()
-    assert hybrid == pytest.approx(10.9)
+    assert np.isnan(hybrid)
     assert user == pytest.approx(0.0)
 
 
@@ -454,6 +454,9 @@ def test_prepare_mlpot_hybrid_state_resync_before_bonded_recovery():
     ctx.sd_watchdog_baseline_grms = None
 
     with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.mlpot_skip_charmm_ener_force_before_first_sd",
+        return_value=False,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
         return_value=-100.0,
     ), mock.patch(

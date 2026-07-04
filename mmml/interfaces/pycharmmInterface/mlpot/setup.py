@@ -1917,6 +1917,12 @@ def register_mlpot(
             workflow_args=workflow_args,
             context="MLpot PBC registration (post-UPDATE)",
         )
+        if verbose:
+            print(
+                "MLpot PBC registration: complete; next step is pre-SD JAX materialize "
+                "(deferred path) or hybrid GRMS probe",
+                flush=True,
+            )
     ctx = MlpotContext(
         mlpot=mlpot,
         pyCModel=pyCModel,

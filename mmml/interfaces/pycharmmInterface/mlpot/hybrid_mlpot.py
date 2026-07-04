@@ -1519,6 +1519,13 @@ def materialize_deferred_mlpot_jax_before_sd(
     if not mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
         return False
 
+    print(
+        "Pre-MLpot SD: JAX hybrid compile/warmup starting "
+        "(CPU may look idle during GPU XLA compile; several minutes is normal for "
+        "large PBC clusters)",
+        flush=True,
+    )
+
     assert_mpi_launcher_for_mlpot_sd(context="Pre-MLpot SD materialize")
     if charmm_lib_links_mpi() and not _under_mpirun() and verbose:
         print(

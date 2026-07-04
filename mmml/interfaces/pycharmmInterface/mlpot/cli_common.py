@@ -2571,20 +2571,20 @@ def prepare_mlpot_hybrid_state_for_sd(
 
     skip_pre_sd_ener = mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx)
     if skip_pre_sd_ener:
-        user = 0.0
         if verbose:
             print(
-                f"{context_prefix}: deferring USER/ENER check until MLpot SD starts "
-                "(PBC + MPI-linked CHARMM deferred JAX)",
+                f"{context_prefix}: deferring hybrid pre-SD checks until JAX materialize "
+                "(PBC + MPI-linked CHARMM deferred JAX; skip silent compile here)",
                 flush=True,
             )
-    else:
-        user = assert_mlpot_user_active(
-            mlpot_ctx,
-            context=f"{context_prefix} MLpot SD minimize",
-            quiet=not verbose,
-        )
-        charmm_grms_after_ener_force()
+        return float("nan"), 0.0
+
+    user = assert_mlpot_user_active(
+        mlpot_ctx,
+        context=f"{context_prefix} MLpot SD minimize",
+        quiet=not verbose,
+    )
+    charmm_grms_after_ener_force()
     diag = measure_hybrid_charmm_grms(
         mlpot_ctx,
         prefer_calculator=True,
