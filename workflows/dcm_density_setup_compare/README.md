@@ -98,6 +98,15 @@ mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 52 \
 
 Disable per config: `warmup_mlpot_jax: false` or `warmup_do_mm: false` (ML-only cache).
 
+**MPI defer path:** registration keeps `JAX_PLATFORMS=cpu` until MLpot SD. Warmup must
+use the same backend or the compile cache misses:
+
+```bash
+MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu mmml warmup-mlpot-jax ... --do-mm
+```
+
+`job_shell.sh` sets CPU warmup automatically when MPI-linked CHARMM defers JAX.
+
 ## Run
 
 ```bash
