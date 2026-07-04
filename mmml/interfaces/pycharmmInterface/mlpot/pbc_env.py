@@ -584,7 +584,12 @@ def _image_setup_byres_all(
     image.update_bimag()
 
 
-def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
+def prepare_charmm_pbc(
+    cubic_box_side_A: float,
+    *,
+    mm_switch_on: float | None = None,
+    mm_switch_width: float | None = None,
+) -> None:
     """Install CHARMM crystal + IMAGE for a cubic cell."""
     import pycharmm.crystal as crystal
 
@@ -614,19 +619,18 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
         )
         from mmml.interfaces.pycharmmInterface.nbonds_config import (
             apply_nbonds_kwargs,
+            apply_switch_nbond_cutoffs_before_cutnb,
             pbc_nbond_cutoffs_from_mlpot_switches,
         )
 
+        mm_on = DEFAULT_MM_SWITCH_ON if mm_switch_on is None else float(mm_switch_on)
+        mm_w = DEFAULT_MM_SWITCH_WIDTH if mm_switch_width is None else float(mm_switch_width)
         cuts = pbc_nbond_cutoffs_from_mlpot_switches(
             L,
-            mm_switch_on=DEFAULT_MM_SWITCH_ON,
-            mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
+            mm_switch_on=mm_on,
+            mm_switch_width=mm_w,
         )
         # domdec builds set cutnb=crystal build cutoff before switch radii are lowered.
-        from mmml.interfaces.pycharmmInterface.nbonds_config import (
-            apply_switch_nbond_cutoffs_before_cutnb,
-        )
-
         apply_switch_nbond_cutoffs_before_cutnb(
             cuts.ctonnb,
             cuts.ctofnb,

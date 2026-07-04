@@ -1395,6 +1395,35 @@ def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
     assert cuts.cutnb < 0.5 * 38.0
 
 
+def test_ensure_headroom_bumps_cutnb_when_stuck():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        _ensure_headroom_before_switch_apply,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.read_charmm_switch_cutoffs",
+        return_value=(13.0, 17.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.try_get_charmm_cutnb",
+        return_value=13.0,
+    ), patch("pycharmm.nbonds.set_cutnb") as set_cutnb:
+        _ensure_headroom_before_switch_apply(cutnb=18.0, ctonnb=13.0, ctofnb=17.0)
+    set_cutnb.assert_called_once()
+    assert float(set_cutnb.call_args[0][0]) >= 17.5
+
+
+def test_try_get_charmm_cutnb_missing_symbol():
+    import math
+
+    from mmml.interfaces.pycharmmInterface.nbonds_config import try_get_charmm_cutnb
+
+    fake_lib = type("Lib", (), {})()
+    fake_charmm = type("Charmm", (), {})()
+    fake_lib.charmm = fake_charmm
+    with patch("pycharmm.lib", fake_lib):
+        assert math.isnan(try_get_charmm_cutnb())
+
+
 def test_charmm_has_vacuum_nbond_preset_detects_defaults():
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         VACUUM_CTONNB,

@@ -409,15 +409,67 @@ def read_charmm_switch_cutoffs() -> tuple[float, float]:
     return float(nbonds.get_ctonnb()), float(nbonds.get_ctofnb())
 
 
+def try_get_charmm_cutnb() -> float:
+    """Return live ``cutnb`` when ``nbonds_get_cutnb`` is linked; else NaN."""
+    try:
+        import pycharmm.lib as lib
+        import pycharmm.nbonds as nbonds
+
+        if not hasattr(lib.charmm, "nbonds_get_cutnb"):
+            return float("nan")
+        cutnb_fn = getattr(nbonds, "get_cutnb", None)
+        if not callable(cutnb_fn):
+            return float("nan")
+        return float(cutnb_fn())
+    except AttributeError:
+        return float("nan")
+
+
 def read_charmm_nbond_cutoffs() -> tuple[float, float, float]:
     """Return live ``(cutnb, ctonnb, ctofnb)`` from CHARMM (Å)."""
+    ctonnb, ctofnb = read_charmm_switch_cutoffs()
+    cutnb = try_get_charmm_cutnb()
+    return cutnb, ctonnb, ctofnb
+
+
+def _ensure_headroom_before_switch_apply(
+    *,
+    cutnb: float | None,
+    ctonnb: float | None,
+    ctofnb: float | None,
+) -> None:
+    """Raise ``cutnb`` when switch radii cannot be updated in CHARMM order.
+
+    ``crystal.build`` on domdec builds can leave ``cutnb <= ctofnb`` with vacuum
+    switches.  Raising ``cutnb`` before ``ctonnb``/``ctofnb`` updates avoids
+    ``nbonds_cutoffs_orderly`` failures when lowering or raising switch radii.
+    """
     import pycharmm.nbonds as nbonds
 
-    cutnb = getattr(nbonds, "get_cutnb", None)
-    if callable(cutnb):
-        return float(cutnb()), float(nbonds.get_ctonnb()), float(nbonds.get_ctofnb())
-    ctonnb, ctofnb = read_charmm_switch_cutoffs()
-    return float("nan"), ctonnb, ctofnb
+    live_on, live_of = read_charmm_switch_cutoffs()
+    live_nb = try_get_charmm_cutnb()
+
+    target_of = float(ctofnb) if ctofnb is not None else live_of
+    target_on = float(ctonnb) if ctonnb is not None else live_on
+    target_nb = (
+        float(cutnb)
+        if cutnb is not None
+        else (live_nb if math.isfinite(live_nb) else float(VACUUM_CUTNB))
+    )
+
+    headroom = max(
+        target_nb,
+        target_of + 0.5,
+        target_on + 1.0,
+        live_of + 0.5,
+        float(VACUUM_CUTNB),
+    )
+    if math.isfinite(live_nb):
+        headroom = max(headroom, live_nb)
+
+    needs_bump = not math.isfinite(live_nb) or live_nb <= max(live_of, target_of)
+    if needs_bump:
+        nbonds.set_cutnb(headroom)
 
 
 def charmm_has_vacuum_nbond_preset(*, tol: float = 0.05) -> bool:
@@ -516,6 +568,13 @@ def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     inbfrq = cfg.pop("inbfrq", None)
     imgfrq = cfg.pop("imgfrq", None)
     cfg.pop("ctexnb", None)  # CHARMM bumps ctexnb internally when cutnb/cutim change
+
+    if any(k in cfg for k in ("cutnb", "ctonnb", "ctofnb")):
+        _ensure_headroom_before_switch_apply(
+            cutnb=cfg.get("cutnb"),
+            ctonnb=cfg.get("ctonnb"),
+            ctofnb=cfg.get("ctofnb"),
+        )
 
     # Apply switched cutoffs low-to-high (ctonnb, ctofnb, cutnb) so lowering ``cutnb``
     # never leaves stale switch values above the new primary cutoff.

@@ -1384,12 +1384,26 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         recover_mpi_for_charmm_after_jax,
     )
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        CutoffParameters,
+        cutoff_parameters_from_args,
+    )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         prepare_charmm_pbc,
         reassert_pbc_nbond_cutoffs,
     )
 
-    prepare_charmm_pbc(float(side))
+    workflow_args = getattr(mlpot_ctx, "workflow_args", None)
+    cp = (
+        cutoff_parameters_from_args(workflow_args)
+        if workflow_args is not None
+        else CutoffParameters()
+    )
+    prepare_charmm_pbc(
+        float(side),
+        mm_switch_on=cp.mm_switch_on,
+        mm_switch_width=cp.mm_switch_width,
+    )
     recover_mpi_for_charmm_after_jax(
         phase=f"after {context} PBC crystal/IMAGE build",
     )
@@ -1397,6 +1411,8 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
         reassert_pbc_nbond_cutoffs(
             float(side),
             rebuild=False,
+            mm_switch_on=cp.mm_switch_on,
+            mm_switch_width=cp.mm_switch_width,
             context=f"{context} (pre-upinb)",
         )
     # Always reinstall ML iblo/inb before upinb (same as registration finalize).
@@ -1607,20 +1623,6 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     )
 
     side = float(cubic_box_side_A)
-    rewrap_charmm_coords_for_mlpot_pbc(
-        cubic_box_side_A=side,
-        workflow_args=workflow_args,
-        verbose=verbose,
-    )
-    prepare_charmm_pbc(side)
-    recover_mpi_for_charmm_after_jax(
-        phase="after MLpot PBC crystal/IMAGE build",
-    )
-    print(
-        f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
-        flush=True,
-    )
-    print("MLpot PBC: configuring PBC nonbond cutoffs (defer upinb)…", flush=True)
     from mmml.interfaces.pycharmmInterface.cutoffs import (
         CutoffParameters,
         cutoff_parameters_from_args,
@@ -1631,8 +1633,26 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         if workflow_args is not None
         else CutoffParameters()
     )
+    rewrap_charmm_coords_for_mlpot_pbc(
+        cubic_box_side_A=side,
+        workflow_args=workflow_args,
+        verbose=verbose,
+    )
+    prepare_charmm_pbc(
+        side,
+        mm_switch_on=cp.mm_switch_on,
+        mm_switch_width=cp.mm_switch_width,
+    )
+    recover_mpi_for_charmm_after_jax(
+        phase="after MLpot PBC crystal/IMAGE build",
+    )
+    print(
+        f"MLpot PBC: crystal/IMAGE ready (L={side:.3f} Å); installing ML exclusions…",
+        flush=True,
+    )
+    print("MLpot PBC: configuring PBC nonbond cutoffs (defer upinb)…", flush=True)
     with charmm_relaxed_bomlev():
-        cuts = reassert_pbc_nbond_cutoffs(
+        reassert_pbc_nbond_cutoffs(
             side,
             rebuild=False,
             mm_switch_on=cp.mm_switch_on,

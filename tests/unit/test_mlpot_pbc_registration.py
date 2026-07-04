@@ -294,7 +294,11 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
             cubic_box_side_A=32.0,
             verbose=False,
         )
-    prepare.assert_called_once_with(32.0)
+    prepare.assert_called_once_with(
+        32.0,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+    )
     apply_nb.assert_any_call(
         32.0,
         rebuild=False,

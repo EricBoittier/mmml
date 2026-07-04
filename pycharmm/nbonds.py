@@ -344,7 +344,18 @@ def get_cutnb():
     -------
     cutnb : float
         the current cutnb (Å)
+
+    Raises
+    ------
+    AttributeError
+        When ``libcharmm`` was built without ``nbonds_get_cutnb``.
+    RuntimeError
+        When the Fortran getter fails.
     """
+    if not hasattr(lib.charmm, "nbonds_get_cutnb"):
+        raise AttributeError(
+            "libcharmm lacks nbonds_get_cutnb; rebuild libcharmm from current mmml source"
+        )
     old_cutnb = (ctypes.c_double * 1)()
     status = lib.charmm.nbonds_get_cutnb(old_cutnb)
     if not bool(status):
