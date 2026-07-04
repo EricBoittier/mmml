@@ -7,7 +7,7 @@ import re
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 import numpy as np
 
@@ -794,7 +794,259 @@ def ensure_psf_for_handoff_cluster(
         )
 
 
-def apply_handoff_to_atoms(atoms: Any, handoff: MdHandoffState) -> None:
+def _masses_amu_from_atomic_numbers(atomic_numbers: np.ndarray) -> np.ndarray:
+    from ase.data import atomic_masses
+
+    z = np.asarray(atomic_numbers, dtype=np.int32).reshape(-1)
+    masses = np.zeros(z.shape[0], dtype=np.float64)
+    for i, zi in enumerate(z):
+        if int(zi) <= 0 or int(zi) >= len(atomic_masses):
+            raise ValueError(f"invalid atomic number for mass lookup: {int(zi)}")
+        masses[i] = float(atomic_masses[int(zi)])
+    return masses
+
+
+def _kinetic_temperature_k_from_ase_velocities(
+    velocities_ang_fs: np.ndarray,
+    masses_amu: np.ndarray,
+) -> float | None:
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _AMU_ANG_PS2_TO_KCALMOL,
+        _KCALMOL_PER_K,
+    )
+
+    v = np.asarray(velocities_ang_fs, dtype=np.float64).reshape(-1, 3)
+    m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+    if v.shape[0] != m.shape[0] or v.shape[0] == 0 or not np.all(np.isfinite(v)):
+        return None
+    v_ang_ps = v * 1000.0
+    ke_kcal = (
+        0.5
+        * float(np.sum(m[:, None] * v_ang_ps * v_ang_ps))
+        * _AMU_ANG_PS2_TO_KCALMOL
+    )
+    dof = max(1, 3 * int(v.shape[0]))
+    if ke_kcal <= 0.0:
+        return 0.0
+    return 2.0 * ke_kcal / (float(dof) * _KCALMOL_PER_K)
+
+
+def resolve_handoff_velocity_units(
+    handoff: MdHandoffState,
+    masses_amu: np.ndarray,
+    *,
+    velocity_units: str = "auto",
+) -> str:
+    """Return ``akma`` or ``ase`` for interpreting :attr:`MdHandoffState.velocities`."""
+    units = str(velocity_units).strip().lower()
+    if units not in {"auto", "akma", "ase"}:
+        raise ValueError(f"velocity_units must be auto, akma, or ase; got {velocity_units!r}")
+    if units != "auto":
+        return units
+
+    meta = handoff.metadata or {}
+    source = str(meta.get("source", "")).strip().lower()
+    backend = str(meta.get("backend", "")).strip().lower()
+    if source in {"traj"} or backend in {"ase", "jaxmd"}:
+        return "ase"
+    if source in {"res"} or backend in {"pycharmm"}:
+        return "akma"
+
+    vel = handoff.velocities
+    if vel is None:
+        return "akma"
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        MAX_REASONABLE_VELOCITY_TEMP_K,
+        MIN_VELOCITY_ASSIGNMENT_TEMP_K,
+        estimate_kinetic_temperature_k,
+    )
+
+    t_akma = estimate_kinetic_temperature_k(vel, masses_amu)
+    t_ase = _kinetic_temperature_k_from_ase_velocities(vel, masses_amu)
+    akma_ok = (
+        t_akma is not None
+        and MIN_VELOCITY_ASSIGNMENT_TEMP_K <= float(t_akma) <= MAX_REASONABLE_VELOCITY_TEMP_K
+    )
+    ase_ok = (
+        t_ase is not None
+        and MIN_VELOCITY_ASSIGNMENT_TEMP_K <= float(t_ase) <= MAX_REASONABLE_VELOCITY_TEMP_K
+    )
+    if akma_ok and not ase_ok:
+        return "akma"
+    if ase_ok and not akma_ok:
+        return "ase"
+    return "akma"
+
+
+def handoff_velocities_as_ase_ang_fs(
+    handoff: MdHandoffState,
+    *,
+    velocity_units: str = "auto",
+) -> np.ndarray | None:
+    """Convert handoff velocities to ASE ``Atoms.get_velocities`` units (Å/fs)."""
+    if handoff.velocities is None:
+        return None
+    z = np.asarray(handoff.atomic_numbers, dtype=np.int32).reshape(-1)
+    if z.size == 0 or not np.any(z):
+        raise ValueError("handoff.atomic_numbers required to convert restart velocities")
+    masses = _masses_amu_from_atomic_numbers(z)
+    units = resolve_handoff_velocity_units(handoff, masses, velocity_units=velocity_units)
+    vel = np.asarray(handoff.velocities, dtype=np.float64).reshape(-1, 3)
+    if units == "ase":
+        return vel
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        charmm_akma_to_ang_fs_velocities,
+    )
+
+    return charmm_akma_to_ang_fs_velocities(vel, masses)
+
+
+def atoms_from_handoff(
+    handoff: MdHandoffState,
+    *,
+    velocity_units: str = "auto",
+) -> Any:
+    """Build a single-frame ``ase.Atoms`` from handoff geometry and velocities."""
+    from ase import Atoms
+
+    z = np.asarray(handoff.atomic_numbers, dtype=np.int32).reshape(-1)
+    if z.size == 0 or not np.any(z):
+        raise ValueError("handoff.atomic_numbers required to build ASE Atoms")
+    atoms = Atoms(numbers=z, positions=np.asarray(handoff.positions, dtype=np.float64))
+    if handoff.cell is not None:
+        atoms.set_cell(np.asarray(handoff.cell, dtype=np.float64))
+    atoms.set_pbc(bool(handoff.pbc))
+    vel = handoff_velocities_as_ase_ang_fs(handoff, velocity_units=velocity_units)
+    if vel is not None:
+        atoms.set_velocities(vel)
+    if handoff.step is not None:
+        atoms.info["step"] = int(handoff.step)
+    if handoff.temperature_K is not None:
+        atoms.info["temperature_K"] = float(handoff.temperature_K)
+    return atoms
+
+
+def resolve_atomic_numbers_for_res(
+    res_path: Path | str,
+    *,
+    atomic_numbers: np.ndarray | Sequence[int] | None = None,
+    npz_path: Path | str | None = None,
+) -> np.ndarray:
+    """Resolve atomic numbers for a CHARMM restart (explicit array or handoff NPZ)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_coordinates,
+    )
+
+    if atomic_numbers is not None:
+        z = np.asarray(atomic_numbers, dtype=np.int32).reshape(-1)
+        if z.size == 0 or not np.any(z):
+            raise ValueError("atomic_numbers must be non-empty")
+        return z
+
+    p = Path(res_path).expanduser().resolve()
+    pos = read_restart_coordinates(p)
+    n_atoms = int(pos.shape[0]) if pos is not None else None
+
+    candidates: list[Path] = []
+    if npz_path is not None:
+        candidates.append(Path(npz_path).expanduser())
+    candidates.extend(
+        [
+            p.parent / "handoff" / "state.npz",
+            p.parent / "state.npz",
+            p.parent.parent / "handoff" / "state.npz",
+        ]
+    )
+    seen: set[str] = set()
+    for cand in candidates:
+        key = str(cand.expanduser())
+        if key in seen:
+            continue
+        seen.add(key)
+        if not cand.is_file():
+            continue
+        data = np.load(cand, allow_pickle=True)
+        z = _handoff_atomic_numbers_from_npz(data, n_atoms=n_atoms)
+        if z.size > 0 and np.any(z):
+            return z
+
+    raise ValueError(
+        f"atomic numbers required for {p.name}; pass atomic_numbers= or npz_path= "
+        "(e.g. sibling handoff/state.npz)"
+    )
+
+
+def res_to_atoms(
+    res_path: Path | str,
+    *,
+    atomic_numbers: np.ndarray | Sequence[int] | None = None,
+    npz_path: Path | str | None = None,
+    velocity_units: str = "auto",
+) -> Any:
+    """Load one CHARMM ``.res`` file as ``ase.Atoms`` with ASE velocities."""
+    p = Path(res_path).expanduser().resolve()
+    z = resolve_atomic_numbers_for_res(
+        p,
+        atomic_numbers=atomic_numbers,
+        npz_path=npz_path,
+    )
+    handoff = load_handoff_from_res(p, atomic_numbers=z)
+    return atoms_from_handoff(handoff, velocity_units=velocity_units)
+
+
+def res_to_trajectory(
+    res_path: Path | str,
+    output_path: Path | str,
+    *,
+    atomic_numbers: np.ndarray | Sequence[int] | None = None,
+    npz_path: Path | str | None = None,
+    velocity_units: str = "auto",
+    numbered_stem: str | None = None,
+) -> Path:
+    """Write one or more CHARMM restarts to an ASE ``.traj`` file."""
+    from ase.io.trajectory import Trajectory
+
+    from mmml.interfaces.pycharmmInterface.mlpot.restart_velocity_analysis import (
+        collect_numbered_restart_paths,
+    )
+
+    p = Path(res_path).expanduser().resolve()
+    out = Path(output_path).expanduser().resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    if p.is_dir():
+        stem = numbered_stem or "heat"
+        restart_paths = collect_numbered_restart_paths(p, stem=stem)
+        if not restart_paths:
+            raise FileNotFoundError(f"no numbered {stem}.*.res files under {p}")
+    elif numbered_stem is not None:
+        restart_paths = collect_numbered_restart_paths(p.parent, stem=numbered_stem)
+        if not restart_paths:
+            restart_paths = [p]
+    else:
+        restart_paths = [p]
+
+    z = resolve_atomic_numbers_for_res(
+        restart_paths[0],
+        atomic_numbers=atomic_numbers,
+        npz_path=npz_path,
+    )
+    traj = Trajectory(str(out), "w")
+    try:
+        for restart in restart_paths:
+            handoff = load_handoff_from_res(restart, atomic_numbers=z)
+            traj.write(atoms_from_handoff(handoff, velocity_units=velocity_units))
+    finally:
+        traj.close()
+    return out
+
+
+def apply_handoff_to_atoms(
+    atoms: Any,
+    handoff: MdHandoffState,
+    *,
+    velocity_units: str = "auto",
+) -> None:
     atoms.set_positions(handoff.positions)
     if handoff.atomic_numbers is not None and handoff.atomic_numbers.any():
         atoms.set_atomic_numbers(handoff.atomic_numbers)
@@ -804,7 +1056,9 @@ def apply_handoff_to_atoms(atoms: Any, handoff: MdHandoffState) -> None:
     elif not handoff.pbc:
         atoms.set_pbc(False)
     if handoff.velocities is not None:
-        atoms.set_velocities(handoff.velocities)
+        atoms.set_velocities(
+            handoff_velocities_as_ase_ang_fs(handoff, velocity_units=velocity_units)
+        )
 
 
 def apply_handoff_geometry_to_atoms(

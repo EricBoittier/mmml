@@ -1227,9 +1227,60 @@ def test_save_handoff_to_res_charmm_write_fails_falls_back_to_patching(
         np.testing.assert_allclose(reloaded.positions, pos, rtol=1e-5, atol=1e-5)
 
 
+def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
+    from ase.io import read as ase_read
 
+    from mmml.cli.run.md_handoff import (
+        _write_synthetic_charmm_restart,
+        atoms_from_handoff,
+        load_handoff_from_res,
+        res_to_trajectory,
+        save_handoff_npz,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        ase_to_charmm_akma_velocities,
+    )
 
+    positions = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0],
+            [7.0, 8.0, 9.0],
+        ],
+        dtype=float,
+    )
+    z = np.array([6, 1, 1], dtype=np.int32)
+    masses = np.array([12.011, 1.008, 1.008], dtype=float)
+    v_ase = np.array(
+        [
+            [0.01, -0.02, 0.03],
+            [0.04, 0.05, -0.06],
+            [0.07, -0.08, 0.09],
+        ],
+        dtype=float,
+    )
+    v_akma = ase_to_charmm_akma_velocities(v_ase, masses)
+    cell = np.diag([30.0, 30.0, 30.0])
+    handoff = MdHandoffState(
+        positions=positions,
+        atomic_numbers=z,
+        velocities=v_akma,
+        cell=cell,
+        pbc=True,
+        step=42,
+    )
 
+    res_path = tmp_path / "heat.res"
+    _write_synthetic_charmm_restart(handoff, res_path)
+    npz_path = save_handoff_npz(handoff, tmp_path / "handoff" / "state.npz")
 
+    atoms = atoms_from_handoff(load_handoff_from_res(res_path, atomic_numbers=z))
+    np.testing.assert_allclose(atoms.get_positions(), positions, rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(atoms.get_velocities(), v_ase, rtol=1e-10, atol=1e-10)
 
+    traj_path = tmp_path / "heat.traj"
+    res_to_trajectory(res_path, traj_path, npz_path=npz_path)
+    loaded = ase_read(str(traj_path), index=0)
+    np.testing.assert_allclose(loaded.get_positions(), positions, rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(loaded.get_velocities(), v_ase, rtol=1e-10, atol=1e-10)
 
