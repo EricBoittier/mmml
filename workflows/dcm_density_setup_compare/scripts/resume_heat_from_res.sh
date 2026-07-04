@@ -73,6 +73,41 @@ if [[ "$_cfg_raw" = /* ]]; then
 else
   CFG="${WORKFLOW_ROOT}/${_cfg_raw}"
 fi
+export MMML_WORKFLOW_CONFIG="$CFG"
+
+_MLPOT_PROF="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config
+cfg = load_config(Path('${CFG}'))
+print(int(bool(cfg.get('mlpot_profile', False))))
+" 2>/dev/null || echo 0)"
+_JAX_TIMERS="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config
+cfg = load_config(Path('${CFG}'))
+print(int(bool(cfg.get('jax_compile_timers', False) or cfg.get('mlpot_profile', False))))
+" 2>/dev/null || echo 0)"
+_JAX_PME_PROF="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config
+cfg = load_config(Path('${CFG}'))
+print(int(bool(cfg.get('jax_pme_profile', False))))
+" 2>/dev/null || echo 0)"
+if [[ "$_MLPOT_PROF" == "1" ]]; then
+  export MMML_MLPOT_PROFILE="${MMML_MLPOT_PROFILE:-1}"
+fi
+if [[ "$_JAX_TIMERS" == "1" ]]; then
+  export MMML_JAX_COMPILE_TIMERS="${MMML_JAX_COMPILE_TIMERS:-1}"
+fi
+if [[ "$_JAX_PME_PROF" == "1" ]]; then
+  export MMML_JAX_PME_PROFILE="${MMML_JAX_PME_PROFILE:-1}"
+fi
 
 if ! ldconfig -p 2>/dev/null | grep -q 'libOpenCL\.so'; then
   echo "ERROR: libOpenCL.so.1 not found on this host ($(hostname))." >&2

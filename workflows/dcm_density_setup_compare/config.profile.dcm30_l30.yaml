@@ -1,0 +1,93 @@
+# GPU profile: DCM:30 @ L=30 Å, jax_mic (MIC), short mini+heat (no equi/prod).
+#
+# Run (GPU node with OpenCL + JAX):
+#   cd workflows/dcm_density_setup_compare
+#   export MMML_CKPT=...
+#   export JAX_ENABLE_X64=1
+#   bash scripts/profile_gpu_heat.sh
+#
+# Output:
+#   artifacts/dcm_density_setup_compare/profile_dcm30_l30/
+#   profile_gpu_heat.log (stdout/stderr with MLpot + jax-pme summaries)
+
+setups: [minimal]
+solvents: [DCM]
+cluster_sizes: [30]
+temperatures: [50.0]
+box_sizes: [30.0]
+
+checkpoint: ${MMML_CKPT}
+output_root: artifacts/dcm_density_setup_compare/profile_dcm30_l30
+seed_base: 7070
+placement_seed_ignore_heat: true
+
+# jax_mic = MIC long-range / cross-monomer nonbond on JAX GPU.
+mm_nonbond_mode: jax_mic
+periodic_charmm_vdw: false
+charmm_mm_pretreat: false
+
+# Grid placement — sparse 30-mer in 30 Å (no Packmol).
+builder: liquid
+packmol: false
+spacing: 6.0
+packmol_tolerance: 2.0
+packmol_box_padding: 1.0
+
+dt_fs: 0.25
+pressure: 1.0
+
+# Minimal setup: skip liquid prep ladder / calculator pre-SD (fast path to heat).
+liquid_prep: false
+density_prep_ladder: false
+calculator_pre_minimize: false
+bonded_mm_mini: false
+
+mini_nstep: 4000
+charmm_sd_steps: 8000
+charmm_abnr_steps: 8000
+
+max_grms_before_dyn: 200.0
+allow_high_grms: true
+mlpot_registration_max_grms: 300.0
+
+# Short heat-only leg (no post-heat dynamics).
+heat_thermostats: [bussi]
+default_heat_thermostat: bussi
+ps_heat: 0.5
+n_heat_segments: 1
+heat_firstt: 10.0
+no_echeck: true
+no_echeck_heat: true
+
+# Heat-only profiling: skip overlap rescue handoffs (restart-file continuation).
+dynamics_overlap_check_interval: 500
+dynamics_overlap_action: "off"
+dynamics_overlap_memory_handoff: false
+no_dynamics_monomer_template_restore: true
+heat_ihtfrq: 200
+dyn_freq_cadence: 200
+dcd_nsavc: 50
+
+dynamics_legs:
+  pycharmm_equi: false
+  pycharmm_prod: false
+  jaxmd: false
+  ase: false
+
+handoff_write_res: true
+continue_velocities: true
+
+mm_switch_on: 5.0
+mm_switch_width: 3.0
+ml_switch_width: 1.0
+ml_gpu_count: 1
+ml_batch_size: 128
+
+warmup_mlpot_jax: true
+warmup_do_mm: true
+warmup_compile_threads: 4
+
+# Profiling (→ --mlpot-profile + env in profile_gpu_heat.sh).
+mlpot_profile: true
+jax_compile_timers: true
+jax_pme_profile: true

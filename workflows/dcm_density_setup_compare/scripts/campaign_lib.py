@@ -1186,6 +1186,9 @@ def build_campaign(cfg: dict[str, Any], cell: RunCell) -> dict[str, Any]:
         defaults["handoff_write_res"] = bool(cell_cfg.get("handoff_write_res", True))
         defaults["continue_velocities"] = bool(cell_cfg.get("continue_velocities", True))
 
+    if bool(effective.get("mlpot_profile", False)):
+        defaults["mlpot_profile"] = True
+
     mini_flags = _mini_job_flags(cfg, cell)
     mini_flags.update(_init_stage_overrides(cfg, cell, effective))
     ladder_from = _apply_temperature_ladder(cfg, cell, defaults, mini_flags)
