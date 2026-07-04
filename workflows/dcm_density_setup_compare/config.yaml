@@ -59,17 +59,27 @@ charmm_sd_steps: 40000
 charmm_abnr_steps: 40000
 pre_min_steps: 5000
 
-# Overlap checks during heat/dynamics: smaller interval = more frequent (steps).
-# Prep sweep stage 2: 50 beat 100 on anchor mini+heat (avoid dt=0.05 for heat).
-dynamics_overlap_check_interval: 50
+# Overlap geometry checks during heat/dynamics (steps per CHARMM restart chunk).
+# Larger interval = fewer GPU-host syncs / Bussi handoffs (better throughput).
+dynamics_overlap_check_interval: 200
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
 min_intermonomer_atom_distance: 2.3
 pre_mlpot_overlap_min_distance: 2.3
 
-# Heat DCD cadence (lower nsavc = more frequent frames; dcd25 winner on anchor).
-dcd_nsavc: 25
+# GPU throughput: align Bussi micro-chunks with overlap interval (default dyn_freq_cadence=50
+# creates ~40×50-step heat segments and suppresses DCD on many sub-chunks).
+heat_ihtfrq: 200
+dyn_freq_cadence: 200
+
+# In-process velocity handoff between overlap chunks (avoids per-chunk Boltzmann redraw).
+dynamics_overlap_memory_handoff: true
+no_dynamics_monomer_template_restore: true
+
+# Trajectory cadence for VMD (decoupled from overlap/Bussi chunk size; must be < chunk nstep).
+# With overlap=200 and dcd_nsavc=10 → one frame every 10 steps (~20 frames per 200-step chunk).
+dcd_nsavc: 10
 # Prep sweep winner: defer CHARMM inbfrq rebuild until dynamics (SD uses inbfrq=0 chunks).
 #dyn_inbfrq: -1
 

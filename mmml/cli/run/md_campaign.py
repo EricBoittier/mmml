@@ -573,9 +573,24 @@ def build_benchmark_md_system_argv(
             argv.append("--dynamics-overlap-memory-handoff")
         if job.get("no_echeck") or cfg.get("no_echeck"):
             argv.append("--no-echeck")
-        heat_ihtfrq = job.get("heat_ihtfrq")
+        heat_ihtfrq = job.get("heat_ihtfrq", cfg.get("heat_ihtfrq"))
         if heat_ihtfrq is not None:
             argv.extend(["--heat-ihtfrq", str(heat_ihtfrq)])
+        dyn_freq_cadence = job.get("dyn_freq_cadence", cfg.get("dyn_freq_cadence"))
+        if dyn_freq_cadence is not None:
+            argv.extend(["--dyn-freq-cadence", str(dyn_freq_cadence)])
+        sd_steps = job.get(
+            "dynamics_overlap_charmm_sd_steps",
+            cfg.get("dynamics_overlap_charmm_sd_steps"),
+        )
+        if sd_steps is not None:
+            argv.extend(["--dynamics-overlap-charmm-sd-steps", str(sd_steps)])
+        abnr_steps = job.get(
+            "dynamics_overlap_charmm_abnr_steps",
+            cfg.get("dynamics_overlap_charmm_abnr_steps"),
+        )
+        if abnr_steps is not None:
+            argv.extend(["--dynamics-overlap-charmm-abnr-steps", str(abnr_steps)])
         argv.extend(["--heat-firstt", str(job.get("heat_firstt", cfg["heat_firstt"]))])
         argv.extend(["--heat-finalt", str(job.get("heat_finalt", cfg["heat_finalt"]))])
         heat_mode = job.get("heat_mode", cfg.get("heat_mode"))
