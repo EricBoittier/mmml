@@ -1,3 +1,10 @@
+"""DEPRECATED legacy MMML calculator fork (early PhysNetJax prototype).
+
+Do **not** import this module in production or CI: it runs module-level PyCHARMM
+setup and duplicates ``mmml.interfaces.pycharmmInterface.mmml_calculator`` with
+JIT-unfriendly Python loops over dimers.  Use ``setup_calculator`` instead; see
+``mmml.interfaces.pycharmmInterface.legacy_paths``.
+"""
 R = coor.get_positions().to_numpy()
 
 # System constants
@@ -493,6 +500,15 @@ def get_spherical_cutoff_calculator(
     Returns:
         ASE-compatible calculator that computes energies and forces
     """
+    from mmml.interfaces.pycharmmInterface.legacy_paths import (
+        DEPRECATED,
+        warn_legacy,
+    )
+
+    warn_legacy(
+        "mmml.models.physnetjax.physnetjax.calc.mmml_calculator.get_spherical_cutoff_calculator",
+        DEPRECATED["mmml.models.physnetjax.physnetjax.calc.mmml_calculator"],
+    )
 
     all_dimer_idxs = []
     for a, b in dimer_permutations(n_monomers):

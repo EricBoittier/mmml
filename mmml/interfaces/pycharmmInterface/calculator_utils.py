@@ -338,7 +338,7 @@ def apply_flat_bottom(
     mic_fn,
 ) -> Tuple[Array, Array, Array, Array]:
     """Harmonic flat-bottom on COM(s). Returns (flat_E, flat_F, com, com_dist)."""
-    if jnp is None:
+    if jnp is None or jax is None:
         raise RuntimeError("apply_flat_bottom requires JAX")
     from ase.data import atomic_masses as ase_atomic_masses
 
@@ -366,36 +366,39 @@ def apply_flat_bottom(
     if mode != "monomer":
         raise ValueError(f"flat_bottom mode must be one of {FLAT_BOTTOM_MODES}, got {mode!r}")
 
-    # Static slice bounds: monomer_offsets and n_monomers are fixed at JIT compile time
-    # (n_monomers is a static arg on spherical_cutoff_calculator). lax.fori_loop cannot
-    # be used because dynamic slice endpoints are not allowed inside traced loops.
-    mo_np = np.asarray(monomer_offsets, dtype=np.int32)
     n_mon = int(n_monomers)
+    if n_mon < 1:
+        z = jnp.array(0.0, dtype=positions.dtype)
+        return z, jnp.zeros_like(base_forces), jnp.zeros(3, dtype=positions.dtype), z
 
-    flat_E = jnp.array(0.0, dtype=positions.dtype)
-    flat_F = jnp.zeros_like(base_forces)
-    max_dist = jnp.array(0.0, dtype=positions.dtype)
-    for m in range(n_mon):
-        s = int(mo_np[m])
-        e = int(mo_np[m + 1])
-        pos_m = positions[s:e]
-        mass_m = masses[s:e]
-        M_m = jnp.sum(mass_m)
-        com_m = jnp.sum(pos_m * mass_m[:, None], axis=0) / M_m
+    monomer_id = jnp.asarray(
+        monomer_id_np_from_offsets(np.asarray(monomer_offsets), n_mon),
+        dtype=jnp.int32,
+    )
+    k_f = float(k)
+    r_f = float(radius)
+
+    def _monomer_com_distances(coms: Array) -> Array:
         if pbc_cell is not None:
-            d = mic_fn(center, com_m, pbc_cell)
+            d = jax.vmap(lambda c: mic_fn(center, c, pbc_cell))(coms)
         else:
-            d = com_m - center
-        dist = jnp.linalg.norm(d)
-        excess = jnp.maximum(0.0, dist - radius)
-        E_m = k * excess ** 2
-        unit_d = d / (dist + 1e-12)
-        F_com = -k * 2.0 * excess * unit_d
-        F_m = (mass_m[:, None] / M_m) * F_com[None, :]
-        flat_F = flat_F.at[s:e].add(F_m)
-        flat_E = flat_E + E_m
-        max_dist = jnp.maximum(max_dist, dist)
+            d = coms - center
+        return jnp.linalg.norm(d, axis=1)
 
+    coms_now = monomer_coms_segment(
+        positions, monomer_id, n_mon, masses=masses
+    )
+    max_dist = jnp.max(_monomer_com_distances(coms_now))
+
+    def flat_monomer_energy(pos: Array) -> Array:
+        coms = monomer_coms_segment(pos, monomer_id, n_mon, masses=masses)
+        dist = _monomer_com_distances(coms)
+        excess = jnp.maximum(0.0, r_f - dist)
+        return k_f * jnp.sum(excess ** 2)
+
+    flat_E = flat_monomer_energy(positions)
+    flat_F = -jax.grad(flat_monomer_energy)(positions)
+    flat_F = jnp.where(jnp.isfinite(flat_F), flat_F, 0.0)
     com = jnp.zeros(3, dtype=positions.dtype)
     return flat_E, flat_F, com, max_dist
 

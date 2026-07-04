@@ -1,4 +1,8 @@
-# monomer_graph_jax.py
+"""Monomer COM / pair helpers under PBC (legacy thin wrapper).
+
+Prefer :func:`~mmml.interfaces.pycharmmInterface.calculator_utils.monomer_coms_segment`
+for JIT-safe COMs.  This module keeps MIC pair-distance utilities for older scripts.
+"""
 import jax.numpy as jnp
 
 from mmml.interfaces.pycharmmInterface.calculator_utils import monomer_coms_segment
@@ -13,6 +17,12 @@ Array = jnp.ndarray
 
 def monomer_COMs(R: Array, groups: list[Array], masses: Array | None, cell: Array) -> Array:
     """COMs for monomers (wrapped consistently), mass-weighted if masses provided."""
+    from mmml.interfaces.pycharmmInterface.legacy_paths import DEPRECATED, warn_legacy
+
+    warn_legacy(
+        "mmml.interfaces.pycharmmInterface.monomer_graph_jax.monomer_COMs",
+        DEPRECATED["mmml.interfaces.pycharmmInterface.monomer_graph_jax.monomer_COMs"],
+    )
     group_id = group_ids_from_groups(groups, n_atoms=R.shape[0])
     n_groups = len(groups)
     if masses is None:

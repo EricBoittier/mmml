@@ -1,3 +1,8 @@
+"""DEPRECATED legacy ASE MM/ML calculator (hardcoded CHARMM paths, old switching).
+
+Use ``mmml.interfaces.pycharmmInterface.mmml_calculator.setup_calculator`` instead.
+See ``mmml.interfaces.pycharmmInterface.legacy_paths`` for the canonical map.
+"""
 from itertools import combinations, product
 from typing import Dict, Tuple, Any, NamedTuple
 import jax
@@ -1275,6 +1280,15 @@ def get_spherical_cutoff_calculator(
     Returns:
         ASE-compatible calculator that computes energies and forces
     """
+    from mmml.interfaces.pycharmmInterface.legacy_paths import (
+        DEPRECATED,
+        warn_legacy,
+    )
+
+    warn_legacy(
+        "mmml.interfaces.aseInterface.mmml_ase.get_spherical_cutoff_calculator",
+        DEPRECATED["mmml.interfaces.aseInterface.mmml_ase.get_spherical_cutoff_calculator"],
+    )
 
     all_dimer_idxs = []
     for a, b in dimer_permutations(n_monomers):

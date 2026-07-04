@@ -60,3 +60,29 @@ caveats for working in the cloud VM.
   `git clone --depth 1 <url>` (shallow).
 - Reclaiming Git LFS quota requires deleting the historical LFS objects (GitHub does not GC them
   automatically) — rewrite history, then recreate the repo or use GitHub's LFS admin tooling.
+
+### MM/ML calculator paths (canonical vs legacy)
+
+**Use for production MD / MLpot / PBC:**
+
+| Role | Module |
+|------|--------|
+| Hybrid factory | `mmml.interfaces.pycharmmInterface.mmml_calculator.setup_calculator` |
+| MLpot CHARMM callback | `mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot` |
+| MM switched nonbond | `mmml.interfaces.pycharmmInterface.mm_energy_forces.build_mm_energy_forces_fn` |
+| JIT-safe COM / pair helpers | `calculator_utils.monomer_coms_segment`, `dimer_pair_index_arrays` |
+| Sparse dimer caps | `mlpot.mlpot_sparse_dimer_policy` |
+
+**Deprecated — do not extend (DeprecationWarning on call/import):**
+
+- `mmml.models.physnetjax.physnetjax.calc.mmml_calculator` — early fork; module-level PyCHARMM side effects
+- `mmml.interfaces.aseInterface.mmml_ase.get_spherical_cutoff_calculator` — old ASE training path
+- `mmml.pycharmmInterface.*` — package alias only; use `mmml.interfaces.pycharmmInterface`
+- `monomer_graph_jax.monomer_COMs` — use `monomer_coms_segment` instead
+
+Full map: `mmml/interfaces/pycharmmInterface/legacy_paths.py`.
+
+**JAX compile footguns:** never build `jnp.stack` / `jnp.concatenate` via Python loops over
+monomers or dimers inside `@jit`. Use `segment_sum`, `jnp.repeat`, vectorized sharpstep, or
+scalar energy + `jax.grad` (see recent fixes in `calculator_utils`, `mmml_calculator`,
+`jax_pme_hybrid_coulomb`, `mm_energy_forces`).
