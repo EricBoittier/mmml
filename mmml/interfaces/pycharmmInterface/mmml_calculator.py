@@ -1,8 +1,7 @@
 """MM/ML calculator helpers (canonical production path).
 
 **Entry point:** :func:`setup_calculator` — use this for MD, MLpot, and PBC workflows.
-Legacy duplicates and deprecated helpers are listed in
-:mod:`mmml.interfaces.pycharmmInterface.legacy_paths`.
+Canonical modules are listed in :mod:`mmml.interfaces.pycharmmInterface.canonical_paths`.
 
 This module historically pulled in a large collection of heavy optional
 dependencies (ASE, PyCHARMM, JAX, ...) at import time. That behaviour made the

@@ -68,7 +68,7 @@ For config-driven condensed-phase MD campaigns, start with
 ```python
 import numpy as np
 from pathlib import Path
-from mmml.pycharmmInterface.mmml_calculator import setup_calculator
+from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 import ase
 
 ATOMS_PER_MONOMER = 10

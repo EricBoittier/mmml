@@ -222,9 +222,9 @@ def test_ase_jaxmd_pbc_energy_forces_consistency():
     from jax import jit
     import ase
 
-    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     n_monomers = 2
     n_atoms_monomer = 10
@@ -319,9 +319,9 @@ def test_ase_jaxmd_pbc_with_box_and_pairs():
     import ase
     import e3x
 
-    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     n_monomers = 2
     n_atoms_monomer = 10
@@ -448,9 +448,9 @@ def test_ase_jaxmd_pbc_ml_mm_box_and_jaxmd_pairs():
     import ase
     import pycharmm.param as param
 
-    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     cell_length = 40.0
     cutoff_params = CutoffParameters()
@@ -552,9 +552,9 @@ def _build_aco_mm_calculator(
 ):
     """Factory + calculator for 2xACO with ML+MM and PBC."""
     import pycharmm.param as param
-    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     at_codes = _psf_at_codes_override()
     n_types = len(param.get_atc())
@@ -627,9 +627,9 @@ def test_ml_only_jax_autograd_matches_model_forces():
     from jax import jit
     import ase
 
-    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     ckpt = _get_ckpt()
     if ckpt is None:
@@ -780,7 +780,7 @@ def test_ml_mm_frozen_pair_autograd_differs_from_analytical():
 def test_box_vectors_from_ase_atoms():
     """Orthorhombic ASE cell is forwarded as (Lx, Ly, Lz) box vectors."""
     import ase
-    from mmml.pycharmmInterface.calculator_utils import box_vectors_from_atoms_or_cell
+    from mmml.interfaces.pycharmmInterface.calculator_utils import box_vectors_from_atoms_or_cell
 
     cell_length = 40.0
     atoms = ase.Atoms("H2O", positions=[[0, 0, 0], [1, 0, 0], [0, 1, 0]], cell=_cell_matrix(cell_length), pbc=True)
@@ -859,9 +859,9 @@ def test_pbc_lattice_invariance_ml_ase_and_jax():
     from jax import jit
     import ase
 
-    from mmml.pycharmmInterface.mmml_calculator import setup_calculator
-    from mmml.pycharmmInterface.cutoffs import CutoffParameters
-    from mmml.pycharmmInterface.calculator_utils import unpack_factory_result
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+    from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.calculator_utils import unpack_factory_result
 
     ckpt = _get_ckpt()
     if ckpt is None:

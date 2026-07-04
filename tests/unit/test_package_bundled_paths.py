@@ -68,15 +68,6 @@ def test_default_benzene_crystal_cif_is_bundled() -> None:
     assert "_cell_formula_units_Z" in text
 
 
-def test_pycharmm_interface_compat_alias() -> None:
-    import mmml.pycharmmInterface  # noqa: F401 — registers lazy submodule proxies
-
-    from mmml.pycharmmInterface import cutoffs as alias_mod
-    from mmml.interfaces.pycharmmInterface import cutoffs as canonical_mod
-
-    assert alias_mod is canonical_mod
-
-
 def test_generate_sample_module_is_packaged() -> None:
     spec = importlib.util.find_spec("mmml.generate.sample.sample_diverse_xyz")
     assert spec is not None and spec.origin

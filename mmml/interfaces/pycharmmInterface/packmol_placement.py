@@ -648,7 +648,7 @@ def assign_packmol_pdb_to_psf_order(
     """Map Packmol-packed PDB coordinates onto CHARMM PSF atom order.
 
     Packmol output atom order does not generally match PSF ``atype`` order.  Match by
-    ``(residue_index, atom_name)`` using the same recipe as ``mmml_ase.load_pdb_data``.
+    ``(residue_index, atom_name)`` using the same PDB residue/atom naming recipe.
     """
     atypes = [str(x) for x in psf_atom_names]
     n_atoms = len(atypes)

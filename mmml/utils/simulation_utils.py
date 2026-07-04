@@ -38,7 +38,7 @@ def reorder_atoms_to_match_pycharmm(
         Z_reordered: Reordered atomic numbers matching PyCHARMM ordering
         reorder_indices: Indices used for reordering
     """
-    from mmml.pycharmmInterface.import_pycharmm import coor
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
     import pycharmm.energy as energy
     
     n_atoms = len(R)
@@ -379,7 +379,7 @@ def initialize_simulation_from_batch(
         atoms: ASE Atoms object initialized from the batch
         hybrid_calc: Hybrid calculator for the system
     """
-    from mmml.pycharmmInterface.import_pycharmm import coor
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
     
     # Get positions and atomic numbers from batch
     R = batch["R"]
@@ -418,7 +418,7 @@ def initialize_simulation_from_batch(
     pycharmm_available = False
     if hasattr(args, 'include_mm') and args.include_mm:
         try:
-            from mmml.pycharmmInterface.import_pycharmm import psf, coor
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import psf, coor
             # Try a simple test call to see if PyCHARMM is alive
             try:
                 _ = psf.get_atype()
@@ -443,7 +443,7 @@ def initialize_simulation_from_batch(
     # Wrap in comprehensive error handling to prevent crashes
     if pycharmm_available and (pycharmm_atypes is None or pycharmm_resids is None):
         try:
-            from mmml.pycharmmInterface.import_pycharmm import psf
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import psf
             # Test if PyCHARMM is responsive before calling it
             try:
                 # Try a simple call first to see if PyCHARMM is alive
@@ -520,8 +520,8 @@ def initialize_simulation_from_batch(
     # Wrap in comprehensive error handling to prevent crashes
     if hasattr(args, 'include_mm') and args.include_mm and pycharmm_atypes is not None:
         try:
-            from mmml.pycharmmInterface.import_pycharmm import psf
-            from mmml.pycharmmInterface.utils import get_Z_from_psf
+            from mmml.interfaces.pycharmmInterface.import_pycharmm import psf
+            from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
             # Get atomic numbers from PyCHARMM PSF with error handling
             try:
                 # Use get_Z_from_psf() which uses atomic masses to determine Z

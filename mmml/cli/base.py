@@ -461,7 +461,7 @@ def setup_ase_imports():
 def setup_mmml_imports():
     """Setup MMML imports with error handling."""
     try:
-        from mmml.pycharmmInterface.mmml_calculator import (
+        from mmml.interfaces.pycharmmInterface.mmml_calculator import (
             CutoffParameters,
             ev2kcalmol,
             setup_calculator,

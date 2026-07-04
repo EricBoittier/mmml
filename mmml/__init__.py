@@ -3,11 +3,6 @@
 # Add imports here
 from .mmml import *
 
-# Legacy ``mmml.pycharmmInterface`` imports are handled by ``mmml/pycharmmInterface/``
-# (lazy redirects to ``mmml.interfaces.pycharmmInterface``). Do not register the
-# interfaces package as ``mmml.pycharmmInterface`` in ``sys.modules`` here: that
-# breaks ``alias_mod is canonical_mod`` for submodules loaded via the legacy path.
-
 import sys
 
 if "mmml.models.physnetjax" not in sys.modules:

@@ -2,10 +2,10 @@
 # coding: utf-8
 
 
-from mmml.pycharmmInterface.import_pycharmm import reset_block, pycharmm_quiet, pycharmm_soft
+from mmml.interfaces.pycharmmInterface.import_pycharmm import reset_block, pycharmm_quiet, pycharmm_soft
 pycharmm_quiet()
-from mmml.pycharmmInterface import setupRes
-from mmml.pycharmmInterface.utils import view_pycharmm_state, get_Z_from_psf
+from mmml.interfaces.pycharmmInterface import setupRes
+from mmml.interfaces.pycharmmInterface.utils import view_pycharmm_state, get_Z_from_psf
 import ase
 import pandas as pd
 import numpy as np

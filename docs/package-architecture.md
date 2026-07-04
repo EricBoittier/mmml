@@ -110,16 +110,14 @@ flowchart LR
 
 ---
 
-## Legacy import aliases
+## Import aliases
 
 `mmml/__init__.py` registers compatibility names in `sys.modules`:
 
 ```mermaid
 flowchart LR
   ROOT["mmml"]
-  ROOT --> PI["mmml.pycharmmInterface\n(sys.modules alias)"]
   ROOT --> DC["mmml.dcmnet\n(alias)"]
-  PI --> IFACE["mmml.interfaces.pycharmmInterface"]
   DC --> DCM["mmml.models.dcmnet"]
 ```
 
@@ -282,7 +280,7 @@ flowchart TB
 | `pycharmmInterface` | 17 | Core CHARMM + hybrid calculator |
 | `pyscf4gpuInterface` | 11 | `mmml pyscf-dft`, `pyscf-evaluate`, … |
 | `dcmInterface` | 12 | `mmml kernel-fit` |
-| `aseInterface` | 4 | Legacy ASE calculators |
+| `aseInterface` | 4 | Pyxtal placement / ASE helpers |
 | `chemcoordInterface` | 1 | `mmml interpolate-xyz` |
 | `openmmInterface`, `jaxmdInterface`, … | few | Specialized / optional |
 

@@ -234,8 +234,8 @@ def _ensure_opt_imports() -> dict[str, Any]:
         import pandas as pd
         from ase.io import Trajectory
         from ase.calculators.singlepoint import SinglePointCalculator
-        from mmml.pycharmmInterface.setupBox import setup_box_generic
-        from mmml.pycharmmInterface.import_pycharmm import coor
+        from mmml.interfaces.pycharmmInterface.setupBox import setup_box_generic
+        from mmml.interfaces.pycharmmInterface.import_pycharmm import coor
         return {
             "ase_io": ase_io,
             "plt": plt,

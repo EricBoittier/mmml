@@ -49,8 +49,8 @@ def extract_lj_parameters_from_calculator(
             iac_to_param_idx: Mapping from IAC codes to parameter array indices
     """
     import pycharmm.param as param
-    from mmml.pycharmmInterface.import_pycharmm import psf, CGENFF_RTF, CGENFF_PRM, read, settings, reset_block
-    from mmml.pycharmmInterface.mmml_calculator import dimer_permutations
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import psf, CGENFF_RTF, CGENFF_PRM, read, settings, reset_block
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import dimer_permutations
 
     # Normalize ATOMS_PER_MONOMER to atoms_per_monomer_list
     if isinstance(ATOMS_PER_MONOMER, (list, tuple, np.ndarray)):
@@ -449,7 +449,7 @@ def create_hybrid_fitting_factory(
                 skip_ml_dimers = args.skip_ml_dimers if args and hasattr(args, 'skip_ml_dimers') else False
                 
                 # Prepare batches manually (matching calculator's format)
-                from mmml.pycharmmInterface.mmml_calculator import (
+                from mmml.interfaces.pycharmmInterface.mmml_calculator import (
                     prepare_batches_md,
                     dimer_permutations,
                     indices_of_monomer,
@@ -2338,7 +2338,7 @@ def fit_hybrid_parameters_iteratively(
             - "lj_loss_history": List of LJ optimization loss histories
             - "cutoff_loss_history": List of cutoff optimization loss histories
     """
-    from mmml.pycharmmInterface.mmml_calculator import CutoffParameters
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters
     
     # Initialize parameters
     current_ep_scale = initial_ep_scale
