@@ -285,6 +285,11 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
         mlpot_setup,
         "_import_pycharmm",
     ) as import_py, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.capture_charmm_script_output",
+        return_value="",
+    ) as capture_update, patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.stash_mkimat2_registration_log",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         fake_pycharmm = MagicMock()
@@ -308,7 +313,8 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
-    assert fake_pycharmm.lingo.charmm_script.call_count == 2
+    assert fake_pycharmm.lingo.charmm_script.call_count == 1
+    capture_update.assert_called_once_with("UPDATE", replay=False)
     assert fake_pycharmm.image.update_bimag.call_count == 2
 
 
