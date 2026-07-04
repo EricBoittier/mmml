@@ -54,7 +54,10 @@ dynamics_overlap_min_distance: 1.5
 min_intermonomer_atom_distance: 2.3
 pre_mlpot_overlap_min_distance: 2.3
 
-dcd_nsavc: 25
+# GPU throughput + VMD: align Bussi micro-chunks with overlap (default cadence=50 → 40×50-step handoffs).
+heat_ihtfrq: 200
+dyn_freq_cadence: 200
+dcd_nsavc: 10
 dyn_inbfrq: 25
 
 liquid_prep: true
@@ -92,9 +95,10 @@ heat_firstt: 10.0
 no_echeck: true
 no_echeck_heat: true
 # In-process Bussi continuation (avoid per-chunk Boltzmann redraw).
+# Use resume_heat_from_res.sh for heat resume — sets memory_handoff: false (restart-file handoff).
 dynamics_overlap_memory_handoff: true
-# Less frequent overlap audits during 1 ps heat (50 caused template-restore churn).
-dynamics_overlap_check_interval: 100
+# Overlap audits / Bussi micro-chunks (200 → ~20 chunks per 1 ps heat vs 40×50 at cadence 50).
+dynamics_overlap_check_interval: 200
 # Audit only during heat; |v|>15k AKMA flags are noisy at 50 K with iasvel=1 fallback.
 no_dynamics_monomer_template_restore: true
 heat_thermostats: []
