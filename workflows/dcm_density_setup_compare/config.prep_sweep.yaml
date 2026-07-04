@@ -48,7 +48,6 @@ charmm_abnr_steps: 8000
 pre_min_steps: 1000
 
 # Prep sweep stage 2: ovlp50 beat ovlp100 on anchor mini+heat.
-dynamics_overlap_check_interval: 50
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
@@ -90,7 +89,14 @@ default_heat_thermostat: bussi
 ps_heat: 1.0
 n_heat_segments: 1
 heat_firstt: 10.0
+no_echeck: true
 no_echeck_heat: true
+# In-process Bussi continuation (avoid per-chunk Boltzmann redraw).
+dynamics_overlap_memory_handoff: true
+# Less frequent overlap audits during 1 ps heat (50 caused template-restore churn).
+dynamics_overlap_check_interval: 100
+# Audit only during heat; |v|>15k AKMA flags are noisy at 50 K with iasvel=1 fallback.
+no_dynamics_monomer_template_restore: true
 heat_thermostats: []
 dynamics_legs:
   pycharmm_equi: false

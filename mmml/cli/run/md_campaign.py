@@ -565,6 +565,10 @@ def build_benchmark_md_system_argv(
             argv.extend(["--heat-thermostat", str(job["heat_thermostat"])])
         if job.get("no_echeck_heat") or cfg.get("no_echeck_heat"):
             argv.append("--no-echeck-heat")
+        if job.get("no_dynamics_monomer_template_restore") or cfg.get(
+            "no_dynamics_monomer_template_restore"
+        ):
+            argv.append("--no-dynamics-monomer-template-restore")
         if job.get("dynamics_overlap_memory_handoff", cfg.get("dynamics_overlap_memory_handoff")):
             argv.append("--dynamics-overlap-memory-handoff")
         if job.get("no_echeck") or cfg.get("no_echeck"):
