@@ -131,3 +131,79 @@ def test_route_mlpot_callback_keeps_user_when_routing_would_zero_hybrid(monkeypa
     }
     e_user = route_mlpot_callback_energy_kcalmol(-31729.4, components, route=True)
     assert e_user == pytest.approx(-31729.4)
+
+
+def test_decompose_mlpot_mm_nb_skips_out_of_range_pair_indices():
+    """Pair indices must be bounded by primary-cell atom count (PBC / type-table bugs)."""
+    n = 260
+    pos = np.random.default_rng(0).random((n, 3)) * 10.0
+    pair_idx = np.array([[0, 163], [100, 259]], dtype=np.int32)
+    pair_mask = np.array([True, True], dtype=bool)
+    charges = np.ones(n, dtype=np.float64) * 0.1
+    rmins = np.linspace(1.5, 2.0, n)
+    eps = -np.linspace(0.01, 0.05, n)
+    monomer_id = np.repeat(np.arange(20, dtype=np.int32), n // 20)
+    out = decompose_mlpot_mm_nb_eterms_kcalmol(
+        pos,
+        pair_idx,
+        pair_mask,
+        np.diag([38.0, 38.0, 38.0]),
+        charges_e=charges,
+        rmins_A=rmins,
+        epsilons_kcal=eps,
+        monomer_id=monomer_id,
+        mm_switch_on=9.0,
+        mm_switch_width=3.0,
+    )
+    assert np.isfinite(out["mm_total"])
+
+
+def test_decompose_and_route_uses_per_atom_nb_arrays_not_type_table(monkeypatch):
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
+        decompose_and_route_mlpot_mm_from_callback,
+    )
+
+    n = 260
+    pos = np.zeros((n, 3), dtype=np.float64)
+    calc = MagicMock()
+    calc._do_mm = True
+    calc._atoms_per_monomer = [13] * 20
+    calc.cutoff_params = MagicMock(
+        mm_switch_on=9.0,
+        mm_switch_width=3.0,
+        ml_switch_width=1.5,
+        complementary_handoff=True,
+    )
+    live_charges = np.ones(n)
+    live_eps = -np.ones(n) * 0.02
+    live_rmins = np.ones(n) * 1.8
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mm_system_energy._live_charmm_nonbonded_arrays",
+        return_value=(live_charges, live_eps, live_rmins),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mm_energy_forces.decompose_mlpot_mm_nb_eterms_kcalmol",
+        return_value={
+            "vdw_primary": 0.0,
+            "vdw_image": 0.0,
+            "elec_primary": 0.0,
+            "elec_image": 0.0,
+            "mm_total": 0.0,
+        },
+    ) as mock_decompose:
+        user = decompose_and_route_mlpot_mm_from_callback(
+            calc,
+            pos,
+            np.zeros((1, 2), dtype=np.int32),
+            np.array([False], dtype=bool),
+            None,
+            -42.0,
+            use_mm_pairs=True,
+        )
+    assert user == pytest.approx(-42.0)
+    args, kwargs = mock_decompose.call_args
+    assert kwargs["rmins_A"].shape == (n,)
+    assert kwargs["epsilons_kcal"].shape == (n,)
+    assert kwargs["charges_e"].shape == (n,)

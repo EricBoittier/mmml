@@ -1989,9 +1989,17 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
         return float(s * s * (3.0 - 2.0 * s))
 
     pos = np.asarray(positions_A, dtype=np.float64)
+    n_atoms = int(pos.shape[0])
     pi = np.asarray(pair_idx[:, 0], dtype=np.int64)
     pj = np.asarray(pair_idx[:, 1], dtype=np.int64)
-    mask = np.asarray(pair_mask, dtype=bool) & (pi < pj)
+    mask = (
+        np.asarray(pair_mask, dtype=bool)
+        & (pi < pj)
+        & (pi >= 0)
+        & (pj >= 0)
+        & (pi < n_atoms)
+        & (pj < n_atoms)
+    )
     if not np.any(mask):
         zeros = {
             "vdw_primary": 0.0,

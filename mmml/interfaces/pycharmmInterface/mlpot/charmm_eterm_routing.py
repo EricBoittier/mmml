@@ -91,7 +91,6 @@ def decompose_and_route_mlpot_mm_from_callback(
         import numpy as np
 
         from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
-            _get_actual_psf_charges,
             decompose_mlpot_mm_nb_eterms_kcalmol,
         )
     except ImportError:
@@ -104,24 +103,42 @@ def decompose_and_route_mlpot_mm_from_callback(
     cp = getattr(calculator, "cutoff_params", None)
     if cp is None:
         return float(energy_kcal)
-    try:
-        import pycharmm.param as param
-    except (ImportError, OSError):
-        return float(energy_kcal)
 
-    atc = list(param.get_atc())[:n]
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import CGENFF_PRM, CGENFF_RTF
-
-    cgenff_params_dict: dict[str, tuple[float, float]] = {}
-    for line in open(CGENFF_PRM).readlines():
-        parts = line.split()
-        if len(parts) > 4 and parts[1] == "0.0" and line[0] != "!":
-            cgenff_params_dict[parts[0]] = (float(parts[2]), float(parts[3]))
-    rmins = np.array([cgenff_params_dict.get(at, (0.0, 0.0))[1] for at in atc], dtype=np.float64)
-    eps = np.array(
-        [-abs(cgenff_params_dict.get(at, (0.0, 0.0))[0]) for at in atc],
-        dtype=np.float64,
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        _live_charmm_nonbonded_arrays,
     )
+
+    live = _live_charmm_nonbonded_arrays(n)
+    if live is not None:
+        charges, eps, rmins = live
+        charges = np.asarray(charges, dtype=np.float64)[:n]
+        eps = np.asarray(eps, dtype=np.float64)[:n]
+        rmins = np.asarray(rmins, dtype=np.float64)[:n]
+    else:
+        try:
+            import pycharmm.atom_info as atom_info
+        except (ImportError, OSError):
+            return float(energy_kcal)
+        from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+            CGENFF_PRM,
+            _get_actual_psf_charges,
+        )
+
+        cgenff_params_dict: dict[str, tuple[float, float]] = {}
+        for line in open(CGENFF_PRM).readlines():
+            parts = line.split()
+            if len(parts) > 4 and parts[1] == "0.0" and line[0] != "!":
+                cgenff_params_dict[parts[0]] = (float(parts[2]), float(parts[3]))
+        chem_types = atom_info.get_chem_types(list(range(n)))
+        rmins = np.array(
+            [cgenff_params_dict.get(at, (0.0, 0.0))[1] for at in chem_types],
+            dtype=np.float64,
+        )
+        eps = np.array(
+            [-abs(cgenff_params_dict.get(at, (0.0, 0.0))[0]) for at in chem_types],
+            dtype=np.float64,
+        )
+        charges = np.asarray(_get_actual_psf_charges(n), dtype=np.float64)[:n]
 
     offsets = np.zeros(len(calculator._atoms_per_monomer) + 1, dtype=np.int32)
     offsets[1:] = np.cumsum(np.asarray(calculator._atoms_per_monomer, dtype=np.int32))
@@ -129,24 +146,34 @@ def decompose_and_route_mlpot_mm_from_callback(
     for m in range(len(calculator._atoms_per_monomer)):
         monomer_id[offsets[m] : offsets[m + 1]] = m
 
-    charges = np.asarray(_get_actual_psf_charges(n), dtype=np.float64)[:n]
     cell_np = None
     if box is not None:
         cell_np = np.asarray(box, dtype=np.float64)
 
-    components = decompose_mlpot_mm_nb_eterms_kcalmol(
-        pos,
-        pair_idx,
-        pair_mask,
-        cell_np,
-        charges_e=charges,
-        rmins_A=np.asarray(rmins)[:n],
-        epsilons_kcal=np.asarray(eps)[:n],
-        monomer_id=monomer_id,
-        mm_switch_on=float(cp.mm_switch_on),
-        mm_switch_width=float(cp.mm_switch_width),
-        ml_switch_width=float(cp.ml_switch_width),
-        complementary_handoff=bool(cp.complementary_handoff),
-    )
+    try:
+        components = decompose_mlpot_mm_nb_eterms_kcalmol(
+            pos,
+            pair_idx,
+            pair_mask,
+            cell_np,
+            charges_e=charges,
+            rmins_A=rmins,
+            epsilons_kcal=eps,
+            monomer_id=monomer_id,
+            mm_switch_on=float(cp.mm_switch_on),
+            mm_switch_width=float(cp.mm_switch_width),
+            ml_switch_width=float(cp.ml_switch_width),
+            complementary_handoff=bool(cp.complementary_handoff),
+        )
+    except Exception as exc:
+        import sys
+
+        print(
+            f"WARN: MLpot MM eterm decomposition failed ({exc}); "
+            "returning full hybrid energy as USER",
+            file=sys.stderr,
+            flush=True,
+        )
+        return float(energy_kcal)
     calculator._last_mm_nb_components_kcalmol = components
     return route_mlpot_callback_energy_kcalmol(float(energy_kcal), components)
