@@ -41,7 +41,7 @@ def resolve_max_active_dimers(
             elif n_dimers_total <= 4005:
                 cap = n_dimers_total
             else:
-                cap = max(8000, 6 * int(n_monomers))
+                cap = max(4005, 6 * int(n_monomers))
     if free_space:
         cap = max(cap, all_pairs_cap)
     cap = min(all_pairs_cap, cap)
