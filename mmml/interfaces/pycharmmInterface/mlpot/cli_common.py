@@ -3476,7 +3476,19 @@ def assert_initial_mlpot_grms_before_sd(
     verbose: bool = True,
 ) -> float:
     """Abort when hybrid GRMS is already too large to recover in MLpot SD."""
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        mlpot_skip_charmm_ener_force_before_first_sd,
+    )
     from mmml.utils.intermonomer_geometry import resolve_mlpot_registration_max_grms
+
+    if mlpot_skip_charmm_ener_force_before_first_sd(mlpot_ctx):
+        if verbose:
+            print(
+                f"{context}: deferring hybrid GRMS probe until MLpot SD JAX materialize "
+                "(PBC + MPI-linked CHARMM deferred JAX)",
+                flush=True,
+            )
+        return float("nan")
 
     limit = resolve_mlpot_registration_max_grms(args)
     grms = mlpot_hybrid_grms_from_calculator(mlpot_ctx)

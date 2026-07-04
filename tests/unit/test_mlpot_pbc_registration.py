@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
@@ -313,8 +313,14 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()
-    assert fake_pycharmm.lingo.charmm_script.call_count == 1
-    capture_update.assert_called_once_with("UPDATE", replay=False)
+    assert fake_pycharmm.lingo.charmm_script.call_count == 0
+    assert capture_update.call_count == 2
+    capture_update.assert_has_calls(
+        [
+            call("UPDATE", replay=False),
+            call("UPDATE", replay=False),
+        ]
+    )
     assert fake_pycharmm.image.update_bimag.call_count == 2
 
 

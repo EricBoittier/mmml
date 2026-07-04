@@ -189,10 +189,26 @@ def enforce_charmm_energy_term_policies(
     use_pbc: bool,
     cubic_box_side_A: float | None,
     verbose: bool = False,
+    skip_ener_probe: bool | None = None,
 ) -> list[str]:
     """Probe CHARMM ENER; reload PSF/.prm overlays for violated policies."""
     policies = resolve_charmm_energy_term_policies(args)
     if not policies:
+        return []
+
+    from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+        _mlpot_active_in_charmm,
+    )
+
+    if skip_ener_probe is None:
+        skip_ener_probe = _mlpot_active_in_charmm()
+    if skip_ener_probe:
+        if verbose or not getattr(args, "quiet", False):
+            print(
+                "CHARMM energy policy: deferring ENER probe while MLpot USER is active "
+                "(run before MLpot registration instead)",
+                flush=True,
+            )
         return []
 
     from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (

@@ -1656,7 +1656,13 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 1)",
         )
-        pycharmm.lingo.charmm_script("UPDATE")
+        from mmml.interfaces.pycharmmInterface.charmm_image_geometry import (
+            capture_charmm_script_output,
+            stash_mkimat2_registration_log,
+        )
+
+        mkimat_log = capture_charmm_script_output("UPDATE", replay=False)
+        stash_mkimat2_registration_log(workflow_args, mkimat_log)
     pycharmm.image.update_bimag()
     rewrap_charmm_coords_for_mlpot_pbc(
         cubic_box_side_A=side,
@@ -1675,8 +1681,12 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
             stash_mkimat2_registration_log,
         )
 
-        mkimat_log = capture_charmm_script_output("UPDATE", replay=False)
-        stash_mkimat2_registration_log(workflow_args, mkimat_log)
+        mkimat_log2 = capture_charmm_script_output("UPDATE", replay=False)
+        if mkimat_log.strip():
+            mkimat_log2 = "\n".join(
+                part for part in (mkimat_log, mkimat_log2) if part.strip()
+            )
+        stash_mkimat2_registration_log(workflow_args, mkimat_log2)
     pycharmm.image.update_bimag()
     reassert_pbc_nbond_cutoffs(
         side,
@@ -1826,6 +1836,26 @@ def register_mlpot(
             skip_iblo_inb_update = True
         else:
             box_side = None
+        if workflow_args is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+                enforce_charmm_energy_term_policies,
+            )
+
+            enforce_charmm_energy_term_policies(
+                workflow_args,
+                ml_selection=ml_selection,
+                use_pbc=bool(use_pbc),
+                cubic_box_side_A=(
+                    float(box_side)
+                    if use_pbc and box_side is not None
+                    else (
+                        float(cubic_box_side_A)
+                        if use_pbc and cubic_box_side_A is not None
+                        else None
+                    )
+                ),
+                verbose=verbose,
+            )
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
             ml_Z=z_ml,
@@ -1907,16 +1937,4 @@ def register_mlpot(
     )
     if use_pbc:
         setattr(ctx, "_mlpot_pbc_nb_lists_built", True)
-    if workflow_args is not None:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
-            enforce_charmm_energy_term_policies,
-        )
-
-        enforce_charmm_energy_term_policies(
-            workflow_args,
-            ml_selection=ml_selection,
-            use_pbc=bool(use_pbc),
-            cubic_box_side_A=reg_box,
-            verbose=verbose,
-        )
     return ctx
