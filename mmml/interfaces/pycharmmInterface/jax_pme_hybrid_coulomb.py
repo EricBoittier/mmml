@@ -270,55 +270,67 @@ def _mean_switch_scale_jax(
     complementary_handoff: bool,
     mm_r_min: float | None,
 ):
-    """Mean COM switch factor (scalar), differentiable in ``positions``."""
+    """Mean COM switch factor (scalar), differentiable in ``positions``.
+
+    Vectorized over monomer pairs (no Python ``list`` + ``jnp.stack``).
+    """
+    import jax
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
+    from mmml.interfaces.pycharmmInterface.calculator_utils import (
+        _sharpstep,
+        dimer_pair_index_arrays,
+        monomer_coms_segment,
+        monomer_id_np_from_offsets,
+    )
     from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
     offsets = np.asarray(monomer_offsets, dtype=np.int64).reshape(-1)
     n_monomers = int(len(offsets) - 1)
-    scales = []
-    for mi in range(n_monomers):
-        for mj in range(mi + 1, n_monomers):
-            com_i = jnp.mean(positions[int(offsets[mi]) : int(offsets[mi + 1])], axis=0)
-            com_j = jnp.mean(positions[int(offsets[mj]) : int(offsets[mj + 1])], axis=0)
-            d_vec = _mic_displacement_jax(com_i, com_j, pbc_cell)
-            r = jnp.linalg.norm(d_vec)
-            if complementary_handoff:
-                handoff = _sharpstep(
-                    r,
-                    mm_switch_on - ml_switch_width,
-                    mm_switch_on,
-                    gamma=GAMMA_ON,
-                )
-                taper = 1.0 - _sharpstep(
-                    r,
-                    mm_switch_on,
-                    mm_switch_on + mm_switch_width,
-                    gamma=GAMMA_OFF,
-                )
-                pair_scale = handoff * taper
-            else:
-                mm_on = _sharpstep(
-                    r,
-                    mm_switch_on,
-                    mm_switch_on + mm_switch_width,
-                    gamma=GAMMA_ON,
-                )
-                mm_off = _sharpstep(
-                    r,
-                    mm_switch_on + mm_switch_width,
-                    mm_switch_on + 2.0 * mm_switch_width,
-                    gamma=GAMMA_OFF,
-                )
-                pair_scale = mm_on * (1.0 - mm_off)
-            if mm_r_min is not None:
-                pair_scale = jnp.where(r < float(mm_r_min), 0.0, pair_scale)
-            scales.append(pair_scale)
-    if not scales:
+    if n_monomers < 2:
         return jnp.asarray(0.0, dtype=positions.dtype)
-    return jnp.mean(jnp.stack(scales))
+
+    monomer_id = jnp.asarray(monomer_id_np_from_offsets(offsets), dtype=jnp.int32)
+    pair_i, pair_j = dimer_pair_index_arrays(n_monomers)
+    pair_i_j = jnp.asarray(pair_i, dtype=jnp.int32)
+    pair_j_j = jnp.asarray(pair_j, dtype=jnp.int32)
+
+    coms = monomer_coms_segment(positions, monomer_id, n_monomers)
+    com_i = coms[pair_i_j]
+    com_j = coms[pair_j_j]
+    d_vec = jax.vmap(lambda a, b: _mic_displacement_jax(a, b, pbc_cell))(com_i, com_j)
+    r = jnp.linalg.norm(d_vec, axis=1)
+    if complementary_handoff:
+        handoff = _sharpstep(
+            r,
+            mm_switch_on - ml_switch_width,
+            mm_switch_on,
+            gamma=GAMMA_ON,
+        )
+        taper = 1.0 - _sharpstep(
+            r,
+            mm_switch_on,
+            mm_switch_on + mm_switch_width,
+            gamma=GAMMA_OFF,
+        )
+        scales = handoff * taper
+    else:
+        mm_on = _sharpstep(
+            r,
+            mm_switch_on,
+            mm_switch_on + mm_switch_width,
+            gamma=GAMMA_ON,
+        )
+        mm_off = _sharpstep(
+            r,
+            mm_switch_on + mm_switch_width,
+            mm_switch_on + 2.0 * mm_switch_width,
+            gamma=GAMMA_OFF,
+        )
+        scales = mm_on * (1.0 - mm_off)
+    if mm_r_min is not None:
+        scales = jnp.where(r < float(mm_r_min), 0.0, scales)
+    return jnp.mean(scales)
 
 
 @dataclass(frozen=True)

@@ -561,10 +561,10 @@ def create_hybrid_fitting_factory(
                     ml_dimer_energies = ml_energy_raw_arr[n_monomers_val:]
                     # Calculate monomer contributions to dimers
                     dimer_perms = dimer_permutations(n_monomers_val)
-                    monomer_contrib_to_dimers = jnp.array([
-                        ml_monomer_energies[a] + ml_monomer_energies[b]
-                        for a, b in dimer_perms
-                    ])
+                    pair_idx = jnp.asarray(dimer_perms, dtype=jnp.int32)
+                    monomer_contrib_to_dimers = (
+                        ml_monomer_energies[pair_idx[:, 0]] + ml_monomer_energies[pair_idx[:, 1]]
+                    )
                     # Dimer interaction energies = dimer_energy - monomer_energy
                     dimer_interaction_energies = ml_dimer_energies - monomer_contrib_to_dimers
                     dimer_interaction_total = dimer_interaction_energies.sum()

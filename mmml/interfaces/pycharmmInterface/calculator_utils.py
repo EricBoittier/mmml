@@ -8,9 +8,11 @@ from typing import Any, List, NamedTuple, Optional, Sequence, Tuple
 import numpy as np
 
 try:
+    import jax
     import jax.numpy as jnp
     from jax import Array
 except ModuleNotFoundError:
+    jax = None  # type: ignore[assignment]
     jnp = None  # type: ignore[assignment]
     Array = Any  # type: ignore[misc,assignment]
 
@@ -67,6 +69,49 @@ def parse_non_int(s: str) -> str:
 def dimer_permutations(n_mol: int) -> List[Tuple[int, int]]:
     return list(combinations(range(n_mol), 2))
 
+
+def monomer_id_np_from_offsets(
+    monomer_offsets: np.ndarray | Array,
+    n_monomers: int | None = None,
+) -> np.ndarray:
+    """Per-atom monomer index (numpy, setup-time)."""
+    mo = np.asarray(monomer_offsets, dtype=np.int32).reshape(-1)
+    n = int(n_monomers) if n_monomers is not None else int(mo.shape[0] - 1)
+    ids = np.empty(int(mo[n]), dtype=np.int32)
+    for m in range(n):
+        ids[int(mo[m]) : int(mo[m + 1])] = m
+    return ids
+
+
+def monomer_coms_segment(
+    positions: Array,
+    monomer_id: Array,
+    n_monomers: int,
+    *,
+    masses: Array | None = None,
+) -> Array:
+    """Monomer COMs via ``segment_sum`` (JIT-safe; no Python loops over monomers)."""
+    n = int(n_monomers)
+    if masses is None:
+        weights = jnp.ones(positions.shape[0], dtype=positions.dtype)
+        counts = jax.ops.segment_sum(weights, monomer_id, num_segments=n)
+        coms = jax.ops.segment_sum(positions, monomer_id, num_segments=n)
+    else:
+        counts = jax.ops.segment_sum(masses, monomer_id, num_segments=n)
+        coms = jax.ops.segment_sum(positions * masses[:, None], monomer_id, num_segments=n)
+    return coms / jnp.maximum(counts[:, None], 1e-10)
+
+
+def dimer_pair_index_arrays(n_monomers: int) -> tuple[np.ndarray, np.ndarray]:
+    """Upper-triangle monomer pair indices as numpy ``(pair_i, pair_j)``."""
+    pairs = dimer_permutations(int(n_monomers))
+    if not pairs:
+        return (
+            np.zeros(0, dtype=np.int32),
+            np.zeros(0, dtype=np.int32),
+        )
+    pair_i, pair_j = zip(*pairs)
+    return np.asarray(pair_i, dtype=np.int32), np.asarray(pair_j, dtype=np.int32)
 
 # -----------------------------------------------------------------------------
 # JAX-native smooth switching utilities (avoid traced-python conditionals)
@@ -200,17 +245,17 @@ def _monomer_coms(
     *,
     monomer_offsets: Array,
     n_monomers: int,
-) -> list[Array]:
-    mo_np = np.asarray(monomer_offsets, dtype=np.int32)
-    coms: list[Array] = []
-    for m in range(int(n_monomers)):
-        s = int(mo_np[m])
-        e = int(mo_np[m + 1])
-        pos_m = positions[s:e]
-        mass_m = masses[s:e]
-        M_m = jnp.sum(mass_m)
-        coms.append(jnp.sum(pos_m * mass_m[:, None], axis=0) / M_m)
-    return coms
+) -> Array:
+    monomer_id = jnp.asarray(
+        monomer_id_np_from_offsets(np.asarray(monomer_offsets), n_monomers),
+        dtype=jnp.int32,
+    )
+    return monomer_coms_segment(
+        positions,
+        monomer_id,
+        int(n_monomers),
+        masses=masses,
+    )
 
 
 def apply_com_lower_wall(

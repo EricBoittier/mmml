@@ -1171,14 +1171,9 @@ def build_mm_energy_forces_fn(
             pair_dimer_idx_arg: Optional[Array] = None,
             box_override: Optional[Array] = None,
         ) -> Array:
-            mono_counts = jax.ops.segment_sum(
-                jnp.ones(positions.shape[0], dtype=positions.dtype),
-                _monomer_id_jnp,
-                num_segments=n_monomers,
-            )
-            coms = jax.ops.segment_sum(
-                positions, _monomer_id_jnp, num_segments=n_monomers
-            ) / jnp.maximum(mono_counts[:, None], 1e-10)
+            from mmml.interfaces.pycharmmInterface.calculator_utils import monomer_coms_segment
+
+            coms = monomer_coms_segment(positions, _monomer_id_jnp, n_monomers)
             com_i = coms[_dimer_perms_np[:, 0]]
             com_j = coms[_dimer_perms_np[:, 1]]
             cell_for_com = box_override if box_override is not None else pbc_cell
