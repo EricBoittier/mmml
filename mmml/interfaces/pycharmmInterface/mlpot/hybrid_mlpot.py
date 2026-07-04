@@ -163,6 +163,7 @@ class DecomposedMlpotCalculator:
         periodic_mm_config: Any | None = None,
         mm_pair_source: MmPairSource = _DEFAULT_MM_PAIR_SOURCE,
         mm_r_min: float | None = None,
+        mm_pair_capacity_hint: int | None = None,
     ) -> None:
         self.spherical_fn = spherical_fn
         self.cutoff_params = cutoff_params
@@ -188,6 +189,50 @@ class DecomposedMlpotCalculator:
         self._mm_pair_source: MmPairSource = str(mm_pair_source)  # type: ignore[assignment]
         self._mm_r_min = float(mm_r_min) if mm_r_min is not None else None
         self._callback_pair_warned = False
+        self._mm_pair_capacity: int | None = (
+            int(mm_pair_capacity_hint) if mm_pair_capacity_hint else None
+        )
+
+    def _mm_pair_pad_capacity(self) -> int:
+        cap = getattr(self, "_mm_pair_capacity", None)
+        return max(int(cap), 1) if cap is not None else 1
+
+    def _invalidate_forward_jit_cache(self) -> None:
+        owner = self._grad_cache_owner()
+        owner._spherical_forward_fn = None
+        owner._forward_cache_key = None
+
+    def _note_mm_pair_capacity(self, pair_idx: Any) -> None:
+        n = int(np.asarray(pair_idx).shape[0])
+        prev = getattr(self, "_mm_pair_capacity", None)
+        if prev is None or n > int(prev):
+            self._mm_pair_capacity = n
+            if prev is not None and n > int(prev):
+                self._invalidate_forward_jit_cache()
+
+    def _ensure_mm_pair_capacity_from_update_fn(
+        self,
+        pos: np.ndarray,
+        box: jnp.ndarray | None,
+    ) -> None:
+        """Seed stable pair-buffer capacity from JAX rebuild (matches warmup JIT shapes)."""
+        if getattr(self, "_mm_pair_capacity", None) is not None:
+            return
+        if not self.do_mm or self._get_update_fn is None:
+            return
+        update_fn = getattr(self, "_cached_update_fn", None)
+        if update_fn is None:
+            update_fn = self._get_update_fn(pos, self.cutoff_params, box=box)
+            self._cached_update_fn = update_fn
+        if update_fn is None:
+            return
+        box_np = _box_numpy_for_update(box)
+        if box_np is not None:
+            pair_idx, pair_mask = update_fn(pos, box=box_np)
+        else:
+            pair_idx, pair_mask = update_fn(pos)
+        if pair_idx is not None and pair_mask is not None:
+            self._note_mm_pair_capacity(pair_idx)
 
     def _grad_cache_owner(self) -> DecomposedMlpotCalculator | DecomposedMlpotModel:
         parent = getattr(self, "_parent_model", None)
@@ -388,6 +433,7 @@ class DecomposedMlpotCalculator:
                     "cannot evaluate switched MM without mm_pair_idx/mm_pair_mask."
                 )
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
+        self._note_mm_pair_capacity(mm_pair_idx)
         return jnp.asarray(mm_pair_idx), jnp.asarray(mm_pair_mask), True
 
     def _resolve_mm_pairs_from_callback(
@@ -421,6 +467,9 @@ class DecomposedMlpotCalculator:
                 )
                 self._callback_pair_warned = True
             return self._resolve_mm_pairs(pos, box)
+
+        self._ensure_mm_pair_capacity_from_update_fn(pos, box)
+        pad_capacity = self._mm_pair_pad_capacity()
 
         offsets = _monomer_offsets_from_atoms_per_monomer(self._atoms_per_monomer)
         mid = monomer_id_from_offsets(offsets, int(natom))
@@ -457,7 +506,11 @@ class DecomposedMlpotCalculator:
                 for pair in filtered
                 if float(np.linalg.norm(pos[pair[1]] - pos[pair[0]])) < cutoff
             }
-        pair_idx, pair_mask = callback_pairs_to_padded_arrays(mic_filtered)
+        pair_idx, pair_mask = callback_pairs_to_padded_arrays(
+            mic_filtered,
+            min_capacity=pad_capacity,
+        )
+        self._note_mm_pair_capacity(pair_idx)
         return jnp.asarray(pair_idx), jnp.asarray(pair_mask), True
 
     def _mlpot_eval_device_context(self):
@@ -773,6 +826,7 @@ class DecomposedMlpotModel:
         jax_pme_method: str | None = None,
         mm_pair_source: MmPairSource = _DEFAULT_MM_PAIR_SOURCE,
         mm_r_min: float | None = None,
+        mm_pair_capacity_hint: int | None = None,
     ) -> None:
         self._spherical_fn = spherical_fn
         self._cutoff_params = cutoff_params
@@ -812,6 +866,9 @@ class DecomposedMlpotModel:
         self._jax_pme_method = jax_pme_method
         self._mm_pair_source: MmPairSource = str(mm_pair_source)  # type: ignore[assignment]
         self._mm_r_min = float(mm_r_min) if mm_r_min is not None else None
+        self._mm_pair_capacity_hint = (
+            int(mm_pair_capacity_hint) if mm_pair_capacity_hint else None
+        )
         self._jax_pme_hybrid_first_ener_done = not self._defer_jax_pme_gpu_promote_initial()
 
     def _jax_pme_lr_active(self) -> bool:
@@ -1023,6 +1080,7 @@ class DecomposedMlpotModel:
             periodic_mm_config=self._periodic_mm_config,
             mm_pair_source=self._mm_pair_source,
             mm_r_min=self._mm_r_min,
+            mm_pair_capacity_hint=self._mm_pair_capacity_hint,
         )
         calc._parent_model = self
         self._registered_calculator = calc
@@ -1330,6 +1388,7 @@ def build_decomposed_mlpot_model(
             jax_pme_method=jax_pme_method,
             mm_pair_source=mm_pair_source,
             mm_r_min=mm_r_min_arg,
+            mm_pair_capacity_hint=max_pairs,
         )
     r0 = np.zeros((len(z), 3), dtype=np.float64)
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
@@ -1370,6 +1429,7 @@ def build_decomposed_mlpot_model(
         jax_pme_method=jax_pme_method,
         mm_pair_source=mm_pair_source,
         mm_r_min=mm_r_min_arg,
+        mm_pair_capacity_hint=max_pairs,
     )
     return model
 

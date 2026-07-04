@@ -111,6 +111,19 @@ def test_callback_mlmm_pairs_to_half_set_maps_primary_indices() -> None:
     assert pair_idx[0].tolist() == [0, 5]
 
 
+def test_callback_pairs_to_padded_arrays_honors_min_capacity() -> None:
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        callback_pairs_to_padded_arrays,
+    )
+
+    pairs = {(0, 5), (2, 7)}
+    pair_idx, pair_mask = callback_pairs_to_padded_arrays(pairs, min_capacity=100)
+    assert pair_idx.shape == (100, 2)
+    assert pair_mask.sum() == 2
+    assert pair_mask[:2].tolist() == [True, True]
+    assert not pair_mask[2:].any()
+
+
 def test_pbc_nbond_cutoffs_from_mlpot_switches_aligns_outer_radius() -> None:
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         mlpot_mm_nl_cutoff_A,
