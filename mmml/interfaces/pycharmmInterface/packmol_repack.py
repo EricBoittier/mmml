@@ -171,6 +171,7 @@ def _run_packmol_repack(
         if atomic_numbers is None:
             atomic_numbers = meta[1]
 
+    scratch_dir = Path(scratch_dir).expanduser().resolve()
     scratch_dir.mkdir(parents=True, exist_ok=True)
     structure_lines: list[str] = []
     output_order: list[int] = []
@@ -224,7 +225,7 @@ def _run_packmol_repack(
             resname=f"F{mi:03d}",
         )
         structure_lines.append(
-            f"structure {pdb_path}\n"
+            f"structure {pdb_path.resolve()}\n"
             f"  number 1\n"
             f"  fixed {float(com[0])} {float(com[1])} {float(com[2])} 0. 0. 0.\n"
             f"end structure"
@@ -252,7 +253,7 @@ def _run_packmol_repack(
             resname=f"M{mi0:03d}",
         )
         structure_lines.append(
-            f"structure {pdb_path}\n"
+            f"structure {pdb_path.resolve()}\n"
             f"  chain A\n"
             f"  resnumbers 2\n"
             f"  number {len(mi_list)}\n"
@@ -261,7 +262,7 @@ def _run_packmol_repack(
         )
         output_order.extend(int(i) for i in mi_list)
 
-    out_pdb = scratch_dir / "repack.pdb"
+    out_pdb = (scratch_dir / "repack.pdb").resolve()
     inp_path = scratch_dir / "repack.inp"
     randint = int(seed) if seed is not None else int(np.random.randint(1_000_000))
     packmol_input = (

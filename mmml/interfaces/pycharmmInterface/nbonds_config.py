@@ -695,7 +695,7 @@ def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     import pycharmm.nbonds as nbonds
 
     cfg = dict(kw)
-    cfg.pop("nbxmod", None)
+    nbxmod = cfg.pop("nbxmod", None)
     cutim = cfg.pop("cutim", None)
     inbfrq = cfg.pop("inbfrq", None)
     imgfrq = cfg.pop("imgfrq", None)
@@ -722,7 +722,12 @@ def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     if imgfrq is not None:
         nbonds.set_imgfrq(int(imgfrq))
     if rebuild:
-        nbonds.update_bnbnd()
+        if nbxmod is not None:
+            import pycharmm
+
+            pycharmm.UpdateNonBondedScript(nbxmod=int(nbxmod)).run()
+        else:
+            nbonds.update_bnbnd()
 
 
 def apply_nbonds_script_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:

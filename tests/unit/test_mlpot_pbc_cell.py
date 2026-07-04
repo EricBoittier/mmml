@@ -1534,6 +1534,19 @@ def test_charmm_has_vacuum_nbond_preset_detects_defaults():
         assert not charmm_has_vacuum_nbond_preset()
 
 
+def test_apply_nbonds_kwargs_uses_update_script_for_nbxmod():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
+
+    with patch("pycharmm.nbonds.configure"), patch(
+        "pycharmm.nbonds.update_bnbnd"
+    ) as rebuild, patch("pycharmm.UpdateNonBondedScript") as update_script:
+        update_script.return_value.run.return_value = None
+        apply_nbonds_kwargs({"cutnb": 12.0, "nbxmod": 5})
+    rebuild.assert_not_called()
+    update_script.assert_called_once_with(nbxmod=5)
+    update_script.return_value.run.assert_called_once()
+
+
 def test_calculator_wrapping_translation_invariance():
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
     from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters

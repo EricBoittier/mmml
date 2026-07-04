@@ -74,6 +74,60 @@ def test_packmol_selective_repack_writes_fixed_and_movable_blocks(tmp_path, monk
     assert out[0, 0] == pytest.approx(0.0)
 
 
+def test_packmol_repack_resolves_structure_paths_when_scratch_dir_relative(
+    tmp_path, monkeypatch
+):
+    """Packmol cwd is scratch_dir; relative structure paths double-resolve and fail."""
+    from mmml.interfaces.pycharmmInterface import packmol_repack
+
+    captured: dict[str, str] = {}
+    pos, offsets = _two_monomer_system()
+    z = np.array([6, 1, 6, 1], dtype=int)
+    rel_scratch = Path("packmol_repack_scratch")
+
+    def fake_execute(packmol_input: str, inp_path: Path) -> None:
+        captured["input"] = packmol_input
+        out = inp_path.parent / "repack.pdb"
+        out.write_text(
+            "\n".join(
+                [
+                    "ATOM      1  C   F000A   1       0.000   0.000   0.000  1.00  0.00           C",
+                    "ATOM      2  H1  F000A   1       1.000   0.000   0.000  1.00  0.00           H",
+                    "ATOM      3  C   M001A   2       5.000   0.000   0.000  1.00  0.00           C",
+                    "ATOM      4  H1  M001A   2       6.000   0.000   0.000  1.00  0.00           H",
+                    "END",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(packmol_repack, "execute_packmol_script", fake_execute)
+    monkeypatch.setattr(
+        packmol_repack,
+        "_charmm_atom_metadata",
+        lambda _n: (["C", "H1", "C", "H1"], z),
+    )
+
+    packmol_repack.repack_selected_monomers_clear_overlap(
+        pos,
+        offsets,
+        [1],
+        min_distance=1.5,
+        spacing=4.0,
+        seed=7,
+        cell=np.diag([10.0, 10.0, 10.0]),
+        scratch_dir=rel_scratch,
+        atomic_numbers=z,
+    )
+
+    resolved_scratch = (tmp_path / rel_scratch).resolve()
+    assert f"structure {resolved_scratch / 'fixed_0000.pdb'}" in captured["input"]
+    assert f"output {resolved_scratch / 'repack.pdb'}" in captured["input"]
+    assert "structure packmol_repack_scratch/" not in captured["input"]
+
+
 def test_read_packmol_monomer_coords_splits_sequential_atoms_not_residue_ids(tmp_path):
     from mmml.interfaces.pycharmmInterface.packmol_repack import (
         _read_packmol_monomer_coords,
