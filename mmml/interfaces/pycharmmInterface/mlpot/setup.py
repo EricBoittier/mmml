@@ -350,19 +350,92 @@ def _read_mlpot_user_energy_kcal(
     script = "ENER FORCE" if force else "ENER"
     with charmm_silent_command():
         pycharmm.lingo.charmm_script(script)
+    terms = _read_mlpot_charmm_energy_terms_kcal()
     try:
         value = float(energy.get_term_by_name("USER"))
     except (ValueError, IndexError, TypeError):
-        return None
+        value = float(terms.get("USER", 0.0))
     if not math.isfinite(value):
         return None
-    return value
+    if (
+        ctx is not None
+        and abs(float(value)) <= 1.0e-12
+        and _mlpot_ml_energy_missing_in_charmm(value, terms, zero_tol_kcalmol=1.0e-12)
+    ):
+        calc = getattr(ctx.mlpot, "calculator", None)
+        callback_user = getattr(calc, "_last_callback_user_return_kcal", None)
+        callback_hybrid = getattr(calc, "_last_callback_hybrid_energy_kcal", None)
+        if callback_user is not None and abs(float(callback_user)) > 1.0e-6:
+            sync_mlpot_fortran_registration(ctx, verbose=False)
+            with charmm_silent_command():
+                pycharmm.lingo.charmm_script(script)
+            terms = _read_mlpot_charmm_energy_terms_kcal()
+            try:
+                value = float(energy.get_term_by_name("USER"))
+            except (ValueError, IndexError, TypeError):
+                value = float(terms.get("USER", 0.0))
+            if (
+                abs(float(value)) <= 1.0e-12
+                and callback_hybrid is not None
+                and abs(float(callback_hybrid)) > 1.0e-6
+            ):
+                return _effective_mlpot_user_kcal(value, terms)
+    if _mlpot_ml_energy_missing_in_charmm(value, terms, zero_tol_kcalmol=1.0e-12):
+        return None
+    return _effective_mlpot_user_kcal(value, terms)
+
+
+_MLPOT_CHARMM_HYBRID_ETERM_KEYS: tuple[str, ...] = (
+    "USER",
+    "VDW",
+    "ELEC",
+    "IMNB",
+    "IMEL",
+)
 
 
 def _mlpot_user_missing(user: float | None, *, zero_tol_kcalmol: float) -> bool:
     import math
 
     return user is None or not math.isfinite(user) or abs(float(user)) <= zero_tol_kcalmol
+
+
+def _sum_mlpot_charmm_hybrid_energy_kcal(terms: dict[str, float]) -> float:
+    return float(
+        sum(float(terms.get(key, 0.0)) for key in _MLPOT_CHARMM_HYBRID_ETERM_KEYS)
+    )
+
+
+def _read_mlpot_charmm_energy_terms_kcal() -> dict[str, float]:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+
+    return dict(charmm_energy_row())
+
+
+def _mlpot_ml_energy_missing_in_charmm(
+    user: float | None,
+    terms: dict[str, float] | None,
+    *,
+    zero_tol_kcalmol: float,
+) -> bool:
+    """True when CHARMM ENER shows no MLpot hybrid energy in USER or routed eterm slots."""
+    if not _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol):
+        return False
+    if terms is None:
+        return True
+    hybrid_sum = _sum_mlpot_charmm_hybrid_energy_kcal(terms)
+    return abs(hybrid_sum) <= float(zero_tol_kcalmol)
+
+
+def _effective_mlpot_user_kcal(
+    user: float | None,
+    terms: dict[str, float] | None,
+) -> float:
+    if user is not None and np.isfinite(float(user)) and abs(float(user)) > 0.0:
+        return float(user)
+    if terms is None:
+        return 0.0
+    return _sum_mlpot_charmm_hybrid_energy_kcal(terms)
 
 
 def rebind_mlpot_calculator_from_pycmodel(
@@ -388,8 +461,13 @@ def rebind_mlpot_calculator_from_pycmodel(
 
     pycharmm = _import_pycharmm()
     calc = get_calc()
+    unset = getattr(mlpot, "unset_mlpot", None)
+    if callable(unset):
+        unset()
     mlpot.calculator = calc
     mlpot.energy_func = mlpot.func_type(calc.calculate_charmm)
+    # Keep calculator + CFUNCTYPE alive (Fortran only holds a raw function pointer).
+    mlpot._energy_func_keepalive = (calc, mlpot.energy_func)
     pycharmm.lib.charmm.mlpot_set_func(mlpot.energy_func)
     mlidx = (ctypes.c_int * mlpot.ml_Natoms)()
     mlidx[:] = mlpot.ml_indices + 1

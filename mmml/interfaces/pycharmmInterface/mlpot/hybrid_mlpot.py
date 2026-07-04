@@ -686,6 +686,7 @@ class DecomposedMlpotCalculator:
             dy[i] -= forces[i, 1]
             dz[i] -= forces[i, 2]
         if run_ml and use_mm_pairs:
+            hybrid_before_route = float(e_kcal)
             from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
                 decompose_and_route_mlpot_mm_from_callback,
             )
@@ -696,9 +697,13 @@ class DecomposedMlpotCalculator:
                 mm_pair_idx,
                 mm_pair_mask,
                 box,
-                float(e_kcal),
+                hybrid_before_route,
                 use_mm_pairs=bool(use_mm_pairs),
             )
+            self._last_callback_hybrid_energy_kcal = hybrid_before_route
+        else:
+            self._last_callback_hybrid_energy_kcal = float(e_kcal if run_ml else 0.0)
+        self._last_callback_user_return_kcal = float(e_kcal)
         return e_kcal
 
 

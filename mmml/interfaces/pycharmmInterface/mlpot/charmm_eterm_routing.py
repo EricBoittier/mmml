@@ -48,16 +48,28 @@ def route_mlpot_callback_energy_kcalmol(
 ) -> float:
     """Push MM buckets to CHARMM eterm slots; return USER energy (ML + LR not routed)."""
     mm_total = float(components.get("mm_total", 0.0))
-    push_mlpot_nb_components_to_charmm(
-        vdw_primary_kcal=float(components.get("vdw_primary", 0.0)),
-        vdw_image_kcal=float(components.get("vdw_image", 0.0)),
-        elec_primary_kcal=float(components.get("elec_primary", 0.0)),
-        elec_image_kcal=float(components.get("elec_image", 0.0)),
-        route=route,
-    )
-    if not route or not mlpot_route_mm_to_charmm_eterms_enabled():
-        return float(energy_kcal)
-    return float(energy_kcal) - mm_total
+    energy_kcal = float(energy_kcal)
+    do_route = bool(route and mlpot_route_mm_to_charmm_eterms_enabled())
+    user_kcal = energy_kcal - mm_total if do_route else energy_kcal
+    # When decomposition captures ~all hybrid energy as MM but CHARMM VDW/ELEC are
+    # blocked (all-ML BLOCK), routing would leave USER≈0 and discard ML from ENER.
+    if (
+        do_route
+        and abs(user_kcal) <= 1.0e-6
+        and abs(energy_kcal) > 1.0
+        and abs(mm_total) >= abs(energy_kcal) * 0.99
+    ):
+        do_route = False
+        user_kcal = energy_kcal
+    if do_route:
+        push_mlpot_nb_components_to_charmm(
+            vdw_primary_kcal=float(components.get("vdw_primary", 0.0)),
+            vdw_image_kcal=float(components.get("vdw_image", 0.0)),
+            elec_primary_kcal=float(components.get("elec_primary", 0.0)),
+            elec_image_kcal=float(components.get("elec_image", 0.0)),
+            route=True,
+        )
+    return float(user_kcal)
 
 
 def decompose_and_route_mlpot_mm_from_callback(
