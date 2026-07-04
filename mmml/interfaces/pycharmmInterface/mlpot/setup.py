@@ -194,24 +194,22 @@ class MlpotContext:
         """
         if self.ml_selection is None or self.ml_Z is None:
             raise RuntimeError("MlpotContext missing ml_selection or ml_Z for reregister")
+        if force:
+            unset = getattr(self.mlpot, "unset_mlpot", None)
+            if callable(unset):
+                unset()
+            elif hasattr(self.mlpot, "is_set"):
+                self.mlpot.is_set = False
         if reregister_params:
             self.block_tag = _apply_mlpot_psf_mm_off_and_pbc(self, verbose=verbose)
+        if rebind_mlpot_calculator_from_pycmodel(self, verbose=verbose):
+            return
         reattach = getattr(self.mlpot, "reattach_mlpot", None)
         if callable(reattach):
-            # Do not construct a new MLpot(): __init__ rebuilds iblo/inb via update_bnbnd
-            # (upinb), which segfaults after long MD. Re-enable the existing callback.
-            if force:
-                unset = getattr(self.mlpot, "unset_mlpot", None)
-                if callable(unset):
-                    unset()
-                elif hasattr(self.mlpot, "is_set"):
-                    self.mlpot.is_set = False
-            reattach()
-            rebind_mlpot_calculator_from_pycmodel(self, verbose=verbose)
+            # Fallback when pyCModel rebind is unavailable: reuse stored energy_func.
+            reattach(force=force)
             return
-
         self._reattach_mlpot_compat()
-        rebind_mlpot_calculator_from_pycmodel(self, verbose=verbose)
 
     def _reattach_mlpot_compat(self) -> None:
         """Compatibility path for PyCHARMM MLpot builds without ``reattach_mlpot``."""
@@ -238,7 +236,106 @@ class MlpotContext:
             self.mlpot.is_set = True
 
 
-def _read_mlpot_user_energy_kcal(*, force: bool = True) -> float | None:
+def _fortran_mlpot_callback_active() -> bool | None:
+    """Return Fortran ``mlpot_is_set()`` when ``image_get_iminb_stats`` is available."""
+    try:
+        import pycharmm.image as image
+
+        stats = image.get_iminb_stats()
+        if stats is not None:
+            return bool(stats.get("mlpot_active"))
+    except Exception:
+        pass
+    return None
+
+
+def _probe_mlpot_hybrid_energy_kcal(ctx: MlpotContext) -> float | None:
+    """Best-effort hybrid ML energy (kcal/mol) via JAX, bypassing CHARMM ENER."""
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_positions_angstrom,
+            mlpot_spherical_energy_forces_ev_angstrom,
+        )
+        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+        pyCModel = ctx.pyCModel
+        if pyCModel is None:
+            return None
+        pos = charmm_positions_angstrom()
+        use_pbc = bool(getattr(ctx, "use_pbc", False))
+        box_A = getattr(ctx, "cubic_box_side_A", None)
+        if box_A is None:
+            box_A = getattr(ctx, "charmm_cubic_box_side_A", None)
+        out = mlpot_spherical_energy_forces_ev_angstrom(
+            pyCModel,
+            positions=pos,
+            use_pbc=use_pbc,
+            box_A=float(box_A) if box_A is not None else None,
+        )
+        if out is None:
+            return None
+        energy_ev, _forces = out
+        if not np.isfinite(float(energy_ev)):
+            return None
+        return float(energy_ev) * float(ev2kcalmol)
+    except Exception:
+        return None
+
+
+def _mlpot_user_registration_diag(ctx: MlpotContext) -> str:
+    """Summarize Python/Fortran MLpot registration vs JAX hybrid energy."""
+    parts: list[str] = []
+    py_set = getattr(ctx.mlpot, "is_set", None)
+    if py_set is not None:
+        parts.append(f"python is_set={bool(py_set)}")
+    fortran = _fortran_mlpot_callback_active()
+    if fortran is not None:
+        parts.append(f"Fortran mlpot_is_set={fortran}")
+    hybrid_e = _probe_mlpot_hybrid_energy_kcal(ctx)
+    if hybrid_e is not None and np.isfinite(hybrid_e):
+        parts.append(f"JAX hybrid E={hybrid_e:.2f} kcal/mol")
+        try:
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                mlpot_hybrid_grms_from_calculator,
+            )
+
+            grms = mlpot_hybrid_grms_from_calculator(ctx)
+            if grms is not None and np.isfinite(grms):
+                parts.append(f"JAX hybrid GRMS={float(grms):.2f} kcal/mol/Å")
+        except Exception:
+            pass
+    return "; ".join(parts)
+
+
+def sync_mlpot_fortran_registration(
+    ctx: MlpotContext,
+    *,
+    verbose: bool = False,
+) -> bool:
+    """Ensure Fortran ``mlpot_set_func`` matches the current pyCModel calculator."""
+    if not rebind_mlpot_calculator_from_pycmodel(ctx, verbose=verbose):
+        return False
+    fortran = _fortran_mlpot_callback_active()
+    py_set = bool(getattr(ctx.mlpot, "is_set", False))
+    if fortran is False and py_set:
+        if verbose:
+            print(
+                "WARN: MLpot Python is_set=True but Fortran mlpot_is_set=False; "
+                "forcing mlpot_unset + callback rebind",
+                flush=True,
+            )
+        unset = getattr(ctx.mlpot, "unset_mlpot", None)
+        if callable(unset):
+            unset()
+        return rebind_mlpot_calculator_from_pycmodel(ctx, verbose=verbose)
+    return True
+
+
+def _read_mlpot_user_energy_kcal(
+    *,
+    force: bool = True,
+    ctx: MlpotContext | None = None,
+) -> float | None:
     """Read CHARMM USER energy (kcal/mol) after ``ENER`` or ``ENER FORCE``."""
     import math
 
@@ -248,6 +345,8 @@ def _read_mlpot_user_energy_kcal(*, force: bool = True) -> float | None:
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
+    if ctx is not None:
+        sync_mlpot_fortran_registration(ctx, verbose=False)
     script = "ENER FORCE" if force else "ENER"
     with charmm_silent_command():
         pycharmm.lingo.charmm_script(script)
@@ -428,7 +527,7 @@ def assert_mlpot_user_active(
     BLOCK, so a missing USER term leaves dynamics integrating a free gas.
     """
     if mlpot_defer_charmm_hybrid_ener(ctx):
-        rebind_mlpot_calculator_from_pycmodel(ctx, verbose=False)
+        sync_mlpot_fortran_registration(ctx, verbose=False)
         if not quiet:
             print(
                 f"{context}: deferring USER ENER probe until MLpot SD JAX materialize "
@@ -436,18 +535,28 @@ def assert_mlpot_user_active(
                 flush=True,
             )
         return 0.0
-    rebind_mlpot_calculator_from_pycmodel(ctx, verbose=not quiet)
-    user = _read_mlpot_user_energy_kcal(force=True)
+    sync_mlpot_fortran_registration(ctx, verbose=not quiet)
+    user = _read_mlpot_user_energy_kcal(force=True, ctx=ctx)
     missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
-    is_set = getattr(ctx.mlpot, "is_set", True)
-    if missing or is_set is False:
+    if missing:
         if not quiet:
             print(
-                f"WARN: MLpot USER term missing before {context}; attempting reattach",
+                f"WARN: MLpot USER term missing before {context}; "
+                "forcing mlpot_unset + callback rebind",
+                flush=True,
+            )
+        ctx.reregister_mlpot(force=True, reregister_params=False)
+        user = _read_mlpot_user_energy_kcal(force=True, ctx=ctx)
+        missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
+    if missing:
+        if not quiet:
+            print(
+                f"WARN: MLpot USER still missing before {context}; "
+                "rebuilding PBC lists + callback rebind",
                 flush=True,
             )
         ctx.reregister_mlpot(force=True, reregister_params=True)
-        user = _read_mlpot_user_energy_kcal(force=True)
+        user = _read_mlpot_user_energy_kcal(force=True, ctx=ctx)
         missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
     if missing:
         from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -466,14 +575,26 @@ def assert_mlpot_user_active(
             silent_charmm=True,
             verbose=not quiet,
         )
-        rebind_mlpot_calculator_from_pycmodel(ctx, verbose=not quiet)
-        user = _read_mlpot_user_energy_kcal(force=True)
+        sync_mlpot_fortran_registration(ctx, verbose=not quiet)
+        user = _read_mlpot_user_energy_kcal(force=True, ctx=ctx)
         missing = _mlpot_user_missing(user, zero_tol_kcalmol=zero_tol_kcalmol)
 
     if missing:
-        raise RuntimeError(
-            f"MLpot USER term is zero/missing before {context}; refusing to run dynamics"
+        diag = _mlpot_user_registration_diag(ctx)
+        msg = (
+            f"MLpot USER term is zero/missing before {context}; "
+            "refusing to run dynamics"
         )
+        if diag:
+            msg = f"{msg} ({diag})"
+        hybrid_e = _probe_mlpot_hybrid_energy_kcal(ctx)
+        if hybrid_e is not None and abs(float(hybrid_e)) > float(zero_tol_kcalmol):
+            msg = (
+                f"{msg}. JAX hybrid energy is active but CHARMM USER is not — "
+                "the MLpot ctypes callback is not wired into ENER (check "
+                "mlpot_set_func / mpirun launcher / PBC list rebuild order)"
+            )
+        raise RuntimeError(msg)
     if not quiet:
         from mmml.data.units import format_energy_kcal_ev
         from mmml.utils.rich_report import emit_tagged

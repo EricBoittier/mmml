@@ -618,7 +618,28 @@ def test_reregister_mlpot_default_reattach_only():
         ctx.reregister_mlpot()
 
     apply_block.assert_not_called()
-    mlpot.reattach_mlpot.assert_called_once_with()
+    mlpot.reattach_mlpot.assert_called_once_with(force=False)
+
+
+def test_reregister_mlpot_prefers_rebind_when_available():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    mlpot = MagicMock()
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1], dtype=int),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        return_value=True,
+    ) as rebind:
+        ctx.reregister_mlpot()
+    rebind.assert_called_once()
+    mlpot.reattach_mlpot.assert_not_called()
 
 
 def test_reregister_mlpot_applies_params_when_requested():
@@ -645,7 +666,7 @@ def test_reregister_mlpot_applies_params_when_requested():
         ctx.reregister_mlpot(reregister_params=True)
 
     apply_block.assert_called_once_with(ctx, verbose=False)
-    mlpot.reattach_mlpot.assert_called_once_with()
+    mlpot.reattach_mlpot.assert_called_once_with(force=False)
 
 
 def test_reregister_mlpot_skips_param_read_when_reregister_params_false():
@@ -671,7 +692,7 @@ def test_reregister_mlpot_skips_param_read_when_reregister_params_false():
         ctx.reregister_mlpot(reregister_params=False)
 
     apply_block.assert_not_called()
-    mlpot.reattach_mlpot.assert_called_once_with()
+    mlpot.reattach_mlpot.assert_called_once_with(force=False)
 
 
 def test_reregister_after_topology_reload_skips_upinb_rebuild():
@@ -745,7 +766,7 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
-    ctx.mlpot.reattach_mlpot.assert_called_once()
+    ctx.mlpot.reattach_mlpot.assert_called_once_with(force=True)
     ctx.mlpot.unset_mlpot.assert_called_once()
     assert user == pytest.approx(-123.4)
 
@@ -821,7 +842,7 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     mock_energy = types.ModuleType("pycharmm.energy")
     mock_energy.get_term_by_name = MagicMock(side_effect=[0.0, -123.4])
 
-    def _reattach() -> None:
+    def _reattach(*, force: bool = False) -> None:
         mlpot.is_set = True
 
     mlpot.unset_mlpot = MagicMock()
@@ -843,10 +864,70 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     ):
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
-    ctx.mlpot.reattach_mlpot.assert_called_once()
+    ctx.mlpot.reattach_mlpot.assert_called_once_with(force=True)
     ctx.mlpot.unset_mlpot.assert_called_once()
     assert mlpot.is_set is True
     assert user == pytest.approx(-123.4)
+
+
+def test_sync_mlpot_fortran_registration_unsets_when_fortran_inactive():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        sync_mlpot_fortran_registration,
+    )
+
+    mlpot = MagicMock()
+    mlpot.is_set = True
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1], dtype=int),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.rebind_mlpot_calculator_from_pycmodel",
+        side_effect=[True, True],
+    ) as rebind, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
+        side_effect=[False, True],
+    ):
+        ok = sync_mlpot_fortran_registration(ctx, verbose=False)
+    assert ok is True
+    mlpot.unset_mlpot.assert_called_once()
+    assert rebind.call_count == 2
+
+
+def test_assert_mlpot_user_active_error_includes_jax_hybrid_diag():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        assert_mlpot_user_active,
+    )
+
+    ctx = MlpotContext(
+        mlpot=MagicMock(is_set=True),
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1], dtype=int),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        return_value=0.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._probe_mlpot_hybrid_energy_kcal",
+        return_value=-50000.0,
+    ), patch.object(ctx, "reregister_mlpot"), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
+        return_value=1081.0,
+    ):
+        with pytest.raises(RuntimeError, match="JAX hybrid energy is active but CHARMM USER"):
+            assert_mlpot_user_active(ctx, context="test", quiet=True)
 
 
 def test_restore_workflow_nbonds_skips_nbond_rebuild():

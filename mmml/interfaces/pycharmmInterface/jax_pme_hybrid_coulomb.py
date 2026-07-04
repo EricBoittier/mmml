@@ -414,8 +414,8 @@ def _com_switch_value_and_grad(
         complementary_handoff=complementary_handoff,
         mm_r_min=mm_r_min,
     )
-    pos_j = jnp.asarray(positions_A, dtype=jnp.float64)
-    cell_j = jnp.asarray(pbc_cell, dtype=jnp.float64)
+    pos_j = jnp.asarray(positions_A, dtype=jnp.float32)
+    cell_j = jnp.asarray(pbc_cell, dtype=jnp.float32)
     switch_scale, grad_s = _cached_com_switch_value_and_grad_fn(key)(pos_j, cell_j)
     jax.block_until_ready(switch_scale)
     jax.block_until_ready(grad_s)

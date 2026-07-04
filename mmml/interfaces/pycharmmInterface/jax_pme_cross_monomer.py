@@ -473,9 +473,9 @@ class _CrossMonomerHostEvaluator:
         t0 = time.perf_counter() if _profile_enabled() else None
         with host_ctx():
             energy, forces = energy_forces(
-                jnp.asarray(positions_j, dtype=jnp.float64),
-                jnp.asarray(charges, dtype=jnp.float64),
-                jnp.asarray(cell_j, dtype=jnp.float64),
+                jnp.asarray(positions_j, dtype=jnp.float32),
+                jnp.asarray(charges, dtype=jnp.float32),
+                jnp.asarray(cell_j, dtype=jnp.float32),
                 jnp.asarray(i, dtype=jnp.int32),
                 jnp.asarray(j, dtype=jnp.int32),
                 jnp.asarray(cell_shifts, dtype=jnp.int32),
