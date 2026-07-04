@@ -55,10 +55,10 @@ module api_func
   procedure(callback), pointer :: user_func
   procedure(callback_mlpot), pointer :: user_mlpot
 
-  real(c_double), save :: mlpot_e_vdw = 0.d0
-  real(c_double), save :: mlpot_e_elec = 0.d0
-  real(c_double), save :: mlpot_e_imvdw = 0.d0
-  real(c_double), save :: mlpot_e_imel = 0.d0
+  double precision, save :: mlpot_e_vdw = 0.d0
+  double precision, save :: mlpot_e_elec = 0.d0
+  double precision, save :: mlpot_e_imvdw = 0.d0
+  double precision, save :: mlpot_e_imel = 0.d0
   logical, save :: mlpot_route_nb_eterms = .false.
 
   public :: func_set, func_call, func_is_set, func_unset,       &
@@ -389,10 +389,10 @@ contains
     implicit none
     real(c_double), value :: e_vdw, e_elec, e_imvdw, e_imel
     integer(c_int), value :: route_eterms
-    mlpot_e_vdw = e_vdw
-    mlpot_e_elec = e_elec
-    mlpot_e_imvdw = e_imvdw
-    mlpot_e_imel = e_imel
+    mlpot_e_vdw = dble(e_vdw)
+    mlpot_e_elec = dble(e_elec)
+    mlpot_e_imvdw = dble(e_imvdw)
+    mlpot_e_imel = dble(e_imel)
     mlpot_route_nb_eterms = (route_eterms /= 0)
   end subroutine mlpot_set_nb_components
 
