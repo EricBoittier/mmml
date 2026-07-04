@@ -98,19 +98,6 @@ print(int(warmup_mlpot_enabled(cfg)))
 
 if [[ "$WARMUP_ENABLED" == "1" ]]; then
   echo "=== warmup-mlpot-jax (serial, before CHARMM MLpot) ==="
-  # Match deferred MPI path: registration/materialize compile on CPU until SD.
-  _warmup_cpu="$("$PY" -c "
-from mmml.interfaces.pycharmmInterface.charmm_mpi import (
-    charmm_lib_links_mpi,
-    defer_jax_warmup_until_after_mlpot_sd,
-)
-print(int(charmm_lib_links_mpi() and defer_jax_warmup_until_after_mlpot_sd()))
-")"
-  if [[ "$_warmup_cpu" == "1" ]]; then
-    export MMML_MLPOT_DEVICE=cpu
-    export JAX_PLATFORMS=cpu
-    echo "warmup: MMML_MLPOT_DEVICE=cpu JAX_PLATFORMS=cpu (MPI defer path cache)"
-  fi
   # Slurm/srun exports PMI env; ML-only warmup must not MPI_Init libcharmm at import time.
   while IFS= read -r _var; do
     [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true

@@ -21,7 +21,7 @@ def _tier2_patches(**overrides):
         "spatial_mpi_enabled": True,
         "mlpot_jax_device_name": "gpu",
         "mlpot_local_gpu_count": 1,
-        "defer_jax_warmup_until_after_mlpot_sd": True,
+        "defer_jax_warmup_until_after_mlpot_sd": False,
     }
     defaults.update(overrides)
     patches = [

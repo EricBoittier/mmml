@@ -170,7 +170,7 @@ MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh md-system \
 | `MMML_NO_MPI_RERUN` | off | Disable auto re-exec under mpirun |
 | `MMML_MPIRUN` | auto | Override `mpirun` path |
 | `MMML_CHARMM_OMP_THREADS` | `1` | Pin CHARMM OpenMP threads; set via `mmml md-system --charmm-omp-threads N` or YAML `charmm_omp_threads: N`. When explicit, MMML also uses `N` as the default MKL/OpenBLAS/NumExpr/JAX compile thread budget unless those env vars are already exported. |
-| `MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD` | on (MPI) | JAX after MLpot SD |
+| `MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD` | off | Opt-in: defer JAX until after MLpot SD (legacy) |
 | `MMML_MLPOT_RANK0_BRIDGE` | `1` | Rank 0 runs MLpot when `np>1` |
 
 ### CHARMM rebuild notes
@@ -291,7 +291,7 @@ MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 ./scripts/mmml-charmm-mpirun.sh mpi-check
 | Issue | Symptom | Mitigation |
 |-------|---------|------------|
 | Serial `python` with MPI-linked `libcharmm.so` | May segfault in `upinb` / `send_coord_to_recip` (stack-dependent) | `./scripts/mmml-charmm-mpirun.sh`; run `08_serial_vs_mpirun` on new nodes |
-| JAX GPU warmup before MLpot SD | MPI pool corruption / hang | `defer_jax_warmup` (default on MPI builds via launcher) |
+| JAX GPU warmup before MLpot SD | Rare on current builds | Default: immediate GPU warmup; opt-in defer via `MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1` |
 | `OMP_NUM_THREADS > 1` with MPI CHARMM | NL races / crashes | `MMML_CHARMM_OMP_THREADS=1` (launcher pins) |
 | `np>1` + `--ml-gpu-count > 1` | GPU oversubscription / OOM | `--ml-gpu-count 1` + `MMML_MPI_PIN_GPU_PER_RANK=1` |
 | `np>1` without `--ml-spatial-mpi` | Correct but no ML speedup (rank-0 bridge) | Set `MMML_MLPOT_SPATIAL_MPI=1` and pass `--ml-spatial-mpi` |

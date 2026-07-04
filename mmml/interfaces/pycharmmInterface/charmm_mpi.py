@@ -2539,20 +2539,15 @@ def _repo_root_hint() -> Path:
 
 
 def defer_jax_warmup_until_after_mlpot_sd() -> bool:
-    """Defer JAX GPU warmup until after CHARMM MLpot SD on MPI-linked builds.
+    """Opt-in: defer JAX GPU warmup until after CHARMM MLpot SD.
 
-    JAX/CUDA activity before the first ``gete`` in MLpot SD can corrupt OpenMPI
-    registered-memory pools; the next CHARMM energy eval then segfaults in
-    ``send_coord_to_recip`` / ``PMPI_Free_mem`` even after ``domdec off``.
-    MM pretreat (no JAX) succeeds on the same system.
+    Default is **off** (GPU warmup runs right after MLpot registration).  Set
+    ``MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1`` only when debugging legacy MPI/JAX
+    pool issues on a specific cluster build.
     """
     if _truthy("MMML_NO_DEFER_JAX_WARMUP"):
         return False
-    if _truthy("MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD"):
-        return True
-    # Defer on any MPI-linked libcharmm build, not only when launched under mpirun.
-    # Serial ``python`` + MPI-linked CHARMM is a common segfault path during MLpot SD.
-    return charmm_lib_links_mpi()
+    return _truthy("MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD")
 
 
 def maybe_rerun_mmml_under_mpirun(

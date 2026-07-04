@@ -122,16 +122,11 @@ def validate_tier2_spatial_mpi_env(
             f"OMP_NUM_THREADS={omp}; MPI-linked CHARMM expects 1 (see MMML_CHARMM_OMP_THREADS)"
         )
 
-    if report.charmm_links_mpi and not report.defer_jax_warmup and report.mlpot_device == "gpu":
-        if report.under_mpirun:
-            report.warnings.append(
-                "JAX GPU warmup may run before MLpot SD; prefer mmml-charmm-mpirun.sh "
-                "(defer_jax_warmup default on MPI builds)"
-            )
-        else:
-            report.warnings.append(
-                "Defer JAX until after MLpot SD applies under mpirun (launcher sets this)"
-            )
+    if report.charmm_links_mpi and report.defer_jax_warmup:
+        report.warnings.append(
+            "MMML_DEFER_JAX_WARMUP_UNTIL_AFTER_SD=1: JAX GPU warmup deferred until after "
+            "MLpot SD (legacy/debug; default is immediate GPU warmup after registration)"
+        )
 
     if os.environ.get("MMML_MLPOT_RANK0_BRIDGE", "1").strip().lower() in ("0", "false"):
         if report.spatial_mpi_enabled and report.mpi_size > 1:
