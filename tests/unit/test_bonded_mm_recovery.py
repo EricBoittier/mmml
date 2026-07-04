@@ -747,26 +747,22 @@ def test_assert_mlpot_user_active_reattaches_when_user_missing():
     mock_py.settings = mock_settings
     mock_energy = types.ModuleType("pycharmm.energy")
     mock_energy.get_term_by_name = MagicMock()
-    mock_energy.get_term_by_name.side_effect = [0.0, -123.4, -123.4]
+    mock_energy.get_term_by_name.side_effect = [0.0, 0.0, -123.4, -123.4]
     mlpot.unset_mlpot = MagicMock()
-    with patch.dict(
-        sys.modules,
-        {
-            "pycharmm": mock_py,
-            "pycharmm.energy": mock_energy,
-            "pycharmm.settings": mock_settings,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
-        },
-    ), patch(
+    with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
         return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        side_effect=[None, -123.4],
     ), patch.object(
         ctx,
         "reregister_mlpot",
-    ):
+        MagicMock(),
+    ) as reregister_mock:
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
-    ctx.reregister_mlpot.assert_called_once_with(force=True, reregister_params=False)
+    reregister_mock.assert_called_once_with(force=True, reregister_params=False)
     assert user == pytest.approx(-123.4)
 
 
@@ -841,32 +837,27 @@ def test_assert_mlpot_user_active_forces_stale_python_is_set():
     mock_settings.set_bomb_level.return_value = 0
     mock_py.settings = mock_settings
     mock_energy = types.ModuleType("pycharmm.energy")
-    mock_energy.get_term_by_name = MagicMock(side_effect=[0.0, -123.4, -123.4])
+    mock_energy.get_term_by_name = MagicMock(side_effect=[0.0, 0.0, -123.4, -123.4])
 
-    def _reattach(*, force: bool = False) -> None:
+    def _reattach(*, force: bool = False, reregister_params: bool = False) -> None:
         mlpot.is_set = True
 
     mlpot.unset_mlpot = MagicMock()
     mlpot.reattach_mlpot.side_effect = _reattach
-    with patch.dict(
-        sys.modules,
-        {
-            "pycharmm": mock_py,
-            "pycharmm.energy": mock_energy,
-            "pycharmm.settings": mock_settings,
-            "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
-        },
-    ), patch(
+    with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
         return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        side_effect=[None, -123.4],
     ), patch.object(
         ctx,
         "reregister_mlpot",
-        side_effect=_reattach,
-    ):
+        MagicMock(side_effect=_reattach),
+    ) as reregister_mock:
         user = assert_mlpot_user_active(ctx, context="test", quiet=True)
 
-    ctx.reregister_mlpot.assert_called_once_with(force=True, reregister_params=False)
+    reregister_mock.assert_called_once_with(force=True, reregister_params=False)
     assert mlpot.is_set is True
     assert user == pytest.approx(-123.4)
 

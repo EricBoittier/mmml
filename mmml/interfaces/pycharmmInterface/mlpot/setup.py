@@ -438,13 +438,11 @@ def _read_mlpot_charmm_energy_terms_kcal() -> dict[str, float]:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.energy as energy
 
-        terms: dict[str, float] = {}
-        for key in _MLPOT_CHARMM_HYBRID_ETERM_KEYS:
-            try:
-                terms[key] = float(energy.get_term_by_name(key))
-            except (ValueError, IndexError, TypeError, AttributeError):
-                terms[key] = 0.0
-        return terms
+        try:
+            user = float(energy.get_term_by_name("USER"))
+        except (ValueError, IndexError, TypeError, AttributeError):
+            user = 0.0
+        return {"USER": user}
 
 
 def _mlpot_ml_energy_missing_in_charmm(
