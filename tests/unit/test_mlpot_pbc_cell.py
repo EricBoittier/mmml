@@ -1347,11 +1347,52 @@ def test_apply_nbonds_kwargs_can_defer_rebuild():
     ) as rebuild:
         apply_nbonds_kwargs({"cutnb": 12.0, "ctonnb": 10.0, "ctofnb": 11.0}, rebuild=False)
     assert [list(c.kwargs.keys()) for c in configure.call_args_list] == [
-        ["cutnb"],
-        ["ctofnb"],
         ["ctonnb"],
+        ["ctofnb"],
+        ["cutnb"],
     ]
     rebuild.assert_not_called()
+
+
+def test_charmm_nbond_cutoffs_orderly():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import charmm_nbond_cutoffs_orderly
+
+    assert charmm_nbond_cutoffs_orderly(13.0, 9.0, 12.28)
+    assert not charmm_nbond_cutoffs_orderly(13.0, 13.0, 17.0)
+
+
+def test_apply_switch_nbond_cutoffs_before_cutnb():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        apply_switch_nbond_cutoffs_before_cutnb,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_kwargs"
+    ) as apply_kw:
+        apply_switch_nbond_cutoffs_before_cutnb(9.0, 12.28, rebuild=False)
+    apply_kw.assert_called_once_with(
+        {"ctonnb": 9.0, "ctofnb": 12.28},
+        rebuild=False,
+    )
+
+
+def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        pbc_nbond_cutoffs_from_mlpot_switches,
+    )
+
+    cuts = pbc_nbond_cutoffs_from_mlpot_switches(
+        38.0,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
+    )
+    assert cuts.cutnb == pytest.approx(DEFAULT_MM_SWITCH_ON + DEFAULT_MM_SWITCH_WIDTH)
+    assert cuts.ctonnb < cuts.ctofnb < cuts.cutnb
+    assert cuts.cutnb < 0.5 * 38.0
 
 
 def test_calculator_wrapping_translation_invariance():

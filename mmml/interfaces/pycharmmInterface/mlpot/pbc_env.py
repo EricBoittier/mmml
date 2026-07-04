@@ -622,6 +622,16 @@ def prepare_charmm_pbc(cubic_box_side_A: float) -> None:
             mm_switch_on=DEFAULT_MM_SWITCH_ON,
             mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
         )
+        # domdec builds set cutnb=crystal build cutoff before switch radii are lowered.
+        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+            apply_switch_nbond_cutoffs_before_cutnb,
+        )
+
+        apply_switch_nbond_cutoffs_before_cutnb(
+            cuts.ctonnb,
+            cuts.ctofnb,
+            rebuild=False,
+        )
         build_cut = min(
             float(cuts.cutnb),
             max(L / 2.0 - PBC_NBOND_BOX_MARGIN_A, 6.0),
@@ -686,6 +696,57 @@ def apply_pbc_nbonds(
     from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 
     apply_nbonds_kwargs(cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod), rebuild=rebuild)
+    return cuts
+
+
+def reassert_pbc_nbond_cutoffs(
+    cubic_box_side_A: float,
+    *,
+    mm_switch_on: float | None = None,
+    mm_switch_width: float | None = None,
+    rebuild: bool = False,
+    context: str = "PBC nbonds",
+) -> PbcNbondCutoffs:
+    """Re-apply capped PBC cutoffs after ``READ PARAM`` / ``UPDATE`` may reset defaults.
+
+    ``GTNBCT`` during parameter reads restores vacuum ``cutnb=18`` etc.; domdec
+    ``crystal.build`` can assign ``cutnb`` before switch radii are lowered.  Call
+    after image registration ``UPDATE`` and before hybrid ``ENER``.
+    """
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        charmm_nbond_cutoffs_orderly,
+        read_charmm_switch_cutoffs,
+    )
+
+    cuts = apply_pbc_nbonds(
+        cubic_box_side_A=float(cubic_box_side_A),
+        rebuild=rebuild,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+    )
+    ctonnb, ctofnb = read_charmm_switch_cutoffs()
+    if not charmm_nbond_cutoffs_orderly(cuts.cutnb, ctonnb, ctofnb):
+        print(
+            f"{context}: CHARMM switch cutoffs out of order after reapply "
+            f"(cutnb={cuts.cutnb:.2f}, ctonnb={ctonnb:.2f}, ctofnb={ctofnb:.2f}); "
+            "retrying switch-first apply",
+            flush=True,
+        )
+        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+            apply_switch_nbond_cutoffs_before_cutnb,
+        )
+
+        apply_switch_nbond_cutoffs_before_cutnb(
+            cuts.ctonnb,
+            cuts.ctofnb,
+            rebuild=False,
+        )
+        apply_pbc_nbonds(
+            cubic_box_side_A=float(cubic_box_side_A),
+            rebuild=rebuild,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+        )
     return cuts
 
 
@@ -856,7 +917,7 @@ __all__ = [
     "get_charmm_cubic_box_side_A",
     "push_charmm_cubic_box_side_A",
     "pbc_nbond_cutoffs",
-    "prepare_charmm_pbc",
+    "reassert_pbc_nbond_cutoffs",
     "reinstall_charmm_crystal_for_lattice_abnr",
     "restore_charmm_cubic_crystal_lattice",
     "setup_charmm_environment",

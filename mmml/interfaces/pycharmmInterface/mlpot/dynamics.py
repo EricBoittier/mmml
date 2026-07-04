@@ -5280,12 +5280,15 @@ def _prepare_overlap_chunk_after_restart(
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
-    from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        apply_nbonds_script_kwargs,
+        vacuum_nbond_kwargs,
+    )
 
     pycharmm = _import_pycharmm_modules()[0]
     with charmm_relaxed_bomlev():
         pycharmm.nbonds.update_bnbnd()
-        pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+        apply_nbonds_script_kwargs(vacuum_nbond_kwargs(nbxmod=5), rebuild=True)
         pycharmm.lingo.charmm_script("ENER")
         pycharmm.lingo.charmm_script("UPDATE")
 

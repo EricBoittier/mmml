@@ -165,10 +165,12 @@ def _reload_prm_overlay(
         )
     else:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        import pycharmm
-        from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
+        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+            apply_nbonds_script_kwargs,
+            vacuum_nbond_kwargs,
+        )
 
-        pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+        apply_nbonds_script_kwargs(vacuum_nbond_kwargs(nbxmod=5), rebuild=True)
 
 
 def _run_silent_ener() -> None:

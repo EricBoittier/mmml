@@ -927,14 +927,21 @@ def setup_default_nbonds(*, nbxmod: int = 5) -> None:
     apply_vacuum_nbonds(nbxmod=nbxmod)
 
 
-def refresh_nbonds_after_mlpot(*, nbxmod: int = 5) -> None:
+def refresh_nbonds_after_mlpot(*, nbxmod: int = 5, use_pbc: bool = False, cubic_box_side_A: float | None = None) -> None:
     """Rebuild nonbond lists after :class:`pycharmm.MLpot` changes exclusions."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
+    if use_pbc and cubic_box_side_A is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import reassert_pbc_nbond_cutoffs
 
-    prepare_charmm_vacuum()
-    pycharmm = _import_pycharmm()
-    pycharmm.nbonds.update_bnbnd()
-    pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
+        reassert_pbc_nbond_cutoffs(
+            float(cubic_box_side_A),
+            rebuild=True,
+            context="refresh_nbonds_after_mlpot",
+        )
+        return
+
+    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_vacuum_nbonds
+
+    apply_vacuum_nbonds(nbxmod=nbxmod)
 
 
 DEFAULT_WORKFLOW_NBXMOD = 5
@@ -960,7 +967,12 @@ def _is_all_ml_pbc_context(ctx: MlpotContext) -> bool:
 
 def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -> None:
     """Temporary nonbond settings for bonded rescue SD (``NBXMOD 2``, VDW on in BLOCK)."""
-    from mmml.interfaces.pycharmmInterface.nbonds_config import vacuum_nbond_kwargs
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        apply_nbonds_script_kwargs,
+        apply_vacuum_nbonds,
+        trigger_nbonds_update_script,
+        vacuum_nbond_kwargs,
+    )
 
     pycharmm = _import_pycharmm()
     if _is_all_ml_pbc_context(ctx):
@@ -969,15 +981,16 @@ def apply_recovery_nbonds(ctx: MlpotContext, *, nbxmod: int = RECOVERY_NBXMOD) -
     if ctx.use_pbc and ctx.cubic_box_side_A is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import apply_pbc_nbonds
 
-        cuts = apply_pbc_nbonds(
+        apply_pbc_nbonds(
             nbxmod=nbxmod,
             cubic_box_side_A=float(ctx.cubic_box_side_A),
+            rebuild=False,
         )
-        pycharmm.UpdateNonBondedScript(**cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod)).run()
+        trigger_nbonds_update_script()
     else:
         # Dynamics may leave imgfrq>0; clear before rescue SD (inbfrq=0 is invalid then).
         pycharmm.nbonds.set_imgfrq(-1)
-        pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=nbxmod)).run()
+        apply_nbonds_script_kwargs(vacuum_nbond_kwargs(nbxmod=nbxmod), rebuild=True)
 
 
 def restore_workflow_nbonds(
@@ -1804,11 +1817,11 @@ def register_mlpot(
             # Re-running prepare_charmm_vacuum + update_bnbnd here segfaults in upinb
             # for large clusters (e.g. DCM:90) after JAX GPU warmup.
             from mmml.interfaces.pycharmmInterface.nbonds_config import (
+                apply_nbonds_script_kwargs,
                 vacuum_nbond_kwargs,
             )
 
-            pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
-            pycharmm.UpdateNonBondedScript(**vacuum_nbond_kwargs(nbxmod=5)).run()
+            apply_nbonds_script_kwargs(vacuum_nbond_kwargs(nbxmod=5), rebuild=True)
     ml_z = np.asarray(ml_Z, dtype=int)
     reg_box = (
         float(box_side)
@@ -1837,6 +1850,15 @@ def register_mlpot(
             workflow_args=workflow_args,
             context="MLpot PBC registration (post-MLpot)",
             verbose=verbose,
+        )
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            reassert_pbc_nbond_cutoffs,
+        )
+
+        reassert_pbc_nbond_cutoffs(
+            float(reg_box),
+            rebuild=False,
+            context="MLpot PBC registration (post-UPDATE)",
         )
     ctx = MlpotContext(
         mlpot=mlpot,

@@ -56,6 +56,9 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
         side_effect=lambda **kwargs: (call_order.append("image_gate") or 6.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reassert_pbc_nbond_cutoffs",
+        side_effect=lambda *args, **kwargs: (call_order.append("reassert_nbonds") or MagicMock()),
     ):
         fake_pycharmm.MLpot = _FakeMLpot
         mlpot_setup.register_mlpot(
@@ -73,6 +76,7 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
         "mlpot",
         "skip_iblo",
         "image_gate",
+        "reassert_nbonds",
     ]
 
 
@@ -128,6 +132,9 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
         side_effect=lambda **kwargs: (call_order.append("image_gate") or 6.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reassert_pbc_nbond_cutoffs",
+        side_effect=lambda *args, **kwargs: (call_order.append("reassert_nbonds") or MagicMock()),
     ):
         fake_pycharmm.MLpot = _FakeMLpot
         mlpot_setup.register_mlpot(
@@ -140,7 +147,7 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         )
 
     assert "crystal_free" not in call_order
-    assert call_order == ["block", "finalize_pbc_exclusions", "mlpot", "image_gate"]
+    assert call_order == ["block", "finalize_pbc_exclusions", "mlpot", "image_gate", "reassert_nbonds"]
 
 
 def test_register_mlpot_vacuum_skips_pre_block_exclusions():
@@ -171,10 +178,9 @@ def test_register_mlpot_vacuum_skips_pre_block_exclusions():
     ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
-    ), patch.object(fake_pycharmm, "MLpot", side_effect=_mlpot), patch.object(
-        fake_pycharmm, "UpdateNonBondedScript"
+    ), patch.object(fake_pycharmm, "MLpot", side_effect=_mlpot), patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_script_kwargs",
     ) as mock_nb:
-        mock_nb.return_value.run = MagicMock()
         mlpot_setup.register_mlpot(
             MagicMock(),
             [1, 1],
@@ -183,6 +189,7 @@ def test_register_mlpot_vacuum_skips_pre_block_exclusions():
         )
 
     mock_install.assert_not_called()
+    mock_nb.assert_called_once()
     assert call_order == ["block", "mlpot"]
 
 
@@ -288,7 +295,13 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
             verbose=False,
         )
     prepare.assert_called_once_with(32.0)
-    apply_nb.assert_called_once_with(nbxmod=5, cubic_box_side_A=32.0, rebuild=False)
+    apply_nb.assert_called_once_with(
+        nbxmod=5,
+        cubic_box_side_A=32.0,
+        rebuild=False,
+        mm_switch_on=8.0,
+        mm_switch_width=5.0,
+    )
     install.assert_called_once_with(fake_sel, update=False)
     verify.assert_called_once()
     fake_pycharmm.nbonds.update_bnbnd.assert_not_called()

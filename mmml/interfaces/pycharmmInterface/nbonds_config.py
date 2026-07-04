@@ -401,6 +401,39 @@ def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:
     return path
 
 
+def read_charmm_switch_cutoffs() -> tuple[float, float]:
+    """Return live ``(ctonnb, ctofnb)`` from CHARMM (Å)."""
+    import pycharmm.nbonds as nbonds
+
+    return float(nbonds.get_ctonnb()), float(nbonds.get_ctofnb())
+
+
+def charmm_nbond_cutoffs_orderly(
+    cutnb: float,
+    ctonnb: float,
+    ctofnb: float,
+) -> bool:
+    """True when ``ctonnb < ctofnb < cutnb`` (CHARMM ``nbonds_cutoffs_orderly``)."""
+    return float(ctonnb) < float(ctofnb) < float(cutnb)
+
+
+def apply_switch_nbond_cutoffs_before_cutnb(
+    ctonnb: float,
+    ctofnb: float,
+    *,
+    rebuild: bool = False,
+) -> None:
+    """Lower switch radii before ``cutnb`` changes (``crystal.build`` on domdec builds)."""
+    apply_nbonds_kwargs({"ctonnb": float(ctonnb), "ctofnb": float(ctofnb)}, rebuild=rebuild)
+
+
+def trigger_nbonds_update_script() -> None:
+    """Run CHARMM ``UPDATE`` without changing cutoff keywords."""
+    import pycharmm.lingo as lingo
+
+    lingo.charmm_script("UPDATE")
+
+
 def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
     """Apply nonbond settings via the KEY_LIBRARY C API (no ``nbonds`` script).
 
@@ -435,6 +468,17 @@ def apply_nbonds_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
         nbonds.set_imgfrq(int(imgfrq))
     if rebuild:
         nbonds.update_bnbnd()
+
+
+def apply_nbonds_script_kwargs(kw: dict[str, Any], *, rebuild: bool = True) -> None:
+    """Apply nonbond kwargs via the C API, then optionally ``UPDATE``.
+
+    Do not pass cutoff kwargs to ``UpdateNonBondedScript`` — CHARMM parses
+    ``cutnb`` before ``ctofnb``/``ctonnb`` and fails when lowering ``cutnb``.
+    """
+    apply_nbonds_kwargs(kw, rebuild=False)
+    if rebuild:
+        trigger_nbonds_update_script()
 
 
 def apply_vacuum_nbonds(*, nbxmod: int = 5) -> None:
