@@ -393,7 +393,7 @@ def apply_flat_bottom(
     def flat_monomer_energy(pos: Array) -> Array:
         coms = monomer_coms_segment(pos, monomer_id, n_mon, masses=masses)
         dist = _monomer_com_distances(coms)
-        excess = jnp.maximum(0.0, r_f - dist)
+        excess = jnp.maximum(0.0, dist - r_f)
         return k_f * jnp.sum(excess ** 2)
 
     flat_E = flat_monomer_energy(positions)
