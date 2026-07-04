@@ -65,7 +65,7 @@ dynamics_overlap_check_interval: 200
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
-min_intermonomer_atom_distance: 2.3
+min_intermonomer_atom_distance: 1.3
 pre_mlpot_overlap_min_distance: 2.3
 
 # GPU throughput: align Bussi micro-chunks with overlap interval (default dyn_freq_cadence=50
