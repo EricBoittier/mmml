@@ -611,6 +611,8 @@ def warmup_mlpot_argv(cfg: dict[str, Any], cell: RunCell) -> list[str]:
     compile_threads = cfg.get("warmup_compile_threads", cfg.get("jax_compile_threads"))
     if compile_threads is not None:
         argv.extend(["--compile-threads", str(int(compile_threads))])
-    if bool(cfg.get("warmup_do_mm", True)):
+    from mmml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
+
+    if resolve_warmup_do_mm_for_config(cfg):
         argv.append("--do-mm")
     return argv

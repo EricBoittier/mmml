@@ -381,3 +381,23 @@ def test_maybe_auto_warmup_runs_serial(monkeypatch):
     ) as mock_run:
         assert wm.maybe_auto_warmup_mlpot_jax_from_md_system(args) == 0
     mock_run.assert_called_once()
+
+
+def test_resolve_warmup_do_mm_jax_mic_pbc_all_ml():
+    cfg = {"mm_nonbond_mode": "jax_mic", "periodic_charmm_vdw": False}
+    assert wm.resolve_warmup_do_mm_for_config(cfg) is True
+
+
+def test_resolve_warmup_do_mm_explicit_yaml_override():
+    cfg = {
+        "mm_nonbond_mode": "jax_mic",
+        "periodic_charmm_vdw": False,
+        "warmup_do_mm": False,
+    }
+    assert wm.resolve_warmup_do_mm_for_config(cfg) is False
+
+
+def test_resolve_warmup_do_mm_env_override(monkeypatch):
+    monkeypatch.setenv("MMML_AUTO_WARMUP_DO_MM", "1")
+    cfg = {"mm_nonbond_mode": "mic", "periodic_charmm_vdw": True, "include_mm": False}
+    assert wm.resolve_warmup_do_mm_for_config(cfg) is True

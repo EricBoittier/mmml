@@ -43,7 +43,9 @@ from campaign_lib import (
     slurm_small_cluster_max_n,
     slurm_tier_enabled,
     slurm_tier_resource_pools,
+    warmup_mlpot_enabled,
 )
+from mmml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
 from setup_variants import resolve_setup_variant
 from bulk_density import bulk_reference_table, matrix_uses_bulk_density
 cfg = load_config(Path('${CFG}'))
@@ -127,6 +129,8 @@ if prep_sweep_enabled(cfg):
 print('workflow_config:', Path('${CFG}'))
 allow_hg = cfg.get('allow_high_grms', False)
 print('allow_high_grms:', bool(allow_hg))
+print('warmup_mlpot_jax:', warmup_mlpot_enabled(cfg))
+print('warmup_do_mm:', resolve_warmup_do_mm_for_config(cfg))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then

@@ -108,6 +108,11 @@ ml_gpu_count: 1
 # 128 reduces JAX/LLVM compile RAM on 12–16 GB Slurm steps (OOM on heat chunk 1 @ N=52).
 ml_batch_size: 128
 
+# Serial JAX compile (PhysNet + jax-pme) before CHARMM MLpot registration.
+warmup_mlpot_jax: true
+warmup_do_mm: true
+warmup_compile_threads: 4
+
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 6
 slurm_max_concurrent_slow: 4

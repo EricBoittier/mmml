@@ -1486,6 +1486,68 @@ def slurm_resources_cli(cfg: dict[str, Any]) -> str:
     return " ".join(f"{key}={value}" for key, value in pools.items())
 
 
+def warmup_mlpot_enabled(cfg: dict[str, Any]) -> bool:
+    return bool(cfg.get("warmup_mlpot_jax", True))
+
+
+def warmup_atoms_per_monomer(cell: RunCell) -> int:
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits import (
+        PBC_BURST_ML_ATOMS_PER_MONOMER,
+    )
+
+    apm = PBC_BURST_ML_ATOMS_PER_MONOMER.get(solvent_slug(cell.solvent))
+    if apm is None:
+        known = ", ".join(sorted(PBC_BURST_ML_ATOMS_PER_MONOMER))
+        raise ValueError(
+            f"warmup atoms/monomer unknown for solvent {cell.solvent!r} (known: {known})"
+        )
+    return int(apm)
+
+
+def warmup_mlpot_argv(cfg: dict[str, Any], cell: RunCell) -> list[str]:
+    """Serial ``mmml warmup-mlpot-jax`` argv matching this cell's MLpot/JAX settings."""
+    from mmml.cli.run.warmup_mlpot_jax import resolve_warmup_do_mm_for_config
+
+    cell_cfg = cell_workflow_cfg(cfg, cell)
+    effective = merge_setup_into_config(cell_cfg, cell.setup_id)
+    dense = dense_cell_mlpot_overrides(cell, effective)
+    batch = int(
+        cfg.get("warmup_ml_batch_size")
+        or dense.get("ml_batch_size", effective.get("ml_batch_size", 2048))
+    )
+    argv = [
+        "warmup-mlpot-jax",
+        "--checkpoint",
+        str(checkpoint_path_for_yaml(str(cfg["checkpoint"]))),
+        "--n-monomers",
+        str(int(cell.n_monomers)),
+        "--atoms-per-monomer",
+        str(warmup_atoms_per_monomer(cell)),
+        "--box-side",
+        str(float(cell.box_size)),
+        "--ml-batch-size",
+        str(batch),
+        "--ml-gpu-count",
+        str(int(effective.get("ml_gpu_count", cfg.get("ml_gpu_count", 1)))),
+        "--mm-switch-on",
+        str(float(effective.get("mm_switch_on", cfg.get("mm_switch_on", 8.0)))),
+        "--mm-switch-width",
+        str(float(effective.get("mm_switch_width", cfg.get("mm_switch_width", 5.0)))),
+        "--ml-switch-width",
+        str(float(effective.get("ml_switch_width", cfg.get("ml_switch_width", 1.5)))),
+        "--quiet",
+    ]
+    ml_cap = effective.get("ml_max_active_dimers") or cfg.get("ml_max_active_dimers")
+    if ml_cap is not None:
+        argv.extend(["--ml-max-active-dimers", str(int(ml_cap))])
+    compile_threads = cfg.get("warmup_compile_threads", cfg.get("jax_compile_threads"))
+    if compile_threads is not None:
+        argv.extend(["--compile-threads", str(int(compile_threads))])
+    if resolve_warmup_do_mm_for_config({**effective, **cfg}):
+        argv.append("--do-mm")
+    return argv
+
+
 def paths_for_run(cfg: dict[str, Any], cell: RunCell) -> dict[str, Path]:
     cell_cfg = cell_workflow_cfg(cfg, cell)
     out = run_output_dir(cfg, cell)

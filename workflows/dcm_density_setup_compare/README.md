@@ -80,6 +80,24 @@ artifacts/dcm_density_setup_compare/minimal_dcm_52_t300_l28/
   done.txt
 ```
 
+## JAX warmup (before CHARMM MLpot)
+
+Each cell runs **serial** `mmml warmup-mlpot-jax` in `job_shell.sh` before `md-system`
+(unless `warmup_mlpot_jax: false`). With `warmup_do_mm: true` (default for PBC
+`jax_mic` + CHARMM VDW off), this JIT-compiles **PhysNet + jax-pme** into
+`JAX_COMPILATION_CACHE_DIR` so MPI-linked MLpot registration skips a silent
+multi-minute compile.
+
+```bash
+# Manual warmup matching prep_sweep anchor (DCM:52, L=38):
+export MMML_CKPT=...
+mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 52 \
+  --atoms-per-monomer 5 --box-side 38 --ml-batch-size 128 \
+  --mm-switch-on 12 --mm-switch-width 6 --ml-switch-width 2 --do-mm --verbose
+```
+
+Disable per config: `warmup_mlpot_jax: false` or `warmup_do_mm: false` (ML-only cache).
+
 ## Run
 
 ```bash

@@ -100,6 +100,10 @@ continue_velocities: true
 ml_gpu_count: 1
 ml_batch_size: 128
 
+warmup_mlpot_jax: true
+warmup_do_mm: true
+warmup_compile_threads: 4
+
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 4
 slurm_max_concurrent_slow: 2

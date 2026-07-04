@@ -306,6 +306,30 @@ def _truthy_env(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def resolve_warmup_do_mm_for_config(cfg: dict[str, Any], *, default: bool = True) -> bool:
+    """Whether serial ``warmup-mlpot-jax`` should pass ``--do-mm`` (hybrid + jax-pme path).
+
+    Explicit ``warmup_do_mm`` in workflow YAML wins.  For PBC ``jax_mic`` with CHARMM
+    VDW off (typical all-ML liquid), default True so the jax-pme compile is cached
+    before MPI-linked MLpot registration.
+    """
+    if "warmup_do_mm" in cfg:
+        return bool(cfg["warmup_do_mm"])
+    if _truthy_env("MMML_AUTO_WARMUP_DO_MM"):
+        return True
+    env = (os.environ.get("MMML_AUTO_WARMUP_DO_MM") or "").strip().lower()
+    if env in ("0", "false", "no", "off"):
+        return False
+    mm_mode = str(cfg.get("mm_nonbond_mode", "jax_mic")).strip().lower()
+    periodic_vdw = bool(cfg.get("periodic_charmm_vdw", True))
+    if mm_mode in ("jax_mic", "mic", "jax") and not periodic_vdw:
+        return True
+    include_mm = cfg.get("include_mm")
+    if include_mm is not None:
+        return bool(include_mm)
+    return default
+
+
 def auto_warmup_mlpot_jax_enabled(args: argparse.Namespace) -> bool:
     """Whether md-system / mmml-charmm-mpirun should run serial warmup-mlpot-jax."""
     if _truthy_env("MMML_NO_AUTO_WARMUP_MLPOT_JAX"):
@@ -381,16 +405,18 @@ def build_warmup_namespace_from_md_system(args: argparse.Namespace) -> argparse.
     atoms_per = resolve_warmup_atoms_per_monomer_from_md_system(args)
     if atoms_per is None:
         return None
-    do_mm = bool(getattr(args, "include_mm", True))
-    if _truthy_env("MMML_AUTO_WARMUP_DO_MM"):
-        do_mm = True
-    elif (os.environ.get("MMML_AUTO_WARMUP_DO_MM") or "").strip().lower() in (
-        "0",
-        "false",
-        "no",
-        "off",
-    ):
-        do_mm = False
+    cfg_dict = {
+        "warmup_do_mm": getattr(args, "warmup_do_mm", None),
+        "mm_nonbond_mode": getattr(args, "mm_nonbond_mode", "jax_mic"),
+        "periodic_charmm_vdw": getattr(args, "periodic_charmm_vdw", True),
+        "include_mm": getattr(args, "include_mm", True),
+    }
+    if cfg_dict["warmup_do_mm"] is None:
+        cfg_dict.pop("warmup_do_mm", None)
+    do_mm = resolve_warmup_do_mm_for_config(
+        cfg_dict,
+        default=bool(getattr(args, "include_mm", True)),
+    )
     warmup = argparse.Namespace(
         checkpoint=getattr(args, "checkpoint", None),
         n_monomers=resolve_warmup_n_monomers_from_md_system(args),

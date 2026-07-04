@@ -134,6 +134,11 @@ ml_switch_width: 1.0
 ml_gpu_count: 1
 ml_batch_size: 256
 
+# Serial JAX compile cache before MPI-linked MLpot (jax-pme hybrid path).
+warmup_mlpot_jax: true
+warmup_do_mm: true
+warmup_compile_threads: 4
+
 slurm_small_cluster_max_n: 30
 slurm_max_concurrent_fast: 16
 slurm_max_concurrent_slow: 12

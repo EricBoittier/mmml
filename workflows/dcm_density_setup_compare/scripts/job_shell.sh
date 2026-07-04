@@ -87,6 +87,53 @@ eval "$(
     | grep '^export '
 )"
 
+WARMUP_ENABLED="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config, warmup_mlpot_enabled
+cfg = load_config(Path('${CFG}'))
+print(int(warmup_mlpot_enabled(cfg)))
+")"
+
+if [[ "$WARMUP_ENABLED" == "1" ]]; then
+  echo "=== warmup-mlpot-jax (serial, before CHARMM MLpot) ==="
+  # Slurm/srun exports PMI env; ML-only warmup must not MPI_Init libcharmm at import time.
+  while IFS= read -r _var; do
+    [[ -n "$_var" ]] && unset "$_var" 2>/dev/null || true
+  done < <(env | cut -d= -f1 | grep -E '^(OMPI_|PMI_|PMIX_|MPI_LOCALRANKID$|SLURM_MPI_TYPE$)' || true)
+  export MMML_WARMUP_MLPOT_JAX_ONLY=1
+  export XLA_PYTHON_CLIENT_PREALLOCATE=false
+  _jax_threads="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config
+cfg = load_config(Path('${CFG}'))
+print(int(cfg.get('jax_compile_threads', cfg.get('warmup_compile_threads', 4))))
+")"
+  export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-$_jax_threads}"
+  export OMP_NUM_THREADS="${OMP_NUM_THREADS:-$_jax_threads}"
+  export OMPI_MCA_ess=singleton
+  export OMPI_MCA_mpi_init_support=0
+  export OMPI_MCA_plm=^slurm
+  WARMUP_ARGS="$("$PY" -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${WORKFLOW_ROOT}/scripts')
+from campaign_lib import load_config, cell_from_tag, warmup_mlpot_argv
+cfg = load_config(Path('${CFG}'))
+cell = cell_from_tag(cfg, '${RUN_TAG}')
+print(' '.join(warmup_mlpot_argv(cfg, cell)))
+")"
+  # shellcheck disable=SC2086
+  if ! "$PY" -m mmml.cli.__main__ $WARMUP_ARGS; then
+    echo "ERROR: warmup-mlpot-jax failed" >&2
+    exit 1
+  fi
+  unset MMML_WARMUP_MLPOT_JAX_ONLY
+fi
+
 "$PY" -c "
 import sys
 from pathlib import Path
