@@ -232,6 +232,28 @@ def test_campaign_forwards_allow_high_grms(monkeypatch: pytest.MonkeyPatch, tmp_
     assert cfg.get("allow_high_grms") is False
 
 
+def test_campaign_forwards_lr_solver_knobs(cfg: dict, cell: RunCell) -> None:
+    cfg_lr = {
+        **cfg,
+        "lr_solver": "mic",
+    }
+    campaign = build_campaign(cfg_lr, cell)
+    mini = campaign["runs"]["pycharmm_mini"]
+    assert mini["lr_solver"] == "mic"
+    assert campaign["defaults"]["lr_solver"] == "mic"
+
+
+def test_config_yaml_declares_lr_solver(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ckpt = tmp_path / "params.json"
+    ckpt.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MMML_CKPT", str(ckpt))
+    cfg = load_config(WORKFLOW / "config.yaml")
+    assert cfg.get("lr_solver") == "mic"
+    cell = next(iter_matrix_cells(cfg))
+    mini = build_campaign(cfg, cell)["runs"]["pycharmm_mini"]
+    assert mini.get("lr_solver") == "mic"
+
+
 def test_temperature_ladder_prior_cell(cfg: dict) -> None:
     cfg_ladder = {
         **cfg,

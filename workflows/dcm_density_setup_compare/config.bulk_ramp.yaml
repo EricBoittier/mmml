@@ -63,6 +63,7 @@ mm_switch_on: 12.0
 mm_switch_width: 6.0
 ml_switch_width: 2.0
 mm_nonbond_mode: jax_mic
+lr_solver: mic
 charmm_mm_pretreat: true
 
 allow_high_grms: true

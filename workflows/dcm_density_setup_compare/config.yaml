@@ -41,6 +41,8 @@ periodic_charmm_vdw: false
 packmol_tolerance: 5.0
 packmol_box_padding: 2.0
 mm_nonbond_mode: jax_mic
+# Long-range Coulomb: truncated MIC only (no jax-pme / Ewald k-space).
+lr_solver: mic
 charmm_mm_pretreat: true
 
 # Stricter pre-dynamics GRMS gate (do not scale up with bad per-monomer stats).
@@ -136,7 +138,7 @@ jaxmd_ps: 10.0
 ase_setup: pbc_nvt
 ase_integrator: nvt_nhc
 ase_ps: 1.0
-# optional_legs: [jaxmd_prod, ase_prod]
+optional_legs: [jaxmd_prod, ase_prod]
 
 mm_switch_on: 6.0
 mm_switch_width: 4.0

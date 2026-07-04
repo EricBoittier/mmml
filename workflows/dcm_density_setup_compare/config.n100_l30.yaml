@@ -35,6 +35,7 @@ periodic_charmm_vdw: false
 packmol_tolerance: 5.0
 packmol_box_padding: 1.0
 mm_nonbond_mode: jax_mic
+lr_solver: mic
 charmm_mm_pretreat: true
 
 dt_fs: 0.25

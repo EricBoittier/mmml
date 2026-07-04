@@ -1284,3 +1284,39 @@ def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
     np.testing.assert_allclose(loaded.get_positions(), positions, rtol=1e-10, atol=1e-10)
     np.testing.assert_allclose(loaded.get_velocities(), v_ase, rtol=1e-10, atol=1e-10)
 
+
+def test_resolve_atomic_numbers_from_psf_and_cluster_npz(tmp_path: Path) -> None:
+    from mmml.cli.run.md_handoff import (
+        _write_synthetic_charmm_restart,
+        resolve_atomic_numbers_for_res,
+    )
+
+    z = np.array([6, 1, 1, 8], dtype=np.int32)
+    handoff = MdHandoffState(
+        positions=np.zeros((4, 3), dtype=float),
+        atomic_numbers=z,
+        velocities=np.zeros((4, 3), dtype=float),
+    )
+    res_path = tmp_path / "heat.res"
+    _write_synthetic_charmm_restart(handoff, res_path)
+
+    psf_lines = [
+        "         4 !NATOM",
+        "       1 SYS     1 DCMA C1   CA   0.000000 12.0110           0",
+        "       2 SYS     1 DCMA H1   HA   0.000000  1.0080           0",
+        "       3 SYS     1 DCMA H2   HA   0.000000  1.0080           0",
+        "       4 SYS     1 DCMA O1   OA   0.000000 15.9990           0",
+    ]
+    psf_path = tmp_path / "cleanup" / "box.psf"
+    psf_path.parent.mkdir(parents=True)
+    psf_path.write_text("\n".join(psf_lines) + "\n", encoding="ascii")
+
+    got = resolve_atomic_numbers_for_res(res_path)
+    np.testing.assert_array_equal(got, z)
+
+    cluster_npz = tmp_path / ".packmol_cache" / "abc" / "cluster.npz"
+    cluster_npz.parent.mkdir(parents=True)
+    np.savez(cluster_npz, z=z, positions=np.zeros((4, 3)))
+    got_cluster = resolve_atomic_numbers_for_res(res_path, npz_path=cluster_npz)
+    np.testing.assert_array_equal(got_cluster, z)
+

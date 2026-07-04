@@ -926,15 +926,103 @@ def atoms_from_handoff(
     return atoms
 
 
+def _read_psf_atomic_numbers_offline(path: Path) -> np.ndarray:
+    """Parse atomic numbers from a CHARMM PSF ``!NATOM`` block (mass lookup)."""
+    masses: list[float] = []
+    lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+    natom: int | None = None
+    atom_start_idx: int | None = None
+    for idx, line in enumerate(lines):
+        if "!NATOM" in line:
+            natom = int(line.split()[0])
+            atom_start_idx = idx + 1
+            break
+    if natom is None or atom_start_idx is None:
+        raise ValueError(f"Could not find !NATOM section in PSF file {path}")
+    for i in range(natom):
+        line = lines[atom_start_idx + i]
+        parts = line.split()
+        if len(parts) < 8:
+            raise ValueError(f"Malformed PSF atom line in {path}: {line!r}")
+        masses.append(float(parts[7]))
+    from ase.data import atomic_masses
+
+    masses_arr = np.asarray(masses, dtype=np.float64)
+    diffs = np.abs(atomic_masses[1:, np.newaxis] - masses_arr)
+    return np.asarray(np.argmin(diffs, axis=0) + 1, dtype=np.int32)
+
+
+def _atomic_numbers_from_topology_npz(path: Path, *, n_atoms: int | None = None) -> np.ndarray | None:
+    data = np.load(path, allow_pickle=True)
+    z = _handoff_atomic_numbers_from_npz(data, n_atoms=n_atoms)
+    if z.size > 0 and np.any(z):
+        return z
+    return None
+
+
+def _discover_topology_paths_for_res(
+    res_path: Path,
+    *,
+    npz_path: Path | str | None = None,
+    psf_path: Path | str | None = None,
+) -> list[Path]:
+    """Candidate topology files near a staged ``.res`` restart."""
+    p = Path(res_path).expanduser().resolve()
+    ordered: list[Path] = []
+    seen: set[str] = set()
+
+    def _add(path: Path | str | None) -> None:
+        if path is None:
+            return
+        cand = Path(path).expanduser()
+        key = str(cand)
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(cand)
+
+    _add(npz_path)
+    _add(psf_path)
+    for rel in (
+        p.parent / "handoff" / "state.npz",
+        p.parent / "state.npz",
+        p.parent.parent / "handoff" / "state.npz",
+    ):
+        _add(rel)
+
+    cleanup = p.parent / "cleanup"
+    if cleanup.is_dir():
+        for psf in sorted(cleanup.glob("*.psf"), key=lambda item: item.stat().st_mtime, reverse=True):
+            _add(psf)
+
+    cache_root = p.parent / ".packmol_cache"
+    if cache_root.is_dir():
+        for cluster in sorted(
+            cache_root.glob("*/cluster.npz"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        ):
+            _add(cluster)
+
+    packmol_cluster = p.parent / "packmol_cluster"
+    if packmol_cluster.is_dir():
+        for cluster in sorted(packmol_cluster.glob("**/cluster.npz")):
+            _add(cluster)
+
+    return ordered
+
+
 def resolve_atomic_numbers_for_res(
     res_path: Path | str,
     *,
     atomic_numbers: np.ndarray | Sequence[int] | None = None,
     npz_path: Path | str | None = None,
+    psf_path: Path | str | None = None,
 ) -> np.ndarray:
-    """Resolve atomic numbers for a CHARMM restart (explicit array or handoff NPZ)."""
+    """Resolve atomic numbers for a CHARMM restart (NPZ, PSF, or packmol cluster)."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
         read_restart_coordinates,
+        read_restart_natom,
     )
 
     if atomic_numbers is not None:
@@ -945,35 +1033,37 @@ def resolve_atomic_numbers_for_res(
 
     p = Path(res_path).expanduser().resolve()
     pos = read_restart_coordinates(p)
-    n_atoms = int(pos.shape[0]) if pos is not None else None
+    n_atoms = int(pos.shape[0]) if pos is not None else read_restart_natom(p)
 
-    candidates: list[Path] = []
-    if npz_path is not None:
-        candidates.append(Path(npz_path).expanduser())
-    candidates.extend(
-        [
-            p.parent / "handoff" / "state.npz",
-            p.parent / "state.npz",
-            p.parent.parent / "handoff" / "state.npz",
-        ]
-    )
-    seen: set[str] = set()
-    for cand in candidates:
-        key = str(cand.expanduser())
-        if key in seen:
-            continue
-        seen.add(key)
+    tried: list[str] = []
+    for cand in _discover_topology_paths_for_res(p, npz_path=npz_path, psf_path=psf_path):
         if not cand.is_file():
             continue
-        data = np.load(cand, allow_pickle=True)
-        z = _handoff_atomic_numbers_from_npz(data, n_atoms=n_atoms)
+        tried.append(str(cand))
+        if cand.suffix.lower() == ".psf":
+            try:
+                z = _read_psf_atomic_numbers_offline(cand)
+            except (OSError, ValueError):
+                continue
+        else:
+            z = _atomic_numbers_from_topology_npz(cand, n_atoms=n_atoms)
+            if z is None:
+                continue
+        if n_atoms is not None and int(z.shape[0]) != int(n_atoms):
+            continue
         if z.size > 0 and np.any(z):
             return z
 
-    raise ValueError(
-        f"atomic numbers required for {p.name}; pass atomic_numbers= or npz_path= "
-        "(e.g. sibling handoff/state.npz)"
+    hint = (
+        "pass --psf cleanup/*.psf, --npz .packmol_cache/*/cluster.npz, "
+        "or handoff/state.npz"
     )
+    if tried:
+        raise ValueError(
+            f"atomic numbers required for {p.name}; tried {len(tried)} topology file(s) "
+            f"but none matched NATOM={n_atoms}. {hint}"
+        )
+    raise ValueError(f"atomic numbers required for {p.name}; no topology files found. {hint}")
 
 
 def res_to_atoms(
@@ -981,6 +1071,7 @@ def res_to_atoms(
     *,
     atomic_numbers: np.ndarray | Sequence[int] | None = None,
     npz_path: Path | str | None = None,
+    psf_path: Path | str | None = None,
     velocity_units: str = "auto",
 ) -> Any:
     """Load one CHARMM ``.res`` file as ``ase.Atoms`` with ASE velocities."""
@@ -989,6 +1080,7 @@ def res_to_atoms(
         p,
         atomic_numbers=atomic_numbers,
         npz_path=npz_path,
+        psf_path=psf_path,
     )
     handoff = load_handoff_from_res(p, atomic_numbers=z)
     return atoms_from_handoff(handoff, velocity_units=velocity_units)
@@ -1000,6 +1092,7 @@ def res_to_trajectory(
     *,
     atomic_numbers: np.ndarray | Sequence[int] | None = None,
     npz_path: Path | str | None = None,
+    psf_path: Path | str | None = None,
     velocity_units: str = "auto",
     numbered_stem: str | None = None,
 ) -> Path:
@@ -1030,6 +1123,7 @@ def res_to_trajectory(
         restart_paths[0],
         atomic_numbers=atomic_numbers,
         npz_path=npz_path,
+        psf_path=psf_path,
     )
     traj = Trajectory(str(out), "w")
     try:
@@ -1385,6 +1479,8 @@ def _handoff_atomic_numbers_from_npz(
     raw = data["atomic_numbers"]
   elif "Z" in data.files:
     raw = data["Z"]
+  elif "z" in data.files:
+    raw = data["z"]
 
   if raw is None:
     return np.zeros(0, dtype=np.int32)

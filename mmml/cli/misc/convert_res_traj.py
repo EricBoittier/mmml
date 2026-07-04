@@ -29,7 +29,13 @@ def main() -> None:
         "--npz",
         type=Path,
         default=None,
-        help="Handoff NPZ with atomic_numbers (default: sibling handoff/state.npz)",
+        help="NPZ with atomic numbers (default: auto-discover handoff/state.npz or cluster.npz)",
+    )
+    parser.add_argument(
+        "--psf",
+        type=Path,
+        default=None,
+        help="CHARMM PSF for atomic numbers (default: auto-discover cleanup/*.psf)",
     )
     parser.add_argument(
         "--numbered-stem",
@@ -48,6 +54,7 @@ def main() -> None:
         args.res,
         args.output,
         npz_path=args.npz,
+        psf_path=args.psf,
         velocity_units=args.velocity_units,
         numbered_stem=args.numbered_stem,
     )
