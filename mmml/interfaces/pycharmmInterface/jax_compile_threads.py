@@ -1,14 +1,14 @@
 """Temporarily raise CPU thread limits during JAX/XLA compile (not during CHARMM ``upinb``).
 
 CHARMM MPI builds pin ``OMP_NUM_THREADS=1`` for ``upinb`` safety. GPU JIT compile is
-mostly CPU-bound (LLVM, Eigen, ``ptxas``); bumping BLAS/OpenMP during warmup only
-can shorten first-compile wall time without touching MLpot registration.
+mostly CPU-bound (LLVM, Eigen, ``ptxas``); :func:`jax_compile_threads_context` bumps
+BLAS/OpenMP **only during compile/warmup** and restores the CHARMM pin afterward.
 
-Enable (default when unset): set ``MMML_JAX_COMPILE_THREADS`` to the desired count
-(default: ``min(16, cpu_count)``). Disable with ``MMML_NO_JAX_COMPILE_THREADS=1``.
+Enable (default): ``MMML_JAX_COMPILE_THREADS`` (default ``min(16, cpu_count)``).
+Disable with ``MMML_NO_JAX_COMPILE_THREADS=1``.
 
 For XLA's Eigen pool, also call :func:`apply_jax_compile_xla_flags` before the first
-``import jax`` (``md-system`` does this for the pycharmm backend).
+``import jax`` (``md-system`` and ``mmml-charmm-mpirun.sh`` do this).
 """
 
 from __future__ import annotations
@@ -59,24 +59,11 @@ def jax_compile_threads_enabled() -> bool:
     return not _truthy("MMML_NO_JAX_COMPILE_THREADS")
 
 
-def _under_mpi_launcher() -> bool:
-    """True when the process was started under an MPI launcher (``mpirun``, Slurm PMI, …)."""
-    return bool(
-        os.environ.get("OMPI_COMM_WORLD_SIZE")
-        or os.environ.get("PMI_SIZE")
-        or os.environ.get("MPI_LOCALNRANKS")
-    )
-
-
 def resolve_jax_compile_thread_count() -> int:
     """Thread budget for JAX compile warmup (0 when disabled)."""
     if not jax_compile_threads_enabled():
         return 0
     explicit = (os.environ.get("MMML_JAX_COMPILE_THREADS") or "").strip()
-    # MPI-linked CHARMM + JAX GPU warmup can corrupt OpenMPI allocators when compile
-    # bumps OMP to 16 (see send_coord_to_recip / PMPI_Free_mem after warmup).
-    if not explicit and _under_mpi_launcher() and not _truthy("MMML_FORCE_JAX_COMPILE_THREADS"):
-        return 0
     if explicit:
         try:
             n = int(explicit)

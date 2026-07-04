@@ -28,7 +28,16 @@ source "$ROOT/scripts/resolve_mmml_env.sh"
 mmml_resolve_env "$ROOT"
 
 export OMPI_MCA_opal_cuda_support=0
-export MMML_NO_JAX_COMPILE_THREADS="${MMML_NO_JAX_COMPILE_THREADS:-1}"
+# JAX compile uses jax_compile_threads_context (temporary OMP bump); CHARMM stays OMP=1.
+export MMML_NO_JAX_COMPILE_THREADS="${MMML_NO_JAX_COMPILE_THREADS:-0}"
+if [[ -z "${MMML_JAX_COMPILE_THREADS:-}" ]]; then
+  _cpus="${SLURM_CPUS_PER_TASK:-${OMP_NUM_THREADS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8)}}"
+  if [[ "$_cpus" =~ ^[0-9]+$ ]] && (( _cpus > 0 )); then
+    export MMML_JAX_COMPILE_THREADS=$(( _cpus > 16 ? 16 : _cpus ))
+  else
+    export MMML_JAX_COMPILE_THREADS=8
+  fi
+fi
 PY="${MMML_PYTHON}"
 while IFS= read -r line; do
   [[ -n "$line" ]] && eval "$line"
@@ -37,10 +46,14 @@ import os
 import shlex
 
 from mmml.interfaces.pycharmmInterface.charmm_mpi import charmm_mpirun_path, mpi_shell_setup_lines
-from mmml.interfaces.pycharmmInterface.jax_compile_threads import sanitize_xla_flags_env
+from mmml.interfaces.pycharmmInterface.jax_compile_threads import (
+    apply_jax_compile_xla_flags,
+    sanitize_xla_flags_env,
+)
 from mmml.utils.jax_gpu_warmup import ensure_jax_cuda_runtime_libs, jax_cuda_runtime_libs_warning
 
 sanitize_xla_flags_env(quiet=True)
+apply_jax_compile_xla_flags(quiet=True)
 
 for line in mpi_shell_setup_lines():
     print(line)

@@ -25,7 +25,8 @@ mmml_resolve_env "$REPO_ROOT"
 
 export CHARMM_LIB_DIR="${CHARMM_LIB_DIR:-$HOME/.cache/mmml-charmm-build/tier_12000000_nodomdec/lib}"
 export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
-export MMML_NO_JAX_COMPILE_THREADS="${MMML_NO_JAX_COMPILE_THREADS:-1}"
+export MMML_NO_JAX_COMPILE_THREADS="${MMML_NO_JAX_COMPILE_THREADS:-0}"
+export MMML_JAX_COMPILE_THREADS="${MMML_JAX_COMPILE_THREADS:-${SLURM_CPUS_PER_TASK:-8}}"
 
 # --- Tier 1 (default): single MPI rank, one GPU ---------------------------
 MMML_MPI_NP="${MMML_MPI_NP:-1}"

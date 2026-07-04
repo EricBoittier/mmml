@@ -2340,7 +2340,6 @@ def prepare_serial_charmm_mpi_env() -> None:
     sanitize_xla_flags_env(quiet=True)
     prepare_charmm_mpi_runtime()
     if charmm_lib_links_mpi():
-        os.environ.setdefault("MMML_NO_JAX_COMPILE_THREADS", "1")
         configure_mpi4py_charmm_owned_init()
     _pin_charmm_openmp_for_serial_mlpot()
     if _under_mpirun():
