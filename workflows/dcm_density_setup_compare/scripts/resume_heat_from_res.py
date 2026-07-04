@@ -20,6 +20,7 @@ from campaign_lib import (  # noqa: E402
     build_heat_resume_md_argv,
     cell_from_tag,
     cell_run_tag,
+    cell_workflow_cfg,
     config_for_run_tag,
     discover_heat_resume_restart,
     init_job_id,
@@ -109,7 +110,7 @@ def main() -> int:
     resolve_checkpoint(str(cfg["checkpoint"]))
 
     paths = paths_for_run(cfg, cell)
-    leg_id = args.leg or init_job_id(cell)
+    leg_id = args.leg or init_job_id(cell_workflow_cfg(cfg, cell))
     leg_dir = paths["out_dir"] / leg_id
     if not leg_dir.is_dir():
         print(f"PyCHARMM leg directory missing: {leg_dir}", file=sys.stderr)
