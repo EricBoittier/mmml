@@ -764,6 +764,8 @@ def assert_bonded_mm_energy_active(*, context: str = "bonded-MM rescue") -> None
 def _preflight_intra_overlap_rescue(
     config: Any,
     bonded_cfg: BondedMmMiniConfig,
+    *,
+    mlpot_ctx: MlpotContext | None = None,
 ) -> None:
     """Coordinate noise / clash relief before bonded SD intra-monomer rescue."""
     from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
@@ -774,6 +776,7 @@ def _preflight_intra_overlap_rescue(
         config,
         context="Intra overlap rescue preflight",
         verbose=bool(bonded_cfg.verbose),
+        mlpot_ctx=mlpot_ctx,
     )
     noise = float(getattr(config, "position_noise_A", 0.05) or 0.0)
     seed = getattr(config, "recovery_seed", None)
@@ -789,6 +792,7 @@ def _preflight_intra_overlap_rescue(
             config,
             context="Intra overlap rescue post-noise",
             verbose=bool(bonded_cfg.verbose),
+            mlpot_ctx=mlpot_ctx,
         )
 
 
@@ -803,7 +807,7 @@ def _run_all_ml_intra_overlap_rescue(
     _maybe_run_per_monomer_bonded_jax_preflight(
         ctx, config, context="Intra overlap rescue"
     )
-    _preflight_intra_overlap_rescue(config, bonded_cfg)
+    _preflight_intra_overlap_rescue(config, bonded_cfg, mlpot_ctx=ctx)
     sd_steps = int(
         getattr(config, "intra_rescue_sd_steps", None) or bonded_cfg.nstep_sd
     )
@@ -1469,7 +1473,7 @@ def _bonded_mm_skip_reason_after_heat_overlap(
     )
     if not cfg.enabled:
         return None
-    worst = measure_worst_intermonomer_distance(cfg)
+    worst = measure_worst_intermonomer_distance(cfg, mlpot_ctx=ctx)
     if worst >= cfg.min_distance_A:
         return None
     return (

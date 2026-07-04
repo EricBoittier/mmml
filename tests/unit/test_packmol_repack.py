@@ -147,3 +147,53 @@ def test_overlap_guard_repack_fn_uses_packmol_module():
     from mmml.interfaces.pycharmmInterface import packmol_repack
 
     assert _repack_monomers_clear_overlap_fn() is packmol_repack.repack_monomers_clear_overlap
+
+
+def test_apply_overlap_repack_uses_psf_monomer_offsets(monkeypatch):
+    """Repack must slice atoms by PSF counts, not uniform n_atoms/n_monomers."""
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        apply_overlap_repack_last_resort,
+    )
+
+    pos = np.arange(30, dtype=float).reshape(10, 3)
+    captured: dict[str, np.ndarray] = {}
+
+    class _Ctx:
+        atoms_per_monomer = [3, 7]
+
+    def fake_get_pos():
+        return pos.copy()
+
+    def fake_repack(positions, offsets, **kwargs):
+        captured["offsets"] = np.asarray(offsets, dtype=int)
+        return positions
+
+    def fake_sync(_pos):
+        return None
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        fake_get_pos,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        fake_sync,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._find_worst_intermonomer_overlap_fn",
+        lambda: lambda _pos, _off, **kw: (1.0, None),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._repack_monomers_clear_overlap_fn",
+        lambda: fake_repack,
+    )
+    monkeypatch.setattr(
+        "mmml.utils.monomer_force_diag.resolve_selective_repack_monomers",
+        lambda *_a, **_k: None,
+    )
+
+    cfg = DynamicsOverlapConfig(action="rescue", n_monomers=2, min_distance_A=2.0)
+    apply_overlap_repack_last_resort(cfg, mlpot_ctx=_Ctx())
+
+    np.testing.assert_array_equal(captured["offsets"], [0, 3, 10])

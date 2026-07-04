@@ -801,12 +801,14 @@ def _overlap_cell(
 
 def measure_worst_intermonomer_distance(
     config: DynamicsOverlapConfig,
+    *,
+    mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     """Return closest inter-monomer atom–atom distance (Å) without raising."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     pos = get_charmm_positions_array()
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
@@ -871,6 +873,7 @@ def relieve_intramonomer_clashes(
     context: str = "intra-monomer separation",
     verbose: bool = False,
     margin_A: float | None = None,
+    mlpot_ctx: "MlpotContext | None" = None,
 ) -> float:
     """Push apart intra-monomer atom pairs below ``intra_min_distance_A``."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -886,7 +889,7 @@ def relieve_intramonomer_clashes(
         return float("inf")
 
     pos = get_charmm_positions_array()
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
@@ -1095,7 +1098,7 @@ def apply_overlap_repack_last_resort(
     )
 
     pos = get_charmm_positions_array()
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
@@ -1158,7 +1161,11 @@ def apply_overlap_repack_last_resort(
     return float(best_dist)
 
 
-def apply_overlap_separation_last_resort(config: DynamicsOverlapConfig) -> float:
+def apply_overlap_separation_last_resort(
+    config: DynamicsOverlapConfig,
+    *,
+    mlpot_ctx: "MlpotContext | None" = None,
+) -> float:
     """Rigidly push overlapped monomer pairs apart (symmetric COM translation)."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
@@ -1166,7 +1173,7 @@ def apply_overlap_separation_last_resort(config: DynamicsOverlapConfig) -> float
     )
 
     pos = get_charmm_positions_array()
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
@@ -1211,10 +1218,12 @@ def _apply_repack_or_raise(
             config,
             context=f"{label} after overlap repack (intra preflight)",
             verbose=True,
+            mlpot_ctx=mlpot_ctx,
         )
         return _overlap_check(
             config,
             context=f"{label} after overlap repack",
+            mlpot_ctx=mlpot_ctx,
         )
     except RuntimeError as repack_still_bad:
         print(
@@ -1223,7 +1232,7 @@ def _apply_repack_or_raise(
             flush=True,
         )
         try:
-            d_sep = apply_overlap_separation_last_resort(config)
+            d_sep = apply_overlap_separation_last_resort(config, mlpot_ctx=mlpot_ctx)
             print(
                 f"Overlap separation: min inter-monomer distance now {d_sep:.4f} Å",
                 flush=True,
@@ -1231,6 +1240,7 @@ def _apply_repack_or_raise(
             return _overlap_check(
                 config,
                 context=f"{label} after overlap separation",
+                mlpot_ctx=mlpot_ctx,
             )
         except RuntimeError as sep_still_bad:
             raise RuntimeError(
@@ -1281,7 +1291,11 @@ def _handle_inter_monomer_rescue(
             f"{exc}; MLpot overlap rescue failed: {rescue_exc}"
         ) from rescue_exc
     try:
-        return _overlap_check(config, context=f"{label} after overlap rescue")
+        return _overlap_check(
+            config,
+            context=f"{label} after overlap rescue",
+            mlpot_ctx=mlpot_ctx,
+        )
     except RuntimeError as still_bad:
         if config.separate_on_rescue_fail:
             return _apply_separation_or_raise(
@@ -1434,7 +1448,7 @@ def _handle_extent_cleanup_rescue(
             f"{exc}; coordinates span ±{max_abs:.0f} Å — refuse cleanup extent rescue "
             "(integration blow-up; fix heat ihtfrq < chunk nstep or use Hoover heat)"
         ) from exc
-    offsets = monomer_offsets(int(pos.shape[0]), config.n_monomers)
+    offsets = resolve_overlap_monomer_offsets(config, mlpot_ctx)
     cell = _overlap_cell(
         use_pbc=config.use_pbc,
         fallback_box_side_A=config.fallback_box_side_A,
