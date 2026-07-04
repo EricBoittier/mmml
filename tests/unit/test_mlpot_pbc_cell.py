@@ -600,6 +600,32 @@ def test_register_mlpot_context_forwards_cell():
     assert model is fake_model
 
 
+def test_warmup_decomposed_mlpot_uses_single_callback_forward_jit():
+    z = np.zeros(8, dtype=int)
+    model = DecomposedMlpotModel(
+        MagicMock(), CutoffParameters(), 2, z, cell=20.0, do_mm=False
+    )
+    r = np.zeros((8, 3), dtype=float)
+
+    with patch(
+        "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
+    ) as mock_spherical_warmup, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
+    ) as mock_callback_warmup, patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ):
+        warmup_decomposed_mlpot(model, r, verbose=False)
+
+    mock_spherical_warmup.assert_not_called()
+    mock_callback_warmup.assert_called_once()
+    box = mock_callback_warmup.call_args.kwargs["box"]
+    assert box is not None
+    assert float(box[0, 0]) == pytest.approx(20.0)
+
+
 def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     z = np.zeros(8, dtype=int)
     model = DecomposedMlpotModel(
@@ -610,17 +636,20 @@ def test_warmup_decomposed_mlpot_passes_box_when_cell_set():
     with patch(
         "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
     ) as mock_warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
     ) as mock_vg_warmup, patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        return_value=False,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         warmup_decomposed_mlpot(model, r, verbose=False)
 
-    mock_warmup.assert_called_once()
-    box = mock_warmup.call_args.kwargs["box"]
+    mock_warmup.assert_not_called()
+    mock_vg_warmup.assert_called_once()
+    box = mock_vg_warmup.call_args.kwargs["box"]
     assert box is not None
     assert float(box[0, 0]) == pytest.approx(20.0)
-    mock_vg_warmup.assert_called_once()
 
 
 def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
@@ -642,16 +671,19 @@ def test_warmup_decomposed_mlpot_do_mm_uses_get_update_fn():
     with patch(
         "mmml.utils.jax_gpu_warmup.warmup_hybrid_spherical_cutoff",
     ) as mock_warmup, patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_value_and_grad_for_model",
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot._warmup_mlpot_callback_forward",
     ) as mock_vg_warmup, patch(
+        "mmml.utils.jax_gpu_warmup.ensure_xla_gpu_warmed",
+        return_value=False,
+    ), patch(
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ):
         warmup_decomposed_mlpot(model, r, verbose=False)
 
     get_update_fn.assert_called_once()
-    mock_warmup.assert_called_once()
-    assert mock_warmup.call_args.kwargs["doMM"] is True
+    mock_warmup.assert_not_called()
     mock_vg_warmup.assert_called_once()
+    assert mock_vg_warmup.call_args.kwargs["use_mm_pairs"] is True
 
 
 def test_resolve_mm_pairs_raises_when_pbc_update_returns_empty():

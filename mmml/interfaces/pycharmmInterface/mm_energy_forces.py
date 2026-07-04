@@ -1503,10 +1503,6 @@ def build_mm_energy_forces_fn(
                 cell = _box_to_cell_3x3(jnp.asarray(pbc_cell, dtype=pos.dtype))
             return pos @ cell
 
-        @jax.jit
-        def _max_cartesian_displacement(current: Array, previous: Array) -> Array:
-            return jnp.max(jnp.linalg.norm(current - previous, axis=1))
-
         def _box_delta_within_tolerance(box_in: Optional[np.ndarray]) -> bool:
             if box_in is None or _last_box[0] is None:
                 return box_in is None and _last_box[0] is None
@@ -1697,11 +1693,10 @@ def build_mm_energy_forces_fn(
                     return _pair_idx_cell[0], _pair_mask_cell[0]
                 _pair_stats["device_skin_checks"] += 1
                 R_cart_jax = _jax_cartesian_for_nl_build(positions_jax, box)
-                max_disp = _max_cartesian_displacement(
-                    R_cart_jax,
-                    _last_cartesian_positions_jax[0],
-                )
-                if bool(np.asarray(jax.device_get(max_disp <= skin))):
+                c = np.asarray(jax.device_get(R_cart_jax), dtype=np.float64)
+                p = np.asarray(jax.device_get(_last_cartesian_positions_jax[0]), dtype=np.float64)
+                max_disp = float(np.max(np.linalg.norm(c - p, axis=1)))
+                if max_disp <= skin:
                     _pair_stats["reused"] += 1
                     _pair_stats["cache_reuse_reason"] = "device_skin"
                     _pair_stats["last_reuse_reason"] = "device_skin"

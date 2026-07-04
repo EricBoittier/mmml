@@ -1410,7 +1410,7 @@ def _resolve_mlpot_warmup_box_pairs(
     return box, mm_pair_idx, mm_pair_mask, use_mm_pairs
 
 
-def _warmup_value_and_grad_for_model(
+def _warmup_mlpot_callback_forward(
     model: DecomposedMlpotModel,
     positions: np.ndarray,
     *,
@@ -1419,7 +1419,12 @@ def _warmup_value_and_grad_for_model(
     mm_pair_mask: Any = None,
     use_mm_pairs: bool = False,
 ) -> None:
-    """Compile the CHARMM callback spherical forward path (SD / dynamics)."""
+    """Compile the CHARMM MLpot callback ``forward_fn`` JIT (energy + forces).
+
+    This is the authoritative warmup for decomposed MLpot: one stable ``jax.jit``
+    wrapping ``spherical_fn``. Do not also call ``warmup_hybrid_spherical_cutoff``
+    here — that duplicates XLA compilation of the same hybrid graph.
+    """
     from mmml.interfaces.pycharmmInterface.jax_device_policy import mlpot_jax_device_context
     from mmml.utils.jax_gpu_warmup import block_jax_values, run_jax_warmup_passes
 
@@ -1476,11 +1481,15 @@ def _warmup_value_and_grad_for_model(
             )
 
         run_jax_warmup_passes(
-            "mlpot_spherical_forward",
+            "mlpot_callback_forward",
             2,
             _run_forward,
             block=lambda out: block_jax_values(out[0], out[1]),
         )
+
+
+# Backward-compatible alias (tests / older call sites).
+_warmup_value_and_grad_for_model = _warmup_mlpot_callback_forward
 
 
 def materialize_deferred_mlpot_jax_before_sd(
@@ -1618,7 +1627,7 @@ def materialize_deferred_mlpot_jax_before_sd(
                 "(same path as steepd gete)",
                 flush=True,
             )
-            _warmup_value_and_grad_for_model(
+            _warmup_mlpot_callback_forward(
                 pyCModel,
                 pos,
                 box=box,
@@ -1692,8 +1701,17 @@ def warmup_decomposed_mlpot(
     cell: Union[float, bool] | None = None,
     verbose: bool = False,
 ) -> None:
-    """JIT-compile hybrid ML/MM on GPU (after MLpot SD when MPI defers JAX)."""
-    from mmml.utils.jax_gpu_warmup import maybe_sanitize_process_env_for_ptxas
+    """JIT-compile the MLpot CHARMM callback path (single ``forward_fn`` graph).
+
+    Compiles one stable ``jax.jit(forward_fn)`` that wraps ``spherical_fn`` — the
+    same entry point ``DecomposedMlpotCalculator.calculate_charmm`` uses. Avoids
+    a separate ``warmup_hybrid_spherical_cutoff`` pass that would duplicate XLA
+    work (slice/mul/scatter/PhysNet/jax-pme compiled twice).
+    """
+    from mmml.utils.jax_gpu_warmup import (
+        ensure_xla_gpu_warmed,
+        maybe_sanitize_process_env_for_ptxas,
+    )
 
     maybe_sanitize_process_env_for_ptxas()
     if getattr(model, "_jax_warmup_done", False) and model._spherical_fn is not None:
@@ -1702,7 +1720,6 @@ def warmup_decomposed_mlpot(
         model.promote_jax_factory_to_gpu(force_after_sd=True)
     else:
         model._finalize_jax_factory()
-    from mmml.utils.jax_gpu_warmup import warmup_hybrid_spherical_cutoff
 
     z = np.asarray(physnet_ml_atomic_numbers(model._atomic_numbers), dtype=int)
     r = np.asarray(positions, dtype=np.float64)
@@ -1738,26 +1755,16 @@ def warmup_decomposed_mlpot(
             msg += f", MIC PBC L={float(pbc_cell):.3f} Å"
         print(msg, flush=True)
 
-    if verbose:
-        print("Decomposed MLpot JAX warmup: spherical_cutoff...", flush=True)
+    prefer_cpu = bool(model._jax_pme_lr_active() and not model._jax_on_gpu)
+    if not prefer_cpu:
+        ensure_xla_gpu_warmed(force=False)
 
-    warmup_hybrid_spherical_cutoff(
-        model._spherical_fn,
-        atomic_numbers=jnp.asarray(z),
-        positions=jnp.asarray(r),
-        n_monomers=model._n_monomers,
-        cutoff_params=model._cutoff_params,
-        doML=True,
-        doMM=model._do_mm,
-        doML_dimer=True,
-        box=box,
-        mm_pair_idx=mm_pair_idx,
-        mm_pair_mask=mm_pair_mask,
-        prefer_cpu=model._jax_pme_lr_active() and not model._jax_on_gpu,
-    )
     if verbose:
-        print("Decomposed MLpot JAX warmup: spherical_forward...", flush=True)
-    _warmup_value_and_grad_for_model(
+        print(
+            "Decomposed MLpot JAX warmup: mlpot_callback_forward (single jit)...",
+            flush=True,
+        )
+    _warmup_mlpot_callback_forward(
         model,
         r,
         box=box,
