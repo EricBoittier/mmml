@@ -1582,18 +1582,6 @@ def setup_calculator(
             mm_switch_on = cutoff_params.mm_switch_on
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
-            def _cubic_side_from_cell(cell_arr):
-                if cell_arr is None:
-                    return None
-                c = jnp.asarray(cell_arr)
-                if c.ndim == 1:
-                    return float(c.reshape(-1)[0])
-                if c.shape == (3, 3) and jnp.allclose(c - jnp.diag(jnp.diag(c)), 0.0):
-                    return float(c[0, 0])
-                return None
-
-            _cubic_side = _cubic_side_from_cell(cell_for_mic)
-
             def _dimer_com_dist(pos_di, na, nb):
                 # Masked reduction for vmap compatibility (na, nb can be traced)
                 max_n = pos_di.shape[0]
@@ -1604,17 +1592,13 @@ def setup_calculator(
                 n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
                 com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
                 com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
-                if _cubic_side is not None:
-                    side = jnp.asarray(_cubic_side, dtype=pos_di.dtype)
-                    offsets = jnp.array([-1.0, 0.0, 1.0], dtype=pos_di.dtype)
-                    tx, ty, tz = jnp.meshgrid(offsets, offsets, offsets, indexing="ij")
-                    shifts = (
-                        jnp.stack([tx.reshape(-1), ty.reshape(-1), tz.reshape(-1)], axis=1)
-                        * side
-                    )
-                    dists = jnp.linalg.norm(com_b[None, :] + shifts - com_a[None, :], axis=1)
-                    return jnp.min(dists)
-                d = mic_fn(com_a, com_b, cell_for_mic) if cell_for_mic is not None else com_b - com_a
+                # Always use MIC inside JIT; cubic 3x3 shell fast path lives in
+                # mlpot_sparse_dimer_policy (numpy) for validation scripts only.
+                d = (
+                    mic_fn(com_a, com_b, cell_for_mic)
+                    if cell_for_mic is not None
+                    else com_b - com_a
+                )
                 return jnp.linalg.norm(d)
 
             com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
