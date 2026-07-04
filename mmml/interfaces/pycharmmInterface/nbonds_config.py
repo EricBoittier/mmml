@@ -402,6 +402,138 @@ def _rtf_path_without_drude_autogen(rtf_path: str | Path) -> str:
     return path
 
 
+_PBC_NBOND_STASH_ATTR = "_pbc_nbond_cutoffs_applied"
+
+
+def _pbc_box_L_match(stored_L: float, target_L: float) -> bool:
+    return abs(float(stored_L) - float(target_L)) <= max(1e-3, 1e-4 * float(target_L))
+
+
+def pbc_nbond_cutoffs_invariant_ok(
+    cuts: PbcNbondCutoffs,
+    *,
+    strict_half: bool = True,
+) -> bool:
+    """True when ``0 < ctonnb < ctofnb <= cutnb < L/2``."""
+    L = float(cuts.cubic_box_side_A)
+    if not (L > 0.0) or L != L:
+        return False
+    if float(cuts.ctonnb) <= 0.0:
+        return False
+    if not charmm_nbond_cutoffs_orderly(cuts.cutnb, cuts.ctonnb, cuts.ctofnb):
+        return False
+    if float(cuts.ctofnb) > float(cuts.cutnb) + 1e-6:
+        return False
+    if strict_half and not (float(cuts.cutnb) < 0.5 * L):
+        return False
+    return True
+
+
+def stash_pbc_nbond_cutoffs(workflow_args: Any, cuts: PbcNbondCutoffs) -> None:
+    """Remember PBC nbond targets applied during pretreat for MLpot registration."""
+    if workflow_args is None:
+        return
+    setattr(workflow_args, _PBC_NBOND_STASH_ATTR, cuts)
+
+
+def get_stashed_pbc_nbond_cutoffs(
+    workflow_args: Any,
+    cubic_box_side_A: float,
+) -> PbcNbondCutoffs | None:
+    if workflow_args is None:
+        return None
+    cuts = getattr(workflow_args, _PBC_NBOND_STASH_ATTR, None)
+    if not isinstance(cuts, PbcNbondCutoffs):
+        return None
+    if not _pbc_box_L_match(cuts.cubic_box_side_A, cubic_box_side_A):
+        return None
+    return cuts
+
+
+def resolve_pbc_nbond_cutoffs(
+    cubic_box_side_A: float,
+    *,
+    workflow_args: Any = None,
+    cutoff_params: Any = None,
+    mm_switch_on: float | None = None,
+    mm_switch_width: float | None = None,
+    prefer_stashed: bool = True,
+    use_workflow_mm_switches: bool = False,
+) -> PbcNbondCutoffs:
+    """Single source of truth for PBC CHARMM nbond targets.
+
+    Reuses cutoffs stashed during ``setup_charmm_environment`` / pretreat when the
+    box side matches, so MLpot registration does not recompute uncapped vacuum
+    switches after a tighter L/2 cap was already applied.
+
+    Fresh targets use DEFAULT MM switches (8+5 Å) unless
+    ``use_workflow_mm_switches=True`` or explicit ``mm_switch_on`` / width are
+    passed.  Pretreat stashes the capped defaults; registration prefers that stash
+    even when workflow JAX switches are wider (e.g. 12+6 Å).
+    """
+    L = float(cubic_box_side_A)
+    if prefer_stashed:
+        stashed = get_stashed_pbc_nbond_cutoffs(workflow_args, L)
+        if stashed is not None and pbc_nbond_cutoffs_invariant_ok(stashed):
+            return stashed
+
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+        CutoffParameters,
+        cutoff_parameters_from_args,
+    )
+
+    cp = cutoff_params
+    if cp is None and workflow_args is not None and use_workflow_mm_switches:
+        cp = cutoff_parameters_from_args(workflow_args)
+    if cp is None:
+        cp = CutoffParameters()
+
+    if mm_switch_on is not None:
+        mm_on = float(mm_switch_on)
+    elif use_workflow_mm_switches:
+        mm_on = float(getattr(cp, "mm_switch_on", DEFAULT_MM_SWITCH_ON))
+    else:
+        mm_on = float(DEFAULT_MM_SWITCH_ON)
+
+    if mm_switch_width is not None:
+        mm_w = float(mm_switch_width)
+    elif use_workflow_mm_switches:
+        mm_w = float(getattr(cp, "mm_switch_width", DEFAULT_MM_SWITCH_WIDTH))
+    else:
+        mm_w = float(DEFAULT_MM_SWITCH_WIDTH)
+
+    cuts = pbc_nbond_cutoffs_from_mlpot_switches(
+        L,
+        mm_switch_on=mm_on,
+        mm_switch_width=mm_w,
+    )
+    if not pbc_nbond_cutoffs_invariant_ok(cuts):
+        raise RuntimeError(
+            f"PBC nbond cutoffs violate CHARMM ordering for L={L:.3f} Å: "
+            f"cutnb/ctonnb/ctofnb={cuts.cutnb:.2f}/{cuts.ctonnb:.2f}/{cuts.ctofnb:.2f} "
+            f"(require 0 < ctonnb < ctofnb <= cutnb < L/2={0.5 * L:.2f})"
+        )
+    return cuts
+
+
+def assert_pbc_nbond_cutoffs_before_upinb(
+    cuts: PbcNbondCutoffs,
+    *,
+    context: str = "PBC nbonds",
+) -> None:
+    """Raise when cutoffs would fail CHARMM ``upinb`` / ``UPDATE`` ordering checks."""
+    if pbc_nbond_cutoffs_invariant_ok(cuts):
+        return
+    L = float(cuts.cubic_box_side_A)
+    raise RuntimeError(
+        f"{context}: invalid PBC nbond cutoffs for L={L:.3f} Å: "
+        f"cutnb/ctonnb/ctofnb={cuts.cutnb:.2f}/{cuts.ctonnb:.2f}/{cuts.ctofnb:.2f} "
+        f"(require 0 < ctonnb < ctofnb <= cutnb < L/2={0.5 * L:.2f})"
+    )
+
+
 def read_charmm_switch_cutoffs() -> tuple[float, float]:
     """Return live ``(ctonnb, ctofnb)`` from CHARMM (Å)."""
     import pycharmm.nbonds as nbonds

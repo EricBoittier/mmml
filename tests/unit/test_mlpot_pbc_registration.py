@@ -293,17 +293,16 @@ def test_finalize_pbc_exclusions_uses_prepare_charmm_pbc():
             fake_sel,
             cubic_box_side_A=32.0,
             verbose=False,
+            workflow_args=MagicMock(),
         )
     prepare.assert_called_once_with(
         32.0,
-        mm_switch_on=8.0,
-        mm_switch_width=5.0,
+        workflow_args=prepare.call_args.kwargs.get("workflow_args"),
     )
     apply_nb.assert_any_call(
         32.0,
         rebuild=False,
-        mm_switch_on=8.0,
-        mm_switch_width=5.0,
+        workflow_args=apply_nb.call_args.kwargs.get("workflow_args"),
         context="MLpot PBC registration (pre-upinb)",
     )
     install.assert_called_once_with(fake_sel, update=False)

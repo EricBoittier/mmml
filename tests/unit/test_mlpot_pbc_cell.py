@@ -1395,6 +1395,65 @@ def test_pbc_nbond_cutoffs_l38_matches_mlpot_switches():
     assert cuts.cutnb < 0.5 * 38.0
 
 
+def test_resolve_pbc_nbond_cutoffs_prefers_stashed_pretreat_caps():
+    import argparse
+
+    from mmml.interfaces.pycharmmInterface.cutoffs import (
+        DEFAULT_MM_SWITCH_ON,
+        DEFAULT_MM_SWITCH_WIDTH,
+    )
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        PbcNbondCutoffs,
+        pbc_nbond_cutoffs_from_mlpot_switches,
+        resolve_pbc_nbond_cutoffs,
+        stash_pbc_nbond_cutoffs,
+    )
+
+    pretreat = pbc_nbond_cutoffs_from_mlpot_switches(
+        38.0,
+        mm_switch_on=DEFAULT_MM_SWITCH_ON,
+        mm_switch_width=DEFAULT_MM_SWITCH_WIDTH,
+    )
+    assert pretreat.cutnb == pytest.approx(13.0)
+    args = argparse.Namespace(
+        mm_switch_on=12.0,
+        mm_switch_width=6.0,
+    )
+    stash_pbc_nbond_cutoffs(args, pretreat)
+    resolved = resolve_pbc_nbond_cutoffs(38.0, workflow_args=args)
+    assert resolved is pretreat
+    assert resolved.cutnb == pytest.approx(13.0)
+    assert resolved.ctonnb == pytest.approx(9.0)
+    assert resolved.ctofnb == pytest.approx(12.28, rel=0, abs=0.01)
+
+
+def test_pbc_nbond_cutoffs_invariant_requires_ordering():
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        PbcNbondCutoffs,
+        pbc_nbond_cutoffs_invariant_ok,
+    )
+
+    ordered = PbcNbondCutoffs(
+        cubic_box_side_A=38.0,
+        cutnb=13.0,
+        cutim=13.0,
+        ctonnb=9.0,
+        ctofnb=12.28,
+        ctexnb=13.0,
+    )
+    assert pbc_nbond_cutoffs_invariant_ok(ordered)
+
+    disordered = PbcNbondCutoffs(
+        cubic_box_side_A=38.0,
+        cutnb=13.0,
+        cutim=13.0,
+        ctonnb=13.0,
+        ctofnb=17.0,
+        ctexnb=13.0,
+    )
+    assert not pbc_nbond_cutoffs_invariant_ok(disordered)
+
+
 def test_ensure_headroom_bumps_cutnb_when_stuck():
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         _ensure_headroom_before_switch_apply,

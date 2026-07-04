@@ -409,7 +409,7 @@ def run_liquid_box_build(args: argparse.Namespace) -> LiquidBoxBuildResult:
     )
 
     mini_nprint = apply_charmm_output_from_args(args)
-    setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
+    setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side, workflow_args=args)
     sync_charmm_positions(r)
 
     maybe_probe_packmol_mic_pipeline(

@@ -589,6 +589,7 @@ def prepare_charmm_pbc(
     *,
     mm_switch_on: float | None = None,
     mm_switch_width: float | None = None,
+    workflow_args: Any = None,
 ) -> None:
     """Install CHARMM crystal + IMAGE for a cubic cell."""
     import pycharmm.crystal as crystal
@@ -613,23 +614,23 @@ def prepare_charmm_pbc(
         mpi_charmm_script(pbcset.format(SIDELENGTH=L), quiet=True)
         if not crystal.define_cubic(L):
             raise RuntimeError(f"crystal.define_cubic failed for L={L} Å")
-        from mmml.interfaces.pycharmmInterface.cutoffs import (
-            DEFAULT_MM_SWITCH_ON,
-            DEFAULT_MM_SWITCH_WIDTH,
-        )
         from mmml.interfaces.pycharmmInterface.nbonds_config import (
             apply_nbonds_kwargs,
             apply_switch_nbond_cutoffs_before_cutnb,
-            pbc_nbond_cutoffs_from_mlpot_switches,
+            resolve_pbc_nbond_cutoffs,
+            stash_pbc_nbond_cutoffs,
         )
 
-        mm_on = DEFAULT_MM_SWITCH_ON if mm_switch_on is None else float(mm_switch_on)
-        mm_w = DEFAULT_MM_SWITCH_WIDTH if mm_switch_width is None else float(mm_switch_width)
-        cuts = pbc_nbond_cutoffs_from_mlpot_switches(
+        cuts = resolve_pbc_nbond_cutoffs(
             L,
-            mm_switch_on=mm_on,
-            mm_switch_width=mm_w,
+            workflow_args=workflow_args,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            use_workflow_mm_switches=(
+                mm_switch_on is not None or mm_switch_width is not None
+            ),
         )
+        stash_pbc_nbond_cutoffs(workflow_args, cuts)
         # domdec builds set cutnb=crystal build cutoff before switch radii are lowered.
         apply_switch_nbond_cutoffs_before_cutnb(
             cuts.ctonnb,
@@ -654,6 +655,8 @@ def apply_pbc_nbonds(
     rebuild: bool = True,
     mm_switch_on: float | None = None,
     mm_switch_width: float | None = None,
+    workflow_args: Any = None,
+    cuts: PbcNbondCutoffs | None = None,
 ) -> PbcNbondCutoffs:
     """Nonbond list for periodic CHARMM (``cutim >= cutnb``).
 
@@ -669,37 +672,43 @@ def apply_pbc_nbonds(
         PbcNbondCutoffs,
         apply_nbonds_kwargs,
         pbc_nbond_cutoffs,
-        pbc_nbond_cutoffs_from_mlpot_switches,
+        resolve_pbc_nbond_cutoffs,
         scale_vacuum_switch_cutoffs,
+        stash_pbc_nbond_cutoffs,
     )
 
     mm_on = DEFAULT_MM_SWITCH_ON if mm_switch_on is None else float(mm_switch_on)
     mm_w = DEFAULT_MM_SWITCH_WIDTH if mm_switch_width is None else float(mm_switch_width)
 
-    if cubic_box_side_A is not None:
-        if cutnb is not None:
-            cuts = pbc_nbond_cutoffs(cubic_box_side_A, cutnb_max=float(cutnb))
+    if cuts is None:
+        if cubic_box_side_A is not None:
+            if cutnb is not None:
+                cuts = pbc_nbond_cutoffs(cubic_box_side_A, cutnb_max=float(cutnb))
+            else:
+                cuts = resolve_pbc_nbond_cutoffs(
+                    cubic_box_side_A,
+                    workflow_args=workflow_args,
+                    mm_switch_on=mm_on,
+                    mm_switch_width=mm_w,
+                    use_workflow_mm_switches=(
+                        mm_switch_on is not None or mm_switch_width is not None
+                    ),
+                )
         else:
-            cuts = pbc_nbond_cutoffs_from_mlpot_switches(
-                cubic_box_side_A,
-                mm_switch_on=mm_on,
-                mm_switch_width=mm_w,
+            nb = float(cutnb) if cutnb is not None else mm_on + mm_w
+            ctonnb, ctofnb = scale_vacuum_switch_cutoffs(nb)
+            cutim = nb + 4.0
+            cuts = PbcNbondCutoffs(
+                cubic_box_side_A=float("nan"),
+                cutnb=nb,
+                cutim=cutim,
+                ctonnb=ctonnb,
+                ctofnb=ctofnb,
+                ctexnb=nb,
             )
-    else:
-        nb = float(cutnb) if cutnb is not None else mm_on + mm_w
-        ctonnb, ctofnb = scale_vacuum_switch_cutoffs(nb)
-        cutim = nb + 4.0
-        cuts = PbcNbondCutoffs(
-            cubic_box_side_A=float("nan"),
-            cutnb=nb,
-            cutim=cutim,
-            ctonnb=ctonnb,
-            ctofnb=ctofnb,
-            ctexnb=nb,
-        )
-    from mmml.interfaces.pycharmmInterface.nbonds_config import apply_nbonds_kwargs
 
     apply_nbonds_kwargs(cuts.as_pbc_nbond_kwargs(nbxmod=nbxmod), rebuild=rebuild)
+    stash_pbc_nbond_cutoffs(workflow_args, cuts)
     return cuts
 
 
@@ -708,6 +717,7 @@ def reassert_pbc_nbond_cutoffs(
     *,
     mm_switch_on: float | None = None,
     mm_switch_width: float | None = None,
+    workflow_args: Any = None,
     rebuild: bool = False,
     context: str = "PBC nbonds",
     strict: bool = False,
@@ -720,20 +730,34 @@ def reassert_pbc_nbond_cutoffs(
     """
     from mmml.interfaces.pycharmmInterface.nbonds_config import (
         apply_switch_nbond_cutoffs_before_cutnb,
+        assert_pbc_nbond_cutoffs_before_upinb,
         charmm_has_vacuum_nbond_preset,
         charmm_nbond_cutoffs_match_target,
         log_charmm_pbc_nbond_cutoffs,
+        resolve_pbc_nbond_cutoffs,
+        stash_pbc_nbond_cutoffs,
     )
+
+    cuts = resolve_pbc_nbond_cutoffs(
+        float(cubic_box_side_A),
+        workflow_args=workflow_args,
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        use_workflow_mm_switches=(
+            mm_switch_on is not None or mm_switch_width is not None
+        ),
+    )
+    assert_pbc_nbond_cutoffs_before_upinb(cuts, context=context)
 
     def _apply() -> PbcNbondCutoffs:
         return apply_pbc_nbonds(
             cubic_box_side_A=float(cubic_box_side_A),
             rebuild=rebuild,
-            mm_switch_on=mm_switch_on,
-            mm_switch_width=mm_switch_width,
+            workflow_args=workflow_args,
+            cuts=cuts,
         )
 
-    cuts = _apply()
+    applied = _apply()
     if charmm_has_vacuum_nbond_preset() or not charmm_nbond_cutoffs_match_target(cuts):
         print(
             f"{context}: re-applying PBC cutoffs (vacuum preset or target mismatch)…",
@@ -744,7 +768,8 @@ def reassert_pbc_nbond_cutoffs(
             cuts.ctofnb,
             rebuild=False,
         )
-        cuts = _apply()
+        applied = _apply()
+    stash_pbc_nbond_cutoffs(workflow_args, cuts)
     log_charmm_pbc_nbond_cutoffs(cuts, context=context, strict=strict)
     return cuts
 
@@ -754,6 +779,7 @@ def setup_charmm_environment(
     use_pbc: bool,
     cubic_box_side_A: float | None,
     nbxmod: int = 5,
+    workflow_args: Any = None,
 ) -> dict[str, Any]:
     """Vacuum or PBC CHARMM environment before MLpot registration."""
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -764,14 +790,16 @@ def setup_charmm_environment(
     if use_pbc:
         if cubic_box_side_A is None or float(cubic_box_side_A) <= 0.0:
             raise ValueError("PBC requires a positive cubic box side (Å)")
-        prepare_charmm_pbc(float(cubic_box_side_A))
+        side = float(cubic_box_side_A)
+        prepare_charmm_pbc(side, workflow_args=workflow_args)
         cuts = apply_pbc_nbonds(
             nbxmod=nbxmod,
-            cubic_box_side_A=float(cubic_box_side_A),
+            cubic_box_side_A=side,
+            workflow_args=workflow_args,
         )
         if cuts.was_capped:
             print(cuts.summary_line(), flush=True)
-        return {"pbc": True, "box_A": float(cubic_box_side_A)}
+        return {"pbc": True, "box_A": side}
     prepare_charmm_vacuum()
     setup_default_nbonds(nbxmod=nbxmod)
     return {"pbc": False, "box_A": None}

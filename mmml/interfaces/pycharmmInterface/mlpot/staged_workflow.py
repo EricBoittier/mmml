@@ -1596,7 +1596,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             flush=True,
         )
 
-    setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side)
+    setup_charmm_environment(use_pbc=charmm_pbc, cubic_box_side_A=box_side, workflow_args=args)
     if atoms_per_list is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 

@@ -637,7 +637,7 @@ def _setup_charmm_nbonds_for_args(
             )
         else:
             print(f"PBC cubic box: {box_side:.3f} Å", flush=True)
-    setup_charmm_environment(use_pbc=True, cubic_box_side_A=box_side)
+    setup_charmm_environment(use_pbc=True, cubic_box_side_A=box_side, workflow_args=args)
     return float(box_side)
 
 

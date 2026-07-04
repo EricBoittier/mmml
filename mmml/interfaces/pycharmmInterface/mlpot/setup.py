@@ -1384,25 +1384,15 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
     from mmml.interfaces.pycharmmInterface.charmm_mpi import (
         recover_mpi_for_charmm_after_jax,
     )
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
-        CutoffParameters,
-        cutoff_parameters_from_args,
-    )
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
         prepare_charmm_pbc,
         reassert_pbc_nbond_cutoffs,
     )
 
     workflow_args = getattr(mlpot_ctx, "workflow_args", None)
-    cp = (
-        cutoff_parameters_from_args(workflow_args)
-        if workflow_args is not None
-        else CutoffParameters()
-    )
     prepare_charmm_pbc(
         float(side),
-        mm_switch_on=cp.mm_switch_on,
-        mm_switch_width=cp.mm_switch_width,
+        workflow_args=workflow_args,
     )
     recover_mpi_for_charmm_after_jax(
         phase=f"after {context} PBC crystal/IMAGE build",
@@ -1411,8 +1401,7 @@ def ensure_ml_exclusions_before_mlpot_charmm_energy(
         reassert_pbc_nbond_cutoffs(
             float(side),
             rebuild=False,
-            mm_switch_on=cp.mm_switch_on,
-            mm_switch_width=cp.mm_switch_width,
+            workflow_args=workflow_args,
             context=f"{context} (pre-upinb)",
         )
     # Always reinstall ML iblo/inb before upinb (same as registration finalize).
@@ -1623,16 +1612,6 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     )
 
     side = float(cubic_box_side_A)
-    from mmml.interfaces.pycharmmInterface.cutoffs import (
-        CutoffParameters,
-        cutoff_parameters_from_args,
-    )
-
-    cp = (
-        cutoff_parameters_from_args(workflow_args)
-        if workflow_args is not None
-        else CutoffParameters()
-    )
     rewrap_charmm_coords_for_mlpot_pbc(
         cubic_box_side_A=side,
         workflow_args=workflow_args,
@@ -1640,8 +1619,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     )
     prepare_charmm_pbc(
         side,
-        mm_switch_on=cp.mm_switch_on,
-        mm_switch_width=cp.mm_switch_width,
+        workflow_args=workflow_args,
     )
     recover_mpi_for_charmm_after_jax(
         phase="after MLpot PBC crystal/IMAGE build",
@@ -1655,8 +1633,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         reassert_pbc_nbond_cutoffs(
             side,
             rebuild=False,
-            mm_switch_on=cp.mm_switch_on,
-            mm_switch_width=cp.mm_switch_width,
+            workflow_args=workflow_args,
             context="MLpot PBC registration (pre-upinb)",
         )
     _install_ml_exclusions(ml_selection, update=False)
@@ -1676,8 +1653,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         reassert_pbc_nbond_cutoffs(
             side,
             rebuild=False,
-            mm_switch_on=cp.mm_switch_on,
-            mm_switch_width=cp.mm_switch_width,
+            workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 1)",
         )
         pycharmm.lingo.charmm_script("UPDATE")
@@ -1691,8 +1667,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         reassert_pbc_nbond_cutoffs(
             side,
             rebuild=False,
-            mm_switch_on=cp.mm_switch_on,
-            mm_switch_width=cp.mm_switch_width,
+            workflow_args=workflow_args,
             context="MLpot PBC registration (before UPDATE 2)",
         )
         pycharmm.lingo.charmm_script("UPDATE")
@@ -1700,8 +1675,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
     reassert_pbc_nbond_cutoffs(
         side,
         rebuild=False,
-        mm_switch_on=cp.mm_switch_on,
-        mm_switch_width=cp.mm_switch_width,
+        workflow_args=workflow_args,
         context="MLpot PBC registration (post-upinb)",
         strict=False,
     )
@@ -1904,6 +1878,7 @@ def register_mlpot(
         reassert_pbc_nbond_cutoffs(
             float(reg_box),
             rebuild=False,
+            workflow_args=workflow_args,
             context="MLpot PBC registration (post-UPDATE)",
         )
     ctx = MlpotContext(
