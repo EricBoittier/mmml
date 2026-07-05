@@ -378,6 +378,8 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
