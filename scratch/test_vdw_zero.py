@@ -1,16 +1,28 @@
 import argparse
+import sys
+import pycharmm
+from pycharmm.lingo import charmm_script
+
 from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
-    setup_cli_parser, build_cluster_from_args
+    build_cluster_from_args
+)
+from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
+from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+    add_cluster_args,
+    add_charmm_output_args,
 )
 from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
     enforce_charmm_energy_term_policies
 )
-import pycharmm
-from pycharmm.lingo import charmm_script
 
-parser = setup_cli_parser("Test")
+parser = argparse.ArgumentParser()
+parser.add_argument("composition_arg", nargs="?", help="Shortcut for --composition")
+add_cluster_args(parser)
+add_charmm_output_args(parser)
+add_handoff_cutoff_args(parser)
+parser.add_argument("--charmm-zero-energy-terms", default="vdw")
+
 args = parser.parse_args(["DCM:4"])
-
 handoff = build_cluster_from_args(args)
 
 charmm_script("ENER")
