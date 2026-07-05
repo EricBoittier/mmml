@@ -134,15 +134,19 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
         args.mini_lattice_abnr_steps = 0
         args.density_prep_lattice_abnr_steps = 0
         args.mini_box_equil_ps = 0.0
-    elif getattr(args, "mini_lattice_abnr_steps", None) is None:
-        # Explicit 0 (YAML/CLI) must stay off — do not treat as "unset".
-        args.mini_lattice_abnr_steps = 200
-        if float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0) <= 0.0:
+    else:
+        if getattr(args, "mini_lattice_abnr_steps", None) is None:
+            # Explicit 0 (YAML/CLI) must stay off — do not treat as "unset".
+            args.mini_lattice_abnr_steps = 200
+        if getattr(args, "mini_box_equil_ps", None) is None:
             from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
                 DEFAULT_MINI_BOX_EQUIL_PS,
             )
 
-            args.mini_box_equil_ps = float(DEFAULT_MINI_BOX_EQUIL_PS)
+            n_lat = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
+            args.mini_box_equil_ps = (
+                float(DEFAULT_MINI_BOX_EQUIL_PS) if n_lat > 0 else 0.0
+            )
 
     if getattr(args, "min_intermonomer_atom_distance", None) is None:
         from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_OVERLAP_MIN_A

@@ -127,6 +127,28 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+def test_build_pycharmm_command_forwards_zero_mini_box_equil_and_lattice():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            mini_box_equil_ps=0.0,
+            mini_lattice_abnr_steps=0,
+            density_prep_lattice_abnr_steps=0,
+        )
+    )
+    assert "--mini-box-equil-ps" in cmd
+    assert cmd[cmd.index("--mini-box-equil-ps") + 1] == "0.0"
+    assert "--mini-lattice-abnr-steps" in cmd
+    assert cmd[cmd.index("--mini-lattice-abnr-steps") + 1] == "0"
+    assert "--density-prep-lattice-abnr-steps" in cmd
+    assert cmd[cmd.index("--density-prep-lattice-abnr-steps") + 1] == "0"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.mini_box_equil_ps == pytest.approx(0.0)
+    assert parsed.mini_lattice_abnr_steps == 0
+    assert parsed.density_prep_lattice_abnr_steps == 0
+
+
 def test_build_pycharmm_command_forwards_dyn_freq_cadence():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 

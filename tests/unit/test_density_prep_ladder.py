@@ -24,7 +24,7 @@ def _args(**overrides) -> argparse.Namespace:
         mini_nstep=20,
         bonded_mm_mini_steps=200,
         mini_lattice_abnr_steps=None,
-        mini_box_equil_ps=0.0,
+        mini_box_equil_ps=None,
         mini_lattice_abnr_allow_fixed_box=False,
         mini_box_equil_allow_fixed_box=False,
         calculator_pre_minimize=True,
@@ -59,6 +59,17 @@ def test_resilient_defaults_respect_explicit_zero_mini_lattice_abnr():
     args = _args(liquid_prep=True, mini_lattice_abnr_steps=0)
     apply_density_prep_resilient_defaults(args)
     assert args.mini_lattice_abnr_steps == 0
+    assert args.mini_box_equil_ps == 0.0
+
+
+def test_resilient_defaults_respect_explicit_zero_mini_box_equil():
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_density_prep_resilient_defaults,
+    )
+
+    args = _args(liquid_prep=True, mini_box_equil_ps=0.0)
+    apply_density_prep_resilient_defaults(args)
+    assert args.mini_box_equil_ps == 0.0
 
 
 def test_resilient_defaults_respect_explicit_box_and_ladder_off():

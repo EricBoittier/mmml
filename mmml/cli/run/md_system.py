@@ -2052,9 +2052,8 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     mc_max_scale = float(getattr(args, "mc_density_max_scale", 1.50) or 0.0)
     if mc_max_scale != 1.50:
         cmd.extend(["--mc-density-max-scale", str(mc_max_scale)])
-    ps = float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0)
-    if ps > 0.0:
-        cmd.extend(["--mini-box-equil-ps", str(ps)])
+    if getattr(args, "mini_box_equil_ps", None) is not None:
+        cmd.extend(["--mini-box-equil-ps", str(float(args.mini_box_equil_ps))])
     _append_optional(cmd, "--mini-box-equil-ps-heat", getattr(args, "mini_box_equil_ps_heat", None))
     _append_optional(cmd, "--mini-box-equil-ps-cool", getattr(args, "mini_box_equil_ps_cool", None))
     _append_optional(cmd, "--mini-box-equil-hot-temp", getattr(args, "mini_box_equil_hot_temp", None))
@@ -2063,9 +2062,8 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     jax_ps = float(getattr(args, "jaxmd_mini_box_equil_ps", 0.0) or 0.0)
     if jax_ps > 0.0:
         cmd.extend(["--jaxmd-mini-box-equil-ps", str(jax_ps)])
-    lattice_n = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
-    if lattice_n > 0:
-        cmd.extend(["--mini-lattice-abnr-steps", str(lattice_n)])
+    if getattr(args, "mini_lattice_abnr_steps", None) is not None:
+        cmd.extend(["--mini-lattice-abnr-steps", str(int(args.mini_lattice_abnr_steps))])
     if getattr(args, "mini_lattice_abnr_nocoords", False):
         cmd.append("--mini-lattice-abnr-nocoords")
     if getattr(args, "mini_lattice_abnr_allow_fixed_box", False):
@@ -2084,9 +2082,9 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
     max_rounds = int(getattr(args, "density_prep_ladder_max_rounds", 3) or 3)
     if max_rounds != 3:
         cmd.extend(["--density-prep-ladder-max-rounds", str(max_rounds)])
-    lattice_ladder = int(getattr(args, "density_prep_lattice_abnr_steps", 0) or 0)
-    if lattice_ladder > 0:
-        cmd.extend(["--density-prep-lattice-abnr-steps", str(lattice_ladder)])
+    lattice_ladder = getattr(args, "density_prep_lattice_abnr_steps", None)
+    if lattice_ladder is not None:
+        cmd.extend(["--density-prep-lattice-abnr-steps", str(int(lattice_ladder))])
     pre_mlpot = getattr(args, "pre_mlpot_overlap_min_distance", None)
     if pre_mlpot is not None:
         cmd.extend(["--pre-mlpot-overlap-min-distance", str(pre_mlpot)])
