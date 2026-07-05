@@ -47,6 +47,10 @@ MmPairSource = Literal["jax", "charmm_callback"]
 _DEFAULT_MM_PAIR_SOURCE: MmPairSource = "charmm_callback"
 
 
+class _CallbackPairListUnavailable(RuntimeError):
+    """Raised internally when CHARMM callback pair lists are unusable."""
+
+
 def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
     """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback).
 
@@ -461,7 +465,7 @@ class DecomposedMlpotCalculator:
         if n_pairs <= 0:
             if not self.do_mm or int(self.n_monomers) <= 1:
                 return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
-            raise RuntimeError(
+            raise _CallbackPairListUnavailable(
                 "Decomposed MLpot: charmm_callback returned zero ML/MM pairs while "
                 "JAX MM is enabled for a multi-monomer system. Refusing to rebuild "
                 "pairs inside the CHARMM callback because this indicates stale "
@@ -622,23 +626,38 @@ class DecomposedMlpotCalculator:
         )
         if run_ml:
             with self._mlpot_eval_device_context():
-                if self._mm_pair_source == "charmm_callback":
-                    mm_pair_idx, mm_pair_mask, use_mm_pairs = (
-                        self._resolve_mm_pairs_from_callback(
-                            idxu,
-                            idxv,
-                            idxup,
-                            idxvp,
-                            natom=n,
-                            nmlmmp=int(Nmlmmp),
-                            pos=pos,
-                            box=box,
+                try:
+                    if self._mm_pair_source == "charmm_callback":
+                        mm_pair_idx, mm_pair_mask, use_mm_pairs = (
+                            self._resolve_mm_pairs_from_callback(
+                                idxu,
+                                idxv,
+                                idxup,
+                                idxvp,
+                                natom=n,
+                                nmlmmp=int(Nmlmmp),
+                                pos=pos,
+                                box=box,
+                            )
                         )
-                    )
-                else:
-                    mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(
-                        pos, box
-                    )
+                    else:
+                        mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(
+                            pos, box
+                        )
+                except _CallbackPairListUnavailable as exc:
+                    msg = str(exc)
+                    self._last_callback_error = msg
+                    self._last_callback_hybrid_energy_kcal = 0.0
+                    self._last_callback_user_return_kcal = 0.0
+                    self.last_ml_forces = np.zeros((n, 3), dtype=np.float64)
+                    parent = getattr(self, "_parent_model", None)
+                    if parent is not None:
+                        parent._last_callback_error = msg
+                        parent._last_ml_forces = self.last_ml_forces
+                    if not self._callback_pair_warned:
+                        print(f"WARN: {msg}", flush=True)
+                        self._callback_pair_warned = True
+                    return 0.0
                 positions_jax = as_ml_array(
                     pos,
                     dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None)),

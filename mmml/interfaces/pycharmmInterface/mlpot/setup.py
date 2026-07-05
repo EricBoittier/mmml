@@ -292,6 +292,9 @@ def _mlpot_user_registration_diag(ctx: MlpotContext) -> str:
     if fortran is not None:
         parts.append(f"Fortran mlpot_is_set={fortran}")
     calc = getattr(ctx.mlpot, "calculator", None)
+    callback_error = getattr(calc, "_last_callback_error", None)
+    if callback_error:
+        parts.append(f"callback error={callback_error}")
     callback_user = getattr(calc, "_last_callback_user_return_kcal", None)
     if callback_user is not None and np.isfinite(float(callback_user)):
         parts.append(f"callback USER return={float(callback_user):.2f} kcal/mol")

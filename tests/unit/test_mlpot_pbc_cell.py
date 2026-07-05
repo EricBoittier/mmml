@@ -1192,6 +1192,56 @@ def test_charmm_callback_zero_pairs_refuses_implicit_jax_rebuild():
         )
 
 
+def test_charmm_callback_zero_pairs_records_error_inside_ctypes_callback():
+    z = np.zeros(8, dtype=int)
+    spherical_fn = MagicMock()
+    calc = DecomposedMlpotCalculator(
+        spherical_fn,
+        CutoffParameters(),
+        2,
+        z,
+        do_mm=True,
+        get_update_fn=MagicMock(return_value=MagicMock(return_value=_mock_mm_pair_buffers())),
+        mm_pair_source="charmm_callback",
+    )
+    n = 8
+    x = np.zeros(n, dtype=np.float64)
+    y = np.zeros(n, dtype=np.float64)
+    zc = np.zeros(n, dtype=np.float64)
+    dx = np.zeros(n, dtype=np.float64)
+    dy = np.zeros(n, dtype=np.float64)
+    dz = np.zeros(n, dtype=np.float64)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
+        return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ):
+        user = calc.calculate_charmm(
+            n,
+            0,
+            0,
+            None,
+            x,
+            y,
+            zc,
+            dx,
+            dy,
+            dz,
+            0,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    assert user == pytest.approx(0.0)
+    assert "returned zero ML/MM pairs" in calc._last_callback_error
+    assert calc._last_callback_user_return_kcal == pytest.approx(0.0)
+    spherical_fn.assert_not_called()
+
+
 def test_charmm_callback_zero_pairs_allowed_when_mm_disabled():
     z = np.zeros(8, dtype=int)
     calc = DecomposedMlpotCalculator(
