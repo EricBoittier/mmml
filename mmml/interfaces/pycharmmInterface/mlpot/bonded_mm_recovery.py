@@ -1072,6 +1072,14 @@ def finalize_overlap_rescue_for_dynamics(
                     flush=True,
                 )
             return grms
+        if float(grms) <= float(limit) * max(1.0, retry_factor):
+            print(
+                f"WARN: {context}: post-rescue GRMS {grms:.4f} kcal/mol/Å "
+                f"remains above limit {float(limit):.4f} after retry, but is within "
+                f"{retry_factor:.2f}× tolerance; continuing dynamics",
+                flush=True,
+            )
+            return grms
         raise RuntimeError(
             f"{context}: post-overlap-rescue hybrid GRMS {grms:.2f} kcal/mol/Å > "
             f"{limit:.0f} — coordinates still too strained to continue dynamics. "

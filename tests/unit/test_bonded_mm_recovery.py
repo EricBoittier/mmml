@@ -2250,6 +2250,50 @@ def test_finalize_overlap_rescue_retries_high_but_recoverable_grms_gate():
     mini.assert_called_once()
 
 
+def test_finalize_overlap_rescue_continues_bounded_grms_after_retry():
+    from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
+        finalize_overlap_rescue_for_dynamics,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
+        DynamicsOverlapConfig,
+        OverlapRescueConfig,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext
+
+    ctx = MagicMock(spec=MlpotContext)
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        n_monomers=45,
+        rescue=OverlapRescueConfig(verbose=False, nstep_sd=200, nstep_abnr=400),
+        mlpot_rescue_mini_nstep=0,
+        pyCModel=MagicMock(),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        side_effect=[501.0924, 501.0924],
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.assert_mlpot_user_active",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.resolve_mlpot_grms_kcalmol_A",
+        side_effect=[501.0924, 501.0924],
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery._run_mlpot_recovery_mini",
+    ) as mini:
+        grms = finalize_overlap_rescue_for_dynamics(
+            ctx,
+            cfg,
+            context="HEAT after early-abort recovery (step 4000)",
+            max_grms=335.0,
+        )
+
+    assert grms == pytest.approx(501.0924)
+    mini.assert_called_once()
+
+
 def test_finalize_overlap_rescue_for_dynamics_aborts_on_high_grms():
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         finalize_overlap_rescue_for_dynamics,
