@@ -195,6 +195,63 @@ def zero_prm_text(text: str, *, bonded_only: bool = False) -> str:
     return "".join(out)
 
 
+def zeroed_nonbond_prm_text(text: str) -> str:
+    """Emit NONBONDED/NBFIX sections with ε=0; omit the ``nbxmod`` control header.
+
+    This is the correct content for a ``READ PARAM APPEND`` overlay that must
+    **overwrite** VDW table entries already loaded in CHARMM.  Omitting the
+    ``nbxmod/cutnb/ctofnb/...`` control line (the first line of the NONBONDED
+    block) prevents CHARMM from resetting cutoff settings during the append.
+
+    Only atom rows (matching ``_NONBONDED``) and NBFIX rows are emitted;
+    section headers (``NONBONDED``, ``NBFIX``) and comment/blank lines inside
+    those sections are retained so CHARMM's parser can recognise the sections.
+    HBOND is always omitted.
+    """
+    section: str | None = None
+    omit_section = False
+    out: list[str] = []
+    for raw in text.splitlines(keepends=True):
+        body = raw.rstrip("\r\n")
+        newline = raw[len(body):]
+        new_section = _section_from_line(body)
+        if new_section is not None:
+            if new_section == "END":
+                section = None
+                omit_section = False
+                out.append(raw)
+                continue
+            section = new_section
+            # HBOND: skip entirely.
+            omit_section = section == "HBOND"
+            if omit_section:
+                continue
+            # Emit NONBONDED/NBFIX section header — needed by CHARMM parser.
+            # Bonded sections are also included (with zeroed constants).
+            out.append(raw)
+            continue
+        if omit_section:
+            continue
+        if section == "NONBONDED":
+            # Skip the nbxmod/cutnb/... control continuation line.
+            stripped = body.strip()
+            if stripped.startswith("nbxmod") or stripped.startswith("cutnb") or (
+                stripped.startswith("-") and "cutnb" in stripped.lower()
+            ) or (not stripped or stripped.startswith("!")):
+                # Skip control lines and blank/comment lines inside NONBONDED header.
+                continue
+            # Atom row: zero epsilon.
+            zeroed = zero_prm_line(body, section)
+            out.append(zeroed + newline)
+        elif section == "NBFIX":
+            zeroed = zero_prm_line(body, section)
+            out.append(zeroed + newline)
+        else:
+            # Bonded section: zero force constants.
+            out.append(zero_prm_line(body, section) + newline)
+    return "".join(out)
+
+
 def build_prm_policy_overlay_text(
     text: str,
     *,
@@ -314,9 +371,9 @@ def write_zeroed_psf_ready_prm(
     """
     text = src.read_text(encoding="utf-8", errors="replace")
     if include_nonbonded_zeros:
-        # Full zero: bonded zeroed + NONBONDED/NBFIX zeroed (no section headers
-        # for nbxmod control line — use zero_prm_text which omits those headers).
-        body = zero_prm_text(text, bonded_only=False)
+        # Append-mode: emit NONBONDED/NBFIX with ε=0 rows (no nbxmod control header)
+        # so CHARMM overwrites existing VDW table entries with zeros.
+        body = zeroed_nonbond_prm_text(text)
         nb_desc = "NONBONDED/NBFIX zeroed (ε=0; append-mode)"
     else:
         # Bonded-only: NONBONDED/NBFIX/HBOND entirely absent.
