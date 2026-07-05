@@ -6,6 +6,6 @@ tolerance 2.0
 structure /Users/ericboittier/mmml/pdb/packmol_cluster/monomers/dcm.pdb
   chain A
   resnumbers 2
-  number 2
+  number 32
   inside cube -10.2 -10.2 -10.2 20.4
 end structure
