@@ -1240,6 +1240,47 @@ def _maybe_abort_sd_on_stress_grms(
     return True
 
 
+def _raise_if_sd_stall_unsafe_for_dynamics(
+    config: MinimizeWithMlpotConfig,
+    *,
+    last_grms: float | None,
+    context: str,
+) -> None:
+    """Refuse dynamics when pre-dynamics MLpot GRMS remains above the safe ceiling."""
+    ceiling = (
+        float(config.pre_sd_bonded_recovery_grms_kcalmol_A)
+        if config.pre_sd_bonded_recovery_grms_kcalmol_A is not None
+        else _resolved_sd_stress_abort_ceiling(config)
+    )
+    current_grms = last_grms
+    if config.mlpot_ctx is not None:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            refresh_mlpot_energy_and_grms,
+        )
+
+        refreshed = refresh_mlpot_energy_and_grms(
+            config.mlpot_ctx,
+            context="Post-SD-stall pre-dynamics gate",
+            reregister=False,
+            verbose=False,
+        )
+        if refreshed is not None and np.isfinite(float(refreshed)):
+            current_grms = float(refreshed)
+    if current_grms is None or not np.isfinite(float(current_grms)):
+        raise RuntimeError(
+            f"{context}: MLpot SD stalled and post-recovery hybrid GRMS is unavailable; "
+            "refusing to start dynamics because CHARMM SD did not produce a verified "
+            "safe geometry."
+        )
+    if float(current_grms) > ceiling:
+        raise RuntimeError(
+            f"{context}: MLpot SD stalled with hybrid GRMS {float(current_grms):.4f} "
+            f"kcal/mol/Å > pre-dynamics ceiling {ceiling:.4f}; refusing to start "
+            "dynamics. Run density/overlap recovery, lower the initial density step, "
+            "or increase calculator/bonded pre-minimize cleanup before dynamics."
+        )
+
+
 def _effective_sd_stall_patience_chunks(
     config: MinimizeWithMlpotConfig,
     *,
@@ -7973,6 +8014,11 @@ def minimize_with_mlpot(
                                 f"{float(config.pre_sd_bonded_recovery_grms_kcalmol_A):.4f})",
                                 flush=True,
                             )
+                    _raise_if_sd_stall_unsafe_for_dynamics(
+                        config,
+                        last_grms=sd_result.last_grms,
+                        context="MLpot SD pass 1 stalled",
+                    )
                 elif sd_result.rolled_back:
                     grms_txt = (
                         f"{sd_result.last_grms:.4f}"
