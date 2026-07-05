@@ -579,6 +579,7 @@ def charmm_dynamics_energy_is_finite() -> bool:
 # kcal/mol) while coordinates still sit inside the primary cell — must abort
 # before ENER/UPDATE/mlpot_update (Fortran image rebuild segfault risk).
 _DYNAMICS_ENERGY_ABS_MAX_KCALMOL = 1.0e8
+_DYNAMICS_GRMS_MAX_KCALMOL_A = 250.0
 
 
 def charmm_dynamics_energy_is_plausible(
@@ -604,6 +605,28 @@ def charmm_dynamics_energy_is_plausible(
     return True
 
 
+def charmm_dynamics_grms_is_plausible(
+    *,
+    max_grms_kcalmol_A: float = _DYNAMICS_GRMS_MAX_KCALMOL_A,
+) -> bool:
+    """False when CHARMM reports a finite but integration-unsafe GRMS spike."""
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm.energy as energy
+
+    limit = float(max_grms_kcalmol_A)
+    if limit <= 0.0:
+        return True
+    try:
+        row = energy.get_energy().iloc[0]
+    except Exception:
+        return False
+    try:
+        grms = float(row.get("GRMS"))
+    except (TypeError, ValueError):
+        return False
+    return bool(np.isfinite(grms) and grms <= limit)
+
+
 def charmm_coordinates_are_bounded(*, max_abs_A: float = 2000.0) -> bool:
     """False when any atom coordinate magnitude exceeds a sane bound."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
@@ -626,6 +649,7 @@ def charmm_dynamics_state_is_finite() -> bool:
         and charmm_coordinates_are_bounded()
         and charmm_dynamics_energy_is_finite()
         and charmm_dynamics_energy_is_plausible()
+        and charmm_dynamics_grms_is_plausible()
     )
 
 
@@ -689,6 +713,13 @@ def validate_charmm_dynamics_state_after_chunk(
                 f"{_DYNAMICS_ENERGY_ABS_MAX_KCALMOL:.0e} kcal/mol after dynamics "
                 "(MLpot integration blow-up). Shorten the timestep, tighten echeck, "
                 "or verify MLpot timestep is applied (not leftover CHARMM pretreat dt)."
+            )
+        if not charmm_dynamics_grms_is_plausible():
+            raise RuntimeError(
+                f"{context}: CHARMM GRMS exceeds "
+                f"{_DYNAMICS_GRMS_MAX_KCALMOL_A:.0f} kcal/mol/Å after dynamics "
+                "(MLpot integration blow-up). Stop before the next dynamics "
+                "continuation so overlap/dimer recovery can stabilize the geometry."
             )
         return
     raise RuntimeError(

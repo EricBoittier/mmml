@@ -6283,6 +6283,18 @@ def _run_bussi_heat_subchunked(
                 (p for p in candidates if p.is_file() and p.stat().st_size > 0),
                 sub_io.restart_write,
             )
+        if _dynamics_chunk_state_corrupt(
+            overlap_context=f"{overlap_context} Bussi sub-chunk ending step {global_after}",
+            restart_path=restart_path,
+        ):
+            kw["_bussi_subchunk_abort_global_step"] = global_after
+            print(
+                f"{overlap_context}: stopping Bussi heat sub-chunks at step "
+                f"{global_after} before continuation; overlap recovery will run",
+                flush=True,
+            )
+            steps_done += n
+            break
         apply_bussi_velocity_rescale(
             target_k,
             timestep_ps=timestep_ps,
@@ -7111,6 +7123,8 @@ def run_dynamics_with_io(
                     fallback_steps=expected_after,
                     steps_before_chunk=steps_before_chunk,
                 )
+                if "_bussi_subchunk_abort_global_step" in chunk_kw:
+                    reported_steps = int(chunk_kw["_bussi_subchunk_abort_global_step"])
                 from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
                     classify_chunk_outcome,
                     patch_restart_global_step,

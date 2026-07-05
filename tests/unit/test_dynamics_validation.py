@@ -761,6 +761,37 @@ def test_validate_charmm_dynamics_quarantines_stale_unsafe_restart_when_memory_o
     assert list(tmp_path.glob("heat.stale_unsafe*.res"))
 
 
+def test_validate_charmm_dynamics_rejects_high_finite_grms():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        validate_charmm_dynamics_state_after_chunk,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
+        return_value=False,
+    ):
+        with pytest.raises(RuntimeError, match="CHARMM GRMS exceeds"):
+            validate_charmm_dynamics_state_after_chunk(
+                context="HEAT subchunk",
+                restart_path=None,
+            )
+
+
 def test_assert_stage_dynamics_completed_accepts_single_step_heat(tmp_path):
     """nstep=1 heat (instant velocity scaling) writes one DCD frame, not two."""
     dcd = tmp_path / "heat.dcd"
@@ -1318,4 +1349,3 @@ def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
     assert captured["nsavc"] == 49
     assert captured["nsavv"] == 50
     assert read_restart_nsavv(scratch) == 50
-
