@@ -110,6 +110,7 @@ def write_charmm_restart_from_memory(
                 f"* {title}",
             ]
         )
+    lines.append(" !X, Y, Z")
     lines.extend(_restart_section_coord_lines(pos))
 
     if include_velocities:
@@ -134,6 +135,7 @@ def write_charmm_restart_from_memory(
         if vel is not None:
             vel = np.asarray(vel, dtype=float)
             if vel.shape == pos.shape and np.all(np.isfinite(vel)):
+                lines.append(" !VX, VY, VZ")
                 lines.extend(_restart_section_coord_lines(vel))
 
     if include_crystal:
@@ -146,6 +148,7 @@ def write_charmm_restart_from_memory(
             lx, ly, lz = _read_charmm_box_sides_A()
             if min(lx, ly, lz) > 0.0 and _is_cubic_box_sides(lx, ly, lz):
                 side = float((lx + ly + lz) / 3.0)
+                lines.append(" !CRYSTAL PARAMETERS")
                 z = _format_fortran_restart_float(0.0)
                 s = _format_fortran_restart_float(side)
                 lines.append(f"{s}{z}{z}")
