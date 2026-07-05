@@ -129,11 +129,15 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     _bump_int_attr(args, "charmm_abnr_steps", 1000)
     _bump_int_attr(args, "mini_nstep", 500)
     _bump_int_attr(args, "bonded_mm_mini_steps", 500)
-    skip_box_prep = certified_box_handoff(args)
+    fixed_box = getattr(args, "box_size", None) is not None
+    skip_box_prep = certified_box_handoff(args) or fixed_box
     if skip_box_prep:
-        args.mini_lattice_abnr_steps = 0
-        args.density_prep_lattice_abnr_steps = 0
-        args.mini_box_equil_ps = 0.0
+        if getattr(args, "mini_lattice_abnr_steps", None) is None:
+            args.mini_lattice_abnr_steps = 0
+        if getattr(args, "density_prep_lattice_abnr_steps", None) is None:
+            args.density_prep_lattice_abnr_steps = 0
+        if getattr(args, "mini_box_equil_ps", None) is None:
+            args.mini_box_equil_ps = 0.0
     else:
         if getattr(args, "mini_lattice_abnr_steps", None) is None:
             # Explicit 0 (YAML/CLI) must stay off — do not treat as "unset".
@@ -161,11 +165,11 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
     if getattr(args, "liquid_prep_staged_density_fraction", None) is None:
         args.liquid_prep_staged_density_fraction = 0.55
 
-    if getattr(args, "density_prep_lattice_abnr_steps", None) is None:
+    if getattr(args, "density_prep_lattice_abnr_steps", None) is None and not fixed_box:
         # Lattice ABNR can shrink L and create MIC face contacts after a borderline repack.
         args.density_prep_lattice_abnr_steps = 0
 
-    if getattr(args, "box_size", None) is not None:
+    if fixed_box:
         args.mini_lattice_abnr_allow_fixed_box = True
         args.mini_box_equil_allow_fixed_box = True
 
@@ -214,7 +218,7 @@ def resolve_density_prep_lattice_abnr_steps(args: argparse.Namespace) -> int:
     steps = int(getattr(args, "mini_lattice_abnr_steps", 0) or 0)
     if steps > 0:
         return steps
-    return 100
+    return 0
 
 
 def apply_condensed_phase_md_defaults(args: argparse.Namespace) -> None:

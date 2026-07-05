@@ -9,18 +9,19 @@ from typing import Any
 import numpy as np
 
 # Prep gate: ML-safe inter-monomer MIC floor before USER potential is enabled.
-DEFAULT_PRE_MLPOT_OVERLAP_MIN_A = 2.3
+# Blocks true overlaps while allowing dense liquid prep (sub-vdW contacts relax in mini).
+DEFAULT_PRE_MLPOT_OVERLAP_MIN_A = 2.0
 
 # Element-pair prep floors for dense halogenated liquids (e.g. DCM).
-DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A = 2.4
-DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A = 2.9
-DEFAULT_PRE_MLPOT_H_H_MIN_A = 2.3
+DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A = 2.3
+DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A = 2.5
+DEFAULT_PRE_MLPOT_H_H_MIN_A = 2.2
 
 # Hard abort before MLpot SD when hybrid forces are already catastrophic.
 DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A = 50.0
 
 # CHARMM <MKIMAT2> group Min-Distance before MLpot USER (looser than MIC prep floors).
-# Atom-pair prep gates remain element-aware (2.3–2.9 Å); override via CLI/config when needed.
+# Atom-pair prep gates remain element-aware (≈2.0–2.5 Å); override via CLI/config when needed.
 DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A = 1.0
 # When MKIMAT2 cannot be captured, MIC must clear the IMAGE floor (no extra slack).
 DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A = 0.0
@@ -207,10 +208,19 @@ def resolve_overlap_last_chance_separation_A(args: argparse.Namespace) -> float:
     not the dynamics overlap guard (1.5 Å).
     """
     prep_floor = resolve_pre_mlpot_overlap_min_distance(args)
-    pair_target = resolve_pre_mlpot_element_pair_min_distance("H", "C", args=args)
     if is_dcm_like_prep(args):
-        return max(float(prep_floor), float(pair_target))
-    return max(float(prep_floor), float(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A))
+        pair_targets = (
+            resolve_pre_mlpot_element_pair_min_distance("H", "C", args=args),
+            resolve_pre_mlpot_element_pair_min_distance("H", "Cl", args=args),
+            resolve_pre_mlpot_element_pair_min_distance("Cl", "Cl", args=args),
+        )
+        return max(float(prep_floor), *(float(t) for t in pair_targets))
+    pair_target = resolve_pre_mlpot_element_pair_min_distance("H", "C", args=args)
+    return max(
+        float(prep_floor),
+        float(pair_target),
+        float(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A),
+    )
 
 
 def resolve_mc_min_intermonomer_distance_A(args: argparse.Namespace) -> float:
@@ -298,7 +308,8 @@ def summarize_worst_intermonomer_contact(
     *,
     box_side: float | None,
     use_pbc: bool,
-    threshold_A: float,
+    threshold_A: float | None = None,
+    args: argparse.Namespace | None = None,
     atomic_numbers: np.ndarray | list[int] | None = None,
     dynamics_reference_A: float = DYNAMICS_OVERLAP_REFERENCE_A,
 ) -> IntermonomerContactSummary:
@@ -314,9 +325,14 @@ def summarize_worst_intermonomer_contact(
         cell = np.diag([float(box_side), float(box_side), float(box_side)])
     dist, violation = find_worst_intermonomer_overlap(pos, offsets, cell=cell)
     if violation is None:
+        fallback = (
+            float(threshold_A)
+            if threshold_A is not None
+            else resolve_pre_mlpot_overlap_min_distance(args)
+        )
         return IntermonomerContactSummary(
             distance_A=float("inf"),
-            threshold_A=float(threshold_A),
+            threshold_A=fallback,
             monomer_i=-1,
             monomer_j=-1,
             atom_i=-1,
@@ -332,9 +348,16 @@ def summarize_worst_intermonomer_contact(
     li = _element_symbol(z[violation.atom_i]) if z is not None else "?"
     lj = _element_symbol(z[violation.atom_j]) if z is not None else "?"
 
+    if args is not None and li != "?" and lj != "?":
+        required = resolve_pre_mlpot_element_pair_min_distance(li, lj, args=args)
+    elif threshold_A is not None:
+        required = float(threshold_A)
+    else:
+        required = resolve_pre_mlpot_overlap_min_distance(args)
+
     return IntermonomerContactSummary(
         distance_A=float(dist),
-        threshold_A=float(threshold_A),
+        threshold_A=float(required),
         monomer_i=int(violation.monomer_i),
         monomer_j=int(violation.monomer_j),
         atom_i=int(violation.atom_i),
