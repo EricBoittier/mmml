@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
 )
 from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args
 
+import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
 import pycharmm
 import pycharmm.energy as energy
 import pycharmm.coor as coor
@@ -29,11 +30,9 @@ def calculate_charmm_mm_energy_force():
     # Actually, in PyCHARMM, `pycharmm.lib.get_forces()` returns the forces?
     # Let's try `pycharmm.lingo.charmm_script("ENER")` and getting forces.
     
-    # Another way is to use get_positions() and get_forces() from our mmml wrappers.
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array, get_charmm_forces_array
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_total_forces_kcalmol_A
     
-    pos = get_charmm_positions_array()
-    force = get_charmm_forces_array()
+    force = charmm_total_forces_kcalmol_A()
     
     return e, np.asarray(force)
 
