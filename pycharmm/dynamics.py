@@ -852,23 +852,38 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     options = _configure_known_only(**kwargs)
     buf, buflen = c_api_string_buffer(command_line)
     fn = lib.charmm.dynamics_run_kw
+    
+    # Explicitly set argtypes to ensure NULL pointers for omitted optionals
+    fn.argtypes = [
+        ctypes.POINTER(OPTIONS),
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    fn.restype = ctypes.c_int
+    
     if init_velocities is not None:
         success = fn(
             ctypes.byref(options),
-            buf,
-            ctypes.byref(buflen),
-            init_vx,
-            init_vy,
-            init_vz,
-            out_vx,
-            out_vy,
-            out_vz,
+            ctypes.cast(buf, ctypes.c_char_p),
+            buflen.value,
+            ctypes.cast(init_vx, ctypes.c_void_p),
+            ctypes.cast(init_vy, ctypes.c_void_p),
+            ctypes.cast(init_vz, ctypes.c_void_p),
+            ctypes.cast(out_vx, ctypes.c_void_p),
+            ctypes.cast(out_vy, ctypes.c_void_p),
+            ctypes.cast(out_vz, ctypes.c_void_p),
         )
     else:
         success = fn(
             ctypes.byref(options),
-            buf,
-            ctypes.byref(buflen),
+            ctypes.cast(buf, ctypes.c_char_p),
+            buflen.value,
             None,
             None,
             None,
