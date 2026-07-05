@@ -1,4 +1,15 @@
-"""Zero CHARMM .prm force constants for MLpot PSF/param overlays (library)."""
+"""Zero CHARMM .prm force constants for MLpot PSF/param overlays (library).
+
+Public API
+----------
+write_zeroed_psf_ready_prm(src, dst)
+    Produce a READ-PARAM-APPEND–safe .prm with:
+    * All bonded force constants (Kb, Kθ, Kub, Vn) set to 0.0
+    * NONBONDED / NBFIX / HBOND sections **omitted entirely**
+    Load this *before* MLpot registration so CHARMM's VDW table is never
+    populated: VDW and IMNB are structurally zero without any runtime
+    ``SCALAR VDW SET 0.0`` remediation.
+"""
 
 from __future__ import annotations
 
@@ -249,3 +260,54 @@ def zero_prm_file(src: Path, dst: Path, *, bonded_only: bool = False) -> None:
     zeroed = header + zero_prm_text(text, bonded_only=bonded_only)
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(zeroed, encoding="utf-8")
+
+
+def write_zeroed_psf_ready_prm(
+    src: Path,
+    dst: Path,
+    *,
+    note: str = "",
+) -> Path:
+    """Write a READ-PARAM-APPEND–safe .prm with zero bonded constants and no VDW.
+
+    This is the recommended Option C fix for the ``IMNB`` / ``VDW`` non-zero
+    energy after MLpot registration.  Loading *dst* before calling
+    ``register_mlpot`` means CHARMM never populates its internal VDW table,
+    so ``ENER`` will report ``VDW=0`` and ``IMNBvdw=0`` without requiring any
+    runtime ``SCALAR VDW SET 0.0`` patch.
+
+    The output:
+    * Zeroes all bonded force constants (Kb, Kθ, Kub, Vn) — equilibrium
+      geometry (r0, theta0, phase, multiplicity) is preserved.
+    * Omits NONBONDED, NBFIX, and HBOND sections entirely so no epsilon/Rmin
+      row is ever re-read into the parameter table.
+    * Retains section headers (BONDS, ANGLES, DIHEDRALS, IMPROPERS) and
+      all comment lines — safe for ``READ PARAM APPEND``.
+
+    Parameters
+    ----------
+    src:
+        Source CHARMM .prm file (e.g. ``par_all36_cgenff.prm``).
+    dst:
+        Destination path.  Parent directory is created if absent.
+    note:
+        Optional free-text annotation written into the file header.
+
+    Returns
+    -------
+    dst
+        The path that was written.
+    """
+    text = src.read_text(encoding="utf-8", errors="replace")
+    body = bonded_only_prm_text(text, zero_constants=True)
+    header = (
+        "*  MMML PSF-ready overlay: bonded constants zeroed, NONBONDED/NBFIX/HBOND omitted\n"
+        "*  Load via READ PARAM APPEND before MLpot registration to keep VDW=0 / IMNB=0\n"
+        f"*  Source: {src.name}\n"
+    )
+    if note:
+        header += f"*  {note}\n"
+    header += "*  --------------------------------------------------------------------------  *\n"
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(header + body, encoding="utf-8")
+    return dst
