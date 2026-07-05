@@ -1026,7 +1026,7 @@ def finalize_overlap_rescue_for_dynamics(
     )
     if grms > limit:
         retry_factor = float(
-            getattr(config, "post_rescue_grms_retry_factor", 2.0) or 2.0
+            getattr(config, "post_rescue_grms_retry_factor", 3.0) or 3.0
         )
         rescue_cfg = getattr(config, "rescue", None)
         retry_nstep = max(
