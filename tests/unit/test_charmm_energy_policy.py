@@ -190,11 +190,11 @@ def test_enforce_can_verify_without_late_reload(monkeypatch):
     monkeypatch.setattr(
         cep,
         "measure_charmm_energy_terms",
-        lambda: {"VDW": 0.0, "IMNB": -0.324845, "USER": 0.0},
+        lambda: {"VDW": 0.0, "IMNB": -1.324845, "USER": 0.0},
     )
     monkeypatch.setattr(cep, "_run_silent_ener", lambda: None)
 
-    with pytest.raises(RuntimeError, match="IMNB=-0.324845"):
+    with pytest.raises(RuntimeError, match="IMNB=-1.32485"):
         cep.enforce_charmm_energy_term_policies(
             args,
             ml_selection=object(),
@@ -218,6 +218,33 @@ def test_enforce_tolerates_small_imnb_after_pre_remediation(monkeypatch):
         cep,
         "measure_charmm_energy_terms",
         lambda: {"VDW": 0.0, "IMNB": -0.0921032, "USER": 0.0},
+    )
+    monkeypatch.setattr(cep, "_run_silent_ener", lambda: None)
+
+    applied = cep.enforce_charmm_energy_term_policies(
+        args,
+        ml_selection=object(),
+        use_pbc=True,
+        cubic_box_side_A=50.0,
+        verbose=False,
+        reload_on_violation=False,
+    )
+    assert applied == ["vdw"]
+
+
+def test_enforce_tolerates_image_imnb_after_pre_remediation(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    args = argparse.Namespace(
+        periodic_charmm_vdw=False,
+        charmm_zero_energy_terms=None,
+        quiet=True,
+    )
+
+    monkeypatch.setattr(
+        cep,
+        "measure_charmm_energy_terms",
+        lambda: {"VDW": 0.0, "IMNB": -0.296236, "USER": 0.0},
     )
     monkeypatch.setattr(cep, "_run_silent_ener", lambda: None)
 
