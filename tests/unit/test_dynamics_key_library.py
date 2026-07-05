@@ -343,6 +343,49 @@ def test_run_dynamics_c_api_path_invoked():
     run_c_api.assert_called_once()
 
 
+def test_run_dynamics_dcd_write_uses_script_path_even_when_c_api_available():
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
+
+    kw = {
+        "nstep": 50,
+        "timestep": 0.00025,
+        "nsavc": 49,
+        "leap": True,
+        "start": True,
+        "iasvel": 1,
+        "iuncrd": 90,
+        "echeck": -1.0,
+    }
+    fake_dyn = MagicMock()
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
+    with (
+        patch.dict("sys.modules", {"pycharmm": fake_pycharmm}),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+            return_value=True,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        ) as run_c_api,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
+        ) as run_script,
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._apply_dynamics_io_setters",
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
+        ),
+    ):
+        out = run_dynamics(kw)
+    assert out is fake_dyn
+    run_c_api.assert_not_called()
+    run_script.assert_called_once()
+
+
 def test_run_dynamics_via_c_api_passes_init_velocities_without_restart_handoff():
     import types
     from types import SimpleNamespace
