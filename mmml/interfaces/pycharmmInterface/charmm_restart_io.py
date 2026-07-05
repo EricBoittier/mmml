@@ -136,7 +136,7 @@ def write_charmm_restart_from_memory(
         if vel is not None:
             vel = np.asarray(vel, dtype=float)
             if vel.shape == pos.shape and np.all(np.isfinite(vel)):
-                lines.append(" !VELOCITIES")
+                lines.append(" !VX, VY, VZ")
                 lines.extend(_restart_section_coord_lines(vel))
 
     if include_crystal:
