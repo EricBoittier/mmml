@@ -784,12 +784,12 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--mini-lattice-abnr-steps",
         type=int,
-        default=0,
+        default=None,
         metavar="N",
         help=(
             "PyCHARMM mini: CHARMM MINI ABNR LATTice steps to optimize the cubic unit cell "
-            "after coordinate-only CHARMM MM mini and before MLpot SD. 0=off. "
-            "Requires CRYSTAL/PBC."
+            "after coordinate-only CHARMM MM mini and before MLpot SD. "
+            "0=off; default with --liquid-prep: 200. Requires CRYSTAL/PBC."
         ),
     )
     group.add_argument(

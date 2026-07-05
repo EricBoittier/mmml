@@ -134,7 +134,8 @@ def apply_density_prep_resilient_defaults(args: argparse.Namespace) -> None:
         args.mini_lattice_abnr_steps = 0
         args.density_prep_lattice_abnr_steps = 0
         args.mini_box_equil_ps = 0.0
-    elif int(getattr(args, "mini_lattice_abnr_steps", 0) or 0) <= 0:
+    elif getattr(args, "mini_lattice_abnr_steps", None) is None:
+        # Explicit 0 (YAML/CLI) must stay off — do not treat as "unset".
         args.mini_lattice_abnr_steps = 200
         if float(getattr(args, "mini_box_equil_ps", 0.0) or 0.0) <= 0.0:
             from mmml.interfaces.pycharmmInterface.mlpot.box_equil import (
