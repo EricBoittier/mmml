@@ -74,6 +74,14 @@ def zero_prm_line(
         m = _NONBONDED.match(line)
         if m:
             lead, atype, ignored, _eps, rmin, tail = m.groups()
+            tail_parts = tail.split("!", 1)
+            comment = ""
+            if len(tail_parts) > 1:
+                comment = " !" + tail_parts[1]
+            tail_vals = tail_parts[0].split()
+            if len(tail_vals) >= 3:
+                p_14, _eps_14, rmin_14 = tail_vals[:3]
+                tail = f"   {p_14}    0.0     {rmin_14}{comment}"
             return f"{lead}{atype}     {ignored}        0.0     {rmin}{tail}"
     elif section == "NBFIX":
         m = _NBFIX.match(line)

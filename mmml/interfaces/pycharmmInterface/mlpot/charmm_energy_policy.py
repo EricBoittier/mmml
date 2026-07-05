@@ -30,6 +30,7 @@ POLICY_REGISTRY: dict[str, CharmmEnergyTermPolicy] = {
     "vdw": CharmmEnergyTermPolicy(
         name="vdw",
         energy_keys=("VDW", "IMNB"),
+        tolerance_kcal=1.0,
         zero_nonbond_prm=True,
     ),
     "elec": CharmmEnergyTermPolicy(
