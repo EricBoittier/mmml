@@ -237,8 +237,13 @@ def enforce_charmm_energy_term_policies(
             violated.append(policy)
             if verbose or not getattr(args, "quiet", False):
                 detail = ", ".join(f"{k}={v:.6g}" for k, v in sorted(hits.items()))
+                stage = (
+                    "non-zero before reload"
+                    if reload_on_violation
+                    else "still non-zero after pre-registration remediation"
+                )
                 print(
-                    f"CHARMM energy policy {policy.name}: non-zero before reload ({detail})",
+                    f"CHARMM energy policy {policy.name}: {stage} ({detail})",
                     flush=True,
                 )
 
