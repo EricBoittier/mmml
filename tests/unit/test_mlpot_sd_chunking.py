@@ -594,6 +594,59 @@ def test_minimize_with_mlpot_recovers_when_sd_stall_ladder_lowers_grms():
     sync_lists.assert_called()
 
 
+def test_minimize_with_mlpot_continues_when_sd_stall_near_ceiling():
+    ctx = MagicMock()
+    minimize = MagicMock()
+    pycharmm = MagicMock()
+    cons_fix = MagicMock()
+
+    config = MinimizeWithMlpotConfig(
+        nstep=3,
+        nprint=10,
+        verbose=False,
+        mlpot_ctx=ctx,
+        pre_sd_bonded_recovery_grms_kcalmol_A=500.0,
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        return_value=(pycharmm, cons_fix, MagicMock(), minimize, MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
+        return_value=(597.5595, -32771.17733),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_mlpot_sd_then_abnr",
+        return_value=MlpotSdChunkResult(
+            completed=False,
+            stalled=True,
+            last_grms=597.5595,
+        ),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.maybe_run_density_prep_ladder_for_mlpot",
+        return_value=(597.5595, False),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        return_value=597.5595,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
+    ) as sync_lists, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
+    ):
+        minimize_with_mlpot(config)
+
+    sync_lists.assert_called()
+
+
 def test_maybe_abort_sd_on_stress_grms_aborts_above_ceiling():
     cfg = MinimizeWithMlpotConfig(mlpot_ctx=MagicMock(), verbose=False)
     assert _resolved_sd_stress_abort_ceiling(cfg) == pytest.approx(500.0)

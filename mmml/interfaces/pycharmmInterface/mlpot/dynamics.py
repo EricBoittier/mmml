@@ -1273,6 +1273,19 @@ def _raise_if_sd_stall_unsafe_for_dynamics(
             "safe geometry."
         )
     if float(current_grms) > ceiling:
+        near_miss_factor = float(
+            getattr(config, "sd_stall_pre_dynamics_retry_factor", 2.0) or 2.0
+        )
+        if float(current_grms) <= float(ceiling) * max(1.0, near_miss_factor):
+            if config.verbose:
+                print(
+                    f"{context}: MLpot SD stalled with hybrid GRMS "
+                    f"{float(current_grms):.4f} kcal/mol/Å > pre-dynamics ceiling "
+                    f"{ceiling:.4f}; continuing after recovery gate "
+                    f"(near-miss factor {near_miss_factor:.2f})",
+                    flush=True,
+                )
+            return
         raise RuntimeError(
             f"{context}: MLpot SD stalled with hybrid GRMS {float(current_grms):.4f} "
             f"kcal/mol/Å > pre-dynamics ceiling {ceiling:.4f}; refusing to start "
