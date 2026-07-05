@@ -37,8 +37,8 @@ def calculate_charmm_mm_energy_force():
     return e, np.asarray(force)
 
 def set_charmm_positions(pos):
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import set_charmm_positions_array
-    set_charmm_positions_array(pos)
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
+    sync_charmm_positions(pos)
 
 def fd_check(pos, step=1e-4):
     n = len(pos)
