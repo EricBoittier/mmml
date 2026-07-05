@@ -98,22 +98,27 @@ def _make(src: Path, dst: Path, **kw) -> tuple[Path, str]:
 
 
 def test_nonbonded_section_absent(mini_prm: Path, dst: Path):
-    """NONBONDED header and all its atom rows must not appear."""
+    """NONBONDED header and atom rows must not appear in the PRM body."""
     _, text = _make(mini_prm, dst)
-    assert "NONBONDED" not in text, "NONBONDED section header found in output"
-    assert "nbxmod" not in text.lower()
-    assert "cutnb" not in text.lower()
+    # Strip the header block (lines starting with '*') from the full text so
+    # that the human-readable description in the header stamp doesn't false-fire.
+    body = "\n".join(l for l in text.splitlines() if not l.startswith("*"))
+    assert "NONBONDED" not in body, "NONBONDED section found in PRM body"
+    assert "nbxmod" not in body.lower()
+    assert "cutnb" not in body.lower()
 
 
 def test_nbfix_section_absent(mini_prm: Path, dst: Path):
     _, text = _make(mini_prm, dst)
-    assert "NBFIX" not in text
+    body = "\n".join(l for l in text.splitlines() if not l.startswith("*"))
+    assert "NBFIX" not in body, "NBFIX section found in PRM body"
 
 
 def test_hbond_section_absent(mini_prm: Path, dst: Path):
     _, text = _make(mini_prm, dst)
-    assert "HBOND" not in text
-    assert "CUTHB" not in text
+    body = "\n".join(l for l in text.splitlines() if not l.startswith("*"))
+    assert "HBOND" not in body, "HBOND section found in PRM body"
+    assert "CUTHB" not in body
 
 
 def test_vdw_atom_rows_absent(mini_prm: Path, dst: Path):
