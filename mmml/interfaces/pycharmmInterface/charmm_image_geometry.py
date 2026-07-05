@@ -214,11 +214,6 @@ def assert_charmm_image_mic_fallback(
     min_distance_A: float,
     context: str,
 ) -> float:
-    """MIC prep gate when ``<MKIMAT2>`` is unavailable (MPI / cached IMAGE lists).
-
-    Uses the same element-pair prep floors as Packmol/MC certification (≈2.0–2.5 Å),
-    not the CHARMM ``<MKIMAT2>`` group Min-Distance margin (3.5–4.5 Å).
-    """
     import numpy as np
 
     from mmml.interfaces.pycharmmInterface.mlpot.mc_density import (
