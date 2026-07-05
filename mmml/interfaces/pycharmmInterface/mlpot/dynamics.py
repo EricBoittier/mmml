@@ -1058,8 +1058,8 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
     pycharmm = _import_pycharmm_modules()[0]
     maybe_snapshot_nbond_state(None, context="sync_charmm_lists_after_mini (pre-UPDATE)")
     with charmm_silent_command():
-        pycharmm.lingo.charmm_script("ENER")
         pycharmm.lingo.charmm_script("UPDATE")
+        pycharmm.lingo.charmm_script("ENER")
     if not quiet:
         print(
             "CHARMM UPDATE after mini (sync NB/MLpot lists before dyna)",

@@ -680,7 +680,7 @@ def assert_mlpot_user_active(
         if not quiet:
             print(
                 f"WARN: MLpot USER still missing before {context}; "
-                "running light resync (ENER FORCE + UPDATE)",
+                "running light resync (UPDATE + ENER FORCE)",
                 flush=True,
             )
         light_resync_mlpot_state(

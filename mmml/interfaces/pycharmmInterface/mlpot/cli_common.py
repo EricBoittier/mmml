@@ -2360,11 +2360,11 @@ def light_resync_mlpot_state(
         from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
 
         with charmm_silent_command():
-            pycharmm.lingo.charmm_script("ENER FORCE")
             pycharmm.lingo.charmm_script("UPDATE")
+            pycharmm.lingo.charmm_script("ENER FORCE")
     else:
-        pycharmm.lingo.charmm_script("ENER FORCE")
         pycharmm.lingo.charmm_script("UPDATE")
+        pycharmm.lingo.charmm_script("ENER FORCE")
     diag = measure_hybrid_charmm_grms(mlpot_ctx)
     if verify_ase_calculator:
         verify_hybrid_ase_charmm_consistency(

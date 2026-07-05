@@ -273,8 +273,8 @@ def test_light_resync_reregisters_and_updates():
         grms = light_resync_mlpot_state(ctx, context="resync")
 
     ctx.reregister_mlpot.assert_called_once()
-    assert fake_pycharmm.lingo.charmm_script.call_args_list[0][0][0] == "ENER FORCE"
-    assert fake_pycharmm.lingo.charmm_script.call_args_list[1][0][0] == "UPDATE"
+    assert fake_pycharmm.lingo.charmm_script.call_args_list[0][0][0] == "UPDATE"
+    assert fake_pycharmm.lingo.charmm_script.call_args_list[1][0][0] == "ENER FORCE"
     assert grms == pytest.approx(3.0)
 
 

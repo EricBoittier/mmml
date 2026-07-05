@@ -101,7 +101,7 @@ def test_sync_charmm_lists_after_mini_skips_stale_grms_gate():
         context="CHARMM UPDATE after mini (sync NB/MLpot lists)",
         check_grms=False,
     )
-    fake_lingo.charmm_script.assert_has_calls([mock.call("ENER"), mock.call("UPDATE")])
+    fake_lingo.charmm_script.assert_has_calls([mock.call("UPDATE"), mock.call("ENER")])
 
 
 def test_charmm_dynamics_energy_is_plausible_rejects_blowup_totke():
