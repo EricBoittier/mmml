@@ -51,7 +51,11 @@ class _CallbackPairListUnavailable(RuntimeError):
     """Raised internally when CHARMM callback pair lists are unusable."""
 
 
-def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
+def resolve_mm_pair_source(
+    args: Any | None = None,
+    *,
+    all_ml_pbc_jax_mic: bool = False,
+) -> MmPairSource:
     """Resolve MM pair provider for decomposed MLpot (``jax`` vs Fortran callback).
 
     Default is ``charmm_callback`` (Fortran ``idxu/idxv`` primary pairs). All-ML
@@ -76,6 +80,8 @@ def resolve_mm_pair_source(args: Any | None = None) -> MmPairSource:
         raise ValueError(
             f"MMML_MM_PAIR_SOURCE must be jax or charmm_callback; got {raw!r}"
         )
+    if all_ml_pbc_jax_mic:
+        return "jax"
     return _DEFAULT_MM_PAIR_SOURCE
 
 
@@ -1331,8 +1337,22 @@ def build_decomposed_mlpot_model(
             f"r^-6 dispersion={disp_text} when lr_solver=jax_pme)",
             flush=True,
         )
-    mm_pair_source = resolve_mm_pair_source(args)
+    mm_pair_source = resolve_mm_pair_source(
+        args,
+        all_ml_pbc_jax_mic=(
+            bool(cell)
+            and bool(do_mm)
+            and int(n_monomers) > 1
+            and str(mm_nonbond_mode) == "jax_mic"
+        ),
+    )
     mm_r_min_arg = getattr(args, "mm_r_min", None) if args is not None else None
+    if verbose and mm_pair_source == "jax":
+        print(
+            "Decomposed MLpot: mm_pair_source=jax "
+            "(all-ML/PBC JAX-MIC; CHARMM callback lists are fully excluded)",
+            flush=True,
+        )
     if verbose and mm_pair_source == "charmm_callback":
         print(
             "Decomposed MLpot: mm_pair_source=charmm_callback "
