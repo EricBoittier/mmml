@@ -134,7 +134,12 @@ print('warmup_do_mm:', resolve_warmup_do_mm_for_config(cfg))
 "
 
 if ! command -v packmol >/dev/null 2>&1; then
-  echo "WARNING: packmol not on PATH (required for initial placement)." >&2
+  _packmol_bundled="$("$PY" -c "from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable; print(packmol_executable())" 2>/dev/null || true)"
+  if [[ -n "$_packmol_bundled" && -x "$_packmol_bundled" ]]; then
+    echo "packmol: bundled ${_packmol_bundled}"
+  else
+    echo "WARNING: packmol not on PATH and bundled binary unavailable." >&2
+  fi
 fi
 
 if [[ -n "${MMML_CKPT:-}" ]]; then

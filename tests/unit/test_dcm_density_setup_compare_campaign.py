@@ -834,6 +834,20 @@ def test_main_matrix_tag_stays_on_config_yaml() -> None:
     assert cl.default_workflow_config_path(run_tag=tag).name == "config.yaml"
 
 
+def test_mlpot_profile_in_campaign_defaults(cfg: dict, cell: RunCell) -> None:
+    cfg_prof = {**cfg, "mlpot_profile": True, "heat_thermostats": ["bussi"]}
+    cell_ht = RunCell(
+        setup_id=cell.setup_id,
+        solvent=cell.solvent,
+        n_monomers=cell.n_monomers,
+        temperature=cell.temperature,
+        box_size=cell.box_size,
+        heat_thermostat="bussi",
+    )
+    campaign = build_campaign(cfg_prof, cell_ht)
+    assert campaign["defaults"].get("mlpot_profile") is True
+
+
 def test_n100_l30_tag_resolves_config_and_density() -> None:
     cfg = load_config(WORKFLOW / "config.yaml")
     tag = "resilient_dcm_100_t50_l30_ht_bussi"
