@@ -112,6 +112,21 @@ def test_policy_violation_detects_imnb():
     assert hits == {"IMNB": pytest.approx(-1.0528)}
 
 
+def test_policy_violation_detects_small_imnb():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        POLICY_REGISTRY,
+        _policy_violation,
+    )
+
+    policy = POLICY_REGISTRY["vdw"]
+    bad, hits = _policy_violation(
+        policy,
+        {"VDW": 0.0, "IMNB": -3.0e-4, "USER": -1000.0},
+    )
+    assert bad
+    assert hits == {"IMNB": pytest.approx(-3.0e-4)}
+
+
 def test_nonbond_only_prm_text_omits_section_headers(tmp_path: Path):
     from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_prm_policy_overlay,

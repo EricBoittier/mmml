@@ -133,6 +133,21 @@ def test_route_mlpot_callback_keeps_user_when_routing_would_zero_hybrid(monkeypa
     assert e_user == pytest.approx(-31729.4)
 
 
+def test_route_mlpot_callback_keeps_small_user_when_routing_would_zero_hybrid(
+    monkeypatch,
+):
+    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    components = {
+        "vdw_primary": -1.0e-4,
+        "vdw_image": -1.0e-4,
+        "elec_primary": -5.0e-5,
+        "elec_image": -5.0e-5,
+        "mm_total": -3.0e-4,
+    }
+    e_user = route_mlpot_callback_energy_kcalmol(-3.0e-4, components, route=True)
+    assert e_user == pytest.approx(-3.0e-4)
+
+
 def test_decompose_mlpot_mm_nb_skips_out_of_range_pair_indices():
     """Pair indices must be bounded by primary-cell atom count (PBC / type-table bugs)."""
     n = 260

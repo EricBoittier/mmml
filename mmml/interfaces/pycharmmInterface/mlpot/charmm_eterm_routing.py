@@ -55,9 +55,9 @@ def route_mlpot_callback_energy_kcalmol(
     # blocked (all-ML BLOCK), routing would leave USER≈0 and discard ML from ENER.
     if (
         do_route
-        and abs(user_kcal) <= 1.0e-6
-        and abs(energy_kcal) > 1.0
-        and abs(mm_total) >= abs(energy_kcal) * 0.99
+        and abs(user_kcal) <= max(1.0e-6, abs(energy_kcal) * 1.0e-9)
+        and abs(energy_kcal) > 1.0e-12
+        and abs(mm_total) >= max(abs(energy_kcal) * 0.99, 1.0e-12)
     ):
         do_route = False
         user_kcal = energy_kcal
