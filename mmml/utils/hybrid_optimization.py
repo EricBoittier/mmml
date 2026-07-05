@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple, Union, Any
 import matplotlib.pyplot as plt
 
+from mmml.interfaces.pycharmmInterface.calculator_utils import safe_norm
+
 
 def extract_lj_parameters_from_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
@@ -399,7 +401,7 @@ def create_hybrid_fitting_factory(
             pair_qq = q_a * q_b
             
             displacements = R[pair_idx_safe[:, 0]] - R[pair_idx_safe[:, 1]]
-            distances = jnp.linalg.norm(displacements, axis=1)
+            distances = safe_norm(displacements, axis=1)
             
             def lennard_jones(r, sig, ep):
                 r6 = (sig / r) ** 6
@@ -421,7 +423,7 @@ def create_hybrid_fitting_factory(
             
             def mm_energy_fn(R_pos):
                 disp = R_pos[pair_idx_safe[:, 0]] - R_pos[pair_idx_safe[:, 1]]
-                dist = jnp.linalg.norm(disp, axis=1)
+                dist = safe_norm(disp, axis=1)
                 vdw = lennard_jones(dist, pair_rm, pair_ep)
                 coul = coulomb(dist, pair_qq)
                 energy_sum = (vdw + coul).sum()
@@ -705,7 +707,7 @@ def create_hybrid_fitting_factory(
             # This is more accurate and gives better gradients
             n_atoms = len(R)
             if len(pair_idx_atom_atom) > 0:
-                pair_distances = jnp.linalg.norm(
+                pair_distances = safe_norm(
                     R[pair_idx_atom_atom[:, 0]] - R[pair_idx_atom_atom[:, 1]], 
                     axis=1
                 )
@@ -715,9 +717,8 @@ def create_hybrid_fitting_factory(
                 ml_scales_per_pair = ml_switch_simple(pair_distances, ml_cutoff_val, mm_switch_on_val)
                 mm_scales_per_pair = mm_switch_simple(pair_distances, mm_switch_on_val, mm_cutoff_val)
                 
-                # Average scales across all pairs (weighted by distance to emphasize close pairs)
-                # Use inverse distance weighting to emphasize short-range pairs where switching matters most
-                weights = 1.0 / (pair_distances + 1e-6)  # Add small epsilon to avoid division by zero
+                # Use exponential weighting to smoothly bound derivatives and avoid singularities
+                weights = jnp.exp(-pair_distances / 2.0)
                 weights = weights / (jnp.sum(weights) + 1e-10)  # Normalize
                 
                 ml_scale = jnp.sum(ml_scales_per_pair * weights)
@@ -733,7 +734,7 @@ def create_hybrid_fitting_factory(
                 mm_scale = 0.5 * mm_scale + 0.5 * mm_scale_avg
             else:
                 # Fallback: use average distance from origin
-                switching_distance = jnp.mean(jnp.linalg.norm(R, axis=1))
+                switching_distance = jnp.mean(safe_norm(R, axis=1))
                 switching_distance = jnp.maximum(switching_distance, 0.1)
                 switching_distance = jnp.where(jnp.isfinite(switching_distance), switching_distance, 5.0)
                 

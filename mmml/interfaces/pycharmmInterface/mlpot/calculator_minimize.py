@@ -775,10 +775,8 @@ def _run_hybrid_calculator_bfgs(
     initial_fmax_ev_a: float,
 ) -> tuple[Any, _BestMinimizationFrame, bool, bool]:
     """Run guarded ASE BFGS; returns (optimizer, best_frame, stopped_on_spike, safe_grms)."""
-    if config.use_bfgs_line_search:
-        from ase.optimize.bfgslinesearch import BFGSLineSearch as BfgsOptimizer
-    else:
-        from ase.optimize import BFGS as BfgsOptimizer
+    # Replaced BFGS with FIRE for vastly improved stability on noisy ML/MM potentials
+    from ase.optimize import FIRE as BfgsOptimizer
 
     best_frame = _BestMinimizationFrame(atoms)
     best_frame.record("initial")

@@ -53,6 +53,7 @@ __all__ = [
     "parse_non_int",
     "_ase_cell_to_3x3",
     "_safe_den",
+    "safe_norm",
     "_sharpstep",
     "_smoothstep01",
     "unpack_factory_result",
@@ -118,6 +119,33 @@ def dimer_pair_index_arrays(n_monomers: int) -> tuple[np.ndarray, np.ndarray]:
 # -----------------------------------------------------------------------------
 def _safe_den(x: float | Array) -> Array:
     return jnp.maximum(x, 1e-6)
+
+@jax.custom_jvp
+def safe_norm(x: Array, axis: int | None = None, keepdims: bool = False) -> Array:
+    """Computes the norm, guarding against NaN gradients at exactly 0.0."""
+    return jnp.linalg.norm(x, axis=axis, keepdims=keepdims)
+
+@safe_norm.defjvp
+def safe_norm_jvp(primals, tangents):
+    x, axis, keepdims = primals
+    x_dot, _, _ = tangents
+    
+    # Compute the forward pass normally
+    primal_out = safe_norm(x, axis=axis, keepdims=keepdims)
+    
+    # Backward pass / JVP:
+    # d(||x||) = sum(x * x_dot) / ||x||. 
+    # To prevent division by zero, we use jnp.where
+    safe_out = jnp.where(primal_out > 1e-12, primal_out, 1e-12)
+    
+    # Compute the dot product between x and x_dot along the specified axis
+    if axis is None:
+        dot = jnp.sum(x * x_dot)
+    else:
+        dot = jnp.sum(x * x_dot, axis=axis, keepdims=keepdims)
+        
+    tangent_out = jnp.where(primal_out > 1e-12, dot / safe_out, 0.0)
+    return primal_out, tangent_out
 
 
 def jax_smooth_switch_linear(r: Array, x0: float, x1: float) -> Array:
@@ -298,7 +326,7 @@ def apply_com_lower_wall(
             d = jax.vmap(lambda a, b: mic_fn(a, b, pbc_cell))(com_a, com_b)
         else:
             d = com_b - com_a
-        return jnp.linalg.norm(d, axis=1)
+        return safe_norm(d, axis=1)
 
     coms_now = _monomer_coms(
         positions,
@@ -355,7 +383,7 @@ def apply_flat_bottom(
             d = mic_fn(center, com, pbc_cell)
         else:
             d = com - center
-        com_dist = jnp.linalg.norm(d)
+        com_dist = safe_norm(d)
         excess = jnp.maximum(0.0, com_dist - radius)
         flat_E = k * excess ** 2
         unit_d = d / (com_dist + 1e-12)
@@ -383,7 +411,7 @@ def apply_flat_bottom(
             d = jax.vmap(lambda c: mic_fn(center, c, pbc_cell))(coms)
         else:
             d = coms - center
-        return jnp.linalg.norm(d, axis=1)
+        return safe_norm(d, axis=1)
 
     coms_now = monomer_coms_segment(
         positions, monomer_id, n_mon, masses=masses

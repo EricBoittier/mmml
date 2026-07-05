@@ -402,7 +402,7 @@ def run_selective_monomer_physnet_mini(
             checkpoint=checkpoint,
             atomic_numbers=z_mono,
         )
-        opt = ase_opt.BFGS(
+        opt = ase_opt.FIRE(
             mono_atoms,
             maxstep=float(config.bfgs_maxstep),
             logfile=logfile,

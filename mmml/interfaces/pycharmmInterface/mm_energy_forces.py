@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 from jax import Array
 
-from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep
+from mmml.interfaces.pycharmmInterface.calculator_utils import _sharpstep, safe_norm
 from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
@@ -1183,7 +1183,7 @@ def build_mm_energy_forces_fn(
                 d_vec = jax.vmap(lambda a, b: mic_fn(a, b, cell_for_com))(com_i, com_j)
                 r = jnp.linalg.norm(d_vec, axis=1)
             else:
-                r = jnp.linalg.norm(com_j - com_i, axis=1)
+                r = safe_norm(com_j - com_i, axis=1)
             if _mm_r_min is not None:
                 r_min_mask = (r >= _mm_r_min)
             else:
@@ -1242,10 +1242,11 @@ def build_mm_energy_forces_fn(
             displacements = mic_batched(pos_dst, pos_src, pbc_cell)
         else:
             displacements = positions[pair_idx_atom_atom[:, 0]] - positions[pair_idx_atom_atom[:, 1]]
-        distances = jnp.linalg.norm(displacements, axis=1)
+        distances = safe_norm(displacements, axis=1)
 
-        # Prevent 0.0 distance from generating Inf / NaN during 1/r^12 calculation
-        distances = jnp.where(distances < 0.1, 0.1, distances)
+        # Prevent hard 0.0 overlaps from generating Inf / NaN during 1/r^12 calculation.
+        # Using softplus for a C2 continuous soft-core boundary at 0.6 Å.
+        distances = jax.nn.softplus(20.0 * (distances - 0.6)) / 20.0 + 0.6
 
         if _cl_mask_jnp is not None:
             distances = jnp.where(_cl_mask_jnp > 0, distances, 1e6)
@@ -1357,10 +1358,11 @@ def build_mm_energy_forces_fn(
             pos_src = positions[pair_i]
             mic_batched = mic_displacements_batched_smooth if _use_smooth_mic else mic_displacements_batched
             displacements = mic_batched(pos_dst, pos_src, _cell)
-            distances = jnp.linalg.norm(displacements, axis=1)
+            distances = safe_norm(displacements, axis=1)
 
-            # Prevent 0.0 distance from generating Inf / NaN during 1/r^12 calculation
-            distances = jnp.where(distances < 0.1, 0.1, distances)
+            # Prevent hard 0.0 overlaps from generating Inf / NaN during 1/r^12 calculation.
+            # Using softplus for a C2 continuous soft-core boundary at 0.6 Å.
+            distances = jax.nn.softplus(20.0 * (distances - 0.6)) / 20.0 + 0.6
 
             distances = jnp.where(pair_mask > 0, distances, 1e6)
 
