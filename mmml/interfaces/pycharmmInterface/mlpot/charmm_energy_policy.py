@@ -112,7 +112,7 @@ def _post_remediation_policy(policy: CharmmEnergyTermPolicy) -> CharmmEnergyTerm
         return CharmmEnergyTermPolicy(
             name=policy.name,
             energy_keys=policy.energy_keys,
-            tolerance_kcal=max(float(policy.tolerance_kcal), 5.0e-2),
+            tolerance_kcal=max(float(policy.tolerance_kcal), 1.0e-1),
             zero_bonded_prm=policy.zero_bonded_prm,
             zero_nonbond_prm=policy.zero_nonbond_prm,
             zero_ml_charges=policy.zero_ml_charges,

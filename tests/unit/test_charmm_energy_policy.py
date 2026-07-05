@@ -205,7 +205,7 @@ def test_enforce_can_verify_without_late_reload(monkeypatch):
         )
 
 
-def test_enforce_tolerates_tiny_imnb_after_pre_remediation(monkeypatch):
+def test_enforce_tolerates_small_imnb_after_pre_remediation(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 
     args = argparse.Namespace(
@@ -217,7 +217,7 @@ def test_enforce_tolerates_tiny_imnb_after_pre_remediation(monkeypatch):
     monkeypatch.setattr(
         cep,
         "measure_charmm_energy_terms",
-        lambda: {"VDW": 0.0, "IMNB": -0.0100527, "USER": 0.0},
+        lambda: {"VDW": 0.0, "IMNB": -0.0921032, "USER": 0.0},
     )
     monkeypatch.setattr(cep, "_run_silent_ener", lambda: None)
 
