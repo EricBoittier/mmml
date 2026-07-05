@@ -3921,6 +3921,20 @@ def _run_dynamics_via_c_api(
         # Clear init_velocities so we don't pass them to the broken C-API wrapper
         init_velocities = None
 
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
+    import ase.io
+    import ase
+    
+    # Save before .traj
+    try:
+        pos_before = get_charmm_positions_array()
+        atoms_before = ase.Atoms(positions=pos_before)
+        if handoff_res is not None and 'vel' in locals():
+            atoms_before.set_velocities(vel)
+        ase.io.write("velocities_before.traj", atoms_before)
+    except Exception:
+        pass
+
     dyn = pycharmm.DynamicsScript(**kw)
     script = _merge_dynamics_script_append(dyn.create_script_string(), heat_append)
     command_line = charm_dyn.flatten_dynamics_script(script)
@@ -3937,6 +3951,18 @@ def _run_dynamics_via_c_api(
                 handoff_res.unlink()
         except OSError:
             pass
+
+    # Save after .traj
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import charmm_synced_velocities_akma
+        pos_after = get_charmm_positions_array()
+        vel_after = charmm_synced_velocities_akma()
+        atoms_after = ase.Atoms(positions=pos_after)
+        if vel_after is not None:
+            atoms_after.set_velocities(vel_after)
+        ase.io.write("velocities_after.traj", atoms_after)
+    except Exception:
+        pass
             
     return dyn
 
