@@ -3913,8 +3913,8 @@ def _run_dynamics_via_c_api(
             include_crystal=True,
         )
         
-        # Open the restart file on unit 88 and override kwargs to read from it
-        pycharmm.lingo.charmm_script(f"open read unform unit 88 name {handoff_res.as_posix()}")
+        # Open the restart file on unit 88 (must be formatted card) and override kwargs to read from it
+        pycharmm.lingo.charmm_script(f"open read card unit 88 name {handoff_res.as_posix()}")
         kw["iasvel"] = 1
         kw["iunrea"] = 88
         
