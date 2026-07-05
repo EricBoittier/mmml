@@ -132,13 +132,17 @@ def test_maybe_abort_sd_on_grms_detects_chunk_to_chunk_rise():
 
 
 def test_invalidate_mlpot_calculator_caches_clears_update_fn():
-    calc = MagicMock()
+    calc = SimpleNamespace()
     calc._cached_update_fn = object()
-    model = MagicMock()
-    model.get_pycharmm_calculator.return_value = calc
+    calc.last_ml_forces = object()
+    model = SimpleNamespace()
+    model._last_ml_forces = object()
+    model.get_pycharmm_calculator = lambda: calc
     ctx = MagicMock(pyCModel=model)
     invalidate_mlpot_calculator_caches(ctx)
     assert calc._cached_update_fn is None
+    assert calc.last_ml_forces is None
+    assert model._last_ml_forces is None
 
 
 def test_run_minimize_in_chunks_splits_long_pbc_sd():

@@ -1149,7 +1149,7 @@ def maybe_rewrap_mlpot_pbc_from_mlpot_ctx(
 
 
 def invalidate_mlpot_calculator_caches(mlpot_ctx: Any | None) -> None:
-    """Drop JAX MM pair-list caches after CHARMM UPDATE (positions moved)."""
+    """Drop JAX MM pair-list and stale force caches after CHARMM UPDATE (positions moved)."""
     if mlpot_ctx is None:
         return
     pyCModel = getattr(mlpot_ctx, "pyCModel", None)
@@ -1166,6 +1166,13 @@ def invalidate_mlpot_calculator_caches(mlpot_ctx: Any | None) -> None:
         calc = getattr(pyCModel, "_registered_calculator", None)
     if calc is not None and hasattr(calc, "_cached_update_fn"):
         calc._cached_update_fn = None
+    # Also clear the cached force arrays so that resolve_mlpot_grms_kcalmol_A
+    # cannot return a stale pre-SD GRMS via mlpot_last_hybrid_forces_kcalmol_A.
+    # These are repopulated on the next MLpot callback or spherical_fn call.
+    if hasattr(pyCModel, "_last_ml_forces"):
+        pyCModel._last_ml_forces = None
+    if calc is not None and hasattr(calc, "last_ml_forces"):
+        calc.last_ml_forces = None
 
 
 def _mlpot_sd_chunk_nstep(config: MinimizeWithMlpotConfig) -> int:
@@ -3654,7 +3661,7 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     """
     use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
     if not use_c_api_handoff or not _dynamics_c_api_available():
-            _apply_bussi_iasvel_one_at_ramp_target(kw)
+        _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     kw["iasvel"] = 0
     kw["iasors"] = 0
