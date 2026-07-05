@@ -947,6 +947,12 @@ def test_assert_mlpot_user_active_error_includes_callback_pair_failure():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup._probe_mlpot_hybrid_energy_kcal",
         return_value=0.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._fortran_mlpot_callback_active",
+        return_value=None,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_charmm_energy_terms_kcal",
+        return_value={},
     ), patch.object(ctx, "reregister_mlpot"), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
         return_value=0.0,
