@@ -1093,6 +1093,12 @@ def _rewrap_mlpot_pbc_after_sd(
     atoms_per = getattr(mlpot_ctx, "atoms_per_monomer", None)
     if box_side is None or atoms_per is None:
         return
+    try:
+        atoms_per_monomer = list(atoms_per)
+    except TypeError:
+        return
+    if not atoms_per_monomer:
+        return
 
     import numpy as _np
     from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
@@ -1102,7 +1108,7 @@ def _rewrap_mlpot_pbc_after_sd(
     )
 
     pos = get_charmm_positions_array()
-    pos_wrapped = rewrap_charmm_pbc_molecules(pos, list(atoms_per), float(box_side))
+    pos_wrapped = rewrap_charmm_pbc_molecules(pos, atoms_per_monomer, float(box_side))
     delta = _np.abs(pos - pos_wrapped)
     n_shifted = int(_np.any(delta > 1e-4, axis=1).sum())
     if n_shifted == 0:
@@ -6292,6 +6298,7 @@ def _run_bussi_heat_subchunked(
             split_trajectory=traj_split,
         )
         suppress_sub_traj = bool(sub_kw.get("_suppress_trajectory", False))
+        # Continuation Bussi legs keep restart I/O but must not reopen the same DCD.
         drop_sub_traj = suppress_sub_traj or "nsavc" not in sub_kw or steps_done > 0
         sub_io = _drop_trajectory_io(io) if drop_sub_traj else io
         # Match CPT sub-chunking: pass iuncrd only on the first in-memory leg so

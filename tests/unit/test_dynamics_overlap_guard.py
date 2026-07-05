@@ -2160,6 +2160,9 @@ def test_mlpot_bussi_overlap_chunks_use_in_memory_handoff(tmp_path, monkeypatch)
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_bussi_heat_subchunked",
         side_effect=fake_bussi_sub,
     ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard.check_dynamics_overlap",
         return_value=(5.0, False),
     ), mock.patch(
