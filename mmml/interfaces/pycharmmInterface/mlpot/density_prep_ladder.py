@@ -733,6 +733,7 @@ def run_density_prep_ladder(
     fix_resids: list[int],
     show_energy: bool,
     z: np.ndarray,
+    force: bool = False,
 ) -> tuple[float, float | None, DensityPrepLadderResult]:
     """Attempt staged recovery until hybrid GRMS is below ``max_grms``."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
@@ -741,7 +742,7 @@ def run_density_prep_ladder(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
-    enabled = density_prep_ladder_enabled(args)
+    enabled = bool(force) or density_prep_ladder_enabled(args)
     if not enabled:
         return current_grms, box_side, DensityPrepLadderResult(
             enabled=False,
@@ -1198,12 +1199,15 @@ def maybe_run_density_prep_ladder_for_mlpot(
     max_grms: float,
     context: str = "Density prep ladder",
     quiet: bool = False,
+    force: bool = False,
 ) -> tuple[float, bool]:
-    """Run the liquid-prep ladder when enabled on ``mlpot_ctx.workflow_args``."""
+    """Run the liquid-prep ladder when enabled, or when forced by a fatal gate."""
     from mmml.interfaces.pycharmmInterface.mlpot.cli_common import refresh_mlpot_energy_and_grms
 
     args = getattr(mlpot_ctx, "workflow_args", None)
-    if args is None or not density_prep_ladder_enabled(args):
+    if args is None or (not force and not density_prep_ladder_enabled(args)):
+        return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
+    if bool(getattr(mlpot_ctx, "_density_prep_ladder_active", False)):
         return refresh_mlpot_energy_and_grms(mlpot_ctx, context=context), False
 
     atoms_per_list = getattr(mlpot_ctx, "atoms_per_monomer", None)
@@ -1229,24 +1233,29 @@ def maybe_run_density_prep_ladder_for_mlpot(
     if current_grms <= float(max_grms):
         return float(current_grms), False
 
-    ladder_grms, _new_side, _summary = run_density_prep_ladder(
-        args,
-        mlpot_ctx=mlpot_ctx,
-        pyCModel=pyCModel,
-        max_grms=float(max_grms),
-        current_grms=float(current_grms),
-        n_mol=n_mol,
-        n_atoms=n_atoms,
-        box_side=float(box_side) if box_side is not None else None,
-        charmm_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
-        atoms_per_list=list(atoms_per_list),
-        composition=composition,
-        mini_nstep=int(getattr(args, "mini_nstep", 500) or 500),
-        mini_nprint=max(1, int(getattr(args, "nprint", 100) or 100)),
-        fix_resids=[],
-        show_energy=False,
-        z=getattr(mlpot_ctx, "ml_Z", None),
-    )
+    setattr(mlpot_ctx, "_density_prep_ladder_active", True)
+    try:
+        ladder_grms, _new_side, _summary = run_density_prep_ladder(
+            args,
+            mlpot_ctx=mlpot_ctx,
+            pyCModel=pyCModel,
+            max_grms=float(max_grms),
+            current_grms=float(current_grms),
+            n_mol=n_mol,
+            n_atoms=n_atoms,
+            box_side=float(box_side) if box_side is not None else None,
+            charmm_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+            atoms_per_list=list(atoms_per_list),
+            composition=composition,
+            mini_nstep=int(getattr(args, "mini_nstep", 500) or 500),
+            mini_nprint=max(1, int(getattr(args, "nprint", 100) or 100)),
+            fix_resids=[],
+            show_energy=False,
+            z=getattr(mlpot_ctx, "ml_Z", None),
+            force=force,
+        )
+    finally:
+        setattr(mlpot_ctx, "_density_prep_ladder_active", False)
     return float(ladder_grms), True
 
 

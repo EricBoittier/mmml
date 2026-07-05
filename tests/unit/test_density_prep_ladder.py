@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -103,6 +105,43 @@ def test_resilient_defaults_respect_explicit_box_and_ladder_off():
     assert args.charmm_sd_steps == 2000
     assert args.mini_lattice_abnr_allow_fixed_box is True
     assert args.mini_box_equil_allow_fixed_box is True
+
+
+def test_maybe_run_density_prep_ladder_force_bypasses_disabled_flag():
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        maybe_run_density_prep_ladder_for_mlpot,
+    )
+
+    args = _args(density_prep_ladder=False)
+    ctx = SimpleNamespace(
+        workflow_args=args,
+        atoms_per_monomer=[5, 5],
+        pyCModel=MagicMock(),
+        cubic_box_side_A=30.0,
+        use_pbc=True,
+        ml_Z=np.ones(10, dtype=int),
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.refresh_mlpot_energy_and_grms",
+        return_value=1232.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder.run_density_prep_ladder",
+        return_value=(42.0, 30.0, MagicMock()),
+    ) as run_ladder:
+        grms, ran = maybe_run_density_prep_ladder_for_mlpot(
+            ctx,
+            max_grms=500.0,
+            context="Post-SD-stall density prep ladder",
+            quiet=True,
+            force=True,
+        )
+
+    assert ran is True
+    assert grms == pytest.approx(42.0)
+    assert ctx._density_prep_ladder_active is False
+    run_ladder.assert_called_once()
+    assert run_ladder.call_args.kwargs["force"] is True
 
 
 def test_condensed_phase_defaults_from_certified_box():

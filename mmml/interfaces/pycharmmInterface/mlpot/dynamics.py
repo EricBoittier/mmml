@@ -8056,6 +8056,7 @@ def minimize_with_mlpot(
                         "geometry_stress — skipping remaining SD chunks",
                         flush=True,
                     )
+                    post_stall_grms = sd_result.last_grms
                     if (
                         config.mlpot_ctx is not None
                         and config.pre_sd_bonded_recovery_grms_kcalmol_A is not None
@@ -8069,7 +8070,10 @@ def minimize_with_mlpot(
                             max_grms=float(config.pre_sd_bonded_recovery_grms_kcalmol_A),
                             context="Post-SD-stall density prep ladder",
                             quiet=not config.verbose,
+                            force=True,
                         )
+                        if ran_ladder and np.isfinite(float(ladder_grms)):
+                            post_stall_grms = float(ladder_grms)
                         if ran_ladder and config.verbose:
                             print(
                                 f"Post-SD-stall density prep ladder: GRMS→{ladder_grms:.4f} "
@@ -8079,7 +8083,7 @@ def minimize_with_mlpot(
                             )
                     _raise_if_sd_stall_unsafe_for_dynamics(
                         config,
-                        last_grms=sd_result.last_grms,
+                        last_grms=post_stall_grms,
                         context="MLpot SD pass 1 stalled",
                     )
                 elif sd_result.rolled_back:
