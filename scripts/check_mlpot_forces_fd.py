@@ -59,6 +59,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Use Packmol sphere placement for --composition.",
     )
+    parser.add_argument("--charmm-zero-energy-terms", default=None, help="Energy terms to zero out.")
     parser.add_argument("--packmol-radius", type=float, default=None, help="Packmol sphere radius in Å.")
     parser.add_argument("--packmol-tolerance", type=float, default=2.0, help="Packmol tolerance in Å.")
     parser.add_argument(
