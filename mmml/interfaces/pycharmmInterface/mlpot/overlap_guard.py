@@ -1346,6 +1346,14 @@ def _handle_intramonomer_rescue(
             context=f"{label} intra-monomer template restore",
             restart_path=config.prior_segment_restart,
         )
+        try:
+            return _intramonomer_check(
+                config,
+                context=f"{label} after intra-monomer template restore",
+                mlpot_ctx=mlpot_ctx,
+            )
+        except RuntimeError:
+            pass
 
     sd_steps = config.intra_rescue_sd_steps
     if sd_steps is None:
