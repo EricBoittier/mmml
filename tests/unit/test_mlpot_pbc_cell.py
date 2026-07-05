@@ -713,6 +713,7 @@ def test_decomposed_calculator_initializes_mm_before_spherical_fn():
         z,
         do_mm=True,
         get_update_fn=get_update_fn,
+        mm_pair_source="jax",
     )
     mock_energy = jnp.array(0.0)
     mock_forces = jnp.zeros((8, 3))
@@ -906,6 +907,7 @@ def test_decomposed_calculator_jax_pme_uses_charmm_box_fallback():
         cell=False,
         do_mm=True,
         get_update_fn=get_update_fn,
+        mm_pair_source="jax",
     )
     parent = MagicMock()
     parent._jax_pme_lr_active.return_value = True
@@ -1048,6 +1050,7 @@ def test_decomposed_calculator_passes_charmm_box_to_spherical_fn():
         2,
         z,
         cell=40.0,
+        do_mm=False,
     )
     captured: dict[str, Any] = {}
 
@@ -1106,6 +1109,7 @@ def test_decomposed_calculator_queries_box_when_jax_pme_active_without_cached_ce
         cell=False,
         do_mm=True,
         get_update_fn=get_update_fn,
+        mm_pair_source="jax",
     )
     parent = MagicMock()
     parent._jax_pme_lr_active.return_value = True
@@ -1156,6 +1160,55 @@ def test_decomposed_calculator_queries_box_when_jax_pme_active_without_cached_ce
     forwarded_box = get_update_fn.call_args.kwargs["box"]
     assert forwarded_box is not None
     assert float(forwarded_box[0, 0]) == pytest.approx(37.5)
+
+
+def test_charmm_callback_zero_pairs_refuses_implicit_jax_rebuild():
+    z = np.zeros(8, dtype=int)
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        do_mm=True,
+        get_update_fn=MagicMock(return_value=MagicMock(return_value=_mock_mm_pair_buffers())),
+        mm_pair_source="charmm_callback",
+    )
+    with pytest.raises(RuntimeError, match="returned zero ML/MM pairs"):
+        calc._resolve_mm_pairs_from_callback(
+            None,
+            None,
+            None,
+            None,
+            natom=8,
+            nmlmmp=0,
+            pos=np.zeros((8, 3), dtype=np.float64),
+            box=None,
+        )
+
+
+def test_charmm_callback_zero_pairs_allowed_when_mm_disabled():
+    z = np.zeros(8, dtype=int)
+    calc = DecomposedMlpotCalculator(
+        MagicMock(),
+        CutoffParameters(),
+        2,
+        z,
+        do_mm=False,
+        mm_pair_source="charmm_callback",
+    )
+    pair_idx, pair_mask, use_pairs = calc._resolve_mm_pairs_from_callback(
+        None,
+        None,
+        None,
+        None,
+        natom=8,
+        nmlmmp=0,
+        pos=np.zeros((8, 3), dtype=np.float64),
+        box=None,
+    )
+    assert not use_pairs
+    assert pair_idx.shape == (1, 2)
+    assert pair_mask.shape == (1,)
 
 
 def test_decomposed_calculator_propagates_box_sync_failure():
@@ -1659,4 +1712,3 @@ def test_calculator_wrapping_translation_invariance():
     # Assert energy and forces are exactly the same
     assert np.allclose(out_initial.energy, out_shifted.energy, atol=1e-5)
     assert np.allclose(out_initial.forces, out_shifted.forces, atol=1e-5)
-

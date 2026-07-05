@@ -459,14 +459,15 @@ class DecomposedMlpotCalculator:
 
         n_pairs = int(nmlmmp)
         if n_pairs <= 0:
-            if not self._callback_pair_warned:
-                print(
-                    "Decomposed MLpot: charmm_callback pairs empty (all-ML or stale "
-                    "mlpot_update); using JAX MM neighbor rebuild",
-                    flush=True,
-                )
-                self._callback_pair_warned = True
-            return self._resolve_mm_pairs(pos, box)
+            if not self.do_mm or int(self.n_monomers) <= 1:
+                return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
+            raise RuntimeError(
+                "Decomposed MLpot: charmm_callback returned zero ML/MM pairs while "
+                "JAX MM is enabled for a multi-monomer system. Refusing to rebuild "
+                "pairs inside the CHARMM callback because this indicates stale "
+                "mlpot_update/list state before dynamics. Run CHARMM UPDATE/mlpot_update "
+                "before dynamics, or opt into --mm-pair-source jax explicitly."
+            )
 
         self._ensure_mm_pair_capacity_from_update_fn(pos, box)
         pad_capacity = self._mm_pair_pad_capacity()
