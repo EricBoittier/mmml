@@ -320,3 +320,64 @@ def test_urey_bradley_energy_and_forces() -> None:
     )
     assert float(comp["urey"]) == pytest.approx(expected, rel=1e-6)
     assert float(comp["total"]) == pytest.approx(expected, rel=1e-6)
+
+
+def test_urey_arrays_for_topology_angles() -> None:
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+        urey_arrays_for_topology_angles,
+    )
+
+    prm = Path("tests/unit/fixtures/urey_sample.prm")
+    angles = np.array([[0, 1, 2]], dtype=np.int32)
+    atom_types = ("CG311", "CG321", "HGA2")
+    urey_k, urey_r0 = urey_arrays_for_topology_angles(atom_types, angles, prm)
+    assert float(urey_k[0]) == pytest.approx(22.53)
+    assert float(urey_r0[0]) == pytest.approx(2.179)
+
+
+def test_load_protein_urey_from_psf(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+        bonded_energy_and_forces_from_system,
+    )
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
+
+    prm = Path("tests/unit/fixtures/urey_sample.prm")
+    psf = tmp_path / "prot_ub.psf"
+    psf.write_text(
+        "\n".join(
+            [
+                "PSF EXT",
+                "",
+                "         3 !NATOM",
+                "         1 ALA      1        ALA      C1       CG311    0.000000       12.0110           0",
+                "         2 ALA      1        ALA      C2       CG321    0.000000       12.0110           0",
+                "         3 ALA      1        ALA      H1       HGA2     0.000000        1.0080           0",
+                "",
+                "         2 !NBOND: bonds",
+                "         1         2         2         3",
+                "",
+                "         1 !NTHETA: angles",
+                "         1         2         3",
+                "",
+                "         0 !NPHI: dihedrals",
+                "",
+                "         0 !NIMPHI: impropers",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    positions = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.5, 0.0, 0.0],
+            [2.0, 1.2, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    system = load_cgenff_bonded_from_psf(psf, positions, prm_file=prm)
+    assert float(system.urey_k[0]) == pytest.approx(22.53)
+    assert float(system.urey_r0[0]) == pytest.approx(2.179)
+    components, forces = bonded_energy_and_forces_from_system(system)
+    assert float(components["urey"]) > 0.0
+    assert forces.shape == (3, 3)
+    assert np.all(np.isfinite(forces))

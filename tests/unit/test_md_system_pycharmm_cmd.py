@@ -127,6 +127,24 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+def test_build_pycharmm_command_forwards_pre_mlpot_pair_floors():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(
+        _pycharmm_args(
+            pre_mlpot_h_heavy_min_distance=2.4,
+            pre_mlpot_heavy_heavy_min_distance=2.45,
+        )
+    )
+    assert "--pre-mlpot-h-heavy-min-distance" in cmd
+    assert cmd[cmd.index("--pre-mlpot-h-heavy-min-distance") + 1] == "2.4"
+    assert "--pre-mlpot-heavy-heavy-min-distance" in cmd
+    assert cmd[cmd.index("--pre-mlpot-heavy-heavy-min-distance") + 1] == "2.45"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.pre_mlpot_h_heavy_min_distance == pytest.approx(2.4)
+    assert parsed.pre_mlpot_heavy_heavy_min_distance == pytest.approx(2.45)
+
+
 def test_build_pycharmm_command_forwards_zero_mini_box_equil_and_lattice():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 

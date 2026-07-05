@@ -79,8 +79,8 @@ def _positions_from_pdb(pdb_path: Path) -> np.ndarray:
 
 def _mmml_bonded_energy(positions: np.ndarray, psf_path: Path, prm_path: Path | None) -> dict[str, float]:
     from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
-        bonded_energy_and_forces,
-        bonded_energy_components,
+        bonded_energy_and_forces_from_system,
+        bonded_energy_components_from_system,
     )
     from mmml.interfaces.pycharmmInterface.cgenff_topology import load_cgenff_bonded_from_psf
 
@@ -89,15 +89,10 @@ def _mmml_bonded_energy(positions: np.ndarray, psf_path: Path, prm_path: Path | 
         positions,
         prm_file=prm_path,
     )
-    comp = bonded_energy_components(
+    comp = bonded_energy_components_from_system(system, jnp.asarray(positions))
+    bonded_total, _forces = bonded_energy_and_forces_from_system(
+        system,
         jnp.asarray(positions),
-        system.topology,
-        system.bonded,
-    )
-    bonded_total, _forces = bonded_energy_and_forces(
-        jnp.asarray(positions),
-        system.topology,
-        system.bonded,
         energy_unit="kcal/mol",
     )
     out = {k: float(v) for k, v in comp.items()}
@@ -125,9 +120,27 @@ def _jaxmd_oplsaa_energy(
         str(rtf_path),
     )
     if not include_nonbonded:
-        from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_components
+        from jax_md.mm_forcefields.io.charmm import parse_rtf
 
-        comp = bonded_energy_components(pos_j, topology, parameters.bonded)
+        from mmml.interfaces.pycharmmInterface.cgenff_bonded import bonded_energy_components
+        from mmml.interfaces.pycharmmInterface.cgenff_topology import (
+            urey_arrays_for_topology_angles,
+        )
+
+        _, rtf_atoms, _, _, _ = parse_rtf(str(rtf_path))
+        atom_types = tuple(atom.type for atom in rtf_atoms)
+        urey_k, urey_r0 = urey_arrays_for_topology_angles(
+            atom_types,
+            topology.angles,
+            prm_path,
+        )
+        comp = bonded_energy_components(
+            pos_j,
+            topology,
+            parameters.bonded,
+            urey_k=urey_k,
+            urey_r0=urey_r0,
+        )
         return {k: float(v) for k, v in comp.items()}
 
     box = jnp.array([float(box_side)] * 3, dtype=jnp.float64)

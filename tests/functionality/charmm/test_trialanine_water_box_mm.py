@@ -170,14 +170,12 @@ def test_trialanine_water_total_mm_matches_pycharmm(
         _nbond_settings_from_box(box),
         include_cmap=include_cmap,
     )
-    ignore_charmm_bonded = ("urey", "ub")
     print(
         f"\nTRIA MM parity ({len(nbond_data.excluded_pairs)} excluded pairs): "
-        f"{summarize_mm_system_charmm_delta(result, ignore_charmm_bonded_terms=ignore_charmm_bonded)}\n",
+        f"{summarize_mm_system_charmm_delta(result)}\n",
         flush=True,
     )
     compare_mm_system_to_charmm(
         result,
-        ignore_charmm_bonded_terms=ignore_charmm_bonded,
         energy_atol=0.7,
     )

@@ -99,7 +99,7 @@ The functionality test uses ``energy_atol=0.7`` kcal/mol on the 72-atom TRIA box
 
 - **Toggling ``vfswitch`` alone** does not explain the gap (CHARMM VDW changes by ≲1 kcal
   on a 2× acetone dimer; tri-alanine is similar).
-- **Bonded terms match** (bond/angle/dihedral; Urey–Bradley ≈0.2 kcal is omitted in JAX).
+- **Bonded terms match** (bond/angle/torsion/improper/CMAP/Urey–Bradley).
 
 ### Main contributors (historical — pre INB/IBLO fix)
 

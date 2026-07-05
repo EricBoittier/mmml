@@ -8,7 +8,7 @@ alongside angle terms using the same ``topology.angles`` index rows.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import jax
 import jax.numpy as jnp
@@ -19,6 +19,9 @@ from jax_md.mm_forcefields.base import BondedParameters, Topology
 from jax_md.util import normalize, safe_arccos, safe_norm
 
 from mmml.interfaces.pycharmmInterface.cgenff_cmap import cmap_energy
+
+if TYPE_CHECKING:
+    from mmml.interfaces.pycharmmInterface.cgenff_topology import CgenffBondedSystem
 
 KCAL_MOL_TO_EV = 0.04336411530877155
 
@@ -214,6 +217,48 @@ def bonded_energy_and_forces(
         raise ValueError(f"Unsupported energy_unit: {energy_unit!r}")
 
     return components, forces
+
+
+def bonded_energy_components_from_system(
+    system: CgenffBondedSystem,
+    positions: Array | None = None,
+    displacement_fn: space.DisplacementFn | None = None,
+    *,
+    include_cmap: bool = True,
+) -> dict[str, Array]:
+    """Evaluate bonded components using ``system`` Urey–Bradley arrays."""
+    pos = system.positions if positions is None else positions
+    return bonded_energy_components(
+        pos,
+        system.topology,
+        system.bonded,
+        displacement_fn,
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
+        include_cmap=include_cmap,
+    )
+
+
+def bonded_energy_and_forces_from_system(
+    system: CgenffBondedSystem,
+    positions: Array | None = None,
+    displacement_fn: space.DisplacementFn | None = None,
+    *,
+    energy_unit: str = "kcal/mol",
+    include_cmap: bool = True,
+) -> tuple[dict[str, Array], Array]:
+    """Evaluate bonded energy/forces using ``system`` Urey–Bradley arrays."""
+    pos = system.positions if positions is None else positions
+    return bonded_energy_and_forces(
+        pos,
+        system.topology,
+        system.bonded,
+        displacement_fn,
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
+        energy_unit=energy_unit,
+        include_cmap=include_cmap,
+    )
 
 
 def build_bonded_energy_fn(

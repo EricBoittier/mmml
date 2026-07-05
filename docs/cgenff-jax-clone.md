@@ -44,7 +44,7 @@ JAX bonded formulas follow `jax_md.mm_forcefields.oplsaa.energy` so they can be 
 | Dihedrals | Fourier \(V_n\cos(n\phi)\) | same |
 | Impropers | harmonic | same |
 | CMAP | grid correction | `cmap_energy` |
-| Urey–Bradley | optional in PRM | **not implemented** (≈0.2 kcal/mol on tri-alanine) |
+| Urey–Bradley | \(V = K_{ub}(S - S_0)^2\) on 1–3 pairs | `urey_bradley_energy` (per-angle rows from PRM ``K_ub`` / ``S0``) |
 
 Live cross-check (requires PyCHARMM):
 

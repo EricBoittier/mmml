@@ -133,6 +133,23 @@ def _merge_charmm_prm_urey_parameters(
     return merged
 
 
+def urey_arrays_for_topology_angles(
+    atom_types: Sequence[str],
+    angles: np.ndarray | Array,
+    *prm_paths: Path | str,
+) -> tuple[Array, Array]:
+    """Build per-angle Urey–Bradley ``K_ub`` / ``S0`` arrays for a topology."""
+    urey_params = _merge_charmm_prm_urey_parameters(*prm_paths)
+    angle_rows = np.asarray(angles, dtype=np.int32)
+    urey_k = np.zeros(angle_rows.shape[0], dtype=np.float64)
+    urey_r0 = np.zeros(angle_rows.shape[0], dtype=np.float64)
+    for i, (idx1, idx2, idx3) in enumerate(angle_rows):
+        key = (atom_types[int(idx1)], atom_types[int(idx2)], atom_types[int(idx3)])
+        if key in urey_params:
+            urey_k[i], urey_r0[i] = urey_params[key]
+    return jnp.asarray(urey_k), jnp.asarray(urey_r0)
+
+
 def _merge_charmm_prm_parameters(
     *prm_paths: Path | str,
 ) -> tuple[dict, dict, dict]:

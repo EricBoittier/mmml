@@ -97,7 +97,7 @@ MMML_MPI_NP=4 ./scripts/mmml-charmm-mpirun.sh python \
 
 ### MMML bonded loader (PSF + protein PRM)
 
-Matches `cgenff_bonded.py` / `cgenff_topology.py` (jax-md CHARMM parsers, CMAP when present):
+Matches `cgenff_bonded.py` / `cgenff_topology.py` (jax-md CHARMM parsers, CMAP and Urey–Bradley when present in the PRM):
 
 ```bash
 JAX_PLATFORMS=cpu uv run python scripts/examples/jaxmd_protein_alad_energy.py \
