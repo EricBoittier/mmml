@@ -1274,7 +1274,7 @@ def _raise_if_sd_stall_unsafe_for_dynamics(
         )
     if float(current_grms) > ceiling:
         near_miss_factor = float(
-            getattr(config, "sd_stall_pre_dynamics_retry_factor", 2.0) or 2.0
+            getattr(config, "sd_stall_pre_dynamics_retry_factor", 3.0) or 3.0
         )
         if float(current_grms) <= float(ceiling) * max(1.0, near_miss_factor):
             if config.verbose:
