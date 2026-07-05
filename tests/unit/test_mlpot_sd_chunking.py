@@ -361,6 +361,7 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
     ctx.use_pbc = False
     ctx.charmm_cubic_box_side_A = None
     ctx.pyCModel = None
+    ctx.sd_watchdog_baseline_grms = None
     minimize = MagicMock()
     pycharmm = MagicMock()
     cons_fix = MagicMock()
