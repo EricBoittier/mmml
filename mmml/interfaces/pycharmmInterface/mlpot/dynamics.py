@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
@@ -3643,8 +3644,15 @@ def _apply_bussi_iasvel_one_at_ramp_target(kw: dict[str, Any]) -> None:
 
 
 def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
-    """Pick ``iasvel=0`` + C-API injection, or ``iasvel=1`` Boltzmann when ``dynamics_run_kw`` is absent."""
-    if not _dynamics_c_api_available():
+    """Use safe ``iasvel=1`` Bussi continuation unless C-API handoff is explicitly requested.
+
+    Some libcharmm builds expose ``dynamics_run_kw`` but segfault in ``dynopt`` when
+    `init_velocities` are injected on an in-memory continuation.  The stable default
+    is therefore a ramp-target Boltzmann continuation; the old C-API handoff remains
+    available only through ``MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1``.
+    """
+    use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
+    if not use_c_api_handoff or not _dynamics_c_api_available():
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     kw["iasvel"] = 0

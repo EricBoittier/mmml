@@ -735,9 +735,36 @@ def test_resolve_heat_thermostat_keeps_bussi_after_pretreat(monkeypatch):
     assert resolve_heat_thermostat(args) == "bussi"
 
 
-def test_apply_bussi_in_memory_continuation_keeps_iasvel_zero():
+def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_one(monkeypatch):
     from unittest.mock import patch
 
+    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
+    kw = {
+        "firstt": 10.0,
+        "finalt": 50.0,
+        "tstruct": 10.0,
+        "tbath": 10.0,
+        "timestep": 0.0001,
+        "nstep": 50,
+    }
+    prepare_bussi_heat_dynamics_kw(kw, nstep=50, ihtfrq=50, timestep_ps=0.0001)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
+        return_value=True,
+    ):
+        _apply_bussi_in_memory_continuation_kw(kw)
+    assert kw["iasvel"] == 1
+    assert kw["start"] is False
+    assert kw["iunrea"] == -1
+    assert kw.get("_skip_ase_cold_velocity_assign") is None
+    assert kw["firstt"] == pytest.approx(50.0)
+    assert kw["tstruct"] == pytest.approx(50.0)
+
+
+def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
+    from unittest.mock import patch
+
+    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -1175,13 +1202,14 @@ def test_resolve_dynamics_init_velocities_bussi_continuation_uses_rescale_ladder
     assert np.allclose(out["vz"], expected["vz"])
 
 
-def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
+def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk(monkeypatch):
     from unittest.mock import patch
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _apply_overlap_chunk_dynamics_kw,
     )
 
+    monkeypatch.delenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", raising=False)
     kw = {
         "firstt": 10.0,
         "finalt": 50.0,
@@ -1197,10 +1225,10 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk():
         return_value=True,
     ):
         _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
-    assert kw["iasvel"] == 0
+    assert kw["iasvel"] == 1
     assert kw["start"] is False
-    assert "firstt" not in kw
-    assert "tstruct" not in kw
+    assert kw["firstt"] == pytest.approx(50.0)
+    assert kw["tstruct"] == pytest.approx(50.0)
 
 
 def test_overlap_chunk_uses_memory_handoff_for_bussi(monkeypatch):
