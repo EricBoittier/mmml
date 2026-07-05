@@ -266,8 +266,8 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-monomer-health-max-restore",
         type=int,
-        default=4,
-        help="Max monomers to template-restore per health check (default: 4).",
+        default=40,
+        help="Max monomers to template-restore per health check (default: 40).",
     )
 
 

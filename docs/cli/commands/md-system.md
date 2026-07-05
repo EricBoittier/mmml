@@ -1202,7 +1202,7 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         restored monomers.
   --dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE
                         Max monomers to template-restore per health check
-                        (default: 4).
+                        (default: 40).
 ```
 
 
