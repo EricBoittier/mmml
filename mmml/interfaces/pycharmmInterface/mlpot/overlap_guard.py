@@ -44,7 +44,7 @@ class DynamicsOverlapConfig:
     intra_min_distance_A: float = 0.5
     intra_exclude_1_3: bool = True
     intra_rescue_sd_steps: int | None = None
-    check_interval: int = 100
+    check_interval: int = 500
     n_monomers: int = 1
     use_pbc: bool = False
     fallback_box_side_A: float | None = None
@@ -160,10 +160,10 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-overlap-check-interval",
         type=int,
-        default=100,
+        default=500,
         help=(
             "Integration steps between overlap/extent checks during dynamics "
-            "(default: 100). Effective interval is the largest divisor of the stage "
+            "(default: 500). Effective interval is the largest divisor of the stage "
             "step count not exceeding this value (and at least dcd-nsavc + 1 when set). "
             "Heat uses this mid-segment interval by default; see "
             "--heat-overlap-segment-boundary-only for legacy end-only checks."
@@ -266,8 +266,17 @@ def add_dynamics_overlap_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--dynamics-monomer-health-max-restore",
         type=int,
-        default=40,
-        help="Max monomers to template-restore per health check (default: 40).",
+        default=4,
+        help="Max monomers to template-restore per health check (default: 4).",
+    )
+    group.add_argument(
+        "--dynamics-monomer-velocity-warn-recover-fraction",
+        type=float,
+        default=0.80,
+        help=(
+            "Fraction of monomers that must be velocity-warn before velocity-only "
+            "redraw recovery runs (default: 0.80)."
+        ),
     )
 
 
@@ -382,7 +391,7 @@ def resolve_dynamics_overlap_config(
     else:
         min_distance_A = _workflow_arg_float(args, "dynamics_overlap_min_distance", 1.5)
 
-    interval = _workflow_arg_int(args, "dynamics_overlap_check_interval", 100)
+    interval = _workflow_arg_int(args, "dynamics_overlap_check_interval", 500)
     if use_pbc and fallback_box_side_A is None:
         box_size = _workflow_arg(args, "box_size", None)
         if box_size is not None:

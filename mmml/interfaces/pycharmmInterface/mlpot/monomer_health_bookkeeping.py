@@ -41,7 +41,7 @@ class MonomerHealthConfig:
     velocity_bad_ratio: float = 6.0
     velocity_warn_abs_akma: float = 5000.0
     velocity_bad_abs_akma: float = 15000.0
-    velocity_warn_recover_fraction: float = 0.50
+    velocity_warn_recover_fraction: float = 0.80
     force_warn_ratio: float = 2.5
     force_bad_ratio: float = 5.0
     force_warn_abs_kcalmol_A: float = 30.0
@@ -211,8 +211,8 @@ def monomer_health_config_from_args(args: Any | None) -> MonomerHealthConfig:
             getattr(args, "dynamics_monomer_velocity_bad_akma", 15000.0), 15000.0
         ),
         velocity_warn_recover_fraction=_safe_float(
-            getattr(args, "dynamics_monomer_velocity_warn_recover_fraction", 0.50),
-            0.50,
+            getattr(args, "dynamics_monomer_velocity_warn_recover_fraction", 0.80),
+            0.80,
         ),
         force_warn_ratio=_safe_float(
             getattr(args, "dynamics_monomer_force_warn_ratio", 2.5), 2.5

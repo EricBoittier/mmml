@@ -612,7 +612,7 @@ def test_resolve_defaults_to_rescue_and_1p5A():
     assert cfg.min_distance_A == 1.5
     assert cfg.intra_min_distance_A == 0.5
     assert cfg.intra_exclude_1_3 is True
-    assert cfg.check_interval == 100
+    assert cfg.check_interval == 500
     assert cfg.enabled is True
     assert cfg.intra_enabled is True
     assert cfg.extent_enabled is True
@@ -648,7 +648,7 @@ def test_resolve_dynamics_overlap_config_tolerates_explicit_none_fields():
     assert cfg.min_distance_A == pytest.approx(1.5)
     assert cfg.intra_min_distance_A == pytest.approx(0.5)
     assert cfg.max_monomer_extent_A == pytest.approx(12.0)
-    assert cfg.check_interval == 100
+    assert cfg.check_interval == 500
     assert cfg.rescue.nstep_sd == 200
     assert cfg.separate_margin_A == pytest.approx(0.2)
 
