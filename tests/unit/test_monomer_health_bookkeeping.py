@@ -82,6 +82,7 @@ def test_monomer_health_config_from_args() -> None:
         dynamics_monomer_velocity_bad_ratio=6.0,
         dynamics_monomer_velocity_warn_akma=5000.0,
         dynamics_monomer_velocity_bad_akma=15000.0,
+        dynamics_monomer_velocity_warn_recover_fraction=0.8,
         dynamics_monomer_force_warn_ratio=2.5,
         dynamics_monomer_force_bad_ratio=5.0,
         dynamics_monomer_energy_warn_ratio=2.0,
@@ -92,6 +93,7 @@ def test_monomer_health_config_from_args() -> None:
     assert cfg.enabled
     assert cfg.debug_dot_matrix
     assert cfg.max_restore_per_check == 2
+    assert cfg.velocity_warn_recover_fraction == pytest.approx(0.8)
 
 
 @patch(
