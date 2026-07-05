@@ -1157,6 +1157,31 @@ def run_dynamics_workflow(
                     verbose=not args.quiet,
                 )
 
+            # Mark JAX as materialized so assert_mlpot_user_active (below) actually
+            # probes CHARMM USER instead of silently returning 0.0 via the defer
+            # guard (mlpot_defer_charmm_hybrid_ener checks this flag).
+            setattr(ctx, "_mlpot_sd_jax_materialized", True)
+
+            # Rebuild CHARMM pair lists after the warmup (SD used inbfrq=0, so
+            # nmlmmp is stale/0 in the callback, triggering the multi-monomer guard).
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+                sync_charmm_lists_after_mini,
+            )
+
+            sync_charmm_lists_after_mini(quiet=bool(args.quiet))
+
+            # Prime the CHARMM USER term with one ENER FORCE under mpirun — same
+            # validation the SD-deferred path runs at _mlpot_sd_jax_materialized=True.
+            from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+                prime_charmm_hybrid_energy_before_mlpot_sd,
+            )
+
+            prime_charmm_hybrid_energy_before_mlpot_sd(
+                ctx,
+                verbose=not args.quiet,
+                context="Post-warmup pre-dynamics",
+            )
+
         # MMFP flat-bottom for dynamics only (avoid fighting SD on the initial Packmol cloud).
         apply_flat_bottom_from_args(args)
 
