@@ -1,3 +1,8 @@
+import sys
+import os
+
+os.environ['CHARMM_LIB_DIR'] = '/Users/ericboittier/mmml/setup/charmm'
+
 import pycharmm
 import pycharmm.dynamics as charm_dyn
 
