@@ -58,6 +58,7 @@ def write_charmm_restart_from_memory(
     nsavv: int = 0,
     include_velocities: bool = True,
     include_crystal: bool = True,
+    velocities_akma: np.ndarray | None = None,
 ) -> Path:
     """Write a CHARMM ``.res`` from coordinates (no ``WRITE RESTART`` script).
 
@@ -114,15 +115,16 @@ def write_charmm_restart_from_memory(
     lines.extend(_restart_section_coord_lines(pos))
 
     if include_velocities:
-        vel = None
-        try:
-            from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-                charmm_synced_velocities_akma,
-            )
+        vel = velocities_akma
+        if vel is None:
+            try:
+                from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+                    charmm_synced_velocities_akma,
+                )
 
-            vel = charmm_synced_velocities_akma()
-        except Exception:
-            vel = None
+                vel = charmm_synced_velocities_akma()
+            except Exception:
+                vel = None
         if vel is None:
             try:
                 from mmml.interfaces.pycharmmInterface.mlpot.run_state_checkpoint import (

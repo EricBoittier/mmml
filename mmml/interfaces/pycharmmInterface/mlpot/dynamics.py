@@ -3889,6 +3889,37 @@ def _run_dynamics_via_c_api(
     """Run ``dynopt`` with a keyword line (KEY_LIBRARY; leap/hoover/cpt flags)."""
     import pycharmm
     import pycharmm.dynamics as charm_dyn
+    import os
+    import tempfile
+    import numpy as np
+    from pathlib import Path
+    from mmml.interfaces.pycharmmInterface.charmm_restart_io import write_charmm_restart_from_memory
+    
+    handoff_res = None
+    if init_velocities is not None:
+        # Reconstruct (N, 3) from the dict
+        vel = np.column_stack([
+            init_velocities["vx"],
+            init_velocities["vy"],
+            init_velocities["vz"],
+        ])
+        handoff_res = Path(tempfile.gettempdir()) / f"mmml_vel_handoff_{os.getpid()}.res"
+        
+        # Write exact AKMA velocities to a temporary restart file
+        write_charmm_restart_from_memory(
+            handoff_res,
+            velocities_akma=vel,
+            include_velocities=True,
+            include_crystal=True,
+        )
+        
+        # Open the restart file on unit 88 and override kwargs to read from it
+        pycharmm.lingo.charmm_script(f"open read unform unit 88 name {handoff_res.as_posix()}")
+        kw["iasvel"] = 1
+        kw["iunrea"] = 88
+        
+        # Clear init_velocities so we don't pass them to the broken C-API wrapper
+        init_velocities = None
 
     dyn = pycharmm.DynamicsScript(**kw)
     script = _merge_dynamics_script_append(dyn.create_script_string(), heat_append)
@@ -3898,6 +3929,15 @@ def _run_dynamics_via_c_api(
         init_velocities=init_velocities,
         **kw,
     )
+    
+    if handoff_res is not None:
+        pycharmm.lingo.charmm_script("close unit 88")
+        try:
+            if handoff_res.exists():
+                handoff_res.unlink()
+        except OSError:
+            pass
+            
     return dyn
 
 
