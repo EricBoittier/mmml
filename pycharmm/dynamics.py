@@ -852,31 +852,70 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     options = _configure_known_only(**kwargs)
     buf, buflen = c_api_string_buffer(command_line)
     fn = lib.charmm.dynamics_run_kw
+
+    # Fortran bind(c) ABI requirements for dynamics_run_kw:
+    #
+    # 1. c_kw_len is declared `integer(c_int), value` → pass by VALUE not byref.
+    #    ctypes byref() would pass a pointer-to-int instead of an int, corrupting
+    #    the argument.
+    #
+    # 2. in_vx/vy/vz/out_vx/vy/vz are `dimension(:), optional` in bind(c).
+    #    gfortran's CFI ABI signals absent optional arrays via a NULL CFI-descriptor
+    #    pointer.  Simply omitting these arguments leaves garbage in stack/register
+    #    positions that _gfortran_cfi_desc_to_gfc_desc tries to dereference
+    #    (→ segfault at address 0x6 or similar small offset).
+    #    We must always pass all 9 arguments; absent ones must be NULL (c_void_p).
+    #
+    # 3. For present arrays, gfortran still expects a CFI descriptor (not a raw
+    #    data pointer).  Passing raw ctypes Arrays as c_void_p gives gfortran a
+    #    non-CFI pointer and will likely segfault inside _gfortran_cfi_desc_to_gfc_desc.
+    #    The velocity-injection path (MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1) is
+    #    therefore kept explicitly broken by design until a proper CFI wrapper exists.
+
+    fn.argtypes = [
+        ctypes.POINTER(OPTIONS),  # options (by reference — struct)
+        ctypes.c_char_p,          # c_kw   (char * — assumed-size character)
+        ctypes.c_int,             # c_kw_len (VALUE — must NOT be byref)
+        ctypes.c_void_p,          # in_vx  (CFI descriptor ptr or NULL)
+        ctypes.c_void_p,          # in_vy
+        ctypes.c_void_p,          # in_vz
+        ctypes.c_void_p,          # out_vx
+        ctypes.c_void_p,          # out_vy
+        ctypes.c_void_p,          # out_vz
+    ]
+    fn.restype = ctypes.c_int
+
     if init_velocities is not None:
-        # Velocity injection: pass arrays directly as ctypes Arrays.
-        # Fortran bind(c) optional assumed-shape arrays require a proper
-        # C pointer to contiguous memory, not a c_void_p NULL.
+        # Velocity path: pass raw data pointers. NOTE: gfortran will interpret
+        # these as CFI descriptors and will likely crash (see note 3 above).
+        # This path is only reached when MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1.
         success = fn(
             ctypes.byref(options),
             buf,
-            ctypes.byref(buflen),
-            init_vx,
-            init_vy,
-            init_vz,
-            out_vx,
-            out_vy,
-            out_vz,
+            buflen,  # c_int value — NOT byref
+            ctypes.cast(init_vx, ctypes.c_void_p),
+            ctypes.cast(init_vy, ctypes.c_void_p),
+            ctypes.cast(init_vz, ctypes.c_void_p),
+            ctypes.cast(out_vx, ctypes.c_void_p),
+            ctypes.cast(out_vy, ctypes.c_void_p),
+            ctypes.cast(out_vz, ctypes.c_void_p),
         )
     else:
-        # No-velocity path: call without the optional array arguments so
-        # Fortran's present() check returns .false. and dynopt takes the
-        # non-velocity branch. Do NOT pass NULL c_void_p args — Fortran
-        # assumed-shape optionals require genuine ABI absence, not NULL.
+        # No-velocity path: pass NULL for all 6 optional array positions.
+        # Fortran present() returns .false. for NULL CFI descriptor pointers,
+        # so dynopt takes the non-velocity branch (correct behaviour).
         success = fn(
             ctypes.byref(options),
             buf,
-            ctypes.byref(buflen),
+            buflen,  # c_int value — NOT byref
+            None,  # in_vx  → absent → NULL CFI desc → present()=.false.
+            None,  # in_vy
+            None,  # in_vz
+            None,  # out_vx
+            None,  # out_vy
+            None,  # out_vz
         )
+
 
 
     if not success:
