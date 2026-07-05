@@ -358,6 +358,9 @@ def test_run_minimize_in_chunks_watchdog_rolls_back_after_chunk_blowup():
 
 def test_minimize_with_mlpot_refreshes_grms_after_sync():
     ctx = MagicMock()
+    ctx.use_pbc = False
+    ctx.charmm_cubic_box_side_A = None
+    ctx.pyCModel = None
     minimize = MagicMock()
     pycharmm = MagicMock()
     cons_fix = MagicMock()
@@ -368,6 +371,7 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
         verbose=True,
         mlpot_ctx=ctx,
         sd_abort_on_grms_increase=False,
+        show_energy=False,
     )
 
     with patch(
@@ -383,6 +387,14 @@ def test_minimize_with_mlpot_refreshes_grms_after_sync():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.sync_charmm_lists_after_mini",
     ) as sync_lists, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_promote_mlpot_jax_after_sd",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._maybe_show_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_vacuum_nbonds",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_script_kwargs",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot.materialize_deferred_mlpot_jax_before_sd",
     ), patch(
