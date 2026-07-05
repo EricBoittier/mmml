@@ -22,6 +22,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
     emit_monomer_health_dot_matrix,
     monomer_health_config_from_args,
     select_flagged_bad_by_highest_grms,
+    select_systemic_velocity_warn_by_highest_grms,
 )
 
 
@@ -176,6 +177,58 @@ def test_select_flagged_bad_by_highest_grms() -> None:
     assert select_flagged_bad_by_highest_grms(report, max_select=2) == (1, 2)
 
 
+def test_select_systemic_velocity_warn_by_highest_grms() -> None:
+    report = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="DCM",
+                velocity_rms_akma=6000.0,
+                velocity_max_akma=9000.0,
+                hybrid_grms_kcalmol_A=5.0,
+                charmm_grms_kcalmol_A=4.0,
+                velocity_level=LEVEL_WARN,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=1,
+                label="DCM",
+                velocity_rms_akma=7000.0,
+                velocity_max_akma=11000.0,
+                hybrid_grms_kcalmol_A=8.0,
+                charmm_grms_kcalmol_A=6.0,
+                velocity_level=LEVEL_WARN,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=2,
+                label="DCM",
+                velocity_rms_akma=100.0,
+                velocity_max_akma=200.0,
+                hybrid_grms_kcalmol_A=90.0,
+                charmm_grms_kcalmol_A=80.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+            ),
+        ),
+        flagged_bad=(),
+        flagged_warn=(0, 1),
+        baseline_recorded=False,
+    )
+
+    assert select_systemic_velocity_warn_by_highest_grms(
+        report,
+        min_fraction=0.5,
+    ) == (1, 0)
+    assert not select_systemic_velocity_warn_by_highest_grms(
+        report,
+        min_fraction=0.8,
+    )
+
+
 def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
         MonomerHealthEntry,
@@ -267,3 +320,87 @@ def test_restore_monomer_velocities_splices_template_slice(
     assert synced[0, 0] == pytest.approx(200.0)
     assert synced[1, 0] == pytest.approx(300.0)
     assert synced[2, 0] == pytest.approx(100.0)
+
+
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.redraw_monomer_velocities",
+    return_value=True,
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.resolve_monomer_offsets_for_ctx",
+    return_value=np.array([0, 2, 4, 6], dtype=int),
+)
+@patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping.audit_monomer_health"
+)
+@patch("pycharmm.coor.get_natom", return_value=6)
+def test_maybe_intervene_monomer_health_recovers_systemic_velocity_warn(
+    _natom: MagicMock,
+    audit: MagicMock,
+    _offsets: MagicMock,
+    redraw: MagicMock,
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        maybe_intervene_monomer_health,
+    )
+
+    audit.return_value = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="DCM",
+                velocity_rms_akma=7000.0,
+                velocity_max_akma=9000.0,
+                hybrid_grms_kcalmol_A=2.0,
+                charmm_grms_kcalmol_A=1.0,
+                velocity_level=LEVEL_WARN,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=1,
+                label="DCM",
+                velocity_rms_akma=8000.0,
+                velocity_max_akma=12000.0,
+                hybrid_grms_kcalmol_A=4.0,
+                charmm_grms_kcalmol_A=1.0,
+                velocity_level=LEVEL_WARN,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=2,
+                label="DCM",
+                velocity_rms_akma=9000.0,
+                velocity_max_akma=13000.0,
+                hybrid_grms_kcalmol_A=3.0,
+                charmm_grms_kcalmol_A=1.0,
+                velocity_level=LEVEL_WARN,
+                force_level=LEVEL_OK,
+                energy_level=LEVEL_OK,
+            ),
+        ),
+        flagged_bad=(),
+        flagged_warn=(0, 1, 2),
+        baseline_recorded=False,
+    )
+    ctx = MagicMock(workflow_args=SimpleNamespace(temperature=10.0))
+    overlap = SimpleNamespace(
+        n_monomers=3,
+        monomer_health=MonomerHealthConfig(verbose=False),
+    )
+
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+    ) as invalidate:
+        recovered = maybe_intervene_monomer_health(
+            ctx,
+            overlap,
+            context="NVE",
+            global_step=100,
+        )
+
+    assert recovered is True
+    redraw.assert_called_once()
+    assert redraw.call_args.args[1] == (1, 2, 0)
+    invalidate.assert_called_once_with(ctx)

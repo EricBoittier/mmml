@@ -41,6 +41,7 @@ class MonomerHealthConfig:
     velocity_bad_ratio: float = 6.0
     velocity_warn_abs_akma: float = 5000.0
     velocity_bad_abs_akma: float = 15000.0
+    velocity_warn_recover_fraction: float = 0.50
     force_warn_ratio: float = 2.5
     force_bad_ratio: float = 5.0
     force_warn_abs_kcalmol_A: float = 30.0
@@ -136,6 +137,34 @@ def select_flagged_bad_by_highest_grms(
     return tuple(ranked[: max(1, int(max_select))])
 
 
+def select_systemic_velocity_warn_by_highest_grms(
+    report: MonomerHealthReport,
+    *,
+    min_fraction: float,
+) -> tuple[int, ...]:
+    """Select velocity-warn monomers when warnings are system-wide enough to recover."""
+    if not report.entries or not report.flagged_warn:
+        return ()
+    velocity_warn = [
+        entry
+        for entry in report.entries
+        if entry.velocity_level == LEVEL_WARN
+        and entry.force_level != LEVEL_BAD
+        and entry.energy_level != LEVEL_BAD
+    ]
+    if not velocity_warn:
+        return ()
+    fraction = len(velocity_warn) / max(1, len(report.entries))
+    if fraction < max(0.0, min(1.0, float(min_fraction))):
+        return ()
+    ranked = sorted(
+        velocity_warn,
+        key=lambda entry: (_entry_grms_for_selection(entry), -int(entry.index)),
+        reverse=True,
+    )
+    return tuple(int(entry.index) for entry in ranked)
+
+
 def _safe_int(value: Any, default: int) -> int:
     try:
         return int(value)
@@ -180,6 +209,10 @@ def monomer_health_config_from_args(args: Any | None) -> MonomerHealthConfig:
         ),
         velocity_bad_abs_akma=_safe_float(
             getattr(args, "dynamics_monomer_velocity_bad_akma", 15000.0), 15000.0
+        ),
+        velocity_warn_recover_fraction=_safe_float(
+            getattr(args, "dynamics_monomer_velocity_warn_recover_fraction", 0.50),
+            0.50,
         ),
         force_warn_ratio=_safe_float(
             getattr(args, "dynamics_monomer_force_warn_ratio", 2.5), 2.5
@@ -634,6 +667,55 @@ def restore_monomer_velocities_from_template(
     return True
 
 
+def redraw_monomer_velocities(
+    mlpot_ctx: Any,
+    flagged: tuple[int, ...] | list[int],
+    *,
+    offsets: np.ndarray,
+    temperature_K: float | None = None,
+    verbose: bool = False,
+    context: str = "monomer health",
+) -> bool:
+    """Maxwell-Boltzmann redraw for selected monomers without moving coordinates."""
+    if not flagged:
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
+        _maxwell_boltzmann_akma_numpy,
+        charmm_masses_amu,
+        sync_charmm_velocities_akma,
+    )
+
+    n_atoms = int(offsets[-1])
+    vel = _current_velocities_akma(n_atoms)
+    if vel is None:
+        vel = np.zeros((n_atoms, 3), dtype=np.float64)
+    masses = charmm_masses_amu()
+    temp = float(
+        temperature_K
+        if temperature_K is not None
+        else _resolve_health_velocity_temperature_K(mlpot_ctx)
+    )
+    modified = False
+    selected = [int(i) for i in flagged]
+    for mi in selected:
+        start = int(offsets[int(mi)])
+        end = int(offsets[int(mi) + 1])
+        if end <= start:
+            continue
+        vel[start:end] = _maxwell_boltzmann_akma_numpy(masses[start:end], temp)
+        modified = True
+    if not modified:
+        return False
+    sync_charmm_velocities_akma(vel)
+    if verbose:
+        print(
+            f"{context}: redrew velocities for monomer(s) {selected} "
+            f"(T={temp:.1f} K)",
+            flush=True,
+        )
+    return True
+
+
 def restore_flagged_monomers_from_template(
     mlpot_ctx: Any,
     flagged: tuple[int, ...] | list[int],
@@ -792,7 +874,37 @@ def maybe_intervene_monomer_health(
         )
 
     if not report.flagged_bad:
-        return False
+        to_redraw = select_systemic_velocity_warn_by_highest_grms(
+            report,
+            min_fraction=float(health_cfg.velocity_warn_recover_fraction),
+        )
+        if not to_redraw:
+            return False
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import pycharmm.coor as coor
+
+        n_atoms = int(coor.get_natom())
+        offsets = resolve_monomer_offsets_for_ctx(
+            mlpot_ctx, n_monomers=int(n_monomers), n_atoms=n_atoms
+        )
+        if offsets is None:
+            return False
+        redrawn = redraw_monomer_velocities(
+            mlpot_ctx,
+            to_redraw,
+            offsets=offsets,
+            temperature_K=_resolve_health_velocity_temperature_K(mlpot_ctx),
+            verbose=health_cfg.verbose or health_cfg.debug_dot_matrix,
+            context=context,
+        )
+        if not redrawn:
+            return False
+        from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+            invalidate_mlpot_calculator_caches,
+        )
+
+        invalidate_mlpot_calculator_caches(mlpot_ctx)
+        return True
 
     to_restore = select_flagged_bad_by_highest_grms(
         report,
