@@ -1007,7 +1007,12 @@ def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
     captured: list[dict[str, Any]] = []
 
     def fake_chunk(sub_kw, sub_io, **kwargs):
-        captured.append({"iokw": kwargs.get("extra_iokw")})
+        captured.append(
+            {
+                "iokw": kwargs.get("extra_iokw"),
+                "traj": None if sub_io is None else sub_io.trajectory,
+            }
+        )
         return mock.Mock()
 
     with patch(
@@ -1031,7 +1036,9 @@ def test_run_bussi_heat_subchunked_iuncrd_only_on_first_subchunk():
         )
     assert len(captured) == 2
     assert captured[0]["iokw"] == {"iuncrd": 90}
+    assert captured[0]["traj"] == Path("/tmp/heat.0000.dcd")
     assert captured[1]["iokw"] == {}
+    assert captured[1]["traj"] is None
 
 
 def test_overlap_chunk_bussi_ramp_prep_strips_bath():
