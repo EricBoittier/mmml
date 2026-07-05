@@ -305,7 +305,7 @@ def test_run_minimize_in_chunks_watchdog_rolls_back_after_chunk_blowup():
         pre_sd_bonded_recovery_grms_kcalmol_A=50.0,
         sd_converged_grms_kcalmol_A=5.0,
         sd_grms_watchdog_factor=2.5,
-        verbose=True,
+        verbose=False,
     )
     base_kw = {"inbfrq": 0, "ihbfrq": 0}
     good_positions = np.zeros((3, 3))
@@ -451,6 +451,10 @@ def test_minimize_with_mlpot_raises_when_sd_watchdog_aborts():
 
 def test_minimize_with_mlpot_continues_after_rollback():
     ctx = MagicMock()
+    ctx.use_pbc = False
+    ctx.charmm_cubic_box_side_A = None
+    ctx.pyCModel = None
+    ctx.sd_watchdog_baseline_grms = None
     minimize = MagicMock()
     pycharmm = MagicMock()
     cons_fix = MagicMock()
@@ -460,6 +464,7 @@ def test_minimize_with_mlpot_continues_after_rollback():
         nprint=10,
         verbose=True,
         mlpot_ctx=ctx,
+        show_energy=False,
     )
 
     with patch(
