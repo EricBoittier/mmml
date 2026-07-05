@@ -4240,15 +4240,32 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help=(
-            "After repack or ASE FIRE, BFGS 1–2 flagged monomers with an isolated "
-            "PhysNet calculator (default: on)."
+            "After repack or ASE FIRE, FIRE-minimize 1–2 flagged monomers, "
+            "or a flagged dimer pair, with an isolated PhysNet calculator "
+            "(default: on)."
         ),
+    )
+    group.add_argument(
+        "--monomer-physnet-mini-dimers",
+        dest="no_monomer_physnet_mini_dimers",
+        action="store_false",
+        default=False,
+        help=(
+            "When exactly two monomers are flagged, minimize them together as a dimer "
+            "rather than independently (default: on)."
+        ),
+    )
+    group.add_argument(
+        "--no-monomer-physnet-mini-dimers",
+        dest="no_monomer_physnet_mini_dimers",
+        action="store_true",
+        help="Disable paired dimer PhysNet minimization for two flagged monomers.",
     )
     group.add_argument(
         "--monomer-physnet-mini-max-select",
         type=int,
         default=2,
-        help="Max monomers to relax with monomer PhysNet BFGS (default: 2).",
+        help="Max monomers to relax with selective PhysNet minimization (default: 2).",
     )
     group.add_argument(
         "--monomer-physnet-mini-min-grms",
@@ -4270,20 +4287,20 @@ def add_calculator_pre_minimize_args(parser: argparse.ArgumentParser) -> None:
         "--monomer-physnet-mini-steps",
         type=int,
         default=60,
-        help="Max ASE BFGS steps per flagged monomer (default: 60).",
+        help="Max ASE FIRE steps per flagged monomer/dimer group (default: 60).",
     )
     group.add_argument(
         "--monomer-physnet-mini-fmax",
         type=float,
         default=None,
         metavar="EV_A",
-        help="Monomer BFGS fmax in eV/Å (default: inherit --pre-min-fmax).",
+        help="Selective PhysNet FIRE fmax in eV/Å (default: inherit --pre-min-fmax).",
     )
     group.add_argument(
         "--monomer-physnet-mini-maxstep",
         type=float,
         default=None,
-        help="Monomer BFGS maxstep in Å (default: inherit --bfgs-maxstep).",
+        help="Selective PhysNet FIRE maxstep in Å (default: inherit --bfgs-maxstep).",
     )
 
 

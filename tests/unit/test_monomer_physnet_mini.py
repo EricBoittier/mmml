@@ -265,7 +265,7 @@ def test_run_selective_monomer_physnet_mini_runs_bfgs_on_flagged(monkeypatch):
     import ase.optimize as ase_opt
 
     monkeypatch.setattr(ase, "Atoms", _FakeAtoms)
-    monkeypatch.setattr(ase_opt, "BFGS", _FakeBFGS)
+    monkeypatch.setattr(ase_opt, "FIRE", _FakeBFGS)
 
     cfg = SelectiveMonomerPhysnetMiniConfig(
         verbose=False,
@@ -313,7 +313,7 @@ def test_run_selective_monomer_physnet_mini_explicit_flagged(monkeypatch):
     import ase.optimize as ase_opt
 
     monkeypatch.setattr(ase, "Atoms", _FakeAtoms)
-    monkeypatch.setattr(ase_opt, "BFGS", _FakeBFGS)
+    monkeypatch.setattr(ase_opt, "FIRE", _FakeBFGS)
 
     result = run_selective_monomer_physnet_mini(
         ctx,
@@ -326,3 +326,74 @@ def test_run_selective_monomer_physnet_mini_explicit_flagged(monkeypatch):
     )
     assert result.ran is True
     assert result.flagged == (0,)
+
+
+def test_run_selective_monomer_physnet_mini_runs_dimer_group(monkeypatch):
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [11.0, 0.0, 0.0],
+            [10.0, 1.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    ctx = _ctx(positions=pos)
+
+    calc_numbers: list[tuple[int, ...]] = []
+
+    def _calc(*_args, atomic_numbers, **_kwargs):
+        calc_numbers.append(tuple(int(z) for z in atomic_numbers))
+        return MagicMock()
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.resolve_mlpot_checkpoint_path",
+        lambda _ctx: __import__("pathlib").Path("/tmp/fake.ckpt"),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini._monomer_ase_calculator",
+        _calc,
+    )
+
+    synced: list[np.ndarray] = []
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        lambda: ctx._positions,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        lambda arr: synced.append(np.asarray(arr, dtype=np.float64).copy()),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.invalidate_mlpot_calculator_caches",
+        lambda _ctx: None,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_physnet_mini.refresh_mlpot_energy_and_grms",
+        lambda _ctx, context="": 3.0,
+    )
+
+    import ase
+    import ase.optimize as ase_opt
+
+    monkeypatch.setattr(ase, "Atoms", _FakeAtoms)
+    monkeypatch.setattr(ase_opt, "FIRE", _FakeBFGS)
+
+    result = run_selective_monomer_physnet_mini(
+        ctx,
+        config=SelectiveMonomerPhysnetMiniConfig(
+            verbose=False,
+            quiet_bfgs=True,
+            optimize_dimers=True,
+        ),
+        flagged=(0, 1),
+        context_prefix="test",
+    )
+
+    assert result.ran is True
+    assert result.flagged == (0, 1)
+    assert calc_numbers == [(6, 1, 1, 6, 1, 1)]
+    assert len(synced) == 1
+    np.testing.assert_allclose(synced[0], pos + 0.1)

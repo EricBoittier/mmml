@@ -27,7 +27,7 @@ class SelectiveMonomerPhysnetMiniResult:
 
 @dataclass
 class SelectiveMonomerPhysnetMiniConfig:
-    """Relax 1–2 stressed monomers with an isolated PhysNet calculator."""
+    """Relax 1–2 stressed monomers/dimers with an isolated PhysNet calculator."""
 
     max_select: int = 2
     min_abs_grms: float = 25.0
@@ -35,6 +35,7 @@ class SelectiveMonomerPhysnetMiniConfig:
     max_steps: int = 60
     fmax_ev_a: float = 0.05
     bfgs_maxstep: float = 0.05
+    optimize_dimers: bool = True
     verbose: bool = True
     quiet_bfgs: bool = False
 
@@ -67,6 +68,9 @@ def selective_monomer_physnet_mini_config_from_args(
             getattr(args, "monomer_physnet_mini_maxstep", None)
             or getattr(args, "bfgs_maxstep", 0.05)
             or 0.05
+        ),
+        optimize_dimers=not bool(
+            getattr(args, "no_monomer_physnet_mini_dimers", False)
         ),
         verbose=bool(verbose),
         quiet_bfgs=bool(quiet_bfgs or getattr(args, "quiet_bfgs", False)),
@@ -237,6 +241,19 @@ def _monomer_ase_calculator(
     return calc
 
 
+def _selected_atom_indices(
+    offsets: np.ndarray,
+    monomer_indices: tuple[int, ...],
+) -> np.ndarray:
+    chunks = [
+        np.arange(int(offsets[int(mi)]), int(offsets[int(mi) + 1]), dtype=int)
+        for mi in monomer_indices
+    ]
+    if not chunks:
+        return np.asarray([], dtype=int)
+    return np.concatenate(chunks)
+
+
 def run_selective_monomer_physnet_mini(
     mlpot_ctx: Any,
     *,
@@ -245,7 +262,7 @@ def run_selective_monomer_physnet_mini(
     flagged: tuple[int, ...] | list[int] | None = None,
     restart_path: Path | str | None = None,
 ) -> SelectiveMonomerPhysnetMiniResult:
-    """BFGS flagged monomers with an isolated PhysNet calc; rest of the box stays fixed."""
+    """FIRE-minimize flagged monomers/dimers; rest of the box stays fixed."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         invalidate_mlpot_calculator_caches,
     )
@@ -390,25 +407,33 @@ def run_selective_monomer_physnet_mini(
     logfile: str | io.StringIO = (
         io.StringIO() if config.quiet_bfgs else "-"
     )
-    for mi in selected:
-        s, e = int(offsets[mi]), int(offsets[mi + 1])
-        z_mono = z_arr[s:e]
-        mono_atoms = ase.Atoms(
-            numbers=np.asarray(z_mono, dtype=int),
-            positions=np.asarray(pos[s:e], dtype=np.float64),
+    groups: tuple[tuple[int, ...], ...]
+    if bool(config.optimize_dimers) and len(selected) == 2:
+        groups = (tuple(selected),)
+    else:
+        groups = tuple((int(mi),) for mi in selected)
+
+    for group in groups:
+        atom_idx = _selected_atom_indices(offsets, tuple(int(mi) for mi in group))
+        if atom_idx.size == 0:
+            continue
+        z_sel = z_arr[atom_idx]
+        sel_atoms = ase.Atoms(
+            numbers=np.asarray(z_sel, dtype=int),
+            positions=np.asarray(pos[atom_idx], dtype=np.float64),
         )
-        mono_atoms.calc = _monomer_ase_calculator(
+        sel_atoms.calc = _monomer_ase_calculator(
             mlpot_ctx,
             checkpoint=checkpoint,
-            atomic_numbers=z_mono,
+            atomic_numbers=z_sel,
         )
         opt = ase_opt.FIRE(
-            mono_atoms,
+            sel_atoms,
             maxstep=float(config.bfgs_maxstep),
             logfile=logfile,
         )
         opt.run(fmax=float(config.fmax_ev_a), steps=max(1, int(config.max_steps)))
-        pos[s:e] = np.asarray(mono_atoms.get_positions(), dtype=np.float64)
+        pos[atom_idx] = np.asarray(sel_atoms.get_positions(), dtype=np.float64)
 
     sync_charmm_positions(pos)
     invalidate_mlpot_calculator_caches(mlpot_ctx)
@@ -416,7 +441,7 @@ def run_selective_monomer_physnet_mini(
     if config.verbose:
         print(
             f"{context_prefix}: done — hybrid GRMS={grms:.4f} kcal/mol/Å "
-            f"({len(selected)} monomer(s))",
+            f"({len(selected)} monomer(s), {len(groups)} PhysNet group(s))",
             flush=True,
         )
     return SelectiveMonomerPhysnetMiniResult(

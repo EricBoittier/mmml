@@ -14,11 +14,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
     LEVEL_WARN,
     MonomerHealthBaseline,
     MonomerHealthConfig,
+    MonomerHealthEntry,
+    MonomerHealthReport,
     _classify_component,
     _per_monomer_velocity_stats,
     audit_monomer_health,
     emit_monomer_health_dot_matrix,
     monomer_health_config_from_args,
+    select_flagged_bad_by_highest_grms,
 )
 
 
@@ -126,6 +129,51 @@ def test_audit_monomer_health_flags_bad_monomer(
     assert report is not None
     assert 1 in report.flagged_bad
     assert report.entries[1].velocity_level == LEVEL_BAD
+
+
+def test_select_flagged_bad_by_highest_grms() -> None:
+    report = MonomerHealthReport(
+        entries=(
+            MonomerHealthEntry(
+                index=0,
+                label="DCM",
+                velocity_rms_akma=None,
+                velocity_max_akma=None,
+                hybrid_grms_kcalmol_A=30.0,
+                charmm_grms_kcalmol_A=20.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_BAD,
+                energy_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=1,
+                label="DCM",
+                velocity_rms_akma=None,
+                velocity_max_akma=None,
+                hybrid_grms_kcalmol_A=90.0,
+                charmm_grms_kcalmol_A=40.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_BAD,
+                energy_level=LEVEL_OK,
+            ),
+            MonomerHealthEntry(
+                index=2,
+                label="DCM",
+                velocity_rms_akma=None,
+                velocity_max_akma=None,
+                hybrid_grms_kcalmol_A=60.0,
+                charmm_grms_kcalmol_A=80.0,
+                velocity_level=LEVEL_OK,
+                force_level=LEVEL_BAD,
+                energy_level=LEVEL_OK,
+            ),
+        ),
+        flagged_bad=(0, 1, 2),
+        flagged_warn=(),
+        baseline_recorded=False,
+    )
+
+    assert select_flagged_bad_by_highest_grms(report, max_select=2) == (1, 2)
 
 
 def test_emit_monomer_health_dot_matrix_plain(capsys: pytest.CaptureFixture[str]) -> None:

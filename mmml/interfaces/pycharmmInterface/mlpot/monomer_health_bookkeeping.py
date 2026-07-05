@@ -101,6 +101,41 @@ class MonomerHealthReport:
   restored: bool = False
 
 
+def _entry_grms_for_selection(entry: MonomerHealthEntry) -> float:
+    """Highest live GRMS signal for prioritizing limited intervention slots."""
+    vals = [
+        v
+        for v in (entry.hybrid_grms_kcalmol_A, entry.charmm_grms_kcalmol_A)
+        if v is not None and np.isfinite(v)
+    ]
+    if vals:
+        return float(max(vals))
+    return float("-inf")
+
+
+def select_flagged_bad_by_highest_grms(
+    report: MonomerHealthReport,
+    *,
+    max_select: int,
+) -> tuple[int, ...]:
+    """Select bad monomers by highest GRMS, not by residue index order."""
+    if not report.flagged_bad:
+        return ()
+    entries_by_index = {int(entry.index): entry for entry in report.entries}
+    ranked = sorted(
+        (int(i) for i in report.flagged_bad),
+        key=lambda i: (
+            _entry_grms_for_selection(entries_by_index[i]),
+            _level_rank(entries_by_index[i].overall_level),
+            -i,
+        )
+        if i in entries_by_index
+        else (float("-inf"), -1, -i),
+        reverse=True,
+    )
+    return tuple(ranked[: max(1, int(max_select))])
+
+
 def _safe_int(value: Any, default: int) -> int:
     try:
         return int(value)
@@ -759,7 +794,10 @@ def maybe_intervene_monomer_health(
     if not report.flagged_bad:
         return False
 
-    to_restore = report.flagged_bad[: int(health_cfg.max_restore_per_check)]
+    to_restore = select_flagged_bad_by_highest_grms(
+        report,
+        max_select=int(health_cfg.max_restore_per_check),
+    )
     if not health_cfg.template_restore_on_bad:
         if health_cfg.verbose:
             print(
