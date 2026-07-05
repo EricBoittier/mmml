@@ -1,0 +1,16 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     7/ 5/26      4:58:30      CREATED BY USER: ericboittier            
+ATOM      1  CG  BENZ    1       2.196   2.314   0.254  1.00  0.00      BENZ
+ATOM      2  HG  BENZ    1       2.768   2.769  -0.541  1.00  0.00      BENZ
+ATOM      3  CD1 BENZ    1       2.824   1.962   1.456  1.00  0.00      BENZ
+ATOM      4  HD1 BENZ    1       3.880   2.147   1.588  1.00  0.00      BENZ
+ATOM      5  CD2 BENZ    1       0.826   2.074   0.085  1.00  0.00      BENZ
+ATOM      6  HD2 BENZ    1       0.340   2.346  -0.844  1.00  0.00      BENZ
+ATOM      7  CE1 BENZ    1       2.082   1.369   2.488  1.00  0.00      BENZ
+ATOM      8  HE1 BENZ    1       2.567   1.098   3.415  1.00  0.00      BENZ
+ATOM      9  CE2 BENZ    1       0.083   1.482   1.114  1.00  0.00      BENZ
+ATOM     10  HE2 BENZ    1      -0.972   1.297   0.983  1.00  0.00      BENZ
+ATOM     11  CZ  BENZ    1       0.712   1.130   2.317  1.00  0.00      BENZ
+ATOM     12  HZ  BENZ    1       0.140   0.673   3.112  1.00  0.00      BENZ
+TER      13      BENZ     1
+END

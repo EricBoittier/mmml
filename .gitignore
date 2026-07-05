@@ -274,3 +274,4 @@ node_modules/
 .nfs*
 **/fftw-wisdom.dat
 fftw-wisdom.dat
+mmml/generate/packmol/packmol
