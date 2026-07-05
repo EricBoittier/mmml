@@ -3940,6 +3940,7 @@ def _run_dynamics_via_c_api(
     dyn = pycharmm.DynamicsScript(**kw)
     script = _merge_dynamics_script_append(dyn.create_script_string(), heat_append)
     command_line = charm_dyn.flatten_dynamics_script(script)
+    print(f"DEBUG DYNAMICS COMMAND: {command_line}", flush=True)
     charm_dyn.run_with_command_line(
         command_line,
         init_velocities=init_velocities,
