@@ -3644,6 +3644,23 @@ def _dynamics_c_api_available() -> bool:
         return False
 
 
+def _dynamics_c_api_safe_for_kw(
+    kw: dict[str, Any],
+    *,
+    init_velocities: dict[str, np.ndarray] | None = None,
+) -> bool:
+    """False for DCD-writing script runs that crash some ``dynamics_run_kw`` builds."""
+    if init_velocities is not None:
+        return True
+    if "iuncrd" not in kw:
+        return True
+    try:
+        nsavc = int(kw.get("nsavc", 0) or 0)
+    except (TypeError, ValueError):
+        nsavc = 0
+    return nsavc <= 0
+
+
 def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
     """True when CHARMM would read COMP as velocities (``iasvel=0`` + lingering START).
 
@@ -4070,10 +4087,14 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         )
     _normalize_dynamics_heat_ramp_kw(kw)
     _strip_non_charmm_dynamics_keywords(kw)
+    use_c_api = _dynamics_c_api_available() and _dynamics_c_api_safe_for_kw(
+        kw,
+        init_velocities=init_velocities,
+    )
     _apply_dynamics_io_setters(kw)
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
-    if _dynamics_c_api_available():
+    if use_c_api:
         dyn = _run_dynamics_via_c_api(
             kw,
             heat_append=heat_append,
