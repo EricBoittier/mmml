@@ -261,11 +261,11 @@ def comparison_comp_looks_like_spatial_coords(vel: np.ndarray) -> bool:
     v = np.asarray(vel, dtype=np.float64).reshape(-1, 3)
     if v.size == 0:
         return False
-    max_abs = float(np.max(np.abs(v)))
-    if max_abs > 9000.0:
-        return True
-    rms = float(np.sqrt(np.mean(np.square(v))))
-    return rms > 500.0
+    # Magnitude heuristics are fragile because warm AKMA velocities (~30,000) 
+    # are wrongly flagged as coordinates by naive large-value bounds, while
+    # cold AKMA velocities (~200) overlap with actual coordinate ranges.
+    # We rely exclusively on exact coordinate matching instead.
+    return False
 
 
 def sync_comparison_velocities_from_comparison() -> bool:
