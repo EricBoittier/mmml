@@ -201,6 +201,7 @@ def enforce_charmm_energy_term_policies(
     cubic_box_side_A: float | None,
     verbose: bool = False,
     skip_ener_probe: bool | None = None,
+    reload_on_violation: bool = True,
 ) -> list[str]:
     """Probe CHARMM ENER; reload PSF/.prm overlays for violated policies."""
     policies = resolve_charmm_energy_term_policies(args)
@@ -243,6 +244,17 @@ def enforce_charmm_energy_term_policies(
 
     if not violated:
         return []
+
+    if not reload_on_violation:
+        details: list[str] = []
+        for policy in violated:
+            _bad, hits = _policy_violation(policy, terms)
+            detail = ", ".join(f"{k}={v:.6g}" for k, v in sorted(hits.items()))
+            details.append(f"{policy.name} ({detail})" if detail else policy.name)
+        raise RuntimeError(
+            "CHARMM energy policy still non-zero after pre-registration remediation: "
+            + ", ".join(details)
+        )
 
     zero_bonded = any(p.zero_bonded_prm for p in violated)
     zero_nonbond = any(p.zero_nonbond_prm for p in violated)
@@ -313,6 +325,49 @@ def enforce_charmm_energy_term_policies(
             flush=True,
         )
     return applied
+
+
+def apply_charmm_energy_term_policies_before_pbc_finalize(
+    args: argparse.Namespace | None,
+    *,
+    ml_selection: Any,
+    verbose: bool = False,
+) -> list[str]:
+    """Apply policy remediations before PBC image/nonbond list finalization.
+
+    This avoids the unsafe sequence seen with all-ML PBC systems:
+    finalize image lists -> probe IMNB -> READ PARAM APPEND -> crystal free/hang.
+    """
+    policies = resolve_charmm_energy_term_policies(args)
+    if not policies:
+        return []
+
+    zero_nonbond = any(p.zero_nonbond_prm for p in policies)
+    zero_charges = any(p.zero_ml_charges for p in policies)
+    applied: list[str] = []
+
+    if zero_nonbond:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import pycharmm
+        from mmml.interfaces.pycharmmInterface.charmm_levels import (
+            charmm_silent_command,
+        )
+
+        with charmm_silent_command():
+            pycharmm.lingo.charmm_script("scalar vdw set 0.0 sele all end")
+            pycharmm.lingo.charmm_script("scalar vdw14 set 0.0 sele all end")
+        applied.extend(p.name for p in policies if p.zero_nonbond_prm)
+        if verbose or not getattr(args, "quiet", False):
+            print(
+                "CHARMM energy policy: pre-zeroed VDW/VDW14 before PBC image-list build",
+                flush=True,
+            )
+
+    if zero_charges:
+        _zero_ml_atom_charges(ml_selection)
+        applied.extend(p.name for p in policies if p.zero_ml_charges)
+
+    return list(dict.fromkeys(applied))
 
 
 def summarize_policy_energy_terms(

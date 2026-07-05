@@ -80,6 +80,92 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
     ]
 
 
+def test_register_mlpot_pbc_applies_policy_before_finalize():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    call_order: list[str] = []
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.coor.get_natom.return_value = 4
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = [0, 1, 2, 3]
+
+    def _finalize(_sel, *, cubic_box_side_A, verbose=False, workflow_args=None):
+        call_order.append("finalize_pbc_exclusions")
+
+    def _block(*args, **kwargs):
+        call_order.append("block")
+        return "all"
+
+    def _pre_policy(*args, **kwargs):
+        call_order.append("pre_policy")
+        return ["vdw"]
+
+    def _verify_policy(*args, **kwargs):
+        call_order.append(f"verify_policy_reload={kwargs.get('reload_on_violation')}")
+        return []
+
+    class _FakeMLpot:
+        def __init__(self, *, skip_iblo_inb_update=False, **kwargs):
+            call_order.append("mlpot")
+
+    workflow_args = MagicMock()
+
+    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+        mlpot_setup,
+        "_finalize_pbc_mlpot_exclusions_after_param_read",
+        side_effect=_finalize,
+    ), patch.object(
+        mlpot_setup,
+        "_suspend_pbc_for_cgenff_param_read",
+        side_effect=lambda **kwargs: call_order.append("crystal_free"),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
+        side_effect=_block,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy.apply_charmm_energy_term_policies_before_pbc_finalize",
+        side_effect=_pre_policy,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy.enforce_charmm_energy_term_policies",
+        side_effect=_verify_policy,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=MagicMock(__enter__=MagicMock(return_value=None), __exit__=MagicMock(return_value=False)),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_mpi.charmm_lib_links_mpi",
+        return_value=False,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.assert_charmm_pbc_lattice_ready_for_mlpot",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_image_geometry.run_mlpot_pbc_image_registration_gate",
+        side_effect=lambda **kwargs: (call_order.append("image_gate") or 6.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.pbc_env.reassert_pbc_nbond_cutoffs",
+        side_effect=lambda *args, **kwargs: (call_order.append("reassert_nbonds") or MagicMock()),
+    ):
+        fake_pycharmm.MLpot = _FakeMLpot
+        mlpot_setup.register_mlpot(
+            MagicMock(),
+            [1, 1, 1, 1],
+            fake_sel,
+            use_pbc=True,
+            cubic_box_side_A=50.0,
+            workflow_args=workflow_args,
+        )
+
+    assert call_order == [
+        "crystal_free",
+        "block",
+        "pre_policy",
+        "finalize_pbc_exclusions",
+        "verify_policy_reload=False",
+        "mlpot",
+        "image_gate",
+        "reassert_nbonds",
+    ]
+
+
 def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 

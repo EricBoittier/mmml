@@ -2078,6 +2078,16 @@ def register_mlpot(
             )
         if use_pbc:
             box_side = _registration_pbc_box_side_A(cubic_box_side_A, budget_box)
+            if workflow_args is not None:
+                from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+                    apply_charmm_energy_term_policies_before_pbc_finalize,
+                )
+
+                apply_charmm_energy_term_policies_before_pbc_finalize(
+                    workflow_args,
+                    ml_selection=ml_selection,
+                    verbose=verbose,
+                )
             _finalize_pbc_mlpot_exclusions_after_param_read(
                 ml_selection,
                 cubic_box_side_A=box_side,
@@ -2106,6 +2116,7 @@ def register_mlpot(
                     )
                 ),
                 verbose=verbose,
+                reload_on_violation=not bool(use_pbc),
             )
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,

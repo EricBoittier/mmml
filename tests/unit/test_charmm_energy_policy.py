@@ -176,3 +176,30 @@ def test_enforce_skips_when_terms_already_zero(monkeypatch):
         verbose=False,
     )
     assert applied == []
+
+
+def test_enforce_can_verify_without_late_reload(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    args = argparse.Namespace(
+        periodic_charmm_vdw=False,
+        charmm_zero_energy_terms=None,
+        quiet=True,
+    )
+
+    monkeypatch.setattr(
+        cep,
+        "measure_charmm_energy_terms",
+        lambda: {"VDW": 0.0, "IMNB": -0.324845, "USER": 0.0},
+    )
+    monkeypatch.setattr(cep, "_run_silent_ener", lambda: None)
+
+    with pytest.raises(RuntimeError, match="IMNB=-0.324845"):
+        cep.enforce_charmm_energy_term_policies(
+            args,
+            ml_selection=object(),
+            use_pbc=True,
+            cubic_box_side_A=50.0,
+            verbose=False,
+            reload_on_violation=False,
+        )
