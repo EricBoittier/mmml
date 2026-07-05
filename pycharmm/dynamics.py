@@ -852,45 +852,32 @@ def run_with_command_line(command_line: str, init_velocities=None, **kwargs):
     options = _configure_known_only(**kwargs)
     buf, buflen = c_api_string_buffer(command_line)
     fn = lib.charmm.dynamics_run_kw
-    
-    # Explicitly set argtypes to ensure NULL pointers for omitted optionals
-    fn.argtypes = [
-        ctypes.POINTER(OPTIONS),
-        ctypes.c_char_p,
-        ctypes.c_int,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-    ]
-    fn.restype = ctypes.c_int
-    
     if init_velocities is not None:
+        # Velocity injection: pass arrays directly as ctypes Arrays.
+        # Fortran bind(c) optional assumed-shape arrays require a proper
+        # C pointer to contiguous memory, not a c_void_p NULL.
         success = fn(
             ctypes.byref(options),
-            ctypes.cast(buf, ctypes.c_char_p),
-            buflen.value,
-            ctypes.cast(init_vx, ctypes.c_void_p),
-            ctypes.cast(init_vy, ctypes.c_void_p),
-            ctypes.cast(init_vz, ctypes.c_void_p),
-            ctypes.cast(out_vx, ctypes.c_void_p),
-            ctypes.cast(out_vy, ctypes.c_void_p),
-            ctypes.cast(out_vz, ctypes.c_void_p),
+            buf,
+            ctypes.byref(buflen),
+            init_vx,
+            init_vy,
+            init_vz,
+            out_vx,
+            out_vy,
+            out_vz,
         )
     else:
+        # No-velocity path: call without the optional array arguments so
+        # Fortran's present() check returns .false. and dynopt takes the
+        # non-velocity branch. Do NOT pass NULL c_void_p args — Fortran
+        # assumed-shape optionals require genuine ABI absence, not NULL.
         success = fn(
             ctypes.byref(options),
-            ctypes.cast(buf, ctypes.c_char_p),
-            buflen.value,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            buf,
+            ctypes.byref(buflen),
         )
+
 
     if not success:
         raise RuntimeError("dynamics_run_kw failed")

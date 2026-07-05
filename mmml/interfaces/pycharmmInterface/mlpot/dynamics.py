@@ -3704,10 +3704,22 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     if not use_c_api_handoff or not _dynamics_c_api_available():
         _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
+    # WARNING: This path passes velocity arrays to Fortran bind(c) optional
+    # assumed-shape arguments via raw ctypes pointers.  Most gfortran builds
+    # segfault inside dynopt because gfortran's CFI array descriptor ABI is
+    # not satisfied by plain C pointers.  Use iasvel=1 (default) instead.
+    print(
+        "WARN: MMML_BUSSI_INIT_VELOCITIES_HANDOFF=1 — C-API velocity injection enabled. "
+        "This path is known to segfault in dynopt on gfortran builds (bind(c) optional "
+        "assumed-shape array ABI mismatch). Unset MMML_BUSSI_INIT_VELOCITIES_HANDOFF "
+        "to use the safe iasvel=1 Boltzmann continuation instead.",
+        flush=True,
+    )
     kw["iasvel"] = 0
     kw["iasors"] = 0
     kw["start"] = False
     kw["_skip_ase_cold_velocity_assign"] = True
+
 
 
 def _init_velocities_handoff_looks_valid(

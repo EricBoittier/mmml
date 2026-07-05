@@ -420,6 +420,8 @@ def test_minimize_with_mlpot_raises_when_sd_watchdog_aborts():
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
     ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
+    ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(12.0, -100.0),
     ), patch(
@@ -501,6 +503,8 @@ def test_minimize_with_mlpot_raises_when_sd_stall_still_above_dynamics_gate():
         "mmml.interfaces.pycharmmInterface.charmm_mpi.recover_mpi_for_charmm_after_jax",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._ensure_domdec_off_for_mlpot_energy",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._rewrap_mlpot_pbc_after_sd",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cli_common.prepare_mlpot_hybrid_state_for_sd",
         return_value=(5588.0, -91065.0),
