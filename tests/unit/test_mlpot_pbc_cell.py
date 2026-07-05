@@ -931,6 +931,9 @@ def test_decomposed_calculator_jax_pme_uses_charmm_box_fallback():
     ) as mock_resolve, patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing.decompose_and_route_mlpot_mm_from_callback",
+        return_value=0.0,
     ):
         calc.calculate_charmm(
             n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
@@ -1146,6 +1149,9 @@ def test_decomposed_calculator_queries_box_when_jax_pme_active_without_cached_ce
     ) as mock_resolve, patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing.decompose_and_route_mlpot_mm_from_callback",
+        return_value=0.0,
     ):
         calc.calculate_charmm(
             n, 0, 0, None, x, y, zc, dx, dy, dz, 0, 0, None, None, None, None, None, None, None
