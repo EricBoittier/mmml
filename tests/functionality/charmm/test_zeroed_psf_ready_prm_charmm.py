@@ -233,12 +233,29 @@ def test_full_prm_gives_nonzero_vdw_for_aco(pycharmm_workdir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "CHARMM READ PARAM APPEND does not overwrite existing atom-type VDW "
+        "entries — it only inserts *new* types.  Appending a zeroed NONBONDED "
+        "overlay after a full CGenFF PRM load leaves the original epsilons in "
+        "the live VDW table.  The correct workflow is to load "
+        "write_zeroed_psf_ready_prm() output as the *first* (and only) PRM, "
+        "not as an overlay.  This test documents the known limitation."
+    ),
+)
 def test_zeroed_prm_append_after_full_prm_zeros_vdw(pycharmm_workdir: Path) -> None:
-    """READ PARAM APPEND with the zeroed overlay after a full PRM load zeros VDW.
+    """CHARMM READ PARAM APPEND does NOT zero VDW for pre-existing atom types.
 
-    This is the production usage pattern: CHARMM loads the full PRM during PSF
-    build, then ``write_zeroed_psf_ready_prm`` output is appended to overwrite
-    the VDW table before MLpot registration.
+    This test documents the known limitation: CHARMM's APPEND mode only adds
+    *new* atom types; it does not overwrite epsilon values for types that are
+    already in the parameter table.  The test is expected to fail (xfail).
+
+    Correct usage
+    -------------
+    Load ``write_zeroed_psf_ready_prm()`` output as the **first** PRM
+    (``include_nonbonded_zeros=False``) so CHARMM's VDW table is never populated
+    with non-zero values.  See ``test_aco_vdw_is_zero_after_zeroed_prm_read``.
     """
     import pycharmm.read as read
 
