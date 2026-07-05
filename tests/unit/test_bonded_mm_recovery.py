@@ -922,6 +922,39 @@ def test_assert_mlpot_user_active_error_includes_jax_hybrid_diag():
             assert_mlpot_user_active(ctx, context="test", quiet=True)
 
 
+def test_assert_mlpot_user_active_error_includes_callback_pair_failure():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        MlpotContext,
+        assert_mlpot_user_active,
+    )
+
+    calc = MagicMock()
+    calc._last_callback_error = "Decomposed MLpot: charmm_callback returned zero ML/MM pairs"
+    ctx = MlpotContext(
+        mlpot=MagicMock(is_set=True, calculator=calc),
+        pyCModel=MagicMock(),
+        params=None,
+        model=None,
+        ml_selection=MagicMock(),
+        ml_Z=np.array([6, 1], dtype=int),
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_mlpot_fortran_registration",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._read_mlpot_user_energy_kcal",
+        return_value=0.0,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup._probe_mlpot_hybrid_energy_kcal",
+        return_value=0.0,
+    ), patch.object(ctx, "reregister_mlpot"), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.light_resync_mlpot_state",
+        return_value=0.0,
+    ):
+        with pytest.raises(RuntimeError, match="callback returned zero ML/MM pairs"):
+            assert_mlpot_user_active(ctx, context="test", quiet=True)
+
+
 def test_restore_workflow_nbonds_skips_nbond_rebuild():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import MlpotContext, restore_workflow_nbonds
 
