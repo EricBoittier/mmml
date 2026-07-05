@@ -1981,7 +1981,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             if _pre_sd_threshold is None and getattr(args, "bonded_mm_mini", True):
                 # Default: 100 kcal/mol per atom — catches severe Packmol clash energies
                 # (e.g. 17M kcal/mol for 890 atoms) while ignoring normal ML energies.
-                _pre_sd_threshold = 100.0 * float(n_atoms)
+                _pre_sd_threshold = 1000.0 * float(n_atoms)
             _pre_sd_grms = getattr(args, "pre_sd_recovery_grms_threshold", None)
             if _pre_sd_grms is None:
                 _pre_sd_grms = resolve_max_grms_before_dyn(

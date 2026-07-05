@@ -1168,6 +1168,7 @@ def build_mm_energy_forces_fn(
         def apply_switching_function(
             positions: Array,
             pair_energies: Array,
+            distances: Optional[Array] = None,
             pair_dimer_idx_arg: Optional[Array] = None,
             box_override: Optional[Array] = None,
         ) -> Array:
@@ -1201,9 +1202,24 @@ def build_mm_energy_forces_fn(
             use_dimer_idx = (pair_dimer_idx_arg is not None) or (pair_dimer_idx is not None)
             pdi = pair_dimer_idx_arg if pair_dimer_idx_arg is not None else pair_dimer_idx
             if use_dimer_idx and pdi is not None:
+                if distances is not None:
+                    atom_atom_taper = 1.0 - _sharpstep(distances, mm_switch_on, mm_switch_on + mm_switch_width, gamma=GAMMA_OFF)
+                else:
+                    atom_atom_taper = 0.0
+
+                monomer_i = _monomer_id_jnp[pair_idx_atom_atom[:, 0]]
+                monomer_j = _monomer_id_jnp[pair_idx_atom_atom[:, 1]]
+                is_inter = (monomer_i != monomer_j)
+
                 mm_scale_with_dummy = jnp.concatenate([mm_scale, jnp.zeros(1)])
                 safe_idx = jnp.where(pdi >= 0, pdi, len(mm_scale))
-                mm_scale_expanded = mm_scale_with_dummy[safe_idx]
+                dimer_scale = mm_scale_with_dummy[safe_idx]
+                
+                mm_scale_expanded = jnp.where(
+                    pdi >= 0,
+                    dimer_scale,
+                    jnp.where(is_inter, atom_atom_taper, 0.0)
+                )
             else:
                 n_pairs_per_dimer_jnp = jnp.asarray(
                     n_pairs_per_dimer_arr, dtype=jnp.int32
@@ -1218,7 +1234,7 @@ def build_mm_energy_forces_fn(
 
     apply_switching_function = get_switching_function()
 
-    def calculate_mm_pair_energies(positions: Array) -> Array:
+    def calculate_mm_pair_energies(positions: Array) -> Tuple[Array, Array, Array, Array]:
         if pbc_cell is not None:
             pos_dst = positions[pair_idx_atom_atom[:, 1]]
             pos_src = positions[pair_idx_atom_atom[:, 0]]
@@ -1228,6 +1244,9 @@ def build_mm_energy_forces_fn(
             displacements = positions[pair_idx_atom_atom[:, 0]] - positions[pair_idx_atom_atom[:, 1]]
         distances = jnp.linalg.norm(displacements, axis=1)
 
+        # Prevent 0.0 distance from generating Inf / NaN during 1/r^12 calculation
+        distances = jnp.where(distances < 0.1, 0.1, distances)
+
         if _cl_mask_jnp is not None:
             distances = jnp.where(_cl_mask_jnp > 0, distances, 1e6)
 
@@ -1235,22 +1254,22 @@ def build_mm_energy_forces_fn(
         vdw_energies = _pair_vdw_energies(distances, pair_rm, pair_ep, pair_mask)
         if _use_jax_pme_coulomb:
             zeros = jnp.zeros_like(vdw_energies)
-            return vdw_energies, zeros, vdw_energies
+            return vdw_energies, zeros, vdw_energies, distances
         electrostatic_energies = coulomb(distances, pair_qq) * pair_mask
-        return vdw_energies, electrostatic_energies, vdw_energies + electrostatic_energies
+        return vdw_energies, electrostatic_energies, vdw_energies + electrostatic_energies, distances
 
     def switched_mm_energy(positions: Array) -> Array:
-        _, _, pair_energies = calculate_mm_pair_energies(positions)
-        return apply_switching_function(positions, pair_energies)
+        _, _, pair_energies, distances = calculate_mm_pair_energies(positions)
+        return apply_switching_function(positions, pair_energies, distances=distances)
 
     switched_mm_grad = jax.grad(switched_mm_energy)
 
     @jax.jit
     def calculate_mm_energy_and_forces(positions: Array) -> Tuple[Array, Array, Array, Array]:
-        vdw_pe, elec_pe, pair_energies = calculate_mm_pair_energies(positions)
-        switched_energy = apply_switching_function(positions, pair_energies)
-        switched_vdw = apply_switching_function(positions, vdw_pe)
-        switched_elec = apply_switching_function(positions, elec_pe)
+        vdw_pe, elec_pe, pair_energies, distances = calculate_mm_pair_energies(positions)
+        switched_energy = apply_switching_function(positions, pair_energies, distances=distances)
+        switched_vdw = apply_switching_function(positions, vdw_pe, distances=distances)
+        switched_elec = apply_switching_function(positions, elec_pe, distances=distances)
         forces = -1.0 * switched_mm_grad(positions)
         forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
         switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
@@ -1315,7 +1334,7 @@ def build_mm_energy_forces_fn(
             pair_idx: Array,
             pair_mask: Array,
             cell_for_mic: Optional[Array] = None,
-        ) -> Array:
+        ) -> Tuple[Array, Array]:
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
             lam_a = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[pair_i])
@@ -1339,14 +1358,18 @@ def build_mm_energy_forces_fn(
             mic_batched = mic_displacements_batched_smooth if _use_smooth_mic else mic_displacements_batched
             displacements = mic_batched(pos_dst, pos_src, _cell)
             distances = jnp.linalg.norm(displacements, axis=1)
+
+            # Prevent 0.0 distance from generating Inf / NaN during 1/r^12 calculation
+            distances = jnp.where(distances < 0.1, 0.1, distances)
+
             distances = jnp.where(pair_mask > 0, distances, 1e6)
 
             pair_mask_ij = (pair_i < pair_j)
             vdw = _pair_vdw_energies(distances, pair_rm_dyn, pair_ep_dyn, pair_mask_ij)
             if _use_jax_pme_coulomb:
-                return vdw
+                return vdw, distances
             elec = coulomb(distances, pair_qq_dyn) * pair_mask_ij
-            return vdw + elec
+            return vdw + elec, distances
 
         def _mm_dynamic_energy_scalar(
             positions: Array,
@@ -1359,12 +1382,13 @@ def build_mm_energy_forces_fn(
             mid_i = _monomer_id_jnp[pair_i]
             mid_j = _monomer_id_jnp[pair_j]
             pair_dimer_idx_dyn = _dimer_lookup_arr[mid_i, mid_j]
-            pair_energies = calculate_mm_pair_energies_dynamic(
+            pair_energies, distances = calculate_mm_pair_energies_dynamic(
                 positions, pair_idx, pair_mask, cell_for_mic=cell_for_mic
             )
             return apply_switching_function(
                 positions,
                 pair_energies,
+                distances=distances,
                 pair_dimer_idx_arg=pair_dimer_idx_dyn,
                 box_override=cell_for_mic,
             )
