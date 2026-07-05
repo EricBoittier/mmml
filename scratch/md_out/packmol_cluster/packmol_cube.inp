@@ -1,0 +1,11 @@
+seed 123
+output /Users/ericboittier/mmml/scratch/md_out/packmol_cluster/init-packmol-sphere.pdb
+filetype pdb
+tolerance 2.0
+
+structure /Users/ericboittier/mmml/scratch/md_out/packmol_cluster/monomers/dcm.pdb
+  chain A
+  resnumbers 2
+  number 4
+  inside cube -10.2 -10.2 -10.2 20.4
+end structure

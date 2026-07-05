@@ -1,0 +1,45 @@
+{
+  "tag": "dcm_4",
+  "snapshots": [
+    {
+      "seq": 0,
+      "slug": "pack",
+      "stem": "00_pack",
+      "kind": "packmol",
+      "label": "Packmol sphere placement (pre-minimize)",
+      "files": {
+        "pdb": "/Users/ericboittier/mmml/scratch/md_out/model.pdb",
+        "psf": "/Users/ericboittier/mmml/scratch/md_out/model.psf"
+      }
+    },
+    {
+      "seq": 1,
+      "slug": "mm",
+      "stem": "01_mm",
+      "kind": "MM",
+      "label": "CHARMM CGENFF SD/ABNR before MLpot (MM only)",
+      "files": {
+        "crd": "/Users/ericboittier/mmml/scratch/md_out/pretreat/01_mm.crd",
+        "energy_json": "/Users/ericboittier/mmml/scratch/md_out/pretreat/01_mm_energy.json",
+        "pdb": "/Users/ericboittier/mmml/scratch/md_out/pretreat/01_mm.pdb",
+        "psf": "/Users/ericboittier/mmml/scratch/md_out/pretreat/01_mm.psf"
+      },
+      "grms_kcalmol_A": 0.27237490216714827
+    },
+    {
+      "seq": 2,
+      "slug": "mini",
+      "stem": "02_mini",
+      "kind": "MMML",
+      "label": "MLpot PhysNet steepest descent (USER / MMML)",
+      "files": {
+        "crd": "/Users/ericboittier/mmml/scratch/md_out/02_mini.crd",
+        "energy_json": "/Users/ericboittier/mmml/scratch/md_out/02_mini_energy.json",
+        "pdb": "/Users/ericboittier/mmml/scratch/md_out/02_mini.pdb",
+        "psf": "/Users/ericboittier/mmml/scratch/md_out/02_mini.psf",
+        "xyz": "/Users/ericboittier/mmml/scratch/md_out/02_mini.xyz"
+      },
+      "grms_kcalmol_A": 0.45081295317406544
+    }
+  ]
+}

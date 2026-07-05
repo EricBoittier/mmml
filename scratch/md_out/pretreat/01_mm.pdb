@@ -1,0 +1,24 @@
+REMARK  EXECUTING CHARMM SCRIPT FROM PYTHON                                           
+REMARK   DATE:     7/ 5/26      8:57: 5      CREATED BY USER: ericboittier            
+ATOM      1  C   DCM     1       3.406  -1.124  -9.057  1.00  1.00      CLST
+ATOM      2  H1  DCM     1       3.753  -1.452  -8.053  1.00  1.00      CLST
+ATOM      3  H2  DCM     1       3.017  -1.978  -9.651  1.00  1.00      CLST
+ATOM      4  CL1 DCM     1       2.104   0.083  -8.850  1.00  1.00      CLST
+ATOM      5  CL2 DCM     1       4.780  -0.383  -9.930  1.00  1.00      CLST
+ATOM      6  C   DCM     2      -9.111  -9.177  -9.032  1.00  1.00      CLST
+ATOM      7  H1  DCM     2      -8.791  -8.465  -8.243  1.00  1.00      CLST
+ATOM      8  H2  DCM     2      -9.663 -10.036  -8.595  1.00  1.00      CLST
+ATOM      9  CL1 DCM     2     -10.180  -8.325 -10.185  1.00  1.00      CLST
+ATOM     10  CL2 DCM     2      -7.664  -9.790  -9.884  1.00  1.00      CLST
+ATOM     11  C   DCM     3       1.160   3.903  -9.278  1.00  1.00      CLST
+ATOM     12  H1  DCM     3       2.039   4.375  -9.767  1.00  1.00      CLST
+ATOM     13  H2  DCM     3       1.102   2.822  -9.522  1.00  1.00      CLST
+ATOM     14  CL1 DCM     3       1.309   4.095  -7.505  1.00  1.00      CLST
+ATOM     15  CL2 DCM     3      -0.327   4.712  -9.856  1.00  1.00      CLST
+ATOM     16  C   DCM     4      -7.828   2.658  -8.608  1.00  1.00      CLST
+ATOM     17  H1  DCM     4      -8.557   2.640  -7.770  1.00  1.00      CLST
+ATOM     18  H2  DCM     4      -6.898   2.115  -8.341  1.00  1.00      CLST
+ATOM     19  CL1 DCM     4      -8.568   1.878 -10.037  1.00  1.00      CLST
+ATOM     20  CL2 DCM     4      -7.420   4.356  -8.987  1.00  1.00      CLST
+TER      21      DCM      4
+END
