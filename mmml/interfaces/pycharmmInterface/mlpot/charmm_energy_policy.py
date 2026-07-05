@@ -132,6 +132,7 @@ def _reload_prm_overlay(
     ml_selection: Any,
     zero_ml_charges: bool,
     verbose: bool,
+    zero_nonbond: bool = False,
     workflow_args: argparse.Namespace | None = None,
 ) -> None:
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -143,6 +144,15 @@ def _reload_prm_overlay(
     if use_pbc:
         _suspend_pbc_for_cgenff_param_read(verbose=verbose)
     read_cgenff_prm(overlay_path, append=True)
+    if zero_nonbond:
+        import pycharmm
+        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+        with charmm_silent_command():
+            pycharmm.lingo.charmm_script("scalar vdw set 0.0 sele all end")
+            pycharmm.lingo.charmm_script("scalar vdw14 set 0.0 sele all end")
+        if verbose:
+            print("CHARMM energy policy: applied SCALAR VDW/VDW14 SET 0.0 to all atoms (READ PARAM APPEND workaround)", flush=True)
+
     if zero_ml_charges:
         _zero_ml_atom_charges(ml_selection)
     if use_pbc:
@@ -272,6 +282,7 @@ def enforce_charmm_energy_term_policies(
         ml_selection=ml_selection,
         zero_ml_charges=zero_charges,
         verbose=verbose,
+        zero_nonbond=zero_nonbond,
         workflow_args=args,
     )
 
@@ -289,12 +300,11 @@ def enforce_charmm_energy_term_policies(
                 flush=True,
             )
     if still_bad:
-        # raise RuntimeError(
-        #     "CHARMM energy policy reload failed for: "
-        #     + ", ".join(still_bad)
-        #     + ". Inspect charmm_energy_policy/*.prm and ENER decomposition."
-        # )
-        print(f"WARN: Ignoring energy policy failure for {', '.join(still_bad)} to allow simulation to proceed.")
+        raise RuntimeError(
+            "CHARMM energy policy reload failed for: "
+            + ", ".join(still_bad)
+            + ". Inspect charmm_energy_policy/*.prm and ENER decomposition."
+        )
 
     applied = [p.name for p in violated]
     if verbose or not getattr(args, "quiet", False):

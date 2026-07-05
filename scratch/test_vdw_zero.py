@@ -1,5 +1,6 @@
 import argparse
 import sys
+import mmml.interfaces.pycharmmInterface.import_pycharmm
 import pycharmm
 from pycharmm.lingo import charmm_script
 
