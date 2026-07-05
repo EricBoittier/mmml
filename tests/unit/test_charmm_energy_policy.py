@@ -53,7 +53,7 @@ def test_resolve_charmm_energy_term_policies_jax_mic_adds_vdw():
     assert [p.name for p in policies] == ["elec", "bonded", "vdw"]
 
 
-def test_nonbond_only_prm_text_zeros_eps():
+def test_nonbond_only_prm_text_removes_vdw_sections():
     from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
         nonbond_only_prm_text,
     )
@@ -66,11 +66,11 @@ def test_nonbond_only_prm_text_zeros_eps():
         "CL   CTCL    -0.1200     2.4700\n"
     )
     out = nonbond_only_prm_text(sample)
-    assert "0.0" in out
-    assert "NONBONDED" in out
-    assert "NBFIX" in out
+    assert "VDW term removed" in out
+    assert "NONBONDED" not in out
+    assert "NBFIX" not in out
     assert "nbxmod" not in out.lower()
-    assert "CL" in out
+    assert "CL" not in out
 
 
 def test_write_prm_policy_overlay_nonbond(tmp_path: Path):
@@ -90,7 +90,10 @@ def test_write_prm_policy_overlay_nonbond(tmp_path: Path):
     write_prm_policy_overlay(src, dst, zero_bonded=False, zero_nonbond=True)
     text = dst.read_text(encoding="utf-8")
     assert "MMML energy-policy overlay" in text
-    assert "0.0" in text
+    assert "VDW term removed" in text
+    assert "NONBONDED" not in text
+    assert "NBFIX" not in text
+    assert "CL" not in text
     assert "300.0" not in text
 
 
@@ -103,13 +106,13 @@ def test_policy_violation_detects_imnb():
     policy = POLICY_REGISTRY["vdw"]
     bad, hits = _policy_violation(
         policy,
-        {"VDW": 0.0, "IMNB": -0.0528, "USER": -1000.0},
+        {"VDW": 0.0, "IMNB": -1.0528, "USER": -1000.0},
     )
     assert bad
-    assert hits == {"IMNB": pytest.approx(-0.0528)}
+    assert hits == {"IMNB": pytest.approx(-1.0528)}
 
 
-def test_nonbond_only_prm_text_includes_section_headers(tmp_path: Path):
+def test_nonbond_only_prm_text_omits_section_headers(tmp_path: Path):
     from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
         write_prm_policy_overlay,
     )
@@ -123,8 +126,9 @@ def test_nonbond_only_prm_text_includes_section_headers(tmp_path: Path):
         zero_nonbond=True,
     )
     text = dst.read_text(encoding="utf-8")
-    assert "NONBONDED\n" in text or text.lstrip().startswith("*") and "\nNONBONDED\n" in text
-    assert "\nNBFIX\n" in text
+    assert "\nNONBONDED" not in text
+    assert "\nNBFIX" not in text
+    assert "\nHBOND" not in text
     assert "nbxmod" not in text.lower()
 
 

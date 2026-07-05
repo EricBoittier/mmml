@@ -52,7 +52,7 @@ def test_bonded_only_skips_nonbonded():
     assert "-0.0450" in out
 
 
-def test_zero_prm_text_omits_nonbonded_control_lines():
+def test_zero_prm_text_omits_nonbonded_section():
     text = (
         "NONBONDED nbxmod  5 atom cdiel fshift vatom vdistance vfswitch -\n"
         "cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5\n"
@@ -61,11 +61,10 @@ def test_zero_prm_text_omits_nonbonded_control_lines():
         "END\n"
     )
     out = zero_prm_text(text)
-    assert "NONBONDED\n" in out
+    assert "NONBONDED" not in out
     assert "nbxmod" not in out
     assert "cutnb" not in out
-    assert "HGA1" in out
-    assert "0.0" in out
+    assert "HGA1" not in out
     assert "-0.0450" not in out
 
 
@@ -136,3 +135,6 @@ def test_zero_cgenff_prm_file(tmp_path: Path):
     assert "ZEROED COPY" in text
     assert "1053.00" not in text  # sample bond Kb from ACN
     assert "1.1800" in text  # equilibrium kept
+    assert "\nNONBONDED" not in text
+    assert "\nNBFIX" not in text
+    assert "\nHBOND" not in text
