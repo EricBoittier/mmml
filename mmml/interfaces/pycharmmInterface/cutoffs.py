@@ -256,7 +256,7 @@ class CutoffParameters:
     # --- Switching functions (must match mmml_calculator implementation) ---
     @staticmethod
     def _smoothstep01(s):
-        return s * s * (3.0 - 2.0 * s)
+        return s * s * s * (10.0 + s * (-15.0 + 6.0 * s))
 
     @staticmethod
     def _sharpstep(r, x0, x1, gamma=3.0):
