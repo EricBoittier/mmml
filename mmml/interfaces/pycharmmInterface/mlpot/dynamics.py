@@ -3895,84 +3895,15 @@ def _run_dynamics_via_c_api(
     """Run ``dynopt`` with a keyword line (KEY_LIBRARY; leap/hoover/cpt flags)."""
     import pycharmm
     import pycharmm.dynamics as charm_dyn
-    import os
-    import tempfile
-    import numpy as np
-    from pathlib import Path
-    from mmml.interfaces.pycharmmInterface.charmm_restart_io import write_charmm_restart_from_memory
-    
-    handoff_res = None
-    if init_velocities is not None:
-        # Reconstruct (N, 3) from the dict
-        vel = np.column_stack([
-            init_velocities["vx"],
-            init_velocities["vy"],
-            init_velocities["vz"],
-        ])
-        handoff_res = Path(tempfile.gettempdir()) / f"mmml_vel_handoff_{os.getpid()}.res"
-        
-        # Write exact AKMA velocities to a temporary restart file
-        write_charmm_restart_from_memory(
-            handoff_res,
-            velocities_akma=vel,
-            include_velocities=True,
-            include_crystal=True,
-        )
-        
-        # Open the restart file on unit 88 (must be formatted card) and override kwargs to read from it
-        pycharmm.lingo.charmm_script(f"open read card unit 88 name {handoff_res.as_posix()}")
-        kw["start"] = False
-        kw["restart"] = True
-        kw["iasvel"] = 1
-        kw["iunrea"] = 88
-        
-        # Clear init_velocities so we don't pass them to the broken C-API wrapper
-        init_velocities = None
-
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
-    import ase.io
-    import ase
-    
-    # Save before .traj
-    try:
-        pos_before = get_charmm_positions_array()
-        atoms_before = ase.Atoms(positions=pos_before)
-        if handoff_res is not None and 'vel' in locals():
-            atoms_before.set_velocities(vel)
-        ase.io.write("velocities_before.traj", atoms_before)
-    except Exception:
-        pass
 
     dyn = pycharmm.DynamicsScript(**kw)
     script = _merge_dynamics_script_append(dyn.create_script_string(), heat_append)
     command_line = charm_dyn.flatten_dynamics_script(script)
-    print(f"DEBUG DYNAMICS COMMAND: {command_line}", flush=True)
     charm_dyn.run_with_command_line(
         command_line,
         init_velocities=init_velocities,
         **kw,
     )
-    
-    if handoff_res is not None:
-        pycharmm.lingo.charmm_script("close unit 88")
-        try:
-            if handoff_res.exists():
-                handoff_res.unlink()
-        except OSError:
-            pass
-
-    # Save after .traj
-    try:
-        from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import charmm_synced_velocities_akma
-        pos_after = get_charmm_positions_array()
-        vel_after = charmm_synced_velocities_akma()
-        atoms_after = ase.Atoms(positions=pos_after)
-        if vel_after is not None:
-            atoms_after.set_velocities(vel_after)
-        ase.io.write("velocities_after.traj", atoms_after)
-    except Exception:
-        pass
-            
     return dyn
 
 

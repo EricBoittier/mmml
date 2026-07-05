@@ -329,6 +329,56 @@ def test_run_dynamics_c_api_path_invoked():
     run_c_api.assert_called_once()
 
 
+def test_run_dynamics_via_c_api_passes_init_velocities_without_restart_handoff():
+    import types
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _run_dynamics_via_c_api
+
+    init = {
+        "vx": np.array([1.0, 2.0]),
+        "vy": np.array([3.0, 4.0]),
+        "vz": np.array([5.0, 6.0]),
+    }
+    calls: dict[str, object] = {}
+    fake_dyn = MagicMock()
+    fake_dyn.create_script_string.return_value = "dynamics verlet iasvel 0 iunrea -1"
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
+    fake_pycharmm.lingo = SimpleNamespace(charmm_script=MagicMock())
+    fake_charm_dyn = types.ModuleType("pycharmm.dynamics")
+    fake_charm_dyn.flatten_dynamics_script = lambda script: "verlet iasvel 0 iunrea -1"
+    fake_charm_dyn.run_with_command_line = (
+        lambda command_line, init_velocities=None, **kwargs: calls.update(
+            {
+                "command_line": command_line,
+                "init_velocities": init_velocities,
+                "kwargs": kwargs,
+            }
+        )
+    )
+    fake_pycharmm.dynamics = fake_charm_dyn
+
+    with patch.dict(
+        sys.modules,
+        {
+            "pycharmm": fake_pycharmm,
+            "pycharmm.dynamics": fake_charm_dyn,
+        },
+    ):
+        _run_dynamics_via_c_api(
+            {"nstep": 50, "start": False, "restart": False, "iasvel": 0, "iunrea": -1},
+            init_velocities=init,
+        )
+
+    fake_pycharmm.lingo.charmm_script.assert_not_called()
+    assert calls["init_velocities"] is init
+    assert calls["kwargs"]["restart"] is False
+    assert calls["kwargs"]["iunrea"] == -1
+    assert "restart" not in calls["command_line"]
+    assert "iunrea 88" not in calls["command_line"]
+
+
 def test_run_dynamics_bussi_iasvel_one_fallback_keeps_ramp_temperature():
     import sys
     from unittest.mock import MagicMock, patch
