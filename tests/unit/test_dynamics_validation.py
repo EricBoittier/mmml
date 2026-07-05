@@ -319,14 +319,22 @@ def test_run_dynamics_clears_comparison_coords_when_iasvel_zero_no_start():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._release_charmm_dynamics_api_buffers",
     ) as release_bufs, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
-        return_value=False,
+        return_value=True,
     ), patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
-    ) as exec_dyn, patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._finalize_init_velocities_handoff",
+        return_value={
+            "vx": np.array([1.0]),
+            "vy": np.array([0.0]),
+            "vz": np.array([0.0]),
+        },
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._run_dynamics_via_c_api",
+        return_value=dyn,
+    ) as run_c_api, patch.dict(sys.modules, {"pycharmm": fake_pycharmm}):
         run_dynamics({"iasvel": 0, "start": False, "nstep": 10})
-    sync_vel.assert_called_once()
+    sync_vel.assert_not_called()
     mirror_comp.assert_not_called()
-    exec_dyn.assert_called_once()
+    run_c_api.assert_called_once()
     assert release_bufs.call_count == 2
 
 
@@ -752,6 +760,9 @@ def test_validate_charmm_dynamics_quarantines_stale_unsafe_restart_when_memory_o
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
         return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
+        return_value=True,
     ):
         validate_charmm_dynamics_state_after_chunk(
             context="CHARMM_MM_PRETREAT_HEAT",
@@ -790,6 +801,37 @@ def test_validate_charmm_dynamics_rejects_high_finite_grms():
                 context="HEAT subchunk",
                 restart_path=None,
             )
+
+
+def test_validate_charmm_dynamics_can_skip_stale_grms_for_post_mini_sync():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        validate_charmm_dynamics_state_after_chunk,
+    )
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_finite",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_finite",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_nontrivial",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_coordinates_are_bounded",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_energy_is_plausible",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.charmm_dynamics_grms_is_plausible",
+        return_value=False,
+    ):
+        validate_charmm_dynamics_state_after_chunk(
+            context="CHARMM UPDATE after mini (sync NB/MLpot lists)",
+            restart_path=None,
+            check_grms=False,
+        )
 
 
 def test_assert_stage_dynamics_completed_accepts_single_step_heat(tmp_path):

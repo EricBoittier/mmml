@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from unittest import mock
 
 import numpy as np
@@ -69,13 +70,38 @@ def test_charmm_dynamics_energy_is_finite_detects_nan():
 
 def test_charmm_dynamics_state_is_finite_requires_both():
     pos = pd.DataFrame({"x": [0.0, 1.0], "y": [0.0, 0.0], "z": [0.0, 0.0]})
-    row = pd.DataFrame([{"USER": -1.0}])
+    row = pd.DataFrame([{"USER": -1.0, "GRMS": 0.1}])
     fake_coor = mock.MagicMock()
     fake_coor.get_positions.return_value = pos
     fake_energy = mock.MagicMock()
     fake_energy.get_energy.return_value = row
     with fake_pycharmm_modules(coor=fake_coor, energy=fake_energy):
         assert charmm_dynamics_state_is_finite()
+
+
+def test_sync_charmm_lists_after_mini_skips_stale_grms_gate():
+    from mmml.interfaces.pycharmmInterface.mlpot import dynamics
+
+    fake_lingo = mock.MagicMock()
+    fake_pycharmm = mock.MagicMock(lingo=fake_lingo)
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.assert_charmm_dynamics_chunk_safe"
+    ) as assert_safe, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._import_pycharmm_modules",
+        return_value=(fake_pycharmm, None, None, None, None, None),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        return_value=nullcontext(),
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics.maybe_snapshot_nbond_state"
+    ):
+        dynamics.sync_charmm_lists_after_mini(quiet=True)
+
+    assert_safe.assert_called_once_with(
+        context="CHARMM UPDATE after mini (sync NB/MLpot lists)",
+        check_grms=False,
+    )
+    fake_lingo.charmm_script.assert_has_calls([mock.call("ENER"), mock.call("UPDATE")])
 
 
 def test_charmm_dynamics_energy_is_plausible_rejects_blowup_totke():

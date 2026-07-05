@@ -641,7 +641,7 @@ def charmm_coordinates_are_bounded(*, max_abs_A: float = 2000.0) -> bool:
     return float(np.max(np.abs(arr))) <= float(max_abs_A)
 
 
-def charmm_dynamics_state_is_finite() -> bool:
+def charmm_dynamics_state_is_finite(*, check_grms: bool = True) -> bool:
     """Coordinates and energy row are finite and physically plausible after dynamics."""
     return (
         charmm_coordinates_are_finite()
@@ -649,7 +649,7 @@ def charmm_dynamics_state_is_finite() -> bool:
         and charmm_coordinates_are_bounded()
         and charmm_dynamics_energy_is_finite()
         and charmm_dynamics_energy_is_plausible()
-        and charmm_dynamics_grms_is_plausible()
+        and (not check_grms or charmm_dynamics_grms_is_plausible())
     )
 
 
@@ -657,6 +657,7 @@ def validate_charmm_dynamics_state_after_chunk(
     *,
     context: str,
     restart_path: Path | None = None,
+    check_grms: bool = True,
 ) -> None:
     """Raise when coordinates or energies are non-finite (barostat / MLpot blow-up)."""
     restart_bad = False
@@ -665,7 +666,7 @@ def validate_charmm_dynamics_state_after_chunk(
         restart_bad = restart_has_nonfinite_coordinates(rp) or restart_coordinates_are_unsafe(
             rp
         )
-        if restart_bad and charmm_dynamics_state_is_finite():
+        if restart_bad and charmm_dynamics_state_is_finite(check_grms=check_grms):
             quarantined = quarantine_restart_file(
                 rp,
                 reason="stale_unsafe",
@@ -714,7 +715,7 @@ def validate_charmm_dynamics_state_after_chunk(
                 "(MLpot integration blow-up). Shorten the timestep, tighten echeck, "
                 "or verify MLpot timestep is applied (not leftover CHARMM pretreat dt)."
             )
-        if not charmm_dynamics_grms_is_plausible():
+        if check_grms and not charmm_dynamics_grms_is_plausible():
             raise RuntimeError(
                 f"{context}: CHARMM GRMS exceeds "
                 f"{_DYNAMICS_GRMS_MAX_KCALMOL_A:.0f} kcal/mol/Å after dynamics "
@@ -734,9 +735,10 @@ def assert_charmm_dynamics_chunk_safe(
     *,
     context: str,
     restart_path: Path | None = None,
+    check_grms: bool = True,
 ) -> None:
     """Log a warning when state looks corrupt, then raise before list rebuild / mlpot_update."""
-    memory_bad = not charmm_dynamics_state_is_finite()
+    memory_bad = not charmm_dynamics_state_is_finite(check_grms=check_grms)
     restart_bad = restart_path is not None and (
         restart_has_nonfinite_coordinates(Path(restart_path))
         or restart_coordinates_are_unsafe(Path(restart_path))
@@ -749,6 +751,7 @@ def assert_charmm_dynamics_chunk_safe(
     validate_charmm_dynamics_state_after_chunk(
         context=context,
         restart_path=restart_path,
+        check_grms=check_grms,
     )
 
 

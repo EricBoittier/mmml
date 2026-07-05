@@ -1048,6 +1048,7 @@ def sync_charmm_lists_after_mini(*, quiet: bool = False) -> None:
 
     assert_charmm_dynamics_chunk_safe(
         context="CHARMM UPDATE after mini (sync NB/MLpot lists)",
+        check_grms=False,
     )
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_nbond_diagnostics import (
@@ -3653,7 +3654,7 @@ def _configure_bussi_in_memory_continuation_iasvel(kw: dict[str, Any]) -> None:
     """
     use_c_api_handoff = os.environ.get("MMML_BUSSI_INIT_VELOCITIES_HANDOFF") == "1"
     if not use_c_api_handoff or not _dynamics_c_api_available():
-        _apply_bussi_iasvel_one_at_ramp_target(kw)
+            _apply_bussi_iasvel_one_at_ramp_target(kw)
         return
     kw["iasvel"] = 0
     kw["iasors"] = 0
