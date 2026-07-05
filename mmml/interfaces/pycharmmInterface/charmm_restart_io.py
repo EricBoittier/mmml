@@ -11,7 +11,7 @@ def _format_fortran_restart_float(value: float) -> str:
     v = float(value)
     if not np.isfinite(v):
         raise ValueError(f"non-finite restart value: {v}")
-    return f"{v:.15E}".replace("E", "D")
+    return f"{v:24.15E}".replace("E", "D")
 
 
 def _restart_section_coord_lines(arr: np.ndarray) -> list[str]:
@@ -20,8 +20,7 @@ def _restart_section_coord_lines(arr: np.ndarray) -> list[str]:
     for i in range(0, len(flat), 3):
         chunk = flat[i : i + 3]
         lines.append(
-            " "
-            + " ".join(_format_fortran_restart_float(float(v)) for v in chunk)
+            "".join(_format_fortran_restart_float(float(v)) for v in chunk)
         )
     return lines
 
@@ -152,9 +151,9 @@ def write_charmm_restart_from_memory(
                 lines.append(" !CRYSTAL PARAMETERS")
                 z = _format_fortran_restart_float(0.0)
                 s = _format_fortran_restart_float(side)
-                lines.append(f" {s} {z} {z}")
-                lines.append(f" {z} {s} {z}")
-                lines.append(f" {z} {z} {s}")
+                lines.append(f"{s}{z}{z}")
+                lines.append(f"{z}{s}{z}")
+                lines.append(f"{z}{z}{s}")
         except Exception:
             pass
 
