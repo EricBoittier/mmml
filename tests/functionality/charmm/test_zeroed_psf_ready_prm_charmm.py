@@ -61,7 +61,7 @@ def _cgenff_prm_src() -> Path:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_zeroed_prm(tmp_path: Path, *, note: str = "") -> Path:
+def _make_zeroed_prm(tmp_path: Path, *, note: str = "", include_nonbonded_zeros: bool = False) -> Path:
     """Write the zeroed PSF-ready .prm for the current CGenFF source."""
     from mmml.interfaces.pycharmmInterface.charmm_prm_zero import write_zeroed_psf_ready_prm
 
@@ -69,7 +69,7 @@ def _make_zeroed_prm(tmp_path: Path, *, note: str = "") -> Path:
     if not src.is_file():
         pytest.skip(f"CGenFF .prm source not found: {src}")
     dst = tmp_path / "zeroed_psf_ready.prm"
-    write_zeroed_psf_ready_prm(src, dst, note=note)
+    write_zeroed_psf_ready_prm(src, dst, note=note, include_nonbonded_zeros=include_nonbonded_zeros)
     return dst
 
 
@@ -240,25 +240,24 @@ def test_zeroed_prm_append_after_full_prm_zeros_vdw(pycharmm_workdir: Path) -> N
     build, then ``write_zeroed_psf_ready_prm`` output is appended to overwrite
     the VDW table before MLpot registration.
     """
-    import pycharmm
     import pycharmm.read as read
 
-    from mmml.interfaces.pycharmmInterface.charmm_levels import (
-        charmm_relaxed_bomlev,
-        charmm_silent_command,
-    )
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
         read_pdb_file,
         read_psf_card_file,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import setup_default_nbonds
-    from mmml.interfaces.pycharmmInterface.nbonds_config import CGENFF_PRM_BOMLEV
+    from mmml.interfaces.pycharmmInterface.nbonds_config import (
+        CGENFF_PRM_BOMLEV,
+        read_cgenff_prm,
+    )
 
     src = _cgenff_prm_src()
     if not src.is_file():
         pytest.skip(f"CGenFF .prm not found: {src}")
 
-    zeroed = _make_zeroed_prm(pycharmm_workdir, note="append-mode test")
+    zeroed = _make_zeroed_prm(pycharmm_workdir, note="append-mode test", include_nonbonded_zeros=True)
     psf_path = Path(workdir_psf("aco-1.psf"))
     pdb_path = Path(workdir_pdb("aco.pdb"))
 
@@ -269,12 +268,9 @@ def test_zeroed_prm_append_after_full_prm_zeros_vdw(pycharmm_workdir: Path) -> N
         read_psf_card_file(psf_path)
         read_pdb_file(pdb_path, resid=True)
 
-    # Step 2: append zeroed overlay (as happens before MLpot registration)
-    with charmm_relaxed_bomlev(CGENFF_PRM_BOMLEV):
-        with charmm_silent_command():
-            pycharmm.lingo.charmm_script(
-                f"READ PARAM APPEND CARD NAME {zeroed}"
-            )
+    # Step 2: append zeroed overlay via read_cgenff_prm (handles PBC suspend,
+    # flex=True, and correct bomlev automatically — same path as production code).
+    read_cgenff_prm(zeroed, append=True)
 
     setup_default_nbonds()
     terms = _run_ener_and_get_terms()

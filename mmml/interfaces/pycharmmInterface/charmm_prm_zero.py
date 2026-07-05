@@ -266,23 +266,33 @@ def write_zeroed_psf_ready_prm(
     src: Path,
     dst: Path,
     *,
+    include_nonbonded_zeros: bool = False,
     note: str = "",
 ) -> Path:
     """Write a READ-PARAM-APPEND–safe .prm with zero bonded constants and no VDW.
 
     This is the recommended Option C fix for the ``IMNB`` / ``VDW`` non-zero
-    energy after MLpot registration.  Loading *dst* before calling
-    ``register_mlpot`` means CHARMM never populates its internal VDW table,
-    so ``ENER`` will report ``VDW=0`` and ``IMNBvdw=0`` without requiring any
-    runtime ``SCALAR VDW SET 0.0`` patch.
+    energy after MLpot registration.
 
-    The output:
+    Two usage modes are supported:
+
+    **Initial load** (``include_nonbonded_zeros=False``, default)
+        The NONBONDED, NBFIX, and HBOND sections are **omitted entirely**.
+        Load this as the *first and only* parameter file so CHARMM's internal
+        VDW table is never populated: ``ENER`` gives ``VDW=0`` and ``IMNB=0``
+        without any ``SCALAR VDW SET 0.0`` patch.
+
+    **Append / overlay** (``include_nonbonded_zeros=True``)
+        The NONBONDED and NBFIX sections are included with all epsilon values
+        set to 0.0 (Rmin preserved).  Use this with ``READ PARAM APPEND`` after
+        a full CGenFF PRM has already been loaded, so CHARMM overwrites the
+        existing VDW table entries with zeros.
+
+    The output always:
     * Zeroes all bonded force constants (Kb, Kθ, Kub, Vn) — equilibrium
       geometry (r0, theta0, phase, multiplicity) is preserved.
-    * Omits NONBONDED, NBFIX, and HBOND sections entirely so no epsilon/Rmin
-      row is ever re-read into the parameter table.
-    * Retains section headers (BONDS, ANGLES, DIHEDRALS, IMPROPERS) and
-      all comment lines — safe for ``READ PARAM APPEND``.
+    * Retains BONDS / ANGLES / DIHEDRALS / IMPROPERS section headers.
+    * Omits HBOND (not needed in either mode).
 
     Parameters
     ----------
@@ -290,6 +300,10 @@ def write_zeroed_psf_ready_prm(
         Source CHARMM .prm file (e.g. ``par_all36_cgenff.prm``).
     dst:
         Destination path.  Parent directory is created if absent.
+    include_nonbonded_zeros:
+        When True, include NONBONDED/NBFIX with ε=0 rows so an append into an
+        existing CHARMM session zeros its VDW table.  When False (default),
+        omit those sections entirely (suitable for a fresh CHARMM session).
     note:
         Optional free-text annotation written into the file header.
 
@@ -299,10 +313,18 @@ def write_zeroed_psf_ready_prm(
         The path that was written.
     """
     text = src.read_text(encoding="utf-8", errors="replace")
-    body = bonded_only_prm_text(text, zero_constants=True)
+    if include_nonbonded_zeros:
+        # Full zero: bonded zeroed + NONBONDED/NBFIX zeroed (no section headers
+        # for nbxmod control line — use zero_prm_text which omits those headers).
+        body = zero_prm_text(text, bonded_only=False)
+        nb_desc = "NONBONDED/NBFIX zeroed (ε=0; append-mode)"
+    else:
+        # Bonded-only: NONBONDED/NBFIX/HBOND entirely absent.
+        body = bonded_only_prm_text(text, zero_constants=True)
+        nb_desc = "NONBONDED/NBFIX/HBOND omitted (initial-load mode)"
     header = (
-        "*  MMML PSF-ready overlay: bonded constants zeroed, NONBONDED/NBFIX/HBOND omitted\n"
-        "*  Load via READ PARAM APPEND before MLpot registration to keep VDW=0 / IMNB=0\n"
+        f"*  MMML PSF-ready overlay: bonded constants zeroed, {nb_desc}\n"
+        "*  Load via READ PARAM (APPEND) before MLpot registration to keep VDW=0 / IMNB=0\n"
         f"*  Source: {src.name}\n"
     )
     if note:
