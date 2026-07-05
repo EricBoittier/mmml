@@ -1208,7 +1208,11 @@ def build_mm_energy_forces_fn(
                 n_pairs_per_dimer_jnp = jnp.asarray(
                     n_pairs_per_dimer_arr, dtype=jnp.int32
                 )
-                mm_scale_expanded = jnp.repeat(mm_scale, n_pairs_per_dimer_jnp)
+                mm_scale_expanded = jnp.repeat(
+                    mm_scale, 
+                    n_pairs_per_dimer_jnp, 
+                    total_repeat_length=int(n_pairs_per_dimer_arr.sum())
+                )
             return (pair_energies * mm_scale_expanded).sum()
         return apply_switching_function
 
