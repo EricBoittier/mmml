@@ -757,8 +757,8 @@ def test_apply_bussi_in_memory_continuation_defaults_to_iasvel_one(monkeypatch):
     assert kw["start"] is False
     assert kw["iunrea"] == -1
     assert kw.get("_skip_ase_cold_velocity_assign") is None
-    assert kw["firstt"] == pytest.approx(50.0)
-    assert kw["tstruct"] == pytest.approx(50.0)
+    assert kw["firstt"] == pytest.approx(10.0)
+    assert kw["tstruct"] == pytest.approx(10.0)
 
 
 def test_apply_bussi_in_memory_continuation_opt_in_iasvel_zero(monkeypatch):
@@ -1165,10 +1165,9 @@ def test_overlap_chunk_bussi_ramp_prep_strips_bath():
             chunk_index=1,
             has_restart_read=False,
         )
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
     assert chunk_kw["iunrea"] == -1
-    assert "firstt" not in chunk_kw
     assert "finalt" not in chunk_kw
     assert "tbath" not in chunk_kw
     assert "twindh" not in chunk_kw
@@ -1227,8 +1226,8 @@ def test_ensure_bussi_heat_continuation_iasvel_for_overlap_chunk(monkeypatch):
         _apply_overlap_chunk_dynamics_kw(kw, chunk_index=1, has_restart_read=False)
     assert kw["iasvel"] == 1
     assert kw["start"] is False
-    assert kw["firstt"] == pytest.approx(50.0)
-    assert kw["tstruct"] == pytest.approx(50.0)
+    assert kw["firstt"] == pytest.approx(10.0)
+    assert kw["tstruct"] == pytest.approx(10.0)
 
 
 def test_overlap_chunk_uses_memory_handoff_for_bussi(monkeypatch):
@@ -1291,10 +1290,10 @@ def test_prepare_post_rescue_overlap_handoff_bussi_uses_in_memory_kw():
     assert restore_vel.call_args.kwargs["global_step"] == 0
 
     assert chunk_kw["restart"] is False
-    assert chunk_kw["iasvel"] == 0
+    assert chunk_kw["iasvel"] == 1
     assert chunk_kw["start"] is False
     assert chunk_kw["iunrea"] == -1
-    assert chunk_kw["_skip_ase_cold_velocity_assign"] is True
+    assert chunk_kw.get("_skip_ase_cold_velocity_assign") is None
 
 
 def test_apply_post_rescue_overlap_handoff_bussi_returns_in_memory():

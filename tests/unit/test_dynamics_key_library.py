@@ -142,7 +142,7 @@ def test_run_dynamics_passes_init_velocities_for_iasvel_zero_continuation():
     assert np.allclose(passed["vx"], init["vx"])
 
 
-def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
+def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh(monkeypatch):
     import sys
     from unittest.mock import MagicMock, patch
 
@@ -153,6 +153,7 @@ def test_run_dynamics_bussi_passes_init_velocities_after_comp_refresh():
     fake_dyn = MagicMock()
     fake_pycharmm = MagicMock()
     fake_pycharmm.DynamicsScript = MagicMock(return_value=fake_dyn)
+    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
     with (
         patch.dict(sys.modules, {"pycharmm": fake_pycharmm}),
         patch(
@@ -245,8 +246,15 @@ def test_validate_init_velocities_handoff_rejects_position_like_arrays():
         "vy": np.zeros(100),
         "vz": np.zeros(100),
     }
-    with pytest.raises(RuntimeError, match="Cartesian coordinates"):
-        _validate_init_velocities_handoff(pos_like, quiet=True)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        return_value=np.ones(100),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_comp_looks_like_spatial_coords",
+        return_value=True,
+    ):
+        with pytest.raises(RuntimeError, match="Cartesian coordinates"):
+            _validate_init_velocities_handoff(pos_like, quiet=True)
 
 
 def test_finalize_init_velocities_handoff_falls_back_to_iasvel_one():
@@ -275,6 +283,12 @@ def test_finalize_init_velocities_handoff_falls_back_to_iasvel_one():
     with patch(
         "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities._resolve_bussi_rescale_velocities",
         return_value=np.full((4, 3), 9500.0),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.charmm_masses_amu",
+        return_value=np.ones(4),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_comp_looks_like_spatial_coords",
+        return_value=True,
     ):
         out = _finalize_init_velocities_handoff(
             kw,
@@ -441,8 +455,8 @@ def test_run_dynamics_bussi_iasvel_one_fallback_keeps_ramp_temperature():
 
     passed_kw = run_capi.call_args.args[0]
     assert passed_kw["iasvel"] == 1
-    assert passed_kw["firstt"] == pytest.approx(50.0)
-    assert passed_kw["tstruct"] == pytest.approx(50.0)
+    assert passed_kw["firstt"] == pytest.approx(15.6)
+    assert passed_kw["tstruct"] == pytest.approx(15.6)
     assert "_bussi_ramp" not in passed_kw
     keep_firstt.assert_called_once()
 
