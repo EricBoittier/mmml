@@ -737,6 +737,8 @@ def _register_mlpot_context(
     # CHARMM builds (DCM clusters, PBC NpT).
     from mmml.interfaces.pycharmmInterface.charmm_mpi import recover_mpi_for_charmm_after_jax
 
+    from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import resolve_periodic_charmm_vdw
+
     ctx = register_mlpot(
         pyCModel,
         z,
@@ -748,11 +750,9 @@ def _register_mlpot_context(
             if args is not None
             else "jax_mic"
         ),
-        periodic_charmm_vdw=(
-            bool(getattr(args, "periodic_charmm_vdw", True))
-            if args is not None
-            else True
-        ),
+        # Use the resolver (not a raw getattr) so that jax_mic mode always
+        # forces False — CHARMM IMAGE VDW double-counts with JAX MIC otherwise.
+        periodic_charmm_vdw=resolve_periodic_charmm_vdw(args),
         cubic_box_side_A=ml_cell,
         verbose=bool(getattr(args, "verbose", False)) if args is not None else False,
         use_block_registration=(
