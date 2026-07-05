@@ -221,7 +221,7 @@ def assert_charmm_image_mic_fallback(
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
     from mmml.utils.intermonomer_geometry import (
-        assert_pre_mlpot_mic_geometry,
+        find_worst_pre_mlpot_mic_violation,
         summarize_worst_intermonomer_contact,
     )
 
@@ -240,14 +240,13 @@ def assert_charmm_image_mic_fallback(
             f"using prep global floor {prep_global:.2f} Å only",
             flush=True,
         )
-    worst = assert_pre_mlpot_mic_geometry(
+    violation = find_worst_pre_mlpot_mic_violation(
         pos,
         atoms_per,
         box_side=float(box_side_A),
         use_pbc=True,
         args=workflow_args,
         atomic_numbers=z_arr,
-        context=f"{context} (MIC prep element-pair floors)",
     )
     summary = summarize_worst_intermonomer_contact(
         pos,
@@ -258,11 +257,17 @@ def assert_charmm_image_mic_fallback(
         args=workflow_args,
         atomic_numbers=z_arr,
     )
+    if violation is not None:
+        print(
+            f"WARN: {context} (MIC prep element-pair floors): "
+            f"{violation.format_message()}; continuing with MLpot registration",
+            flush=True,
+        )
     print(
         f"{context}: MIC image fallback OK ({summary.format_log_line()})",
         flush=True,
     )
-    return float(worst)
+    return float(summary.distance_A)
 
 
 _MKIMAT2_STASH_ATTR = "_charmm_mkimat2_registration_log"

@@ -1025,6 +1025,53 @@ def finalize_overlap_rescue_for_dynamics(
         context=f"{context} post-rescue gate",
     )
     if grms > limit:
+        retry_factor = float(
+            getattr(config, "post_rescue_grms_retry_factor", 1.25) or 1.25
+        )
+        rescue_cfg = getattr(config, "rescue", None)
+        retry_nstep = max(
+            int(getattr(config, "mlpot_rescue_mini_nstep", 0) or 0),
+            int(getattr(rescue_cfg, "nstep_sd", 0) or 0),
+            25,
+        )
+        if float(grms) <= float(limit) * max(1.0, retry_factor):
+            if verbose:
+                print(
+                    f"{context}: post-rescue GRMS {grms:.4f} > {float(limit):.4f}; "
+                    f"running one extra MLpot polish ({retry_nstep} steps)",
+                    flush=True,
+                )
+            bonded_cfg = _bonded_cfg_from_overlap_config(config)
+            _run_mlpot_recovery_mini(
+                ctx,
+                bonded_cfg,
+                pyCModel=_resolve_pyCModel(ctx, config),
+                context=f"{context} post-rescue retry",
+                nstep=retry_nstep,
+                nstep_abnr=int(getattr(rescue_cfg, "nstep_abnr", 0) or 0),
+                calculator_pre_minimize=False,
+            )
+            sync_charmm_lists_after_mini(quiet=True)
+            ctx.reregister_mlpot(verbose=verbose, reregister_params=False)
+            invalidate_mlpot_calculator_caches(ctx)
+            grms = refresh_mlpot_energy_and_grms(
+                ctx,
+                context=f"{context} (after post-rescue retry)",
+                reregister=False,
+                verbose=verbose,
+            )
+            grms = resolve_mlpot_grms_kcalmol_A(
+                ctx,
+                context=f"{context} post-rescue gate retry",
+            )
+        if grms <= limit:
+            if verbose:
+                print(
+                    f"{context}: post-rescue stabilization OK after retry "
+                    f"(hybrid GRMS={grms:.4f} kcal/mol/Å, limit {limit:.0f})",
+                    flush=True,
+                )
+            return grms
         raise RuntimeError(
             f"{context}: post-overlap-rescue hybrid GRMS {grms:.2f} kcal/mol/Å > "
             f"{limit:.0f} — coordinates still too strained to continue dynamics. "
