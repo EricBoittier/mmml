@@ -272,7 +272,12 @@ def test_zeroed_prm_append_after_full_prm_zeros_vdw(pycharmm_workdir: Path) -> N
     # flex=True, and correct bomlev automatically — same path as production code).
     read_cgenff_prm(zeroed, append=True)
 
+    # Rebuild nonbond lists after READ PARAM APPEND clears them (PARMIO).
+    import pycharmm
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
     setup_default_nbonds()
+    with charmm_silent_command():
+        pycharmm.lingo.charmm_script("UPDAte")
     terms = _run_ener_and_get_terms()
 
     vdw = terms.get("VDW", None)

@@ -199,13 +199,11 @@ def zeroed_nonbond_prm_text(text: str) -> str:
     """Emit NONBONDED/NBFIX sections with ε=0; omit the ``nbxmod`` control header.
 
     This is the correct content for a ``READ PARAM APPEND`` overlay that must
-    **overwrite** VDW table entries already loaded in CHARMM.  Omitting the
-    ``nbxmod/cutnb/ctofnb/...`` control line (the first line of the NONBONDED
-    block) prevents CHARMM from resetting cutoff settings during the append.
+    **overwrite** VDW table entries already loaded in CHARMM.  The NONBONDED
+    section header is emitted as a bare ``NONBONDED`` keyword (no control
+    keywords such as ``nbxmod``, ``cutnb``, etc.) so CHARMM enters the section
+    and reads the zeroed atom rows without resetting cutoff settings.
 
-    Only atom rows (matching ``_NONBONDED``) and NBFIX rows are emitted;
-    section headers (``NONBONDED``, ``NBFIX``) and comment/blank lines inside
-    those sections are retained so CHARMM's parser can recognise the sections.
     HBOND is always omitted.
     """
     section: str | None = None
@@ -226,28 +224,40 @@ def zeroed_nonbond_prm_text(text: str) -> str:
             omit_section = section == "HBOND"
             if omit_section:
                 continue
-            # Emit NONBONDED/NBFIX section header — needed by CHARMM parser.
-            # Bonded sections are also included (with zeroed constants).
-            out.append(raw)
+            if section == "NONBONDED":
+                # Emit bare section keyword only — no nbxmod/cutnb/... control args.
+                out.append("NONBONDED" + newline)
+            else:
+                out.append(raw)
             continue
         if omit_section:
             continue
         if section == "NONBONDED":
-            # Skip the nbxmod/cutnb/... control continuation line.
             stripped = body.strip()
-            if stripped.startswith("nbxmod") or stripped.startswith("cutnb") or (
-                stripped.startswith("-") and "cutnb" in stripped.lower()
-            ) or (not stripped or stripped.startswith("!")):
-                # Skip control lines and blank/comment lines inside NONBONDED header.
+            # Skip blank lines, comment lines, and continuation control lines.
+            if not stripped or stripped.startswith("!") or stripped.startswith("-") or (
+                any(
+                    stripped.lower().startswith(kw)
+                    for kw in ("nbxmod", "cutnb", "ctofnb", "ctonnb", "cgonnb",
+                               "cgofnb", "wmin", "wrnmxd", "e14fac", "eps", "atom",
+                               "cdiel", "fshift", "vatom", "vdistance", "vfswitch",
+                               "bygroup", "noextnd", "noew")
+                )
+            ):
                 continue
-            # Atom row: zero epsilon.
-            zeroed = zero_prm_line(body, section)
-            out.append(zeroed + newline)
+            # Atom row: zero epsilon and 1-4 epsilon; keep Rmin.
+            m = _NONBONDED.match(body)
+            if m:
+                zeroed = zero_prm_line(body, section)
+                out.append(zeroed + newline)
+            # else: comment or unrecognised line — skip
         elif section == "NBFIX":
-            zeroed = zero_prm_line(body, section)
-            out.append(zeroed + newline)
+            m = _NBFIX.match(body)
+            if m:
+                zeroed = zero_prm_line(body, section)
+                out.append(zeroed + newline)
         else:
-            # Bonded section: zero force constants.
+            # Bonded sections: zero force constants.
             out.append(zero_prm_line(body, section) + newline)
     return "".join(out)
 
