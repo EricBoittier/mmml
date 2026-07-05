@@ -3650,15 +3650,40 @@ def _dynamics_c_api_safe_for_kw(
     init_velocities: dict[str, np.ndarray] | None = None,
 ) -> bool:
     """False for DCD-writing script runs that crash some ``dynamics_run_kw`` builds."""
+    if init_velocities is not None and _dynamics_writes_dcd(kw):
+        return False
     if init_velocities is not None:
         return True
+    return not _dynamics_writes_dcd(kw)
+
+
+def _dynamics_writes_dcd(kw: dict[str, Any]) -> bool:
     if "iuncrd" not in kw:
-        return True
+        return False
     try:
         nsavc = int(kw.get("nsavc", 0) or 0)
     except (TypeError, ValueError):
         nsavc = 0
-    return nsavc <= 0
+    return nsavc > 0
+
+
+def _drop_unsafe_bussi_init_velocities_for_dcd(
+    kw: dict[str, Any],
+    init_velocities: dict[str, np.ndarray] | None,
+    *,
+    quiet: bool = False,
+) -> dict[str, np.ndarray] | None:
+    """Avoid ``dynamics_run_kw`` dynopt segfault with DCD + init_velocities."""
+    if init_velocities is None or not _dynamics_writes_dcd(kw):
+        return init_velocities
+    if not quiet:
+        print(
+            "run_dynamics: DCD output with C-API init_velocities is unsafe on this "
+            "CHARMM build; using iasvel=1 Bussi continuation instead",
+            flush=True,
+        )
+    _apply_bussi_iasvel_one_at_ramp_target(kw)
+    return None
 
 
 def _requires_init_velocities_handoff(kw: dict[str, Any]) -> bool:
@@ -4083,6 +4108,11 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
             handoff_vel=handoff_vel,
             restart_read_path=restart_read_path,
             fallback_paths=bussi_restart_fallbacks,
+            quiet=bool(kw.get("_quiet_bussi_rescale", False)),
+        )
+        init_velocities = _drop_unsafe_bussi_init_velocities_for_dcd(
+            kw,
+            init_velocities,
             quiet=bool(kw.get("_quiet_bussi_rescale", False)),
         )
     _normalize_dynamics_heat_ramp_kw(kw)
