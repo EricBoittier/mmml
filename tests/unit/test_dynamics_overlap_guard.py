@@ -1503,7 +1503,7 @@ def test_check_intra_monomer_template_restore_skips_bonded_mini():
         return_value=excluded,
     ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.restore_monomer_from_template_for_violation",
-        side_effect=lambda *_args, **_kwargs: positions.update(current=pos_ok),
+        side_effect=lambda *_args, **_kwargs: positions.update(current=pos_ok) or True,
     ) as restore, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
     ) as rescue:
@@ -1513,6 +1513,57 @@ def test_check_intra_monomer_template_restore_skips_bonded_mini():
     rescue.assert_not_called()
     assert rescued
     assert dmin >= 1.0
+
+
+def test_check_intra_monomer_template_then_separation_skips_bonded_mini():
+    cfg = DynamicsOverlapConfig(
+        action="rescue",
+        min_distance_A=0.0,
+        intra_min_distance_A=0.5,
+        n_monomers=1,
+        use_pbc=False,
+        separate_margin_A=0.2,
+        rescue=OverlapRescueConfig(nstep_sd=400, nstep_abnr=0, verbose=False),
+    )
+    pos_bad = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.09, 0.0, 0.0],
+            [0.0057, 0.0, 0.0],
+        ],
+        dtype=float,
+    )
+    excluded = frozenset({(0, 1), (1, 2)})
+    ctx = object()
+    positions = {"current": pos_bad.copy()}
+
+    def _get_pos():
+        return positions["current"]
+
+    def _sync_pos(new_pos):
+        positions["current"] = np.asarray(new_pos, dtype=float)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+        side_effect=_get_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+        side_effect=_sync_pos,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+        return_value=excluded,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits.restore_monomer_from_template_for_violation",
+        return_value=True,
+    ) as restore, mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._run_intramonomer_bonded_rescue",
+    ) as rescue:
+        dmin, rescued = check_dynamics_overlap(cfg, context="heat", step=500, mlpot_ctx=ctx)
+
+    restore.assert_called_once()
+    rescue.assert_not_called()
+    assert rescued
+    assert dmin >= 0.5
 
 
 def test_check_overlap_rescue_runs_minimize_and_rechecks():

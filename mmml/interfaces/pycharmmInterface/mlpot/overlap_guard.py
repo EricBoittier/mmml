@@ -1340,20 +1340,36 @@ def _handle_intramonomer_rescue(
         min_distance=float(config.intra_min_distance_A),
     )
     if violation is not None:
-        restore_monomer_from_template_for_violation(
+        restored = restore_monomer_from_template_for_violation(
             mlpot_ctx,
             int(violation.monomer),
             context=f"{label} intra-monomer template restore",
             restart_path=config.prior_segment_restart,
         )
-        try:
-            return _intramonomer_check(
-                config,
-                context=f"{label} after intra-monomer template restore",
-                mlpot_ctx=mlpot_ctx,
-            )
-        except RuntimeError:
-            pass
+        if restored:
+            try:
+                return _intramonomer_check(
+                    config,
+                    context=f"{label} after intra-monomer template restore",
+                    mlpot_ctx=mlpot_ctx,
+                )
+            except RuntimeError:
+                pass
+            try:
+                relieved = relieve_intramonomer_clashes(
+                    config,
+                    context=f"{label} after intra-monomer template restore",
+                    verbose=False,
+                    mlpot_ctx=mlpot_ctx,
+                )
+                if np.isfinite(relieved) and relieved >= float(config.intra_min_distance_A):
+                    return _intramonomer_check(
+                        config,
+                        context=f"{label} after intra-monomer separation",
+                        mlpot_ctx=mlpot_ctx,
+                    )
+            except RuntimeError:
+                pass
 
     sd_steps = config.intra_rescue_sd_steps
     if sd_steps is None:
