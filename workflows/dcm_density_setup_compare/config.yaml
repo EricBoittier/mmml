@@ -49,9 +49,9 @@ charmm_mm_pretreat: true
 no_scale_max_grms: true
 max_grms_before_dyn: 50.0
 allow_high_grms: false
-pre_mlpot_overlap_min_distance: 2.3
-pre_mlpot_h_heavy_min_distance: 2.4
-pre_mlpot_heavy_heavy_min_distance: 2.9
+pre_mlpot_overlap_min_distance: 2.0
+pre_mlpot_h_heavy_min_distance: 2.3
+pre_mlpot_heavy_heavy_min_distance: 2.5
 mlpot_registration_max_grms: 50.0
 liquid_prep_staged_density_fraction: 0.50
 
@@ -67,8 +67,7 @@ dynamics_overlap_check_interval: 200
 dynamics_overlap_charmm_sd_steps: 400
 dynamics_overlap_charmm_abnr_steps: 800
 dynamics_overlap_min_distance: 1.5
-min_intermonomer_atom_distance: 1.3
-pre_mlpot_overlap_min_distance: 2.3
+min_intermonomer_atom_distance: 2.0
 
 # GPU throughput: align Bussi micro-chunks with overlap interval (default dyn_freq_cadence=50
 # creates ~40×50-step heat segments and suppresses DCD on many sub-chunks).
@@ -89,12 +88,12 @@ dcd_nsavc: 10
 liquid_prep: true
 density_prep_ladder: true
 density_prep_ladder_max_rounds: 8
-density_prep_lattice_abnr_steps: 300
-mini_lattice_abnr_steps: 300
+density_prep_lattice_abnr_steps: 0
+mini_lattice_abnr_steps: 0
 mc_density_equalize: true
 # Extra MC capacity (mc_density dropped anchor GRMS 261→129 in latest run).
 mc_density_steps: 256
-mini_box_equil_ps: 5.0
+mini_box_equil_ps: 0.0
 calculator_pre_minimize: true
 # FIRE-first when GRMS > crossover (BFGS spikes on severe overlap at ~140 kcal/mol/Å).
 geometry_packing_fire_bfgs_crossover_grms: 200.0

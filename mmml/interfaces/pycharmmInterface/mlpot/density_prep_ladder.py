@@ -455,6 +455,7 @@ def probe_pre_mlpot_mic_contacts(
         box_side=box_side,
         use_pbc=charmm_pbc,
         threshold_A=floor,
+        args=args,
         atomic_numbers=atomic_numbers,
         dynamics_reference_A=dyn_ref,
     )
@@ -1661,6 +1662,7 @@ def run_pre_mlpot_geometry_gate(
             box_side=side,
             use_pbc=charmm_pbc,
             threshold_A=min_overlap,
+            args=args,
             atomic_numbers=z_arr,
             dynamics_reference_A=resolve_dynamics_overlap_reference_A(args),
         )

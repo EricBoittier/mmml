@@ -72,6 +72,18 @@ def test_resilient_defaults_respect_explicit_zero_mini_box_equil():
     assert args.mini_box_equil_ps == 0.0
 
 
+def test_resilient_defaults_skip_lattice_on_explicit_box_size():
+    from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
+        apply_density_prep_resilient_defaults,
+    )
+
+    args = _args(liquid_prep=True, box_size=40.0)
+    apply_density_prep_resilient_defaults(args)
+    assert args.mini_lattice_abnr_steps == 0
+    assert args.mini_box_equil_ps == 0.0
+    assert args.density_prep_lattice_abnr_steps == 0
+
+
 def test_resilient_defaults_respect_explicit_box_and_ladder_off():
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         apply_density_prep_resilient_defaults,
@@ -634,16 +646,17 @@ def test_lattice_abnr_prep_passes_only_lattice_full():
     assert _LATTICE_ABNR_PREP_PASSES == ((False, "lattice_full"),)
 
 
-def test_overlap_last_chance_separates_to_ml_safe_h_heavy_floor(monkeypatch):
+def test_overlap_last_chance_separates_to_ml_safe_pair_floors(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.density_prep_ladder import (
         run_pre_mlpot_geometry_gate,
     )
-    from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A
+    from mmml.utils.intermonomer_geometry import DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A
 
     args = _args(
         liquid_prep=True,
         pre_mlpot_overlap_min_distance=1.0,
         dynamics_overlap_min_distance=1.5,
+        composition={"DCM": 2},
     )
     pos = np.array([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0]], dtype=float)
     repacked = pos.copy()
@@ -702,8 +715,8 @@ def test_overlap_last_chance_separates_to_ml_safe_h_heavy_floor(monkeypatch):
 
     assert summary.reason == "ok"
     assert "pre_mlpot:overlap_last_chance" in summary.steps_applied
-    assert repack_targets[-1] == pytest.approx(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A)
-    assert separate_targets == [pytest.approx(DEFAULT_PRE_MLPOT_H_HEAVY_MIN_A)]
+    assert repack_targets[-1] == pytest.approx(DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A)
+    assert separate_targets == [pytest.approx(DEFAULT_PRE_MLPOT_HEAVY_HEAVY_MIN_A)]
 
 
 def test_dynamics_open_runs_when_prep_passes_but_contact_tight(monkeypatch):

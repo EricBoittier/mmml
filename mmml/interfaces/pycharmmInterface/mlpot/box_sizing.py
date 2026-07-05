@@ -885,7 +885,7 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         dest="pre_mlpot_h_heavy_min_distance",
         metavar="ANG",
-        help="Pre-MLpot H–heavy element-pair MIC floor (Å); default 2.4.",
+        help="Pre-MLpot H–heavy element-pair MIC floor (Å); default 2.3.",
     )
     group.add_argument(
         "--pre-mlpot-heavy-heavy-min-distance",
@@ -893,7 +893,7 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
         default=None,
         dest="pre_mlpot_heavy_heavy_min_distance",
         metavar="ANG",
-        help="Pre-MLpot heavy–heavy element-pair MIC floor (Å); default 2.9.",
+        help="Pre-MLpot heavy–heavy element-pair MIC floor (Å); default 2.5.",
     )
     group.add_argument(
         "--mlpot-registration-max-grms",
