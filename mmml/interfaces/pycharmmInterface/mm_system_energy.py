@@ -736,6 +736,7 @@ def nonbonded_energy_and_forces(
     *,
     pair_i: np.ndarray | None = None,
     pair_j: np.ndarray | None = None,
+    molecule_id: np.ndarray | None = None,
     lr_solver: str | None = None,
     jax_pme_method: str | None = None,
     jax_pme_sr_cutoff_A: float = 6.0,
@@ -773,6 +774,20 @@ def nonbonded_energy_and_forces(
         pair_i = host_i
         pair_j = host_j
 
+    if molecule_id is not None:
+        molecule_id = np.asarray(molecule_id, dtype=np.int32)
+
+        if molecule_id.shape != (len(positions),):
+            raise ValueError(
+                f"molecule_id shape {molecule_id.shape} "
+                f"!= ({len(positions)},)"
+            )
+
+        inter = molecule_id[pair_i] != molecule_id[pair_j]
+
+        pair_i = np.asarray(pair_i)[inter]
+        pair_j = np.asarray(pair_j)[inter]
+        
     pi = jnp.asarray(pair_i, dtype=jnp.int32)
     pj = jnp.asarray(pair_j, dtype=jnp.int32)
 

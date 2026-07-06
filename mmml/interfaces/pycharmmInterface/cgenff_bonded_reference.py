@@ -230,12 +230,12 @@ def setup_nonbonded_only_charmm() -> None:
     _assert_selective_block_safe(context="setup_nonbonded_only_charmm")
     from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_quiet
 
-    block = """BLOCK
-CALL 1 SELE ALL END
-COEFF 1 1 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 1.0 VDW 1.0
-END
-"""
-    run_charmm_script_quiet(block)
+#     block = """BLOCK
+# CALL 1 SELE ALL END
+# COEFF 1 1 0.0 BOND 0.0 ANGL 0.0 DIHEdral 0.0 ELEC 1.0 VDW 1.0
+# END
+# """
+#     run_charmm_script_quiet(block)
 
 
 def _charmm_active_energy_terms() -> dict[str, float]:

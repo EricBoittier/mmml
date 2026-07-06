@@ -199,6 +199,17 @@ def run_charmm_script_quiet(script: str) -> None:
     finally:
         _restore_charmm_levels(old)
 
+def run_charmm_script_loud(script: str) -> None:
+    """Run a CHARMM script at PRNLev/WRNLev 1; restore prior levels on exit."""
+    import pycharmm
+
+    old = _set_charmm_levels(prnlev=1, warnlev=1)
+    try:
+        pycharmm.lingo.charmm_script(script)
+    finally:
+        _restore_charmm_levels(old)
+
+
 
 @contextmanager
 def charmm_quiet_prnlev():

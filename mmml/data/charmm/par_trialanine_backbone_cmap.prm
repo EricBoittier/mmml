@@ -1,4 +1,5 @@
-* TRIA backbone CMAP (alanine grid from par_all36m_prot.prm, CGENFF types)
+* TRIA backbone CMAP (alanine grid from protein PRM, CGENFF types)
+* Regenerate: ./scripts/mmml-charmm-mpirun.sh python scripts/export_trialanine_cgenff_rtf.py
 CMAP
 ! alanine backbone map
 CG2O1 NG2S1 CG311 CG2O1 NG2S1 CG311 CG2O1 NG2S1  24

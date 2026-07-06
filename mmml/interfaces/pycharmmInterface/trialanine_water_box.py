@@ -253,9 +253,9 @@ def build_trialanine_water_box_in_charmm(
     *,
     n_waters: int = 12,
     box_side_A: float = 28.0,
-    water_spacing_A: float = 2.85,
-    min_peptide_water_dist_A: float = 2.4,
-    seed: int = 11,
+    water_spacing_A: float = 1.85,
+    min_peptide_water_dist_A: float = 1.4,
+    seed: int = 42,
     workdir: Path | None = None,
     skip_reset_block: bool = False,
 ) -> TrialanineWaterBox:
