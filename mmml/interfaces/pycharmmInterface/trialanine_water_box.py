@@ -315,21 +315,56 @@ def build_trialanine_water_box_in_charmm(
     peptide += np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
     coor.set_positions(pd.DataFrame(peptide, columns=["x", "y", "z"]))
 
-    tip3 = _tip3_template()
-    tip3_com = tip3.mean(axis=0)
-    oxygen_sites = _grid_oxygen_sites(
-        n_waters=n_waters,
-        box_side_A=box_side_A,
-        spacing_A=water_spacing_A,
-        margin_A=3.0,
-        existing=peptide,
-        min_dist_A=min_peptide_water_dist_A,
-        rng=rng,
-        water_template=tip3,
-    )
-    water_coords = np.vstack(
-        [site + (tip3 - tip3_com) for site in oxygen_sites],
-    )
+    # Use packmol to pack waters
+    from mmml.interfaces.pycharmmInterface.packmol_placement import packmol_executable
+    from ase import Atoms
+    from ase.io import write as ase_write
+    from ase.io import read as ase_read
+    import subprocess
+    import shutil
+    from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+    
+    out_dir = Path(workdir or Path.cwd())
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    pep_z = get_Z_from_psf()
+    pep_atoms = Atoms(pep_z, peptide)
+    pep_pdb_path = out_dir / "peptide.pdb"
+    ase_write(str(pep_pdb_path), pep_atoms)
+    
+    from mmml.paths import bundled_file
+    tip3_pdb_src = bundled_file("data", "charmm", "tip3.pdb")
+    shutil.copy(tip3_pdb_src, out_dir / tip3_pdb_src.name)
+    
+    packmol_inp_path = out_dir / "packmol.inp"
+    packmol_out_path = out_dir / "packmol_out.pdb"
+    
+    margin = 1.5
+    h_side = box_side_A - margin
+    
+    packmol_input = f"""
+tolerance 2.0
+filetype pdb
+output {packmol_out_path.name}
+seed {rng.integers(1000000)}
+
+structure {pep_pdb_path.name}
+  number 1
+  fixed {box_side_A/2:.4f} {box_side_A/2:.4f} {box_side_A/2:.4f} 0.0 0.0 0.0
+end structure
+
+structure {tip3_pdb_src.name}
+  number {n_waters}
+  inside box {margin:.1f} {margin:.1f} {margin:.1f} {h_side:.1f} {h_side:.1f} {h_side:.1f}
+end structure
+"""
+    packmol_inp_path.write_text(packmol_input)
+    
+    packmol_bin = packmol_executable()
+    subprocess.run([packmol_bin, "-i", packmol_inp_path.name], cwd=out_dir, check=True)
+    
+    packed_atoms = ase_read(str(packmol_out_path))
+    water_coords = packed_atoms.get_positions()[len(peptide):]
 
     read.sequence_string(" ".join(["TIP3"] * n_waters))
     generate.new_segment(seg_name="SOLV", setup_ic=False)
