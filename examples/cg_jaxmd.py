@@ -33,6 +33,8 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded_reference import (
 from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     load_nonbonded_system_from_charmm,
     nonbonded_energy_and_forces,
+    _build_pair_indices,
+    resolve_nonbonded_excluded_pairs,
 )
 from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import _nbond_settings_from_cutoffs
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
@@ -97,6 +99,19 @@ molecule_id[:n_trialanine] = 0
 for mol_id, start in enumerate(range(n_trialanine, len(pos), 3), start=1):
     molecule_id[start:start + 3] = mol_id
 jax_molecule_id = jnp.array(molecule_id, dtype=jnp.int32)
+
+# Precompute pair list indices for nonbonded interactions to avoid JIT TracerArrayConversionError
+print("--- Precomputing nonbonded pair list indices ---")
+excluded_pairs = nbond_data.excluded_pairs
+if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
+    excluded_pairs = resolve_nonbonded_excluded_pairs(
+        nbond_data.psf_path,
+        nbond_data.psf_bonds,
+        natom=int(np.asarray(nbond_data.charges).shape[0]),
+    )
+pair_i, pair_j = _build_pair_indices(pos, cell, excluded_pairs, nb_settings.cutnb)
+jax_pair_i = jnp.array(pair_i, dtype=jnp.int32)
+jax_pair_j = jnp.array(pair_j, dtype=jnp.int32)
 
 # 5. Define displacement and shift functions for Periodic Boundary Conditions (JAX-MD)
 # Using a cubic box setup based on the cell size.
@@ -167,6 +182,8 @@ def hybrid_energy_fn(r: jnp.ndarray) -> jnp.ndarray:
         cell,
         nb_settings,
         molecule_id=jax_molecule_id,
+        pair_i=jax_pair_i,
+        pair_j=jax_pair_j,
     )
     e_inter = terms_raw.get("total", sum(terms_raw.values())) * KCAL_MOL_TO_EV
     
