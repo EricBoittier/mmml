@@ -61,7 +61,7 @@ CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
-box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=28.0, seed=11, workdir=workdir)
+box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=38.0, seed=11, workdir=workdir)
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
@@ -151,7 +151,7 @@ displacement_fn, shift_fn = space.periodic(box_size)
 # 6. Build the Hybrid JAX-MD Energy Function
 # Using a factory/constructor pattern with jax.vmap to batch identical monomers.
 # This prevents JAX from unrolling python loops, enabling fast compilation and execution.
-def make_monomer_energy_fn(model, params, jax_z, monomer_indices):
+def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_fn):
     from collections import defaultdict
     # Group monomer indices by their size (atom count)
     by_size = defaultdict(list)
@@ -184,10 +184,22 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices):
         # Static atomic numbers for all monomers of this size
         group_z = jax_z[stacked_indices]
         
+        # Vectorized displacement to calculate relative coordinates under PBC
+        vmapped_displacement = jax.vmap(
+            jax.vmap(displacement_fn, in_axes=(0, None)),
+            in_axes=(0, 0)
+        )
+        
         def group_energy(r, stacked_idx=stacked_indices, gz=group_z):
             # Gather coordinates: shape (N_monomers, size, 3)
             group_pos = r[stacked_idx]
-            energies = vmapped_apply(group_pos, gz)
+            
+            # Unfold coordinate images relative to the first atom of each monomer
+            ref_pos = group_pos[:, 0, :]
+            displacements = vmapped_displacement(group_pos, ref_pos)
+            unfolded_pos = ref_pos[:, None, :] + displacements
+            
+            energies = vmapped_apply(unfolded_pos, gz)
             return jnp.sum(energies)
             
         group_fns.append(group_energy)
@@ -197,7 +209,7 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices):
         
     return total_monomer_energy
 
-compute_monomer_energy = make_monomer_energy_fn(model, params, jax_z, jax_monomer_indices)
+compute_monomer_energy = make_monomer_energy_fn(model, params, jax_z, jax_monomer_indices, displacement_fn)
 
 
 # Helper function to filter out intramolecular nonbonded terms on the host
