@@ -114,8 +114,10 @@ CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 
 FIRE_STEPS = 500
 FIRE_PRINT_FREQ = 100
-# Larger block sizes → GPU does more work per Python wake-up
-FIRE_BLOCK_STEPS = 1000
+# FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
+# running 1000 steps without checking allows catastrophic divergence before repair.
+# NVT/NVE use larger blocks since Verlet integrators are far more stable.
+FIRE_BLOCK_STEPS = 100
 NVT_TOTAL_STEPS = 50000
 NVT_BLOCK_STEPS = 500
 
@@ -615,9 +617,13 @@ for cycle in range(FIRE_CYCLES):
 
     # Run FIRE blocks — pair list rebuilt every FIRE_BLOCK_STEPS steps
     nan_detected = False
+    last_good_pos = np.asarray(pos_current)   # checkpoint: last positions with finite energy
     for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
+        # Save current positions before the block so we can recover if FIRE diverges
+        pos_before_block = np.asarray(fire_state.position)
+
         # Update pair list (CPU side only; no JAX re-trace)
-        update_pair_refs(np.asarray(fire_state.position))
+        update_pair_refs(pos_before_block)
 
         fire_state = run_fire_block(fire_state)
 
@@ -628,19 +634,25 @@ for cycle in range(FIRE_CYCLES):
         print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:4d} | "
               f"Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å")
 
-        if not np.isfinite(curr_e):
+        if not np.isfinite(curr_e) or not np.isfinite(max_bond):
             print(f"[FIRE] NaN/Inf energy detected at step {step+FIRE_BLOCK_STEPS} — "
-                  "triggering repair (skipping remaining FIRE steps)")
-            diagnose_energy(fire_state.position, label=f" Cycle{cycle+1} step{step+FIRE_BLOCK_STEPS}")
+                  f"reverting to last-good positions (before this block) and repairing")
+            # Diagnose using pre-block positions (which are still finite)
+            diagnose_energy(jnp.array(pos_before_block, dtype=jnp.float64),
+                            label=f" Cycle{cycle+1} pre-step{step+FIRE_BLOCK_STEPS}")
+            # Use pre-block positions for CHARMM repair (they are finite)
+            fire_state = fire_state.replace(position=jnp.array(pos_before_block, dtype=jnp.float64))
             nan_detected = True
             break
 
+        last_good_pos = pos_before_block
         frame = atoms.copy()
         frame.set_positions(unfold_coordinates(np.asarray(fire_state.position), box_size, _mon_stacked_groups))
         frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
         traj_fire.write(frame)
 
     # Repair the minimized structures in CHARMM at the end of every cycle
+    # Use fire_state.position (reverted to pre-NaN if divergence occurred)
     pos_current = jnp.array(repair_structure_in_charmm(fire_state.position), dtype=jnp.float64)
 
 traj_fire.close()
