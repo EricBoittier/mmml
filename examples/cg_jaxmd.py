@@ -250,11 +250,6 @@ def repair_structure_in_charmm(positions):
     # Unfold coordinates first so PyCHARMM does not see split molecules with massive bond lengths
     unfolded_pos = unfold_coordinates(np.asarray(positions), box_size, monomer_indices)
     set_charmm_positions(unfolded_pos)
-    
-    # Run steep SD and ABNR minimizations in PyCHARMM to resolve overlaps/clashes
-    # lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
-    # lingo.charmm_script("MINI SD 100")
-    # lingo.charmm_script("CONStraint DROPlet")
     lingo.charmm_script("MINI SD 1000")
     lingo.charmm_script("MINI ABNR 1000")
     # Retrieve repaired positions
@@ -325,8 +320,10 @@ for cycle in range(FIRE_CYCLES):
         frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
         traj_fire.write(frame)
         
-    # Repair the minimized structures in CHARMM to resolve any close contacts
-    pos_current = repair_structure_in_charmm(fire_state.position)
+    # Clean up all except the final
+    if (step+1)*FIRE_BLOCK_STEPS < FIRE_STEPS:
+        # Repair the minimized structures in CHARMM to resolve any close contacts
+        pos_current = repair_structure_in_charmm(fire_state.position)
 
 traj_fire.close()
 min_r = jnp.array(pos_current, dtype=jnp.float64)
