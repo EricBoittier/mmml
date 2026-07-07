@@ -73,8 +73,8 @@ NVT_BLOCK_STEPS = 1000
 NVE_TOTAL_STEPS = 20000
 NVE_BLOCK_STEPS = 100
 FIRE_CYCLES=10
-NWATER = 500
-BOX_SIDE_A = 30.0
+NWATER = 1000
+BOX_SIDE_A = 28.0
 
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
