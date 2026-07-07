@@ -233,28 +233,49 @@ def make_fire_block_runner(pi, pj):
             return step_fn_local(val_state)
         return jax.lax.fori_loop(0, steps, body_fn, state)
         
-    return run_fire_block, init_fn_local, jit(local_energy_fn)
+    return run_fire_block, init_fn_local, jit(local_energy_fn), jit(grad(lambda r: -local_energy_fn(r)))
 
 # Initialize starting FIRE state using the initial pair list
 FIRE_BLOCK_STEPS = 100
-run_fire_block, init_fn_fire, energy_fn_fire = make_fire_block_runner(pair_i, pair_j)
+run_fire_block, init_fn_fire, energy_fn_fire, force_fn_fire = make_fire_block_runner(pair_i, pair_j)
 fire_state = init_fn_fire(init_r)
 
-# Perform minimization steps in blocks, updating neighbor lists
+# Open trajectory file for saving minimization path
+traj_path_fire = "cg_fire.traj"
+print(f"--- Saving minimization trajectory to {traj_path_fire} ---")
+traj_fire = Trajectory(traj_path_fire, "w", atoms)
+
+# Save initial pre-minimized frame (Step 0)
+curr_e = float(energy_fn_fire(init_r))
+curr_f = np.asarray(force_fn_fire(init_r))
+frame = atoms.copy()
+frame.set_positions(np.asarray(init_r))
+frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
+traj_fire.write(frame)
+
+# Perform minimization steps in blocks, updating neighbor lists and saving trajectory
 for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
     # Update neighbor list (pair list) on the host based on current positions
     pos_np = np.asarray(fire_state.position)
     pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
     
     # Retrieve the block runner for these specific pairs
-    run_fire_block, _, energy_fn_fire = make_fire_block_runner(pi, pj)
+    run_fire_block, _, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi, pj)
     
     # Run the compiled block
     fire_state = run_fire_block(fire_state, FIRE_BLOCK_STEPS)
     
     curr_e = float(energy_fn_fire(fire_state.position))
+    curr_f = np.asarray(force_fn_fire(fire_state.position))
     print(f"FIRE Step {step+FIRE_BLOCK_STEPS:5d} | Energy: {curr_e:.4f} eV")
+    
+    # Save minimized block frame to trajectory
+    frame = atoms.copy()
+    frame.set_positions(np.asarray(fire_state.position))
+    frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
+    traj_fire.write(frame)
 
+traj_fire.close()
 min_r = fire_state.position
 print(f"Minimization complete. Final Energy: {energy_fn_fire(min_r):.4f} eV")
 
