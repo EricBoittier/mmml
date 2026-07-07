@@ -759,7 +759,7 @@ print("--- Running NVE Dynamics with JAX-MD to check stability ---")
 update_pair_refs(np.asarray(state.position))
 pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-state_nve = _init_fn_nve(state.position, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
 traj_path_nve = "cg_nve.traj"
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
@@ -806,7 +806,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         update_pair_refs(np.asarray(final_min_pos))
         pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state_nve = _init_fn_nve(final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        state_nve = _init_fn_nve(key, final_min_pos, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
         # Re-evaluate diagnostics
         curr_f = np.asarray(state_nve.force)
         curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
