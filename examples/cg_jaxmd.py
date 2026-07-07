@@ -252,11 +252,11 @@ def repair_structure_in_charmm(positions):
     set_charmm_positions(unfolded_pos)
     
     # Run steep SD and ABNR minimizations in PyCHARMM to resolve overlaps/clashes
-    lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
-    lingo.charmm_script("MINI SD 100")
-    lingo.charmm_script("CONStraint DROPlet")
-    lingo.charmm_script("MINI SD 100")
-    lingo.charmm_script("MINI ABNR 100")
+    # lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
+    # lingo.charmm_script("MINI SD 100")
+    # lingo.charmm_script("CONStraint DROPlet")
+    lingo.charmm_script("MINI SD 1000")
+    lingo.charmm_script("MINI ABNR 1000")
     # Retrieve repaired positions
     repaired_pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     print("[REPAIR] Structure repaired successfully. Re-initializing state.\n")
