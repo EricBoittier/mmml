@@ -79,11 +79,11 @@ setup_nonbonded_only_charmm()
 
 for i in range(10):
     # Apply constraint and run steepest descent minimization
-    lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
-    run_charmm_script_loud("MINI SD 10000")
+    lingo.charmm_script("CONStraint DROPlet FORC 0.001 EXPO 4")
+    lingo.charmm_script("MINI SD 10000")
     lingo.charmm_script("IMAGE")
     lingo.charmm_script("CONStraint DROPlet")
-    run_charmm_script_loud("MINI SD 10000")
+    lingo.charmm_script("MINI SD 10000")
 
 
 
