@@ -317,6 +317,22 @@ run_nvt_block, init_fn_nvt, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(
 key = jax.random.PRNGKey(42)
 state = init_fn_nvt(key, min_r, mass=jax_mass)
 
+# Helper function to repair structures using PyCHARMM minimization
+def repair_structure_in_charmm(positions):
+    print("\n[REPAIR] Temperature spike or NaN detected! Repairing structure in CHARMM...")
+    set_charmm_positions(np.asarray(positions))
+    # Run steep SD and ABNR minimizations in PyCHARMM to resolve overlaps/clashes
+    lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
+    lingo.charmm_script("MINI SD 100")
+    lingo.charmm_script("IMAGE")
+    lingo.charmm_script("CONStraint DROPlet")
+    lingo.charmm_script("MINI SD 100")
+    lingo.charmm_script("MINI ABNR 100")
+    # Retrieve repaired positions
+    repaired_pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    print("[REPAIR] Structure repaired successfully. Re-initializing state.\n")
+    return repaired_pos
+
 # Run NVT dynamics loop with periodic neighbor list updates
 traj_path_nvt = "cg_nvt.traj"
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
@@ -338,6 +354,18 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     curr_f = np.asarray(force_fn_nvt(state.position))
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
+    
+    # Check if a spike occurred and repair if necessary
+    if temp > 400.0 or np.isnan(curr_e):
+        repaired_pos = repair_structure_in_charmm(state.position)
+        # Re-initialize the state with the repaired coordinates at the target temperature
+        state = init_fn_nvt(key, jnp.array(repaired_pos, dtype=jnp.float64), mass=jax_mass)
+        # Re-evaluate properties
+        curr_e = float(energy_fn_nvt(state.position))
+        curr_f = np.asarray(force_fn_nvt(state.position))
+        ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
+        temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
+        
     print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
     
     # Save frame to trajectory
@@ -392,6 +420,18 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     curr_f = np.asarray(force_fn_nve(state_nve.position))
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
+    
+    # Check if a spike occurred and repair if necessary
+    if temp > 400.0 or np.isnan(curr_e):
+        repaired_pos = repair_structure_in_charmm(state_nve.position)
+        # Re-initialize the state with the repaired coordinates
+        state_nve = init_fn_nve(key, jnp.array(repaired_pos, dtype=jnp.float64), target_temp_ev, mass=jax_mass)
+        # Re-evaluate properties
+        curr_e = float(energy_fn_nve(state_nve.position))
+        curr_f = np.asarray(force_fn_nve(state_nve.position))
+        ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
+        temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
+        
     print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
     
     # Save frame to trajectory
