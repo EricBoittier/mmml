@@ -256,7 +256,17 @@ def make_hybrid_energy_fn(pi, pj):
         return e_intra + e_inter
     return hybrid_energy_fn
 
-# 7. Structure Minimization with JAX-MD FIRE
+# 7. Minimization and Dynamics Configuration
+FIRE_STEPS = 2000
+FIRE_PRINT_FREQ = 20
+
+NVT_TOTAL_STEPS = 50000
+NVT_BLOCK_STEPS = 1000
+
+NVE_TOTAL_STEPS = 20000
+NVE_BLOCK_STEPS = 1000
+
+# 8. Structure Minimization with JAX-MD FIRE
 print("--- Minimizing System with JAX-MD FIRE ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 
@@ -270,16 +280,16 @@ fire_init, fire_step = minimize.fire_descent(initial_energy_fn, shift_fn, dt_sta
 fire_state = fire_init(init_r)
 
 # Perform minimization steps
-for step in range(2000):
+for step in range(FIRE_STEPS):
     fire_state = fire_step(fire_state)
-    if step % 20 == 0:
+    if step % FIRE_PRINT_FREQ == 0:
         curr_e = energy_fn(fire_state.position)
         print(f"FIRE Step {step:3d} | Energy: {curr_e:.4f} eV")
 
 min_r = fire_state.position
 print(f"Minimization complete. Final Energy: {energy_fn(min_r):.4f} eV")
 
-# 8. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
+# 9. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
 from jax_md import quantity
 
@@ -305,7 +315,7 @@ def make_nvt_block_runner(pi, pj):
     step_fn_local = jit(step_fn_local)
     
     @jit
-    def run_nvt_block(state, steps=1000):
+    def run_nvt_block(state, steps=NVT_BLOCK_STEPS):
         def body_fn(i, val_state):
             return step_fn_local(val_state)
         return jax.lax.fori_loop(0, steps, body_fn, state)
@@ -322,7 +332,7 @@ traj_path_nvt = "cg_nvt.traj"
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
 traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
 
-for step in range(0, 50000, 1000):
+for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     # Update neighbor list (pair list) on the host based on current positions
     pos_np = np.asarray(state.position)
     pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
@@ -330,15 +340,15 @@ for step in range(0, 50000, 1000):
     # Retrieve the block runner for these specific pairs
     run_nvt_block, _, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(pi, pj)
     
-    # Run the compiled 1000-step block
-    state = run_nvt_block(state, 1000)
+    # Run the compiled block of steps
+    state = run_nvt_block(state, NVT_BLOCK_STEPS)
     
     # Compute diagnostics
     curr_e = float(energy_fn_nvt(state.position))
     curr_f = np.asarray(force_fn_nvt(state.position))
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
-    print(f"NVT Step {step+1000:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+    print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
     
     # Save frame to trajectory
     frame = atoms.copy()
@@ -349,7 +359,7 @@ for step in range(0, 50000, 1000):
 traj_nvt.close()
 print("NVT dynamics complete!")
 
-# 9. Molecular Dynamics (NVE) with JAX-MD to check stability
+# 10. Molecular Dynamics (NVE) with JAX-MD to check stability
 print("--- Running NVE Dynamics with JAX-MD to check stability ---")
 
 # Helper function to create JIT-compiled NVE block runner for a specific pair list
@@ -359,7 +369,7 @@ def make_nve_block_runner(pi, pj):
     step_fn_local = jit(step_fn_local)
     
     @jit
-    def run_nve_block(state, steps=1000):
+    def run_nve_block(state, steps=NVE_BLOCK_STEPS):
         def body_fn(i, val_state):
             return step_fn_local(val_state)
         return jax.lax.fori_loop(0, steps, body_fn, state)
@@ -376,7 +386,7 @@ traj_path_nve = "cg_nve.traj"
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
 traj_nve = Trajectory(traj_path_nve, "w", atoms)
 
-for step in range(0, 20000, 1000):
+for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     # Update neighbor list (pair list)
     pos_np = np.asarray(state_nve.position)
     pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
@@ -384,15 +394,15 @@ for step in range(0, 20000, 1000):
     # Get NVE block runner
     run_nve_block, _, energy_fn_nve, force_fn_nve = make_nve_block_runner(pi, pj)
     
-    # Run the compiled 1000-step block
-    state_nve = run_nve_block(state_nve, 1000)
+    # Run the compiled block of steps
+    state_nve = run_nve_block(state_nve, NVE_BLOCK_STEPS)
     
     # Compute diagnostics to verify energy conservation
     curr_e = float(energy_fn_nve(state_nve.position))
     curr_f = np.asarray(force_fn_nve(state_nve.position))
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
-    print(f"NVE Step {step+1000:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
     
     # Save frame to trajectory
     frame = atoms.copy()
