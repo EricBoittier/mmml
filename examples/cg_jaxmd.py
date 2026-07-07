@@ -28,6 +28,12 @@ import jax.numpy as jnp
 import numpy as np
 from jax import jit, grad
 
+# Enable persistent JAX compilation cache for fast subsequent execution
+cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jax_cache")
+os.makedirs(cache_dir, exist_ok=True)
+jax.config.update("jax_compilation_cache_dir", cache_dir)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 2)
+
 # ASE trajectory, calculator, and Atoms imports
 from ase import Atoms
 from ase.io.trajectory import Trajectory
@@ -266,13 +272,21 @@ def _precompute_e14_vdw14(pair_i_np, pair_j_np):
     return e14, vdw14
 
 
+from scipy.spatial import cKDTree
+
 def _get_inter_pairs_np(pos_np):
-    """Compute intermolecular pair list on host, return numpy arrays."""
-    pair_i_raw, pair_j_raw = _build_pair_indices(
-        pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER
-    )
-    inter = molecule_id[pair_i_raw] != molecule_id[pair_j_raw]
-    return pair_i_raw[inter], pair_j_raw[inter]
+    """Compute intermolecular pair list on host using cKDTree with periodic boundaries."""
+    boxsize = np.diag(cell)
+    cutoff = nb_settings.cutnb + NL_BUFFER
+    tree = cKDTree(pos_np, boxsize=boxsize)
+    pairs = tree.query_pairs(cutoff, output_type='ndarray')
+    
+    # Filter intermolecular pairs (since exclusions are only intramolecular,
+    # this also naturally filters out all intramolecular exclusions)
+    i_arr = pairs[:, 0]
+    j_arr = pairs[:, 1]
+    inter = molecule_id[i_arr] != molecule_id[j_arr]
+    return i_arr[inter], j_arr[inter]
 
 
 # Sample the pair count from the initial structure to size the padded arrays
@@ -359,6 +373,7 @@ def update_pair_refs(pos_np):
 update_pair_refs(pos)
 
 
+@jit
 def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jnp.ndarray:
     """Single JIT-compiled hybrid ML/MM energy function.
 
@@ -443,12 +458,6 @@ def diagnose_energy(r, label=""):
           f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())}")
 
 
-# Compile energy + forces in a single kernel launch
-@jit
-def energy_and_forces_fn(r, pi, pj, mask, e14, vdw14):
-    """Returns (energy_scalar, forces_array) in one JIT-compiled call."""
-    e, neg_f = jax.value_and_grad(hybrid_energy_fn)(r, pi, pj, mask, e14, vdw14)
-    return e, -neg_f
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -603,9 +612,8 @@ for cycle in range(FIRE_CYCLES):
     fire_state = _init_fn_fire(pos_current, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
     # Write starting configuration of this cycle to trajectory
-    curr_e, curr_f = energy_and_forces_fn(pos_current, pi, pj, mask, e14, vdw14)
-    curr_e = float(curr_e)
-    curr_f = np.asarray(curr_f)
+    curr_f = np.asarray(fire_state.force)
+    curr_e = float(hybrid_energy_fn(pos_current, pi, pj, mask, e14, vdw14))
     frame = atoms.copy()
     frame.set_positions(unfold_coordinates(np.asarray(pos_current), box_size, _mon_stacked_groups))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
@@ -625,9 +633,8 @@ for cycle in range(FIRE_CYCLES):
 
         fire_state = run_fire_block(fire_state, pi, pj, mask, e14, vdw14)
 
-        curr_e, curr_f = energy_and_forces_fn(fire_state.position, pi, pj, mask, e14, vdw14)
-        curr_e = float(curr_e)
-        curr_f = np.asarray(curr_f)
+        curr_f = np.asarray(fire_state.force)
+        curr_e = float(hybrid_energy_fn(fire_state.position, pi, pj, mask, e14, vdw14))
         max_bond = get_max_h_x_bond(fire_state.position, box_size, h_idx_arr, x_idx_arr)
         print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:4d} | "
               f"Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å")
@@ -689,10 +696,9 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     # Run the compiled block of steps
     state = run_nvt_block(state, pi, pj, mask, e14, vdw14)
 
-    # Compute diagnostics (energy + forces in one kernel launch)
-    curr_e, curr_f = energy_and_forces_fn(state.position, pi, pj, mask, e14, vdw14)
-    curr_e = float(curr_e)
-    curr_f = np.asarray(curr_f)
+    # Compute diagnostics directly from state and JITted hybrid_energy_fn
+    curr_f = np.asarray(state.force)
+    curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14))
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
     max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
@@ -724,9 +730,8 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
         state = _init_fn_nvt(key, final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
         # Re-evaluate diagnostics
-        curr_e, curr_f = energy_and_forces_fn(state.position, pi, pj, mask, e14, vdw14)
-        curr_e = float(curr_e)
-        curr_f = np.asarray(curr_f)
+        curr_f = np.asarray(state.force)
+        curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14))
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
         temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
         max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
@@ -769,9 +774,8 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     state_nve = run_nve_block(state_nve, pi, pj, mask, e14, vdw14)
 
     # Compute diagnostics
-    curr_e, curr_f = energy_and_forces_fn(state_nve.position, pi, pj, mask, e14, vdw14)
-    curr_e = float(curr_e)
-    curr_f = np.asarray(curr_f)
+    curr_f = np.asarray(state_nve.force)
+    curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
     max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
@@ -803,9 +807,8 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
         state_nve = _init_fn_nve(final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
         # Re-evaluate diagnostics
-        curr_e, curr_f = energy_and_forces_fn(state_nve.position, pi, pj, mask, e14, vdw14)
-        curr_e = float(curr_e)
-        curr_f = np.asarray(curr_f)
+        curr_f = np.asarray(state_nve.force)
+        curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
         temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
         max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
