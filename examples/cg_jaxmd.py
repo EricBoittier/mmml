@@ -278,11 +278,12 @@ def _get_inter_pairs_np(pos_np):
     """Compute intermolecular pair list on host using cKDTree with periodic boundaries."""
     boxsize = np.diag(cell)
     cutoff = nb_settings.cutnb + NL_BUFFER
-    tree = cKDTree(pos_np, boxsize=boxsize)
+    # cKDTree requires coordinates to be inside the [0, boxsize] domain
+    wrapped_pos = np.mod(pos_np, boxsize)
+    tree = cKDTree(wrapped_pos, boxsize=boxsize)
     pairs = tree.query_pairs(cutoff, output_type='ndarray')
     
-    # Filter intermolecular pairs (since exclusions are only intramolecular,
-    # this also naturally filters out all intramolecular exclusions)
+    # Filter intermolecular pairs
     i_arr = pairs[:, 0]
     j_arr = pairs[:, 1]
     inter = molecule_id[i_arr] != molecule_id[j_arr]
