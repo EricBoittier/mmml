@@ -96,9 +96,9 @@ CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 FIRE_STEPS = 500
 FIRE_PRINT_FREQ = 100
 
-FIRE_BLOCK_STEPS = 100
+FIRE_BLOCK_STEPS = 200
 NVT_TOTAL_STEPS = 50000
-NVT_BLOCK_STEPS = 1000
+NVT_BLOCK_STEPS = 100
 
 NVE_TOTAL_STEPS = 20000
 NVE_BLOCK_STEPS = 100
@@ -108,10 +108,10 @@ BOX_SIDE_A = 30.0
 
 
 # Define simulation conditions
-temperature = 200.0  # Kelvin
+temperature = 100.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-dt_fs = 0.5  # time step in femtoseconds
+dt_fs = 0.25  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 
@@ -134,19 +134,7 @@ pos += translation/2.0
 
 set_charmm_positions(pos)
 
-# setup_nonbonded_only_charmm()
-
-
-for i in range(1):
-    # Apply constraint and run steepest descent minimization
-    # lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
-    # lingo.charmm_script("MINI SD 10000")
-    # lingo.charmm_script("IMAGE")
-    # lingo.charmm_script("CONStraint DROPlet")
-    lingo.charmm_script("MINI SD 10000")
-
-
-
+lingo.charmm_script("MINI SD 10000")
 lingo.charmm_script("MINI ABNR 10000")
 
 # Retrieve positions and atomic numbers
@@ -267,10 +255,10 @@ def scale_broken_h_bonds(positions, box_sz, h_x_bonds):
         diff = positions[h_idx] - positions[x_idx]
         diff = diff - box_sz * np.round(diff / box_sz)
         dist = np.linalg.norm(diff)
-        if dist > 1.5:
+        if dist > 1.3:
             # Scale back along the bond vector relative to the heavy atom X
             direction = diff / dist
-            new_pos[h_idx] = positions[x_idx] + direction * 1.0
+            new_pos[h_idx] = positions[x_idx] + direction * 1.02
             scaled_any = True
     return new_pos, scaled_any
 
