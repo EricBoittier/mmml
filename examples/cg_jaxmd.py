@@ -23,6 +23,9 @@ from ase.calculators.singlepoint import SinglePointCalculator
 # JAX-MD imports
 from jax_md import space, minimize, simulate
 
+# PyCHARMM lingo imports
+import pycharmm.lingo as lingo
+
 import mmml
 from mmml.interfaces.pycharmmInterface.import_pycharmm import (
     ensure_pycharmm_loaded,
@@ -62,17 +65,24 @@ box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=28.0, seed=1
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
+
+# translate peptide to the middle of the box (L/2, L/2, L/2)
+peptide_np = np.array(pos[n_trialanine:])
+pos[n_trialanine:] -= peptide_np.mean(axis=0)
+pos[n_trialanine:] += np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
+
 set_charmm_positions(pos)
 
 setup_nonbonded_only_charmm()
 
 
-import pycharmm.lingo as lingo
-# Apply constraint and run steepest descent minimization
-lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
-run_charmm_script_loud("MINI SD 10000")
-lingo.charmm_script("CONStraint DROPlet")
-run_charmm_script_loud("MINI SD 10000")
+for i in range(10):
+    # Apply constraint and run steepest descent minimization
+    lingo.charmm_script("CONStraint DROPlet FORC 0.1 EXPO 4")
+    run_charmm_script_loud("MINI SD 10000")
+    lingo.charmm_script("CONStraint DROPlet")
+    run_charmm_script_loud("MINI SD 10000")
+
 
 
 run_charmm_script_loud("MINI ABNR 10000")
