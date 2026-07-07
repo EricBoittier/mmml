@@ -60,7 +60,17 @@ pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
 set_charmm_positions(pos)
 
 setup_nonbonded_only_charmm()
-run_charmm_script_loud("MINI SD 100")
+
+
+import pycharmm.lingo as lingo
+# Apply constraint and run steepest descent minimization
+lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
+run_charmm_script_loud("MINI SD 10000")
+lingo.charmm_script("CONStraint DROPlet")
+run_charmm_script_loud("MINI SD 10000")
+
+
+run_charmm_script_loud("MINI ABNR 10000")
 
 # Retrieve positions and atomic numbers
 pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
