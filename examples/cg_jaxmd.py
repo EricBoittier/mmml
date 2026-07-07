@@ -200,51 +200,76 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices):
 compute_monomer_energy = make_monomer_energy_fn(model, params, jax_z, jax_monomer_indices)
 
 
-def hybrid_energy_fn(r: jnp.ndarray, pair_i=None, pair_j=None) -> jnp.ndarray:
-    """Combines intramolecular (ML) and intermolecular (MM via JAX nonbonded) energy."""
-    # (A) Intramolecular terms from ML potential
-    e_intra = compute_monomer_energy(r)
-    
-    # Resolve pair list (fall back to initial static lists if None)
-    pi = jax_pair_i if pair_i is None else pair_i
-    pj = jax_pair_j if pair_j is None else pair_j
+# Helper function to filter out intramolecular nonbonded terms on the host
+def get_intermolecular_pairs(positions, cell_matrix, excluded, cutoff, mol_id):
+    pair_i_raw, pair_j_raw = _build_pair_indices(positions, cell_matrix, excluded, cutoff)
+    # Exclude pairs where both atoms belong to the same molecule
+    inter = mol_id[pair_i_raw] != mol_id[pair_j_raw]
+    return pair_i_raw[inter], pair_j_raw[inter]
 
-    # (B) Intermolecular nonbonded terms from JAX-MM system
-    # We call nonbonded_energy_and_forces but only need the energy.
-    terms_raw, _ = nonbonded_energy_and_forces(
-        r,
-        nbond_data,
-        cell,
-        nb_settings,
-        molecule_id=jax_molecule_id,
-        pair_i=pi,
-        pair_j=pj,
+# Precompute initial pair list
+print("--- Precomputing nonbonded pair list indices ---")
+excluded_pairs = nbond_data.excluded_pairs
+if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
+    excluded_pairs = resolve_nonbonded_excluded_pairs(
+        nbond_data.psf_path,
+        nbond_data.psf_bonds,
+        natom=int(np.asarray(nbond_data.charges).shape[0]),
     )
-    e_inter = terms_raw.get("total", sum(terms_raw.values())) * KCAL_MOL_TO_EV
-    
-    return e_intra + e_inter
+pair_i, pair_j = get_intermolecular_pairs(pos, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
 
-# Create JIT compiled energy and force functions supporting dynamic pair lists
-energy_fn = jit(hybrid_energy_fn)
-force_fn = jit(grad(lambda r, pi, pj: -hybrid_energy_fn(r, pair_i=pi, pair_j=pj)))
+# 5. Define displacement and shift functions for Periodic Boundary Conditions (JAX-MD)
+# Using a cubic box setup based on the cell size.
+displacement_fn, shift_fn = space.periodic(box_size)
+
+# 6. Build the Hybrid JAX-MD Energy Function factory closing over static pair lists
+def make_hybrid_energy_fn(pi, pj):
+    # Convert numpy pair indices to JAX arrays once at definition time (treated as static constants)
+    j_pi = jnp.array(pi, dtype=jnp.int32)
+    j_pj = jnp.array(pj, dtype=jnp.int32)
+    
+    def hybrid_energy_fn(r) -> jnp.ndarray:
+        # (A) Intramolecular terms from ML potential
+        e_intra = compute_monomer_energy(r)
+        
+        # (B) Intermolecular nonbonded terms from JAX-MM system
+        # Set molecule_id=None because pair list is already filtered on the host.
+        terms_raw, _ = nonbonded_energy_and_forces(
+            r,
+            nbond_data,
+            cell,
+            nb_settings,
+            molecule_id=None,
+            pair_i=j_pi,
+            pair_j=j_pj,
+        )
+        e_inter = terms_raw.get("total", sum(terms_raw.values())) * KCAL_MOL_TO_EV
+        
+        return e_intra + e_inter
+    return hybrid_energy_fn
 
 # 7. Structure Minimization with JAX-MD FIRE
 print("--- Minimizing System with JAX-MD FIRE ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 
+# Create the initial energy and force functions for minimization
+initial_energy_fn = make_hybrid_energy_fn(pair_i, pair_j)
+energy_fn = jit(initial_energy_fn)
+force_fn = jit(grad(lambda r: -initial_energy_fn(r)))
+
 # Initialize FIRE minimizer
-fire_init, fire_step = minimize.fire_descent(hybrid_energy_fn, shift_fn, dt_start=0.001, dt_max=0.001)
+fire_init, fire_step = minimize.fire_descent(initial_energy_fn, shift_fn, dt_start=0.001, dt_max=0.001)
 fire_state = fire_init(init_r)
 
 # Perform minimization steps
 for step in range(200):
-    fire_state = fire_step(fire_state, pair_i=jax_pair_i, pair_j=jax_pair_j)
+    fire_state = fire_step(fire_state)
     if step % 20 == 0:
-        curr_e = energy_fn(fire_state.position, pair_i=jax_pair_i, pair_j=jax_pair_j)
+        curr_e = energy_fn(fire_state.position)
         print(f"FIRE Step {step:3d} | Energy: {curr_e:.4f} eV")
 
 min_r = fire_state.position
-print(f"Minimization complete. Final Energy: {energy_fn(min_r, pair_i=jax_pair_i, pair_j=jax_pair_j):.4f} eV")
+print(f"Minimization complete. Final Energy: {energy_fn(min_r):.4f} eV")
 
 # 8. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
@@ -258,7 +283,6 @@ dt_fs = 0.25  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Setup NHC simulator
-# We define particle masses (in AMU)
 mass = np.zeros(len(pos))
 mass[:n_trialanine] = 12.0  # average mass approximation for peptide
 mass[n_trialanine::3] = 16.0  # Oxygen
@@ -266,22 +290,24 @@ mass[n_trialanine+1::3] = 1.0  # Hydrogen
 mass[n_trialanine+2::3] = 1.0  # Hydrogen
 jax_mass = jnp.array(mass, dtype=jnp.float64)
 
-# Initialize simulator state
-# nvt_nose_hoover expects positional arguments: energy_or_force_fn, shift_fn, dt, kT
-init_fn, step_fn = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn, dt, target_temp_ev)
-# Using random key to assign initial velocities and initialize NVT Nose-Hoover state
+# Helper function to create JIT-compiled NVT block runner for a specific pair list
+def make_nvt_block_runner(pi, pj):
+    local_energy_fn = make_hybrid_energy_fn(pi, pj)
+    init_fn_local, step_fn_local = simulate.nvt_nose_hoover(local_energy_fn, shift_fn, dt, target_temp_ev)
+    step_fn_local = jit(step_fn_local)
+    
+    @jit
+    def run_nvt_block(state, steps=1000):
+        def body_fn(i, val_state):
+            return step_fn_local(val_state)
+        return jax.lax.fori_loop(0, steps, body_fn, state)
+        
+    return run_nvt_block, init_fn_local, local_energy_fn, jit(grad(lambda r: -local_energy_fn(r)))
+
+# Initialize starting NVT state using the initial pair list
+run_nvt_block, init_fn_nvt, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(pair_i, pair_j)
 key = jax.random.PRNGKey(42)
-state = init_fn(key, min_r, mass=jax_mass)
-
-# JIT-compile the step function for speed
-step_fn = jit(step_fn)
-
-# Define JIT-compiled block runner to execute 1000 steps at a time on GPU
-@jit
-def run_nvt_block(state, pi, pj, steps=1000):
-    def body_fn(i, val_state):
-        return step_fn(val_state, pair_i=pi, pair_j=pj)
-    return jax.lax.fori_loop(0, steps, body_fn, state)
+state = init_fn_nvt(key, min_r, mass=jax_mass)
 
 # Run NVT dynamics loop with periodic neighbor list updates
 traj_path_nvt = "cg_nvt.traj"
@@ -291,16 +317,17 @@ traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
 for step in range(0, 50000, 1000):
     # Update neighbor list (pair list) on the host based on current positions
     pos_np = np.asarray(state.position)
-    pair_i, pair_j = _build_pair_indices(pos_np, cell, excluded_pairs, nb_settings.cutnb)
-    jax_pair_i = jnp.array(pair_i, dtype=jnp.int32)
-    jax_pair_j = jnp.array(pair_j, dtype=jnp.int32)
+    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+    
+    # Retrieve the block runner for these specific pairs
+    run_nvt_block, _, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(pi, pj)
     
     # Run the compiled 1000-step block
-    state = run_nvt_block(state, jax_pair_i, jax_pair_j, 1000)
+    state = run_nvt_block(state, 1000)
     
     # Compute diagnostics
-    curr_e = float(energy_fn(state.position, pair_i=jax_pair_i, pair_j=jax_pair_j))
-    curr_f = np.asarray(force_fn(state.position, jax_pair_i, jax_pair_j))
+    curr_e = float(energy_fn_nvt(state.position))
+    curr_f = np.asarray(force_fn_nvt(state.position))
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
     print(f"NVT Step {step+1000:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
@@ -316,16 +343,25 @@ print("NVT dynamics complete!")
 
 # 9. Molecular Dynamics (NVE) with JAX-MD to check stability
 print("--- Running NVE Dynamics with JAX-MD to check stability ---")
-init_fn_nve, step_fn_nve = simulate.nve(hybrid_energy_fn, shift_fn, dt)
-step_fn_nve = jit(step_fn_nve)
 
-@jit
-def run_nve_block(state, pi, pj, steps=1000):
-    def body_fn(i, val_state):
-        return step_fn_nve(val_state, pair_i=pi, pair_j=pj)
-    return jax.lax.fori_loop(0, steps, body_fn, state)
+# Helper function to create JIT-compiled NVE block runner for a specific pair list
+def make_nve_block_runner(pi, pj):
+    local_energy_fn = make_hybrid_energy_fn(pi, pj)
+    init_fn_local, step_fn_local = simulate.nve(local_energy_fn, shift_fn, dt)
+    step_fn_local = jit(step_fn_local)
+    
+    @jit
+    def run_nve_block(state, steps=1000):
+        def body_fn(i, val_state):
+            return step_fn_local(val_state)
+        return jax.lax.fori_loop(0, steps, body_fn, state)
+        
+    return run_nve_block, init_fn_local, local_energy_fn, jit(grad(lambda r: -local_energy_fn(r)))
 
 # Initialize NVE simulation state from the final NVT positions and velocities
+pos_np_final = np.asarray(state.position)
+pi_init, pj_init = get_intermolecular_pairs(pos_np_final, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+run_nve_block, init_fn_nve, energy_fn_nve, force_fn_nve = make_nve_block_runner(pi_init, pj_init)
 state_nve = init_fn_nve(key, state.position, mass=jax_mass)
 
 traj_path_nve = "cg_nve.traj"
@@ -335,16 +371,17 @@ traj_nve = Trajectory(traj_path_nve, "w", atoms)
 for step in range(0, 20000, 1000):
     # Update neighbor list (pair list)
     pos_np = np.asarray(state_nve.position)
-    pair_i, pair_j = _build_pair_indices(pos_np, cell, excluded_pairs, nb_settings.cutnb)
-    jax_pair_i = jnp.array(pair_i, dtype=jnp.int32)
-    jax_pair_j = jnp.array(pair_j, dtype=jnp.int32)
+    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+    
+    # Get NVE block runner
+    run_nve_block, _, energy_fn_nve, force_fn_nve = make_nve_block_runner(pi, pj)
     
     # Run the compiled 1000-step block
-    state_nve = run_nve_block(state_nve, jax_pair_i, jax_pair_j, 1000)
+    state_nve = run_nve_block(state_nve, 1000)
     
     # Compute diagnostics to verify energy conservation
-    curr_e = float(energy_fn(state_nve.position, pair_i=jax_pair_i, pair_j=jax_pair_j))
-    curr_f = np.asarray(force_fn(state_nve.position, jax_pair_i, jax_pair_j))
+    curr_e = float(energy_fn_nve(state_nve.position))
+    curr_f = np.asarray(force_fn_nve(state_nve.position))
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
     print(f"NVE Step {step+1000:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
