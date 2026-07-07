@@ -359,22 +359,17 @@ def update_pair_refs(pos_np):
 update_pair_refs(pos)
 
 
-def hybrid_energy_fn(r) -> jnp.ndarray:
+def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jnp.ndarray:
     """Single JIT-compiled hybrid ML/MM energy function.
 
-    Closes over mutable _pi_ref/_pj_ref/_mask_ref/_e14_ref/_vdw14_ref slots.
-    JAX traces this once; pair data is updated by mutating the slots.
+    Takes padded pair arrays as keyword arguments. Since their shapes (MAX_PAIRS)
+    are constant, JAX compiles the simulators exactly once and reuses the graph
+    when new array values are passed in.
     """
     # (A) Intramolecular terms from ML potential
     e_intra = compute_monomer_energy(r)
 
     # (B) Intermolecular MM nonbonded terms with padded pair list
-    pi = _pi_ref[0]
-    pj = _pj_ref[0]
-    mask = _mask_ref[0]      # 1.0 for real pairs, 0.0 for padding
-    e14 = _e14_ref[0]
-    vdw14 = _vdw14_ref[0]
-
     ri = r[pi]
     rj = r[pj]
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
@@ -410,13 +405,8 @@ def _debug_ml_energy(r):
 
 
 @jit
-def _debug_mm_energy(r):
+def _debug_mm_energy(r, pi, pj, mask, e14, vdw14):
     """JIT-compiled MM intermolecular energy only (for diagnostics)."""
-    pi = _pi_ref[0]
-    pj = _pj_ref[0]
-    mask = _mask_ref[0]
-    e14 = _e14_ref[0]
-    vdw14 = _vdw14_ref[0]
     ri = r[pi]; rj = r[pj]
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
     dist = jnp.linalg.norm(disp, axis=-1)
@@ -434,13 +424,16 @@ def _debug_mm_energy(r):
 
 def diagnose_energy(r, label=""):
     """Print energy components to identify NaN source."""
+    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+
     r_np = np.asarray(r)
     if not np.isfinite(r_np).all():
         n_bad = int((~np.isfinite(r_np)).any(axis=-1).sum())
         print(f"[DIAG{label}] ⚠ Positions: {n_bad} atoms with NaN/Inf — energy will be NaN")
         return
     e_ml = float(_debug_ml_energy(r))
-    e_mm = float(_debug_mm_energy(r))
+    e_mm = float(_debug_mm_energy(r, pi, pj, mask, e14, vdw14))
     e_tot = e_ml + e_mm
     ml_ok = "✓" if np.isfinite(e_ml) else "✗ NaN/Inf"
     mm_ok = "✓" if np.isfinite(e_mm) else "✗ NaN/Inf"
@@ -450,9 +443,9 @@ def diagnose_energy(r, label=""):
 
 # Compile energy + forces in a single kernel launch
 @jit
-def energy_and_forces_fn(r):
+def energy_and_forces_fn(r, pi, pj, mask, e14, vdw14):
     """Returns (energy_scalar, forces_array) in one JIT-compiled call."""
-    e, neg_f = jax.value_and_grad(hybrid_energy_fn)(r)
+    e, neg_f = jax.value_and_grad(hybrid_energy_fn)(r, pi, pj, mask, e14, vdw14)
     return e, -neg_f
 
 
@@ -535,18 +528,18 @@ _init_fn_fire, _step_fn_fire = minimize.fire_descent(
 _step_fn_fire = jit(_step_fn_fire)
 
 @jit
-def run_fire_block(state):
+def run_fire_block(state, pi, pj, mask, e14, vdw14):
     """Run FIRE_BLOCK_STEPS steps of FIRE (compiled once)."""
     def body_fn(i, s):
-        return _step_fn_fire(s)
+        return _step_fn_fire(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
     return jax.lax.fori_loop(0, FIRE_BLOCK_STEPS, body_fn, state)
 
 
 @jit
-def run_fire_block_repair(state):
+def run_fire_block_repair(state, pi, pj, mask, e14, vdw14):
     """Run 200 steps of FIRE for post-repair minimization (compiled once)."""
     def body_fn(i, s):
-        return _step_fn_fire(s)
+        return _step_fn_fire(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
     return jax.lax.fori_loop(0, 200, body_fn, state)
 
 
@@ -565,9 +558,9 @@ _init_fn_nvt, _step_fn_nvt = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn
 _step_fn_nvt = jit(_step_fn_nvt)
 
 @jit
-def run_nvt_block(state):
+def run_nvt_block(state, pi, pj, mask, e14, vdw14):
     def body_fn(i, s):
-        return _step_fn_nvt(s)
+        return _step_fn_nvt(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
     return jax.lax.fori_loop(0, NVT_BLOCK_STEPS, body_fn, state)
 
 
@@ -577,9 +570,9 @@ _init_fn_nve, _step_fn_nve = simulate.nve(hybrid_energy_fn, shift_fn, dt)
 _step_fn_nve = jit(_step_fn_nve)
 
 @jit
-def run_nve_block(state):
+def run_nve_block(state, pi, pj, mask, e14, vdw14):
     def body_fn(i, s):
-        return _step_fn_nve(s)
+        return _step_fn_nve(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
     return jax.lax.fori_loop(0, NVE_BLOCK_STEPS, body_fn, state)
 
 
@@ -599,14 +592,16 @@ for cycle in range(FIRE_CYCLES):
 
     # Update pair list from current coordinates (CPU, once per cycle start)
     update_pair_refs(np.asarray(pos_current))
+    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 
     # --- Pre-FIRE diagnostic: print energy components before any step ---
     diagnose_energy(pos_current, label=f" Cycle{cycle+1} init")
 
-    fire_state = _init_fn_fire(pos_current)
+    fire_state = _init_fn_fire(pos_current, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
     # Write starting configuration of this cycle to trajectory
-    curr_e, curr_f = energy_and_forces_fn(pos_current)
+    curr_e, curr_f = energy_and_forces_fn(pos_current, pi, pj, mask, e14, vdw14)
     curr_e = float(curr_e)
     curr_f = np.asarray(curr_f)
     frame = atoms.copy()
@@ -623,10 +618,12 @@ for cycle in range(FIRE_CYCLES):
 
         # Update pair list (CPU side only; no JAX re-trace)
         update_pair_refs(pos_before_block)
+        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 
-        fire_state = run_fire_block(fire_state)
+        fire_state = run_fire_block(fire_state, pi, pj, mask, e14, vdw14)
 
-        curr_e, curr_f = energy_and_forces_fn(fire_state.position)
+        curr_e, curr_f = energy_and_forces_fn(fire_state.position, pi, pj, mask, e14, vdw14)
         curr_e = float(curr_e)
         curr_f = np.asarray(curr_f)
         max_bond = get_max_h_x_bond(fire_state.position, box_size, h_idx_arr, x_idx_arr)
@@ -643,7 +640,9 @@ for cycle in range(FIRE_CYCLES):
             # Re-initialize FIRE from pre-block (finite) positions for CHARMM repair.
             # FireDescentState is a plain dataclass so we use _init_fn_fire, not .replace().
             update_pair_refs(pos_before_block)
-            fire_state = _init_fn_fire(good_pos_jax)
+            pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+            e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+            fire_state = _init_fn_fire(good_pos_jax, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
             nan_detected = True
             break
 
@@ -671,7 +670,9 @@ key = jax.random.PRNGKey(42)
 
 # Initialize starting NVT state
 update_pair_refs(np.asarray(min_r))
-state = _init_fn_nvt(key, min_r, mass=jax_mass)
+pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+state = _init_fn_nvt(key, min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
 traj_path_nvt = "cg_nvt.traj"
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
@@ -680,12 +681,14 @@ traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
 for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     # Update pair list on CPU (no JAX re-trace — shapes are fixed)
     update_pair_refs(np.asarray(state.position))
+    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 
     # Run the compiled block of steps
-    state = run_nvt_block(state)
+    state = run_nvt_block(state, pi, pj, mask, e14, vdw14)
 
     # Compute diagnostics (energy + forces in one kernel launch)
-    curr_e, curr_f = energy_and_forces_fn(state.position)
+    curr_e, curr_f = energy_and_forces_fn(state.position, pi, pj, mask, e14, vdw14)
     curr_e = float(curr_e)
     curr_f = np.asarray(curr_f)
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
@@ -707,15 +710,19 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
         repaired_jax = jnp.array(repaired_pos, dtype=jnp.float64)
         update_pair_refs(repaired_pos)
-        fire_state_rep = _init_fn_fire(repaired_jax)
-        fire_state_rep = run_fire_block_repair(fire_state_rep)
+        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        fire_state_rep = _init_fn_fire(repaired_jax, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        fire_state_rep = run_fire_block_repair(fire_state_rep, pi, pj, mask, e14, vdw14)
         final_min_pos = jnp.array(fire_state_rep.position, dtype=jnp.float64)
 
         # Re-initialize NVT state
         update_pair_refs(np.asarray(final_min_pos))
-        state = _init_fn_nvt(key, final_min_pos, mass=jax_mass)
+        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        state = _init_fn_nvt(key, final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
         # Re-evaluate diagnostics
-        curr_e, curr_f = energy_and_forces_fn(state.position)
+        curr_e, curr_f = energy_and_forces_fn(state.position, pi, pj, mask, e14, vdw14)
         curr_e = float(curr_e)
         curr_f = np.asarray(curr_f)
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
@@ -742,7 +749,9 @@ print("--- Running NVE Dynamics with JAX-MD to check stability ---")
 
 # Initialize NVE state from final NVT positions
 update_pair_refs(np.asarray(state.position))
-state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass)
+pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+state_nve = _init_fn_nve(state.position, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
 traj_path_nve = "cg_nve.traj"
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
@@ -751,12 +760,14 @@ traj_nve = Trajectory(traj_path_nve, "w", atoms)
 for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     # Update pair list on CPU (no JAX re-trace)
     update_pair_refs(np.asarray(state_nve.position))
+    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 
     # Run the compiled block of steps
-    state_nve = run_nve_block(state_nve)
+    state_nve = run_nve_block(state_nve, pi, pj, mask, e14, vdw14)
 
     # Compute diagnostics
-    curr_e, curr_f = energy_and_forces_fn(state_nve.position)
+    curr_e, curr_f = energy_and_forces_fn(state_nve.position, pi, pj, mask, e14, vdw14)
     curr_e = float(curr_e)
     curr_f = np.asarray(curr_f)
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
@@ -778,15 +789,19 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
         repaired_jax = jnp.array(repaired_pos, dtype=jnp.float64)
         update_pair_refs(repaired_pos)
-        fire_state_rep = _init_fn_fire(repaired_jax)
-        fire_state_rep = run_fire_block_repair(fire_state_rep)
+        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        fire_state_rep = _init_fn_fire(repaired_jax, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        fire_state_rep = run_fire_block_repair(fire_state_rep, pi, pj, mask, e14, vdw14)
         final_min_pos = jnp.array(fire_state_rep.position, dtype=jnp.float64)
 
         # Re-initialize NVE state
         update_pair_refs(np.asarray(final_min_pos))
-        state_nve = _init_fn_nve(key, final_min_pos, target_temp_ev, mass=jax_mass)
+        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        state_nve = _init_fn_nve(final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
         # Re-evaluate diagnostics
-        curr_e, curr_f = energy_and_forces_fn(state_nve.position)
+        curr_e, curr_f = energy_and_forces_fn(state_nve.position, pi, pj, mask, e14, vdw14)
         curr_e = float(curr_e)
         curr_f = np.asarray(curr_f)
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
