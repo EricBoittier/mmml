@@ -244,11 +244,11 @@ def repair_structure_in_charmm(positions):
 FIRE_STEPS = 500
 FIRE_PRINT_FREQ = 100
 
-NVT_TOTAL_STEPS = 5000
+NVT_TOTAL_STEPS = 50000
 NVT_BLOCK_STEPS = 1000
 
 NVE_TOTAL_STEPS = 20000
-NVE_BLOCK_STEPS = 10000
+NVE_BLOCK_STEPS = 100
 
 # 8. Structure Minimization with JAX-MD FIRE and PyCHARMM Repair Loops
 print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops (5 cycles) ---")
