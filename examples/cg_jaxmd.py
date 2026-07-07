@@ -124,7 +124,7 @@ FIRE_PRINT_FREQ = 100
 # running 1000 steps without checking allows catastrophic divergence before repair.
 FIRE_BLOCK_STEPS = 100
 NVT_TOTAL_STEPS = 50000
-NVT_BLOCK_STEPS = 500
+NVT_BLOCK_STEPS = 200
 
 NVE_TOTAL_STEPS = 20000
 NVE_BLOCK_STEPS = 500
@@ -134,7 +134,7 @@ BOX_SIDE_A = 30.0
 NL_BUFFER = 2.0
 # Extra headroom fraction for padded pair array (5%)
 MAX_PAIRS_HEADROOM = 1.05
-MAX_HX_BOND_LIMIT = 1.2
+MAX_HX_BOND_LIMIT = 1.5
 SEED = 42
 # Define simulation conditions
 temperature = 100.0  # Kelvin
