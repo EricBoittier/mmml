@@ -257,14 +257,14 @@ def make_hybrid_energy_fn(pi, pj):
     return hybrid_energy_fn
 
 # 7. Minimization and Dynamics Configuration
-FIRE_STEPS = 2000
-FIRE_PRINT_FREQ = 20
+FIRE_STEPS = 20000
+FIRE_PRINT_FREQ = 2000
 
 NVT_TOTAL_STEPS = 50000
 NVT_BLOCK_STEPS = 1000
 
 NVE_TOTAL_STEPS = 20000
-NVE_BLOCK_STEPS = 1000
+NVE_BLOCK_STEPS = 10000
 
 # 8. Structure Minimization with JAX-MD FIRE
 print("--- Minimizing System with JAX-MD FIRE ---")
