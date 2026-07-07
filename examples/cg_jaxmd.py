@@ -402,6 +402,51 @@ def hybrid_energy_fn(r) -> jnp.ndarray:
     return e_intra + e_inter
 
 
+@jit
+def _debug_ml_energy(r):
+    """JIT-compiled ML intramolecular energy only (for diagnostics)."""
+    return compute_monomer_energy(r)
+
+
+@jit
+def _debug_mm_energy(r):
+    """JIT-compiled MM intermolecular energy only (for diagnostics)."""
+    pi = _pi_ref[0]
+    pj = _pj_ref[0]
+    mask = _mask_ref[0]
+    e14 = _e14_ref[0]
+    vdw14 = _vdw14_ref[0]
+    ri = r[pi]; rj = r[pj]
+    disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
+    dist = jnp.linalg.norm(disp, axis=-1)
+    within_ctof = (dist * dist < _c2of) * mask
+    safe_dist = jnp.where(mask > 0.5, dist, 1.0)
+    ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
+    sig = _rmin_jax[pi] + _rmin_jax[pj]
+    qq = _q_jax[pi] * _q_jax[pj] * e14 / nb_settings.eps
+    vdw = _pair_vdw_energy(safe_dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False) * vdw14
+    elec = _pair_elec_energy(safe_dist, qq, nb_settings, _fswitch)
+    vdw = jnp.where(within_ctof, vdw, 0.0)
+    elec = jnp.where(within_ctof, elec, 0.0)
+    return (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
+
+
+def diagnose_energy(r, label=""):
+    """Print energy components to identify NaN source."""
+    r_np = np.asarray(r)
+    if not np.isfinite(r_np).all():
+        n_bad = int((~np.isfinite(r_np)).any(axis=-1).sum())
+        print(f"[DIAG{label}] ⚠ Positions: {n_bad} atoms with NaN/Inf — energy will be NaN")
+        return
+    e_ml = float(_debug_ml_energy(r))
+    e_mm = float(_debug_mm_energy(r))
+    e_tot = e_ml + e_mm
+    ml_ok = "✓" if np.isfinite(e_ml) else "✗ NaN/Inf"
+    mm_ok = "✓" if np.isfinite(e_mm) else "✗ NaN/Inf"
+    print(f"[DIAG{label}] E_ML={e_ml:.4f} eV {ml_ok} | E_MM={e_mm:.4f} eV {mm_ok} | "
+          f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())}")
+
+
 # Compile energy + forces in a single kernel launch
 @jit
 def energy_and_forces_fn(r):
@@ -554,6 +599,9 @@ for cycle in range(FIRE_CYCLES):
     # Update pair list from current coordinates (CPU, once per cycle start)
     update_pair_refs(np.asarray(pos_current))
 
+    # --- Pre-FIRE diagnostic: print energy components before any step ---
+    diagnose_energy(pos_current, label=f" Cycle{cycle+1} init")
+
     fire_state = _init_fn_fire(pos_current)
 
     # Write starting configuration of this cycle to trajectory
@@ -566,6 +614,7 @@ for cycle in range(FIRE_CYCLES):
     traj_fire.write(frame)
 
     # Run FIRE blocks — pair list rebuilt every FIRE_BLOCK_STEPS steps
+    nan_detected = False
     for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
         # Update pair list (CPU side only; no JAX re-trace)
         update_pair_refs(np.asarray(fire_state.position))
@@ -578,6 +627,13 @@ for cycle in range(FIRE_CYCLES):
         max_bond = get_max_h_x_bond(fire_state.position, box_size, h_idx_arr, x_idx_arr)
         print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:4d} | "
               f"Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å")
+
+        if not np.isfinite(curr_e):
+            print(f"[FIRE] NaN/Inf energy detected at step {step+FIRE_BLOCK_STEPS} — "
+                  "triggering repair (skipping remaining FIRE steps)")
+            diagnose_energy(fire_state.position, label=f" Cycle{cycle+1} step{step+FIRE_BLOCK_STEPS}")
+            nan_detected = True
+            break
 
         frame = atoms.copy()
         frame.set_positions(unfold_coordinates(np.asarray(fire_state.position), box_size, _mon_stacked_groups))
