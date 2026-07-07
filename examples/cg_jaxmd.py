@@ -106,7 +106,7 @@ FIRE_CYCLES=10
 NWATER = 1500
 BOX_SIDE_A = 30.0
 NL_BUFFER = 2.0
-
+MAX_HX_BOND_LIMIT = 1.2
 
 # Define simulation conditions
 temperature = 100.0  # Kelvin
@@ -415,9 +415,9 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     max_bond = get_max_h_x_bond(np.asarray(state.position), box_size, pep_h_x_bonds)
     
     # Check if a spike occurred, NaN energy, or peptide H-X bond stretched > 1.5 A and repair
-    if temp > 400.0 or np.isnan(curr_e) or max_bond > 1.5:
-        if max_bond > 1.5:
-            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit 1.5 Å)")
+    if temp > 400.0 or np.isnan(curr_e) or max_bond > MAX_HX_BOND_LIMIT:
+        if max_bond > MAX_HX_BOND_LIMIT:
+            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit {MAX_HX_BOND_LIMIT} Å)")
         # 1. Scale back the coordinates of any stretched H-X bonds to 1.0 A
         scaled_pos, scaled_any = scale_broken_h_bonds(np.asarray(state.position), box_size, pep_h_x_bonds)
         # 2. Minimize in PyCHARMM
@@ -496,9 +496,9 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     max_bond = get_max_h_x_bond(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
     
     # Check if a spike occurred, NaN energy, or peptide H-X bond stretched > 1.5 A and repair
-    if temp > 400.0 or np.isnan(curr_e) or max_bond > 1.5:
-        if max_bond > 1.5:
-            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit 1.5 Å)")
+    if temp > 400.0 or np.isnan(curr_e) or max_bond > MAX_HX_BOND_LIMIT:
+        if max_bond > MAX_HX_BOND_LIMIT:
+            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit {MAX_HX_BOND_LIMIT} Å)")
         # 1. Scale back the coordinates of any stretched H-X bonds to 1.0 A
         scaled_pos, scaled_any = scale_broken_h_bonds(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
         # 2. Minimize in PyCHARMM
