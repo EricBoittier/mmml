@@ -37,6 +37,7 @@ def _load_script_module(name: str, path: Path) -> ModuleType:
 
 
 cl = _load_script_module("pbc_solvent_burst_campaign_lib", SCRIPTS / "campaign_lib.py")
+sys.modules["campaign_lib"] = cl
 ml = _load_script_module("pbc_solvent_burst_monitor_lib", SCRIPTS / "monitor_lib.py")
 RunCell = cl.RunCell
 grep_errors = ml.grep_errors

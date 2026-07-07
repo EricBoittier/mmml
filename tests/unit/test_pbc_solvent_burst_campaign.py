@@ -35,6 +35,7 @@ def _load_script_module(name: str, path: Path) -> ModuleType:
 
 
 cl = _load_script_module(_CAMPAIGN_MOD, SCRIPTS / "campaign_lib.py")
+sys.modules["campaign_lib"] = cl
 cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
 
 RunCell = cl.RunCell

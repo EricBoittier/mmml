@@ -35,16 +35,32 @@ def load_config(config_path: Path | str | None = None) -> dict[str, Any]:
 
 
 def resolve_checkpoint(raw: str) -> Path:
-    if raw == "${MMML_CKPT}":
-        env = os.environ.get("MMML_CKPT", "").strip()
-        if not env:
-            raise RuntimeError(
-                "MMML_CKPT is not set (config checkpoint: ${MMML_CKPT}). "
-                "Export your DES dimers PhysNet checkpoint directory before running."
-            )
+    # 1. Respect MMML_CKPT environment override if set
+    env = os.environ.get("MMML_CKPT", "").strip()
+    if env:
         path = Path(env).expanduser().resolve()
+        if path.exists():
+            return path
+
+    if raw == "${MMML_CKPT}":
+        raise RuntimeError(
+            "MMML_CKPT is not set (config checkpoint: ${MMML_CKPT}). "
+            "Export your DES dimers PhysNet checkpoint directory before running."
+        )
     else:
         path = Path(os.path.expandvars(raw)).expanduser().resolve()
+        if path.exists():
+            return path
+        
+        # Fallback: resolve relative to repository root if not absolute
+        try:
+            repo_root = Path(__file__).resolve().parents[3]
+            fallback_path = repo_root / raw.lstrip("/")
+            if fallback_path.exists():
+                return fallback_path
+        except Exception:
+            pass
+
     validate_checkpoint(path)
     return path
 

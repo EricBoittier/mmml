@@ -9,6 +9,7 @@ __all__ = ["mlpot"]
 
 
 def __getattr__(name: str) -> Any:
-    if name == "mlpot":
-        return importlib.import_module(".mlpot", __name__)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    try:
+        return importlib.import_module(f".{name}", __name__)
+    except ImportError as e:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from e
