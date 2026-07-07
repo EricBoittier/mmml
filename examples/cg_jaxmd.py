@@ -196,6 +196,8 @@ print(f"Minimization complete. Final Energy: {energy_fn(min_r):.4f} eV")
 
 # 8. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
+from jax_md import quantity
+
 # Define simulation conditions
 temperature = 300.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K
@@ -203,7 +205,7 @@ target_temp_ev = temperature * kb
 dt = 0.5  # femtoseconds
 
 # Setup NHC simulator
-# We define particle masses (dummy masses here, e.g. Hydrogen/Oxygen/Carbon mass array)
+# We define particle masses
 mass = np.zeros(len(pos))
 mass[:n_trialanine] = 12.0  # average mass approximation for peptide
 mass[n_trialanine::3] = 16.0  # Oxygen
@@ -213,7 +215,7 @@ jax_mass = jnp.array(mass, dtype=jnp.float64)
 
 # Initialize simulator state
 init_fn, step_fn = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn, dt=dt, T_eq=target_temp_ev)
-# Using random key to assign initial velocities
+# Using random key to assign initial velocities and initialize NVT Nose-Hoover state
 key = jax.random.PRNGKey(42)
 state = init_fn(key, min_r, mass=jax_mass)
 
@@ -225,10 +227,10 @@ for step in range(500):
     state = step_fn(state)
     if step % 100 == 0:
         curr_e = energy_fn(state.position)
-        # Calculate instantaneous kinetic energy and temperature
-        p = state.velocity * jax_mass[:, None]
-        ke = 0.5 * jnp.sum(jax_mass[:, None] * (state.velocity ** 2))
-        temp = (2.0 * ke) / (3.0 * len(pos) * kb)
+        # Calculate instantaneous kinetic energy and temperature using JAX-MD quantities
+        ke = quantity.kinetic_energy(momentum=state.momentum, mass=jax_mass)
+        temp = quantity.temperature(momentum=state.momentum, mass=jax_mass) / kb
         print(f"MD Step {step:3d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
 
 print("JAX-MD Simulation complete!")
+
