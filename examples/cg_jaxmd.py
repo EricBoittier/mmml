@@ -279,7 +279,7 @@ traj = Trajectory(traj_path, "w", atoms)
 
 for step in range(50000):
     state = step_fn(state)
-    if step % 1000 == 0:
+    if step % 100 == 0:
         pos_np = np.asarray(state.position)
         curr_e = float(energy_fn(state.position))
         curr_f = np.asarray(force_fn(state.position))
