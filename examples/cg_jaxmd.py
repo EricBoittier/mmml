@@ -116,7 +116,6 @@ FIRE_STEPS = 500
 FIRE_PRINT_FREQ = 100
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
 # running 1000 steps without checking allows catastrophic divergence before repair.
-# NVT/NVE use larger blocks since Verlet integrators are far more stable.
 FIRE_BLOCK_STEPS = 100
 NVT_TOTAL_STEPS = 50000
 NVT_BLOCK_STEPS = 500
@@ -638,10 +637,13 @@ for cycle in range(FIRE_CYCLES):
             print(f"[FIRE] NaN/Inf energy detected at step {step+FIRE_BLOCK_STEPS} — "
                   f"reverting to last-good positions (before this block) and repairing")
             # Diagnose using pre-block positions (which are still finite)
-            diagnose_energy(jnp.array(pos_before_block, dtype=jnp.float64),
+            good_pos_jax = jnp.array(pos_before_block, dtype=jnp.float64)
+            diagnose_energy(good_pos_jax,
                             label=f" Cycle{cycle+1} pre-step{step+FIRE_BLOCK_STEPS}")
-            # Use pre-block positions for CHARMM repair (they are finite)
-            fire_state = fire_state.replace(position=jnp.array(pos_before_block, dtype=jnp.float64))
+            # Re-initialize FIRE from pre-block (finite) positions for CHARMM repair.
+            # FireDescentState is a plain dataclass so we use _init_fn_fire, not .replace().
+            update_pair_refs(pos_before_block)
+            fire_state = _init_fn_fire(good_pos_jax)
             nan_detected = True
             break
 
