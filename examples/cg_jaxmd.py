@@ -75,11 +75,9 @@ prm_path = CGENFF_PRM
 nb_settings = _nbond_settings_from_cutoffs(box.nbond_cutoffs)
 nbond_data = load_nonbonded_system_from_charmm(psf_path, prm_path)
 
-# 4. Load the Model checkpoint for JAX-MD
-# We load the parameters and the model apply function.
-checkpoint = load_model_checkpoint(Path(CKPT_PATH))
-model = checkpoint.model
-params = checkpoint.params
+calc = create_calculator_from_checkpoint(CKPT_PATH)
+model = calc.model
+params = calc.params
 
 # Setup monomer groupings (first 42 atoms: peptide; then groups of 3 for water)
 n_trialanine = 42
