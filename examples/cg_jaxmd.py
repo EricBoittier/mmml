@@ -258,7 +258,7 @@ fire_init, fire_step = minimize.fire_descent(initial_energy_fn, shift_fn, dt_sta
 fire_state = fire_init(init_r)
 
 # Perform minimization steps
-for step in range(200):
+for step in range(2000):
     fire_state = fire_step(fire_state)
     if step % 20 == 0:
         curr_e = energy_fn(fire_state.position)
