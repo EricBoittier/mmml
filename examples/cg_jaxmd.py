@@ -234,6 +234,16 @@ def unfold_coordinates(positions, L, mon_indices):
         unfolded[indices] = ref_pos + diff
     return unfolded
 
+# Helper function to check the spatial extent of the peptide (first 42 atoms)
+def check_peptide_extent(positions, box_sz):
+    pep_pos = np.asarray(positions[:42])
+    ref_pos = pep_pos[0]
+    diff = pep_pos - ref_pos
+    diff = diff - box_sz * np.round(diff / box_sz)
+    unfolded_pep = ref_pos + diff
+    dists = np.linalg.norm(unfolded_pep[:, None, :] - unfolded_pep[None, :, :], axis=-1)
+    return float(np.max(dists))
+
 # Helper function to repair structures using PyCHARMM minimization
 def repair_structure_in_charmm(positions):
     print("\n[REPAIR] Temperature spike or NaN detected! Unfolding and repairing structure in CHARMM...")
@@ -306,7 +316,8 @@ for cycle in range(FIRE_CYCLES):
         
         curr_e = float(energy_fn_fire(fire_state.position))
         curr_f = np.asarray(force_fn_fire(fire_state.position))
-        print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:3d} | Energy: {curr_e:.4f} eV")
+        pep_ext = check_peptide_extent(fire_state.position, box_size)
+        print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:3d} | Energy: {curr_e:.4f} eV | Pep Extent: {pep_ext:.2f} Å")
         
         # Save intermediate configuration to trajectory
         frame = atoms.copy()
@@ -381,9 +392,12 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     curr_f = np.asarray(force_fn_nvt(state.position))
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
+    pep_ext = check_peptide_extent(state.position, box_size)
     
-    # Check if a spike occurred and repair if necessary
-    if temp > 400.0 or np.isnan(curr_e):
+    # Check if a spike occurred, NaN energy, or peptide broke (extent > 15.0 A) and repair if necessary
+    if temp > 400.0 or np.isnan(curr_e) or pep_ext > 15.0:
+        if pep_ext > 15.0:
+            print(f"[REPAIR] Peptide broke! Extent: {pep_ext:.2f} Å (max limit 15.0 Å)")
         repaired_pos = repair_structure_in_charmm(state.position)
         # Re-initialize the state with the repaired coordinates at the target temperature
         state = init_fn_nvt(key, jnp.array(repaired_pos, dtype=jnp.float64), mass=jax_mass)
@@ -392,8 +406,9 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         curr_f = np.asarray(force_fn_nvt(state.position))
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
         temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
+        pep_ext = check_peptide_extent(repaired_pos, box_size)
         
-    print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+    print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Peptide Ext: {pep_ext:.2f} Å")
     
     # Save frame to trajectory
     frame = atoms.copy()
@@ -447,9 +462,12 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     curr_f = np.asarray(force_fn_nve(state_nve.position))
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
+    pep_ext = check_peptide_extent(state_nve.position, box_size)
     
-    # Check if a spike occurred and repair if necessary
-    if temp > 400.0 or np.isnan(curr_e):
+    # Check if a spike occurred, NaN energy, or peptide broke (extent > 15.0 A) and repair if necessary
+    if temp > 400.0 or np.isnan(curr_e) or pep_ext > 15.0:
+        if pep_ext > 15.0:
+            print(f"[REPAIR] Peptide broke! Extent: {pep_ext:.2f} Å (max limit 15.0 Å)")
         repaired_pos = repair_structure_in_charmm(state_nve.position)
         # Re-initialize the state with the repaired coordinates
         state_nve = init_fn_nve(key, jnp.array(repaired_pos, dtype=jnp.float64), target_temp_ev, mass=jax_mass)
@@ -458,8 +476,9 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         curr_f = np.asarray(force_fn_nve(state_nve.position))
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
         temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
+        pep_ext = check_peptide_extent(repaired_pos, box_size)
         
-    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Peptide Ext: {pep_ext:.2f} Å")
     
     # Save frame to trajectory
     frame = atoms.copy()
