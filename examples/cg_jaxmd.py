@@ -63,7 +63,15 @@ pycharmm_loud()
 # Path to the pretrained neural network checkpoint parameters
 CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 
+FIRE_STEPS = 500
+FIRE_PRINT_FREQ = 100
 
+FIRE_BLOCK_STEPS = 100
+NVT_TOTAL_STEPS = 50000
+NVT_BLOCK_STEPS = 1000
+
+NVE_TOTAL_STEPS = 20000
+NVE_BLOCK_STEPS = 100
 
 NWATER = 50
 BOX_SIDE_A = 30.0
@@ -245,15 +253,7 @@ def repair_structure_in_charmm(positions):
     return repaired_pos
 
 
-# 7. Minimization and Dynamics Configuration
-FIRE_STEPS = 500
-FIRE_PRINT_FREQ = 100
 
-NVT_TOTAL_STEPS = 50000
-NVT_BLOCK_STEPS = 1000
-
-NVE_TOTAL_STEPS = 20000
-NVE_BLOCK_STEPS = 100
 
 # 8. Structure Minimization with JAX-MD FIRE and PyCHARMM Repair Loops
 print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops (5 cycles) ---")
@@ -274,7 +274,6 @@ def make_fire_block_runner(pi, pj):
         
     return run_fire_block, init_fn_local, jit(local_energy_fn), jit(grad(lambda r: -local_energy_fn(r)))
 
-FIRE_BLOCK_STEPS = 100
 
 # Open trajectory file for saving minimization path
 traj_path_fire = "cg_fire.traj"
