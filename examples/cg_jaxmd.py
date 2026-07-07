@@ -200,11 +200,15 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices):
 compute_monomer_energy = make_monomer_energy_fn(model, params, jax_z, jax_monomer_indices)
 
 
-def hybrid_energy_fn(r: jnp.ndarray) -> jnp.ndarray:
+def hybrid_energy_fn(r: jnp.ndarray, pair_i=None, pair_j=None) -> jnp.ndarray:
     """Combines intramolecular (ML) and intermolecular (MM via JAX nonbonded) energy."""
     # (A) Intramolecular terms from ML potential
     e_intra = compute_monomer_energy(r)
     
+    # Resolve pair list (fall back to initial static lists if None)
+    pi = jax_pair_i if pair_i is None else pair_i
+    pj = jax_pair_j if pair_j is None else pair_j
+
     # (B) Intermolecular nonbonded terms from JAX-MM system
     # We call nonbonded_energy_and_forces but only need the energy.
     terms_raw, _ = nonbonded_energy_and_forces(
@@ -213,34 +217,34 @@ def hybrid_energy_fn(r: jnp.ndarray) -> jnp.ndarray:
         cell,
         nb_settings,
         molecule_id=jax_molecule_id,
-        pair_i=jax_pair_i,
-        pair_j=jax_pair_j,
+        pair_i=pi,
+        pair_j=pj,
     )
     e_inter = terms_raw.get("total", sum(terms_raw.values())) * KCAL_MOL_TO_EV
     
     return e_intra + e_inter
 
-# Create JIT compiled energy and force functions
+# Create JIT compiled energy and force functions supporting dynamic pair lists
 energy_fn = jit(hybrid_energy_fn)
-force_fn = jit(grad(lambda r: -hybrid_energy_fn(r)))
+force_fn = jit(grad(lambda r, pi, pj: -hybrid_energy_fn(r, pair_i=pi, pair_j=pj)))
 
 # 7. Structure Minimization with JAX-MD FIRE
 print("--- Minimizing System with JAX-MD FIRE ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 
-# Initialize FIRE minimizer with a stable initial step size (0.001 ps = 1 fs)
+# Initialize FIRE minimizer
 fire_init, fire_step = minimize.fire_descent(hybrid_energy_fn, shift_fn, dt_start=0.001, dt_max=0.001)
 fire_state = fire_init(init_r)
 
 # Perform minimization steps
 for step in range(200):
-    fire_state = fire_step(fire_state)
+    fire_state = fire_step(fire_state, pair_i=jax_pair_i, pair_j=jax_pair_j)
     if step % 20 == 0:
-        curr_e = energy_fn(fire_state.position)
+        curr_e = energy_fn(fire_state.position, pair_i=jax_pair_i, pair_j=jax_pair_j)
         print(f"FIRE Step {step:3d} | Energy: {curr_e:.4f} eV")
 
 min_r = fire_state.position
-print(f"Minimization complete. Final Energy: {energy_fn(min_r):.4f} eV")
+print(f"Minimization complete. Final Energy: {energy_fn(min_r, pair_i=jax_pair_i, pair_j=jax_pair_j):.4f} eV")
 
 # 8. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
@@ -272,29 +276,85 @@ state = init_fn(key, min_r, mass=jax_mass)
 # JIT-compile the step function for speed
 step_fn = jit(step_fn)
 
-# Run dynamics loop
-traj_path = "cg_md.traj"
-print(f"--- Running dynamics and saving trajectory to {traj_path} ---")
-traj = Trajectory(traj_path, "w", atoms)
+# Define JIT-compiled block runner to execute 1000 steps at a time on GPU
+@jit
+def run_nvt_block(state, pi, pj, steps=1000):
+    def body_fn(i, val_state):
+        return step_fn(val_state, pair_i=pi, pair_j=pj)
+    return jax.lax.fori_loop(0, steps, body_fn, state)
 
-for step in range(50000):
-    state = step_fn(state)
-    if step % 100 == 0:
-        pos_np = np.asarray(state.position)
-        curr_e = float(energy_fn(state.position))
-        curr_f = np.asarray(force_fn(state.position))
-        
-        # Calculate instantaneous kinetic energy and temperature using JAX-MD quantities
-        ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
-        temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
-        print(f"MD Step {step:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
-        
-        # Save frame to trajectory with computed energy and forces
-        frame = atoms.copy()
-        frame.set_positions(pos_np)
-        frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
-        traj.write(frame)
+# Run NVT dynamics loop with periodic neighbor list updates
+traj_path_nvt = "cg_nvt.traj"
+print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
+traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
 
-traj.close()
-print(f"JAX-MD Simulation complete! Trajectory saved to {traj_path}")
+for step in range(0, 50000, 1000):
+    # Update neighbor list (pair list) on the host based on current positions
+    pos_np = np.asarray(state.position)
+    pair_i, pair_j = _build_pair_indices(pos_np, cell, excluded_pairs, nb_settings.cutnb)
+    jax_pair_i = jnp.array(pair_i, dtype=jnp.int32)
+    jax_pair_j = jnp.array(pair_j, dtype=jnp.int32)
+    
+    # Run the compiled 1000-step block
+    state = run_nvt_block(state, jax_pair_i, jax_pair_j, 1000)
+    
+    # Compute diagnostics
+    curr_e = float(energy_fn(state.position, pair_i=jax_pair_i, pair_j=jax_pair_j))
+    curr_f = np.asarray(force_fn(state.position, jax_pair_i, jax_pair_j))
+    ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
+    temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
+    print(f"NVT Step {step+1000:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+    
+    # Save frame to trajectory
+    frame = atoms.copy()
+    frame.set_positions(np.asarray(state.position))
+    frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
+    traj_nvt.write(frame)
+
+traj_nvt.close()
+print("NVT dynamics complete!")
+
+# 9. Molecular Dynamics (NVE) with JAX-MD to check stability
+print("--- Running NVE Dynamics with JAX-MD to check stability ---")
+init_fn_nve, step_fn_nve = simulate.nve(hybrid_energy_fn, shift_fn, dt)
+step_fn_nve = jit(step_fn_nve)
+
+@jit
+def run_nve_block(state, pi, pj, steps=1000):
+    def body_fn(i, val_state):
+        return step_fn_nve(val_state, pair_i=pi, pair_j=pj)
+    return jax.lax.fori_loop(0, steps, body_fn, state)
+
+# Initialize NVE simulation state from the final NVT positions and velocities
+state_nve = init_fn_nve(key, state.position, mass=jax_mass)
+
+traj_path_nve = "cg_nve.traj"
+print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
+traj_nve = Trajectory(traj_path_nve, "w", atoms)
+
+for step in range(0, 20000, 1000):
+    # Update neighbor list (pair list)
+    pos_np = np.asarray(state_nve.position)
+    pair_i, pair_j = _build_pair_indices(pos_np, cell, excluded_pairs, nb_settings.cutnb)
+    jax_pair_i = jnp.array(pair_i, dtype=jnp.int32)
+    jax_pair_j = jnp.array(pair_j, dtype=jnp.int32)
+    
+    # Run the compiled 1000-step block
+    state_nve = run_nve_block(state_nve, jax_pair_i, jax_pair_j, 1000)
+    
+    # Compute diagnostics to verify energy conservation
+    curr_e = float(energy_fn(state_nve.position, pair_i=jax_pair_i, pair_j=jax_pair_j))
+    curr_f = np.asarray(force_fn(state_nve.position, jax_pair_i, jax_pair_j))
+    ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
+    temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
+    print(f"NVE Step {step+1000:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+    
+    # Save frame to trajectory
+    frame = atoms.copy()
+    frame.set_positions(np.asarray(state_nve.position))
+    frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
+    traj_nve.write(frame)
+
+traj_nve.close()
+print("NVE dynamics complete!")
 
