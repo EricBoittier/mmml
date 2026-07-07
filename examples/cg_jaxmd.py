@@ -67,6 +67,7 @@ pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
 
 # translate peptide to the middle of the box (L/2, L/2, L/2)
+n_trialanine = 42
 peptide_np = np.array(pos[n_trialanine:])
 pos[n_trialanine:] -= peptide_np.mean(axis=0)
 pos[n_trialanine:] += np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
@@ -114,7 +115,6 @@ if model is None or params is None:
     raise ValueError("Could not extract model or params from the loaded calculator.")
 
 # Setup monomer groupings (first 42 atoms: peptide; then groups of 3 for water)
-n_trialanine = 42
 monomer_indices = [np.arange(n_trialanine)]
 for i in range(n_trialanine, len(pos), 3):
     monomer_indices.append(np.arange(i, i + 3))
