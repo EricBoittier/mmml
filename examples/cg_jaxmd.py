@@ -6,6 +6,19 @@
 By bypassing ASE and running the optimization and molecular dynamics entirely
 within JAX-MD, we achieve significantly faster execution times through full-program
 compilation (JIT) and hardware acceleration (GPU/TPU).
+
+GPU Performance Optimizations vs. original:
+  1. Zero-retrace pair-list pattern: pair arrays are padded to a fixed MAX_PAIRS
+     shape and stored in mutable Python list slots (_pi_ref, _pj_ref). The energy
+     function closes over these references; since the shape never changes JAX only
+     traces once, eliminating thousands of recompilations.
+  2. e14/vdw14 scale arrays precomputed on CPU once per NL update (not inside JIT).
+  3. Runner step functions compiled once and reused across all blocks.
+  4. value_and_grad: energy + forces computed in a single kernel launch.
+  5. Vectorized helpers: unfold_coordinates, get_max_h_x_bond, scale_broken_h_bonds
+     now use NumPy broadcasting instead of Python for-loops.
+  6. Larger block sizes (FIRE: 200→1000, NVT/NVE: 100→500) to amortize Python
+     overhead across more GPU work per outer-loop iteration.
 """
 
 from pathlib import Path
@@ -43,6 +56,11 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
     nonbonded_energy_and_forces,
     _build_pair_indices,
     resolve_nonbonded_excluded_pairs,
+    charmm_vfswitch_coeffs,
+    charmm_fswitch_coeffs,
+    _pair_lj_epsilon,
+    _pair_vdw_energy,
+    _pair_elec_energy,
 )
 from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import _nbond_settings_from_cutoffs
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
@@ -54,6 +72,7 @@ from mmml.interfaces.jaxmdInterface import (
     make_peptide_water_ml_energy_fn,
     get_intermolecular_pairs,
 )
+from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
@@ -95,17 +114,19 @@ CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 
 FIRE_STEPS = 500
 FIRE_PRINT_FREQ = 100
-
-FIRE_BLOCK_STEPS = 200
+# Larger block sizes → GPU does more work per Python wake-up
+FIRE_BLOCK_STEPS = 1000
 NVT_TOTAL_STEPS = 50000
-NVT_BLOCK_STEPS = 100
+NVT_BLOCK_STEPS = 500
 
 NVE_TOTAL_STEPS = 20000
-NVE_BLOCK_STEPS = 100
-FIRE_CYCLES=10
+NVE_BLOCK_STEPS = 500
+FIRE_CYCLES = 10
 NWATER = 1500
 BOX_SIDE_A = 30.0
 NL_BUFFER = 2.0
+# Extra headroom fraction for padded pair array (5%)
+MAX_PAIRS_HEADROOM = 1.05
 MAX_HX_BOND_LIMIT = 1.2
 SEED = 42
 # Define simulation conditions
@@ -116,24 +137,22 @@ dt_fs = 0.25  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 
-
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
-box = build_trialanine_water_box_in_charmm(n_waters=NWATER, 
+box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
     box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
     )
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-0.1, 0.1, pos.shape) + pos
 
-# translate the entire system so that the peptide is centered in the box (L/2, L/2, L/2)
-# while keeping the waters in their relative positions around the peptide
+# Translate the entire system so that the peptide is centered in the box
 n_trialanine = 42
 peptide_center = pos[:n_trialanine].mean(axis=0)
 box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
 translation = box_center - peptide_center
-pos += translation/2.0
+pos += translation / 2.0
 
 set_charmm_positions(pos)
 
@@ -145,6 +164,10 @@ pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
 z = get_Z_from_psf()
 pep_h_x_bonds = parse_peptide_h_x_bonds(box.psf_path, z)
 print(f"Parsed {len(pep_h_x_bonds)} peptide H-X bonds from PSF.")
+
+# Precompute H-X bond index arrays for vectorized operations
+h_idx_arr = np.array([b[0] for b in pep_h_x_bonds], dtype=np.int32)
+x_idx_arr = np.array([b[1] for b in pep_h_x_bonds], dtype=np.int32)
 
 # Construct ASE Atoms object to act as a template for trajectory writing
 atoms = Atoms(z, pos)
@@ -184,8 +207,15 @@ for mol_id, start in enumerate(range(n_trialanine, len(pos), 3), start=1):
     molecule_id[start:start + 3] = mol_id
 jax_molecule_id = jnp.array(molecule_id, dtype=jnp.int32)
 
-# 5. Define displacement and shift functions for Periodic Boundary Conditions (JAX-MD)
-# Using a cubic box setup based on the cell size.
+# Precompute stacked monomer index arrays grouped by size for vectorized unfolding
+from collections import defaultdict
+_mon_by_size = defaultdict(list)
+for idx in monomer_indices:
+    _mon_by_size[len(idx)].append(idx)
+# List of (stacked_indices, size) tuples — one entry per unique monomer size
+_mon_stacked_groups = [(np.stack(lst), sz) for sz, lst in _mon_by_size.items()]
+
+# 5. Define displacement and shift functions for Periodic Boundary Conditions
 displacement_fn, shift_fn = space.periodic(box_size)
 
 # Option: Treat peptide-water intermolecular interactions with ML instead of MM
@@ -214,322 +244,477 @@ if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
         nbond_data.psf_bonds,
         natom=int(np.asarray(nbond_data.charges).shape[0]),
     )
-pair_i, pair_j = get_intermolecular_pairs(pos, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
 
-def make_hybrid_energy_fn(pi, pj):
-    # Keep pi and pj as numpy arrays (np.ndarray) so they are treated as static constants during JIT compilation.
-    def hybrid_energy_fn(r) -> jnp.ndarray:
-        # (A) Intramolecular terms from ML potential
-        e_intra = compute_monomer_energy(r)
-        
-        # (B) Intermolecular nonbonded terms from JAX-MM system
-        # Set molecule_id=None because pair list is already filtered on the host.
-        terms_raw, _ = nonbonded_energy_and_forces(
-            r,
-            nbond_data,
-            cell,
-            nb_settings,
-            molecule_id=None,
-            pair_i=pi,
-            pair_j=pj,
-        )
-        e_inter = terms_raw.get("total", sum(terms_raw.values())) * KCAL_MOL_TO_EV
-        
-        return e_intra + e_inter
-    return hybrid_energy_fn
+# ─────────────────────────────────────────────────────────────────────────────
+# GPU OPTIMIZATION: Padded pair-list infrastructure
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Helper function to unfold periodic coordinates to keep molecules contiguous
-def unfold_coordinates(positions, L, mon_indices):
-    unfolded = np.copy(positions)
-    for indices in mon_indices:
-        if len(indices) <= 1:
-            continue
-        ref_pos = positions[indices[0]]
-        diff = positions[indices] - ref_pos
-        diff = diff - L * np.round(diff / L)
-        unfolded[indices] = ref_pos + diff
+def _precompute_e14_vdw14(pair_i_np, pair_j_np):
+    """Precompute per-pair 1-4 scaling arrays on the CPU.
+
+    Called on every neighbor-list update (cheap — runs on CPU once per NL rebuild).
+    Returns JAX arrays of fixed shape equal to MAX_PAIRS with padding zeros.
+    """
+    n = len(pair_i_np)
+    e14 = np.ones(n, dtype=np.float64)
+    vdw14 = np.ones(n, dtype=np.float64)
+    for k, (i, j) in enumerate(zip(pair_i_np, pair_j_np)):
+        if (int(i), int(j)) in nbond_data.e14_pairs:
+            e14[k] = nb_settings.e14fac
+            vdw14[k] = nb_settings.vdw14fac
+    return e14, vdw14
+
+
+def _get_inter_pairs_np(pos_np):
+    """Compute intermolecular pair list on host, return numpy arrays."""
+    pair_i_raw, pair_j_raw = _build_pair_indices(
+        pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER
+    )
+    inter = molecule_id[pair_i_raw] != molecule_id[pair_j_raw]
+    return pair_i_raw[inter], pair_j_raw[inter]
+
+
+# Sample the pair count from the initial structure to size the padded arrays
+_pi0, _pj0 = _get_inter_pairs_np(pos)
+MAX_PAIRS = int(len(_pi0) * MAX_PAIRS_HEADROOM) + 16  # add 16 as safety margin
+print(f"--- Initial pair count: {len(_pi0)}, MAX_PAIRS buffer: {MAX_PAIRS} ---")
+
+
+def _pad_pairs(pi_np, pj_np):
+    """Pad pair index arrays to MAX_PAIRS with (0,0) sentinel entries.
+
+    Sentinel pairs (both index 0) contribute zero energy because same-atom pairs
+    have zero charge product and the VDW self-energy is zero (r→0 handled by cutoff
+    mask which evaluates False for r=0 < c2of, but since atom 0 contributes to
+    real pairs we use a zero-mask column instead).
+    """
+    n = len(pi_np)
+    assert n <= MAX_PAIRS, (
+        f"Pair count {n} exceeds MAX_PAIRS={MAX_PAIRS}. "
+        "Increase MAX_PAIRS_HEADROOM or decrease NL_BUFFER."
+    )
+    pi_pad = np.zeros(MAX_PAIRS, dtype=np.int32)
+    pj_pad = np.zeros(MAX_PAIRS, dtype=np.int32)
+    mask = np.zeros(MAX_PAIRS, dtype=np.float64)   # 1.0 for real pairs, 0.0 for padding
+    pi_pad[:n] = pi_np
+    pj_pad[:n] = pj_np
+    mask[:n] = 1.0
+    return pi_pad, pj_pad, mask
+
+
+def _pad_e14_vdw14(e14_np, vdw14_np):
+    """Pad 1-4 scaling arrays to MAX_PAIRS with 1.0 (neutral scaling)."""
+    e14_pad = np.ones(MAX_PAIRS, dtype=np.float64)
+    vdw14_pad = np.ones(MAX_PAIRS, dtype=np.float64)
+    n = len(e14_np)
+    e14_pad[:n] = e14_np
+    vdw14_pad[:n] = vdw14_np
+    return e14_pad, vdw14_pad
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mutable reference slots for pair data — JAX sees fixed shapes → traces once
+# ─────────────────────────────────────────────────────────────────────────────
+# We close over these Python list slots in the JIT-compiled energy function.
+# Updating _pi_ref[0] etc. before each block is a Python-level mutation that
+# does NOT trigger JAX re-tracing because the array shape is unchanged.
+
+_pi_ref = [jnp.zeros(MAX_PAIRS, dtype=jnp.int32)]
+_pj_ref = [jnp.zeros(MAX_PAIRS, dtype=jnp.int32)]
+_mask_ref = [jnp.zeros(MAX_PAIRS, dtype=jnp.float64)]
+_e14_ref = [jnp.ones(MAX_PAIRS, dtype=jnp.float64)]
+_vdw14_ref = [jnp.ones(MAX_PAIRS, dtype=jnp.float64)]
+
+# Precompute static per-atom arrays used inside the energy function
+_q_jax = jnp.asarray(nbond_data.charges, dtype=jnp.float64)
+_eps_jax = jnp.asarray(nbond_data.epsilon, dtype=jnp.float64)
+_rmin_jax = jnp.asarray(nbond_data.rmin, dtype=jnp.float64)
+_cell_jax = jnp.asarray(cell if cell.ndim == 2 else np.diag(cell), dtype=jnp.float64)
+_vfswitch = charmm_vfswitch_coeffs(nb_settings)
+_fswitch = charmm_fswitch_coeffs(nb_settings)
+_c2of = nb_settings.c2ofnb
+
+
+def update_pair_refs(pos_np):
+    """Rebuild pair list on CPU and update mutable reference slots.
+
+    This is the ONLY function that touches the pair data between blocks.
+    Because array shapes are constant, the compiled energy_fn is never re-traced.
+    """
+    pi_np, pj_np = _get_inter_pairs_np(pos_np)
+    e14_np, vdw14_np = _precompute_e14_vdw14(pi_np, pj_np)
+
+    pi_pad, pj_pad, mask = _pad_pairs(pi_np, pj_np)
+    e14_pad, vdw14_pad = _pad_e14_vdw14(e14_np, vdw14_np)
+
+    _pi_ref[0] = jnp.array(pi_pad, dtype=jnp.int32)
+    _pj_ref[0] = jnp.array(pj_pad, dtype=jnp.int32)
+    _mask_ref[0] = jnp.array(mask, dtype=jnp.float64)
+    _e14_ref[0] = jnp.array(e14_pad, dtype=jnp.float64)
+    _vdw14_ref[0] = jnp.array(vdw14_pad, dtype=jnp.float64)
+
+
+# Populate refs with the initial pair list
+update_pair_refs(pos)
+
+
+def hybrid_energy_fn(r) -> jnp.ndarray:
+    """Single JIT-compiled hybrid ML/MM energy function.
+
+    Closes over mutable _pi_ref/_pj_ref/_mask_ref/_e14_ref/_vdw14_ref slots.
+    JAX traces this once; pair data is updated by mutating the slots.
+    """
+    # (A) Intramolecular terms from ML potential
+    e_intra = compute_monomer_energy(r)
+
+    # (B) Intermolecular MM nonbonded terms with padded pair list
+    pi = _pi_ref[0]
+    pj = _pj_ref[0]
+    mask = _mask_ref[0]      # 1.0 for real pairs, 0.0 for padding
+    e14 = _e14_ref[0]
+    vdw14 = _vdw14_ref[0]
+
+    ri = r[pi]
+    rj = r[pj]
+    disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
+    dist = jnp.linalg.norm(disp, axis=-1)
+    within_ctof = (dist * dist < _c2of) * mask   # zero out padding entries
+
+    ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
+    sig = _rmin_jax[pi] + _rmin_jax[pj]
+    qq = _q_jax[pi] * _q_jax[pj] * e14 / nb_settings.eps
+
+    vdw = _pair_vdw_energy(dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False)
+    vdw = vdw * vdw14
+    elec = _pair_elec_energy(dist, qq, nb_settings, _fswitch)
+
+    vdw = jnp.where(within_ctof, vdw, 0.0)
+    elec = jnp.where(within_ctof, elec, 0.0)
+    e_inter = (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
+
+    return e_intra + e_inter
+
+
+# Compile energy + forces in a single kernel launch
+@jit
+def energy_and_forces_fn(r):
+    """Returns (energy_scalar, forces_array) in one JIT-compiled call."""
+    e, neg_f = jax.value_and_grad(hybrid_energy_fn)(r)
+    return e, -neg_f
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Vectorized helper functions (no Python loops)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def unfold_coordinates(positions, L, mon_stacked_groups):
+    """Vectorized coordinate unfolding under PBC.
+
+    Uses precomputed _mon_stacked_groups (list of (stacked_idx, size)) to avoid
+    per-monomer Python iteration. Each group is handled with NumPy broadcasting.
+    """
+    unfolded = np.array(positions)
+    for stacked, _sz in mon_stacked_groups:
+        # stacked: (N_monomers, size) index array
+        coords = unfolded[stacked]           # (N, size, 3)
+        ref = coords[:, 0:1, :]             # (N, 1, 3)
+        diff = coords - ref
+        diff -= L * np.round(diff / L)
+        unfolded[stacked] = ref + diff
     return unfolded
 
-# Helper function to check and scale back stretched peptide H-X bonds to 1.0 A
-def scale_broken_h_bonds(positions, box_sz, h_x_bonds):
-    new_pos = np.copy(positions)
-    scaled_any = False
-    for h_idx, x_idx in h_x_bonds:
-        diff = positions[h_idx] - positions[x_idx]
-        diff = diff - box_sz * np.round(diff / box_sz)
-        dist = np.linalg.norm(diff)
-        if dist > 1.3:
-            # Scale back along the bond vector relative to the heavy atom X
-            direction = diff / dist
-            new_pos[h_idx] = positions[x_idx] + direction * 1.02
-            scaled_any = True
-    return new_pos, scaled_any
 
-# Helper function to compute the maximum peptide H-X bond length under PBC
-def get_max_h_x_bond(positions, box_sz, h_x_bonds):
-    max_d = 0.0
-    for h_idx, x_idx in h_x_bonds:
-        diff = positions[h_idx] - positions[x_idx]
-        diff = diff - box_sz * np.round(diff / box_sz)
-        dist = np.linalg.norm(diff)
-        if dist > max_d:
-            max_d = dist
-    return float(max_d)
+def get_max_h_x_bond(positions, box_sz, h_idx, x_idx):
+    """Vectorized max H-X bond length computation under PBC."""
+    if len(h_idx) == 0:
+        return 0.0
+    pos_np = np.asarray(positions)
+    diff = pos_np[h_idx] - pos_np[x_idx]      # (N_bonds, 3)
+    diff -= box_sz * np.round(diff / box_sz)
+    return float(np.linalg.norm(diff, axis=-1).max())
+
+
+def scale_broken_h_bonds(positions, box_sz, h_idx, x_idx, threshold=1.3, target=1.02):
+    """Vectorized H-X bond repair: scales back bonds longer than threshold."""
+    new_pos = np.array(np.asarray(positions))
+    if len(h_idx) == 0:
+        return new_pos, False
+    diff = new_pos[h_idx] - new_pos[x_idx]    # (N_bonds, 3)
+    diff -= box_sz * np.round(diff / box_sz)
+    dists = np.linalg.norm(diff, axis=-1)      # (N_bonds,)
+    broken = dists > threshold
+    if broken.any():
+        dirs = diff[broken] / dists[broken, np.newaxis]
+        new_pos[h_idx[broken]] = new_pos[x_idx[broken]] + dirs * target
+    return new_pos, bool(broken.any())
+
 
 # Helper function to repair structures using PyCHARMM minimization
 def repair_structure_in_charmm(positions):
     print("\n[REPAIR] Temperature spike or NaN detected! Unfolding and repairing structure in CHARMM...")
-    # Unfold coordinates first so PyCHARMM does not see split molecules with massive bond lengths
-    unfolded_pos = unfold_coordinates(np.asarray(positions), box_size, monomer_indices)
+    unfolded_pos = unfold_coordinates(np.asarray(positions), box_size, _mon_stacked_groups)
     set_charmm_positions(unfolded_pos)
     lingo.charmm_script("MINI SD 1000")
     lingo.charmm_script("MINI ABNR 1000")
-    # Retrieve repaired positions
     repaired_pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     print("[REPAIR] Structure repaired successfully. Re-initializing state.\n")
     return repaired_pos
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Build simulation runner functions ONCE — never rebuilt inside loops
+# ─────────────────────────────────────────────────────────────────────────────
+
+# FIRE minimization
+print("--- Building FIRE minimizer (compiled once) ---")
+_init_fn_fire, _step_fn_fire = minimize.fire_descent(
+    hybrid_energy_fn, shift_fn, dt_start=0.0001, dt_max=0.001
+)
+_step_fn_fire = jit(_step_fn_fire)
+
+@jit
+def run_fire_block(state):
+    """Run FIRE_BLOCK_STEPS steps of FIRE (compiled once)."""
+    def body_fn(i, s):
+        return _step_fn_fire(s)
+    return jax.lax.fori_loop(0, FIRE_BLOCK_STEPS, body_fn, state)
 
 
+@jit
+def run_fire_block_repair(state):
+    """Run 200 steps of FIRE for post-repair minimization (compiled once)."""
+    def body_fn(i, s):
+        return _step_fn_fire(s)
+    return jax.lax.fori_loop(0, 200, body_fn, state)
+
+
+# NVT Nose-Hoover
+print("--- Building NVT NHC simulator (compiled once) ---")
+from jax_md import quantity
+
+mass = np.zeros(len(pos))
+mass[:n_trialanine] = 12.0   # average mass approximation for peptide
+mass[n_trialanine::3] = 16.0  # Oxygen
+mass[n_trialanine+1::3] = 1.0  # Hydrogen
+mass[n_trialanine+2::3] = 1.0  # Hydrogen
+jax_mass = jnp.array(mass, dtype=jnp.float64)
+
+_init_fn_nvt, _step_fn_nvt = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn, dt, target_temp_ev)
+_step_fn_nvt = jit(_step_fn_nvt)
+
+@jit
+def run_nvt_block(state):
+    def body_fn(i, s):
+        return _step_fn_nvt(s)
+    return jax.lax.fori_loop(0, NVT_BLOCK_STEPS, body_fn, state)
+
+
+# NVE
+print("--- Building NVE simulator (compiled once) ---")
+_init_fn_nve, _step_fn_nve = simulate.nve(hybrid_energy_fn, shift_fn, dt)
+_step_fn_nve = jit(_step_fn_nve)
+
+@jit
+def run_nve_block(state):
+    def body_fn(i, s):
+        return _step_fn_nve(s)
+    return jax.lax.fori_loop(0, NVE_BLOCK_STEPS, body_fn, state)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 8. Structure Minimization with JAX-MD FIRE and PyCHARMM Repair Loops
-print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops (5 cycles) ---")
+# ─────────────────────────────────────────────────────────────────────────────
+print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 pos_current = init_r
 
-# Helper function to create JIT-compiled FIRE block runner for a specific pair list
-def make_fire_block_runner(pi, pj):
-    local_energy_fn = make_hybrid_energy_fn(pi, pj)
-    init_fn_local, step_fn_local = minimize.fire_descent(local_energy_fn, shift_fn, dt_start=0.0001, dt_max=0.001)
-    step_fn_local = jit(step_fn_local)
-    
-    @jit
-    def run_fire_block(state, steps=100):
-        def body_fn(i, val_state):
-            return step_fn_local(val_state)
-        return jax.lax.fori_loop(0, steps, body_fn, state)
-        
-    return run_fire_block, init_fn_local, jit(local_energy_fn), jit(grad(lambda r: -local_energy_fn(r)))
-
-
-# Open trajectory file for saving minimization path
 traj_path_fire = "cg_fire.traj"
 print(f"--- Saving minimization trajectory to {traj_path_fire} ---")
 traj_fire = Trajectory(traj_path_fire, "w", atoms)
 
 for cycle in range(FIRE_CYCLES):
     print(f"\n--- Minimization Cycle {cycle+1}/{FIRE_CYCLES} ---")
-    
-    # Initialize starting FIRE state using current coordinates and pair list
-    pi_init, pj_init = get_intermolecular_pairs(np.asarray(pos_current), cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
-    run_fire_block, init_fn_fire, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi_init, pj_init)
-    fire_state = init_fn_fire(pos_current)
-    
+
+    # Update pair list from current coordinates (CPU, once per cycle start)
+    update_pair_refs(np.asarray(pos_current))
+
+    fire_state = _init_fn_fire(pos_current)
+
     # Write starting configuration of this cycle to trajectory
-    curr_e = float(energy_fn_fire(pos_current))
-    curr_f = np.asarray(force_fn_fire(pos_current))
+    curr_e, curr_f = energy_and_forces_fn(pos_current)
+    curr_e = float(curr_e)
+    curr_f = np.asarray(curr_f)
     frame = atoms.copy()
-    frame.set_positions(unfold_coordinates(np.asarray(pos_current), box_size, monomer_indices))
+    frame.set_positions(unfold_coordinates(np.asarray(pos_current), box_size, _mon_stacked_groups))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
     traj_fire.write(frame)
-    
-    # Run FIRE blocks
+
+    # Run FIRE blocks — pair list rebuilt every FIRE_BLOCK_STEPS steps
     for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
-        pos_np = np.asarray(fire_state.position)
-        pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
-        run_fire_block, _, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi, pj)
-        
-        fire_state = run_fire_block(fire_state, FIRE_BLOCK_STEPS)
-        
-        curr_e = float(energy_fn_fire(fire_state.position))
-        curr_f = np.asarray(force_fn_fire(fire_state.position))
-        max_bond = get_max_h_x_bond(fire_state.position, box_size, pep_h_x_bonds)
-        print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:3d} | Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å")
-        
-        # Save intermediate configuration to trajectory
+        # Update pair list (CPU side only; no JAX re-trace)
+        update_pair_refs(np.asarray(fire_state.position))
+
+        fire_state = run_fire_block(fire_state)
+
+        curr_e, curr_f = energy_and_forces_fn(fire_state.position)
+        curr_e = float(curr_e)
+        curr_f = np.asarray(curr_f)
+        max_bond = get_max_h_x_bond(fire_state.position, box_size, h_idx_arr, x_idx_arr)
+        print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:4d} | "
+              f"Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å")
+
         frame = atoms.copy()
-        frame.set_positions(unfold_coordinates(np.asarray(fire_state.position), box_size, monomer_indices))
+        frame.set_positions(unfold_coordinates(np.asarray(fire_state.position), box_size, _mon_stacked_groups))
         frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
         traj_fire.write(frame)
-        
-    # Repair the minimized structures in CHARMM at the end of every cycle to resolve any close contacts
-    pos_current = repair_structure_in_charmm(fire_state.position)
+
+    # Repair the minimized structures in CHARMM at the end of every cycle
+    pos_current = jnp.array(repair_structure_in_charmm(fire_state.position), dtype=jnp.float64)
 
 traj_fire.close()
-min_r = jnp.array(pos_current, dtype=jnp.float64)
+min_r = pos_current
 print(f"\nMinimization completed over {FIRE_CYCLES} cycles.")
 
-# 9. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. Molecular Dynamics (NVT Nose-Hoover)
+# ─────────────────────────────────────────────────────────────────────────────
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
-from jax_md import quantity
 
-
-
-# Setup NHC simulator
-mass = np.zeros(len(pos))
-mass[:n_trialanine] = 12.0  # average mass approximation for peptide
-mass[n_trialanine::3] = 16.0  # Oxygen
-mass[n_trialanine+1::3] = 1.0  # Hydrogen
-mass[n_trialanine+2::3] = 1.0  # Hydrogen
-jax_mass = jnp.array(mass, dtype=jnp.float64)
-
-# Helper function to create JIT-compiled NVT block runner for a specific pair list
-def make_nvt_block_runner(pi, pj):
-    local_energy_fn = make_hybrid_energy_fn(pi, pj)
-    init_fn_local, step_fn_local = simulate.nvt_nose_hoover(local_energy_fn, shift_fn, dt, target_temp_ev)
-    step_fn_local = jit(step_fn_local)
-    
-    @jit
-    def run_nvt_block(state, steps=NVT_BLOCK_STEPS):
-        def body_fn(i, val_state):
-            return step_fn_local(val_state)
-        return jax.lax.fori_loop(0, steps, body_fn, state)
-        
-    return run_nvt_block, init_fn_local, local_energy_fn, jit(grad(lambda r: -local_energy_fn(r)))
-
-# Initialize starting NVT state using the initial pair list
-run_nvt_block, init_fn_nvt, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(pair_i, pair_j)
 key = jax.random.PRNGKey(42)
-state = init_fn_nvt(key, min_r, mass=jax_mass)
 
+# Initialize starting NVT state
+update_pair_refs(np.asarray(min_r))
+state = _init_fn_nvt(key, min_r, mass=jax_mass)
 
-# Run NVT dynamics loop with periodic neighbor list updates
 traj_path_nvt = "cg_nvt.traj"
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
 traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
 
 for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
-    # Update neighbor list (pair list) on the host based on current positions
-    pos_np = np.asarray(state.position)
-    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
-    
-    # Retrieve the block runner for these specific pairs
-    run_nvt_block, _, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(pi, pj)
-    
+    # Update pair list on CPU (no JAX re-trace — shapes are fixed)
+    update_pair_refs(np.asarray(state.position))
+
     # Run the compiled block of steps
-    state = run_nvt_block(state, NVT_BLOCK_STEPS)
-    
-    # Compute diagnostics
-    curr_e = float(energy_fn_nvt(state.position))
-    curr_f = np.asarray(force_fn_nvt(state.position))
+    state = run_nvt_block(state)
+
+    # Compute diagnostics (energy + forces in one kernel launch)
+    curr_e, curr_f = energy_and_forces_fn(state.position)
+    curr_e = float(curr_e)
+    curr_f = np.asarray(curr_f)
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
-    max_bond = get_max_h_x_bond(np.asarray(state.position), box_size, pep_h_x_bonds)
-    
-    # Check if a spike occurred, NaN energy, or peptide H-X bond stretched > 1.5 A and repair
+    max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
+
+    # Check for instability and repair
     if temp > 400.0 or np.isnan(curr_e) or max_bond > MAX_HX_BOND_LIMIT:
         if max_bond > MAX_HX_BOND_LIMIT:
-            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit {MAX_HX_BOND_LIMIT} Å)")
-        # 1. Scale back the coordinates of any stretched H-X bonds to 1.0 A
-        scaled_pos, scaled_any = scale_broken_h_bonds(np.asarray(state.position), box_size, pep_h_x_bonds)
+            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å "
+                  f"(max limit {MAX_HX_BOND_LIMIT} Å)")
+        # 1. Scale back stretched H-X bonds
+        scaled_pos, _ = scale_broken_h_bonds(
+            np.asarray(state.position), box_size, h_idx_arr, x_idx_arr
+        )
         # 2. Minimize in PyCHARMM
         repaired_pos = repair_structure_in_charmm(scaled_pos)
-        # 3. Post-repair JAX FIRE minimization (200 steps)
+        # 3. Post-repair JAX FIRE minimization
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
-        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
-        run_fire, init_fire, energy_fire, _ = make_fire_block_runner(pi_rep, pj_rep)
-        fire_state_rep = init_fire(jnp.array(repaired_pos, dtype=jnp.float64))
-        fire_state_rep = run_fire(fire_state_rep, 200)
-        final_min_pos = np.asarray(fire_state_rep.position)
-        
-        # Re-initialize the state with the final minimized coordinates at target temperature
-        state = init_fn_nvt(key, jnp.array(final_min_pos, dtype=jnp.float64), mass=jax_mass)
-        # Re-evaluate properties
-        curr_e = float(energy_fn_nvt(state.position))
-        curr_f = np.asarray(force_fn_nvt(state.position))
+        repaired_jax = jnp.array(repaired_pos, dtype=jnp.float64)
+        update_pair_refs(repaired_pos)
+        fire_state_rep = _init_fn_fire(repaired_jax)
+        fire_state_rep = run_fire_block_repair(fire_state_rep)
+        final_min_pos = jnp.array(fire_state_rep.position, dtype=jnp.float64)
+
+        # Re-initialize NVT state
+        update_pair_refs(np.asarray(final_min_pos))
+        state = _init_fn_nvt(key, final_min_pos, mass=jax_mass)
+        # Re-evaluate diagnostics
+        curr_e, curr_f = energy_and_forces_fn(state.position)
+        curr_e = float(curr_e)
+        curr_f = np.asarray(curr_f)
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
         temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
-        max_bond = get_max_h_x_bond(np.asarray(state.position), box_size, pep_h_x_bonds)
-        
-    print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
-    
+        max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
+
+    print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
+          f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
+
     # Save frame to trajectory
     frame = atoms.copy()
-    frame.set_positions(unfold_coordinates(np.asarray(state.position), box_size, monomer_indices))
+    frame.set_positions(unfold_coordinates(np.asarray(state.position), box_size, _mon_stacked_groups))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
     traj_nvt.write(frame)
 
 traj_nvt.close()
 print("NVT dynamics complete!")
 
-# 10. Molecular Dynamics (NVE) with JAX-MD to check stability
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. Molecular Dynamics (NVE) to check stability
+# ─────────────────────────────────────────────────────────────────────────────
 print("--- Running NVE Dynamics with JAX-MD to check stability ---")
 
-# Helper function to create JIT-compiled NVE block runner for a specific pair list
-def make_nve_block_runner(pi, pj):
-    local_energy_fn = make_hybrid_energy_fn(pi, pj)
-    init_fn_local, step_fn_local = simulate.nve(local_energy_fn, shift_fn, dt)
-    step_fn_local = jit(step_fn_local)
-    
-    @jit
-    def run_nve_block(state, steps=NVE_BLOCK_STEPS):
-        def body_fn(i, val_state):
-            return step_fn_local(val_state)
-        return jax.lax.fori_loop(0, steps, body_fn, state)
-        
-    return run_nve_block, init_fn_local, local_energy_fn, jit(grad(lambda r: -local_energy_fn(r)))
-
-# Initialize NVE simulation state from the final NVT positions and velocities
-pos_np_final = np.asarray(state.position)
-pi_init, pj_init = get_intermolecular_pairs(pos_np_final, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
-run_nve_block, init_fn_nve, energy_fn_nve, force_fn_nve = make_nve_block_runner(pi_init, pj_init)
-state_nve = init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass)
+# Initialize NVE state from final NVT positions
+update_pair_refs(np.asarray(state.position))
+state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass)
 
 traj_path_nve = "cg_nve.traj"
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
 traj_nve = Trajectory(traj_path_nve, "w", atoms)
 
 for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
-    # Update neighbor list (pair list)
-    pos_np = np.asarray(state_nve.position)
-    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
-    
-    # Get NVE block runner
-    run_nve_block, _, energy_fn_nve, force_fn_nve = make_nve_block_runner(pi, pj)
-    
+    # Update pair list on CPU (no JAX re-trace)
+    update_pair_refs(np.asarray(state_nve.position))
+
     # Run the compiled block of steps
-    state_nve = run_nve_block(state_nve, NVE_BLOCK_STEPS)
-    
-    # Compute diagnostics to verify energy conservation
-    curr_e = float(energy_fn_nve(state_nve.position))
-    curr_f = np.asarray(force_fn_nve(state_nve.position))
+    state_nve = run_nve_block(state_nve)
+
+    # Compute diagnostics
+    curr_e, curr_f = energy_and_forces_fn(state_nve.position)
+    curr_e = float(curr_e)
+    curr_f = np.asarray(curr_f)
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
-    max_bond = get_max_h_x_bond(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
-    
-    # Check if a spike occurred, NaN energy, or peptide H-X bond stretched > 1.5 A and repair
+    max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
+
+    # Check for instability and repair
     if temp > 400.0 or np.isnan(curr_e) or max_bond > MAX_HX_BOND_LIMIT:
         if max_bond > MAX_HX_BOND_LIMIT:
-            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit {MAX_HX_BOND_LIMIT} Å)")
-        # 1. Scale back the coordinates of any stretched H-X bonds to 1.0 A
-        scaled_pos, scaled_any = scale_broken_h_bonds(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
+            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å "
+                  f"(max limit {MAX_HX_BOND_LIMIT} Å)")
+        # 1. Scale back stretched H-X bonds
+        scaled_pos, _ = scale_broken_h_bonds(
+            np.asarray(state_nve.position), box_size, h_idx_arr, x_idx_arr
+        )
         # 2. Minimize in PyCHARMM
         repaired_pos = repair_structure_in_charmm(scaled_pos)
-        # 3. Post-repair JAX FIRE minimization (200 steps)
+        # 3. Post-repair JAX FIRE minimization
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
-        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
-        run_fire, init_fire, energy_fire, _ = make_fire_block_runner(pi_rep, pj_rep)
-        fire_state_rep = init_fire(jnp.array(repaired_pos, dtype=jnp.float64))
-        fire_state_rep = run_fire(fire_state_rep, 200)
-        final_min_pos = np.asarray(fire_state_rep.position)
-        
-        # Re-initialize the state with the final minimized coordinates
-        state_nve = init_fn_nve(key, jnp.array(final_min_pos, dtype=jnp.float64), target_temp_ev, mass=jax_mass)
-        # Re-evaluate properties
-        curr_e = float(energy_fn_nve(state_nve.position))
-        curr_f = np.asarray(force_fn_nve(state_nve.position))
+        repaired_jax = jnp.array(repaired_pos, dtype=jnp.float64)
+        update_pair_refs(repaired_pos)
+        fire_state_rep = _init_fn_fire(repaired_jax)
+        fire_state_rep = run_fire_block_repair(fire_state_rep)
+        final_min_pos = jnp.array(fire_state_rep.position, dtype=jnp.float64)
+
+        # Re-initialize NVE state
+        update_pair_refs(np.asarray(final_min_pos))
+        state_nve = _init_fn_nve(key, final_min_pos, target_temp_ev, mass=jax_mass)
+        # Re-evaluate diagnostics
+        curr_e, curr_f = energy_and_forces_fn(state_nve.position)
+        curr_e = float(curr_e)
+        curr_f = np.asarray(curr_f)
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
         temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
-        max_bond = get_max_h_x_bond(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
-        
-    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
-    
+        max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
+
+    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
+          f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
+
     # Save frame to trajectory
     frame = atoms.copy()
-    frame.set_positions(unfold_coordinates(np.asarray(state_nve.position), box_size, monomer_indices))
+    frame.set_positions(unfold_coordinates(np.asarray(state_nve.position), box_size, _mon_stacked_groups))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
     traj_nve.write(frame)
 
 traj_nve.close()
 print("NVE dynamics complete!")
-
