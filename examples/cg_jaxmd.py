@@ -75,12 +75,13 @@ pos[n_trialanine:] += np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_
 set_charmm_positions(pos)
 
 setup_nonbonded_only_charmm()
-lingo.charmm_script("IMAGE")
+
 
 for i in range(10):
     # Apply constraint and run steepest descent minimization
     lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
     run_charmm_script_loud("MINI SD 10000")
+    lingo.charmm_script("IMAGE")
     lingo.charmm_script("CONStraint DROPlet")
     run_charmm_script_loud("MINI SD 10000")
 
@@ -246,10 +247,10 @@ print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
 from jax_md import quantity
 
 # Define simulation conditions
-temperature = 300.0  # Kelvin
+temperature = 200.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-dt_fs = 0.5  # time step in femtoseconds
+dt_fs = 0.25  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Setup NHC simulator
