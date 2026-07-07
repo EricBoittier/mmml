@@ -141,7 +141,7 @@ SEED = 42
 temperature = 298.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-dt_fs = 0.5  # time step in femtoseconds
+dt_fs = 0.125  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 
@@ -195,7 +195,7 @@ for h_idx, x_idx in pep_h_x_bonds:
     dr = pos_init[h_idx] - pos_init[x_idx]
     dr -= box_size * np.round(dr / box_size)
     r0 = np.linalg.norm(dr)
-    r0_list.append(r0)
+    r0_list.append(1.05)
 r0_jax = jnp.array(r0_list, dtype=jnp.float64)
 print(f"--- Measured {len(r0_list)} equilibrium H-X bond lengths for flat-bottom restraints ---")
 
