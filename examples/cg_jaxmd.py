@@ -292,7 +292,7 @@ for cycle in range(5):
     curr_e = float(energy_fn_fire(pos_current))
     curr_f = np.asarray(force_fn_fire(pos_current))
     frame = atoms.copy()
-    frame.set_positions(np.asarray(pos_current))
+    frame.set_positions(unfold_coordinates(np.asarray(pos_current), box_size, monomer_indices))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
     traj_fire.write(frame)
     
@@ -310,7 +310,7 @@ for cycle in range(5):
         
         # Save intermediate configuration to trajectory
         frame = atoms.copy()
-        frame.set_positions(np.asarray(fire_state.position))
+        frame.set_positions(unfold_coordinates(np.asarray(fire_state.position), box_size, monomer_indices))
         frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
         traj_fire.write(frame)
         
@@ -397,7 +397,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     
     # Save frame to trajectory
     frame = atoms.copy()
-    frame.set_positions(np.asarray(state.position))
+    frame.set_positions(unfold_coordinates(np.asarray(state.position), box_size, monomer_indices))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
     traj_nvt.write(frame)
 
@@ -463,7 +463,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     
     # Save frame to trajectory
     frame = atoms.copy()
-    frame.set_positions(np.asarray(state_nve.position))
+    frame.set_positions(unfold_coordinates(np.asarray(state_nve.position), box_size, monomer_indices))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
     traj_nve.write(frame)
 
