@@ -73,9 +73,9 @@ pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
 
 # translate peptide to the middle of the box (L/2, L/2, L/2)
 n_trialanine = 42
-peptide_np = np.array(pos[n_trialanine:])
-pos[n_trialanine:] -= peptide_np.mean(axis=0)
-pos[n_trialanine:] += np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
+peptide_np = np.array(pos[:n_trialanine])
+pos[:n_trialanine] -= peptide_np.mean(axis=0)
+pos[:n_trialanine] += np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
 
 set_charmm_positions(pos)
 
@@ -208,8 +208,8 @@ def make_hybrid_energy_fn(pi, pj):
     return hybrid_energy_fn
 
 # 7. Minimization and Dynamics Configuration
-FIRE_STEPS = 20000
-FIRE_PRINT_FREQ = 2000
+FIRE_STEPS = 500
+FIRE_PRINT_FREQ = 100
 
 NVT_TOTAL_STEPS = 5000
 NVT_BLOCK_STEPS = 1000
@@ -228,7 +228,7 @@ def make_fire_block_runner(pi, pj):
     step_fn_local = jit(step_fn_local)
     
     @jit
-    def run_fire_block(state, steps=500):
+    def run_fire_block(state, steps=100):
         def body_fn(i, val_state):
             return step_fn_local(val_state)
         return jax.lax.fori_loop(0, steps, body_fn, state)
@@ -236,7 +236,7 @@ def make_fire_block_runner(pi, pj):
     return run_fire_block, init_fn_local, jit(local_energy_fn)
 
 # Initialize starting FIRE state using the initial pair list
-FIRE_BLOCK_STEPS = 500
+FIRE_BLOCK_STEPS = 100
 run_fire_block, init_fn_fire, energy_fn_fire = make_fire_block_runner(pair_i, pair_j)
 fire_state = init_fn_fire(init_r)
 
