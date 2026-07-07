@@ -64,7 +64,11 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
             displacements = vmapped_displacement(group_pos, ref_pos)
             unfolded_pos = ref_pos[:, None, :] + displacements
             
-            energies = vmapped_apply(unfolded_pos, gz)
+            # Center coordinates to the Center of Mass (COM) / Center of Geometry
+            com = jnp.mean(unfolded_pos, axis=1, keepdims=True)
+            centered_pos = unfolded_pos - com
+            
+            energies = vmapped_apply(centered_pos, gz)
             return jnp.sum(energies)
             
         group_fns.append(group_energy)
@@ -124,10 +128,15 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         pep_pos = r[peptide_idx]
         ref_pos = pep_pos[0]
         unfolded_pep = ref_pos + vmapped_displacement_pep(pep_pos, ref_pos)
+        
+        # Center peptide coordinates to its COM
+        pep_com = jnp.mean(unfolded_pep, axis=0, keepdims=True)
+        centered_pep = unfolded_pep - pep_com
+        
         return model.apply(
             params,
             atomic_numbers=pep_z,
-            positions=unfolded_pep,
+            positions=centered_pep,
             dst_idx=dst_idx_pep,
             src_idx=src_idx_pep,
         )["energy"]
@@ -141,7 +150,11 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         displacements = vmapped_displacement_dimer(group_pos, ref_pos)
         unfolded_dimer_pos = ref_pos[:, None, :] + displacements
         
-        dimer_energies = vmapped_apply_dimer(unfolded_dimer_pos, dimer_z)
+        # Center dimer coordinates to its COM
+        dimer_com = jnp.mean(unfolded_dimer_pos, axis=1, keepdims=True)
+        centered_dimer = unfolded_dimer_pos - dimer_com
+        
+        dimer_energies = vmapped_apply_dimer(centered_dimer, dimer_z)
         e_dimer_sum = jnp.sum(dimer_energies)
         
         # Evaluate single peptide energy
