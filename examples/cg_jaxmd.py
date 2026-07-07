@@ -82,7 +82,7 @@ workdir = Path('/tmp/tria_box')
 box = build_trialanine_water_box_in_charmm(n_waters=NWATER, box_side_A=BOX_SIDE_A, seed=11, workdir=workdir)
 
 pos = np.asarray(box.positions, dtype=np.float64)
-pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
+pos = np.random.uniform(-0.1, 0.1, pos.shape) + pos
 
 # translate the entire system so that the peptide is centered in the box (L/2, L/2, L/2)
 # while keeping the waters in their relative positions around the peptide
@@ -90,11 +90,11 @@ n_trialanine = 42
 peptide_center = pos[:n_trialanine].mean(axis=0)
 box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
 translation = box_center - peptide_center
-pos += translation
+pos += translation/2.0
 
 set_charmm_positions(pos)
 
-setup_nonbonded_only_charmm()
+# setup_nonbonded_only_charmm()
 
 
 for i in range(10):
@@ -107,7 +107,7 @@ for i in range(10):
 
 
 
-run_charmm_script_loud("MINI ABNR 10000")
+lingo.charmm_script("MINI ABNR 10000")
 
 # Retrieve positions and atomic numbers
 pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
