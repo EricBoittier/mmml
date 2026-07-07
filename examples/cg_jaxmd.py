@@ -75,7 +75,7 @@ pos[n_trialanine:] += np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_
 set_charmm_positions(pos)
 
 setup_nonbonded_only_charmm()
-
+lingo.charmm_script("IMAGE")
 
 for i in range(10):
     # Apply constraint and run steepest descent minimization
