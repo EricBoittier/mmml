@@ -63,10 +63,15 @@ pycharmm_loud()
 # Path to the pretrained neural network checkpoint parameters
 CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 
+
+
+NWATER = 50
+BOX_SIDE_A = 30.0
+
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
-box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=28.0, seed=11, workdir=workdir)
+box = build_trialanine_water_box_in_charmm(n_waters=NWATER, box_side_A=BOX_SIDE_A, seed=11, workdir=workdir)
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
