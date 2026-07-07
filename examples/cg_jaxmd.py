@@ -185,6 +185,19 @@ atoms.set_pbc(True)
 box_size = float(box.box_side_A)
 cell = np.asarray(box.cell, dtype=np.float64)
 
+# Convert indices to JAX arrays and measure initial bond lengths
+h_idx_jax = jnp.array(h_idx_arr, dtype=jnp.int32)
+x_idx_jax = jnp.array(x_idx_arr, dtype=jnp.int32)
+pos_init = np.asarray(pos)
+r0_list = []
+for h_idx, x_idx in pep_h_x_bonds:
+    dr = pos_init[h_idx] - pos_init[x_idx]
+    dr -= box_size * np.round(dr / box_size)
+    r0 = np.linalg.norm(dr)
+    r0_list.append(r0)
+r0_jax = jnp.array(r0_list, dtype=jnp.float64)
+print(f"--- Measured {len(r0_list)} equilibrium H-X bond lengths for flat-bottom restraints ---")
+
 # 3. Load JAX nonbonded parameters and setup cutoffs
 psf_path = box.psf_path
 prm_path = CGENFF_PRM
@@ -412,7 +425,16 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
     elec = jnp.where(within_ctof, elec, 0.0)
     e_inter = (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
 
-    return e_intra + e_inter
+    # (C) Flat-bottom harmonic restraints on peptide H-X bonds
+    # Kicks in only if bonds stretch more than 0.08 Å beyond equilibrium (r0_jax).
+    ri_pep = r[h_idx_jax]
+    rj_pep = r[x_idx_jax]
+    disp_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_pep, rj_pep)
+    dist_pep = jnp.linalg.norm(disp_pep, axis=-1)
+    excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
+    e_restraint = jnp.sum(0.5 * 100.0 * jnp.square(excess))
+
+    return e_intra + e_inter + e_restraint
 
 
 @jit
