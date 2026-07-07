@@ -378,15 +378,22 @@ def hybrid_energy_fn(r) -> jnp.ndarray:
     rj = r[pj]
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
     dist = jnp.linalg.norm(disp, axis=-1)
-    within_ctof = (dist * dist < _c2of) * mask   # zero out padding entries
+    within_ctof = (dist * dist < _c2of) * mask   # 0.0 for padding and out-of-cutoff
+
+    # CRITICAL: Clamp distances for padding pairs (mask=0) to a safe non-zero value
+    # before passing to VDW/elec kernels.  Padding pairs have pi=pj=0 → dist=0 → inf.
+    # JAX's jnp.where evaluates BOTH branches, so inf survives and 0.0 * inf = nan.
+    # Using a safe sentinel distance (1.0 Å, well within cutoff but harmless since
+    # within_ctof already zeros the result for masked pairs via the mask column).
+    safe_dist = jnp.where(mask > 0.5, dist, 1.0)
 
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
     sig = _rmin_jax[pi] + _rmin_jax[pj]
     qq = _q_jax[pi] * _q_jax[pj] * e14 / nb_settings.eps
 
-    vdw = _pair_vdw_energy(dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False)
+    vdw = _pair_vdw_energy(safe_dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False)
     vdw = vdw * vdw14
-    elec = _pair_elec_energy(dist, qq, nb_settings, _fswitch)
+    elec = _pair_elec_energy(safe_dist, qq, nb_settings, _fswitch)
 
     vdw = jnp.where(within_ctof, vdw, 0.0)
     elec = jnp.where(within_ctof, elec, 0.0)
@@ -452,7 +459,16 @@ def scale_broken_h_bonds(positions, box_sz, h_idx, x_idx, threshold=1.3, target=
 # Helper function to repair structures using PyCHARMM minimization
 def repair_structure_in_charmm(positions):
     print("\n[REPAIR] Temperature spike or NaN detected! Unfolding and repairing structure in CHARMM...")
-    unfolded_pos = unfold_coordinates(np.asarray(positions), box_size, _mon_stacked_groups)
+    pos_np = np.asarray(positions)
+    if not np.isfinite(pos_np).all():
+        n_bad = int((~np.isfinite(pos_np)).any(axis=-1).sum())
+        raise RuntimeError(
+            f"[REPAIR] Positions contain NaN/Inf on {n_bad} atoms — "
+            "cannot pass to CHARMM (would segfault). "
+            "The simulation exploded before the repair point. "
+            "Consider reducing dt, FIRE_BLOCK_STEPS, or dt_start/dt_max."
+        )
+    unfolded_pos = unfold_coordinates(pos_np, box_size, _mon_stacked_groups)
     set_charmm_positions(unfolded_pos)
     lingo.charmm_script("MINI SD 1000")
     lingo.charmm_script("MINI ABNR 1000")
