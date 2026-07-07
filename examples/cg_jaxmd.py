@@ -72,8 +72,8 @@ NVT_BLOCK_STEPS = 1000
 
 NVE_TOTAL_STEPS = 20000
 NVE_BLOCK_STEPS = 100
-
-NWATER = 50
+FIRE_CYCLES=10
+NWATER = 500
 BOX_SIDE_A = 30.0
 
 # 2. Build the initial system in PyCHARMM and minimize
@@ -280,8 +280,8 @@ traj_path_fire = "cg_fire.traj"
 print(f"--- Saving minimization trajectory to {traj_path_fire} ---")
 traj_fire = Trajectory(traj_path_fire, "w", atoms)
 
-for cycle in range(5):
-    print(f"\n--- Minimization Cycle {cycle+1}/5 ---")
+for cycle in range(FIRE_CYCLES):
+    print(f"\n--- Minimization Cycle {cycle+1}/{FIRE_CYCLES} ---")
     
     # Initialize starting FIRE state using current coordinates and pair list
     pi_init, pj_init = get_intermolecular_pairs(np.asarray(pos_current), cell, excluded_pairs, nb_settings.cutnb, molecule_id)
@@ -319,7 +319,7 @@ for cycle in range(5):
 
 traj_fire.close()
 min_r = jnp.array(pos_current, dtype=jnp.float64)
-print(f"\nMinimization completed over 5 cycles.")
+print(f"\nMinimization completed over {FIRE_CYCLES} cycles.")
 
 # 9. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
