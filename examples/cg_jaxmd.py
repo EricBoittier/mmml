@@ -61,7 +61,7 @@ CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
-box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=38.0, seed=11, workdir=workdir)
+box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=28.0, seed=11, workdir=workdir)
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
@@ -79,7 +79,7 @@ setup_nonbonded_only_charmm()
 
 for i in range(10):
     # Apply constraint and run steepest descent minimization
-    lingo.charmm_script("CONStraint DROPlet FORC 0.001 EXPO 4")
+    lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
     lingo.charmm_script("MINI SD 10000")
     lingo.charmm_script("IMAGE")
     lingo.charmm_script("CONStraint DROPlet")
