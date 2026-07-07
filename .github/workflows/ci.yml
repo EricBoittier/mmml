@@ -22,15 +22,15 @@ jobs:
       - name: Set up Python
         run: uv python install ${{ matrix.python-version }}
       - name: Install package and dependencies
-        run: uv pip install --system ".[dev,all-cpu]"
+        run: uv sync --extra dev --extra all-cpu
       - name: Lint config sanity
         run: |
-          python -V
-          python -c "import mmml; print('pkg import ok')"
+          uv run python -V
+          uv run python -c "import mmml; print('pkg import ok')"
       - name: Run tests
-        run: pytest -v --color=yes tests/
+        run: uv run pytest -v --color=yes tests/
       - name: Run CHARMM MPI unit suite
-        run: pytest -v --color=yes tests/charmm_mpi/ -m "charmm_mpi and not pycharmm"
+        run: uv run pytest -v --color=yes tests/charmm_mpi/ -m "charmm_mpi and not pycharmm"
 
   charmm:
     runs-on: ubuntu-latest
@@ -75,7 +75,7 @@ jobs:
             echo "export CHARMM_LIB_DIR=$PWD/setup/charmm"
           } > CHARMMSETUP
       - name: Install package and dependencies
-        run: uv pip install --system ".[dev,all-cpu,charmm-interface]"
+        run: uv sync --extra dev --extra all-cpu --extra charmm-interface
       - name: Run PyCHARMM smoke tests
-        run: bash scripts/ci/run_pycharmm_smoke_pytest.sh -q
+        run: uv run bash scripts/ci/run_pycharmm_smoke_pytest.sh -q
 
