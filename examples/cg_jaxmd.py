@@ -37,8 +37,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
 from mmml.interfaces.pycharmmInterface.charmm_jax_energy_benchmark import _nbond_settings_from_cutoffs
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.interfaces.pycharmmInterface.charmm_levels import run_charmm_script_loud
-from mmml.interfaces.calculators.checkpoint_loading import load_model_checkpoint
-from mmml.interfaces.calculators.simple_inference import SimpleInferenceCalculator
+from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 from mmml.data.units import KCAL_MOL_TO_EV
 
 # 1. Initialize JAX and PyCHARMM configuration
