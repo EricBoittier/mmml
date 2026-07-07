@@ -197,8 +197,8 @@ force_fn = jit(grad(lambda r: -hybrid_energy_fn(r)))
 print("--- Minimizing System with JAX-MD FIRE ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 
-# Initialize FIRE minimizer
-fire_init, fire_step = minimize.fire_descent(hybrid_energy_fn, shift_fn)
+# Initialize FIRE minimizer with a stable initial step size (0.001 ps = 1 fs)
+fire_init, fire_step = minimize.fire_descent(hybrid_energy_fn, shift_fn, dt_start=0.001, dt_max=0.001)
 fire_state = fire_init(init_r)
 
 # Perform minimization steps
@@ -217,12 +217,13 @@ from jax_md import quantity
 
 # Define simulation conditions
 temperature = 300.0  # Kelvin
-kb = 8.617333262145e-5  # eV/K
+kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-dt = 0.5  # femtoseconds
+dt_fs = 0.5  # time step in femtoseconds
+dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Setup NHC simulator
-# We define particle masses
+# We define particle masses (in AMU)
 mass = np.zeros(len(pos))
 mass[:n_trialanine] = 12.0  # average mass approximation for peptide
 mass[n_trialanine::3] = 16.0  # Oxygen
@@ -231,7 +232,8 @@ mass[n_trialanine+2::3] = 1.0  # Hydrogen
 jax_mass = jnp.array(mass, dtype=jnp.float64)
 
 # Initialize simulator state
-init_fn, step_fn = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn, dt=dt, T_eq=target_temp_ev)
+# nvt_nose_hoover expects positional arguments: energy_or_force_fn, shift_fn, dt, kT
+init_fn, step_fn = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn, dt, target_temp_ev)
 # Using random key to assign initial velocities and initialize NVT Nose-Hoover state
 key = jax.random.PRNGKey(42)
 state = init_fn(key, min_r, mass=jax_mass)
