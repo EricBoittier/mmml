@@ -71,11 +71,13 @@ box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=28.0, seed=1
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-1.0, 1.0, pos.shape) + pos
 
-# translate peptide to the middle of the box (L/2, L/2, L/2)
+# translate the entire system so that the peptide is centered in the box (L/2, L/2, L/2)
+# while keeping the waters in their relative positions around the peptide
 n_trialanine = 42
-peptide_np = np.array(pos[:n_trialanine])
-pos[:n_trialanine] -= peptide_np.mean(axis=0)
-pos[:n_trialanine] += np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
+peptide_center = pos[:n_trialanine].mean(axis=0)
+box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
+translation = box_center - peptide_center
+pos += translation
 
 set_charmm_positions(pos)
 
@@ -207,6 +209,27 @@ def make_hybrid_energy_fn(pi, pj):
         return e_intra + e_inter
     return hybrid_energy_fn
 
+
+
+
+
+# Helper function to repair structures using PyCHARMM minimization
+def repair_structure_in_charmm(positions):
+    print("\n[REPAIR] Temperature spike or NaN detected! Repairing structure in CHARMM...")
+    set_charmm_positions(np.asarray(positions))
+    # Run steep SD and ABNR minimizations in PyCHARMM to resolve overlaps/clashes
+    lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
+    lingo.charmm_script("MINI SD 100")
+    lingo.charmm_script("IMAGE")
+    lingo.charmm_script("CONStraint DROPlet")
+    lingo.charmm_script("MINI SD 100")
+    lingo.charmm_script("MINI ABNR 100")
+    # Retrieve repaired positions
+    repaired_pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    print("[REPAIR] Structure repaired successfully. Re-initializing state.\n")
+    return repaired_pos
+
+
 # 7. Minimization and Dynamics Configuration
 FIRE_STEPS = 500
 FIRE_PRINT_FREQ = 100
@@ -217,9 +240,9 @@ NVT_BLOCK_STEPS = 1000
 NVE_TOTAL_STEPS = 20000
 NVE_BLOCK_STEPS = 10000
 
-# 8. Structure Minimization with JAX-MD FIRE
-print("--- Minimizing System with JAX-MD FIRE ---")
-init_r = jnp.array(pos, dtype=jnp.float64)
+# 8. Structure Minimization with JAX-MD FIRE and PyCHARMM Repair Loops
+print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops (5 cycles) ---")
+pos_current = init_r
 
 # Helper function to create JIT-compiled FIRE block runner for a specific pair list
 def make_fire_block_runner(pi, pj):
@@ -235,49 +258,53 @@ def make_fire_block_runner(pi, pj):
         
     return run_fire_block, init_fn_local, jit(local_energy_fn), jit(grad(lambda r: -local_energy_fn(r)))
 
-# Initialize starting FIRE state using the initial pair list
 FIRE_BLOCK_STEPS = 100
-run_fire_block, init_fn_fire, energy_fn_fire, force_fn_fire = make_fire_block_runner(pair_i, pair_j)
-fire_state = init_fn_fire(init_r)
 
 # Open trajectory file for saving minimization path
 traj_path_fire = "cg_fire.traj"
 print(f"--- Saving minimization trajectory to {traj_path_fire} ---")
 traj_fire = Trajectory(traj_path_fire, "w", atoms)
 
-# Save initial pre-minimized frame (Step 0)
-curr_e = float(energy_fn_fire(init_r))
-curr_f = np.asarray(force_fn_fire(init_r))
-frame = atoms.copy()
-frame.set_positions(np.asarray(init_r))
-frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
-traj_fire.write(frame)
-
-# Perform minimization steps in blocks, updating neighbor lists and saving trajectory
-for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
-    # Update neighbor list (pair list) on the host based on current positions
-    pos_np = np.asarray(fire_state.position)
-    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+for cycle in range(5):
+    print(f"\n--- Minimization Cycle {cycle+1}/5 ---")
     
-    # Retrieve the block runner for these specific pairs
-    run_fire_block, _, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi, pj)
+    # Initialize starting FIRE state using current coordinates and pair list
+    pi_init, pj_init = get_intermolecular_pairs(np.asarray(pos_current), cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+    run_fire_block, init_fn_fire, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi_init, pj_init)
+    fire_state = init_fn_fire(pos_current)
     
-    # Run the compiled block
-    fire_state = run_fire_block(fire_state, FIRE_BLOCK_STEPS)
-    
-    curr_e = float(energy_fn_fire(fire_state.position))
-    curr_f = np.asarray(force_fn_fire(fire_state.position))
-    print(f"FIRE Step {step+FIRE_BLOCK_STEPS:5d} | Energy: {curr_e:.4f} eV")
-    
-    # Save minimized block frame to trajectory
+    # Write starting configuration of this cycle to trajectory
+    curr_e = float(energy_fn_fire(pos_current))
+    curr_f = np.asarray(force_fn_fire(pos_current))
     frame = atoms.copy()
-    frame.set_positions(np.asarray(fire_state.position))
+    frame.set_positions(np.asarray(pos_current))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
     traj_fire.write(frame)
+    
+    # Run FIRE blocks
+    for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
+        pos_np = np.asarray(fire_state.position)
+        pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+        run_fire_block, _, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi, pj)
+        
+        fire_state = run_fire_block(fire_state, FIRE_BLOCK_STEPS)
+        
+        curr_e = float(energy_fn_fire(fire_state.position))
+        curr_f = np.asarray(force_fn_fire(fire_state.position))
+        print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:3d} | Energy: {curr_e:.4f} eV")
+        
+        # Save intermediate configuration to trajectory
+        frame = atoms.copy()
+        frame.set_positions(np.asarray(fire_state.position))
+        frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
+        traj_fire.write(frame)
+        
+    # Repair the minimized structures in CHARMM to resolve any close contacts
+    pos_current = repair_structure_in_charmm(fire_state.position)
 
 traj_fire.close()
-min_r = fire_state.position
-print(f"Minimization complete. Final Energy: {energy_fn_fire(min_r):.4f} eV")
+min_r = jnp.array(pos_current, dtype=jnp.float64)
+print(f"\nMinimization completed over 5 cycles.")
 
 # 9. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
@@ -317,21 +344,6 @@ run_nvt_block, init_fn_nvt, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(
 key = jax.random.PRNGKey(42)
 state = init_fn_nvt(key, min_r, mass=jax_mass)
 
-# Helper function to repair structures using PyCHARMM minimization
-def repair_structure_in_charmm(positions):
-    print("\n[REPAIR] Temperature spike or NaN detected! Repairing structure in CHARMM...")
-    set_charmm_positions(np.asarray(positions))
-    # Run steep SD and ABNR minimizations in PyCHARMM to resolve overlaps/clashes
-    lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
-    lingo.charmm_script("MINI SD 100")
-    lingo.charmm_script("IMAGE")
-    lingo.charmm_script("CONStraint DROPlet")
-    lingo.charmm_script("MINI SD 100")
-    lingo.charmm_script("MINI ABNR 100")
-    # Retrieve repaired positions
-    repaired_pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
-    print("[REPAIR] Structure repaired successfully. Re-initializing state.\n")
-    return repaired_pos
 
 # Run NVT dynamics loop with periodic neighbor list updates
 traj_path_nvt = "cg_nvt.traj"
