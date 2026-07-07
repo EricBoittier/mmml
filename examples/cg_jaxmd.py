@@ -242,6 +242,7 @@ NVE_BLOCK_STEPS = 10000
 
 # 8. Structure Minimization with JAX-MD FIRE and PyCHARMM Repair Loops
 print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops (5 cycles) ---")
+init_r = jnp.array(pos, dtype=jnp.float64)
 pos_current = init_r
 
 # Helper function to create JIT-compiled FIRE block runner for a specific pair list
