@@ -1,0 +1,29 @@
+[mmml] JAX compile-time thread env=4 (OMP '4' -> 4; restored after compile context)
+mmml: JAX compile timer [xla_gpu_delay_kernel] pass 1 (compile+run): 0.03s
+mmml: JAX compile timer [xla_gpu_delay_kernel] pass 2 (run): 0.00s
+mmml: JAX compile timer [xla_gpu_delay_kernel] summary: compile≈0.03s, run≈0.00s
+[mmml] JAX compile-time thread env=4 (OMP '4' -> 4; restored after compile context)
+mmml: JAX compile timer [xla_gpu_delay_kernel] pass 1 (compile+run): 0.03s
+mmml: JAX compile timer [xla_gpu_delay_kernel] pass 2 (run): 0.00s
+mmml: JAX compile timer [xla_gpu_delay_kernel] summary: compile≈0.03s, run≈0.00s
+[mmml] JAX compile-time thread env=4 (OMP '4' -> 4; restored after compile context)
+mmml: JAX compile timer [mlpot_callback_forward] pass 1 (compile+run): 9.88s
+mmml: JAX compile timer [mlpot_callback_forward] pass 2 (run): 0.86s
+mmml: JAX compile timer [mlpot_callback_forward] summary: compile≈9.03s, run≈0.86s
+mmml: JAX compile timers — estimated compile=9.06s, run=0.86s
+jax-pme profile summary:
+MLpot profile: wrote git metadata /mmhome/boittier/home/mmml/artifacts/dcm_density_setup_compare/profile_dcm30_l30/minimal_dcm_30_t50_l30_ht_bussi/pycharmm_mini/profile_git_metadata.json
+Decomposed MLpot: ml_batch_size=128 (30 monomers; reduces JAX compile memory)
+ JAX compile-time thread env=8 (OMP '1' -> 8; restored after compile context)
+ JAX compile-time thread env=8 (OMP '8' -> 8; restored after compile context)
+mmml: JAX compile timer xla_gpu_delay_kernel pass 1 (compile+run): 0.06s
+mmml: JAX compile timer xla_gpu_delay_kernel pass 2 (run): 0.00s
+mmml: JAX compile timer xla_gpu_delay_kernel summary: compile≈0.06s, run≈0.00s
+ JAX compile-time thread env=8 (OMP '1' -> 8; restored after compile context)
+mmml: JAX compile timer mlpot_callback_forward pass 1 (compile+run): 12.94s
+mmml: JAX compile timer mlpot_callback_forward pass 2 (run): 1.64s
+mmml: JAX compile timer mlpot_callback_forward summary: compile≈11.29s, 
+╭─────── mmml: JAX compile timers — estimated compile=11.36s, run=1.64s ───────╮
+MLpot list sync before SD minimize: first hybrid ENER FORCE (JAX compile cache / auto warmup speeds this up)...
+MLpot profile: 2380 ML callbacks, ML=3620.121s (95.0%), CHARMM+overhead=189.718s
+jax-pme profile summary:
