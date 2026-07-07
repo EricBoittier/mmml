@@ -60,6 +60,36 @@ jax.config.update("jax_enable_x64", True)
 ensure_pycharmm_loaded()
 pycharmm_loud()
 
+# Helper function to parse peptide H-X bonds from the CHARMM PSF file
+def parse_peptide_h_x_bonds(psf_path, z_array):
+    bonds = []
+    in_bonds = False
+    with open(psf_path, 'r') as f:
+        for line in f:
+            if '!NBOND' in line:
+                in_bonds = True
+                continue
+            if in_bonds:
+                if not line.strip() or '!' in line:
+                    if '!NBOND' not in line:
+                        in_bonds = False
+                        continue
+                parts = line.split()
+                for i in range(0, len(parts), 2):
+                    idx1 = int(parts[i]) - 1
+                    idx2 = int(parts[i+1]) - 1
+                    # Peptide atoms are the first 42 atoms
+                    if idx1 < 42 and idx2 < 42:
+                        z1 = z_array[idx1]
+                        z2 = z_array[idx2]
+                        # Identify hydrogen (Z=1) to heavy atom (Z>1) bonds
+                        if (z1 == 1 and z2 > 1) or (z2 == 1 and z1 > 1):
+                            h_idx = idx1 if z1 == 1 else idx2
+                            x_idx = idx2 if z1 == 1 else idx1
+                            bonds.append((h_idx, x_idx))
+    return bonds
+
+
 # Path to the pretrained neural network checkpoint parameters
 CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
 
@@ -112,6 +142,8 @@ lingo.charmm_script("MINI ABNR 10000")
 # Retrieve positions and atomic numbers
 pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
 z = get_Z_from_psf()
+pep_h_x_bonds = parse_peptide_h_x_bonds(box.psf_path, z)
+print(f"Parsed {len(pep_h_x_bonds)} peptide H-X bonds from PSF.")
 
 # Construct ASE Atoms object to act as a template for trajectory writing
 atoms = Atoms(z, pos)
@@ -234,15 +266,31 @@ def unfold_coordinates(positions, L, mon_indices):
         unfolded[indices] = ref_pos + diff
     return unfolded
 
-# Helper function to check the spatial extent of the peptide (first 42 atoms)
-def check_peptide_extent(positions, box_sz):
-    pep_pos = np.asarray(positions[:42])
-    ref_pos = pep_pos[0]
-    diff = pep_pos - ref_pos
-    diff = diff - box_sz * np.round(diff / box_sz)
-    unfolded_pep = ref_pos + diff
-    dists = np.linalg.norm(unfolded_pep[:, None, :] - unfolded_pep[None, :, :], axis=-1)
-    return float(np.max(dists))
+# Helper function to check and scale back stretched peptide H-X bonds to 1.0 A
+def scale_broken_h_bonds(positions, box_sz, h_x_bonds):
+    new_pos = np.copy(positions)
+    scaled_any = False
+    for h_idx, x_idx in h_x_bonds:
+        diff = positions[h_idx] - positions[x_idx]
+        diff = diff - box_sz * np.round(diff / box_sz)
+        dist = np.linalg.norm(diff)
+        if dist > 1.5:
+            # Scale back along the bond vector relative to the heavy atom X
+            direction = diff / dist
+            new_pos[h_idx] = positions[x_idx] + direction * 1.0
+            scaled_any = True
+    return new_pos, scaled_any
+
+# Helper function to compute the maximum peptide H-X bond length under PBC
+def get_max_h_x_bond(positions, box_sz, h_x_bonds):
+    max_d = 0.0
+    for h_idx, x_idx in h_x_bonds:
+        diff = positions[h_idx] - positions[x_idx]
+        diff = diff - box_sz * np.round(diff / box_sz)
+        dist = np.linalg.norm(diff)
+        if dist > max_d:
+            max_d = dist
+    return float(max_d)
 
 # Helper function to repair structures using PyCHARMM minimization
 def repair_structure_in_charmm(positions):
@@ -311,8 +359,8 @@ for cycle in range(FIRE_CYCLES):
         
         curr_e = float(energy_fn_fire(fire_state.position))
         curr_f = np.asarray(force_fn_fire(fire_state.position))
-        pep_ext = check_peptide_extent(fire_state.position, box_size)
-        print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:3d} | Energy: {curr_e:.4f} eV | Pep Extent: {pep_ext:.2f} Å")
+        max_bond = get_max_h_x_bond(fire_state.position, box_size, pep_h_x_bonds)
+        print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:3d} | Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å")
         
         # Save intermediate configuration to trajectory
         frame = atoms.copy()
@@ -389,23 +437,34 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     curr_f = np.asarray(force_fn_nvt(state.position))
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
-    pep_ext = check_peptide_extent(state.position, box_size)
+    max_bond = get_max_h_x_bond(np.asarray(state.position), box_size, pep_h_x_bonds)
     
-    # Check if a spike occurred, NaN energy, or peptide broke (extent > 15.0 A) and repair if necessary
-    if temp > 400.0 or np.isnan(curr_e) or pep_ext > 15.0:
-        if pep_ext > 15.0:
-            print(f"[REPAIR] Peptide broke! Extent: {pep_ext:.2f} Å (max limit 15.0 Å)")
-        repaired_pos = repair_structure_in_charmm(state.position)
-        # Re-initialize the state with the repaired coordinates at the target temperature
-        state = init_fn_nvt(key, jnp.array(repaired_pos, dtype=jnp.float64), mass=jax_mass)
+    # Check if a spike occurred, NaN energy, or peptide H-X bond stretched > 1.5 A and repair
+    if temp > 400.0 or np.isnan(curr_e) or max_bond > 1.5:
+        if max_bond > 1.5:
+            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit 1.5 Å)")
+        # 1. Scale back the coordinates of any stretched H-X bonds to 1.0 A
+        scaled_pos, scaled_any = scale_broken_h_bonds(np.asarray(state.position), box_size, pep_h_x_bonds)
+        # 2. Minimize in PyCHARMM
+        repaired_pos = repair_structure_in_charmm(scaled_pos)
+        # 3. Post-repair JAX FIRE minimization (200 steps)
+        print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
+        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+        run_fire, init_fire, energy_fire, _ = make_fire_block_runner(pi_rep, pj_rep)
+        fire_state_rep = init_fire(jnp.array(repaired_pos, dtype=jnp.float64))
+        fire_state_rep = run_fire(fire_state_rep, 200)
+        final_min_pos = np.asarray(fire_state_rep.position)
+        
+        # Re-initialize the state with the final minimized coordinates at target temperature
+        state = init_fn_nvt(key, jnp.array(final_min_pos, dtype=jnp.float64), mass=jax_mass)
         # Re-evaluate properties
         curr_e = float(energy_fn_nvt(state.position))
         curr_f = np.asarray(force_fn_nvt(state.position))
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
         temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
-        pep_ext = check_peptide_extent(repaired_pos, box_size)
+        max_bond = get_max_h_x_bond(np.asarray(state.position), box_size, pep_h_x_bonds)
         
-    print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Peptide Ext: {pep_ext:.2f} Å")
+    print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
     
     # Save frame to trajectory
     frame = atoms.copy()
@@ -459,23 +518,34 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     curr_f = np.asarray(force_fn_nve(state_nve.position))
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
-    pep_ext = check_peptide_extent(state_nve.position, box_size)
+    max_bond = get_max_h_x_bond(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
     
-    # Check if a spike occurred, NaN energy, or peptide broke (extent > 15.0 A) and repair if necessary
-    if temp > 400.0 or np.isnan(curr_e) or pep_ext > 15.0:
-        if pep_ext > 15.0:
-            print(f"[REPAIR] Peptide broke! Extent: {pep_ext:.2f} Å (max limit 15.0 Å)")
-        repaired_pos = repair_structure_in_charmm(state_nve.position)
-        # Re-initialize the state with the repaired coordinates
-        state_nve = init_fn_nve(key, jnp.array(repaired_pos, dtype=jnp.float64), target_temp_ev, mass=jax_mass)
+    # Check if a spike occurred, NaN energy, or peptide H-X bond stretched > 1.5 A and repair
+    if temp > 400.0 or np.isnan(curr_e) or max_bond > 1.5:
+        if max_bond > 1.5:
+            print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å (max limit 1.5 Å)")
+        # 1. Scale back the coordinates of any stretched H-X bonds to 1.0 A
+        scaled_pos, scaled_any = scale_broken_h_bonds(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
+        # 2. Minimize in PyCHARMM
+        repaired_pos = repair_structure_in_charmm(scaled_pos)
+        # 3. Post-repair JAX FIRE minimization (200 steps)
+        print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
+        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+        run_fire, init_fire, energy_fire, _ = make_fire_block_runner(pi_rep, pj_rep)
+        fire_state_rep = init_fire(jnp.array(repaired_pos, dtype=jnp.float64))
+        fire_state_rep = run_fire(fire_state_rep, 200)
+        final_min_pos = np.asarray(fire_state_rep.position)
+        
+        # Re-initialize the state with the final minimized coordinates
+        state_nve = init_fn_nve(key, jnp.array(final_min_pos, dtype=jnp.float64), target_temp_ev, mass=jax_mass)
         # Re-evaluate properties
         curr_e = float(energy_fn_nve(state_nve.position))
         curr_f = np.asarray(force_fn_nve(state_nve.position))
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
         temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
-        pep_ext = check_peptide_extent(repaired_pos, box_size)
+        max_bond = get_max_h_x_bond(np.asarray(state_nve.position), box_size, pep_h_x_bonds)
         
-    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Peptide Ext: {pep_ext:.2f} Å")
+    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
     
     # Save frame to trajectory
     frame = atoms.copy()
