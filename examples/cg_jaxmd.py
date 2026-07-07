@@ -105,6 +105,7 @@ NVE_BLOCK_STEPS = 100
 FIRE_CYCLES=10
 NWATER = 1500
 BOX_SIDE_A = 30.0
+NL_BUFFER = 2.0
 
 
 # Define simulation conditions
@@ -211,7 +212,7 @@ if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
         nbond_data.psf_bonds,
         natom=int(np.asarray(nbond_data.charges).shape[0]),
     )
-pair_i, pair_j = get_intermolecular_pairs(pos, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+pair_i, pair_j = get_intermolecular_pairs(pos, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
 
 def make_hybrid_energy_fn(pi, pj):
     # Keep pi and pj as numpy arrays (np.ndarray) so they are treated as static constants during JIT compilation.
@@ -318,7 +319,7 @@ for cycle in range(FIRE_CYCLES):
     print(f"\n--- Minimization Cycle {cycle+1}/{FIRE_CYCLES} ---")
     
     # Initialize starting FIRE state using current coordinates and pair list
-    pi_init, pj_init = get_intermolecular_pairs(np.asarray(pos_current), cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+    pi_init, pj_init = get_intermolecular_pairs(np.asarray(pos_current), cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
     run_fire_block, init_fn_fire, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi_init, pj_init)
     fire_state = init_fn_fire(pos_current)
     
@@ -333,7 +334,7 @@ for cycle in range(FIRE_CYCLES):
     # Run FIRE blocks
     for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
         pos_np = np.asarray(fire_state.position)
-        pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+        pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
         run_fire_block, _, energy_fn_fire, force_fn_fire = make_fire_block_runner(pi, pj)
         
         fire_state = run_fire_block(fire_state, FIRE_BLOCK_STEPS)
@@ -398,7 +399,7 @@ traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
 for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     # Update neighbor list (pair list) on the host based on current positions
     pos_np = np.asarray(state.position)
-    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
     
     # Retrieve the block runner for these specific pairs
     run_nvt_block, _, energy_fn_nvt, force_fn_nvt = make_nvt_block_runner(pi, pj)
@@ -423,7 +424,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         repaired_pos = repair_structure_in_charmm(scaled_pos)
         # 3. Post-repair JAX FIRE minimization (200 steps)
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
-        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
         run_fire, init_fire, energy_fire, _ = make_fire_block_runner(pi_rep, pj_rep)
         fire_state_rep = init_fire(jnp.array(repaired_pos, dtype=jnp.float64))
         fire_state_rep = run_fire(fire_state_rep, 200)
@@ -468,7 +469,7 @@ def make_nve_block_runner(pi, pj):
 
 # Initialize NVE simulation state from the final NVT positions and velocities
 pos_np_final = np.asarray(state.position)
-pi_init, pj_init = get_intermolecular_pairs(pos_np_final, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+pi_init, pj_init = get_intermolecular_pairs(pos_np_final, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
 run_nve_block, init_fn_nve, energy_fn_nve, force_fn_nve = make_nve_block_runner(pi_init, pj_init)
 state_nve = init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass)
 
@@ -479,7 +480,7 @@ traj_nve = Trajectory(traj_path_nve, "w", atoms)
 for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     # Update neighbor list (pair list)
     pos_np = np.asarray(state_nve.position)
-    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
     
     # Get NVE block runner
     run_nve_block, _, energy_fn_nve, force_fn_nve = make_nve_block_runner(pi, pj)
@@ -504,7 +505,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         repaired_pos = repair_structure_in_charmm(scaled_pos)
         # 3. Post-repair JAX FIRE minimization (200 steps)
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
-        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+        pi_rep, pj_rep = get_intermolecular_pairs(repaired_pos, cell, excluded_pairs, nb_settings.cutnb + NL_BUFFER, molecule_id)
         run_fire, init_fire, energy_fire, _ = make_fire_block_runner(pi_rep, pj_rep)
         fire_state_rep = init_fire(jnp.array(repaired_pos, dtype=jnp.float64))
         fire_state_rep = run_fire(fire_state_rep, 200)
