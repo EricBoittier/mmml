@@ -209,10 +209,6 @@ def make_hybrid_energy_fn(pi, pj):
         return e_intra + e_inter
     return hybrid_energy_fn
 
-
-
-
-
 # Helper function to unfold periodic coordinates to keep molecules contiguous
 def unfold_coordinates(positions, L, mon_indices):
     unfolded = np.copy(positions)
@@ -262,7 +258,7 @@ pos_current = init_r
 # Helper function to create JIT-compiled FIRE block runner for a specific pair list
 def make_fire_block_runner(pi, pj):
     local_energy_fn = make_hybrid_energy_fn(pi, pj)
-    init_fn_local, step_fn_local = minimize.fire_descent(local_energy_fn, shift_fn, dt_start=0.001, dt_max=0.001)
+    init_fn_local, step_fn_local = minimize.fire_descent(local_energy_fn, shift_fn, dt_start=0.0001, dt_max=0.001)
     step_fn_local = jit(step_fn_local)
     
     @jit
