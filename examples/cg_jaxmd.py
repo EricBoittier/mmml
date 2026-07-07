@@ -213,14 +213,29 @@ def make_hybrid_energy_fn(pi, pj):
 
 
 
+# Helper function to unfold periodic coordinates to keep molecules contiguous
+def unfold_coordinates(positions, cell_matrix, mon_indices):
+    unfolded = np.copy(positions)
+    L = cell_matrix[0]  # Assuming a cubic box
+    for indices in mon_indices:
+        if len(indices) <= 1:
+            continue
+        ref_pos = positions[indices[0]]
+        diff = positions[indices] - ref_pos
+        diff = diff - L * np.round(diff / L)
+        unfolded[indices] = ref_pos + diff
+    return unfolded
+
 # Helper function to repair structures using PyCHARMM minimization
 def repair_structure_in_charmm(positions):
-    print("\n[REPAIR] Temperature spike or NaN detected! Repairing structure in CHARMM...")
-    set_charmm_positions(np.asarray(positions))
+    print("\n[REPAIR] Temperature spike or NaN detected! Unfolding and repairing structure in CHARMM...")
+    # Unfold coordinates first so PyCHARMM does not see split molecules with massive bond lengths
+    unfolded_pos = unfold_coordinates(np.asarray(positions), cell, monomer_indices)
+    set_charmm_positions(unfolded_pos)
+    
     # Run steep SD and ABNR minimizations in PyCHARMM to resolve overlaps/clashes
     lingo.charmm_script("CONStraint DROPlet FORC 0.01 EXPO 4")
     lingo.charmm_script("MINI SD 100")
-    lingo.charmm_script("IMAGE")
     lingo.charmm_script("CONStraint DROPlet")
     lingo.charmm_script("MINI SD 100")
     lingo.charmm_script("MINI ABNR 100")
