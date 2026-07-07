@@ -118,15 +118,16 @@ def parse_peptide_h_x_bonds(psf_path, z_array):
 # Path to the pretrained neural network checkpoint parameters
 CKPT_PATH = "examples/params_aaa_long_2026-07-04_22-30-27.json"
 
-FIRE_STEPS = 500
-FIRE_PRINT_FREQ = 100
+FIRE_STEPS = 5000
+FIRE_PRINT_FREQ = 1000
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
 # running 1000 steps without checking allows catastrophic divergence before repair.
-FIRE_BLOCK_STEPS = 100
-NVT_TOTAL_STEPS = 50000
-NVT_BLOCK_STEPS = 200
+FIRE_BLOCK_STEPS = 1000
 
-NVE_TOTAL_STEPS = 20000
+NVT_TOTAL_STEPS = 1000000
+NVT_BLOCK_STEPS = 500
+
+NVE_TOTAL_STEPS = 1000000
 NVE_BLOCK_STEPS = 500
 FIRE_CYCLES = 10
 NWATER = 1500
@@ -137,10 +138,10 @@ MAX_PAIRS_HEADROOM = 1.05
 MAX_HX_BOND_LIMIT = 1.5
 SEED = 42
 # Define simulation conditions
-temperature = 100.0  # Kelvin
+temperature = 298.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-dt_fs = 0.25  # time step in femtoseconds
+dt_fs = 0.5  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 
