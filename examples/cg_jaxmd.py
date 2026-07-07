@@ -221,24 +221,42 @@ NVE_BLOCK_STEPS = 10000
 print("--- Minimizing System with JAX-MD FIRE ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 
-# Create the initial energy and force functions for minimization
-initial_energy_fn = make_hybrid_energy_fn(pair_i, pair_j)
-energy_fn = jit(initial_energy_fn)
-force_fn = jit(grad(lambda r: -initial_energy_fn(r)))
+# Helper function to create JIT-compiled FIRE block runner for a specific pair list
+def make_fire_block_runner(pi, pj):
+    local_energy_fn = make_hybrid_energy_fn(pi, pj)
+    init_fn_local, step_fn_local = minimize.fire_descent(local_energy_fn, shift_fn, dt_start=0.001, dt_max=0.001)
+    step_fn_local = jit(step_fn_local)
+    
+    @jit
+    def run_fire_block(state, steps=500):
+        def body_fn(i, val_state):
+            return step_fn_local(val_state)
+        return jax.lax.fori_loop(0, steps, body_fn, state)
+        
+    return run_fire_block, init_fn_local, jit(local_energy_fn)
 
-# Initialize FIRE minimizer
-fire_init, fire_step = minimize.fire_descent(initial_energy_fn, shift_fn, dt_start=0.001, dt_max=0.001)
-fire_state = fire_init(init_r)
+# Initialize starting FIRE state using the initial pair list
+FIRE_BLOCK_STEPS = 500
+run_fire_block, init_fn_fire, energy_fn_fire = make_fire_block_runner(pair_i, pair_j)
+fire_state = init_fn_fire(init_r)
 
-# Perform minimization steps
-for step in range(FIRE_STEPS):
-    fire_state = fire_step(fire_state)
-    if step % FIRE_PRINT_FREQ == 0:
-        curr_e = energy_fn(fire_state.position)
-        print(f"FIRE Step {step:3d} | Energy: {curr_e:.4f} eV")
+# Perform minimization steps in blocks, updating neighbor lists
+for step in range(0, FIRE_STEPS, FIRE_BLOCK_STEPS):
+    # Update neighbor list (pair list) on the host based on current positions
+    pos_np = np.asarray(fire_state.position)
+    pi, pj = get_intermolecular_pairs(pos_np, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
+    
+    # Retrieve the block runner for these specific pairs
+    run_fire_block, _, energy_fn_fire = make_fire_block_runner(pi, pj)
+    
+    # Run the compiled block
+    fire_state = run_fire_block(fire_state, FIRE_BLOCK_STEPS)
+    
+    curr_e = float(energy_fn_fire(fire_state.position))
+    print(f"FIRE Step {step+FIRE_BLOCK_STEPS:5d} | Energy: {curr_e:.4f} eV")
 
 min_r = fire_state.position
-print(f"Minimization complete. Final Energy: {energy_fn(min_r):.4f} eV")
+print(f"Minimization complete. Final Energy: {energy_fn_fire(min_r):.4f} eV")
 
 # 9. Molecular Dynamics (NVT Nose-Hoover) with JAX-MD
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
