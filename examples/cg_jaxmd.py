@@ -222,12 +222,8 @@ pair_i, pair_j = get_intermolecular_pairs(pos, cell, excluded_pairs, nb_settings
 # Using a cubic box setup based on the cell size.
 displacement_fn, shift_fn = space.periodic(box_size)
 
-# 6. Build the Hybrid JAX-MD Energy Function factory closing over static pair lists
 def make_hybrid_energy_fn(pi, pj):
-    # Convert numpy pair indices to JAX arrays once at definition time (treated as static constants)
-    j_pi = jnp.array(pi, dtype=jnp.int32)
-    j_pj = jnp.array(pj, dtype=jnp.int32)
-    
+    # Keep pi and pj as numpy arrays (np.ndarray) so they are treated as static constants during JIT compilation.
     def hybrid_energy_fn(r) -> jnp.ndarray:
         # (A) Intramolecular terms from ML potential
         e_intra = compute_monomer_energy(r)
@@ -240,8 +236,8 @@ def make_hybrid_energy_fn(pi, pj):
             cell,
             nb_settings,
             molecule_id=None,
-            pair_i=j_pi,
-            pair_j=j_pj,
+            pair_i=pi,
+            pair_j=pj,
         )
         e_inter = terms_raw.get("total", sum(terms_raw.values())) * KCAL_MOL_TO_EV
         
