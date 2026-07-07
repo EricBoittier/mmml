@@ -15,6 +15,11 @@ import jax.numpy as jnp
 import numpy as np
 from jax import jit, grad
 
+# ASE trajectory, calculator, and Atoms imports
+from ase import Atoms
+from ase.io.trajectory import Trajectory
+from ase.calculators.singlepoint import SinglePointCalculator
+
 # JAX-MD imports
 from jax_md import space, minimize, simulate
 
@@ -75,6 +80,11 @@ run_charmm_script_loud("MINI ABNR 10000")
 # Retrieve positions and atomic numbers
 pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
 z = get_Z_from_psf()
+
+# Construct ASE Atoms object to act as a template for trajectory writing
+atoms = Atoms(z, pos)
+atoms.set_cell(box.cell)
+atoms.set_pbc(True)
 
 # Define box size and cell
 box_size = float(box.box_side_A)
@@ -252,14 +262,28 @@ state = init_fn(key, min_r, mass=jax_mass)
 step_fn = jit(step_fn)
 
 # Run dynamics loop
-for step in range(500):
-    state = step_fn(state)
-    if step % 100 == 0:
-        curr_e = energy_fn(state.position)
-        # Calculate instantaneous kinetic energy and temperature using JAX-MD quantities
-        ke = quantity.kinetic_energy(momentum=state.momentum, mass=state.mass)
-        temp = quantity.temperature(momentum=state.momentum, mass=state.mass) / kb
-        print(f"MD Step {step:3d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+traj_path = "cg_md.traj"
+print(f"--- Running dynamics and saving trajectory to {traj_path} ---")
+traj = Trajectory(traj_path, "w", atoms)
 
-print("JAX-MD Simulation complete!")
+for step in range(50000):
+    state = step_fn(state)
+    if step % 1000 == 0:
+        pos_np = np.asarray(state.position)
+        curr_e = float(energy_fn(state.position))
+        curr_f = np.asarray(force_fn(state.position))
+        
+        # Calculate instantaneous kinetic energy and temperature using JAX-MD quantities
+        ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
+        temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
+        print(f"MD Step {step:5d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
+        
+        # Save frame to trajectory with computed energy and forces
+        frame = atoms.copy()
+        frame.set_positions(pos_np)
+        frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
+        traj.write(frame)
+
+traj.close()
+print(f"JAX-MD Simulation complete! Trajectory saved to {traj_path}")
 
