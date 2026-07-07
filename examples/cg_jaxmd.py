@@ -107,7 +107,7 @@ NWATER = 1500
 BOX_SIDE_A = 30.0
 NL_BUFFER = 2.0
 MAX_HX_BOND_LIMIT = 1.2
-
+SEED = 42
 # Define simulation conditions
 temperature = 100.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
@@ -120,7 +120,9 @@ dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
-box = build_trialanine_water_box_in_charmm(n_waters=NWATER, box_side_A=BOX_SIDE_A, seed=11, workdir=workdir)
+box = build_trialanine_water_box_in_charmm(n_waters=NWATER, 
+    box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
+    )
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-0.1, 0.1, pos.shape) + pos
