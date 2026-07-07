@@ -106,6 +106,16 @@ FIRE_CYCLES=10
 NWATER = 1500
 BOX_SIDE_A = 30.0
 
+
+# Define simulation conditions
+temperature = 200.0  # Kelvin
+kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
+target_temp_ev = temperature * kb
+dt_fs = 0.5  # time step in femtoseconds
+dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
+
+
+
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
@@ -183,19 +193,6 @@ for mol_id, start in enumerate(range(n_trialanine, len(pos), 3), start=1):
     molecule_id[start:start + 3] = mol_id
 jax_molecule_id = jnp.array(molecule_id, dtype=jnp.int32)
 
-# Precompute pair list indices for nonbonded interactions to avoid JIT TracerArrayConversionError
-print("--- Precomputing nonbonded pair list indices ---")
-excluded_pairs = nbond_data.excluded_pairs
-if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
-    excluded_pairs = resolve_nonbonded_excluded_pairs(
-        nbond_data.psf_path,
-        nbond_data.psf_bonds,
-        natom=int(np.asarray(nbond_data.charges).shape[0]),
-    )
-pair_i, pair_j = _build_pair_indices(pos, cell, excluded_pairs, nb_settings.cutnb)
-jax_pair_i = jnp.array(pair_i, dtype=jnp.int32)
-jax_pair_j = jnp.array(pair_j, dtype=jnp.int32)
-
 # 5. Define displacement and shift functions for Periodic Boundary Conditions (JAX-MD)
 # Using a cubic box setup based on the cell size.
 displacement_fn, shift_fn = space.periodic(box_size)
@@ -227,10 +224,6 @@ if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
         natom=int(np.asarray(nbond_data.charges).shape[0]),
     )
 pair_i, pair_j = get_intermolecular_pairs(pos, cell, excluded_pairs, nb_settings.cutnb, molecule_id)
-
-# 5. Define displacement and shift functions for Periodic Boundary Conditions (JAX-MD)
-# Using a cubic box setup based on the cell size.
-displacement_fn, shift_fn = space.periodic(box_size)
 
 def make_hybrid_energy_fn(pi, pj):
     # Keep pi and pj as numpy arrays (np.ndarray) so they are treated as static constants during JIT compilation.
@@ -368,10 +361,8 @@ for cycle in range(FIRE_CYCLES):
         frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
         traj_fire.write(frame)
         
-    # Clean up all except the final
-    if (step+1)*FIRE_BLOCK_STEPS < FIRE_STEPS:
-        # Repair the minimized structures in CHARMM to resolve any close contacts
-        pos_current = repair_structure_in_charmm(fire_state.position)
+    # Repair the minimized structures in CHARMM at the end of every cycle to resolve any close contacts
+    pos_current = repair_structure_in_charmm(fire_state.position)
 
 traj_fire.close()
 min_r = jnp.array(pos_current, dtype=jnp.float64)
@@ -381,12 +372,7 @@ print(f"\nMinimization completed over {FIRE_CYCLES} cycles.")
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
 from jax_md import quantity
 
-# Define simulation conditions
-temperature = 200.0  # Kelvin
-kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
-target_temp_ev = temperature * kb
-dt_fs = 0.25  # time step in femtoseconds
-dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
+
 
 # Setup NHC simulator
 mass = np.zeros(len(pos))
