@@ -257,8 +257,8 @@ for step in range(500):
     if step % 100 == 0:
         curr_e = energy_fn(state.position)
         # Calculate instantaneous kinetic energy and temperature using JAX-MD quantities
-        ke = quantity.kinetic_energy(momentum=state.momentum, mass=jax_mass)
-        temp = quantity.temperature(momentum=state.momentum, mass=jax_mass) / kb
+        ke = quantity.kinetic_energy(momentum=state.momentum, mass=state.mass)
+        temp = quantity.temperature(momentum=state.momentum, mass=state.mass) / kb
         print(f"MD Step {step:3d} | Tot Energy: {curr_e + ke:.4f} eV | Temp: {temp:.1f} K")
 
 print("JAX-MD Simulation complete!")
