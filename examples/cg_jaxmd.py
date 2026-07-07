@@ -110,7 +110,7 @@ def parse_peptide_h_x_bonds(psf_path, z_array):
 
 
 # Path to the pretrained neural network checkpoint parameters
-CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
+CKPT_PATH = "examples/params_aaa_long_2026-07-04_22-30-27.json"
 
 FIRE_STEPS = 500
 FIRE_PRINT_FREQ = 100
@@ -373,14 +373,15 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
     ri = r[pi]
     rj = r[pj]
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
-    dist = jnp.linalg.norm(disp, axis=-1)
+    
+    # CRITICAL: Prevent zero displacement for padding pairs (mask=0)
+    # to avoid NaN gradients from jnp.linalg.norm at 0.
+    safe_disp = jnp.where(mask[:, None] > 0.5, disp, 1.0)
+    dist = jnp.linalg.norm(safe_disp, axis=-1)
     within_ctof = (dist * dist < _c2of) * mask   # 0.0 for padding and out-of-cutoff
 
     # CRITICAL: Clamp distances for padding pairs (mask=0) to a safe non-zero value
-    # before passing to VDW/elec kernels.  Padding pairs have pi=pj=0 → dist=0 → inf.
-    # JAX's jnp.where evaluates BOTH branches, so inf survives and 0.0 * inf = nan.
-    # Using a safe sentinel distance (1.0 Å, well within cutoff but harmless since
-    # within_ctof already zeros the result for masked pairs via the mask column).
+    # before passing to VDW/elec kernels.
     safe_dist = jnp.where(mask > 0.5, dist, 1.0)
 
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
@@ -409,7 +410,8 @@ def _debug_mm_energy(r, pi, pj, mask, e14, vdw14):
     """JIT-compiled MM intermolecular energy only (for diagnostics)."""
     ri = r[pi]; rj = r[pj]
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
-    dist = jnp.linalg.norm(disp, axis=-1)
+    safe_disp = jnp.where(mask[:, None] > 0.5, disp, 1.0)
+    dist = jnp.linalg.norm(safe_disp, axis=-1)
     within_ctof = (dist * dist < _c2of) * mask
     safe_dist = jnp.where(mask > 0.5, dist, 1.0)
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
