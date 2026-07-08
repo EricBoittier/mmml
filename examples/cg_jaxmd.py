@@ -496,6 +496,198 @@ def diagnose_energy(r, label=""):
           f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())}")
 
 
+def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
+    """Detailed diagnostics of forces and neighbor lists, creating plots."""
+    import matplotlib
+    matplotlib.use('Agg') # Ensure non-interactive backend is used
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LogNorm
+    import networkx as nx
+    
+    r_np = np.asarray(r)
+    pi_np = np.asarray(pi)
+    pj_np = np.asarray(pj)
+    mask_np = np.asarray(mask)
+    
+    print(f"\n=== FORCE & NEIGHBOR LIST DIAGNOSTICS (Cycle {cycle}, Step {step}) ===")
+    print(f"Positions: min={r_np.min():.3f}, max={r_np.max():.3f}, mean={r_np.mean():.3f}, std={r_np.std():.3f}")
+    
+    # helper for atom names
+    def get_atom_name(idx):
+        if 'atoms' in globals() and idx < len(atoms):
+            return f"{atoms.get_chemical_symbols()[idx]}{idx}"
+        return f"Atom{idx}"
+
+    # 1. Energy Components
+    e_ml = float(_debug_ml_energy(r))
+    e_mm = float(_debug_mm_energy(r, pi, pj, mask, e14, vdw14))
+    print(f"Energies: E_ML={e_ml:.4f} eV | E_MM={e_mm:.4f} eV | E_tot={e_ml+e_mm:.4f} eV")
+
+    # 2. Forces
+    f_tot_mag = np.zeros(1)
+    f_ml_mag = np.zeros(1)
+    f_mm_mag = np.zeros(1)
+    f_res_mag = np.zeros(1)
+    
+    f_tot = None
+    f_ml = None
+    f_mm = None
+    
+    try:
+        grad_tot = jax.grad(lambda r_: hybrid_energy_fn(r_, pi, pj, mask, e14, vdw14))(r)
+        f_tot = -np.asarray(grad_tot)
+        f_tot_mag = np.linalg.norm(f_tot, axis=-1)
+        print(f"Total Forces: min={f_tot_mag.min():.3f}, max={f_tot_mag.max():.3f}, mean={f_tot_mag.mean():.3f}, std={f_tot_mag.std():.3f}")
+        nans_tot = np.isnan(f_tot).sum()
+        if nans_tot > 0:
+            print(f"  ⚠ WARNING: {nans_tot} NaNs detected in Total Forces!")
+    except Exception as e:
+        print(f"  Failed to compute Total Forces gradient: {e}")
+        
+    try:
+        grad_ml = jax.grad(lambda r_: compute_monomer_energy(r_))(r)
+        f_ml = -np.asarray(grad_ml)
+        f_ml_mag = np.linalg.norm(f_ml, axis=-1)
+        print(f"ML Monomer Forces: min={f_ml_mag.min():.3f}, max={f_ml_mag.max():.3f}, mean={f_ml_mag.mean():.3f}, std={f_ml_mag.std():.3f}")
+        nans_ml = np.isnan(f_ml).sum()
+        if nans_ml > 0:
+            print(f"  ⚠ WARNING: {nans_ml} NaNs detected in ML Forces!")
+    except Exception as e:
+        print(f"  Failed to compute ML Forces gradient: {e}")
+
+    try:
+        grad_mm = jax.grad(lambda r_: _debug_mm_energy(r_, pi, pj, mask, e14, vdw14))(r)
+        f_mm = -np.asarray(grad_mm)
+        f_mm_mag = np.linalg.norm(f_mm, axis=-1)
+        print(f"MM Nonbonded Forces: min={f_mm_mag.min():.3f}, max={f_mm_mag.max():.3f}, mean={f_mm_mag.mean():.3f}, std={f_mm_mag.std():.3f}")
+        nans_mm = np.isnan(f_mm).sum()
+        if nans_mm > 0:
+            print(f"  ⚠ WARNING: {nans_mm} NaNs detected in MM Forces!")
+    except Exception as e:
+        print(f"  Failed to compute MM Forces gradient: {e}")
+
+    try:
+        def restraint_energy_fn(r_):
+            ri_pep = r_[h_idx_jax]
+            rj_pep = r_[x_idx_jax]
+            disp_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_pep, rj_pep)
+            disp_pep_sq = jnp.sum(disp_pep**2, axis=-1)
+            dist_pep = jnp.sqrt(jnp.maximum(disp_pep_sq, 1e-12))
+            excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
+            return jnp.sum(0.5 * 100.0 * jnp.square(excess))
+        grad_res = jax.grad(restraint_energy_fn)(r)
+        f_res = -np.asarray(grad_res)
+        f_res_mag = np.linalg.norm(f_res, axis=-1)
+        print(f"Restraint Forces: min={f_res_mag.min():.3f}, max={f_res_mag.max():.3f}, mean={f_res_mag.mean():.3f}, std={f_res_mag.std():.3f}")
+        nans_res = np.isnan(f_res).sum()
+        if nans_res > 0:
+            print(f"  ⚠ WARNING: {nans_res} NaNs detected in Restraint Forces!")
+    except Exception as e:
+        print(f"  Failed to compute Restraint Forces gradient: {e}")
+
+    # 3. Analyze distances for neighbor list pairs
+    active_idx = np.where(mask_np > 0.5)[0]
+    dists = np.array([])
+    if len(active_idx) > 0:
+        active_pi = pi_np[active_idx]
+        active_pj = pj_np[active_idx]
+        ri_active = r_np[active_pi]
+        rj_active = r_np[active_pj]
+        diff = rj_active - ri_active
+        box_sz = np.diag(cell) if cell.ndim == 2 else np.diag(np.diag(cell))
+        diff -= box_sz * np.round(diff / box_sz)
+        dists = np.linalg.norm(diff, axis=-1)
+        
+        print(f"Active NL Pairs Count: {len(active_idx)}")
+        print(f"Active Pair Distances: min={dists.min():.3f} Å, max={dists.max():.3f} Å, mean={dists.mean():.3f} Å")
+        
+        close_idx = np.where(dists < 1.2)[0]
+        if len(close_idx) > 0:
+            print(f"  ⚠ WARNING: {len(close_idx)} pairs are extremely close (< 1.2 Å)!")
+            sorted_close = np.argsort(dists[close_idx])
+            for idx in sorted_close[:5]:
+                p_idx = close_idx[idx]
+                print(f"    Atom {active_pi[p_idx]} ({get_atom_name(active_pi[p_idx])}) - Atom {active_pj[p_idx]} ({get_atom_name(active_pj[p_idx])}): dist = {dists[p_idx]:.3f} Å")
+
+    # 4. Generate Plots
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    
+    # Plot A: Forces per Atom
+    if f_tot is not None:
+        axes[0, 0].plot(f_tot_mag, label="Total Force", alpha=0.7)
+    if f_ml is not None:
+        axes[0, 0].plot(f_ml_mag, label="ML Force", alpha=0.7)
+    if f_mm is not None:
+        axes[0, 0].plot(f_mm_mag, label="MM Force", alpha=0.7)
+    axes[0, 0].set_yscale('log')
+    axes[0, 0].set_xlabel("Atom Index")
+    axes[0, 0].set_ylabel("Force Magnitude (eV/Å)")
+    axes[0, 0].set_title("Forces per Atom (Log scale)")
+    axes[0, 0].legend()
+    axes[0, 0].grid(True, which="both", ls="--", alpha=0.5)
+
+    # Plot B: Distance matrix log-scale for first 100 atoms
+    n_sub = min(100, len(r_np))
+    sub_pos = r_np[:n_sub]
+    diff_matrix = sub_pos[:, None, :] - sub_pos[None, :, :]
+    box_sz = np.diag(cell) if cell.ndim == 2 else np.diag(np.diag(cell))
+    diff_matrix -= box_sz * np.round(diff_matrix / box_sz)
+    dist_matrix = np.linalg.norm(diff_matrix, axis=-1)
+    dist_matrix_safe = np.where(dist_matrix > 0, dist_matrix, 1e-5)
+    
+    im = axes[0, 1].matshow(dist_matrix_safe, norm=LogNorm(vmin=1e-1, vmax=dist_matrix_safe.max()), cmap='viridis')
+    fig.colorbar(im, ax=axes[0, 1], label="Distance (Å)")
+    axes[0, 1].set_title(f"Distance Matrix (First {n_sub} Atoms, Log)")
+
+    # Plot C: Adjacency matrix of neighbor list (first 100 atoms)
+    adj = np.zeros((n_sub, n_sub))
+    if len(active_idx) > 0:
+        sub_pairs = (active_pi < n_sub) & (active_pj < n_sub)
+        for i, j in zip(active_pi[sub_pairs], active_pj[sub_pairs]):
+            adj[i, j] = 1.0
+            adj[j, i] = 1.0
+    
+    im_adj = axes[1, 0].matshow(adj, cmap='binary')
+    axes[1, 0].set_title(f"Neighbor List Adjacency (First {n_sub} Atoms)")
+
+    # Plot D: Peptide Neighbor List Graph Layout
+    if len(active_idx) > 0:
+        G = nx.Graph()
+        pep_atoms = list(range(42))
+        G.add_nodes_from(pep_atoms)
+        
+        pep_pairs = (active_pi < 42) | (active_pj < 42)
+        pep_active_pi = active_pi[pep_pairs]
+        pep_active_pj = active_pj[pep_pairs]
+        pep_dists = dists[pep_pairs]
+        
+        close_threshold = 4.5
+        for i, j, d in zip(pep_active_pi, pep_active_pj, pep_dists):
+            if d < close_threshold:
+                G.add_edge(int(i), int(j), weight=float(d))
+        
+        nodes = list(G.nodes())
+        pos_layout = nx.spring_layout(G, seed=42)
+        node_colors = ['lightblue' if n < 42 else 'salmon' for n in nodes]
+        node_sizes = [150 if n < 42 else 50 for n in nodes]
+        
+        nx.draw_networkx_nodes(G, pos_layout, ax=axes[1, 1], node_color=node_colors, node_size=node_sizes, edgecolors='black', linewidths=0.5)
+        pep_labels = {n: f"{atoms.get_chemical_symbols()[n]}{n}" for n in nodes if n < 42}
+        nx.draw_networkx_labels(G, pos_layout, labels=pep_labels, ax=axes[1, 1], font_size=8)
+        nx.draw_networkx_edges(G, pos_layout, ax=axes[1, 1], alpha=0.2, edge_color='gray')
+        
+        axes[1, 1].set_title(f"Peptide NL Connections (< {close_threshold} Å)")
+        axes[1, 1].axis('off')
+        
+    plt.tight_layout()
+    plot_name = f"diagnostics_cycle_{cycle}_step_{step}.png"
+    plt.savefig(plot_name, dpi=150)
+    print(f"  Generated diagnostics plot: {plot_name}")
+    plt.close()
+    print("===============================================================\n")
+
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
