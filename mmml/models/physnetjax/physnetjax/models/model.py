@@ -826,12 +826,12 @@ class PhysNet(nn.Module):
         # Sum contributions for each atom
         # Use actual number of atoms from atomic_charges to match atomic_energies shape
         num_atoms_actual = atomic_charges.shape[0]
-        # Use batch_size * self.natoms for num_segments to handle all possible indices (static for JIT)
+        # Use num_atoms_actual for num_segments to handle all possible indices (static for JIT)
         # Then truncate to match atomic_energies shape (atomic_energies has shape (num_atoms_actual, 1, 1, 1))
         atomic_electrostatics = jax.ops.segment_sum(
             electrostatics,
             segment_ids=dst_idx,
-            num_segments=batch_size * self.max_padded_atoms,
+            num_segments=num_atoms_actual,
         )
         # Truncate to match atomic_energies shape
         atomic_electrostatics = atomic_electrostatics[:num_atoms_actual]
