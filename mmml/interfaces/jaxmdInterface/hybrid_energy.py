@@ -46,9 +46,8 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
             "v_disp": vmapped_displacement,
         }
 
-    def eval_energy_and_forces(r, compute_forces=False):
+    def total_monomer_energy(r):
         tot_energy = 0.0
-        tot_forces = jnp.zeros_like(r)
         
         for size, p in size_params.items():
             stacked_idx = p["stacked_idx"]
@@ -71,32 +70,15 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
                     positions=pos,
                     dst_idx=d_idx,
                     src_idx=s_idx,
-                    compute_forces=compute_forces,
+                    compute_forces=False,
                 ),
                 in_axes=(0, 0)
             )
             
             outputs = vmapped_apply(centered_pos, gz)
             tot_energy += jnp.sum(outputs["energy"])
-            
-            if compute_forces:
-                group_forces = outputs["forces"]
-                tot_forces = tot_forces.at[stacked_idx].add(group_forces)
-                
-        return tot_energy, tot_forces
 
-    @jax.custom_jvp
-    def total_monomer_energy(r):
-        energy, _ = eval_energy_and_forces(r, compute_forces=False)
-        return energy
-        
-    @total_monomer_energy.defjvp
-    def total_monomer_energy_jvp(primals, tangents):
-        r, = primals
-        r_dot, = tangents
-        r_primal = jax.lax.stop_gradient(r)
-        energy, forces = eval_energy_and_forces(r_primal, compute_forces=True)
-        return energy, jnp.sum(-forces * r_dot)
+        return tot_energy
         
     return total_monomer_energy
 
@@ -138,7 +120,7 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     
     n_waters = len(water_indices)
     
-    def eval_energy_and_forces(r, compute_forces=False):
+    def dimer_energy_fn(r):
         # 1. Dimer evaluation
         group_pos = r[stacked_dimer_indices]
         ref_pos = group_pos[:, 0, :]
@@ -156,7 +138,7 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
                 positions=pos,
                 dst_idx=dst_idx_dimer,
                 src_idx=src_idx_dimer,
-                compute_forces=compute_forces,
+                compute_forces=False,
             ),
             in_axes=(0, 0)
         )
@@ -179,39 +161,13 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
             positions=centered_pep,
             dst_idx=dst_idx_pep,
             src_idx=src_idx_pep,
-            compute_forces=compute_forces,
+            compute_forces=False,
         )
         e_pep = jnp.sum(outputs_pep["energy"])
         
         # Subtract (N_waters - 1) * E_peptide to get:
         # E_peptide_ML + sum(E_water_i_ML) + sum(E_inter_peptide_water_ML)
-        tot_energy = e_dimer_sum - (n_waters - 1) * e_pep
-        
-        if compute_forces:
-            # Scatter dimer forces back to global coordinates
-            tot_forces = jnp.zeros_like(r)
-            tot_forces = tot_forces.at[stacked_dimer_indices].add(outputs_dimer["forces"])
-            
-            # Subtract scaled peptide forces scattered back to peptide_idx
-            pep_forces_scaled = (n_waters - 1) * outputs_pep["forces"]
-            tot_forces = tot_forces.at[peptide_idx].add(-pep_forces_scaled)
-            
-            return tot_energy, tot_forces
-            
-        return tot_energy, None
-
-    @jax.custom_jvp
-    def dimer_energy_fn(r):
-        energy, _ = eval_energy_and_forces(r, compute_forces=False)
-        return energy
-        
-    @dimer_energy_fn.defjvp
-    def dimer_energy_fn_jvp(primals, tangents):
-        r, = primals
-        r_dot, = tangents
-        r_primal = jax.lax.stop_gradient(r)
-        energy, forces = eval_energy_and_forces(r_primal, compute_forces=True)
-        return energy, jnp.sum(-forces * r_dot)
+        return e_dimer_sum - (n_waters - 1) * e_pep
         
     return dimer_energy_fn
 
