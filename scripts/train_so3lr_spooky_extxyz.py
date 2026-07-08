@@ -22,6 +22,12 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+_xla_flags = os.environ.get("XLA_FLAGS", "")
+_disabled_pass = "--xla_disable_hlo_passes=hoist-fused-bitcasts"
+if _disabled_pass not in _xla_flags:
+    os.environ["XLA_FLAGS"] = f"{_xla_flags} {_disabled_pass}".strip()
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -440,7 +446,9 @@ def resolve_restart_path(args: argparse.Namespace) -> Path | None:
     if args.restart == "latest":
         latest = latest_checkpoint_path(workdir)
         if latest is None:
-            raise FileNotFoundError(f"No epoch-* checkpoints found in {workdir}")
+            print(
+                f"No epoch-* checkpoints found in {workdir}; starting from scratch"
+            )
         return latest
     return Path(args.restart).expanduser().resolve()
 
@@ -563,6 +571,7 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     state = jax_utils.replicate(state, devices=devices)
     rng = np.random.default_rng(args.seed)
+    compiled_atom_counts: set[int] = set()
     for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
         train_metrics = []
@@ -573,6 +582,15 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             rng=rng,
         )
         for step, device_indices in enumerate(train_batches, start=1):
+            n_atoms = int(
+                np.asarray(data["N"])[device_indices[0, 0]].reshape(-1)[0]
+            )
+            if n_atoms not in compiled_atom_counts:
+                print(
+                    f"Compiling train step for {n_atoms}-atom structures",
+                    flush=True,
+                )
+                compiled_atom_counts.add(n_atoms)
             batch = stack_device_batches(data, device_indices)
             state, metrics = train_step(state, batch)
             train_metrics.append(metrics)
@@ -691,7 +709,6 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
     cache_path = _resolve_cache_path(args)
     if args.mode in {"cache", "cache-and-train"}:
         cache_path = cache_extxyz_to_orbax(args)
