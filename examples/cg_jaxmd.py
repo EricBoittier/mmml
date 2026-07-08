@@ -171,7 +171,7 @@ NVT_BLOCK_STEPS = 100
 NVE_TOTAL_STEPS = 1000000
 NVE_BLOCK_STEPS = 500
 FIRE_CYCLES = 10
-NWATER = 1100
+NWATER = 100
 BOX_SIDE_A = 30.0
 NL_BUFFER = 2.0
 # Extra headroom fraction for padded pair array (5%)
