@@ -672,7 +672,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         node_sizes = [150 if n < 42 else 50 for n in nodes]
         
         nx.draw_networkx_nodes(G, pos_layout, ax=axes[1, 1], node_color=node_colors, node_size=node_sizes, edgecolors='black', linewidths=0.5)
-        pep_labels = {n: f"{atoms.get_chemical_symbols()[n]}{n}" for n in nodes if n < 42}
+        pep_labels = {n: f"{atoms.get_chemical_symbols()[n]}{n}" if ('atoms' in globals() and n < len(atoms)) else f"Atom{n}" for n in nodes if n < 42}
         nx.draw_networkx_labels(G, pos_layout, labels=pep_labels, ax=axes[1, 1], font_size=8)
         nx.draw_networkx_edges(G, pos_layout, ax=axes[1, 1], alpha=0.2, edge_color='gray')
         
