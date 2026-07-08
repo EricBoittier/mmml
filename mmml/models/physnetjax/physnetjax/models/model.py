@@ -298,6 +298,9 @@ class PhysNet(nn.Module):
             dtype=DTYPE,
         )
         x = embed(atomic_numbers)
+        # Propagate positions tracer/tangents to features to avoid shape mismatch under outer jax.grad
+        pos_dependency = jnp.sum(positions * 0.0, axis=-1, keepdims=True)
+        x = x + pos_dependency
 
         for i in range(self.num_iterations):
             x = self._message_passing_iteration(
