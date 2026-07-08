@@ -147,6 +147,8 @@ dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Option: Treat peptide-water intermolecular interactions with ML instead of MM
 PEPTIDE_WATER_ML = False
+DEBUG = True
+
 
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
