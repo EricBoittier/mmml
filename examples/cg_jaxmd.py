@@ -123,7 +123,8 @@ FIRE_STEPS = 5000
 FIRE_PRINT_FREQ = 1000
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
 # running 1000 steps without checking allows catastrophic divergence before repair.
-FIRE_BLOCK_STEPS = 1000
+FIRE_BLOCK_STEPS = 100
+
 
 NVT_TOTAL_STEPS = 1000000
 NVT_BLOCK_STEPS = 500
