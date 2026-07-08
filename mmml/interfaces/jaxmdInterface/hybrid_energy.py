@@ -23,63 +23,82 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
     for idx in monomer_indices:
         by_size[len(idx)].append(idx)
         
-    group_fns = []
+    # Pre-build size-specific parameters
+    size_params = {}
     for size, indices_list in by_size.items():
-        # Stack indices to shape (N_monomers, size) for batched gathering
         stacked_indices = jnp.stack(indices_list)
-        
-        # Build pairwise indices for PhysNet sparse model input
         n_atoms = size
         dst_idx, src_idx = np.where(~np.eye(n_atoms, dtype=bool))
         dst_idx = jnp.array(dst_idx, dtype=jnp.int32)
         src_idx = jnp.array(src_idx, dtype=jnp.int32)
-        
-        # Vectorize model.apply over the batch of monomers (first dimension)
-        # We bind dst_idx and src_idx as defaults to capture them eagerly
-        vmapped_apply = jax.vmap(
-            lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
-                params,
-                atomic_numbers=atomic_nums,
-                positions=pos,
-                dst_idx=d_idx,
-                src_idx=s_idx,
-                compute_forces=False,
-            )["energy"],
-            in_axes=(0, 0)
-        )
-        
-        # Static atomic numbers for all monomers of this size
         group_z = jax_z[stacked_indices]
         
-        # Vectorized displacement to calculate relative coordinates under PBC
         vmapped_displacement = jax.vmap(
             jax.vmap(displacement_fn, in_axes=(0, None)),
             in_axes=(0, 0)
         )
         
-        # Capture vmapped_apply and vmapped_displacement as defaults to avoid late binding
-        def group_energy(r, stacked_idx=stacked_indices, gz=group_z, v_apply=vmapped_apply, v_disp=vmapped_displacement):
-            # Gather coordinates: shape (N_monomers, size, 3)
-            group_pos = r[stacked_idx]
+        size_params[size] = {
+            "stacked_idx": stacked_indices,
+            "dst_idx": dst_idx,
+            "src_idx": src_idx,
+            "gz": group_z,
+            "v_disp": vmapped_displacement,
+        }
+
+    def eval_energy_and_forces(r, compute_forces=False):
+        tot_energy = 0.0
+        tot_forces = jnp.zeros_like(r)
+        
+        for size, p in size_params.items():
+            stacked_idx = p["stacked_idx"]
+            dst_idx = p["dst_idx"]
+            src_idx = p["src_idx"]
+            gz = p["gz"]
+            v_disp = p["v_disp"]
             
-            # Unfold coordinate images relative to the first atom of each monomer
+            group_pos = r[stacked_idx]
             ref_pos = group_pos[:, 0, :]
             displacements = v_disp(group_pos, ref_pos)
             unfolded_pos = ref_pos[:, None, :] + displacements
-            
-            # Center coordinates to the Center of Mass (COM) / Center of Geometry
             com = jnp.mean(unfolded_pos, axis=1, keepdims=True)
             centered_pos = unfolded_pos - com
             
-            energies = v_apply(centered_pos, gz)
-            return jnp.sum(energies)
+            vmapped_apply = jax.vmap(
+                lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
+                    params,
+                    atomic_numbers=atomic_nums,
+                    positions=pos,
+                    dst_idx=d_idx,
+                    src_idx=s_idx,
+                    compute_forces=compute_forces,
+                ),
+                in_axes=(0, 0)
+            )
             
-        group_fns.append(group_energy)
-        
+            outputs = vmapped_apply(centered_pos, gz)
+            tot_energy += jnp.sum(outputs["energy"])
+            
+            if compute_forces:
+                group_forces = outputs["forces"]
+                tot_forces = tot_forces.at[stacked_idx].add(group_forces)
+                
+        return tot_energy, tot_forces
+
+    @jax.custom_jvp
     def total_monomer_energy(r):
-        return sum(fn(r) for fn in group_fns)
+        energy, _ = eval_energy_and_forces(r, compute_forces=False)
+        return energy
+        
+    @total_monomer_energy.defjvp
+    def total_monomer_energy_jvp(primals, tangents):
+        r, = primals
+        r_dot, = tangents
+        energy, forces = eval_energy_and_forces(r, compute_forces=True)
+        return energy, jnp.sum(-forces * r_dot)
         
     return total_monomer_energy
+
 
 
 def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_indices, displacement_fn):
@@ -97,18 +116,6 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     dst_idx_dimer, src_idx_dimer = np.where(~np.eye(n_atoms_dimer, dtype=bool))
     dst_idx_dimer = jnp.array(dst_idx_dimer, dtype=jnp.int32)
     src_idx_dimer = jnp.array(src_idx_dimer, dtype=jnp.int32)
-    
-    vmapped_apply_dimer = jax.vmap(
-        lambda pos, atomic_nums: model.apply(
-            params,
-            atomic_numbers=atomic_nums,
-            positions=pos,
-            dst_idx=dst_idx_dimer,
-            src_idx=src_idx_dimer,
-            compute_forces=False,
-        )["energy"],
-        in_axes=(0, 0)
-    )
     
     dimer_z = jax_z[stacked_dimer_indices]
     
@@ -128,28 +135,10 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     
     vmapped_displacement_pep = jax.vmap(displacement_fn, in_axes=(0, None))
     
-    def peptide_energy(r):
-        pep_pos = r[peptide_idx]
-        ref_pos = pep_pos[0]
-        unfolded_pep = ref_pos + vmapped_displacement_pep(pep_pos, ref_pos)
-        
-        # Center peptide coordinates to its COM
-        pep_com = jnp.mean(unfolded_pep, axis=0, keepdims=True)
-        centered_pep = unfolded_pep - pep_com
-        
-        return jnp.sum(model.apply(
-            params,
-            atomic_numbers=pep_z,
-            positions=centered_pep,
-            dst_idx=dst_idx_pep,
-            src_idx=src_idx_pep,
-            compute_forces=False,
-        )["energy"])
-        
     n_waters = len(water_indices)
     
-    def dimer_energy_fn(r):
-        # Evaluate dimer sum (peptide + each water)
+    def eval_energy_and_forces(r, compute_forces=False):
+        # 1. Dimer evaluation
         group_pos = r[stacked_dimer_indices]
         ref_pos = group_pos[:, 0, :]
         displacements = vmapped_displacement_dimer(group_pos, ref_pos)
@@ -159,15 +148,68 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         dimer_com = jnp.mean(unfolded_dimer_pos, axis=1, keepdims=True)
         centered_dimer = unfolded_dimer_pos - dimer_com
         
-        dimer_energies = vmapped_apply_dimer(centered_dimer, dimer_z)
-        e_dimer_sum = jnp.sum(dimer_energies)
+        vmapped_apply_dimer = jax.vmap(
+            lambda pos, atomic_nums: model.apply(
+                params,
+                atomic_numbers=atomic_nums,
+                positions=pos,
+                dst_idx=dst_idx_dimer,
+                src_idx=src_idx_dimer,
+                compute_forces=compute_forces,
+            ),
+            in_axes=(0, 0)
+        )
         
-        # Evaluate single peptide energy
-        e_pep = peptide_energy(r)
+        outputs_dimer = vmapped_apply_dimer(centered_dimer, dimer_z)
+        e_dimer_sum = jnp.sum(outputs_dimer["energy"])
+        
+        # 2. Peptide evaluation
+        pep_pos = r[peptide_idx]
+        ref_pos_pep = pep_pos[0]
+        unfolded_pep = ref_pos_pep + vmapped_displacement_pep(pep_pos, ref_pos_pep)
+        
+        # Center peptide coordinates to its COM
+        pep_com = jnp.mean(unfolded_pep, axis=0, keepdims=True)
+        centered_pep = unfolded_pep - pep_com
+        
+        outputs_pep = model.apply(
+            params,
+            atomic_numbers=pep_z,
+            positions=centered_pep,
+            dst_idx=dst_idx_pep,
+            src_idx=src_idx_pep,
+            compute_forces=compute_forces,
+        )
+        e_pep = jnp.sum(outputs_pep["energy"])
         
         # Subtract (N_waters - 1) * E_peptide to get:
         # E_peptide_ML + sum(E_water_i_ML) + sum(E_inter_peptide_water_ML)
-        return e_dimer_sum - (n_waters - 1) * e_pep
+        tot_energy = e_dimer_sum - (n_waters - 1) * e_pep
+        
+        if compute_forces:
+            # Scatter dimer forces back to global coordinates
+            tot_forces = jnp.zeros_like(r)
+            tot_forces = tot_forces.at[stacked_dimer_indices].add(outputs_dimer["forces"])
+            
+            # Subtract scaled peptide forces scattered back to peptide_idx
+            pep_forces_scaled = (n_waters - 1) * outputs_pep["forces"]
+            tot_forces = tot_forces.at[peptide_idx].add(-pep_forces_scaled)
+            
+            return tot_energy, tot_forces
+            
+        return tot_energy, None
+
+    @jax.custom_jvp
+    def dimer_energy_fn(r):
+        energy, _ = eval_energy_and_forces(r, compute_forces=False)
+        return energy
+        
+    @dimer_energy_fn.defjvp
+    def dimer_energy_fn_jvp(primals, tangents):
+        r, = primals
+        r_dot, = tangents
+        energy, forces = eval_energy_and_forces(r, compute_forces=True)
+        return energy, jnp.sum(-forces * r_dot)
         
     return dimer_energy_fn
 

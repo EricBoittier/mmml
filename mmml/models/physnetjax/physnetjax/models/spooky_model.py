@@ -296,9 +296,6 @@ class SpookyPhysNet(nn.Module):
             dtype=DTYPE,
         )
         x = embed(atomic_numbers)
-        # Propagate positions tracer/tangents to features to avoid shape mismatch under outer jax.grad
-        pos_dependency = jnp.sum(positions * 0.0, axis=-1, keepdims=True)
-        x = x + pos_dependency
 
         # Project per-atom scalar charge/spin conditioning to e3x feature format
         # before adding to atomic embeddings.
