@@ -580,8 +580,8 @@ _c2of = nb_settings.c2ofnb
 
 if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
     print(
-        "--- Electrostatic embedding enabled: intermolecular Coulomb uses "
-        "fluctuating ML peptide and water charges; MM LJ remains unchanged ---"
+        "--- Electrostatic embedding enabled: peptide-water Coulomb uses "
+        "fluctuating ML charges; water-water Coulomb and all MM LJ remain unchanged ---"
     )
     print(
         f"--- Peptide ML charges corrected to total charge {pep_ref_charge_total:.6f} e ---"
@@ -593,15 +593,31 @@ if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
         if WATER_ML_CHARGE_TOTAL_CORRECTION
         else "--- Water ML charges are used without total-charge correction ---"
     )
+    if getattr(peptide_model, "charges", True) is False:
+        raise ValueError(
+            f"Peptide checkpoint {PEPTIDE_CKPT_PATH!r} has charges=False and cannot "
+            "provide fluctuating charges for electrostatic embedding."
+        )
+    if getattr(water_model, "charges", True) is False:
+        raise ValueError(
+            f"Water checkpoint {WATER_CKPT_PATH!r} has charges=False and cannot "
+            "provide fluctuating charges for electrostatic embedding."
+        )
 
 
-def _electrostatic_charge_array(r):
-    """Full-system charges for intermolecular electrostatics."""
+def _intermolecular_charge_products(r, pi, pj, e14):
+    """Pair charge products, with ML charges only for peptide-water pairs."""
+    qq_mm = _q_jax[pi] * _q_jax[pj]
     if not PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
-        return _q_jax
-    q_pep = compute_peptide_ml_charges(r)
-    q_water = compute_water_ml_charges(r)
-    return _q_jax.at[:n_trialanine].set(q_pep).at[water_flat_idx_jax].set(q_water)
+        return qq_mm * e14 / nb_settings.eps
+
+    q_ml = _q_jax.at[:n_trialanine].set(compute_peptide_ml_charges(r))
+    q_ml = q_ml.at[water_flat_idx_jax].set(compute_water_ml_charges(r))
+    is_peptide_i = pi < n_trialanine
+    is_peptide_j = pj < n_trialanine
+    is_peptide_water = jnp.logical_xor(is_peptide_i, is_peptide_j)
+    qq = jnp.where(is_peptide_water, q_ml[pi] * q_ml[pj], qq_mm)
+    return qq * e14 / nb_settings.eps
 
 
 def update_pair_refs(pos_np):
@@ -696,8 +712,7 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
 
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
     sig = _rmin_jax[pi] + _rmin_jax[pj]
-    q_inter = _electrostatic_charge_array(r)
-    qq = q_inter[pi] * q_inter[pj] * e14 / nb_settings.eps
+    qq = _intermolecular_charge_products(r, pi, pj, e14)
 
     vdw = _pair_vdw_energy(safe_dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False)
     vdw = vdw * vdw14
@@ -728,8 +743,8 @@ def _debug_ml_energy(r):
 
 
 @jit
-def _debug_mm_energy(r, pi, pj, mask, e14, vdw14):
-    """JIT-compiled MM intermolecular energy only (for diagnostics)."""
+def _debug_mm_energy_components(r, pi, pj, mask, e14, vdw14):
+    """JIT-compiled intermolecular LJ and electrostatic energies."""
     ri = r[pi]; rj = r[pj]
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
     # CRITICAL: Prevent zero displacement for padding pairs (mask=0)
@@ -741,13 +756,14 @@ def _debug_mm_energy(r, pi, pj, mask, e14, vdw14):
     safe_dist = jnp.where(mask > 0.5, dist, 1.0)
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
     sig = _rmin_jax[pi] + _rmin_jax[pj]
-    q_inter = _electrostatic_charge_array(r)
-    qq = q_inter[pi] * q_inter[pj] * e14 / nb_settings.eps
+    qq = _intermolecular_charge_products(r, pi, pj, e14)
     vdw = _pair_vdw_energy(safe_dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False) * vdw14
     elec = _pair_elec_energy(safe_dist, qq, nb_settings, _fswitch)
     vdw = jnp.where(within_ctof, vdw, 0.0)
     elec = jnp.where(within_ctof, elec, 0.0)
-    return (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
+    return jnp.array(
+        [jnp.sum(vdw) * KCAL_MOL_TO_EV, jnp.sum(elec) * KCAL_MOL_TO_EV]
+    )
 
 
 def diagnose_energy(r, label=""):
@@ -761,12 +777,26 @@ def diagnose_energy(r, label=""):
         print(f"[DIAG{label}] ⚠ Positions: {n_bad} atoms with NaN/Inf — energy will be NaN")
         return
     e_ml = float(_debug_ml_energy(r))
-    e_mm = float(_debug_mm_energy(r, pi, pj, mask, e14, vdw14))
+    e_lj, e_elec = map(
+        float, _debug_mm_energy_components(r, pi, pj, mask, e14, vdw14)
+    )
+    e_mm = e_lj + e_elec
     e_tot = e_ml + e_mm
     ml_ok = "✓" if np.isfinite(e_ml) else "✗ NaN/Inf"
     mm_ok = "✓" if np.isfinite(e_mm) else "✗ NaN/Inf"
-    print(f"[DIAG{label}] E_ML={e_ml:.4f} eV {ml_ok} | E_MM={e_mm:.4f} eV {mm_ok} | "
+    print(f"[DIAG{label}] E_ML={e_ml:.4f} eV {ml_ok} | "
+          f"E_LJ={e_lj:.4f} eV | E_elec={e_elec:.4f} eV | "
+          f"E_MM={e_mm:.4f} eV {mm_ok} | "
           f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())}")
+    if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
+        q_pep = np.asarray(compute_peptide_ml_charges(r))
+        q_water = np.asarray(compute_water_ml_charges(r)).reshape(-1, water_n_atoms)
+        print(
+            f"[DIAG{label}] q_pep: min={q_pep.min():.4f}, max={q_pep.max():.4f}, "
+            f"sum={q_pep.sum():.6f} e | q_water mean by site="
+            f"{np.mean(q_water, axis=0)} e | max |water sum|="
+            f"{np.max(np.abs(np.sum(q_water, axis=1))):.3e} e"
+        )
 
 
 def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
