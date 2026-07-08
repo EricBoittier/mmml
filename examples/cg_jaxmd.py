@@ -128,7 +128,7 @@ FIRE_BLOCK_STEPS = 100
 
 
 NVT_TOTAL_STEPS = 1000000
-NVT_BLOCK_STEPS = 500
+NVT_BLOCK_STEPS = 100
 
 NVE_TOTAL_STEPS = 1000000
 NVE_BLOCK_STEPS = 500
@@ -139,6 +139,8 @@ NL_BUFFER = 2.0
 # Extra headroom fraction for padded pair array (5%)
 MAX_PAIRS_HEADROOM = 1.05
 MAX_HX_BOND_LIMIT = 1.5
+NVT_REPAIR_TEMP_K = 375.0
+NVE_REPAIR_TEMP_K = 400.0
 SEED = 42
 # Define simulation conditions
 temperature = 298.0  # Kelvin
@@ -902,11 +904,33 @@ def repair_structure_in_charmm(positions):
         )
     unfolded_pos = unfold_coordinates(pos_np, box_size, _mon_stacked_groups)
     set_charmm_positions(unfolded_pos)
-    lingo.charmm_script("MINI SD 1000")
-    lingo.charmm_script("MINI ABNR 1000")
+    lingo.charmm_script("MINI SD NSTEP 1000")
+    lingo.charmm_script("MINI ABNR NSTEP 1000")
     repaired_pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
     print("[REPAIR] Structure repaired successfully. Re-initializing state.\n")
     return repaired_pos
+
+
+def choose_finite_repair_positions(candidate, previous_block, last_good, label):
+    """Pick finite coordinates for repair, preferring the latest viable state."""
+    candidates = [
+        ("current", candidate),
+        ("pre-block", previous_block),
+        ("last-good", last_good),
+    ]
+    for source, positions in candidates:
+        pos_np = np.asarray(positions)
+        if pos_np.shape[-1] == 3 and np.isfinite(pos_np).all():
+            if source != "current":
+                print(
+                    f"[{label}] Current positions are non-finite; "
+                    f"repairing from {source} finite checkpoint instead."
+                )
+            return pos_np.copy(), source
+    raise RuntimeError(
+        f"[{label}] No finite coordinate checkpoint is available for repair. "
+        "The integrator state and saved checkpoints are all non-finite."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1078,10 +1102,23 @@ state = _init_fn_nvt(key, min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14
 traj_path_nvt = "cg_nvt.traj"
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
 traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
+last_good_nvt_pos = np.asarray(min_r, dtype=np.float64)
 
 for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
+    pos_before_block = np.asarray(state.position, dtype=np.float64)
+    if np.isfinite(pos_before_block).all():
+        last_good_nvt_pos = pos_before_block.copy()
+    else:
+        print("[NVT] Non-finite positions detected before block; reverting to last-good checkpoint.")
+        pos_before_block = last_good_nvt_pos.copy()
+        update_pair_refs(pos_before_block)
+        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        state = _init_fn_nvt(key, jnp.array(pos_before_block, dtype=jnp.float64),
+                             mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+
     # Update pair list on CPU (no JAX re-trace — shapes are fixed)
-    update_pair_refs(np.asarray(state.position))
+    update_pair_refs(pos_before_block)
     pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
     e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 
@@ -1096,15 +1133,30 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
 
     # Check for instability and repair
-    if temp > 400.0 or np.isnan(curr_e) or max_bond > MAX_HX_BOND_LIMIT:
+    unstable_nvt = (
+        (not np.isfinite(curr_e))
+        or (not np.isfinite(temp))
+        or (not np.isfinite(max_bond))
+        or temp > NVT_REPAIR_TEMP_K
+        or max_bond > MAX_HX_BOND_LIMIT
+        or (not np.isfinite(np.asarray(state.position)).all())
+    )
+    if unstable_nvt:
+        if temp > NVT_REPAIR_TEMP_K:
+            print(f"[REPAIR] NVT temperature exceeded repair threshold: "
+                  f"{temp:.1f} K > {NVT_REPAIR_TEMP_K:.1f} K")
         if max_bond > MAX_HX_BOND_LIMIT:
             print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å "
                   f"(max limit {MAX_HX_BOND_LIMIT} Å)")
+        repair_input_pos, repair_source = choose_finite_repair_positions(
+            state.position, pos_before_block, last_good_nvt_pos, "NVT REPAIR"
+        )
         # 1. Scale back stretched H-X bonds
         scaled_pos, _ = scale_broken_h_bonds(
-            np.asarray(state.position), box_size, h_idx_arr, x_idx_arr
+            repair_input_pos, box_size, h_idx_arr, x_idx_arr
         )
         # 2. Minimize in PyCHARMM
+        print(f"[REPAIR] NVT repair input source: {repair_source}")
         repaired_pos = repair_structure_in_charmm(scaled_pos)
         # 3. Post-repair JAX FIRE minimization
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
@@ -1127,6 +1179,10 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
         temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
         max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
+        if np.isfinite(np.asarray(state.position)).all() and np.isfinite(curr_e):
+            last_good_nvt_pos = np.asarray(state.position, dtype=np.float64).copy()
+    else:
+        last_good_nvt_pos = np.asarray(state.position, dtype=np.float64).copy()
 
     print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
           f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
@@ -1155,10 +1211,24 @@ state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass, pi=
 traj_path_nve = "cg_nve.traj"
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
 traj_nve = Trajectory(traj_path_nve, "w", atoms)
+last_good_nve_pos = np.asarray(state.position, dtype=np.float64)
 
 for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
+    pos_before_block = np.asarray(state_nve.position, dtype=np.float64)
+    if np.isfinite(pos_before_block).all():
+        last_good_nve_pos = pos_before_block.copy()
+    else:
+        print("[NVE] Non-finite positions detected before block; reverting to last-good checkpoint.")
+        pos_before_block = last_good_nve_pos.copy()
+        update_pair_refs(pos_before_block)
+        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        state_nve = _init_fn_nve(key, jnp.array(pos_before_block, dtype=jnp.float64),
+                                 target_temp_ev, mass=jax_mass,
+                                 pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+
     # Update pair list on CPU (no JAX re-trace)
-    update_pair_refs(np.asarray(state_nve.position))
+    update_pair_refs(pos_before_block)
     pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
     e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 
@@ -1173,15 +1243,30 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
 
     # Check for instability and repair
-    if temp > 400.0 or np.isnan(curr_e) or max_bond > MAX_HX_BOND_LIMIT:
+    unstable_nve = (
+        (not np.isfinite(curr_e))
+        or (not np.isfinite(temp))
+        or (not np.isfinite(max_bond))
+        or temp > NVE_REPAIR_TEMP_K
+        or max_bond > MAX_HX_BOND_LIMIT
+        or (not np.isfinite(np.asarray(state_nve.position)).all())
+    )
+    if unstable_nve:
+        if temp > NVE_REPAIR_TEMP_K:
+            print(f"[REPAIR] NVE temperature exceeded repair threshold: "
+                  f"{temp:.1f} K > {NVE_REPAIR_TEMP_K:.1f} K")
         if max_bond > MAX_HX_BOND_LIMIT:
             print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å "
                   f"(max limit {MAX_HX_BOND_LIMIT} Å)")
+        repair_input_pos, repair_source = choose_finite_repair_positions(
+            state_nve.position, pos_before_block, last_good_nve_pos, "NVE REPAIR"
+        )
         # 1. Scale back stretched H-X bonds
         scaled_pos, _ = scale_broken_h_bonds(
-            np.asarray(state_nve.position), box_size, h_idx_arr, x_idx_arr
+            repair_input_pos, box_size, h_idx_arr, x_idx_arr
         )
         # 2. Minimize in PyCHARMM
+        print(f"[REPAIR] NVE repair input source: {repair_source}")
         repaired_pos = repair_structure_in_charmm(scaled_pos)
         # 3. Post-repair JAX FIRE minimization
         print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
@@ -1204,6 +1289,10 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
         temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
         max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
+        if np.isfinite(np.asarray(state_nve.position)).all() and np.isfinite(curr_e):
+            last_good_nve_pos = np.asarray(state_nve.position, dtype=np.float64).copy()
+    else:
+        last_good_nve_pos = np.asarray(state_nve.position, dtype=np.float64).copy()
 
     print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
           f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
