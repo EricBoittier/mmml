@@ -158,19 +158,20 @@ script_dir = Path(__file__).parent
 PEPTIDE_CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-58-42.json")
 WATER_CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-18-52.json")
 
-FIRE_STEPS = 5000
+FIRE_STEPS = 1000
 FIRE_PRINT_FREQ = 1000
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
 # running 1000 steps without checking allows catastrophic divergence before repair.
 FIRE_BLOCK_STEPS = 100
 
 
-NVT_TOTAL_STEPS = 1000000
+NVT_TOTAL_STEPS = 1000
 NVT_BLOCK_STEPS = 100
 
-NVE_TOTAL_STEPS = 1000000
+NVE_TOTAL_STEPS = 2000
 NVE_BLOCK_STEPS = 500
-FIRE_CYCLES = 10
+FIRE_CYCLES = 2
+
 NWATER = 100
 BOX_SIDE_A = 30.0
 NL_BUFFER = 2.0
