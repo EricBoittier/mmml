@@ -766,6 +766,12 @@ def _debug_mm_energy_components(r, pi, pj, mask, e14, vdw14):
     )
 
 
+@jit
+def _debug_mm_energy(r, pi, pj, mask, e14, vdw14):
+    """JIT-compiled total intermolecular MM energy (for diagnostics)."""
+    return jnp.sum(_debug_mm_energy_components(r, pi, pj, mask, e14, vdw14))
+
+
 def diagnose_energy(r, label=""):
     """Print energy components to identify NaN source."""
     pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
