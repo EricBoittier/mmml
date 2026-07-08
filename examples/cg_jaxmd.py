@@ -38,6 +38,7 @@ jax.config.update("jax_persistent_cache_min_compile_time_secs", 2)
 from ase import Atoms
 from ase.io.trajectory import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
+from ase.optimize.fire import FIRE as AseFIRE
 
 # JAX-MD imports
 from jax_md import space, minimize, simulate
@@ -150,6 +151,46 @@ PEPTIDE_WATER_ML = False
 DEBUG = True
 
 
+def minimize_peptide_only_in_charmm(sd_steps=10000, abnr_steps=10000):
+    """Minimize only the PEPT segment while keeping waters fixed."""
+    print("--- Minimizing peptide-only in CHARMM with waters fixed ---")
+    try:
+        lingo.charmm_script("CONS FIX SELE .NOT. SEGID PEPT END")
+        lingo.charmm_script(f"MINI SD {sd_steps}")
+        lingo.charmm_script(f"MINI ABNR {abnr_steps}")
+    finally:
+        lingo.charmm_script("CONS FIX SELE NONE END")
+
+
+def minimize_peptide_only_with_ml_calculator(
+    positions,
+    atomic_numbers,
+    peptide_calc,
+    workdir,
+    n_peptide_atoms=42,
+    fmax=0.05,
+    steps=500,
+):
+    """Minimize the peptide subset with the ML ASE calculator and keep solvent fixed."""
+    print("--- Minimizing peptide-only with ML ASE calculator ---")
+    peptide_atoms = Atoms(
+        numbers=np.asarray(atomic_numbers[:n_peptide_atoms], dtype=np.int32),
+        positions=np.asarray(positions[:n_peptide_atoms], dtype=np.float64),
+    )
+    peptide_atoms.calc = peptide_calc
+    opt = AseFIRE(
+        peptide_atoms,
+        logfile=str(Path(workdir) / "peptide_ml_fire.log"),
+        trajectory=str(Path(workdir) / "peptide_ml_fire.traj"),
+        maxstep=0.03,
+    )
+    opt.run(fmax=fmax, steps=steps)
+
+    relaxed = np.asarray(positions, dtype=np.float64).copy()
+    relaxed[:n_peptide_atoms] = peptide_atoms.get_positions()
+    return relaxed
+
+
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
@@ -167,6 +208,21 @@ box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 
 translation = box_center - peptide_center
 pos += translation / 2.0
 
+z = get_Z_from_psf()
+
+peptide_calc = create_calculator_from_checkpoint(PEPTIDE_CKPT_PATH)
+peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
+peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
+
+if peptide_model is None or peptide_params is None:
+    raise ValueError("Could not extract model or params from the loaded peptide calculator.")
+
+set_charmm_positions(pos)
+
+minimize_peptide_only_in_charmm()
+
+pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+pos = minimize_peptide_only_with_ml_calculator(pos, z, peptide_calc, workdir, n_trialanine)
 set_charmm_positions(pos)
 
 lingo.charmm_script("MINI SD 10000")
@@ -210,16 +266,10 @@ prm_path = CGENFF_PRM
 nb_settings = _nbond_settings_from_cutoffs(box.nbond_cutoffs)
 nbond_data = load_nonbonded_system_from_charmm(psf_path, prm_path)
 
-peptide_calc = create_calculator_from_checkpoint(PEPTIDE_CKPT_PATH)
-peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
-peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
-
 water_calc = create_calculator_from_checkpoint(WATER_CKPT_PATH)
 water_model = getattr(water_calc, "model", getattr(water_calc, "_mmml_physnet_model", None))
 water_params = getattr(water_calc, "params", getattr(water_calc, "_mmml_physnet_params", None))
 
-if peptide_model is None or peptide_params is None:
-    raise ValueError("Could not extract model or params from the loaded peptide calculator.")
 if water_model is None or water_params is None:
     raise ValueError("Could not extract model or params from the loaded water calculator.")
 
