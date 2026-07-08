@@ -36,12 +36,12 @@ def test_physnet_electrostatics_shape_mismatch(model_cls):
     init_args = {}
     apply_args = {}
     if model_cls is SpookyPhysNet:
-        # SpookyPhysNet requires charges and spins arrays
-        init_args["charges"] = jnp.array([0.0])
-        init_args["spins"] = jnp.array([1.0])
+        # SpookyPhysNet requires charges and spins arrays of shape (n_atoms,)
+        init_args["charges"] = jnp.zeros(10)
+        init_args["spins"] = jnp.zeros(10)
         
-        apply_args["charges"] = jnp.array([0.0])
-        apply_args["spins"] = jnp.array([1.0])
+        apply_args["charges"] = jnp.zeros(12)
+        apply_args["spins"] = jnp.zeros(12)
         
     params = model.init(
         key,
