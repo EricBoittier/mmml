@@ -932,6 +932,7 @@ class PhysNet(nn.Module):
         batch_mask: Optional[jnp.ndarray] = None,
         atom_mask: Optional[jnp.ndarray] = None,
         cell: Optional[jnp.ndarray] = None,
+        compute_forces: bool = True,
     ) -> Dict[str, Optional[jnp.ndarray]]:
         """
         Forward pass of the model.
@@ -990,39 +991,42 @@ class PhysNet(nn.Module):
         # jax.debug.print("batch_mask {x}", x=batch_mask[::])
         # jax.debug.print("atom_mask {x}", x=atom_mask[::])
 
-        # Since we want to also predict forces, i.e. the gradient of the energy w.r.t. positions (argument 1), we use
-        # jax.value_and_grad to create a function for predicting both energy and forces for us.
-        energy_and_forces = jax.value_and_grad(self.energy, argnums=1, has_aux=True)
+        if not compute_forces:
+            # Bypass value_and_grad
+            _, (energy, charges, electrostatics, repulsion, state) = self.energy(
+                atomic_numbers,
+                positions,
+                dst_idx,
+                src_idx,
+                batch_segments,
+                batch_size,
+                batch_mask,
+                atom_mask,
+                cell,
+            )
+            forces = None
+        else:
+            # Since we want to also predict forces, i.e. the gradient of the energy w.r.t. positions (argument 1), we use
+            # jax.value_and_grad to create a function for predicting both energy and forces for us.
+            energy_and_forces = jax.value_and_grad(self.energy, argnums=1, has_aux=True)
 
-        # Debug input shapes
-        # if not self.debug and "idx" in self.debug:
-        # # if True:
-        #     jax.debug.print("atomic_numbers {x}", x=atomic_numbers.shape)
-        #     jax.debug.print("positions {x}", x=positions.shape)
-        #     jax.debug.print("dst_idx {x}", x=dst_idx.shape)
-        #     jax.debug.print("src_idx {x}", x=src_idx.shape)
-        #     jax.debug.print("batch_segments {x}", x=batch_segments.shape)
-        #     jax.debug.print("batch_size {x}", x=batch_size)
-        #     jax.debug.print("batch_mask {x}", x=batch_mask.shape)
-        #     jax.debug.print("atom_mask {x}", x=atom_mask.shape)
-
-        # Calculate energies and forces
-        (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
-            atomic_numbers,
-            positions,
-            dst_idx,
-            src_idx,
-            batch_segments,
-            batch_size,
-            batch_mask,
-            atom_mask,
-            cell,
-        )
-        # NOTE: energy() returns -E (negative energy) at line 532
-        # So: gradient = d(-E)/dr = -dE/dr
-        # And forces F = -dE/dr = gradient (no extra negation needed!)
-        forces = gradient
-        forces *= atom_mask[..., None]
+            # Calculate energies and forces
+            (_, (energy, charges, electrostatics, repulsion, state)), gradient = energy_and_forces(
+                atomic_numbers,
+                positions,
+                dst_idx,
+                src_idx,
+                batch_segments,
+                batch_size,
+                batch_mask,
+                atom_mask,
+                cell,
+            )
+            # NOTE: energy() returns -E (negative energy) at line 532
+            # So: gradient = d(-E)/dr = -dE/dr
+            # And forces F = -dE/dr = gradient (no extra negation needed!)
+            forces = gradient
+            forces *= atom_mask[..., None]
 
         dipoles = (
             self._calculate_dipole(

@@ -43,6 +43,7 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
                 positions=pos,
                 dst_idx=d_idx,
                 src_idx=s_idx,
+                compute_forces=False,
             )["energy"],
             in_axes=(0, 0)
         )
@@ -104,6 +105,7 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
             positions=pos,
             dst_idx=dst_idx_dimer,
             src_idx=src_idx_dimer,
+            compute_forces=False,
         )["energy"],
         in_axes=(0, 0)
     )
@@ -141,6 +143,7 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
             positions=centered_pep,
             dst_idx=dst_idx_pep,
             src_idx=src_idx_pep,
+            compute_forces=False,
         )["energy"])
         
     n_waters = len(water_indices)
