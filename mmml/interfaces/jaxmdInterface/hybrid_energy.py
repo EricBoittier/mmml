@@ -94,7 +94,8 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
     def total_monomer_energy_jvp(primals, tangents):
         r, = primals
         r_dot, = tangents
-        energy, forces = eval_energy_and_forces(r, compute_forces=True)
+        r_primal = jax.lax.stop_gradient(r)
+        energy, forces = eval_energy_and_forces(r_primal, compute_forces=True)
         return energy, jnp.sum(-forces * r_dot)
         
     return total_monomer_energy
@@ -208,7 +209,8 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     def dimer_energy_fn_jvp(primals, tangents):
         r, = primals
         r_dot, = tangents
-        energy, forces = eval_energy_and_forces(r, compute_forces=True)
+        r_primal = jax.lax.stop_gradient(r)
+        energy, forces = eval_energy_and_forces(r_primal, compute_forces=True)
         return energy, jnp.sum(-forces * r_dot)
         
     return dimer_energy_fn
