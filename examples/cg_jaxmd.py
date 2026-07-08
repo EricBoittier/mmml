@@ -133,7 +133,7 @@ NVT_BLOCK_STEPS = 100
 NVE_TOTAL_STEPS = 1000000
 NVE_BLOCK_STEPS = 500
 FIRE_CYCLES = 10
-NWATER = 1500
+NWATER = 1100
 BOX_SIDE_A = 30.0
 NL_BUFFER = 2.0
 # Extra headroom fraction for padded pair array (5%)
@@ -143,7 +143,7 @@ NVT_REPAIR_TEMP_K = 375.0
 NVE_REPAIR_TEMP_K = 400.0
 SEED = 42
 # Define simulation conditions
-temperature = 298.0  # Kelvin
+temperature = 248.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
 dt_fs = 0.5  # time step in femtoseconds
