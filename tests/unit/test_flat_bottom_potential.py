@@ -52,7 +52,7 @@ def test_flat_bottom_system_vs_monomer(mode, expected_e, expected_com_dist) -> N
     )
 
     assert float(flat_e) == pytest.approx(expected_e)
-    assert float(com_dist) == pytest.approx(expected_com_dist)
+    assert float(com_dist) == pytest.approx(expected_com_dist, abs=1e-6)
     if mode == "monomer":
         assert float(jnp.max(jnp.abs(flat_f))) > 0.0
 

@@ -406,9 +406,10 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
     
     # CRITICAL: Prevent zero displacement for padding pairs (mask=0)
-    # to avoid NaN gradients from jnp.linalg.norm at 0.
-    safe_disp = jnp.where(mask[:, None] > 0.5, disp, 1.0)
-    dist = jnp.linalg.norm(safe_disp, axis=-1)
+    # and overlapping real pairs to avoid NaN gradients from jnp.linalg.norm at 0.
+    disp_sq = jnp.sum(disp**2, axis=-1)
+    safe_disp_sq = jnp.where(mask > 0.5, disp_sq, 1.0)
+    dist = jnp.sqrt(jnp.maximum(safe_disp_sq, 1e-12))
     within_ctof = (dist * dist < _c2of) * mask   # 0.0 for padding and out-of-cutoff
 
     # CRITICAL: Clamp distances for padding pairs (mask=0) to a safe non-zero value
@@ -432,7 +433,8 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
     ri_pep = r[h_idx_jax]
     rj_pep = r[x_idx_jax]
     disp_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_pep, rj_pep)
-    dist_pep = jnp.linalg.norm(disp_pep, axis=-1)
+    disp_pep_sq = jnp.sum(disp_pep**2, axis=-1)
+    dist_pep = jnp.sqrt(jnp.maximum(disp_pep_sq, 1e-12))
     excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
     e_restraint = jnp.sum(0.5 * 100.0 * jnp.square(excess))
 
@@ -450,8 +452,11 @@ def _debug_mm_energy(r, pi, pj, mask, e14, vdw14):
     """JIT-compiled MM intermolecular energy only (for diagnostics)."""
     ri = r[pi]; rj = r[pj]
     disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
-    safe_disp = jnp.where(mask[:, None] > 0.5, disp, 1.0)
-    dist = jnp.linalg.norm(safe_disp, axis=-1)
+    # CRITICAL: Prevent zero displacement for padding pairs (mask=0)
+    # and overlapping real pairs to avoid NaN gradients from jnp.linalg.norm at 0.
+    disp_sq = jnp.sum(disp**2, axis=-1)
+    safe_disp_sq = jnp.where(mask > 0.5, disp_sq, 1.0)
+    dist = jnp.sqrt(jnp.maximum(safe_disp_sq, 1e-12))
     within_ctof = (dist * dist < _c2of) * mask
     safe_dist = jnp.where(mask > 0.5, dist, 1.0)
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
