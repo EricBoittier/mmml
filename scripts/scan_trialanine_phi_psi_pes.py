@@ -31,6 +31,7 @@ from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
     _load_cgenff_with_trialanine,
 )
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
+from mmml.utils.dcd_writer import save_trajectory_dcd
 
 
 PEPTIDE_CKPT_PATH = "examples/params_aaa_long_2026-07-04_22-30-27.json"
@@ -122,6 +123,30 @@ def charmm_energy_kcal(positions: np.ndarray) -> float:
     return float(energy.get_total())
 
 
+def write_charmm_vmd_files(
+    out_dir: Path,
+    prefix: str,
+    atoms: Atoms,
+    trajectory_positions: list[np.ndarray],
+) -> tuple[Path, Path, Path]:
+    """Write CHARMM PSF/CRD plus DCD for VMD from the active CHARMM peptide system."""
+    import pycharmm.write as pywrite
+
+    if not trajectory_positions:
+        raise ValueError("cannot write VMD files without trajectory frames")
+
+    psf_path = out_dir / f"{prefix}.psf"
+    crd_path = out_dir / f"{prefix}.crd"
+    dcd_path = out_dir / f"{prefix}.dcd"
+
+    first_positions = np.asarray(trajectory_positions[0], dtype=np.float64)
+    set_charmm_positions(first_positions)
+    pywrite.psf_card(str(psf_path), title="trialanine PHI/PSI PES topology")
+    pywrite.coor_card(str(crd_path), title="trialanine PHI/PSI PES first frame")
+    save_trajectory_dcd(dcd_path, np.asarray(trajectory_positions, dtype=np.float32), atoms)
+    return psf_path, crd_path, dcd_path
+
+
 def parse_grid(values: str) -> np.ndarray:
     """Parse start:stop:step grid in degrees, including stop."""
     start, stop, step = (float(x) for x in values.split(":"))
@@ -141,6 +166,8 @@ def main() -> None:
     parser.add_argument("--relax-steps", type=int, default=200)
     parser.add_argument("--relax-fmax", type=float, default=0.05)
     parser.add_argument("--traj", default="phi_psi_pes.traj", help="ASE trajectory filename under --out")
+    parser.add_argument("--no-vmd", action="store_true", help="Do not write CHARMM PSF/CRD/DCD VMD files")
+    parser.add_argument("--vmd-prefix", default="trialanine_phi_psi_pes", help="Prefix for PSF/CRD/DCD files")
     parser.add_argument("--write-xyz", action="store_true")
     args = parser.parse_args()
 
@@ -162,6 +189,7 @@ def main() -> None:
     ml_forces_eVA = np.full_like(positions_A, np.nan)
 
     rows: list[dict[str, float]] = []
+    trajectory_positions: list[np.ndarray] = []
     traj = Trajectory(out_dir / args.traj, "w")
     for i, phi in enumerate(phi_grid):
         for j, psi in enumerate(psi_grid):
@@ -193,6 +221,7 @@ def main() -> None:
             actual_psi[i, j] = psi_actual
             positions_A[i, j] = atoms.get_positions()
             ml_forces_eVA[i, j] = forces_ml
+            trajectory_positions.append(np.asarray(atoms.get_positions(), dtype=np.float64))
             rows.append(
                 {
                     "phi_deg": float(phi),
@@ -225,6 +254,16 @@ def main() -> None:
 
     traj.close()
 
+    if not args.no_vmd:
+        psf_path, crd_path, dcd_path = write_charmm_vmd_files(
+            out_dir,
+            args.vmd_prefix,
+            base_atoms,
+            trajectory_positions,
+        )
+    else:
+        psf_path = crd_path = dcd_path = None
+
     np.savez(
         out_dir / "phi_psi_pes.npz",
         phi_grid_deg=phi_grid,
@@ -249,6 +288,11 @@ def main() -> None:
     print(f"Wrote {out_dir / 'phi_psi_pes.npz'}")
     print(f"Wrote {csv_path}")
     print(f"Wrote {out_dir / args.traj}")
+    if psf_path is not None and crd_path is not None and dcd_path is not None:
+        print(f"Wrote {psf_path}")
+        print(f"Wrote {crd_path}")
+        print(f"Wrote {dcd_path}")
+        print(f"VMD: vmd {psf_path} {dcd_path}")
 
 
 if __name__ == "__main__":
