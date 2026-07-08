@@ -43,7 +43,6 @@ sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = mock.MagicMoc
 
 # Import model calculator and interfaces
 from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
-from jax_md import space
 
 # 3. Create the calculator and model
 try:
@@ -62,13 +61,62 @@ for i in range(n_trialanine, len(pos), 3):
     monomer_indices.append(np.arange(i, i + 3))
 jax_monomer_indices = [jnp.array(idx, dtype=jnp.int32) for idx in monomer_indices]
 
-# Displacement fn
+# Define simple periodic displacement function
 cell = np.asarray(atoms.get_cell(), dtype=np.float64)
-displacement_fn, shift_fn = space.periodic(cell)
+cell_diag = jnp.array([cell[0, 0], cell[1, 1], cell[2, 2]], dtype=jnp.float32)
 
-# 5. Build monomer energy function using our newly updated factory!
-from mmml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
-compute_monomer_energy = make_monomer_energy_fn(model, params, z, jax_monomer_indices, displacement_fn)
+def simple_displacement_fn(r1, r2):
+    diff = r1 - r2
+    return diff - jnp.round(diff / cell_diag) * cell_diag
+
+# 5. Build monomer energy function using standard JAX AD
+from collections import defaultdict
+by_size = defaultdict(list)
+for idx in monomer_indices:
+    by_size[len(idx)].append(idx)
+
+group_fns = []
+for size, indices_list in by_size.items():
+    stacked_indices = jnp.stack(indices_list)
+    n_atoms = size
+    dst_idx, src_idx = np.where(~np.eye(n_atoms, dtype=bool))
+    dst_idx = jnp.array(dst_idx, dtype=jnp.int32)
+    src_idx = jnp.array(src_idx, dtype=jnp.int32)
+    
+    # Vectorize model.apply using compute_forces=True to get forces internally
+    vmapped_apply = jax.vmap(
+        lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
+            params,
+            atomic_numbers=atomic_nums,
+            positions=pos,
+            dst_idx=d_idx,
+            src_idx=s_idx,
+            compute_forces=True,
+        ),
+        in_axes=(0, 0)
+    )
+    
+    group_z = z[stacked_indices]
+    
+    vmapped_displacement = jax.vmap(
+        jax.vmap(simple_displacement_fn, in_axes=(0, None)),
+        in_axes=(0, 0)
+    )
+    
+    def group_energy(r, stacked_idx=stacked_indices, gz=group_z, v_apply=vmapped_apply, v_disp=vmapped_displacement):
+        group_pos = r[stacked_idx]
+        ref_pos = group_pos[:, 0, :]
+        displacements = v_disp(group_pos, ref_pos)
+        unfolded_pos = ref_pos[:, None, :] + displacements
+        com = jnp.mean(unfolded_pos, axis=1, keepdims=True)
+        centered_pos = unfolded_pos - com
+        outputs = v_apply(centered_pos, gz)
+        return jnp.sum(outputs["energy"])
+        
+    group_fns.append(group_energy)
+
+def compute_monomer_energy(r):
+    return sum(fn(r) for fn in group_fns)
 
 # 6. Compute ML forces
 @jax.jit
