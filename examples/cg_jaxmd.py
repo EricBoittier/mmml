@@ -838,6 +838,8 @@ for cycle in range(FIRE_CYCLES):
 
     # --- Pre-FIRE diagnostic: print energy components before any step ---
     diagnose_energy(pos_current, label=f" Cycle{cycle+1} init")
+    if DEBUG:
+        run_force_and_nl_diagnostics(pos_current, pi, pj, mask, e14, vdw14, cycle+1, 0)
 
     fire_state = _init_fn_fire(pos_current, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
@@ -876,6 +878,14 @@ for cycle in range(FIRE_CYCLES):
             good_pos_jax = jnp.array(pos_before_block, dtype=jnp.float64)
             diagnose_energy(good_pos_jax,
                             label=f" Cycle{cycle+1} pre-step{step+FIRE_BLOCK_STEPS}")
+            if DEBUG:
+                print("  [DEBUG] Running diagnostics on last good positions before the NaN step:")
+                run_force_and_nl_diagnostics(good_pos_jax, pi, pj, mask, e14, vdw14, cycle+1, step)
+                print("  [DEBUG] Running diagnostics on the NaN positions (to see which forces are NaNs):")
+                try:
+                    run_force_and_nl_diagnostics(fire_state.position, pi, pj, mask, e14, vdw14, cycle+1, step+FIRE_BLOCK_STEPS)
+                except Exception as e_diag:
+                    print(f"Failed to run diagnostics on NaN state: {e_diag}")
             # Re-initialize FIRE from pre-block (finite) positions for CHARMM repair.
             # FireDescentState is a plain dataclass so we use _init_fn_fire, not .replace().
             update_pair_refs(pos_before_block)
