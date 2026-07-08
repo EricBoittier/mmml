@@ -118,7 +118,7 @@ def parse_peptide_h_x_bonds(psf_path, z_array):
 # Path to the pretrained neural network checkpoint parameters
 # CKPT_PATH = "examples/params_aaa_long_2026-07-04_22-30-27.json"
 CKPT_PATH = "/mmhome/boittier/home/mmml_tutorial/aaa.ama/ama_model/ckpts/test01/params_test01_2026-07-08_12-18-52.json"
-
+CKPT_PATH = "/mmhome/boittier/home/mmml_tutorial/aaa.ama/water/ckpts/test01/params_test01_2026-07-08_13-07-08.json"
 FIRE_STEPS = 5000
 FIRE_PRINT_FREQ = 1000
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
