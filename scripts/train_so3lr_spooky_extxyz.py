@@ -413,6 +413,81 @@ def init_state(
     )
 
 
+def _epoch_number_from_path(path: Path) -> int:
+    try:
+        return int(path.name.split("epoch-", 1)[1])
+    except (IndexError, ValueError):
+        return -1
+
+
+def latest_checkpoint_path(workdir: Path) -> Path | None:
+    checkpoints = [
+        path
+        for path in workdir.glob("epoch-*")
+        if path.is_dir() and "tmp" not in path.name
+    ]
+    if not checkpoints:
+        return None
+    return max(checkpoints, key=_epoch_number_from_path)
+
+
+def resolve_restart_path(args: argparse.Namespace) -> Path | None:
+    workdir = Path(args.workdir).resolve()
+    if args.restart is None:
+        if not args.auto_resume:
+            return None
+        return latest_checkpoint_path(workdir)
+    if args.restart == "latest":
+        latest = latest_checkpoint_path(workdir)
+        if latest is None:
+            raise FileNotFoundError(f"No epoch-* checkpoints found in {workdir}")
+        return latest
+    return Path(args.restart).expanduser().resolve()
+
+
+def _restore_state_from_checkpoint(
+    checkpoint_path: Path,
+    state: train_state.TrainState,
+) -> tuple[train_state.TrainState, int, dict[str, Any]]:
+    checkpointer = ocp.PyTreeCheckpointer()
+    restored = checkpointer.restore(checkpoint_path)
+    restored_model = restored.get("model")
+    restored_params = restored.get("params")
+    if restored_model is not None:
+        typed_model = checkpointer.restore(
+            checkpoint_path,
+            item={"model": state},
+            partial_restore=True,
+        )["model"]
+        state = state.replace(
+            step=typed_model.step,
+            params=typed_model.params,
+            opt_state=typed_model.opt_state,
+        )
+    elif restored_params is not None:
+        state = state.replace(params=restored_params)
+    else:
+        raise ValueError(f"Checkpoint {checkpoint_path} has no 'model' or 'params'")
+
+    epoch = int(np.asarray(restored.get("epoch", _epoch_number_from_path(checkpoint_path))))
+    metrics = restored.get("metrics", {})
+    return state, epoch, metrics
+
+
+def _restored_best_valid_loss(metrics: Any) -> float | None:
+    if not isinstance(metrics, dict):
+        return None
+    value = metrics.get("best_valid_loss")
+    if value is None and isinstance(metrics.get("valid"), dict):
+        value = metrics["valid"].get("loss")
+    if value is None:
+        return None
+    try:
+        return float(np.asarray(value).reshape(-1)[0])
+    except (TypeError, ValueError):
+        return None
+
+
 def save_epoch_checkpoint(
     workdir: Path,
     epoch: int,
@@ -452,7 +527,6 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     model = create_model(args, max_atoms=max_atoms)
     state = init_state(model, data, train_buckets, args)
-    state = jax_utils.replicate(state, devices=devices)
     train_step, eval_step = make_steps(model, args, devices)
 
     workdir = Path(args.workdir).resolve()
@@ -465,9 +539,31 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
     print(f"Max atoms: {max_atoms}; per-device batch: {args.batch_size_per_device}")
     print(f"Checkpoint directory: {workdir}")
 
+    start_epoch = 1
     best_valid = math.inf
+    restart_path = resolve_restart_path(args)
+    if restart_path is not None:
+        state, restored_epoch, restored_metrics = _restore_state_from_checkpoint(
+            restart_path, state
+        )
+        start_epoch = restored_epoch + 1
+        restored_best = _restored_best_valid_loss(restored_metrics)
+        if restored_best is not None:
+            best_valid = restored_best
+        print(
+            f"Restarted from {restart_path} at epoch {restored_epoch}; "
+            f"continuing from epoch {start_epoch}"
+        )
+        if start_epoch > args.epochs:
+            print(
+                f"Nothing to do: restart epoch {restored_epoch} is already >= "
+                f"--epochs {args.epochs}"
+            )
+            return
+
+    state = jax_utils.replicate(state, devices=devices)
     rng = np.random.default_rng(args.seed)
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
         train_metrics = []
         train_batches = iter_device_batches(
@@ -558,6 +654,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num-devices", type=int, default=2)
     parser.add_argument("--batch-size-per-device", type=int, default=4)
     parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument(
+        "--restart",
+        default=None,
+        help="Path to an epoch-* checkpoint, or 'latest' to use the newest under --workdir",
+    )
+    parser.add_argument(
+        "--auto-resume",
+        action="store_true",
+        help="Resume from newest epoch-* under --workdir when present",
+    )
     parser.add_argument("--steps-per-epoch", type=int, default=None)
     parser.add_argument("--valid-steps", type=int, default=100)
     parser.add_argument("--save-every", type=int, default=1)
