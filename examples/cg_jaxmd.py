@@ -117,9 +117,47 @@ def parse_peptide_h_x_bonds(psf_path, z_array):
     return bonds
 
 
+def parse_all_peptide_bonds(psf_path):
+    bonds = []
+    in_bonds = False
+    with open(psf_path, 'r') as f:
+        for line in f:
+            if '!NBOND' in line:
+                in_bonds = True
+                continue
+            if in_bonds:
+                if not line.strip() or '!' in line:
+                    if '!NBOND' not in line:
+                        in_bonds = False
+                        continue
+                parts = line.split()
+                for i in range(0, len(parts), 2):
+                    idx1 = int(parts[i]) - 1
+                    idx2 = int(parts[i+1]) - 1
+                    # Peptide atoms are the first 42 atoms
+                    if idx1 < 42 and idx2 < 42:
+                        bonds.append((idx1, idx2))
+    return bonds
+
+
+def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
+    r_np = np.asarray(r)
+    ri = r_np[idx1_arr]
+    rj = r_np[idx2_arr]
+    dr = ri - rj
+    dr -= box_size * np.round(dr / box_size)
+    dists = np.linalg.norm(dr, axis=-1)
+    diffs = np.abs(dists - r0_arr)
+    return float(diffs.max()), float(diffs.mean())
+
+
+
+
 # Paths to pretrained neural network checkpoint parameters.
-PEPTIDE_CKPT_PATH = "params_test01_2026-07-08_12-58-42.json"
-WATER_CKPT_PATH = "params_test01_2026-07-08_12-18-52.json"
+script_dir = Path(__file__).parent
+PEPTIDE_CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-58-42.json")
+WATER_CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-18-52.json")
+
 FIRE_STEPS = 5000
 FIRE_PRINT_FREQ = 1000
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
@@ -172,6 +210,8 @@ PSI_TARGET_DEG = None
 DIHEDRAL_RESTRAINT_K_EV = 1.0
 PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
 PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
+PEPTIDE_BOND_K_EV = 200.0  # Force constant for harmonic restraints on all peptide bonds (eV/Å^2)
+
 
 
 def minimize_peptide_only_in_charmm(sd_steps=10000, abnr_steps=10000):
@@ -291,10 +331,15 @@ pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
 z = get_Z_from_psf()
 pep_h_x_bonds = parse_peptide_h_x_bonds(box.psf_path, z)
 print(f"Parsed {len(pep_h_x_bonds)} peptide H-X bonds from PSF.")
+pep_all_bonds = parse_all_peptide_bonds(box.psf_path)
+print(f"Parsed {len(pep_all_bonds)} peptide bonds from PSF.")
 
 # Precompute H-X bond index arrays for vectorized operations
 h_idx_arr = np.array([b[0] for b in pep_h_x_bonds], dtype=np.int32)
 x_idx_arr = np.array([b[1] for b in pep_h_x_bonds], dtype=np.int32)
+
+pep_bond_idx1_arr = np.array([b[0] for b in pep_all_bonds], dtype=np.int32)
+pep_bond_idx2_arr = np.array([b[1] for b in pep_all_bonds], dtype=np.int32)
 
 # Construct ASE Atoms object to act as a template for trajectory writing
 atoms = Atoms(z, pos)
@@ -308,6 +353,9 @@ cell = np.asarray(box.cell, dtype=np.float64)
 # Convert indices to JAX arrays and measure initial bond lengths
 h_idx_jax = jnp.array(h_idx_arr, dtype=jnp.int32)
 x_idx_jax = jnp.array(x_idx_arr, dtype=jnp.int32)
+pep_bond_idx1_jax = jnp.array(pep_bond_idx1_arr, dtype=jnp.int32)
+pep_bond_idx2_jax = jnp.array(pep_bond_idx2_arr, dtype=jnp.int32)
+
 pos_init = np.asarray(pos)
 r0_list = []
 for h_idx, x_idx in pep_h_x_bonds:
@@ -317,6 +365,16 @@ for h_idx, x_idx in pep_h_x_bonds:
     r0_list.append(r0)
 r0_jax = jnp.array(r0_list, dtype=jnp.float64)
 print(f"--- Measured {len(r0_list)} equilibrium H-X bond lengths for flat-bottom restraints ---")
+
+r0_pep_list = []
+for idx1, idx2 in pep_all_bonds:
+    dr = pos_init[idx1] - pos_init[idx2]
+    dr -= box_size * np.round(dr / box_size)
+    r0 = np.linalg.norm(dr)
+    r0_pep_list.append(r0)
+r0_pep_jax = jnp.array(r0_pep_list, dtype=jnp.float64)
+print(f"--- Measured {len(r0_pep_list)} equilibrium peptide bond lengths for constraints ---")
+
 
 # 3. Load JAX nonbonded parameters and setup cutoffs
 psf_path = box.psf_path
@@ -731,9 +789,19 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
     dist_pep = jnp.sqrt(jnp.maximum(disp_pep_sq, 1e-12))
     excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
     e_restraint = jnp.sum(0.5 * 100.0 * jnp.square(excess))
+
+    # (D) Harmonic restraints on ALL peptide bonds
+    ri_all_pep = r[pep_bond_idx1_jax]
+    rj_all_pep = r[pep_bond_idx2_jax]
+    disp_all_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_all_pep, rj_all_pep)
+    disp_all_pep_sq = jnp.sum(disp_all_pep**2, axis=-1)
+    dist_all_pep = jnp.sqrt(jnp.maximum(disp_all_pep_sq, 1e-12))
+    e_pep_bond_restraints = jnp.sum(0.5 * PEPTIDE_BOND_K_EV * jnp.square(dist_all_pep - r0_pep_jax))
+
     e_dihedral_restraint = _phi_psi_restraint_energy(r)
 
-    return e_intra + e_inter + e_restraint + e_dihedral_restraint
+    return e_intra + e_inter + e_restraint + e_pep_bond_restraints + e_dihedral_restraint
+
 
 
 @jit
@@ -883,7 +951,17 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
             disp_pep_sq = jnp.sum(disp_pep**2, axis=-1)
             dist_pep = jnp.sqrt(jnp.maximum(disp_pep_sq, 1e-12))
             excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
-            return jnp.sum(0.5 * 100.0 * jnp.square(excess))
+            e_h_x = jnp.sum(0.5 * 100.0 * jnp.square(excess))
+
+            ri_all_pep = r_[pep_bond_idx1_jax]
+            rj_all_pep = r_[pep_bond_idx2_jax]
+            disp_all_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_all_pep, rj_all_pep)
+            disp_all_pep_sq = jnp.sum(disp_all_pep**2, axis=-1)
+            dist_all_pep = jnp.sqrt(jnp.maximum(disp_all_pep_sq, 1e-12))
+            e_pep_bonds = jnp.sum(0.5 * PEPTIDE_BOND_K_EV * jnp.square(dist_all_pep - r0_pep_jax))
+            
+            return e_h_x + e_pep_bonds
+
         grad_res = jax.grad(restraint_energy_fn)(r)
         f_res = -np.asarray(grad_res)
         f_res_mag = np.linalg.norm(f_res, axis=-1)
@@ -1199,8 +1277,11 @@ for cycle in range(FIRE_CYCLES):
         curr_f = np.asarray(fire_state.force)
         curr_e = float(hybrid_energy_fn(fire_state.position, pi, pj, mask, e14, vdw14))
         max_bond = get_max_h_x_bond(fire_state.position, box_size, h_idx_arr, x_idx_arr)
+        max_dev, mean_dev = get_peptide_bond_diagnostics(fire_state.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
         print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:4d} | "
-              f"Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å")
+              f"Energy: {curr_e:.4f} eV | Max H-X Bond: {max_bond:.2f} Å | "
+              f"Max/Mean Pep Bond Dev: {max_dev:.4f}/{mean_dev:.4f} Å")
+
 
         if not np.isfinite(curr_e) or not np.isfinite(max_bond):
             print(f"[FIRE] NaN/Inf energy detected at step {step+FIRE_BLOCK_STEPS} — "
@@ -1339,8 +1420,11 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     else:
         last_good_nvt_pos = np.asarray(state.position, dtype=np.float64).copy()
 
+    max_dev, mean_dev = get_peptide_bond_diagnostics(state.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
     print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
-          f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
+          f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å | "
+          f"Max/Mean Pep Bond Dev: {max_dev:.4f}/{mean_dev:.4f} Å")
+
 
     # Save frame to trajectory
     frame = atoms.copy()
@@ -1367,6 +1451,13 @@ traj_path_nve = "cg_nve.traj"
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
 traj_nve = Trajectory(traj_path_nve, "w", atoms)
 last_good_nve_pos = np.asarray(state.position, dtype=np.float64)
+
+# Measure initial NVE total energy baseline for conservation checks
+init_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
+init_ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
+initial_nve_energy = init_e + init_ke
+print(f"Initial NVE Energy Baseline: {initial_nve_energy:.6f} eV (Potential: {init_e:.6f} eV, Kinetic: {init_ke:.6f} eV)")
+
 
 for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     pos_before_block = np.asarray(state_nve.position, dtype=np.float64)
@@ -1446,11 +1537,18 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
         if np.isfinite(np.asarray(state_nve.position)).all() and np.isfinite(curr_e):
             last_good_nve_pos = np.asarray(state_nve.position, dtype=np.float64).copy()
+            initial_nve_energy = curr_e + ke
+            print(f"[REPAIR] Reset NVE Energy Baseline post-repair to: {initial_nve_energy:.6f} eV")
     else:
         last_good_nve_pos = np.asarray(state_nve.position, dtype=np.float64).copy()
 
-    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
-          f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å")
+    tot_energy = curr_e + ke
+    energy_drift = tot_energy - initial_nve_energy
+    max_dev, mean_dev = get_peptide_bond_diagnostics(state_nve.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
+    print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {tot_energy:.4f} eV | Drift: {energy_drift:.6f} eV | "
+          f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å | "
+          f"Max/Mean Pep Bond Dev: {max_dev:.4f}/{mean_dev:.4f} Å")
+
 
     # Save frame to trajectory
     frame = atoms.copy()
