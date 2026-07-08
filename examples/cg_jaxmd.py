@@ -153,7 +153,9 @@ dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 PEPTIDE_WATER_ML = False
 PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = True
 PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = True
+WATER_ML_CHARGE_TOTAL_CORRECTION = True
 PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
+WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
 DEBUG = True
 
 # Optional: start from a peptide-only frame produced by
@@ -382,6 +384,15 @@ pep_dst_idx_jax = jnp.array(pep_dst_idx_np, dtype=jnp.int32)
 pep_src_idx_jax = jnp.array(pep_src_idx_np, dtype=jnp.int32)
 pep_ref_charge_total = float(np.asarray(nbond_data.charges[:n_trialanine]).sum())
 
+water_stacked_idx_jax = jnp.array(np.stack(monomer_indices[1:]), dtype=jnp.int32)
+water_n_atoms = 3
+water_dst_idx_np, water_src_idx_np = np.where(~np.eye(water_n_atoms, dtype=bool))
+water_dst_idx_jax = jnp.array(water_dst_idx_np, dtype=jnp.int32)
+water_src_idx_jax = jnp.array(water_src_idx_np, dtype=jnp.int32)
+water_z_jax = jax_z[water_stacked_idx_jax]
+water_flat_idx_jax = water_stacked_idx_jax.reshape(-1)
+water_ref_charge_total = float(np.asarray(nbond_data.charges[n_trialanine:n_trialanine + water_n_atoms]).sum())
+
 
 def compute_peptide_ml_charges(r):
     """Return geometry-dependent peptide atomic charges from the peptide ML model."""
@@ -411,6 +422,46 @@ def compute_peptide_ml_charges(r):
     if PEPTIDE_ML_CHARGE_TOTAL_CORRECTION:
         q_pep = q_pep + (pep_ref_charge_total - jnp.sum(q_pep)) / pep_n_atoms
     return q_pep
+
+
+def compute_water_ml_charges(r):
+    """Return geometry-dependent water atomic charges from the water ML model."""
+    group_pos = r[water_stacked_idx_jax]
+    ref_pos = group_pos[:, 0, :]
+    displacements = jax.vmap(
+        jax.vmap(displacement_fn, in_axes=(0, None)),
+        in_axes=(0, 0),
+    )(group_pos, ref_pos)
+    unfolded = ref_pos[:, None, :] + displacements
+    centered = unfolded - jnp.mean(unfolded, axis=1, keepdims=True)
+
+    outputs = jax.vmap(
+        lambda pos, atomic_nums: water_model.apply(
+            water_params,
+            atomic_numbers=atomic_nums,
+            positions=pos,
+            dst_idx=water_dst_idx_jax,
+            src_idx=water_src_idx_jax,
+            compute_forces=False,
+        ),
+        in_axes=(0, 0),
+    )(centered, water_z_jax)
+
+    if "charges_as_mono" in outputs:
+        q_water = jnp.asarray(outputs["charges_as_mono"], dtype=jnp.float64).reshape((-1, water_n_atoms))
+    elif "charges" in outputs:
+        q_water = jnp.asarray(outputs["charges"], dtype=jnp.float64).reshape((-1, water_n_atoms))
+    else:
+        if WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES:
+            raise ValueError(
+                "PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING requires a water checkpoint "
+                "whose model output includes 'charges_as_mono' or 'charges'."
+            )
+        q_water = _q_jax[water_flat_idx_jax].reshape((-1, water_n_atoms))
+
+    if WATER_ML_CHARGE_TOTAL_CORRECTION:
+        q_water = q_water + (water_ref_charge_total - jnp.sum(q_water, axis=1, keepdims=True)) / water_n_atoms
+    return q_water.reshape(-1)
 
 # Precompute initial pair list
 print("--- Precomputing nonbonded pair list indices ---")
@@ -529,13 +580,18 @@ _c2of = nb_settings.c2ofnb
 
 if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
     print(
-        "--- Electrostatic embedding enabled: peptide-water Coulomb uses "
-        "fluctuating ML peptide charges and fixed MM water charges ---"
+        "--- Electrostatic embedding enabled: intermolecular Coulomb uses "
+        "fluctuating ML peptide and water charges; MM LJ remains unchanged ---"
     )
     print(
         f"--- Peptide ML charges corrected to total charge {pep_ref_charge_total:.6f} e ---"
         if PEPTIDE_ML_CHARGE_TOTAL_CORRECTION
         else "--- Peptide ML charges are used without total-charge correction ---"
+    )
+    print(
+        f"--- Water ML charges corrected to total charge {water_ref_charge_total:.6f} e per water ---"
+        if WATER_ML_CHARGE_TOTAL_CORRECTION
+        else "--- Water ML charges are used without total-charge correction ---"
     )
 
 
@@ -544,7 +600,8 @@ def _electrostatic_charge_array(r):
     if not PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
         return _q_jax
     q_pep = compute_peptide_ml_charges(r)
-    return _q_jax.at[:n_trialanine].set(q_pep)
+    q_water = compute_water_ml_charges(r)
+    return _q_jax.at[:n_trialanine].set(q_pep).at[water_flat_idx_jax].set(q_water)
 
 
 def update_pair_refs(pos_np):
