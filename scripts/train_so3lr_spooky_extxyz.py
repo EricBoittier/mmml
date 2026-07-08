@@ -257,19 +257,24 @@ def iter_device_batches(
     buckets: dict[int, np.ndarray],
     *,
     per_device_batch_size: int,
+    max_pairs_per_device: int,
     n_devices: int,
     rng: np.random.Generator,
 ) -> Any:
-    global_batch = per_device_batch_size * n_devices
     bucket_keys = list(buckets)
     rng.shuffle(bucket_keys)
     for n_atoms in bucket_keys:
+        bucket_batch_size = min(
+            per_device_batch_size,
+            max(1, max_pairs_per_device // (n_atoms * n_atoms)),
+        )
+        global_batch = bucket_batch_size * n_devices
         indices = buckets[n_atoms].copy()
         rng.shuffle(indices)
         usable = (len(indices) // global_batch) * global_batch
         for start in range(0, usable, global_batch):
             chunk = indices[start : start + global_batch]
-            yield chunk.reshape(n_devices, per_device_batch_size)
+            yield chunk.reshape(n_devices, bucket_batch_size)
 
 
 def stack_device_batches(
@@ -535,8 +540,6 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     model = create_model(args, max_atoms=max_atoms)
     state = init_state(model, data, train_buckets, args)
-    train_step, eval_step = make_steps(model, args, devices)
-
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
     with (workdir / "run_config.json").open("w") as fh:
@@ -571,26 +574,41 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     state = jax_utils.replicate(state, devices=devices)
     rng = np.random.default_rng(args.seed)
-    compiled_atom_counts: set[int] = set()
+    step_functions: dict[int, tuple[Any, Any]] = {}
+
+    def steps_for_batch_size(batch_size: int) -> tuple[Any, Any]:
+        if batch_size not in step_functions:
+            step_args = argparse.Namespace(
+                **{**vars(args), "batch_size_per_device": batch_size}
+            )
+            step_functions[batch_size] = make_steps(model, step_args, devices)
+        return step_functions[batch_size]
+
+    compiled_shapes: set[tuple[int, int]] = set()
     for epoch in range(start_epoch, args.epochs + 1):
         t0 = time.time()
         train_metrics = []
         train_batches = iter_device_batches(
             train_buckets,
             per_device_batch_size=args.batch_size_per_device,
+            max_pairs_per_device=args.max_pairs_per_device,
             n_devices=args.num_devices,
             rng=rng,
         )
         for step, device_indices in enumerate(train_batches, start=1):
+            batch_size = int(device_indices.shape[1])
             n_atoms = int(
                 np.asarray(data["N"])[device_indices[0, 0]].reshape(-1)[0]
             )
-            if n_atoms not in compiled_atom_counts:
+            shape = (n_atoms, batch_size)
+            if shape not in compiled_shapes:
                 print(
-                    f"Compiling train step for {n_atoms}-atom structures",
+                    f"Compiling steps for {n_atoms}-atom structures "
+                    f"with per-device batch {batch_size}",
                     flush=True,
                 )
-                compiled_atom_counts.add(n_atoms)
+                compiled_shapes.add(shape)
+            train_step, _ = steps_for_batch_size(batch_size)
             batch = stack_device_batches(data, device_indices)
             state, metrics = train_step(state, batch)
             train_metrics.append(metrics)
@@ -608,10 +626,12 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         valid_batches = iter_device_batches(
             valid_buckets,
             per_device_batch_size=args.batch_size_per_device,
+            max_pairs_per_device=args.max_pairs_per_device,
             n_devices=args.num_devices,
             rng=np.random.default_rng(args.seed + epoch),
         )
         for step, device_indices in enumerate(valid_batches, start=1):
+            _, eval_step = steps_for_batch_size(int(device_indices.shape[1]))
             batch = stack_device_batches(data, device_indices)
             valid_metrics.append(eval_step(state, batch))
             if args.valid_steps and step >= args.valid_steps:
@@ -671,6 +691,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--valid-fraction", type=float, default=0.05)
     parser.add_argument("--num-devices", type=int, default=2)
     parser.add_argument("--batch-size-per-device", type=int, default=4)
+    parser.add_argument(
+        "--max-pairs-per-device",
+        type=int,
+        default=18000,
+        help=(
+            "Approximate per-device batch*n_atoms^2 budget; automatically reduces "
+            "the structure batch for larger molecules"
+        ),
+    )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument(
         "--restart",
