@@ -31,7 +31,7 @@ from mmml.interfaces.pycharmmInterface.trialanine_water_box import (
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 
 
-PEPTIDE_CKPT_PATH = "/mmhome/boittier/home/mmml_tutorial/aaa.ama/aaa_model/ckpts/test01/params_test01_2026-07-08_12-34-45.json"
+PEPTIDE_CKPT_PATH = "examples/params_aaa_long_2026-07-04_22-30-27.json"
 
 PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
 PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
@@ -135,6 +135,7 @@ def main() -> None:
     parser.add_argument("--psi", default="-180:180:30", help="PSI grid as start:stop:step degrees")
     parser.add_argument("--out", default="artifacts/trialanine_phi_psi_pes")
     parser.add_argument("--relax-ase", action="store_true", help="Constrained ML relaxation before energy evaluation")
+    parser.add_argument("--skip-ml", action="store_true", help="Only evaluate CHARMM energies")
     parser.add_argument("--relax-steps", type=int, default=200)
     parser.add_argument("--relax-fmax", type=float, default=0.05)
     parser.add_argument("--write-xyz", action="store_true")
@@ -146,7 +147,7 @@ def main() -> None:
     atomic_numbers, positions = build_trialanine_peptide_in_charmm()
     base_atoms = Atoms(numbers=atomic_numbers, positions=positions)
 
-    calc = create_calculator_from_checkpoint(args.checkpoint)
+    calc = None if args.skip_ml else create_calculator_from_checkpoint(args.checkpoint)
     phi_grid = parse_grid(args.phi)
     psi_grid = parse_grid(args.psi)
 
@@ -160,6 +161,8 @@ def main() -> None:
         for j, psi in enumerate(psi_grid):
             atoms = set_phi_psi(base_atoms, phi, psi)
             if args.relax_ase:
+                if calc is None:
+                    raise ValueError("--relax-ase requires an ML checkpoint; remove --skip-ml")
                 atoms = relax_with_fixed_phi_psi(
                     atoms,
                     calc,
@@ -168,9 +171,10 @@ def main() -> None:
                     fmax=args.relax_fmax,
                     steps=args.relax_steps,
                 )
-            atoms.calc = calc
-
-            e_ml = float(atoms.get_potential_energy())
+            e_ml = np.nan
+            if calc is not None:
+                atoms.calc = calc
+                e_ml = float(atoms.get_potential_energy())
             e_charmm = charmm_energy_kcal(atoms.get_positions())
             phi_actual = float(atoms.get_dihedral(*PHI_CENTRAL))
             psi_actual = float(atoms.get_dihedral(*PSI_CENTRAL))
