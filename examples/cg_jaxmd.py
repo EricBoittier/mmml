@@ -36,6 +36,7 @@ jax.config.update("jax_persistent_cache_min_compile_time_secs", 2)
 
 # ASE trajectory, calculator, and Atoms imports
 from ase import Atoms
+from ase.io import read as ase_read
 from ase.io.trajectory import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.optimize.fire import FIRE as AseFIRE
@@ -150,6 +151,21 @@ dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 PEPTIDE_WATER_ML = False
 DEBUG = True
 
+# Optional: start from a peptide-only frame produced by
+# scripts/scan_trialanine_phi_psi_pes.py. The frame replaces the first
+# n_trialanine coordinates in the solvated box before minimization/dynamics.
+START_PEPTIDE_TRAJ_PATH = None
+START_PEPTIDE_TRAJ_INDEX = 0
+
+# Optional PHI/PSI restraints for JAX-MD. If targets are None and a trajectory
+# frame is loaded, targets are read from that frame's info when available.
+CONSTRAIN_PHI_PSI = False
+PHI_TARGET_DEG = None
+PSI_TARGET_DEG = None
+DIHEDRAL_RESTRAINT_K_EV = 1.0
+PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
+PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
+
 
 def minimize_peptide_only_in_charmm(sd_steps=10000, abnr_steps=10000):
     """Minimize only the PEPT segment while keeping waters fixed."""
@@ -191,6 +207,20 @@ def minimize_peptide_only_with_ml_calculator(
     return relaxed
 
 
+def load_peptide_start_frame(traj_path, frame_index=0):
+    """Read a peptide-only ASE trajectory frame and return positions plus PHI/PSI info."""
+    if traj_path is None:
+        return None, {}
+    frame = ase_read(str(traj_path), index=frame_index)
+    positions = np.asarray(frame.get_positions(), dtype=np.float64)
+    if positions.shape[0] != n_trialanine:
+        raise ValueError(
+            f"Expected peptide trajectory frame with {n_trialanine} atoms, "
+            f"got {positions.shape[0]} from {traj_path}"
+        )
+    return positions, dict(frame.info)
+
+
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
@@ -207,6 +237,27 @@ peptide_center = pos[:n_trialanine].mean(axis=0)
 box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
 translation = box_center - peptide_center
 pos += translation / 2.0
+
+start_peptide_pos, start_peptide_info = load_peptide_start_frame(
+    START_PEPTIDE_TRAJ_PATH, START_PEPTIDE_TRAJ_INDEX
+)
+if start_peptide_pos is not None:
+    print(
+        f"--- Loading peptide start frame {START_PEPTIDE_TRAJ_INDEX} "
+        f"from {START_PEPTIDE_TRAJ_PATH} ---"
+    )
+    pos[:n_trialanine] = start_peptide_pos + (box_center - start_peptide_pos.mean(axis=0))
+    if PHI_TARGET_DEG is None and "actual_phi_deg" in start_peptide_info:
+        PHI_TARGET_DEG = float(start_peptide_info["actual_phi_deg"])
+    if PSI_TARGET_DEG is None and "actual_psi_deg" in start_peptide_info:
+        PSI_TARGET_DEG = float(start_peptide_info["actual_psi_deg"])
+
+if CONSTRAIN_PHI_PSI:
+    print(
+        "--- JAX-MD PHI/PSI restraints enabled: "
+        f"phi={PHI_TARGET_DEG}, psi={PSI_TARGET_DEG}, "
+        f"k={DIHEDRAL_RESTRAINT_K_EV} eV/rad^2 ---"
+    )
 
 z = get_Z_from_psf()
 
@@ -457,6 +508,46 @@ def update_pair_refs(pos_np):
 update_pair_refs(pos)
 
 
+def _dihedral_angle_rad(r, atom_indices):
+    """Signed dihedral angle in radians for four atom indices."""
+    p0 = r[atom_indices[0]]
+    p1 = r[atom_indices[1]]
+    p2 = r[atom_indices[2]]
+    p3 = r[atom_indices[3]]
+
+    b0 = -(p1 - p0)
+    b1 = p2 - p1
+    b2 = p3 - p2
+
+    b1 = b1 / jnp.linalg.norm(b1)
+    v = b0 - jnp.dot(b0, b1) * b1
+    w = b2 - jnp.dot(b2, b1) * b1
+
+    x = jnp.dot(v, w)
+    y = jnp.dot(jnp.cross(b1, v), w)
+    return jnp.arctan2(y, x)
+
+
+def _periodic_angle_delta_rad(angle, target):
+    """Smallest signed angle difference angle-target in radians."""
+    return jnp.arctan2(jnp.sin(angle - target), jnp.cos(angle - target))
+
+
+def _phi_psi_restraint_energy(r):
+    if not CONSTRAIN_PHI_PSI:
+        return 0.0
+    if PHI_TARGET_DEG is None or PSI_TARGET_DEG is None:
+        return 0.0
+
+    phi = _dihedral_angle_rad(r, PHI_CENTRAL)
+    psi = _dihedral_angle_rad(r, PSI_CENTRAL)
+    phi_target = jnp.deg2rad(float(PHI_TARGET_DEG))
+    psi_target = jnp.deg2rad(float(PSI_TARGET_DEG))
+    d_phi = _periodic_angle_delta_rad(phi, phi_target)
+    d_psi = _periodic_angle_delta_rad(psi, psi_target)
+    return 0.5 * DIHEDRAL_RESTRAINT_K_EV * (d_phi * d_phi + d_psi * d_psi)
+
+
 @jit
 def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jnp.ndarray:
     """Single JIT-compiled hybrid ML/MM energy function.
@@ -505,8 +596,9 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
     dist_pep = jnp.sqrt(jnp.maximum(disp_pep_sq, 1e-12))
     excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
     e_restraint = jnp.sum(0.5 * 100.0 * jnp.square(excess))
+    e_dihedral_restraint = _phi_psi_restraint_energy(r)
 
-    return e_intra + e_inter + e_restraint
+    return e_intra + e_inter + e_restraint + e_dihedral_restraint
 
 
 @jit

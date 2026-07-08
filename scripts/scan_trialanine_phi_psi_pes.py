@@ -12,7 +12,9 @@ import pandas as pd
 from ase import Atoms
 from ase.constraints import FixInternals
 from ase.io import write
+from ase.io.trajectory import Trajectory
 from ase.optimize.fire import FIRE
+from ase.calculators.singlepoint import SinglePointCalculator
 
 from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 from mmml.interfaces.pycharmmInterface import setupRes
@@ -138,6 +140,7 @@ def main() -> None:
     parser.add_argument("--skip-ml", action="store_true", help="Only evaluate CHARMM energies")
     parser.add_argument("--relax-steps", type=int, default=200)
     parser.add_argument("--relax-fmax", type=float, default=0.05)
+    parser.add_argument("--traj", default="phi_psi_pes.traj", help="ASE trajectory filename under --out")
     parser.add_argument("--write-xyz", action="store_true")
     args = parser.parse_args()
 
@@ -155,8 +158,11 @@ def main() -> None:
     ml_ev = np.full_like(charmm_kcal, np.nan)
     actual_phi = np.full_like(charmm_kcal, np.nan)
     actual_psi = np.full_like(charmm_kcal, np.nan)
+    positions_A = np.full((len(phi_grid), len(psi_grid), len(base_atoms), 3), np.nan, dtype=float)
+    ml_forces_eVA = np.full_like(positions_A, np.nan)
 
     rows: list[dict[str, float]] = []
+    traj = Trajectory(out_dir / args.traj, "w")
     for i, phi in enumerate(phi_grid):
         for j, psi in enumerate(psi_grid):
             atoms = set_phi_psi(base_atoms, phi, psi)
@@ -172,9 +178,11 @@ def main() -> None:
                     steps=args.relax_steps,
                 )
             e_ml = np.nan
+            forces_ml = np.full((len(atoms), 3), np.nan, dtype=float)
             if calc is not None:
                 atoms.calc = calc
                 e_ml = float(atoms.get_potential_energy())
+                forces_ml = np.asarray(atoms.get_forces(), dtype=float)
             e_charmm = charmm_energy_kcal(atoms.get_positions())
             phi_actual = float(atoms.get_dihedral(*PHI_CENTRAL))
             psi_actual = float(atoms.get_dihedral(*PSI_CENTRAL))
@@ -183,6 +191,8 @@ def main() -> None:
             charmm_kcal[i, j] = e_charmm
             actual_phi[i, j] = phi_actual
             actual_psi[i, j] = psi_actual
+            positions_A[i, j] = atoms.get_positions()
+            ml_forces_eVA[i, j] = forces_ml
             rows.append(
                 {
                     "phi_deg": float(phi),
@@ -193,6 +203,17 @@ def main() -> None:
                     "charmm_energy_kcal_mol": e_charmm,
                 }
             )
+
+            frame = atoms.copy()
+            frame.info["phi_deg"] = float(phi)
+            frame.info["psi_deg"] = float(psi)
+            frame.info["actual_phi_deg"] = phi_actual
+            frame.info["actual_psi_deg"] = psi_actual
+            frame.info["charmm_energy_kcal_mol"] = e_charmm
+            if calc is not None:
+                frame.calc = SinglePointCalculator(frame, energy=e_ml, forces=forces_ml)
+            traj.write(frame)
+
             print(
                 f"phi={phi:7.2f} psi={psi:7.2f} "
                 f"ML={e_ml:14.6f} eV CHARMM={e_charmm:14.6f} kcal/mol",
@@ -202,6 +223,8 @@ def main() -> None:
             if args.write_xyz:
                 write(out_dir / f"phi_{phi:+07.2f}_psi_{psi:+07.2f}.xyz", atoms)
 
+    traj.close()
+
     np.savez(
         out_dir / "phi_psi_pes.npz",
         phi_grid_deg=phi_grid,
@@ -210,6 +233,8 @@ def main() -> None:
         charmm_energy_kcal_mol=charmm_kcal,
         actual_phi_deg=actual_phi,
         actual_psi_deg=actual_psi,
+        positions_A=positions_A,
+        ml_forces_eVA=ml_forces_eVA,
         phi_atoms=np.asarray(PHI_CENTRAL, dtype=np.int32),
         psi_atoms=np.asarray(PSI_CENTRAL, dtype=np.int32),
     )
@@ -223,6 +248,7 @@ def main() -> None:
     pd.DataFrame(rows).to_json(out_dir / "phi_psi_pes.json", orient="records", indent=2)
     print(f"Wrote {out_dir / 'phi_psi_pes.npz'}")
     print(f"Wrote {csv_path}")
+    print(f"Wrote {out_dir / args.traj}")
 
 
 if __name__ == "__main__":
