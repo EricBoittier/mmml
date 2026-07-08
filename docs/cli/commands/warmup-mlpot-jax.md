@@ -22,7 +22,8 @@ usage: mmml warmup-mlpot-jax [-h] [--checkpoint CHECKPOINT]
                              [--ml-switch-width ML_SWITCH_WIDTH]
                              [--mm-switch-on MM_SWITCH_ON]
                              [--mm-switch-width MM_SWITCH_WIDTH]
-                             [--no-complementary-handoff] [--do-mm]
+                             [--no-complementary-handoff]
+                             [--mm-pair-source {jax,charmm_callback}] [--do-mm]
                              [--compile-threads COMPILE_THREADS]
                              [--allow-under-mpirun] [--dry-run] [--quiet]
                              [--verbose]
@@ -64,6 +65,12 @@ options:
   --no-complementary-handoff
                         Legacy MM window: MM starts at mm_switch_on instead of
                         filling the ML taper handoff.
+  --mm-pair-source {jax,charmm_callback}
+                        Decomposed MLpot MM pair provider: Fortran callback
+                        idxu/idxv (default) or JAX neighbor rebuild (--mm-pair-
+                        source jax). All-ML bulk systems with empty callback
+                        lists auto-fall back to JAX. Override with env
+                        MMML_MM_PAIR_SOURCE.
   --do-mm               Include MM pair path in warmup (closer to production
                         hybrid)
   --compile-threads COMPILE_THREADS

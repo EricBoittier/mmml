@@ -873,6 +873,7 @@ def test_n100_l30_tag_resolves_config_and_density() -> None:
 
 def test_prep_sweep_tag_fails_without_prep_sweep_yaml(cfg: dict, monkeypatch) -> None:
     monkeypatch.setattr(cl, "prep_sweep_config_path", lambda: WORKFLOW / "nonexistent_prep_sweep.yaml")
+    monkeypatch.setattr(cl, "bulk_ramp_config_path", lambda: WORKFLOW / "nonexistent_bulk_ramp.yaml")
     with pytest.raises(KeyError, match="prep_sweep.enabled is false"):
         cell_from_tag(cfg, "resilient_dcm_52_t50_l28_sw_baseline")
 
@@ -902,7 +903,8 @@ def test_prep_sweep_mini_heat_stage(cfg: dict) -> None:
     assert mini["heat_thermostat"] == "hoover"
 
 
-def test_bulk_ramp_config_resolves_compress_tag(cfg: dict) -> None:
+def test_bulk_ramp_config_resolves_compress_tag(cfg: dict, monkeypatch) -> None:
+    monkeypatch.setattr(cl, "prep_sweep_config_path", lambda: WORKFLOW / "nonexistent_prep_sweep.yaml")
     tag = "resilient_dcm_52_t50_l38_ht_bussi_sw_compress_025"
     path = cl.default_workflow_config_path(run_tag=tag)
     assert path.name == "config.bulk_ramp.yaml"

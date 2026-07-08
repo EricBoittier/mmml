@@ -1992,7 +1992,9 @@ def _mlpot_spherical_eval_kwargs(
     import jax.numpy as jnp
 
     n = int(pos_np.shape[0])
-    pos_j = jnp.asarray(pos_np, dtype=jnp.float32)
+    from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
+    dtype = resolve_ml_compute_dtype()
+    pos_j = jnp.asarray(pos_np, dtype=dtype)
     z_j = jnp.asarray(calc.atomic_numbers[:n], dtype=jnp.int32)
     kwargs: dict[str, Any] = dict(
         positions=pos_j,
@@ -2007,7 +2009,7 @@ def _mlpot_spherical_eval_kwargs(
     if needs_box and box_A is not None:
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
 
-        box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=jnp.float32)
+        box_j = jnp.asarray(cubic_box_matrix_from_side(float(box_A)), dtype=dtype)
         kwargs["box"] = box_j
         mm_pair_idx, mm_pair_mask, use_mm_pairs = calc._resolve_mm_pairs(pos_np, box_j)
         if use_mm_pairs:

@@ -166,7 +166,7 @@ def test_run_hybrid_calculator_bfgs_stops_on_spike_without_stopiteration():
         safe_grms_kcalmol_A=None,
     )
 
-    with patch("ase.optimize.BFGS", FakeOpt):
+    with patch("ase.optimize.FIRE", FakeOpt):
         opt, best_frame, stopped, stopped_safe = _run_hybrid_calculator_bfgs(
             atoms,
             config,
@@ -226,7 +226,7 @@ def test_run_hybrid_calculator_bfgs_stops_on_soft_region_plateau():
         safe_grms_kcalmol_A=None,
     )
 
-    with patch("ase.optimize.BFGS", FakeOpt):
+    with patch("ase.optimize.FIRE", FakeOpt):
         opt, best_frame, stopped, stopped_safe = _run_hybrid_calculator_bfgs(
             atoms,
             config,
@@ -493,7 +493,7 @@ def test_run_hybrid_calculator_bfgs_stops_on_safe_grms():
         safe_grms_kcalmol_A=30.0,
     )
 
-    with patch("ase.optimize.BFGS", FakeOpt):
+    with patch("ase.optimize.FIRE", FakeOpt):
         opt, best_frame, stopped_spike, stopped_safe = _run_hybrid_calculator_bfgs(
             atoms,
             config,

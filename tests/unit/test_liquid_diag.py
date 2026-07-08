@@ -29,6 +29,17 @@ def _load_dcd_writer():
     return mod
 
 
+def _load_campaign_lib():
+    path = WORKFLOW / "scripts" / "campaign_lib.py"
+    name = "pbc_liquid_density_dyn_campaign_lib"
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    return mod
+
+
 class _NatomsStub:
     def __init__(self, n: int) -> None:
         self._n = n
@@ -179,11 +190,11 @@ def test_inspect_run_from_stdout(tmp_path: Path):
     cfg_path = WORKFLOW / "config.smoke.gpu.yaml"
     if not cfg_path.is_file():
         pytest.skip("smoke gpu config missing")
-    from campaign_lib import cell_from_tag, load_config, paths_for_run  # noqa: E402
+    cl = _load_campaign_lib()
 
-    cfg = load_config(cfg_path)
-    cell = cell_from_tag(cfg, "dcm_32")
-    paths = paths_for_run(cfg, cell)
+    cfg = cl.load_config(cfg_path)
+    cell = cl.cell_from_tag(cfg, "dcm_32")
+    paths = cl.paths_for_run(cfg, cell)
     out = paths["out_dir"]
     if not out.is_dir():
         out = tmp_path / "dcm_32"
@@ -206,8 +217,8 @@ def test_inspect_run_from_stdout(tmp_path: Path):
 
         alt = tmp_path / "cfg.yaml"
         alt.write_text(yaml.dump(cfg), encoding="utf-8")
-        cfg = load_config(alt)
-        cell = cell_from_tag(cfg, "dcm_32")
+        cfg = cl.load_config(alt)
+        cell = cl.cell_from_tag(cfg, "dcm_32")
 
     monitor = ml.inspect_run(cfg, cell)
     assert monitor.dyna.get("n_frames") == 2
@@ -228,9 +239,9 @@ def test_collect_manifest(tmp_path: Path):
     )
 
     import yaml
-    from campaign_lib import load_config  # noqa: E402
+    cl = _load_campaign_lib()
 
-    cfg = load_config(cfg_path)
+    cfg = cl.load_config(cfg_path)
     cfg["output_root"] = str(test_root.relative_to(REPO))
     alt_cfg = tmp_path / "cfg.yaml"
     alt_cfg.write_text(yaml.dump(cfg), encoding="utf-8")

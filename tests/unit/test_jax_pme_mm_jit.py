@@ -97,7 +97,7 @@ def test_wrap_mm_fn_jax_pme_static_path_under_jit(monkeypatch) -> None:
     )
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(_lj_only_mm_fn, **_wrap_kwargs(dynamic=False))
     pos = jnp.zeros((5, 3), dtype=jnp.float32)
-    energy, forces = jax.jit(wrapped)(pos)
+    energy, forces, _, _ = jax.jit(wrapped)(pos)
     assert float(energy) == pytest.approx(3.0)
     np.testing.assert_allclose(np.asarray(forces), 0.5, rtol=0, atol=1e-6)
 
@@ -123,7 +123,7 @@ def test_wrap_mm_fn_jax_pme_dynamic_path_under_jit(monkeypatch) -> None:
     def eval_mm(p, b):
         return wrapped(p, pair_idx, pair_mask, box_override=b)
 
-    energy, forces = eval_mm(pos, box)
+    energy, forces, _, _ = eval_mm(pos, box)
     assert float(energy) == pytest.approx(3.0)
     np.testing.assert_allclose(np.asarray(forces), 0.5, rtol=0, atol=1e-6)
 
@@ -152,7 +152,7 @@ def test_wrap_mm_fn_jax_pme_dynamic_path_uses_static_pbc_when_box_missing(monkey
     def eval_mm(p):
         return wrapped(p, pair_idx, pair_mask)
 
-    energy, forces = eval_mm(pos)
+    energy, forces, _, _ = eval_mm(pos)
     assert float(energy) == pytest.approx(3.0)
     np.testing.assert_allclose(np.asarray(forces), 0.5, rtol=0, atol=1e-6)
     assert seen == [pytest.approx(32.0)]
@@ -183,6 +183,6 @@ def test_wrap_mm_fn_pme_pure_callback_enters_host_context(monkeypatch) -> None:
     kw["method"] = "pme"
     wrapped = _wrap_mm_fn_with_jax_pme_coulomb(_lj_only_mm_fn, **kw)
     pos = jnp.zeros((5, 3), dtype=jnp.float32)
-    energy, forces = jax.jit(wrapped)(pos)
+    energy, forces, _, _ = jax.jit(wrapped)(pos)
     assert entered == ["host_ctx"]
     assert float(energy) == pytest.approx(3.0)

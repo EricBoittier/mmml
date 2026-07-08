@@ -52,6 +52,10 @@ usage: mmml liquid-box [-h] --composition COMPOSITION --output-dir OUTPUT_DIR
                        [--density-prep-ladder-max-rounds N]
                        [--density-prep-lattice-abnr-steps N]
                        [--pre-mlpot-overlap-min-distance ANG]
+                       [--charmm-image-mlpot-min-distance ANG]
+                       [--pre-mlpot-h-heavy-min-distance ANG]
+                       [--pre-mlpot-heavy-heavy-min-distance ANG]
+                       [--mlpot-registration-max-grms KCAL]
                        [--prep-ladder-dir PREP_LADDER_DIR]
                        [--cleanup-dir CLEANUP_DIR] [--no-recovery-artifacts]
                        [--cleanup | --no-cleanup]
@@ -189,8 +193,8 @@ PBC box sizing:
   --mini-lattice-abnr-steps N
                         PyCHARMM mini: CHARMM MINI ABNR LATTice steps to
                         optimize the cubic unit cell after coordinate-only
-                        CHARMM MM mini and before MLpot SD. 0=off. Requires
-                        CRYSTAL/PBC.
+                        CHARMM MM mini and before MLpot SD. 0=off; default with
+                        --liquid-prep: 200. Requires CRYSTAL/PBC.
   --mini-lattice-abnr-nocoords
                         With --mini-lattice-abnr-steps: optimize only the unit
                         cell (NOCOordinates); default optimizes coordinates and
@@ -226,6 +230,20 @@ PBC box sizing:
                         distance in Å (default: 2.3; independent of --dynamics-
                         overlap-min-distance). Structures must be ML-safe before
                         USER is enabled.
+  --charmm-image-mlpot-min-distance ANG
+                        CHARMM <MKIMAT2> / MIC registration floor (Å) before
+                        MLpot USER (default: 1.0; atom-pair prep gates remain
+                        stricter).
+  --pre-mlpot-h-heavy-min-distance ANG
+                        Pre-MLpot H–heavy element-pair MIC floor (Å); default
+                        2.3.
+  --pre-mlpot-heavy-heavy-min-distance ANG
+                        Pre-MLpot heavy–heavy element-pair MIC floor (Å);
+                        default 2.5.
+  --mlpot-registration-max-grms KCAL
+                        Abort MLpot registration when hybrid GRMS exceeds this
+                        limit (kcal/mol/Å; default 50). Use with --allow-high-
+                        grms to warn only.
 
 Recovery artifact folders:
   --prep-ladder-dir PREP_LADDER_DIR

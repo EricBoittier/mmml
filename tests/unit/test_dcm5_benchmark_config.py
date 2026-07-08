@@ -26,12 +26,18 @@ EXPECTED_JOB_COUNT = 16
 
 
 @pytest.fixture(scope="module", autouse=True)
-def dcm5_test_checkpoint() -> Path:
+def dcm5_test_checkpoint() -> Iterator[Path]:
     """Create a dummy checkpoint dir so ``resolve_checkpoint`` passes in CI."""
+    from typing import Iterator
     ckpt = Path("/tmp/dcm5_test_ckpt")
     ckpt.mkdir(parents=True, exist_ok=True)
+    old_val = os.environ.get("MMML_CKPT")
     os.environ["MMML_CKPT"] = str(ckpt)
-    return ckpt
+    yield ckpt
+    if old_val is not None:
+        os.environ["MMML_CKPT"] = old_val
+    else:
+        os.environ.pop("MMML_CKPT", None)
 
 
 @pytest.fixture(scope="module")

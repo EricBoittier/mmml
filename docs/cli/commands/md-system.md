@@ -66,6 +66,10 @@ usage: mmml md-system [-h]
                       [--density-prep-ladder-max-rounds N]
                       [--density-prep-lattice-abnr-steps N]
                       [--pre-mlpot-overlap-min-distance ANG]
+                      [--charmm-image-mlpot-min-distance ANG]
+                      [--pre-mlpot-h-heavy-min-distance ANG]
+                      [--pre-mlpot-heavy-heavy-min-distance ANG]
+                      [--mlpot-registration-max-grms KCAL]
                       [--prep-ladder-dir PREP_LADDER_DIR]
                       [--cleanup-dir CLEANUP_DIR] [--no-recovery-artifacts]
                       [--cleanup | --no-cleanup] [--save-run-state]
@@ -163,6 +167,7 @@ usage: mmml md-system [-h]
                       [--no-dynamics-monomer-jax-after-restore]
                       [--no-dynamics-monomer-velocity-restore]
                       [--dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE]
+                      [--dynamics-monomer-velocity-warn-recover-fraction DYNAMICS_MONOMER_VELOCITY_WARN_RECOVER_FRACTION]
                       [--restart-from RESTART_FROM] [--from-psf FROM_PSF]
                       [--from-crd FROM_CRD] [--skip-cluster-build]
                       [--skip-if-crd-exists] [--no-save-vmd-topology]
@@ -1059,8 +1064,8 @@ PBC box sizing:
   --mini-lattice-abnr-steps N
                         PyCHARMM mini: CHARMM MINI ABNR LATTice steps to
                         optimize the cubic unit cell after coordinate-only
-                        CHARMM MM mini and before MLpot SD. 0=off. Requires
-                        CRYSTAL/PBC.
+                        CHARMM MM mini and before MLpot SD. 0=off; default with
+                        --liquid-prep: 200. Requires CRYSTAL/PBC.
   --mini-lattice-abnr-nocoords
                         With --mini-lattice-abnr-steps: optimize only the unit
                         cell (NOCOordinates); default optimizes coordinates and
@@ -1096,6 +1101,20 @@ PBC box sizing:
                         distance in Å (default: 2.3; independent of --dynamics-
                         overlap-min-distance). Structures must be ML-safe before
                         USER is enabled.
+  --charmm-image-mlpot-min-distance ANG
+                        CHARMM <MKIMAT2> / MIC registration floor (Å) before
+                        MLpot USER (default: 1.0; atom-pair prep gates remain
+                        stricter).
+  --pre-mlpot-h-heavy-min-distance ANG
+                        Pre-MLpot H–heavy element-pair MIC floor (Å); default
+                        2.3.
+  --pre-mlpot-heavy-heavy-min-distance ANG
+                        Pre-MLpot heavy–heavy element-pair MIC floor (Å);
+                        default 2.5.
+  --mlpot-registration-max-grms KCAL
+                        Abort MLpot registration when hybrid GRMS exceeds this
+                        limit (kcal/mol/Å; default 50). Use with --allow-high-
+                        grms to warn only.
 
 Recovery artifact folders:
   --prep-ladder-dir PREP_LADDER_DIR
@@ -1149,7 +1168,7 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         rescue (default: --dynamics-overlap-charmm-sd-steps).
   --dynamics-overlap-check-interval DYNAMICS_OVERLAP_CHECK_INTERVAL
                         Integration steps between overlap/extent checks during
-                        dynamics (default: 100). Effective interval is the
+                        dynamics (default: 500). Effective interval is the
                         largest divisor of the stage step count not exceeding
                         this value (and at least dcd-nsavc + 1 when set). Heat
                         uses this mid-segment interval by default; see --heat-
@@ -1202,7 +1221,10 @@ Dynamics overlap guard (PyCHARMM MLpot):
                         restored monomers.
   --dynamics-monomer-health-max-restore DYNAMICS_MONOMER_HEALTH_MAX_RESTORE
                         Max monomers to template-restore per health check
-                        (default: 40).
+                        (default: 4).
+  --dynamics-monomer-velocity-warn-recover-fraction DYNAMICS_MONOMER_VELOCITY_WARN_RECOVER_FRACTION
+                        Fraction of monomers that must be velocity-warn before
+                        velocity-only redraw recovery runs (default: 0.80).
 ```
 
 

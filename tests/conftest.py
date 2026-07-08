@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+os.environ["JAX_ENABLE_X64"] = "1"
 import shutil
 from pathlib import Path
 

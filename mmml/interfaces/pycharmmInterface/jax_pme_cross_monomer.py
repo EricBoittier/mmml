@@ -471,11 +471,13 @@ class _CrossMonomerHostEvaluator:
             else "cross_monomer_masked"
         )
         t0 = time.perf_counter() if _profile_enabled() else None
+        from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
+        dtype = resolve_ml_compute_dtype()
         with host_ctx():
             energy, forces = energy_forces(
-                jnp.asarray(positions_j, dtype=jnp.float32),
-                jnp.asarray(charges, dtype=jnp.float32),
-                jnp.asarray(cell_j, dtype=jnp.float32),
+                jnp.asarray(positions_j, dtype=dtype),
+                jnp.asarray(charges, dtype=dtype),
+                jnp.asarray(cell_j, dtype=dtype),
                 jnp.asarray(i, dtype=jnp.int32),
                 jnp.asarray(j, dtype=jnp.int32),
                 jnp.asarray(cell_shifts, dtype=jnp.int32),
