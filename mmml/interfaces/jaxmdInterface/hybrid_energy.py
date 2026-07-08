@@ -35,13 +35,14 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
         src_idx = jnp.array(src_idx, dtype=jnp.int32)
         
         # Vectorize model.apply over the batch of monomers (first dimension)
+        # We bind dst_idx and src_idx as defaults to capture them eagerly
         vmapped_apply = jax.vmap(
-            lambda pos, atomic_nums: model.apply(
+            lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
                 params,
                 atomic_numbers=atomic_nums,
                 positions=pos,
-                dst_idx=dst_idx,
-                src_idx=src_idx,
+                dst_idx=d_idx,
+                src_idx=s_idx,
             )["energy"],
             in_axes=(0, 0)
         )
@@ -55,20 +56,21 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
             in_axes=(0, 0)
         )
         
-        def group_energy(r, stacked_idx=stacked_indices, gz=group_z):
+        # Capture vmapped_apply and vmapped_displacement as defaults to avoid late binding
+        def group_energy(r, stacked_idx=stacked_indices, gz=group_z, v_apply=vmapped_apply, v_disp=vmapped_displacement):
             # Gather coordinates: shape (N_monomers, size, 3)
             group_pos = r[stacked_idx]
             
             # Unfold coordinate images relative to the first atom of each monomer
             ref_pos = group_pos[:, 0, :]
-            displacements = vmapped_displacement(group_pos, ref_pos)
+            displacements = v_disp(group_pos, ref_pos)
             unfolded_pos = ref_pos[:, None, :] + displacements
             
             # Center coordinates to the Center of Mass (COM) / Center of Geometry
             com = jnp.mean(unfolded_pos, axis=1, keepdims=True)
             centered_pos = unfolded_pos - com
             
-            energies = vmapped_apply(centered_pos, gz)
+            energies = v_apply(centered_pos, gz)
             return jnp.sum(energies)
             
         group_fns.append(group_energy)

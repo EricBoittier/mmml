@@ -5,6 +5,9 @@ import jax.numpy as jnp
 import numpy as np
 from ase.io import read
 
+# Disable JIT to allow eager execution and frame inspection
+jax.config.update("jax_disable_jit", True)
+
 # Paths
 workspace_dir = Path("/Users/ericboittier/mmml")
 traj_path = workspace_dir / "cg_fire.traj"
@@ -38,7 +41,6 @@ sys.modules["pycharmm.select"] = mock.MagicMock()
 sys.modules["pycharmm.lingo"] = mock.MagicMock()
 sys.modules["mmml.interfaces.pycharmmInterface.import_pycharmm"] = mock.MagicMock()
 
-
 # Import model calculator and interfaces
 from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
 from mmml.interfaces.jaxmdInterface.hybrid_energy import make_monomer_energy_fn
@@ -70,25 +72,26 @@ compute_monomer_energy = make_monomer_energy_fn(
     model, params, z, jax_monomer_indices, displacement_fn
 )
 
-# 6. Compute ML forces
-@jax.jit
-def get_ml_forces(r):
-    return -jax.grad(compute_monomer_energy)(r)
-
-print("Compiling and evaluating ML forces...")
-f_ml = np.asarray(get_ml_forces(pos))
-f_ml_mag = np.linalg.norm(f_ml, axis=-1)
-
-# Print peptide vs water force stats
-pep_forces = f_ml_mag[:n_trialanine]
-wat_forces = f_ml_mag[n_trialanine:]
-
-print("\n--- ML Force Magnitude Statistics ---")
-print(f"Peptide (first 42 atoms): min={pep_forces.min():.6e}, max={pep_forces.max():.6e}, mean={pep_forces.mean():.6e}")
-print(f"Water (rest of atoms):    min={wat_forces.min():.6e}, max={wat_forces.max():.6e}, mean={wat_forces.mean():.6e}")
-
-# Check if peptide forces are exactly 0
-n_zero = np.sum(pep_forces < 1e-12)
-print(f"\nNumber of peptide atoms with ML forces < 1e-12: {n_zero} / {n_trialanine}")
-if n_zero > 0:
-    print(f"Zero force indices: {np.where(pep_forces < 1e-12)[0]}")
+# 6. Compute ML forces and catch error
+try:
+    f_ml = -jax.grad(compute_monomer_energy)(pos)
+    print("ML forces calculated successfully!")
+except ValueError as e:
+    print("\nCaught ValueError during forces calculation:")
+    print(e)
+    
+    # Let's inspect the call stack
+    import traceback
+    tb = sys.exc_info()[2]
+    # Iterate to the deepest frame
+    while tb.tb_next:
+        tb = tb.tb_next
+    frame = tb.tb_frame
+    print("\n--- Local variables in the failing frame ---")
+    for name, value in frame.f_locals.items():
+        if hasattr(value, "shape"):
+            print(f"{name}: shape={value.shape}, dtype={value.dtype}")
+        elif isinstance(value, (int, float, str, bool)):
+            print(f"{name}: value={value}")
+        elif name in ("self", "inputs", "basis", "dst_idx", "src_idx"):
+            print(f"{name}: type={type(value)}")
