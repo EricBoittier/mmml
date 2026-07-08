@@ -115,10 +115,9 @@ def parse_peptide_h_x_bonds(psf_path, z_array):
     return bonds
 
 
-# Path to the pretrained neural network checkpoint parameters
-# CKPT_PATH = "examples/params_aaa_long_2026-07-04_22-30-27.json"
-CKPT_PATH = "/mmhome/boittier/home/mmml_tutorial/aaa.ama/ama_model/ckpts/test01/params_test01_2026-07-08_12-18-52.json"
-CKPT_PATH = "/mmhome/boittier/home/mmml_tutorial/aaa.ama/water/ckpts/test01/params_test01_2026-07-08_13-07-08.json"
+# Paths to pretrained neural network checkpoint parameters.
+PEPTIDE_CKPT_PATH = "/mmhome/boittier/home/mmml_tutorial/aaa.ama/aaa_model/ckpts/test01/params_test01_2026-07-08_12-34-45.json"
+WATER_CKPT_PATH = "/mmhome/boittier/home/mmml_tutorial/aaa.ama/water/ckpts/test01/params_test01_2026-07-08_13-07-08.json"
 FIRE_STEPS = 5000
 FIRE_PRINT_FREQ = 1000
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
@@ -201,7 +200,7 @@ for h_idx, x_idx in pep_h_x_bonds:
     dr = pos_init[h_idx] - pos_init[x_idx]
     dr -= box_size * np.round(dr / box_size)
     r0 = np.linalg.norm(dr)
-    r0_list.append(1.05)
+    r0_list.append(r0)
 r0_jax = jnp.array(r0_list, dtype=jnp.float64)
 print(f"--- Measured {len(r0_list)} equilibrium H-X bond lengths for flat-bottom restraints ---")
 
@@ -211,12 +210,18 @@ prm_path = CGENFF_PRM
 nb_settings = _nbond_settings_from_cutoffs(box.nbond_cutoffs)
 nbond_data = load_nonbonded_system_from_charmm(psf_path, prm_path)
 
-calc = create_calculator_from_checkpoint(CKPT_PATH)
-model = getattr(calc, "model", getattr(calc, "_mmml_physnet_model", None))
-params = getattr(calc, "params", getattr(calc, "_mmml_physnet_params", None))
+peptide_calc = create_calculator_from_checkpoint(PEPTIDE_CKPT_PATH)
+peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
+peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
 
-if model is None or params is None:
-    raise ValueError("Could not extract model or params from the loaded calculator.")
+water_calc = create_calculator_from_checkpoint(WATER_CKPT_PATH)
+water_model = getattr(water_calc, "model", getattr(water_calc, "_mmml_physnet_model", None))
+water_params = getattr(water_calc, "params", getattr(water_calc, "_mmml_physnet_params", None))
+
+if peptide_model is None or peptide_params is None:
+    raise ValueError("Could not extract model or params from the loaded peptide calculator.")
+if water_model is None or water_params is None:
+    raise ValueError("Could not extract model or params from the loaded water calculator.")
 
 # Setup monomer groupings (first 42 atoms: peptide; then groups of 3 for water)
 monomer_indices = [np.arange(n_trialanine)]
@@ -247,17 +252,21 @@ displacement_fn, shift_fn = space.periodic(box_size)
 
 # Configure compute_monomer_energy function based on selection
 if PEPTIDE_WATER_ML:
-    print("--- Configuring PEPTIDE-WATER interactions with ML (dimer approach) ---")
-    peptide_idx = monomer_indices[0]
-    water_indices = monomer_indices[1:]
-    compute_monomer_energy = make_peptide_water_ml_energy_fn(
-        model, params, jax_z, peptide_idx, water_indices, displacement_fn
+    raise NotImplementedError(
+        "PEPTIDE_WATER_ML requires a dedicated peptide-water dimer checkpoint; "
+        "the current script has separate peptide and water monomer checkpoints."
     )
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
-    compute_monomer_energy = make_monomer_energy_fn(
-        model, params, jax_z, jax_monomer_indices, displacement_fn
+    compute_peptide_energy = make_monomer_energy_fn(
+        peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn
     )
+    compute_water_energy = make_monomer_energy_fn(
+        water_model, water_params, jax_z, jax_monomer_indices[1:], displacement_fn
+    )
+
+    def compute_monomer_energy(r):
+        return compute_peptide_energy(r) + compute_water_energy(r)
 
 # Precompute initial pair list
 print("--- Precomputing nonbonded pair list indices ---")
