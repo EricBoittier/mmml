@@ -47,6 +47,7 @@ class CacheMeta:
     forces_key: str
     charge_key: str
     spin_key: str | None
+    infer_spin: bool
     default_charge: float
     default_spin: float
     max_structures: int | None
@@ -82,6 +83,7 @@ def _resolve_cache_path(args: argparse.Namespace) -> Path:
         forces_key=args.forces_key,
         charge_key=args.charge_key,
         spin_key=args.spin_key,
+        infer_spin=args.infer_spin,
         default_charge=args.default_charge,
         default_spin=args.default_spin,
         max_structures=args.max_structures,
@@ -137,6 +139,13 @@ def _get_forces(atoms, key: str, structure_index: int) -> np.ndarray:
     )
 
 
+def _infer_spin_multiplicity(atoms, total_charge: float) -> float:
+    """Infer singlet/doublet multiplicity from electron parity."""
+    n_protons = int(np.sum(atoms.get_atomic_numbers()))
+    n_electrons = int(round(n_protons - total_charge))
+    return 1.0 if n_electrons % 2 == 0 else 2.0
+
+
 def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
     """Parse extxyz once into flat concatenated arrays and store them via Orbax."""
     extxyz = Path(args.extxyz).resolve()
@@ -171,8 +180,9 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
         f_parts.append(_get_forces(atoms, args.forces_key, i))
         energies.append(_get_energy(atoms, args.energy_key, i))
         natoms.append(n_atoms)
-        charges.append(_get_info_scalar(atoms.info, args.charge_key, args.default_charge))
-        spin = args.default_spin
+        charge = _get_info_scalar(atoms.info, args.charge_key, args.default_charge)
+        charges.append(charge)
+        spin = _infer_spin_multiplicity(atoms, charge) if args.infer_spin else args.default_spin
         if args.spin_key is not None:
             spin = _get_info_scalar(atoms.info, args.spin_key, args.default_spin)
         spins.append(spin)
@@ -536,6 +546,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--spin-key", default=None, help="ASE info key for spin multiplicity; defaults to singlet")
     parser.add_argument("--default-charge", type=float, default=0.0)
     parser.add_argument("--default-spin", type=float, default=1.0)
+    parser.add_argument(
+        "--no-infer-spin",
+        dest="infer_spin",
+        action="store_false",
+        help="Use --default-spin when --spin-key is absent instead of electron parity",
+    )
+    parser.set_defaults(infer_spin=True)
     parser.add_argument("--max-structures", type=int, default=None, help="Optional smoke-test cap")
     parser.add_argument("--valid-fraction", type=float, default=0.05)
     parser.add_argument("--num-devices", type=int, default=2)
