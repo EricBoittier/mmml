@@ -5,11 +5,11 @@ import jax.numpy as jnp
 import numpy as np
 from ase.io import read
 
-# Enable JIT/gradient tracing to verify the compiler likes it
-jax.config.update("jax_disable_jit", False)
+# Disable JIT to allow eager execution and frame inspection
+jax.config.update("jax_disable_jit", True)
 
 # Paths
-workspace_dir = Path("/Users/ericboittier/mmml")
+workspace_dir = Path("/Users/ericboittier") / "mmml"
 traj_path = workspace_dir / "cg_fire.traj"
 ckpt_path = workspace_dir / "examples/params_aaa_long_2026-07-04_22-30-27.json"
 
@@ -80,7 +80,6 @@ for size, indices_list in by_size.items():
     dst_idx = jnp.array(dst_idx, dtype=jnp.int32)
     src_idx = jnp.array(src_idx, dtype=jnp.int32)
     
-    # Vectorize model.apply using compute_forces=False
     vmapped_apply = jax.vmap(
         lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
             params,
@@ -115,24 +114,24 @@ for size, indices_list in by_size.items():
 def compute_monomer_energy(r):
     return sum(fn(r) for fn in group_fns)
 
-# 6. Compute ML forces
-@jax.jit
-def get_ml_forces(r):
-    return -jax.grad(compute_monomer_energy)(r)
-
-print("Compiling and evaluating ML forces...")
+# 6. Compute ML forces and catch error
 try:
-    f_ml = np.asarray(get_ml_forces(pos))
+    f_ml = -jax.grad(compute_monomer_energy)(pos)
     print("ML forces calculated successfully!")
-    f_ml_mag = np.linalg.norm(f_ml, axis=-1)
+except ValueError as e:
+    print("\nCaught ValueError during forces calculation:")
+    print(e)
     
-    pep_forces = f_ml_mag[:n_trialanine]
-    wat_forces = f_ml_mag[n_trialanine:]
-    
-    print("\n--- ML Force Magnitude Statistics ---")
-    print(f"Peptide (first 42 atoms): min={pep_forces.min():.6e}, max={pep_forces.max():.6e}, mean={pep_forces.mean():.6e}")
-    print(f"Water (rest of atoms):    min={wat_forces.min():.6e}, max={wat_forces.max():.6e}, mean={wat_forces.mean():.6e}")
-except Exception as e:
-    print(f"Failed to calculate ML forces: {e}")
     import traceback
-    traceback.print_exc()
+    tb = sys.exc_info()[2]
+    while tb.tb_next:
+        tb = tb.tb_next
+    frame = tb.tb_frame
+    print("\n--- Local variables in the failing frame ---")
+    for name, value in frame.f_locals.items():
+        if hasattr(value, "shape"):
+            print(f"{name}: shape={value.shape}, dtype={value.dtype}")
+        elif isinstance(value, (int, float, str, bool)):
+            print(f"{name}: value={value}")
+        elif name in ("self", "inputs", "basis", "dst_idx", "src_idx"):
+            print(f"{name}: type={type(value)}")
