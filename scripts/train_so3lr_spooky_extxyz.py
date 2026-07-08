@@ -18,6 +18,7 @@ import json
 import math
 import os
 import time
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -51,13 +52,14 @@ class CacheMeta:
     mtime_ns: int
     energy_key: str
     forces_key: str
+    dipole_key: str
     charge_key: str
     spin_key: str | None
     infer_spin: bool
     default_charge: float
     default_spin: float
     max_structures: int | None
-    cache_version: int = 1
+    cache_version: int = 2
 
 
 def _cache_name(meta: CacheMeta) -> str:
@@ -87,6 +89,7 @@ def _resolve_cache_path(args: argparse.Namespace) -> Path:
         mtime_ns=stat.st_mtime_ns,
         energy_key=args.energy_key,
         forces_key=args.forces_key,
+        dipole_key=args.dipole_key,
         charge_key=args.charge_key,
         spin_key=args.spin_key,
         infer_spin=args.infer_spin,
@@ -105,6 +108,15 @@ def _get_info_scalar(info: dict[str, Any], key: str, default: float) -> float:
     if array.size == 1:
         return float(array.reshape(-1)[0])
     raise ValueError(f"Expected scalar '{key}', got shape {array.shape}")
+
+
+def _get_info_vector(info: dict[str, Any], key: str, size: int) -> np.ndarray:
+    if key not in info:
+        raise KeyError(f"Structure lacks required info key '{key}'")
+    value = np.asarray(info[key], dtype=np.float64).reshape(-1)
+    if value.size != size:
+        raise ValueError(f"Expected '{key}' with {size} values, got shape {value.shape}")
+    return value
 
 
 def _get_energy(atoms, key: str, structure_index: int) -> float:
@@ -170,6 +182,7 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
     natoms: list[int] = []
     charges: list[float] = []
     spins: list[float] = []
+    dipoles: list[np.ndarray] = []
     offsets = [0]
 
     print(f"Reading extxyz: {extxyz}")
@@ -185,6 +198,7 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
         z_parts.append(atoms.get_atomic_numbers().astype(np.int32, copy=False))
         f_parts.append(_get_forces(atoms, args.forces_key, i))
         energies.append(_get_energy(atoms, args.energy_key, i))
+        dipoles.append(_get_info_vector(atoms.info, args.dipole_key, 3))
         natoms.append(n_atoms)
         charge = _get_info_scalar(atoms.info, args.charge_key, args.default_charge)
         charges.append(charge)
@@ -209,6 +223,7 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
         "N": np.asarray(natoms, dtype=np.int32).reshape(-1, 1),
         "Q": np.asarray(charges, dtype=np.float64).reshape(-1, 1),
         "S": np.asarray(spins, dtype=np.float64).reshape(-1, 1),
+        "D": np.asarray(dipoles, dtype=np.float64).reshape(-1, 3),
     }
     data["metadata_n_structures"] = np.asarray(len(energies), dtype=np.int64)
     data["metadata_n_atoms_total"] = np.asarray(offsets[-1], dtype=np.int64)
@@ -285,6 +300,10 @@ def stack_device_batches(
         build_spooky_batch_from_flat_data(data, device_indices[i])
         for i in range(device_indices.shape[0])
     ]
+    for i, batch in enumerate(batches):
+        indices = device_indices[i]
+        batch["D"] = jnp.asarray(data["D"][indices], dtype=jnp.float32)
+        batch["Q_total"] = jnp.asarray(data["Q"][indices], dtype=jnp.float32)
     stacked: dict[str, Any] = {}
     for key in batches[0]:
         if key == "batch_size":
@@ -314,6 +333,8 @@ def make_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: list[Any
     per_device_batch_size = args.batch_size_per_device
     energy_weight = args.energy_weight
     forces_weight = args.forces_weight
+    dipole_weight = args.dipole_weight
+    charges_weight = args.charges_weight
 
     def loss_fn(params, batch):
         out = model.apply(
@@ -342,12 +363,28 @@ def make_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: list[Any
         force_mae = jnp.sum(jnp.abs(forces_pred - forces_ref) * force_mask)
         force_mae /= jnp.sum(force_mask) * 3.0 + 1e-8
         loss = energy_weight * energy_mse + forces_weight * force_mse
+        dipole_mae = jnp.asarray(0.0)
+        charge_mae = jnp.asarray(0.0)
+        dipole_mse = jnp.asarray(0.0)
+        charge_mse = jnp.asarray(0.0)
+        if args.predict_charges:
+            dipole_pred = out["dipoles"].reshape(batch["D"].shape)
+            charge_pred = out["sum_charges"].reshape(batch["Q_total"].shape)
+            dipole_mse = jnp.mean((dipole_pred - batch["D"]) ** 2)
+            charge_mse = jnp.mean((charge_pred - batch["Q_total"]) ** 2)
+            dipole_mae = jnp.mean(jnp.abs(dipole_pred - batch["D"]))
+            charge_mae = jnp.mean(jnp.abs(charge_pred - batch["Q_total"]))
+            loss += dipole_weight * dipole_mse + charges_weight * charge_mse
         metrics = {
             "loss": loss,
             "energy_mae": energy_mae,
             "forces_mae": force_mae,
             "energy_mse": energy_mse,
             "forces_mse": force_mse,
+            "dipole_mae": dipole_mae,
+            "charge_mae": charge_mae,
+            "dipole_mse": dipole_mse,
+            "charge_mse": charge_mse,
         }
         return loss, metrics
 
@@ -487,6 +524,56 @@ def _restore_state_from_checkpoint(
     return state, epoch, metrics
 
 
+def _merge_compatible_params(
+    initialized: Any,
+    loaded: Any,
+) -> tuple[Any, int, int, int]:
+    if isinstance(initialized, Mapping):
+        loaded_mapping = loaded if isinstance(loaded, Mapping) else {}
+        merged = {}
+        loaded_count = 0
+        initialized_count = 0
+        skipped_count = 0
+        for key, initialized_value in initialized.items():
+            if key not in loaded_mapping:
+                merged[key] = initialized_value
+                initialized_count += len(jax.tree_util.tree_leaves(initialized_value))
+                continue
+            value, used, fresh, skipped = _merge_compatible_params(
+                initialized_value, loaded_mapping[key]
+            )
+            merged[key] = value
+            loaded_count += used
+            initialized_count += fresh
+            skipped_count += skipped
+        return merged, loaded_count, initialized_count, skipped_count
+
+    if np.shape(initialized) == np.shape(loaded):
+        return loaded, 1, 0, 0
+    return initialized, 0, 0, 1
+
+
+def _initialize_from_checkpoint(
+    checkpoint_path: Path,
+    state: train_state.TrainState,
+) -> train_state.TrainState:
+    restored = ocp.PyTreeCheckpointer().restore(checkpoint_path)
+    loaded_params = restored.get("params")
+    if loaded_params is None and isinstance(restored.get("model"), Mapping):
+        loaded_params = restored["model"].get("params")
+    if loaded_params is None:
+        raise ValueError(f"Checkpoint {checkpoint_path} has no parameters")
+
+    params, loaded, initialized, skipped = _merge_compatible_params(
+        state.params, loaded_params
+    )
+    print(
+        f"Warm-started from {checkpoint_path}: loaded {loaded} parameter leaves, "
+        f"initialized {initialized} new leaves, skipped {skipped} incompatible leaves"
+    )
+    return state.replace(params=params)
+
+
 def _restored_best_valid_loss(metrics: Any) -> float | None:
     if not isinstance(metrics, dict):
         return None
@@ -552,6 +639,14 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
 
     start_epoch = 1
     best_valid = math.inf
+    if args.init_checkpoint is not None:
+        if args.restart is not None or args.auto_resume:
+            raise ValueError(
+                "--init-checkpoint cannot be combined with --restart or --auto-resume"
+            )
+        state = _initialize_from_checkpoint(
+            Path(args.init_checkpoint).expanduser().resolve(), state
+        )
     restart_path = resolve_restart_path(args)
     if restart_path is not None:
         state, restored_epoch, restored_metrics = _restore_state_from_checkpoint(
@@ -617,7 +712,8 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 print(
                     f"epoch {epoch:04d} step {step:06d} "
                     f"loss={m['loss']:.6g} E_MAE={m['energy_mae']:.6g} "
-                    f"F_MAE={m['forces_mae']:.6g}"
+                    f"F_MAE={m['forces_mae']:.6g} "
+                    f"D_MAE={m['dipole_mae']:.6g} Q_MAE={m['charge_mae']:.6g}"
                 )
             if args.steps_per_epoch and step >= args.steps_per_epoch:
                 break
@@ -645,7 +741,9 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"train_loss={train_mean.get('loss', float('nan')):.6g} "
             f"valid_loss={valid_mean.get('loss', float('nan')):.6g} "
             f"valid_E_MAE={valid_mean.get('energy_mae', float('nan')):.6g} "
-            f"valid_F_MAE={valid_mean.get('forces_mae', float('nan')):.6g}"
+            f"valid_F_MAE={valid_mean.get('forces_mae', float('nan')):.6g} "
+            f"valid_D_MAE={valid_mean.get('dipole_mae', float('nan')):.6g} "
+            f"valid_Q_MAE={valid_mean.get('charge_mae', float('nan')):.6g}"
         )
 
         should_save = epoch % args.save_every == 0
@@ -676,6 +774,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force-recache", action="store_true", help="Overwrite existing matching data cache")
     parser.add_argument("--energy-key", default="energy", help="ASE info key for scalar energy target")
     parser.add_argument("--forces-key", default="forces", help="ASE arrays key for force target")
+    parser.add_argument("--dipole-key", default="dipole", help="ASE info key for dipole target")
     parser.add_argument("--charge-key", default="charge", help="ASE info key for total molecular charge")
     parser.add_argument("--spin-key", default=None, help="ASE info key for spin multiplicity; defaults to singlet")
     parser.add_argument("--default-charge", type=float, default=0.0)
@@ -707,6 +806,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to an epoch-* checkpoint, or 'latest' to use the newest under --workdir",
     )
     parser.add_argument(
+        "--init-checkpoint",
+        default=None,
+        help=(
+            "Warm-start compatible parameters from a checkpoint while initializing "
+            "new heads and optimizer state from scratch"
+        ),
+    )
+    parser.add_argument(
         "--auto-resume",
         action="store_true",
         help="Resume from newest epoch-* under --workdir when present",
@@ -719,6 +826,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--clip-global-norm", type=float, default=10.0)
     parser.add_argument("--energy-weight", type=float, default=1.0)
     parser.add_argument("--forces-weight", type=float, default=52.91)
+    parser.add_argument("--dipole-weight", type=float, default=1.0)
+    parser.add_argument("--charges-weight", type=float, default=1.0)
     parser.add_argument("--features", type=int, default=128)
     parser.add_argument("--max-degree", type=int, default=2)
     parser.add_argument("--num-iterations", type=int, default=3)
