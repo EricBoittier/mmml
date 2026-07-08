@@ -145,6 +145,8 @@ target_temp_ev = temperature * kb
 dt_fs = 0.125  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
+# Option: Treat peptide-water intermolecular interactions with ML instead of MM
+PEPTIDE_WATER_ML = False
 
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
@@ -240,9 +242,6 @@ _mon_stacked_groups = [(np.stack(lst), sz) for sz, lst in _mon_by_size.items()]
 # 5. Define displacement and shift functions for Periodic Boundary Conditions
 displacement_fn, shift_fn = space.periodic(box_size)
 
-# Option: Treat peptide-water intermolecular interactions with ML instead of MM
-PEPTIDE_WATER_ML = False
-
 # Configure compute_monomer_energy function based on selection
 if PEPTIDE_WATER_ML:
     print("--- Configuring PEPTIDE-WATER interactions with ML (dimer approach) ---")
@@ -302,6 +301,13 @@ def _get_inter_pairs_np(pos_np):
     i_arr = pairs[:, 0]
     j_arr = pairs[:, 1]
     inter = molecule_id[i_arr] != molecule_id[j_arr]
+    
+    if PEPTIDE_WATER_ML:
+        is_pep_i = molecule_id[i_arr] == 0
+        is_pep_j = molecule_id[j_arr] == 0
+        pep_wat = (is_pep_i & ~is_pep_j) | (is_pep_j & ~is_pep_i)
+        inter = inter & ~pep_wat
+        
     return i_arr[inter], j_arr[inter]
 
 

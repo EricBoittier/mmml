@@ -133,13 +133,13 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         pep_com = jnp.mean(unfolded_pep, axis=0, keepdims=True)
         centered_pep = unfolded_pep - pep_com
         
-        return model.apply(
+        return jnp.sum(model.apply(
             params,
             atomic_numbers=pep_z,
             positions=centered_pep,
             dst_idx=dst_idx_pep,
             src_idx=src_idx_pep,
-        )["energy"]
+        )["energy"])
         
     n_waters = len(water_indices)
     
