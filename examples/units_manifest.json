@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "canonical": {
+    "energy": "ev",
+    "force": "ev_angstrom",
+    "coords": "angstrom"
+  },
+  "arrays": {
+    "R": "angstrom",
+    "E": "hartree",
+    "efield_energy": "hartree",
+    "efield_scf_energy": "hartree",
+    "F": "hartree_bohr",
+    "efield_scf_F": "hartree_bohr",
+    "Dxyz": "debye",
+    "D": "debye",
+    "efield_scf_D": "debye",
+    "efield_D": "debye",
+    "esp": "hartree_per_e",
+    "Ef": "atomic_unit_field",
+    "efield_Ef": "atomic_unit_field",
+    "efield_scf_Ef": "atomic_unit_field"
+  },
+  "preserve_units": true,
+  "notes": [
+    "--preserve-units: no unit conversions on R, E, F, Dxyz, or grid"
+  ],
+  "coords_in": "auto",
+  "coords_out": "angstrom",
+  "coords_detected": "angstrom",
+  "energy_in": "hartree",
+  "energy_out": "hartree",
+  "force_in": "hartree_bohr",
+  "force_out": "hartree_bohr",
+  "dipole_in": "debye",
+  "dipole_out": "debye",
+  "grid_coords_in": null,
+  "grid_coords_out": null,
+  "esp_values": "hartree/e",
+  "flip_forces": false
+}

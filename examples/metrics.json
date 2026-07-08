@@ -1,0 +1,24 @@
+{
+  "checkpoint": "/mmhome/boittier/home/mmml_tutorial/aaa.ama/ama_model/ckpts/test01/test01-73bcaa5e-f811-4b06-a09d-6be83b621227/epoch-2770",
+  "data": "/mmhome/boittier/home/mmml_tutorial/aaa.ama/ama_model/output/energies_forces_dipoles_test.npz",
+  "natoms": 40,
+  "n_batches": 15,
+  "batch_size": 200,
+  "energy": {
+    "mae_kcal_mol": 2.7922925706015898,
+    "rmse_kcal_mol": 3.670163146300696,
+    "mae_ev": 0.12108630487401925,
+    "rmse_ev": 0.15915470260862025
+  },
+  "forces": {
+    "mae_kcal_mol": 0.8505392466273143,
+    "rmse_kcal_mol": 1.7974755655839072,
+    "mae_ev": 0.03688318896405798,
+    "rmse_ev": 0.07794658648216125
+  },
+  "n_params": 181460,
+  "dipole": {
+    "mae_e_bohr": 0.03322652446257151,
+    "rmse_e_bohr": 0.04345630300371793
+  }
+}
