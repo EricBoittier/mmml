@@ -151,6 +151,9 @@ dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Option: Treat peptide-water intermolecular interactions with ML instead of MM
 PEPTIDE_WATER_ML = False
+PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = True
+PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = True
+PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
 DEBUG = True
 
 # Optional: start from a peptide-only frame produced by
@@ -174,8 +177,8 @@ def minimize_peptide_only_in_charmm(sd_steps=10000, abnr_steps=10000):
     print("--- Minimizing peptide-only in CHARMM with waters fixed ---")
     try:
         lingo.charmm_script("CONS FIX SELE .NOT. SEGID PEPT END")
-        lingo.charmm_script(f"MINI SD {sd_steps}")
-        lingo.charmm_script(f"MINI ABNR {abnr_steps}")
+        lingo.charmm_script(f"MINI SD NSTEP {sd_steps}")
+        lingo.charmm_script(f"MINI ABNR NSTEP {abnr_steps}")
     finally:
         lingo.charmm_script("CONS FIX SELE NONE END")
 
@@ -278,8 +281,8 @@ pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
 pos = minimize_peptide_only_with_ml_calculator(pos, z, peptide_calc, workdir, n_trialanine)
 set_charmm_positions(pos)
 
-lingo.charmm_script("MINI SD 10000")
-lingo.charmm_script("MINI ABNR 10000")
+lingo.charmm_script("MINI SD NSTEP 10000")
+lingo.charmm_script("MINI ABNR NSTEP 10000")
 
 # Retrieve positions and atomic numbers
 pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
@@ -370,6 +373,44 @@ else:
 
     def compute_monomer_energy(r):
         return compute_peptide_energy(r) + compute_water_energy(r)
+
+pep_idx_jax = jax_monomer_indices[0]
+pep_z_jax = jax_z[pep_idx_jax]
+pep_n_atoms = int(n_trialanine)
+pep_dst_idx_np, pep_src_idx_np = np.where(~np.eye(pep_n_atoms, dtype=bool))
+pep_dst_idx_jax = jnp.array(pep_dst_idx_np, dtype=jnp.int32)
+pep_src_idx_jax = jnp.array(pep_src_idx_np, dtype=jnp.int32)
+pep_ref_charge_total = float(np.asarray(nbond_data.charges[:n_trialanine]).sum())
+
+
+def compute_peptide_ml_charges(r):
+    """Return geometry-dependent peptide atomic charges from the peptide ML model."""
+    pep_pos = r[pep_idx_jax]
+    ref_pos = pep_pos[0]
+    unfolded = ref_pos + jax.vmap(displacement_fn, in_axes=(0, None))(pep_pos, ref_pos)
+    centered = unfolded - jnp.mean(unfolded, axis=0, keepdims=True)
+    outputs = peptide_model.apply(
+        peptide_params,
+        atomic_numbers=pep_z_jax,
+        positions=centered,
+        dst_idx=pep_dst_idx_jax,
+        src_idx=pep_src_idx_jax,
+        compute_forces=False,
+    )
+    if "charges_as_mono" in outputs:
+        q_pep = jnp.asarray(outputs["charges_as_mono"], dtype=jnp.float64).reshape(-1)[:pep_n_atoms]
+    elif "charges" in outputs:
+        q_pep = jnp.asarray(outputs["charges"], dtype=jnp.float64).reshape(-1)[:pep_n_atoms]
+    else:
+        if PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES:
+            raise ValueError(
+                "PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING requires a peptide checkpoint "
+                "whose model output includes 'charges_as_mono' or 'charges'."
+            )
+        q_pep = _q_jax[:n_trialanine]
+    if PEPTIDE_ML_CHARGE_TOTAL_CORRECTION:
+        q_pep = q_pep + (pep_ref_charge_total - jnp.sum(q_pep)) / pep_n_atoms
+    return q_pep
 
 # Precompute initial pair list
 print("--- Precomputing nonbonded pair list indices ---")
@@ -486,6 +527,25 @@ _vfswitch = charmm_vfswitch_coeffs(nb_settings)
 _fswitch = charmm_fswitch_coeffs(nb_settings)
 _c2of = nb_settings.c2ofnb
 
+if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
+    print(
+        "--- Electrostatic embedding enabled: peptide-water Coulomb uses "
+        "fluctuating ML peptide charges and fixed MM water charges ---"
+    )
+    print(
+        f"--- Peptide ML charges corrected to total charge {pep_ref_charge_total:.6f} e ---"
+        if PEPTIDE_ML_CHARGE_TOTAL_CORRECTION
+        else "--- Peptide ML charges are used without total-charge correction ---"
+    )
+
+
+def _electrostatic_charge_array(r):
+    """Full-system charges for intermolecular electrostatics."""
+    if not PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
+        return _q_jax
+    q_pep = compute_peptide_ml_charges(r)
+    return _q_jax.at[:n_trialanine].set(q_pep)
+
 
 def update_pair_refs(pos_np):
     """Rebuild pair list on CPU and update mutable reference slots.
@@ -579,7 +639,8 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jn
 
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
     sig = _rmin_jax[pi] + _rmin_jax[pj]
-    qq = _q_jax[pi] * _q_jax[pj] * e14 / nb_settings.eps
+    q_inter = _electrostatic_charge_array(r)
+    qq = q_inter[pi] * q_inter[pj] * e14 / nb_settings.eps
 
     vdw = _pair_vdw_energy(safe_dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False)
     vdw = vdw * vdw14
@@ -623,7 +684,8 @@ def _debug_mm_energy(r, pi, pj, mask, e14, vdw14):
     safe_dist = jnp.where(mask > 0.5, dist, 1.0)
     ep = _pair_lj_epsilon(_eps_jax[pi], _eps_jax[pj])
     sig = _rmin_jax[pi] + _rmin_jax[pj]
-    qq = _q_jax[pi] * _q_jax[pj] * e14 / nb_settings.eps
+    q_inter = _electrostatic_charge_array(r)
+    qq = q_inter[pi] * q_inter[pj] * e14 / nb_settings.eps
     vdw = _pair_vdw_energy(safe_dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False) * vdw14
     elec = _pair_elec_energy(safe_dist, qq, nb_settings, _fswitch)
     vdw = jnp.where(within_ctof, vdw, 0.0)
