@@ -275,3 +275,4 @@ node_modules/
 **/fftw-wisdom.dat
 fftw-wisdom.dat
 mmml/generate/packmol/packmol
+examples/jax_cache/

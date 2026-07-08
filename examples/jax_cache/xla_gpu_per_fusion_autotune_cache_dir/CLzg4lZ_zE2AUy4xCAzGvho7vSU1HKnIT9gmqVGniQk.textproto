@@ -1,3 +1,0 @@
-gemm {
-  autotune_workspace_size: 33554432
-}
