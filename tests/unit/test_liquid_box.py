@@ -50,7 +50,7 @@ def test_apply_liquid_box_profile_dense_enables_liquid_prep():
     assert args.setup == "pbc_nvt"
     assert args.box_auto == "density"
     assert int(args.mini_lattice_abnr_steps) >= 200
-    assert float(args.min_intermonomer_atom_distance) == pytest.approx(1.0)
+    assert float(args.min_intermonomer_atom_distance) == pytest.approx(2.0)
 
 
 def test_liquid_box_uses_packmol_by_default():

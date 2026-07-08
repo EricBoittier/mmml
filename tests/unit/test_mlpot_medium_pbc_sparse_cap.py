@@ -20,14 +20,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
 @pytest.mark.parametrize("n_monomers", MEDIUM_PBC_MONOMER_COUNTS)
 def test_medium_pbc_default_cap_policy(n_monomers: int):
     cap = resolve_max_active_dimers(n_monomers, free_space=False)
-    assert cap == max(1000, 6 * n_monomers)
+    assert cap == max(4005, 6 * n_monomers)
 
 
 @pytest.mark.parametrize("n_monomers", MEDIUM_PBC_MONOMER_COUNTS)
 def test_suggest_medium_pbc_sizing_bounds(n_monomers: int):
     sizing = suggest_medium_pbc_sizing(n_monomers)
     assert sizing.n_monomers == n_monomers
-    assert sizing.max_active_dimers_cap == max(1000, 6 * n_monomers)
+    assert sizing.max_active_dimers_cap == max(4005, 6 * n_monomers)
     assert sizing.physnet_systems_upper_bound == n_monomers + sizing.max_active_dimers_cap
     assert sizing.ml_batch_size_gpu == 256
     assert sizing.expected_gpu_chunks is not None
