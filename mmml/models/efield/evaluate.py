@@ -69,6 +69,7 @@ _EVALUATE_DEFAULTS = {
     "num_basis_functions": None,
     "cutoff": None,
     "max_atomic_number": None,
+    "electrostatics_damping_sigma": None,
     "save_output_npz": False,
     "output_h5": None,
     "test_npz": None,
@@ -112,6 +113,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Cutoff radius (default: 10.0)")
     parser.add_argument("--max-atomic-number", type=int, default=defaults["max_atomic_number"],
                        help="Max atomic number (default: 55)")
+    parser.add_argument("--electrostatics-damping-sigma", type=float, default=defaults["electrostatics_damping_sigma"],
+                       help="Override learned-charge Coulomb erf damping sigma; set 0 to disable")
     parser.add_argument("--save-output-npz", action="store_true",
                        help="Save evaluation outputs (predictions, targets) to NPZ file")
     parser.add_argument(
@@ -1129,6 +1132,7 @@ def main(args=None):
         'cutoff': 10.0,
         'max_atomic_number': 55,
         'include_pseudotensors': True,
+        'electrostatics_damping_sigma': 4.0,
     }
     
     # Try to load from config file first
@@ -1207,6 +1211,8 @@ def main(args=None):
         model_config['cutoff'] = args.cutoff
     if args.max_atomic_number is not None:
         model_config['max_atomic_number'] = args.max_atomic_number
+    if args.electrostatics_damping_sigma is not None:
+        model_config['electrostatics_damping_sigma'] = args.electrostatics_damping_sigma
     
     print("\nModel configuration:")
     for key, value in model_config.items():

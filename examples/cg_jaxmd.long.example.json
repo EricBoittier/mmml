@@ -13,6 +13,7 @@
   "nve_block_steps": 500,
   "max_pairs_headroom": 1.15,
   "peptide_bond_k_ev": 10.0,
+  "electrostatics_damping_sigma": 4.0,
   "workdir": "/tmp/tria_box",
   "output_dir": "artifacts/cg_jaxmd_long",
   "write_dcd": true

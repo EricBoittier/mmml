@@ -2964,7 +2964,7 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
     _append_optional(cmd, "--builder", getattr(args, "builder", None))
     if not skip_box_size_for_cmd:
-    _append_optional(cmd, "--box-size", args.box_size)
+        _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--checkpoint", args.checkpoint)
     _append_optional(cmd, "--electrostatics-damping-sigma", getattr(args, "electrostatics_damping_sigma", None))
     _append_optional(cmd, "--output-dir", args.output_dir)

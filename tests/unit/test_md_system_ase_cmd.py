@@ -19,10 +19,13 @@ def _ase_args(**overrides) -> Namespace:
         spacing=5.0,
         ps=2.0,
         dt_fs=0.25,
+        temperature=300.0,
+        pressure=1.0,
         traj_chunk_frames=0,
         n_molecules=5,
         box_size=25.0,
         checkpoint="/tmp/ckpt.json",
+        electrostatics_damping_sigma=None,
         output_dir="/tmp/out",
         template_pdb=None,
         seed=42,
@@ -78,3 +81,17 @@ def test_build_command_ase_uses_mm_cutoff_not_switch_width() -> None:
     assert "--lr-solver" not in argv
     assert "--include-mm" in argv
     assert "--nve-temp-K" in argv
+
+
+def test_build_command_forwards_electrostatics_damping_sigma() -> None:
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(_ase_args(electrostatics_damping_sigma=0.0))
+    assert backend == "ase"
+    assert "--electrostatics-damping-sigma" in argv
+    assert argv[argv.index("--electrostatics-damping-sigma") + 1] == "0.0"
+
+    backend, argv = build_command(_ase_args(backend="jaxmd", electrostatics_damping_sigma=0.0))
+    assert backend == "jaxmd"
+    assert "--electrostatics-damping-sigma" in argv
+    assert argv[argv.index("--electrostatics-damping-sigma") + 1] == "0.0"

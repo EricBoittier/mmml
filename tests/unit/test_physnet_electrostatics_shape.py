@@ -6,6 +6,22 @@ from mmml.models.physnetjax.physnetjax.models.model import PhysNet
 from mmml.models.physnetjax.physnetjax.models.spooky_model import SpookyPhysNet
 
 @pytest.mark.parametrize("model_cls", [PhysNet, SpookyPhysNet])
+def test_physnet_electrostatics_damping_default_and_opt_out(model_cls):
+    damped = model_cls()
+    undamped = model_cls(electrostatics_damping_sigma=0.0)
+
+    assert damped.return_attributes()["electrostatics_damping_sigma"] == 4.0
+    assert undamped.return_attributes()["electrostatics_damping_sigma"] == 0.0
+
+    displacements = jnp.array([[1.0, 0.0, 0.0]], dtype=jnp.float32)
+    batch_mask = jnp.array([1.0], dtype=jnp.float32)
+    r_damped, _, _ = damped._calc_switches(displacements, batch_mask)
+    r_undamped, _, _ = undamped._calc_switches(displacements, batch_mask)
+
+    assert float(r_damped[0]) < float(r_undamped[0])
+
+
+@pytest.mark.parametrize("model_cls", [PhysNet, SpookyPhysNet])
 def test_physnet_electrostatics_shape_mismatch(model_cls):
     """Verify that a model trained/initialized with a smaller max_padded_atoms
     can evaluate a larger molecule without shape/broadcasting errors in electrostatics.

@@ -54,6 +54,7 @@ def _pycharmm_args(**overrides) -> argparse.Namespace:
         md_stages="mini,heat,equi",
         tag=None,
         checkpoint=None,
+        electrostatics_damping_sigma=None,
         output_dir=Path("artifacts/pycharmm_mlpot/dcm20_pbc"),
         job_name=None,
         jobs_dir=Path("artifacts/md_system/jobs"),
@@ -176,6 +177,16 @@ def test_build_pycharmm_command_forwards_dyn_freq_cadence():
     assert cmd[idx + 1] == "50"
     parsed = pycharmm_mlpot.parse_args(cmd)
     assert parsed.dyn_freq_cadence == 50
+
+
+def test_build_pycharmm_command_forwards_electrostatics_damping_sigma():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(_pycharmm_args(electrostatics_damping_sigma=0.0))
+    assert "--electrostatics-damping-sigma" in cmd
+    assert cmd[cmd.index("--electrostatics-damping-sigma") + 1] == "0.0"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.electrostatics_damping_sigma == pytest.approx(0.0)
 
 
 def test_build_pycharmm_command_forwards_include_mm_false():
