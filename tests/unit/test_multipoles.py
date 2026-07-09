@@ -8,6 +8,7 @@ import pytest
 
 from mmml.models.multipoles import E3xMultipoleModel, irrep_blocks_to_traceless
 from scripts.cache_qcml_multipoles_orbax import preprocess_examples
+from scripts.analyze_qcml_multipoles import error_metrics, generate_report
 from scripts.train_qcml_multipoles import (
     TrainConfig,
     build_steps,
@@ -84,9 +85,9 @@ def test_qcml_pair_preprocessing_joins_and_pads() -> None:
     }
     moments = {
         "key_hash": np.array(b"same-key"),
-        "pbe0_dipole": np.asarray(e3x.so3.irreps_to_tensor(irreps[1], degree=1)),
-        "pbe0_quadrupole": np.asarray(e3x.so3.irreps_to_tensor(irreps[2], degree=2)),
-        "pbe0_octupole": np.asarray(e3x.so3.irreps_to_tensor(irreps[3], degree=3)),
+        "pbe0_dipole": np.asarray(irreps[1]),
+        "pbe0_quadrupole": np.asarray(irreps[2]),
+        "pbe0_octupole": np.asarray(irreps[3]),
     }
 
     cache = preprocess_examples([(geometry, moments)])
@@ -135,3 +136,35 @@ def test_multipole_loss_balances_degrees() -> None:
     assert degree_losses["l0"] == pytest.approx(4.0)
     assert degree_losses["l3"] == pytest.approx(4.0)
     assert loss == pytest.approx(2.0)
+
+
+def test_analysis_metrics_and_report_outputs(tmp_path) -> None:
+    target = np.zeros((2, 16), dtype=np.float32)
+    prediction = target.copy()
+    prediction[0, 1:4] = 1.0
+    num_atoms = np.array([2.0, 4.0])
+    scales = {degree: 1.0 for degree in range(4)}
+    units = {degree: "native" for degree in range(4)}
+
+    metrics = error_metrics(target, prediction, num_atoms, scales, units)
+    report = generate_report(
+        tmp_path,
+        np.array([3, 7]),
+        target,
+        prediction,
+        num_atoms,
+        scales,
+        units,
+    )
+
+    assert metrics["l1"]["spherical_traceless"]["component_mae"] == pytest.approx(0.5)
+    assert metrics["l1"]["spherical_traceless"]["tensor_norm_mae"] == pytest.approx(
+        np.sqrt(3) / 2
+    )
+    assert report == metrics
+    assert (tmp_path / "metrics.json").exists()
+    assert (tmp_path / "per_structure_errors.csv").exists()
+    assert (tmp_path / "scatter_spherical_l3.png").exists()
+    assert (tmp_path / "scatter_cartesian_l3.png").exists()
+    assert (tmp_path / "error_distributions.png").exists()
+    assert (tmp_path / "error_vs_num_atoms.png").exists()

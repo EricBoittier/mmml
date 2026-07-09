@@ -7,7 +7,6 @@ import argparse
 from pathlib import Path
 from typing import Any
 
-import e3x
 import numpy as np
 import orbax.checkpoint as ocp
 
@@ -77,12 +76,14 @@ def preprocess_examples(
         for degree in range(1, max_degree + 1):
             source_name = source_names.get(degree)
             if source_name is None or source_name not in moments:
-                raise KeyError(f"Missing Cartesian target for degree l={degree}")
-            blocks[f"l{degree}_irrep"] = np.asarray(
-                e3x.so3.tensor_to_irreps(
-                    np.asarray(moments[source_name]), degree=degree
+                raise KeyError(f"Missing spherical target for degree l={degree}")
+            block = np.asarray(moments[source_name])
+            expected_width = 2 * degree + 1
+            if block.shape != (expected_width,):
+                raise ValueError(
+                    f"{source_name} must have shape ({expected_width},), got {block.shape}"
                 )
-            )
+            blocks[f"l{degree}_irrep"] = block
         packed = np.concatenate([blocks[f"l{degree}_irrep"] for degree in range(max_degree + 1)])
         converted = irrep_blocks_to_traceless(packed, max_degree=max_degree)
         converted_examples.append(

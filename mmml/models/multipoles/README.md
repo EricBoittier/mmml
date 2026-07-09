@@ -43,3 +43,19 @@ python scripts/train_qcml_multipoles.py \
 The loss gives equal weight to each degree rather than allowing the seven
 octupole components to dominate the scalar monopole. Checkpoints contain model
 parameters, optimizer state, configuration, and train/validation metrics.
+
+Generate metrics, per-structure CSV data, reference/prediction scatters, and
+error distributions with:
+
+```console
+python scripts/analyze_qcml_multipoles.py \
+  --cache orbax_cache/qcml_multipoles_traceless/0 \
+  --checkpoint artifacts/qcml_multipoles/epoch-0100 \
+  --output-dir artifacts/qcml_multipoles/report \
+  --split validation
+```
+
+The report covers both the native spherical traceless components and their
+Cartesian traceless tensors. QCML does not declare units for these fields in
+its published schema, so labels default to `QCML native`. Use `--scale-lN` and
+`--unit-lN` to apply known display conversions for each degree.
