@@ -187,7 +187,45 @@ MMML does not ship OpenMM protein builders; use OpenMM directly for that path, t
 
 ---
 
-## 3. Bundled CGENFF peptide (no protein toppar)
+## 3. General Peptide Builder & Solvation (CGenFF + Protein append)
+
+For arbitrary residue sequences, MMML provides a general peptide builder that supports terminal patching, solvation, and Quality Control (QC) structural checks:
+
+```python
+from mmml.interfaces.pycharmmInterface.peptide_builder import (
+    build_peptide_in_charmm,
+    solvate_peptide_in_charmm,
+    qc_built_system,
+    infer_charge_and_spin_from_psf,
+)
+
+# 1. Build arbitrary peptide sequence from 3-letter codes, space-separated, or 1-letter codes
+peptide = build_peptide_in_charmm(
+    "AAA",             # or "ALA ALA ALA" or ["ALA", "ALA", "ALA"]
+    first_patch="ACE",  # default acetylated/neutral terminal patches
+    last_patch="CT3",
+)
+
+# 2. Solvate in a cubic box with TIP3 water centered at (0, 0, 0) to avoid PBC wrapping
+box = solvate_peptide_in_charmm(peptide, box_side_A=28.0, n_waters=100)
+
+# 3. Perform structural QC (checks charges, bond lengths, and non-bonded steric clashes)
+report = qc_built_system(box.positions, box.psf_path, check_energy=True)
+if report.is_valid:
+    print(f"System is valid! Energy: {report.details['charmm_energy']:.3f} kcal/mol")
+```
+
+The builder loads the CGenFF parameters first as the primary topology and appends the standard protein parameters second. This ensures that water and standard ion chemical types (`OT`, `HT`, `CLA`, `SOD`) are correctly mapped inside PyCHARMM.
+
+Furthermore, `infer_charge_and_spin_from_psf` can be used to automatically determine the total charge and spin multiplicity of the constructed peptide system from the PSF:
+```python
+total_charge, spin_multiplicity = infer_charge_and_spin_from_psf(box.psf_path)
+print(f"Charge: {total_charge}, Spin Multiplicity: {spin_multiplicity}")
+```
+
+---
+
+## 4. Bundled CGENFF peptide (no protein toppar)
 
 Tri-alanine in periodic water uses a supplemental CGENFF residue **`TRIA`** — no `top_all36_prot.rtf` at runtime:
 
@@ -206,7 +244,7 @@ JAX cross-check: [trialanine-water-box.md](trialanine-water-box.md).
 
 ---
 
-## 4. Choosing a path
+## 5. Choosing a path
 
 | Goal | Recommendation |
 |------|----------------|
@@ -215,6 +253,7 @@ JAX cross-check: [trialanine-water-box.md](trialanine-water-box.md).
 | JAX full MM (vacuum/PBC) | `oplsaa.load_charmm_system` + `oplsaa.energy` |
 | AMBER-family protein | OpenMM → jax-md `amber.energy` |
 | MLpot liquid / small molecules | CGENFF + Packmol ([packmol-placement.md](packmol-placement.md)) |
+| General peptide build and solvation | `build_peptide_in_charmm` + `solvate_peptide_in_charmm` |
 | Peptide smoke without toppar | Bundled `TRIA` + TIP3 |
 
 ---
