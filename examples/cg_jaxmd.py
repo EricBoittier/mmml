@@ -85,8 +85,6 @@ from cg_common import load_cg_checkpoint, load_cg_config, probe_charge_output
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
-ensure_pycharmm_loaded()
-pycharmm_loud()
 
 # Helper function to parse peptide H-X bonds from the CHARMM PSF file
 def parse_peptide_h_x_bonds(psf_path, z_array):
@@ -262,6 +260,11 @@ DIHEDRAL_RESTRAINT_K_EV = float(_settings.dihedral_restraint_k_ev)
 PHI_CENTRAL = tuple(_settings.phi_central)  # C1-N2-CA2-C2
 PSI_CENTRAL = tuple(_settings.psi_central)  # N2-CA2-C2-N3
 PEPTIDE_BOND_K_EV = float(_settings.peptide_bond_k_ev)
+OUTPUT_DIR = Path(_settings.output_dir).expanduser()
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+ensure_pycharmm_loaded()
+pycharmm_loud()
 
 
 
@@ -1338,7 +1341,7 @@ print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 pos_current = init_r
 
-traj_path_fire = "cg_fire.traj"
+traj_path_fire = str(OUTPUT_DIR / "cg_fire.traj")
 print(f"--- Saving minimization trajectory to {traj_path_fire} ---")
 traj_fire = Trajectory(traj_path_fire, "w", atoms)
 
@@ -1440,7 +1443,7 @@ pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 state = _init_fn_nvt(key, min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
-traj_path_nvt = "cg_nvt.traj"
+traj_path_nvt = str(OUTPUT_DIR / "cg_nvt.traj")
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
 traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
 last_good_nvt_pos = np.asarray(min_r, dtype=np.float64)
@@ -1552,7 +1555,7 @@ pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
-traj_path_nve = "cg_nve.traj"
+traj_path_nve = str(OUTPUT_DIR / "cg_nve.traj")
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
 traj_nve = Trajectory(traj_path_nve, "w", atoms)
 last_good_nve_pos = np.asarray(state.position, dtype=np.float64)

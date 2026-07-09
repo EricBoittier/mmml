@@ -47,8 +47,6 @@ from cg_common import load_cg_checkpoint, load_cg_config, probe_charge_output
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
-ensure_pycharmm_loaded()
-pycharmm_loud()
 
 # Runtime settings. Every key can be overridden through --config; common
 # settings also have direct CLI flags.
@@ -70,6 +68,11 @@ _settings = load_cg_config(
     description="Trialanine/water ASE hybrid example",
 )
 CKPT_PATH = str(_settings.checkpoint)
+OUTPUT_DIR = Path(_settings.output_dir).expanduser()
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+ensure_pycharmm_loaded()
+pycharmm_loud()
 
 # 2. Build the initial system in PyCHARMM
 # Creates a water box containing the trialanine peptide and 200 water molecules.
@@ -108,7 +111,7 @@ z = get_Z_from_psf()
 atoms = ase.Atoms(z, pos)
 atoms.set_cell(box.cell)
 atoms.set_pbc(True)
-atoms.write("atoms.pdb")
+atoms.write(OUTPUT_DIR / "atoms.pdb")
 print(f"Initial Atoms structure saved to atoms.pdb: {atoms}")
 
 # 5. Define monomer molecule grouping indices
@@ -206,7 +209,11 @@ def print_energy(atoms_obj: ase.Atoms) -> None:
     print(f'Energy per atom: Epot = {epot:.3f} eV, Ekin = {ekin:.3f} eV (T = {temp:3.0f} K)')
 
 # Initialize NVE Verlet dynamics with 0.5 fs time step
-dyn = VelocityVerlet(atoms, float(_settings.dt_fs) * units.fs, trajectory="md.traj")
+dyn = VelocityVerlet(
+    atoms,
+    float(_settings.dt_fs) * units.fs,
+    trajectory=str(OUTPUT_DIR / "md.traj"),
+)
 
 print_energy(atoms)
 for i in range(int(_settings.md_blocks)):
@@ -257,5 +264,5 @@ dyn_script.run()
 # Retrieve final positions and save
 pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
 final_atoms = ase.Atoms(z, pos)
-final_atoms.write("atoms_final.pdb")
+final_atoms.write(OUTPUT_DIR / "atoms_final.pdb")
 print("Workflow complete! Saved final coordinates to atoms_final.pdb.")

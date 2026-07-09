@@ -1,0 +1,14 @@
+{
+  "checkpoint": "examples/spooky_so3lr_epoch2_params.json",
+  "n_waters": 200,
+  "box_size": 28.0,
+  "seed": 11,
+  "temperature": 300.0,
+  "dt_fs": 0.5,
+  "position_perturbation": 0.1,
+  "fire_fmax": 0.5,
+  "md_blocks": 5,
+  "md_steps_per_block": 100,
+  "workdir": "/tmp/tria_box",
+  "output_dir": "artifacts/cg_ase"
+}

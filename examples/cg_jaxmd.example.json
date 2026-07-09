@@ -1,0 +1,22 @@
+{
+  "checkpoint": "examples/spooky_so3lr_epoch2_params.json",
+  "peptide_checkpoint": "examples/spooky_so3lr_epoch2_params.json",
+  "water_checkpoint": "examples/spooky_so3lr_epoch2_params.json",
+  "n_waters": 100,
+  "box_size": 30.0,
+  "seed": 42,
+  "temperature": 248.0,
+  "dt_fs": 0.5,
+  "fire_steps": 1000,
+  "fire_block_steps": 100,
+  "nvt_total_steps": 1000,
+  "nvt_block_steps": 100,
+  "nve_total_steps": 2000,
+  "nve_block_steps": 500,
+  "peptide_water_ml": false,
+  "peptide_water_electrostatic_embedding": true,
+  "peptide_ml_charge_total_correction": true,
+  "water_ml_charge_total_correction": true,
+  "workdir": "/tmp/tria_box",
+  "output_dir": "artifacts/cg_jaxmd"
+}
