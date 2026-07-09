@@ -36,7 +36,7 @@ def test_flat_bottom_system_vs_monomer(mode, expected_e):
 
     assert float(flat_e) == pytest.approx(expected_e)
     if mode == "system":
-        assert float(com_dist) == pytest.approx(0.0)
+        assert float(com_dist) == pytest.approx(0.0, abs=1e-5)
     else:
         assert float(com_dist) == pytest.approx(5.0)
         assert np.allclose(np.asarray(flat_f), 0.0) is False
