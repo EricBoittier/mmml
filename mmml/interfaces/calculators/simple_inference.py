@@ -30,6 +30,8 @@ class SimpleInferenceCalculator(Calculator):
         params: Any,
         cutoff: float = 10.0,
         use_dcmnet_dipole: bool = False,
+        charge: float | None = None,
+        spin: float | None = None,
         **kwargs,
     ):  # noqa: D401
         super().__init__(**kwargs)
@@ -37,6 +39,8 @@ class SimpleInferenceCalculator(Calculator):
         self.params = params
         self.cutoff = cutoff
         self.use_dcmnet_dipole = use_dcmnet_dipole
+        self.charge = charge
+        self.spin = spin
         self._last_positions: Optional[np.ndarray] = None
         self._last_atomic_numbers: Optional[np.ndarray] = None
         self._last_monopoles: Optional[np.ndarray] = None
@@ -98,17 +102,45 @@ class SimpleInferenceCalculator(Calculator):
         batch_segments = np.zeros(self.natoms, dtype=np.int32)
         batch_mask = np.ones(len(dst_idx), dtype=np.float32)
 
-        output = self.model.apply(
-            self.params,
-            atomic_numbers=jnp.array(padded_atomic_numbers),
-            positions=jnp.array(padded_positions),
-            dst_idx=jnp.array(dst_idx),
-            src_idx=jnp.array(src_idx),
-            batch_segments=jnp.array(batch_segments),
-            batch_size=1,
-            batch_mask=jnp.array(batch_mask),
-            atom_mask=jnp.array(atom_mask),
-        )
+        is_spooky = (
+            hasattr(self.model, "charges")
+            and hasattr(self.model, "total_charge")
+        ) or "spooky" in str(type(self.model)).lower()
+
+        if is_spooky:
+            total_charge = float(atoms.info.get("charge", self.charge or 0.0))
+            spin = atoms.info.get("spin", atoms.info.get("multiplicity", self.spin))
+            if spin is None:
+                n_electrons = int(round(np.sum(atomic_numbers) - total_charge))
+                spin = 1.0 if n_electrons % 2 == 0 else 2.0
+            else:
+                spin = float(spin)
+
+            output = self.model.apply(
+                self.params,
+                atomic_numbers=jnp.array(padded_atomic_numbers),
+                positions=jnp.array(padded_positions),
+                charges=jnp.full((self.natoms, 1), total_charge, dtype=jnp.float32),
+                spins=jnp.full((self.natoms, 1), spin, dtype=jnp.float32),
+                dst_idx=jnp.array(dst_idx),
+                src_idx=jnp.array(src_idx),
+                batch_segments=jnp.array(batch_segments),
+                batch_size=1,
+                batch_mask=jnp.array(batch_mask),
+                atom_mask=jnp.array(atom_mask),
+            )
+        else:
+            output = self.model.apply(
+                self.params,
+                atomic_numbers=jnp.array(padded_atomic_numbers),
+                positions=jnp.array(padded_positions),
+                dst_idx=jnp.array(dst_idx),
+                src_idx=jnp.array(src_idx),
+                batch_segments=jnp.array(batch_segments),
+                batch_size=1,
+                batch_mask=jnp.array(batch_mask),
+                atom_mask=jnp.array(atom_mask),
+            )
 
         energy = output["energy"]
         self.results["energy"] = float(energy[0]) if energy.ndim > 0 else float(energy)

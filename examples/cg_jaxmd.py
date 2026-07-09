@@ -155,8 +155,9 @@ def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
 
 # Paths to pretrained neural network checkpoint parameters.
 script_dir = Path(__file__).parent
-PEPTIDE_CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-58-42.json")
-WATER_CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-18-52.json")
+CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-58-42.json")
+PEPTIDE_CKPT_PATH = CKPT_PATH
+WATER_CKPT_PATH = CKPT_PATH
 
 FIRE_STEPS = 1000
 FIRE_PRINT_FREQ = 1000
@@ -275,6 +276,10 @@ workdir = Path('/tmp/tria_box')
 box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
     box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
     )
+
+from mmml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
+pep_charge, pep_spin = infer_charge_and_spin_from_psf(box.psf_path)
+print(f"Inferred peptide charge={pep_charge}, spin multiplicity={pep_spin} from PSF.")
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-0.1, 0.1, pos.shape) + pos
@@ -425,11 +430,15 @@ if PEPTIDE_WATER_ML:
     )
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
+    monomer_charges = {42: float(pep_charge), 3: 0.0}
+    monomer_spins = {42: float(pep_spin), 3: 1.0}
     compute_peptide_energy = make_monomer_energy_fn(
-        peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn
+        peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn,
+        charges=monomer_charges, spins=monomer_spins
     )
     compute_water_energy = make_monomer_energy_fn(
-        water_model, water_params, jax_z, jax_monomer_indices[1:], displacement_fn
+        water_model, water_params, jax_z, jax_monomer_indices[1:], displacement_fn,
+        charges=monomer_charges, spins=monomer_spins
     )
 
     def compute_monomer_energy(r):
@@ -459,14 +468,31 @@ def compute_peptide_ml_charges(r):
     ref_pos = pep_pos[0]
     unfolded = ref_pos + jax.vmap(displacement_fn, in_axes=(0, None))(pep_pos, ref_pos)
     centered = unfolded - jnp.mean(unfolded, axis=0, keepdims=True)
-    outputs = peptide_model.apply(
-        peptide_params,
-        atomic_numbers=pep_z_jax,
-        positions=centered,
-        dst_idx=pep_dst_idx_jax,
-        src_idx=pep_src_idx_jax,
-        compute_forces=False,
-    )
+    is_pep_spooky = (
+        hasattr(peptide_model, "charges")
+        and hasattr(peptide_model, "total_charge")
+    ) or "spooky" in str(type(peptide_model)).lower()
+
+    if is_pep_spooky:
+        outputs = peptide_model.apply(
+            peptide_params,
+            atomic_numbers=pep_z_jax,
+            positions=centered,
+            charges=jnp.full((pep_z_jax.shape[0], 1), pep_charge, dtype=jnp.float32),
+            spins=jnp.full((pep_z_jax.shape[0], 1), pep_spin, dtype=jnp.float32),
+            dst_idx=pep_dst_idx_jax,
+            src_idx=pep_src_idx_jax,
+            compute_forces=False,
+        )
+    else:
+        outputs = peptide_model.apply(
+            peptide_params,
+            atomic_numbers=pep_z_jax,
+            positions=centered,
+            dst_idx=pep_dst_idx_jax,
+            src_idx=pep_src_idx_jax,
+            compute_forces=False,
+        )
     if "charges_as_mono" in outputs:
         q_pep = jnp.asarray(outputs["charges_as_mono"], dtype=jnp.float64).reshape(-1)[:pep_n_atoms]
     elif "charges" in outputs:
@@ -494,17 +520,37 @@ def compute_water_ml_charges(r):
     unfolded = ref_pos[:, None, :] + displacements
     centered = unfolded - jnp.mean(unfolded, axis=1, keepdims=True)
 
-    outputs = jax.vmap(
-        lambda pos, atomic_nums: water_model.apply(
-            water_params,
-            atomic_numbers=atomic_nums,
-            positions=pos,
-            dst_idx=water_dst_idx_jax,
-            src_idx=water_src_idx_jax,
-            compute_forces=False,
-        ),
-        in_axes=(0, 0),
-    )(centered, water_z_jax)
+    is_water_spooky = (
+        hasattr(water_model, "charges")
+        and hasattr(water_model, "total_charge")
+    ) or "spooky" in str(type(water_model)).lower()
+
+    if is_water_spooky:
+        outputs = jax.vmap(
+            lambda pos, atomic_nums: water_model.apply(
+                water_params,
+                atomic_numbers=atomic_nums,
+                positions=pos,
+                charges=jnp.full((3, 1), 0.0, dtype=jnp.float32),
+                spins=jnp.full((3, 1), 1.0, dtype=jnp.float32),
+                dst_idx=water_dst_idx_jax,
+                src_idx=water_src_idx_jax,
+                compute_forces=False,
+            ),
+            in_axes=(0, 0),
+        )(centered, water_z_jax)
+    else:
+        outputs = jax.vmap(
+            lambda pos, atomic_nums: water_model.apply(
+                water_params,
+                atomic_numbers=atomic_nums,
+                positions=pos,
+                dst_idx=water_dst_idx_jax,
+                src_idx=water_src_idx_jax,
+                compute_forces=False,
+            ),
+            in_axes=(0, 0),
+        )(centered, water_z_jax)
 
     if "charges_as_mono" in outputs:
         q_water = jnp.asarray(outputs["charges_as_mono"], dtype=jnp.float64).reshape((-1, water_n_atoms))

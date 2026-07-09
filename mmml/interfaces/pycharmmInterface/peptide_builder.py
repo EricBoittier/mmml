@@ -506,6 +506,30 @@ def parse_psf_details(psf_path: Path) -> dict[str, Any]:
     }
 
 
+def infer_charge_and_spin_from_psf(psf_path: Path | str) -> tuple[int, float]:
+    """Infer the total system charge and spin multiplicity from a PSF file.
+
+    Returns
+    -------
+    total_charge : int
+        The total charge rounded to the nearest integer.
+    multiplicity : float
+        The spin multiplicity (1.0 for even electron count, 2.0 for odd).
+    """
+    psf_data = parse_psf_details(Path(psf_path))
+    atoms = psf_data["atoms"]
+
+    total_q = sum(a["charge"] for a in atoms)
+    total_charge = int(round(total_q))
+
+    total_z = sum(a["element"] for a in atoms)
+    n_electrons = total_z - total_charge
+
+    multiplicity = 1.0 if n_electrons % 2 == 0 else 2.0
+    return total_charge, multiplicity
+
+
+
 def qc_built_system(
     positions: np.ndarray,
     psf_path: Path | str,

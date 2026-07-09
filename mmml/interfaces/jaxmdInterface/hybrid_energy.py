@@ -11,7 +11,7 @@ from mmml.interfaces.pycharmmInterface.mm_system_energy import (
 from mmml.data.units import KCAL_MOL_TO_EV
 
 
-def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_fn):
+def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_fn, charges=None, spins=None):
     """Factory creating an intramolecular energy function that evaluates grouped monomers.
     
     Batches evaluations using jax.vmap and unfolds monomer coordinates under periodic boundary 
@@ -23,6 +23,11 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
     for idx in monomer_indices:
         by_size[len(idx)].append(idx)
         
+    is_spooky = (
+        hasattr(model, "charges")
+        and hasattr(model, "total_charge")
+    ) or "spooky" in str(type(model)).lower()
+
     # Pre-build size-specific parameters
     size_params = {}
     for size, indices_list in by_size.items():
@@ -38,12 +43,25 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
             in_axes=(0, 0)
         )
         
+        # Determine charge and spin for this size
+        if isinstance(charges, dict):
+            size_q = float(charges.get(size, 0.0))
+        else:
+            size_q = 0.0 if size == 3 else float(charges or 0.0)
+
+        if isinstance(spins, dict):
+            size_s = float(spins.get(size, 1.0))
+        else:
+            size_s = 1.0 if size == 3 else float(spins or 1.0)
+        
         size_params[size] = {
             "stacked_idx": stacked_indices,
             "dst_idx": dst_idx,
             "src_idx": src_idx,
             "gz": group_z,
             "v_disp": vmapped_displacement,
+            "q": size_q,
+            "s": size_s,
         }
 
     def total_monomer_energy(r):
@@ -55,6 +73,8 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
             src_idx = p["src_idx"]
             gz = p["gz"]
             v_disp = p["v_disp"]
+            size_q = p["q"]
+            size_s = p["s"]
             
             group_pos = r[stacked_idx]
             ref_pos = group_pos[:, 0, :]
@@ -63,17 +83,33 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
             com = jnp.mean(unfolded_pos, axis=1, keepdims=True)
             centered_pos = unfolded_pos - com
             
-            vmapped_apply = jax.vmap(
-                lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
-                    params,
-                    atomic_numbers=atomic_nums,
-                    positions=pos,
-                    dst_idx=d_idx,
-                    src_idx=s_idx,
-                    compute_forces=False,
-                ),
-                in_axes=(0, 0)
-            )
+            n_atoms = size
+            if is_spooky:
+                vmapped_apply = jax.vmap(
+                    lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
+                        params,
+                        atomic_numbers=atomic_nums,
+                        positions=pos,
+                        charges=jnp.full((n_atoms, 1), size_q, dtype=jnp.float32),
+                        spins=jnp.full((n_atoms, 1), size_s, dtype=jnp.float32),
+                        dst_idx=d_idx,
+                        src_idx=s_idx,
+                        compute_forces=False,
+                    ),
+                    in_axes=(0, 0)
+                )
+            else:
+                vmapped_apply = jax.vmap(
+                    lambda pos, atomic_nums, d_idx=dst_idx, s_idx=src_idx: model.apply(
+                        params,
+                        atomic_numbers=atomic_nums,
+                        positions=pos,
+                        dst_idx=d_idx,
+                        src_idx=s_idx,
+                        compute_forces=False,
+                    ),
+                    in_axes=(0, 0)
+                )
             
             outputs = vmapped_apply(centered_pos, gz)
             tot_energy += jnp.sum(outputs["energy"])
@@ -84,7 +120,7 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
 
 
 
-def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_indices, displacement_fn):
+def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_indices, displacement_fn, charges=None, spins=None):
     """Factory creating an energy function where peptide-water interactions are computed via ML.
     
     Evaluates peptide-water dimers in parallel using jax.vmap and subtracts redundant peptide
@@ -119,6 +155,22 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     vmapped_displacement_pep = jax.vmap(displacement_fn, in_axes=(0, None))
     
     n_waters = len(water_indices)
+
+    is_spooky = (
+        hasattr(model, "charges")
+        and hasattr(model, "total_charge")
+    ) or "spooky" in str(type(model)).lower()
+
+    if isinstance(charges, dict):
+        dimer_q = float(charges.get(45, charges.get(42, 0.0)))
+        dimer_s = float(spins.get(45, spins.get(42, 1.0)))
+        pep_q = float(charges.get(42, 0.0))
+        pep_s = float(spins.get(42, 1.0))
+    else:
+        dimer_q = float(charges or 0.0)
+        dimer_s = float(spins or 1.0)
+        pep_q = float(charges or 0.0)
+        pep_s = float(spins or 1.0)
     
     def dimer_energy_fn(r):
         # 1. Dimer evaluation
@@ -131,17 +183,32 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         dimer_com = jnp.mean(unfolded_dimer_pos, axis=1, keepdims=True)
         centered_dimer = unfolded_dimer_pos - dimer_com
         
-        vmapped_apply_dimer = jax.vmap(
-            lambda pos, atomic_nums: model.apply(
-                params,
-                atomic_numbers=atomic_nums,
-                positions=pos,
-                dst_idx=dst_idx_dimer,
-                src_idx=src_idx_dimer,
-                compute_forces=False,
-            ),
-            in_axes=(0, 0)
-        )
+        if is_spooky:
+            vmapped_apply_dimer = jax.vmap(
+                lambda pos, atomic_nums: model.apply(
+                    params,
+                    atomic_numbers=atomic_nums,
+                    positions=pos,
+                    charges=jnp.full((n_atoms_dimer, 1), dimer_q, dtype=jnp.float32),
+                    spins=jnp.full((n_atoms_dimer, 1), dimer_s, dtype=jnp.float32),
+                    dst_idx=dst_idx_dimer,
+                    src_idx=src_idx_dimer,
+                    compute_forces=False,
+                ),
+                in_axes=(0, 0)
+            )
+        else:
+            vmapped_apply_dimer = jax.vmap(
+                lambda pos, atomic_nums: model.apply(
+                    params,
+                    atomic_numbers=atomic_nums,
+                    positions=pos,
+                    dst_idx=dst_idx_dimer,
+                    src_idx=src_idx_dimer,
+                    compute_forces=False,
+                ),
+                in_axes=(0, 0)
+            )
         
         outputs_dimer = vmapped_apply_dimer(centered_dimer, dimer_z)
         e_dimer_sum = jnp.sum(outputs_dimer["energy"])
@@ -155,14 +222,26 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         pep_com = jnp.mean(unfolded_pep, axis=0, keepdims=True)
         centered_pep = unfolded_pep - pep_com
         
-        outputs_pep = model.apply(
-            params,
-            atomic_numbers=pep_z,
-            positions=centered_pep,
-            dst_idx=dst_idx_pep,
-            src_idx=src_idx_pep,
-            compute_forces=False,
-        )
+        if is_spooky:
+            outputs_pep = model.apply(
+                params,
+                atomic_numbers=pep_z,
+                positions=centered_pep,
+                charges=jnp.full((n_atoms_pep, 1), pep_q, dtype=jnp.float32),
+                spins=jnp.full((n_atoms_pep, 1), pep_s, dtype=jnp.float32),
+                dst_idx=dst_idx_pep,
+                src_idx=src_idx_pep,
+                compute_forces=False,
+            )
+        else:
+            outputs_pep = model.apply(
+                params,
+                atomic_numbers=pep_z,
+                positions=centered_pep,
+                dst_idx=dst_idx_pep,
+                src_idx=src_idx_pep,
+                compute_forces=False,
+            )
         e_pep = jnp.sum(outputs_pep["energy"])
         
         # Subtract (N_waters - 1) * E_peptide to get:

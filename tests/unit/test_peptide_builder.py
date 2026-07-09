@@ -153,3 +153,44 @@ def test_live_peptide_builder_and_qc(tmp_path: Path) -> None:
     assert report.is_valid, f"QC check failed: {report.errors}"
     assert len(report.errors) == 0
     assert report.details["charmm_energy"] < 1e5
+
+
+def test_infer_charge_and_spin() -> None:
+    from mmml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
+    import tempfile
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Mock PSF 1: Neutral, even electrons (Z_sum = 6+1+1+8 = 16)
+        psf_path_even = Path(tmpdir) / "mock_even.psf"
+        psf_even_content = """* MOCK EVEN PSF
+*
+       4 !NATOM
+       1 PEPT 1    ALA  CA   C       0.100000       12.0110           0
+       2 PEPT 1    ALA  HA1  H       0.100000        1.0080           0
+       3 PEPT 1    ALA  HA2  H      -0.200000        1.0080           0
+       4 PEPT 1    ALA  O    O       0.000000       15.9990           0
+
+       0 !NBOND: bonds
+"""
+        psf_path_even.write_text(psf_even_content, encoding="utf-8")
+        q, s = infer_charge_and_spin_from_psf(psf_path_even)
+        assert q == 0
+        assert s == 1.0
+
+        # Mock PSF 2: Charged (+1), odd electrons (Z_sum = 16, Charge = 1, N_elec = 15)
+        psf_path_odd = Path(tmpdir) / "mock_odd.psf"
+        psf_odd_content = """* MOCK ODD PSF
+*
+       4 !NATOM
+       1 PEPT 1    ALA  CA   C       0.400000       12.0110           0
+       2 PEPT 1    ALA  HA1  H       0.300000        1.0080           0
+       3 PEPT 1    ALA  HA2  H       0.200000        1.0080           0
+       4 PEPT 1    ALA  O    O       0.000000       15.9990           0
+
+       0 !NBOND: bonds
+"""
+        psf_path_odd.write_text(psf_odd_content, encoding="utf-8")
+        q, s = infer_charge_and_spin_from_psf(psf_path_odd)
+        assert q == 1
+        assert s == 2.0
+
