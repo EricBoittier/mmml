@@ -459,29 +459,84 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", "--output", dest="output_dir", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--split", choices=("all", "train", "validation"), default="validation")
+    parser.add_argument("--bucket-width", type=int, default=8)
+    parser.add_argument("--split", choices=("all", "train", "validation", "test"), default="test")
+    parser.add_argument("--data-split", type=Path)
+    parser.add_argument("--validation-shards", type=int, default=1)
+    parser.add_argument("--test-shards", type=int, default=1)
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--max-structures", type=int)
+    parser.add_argument("--max-atoms", type=int)
     for degree in range(4):
         parser.add_argument(f"--scale-l{degree}", type=float, default=1.0)
         parser.add_argument(f"--unit-l{degree}", default="QCML native")
     args = parser.parse_args()
 
-    cache = restore_cache(args.cache)
     model, params = load_model(args.checkpoint)
-    indices = select_indices(
-        cache["R"].shape[0],
+    shard_paths = resolve_split_paths(
+        args.cache,
+        args.checkpoint,
         args.split,
-        args.validation_fraction,
-        args.seed,
+        args.validation_shards,
+        args.test_shards,
+        args.data_split,
     )
-    if not len(indices):
-        raise ValueError(f"The selected {args.split} split is empty")
-    prediction = predict(model, params, cache, indices, args.batch_size)
-    target = cache["multipoles"][indices].astype(np.float32)
-    num_atoms = cache["atom_mask"][indices].sum(axis=1)
+    all_predictions = []
+    all_targets = []
+    all_indices = []
+    all_num_atoms = []
+    remaining = args.max_structures
+
+    if shard_paths is None:
+        cache = restore_cache(args.cache)
+        indices = select_single_shard_indices(
+            cache,
+            args.split,
+            args.validation_fraction,
+            args.seed,
+            args.max_atoms,
+        )
+        if remaining is not None:
+            indices = indices[:remaining]
+        shard_work = [(args.cache, cache, indices)]
+    else:
+        shard_work = []
+        for shard_path in shard_paths:
+            if remaining is not None and remaining <= 0:
+                break
+            cache = restore_cache(shard_path)
+            indices = eligible_indices(cache, args.max_atoms)
+            if remaining is not None:
+                indices = indices[:remaining]
+                remaining -= len(indices)
+            shard_work.append((shard_path, cache, indices))
+
+    for _, cache, indices in shard_work:
+        if not len(indices):
+            continue
+        prediction, ordered_indices = predict_bucketed(
+            model,
+            params,
+            cache,
+            indices,
+            args.batch_size,
+            args.bucket_width,
+        )
+        all_predictions.append(prediction)
+        all_targets.append(cache["multipoles"][ordered_indices].astype(np.float32))
+        all_indices.append(ordered_indices)
+        all_num_atoms.append(cache["atom_mask"][ordered_indices].sum(axis=1))
+
+    if not all_indices:
+        raise ValueError(f"The selected {args.split} split contains no eligible structures")
+
+    prediction = np.concatenate(all_predictions, axis=0)
+    target = np.concatenate(all_targets, axis=0)
+    indices = np.concatenate(all_indices, axis=0)
+    num_atoms = np.concatenate(all_num_atoms, axis=0)
     scales = {degree: getattr(args, f"scale_l{degree}") for degree in range(4)}
     units = {degree: getattr(args, f"unit_l{degree}") for degree in range(4)}
     metrics = generate_report(
