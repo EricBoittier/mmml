@@ -67,6 +67,9 @@ def audit_cache(
     }
     distances = []
     atom_counts = []
+    geometric_centroid_norms = []
+    nuclear_charge_centroid_norms = []
+    charged_origin_shift_scales = []
     multipoles = []
     charges = []
     mbd_energy = []
@@ -93,6 +96,18 @@ def audit_cache(
             atomic_numbers = shard["Z"][index]
             sampled += 1
             atom_counts.append(np.asarray([mask.sum()]))
+            geometric_centroid = positions.mean(axis=0)
+            geometric_centroid_norms.append(
+                np.asarray([np.linalg.norm(geometric_centroid)])
+            )
+            nuclear_weights = atomic_numbers[mask].astype(np.float64)
+            nuclear_charge_centroid = (
+                np.sum(positions * nuclear_weights[:, None], axis=0)
+                / np.sum(nuclear_weights)
+            )
+            nuclear_charge_centroid_norms.append(
+                np.asarray([np.linalg.norm(nuclear_charge_centroid)])
+            )
             pair_distances = _pair_distances(positions)
             if len(pair_distances):
                 distances.append(pair_distances)
@@ -103,7 +118,11 @@ def audit_cache(
             arrays = [positions, atomic_numbers[mask]]
             if kind == "multipoles":
                 multipoles.append(shard["multipoles"][index : index + 1])
-                charges.append(np.asarray(shard["Q"][index]).reshape(1))
+                charge = np.asarray(shard["Q"][index]).reshape(1)
+                charges.append(charge)
+                charged_origin_shift_scales.append(
+                    np.abs(charge) * np.linalg.norm(geometric_centroid)
+                )
                 arrays.append(shard["multipoles"][index])
             else:
                 force = shard["F_mbd"][index, mask]
@@ -136,6 +155,14 @@ def audit_cache(
         "arrays_with_nonfinite_values": nonfinite_values,
     }
     report["atom_count"] = _quantiles(atom_counts)
+    report["coordinate_origin"] = {
+        "geometric_centroid_norm_bohr": _quantiles(geometric_centroid_norms),
+        "nuclear_charge_centroid_norm_bohr": _quantiles(nuclear_charge_centroid_norms),
+        "note": (
+            "High-order multipoles are origin-sensitive; large centroid norms "
+            "mean target convention should be verified against QCML metadata."
+        ),
+    }
     if distances:
         report["pair_distance_bohr"] = _quantiles(distances)
         report["pair_distance_angstrom"] = {
@@ -161,6 +188,9 @@ def audit_cache(
                 )
             ),
             "component_scale_native": _quantiles([packed]),
+            "charged_geometric_origin_shift_scale_native": _quantiles(
+                charged_origin_shift_scales
+            ),
         }
     else:
         energies = np.concatenate(mbd_energy)

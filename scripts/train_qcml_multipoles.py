@@ -31,6 +31,17 @@ class TrainConfig:
     max_atomic_number: int = 118
 
 
+def degree_slices(max_degree: int = 3) -> dict[str, tuple[int, int]]:
+    """Return packed spherical multipole block slices by degree."""
+    slices = {}
+    start = 0
+    for degree in range(max_degree + 1):
+        width = 2 * degree + 1
+        slices[f"l{degree}"] = (start, start + width)
+        start += width
+    return slices
+
+
 def restore_cache(path: Path) -> dict[str, np.ndarray]:
     """Restore the cache and validate fields required for training."""
     restored = ocp.PyTreeCheckpointer().restore(path)
@@ -42,6 +53,92 @@ def restore_cache(path: Path) -> dict[str, np.ndarray]:
     if cache["multipoles"].shape[-1] != 16:
         raise ValueError("Expected 16 packed target components through l=3")
     return cache
+
+
+def target_rms_from_arrays(
+    targets: np.ndarray,
+    *,
+    max_degree: int = 3,
+    floor: float = 1e-6,
+) -> dict[str, float]:
+    """Compute scalar RMS per packed degree block."""
+    target_rms = {}
+    for name, (start, stop) in degree_slices(max_degree).items():
+        block = targets[:, start:stop].astype(np.float64)
+        target_rms[name] = max(float(np.sqrt(np.mean(np.square(block)))), floor)
+    return target_rms
+
+
+def target_rms_vector(
+    target_rms: dict[str, float],
+    *,
+    max_degree: int = 3,
+) -> np.ndarray:
+    """Expand per-degree RMS values to the packed 16-component layout."""
+    values = []
+    for degree in range(max_degree + 1):
+        value = float(target_rms[f"l{degree}"])
+        values.extend([value] * (2 * degree + 1))
+    return np.asarray(values, dtype=np.float32)
+
+
+def compute_target_rms(
+    shard_paths: list[Path],
+    *,
+    max_structures: int | None,
+    max_atoms: int | None,
+    max_degree: int = 3,
+    floor: float = 1e-6,
+) -> dict[str, float]:
+    """Compute per-degree target RMS over the same training subset."""
+    sums = {name: 0.0 for name in degree_slices(max_degree)}
+    counts = {name: 0 for name in degree_slices(max_degree)}
+    remaining = max_structures
+    for shard_path in shard_paths:
+        if remaining is not None and remaining <= 0:
+            break
+        cache = restore_cache(shard_path)
+        if remaining is not None:
+            cache = limit_cache(cache, remaining)
+            remaining -= len(cache["R"])
+        indices = eligible_indices(cache, max_atoms)
+        targets = cache["multipoles"][indices].astype(np.float64)
+        for name, (start, stop) in degree_slices(max_degree).items():
+            block = targets[:, start:stop]
+            sums[name] += float(np.sum(np.square(block)))
+            counts[name] += int(block.size)
+        del cache
+    if not all(counts.values()):
+        raise ValueError("No eligible structures found while computing target RMS")
+    return {
+        name: max(float(np.sqrt(sums[name] / counts[name])), floor)
+        for name in sums
+    }
+
+
+def load_or_compute_target_rms(
+    path: Path,
+    shard_paths: list[Path],
+    *,
+    max_structures: int | None,
+    max_atoms: int | None,
+    max_degree: int = 3,
+    floor: float = 1e-6,
+) -> dict[str, float]:
+    """Load existing target RMS stats or compute and save them."""
+    if path.exists():
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        return {f"l{degree}": float(payload[f"l{degree}"]) for degree in range(max_degree + 1)}
+    target_rms = compute_target_rms(
+        shard_paths,
+        max_structures=max_structures,
+        max_atoms=max_atoms,
+        max_degree=max_degree,
+        floor=floor,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(target_rms, indent=2, sort_keys=True), encoding="utf-8")
+    return target_rms
 
 
 def limit_cache(
@@ -194,19 +291,33 @@ def multipole_loss(
     prediction: jax.Array,
     target: jax.Array,
     example_mask: jax.Array,
+    charge: jax.Array | None = None,
+    target_rms: jax.Array | None = None,
+    charge_weight: float = 0.0,
     max_degree: int = 3,
 ) -> tuple[jax.Array, dict[str, jax.Array]]:
     """Average degree-balanced MSE over non-padding examples."""
     losses = {}
     start = 0
     denominator = jnp.maximum(jnp.sum(example_mask), 1.0)
+    if target_rms is None:
+        target_rms = jnp.ones(target.shape[-1], dtype=target.dtype)
     for degree in range(max_degree + 1):
         width = 2 * degree + 1
-        error = prediction[:, start : start + width] - target[:, start : start + width]
+        block_rms = target_rms[start : start + width]
+        error = (
+            prediction[:, start : start + width] - target[:, start : start + width]
+        ) / block_rms
         per_example = jnp.mean(jnp.square(error), axis=-1)
         losses[f"l{degree}"] = jnp.sum(per_example * example_mask) / denominator
         start += width
-    return jnp.mean(jnp.stack(tuple(losses.values()))), losses
+    total = jnp.mean(jnp.stack(tuple(losses.values())))
+    if charge is not None and charge_weight:
+        charge_error = prediction[:, 0] - jnp.asarray(charge, dtype=prediction.dtype)
+        charge_loss = jnp.sum(jnp.square(charge_error) * example_mask) / denominator
+        losses["charge"] = charge_loss
+        total = total + charge_weight * charge_loss
+    return total, losses
 
 
 def create_state(
@@ -215,10 +326,15 @@ def create_state(
     seed: int,
     learning_rate: float,
     weight_decay: float,
+    gradient_clip_norm: float | None = None,
 ) -> train_state.TrainState:
     inputs = {key: batch[key] for key in _MODEL_INPUT_KEYS}
     variables = model.init(jax.random.key(seed), **inputs, batch_size=batch["targets"].shape[0])
-    optimizer = optax.adamw(learning_rate, weight_decay=weight_decay)
+    transforms = []
+    if gradient_clip_norm is not None and gradient_clip_norm > 0:
+        transforms.append(optax.clip_by_global_norm(gradient_clip_norm))
+    transforms.append(optax.adamw(learning_rate, weight_decay=weight_decay))
+    optimizer = optax.chain(*transforms)
     return train_state.TrainState.create(
         apply_fn=model.apply,
         params=variables["params"],
@@ -239,7 +355,16 @@ _MODEL_INPUT_KEYS = (
 )
 
 
-def build_steps(model: E3xMultipoleModel, batch_size: int):
+def build_steps(
+    model: E3xMultipoleModel,
+    batch_size: int,
+    target_rms: np.ndarray | jax.Array | None = None,
+    charge_weight: float = 0.0,
+):
+    target_rms_array = (
+        None if target_rms is None else jnp.asarray(target_rms, dtype=jnp.float32)
+    )
+
     def loss_fn(params: Any, batch: dict[str, jax.Array]):
         inputs = {key: batch[key] for key in _MODEL_INPUT_KEYS}
         prediction = model.apply(
@@ -247,7 +372,14 @@ def build_steps(model: E3xMultipoleModel, batch_size: int):
             **inputs,
             batch_size=batch_size,
         )["multipoles"]
-        return multipole_loss(prediction, batch["targets"], batch["example_mask"])
+        return multipole_loss(
+            prediction,
+            batch["targets"],
+            batch["example_mask"],
+            charge=batch["charge"],
+            target_rms=target_rms_array,
+            charge_weight=charge_weight,
+        )
 
     @jax.jit
     def train_step(state: train_state.TrainState, batch: dict[str, jax.Array]):
@@ -322,6 +454,10 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-6)
+    parser.add_argument("--gradient-clip-norm", type=float, default=1.0)
+    parser.add_argument("--charge-weight", type=float, default=1.0)
+    parser.add_argument("--target-rms-json", type=Path)
+    parser.add_argument("--target-rms-floor", type=float, default=1e-6)
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--max-structures", type=int)
     parser.add_argument("--max-atoms", type=int)
@@ -357,6 +493,17 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
+    target_rms_path = args.target_rms_json or args.workdir / "target_rms.json"
+    target_rms = load_or_compute_target_rms(
+        target_rms_path,
+        training_paths,
+        max_structures=args.max_structures,
+        max_atoms=args.max_atoms,
+        max_degree=3,
+        floor=args.target_rms_floor,
+    )
+    target_rms_array = target_rms_vector(target_rms)
+    print(f"Using target RMS: {json.dumps(target_rms, sort_keys=True)}")
 
     first_cache = restore_cache(training_paths[0])
     if args.max_structures is not None:
@@ -391,8 +538,14 @@ def main() -> None:
         args.seed,
         args.learning_rate,
         args.weight_decay,
+        args.gradient_clip_norm,
     )
-    train_step, validation_step = build_steps(model, args.batch_size)
+    train_step, validation_step = build_steps(
+        model,
+        args.batch_size,
+        target_rms_array,
+        args.charge_weight,
+    )
     rng = np.random.default_rng(args.seed)
 
     for epoch in range(1, args.epochs + 1):
@@ -443,7 +596,12 @@ def main() -> None:
             "epoch": epoch,
             "train_loss": train_total / train_count,
             "validation_loss": validation_loss,
+            "learning_rate": args.learning_rate,
+            "gradient_clip_norm": args.gradient_clip_norm,
+            "charge_weight": args.charge_weight,
         }
+        for name, value in target_rms.items():
+            metrics[f"target_rms_{name}"] = value
         print(
             f"epoch={epoch:04d} train={metrics['train_loss']:.8g} "
             f"valid={metrics['validation_loss']:.8g}"
