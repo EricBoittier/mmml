@@ -225,7 +225,7 @@ PSI_TARGET_DEG = None
 DIHEDRAL_RESTRAINT_K_EV = 1.0
 PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
 PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
-PEPTIDE_BOND_K_EV = 10.0  # Force constant for harmonic restraints on all peptide bonds (eV/Å^2)
+PEPTIDE_BOND_K_EV = 0.0  # Force constant for harmonic restraints on all peptide bonds (eV/Å^2)
 
 
 
