@@ -22,7 +22,7 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
     by_size = defaultdict(list)
     for idx in monomer_indices:
         by_size[len(idx)].append(idx)
-        
+    import inspect
     def _model_accepts_kwarg(model, name):
         fn = getattr(model, "__call__", None)
         if fn is None:
