@@ -155,22 +155,22 @@ def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
 
 # Paths to pretrained neural network checkpoint parameters.
 script_dir = Path(__file__).parent
-CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-58-42.json")
+CKPT_PATH = str(script_dir / "sppoky-epoch-0003_params.json"  ) #"params_test01_2026-07-08_12-58-42.json")
 PEPTIDE_CKPT_PATH = CKPT_PATH
 WATER_CKPT_PATH = CKPT_PATH
 
-FIRE_STEPS = 1000
+FIRE_STEPS = 10000
 FIRE_PRINT_FREQ = 1000
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
 # running 1000 steps without checking allows catastrophic divergence before repair.
-FIRE_BLOCK_STEPS = 100
+FIRE_BLOCK_STEPS = 1000
 
 
 NVT_TOTAL_STEPS = 8000000
-NVT_BLOCK_STEPS = 100
+NVT_BLOCK_STEPS = 1000
 
 NVE_TOTAL_STEPS = 8000000
-NVE_BLOCK_STEPS = 500
+NVE_BLOCK_STEPS = 5000
 FIRE_CYCLES = 2
 
 NWATER = 600
@@ -183,19 +183,19 @@ NVT_REPAIR_TEMP_K = 375.0
 NVE_REPAIR_TEMP_K = 400.0
 SEED = 42
 # Define simulation conditions
-temperature = 298.0  # Kelvin
+temperature = 198.0  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-dt_fs = 0.125  # time step in femtoseconds
+dt_fs = 0.5  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Option: Treat peptide-water intermolecular interactions with ML instead of MM
 PEPTIDE_WATER_ML = False
-PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = True
-PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = True
-WATER_ML_CHARGE_TOTAL_CORRECTION = True
-PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
-WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
+PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = False #True
+PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = False #True
+WATER_ML_CHARGE_TOTAL_CORRECTION = False #True
+PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = False  #True
+WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = False #True
 DEBUG = True
 MAX_BOND_DEV_LIMIT = 0.35
 # Optional: start from a peptide-only frame produced by
