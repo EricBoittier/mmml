@@ -7,7 +7,7 @@ import numpy as np
 
 from mmml.models.mbd import E3xMBDModel, mbd_energy_and_forces, qdo_pairwise_dispersion
 from scripts.cache_qcml_mbd_orbax import preprocess_examples
-from scripts.train_qcml_mbd import make_batch
+from scripts.train_qcml_mbd import limit_cache, make_batch
 
 
 def test_qdo_pairwise_dispersion_counts_directed_pair_once() -> None:
@@ -83,3 +83,17 @@ def test_mbd_model_outputs_positive_properties_and_conservative_forces() -> None
     assert np.all(np.asarray(output["c6_coefficients"]) > 0)
     assert np.all(np.asarray(output["polarizabilities"]) > 0)
     np.testing.assert_allclose(forces.sum(axis=0), 0.0, atol=1e-6)
+
+
+def test_mbd_training_cache_limit() -> None:
+    cache = {
+        "R": np.zeros((4, 2, 3)),
+        "E_mbd": np.zeros(4),
+        "scalar_metadata": np.array(4),
+    }
+
+    limited = limit_cache(cache, 2)
+
+    assert limited["R"].shape[0] == 2
+    assert limited["E_mbd"].shape[0] == 2
+    assert limited["scalar_metadata"] == 4

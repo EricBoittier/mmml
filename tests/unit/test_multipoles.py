@@ -13,6 +13,7 @@ from scripts.train_qcml_multipoles import (
     TrainConfig,
     build_steps,
     create_state,
+    limit_cache,
     make_batch,
     multipole_loss,
 )
@@ -136,6 +137,20 @@ def test_multipole_loss_balances_degrees() -> None:
     assert degree_losses["l0"] == pytest.approx(4.0)
     assert degree_losses["l3"] == pytest.approx(4.0)
     assert loss == pytest.approx(2.0)
+
+
+def test_training_cache_limit_preserves_aligned_fields() -> None:
+    cache = {
+        "R": np.zeros((5, 2, 3)),
+        "Z": np.zeros((5, 2)),
+        "metadata": np.array(17),
+    }
+
+    limited = limit_cache(cache, 3)
+
+    assert limited["R"].shape[0] == 3
+    assert limited["Z"].shape[0] == 3
+    assert limited["metadata"] == 17
 
 
 def test_analysis_metrics_and_report_outputs(tmp_path) -> None:

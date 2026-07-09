@@ -43,6 +43,23 @@ def restore_cache(path: Path) -> dict[str, np.ndarray]:
     return cache
 
 
+def limit_cache(
+    cache: dict[str, np.ndarray],
+    max_structures: int | None,
+) -> dict[str, np.ndarray]:
+    """Limit all structure-aligned arrays to the first ``max_structures``."""
+    if max_structures is None:
+        return cache
+    if max_structures <= 0:
+        raise ValueError("max_structures must be positive")
+    size = cache["R"].shape[0]
+    limit = min(max_structures, size)
+    return {
+        key: value[:limit] if value.ndim > 0 and value.shape[0] == size else value
+        for key, value in cache.items()
+    }
+
+
 def split_indices(
     size: int,
     validation_fraction: float,
@@ -244,6 +261,7 @@ def main() -> None:
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-6)
     parser.add_argument("--validation-fraction", type=float, default=0.1)
+    parser.add_argument("--max-structures", type=int)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--save-every", type=int, default=10)
     parser.add_argument("--features", type=int, default=64)
@@ -252,7 +270,7 @@ def main() -> None:
     parser.add_argument("--cutoff", type=float, default=6.0)
     args = parser.parse_args()
 
-    cache = restore_cache(args.cache)
+    cache = limit_cache(restore_cache(args.cache), args.max_structures)
     training_indices, validation_indices = split_indices(
         cache["R"].shape[0],
         args.validation_fraction,
