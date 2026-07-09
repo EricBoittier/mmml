@@ -468,10 +468,21 @@ def compute_peptide_ml_charges(r):
     ref_pos = pep_pos[0]
     unfolded = ref_pos + jax.vmap(displacement_fn, in_axes=(0, None))(pep_pos, ref_pos)
     centered = unfolded - jnp.mean(unfolded, axis=0, keepdims=True)
+    # is_pep_spooky = (
+    #     hasattr(peptide_model, "charges")
+    #     and hasattr(peptide_model, "total_charge")
+    # ) or "spooky" in str(type(peptide_model)).lower()
+    import inspect
+
+    def _accepts_kwarg(model, name):
+        try:
+            return name in inspect.signature(model.__call__).parameters
+        except Exception:
+            return False
     is_pep_spooky = (
-        hasattr(peptide_model, "charges")
-        and hasattr(peptide_model, "total_charge")
-    ) or "spooky" in str(type(peptide_model)).lower()
+        _accepts_kwarg(peptide_model, "charges")
+        and _accepts_kwarg(peptide_model, "spins")
+    )
 
     if is_pep_spooky:
         outputs = peptide_model.apply(
@@ -520,10 +531,21 @@ def compute_water_ml_charges(r):
     unfolded = ref_pos[:, None, :] + displacements
     centered = unfolded - jnp.mean(unfolded, axis=1, keepdims=True)
 
+    # is_water_spooky = (
+    #     hasattr(water_model, "charges")
+    #     and hasattr(water_model, "total_charge")
+    # ) or "spooky" in str(type(water_model)).lower()
+    import inspect
+    def _accepts_kwarg(model, name):
+        try:
+            return name in inspect.signature(model.__call__).parameters
+        except Exception:
+            return False
+
     is_water_spooky = (
-        hasattr(water_model, "charges")
-        and hasattr(water_model, "total_charge")
-    ) or "spooky" in str(type(water_model)).lower()
+        _accepts_kwarg(water_model, "charges")
+        and _accepts_kwarg(water_model, "spins")
+    )
 
     if is_water_spooky:
         outputs = jax.vmap(
