@@ -36,7 +36,9 @@ usage: mmml ef-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                      [--forces_weight FORCES_WEIGHT]
                      [--dipole_weight DIPOLE_WEIGHT]
                      [--charge_weight CHARGE_WEIGHT] [--dipole_field_coupling]
-                     [--field_scale FIELD_SCALE] [--zbl]
+                     [--field_scale FIELD_SCALE]
+                     [--electrostatics_damping_sigma ELECTROSTATICS_DAMPING_SIGMA]
+                     [--zbl]
                      [--include-pseudotensors | --no-include-pseudotensors]
                      [--gradient-checkpoint] [--rot-augment]
                      [--rot-perturbation ROT_PERTURBATION] [--verbose]
@@ -90,6 +92,9 @@ options:
                         Add explicit E_total = E_nn + mu·Ef coupling
   --field_scale FIELD_SCALE
                         Ef_phys = Ef_input * field_scale (au)
+  --electrostatics_damping_sigma ELECTROSTATICS_DAMPING_SIGMA
+                        Apply erf(r/sigma) damping to learned-charge Coulomb;
+                        set 0 to disable
   --zbl                 Add ZBL nuclear repulsion for short-range stability
   --include-pseudotensors, --no-include-pseudotensors
                         Equivariant parity dimension in e3x MessagePass /

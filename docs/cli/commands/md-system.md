@@ -15,11 +15,13 @@ mmml md-system --help
 usage: mmml md-system [-h]
                       [--setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}]
                       [--backend {auto,ase,jaxmd,pycharmm}]
-                      [--checkpoint CHECKPOINT] [--output-dir OUTPUT_DIR]
-                      [--job-name JOB_NAME] [--jobs-dir JOBS_DIR]
-                      [--template-pdb TEMPLATE_PDB] [--n-molecules N_MOLECULES]
-                      [--composition COMPOSITION] [--spacing SPACING] [--ps PS]
-                      [--dt-fs DT_FS] [--traj-chunk-frames TRAJ_CHUNK_FRAMES]
+                      [--checkpoint CHECKPOINT]
+                      [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
+                      [--output-dir OUTPUT_DIR] [--job-name JOB_NAME]
+                      [--jobs-dir JOBS_DIR] [--template-pdb TEMPLATE_PDB]
+                      [--n-molecules N_MOLECULES] [--composition COMPOSITION]
+                      [--spacing SPACING] [--ps PS] [--dt-fs DT_FS]
+                      [--traj-chunk-frames TRAJ_CHUNK_FRAMES]
                       [--traj-export-molecular-wrap] [--temperature TEMPERATURE]
                       [--nvt-integrator {auto,nhc,langevin}]
                       [--pressure PRESSURE] [--seed SEED]
@@ -287,6 +289,9 @@ options:
                         MD.
   --checkpoint CHECKPOINT
                         Model checkpoint path.
+  --electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA
+                        Override learned-charge Coulomb erf damping sigma in
+                        Angstrom; set 0 to disable.
   --output-dir OUTPUT_DIR
                         Output directory for artifacts.
   --job-name JOB_NAME   Logical job id for this run. Writes

@@ -24,6 +24,7 @@ usage: mmml ef-evaluate [-h] [--params PARAMS] [--config CONFIG] [--data DATA]
                         [--num-basis-functions NUM_BASIS_FUNCTIONS]
                         [--cutoff CUTOFF]
                         [--max-atomic-number MAX_ATOMIC_NUMBER]
+                        [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
                         [--save-output-npz] [--output-h5 PATH] [--rot-augment]
                         [--rot-perturbation ROT_PERTURBATION]
 
@@ -56,6 +57,9 @@ options:
   --cutoff CUTOFF       Cutoff radius (default: 10.0)
   --max-atomic-number MAX_ATOMIC_NUMBER
                         Max atomic number (default: 55)
+  --electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA
+                        Override learned-charge Coulomb erf damping sigma; set 0
+                        to disable
   --save-output-npz     Save evaluation outputs (predictions, targets) to NPZ
                         file
   --output-h5 PATH      Write HDF5 trajectory for mmml gui
