@@ -1446,7 +1446,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         or temp > NVT_REPAIR_TEMP_K
         or max_bond > MAX_HX_BOND_LIMIT
         or (not np.isfinite(np.asarray(state.position)).all())
-        or (mean_dev > 0.5)
+        or (max_dev > 0.35)
     )
     if unstable_nvt:
         if temp > NVT_REPAIR_TEMP_K:
@@ -1567,7 +1567,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         or temp > NVE_REPAIR_TEMP_K
         or max_bond > MAX_HX_BOND_LIMIT
         or (not np.isfinite(np.asarray(state_nve.position)).all())
-        or (mean_dev > 0.5)
+        or (max_dev > 0.35)
     )
     if unstable_nve:
         if temp > NVE_REPAIR_TEMP_K:
