@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=qcml-multipoles
+#SBATCH --partition=rtx4090
+#SBATCH --qos=rtx4090-1day
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=30G
-#SBATCH --time=24:00:00
+#SBATCH --mem=40G
+#SBATCH --time=23:30:00
 #SBATCH --output=logs/qcml-multipoles-%j.out
 
 set -euo pipefail
