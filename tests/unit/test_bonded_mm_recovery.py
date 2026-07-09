@@ -1664,7 +1664,7 @@ def test_restore_charmm_state_from_restart_parses_and_syncs_positions(tmp_path):
     assert np.allclose(synced[0], expected)
     script = mock_py.lingo.charmm_script.call_args[0][0]
     assert "open read unit 93" in script
-    assert str(restart) in script
+    assert restart.name in script
     assert "read restart unit 93" in script
     assert "UPDATE" in script
 
@@ -1882,6 +1882,8 @@ def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_
             "mmml.interfaces.pycharmmInterface.import_pycharmm": MagicMock(),
         },
     ), patch(
+        "mmml.interfaces.pycharmmInterface.cgenff_bonded_reference.read_psf_card_file"
+    ) as mock_read_psf, patch(
         "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
         return_value=__import__("contextlib").nullcontext(),
     ), patch(
@@ -1898,7 +1900,8 @@ def test_reload_pre_mlpot_topology_uses_explicit_positions_not_charmm_array(tmp_
     get_pos.assert_not_called()
     assert len(synced) == 1
     assert np.allclose(synced[0], explicit)
-    mock_read.psf_card.assert_called_once_with(str(topo.resolve()))
+    mock_read_psf.assert_called_once()
+    assert mock_read_psf.call_args[0][0].name == topo.name
     ctx.unset.assert_called_once()
 
 
