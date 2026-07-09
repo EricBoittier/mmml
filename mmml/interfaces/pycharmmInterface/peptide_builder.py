@@ -190,8 +190,11 @@ def build_peptide_in_charmm(
 
         # Also load standard CGENFF RTF and PRM to get TIP3 water and general templates
         from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
-        from mmml.interfaces.pycharmmInterface.nbonds_config import read_cgenff_prm
-        read.rtf(CGENFF_RTF, append=True)
+        from mmml.interfaces.pycharmmInterface.nbonds_config import (
+            read_cgenff_prm,
+            _rtf_path_without_drude_autogen,
+        )
+        read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF), append=True)
         read_cgenff_prm(bomlev=False)
 
         # Load extra RTF/PRM files if provided
