@@ -156,7 +156,7 @@ def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
 
 # Default configuration parameters
 DEFAULTS = {
-    "checkpoint": str(Path(__file__).parent / "sppoky-epoch-0003_params.json"),
+    "checkpoint": str(Path(__file__).parent / "sppoky-epoch-0005_params.json"),
     "peptide_checkpoint": None,
     "water_checkpoint": None,
 
