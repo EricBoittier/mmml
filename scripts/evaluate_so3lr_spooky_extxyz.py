@@ -104,51 +104,54 @@ def _get_info_scalar(info: dict[str, Any], key: str, default: float) -> float:
     raise ValueError(f"Expected scalar '{key}', got shape {array.shape}")
 
 
-def _get_info_vector(info: dict[str, Any], key: str, size: int) -> np.ndarray:
+def _get_info_vector(info: dict[str, Any], key: str, size: int, default: np.ndarray | None = None) -> np.ndarray:
     if key not in info:
+        if default is not None:
+            return default
         raise KeyError(f"Structure lacks required info key '{key}'")
-    value = np.asarray(info[key], dtype=np.float64).reshape(-1)
+    val_raw = info[key]
+    if isinstance(val_raw, str):
+        try:
+            value = np.fromstring(val_raw, sep=" ", dtype=np.float64)
+        except Exception:
+            value = np.asarray(val_raw.split(), dtype=np.float64)
+    else:
+        value = np.asarray(val_raw, dtype=np.float64)
+    value = value.reshape(-1)
     if value.size != size:
+        if default is not None:
+            return default
         raise ValueError(f"Expected '{key}' with {size} values, got shape {value.shape}")
     return value
 
 
-def _get_energy(atoms, key: str, structure_index: int) -> float:
-    if key in atoms.info:
-        return _get_info_scalar(atoms.info, key, 0.0)
-    if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
-        return float(np.asarray(atoms.calc.results[key]).reshape(-1)[0])
-    if key == "energy":
-        try:
+def _get_energy(atoms, key: str, structure_index: int, default: float = 0.0) -> float:
+    try:
+        if key in atoms.info:
+            return _get_info_scalar(atoms.info, key, default)
+        if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
+            return float(np.asarray(atoms.calc.results[key]).reshape(-1)[0])
+        if key == "energy":
             return float(atoms.get_potential_energy())
-        except Exception as exc:
-            raise KeyError(
-                f"Structure {structure_index} lacks energy in info/calculator results"
-            ) from exc
-    raise KeyError(
-        f"Structure {structure_index} lacks energy key '{key}'; "
-        f"info keys: {sorted(atoms.info)}; "
-        f"calculator result keys: {sorted(getattr(atoms.calc, 'results', {}))}"
-    )
+    except Exception:
+        return default
+    return default
 
 
-def _get_forces(atoms, key: str, structure_index: int) -> np.ndarray:
-    if key in atoms.arrays:
-        return np.asarray(atoms.arrays[key], dtype=np.float64)
-    if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
-        return np.asarray(atoms.calc.results[key], dtype=np.float64)
-    if key == "forces":
-        try:
+def _get_forces(atoms, key: str, structure_index: int, default: np.ndarray | None = None) -> np.ndarray:
+    try:
+        if key in atoms.arrays:
+            return np.asarray(atoms.arrays[key], dtype=np.float64)
+        if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
+            return np.asarray(atoms.calc.results[key], dtype=np.float64)
+        if key == "forces":
             return np.asarray(atoms.get_forces(), dtype=np.float64)
-        except Exception as exc:
-            raise KeyError(
-                f"Structure {structure_index} lacks forces in arrays/calculator results"
-            ) from exc
-    raise KeyError(
-        f"Structure {structure_index} lacks forces key '{key}'; "
-        f"array keys: {sorted(atoms.arrays)}; "
-        f"calculator result keys: {sorted(getattr(atoms.calc, 'results', {}))}"
-    )
+    except Exception:
+        pass
+    if default is not None:
+        return default
+    raise KeyError(f"Structure {structure_index} lacks forces key '{key}'")
+
 
 
 def _infer_spin_multiplicity(atoms, total_charge: float) -> float:
@@ -168,6 +171,18 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
     if cache_path.exists() and not args.force_recache:
         print(f"Using existing Orbax data cache: {cache_path}")
         return cache_path
+
+    # Check what keys are available in the first structure
+    first_structure = next(iread(extxyz, index="0"))
+    has_energy = args.energy_key in first_structure.info or (
+        first_structure.calc is not None and args.energy_key in getattr(first_structure.calc, "results", {})
+    ) or args.energy_key == "energy"
+    
+    has_forces = args.forces_key in first_structure.arrays or (
+        first_structure.calc is not None and args.forces_key in getattr(first_structure.calc, "results", {})
+    ) or args.forces_key == "forces"
+    
+    has_dipole = args.dipole_key in first_structure.info
 
     r_parts: list[np.ndarray] = []
     z_parts: list[np.ndarray] = []
@@ -190,9 +205,22 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
 
         r_parts.append(atoms.get_positions().astype(np.float64, copy=False))
         z_parts.append(atoms.get_atomic_numbers().astype(np.int32, copy=False))
-        f_parts.append(_get_forces(atoms, args.forces_key, i))
-        energies.append(_get_energy(atoms, args.energy_key, i))
-        dipoles.append(_get_info_vector(atoms.info, args.dipole_key, 3))
+        
+        if has_forces:
+            f_parts.append(_get_forces(atoms, args.forces_key, i, default=np.zeros((n_atoms, 3), dtype=np.float64)))
+        else:
+            f_parts.append(np.zeros((n_atoms, 3), dtype=np.float64))
+            
+        if has_energy:
+            energies.append(_get_energy(atoms, args.energy_key, i, default=0.0))
+        else:
+            energies.append(0.0)
+            
+        if has_dipole:
+            dipoles.append(_get_info_vector(atoms.info, args.dipole_key, 3, default=np.zeros(3, dtype=np.float64)))
+        else:
+            dipoles.append(np.zeros(3, dtype=np.float64))
+            
         natoms.append(n_atoms)
         charge = _get_info_scalar(atoms.info, args.charge_key, args.default_charge)
         charges.append(charge)
@@ -222,6 +250,9 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
     data["metadata_n_structures"] = np.asarray(len(energies), dtype=np.int64)
     data["metadata_n_atoms_total"] = np.asarray(offsets[-1], dtype=np.int64)
     data["metadata_max_atoms"] = np.asarray(max(natoms), dtype=np.int32)
+    data["metadata_has_energy"] = np.asarray(has_energy, dtype=bool)
+    data["metadata_has_forces"] = np.asarray(has_forces, dtype=bool)
+    data["metadata_has_dipole"] = np.asarray(has_dipole, dtype=bool)
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Saving Orbax data cache: {cache_path}")
@@ -234,13 +265,20 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
     return cache_path
 
 
-def restore_cached_data(cache_path: Path) -> dict[str, np.ndarray]:
+def restore_cached_data(cache_path: Path) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
     restored = ocp.PyTreeCheckpointer().restore(cache_path)
-    return {
+    data = {
         key: np.asarray(value)
         for key, value in restored.items()
         if not key.startswith("metadata_")
     }
+    metadata = {
+        key: np.asarray(value)
+        for key, value in restored.items()
+        if key.startswith("metadata_")
+    }
+    return data, metadata
+
 
 
 def bucket_indices_by_natoms(data: dict[str, np.ndarray]) -> dict[int, np.ndarray]:
@@ -383,11 +421,17 @@ def evaluate_dataset(
     model: SpookyPhysNet,
     params: dict[str, Any],
     data: dict[str, np.ndarray],
+    metadata: dict[str, Any],
     args: argparse.Namespace,
     devices: list[Any],
 ) -> dict[str, float]:
     n_atoms = np.asarray(data["N"]).reshape(-1)
     buckets = bucket_indices_by_natoms(data)
+    
+    # Check flags
+    has_energy = bool(metadata.get("metadata_has_energy", True))
+    has_forces = bool(metadata.get("metadata_has_forces", True))
+    has_dipole = bool(metadata.get("metadata_has_dipole", True))
     
     # Initialize metrics
     total_structures = 0
@@ -430,26 +474,31 @@ def evaluate_dataset(
         # Accumulate metrics on CPU
         is_real_np = np.asarray(is_real) # shape (n_devices, batch_size)
         
-        E_pred = np.asarray(predictions["E_pred"]).reshape(is_real_np.shape)
-        E_ref = np.asarray(predictions["E_ref"]).reshape(is_real_np.shape)
-        energy_errors = np.abs(E_pred - E_ref)[is_real_np]
-        energy_sae += float(np.sum(energy_errors))
-        energy_sse += float(np.sum(energy_errors**2))
+        if has_energy:
+            E_pred = np.asarray(predictions["E_pred"]).reshape(is_real_np.shape)
+            E_ref = np.asarray(predictions["E_ref"]).reshape(is_real_np.shape)
+            energy_errors = np.abs(E_pred - E_ref)[is_real_np]
+            energy_sae += float(np.sum(energy_errors))
+            energy_sse += float(np.sum(energy_errors**2))
+            
         total_structures += int(np.sum(is_real_np))
         
-        F_pred = np.asarray(predictions["F_pred"]).reshape(is_real_np.shape[0], is_real_np.shape[1], bucket_atoms, 3)
-        F_ref = np.asarray(predictions["F_ref"]).reshape(is_real_np.shape[0], is_real_np.shape[1], bucket_atoms, 3)
-        force_errors = np.abs(F_pred[is_real_np] - F_ref[is_real_np])
-        force_sae += float(np.sum(force_errors))
-        force_sse += float(np.sum(force_errors**2))
+        if has_forces:
+            F_pred = np.asarray(predictions["F_pred"]).reshape(is_real_np.shape[0], is_real_np.shape[1], bucket_atoms, 3)
+            F_ref = np.asarray(predictions["F_ref"]).reshape(is_real_np.shape[0], is_real_np.shape[1], bucket_atoms, 3)
+            force_errors = np.abs(F_pred[is_real_np] - F_ref[is_real_np])
+            force_sae += float(np.sum(force_errors))
+            force_sse += float(np.sum(force_errors**2))
+            
         total_atoms += int(is_real_np.sum()) * bucket_atoms
         
         if predict_charges:
-            D_pred = np.asarray(predictions["D_pred"]).reshape(is_real_np.shape[0], is_real_np.shape[1], 3)
-            D_ref = np.asarray(predictions["D_ref"]).reshape(is_real_np.shape[0], is_real_np.shape[1], 3)
-            dipole_errors = np.abs(D_pred[is_real_np] - D_ref[is_real_np])
-            dipole_sae += float(np.sum(dipole_errors))
-            dipole_sse += float(np.sum(dipole_errors**2))
+            if has_dipole:
+                D_pred = np.asarray(predictions["D_pred"]).reshape(is_real_np.shape[0], is_real_np.shape[1], 3)
+                D_ref = np.asarray(predictions["D_ref"]).reshape(is_real_np.shape[0], is_real_np.shape[1], 3)
+                dipole_errors = np.abs(D_pred[is_real_np] - D_ref[is_real_np])
+                dipole_sae += float(np.sum(dipole_errors))
+                dipole_sse += float(np.sum(dipole_errors**2))
             
             Q_pred = np.asarray(predictions["Q_pred"]).reshape(is_real_np.shape)
             Q_ref = np.asarray(predictions["Q_ref"]).reshape(is_real_np.shape)
@@ -457,19 +506,34 @@ def evaluate_dataset(
             charge_sae += float(np.sum(charge_errors))
             charge_sse += float(np.sum(charge_errors**2))
 
-    metrics = {
-        "energy_mae": energy_sae / max(1, total_structures),
-        "energy_rmse": math.sqrt(energy_sse / max(1, total_structures)),
-        "forces_mae": force_sae / max(1, total_atoms * 3),
-        "forces_rmse": math.sqrt(force_sse / max(1, total_atoms * 3)),
-    }
+    metrics = {}
+    if has_energy:
+        metrics["energy_mae"] = energy_sae / max(1, total_structures)
+        metrics["energy_rmse"] = math.sqrt(energy_sse / max(1, total_structures))
+    else:
+        metrics["energy_mae"] = float('nan')
+        metrics["energy_rmse"] = float('nan')
+        
+    if has_forces:
+        metrics["forces_mae"] = force_sae / max(1, total_atoms * 3)
+        metrics["forces_rmse"] = math.sqrt(force_sse / max(1, total_atoms * 3))
+    else:
+        metrics["forces_mae"] = float('nan')
+        metrics["forces_rmse"] = float('nan')
+        
     if predict_charges:
-        metrics["dipole_mae"] = dipole_sae / max(1, total_structures * 3)
-        metrics["dipole_rmse"] = math.sqrt(dipole_sse / max(1, total_structures * 3))
+        if has_dipole:
+            metrics["dipole_mae"] = dipole_sae / max(1, total_structures * 3)
+            metrics["dipole_rmse"] = math.sqrt(dipole_sse / max(1, total_structures * 3))
+        else:
+            metrics["dipole_mae"] = float('nan')
+            metrics["dipole_rmse"] = float('nan')
+            
         metrics["charge_mae"] = charge_sae / max(1, total_structures)
         metrics["charge_rmse"] = math.sqrt(charge_sse / max(1, total_structures))
         
     return metrics
+
 
 
 def main() -> None:
@@ -533,7 +597,7 @@ def main() -> None:
     for extxyz_file in extxyz_files:
         print(f"\n--- Processing dataset: {extxyz_file.name} ---")
         cache_path = cache_extxyz_to_orbax(args, extxyz_file)
-        data = restore_cached_data(cache_path)
+        data, metadata = restore_cached_data(cache_path)
         
         max_atoms = int(np.max(np.asarray(data["N"]).reshape(-1)))
         
@@ -541,7 +605,7 @@ def main() -> None:
         model = create_model_from_config(config, max_atoms=max_atoms)
         
         t0 = time.time()
-        metrics = evaluate_dataset(model, params, data, args, devices)
+        metrics = evaluate_dataset(model, params, data, metadata, args, devices)
         elapsed = time.time() - t0
         print(f"Evaluation finished in {elapsed:.1f} seconds.")
         
@@ -567,7 +631,7 @@ def main() -> None:
                 f"{m['charge_mae']:.6f}"
             )
     else:
-        header = f"{'Dataset':<35} | {'Energy MAE':<12} | {'Energy RMSE':<12} | {'Forces MAE':<12} | {'Forces RMSE':<12}"
+        header = f"{'Dataset':<35} | {'E MAE':<9} | {'E RMSE':<9} | {'F MAE':<9} | {'F RMSE':<9}"
         print(header)
         print("-"*len(header))
         for name, m in results.items():
