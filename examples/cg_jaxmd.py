@@ -81,6 +81,7 @@ from mmml.interfaces.jaxmdInterface import (
     get_intermolecular_pairs,
 )
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+from cg_common import load_cg_checkpoint, load_cg_config, probe_charge_output
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
@@ -155,64 +156,112 @@ def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
 
 # Paths to pretrained neural network checkpoint parameters.
 script_dir = Path(__file__).parent
-CKPT_PATH = str(script_dir / "params_test01_2026-07-08_12-58-42.json")
-PEPTIDE_CKPT_PATH = CKPT_PATH
-WATER_CKPT_PATH = CKPT_PATH
+_settings = load_cg_config(
+    {
+        "checkpoint": str(script_dir / "params_test01_2026-07-08_12-58-42.json"),
+        "peptide_checkpoint": str(script_dir / "params_test01_2026-07-08_12-58-42.json"),
+        "water_checkpoint": str(script_dir / "params_test01_2026-07-08_12-58-42.json"),
+        "fire_steps": 1000,
+        "fire_print_freq": 1000,
+        "fire_block_steps": 100,
+        "nvt_total_steps": 1000,
+        "nvt_block_steps": 100,
+        "nve_total_steps": 2000,
+        "nve_block_steps": 500,
+        "fire_cycles": 2,
+        "n_waters": 100,
+        "box_size": 30.0,
+        "nl_buffer": 2.0,
+        "max_pairs_headroom": 1.05,
+        "max_hx_bond_limit": 1.5,
+        "nvt_repair_temp_k": 375.0,
+        "nve_repair_temp_k": 400.0,
+        "seed": 42,
+        "temperature": 248.0,
+        "dt_fs": 0.5,
+        "peptide_water_ml": False,
+        "peptide_water_electrostatic_embedding": True,
+        "peptide_ml_charge_total_correction": True,
+        "water_ml_charge_total_correction": True,
+        "peptide_electrostatic_embedding_require_ml_charges": True,
+        "water_electrostatic_embedding_require_ml_charges": True,
+        "debug": True,
+        "start_peptide_traj_path": None,
+        "start_peptide_traj_index": 0,
+        "constrain_phi_psi": False,
+        "phi_target_deg": None,
+        "psi_target_deg": None,
+        "dihedral_restraint_k_ev": 1.0,
+        "phi_central": [14, 16, 18, 24],
+        "psi_central": [16, 18, 24, 26],
+        "peptide_bond_k_ev": 200.0,
+        "workdir": "/tmp/tria_box",
+        "output_dir": ".",
+    },
+    description="Trialanine/water direct JAX-MD hybrid example",
+)
+CKPT_PATH = str(_settings.checkpoint)
+PEPTIDE_CKPT_PATH = str(_settings.peptide_checkpoint)
+WATER_CKPT_PATH = str(_settings.water_checkpoint)
 
-FIRE_STEPS = 1000
-FIRE_PRINT_FREQ = 1000
+FIRE_STEPS = int(_settings.fire_steps)
+FIRE_PRINT_FREQ = int(_settings.fire_print_freq)
 # FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
 # running 1000 steps without checking allows catastrophic divergence before repair.
-FIRE_BLOCK_STEPS = 100
+FIRE_BLOCK_STEPS = int(_settings.fire_block_steps)
 
 
-NVT_TOTAL_STEPS = 1000
-NVT_BLOCK_STEPS = 100
+NVT_TOTAL_STEPS = int(_settings.nvt_total_steps)
+NVT_BLOCK_STEPS = int(_settings.nvt_block_steps)
 
-NVE_TOTAL_STEPS = 2000
-NVE_BLOCK_STEPS = 500
-FIRE_CYCLES = 2
+NVE_TOTAL_STEPS = int(_settings.nve_total_steps)
+NVE_BLOCK_STEPS = int(_settings.nve_block_steps)
+FIRE_CYCLES = int(_settings.fire_cycles)
 
-NWATER = 100
-BOX_SIDE_A = 30.0
-NL_BUFFER = 2.0
+NWATER = int(_settings.n_waters)
+BOX_SIDE_A = float(_settings.box_size)
+NL_BUFFER = float(_settings.nl_buffer)
 # Extra headroom fraction for padded pair array (5%)
-MAX_PAIRS_HEADROOM = 1.05
-MAX_HX_BOND_LIMIT = 1.5
-NVT_REPAIR_TEMP_K = 375.0
-NVE_REPAIR_TEMP_K = 400.0
-SEED = 42
+MAX_PAIRS_HEADROOM = float(_settings.max_pairs_headroom)
+MAX_HX_BOND_LIMIT = float(_settings.max_hx_bond_limit)
+NVT_REPAIR_TEMP_K = float(_settings.nvt_repair_temp_k)
+NVE_REPAIR_TEMP_K = float(_settings.nve_repair_temp_k)
+SEED = int(_settings.seed)
 # Define simulation conditions
-temperature = 248.0  # Kelvin
+temperature = float(_settings.temperature)  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-dt_fs = 0.5  # time step in femtoseconds
+dt_fs = float(_settings.dt_fs)  # time step in femtoseconds
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Option: Treat peptide-water intermolecular interactions with ML instead of MM
-PEPTIDE_WATER_ML = False
-PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = True
-PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = True
-WATER_ML_CHARGE_TOTAL_CORRECTION = True
-PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
-WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
-DEBUG = True
+PEPTIDE_WATER_ML = bool(_settings.peptide_water_ml)
+PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = bool(_settings.peptide_water_electrostatic_embedding)
+PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = bool(_settings.peptide_ml_charge_total_correction)
+WATER_ML_CHARGE_TOTAL_CORRECTION = bool(_settings.water_ml_charge_total_correction)
+PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = bool(
+    _settings.peptide_electrostatic_embedding_require_ml_charges
+)
+WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = bool(
+    _settings.water_electrostatic_embedding_require_ml_charges
+)
+DEBUG = bool(_settings.debug)
 
 # Optional: start from a peptide-only frame produced by
 # scripts/scan_trialanine_phi_psi_pes.py. The frame replaces the first
 # n_trialanine coordinates in the solvated box before minimization/dynamics.
-START_PEPTIDE_TRAJ_PATH = None
-START_PEPTIDE_TRAJ_INDEX = 0
+START_PEPTIDE_TRAJ_PATH = _settings.start_peptide_traj_path
+START_PEPTIDE_TRAJ_INDEX = int(_settings.start_peptide_traj_index)
 
 # Optional PHI/PSI restraints for JAX-MD. If targets are None and a trajectory
 # frame is loaded, targets are read from that frame's info when available.
-CONSTRAIN_PHI_PSI = False
-PHI_TARGET_DEG = None
-PSI_TARGET_DEG = None
-DIHEDRAL_RESTRAINT_K_EV = 1.0
-PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
-PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
-PEPTIDE_BOND_K_EV = 200.0  # Force constant for harmonic restraints on all peptide bonds (eV/Å^2)
+CONSTRAIN_PHI_PSI = bool(_settings.constrain_phi_psi)
+PHI_TARGET_DEG = _settings.phi_target_deg
+PSI_TARGET_DEG = _settings.psi_target_deg
+DIHEDRAL_RESTRAINT_K_EV = float(_settings.dihedral_restraint_k_ev)
+PHI_CENTRAL = tuple(_settings.phi_central)  # C1-N2-CA2-C2
+PSI_CENTRAL = tuple(_settings.psi_central)  # N2-CA2-C2-N3
+PEPTIDE_BOND_K_EV = float(_settings.peptide_bond_k_ev)
 
 
 
@@ -272,7 +321,7 @@ def load_peptide_start_frame(traj_path, frame_index=0):
 
 # 2. Build the initial system in PyCHARMM and minimize
 print("--- Building Trialanine Water Box in CHARMM ---")
-workdir = Path('/tmp/tria_box')
+workdir = Path(_settings.workdir).expanduser()
 box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
     box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
     )
@@ -314,12 +363,7 @@ if CONSTRAIN_PHI_PSI:
 
 z = get_Z_from_psf()
 
-peptide_calc = create_calculator_from_checkpoint(PEPTIDE_CKPT_PATH)
-peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
-peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
-
-if peptide_model is None or peptide_params is None:
-    raise ValueError("Could not extract model or params from the loaded peptide calculator.")
+peptide_calc, peptide_model, peptide_params = load_cg_checkpoint(PEPTIDE_CKPT_PATH)
 
 set_charmm_positions(pos)
 
@@ -388,12 +432,7 @@ prm_path = CGENFF_PRM
 nb_settings = _nbond_settings_from_cutoffs(box.nbond_cutoffs)
 nbond_data = load_nonbonded_system_from_charmm(psf_path, prm_path)
 
-water_calc = create_calculator_from_checkpoint(WATER_CKPT_PATH)
-water_model = getattr(water_calc, "model", getattr(water_calc, "_mmml_physnet_model", None))
-water_params = getattr(water_calc, "params", getattr(water_calc, "_mmml_physnet_params", None))
-
-if water_model is None or water_params is None:
-    raise ValueError("Could not extract model or params from the loaded water calculator.")
+water_calc, water_model, water_params = load_cg_checkpoint(WATER_CKPT_PATH)
 
 # Setup monomer groupings (first 42 atoms: peptide; then groups of 3 for water)
 monomer_indices = [np.arange(n_trialanine)]
@@ -460,6 +499,25 @@ water_src_idx_jax = jnp.array(water_src_idx_np, dtype=jnp.int32)
 water_z_jax = jax_z[water_stacked_idx_jax]
 water_flat_idx_jax = water_stacked_idx_jax.reshape(-1)
 water_ref_charge_total = float(np.asarray(nbond_data.charges[n_trialanine:n_trialanine + water_n_atoms]).sum())
+
+probe_charge_output(
+    peptide_model,
+    peptide_params,
+    np.asarray(z[:n_trialanine]),
+    np.asarray(pos[:n_trialanine]),
+    charge=float(pep_charge),
+    spin=float(pep_spin),
+    label="peptide checkpoint",
+)
+probe_charge_output(
+    water_model,
+    water_params,
+    np.asarray(z[n_trialanine:n_trialanine + water_n_atoms]),
+    np.asarray(pos[n_trialanine:n_trialanine + water_n_atoms]),
+    charge=0.0,
+    spin=1.0,
+    label="water checkpoint",
+)
 
 
 def compute_peptide_ml_charges(r):

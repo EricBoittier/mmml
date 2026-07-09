@@ -43,25 +43,50 @@ from mmml.interfaces.calculators.hybrid import (
     MonomerSumCalculator,
     JAXIntermolecularCalculator,
 )
+from cg_common import load_cg_checkpoint, load_cg_config, probe_charge_output
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
 ensure_pycharmm_loaded()
 pycharmm_loud()
 
-# Path to the pretrained neural network checkpoint parameters
-CKPT_PATH = "params_aaa_long_2026-07-04_22-30-27.json"
+# Runtime settings. Every key can be overridden through --config; common
+# settings also have direct CLI flags.
+_settings = load_cg_config(
+    {
+        "checkpoint": str(Path(__file__).parent / "params_aaa_long_2026-07-04_22-30-27.json"),
+        "n_waters": 200,
+        "box_size": 28.0,
+        "seed": 11,
+        "temperature": 300.0,
+        "dt_fs": 0.5,
+        "position_perturbation": 4.1,
+        "fire_fmax": 0.5,
+        "md_blocks": 5,
+        "md_steps_per_block": 100,
+        "workdir": "/tmp/tria_box",
+        "output_dir": ".",
+    },
+    description="Trialanine/water ASE hybrid example",
+)
+CKPT_PATH = str(_settings.checkpoint)
 
 # 2. Build the initial system in PyCHARMM
 # Creates a water box containing the trialanine peptide and 200 water molecules.
 print("--- Building Trialanine Water Box in CHARMM ---")
-workdir = Path('/tmp/tria_box')
-box = build_trialanine_water_box_in_charmm(n_waters=200, box_side_A=28.0, seed=11, workdir=workdir)
+workdir = Path(_settings.workdir).expanduser()
+box = build_trialanine_water_box_in_charmm(
+    n_waters=int(_settings.n_waters),
+    box_side_A=float(_settings.box_size),
+    seed=int(_settings.seed),
+    workdir=workdir,
+)
 print(f"System size: {len(box.positions)} atoms. PSF file path: {box.psf_path}")
 
 # Perturb positions slightly to test minimization
 pos = np.asarray(box.positions, dtype=np.float64)
-pos = np.random.uniform(-4.1, 4.1, pos.shape) + pos
+perturbation = float(_settings.position_perturbation)
+pos = np.random.uniform(-perturbation, perturbation, pos.shape) + pos
 set_charmm_positions(pos)
 
 # 3. Minimize the system coordinates using PyCHARMM
@@ -119,6 +144,25 @@ nbond_data = load_nonbonded_system_from_charmm(psf_path, prm_path)
 
 # (A) Intramolecular ML Potential Calculator
 # Computes isolated gas-phase energy/forces for each monomer using the pretrained PhysNet.
+checkpoint_calc, checkpoint_model, checkpoint_params = load_cg_checkpoint(CKPT_PATH)
+probe_charge_output(
+    checkpoint_model,
+    checkpoint_params,
+    z_array[:n_trialanine],
+    np.asarray(atoms.positions[:n_trialanine]),
+    charge=0.0,
+    spin=1.0,
+    label="peptide checkpoint",
+)
+probe_charge_output(
+    checkpoint_model,
+    checkpoint_params,
+    z_array[n_trialanine:n_trialanine + 3],
+    np.asarray(atoms.positions[n_trialanine:n_trialanine + 3]),
+    charge=0.0,
+    spin=1.0,
+    label="water checkpoint",
+)
 physnet_monomers = MonomerSumCalculator(
     monomer_indices=monomer_indices,
     calculator_factory=lambda: create_calculator_from_checkpoint(CKPT_PATH),
@@ -147,13 +191,13 @@ print(f"Max Force Component: {np.abs(forces).max():.4f} eV/Å")
 # 7. Perform structure minimization using ASE (FIRE)
 print("--- Minimizing using ASE FIRE Optimizer ---")
 opt = FIRE(atoms)
-opt.run(fmax=0.5)
+opt.run(fmax=float(_settings.fire_fmax))
 print(f"Minimization complete. Minimized Energy: {atoms.get_potential_energy():.4f} eV")
 
 # 8. Run Molecular Dynamics using ASE
 print("--- Running ASE NVE/NVT VelocityVerlet Dynamics ---")
 # Set momenta corresponding to T=300K
-MaxwellBoltzmannDistribution(atoms, temperature_K=300)
+MaxwellBoltzmannDistribution(atoms, temperature_K=float(_settings.temperature))
 
 def print_energy(atoms_obj: ase.Atoms) -> None:
     epot = atoms_obj.get_potential_energy() / len(atoms_obj)
@@ -162,14 +206,14 @@ def print_energy(atoms_obj: ase.Atoms) -> None:
     print(f'Energy per atom: Epot = {epot:.3f} eV, Ekin = {ekin:.3f} eV (T = {temp:3.0f} K)')
 
 # Initialize NVE Verlet dynamics with 0.5 fs time step
-dyn = VelocityVerlet(atoms, 0.5 * units.fs, trajectory="md.traj")
+dyn = VelocityVerlet(atoms, float(_settings.dt_fs) * units.fs, trajectory="md.traj")
 
 print_energy(atoms)
-for i in range(5):
-    dyn.run(100)
+for i in range(int(_settings.md_blocks)):
+    dyn.run(int(_settings.md_steps_per_block))
     print_energy(atoms)
     # Re-equilibrate temperature
-    MaxwellBoltzmannDistribution(atoms, temperature_K=300)
+    MaxwellBoltzmannDistribution(atoms, temperature_K=float(_settings.temperature))
 
 # 9. Perform dynamics in PyCHARMM (Optional / Alternative workflow)
 print("--- Running CHARMM MD Script Workflow ---")
