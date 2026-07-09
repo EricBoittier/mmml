@@ -40,6 +40,7 @@ from ase.io import read as ase_read
 from ase.io.trajectory import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.optimize.fire import FIRE as AseFIRE
+# pyrefly: ignore [missing-import]
 from cg_common import DualTrajectoryWriter
 
 # JAX-MD imports
