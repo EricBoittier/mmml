@@ -739,6 +739,9 @@ def _register_mlpot_context(
 
     from mmml.interfaces.pycharmmInterface.mlpot.periodic_mm import resolve_periodic_charmm_vdw
 
+    registration_kwargs = {}
+    if args is not None:
+        registration_kwargs["workflow_args"] = args
     ctx = register_mlpot(
         pyCModel,
         z,
@@ -760,7 +763,7 @@ def _register_mlpot_context(
             if args is not None and bool(getattr(args, "mlpot_use_block", False))
             else None
         ),
-        workflow_args=args,
+        **registration_kwargs,
     )
     recover_mpi_for_charmm_after_jax(phase="after MLpot registration")
     from mmml.interfaces.pycharmmInterface.jax_device_policy import apply_mlpot_jax_platform_env

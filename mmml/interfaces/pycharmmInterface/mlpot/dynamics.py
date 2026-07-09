@@ -1563,14 +1563,6 @@ def _run_minimize_in_chunks(
             quiet=False,
         )
 
-    last_good_positions: np.ndarray | None = None
-    last_good_grms: float | None = None
-    last_good_chunk = 0
-    if initial_grms is not None and np.isfinite(initial_grms):
-        last_good_positions = get_charmm_positions_array().copy()
-        last_good_grms = float(initial_grms)
-        last_good_chunk = 0
-
     chunk_index = 0
     stagnant_chunks = 0
     converged_grms = _resolved_sd_converged_grms(config)
@@ -1607,6 +1599,15 @@ def _run_minimize_in_chunks(
                 flush=True,
             )
         return MlpotSdChunkResult(completed=True, last_grms=float(initial_grms))
+
+    last_good_positions: np.ndarray | None = None
+    last_good_grms: float | None = None
+    last_good_chunk = 0
+    if initial_grms is not None and np.isfinite(initial_grms):
+        last_good_positions = get_charmm_positions_array().copy()
+        last_good_grms = float(initial_grms)
+        last_good_chunk = 0
+
     pbc_sd = bool(getattr(config.mlpot_ctx, "use_pbc", False)) if config.mlpot_ctx else False
     while remaining > 0:
         chunk_index += 1

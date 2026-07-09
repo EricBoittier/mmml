@@ -1732,7 +1732,7 @@ def materialize_deferred_mlpot_jax_before_sd(
                 "(same path as steepd gete)",
                 flush=True,
             )
-            _warmup_mlpot_callback_forward(
+            _warmup_value_and_grad_for_model(
                 pyCModel,
                 pos,
                 box=box,

@@ -160,11 +160,13 @@ def test_sync_charmm_velocities_akma_always_mirrors_comp():
     np.testing.assert_allclose(sync_comp.call_args[0][0], vel)
 
 
-def test_run_dynamics_ensures_bussi_iasvel_zero():
+def test_run_dynamics_ensures_bussi_iasvel_zero(monkeypatch):
     import sys
     from unittest.mock import MagicMock, patch
 
     import numpy as np
+
+    monkeypatch.setenv("MMML_BUSSI_INIT_VELOCITIES_HANDOFF", "1")
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import run_dynamics
 
@@ -189,6 +191,11 @@ def test_run_dynamics_ensures_bussi_iasvel_zero():
     ) as run_capi, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._init_velocities_handoff_looks_valid",
+        return_value=True,
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics._validate_init_velocities_handoff",
     ), patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._resolve_dynamics_init_velocities",
         return_value=init,
