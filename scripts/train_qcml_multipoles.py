@@ -17,6 +17,7 @@ import optax
 import orbax.checkpoint as ocp
 from flax.training import train_state
 
+from mmml.data.orbax_shards import partition_shards
 from mmml.models.multipoles import E3xMultipoleModel
 
 
@@ -325,6 +326,8 @@ def main() -> None:
     parser.add_argument("--max-structures", type=int)
     parser.add_argument("--max-atoms", type=int)
     parser.add_argument("--bucket-width", type=int, default=8)
+    parser.add_argument("--validation-shards", type=int, default=1)
+    parser.add_argument("--test-shards", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--save-every", type=int, default=10)
     parser.add_argument("--features", type=int, default=64)
@@ -333,16 +336,42 @@ def main() -> None:
     parser.add_argument("--cutoff", type=float, default=6.0)
     args = parser.parse_args()
 
-    cache = limit_cache(restore_cache(args.cache), args.max_structures)
-    available_indices = eligible_indices(cache, args.max_atoms)
-    training_selection, validation_selection = split_indices(
-        len(available_indices),
-        args.validation_fraction,
-        args.seed,
+    manifest_mode = (args.cache / "manifest.json").exists()
+    if manifest_mode:
+        shard_split = partition_shards(
+            args.cache,
+            validation_shards=args.validation_shards,
+            test_shards=args.test_shards,
+        )
+        training_paths = shard_split["train"]
+        validation_paths = shard_split["validation"]
+    else:
+        shard_split = {"train": [args.cache], "validation": [], "test": []}
+        training_paths = [args.cache]
+        validation_paths = []
+    args.workdir.mkdir(parents=True, exist_ok=True)
+    (args.workdir / "data_split.json").write_text(
+        json.dumps(
+            {key: [str(path) for path in paths] for key, paths in shard_split.items()},
+            indent=2,
+        ),
+        encoding="utf-8",
     )
-    training_indices = available_indices[training_selection]
-    validation_indices = available_indices[validation_selection]
-    training_buckets = bucket_indices(cache, training_indices, args.bucket_width)
+
+    first_cache = restore_cache(training_paths[0])
+    if args.max_structures is not None:
+        first_cache = limit_cache(first_cache, args.max_structures)
+    first_indices = eligible_indices(first_cache, args.max_atoms)
+    if not manifest_mode:
+        training_selection, validation_selection = split_indices(
+            len(first_indices), args.validation_fraction, args.seed
+        )
+        training_indices = first_indices[training_selection]
+        validation_indices = first_indices[validation_selection]
+    else:
+        training_indices = first_indices
+        validation_indices = np.asarray([], dtype=np.int64)
+    training_buckets = bucket_indices(first_cache, training_indices, args.bucket_width)
     config = TrainConfig(
         features=args.features,
         num_iterations=args.num_iterations,
@@ -354,7 +383,7 @@ def main() -> None:
         iter_bucket_batches(training_buckets, args.batch_size)
     )
     initial_batch = make_batch(
-        cache, initial_indices, initial_mask, initial_max_atoms
+        first_cache, initial_indices, initial_mask, initial_max_atoms
     )
     state = create_state(
         model,
@@ -365,30 +394,54 @@ def main() -> None:
     )
     train_step, validation_step = build_steps(model, args.batch_size)
     rng = np.random.default_rng(args.seed)
-    args.workdir.mkdir(parents=True, exist_ok=True)
 
     for epoch in range(1, args.epochs + 1):
         train_total = 0.0
         train_count = 0.0
-        for batch_indices, example_mask, max_atoms in iter_bucket_batches(
-            training_buckets, args.batch_size, rng
-        ):
-            batch = make_batch(cache, batch_indices, example_mask, max_atoms)
-            state, loss, _ = train_step(state, batch)
-            weight = float(example_mask.sum())
-            train_total += float(loss) * weight
-            train_count += weight
+        remaining = args.max_structures
+        epoch_paths = list(training_paths)
+        rng.shuffle(epoch_paths)
+        for shard_path in epoch_paths:
+            cache = restore_cache(shard_path)
+            if remaining is not None:
+                if remaining <= 0:
+                    break
+                cache = limit_cache(cache, remaining)
+                remaining -= len(cache["R"])
+            indices = eligible_indices(cache, args.max_atoms)
+            buckets = bucket_indices(cache, indices, args.bucket_width)
+            for batch_indices, example_mask, max_atoms in iter_bucket_batches(
+                buckets, args.batch_size, rng
+            ):
+                batch = make_batch(cache, batch_indices, example_mask, max_atoms)
+                state, loss, _ = train_step(state, batch)
+                weight = float(example_mask.sum())
+                train_total += float(loss) * weight
+                train_count += weight
+            del cache
+        if validation_paths:
+            validation_total = 0.0
+            validation_count = 0
+            for shard_path in validation_paths:
+                cache = restore_cache(shard_path)
+                indices = eligible_indices(cache, args.max_atoms)
+                shard_loss = evaluate(
+                    state.params, cache, indices, args.batch_size,
+                    validation_step, args.bucket_width,
+                )
+                validation_total += shard_loss * len(indices)
+                validation_count += len(indices)
+                del cache
+            validation_loss = validation_total / validation_count
+        else:
+            validation_loss = evaluate(
+                state.params, first_cache, validation_indices, args.batch_size,
+                validation_step, args.bucket_width,
+            )
         metrics = {
             "epoch": epoch,
             "train_loss": train_total / train_count,
-            "validation_loss": evaluate(
-                state.params,
-                cache,
-                validation_indices,
-                args.batch_size,
-                validation_step,
-                args.bucket_width,
-            ),
+            "validation_loss": validation_loss,
         }
         print(
             f"epoch={epoch:04d} train={metrics['train_loss']:.8g} "

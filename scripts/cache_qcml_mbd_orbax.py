@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import orbax.checkpoint as ocp
 
+from mmml.data.orbax_shards import write_orbax_shards
 
 DATASETS = {
     "geometry": "qcml/dft_force_field",
@@ -113,6 +114,7 @@ def main() -> None:
     parser.add_argument("--cache-dir", type=Path, default=Path("orbax_cache/qcml_mbd"))
     parser.add_argument("--split", default="full")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--shard-size", type=int, default=50000)
     args = parser.parse_args()
 
     try:
@@ -130,14 +132,17 @@ def main() -> None:
         )
         for dataset in DATASETS.values()
     ]
-    cache = preprocess_examples(
-        zip(*(tfds.as_numpy(dataset) for dataset in datasets)),
-        limit=args.limit,
+    examples = zip(*(tfds.as_numpy(dataset) for dataset in datasets))
+    if args.limit is not None:
+        examples = itertools.islice(examples, args.limit)
+    manifest = write_orbax_shards(
+        examples,
+        args.cache_dir,
+        preprocess_examples,
+        shard_size=args.shard_size,
+        dataset_kind="qcml_mbd",
     )
-    checkpoint = args.cache_dir / "0"
-    checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    ocp.PyTreeCheckpointer().save(checkpoint, cache)
-    print(f"Saved {cache['R'].shape[0]} MBD examples to {checkpoint}")
+    print(f"Saved sharded MBD cache: {manifest}")
 
 
 if __name__ == "__main__":

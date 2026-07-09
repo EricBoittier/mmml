@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ import numpy as np
 import orbax.checkpoint as ocp
 
 from mmml.models.multipoles.representations import irrep_blocks_to_traceless
+from mmml.data.orbax_shards import write_orbax_shards
 
 
 DEFAULT_DATASET = "qcml/dft_multipole_moments"
@@ -152,6 +154,7 @@ def main() -> None:
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
     parser.add_argument("--max-degree", type=int, default=3)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--shard-size", type=int, default=50000)
     args = parser.parse_args()
 
     try:
@@ -175,16 +178,17 @@ def main() -> None:
         data_dir=args.data_dir,
         read_config=read_config,
     )
-    cache = preprocess_examples(
-        zip(tfds.as_numpy(geometry_dataset), tfds.as_numpy(multipole_dataset)),
-        max_degree=args.max_degree,
-        limit=args.limit,
+    examples = zip(tfds.as_numpy(geometry_dataset), tfds.as_numpy(multipole_dataset))
+    if args.limit is not None:
+        examples = itertools.islice(examples, args.limit)
+    manifest = write_orbax_shards(
+        examples,
+        args.cache_dir,
+        lambda records: preprocess_examples(records, max_degree=args.max_degree),
+        shard_size=args.shard_size,
+        dataset_kind="qcml_multipoles",
     )
-    checkpoint = args.cache_dir / "0"
-    save_orbax_cache(cache, checkpoint)
-    restored = load_orbax_cache(checkpoint)
-    print(f"Saved {restored['R'].shape[0]} examples to {checkpoint}")
-    print(f"Packed multipole shape: {restored['multipoles'].shape}")
+    print(f"Saved sharded multipole cache: {manifest}")
 
 
 if __name__ == "__main__":
