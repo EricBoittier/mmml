@@ -213,12 +213,12 @@ config = load_cg_config(DEFAULTS, description="Hybrid JAX-MD ML/MM Simulator")
 # Apply CLI short overrides
 import sys
 if "--short" in sys.argv:
-    config.fire_steps = 500
-    config.fire_block_steps = 100
-    config.nvt_total_steps = 1000
-    config.nvt_block_steps = 100
-    config.nve_total_steps = 1000
-    config.nve_block_steps = 100
+    config.fire_steps = 10
+    config.fire_block_steps = 10
+    config.nvt_total_steps = 10
+    config.nvt_block_steps = 10
+    config.nve_total_steps = 10
+    config.nve_block_steps = 10
 
 # Set fallbacks
 if config.peptide_checkpoint is None:
