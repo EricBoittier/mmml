@@ -596,11 +596,14 @@ def orbax_to_json(
 
     if isinstance(restored, dict) and params_key in restored:
         params = restored[params_key]
-        if config is None and "config" in restored:
-            config = restored["config"]
-        elif config is None and "model_attributes" in restored:
-            # PhysNetJax checkpoints use model_attributes; use as config
-            config = restored["model_attributes"]
+        if config is None:
+            checkpoint_config = restored.get("config")
+            model_attributes = restored.get("model_attributes")
+            if isinstance(checkpoint_config, dict) or isinstance(model_attributes, dict):
+                config = {
+                    **(checkpoint_config if isinstance(checkpoint_config, dict) else {}),
+                    **(model_attributes if isinstance(model_attributes, dict) else {}),
+                }
         if metadata is None and "metadata" in restored:
             metadata = restored["metadata"]
     elif isinstance(restored, dict):
@@ -819,4 +822,3 @@ def quick_load(
         checkpoint_dir = checkpoint_path
     
     return load_model_checkpoint(checkpoint_dir, **kwargs)
-

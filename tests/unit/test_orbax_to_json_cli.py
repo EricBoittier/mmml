@@ -88,3 +88,32 @@ def test_orbax_to_json_cli_rejects_json_checkpoint(tmp_path: Path) -> None:
     )
     assert proc.returncode == 1
     assert "already JSON" in proc.stderr
+
+
+def test_orbax_to_json_merges_model_attributes_into_training_config(tmp_path: Path) -> None:
+    import orbax.checkpoint as ocp
+
+    from mmml.utils.model_checkpoint import orbax_to_json
+
+    checkpoint = tmp_path / "epoch-0002"
+    ocp.PyTreeCheckpointer().save(
+        str(checkpoint),
+        {
+            "params": {"weight": np.ones(2, dtype=np.float32)},
+            "config": {"batch_size": 4, "cutoff": 5.0},
+            "model_attributes": {
+                "model_type": "spooky",
+                "cutoff": 6.0,
+                "max_padded_atoms": 32,
+            },
+        },
+    )
+
+    output = orbax_to_json(checkpoint, tmp_path / "spooky_params.json")
+    with output.open() as handle:
+        payload = json.load(handle)
+
+    assert payload["config"]["batch_size"] == 4
+    assert payload["config"]["model_type"] == "spooky"
+    assert payload["config"]["cutoff"] == 6.0
+    assert payload["config"]["max_padded_atoms"] == 32

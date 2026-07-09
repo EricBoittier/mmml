@@ -38,6 +38,10 @@ flowchart LR
 
 A single-run config is a flat mapping. Keys are the Python form of CLI flags, so `--box-size` becomes `box_size`.
 
+Orbax training checkpoints can be exported first with `mmml orbax-to-json`.
+For SpookyPhysNet/SO3LR checkpoints, see the
+[conversion and JAX-MD example](cli/commands/orbax-to-json.md#spookyphysnet--so3lr-checkpoints).
+
 ```yaml
 setup: pbc_npt
 backend: jaxmd
