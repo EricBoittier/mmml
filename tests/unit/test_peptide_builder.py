@@ -194,3 +194,23 @@ def test_infer_charge_and_spin() -> None:
         assert q == 1
         assert s == 2.0
 
+
+@pytest.mark.skipif(not can_import_pycharmm(), reason="PyCHARMM is not available")
+def test_gas_phase_peptide_builder(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
+    from mmml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm
+    
+    assert ensure_pycharmm_loaded()
+    
+    # Build deca-alanine in gas phase (unsolvated)
+    peptide = build_peptide_in_charmm(
+        sequence="ALA ALA ALA ALA ALA ALA ALA ALA ALA ALA",
+        minimize=True,
+        mini_steps=50,
+        workdir=tmp_path,
+    )
+    
+    assert peptide.n_atoms > 0
+    assert peptide.psf_path.is_file()
+    assert peptide.pdb_path.is_file()
+

@@ -208,7 +208,7 @@ DEFAULTS = {
 }
 
 # Import load_cg_config from cg_common
-from cg_common import load_cg_config
+from cg_common import load_cg_config, parse_temp_schedule
 
 # Load configuration
 config = load_cg_config(DEFAULTS, description="Hybrid JAX-MD ML/MM Simulator")

@@ -225,3 +225,62 @@ def probe_charge_output(
         f"(Zmax={int(numbers.max())}, charge sum={float(result.sum()):.6f})"
     )
     return result
+
+
+def parse_temp_schedule(schedule_str, total_steps):
+    """
+    Parses a temperature schedule string and returns a function T(step) -> Kelvin.
+    Supported formats:
+      1. A single float: "298.0" -> constant 298 K
+      2. "T1->T2" -> linear ramp from T1 to T2 over total_steps
+      3. Complex staged schedule: "298.0->398.0:0.25, 398.0:0.5, 398.0->298.0:0.25"
+    """
+    schedule_str = str(schedule_str).strip()
+    try:
+        val = float(schedule_str)
+        return lambda step: val
+    except ValueError:
+        pass
+    if "->" in schedule_str and ":" not in schedule_str:
+        parts = schedule_str.split("->")
+        T1 = float(parts[0])
+        T2 = float(parts[1])
+        return lambda step: T1 + (T2 - T1) * (step / max(1, total_steps))
+    stages = []
+    accum_frac = 0.0
+    for part in schedule_str.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            raise ValueError(f"Invalid schedule segment (missing fraction): {part}")
+        expr, frac_str = part.split(":")
+        frac = float(frac_str)
+        start_frac = accum_frac
+        end_frac = accum_frac + frac
+        accum_frac = end_frac
+        if "->" in expr:
+            t_parts = expr.split("->")
+            T1 = float(t_parts[0])
+            T2 = float(t_parts[1])
+            stages.append((start_frac, end_frac, T1, T2, True))
+        else:
+            T = float(expr)
+            stages.append((start_frac, end_frac, T, T, False))
+    if abs(accum_frac - 1.0) > 1e-4:
+        stages = [(sf/accum_frac, ef/accum_frac, T1, T2, is_ramp) for sf, ef, T1, T2, is_ramp in stages]
+    def T_func(step):
+        frac = step / max(1, total_steps)
+        frac = min(max(frac, 0.0), 1.0)
+        for sf, ef, T1, T2, is_ramp in stages:
+            if sf <= frac <= ef:
+                if sf == ef:
+                    return T1
+                if is_ramp:
+                    segment_frac = (frac - sf) / (ef - sf)
+                    return T1 + (T2 - T1) * segment_frac
+                else:
+                    return T1
+        return stages[-1][2]
+    return T_func
+
