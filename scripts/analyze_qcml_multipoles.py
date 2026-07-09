@@ -12,6 +12,7 @@ from dataclasses import fields
 from pathlib import Path
 from typing import Any
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import orbax.checkpoint as ocp
@@ -171,9 +172,23 @@ def predict(
     return np.concatenate(predictions, axis=0)
 
 
+def build_predict_step(model: E3xMultipoleModel, params: Any, batch_size: int):
+    """Compile one prediction function reused across shards and atom buckets."""
+
+    @jax.jit
+    def predict_step(inputs: dict[str, Any]) -> jax.Array:
+        output = model.apply(
+            {"params": params},
+            **inputs,
+            batch_size=batch_size,
+        )
+        return output["multipoles"]
+
+    return predict_step
+
+
 def predict_bucketed(
-    model: E3xMultipoleModel,
-    params: Any,
+    predict_step,
     cache: dict[str, np.ndarray],
     indices: np.ndarray,
     batch_size: int,
@@ -202,13 +217,9 @@ def predict_bucketed(
                 "edge_mask",
             )
         }
-        output = model.apply(
-            {"params": params},
-            **inputs,
-            batch_size=batch_size,
-        )
+        output = predict_step(inputs)
         valid_count = int(example_mask.sum())
-        predictions.append(np.asarray(output["multipoles"][:valid_count]))
+        predictions.append(np.asarray(output[:valid_count]))
         ordered_indices.append(batch_indices[:valid_count])
     return np.concatenate(predictions, axis=0), np.concatenate(ordered_indices, axis=0)
 
@@ -237,21 +248,27 @@ def error_metrics(
     num_atoms: np.ndarray,
     scales: dict[int, float],
     units: dict[int, str],
+    include_cartesian: bool = True,
 ) -> dict[str, Any]:
     """Compute spherical-component and Cartesian-tensor errors by degree."""
     target_spherical = _degree_blocks(target)
     prediction_spherical = _degree_blocks(prediction)
-    target_cartesian = _cartesian_blocks(target)
-    prediction_cartesian = _cartesian_blocks(prediction)
+    if include_cartesian:
+        target_cartesian = _cartesian_blocks(target)
+        prediction_cartesian = _cartesian_blocks(prediction)
     report: dict[str, Any] = {}
 
     for degree in range(4):
         scale = scales[degree]
         degree_report: dict[str, Any] = {"unit": units[degree], "scale": scale}
-        for representation, references, estimates in (
+        representations = [
             ("spherical_traceless", target_spherical, prediction_spherical),
-            ("cartesian_traceless", target_cartesian, prediction_cartesian),
-        ):
+        ]
+        if include_cartesian:
+            representations.append(
+                ("cartesian_traceless", target_cartesian, prediction_cartesian)
+            )
+        for representation, references, estimates in representations:
             error = (estimates[degree] - references[degree]) * scale
             norm_error = np.linalg.norm(error, axis=-1)
             degree_report[representation] = {
@@ -400,9 +417,18 @@ def generate_report(
     num_atoms: np.ndarray,
     scales: dict[int, float],
     units: dict[int, str],
+    include_cartesian: bool = True,
+    include_plots: bool = True,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    metrics = error_metrics(target, prediction, num_atoms, scales, units)
+    metrics = error_metrics(
+        target,
+        prediction,
+        num_atoms,
+        scales,
+        units,
+        include_cartesian=include_cartesian,
+    )
     (output_dir / "metrics.json").write_text(
         json.dumps(metrics, indent=2, sort_keys=True),
         encoding="utf-8",
@@ -416,10 +442,14 @@ def generate_report(
         scales,
     )
 
+    if not include_plots:
+        return metrics
+
     spherical_target = _degree_blocks(target)
     spherical_prediction = _degree_blocks(prediction)
-    cartesian_target = _cartesian_blocks(target)
-    cartesian_prediction = _cartesian_blocks(prediction)
+    if include_cartesian:
+        cartesian_target = _cartesian_blocks(target)
+        cartesian_prediction = _cartesian_blocks(prediction)
     spherical_errors = {}
     for degree in range(4):
         scale = scales[degree]
@@ -433,13 +463,14 @@ def generate_report(
             f"Spherical traceless multipole, l={degree}",
             units[degree],
         )
-        plot_scatter(
-            output_dir / f"scatter_cartesian_l{degree}.png",
-            cartesian_target[degree] * scale,
-            cartesian_prediction[degree] * scale,
-            f"Cartesian traceless tensor, l={degree}",
-            units[degree],
-        )
+        if include_cartesian:
+            plot_scatter(
+                output_dir / f"scatter_cartesian_l{degree}.png",
+                cartesian_target[degree] * scale,
+                cartesian_prediction[degree] * scale,
+                f"Cartesian traceless tensor, l={degree}",
+                units[degree],
+            )
     plot_error_distributions(
         output_dir / "error_distributions.png",
         spherical_errors,
@@ -470,6 +501,16 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-structures", type=int)
     parser.add_argument("--max-atoms", type=int)
+    parser.add_argument(
+        "--skip-cartesian",
+        action="store_true",
+        help="Skip Cartesian traceless tensor conversion and Cartesian scatter plots.",
+    )
+    parser.add_argument(
+        "--skip-plots",
+        action="store_true",
+        help="Write metrics/CSV only; skip PNG generation.",
+    )
     for degree in range(4):
         parser.add_argument(f"--scale-l{degree}", type=float, default=1.0)
         parser.add_argument(f"--unit-l{degree}", default="QCML native")
@@ -489,6 +530,7 @@ def main() -> None:
     all_indices = []
     all_num_atoms = []
     remaining = args.max_structures
+    predict_step = build_predict_step(model, params, args.batch_size)
 
     if shard_paths is None:
         cache = restore_cache(args.cache)
@@ -504,9 +546,10 @@ def main() -> None:
         shard_work = [(args.cache, cache, indices)]
     else:
         shard_work = []
-        for shard_path in shard_paths:
+        for shard_number, shard_path in enumerate(shard_paths, start=1):
             if remaining is not None and remaining <= 0:
                 break
+            print(f"Restoring shard {shard_number}/{len(shard_paths)}: {shard_path}")
             cache = restore_cache(shard_path)
             indices = eligible_indices(cache, args.max_atoms)
             if remaining is not None:
@@ -514,12 +557,15 @@ def main() -> None:
                 remaining -= len(indices)
             shard_work.append((shard_path, cache, indices))
 
-    for _, cache, indices in shard_work:
+    for shard_number, (shard_path, cache, indices) in enumerate(shard_work, start=1):
         if not len(indices):
             continue
+        print(
+            f"Predicting shard {shard_number}/{len(shard_work)}: "
+            f"{shard_path} ({len(indices)} structures)"
+        )
         prediction, ordered_indices = predict_bucketed(
-            model,
-            params,
+            predict_step,
             cache,
             indices,
             args.batch_size,
@@ -547,6 +593,8 @@ def main() -> None:
         num_atoms,
         scales,
         units,
+        include_cartesian=not args.skip_cartesian,
+        include_plots=not args.skip_plots,
     )
     print(json.dumps(metrics, indent=2, sort_keys=True))
     print(f"Wrote report to {args.output_dir}")
