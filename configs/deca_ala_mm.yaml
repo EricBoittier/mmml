@@ -1,0 +1,22 @@
+# deca_ala_mm.yaml
+# Gas-phase deca-alanine (10-mer) simulation using classical MM forces.
+sequence: "ALA ALA ALA ALA ALA ALA ALA ALA ALA ALA"
+n_waters: 0
+box_size: 100.0
+seed: 42
+temperature: 298.0
+dt_fs: 0.5
+
+use_ml_intramolecular: false
+
+fire_steps: 10000
+fire_block_steps: 1000
+nvt_total_steps: 400000  # 200 ps at 0.5 fs dt
+nvt_block_steps: 5000
+nve_total_steps: 400000  # 200 ps at 0.5 fs dt
+nve_block_steps: 5000
+fire_cycles: 2
+
+peptide_bond_k_ev: 0.0
+write_dcd: true
+output_dir: "./output_deca_mm"

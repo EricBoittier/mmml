@@ -86,15 +86,19 @@ def load_cg_config(
         action="store_true",
         help="Mock ML internals with classical MM bonded terms",
     )
-    args = parser.parse_args(argv)
+    args, unknown_args = parser.parse_known_args(argv)
 
     values = dict(defaults)
     configured: dict[str, Any] = {}
     if args.config is not None:
         with args.config.expanduser().open(encoding="utf-8") as handle:
-            configured = json.load(handle)
+            if args.config.suffix in (".yaml", ".yml"):
+                import yaml
+                configured = yaml.safe_load(handle)
+            else:
+                configured = json.load(handle)
         if not isinstance(configured, dict):
-            raise ValueError(f"CG config must contain a JSON object: {args.config}")
+            raise ValueError(f"CG config must contain a dictionary object: {args.config}")
         unknown = sorted(set(configured) - set(values))
         if unknown:
             raise ValueError(f"Unknown CG config keys: {', '.join(unknown)}")

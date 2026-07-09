@@ -154,78 +154,129 @@ def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
 
 
 
-# Paths to pretrained neural network checkpoint parameters.
-script_dir = Path(__file__).parent
-CKPT_PATH = str(script_dir / "sppoky-epoch-0003_params.json"  ) #"params_test01_2026-07-08_12-58-42.json")
-PEPTIDE_CKPT_PATH = CKPT_PATH
-WATER_CKPT_PATH = CKPT_PATH
+# Default configuration parameters
+DEFAULTS = {
+    "checkpoint": str(Path(__file__).parent / "sppoky-epoch-0003_params.json"),
+    "peptide_checkpoint": None,
+    "water_checkpoint": None,
 
-FIRE_STEPS = 10000
-FIRE_PRINT_FREQ = 1000
-# FIRE_BLOCK_STEPS kept small (100) because FIRE adaptively grows its step size:
-# running 1000 steps without checking allows catastrophic divergence before repair.
-FIRE_BLOCK_STEPS = 1000
+    "sequence": "ALA ALA ALA",  # default is trialanine
+    "n_waters": 600,
+    "box_size": 28.0,
+    "seed": 42,
+    "temperature": 198.0,
+    "dt_fs": 0.5,
 
-NVT_TOTAL_STEPS = 8000000
-NVT_BLOCK_STEPS = 1000
+    "use_ml_intramolecular": True,
+    "peptide_water_ml": False,
+    "peptide_water_electrostatic_embedding": False,
+    "peptide_ml_charge_total_correction": False,
+    "water_ml_charge_total_correction": False,
+    "peptide_electrostatic_embedding_require_ml_charges": False,
+    "water_electrostatic_embedding_require_ml_charges": False,
 
-NVE_TOTAL_STEPS = 8000000
-NVE_BLOCK_STEPS = 5000
-FIRE_CYCLES = 2
+    "fire_steps": 10000,
+    "fire_block_steps": 1000,
+    "nvt_total_steps": 8000000,
+    "nvt_block_steps": 1000,
+    "nve_total_steps": 8000000,
+    "nve_block_steps": 5000,
+    "fire_cycles": 2,
 
+    "nl_buffer": 2.0,
+    "max_pairs_headroom": 1.15,
+    "max_hx_bond_limit": 1.5,
+    "max_bond_dev_limit": 0.3,
+    "nvt_repair_temp_k": 375.0,
+    "nve_repair_temp_k": 400.0,
+    "debug": True,
+
+    "start_peptide_traj_path": None,
+    "start_peptide_traj_index": 0,
+
+    "constrain_phi_psi": False,
+    "phi_target_deg": None,
+    "psi_target_deg": None,
+    "dihedral_restraint_k_ev": 1.0,
+    "peptide_bond_k_ev": 0.0,
+
+    "write_dcd": True,
+    "output_dir": ".",
+}
+
+# Import load_cg_config from cg_common
+from cg_common import load_cg_config
+
+# Load configuration
+config = load_cg_config(DEFAULTS, description="Hybrid JAX-MD ML/MM Simulator")
+
+# Apply CLI short overrides
 import sys
 if "--short" in sys.argv:
-    FIRE_STEPS = 500
-    FIRE_BLOCK_STEPS = 100
-    NVT_TOTAL_STEPS = 1000
-    NVT_BLOCK_STEPS = 100
-    NVE_TOTAL_STEPS = 1000
-    NVE_BLOCK_STEPS = 100
+    config.fire_steps = 500
+    config.fire_block_steps = 100
+    config.nvt_total_steps = 1000
+    config.nvt_block_steps = 100
+    config.nve_total_steps = 1000
+    config.nve_block_steps = 100
 
-NWATER = 600
-BOX_SIDE_A = 28.0
-NL_BUFFER = 2.0
-# Extra headroom fraction for padded pair array (5%)
-MAX_PAIRS_HEADROOM = 1.15
-MAX_HX_BOND_LIMIT = 1.5
-NVT_REPAIR_TEMP_K = 375.0
-NVE_REPAIR_TEMP_K = 400.0
-SEED = 42
-# Define simulation conditions
-temperature = 198.0  # Kelvin
-kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
+# Set fallbacks
+if config.peptide_checkpoint is None:
+    config.peptide_checkpoint = config.checkpoint
+if config.water_checkpoint is None:
+    config.water_checkpoint = config.checkpoint
+
+# Extract settings to local variables to maintain compatibility with the rest of the script
+CKPT_PATH = config.checkpoint
+PEPTIDE_CKPT_PATH = config.peptide_checkpoint
+WATER_CKPT_PATH = config.water_checkpoint
+
+FIRE_STEPS = config.fire_steps
+FIRE_BLOCK_STEPS = config.fire_block_steps
+NVT_TOTAL_STEPS = config.nvt_total_steps
+NVT_BLOCK_STEPS = config.nvt_block_steps
+NVE_TOTAL_STEPS = config.nve_total_steps
+NVE_BLOCK_STEPS = config.nve_block_steps
+FIRE_CYCLES = config.fire_cycles
+
+NWATER = config.n_waters
+BOX_SIDE_A = config.box_size
+NL_BUFFER = config.nl_buffer
+MAX_PAIRS_HEADROOM = config.max_pairs_headroom
+MAX_HX_BOND_LIMIT = config.max_hx_bond_limit
+NVT_REPAIR_TEMP_K = config.nvt_repair_temp_k
+NVE_REPAIR_TEMP_K = config.nve_repair_temp_k
+SEED = config.seed
+
+temperature = config.temperature
+kb = 8.617333262145e-5  # eV/K
 target_temp_ev = temperature * kb
-dt_fs = 0.5  # time step in femtoseconds
-dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
+dt_fs = config.dt_fs
+dt = dt_fs * 0.001
 
-# Option: Treat peptide-water intermolecular interactions with ML instead of MM
-PEPTIDE_WATER_ML = False
-USE_ML_INTRAMOLECULAR = True
-import sys
-if "--no-ml" in sys.argv:
-    USE_ML_INTRAMOLECULAR = False
-PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = False #True
-PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = False #True
-WATER_ML_CHARGE_TOTAL_CORRECTION = False #True
-PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = False  #True
-WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = False #True
-DEBUG = True
-MAX_BOND_DEV_LIMIT = 0.3
-# Optional: start from a peptide-only frame produced by
-# scripts/scan_trialanine_phi_psi_pes.py. The frame replaces the first
-# n_trialanine coordinates in the solvated box before minimization/dynamics.
-START_PEPTIDE_TRAJ_PATH = None
-START_PEPTIDE_TRAJ_INDEX = 0
+PEPTIDE_WATER_ML = config.peptide_water_ml
+USE_ML_INTRAMOLECULAR = config.use_ml_intramolecular
+PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = config.peptide_water_electrostatic_embedding
+PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = config.peptide_ml_charge_total_correction
+WATER_ML_CHARGE_TOTAL_CORRECTION = config.water_ml_charge_total_correction
+PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = config.peptide_electrostatic_embedding_require_ml_charges
+WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = config.water_electrostatic_embedding_require_ml_charges
+DEBUG = config.debug
+MAX_BOND_DEV_LIMIT = config.max_bond_dev_limit
 
-# Optional PHI/PSI restraints for JAX-MD. If targets are None and a trajectory
-# frame is loaded, targets are read from that frame's info when available.
-CONSTRAIN_PHI_PSI = False
-PHI_TARGET_DEG = None
-PSI_TARGET_DEG = None
-DIHEDRAL_RESTRAINT_K_EV = 1.0
-PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
-PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
-PEPTIDE_BOND_K_EV = 0.0  # Force constant for harmonic restraints on all peptide bonds (eV/Å^2)
+START_PEPTIDE_TRAJ_PATH = config.start_peptide_traj_path
+START_PEPTIDE_TRAJ_INDEX = config.start_peptide_traj_index
+
+CONSTRAIN_PHI_PSI = config.constrain_phi_psi
+PHI_TARGET_DEG = config.phi_target_deg
+PSI_TARGET_DEG = config.psi_target_deg
+DIHEDRAL_RESTRAINT_K_EV = config.dihedral_restraint_k_ev
+PHI_CENTRAL = (14, 16, 18, 24)
+PSI_CENTRAL = (16, 18, 24, 26)
+PEPTIDE_BOND_K_EV = config.peptide_bond_k_ev
+
+WRITE_DCD = config.write_dcd
+OUTPUT_DIR = config.output_dir
 
 
 def minimize_peptide_only_in_charmm(sd_steps=1000, abnr_steps=1000):
@@ -283,10 +334,41 @@ def load_peptide_start_frame(traj_path, frame_index=0):
 
 
 # 2. Build the initial system in PyCHARMM and minimize
-print("--- Building Trialanine Water Box in CHARMM ---")
 workdir = Path('/tmp/tria_box')
-box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
-    box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
+
+if NWATER > 0:
+    print("--- Building Trialanine Water Box in CHARMM ---")
+    box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
+        box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
+        )
+else:
+    print(f"--- Building Gas-Phase Peptide ({config.sequence}) in CHARMM ---")
+    from mmml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm, SolvatedPeptideBox, PbcNbondCutoffs, parse_sequence
+
+    build_result = build_peptide_in_charmm(
+        sequence=config.sequence,
+        seed=SEED,
+        workdir=workdir,
+        minimize=True,
+    )
+
+    # Setup dummy PbcNbondCutoffs for nonbonded settings in gas phase
+    nbond_cutoffs = PbcNbondCutoffs(
+        cutnb=15.0,
+        ctofnb=12.0,
+        ctonnb=10.0,
+        c2ofnb=144.0,
+        c2onnb=100.0,
+    )
+    box = SolvatedPeptideBox(
+        positions=np.asarray(build_result.positions, dtype=np.float64),
+        psf_path=build_result.psf_path,
+        pdb_path=build_result.pdb_path,
+        box_side_A=BOX_SIDE_A,
+        n_peptide_atoms=build_result.n_atoms,
+        n_waters=0,
+        nbond_cutoffs=nbond_cutoffs,
+        sequence=parse_sequence(config.sequence),
     )
 
 from mmml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
@@ -297,11 +379,11 @@ pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-0.1, 0.1, pos.shape) + pos
 
 # Translate the entire system so that the peptide is centered in the box
-n_trialanine = 42
+n_trialanine = box.n_peptide_atoms
 peptide_center = pos[:n_trialanine].mean(axis=0)
 box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
 translation = box_center - peptide_center
-pos += translation / 2.0
+pos += translation
 
 start_peptide_pos, start_peptide_info = load_peptide_start_frame(
     START_PEPTIDE_TRAJ_PATH, START_PEPTIDE_TRAJ_INDEX
@@ -1409,7 +1491,7 @@ print("--- Minimizing System with JAX-MD FIRE and PyCHARMM Repair Loops ---")
 init_r = jnp.array(pos, dtype=jnp.float64)
 pos_current = init_r
 
-traj_path_fire = "cg_fire.traj"
+traj_path_fire = os.path.join(OUTPUT_DIR, "cg_fire.traj")
 print(f"--- Saving minimization trajectory to {traj_path_fire} and its .dcd counterpart ---")
 traj_fire = DualTrajectoryWriter(traj_path_fire, atoms, dt_ps=0.0, steps_per_frame=FIRE_BLOCK_STEPS)
 
@@ -1511,7 +1593,7 @@ pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 state = _init_fn_nvt(key, min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
-traj_path_nvt = "cg_nvt.traj"
+traj_path_nvt = os.path.join(OUTPUT_DIR, "cg_nvt.traj")
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} and its .dcd counterpart ---")
 traj_nvt = DualTrajectoryWriter(traj_path_nvt, atoms, dt_ps=dt, steps_per_frame=NVT_BLOCK_STEPS)
 last_good_nvt_pos = np.asarray(min_r, dtype=np.float64)
@@ -1624,7 +1706,7 @@ pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
-traj_path_nve = "cg_nve.traj"
+traj_path_nve = os.path.join(OUTPUT_DIR, "cg_nve.traj")
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} and its .dcd counterpart ---")
 traj_nve = DualTrajectoryWriter(traj_path_nve, atoms, dt_ps=dt, steps_per_frame=NVE_BLOCK_STEPS)
 last_good_nve_pos = np.asarray(state.position, dtype=np.float64)
