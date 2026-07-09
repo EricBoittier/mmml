@@ -1083,7 +1083,7 @@ def _phi_psi_restraint_energy(r):
 
 
 @jit
-def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None) -> jnp.ndarray:
+def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None, **unused_kwargs) -> jnp.ndarray:
     """Single JIT-compiled hybrid ML/MM energy function.
 
     Takes padded pair arrays as keyword arguments. Since their shapes (MAX_PAIRS)
