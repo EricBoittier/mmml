@@ -37,6 +37,7 @@ def load_cg_config(
     args = parser.parse_args(argv)
 
     values = dict(defaults)
+    configured: dict[str, Any] = {}
     if args.config is not None:
         with args.config.expanduser().open(encoding="utf-8") as handle:
             configured = json.load(handle)
@@ -46,6 +47,11 @@ def load_cg_config(
         if unknown:
             raise ValueError(f"Unknown CG config keys: {', '.join(unknown)}")
         values.update(configured)
+        if "checkpoint" in configured:
+            if "peptide_checkpoint" in values and "peptide_checkpoint" not in configured:
+                values["peptide_checkpoint"] = configured["checkpoint"]
+            if "water_checkpoint" in values and "water_checkpoint" not in configured:
+                values["water_checkpoint"] = configured["checkpoint"]
 
     cli_mapping = {
         "checkpoint": "checkpoint",

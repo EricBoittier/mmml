@@ -51,6 +51,22 @@ def test_load_cg_config_applies_json_then_cli(tmp_path: Path) -> None:
     assert settings.water_checkpoint == "new.json"
 
 
+def test_json_checkpoint_defaults_both_regions(tmp_path: Path) -> None:
+    config = tmp_path / "cg.json"
+    config.write_text(json.dumps({"checkpoint": "shared.json"}))
+    settings = cg_common.load_cg_config(
+        {
+            "checkpoint": "old.json",
+            "peptide_checkpoint": "peptide.json",
+            "water_checkpoint": "water.json",
+        },
+        description="test",
+        argv=["--config", str(config)],
+    )
+    assert settings.peptide_checkpoint == "shared.json"
+    assert settings.water_checkpoint == "shared.json"
+
+
 def test_validate_supported_elements_has_no_size_or_order_restriction() -> None:
     model = type("Model", (), {"max_atomic_number": 8})()
     numbers = np.array([8, 1, 6, 1] * 20)
