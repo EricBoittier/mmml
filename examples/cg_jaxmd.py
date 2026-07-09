@@ -1147,7 +1147,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Vectorized helper functions (no Python loops)
+# Vectorized helper functions (no pure Python loops)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def unfold_coordinates(positions, L, mon_stacked_groups):
@@ -1436,6 +1436,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
     max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
+    max_dev, mean_dev = get_peptide_bond_diagnostics(state.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
 
     # Check for instability and repair
     unstable_nvt = (
@@ -1445,6 +1446,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         or temp > NVT_REPAIR_TEMP_K
         or max_bond > MAX_HX_BOND_LIMIT
         or (not np.isfinite(np.asarray(state.position)).all())
+        or (mean_dev > 0.5)
     )
     if unstable_nvt:
         if temp > NVT_REPAIR_TEMP_K:
@@ -1489,7 +1491,6 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     else:
         last_good_nvt_pos = np.asarray(state.position, dtype=np.float64).copy()
 
-    max_dev, mean_dev = get_peptide_bond_diagnostics(state.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
     print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
           f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å | "
           f"Max/Mean Pep Bond Dev: {max_dev:.4f}/{mean_dev:.4f} Å")
@@ -1556,6 +1557,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
     max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
+    max_dev, mean_dev = get_peptide_bond_diagnostics(state_nve.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
 
     # Check for instability and repair
     unstable_nve = (
@@ -1565,6 +1567,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         or temp > NVE_REPAIR_TEMP_K
         or max_bond > MAX_HX_BOND_LIMIT
         or (not np.isfinite(np.asarray(state_nve.position)).all())
+        or (mean_dev > 0.5)
     )
     if unstable_nve:
         if temp > NVE_REPAIR_TEMP_K:
@@ -1613,7 +1616,6 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
 
     tot_energy = curr_e + ke
     energy_drift = tot_energy - initial_nve_energy
-    max_dev, mean_dev = get_peptide_bond_diagnostics(state_nve.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
     print(f"NVE Step {step+NVE_BLOCK_STEPS:5d} | Tot Energy: {tot_energy:.4f} eV | Drift: {energy_drift:.6f} eV | "
           f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å | "
           f"Max/Mean Pep Bond Dev: {max_dev:.4f}/{mean_dev:.4f} Å")
