@@ -174,6 +174,7 @@ DEFAULTS = {
     "water_ml_charge_total_correction": False,
     "peptide_electrostatic_embedding_require_ml_charges": False,
     "water_electrostatic_embedding_require_ml_charges": False,
+    "electrostatics_damping_sigma": None,
 
     "fire_steps": 10000,
     "fire_block_steps": 1000,
@@ -411,7 +412,10 @@ if CONSTRAIN_PHI_PSI:
 z = get_Z_from_psf()
 
 if USE_ML_INTRAMOLECULAR:
-    peptide_calc = create_calculator_from_checkpoint(PEPTIDE_CKPT_PATH)
+    peptide_calc = create_calculator_from_checkpoint(
+        PEPTIDE_CKPT_PATH,
+        electrostatics_damping_sigma=config.electrostatics_damping_sigma,
+    )
     peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
     peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
 
@@ -538,7 +542,10 @@ else:
     pep_intra_vdw14 = None
 
 if USE_ML_INTRAMOLECULAR:
-    water_calc = create_calculator_from_checkpoint(WATER_CKPT_PATH)
+    water_calc = create_calculator_from_checkpoint(
+        WATER_CKPT_PATH,
+        electrostatics_damping_sigma=config.electrostatics_damping_sigma,
+    )
     water_model = getattr(water_calc, "model", getattr(water_calc, "_mmml_physnet_model", None))
     water_params = getattr(water_calc, "params", getattr(water_calc, "_mmml_physnet_params", None))
 

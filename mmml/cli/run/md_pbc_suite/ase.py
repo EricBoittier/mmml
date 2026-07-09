@@ -832,6 +832,7 @@ def _factory_mmml(
     ml_batch_size: Optional[int] = None,
     ml_max_active_dimers: Optional[int] = None,
     ml_compute_dtype: Optional[str] = None,
+    electrostatics_damping_sigma: float | None = None,
     at_codes_override: np.ndarray | None = None,
 ):
     if at_codes_override is not None:
@@ -878,6 +879,7 @@ def _factory_mmml(
         ml_batch_size=ml_batch_size,
         ml_max_active_dimers=ml_max_active_dimers,
         ml_compute_dtype=ml_compute_dtype,
+        electrostatics_damping_sigma=electrostatics_damping_sigma,
     )
     t1 = _tmark()
     cutoff = CutoffParameters(
@@ -1361,6 +1363,12 @@ def main(argv: list[str] | None = None) -> int:
             "Portable .json or Orbax path (default: bundled manifest model with "
             "lowest validation force MAE, or $MMML_CKPT)."
         ),
+    )
+    parser.add_argument(
+        "--electrostatics-damping-sigma",
+        type=float,
+        default=None,
+        help="Override learned-charge Coulomb erf damping sigma in Angstrom; set 0 to disable.",
     )
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite"))
     parser.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
@@ -1984,6 +1992,7 @@ def main(argv: list[str] | None = None) -> int:
             ml_batch_size=getattr(args, "ml_batch_size", None),
             ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
             ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
+            electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
         )
         atoms.calc = calc
         _save_cutoff_plot(

@@ -232,6 +232,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     add_ml_compute_dtype_args(parser)
     parser.add_argument(
+        "--electrostatics-damping-sigma",
+        type=float,
+        default=None,
+        help="Override learned-charge Coulomb erf damping sigma in Angstrom; set 0 to disable.",
+    )
+    parser.add_argument(
         "--ml-max-active-dimers",
         type=int,
         default=None,
