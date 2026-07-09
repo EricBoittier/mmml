@@ -23,10 +23,22 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
     for idx in monomer_indices:
         by_size[len(idx)].append(idx)
         
-    is_spooky = (
-        hasattr(model, "charges")
-        and hasattr(model, "total_charge")
-    ) or "spooky" in str(type(model)).lower()
+    def _model_accepts_kwarg(model, name):
+        fn = getattr(model, "__call__", None)
+        if fn is None:
+            return False
+        try:
+            return name in inspect.signature(fn).parameters
+        except (TypeError, ValueError):
+            return False
+    
+    supports_charges = _model_accepts_kwarg(model, "charges")
+    supports_spins = _model_accepts_kwarg(model, "spins")
+    is_spooky = supports_charges and supports_spins
+    # old check: is_spooky = (
+    #     hasattr(model, "charges")
+    #     and hasattr(model, "total_charge")
+    # ) or "spooky" in str(type(model)).lower()
 
     # Pre-build size-specific parameters
     size_params = {}
@@ -156,10 +168,24 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     
     n_waters = len(water_indices)
 
-    is_spooky = (
-        hasattr(model, "charges")
-        and hasattr(model, "total_charge")
-    ) or "spooky" in str(type(model)).lower()
+    import inspect
+
+    def _model_accepts_kwarg(model, name):
+        fn = getattr(model, "__call__", None)
+        if fn is None:
+            return False
+        try:
+            return name in inspect.signature(fn).parameters
+        except (TypeError, ValueError):
+            return False
+            
+    supports_charges = _model_accepts_kwarg(model, "charges")
+    supports_spins = _model_accepts_kwarg(model, "spins")
+    is_spooky = supports_charges and supports_spins
+    # is_spooky = (
+    #     hasattr(model, "charges")
+    #     and hasattr(model, "total_charge")
+    # ) or "spooky" in str(type(model)).lower()
 
     if isinstance(charges, dict):
         dimer_q = float(charges.get(45, charges.get(42, 0.0)))
