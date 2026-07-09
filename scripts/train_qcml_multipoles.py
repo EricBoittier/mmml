@@ -400,7 +400,8 @@ def main() -> None:
         train_count = 0.0
         remaining = args.max_structures
         epoch_paths = list(training_paths)
-        rng.shuffle(epoch_paths)
+        if remaining is None:
+            rng.shuffle(epoch_paths)
         for shard_path in epoch_paths:
             cache = restore_cache(shard_path)
             if remaining is not None:
