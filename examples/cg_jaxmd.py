@@ -204,6 +204,7 @@ DEFAULTS = {
 
     "write_dcd": True,
     "output_dir": ".",
+    "nvt_temp_schedule": None,
 }
 
 # Import load_cg_config from cg_common
@@ -280,6 +281,69 @@ PEPTIDE_BOND_K_EV = config.peptide_bond_k_ev
 WRITE_DCD = config.write_dcd
 OUTPUT_DIR = config.output_dir
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def parse_temp_schedule(schedule_str, total_steps):
+    """
+    Parses a temperature schedule string and returns a function T(step) -> Kelvin.
+    Supported formats:
+      1. A single float: "298.0" -> constant 298 K
+      2. "T1->T2" -> linear ramp from T1 to T2 over total_steps
+      3. Complex staged schedule: "298.0->398.0:0.25, 398.0:0.5, 398.0->298.0:0.25"
+    """
+    schedule_str = str(schedule_str).strip()
+    try:
+        val = float(schedule_str)
+        return lambda step: val
+    except ValueError:
+        pass
+    if "->" in schedule_str and ":" not in schedule_str:
+        parts = schedule_str.split("->")
+        T1 = float(parts[0])
+        T2 = float(parts[1])
+        return lambda step: T1 + (T2 - T1) * (step / max(1, total_steps))
+    stages = []
+    accum_frac = 0.0
+    for part in schedule_str.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" not in part:
+            raise ValueError(f"Invalid schedule segment (missing fraction): {part}")
+        expr, frac_str = part.split(":")
+        frac = float(frac_str)
+        start_frac = accum_frac
+        end_frac = accum_frac + frac
+        accum_frac = end_frac
+        if "->" in expr:
+            t_parts = expr.split("->")
+            T1 = float(t_parts[0])
+            T2 = float(t_parts[1])
+            stages.append((start_frac, end_frac, T1, T2, True))
+        else:
+            T = float(expr)
+            stages.append((start_frac, end_frac, T, T, False))
+    if abs(accum_frac - 1.0) > 1e-4:
+        stages = [(sf/accum_frac, ef/accum_frac, T1, T2, is_ramp) for sf, ef, T1, T2, is_ramp in stages]
+    def T_func(step):
+        frac = step / max(1, total_steps)
+        frac = min(max(frac, 0.0), 1.0)
+        for sf, ef, T1, T2, is_ramp in stages:
+            if sf <= frac <= ef:
+                if sf == ef:
+                    return T1
+                if is_ramp:
+                    segment_frac = (frac - sf) / (ef - sf)
+                    return T1 + (T2 - T1) * segment_frac
+                else:
+                    return T1
+        return stages[-1][2]
+    return T_func
+
+NVT_TEMP_SCHEDULE = config.nvt_temp_schedule
+if NVT_TEMP_SCHEDULE is not None:
+    nvt_temp_func = parse_temp_schedule(NVT_TEMP_SCHEDULE, NVT_TOTAL_STEPS)
+else:
+    nvt_temp_func = lambda step: temperature
 
 
 def minimize_peptide_only_in_charmm(sd_steps=1000, abnr_steps=1000):
@@ -1576,9 +1640,9 @@ _init_fn_nvt, _step_fn_nvt = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn
 _step_fn_nvt = jit(_step_fn_nvt)
 
 @jit
-def run_nvt_block(state, pi, pj, mask, e14, vdw14):
+def run_nvt_block(state, pi, pj, mask, e14, vdw14, target_temp_ev):
     def body_fn(i, s):
-        return _step_fn_nvt(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        return _step_fn_nvt(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=target_temp_ev)
     return jax.lax.fori_loop(0, NVT_BLOCK_STEPS, body_fn, state)
 
 
@@ -1711,7 +1775,9 @@ def next_md_key():
 update_pair_refs(np.asarray(min_r))
 pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-state = _init_fn_nvt(next_md_key(), min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+init_temp_k = nvt_temp_func(0)
+init_temp_ev = init_temp_k * kb
+state = _init_fn_nvt(next_md_key(), min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=init_temp_ev)
 
 traj_path_nvt = os.path.join(OUTPUT_DIR, "cg_nvt.traj")
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} and its .dcd counterpart ---")
@@ -1719,25 +1785,28 @@ traj_nvt = DualTrajectoryWriter(traj_path_nvt, atoms, dt_ps=dt, steps_per_frame=
 last_good_nvt_pos = np.asarray(min_r, dtype=np.float64)
 
 for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
+    curr_temp_k = nvt_temp_func(step)
+    curr_temp_ev = curr_temp_k * kb
+
     pos_before_block = np.asarray(state.position, dtype=np.float64)
     if np.isfinite(pos_before_block).all():
         last_good_nvt_pos = pos_before_block.copy()
     else:
-        print("[NVT] Non-finite positions detected before block; reverting to last-good checkpoint.")
+        print(f"[NVT] Non-finite positions detected before block; reverting to last-good checkpoint. (T={curr_temp_k:.1f} K)")
         pos_before_block = last_good_nvt_pos.copy()
         update_pair_refs(pos_before_block)
         pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
         state = _init_fn_nvt(next_md_key(), jnp.array(pos_before_block, dtype=jnp.float64),
-                             mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+                             mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=curr_temp_ev)
 
     # Update pair list on CPU (no JAX re-trace — shapes are fixed)
     update_pair_refs(pos_before_block)
     pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
     e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 
-    # Run the compiled block of steps
-    state = run_nvt_block(state, pi, pj, mask, e14, vdw14)
+    # Run the compiled block of steps with current target temperature
+    state = run_nvt_block(state, pi, pj, mask, e14, vdw14, curr_temp_ev)
 
     # Compute diagnostics directly from state and JITted hybrid_energy_fn
     curr_f = np.asarray(state.force)
@@ -1748,19 +1817,20 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
     max_dev, mean_dev = get_peptide_bond_diagnostics(state.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
 
     # Check for instability and repair
+    repair_threshold = max(NVT_REPAIR_TEMP_K, curr_temp_k + 100.0)
     unstable_nvt = (
         (not np.isfinite(curr_e))
         or (not np.isfinite(temp))
         or (not np.isfinite(max_bond))
-        or temp > NVT_REPAIR_TEMP_K
+        or temp > repair_threshold
         or max_bond > MAX_HX_BOND_LIMIT
         or (not np.isfinite(np.asarray(state.position)).all())
         or (max_dev > MAX_BOND_DEV_LIMIT)
     )
     if unstable_nvt:
-        if temp > NVT_REPAIR_TEMP_K:
+        if temp > repair_threshold:
             print(f"[REPAIR] NVT temperature exceeded repair threshold: "
-                  f"{temp:.1f} K > {NVT_REPAIR_TEMP_K:.1f} K")
+                  f"{temp:.1f} K > {repair_threshold:.1f} K")
         if max_bond > MAX_HX_BOND_LIMIT:
             print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å "
                   f"(max limit {MAX_HX_BOND_LIMIT} Å)")
@@ -1782,7 +1852,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         update_pair_refs(np.asarray(final_min_pos))
         pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state = _init_fn_nvt(next_md_key(), final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        state = _init_fn_nvt(next_md_key(), final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=curr_temp_ev)
         # Re-evaluate diagnostics
         curr_f = np.asarray(state.force)
         curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14))
@@ -1796,7 +1866,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         last_good_nvt_pos = np.asarray(state.position, dtype=np.float64).copy()
 
     print(f"NVT Step {step+NVT_BLOCK_STEPS:5d} | Tot Energy: {curr_e + ke:.4f} eV | "
-          f"Temp: {temp:.1f} K | Max H-X Bond: {max_bond:.2f} Å | "
+          f"Temp: {temp:.1f} K (target {curr_temp_k:.1f} K) | Max H-X Bond: {max_bond:.2f} Å | "
           f"Max/Mean Pep Bond Dev: {max_dev:.4f}/{mean_dev:.4f} Å")
 
 
