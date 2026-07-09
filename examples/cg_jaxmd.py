@@ -277,6 +277,7 @@ PEPTIDE_BOND_K_EV = config.peptide_bond_k_ev
 
 WRITE_DCD = config.write_dcd
 OUTPUT_DIR = config.output_dir
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def minimize_peptide_only_in_charmm(sd_steps=1000, abnr_steps=1000):
@@ -354,11 +355,12 @@ else:
 
     # Setup dummy PbcNbondCutoffs for nonbonded settings in gas phase
     nbond_cutoffs = PbcNbondCutoffs(
+        cubic_box_side_A=BOX_SIDE_A,
         cutnb=15.0,
-        ctofnb=12.0,
+        cutim=15.0,
         ctonnb=10.0,
-        c2ofnb=144.0,
-        c2onnb=100.0,
+        ctofnb=12.0,
+        ctexnb=999.0,
     )
     box = SolvatedPeptideBox(
         positions=np.asarray(build_result.positions, dtype=np.float64),
@@ -643,14 +645,23 @@ pep_dst_idx_jax = jnp.array(pep_dst_idx_np, dtype=jnp.int32)
 pep_src_idx_jax = jnp.array(pep_src_idx_np, dtype=jnp.int32)
 pep_ref_charge_total = float(np.asarray(nbond_data.charges[:n_trialanine]).sum())
 
-water_stacked_idx_jax = jnp.array(np.stack(monomer_indices[1:]), dtype=jnp.int32)
-water_n_atoms = 3
-water_dst_idx_np, water_src_idx_np = np.where(~np.eye(water_n_atoms, dtype=bool))
-water_dst_idx_jax = jnp.array(water_dst_idx_np, dtype=jnp.int32)
-water_src_idx_jax = jnp.array(water_src_idx_np, dtype=jnp.int32)
-water_z_jax = jax_z[water_stacked_idx_jax]
-water_flat_idx_jax = water_stacked_idx_jax.reshape(-1)
-water_ref_charge_total = float(np.asarray(nbond_data.charges[n_trialanine:n_trialanine + water_n_atoms]).sum())
+if len(monomer_indices) > 1:
+    water_stacked_idx_jax = jnp.array(np.stack(monomer_indices[1:]), dtype=jnp.int32)
+    water_n_atoms = 3
+    water_dst_idx_np, water_src_idx_np = np.where(~np.eye(water_n_atoms, dtype=bool))
+    water_dst_idx_jax = jnp.array(water_dst_idx_np, dtype=jnp.int32)
+    water_src_idx_jax = jnp.array(water_src_idx_np, dtype=jnp.int32)
+    water_z_jax = jax_z[water_stacked_idx_jax]
+    water_flat_idx_jax = water_stacked_idx_jax.reshape(-1)
+    water_ref_charge_total = float(np.asarray(nbond_data.charges[n_trialanine:n_trialanine + water_n_atoms]).sum())
+else:
+    water_stacked_idx_jax = jnp.zeros((0, 3), dtype=jnp.int32)
+    water_n_atoms = 3
+    water_dst_idx_jax = jnp.zeros((0, 2), dtype=jnp.int32)
+    water_src_idx_jax = jnp.zeros((0, 2), dtype=jnp.int32)
+    water_z_jax = jnp.zeros((0, 3), dtype=jnp.int32)
+    water_flat_idx_jax = jnp.zeros(0, dtype=jnp.int32)
+    water_ref_charge_total = 0.0
 
 
 def compute_peptide_ml_charges(r):
