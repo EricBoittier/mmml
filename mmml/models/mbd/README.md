@@ -35,6 +35,17 @@ For manifest caches, the final `--test-shards` are never restored during
 training. Validation uses the preceding `--validation-shards`, and the full
 partition is saved as `data_split.json`.
 
+Audit geometry scales, positivity, and force/torque conservation with:
+
+```console
+python scripts/audit_qcml_shards.py \
+  --cache orbax_cache/qcml_mbd \
+  --kind mbd \
+  --max-shards 3 \
+  --samples-per-shard 2000 \
+  --output artifacts/qcml_mbd/shard_audit.json
+```
+
 `qdo_pairwise_dispersion` implements the damped pairwise C6/C8/C10 expression
 as a separately testable baseline. It is not presented as equivalent to the
 full coupled-oscillator libMBD target used by QCML.

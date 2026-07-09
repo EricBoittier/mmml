@@ -27,6 +27,7 @@ from mmml.interfaces.pycharmmInterface.protein_charmm_build import (
 from mmml.interfaces.pycharmmInterface.nbonds_config import PbcNbondCutoffs
 from mmml.interfaces.pycharmmInterface.utils import get_Z_from_psf
 from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
+from mmml.interfaces.pycharmmInterface.import_pycharmm import CHARMM_HOME
 
 ONE_TO_THREE = {
     "A": "ALA", "R": "ARG", "N": "ASN", "D": "ASP", "C": "CYS",
@@ -34,6 +35,9 @@ ONE_TO_THREE = {
     "L": "LEU", "K": "LYS", "M": "MET", "F": "PHE", "P": "PRO",
     "S": "SER", "T": "THR", "W": "TRP", "Y": "TYR", "V": "VAL"
 }
+
+
+
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,20 +188,21 @@ def build_peptide_in_charmm(
     # Load parameters & generate segment under relaxed bomlev to prevent termination on toppar warnings
     from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_relaxed_bomlev
     with charmm_relaxed_bomlev(-5):
-        tp = toppar or protein_toppar_paths()
-        read.rtf(str(tp.rtf))
-        read.prm(str(tp.prm))
-
-        # Also load standard CGENFF RTF and PRM to get TIP3 water and general templates
+        # 1. Load CGENFF topology and parameters first
         from mmml.interfaces.pycharmmInterface.import_pycharmm import CGENFF_RTF
         from mmml.interfaces.pycharmmInterface.nbonds_config import (
             read_cgenff_prm,
             _rtf_path_without_drude_autogen,
         )
-        read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF), append=True)
+        read.rtf(_rtf_path_without_drude_autogen(CGENFF_RTF))
         read_cgenff_prm(bomlev=False)
 
-        # Load extra RTF/PRM files if provided
+        # 2. Append standard protein topology and parameters second
+        tp = toppar or protein_toppar_paths()
+        read.rtf(str(tp.rtf), append=True)
+        read.prm(str(tp.prm), append=True)
+
+        # 3. Load extra RTF/PRM files if provided
         if extra_rtfs:
             for rtf_file in extra_rtfs:
                 read.rtf(str(rtf_file), append=True)
@@ -247,7 +252,7 @@ def build_peptide_in_charmm(
         # Jitter slightly and do full nonbonded minimization to avoid saddle points
         pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
         rng = np.random.default_rng(seed + 1)
-        pos *= rng.uniform(0.95, 1.05, size=pos.shape)
+        pos += rng.uniform(-0.02, 0.02, size=pos.shape)
         coor.set_positions(pd.DataFrame(pos, columns=["x", "y", "z"]))
         
         apply_nbonds_kwargs(vacuum_nbond_kwargs(nbxmod=5))
@@ -303,12 +308,10 @@ def solvate_peptide_in_charmm(
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(seed)
 
-    # 1. Translate peptide to center of the box
+    # 1. Translate peptide to origin (0, 0, 0)
     peptide_pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float).copy()
     peptide_center = peptide_pos.mean(axis=0)
     peptide_pos -= peptide_center
-    box_center = np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
-    peptide_pos += box_center
     coor.set_positions(pd.DataFrame(peptide_pos, columns=["x", "y", "z"]))
 
     # 2. Check box suitability & warn if peptide spans too much
@@ -353,7 +356,7 @@ def solvate_peptide_in_charmm(
 
             packmol_inp_path = out_dir / "packmol_solvate.inp"
             packmol_out_path = out_dir / "packmol_solvate_out.pdb"
-            h_side = box_side_A - margin_A
+            h_side = box_side_A / 2 - margin_A
 
             packmol_input = f"""
 tolerance 2.0
@@ -363,12 +366,12 @@ seed {rng.integers(1000000)}
 
 structure {pep_pdb_path.name}
   number 1
-  fixed {box_side_A/2:.4f} {box_side_A/2:.4f} {box_side_A/2:.4f} 0.0 0.0 0.0
+  fixed 0.0 0.0 0.0 0.0 0.0 0.0
 end structure
 
 structure {tip3_pdb_src.name}
   number {n_waters}
-  inside box {margin_A:.1f} {margin_A:.1f} {margin_A:.1f} {h_side:.1f} {h_side:.1f} {h_side:.1f}
+  inside box {-h_side:.2f} {-h_side:.2f} {-h_side:.2f} {h_side:.2f} {h_side:.2f} {h_side:.2f}
 end structure
 """
             packmol_inp_path.write_text(packmol_input, encoding="utf-8")
@@ -386,17 +389,19 @@ end structure
     if use_grid_fallback:
         tip3 = _tip3_template()
         tip3_com = tip3.mean(axis=0)
+        # Shift existing peptide_pos to be positive for the grid placement check
+        shift = np.array([box_side_A / 2, box_side_A / 2, box_side_A / 2])
         oxygen_sites = _grid_oxygen_sites(
             n_waters=n_waters,
             box_side_A=box_side_A,
             spacing_A=water_spacing_A,
             margin_A=margin_A,
-            existing=peptide_pos,
+            existing=peptide_pos + shift,
             min_dist_A=min_peptide_water_dist_A,
             rng=rng,
             water_template=tip3,
         )
-        water_coords = np.vstack([site + (tip3 - tip3_com) for site in oxygen_sites])
+        water_coords = np.vstack([site - shift + (tip3 - tip3_com) for site in oxygen_sites])
 
     # 4. Load waters in CHARMM and apply coordinates
     read.sequence_string(" ".join(["TIP3"] * n_waters))
@@ -554,8 +559,20 @@ def qc_built_system(
         elem_u = atoms[u]["element"]
         elem_v = atoms[v]["element"]
         is_h_bond = (elem_u == 1) or (elem_v == 1)
+        is_h_h_bond = (elem_u == 1) and (elem_v == 1)
 
-        if is_h_bond:
+        if is_h_h_bond:
+            # Water H-H rigid constraint (should be around 1.514 Å)
+            if d < 1.40 or d > 1.65:
+                bad_bonds.append({
+                    "atoms": (u, v),
+                    "names": (atoms[u]["name"], atoms[v]["name"]),
+                    "resids": (atoms[u]["resid"], atoms[v]["resid"]),
+                    "elements": (elem_u, elem_v),
+                    "length": d,
+                    "type": "H-H",
+                })
+        elif is_h_bond:
             if d < min_hx_bond_A or d > max_hx_bond_A:
                 bad_bonds.append({
                     "atoms": (u, v),

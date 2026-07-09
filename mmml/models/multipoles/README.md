@@ -54,6 +54,17 @@ Manifest caches reserve the final `--test-shards` shards untouched and the
 preceding `--validation-shards` shards for validation. The exact paths are
 recorded in `data_split.json`.
 
+Audit sampled shards before training:
+
+```console
+python scripts/audit_qcml_shards.py \
+  --cache orbax_cache/qcml_multipoles_traceless \
+  --kind multipoles \
+  --max-shards 3 \
+  --samples-per-shard 2000 \
+  --output artifacts/qcml_multipoles/shard_audit.json
+```
+
 Generate metrics, per-structure CSV data, reference/prediction scatters, and
 error distributions with:
 
