@@ -37,12 +37,18 @@ python scripts/train_qcml_multipoles.py \
   --cache orbax_cache/qcml_multipoles_traceless/0 \
   --workdir artifacts/qcml_multipoles \
   --epochs 100 \
-  --batch-size 32
+  --batch-size 32 \
+  --bucket-width 8 \
+  --max-atoms 64 \
+  --max-structures 100000
 ```
 
 The loss gives equal weight to each degree rather than allowing the seven
 octupole components to dominate the scalar monopole. Checkpoints contain model
 parameters, optimizer state, configuration, and train/validation metrics.
+Atom-count buckets crop each batch to the bucket ceiling, reducing complete
+graph cost from the cache-wide maximum. `--max-atoms` excludes larger
+structures before splitting; omit it to retain all structures.
 
 Generate metrics, per-structure CSV data, reference/prediction scatters, and
 error distributions with:

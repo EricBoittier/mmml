@@ -11,8 +11,10 @@ from scripts.cache_qcml_multipoles_orbax import preprocess_examples
 from scripts.analyze_qcml_multipoles import error_metrics, generate_report
 from scripts.train_qcml_multipoles import (
     TrainConfig,
+    bucket_indices,
     build_steps,
     create_state,
+    eligible_indices,
     limit_cache,
     make_batch,
     multipole_loss,
@@ -151,6 +153,37 @@ def test_training_cache_limit_preserves_aligned_fields() -> None:
     assert limited["R"].shape[0] == 3
     assert limited["Z"].shape[0] == 3
     assert limited["metadata"] == 17
+
+
+def test_multipole_atom_buckets_crop_batch_shapes() -> None:
+    cache = {
+        "R": np.zeros((3, 9, 3), dtype=np.float32),
+        "Z": np.zeros((3, 9), dtype=np.int32),
+        "Q": np.zeros(3),
+        "S": np.ones(3),
+        "atom_mask": np.array(
+            [
+                [1, 1, 1, 0, 0, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 0, 0, 0, 0],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1],
+            ],
+            dtype=np.float32,
+        ),
+        "multipoles": np.zeros((3, 16), dtype=np.float32),
+    }
+    indices = eligible_indices(cache, max_atoms=5)
+    buckets = bucket_indices(cache, indices, bucket_width=4)
+    batch = make_batch(
+        cache,
+        np.array([0]),
+        np.ones(1, dtype=np.float32),
+        max_atoms=4,
+    )
+
+    np.testing.assert_array_equal(indices, np.array([0, 1]))
+    assert set(buckets) == {4, 8}
+    assert batch["positions"].shape == (4, 3)
+    assert batch["dst_idx"].shape == (12,)
 
 
 def test_analysis_metrics_and_report_outputs(tmp_path) -> None:

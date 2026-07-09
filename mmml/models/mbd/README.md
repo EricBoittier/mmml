@@ -20,12 +20,17 @@ python scripts/train_qcml_mbd.py \
   --cache orbax_cache/qcml_mbd/0 \
   --workdir artifacts/qcml_mbd \
   --epochs 100 \
-  --batch-size 16
+  --batch-size 16 \
+  --bucket-width 8 \
+  --max-atoms 64 \
+  --max-structures 100000
 ```
 
 The four loss weights are configurable with `--energy-weight`,
 `--force-weight`, `--c6-weight`, and `--alpha-weight`. C6 and alpha use
 `log1p` losses to handle their dynamic range.
+Atom-count bucketing crops positions and every atomic target to the bucket
+ceiling. `--max-atoms` filters oversized structures before the random split.
 
 `qdo_pairwise_dispersion` implements the damped pairwise C6/C8/C10 expression
 as a separately testable baseline. It is not presented as equivalent to the

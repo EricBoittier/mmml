@@ -7,7 +7,12 @@ import numpy as np
 
 from mmml.models.mbd import E3xMBDModel, mbd_energy_and_forces, qdo_pairwise_dispersion
 from scripts.cache_qcml_mbd_orbax import preprocess_examples
-from scripts.train_qcml_mbd import limit_cache, make_batch
+from scripts.train_qcml_mbd import (
+    bucket_indices,
+    eligible_indices,
+    limit_cache,
+    make_batch,
+)
 
 
 def test_qdo_pairwise_dispersion_counts_directed_pair_once() -> None:
@@ -97,3 +102,34 @@ def test_mbd_training_cache_limit() -> None:
     assert limited["R"].shape[0] == 2
     assert limited["E_mbd"].shape[0] == 2
     assert limited["scalar_metadata"] == 4
+
+
+def test_mbd_atom_buckets_crop_atomic_targets() -> None:
+    atom_mask = np.array(
+        [[1, 1, 0, 0, 0, 0], [1, 1, 1, 1, 1, 0]],
+        dtype=np.float32,
+    )
+    cache = {
+        "R": np.zeros((2, 6, 3), dtype=np.float32),
+        "Z": np.zeros((2, 6), dtype=np.int32),
+        "Q": np.zeros(2),
+        "S": np.ones(2),
+        "E_mbd": np.zeros(2),
+        "F_mbd": np.zeros((2, 6, 3)),
+        "C6_mbd": np.zeros((2, 6)),
+        "alpha_mbd": np.zeros((2, 6)),
+        "atom_mask": atom_mask,
+    }
+    indices = eligible_indices(cache, max_atoms=5)
+    buckets = bucket_indices(cache, indices, bucket_width=2)
+    batch = make_batch(
+        cache,
+        np.array([0]),
+        np.ones(1, dtype=np.float32),
+        max_atoms=2,
+    )
+
+    np.testing.assert_array_equal(indices, np.array([0, 1]))
+    assert set(buckets) == {2, 6}
+    assert batch["target_forces"].shape == (2, 3)
+    assert batch["target_c6"].shape == (2,)

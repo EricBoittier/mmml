@@ -78,6 +78,45 @@ def split_indices(
     return training, validation
 
 
+def eligible_indices(
+    cache: dict[str, np.ndarray],
+    max_atoms: int | None,
+) -> np.ndarray:
+    """Return structures satisfying the optional real-atom limit."""
+    atom_counts = np.asarray(cache["atom_mask"].sum(axis=1), dtype=np.int32)
+    if max_atoms is None:
+        return np.arange(len(atom_counts))
+    if max_atoms <= 0:
+        raise ValueError("max_atoms must be positive")
+    indices = np.flatnonzero(atom_counts <= max_atoms)
+    if not len(indices):
+        raise ValueError(f"No structures contain at most {max_atoms} atoms")
+    return indices
+
+
+def bucket_indices(
+    cache: dict[str, np.ndarray],
+    indices: np.ndarray,
+    bucket_width: int,
+) -> dict[int, np.ndarray]:
+    """Group indices by padded atom-count ceiling."""
+    if bucket_width <= 0:
+        raise ValueError("bucket_width must be positive")
+    atom_counts = np.asarray(cache["atom_mask"].sum(axis=1), dtype=np.int32)
+    buckets: dict[int, list[int]] = {}
+    for index in indices:
+        count = int(atom_counts[index])
+        ceiling = min(
+            ((count + bucket_width - 1) // bucket_width) * bucket_width,
+            cache["R"].shape[1],
+        )
+        buckets.setdefault(ceiling, []).append(int(index))
+    return {
+        ceiling: np.asarray(values, dtype=np.int64)
+        for ceiling, values in sorted(buckets.items())
+    }
+
+
 def iter_batches(
     indices: np.ndarray,
     batch_size: int,
@@ -97,15 +136,33 @@ def iter_batches(
         yield batch, example_mask
 
 
+def iter_bucket_batches(
+    buckets: dict[int, np.ndarray],
+    batch_size: int,
+    rng: np.random.Generator | None = None,
+) -> Iterator[tuple[np.ndarray, np.ndarray, int]]:
+    ceilings = np.asarray(list(buckets), dtype=np.int32)
+    if rng is not None:
+        rng.shuffle(ceilings)
+    for ceiling in ceilings:
+        for indices, example_mask in iter_batches(
+            buckets[int(ceiling)],
+            batch_size,
+            rng,
+        ):
+            yield indices, example_mask, int(ceiling)
+
+
 def make_batch(
     cache: dict[str, np.ndarray],
     indices: np.ndarray,
     example_mask: np.ndarray,
+    max_atoms: int | None = None,
 ) -> dict[str, jax.Array]:
     """Create a flattened, padding-safe E3x graph batch."""
-    positions = cache["R"][indices].astype(np.float32)
-    atomic_numbers = cache["Z"][indices].astype(np.int32)
-    atom_mask = cache["atom_mask"][indices].astype(np.float32)
+    positions = cache["R"][indices, :max_atoms].astype(np.float32)
+    atomic_numbers = cache["Z"][indices, :max_atoms].astype(np.int32)
+    atom_mask = cache["atom_mask"][indices, :max_atoms].astype(np.float32)
     batch_size, max_atoms = atomic_numbers.shape
     template_dst, template_src = e3x.ops.sparse_pairwise_indices(max_atoms)
     template_dst = np.asarray(template_dst)
@@ -211,15 +268,19 @@ def evaluate(
     indices: np.ndarray,
     batch_size: int,
     validation_step: Any,
+    bucket_width: int,
 ) -> float:
     if not len(indices):
         return float("nan")
     weighted_loss = 0.0
     count = 0.0
-    for batch_indices, example_mask in iter_batches(indices, batch_size):
+    buckets = bucket_indices(cache, indices, bucket_width)
+    for batch_indices, example_mask, max_atoms in iter_bucket_batches(
+        buckets, batch_size
+    ):
         loss, _ = validation_step(
             params,
-            make_batch(cache, batch_indices, example_mask),
+            make_batch(cache, batch_indices, example_mask, max_atoms),
         )
         weight = float(example_mask.sum())
         weighted_loss += float(loss) * weight
@@ -262,6 +323,8 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=1e-6)
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--max-structures", type=int)
+    parser.add_argument("--max-atoms", type=int)
+    parser.add_argument("--bucket-width", type=int, default=8)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--save-every", type=int, default=10)
     parser.add_argument("--features", type=int, default=64)
@@ -271,11 +334,15 @@ def main() -> None:
     args = parser.parse_args()
 
     cache = limit_cache(restore_cache(args.cache), args.max_structures)
-    training_indices, validation_indices = split_indices(
-        cache["R"].shape[0],
+    available_indices = eligible_indices(cache, args.max_atoms)
+    training_selection, validation_selection = split_indices(
+        len(available_indices),
         args.validation_fraction,
         args.seed,
     )
+    training_indices = available_indices[training_selection]
+    validation_indices = available_indices[validation_selection]
+    training_buckets = bucket_indices(cache, training_indices, args.bucket_width)
     config = TrainConfig(
         features=args.features,
         num_iterations=args.num_iterations,
@@ -283,10 +350,12 @@ def main() -> None:
         cutoff=args.cutoff,
     )
     model = E3xMultipoleModel(**asdict(config))
-    initial_indices, initial_mask = next(
-        iter_batches(training_indices, args.batch_size)
+    initial_indices, initial_mask, initial_max_atoms = next(
+        iter_bucket_batches(training_buckets, args.batch_size)
     )
-    initial_batch = make_batch(cache, initial_indices, initial_mask)
+    initial_batch = make_batch(
+        cache, initial_indices, initial_mask, initial_max_atoms
+    )
     state = create_state(
         model,
         initial_batch,
@@ -301,10 +370,10 @@ def main() -> None:
     for epoch in range(1, args.epochs + 1):
         train_total = 0.0
         train_count = 0.0
-        for batch_indices, example_mask in iter_batches(
-            training_indices, args.batch_size, rng
+        for batch_indices, example_mask, max_atoms in iter_bucket_batches(
+            training_buckets, args.batch_size, rng
         ):
-            batch = make_batch(cache, batch_indices, example_mask)
+            batch = make_batch(cache, batch_indices, example_mask, max_atoms)
             state, loss, _ = train_step(state, batch)
             weight = float(example_mask.sum())
             train_total += float(loss) * weight
@@ -318,6 +387,7 @@ def main() -> None:
                 validation_indices,
                 args.batch_size,
                 validation_step,
+                args.bucket_width,
             ),
         }
         print(
