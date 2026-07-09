@@ -14,6 +14,8 @@ from scripts.train_qcml_multipoles import (
     bucket_indices,
     build_steps,
     create_state,
+    target_rms_from_arrays,
+    target_rms_vector,
     eligible_indices,
     limit_cache,
     make_batch,
@@ -136,6 +138,38 @@ def test_multipole_loss_balances_degrees() -> None:
     assert degree_losses["l0"] == pytest.approx(4.0)
     assert degree_losses["l3"] == pytest.approx(4.0)
     assert loss == pytest.approx(2.0)
+
+
+def test_multipole_loss_uses_rms_and_charge_constraint() -> None:
+    target = jnp.zeros((1, 16))
+    prediction = target.at[:, 0].set(2.0).at[:, 9:16].set(4.0)
+    target_rms = jnp.ones(16).at[9:16].set(2.0)
+
+    loss, losses = multipole_loss(
+        prediction,
+        target,
+        jnp.ones(1),
+        charge=jnp.array([1.0]),
+        target_rms=target_rms,
+        charge_weight=0.5,
+    )
+
+    assert losses["l0"] == pytest.approx(4.0)
+    assert losses["l3"] == pytest.approx(4.0)
+    assert losses["charge"] == pytest.approx(1.0)
+    assert loss == pytest.approx(2.5)
+
+
+def test_target_rms_helpers_expand_degree_blocks() -> None:
+    targets = np.zeros((2, 16), dtype=np.float32)
+    targets[:, 1:4] = 2.0
+    target_rms = target_rms_from_arrays(targets)
+    vector = target_rms_vector(target_rms)
+
+    assert target_rms["l0"] == pytest.approx(1e-6)
+    assert target_rms["l1"] == pytest.approx(2.0)
+    assert vector.shape == (16,)
+    np.testing.assert_allclose(vector[1:4], 2.0)
 
 
 def test_training_cache_limit_preserves_aligned_fields() -> None:

@@ -23,6 +23,7 @@ def test_multipole_shard_audit_detects_consistent_data(tmp_path) -> None:
     assert report["multipoles"]["monopole_charge_max_abs_error"] == 0
     assert report["multipoles"]["quadrupole_max_abs_trace"] == 0
     assert report["pair_distance_bohr"]["median"] == 2
+    assert report["coordinate_origin"]["geometric_centroid_norm_bohr"]["median"] == 1
 
 
 def test_mbd_shard_audit_checks_force_and_positive_targets(tmp_path) -> None:
