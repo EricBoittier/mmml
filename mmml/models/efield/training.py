@@ -19,6 +19,7 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
+import jax.scipy.special
 
 import optax
 from optax import tree_utils as otu
@@ -240,6 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Add explicit E_total = E_nn + mu·Ef coupling")
     parser.add_argument("--field_scale", type=float, default=0.001,
                        help="Ef_phys = Ef_input * field_scale (au)")
+    parser.add_argument("--electrostatics_damping_sigma", type=float, default=4.0,
+                       help="Apply erf(r/sigma) damping to learned-charge Coulomb; set 0 to disable")
     parser.add_argument("--zbl", action="store_true",
                        help="Add ZBL nuclear repulsion for short-range stability")
     parser.add_argument(
@@ -341,6 +344,7 @@ class EFieldPhysNet(nn.Module):
     field_scale: float = 0.001  # Ef_phys [au] = Ef_input * field_scale
     # ZBL: Ziegler-Biersack-Littmark nuclear repulsion for short-range stability
     zbl: bool = False
+    electrostatics_damping_sigma: float = 4.0
 
     def setup(self):
         if self.zbl:
@@ -519,7 +523,11 @@ class EFieldPhysNet(nn.Module):
         r_ij_bohr = r_ij_angstrom * ANGSTROM_TO_BOHR
         q_src = atomic_charges[src_idx_flat]  # (B*E,)
         q_dst = atomic_charges[dst_idx_flat]  # (B*E,)
-        pair_coulomb_ha = (q_src * q_dst) / (r_ij_bohr + 1e-10)  # (B*E,) [Ha]
+        damping = 1.0
+        if self.electrostatics_damping_sigma > 0.0:
+            sigma = jnp.asarray(self.electrostatics_damping_sigma, dtype=r_ij_angstrom.dtype)
+            damping = jax.scipy.special.erf(r_ij_angstrom / sigma)
+        pair_coulomb_ha = (q_src * q_dst) * damping / (r_ij_bohr + 1e-10)  # (B*E,) [Ha]
         # Neighbor list counts each undirected pair twice → divide by 2
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_ha = jax.ops.segment_sum(pair_coulomb_ha, edge_batch, num_segments=B) / 2.0  # (B,)
@@ -1613,6 +1621,7 @@ def main(args=None):
         dipole_field_coupling=args.dipole_field_coupling,
         field_scale=args.field_scale,
         zbl=args.zbl,
+        electrostatics_damping_sigma=args.electrostatics_damping_sigma,
     )
 
 
@@ -1680,6 +1689,7 @@ def main(args=None):
             'dipole_field_coupling': args.dipole_field_coupling,
             'field_scale': args.field_scale,
             'zbl': args.zbl,
+            'electrostatics_damping_sigma': args.electrostatics_damping_sigma,
         },
         'training': {
             'num_train': args.num_train,

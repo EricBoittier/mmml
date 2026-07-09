@@ -141,7 +141,8 @@ class EFieldCalculator(ase_calc.Calculator):
                 model_keys = {'features', 'max_degree', 'num_iterations',
                               'num_basis_functions', 'cutoff', 'max_atomic_number',
                               'include_pseudotensors',
-                              'dipole_field_coupling', 'field_scale', 'zbl'}
+                              'dipole_field_coupling', 'field_scale', 'zbl',
+                              'electrostatics_damping_sigma'}
                 if 'model' in config and isinstance(config['model'], dict):
                     model_config = {k: v for k, v in config['model'].items()
                                     if k in model_keys}
@@ -171,6 +172,7 @@ class EFieldCalculator(ase_calc.Calculator):
                 'max_atomic_number': 55,
                 'include_pseudotensors': True,
                 'zbl': False,
+                'electrostatics_damping_sigma': 4.0,
             }
         
         # Apply runtime overrides

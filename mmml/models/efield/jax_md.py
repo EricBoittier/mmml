@@ -640,7 +640,7 @@ def main(args=None):
     model_keys = {'features', 'max_degree', 'num_iterations',
                   'num_basis_functions', 'cutoff', 'max_atomic_number',
                   'include_pseudotensors', 'dipole_field_coupling', 'field_scale',
-                  'zbl'}
+                  'zbl', 'electrostatics_damping_sigma'}
 
     if config_path is not None:
         config = load_config(config_path)

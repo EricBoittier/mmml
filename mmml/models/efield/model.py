@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import jax.scipy.special
 import flax.linen as nn
 import functools
 import e3x
@@ -20,6 +21,7 @@ class EFieldPhysNet(nn.Module):
     # When False (default) the existing implicit coupling through features is used.
     dipole_field_coupling: bool = False
     field_scale: float = 0.001  # Ef_phys [au] = Ef_input * field_scale
+    electrostatics_damping_sigma: float = 4.0
 
     def EFD(self, atomic_numbers, positions, Ef, dst_idx_flat, src_idx_flat, batch_segments, batch_size, dst_idx=None, src_idx=None):
         """
@@ -165,7 +167,11 @@ class EFieldPhysNet(nn.Module):
         r_ij = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
         q_src = atomic_charges[src_idx_flat]  # (B*E,)
         q_dst = atomic_charges[dst_idx_flat]  # (B*E,)
-        pair_coulomb = q_src * q_dst / (r_ij + 1e-10)  # (B*E,)
+        damping = 1.0
+        if self.electrostatics_damping_sigma > 0.0:
+            sigma = jnp.asarray(self.electrostatics_damping_sigma, dtype=r_ij.dtype)
+            damping = jax.scipy.special.erf(r_ij / sigma)
+        pair_coulomb = q_src * q_dst * damping / (r_ij + 1e-10)  # (B*E,)
         # Sum per molecule (each pair counted twice in neighbor list, so divide by 2)
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_energy = jax.ops.segment_sum(pair_coulomb, edge_batch, num_segments=B) / 2.0  # (B,)

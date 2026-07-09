@@ -18,5 +18,6 @@ nve_block_steps: 5000
 fire_cycles: 2
 
 peptide_bond_k_ev: 0.0
+max_bond_dev_limit: 99.0  # Disable bond deviation repair in gas phase
 write_dcd: true
 output_dir: "./output_15mer_ml"
