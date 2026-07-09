@@ -1603,13 +1603,20 @@ print(f"\nMinimization completed over {FIRE_CYCLES} cycles.")
 # ─────────────────────────────────────────────────────────────────────────────
 print("--- Running NVT Nose-Hoover Dynamics with JAX-MD ---")
 
-key = jax.random.PRNGKey(42)
+md_key = jax.random.PRNGKey(SEED)
+
+
+def next_md_key():
+    """Return a fresh PRNG key for velocity-generating MD initializers."""
+    global md_key
+    md_key, subkey = jax.random.split(md_key)
+    return subkey
 
 # Initialize starting NVT state
 update_pair_refs(np.asarray(min_r))
 pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-state = _init_fn_nvt(key, min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+state = _init_fn_nvt(next_md_key(), min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
 traj_path_nvt = os.path.join(OUTPUT_DIR, "cg_nvt.traj")
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} and its .dcd counterpart ---")
@@ -1626,7 +1633,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         update_pair_refs(pos_before_block)
         pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state = _init_fn_nvt(key, jnp.array(pos_before_block, dtype=jnp.float64),
+        state = _init_fn_nvt(next_md_key(), jnp.array(pos_before_block, dtype=jnp.float64),
                              mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
     # Update pair list on CPU (no JAX re-trace — shapes are fixed)
@@ -1662,6 +1669,9 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         if max_bond > MAX_HX_BOND_LIMIT:
             print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å "
                   f"(max limit {MAX_HX_BOND_LIMIT} Å)")
+        if max_dev > MAX_BOND_DEV_LIMIT:
+            print(f"[REPAIR] Peptide bond deviation exceeded repair threshold: "
+                  f"{max_dev:.4f} Å > {MAX_BOND_DEV_LIMIT:.4f} Å")
         repair_input_pos, repair_source = choose_finite_repair_positions(
             state.position, pos_before_block, last_good_nvt_pos, "NVT REPAIR"
         )
@@ -1686,13 +1696,14 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         update_pair_refs(np.asarray(final_min_pos))
         pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state = _init_fn_nvt(key, final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        state = _init_fn_nvt(next_md_key(), final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
         # Re-evaluate diagnostics
         curr_f = np.asarray(state.force)
         curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14))
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
         temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
         max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
+        max_dev, mean_dev = get_peptide_bond_diagnostics(state.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
         if np.isfinite(np.asarray(state.position)).all() and np.isfinite(curr_e):
             last_good_nvt_pos = np.asarray(state.position, dtype=np.float64).copy()
     else:
@@ -1722,7 +1733,7 @@ print("--- Running NVE Dynamics with JAX-MD to check stability ---")
 update_pair_refs(np.asarray(state.position))
 pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
 e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+state_nve = _init_fn_nve(next_md_key(), state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
 traj_path_nve = os.path.join(OUTPUT_DIR, "cg_nve.traj")
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} and its .dcd counterpart ---")
@@ -1746,7 +1757,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         update_pair_refs(pos_before_block)
         pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state_nve = _init_fn_nve(key, jnp.array(pos_before_block, dtype=jnp.float64),
+        state_nve = _init_fn_nve(next_md_key(), jnp.array(pos_before_block, dtype=jnp.float64),
                                  target_temp_ev, mass=jax_mass,
                                  pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
@@ -1783,6 +1794,9 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         if max_bond > MAX_HX_BOND_LIMIT:
             print(f"[REPAIR] Peptide H-X bond broke! Max bond length: {max_bond:.2f} Å "
                   f"(max limit {MAX_HX_BOND_LIMIT} Å)")
+        if max_dev > MAX_BOND_DEV_LIMIT:
+            print(f"[REPAIR] Peptide bond deviation exceeded repair threshold: "
+                  f"{max_dev:.4f} Å > {MAX_BOND_DEV_LIMIT:.4f} Å")
         repair_input_pos, repair_source = choose_finite_repair_positions(
             state_nve.position, pos_before_block, last_good_nve_pos, "NVE REPAIR"
         )
@@ -1807,13 +1821,14 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         update_pair_refs(np.asarray(final_min_pos))
         pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
         e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state_nve = _init_fn_nve(key, final_min_pos, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        state_nve = _init_fn_nve(next_md_key(), final_min_pos, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
         # Re-evaluate diagnostics
         curr_f = np.asarray(state_nve.force)
         curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
         temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
         max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
+        max_dev, mean_dev = get_peptide_bond_diagnostics(state_nve.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
         if np.isfinite(np.asarray(state_nve.position)).all() and np.isfinite(curr_e):
             last_good_nve_pos = np.asarray(state_nve.position, dtype=np.float64).copy()
             initial_nve_energy = curr_e + ke
