@@ -7,6 +7,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+import e3x
 import numpy as np
 import orbax.checkpoint as ocp
 
@@ -14,13 +15,13 @@ from mmml.models.multipoles.representations import irrep_blocks_to_traceless
 
 
 DEFAULT_DATASET = "qcml/dft_multipole_moments"
+DEFAULT_GEOMETRY_DATASET = "qcml/dft_force_field"
 DEFAULT_CACHE_DIR = Path("orbax_cache/qcml_multipoles_traceless")
 FIELD_ALIASES = {
     "R": ("R", "positions", "coordinates"),
     "Z": ("Z", "atomic_numbers", "nuclear_charges"),
     "Q": ("Q", "charge", "total_charge"),
-    "S": ("S", "spin", "multiplicity"),
-    "multipoles": ("multipole_moments", "multipoles"),
+    "S": ("S", "multiplicity", "spin"),
     "key_hash": ("key_hash",),
 }
 
@@ -41,7 +42,7 @@ def preprocess_examples(
     max_degree: int = 3,
     limit: int | None = None,
 ) -> dict[str, np.ndarray]:
-    """Convert a stream of NumPy examples to a stackable Orbax PyTree."""
+    """Convert matched ``(force_field, multipoles)`` examples to an Orbax PyTree."""
     records: dict[str, list[np.ndarray]] = {
         "R": [],
         "Z": [],
@@ -50,30 +51,51 @@ def preprocess_examples(
         "atom_mask": [],
         "multipoles": [],
     }
-    key_hashes: list[np.ndarray] = []
+    key_hashes: list[bytes] = []
     converted_examples = []
 
-    for index, example in enumerate(examples):
+    for index, pair in enumerate(examples):
         if limit is not None and index >= limit:
             break
-        positions = np.asarray(_field(example, "R"))
-        converted = irrep_blocks_to_traceless(
-            np.asarray(_field(example, "multipoles")),
-            max_degree=max_degree,
-        )
+        geometry, moments = pair
+        geometry_hash = bytes(np.asarray(_field(geometry, "key_hash")).item())
+        moments_hash = bytes(np.asarray(_field(moments, "key_hash")).item())
+        if geometry_hash != moments_hash:
+            raise ValueError(
+                f"Dataset key mismatch at example {index}: "
+                f"{geometry_hash!r} != {moments_hash!r}"
+            )
+
+        positions = np.asarray(_field(geometry, "R"))
+        charge = np.asarray(_field(geometry, "Q"))
+        blocks = {"l0_irrep": np.atleast_1d(charge).astype(positions.dtype)}
+        source_names = {
+            1: "pbe0_dipole",
+            2: "pbe0_quadrupole",
+            3: "pbe0_octupole",
+        }
+        for degree in range(1, max_degree + 1):
+            source_name = source_names.get(degree)
+            if source_name is None or source_name not in moments:
+                raise KeyError(f"Missing Cartesian target for degree l={degree}")
+            blocks[f"l{degree}_irrep"] = np.asarray(
+                e3x.so3.tensor_to_irreps(
+                    np.asarray(moments[source_name]), degree=degree
+                )
+            )
+        packed = np.concatenate([blocks[f"l{degree}_irrep"] for degree in range(max_degree + 1)])
+        converted = irrep_blocks_to_traceless(packed, max_degree=max_degree)
         converted_examples.append(
             {
                 "R": positions,
-                "Z": np.asarray(_field(example, "Z")),
-                "Q": np.asarray(_field(example, "Q")),
-                "S": np.asarray(_field(example, "S")),
-                "multipoles": np.asarray(_field(example, "multipoles")),
+                "Z": np.asarray(_field(geometry, "Z")),
+                "Q": charge,
+                "S": np.asarray(_field(geometry, "S")),
+                "multipoles": packed,
                 **{key: np.asarray(value) for key, value in converted.items()},
             }
         )
-        key_hash = _field(example, "key_hash", required=False)
-        if key_hash is not None:
-            key_hashes.append(np.asarray(key_hash))
+        key_hashes.append(geometry_hash)
         if index % 1000 == 0:
             print(f"Processed {index} examples")
 
@@ -100,8 +122,14 @@ def preprocess_examples(
             records[key].append(record[key])
 
     cache = {key: np.stack(values) for key, values in records.items()}
-    if len(key_hashes) == len(converted_examples):
-        cache["key_hash"] = np.stack(key_hashes)
+    max_hash_length = max(map(len, key_hashes))
+    cache["key_hash"] = np.stack(
+        [
+            np.pad(np.frombuffer(key_hash, dtype=np.uint8), (0, max_hash_length - len(key_hash)))
+            for key_hash in key_hashes
+        ]
+    )
+    cache["key_hash_length"] = np.asarray([len(key_hash) for key_hash in key_hashes])
     return cache
 
 
@@ -117,6 +145,7 @@ def load_orbax_cache(checkpoint: Path) -> dict[str, np.ndarray]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", default=DEFAULT_DATASET)
+    parser.add_argument("--geometry-dataset", default=DEFAULT_GEOMETRY_DATASET)
     parser.add_argument("--split", default="full")
     parser.add_argument("--data-dir", type=Path, default=Path("."))
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE_DIR)
@@ -132,9 +161,21 @@ def main() -> None:
             "dataset environment first"
         ) from exc
 
-    dataset = tfds.load(args.dataset, split=args.split, data_dir=args.data_dir)
+    read_config = tfds.ReadConfig(interleave_cycle_length=1)
+    geometry_dataset = tfds.load(
+        args.geometry_dataset,
+        split=args.split,
+        data_dir=args.data_dir,
+        read_config=read_config,
+    )
+    multipole_dataset = tfds.load(
+        args.dataset,
+        split=args.split,
+        data_dir=args.data_dir,
+        read_config=read_config,
+    )
     cache = preprocess_examples(
-        tfds.as_numpy(dataset),
+        zip(tfds.as_numpy(geometry_dataset), tfds.as_numpy(multipole_dataset)),
         max_degree=args.max_degree,
         limit=args.limit,
     )

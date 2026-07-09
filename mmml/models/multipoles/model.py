@@ -80,6 +80,7 @@ class E3xMultipoleModel(nn.Module):
                 max_degree=self.max_degree,
                 include_pseudotensors=False,
             )(x, basis, dst_idx=dst_idx, src_idx=src_idx)
+            message = message.astype(x.dtype)
             x = e3x.nn.add(x, message)
             x = e3x.nn.silu(x)
             x = e3x.nn.Dense(self.features)(x)
