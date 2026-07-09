@@ -8,6 +8,13 @@ import pytest
 
 from mmml.models.multipoles import E3xMultipoleModel, irrep_blocks_to_traceless
 from scripts.cache_qcml_multipoles_orbax import preprocess_examples
+from scripts.train_qcml_multipoles import (
+    TrainConfig,
+    build_steps,
+    create_state,
+    make_batch,
+    multipole_loss,
+)
 
 
 def test_irrep_blocks_to_traceless_shapes_and_traces() -> None:
@@ -89,3 +96,42 @@ def test_qcml_pair_preprocessing_joins_and_pads() -> None:
     assert cache["multipoles"].shape == (1, 16)
     assert cache["multipoles"][0, 0] == -1
     np.testing.assert_allclose(cache["multipoles"][0, 1:4], irreps[1], atol=1e-6)
+
+
+def test_training_batch_and_step_are_padding_safe() -> None:
+    cache = {
+        "R": np.array(
+            [
+                [[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [0.0, 0.0, 0.0]],
+                [[0.0, 0.0, 0.0], [0.0, 0.9, 0.0], [0.2, 0.0, 0.0]],
+            ],
+            dtype=np.float32,
+        ),
+        "Z": np.array([[8, 1, 0], [6, 1, 1]], dtype=np.int32),
+        "Q": np.array([0.0, 0.0], dtype=np.float32),
+        "S": np.array([1.0, 1.0], dtype=np.float32),
+        "atom_mask": np.array([[1, 1, 0], [1, 1, 1]], dtype=np.float32),
+        "multipoles": np.ones((2, 16), dtype=np.float32),
+    }
+    batch = make_batch(cache, np.array([0, 1]), np.ones(2, dtype=np.float32))
+    config = TrainConfig(features=4, num_iterations=1, num_basis_functions=3)
+    model = E3xMultipoleModel(**vars(config))
+    state = create_state(model, batch, seed=0, learning_rate=1e-3, weight_decay=0.0)
+    train_step, _ = build_steps(model, batch_size=2)
+
+    updated_state, loss, degree_losses = train_step(state, batch)
+
+    assert int(updated_state.step) == 1
+    assert np.isfinite(loss)
+    assert set(degree_losses) == {"l0", "l1", "l2", "l3"}
+    assert batch["edge_mask"].sum() == 8
+
+
+def test_multipole_loss_balances_degrees() -> None:
+    target = jnp.zeros((1, 16))
+    prediction = target.at[:, 0].set(2.0).at[:, 9:16].set(2.0)
+    loss, degree_losses = multipole_loss(prediction, target, jnp.ones(1))
+
+    assert degree_losses["l0"] == pytest.approx(4.0)
+    assert degree_losses["l3"] == pytest.approx(4.0)
+    assert loss == pytest.approx(2.0)

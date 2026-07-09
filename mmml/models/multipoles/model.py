@@ -39,6 +39,7 @@ class E3xMultipoleModel(nn.Module):
         batch_segments: jnp.ndarray | None = None,
         batch_size: int | None = None,
         atom_mask: jnp.ndarray | None = None,
+        edge_mask: jnp.ndarray | None = None,
     ) -> dict[str, jnp.ndarray]:
         positions = jnp.asarray(positions, dtype=jnp.float32)
         atomic_numbers = jnp.asarray(atomic_numbers).reshape(-1)
@@ -63,6 +64,8 @@ class E3xMultipoleModel(nn.Module):
             radial_fn=e3x.nn.reciprocal_bernstein,
             cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff),
         )
+        if edge_mask is not None:
+            basis = basis * jnp.asarray(edge_mask, dtype=basis.dtype)[:, None, None, None]
 
         x = e3x.nn.Embed(
             num_embeddings=self.max_atomic_number + 1,

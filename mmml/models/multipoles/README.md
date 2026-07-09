@@ -29,3 +29,17 @@ python scripts/cache_qcml_multipoles_orbax.py \
 
 It stores padded `R`, `Z`, `atom_mask`, `Q`, `S`, packed spherical multipoles,
 individual irrep blocks, and traceless Cartesian tensors.
+
+Train from that cache with:
+
+```console
+python scripts/train_qcml_multipoles.py \
+  --cache orbax_cache/qcml_multipoles_traceless/0 \
+  --workdir artifacts/qcml_multipoles \
+  --epochs 100 \
+  --batch-size 32
+```
+
+The loss gives equal weight to each degree rather than allowing the seven
+octupole components to dominate the scalar monopole. Checkpoints contain model
+parameters, optimizer state, configuration, and train/validation metrics.
