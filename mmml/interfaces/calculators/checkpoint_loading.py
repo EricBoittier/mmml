@@ -435,6 +435,7 @@ def _build_physnet_ef_calculator(
     params: Any,
     *,
     cutoff: float | None,
+    electrostatics_damping_sigma: float | None = None,
 ) -> Calculator:
     from mmml.utils.model_checkpoint import normalize_physnet_config, physnet_constructor_kwargs
     from mmml.models.physnetjax.physnetjax.calc.helper_mlp import get_ase_calc
@@ -450,6 +451,10 @@ def _build_physnet_ef_calculator(
     is_spooky = str(saved_config.get("model_type", model_config.get("model_type", ""))).lower() == "spooky"
     model_cls = SpookyPhysNet if is_spooky else PhysNet
     filtered_config = physnet_constructor_kwargs(model_config, model_cls)
+    if electrostatics_damping_sigma is not None and "electrostatics_damping_sigma" in getattr(
+        model_cls, "__dataclass_fields__", {}
+    ):
+        filtered_config["electrostatics_damping_sigma"] = float(electrostatics_damping_sigma)
     if "max_padded_atoms" not in filtered_config:
         raise ValueError(
             "PhysNet checkpoint config is missing required field "
@@ -472,6 +477,7 @@ def create_calculator_from_checkpoint(
     cutoff: float | None = None,
     use_dcmnet_dipole: bool = False,
     disable_physnet_point_coulomb: bool = False,
+    electrostatics_damping_sigma: float | None = None,
 ) -> Calculator:
     """Load a trained MMML model and return an ASE calculator."""
     bundle = load_checkpoint_bundle(Path(checkpoint_path))
@@ -495,4 +501,9 @@ def create_calculator_from_checkpoint(
             use_dcmnet_dipole=use_dcmnet_dipole,
         )
 
-    return _build_physnet_ef_calculator(bundle.config, bundle.params, cutoff=cutoff)
+    return _build_physnet_ef_calculator(
+        bundle.config,
+        bundle.params,
+        cutoff=cutoff,
+        electrostatics_damping_sigma=electrostatics_damping_sigma,
+    )

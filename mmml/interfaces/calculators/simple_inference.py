@@ -354,6 +354,7 @@ def create_calculator_from_checkpoint(
     cutoff: Optional[float] = None,
     use_dcmnet_dipole: bool = False,
     disable_physnet_point_coulomb: bool = False,
+    electrostatics_damping_sigma: Optional[float] = None,
 ) -> Calculator:
     """Load model parameters and return a ready-to-use calculator."""
     from mmml.interfaces.calculators.checkpoint_loading import (
@@ -366,4 +367,5 @@ def create_calculator_from_checkpoint(
         cutoff=cutoff,
         use_dcmnet_dipole=use_dcmnet_dipole,
         disable_physnet_point_coulomb=disable_physnet_point_coulomb,
+        electrostatics_damping_sigma=electrostatics_damping_sigma,
     )

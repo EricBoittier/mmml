@@ -12,6 +12,7 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 import jax.scipy.linalg
+import jax.scipy.special
 from jax import Array
 # from jax.experimental import mesh_utils
 # from jax.sharding import Mesh
@@ -62,7 +63,7 @@ class PhysNet(nn.Module):
     use_energy_bias: bool = False
     use_pbc: bool = False
     include_electrostatics: bool = True
-    electrostatics_damping_sigma: float = 0.0
+    electrostatics_damping_sigma: float = 4.0
 
     @property
     def natoms(self) -> int:

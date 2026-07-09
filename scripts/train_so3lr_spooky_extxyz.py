@@ -843,8 +843,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--electrostatics-damping-sigma",
         type=float,
-        default=0.0,
-        help="Apply erf(r/sigma) damping to the learned-charge Coulomb term; SO3LR uses sigma=4.",
+        default=4.0,
+        help="Apply erf(r/sigma) damping to the learned-charge Coulomb term; set 0 to disable.",
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--log-every", type=int, default=10000, help="Structure interval while parsing extxyz")
