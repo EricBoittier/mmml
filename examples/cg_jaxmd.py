@@ -215,8 +215,6 @@ FIRE_PRINT_FREQ = int(_settings.fire_print_freq)
 FIRE_BLOCK_STEPS = int(_settings.fire_block_steps)
 
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 NVT_TOTAL_STEPS = int(_settings.nvt_total_steps)
 NVT_BLOCK_STEPS = int(_settings.nvt_block_steps)
 
@@ -233,43 +231,11 @@ MAX_HX_BOND_LIMIT = float(_settings.max_hx_bond_limit)
 NVT_REPAIR_TEMP_K = float(_settings.nvt_repair_temp_k)
 NVE_REPAIR_TEMP_K = float(_settings.nve_repair_temp_k)
 SEED = int(_settings.seed)
-=======
-NVT_TOTAL_STEPS = 100000
-=======
-NVT_TOTAL_STEPS = 8000000
->>>>>>> 2cdbc91aa (asdf)
-NVT_BLOCK_STEPS = 100
-
-NVE_TOTAL_STEPS = 8000000
-NVE_BLOCK_STEPS = 500
-FIRE_CYCLES = 2
-
-NWATER = 600
-BOX_SIDE_A = 28.0
-NL_BUFFER = 2.0
-# Extra headroom fraction for padded pair array (5%)
-MAX_PAIRS_HEADROOM = 1.15
-MAX_HX_BOND_LIMIT = 1.5
-NVT_REPAIR_TEMP_K = 375.0
-NVE_REPAIR_TEMP_K = 400.0
-SEED = 42
->>>>>>> 5ce097cb2 (asdf)
 # Define simulation conditions
-<<<<<<< HEAD
 temperature = float(_settings.temperature)  # Kelvin
 kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
 target_temp_ev = temperature * kb
-<<<<<<< HEAD
 dt_fs = float(_settings.dt_fs)  # time step in femtoseconds
-=======
-dt_fs = 0.25  # time step in femtoseconds
->>>>>>> 5ce097cb2 (asdf)
-=======
-temperature = 298.0  # Kelvin
-kb = 8.617333262145e-5  # eV/K (Boltzmann constant in eV/K)
-target_temp_ev = temperature * kb
-dt_fs = 0.125  # time step in femtoseconds
->>>>>>> 2cdbc91aa (asdf)
 dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Option: Treat peptide-water intermolecular interactions with ML instead of MM
@@ -293,7 +259,6 @@ START_PEPTIDE_TRAJ_INDEX = int(_settings.start_peptide_traj_index)
 
 # Optional PHI/PSI restraints for JAX-MD. If targets are None and a trajectory
 # frame is loaded, targets are read from that frame's info when available.
-<<<<<<< HEAD
 CONSTRAIN_PHI_PSI = bool(_settings.constrain_phi_psi)
 PHI_TARGET_DEG = _settings.phi_target_deg
 PSI_TARGET_DEG = _settings.psi_target_deg
@@ -306,15 +271,6 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 ensure_pycharmm_loaded()
 pycharmm_loud()
-=======
-CONSTRAIN_PHI_PSI = False
-PHI_TARGET_DEG = None
-PSI_TARGET_DEG = None
-DIHEDRAL_RESTRAINT_K_EV = 1.0
-PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
-PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
-PEPTIDE_BOND_K_EV = 10.0  # Force constant for harmonic restraints on all peptide bonds (eV/Å^2)
->>>>>>> 2cdbc91aa (asdf)
 
 
 
