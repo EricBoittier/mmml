@@ -1,0 +1,31 @@
+# E3x molecular multipoles
+
+`E3xMultipoleModel` predicts the 16 real spherical components for molecular
+multipoles through `l=3` from coordinates `R`, atomic numbers `Z`, total charge
+`Q`, and spin/multiplicity `S`. The output also includes symmetric traceless
+Cartesian tensors with shapes `(3,)`, `(3, 3)`, and `(3, 3, 3)`.
+
+Inputs use flattened atoms and E3x sparse pair indices:
+
+```python
+dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(len(Z))
+variables = model.init(key, R, Z, Q[None], S[None], dst_idx, src_idx)
+prediction = model.apply(variables, R, Z, Q[None], S[None], dst_idx, src_idx)
+loss = jnp.mean((prediction["multipoles"] - target_multipoles) ** 2)
+```
+
+For batches, concatenate atoms and edges, offset each molecule's edge indices,
+and pass `batch_segments` plus the static `batch_size`. Coordinates and targets
+must refer to the same molecular origin because multipoles of charged systems
+are origin dependent.
+
+The QCML cache utility is:
+
+```console
+python scripts/cache_qcml_multipoles_orbax.py \
+  --data-dir . \
+  --cache-dir orbax_cache/qcml_multipoles_traceless
+```
+
+It stores padded `R`, `Z`, `atom_mask`, `Q`, `S`, packed spherical multipoles,
+individual irrep blocks, and traceless Cartesian tensors.
