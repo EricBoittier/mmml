@@ -197,7 +197,7 @@ WATER_ML_CHARGE_TOTAL_CORRECTION = True
 PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
 WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = True
 DEBUG = True
-
+MAX_BOND_DEV_LIMIT = 0.35
 # Optional: start from a peptide-only frame produced by
 # scripts/scan_trialanine_phi_psi_pes.py. The frame replaces the first
 # n_trialanine coordinates in the solvated box before minimization/dynamics.
@@ -1446,7 +1446,7 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         or temp > NVT_REPAIR_TEMP_K
         or max_bond > MAX_HX_BOND_LIMIT
         or (not np.isfinite(np.asarray(state.position)).all())
-        or (max_dev > 0.35)
+        or (max_dev > MAX_BOND_DEV_LIMIT)
     )
     if unstable_nvt:
         if temp > NVT_REPAIR_TEMP_K:
@@ -1567,7 +1567,7 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         or temp > NVE_REPAIR_TEMP_K
         or max_bond > MAX_HX_BOND_LIMIT
         or (not np.isfinite(np.asarray(state_nve.position)).all())
-        or (max_dev > 0.35)
+        or (max_dev > MAX_BOND_DEV_LIMIT)
     )
     if unstable_nve:
         if temp > NVE_REPAIR_TEMP_K:
