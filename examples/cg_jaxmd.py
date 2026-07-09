@@ -1402,7 +1402,7 @@ def scale_broken_h_bonds(positions, box_sz, h_idx, x_idx, threshold=1.3, target=
 
 # Helper function to repair structures using PyCHARMM minimization
 def repair_structure_in_charmm(positions):
-    print("\n[REPAIR] Temperature spike or NaN detected! Unfolding and repairing structure in CHARMM...")
+    print("\n[REPAIR] Minimizing structure in PyCHARMM...")
     pos_np = np.asarray(positions)
     if not np.isfinite(pos_np).all():
         n_bad = int((~np.isfinite(pos_np)).any(axis=-1).sum())
@@ -1680,6 +1680,9 @@ for cycle in range(FIRE_CYCLES):
         frame.set_positions(unfold_coordinates(np.asarray(fire_state.position), box_size, _mon_stacked_groups))
         frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
         traj_fire.write(frame)
+
+    # Print energy breakdown after fire cycle completes
+    diagnose_energy(fire_state.position, label=f" Cycle {cycle+1} completed")
 
     # Repair the minimized structures in CHARMM at the end of every cycle
     # Use fire_state.position (reverted to pre-NaN if divergence occurred)
