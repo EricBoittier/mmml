@@ -69,9 +69,6 @@ def test_e3x_multipole_model_output_shapes() -> None:
     prediction = model.apply(variables, *arguments)
 
     assert prediction["multipoles"].shape == (1, 16)
-    assert prediction["l1_dipole_tensor"].shape == (1, 3)
-    assert prediction["l2_quadrupole_tensor"].shape == (1, 3, 3)
-    assert prediction["l3_octupole_tensor"].shape == (1, 3, 3, 3)
 
 
 def test_qcml_pair_preprocessing_joins_and_pads() -> None:

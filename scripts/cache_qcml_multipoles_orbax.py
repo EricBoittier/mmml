@@ -11,7 +11,6 @@ from typing import Any
 import numpy as np
 import orbax.checkpoint as ocp
 
-from mmml.models.multipoles.representations import irrep_blocks_to_traceless
 from mmml.data.orbax_shards import write_orbax_shards
 
 
@@ -44,16 +43,8 @@ def preprocess_examples(
     limit: int | None = None,
 ) -> dict[str, np.ndarray]:
     """Convert matched ``(force_field, multipoles)`` examples to an Orbax PyTree."""
-    records: dict[str, list[np.ndarray]] = {
-        "R": [],
-        "Z": [],
-        "Q": [],
-        "S": [],
-        "atom_mask": [],
-        "multipoles": [],
-    }
     key_hashes: list[bytes] = []
-    converted_examples = []
+    converted_examples: list[dict[str, np.ndarray]] = []
 
     for index, pair in enumerate(examples):
         if limit is not None and index >= limit:
@@ -87,7 +78,6 @@ def preprocess_examples(
                 )
             blocks[f"l{degree}_irrep"] = block
         packed = np.concatenate([blocks[f"l{degree}_irrep"] for degree in range(max_degree + 1)])
-        converted = irrep_blocks_to_traceless(packed, max_degree=max_degree)
         converted_examples.append(
             {
                 "R": positions,
@@ -95,7 +85,6 @@ def preprocess_examples(
                 "Q": charge,
                 "S": np.asarray(_field(geometry, "S")),
                 "multipoles": packed,
-                **{key: np.asarray(value) for key, value in converted.items()},
             }
         )
         key_hashes.append(geometry_hash)
@@ -106,25 +95,25 @@ def preprocess_examples(
         raise ValueError("Dataset produced no examples")
 
     max_atoms = max(record["R"].shape[0] for record in converted_examples)
-    tensor_keys = [
-        key
-        for key in converted_examples[0]
-        if key not in {"R", "Z", "Q", "S", "multipoles"}
-    ]
-    for key in tensor_keys:
-        records[key] = []
-
-    for record in converted_examples:
+    num_examples = len(converted_examples)
+    positions = np.zeros((num_examples, max_atoms, 3), dtype=np.float32)
+    atomic_numbers = np.zeros((num_examples, max_atoms), dtype=np.int32)
+    atom_mask = np.zeros((num_examples, max_atoms), dtype=np.float32)
+    for example_index, record in enumerate(converted_examples):
         num_atoms = record["R"].shape[0]
-        records["R"].append(np.pad(record["R"], ((0, max_atoms - num_atoms), (0, 0))))
-        records["Z"].append(np.pad(record["Z"], (0, max_atoms - num_atoms)))
-        records["atom_mask"].append(
-            np.pad(np.ones(num_atoms, dtype=np.float32), (0, max_atoms - num_atoms))
-        )
-        for key in ("Q", "S", "multipoles", *tensor_keys):
-            records[key].append(record[key])
-
-    cache = {key: np.stack(values) for key, values in records.items()}
+        positions[example_index, :num_atoms] = record["R"]
+        atomic_numbers[example_index, :num_atoms] = record["Z"]
+        atom_mask[example_index, :num_atoms] = 1
+    cache = {
+        "R": positions,
+        "Z": atomic_numbers,
+        "atom_mask": atom_mask,
+        "Q": np.stack([record["Q"] for record in converted_examples]),
+        "S": np.stack([record["S"] for record in converted_examples]),
+        "multipoles": np.stack(
+            [record["multipoles"] for record in converted_examples]
+        ).astype(np.float32),
+    }
     max_hash_length = max(map(len, key_hashes))
     cache["key_hash"] = np.stack(
         [

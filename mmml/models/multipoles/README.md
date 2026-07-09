@@ -2,8 +2,9 @@
 
 `E3xMultipoleModel` predicts the 16 real spherical components for molecular
 multipoles through `l=3` from coordinates `R`, atomic numbers `Z`, total charge
-`Q`, and spin/multiplicity `S`. The output also includes symmetric traceless
-Cartesian tensors with shapes `(3,)`, `(3, 3)`, and `(3, 3, 3)`.
+`Q`, and spin/multiplicity `S`. Convert predictions on demand with
+`irrep_blocks_to_traceless` to obtain symmetric traceless Cartesian tensors
+with shapes `(3,)`, `(3, 3)`, and `(3, 3, 3)`.
 
 Inputs use flattened atoms and E3x sparse pair indices:
 

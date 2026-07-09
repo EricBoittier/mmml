@@ -9,9 +9,6 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
-from .representations import irrep_blocks_to_traceless
-
-
 class E3xMultipoleModel(nn.Module):
     """Predict molecular traceless multipoles through ``l=max_degree``.
 
@@ -109,10 +106,4 @@ class E3xMultipoleModel(nn.Module):
             num_segments=batch_size,
         )
         packed_irreps = molecular_irreps[:, 0, :]
-        return {
-            "multipoles": packed_irreps,
-            **irrep_blocks_to_traceless(
-                packed_irreps,
-                max_degree=self.max_degree,
-            ),
-        }
+        return {"multipoles": packed_irreps}
