@@ -25,11 +25,15 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from mmml.data.orbax_shards import partition_shards
 from mmml.models.multipoles import E3xMultipoleModel, irrep_blocks_to_traceless
 try:
     from scripts.train_qcml_multipoles import (
         TrainConfig,
+        bucket_indices,
+        eligible_indices,
         iter_batches,
+        iter_bucket_batches,
         make_batch,
         restore_cache,
         split_indices,
@@ -37,7 +41,10 @@ try:
 except ModuleNotFoundError:
     from train_qcml_multipoles import (
         TrainConfig,
+        bucket_indices,
+        eligible_indices,
         iter_batches,
+        iter_bucket_batches,
         make_batch,
         restore_cache,
         split_indices,
@@ -79,6 +86,56 @@ def select_indices(
     return training if split == "train" else validation
 
 
+def resolve_split_paths(
+    cache: Path,
+    checkpoint: Path,
+    split: str,
+    validation_shards: int,
+    test_shards: int,
+    data_split: Path | None,
+) -> list[Path] | None:
+    """Return shard paths for manifest caches, or None for single-shard caches."""
+    split_path = data_split or checkpoint.parent / "data_split.json"
+    if split_path.exists():
+        split_data = json.loads(split_path.read_text(encoding="utf-8"))
+        if split == "all":
+            paths = split_data.get("train", []) + split_data.get("validation", []) + split_data.get("test", [])
+        else:
+            paths = split_data.get(split, [])
+        if not paths:
+            raise ValueError(f"No paths found for split={split!r} in {split_path}")
+        return [Path(path) for path in paths]
+
+    if (cache / "manifest.json").exists():
+        partitions = partition_shards(
+            cache,
+            validation_shards=validation_shards,
+            test_shards=test_shards,
+        )
+        if split == "all":
+            return partitions["train"] + partitions["validation"] + partitions["test"]
+        return partitions[split]
+    return None
+
+
+def select_single_shard_indices(
+    cache: dict[str, np.ndarray],
+    split: str,
+    validation_fraction: float,
+    seed: int,
+    max_atoms: int | None,
+) -> np.ndarray:
+    eligible = eligible_indices(cache, max_atoms)
+    if split == "all":
+        return eligible
+    training, validation = split_indices(len(eligible), validation_fraction, seed)
+    if split == "train":
+        return eligible[training]
+    if split == "validation":
+        return eligible[validation]
+    raise ValueError("Single-shard cache has no held-out test split; use --split validation/all/train")
+
+
 def predict(
     model: E3xMultipoleModel,
     params: Any,
@@ -112,6 +169,48 @@ def predict(
         valid_count = int(example_mask.sum())
         predictions.append(np.asarray(output["multipoles"][:valid_count]))
     return np.concatenate(predictions, axis=0)
+
+
+def predict_bucketed(
+    model: E3xMultipoleModel,
+    params: Any,
+    cache: dict[str, np.ndarray],
+    indices: np.ndarray,
+    batch_size: int,
+    bucket_width: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Run atom-count bucketed batches and discard repeated final-batch padding."""
+    predictions = []
+    ordered_indices = []
+    buckets = bucket_indices(cache, indices, bucket_width)
+    for batch_indices, example_mask, max_atoms in iter_bucket_batches(
+        buckets,
+        batch_size,
+    ):
+        batch = make_batch(cache, batch_indices, example_mask, max_atoms)
+        inputs = {
+            key: batch[key]
+            for key in (
+                "positions",
+                "atomic_numbers",
+                "charge",
+                "spin",
+                "dst_idx",
+                "src_idx",
+                "batch_segments",
+                "atom_mask",
+                "edge_mask",
+            )
+        }
+        output = model.apply(
+            {"params": params},
+            **inputs,
+            batch_size=batch_size,
+        )
+        valid_count = int(example_mask.sum())
+        predictions.append(np.asarray(output["multipoles"][:valid_count]))
+        ordered_indices.append(batch_indices[:valid_count])
+    return np.concatenate(predictions, axis=0), np.concatenate(ordered_indices, axis=0)
 
 
 def _degree_blocks(values: np.ndarray) -> dict[int, np.ndarray]:

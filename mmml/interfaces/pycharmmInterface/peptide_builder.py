@@ -526,6 +526,9 @@ def infer_charge_and_spin_from_psf(psf_path: Path | str) -> tuple[int, float]:
     n_electrons = total_z - total_charge
 
     multiplicity = 1.0 if n_electrons % 2 == 0 else 2.0
+    print("psf: ", psf_path)
+    print("total_charge: ", total_charge)
+    print("multiplicity: ", multiplicity)
     return total_charge, multiplicity
 
 
