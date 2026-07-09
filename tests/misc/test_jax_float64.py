@@ -41,7 +41,7 @@ with warnings.catch_warnings(record=True):
     assert x.dtype == jnp.float32, f"float64 truncated to float32 when x64 off, got {x.dtype}"
 print("OK")
 """
-    ret, out = _run_in_subprocess(code)
+    ret, out = _run_in_subprocess(code, env={"JAX_ENABLE_X64": "false"})
     assert ret == 0, f"Subprocess failed: {out}"
     assert "OK" in out
 
