@@ -2432,6 +2432,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         cmd.extend(["--md-stages", _default_stages[args.setup]])
     _append_optional(cmd, "--tag", getattr(args, "tag", None))
     _append_optional(cmd, "--checkpoint", args.checkpoint)
+    _append_optional(cmd, "--electrostatics-damping-sigma", getattr(args, "electrostatics_damping_sigma", None))
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--ps-nve", getattr(args, "ps_nve", None))
@@ -2963,8 +2964,9 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         cmd.extend(["--n-molecules", str(args.n_molecules)])
     _append_optional(cmd, "--builder", getattr(args, "builder", None))
     if not skip_box_size_for_cmd:
-        _append_optional(cmd, "--box-size", args.box_size)
+    _append_optional(cmd, "--box-size", args.box_size)
     _append_optional(cmd, "--checkpoint", args.checkpoint)
+    _append_optional(cmd, "--electrostatics-damping-sigma", getattr(args, "electrostatics_damping_sigma", None))
     _append_optional(cmd, "--output-dir", args.output_dir)
     _append_optional(cmd, "--template-pdb", args.template_pdb)
     cmd.extend(["--seed", str(args.seed)])

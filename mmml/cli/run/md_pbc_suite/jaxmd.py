@@ -110,6 +110,12 @@ def main(argv: list[str] | None = None) -> int:
     apply_xla_cuda_timer_log_filter()
     p = argparse.ArgumentParser()
     p.add_argument("--checkpoint", type=Path, default=None)
+    p.add_argument(
+        "--electrostatics-damping-sigma",
+        type=float,
+        default=None,
+        help="Override learned-charge Coulomb erf damping sigma in Angstrom; set 0 to disable.",
+    )
     p.add_argument("--output-dir", type=Path, default=Path("artifacts/md_10mer_mmml_pbc_suite_jaxmd"))
     p.add_argument("--template-pdb", type=Path, default=default_meoh_template_pdb())
     p.add_argument("--n-molecules", type=int, default=10)
@@ -698,6 +704,7 @@ def main(argv: list[str] | None = None) -> int:
         defer_xla_gpu_warmup=bool(args.skip_jit_warmup),
         ml_batch_size=getattr(args, "ml_batch_size", None),
         ml_max_active_dimers=getattr(args, "ml_max_active_dimers", None),
+        electrostatics_damping_sigma=getattr(args, "electrostatics_damping_sigma", None),
         ml_compute_dtype=getattr(args, "ml_compute_dtype", None),
     )
     cutoff = CutoffParameters(ml_switch_width=ml_w, mm_switch_on=mm_on, mm_switch_width=mm_w)
