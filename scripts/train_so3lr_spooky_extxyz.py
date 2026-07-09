@@ -326,6 +326,7 @@ def create_model(args: argparse.Namespace, max_atoms: int) -> SpookyPhysNet:
         zbl=not args.no_zbl,
         efa=args.efa,
         use_energy_bias=args.use_energy_bias,
+        electrostatics_damping_sigma=args.electrostatics_damping_sigma,
     )
 
 
@@ -839,6 +840,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-zbl", action="store_true")
     parser.add_argument("--efa", action="store_true")
     parser.add_argument("--use-energy-bias", action="store_true")
+    parser.add_argument(
+        "--electrostatics-damping-sigma",
+        type=float,
+        default=0.0,
+        help="Apply erf(r/sigma) damping to the learned-charge Coulomb term; SO3LR uses sigma=4.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--log-every", type=int, default=10000, help="Structure interval while parsing extxyz")
     parser.add_argument("--log-every-steps", type=int, default=50)

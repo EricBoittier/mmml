@@ -55,6 +55,7 @@ class SpookyPhysNet(nn.Module):
     efa: bool = False
     use_energy_bias: bool = False
     use_pbc: bool = False
+    electrostatics_damping_sigma: float = 0.0
 
     @property
     def natoms(self) -> int:
@@ -126,6 +127,7 @@ class SpookyPhysNet(nn.Module):
             "efa": self.efa,
             "use_energy_bias": self.use_energy_bias,
             "use_pbc": self.use_pbc,
+            "electrostatics_damping_sigma": self.electrostatics_damping_sigma,
         }
 
     def energy(
@@ -777,6 +779,9 @@ class SpookyPhysNet(nn.Module):
         # R2: Long-range Coulomb potential with safe distance
         r2 = one_minus_switch_dist / safe_distances
         r = r1 + r2
+        if self.electrostatics_damping_sigma > 0.0:
+            sigma = jnp.asarray(self.electrostatics_damping_sigma, dtype=distances.dtype)
+            r *= jax.scipy.special.erf(distances / sigma)
         eshift = safe_distances / (switch_end**2) - 2.0 / switch_end
         # r *= batch_mask[..., None]
         off_dist *= batch_mask

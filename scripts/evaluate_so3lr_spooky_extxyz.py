@@ -359,6 +359,7 @@ def create_model_from_config(config: dict[str, Any], max_atoms: int) -> SpookyPh
         zbl=zbl,
         efa=config.get("efa", False),
         use_energy_bias=config.get("use_energy_bias", False),
+        electrostatics_damping_sigma=config.get("electrostatics_damping_sigma", 0.0),
     )
 
 

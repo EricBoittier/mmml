@@ -93,6 +93,7 @@ CHECKPOINT_ARCH_KEYS = (
     "charges",
     "total_charge",
     "include_electrostatics",
+    "electrostatics_damping_sigma",
 )
 
 
