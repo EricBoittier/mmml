@@ -382,7 +382,7 @@ pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-0.1, 0.1, pos.shape) + pos
 
 # Translate the entire system so that the peptide is centered in the box
-n_trialanine = box.n_peptide_atoms
+n_trialanine = getattr(box, "n_peptide_atoms", 42)
 peptide_center = pos[:n_trialanine].mean(axis=0)
 box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
 translation = box_center - peptide_center
@@ -1469,6 +1469,97 @@ def run_fire_block_repair(state, pi, pj, mask, e14, vdw14):
     return jax.lax.fori_loop(0, 200, body_fn, state)
 
 
+def _repair_candidate_metrics(label, positions):
+    """Evaluate repaired candidate quality under the current MMML potential."""
+    pos_np = np.asarray(positions, dtype=np.float64)
+    if not np.isfinite(pos_np).all():
+        return {
+            "label": label,
+            "positions": pos_np,
+            "finite": False,
+            "energy": float("inf"),
+            "max_force": float("inf"),
+            "mean_force": float("inf"),
+        }
+    update_pair_refs(pos_np)
+    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    r_jax = jnp.array(pos_np, dtype=jnp.float64)
+    energy = float(hybrid_energy_fn(r_jax, pi, pj, mask, e14, vdw14))
+    force = -np.asarray(
+        jax.grad(lambda r: hybrid_energy_fn(r, pi, pj, mask, e14, vdw14))(r_jax)
+    )
+    force_norm = np.linalg.norm(force, axis=-1)
+    finite = np.isfinite(energy) and np.isfinite(force_norm).all()
+    return {
+        "label": label,
+        "positions": pos_np,
+        "finite": bool(finite),
+        "energy": energy if finite else float("inf"),
+        "max_force": float(force_norm.max()) if finite else float("inf"),
+        "mean_force": float(force_norm.mean()) if finite else float("inf"),
+    }
+
+
+def _run_jax_mmml_fire_repair(positions):
+    """Run the MMML FIRE repair stage from supplied coordinates."""
+    pos_np = np.asarray(positions, dtype=np.float64)
+    update_pair_refs(pos_np)
+    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
+    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    fire_state = _init_fn_fire(
+        jnp.array(pos_np, dtype=jnp.float64),
+        pi=pi,
+        pj=pj,
+        mask=mask,
+        e14=e14,
+        vdw14=vdw14,
+    )
+    fire_state = run_fire_block_repair(fire_state, pi, pj, mask, e14, vdw14)
+    return np.asarray(fire_state.position, dtype=np.float64)
+
+
+def run_staged_repair_for_jaxmd(positions, label):
+    """Run MM(system), ML(peptide), and MMML FIRE repair; return best candidate."""
+    candidates = []
+
+    print(f"[REPAIR] {label}: running MM(system) CHARMM minimization...")
+    mm_pos = repair_structure_in_charmm(positions)
+    candidates.append(_repair_candidate_metrics("MM(system)", mm_pos))
+
+    if USE_ML_INTRAMOLECULAR and peptide_calc is not None:
+        print(f"[REPAIR] {label}: running ML(peptide) minimization...")
+        ml_pos = minimize_peptide_only_with_ml_calculator(
+            mm_pos, z, peptide_calc, workdir, n_trialanine
+        )
+        candidates.append(_repair_candidate_metrics("ML(peptide)", ml_pos))
+    else:
+        print(f"[REPAIR] {label}: skipping ML(peptide) minimization (ML disabled).")
+        ml_pos = mm_pos
+
+    print(f"[REPAIR] {label}: running MMML(system) JAX FIRE minimization (200 steps)...")
+    mmml_pos = _run_jax_mmml_fire_repair(ml_pos)
+    candidates.append(_repair_candidate_metrics("MMML(system) FIRE", mmml_pos))
+
+    finite_candidates = [candidate for candidate in candidates if candidate["finite"]]
+    if not finite_candidates:
+        raise RuntimeError(f"[REPAIR] {label}: all staged repair candidates are non-finite.")
+
+    print(f"[REPAIR] {label}: candidate ranking by max force, then energy:")
+    for candidate in sorted(candidates, key=lambda item: (not item["finite"], item["max_force"], item["energy"])):
+        status = "finite" if candidate["finite"] else "non-finite"
+        print(
+            f"[REPAIR]   {candidate['label']}: {status}, "
+            f"E={candidate['energy']:.6f} eV, "
+            f"max|F|={candidate['max_force']:.6f} eV/A, "
+            f"mean|F|={candidate['mean_force']:.6f} eV/A"
+        )
+
+    best = min(finite_candidates, key=lambda item: (item["max_force"], item["energy"]))
+    print(f"[REPAIR] {label}: selected {best['label']} for JAX-MD restart.")
+    return jnp.array(best["positions"], dtype=jnp.float64)
+
+
 # NVT Nose-Hoover
 print("--- Building NVT NHC simulator (compiled once) ---")
 from jax_md import quantity
@@ -1679,18 +1770,9 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         scaled_pos, _ = scale_broken_h_bonds(
             repair_input_pos, box_size, h_idx_arr, x_idx_arr
         )
-        # 2. Minimize in PyCHARMM
+        # 2. Run staged MM/ML/MMML repair and select the best finite candidate
         print(f"[REPAIR] NVT repair input source: {repair_source}")
-        repaired_pos = repair_structure_in_charmm(scaled_pos)
-        # 3. Post-repair JAX FIRE minimization
-        print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
-        repaired_jax = jnp.array(repaired_pos, dtype=jnp.float64)
-        update_pair_refs(repaired_pos)
-        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        fire_state_rep = _init_fn_fire(repaired_jax, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
-        fire_state_rep = run_fire_block_repair(fire_state_rep, pi, pj, mask, e14, vdw14)
-        final_min_pos = jnp.array(fire_state_rep.position, dtype=jnp.float64)
+        final_min_pos = run_staged_repair_for_jaxmd(scaled_pos, "NVT")
 
         # Re-initialize NVT state
         update_pair_refs(np.asarray(final_min_pos))
@@ -1804,18 +1886,9 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         scaled_pos, _ = scale_broken_h_bonds(
             repair_input_pos, box_size, h_idx_arr, x_idx_arr
         )
-        # 2. Minimize in PyCHARMM
+        # 2. Run staged MM/ML/MMML repair and select the best finite candidate
         print(f"[REPAIR] NVE repair input source: {repair_source}")
-        repaired_pos = repair_structure_in_charmm(scaled_pos)
-        # 3. Post-repair JAX FIRE minimization
-        print("[REPAIR] Running post-repair JAX FIRE minimization (200 steps)...")
-        repaired_jax = jnp.array(repaired_pos, dtype=jnp.float64)
-        update_pair_refs(repaired_pos)
-        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        fire_state_rep = _init_fn_fire(repaired_jax, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
-        fire_state_rep = run_fire_block_repair(fire_state_rep, pi, pj, mask, e14, vdw14)
-        final_min_pos = jnp.array(fire_state_rep.position, dtype=jnp.float64)
+        final_min_pos = run_staged_repair_for_jaxmd(scaled_pos, "NVE")
 
         # Re-initialize NVE state
         update_pair_refs(np.asarray(final_min_pos))

@@ -21,3 +21,15 @@ def test_repair_branch_recomputes_bond_deviation_for_logged_state():
     source = _source()
     assert "Peptide bond deviation exceeded repair threshold" in source
     assert source.count("max_dev, mean_dev = get_peptide_bond_diagnostics") >= 5
+
+
+def test_repair_sequence_stages_mm_ml_mmml_and_selects_candidate():
+    source = _source()
+    assert "def run_staged_repair_for_jaxmd" in source
+    assert "MM(system)" in source
+    assert "ML(peptide)" in source
+    assert "MMML(system) FIRE" in source
+    assert "_repair_candidate_metrics" in source
+    assert "candidate ranking by max force, then energy" in source
+    assert "min(finite_candidates, key=lambda item: (item[\"max_force\"], item[\"energy\"]))" in source
+    assert source.count("run_staged_repair_for_jaxmd(scaled_pos") == 2
