@@ -1380,6 +1380,9 @@ def build_decomposed_mlpot_model(
         mm_switch_width=cutoff_params.mm_switch_width,
         complementary_handoff=cutoff_params.complementary_handoff,
         mm_r_min=getattr(args, "mm_r_min", None) if args is not None else None,
+        electrostatics_damping_sigma=(
+            getattr(args, "electrostatics_damping_sigma", None) if args is not None else None
+        ),
         mm_atomic_numbers=np.asarray(atomic_numbers, dtype=int),
         min_com_restraint_distance=(
             getattr(args, "min_com_restraint_distance", None) if args is not None else None

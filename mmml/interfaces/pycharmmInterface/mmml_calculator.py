@@ -383,6 +383,7 @@ def setup_calculator(
     periodic_charmm_vdw: bool = True,
     ml_potential_mode: str = "physnet",
     jax_mm_spoof_psf: Path | str | None = None,
+    electrostatics_damping_sigma: float | None = None,
 ):
     """Create hybrid ML/MM calculator with outputs in eV/eV-A.
 
@@ -755,6 +756,8 @@ def setup_calculator(
             if is_joint_checkpoint_config(config):
                 physnet_cfg = normalize_physnet_config(dict(config["physnet_config"]))
                 physnet_cfg["max_padded_atoms"] = max_atoms
+                if electrostatics_damping_sigma is not None:
+                    physnet_cfg["electrostatics_damping_sigma"] = float(electrostatics_damping_sigma)
                 model_config = physnet_constructor_kwargs(
                     json_to_jax_config(physnet_cfg), PhysNet
                 )
@@ -789,6 +792,8 @@ def setup_calculator(
                     }
                 model_config = json_to_jax_config(config)
                 model_config["max_padded_atoms"] = max_atoms
+                if electrostatics_damping_sigma is not None:
+                    model_config["electrostatics_damping_sigma"] = float(electrostatics_damping_sigma)
                 if cell:
                     model_config["use_pbc"] = True
                 if not model_config.get("charges", False):

@@ -76,6 +76,12 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--checkpoint", type=Path, default=None, help="Model checkpoint path.")
+    parser.add_argument(
+        "--electrostatics-damping-sigma",
+        type=float,
+        default=None,
+        help="Override learned-charge Coulomb erf damping sigma in Angstrom; set 0 to disable.",
+    )
     parser.add_argument("--output-dir", type=Path, default=None, help="Output directory for artifacts.")
     parser.add_argument(
         "--job-name",
