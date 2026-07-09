@@ -43,7 +43,12 @@ from mmml.interfaces.calculators.hybrid import (
     MonomerSumCalculator,
     JAXIntermolecularCalculator,
 )
-from cg_common import load_cg_checkpoint, load_cg_config, probe_charge_output
+from cg_common import (
+    DualTrajectoryWriter,
+    load_cg_checkpoint,
+    load_cg_config,
+    probe_charge_output,
+)
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
@@ -64,6 +69,7 @@ _settings = load_cg_config(
         "md_steps_per_block": 100,
         "workdir": "/tmp/tria_box",
         "output_dir": ".",
+        "write_dcd": True,
     },
     description="Trialanine/water ASE hybrid example",
 )
@@ -212,8 +218,15 @@ def print_energy(atoms_obj: ase.Atoms) -> None:
 dyn = VelocityVerlet(
     atoms,
     float(_settings.dt_fs) * units.fs,
-    trajectory=str(OUTPUT_DIR / "md.traj"),
 )
+md_trajectory = DualTrajectoryWriter(
+    OUTPUT_DIR / "md.traj",
+    atoms,
+    write_dcd=bool(_settings.write_dcd),
+    dt_ps=float(_settings.dt_fs) * 0.001,
+    steps_per_frame=1,
+)
+dyn.attach(md_trajectory.write, interval=1, atoms=atoms)
 
 print_energy(atoms)
 for i in range(int(_settings.md_blocks)):
@@ -221,6 +234,7 @@ for i in range(int(_settings.md_blocks)):
     print_energy(atoms)
     # Re-equilibrate temperature
     MaxwellBoltzmannDistribution(atoms, temperature_K=float(_settings.temperature))
+md_trajectory.close()
 
 # 9. Perform dynamics in PyCHARMM (Optional / Alternative workflow)
 print("--- Running CHARMM MD Script Workflow ---")

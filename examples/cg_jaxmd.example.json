@@ -18,5 +18,6 @@
   "peptide_ml_charge_total_correction": true,
   "water_ml_charge_total_correction": true,
   "workdir": "/tmp/tria_box",
-  "output_dir": "artifacts/cg_jaxmd"
+  "output_dir": "artifacts/cg_jaxmd",
+  "write_dcd": true
 }

@@ -119,3 +119,29 @@ def test_probe_charge_output_rejects_missing_charges() -> None:
             spin=1.0,
             label="water",
         )
+
+
+def test_dual_trajectory_writer_writes_matching_traj_and_dcd(tmp_path: Path) -> None:
+    from ase import Atoms
+    from ase.io import read
+
+    from mmml.utils.dcd_reader import read_dcd_trajectory
+
+    atoms = Atoms("H2", positions=[[0, 0, 0], [0, 0, 0.7]], cell=[8, 8, 8], pbc=True)
+    writer = cg_common.DualTrajectoryWriter(
+        tmp_path / "frames.traj",
+        atoms,
+        dt_ps=0.001,
+        steps_per_frame=5,
+    )
+    writer.write(atoms)
+    atoms.positions[1, 2] = 0.8
+    writer.write(atoms)
+    writer.close()
+
+    ase_frames = read(tmp_path / "frames.traj", index=":")
+    dcd_positions, metadata = read_dcd_trajectory(tmp_path / "frames.dcd")
+    assert len(ase_frames) == 2
+    assert dcd_positions.shape == (2, 2, 3)
+    np.testing.assert_allclose(dcd_positions[1], ase_frames[1].positions)
+    assert metadata["nsavc"] == 5

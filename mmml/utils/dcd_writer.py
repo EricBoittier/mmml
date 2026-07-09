@@ -10,7 +10,7 @@ from __future__ import annotations
 import struct
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, BinaryIO, List, Optional, Union
 
 import numpy as np
 
@@ -19,6 +19,96 @@ _ENDIAN = "<"
 _FMT_I = _ENDIAN + "i"
 _FMT_F = _ENDIAN + "f"
 _FMT_D = _ENDIAN + "d"
+
+
+class DCDTrajectoryWriter:
+    """Incrementally write CHARMM-compatible DCD frames."""
+
+    def __init__(
+        self,
+        path: Union[str, Path],
+        n_atoms: int,
+        *,
+        dt_ps: float = 1.0,
+        steps_per_frame: int = 1,
+        has_unitcell: bool = True,
+    ) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.n_atoms = int(n_atoms)
+        self.dt_ps = float(dt_ps)
+        self.steps_per_frame = max(1, int(steps_per_frame))
+        self.has_unitcell = bool(has_unitcell)
+        self.n_frames = 0
+        self._file: BinaryIO = self.path.open("wb")
+        self._write_header()
+
+    def _write_header(self) -> None:
+        handle = self._file
+        handle.write(struct.pack(_FMT_I, 84))
+        handle.write(b"CORD")
+        handle.write(struct.pack(_FMT_I, 0))
+        handle.write(struct.pack(_FMT_I, 0))
+        handle.write(struct.pack(_FMT_I, self.steps_per_frame))
+        handle.write(struct.pack(_FMT_I, 0))
+        handle.write(struct.pack(_FMT_I, 0) * 5)
+        handle.write(struct.pack(_FMT_F, self.dt_ps))
+        handle.write(struct.pack(_FMT_I, 1 if self.has_unitcell else 0))
+        handle.write(struct.pack(_FMT_I, 0) * 8)
+        handle.write(struct.pack(_FMT_I, 24))
+        handle.write(struct.pack(_FMT_I, 84))
+
+        handle.write(struct.pack(_FMT_I, 164))
+        handle.write(struct.pack(_FMT_I, 2))
+        handle.write(b"Created by mmml streaming DCD writer".ljust(80))
+        handle.write(datetime.now().strftime("%d %B, %Y at %H:%M").encode().ljust(80))
+        handle.write(struct.pack(_FMT_I, 164))
+
+        handle.write(struct.pack(_FMT_I, 4))
+        handle.write(struct.pack(_FMT_I, self.n_atoms))
+        handle.write(struct.pack(_FMT_I, 4))
+        handle.flush()
+
+    def write(self, positions: np.ndarray, *, box: Any | None = None) -> None:
+        coordinates = np.asarray(positions, dtype=np.float32)
+        if coordinates.shape != (self.n_atoms, 3):
+            raise ValueError(
+                f"DCD frame has shape {coordinates.shape}; "
+                f"expected ({self.n_atoms}, 3)"
+            )
+        handle = self._file
+        if self.has_unitcell:
+            unitcell = _box_to_dcd_unitcell(
+                np.zeros(3, dtype=np.float64) if box is None else np.asarray(box)
+            )
+            handle.write(struct.pack(_FMT_I, 48))
+            handle.write(unitcell.astype(np.float64).tobytes())
+            handle.write(struct.pack(_FMT_I, 48))
+
+        block_size = self.n_atoms * 4
+        for axis in range(3):
+            handle.write(struct.pack(_FMT_I, block_size))
+            handle.write(coordinates[:, axis].astype(np.float32).tobytes())
+            handle.write(struct.pack(_FMT_I, block_size))
+
+        self.n_frames += 1
+        end = handle.tell()
+        handle.seek(8)
+        handle.write(struct.pack(_FMT_I, self.n_frames))
+        handle.seek(20)
+        handle.write(struct.pack(_FMT_I, self.n_frames * self.steps_per_frame))
+        handle.seek(end)
+        handle.flush()
+
+    def close(self) -> None:
+        if not self._file.closed:
+            self._file.close()
+
+    def __enter__(self) -> "DCDTrajectoryWriter":
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self.close()
 
 
 def _box_to_dcd_unitcell(box: np.ndarray) -> np.ndarray:

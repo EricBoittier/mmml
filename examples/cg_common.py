@@ -11,8 +11,50 @@ from typing import Any, Mapping, Sequence
 import jax
 import jax.numpy as jnp
 import numpy as np
+from ase.io.trajectory import Trajectory
 
 from mmml.interfaces.calculators.simple_inference import create_calculator_from_checkpoint
+from mmml.utils.dcd_writer import DCDTrajectoryWriter
+
+
+class DualTrajectoryWriter:
+    """Write each ASE frame to both an ASE trajectory and a DCD."""
+
+    def __init__(
+        self,
+        traj_path: str | Path,
+        atoms: Any,
+        *,
+        write_dcd: bool = True,
+        dt_ps: float = 1.0,
+        steps_per_frame: int = 1,
+    ) -> None:
+        self.traj_path = Path(traj_path)
+        self.ase = Trajectory(str(self.traj_path), "w", atoms)
+        self.dcd = (
+            DCDTrajectoryWriter(
+                self.traj_path.with_suffix(".dcd"),
+                len(atoms),
+                dt_ps=dt_ps,
+                steps_per_frame=steps_per_frame,
+                has_unitcell=True,
+            )
+            if write_dcd
+            else None
+        )
+
+    def write(self, atoms: Any) -> None:
+        self.ase.write(atoms)
+        if self.dcd is not None:
+            self.dcd.write(
+                atoms.get_positions(),
+                box=np.asarray(atoms.get_cell().array, dtype=np.float64),
+            )
+
+    def close(self) -> None:
+        self.ase.close()
+        if self.dcd is not None:
+            self.dcd.close()
 
 
 def load_cg_config(
@@ -34,6 +76,11 @@ def load_cg_config(
     parser.add_argument("--dt-fs", type=float)
     parser.add_argument("--workdir", type=Path)
     parser.add_argument("--output-dir", type=Path)
+    parser.add_argument(
+        "--no-dcd",
+        action="store_true",
+        help="Disable simultaneous CHARMM DCD output",
+    )
     args = parser.parse_args(argv)
 
     values = dict(defaults)
@@ -77,6 +124,8 @@ def load_cg_config(
             values["peptide_checkpoint"] = checkpoint
         if "water_checkpoint" in values:
             values["water_checkpoint"] = checkpoint
+    if args.no_dcd and "write_dcd" in values:
+        values["write_dcd"] = False
 
     return SimpleNamespace(**values)
 

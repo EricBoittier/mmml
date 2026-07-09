@@ -81,7 +81,12 @@ from mmml.interfaces.jaxmdInterface import (
     get_intermolecular_pairs,
 )
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
-from cg_common import load_cg_checkpoint, load_cg_config, probe_charge_output
+from cg_common import (
+    DualTrajectoryWriter,
+    load_cg_checkpoint,
+    load_cg_config,
+    probe_charge_output,
+)
 
 # 1. Initialize JAX and PyCHARMM configuration
 jax.config.update("jax_enable_x64", True)
@@ -195,6 +200,7 @@ _settings = load_cg_config(
         "peptide_bond_k_ev": 200.0,
         "workdir": "/tmp/tria_box",
         "output_dir": ".",
+        "write_dcd": True,
     },
     description="Trialanine/water direct JAX-MD hybrid example",
 )
@@ -1343,7 +1349,13 @@ pos_current = init_r
 
 traj_path_fire = str(OUTPUT_DIR / "cg_fire.traj")
 print(f"--- Saving minimization trajectory to {traj_path_fire} ---")
-traj_fire = Trajectory(traj_path_fire, "w", atoms)
+traj_fire = DualTrajectoryWriter(
+    traj_path_fire,
+    atoms,
+    write_dcd=bool(_settings.write_dcd),
+    dt_ps=dt,
+    steps_per_frame=FIRE_BLOCK_STEPS,
+)
 
 for cycle in range(FIRE_CYCLES):
     print(f"\n--- Minimization Cycle {cycle+1}/{FIRE_CYCLES} ---")
@@ -1445,7 +1457,13 @@ state = _init_fn_nvt(key, min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14
 
 traj_path_nvt = str(OUTPUT_DIR / "cg_nvt.traj")
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
-traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
+traj_nvt = DualTrajectoryWriter(
+    traj_path_nvt,
+    atoms,
+    write_dcd=bool(_settings.write_dcd),
+    dt_ps=dt,
+    steps_per_frame=NVT_BLOCK_STEPS,
+)
 last_good_nvt_pos = np.asarray(min_r, dtype=np.float64)
 
 for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
@@ -1557,7 +1575,13 @@ state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass, pi=
 
 traj_path_nve = str(OUTPUT_DIR / "cg_nve.traj")
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
-traj_nve = Trajectory(traj_path_nve, "w", atoms)
+traj_nve = DualTrajectoryWriter(
+    traj_path_nve,
+    atoms,
+    write_dcd=bool(_settings.write_dcd),
+    dt_ps=dt,
+    steps_per_frame=NVE_BLOCK_STEPS,
+)
 last_good_nve_pos = np.asarray(state.position, dtype=np.float64)
 
 # Measure initial NVE total energy baseline for conservation checks

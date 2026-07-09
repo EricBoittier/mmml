@@ -10,5 +10,6 @@
   "md_blocks": 5,
   "md_steps_per_block": 100,
   "workdir": "/tmp/tria_box",
-  "output_dir": "artifacts/cg_ase"
+  "output_dir": "artifacts/cg_ase",
+  "write_dcd": true
 }
