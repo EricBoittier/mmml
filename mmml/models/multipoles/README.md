@@ -34,7 +34,7 @@ Train from that cache with:
 
 ```console
 python scripts/train_qcml_multipoles.py \
-  --cache orbax_cache/qcml_multipoles_traceless/0 \
+  --cache orbax_cache/qcml_multipoles_traceless \
   --workdir artifacts/qcml_multipoles \
   --epochs 100 \
   --batch-size 32 \
@@ -49,6 +49,9 @@ parameters, optimizer state, configuration, and train/validation metrics.
 Atom-count buckets crop each batch to the bucket ceiling, reducing complete
 graph cost from the cache-wide maximum. `--max-atoms` excludes larger
 structures before splitting; omit it to retain all structures.
+Manifest caches reserve the final `--test-shards` shards untouched and the
+preceding `--validation-shards` shards for validation. The exact paths are
+recorded in `data_split.json`.
 
 Generate metrics, per-structure CSV data, reference/prediction scatters, and
 error distributions with:

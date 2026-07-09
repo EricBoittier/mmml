@@ -17,7 +17,7 @@ Train energy, force, C6, and polarizability targets:
 
 ```console
 python scripts/train_qcml_mbd.py \
-  --cache orbax_cache/qcml_mbd/0 \
+  --cache orbax_cache/qcml_mbd \
   --workdir artifacts/qcml_mbd \
   --epochs 100 \
   --batch-size 16 \
@@ -31,6 +31,9 @@ The four loss weights are configurable with `--energy-weight`,
 `log1p` losses to handle their dynamic range.
 Atom-count bucketing crops positions and every atomic target to the bucket
 ceiling. `--max-atoms` filters oversized structures before the random split.
+For manifest caches, the final `--test-shards` are never restored during
+training. Validation uses the preceding `--validation-shards`, and the full
+partition is saved as `data_split.json`.
 
 `qdo_pairwise_dispersion` implements the damped pairwise C6/C8/C10 expression
 as a separately testable baseline. It is not presented as equivalent to the
