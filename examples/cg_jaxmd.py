@@ -40,6 +40,7 @@ from ase.io import read as ase_read
 from ase.io.trajectory import Trajectory
 from ase.calculators.singlepoint import SinglePointCalculator
 from ase.optimize.fire import FIRE as AseFIRE
+from cg_common import DualTrajectoryWriter
 
 # JAX-MD imports
 from jax_md import space, minimize, simulate
@@ -1303,8 +1304,8 @@ init_r = jnp.array(pos, dtype=jnp.float64)
 pos_current = init_r
 
 traj_path_fire = "cg_fire.traj"
-print(f"--- Saving minimization trajectory to {traj_path_fire} ---")
-traj_fire = Trajectory(traj_path_fire, "w", atoms)
+print(f"--- Saving minimization trajectory to {traj_path_fire} and its .dcd counterpart ---")
+traj_fire = DualTrajectoryWriter(traj_path_fire, atoms, dt_ps=0.0, steps_per_frame=FIRE_BLOCK_STEPS)
 
 for cycle in range(FIRE_CYCLES):
     print(f"\n--- Minimization Cycle {cycle+1}/{FIRE_CYCLES} ---")
@@ -1405,8 +1406,8 @@ e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 state = _init_fn_nvt(key, min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
 traj_path_nvt = "cg_nvt.traj"
-print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} ---")
-traj_nvt = Trajectory(traj_path_nvt, "w", atoms)
+print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} and its .dcd counterpart ---")
+traj_nvt = DualTrajectoryWriter(traj_path_nvt, atoms, dt_ps=dt, steps_per_frame=NVT_BLOCK_STEPS)
 last_good_nvt_pos = np.asarray(min_r, dtype=np.float64)
 
 for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
@@ -1518,8 +1519,8 @@ e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
 state_nve = _init_fn_nve(key, state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
 
 traj_path_nve = "cg_nve.traj"
-print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} ---")
-traj_nve = Trajectory(traj_path_nve, "w", atoms)
+print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} and its .dcd counterpart ---")
+traj_nve = DualTrajectoryWriter(traj_path_nve, atoms, dt_ps=dt, steps_per_frame=NVE_BLOCK_STEPS)
 last_good_nve_pos = np.asarray(state.position, dtype=np.float64)
 
 # Measure initial NVE total energy baseline for conservation checks
