@@ -210,7 +210,7 @@ WATER_ML_CHARGE_TOTAL_CORRECTION = False #True
 PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = False  #True
 WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = False #True
 DEBUG = True
-MAX_BOND_DEV_LIMIT = 0.35
+MAX_BOND_DEV_LIMIT = 0.3
 # Optional: start from a peptide-only frame produced by
 # scripts/scan_trialanine_phi_psi_pes.py. The frame replaces the first
 # n_trialanine coordinates in the solvated box before minimization/dynamics.
@@ -226,7 +226,6 @@ DIHEDRAL_RESTRAINT_K_EV = 1.0
 PHI_CENTRAL = (14, 16, 18, 24)  # C1-N2-CA2-C2
 PSI_CENTRAL = (16, 18, 24, 26)  # N2-CA2-C2-N3
 PEPTIDE_BOND_K_EV = 0.0  # Force constant for harmonic restraints on all peptide bonds (eV/Å^2)
-
 
 
 def minimize_peptide_only_in_charmm(sd_steps=1000, abnr_steps=1000):
