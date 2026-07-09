@@ -81,6 +81,11 @@ def load_cg_config(
         action="store_true",
         help="Disable simultaneous CHARMM DCD output",
     )
+    parser.add_argument(
+        "--no-ml",
+        action="store_true",
+        help="Mock ML internals with classical MM bonded terms",
+    )
     args = parser.parse_args(argv)
 
     values = dict(defaults)
@@ -126,6 +131,8 @@ def load_cg_config(
             values["water_checkpoint"] = checkpoint
     if args.no_dcd and "write_dcd" in values:
         values["write_dcd"] = False
+    if args.no_ml:
+        values["use_ml_intramolecular"] = False
 
     return SimpleNamespace(**values)
 

@@ -166,13 +166,21 @@ FIRE_PRINT_FREQ = 1000
 # running 1000 steps without checking allows catastrophic divergence before repair.
 FIRE_BLOCK_STEPS = 1000
 
-
 NVT_TOTAL_STEPS = 8000000
 NVT_BLOCK_STEPS = 1000
 
 NVE_TOTAL_STEPS = 8000000
 NVE_BLOCK_STEPS = 5000
 FIRE_CYCLES = 2
+
+import sys
+if "--short" in sys.argv:
+    FIRE_STEPS = 500
+    FIRE_BLOCK_STEPS = 100
+    NVT_TOTAL_STEPS = 1000
+    NVT_BLOCK_STEPS = 100
+    NVE_TOTAL_STEPS = 1000
+    NVE_BLOCK_STEPS = 100
 
 NWATER = 600
 BOX_SIDE_A = 28.0
@@ -192,6 +200,10 @@ dt = dt_fs * 0.001  # convert to picoseconds (JAX-MD metal units)
 
 # Option: Treat peptide-water intermolecular interactions with ML instead of MM
 PEPTIDE_WATER_ML = False
+USE_ML_INTRAMOLECULAR = True
+import sys
+if "--no-ml" in sys.argv:
+    USE_ML_INTRAMOLECULAR = False
 PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = False #True
 PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = False #True
 WATER_ML_CHARGE_TOTAL_CORRECTION = False #True
@@ -315,20 +327,26 @@ if CONSTRAIN_PHI_PSI:
 
 z = get_Z_from_psf()
 
-peptide_calc = create_calculator_from_checkpoint(PEPTIDE_CKPT_PATH)
-peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
-peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
+if USE_ML_INTRAMOLECULAR:
+    peptide_calc = create_calculator_from_checkpoint(PEPTIDE_CKPT_PATH)
+    peptide_model = getattr(peptide_calc, "model", getattr(peptide_calc, "_mmml_physnet_model", None))
+    peptide_params = getattr(peptide_calc, "params", getattr(peptide_calc, "_mmml_physnet_params", None))
 
-if peptide_model is None or peptide_params is None:
-    raise ValueError("Could not extract model or params from the loaded peptide calculator.")
+    if peptide_model is None or peptide_params is None:
+        raise ValueError("Could not extract model or params from the loaded peptide calculator.")
+else:
+    peptide_calc = None
+    peptide_model = None
+    peptide_params = None
 
 set_charmm_positions(pos)
 
 minimize_peptide_only_in_charmm()
 
-pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
-pos = minimize_peptide_only_with_ml_calculator(pos, z, peptide_calc, workdir, n_trialanine)
-set_charmm_positions(pos)
+if USE_ML_INTRAMOLECULAR:
+    pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
+    pos = minimize_peptide_only_with_ml_calculator(pos, z, peptide_calc, workdir, n_trialanine)
+    set_charmm_positions(pos)
 
 lingo.charmm_script("MINI SD NSTEP 10000")
 lingo.charmm_script("MINI ABNR NSTEP 10000")
@@ -389,12 +407,64 @@ prm_path = CGENFF_PRM
 nb_settings = _nbond_settings_from_cutoffs(box.nbond_cutoffs)
 nbond_data = load_nonbonded_system_from_charmm(psf_path, prm_path)
 
-water_calc = create_calculator_from_checkpoint(WATER_CKPT_PATH)
-water_model = getattr(water_calc, "model", getattr(water_calc, "_mmml_physnet_model", None))
-water_params = getattr(water_calc, "params", getattr(water_calc, "_mmml_physnet_params", None))
+# Precompute excluded pairs early for intramolecular setup
+excluded_pairs = nbond_data.excluded_pairs
+if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
+    excluded_pairs = resolve_nonbonded_excluded_pairs(
+        nbond_data.psf_path,
+        nbond_data.psf_bonds,
+        natom=int(np.asarray(nbond_data.charges).shape[0]),
+    )
 
-if water_model is None or water_params is None:
-    raise ValueError("Could not extract model or params from the loaded water calculator.")
+from mmml.interfaces.pycharmmInterface.mm_system_energy import load_bonded_system_from_psf
+from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
+    bonded_energy_components,
+    KCAL_MOL_TO_EV,
+)
+# Load full system CGenFF bonded topology/parameters (all atoms)
+bonded_system = load_bonded_system_from_psf(psf_path, pos, prm_file=prm_path)
+
+# Set up static peptide intramolecular nonbonded pairs if we are mocking the ML potential
+if not USE_ML_INTRAMOLECULAR:
+    _pi_list = []
+    _pj_list = []
+    _e14_list = []
+    _vdw14_list = []
+    for _i in range(n_trialanine):
+        for _j in range(_i + 1, n_trialanine):
+            _pair = (_i, _j)
+            if _pair in excluded_pairs:
+                continue
+            _pi_list.append(_i)
+            _pj_list.append(_j)
+            if _pair in nbond_data.e14_pairs:
+                _e14_list.append(nb_settings.e14fac)
+                _vdw14_list.append(nb_settings.vdw14fac)
+            else:
+                _e14_list.append(1.0)
+                _vdw14_list.append(1.0)
+
+    pep_intra_pi = jnp.array(_pi_list, dtype=jnp.int32)
+    pep_intra_pj = jnp.array(_pj_list, dtype=jnp.int32)
+    pep_intra_e14 = jnp.array(_e14_list, dtype=jnp.float64)
+    pep_intra_vdw14 = jnp.array(_vdw14_list, dtype=jnp.float64)
+else:
+    pep_intra_pi = None
+    pep_intra_pj = None
+    pep_intra_e14 = None
+    pep_intra_vdw14 = None
+
+if USE_ML_INTRAMOLECULAR:
+    water_calc = create_calculator_from_checkpoint(WATER_CKPT_PATH)
+    water_model = getattr(water_calc, "model", getattr(water_calc, "_mmml_physnet_model", None))
+    water_params = getattr(water_calc, "params", getattr(water_calc, "_mmml_physnet_params", None))
+
+    if water_model is None or water_params is None:
+        raise ValueError("Could not extract model or params from the loaded water calculator.")
+else:
+    water_calc = None
+    water_model = None
+    water_params = None
 
 # Setup monomer groupings (first 42 atoms: peptide; then groups of 3 for water)
 monomer_indices = [np.arange(n_trialanine)]
@@ -431,19 +501,58 @@ if PEPTIDE_WATER_ML:
     )
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
-    monomer_charges = {42: float(pep_charge), 3: 0.0}
-    monomer_spins = {42: float(pep_spin), 3: 1.0}
-    compute_peptide_energy = make_monomer_energy_fn(
-        peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn,
-        charges=monomer_charges, spins=monomer_spins
-    )
-    compute_water_energy = make_monomer_energy_fn(
-        water_model, water_params, jax_z, jax_monomer_indices[1:], displacement_fn,
-        charges=monomer_charges, spins=monomer_spins
-    )
+    if USE_ML_INTRAMOLECULAR:
+        monomer_charges = {42: float(pep_charge), 3: 0.0}
+        monomer_spins = {42: float(pep_spin), 3: 1.0}
+        compute_peptide_energy = make_monomer_energy_fn(
+            peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn,
+            charges=monomer_charges, spins=monomer_spins
+        )
+        compute_water_energy = make_monomer_energy_fn(
+            water_model, water_params, jax_z, jax_monomer_indices[1:], displacement_fn,
+            charges=monomer_charges, spins=monomer_spins
+        )
 
-    def compute_monomer_energy(r):
-        return compute_peptide_energy(r) + compute_water_energy(r)
+        def compute_monomer_energy(r):
+            return compute_peptide_energy(r) + compute_water_energy(r)
+    else:
+        @jit
+        def compute_peptide_intra_nb_energy(r):
+            ri = r[pep_intra_pi]
+            rj = r[pep_intra_pj]
+            disp = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri, rj)
+            disp_sq = jnp.sum(disp**2, axis=-1)
+            dist = jnp.sqrt(jnp.maximum(disp_sq, 1e-12))
+
+            ep = _pair_lj_epsilon(_eps_jax[pep_intra_pi], _eps_jax[pep_intra_pj])
+            sig = _rmin_jax[pep_intra_pi] + _rmin_jax[pep_intra_pj]
+            qq = _q_jax[pep_intra_pi] * _q_jax[pep_intra_pj]
+
+            vdw = _pair_vdw_energy(dist, ep, sig, nb_settings, _vfswitch, use_jax_pme_dispersion=False)
+            vdw = vdw * pep_intra_vdw14
+            elec = _pair_elec_energy(dist, qq, nb_settings, _fswitch)
+            elec = elec * pep_intra_e14
+
+            within_ctof = dist * dist < _c2of
+            vdw = jnp.where(within_ctof, vdw, 0.0)
+            elec = jnp.where(within_ctof, elec, 0.0)
+
+            return (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
+
+        @jit
+        def compute_monomer_energy(r):
+            bonded_comp = bonded_energy_components(
+                r,
+                bonded_system.topology,
+                bonded_system.bonded,
+                displacement_fn,
+                urey_k=bonded_system.urey_k,
+                urey_r0=bonded_system.urey_r0,
+                include_cmap=True,
+            )
+            e_bonded = bonded_comp["total"] * KCAL_MOL_TO_EV
+            e_pep_intra_nb = compute_peptide_intra_nb_energy(r)
+            return e_bonded + e_pep_intra_nb
 
 pep_idx_jax = jax_monomer_indices[0]
 pep_z_jax = jax_z[pep_idx_jax]
@@ -465,6 +574,8 @@ water_ref_charge_total = float(np.asarray(nbond_data.charges[n_trialanine:n_tria
 
 def compute_peptide_ml_charges(r):
     """Return geometry-dependent peptide atomic charges from the peptide ML model."""
+    if not USE_ML_INTRAMOLECULAR:
+        return _q_jax[:n_trialanine]
     pep_pos = r[pep_idx_jax]
     ref_pos = pep_pos[0]
     unfolded = ref_pos + jax.vmap(displacement_fn, in_axes=(0, None))(pep_pos, ref_pos)
@@ -523,6 +634,8 @@ def compute_peptide_ml_charges(r):
 
 def compute_water_ml_charges(r):
     """Return geometry-dependent water atomic charges from the water ML model."""
+    if not USE_ML_INTRAMOLECULAR:
+        return _q_jax[water_flat_idx_jax].reshape((-1, water_n_atoms))
     group_pos = r[water_stacked_idx_jax]
     ref_pos = group_pos[:, 0, :]
     displacements = jax.vmap(
@@ -593,13 +706,7 @@ def compute_water_ml_charges(r):
 
 # Precompute initial pair list
 print("--- Precomputing nonbonded pair list indices ---")
-excluded_pairs = nbond_data.excluded_pairs
-if nbond_data.psf_path is not None and nbond_data.psf_bonds is not None:
-    excluded_pairs = resolve_nonbonded_excluded_pairs(
-        nbond_data.psf_path,
-        nbond_data.psf_bonds,
-        natom=int(np.asarray(nbond_data.charges).shape[0]),
-    )
+# excluded_pairs is already resolved and precomputed at setup
 
 # ─────────────────────────────────────────────────────────────────────────────
 # GPU OPTIMIZATION: Padded pair-list infrastructure
