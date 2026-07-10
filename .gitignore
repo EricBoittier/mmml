@@ -12,6 +12,8 @@ CHARMMSETUP
 
 # Local CHARMM / MD smoke logs (DCM2LOG, DCM9LOG, …)
 DCM*LOG
+setup/charmm/*.mod
+setup/charmm/**.mod
 
 # DCM:5 benchmark workflow outputs (see workflows/dcm5_md_benchmark/.gitignore)
 workflows/dcm5_md_benchmark/results/
