@@ -172,8 +172,12 @@ def predict_shard(
         predictions["num_atoms"].append(atom_mask[:valid_count].sum(axis=1))
 
     return {
-        key: np.concatenate(values, axis=0)
-        for key, values in predictions.items()
+        "energy": np.concatenate(predictions["energy"], axis=0),
+        "forces": _pad_atom_arrays(predictions["forces"]),
+        "c6": _pad_atom_arrays(predictions["c6"]),
+        "alpha": _pad_atom_arrays(predictions["alpha"]),
+        "indices": np.concatenate(predictions["indices"], axis=0),
+        "num_atoms": np.concatenate(predictions["num_atoms"], axis=0),
     }
 
 
