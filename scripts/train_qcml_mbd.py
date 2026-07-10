@@ -258,12 +258,14 @@ def evaluate(params, cache, indices, batch_size, validation_step, bucket_width):
     return total / count
 
 
-def save_checkpoint(path, state, config, metrics):
+def save_checkpoint(path, state, config, metrics, save_opt_state=False):
     path.parent.mkdir(parents=True, exist_ok=True)
-    ocp.PyTreeCheckpointer().save(
-        path,
-        {"params": state.params, "opt_state": state.opt_state, "step": np.asarray(state.step)},
-    )
+    payload = {"params": state.params, "step": np.asarray(state.step)}
+    if save_opt_state:
+        payload["opt_state"] = state.opt_state
+    payload = jax.device_get(payload)
+    print(f"Writing checkpoint: {path} save_opt_state={save_opt_state}", flush=True)
+    ocp.PyTreeCheckpointer().save(path, payload)
     (path / "model_config.json").write_text(
         json.dumps(asdict(config), indent=2, sort_keys=True),
         encoding="utf-8",
@@ -290,6 +292,7 @@ def main():
     parser.add_argument("--test-shards", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--save-every", type=int, default=10)
+    parser.add_argument("--save-opt-state", action="store_true")
     parser.add_argument("--features", type=int, default=64)
     parser.add_argument("--num-iterations", type=int, default=3)
     parser.add_argument("--num-basis-functions", type=int, default=16)
@@ -421,7 +424,13 @@ def main():
         )
         if epoch % args.save_every == 0 or epoch == args.epochs:
             checkpoint = args.workdir / f"epoch-{epoch:04d}"
-            save_checkpoint(checkpoint, state, config, metrics)
+            save_checkpoint(
+                checkpoint,
+                state,
+                config,
+                metrics,
+                save_opt_state=args.save_opt_state,
+            )
             print(f"Saved checkpoint: {checkpoint}")
 
 

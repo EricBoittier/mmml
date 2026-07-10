@@ -427,13 +427,17 @@ def save_checkpoint(
     state: train_state.TrainState,
     config: TrainConfig,
     metrics: dict[str, float],
+    save_opt_state: bool = False,
 ) -> Path:
     checkpoint = workdir / f"epoch-{epoch:04d}"
     payload = {
         "params": state.params,
-        "opt_state": state.opt_state,
         "step": np.asarray(state.step),
     }
+    if save_opt_state:
+        payload["opt_state"] = state.opt_state
+    payload = jax.device_get(payload)
+    print(f"Writing checkpoint: {checkpoint} save_opt_state={save_opt_state}", flush=True)
     ocp.PyTreeCheckpointer().save(checkpoint, payload)
     (checkpoint / "model_config.json").write_text(
         json.dumps(asdict(config), indent=2, sort_keys=True),
@@ -466,6 +470,7 @@ def main() -> None:
     parser.add_argument("--test-shards", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--save-every", type=int, default=10)
+    parser.add_argument("--save-opt-state", action="store_true")
     parser.add_argument("--features", type=int, default=64)
     parser.add_argument("--num-iterations", type=int, default=3)
     parser.add_argument("--num-basis-functions", type=int, default=16)
@@ -607,7 +612,14 @@ def main() -> None:
             f"valid={metrics['validation_loss']:.8g}"
         )
         if epoch % args.save_every == 0 or epoch == args.epochs:
-            path = save_checkpoint(args.workdir, epoch, state, config, metrics)
+            path = save_checkpoint(
+                args.workdir,
+                epoch,
+                state,
+                config,
+                metrics,
+                save_opt_state=args.save_opt_state,
+            )
             print(f"Saved checkpoint: {path}")
 
 

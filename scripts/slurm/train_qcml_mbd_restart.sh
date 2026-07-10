@@ -21,6 +21,7 @@ BATCH_SIZE="${BATCH_SIZE:-8}"
 BUCKET_WIDTH="${BUCKET_WIDTH:-4}"
 EPOCHS="${EPOCHS:-100}"
 SAVE_EVERY="${SAVE_EVERY:-5}"
+SAVE_OPT_STATE="${SAVE_OPT_STATE:-0}"
 LEARNING_RATE="${LEARNING_RATE:-1e-4}"
 WEIGHT_DECAY="${WEIGHT_DECAY:-1e-6}"
 VALIDATION_SHARDS="${VALIDATION_SHARDS:-2}"
@@ -31,6 +32,9 @@ cd "$ROOT"
 mkdir -p logs "$WORKDIR"
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
+if [[ "${DISABLE_PINNED_HOST_TRANSFER:-0}" == "1" ]]; then
+  export XLA_FLAGS="${XLA_FLAGS:-} --xla_gpu_enable_pinned_host_transfer=false"
+fi
 
 echo "ROOT=$ROOT"
 echo "CACHE=$CACHE"
@@ -38,6 +42,7 @@ echo "WORKDIR=$WORKDIR"
 echo "MAX_STRUCTURES=${MAX_STRUCTURES:-all}"
 echo "MAX_ATOMS=$MAX_ATOMS BATCH_SIZE=$BATCH_SIZE BUCKET_WIDTH=$BUCKET_WIDTH"
 echo "EPOCHS=$EPOCHS SAVE_EVERY=$SAVE_EVERY"
+echo "SAVE_OPT_STATE=$SAVE_OPT_STATE"
 echo "LEARNING_RATE=$LEARNING_RATE WEIGHT_DECAY=$WEIGHT_DECAY"
 
 "$PY" scripts/snapshot_orbax_shard_manifest.py \
@@ -73,6 +78,9 @@ train_args=(
 
 if [[ -n "$MAX_STRUCTURES" ]]; then
   train_args+=(--max-structures "$MAX_STRUCTURES")
+fi
+if [[ "$SAVE_OPT_STATE" == "1" ]]; then
+  train_args+=(--save-opt-state)
 fi
 
 "$PY" scripts/train_qcml_mbd.py "${train_args[@]}"
