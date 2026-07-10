@@ -70,6 +70,12 @@ def load_cg_config(
     parser.add_argument("--peptide-checkpoint", type=Path)
     parser.add_argument("--water-checkpoint", type=Path)
     parser.add_argument("--sequence")
+    parser.add_argument("--first-patch")
+    parser.add_argument("--last-patch")
+    parser.add_argument("--peptide-patch", action="append", dest="peptide_patches")
+    parser.add_argument("--initial-peptide-pdb", type=Path)
+    parser.add_argument("--pdb-id")
+    parser.add_argument("--pdb-chain")
     parser.add_argument("--n-waters", type=int)
     parser.add_argument("--box-size", type=float)
     parser.add_argument("--seed", type=int)
@@ -115,6 +121,12 @@ def load_cg_config(
         "peptide_checkpoint": "peptide_checkpoint",
         "water_checkpoint": "water_checkpoint",
         "sequence": "sequence",
+        "first_patch": "first_patch",
+        "last_patch": "last_patch",
+        "peptide_patches": "peptide_patches",
+        "initial_peptide_pdb": "initial_peptide_pdb",
+        "pdb_id": "pdb_id",
+        "pdb_chain": "pdb_chain",
         "n_waters": "n_waters",
         "box_size": "box_size",
         "seed": "seed",

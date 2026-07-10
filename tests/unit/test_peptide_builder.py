@@ -8,8 +8,12 @@ import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.peptide_builder import (
+    parse_peptide_patch_spec,
+    parse_pdb_chain_sequence,
+    parse_pdb_ssbond_patches,
     parse_sequence,
     qc_built_system,
+    write_pdb_chain_subset,
 )
 from tests.conftest import can_import_pycharmm
 
@@ -39,6 +43,51 @@ def test_parse_sequence() -> None:
         parse_sequence("XYZ")
     with pytest.raises(ValueError, match="Unknown residue code"):
         parse_sequence("ALA-XYZ")
+
+
+def test_parse_peptide_patch_spec() -> None:
+    name, sites, options = parse_peptide_patch_spec("DISU PEPT 3 PEPT 12")
+    assert name == "DISU"
+    assert sites == "PEPT 3 PEPT 12"
+    assert options == {}
+
+    name, sites, options = parse_peptide_patch_spec(
+        {"patch": "ct2", "sites": "PEPT 7", "options": {"warn": True}}
+    )
+    assert name == "CT2"
+    assert sites == "PEPT 7"
+    assert options == {"warn": True}
+
+    with pytest.raises(ValueError, match="Peptide patch strings"):
+        parse_peptide_patch_spec("DISU")
+
+
+def test_prepare_pdb_chain_inputs(tmp_path: Path) -> None:
+    pdb_path = tmp_path / "mini.pdb"
+    pdb_path.write_text(
+        """HEADER    MINI PDB
+SSBOND   1 CYS A    1    CYS A    3                          1555   1555  2.03
+ATOM      1  N   CYS A   1       0.000   0.000   0.000  1.00 20.00           N
+ATOM      2  CA ACYS A   1       1.000   0.000   0.000  0.60 20.00           C
+ATOM      3  CA BCYS A   1       2.000   0.000   0.000  0.40 20.00           C
+ATOM      4  C   ALA A   2       1.000   1.000   0.000  1.00 20.00           C
+ATOM      5  N   CYS A   3       1.000   2.000   0.000  1.00 20.00           N
+ATOM      6  N   GLY B   1       9.000   9.000   9.000  1.00 20.00           N
+HETATM    7  N   NO3 A 201       5.000   5.000   5.000  1.00 20.00           N
+END
+""",
+        encoding="utf-8",
+    )
+
+    assert parse_pdb_chain_sequence(pdb_path, chain_id="A") == ["CYS", "ALA", "CYS"]
+    assert parse_pdb_ssbond_patches(pdb_path, chain_id="A") == ["DISU PEPT 1 PEPT 3"]
+
+    chain_path = write_pdb_chain_subset(pdb_path, tmp_path / "chain_a.pdb", chain_id="A")
+    chain_text = chain_path.read_text(encoding="utf-8")
+    assert "NO3" not in chain_text
+    assert "GLY B" not in chain_text
+    assert "CA ACYS" not in chain_text
+    assert " CA  CYS" in chain_text
 
 
 def test_qc_validation_mock() -> None:
@@ -213,4 +262,3 @@ def test_gas_phase_peptide_builder(tmp_path: Path) -> None:
     assert peptide.n_atoms > 0
     assert peptide.psf_path.is_file()
     assert peptide.pdb_path.is_file()
-

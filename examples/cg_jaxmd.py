@@ -160,6 +160,12 @@ DEFAULTS = {
     "water_checkpoint": None,
 
     "sequence": "ALA ALA ALA",  # default is trialanine
+    "first_patch": "ACE",
+    "last_patch": "CT3",
+    "peptide_patches": None,
+    "initial_peptide_pdb": None,
+    "pdb_id": None,
+    "pdb_chain": None,
     "n_waters": 600,
     "box_size": 28.0,
     "seed": 42,
@@ -347,10 +353,44 @@ def load_peptide_start_frame(traj_path, frame_index=0):
 # 2. Build the initial system in PyCHARMM and minimize
 workdir = Path(config.workdir)
 
+if config.pdb_id is not None:
+    from mmml.interfaces.pycharmmInterface.peptide_builder import prepare_rcsb_peptide_input
+
+    if config.first_patch == "ACE" and config.last_patch == "CT3":
+        config.first_patch = None
+        config.last_patch = None
+
+    prepared_pdb = prepare_rcsb_peptide_input(
+        config.pdb_id,
+        chain_id=config.pdb_chain,
+        workdir=workdir,
+        seg_name="PEPT",
+    )
+    config.sequence = prepared_pdb["sequence"]
+    if config.initial_peptide_pdb is None:
+        config.initial_peptide_pdb = str(prepared_pdb["chain_pdb_path"])
+    config.peptide_patches = [
+        *(config.peptide_patches or []),
+        *prepared_pdb["peptide_patches"],
+    ]
+    print(
+        f"--- Prepared RCSB {config.pdb_id.upper()} "
+        f"chain {prepared_pdb['chain_id'] or 'blank'}: "
+        f"{len(config.sequence)} residues, "
+        f"{len(prepared_pdb['peptide_patches'])} DISU patches ---"
+    )
+
 if NWATER > 0:
     from mmml.interfaces.pycharmmInterface.peptide_builder import parse_sequence
     seq_clean = " ".join(parse_sequence(config.sequence))
-    if seq_clean == "ALA ALA ALA":
+    use_trialanine_template = (
+        seq_clean == "ALA ALA ALA"
+        and config.first_patch == "ACE"
+        and config.last_patch == "CT3"
+        and not config.peptide_patches
+        and config.initial_peptide_pdb is None
+    )
+    if use_trialanine_template:
         print("--- Building Trialanine Water Box in CHARMM ---")
         box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
             box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
@@ -363,6 +403,10 @@ if NWATER > 0:
         )
         peptide = build_peptide_in_charmm(
             sequence=config.sequence,
+            first_patch=config.first_patch,
+            last_patch=config.last_patch,
+            peptide_patches=config.peptide_patches,
+            initial_pdb_path=config.initial_peptide_pdb,
             seed=SEED,
             workdir=workdir,
             minimize=True,
@@ -380,6 +424,10 @@ else:
 
     build_result = build_peptide_in_charmm(
         sequence=config.sequence,
+        first_patch=config.first_patch,
+        last_patch=config.last_patch,
+        peptide_patches=config.peptide_patches,
+        initial_pdb_path=config.initial_peptide_pdb,
         seed=SEED,
         workdir=workdir,
         minimize=True,

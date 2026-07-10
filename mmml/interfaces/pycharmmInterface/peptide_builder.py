@@ -7,6 +7,7 @@ import sys
 import shutil
 import warnings
 import subprocess
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,12 @@ ONE_TO_THREE = {
     "E": "GLU", "Q": "GLN", "G": "GLY", "H": "HSD", "I": "ILE",
     "L": "LEU", "K": "LYS", "M": "MET", "F": "PHE", "P": "PRO",
     "S": "SER", "T": "THR", "W": "TRP", "Y": "TYR", "V": "VAL"
+}
+
+THREE_TO_ONE = {value: key for key, value in ONE_TO_THREE.items()}
+THREE_TO_ONE.update({"HSE": "H", "HSP": "H"})
+PDB_RESNAME_TO_CHARMM = {
+    "HIS": "HSD",
 }
 
 
@@ -144,11 +151,222 @@ def parse_sequence(sequence: str | list[str]) -> list[str]:
     return res_list
 
 
+def parse_peptide_patch_spec(spec: str | dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    """Normalize a CHARMM patch spec into patch name, sites, and options."""
+    if isinstance(spec, str):
+        parts = spec.strip().split(maxsplit=1)
+        if len(parts) != 2:
+            raise ValueError(
+                "Peptide patch strings must look like 'PATCH SEGID RESID [SEGID RESID ...]'."
+            )
+        return parts[0].upper(), parts[1], {}
+
+    if not isinstance(spec, dict):
+        raise TypeError(f"Peptide patch specs must be strings or dictionaries, got {type(spec)!r}")
+
+    name = str(spec.get("name") or spec.get("patch") or "").strip().upper()
+    sites = str(spec.get("sites") or spec.get("site") or "").strip()
+    if not name or not sites:
+        raise ValueError("Peptide patch dictionaries require 'name'/'patch' and 'sites'.")
+
+    options = spec.get("options") or {}
+    if not isinstance(options, dict):
+        raise TypeError("Peptide patch 'options' must be a dictionary when provided.")
+    return name, sites, dict(options)
+
+
+def _pdb_atom_chain_id(line: str) -> str:
+    return line[21].strip() if len(line) > 21 else ""
+
+
+def _pdb_atom_residue_key(line: str) -> tuple[str, str, str, str]:
+    chain_id = _pdb_atom_chain_id(line)
+    resname = line[17:20].strip().upper()
+    resseq = line[22:26].strip()
+    icode = line[26].strip() if len(line) > 26 else ""
+    return chain_id, resseq, icode, resname
+
+
+def _pdb_atom_altloc(line: str) -> str:
+    return line[16].strip() if len(line) > 16 else ""
+
+
+def first_protein_chain_id(pdb_path: Path | str) -> str:
+    """Return the first chain ID containing a supported protein residue."""
+    first_model_done = False
+    with Path(pdb_path).open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            record = line[:6]
+            if record.startswith("ENDMDL"):
+                first_model_done = True
+                continue
+            if first_model_done:
+                continue
+            if not record.startswith("ATOM"):
+                continue
+            _chain, _resseq, _icode, resname = _pdb_atom_residue_key(line)
+            if resname in THREE_TO_ONE:
+                return _chain
+    raise ValueError(f"No supported protein chain found in {pdb_path}.")
+
+
+def download_rcsb_pdb(pdb_id: str, out_dir: Path | str) -> Path:
+    """Download a legacy PDB file from RCSB into ``out_dir``."""
+    pdb_code = pdb_id.strip().upper()
+    if len(pdb_code) != 4 or not pdb_code.isalnum():
+        raise ValueError(f"RCSB PDB IDs must be four alphanumeric characters, got {pdb_id!r}")
+
+    out_path = Path(out_dir) / f"{pdb_code}.pdb"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    url = f"https://files.rcsb.org/download/{pdb_code}.pdb"
+    urllib.request.urlretrieve(url, out_path)  # noqa: S310
+    return out_path
+
+
+def parse_pdb_chain_sequence(pdb_path: Path | str, chain_id: str | None = None) -> list[str]:
+    """Return the protein residue sequence for one chain from a legacy PDB file."""
+    selected_chain = chain_id.strip() if chain_id is not None else None
+    residues: list[str] = []
+    seen: set[tuple[str, str, str]] = set()
+    first_model_done = False
+
+    with Path(pdb_path).open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            record = line[:6]
+            if record.startswith("ENDMDL"):
+                first_model_done = True
+                continue
+            if first_model_done:
+                continue
+            if not record.startswith("ATOM"):
+                continue
+            altloc = _pdb_atom_altloc(line)
+            if altloc not in ("", "A"):
+                continue
+            chain, resseq, icode, resname = _pdb_atom_residue_key(line)
+            if selected_chain is not None and chain != selected_chain:
+                continue
+            charmm_resname = PDB_RESNAME_TO_CHARMM.get(resname, resname)
+            if charmm_resname not in THREE_TO_ONE:
+                raise ValueError(
+                    f"Unsupported protein residue {resname!r} at chain {chain!r} "
+                    f"residue {resseq}{icode} in {pdb_path}."
+                )
+            residue_key = (chain, resseq, icode)
+            if residue_key not in seen:
+                residues.append(charmm_resname)
+                seen.add(residue_key)
+
+    if not residues:
+        chain_label = f" chain {selected_chain!r}" if selected_chain is not None else ""
+        raise ValueError(f"No protein ATOM residues found in{chain_label} {pdb_path}.")
+    return residues
+
+
+def parse_pdb_ssbond_patches(
+    pdb_path: Path | str,
+    *,
+    chain_id: str | None = None,
+    seg_name: str = "PEPT",
+) -> list[str]:
+    """Infer CHARMM DISU patches from legacy PDB SSBOND records."""
+    selected_chain = chain_id.strip() if chain_id is not None else None
+    patches: list[str] = []
+
+    with Path(pdb_path).open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not line.startswith("SSBOND"):
+                continue
+            parts = line.split()
+            if len(parts) < 8:
+                continue
+            chain1, resid1 = parts[3], parts[4]
+            chain2, resid2 = parts[6], parts[7]
+            if selected_chain is not None and (chain1 != selected_chain or chain2 != selected_chain):
+                continue
+            patches.append(f"DISU {seg_name} {resid1} {seg_name} {resid2}")
+    return patches
+
+
+def write_pdb_chain_subset(
+    pdb_path: Path | str,
+    out_path: Path | str,
+    *,
+    chain_id: str | None = None,
+) -> Path:
+    """Write a first-model, protein-only, single-chain PDB coordinate file."""
+    selected_chain = chain_id.strip() if chain_id is not None else None
+    out = Path(out_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    wrote_atom = False
+    first_model_done = False
+
+    with Path(pdb_path).open(encoding="utf-8", errors="replace") as source, out.open(
+        "w", encoding="utf-8"
+    ) as dest:
+        for line in source:
+            record = line[:6]
+            if record.startswith("ENDMDL"):
+                first_model_done = True
+                continue
+            if first_model_done:
+                continue
+            if not record.startswith("ATOM"):
+                continue
+            altloc = _pdb_atom_altloc(line)
+            if altloc not in ("", "A"):
+                continue
+            chain, _resseq, _icode, resname = _pdb_atom_residue_key(line)
+            if selected_chain is not None and chain != selected_chain:
+                continue
+            if resname not in THREE_TO_ONE:
+                continue
+            if altloc == "A":
+                line = line[:16] + " " + line[17:]
+            dest.write(line)
+            wrote_atom = True
+        dest.write("END\n")
+
+    if not wrote_atom:
+        chain_label = f" chain {selected_chain!r}" if selected_chain is not None else ""
+        raise ValueError(f"No protein ATOM records written for{chain_label} {pdb_path}.")
+    return out
+
+
+def prepare_rcsb_peptide_input(
+    pdb_id: str,
+    *,
+    chain_id: str | None = None,
+    workdir: Path | str | None = None,
+    seg_name: str = "PEPT",
+) -> dict[str, Any]:
+    """Fetch an RCSB PDB entry and prepare sequence, patches, and coordinates for CHARMM."""
+    out_dir = Path(workdir or Path.cwd())
+    pdb_path = download_rcsb_pdb(pdb_id, out_dir)
+    selected_chain = chain_id.strip() if chain_id is not None else first_protein_chain_id(pdb_path)
+    sequence = parse_pdb_chain_sequence(pdb_path, chain_id=selected_chain)
+    patches = parse_pdb_ssbond_patches(pdb_path, chain_id=selected_chain, seg_name=seg_name)
+    chain_pdb_path = write_pdb_chain_subset(
+        pdb_path,
+        out_dir / f"{pdb_id.strip().upper()}_{selected_chain or 'blank'}_protein.pdb",
+        chain_id=selected_chain,
+    )
+    return {
+        "pdb_path": pdb_path,
+        "chain_pdb_path": chain_pdb_path,
+        "chain_id": selected_chain,
+        "sequence": sequence,
+        "peptide_patches": patches,
+    }
+
+
 def build_peptide_in_charmm(
     sequence: str | list[str],
     *,
     first_patch: str | None = "ACE",
     last_patch: str | None = "CT3",
+    peptide_patches: list[str | dict[str, Any]] | None = None,
+    initial_pdb_path: Path | str | None = None,
     seg_name: str = "PEPT",
     minimize: bool = True,
     mini_steps: int = 500,
@@ -218,6 +436,12 @@ def build_peptide_in_charmm(
             last_patch=last_patch,
             setup_ic=True,
         )
+        for patch_spec in peptide_patches or []:
+            patch_name, patch_sites, patch_options = parse_peptide_patch_spec(patch_spec)
+            generate.patch(patch_name, patch_sites, **patch_options)
+
+        if initial_pdb_path is not None:
+            read.pdb(str(initial_pdb_path), resid=True)
 
     # Seed the IC table and build
     # If using acetylated/neutral terminus, we seed on ACE (res 1), otherwise on standard N-terminus
