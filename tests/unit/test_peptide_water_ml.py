@@ -197,3 +197,44 @@ def test_peptide_water_ml_cutoff_zeroes_energy_and_force_at_cutoff():
 
     np.testing.assert_allclose(np.asarray(energy), 13.0, atol=1e-10)
     np.testing.assert_allclose(np.asarray(forces), np.zeros((5, 3)), atol=1e-10)
+
+
+def test_peptide_water_ml_accepts_padded_active_water_slots():
+    peptide_idx = jnp.array([0, 1], dtype=jnp.int32)
+    water_indices = [
+        jnp.array([2, 3, 4], dtype=jnp.int32),
+        jnp.array([5, 6, 7], dtype=jnp.int32),
+    ]
+    jax_z = jnp.ones(8, dtype=jnp.int32)
+    positions = jnp.array(
+        [
+            [0.0, 0.0, 0.0],
+            [-0.5, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [2.1, 0.0, 0.0],
+            [2.2, 0.0, 0.0],
+            [8.0, 0.0, 0.0],
+            [8.1, 0.0, 0.0],
+            [8.2, 0.0, 0.0],
+        ],
+        dtype=jnp.float64,
+    )
+
+    displacement_fn, _ = space.periodic(100.0)
+    energy_fn = make_peptide_water_ml_energy_fn(
+        CutoffProbeModel(),
+        {},
+        jax_z,
+        peptide_idx,
+        water_indices,
+        displacement_fn,
+    )
+
+    active_slots = jnp.array([1, 0], dtype=jnp.int32)
+    active_mask = jnp.array([0.0, 1.0], dtype=jnp.float64)
+    energy = jax.jit(energy_fn)(positions, active_slots, active_mask)
+    forces = -jax.jit(jax.grad(energy_fn))(positions, active_slots, active_mask)
+
+    np.testing.assert_allclose(np.asarray(energy), 36.2, atol=1e-10)
+    assert forces.shape == positions.shape
+    assert jnp.isfinite(forces).all()

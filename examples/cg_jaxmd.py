@@ -178,6 +178,7 @@ DEFAULTS = {
     "peptide_water_ml": True,
     "peptide_water_ml_cutoff_A": 8.0,
     "peptide_water_ml_switch_width_A": 2.0,
+    "peptide_water_ml_headroom": 1.5,
     "peptide_water_electrostatic_embedding": False,
     "peptide_ml_charge_total_correction": False,
     "water_ml_charge_total_correction": False,
@@ -270,6 +271,7 @@ dt = dt_fs * 0.001
 PEPTIDE_WATER_ML = config.peptide_water_ml
 PEPTIDE_WATER_ML_CUTOFF_A = config.peptide_water_ml_cutoff_A
 PEPTIDE_WATER_ML_SWITCH_WIDTH_A = config.peptide_water_ml_switch_width_A
+PEPTIDE_WATER_ML_HEADROOM = config.peptide_water_ml_headroom
 USE_ML_INTRAMOLECULAR = config.use_ml_intramolecular
 PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = config.peptide_water_electrostatic_embedding
 PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = config.peptide_ml_charge_total_correction
@@ -724,7 +726,7 @@ if PEPTIDE_WATER_ML:
     dimer_size = n_trialanine + 3
     ml_charges = {n_trialanine: float(pep_charge), 3: 0.0, dimer_size: float(pep_charge)}
     ml_spins = {n_trialanine: float(pep_spin), 3: 1.0, dimer_size: float(pep_spin)}
-    compute_monomer_energy = make_peptide_water_ml_energy_fn(
+    compute_peptide_water_ml_energy = make_peptide_water_ml_energy_fn(
         peptide_model,
         peptide_params,
         jax_z,
@@ -755,11 +757,14 @@ if PEPTIDE_WATER_ML:
         spins=ml_spins,
     )
 
-    def compute_ml_bonded_energy(r):
+    def compute_monomer_energy(r, pw_slots=None, pw_mask=None):
+        return compute_peptide_water_ml_energy(r, pw_slots, pw_mask)
+
+    def compute_ml_bonded_energy(r, pw_slots=None, pw_mask=None):
         return compute_peptide_monomer_energy(r) + compute_water_monomer_energy(r)
 
-    def compute_ml_nonbonded_energy(r):
-        return compute_monomer_energy(r) - compute_ml_bonded_energy(r)
+    def compute_ml_nonbonded_energy(r, pw_slots=None, pw_mask=None):
+        return compute_monomer_energy(r, pw_slots, pw_mask) - compute_ml_bonded_energy(r)
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
     if USE_ML_INTRAMOLECULAR:
@@ -781,16 +786,16 @@ else:
             charges=monomer_charges, spins=monomer_spins
         )
 
-        def compute_monomer_energy(r):
+        def compute_monomer_energy(r, pw_slots=None, pw_mask=None):
             e_water = compute_water_energy(r)
             if compute_peptide_energy is None:
                 return e_water
             return compute_peptide_energy(r) + e_water
 
-        def compute_ml_bonded_energy(r):
-            return compute_monomer_energy(r)
+        def compute_ml_bonded_energy(r, pw_slots=None, pw_mask=None):
+            return compute_monomer_energy(r, pw_slots, pw_mask)
 
-        def compute_ml_nonbonded_energy(r):
+        def compute_ml_nonbonded_energy(r, pw_slots=None, pw_mask=None):
             return jnp.asarray(0.0, dtype=jnp.float64)
     else:
         @jit
@@ -817,7 +822,7 @@ else:
             return (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
 
         @jit
-        def compute_monomer_energy(r):
+        def compute_monomer_energy(r, pw_slots=None, pw_mask=None):
             bonded_comp = bonded_energy_components(
                 r,
                 bonded_system.topology,
@@ -831,10 +836,10 @@ else:
             e_pep_intra_nb = compute_peptide_intra_nb_energy(r)
             return e_bonded + e_pep_intra_nb
 
-        def compute_ml_bonded_energy(r):
+        def compute_ml_bonded_energy(r, pw_slots=None, pw_mask=None):
             return jnp.asarray(0.0, dtype=jnp.float64)
 
-        def compute_ml_nonbonded_energy(r):
+        def compute_ml_nonbonded_energy(r, pw_slots=None, pw_mask=None):
             return jnp.asarray(0.0, dtype=jnp.float64)
 
 pep_n_atoms = int(n_trialanine)
@@ -1059,6 +1064,47 @@ _pi0, _pj0 = _get_inter_pairs_np(pos)
 MAX_PAIRS = int(len(_pi0) * MAX_PAIRS_HEADROOM) + 16  # add 16 as safety margin
 print(f"--- Initial pair count: {len(_pi0)}, MAX_PAIRS buffer: {MAX_PAIRS} ---")
 
+_pw_water_indices_np = (
+    np.stack(monomer_indices[1:]).astype(np.int32)
+    if PEPTIDE_WATER_ML and HAS_PEPTIDE and len(monomer_indices) > 1
+    else np.zeros((0, 3), dtype=np.int32)
+)
+
+
+def _get_peptide_water_active_slots_np(pos_np):
+    """Return water slot ids whose atoms are inside the peptide-water ML skin."""
+    n_waters_local = int(_pw_water_indices_np.shape[0])
+    if not PEPTIDE_WATER_ML or not HAS_PEPTIDE or n_waters_local == 0:
+        return np.zeros(0, dtype=np.int32)
+    if PEPTIDE_WATER_ML_CUTOFF_A is None:
+        return np.arange(n_waters_local, dtype=np.int32)
+
+    active_radius = float(PEPTIDE_WATER_ML_CUTOFF_A) + float(NL_BUFFER)
+    boxsize = np.diag(cell)
+    pep_pos = np.asarray(pos_np[:n_trialanine], dtype=np.float64)
+    water_pos = np.asarray(pos_np[_pw_water_indices_np], dtype=np.float64)
+    diff = water_pos[:, None, :, :] - pep_pos[None, :, None, :]
+    diff -= boxsize * np.round(diff / boxsize)
+    min_dist = np.sqrt(np.min(np.sum(diff * diff, axis=-1), axis=(1, 2)))
+    return np.where(min_dist < active_radius)[0].astype(np.int32)
+
+
+_pw_slots0 = _get_peptide_water_active_slots_np(pos)
+if PEPTIDE_WATER_ML and HAS_PEPTIDE and len(_pw_water_indices_np) > 0:
+    if PEPTIDE_WATER_ML_CUTOFF_A is None:
+        MAX_PW_ML_WATERS = len(_pw_water_indices_np)
+    else:
+        MAX_PW_ML_WATERS = min(
+            len(_pw_water_indices_np),
+            max(16, int(len(_pw_slots0) * float(PEPTIDE_WATER_ML_HEADROOM)) + 16),
+        )
+else:
+    MAX_PW_ML_WATERS = 1
+print(
+    f"--- Initial peptide-water ML active waters: {len(_pw_slots0)}, "
+    f"MAX_PW_ML_WATERS buffer: {MAX_PW_ML_WATERS} ---"
+)
+
 
 def _pad_pairs(pi_np, pj_np):
     """Pad pair index arrays to MAX_PAIRS with (0,0) sentinel entries.
@@ -1080,6 +1126,21 @@ def _pad_pairs(pi_np, pj_np):
     pj_pad[:n] = pj_np
     mask[:n] = 1.0
     return pi_pad, pj_pad, mask
+
+
+def _pad_peptide_water_slots(slots_np):
+    """Pad active peptide-water ML water slots to fixed JAX shape."""
+    n = len(slots_np)
+    assert n <= MAX_PW_ML_WATERS, (
+        f"Peptide-water ML active water count {n} exceeds "
+        f"MAX_PW_ML_WATERS={MAX_PW_ML_WATERS}. Increase "
+        "peptide_water_ml_headroom or nl_buffer, or reduce peptide_water_ml_cutoff_A."
+    )
+    slots_pad = np.zeros(MAX_PW_ML_WATERS, dtype=np.int32)
+    mask = np.zeros(MAX_PW_ML_WATERS, dtype=np.float64)
+    slots_pad[:n] = slots_np
+    mask[:n] = 1.0
+    return slots_pad, mask
 
 
 def _pad_e14_vdw14(e14_np, vdw14_np):
@@ -1104,6 +1165,8 @@ _pj_ref = [jnp.zeros(MAX_PAIRS, dtype=jnp.int32)]
 _mask_ref = [jnp.zeros(MAX_PAIRS, dtype=jnp.float64)]
 _e14_ref = [jnp.ones(MAX_PAIRS, dtype=jnp.float64)]
 _vdw14_ref = [jnp.ones(MAX_PAIRS, dtype=jnp.float64)]
+_pw_slots_ref = [jnp.zeros(MAX_PW_ML_WATERS, dtype=jnp.int32)]
+_pw_mask_ref = [jnp.zeros(MAX_PW_ML_WATERS, dtype=jnp.float64)]
 
 # Precompute static per-atom arrays used inside the energy function
 _q_jax = jnp.asarray(nbond_data.charges, dtype=jnp.float64)
@@ -1164,15 +1227,31 @@ def update_pair_refs(pos_np):
     """
     pi_np, pj_np = _get_inter_pairs_np(pos_np)
     e14_np, vdw14_np = _precompute_e14_vdw14(pi_np, pj_np)
+    pw_slots_np = _get_peptide_water_active_slots_np(pos_np)
 
     pi_pad, pj_pad, mask = _pad_pairs(pi_np, pj_np)
     e14_pad, vdw14_pad = _pad_e14_vdw14(e14_np, vdw14_np)
+    pw_slots_pad, pw_mask = _pad_peptide_water_slots(pw_slots_np)
 
     _pi_ref[0] = jnp.array(pi_pad, dtype=jnp.int32)
     _pj_ref[0] = jnp.array(pj_pad, dtype=jnp.int32)
     _mask_ref[0] = jnp.array(mask, dtype=jnp.float64)
     _e14_ref[0] = jnp.array(e14_pad, dtype=jnp.float64)
     _vdw14_ref[0] = jnp.array(vdw14_pad, dtype=jnp.float64)
+    _pw_slots_ref[0] = jnp.array(pw_slots_pad, dtype=jnp.int32)
+    _pw_mask_ref[0] = jnp.array(pw_mask, dtype=jnp.float64)
+
+
+def _current_energy_refs():
+    return (
+        _pi_ref[0],
+        _pj_ref[0],
+        _mask_ref[0],
+        _e14_ref[0],
+        _vdw14_ref[0],
+        _pw_slots_ref[0],
+        _pw_mask_ref[0],
+    )
 
 
 # Populate refs with the initial pair list
@@ -1222,7 +1301,17 @@ def _phi_psi_restraint_energy(r):
 
 
 @jit
-def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None, **unused_kwargs) -> jnp.ndarray:
+def hybrid_energy_fn(
+    r,
+    pi=None,
+    pj=None,
+    mask=None,
+    e14=None,
+    vdw14=None,
+    pw_slots=None,
+    pw_mask=None,
+    **unused_kwargs,
+) -> jnp.ndarray:
     """Single JIT-compiled hybrid ML/MM energy function.
 
     Takes padded pair arrays as keyword arguments. Since their shapes (MAX_PAIRS)
@@ -1230,7 +1319,7 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None, **unu
     when new array values are passed in.
     """
     # (A) Intramolecular terms from ML potential
-    e_intra = compute_monomer_energy(r)
+    e_intra = compute_monomer_energy(r, pw_slots, pw_mask)
 
     # (B) Intermolecular MM nonbonded terms with padded pair list
     ri = r[pi]
@@ -1288,16 +1377,16 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None, **unu
 
 
 @jit
-def _debug_ml_energy(r):
+def _debug_ml_energy(r, pw_slots=None, pw_mask=None):
     """JIT-compiled total ML energy contribution (for diagnostics)."""
-    return compute_monomer_energy(r)
+    return compute_monomer_energy(r, pw_slots, pw_mask)
 
 
 @jit
-def _debug_ml_energy_components(r):
+def _debug_ml_energy_components(r, pw_slots=None, pw_mask=None):
     """JIT-compiled ML bonded and nonbonded interaction components."""
-    e_bonded = compute_ml_bonded_energy(r)
-    e_nonbonded = compute_ml_nonbonded_energy(r)
+    e_bonded = compute_ml_bonded_energy(r, pw_slots, pw_mask)
+    e_nonbonded = compute_ml_nonbonded_energy(r, pw_slots, pw_mask)
     return jnp.array([e_bonded, e_nonbonded])
 
 
@@ -1335,13 +1424,14 @@ def diagnose_energy(r, label=""):
     """Print energy components to identify NaN source."""
     pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
     e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    pw_slots = _pw_slots_ref[0]; pw_mask = _pw_mask_ref[0]
 
     r_np = np.asarray(r)
     if not np.isfinite(r_np).all():
         n_bad = int((~np.isfinite(r_np)).any(axis=-1).sum())
         print(f"[DIAG{label}] ⚠ Positions: {n_bad} atoms with NaN/Inf — energy will be NaN")
         return
-    e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r))
+    e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r, pw_slots, pw_mask))
     e_ml = e_ml_bonded + e_ml_nonbonded
     e_lj, e_elec = map(
         float, _debug_mm_energy_components(r, pi, pj, mask, e14, vdw14)
@@ -1354,7 +1444,8 @@ def diagnose_energy(r, label=""):
           f"(bonded={e_ml_bonded:.4f}, nonbonded={e_ml_nonbonded:.4f}) | "
           f"E_LJ={e_lj:.4f} eV | E_elec={e_elec:.4f} eV | "
           f"E_MM={e_mm:.4f} eV {mm_ok} | "
-          f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())}")
+          f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())} | "
+          f"PW_ML_active={int((_pw_mask_ref[0]>0.5).sum())}/{MAX_PW_ML_WATERS}")
     if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
         q_pep = np.asarray(compute_peptide_ml_charges(r))
         q_water = np.asarray(compute_water_ml_charges(r)).reshape(-1, water_n_atoms)
@@ -1378,6 +1469,8 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
     pi_np = np.asarray(pi)
     pj_np = np.asarray(pj)
     mask_np = np.asarray(mask)
+    pw_slots = _pw_slots_ref[0]
+    pw_mask = _pw_mask_ref[0]
     
     print(f"\n=== FORCE & NEIGHBOR LIST DIAGNOSTICS (Cycle {cycle}, Step {step}) ===")
     print(f"Positions: min={r_np.min():.3f}, max={r_np.max():.3f}, mean={r_np.mean():.3f}, std={r_np.std():.3f}")
@@ -1389,7 +1482,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         return f"Atom{idx}"
 
     # 1. Energy Components
-    e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r))
+    e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r, pw_slots, pw_mask))
     e_ml = e_ml_bonded + e_ml_nonbonded
     e_mm = float(_debug_mm_energy(r, pi, pj, mask, e14, vdw14))
     print(
@@ -1413,7 +1506,9 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
     f_mm = None
     
     try:
-        grad_tot = jax.grad(lambda r_: hybrid_energy_fn(r_, pi, pj, mask, e14, vdw14))(r)
+        grad_tot = jax.grad(
+            lambda r_: hybrid_energy_fn(r_, pi, pj, mask, e14, vdw14, pw_slots, pw_mask)
+        )(r)
         f_tot = -np.asarray(grad_tot)
         f_tot_mag = np.linalg.norm(f_tot, axis=-1)
         print(f"Total Forces: min={f_tot_mag.min():.3f}, max={f_tot_mag.max():.3f}, mean={f_tot_mag.mean():.3f}, std={f_tot_mag.std():.3f}")
@@ -1424,7 +1519,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         print(f"  Failed to compute Total Forces gradient: {e}")
         
     try:
-        grad_ml = jax.grad(lambda r_: compute_monomer_energy(r_))(r)
+        grad_ml = jax.grad(lambda r_: compute_monomer_energy(r_, pw_slots, pw_mask))(r)
         f_ml = -np.asarray(grad_ml)
         f_ml_mag = np.linalg.norm(f_ml, axis=-1)
         print(f"ML Total Forces: min={f_ml_mag.min():.3f}, max={f_ml_mag.max():.3f}, mean={f_ml_mag.mean():.3f}, std={f_ml_mag.std():.3f}")
@@ -1435,7 +1530,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         print(f"  Failed to compute ML Forces gradient: {e}")
 
     try:
-        grad_ml_bonded = jax.grad(lambda r_: compute_ml_bonded_energy(r_))(r)
+        grad_ml_bonded = jax.grad(lambda r_: compute_ml_bonded_energy(r_, pw_slots, pw_mask))(r)
         f_ml_bonded = -np.asarray(grad_ml_bonded)
         f_ml_bonded_mag = np.linalg.norm(f_ml_bonded, axis=-1)
         print(
@@ -1450,7 +1545,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         print(f"  Failed to compute ML bonded force gradient: {e}")
 
     try:
-        grad_ml_nonbonded = jax.grad(lambda r_: compute_ml_nonbonded_energy(r_))(r)
+        grad_ml_nonbonded = jax.grad(lambda r_: compute_ml_nonbonded_energy(r_, pw_slots, pw_mask))(r)
         f_ml_nonbonded = -np.asarray(grad_ml_nonbonded)
         f_ml_nonbonded_mag = np.linalg.norm(f_ml_nonbonded, axis=-1)
         print(
@@ -1520,6 +1615,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         dists = np.linalg.norm(diff, axis=-1)
         
         print(f"Active NL Pairs Count: {len(active_idx)}")
+        print(f"Active Peptide-Water ML Waters: {int((np.asarray(pw_mask) > 0.5).sum())}/{MAX_PW_ML_WATERS}")
         print(f"Active Pair Distances: min={dists.min():.3f} Å, max={dists.max():.3f} Å, mean={dists.mean():.3f} Å")
         
         close_idx = np.where(dists < 1.2)[0]
@@ -1716,18 +1812,24 @@ _init_fn_fire, _step_fn_fire = minimize.fire_descent(
 _step_fn_fire = jit(_step_fn_fire)
 
 @jit
-def run_fire_block(state, pi, pj, mask, e14, vdw14):
+def run_fire_block(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask):
     """Run FIRE_BLOCK_STEPS steps of FIRE (compiled once)."""
     def body_fn(i, s):
-        return _step_fn_fire(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        return _step_fn_fire(
+            s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+            pw_slots=pw_slots, pw_mask=pw_mask,
+        )
     return jax.lax.fori_loop(0, FIRE_BLOCK_STEPS, body_fn, state)
 
 
 @jit
-def run_fire_block_repair(state, pi, pj, mask, e14, vdw14):
+def run_fire_block_repair(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask):
     """Run 200 steps of FIRE for post-repair minimization (compiled once)."""
     def body_fn(i, s):
-        return _step_fn_fire(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        return _step_fn_fire(
+            s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+            pw_slots=pw_slots, pw_mask=pw_mask,
+        )
     return jax.lax.fori_loop(0, 200, body_fn, state)
 
 
@@ -1744,12 +1846,11 @@ def _repair_candidate_metrics(label, positions):
             "mean_force": float("inf"),
         }
     update_pair_refs(pos_np)
-    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
     r_jax = jnp.array(pos_np, dtype=jnp.float64)
-    energy = float(hybrid_energy_fn(r_jax, pi, pj, mask, e14, vdw14))
+    energy = float(hybrid_energy_fn(r_jax, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
     force = -np.asarray(
-        jax.grad(lambda r: hybrid_energy_fn(r, pi, pj, mask, e14, vdw14))(r_jax)
+        jax.grad(lambda r: hybrid_energy_fn(r, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))(r_jax)
     )
     force_norm = np.linalg.norm(force, axis=-1)
     finite = np.isfinite(energy) and np.isfinite(force_norm).all()
@@ -1767,8 +1868,7 @@ def _run_jax_mmml_fire_repair(positions):
     """Run the MMML FIRE repair stage from supplied coordinates."""
     pos_np = np.asarray(positions, dtype=np.float64)
     update_pair_refs(pos_np)
-    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
     fire_state = _init_fn_fire(
         jnp.array(pos_np, dtype=jnp.float64),
         pi=pi,
@@ -1776,8 +1876,10 @@ def _run_jax_mmml_fire_repair(positions):
         mask=mask,
         e14=e14,
         vdw14=vdw14,
+        pw_slots=pw_slots,
+        pw_mask=pw_mask,
     )
-    fire_state = run_fire_block_repair(fire_state, pi, pj, mask, e14, vdw14)
+    fire_state = run_fire_block_repair(fire_state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask)
     return np.asarray(fire_state.position, dtype=np.float64)
 
 
@@ -1837,9 +1939,12 @@ _init_fn_nvt, _step_fn_nvt = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn
 _step_fn_nvt = jit(_step_fn_nvt)
 
 @jit
-def run_nvt_block(state, pi, pj, mask, e14, vdw14, target_temp_ev):
+def run_nvt_block(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask, target_temp_ev):
     def body_fn(i, s):
-        return _step_fn_nvt(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=target_temp_ev)
+        return _step_fn_nvt(
+            s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+            pw_slots=pw_slots, pw_mask=pw_mask, kT=target_temp_ev,
+        )
     return jax.lax.fori_loop(0, NVT_BLOCK_STEPS, body_fn, state)
 
 
@@ -1849,9 +1954,12 @@ _init_fn_nve, _step_fn_nve = simulate.nve(hybrid_energy_fn, shift_fn, dt)
 _step_fn_nve = jit(_step_fn_nve)
 
 @jit
-def run_nve_block(state, pi, pj, mask, e14, vdw14):
+def run_nve_block(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask):
     def body_fn(i, s):
-        return _step_fn_nve(s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        return _step_fn_nve(
+            s, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+            pw_slots=pw_slots, pw_mask=pw_mask,
+        )
     return jax.lax.fori_loop(0, NVE_BLOCK_STEPS, body_fn, state)
 
 
@@ -1871,19 +1979,21 @@ for cycle in range(FIRE_CYCLES):
 
     # Update pair list from current coordinates (CPU, once per cycle start)
     update_pair_refs(np.asarray(pos_current))
-    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
 
     # --- Pre-FIRE diagnostic: print energy components before any step ---
     diagnose_energy(pos_current, label=f" Cycle{cycle+1} init")
     if DEBUG:
         run_force_and_nl_diagnostics(pos_current, pi, pj, mask, e14, vdw14, cycle+1, 0)
 
-    fire_state = _init_fn_fire(pos_current, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+    fire_state = _init_fn_fire(
+        pos_current, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+        pw_slots=pw_slots, pw_mask=pw_mask,
+    )
 
     # Write starting configuration of this cycle to trajectory
     curr_f = np.asarray(fire_state.force)
-    curr_e = float(hybrid_energy_fn(pos_current, pi, pj, mask, e14, vdw14))
+    curr_e = float(hybrid_energy_fn(pos_current, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
     frame = atoms.copy()
     frame.set_positions(unfold_coordinates(np.asarray(pos_current), box_size, _mon_stacked_groups))
     frame.calc = SinglePointCalculator(frame, energy=curr_e, forces=curr_f)
@@ -1898,13 +2008,12 @@ for cycle in range(FIRE_CYCLES):
 
         # Update pair list (CPU side only; no JAX re-trace)
         update_pair_refs(pos_before_block)
-        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
 
-        fire_state = run_fire_block(fire_state, pi, pj, mask, e14, vdw14)
+        fire_state = run_fire_block(fire_state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask)
 
         curr_f = np.asarray(fire_state.force)
-        curr_e = float(hybrid_energy_fn(fire_state.position, pi, pj, mask, e14, vdw14))
+        curr_e = float(hybrid_energy_fn(fire_state.position, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
         max_bond = get_max_h_x_bond(fire_state.position, box_size, h_idx_arr, x_idx_arr)
         max_dev, mean_dev = get_peptide_bond_diagnostics(fire_state.position, box_size, pep_bond_idx1_arr, pep_bond_idx2_arr, r0_pep_list)
         print(f"Cycle {cycle+1} | FIRE Step {step+FIRE_BLOCK_STEPS:4d} | "
@@ -1930,9 +2039,11 @@ for cycle in range(FIRE_CYCLES):
             # Re-initialize FIRE from pre-block (finite) positions for CHARMM repair.
             # FireDescentState is a plain dataclass so we use _init_fn_fire, not .replace().
             update_pair_refs(pos_before_block)
-            pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-            e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-            fire_state = _init_fn_fire(good_pos_jax, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+            pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
+            fire_state = _init_fn_fire(
+                good_pos_jax, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+                pw_slots=pw_slots, pw_mask=pw_mask,
+            )
             nan_detected = True
             break
 
@@ -1970,11 +2081,13 @@ def next_md_key():
 
 # Initialize starting NVT state
 update_pair_refs(np.asarray(min_r))
-pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
 init_temp_k = nvt_temp_func(0)
 init_temp_ev = init_temp_k * kb
-state = _init_fn_nvt(next_md_key(), min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=init_temp_ev)
+state = _init_fn_nvt(
+    next_md_key(), min_r, mass=jax_mass, pi=pi, pj=pj, mask=mask,
+    e14=e14, vdw14=vdw14, pw_slots=pw_slots, pw_mask=pw_mask, kT=init_temp_ev,
+)
 
 traj_path_nvt = os.path.join(OUTPUT_DIR, "cg_nvt.traj")
 print(f"--- Running NVT dynamics and saving trajectory to {traj_path_nvt} and its .dcd counterpart ---")
@@ -1992,22 +2105,21 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
         print(f"[NVT] Non-finite positions detected before block; reverting to last-good checkpoint. (T={curr_temp_k:.1f} K)")
         pos_before_block = last_good_nvt_pos.copy()
         update_pair_refs(pos_before_block)
-        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
         state = _init_fn_nvt(next_md_key(), jnp.array(pos_before_block, dtype=jnp.float64),
-                             mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=curr_temp_ev)
+                             mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+                             pw_slots=pw_slots, pw_mask=pw_mask, kT=curr_temp_ev)
 
     # Update pair list on CPU (no JAX re-trace — shapes are fixed)
     update_pair_refs(pos_before_block)
-    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
 
     # Run the compiled block of steps with current target temperature
-    state = run_nvt_block(state, pi, pj, mask, e14, vdw14, curr_temp_ev)
+    state = run_nvt_block(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask, curr_temp_ev)
 
     # Compute diagnostics directly from state and JITted hybrid_energy_fn
     curr_f = np.asarray(state.force)
-    curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14))
+    curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
     ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
     temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
     max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
@@ -2047,12 +2159,14 @@ for step in range(0, NVT_TOTAL_STEPS, NVT_BLOCK_STEPS):
 
         # Re-initialize NVT state
         update_pair_refs(np.asarray(final_min_pos))
-        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state = _init_fn_nvt(next_md_key(), final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14, kT=curr_temp_ev)
+        pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
+        state = _init_fn_nvt(
+            next_md_key(), final_min_pos, mass=jax_mass, pi=pi, pj=pj, mask=mask,
+            e14=e14, vdw14=vdw14, pw_slots=pw_slots, pw_mask=pw_mask, kT=curr_temp_ev,
+        )
         # Re-evaluate diagnostics
         curr_f = np.asarray(state.force)
-        curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14))
+        curr_e = float(hybrid_energy_fn(state.position, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
         ke = float(quantity.kinetic_energy(momentum=state.momentum, mass=state.mass))
         temp = float(quantity.temperature(momentum=state.momentum, mass=state.mass) / kb)
         max_bond = get_max_h_x_bond(state.position, box_size, h_idx_arr, x_idx_arr)
@@ -2084,9 +2198,11 @@ print("--- Running NVE Dynamics with JAX-MD to check stability ---")
 
 # Initialize NVE state from final NVT positions
 update_pair_refs(np.asarray(state.position))
-pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-state_nve = _init_fn_nve(next_md_key(), state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
+state_nve = _init_fn_nve(
+    next_md_key(), state.position, target_temp_ev, mass=jax_mass, pi=pi, pj=pj,
+    mask=mask, e14=e14, vdw14=vdw14, pw_slots=pw_slots, pw_mask=pw_mask,
+)
 
 traj_path_nve = os.path.join(OUTPUT_DIR, "cg_nve.traj")
 print(f"--- Running NVE dynamics and saving trajectory to {traj_path_nve} and its .dcd counterpart ---")
@@ -2094,7 +2210,7 @@ traj_nve = DualTrajectoryWriter(traj_path_nve, atoms, dt_ps=dt, steps_per_frame=
 last_good_nve_pos = np.asarray(state.position, dtype=np.float64)
 
 # Measure initial NVE total energy baseline for conservation checks
-init_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
+init_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
 init_ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
 initial_nve_energy = init_e + init_ke
 print(f"Initial NVE Energy Baseline: {initial_nve_energy:.6f} eV (Potential: {init_e:.6f} eV, Kinetic: {init_ke:.6f} eV)")
@@ -2108,23 +2224,22 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
         print("[NVE] Non-finite positions detected before block; reverting to last-good checkpoint.")
         pos_before_block = last_good_nve_pos.copy()
         update_pair_refs(pos_before_block)
-        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+        pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
         state_nve = _init_fn_nve(next_md_key(), jnp.array(pos_before_block, dtype=jnp.float64),
                                  target_temp_ev, mass=jax_mass,
-                                 pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+                                 pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+                                 pw_slots=pw_slots, pw_mask=pw_mask)
 
     # Update pair list on CPU (no JAX re-trace)
     update_pair_refs(pos_before_block)
-    pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-    e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
+    pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
 
     # Run the compiled block of steps
-    state_nve = run_nve_block(state_nve, pi, pj, mask, e14, vdw14)
+    state_nve = run_nve_block(state_nve, pi, pj, mask, e14, vdw14, pw_slots, pw_mask)
 
     # Compute diagnostics
     curr_f = np.asarray(state_nve.force)
-    curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
+    curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
     ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
     temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
     max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)
@@ -2163,12 +2278,14 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
 
         # Re-initialize NVE state
         update_pair_refs(np.asarray(final_min_pos))
-        pi = _pi_ref[0]; pj = _pj_ref[0]; mask = _mask_ref[0]
-        e14 = _e14_ref[0]; vdw14 = _vdw14_ref[0]
-        state_nve = _init_fn_nve(next_md_key(), final_min_pos, target_temp_ev, mass=jax_mass, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14)
+        pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
+        state_nve = _init_fn_nve(
+            next_md_key(), final_min_pos, target_temp_ev, mass=jax_mass, pi=pi, pj=pj,
+            mask=mask, e14=e14, vdw14=vdw14, pw_slots=pw_slots, pw_mask=pw_mask,
+        )
         # Re-evaluate diagnostics
         curr_f = np.asarray(state_nve.force)
-        curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14))
+        curr_e = float(hybrid_energy_fn(state_nve.position, pi, pj, mask, e14, vdw14, pw_slots, pw_mask))
         ke = float(quantity.kinetic_energy(momentum=state_nve.momentum, mass=state_nve.mass))
         temp = float(quantity.temperature(momentum=state_nve.momentum, mass=state_nve.mass) / kb)
         max_bond = get_max_h_x_bond(state_nve.position, box_size, h_idx_arr, x_idx_arr)

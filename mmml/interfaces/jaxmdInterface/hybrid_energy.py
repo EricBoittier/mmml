@@ -323,7 +323,7 @@ def make_peptide_water_ml_energy_fn(
         smoothstep = t * t * t * (10.0 - 15.0 * t + 6.0 * t * t)
         return 1.0 - smoothstep
     
-    def dimer_energy_fn(r):
+    def dimer_energy_fn(r, active_water_slots=None, active_water_mask=None):
         # Always evaluate the peptide monomer. With no waters this function
         # reduces to the peptide ML energy, which keeps gas-phase setups valid.
         pep_pos = r[peptide_idx]
@@ -337,19 +337,6 @@ def make_peptide_water_ml_energy_fn(
         if n_waters == 0:
             return e_pep
 
-        # 1. Dimer evaluation
-        group_pos = r[stacked_dimer_indices]
-        ref_pos = group_pos[:, 0, :]
-        displacements = vmapped_displacement_dimer(group_pos, ref_pos)
-        unfolded_dimer_pos = ref_pos[:, None, :] + displacements
-        
-        # Center dimer coordinates to its COM
-        dimer_com = jnp.mean(unfolded_dimer_pos, axis=1, keepdims=True)
-        centered_dimer = unfolded_dimer_pos - dimer_com
-        
-        outputs_dimer = vmapped_apply_dimer(centered_dimer, dimer_z)
-        e_dimer = jnp.asarray(outputs_dimer["energy"]).reshape((n_waters,))
-
         water_pos = r[water_stacked_indices]
         water_ref_pos = water_pos[:, 0, :]
         water_displacements = vmapped_displacement_water(water_pos, water_ref_pos)
@@ -359,17 +346,48 @@ def make_peptide_water_ml_energy_fn(
         outputs_water = vmapped_apply_water(centered_water, water_z)
         e_water = jnp.asarray(outputs_water["energy"]).reshape((n_waters,))
 
+        if active_water_slots is None:
+            active_stacked_dimer_indices = stacked_dimer_indices
+            active_dimer_z = dimer_z
+            active_e_water = e_water
+            active_mask = jnp.ones((n_waters,), dtype=e_water.dtype)
+        else:
+            active_water_slots = jnp.asarray(active_water_slots, dtype=jnp.int32)
+            active_mask = jnp.asarray(active_water_mask, dtype=e_water.dtype)
+            active_water_indices = water_stacked_indices[active_water_slots]
+            active_peptide_indices = jnp.broadcast_to(
+                peptide_idx[None, :], (active_water_slots.shape[0], n_atoms_pep)
+            )
+            active_stacked_dimer_indices = jnp.concatenate(
+                [active_peptide_indices, active_water_indices], axis=1
+            )
+            active_dimer_z = jax_z[active_stacked_dimer_indices]
+            active_e_water = e_water[active_water_slots]
+
+        # 1. Dimer evaluation over only the active/padded peptide-water slots.
+        group_pos = r[active_stacked_dimer_indices]
+        ref_pos = group_pos[:, 0, :]
+        displacements = vmapped_displacement_dimer(group_pos, ref_pos)
+        unfolded_dimer_pos = ref_pos[:, None, :] + displacements
+        
+        # Center dimer coordinates to its COM
+        dimer_com = jnp.mean(unfolded_dimer_pos, axis=1, keepdims=True)
+        centered_dimer = unfolded_dimer_pos - dimer_com
+        
+        outputs_dimer = vmapped_apply_dimer(centered_dimer, active_dimer_z)
+        e_dimer = jnp.asarray(outputs_dimer["energy"]).reshape(active_mask.shape)
+
         pep_atoms = unfolded_dimer_pos[:, :n_atoms_pep, :]
         water_atoms = unfolded_dimer_pos[:, n_atoms_pep:, :]
         pair_diff = pep_atoms[:, :, None, :] - water_atoms[:, None, :, :]
         min_pair_dist = jnp.min(jnp.linalg.norm(pair_diff, axis=-1), axis=(1, 2))
         weights = _smooth_switch(min_pair_dist)
 
-        e_interaction = e_dimer - e_pep - e_water
+        e_interaction = e_dimer - e_pep - active_e_water
 
         # Subtract (N_waters - 1) * E_peptide to get:
         # E_peptide_ML + sum(E_water_i_ML) + sum(E_inter_peptide_water_ML)
-        return e_pep + jnp.sum(e_water) + jnp.sum(weights * e_interaction)
+        return e_pep + jnp.sum(e_water) + jnp.sum(active_mask * weights * e_interaction)
         
     return dimer_energy_fn
 
