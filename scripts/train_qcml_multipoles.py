@@ -82,6 +82,70 @@ def target_rms_vector(
     return np.asarray(values, dtype=np.float32)
 
 
+def target_component_scale_from_arrays(
+    targets: np.ndarray,
+    *,
+    quantile: float,
+    max_degree: int = 3,
+    floor: float = 1e-6,
+) -> dict[str, float]:
+    """Compute per-degree absolute component quantile scales."""
+    scales = {}
+    for name, (start, stop) in degree_slices(max_degree).items():
+        block = np.abs(targets[:, start:stop].astype(np.float64)).reshape(-1)
+        scales[name] = max(float(np.quantile(block, quantile)), floor)
+    return scales
+
+
+def target_block_max_abs(
+    targets: np.ndarray,
+    *,
+    max_degree: int = 3,
+) -> dict[str, np.ndarray]:
+    """Return per-structure max absolute component by degree."""
+    maxima = {}
+    for name, (start, stop) in degree_slices(max_degree).items():
+        maxima[name] = np.max(np.abs(targets[:, start:stop]), axis=1)
+    return maxima
+
+
+def target_block_norms(
+    targets: np.ndarray,
+    *,
+    max_degree: int = 3,
+) -> dict[str, np.ndarray]:
+    """Return per-structure vector norm by degree."""
+    norms = {}
+    for name, (start, stop) in degree_slices(max_degree).items():
+        norms[name] = np.linalg.norm(targets[:, start:stop], axis=1)
+    return norms
+
+
+def filter_indices_by_target_thresholds(
+    cache: dict[str, np.ndarray],
+    indices: np.ndarray,
+    thresholds: dict[str, float] | None,
+    *,
+    mode: str = "component",
+    max_degree: int = 3,
+) -> np.ndarray:
+    """Drop structures whose target block statistic exceeds any threshold."""
+    if thresholds is None:
+        return indices
+    targets = cache["multipoles"][indices]
+    if mode == "component":
+        statistics = target_block_max_abs(targets, max_degree=max_degree)
+    elif mode == "norm":
+        statistics = target_block_norms(targets, max_degree=max_degree)
+    else:
+        raise ValueError("outlier_degree_mode must be 'component' or 'norm'")
+    keep = np.ones(len(indices), dtype=bool)
+    for degree in range(max_degree + 1):
+        name = f"l{degree}"
+        keep &= statistics[name] <= float(thresholds[name])
+    return indices[keep]
+
+
 def compute_target_rms(
     shard_paths: list[Path],
     *,
@@ -119,6 +183,161 @@ def compute_target_rms(
         name: max(float(np.sqrt(sums[name] / counts[name])), floor)
         for name in sums
     }
+
+
+def compute_target_statistics(
+    shard_paths: list[Path],
+    *,
+    max_structures: int | None,
+    max_atoms: int | None,
+    scale_mode: str,
+    outlier_quantile: float | None,
+    outlier_degree_mode: str,
+    max_degree: int = 3,
+    floor: float = 1e-6,
+) -> dict[str, Any]:
+    """Compute training-set target scales and optional outlier thresholds."""
+    if scale_mode not in {"rms", "q95", "q99"}:
+        raise ValueError("target_scale_mode must be one of: rms, q95, q99")
+    if outlier_quantile is not None and not 0.0 < outlier_quantile <= 1.0:
+        raise ValueError("outlier_quantile must be in (0, 1]")
+
+    component_values = {name: [] for name in degree_slices(max_degree)}
+    outlier_values = {name: [] for name in degree_slices(max_degree)}
+    rms_sums = {name: 0.0 for name in degree_slices(max_degree)}
+    rms_counts = {name: 0 for name in degree_slices(max_degree)}
+    eligible_count = 0
+    remaining = max_structures
+
+    for shard_number, shard_path in enumerate(shard_paths, start=1):
+        if remaining is not None and remaining <= 0:
+            break
+        print(
+            f"Computing target statistics from shard {shard_number}/{len(shard_paths)}: "
+            f"{shard_path}",
+            flush=True,
+        )
+        cache = restore_cache(shard_path)
+        if remaining is not None:
+            cache = limit_cache(cache, remaining)
+            remaining -= len(cache["R"])
+        indices = eligible_indices(cache, max_atoms)
+        targets = cache["multipoles"][indices].astype(np.float64)
+        eligible_count += len(indices)
+        max_abs = target_block_max_abs(targets, max_degree=max_degree)
+        norms = target_block_norms(targets, max_degree=max_degree)
+        for name, (start, stop) in degree_slices(max_degree).items():
+            block = targets[:, start:stop]
+            rms_sums[name] += float(np.sum(np.square(block)))
+            rms_counts[name] += int(block.size)
+            if scale_mode != "rms":
+                component_values[name].append(
+                    np.abs(block).reshape(-1).astype(np.float32)
+                )
+            if outlier_quantile is not None:
+                values = max_abs[name] if outlier_degree_mode == "component" else norms[name]
+                outlier_values[name].append(values.astype(np.float32))
+        del cache
+
+    if eligible_count == 0 or not all(rms_counts.values()):
+        raise ValueError("No eligible structures found while computing target statistics")
+
+    scales = {}
+    scale_quantile = {"q95": 0.95, "q99": 0.99}.get(scale_mode)
+    for name in degree_slices(max_degree):
+        if scale_mode == "rms":
+            scales[name] = max(float(np.sqrt(rms_sums[name] / rms_counts[name])), floor)
+        else:
+            values = np.concatenate(component_values[name])
+            scales[name] = max(float(np.quantile(values, scale_quantile)), floor)
+
+    thresholds = None
+    if outlier_quantile is not None:
+        thresholds = {
+            name: max(float(np.quantile(np.concatenate(values), outlier_quantile)), floor)
+            for name, values in outlier_values.items()
+        }
+
+    report: dict[str, Any] = {
+        "scale_mode": scale_mode,
+        "scale": scales,
+        "eligible_structures": int(eligible_count),
+        "outlier_degree_mode": outlier_degree_mode,
+        "outlier_quantile": outlier_quantile,
+        "outlier_threshold": thresholds,
+    }
+    if thresholds is not None:
+        retained = 0
+        rejected = 0
+        remaining = max_structures
+        for shard_path in shard_paths:
+            if remaining is not None and remaining <= 0:
+                break
+            cache = restore_cache(shard_path)
+            if remaining is not None:
+                cache = limit_cache(cache, remaining)
+                remaining -= len(cache["R"])
+            indices = eligible_indices(cache, max_atoms)
+            filtered = filter_indices_by_target_thresholds(
+                cache,
+                indices,
+                thresholds,
+                mode=outlier_degree_mode,
+                max_degree=max_degree,
+            )
+            retained += len(filtered)
+            rejected += len(indices) - len(filtered)
+            del cache
+        report["retained_structures"] = int(retained)
+        report["rejected_structures"] = int(rejected)
+        report["retained_fraction"] = float(retained / max(retained + rejected, 1))
+    return report
+
+
+def load_or_compute_target_statistics(
+    path: Path,
+    shard_paths: list[Path],
+    *,
+    max_structures: int | None,
+    max_atoms: int | None,
+    scale_mode: str,
+    outlier_quantile: float | None,
+    outlier_degree_mode: str,
+    max_degree: int = 3,
+    floor: float = 1e-6,
+) -> dict[str, Any]:
+    """Load existing target statistics or compute and save them."""
+    if path.exists():
+        print(f"Loading target statistics from {path}", flush=True)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if "scale" in payload:
+            return payload
+        legacy_scale = {
+            f"l{degree}": float(payload[f"l{degree}"])
+            for degree in range(max_degree + 1)
+        }
+        return {
+            "scale_mode": "rms",
+            "scale": legacy_scale,
+            "eligible_structures": None,
+            "outlier_degree_mode": outlier_degree_mode,
+            "outlier_quantile": None,
+            "outlier_threshold": None,
+        }
+    print(f"Computing target statistics and writing {path}", flush=True)
+    report = compute_target_statistics(
+        shard_paths,
+        max_structures=max_structures,
+        max_atoms=max_atoms,
+        scale_mode=scale_mode,
+        outlier_quantile=outlier_quantile,
+        outlier_degree_mode=outlier_degree_mode,
+        max_degree=max_degree,
+        floor=floor,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    return report
 
 
 def load_or_compute_target_rms(
@@ -301,6 +520,7 @@ def multipole_loss(
     charge: jax.Array | None = None,
     target_rms: jax.Array | None = None,
     charge_weight: float = 0.0,
+    huber_delta: float = 0.0,
     max_degree: int = 3,
 ) -> tuple[jax.Array, dict[str, jax.Array]]:
     """Average degree-balanced MSE over non-padding examples."""
@@ -315,7 +535,11 @@ def multipole_loss(
         error = (
             prediction[:, start : start + width] - target[:, start : start + width]
         ) / block_rms
-        per_example = jnp.mean(jnp.square(error), axis=-1)
+        if huber_delta and huber_delta > 0:
+            per_component = optax.huber_loss(error, delta=huber_delta)
+        else:
+            per_component = jnp.square(error)
+        per_example = jnp.mean(per_component, axis=-1)
         losses[f"l{degree}"] = jnp.sum(per_example * example_mask) / denominator
         start += width
     total = jnp.mean(jnp.stack(tuple(losses.values())))
@@ -367,6 +591,7 @@ def build_steps(
     batch_size: int,
     target_rms: np.ndarray | jax.Array | None = None,
     charge_weight: float = 0.0,
+    huber_delta: float = 0.0,
 ):
     target_rms_array = (
         None if target_rms is None else jnp.asarray(target_rms, dtype=jnp.float32)
@@ -386,6 +611,7 @@ def build_steps(
             charge=batch["charge"],
             target_rms=target_rms_array,
             charge_weight=charge_weight,
+            huber_delta=huber_delta,
         )
 
     @jax.jit
@@ -409,7 +635,17 @@ def evaluate(
     batch_size: int,
     validation_step: Any,
     bucket_width: int,
+    target_thresholds: dict[str, float] | None = None,
+    outlier_degree_mode: str = "component",
 ) -> float:
+    if not len(indices):
+        return float("nan")
+    indices = filter_indices_by_target_thresholds(
+        cache,
+        indices,
+        target_thresholds,
+        mode=outlier_degree_mode,
+    )
     if not len(indices):
         return float("nan")
     weighted_loss = 0.0
@@ -467,8 +703,21 @@ def main() -> None:
     parser.add_argument("--weight-decay", type=float, default=1e-6)
     parser.add_argument("--gradient-clip-norm", type=float, default=1.0)
     parser.add_argument("--charge-weight", type=float, default=1.0)
+    parser.add_argument("--huber-delta", type=float, default=1.0)
+    parser.add_argument("--target-scale-json", type=Path)
+    parser.add_argument(
+        "--target-scale-mode",
+        choices=("rms", "q95", "q99"),
+        default="q95",
+    )
     parser.add_argument("--target-rms-json", type=Path)
     parser.add_argument("--target-rms-floor", type=float, default=1e-6)
+    parser.add_argument("--outlier-quantile", type=float, default=0.99)
+    parser.add_argument(
+        "--outlier-degree-mode",
+        choices=("component", "norm"),
+        default="component",
+    )
     parser.add_argument("--validation-fraction", type=float, default=0.1)
     parser.add_argument("--max-structures", type=int)
     parser.add_argument("--max-atoms", type=int)
@@ -505,17 +754,39 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
-    target_rms_path = args.target_rms_json or args.workdir / "target_rms.json"
-    target_rms = load_or_compute_target_rms(
-        target_rms_path,
+    target_stats_path = (
+        args.target_scale_json
+        or args.target_rms_json
+        or args.workdir / "target_scale.json"
+    )
+    if args.target_rms_json is not None and args.target_scale_json is None:
+        target_scale_mode = "rms"
+        outlier_quantile = None
+    else:
+        target_scale_mode = args.target_scale_mode
+        outlier_quantile = args.outlier_quantile
+    target_stats = load_or_compute_target_statistics(
+        target_stats_path,
         training_paths,
         max_structures=args.max_structures,
         max_atoms=args.max_atoms,
+        scale_mode=target_scale_mode,
+        outlier_quantile=outlier_quantile,
+        outlier_degree_mode=args.outlier_degree_mode,
         max_degree=3,
         floor=args.target_rms_floor,
     )
-    target_rms_array = target_rms_vector(target_rms)
-    print(f"Using target RMS: {json.dumps(target_rms, sort_keys=True)}")
+    target_scale = {
+        f"l{degree}": float(target_stats["scale"][f"l{degree}"])
+        for degree in range(4)
+    }
+    target_thresholds = target_stats.get("outlier_threshold")
+    target_scale_array = target_rms_vector(target_scale)
+    print(f"Using target scale: {json.dumps(target_scale, sort_keys=True)}")
+    if target_thresholds is not None:
+        print(
+            f"Using outlier thresholds: {json.dumps(target_thresholds, sort_keys=True)}"
+        )
 
     first_cache = restore_cache(training_paths[0])
     if args.max_structures is not None:
@@ -530,6 +801,14 @@ def main() -> None:
     else:
         training_indices = first_indices
         validation_indices = np.asarray([], dtype=np.int64)
+    training_indices = filter_indices_by_target_thresholds(
+        first_cache,
+        training_indices,
+        target_thresholds,
+        mode=args.outlier_degree_mode,
+    )
+    if not len(training_indices):
+        raise ValueError("Outlier filtering removed all initial training structures")
     training_buckets = bucket_indices(first_cache, training_indices, args.bucket_width)
     config = TrainConfig(
         features=args.features,
@@ -555,8 +834,9 @@ def main() -> None:
     train_step, validation_step = build_steps(
         model,
         args.batch_size,
-        target_rms_array,
+        target_scale_array,
         args.charge_weight,
+        args.huber_delta,
     )
     rng = np.random.default_rng(args.seed)
 
@@ -575,6 +855,15 @@ def main() -> None:
                 cache = limit_cache(cache, remaining)
                 remaining -= len(cache["R"])
             indices = eligible_indices(cache, args.max_atoms)
+            indices = filter_indices_by_target_thresholds(
+                cache,
+                indices,
+                target_thresholds,
+                mode=args.outlier_degree_mode,
+            )
+            if not len(indices):
+                del cache
+                continue
             buckets = bucket_indices(cache, indices, args.bucket_width)
             for batch_indices, example_mask, max_atoms in iter_bucket_batches(
                 buckets, args.batch_size, rng
@@ -594,26 +883,39 @@ def main() -> None:
                 shard_loss = evaluate(
                     state.params, cache, indices, args.batch_size,
                     validation_step, args.bucket_width,
+                    target_thresholds, args.outlier_degree_mode,
                 )
+                if not np.isfinite(shard_loss):
+                    del cache
+                    continue
                 validation_total += shard_loss * len(indices)
                 validation_count += len(indices)
                 del cache
-            validation_loss = validation_total / validation_count
+            validation_loss = (
+                validation_total / validation_count
+                if validation_count
+                else float("nan")
+            )
         else:
             validation_loss = evaluate(
                 state.params, first_cache, validation_indices, args.batch_size,
                 validation_step, args.bucket_width,
+                target_thresholds, args.outlier_degree_mode,
             )
         metrics = {
             "epoch": epoch,
-            "train_loss": train_total / train_count,
+            "train_loss": train_total / train_count if train_count else float("nan"),
             "validation_loss": validation_loss,
             "learning_rate": args.learning_rate,
             "gradient_clip_norm": args.gradient_clip_norm,
             "charge_weight": args.charge_weight,
+            "huber_delta": args.huber_delta,
         }
-        for name, value in target_rms.items():
-            metrics[f"target_rms_{name}"] = value
+        for name, value in target_scale.items():
+            metrics[f"target_scale_{name}"] = value
+        if target_thresholds is not None:
+            for name, value in target_thresholds.items():
+                metrics[f"outlier_threshold_{name}"] = value
         print(
             f"epoch={epoch:04d} train={metrics['train_loss']:.8g} "
             f"valid={metrics['validation_loss']:.8g}"

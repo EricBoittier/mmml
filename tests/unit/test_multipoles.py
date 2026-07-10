@@ -14,8 +14,10 @@ from scripts.train_qcml_multipoles import (
     bucket_indices,
     build_steps,
     create_state,
+    filter_indices_by_target_thresholds,
     target_rms_from_arrays,
     target_rms_vector,
+    target_component_scale_from_arrays,
     eligible_indices,
     limit_cache,
     make_batch,
@@ -160,6 +162,23 @@ def test_multipole_loss_uses_rms_and_charge_constraint() -> None:
     assert loss == pytest.approx(2.5)
 
 
+def test_multipole_loss_can_use_huber_on_normalized_errors() -> None:
+    target = jnp.zeros((1, 16))
+    prediction = target.at[:, 0].set(4.0)
+    target_rms = jnp.ones(16).at[0].set(2.0)
+
+    loss, losses = multipole_loss(
+        prediction,
+        target,
+        jnp.ones(1),
+        target_rms=target_rms,
+        huber_delta=1.0,
+    )
+
+    assert losses["l0"] == pytest.approx(1.5)
+    assert loss == pytest.approx(0.375)
+
+
 def test_target_rms_helpers_expand_degree_blocks() -> None:
     targets = np.zeros((2, 16), dtype=np.float32)
     targets[:, 1:4] = 2.0
@@ -170,6 +189,24 @@ def test_target_rms_helpers_expand_degree_blocks() -> None:
     assert target_rms["l1"] == pytest.approx(2.0)
     assert vector.shape == (16,)
     np.testing.assert_allclose(vector[1:4], 2.0)
+
+
+def test_target_quantile_scale_and_outlier_filtering() -> None:
+    targets = np.zeros((3, 16), dtype=np.float32)
+    targets[:, 1] = [1.0, 2.0, 100.0]
+    scales = target_component_scale_from_arrays(targets, quantile=0.5)
+    cache = {
+        "multipoles": targets,
+    }
+
+    filtered = filter_indices_by_target_thresholds(
+        cache,
+        np.array([0, 1, 2]),
+        {"l0": 1.0, "l1": 10.0, "l2": 1.0, "l3": 1.0},
+    )
+
+    assert scales["l1"] == pytest.approx(0.0, abs=1e-6)
+    np.testing.assert_array_equal(filtered, np.array([0, 1]))
 
 
 def test_training_cache_limit_preserves_aligned_fields() -> None:
