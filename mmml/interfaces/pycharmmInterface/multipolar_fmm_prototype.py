@@ -18,6 +18,23 @@ import jax
 import jax.numpy as jnp
 
 MultipoleOrder = Literal[0, 1, 2]
+QuadrupoleTracePolicy = Literal["traceless", "preserve"]
+
+E3X_CONVENTION_NOTE = (
+    "Use e3x.Config to pin global irrep conventions before converting Cartesian "
+    "moments with e3x.so3.tensor_to_irreps or e3x.so3.irreps_to_tensor. The "
+    "prototype boundary uses symmetric traceless degree-2 quadrupoles because "
+    "that is the Cartesian tensor represented by an e3x degree-2 irrep."
+)
+
+SR_ML_FMM_COMPOSITION_NOTE = (
+    "When a short-range ML potential has implicit electrostatics, do not add a "
+    "full explicit FMM energy for the same owned pairs. Either train the ML "
+    "model as a short-range residual after subtracting explicit electrostatics, "
+    "or add only a smooth long-range FMM complement outside the ML training "
+    "cutoff. MM/MM can own its full explicit multipolar FMM term; MM->ML should "
+    "be one-way embedding unless reciprocal MM/ML energy ownership is defined."
+)
 
 _QUAD_COMPONENTS = (
     (0, 0),
@@ -52,6 +69,24 @@ class CartesianMultipoleLayout:
         return slice(4, 10)
 
 
+@dataclass(frozen=True)
+class MmMmMultipolarResult:
+    """Owned MM/MM multipolar energy with self pairs excluded and pairs halved."""
+
+    energy: jax.Array
+    per_site_energy: jax.Array
+
+
+@dataclass(frozen=True)
+class MmToMlMultipolarResult:
+    """One-way MM->ML embedding quantities without pair halving."""
+
+    potential: jax.Array
+    potential_gradient: jax.Array
+    electric_field: jax.Array
+    target_energy: jax.Array | None = None
+
+
 def multipole_coeff_count(order: MultipoleOrder) -> int:
     """Return packed coefficient count for Cartesian ranks 0..``order``."""
     if order == 0:
@@ -63,18 +98,33 @@ def multipole_coeff_count(order: MultipoleOrder) -> int:
     raise ValueError(f"unsupported multipole order {order!r}; expected 0, 1, or 2")
 
 
+def symmetric_traceless(tensor: jax.Array) -> jax.Array:
+    """Return the symmetric traceless degree-2 Cartesian tensor.
+
+    E3x degree-2 irreps correspond to symmetric traceless Cartesian tensors, so
+    this is the default quadrupole boundary convention used by this prototype.
+    """
+    tensor = jnp.asarray(tensor)
+    symmetric = 0.5 * (tensor + jnp.swapaxes(tensor, -1, -2))
+    trace = jnp.trace(symmetric, axis1=-2, axis2=-1)
+    identity = jnp.eye(3, dtype=symmetric.dtype)
+    return symmetric - trace[..., None, None] * identity / 3.0
+
+
 def pack_cartesian_multipoles(
     charge: jax.Array,
     *,
     dipole: jax.Array | None = None,
     quadrupole: jax.Array | None = None,
     order: MultipoleOrder = 0,
+    quadrupole_trace_policy: QuadrupoleTracePolicy = "traceless",
 ) -> jax.Array:
     """Pack charge, dipole, and quadrupole moments into one coefficient array.
 
     The quadrupole is stored as the six independent symmetric tensor entries
-    ``xx, xy, xz, yy, yz, zz``.  No traceless projection is applied here because
-    different FMM and force-field conventions make different choices.
+    ``xx, xy, xz, yy, yz, zz``.  By default, it is projected to the symmetric
+    traceless degree-2 Cartesian tensor convention used by E3x irreps.  Use
+    ``quadrupole_trace_policy="preserve"`` only for legacy Cartesian tests.
     """
     charge = jnp.asarray(charge)
     coeffs = jnp.zeros(
@@ -90,6 +140,12 @@ def pack_cartesian_multipoles(
         if quadrupole is None:
             quadrupole = jnp.zeros(charge.shape + (3, 3), dtype=charge.dtype)
         quad = jnp.asarray(quadrupole, dtype=charge.dtype)
+        if quadrupole_trace_policy == "traceless":
+            quad = symmetric_traceless(quad)
+        elif quadrupole_trace_policy != "preserve":
+            raise ValueError(
+                "quadrupole_trace_policy must be 'traceless' or 'preserve'"
+            )
         packed_quad = jnp.stack(
             [quad[..., a, b] for a, b in _QUAD_COMPONENTS],
             axis=-1,
@@ -186,6 +242,44 @@ def direct_multipole_to_point(
     return jax.vmap(target_potential)(target_positions, jnp.arange(target_positions.shape[0]))
 
 
+def direct_multipole_potential_gradient_to_point(
+    source_positions: jax.Array,
+    source_coeffs: jax.Array,
+    target_position: jax.Array,
+    *,
+    softening: float = 0.0,
+) -> tuple[jax.Array, jax.Array]:
+    """Return potential and gradient of potential at one target point."""
+
+    def potential_at(position: jax.Array) -> jax.Array:
+        return direct_multipole_to_point(
+            source_positions,
+            source_coeffs,
+            position[None, :],
+            softening=softening,
+        )[0]
+
+    return potential_at(target_position), jax.grad(potential_at)(target_position)
+
+
+def direct_multipole_potential_gradient_to_points(
+    source_positions: jax.Array,
+    source_coeffs: jax.Array,
+    target_positions: jax.Array,
+    *,
+    softening: float = 0.0,
+) -> tuple[jax.Array, jax.Array]:
+    """Return potentials and potential gradients at target points."""
+    return jax.vmap(
+        lambda target_position: direct_multipole_potential_gradient_to_point(
+            source_positions,
+            source_coeffs,
+            target_position,
+            softening=softening,
+        )
+    )(target_positions)
+
+
 def direct_multipole_to_multipole_energy(
     source_positions: jax.Array,
     source_coeffs: jax.Array,
@@ -275,3 +369,63 @@ def self_energy(
         softening=softening,
     )
     return 0.5 * jnp.sum(per_target)
+
+
+def mm_mm_multipolar_energy(
+    mm_positions: jax.Array,
+    mm_coeffs: jax.Array,
+    *,
+    softening: float = 0.0,
+) -> MmMmMultipolarResult:
+    """MM/MM owned energy: exclude self terms and halve pair contributions."""
+    per_site_energy = direct_multipole_to_multipole_energy(
+        mm_positions,
+        mm_coeffs,
+        mm_positions,
+        mm_coeffs,
+        exclude_self=True,
+        softening=softening,
+    )
+    return MmMmMultipolarResult(
+        energy=0.5 * jnp.sum(per_site_energy),
+        per_site_energy=per_site_energy,
+    )
+
+
+def mm_to_ml_multipolar_embedding(
+    mm_positions: jax.Array,
+    mm_coeffs: jax.Array,
+    ml_positions: jax.Array,
+    ml_target_coeffs: jax.Array | None = None,
+    *,
+    softening: float = 0.0,
+) -> MmToMlMultipolarResult:
+    """One-way MM->ML embedding potential/field with no pair halving.
+
+    If ``ml_target_coeffs`` is supplied, target energies are contracted against
+    the MM-generated potential derivatives.  This path is appropriate when the
+    ML term consumes an external MM field and does not also own the reciprocal
+    ML->MM or MM/ML pair energy separately.
+    """
+    potential, potential_gradient = direct_multipole_potential_gradient_to_points(
+        mm_positions,
+        mm_coeffs,
+        ml_positions,
+        softening=softening,
+    )
+    electric_field = -potential_gradient
+    target_energy = None
+    if ml_target_coeffs is not None:
+        target_energy = direct_multipole_to_multipole_energy(
+            mm_positions,
+            mm_coeffs,
+            ml_positions,
+            ml_target_coeffs,
+            softening=softening,
+        )
+    return MmToMlMultipolarResult(
+        potential=potential,
+        potential_gradient=potential_gradient,
+        electric_field=electric_field,
+        target_energy=target_energy,
+    )
