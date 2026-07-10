@@ -94,9 +94,14 @@ def compute_target_rms(
     sums = {name: 0.0 for name in degree_slices(max_degree)}
     counts = {name: 0 for name in degree_slices(max_degree)}
     remaining = max_structures
-    for shard_path in shard_paths:
+    for shard_number, shard_path in enumerate(shard_paths, start=1):
         if remaining is not None and remaining <= 0:
             break
+        print(
+            f"Computing target RMS from shard {shard_number}/{len(shard_paths)}: "
+            f"{shard_path}",
+            flush=True,
+        )
         cache = restore_cache(shard_path)
         if remaining is not None:
             cache = limit_cache(cache, remaining)
@@ -127,8 +132,10 @@ def load_or_compute_target_rms(
 ) -> dict[str, float]:
     """Load existing target RMS stats or compute and save them."""
     if path.exists():
+        print(f"Loading target RMS from {path}", flush=True)
         payload = json.loads(path.read_text(encoding="utf-8"))
         return {f"l{degree}": float(payload[f"l{degree}"]) for degree in range(max_degree + 1)}
+    print(f"Computing target RMS and writing {path}", flush=True)
     target_rms = compute_target_rms(
         shard_paths,
         max_structures=max_structures,
