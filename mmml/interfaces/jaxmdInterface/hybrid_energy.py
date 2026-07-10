@@ -138,17 +138,25 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     Evaluates peptide-water dimers in parallel using jax.vmap and subtracts redundant peptide
     energies to yield the sum of monomer energies plus peptide-water intermolecular energies.
     """
-    # Construct stacked dimer indices of shape (N_waters, 45) containing the peptide and each water
-    dimer_indices = [np.concatenate([peptide_idx, idx]) for idx in water_indices]
-    stacked_dimer_indices = jnp.stack(dimer_indices)
-    
-    # 1. Setup dimer evaluation (45 atoms)
-    n_atoms_dimer = 45
+    peptide_idx = jnp.asarray(peptide_idx, dtype=jnp.int32)
+    water_indices = [jnp.asarray(idx, dtype=jnp.int32) for idx in water_indices]
+    n_waters = len(water_indices)
+    n_atoms_pep = int(peptide_idx.shape[0])
+    n_atoms_water = int(water_indices[0].shape[0]) if n_waters else 0
+    n_atoms_dimer = n_atoms_pep + n_atoms_water
+
+    # 1. Setup peptide-water dimer evaluation.
+    if n_waters:
+        dimer_indices = [jnp.concatenate([peptide_idx, idx]) for idx in water_indices]
+        stacked_dimer_indices = jnp.stack(dimer_indices)
+        dimer_z = jax_z[stacked_dimer_indices]
+    else:
+        stacked_dimer_indices = jnp.zeros((0, n_atoms_dimer), dtype=jnp.int32)
+        dimer_z = jnp.zeros((0, n_atoms_dimer), dtype=jnp.int32)
+
     dst_idx_dimer, src_idx_dimer = np.where(~np.eye(n_atoms_dimer, dtype=bool))
     dst_idx_dimer = jnp.array(dst_idx_dimer, dtype=jnp.int32)
     src_idx_dimer = jnp.array(src_idx_dimer, dtype=jnp.int32)
-    
-    dimer_z = jax_z[stacked_dimer_indices]
     
     # Vectorized displacement to calculate relative coordinates of dimer under PBC relative to first atom
     vmapped_displacement_dimer = jax.vmap(
@@ -156,8 +164,7 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         in_axes=(0, 0)
     )
     
-    # 2. Setup peptide evaluation (42 atoms)
-    n_atoms_pep = len(peptide_idx)
+    # 2. Setup peptide evaluation.
     dst_idx_pep, src_idx_pep = np.where(~np.eye(n_atoms_pep, dtype=bool))
     dst_idx_pep = jnp.array(dst_idx_pep, dtype=jnp.int32)
     src_idx_pep = jnp.array(src_idx_pep, dtype=jnp.int32)
@@ -166,8 +173,6 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     
     vmapped_displacement_pep = jax.vmap(displacement_fn, in_axes=(0, None))
     
-    n_waters = len(water_indices)
-
     import inspect
 
     def _model_accepts_kwarg(model, name):
@@ -188,17 +193,82 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     # ) or "spooky" in str(type(model)).lower()
 
     if isinstance(charges, dict):
-        dimer_q = float(charges.get(45, charges.get(42, 0.0)))
-        dimer_s = float(spins.get(45, spins.get(42, 1.0)))
-        pep_q = float(charges.get(42, 0.0))
-        pep_s = float(spins.get(42, 1.0))
+        dimer_q = float(charges.get(n_atoms_dimer, charges.get(n_atoms_pep, 0.0)))
+        pep_q = float(charges.get(n_atoms_pep, 0.0))
     else:
         dimer_q = float(charges or 0.0)
-        dimer_s = float(spins or 1.0)
         pep_q = float(charges or 0.0)
+
+    if isinstance(spins, dict):
+        dimer_s = float(spins.get(n_atoms_dimer, spins.get(n_atoms_pep, 1.0)))
+        pep_s = float(spins.get(n_atoms_pep, 1.0))
+    else:
+        dimer_s = float(spins or 1.0)
         pep_s = float(spins or 1.0)
+
+    if is_spooky:
+        vmapped_apply_dimer = jax.vmap(
+            lambda pos, atomic_nums: model.apply(
+                params,
+                atomic_numbers=atomic_nums,
+                positions=pos,
+                charges=jnp.full((n_atoms_dimer, 1), dimer_q, dtype=jnp.float32),
+                spins=jnp.full((n_atoms_dimer, 1), dimer_s, dtype=jnp.float32),
+                dst_idx=dst_idx_dimer,
+                src_idx=src_idx_dimer,
+                compute_forces=False,
+            ),
+            in_axes=(0, 0)
+        )
+
+        def apply_peptide(pos):
+            return model.apply(
+                params,
+                atomic_numbers=pep_z,
+                positions=pos,
+                charges=jnp.full((n_atoms_pep, 1), pep_q, dtype=jnp.float32),
+                spins=jnp.full((n_atoms_pep, 1), pep_s, dtype=jnp.float32),
+                dst_idx=dst_idx_pep,
+                src_idx=src_idx_pep,
+                compute_forces=False,
+            )
+    else:
+        vmapped_apply_dimer = jax.vmap(
+            lambda pos, atomic_nums: model.apply(
+                params,
+                atomic_numbers=atomic_nums,
+                positions=pos,
+                dst_idx=dst_idx_dimer,
+                src_idx=src_idx_dimer,
+                compute_forces=False,
+            ),
+            in_axes=(0, 0)
+        )
+
+        def apply_peptide(pos):
+            return model.apply(
+                params,
+                atomic_numbers=pep_z,
+                positions=pos,
+                dst_idx=dst_idx_pep,
+                src_idx=src_idx_pep,
+                compute_forces=False,
+            )
     
     def dimer_energy_fn(r):
+        # Always evaluate the peptide monomer. With no waters this function
+        # reduces to the peptide ML energy, which keeps gas-phase setups valid.
+        pep_pos = r[peptide_idx]
+        ref_pos_pep = pep_pos[0]
+        unfolded_pep = ref_pos_pep + vmapped_displacement_pep(pep_pos, ref_pos_pep)
+        pep_com = jnp.mean(unfolded_pep, axis=0, keepdims=True)
+        centered_pep = unfolded_pep - pep_com
+        outputs_pep = apply_peptide(centered_pep)
+        e_pep = jnp.sum(outputs_pep["energy"])
+
+        if n_waters == 0:
+            return e_pep
+
         # 1. Dimer evaluation
         group_pos = r[stacked_dimer_indices]
         ref_pos = group_pos[:, 0, :]
@@ -209,67 +279,9 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         dimer_com = jnp.mean(unfolded_dimer_pos, axis=1, keepdims=True)
         centered_dimer = unfolded_dimer_pos - dimer_com
         
-        if is_spooky:
-            vmapped_apply_dimer = jax.vmap(
-                lambda pos, atomic_nums: model.apply(
-                    params,
-                    atomic_numbers=atomic_nums,
-                    positions=pos,
-                    charges=jnp.full((n_atoms_dimer, 1), dimer_q, dtype=jnp.float32),
-                    spins=jnp.full((n_atoms_dimer, 1), dimer_s, dtype=jnp.float32),
-                    dst_idx=dst_idx_dimer,
-                    src_idx=src_idx_dimer,
-                    compute_forces=False,
-                ),
-                in_axes=(0, 0)
-            )
-        else:
-            vmapped_apply_dimer = jax.vmap(
-                lambda pos, atomic_nums: model.apply(
-                    params,
-                    atomic_numbers=atomic_nums,
-                    positions=pos,
-                    dst_idx=dst_idx_dimer,
-                    src_idx=src_idx_dimer,
-                    compute_forces=False,
-                ),
-                in_axes=(0, 0)
-            )
-        
         outputs_dimer = vmapped_apply_dimer(centered_dimer, dimer_z)
         e_dimer_sum = jnp.sum(outputs_dimer["energy"])
-        
-        # 2. Peptide evaluation
-        pep_pos = r[peptide_idx]
-        ref_pos_pep = pep_pos[0]
-        unfolded_pep = ref_pos_pep + vmapped_displacement_pep(pep_pos, ref_pos_pep)
-        
-        # Center peptide coordinates to its COM
-        pep_com = jnp.mean(unfolded_pep, axis=0, keepdims=True)
-        centered_pep = unfolded_pep - pep_com
-        
-        if is_spooky:
-            outputs_pep = model.apply(
-                params,
-                atomic_numbers=pep_z,
-                positions=centered_pep,
-                charges=jnp.full((n_atoms_pep, 1), pep_q, dtype=jnp.float32),
-                spins=jnp.full((n_atoms_pep, 1), pep_s, dtype=jnp.float32),
-                dst_idx=dst_idx_pep,
-                src_idx=src_idx_pep,
-                compute_forces=False,
-            )
-        else:
-            outputs_pep = model.apply(
-                params,
-                atomic_numbers=pep_z,
-                positions=centered_pep,
-                dst_idx=dst_idx_pep,
-                src_idx=src_idx_pep,
-                compute_forces=False,
-            )
-        e_pep = jnp.sum(outputs_pep["energy"])
-        
+
         # Subtract (N_waters - 1) * E_peptide to get:
         # E_peptide_ML + sum(E_water_i_ML) + sum(E_inter_peptide_water_ML)
         return e_dimer_sum - (n_waters - 1) * e_pep

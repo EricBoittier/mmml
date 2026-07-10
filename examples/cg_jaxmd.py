@@ -665,9 +665,24 @@ displacement_fn, shift_fn = space.periodic(box_size)
 
 # Configure compute_monomer_energy function based on selection
 if PEPTIDE_WATER_ML:
-    raise NotImplementedError(
-        "PEPTIDE_WATER_ML requires a dedicated peptide-water dimer checkpoint; "
-        "the current script has separate peptide and water monomer checkpoints."
+    if not USE_ML_INTRAMOLECULAR:
+        raise ValueError("PEPTIDE_WATER_ML requires use_ml_intramolecular=True.")
+    print(
+        "--- Configuring PEPTIDE-WATER interactions with foundation ML model "
+        "(peptide-water dimers) ---"
+    )
+    dimer_size = n_trialanine + 3
+    ml_charges = {n_trialanine: float(pep_charge), 3: 0.0, dimer_size: float(pep_charge)}
+    ml_spins = {n_trialanine: float(pep_spin), 3: 1.0, dimer_size: float(pep_spin)}
+    compute_monomer_energy = make_peptide_water_ml_energy_fn(
+        peptide_model,
+        peptide_params,
+        jax_z,
+        jax_monomer_indices[0],
+        jax_monomer_indices[1:],
+        displacement_fn,
+        charges=ml_charges,
+        spins=ml_spins,
     )
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
