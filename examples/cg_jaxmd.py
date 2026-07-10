@@ -155,25 +155,25 @@ def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
 
 # Default configuration parameters
 DEFAULTS = {
-    "checkpoint": str(Path(__file__).parent / "sppoky-epoch-0005_params.json"),
+    "checkpoint": str(Path(__file__).parent / "sppoky-epoch-0010_params.json"),
     "peptide_checkpoint": None,
     "water_checkpoint": None,
 
-    "sequence": "ALA ALA ALA",  # default is trialanine
+    "sequence": "ALA ALA ALA ALA ALA ALA",  # default is trialanine
     "first_patch": "ACE",
     "last_patch": "CT3",
     "peptide_patches": None,
     "initial_peptide_pdb": None,
     "pdb_id": None,
     "pdb_chain": None,
-    "n_waters": 600,
+    "n_waters": 500,
     "box_size": 28.0,
     "seed": 42,
     "temperature": 198.0,
     "dt_fs": 0.5,
 
     "use_ml_intramolecular": True,
-    "peptide_water_ml": False,
+    "peptide_water_ml": True,
     "peptide_water_electrostatic_embedding": False,
     "peptide_ml_charge_total_correction": False,
     "water_ml_charge_total_correction": False,
@@ -213,6 +213,7 @@ DEFAULTS = {
 }
 
 # Import load_cg_config from cg_common
+# pyrefly: ignore [missing-import]
 from cg_common import load_cg_config, parse_temp_schedule
 
 # Load configuration
