@@ -890,6 +890,81 @@ def filter_bonded_topology_for_mm(
     return filtered_topology, filtered_bonded, urey_k_out, urey_r0_out
 
 
+def filter_bonded_topology_excluding_ml_interior(
+    topology: Topology,
+    bonded: BondedParameters,
+    ml_atom_indices: Sequence[int],
+    *,
+    urey_k: Array | None = None,
+    urey_r0: Array | None = None,
+) -> tuple[Topology, BondedParameters, Array, Array]:
+    """Keep bonded rows unless every atom in the row belongs to the ML region.
+
+    This is the simplest "ghost boundary" ML/MM policy: the ML model replaces
+    only bonded-like terms fully inside the ML region, while MM bonded terms
+    spanning the ML/MM boundary are retained to stabilize the cut.
+    """
+    n_atoms = int(topology.n_atoms)
+    ml_mask = np.zeros((n_atoms,), dtype=bool)
+    for idx in ml_atom_indices:
+        idx_i = int(idx)
+        if idx_i < 0 or idx_i >= n_atoms:
+            raise IndexError(f"ML atom index {idx_i} outside topology with {n_atoms} atoms")
+        ml_mask[idx_i] = True
+
+    def _keep_rows(indices: np.ndarray) -> np.ndarray:
+        if indices.size == 0:
+            return np.zeros((0,), dtype=bool)
+        return ~np.all(ml_mask[indices], axis=1)
+
+    bond_keep = _keep_rows(np.asarray(topology.bonds))
+    angle_keep = _keep_rows(np.asarray(topology.angles))
+    torsion_keep = _keep_rows(np.asarray(topology.torsions))
+    improper_keep = _keep_rows(np.asarray(topology.impropers))
+
+    def _slice_params(arr: Array | None, keep: np.ndarray) -> Array | None:
+        if arr is None:
+            return None
+        return jnp.asarray(arr)[keep]
+
+    filtered_topology = Topology(
+        n_atoms=topology.n_atoms,
+        bonds=jnp.asarray(topology.bonds)[bond_keep],
+        angles=jnp.asarray(topology.angles)[angle_keep],
+        torsions=jnp.asarray(topology.torsions)[torsion_keep],
+        impropers=jnp.asarray(topology.impropers)[improper_keep],
+        exclusion_mask=topology.exclusion_mask,
+        pair_14_mask=topology.pair_14_mask,
+        molecule_id=topology.molecule_id,
+        cmap_atoms=topology.cmap_atoms,
+        cmap_map_idx=topology.cmap_map_idx,
+        exc_pairs=topology.exc_pairs,
+        nbfix_atom_type=topology.nbfix_atom_type,
+    )
+    filtered_bonded = BondedParameters(
+        bond_k=_slice_params(bonded.bond_k, bond_keep),
+        bond_r0=_slice_params(bonded.bond_r0, bond_keep),
+        angle_k=_slice_params(bonded.angle_k, angle_keep),
+        angle_theta0=_slice_params(bonded.angle_theta0, angle_keep),
+        torsion_k=_slice_params(bonded.torsion_k, torsion_keep),
+        torsion_n=_slice_params(bonded.torsion_n, torsion_keep),
+        torsion_gamma=_slice_params(bonded.torsion_gamma, torsion_keep),
+        improper_k=_slice_params(bonded.improper_k, improper_keep),
+        improper_n=_slice_params(bonded.improper_n, improper_keep),
+        improper_gamma=_slice_params(bonded.improper_gamma, improper_keep),
+        cmap_maps=bonded.cmap_maps,
+    )
+    if urey_k is None:
+        urey_k_out = jnp.zeros((int(angle_keep.sum()),), dtype=jnp.float64)
+    else:
+        urey_k_out = _slice_params(urey_k, angle_keep)
+    if urey_r0 is None:
+        urey_r0_out = jnp.zeros((int(angle_keep.sum()),), dtype=jnp.float64)
+    else:
+        urey_r0_out = _slice_params(urey_r0, angle_keep)
+    return filtered_topology, filtered_bonded, urey_k_out, urey_r0_out
+
+
 def concat_cgenff_systems(systems: Iterable[CgenffBondedSystem]) -> CgenffBondedSystem:
     """Concatenate multiple non-interacting molecules into one system."""
     systems = list(systems)

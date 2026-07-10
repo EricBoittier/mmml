@@ -15,6 +15,7 @@ from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
 )
 from mmml.interfaces.pycharmmInterface.cgenff_topology import (
     extract_residue_rtf,
+    filter_bonded_topology_excluding_ml_interior,
     load_cgenff_bonded_from_charmm_files,
     load_cgenff_bonded_from_psf,
     parse_psf_ext,
@@ -158,6 +159,27 @@ def test_mm_mask_filters_ml_bonded_terms() -> None:
     mm_system, mm_mask = prepare_mm_bonded_system(system, ml_atom_indices=(0,))
     assert int(jnp.sum(mm_mask)) == 2
     assert mm_system.topology.bonds.shape[0] == 1  # H1-H2 only
+
+
+def test_ghost_boundary_filter_keeps_cross_boundary_terms() -> None:
+    system = load_cgenff_bonded_from_charmm_files(
+        TIP3_PDB,
+        residue_name="TIP3",
+    )
+    # With atoms 0 and 1 as ML, the 0-1 bond is replaced by ML,
+    # while 0-2 and 1-2 remain cross-boundary MM bonded terms.
+    topology, bonded, urey_k, urey_r0 = filter_bonded_topology_excluding_ml_interior(
+        system.topology,
+        system.bonded,
+        ml_atom_indices=(0, 1),
+        urey_k=system.urey_k,
+        urey_r0=system.urey_r0,
+    )
+    assert topology.bonds.shape[0] == 2
+    assert topology.angles.shape[0] == 3
+    assert bonded.bond_k.shape[0] == 2
+    assert urey_k.shape[0] == 3
+    assert urey_r0.shape[0] == 3
 
 
 def test_mixed_ml_mm_splits_energy() -> None:
