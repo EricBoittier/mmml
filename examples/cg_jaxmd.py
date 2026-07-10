@@ -177,8 +177,11 @@ DEFAULTS = {
     "use_ml_intramolecular": True,
     "peptide_water_ml": True,
     "peptide_water_ml_cutoff_A": 8.0,
-    "peptide_water_ml_switch_width_A": 2.0,
+    "peptide_water_ml_switch_width_A": 1.0,
     "peptide_water_ml_headroom": 1.5,
+    "peptide_water_ml_core_vdw": True,
+    "peptide_water_ml_core_cutoff_A": 3.0,
+    "peptide_water_ml_core_switch_width_A": 0.5,
     "peptide_water_electrostatic_embedding": False,
     "peptide_ml_charge_total_correction": False,
     "water_ml_charge_total_correction": False,
@@ -201,6 +204,7 @@ DEFAULTS = {
     "nvt_repair_temp_k": 375.0,
     "nve_repair_temp_k": 400.0,
     "debug": True,
+    "debug_expensive_ml_force_components": False,
 
     "start_peptide_traj_path": None,
     "start_peptide_traj_index": 0,
@@ -272,6 +276,9 @@ PEPTIDE_WATER_ML = config.peptide_water_ml
 PEPTIDE_WATER_ML_CUTOFF_A = config.peptide_water_ml_cutoff_A
 PEPTIDE_WATER_ML_SWITCH_WIDTH_A = config.peptide_water_ml_switch_width_A
 PEPTIDE_WATER_ML_HEADROOM = config.peptide_water_ml_headroom
+PEPTIDE_WATER_ML_CORE_VDW = config.peptide_water_ml_core_vdw
+PEPTIDE_WATER_ML_CORE_CUTOFF_A = config.peptide_water_ml_core_cutoff_A
+PEPTIDE_WATER_ML_CORE_SWITCH_WIDTH_A = config.peptide_water_ml_core_switch_width_A
 USE_ML_INTRAMOLECULAR = config.use_ml_intramolecular
 PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = config.peptide_water_electrostatic_embedding
 PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = config.peptide_ml_charge_total_correction
@@ -279,6 +286,7 @@ WATER_ML_CHARGE_TOTAL_CORRECTION = config.water_ml_charge_total_correction
 PEPTIDE_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = config.peptide_electrostatic_embedding_require_ml_charges
 WATER_ELECTROSTATIC_EMBEDDING_REQUIRE_ML_CHARGES = config.water_electrostatic_embedding_require_ml_charges
 DEBUG = config.debug
+DEBUG_EXPENSIVE_ML_FORCE_COMPONENTS = config.debug_expensive_ml_force_components
 MAX_BOND_DEV_LIMIT = config.max_bond_dev_limit
 
 START_PEPTIDE_TRAJ_PATH = config.start_peptide_traj_path
@@ -723,6 +731,12 @@ if PEPTIDE_WATER_ML:
         f"cutoff={PEPTIDE_WATER_ML_CUTOFF_A} Å, "
         f"width={PEPTIDE_WATER_ML_SWITCH_WIDTH_A} Å ---"
     )
+    if PEPTIDE_WATER_ML_CORE_VDW:
+        print(
+            "--- Peptide-water ML uses additive repulsive CHARMM LJ core: "
+            f"cutoff={PEPTIDE_WATER_ML_CORE_CUTOFF_A} Å, "
+            f"width={PEPTIDE_WATER_ML_CORE_SWITCH_WIDTH_A} Å ---"
+        )
     dimer_size = n_trialanine + 3
     ml_charges = {n_trialanine: float(pep_charge), 3: 0.0, dimer_size: float(pep_charge)}
     ml_spins = {n_trialanine: float(pep_spin), 3: 1.0, dimer_size: float(pep_spin)}
@@ -1089,7 +1103,24 @@ def _get_peptide_water_active_slots_np(pos_np):
     return np.where(min_dist < active_radius)[0].astype(np.int32)
 
 
+def _peptide_water_distance_stats_np(pos_np, slots_np=None):
+    """Return min/mean active peptide-water atom distances under MIC."""
+    if not PEPTIDE_WATER_ML or not HAS_PEPTIDE or len(_pw_water_indices_np) == 0:
+        return float("nan"), float("nan")
+    water_indices_np = _pw_water_indices_np if slots_np is None else _pw_water_indices_np[slots_np]
+    if len(water_indices_np) == 0:
+        return float("nan"), float("nan")
+    boxsize = np.diag(cell)
+    pep_pos = np.asarray(pos_np[:n_trialanine], dtype=np.float64)
+    water_pos = np.asarray(pos_np[water_indices_np], dtype=np.float64)
+    diff = water_pos[:, None, :, :] - pep_pos[None, :, None, :]
+    diff -= boxsize * np.round(diff / boxsize)
+    min_by_water = np.sqrt(np.min(np.sum(diff * diff, axis=-1), axis=(1, 2)))
+    return float(min_by_water.min()), float(min_by_water.mean())
+
+
 _pw_slots0 = _get_peptide_water_active_slots_np(pos)
+_pw_min0, _pw_mean0 = _peptide_water_distance_stats_np(pos, _pw_slots0)
 if PEPTIDE_WATER_ML and HAS_PEPTIDE and len(_pw_water_indices_np) > 0:
     if PEPTIDE_WATER_ML_CUTOFF_A is None:
         MAX_PW_ML_WATERS = len(_pw_water_indices_np)
@@ -1102,7 +1133,8 @@ else:
     MAX_PW_ML_WATERS = 1
 print(
     f"--- Initial peptide-water ML active waters: {len(_pw_slots0)}, "
-    f"MAX_PW_ML_WATERS buffer: {MAX_PW_ML_WATERS} ---"
+    f"MAX_PW_ML_WATERS buffer: {MAX_PW_ML_WATERS}, "
+    f"min/mean active PW distance: {_pw_min0:.3f}/{_pw_mean0:.3f} Å ---"
 )
 
 
@@ -1173,6 +1205,7 @@ _q_jax = jnp.asarray(nbond_data.charges, dtype=jnp.float64)
 _eps_jax = jnp.asarray(nbond_data.epsilon, dtype=jnp.float64)
 _rmin_jax = jnp.asarray(nbond_data.rmin, dtype=jnp.float64)
 _cell_jax = jnp.asarray(cell if cell.ndim == 2 else np.diag(cell), dtype=jnp.float64)
+_pw_water_indices_jax = jnp.asarray(_pw_water_indices_np, dtype=jnp.int32)
 _vfswitch = charmm_vfswitch_coeffs(nb_settings)
 _fswitch = charmm_fswitch_coeffs(nb_settings)
 _c2of = nb_settings.c2ofnb
@@ -1300,6 +1333,55 @@ def _phi_psi_restraint_energy(r):
     return 0.5 * DIHEDRAL_RESTRAINT_K_EV * (d_phi * d_phi + d_psi * d_psi)
 
 
+def _smooth_cutoff_weight(dist, cutoff, width):
+    width = float(max(0.0, min(float(width), float(cutoff))))
+    if width <= 0.0:
+        return jnp.where(dist < cutoff, 1.0, 0.0)
+    switch_on = float(cutoff) - width
+    t = jnp.clip((dist - switch_on) / width, 0.0, 1.0)
+    smoothstep = t * t * t * (10.0 - 15.0 * t + 6.0 * t * t)
+    return 1.0 - smoothstep
+
+
+def compute_peptide_water_core_vdw_energy(r, pw_slots=None, pw_mask=None):
+    """Short-range repulsive CHARMM LJ wall for ML peptide-water pairs."""
+    if not PEPTIDE_WATER_ML_CORE_VDW or not PEPTIDE_WATER_ML or not HAS_PEPTIDE:
+        return jnp.asarray(0.0, dtype=jnp.float64)
+    if _pw_water_indices_jax.shape[0] == 0:
+        return jnp.asarray(0.0, dtype=jnp.float64)
+
+    if pw_slots is None:
+        active_water_indices = _pw_water_indices_jax
+        active_mask = jnp.ones((_pw_water_indices_jax.shape[0],), dtype=jnp.float64)
+    else:
+        active_water_indices = _pw_water_indices_jax[pw_slots]
+        active_mask = jnp.asarray(pw_mask, dtype=jnp.float64)
+
+    pep_pos = r[:n_trialanine]
+    water_pos = r[active_water_indices]
+    disp = water_pos[:, None, :, :] - pep_pos[None, :, None, :]
+    box_diag = jnp.diag(_cell_jax)
+    disp = disp - box_diag * jnp.round(disp / box_diag)
+    dist_sq = jnp.sum(disp * disp, axis=-1)
+    dist = jnp.sqrt(jnp.maximum(dist_sq, 1e-12))
+
+    pep_idx = jnp.arange(n_trialanine, dtype=jnp.int32)
+    ep = _pair_lj_epsilon(
+        _eps_jax[pep_idx][None, :, None],
+        _eps_jax[active_water_indices][:, None, :],
+    )
+    sig = _rmin_jax[pep_idx][None, :, None] + _rmin_jax[active_water_indices][:, None, :]
+    sig_r6 = (sig / jnp.maximum(dist, 1e-10)) ** 6
+    vdw_full = ep * (sig_r6 * sig_r6 - 2.0 * sig_r6)
+    repulsive = jnp.maximum(vdw_full, 0.0)
+    weights = _smooth_cutoff_weight(
+        dist,
+        PEPTIDE_WATER_ML_CORE_CUTOFF_A,
+        PEPTIDE_WATER_ML_CORE_SWITCH_WIDTH_A,
+    )
+    return jnp.sum(active_mask[:, None, None] * weights * repulsive) * KCAL_MOL_TO_EV
+
+
 @jit
 def hybrid_energy_fn(
     r,
@@ -1320,6 +1402,7 @@ def hybrid_energy_fn(
     """
     # (A) Intramolecular terms from ML potential
     e_intra = compute_monomer_energy(r, pw_slots, pw_mask)
+    e_pw_core = compute_peptide_water_core_vdw_energy(r, pw_slots, pw_mask)
 
     # (B) Intermolecular MM nonbonded terms with padded pair list
     ri = r[pi]
@@ -1372,7 +1455,7 @@ def hybrid_energy_fn(
 
     e_dihedral_restraint = _phi_psi_restraint_energy(r)
 
-    return e_intra + e_inter + e_restraint + e_pep_bond_restraints + e_dihedral_restraint
+    return e_intra + e_pw_core + e_inter + e_restraint + e_pep_bond_restraints + e_dihedral_restraint
 
 
 
@@ -1388,6 +1471,12 @@ def _debug_ml_energy_components(r, pw_slots=None, pw_mask=None):
     e_bonded = compute_ml_bonded_energy(r, pw_slots, pw_mask)
     e_nonbonded = compute_ml_nonbonded_energy(r, pw_slots, pw_mask)
     return jnp.array([e_bonded, e_nonbonded])
+
+
+@jit
+def _debug_pw_core_energy(r, pw_slots=None, pw_mask=None):
+    """JIT-compiled short-range peptide-water core energy."""
+    return compute_peptide_water_core_vdw_energy(r, pw_slots, pw_mask)
 
 
 @jit
@@ -1433,19 +1522,24 @@ def diagnose_energy(r, label=""):
         return
     e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r, pw_slots, pw_mask))
     e_ml = e_ml_bonded + e_ml_nonbonded
+    e_pw_core = float(_debug_pw_core_energy(r, pw_slots, pw_mask))
     e_lj, e_elec = map(
         float, _debug_mm_energy_components(r, pi, pj, mask, e14, vdw14)
     )
     e_mm = e_lj + e_elec
-    e_tot = e_ml + e_mm
+    e_tot = e_ml + e_pw_core + e_mm
     ml_ok = "✓" if np.isfinite(e_ml) else "✗ NaN/Inf"
     mm_ok = "✓" if np.isfinite(e_mm) else "✗ NaN/Inf"
+    active_pw_slots_np = np.asarray(_pw_slots_ref[0])[np.asarray(_pw_mask_ref[0]) > 0.5]
+    pw_min_dist, pw_mean_dist = _peptide_water_distance_stats_np(r_np, active_pw_slots_np)
     print(f"[DIAG{label}] E_ML={e_ml:.4f} eV {ml_ok} "
           f"(bonded={e_ml_bonded:.4f}, nonbonded={e_ml_nonbonded:.4f}) | "
+          f"E_PWcore={e_pw_core:.4f} eV | "
           f"E_LJ={e_lj:.4f} eV | E_elec={e_elec:.4f} eV | "
           f"E_MM={e_mm:.4f} eV {mm_ok} | "
           f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())} | "
-          f"PW_ML_active={int((_pw_mask_ref[0]>0.5).sum())}/{MAX_PW_ML_WATERS}")
+          f"PW_ML_active={int((_pw_mask_ref[0]>0.5).sum())}/{MAX_PW_ML_WATERS} | "
+          f"PW_min/mean={pw_min_dist:.3f}/{pw_mean_dist:.3f} Å")
     if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
         q_pep = np.asarray(compute_peptide_ml_charges(r))
         q_water = np.asarray(compute_water_ml_charges(r)).reshape(-1, water_n_atoms)
@@ -1481,21 +1575,34 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
             return f"{atoms.get_chemical_symbols()[idx]}{idx}"
         return f"Atom{idx}"
 
+    def get_pair_class(i, j):
+        if molecule_id[i] == molecule_id[j]:
+            return "intramolecular"
+        if HAS_PEPTIDE and ((i < n_trialanine) ^ (j < n_trialanine)):
+            return "peptide-water"
+        return "water-water"
+
     # 1. Energy Components
     e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r, pw_slots, pw_mask))
     e_ml = e_ml_bonded + e_ml_nonbonded
+    e_pw_core = float(_debug_pw_core_energy(r, pw_slots, pw_mask))
     e_mm = float(_debug_mm_energy(r, pi, pj, mask, e14, vdw14))
+    active_pw_slots_np = np.asarray(pw_slots)[np.asarray(pw_mask) > 0.5]
+    pw_min_dist, pw_mean_dist = _peptide_water_distance_stats_np(r_np, active_pw_slots_np)
     print(
         f"Energies: E_ML={e_ml:.4f} eV "
         f"(bonded={e_ml_bonded:.4f}, nonbonded={e_ml_nonbonded:.4f}) | "
-        f"E_MM={e_mm:.4f} eV | E_tot={e_ml+e_mm:.4f} eV"
+        f"E_PWcore={e_pw_core:.4f} eV | "
+        f"E_MM={e_mm:.4f} eV | E_tot={e_ml+e_pw_core+e_mm:.4f} eV"
     )
+    print(f"Peptide-water active min/mean distance: {pw_min_dist:.3f}/{pw_mean_dist:.3f} Å")
 
     # 2. Forces
     f_tot_mag = np.zeros(1)
     f_ml_mag = np.zeros(1)
     f_ml_bonded_mag = np.zeros(1)
     f_ml_nonbonded_mag = np.zeros(1)
+    f_pw_core_mag = np.zeros(1)
     f_mm_mag = np.zeros(1)
     f_res_mag = np.zeros(1)
     
@@ -1503,6 +1610,7 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
     f_ml = None
     f_ml_bonded = None
     f_ml_nonbonded = None
+    f_pw_core = None
     f_mm = None
     
     try:
@@ -1518,16 +1626,19 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
     except Exception as e:
         print(f"  Failed to compute Total Forces gradient: {e}")
         
-    try:
-        grad_ml = jax.grad(lambda r_: compute_monomer_energy(r_, pw_slots, pw_mask))(r)
-        f_ml = -np.asarray(grad_ml)
-        f_ml_mag = np.linalg.norm(f_ml, axis=-1)
-        print(f"ML Total Forces: min={f_ml_mag.min():.3f}, max={f_ml_mag.max():.3f}, mean={f_ml_mag.mean():.3f}, std={f_ml_mag.std():.3f}")
-        nans_ml = np.isnan(f_ml).sum()
-        if nans_ml > 0:
-            print(f"  ⚠ WARNING: {nans_ml} NaNs detected in ML Forces!")
-    except Exception as e:
-        print(f"  Failed to compute ML Forces gradient: {e}")
+    if DEBUG_EXPENSIVE_ML_FORCE_COMPONENTS:
+        try:
+            grad_ml = jax.grad(lambda r_: compute_monomer_energy(r_, pw_slots, pw_mask))(r)
+            f_ml = -np.asarray(grad_ml)
+            f_ml_mag = np.linalg.norm(f_ml, axis=-1)
+            print(f"ML Total Forces: min={f_ml_mag.min():.3f}, max={f_ml_mag.max():.3f}, mean={f_ml_mag.mean():.3f}, std={f_ml_mag.std():.3f}")
+            nans_ml = np.isnan(f_ml).sum()
+            if nans_ml > 0:
+                print(f"  ⚠ WARNING: {nans_ml} NaNs detected in ML Forces!")
+        except Exception as e:
+            print(f"  Failed to compute ML Forces gradient: {e}")
+    else:
+        print("ML Total Forces: skipped (set debug_expensive_ml_force_components=True to compute)")
 
     try:
         grad_ml_bonded = jax.grad(lambda r_: compute_ml_bonded_energy(r_, pw_slots, pw_mask))(r)
@@ -1544,20 +1655,38 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
     except Exception as e:
         print(f"  Failed to compute ML bonded force gradient: {e}")
 
+    if DEBUG_EXPENSIVE_ML_FORCE_COMPONENTS:
+        try:
+            grad_ml_nonbonded = jax.grad(lambda r_: compute_ml_nonbonded_energy(r_, pw_slots, pw_mask))(r)
+            f_ml_nonbonded = -np.asarray(grad_ml_nonbonded)
+            f_ml_nonbonded_mag = np.linalg.norm(f_ml_nonbonded, axis=-1)
+            print(
+                f"ML Nonbonded Forces: min={f_ml_nonbonded_mag.min():.3f}, "
+                f"max={f_ml_nonbonded_mag.max():.3f}, mean={f_ml_nonbonded_mag.mean():.3f}, "
+                f"std={f_ml_nonbonded_mag.std():.3f}"
+            )
+            nans_ml_nonbonded = np.isnan(f_ml_nonbonded).sum()
+            if nans_ml_nonbonded > 0:
+                print(f"  ⚠ WARNING: {nans_ml_nonbonded} NaNs detected in ML nonbonded forces!")
+        except Exception as e:
+            print(f"  Failed to compute ML nonbonded force gradient: {e}")
+    else:
+        print("ML Nonbonded Forces: skipped (set debug_expensive_ml_force_components=True to compute)")
+
     try:
-        grad_ml_nonbonded = jax.grad(lambda r_: compute_ml_nonbonded_energy(r_, pw_slots, pw_mask))(r)
-        f_ml_nonbonded = -np.asarray(grad_ml_nonbonded)
-        f_ml_nonbonded_mag = np.linalg.norm(f_ml_nonbonded, axis=-1)
+        grad_pw_core = jax.grad(lambda r_: compute_peptide_water_core_vdw_energy(r_, pw_slots, pw_mask))(r)
+        f_pw_core = -np.asarray(grad_pw_core)
+        f_pw_core_mag = np.linalg.norm(f_pw_core, axis=-1)
         print(
-            f"ML Nonbonded Forces: min={f_ml_nonbonded_mag.min():.3f}, "
-            f"max={f_ml_nonbonded_mag.max():.3f}, mean={f_ml_nonbonded_mag.mean():.3f}, "
-            f"std={f_ml_nonbonded_mag.std():.3f}"
+            f"Peptide-Water Core Forces: min={f_pw_core_mag.min():.3f}, "
+            f"max={f_pw_core_mag.max():.3f}, mean={f_pw_core_mag.mean():.3f}, "
+            f"std={f_pw_core_mag.std():.3f}"
         )
-        nans_ml_nonbonded = np.isnan(f_ml_nonbonded).sum()
-        if nans_ml_nonbonded > 0:
-            print(f"  ⚠ WARNING: {nans_ml_nonbonded} NaNs detected in ML nonbonded forces!")
+        nans_pw_core = np.isnan(f_pw_core).sum()
+        if nans_pw_core > 0:
+            print(f"  ⚠ WARNING: {nans_pw_core} NaNs detected in peptide-water core forces!")
     except Exception as e:
-        print(f"  Failed to compute ML nonbonded force gradient: {e}")
+        print(f"  Failed to compute peptide-water core force gradient: {e}")
 
     try:
         grad_mm = jax.grad(lambda r_: _debug_mm_energy(r_, pi, pj, mask, e14, vdw14))(r)
@@ -1624,7 +1753,13 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
             sorted_close = np.argsort(dists[close_idx])
             for idx in sorted_close[:5]:
                 p_idx = close_idx[idx]
-                print(f"    Atom {active_pi[p_idx]} ({get_atom_name(active_pi[p_idx])}) - Atom {active_pj[p_idx]} ({get_atom_name(active_pj[p_idx])}): dist = {dists[p_idx]:.3f} Å")
+                i_atom = int(active_pi[p_idx])
+                j_atom = int(active_pj[p_idx])
+                print(
+                    f"    Atom {i_atom} ({get_atom_name(i_atom)}) - "
+                    f"Atom {j_atom} ({get_atom_name(j_atom)}): "
+                    f"dist = {dists[p_idx]:.3f} Å [{get_pair_class(i_atom, j_atom)}]"
+                )
 
     # 4. Generate Plots
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
@@ -1638,6 +1773,8 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         axes[0, 0].plot(f_ml_bonded_mag, label="ML Bonded Force", alpha=0.7)
     if f_ml_nonbonded is not None:
         axes[0, 0].plot(f_ml_nonbonded_mag, label="ML Nonbonded Force", alpha=0.7)
+    if f_pw_core is not None:
+        axes[0, 0].plot(f_pw_core_mag, label="PW Core Force", alpha=0.7)
     if f_mm is not None:
         axes[0, 0].plot(f_mm_mag, label="MM Force", alpha=0.7)
     axes[0, 0].set_yscale('log')
