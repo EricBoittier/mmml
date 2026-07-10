@@ -141,6 +141,8 @@ def parse_all_peptide_bonds(psf_path, n_peptide_atoms):
 
 
 def get_peptide_bond_diagnostics(r, box_size, idx1_arr, idx2_arr, r0_arr):
+    if len(idx1_arr) == 0:
+        return 0.0, 0.0
     r_np = np.asarray(r)
     ri = r_np[idx1_arr]
     rj = r_np[idx2_arr]
@@ -299,6 +301,9 @@ else:
 
 def minimize_peptide_only_in_charmm(sd_steps=1000, abnr_steps=1000):
     """Minimize only the PEPT segment while keeping waters fixed."""
+    if not HAS_PEPTIDE:
+        print("--- Skipping peptide-only CHARMM minimization: no peptide present ---")
+        return
     print("--- Minimizing peptide-only in CHARMM with waters fixed ---")
     try:
         lingo.charmm_script("CONS FIX SELE .NOT. SEGID PEPT END")
@@ -318,6 +323,8 @@ def minimize_peptide_only_with_ml_calculator(
     steps=500,
 ):
     """Minimize the peptide subset with the ML ASE calculator and keep solvent fixed."""
+    if n_peptide_atoms <= 0:
+        return np.asarray(positions, dtype=np.float64).copy()
     print("--- Minimizing peptide-only with ML ASE calculator ---")
     peptide_atoms = Atoms(
         numbers=np.asarray(atomic_numbers[:n_peptide_atoms], dtype=np.int32),
@@ -341,6 +348,8 @@ def load_peptide_start_frame(traj_path, frame_index=0):
     """Read a peptide-only ASE trajectory frame and return positions plus PHI/PSI info."""
     if traj_path is None:
         return None, {}
+    if not HAS_PEPTIDE:
+        raise ValueError("start_peptide_traj_path is only valid when a peptide is present.")
     frame = ase_read(str(traj_path), index=frame_index)
     positions = np.asarray(frame.get_positions(), dtype=np.float64)
     if positions.shape[0] != n_trialanine:
@@ -353,6 +362,12 @@ def load_peptide_start_frame(traj_path, frame_index=0):
 
 # 2. Build the initial system in PyCHARMM and minimize
 workdir = Path(config.workdir)
+from mmml.interfaces.pycharmmInterface.peptide_builder import parse_sequence
+sequence_residues = parse_sequence(config.sequence)
+SOLVENT_ONLY = len(sequence_residues) == 0
+
+if config.pdb_id is not None and SOLVENT_ONLY:
+    raise ValueError("pdb_id cannot be used with an empty solvent-only sequence.")
 
 if config.pdb_id is not None:
     from mmml.interfaces.pycharmmInterface.peptide_builder import prepare_rcsb_peptide_input
@@ -380,10 +395,26 @@ if config.pdb_id is not None:
         f"{len(config.sequence)} residues, "
         f"{len(prepared_pdb['peptide_patches'])} DISU patches ---"
     )
+    sequence_residues = parse_sequence(config.sequence)
 
-if NWATER > 0:
-    from mmml.interfaces.pycharmmInterface.peptide_builder import parse_sequence
-    seq_clean = " ".join(parse_sequence(config.sequence))
+if SOLVENT_ONLY:
+    if NWATER <= 0:
+        raise ValueError("Solvent-only mode requires n_waters > 0.")
+    if START_PEPTIDE_TRAJ_PATH is not None:
+        raise ValueError("start_peptide_traj_path cannot be used in solvent-only mode.")
+    if CONSTRAIN_PHI_PSI:
+        raise ValueError("constrain_phi_psi cannot be used in solvent-only mode.")
+    print(f"--- Building TIP3 solvent-only box with {NWATER} waters in CHARMM ---")
+    from mmml.interfaces.pycharmmInterface.tip3_liquid_box import build_tip3_liquid_box_in_charmm
+
+    box = build_tip3_liquid_box_in_charmm(
+        n_waters=NWATER,
+        box_side_A=BOX_SIDE_A,
+        seed=SEED,
+        workdir=workdir,
+    )
+elif NWATER > 0:
+    seq_clean = " ".join(sequence_residues)
     use_trialanine_template = (
         seq_clean == "ALA ALA ALA"
         and config.first_patch == "ACE"
@@ -421,7 +452,7 @@ if NWATER > 0:
         )
 else:
     print(f"--- Building Gas-Phase Peptide ({config.sequence}) in CHARMM ---")
-    from mmml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm, SolvatedPeptideBox, PbcNbondCutoffs, parse_sequence
+    from mmml.interfaces.pycharmmInterface.peptide_builder import build_peptide_in_charmm, SolvatedPeptideBox, PbcNbondCutoffs
 
     build_result = build_peptide_in_charmm(
         sequence=config.sequence,
@@ -451,22 +482,31 @@ else:
         n_peptide_atoms=build_result.n_atoms,
         n_waters=0,
         nbond_cutoffs=nbond_cutoffs,
-        sequence=parse_sequence(config.sequence),
+        sequence=sequence_residues,
     )
-
-from mmml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
-pep_charge, pep_spin = infer_charge_and_spin_from_psf(box.psf_path)
-print(f"Inferred peptide charge={pep_charge}, spin multiplicity={pep_spin} from PSF.")
 
 pos = np.asarray(box.positions, dtype=np.float64)
 pos = np.random.uniform(-0.1, 0.1, pos.shape) + pos
 
-# Translate the entire system so that the peptide is centered in the box
-n_trialanine = getattr(box, "n_peptide_atoms", 42)
-peptide_center = pos[:n_trialanine].mean(axis=0)
 box_center = np.array([box.box_side_A / 2, box.box_side_A / 2, box.box_side_A / 2])
-translation = box_center - peptide_center
-pos += translation
+n_trialanine = int(getattr(box, "n_peptide_atoms", 0 if SOLVENT_ONLY else 42))
+HAS_PEPTIDE = n_trialanine > 0
+
+if HAS_PEPTIDE:
+    from mmml.interfaces.pycharmmInterface.peptide_builder import infer_charge_and_spin_from_psf
+    pep_charge, pep_spin = infer_charge_and_spin_from_psf(box.psf_path)
+    print(f"Inferred peptide charge={pep_charge}, spin multiplicity={pep_spin} from PSF.")
+    peptide_center = pos[:n_trialanine].mean(axis=0)
+    pos += box_center - peptide_center
+else:
+    pep_charge, pep_spin = 0, 1.0
+    print("No peptide present; configuring solvent-only simulation.")
+    if PEPTIDE_WATER_ML:
+        print("--- Disabling peptide_water_ml: no peptide-water pairs exist ---")
+        PEPTIDE_WATER_ML = False
+    if PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING:
+        print("--- Disabling peptide-water electrostatic embedding: no peptide-water pairs exist ---")
+        PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = False
 
 start_peptide_pos, start_peptide_info = load_peptide_start_frame(
     START_PEPTIDE_TRAJ_PATH, START_PEPTIDE_TRAJ_INDEX
@@ -491,7 +531,7 @@ if CONSTRAIN_PHI_PSI:
 
 z = get_Z_from_psf()
 
-if USE_ML_INTRAMOLECULAR:
+if USE_ML_INTRAMOLECULAR and HAS_PEPTIDE:
     peptide_calc = create_calculator_from_checkpoint(
         PEPTIDE_CKPT_PATH,
         electrostatics_damping_sigma=config.electrostatics_damping_sigma,
@@ -636,8 +676,8 @@ else:
     water_model = None
     water_params = None
 
-# Setup monomer groupings (first n_trialanine atoms: peptide; then groups of 3 for water)
-monomer_indices = [np.arange(n_trialanine)]
+# Setup monomer groupings: optional peptide first, then groups of 3 for water.
+monomer_indices = [np.arange(n_trialanine)] if HAS_PEPTIDE else []
 for i in range(n_trialanine, len(pos), 3):
     monomer_indices.append(np.arange(i, i + 3))
 
@@ -648,7 +688,8 @@ jax_z = jnp.array(z, dtype=jnp.int32)
 # Set up molecule IDs for nonbonded interactions
 molecule_id = np.empty(len(pos), dtype=np.int32)
 molecule_id[:n_trialanine] = 0
-for mol_id, start in enumerate(range(n_trialanine, len(pos), 3), start=1):
+first_water_mol_id = 1 if HAS_PEPTIDE else 0
+for mol_id, start in enumerate(range(n_trialanine, len(pos), 3), start=first_water_mol_id):
     molecule_id[start:start + 3] = mol_id
 jax_molecule_id = jnp.array(molecule_id, dtype=jnp.int32)
 
@@ -687,19 +728,29 @@ if PEPTIDE_WATER_ML:
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
     if USE_ML_INTRAMOLECULAR:
-        monomer_charges = {n_trialanine: float(pep_charge), 3: 0.0}
-        monomer_spins = {n_trialanine: float(pep_spin), 3: 1.0}
-        compute_peptide_energy = make_monomer_energy_fn(
-            peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn,
-            charges=monomer_charges, spins=monomer_spins
-        )
+        monomer_charges = {3: 0.0}
+        monomer_spins = {3: 1.0}
+        if HAS_PEPTIDE:
+            monomer_charges[n_trialanine] = float(pep_charge)
+            monomer_spins[n_trialanine] = float(pep_spin)
+            compute_peptide_energy = make_monomer_energy_fn(
+                peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn,
+                charges=monomer_charges, spins=monomer_spins
+            )
+            water_monomer_indices = jax_monomer_indices[1:]
+        else:
+            compute_peptide_energy = None
+            water_monomer_indices = jax_monomer_indices
         compute_water_energy = make_monomer_energy_fn(
-            water_model, water_params, jax_z, jax_monomer_indices[1:], displacement_fn,
+            water_model, water_params, jax_z, water_monomer_indices, displacement_fn,
             charges=monomer_charges, spins=monomer_spins
         )
 
         def compute_monomer_energy(r):
-            return compute_peptide_energy(r) + compute_water_energy(r)
+            e_water = compute_water_energy(r)
+            if compute_peptide_energy is None:
+                return e_water
+            return compute_peptide_energy(r) + e_water
     else:
         @jit
         def compute_peptide_intra_nb_energy(r):
@@ -739,16 +790,23 @@ else:
             e_pep_intra_nb = compute_peptide_intra_nb_energy(r)
             return e_bonded + e_pep_intra_nb
 
-pep_idx_jax = jax_monomer_indices[0]
-pep_z_jax = jax_z[pep_idx_jax]
 pep_n_atoms = int(n_trialanine)
-pep_dst_idx_np, pep_src_idx_np = np.where(~np.eye(pep_n_atoms, dtype=bool))
-pep_dst_idx_jax = jnp.array(pep_dst_idx_np, dtype=jnp.int32)
-pep_src_idx_jax = jnp.array(pep_src_idx_np, dtype=jnp.int32)
+if HAS_PEPTIDE:
+    pep_idx_jax = jax_monomer_indices[0]
+    pep_z_jax = jax_z[pep_idx_jax]
+    pep_dst_idx_np, pep_src_idx_np = np.where(~np.eye(pep_n_atoms, dtype=bool))
+    pep_dst_idx_jax = jnp.array(pep_dst_idx_np, dtype=jnp.int32)
+    pep_src_idx_jax = jnp.array(pep_src_idx_np, dtype=jnp.int32)
+else:
+    pep_idx_jax = jnp.zeros(0, dtype=jnp.int32)
+    pep_z_jax = jnp.zeros(0, dtype=jnp.int32)
+    pep_dst_idx_jax = jnp.zeros(0, dtype=jnp.int32)
+    pep_src_idx_jax = jnp.zeros(0, dtype=jnp.int32)
 pep_ref_charge_total = float(np.asarray(nbond_data.charges[:n_trialanine]).sum())
 
-if len(monomer_indices) > 1:
-    water_stacked_idx_jax = jnp.array(np.stack(monomer_indices[1:]), dtype=jnp.int32)
+water_indices = monomer_indices[1:] if HAS_PEPTIDE else monomer_indices
+if len(water_indices) > 0:
+    water_stacked_idx_jax = jnp.array(np.stack(water_indices), dtype=jnp.int32)
     water_n_atoms = 3
     water_dst_idx_np, water_src_idx_np = np.where(~np.eye(water_n_atoms, dtype=bool))
     water_dst_idx_jax = jnp.array(water_dst_idx_np, dtype=jnp.int32)
@@ -768,6 +826,8 @@ else:
 
 def compute_peptide_ml_charges(r):
     """Return geometry-dependent peptide atomic charges from the peptide ML model."""
+    if not HAS_PEPTIDE:
+        return jnp.zeros(0, dtype=jnp.float64)
     if not USE_ML_INTRAMOLECULAR:
         return _q_jax[:n_trialanine]
     pep_pos = r[pep_idx_jax]
@@ -1098,6 +1158,8 @@ def _periodic_angle_delta_rad(angle, target):
 
 
 def _phi_psi_restraint_energy(r):
+    if not HAS_PEPTIDE:
+        return 0.0
     if not CONSTRAIN_PHI_PSI:
         return 0.0
     if PHI_TARGET_DEG is None or PSI_TARGET_DEG is None:
@@ -1151,23 +1213,26 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None, **unu
     elec = jnp.where(within_ctof, elec, 0.0)
     e_inter = (jnp.sum(vdw) + jnp.sum(elec)) * KCAL_MOL_TO_EV
 
-    # (C) Flat-bottom harmonic restraints on peptide H-X bonds
-    # Kicks in only if bonds stretch more than 0.08 Å beyond equilibrium (r0_jax).
-    ri_pep = r[h_idx_jax]
-    rj_pep = r[x_idx_jax]
-    disp_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_pep, rj_pep)
-    disp_pep_sq = jnp.sum(disp_pep**2, axis=-1)
-    dist_pep = jnp.sqrt(jnp.maximum(disp_pep_sq, 1e-12))
-    excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
-    e_restraint = jnp.sum(0.5 * 100.0 * jnp.square(excess))
+    if HAS_PEPTIDE:
+        # (C) Flat-bottom harmonic restraints on peptide H-X bonds.
+        ri_pep = r[h_idx_jax]
+        rj_pep = r[x_idx_jax]
+        disp_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_pep, rj_pep)
+        disp_pep_sq = jnp.sum(disp_pep**2, axis=-1)
+        dist_pep = jnp.sqrt(jnp.maximum(disp_pep_sq, 1e-12))
+        excess = jnp.maximum(dist_pep - (r0_jax + 0.08), 0.0)
+        e_restraint = jnp.sum(0.5 * 100.0 * jnp.square(excess))
 
-    # (D) Harmonic restraints on ALL peptide bonds
-    ri_all_pep = r[pep_bond_idx1_jax]
-    rj_all_pep = r[pep_bond_idx2_jax]
-    disp_all_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_all_pep, rj_all_pep)
-    disp_all_pep_sq = jnp.sum(disp_all_pep**2, axis=-1)
-    dist_all_pep = jnp.sqrt(jnp.maximum(disp_all_pep_sq, 1e-12))
-    e_pep_bond_restraints = jnp.sum(0.5 * PEPTIDE_BOND_K_EV * jnp.square(dist_all_pep - r0_pep_jax))
+        # (D) Harmonic restraints on ALL peptide bonds.
+        ri_all_pep = r[pep_bond_idx1_jax]
+        rj_all_pep = r[pep_bond_idx2_jax]
+        disp_all_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_all_pep, rj_all_pep)
+        disp_all_pep_sq = jnp.sum(disp_all_pep**2, axis=-1)
+        dist_all_pep = jnp.sqrt(jnp.maximum(disp_all_pep_sq, 1e-12))
+        e_pep_bond_restraints = jnp.sum(0.5 * PEPTIDE_BOND_K_EV * jnp.square(dist_all_pep - r0_pep_jax))
+    else:
+        e_restraint = 0.0
+        e_pep_bond_restraints = 0.0
 
     e_dihedral_restraint = _phi_psi_restraint_energy(r)
 
@@ -1316,6 +1381,8 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
 
     try:
         def restraint_energy_fn(r_):
+            if not HAS_PEPTIDE:
+                return 0.0
             ri_pep = r_[h_idx_jax]
             rj_pep = r_[x_idx_jax]
             disp_pep = jax.vmap(lambda a, b: mic_displacement(a, b, _cell_jax))(ri_pep, rj_pep)
