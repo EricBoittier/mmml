@@ -1,4 +1,4 @@
-.import jax
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -24,6 +24,25 @@ class SizeCheckingModel:
         assert dst_idx.shape == src_idx.shape
         assert dst_idx.shape[0] == n_atoms * (n_atoms - 1)
         return {"energy": jnp.sum(positions * positions)}
+
+
+class CutoffProbeModel:
+    def apply(
+        self,
+        params,
+        *,
+        atomic_numbers,
+        positions,
+        dst_idx,
+        src_idx,
+        compute_forces=True,
+    ):
+        del params, atomic_numbers, dst_idx, src_idx, compute_forces
+        n_atoms = positions.shape[0]
+        base = jnp.asarray(float(n_atoms * n_atoms), dtype=positions.dtype)
+        if n_atoms == 5:
+            return {"energy": base + jnp.linalg.norm(positions[0] - positions[-1])}
+        return {"energy": base}
 
 
 def test_peptide_water_ml_energy_fn_jit():
@@ -144,3 +163,37 @@ def test_peptide_water_ml_energy_fn_uses_dynamic_dimer_size():
     assert jnp.isfinite(energy)
     assert forces.shape == positions.shape
     assert jnp.isfinite(forces).all()
+
+
+def test_peptide_water_ml_cutoff_zeroes_energy_and_force_at_cutoff():
+    peptide_idx = jnp.array([0, 1], dtype=jnp.int32)
+    water_indices = [jnp.array([2, 3, 4], dtype=jnp.int32)]
+    jax_z = jnp.ones(5, dtype=jnp.int32)
+    positions = jnp.array(
+        [
+            [0.0, 0.0, 0.0],
+            [-0.5, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [2.1, 0.0, 0.0],
+            [2.2, 0.0, 0.0],
+        ],
+        dtype=jnp.float64,
+    )
+
+    displacement_fn, _ = space.periodic(100.0)
+    energy_fn = make_peptide_water_ml_energy_fn(
+        CutoffProbeModel(),
+        {},
+        jax_z,
+        peptide_idx,
+        water_indices,
+        displacement_fn,
+        interaction_cutoff_A=2.0,
+        interaction_switch_width_A=1.0,
+    )
+
+    energy = jax.jit(energy_fn)(positions)
+    forces = -jax.jit(jax.grad(energy_fn))(positions)
+
+    np.testing.assert_allclose(np.asarray(energy), 13.0, atol=1e-10)
+    np.testing.assert_allclose(np.asarray(forces), np.zeros((5, 3)), atol=1e-10)

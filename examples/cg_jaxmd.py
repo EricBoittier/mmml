@@ -176,6 +176,8 @@ DEFAULTS = {
 
     "use_ml_intramolecular": True,
     "peptide_water_ml": True,
+    "peptide_water_ml_cutoff_A": 8.0,
+    "peptide_water_ml_switch_width_A": 2.0,
     "peptide_water_electrostatic_embedding": False,
     "peptide_ml_charge_total_correction": False,
     "water_ml_charge_total_correction": False,
@@ -266,6 +268,8 @@ dt_fs = config.dt_fs
 dt = dt_fs * 0.001
 
 PEPTIDE_WATER_ML = config.peptide_water_ml
+PEPTIDE_WATER_ML_CUTOFF_A = config.peptide_water_ml_cutoff_A
+PEPTIDE_WATER_ML_SWITCH_WIDTH_A = config.peptide_water_ml_switch_width_A
 USE_ML_INTRAMOLECULAR = config.use_ml_intramolecular
 PEPTIDE_WATER_ELECTROSTATIC_EMBEDDING = config.peptide_water_electrostatic_embedding
 PEPTIDE_ML_CHARGE_TOTAL_CORRECTION = config.peptide_ml_charge_total_correction
@@ -712,6 +716,11 @@ if PEPTIDE_WATER_ML:
         "--- Configuring PEPTIDE-WATER interactions with foundation ML model "
         "(peptide-water dimers) ---"
     )
+    print(
+        "--- Peptide-water ML interaction uses smooth energy/force switch: "
+        f"cutoff={PEPTIDE_WATER_ML_CUTOFF_A} Å, "
+        f"width={PEPTIDE_WATER_ML_SWITCH_WIDTH_A} Å ---"
+    )
     dimer_size = n_trialanine + 3
     ml_charges = {n_trialanine: float(pep_charge), 3: 0.0, dimer_size: float(pep_charge)}
     ml_spins = {n_trialanine: float(pep_spin), 3: 1.0, dimer_size: float(pep_spin)}
@@ -724,7 +733,33 @@ if PEPTIDE_WATER_ML:
         displacement_fn,
         charges=ml_charges,
         spins=ml_spins,
+        interaction_cutoff_A=PEPTIDE_WATER_ML_CUTOFF_A,
+        interaction_switch_width_A=PEPTIDE_WATER_ML_SWITCH_WIDTH_A,
     )
+    compute_peptide_monomer_energy = make_monomer_energy_fn(
+        peptide_model,
+        peptide_params,
+        jax_z,
+        [jax_monomer_indices[0]],
+        displacement_fn,
+        charges=ml_charges,
+        spins=ml_spins,
+    )
+    compute_water_monomer_energy = make_monomer_energy_fn(
+        peptide_model,
+        peptide_params,
+        jax_z,
+        jax_monomer_indices[1:],
+        displacement_fn,
+        charges=ml_charges,
+        spins=ml_spins,
+    )
+
+    def compute_ml_bonded_energy(r):
+        return compute_peptide_monomer_energy(r) + compute_water_monomer_energy(r)
+
+    def compute_ml_nonbonded_energy(r):
+        return compute_monomer_energy(r) - compute_ml_bonded_energy(r)
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
     if USE_ML_INTRAMOLECULAR:
@@ -751,6 +786,12 @@ else:
             if compute_peptide_energy is None:
                 return e_water
             return compute_peptide_energy(r) + e_water
+
+        def compute_ml_bonded_energy(r):
+            return compute_monomer_energy(r)
+
+        def compute_ml_nonbonded_energy(r):
+            return jnp.asarray(0.0, dtype=jnp.float64)
     else:
         @jit
         def compute_peptide_intra_nb_energy(r):
@@ -789,6 +830,12 @@ else:
             e_bonded = bonded_comp["total"] * KCAL_MOL_TO_EV
             e_pep_intra_nb = compute_peptide_intra_nb_energy(r)
             return e_bonded + e_pep_intra_nb
+
+        def compute_ml_bonded_energy(r):
+            return jnp.asarray(0.0, dtype=jnp.float64)
+
+        def compute_ml_nonbonded_energy(r):
+            return jnp.asarray(0.0, dtype=jnp.float64)
 
 pep_n_atoms = int(n_trialanine)
 if HAS_PEPTIDE:
@@ -1242,8 +1289,16 @@ def hybrid_energy_fn(r, pi=None, pj=None, mask=None, e14=None, vdw14=None, **unu
 
 @jit
 def _debug_ml_energy(r):
-    """JIT-compiled ML intramolecular energy only (for diagnostics)."""
+    """JIT-compiled total ML energy contribution (for diagnostics)."""
     return compute_monomer_energy(r)
+
+
+@jit
+def _debug_ml_energy_components(r):
+    """JIT-compiled ML bonded and nonbonded interaction components."""
+    e_bonded = compute_ml_bonded_energy(r)
+    e_nonbonded = compute_ml_nonbonded_energy(r)
+    return jnp.array([e_bonded, e_nonbonded])
 
 
 @jit
@@ -1286,7 +1341,8 @@ def diagnose_energy(r, label=""):
         n_bad = int((~np.isfinite(r_np)).any(axis=-1).sum())
         print(f"[DIAG{label}] ⚠ Positions: {n_bad} atoms with NaN/Inf — energy will be NaN")
         return
-    e_ml = float(_debug_ml_energy(r))
+    e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r))
+    e_ml = e_ml_bonded + e_ml_nonbonded
     e_lj, e_elec = map(
         float, _debug_mm_energy_components(r, pi, pj, mask, e14, vdw14)
     )
@@ -1294,7 +1350,8 @@ def diagnose_energy(r, label=""):
     e_tot = e_ml + e_mm
     ml_ok = "✓" if np.isfinite(e_ml) else "✗ NaN/Inf"
     mm_ok = "✓" if np.isfinite(e_mm) else "✗ NaN/Inf"
-    print(f"[DIAG{label}] E_ML={e_ml:.4f} eV {ml_ok} | "
+    print(f"[DIAG{label}] E_ML={e_ml:.4f} eV {ml_ok} "
+          f"(bonded={e_ml_bonded:.4f}, nonbonded={e_ml_nonbonded:.4f}) | "
           f"E_LJ={e_lj:.4f} eV | E_elec={e_elec:.4f} eV | "
           f"E_MM={e_mm:.4f} eV {mm_ok} | "
           f"E_tot={e_tot:.4f} eV | Pairs_real={int((_mask_ref[0]>0.5).sum())}")
@@ -1332,18 +1389,27 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         return f"Atom{idx}"
 
     # 1. Energy Components
-    e_ml = float(_debug_ml_energy(r))
+    e_ml_bonded, e_ml_nonbonded = map(float, _debug_ml_energy_components(r))
+    e_ml = e_ml_bonded + e_ml_nonbonded
     e_mm = float(_debug_mm_energy(r, pi, pj, mask, e14, vdw14))
-    print(f"Energies: E_ML={e_ml:.4f} eV | E_MM={e_mm:.4f} eV | E_tot={e_ml+e_mm:.4f} eV")
+    print(
+        f"Energies: E_ML={e_ml:.4f} eV "
+        f"(bonded={e_ml_bonded:.4f}, nonbonded={e_ml_nonbonded:.4f}) | "
+        f"E_MM={e_mm:.4f} eV | E_tot={e_ml+e_mm:.4f} eV"
+    )
 
     # 2. Forces
     f_tot_mag = np.zeros(1)
     f_ml_mag = np.zeros(1)
+    f_ml_bonded_mag = np.zeros(1)
+    f_ml_nonbonded_mag = np.zeros(1)
     f_mm_mag = np.zeros(1)
     f_res_mag = np.zeros(1)
     
     f_tot = None
     f_ml = None
+    f_ml_bonded = None
+    f_ml_nonbonded = None
     f_mm = None
     
     try:
@@ -1361,12 +1427,42 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         grad_ml = jax.grad(lambda r_: compute_monomer_energy(r_))(r)
         f_ml = -np.asarray(grad_ml)
         f_ml_mag = np.linalg.norm(f_ml, axis=-1)
-        print(f"ML Monomer Forces: min={f_ml_mag.min():.3f}, max={f_ml_mag.max():.3f}, mean={f_ml_mag.mean():.3f}, std={f_ml_mag.std():.3f}")
+        print(f"ML Total Forces: min={f_ml_mag.min():.3f}, max={f_ml_mag.max():.3f}, mean={f_ml_mag.mean():.3f}, std={f_ml_mag.std():.3f}")
         nans_ml = np.isnan(f_ml).sum()
         if nans_ml > 0:
             print(f"  ⚠ WARNING: {nans_ml} NaNs detected in ML Forces!")
     except Exception as e:
         print(f"  Failed to compute ML Forces gradient: {e}")
+
+    try:
+        grad_ml_bonded = jax.grad(lambda r_: compute_ml_bonded_energy(r_))(r)
+        f_ml_bonded = -np.asarray(grad_ml_bonded)
+        f_ml_bonded_mag = np.linalg.norm(f_ml_bonded, axis=-1)
+        print(
+            f"ML Bonded Forces: min={f_ml_bonded_mag.min():.3f}, "
+            f"max={f_ml_bonded_mag.max():.3f}, mean={f_ml_bonded_mag.mean():.3f}, "
+            f"std={f_ml_bonded_mag.std():.3f}"
+        )
+        nans_ml_bonded = np.isnan(f_ml_bonded).sum()
+        if nans_ml_bonded > 0:
+            print(f"  ⚠ WARNING: {nans_ml_bonded} NaNs detected in ML bonded forces!")
+    except Exception as e:
+        print(f"  Failed to compute ML bonded force gradient: {e}")
+
+    try:
+        grad_ml_nonbonded = jax.grad(lambda r_: compute_ml_nonbonded_energy(r_))(r)
+        f_ml_nonbonded = -np.asarray(grad_ml_nonbonded)
+        f_ml_nonbonded_mag = np.linalg.norm(f_ml_nonbonded, axis=-1)
+        print(
+            f"ML Nonbonded Forces: min={f_ml_nonbonded_mag.min():.3f}, "
+            f"max={f_ml_nonbonded_mag.max():.3f}, mean={f_ml_nonbonded_mag.mean():.3f}, "
+            f"std={f_ml_nonbonded_mag.std():.3f}"
+        )
+        nans_ml_nonbonded = np.isnan(f_ml_nonbonded).sum()
+        if nans_ml_nonbonded > 0:
+            print(f"  ⚠ WARNING: {nans_ml_nonbonded} NaNs detected in ML nonbonded forces!")
+    except Exception as e:
+        print(f"  Failed to compute ML nonbonded force gradient: {e}")
 
     try:
         grad_mm = jax.grad(lambda r_: _debug_mm_energy(r_, pi, pj, mask, e14, vdw14))(r)
@@ -1442,6 +1538,10 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         axes[0, 0].plot(f_tot_mag, label="Total Force", alpha=0.7)
     if f_ml is not None:
         axes[0, 0].plot(f_ml_mag, label="ML Force", alpha=0.7)
+    if f_ml_bonded is not None:
+        axes[0, 0].plot(f_ml_bonded_mag, label="ML Bonded Force", alpha=0.7)
+    if f_ml_nonbonded is not None:
+        axes[0, 0].plot(f_ml_nonbonded_mag, label="ML Nonbonded Force", alpha=0.7)
     if f_mm is not None:
         axes[0, 0].plot(f_mm_mag, label="MM Force", alpha=0.7)
     axes[0, 0].set_yscale('log')

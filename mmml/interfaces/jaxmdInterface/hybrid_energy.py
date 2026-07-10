@@ -132,7 +132,18 @@ def make_monomer_energy_fn(model, params, jax_z, monomer_indices, displacement_f
 
 
 
-def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_indices, displacement_fn, charges=None, spins=None):
+def make_peptide_water_ml_energy_fn(
+    model,
+    params,
+    jax_z,
+    peptide_idx,
+    water_indices,
+    displacement_fn,
+    charges=None,
+    spins=None,
+    interaction_cutoff_A=None,
+    interaction_switch_width_A=2.0,
+):
     """Factory creating an energy function where peptide-water interactions are computed via ML.
     
     Evaluates peptide-water dimers in parallel using jax.vmap and subtracts redundant peptide
@@ -147,12 +158,16 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
 
     # 1. Setup peptide-water dimer evaluation.
     if n_waters:
+        water_stacked_indices = jnp.stack(water_indices)
         dimer_indices = [jnp.concatenate([peptide_idx, idx]) for idx in water_indices]
         stacked_dimer_indices = jnp.stack(dimer_indices)
         dimer_z = jax_z[stacked_dimer_indices]
+        water_z = jax_z[water_stacked_indices]
     else:
+        water_stacked_indices = jnp.zeros((0, n_atoms_water), dtype=jnp.int32)
         stacked_dimer_indices = jnp.zeros((0, n_atoms_dimer), dtype=jnp.int32)
         dimer_z = jnp.zeros((0, n_atoms_dimer), dtype=jnp.int32)
+        water_z = jnp.zeros((0, n_atoms_water), dtype=jnp.int32)
 
     dst_idx_dimer, src_idx_dimer = np.where(~np.eye(n_atoms_dimer, dtype=bool))
     dst_idx_dimer = jnp.array(dst_idx_dimer, dtype=jnp.int32)
@@ -172,6 +187,19 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     pep_z = jax_z[peptide_idx]
     
     vmapped_displacement_pep = jax.vmap(displacement_fn, in_axes=(0, None))
+
+    dst_idx_water, src_idx_water = np.where(~np.eye(n_atoms_water, dtype=bool))
+    dst_idx_water = jnp.array(dst_idx_water, dtype=jnp.int32)
+    src_idx_water = jnp.array(src_idx_water, dtype=jnp.int32)
+    vmapped_displacement_water = jax.vmap(
+        jax.vmap(displacement_fn, in_axes=(0, None)),
+        in_axes=(0, 0)
+    )
+    use_interaction_cutoff = interaction_cutoff_A is not None
+    interaction_cutoff_A = float(interaction_cutoff_A or 0.0)
+    interaction_switch_width_A = float(interaction_switch_width_A)
+    interaction_switch_width_A = max(0.0, min(interaction_switch_width_A, interaction_cutoff_A))
+    interaction_switch_on_A = interaction_cutoff_A - interaction_switch_width_A
     
     import inspect
 
@@ -195,16 +223,20 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
     if isinstance(charges, dict):
         dimer_q = float(charges.get(n_atoms_dimer, charges.get(n_atoms_pep, 0.0)))
         pep_q = float(charges.get(n_atoms_pep, 0.0))
+        water_q = float(charges.get(n_atoms_water, 0.0))
     else:
         dimer_q = float(charges or 0.0)
         pep_q = float(charges or 0.0)
+        water_q = 0.0 if n_atoms_water == 3 else float(charges or 0.0)
 
     if isinstance(spins, dict):
         dimer_s = float(spins.get(n_atoms_dimer, spins.get(n_atoms_pep, 1.0)))
         pep_s = float(spins.get(n_atoms_pep, 1.0))
+        water_s = float(spins.get(n_atoms_water, 1.0))
     else:
         dimer_s = float(spins or 1.0)
         pep_s = float(spins or 1.0)
+        water_s = 1.0 if n_atoms_water == 3 else float(spins or 1.0)
 
     if is_spooky:
         vmapped_apply_dimer = jax.vmap(
@@ -232,6 +264,20 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
                 src_idx=src_idx_pep,
                 compute_forces=False,
             )
+
+        vmapped_apply_water = jax.vmap(
+            lambda pos, atomic_nums: model.apply(
+                params,
+                atomic_numbers=atomic_nums,
+                positions=pos,
+                charges=jnp.full((n_atoms_water, 1), water_q, dtype=jnp.float32),
+                spins=jnp.full((n_atoms_water, 1), water_s, dtype=jnp.float32),
+                dst_idx=dst_idx_water,
+                src_idx=src_idx_water,
+                compute_forces=False,
+            ),
+            in_axes=(0, 0)
+        )
     else:
         vmapped_apply_dimer = jax.vmap(
             lambda pos, atomic_nums: model.apply(
@@ -254,6 +300,28 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
                 src_idx=src_idx_pep,
                 compute_forces=False,
             )
+
+        vmapped_apply_water = jax.vmap(
+            lambda pos, atomic_nums: model.apply(
+                params,
+                atomic_numbers=atomic_nums,
+                positions=pos,
+                dst_idx=dst_idx_water,
+                src_idx=src_idx_water,
+                compute_forces=False,
+            ),
+            in_axes=(0, 0)
+        )
+
+    def _smooth_switch(dist):
+        if not use_interaction_cutoff:
+            return jnp.ones_like(dist)
+        if interaction_switch_width_A <= 0.0:
+            return jnp.where(dist < interaction_cutoff_A, 1.0, 0.0)
+        t = (dist - interaction_switch_on_A) / interaction_switch_width_A
+        t = jnp.clip(t, 0.0, 1.0)
+        smoothstep = t * t * t * (10.0 - 15.0 * t + 6.0 * t * t)
+        return 1.0 - smoothstep
     
     def dimer_energy_fn(r):
         # Always evaluate the peptide monomer. With no waters this function
@@ -280,11 +348,28 @@ def make_peptide_water_ml_energy_fn(model, params, jax_z, peptide_idx, water_ind
         centered_dimer = unfolded_dimer_pos - dimer_com
         
         outputs_dimer = vmapped_apply_dimer(centered_dimer, dimer_z)
-        e_dimer_sum = jnp.sum(outputs_dimer["energy"])
+        e_dimer = jnp.asarray(outputs_dimer["energy"]).reshape((n_waters,))
+
+        water_pos = r[water_stacked_indices]
+        water_ref_pos = water_pos[:, 0, :]
+        water_displacements = vmapped_displacement_water(water_pos, water_ref_pos)
+        unfolded_water = water_ref_pos[:, None, :] + water_displacements
+        water_com = jnp.mean(unfolded_water, axis=1, keepdims=True)
+        centered_water = unfolded_water - water_com
+        outputs_water = vmapped_apply_water(centered_water, water_z)
+        e_water = jnp.asarray(outputs_water["energy"]).reshape((n_waters,))
+
+        pep_atoms = unfolded_dimer_pos[:, :n_atoms_pep, :]
+        water_atoms = unfolded_dimer_pos[:, n_atoms_pep:, :]
+        pair_diff = pep_atoms[:, :, None, :] - water_atoms[:, None, :, :]
+        min_pair_dist = jnp.min(jnp.linalg.norm(pair_diff, axis=-1), axis=(1, 2))
+        weights = _smooth_switch(min_pair_dist)
+
+        e_interaction = e_dimer - e_pep - e_water
 
         # Subtract (N_waters - 1) * E_peptide to get:
         # E_peptide_ML + sum(E_water_i_ML) + sum(E_inter_peptide_water_ML)
-        return e_dimer_sum - (n_waters - 1) * e_pep
+        return e_pep + jnp.sum(e_water) + jnp.sum(weights * e_interaction)
         
     return dimer_energy_fn
 
