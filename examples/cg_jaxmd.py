@@ -90,7 +90,7 @@ ensure_pycharmm_loaded()
 pycharmm_loud()
 
 # Helper function to parse peptide H-X bonds from the CHARMM PSF file
-def parse_peptide_h_x_bonds(psf_path, z_array):
+def parse_peptide_h_x_bonds(psf_path, z_array, n_peptide_atoms):
     bonds = []
     in_bonds = False
     with open(psf_path, 'r') as f:
@@ -107,8 +107,7 @@ def parse_peptide_h_x_bonds(psf_path, z_array):
                 for i in range(0, len(parts), 2):
                     idx1 = int(parts[i]) - 1
                     idx2 = int(parts[i+1]) - 1
-                    # Peptide atoms are the first 42 atoms
-                    if idx1 < 42 and idx2 < 42:
+                    if idx1 < n_peptide_atoms and idx2 < n_peptide_atoms:
                         z1 = z_array[idx1]
                         z2 = z_array[idx2]
                         # Identify hydrogen (Z=1) to heavy atom (Z>1) bonds
@@ -119,7 +118,7 @@ def parse_peptide_h_x_bonds(psf_path, z_array):
     return bonds
 
 
-def parse_all_peptide_bonds(psf_path):
+def parse_all_peptide_bonds(psf_path, n_peptide_atoms):
     bonds = []
     in_bonds = False
     with open(psf_path, 'r') as f:
@@ -136,8 +135,7 @@ def parse_all_peptide_bonds(psf_path):
                 for i in range(0, len(parts), 2):
                     idx1 = int(parts[i]) - 1
                     idx2 = int(parts[i+1]) - 1
-                    # Peptide atoms are the first 42 atoms
-                    if idx1 < 42 and idx2 < 42:
+                    if idx1 < n_peptide_atoms and idx2 < n_peptide_atoms:
                         bonds.append((idx1, idx2))
     return bonds
 
@@ -204,6 +202,7 @@ DEFAULTS = {
 
     "write_dcd": True,
     "output_dir": ".",
+    "workdir": "/tmp/tria_box",
     "nvt_temp_schedule": None,
 }
 
@@ -346,12 +345,34 @@ def load_peptide_start_frame(traj_path, frame_index=0):
 
 
 # 2. Build the initial system in PyCHARMM and minimize
-workdir = Path('/tmp/tria_box')
+workdir = Path(config.workdir)
 
 if NWATER > 0:
-    print("--- Building Trialanine Water Box in CHARMM ---")
-    box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
-        box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
+    from mmml.interfaces.pycharmmInterface.peptide_builder import parse_sequence
+    seq_clean = " ".join(parse_sequence(config.sequence))
+    if seq_clean == "ALA ALA ALA":
+        print("--- Building Trialanine Water Box in CHARMM ---")
+        box = build_trialanine_water_box_in_charmm(n_waters=NWATER,
+            box_side_A=BOX_SIDE_A, seed=SEED, workdir=workdir
+            )
+    else:
+        print(f"--- Building Solvated Peptide ({config.sequence}) with {NWATER} waters in CHARMM ---")
+        from mmml.interfaces.pycharmmInterface.peptide_builder import (
+            build_peptide_in_charmm,
+            solvate_peptide_in_charmm,
+        )
+        peptide = build_peptide_in_charmm(
+            sequence=config.sequence,
+            seed=SEED,
+            workdir=workdir,
+            minimize=True,
+        )
+        box = solvate_peptide_in_charmm(
+            peptide,
+            box_side_A=BOX_SIDE_A,
+            n_waters=NWATER,
+            seed=SEED,
+            workdir=workdir,
         )
 else:
     print(f"--- Building Gas-Phase Peptide ({config.sequence}) in CHARMM ---")
@@ -451,9 +472,9 @@ lingo.charmm_script("MINI ABNR NSTEP 10000")
 # Retrieve positions and atomic numbers
 pos = coor.get_positions()[["x", "y", "z"]].to_numpy(dtype=float)
 z = get_Z_from_psf()
-pep_h_x_bonds = parse_peptide_h_x_bonds(box.psf_path, z)
+pep_h_x_bonds = parse_peptide_h_x_bonds(box.psf_path, z, n_trialanine)
 print(f"Parsed {len(pep_h_x_bonds)} peptide H-X bonds from PSF.")
-pep_all_bonds = parse_all_peptide_bonds(box.psf_path)
+pep_all_bonds = parse_all_peptide_bonds(box.psf_path, n_trialanine)
 print(f"Parsed {len(pep_all_bonds)} peptide bonds from PSF.")
 
 # Precompute H-X bond index arrays for vectorized operations
@@ -566,7 +587,7 @@ else:
     water_model = None
     water_params = None
 
-# Setup monomer groupings (first 42 atoms: peptide; then groups of 3 for water)
+# Setup monomer groupings (first n_trialanine atoms: peptide; then groups of 3 for water)
 monomer_indices = [np.arange(n_trialanine)]
 for i in range(n_trialanine, len(pos), 3):
     monomer_indices.append(np.arange(i, i + 3))
@@ -602,8 +623,8 @@ if PEPTIDE_WATER_ML:
 else:
     print("--- Configuring PEPTIDE-WATER interactions with MM ---")
     if USE_ML_INTRAMOLECULAR:
-        monomer_charges = {42: float(pep_charge), 3: 0.0}
-        monomer_spins = {42: float(pep_spin), 3: 1.0}
+        monomer_charges = {n_trialanine: float(pep_charge), 3: 0.0}
+        monomer_spins = {n_trialanine: float(pep_spin), 3: 1.0}
         compute_peptide_energy = make_monomer_energy_fn(
             peptide_model, peptide_params, jax_z, [jax_monomer_indices[0]], displacement_fn,
             charges=monomer_charges, spins=monomer_spins
@@ -1326,10 +1347,10 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
     # Plot D: Peptide Neighbor List Graph Layout
     if len(active_idx) > 0:
         G = nx.Graph()
-        pep_atoms = list(range(42))
+        pep_atoms = list(range(n_trialanine))
         G.add_nodes_from(pep_atoms)
         
-        pep_pairs = (active_pi < 42) | (active_pj < 42)
+        pep_pairs = (active_pi < n_trialanine) | (active_pj < n_trialanine)
         pep_active_pi = active_pi[pep_pairs]
         pep_active_pj = active_pj[pep_pairs]
         pep_dists = dists[pep_pairs]
@@ -1341,11 +1362,11 @@ def run_force_and_nl_diagnostics(r, pi, pj, mask, e14, vdw14, cycle, step):
         
         nodes = list(G.nodes())
         pos_layout = nx.spring_layout(G, seed=42)
-        node_colors = ['lightblue' if n < 42 else 'salmon' for n in nodes]
-        node_sizes = [150 if n < 42 else 50 for n in nodes]
+        node_colors = ['lightblue' if n < n_trialanine else 'salmon' for n in nodes]
+        node_sizes = [150 if n < n_trialanine else 50 for n in nodes]
         
         nx.draw_networkx_nodes(G, pos_layout, ax=axes[1, 1], node_color=node_colors, node_size=node_sizes, edgecolors='black', linewidths=0.5)
-        pep_labels = {n: f"{atoms.get_chemical_symbols()[n]}{n}" if ('atoms' in globals() and n < len(atoms)) else f"Atom{n}" for n in nodes if n < 42}
+        pep_labels = {n: f"{atoms.get_chemical_symbols()[n]}{n}" if ('atoms' in globals() and n < len(atoms)) else f"Atom{n}" for n in nodes if n < n_trialanine}
         nx.draw_networkx_labels(G, pos_layout, labels=pep_labels, ax=axes[1, 1], font_size=8)
         nx.draw_networkx_edges(G, pos_layout, ax=axes[1, 1], alpha=0.2, edge_color='gray')
         

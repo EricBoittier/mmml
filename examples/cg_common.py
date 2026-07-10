@@ -69,6 +69,7 @@ def load_cg_config(
     parser.add_argument("--checkpoint", type=Path, help="Checkpoint used for every ML region")
     parser.add_argument("--peptide-checkpoint", type=Path)
     parser.add_argument("--water-checkpoint", type=Path)
+    parser.add_argument("--sequence")
     parser.add_argument("--n-waters", type=int)
     parser.add_argument("--box-size", type=float)
     parser.add_argument("--seed", type=int)
@@ -113,6 +114,7 @@ def load_cg_config(
         "checkpoint": "checkpoint",
         "peptide_checkpoint": "peptide_checkpoint",
         "water_checkpoint": "water_checkpoint",
+        "sequence": "sequence",
         "n_waters": "n_waters",
         "box_size": "box_size",
         "seed": "seed",
@@ -283,4 +285,3 @@ def parse_temp_schedule(schedule_str, total_steps):
                     return T1
         return stages[-1][2]
     return T_func
-
