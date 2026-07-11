@@ -1,0 +1,15 @@
+
+tolerance 2.0
+filetype pdb
+output packmol_out.pdb
+seed 473188
+
+structure peptide.pdb
+  number 1
+  fixed 7.5000 7.5000 7.5000 0.0 0.0 0.0
+end structure
+
+structure tip3.pdb
+  number 4
+  inside box 1.5 1.5 1.5 13.5 13.5 13.5
+end structure
