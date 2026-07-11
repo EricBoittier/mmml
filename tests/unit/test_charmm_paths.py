@@ -3,8 +3,25 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from mmml.interfaces.pycharmmInterface import charmm_paths
+
+
+def _path_beyond_fortran_limit(base: Path, filename: str) -> Path:
+    """Return ``base/<padding>/filename`` whose resolved length exceeds the CHARMM
+    Fortran name buffer, independent of how short the tmp root happens to be.
+
+    CI tmp roots (e.g. ``/tmp/tmpXXXX``) are far shorter than a developer's
+    ``/private/var/folders/...`` macOS root, so hard-coded directory names land
+    on either side of the 128-char limit depending on the runner.
+    """
+    limit = charmm_paths.charmm_fortran_max_path_length()
+    resolved_base = base.resolve()
+    # +16 margin so the path is unambiguously over the limit after joining.
+    needed = limit + 16 - len(str(resolved_base)) - len(filename) - 2
+    pad = "d" * max(1, needed)
+    return base / pad / filename
 
 
 def test_discover_repo_default_charmm_home(tmp_path):
@@ -223,7 +240,10 @@ def test_charmm_io_alias_read_symlink(tmp_path):
 
 def test_charmm_io_alias_read_symlink_idempotent(tmp_path, monkeypatch):
     monkeypatch.setenv("MMML_CHARMM_IO_SCOPE", "test-scope")
-    original = tmp_path / "zeroed_bonded_par_all36_cgenff.prm"
+    # Read-side aliasing only triggers when the path exceeds the Fortran name
+    # buffer; force that regardless of the tmp root length.
+    original = _path_beyond_fortran_limit(tmp_path, "zeroed_bonded_par_all36_cgenff.prm")
+    original.parent.mkdir(parents=True, exist_ok=True)
     original.write_text("prm\n", encoding="ascii")
     staging = tmp_path / "staging"
 
@@ -340,13 +360,10 @@ def test_fortran_path_needs_alias_for_long_paths(tmp_path):
 
 
 def test_charmm_io_alias_long_write_copy_back():
-    from pathlib import Path
     import tempfile
     with tempfile.TemporaryDirectory(dir="/tmp") as tmpdir:
         tmp_path = Path(tmpdir)
-        deep = tmp_path / "runs" / ("dcm5_l25_electro_compare_slurm203158")
-        deep = deep / "energy_jax_pme_ewald_mm" / "prep_ladder"
-        target = deep / "002_pre_mlpot_monomer_repack.crd"
+        target = _path_beyond_fortran_limit(tmp_path, "002_pre_mlpot_monomer_repack.crd")
         assert len(str(target.resolve())) > charmm_paths.charmm_fortran_max_path_length()
         staging = tmp_path / "staging"
 
