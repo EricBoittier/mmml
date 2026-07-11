@@ -76,3 +76,24 @@ def test_assemble_and_run_rejects_non_jaxmd_backend():
     cfg = RunConfig(system=SystemSpec(builder="psf"), backend="pycharmm")
     with pytest.raises(NotImplementedError, match="jaxmd backend"):
         assemble_and_run(cfg, system=_periodic_system())
+
+
+def test_assemble_and_run_dispatches_rigid_sampler(tmp_path):
+    pytest.importorskip("jax")
+    system = _periodic_system()
+    cfg = RunConfig(
+        system=SystemSpec(builder="psf"),
+        terms=("smd",),
+        ensemble=EnsembleSpec(ensemble="nvt", temperature_K=300.0, n_steps=10),
+        backend="jaxmd",
+        sampler="rigid",
+        output_dir=tmp_path,
+    )
+    traj = assemble_and_run(
+        cfg,
+        system=system,
+        term_kwargs={"smd": {"atom_i": 0, "atom_j": 1, "k_ev_per_A2": 0.5, "target": 2.0}},
+    )
+    # rigid sampler metadata (not the MD driver's)
+    assert "acceptance_ratio" in traj.metadata
+    assert (tmp_path / "trajectory.npz").exists()

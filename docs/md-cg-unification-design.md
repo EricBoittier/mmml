@@ -28,6 +28,7 @@ config ──lowering──▶ RunConfig ──assemble──▶ builder → Hyb
 | Driver incl. **NPT** | `mmml/md/drivers/jaxmd.py` | ✅ tested |
 | Assembly glue | `mmml/md/assemble.py` | ✅ tested |
 | Lowering adapters | `mmml/md/lowering.py` | ✅ tested |
+| Rigid-body `Sampler` (MC) | `mmml/md/samplers/rigid.py` | ✅ tested |
 
 **Energy terms:** `ml_intra`, `ml_pep_water`, `mm_nonbonded`, `vdw_core`, `smd`,
 `dihedral` — each registered, box-aware where relevant, and validated against
@@ -40,8 +41,8 @@ whole `mmml/md` unit suite (~73 tests) is green.
 
 **Remaining (§11):** swap the two legacy entrypoints
 (`md_system --backend jaxmd` and `examples/cg_jaxmd.py`) onto
-`assemble_and_run`, plus the rigid-body `Sampler` and the apocharmm driver.
-These need real end-to-end MD runs to validate, not just unit tests.
+`assemble_and_run`, and the apocharmm driver. These need real end-to-end MD
+runs / a GPU build to validate, not just unit tests.
 
 ---
 
@@ -594,16 +595,22 @@ land seams non-breaking, extract terms with parity checks, then add backends.
 
 ### Rigid sampling
 
-- [ ] Define a `Sampler` protocol (peer of `Driver`) selected by `RunConfig`;
-      MD is the default sampler.
-- [ ] Rigid-body state: per-monomer center-of-mass + orientation (quaternion),
-      derived from `MolecularSystem.monomer_indices`.
-- [ ] Rigid-move propagators: MC translation/rotation moves and/or constrained
-      (SHAKE/SETTLE) rigid MD, reusing the existing `HybridEnergy`.
-- [ ] Acceptance / bias hooks compatible with the existing bias terms
-      (flat-bottom, COM restraint, SMD).
+- [x] Define a `Sampler` protocol (peer of `Driver`) selected by `RunConfig`;
+      MD is the default sampler. `assemble_and_run` dispatches
+      `config.sampler == "rigid"` to the sampler.
+- [x] Rigid-body state: per-monomer COM + unit-quaternion orientation, groups
+      from `MolecularSystem.monomer_indices` (`quat_from_axis_angle` /
+      `quat_to_matrix` in `mmml/md/samplers/rigid.py`).
+- [x] Rigid-move propagator: Metropolis MC translation + quaternion rotation,
+      reusing the jitted `HybridEnergy`. Rigid moves preserve every
+      intramolecular distance (tested to 1e-8): `tests/unit/test_md_samplers.py`.
+- [x] Acceptance uses the composed energy, so existing bias terms (SMD, etc.)
+      participate automatically (exercised via `assemble_and_run` in
+      `tests/unit/test_md_assemble.py`).
 - [ ] Validate rigid sampling reproduces liquid structure (RDF) vs. flexible MD
-      on a small box.
+      on a small box. *(Needs a real forcefield run — deferred.)*
+- [ ] Optional: constrained (SHAKE/SETTLE) rigid MD variant. *(MC path landed
+      first; not required for the sampler to be usable.)*
 
 ### apocharmm (GPU CHARMM) interface
 

@@ -24,6 +24,7 @@ from mmml.md.lowering import (
     terms_from_cg_config,
 )
 from mmml.md.results import Trajectory
+from mmml.md.samplers import RigidBodySampler
 from mmml.md.system import FFParams, MolecularSystem, SystemSpec
 
 __all__ = [
@@ -41,4 +42,5 @@ __all__ = [
     "runconfig_from_cg_config",
     "runconfig_from_md_system_args",
     "terms_from_cg_config",
+    "RigidBodySampler",
 ]

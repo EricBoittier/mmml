@@ -102,19 +102,28 @@ def assemble_and_run(
         raise NotImplementedError(
             f"assemble_and_run currently targets the jaxmd backend; got {config.backend!r}"
         )
+    if config.sampler not in ("md", "rigid"):
+        raise NotImplementedError(f"unknown sampler {config.sampler!r}; expected md or rigid")
     if system is None:
         system = build_system(config.system)
 
     energy = build_hybrid_energy(system, config.terms, ctx, term_kwargs)
 
-    if driver is None:
-        from pathlib import Path
+    from pathlib import Path
 
+    output_path = None
+    if config.output_dir is not None:
+        output_path = Path(config.output_dir) / "trajectory.npz"
+
+    # Rigid-body sampling is a Sampler peer of the MD driver, selected by config.
+    if config.sampler == "rigid" and driver is None:
+        from mmml.md.samplers import RigidBodySampler
+
+        return RigidBodySampler(output_path=output_path).run(system, energy, config)
+
+    if driver is None:
         from mmml.md.drivers import JaxmdDriver
 
-        output_path = None
-        if config.output_dir is not None:
-            output_path = Path(config.output_dir) / "trajectory.npz"
         driver = JaxmdDriver(neighbor_fn=neighbor_fn, output_path=output_path)
 
     return driver.run(system, energy, config.ensemble, on_overlap=on_overlap)
