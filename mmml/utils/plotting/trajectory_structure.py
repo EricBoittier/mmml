@@ -37,11 +37,18 @@ def element_pair_rdfs(
     for frame in frames:
         first, second, distances = neighbor_list("ijd", frame, r_max, self_interaction=False)
         unique = first < second
-        for atom_a, atom_b, distance in zip(first[unique], second[unique], distances[unique]):
-            key = "-".join(sorted((symbols[atom_a], symbols[atom_b])))
-            bin_index = np.searchsorted(edges, distance, side="right") - 1
-            if 0 <= bin_index < bins:
-                counts[key][bin_index] += 1
+        first = first[unique]
+        second = second[unique]
+        distances = distances[unique]
+        for key in counts:
+            element_a, element_b = key.split("-")
+            if element_a == element_b:
+                mask = (symbols[first] == element_a) & (symbols[second] == element_b)
+            else:
+                mask = ((symbols[first] == element_a) & (symbols[second] == element_b)) | (
+                    (symbols[first] == element_b) & (symbols[second] == element_a)
+                )
+            counts[key] += np.histogram(distances[mask], bins=edges)[0]
         volume = frame.get_volume()
         for key in expected:
             element_a, element_b = key.split("-")

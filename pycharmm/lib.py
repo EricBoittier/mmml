@@ -29,20 +29,65 @@ import os.path
 import platform
 
 
+# CHARMM shared-library basenames, in preference order. Both the ``lib``-prefixed
+# and bare forms are accepted so either build layout resolves.
+_CHARMM_LIB_BASENAMES = ('libcharmm', 'charmm')
+
+
+def charmm_lib_suffix(sys_name=None):
+    """Platform shared-library extension: ``.dylib`` (macOS), ``.so`` (Linux),
+    ``.dll`` (Windows). Defaults to ``.so`` for unknown platforms."""
+    sys_name = sys_name or platform.system()
+    return {'Darwin': '.dylib', 'Linux': '.so', 'Windows': '.dll'}.get(sys_name, '.so')
+
+
+def _find_charmm_lib_in_dir(directory, suffix):
+    """First existing ``{lib,}charmm<suffix>`` under *directory* or ``directory/lib``."""
+    if not directory:
+        return None
+    for base_dir in (directory, os.path.join(directory, 'lib')):
+        for base in _CHARMM_LIB_BASENAMES:
+            candidate = os.path.join(base_dir, base + suffix)
+            if os.path.isfile(candidate):
+                return candidate
+    return None
+
+
+def _discover_repo_charmm_lib(suffix):
+    """Walk up from this file for a ``setup/charmm`` dir holding ``libcharmm<suffix>``.
+
+    Self-contained on purpose: importing ``mmml`` here would pull in jax/physnet
+    at CHARMM-load time. Mirrors ``mmml...charmm_paths.default_repo_charmm_home``.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    while True:
+        found = _find_charmm_lib_in_dir(os.path.join(here, 'setup', 'charmm'), suffix)
+        if found:
+            return found
+        parent = os.path.dirname(here)
+        if parent == here:
+            return None
+        here = parent
+
+
+def resolve_charmm_lib_path(charmm_lib_dir=''):
+    """Resolve the CHARMM shared library, cross-platform.
+
+    Order: explicit ``charmm_lib_dir`` (``CHARMM_LIB_DIR``) → repo ``setup/charmm``
+    auto-discovery → bare ``libcharmm<suffix>`` for the dynamic loader search path.
+    """
+    suffix = charmm_lib_suffix()
+    if charmm_lib_dir:
+        found = _find_charmm_lib_in_dir(charmm_lib_dir, suffix)
+        # Fall back to the joined path even if missing, so CDLL raises against the
+        # location the caller explicitly requested.
+        return found or os.path.join(charmm_lib_dir, 'libcharmm' + suffix)
+    return _discover_repo_charmm_lib(suffix) or ('libcharmm' + suffix)
+
+
 class CharmmLib:
     def __init__(self, charmm_lib_dir=''):
-        self.charmm_lib_name = 'libcharmm'
-        if charmm_lib_dir:
-            self.charmm_lib_name = os.path.join(charmm_lib_dir,
-                                                self.charmm_lib_name)
-
-        sys_name = platform.system()
-        if sys_name == 'Darwin':
-            self.charmm_lib_name += '.dylib'
-        elif sys_name == 'Linux':
-            self.charmm_lib_name += '.so'
-        elif sys_name == 'Windows':
-            self.charmm_lib_name += '.dll'
+        self.charmm_lib_name = resolve_charmm_lib_path(charmm_lib_dir)
 
         self.lib = None
         self.init_charmm()
@@ -55,7 +100,17 @@ class CharmmLib:
 
 
     def init_charmm(self):
-        self.lib = ctypes.CDLL(self.charmm_lib_name)
+        try:
+            self.lib = ctypes.CDLL(self.charmm_lib_name)
+        except OSError as exc:
+            suffix = charmm_lib_suffix()
+            raise OSError(
+                f"Could not load the CHARMM shared library ({self.charmm_lib_name!r}).\n"
+                f"Platform {platform.system()!r} expects a {suffix!r} library.\n"
+                "Set CHARMM_LIB_DIR to the directory containing "
+                f"libcharmm{suffix}, or place it under <repo>/setup/charmm.\n"
+                f"Original error: {exc}"
+            ) from exc
         self.lib.init_charmm()
 
     def del_charmm(self):
