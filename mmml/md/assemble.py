@@ -133,7 +133,14 @@ def assemble_and_run(
 
                 cutoff = max(r.cutoff_A for r in inter)
                 cap = next((r.capacity_hint for r in inter if r.capacity_hint), None)
-                neighbor_fn = make_intermolecular_neighbor_fn(system, cutoff, cap)
+                # When ml_pep_water handles core-solvent interactions, exclude
+                # those pairs from the classical MM list too, or mm_nonbonded
+                # double-counts the same interaction the ML dimer term already
+                # scores (doc §4/§8: peptide_water_ml -> pairs excluded from MM).
+                peptide_water_ml = "ml_pep_water" in config.terms
+                neighbor_fn = make_intermolecular_neighbor_fn(
+                    system, cutoff, cap, peptide_water_ml=peptide_water_ml,
+                )
 
         driver = JaxmdDriver(neighbor_fn=neighbor_fn, output_path=output_path)
 

@@ -62,9 +62,24 @@ itself). Regression-tested in
 CHARMM-built peptide-water system + ML checkpoint runs a stable 50-step FIRE
 minimization end-to-end (energy monotonically decreasing, no divergence).
 
-**Remaining (§11):** swap the two legacy entrypoints
-(`md_system --backend jaxmd` and `examples/cg_jaxmd.py`) onto
-`assemble_and_run`, and the apocharmm driver. These need real end-to-end MD
+**Second bug fix found the same way:** `assemble_and_run`'s auto-wired
+neighbor list did not pass `peptide_water_ml=True` to
+`make_intermolecular_neighbor_fn` when the `ml_pep_water` term was selected, so
+`mm_nonbonded` still included core–solvent pairs even though `ml_pep_water`
+already scores them — a silent double-count of the peptide-water interaction
+(classical LJ/Coulomb *and* the ML dimer term). Found while validating the
+`peptide_water_ml` toggle path in `examples/cg_jaxmd_unified.py`: energy jumped
+to ~2e4 eV instead of the expected MD/MM scale. Fixed in `assemble.py` by
+checking `"ml_pep_water" in config.terms`. Regression-tested by comparing the
+excluded vs. unexcluded pair list and energy on the same geometry (see
+`tests/unit/test_cg_jaxmd_unified.py::test_end_to_end_peptide_water_ml_no_double_counting`) —
+note that this test asserts the *relative* with/without-exclusion difference
+rather than an absolute energy threshold, since CHARMM's persistent global
+state across builds in one process makes absolute geometry (and thus energy)
+depend on prior test execution order within the same session.
+
+**Remaining (§11):** swap `md_system --backend jaxmd` onto `assemble_and_run`,
+and the apocharmm driver. These need real end-to-end MD
 runs / a GPU build to validate, not just unit tests.
 
 ---
@@ -614,7 +629,24 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         numpy-only; tested in `tests/unit/test_md_lowering.py`.
   - [ ] Flip `md_system --backend jaxmd` onto `assemble_and_run`; retire the
         duplicate inline loop.
-  - [ ] Make `examples/cg_jaxmd.py` a thin front-end over `assemble_and_run`.
+  - [x] `examples/cg_jaxmd_unified.py` — a thin, validated front-end over
+        `assemble_and_run` for cg_jaxmd-style peptide-water runs: reads a
+        cg_jaxmd JSON config, chains `fire → nvt → nve` phases (carrying
+        positions forward between phases via `dataclasses.replace`), and wires
+        `ml_intra` / `mm_nonbonded` / `ml_pep_water` / `vdw_core` / `smd` term
+        kwargs from the config toggles. Deliberately raises
+        `NotImplementedError` for `constrain_phi_psi` (not yet wired) rather
+        than silently diverging from the legacy script. This is a **new
+        parallel script**, not an in-place rewrite of the 2624-line
+        `examples/cg_jaxmd.py` — safer to validate, and `cg_jaxmd.py` is
+        untouched. Validated end-to-end against real CHARMM builds
+        (`PeptideWaterSystemBuilder`) + the example checkpoint: single-phase
+        runs, multi-phase position chaining (`nvt`'s start energy matches
+        `fire`'s end energy exactly), and the `peptide_water_ml` +
+        `peptide_water_ml_core_vdw` combination. Tests in
+        `tests/unit/test_cg_jaxmd_unified.py` (11 tests: config validation,
+        pure `term_kwargs` derivation, and 3 real end-to-end CHARMM+checkpoint
+        integration tests).
 
 ### Rigid sampling
 

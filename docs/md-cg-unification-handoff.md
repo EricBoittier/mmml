@@ -37,60 +37,81 @@ The six energy terms: `ml_intra`, `ml_pep_water`, `mm_nonbonded`, `vdw_core`,
 against the `cg_jaxmd` originals / the reference nonbonded / the example ML
 checkpoint (`examples/sppoky-epoch-0010_params.json`).
 
-Full `mmml/md` unit suite: ~90 tests, all green.
+Full `mmml/md` package unit suite (the tests above + `test_cg_jaxmd_unified.py`,
+§2a): **102 tests, all green** (running the whole `tests/unit/test_md_*.py` glob,
+which also includes pre-existing legacy `md-system` tests unrelated to this
+package, gives 324 passed / 1 skipped — also green, no regressions).
 
 ---
 
 ## 2. What REMAINS
 
-All three items are integration- or hardware-gated — they need real runs, not
-more unit-testable library code.
+### 2a. `examples/cg_jaxmd.py` swap — DONE (as a new parallel script)
 
-### 2a. Swap the two legacy entrypoints onto `assemble_and_run` (highest value)
+**`examples/cg_jaxmd_unified.py`** is a thin, validated front-end over
+`assemble_and_run` for cg_jaxmd-style peptide-water runs: JSON config →
+`runconfig_from_cg_config(cfg, phase)` → `assemble_and_run(...)`, chaining
+`fire → nvt → nve` phases with positions carried forward
+(`dataclasses.replace(system, R=...)` between phases; velocities are **not**
+carried — a documented simplification). It is a **new script alongside** the
+original `examples/cg_jaxmd.py` (untouched), not an in-place rewrite — safer to
+validate, and the original stays available for feature parity (φ/ψ restraints,
+H-X bond repair, DCD export, diagnostics — all explicitly out of scope for the
+new front-end; it raises `NotImplementedError` for `constrain_phi_psi` rather
+than silently diverging).
 
-The lowering + assembly layers exist; the actual entrypoints still run their own
-inline loops.
+Validated end-to-end against real CHARMM builds
+(`PeptideWaterSystemBuilder(n_molecules=4, box_size=15.0)`) + the example
+checkpoint (`examples/sppoky-epoch-0010_params.json`): single-phase runs,
+multi-phase chaining (`nvt`'s start energy matches `fire`'s end energy exactly),
+and the `peptide_water_ml` + `peptide_water_ml_core_vdw` combination. Tests in
+`tests/unit/test_cg_jaxmd_unified.py` (11 tests, ~1.5 min including 3 real
+CHARMM+checkpoint integration tests).
 
-- **`examples/cg_jaxmd.py`** (do this first — smaller, checkpoint/build path
-  already exercised). Make it a thin front-end: read JSON →
-  `runconfig_from_cg_config(cfg, phase)` → `assemble_and_run(...)`. The energy
-  model comes from `EnergyContext(model=..., params=...)` via
-  `create_calculator_from_checkpoint` (see how `test_md_ml_terms.py` loads it).
-  The builder is `peptide_water` (`PeptideWaterSystemBuilder`).
-- **`mmml/cli/run/md_system.py`** `--backend jaxmd`: `run_backend()` currently
-  dispatches to `md_pbc_suite/jaxmd.py`. Route it through
-  `runconfig_from_md_system_args(args)` → `assemble_and_run(...)` instead, then
-  retire the duplicate inline loop once trajectories match.
+**Two real bugs were found and fixed via this end-to-end validation** (details
+in design doc §0):
+1. `JaxmdDriver`'s fixed-box NVE/NVT/FIRE path silently wrapped real-space (Å)
+   positions as fractional coordinates (`space.periodic_general` defaults to
+   `fractional_coordinates=True`), causing instant divergence on the first
+   integration step. Fixed in `mmml/md/drivers/jaxmd.py`.
+2. `assemble_and_run`'s auto-wired neighbor list didn't exclude peptide-water
+   pairs from `mm_nonbonded` when `ml_pep_water` was active, double-counting
+   that interaction. Fixed in `mmml/md/assemble.py` (checks
+   `"ml_pep_water" in config.terms`).
 
-**Validation gate (important):** run a short trajectory through BOTH the old and
-new paths on the *same* small solvated system and compare energies/frames.
-Because a peptide-only PSF is a single molecule (one `mol_id` → zero
-intermolecular pairs), you need a **solvated multi-molecule build** for a
-meaningful comparison — use `PeptideWaterSystemBuilder` or a packmol build, not
-`pept.psf` alone.
+**Gotcha for the next session:** CHARMM has persistent global state across
+builds within one Python process — the "same" builder call with the "same"
+seed can produce a different geometry depending on what was built earlier in
+the same process/pytest session. Don't assert absolute energy magnitudes in
+CHARMM-integration tests; assert relative/structural properties instead (see
+`test_end_to_end_peptide_water_ml_no_double_counting` for the pattern: compare
+with-exclusion vs. without-exclusion on the *same* built geometry).
 
-**Update (already validated once):** this exact end-to-end path — CHARMM build
-via `PeptideWaterSystemBuilder(n_molecules=4, box_size=15.0)` + the example
-checkpoint (`examples/sppoky-epoch-0010_params.json`) + `ml_intra` +
-`mm_nonbonded` + `assemble_and_run` (FIRE, 50 steps) — has been run successfully
-and is numerically stable (energy monotonically decreasing, no divergence). This
-also caught and fixed a real bug: `JaxmdDriver`'s fixed-box path passed real Å
-positions into `space.periodic_general(box)` without `fractional_coordinates=False`,
-so jax-md silently wrapped them modulo 1 as fractional coordinates on the first
-step (a discontinuous energy jump, invisible to energy-only checks at the
-unperturbed `R`). Fixed and regression-tested (see design doc §0). Remember,
-when constructing your own `neighbor_fn`/`driver` for diagnostics: only pass
-`driver=` to `assemble_and_run` if you've wired the neighbor_fn yourself —
-otherwise the auto-wiring (only triggered `if driver is None`) is skipped and
-`mm_nonbonded`'s host pair-build path will raise `TracerArrayConversionError`
-under jit.
+Also remember: only pass `driver=` to `assemble_and_run` if you've wired the
+neighbor_fn yourself — otherwise the auto-wiring (only triggered
+`if driver is None`) is skipped and `mm_nonbonded`'s host pair-build path will
+raise `TracerArrayConversionError` under jit.
 
-### 2b. RDF validation of rigid sampling
+### 2b. `mmml/cli/run/md_system.py --backend jaxmd` swap (still open, highest value remaining)
+
+`run_backend()` currently dispatches to `md_pbc_suite/jaxmd.py`. Route it
+through `runconfig_from_md_system_args(args)` → `assemble_and_run(...)` instead,
+then retire the duplicate inline loop once trajectories match.
+
+**Validation gate:** run a short trajectory through BOTH the old and new paths
+on the *same* small solvated system and compare energies/frames. Because a
+peptide-only PSF is a single molecule (one `mol_id` → zero intermolecular
+pairs), use a **solvated multi-molecule build** (packmol or
+`PeptideWaterSystemBuilder`), not `pept.psf` alone — same lesson as 2a. The
+`cg_jaxmd_unified.py` front-end (§2a) is a good template for how to wire a
+front-end onto `assemble_and_run`.
+
+### 2c. RDF validation of rigid sampling
 Run `RigidBodySampler` vs. flexible MD on a small liquid box and compare the
 radial distribution function. Needs a real force field run. (§11 "Rigid
 sampling", last unchecked item.)
 
-### 2c. apocharmm GPU driver
+### 2d. apocharmm GPU driver
 Decided design is in the design doc (§4, §10, §11): device-side ML forces via a
 custom `ForceManager`, DLPack transport, apocharmm owns the loop. Needs the
 pybind11 GPU build first — **not doable on this Mac** (no CUDA). Blocked on
@@ -146,10 +167,10 @@ hardware.
 
 ## 5. Suggested order for the next session
 
-1. `cg_jaxmd` entrypoint swap + short solvated-run comparison (§2a).
-2. `md_system --backend jaxmd` swap + comparison, then delete the inline loop.
-3. RDF validation of rigid sampling (§2b).
-4. apocharmm — only once a CUDA box + build are available (§2c).
+1. ~~`cg_jaxmd` entrypoint swap~~ — done (§2a), as `examples/cg_jaxmd_unified.py`.
+2. `md_system --backend jaxmd` swap + comparison, then delete the inline loop (§2b).
+3. RDF validation of rigid sampling (§2c).
+4. apocharmm — only once a CUDA box + build are available (§2d).
 
 Update `docs/md-cg-unification-design.md` §0 and §11 as each lands (that has been
 the running convention).
