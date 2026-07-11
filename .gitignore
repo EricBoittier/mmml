@@ -278,3 +278,4 @@ node_modules/
 fftw-wisdom.dat
 mmml/generate/packmol/packmol
 examples/jax_cache/
+MagicMock/
