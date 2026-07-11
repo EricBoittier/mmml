@@ -138,3 +138,93 @@ def test_zero_temperature_rejected():
     )
     with pytest.raises(ValueError, match="temperature_K must be positive"):
         RigidBodySampler().run(system, energy, cfg)
+
+
+# --- neighbor_fn support (mm_nonbonded / any intermolecular-pair term) -------
+
+
+def _mono_atom_pbc_system(n=4, spacing=5.0, box=20.0):
+    """n single-atom "molecules" on a line, so mm_nonbonded needs a pair list."""
+    from mmml.md.system import FFParams, MolecularSystem
+
+    R = np.zeros((n, 3))
+    R[:, 0] = np.arange(n) * spacing
+    charges = np.where(np.arange(n) % 2 == 0, 0.3, -0.3).astype(float)
+    ff = FFParams(
+        charges=charges,
+        epsilon=np.full(n, 0.1),
+        rmin_half=np.full(n, 1.5),
+        at_codes=np.arange(n, dtype=np.int32),
+        exclusions=np.empty((0, 2), dtype=np.int32),
+        e14_pairs=np.empty((0, 2), dtype=np.int32),
+    )
+    return MolecularSystem(
+        R=R, Z=np.ones(n, int), box=np.diag([box, box, box]),
+        mol_id=np.arange(n), ff_params=ff,
+        monomer_indices=[np.array([i]) for i in range(n)],
+    )
+
+
+def test_rigid_sampler_without_neighbor_fn_rejects_mm_nonbonded():
+    """Regression baseline: mm_nonbonded's host pair-build path isn't jit-safe,
+    so a rigid sweep with no neighbor_fn must fail loudly, not silently."""
+    pytest.importorskip("jax")
+    import jax
+
+    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from mmml.md.energy import EnergyContext
+    from mmml.md.assemble import build_hybrid_energy
+    from mmml.md.samplers.rigid import RigidBodySampler
+
+    system = _mono_atom_pbc_system()
+    energy = build_hybrid_energy(system, ("mm_nonbonded",), EnergyContext())
+    cfg = RunConfig(
+        system=SystemSpec(builder="psf"),
+        ensemble=EnsembleSpec(ensemble="nvt", temperature_K=300.0, n_steps=2),
+    )
+    with pytest.raises(jax.errors.TracerArrayConversionError):
+        RigidBodySampler().run(system, energy, cfg)
+
+
+def test_rigid_sampler_with_neighbor_fn_runs_mm_nonbonded():
+    pytest.importorskip("jax")
+    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
+    from mmml.md.energy import EnergyContext
+    from mmml.md.assemble import build_hybrid_energy
+    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+    from mmml.md.samplers.rigid import RigidBodySampler
+
+    system = _mono_atom_pbc_system()
+    energy = build_hybrid_energy(system, ("mm_nonbonded",), EnergyContext())
+    neighbor_fn = make_intermolecular_neighbor_fn(system, cutoff_A=12.0, capacity=32)
+    cfg = RunConfig(
+        system=SystemSpec(builder="psf"),
+        ensemble=EnsembleSpec(ensemble="nvt", temperature_K=300.0, n_steps=6),
+        seed=1,
+    )
+    traj = RigidBodySampler(
+        record_every=2, neighbor_refresh_every=2, neighbor_fn=neighbor_fn,
+    ).run(system, energy, cfg)
+
+    assert np.all(np.isfinite(traj.metadata["energies"]))
+    assert traj.metadata["attempted"] == 6 * len(system.monomer_indices)
+
+
+def test_assemble_and_run_auto_wires_neighbor_fn_for_rigid_sampler():
+    """assemble_and_run must auto-wire mm_nonbonded's neighbor list for the
+    rigid sampler exactly like it does for the MD driver."""
+    pytest.importorskip("jax")
+    from mmml.md.assemble import assemble_and_run
+    from mmml.md.config import EnsembleSpec, RunConfig, SystemSpec
+
+    system = _mono_atom_pbc_system()
+    cfg = RunConfig(
+        system=SystemSpec(builder="psf"),
+        terms=("mm_nonbonded",),
+        ensemble=EnsembleSpec(ensemble="nvt", temperature_K=300.0, n_steps=4),
+        sampler="rigid",
+        seed=2,
+    )
+    traj = assemble_and_run(cfg, system=system)
+    assert np.all(np.isfinite(traj.metadata["energies"]))
+    assert "acceptance_ratio" in traj.metadata

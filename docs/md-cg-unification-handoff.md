@@ -142,10 +142,36 @@ path exercises code the peptide-water path in §2a never touched):
 / `--continue-from` (handoff) into the unified path, and eventually retiring
 the legacy inline loop once the unified path's coverage is a strict superset.
 
+### 2b′. Cross-backend sweep — DONE — `workflows/unified_backend_sweep/`
+
+A Snakemake workflow smoke-testing every driver/sampler + ensemble reachable
+through `assemble_and_run` (`jaxmd_min`, `jaxmd_nve`, `jaxmd_nvt`, `jaxmd_npt`,
+`rigid_mc`) on the same small real system (4-water TIP3 box, `ml_intra` +
+`mm_nonbonded`, the example checkpoint), across several seeds. See its own
+README for usage.
+
+**This is what caught the `RigidBodySampler` neighbor_fn gap** (§11 "Rigid
+sampling"): the sampler had no way to supply `mm_nonbonded`'s pair list, so any
+intermolecular-pair term raised `TracerArrayConversionError` under its
+`jax.jit`. Fixed by giving `RigidBodySampler` a `neighbor_fn` /
+`neighbor_refresh_every` mechanism mirroring `JaxmdDriver` (rebuilt once per N
+sweeps — rebuilding on the host per proposed move would dominate runtime), and
+extending `assemble_and_run`'s auto-wiring (refactored into a shared
+`_auto_neighbor_fn` helper) to cover the rigid path too.
+
+**Also found:** `jaxmd_npt` takes ~4 minutes to JIT-compile with a real ML
+model on a 12-atom system, vs. ~15–30 seconds for FIRE/NVE/NVT/rigid-MC. Not a
+bug — the fractional↔real coordinate bridge plus the ML model's autodiff graph
+is just markedly more expensive to trace/compile for NPT. The workflow's
+`config.yaml` gives `jaxmd_npt` a longer `runtime_min` for this reason. Budget
+for it if you add more backends/larger systems to this sweep.
+
 ### 2c. RDF validation of rigid sampling
 Run `RigidBodySampler` vs. flexible MD on a small liquid box and compare the
 radial distribution function. Needs a real force field run. (§11 "Rigid
-sampling", last unchecked item.)
+sampling", last unchecked item.) The `unified_backend_sweep` workflow's
+`rigid_mc` + `jaxmd_nvt` settings are a starting point — extend it to compute
+and compare an actual RDF rather than just an energy/finite-ness check.
 
 ### 2d. apocharmm GPU driver
 Decided design is in the design doc (§4, §10, §11): device-side ML forces via a

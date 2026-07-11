@@ -83,6 +83,29 @@ def build_hybrid_energy(
     return HybridEnergy(terms, system, ctx)
 
 
+def _auto_neighbor_fn(system: MolecularSystem, energy: Any, config: RunConfig):
+    """Build the intermolecular neighbor_fn a term's ``NeighborRequest`` implies.
+
+    Shared by both the MD driver and the rigid sampler: any term declaring an
+    intermolecular ``NeighborRequest`` (e.g. ``mm_nonbonded``) needs a padded
+    pair list under jit — its host pair-build path is not jit-compatible.
+    Returns ``None`` when no term needs one.
+    """
+    inter = [r for r in energy.neighbor_requests if r.kind == "intermolecular"]
+    if not inter:
+        return None
+
+    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+
+    cutoff = max(r.cutoff_A for r in inter)
+    cap = next((r.capacity_hint for r in inter if r.capacity_hint), None)
+    # When ml_pep_water handles core-solvent interactions, exclude those pairs
+    # from the classical MM list too, or mm_nonbonded double-counts the same
+    # interaction the ML dimer term already scores (doc §4/§8).
+    peptide_water_ml = "ml_pep_water" in config.terms
+    return make_intermolecular_neighbor_fn(system, cutoff, cap, peptide_water_ml=peptide_water_ml)
+
+
 def assemble_and_run(
     config: RunConfig,
     *,
@@ -119,7 +142,11 @@ def assemble_and_run(
     if config.sampler == "rigid" and driver is None:
         from mmml.md.samplers import RigidBodySampler
 
-        return RigidBodySampler(output_path=output_path).run(system, energy, config)
+        if neighbor_fn is None:
+            neighbor_fn = _auto_neighbor_fn(system, energy, config)
+        return RigidBodySampler(neighbor_fn=neighbor_fn, output_path=output_path).run(
+            system, energy, config
+        )
 
     if driver is None:
         from mmml.md.drivers import JaxmdDriver
@@ -127,20 +154,7 @@ def assemble_and_run(
         # Auto-wire the intermolecular neighbor list when a term needs one and
         # the caller did not supply a neighbor_fn (e.g. mm_nonbonded).
         if neighbor_fn is None:
-            inter = [r for r in energy.neighbor_requests if r.kind == "intermolecular"]
-            if inter:
-                from mmml.md.neighbors import make_intermolecular_neighbor_fn
-
-                cutoff = max(r.cutoff_A for r in inter)
-                cap = next((r.capacity_hint for r in inter if r.capacity_hint), None)
-                # When ml_pep_water handles core-solvent interactions, exclude
-                # those pairs from the classical MM list too, or mm_nonbonded
-                # double-counts the same interaction the ML dimer term already
-                # scores (doc §4/§8: peptide_water_ml -> pairs excluded from MM).
-                peptide_water_ml = "ml_pep_water" in config.terms
-                neighbor_fn = make_intermolecular_neighbor_fn(
-                    system, cutoff, cap, peptide_water_ml=peptide_water_ml,
-                )
+            neighbor_fn = _auto_neighbor_fn(system, energy, config)
 
         driver = JaxmdDriver(neighbor_fn=neighbor_fn, output_path=output_path)
 

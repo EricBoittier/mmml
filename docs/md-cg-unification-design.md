@@ -89,6 +89,18 @@ cannot. `mmml/cli/run/md_system_unified.py` makes both explicit: it writes the
 live CHARMM PSF to a scratch file to resolve `FFParams`, and calls
 `ensure_pycharmm_loaded()` before building.
 
+**Fourth fix, found by a cross-backend sweep rather than one entrypoint:**
+building `workflows/unified_backend_sweep/` (a Snakemake workflow exercising
+every backend/ensemble reachable through `assemble_and_run` — FIRE/NVE/NVT/NPT
+via `JaxmdDriver`, plus `RigidBodySampler`) found that `RigidBodySampler` had no
+way to supply a neighbor list, so any term with an intermolecular pair
+requirement (`mm_nonbonded`) raised `TracerArrayConversionError` under the
+sampler's `jax.jit`. Fixed by giving `RigidBodySampler` the same `neighbor_fn`
+mechanism as `JaxmdDriver` (rebuilt once per N sweeps, not per proposed move),
+and extending `assemble_and_run`'s auto-wiring to cover the rigid path too. The
+sweep also confirmed NPT is markedly slower to JIT-compile with a real ML model
+than the fixed-box ensembles.
+
 **Remaining (§11):** the apocharmm driver (needs a GPU build) and the RDF
 validation of rigid sampling (needs a real force-field production run) are the
 two items still gated on hardware/scope rather than more unit-testable code.
@@ -698,12 +710,36 @@ land seams non-breaking, extract terms with parity checks, then add backends.
 - [x] Acceptance uses the composed energy, so existing bias terms (SMD, etc.)
       participate automatically (exercised via `assemble_and_run` in
       `tests/unit/test_md_assemble.py`).
+- [x] `neighbor_fn` support (found while building the cross-backend sweep,
+      §11 "Cross-backend validation workflow"): `RigidBodySampler` originally
+      had no way to supply `mm_nonbonded`'s padded pair list, so any
+      intermolecular-pair term raised `TracerArrayConversionError` under the
+      sampler's `jax.jit`. `RigidBodySampler` now accepts `neighbor_fn` /
+      `neighbor_refresh_every` (rebuilt once per N sweeps, not per proposed
+      move — rebuilding on the host for every trial move would dominate
+      runtime) mirroring `JaxmdDriver`; `assemble_and_run` auto-wires it for
+      the rigid path exactly as it already did for the MD driver (refactored
+      into a shared `_auto_neighbor_fn` helper). Regression-tested in
+      `tests/unit/test_md_samplers.py` (fails without a neighbor_fn, passes
+      with one, and the auto-wiring is tested through `assemble_and_run`).
 - [ ] Validate rigid sampling reproduces liquid structure (RDF) vs. flexible MD
       on a small box. *(Needs a real forcefield run — deferred.)*
 - [ ] Optional: constrained (SHAKE/SETTLE) rigid MD variant. *(MC path landed
       first; not required for the sampler to be usable.)*
 
-### apocharmm (GPU CHARMM) interface
+### Cross-backend validation workflow
+
+- [x] `workflows/unified_backend_sweep/` — a Snakemake workflow that runs
+      every driver/sampler + ensemble combination reachable through
+      `assemble_and_run` (`jaxmd_min`, `jaxmd_nve`, `jaxmd_nvt`, `jaxmd_npt`,
+      `rigid_mc`) against the *same* small real system (4-water TIP3 box via
+      the packmol composition builder, `ml_intra` + `mm_nonbonded`, the
+      example checkpoint), across several seeds, and aggregates a pass/fail +
+      energy-drift summary. This is what surfaced the `RigidBodySampler`
+      neighbor_fn gap above, and confirmed NPT's much longer JIT-compile time
+      (~4 min vs. ~30s for the fixed-box ensembles on this tiny system —
+      reflected in the workflow's per-backend `runtime_min`). See
+      `workflows/unified_backend_sweep/README.md`.
 
 - [ ] Build apocharmm and confirm the pybind11 module imports in the MMML env
       (CUDA 11.1.1+, GCC 10.1+, NetCDF4).

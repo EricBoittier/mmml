@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Mapping
 
 import numpy as np
 
@@ -55,11 +55,25 @@ def quat_to_matrix(q: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class RigidBodySampler:
-    """Metropolis MC over rigid-body translation + rotation of each monomer."""
+    """Metropolis MC over rigid-body translation + rotation of each monomer.
+
+    ``neighbor_fn`` mirrors :class:`~mmml.md.drivers.JaxmdDriver`'s: called as
+    ``fn(position, box)`` at ``neighbor_refresh_every``-sweep boundaries,
+    returning keyword arrays routed into the energy (e.g. ``pair_i`` /
+    ``pair_j`` / ``pair_mask`` for ``mm_nonbonded``). Required for any term that
+    declares an intermolecular :class:`~mmml.md.energy.registry.NeighborRequest`
+    — without it, the term's host pair-build path is not jit-compatible and
+    raises under ``jax.jit`` (decision B: terms own their pair-list capacity,
+    the sampler/driver only owns the rebuild cadence). Rebuilt once per
+    ``neighbor_refresh_every`` sweeps rather than per proposed move, since
+    rebuilding on the host for every trial move would dominate runtime.
+    """
 
     record_every: int = 100
     max_translation_A: float = 0.2
     max_rotation_rad: float = 0.2
+    neighbor_fn: Callable[[np.ndarray, np.ndarray | None], Mapping[str, Any]] | None = None
+    neighbor_refresh_every: int = 1
     output_path: Path | None = None
     name: str = "rigid"
 
@@ -77,6 +91,8 @@ class RigidBodySampler:
             raise ValueError("n_steps must be non-negative")
         if self.record_every <= 0:
             raise ValueError("record_every must be positive")
+        if self.neighbor_refresh_every <= 0:
+            raise ValueError("neighbor_refresh_every must be positive")
 
         rng = np.random.default_rng(int(config.seed))
         temperature = float(config.ensemble.temperature_K)
@@ -88,18 +104,32 @@ class RigidBodySampler:
         groups = [np.asarray(g, dtype=int) for g in groups]
 
         energy_fn = jax.jit(energy.as_jax_energy_fn())
+        box = None if system.box is None else np.asarray(system.box)
 
-        def E(positions: np.ndarray) -> float:
-            return float(energy_fn(jnp.asarray(positions)))
+        def refresh(positions: np.ndarray) -> Mapping[str, Any]:
+            if self.neighbor_fn is None:
+                return {}
+            result = self.neighbor_fn(positions, box)
+            if not isinstance(result, Mapping):
+                raise TypeError("neighbor_fn must return a mapping of energy keyword arrays")
+            return dict(result)
+
+        def E(positions: np.ndarray, dyn: Mapping[str, Any]) -> float:
+            return float(energy_fn(jnp.asarray(positions), **dyn))
 
         pos = np.array(system.R, dtype=float)
-        e_curr = E(pos)
+        dynamic_kwargs = refresh(pos)
+        e_curr = E(pos, dynamic_kwargs)
         frames = [pos.copy()]
         energies = [e_curr]
         accepted = 0
         attempted = 0
 
         for step in range(n_sweeps):
+            if step > 0 and step % self.neighbor_refresh_every == 0:
+                dynamic_kwargs = refresh(pos)
+                e_curr = E(pos, dynamic_kwargs)  # keep the running energy consistent
+
             for _ in range(len(groups)):  # one sweep ≈ one attempted move per body
                 idx = groups[rng.integers(len(groups))]
                 sub = pos[idx]
@@ -114,7 +144,7 @@ class RigidBodySampler:
                 trial = pos.copy()
                 trial[idx] = (sub - com) @ rot.T + com + translation
 
-                e_trial = E(trial)
+                e_trial = E(trial, dynamic_kwargs)
                 attempted += 1
                 delta = e_trial - e_curr
                 if delta <= 0.0 or rng.random() < np.exp(-delta / kT):
