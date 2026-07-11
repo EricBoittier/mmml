@@ -18,14 +18,19 @@ from mmml.utils.plotting.trajectory_structure import (
 
 
 def plot_rdfs(radii, rdfs, output: Path) -> None:
-    figure, axes = plt.subplots(2, 3, figsize=(12, 7), sharex=True)
-    for axis, (pair, rdf) in zip(axes.flat, sorted(rdfs.items())):
+    columns = 3
+    rows = int(np.ceil(len(rdfs) / columns))
+    figure, axes = plt.subplots(rows, columns, figsize=(12, 3.3 * rows), sharex=True)
+    flat_axes = np.atleast_1d(axes).ravel()
+    for axis, (pair, rdf) in zip(flat_axes, sorted(rdfs.items())):
         axis.plot(radii, rdf)
         axis.set_title(pair)
         axis.set_ylabel("g(r)")
         axis.grid(alpha=0.2)
-    for axis in axes[-1]:
+    for axis in np.atleast_1d(axes)[-1]:
         axis.set_xlabel("r (Å)")
+    for axis in flat_axes[len(rdfs):]:
+        axis.set_visible(False)
     figure.suptitle("Element-pair radial distribution functions")
     figure.tight_layout()
     figure.savefig(output, dpi=300, bbox_inches="tight")

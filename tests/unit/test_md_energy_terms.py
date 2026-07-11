@@ -170,7 +170,7 @@ def test_ase_forces_match_finite_difference():
     assert np.allclose(forces, fd, atol=1e-4)
 
 
-# --- vdw_core (peptide-water repulsive wall) --------------------------------
+# --- vdw_core (repulsive core-group / molecule-group LJ wall) ---------------
 
 
 def test_vdw_core_matches_reference():
