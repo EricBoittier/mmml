@@ -117,6 +117,7 @@ nav:
       - md-embedding smoke results: examples/md-embedding-results.md
       - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
       - Cross-backend handoff: handoff.md
+      - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
