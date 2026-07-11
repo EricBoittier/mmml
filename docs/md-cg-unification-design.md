@@ -449,7 +449,7 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       driver landed in `mmml/md/drivers/jaxmd.py`: lazy optional imports,
       free/PBC NVE, NVT-NHC, FIRE, block-boundary per-term neighbor refresh,
       overlap-repair hook, partial-final-block recording, and optional NPZ
-      output. Real jax-md FIRE/NVE smoke tests live in
+      output. Real jax-md FIRE/NVE/NVT and fixed-box PBC tests live in
       `tests/unit/test_md_jaxmd_driver.py`. Dynamic-box NPT and both legacy
       front-end adapters remain before this item is complete.)*
 - [ ] Flip `md_system --backend jaxmd` onto `JaxmdDriver`; retire the duplicate
