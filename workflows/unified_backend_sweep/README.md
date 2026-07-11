@@ -66,12 +66,29 @@ python scripts/run_setting.py \
 ## Run on SLURM
 
 Install the Snakemake SLURM executor plugin and edit the `slurm` section of
-`config.yaml` if the cluster uses a different partition or GPU request, then:
+`config.yaml` if the cluster uses a different partition, memory, or CPU
+request, then:
 
 ```bash
 uv run --with snakemake --with snakemake-executor-plugin-slurm \
   snakemake --profile profiles/slurm --keep-going
 ```
+
+Resources follow the same convention as the other workflows here (see
+`workflows/dcm_heat_scaling`, `workflows/pbc_solvent_burst`):
+`mem_mb_per_cpu` (not a flat `mem_mb`), `nodes=1` / `tasks=1` for a
+single-process job, and **`charmm_slot=1`** (not `mpi=1`) to cap concurrent
+PyCHARMM-touching jobs per node — the Slurm executor plugin treats `mpi` as a
+real MPI job requiring `tasks > 1`, which this is not. Optional
+`slurm.mail_user` / `slurm.nodelist` in `config.yaml` add `--mail-user` /
+`--nodelist` via `slurm_extra`.
+
+### pc-studix
+
+On **pc-studix login nodes**, PyCHARMM fails with
+`libOpenCL.so.1: cannot open shared object file` — do not run
+`scripts/run_setting.py` directly on the login node. Submit via Snakemake +
+Slurm from the login node instead (as above); the compute nodes have OpenCL.
 
 ## Outputs
 

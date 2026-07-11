@@ -47,9 +47,16 @@ backends:
     n_steps: 100
     runtime_min: 15
 
+# pc-studix convention (see workflows/dcm_heat_scaling, workflows/pbc_solvent_burst):
+# mem_mb_per_cpu (not flat mem_mb), nodes=1/ntasks=1 for a single-process job,
+# and charmm_slot (set on the Snakefile rule, not here) instead of mpi=1 to
+# throttle concurrent PyCHARMM-touching jobs per node.
 slurm:
   partition: gpu
-  gres: gpu:1
   runtime_min: 30
-  mem_mb: 8000
+  mem_mb_per_cpu: 2000
   cpus_per_task: 4
+  nodes: 1
+  ntasks: 1
+  # mail_user: you@example.com   # optional; omit = no Slurm mail
+  # nodelist: gpu08              # optional; omit to let Slurm pick idle nodes

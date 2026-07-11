@@ -17,6 +17,18 @@ def backend_runtime_min(backend):
     return int(config["backends"][backend].get("runtime_min", slurm_value("runtime_min", 30)))
 
 
+def _slurm_extra(wildcards) -> str:
+    """SLURM flags not covered by standard Snakemake resources (no mem/tasks/cpus here)."""
+    mail = str(slurm_value("mail_user", "") or "").strip()
+    nodelist = str(slurm_value("nodelist", "") or "").strip()
+    parts = []
+    if mail:
+        parts.append(f"--mail-user={mail} --mail-type=END,FAIL")
+    if nodelist:
+        parts.append(f"--nodelist={nodelist}")
+    return " ".join(parts)
+
+
 rule all:
     input:
         "results/summary.csv",
@@ -36,11 +48,16 @@ rule run_setting:
         seed="|".join(SEEDS),
     resources:
         gpu=1,
+        # charmm_slot (not mpi) caps concurrent PyCHARMM-touching jobs on a node;
+        # the Slurm plugin treats `mpi` as a real MPI job requiring tasks>1.
+        charmm_slot=1,
         runtime=lambda wildcards: backend_runtime_min(wildcards.backend),
-        mem_mb=lambda wildcards: int(slurm_value("mem_mb", 8000)),
+        nodes=lambda wildcards: int(slurm_value("nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value("ntasks", 1)),
         cpus_per_task=lambda wildcards: int(slurm_value("cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value("mem_mb_per_cpu", 2000)),
         slurm_partition=lambda wildcards: str(slurm_value("partition", "gpu")),
-        slurm_gres=lambda wildcards: str(slurm_value("gres", "gpu:1")),
+        slurm_extra=_slurm_extra,
     shell:
         """
         set -euo pipefail
