@@ -1,10 +1,47 @@
 # Unifying `md-system` and `cg_jaxmd`: calculator & builder schema
 
-**Status:** Proposed (design only — no code changes yet)
+**Status:** In progress — the shared stack is built and tested; the two
+front-end entrypoint swaps remain (see §0 and §11).
 **Scope:** How to split the calculators and system builders shared by
 [`mmml/cli/run/md_system.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/md_system.py) and
 [`examples/cg_jaxmd.py`](https://github.com/EricBoittier/mmml/blob/main/examples/cg_jaxmd.py) so the two can run on one
 architecture.
+
+---
+
+## 0. Implementation status
+
+The design below is largely realized in the `mmml/md/` package. What exists,
+end-to-end from a config:
+
+```
+config ──lowering──▶ RunConfig ──assemble──▶ builder → HybridEnergy → JaxmdDriver
+```
+
+| Layer | Module | State |
+|---|---|---|
+| Topology / FF state | `mmml/md/system.py` (`MolecularSystem`, `FFParams`) | ✅ tested |
+| Config | `mmml/md/config.py` (`RunConfig`, `EnsembleSpec`) | ✅ |
+| Energy terms (all 6) | `mmml/md/energy/terms/` | ✅ parity-tested |
+| Capacity / dtype policy | `mmml/md/energy/capacity.py` | ✅ tested |
+| Builders + FF bridge | `mmml/md/builders/` | ✅ CHARMM-integration tested |
+| Driver incl. **NPT** | `mmml/md/drivers/jaxmd.py` | ✅ tested |
+| Assembly glue | `mmml/md/assemble.py` | ✅ tested |
+| Lowering adapters | `mmml/md/lowering.py` | ✅ tested |
+
+**Energy terms:** `ml_intra`, `ml_pep_water`, `mm_nonbonded`, `vdw_core`, `smd`,
+`dihedral` — each registered, box-aware where relevant, and validated against
+the `cg_jaxmd` originals / the reference nonbonded / the example ML checkpoint.
+
+**Cross-cutting:** the cross-platform `libcharmm` loader (`pycharmm/lib.py`)
+now self-discovers `setup/charmm` on both `.dylib`/`.so`; `import mmml.md`
+stays free of jax/CHARMM (heavy deps are lazy inside `make()` / `run()`); the
+whole `mmml/md` unit suite (~73 tests) is green.
+
+**Remaining (§11):** swap the two legacy entrypoints
+(`md_system --backend jaxmd` and `examples/cg_jaxmd.py`) onto
+`assemble_and_run`, plus the rigid-body `Sampler` and the apocharmm driver.
+These need real end-to-end MD runs to validate, not just unit tests.
 
 ---
 
@@ -546,8 +583,11 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       registry + per-term kwargs), and `assemble_and_run` (RunConfig → builder →
       HybridEnergy → JaxmdDriver). End-to-end tested from a `RunConfig`:
       `tests/unit/test_md_assemble.py`.)*
-  - [ ] Lowering adapters: argparse `Namespace` → `RunConfig` (md-system) and
-        Snakemake JSON → `RunConfig` (cg_jaxmd sweep toggles → term selection).
+  - [x] Lowering adapters (`mmml/md/lowering.py`): `runconfig_from_md_system_args`
+        (argparse `Namespace` → `RunConfig`) and `runconfig_from_cg_config`
+        (cg_jaxmd JSON + phase → `RunConfig`), with `terms_from_cg_config`
+        implementing the sweep-toggle → term-selection mapping (doc §8). Pure /
+        numpy-only; tested in `tests/unit/test_md_lowering.py`.
   - [ ] Flip `md_system --backend jaxmd` onto `assemble_and_run`; retire the
         duplicate inline loop.
   - [ ] Make `examples/cg_jaxmd.py` a thin front-end over `assemble_and_run`.

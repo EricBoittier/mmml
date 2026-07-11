@@ -18,6 +18,11 @@ from mmml.md.assemble import (
     get_builder,
 )
 from mmml.md.config import EnsembleSpec, RunConfig
+from mmml.md.lowering import (
+    runconfig_from_cg_config,
+    runconfig_from_md_system_args,
+    terms_from_cg_config,
+)
 from mmml.md.results import Trajectory
 from mmml.md.system import FFParams, MolecularSystem, SystemSpec
 
@@ -33,4 +38,7 @@ __all__ = [
     "build_hybrid_energy",
     "build_system",
     "get_builder",
+    "runconfig_from_cg_config",
+    "runconfig_from_md_system_args",
+    "terms_from_cg_config",
 ]
