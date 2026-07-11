@@ -101,3 +101,60 @@ surface = calculate_fes(samples, weights=frame_weights, bins=(36, 36))
 
 Empty histogram bins are assigned a finite display floor. They are not sampled
 free-energy estimates and should not be interpreted as physical barriers.
+
+## RDFs and internal degrees of freedom
+
+The companion structural-analysis utilities operate directly on the same list
+of ASE frames:
+
+```python
+from mmml.utils.plotting.trajectory_structure import (
+    element_pair_rdfs,
+    internal_coordinate_distributions,
+)
+
+radii, rdfs = element_pair_rdfs(frames, r_max=8.0, bins=160)
+internal = internal_coordinate_distributions(frames, range(22))
+
+plt.plot(radii, rdfs["O-O"])
+plt.xlabel("r (Å)")
+plt.ylabel("g(r)")
+```
+
+The RDF normalization uses the periodic cell volume and unique atom pairs.
+`internal` contains one trajectory array per inferred peptide bond, angle, and
+proper dihedral. Covalent connectivity is inferred from 1.2 times the tabulated
+covalent radii.
+
+![Element-pair RDFs](images/plots/test4_element_pair_rdfs.png)
+
+![Peptide internal coordinates](images/plots/test4_internal_coordinates.png)
+
+## Water tetrahedrality
+
+The tetrahedral order parameter is calculated from the four nearest oxygen
+neighbors of each water oxygen:
+
+\[
+q = 1 - \frac{3}{8}\sum_{j<k}^{4}
+\left(\cos\psi_{jk} + \frac{1}{3}\right)^2.
+\]
+
+For this example, a water is **near the peptide** when its oxygen is within
+5 Å of any peptide heavy atom. A water is **bulk-like** when that minimum
+distance is at least 8 Å. Waters in the 5–8 Å transition region are omitted
+from this comparison. All distances and nearest-neighbor vectors use the
+periodic minimum-image convention.
+
+```python
+from mmml.utils.plotting.trajectory_structure import water_tetrahedrality
+
+tetrahedrality = water_tetrahedrality(
+    frames,
+    peptide_indices=range(22),
+    near_cutoff=5.0,
+    bulk_cutoff=8.0,
+)
+```
+
+![Water tetrahedrality](images/plots/test4_water_tetrahedrality.png)

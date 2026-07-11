@@ -426,10 +426,14 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         forces vs. finite difference: `tests/unit/test_md_energy_terms.py`.
   - [x] `dihedral` — `DihedralRestraintTerm` (φ/ψ backbone restraints).
         Parity-tested vs. the cg_jaxmd formula.
-  - [ ] `mm_nonbonded` — needs `FFParams` wired through a builder first.
-  - [ ] `vdw_core` — peptide–water LJ wall; needs `FFParams` + pw slots.
+  - [x] `vdw_core` — `PeptideWaterCoreVdwTerm` (repulsive peptide–water LJ wall,
+        smooth cutoff, optional padded slots). Parity-tested vs. the cg_jaxmd
+        formula; takes explicit ε/Rmin arrays now, to be sourced from `FFParams`
+        by the builder.
+  - [ ] `mm_nonbonded` — needs `FFParams` wired through a builder first
+        (blocked here: no `libcharmm` to validate).
   - [ ] `ml_intra` / `ml_pep_water` — wrap `jaxmdInterface.hybrid_energy`;
-        need a model + checkpoint to validate.
+        need a model + checkpoint to validate (blocked here).
 - [ ] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`; port
       `cg_jaxmd` onto it behind a flag and compare trajectories.
 - [ ] Flip `md_system --backend jaxmd` onto `JaxmdDriver`; retire the duplicate
