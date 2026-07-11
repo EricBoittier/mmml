@@ -142,6 +142,21 @@ def test_multipole_loss_balances_degrees() -> None:
     assert loss == pytest.approx(2.0)
 
 
+def test_multipole_loss_applies_degree_weights() -> None:
+    target = jnp.zeros((1, 16))
+    prediction = target.at[:, 0].set(2.0).at[:, 9:16].set(2.0)
+    loss, degree_losses = multipole_loss(
+        prediction,
+        target,
+        jnp.ones(1),
+        degree_weights=jnp.array([0.25, 1.0, 1.0, 2.0]),
+    )
+
+    assert degree_losses["l0"] == pytest.approx(4.0)
+    assert degree_losses["l3"] == pytest.approx(4.0)
+    assert loss == pytest.approx(9.0 / 4.25)
+
+
 def test_multipole_loss_uses_rms_and_charge_constraint() -> None:
     target = jnp.zeros((1, 16))
     prediction = target.at[:, 0].set(2.0).at[:, 9:16].set(4.0)

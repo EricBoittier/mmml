@@ -7,7 +7,7 @@ import argparse
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 import e3x
 import jax
@@ -80,6 +80,22 @@ def target_rms_vector(
         value = float(target_rms[f"l{degree}"])
         values.extend([value] * (2 * degree + 1))
     return np.asarray(values, dtype=np.float32)
+
+
+def parse_degree_weights(value: str | Sequence[float], max_degree: int = 3) -> np.ndarray:
+    """Parse one loss weight per multipole degree."""
+    expected = max_degree + 1
+    if isinstance(value, str):
+        weights = [float(item) for item in value.split(",") if item.strip()]
+    else:
+        weights = [float(item) for item in value]
+    if len(weights) != expected:
+        raise argparse.ArgumentTypeError(
+            f"Expected {expected} comma-separated degree weights, got {len(weights)}"
+        )
+    if any(weight <= 0.0 for weight in weights):
+        raise argparse.ArgumentTypeError("Degree weights must be positive")
+    return np.asarray(weights, dtype=np.float32)
 
 
 def target_component_scale_from_arrays(
@@ -519,16 +535,21 @@ def multipole_loss(
     example_mask: jax.Array,
     charge: jax.Array | None = None,
     target_rms: jax.Array | None = None,
+    degree_weights: jax.Array | None = None,
     charge_weight: float = 0.0,
     huber_delta: float = 0.0,
     max_degree: int = 3,
 ) -> tuple[jax.Array, dict[str, jax.Array]]:
-    """Average degree-balanced MSE over non-padding examples."""
+    """Weighted degree-balanced loss over non-padding examples."""
     losses = {}
     start = 0
     denominator = jnp.maximum(jnp.sum(example_mask), 1.0)
     if target_rms is None:
         target_rms = jnp.ones(target.shape[-1], dtype=target.dtype)
+    if degree_weights is None:
+        degree_weights = jnp.ones(max_degree + 1, dtype=target.dtype)
+    else:
+        degree_weights = jnp.asarray(degree_weights, dtype=target.dtype)
     for degree in range(max_degree + 1):
         width = 2 * degree + 1
         block_rms = target_rms[start : start + width]
@@ -542,7 +563,11 @@ def multipole_loss(
         per_example = jnp.mean(per_component, axis=-1)
         losses[f"l{degree}"] = jnp.sum(per_example * example_mask) / denominator
         start += width
-    total = jnp.mean(jnp.stack(tuple(losses.values())))
+    degree_loss_array = jnp.stack([losses[f"l{degree}"] for degree in range(max_degree + 1)])
+    total = (
+        jnp.sum(degree_loss_array * degree_weights)
+        / jnp.maximum(jnp.sum(degree_weights), jnp.asarray(1.0, dtype=target.dtype))
+    )
     if charge is not None and charge_weight:
         charge_error = prediction[:, 0] - jnp.asarray(charge, dtype=prediction.dtype)
         charge_loss = jnp.sum(jnp.square(charge_error) * example_mask) / denominator
@@ -590,11 +615,17 @@ def build_steps(
     model: E3xMultipoleModel,
     batch_size: int,
     target_rms: np.ndarray | jax.Array | None = None,
+    degree_weights: np.ndarray | jax.Array | None = None,
     charge_weight: float = 0.0,
     huber_delta: float = 0.0,
 ):
     target_rms_array = (
         None if target_rms is None else jnp.asarray(target_rms, dtype=jnp.float32)
+    )
+    degree_weights_array = (
+        None
+        if degree_weights is None
+        else jnp.asarray(degree_weights, dtype=jnp.float32)
     )
 
     def loss_fn(params: Any, batch: dict[str, jax.Array]):
@@ -610,6 +641,7 @@ def build_steps(
             batch["example_mask"],
             charge=batch["charge"],
             target_rms=target_rms_array,
+            degree_weights=degree_weights_array,
             charge_weight=charge_weight,
             huber_delta=huber_delta,
         )
@@ -704,6 +736,12 @@ def main() -> None:
     parser.add_argument("--gradient-clip-norm", type=float, default=1.0)
     parser.add_argument("--charge-weight", type=float, default=1.0)
     parser.add_argument("--huber-delta", type=float, default=1.0)
+    parser.add_argument(
+        "--degree-weights",
+        type=parse_degree_weights,
+        default=parse_degree_weights("1,1,1,1"),
+        help="Comma-separated l0,l1,l2,l3 loss weights.",
+    )
     parser.add_argument("--target-scale-json", type=Path)
     parser.add_argument(
         "--target-scale-mode",
@@ -782,7 +820,9 @@ def main() -> None:
     }
     target_thresholds = target_stats.get("outlier_threshold")
     target_scale_array = target_rms_vector(target_scale)
+    degree_weights = np.asarray(args.degree_weights, dtype=np.float32)
     print(f"Using target scale: {json.dumps(target_scale, sort_keys=True)}")
+    print(f"Using degree weights: {degree_weights.tolist()}")
     if target_thresholds is not None:
         print(
             f"Using outlier thresholds: {json.dumps(target_thresholds, sort_keys=True)}"
@@ -835,6 +875,7 @@ def main() -> None:
         model,
         args.batch_size,
         target_scale_array,
+        degree_weights,
         args.charge_weight,
         args.huber_delta,
     )
@@ -911,6 +952,8 @@ def main() -> None:
             "charge_weight": args.charge_weight,
             "huber_delta": args.huber_delta,
         }
+        for degree, value in enumerate(degree_weights):
+            metrics[f"degree_weight_l{degree}"] = float(value)
         for name, value in target_scale.items():
             metrics[f"target_scale_{name}"] = value
         if target_thresholds is not None:
