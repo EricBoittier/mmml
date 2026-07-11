@@ -104,7 +104,7 @@ def test_hybrid_energy_ase_face():
             )
 
     try:
-        ase = pytest.importorskip("ase")
+        pytest.importorskip("ase")
         from ase import Atoms
 
         system = _trivial_system(4)
