@@ -22,6 +22,10 @@ def _make_calculator(*, spatial_mpi: bool = True, cell: float = 40.0) -> Decompo
         z,
         cell=cell,
         spatial_mpi=spatial_mpi,
+        # Build MM pairs in JAX: the charmm_callback source now refuses to run
+        # with zero callback pairs (stale mlpot_update guard), which would abort
+        # before the spatial forward eval these tests inspect.
+        mm_pair_source="jax",
     )
 
 
