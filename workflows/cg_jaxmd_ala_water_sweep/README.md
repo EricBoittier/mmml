@@ -21,7 +21,8 @@ SLURM resources are configured in `config.yaml`.
 From this directory:
 
 ```bash
-snakemake -n
+uv run --with snakemake --with snakemake-executor-plugin-slurm \
+  snakemake -n
 ```
 
 ## Run on SLURM
@@ -30,13 +31,15 @@ Install the Snakemake SLURM executor plugin and edit the `slurm` section of
 `config.yaml` if the cluster uses a different partition or GPU request. Then run:
 
 ```bash
-snakemake --profile profiles/slurm --keep-going
+uv run --with snakemake --with snakemake-executor-plugin-slurm \
+  snakemake --profile profiles/slurm --keep-going
 ```
 
 Run one setting with, for example:
 
 ```bash
-snakemake results/ml_mm/dt_0p25/status.json --profile profiles/slurm
+uv run --with snakemake --with snakemake-executor-plugin-slurm \
+  snakemake results/ml_mm/dt_0p25/status.json --profile profiles/slurm
 ```
 
 ## Outputs
