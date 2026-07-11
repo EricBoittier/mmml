@@ -89,7 +89,11 @@ exactly along those seams.
 
 ## 4. Available backends
 
-- **Integrator / driver backends:** ASE, jax-md, PyCHARMM.
+- **Integrator / driver backends:** ASE, jax-md, PyCHARMM (Fortran/pyCHARMM),
+  and — proposed — **apocharmm** (GPU-only CHARMM, C++/CUDA + pybind11).
+- **Sampler backends** (orthogonal to MD integrators): standard MD, and —
+  proposed — **rigid-body sampling** (rigid monomers: translation + rotation
+  DOF, SHAKE/SETTLE constraints, MC or rigid MD moves).
 - **Builder backends:** packmol (`packmol_placement`, `tip3_liquid_box`,
   `dcm_liquid_box`), pyxtal, `peptide_builder` / `protein_charmm_build`,
   `trialanine_water_box`, template-PDB, `setupBox` / `setupRes`.
@@ -98,6 +102,39 @@ exactly along those seams.
   bonded (`cgenff_bonded`), biases (SMD, flat-bottom, φ/ψ, COM restraint).
 - **QC / reference backends** (eval only, out of scope for the MD loop): orca,
   pyscf, molpro.
+
+### apocharmm (GPU CHARMM) — interface target
+
+[apocharmm](https://github.com/EricBoittier/apocharmm) is a GPU-only CHARMM MD
+package (C++ ~27%, CUDA ~20%, pybind11 Python bindings). It is a natural
+fourth `Driver` backend, entered at the **C++/CUDA level** rather than through
+the Fortran/pyCHARMM path. Concrete entry points (from `include/`):
+
+- **Container:** `CharmmContext` (holds `CharmmPSF`, `CharmmParameters`,
+  `CharmmCrd`, `Coordinates`) — the object a `MolecularSystem` would lower to.
+- **Integrators:** `CudaLangevinPistonIntegrator` (NPT),
+  `CudaLangevinThermostatIntegrator` / `CudaNoseHooverThermostatIntegrator`
+  (NVT), `CudaVelocityVerletIntegrator`, `CudaLeapFrogIntegrator`,
+  `CudaBAOABIntegrator`.
+- **Forces / neighbor lists:** `CudaNeighborList`, `CudaPMEDirectForce`,
+  `CudaPMEReciprocalForce`, `CudaBondedForce` — native PBC + PME on device.
+- **Free energy:** `EDSForceManager`, `FEPEIForceManager`, `MBARForceManager`,
+  `DualTopologyForceManager`, `PertForceManager` — directly relevant to the
+  existing `lambda_dynamics` / `lambda_mbar` / `lambda_ti` code.
+- **I/O:** `Subscriber` family (`DcdSubscriber`, `NetCDFSubscriber`,
+  `RestartSubscriber`, `StateSubscriber`, `CheckpointSubscriber`).
+- **Restraints/constraints:** `GeometricRestraintForce`,
+  `HarmonicRestraintForce`, `Constraints` (SHAKE) — the constraint machinery a
+  rigid-body sampler would build on.
+
+Two interface levels are worth distinguishing:
+
+1. **Python (pybind11)** — quickest path; drive `CharmmContext` +
+   `Cuda*Integrator` from an `ApoCharmmDriver` in `mmml/md/drivers/`.
+2. **C++/CUDA** — needed only if MMML's jax ML forces must enter the device
+   force loop (e.g. as a custom `ForceManager` contribution) rather than being
+   evaluated host-side between steps. This is the deep integration and the main
+   open design question (see §10).
 
 ---
 
@@ -141,8 +178,13 @@ exactly along those seams.
   emit a jax contribution and/or an ASE contribution.
 - **HybridEnergy** — composes the selected terms and exposes both faces
   (`as_jax_energy_fn`, `as_ase_calculator`).
-- **Drivers** — one per integrator engine; consume a `HybridEnergy` and an
-  `EnsembleSpec`.
+- **Drivers** — one per integrator engine (ASE, jax-md, PyCHARMM, apocharmm);
+  consume a `HybridEnergy` and an `EnsembleSpec`.
+- **Samplers** — a sibling of drivers, selected by `RunConfig`. MD is the
+  default sampler; **rigid-body sampling** is an alternative that moves whole
+  monomers as rigid bodies (translation + rotation), via MC moves or
+  constrained (SHAKE/SETTLE) rigid MD. Reuses the same `HybridEnergy` and
+  `MolecularSystem`; only the propagator differs.
 
 ---
 
@@ -267,3 +309,73 @@ The sweep's two energy-mode toggles (`use_ml_intramolecular`,
 - **Rescue path** — CHARMM repair/minimize is a cross-cutting concern that
   breaks purity. Model it as an explicit driver hook (`on_overlap`) rather than
   hiding it inside an energy term.
+- **apocharmm ML force injection** — can MMML's jax ML forces enter apocharmm's
+  device force loop as a custom `ForceManager` (C++/CUDA, forces stay on
+  device), or only host-side between steps (pybind11, per-step device↔host
+  copies)? The former is the performant path but requires a CUDA interop
+  boundary (device-pointer handoff, or DLPack between jax and apocharmm
+  buffers); the latter is far simpler and likely fine for validation.
+- **Rigid-body DOF representation** — quaternions vs. rotation matrices for the
+  rigid moves, and whether rigid sampling is expressed as a `Sampler` peer of
+  the MD `Driver` or as a constraint mode inside each driver.
+
+---
+
+## 11. Roadmap checklist
+
+Tracking checklist for the unification, plus the two newly-scoped capabilities
+(rigid sampling, apocharmm interface). Migration order is deliberate:
+land seams non-breaking, extract terms with parity checks, then add backends.
+
+### Core unification (from §9)
+
+- [ ] Land protocols/dataclasses (`system.py`, `energy/registry.py`,
+      `config.py`) with no behavior change.
+- [ ] Wrap existing builders into `builders/` (`SystemBuilder`); old call sites
+      delegate.
+- [ ] Extract `cg_jaxmd` energy terms into `energy/terms/` one at a time
+      (`ml_intra`, `ml_pep_water`, `mm_nonbonded`, `smd`, `dihedral`,
+      `vdw_core`), validating against `diagnose_energy` /
+      `run_force_and_nl_diagnostics` at each step.
+- [ ] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`; port
+      `cg_jaxmd` onto it behind a flag and compare trajectories.
+- [ ] Flip `md_system --backend jaxmd` onto `JaxmdDriver`; retire the duplicate
+      inline loop.
+- [ ] Lower argparse CLI **and** Snakemake JSON into one `RunConfig`; make
+      `md_system.py` and `examples/cg_jaxmd.py` thin front-ends.
+
+### Rigid sampling
+
+- [ ] Define a `Sampler` protocol (peer of `Driver`) selected by `RunConfig`;
+      MD is the default sampler.
+- [ ] Rigid-body state: per-monomer center-of-mass + orientation (quaternion),
+      derived from `MolecularSystem.monomer_indices`.
+- [ ] Rigid-move propagators: MC translation/rotation moves and/or constrained
+      (SHAKE/SETTLE) rigid MD, reusing the existing `HybridEnergy`.
+- [ ] Acceptance / bias hooks compatible with the existing bias terms
+      (flat-bottom, COM restraint, SMD).
+- [ ] Validate rigid sampling reproduces liquid structure (RDF) vs. flexible MD
+      on a small box.
+
+### apocharmm (GPU CHARMM) interface
+
+- [ ] Build apocharmm and confirm the pybind11 module imports in the MMML env
+      (CUDA 11.1.1+, GCC 10.1+, NetCDF4).
+- [ ] `MolecularSystem` → `CharmmContext` lowering (`CharmmPSF`,
+      `CharmmParameters`, `CharmmCrd`).
+- [ ] `ApoCharmmDriver` (Python/pybind11): map `EnsembleSpec` to
+      `CudaLangevinPistonIntegrator` (NPT) /
+      `CudaLangevinThermostatIntegrator` / `CudaNoseHooverThermostatIntegrator`
+      / velocity-Verlet.
+- [ ] Wire `Subscriber` I/O (`DcdSubscriber` / `NetCDFSubscriber` /
+      `RestartSubscriber`) into the shared `Trajectory` output.
+- [ ] **Host-side ML** first: evaluate MMML jax forces between steps and add
+      them via a pybind11 force hook (simple, validates correctness).
+- [ ] **Device-side ML** (C++/CUDA, stretch): expose MMML ML forces as a custom
+      `ForceManager` so forces stay on device (DLPack / device-pointer interop
+      with jax) — resolve §10 open question first.
+- [ ] Bridge free-energy managers (`FEPEIForceManager`, `MBARForceManager`,
+      `EDSForceManager`, `DualTopologyForceManager`) to the existing
+      `lambda_dynamics` / `lambda_mbar` / `lambda_ti` paths.
+- [ ] Parity check: apocharmm vs. PyCHARMM vs. jax-md energies/forces on a
+      shared PBC box.
