@@ -54,24 +54,26 @@ class SMDBiasTerm:
         k = self.k_ev_per_A2
         cell = None if system.box is None else jnp.asarray(system.box)
 
-        def distance(R):
-            if cell is None:
+        def distance(R, cell_used):
+            if cell_used is None:
                 disp = R[j] - R[i]
             else:
                 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
                     mic_displacement,
                 )
 
-                disp = mic_displacement(R[i], R[j], cell)
+                disp = mic_displacement(R[i], R[j], cell_used)
             return jnp.sqrt(jnp.sum(disp * disp) + 1e-12)
 
         fixed_target = self.target
         if fixed_target is None:
-            fixed_target = float(distance(jnp.asarray(system.R)))
+            fixed_target = float(distance(jnp.asarray(system.R), cell))
 
-        def energy_fn(R, *, lambda_t: Any = None, **kwargs) -> Any:
+        def energy_fn(R, *, lambda_t: Any = None, box=None, **kwargs) -> Any:
+            # box-aware for NPT: current cell for the end-to-end MIC when supplied.
+            cell_used = cell if box is None else jnp.asarray(box)
             target = fixed_target if lambda_t is None else lambda_t
-            d = distance(R)
+            d = distance(R, cell_used)
             return 0.5 * k * jnp.square(d - target)
 
         return TermFns(

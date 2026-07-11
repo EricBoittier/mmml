@@ -96,7 +96,9 @@ class RepulsiveCoreVdwTerm:
         width = self.switch_width_A
         core_idx = jnp.arange(n_core, dtype=jnp.int32)
 
-        def energy_fn(R, *, active_group_slots=None, active_group_mask=None, **kwargs) -> Any:
+        def energy_fn(R, *, active_group_slots=None, active_group_mask=None, box=None, **kwargs) -> Any:
+            # box-aware for NPT: orthorhombic MIC uses the current cell diagonal.
+            cell_diag = box_diag if box is None else jnp.diag(jnp.asarray(box))
             if group_idx.shape[0] == 0:
                 return jnp.asarray(0.0)
 
@@ -114,7 +116,7 @@ class RepulsiveCoreVdwTerm:
             core_pos = R[:n_core]
             group_pos = R[groups]
             disp = group_pos[:, None, :, :] - core_pos[None, :, None, :]
-            disp = disp - box_diag * jnp.round(disp / box_diag)
+            disp = disp - cell_diag * jnp.round(disp / cell_diag)
             dist = jnp.sqrt(jnp.maximum(jnp.sum(disp * disp, axis=-1), 1e-12))
 
             ep = _pair_lj_epsilon(

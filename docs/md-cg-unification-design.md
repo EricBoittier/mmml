@@ -532,18 +532,25 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         jit + composition using the last-epoch example checkpoint
         (`examples/sppoky-epoch-0010_params.json`):
         `tests/unit/test_md_ml_terms.py`.
-- [~] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`; port
-      `cg_jaxmd` onto it behind a flag and compare trajectories. *(Shared
-      driver landed in `mmml/md/drivers/jaxmd.py`: lazy optional imports,
-      free/PBC NVE, NVT-NHC, FIRE, block-boundary per-term neighbor refresh,
-      overlap-repair hook, partial-final-block recording, and optional NPZ
-      output. Real jax-md FIRE/NVE/NVT and fixed-box PBC tests live in
-      `tests/unit/test_md_jaxmd_driver.py`. Dynamic-box NPT and both legacy
-      front-end adapters remain before this item is complete.)*
-- [ ] Flip `md_system --backend jaxmd` onto `JaxmdDriver`; retire the duplicate
-      inline loop.
-- [ ] Lower argparse CLI **and** Snakemake JSON into one `RunConfig`; make
-      `md_system.py` and `examples/cg_jaxmd.py` thin front-ends.
+- [x] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`. Shared
+      driver in `mmml/md/drivers/jaxmd.py`: lazy optional imports, free/PBC NVE,
+      NVT-NHC, FIRE, **NPT (Nosé–Hoover barostat)**, block-boundary per-term
+      neighbor refresh, overlap-repair hook, partial-final-block recording, and
+      optional NPZ output. NPT keeps the real-space terms via a fractional↔real
+      bridge and box-aware terms (`mm_nonbonded` / `vdw_core` / `smd` accept a
+      `box` kwarg; box threaded each step). Tests (FIRE/NVE/NVT, fixed-box PBC,
+      **box-evolving NPT**): `tests/unit/test_md_jaxmd_driver.py`.
+- [~] Wire the front-ends onto the shared stack. *(Assembly glue landed:
+      `mmml/md/assemble.py` — builder registry (`get_builder` /
+      `available_builders` / `build_system`), `build_hybrid_energy` (term
+      registry + per-term kwargs), and `assemble_and_run` (RunConfig → builder →
+      HybridEnergy → JaxmdDriver). End-to-end tested from a `RunConfig`:
+      `tests/unit/test_md_assemble.py`.)*
+  - [ ] Lowering adapters: argparse `Namespace` → `RunConfig` (md-system) and
+        Snakemake JSON → `RunConfig` (cg_jaxmd sweep toggles → term selection).
+  - [ ] Flip `md_system --backend jaxmd` onto `assemble_and_run`; retire the
+        duplicate inline loop.
+  - [ ] Make `examples/cg_jaxmd.py` a thin front-end over `assemble_and_run`.
 
 ### Rigid sampling
 

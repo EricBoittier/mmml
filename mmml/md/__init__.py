@@ -10,6 +10,13 @@ lazily by the concrete implementations, not by these protocol/dataclass seams.
 
 from __future__ import annotations
 
+from mmml.md.assemble import (
+    assemble_and_run,
+    available_builders,
+    build_hybrid_energy,
+    build_system,
+    get_builder,
+)
 from mmml.md.config import EnsembleSpec, RunConfig
 from mmml.md.results import Trajectory
 from mmml.md.system import FFParams, MolecularSystem, SystemSpec
@@ -21,4 +28,9 @@ __all__ = [
     "EnsembleSpec",
     "RunConfig",
     "Trajectory",
+    "assemble_and_run",
+    "available_builders",
+    "build_hybrid_energy",
+    "build_system",
+    "get_builder",
 ]

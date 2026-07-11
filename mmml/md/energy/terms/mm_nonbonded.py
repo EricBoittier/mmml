@@ -130,10 +130,10 @@ class MMNonbondedTerm:
         c2of = settings.c2ofnb
         eps_scale = float(settings.eps)
 
-        def _pair_energy(R, pi, pj, e14, vdw14, mask):
+        def _pair_energy(R, pi, pj, e14, vdw14, mask, cell_used):
             ri = R[pi]
             rj = R[pj]
-            disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell))(ri, rj)
+            disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_used))(ri, rj)
             disp_sq = jnp.sum(disp * disp, axis=-1)
             # clamp masked/padded pairs so sqrt / 1-r never sees a true zero
             safe_sq = jnp.where(mask > 0.5, disp_sq, 1.0)
@@ -160,8 +160,12 @@ class MMNonbondedTerm:
             vdw14_scale=None,
             pair_mask=None,
             molecule_id=None,
+            box=None,
             **kwargs,
         ) -> Any:
+            # box-aware for NPT: use the current cell when supplied, else the
+            # build-time cell (NVE/NVT fixed box).
+            cell_used = cell if box is None else jnp.asarray(box)
             if pair_i is None or pair_j is None:
                 # host build (non-jit convenience / validation path)
                 mid = system.mol_id if molecule_id is None else molecule_id
@@ -179,7 +183,7 @@ class MMNonbondedTerm:
                 e14 = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if e14_scale is None else jnp.asarray(e14_scale)
                 vdw14 = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if vdw14_scale is None else jnp.asarray(vdw14_scale)
                 mask = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if pair_mask is None else jnp.asarray(pair_mask).astype(COMPUTE_DTYPE)
-            return _pair_energy(R, pi, pj, e14, vdw14, mask)
+            return _pair_energy(R, pi, pj, e14, vdw14, mask, cell_used)
 
         def ase_contribution(atoms):
             from mmml.interfaces.pycharmmInterface.mm_system_energy import (

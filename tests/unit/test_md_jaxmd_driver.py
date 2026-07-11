@@ -198,8 +198,41 @@ def test_neighbor_and_repair_contracts_are_validated():
         )
 
 
-def test_rejects_npt_until_dynamic_box_path_is_extracted():
-    system = _system()
+def test_npt_requires_a_box():
+    system = _system()  # free space (box=None)
     energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
-    with pytest.raises(NotImplementedError, match="min, nve, and nvt"):
+    with pytest.raises(ValueError, match="npt requires a periodic box"):
         JaxmdDriver().run(system, energy, EnsembleSpec(ensemble="npt", n_steps=1))
+
+
+def _periodic_system(n_side: int = 3, spacing: float = 2.5):
+    grid = np.arange(n_side) * spacing
+    pts = np.array([[x, y, z] for x in grid for y in grid for z in grid], dtype=float)
+    box = float(n_side * spacing)
+    n = len(pts)
+    return MolecularSystem(
+        R=pts,
+        Z=np.ones(n, dtype=int),
+        box=np.diag([box, box, box]),
+        mol_id=np.arange(n),
+    )
+
+
+def test_npt_evolves_the_box():
+    system = _periodic_system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    ensemble = EnsembleSpec(
+        ensemble="npt", dt_fs=0.5, n_steps=20, temperature_K=100.0,
+        pressure_bar=1.0, params={"float64": True, "seed": 1},
+    )
+    traj = JaxmdDriver(record_every=5).run(system, energy, ensemble)
+
+    boxes = traj.metadata["boxes"]
+    assert boxes.shape[0] == traj.n_frames
+    # box stays finite and actually changes under the barostat
+    assert np.all(np.isfinite(boxes))
+    assert not np.allclose(boxes[0], boxes[-1])
+    # positions/energies remain finite throughout
+    assert np.all(np.isfinite(traj.metadata["positions"]))
+    assert np.all(np.isfinite(traj.metadata["energies"]))
+    assert traj.metadata["steps"] == 20
