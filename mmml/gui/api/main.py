@@ -18,6 +18,8 @@ def create_app(
     static_dir: Optional[str] = None,
     model_params: Optional[str] = None,
     model_config: Optional[str] = None,
+    enable_runner: bool = False,
+    runner_cwd: Optional[str] = None,
 ) -> FastAPI:
     """
     Create and configure the FastAPI application.
@@ -30,7 +32,13 @@ def create_app(
         Path to a single molecular file
     static_dir : str, optional
         Directory containing static frontend files
-    
+    enable_runner : bool, optional
+        When True, mount job-runner endpoints (/api/jobs, SSE stream) that can
+        launch and stream ``mmml md-system`` runs on this host. Opt-in because
+        it executes subprocesses.
+    runner_cwd : str, optional
+        Working directory jobs launch from (defaults to data_dir or cwd).
+
     Returns
     -------
     FastAPI
@@ -74,6 +82,7 @@ def create_app(
             "model_params": str(app.state.model_params) if app.state.model_params else None,
             "model_config": str(app.state.model_config) if app.state.model_config else None,
             "hidden_model_available": app.state.model_params is not None,
+            "runner_enabled": bool(getattr(app.state, "job_manager", None)),
         }
     
     @app.get("/api/files")
@@ -456,6 +465,19 @@ def create_app(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     
+    # Job runner (opt-in): launch and stream `mmml md-system` runs on this host.
+    # Registered before the static mount so its /api/* routes are not shadowed.
+    if enable_runner:
+        from .runner import JobManager
+        from .runner_routes import register_runner_routes
+
+        cwd = runner_cwd or (str(app.state.data_dir) if app.state.data_dir else None)
+        manager = JobManager(
+            default_cwd=cwd,
+            output_root=str(app.state.data_dir) if app.state.data_dir else None,
+        )
+        register_runner_routes(app, manager)
+
     # Serve static files if directory provided
     if static_dir and Path(static_dir).exists():
         # Serve index.html for SPA routing

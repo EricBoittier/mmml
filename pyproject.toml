@@ -59,6 +59,7 @@ dependencies = [
     "pytest>=9.0.2",
     # Alchemical / multistate free energy (mmml lambda-mbar, scripts/meoh_dimer_lambda_mbar.py)
     "pymbar>=4.0",
+    "umap-learn>=0.5.12",
 ]
 
 [project.optional-dependencies]

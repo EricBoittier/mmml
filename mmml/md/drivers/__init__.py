@@ -20,7 +20,7 @@ from mmml.md.energy.registry import HybridEnergy
 from mmml.md.results import Trajectory
 from mmml.md.system import MolecularSystem
 
-__all__ = ["Driver"]
+__all__ = ["Driver", "JaxmdDriver"]
 
 
 @runtime_checkable
@@ -38,3 +38,7 @@ class Driver(Protocol):
         on_overlap: Callable[..., Any] | None = None,
     ) -> Trajectory:
         ...
+
+
+# Safe eager export: the implementation itself keeps jax/jax-md imports lazy.
+from mmml.md.drivers.jaxmd import JaxmdDriver  # noqa: E402

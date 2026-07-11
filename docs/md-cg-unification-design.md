@@ -202,18 +202,18 @@ therefore a **staging order**, not an either/or:
 
 ```python
 # 0. FF parameters — resolved ONCE by the builder, carried as data (decision A, §10).
-#    No energy term re-derives exclusions / e14 / vdw14 / LJ tables at runtime.
+#    Mirrors NonbondedSystemData field-for-field (see hybrid-mlmm-decomposition §2).
+#    No energy term re-derives exclusions / e14 / LJ tables at runtime.
 @dataclass(frozen=True)
 class FFParams:
-    charges: np.ndarray           # (N,) partial charges
-    lj_eps: np.ndarray            # (N,) or type-indexed LJ epsilon
-    lj_sigma: np.ndarray          # (N,) or type-indexed LJ sigma
-    lj_type_index: np.ndarray     # (N,) index into LJ tables
-    exclusions: np.ndarray        # pair list of excluded (i,j)
-    e14_pairs: np.ndarray         # 1-4 pair list
-    e14_scale: np.ndarray         # per-pair electrostatic 1-4 scaling
-    vdw14: np.ndarray             # 1-4 LJ params / scaling
-    # sourced from the PSF + CHARMM params at BUILD time; immutable thereafter.
+    charges: np.ndarray           # (N,) partial charges       ← nbdata.charges
+    epsilon: np.ndarray           # (N,) LJ epsilon (kcal/mol) ← nbdata.epsilon
+    rmin_half: np.ndarray         # (N,) LJ Rmin/2 (Å)         ← nbdata.rmin
+    at_codes: np.ndarray          # (N,) nonbonded type code   ← nbdata.at_codes
+    exclusions: np.ndarray        # (M,2) 1-2/1-3 excluded     ← nbdata.excluded_pairs
+    e14_pairs: np.ndarray         # (K,2) 1-4 pairs            ← nbdata.e14_pairs
+    # FFParams.from_nonbonded_system_data(nbdata) does the conversion (duck-typed).
+    # 1-4 SCALING (e14_scale / vdw14) is a pair-build detail, not per-atom FF data.
 
 # 1. Topology — backend-agnostic, immutable; what builders emit / everyone reads
 @dataclass(frozen=True)
@@ -416,8 +416,14 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       `HybridEnergy` + term registry), and `builders`/`drivers`/`samplers`
       Protocols. Imports pull in no jax/ASE/CHARMM; smoke-tested in
       `tests/unit/test_md_package_seams.py`.)*
-- [ ] Wrap existing builders into `builders/` (`SystemBuilder`); old call sites
-      delegate.
+- [~] Wrap existing builders into `builders/` (`SystemBuilder`); old call sites
+      delegate. *(In progress.)*
+  - [x] `PsfSystemBuilder` — builds a `MolecularSystem` from a PSF + params +
+        coords; populates `FFParams` field-for-field from `NonbondedSystemData`
+        (`FFParams.from_nonbonded_system_data`) and partitions molecules from the
+        PSF bond graph (`molecule_ids_from_bonds`). CHARMM-integration tested on
+        `pept.psf`/`pept.pdb`: `tests/unit/test_md_builders.py`.
+  - [ ] packmol / pyxtal / peptide-water builders (wrap existing build funcs).
 - [~] Extract `cg_jaxmd` energy terms into `energy/terms/` one at a time,
       validating at each step. *(In progress — bias/restraint terms first, as
       they need no CHARMM/checkpoint.)*
@@ -430,12 +436,22 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         atom group and molecule groups, smooth cutoff, optional padded slots).
         Parity-tested vs. the cg_jaxmd formula; takes explicit ε/Rmin arrays now,
         to be sourced from `FFParams` by the builder.
-  - [ ] `mm_nonbonded` — needs `FFParams` wired through a builder first
-        (blocked here: no `libcharmm` to validate).
+  - [x] `mm_nonbonded` — `MMNonbondedTerm`. Faithful (B)-block extraction reusing
+        the shared switching kernels (`_pair_vdw_energy` / `_pair_elec_energy`):
+        jittable padded-pair jax face (`pair_i/pair_j/pair_mask/e14/vdw14`) plus
+        an ASE face wrapping `nonbonded_energy_and_forces`. Consumes `FFParams`.
+        Parity-tested to ~1e-9 vs. the reference (energy + forces, host/padded/
+        jit/ASE): `tests/unit/test_md_mm_nonbonded.py`.
   - [ ] `ml_intra` / `ml_pep_water` — wrap `jaxmdInterface.hybrid_energy`;
         need a model + checkpoint to validate (blocked here).
-- [ ] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`; port
-      `cg_jaxmd` onto it behind a flag and compare trajectories.
+- [~] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`; port
+      `cg_jaxmd` onto it behind a flag and compare trajectories. *(Shared
+      driver landed in `mmml/md/drivers/jaxmd.py`: lazy optional imports,
+      free/PBC NVE, NVT-NHC, FIRE, block-boundary per-term neighbor refresh,
+      overlap-repair hook, partial-final-block recording, and optional NPZ
+      output. Real jax-md FIRE/NVE smoke tests live in
+      `tests/unit/test_md_jaxmd_driver.py`. Dynamic-box NPT and both legacy
+      front-end adapters remain before this item is complete.)*
 - [ ] Flip `md_system --backend jaxmd` onto `JaxmdDriver`; retire the duplicate
       inline loop.
 - [ ] Lower argparse CLI **and** Snakemake JSON into one `RunConfig`; make

@@ -158,3 +158,112 @@ tetrahedrality = water_tetrahedrality(
 ```
 
 ![Water tetrahedrality](images/plots/test4_water_tetrahedrality.png)
+
+## Hydrogen bonds and interaction network
+
+Hydrogen bonds are detected with a deliberately permissive donor–acceptor
+distance no greater than 3.8 Å and a D–H···A angle of at least 135°. Nitrogen and oxygen atoms are
+treated as acceptors and as donors when covalently bound to hydrogen. Distances
+and angles use periodic minimum-image vectors.
+
+```python
+from mmml.utils.plotting.trajectory_structure import hydrogen_bond_analysis
+
+hydrogen_bonds = hydrogen_bond_analysis(
+    frames,
+    peptide_indices=range(22),
+    distance_cutoff=3.8,
+    angle_cutoff_degrees=135.0,
+)
+
+plt.plot(hydrogen_bonds.peptide_water_counts, label="peptide-water")
+plt.plot(hydrogen_bonds.peptide_peptide_counts, label="peptide-peptide")
+plt.legend()
+```
+
+![Hydrogen-bond time series](images/plots/test4_hydrogen_bond_timeseries.png)
+
+The NetworkX diagram uses the frame with the largest total hydrogen-bond count.
+All atoms are shown at their wrapped Cartesian x/y coordinates with low opacity.
+Hydrogen-bond edges include the complete water–water network as well as
+peptide–water and peptide–peptide interactions. The edge colors and legend
+separate those three classes. Peptide atoms retain labels; water atom labels are
+suppressed to keep the dense network readable.
+
+![Hydrogen-bond network](images/plots/test4_hydrogen_bond_network.png)
+
+The corresponding arrays and edge occupancies are saved in
+`test4_hydrogen_bonds.npz`.
+
+## Radius of gyration, MSD, and diffusion
+
+Wrapped coordinates must not be used directly for mean-squared displacement.
+MMML reconstructs continuous fractional coordinates from frame-to-frame
+minimum-image displacements and raises if a displacement reaches the half-cell
+ambiguity limit. The peptide radius of gyration is mass weighted and calculated
+from these unwrapped coordinates. End-to-end distance is the direct unwrapped
+Cartesian separation between configurable endpoint atoms; this example uses
+terminal heavy atoms 0 and 18. Water diffusion uses the ensemble MSD of all
+water oxygen atoms:
+
+\[
+\mathrm{MSD}(t)=\left\langle|\mathbf r_i(t)-\mathbf r_i(0)|^2\right\rangle_i,
+\qquad D=\frac{1}{6}\frac{d\,\mathrm{MSD}}{dt}.
+\]
+
+```python
+from mmml.utils.plotting.trajectory_structure import (
+    radius_of_gyration_and_diffusion,
+    unwrap_trajectory_positions,
+)
+
+unwrapped_positions = unwrap_trajectory_positions(frames)
+dynamics = radius_of_gyration_and_diffusion(
+    frames,
+    peptide_indices=range(22),
+    timestep_ps=1.0,
+    fit_start_fraction=0.5,
+    end_to_end_indices=(0, 18),
+)
+print(dynamics.diffusion_angstrom2_per_ps)
+```
+
+The PDB does not contain timing metadata. The generated example therefore uses
+**1 ps per saved frame only as an explicit placeholder**. Replace
+`timestep_ps=1.0` with the actual saved-frame interval before interpreting the
+diffusion coefficient. The fitted coefficient scales inversely with this value.
+The reported independent variable is lag time, \(\Delta t\), rather than
+absolute trajectory time. Both water and peptide center-of-mass MSDs average
+over every available time origin for each lag. The fit shown below uses the
+final 50% of lag times; production diffusion estimates should still verify the
+linear diffusive regime and assess fit-window sensitivity.
+
+![Radius of gyration and water MSD](images/plots/test4_radius_gyration_msd.png)
+
+## Heavy-atom distance UMAP
+
+For conformational dimensionality reduction, raw Cartesian coordinates are a
+poor default because translations and rotations dominate their variance.
+Instead, MMML computes every pair distance among the peptide heavy atoms,
+standardizes each distance feature, and embeds the resulting frame-by-feature
+matrix with two-dimensional UMAP. For this peptide there are 10 heavy atoms and
+45 pair-distance features.
+
+```python
+from mmml.utils.plotting.trajectory_structure import heavy_atom_pair_distance_umap
+
+embedding, pair_distances, heavy_atom_pairs = heavy_atom_pair_distance_umap(
+    frames,
+    peptide_indices=range(22),
+    n_neighbors=20,
+    min_dist=0.1,
+    random_state=42,
+)
+```
+
+Points are colored by lag from the first saved frame and connected in trajectory
+order. UMAP coordinates have no physical units; cluster separation is useful
+for exploring conformational states but should be checked against interpretable
+coordinates such as phi, psi, radius of gyration, and end-to-end distance.
+
+![Heavy-atom pair-distance UMAP](images/plots/test4_heavy_atom_distance_umap.png)

@@ -11,9 +11,19 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from mmml.md.builders._topology import (
+    molecule_ids_from_bonds,
+    monomer_indices_from_mol_id,
+)
+from mmml.md.builders.psf import PsfSystemBuilder
 from mmml.md.system import MolecularSystem, SystemSpec
 
-__all__ = ["SystemBuilder"]
+__all__ = [
+    "SystemBuilder",
+    "PsfSystemBuilder",
+    "molecule_ids_from_bonds",
+    "monomer_indices_from_mol_id",
+]
 
 
 @runtime_checkable

@@ -22,6 +22,7 @@ from typing import Any, Sequence
 import numpy as np
 
 from mmml.data.units import KCAL_MOL_TO_EV
+from mmml.md.energy.capacity import COMPUTE_DTYPE
 from mmml.md.energy.registry import EnergyContext, TermFns, register_term
 from mmml.md.system import MolecularSystem
 
@@ -101,10 +102,14 @@ class RepulsiveCoreVdwTerm:
 
             if active_group_slots is None:
                 groups = group_idx
-                mask = jnp.ones((group_idx.shape[0],))
+                # int8 0/1 mask: smaller host->device transfer than a float mask.
+                mask = jnp.ones((group_idx.shape[0],), dtype=jnp.int8)
             else:
                 groups = group_idx[jnp.asarray(active_group_slots, dtype=jnp.int32)]
                 mask = jnp.asarray(active_group_mask)
+            # Cast to the compute dtype explicitly at the multiply site: an int8
+            # mask is numerically identical to f64 here, this just documents intent.
+            mask = mask.astype(COMPUTE_DTYPE)
 
             core_pos = R[:n_core]
             group_pos = R[groups]

@@ -13,12 +13,14 @@ follow.
 from __future__ import annotations
 
 from mmml.md.energy.terms.dihedral import DihedralRestraint, DihedralRestraintTerm
+from mmml.md.energy.terms.mm_nonbonded import MMNonbondedTerm
 from mmml.md.energy.terms.smd import SMDBiasTerm
 from mmml.md.energy.terms.vdw_core import RepulsiveCoreVdwTerm
 
 __all__ = [
     "DihedralRestraint",
     "DihedralRestraintTerm",
+    "MMNonbondedTerm",
     "SMDBiasTerm",
     "RepulsiveCoreVdwTerm",
 ]

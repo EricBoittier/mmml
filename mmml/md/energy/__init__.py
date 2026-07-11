@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from mmml.md.energy.capacity import (
+    CapacityOverflow,
+    check_capacity,
+    pad_indices,
+    shell_capacity,
+)
 from mmml.md.energy.registry import (
     EnergyContext,
     EnergyTerm,
@@ -22,4 +28,8 @@ __all__ = [
     "available_terms",
     "get_term",
     "register_term",
+    "CapacityOverflow",
+    "check_capacity",
+    "pad_indices",
+    "shell_capacity",
 ]

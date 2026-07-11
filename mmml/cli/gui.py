@@ -96,6 +96,21 @@ Supported file formats:
         default=None,
         help='Optional path to model config JSON for hidden-state inspection'
     )
+    parser.add_argument(
+        '--enable-runner',
+        action='store_true',
+        help=(
+            'Enable the job runner: launch and live-stream `mmml md-system` runs '
+            'on this host via /api/jobs (SSE). Intended for remote/HPC use behind '
+            'an SSH port-forward. Executes subprocesses, so keep it off public networks.'
+        )
+    )
+    parser.add_argument(
+        '--runner-cwd',
+        type=Path,
+        default=None,
+        help='Working directory that runner jobs launch from (default: --data-dir or cwd)'
+    )
     return parser
 
 
@@ -161,12 +176,33 @@ def main():
     # Create app
     from ..gui.api.main import create_app
     
+    if args.runner_cwd and not args.runner_cwd.exists():
+        print(f"Error: Runner cwd not found: {args.runner_cwd}", file=sys.stderr)
+        return 1
+
+    # Safety: the runner executes subprocesses. Refuse to expose it on a
+    # non-loopback interface unless the user explicitly opts in.
+    if args.enable_runner and args.host not in ("127.0.0.1", "localhost", "::1"):
+        import os as _os
+        if _os.environ.get("MMML_GUI_ALLOW_REMOTE_RUNNER") != "1":
+            print(
+                f"Error: --enable-runner binds to {args.host} (non-loopback), which would "
+                "expose subprocess execution to the network.\n"
+                "        Prefer binding to 127.0.0.1 and reaching it over an SSH port-forward:\n"
+                "          ssh -N -L 8000:127.0.0.1:8000 user@remote-host\n"
+                "        To override intentionally, set MMML_GUI_ALLOW_REMOTE_RUNNER=1.",
+                file=sys.stderr,
+            )
+            return 1
+
     app = create_app(
         data_dir=str(args.data_dir) if args.data_dir else None,
         single_file=str(args.file) if args.file else None,
         static_dir=static_dir,
         model_params=str(args.model_params) if args.model_params else None,
         model_config=str(args.model_config) if args.model_config else None,
+        enable_runner=bool(args.enable_runner),
+        runner_cwd=str(args.runner_cwd) if args.runner_cwd else None,
     )
     
     # Print startup message
@@ -195,6 +231,12 @@ def main():
     print("  GET /api/frame/{path}?index=N - Get frame data")
     print("  GET /api/properties/{path} - Get all properties")
     print("  GET /api/hidden/{path}?index=N - Get hidden-state summaries")
+    if args.enable_runner:
+        print()
+        print("Job runner: ENABLED")
+        print("  POST /api/jobs                - launch `mmml md-system ...`")
+        print("  GET  /api/jobs/{id}/events    - live log/file/status stream (SSE)")
+        print("  Remote use: ssh -N -L {p}:127.0.0.1:{p} user@host".format(p=args.port))
     print("=" * 60)
     print()
     
