@@ -120,6 +120,7 @@ nav:
       - Cross-backend handoff: handoff.md
       - Remote MD runs + live streaming: remote-md-streaming.md
       - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
+      - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
