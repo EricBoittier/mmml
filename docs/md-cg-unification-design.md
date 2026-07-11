@@ -408,14 +408,28 @@ land seams non-breaking, extract terms with parity checks, then add backends.
 
 ### Core unification (from §9)
 
-- [ ] Land protocols/dataclasses (`system.py`, `energy/registry.py`,
-      `config.py`) with no behavior change.
+- [x] Land protocols/dataclasses (`system.py`, `energy/registry.py`,
+      `config.py`) with no behavior change. *(Done: `mmml/md/` package —
+      `system.py` (`FFParams`/`MolecularSystem`/`SystemSpec`), `config.py`
+      (`RunConfig`/`EnsembleSpec`), `results.py` (`Trajectory`),
+      `energy/registry.py` (`EnergyTerm`/`TermFns`/`NeighborRequest`/
+      `HybridEnergy` + term registry), and `builders`/`drivers`/`samplers`
+      Protocols. Imports pull in no jax/ASE/CHARMM; smoke-tested in
+      `tests/unit/test_md_package_seams.py`.)*
 - [ ] Wrap existing builders into `builders/` (`SystemBuilder`); old call sites
       delegate.
-- [ ] Extract `cg_jaxmd` energy terms into `energy/terms/` one at a time
-      (`ml_intra`, `ml_pep_water`, `mm_nonbonded`, `smd`, `dihedral`,
-      `vdw_core`), validating against `diagnose_energy` /
-      `run_force_and_nl_diagnostics` at each step.
+- [~] Extract `cg_jaxmd` energy terms into `energy/terms/` one at a time,
+      validating at each step. *(In progress — bias/restraint terms first, as
+      they need no CHARMM/checkpoint.)*
+  - [x] `smd` — `SMDBiasTerm` (moving harmonic end-to-end restraint, PBC/free,
+        `lambda_t` steering). Parity-tested vs. the cg_jaxmd formula + ASE
+        forces vs. finite difference: `tests/unit/test_md_energy_terms.py`.
+  - [x] `dihedral` — `DihedralRestraintTerm` (φ/ψ backbone restraints).
+        Parity-tested vs. the cg_jaxmd formula.
+  - [ ] `mm_nonbonded` — needs `FFParams` wired through a builder first.
+  - [ ] `vdw_core` — peptide–water LJ wall; needs `FFParams` + pw slots.
+  - [ ] `ml_intra` / `ml_pep_water` — wrap `jaxmdInterface.hybrid_energy`;
+        need a model + checkpoint to validate.
 - [ ] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`; port
       `cg_jaxmd` onto it behind a flag and compare trajectories.
 - [ ] Flip `md_system --backend jaxmd` onto `JaxmdDriver`; retire the duplicate
