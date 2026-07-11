@@ -13,6 +13,10 @@
 #     snakemake --configfile config.yaml config.cpu.yaml \
 #     --profile profiles/slurm-cpu --keep-going
 
+# Separate results tree so a CPU-partition run doesn't clash with an
+# in-progress/completed GPU run's outputs (results/).
+results_root: results-cpu
+
 slurm:
   partition: short
   gpu: 0

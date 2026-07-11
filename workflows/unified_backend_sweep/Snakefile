@@ -7,6 +7,9 @@ WORKFLOW_DIR = Path(workflow.basedir)
 REPO_ROOT = WORKFLOW_DIR.parents[1]
 BACKENDS = list(config["backends"])
 SEEDS = [str(seed) for seed in config["seeds"]]
+# Separate results tree per config (e.g. results-cpu/ for config.cpu.yaml) so a
+# CPU-partition run doesn't clash with an in-progress/completed GPU run's outputs.
+RESULTS_ROOT = config.get("results_root", "results")
 
 
 def slurm_value(name, default):
@@ -31,15 +34,15 @@ def _slurm_extra(wildcards) -> str:
 
 rule all:
     input:
-        "results/summary.csv",
-        "results/summary.md",
+        f"{RESULTS_ROOT}/summary.csv",
+        f"{RESULTS_ROOT}/summary.md",
 
 
 rule run_setting:
     output:
-        status="results/{backend}/seed_{seed}/status.json",
+        status=f"{RESULTS_ROOT}/{{backend}}/seed_{{seed}}/status.json",
     log:
-        stdout="results/{backend}/seed_{seed}/stdout.log",
+        stdout=f"{RESULTS_ROOT}/{{backend}}/seed_{{seed}}/stdout.log",
     params:
         workflow_dir=WORKFLOW_DIR,
         repo_root=REPO_ROOT,
@@ -80,13 +83,13 @@ rule run_setting:
 rule collect:
     input:
         statuses=expand(
-            "results/{backend}/seed_{seed}/status.json",
+            f"{RESULTS_ROOT}/{{backend}}/seed_{{seed}}/status.json",
             backend=BACKENDS,
             seed=SEEDS,
         ),
     output:
-        csv="results/summary.csv",
-        md="results/summary.md",
+        csv=f"{RESULTS_ROOT}/summary.csv",
+        md=f"{RESULTS_ROOT}/summary.md",
     params:
         script=WORKFLOW_DIR / "scripts" / "collect_results.py",
     shell:
