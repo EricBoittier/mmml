@@ -14,6 +14,20 @@ REPO = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO / "workflows" / "pbc_liquid_density_dyn"
 sys.path.insert(0, str(WORKFLOW / "scripts"))
 
+# Several workflows ship identically-named helper modules (campaign_lib.py,
+# monitor_lib.py, ...). collect_diagnostics/monitor_lib import ``campaign_lib``
+# by bare name, so a sibling workflow test collected earlier can leave a
+# different workflow's module cached in sys.modules and get imported here
+# instead (surfacing as RunCell without ``setup_id`` / a mismatched config
+# schema). Drop the shared names so they re-resolve against sys.path[0] above.
+for _stale_workflow_mod in (
+    "campaign_lib",
+    "collect_diagnostics",
+    "monitor_lib",
+    "trajectory_diag",
+):
+    sys.modules.pop(_stale_workflow_mod, None)
+
 import collect_diagnostics as cd  # noqa: E402
 import monitor_lib as ml  # noqa: E402
 import trajectory_diag as td  # noqa: E402
