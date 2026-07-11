@@ -506,9 +506,9 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         seam tests require no CHARMM/Packmol/PyXtal:
         `tests/unit/test_md_builders.py`. Old front-end call sites still need to
         delegate before the parent item is complete.
-- [~] Extract `cg_jaxmd` energy terms into `energy/terms/` one at a time,
-      validating at each step. *(In progress — bias/restraint terms first, as
-      they need no CHARMM/checkpoint.)*
+- [x] Extract `cg_jaxmd` energy terms into `energy/terms/` one at a time,
+      validating at each step. *(Complete — all six terms extracted, registered,
+      and parity-tested.)*
   - [x] `smd` — `SMDBiasTerm` (moving harmonic end-to-end restraint, PBC/free,
         `lambda_t` steering). Parity-tested vs. the cg_jaxmd formula + ASE
         forces vs. finite difference: `tests/unit/test_md_energy_terms.py`.
@@ -524,8 +524,14 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         an ASE face wrapping `nonbonded_energy_and_forces`. Consumes `FFParams`.
         Parity-tested to ~1e-9 vs. the reference (energy + forces, host/padded/
         jit/ASE): `tests/unit/test_md_mm_nonbonded.py`.
-  - [ ] `ml_intra` / `ml_pep_water` — wrap `jaxmdInterface.hybrid_energy`;
-        need a model + checkpoint to validate (blocked here).
+  - [x] `ml_intra` — `MLIntramolecularTerm` (per-monomer ML energy) and
+        `ml_pep_water` — `MLCoreGroupTerm` (core–group ML dimers over padded
+        `active_group_slots`). Thin wrappers over
+        `jaxmdInterface.hybrid_energy`; model+params come from the run
+        `EnergyContext` (model-agnostic). Validated against the factory calls +
+        jit + composition using the last-epoch example checkpoint
+        (`examples/sppoky-epoch-0010_params.json`):
+        `tests/unit/test_md_ml_terms.py`.
 - [~] Build `JaxmdDriver` from `jaxmd_runner.set_up_nhc_sim_routine`; port
       `cg_jaxmd` onto it behind a flag and compare trajectories. *(Shared
       driver landed in `mmml/md/drivers/jaxmd.py`: lazy optional imports,
