@@ -2,8 +2,8 @@
 
 **Status:** Proposed (design only — no code changes yet)
 **Scope:** How to split the calculators and system builders shared by
-[`mmml/cli/run/md_system.py`](../mmml/cli/run/md_system.py) and
-[`examples/cg_jaxmd.py`](../examples/cg_jaxmd.py) so the two can run on one
+[`mmml/cli/run/md_system.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/md_system.py) and
+[`examples/cg_jaxmd.py`](https://github.com/EricBoittier/mmml/blob/main/examples/cg_jaxmd.py) so the two can run on one
 architecture.
 
 ---
@@ -127,14 +127,21 @@ the Fortran/pyCHARMM path. Concrete entry points (from `include/`):
   `HarmonicRestraintForce`, `Constraints` (SHAKE) — the constraint machinery a
   rigid-body sampler would build on.
 
-Two interface levels are worth distinguishing:
+**Committed direction (decided):** the ML forces must enter apocharmm's
+**device force loop as a custom `ForceManager` contribution** — forces stay on
+device, no per-step host round-trips. This is the deep C++/CUDA integration,
+not host-side evaluation between steps. The two interface levels below are
+therefore a **staging order**, not an either/or:
 
-1. **Python (pybind11)** — quickest path; drive `CharmmContext` +
-   `Cuda*Integrator` from an `ApoCharmmDriver` in `mmml/md/drivers/`.
-2. **C++/CUDA** — needed only if MMML's jax ML forces must enter the device
-   force loop (e.g. as a custom `ForceManager` contribution) rather than being
-   evaluated host-side between steps. This is the deep integration and the main
-   open design question (see §10).
+1. **Python (pybind11), host-side ML — validation stepping stone only.** Drive
+   `CharmmContext` + `Cuda*Integrator` from an `ApoCharmmDriver`, evaluate jax
+   ML forces on the host and add them per step. Used to pin down correctness
+   (energy/force parity) before touching CUDA. *Not* the shipping path.
+2. **C++/CUDA, device-side ML — the target.** MMML's jax ML forces enter the
+   device force loop as a custom `ForceManager` so forces never leave the GPU.
+   Requires a CUDA interop boundary (device-pointer handoff or DLPack between
+   jax and apocharmm buffers). The remaining question is *how* to build that
+   boundary, not *whether* — see §10.
 
 ---
 
@@ -191,6 +198,20 @@ Two interface levels are worth distinguishing:
 ## 6. Protocol sketches
 
 ```python
+# 0. FF parameters — resolved ONCE by the builder, carried as data (decision A, §10).
+#    No energy term re-derives exclusions / e14 / vdw14 / LJ tables at runtime.
+@dataclass(frozen=True)
+class FFParams:
+    charges: np.ndarray           # (N,) partial charges
+    lj_eps: np.ndarray            # (N,) or type-indexed LJ epsilon
+    lj_sigma: np.ndarray          # (N,) or type-indexed LJ sigma
+    lj_type_index: np.ndarray     # (N,) index into LJ tables
+    exclusions: np.ndarray        # pair list of excluded (i,j)
+    e14_pairs: np.ndarray         # 1-4 pair list
+    e14_scale: np.ndarray         # per-pair electrostatic 1-4 scaling
+    vdw14: np.ndarray             # 1-4 LJ params / scaling
+    # sourced from the PSF + CHARMM params at BUILD time; immutable thereafter.
+
 # 1. Topology — backend-agnostic, immutable; what builders emit / everyone reads
 @dataclass(frozen=True)
 class MolecularSystem:
@@ -201,23 +222,38 @@ class MolecularSystem:
     monomer_indices: list[np.ndarray]
     water_indices: list[np.ndarray]
     psf_path: Path | None
-    ff_params: FFParams | None    # charges, LJ, exclusions, e14/vdw14
+    ff_params: FFParams | None    # fully-resolved FF state (decision A)
     metadata: dict
 
-# 2. Builders — SystemSpec -> MolecularSystem
+# 2. Builders — SystemSpec -> MolecularSystem (also the one place FFParams is built)
 class SystemBuilder(Protocol):
     def build(self, spec: SystemSpec) -> MolecularSystem: ...
 # PackmolLiquidBuilder, PyxtalCrystalBuilder, PeptideWaterBuilder, TemplatePdbBuilder
 
-# 3. Energy terms — composable, registry-keyed, engine-agnostic factory
+# 3. Energy terms — composable, registry-keyed, engine-agnostic factory.
+#    Each term declares the neighbor/pair capacity it needs (decision B): the term
+#    owns its own padding (peptide-water slots vs. intermolecular pairs differ).
+@dataclass(frozen=True)
+class NeighborRequest:
+    cutoff_A: float
+    kind: str                     # "intermolecular" | "peptide_water" | ...
+    capacity_hint: int | None     # padded slot count; term sizes its own buffers
+
+class TermFns(NamedTuple):
+    jax_energy_fn: Callable | None       # energy_fn(R, nbrs, box, **kw), jittable
+    ase_contribution: Callable | None    # numpy energy/forces for ASE
+    neighbor_request: NeighborRequest | None
+
 class EnergyTerm(Protocol):
     name: str
+    def neighbor_request(self, system: MolecularSystem) -> NeighborRequest | None: ...
     def make(self, system: MolecularSystem, ctx: EnergyContext) -> TermFns: ...
-# TermFns bundles a jax energy_fn AND/OR an ASE contribution.
 # registry: {"ml_intra", "ml_pep_water", "mm_nonbonded", "smd",
 #            "dihedral", "vdw_core", "flat_bottom", ...}
 
 class HybridEnergy:
+    # Gathers each term's NeighborRequest, allocates the union of neighbor lists,
+    # and routes the right (padded) list to each term at call time.
     def __init__(self, terms: list[EnergyTerm], system, ctx): ...
     def as_jax_energy_fn(self) -> Callable: ...      # for JaxmdDriver
     def as_ase_calculator(self) -> Calculator: ...   # sum of contributions
@@ -225,7 +261,7 @@ class HybridEnergy:
 # 4. Drivers — one per integrator engine
 class Driver(Protocol):
     def run(self, system, energy: HybridEnergy, ensemble: EnsembleSpec) -> Trajectory: ...
-# AseDriver, JaxmdDriver, CharmmDriver
+# AseDriver, JaxmdDriver, CharmmDriver, ApoCharmmDriver
 ```
 
 ---
@@ -298,26 +334,38 @@ The sweep's two energy-mode toggles (`use_ml_intramolecular`,
 
 ---
 
-## 10. Open questions
+## 10. Decisions & open questions
 
-- **`FFParams` boundary** — how much CHARMM FF state (exclusions, e14/vdw14,
-  LJ tables) is captured as data in `MolecularSystem` vs. re-derived by each
-  energy term? `cg_jaxmd` currently recomputes several of these inline.
-- **Neighbor-list ownership** — does the `JaxmdDriver` own the jax-md
-  `neighbor_list`, or does each `EnergyTerm` request capacities it needs
-  (peptide–water slots vs. intermolecular pairs have different padding)?
-- **Rescue path** — CHARMM repair/minimize is a cross-cutting concern that
-  breaks purity. Model it as an explicit driver hook (`on_overlap`) rather than
-  hiding it inside an energy term.
-- **apocharmm ML force injection** — can MMML's jax ML forces enter apocharmm's
-  device force loop as a custom `ForceManager` (C++/CUDA, forces stay on
-  device), or only host-side between steps (pybind11, per-step device↔host
-  copies)? The former is the performant path but requires a CUDA interop
-  boundary (device-pointer handoff, or DLPack between jax and apocharmm
-  buffers); the latter is far simpler and likely fine for validation.
+### Decided
+
+- **`FFParams` boundary → captured as data (option A).** CHARMM FF state
+  (charges, LJ tables, exclusions, e14 / vdw14) is resolved **once by the
+  builder** and carried on `MolecularSystem.ff_params` (see §6). Energy terms
+  read it; none re-derive it at runtime. This removes the inline recomputation
+  `cg_jaxmd` currently does and makes term evaluation pure w.r.t. FF state.
+- **Neighbor-list ownership → per-term capacities (option B).** Each
+  `EnergyTerm` declares a `NeighborRequest` (cutoff, kind, padded capacity) and
+  owns its padding; `HybridEnergy` allocates the union and routes the right
+  list to each term. Peptide–water slots and intermolecular pairs keep
+  independent capacities rather than sharing one driver-owned list.
+- **apocharmm ML forces → device-side custom `ForceManager` (decided).** ML
+  forces enter apocharmm's device force loop; they do **not** stay host-side.
+  Host-side pybind11 evaluation is only a validation stepping stone (§4). The
+  open part is the interop mechanism, not the direction (below).
+- **Rescue path → explicit driver hook.** CHARMM repair/minimize is modelled as
+  a driver hook (`on_overlap`), never hidden inside an energy term, so energy
+  terms stay pure and the impurity is confined to the driver.
+
+### Still open
+
+- **apocharmm device interop mechanism** — *how* to hand jax device buffers to
+  a custom apocharmm `ForceManager`: DLPack capsule exchange vs. raw
+  CUDA device-pointer handoff, who owns the force buffer, and stream/sync
+  semantics between the jax XLA stream and apocharmm's CUDA stream. (Direction
+  is settled; this is the implementation crux — see §11 apocharmm checklist.)
 - **Rigid-body DOF representation** — quaternions vs. rotation matrices for the
-  rigid moves, and whether rigid sampling is expressed as a `Sampler` peer of
-  the MD `Driver` or as a constraint mode inside each driver.
+  rigid moves, and whether rigid sampling is a `Sampler` peer of the MD
+  `Driver` or a constraint mode inside each driver.
 
 ---
 
@@ -369,11 +417,17 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       / velocity-Verlet.
 - [ ] Wire `Subscriber` I/O (`DcdSubscriber` / `NetCDFSubscriber` /
       `RestartSubscriber`) into the shared `Trajectory` output.
-- [ ] **Host-side ML** first: evaluate MMML jax forces between steps and add
-      them via a pybind11 force hook (simple, validates correctness).
-- [ ] **Device-side ML** (C++/CUDA, stretch): expose MMML ML forces as a custom
-      `ForceManager` so forces stay on device (DLPack / device-pointer interop
-      with jax) — resolve §10 open question first.
+- [ ] **Host-side ML** (validation stepping stone, not shipping): evaluate MMML
+      jax forces between steps and add them via a pybind11 force hook; use only
+      to pin energy/force parity before touching CUDA.
+- [ ] **Device-side ML — the target (committed, §10):** expose MMML ML forces
+      as a custom apocharmm `ForceManager` so forces never leave the GPU.
+  - [ ] Prototype jax↔apocharmm buffer exchange (DLPack capsule vs. raw CUDA
+        device pointer) on a toy force; settle ownership + stream/sync semantics.
+  - [ ] Implement the custom `ForceManager` (subclass / composite) that reads
+        device coordinates and writes the ML force contribution in place.
+  - [ ] Validate device-side ML forces match the host-side reference bitwise-
+        close, then benchmark step throughput vs. the host-side path.
 - [ ] Bridge free-energy managers (`FEPEIForceManager`, `MBARForceManager`,
       `EDSForceManager`, `DualTopologyForceManager`) to the existing
       `lambda_dynamics` / `lambda_mbar` / `lambda_ti` paths.
