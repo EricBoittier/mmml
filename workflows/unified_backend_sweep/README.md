@@ -90,6 +90,61 @@ On **pc-studix login nodes**, PyCHARMM fails with
 `scripts/run_setting.py` directly on the login node. Submit via Snakemake +
 Slurm from the login node instead (as above); the compute nodes have OpenCL.
 
+The vendored Packmol binary is platform-specific and not committed to git; if a
+setting fails with `FileNotFoundError: packmol not found for this platform`,
+run `bash ../../scripts/rebuild_packmol.sh` once from the repo root (installs
+to `mmml/generate/packmol/packmol`) before resubmitting.
+
+**Transient XLA compile races:** two CPU-JIT-heavy jobs (mainly `jaxmd_npt`)
+landing on the *same* node at the same time have been observed to fail with
+`JaxRuntimeError: INTERNAL: Failed to materialize symbols: ...`. This is a
+concurrency issue in the CPU XLA backend under load, not a bug in this
+workflow — `profiles/slurm(-cpu)` set `retries: 2`, which clears it on a fresh
+node allocation.
+
+### CPU jobs
+
+This cluster's mmml `.venv` has no CUDA jaxlib installed, so `jax` already
+falls back to CPU even on the `gpu` partition (you'll see `An NVIDIA GPU may be
+present on this machine, but a CUDA-enabled jaxlib is not installed. Falling
+back to cpu.` in `stdout.log`). Submitting to a CPU partition instead is
+strictly a better use of the shared cluster — same behavior, frees the GPU
+allocation for jobs that actually need it:
+
+```bash
+uv run --with snakemake --with snakemake-executor-plugin-slurm \
+  snakemake --configfile config.yaml config.cpu.yaml \
+  --profile profiles/slurm-cpu --keep-going
+```
+
+`config.cpu.yaml` overrides `slurm.partition` (default: `short`) and
+`slurm.gpu` (`0`); everything else (`mem_mb_per_cpu`, `cpus_per_task`, per-backend
+`runtime_min`, ...) is inherited from `config.yaml` — Snakemake deep-merges
+multiple `--configfile`s, so only the overridden keys change. Point
+`--configfile` at a different base if you want, e.g., `long` instead of
+`short` for a bigger walltime budget.
+
+## Long-range electrostatics (`lr_solver`)
+
+`mm_nonbonded` supports CHARMM's real-space minimum-image convention (`mic`,
+the default and the only option any backend in this sweep actually uses) plus
+three full-periodic backends inherited from `nonbonded_energy_and_forces`:
+`jax_pme` (Ewald/PME/P3M via the `jaxpme` package), `nvalchemiops_pme`, and
+`scafacos`.
+
+**These three are only reachable through the ASE face
+(`HybridEnergy.as_ase_calculator()`), not through any backend in this sweep.**
+Their evaluators are host-orchestrated — `jax_pme`'s, for example, builds an
+ASE `Atoms` object and its own neighbor list on the host and returns plain
+numpy — which cannot be traced inside the `jax.jit` graph that `JaxmdDriver`
+and `RigidBodySampler` both require. Passing `lr_solver="jax_pme"` (etc.) as a
+`mm_nonbonded` term kwarg to any backend here raises `NotImplementedError`
+immediately and clearly, rather than silently falling back to `mic` — verified
+in `tests/unit/test_md_mm_nonbonded.py::test_jax_face_rejects_non_mic_lr_solver`.
+Using them for real requires either a non-jit driver (not built yet) or a
+`jax.pure_callback` bridge around the evaluator; see
+`docs/md-cg-unification-design.md` §11 for the tracked gap.
+
 ## Outputs
 
 Each setting writes `run_config.json`, `stdout.log`, and `status.json` under

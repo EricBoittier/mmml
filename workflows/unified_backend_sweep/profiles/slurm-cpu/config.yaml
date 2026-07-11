@@ -1,0 +1,17 @@
+# CPU-partition variant of profiles/slurm. Use together with config.cpu.yaml:
+#   uv run --with snakemake --with snakemake-executor-plugin-slurm \
+#     snakemake --configfile config.yaml config.cpu.yaml \
+#     --profile profiles/slurm-cpu --keep-going
+executor: slurm
+jobs: 15
+latency-wait: 120
+retries: 2
+default-resources:
+  - gpu=0
+  - charmm_slot=1
+  - runtime=30
+  - nodes=1
+  - tasks=1
+  - mem_mb_per_cpu=2000
+  - cpus_per_task=4
+  - slurm_partition=short

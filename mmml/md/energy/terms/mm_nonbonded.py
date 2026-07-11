@@ -11,13 +11,29 @@ Two faces:
 - **jax** — a jittable padded-pair energy: the driver's neighbor list supplies
   ``pair_i`` / ``pair_j`` (+ optional ``pair_mask`` / ``e14_scale`` /
   ``vdw14_scale``) as kwargs each step (decision B). Masked/padded pairs are
-  distance-clamped to avoid NaN gradients.
+  distance-clamped to avoid NaN gradients. Real-space, minimum-image only
+  (``lr_solver="mic"``) — this is the only long-range electrostatics backend
+  that is jit-compatible in this term (see ``lr_solver`` below).
 - **ASE** — wraps ``nonbonded_energy_and_forces`` (rebuilds the pair list each
-  call), matching ``JAXIntermolecularCalculator``.
+  call), matching ``JAXIntermolecularCalculator``. Supports every
+  ``lr_solver`` the reference function does (``mic``, ``jax_pme``,
+  ``nvalchemiops_pme``, ``scafacos``).
 
 Per-atom force-field data comes from ``system.ff_params`` (``FFParams``, decision
 A); the CHARMM cutoffs/switch modes come from a ``CharmmNbondSettings`` passed in
 the constructor or via ``ctx.options``.
+
+``lr_solver`` (default ``"mic"``): selects the long-range electrostatics
+backend. Only ``"mic"`` (real-space minimum-image, the padded-pair kernel
+above) is available through the jax/jit face — ``"jax_pme"`` /
+``"nvalchemiops_pme"`` / ``"scafacos"`` are host-orchestrated (e.g. jax-pme's
+evaluator builds an ASE ``Atoms`` and its own neighbor list on the host, then
+returns plain numpy), which is fundamentally incompatible with tracing inside
+an existing ``jax.jit`` graph — not merely unimplemented. Requesting a
+non-``"mic"`` solver therefore raises ``NotImplementedError`` if the jax
+energy function is actually called; use ``as_ase_calculator()`` instead, which
+supports all four solvers (see ``docs/hybrid-mlmm-decomposition.md`` and
+``docs/md-cg-unification-design.md`` §11 for the underlying limitation).
 """
 
 from __future__ import annotations
@@ -58,8 +74,17 @@ class MMNonbondedTerm:
 
     name = "mm_nonbonded"
 
-    def __init__(self, settings: Any | None = None):
+    def __init__(
+        self,
+        settings: Any | None = None,
+        lr_solver: str = "mic",
+        jax_pme_method: str | None = None,
+        jax_pme_sr_cutoff_A: float = 6.0,
+    ):
         self.settings = settings
+        self.lr_solver = str(lr_solver)
+        self.jax_pme_method = jax_pme_method
+        self.jax_pme_sr_cutoff_A = float(jax_pme_sr_cutoff_A)
 
     def _resolve_settings(self, ctx: EnergyContext):
         if self.settings is not None:
@@ -183,6 +208,16 @@ class MMNonbondedTerm:
                 e14 = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if e14_scale is None else jnp.asarray(e14_scale)
                 vdw14 = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if vdw14_scale is None else jnp.asarray(vdw14_scale)
                 mask = jnp.ones(pi.shape, dtype=COMPUTE_DTYPE) if pair_mask is None else jnp.asarray(pair_mask).astype(COMPUTE_DTYPE)
+            if self.lr_solver != "mic":
+                # jax_pme/nvalchemiops_pme/scafacos are host-orchestrated (e.g.
+                # jax-pme's evaluator builds an ASE Atoms + its own neighbor list
+                # on the host) -- not jit-traceable, so fail loudly here rather
+                # than silently falling back to mic under the driver's jit.
+                raise NotImplementedError(
+                    f"mm_nonbonded's jax/jit face only supports lr_solver='mic'; "
+                    f"got {self.lr_solver!r}. Use as_ase_calculator() instead, which "
+                    "supports mic/jax_pme/nvalchemiops_pme/scafacos."
+                )
             return _pair_energy(R, pi, pj, e14, vdw14, mask, cell_used)
 
         def ase_contribution(atoms):
@@ -196,6 +231,9 @@ class MMNonbondedTerm:
                 self._cell_np,
                 settings,
                 molecule_id=np.asarray(system.mol_id, dtype=np.int32),
+                lr_solver=self.lr_solver,
+                jax_pme_method=self.jax_pme_method,
+                jax_pme_sr_cutoff_A=self.jax_pme_sr_cutoff_A,
             )
             energy = float(terms.get("total", sum(float(v) for v in terms.values())))
             return energy * KCAL_MOL_TO_EV, np.asarray(forces, dtype=np.float64) * KCAL_MOL_TO_EV

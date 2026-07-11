@@ -139,3 +139,56 @@ def test_ase_face_matches_reference():
     ref_e, ref_f = _reference_energy_eV(system, settings, nbdata)
     assert energy == pytest.approx(ref_e, rel=1e-9)
     assert np.allclose(forces, ref_f, atol=1e-8)
+
+
+# --- lr_solver: mic (jax face, jit-compatible) vs. everything else (ASE only) ---
+
+
+class _PosStub:
+    def __init__(self, system):
+        self._pos = np.asarray(system.R)
+        self._cell = np.asarray(system.box)
+
+    def get_positions(self):
+        return self._pos
+
+    @property
+    def cell(self):
+        class _C:
+            array = self._cell
+
+        return _C()
+
+    def __len__(self):
+        return len(self._pos)
+
+
+def test_jax_face_rejects_non_mic_lr_solver():
+    """jax_pme/etc. are host-orchestrated (ASE Atoms + host neighbor list in
+    jax-pme's own evaluator) and cannot be traced inside jax.jit; calling the
+    jax face with a non-mic solver must fail loudly, not silently use mic."""
+    system, settings, _ = _system_and_ref()
+    fn = MMNonbondedTerm(settings, lr_solver="jax_pme").make(system, EnergyContext()).jax_energy_fn
+    with pytest.raises(NotImplementedError, match="lr_solver"):
+        fn(jnp.asarray(system.R))
+
+
+def test_ase_face_jax_pme_differs_from_mic_and_is_finite():
+    pytest.importorskip("jaxpme")
+    system, settings, _ = _system_and_ref()
+
+    mic_contribution = MMNonbondedTerm(settings, lr_solver="mic").make(system, EnergyContext()).ase_contribution
+    pme_contribution = MMNonbondedTerm(
+        settings, lr_solver="jax_pme", jax_pme_sr_cutoff_A=6.0,
+    ).make(system, EnergyContext()).ase_contribution
+
+    e_mic, f_mic = mic_contribution(_PosStub(system))
+    e_pme, f_pme = pme_contribution(_PosStub(system))
+
+    assert np.isfinite(e_mic)
+    assert np.isfinite(e_pme)
+    assert np.all(np.isfinite(f_pme))
+    # different electrostatics treatment (MIC truncated switch vs. full
+    # periodic Ewald/PME) must give a different energy -- if these matched,
+    # the lr_solver kwarg would not actually be reaching the reference call.
+    assert e_pme != pytest.approx(e_mic, rel=1e-6)

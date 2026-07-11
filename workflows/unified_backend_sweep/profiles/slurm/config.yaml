@@ -4,10 +4,13 @@
 # pc-studix: submit from the login node via this profile (PyCHARMM on the
 # login node itself fails with `libOpenCL.so.1: cannot open shared object
 # file` — do not run scripts/run_setting.py directly there).
+# retries=2: concurrent CPU-JIT-heavy jobs (esp. jaxmd_npt) landing on the same
+# node have hit a transient XLA "Failed to materialize symbols" compile race;
+# a retry on a fresh node allocation clears it (see design doc / handoff).
 executor: slurm
 jobs: 15
 latency-wait: 120
-retries: 0
+retries: 2
 default-resources:
   - gpu=1
   - charmm_slot=1

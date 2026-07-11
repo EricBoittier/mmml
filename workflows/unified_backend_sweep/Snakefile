@@ -47,7 +47,11 @@ rule run_setting:
         backend="|".join(BACKENDS),
         seed="|".join(SEEDS),
     resources:
-        gpu=1,
+        # gpu=0 for CPU-only submissions (see config.cpu.yaml): this cluster's
+        # mmml venv has no CUDA jaxlib, so jax already runs on CPU even on the
+        # gpu partition -- a CPU-partition run is strictly a better use of the
+        # shared GPU allocation, not a capability downgrade.
+        gpu=lambda wildcards: int(slurm_value("gpu", 1)),
         # charmm_slot (not mpi) caps concurrent PyCHARMM-touching jobs on a node;
         # the Slurm plugin treats `mpi` as a real MPI job requiring tasks>1.
         charmm_slot=1,

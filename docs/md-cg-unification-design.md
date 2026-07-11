@@ -101,6 +101,22 @@ and extending `assemble_and_run`'s auto-wiring to cover the rigid path too. The
 sweep also confirmed NPT is markedly slower to JIT-compile with a real ML model
 than the fixed-box ensembles.
 
+**Fifth+sixth fix, found submitting that sweep to a real cluster (pc-studix,
+SLURM):** (1) the vendored Packmol binary isn't in git (platform-specific;
+needs a one-time `scripts/rebuild_packmol.sh`), and (2) concurrent
+CPU-JIT-heavy jobs on the same node hit a transient XLA compile race, mitigated
+with `retries: 2`. Also added a **CPU-partition submission path**
+(`config.cpu.yaml` + `profiles/slurm-cpu/`) since this cluster's `.venv` has no
+CUDA jaxlib, so `gpu`-partition jobs were already silently CPU-only.
+
+**Decided: `lr_solver` in `mm_nonbonded`.** The term now supports `mic`
+(default, jit-compatible, the only solver any sweep backend uses) plus
+`jax_pme` / `nvalchemiops_pme` / `scafacos` — but only through the ASE face;
+these evaluators are host-orchestrated (e.g. jax-pme builds an ASE `Atoms` +
+its own neighbor list on the host) and cannot be traced inside `JaxmdDriver` /
+`RigidBodySampler`'s `jax.jit`. The jax face raises `NotImplementedError`
+immediately for non-`mic` solvers rather than silently falling back to `mic`.
+
 **Remaining (§11):** the apocharmm driver (needs a GPU build) and the RDF
 validation of rigid sampling (needs a real force-field production run) are the
 two items still gated on hardware/scope rather than more unit-testable code.
@@ -740,6 +756,39 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       (~4 min vs. ~30s for the fixed-box ensembles on this tiny system —
       reflected in the workflow's per-backend `runtime_min`). See
       `workflows/unified_backend_sweep/README.md`.
+- [x] Submitted the sweep on the real cluster (pc-studix, SLURM `gpu`
+      partition). Found and fixed three more real deployment gaps this
+      surfaced (none were bugs in the sweep itself):
+  1. The vendored Packmol binary isn't committed to git (platform-specific);
+     a fresh checkout needs `bash scripts/rebuild_packmol.sh` once. Documented
+     in the workflow README.
+  2. Two CPU-JIT-heavy jobs (`jaxmd_npt`) landing on the *same* node
+     concurrently hit a transient XLA CPU-backend compile race
+     (`JaxRuntimeError: ... Failed to materialize symbols`). Mitigated with
+     `retries: 2` in `profiles/slurm(-cpu)` (clears on a fresh node
+     allocation) rather than chasing the underlying XLA race.
+  3. This cluster's mmml `.venv` has no CUDA jaxlib, so `gpu`-partition jobs
+     were already silently falling back to CPU. Added
+     `config.cpu.yaml` + `profiles/slurm-cpu/` (Snakemake deep-merges
+     `--configfile config.yaml config.cpu.yaml`) to submit to the CPU
+     partition (`short`) directly instead — identical behavior, better use
+     of the shared GPU allocation.
+- [x] **`lr_solver` support in `mm_nonbonded`** (decided): the term now
+      accepts `lr_solver` (`mic` default, plus `jax_pme` / `nvalchemiops_pme` /
+      `scafacos` inherited from `nonbonded_energy_and_forces`), but only
+      through the **ASE face** — `jax_pme`'s evaluator builds an ASE `Atoms`
+      and its own neighbor list on the host and returns plain numpy, which
+      cannot be traced inside the `jax.jit` graph `JaxmdDriver` /
+      `RigidBodySampler` both require. The jax/jit face raises
+      `NotImplementedError` immediately for any non-`mic` solver rather than
+      silently using `mic` under the hood. Tested in
+      `tests/unit/test_md_mm_nonbonded.py` (jax face rejects cleanly; ASE face
+      with `jax_pme` gives a finite energy that differs from `mic`, proving
+      the kwarg actually reaches the reference call). **Not** wired into any
+      `unified_backend_sweep` backend — doing so would just raise, which is
+      correct but not a useful smoke-test row. Real jax_pme/etc. support needs
+      either a non-jit ASE-based driver (not built) or a `jax.pure_callback`
+      bridge around the evaluator — tracked here, not attempted this session.
 
 - [ ] Build apocharmm and confirm the pybind11 module imports in the MMML env
       (CUDA 11.1.1+, GCC 10.1+, NetCDF4).

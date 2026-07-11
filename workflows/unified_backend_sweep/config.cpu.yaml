@@ -1,0 +1,18 @@
+# CPU-only override for pc-studix's `short` partition (node01-14).
+#
+# This cluster's mmml .venv has no CUDA jaxlib installed, so jax already runs
+# on CPU even when jobs are submitted to the `gpu` partition (confirmed via
+# "An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is
+# not installed. Falling back to cpu." in stdout.log). Submitting to a CPU
+# partition instead is strictly a better use of the shared cluster: it frees
+# the GPU allocation for jobs that actually need it, with no change in this
+# workflow's own behavior.
+#
+# Merge on top of the base config:
+#   uv run --with snakemake --with snakemake-executor-plugin-slurm \
+#     snakemake --configfile config.yaml config.cpu.yaml \
+#     --profile profiles/slurm-cpu --keep-going
+
+slurm:
+  partition: short
+  gpu: 0
