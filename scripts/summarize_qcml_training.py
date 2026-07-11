@@ -104,6 +104,18 @@ def load_optional_json(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
+def best_metric_row(
+    rows: list[dict[str, Any]],
+    key: str,
+) -> dict[str, Any] | None:
+    finite_rows = [
+        row
+        for row in rows
+        if isinstance(row.get(key), int | float) and np.isfinite(row[key])
+    ]
+    return min(finite_rows, key=lambda row: float(row[key])) if finite_rows else None
+
+
 def summarize_run(run_dir: Path, output_dir: Path) -> dict[str, Any]:
     metrics = load_epoch_metrics(run_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -111,6 +123,8 @@ def summarize_run(run_dir: Path, output_dir: Path) -> dict[str, Any]:
         write_csv(output_dir / "epoch_metrics.csv", metrics)
         plot_learning_curves(output_dir / "learning_curves.png", metrics)
     latest = metrics[-1] if metrics else None
+    best_validation = best_metric_row(metrics, "validation_loss")
+    best_train = best_metric_row(metrics, "train_loss") or best_metric_row(metrics, "loss")
     data_split = load_optional_json(run_dir / "data_split.json")
     split_counts = {
         key: len(value)
@@ -123,6 +137,16 @@ def summarize_run(run_dir: Path, output_dir: Path) -> dict[str, Any]:
         "latest_checkpoint": latest["checkpoint"] if latest else None,
         "latest_epoch": int(latest["epoch"]) if latest else None,
         "latest_metrics": latest,
+        "best_validation_checkpoint": (
+            best_validation["checkpoint"] if best_validation else None
+        ),
+        "best_validation_epoch": (
+            int(best_validation["epoch"]) if best_validation else None
+        ),
+        "best_validation_metrics": best_validation,
+        "best_train_checkpoint": best_train["checkpoint"] if best_train else None,
+        "best_train_epoch": int(best_train["epoch"]) if best_train else None,
+        "best_train_metrics": best_train,
         "split_counts": split_counts,
         "has_shard_audit": (run_dir / "shard_audit.json").exists(),
         "has_target_scale": (run_dir / "target_scale.json").exists(),
