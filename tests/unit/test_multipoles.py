@@ -6,7 +6,13 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from mmml.models.multipoles import E3xMultipoleModel, irrep_blocks_to_traceless
+from mmml.models.multipoles import (
+    E3xDipoleModel,
+    E3xMultipoleModel,
+    E3xOctupoleModel,
+    E3xQuadrupoleModel,
+    irrep_blocks_to_traceless,
+)
 from scripts.cache_qcml_multipoles_orbax import preprocess_examples
 from scripts.analyze_qcml_multipoles import error_metrics, generate_report
 from scripts.train_qcml_multipoles import (
@@ -15,6 +21,7 @@ from scripts.train_qcml_multipoles import (
     build_steps,
     create_state,
     filter_indices_by_target_thresholds,
+    parse_degree_weights,
     target_rms_from_arrays,
     target_rms_vector,
     target_component_scale_from_arrays,
@@ -113,6 +120,59 @@ def test_e3x_multipole_model_can_compose_dipole_from_atomic_terms() -> None:
     np.testing.assert_allclose(prediction["multipoles"][0, 1:4], expected_dipole, atol=1e-6)
 
 
+def test_e3x_degree_models_predict_independent_blocks() -> None:
+    positions = jnp.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 2.0, 0.0]]
+    )
+    atomic_numbers = jnp.array([8, 1, 1])
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(3)
+    arguments = (
+        positions,
+        atomic_numbers,
+        jnp.array([3.0]),
+        jnp.array([1.0]),
+        dst_idx,
+        src_idx,
+    )
+
+    dipole_model = E3xDipoleModel(
+        features=8,
+        num_iterations=1,
+        num_basis_functions=4,
+        enforce_total_charge=True,
+    )
+    quadrupole_model = E3xQuadrupoleModel(
+        features=8,
+        num_iterations=1,
+        num_basis_functions=4,
+    )
+    octupole_model = E3xOctupoleModel(
+        features=8,
+        num_iterations=1,
+        num_basis_functions=4,
+    )
+
+    dipole_variables = dipole_model.init(jax.random.key(0), *arguments)
+    quadrupole_variables = quadrupole_model.init(jax.random.key(1), *arguments)
+    octupole_variables = octupole_model.init(jax.random.key(2), *arguments)
+    dipole_prediction = dipole_model.apply(dipole_variables, *arguments)
+    quadrupole_prediction = quadrupole_model.apply(quadrupole_variables, *arguments)
+    octupole_prediction = octupole_model.apply(octupole_variables, *arguments)
+
+    assert dipole_prediction["degree"].shape == (1, 3)
+    assert quadrupole_prediction["degree"].shape == (1, 5)
+    assert octupole_prediction["degree"].shape == (1, 7)
+    assert dipole_prediction["atomic_charges"].shape == (3,)
+    assert dipole_prediction["atomic_dipoles"].shape == (3, 3)
+    assert quadrupole_prediction["atomic_degree_irreps"].shape == (3, 5)
+    assert octupole_prediction["atomic_degree_irreps"].shape == (3, 7)
+    np.testing.assert_allclose(
+        jnp.sum(dipole_prediction["atomic_charges"]),
+        3.0,
+        atol=1e-6,
+    )
+
+
 def test_qcml_pair_preprocessing_joins_and_pads() -> None:
     irreps = {
         degree: jnp.arange(2 * degree + 1, dtype=jnp.float32)
@@ -193,6 +253,17 @@ def test_multipole_loss_applies_degree_weights() -> None:
     assert degree_losses["l0"] == pytest.approx(4.0)
     assert degree_losses["l3"] == pytest.approx(4.0)
     assert loss == pytest.approx(9.0 / 4.25)
+
+
+def test_degree_weights_parse_slurm_safe_colons() -> None:
+    np.testing.assert_allclose(
+        parse_degree_weights("0.1:3:1:1"),
+        np.array([0.1, 3.0, 1.0, 1.0], dtype=np.float32),
+    )
+    np.testing.assert_allclose(
+        parse_degree_weights("0.1,3,1,1"),
+        np.array([0.1, 3.0, 1.0, 1.0], dtype=np.float32),
+    )
 
 
 def test_multipole_loss_uses_rms_and_charge_constraint() -> None:

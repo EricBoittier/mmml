@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterator, Sequence
@@ -88,7 +89,11 @@ def parse_degree_weights(value: str | Sequence[float], max_degree: int = 3) -> n
     """Parse one loss weight per multipole degree."""
     expected = max_degree + 1
     if isinstance(value, str):
-        weights = [float(item) for item in value.split(",") if item.strip()]
+        weights = [
+            float(item)
+            for item in re.split(r"[,:\s]+", value)
+            if item.strip()
+        ]
     else:
         weights = [float(item) for item in value]
     if len(weights) != expected:
@@ -742,7 +747,7 @@ def main() -> None:
         "--degree-weights",
         type=parse_degree_weights,
         default=parse_degree_weights("1,1,1,1"),
-        help="Comma-separated l0,l1,l2,l3 loss weights.",
+        help="l0,l1,l2,l3 loss weights separated by commas, colons, or whitespace.",
     )
     parser.add_argument("--target-scale-json", type=Path)
     parser.add_argument(
