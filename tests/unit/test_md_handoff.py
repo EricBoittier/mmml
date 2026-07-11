@@ -222,7 +222,19 @@ def test_resolve_handoff_restart_template_falls_back_to_overlap_scratch(
     assert got == overlap.resolve()
 
 
-def test_save_handoff_to_res_with_template(nve_stub: Path, tmp_path: Path) -> None:
+def test_save_handoff_to_res_with_template(
+    nve_stub: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # pytest collection uses JAX-only warmup mode.  The bootstrap module remains
+    # importable, but native CHARMM is deliberately unavailable; template
+    # patching must not enter the MPI/Fortran restart writer in this state.
+    import mmml.interfaces.pycharmmInterface.import_pycharmm as charmm_bootstrap
+
+    monkeypatch.setattr(charmm_bootstrap, "PYCHARMM_AVAILABLE", False)
+    monkeypatch.setattr(
+        "mmml.cli.run.md_handoff._write_handoff_restart_via_charmm",
+        lambda *args, **kwargs: pytest.fail("native CHARMM writer called in JAX-only mode"),
+    )
     pos = load_handoff_from_res(nve_stub).positions
     shift = pos + 0.01
     state = MdHandoffState(
@@ -1319,4 +1331,3 @@ def test_resolve_atomic_numbers_from_psf_and_cluster_npz(tmp_path: Path) -> None
     np.savez(cluster_npz, z=z, positions=np.zeros((4, 3)))
     got_cluster = resolve_atomic_numbers_for_res(res_path, npz_path=cluster_npz)
     np.testing.assert_array_equal(got_cluster, z)
-

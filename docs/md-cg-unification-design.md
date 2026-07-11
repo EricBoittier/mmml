@@ -398,6 +398,63 @@ The sweep's two energy-mode toggles (`use_ml_intramolecular`,
 This is the only genuinely open design question; it is deferred to
 implementation/measurement rather than blocked. All other seams are decided.
 
+### PyCHARMM / MPI runtime contract
+
+PyCHARMM is not an ordinary optional Python import in this stack. The vendored
+package loads a native `libcharmm` that may itself be linked to OpenMPI and
+Fortran. A native `STOP`, `MPI_Abort`, loader mismatch, or segmentation fault
+terminates the interpreter; pytest cannot convert it into a Python traceback.
+Consequently, **successful import of the MMML bootstrap module is not proof that
+live CHARMM is available**. The authoritative runtime signal is
+`import_pycharmm.PYCHARMM_AVAILABLE`.
+
+There are three supported execution modes:
+
+| Mode | Intended work | Contract |
+|---|---|---|
+| Offline/unit | restart parsing and text patching, builders mocked at the CHARMM boundary | pytest sets `MMML_WARMUP_MLPOT_JAX_ONLY=1`; do not enter native PyCHARMM |
+| Live, one rank | PSF/parameter reads, restart writes, CHARMM parity tests | launch with `MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh ...` when `libcharmm` is MPI-linked |
+| Live, multiple ranks | DOMDEC / spatial ML MPI | launch with the same wrapper and an explicit `MMML_MPI_NP`; validate Tier 2 first |
+
+The launcher is part of the runtime ABI, not merely a convenience wrapper: it
+selects the OpenMPI installation compatible with `libcharmm`, establishes the
+library search path, constrains OpenMP threads, and orders MPI/mpi4py/JAX
+initialization. Do not run an MPI-linked `libcharmm` from a plain `pytest` or
+`python` process merely because `import pycharmm` appears to work.
+
+Preflight and test recipes:
+
+```bash
+# Loader/OpenMPI/mpi4py survey before launching a job
+mmml mpi-check --strict
+
+# Live one-rank PyCHARMM smoke in the real runtime
+MMML_MPI_NP=1 ./scripts/mmml-charmm-mpirun.sh \
+  python -m pytest tests/charmm_mpi/test_mpi_live_energy.py -q
+
+# Spatial MPI validation before a multi-rank MD run
+mmml mpi-check --tier2 --prelaunch --strict
+MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \
+  ./scripts/mmml-charmm-mpirun.sh mpi-check --tier2 --strict
+```
+
+`MMML_NO_CHARMM_MPI=1` is only valid for a genuinely serial `libcharmm`; it must
+not be used to disguise an MPI-linked build. Likewise,
+`MMML_WARMUP_MLPOT_JAX_ONLY=1` means "bootstrap/import seams only" and must
+never be interpreted as permission to call CHARMM state, coordinate, energy,
+or restart APIs.
+
+The handoff boundary follows this rule explicitly: with a usable restart
+template and `PYCHARMM_AVAILABLE=False`, `save_handoff_to_res` performs the
+offline, validated text patch. It enters `_write_handoff_restart_via_charmm`
+only when native CHARMM is genuinely loaded. This prevents the former failure
+where `test_save_handoff_to_res_with_template` ended at native level with exit
+code 1 and no pytest traceback.
+
+For the full operational matrix and cluster troubleshooting, see
+[PyCHARMM + MPI](pycharmm-mpi.md), [`mpi-check`](cli/commands/mpi-check.md), and
+[`health-check`](cli/commands/health-check.md).
+
 ---
 
 ## 11. Roadmap checklist

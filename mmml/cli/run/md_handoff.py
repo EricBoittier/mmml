@@ -2182,9 +2182,17 @@ def save_handoff_to_res(
 
       charmm_loaded = False
       try:
-          import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+          from mmml.interfaces.pycharmmInterface.import_pycharmm import (
+              PYCHARMM_AVAILABLE,
+          )
 
-          charmm_loaded = True
+          # Importing the bootstrap module is not proof that native CHARMM was
+          # loaded.  Unit-test collection deliberately sets
+          # MMML_WARMUP_MLPOT_JAX_ONLY=1, which leaves the module importable but
+          # PYCHARMM_AVAILABLE=False.  Entering the native restart writer in
+          # that state can terminate the process inside MPI/Fortran before
+          # pytest can report a Python exception.
+          charmm_loaded = bool(PYCHARMM_AVAILABLE)
       except Exception:
           charmm_loaded = False
 
