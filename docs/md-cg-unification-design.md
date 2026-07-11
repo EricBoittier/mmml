@@ -139,9 +139,12 @@ therefore a **staging order**, not an either/or:
    (energy/force parity) before touching CUDA. *Not* the shipping path.
 2. **C++/CUDA, device-side ML — the target.** MMML's jax ML forces enter the
    device force loop as a custom `ForceManager` so forces never leave the GPU.
-   Requires a CUDA interop boundary (device-pointer handoff or DLPack between
-   jax and apocharmm buffers). The remaining question is *how* to build that
-   boundary, not *whether* — see §10.
+   The buffer boundary crosses via **DLPack capsules** (decided, §10) — not raw
+   device pointers — to get shape/dtype/device metadata and proper ownership
+   semantics against jax's async allocator. The custom force is subscribed into
+   apocharmm's `ForceManagerComposite` (`subscribe<ForceType>(...)`), so
+   apocharmm owns the step and the boundary lives in one place. The only
+   remaining question is the cross-stream **sync** mechanism (§10).
 
 ---
 
@@ -350,22 +353,50 @@ The sweep's two energy-mode toggles (`use_ml_intramolecular`,
   independent capacities rather than sharing one driver-owned list.
 - **apocharmm ML forces → device-side custom `ForceManager` (decided).** ML
   forces enter apocharmm's device force loop; they do **not** stay host-side.
-  Host-side pybind11 evaluation is only a validation stepping stone (§4). The
-  open part is the interop mechanism, not the direction (below).
+  Host-side pybind11 evaluation is only a validation stepping stone (§4).
+- **apocharmm buffer transport → DLPack capsule (decided).** jax↔apocharmm
+  device buffers cross as DLPack capsules (`jax.dlpack.to_dlpack` /
+  `from_dlpack`), **not** raw CUDA device pointers. Rationale: DLPack carries
+  shape/dtype/device/strides and a capsule deleter, so it is safe against jax's
+  async allocator and buffer donation (a raw pointer pulled from jax can be
+  reused/freed under us, and layout mismatches fail silently). A thin pybind11
+  shim wraps apocharmm's `CudaContainer`/`DeviceVector` buffers as
+  `DLManagedTensor`. The unavoidable `float4 xyzq` (f32) ↔ `N×3` / `double`
+  layout+precision transform is a small custom kernel on top of the wrap.
+- **apocharmm owns the step (decided).** The custom `MLForceManager` is
+  subscribed into apocharmm's `ForceManagerComposite`
+  (`subscribe<ForceType>(tag, stream, values, energyVirial)`) with its own
+  stream; apocharmm's integrator drives the loop and the DLPack handoff lives
+  in one place (`MLForceManager::calcForce`), accumulating (`+=`) into its
+  force `values`. The jax-owns-loop / XLA-custom-call alternative is rejected —
+  apocharmm is a stateful CUDA engine, not a leaf op.
 - **Rescue path → explicit driver hook.** CHARMM repair/minimize is modelled as
   a driver hook (`on_overlap`), never hidden inside an energy term, so energy
   terms stay pure and the impurity is confined to the driver.
+- **Rigid-body DOF → quaternions (decided).** Rigid-monomer orientation is
+  represented as a unit quaternion (translation = COM), renormalized after each
+  move. Preferred over rotation matrices: 4 numbers vs. 9, no orthogonality
+  drift to project out, and clean composition for MC rotation moves.
+- **Rigid sampling → `Sampler` peer, not a driver constraint mode (decided).**
+  Rigid-body sampling is its own `Sampler` (peer of the MD `Driver`, selected by
+  `RunConfig`), reusing the same `MolecularSystem` + `HybridEnergy`. It is not
+  bolted into each integrator as a constraint mode, so it composes with any
+  energy term and any backend without touching the drivers.
 
 ### Still open
 
-- **apocharmm device interop mechanism** — *how* to hand jax device buffers to
-  a custom apocharmm `ForceManager`: DLPack capsule exchange vs. raw
-  CUDA device-pointer handoff, who owns the force buffer, and stream/sync
-  semantics between the jax XLA stream and apocharmm's CUDA stream. (Direction
-  is settled; this is the implementation crux — see §11 apocharmm checklist.)
-- **Rigid-body DOF representation** — quaternions vs. rotation matrices for the
-  rigid moves, and whether rigid sampling is a `Sampler` peer of the MD
-  `Driver` or a constraint mode inside each driver.
+- **Cross-stream sync mechanism** — how to order the jax ML-force stream against
+  apocharmm's force-manager stream. Options: (1) host barrier per step
+  (`block_until_ready` + `cudaStreamSynchronize`) — correct, on-device, but
+  serializes; (2) event-based overlap (`cudaEventRecord`/`cudaStreamWaitEvent`)
+  — blocked by jax not exposing its CUDA stream publicly; (3) DLPack
+  stream-aware protocol (`__dlpack__(stream=...)`, needs recent jax + shim
+  support). **Plan: ship the barrier (1) first, measure, and only pursue
+  overlap (3) if throughput-bound** — the transport (DLPack) and structure
+  (apocharmm-owns-loop) are settled; only the ordering optimization is open.
+
+This is the only genuinely open design question; it is deferred to
+implementation/measurement rather than blocked. All other seams are decided.
 
 ---
 
@@ -422,12 +453,20 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       to pin energy/force parity before touching CUDA.
 - [ ] **Device-side ML — the target (committed, §10):** expose MMML ML forces
       as a custom apocharmm `ForceManager` so forces never leave the GPU.
-  - [ ] Prototype jax↔apocharmm buffer exchange (DLPack capsule vs. raw CUDA
-        device pointer) on a toy force; settle ownership + stream/sync semantics.
-  - [ ] Implement the custom `ForceManager` (subclass / composite) that reads
-        device coordinates and writes the ML force contribution in place.
-  - [ ] Validate device-side ML forces match the host-side reference bitwise-
-        close, then benchmark step throughput vs. the host-side path.
+  - [ ] pybind11 shim wrapping apocharmm `CudaContainer`/`DeviceVector` buffers
+        as DLPack `DLManagedTensor` (both directions); confirm zero-copy
+        `jax.dlpack.from_dlpack` / `to_dlpack` round-trip on a toy buffer.
+  - [ ] Layout+precision kernel: `float4 xyzq` (f32) → `N×3` for the model, and
+        model forces → accumulate (`+=`) into the `double` force buffer.
+  - [ ] Implement `MLForceManager` and subscribe it into the
+        `ForceManagerComposite` (`subscribe<ForceType>(tag, stream, values,
+        energyVirial)`) with its own stream; DLPack handoff + jax call live in
+        `calcForce`.
+  - [ ] Sync: **host barrier first** (`block_until_ready` +
+        `cudaStreamSynchronize`) — correct and on-device; validate forces match
+        the host-side reference bitwise-close.
+  - [ ] Benchmark step throughput vs. host-side path; **only if throughput-bound**,
+        move to DLPack stream-aware sync (`__dlpack__(stream=...)`) for overlap.
 - [ ] Bridge free-energy managers (`FEPEIForceManager`, `MBARForceManager`,
       `EDSForceManager`, `DualTopologyForceManager`) to the existing
       `lambda_dynamics` / `lambda_mbar` / `lambda_ti` paths.
