@@ -215,6 +215,20 @@ DEFAULTS = {
     "dihedral_restraint_k_ev": 1.0,
     "peptide_bond_k_ev": 0.0,
 
+    # --- Steered MD / Jarzynski (end-to-end distance) ---
+    # Anchors default to the terminal carbon of each end group of RESI TRIA:
+    #   CAY (ACE cap methyl C, 0-based atom 0) and CAT (CT3 cap methyl C, 0-based atom 38).
+    "smd_enable": False,
+    "smd_atom_i": 0,           # N-terminal end-group carbon (CAY)
+    "smd_atom_j": 38,          # C-terminal end-group carbon (CAT)
+    "smd_k_ev_a2": 5.0,        # spring constant, eV/Å^2
+    "smd_v_a_per_ps": 1.0,     # pull rate (lambda velocity), Å/ps
+    "smd_d0_a": None,          # start distance; None -> initial CV value
+    "smd_pull_steps": None,    # steps per pull; None -> nvt_total_steps
+    "smd_equil_steps": None,   # restrained equilibration steps at d0; None -> nvt_block_steps
+    "smd_n_pulls": 20,         # number of independent pulling trajectories
+    "smd_pmf_bins": 60,        # histogram bins for Hummer-Szabo PMF
+
     "write_dcd": True,
     "output_dir": ".",
     "workdir": "/tmp/tria_box",
@@ -299,6 +313,17 @@ DIHEDRAL_RESTRAINT_K_EV = config.dihedral_restraint_k_ev
 PHI_CENTRAL = (14, 16, 18, 24)
 PSI_CENTRAL = (16, 18, 24, 26)
 PEPTIDE_BOND_K_EV = config.peptide_bond_k_ev
+
+SMD_ENABLE      = config.smd_enable
+SMD_ATOM_I      = int(config.smd_atom_i)
+SMD_ATOM_J      = int(config.smd_atom_j)
+SMD_K_EV_A2     = float(config.smd_k_ev_a2)
+SMD_V_A_PER_PS  = float(config.smd_v_a_per_ps)
+SMD_D0_A        = config.smd_d0_a
+SMD_PULL_STEPS  = config.smd_pull_steps
+SMD_EQUIL_STEPS = config.smd_equil_steps
+SMD_N_PULLS     = int(config.smd_n_pulls)
+SMD_PMF_BINS    = int(config.smd_pmf_bins)
 
 WRITE_DCD = config.write_dcd
 OUTPUT_DIR = config.output_dir
@@ -1333,6 +1358,18 @@ def _phi_psi_restraint_energy(r):
     return 0.5 * DIHEDRAL_RESTRAINT_K_EV * (d_phi * d_phi + d_psi * d_psi)
 
 
+def end_to_end_distance(r):
+    """MIC end-to-end distance (Å) between the two SMD anchor atoms."""
+    disp = mic_displacement(r[SMD_ATOM_I], r[SMD_ATOM_J], _cell_jax)
+    return jnp.sqrt(jnp.sum(disp * disp) + 1e-12)
+
+
+def smd_bias_energy(r, lambda_t):
+    """Moving harmonic restraint V = 1/2 k (d(r) - lambda_t)^2 on the end-to-end CV (eV)."""
+    d = end_to_end_distance(r)
+    return 0.5 * SMD_K_EV_A2 * jnp.square(d - lambda_t)
+
+
 def _smooth_cutoff_weight(dist, cutoff, width):
     width = float(max(0.0, min(float(width), float(cutoff))))
     if width <= 0.0:
@@ -1392,6 +1429,7 @@ def hybrid_energy_fn(
     vdw14=None,
     pw_slots=None,
     pw_mask=None,
+    smd_lambda=None,
     **unused_kwargs,
 ) -> jnp.ndarray:
     """Single JIT-compiled hybrid ML/MM energy function.
@@ -1455,7 +1493,15 @@ def hybrid_energy_fn(
 
     e_dihedral_restraint = _phi_psi_restraint_energy(r)
 
-    return e_intra + e_pw_core + e_inter + e_restraint + e_pep_bond_restraints + e_dihedral_restraint
+    # (E) Steered-MD moving harmonic restraint on the end-to-end distance CV.
+    # Only added when a lambda center is supplied (SMD runs); plain NVT/NVE pass None.
+    if smd_lambda is None:
+        e_smd = jnp.asarray(0.0, dtype=jnp.float64)
+    else:
+        e_smd = smd_bias_energy(r, smd_lambda)
+
+    return (e_intra + e_pw_core + e_inter + e_restraint
+            + e_pep_bond_restraints + e_dihedral_restraint + e_smd)
 
 
 
@@ -2449,3 +2495,130 @@ for step in range(0, NVE_TOTAL_STEPS, NVE_BLOCK_STEPS):
 
 traj_nve.close()
 print("NVE dynamics complete!")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. Steered MD + Jarzynski / Hummer-Szabo PMF along the end-to-end distance
+# ─────────────────────────────────────────────────────────────────────────────
+if SMD_ENABLE and HAS_PEPTIDE:
+    print("--- Steered MD (Jarzynski / Hummer-Szabo, end-to-end distance) ---")
+    print(f"--- CV anchors: atom {SMD_ATOM_I} <-> atom {SMD_ATOM_J} "
+          f"(0-based; terminal carbons CAY/CAT) ---")
+
+    smd_pull_steps  = int(SMD_PULL_STEPS)  if SMD_PULL_STEPS  is not None else NVT_TOTAL_STEPS
+    smd_equil_steps = int(SMD_EQUIL_STEPS) if SMD_EQUIL_STEPS is not None else NVT_BLOCK_STEPS
+    block_steps     = NVT_BLOCK_STEPS
+    n_blocks        = smd_pull_steps // block_steps
+    block_dt        = block_steps * dt                 # ps per block
+    lam_dot         = SMD_V_A_PER_PS                    # Å/ps
+
+    smd_base_pos = np.asarray(min_r, dtype=np.float64)
+    d0 = float(SMD_D0_A) if SMD_D0_A is not None \
+         else float(end_to_end_distance(jnp.asarray(smd_base_pos)))
+    d_target = d0 + lam_dot * (n_blocks * block_dt)
+    lam_prof = d0 + lam_dot * (np.arange(1, n_blocks + 1) * block_dt)  # lambda at each block end
+    print(f"--- Pulling {SMD_N_PULLS} trajectories: d0={d0:.3f} -> {d_target:.3f} Å, "
+          f"k={SMD_K_EV_A2} eV/Å², v={lam_dot} Å/ps, {n_blocks} blocks/pull ---")
+
+    _smd_init, _smd_step = simulate.nvt_nose_hoover(hybrid_energy_fn, shift_fn, dt, target_temp_ev)
+
+    def run_smd_block(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask, kT, lam):
+        def body(_, st):
+            return _smd_step(st, pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+                             pw_slots=pw_slots, pw_mask=pw_mask, kT=kT, smd_lambda=lam)
+        return jax.lax.fori_loop(0, block_steps, body, state)
+    run_smd_block = jit(run_smd_block)
+
+    z_prof = np.zeros((SMD_N_PULLS, n_blocks), dtype=np.float64)  # CV per block
+    W_prof = np.zeros((SMD_N_PULLS, n_blocks), dtype=np.float64)  # cumulative work per block
+
+    for pull in range(SMD_N_PULLS):
+        # Fresh velocities + restrained equilibration at fixed lambda = d0.
+        update_pair_refs(smd_base_pos)
+        pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
+        lam0 = jnp.asarray(d0, dtype=jnp.float64)
+        state = _smd_init(next_md_key(), jnp.asarray(smd_base_pos), mass=jax_mass,
+                          pi=pi, pj=pj, mask=mask, e14=e14, vdw14=vdw14,
+                          pw_slots=pw_slots, pw_mask=pw_mask, kT=target_temp_ev,
+                          smd_lambda=lam0)
+        for _ in range(max(1, smd_equil_steps // block_steps)):
+            update_pair_refs(np.asarray(state.position))
+            pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
+            state = run_smd_block(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask,
+                                  target_temp_ev, lam0)
+
+        # Pull: advance lambda one block at a time, accumulating external work.
+        W = 0.0
+        for m in range(n_blocks):
+            lam_end = float(lam_prof[m])
+            update_pair_refs(np.asarray(state.position))
+            pi, pj, mask, e14, vdw14, pw_slots, pw_mask = _current_energy_refs()
+            state = run_smd_block(state, pi, pj, mask, e14, vdw14, pw_slots, pw_mask,
+                                  target_temp_ev, jnp.asarray(lam_end, dtype=jnp.float64))
+            z = float(end_to_end_distance(state.position))
+            # dW = (dV/dlambda) dlambda = k (lambda - z) * (v * block_dt)
+            W += SMD_K_EV_A2 * (lam_end - z) * (lam_dot * block_dt)
+            z_prof[pull, m] = z
+            W_prof[pull, m] = W
+        print(f"[SMD] pull {pull+1}/{SMD_N_PULLS}: final d={z_prof[pull, -1]:.3f} Å, "
+              f"W_total={W_prof[pull, -1]:.4f} eV")
+
+    # --- Hummer-Szabo weighted-histogram PMF reconstruction (PNAS 2001) ---
+    beta = 1.0 / (kb * temperature)
+    N = SMD_N_PULLS
+
+    # Per-block Jarzynski normaliser A_t = <exp(-beta W_t)>, computed stably.
+    Wt = W_prof                              # (N, n_blocks)
+    wmin_t = Wt.min(axis=0, keepdims=True)   # per-block shift for stability
+    expW = np.exp(-beta * (Wt - wmin_t))     # (N, n_blocks)
+    logA_t = (np.log(expW.mean(axis=0)) - beta * wmin_t[0])   # log <exp(-beta W_t)>, per block
+    inv_logA_t = -logA_t                     # 1/A_t = exp(inv_logA_t) in log space
+
+    # Histogram grid for the PMF.
+    z_lo = min(d0, float(z_prof.min())) - 0.5
+    z_hi = max(d_target, float(z_prof.max())) + 0.5
+    edges = np.linspace(z_lo, z_hi, SMD_PMF_BINS + 1)
+    centers = 0.5 * (edges[:-1] + edges[1:])
+
+    # Numerator: sum_t (1/A_t) * (1/N) sum_i exp(-beta W_it) * delta(z - z_it)
+    # done in a numerically stable way per (i, t) via log-weights.
+    logw = -beta * Wt - np.log(N) + inv_logA_t[None, :]     # (N, n_blocks) log weight per sample
+    logw_max = logw.max()
+    w = np.exp(logw - logw_max)                             # shifted weights
+    num = np.zeros(SMD_PMF_BINS, dtype=np.float64)
+    bins = np.clip(np.digitize(z_prof.ravel(), edges) - 1, 0, SMD_PMF_BINS - 1)
+    np.add.at(num, bins, w.ravel())
+
+    # Denominator: sum_t (1/A_t) * exp(-beta V(z, lambda_t)) for each bin center z.
+    Vz = 0.5 * SMD_K_EV_A2 * (centers[:, None] - lam_prof[None, :]) ** 2   # (bins, n_blocks)
+    logden = inv_logA_t[None, :] - beta * Vz                              # (bins, n_blocks)
+    logden_max = logden.max()
+    den = np.exp(logden - logden_max).sum(axis=1)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pmf_ev = -(1.0 / beta) * (np.log(num) - logw_max - (np.log(den) + logden_max))
+    valid = np.isfinite(pmf_ev)
+    if valid.any():
+        pmf_ev = pmf_ev - np.nanmin(pmf_ev[valid])   # zero the minimum
+
+    out_npz = os.path.join(OUTPUT_DIR, "smd_jarzynski.npz")
+    np.savez(
+        out_npz,
+        z_profile=z_prof, work_profile=W_prof, lambda_profile=lam_prof,
+        pmf_centers=centers, pmf_ev=pmf_ev,
+        k_ev_a2=SMD_K_EV_A2, v_a_per_ps=lam_dot, temperature_k=temperature,
+        atom_i=SMD_ATOM_I, atom_j=SMD_ATOM_J,
+    )
+    print(f"[SMD] Wrote work profiles + Hummer-Szabo PMF to {out_npz}")
+    print("[SMD] PMF (eV) vs end-to-end distance (Å):")
+    for c, g in zip(centers, pmf_ev):
+        if np.isfinite(g):
+            print(f"    d={c:6.3f} Å   G={g:8.4f} eV")
+
+    # Endpoint Jarzynski ΔF for reference (stable exponential average of total work).
+    Wtot = W_prof[:, -1]
+    wmin = Wtot.min()
+    dF = -(1.0 / beta) * (np.log(np.mean(np.exp(-beta * (Wtot - wmin))))) + wmin
+    print(f"[SMD] Endpoint Jarzynski ΔF({d0:.3f} -> {d_target:.3f} Å) = {dF:.4f} eV "
+          f"(mean W={Wtot.mean():.4f} eV, {N} pulls)")
+    print("Steered MD complete!")
