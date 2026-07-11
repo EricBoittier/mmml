@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from mmml.md.energy.terms.dihedral import DihedralRestraint, DihedralRestraintTerm
 from mmml.md.energy.terms.smd import SMDBiasTerm
-from mmml.md.energy.terms.vdw_core import PeptideWaterCoreVdwTerm
+from mmml.md.energy.terms.vdw_core import RepulsiveCoreVdwTerm
 
 __all__ = [
     "DihedralRestraint",
     "DihedralRestraintTerm",
     "SMDBiasTerm",
-    "PeptideWaterCoreVdwTerm",
+    "RepulsiveCoreVdwTerm",
 ]

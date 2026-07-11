@@ -18,7 +18,7 @@ from mmml.md.energy import HybridEnergy, available_terms  # noqa: E402
 from mmml.md.energy.terms import (  # noqa: E402
     DihedralRestraint,
     DihedralRestraintTerm,
-    PeptideWaterCoreVdwTerm,
+    RepulsiveCoreVdwTerm,
     SMDBiasTerm,
 )
 from mmml.data.units import KCAL_MOL_TO_EV  # noqa: E402
@@ -190,7 +190,7 @@ def test_vdw_core_matches_reference():
     rmin_half = rng.uniform(0.8, 2.0, size=n_atoms)
     cutoff, width = 4.0, 1.5
 
-    term = PeptideWaterCoreVdwTerm(n_pep, water_indices, eps, rmin_half, cutoff, width)
+    term = RepulsiveCoreVdwTerm(n_pep, water_indices, eps, rmin_half, cutoff, width)
     got = float(term.make(system, EnergyContext()).jax_energy_fn(jnp.asarray(system.R)))
 
     # reference (verbatim structure from cg_jaxmd.compute_peptide_water_core_vdw_energy)
@@ -218,7 +218,7 @@ def test_vdw_core_matches_reference():
 
 def test_vdw_core_requires_box():
     system = _system(6, box=None)
-    term = PeptideWaterCoreVdwTerm(2, [[2, 3, 4]], [0.1] * 6, [1.0] * 6, 4.0, 1.0)
+    term = RepulsiveCoreVdwTerm(2, [[2, 3, 4]], [0.1] * 6, [1.0] * 6, 4.0, 1.0)
     with pytest.raises(ValueError):
         term.make(system, EnergyContext())
 

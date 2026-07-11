@@ -1,15 +1,16 @@
-"""Short-range repulsive LJ "core" wall for ML-treated peptide-water pairs.
+"""Short-range repulsive LJ "core" wall between a core group and molecule groups.
 
-Extracted from ``examples/cg_jaxmd.py`` (``_smooth_cutoff_weight``,
-``compute_peptide_water_core_vdw_energy``). When peptide-water interactions are
-handled by the ML model, this term adds back only the *repulsive* branch of the
-CHARMM LJ potential (smoothly switched to zero at a short cutoff) to stop atoms
-collapsing into ML blind spots.
+When intergroup interactions are handled by an ML model, this term adds back only
+the *repulsive* branch of the CHARMM LJ potential (smoothly switched to zero at a
+short cutoff) between a leading "core" atom group and a set of molecule groups, to
+stop atoms collapsing into ML blind spots.
 
-CHARMM globals lifted to constructor args: ``n_trialanine`` -> ``n_peptide``,
-``_pw_water_indices_jax`` -> ``water_indices``, ``_eps_jax`` / ``_rmin_jax`` ->
-``lj_epsilon`` / ``lj_rmin_half`` (the builder populates these from
-``FFParams``; passed explicitly here so the term is testable without CHARMM).
+Extracted and generalized from ``examples/cg_jaxmd.py``
+(``_smooth_cutoff_weight``, ``compute_peptide_water_core_vdw_energy``): the
+peptide/water specifics are lifted into constructor args — ``n_trialanine`` ->
+``n_core_atoms``, ``_pw_water_indices_jax`` -> ``group_indices``, ``_eps_jax`` /
+``_rmin_jax`` -> ``lj_epsilon`` / ``lj_rmin_half`` (the builder populates these
+from ``FFParams``; passed explicitly here so the term is testable without CHARMM).
 Assumes an orthorhombic cell (minimum image via the box diagonal), matching the
 original.
 """
@@ -24,7 +25,7 @@ from mmml.data.units import KCAL_MOL_TO_EV
 from mmml.md.energy.registry import EnergyContext, TermFns, register_term
 from mmml.md.system import MolecularSystem
 
-__all__ = ["PeptideWaterCoreVdwTerm"]
+__all__ = ["RepulsiveCoreVdwTerm"]
 
 
 def _pair_lj_epsilon(ep_i, ep_j):
@@ -48,30 +49,35 @@ def _smooth_cutoff_weight(dist, cutoff, width):
 
 
 @register_term("vdw_core")
-class PeptideWaterCoreVdwTerm:
-    """Repulsive LJ wall between the peptide and ML-treated waters."""
+class RepulsiveCoreVdwTerm:
+    """Repulsive LJ wall between a leading core atom group and molecule groups.
+
+    The core group occupies the first ``n_core_atoms`` indices; ``group_indices``
+    is ``(n_groups, atoms_per_group)`` for the other molecules (e.g. solvent).
+    Only the repulsive LJ branch is kept, smoothly switched off past ``cutoff_A``.
+    """
 
     name = "vdw_core"
 
     def __init__(
         self,
-        n_peptide: int,
-        water_indices: Sequence[Sequence[int]],
+        n_core_atoms: int,
+        group_indices: Sequence[Sequence[int]],
         lj_epsilon: Sequence[float],
         lj_rmin_half: Sequence[float],
         cutoff_A: float,
         switch_width_A: float,
     ):
-        self.n_peptide = int(n_peptide)
-        self.water_indices = np.asarray(water_indices, dtype=int)
+        self.n_core_atoms = int(n_core_atoms)
+        self.group_indices = np.asarray(group_indices, dtype=int)
         self.lj_epsilon = np.asarray(lj_epsilon, dtype=float)
         self.lj_rmin_half = np.asarray(lj_rmin_half, dtype=float)
         self.cutoff_A = float(cutoff_A)
         self.switch_width_A = float(switch_width_A)
 
     def neighbor_request(self, system: MolecularSystem):
-        # Dense peptide × water block; padding handled via the optional
-        # ``active_water_slots``/``active_water_mask`` kwargs, not a driver list.
+        # Dense core × group block; padding handled via the optional
+        # ``active_group_slots``/``active_group_mask`` kwargs, not a driver list.
         return None
 
     def make(self, system: MolecularSystem, ctx: EnergyContext) -> TermFns:
@@ -80,37 +86,37 @@ class PeptideWaterCoreVdwTerm:
         if system.box is None:
             raise ValueError("vdw_core requires a periodic box (orthorhombic).")
 
-        n_pep = self.n_peptide
-        water_idx = jnp.asarray(self.water_indices, dtype=jnp.int32)
+        n_core = self.n_core_atoms
+        group_idx = jnp.asarray(self.group_indices, dtype=jnp.int32)
         eps = jnp.asarray(self.lj_epsilon)
         rmin_half = jnp.asarray(self.lj_rmin_half)
         box_diag = jnp.asarray(np.diag(np.asarray(system.box)))
         cutoff = self.cutoff_A
         width = self.switch_width_A
-        pep_idx = jnp.arange(n_pep, dtype=jnp.int32)
+        core_idx = jnp.arange(n_core, dtype=jnp.int32)
 
-        def energy_fn(R, *, active_water_slots=None, active_water_mask=None, **kwargs) -> Any:
-            if water_idx.shape[0] == 0:
+        def energy_fn(R, *, active_group_slots=None, active_group_mask=None, **kwargs) -> Any:
+            if group_idx.shape[0] == 0:
                 return jnp.asarray(0.0)
 
-            if active_water_slots is None:
-                waters = water_idx
-                mask = jnp.ones((water_idx.shape[0],))
+            if active_group_slots is None:
+                groups = group_idx
+                mask = jnp.ones((group_idx.shape[0],))
             else:
-                waters = water_idx[jnp.asarray(active_water_slots, dtype=jnp.int32)]
-                mask = jnp.asarray(active_water_mask)
+                groups = group_idx[jnp.asarray(active_group_slots, dtype=jnp.int32)]
+                mask = jnp.asarray(active_group_mask)
 
-            pep_pos = R[:n_pep]
-            water_pos = R[waters]
-            disp = water_pos[:, None, :, :] - pep_pos[None, :, None, :]
+            core_pos = R[:n_core]
+            group_pos = R[groups]
+            disp = group_pos[:, None, :, :] - core_pos[None, :, None, :]
             disp = disp - box_diag * jnp.round(disp / box_diag)
             dist = jnp.sqrt(jnp.maximum(jnp.sum(disp * disp, axis=-1), 1e-12))
 
             ep = _pair_lj_epsilon(
-                eps[pep_idx][None, :, None],
-                eps[waters][:, None, :],
+                eps[core_idx][None, :, None],
+                eps[groups][:, None, :],
             )
-            sig = rmin_half[pep_idx][None, :, None] + rmin_half[waters][:, None, :]
+            sig = rmin_half[core_idx][None, :, None] + rmin_half[groups][:, None, :]
             sig_r6 = (sig / jnp.maximum(dist, 1e-10)) ** 6
             vdw_full = ep * (sig_r6 * sig_r6 - 2.0 * sig_r6)
             repulsive = jnp.maximum(vdw_full, 0.0)

@@ -35,11 +35,15 @@ def element_pair_rdfs(
     expected = {key: np.zeros(bins) for key in counts}
     populations = {element: int(np.sum(symbols == element)) for element in elements}
     for frame in frames:
-        first, second, distances = neighbor_list("ijd", frame, r_max, self_interaction=False)
-        unique = first < second
-        first = first[unique]
-        second = second[unique]
-        distances = distances[unique]
+        if not np.allclose(frame.cell.angles(), 90.0):
+            raise ValueError("RDF calculation currently requires an orthorhombic cell")
+        lengths = frame.cell.lengths()
+        positions = frame.get_positions(wrap=True)
+        pairs = cKDTree(positions, boxsize=lengths).query_pairs(r_max, output_type="ndarray")
+        first, second = pairs[:, 0], pairs[:, 1]
+        vectors = positions[first] - positions[second]
+        vectors -= lengths * np.rint(vectors / lengths)
+        distances = np.linalg.norm(vectors, axis=1)
         for key in counts:
             element_a, element_b = key.split("-")
             if element_a == element_b:

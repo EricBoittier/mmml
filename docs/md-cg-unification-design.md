@@ -426,10 +426,10 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         forces vs. finite difference: `tests/unit/test_md_energy_terms.py`.
   - [x] `dihedral` — `DihedralRestraintTerm` (φ/ψ backbone restraints).
         Parity-tested vs. the cg_jaxmd formula.
-  - [x] `vdw_core` — `PeptideWaterCoreVdwTerm` (repulsive peptide–water LJ wall,
-        smooth cutoff, optional padded slots). Parity-tested vs. the cg_jaxmd
-        formula; takes explicit ε/Rmin arrays now, to be sourced from `FFParams`
-        by the builder.
+  - [x] `vdw_core` — `RepulsiveCoreVdwTerm` (repulsive LJ wall between a core
+        atom group and molecule groups, smooth cutoff, optional padded slots).
+        Parity-tested vs. the cg_jaxmd formula; takes explicit ε/Rmin arrays now,
+        to be sourced from `FFParams` by the builder.
   - [ ] `mm_nonbonded` — needs `FFParams` wired through a builder first
         (blocked here: no `libcharmm` to validate).
   - [ ] `ml_intra` / `ml_pep_water` — wrap `jaxmdInterface.hybrid_energy`;
