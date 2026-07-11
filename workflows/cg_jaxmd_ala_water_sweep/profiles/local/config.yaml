@@ -1,0 +1,5 @@
+executor: local
+jobs: 1
+default-resources:
+  - gpu=1
+

@@ -1,0 +1,75 @@
+configfile: "config.yaml"
+
+from pathlib import Path
+
+
+WORKFLOW_DIR = Path(workflow.basedir)
+REPO_ROOT = WORKFLOW_DIR.parents[1]
+ENERGY_MODES = list(config["energy_modes"])
+DT_TAGS = [str(dt).replace(".", "p") for dt in config["dt_fs"]]
+
+
+def dt_from_tag(tag):
+    values = {str(dt).replace(".", "p"): float(dt) for dt in config["dt_fs"]}
+    return values[tag]
+
+
+def slurm_value(name, default):
+    return config.get("slurm", {}).get(name, default)
+
+
+rule all:
+    input:
+        "results/summary.csv",
+        "results/summary.md",
+
+
+rule run_setting:
+    output:
+        status="results/{mode}/dt_{dt}/status.json",
+    log:
+        stdout="results/{mode}/dt_{dt}/stdout.log",
+    params:
+        workflow_dir=WORKFLOW_DIR,
+        repo_root=REPO_ROOT,
+        dt_fs=lambda wildcards: dt_from_tag(wildcards.dt),
+    wildcard_constraints:
+        mode="|".join(ENERGY_MODES),
+        dt="|".join(DT_TAGS),
+    resources:
+        gpu=1,
+        runtime=lambda wildcards: int(slurm_value("runtime_min", 60)),
+        mem_mb=lambda wildcards: int(slurm_value("mem_mb", 16000)),
+        cpus_per_task=lambda wildcards: int(slurm_value("cpus_per_task", 4)),
+        slurm_partition=lambda wildcards: str(slurm_value("partition", "gpu")),
+        slurm_gres=lambda wildcards: str(slurm_value("gres", "gpu:1")),
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p $(dirname {output.status})
+        python {params.workflow_dir}/scripts/run_setting.py \
+          --workflow-config {params.workflow_dir}/config.yaml \
+          --mode {wildcards.mode} \
+          --dt-fs {params.dt_fs} \
+          --output-dir $(dirname {output.status}) \
+          --repo-root {params.repo_root} \
+          > {log.stdout} 2>&1
+        test -s {output.status}
+        """
+
+
+rule collect:
+    input:
+        statuses=expand(
+            "results/{mode}/dt_{dt}/status.json",
+            mode=ENERGY_MODES,
+            dt=DT_TAGS,
+        ),
+    output:
+        csv="results/summary.csv",
+        md="results/summary.md",
+    params:
+        script=WORKFLOW_DIR / "scripts" / "collect_results.py",
+    shell:
+        "python {params.script} --csv {output.csv} --markdown {output.md} {input.statuses}"
+

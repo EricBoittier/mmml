@@ -1,0 +1,46 @@
+checkpoint: examples/sppoky-epoch-0010_params.json
+
+system:
+  sequence: ALA
+  first_patch: ACE
+  last_patch: CT3
+  n_waters: 50
+  box_size: 20.0
+  seed: 42
+  temperature: 298.0
+
+dt_fs: [0.5, 0.25, 0.1]
+
+energy_modes:
+  mm_mm:
+    description: Classical intramolecular and intermolecular energies
+    use_ml_intramolecular: false
+    peptide_water_ml: false
+  ml_mm:
+    description: ML monomer energies and classical intermolecular energies
+    use_ml_intramolecular: true
+    peptide_water_ml: false
+  ml_ml:
+    description: ML monomer and ML peptide-water interaction energies
+    use_ml_intramolecular: true
+    peptide_water_ml: true
+
+simulation:
+  fire_steps: 200
+  fire_block_steps: 100
+  fire_cycles: 1
+  nvt_total_steps: 1000
+  nvt_block_steps: 100
+  nve_total_steps: 1000
+  nve_block_steps: 100
+  write_dcd: false
+  debug: false
+  debug_expensive_ml_force_components: false
+
+slurm:
+  partition: gpu
+  gres: gpu:1
+  runtime_min: 60
+  mem_mb: 16000
+  cpus_per_task: 4
+
