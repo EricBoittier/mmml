@@ -202,6 +202,44 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             pass
 
 
+# Substrings that identify a failure caused purely by ``libcharmm`` being
+# absent (unbuilt), rather than a genuine defect in the code under test.
+_CHARMM_UNAVAILABLE_SIGNATURES = (
+    "libcharmm.so: cannot open shared object",
+    "libcharmm.dylib",
+    "No module named 'pycharmm.",
+    "'pycharmm' is not a package",
+)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item: pytest.Item):
+    """Skip (don't fail) tests that only break because ``libcharmm`` is unbuilt.
+
+    The fast ``build`` CI job installs the package without compiling
+    ``libcharmm``. Unit tests that reach production code importing
+    ``pycharmm.lib`` then raise ``OSError``/``ModuleNotFoundError`` at runtime.
+    When a real CHARMM build *is* present (``charmm`` job, developer machines)
+    the guard is inert, so genuine regressions still surface there.
+    """
+    outcome = yield
+    excinfo = getattr(outcome, "excinfo", None)
+    if excinfo is None:
+        return
+    exc = excinfo[1]
+    if not isinstance(exc, (OSError, ImportError)):
+        return
+    if charmm_env_configured():
+        return  # CHARMM available: a failure here is a real bug, keep it.
+    message = str(exc)
+    if any(sig in message for sig in _CHARMM_UNAVAILABLE_SIGNATURES):
+        outcome.force_exception(
+            pytest.skip.Exception(
+                f"libcharmm unavailable; skipping CHARMM-dependent test ({message.splitlines()[0]})"
+            )
+        )
+
+
 @pytest.fixture(autouse=True)
 def _jax_enable_x64_for_pycharmm_tests(request: pytest.FixtureRequest) -> None:
     """CHARMM cross-checks need float64 for rtol=1e-4 bonded/improper agreement."""
