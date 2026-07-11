@@ -8,7 +8,8 @@ decision, §10) via MC moves or constrained rigid MD. A sampler reuses the same
 rigid sampling composes with any energy term and any backend without touching
 the drivers.
 
-Concrete samplers (``RigidBodySampler``) land in later steps.
+The concrete :class:`RigidBodySampler` lives in ``mmml/md/samplers/rigid.py``
+(kept lazy so ``import mmml.md.samplers`` needs no jax).
 """
 
 from __future__ import annotations
@@ -18,9 +19,10 @@ from typing import Protocol, runtime_checkable
 from mmml.md.config import RunConfig
 from mmml.md.energy.registry import HybridEnergy
 from mmml.md.results import Trajectory
+from mmml.md.samplers.rigid import RigidBodySampler
 from mmml.md.system import MolecularSystem
 
-__all__ = ["Sampler"]
+__all__ = ["Sampler", "RigidBodySampler"]
 
 
 @runtime_checkable
