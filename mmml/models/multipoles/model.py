@@ -23,6 +23,8 @@ class E3xMultipoleModel(nn.Module):
     num_basis_functions: int = 16
     cutoff: float = 6.0
     max_atomic_number: int = 118
+    compose_dipole_from_atomic: bool = False
+    enforce_total_charge: bool = True
 
     @nn.compact
     def __call__(
@@ -98,7 +100,10 @@ class E3xMultipoleModel(nn.Module):
         )(x)[..., 0]
 
         if atom_mask is not None:
-            atomic_irreps = atomic_irreps * jnp.asarray(atom_mask)[:, None, None]
+            atom_mask = jnp.asarray(atom_mask, dtype=atomic_irreps.dtype)
+            atomic_irreps = atomic_irreps * atom_mask[:, None, None]
+        else:
+            atom_mask = jnp.ones(atomic_numbers.shape[0], dtype=atomic_irreps.dtype)
 
         molecular_irreps = jax.ops.segment_sum(
             atomic_irreps,
@@ -106,4 +111,56 @@ class E3xMultipoleModel(nn.Module):
             num_segments=batch_size,
         )
         packed_irreps = molecular_irreps[:, 0, :]
-        return {"multipoles": packed_irreps}
+        output = {"multipoles": packed_irreps}
+        if not self.compose_dipole_from_atomic:
+            return output
+
+        packed_atomic_irreps = atomic_irreps[:, 0, :]
+        atomic_charges = packed_atomic_irreps[:, 0]
+        raw_atomic_charges = atomic_charges
+        atom_counts = jax.ops.segment_sum(
+            atom_mask,
+            batch_segments,
+            num_segments=batch_size,
+        )
+        if self.enforce_total_charge:
+            charge_residual = charge - jax.ops.segment_sum(
+                atomic_charges,
+                batch_segments,
+                num_segments=batch_size,
+            )
+            atomic_charges = atomic_charges + (
+                charge_residual[batch_segments] / jnp.maximum(atom_counts[batch_segments], 1.0)
+            ) * atom_mask
+
+        position_irreps = e3x.so3.tensor_to_irreps(positions, degree=1)
+        atomic_dipoles = packed_atomic_irreps[:, 1:4]
+        charge_dipoles = atomic_charges[:, None] * position_irreps
+        atomic_total_dipoles = (charge_dipoles + atomic_dipoles) * atom_mask[:, None]
+        molecular_charge = jax.ops.segment_sum(
+            atomic_charges,
+            batch_segments,
+            num_segments=batch_size,
+        )[:, None]
+        molecular_dipole = jax.ops.segment_sum(
+            atomic_total_dipoles,
+            batch_segments,
+            num_segments=batch_size,
+        )
+        higher_multipoles = packed_irreps[:, 4:]
+        composed_multipoles = jnp.concatenate(
+            (molecular_charge, molecular_dipole, higher_multipoles),
+            axis=-1,
+        )
+        output.update(
+            {
+                "multipoles": composed_multipoles,
+                "raw_multipoles": packed_irreps,
+                "atomic_charges": atomic_charges,
+                "raw_atomic_charges": raw_atomic_charges,
+                "atomic_dipoles": atomic_dipoles,
+                "charge_dipoles": charge_dipoles,
+                "atomic_total_dipoles": atomic_total_dipoles,
+            }
+        )
+        return output

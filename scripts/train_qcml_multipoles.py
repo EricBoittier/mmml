@@ -29,6 +29,8 @@ class TrainConfig:
     num_basis_functions: int = 16
     cutoff: float = 6.0
     max_atomic_number: int = 118
+    compose_dipole_from_atomic: bool = False
+    enforce_total_charge: bool = True
 
 
 def degree_slices(max_degree: int = 3) -> dict[str, tuple[int, int]]:
@@ -769,6 +771,18 @@ def main() -> None:
     parser.add_argument("--num-iterations", type=int, default=3)
     parser.add_argument("--num-basis-functions", type=int, default=16)
     parser.add_argument("--cutoff", type=float, default=6.0)
+    parser.add_argument(
+        "--compose-dipole-from-atomic",
+        action="store_true",
+        help="Predict atomic charges/dipoles and compose molecular l0/l1 from them.",
+    )
+    parser.add_argument(
+        "--no-enforce-total-charge",
+        dest="enforce_total_charge",
+        action="store_false",
+        help="Do not shift atomic charges to exactly sum to the molecular charge.",
+    )
+    parser.set_defaults(enforce_total_charge=True)
     args = parser.parse_args()
 
     manifest_mode = (args.cache / "manifest.json").exists()
@@ -855,6 +869,8 @@ def main() -> None:
         num_iterations=args.num_iterations,
         num_basis_functions=args.num_basis_functions,
         cutoff=args.cutoff,
+        compose_dipole_from_atomic=args.compose_dipole_from_atomic,
+        enforce_total_charge=args.enforce_total_charge,
     )
     model = E3xMultipoleModel(**asdict(config))
     initial_indices, initial_mask, initial_max_atoms = next(

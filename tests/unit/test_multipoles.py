@@ -75,6 +75,44 @@ def test_e3x_multipole_model_output_shapes() -> None:
     assert prediction["multipoles"].shape == (1, 16)
 
 
+def test_e3x_multipole_model_can_compose_dipole_from_atomic_terms() -> None:
+    positions = jnp.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 2.0, 0.0]]
+    )
+    atomic_numbers = jnp.array([8, 1, 1])
+    dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(3)
+    model = E3xMultipoleModel(
+        features=8,
+        num_iterations=1,
+        num_basis_functions=4,
+        compose_dipole_from_atomic=True,
+        enforce_total_charge=True,
+    )
+    arguments = (
+        positions,
+        atomic_numbers,
+        jnp.array([3.0]),
+        jnp.array([1.0]),
+        dst_idx,
+        src_idx,
+    )
+
+    variables = model.init(jax.random.key(0), *arguments)
+    prediction = model.apply(variables, *arguments)
+    expected_charges = jnp.ones(3)
+    expected_dipole = jnp.sum(
+        expected_charges[:, None] * e3x.so3.tensor_to_irreps(positions, degree=1),
+        axis=0,
+    )
+
+    assert prediction["multipoles"].shape == (1, 16)
+    assert prediction["atomic_charges"].shape == (3,)
+    assert prediction["atomic_dipoles"].shape == (3, 3)
+    np.testing.assert_allclose(prediction["atomic_charges"], expected_charges, atol=1e-6)
+    np.testing.assert_allclose(prediction["multipoles"][0, 0], 3.0, atol=1e-6)
+    np.testing.assert_allclose(prediction["multipoles"][0, 1:4], expected_dipole, atol=1e-6)
+
+
 def test_qcml_pair_preprocessing_joins_and_pads() -> None:
     irreps = {
         degree: jnp.arange(2 * degree + 1, dtype=jnp.float32)
