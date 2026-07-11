@@ -77,6 +77,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--checkpoint", type=Path, default=None, help="Model checkpoint path.")
     parser.add_argument(
+        "--jaxmd-unified",
+        action="store_true",
+        help=(
+            "EXPERIMENTAL: run --backend jaxmd through the unified mmml.md pipeline "
+            "(mmml.cli.run.md_system_unified) instead of the legacy md_pbc_suite.jaxmd "
+            "inline loop. Only supports the packmol composition builder; see "
+            "docs/md-cg-unification-design.md for scope and status."
+        ),
+    )
+    parser.add_argument(
         "--electrostatics-damping-sigma",
         type=float,
         default=None,
@@ -3285,6 +3295,16 @@ def main() -> int:
         except ValueError as exc:
             print(f"mmml md-system: error: {exc}", file=sys.stderr)
             exit_code = 2
+            return exit_code
+        if getattr(args, "jaxmd_unified", False):
+            from mmml.cli.run.md_system_unified import run_unified_jaxmd
+
+            backend = "jaxmd"
+            try:
+                exit_code = int(run_unified_jaxmd(args))
+            except Exception as exc:
+                print(f"mmml md-system: jaxmd-unified failed: {exc}", file=sys.stderr)
+                exit_code = 1
             return exit_code
         try:
             backend, argv = build_command(args)

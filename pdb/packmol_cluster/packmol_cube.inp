@@ -1,11 +1,11 @@
-seed 123
+seed 5
 output /Users/ericboittier/mmml/pdb/packmol_cluster/init-packmol-sphere.pdb
 filetype pdb
 tolerance 2.0
 
-structure /Users/ericboittier/mmml/pdb/packmol_cluster/monomers/dcm.pdb
+structure /Users/ericboittier/mmml/pdb/packmol_cluster/monomers/tip3.pdb
   chain A
   resnumbers 2
-  number 32
-  inside cube -10.2 -10.2 -10.2 20.4
+  number 4
+  inside cube 0.0 0.0 0.0 15.0
 end structure
