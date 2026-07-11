@@ -86,8 +86,13 @@ class JaxmdDriver:
             box = jnp.asarray(system.box, dtype=dtype)
             _, shift_fn = space.periodic_general(box, fractional_coordinates=True)
         else:
+            # NVE/NVT with a fixed box: positions stay real-space (Å), matching
+            # the box-aware energy terms (mic_displacement against the real cell
+            # matrix). ``periodic_general`` defaults to fractional coordinates,
+            # which would silently wrap real-space Å positions modulo 1 and
+            # produce nonsensical (and unstable) dynamics.
             box = jnp.asarray(system.box, dtype=dtype)
-            _, shift_fn = space.periodic_general(box)
+            _, shift_fn = space.periodic_general(box, fractional_coordinates=False)
 
         hybrid_fn = energy.as_jax_energy_fn()
 

@@ -139,6 +139,41 @@ def test_fixed_box_pbc_and_neighbor_kwargs_are_routed():
     assert result.metadata["energies"][0] == pytest.approx(2.0)
 
 
+def test_fixed_box_pbc_keeps_real_space_positions_unwrapped():
+    """Regression: ``periodic_general`` must not treat real-space (Å) positions
+    as fractional coordinates for the fixed-box NVE/NVT path.
+
+    ``space.periodic_general`` defaults to ``fractional_coordinates=True``; if
+    the driver passed real-space Å positions through unconverted, jax-md would
+    silently wrap them modulo 1, producing a discontinuous, unphysical jump in
+    any position-magnitude-sensitive energy on the very first step.
+    """
+    box_side = 20.0
+    # place atoms far from the origin (well outside the [0, 1) fractional range)
+    system = MolecularSystem(
+        R=np.array([[8.0, 9.0, 10.0], [10.0, 11.0, 12.0]]),
+        Z=np.array([1, 1]),
+        box=np.eye(3) * box_side,
+        mol_id=np.array([0, 1]),
+    )
+    # a real-space-magnitude-sensitive potential (spring to the origin); with a
+    # small dt, genuine per-step energy changes stay small.
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+
+    result = JaxmdDriver(record_every=1).run(
+        system,
+        energy,
+        EnsembleSpec(ensemble="nve", space="pbc", dt_fs=0.01, n_steps=5),
+    )
+
+    energies = result.metadata["energies"]
+    assert np.all(np.isfinite(energies))
+    # a smooth, weak potential must not produce a huge single-step jump; a
+    # fractional/real mismatch wraps positions into [0, 1) and would blow this
+    # up by many orders of magnitude.
+    assert np.max(np.abs(np.diff(energies))) < 1.0
+
+
 def test_overlap_repair_reinitializes_at_repaired_positions():
     system = _system()
     energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())

@@ -43,7 +43,24 @@ the `JaxmdDriver` propagates it (NVE smoke test on a multi-molecule box).
 **Cross-cutting:** the cross-platform `libcharmm` loader (`pycharmm/lib.py`)
 now self-discovers `setup/charmm` on both `.dylib`/`.so`; `import mmml.md`
 stays free of jax/CHARMM (heavy deps are lazy inside `make()` / `run()`); the
-whole `mmml/md` unit suite (~90 tests) is green.
+whole `mmml/md` unit suite (~313 tests) is green.
+
+**Bug fix found via end-to-end validation:** `JaxmdDriver`'s fixed-box
+NVE/NVT/FIRE path called `space.periodic_general(box)` without
+`fractional_coordinates=False`. jax-md defaults that to `True`, so real-space
+(Å) positions were silently treated as fractional coordinates and wrapped
+modulo 1 by the integrator's `shift_fn` on the very first step — a discontinuous,
+unphysical jump invisible to energy-only checks at `R` but catastrophic once any
+step was taken. Found by running the full `assemble_and_run` pipeline
+(`PeptideWaterSystemBuilder` + the example ML checkpoint + `ml_intra` +
+`mm_nonbonded`) end-to-end: FIRE minimization exploded to ~1e15 eV within a few
+steps. Fixed by passing `fractional_coordinates=False` for the fixed-box branch
+(the NPT branch was already correct, since it explicitly bridges fractional↔real
+itself). Regression-tested in
+`tests/unit/test_md_jaxmd_driver.py::test_fixed_box_pbc_keeps_real_space_positions_unwrapped`
+(verified to fail without the fix, pass with it). With the fix, a real
+CHARMM-built peptide-water system + ML checkpoint runs a stable 50-step FIRE
+minimization end-to-end (energy monotonically decreasing, no divergence).
 
 **Remaining (§11):** swap the two legacy entrypoints
 (`md_system --backend jaxmd` and `examples/cg_jaxmd.py`) onto

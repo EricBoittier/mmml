@@ -69,6 +69,22 @@ intermolecular pairs), you need a **solvated multi-molecule build** for a
 meaningful comparison — use `PeptideWaterSystemBuilder` or a packmol build, not
 `pept.psf` alone.
 
+**Update (already validated once):** this exact end-to-end path — CHARMM build
+via `PeptideWaterSystemBuilder(n_molecules=4, box_size=15.0)` + the example
+checkpoint (`examples/sppoky-epoch-0010_params.json`) + `ml_intra` +
+`mm_nonbonded` + `assemble_and_run` (FIRE, 50 steps) — has been run successfully
+and is numerically stable (energy monotonically decreasing, no divergence). This
+also caught and fixed a real bug: `JaxmdDriver`'s fixed-box path passed real Å
+positions into `space.periodic_general(box)` without `fractional_coordinates=False`,
+so jax-md silently wrapped them modulo 1 as fractional coordinates on the first
+step (a discontinuous energy jump, invisible to energy-only checks at the
+unperturbed `R`). Fixed and regression-tested (see design doc §0). Remember,
+when constructing your own `neighbor_fn`/`driver` for diagnostics: only pass
+`driver=` to `assemble_and_run` if you've wired the neighbor_fn yourself —
+otherwise the auto-wiring (only triggered `if driver is None`) is skipped and
+`mm_nonbonded`'s host pair-build path will raise `TracerArrayConversionError`
+under jit.
+
 ### 2b. RDF validation of rigid sampling
 Run `RigidBodySampler` vs. flexible MD on a small liquid box and compare the
 radial distribution function. Needs a real force field run. (§11 "Rigid
