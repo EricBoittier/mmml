@@ -102,9 +102,16 @@ def run_unified_jaxmd(args: Any) -> int:
 
     jax.config.update("jax_enable_x64", True)
 
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import ensure_pycharmm_loaded
     from mmml.md.assemble import assemble_and_run
     from mmml.md.energy.registry import EnergyContext
     from mmml.md.lowering import runconfig_from_md_system_args
+
+    # Explicit and idempotent: unlike PeptideWaterSystemBuilder's underlying
+    # build_trialanine_water_box_in_charmm, build_packmol_composition_cluster
+    # does not self-bootstrap CHARMM (it assumes the caller already has).
+    if not ensure_pycharmm_loaded():
+        raise RuntimeError("PyCHARMM not available (CHARMM_LIB_DIR / libcharmm.so)")
 
     run_config = runconfig_from_md_system_args(args)
     system = build_packmol_system_with_ffparams(run_config.system)

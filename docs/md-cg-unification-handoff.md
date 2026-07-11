@@ -5,7 +5,9 @@ the `mmml/md/` unified MD stack. Read this together with
 [the design doc](md-cg-unification-design.md) (§0 is the live status; §11 is the
 granular checklist).
 
-Baseline commit at handoff: `593c92832` (working tree clean).
+Baseline commit at original handoff: `593c92832`. Both entrypoint swaps (§2a,
+§2b) have since landed on top of that baseline — see design doc §0 for the
+running status.
 
 ---
 
@@ -92,19 +94,53 @@ neighbor_fn yourself — otherwise the auto-wiring (only triggered
 `if driver is None`) is skipped and `mm_nonbonded`'s host pair-build path will
 raise `TracerArrayConversionError` under jit.
 
-### 2b. `mmml/cli/run/md_system.py --backend jaxmd` swap (still open, highest value remaining)
+### 2b. `mmml/cli/run/md_system.py --backend jaxmd` swap — DONE (opt-in flag)
 
-`run_backend()` currently dispatches to `md_pbc_suite/jaxmd.py`. Route it
-through `runconfig_from_md_system_args(args)` → `assemble_and_run(...)` instead,
-then retire the duplicate inline loop once trajectories match.
+**`--jaxmd-unified`** on `mmml md-system --backend jaxmd` routes through
+`mmml/cli/run/md_system_unified.py`: `runconfig_from_md_system_args(args)` →
+`assemble_and_run(...)`, instead of the legacy `md_pbc_suite/jaxmd.py` inline
+loop. It is **opt-in** (`main()` in `md_system.py` checks
+`getattr(args, "jaxmd_unified", False)` right before `build_command`/
+`run_backend`) — the default (unflagged) path is completely untouched; 66
+pre-existing `md_system` CLI tests still pass unchanged.
 
-**Validation gate:** run a short trajectory through BOTH the old and new paths
-on the *same* small solvated system and compare energies/frames. Because a
-peptide-only PSF is a single molecule (one `mol_id` → zero intermolecular
-pairs), use a **solvated multi-molecule build** (packmol or
-`PeptideWaterSystemBuilder`), not `pept.psf` alone — same lesson as 2a. The
-`cg_jaxmd_unified.py` front-end (§2a) is a good template for how to wire a
-front-end onto `assemble_and_run`.
+Only the **packmol composition builder** is wired (`--builder pyxtal`,
+`--template-pdb`, `--continue-from` all raise `NotImplementedError` rather
+than silently diverging — see `check_md_system_args_supported`). Validated
+end-to-end via the real CLI for both `pbc_nve` and `pbc_nvt`:
+
+```bash
+mmml md-system --backend jaxmd --jaxmd-unified \
+  --setup pbc_nve --composition "TIP3:4" --box-size 15.0 \
+  --checkpoint examples/sppoky-epoch-0010_params.json \
+  --dt-fs 1.0 --ps 0.01 --seed 6
+```
+
+Tests in `tests/unit/test_md_system_unified.py` (9 tests: 6 fast config
+validation + 3 real end-to-end CHARMM+checkpoint runs).
+
+**Two gaps found and fixed while validating this** (the packmol composition
+path exercises code the peptide-water path in §2a never touched):
+
+1. `build_packmol_composition_cluster` (used by the packmol `SystemBuilder`)
+   **never writes a PSF file** — unlike `build_trialanine_water_box_in_charmm`
+   (§2a's builder), it only leaves the system live in CHARMM. Without a PSF
+   file, `FFParams` can't be resolved and `mm_nonbonded` can't run.
+   `build_packmol_system_with_ffparams()` in `md_system_unified.py` fixes this
+   by writing the live PSF to a scratch file (`pycharmm.write.psf_card(...)`)
+   right after the packmol build, then lowering it exactly like
+   `_lower_optional_psf` does.
+2. The packmol composition builder **does not self-bootstrap CHARMM** either
+   (no internal `ensure_pycharmm_loaded()` call) — it assumes the caller
+   already did. `run_unified_jaxmd()` now calls `ensure_pycharmm_loaded()`
+   explicitly (it's idempotent) before building. Symptom if you skip this:
+   `AttributeError: 'NoneType' object has no attribute 'lingo'` deep inside
+   CHARMM's `generate`/`ic` calls — not obviously connected to a missing
+   bootstrap call unless you already know the fix.
+
+**Still open, lower priority:** wiring `--builder pyxtal` / `--template-pdb`
+/ `--continue-from` (handoff) into the unified path, and eventually retiring
+the legacy inline loop once the unified path's coverage is a strict superset.
 
 ### 2c. RDF validation of rigid sampling
 Run `RigidBodySampler` vs. flexible MD on a small liquid box and compare the
@@ -162,13 +198,29 @@ hardware.
    (the cg_jaxmd formula or the reference `nonbonded_energy_and_forces`), not
    just self-consistency. Keep that bar for the entrypoint swaps (compare to the
    existing trajectory).
+9. **A legacy builder function working standalone does NOT mean it self-
+   bootstraps CHARMM or persists a PSF.** Different legacy build paths make
+   different implicit assumptions about caller state
+   (`build_trialanine_water_box_in_charmm` self-bootstraps and writes a PSF;
+   `build_packmol_composition_cluster` does neither). Check both explicitly
+   for any *new* builder you wire up, rather than assuming the pattern from
+   one builder generalizes to the next.
+10. **CHARMM's persistent global state biases test order.** A builder call with
+    the "same" seed can produce different geometry depending on what was built
+    earlier in the same process. Don't assert absolute energies in
+    CHARMM-integration tests — assert relative/structural properties on the
+    *same* built geometry instead (§2a's `test_end_to_end_peptide_water_ml_no_double_counting`
+    is the pattern to copy).
 
 ---
 
 ## 5. Suggested order for the next session
 
 1. ~~`cg_jaxmd` entrypoint swap~~ — done (§2a), as `examples/cg_jaxmd_unified.py`.
-2. `md_system --backend jaxmd` swap + comparison, then delete the inline loop (§2b).
+2. ~~`md_system --backend jaxmd` swap~~ — done (§2b), as the opt-in
+   `--jaxmd-unified` flag / `mmml/cli/run/md_system_unified.py`. Only the
+   packmol composition builder is wired; extending to pyxtal/template-PDB/
+   handoff and eventually retiring the legacy inline loop remains open.
 3. RDF validation of rigid sampling (§2c).
 4. apocharmm — only once a CUDA box + build are available (§2d).
 

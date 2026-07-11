@@ -1,7 +1,8 @@
 # Unifying `md-system` and `cg_jaxmd`: calculator & builder schema
 
-**Status:** In progress — the shared stack is built and tested; the two
-front-end entrypoint swaps remain (see §0 and §11).
+**Status:** In progress — the shared stack is built and tested; both
+front-end entrypoint swaps are landed (opt-in for `md-system`); apocharmm and
+RDF validation remain (see §0 and §11).
 **Scope:** How to split the calculators and system builders shared by
 [`mmml/cli/run/md_system.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/cli/run/md_system.py) and
 [`examples/cg_jaxmd.py`](https://github.com/EricBoittier/mmml/blob/main/examples/cg_jaxmd.py) so the two can run on one
@@ -43,7 +44,8 @@ the `JaxmdDriver` propagates it (NVE smoke test on a multi-molecule box).
 **Cross-cutting:** the cross-platform `libcharmm` loader (`pycharmm/lib.py`)
 now self-discovers `setup/charmm` on both `.dylib`/`.so`; `import mmml.md`
 stays free of jax/CHARMM (heavy deps are lazy inside `make()` / `run()`); the
-whole `mmml/md` unit suite (~313 tests) is green.
+whole `tests/unit/test_md_*.py` glob (incl. pre-existing legacy `md-system`
+tests) is green (333 passed, 1 skipped).
 
 **Bug fix found via end-to-end validation:** `JaxmdDriver`'s fixed-box
 NVE/NVT/FIRE path called `space.periodic_general(box)` without
@@ -78,9 +80,20 @@ rather than an absolute energy threshold, since CHARMM's persistent global
 state across builds in one process makes absolute geometry (and thus energy)
 depend on prior test execution order within the same session.
 
-**Remaining (§11):** swap `md_system --backend jaxmd` onto `assemble_and_run`,
-and the apocharmm driver. These need real end-to-end MD
-runs / a GPU build to validate, not just unit tests.
+**Third fix, same technique:** validating `--jaxmd-unified` end-to-end found
+that `build_packmol_composition_cluster` (the packmol composition builder used
+by `md-system`) neither writes a PSF file nor bootstraps CHARMM itself — both
+assumptions the legacy `md_pbc_suite/jaxmd.py` path could rely on implicitly
+because its caller already did so, but which a fresh, explicit front-end
+cannot. `mmml/cli/run/md_system_unified.py` makes both explicit: it writes the
+live CHARMM PSF to a scratch file to resolve `FFParams`, and calls
+`ensure_pycharmm_loaded()` before building.
+
+**Remaining (§11):** the apocharmm driver (needs a GPU build) and the RDF
+validation of rigid sampling (needs a real force-field production run) are the
+two items still gated on hardware/scope rather than more unit-testable code.
+The `--jaxmd-unified` flag also doesn't yet cover the pyxtal/template-PDB
+builders or handoff/continuation — see §11 for the exact gaps.
 
 ---
 
@@ -627,8 +640,31 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         (cg_jaxmd JSON + phase → `RunConfig`), with `terms_from_cg_config`
         implementing the sweep-toggle → term-selection mapping (doc §8). Pure /
         numpy-only; tested in `tests/unit/test_md_lowering.py`.
-  - [ ] Flip `md_system --backend jaxmd` onto `assemble_and_run`; retire the
-        duplicate inline loop.
+  - [x] `mmml/cli/run/md_system_unified.py` — an **opt-in** `--jaxmd-unified`
+        flag on `mmml md-system --backend jaxmd` that routes through
+        `runconfig_from_md_system_args` → `assemble_and_run` instead of the
+        legacy `md_pbc_suite/jaxmd.py` inline loop. Opt-in (not the default)
+        so the existing path is untouched until this covers more of
+        md-system's feature surface — only the packmol composition builder is
+        wired; `--builder pyxtal`, `--template-pdb`, and `--continue-from`
+        raise `NotImplementedError` rather than silently diverging.
+        `build_packmol_system_with_ffparams` closes a real gap: the packmol
+        composition builder (`build_packmol_composition_cluster`) never writes
+        a PSF file, so it writes the live CHARMM PSF to a scratch file to
+        resolve `FFParams` (mirrors `_lower_optional_psf`). Also explicitly
+        calls `ensure_pycharmm_loaded()` before building — unlike
+        `PeptideWaterSystemBuilder`'s underlying builder, the packmol
+        composition builder does not self-bootstrap CHARMM. Validated
+        end-to-end via the real CLI (`mmml md-system --backend jaxmd
+        --jaxmd-unified ...`) for both `pbc_nve` and `pbc_nvt` with a real
+        checkpoint; existing (non-flagged) `--backend jaxmd` behavior is
+        unaffected (66 pre-existing `md_system` CLI tests still pass). Tests
+        in `tests/unit/test_md_system_unified.py` (9 tests: 6 fast config
+        validation + 3 real end-to-end CHARMM+checkpoint runs, including
+        `FFParams` resolution and both `pbc_nve`/`pbc_nvt`).
+        The full legacy dispatch remains the default; retiring the duplicate
+        inline loop is deferred until the unified path covers pyxtal/template
+        builders and handoff.
   - [x] `examples/cg_jaxmd_unified.py` — a thin, validated front-end over
         `assemble_and_run` for cg_jaxmd-style peptide-water runs: reads a
         cg_jaxmd JSON config, chains `fire → nvt → nve` phases (carrying
