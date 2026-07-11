@@ -34,6 +34,50 @@ Writes `serial_vs_mpirun.json` with exit codes, elapsed time, and env snapshot (
 
 **Production / Slurm / `np>1`:** still use `mmml-charmm-mpirun.sh` even when the probe passes — correct MPI bootstrap, OMP pin, GPU-per-rank, and deferred JAX.
 
+### Launch policy: uv, MPI ranks, and JAX are orthogonal
+
+`uv` selects the Python environment, OpenMPI owns process topology, and JAX
+owns its device/thread policy. Use `uv run` outside the MPI launcher so `uv`
+resolves the environment once; `mpi-launch` forwards that exact
+`sys.executable` to every rank rather than invoking `uv` independently on each
+rank.
+
+```bash
+# One MPI rank, one JAX GPU (the conservative production preset)
+uv run mmml mpi-launch --preset single -- md-system --config run.yaml
+
+# One MPI rank, multithreaded CPU JAX; CHARMM remains at one OpenMP thread
+uv run mmml mpi-launch --preset cpu --jax-cpu-threads 16 -- \
+  md-system --config run.yaml
+
+# Explicit topology: four ranks, JAX only on rank 0
+uv run mmml mpi-launch --mpi-ranks 4 --jax-mode rank0 -- \
+  md-system --config run.yaml
+
+# Spatial ML: one pinned GPU per MPI rank
+uv run mmml mpi-launch --preset spatial --mpi-ranks 4 -- \
+  md-system --config run.yaml --ml-spatial-mpi
+```
+
+The two dimensions are intentionally independent:
+
+| Setting | Values |
+|---|---|
+| CHARMM/OpenMPI topology | `--mpi-ranks N`, `--charmm-omp-threads N` |
+| JAX execution | `cpu-threaded`, `gpu-single`, `gpu-per-rank`, `rank0`, `spatial` |
+
+`--preset single`, `--preset cpu`, and `--preset spatial` are aliases, not
+separate architectures. `--dry-run` prints the resolved environment and
+wrapper command. `--strict-resources` rejects configurations whose rank ×
+thread budget exceeds `SLURM_CPUS_PER_TASK`, `MMML_ALLOCATED_CPUS`, or the
+detected host CPU count.
+
+For CPU JAX, `--jax-cpu-threads` configures XLA's Eigen pool while
+`--charmm-omp-threads` independently controls CHARMM/OpenMP. They share a
+process, so the launcher checks the larger per-rank pool for oversubscription;
+it does not force `OMP_NUM_THREADS=1` when a different CHARMM thread count is
+explicitly requested.
+
 The workshop [3SimpleMPIExample](https://github.com/BrooksResearchGroup-UM/pyCHARMM-Workshop/tree/main/3SimpleMPIExample) shows a **different** pattern: embarrassingly parallel φ/ψ minimizations with `mpi4py` — no coupled MLpot callbacks. MMML needs both:
 
 | Pattern | Workshop | MMML tier |

@@ -438,6 +438,23 @@ MMML_MPI_NP=2 MMML_MLPOT_SPATIAL_MPI=1 \
   ./scripts/mmml-charmm-mpirun.sh mpi-check --tier2 --strict
 ```
 
+For normal runs, the implemented `mpi-launch` front end keeps environment,
+rank topology, and JAX policy separate. `uv run` resolves Python once and the
+selected `sys.executable` is forwarded through the existing ABI-aware wrapper:
+
+```bash
+uv run mmml mpi-launch --preset single -- md-system --config run.yaml
+uv run mmml mpi-launch --preset cpu --jax-cpu-threads 16 -- \
+  md-system --config run.yaml
+uv run mmml mpi-launch --preset spatial --mpi-ranks 4 -- \
+  md-system --config run.yaml --ml-spatial-mpi
+```
+
+The presets are aliases over independent `--mpi-ranks`, `--jax-mode`,
+`--jax-cpu-threads`, and `--charmm-omp-threads` settings. This also supports
+multi-rank CHARMM with rank-0 JAX and generic GPU-per-rank JAX without claiming
+that either is spatial decomposition. See [`mpi-launch`](cli/commands/mpi-launch.md).
+
 `MMML_NO_CHARMM_MPI=1` is only valid for a genuinely serial `libcharmm`; it must
 not be used to disguise an MPI-linked build. Likewise,
 `MMML_WARMUP_MLPOT_JAX_ONLY=1` means "bootstrap/import seams only" and must
@@ -480,7 +497,15 @@ land seams non-breaking, extract terms with parity checks, then add backends.
         (`FFParams.from_nonbonded_system_data`) and partitions molecules from the
         PSF bond graph (`molecule_ids_from_bonds`). CHARMM-integration tested on
         `pept.psf`/`pept.pdb`: `tests/unit/test_md_builders.py`.
-  - [ ] packmol / pyxtal / peptide-water builders (wrap existing build funcs).
+  - [x] Packmol / PyXtal / peptide-water placement wrappers — legacy builders
+        now lower PSF-ordered coordinates, molecule partitions, box, residue
+        identity, and water groups into `MolecularSystem`. Packmol/PyXtal can
+        optionally lower a supplied emitted PSF to `FFParams`; the
+        trialanine-water wrapper always delegates its emitted PSF/parameter
+        files through `PsfSystemBuilder`. Backend calls are lazy and mock-backed
+        seam tests require no CHARMM/Packmol/PyXtal:
+        `tests/unit/test_md_builders.py`. Old front-end call sites still need to
+        delegate before the parent item is complete.
 - [~] Extract `cg_jaxmd` energy terms into `energy/terms/` one at a time,
       validating at each step. *(In progress — bias/restraint terms first, as
       they need no CHARMM/checkpoint.)*

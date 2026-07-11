@@ -128,6 +128,11 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
         ("PyCHARMM MPI", "../../pycharmm-mpi.md"),
         ("Spatial ML MPI", "../../mlpot-spatial-mpi.md"),
     ],
+    "mpi-launch": [
+        ("PyCHARMM MPI", "../../pycharmm-mpi.md"),
+        ("Spatial ML MPI", "../../mlpot-spatial-mpi.md"),
+        ("PyCHARMM threading", "../../pycharmm-threading.md"),
+    ],
     "warmup-mlpot-jax": [("MLpot settings", "../../mlpot-settings.md")],
     "health-check": [("MLpot settings", "../../mlpot-settings.md")],
     "cross-check": [("QC cross-check", "../../qc-cross-check.md")],

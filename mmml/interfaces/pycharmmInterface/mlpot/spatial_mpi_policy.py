@@ -41,12 +41,13 @@ def _mpi_local_rank_index() -> int | None:
 
 
 def pin_cuda_for_spatial_mpi() -> bool:
-    """Pin ``CUDA_VISIBLE_DEVICES`` to local MPI rank when spatial ML is on.
+    """Pin ``CUDA_VISIBLE_DEVICES`` for spatial or generic GPU-per-rank JAX.
 
     Must run before the first ``import jax`` on each rank so JAX does not all
     attach to physical GPU 0 (``CUDA_ERROR_DEVICE_UNAVAILABLE`` on rank > 0).
     """
-    if not spatial_mpi_enabled():
+    jax_mode = (os.environ.get("MMML_JAX_MODE") or "").strip().lower()
+    if not spatial_mpi_enabled() and jax_mode != "gpu-per-rank":
         return False
     if not _truthy("MMML_MPI_PIN_GPU_PER_RANK", default=True):
         return False

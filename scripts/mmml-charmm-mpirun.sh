@@ -97,6 +97,9 @@ if ! [[ "$MPI_NP" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
+JAX_MODE="${MMML_JAX_MODE:-legacy}"
+echo "mmml-charmm-mpirun: topology np=${MPI_NP}; jax=${JAX_MODE}; charmm_omp=${MMML_CHARMM_OMP_THREADS:-${OMP_NUM_THREADS:-1}}; jax_cpu_threads=${MMML_JAX_CPU_THREADS:-auto}" >&2
+
 # Native CHARMM binary (Tier 3 DOMDEC smoke): run executable directly under MPI, not via mmml CLI.
 mmml_is_native_executable() {
   local arg="${1:-}"

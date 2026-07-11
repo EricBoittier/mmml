@@ -119,6 +119,10 @@ def main():
         sys.argv = ["mmml mpi-check"] + args.args
         return mpi_check.main()
 
+    elif command == "mpi-launch":
+        from .run import mpi_launch
+        return mpi_launch.main(args.args)
+
     elif command == "health-check":
         from .run import health_check
         sys.argv = ["mmml health-check"] + args.args

@@ -31,6 +31,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("lambda-mbar", "MBAR post-processing for lambda TI"),
             CommandInfo("warmup-mlpot-jax", "Serial JAX JIT warmup for MLpot"),
             CommandInfo("mpi-check", "Validate OpenMPI/CHARMM/mpi4py for MLpot"),
+            CommandInfo("mpi-launch", "Launch OpenMPI with an explicit JAX execution policy"),
             CommandInfo("health-check", "Validate MMML/PyCHARMM/JAX interface health"),
         ),
     ),

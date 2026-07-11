@@ -105,6 +105,7 @@ nav:
           - ef-md: cli/commands/ef-md.md
       - Other utilities:
           - md-embedding: cli/commands/md-embedding.md
+          - mpi-launch: cli/commands/mpi-launch.md
           - plot-restart-velocities: cli/commands/plot-restart-velocities.md
       # CLI_NAV_END
   - MD workflows:

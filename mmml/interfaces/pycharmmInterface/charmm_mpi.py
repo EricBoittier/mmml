@@ -905,7 +905,11 @@ def _pin_charmm_openmp_for_serial_mlpot() -> None:
     os.environ.setdefault("NUMEXPR_NUM_THREADS", cpu_threads)
     if explicit:
         os.environ.setdefault("MMML_JAX_COMPILE_THREADS", cpu_threads)
-        os.environ["MMML_NO_JAX_COMPILE_THREADS"] = "0"
+        # ``mpi-launch --jax-mode cpu-threaded`` owns the XLA runtime pool and
+        # deliberately disables the temporary GPU-oriented compile-thread
+        # context. Do not undo that policy while pinning CHARMM's OpenMP pool.
+        if (os.environ.get("MMML_JAX_MODE") or "").strip() != "cpu-threaded":
+            os.environ["MMML_NO_JAX_COMPILE_THREADS"] = "0"
 
 
 def configure_mpi4py_charmm_owned_init() -> None:

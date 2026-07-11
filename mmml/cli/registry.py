@@ -43,6 +43,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Solvated peptide partial MLpot (train/build/run)",
     ),
     CommandSpec("mpi-check", "mmml.cli.run.mpi_check", "Validate OpenMPI/CHARMM/mpi4py for MLpot"),
+    CommandSpec("mpi-launch", "mmml.cli.run.mpi_launch", "Launch OpenMPI with an explicit JAX execution policy"),
     CommandSpec("health-check", "mmml.cli.run.health_check", "Validate MMML/PyCHARMM/JAX interface health"),
     CommandSpec("env", "mmml.cli.env", "Find resolved/bundled checkpoints and CHARMM paths"),
     CommandSpec("warmup-mlpot-jax", "mmml.cli.run.warmup_mlpot_jax", "Serial JAX JIT warmup for MLpot"),
