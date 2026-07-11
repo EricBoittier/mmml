@@ -28,16 +28,22 @@ config ──lowering──▶ RunConfig ──assemble──▶ builder → Hyb
 | Driver incl. **NPT** | `mmml/md/drivers/jaxmd.py` | ✅ tested |
 | Assembly glue | `mmml/md/assemble.py` | ✅ tested |
 | Lowering adapters | `mmml/md/lowering.py` | ✅ tested |
+| Neighbor-list factory | `mmml/md/neighbors.py` | ✅ tested |
 | Rigid-body `Sampler` (MC) | `mmml/md/samplers/rigid.py` | ✅ tested |
 
 **Energy terms:** `ml_intra`, `ml_pep_water`, `mm_nonbonded`, `vdw_core`, `smd`,
 `dihedral` — each registered, box-aware where relevant, and validated against
 the `cg_jaxmd` originals / the reference nonbonded / the example ML checkpoint.
 
+**End-to-end:** `assemble_and_run` runs the full pipeline as real dynamics —
+`mm_nonbonded` declares an intermolecular `NeighborRequest`, `assemble_and_run`
+auto-builds the padded neighbor list (`make_intermolecular_neighbor_fn`), and
+the `JaxmdDriver` propagates it (NVE smoke test on a multi-molecule box).
+
 **Cross-cutting:** the cross-platform `libcharmm` loader (`pycharmm/lib.py`)
 now self-discovers `setup/charmm` on both `.dylib`/`.so`; `import mmml.md`
 stays free of jax/CHARMM (heavy deps are lazy inside `make()` / `run()`); the
-whole `mmml/md` unit suite (~73 tests) is green.
+whole `mmml/md` unit suite (~90 tests) is green.
 
 **Remaining (§11):** swap the two legacy entrypoints
 (`md_system --backend jaxmd` and `examples/cg_jaxmd.py`) onto

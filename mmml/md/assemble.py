@@ -124,6 +124,17 @@ def assemble_and_run(
     if driver is None:
         from mmml.md.drivers import JaxmdDriver
 
+        # Auto-wire the intermolecular neighbor list when a term needs one and
+        # the caller did not supply a neighbor_fn (e.g. mm_nonbonded).
+        if neighbor_fn is None:
+            inter = [r for r in energy.neighbor_requests if r.kind == "intermolecular"]
+            if inter:
+                from mmml.md.neighbors import make_intermolecular_neighbor_fn
+
+                cutoff = max(r.cutoff_A for r in inter)
+                cap = next((r.capacity_hint for r in inter if r.capacity_hint), None)
+                neighbor_fn = make_intermolecular_neighbor_fn(system, cutoff, cap)
+
         driver = JaxmdDriver(neighbor_fn=neighbor_fn, output_path=output_path)
 
     return driver.run(system, energy, config.ensemble, on_overlap=on_overlap)
