@@ -50,6 +50,8 @@ class JaxmdDriver:
             raise ValueError("n_steps must be non-negative")
         if self.record_every <= 0:
             raise ValueError("record_every must be positive")
+        if self.block_size is not None and self.block_size <= 0:
+            raise ValueError("block_size must be positive")
         if ensemble.dt_fs <= 0:
             raise ValueError("dt_fs must be positive")
         if ensemble.ensemble not in {"min", "nve", "nvt"}:
@@ -112,9 +114,7 @@ class JaxmdDriver:
 
         frames = [np.asarray(jax.device_get(state.position))]
         energies = [float(jax.device_get(energy_fn(state.position, **dynamic_kwargs)))]
-        block_size = int(self.block_size or self.record_every)
-        if block_size <= 0:
-            raise ValueError("block_size must be positive")
+        block_size = int(self.record_every if self.block_size is None else self.block_size)
 
         completed = 0
         next_record = min(self.record_every, ensemble.n_steps)

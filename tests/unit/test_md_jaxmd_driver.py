@@ -30,6 +30,21 @@ class _HarmonicTerm:
         return TermFns(jax_energy_fn=energy_fn)
 
 
+class _KeywordHarmonicTerm:
+    name = "keyword_harmonic"
+
+    def neighbor_request(self, system):
+        return None
+
+    def make(self, system, ctx):
+        import jax.numpy as jnp
+
+        def energy_fn(R, **kwargs):
+            return 0.5 * kwargs["scale"] * jnp.sum(R**2)
+
+        return TermFns(jax_energy_fn=energy_fn)
+
+
 def _system():
     return MolecularSystem(
         R=np.array([[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]]),
@@ -75,8 +90,112 @@ def test_nve_records_requested_final_step_and_rebuilds_neighbors():
     )
 
     assert result.metadata["steps"] == 7
-    assert result.n_frames == 2  # initial + non-aligned final step
+    assert result.n_frames == 3  # initial + step 4 + non-aligned final step 7
     assert len(rebuilds) == 4  # initial allocation + one refresh per block
+
+
+def test_nvt_nhc_runs_and_is_reproducible():
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    ensemble = EnsembleSpec(
+        ensemble="nvt",
+        space="free",
+        temperature_K=150.0,
+        dt_fs=0.1,
+        n_steps=3,
+        params={"seed": 17},
+    )
+
+    first = JaxmdDriver(record_every=2).run(system, energy, ensemble)
+    second = JaxmdDriver(record_every=2).run(system, energy, ensemble)
+
+    np.testing.assert_allclose(first.metadata["positions"], second.metadata["positions"])
+    assert np.isfinite(first.metadata["energies"]).all()
+    assert first.n_frames == 3
+
+
+def test_fixed_box_pbc_and_neighbor_kwargs_are_routed():
+    base = _system()
+    system = MolecularSystem(
+        R=base.R,
+        Z=base.Z,
+        box=np.eye(3) * 8.0,
+        mol_id=base.mol_id,
+    )
+    energy = HybridEnergy([_KeywordHarmonicTerm()], system, EnergyContext())
+    boxes = []
+
+    def neighbor_fn(position, box):
+        boxes.append(box.copy())
+        return {"scale": np.array(2.0)}
+
+    result = JaxmdDriver(record_every=1, neighbor_fn=neighbor_fn).run(
+        system,
+        energy,
+        EnsembleSpec(ensemble="nve", space="pbc", dt_fs=0.1, n_steps=1),
+    )
+
+    np.testing.assert_allclose(boxes[0], system.box)
+    assert result.metadata["energies"][0] == pytest.approx(2.0)
+
+
+def test_overlap_repair_reinitializes_at_repaired_positions():
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    repaired = np.zeros_like(system.R)
+    calls = []
+
+    def repair(position, box):
+        calls.append(position)
+        return repaired if len(calls) == 1 else None
+
+    result = JaxmdDriver(record_every=1).run(
+        system,
+        energy,
+        EnsembleSpec(ensemble="min", space="free", dt_fs=0.1, n_steps=2),
+        on_overlap=repair,
+    )
+
+    np.testing.assert_allclose(result.metadata["positions"][1], repaired)
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    ("driver", "ensemble", "message"),
+    [
+        (JaxmdDriver(record_every=0), EnsembleSpec(), "record_every"),
+        (JaxmdDriver(block_size=0), EnsembleSpec(n_steps=1), "block_size"),
+        (JaxmdDriver(), EnsembleSpec(dt_fs=0), "dt_fs"),
+        (JaxmdDriver(), EnsembleSpec(n_steps=-1), "n_steps"),
+        (
+            JaxmdDriver(),
+            EnsembleSpec(n_steps=0, params={"masses": np.array([1.0, 0.0])}),
+            "strictly positive",
+        ),
+    ],
+)
+def test_invalid_configuration_is_rejected(driver, ensemble, message):
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    with pytest.raises(ValueError, match=message):
+        driver.run(system, energy, ensemble)
+
+
+def test_neighbor_and_repair_contracts_are_validated():
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    ensemble = EnsembleSpec(ensemble="min", dt_fs=0.1, n_steps=1)
+
+    with pytest.raises(TypeError, match="neighbor_fn must return a mapping"):
+        JaxmdDriver(neighbor_fn=lambda position, box: None).run(system, energy, ensemble)
+
+    with pytest.raises(ValueError, match="on_overlap returned positions with shape"):
+        JaxmdDriver().run(
+            system,
+            energy,
+            ensemble,
+            on_overlap=lambda position, box: np.zeros((1, 3)),
+        )
 
 
 def test_rejects_npt_until_dynamic_box_path_is_extracted():
