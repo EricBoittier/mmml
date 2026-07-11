@@ -372,26 +372,11 @@ def test_sync_comparison_velocities_from_comparison_rejects_pathological(
     assert sync_comparison_velocities_from_comparison() is False
 
 
-@patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_matches_main_positions",
-    return_value=False,
-)
-@patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_cold",
-    return_value=False,
-)
-@patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities.velocities_are_pathological",
-    return_value=False,
-)
-@patch(
-    "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.comparison_velocities_akma",
-)
-def test_sync_comparison_velocities_from_comparison_rejects_spatial_coords(
-    mock_comp, mock_path, mock_cold, mock_pos
-):
-    mock_comp.return_value = np.array([[9999.0, 0.0, 0.0], [0.0, 9999.0, 0.0]])
-    assert sync_comparison_velocities_from_comparison() is False
+# NOTE: magnitude-based spatial-coord rejection was removed in 28c318e42
+# ("remove fragile magnitude-based velocity heuristics in favor of exact
+# coordinate matching"). Spatial coords are now rejected via
+# comparison_matches_main_positions (see test_..._rejects_positions and
+# test_comparison_matches_main_positions_true above).
 
 
 @patch(

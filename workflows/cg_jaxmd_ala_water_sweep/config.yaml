@@ -6,10 +6,10 @@ system:
   last_patch: CT3
   n_waters: 50
   box_size: 20.0
-  seed: 42
   temperature: 298.0
 
 dt_fs: [0.5, 0.25, 0.1]
+seeds: [42, 43, 44]
 
 energy_modes:
   mm_mm:
@@ -26,13 +26,13 @@ energy_modes:
     peptide_water_ml: true
 
 simulation:
-  fire_steps: 200
-  fire_block_steps: 100
+  fire_steps: 1000
+  fire_block_steps: 200
   fire_cycles: 1
-  nvt_total_steps: 1000
-  nvt_block_steps: 100
-  nve_total_steps: 1000
-  nve_block_steps: 100
+  nvt_total_steps: 10000
+  nvt_block_steps: 1000
+  nve_total_steps: 100000
+  nve_block_steps: 1000
   write_dcd: false
   debug: false
   debug_expensive_ml_force_components: false
@@ -40,7 +40,6 @@ simulation:
 slurm:
   partition: gpu
   gres: gpu:1
-  runtime_min: 60
+  runtime_min: 240
   mem_mb: 16000
   cpus_per_task: 4
-

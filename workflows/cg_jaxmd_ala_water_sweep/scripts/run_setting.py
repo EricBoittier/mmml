@@ -25,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workflow-config", type=Path, required=True)
     parser.add_argument("--mode", required=True)
     parser.add_argument("--dt-fs", type=float, required=True)
+    parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, required=True)
     return parser.parse_args()
@@ -43,6 +44,7 @@ def main() -> int:
         **workflow_config["system"],
         **workflow_config["simulation"],
         "dt_fs": args.dt_fs,
+        "seed": args.seed,
         "use_ml_intramolecular": mode["use_ml_intramolecular"],
         "peptide_water_ml": mode["peptide_water_ml"],
         "output_dir": str(output_dir),
@@ -62,10 +64,22 @@ def main() -> int:
         for match in NVE_PATTERN.finditer(log_path.read_text(encoding="utf-8", errors="replace")):
             final_nve = match.groupdict()
 
+    atom_count = None
+    trajectory_path = output_dir / "cg_nve.traj"
+    if trajectory_path.exists():
+        try:
+            from ase.io import read
+
+            atom_count = len(read(trajectory_path, index=0))
+        except Exception:
+            atom_count = None
+
     status = {
         "mode": args.mode,
         "description": mode["description"],
         "dt_fs": args.dt_fs,
+        "seed": args.seed,
+        "atom_count": atom_count,
         "returncode": process.returncode,
         "elapsed_seconds": round(elapsed, 3),
         "completed": process.returncode == 0,
@@ -77,4 +91,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

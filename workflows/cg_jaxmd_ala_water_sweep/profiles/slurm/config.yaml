@@ -1,11 +1,11 @@
 # Run with: uv run --with snakemake --with snakemake-executor-plugin-slurm snakemake --profile profiles/slurm
 executor: slurm
-jobs: 9
+jobs: 27
 latency-wait: 120
 retries: 0
 default-resources:
   - gpu=1
-  - runtime=60
+  - runtime=240
   - mem_mb=16000
   - cpus_per_task=4
   - slurm_partition=gpu

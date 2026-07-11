@@ -7,6 +7,7 @@ WORKFLOW_DIR = Path(workflow.basedir)
 REPO_ROOT = WORKFLOW_DIR.parents[1]
 ENERGY_MODES = list(config["energy_modes"])
 DT_TAGS = [str(dt).replace(".", "p") for dt in config["dt_fs"]]
+SEEDS = [str(seed) for seed in config["seeds"]]
 
 
 def dt_from_tag(tag):
@@ -26,9 +27,9 @@ rule all:
 
 rule run_setting:
     output:
-        status="results/{mode}/dt_{dt}/status.json",
+        status="results/{mode}/dt_{dt}/seed_{seed}/status.json",
     log:
-        stdout="results/{mode}/dt_{dt}/stdout.log",
+        stdout="results/{mode}/dt_{dt}/seed_{seed}/stdout.log",
     params:
         workflow_dir=WORKFLOW_DIR,
         repo_root=REPO_ROOT,
@@ -36,6 +37,7 @@ rule run_setting:
     wildcard_constraints:
         mode="|".join(ENERGY_MODES),
         dt="|".join(DT_TAGS),
+        seed="|".join(SEEDS),
     resources:
         gpu=1,
         runtime=lambda wildcards: int(slurm_value("runtime_min", 60)),
@@ -51,6 +53,7 @@ rule run_setting:
           --workflow-config {params.workflow_dir}/config.yaml \
           --mode {wildcards.mode} \
           --dt-fs {params.dt_fs} \
+          --seed {wildcards.seed} \
           --output-dir $(dirname {output.status}) \
           --repo-root {params.repo_root} \
           > {log.stdout} 2>&1
@@ -61,9 +64,10 @@ rule run_setting:
 rule collect:
     input:
         statuses=expand(
-            "results/{mode}/dt_{dt}/status.json",
+            "results/{mode}/dt_{dt}/seed_{seed}/status.json",
             mode=ENERGY_MODES,
             dt=DT_TAGS,
+            seed=SEEDS,
         ),
     output:
         csv="results/summary.csv",
@@ -72,4 +76,3 @@ rule collect:
         script=WORKFLOW_DIR / "scripts" / "collect_results.py",
     shell:
         "python {params.script} --csv {output.csv} --markdown {output.md} {input.statuses}"
-

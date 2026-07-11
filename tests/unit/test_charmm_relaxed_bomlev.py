@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, call
@@ -72,14 +73,17 @@ def test_run_charmm_script_quiet_does_not_echo_level_commands(monkeypatch):
     assert mock_settings.set_verbosity.call_args_list == [call(0), call(5)]
 
 
-def test_suppress_charmm_fortran_io_redirects_stdout_stderr(capsys):
+def test_suppress_charmm_fortran_io_redirects_stdout_stderr(capfd):
     from mmml.interfaces.pycharmmInterface.charmm_levels import suppress_charmm_fortran_io
 
+    # CHARMM's Fortran runtime writes unbuffered to fd 1/2, so exercise the
+    # fd level directly (a buffered Python ``print`` would flush only after the
+    # context restores the descriptors, defeating the check).
     with suppress_charmm_fortran_io():
-        print("fortran banner", file=sys.stdout)
-        print("fortran error", file=sys.stderr)
+        os.write(1, b"fortran banner\n")
+        os.write(2, b"fortran error\n")
 
-    captured = capsys.readouterr()
+    captured = capfd.readouterr()
     assert captured.out == ""
     assert captured.err == ""
 

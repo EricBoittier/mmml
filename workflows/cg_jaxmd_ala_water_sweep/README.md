@@ -12,9 +12,10 @@ valid `cg_jaxmd.py` energy mode and each requested timestep.
 The invalid combination `use_ml_intramolecular: false` with
 `peptide_water_ml: true` is omitted because `cg_jaxmd.py` rejects it.
 
-The default matrix contains nine jobs: three energy modes crossed with
-`dt_fs: [0.5, 0.25, 0.1]`. Simulation lengths, checkpoint, system settings, and
-SLURM resources are configured in `config.yaml`.
+The default validation matrix contains 27 jobs: three energy modes crossed with
+`dt_fs: [0.5, 0.25, 0.1]` and seeds `[42, 43, 44]`. Each run uses 10,000 NVT
+equilibration steps followed by 100,000 NVE steps. Simulation lengths,
+checkpoint, system settings, and SLURM resources are configured in `config.yaml`.
 
 ## Dry-run
 
@@ -39,11 +40,13 @@ Run one setting with, for example:
 
 ```bash
 uv run --with snakemake --with snakemake-executor-plugin-slurm \
-  snakemake results/ml_mm/dt_0p25/status.json --profile profiles/slurm
+  snakemake results/ml_mm/dt_0p25/seed_42/status.json --profile profiles/slurm
 ```
 
 ## Outputs
 
 Each setting writes its exact `run_config.json`, trajectories, `stdout.log`, and
-`status.json` under `results/<mode>/dt_<timestep>/`. Successful completion of all
-nine settings produces `results/summary.csv` and `results/summary.md`.
+`status.json` under `results/<mode>/dt_<timestep>/seed_<seed>/`. Successful
+completion of all 27 settings produces `results/summary.csv` and
+`results/summary.md`. The summaries include absolute energy drift normalized per
+atom, per picosecond, and per atom per picosecond.

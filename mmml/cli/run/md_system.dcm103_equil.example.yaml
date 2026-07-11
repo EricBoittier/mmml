@@ -34,6 +34,7 @@ defaults:
   ps_heat: 10.0
   ps_equi: 10.0
   n_equi_segments: 1
+  mini_box_equil_ps: 2.0
   output_dir: runs/dcm103_equil
   # Optional explicit overrides (presets already set most of these):
   # no_echeck_heat: true
