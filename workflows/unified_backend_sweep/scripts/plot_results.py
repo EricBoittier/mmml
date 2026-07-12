@@ -3,13 +3,14 @@
 
 Reads ``results/summary.csv`` (from ``collect_results.py``) and produces
 ``results/figures/summary_bars.png``: per (backend, seed) bars for energy
-fluctuation ($\\sigma$) and tendency (linear trend) -- see
-``docs/plotting-style-guide.md`` for why these replace a bare endpoint delta
--- plus wall-clock elapsed time. This sweep only records 2-3 frames per
-setting (see README's "What backend means here"), so these are a much
-coarser sanity check than ``mixed_calculator_sweep``'s 100-sample traces.
-Failed settings (e.g. ``jaxmd_npt``'s documented deterministic cluster
-failure) are marked "FAILED" instead of a bar.
+conservation quality ($\\sigma$ fluctuation and linear trend, overlaid as
+semi-transparent bars in one panel -- see ``docs/plotting-style-guide.md``
+"Overlaid semi-transparent bars, not more panels") plus wall-clock elapsed
+time. This sweep only records 2-3 frames per setting (see README's "What
+backend means here"), so these are a much coarser sanity check than
+``mixed_calculator_sweep``'s 100-sample traces. Failed settings (e.g.
+``jaxmd_npt``'s documented deterministic cluster failure) are marked
+"FAILED" instead of a bar.
 
 **Color is semantic, not palette-index**: each backend is colored by *what
 kind of physics it represents*, not by arbitrary series order --
@@ -18,7 +19,9 @@ kind of physics it represents*, not by arbitrary series order --
 (thermostatted -- deliberately exchanges heat) is forest green, ``jaxmd_npt``
 (documented deterministic failure on this cluster) is brick red, and
 ``rigid_mc`` (stochastic, non-dynamical sampler) is muted purple. See
-``docs/plotting-style-guide.md`` "Semantic color, not palette index".
+``docs/plotting-style-guide.md`` "Semantic color, not palette index". Seed
+is a filled-dot count (●, ●●, ●●●) instead of "(seed N)" text -- see
+"Symbols over small text".
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+from mmml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
 
 _STYLE_NAME = "icml"  # see docs/plot-style-gallery.md
 
@@ -65,37 +68,45 @@ def _fluctuation_and_trend(row: dict[str, str]) -> tuple[float, float]:
 
 def plot_summary_bars(rows: list[dict[str, str]], out: Path) -> Path:
     rows = sorted(rows, key=lambda r: (r["backend"], int(r["seed"])))
-    labels = [f"{row['backend']}\n(seed {row['seed']})" for row in rows]
+    labels = [f"{row['backend']}  {seed_symbol(int(row['seed']))}" for row in rows]
     colors = [_BACKEND_COLORS.get(row["backend"], "#999999") for row in rows]
+    x = range(len(rows))
 
-    fig, (ax_fluct, ax_trend, ax_time) = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+    fig, (ax_energy, ax_time) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
 
     for i, row in enumerate(rows):
         if row["completed"] == "True":
             fluctuation, trend = _fluctuation_and_trend(row)
-            ax_fluct.bar(i, fluctuation, color=colors[i], edgecolor="#222222", linewidth=0.8)
-            ax_trend.bar(i, trend, color=colors[i], edgecolor="#222222", linewidth=0.8)
+            ax_energy.bar(i, fluctuation, color=colors[i], alpha=0.9, width=0.6,
+                          edgecolor="#222222", linewidth=0.8)
+            ax_energy.bar(i, trend, color=colors[i], alpha=0.45, width=0.6, hatch="///",
+                          edgecolor="#222222", linewidth=0.8)
         else:
-            for axis in (ax_fluct, ax_trend):
-                axis.text(i, 0, "FAILED", rotation=90, ha="center", va="bottom",
-                           color="#943126", fontsize=11, fontweight="bold")
+            ax_energy.text(i, 0, "FAILED", rotation=90, ha="center", va="bottom",
+                            color="#943126", fontsize=12, fontweight="bold")
 
-    ax_fluct.set_ylabel(r"fluctuation: $\sigma$ (eV)")
-    ax_fluct.set_title("Unified backend sweep — fluctuation, tendency, and cost per backend/seed")
-
-    ax_trend.set_ylabel(r"tendency: $|{\rm d}E/{\rm d}n|$ (eV/frame)")
+    ax_energy.set_ylabel(r"$\sigma$ or $|{\rm d}E/{\rm d}n|$ (eV, eV/frame)")
+    ax_energy.set_title("Unified backend sweep — conservation quality "
+                         "(solid = fluctuation, hatched = tendency) and cost")
 
     elapsed = [float(row["elapsed_seconds"]) for row in rows]
-    ax_time.bar(range(len(rows)), elapsed, color=colors, edgecolor="#222222", linewidth=0.8)
+    ax_time.bar(x, elapsed, color=colors, edgecolor="#222222", linewidth=0.8)
     ax_time.set_ylabel("elapsed (s)")
-    ax_time.set_xticks(range(len(rows)))
-    ax_time.set_xticklabels(labels, rotation=75)
+    ax_time.set_xticks(list(x))
+    # Rotated + right-anchored so dense per-(backend, seed) labels never collide.
+    ax_time.set_xticklabels(labels, rotation=60, ha="right", rotation_mode="anchor")
 
     from matplotlib.patches import Patch
     handles = [Patch(facecolor=c, edgecolor="#222222", label=b) for b, c in _BACKEND_COLORS.items()]
-    legend_outside(ax_fluct, handles=handles, fontsize=10)
+    handles += [
+        Patch(facecolor="#777777", alpha=0.9, edgecolor="#222222", label="fluctuation (solid)"),
+        Patch(facecolor="#777777", alpha=0.45, hatch="///", edgecolor="#222222", label="tendency (hatched)"),
+    ]
+    # Figure-level legend below the whole (stacked, tall) figure -- see
+    # legend_outside's aspect-ratio rule in docs/plotting-style-guide.md.
+    legend_outside(fig, handles=handles, side="bottom", fontsize=12, ncol=3)
 
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.1, 1, 1))
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return out

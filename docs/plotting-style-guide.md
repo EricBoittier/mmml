@@ -96,26 +96,87 @@ semantic. If the only answer is "it's next in the list," fix it.
 ## Legends live outside the plot
 
 **A legend never overlaps the data.** Use
-[`mmml.utils.plotting.styles.legend_outside(axis, **kwargs)`](../mmml/utils/plotting/styles.py)
-instead of `axis.legend(loc="best", ...)`:
+[`mmml.utils.plotting.styles.legend_outside(target, side="auto", **kwargs)`](../mmml/utils/plotting/styles.py)
+instead of `axis.legend(loc="best", ...)`.
 
-```python
-from mmml.utils.plotting.styles import legend_outside
+**Which side depends on the figure's longest dimension, not a fixed default:**
 
-legend_outside(ax, fontsize=10)                       # positional labels already on the plotted lines
-legend_outside(ax, handles=handles, fontsize=11)       # explicit handles (e.g. Patch legend)
-```
+- **Single-column, multi-row (stacked) figures** — e.g. 2-3 subplots stacked
+  vertically, the figure is *taller than wide* — put the legend **below the
+  whole figure**, not to the side. Pass the `Figure` (not an `Axes`) so one
+  combined legend covers every panel instead of stacking several smaller
+  ones:
+  ```python
+  legend_outside(fig, handles=all_handles, labels=all_labels, side="bottom", fontsize=12)
+  ```
+  A bottom legend wraps into a small grid (`ncol` auto-picked, ≤4) rather
+  than one long row, so it stays roughly as wide as the figure itself.
+- **Multi-column figures** — e.g. two panels side by side — **each column
+  gets its own legend on its own outer edge**: the left panel's legend
+  attaches further left, the right panel's further right. Never stack both
+  panels' legends on one side.
+  ```python
+  legend_outside(ax_left, side="left", fontsize=10)
+  legend_outside(ax_right, side="right", fontsize=10)
+  ```
+- **`side="auto"`** (default) picks between right/bottom by comparing the
+  *figure's* width to height (`fig.get_size_inches()`) — use it for a
+  single-axes figure where there's no column/row structure to reason about;
+  set the side explicitly for anything with subplots, per the two cases
+  above.
 
-This places the legend to the right of the axes (`bbox_to_anchor=(1.02, 1.0),
-loc="upper left"`), never covering a data point regardless of where the data
-happens to sit. Because it's outside, **it's free to grow long** — a
-12-setting sweep's legend reads like a small table (marker/color → setting
+Because a legend is outside, **it's free to grow long** — a 12-setting
+sweep's legend reads like a small table (marker/color/seed-symbol → setting
 name) rather than needing to be trimmed to fit inside the plot. Don't
 economize on legend entries to make them fit inside the axes; if the legend
 needs to be big, let it be big outside instead.
 
-`fig.savefig(..., bbox_inches="tight")` (already the house convention) picks
-up the external legend automatically — no extra figure-size tuning needed.
+**Verify there's no overlap by actually looking at the rendered PNG** — a
+bottom legend can still collide with rotated x-tick labels, and a
+side-by-side figure's two titles can run into each other if the panels are
+too narrow for the font size. `bbox_inches="tight"` (house convention on
+every `savefig`) prevents *clipping*, but not two artists rendering on top of
+each other; widen the figure (`figsize`) or add `fig.subplots_adjust(wspace=...)`
+if titles or labels are cramped, then re-render and look again.
+
+## Symbols over small text
+
+When a repeated label would otherwise shrink to fit (e.g. "(seed 3)" tacked
+onto a dozen x-tick labels), replace it with a symbol instead of making the
+text smaller. House convention:
+[`mmml.utils.plotting.styles.seed_symbol(seed)`](../mmml/utils/plotting/styles.py)
+returns a filled-dot count — `seed_symbol(1) == "●"`, `seed_symbol(3) ==
+"●●●"` — instead of the text `"(seed 3)"`. (Unicode die faces U+2680-2685
+were tried first and rejected: they render as generic missing-glyph boxes on
+common sans-serif fonts, including the ones this cluster and this house
+style actually use — verify any "clever" glyph choice actually renders
+before committing to it, don't assume Unicode support.) Reuse `seed_symbol`
+rather than inventing another per-script seed convention.
+
+More generally: a marker *shape* (see "Redundant coding" below) or a fixed
+color is preferable to a text tag wherever one is already semantically
+assigned — only fall back to text for identifiers that don't have a natural
+symbol (most setting names).
+
+## Overlaid semi-transparent bars, not more panels
+
+When two bar-chart metrics share units and scale (e.g. energy fluctuation
+$\sigma$ and trend $|dE/dn|$, both eV-scale) don't give them two separate
+stacked panels — overlay them as semi-transparent bars in **one** panel
+instead, distinguished by fill style (solid vs. `hatch="///"`) at different
+alpha:
+
+```python
+ax.bar(x, fluctuation, alpha=0.9, width=0.6, label="fluctuation")
+ax.bar(x, trend, alpha=0.45, hatch="///", width=0.6, label="tendency")
+```
+
+This reads their relative size directly (one glance, not a vertical scan
+between two panels) and keeps a multi-panel sweep figure shorter — which
+also means less pressure on the "legend below" rule above, since fewer
+stacked rows makes the figure less tall relative to its width. Reserve a
+separate panel for a metric with genuinely different units/scale (e.g.
+wall-clock seconds) that wouldn't overlay meaningfully.
 
 ## Figure conventions (from real precedent, not invented)
 

@@ -28,7 +28,8 @@ _COORD_COLORS = {"bonds": "#1A5276", "angles": "#B9770E", "dihedrals": "#1E8449"
 
 def _example_figure(style_name: str) -> plt.Figure:
     rng = np.random.default_rng(0)
-    fig, (ax_trace, ax_hist) = plt.subplots(1, 2, figsize=(11, 4.2))
+    fig, (ax_trace, ax_hist) = plt.subplots(1, 2, figsize=(17, 5.5))
+    fig.subplots_adjust(wspace=0.45)
 
     style = get_plot_style(style_name)
     frames = np.arange(100)
@@ -40,7 +41,9 @@ def _example_figure(style_name: str) -> plt.Figure:
     ax_trace.set_xlabel("recorded frame")
     ax_trace.set_ylabel(r"$E(t) - E(0)$  (eV)")
     ax_trace.set_title(r"Energy trace: $\Delta E = E(t) - E(0)$")
-    legend_outside(ax_trace, fontsize=10)
+    # Left column of a 2-column figure -> legend attaches further LEFT (not
+    # "right", which would land between the two panels and crowd ax_hist).
+    legend_outside(ax_trace, side="left", fontsize=10)
 
     # Each coordinate TYPE gets its own semantic color -- not one blue reused
     # for bonds/angles/dihedrals (the mistake this gallery/fix addresses).
@@ -58,7 +61,8 @@ def _example_figure(style_name: str) -> plt.Figure:
     ax2.set_yticks([])
     lines1, labels1 = ax_hist.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    legend_outside(ax2, handles=lines1 + lines2, labels=labels1 + labels2, fontsize=9)
+    # Right column -> legend attaches further RIGHT, mirroring the left column.
+    legend_outside(ax2, handles=lines1 + lines2, labels=labels1 + labels2, side="right", fontsize=9)
 
     fig.suptitle(f'Style: "{style_name}"', y=1.03)
     fig.tight_layout()
