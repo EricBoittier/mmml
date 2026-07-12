@@ -18,6 +18,7 @@ from .electrostatics import (
     HARTREE_TO_EV,
     LearnedMolecularMultipoleElectrostatics,
     field_on_slice,
+    fragment_indices_from_atoms,
     pair_energy_charge_dipole_au,
     plot_field_summary,
 )
@@ -33,6 +34,7 @@ __all__ = [
     "HARTREE_TO_EV",
     "LearnedMolecularMultipoleElectrostatics",
     "field_on_slice",
+    "fragment_indices_from_atoms",
     "irrep_blocks_to_traceless",
     "pair_energy_charge_dipole_au",
     "plot_field_summary",

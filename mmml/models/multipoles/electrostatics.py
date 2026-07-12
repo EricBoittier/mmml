@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import fields
+from collections.abc import Sequence as SequenceABC
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -28,7 +29,7 @@ import numpy as np
 import orbax.checkpoint as ocp
 
 try:
-    from ase import Atoms
+    from ase import Atom, Atoms
     from ase.calculators.calculator import Calculator, all_changes
     from ase.units import Bohr, Hartree
 except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without ASE.
@@ -64,6 +65,55 @@ def load_multipole_model(checkpoint: str | Path) -> tuple[E3xMultipoleModel, Any
     return E3xMultipoleModel(**model_config), payload["params"]
 
 
+def _indices_from_atoms_subset(parent: Atoms, subset: Atoms) -> np.ndarray:
+    """Map an ASE Atoms subset back to parent indices by Z and coordinates."""
+    parent_numbers = np.asarray(parent.get_atomic_numbers())
+    parent_positions = np.asarray(parent.get_positions(), dtype=np.float64)
+    subset_numbers = np.asarray(subset.get_atomic_numbers())
+    subset_positions = np.asarray(subset.get_positions(), dtype=np.float64)
+    used: set[int] = set()
+    indices = []
+    for number, position in zip(subset_numbers, subset_positions, strict=True):
+        candidates = np.flatnonzero(
+            (parent_numbers == number)
+            & np.all(np.isclose(parent_positions, position[None, :], atol=1e-8), axis=1)
+        )
+        match = next((int(candidate) for candidate in candidates if int(candidate) not in used), None)
+        if match is None:
+            raise ValueError(
+                "Could not map an ASE Atoms fragment back to parent atom indices. "
+                "Pass explicit integer index lists when duplicate atoms/geometries are ambiguous."
+            )
+        used.add(match)
+        indices.append(match)
+    return np.asarray(indices, dtype=np.int64)
+
+
+def _coerce_fragment_indices(parent: Atoms, fragment: Any) -> np.ndarray:
+    if isinstance(fragment, Atoms):
+        return _indices_from_atoms_subset(parent, fragment)
+    if isinstance(fragment, np.ndarray) and fragment.dtype == bool:
+        if fragment.shape[0] != len(parent):
+            raise ValueError("Boolean fragment masks must have length len(atoms)")
+        return np.flatnonzero(fragment).astype(np.int64)
+    if isinstance(fragment, Atom):
+        return np.asarray([fragment.index], dtype=np.int64)
+    if isinstance(fragment, SequenceABC) and not isinstance(fragment, (str, bytes)):
+        items = list(fragment)
+        if items and all(isinstance(item, Atom) for item in items):
+            return np.asarray([atom.index for atom in items], dtype=np.int64)
+    try:
+        indices = np.asarray(fragment, dtype=np.int64)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            "Fragments must be integer index sequences, boolean masks, ASE Atoms "
+            "slices, or sequences of ASE Atom objects."
+        ) from exc
+    if indices.ndim != 1:
+        raise ValueError("Each fragment must be one-dimensional")
+    return indices
+
+
 def fragment_indices_from_atoms(
     atoms: Atoms,
     fragments: Sequence[Sequence[int]] | None = None,
@@ -76,7 +126,7 @@ def fragment_indices_from_atoms(
     used when present. Otherwise the full structure is treated as one fragment.
     """
     if fragments is not None:
-        return [np.asarray(fragment, dtype=np.int64) for fragment in fragments]
+        return [_coerce_fragment_indices(atoms, fragment) for fragment in fragments]
     if mol_id_array in atoms.arrays:
         mol_ids = np.asarray(atoms.arrays[mol_id_array])
         return [

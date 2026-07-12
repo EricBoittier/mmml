@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from ase import Atoms
 
 from mmml.models.multipoles import (
     AU_FIELD_TO_V_PER_ANGSTROM,
@@ -14,6 +15,7 @@ from mmml.models.multipoles import (
     E3xOctupoleModel,
     E3xQuadrupoleModel,
     field_on_slice,
+    fragment_indices_from_atoms,
     irrep_blocks_to_traceless,
     pair_energy_charge_dipole_au,
 )
@@ -465,6 +467,39 @@ def test_molecular_multipole_electrostatics_dipole_dipole_signs() -> None:
 
     assert head_to_tail == pytest.approx(-0.25)
     assert side_by_side == pytest.approx(0.125)
+
+
+def test_molecular_multipole_fragments_accept_ase_slices_and_masks() -> None:
+    atoms = Atoms(
+        "OH2OH2",
+        positions=[
+            [0.0, 0.0, 0.0],
+            [0.9, 0.0, 0.0],
+            [-0.2, 0.8, 0.0],
+            [5.0, 0.0, 0.0],
+            [5.9, 0.0, 0.0],
+            [4.8, 0.8, 0.0],
+        ],
+    )
+
+    from_indices = fragment_indices_from_atoms(atoms, [np.array([0, 1, 2]), np.array([3, 4, 5])])
+    from_masks = fragment_indices_from_atoms(
+        atoms,
+        [
+            np.array([True, True, True, False, False, False]),
+            np.array([False, False, False, True, True, True]),
+        ],
+    )
+    from_slices = fragment_indices_from_atoms(atoms, [atoms[:3], atoms[3:]])
+    from_atom_lists = fragment_indices_from_atoms(
+        atoms,
+        [[atoms[0], atoms[1], atoms[2]], [atoms[3], atoms[4], atoms[5]]],
+    )
+
+    expected = [np.array([0, 1, 2]), np.array([3, 4, 5])]
+    for fragments in (from_indices, from_masks, from_slices, from_atom_lists):
+        for fragment, expected_fragment in zip(fragments, expected, strict=True):
+            np.testing.assert_array_equal(fragment, expected_fragment)
 
 
 def test_molecular_multipole_field_slice_units_and_direction() -> None:
