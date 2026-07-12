@@ -57,13 +57,18 @@ def _build_atom_list(symbols: list[str], positions: np.ndarray, ghost_mask: np.n
     ]
 
 
+def _rhf(mol, use_gpu: bool):
+    if use_gpu:
+        from gpu4pyscf.scf import RHF
+    else:
+        from pyscf.scf import RHF
+    return RHF(mol)
+
+
 def _mean_field(mol, method: str, use_gpu: bool):
+    """Build the SCF reference for HF or a DFT functional (not MP2 — see _energy_for)."""
     if method.upper() == "HF":
-        if use_gpu:
-            from gpu4pyscf.scf import RHF
-        else:
-            from pyscf.scf import RHF
-        return RHF(mol)
+        return _rhf(mol, use_gpu)
     if use_gpu:
         from gpu4pyscf.dft import rks
     else:
@@ -74,14 +79,37 @@ def _mean_field(mol, method: str, use_gpu: bool):
 def _energy_for(
     symbols: list[str], positions: np.ndarray, ghost_mask: np.ndarray,
     *, method: str, basis: str, aux_basis: str | None, charge: int, spin: int,
-    use_gpu: bool, scf_conv_tol: float, scf_max_cycle: int,
+    use_gpu: bool, scf_conv_tol: float, scf_max_cycle: int, dispersion: str | None = None,
 ) -> float:
     import pyscf
 
     atom_list = _build_atom_list(symbols, positions, ghost_mask)
     mol = pyscf.M(atom=atom_list, basis=basis, charge=charge, spin=spin, unit="Ang", verbose=0)
 
-    mf = _mean_field(mol, method, use_gpu).density_fit(auxbasis=aux_basis)
+    if method.upper() == "MP2":
+        # MP2 isn't a single mean-field kernel() call: run the RHF reference
+        # first (dispersion, if any, would apply to that reference — DFT-D
+        # parameterizations don't cover MP2 itself, so dispersion is a no-op
+        # here; ghost atoms work identically since DF-MP2 just correlates
+        # whatever occupied/virtual orbitals come out of the RHF reference).
+        if use_gpu:
+            from gpu4pyscf.mp import dfmp2
+        else:
+            from pyscf.mp import dfmp2
+        mf = _rhf(mol, use_gpu).density_fit(auxbasis=aux_basis)
+        mf.conv_tol = scf_conv_tol
+        mf.max_cycle = scf_max_cycle
+        e_hf = mf.kernel()
+        if not mf.converged:
+            raise RuntimeError(f"SCF (MP2 reference) did not converge ({basis})")
+        pt = dfmp2.DFMP2(mf)
+        e_corr, _ = pt.kernel()
+        return float(e_hf + e_corr)
+
+    mf = _mean_field(mol, method, use_gpu)
+    if dispersion and dispersion.lower() != "none":
+        mf.disp = dispersion.lower()
+    mf = mf.density_fit(auxbasis=aux_basis)
     mf.conv_tol = scf_conv_tol
     mf.max_cycle = scf_max_cycle
     energy = mf.kernel()
@@ -94,7 +122,7 @@ def evaluate_pyscf_scan(
     geometries, label_a: str, label_b: str, *,
     method: str, basis: str, aux_basis: str | None, counterpoise: bool,
     charge: int, spin: int, use_gpu: bool, scf_conv_tol: float, scf_max_cycle: int,
-    backend_name: str, skip_keys: set[tuple] | None = None,
+    backend_name: str, skip_keys: set[tuple] | None = None, dispersion: str | None = None,
 ) -> list[dict]:
     rows: list[dict] = []
     isolated_cache: dict[str, float] = {}
@@ -115,6 +143,7 @@ def evaluate_pyscf_scan(
         common = dict(
             method=method, basis=basis, aux_basis=aux_basis, charge=charge, spin=spin,
             use_gpu=use_gpu, scf_conv_tol=scf_conv_tol, scf_max_cycle=scf_max_cycle,
+            dispersion=dispersion,
         )
         try:
             e_dimer = _energy_for(symbols, positions, np.zeros(n, dtype=bool), **common)
@@ -175,15 +204,32 @@ def main():
     )
     parser.add_argument(
         "--methods", nargs="+", default=["HF", "PBE0"],
-        help="'HF' or any PySCF/GPU4PySCF XC functional keyword (default: HF PBE0)",
+        help=(
+            "'HF', 'MP2' (density-fitted, RHF reference), or any PySCF/GPU4PySCF XC functional "
+            "keyword (default: HF PBE0). GPU4PySCF makes larger basis sets (def2-TZVP, "
+            "aug-cc-pVDZ, ...) much more tractable than the ORCA/CPU runs — worth trying via --basis."
+        ),
     )
-    parser.add_argument("--basis", default="def2-SVP", help="Orbital basis set (default: def2-SVP)")
+    parser.add_argument(
+        "--basis", default="def2-SVP",
+        help="Orbital basis set (default: def2-SVP). Larger bases (def2-TZVP, aug-cc-pVDZ) are "
+        "reasonable here given GPU acceleration — remember to bump --aux-basis to match.",
+    )
     parser.add_argument(
         "--aux-basis", default="def2-universal-jkfit",
         help=(
             "Density-fitting auxiliary basis (default: def2-universal-jkfit — a general-purpose "
-            "Coulomb/exchange fitting basis that works across all def2 orbital bases). "
-            "Pass '' / none to let PySCF auto-select instead."
+            "Coulomb/exchange fitting basis that works across all def2 orbital bases). Also used "
+            "as the RI basis for MP2 correlation. Pass '' / none to let PySCF auto-select instead."
+        ),
+    )
+    parser.add_argument(
+        "--dispersion", default="none", choices=["none", "d3bj", "d3zero", "d4"],
+        help=(
+            "Empirical dispersion correction via pyscf-dispersion (default: none). No-op for "
+            "--methods MP2 (dispersion parameterizations are DFT/HF-specific, not meaningful "
+            "for a method that already computes correlation directly). Requires the "
+            "pyscf-dispersion package with a working DFT-D3/D4 library for your platform."
         ),
     )
     parser.add_argument(
@@ -262,8 +308,11 @@ def main():
 
         for method in args.methods:
             method_slug = method.lower().replace("-", "")
-            backend_name = f"{method_slug}_{basis_slug}_{engine_tag}{cp_suffix}"
-            print(f"  Evaluating {method}/{args.basis} (aux={aux_basis or 'auto'})...")
+            is_mp2 = method.upper() == "MP2"
+            disp_suffix = f"_{args.dispersion}" if (args.dispersion != "none" and not is_mp2) else ""
+            backend_name = f"{method_slug}_{basis_slug}_{engine_tag}{disp_suffix}{cp_suffix}"
+            disp_note = "" if is_mp2 else f" disp={args.dispersion}"
+            print(f"  Evaluating {method}/{args.basis} (aux={aux_basis or 'auto'}){disp_note}...")
             rows = evaluate_pyscf_scan(
                 geometries, label_a, label_b,
                 method=method, basis=args.basis, aux_basis=aux_basis,
@@ -271,6 +320,7 @@ def main():
                 charge=args.charge, spin=args.spin, use_gpu=not args.cpu,
                 scf_conv_tol=args.scf_conv_tol, scf_max_cycle=args.scf_max_cycle,
                 backend_name=backend_name, skip_keys=seen_keys,
+                dispersion=None if is_mp2 else args.dispersion,
             )
             results.extend(rows)
             seen_keys.update(
