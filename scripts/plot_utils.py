@@ -130,7 +130,12 @@ def load_and_enrich(csv_path) -> pd.DataFrame:
     return add_combined_backend(df)
 
 
-MIN_SAFE_CONTACT_ANGSTROM = 1.2
+# A geometric floor of 1.2 Å (roughly a bare covalent bond length) turns out
+# to be too permissive: pairs like ACE+ACE stay strongly repulsive well past
+# that (contact needs to clear ~1.4-1.5 Å before energies stop being
+# dominated by the wall), so those in-between points were still slipping
+# through and dominating colour scales. 1.5 Å is a safer default.
+MIN_SAFE_CONTACT_ANGSTROM = 1.5
 
 
 def flag_clashing_geometries(
@@ -153,6 +158,61 @@ def flag_clashing_geometries(
     else:
         df["is_clash"] = False
     return df
+
+
+def flag_energy_outliers(
+    df: pd.DataFrame, value_col: str, mad_thresh: float = 8.0
+) -> pd.DataFrame:
+    """Mark rows whose *value_col* is a robust outlier within *df*.
+
+    Geometric clash filtering (``flag_clashing_geometries``) uses a single
+    fixed contact-distance cutoff, which can still miss backend-specific
+    energetic blow-ups (numerical instabilities right at the repulsive wall,
+    or a pair-specific geometry the fixed cutoff didn't anticipate). This
+    catches those directly from the energies themselves via a median absolute
+    deviation (MAD) based z-score — robust to the very outliers it's
+    detecting, unlike a mean/std z-score. Adds a boolean ``is_energy_outlier``
+    column; does not drop rows.
+    """
+    df = df.copy()
+    values = df[value_col].to_numpy(dtype=float)
+    if len(values) < 4:
+        df["is_energy_outlier"] = False
+        return df
+    med = np.median(values)
+    mad = np.median(np.abs(values - med))
+    if mad < 1e-9:
+        df["is_energy_outlier"] = False
+        return df
+    robust_z = 0.6745 * (values - med) / mad
+    df["is_energy_outlier"] = np.abs(robust_z) > mad_thresh
+    return df
+
+
+def robust_color_vmax(
+    values: np.ndarray,
+    *,
+    percentile: float = 85.0,
+    floor: float = 0.5,
+    pad: float = 1.2,
+    ceiling: float | None = None,
+) -> float:
+    """Pick a colour-scale ``vmax`` that isn't dominated by a repulsive wall.
+
+    Uses a percentile (not max) of the *clean* (already clash/outlier
+    filtered) energies so a handful of remaining steep points can't blow out
+    the whole colour range, with a floor so near-flat surfaces still get
+    visible contrast and an optional hard ceiling.
+    """
+    values = np.asarray(values, dtype=float)
+    values = values[np.isfinite(values)]
+    if len(values) == 0:
+        return floor
+    vmax = float(np.percentile(np.abs(values), percentile)) * pad
+    vmax = max(vmax, floor)
+    if ceiling is not None:
+        vmax = min(vmax, ceiling)
+    return vmax
 
 
 # ── Molecule rendering (bonds, depth transparency, optional force field) ────

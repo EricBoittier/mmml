@@ -46,9 +46,11 @@ from plot_utils import (
     BACKEND_LABELS,
     MIN_SAFE_CONTACT_ANGSTROM,
     flag_clashing_geometries,
+    flag_energy_outliers,
     load_and_enrich,
     ordered_backends,
     render_dimer_atoms,
+    robust_color_vmax,
 )
 
 mpl.rcParams.update(
