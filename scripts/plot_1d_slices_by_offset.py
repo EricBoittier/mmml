@@ -33,6 +33,12 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS, MOLECULES
 from mmml.analysis.dimer_scans import build_rigid_dimer_2d
+from plot_utils import (
+    BACKEND_COLORS,
+    BACKEND_LABELS,
+    load_and_enrich,
+    ordered_backends,
+)
 
 mpl.rcParams.update(
     {
@@ -44,19 +50,6 @@ mpl.rcParams.update(
         "text.usetex": False,
     }
 )
-
-BACKEND_LABELS = {
-    "learned_multipole": "Multipoles",
-    "learned_mbd":       "MBD",
-    "xtb_gfn2":          "GFN2-xTB",
-    "charmm":            "CGenFF",
-}
-BACKEND_COLORS = {
-    "learned_multipole": "#4e79a7",
-    "learned_mbd":       "#f28e2b",
-    "xtb_gfn2":          "#59a14f",
-    "charmm":            "#e15759",
-}
 
 
 def _scale_series(y: np.ndarray, x: np.ndarray, min_dist: float = 3.8) -> np.ndarray:
@@ -256,16 +249,10 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    df = pd.read_csv(args.csv)
-    if "offset_angstrom" not in df.columns:
-        print("No 'offset_angstrom' column — adding 0.0 for backward-compat.")
-        df["offset_angstrom"] = 0.0
-
+    df = load_and_enrich(args.csv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    all_backends = df["backend"].unique().tolist()
-    backends = args.backends if args.backends else all_backends
-    backends = [b for b in backends if b in all_backends]
+    backends = ordered_backends(df, args.backends)
 
     pairs = df[["molecule_a", "molecule_b"]].drop_duplicates().values
     print(f"Plotting 1D slice families for {len(pairs)} pairs, {len(backends)} backends...")

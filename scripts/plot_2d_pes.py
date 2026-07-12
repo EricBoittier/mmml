@@ -31,6 +31,13 @@ from scipy.interpolate import RectBivariateSpline
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
+from plot_utils import (
+    BACKEND_CMAPS,
+    BACKEND_LABELS,
+    load_and_enrich,
+    ordered_backends,
+)
+
 mpl.rcParams.update(
     {
         "font.family": "sans-serif",
@@ -41,19 +48,6 @@ mpl.rcParams.update(
         "text.usetex": False,
     }
 )
-
-BACKEND_LABELS = {
-    "learned_multipole": "Multipoles",
-    "learned_mbd": "MBD",
-    "xtb_gfn2": "GFN2-xTB",
-    "charmm": "CGenFF",
-}
-BACKEND_CMAPS = {
-    "learned_multipole": "RdBu_r",
-    "learned_mbd":       "PuOr_r",
-    "xtb_gfn2":          "RdYlGn_r",
-    "charmm":            "seismic",
-}
 
 
 def _reference_energy(series: pd.Series, ref_dist: float | None = None) -> pd.Series:
@@ -222,16 +216,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    df = pd.read_csv(args.csv)
-    if "offset_angstrom" not in df.columns:
-        print("No 'offset_angstrom' column found — adding 0.0 (treating as 1D scan).")
-        df["offset_angstrom"] = 0.0
-
+    df = load_and_enrich(args.csv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    all_backends = df["backend"].unique().tolist()
-    backends = args.backends if args.backends else all_backends
-    backends = [b for b in backends if b in all_backends]
+    all_backends = ordered_backends(df, args.backends)
+    backends = all_backends
 
     pairs = df[["molecule_a", "molecule_b"]].drop_duplicates().values
     print(f"Plotting 2D PES for {len(pairs)} pairs × {len(backends)} backends...")
