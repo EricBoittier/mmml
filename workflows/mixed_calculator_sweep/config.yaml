@@ -68,15 +68,25 @@ settings:
     checkpoint: base
     calculator: {disable_physnet_point_coulomb: true}
 
+  # NOTE on peptide_water_ml_cutoff_A: it does NOT reduce ml_pep_water's
+  # per-step cost. Checked directly in
+  # mmml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn
+  # -- every core-water dimer is still run through the ML model every step
+  # (vmapped, no neighbor-list-style pruning like mm_nonbonded's padded pair
+  # list); the cutoff only applies a post-hoc energy switching weight. So it
+  # affects physics (zeroing far-water contributions), not runtime. It's kept
+  # below because it's still the physically correct choice, but the ACTUAL
+  # fix for the ~3-real-hour-and-still-running-at-n_waters=20 slowdown seen
+  # on pc-studix (see README.md "Real-run status") is fewer dimers per step:
+  # n_waters dropped 20 -> 8 (2.5x fewer vmapped ML forward passes/step) and
+  # n_steps dropped 10000 -> 2000 (still 100x the local smoke test's 20
+  # steps, and record_every=100 still gives 20 recorded energy samples) so a
+  # production run fits the existing walltime/hardware budget honestly,
+  # rather than re-claiming a fix that doesn't touch the actual bottleneck.
   mixed_baseline:
-    # peptide_water_ml_cutoff_A bounds ml_pep_water to nearby waters only --
-    # without it, every core-water pair is scored densely each step (no
-    # neighbor-list capacity limit, unlike mm_nonbonded's padded pair list),
-    # which made this setting ~30-40x slower per step than water_box on the
-    # real cluster (see README.md "Real-run status"). 6.0 A matches
-    # mixed_core_vdw's existing value.
     system: peptide_water
-    n_waters: 20
+    n_waters: 8
+    n_steps: 2000
     box_size: 20.0
     checkpoint: base
     peptide_water_ml_cutoff_A: 6.0
@@ -84,14 +94,16 @@ settings:
 
   mixed_older_epoch:
     system: peptide_water
-    n_waters: 20
+    n_waters: 8
+    n_steps: 2000
     box_size: 20.0
     checkpoint: older_epoch
     peptide_water_ml_cutoff_A: 6.0
 
   mixed_damping_sigma:
     system: peptide_water
-    n_waters: 20
+    n_waters: 8
+    n_steps: 2000
     box_size: 20.0
     checkpoint: base
     calculator: {electrostatics_damping_sigma: 1.0}
@@ -101,7 +113,8 @@ settings:
     # Also exercises vdw_core's repulsive wall between the ML peptide core
     # and any water outside ml_pep_water's own interaction cutoff.
     system: peptide_water
-    n_waters: 20
+    n_waters: 8
+    n_steps: 2000
     box_size: 20.0
     checkpoint: base
     peptide_water_ml_cutoff_A: 6.0
