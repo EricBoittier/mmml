@@ -32,7 +32,8 @@ colors = comparison_colors(style, n=len(settings))  # fixed categorical order
 
 | Preset | When |
 |---|---|
-| `"nature"` (alias `"pub"`/`"publication"`) | Default for scientific analysis figures (energy traces, RDFs, bond/angle histograms) — compact sans-serif, restrained palette, `axes.labelsize=9`. This is what `scripts/plot_trajectory_structure.py`'s hand-picked colors (`#E64B35`, `#3C5488`) already match. |
+| `"tufte"` | **Default for sweep/analysis figures meant to be read, not just glanced at** (energy traces, RDFs, bond/angle histograms, anything going in a writeup) — large serif type (`axes.labelsize=15`, `axes.titlesize=17` bold), thick lines (`lines.linewidth=2.8`), LaTeX-style math via `mathtext.fontset="stix"` (no TeX install needed — `r"$E(t) - E(0)$"` just works), no top/right spine, faint dotted grid. Used by both `workflows/*/scripts/plot_results.py` and `plot_structure.py`. |
+| `"nature"` (alias `"pub"`/`"publication"`) | Compact journal-figure alternative when `"tufte"`'s larger type doesn't fit a multi-panel grid — sans-serif, `axes.labelsize=9`. |
 | `"google"` (module default) | Training-curve dashboards (loss/lr curves) — this is what most existing training-plot scripts assume implicitly. |
 | `"mpl_classic"` | Quick throwaway diagnostics where house branding doesn't matter. |
 | `"xmgrace"` / `"tron"` | Not for new work — legacy/novelty presets. |
@@ -40,13 +41,61 @@ colors = comparison_colors(style, n=len(settings))  # fixed categorical order
 Run `mmml.utils.plotting.styles.list_plot_styles()` to see all registered
 names/aliases.
 
+## Semantic color, not palette index
+
+**A color should mean the same thing every time it appears, not just be "the
+next one in the cycle."** `comparison_colors(style, n)` is fine for truly
+interchangeable series (e.g. random seeds of the same setting), but once
+your series fall into meaningful groups, assign color by group membership —
+fixed and hand-picked, not generated:
+
+```python
+# Good: color means something and is stable across every figure.
+_SYSTEM_COLORS = {"water_box": "#1A5276", "peptide_water": "#943126"}
+color = _SYSTEM_COLORS[row["system"]]
+
+# Bad: the 3rd setting in whatever order happened to sort this run.
+color = comparison_colors(style, n)[i]
+```
+
+Concrete house examples (both from `workflows/*/scripts/plot_results.py`):
+
+- **`mixed_calculator_sweep`**: color = system (`water_box` = deep blue "MM
+  only", `peptide_water` = brick red "mixed ML/MM"); a distinct **marker
+  shape** per individual setting shares that color rather than getting its
+  own hue, so identity is still readable (redundant color+shape coding)
+  without diluting what the color itself means.
+- **`unified_backend_sweep`**: color = *kind of physics* the backend
+  represents — `jaxmd_min` (deterministic minimization) neutral gray,
+  `jaxmd_nve` (energy-conserving reference) deep blue, `jaxmd_nvt`
+  (thermostatted — deliberately exchanges heat) forest green, `jaxmd_npt`
+  (documented deterministic failure on this cluster) brick red, `rigid_mc`
+  (stochastic sampler) muted purple.
+- **Element coloring** (`scripts/plot_trajectory_structure.py`'s `plot_rdfs`)
+  already does this correctly via `ase.data.colors.jmol_colors` — an O atom
+  is the same red everywhere because "oxygen" is the semantic category, not
+  because oxygen happened to be plotted first.
+
+When in doubt: if you can name *why* a series has the color it has (its
+system, its physics, its pass/fail status) in one short phrase, it's
+semantic. If the only answer is "it's next in the list," fix it.
+
 ## Figure conventions (from real precedent, not invented)
 
-- **DPI**: `150` for a quick per-run diagnostic plot regenerated often (e.g.
-  sweep summary bars); `300` for anything meant to be read closely or reused
-  in a writeup (RDFs, bond/angle/dihedral histograms — see
+- **DPI**: `150` for a quick per-run diagnostic plot regenerated often;
+  `200` for `"tufte"`-styled sweep figures (`workflows/*/scripts/plot_results.py`);
+  `300` for anything meant to be read very closely or reused in a writeup
+  (RDFs, bond/angle/dihedral histograms — see
   `scripts/plot_trajectory_structure.py`'s `plot_rdfs`/`plot_internal`, both
   `dpi=300`).
+- **Uncertainty as shading, not just error bars**: `ax.fill_between(x, trend
+  - sigma, trend + sigma, alpha=0.1-0.15)` behind a line reads faster than a
+  legend annotation — see `plot_energy_traces` in
+  `workflows/mixed_calculator_sweep/scripts/plot_results.py`.
+- **Redundant coding for multi-category series**: color for the group, a
+  distinct marker shape (`o`, `s`, `^`, `D`, `v`, ...) for the individual
+  series within it — never rely on color alone to carry both. See "Semantic
+  color, not palette index" below.
 - **Always**: `fig.savefig(path, dpi=..., bbox_inches="tight")` then
   `plt.close(fig)` — every plotting function in this repo returns the output
   `Path` and closes its own figure; never leave figures open across calls.

@@ -24,6 +24,8 @@ import numpy as np
 from ase import Atoms
 
 from mmml.utils.plotting.styles import apply_plot_style
+
+_STYLE_NAME = "tufte"
 from mmml.utils.plotting.trajectory_structure import (
     element_pair_rdfs,
     internal_coordinate_distributions,
@@ -131,7 +133,7 @@ def main() -> None:
     out_dir = args.out_dir or (args.results_dir / args.setting / f"seed_{args.seed}" / "figures")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    apply_plot_style("nature")
+    apply_plot_style(_STYLE_NAME)
     ref = _load_reference_plotting_module(args.repo_root)
 
     n_atoms = len(frames[0])

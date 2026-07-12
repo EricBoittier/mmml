@@ -6,19 +6,24 @@ setting's ``trajectory.npz`` (written by ``JaxmdDriver``/``RigidBodySampler``
 since ``run_setting.py`` passes ``output_dir``) to produce:
 
 - ``results/figures/energy_traces.png`` — energy vs. recorded frame (relative
-  to each run's initial frame) with a fitted linear trend line overlaid, one
-  line per (setting, seed), so a conservation problem (e.g. the
-  ``mixed_core_vdw`` initial blow-up documented in README.md) is visible at a
-  glance. Settings whose energy swings by >1000 eV get their own panel so
-  they don't flatten the well-behaved traces to a line.
+  to each run's initial frame) with a shaded ±1σ fluctuation band and a
+  fitted linear trend line overlaid, one line per (setting, seed), so a
+  conservation problem (e.g. the ``mixed_core_vdw`` initial blow-up
+  documented in README.md) is visible at a glance. Settings whose energy
+  swings by >1000 eV get their own panel so they don't flatten the
+  well-behaved traces to a line.
 - ``results/figures/summary_bars.png`` — per-setting bars for energy
-  fluctuation (std, the noise floor) and trend (linear slope, the systematic
-  tendency) — see ``docs/plotting-style-guide.md`` for why this replaces a
-  bare endpoint delta — plus wall-clock elapsed time, split by system
-  (water_box vs peptide_water).
+  fluctuation ($\\sigma$, the noise floor) and trend (linear slope, the
+  systematic tendency) — see ``docs/plotting-style-guide.md`` for why this
+  replaces a bare endpoint delta — plus wall-clock elapsed time.
 
-Uses ``mmml.utils.plotting.styles`` (the house style module) for fonts/colors
-instead of an ad-hoc palette — see ``docs/plotting-style-guide.md``.
+**Color is semantic, not palette-index**: every setting is colored by its
+*system* (``water_box`` = deep blue "MM only", ``peptide_water`` = brick red
+"mixed ML/MM") using the house "tufte" style's `train`/`valid` roles, not an
+arbitrary per-series hue — see docs/plotting-style-guide.md "Semantic color,
+not palette index". Individual settings within a system share that color but
+get a distinct marker shape, so identity is still readable without inventing
+a new hue per line.
 """
 
 from __future__ import annotations
@@ -31,9 +36,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from mmml.md.results import energy_drift_metrics
-from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
+from mmml.utils.plotting.styles import apply_plot_style
 
-_STYLE_NAME = "nature"
+_STYLE_NAME = "tufte"
+
+# Semantic system -> color (see module docstring). Not palette-index colors.
+_SYSTEM_COLORS = {"water_box": "#1A5276", "peptide_water": "#943126"}
+_SYSTEM_LABELS = {"water_box": "water_box (MM only)", "peptide_water": "peptide_water (mixed ML/MM)"}
+# Symbols distinguish individual settings within a system's shared color.
+_MARKERS = ["o", "s", "^", "D", "v", "P", "X", "*", "<", ">", "h", "p"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,23 +74,22 @@ def _outlier_settings(rows: list[dict[str, str]], results_dir: Path, threshold_e
     return outliers
 
 
-def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path, style) -> Path:
-    """ΔE(frame) = E(frame) - E(frame=0) per (setting, seed), with a fitted trend line.
+def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path) -> Path:
+    r"""$\Delta E(t) = E(t) - E(0)$ per (setting, seed), with a $\pm\sigma$ band and trend fit.
 
     Plotting relative to each trace's own starting energy puts water_box
     (~-75 eV) and peptide_water (~-500 to -560 eV, or the mixed_core_vdw
     outlier's ~1.7M eV -- see README.md/docs §11) on one comparable axis. The
     dashed trend line is the same linear fit `mmml.md.results.energy_drift_metrics`
     reports as `energy_trend_ev_per_frame` -- the systematic tendency, as
-    distinct from frame-to-frame fluctuation.
+    distinct from the shaded $\pm\sigma$ fluctuation band around it.
     """
     settings = sorted({row["setting"] for row in rows})
-    colors = comparison_colors(style, len(settings))
-    color_of = dict(zip(settings, colors))
+    marker_of = dict(zip(settings, _MARKERS))
     outliers = _outlier_settings(rows, results_dir)
 
     fig, (ax_main, ax_outlier) = plt.subplots(
-        2, 1, figsize=(9, 8), gridspec_kw={"height_ratios": [2, 1]}
+        2, 1, figsize=(11, 9), gridspec_kw={"height_ratios": [2, 1]}
     )
     plotted_main = plotted_outlier = False
     for row in rows:
@@ -93,12 +103,16 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path,
         delta = energies - energies[0]
         label = f"{row['setting']} (seed {row['seed']})"
         ax = ax_outlier if row["setting"] in outliers else ax_main
-        color = color_of[row["setting"]]
-        ax.plot(frames, delta, marker="o", markersize=3, linewidth=1.2,
-                color=color, alpha=0.85, label=label)
+        color = _SYSTEM_COLORS[row["system"]]
+        marker = marker_of[row["setting"]]
+
         metrics = energy_drift_metrics(energies)
+        sigma = metrics["energy_fluctuation_std_ev"]
         trend = metrics["energy_trend_ev_per_frame"] * frames
-        ax.plot(frames, trend, linestyle="--", linewidth=1.0, color=color, alpha=0.55)
+        ax.fill_between(frames, trend - sigma, trend + sigma, color=color, alpha=0.12, linewidth=0)
+        ax.plot(frames, delta, marker=marker, markersize=6, markevery=max(1, len(frames) // 20),
+                linewidth=2.4, color=color, alpha=0.9, label=label)
+        ax.plot(frames, trend, linestyle="--", linewidth=1.8, color=color, alpha=0.6)
         if ax is ax_main:
             plotted_main = True
         else:
@@ -108,24 +122,22 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path,
         ax_main.text(0.5, 0.5, "no trajectory.npz found", ha="center", va="center",
                       transform=ax_main.transAxes)
 
-    ax_main.set_ylabel(r"$E(t) - E(0)$ (eV)")
-    ax_main.set_title("Energy traces relative to each run's initial frame (dashed = linear trend fit)")
-    ax_main.legend(fontsize=7, ncol=2, loc="best", framealpha=0.9)
-    ax_main.grid(alpha=0.25)
+    ax_main.set_ylabel(r"$E(t) - E(0)$  (eV)")
+    ax_main.set_title(r"Energy traces relative to $E(0)$  (dashed = trend fit, band = $\pm\sigma$)")
+    ax_main.legend(fontsize=10, ncol=2, loc="best", framealpha=0.85, edgecolor="#CCCCCC")
 
     ax_outlier.set_xlabel("recorded frame (every record_every steps)")
-    ax_outlier.set_ylabel(r"$E(t) - E(0)$ (eV)")
+    ax_outlier.set_ylabel(r"$E(t) - E(0)$  (eV)")
     if outliers:
         ax_outlier.set_title(
             f"Large-swing settings (own axis): {', '.join(sorted(outliers))}"
         )
-        ax_outlier.legend(fontsize=7, loc="best", framealpha=0.9)
+        ax_outlier.legend(fontsize=10, loc="best", framealpha=0.85, edgecolor="#CCCCCC")
     else:
         ax_outlier.set_title("No settings exceeded the 1000 eV outlier threshold")
-    ax_outlier.grid(alpha=0.25)
 
     fig.tight_layout()
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return out
 
@@ -149,7 +161,7 @@ def _drift_metrics_for_row(row: dict[str, str], results_dir: Path) -> dict[str, 
     return {"energy_fluctuation_std_ev": float("nan"), "energy_trend_ev_per_frame": float("nan")}
 
 
-def plot_summary_bars(rows: list[dict[str, str]], results_dir: Path, out: Path, style) -> Path:
+def plot_summary_bars(rows: list[dict[str, str]], results_dir: Path, out: Path) -> Path:
     completed = [row for row in rows if row["completed"] == "True"]
     completed.sort(key=lambda r: (r["system"], r["setting"], r["seed"]))
     labels = [f"{row['setting']}\n(seed {row['seed']})" for row in completed]
@@ -157,36 +169,30 @@ def plot_summary_bars(rows: list[dict[str, str]], results_dir: Path, out: Path, 
     fluctuation = [m["energy_fluctuation_std_ev"] for m in metrics]
     trend = [abs(m["energy_trend_ev_per_frame"]) for m in metrics]
     elapsed = [float(row["elapsed_seconds"]) for row in completed]
-    system_colors = dict(zip(("water_box", "peptide_water"), comparison_colors(style, 2)))
-    colors = [system_colors[row["system"]] for row in completed]
+    colors = [_SYSTEM_COLORS[row["system"]] for row in completed]
 
-    fig, (ax_fluct, ax_trend, ax_time) = plt.subplots(3, 1, figsize=(10, 9), sharex=True)
+    fig, (ax_fluct, ax_trend, ax_time) = plt.subplots(3, 1, figsize=(12, 11), sharex=True)
 
-    ax_fluct.bar(labels, fluctuation, color=colors)
-    ax_fluct.set_ylabel("fluctuation:\nstd (eV)")
+    ax_fluct.bar(labels, fluctuation, color=colors, edgecolor="#222222", linewidth=0.8)
+    ax_fluct.set_ylabel(r"fluctuation: $\sigma$ (eV)")
     ax_fluct.set_title("Conservation quality (fluctuation + tendency) and cost per setting")
     ax_fluct.set_yscale("log")
-    ax_fluct.grid(alpha=0.25, axis="y")
 
-    ax_trend.bar(labels, trend, color=colors)
-    ax_trend.set_ylabel("tendency:\n|slope| (eV/frame)")
+    ax_trend.bar(labels, trend, color=colors, edgecolor="#222222", linewidth=0.8)
+    ax_trend.set_ylabel(r"tendency: $|{\rm d}E/{\rm d}n|$ (eV/frame)")
     ax_trend.set_yscale("log")
-    ax_trend.grid(alpha=0.25, axis="y")
 
-    ax_time.bar(labels, elapsed, color=colors)
+    ax_time.bar(labels, elapsed, color=colors, edgecolor="#222222", linewidth=0.8)
     ax_time.set_ylabel("elapsed (s)")
     ax_time.tick_params(axis="x", rotation=75)
-    ax_time.grid(alpha=0.25, axis="y")
 
     from matplotlib.patches import Patch
-    handles = [
-        Patch(color=system_colors["water_box"], label="water_box"),
-        Patch(color=system_colors["peptide_water"], label="peptide_water (mixed)"),
-    ]
-    ax_fluct.legend(handles=handles, loc="upper left", fontsize=8)
+    handles = [Patch(facecolor=c, edgecolor="#222222", label=_SYSTEM_LABELS[s])
+               for s, c in _SYSTEM_COLORS.items()]
+    ax_fluct.legend(handles=handles, loc="upper left", fontsize=11, framealpha=0.85, edgecolor="#CCCCCC")
 
     fig.tight_layout()
-    fig.savefig(out, dpi=150, bbox_inches="tight")
+    fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return out
 
@@ -196,10 +202,10 @@ def main() -> None:
     out_dir = args.out_dir or (args.results_dir / "figures")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    style = apply_plot_style(_STYLE_NAME)
+    apply_plot_style(_STYLE_NAME)
     rows = load_summary(args.results_dir)
-    traces_path = plot_energy_traces(rows, args.results_dir, out_dir / "energy_traces.png", style)
-    bars_path = plot_summary_bars(rows, args.results_dir, out_dir / "summary_bars.png", style)
+    traces_path = plot_energy_traces(rows, args.results_dir, out_dir / "energy_traces.png")
+    bars_path = plot_summary_bars(rows, args.results_dir, out_dir / "summary_bars.png")
     print(f"wrote {traces_path}")
     print(f"wrote {bars_path}")
 

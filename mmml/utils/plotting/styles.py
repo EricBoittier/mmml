@@ -204,6 +204,54 @@ _TRON_RC = {
     "lines.linewidth": 2.0,
 }
 
+# Tufte: large type, thick lines, LaTeX-style math (mathtext, no TeX install
+# needed), minimal chart junk (no top/right spines, sparse ticks, faint grid).
+# Colors are semantic pairs, not a generic cycling palette -- see
+# docs/plotting-style-guide.md "Semantic color, not palette index" for how
+# callers are expected to map domain categories (e.g. MM vs ML, pass vs
+# fail) onto fixed, meaningful colors rather than an arbitrary series order.
+_TUFTE_COLORS = {
+    "train": "#1A5276",   # deep slate blue
+    "valid": "#943126",   # brick red
+    "best": "#B9770E",    # ochre
+    "accent": "#1E8449",  # forest green
+    "lr": "#6C3483",      # muted purple
+    "muted": "#5D6D7E",   # slate gray
+}
+_TUFTE_RC = {
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+    "axes.edgecolor": "#333333",
+    "axes.linewidth": 1.0,
+    "axes.labelsize": 15,
+    "axes.titlesize": 17,
+    "axes.titleweight": "bold",
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.grid": True,
+    "grid.alpha": 0.18,
+    "grid.linestyle": ":",
+    "grid.linewidth": 0.7,
+    "grid.color": "#888888",
+    "legend.framealpha": 0.92,
+    "legend.fontsize": 12,
+    "legend.edgecolor": "#CCCCCC",
+    "xtick.labelsize": 13,
+    "ytick.labelsize": 13,
+    "xtick.direction": "out",
+    "ytick.direction": "out",
+    "font.family": "serif",
+    "font.serif": ["STIXGeneral", "DejaVu Serif"],
+    "font.size": 14,
+    "mathtext.fontset": "stix",  # LaTeX-like math glyphs, no TeX install needed
+    "lines.linewidth": 2.8,
+    "lines.solid_capstyle": "round",
+    "lines.markersize": 8,
+    "patch.linewidth": 1.2,
+    "savefig.dpi": 200,
+}
+
+
 # Classic matplotlib defaults (pre-seaborn era feel).
 _MPL_CLASSIC_COLORS = {
     "train": "#1f77b4",
@@ -306,6 +354,24 @@ PLOT_STYLES: dict[str, PlotStyle] = {
         },
         summary_font_family="monospace",
         suptitle_color="#E8F4FF",
+    ),
+    "tufte": _style(
+        "tufte",
+        "Tufte-inspired: large serif type, thick lines, LaTeX-style math, "
+        "minimal chart junk (no top/right spine, faint grid), semantic colors.",
+        colors=_TUFTE_COLORS,
+        rc_params=_TUFTE_RC,
+        comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
+        train_linewidth=2.8,
+        valid_linewidth=3.2,
+        best_marker_edge="#222222",
+        best_marker_size=160.0,
+        text_box={
+            "boxstyle": "round",
+            "facecolor": "#FBFBF8",
+            "edgecolor": "#999999",
+            "alpha": 0.95,
+        },
     ),
     "mpl_classic": _style(
         "mpl_classic",
