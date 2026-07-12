@@ -13,17 +13,22 @@ since ``run_setting.py`` passes ``output_dir``) to produce:
   swings by >1000 eV get their own panel so they don't flatten the
   well-behaved traces to a line.
 - ``results/figures/summary_bars.png`` — per-setting bars for energy
-  fluctuation ($\\sigma$, the noise floor) and trend (linear slope, the
-  systematic tendency) — see ``docs/plotting-style-guide.md`` for why this
-  replaces a bare endpoint delta — plus wall-clock elapsed time.
+  conservation quality ($\\sigma$ fluctuation and linear trend, overlaid as
+  semi-transparent bars in one panel rather than two separate ones — see
+  ``docs/plotting-style-guide.md`` "Overlaid semi-transparent bars, not
+  more panels") plus wall-clock elapsed time.
 
 **Color is semantic, not palette-index**: every setting is colored by its
 *system* (``water_box`` = deep blue "MM only", ``peptide_water`` = brick red
-"mixed ML/MM") using the house "editorial" style family's `train`/`valid` roles, not an
-arbitrary per-series hue — see docs/plotting-style-guide.md "Semantic color,
-not palette index". Individual settings within a system share that color but
-get a distinct marker shape, so identity is still readable without inventing
-a new hue per line.
+"mixed ML/MM"); a distinct **marker shape** identifies the individual
+setting, and a **die-face symbol** (⚀⚁⚂...) identifies the seed, replacing
+the old "(seed N)" text — see ``docs/plotting-style-guide.md`` "Semantic
+color, not palette index" and "Symbols over small text".
+
+**Legends live outside the plot, on the figure's longest side**: these are
+single-column, multi-row (stacked) layouts, so the combined legend sits
+below the whole figure (see ``legend_outside``'s aspect-ratio rule), wrapped
+into a small grid rather than one long row.
 """
 
 from __future__ import annotations
@@ -36,7 +41,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from mmml.md.results import energy_drift_metrics
-from mmml.utils.plotting.styles import apply_plot_style, legend_outside
+from mmml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
 
 _STYLE_NAME = "icml"  # see docs/plot-style-gallery.md
 
@@ -89,8 +94,10 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
     outliers = _outlier_settings(rows, results_dir)
 
     fig, (ax_main, ax_outlier) = plt.subplots(
-        2, 1, figsize=(11, 9), gridspec_kw={"height_ratios": [2, 1]}
+        2, 1, figsize=(10, 12), gridspec_kw={"height_ratios": [2, 1]}
     )
+    all_handles: list = []
+    all_labels: list[str] = []
     plotted_main = plotted_outlier = False
     for row in rows:
         if row["completed"] != "True":
@@ -101,7 +108,7 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
         energies = np.asarray(np.load(traj_path)["energies"], dtype=float)
         frames = np.arange(len(energies))
         delta = energies - energies[0]
-        label = f"{row['setting']} (seed {row['seed']})"
+        label = f"{row['setting']}  {seed_symbol(int(row['seed']))}"
         ax = ax_outlier if row["setting"] in outliers else ax_main
         color = _SYSTEM_COLORS[row["system"]]
         marker = marker_of[row["setting"]]
@@ -110,9 +117,11 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
         sigma = metrics["energy_fluctuation_std_ev"]
         trend = metrics["energy_trend_ev_per_frame"] * frames
         ax.fill_between(frames, trend - sigma, trend + sigma, color=color, alpha=0.12, linewidth=0)
-        ax.plot(frames, delta, marker=marker, markersize=6, markevery=max(1, len(frames) // 20),
-                linewidth=2.4, color=color, alpha=0.9, label=label)
+        (line,) = ax.plot(frames, delta, marker=marker, markersize=8, markevery=max(1, len(frames) // 20),
+                           linewidth=2.6, color=color, alpha=0.9, label=label)
         ax.plot(frames, trend, linestyle="--", linewidth=1.8, color=color, alpha=0.6)
+        all_handles.append(line)
+        all_labels.append(label)
         if ax is ax_main:
             plotted_main = True
         else:
@@ -124,9 +133,6 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
 
     ax_main.set_ylabel(r"$E(t) - E(0)$  (eV)")
     ax_main.set_title(r"Energy traces relative to $E(0)$  (dashed = trend fit, band = $\pm\sigma$)")
-    # Outside the axes (never over the data) -- with this many settings the
-    # legend is long, and reads like a table (color+marker -> setting name).
-    legend_outside(ax_main, fontsize=10)
 
     ax_outlier.set_xlabel("recorded frame (every record_every steps)")
     ax_outlier.set_ylabel(r"$E(t) - E(0)$  (eV)")
@@ -134,11 +140,15 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
         ax_outlier.set_title(
             f"Large-swing settings (own axis): {', '.join(sorted(outliers))}"
         )
-        legend_outside(ax_outlier, fontsize=10)
     else:
         ax_outlier.set_title("No settings exceeded the 1000 eV outlier threshold")
 
-    fig.tight_layout()
+    # One combined legend below the whole (tall, stacked) figure, not one per
+    # panel -- avoids two overlapping/duplicated legend boxes. Seed shown as
+    # a die face (⚀⚁⚂...) instead of "(seed N)" text.
+    legend_outside(fig, handles=all_handles, labels=all_labels, side="bottom", fontsize=12, title="setting  seed")
+
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return out
@@ -166,34 +176,47 @@ def _drift_metrics_for_row(row: dict[str, str], results_dir: Path) -> dict[str, 
 def plot_summary_bars(rows: list[dict[str, str]], results_dir: Path, out: Path) -> Path:
     completed = [row for row in rows if row["completed"] == "True"]
     completed.sort(key=lambda r: (r["system"], r["setting"], r["seed"]))
-    labels = [f"{row['setting']}\n(seed {row['seed']})" for row in completed]
+    labels = [f"{row['setting']}  {seed_symbol(int(row['seed']))}" for row in completed]
     metrics = [_drift_metrics_for_row(row, results_dir) for row in completed]
     fluctuation = [m["energy_fluctuation_std_ev"] for m in metrics]
     trend = [abs(m["energy_trend_ev_per_frame"]) for m in metrics]
     elapsed = [float(row["elapsed_seconds"]) for row in completed]
     colors = [_SYSTEM_COLORS[row["system"]] for row in completed]
 
-    fig, (ax_fluct, ax_trend, ax_time) = plt.subplots(3, 1, figsize=(12, 11), sharex=True)
+    fig, (ax_energy, ax_time) = plt.subplots(2, 1, figsize=(11, 10), sharex=True)
 
-    ax_fluct.bar(labels, fluctuation, color=colors, edgecolor="#222222", linewidth=0.8)
-    ax_fluct.set_ylabel(r"fluctuation: $\sigma$ (eV)")
-    ax_fluct.set_title("Conservation quality (fluctuation + tendency) and cost per setting")
-    ax_fluct.set_yscale("log")
+    # Fluctuation and tendency overlaid as semi-transparent bars in ONE panel
+    # (not two stacked ones) -- both are eV-scale conservation-quality
+    # readouts, so overlaying them (hatched vs. solid) shows their relative
+    # size directly instead of forcing a vertical scan between two panels.
+    x = np.arange(len(completed))
+    bars_fluct = ax_energy.bar(x, fluctuation, color=colors, alpha=0.9, width=0.6,
+                                edgecolor="#222222", linewidth=0.8, label="fluctuation")
+    bars_trend = ax_energy.bar(x, trend, color=colors, alpha=0.45, width=0.6, hatch="///",
+                                edgecolor="#222222", linewidth=0.8, label="tendency")
+    ax_energy.set_ylabel(r"$\sigma$ or $|{\rm d}E/{\rm d}n|$ (eV, eV/frame)")
+    ax_energy.set_title("Conservation quality (solid = fluctuation $\\sigma$, hatched = tendency) and cost")
+    ax_energy.set_yscale("log")
+    ax_energy.set_xticks(x)
+    ax_energy.set_xticklabels([])  # shared x-axis: only the bottom panel labels
 
-    ax_trend.bar(labels, trend, color=colors, edgecolor="#222222", linewidth=0.8)
-    ax_trend.set_ylabel(r"tendency: $|{\rm d}E/{\rm d}n|$ (eV/frame)")
-    ax_trend.set_yscale("log")
-
-    ax_time.bar(labels, elapsed, color=colors, edgecolor="#222222", linewidth=0.8)
+    ax_time.bar(x, elapsed, color=colors, edgecolor="#222222", linewidth=0.8)
     ax_time.set_ylabel("elapsed (s)")
-    ax_time.tick_params(axis="x", rotation=75)
+    ax_time.set_xticks(x)
+    # Rotated + right-anchored so long, dense labels never collide (12
+    # settings' worth of text does not fit horizontally at this font size).
+    ax_time.set_xticklabels(labels, rotation=60, ha="right", rotation_mode="anchor")
 
     from matplotlib.patches import Patch
     handles = [Patch(facecolor=c, edgecolor="#222222", label=_SYSTEM_LABELS[s])
                for s, c in _SYSTEM_COLORS.items()]
-    legend_outside(ax_fluct, handles=handles, fontsize=11)
+    handles += [
+        Patch(facecolor="#777777", alpha=0.9, edgecolor="#222222", label="fluctuation (solid)"),
+        Patch(facecolor="#777777", alpha=0.45, hatch="///", edgecolor="#222222", label="tendency (hatched)"),
+    ]
+    legend_outside(fig, handles=handles, side="bottom", fontsize=12, ncol=2)
 
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return out

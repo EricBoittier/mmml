@@ -17,6 +17,8 @@ __all__ = [
     "list_plot_styles",
     "comparison_colors",
     "legend_outside",
+    "seed_symbol",
+    "SEED_DICE",
 ]
 
 
@@ -299,8 +301,8 @@ _ICML_RC = {
     "axes.facecolor": "white",
     "axes.edgecolor": "#444444",
     "axes.linewidth": 1.0,
-    "axes.labelsize": 13,
-    "axes.titlesize": 14,
+    "axes.labelsize": 16,
+    "axes.titlesize": 17,
     "axes.titleweight": "bold",
     "axes.spines.top": False,
     "axes.spines.right": False,
@@ -311,13 +313,14 @@ _ICML_RC = {
     "grid.color": "#DDDDDD",
     "axes.axisbelow": True,
     "legend.framealpha": 0.95,
-    "legend.fontsize": 11,
+    "legend.fontsize": 13,
+    "legend.title_fontsize": 14,
     "legend.edgecolor": "#CCCCCC",
-    "xtick.labelsize": 12,
-    "ytick.labelsize": 12,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
     "font.family": "sans-serif",
     "font.sans-serif": ["Helvetica Neue", "Arial", "DejaVu Sans"],
-    "font.size": 12,
+    "font.size": 14,
     "mathtext.fontset": "dejavusans",
     "lines.linewidth": 2.4,
     "lines.solid_capstyle": "round",
@@ -327,18 +330,68 @@ _ICML_RC = {
 }
 
 
-def legend_outside(axis, *, ncol: int = 1, **kwargs: Any):
-    """Place a legend outside the axes (right-hand side), per house convention.
+# Filled-circle counts instead of "(seed N)" text -- tried Unicode die faces
+# (U+2680-2685) first, but they render as generic missing-glyph boxes on
+# common sans-serif fonts (Helvetica Neue, and likely fonts on the cluster);
+# "●" (filled circle, U+25CF) is part of essentially every font
+# (including matplotlib's bundled DejaVu Sans) and renders reliably.
+SEED_DICE = {n: "●" * n for n in range(1, 7)}
 
-    Legends must never overlap plotted data -- see
-    docs/plotting-style-guide.md "Legends live outside the plot". A legend
-    placed this way is also free to grow large (many entries, long labels)
-    without crowding the data, so it can double as a compact table when
-    useful (e.g. one row per setting with its color/marker as the row key).
+
+def seed_symbol(seed: int) -> str:
+    """seed 1 -> "●", seed 2 -> "●●", etc. (falls back to the
+    plain number above 6, where repeated dots stop being readable at a glance)."""
+    seed = int(seed)
+    return SEED_DICE[seed] if seed in SEED_DICE else str(seed)
+
+
+def legend_outside(target, *, side: str = "auto", ncol: int | None = None, **kwargs: Any):
+    """Place a legend outside the plotted data, on whichever side matches the
+    figure's *longest* dimension -- never squeezed against the short side.
+
+    See docs/plotting-style-guide.md "Legends live outside the plot":
+
+    - ``target`` an ``Axes``: legend is anchored to that axes specifically
+      (right or left of it) -- use this for a multi-column figure, where the
+      left column's legend goes further left and the right column's goes
+      further right, rather than stacking both on one side.
+    - ``target`` a ``Figure``: legend is anchored to the whole figure (right
+      or below it) -- use this for a single-column, multi-row (stacked)
+      figure, where "outside" more naturally means below the tallest side.
+    - ``side="auto"`` (default): compares the *figure's* width to height
+      (``fig.get_size_inches()``) -- wider-than-tall figures get a
+      right-hand legend, taller-than-wide figures get a below legend. Pass
+      ``side="left"``/``"right"``/``"bottom"`` to override.
+
+    A legend placed this way is also free to grow large (many entries, long
+    labels) without crowding the data, so it can double as a compact table
+    (e.g. one row per setting with its color/marker/seed-die as the row key).
+    ``ncol`` defaults to 1 for a side legend (reads top-to-bottom like a
+    table) and wraps to multiple columns for a bottom legend (so a long
+    legend doesn't stretch further than the figure itself).
     """
-    return axis.legend(
-        loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, ncol=ncol, **kwargs
-    )
+    import matplotlib.figure
+
+    fig = target if isinstance(target, matplotlib.figure.Figure) else target.figure
+
+    if side == "auto":
+        width_in, height_in = fig.get_size_inches()
+        side = "right" if width_in >= height_in else "bottom"
+
+    if side == "right":
+        return target.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0),
+                              borderaxespad=0.0, ncol=ncol or 1, **kwargs)
+    if side == "left":
+        return target.legend(loc="upper right", bbox_to_anchor=(-0.02, 1.0),
+                              borderaxespad=0.0, ncol=ncol or 1, **kwargs)
+    if side == "bottom":
+        n_entries = len(kwargs.get("labels") or kwargs.get("handles") or [])
+        if not n_entries and hasattr(target, "get_legend_handles_labels"):
+            n_entries = len(target.get_legend_handles_labels()[1])
+        default_ncol = max(1, min(4, n_entries)) if n_entries else 3
+        return target.legend(loc="upper center", bbox_to_anchor=(0.5, -0.08),
+                              borderaxespad=0.0, ncol=ncol or default_ncol, **kwargs)
+    raise ValueError(f"side must be 'auto', 'left', 'right', or 'bottom'; got {side!r}")
 
 
 # Classic matplotlib defaults (pre-seaborn era feel).
