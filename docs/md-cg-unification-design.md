@@ -790,6 +790,88 @@ land seams non-breaking, extract terms with parity checks, then add backends.
       either a non-jit ASE-based driver (not built) or a `jax.pure_callback`
       bridge around the evaluator — tracked here, not attempted this session.
 
+### Mixed-system (ML core + MM/ML solvent) support checklist
+
+The project goal behind all of §11 is a validated **mixed system**: one
+ML-scored "core" region (e.g. a peptide) embedded in a solvent that is
+partly ML (near the core) and partly classical MM (far from it), evaluated
+through the same `assemble_and_run` seam as every pure-MM or pure-ML setting.
+This tracks what's actually wired and tested for that goal today, vs. still
+open. See `workflows/mixed_calculator_sweep/` for the 10000-step validation
+sweep that exercises the checked items below on a real trialanine+TIP3-water
+system with a real ML checkpoint.
+
+**Builder / topology**
+- [x] `PeptideWaterSystemBuilder` (`mmml/md/builders/placement.py`) — one ML
+      "core" molecule (e.g. trialanine) + N TIP3 waters, all built through
+      live CHARMM (PSF + params), lowered into one `MolecularSystem` with
+      `monomer_indices[0]` = core atoms and `water_indices` = per-water atom
+      groups.
+- [x] `SystemSpec(builder="peptide_water", box_size=..., n_molecules=<n_waters>,
+      seed=...)` — box sizing and water count are builder params, not
+      hardcoded.
+- [ ] Builder support for a non-peptide ML core (e.g. a small-molecule
+      solute) — `PeptideWaterSystemBuilder` is specifically trialanine-shaped
+      today (`build_trialanine_water_box_in_charmm`); a general "ML solute +
+      MM solvent" builder is not yet factored out.
+
+**Energy terms (the ML/MM boundary itself)**
+- [x] `ml_pep_water` (`MLCoreGroupTerm`) — ML dimer energy between the core
+      and each water, gated by `interaction_cutoff_A` /
+      `interaction_switch_width_A` (unset = every core-water pair is ML,
+      correct for small systems, not capacity-padded for large ones).
+- [x] `vdw_core` (`RepulsiveCoreVdwTerm`) — repulsive-only LJ wall from the
+      core to *all* solvent, filling the region outside `ml_pep_water`'s
+      cutoff so waters that fall outside the ML shell don't collapse into the
+      core unscored. Composes with `ml_pep_water` (`mixed_core_vdw` setting
+      in the sweep) rather than replacing it.
+- [x] `mm_nonbonded` scores water-water (MM/MM) interactions in the same
+      composed `HybridEnergy`, so a mixed run is `ml_intra` (core
+      intramolecular) + `ml_pep_water` (core↔near-water, ML) + `vdw_core`
+      (core↔far-water, repulsive wall) + `mm_nonbonded` (water↔water, MM) —
+      four terms, one `HybridEnergy`, one driver.
+- [ ] A smooth ML→MM handoff for individual core-water pairs as a water
+      crosses `ml_pep_water`'s cutoff during dynamics (today: `ml_pep_water`
+      is evaluated over a fixed, build-time-selected group; there is no
+      dynamic re-assignment of a water from "ML-scored" to "MM-scored" mid
+      trajectory). This is the actual "complementary handoff" problem
+      referenced in `long_range_backend.py`'s jax-pme hybrid path
+      (`complementary_handoff` kwarg) but not yet threaded through
+      `assemble_and_run`'s term composition.
+
+**Calculator / force-field knobs** (validated via `mixed_calculator_sweep`'s
+`checkpoint` / `calculator` / `mm_nonbonded` setting axes)
+- [x] Swapping the ML checkpoint (`create_calculator_from_checkpoint`'s
+      `checkpoint_path`) — different training epochs, same term wiring.
+- [x] `electrostatics_damping_sigma` — Gaussian damping of the ML model's
+      point-Coulomb electrostatics; baked into the extracted `model`/`params`
+      at calculator-construction time (`checkpoint_loading.py`), so it
+      affects `ml_intra`/`ml_pep_water` identically to how it'd affect a bare
+      ASE calculator.
+- [x] `disable_physnet_point_coulomb` — toggles the ML model's own
+      point-charge Coulomb term off (e.g. when `mm_nonbonded`'s classical
+      Coulomb, or an external long-range solver, should be the only source of
+      electrostatics for MM-scored atoms).
+- [x] `mm_nonbonded` cutoffs (`cutnb`/`ctonnb`/`ctofnb`) via `EnergyContext.options`
+      — independent of the ML side, only affects the MM/MM water-water term.
+- [ ] `lr_solver` other than `mic` (`jax_pme`/`nvalchemiops_pme`/`scafacos`) in
+      a mixed system's `mm_nonbonded` — same limitation as the pure-MM case
+      (§ "Cross-backend validation workflow" above): ASE-face only, not
+      wireable into `JaxmdDriver`'s jit loop. Not exercised by
+      `mixed_calculator_sweep` for the same reason.
+
+**Validation depth**
+- [x] 10000-step NVE energy trace (100 recorded samples via `JaxmdDriver`'s
+      default `record_every=100`) per setting — enough to see real
+      conservation behavior, not just a 2-3 point endpoint delta.
+- [ ] NVT/NPT for mixed systems — `mixed_calculator_sweep` only runs NVE;
+      `jaxmd_npt`'s deterministic cluster-specific failure (documented in
+      `workflows/unified_backend_sweep/README.md`) would need root-causing
+      before extending the mixed sweep to NPT.
+- [ ] RDF / structural validation of the ML-water shell against a reference
+      (flagged as open in "Rigid sampling" above for the pure-MM case; doubly
+      untested for the mixed ML/MM boundary).
+
 - [ ] Build apocharmm and confirm the pybind11 module imports in the MMML env
       (CUDA 11.1.1+, GCC 10.1+, NetCDF4).
 - [ ] `MolecularSystem` → `CharmmContext` lowering (`CharmmPSF`,

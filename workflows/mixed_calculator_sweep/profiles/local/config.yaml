@@ -1,0 +1,4 @@
+executor: local
+jobs: 1
+default-resources:
+  - charmm_slot=1

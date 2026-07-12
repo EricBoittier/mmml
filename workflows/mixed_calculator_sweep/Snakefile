@@ -1,0 +1,71 @@
+configfile: "config.yaml"
+
+from pathlib import Path
+
+WORKFLOW_DIR = Path(workflow.basedir)
+REPO_ROOT = WORKFLOW_DIR.parents[1]
+
+SETTINGS_SEEDS = [
+    (name, seed)
+    for name, spec in config["settings"].items()
+    for seed in spec.get("seeds", config["default_seeds"])
+]
+SETTING_NAMES = sorted({name for name, _ in SETTINGS_SEEDS})
+SEED_VALUES = sorted({str(seed) for _, seed in SETTINGS_SEEDS})
+STATUS_FILES = [f"results/{name}/seed_{seed}/status.json" for name, seed in SETTINGS_SEEDS]
+
+
+def slurm_value(name, default):
+    return config.get("slurm", {}).get(name, default)
+
+
+rule all:
+    input:
+        "results/summary.csv",
+        "results/summary.md",
+
+
+rule run_setting:
+    output:
+        status="results/{setting}/seed_{seed}/status.json",
+    log:
+        stdout="results/{setting}/seed_{seed}/stdout.log",
+    params:
+        workflow_dir=WORKFLOW_DIR,
+        repo_root=REPO_ROOT,
+    wildcard_constraints:
+        setting="|".join(SETTING_NAMES),
+        seed="|".join(SEED_VALUES),
+    resources:
+        charmm_slot=1,
+        runtime=lambda wildcards: int(slurm_value("runtime_min", 240)),
+        nodes=lambda wildcards: int(slurm_value("nodes", 1)),
+        tasks=lambda wildcards: int(slurm_value("ntasks", 1)),
+        cpus_per_task=lambda wildcards: int(slurm_value("cpus_per_task", 4)),
+        mem_mb_per_cpu=lambda wildcards: int(slurm_value("mem_mb_per_cpu", 2000)),
+        slurm_partition=lambda wildcards: str(slurm_value("partition", "short")),
+    shell:
+        """
+        set -euo pipefail
+        mkdir -p $(dirname {output.status})
+        python {params.workflow_dir}/scripts/run_setting.py \
+          --workflow-config {params.workflow_dir}/config.yaml \
+          --setting {wildcards.setting} \
+          --seed {wildcards.seed} \
+          --output-dir $(dirname {output.status}) \
+          --repo-root {params.repo_root} \
+          > {log.stdout} 2>&1
+        test -s {output.status}
+        """
+
+
+rule collect:
+    input:
+        statuses=STATUS_FILES,
+    output:
+        csv="results/summary.csv",
+        md="results/summary.md",
+    params:
+        script=WORKFLOW_DIR / "scripts" / "collect_results.py",
+    shell:
+        "python {params.script} --csv {output.csv} --markdown {output.md} {input.statuses}"

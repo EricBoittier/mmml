@@ -1,0 +1,16 @@
+# CPU (short) partition profile -- see workflows/unified_backend_sweep for
+# the convention this mirrors. Usage from pc-studix:
+#   uv run --with snakemake --with snakemake-executor-plugin-slurm \
+#     snakemake --profile profiles/slurm-cpu --keep-going
+executor: slurm
+jobs: 12
+latency-wait: 120
+retries: 2
+default-resources:
+  - charmm_slot=1
+  - runtime=240
+  - nodes=1
+  - tasks=1
+  - mem_mb_per_cpu=2000
+  - cpus_per_task=4
+  - slurm_partition=short
