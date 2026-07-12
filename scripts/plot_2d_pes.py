@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.colors import TwoSlopeNorm
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import griddata
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
@@ -249,9 +249,14 @@ def plot_2d_pes_for_pair(
         off_vals  = np.sort(df_be["offset_angstrom"].unique())
 
         min_d = min_o = min_e = None
+        # Clash + outlier removal can leave the surface too sparse/degenerate
+        # to interpolate meaningfully (e.g. a pair whose safe contact
+        # distance is far outside most of the scanned range) — fall back to
+        # a plain scatter rather than fitting a surface to a handful of points.
+        n_excluded_total = n_clash + n_outlier
+        sparse_data = len(dist_vals) < 3 or len(off_vals) < 2 or len(df_be) < 6
 
-        if len(dist_vals) < 2 or len(off_vals) < 2:
-            # Fall back to scatter only
+        if sparse_data:
             norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
             sc = ax.scatter(
                 df_be["distance_angstrom"],
@@ -264,35 +269,38 @@ def plot_2d_pes_for_pair(
                 linewidths=0.4,
             )
             plt.colorbar(sc, ax=ax, label="$E_{int}$ / kcal mol$^{-1}$")
+            if n_excluded_total:
+                ax.text(
+                    0.5, 1.02,
+                    f"only {len(df_be)} clean points after removing {n_excluded_total} "
+                    "clashing/outlier geometries — showing raw points, no surface fit",
+                    transform=ax.transAxes, ha="center", va="bottom",
+                    fontsize=6, color="firebrick",
+                )
             if not df_be.empty:
                 best = df_be.loc[df_be["E_int"].idxmin()]
                 min_d, min_o, min_e = best["distance_angstrom"], best["offset_angstrom"], best["E_int"]
         else:
-            # Pivot to grid and interpolate
-            pivot = df_be.pivot_table(
-                index="offset_angstrom",
-                columns="distance_angstrom",
-                values="E_int",
-                aggfunc="mean",
-            )
-            Z = pivot.values  # shape (n_off, n_dist)
-            D = pivot.columns.values
-            O = pivot.index.values
-
-            # Clip extremes before interpolation (numerical stability only —
-            # the colour range itself is set by vmax below, computed from
-            # clean unclipped data)
-            Z_clipped = np.clip(Z, -clip_bound, clip_bound)
+            # Interpolate directly from the clean scattered (distance, offset,
+            # E_int) points onto a regular grid. Using scattered-data
+            # interpolation (rather than pivoting to a rectangular grid first)
+            # is essential here: dropping clash/outlier rows leaves holes in
+            # what would otherwise be a rectangular grid, and a rectangular-
+            # grid spline can't handle missing cells.
+            points = df_be[["distance_angstrom", "offset_angstrom"]].to_numpy()
+            values = df_be["E_int"].to_numpy()
+            D_fine = np.linspace(dist_vals.min(), dist_vals.max(), n_grid)
+            O_fine = np.linspace(off_vals.min(), off_vals.max(), n_grid)
+            Dg, Og = np.meshgrid(D_fine, O_fine)
 
             try:
-                spline = RectBivariateSpline(O, D, Z_clipped, kx=min(3, len(O)-1), ky=min(3, len(D)-1))
-                D_fine = np.linspace(D.min(), D.max(), n_grid)
-                O_fine = np.linspace(O.min(), O.max(), n_grid)
-                Z_fine = spline(O_fine, D_fine)
-                Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
+                Z_fine = griddata(points, values, (Dg, Og), method="linear")
+                if np.isnan(Z_fine).any():
+                    Z_nearest = griddata(points, values, (Dg, Og), method="nearest")
+                    Z_fine = np.where(np.isnan(Z_fine), Z_nearest, Z_fine)
             except Exception:
-                D_fine, O_fine = D, O
-                Z_fine = Z_clipped
+                Z_fine = griddata(points, values, (Dg, Og), method="nearest")
+            Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
 
             norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
 
@@ -362,7 +370,8 @@ def plot_2d_pes_for_pair(
 
         # Highlighted render of the located minimum
         if ax_min is not None:
-            if min_d is not None:
+            have_min = min_d is not None and np.isfinite(min_e)
+            if have_min:
                 atoms_min, fragments_min = _atoms_snapshot(label_a, label_b, float(min_d), float(min_o))
                 forces_min = _forces_for(atoms_min, forces_calc)
                 with warnings.catch_warnings():
@@ -374,6 +383,11 @@ def plot_2d_pes_for_pair(
                     )
             else:
                 ax_min.set_axis_off()
+                ax_min.text(
+                    0.5, 0.5, "no valid minimum\n(insufficient clean data)",
+                    transform=ax_min.transAxes, ha="center", va="center",
+                    fontsize=7, color="firebrick",
+                )
 
     out_path = out_dir / f"{pair_tag}_2d_pes.png"
     fig.savefig(out_path, bbox_inches="tight")
