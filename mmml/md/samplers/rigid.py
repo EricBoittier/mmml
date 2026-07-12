@@ -161,7 +161,15 @@ class RigidBodySampler:
         path = Path(self.output_path) if self.output_path is not None else None
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(path, positions=frames_arr, energies=energies_arr)
+            # Z/box saved alongside positions/energies so downstream structural
+            # analysis (bonds/angles/dihedrals/RDF) can rebuild ASE Atoms
+            # without re-running the sampler (mirrors JaxmdDriver's npz).
+            npz_kwargs: dict[str, Any] = dict(
+                positions=frames_arr, energies=energies_arr, Z=np.asarray(system.Z),
+            )
+            if system.box is not None:
+                npz_kwargs["box"] = np.asarray(system.box)
+            np.savez(path, **npz_kwargs)
 
         acceptance = accepted / attempted if attempted else 0.0
         metadata: dict[str, Any] = {

@@ -254,8 +254,35 @@ def main():
         "--pairs", nargs="+", default=["TIP3:TIP3", "BENZ:BENZ"],
         help="Pairs to scan as LABEL_A:LABEL_B (default: TIP3:TIP3 BENZ:BENZ)",
     )
-    parser.add_argument("--methods", nargs="+", default=["HF", "MP2"], help="ORCA method keywords (default: HF MP2)")
+    parser.add_argument(
+        "--methods", nargs="+", default=["HF", "MP2"],
+        help=(
+            "ORCA method keywords (default: HF MP2). Double-hybrid DFT methods work "
+            "the same way, e.g. --methods B2PLYP DSD-BLYP — pair with --aux-basis, "
+            "--rijcosx, and --dispersion D3BJ for efficiency/accuracy."
+        ),
+    )
     parser.add_argument("--basis", default="def2-SVP", help="ORCA basis set (default: def2-SVP)")
+    parser.add_argument(
+        "--aux-basis", default=None,
+        help=(
+            "Auxiliary ('/C') basis for RI-MP2 / double-hybrid correlation, e.g. "
+            "def2-SVP/C. Recommended whenever --rijcosx is set or a double-hybrid "
+            "method is used — makes the perturbative correlation step much cheaper."
+        ),
+    )
+    parser.add_argument(
+        "--rijcosx", action="store_true",
+        help="Add RIJCOSX (RI-J + COSX exchange approximation) — standard for efficient double-hybrid/RI-MP2 runs.",
+    )
+    parser.add_argument(
+        "--dispersion", default="none", choices=["none", "D3BJ", "D3ZERO"],
+        help=(
+            "Empirical dispersion correction (default: none). Recommended for double-hybrid "
+            "DFT methods on weak-interaction scans like this one (D3BJ) — not meaningful for "
+            "HF/MP2, which already include (or lack) dispersion through their own physics."
+        ),
+    )
     parser.add_argument(
         "--no-counterpoise", action="store_true",
         help="Skip Boys-Bernardi counterpoise correction (cheaper, but BSSE will distort close-range results)",
