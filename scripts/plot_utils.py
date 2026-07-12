@@ -25,6 +25,10 @@ BACKEND_LABELS: dict[str, str] = {
     "charmm":            "CGenFF",
     "spookynet":         "SpookyNet",
     "spookynet_hybrid":  "SpookyNet Hybrid ML",
+    "hf_def2svp_cp":     "HF/def2-SVP (CP)",
+    "mp2_def2svp_cp":    "MP2/def2-SVP (CP)",
+    "hf_def2svp":        "HF/def2-SVP",
+    "mp2_def2svp":       "MP2/def2-SVP",
 }
 
 BACKEND_COLORS: dict[str, str] = {
@@ -35,6 +39,10 @@ BACKEND_COLORS: dict[str, str] = {
     "charmm":            "#e15759",
     "spookynet":         "#b07aa1",
     "spookynet_hybrid":  "#9c755f",
+    "hf_def2svp_cp":     "#76b7b2",
+    "mp2_def2svp_cp":    "#edc948",
+    "hf_def2svp":        "#76b7b2",
+    "mp2_def2svp":       "#edc948",
 }
 
 BACKEND_CMAPS: dict[str, str] = {
@@ -45,6 +53,10 @@ BACKEND_CMAPS: dict[str, str] = {
     "charmm":            "seismic",
     "spookynet":         "BrBG_r",
     "spookynet_hybrid":  "PuOr",
+    "hf_def2svp_cp":     "PuBuGn_r",
+    "mp2_def2svp_cp":    "YlOrBr_r",
+    "hf_def2svp":        "PuBuGn_r",
+    "mp2_def2svp":       "YlOrBr_r",
 }
 
 # Canonical ordering for legend / subplot layout
@@ -56,6 +68,10 @@ BACKEND_ORDER: list[str] = [
     "spookynet",
     "xtb_gfn2",
     "charmm",
+    "hf_def2svp_cp",
+    "hf_def2svp",
+    "mp2_def2svp_cp",
+    "mp2_def2svp",
 ]
 
 
