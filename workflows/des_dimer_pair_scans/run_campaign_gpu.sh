@@ -2,7 +2,7 @@
 # Run the des_dimer_pair_scans campaign in the current GPU environment on scicore.
 #
 # Usage:
-#   bash run_campaign_gpu.sh [MAX_JOBS] [EXTRA_SNAKEMAKE_FLAGS...]
+#   bash run_campaign_gpu.sh [MAX_JOBS]
 #
 set -euo pipefail
 
@@ -42,11 +42,6 @@ else
 fi
 export MMML_WORKFLOW_CONFIG="$CFG_PATH"
 
-CONFIG_ARGS=()
-if [[ "$CFG_PATH" != "$WORKFLOW_ROOT/config.yaml" ]]; then
-  CONFIG_ARGS=(--configfile "$CFG_PATH")
-fi
-
 echo "=========================================================="
 echo " Starting Dimer Scan Campaign on GPU Node"
 echo "=========================================================="
@@ -56,10 +51,6 @@ echo " CUDA_VISIBLE_DEVICES:   ${CUDA_VISIBLE_DEVICES}"
 echo " JAX_ENABLE_X64:         ${JAX_ENABLE_X64}"
 echo "=========================================================="
 
-exec uv run --with snakemake snakemake \
-  --profile profiles/local \
-  "${CONFIG_ARGS[@]}" \
-  -j"$JOBS" \
-  --resources cpu=4 \
-  --keep-going \
-  "$@"
+exec "${MMML_PYTHON}" "${WORKFLOW_ROOT}/run_campaign_local.py" \
+  --config "${CFG_PATH}" \
+  --jobs "$JOBS"
