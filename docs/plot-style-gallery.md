@@ -220,6 +220,52 @@ something you'd have to notice by comparing many separate panels.
 
 ![histogram time series](plot-style-gallery-assets/chart_histogram_timeseries.png)
 
+## Colormap picks: choosing defaults
+
+A shortlist of `cmap`-library colormaps, each rendered on synthetic data
+suited to its own category (category read from `cmap.Colormap(name).category`,
+not guessed) — regenerate with `python scripts/render_colormap_picks.py`.
+The goal is to pick one **default sequential**, one **default diverging**,
+and one **default cyclic** map for the house style, the same way `"icml"`
+became the default font/axis preset.
+
+![colormap picks overview](plot-style-gallery-assets/colormap_picks.png)
+
+**Sequential** candidates, same field, side by side — smooth density-like
+data (strictly positive, no natural zero):
+
+![sequential picks](plot-style-gallery-assets/colormap_picks_sequential.png)
+
+**Diverging** candidates, same zero-centered residual field, side by side:
+
+![diverging picks](plot-style-gallery-assets/colormap_picks_diverging.png)
+
+`cmocean:phase` (cyclic) is shown separately in the overview above, on a
+wrapped phase/angle field — the natural fit for periodic quantities like the
+dihedral-angle radial histogram earlier in this gallery.
+
+| Candidate | Category | Best suited to |
+|---|---|---|
+| `cmocean:thermal` | sequential | General-purpose warm sequential; reads well at a glance |
+| `matplotlib:terrain` | sequential | Data with a literal "sea level" / physical elevation meaning — misleading otherwise (its blue-green-brown bands imply water/land, not just low/high) |
+| `crameri:lipari` | sequential | Perceptually-uniform, colorblind-safe — the safest general default |
+| `cmasher:ghostlight` | sequential | High contrast on a black background — good for a dark-mode variant, less so alongside white-background figures |
+| `cmasher:horizon` | sequential | Similar dark-background contrast profile to `ghostlight` |
+| `contrib:pampa` | diverging | Muted, low-saturation — won't fight with data ink, good default candidate |
+| `cmasher:watermelon` | diverging | High-saturation pink/green — strong visual pop, worse for colorblind readers than the perceptually-uniform options |
+| `cmocean:delta` | diverging | Built for velocity/flux fields; teal/gold poles read clearly |
+| `cmocean:diff` | diverging | Muted olive/gray — closest in spirit to a "quiet," Tufte-style diverging map |
+| `cmasher:guppy_r` | diverging | Vivid blue/orange — good contrast, less perceptually uniform than `crameri:vik` |
+| `yorick:stern` | misc (HDR) | Only for genuinely high-dynamic-range data (one sharp feature over a broad faint background) — not a general sequential substitute |
+| `cmocean:phase` | cyclic | The house default for any periodic quantity (angles, phases) |
+
+My recommendation, if a single default per category is needed: **`crameri:lipari`**
+(sequential) and **`cmocean:diff`** (diverging) for the most Tufte-aligned
+"quiet," perceptually-uniform defaults; **`cmocean:phase`** for cyclic (no
+real competing candidate in the shortlist). `contrib:pampa` and
+`cmocean:delta` are the strongest alternates if a bit more visual punch is
+wanted over `diff`'s muted look.
+
 ## How to pick
 
 ```python
