@@ -108,15 +108,39 @@ def _energy_for(
         return _run_orca_energy(orca_exe, inp_text, Path(tmp))
 
 
+def _cache_key(label_a: str, label_b: str, backend_name: str, distance: float, offset: float) -> tuple:
+    return (label_a, label_b, backend_name, round(float(distance), 6), round(float(offset), 6))
+
+
+def load_cached_results(csv_path: Path) -> tuple[list[dict], set[tuple]]:
+    """Load a previous run's output CSV (if any) as resumable cache state."""
+    if not csv_path.is_file():
+        return [], set()
+    df = pd.read_csv(csv_path)
+    rows = df.to_dict("records")
+    seen = {
+        _cache_key(r["molecule_a"], r["molecule_b"], r["backend"], r["distance_angstrom"], r["offset_angstrom"])
+        for r in rows
+    }
+    print(f"Resuming from {csv_path}: {len(rows)} points already computed, will be skipped.")
+    return rows, seen
+
+
 def evaluate_orca_scan(
     geometries, label_a: str, label_b: str, *,
     method: str, basis: str, counterpoise: bool,
     pal: int, maxcore: int, orca_exe: str, backend_name: str,
+    skip_keys: set[tuple] | None = None,
 ) -> list[dict]:
     rows: list[dict] = []
     isolated_cache: dict[str, float] = {}
+    skip_keys = skip_keys or set()
 
     for geom in geometries:
+        cache_key = _cache_key(label_a, label_b, backend_name, geom.distance_angstrom, geom.offset_angstrom)
+        if cache_key in skip_keys:
+            continue
+
         symbols = geom.atoms.get_chemical_symbols()
         positions = geom.atoms.get_positions()
         idx_a, idx_b = geom.fragments
@@ -214,6 +238,10 @@ def main():
     )
     parser.add_argument("--n-close", type=int, default=6, help="Extra points between --close-floor and grid start")
     parser.add_argument("--output-dir", type=Path, default=Path("results/dimer_scan_campaign/orca_hf_mp2"))
+    parser.add_argument(
+        "--no-resume", action="store_true",
+        help="Ignore any existing scan_results.csv in --output-dir and recompute everything from scratch",
+    )
     args = parser.parse_args()
 
     orca_exe = args.orca_exe or __import__("os").environ.get("ORCA", "orca")
@@ -226,7 +254,11 @@ def main():
     cp_suffix = "_cp" if not args.no_counterpoise else ""
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    results: list[dict] = []
+    csv_path = args.output_dir / "scan_results.csv"
+    if args.no_resume:
+        results, seen_keys = [], set()
+    else:
+        results, seen_keys = load_cached_results(csv_path)
 
     for pair_str in args.pairs:
         label_a, label_b = pair_str.split(":")
@@ -253,13 +285,18 @@ def main():
                 geometries, label_a, label_b,
                 method=method, basis=args.basis, counterpoise=not args.no_counterpoise,
                 pal=args.pal, maxcore=args.maxcore, orca_exe=orca_exe, backend_name=backend_name,
+                skip_keys=seen_keys,
             )
             results.extend(rows)
+            seen_keys.update(
+                _cache_key(r["molecule_a"], r["molecule_b"], r["backend"], r["distance_angstrom"], r["offset_angstrom"])
+                for r in rows
+            )
 
-            # Save incrementally so partial progress survives a crash/timeout.
-            pd.DataFrame(results).to_csv(args.output_dir / "scan_results.csv", index=False)
+            # Save incrementally so partial progress survives a crash/timeout
+            # and can be resumed with the same command later.
+            pd.DataFrame(results).to_csv(csv_path, index=False)
 
-    csv_path = args.output_dir / "scan_results.csv"
     print(f"Results saved to {csv_path}")
 
 
