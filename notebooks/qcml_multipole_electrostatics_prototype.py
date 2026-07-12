@@ -22,6 +22,7 @@ from ase.io import read
 
 from mmml.models.multipoles import (
     LearnedMolecularMultipoleElectrostatics,
+    plot_field_line_scan,
     plot_field_summary,
 )
 
@@ -79,3 +80,16 @@ fig = plot_field_summary(
     output=Path("~/qcml_runs/electrostatic_field_summary.png").expanduser(),
 )
 fig
+
+# %%
+line_fig = plot_field_line_scan(
+    calc.results["origins_bohr"],
+    calc.results["charges"],
+    calc.results["dipoles_bohr"],
+    axis="x",
+    extent_angstrom=14.0,
+    n_points=501,
+    softening_bohr=0.5,
+    output=Path("~/qcml_runs/electrostatic_horizontal_scan.png").expanduser(),
+)
+line_fig

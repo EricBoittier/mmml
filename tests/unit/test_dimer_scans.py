@@ -105,7 +105,7 @@ def test_evaluate_scan_uses_calculator_factory():
     ]
 
 
-def test_make_xtb_calculator_reports_missing_optional_dependency():
-    pytest.importorskip("xtb", reason="xTB optional dependency is installed")
+def test_make_xtb_calculator_when_optional_dependency_is_available():
+    pytest.importorskip("xtb", reason="xTB optional dependency is not installed")
     calculator = make_xtb_calculator()
     assert calculator is not None

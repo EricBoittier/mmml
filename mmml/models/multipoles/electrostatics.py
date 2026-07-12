@@ -43,6 +43,7 @@ from scripts.train_qcml_multipoles import TrainConfig
 ANGSTROM_TO_BOHR = 1.0 / Bohr
 BOHR_TO_ANGSTROM = Bohr
 HARTREE_TO_EV = Hartree
+AU_POTENTIAL_TO_V = Hartree
 AU_FIELD_TO_V_PER_ANGSTROM = 51.4220674763259
 
 
@@ -454,6 +455,132 @@ def field_on_slice(
         "origins_bohr": np.asarray(origins_bohr, dtype=np.float64),
         "origins_angstrom": np.asarray(origins_bohr, dtype=np.float64) * BOHR_TO_ANGSTROM,
     }
+
+
+def field_on_line(
+    origins_bohr: np.ndarray,
+    charges: np.ndarray,
+    dipoles_bohr: np.ndarray,
+    *,
+    axis: str = "x",
+    center_bohr: Sequence[float] | None = None,
+    offset_bohr: Sequence[float] | None = None,
+    extent_angstrom: float = 12.0,
+    n_points: int = 401,
+    softening_bohr: float = 0.5,
+) -> dict[str, np.ndarray]:
+    """Evaluate potential and field on a 1D Cartesian line scan.
+
+    ``axis`` is the horizontal scan direction. ``offset_bohr`` shifts the line
+    in transverse directions while leaving the scan-axis coordinate unchanged.
+    """
+
+    axis_indices = {"x": 0, "y": 1, "z": 2}
+    if axis not in axis_indices:
+        raise ValueError("axis must be 'x', 'y', or 'z'")
+    if n_points < 2:
+        raise ValueError("n_points must be at least 2")
+
+    axis_index = axis_indices[axis]
+    center = (
+        np.mean(np.asarray(origins_bohr, dtype=np.float64), axis=0)
+        if center_bohr is None
+        else np.asarray(center_bohr, dtype=np.float64)
+    )
+    if offset_bohr is not None:
+        offset = np.asarray(offset_bohr, dtype=np.float64)
+        if offset.shape != (3,):
+            raise ValueError("offset_bohr must have shape (3,)")
+        offset = offset.copy()
+        offset[axis_index] = 0.0
+        center = center + offset
+
+    half_extent_bohr = 0.5 * float(extent_angstrom) * ANGSTROM_TO_BOHR
+    coordinate_bohr = np.linspace(-half_extent_bohr, half_extent_bohr, n_points)
+    points = np.tile(center[None, :], (n_points, 1))
+    points[:, axis_index] += coordinate_bohr
+    potential, field = _point_charge_dipole_potential_field_au(
+        points,
+        origins_bohr,
+        charges,
+        dipoles_bohr,
+        softening_bohr=softening_bohr,
+    )
+    return {
+        "axis": np.asarray(axis),
+        "coordinate_bohr": coordinate_bohr,
+        "coordinate_angstrom": coordinate_bohr * BOHR_TO_ANGSTROM,
+        "points_bohr": points,
+        "potential_au": potential,
+        "potential_v": potential * AU_POTENTIAL_TO_V,
+        "field_au": field,
+        "field_v_per_angstrom": field * AU_FIELD_TO_V_PER_ANGSTROM,
+        "field_horizontal_au": field[:, axis_index],
+        "field_horizontal_v_per_angstrom": field[:, axis_index] * AU_FIELD_TO_V_PER_ANGSTROM,
+        "origins_bohr": np.asarray(origins_bohr, dtype=np.float64),
+        "origins_angstrom": np.asarray(origins_bohr, dtype=np.float64) * BOHR_TO_ANGSTROM,
+    }
+
+
+def plot_field_line_scan(
+    origins_bohr: np.ndarray,
+    charges: np.ndarray,
+    dipoles_bohr: np.ndarray,
+    *,
+    axis: str = "x",
+    extent_angstrom: float = 12.0,
+    n_points: int = 401,
+    softening_bohr: float = 0.5,
+    output: str | Path | None = None,
+):
+    """Plot potential and horizontal field from a 1D electrostatic scan."""
+
+    import matplotlib.pyplot as plt
+
+    scan = field_on_line(
+        origins_bohr,
+        charges,
+        dipoles_bohr,
+        axis=axis,
+        extent_angstrom=extent_angstrom,
+        n_points=n_points,
+        softening_bohr=softening_bohr,
+    )
+    coordinate = scan["coordinate_angstrom"]
+    potential = scan["potential_v"]
+    field_horizontal = scan["field_horizontal_v_per_angstrom"]
+
+    figure, axes = plt.subplots(
+        1,
+        2,
+        figsize=(11.0, 3.8),
+        sharex=True,
+        constrained_layout=True,
+    )
+    axes[0].plot(coordinate, potential, color="tab:blue", linewidth=2.0)
+    axes[0].axhline(0.0, color="black", linewidth=0.8)
+    axes[0].set_title("Potential along scan")
+    axes[0].set_ylabel("Potential [V]")
+
+    axes[1].plot(coordinate, field_horizontal, color="tab:red", linewidth=2.0)
+    axes[1].axhline(0.0, color="black", linewidth=0.8)
+    axes[1].set_title(f"{axis.upper()} field along scan")
+    axes[1].set_ylabel(f"E{axis} [V/Å]")
+
+    axis_index = {"x": 0, "y": 1, "z": 2}[axis]
+    center = np.mean(np.asarray(origins_bohr, dtype=np.float64), axis=0)
+    source_coordinates = (
+        np.asarray(origins_bohr, dtype=np.float64)[:, axis_index] - center[axis_index]
+    ) * BOHR_TO_ANGSTROM
+    for plot_axis in axes:
+        for source_coordinate in source_coordinates:
+            plot_axis.axvline(source_coordinate, color="0.2", alpha=0.25, linewidth=1.0)
+        plot_axis.set_xlabel(f"{axis} scan coordinate [Å]")
+
+    figure.suptitle("Learned molecular q+dipole electrostatic line scan", fontsize=13)
+    if output is not None:
+        figure.savefig(Path(output).expanduser(), dpi=180)
+    return figure
 
 
 def plot_field_summary(

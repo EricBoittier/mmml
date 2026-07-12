@@ -9,11 +9,13 @@ from ase import Atoms
 
 from mmml.models.multipoles import (
     AU_FIELD_TO_V_PER_ANGSTROM,
+    AU_POTENTIAL_TO_V,
     BOHR_TO_ANGSTROM,
     E3xDipoleModel,
     E3xMultipoleModel,
     E3xOctupoleModel,
     E3xQuadrupoleModel,
+    field_on_line,
     field_on_slice,
     fragment_indices_from_atoms,
     irrep_blocks_to_traceless,
@@ -519,5 +521,30 @@ def test_molecular_multipole_field_slice_units_and_direction() -> None:
     np.testing.assert_allclose(
         grid["field_v_per_angstrom"][1, 2],
         np.array([AU_FIELD_TO_V_PER_ANGSTROM, 0.0, 0.0]),
+        atol=1e-12,
+    )
+
+
+def test_molecular_multipole_field_line_scan_units_and_direction() -> None:
+    scan = field_on_line(
+        np.array([[0.0, 0.0, 0.0]]),
+        np.array([1.0]),
+        np.zeros((1, 3)),
+        axis="x",
+        center_bohr=[0.0, 0.0, 0.0],
+        extent_angstrom=2.0 * BOHR_TO_ANGSTROM,
+        n_points=3,
+        softening_bohr=0.0,
+    )
+
+    np.testing.assert_allclose(scan["coordinate_bohr"], np.array([-1.0, 0.0, 1.0]))
+    np.testing.assert_allclose(
+        scan["potential_v"][[0, 2]],
+        np.array([AU_POTENTIAL_TO_V, AU_POTENTIAL_TO_V]),
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        scan["field_horizontal_v_per_angstrom"][[0, 2]],
+        np.array([-AU_FIELD_TO_V_PER_ANGSTROM, AU_FIELD_TO_V_PER_ANGSTROM]),
         atol=1e-12,
     )

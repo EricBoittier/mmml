@@ -9,10 +9,10 @@
 # - water
 # - methanol
 #
-# Goal: build a reproducible dimer-scan workflow that compares learned molecular
-# multipole electrostatics, learned MBD dispersion, SpookyNet/SpookyPhysNet,
-# CHARMM/CGenFF, hybrid MM/ML, and long-range solver variants on the same
-# geometries and units.
+# Goal: build a reproducible dimer-scan workflow that compares learned
+# molecular multipole electrostatics, learned MBD dispersion, xTB,
+# SpookyNet/SpookyPhysNet, CHARMM/CGenFF, hybrid MM/ML, and long-range solver
+# variants on the same geometries and units.
 
 # %% [markdown]
 # ## Current repository assets
@@ -23,7 +23,8 @@
 # |---|---|---:|---|
 # | QCML multipole model + training/eval | `scripts/train_qcml_multipoles.py`, `scripts/analyze_qcml_multipoles.py` | usable | Unified and degree-specific model support exists. |
 # | Learned molecular multipole electrostatics | `mmml/models/multipoles/electrostatics.py` | prototype | q+dipole only; units/sign tests are present. |
-# | QCML MBD model + training/eval | `scripts/train_qcml_mbd.py`, `scripts/analyze_qcml_mbd.py` | usable | MBD ASE calculator exists only in diagnostics notebook. |
+# | QCML MBD model + training/eval | `scripts/train_qcml_mbd.py`, `scripts/analyze_qcml_mbd.py` | usable | Package-level ASE calculator exists. |
+# | Dimer scan helpers | `mmml/analysis/dimer_scans.py` | usable | Builds deterministic ASE rigid dimer scans and optional xTB calculators. |
 # | QCML ASE diagnostics notebook | `notebooks/qcml_ase_calculators_diagnostics.py` | usable | Contains historical prototypes and multipole diagnostics. |
 # | DCM/acetone dimer LR scan | `scripts/run_dcm_aco_dimer_lr_scans.sh` | usable for DCM/ACO | Wraps PyCHARMM MLpot scan and LR solver sweep. |
 # | PyCHARMM dimer scan engine | `scripts/scan_mlpot_dimer_2d_pycharmm.py` | usable | Produces decomposed ML/MM, CHARMM, USER/VDW/ELEC terms. |
@@ -93,6 +94,14 @@ CALCULATORS = pd.DataFrame(
             "entry_point": "mmml.models.mbd.QCMLMBDCalculator",
             "outputs": "MBD energy, forces, polarizabilities, C6",
             "todo": "validate units vs QCML cache and add force finite-difference smoke test",
+        },
+        {
+            "name": "xtb_gfn2",
+            "kind": "ASE",
+            "existing": "optional",
+            "entry_point": "mmml.analysis.dimer_scans.make_xtb_calculator",
+            "outputs": "xTB energy/forces through xtb-python ASE calculator",
+            "todo": "install/validate xtb-python on target nodes; decide GFN1 vs GFN2 default",
         },
         {
             "name": "spookynet_or_spookyphysnet",
@@ -214,6 +223,7 @@ SCAN_DEFAULTS
 # ### Phase 1 — reusable calculators
 #
 # - Use package-level `mmml.models.mbd.QCMLMBDCalculator`.
+# - Use `mmml.analysis.dimer_scans.make_xtb_calculator` for optional xTB scans.
 # - Keep `LearnedMolecularMultipoleElectrostatics` q+dipole-only until l2/l3 are
 #   separately validated.
 # - Add tests:
@@ -224,7 +234,7 @@ SCAN_DEFAULTS
 # ### Phase 2 — calculator-agnostic scan driver
 #
 # - Add an ASE-first dimer scan script for `learned_multipole_qmu`, `learned_mbd`,
-#   and standalone SpookyNet/SpookyPhysNet.
+#   `xtb_gfn2`, and standalone SpookyNet/SpookyPhysNet.
 # - Reuse PyCHARMM scan for `charmm_cgenff`, `hybrid_mm_ml`, and LR solver sweeps.
 # - Normalize all outputs to a common CSV schema.
 #
@@ -243,6 +253,7 @@ TODO = pd.DataFrame(
         ("fixtures", "Collect or generate monomer structures", "agent/user", "blocking"),
         ("mbd", "Promote QCMLMBDCalculator to package module", "agent", "done"),
         ("mbd", "Add MBD calculator tests", "agent", "done"),
+        ("xtb", "Add optional ASE xTB backend hook", "agent", "done"),
         ("multipoles", "Add q+dipole dimer scan wrapper", "agent", "high"),
         ("multipoles", "Add finite-difference q-Q / mu-Q convention tests before l2/l3", "agent", "medium"),
         ("spooky", "Use latest examples/sppoky-epoch-*.json param files", "agent", "high"),
@@ -294,6 +305,7 @@ REQUIRED_USER_INPUT
 # 1. Add an ASE dimer scan script that supports:
 #    - `--backend learned_multipole_qmu`
 #    - `--backend learned_mbd`
+#    - `--backend xtb_gfn2`
 #    - `--backend spookynet`
 # 2. Keep PyCHARMM scans separate initially, then merge outputs by CSV schema.
 #
