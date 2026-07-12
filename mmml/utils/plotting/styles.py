@@ -205,12 +205,19 @@ _TRON_RC = {
 }
 
 # Tufte: large type, thick lines, LaTeX-style math (mathtext, no TeX install
-# needed), minimal chart junk (no top/right spines, sparse ticks, faint grid).
+# "Editorial" family: large type, thick lines, LaTeX-style math (mathtext,
+# no TeX install needed), minimal chart junk (no top/right spines, sparse
+# ticks, faint grid). NOTE: this axis/spacing treatment draws on Tufte's
+# data-ink-ratio *principles* -- it is not itself "the Tufte style" (Tufte
+# never specified one font or palette; the principles are about ink,
+# redundant encoding, and small multiples, not a fixed look). Several font
+# variants share this same axis treatment so the font choice can be judged
+# on its own -- see docs/plot-style-gallery.md for a rendered comparison.
 # Colors are semantic pairs, not a generic cycling palette -- see
 # docs/plotting-style-guide.md "Semantic color, not palette index" for how
 # callers are expected to map domain categories (e.g. MM vs ML, pass vs
 # fail) onto fixed, meaningful colors rather than an arbitrary series order.
-_TUFTE_COLORS = {
+_EDITORIAL_COLORS = {
     "train": "#1A5276",   # deep slate blue
     "valid": "#943126",   # brick red
     "best": "#B9770E",    # ochre
@@ -218,38 +225,61 @@ _TUFTE_COLORS = {
     "lr": "#6C3483",      # muted purple
     "muted": "#5D6D7E",   # slate gray
 }
-_TUFTE_RC = {
-    "figure.facecolor": "white",
-    "axes.facecolor": "white",
-    "axes.edgecolor": "#333333",
-    "axes.linewidth": 1.0,
-    "axes.labelsize": 15,
-    "axes.titlesize": 17,
-    "axes.titleweight": "bold",
-    "axes.spines.top": False,
-    "axes.spines.right": False,
-    "axes.grid": True,
-    "grid.alpha": 0.18,
-    "grid.linestyle": ":",
-    "grid.linewidth": 0.7,
-    "grid.color": "#888888",
-    "legend.framealpha": 0.92,
-    "legend.fontsize": 12,
-    "legend.edgecolor": "#CCCCCC",
-    "xtick.labelsize": 13,
-    "ytick.labelsize": 13,
-    "xtick.direction": "out",
-    "ytick.direction": "out",
-    "font.family": "serif",
-    "font.serif": ["STIXGeneral", "DejaVu Serif"],
-    "font.size": 14,
-    "mathtext.fontset": "stix",  # LaTeX-like math glyphs, no TeX install needed
-    "lines.linewidth": 2.8,
-    "lines.solid_capstyle": "round",
-    "lines.markersize": 8,
-    "patch.linewidth": 1.2,
-    "savefig.dpi": 200,
-}
+
+
+def _editorial_rc(*, family: str, serif: list[str] | None = None,
+                   sans: list[str] | None = None, mathtext_fontset: str) -> dict[str, Any]:
+    """Shared axis/spacing treatment for the editorial_* presets; only the
+    typeface (family/serif-or-sans/mathtext_fontset) differs between them."""
+    rc: dict[str, Any] = {
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "axes.edgecolor": "#333333",
+        "axes.linewidth": 1.0,
+        "axes.labelsize": 15,
+        "axes.titlesize": 17,
+        "axes.titleweight": "bold",
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.grid": True,
+        "grid.alpha": 0.18,
+        "grid.linestyle": ":",
+        "grid.linewidth": 0.7,
+        "grid.color": "#888888",
+        "legend.framealpha": 0.92,
+        "legend.fontsize": 12,
+        "legend.edgecolor": "#CCCCCC",
+        "xtick.labelsize": 13,
+        "ytick.labelsize": 13,
+        "xtick.direction": "out",
+        "ytick.direction": "out",
+        "font.family": family,
+        "font.size": 14,
+        "mathtext.fontset": mathtext_fontset,  # no TeX install needed
+        "lines.linewidth": 2.8,
+        "lines.solid_capstyle": "round",
+        "lines.markersize": 8,
+        "patch.linewidth": 1.2,
+        "savefig.dpi": 200,
+    }
+    if serif is not None:
+        rc["font.serif"] = serif
+    if sans is not None:
+        rc["font.sans-serif"] = sans
+    return rc
+
+
+# Five font variants, same axes/spacing -- pick by eye from the gallery.
+_EDITORIAL_RC_DEJAVU_SANS = _editorial_rc(
+    family="sans-serif", sans=["DejaVu Sans"], mathtext_fontset="dejavusans")
+_EDITORIAL_RC_DEJAVU_SERIF = _editorial_rc(
+    family="serif", serif=["DejaVu Serif"], mathtext_fontset="dejavuserif")
+_EDITORIAL_RC_STIX = _editorial_rc(
+    family="serif", serif=["STIXGeneral", "DejaVu Serif"], mathtext_fontset="stix")
+_EDITORIAL_RC_STIXSANS = _editorial_rc(
+    family="sans-serif", sans=["STIXGeneral", "DejaVu Sans"], mathtext_fontset="stixsans")
+_EDITORIAL_RC_CM = _editorial_rc(
+    family="serif", serif=["DejaVu Serif"], mathtext_fontset="cm")
 
 
 # Classic matplotlib defaults (pre-seaborn era feel).
@@ -355,23 +385,50 @@ PLOT_STYLES: dict[str, PlotStyle] = {
         summary_font_family="monospace",
         suptitle_color="#E8F4FF",
     ),
-    "tufte": _style(
-        "tufte",
-        "Tufte-inspired: large serif type, thick lines, LaTeX-style math, "
-        "minimal chart junk (no top/right spine, faint grid), semantic colors.",
-        colors=_TUFTE_COLORS,
-        rc_params=_TUFTE_RC,
+    # "editorial_*": same large-type/thick-line/no-top-right-spine axis
+    # treatment (data-ink-ratio principles, not "the Tufte style" -- see the
+    # comment above _EDITORIAL_COLORS); each entry below differs ONLY in
+    # typeface, so they can be compared on font choice alone. Rendered
+    # side-by-side in docs/plot-style-gallery.md.
+    "editorial_dejavu_sans": _style(
+        "editorial_dejavu_sans",
+        "Editorial axes (large type, thick lines, no top/right spine) in DejaVu Sans.",
+        colors=_EDITORIAL_COLORS, rc_params=_EDITORIAL_RC_DEJAVU_SANS,
         comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
-        train_linewidth=2.8,
-        valid_linewidth=3.2,
-        best_marker_edge="#222222",
-        best_marker_size=160.0,
-        text_box={
-            "boxstyle": "round",
-            "facecolor": "#FBFBF8",
-            "edgecolor": "#999999",
-            "alpha": 0.95,
-        },
+        train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
+        text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},
+    ),
+    "editorial_dejavu_serif": _style(
+        "editorial_dejavu_serif",
+        "Editorial axes in DejaVu Serif (matplotlib's bundled serif -- always renders identically).",
+        colors=_EDITORIAL_COLORS, rc_params=_EDITORIAL_RC_DEJAVU_SERIF,
+        comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
+        train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
+        text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},
+    ),
+    "editorial_stix": _style(
+        "editorial_stix",
+        "Editorial axes in STIX serif (journal-typeset feel; was previously called 'tufte').",
+        colors=_EDITORIAL_COLORS, rc_params=_EDITORIAL_RC_STIX,
+        comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
+        train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
+        text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},
+    ),
+    "editorial_stixsans": _style(
+        "editorial_stixsans",
+        "Editorial axes in STIX Sans (humanist sans, softer than DejaVu Sans).",
+        colors=_EDITORIAL_COLORS, rc_params=_EDITORIAL_RC_STIXSANS,
+        comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
+        train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
+        text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},
+    ),
+    "editorial_cm": _style(
+        "editorial_cm",
+        "Editorial axes with Computer-Modern-style math (classic LaTeX-paper look).",
+        colors=_EDITORIAL_COLORS, rc_params=_EDITORIAL_RC_CM,
+        comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
+        train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
+        text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},
     ),
     "mpl_classic": _style(
         "mpl_classic",
@@ -401,6 +458,8 @@ _STYLE_ALIASES = {
     "material": "google",
     "classic": "mpl_classic",
     "matplotlib": "mpl_classic",
+    "editorial": "editorial_dejavu_serif",
+    "tufte": "editorial_stix",  # renamed: Tufte is a set of principles, not one font/preset
 }
 
 
