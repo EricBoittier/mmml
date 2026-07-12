@@ -593,3 +593,64 @@ def test_pair_energy_multipole_octupole_octupole() -> None:
     )
     assert energy == pytest.approx(-125.0 / 2187.0)
 
+
+def test_pair_energy_multipole_returns_components() -> None:
+    components = pair_energy_multipole_au(
+        [0.0, 0.0, 0.0],
+        1.0,
+        [0.1, 0.2, 0.3],
+        np.diag([2.0, -1.0, -1.0]),
+        np.zeros((3, 3, 3)),
+        [2.0, 0.0, 0.0],
+        -1.0,
+        [-0.1, 0.0, 0.4],
+        np.diag([-1.0, 2.0, -1.0]),
+        np.zeros((3, 3, 3)),
+        softening_bohr=0.0,
+        return_components=True,
+    )
+    assert isinstance(components, dict)
+    assert "0-0" in components
+    assert "0-1" in components
+    assert "1-1" in components
+    assert "0-2" in components
+    assert "1-2" in components
+    assert "2-2" in components
+    assert "total" in components
+    assert components["total"] == pytest.approx(sum(components[k] for k in components if k != "total"))
+
+
+def test_calculator_max_ell_and_components(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+    from mmml.models.multipoles.electrostatics import LearnedMolecularMultipoleElectrostatics
+
+    monkeypatch.setattr(
+        "mmml.models.multipoles.electrostatics.load_multipole_model",
+        lambda cp: (MagicMock(), MagicMock())
+    )
+
+    calc = LearnedMolecularMultipoleElectrostatics(
+        checkpoint="dummy",
+        fragments=[[0, 1], [2, 3]],
+        charges=[0.0, 0.0],
+        max_ell=1,
+    )
+
+    dummy_multipoles = np.zeros((1, 16))
+    dummy_multipoles[0, 0] = 1.0
+    dummy_multipoles[0, 1:4] = [0.1, 0.2, 0.3]
+    calc._predict = MagicMock(return_value=dummy_multipoles)
+
+    atoms = Atoms("He4", positions=[[0, 0, 0], [0, 0, 1], [2, 0, 0], [2, 0, 1]])
+    atoms.calc = calc
+    atoms.get_potential_energy()
+
+    np.testing.assert_allclose(calc.results["quadrupoles_bohr"], np.zeros((2, 3, 3)))
+    np.testing.assert_allclose(calc.results["octupoles_bohr"], np.zeros((2, 3, 3, 3)))
+    np.testing.assert_allclose(calc.results["charges"], np.array([1.0, 1.0]))
+
+    assert "pair_energies_by_component" in calc.results
+    assert "potentials_at_origins_v" in calc.results
+    assert calc.results["potentials_at_origins_v"].shape == (2, 4)
+
+
