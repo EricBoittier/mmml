@@ -101,6 +101,7 @@ def test_evaluate_scan_uses_calculator_factory():
             "molecule_a": "H",
             "molecule_b": "H",
             "distance_angstrom": 2.0,
+            "offset_angstrom": 0.0,
             "energy_ev": 0.5,
             "energy_kcal_mol": pytest.approx(11.5302744335),
         }
