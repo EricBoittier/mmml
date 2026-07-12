@@ -185,15 +185,21 @@ def evaluate_scan(
         atoms.calc = calculator_factory()
         try:
             energy_ev = float(atoms.get_potential_energy())
-            rows.append(
-                {
-                    "molecule_a": geometry.pair[0],
-                    "molecule_b": geometry.pair[1],
-                    "distance_angstrom": geometry.distance_angstrom,
-                    "energy_ev": energy_ev,
-                    "energy_kcal_mol": energy_ev * 23.060548867,
-                }
-            )
+            row = {
+                "molecule_a": geometry.pair[0],
+                "molecule_b": geometry.pair[1],
+                "distance_angstrom": geometry.distance_angstrom,
+                "energy_ev": energy_ev,
+                "energy_kcal_mol": energy_ev * 23.060548867,
+            }
+            if hasattr(atoms.calc, "results") and "pair_energies_by_component" in atoms.calc.results:
+                comp_list = atoms.calc.results["pair_energies_by_component"]
+                if comp_list:
+                    for k, val_ev in comp_list[0].items():
+                        if k != "pair":
+                            row[f"comp_{k}_ev"] = val_ev
+                            row[f"comp_{k}_kcal_mol"] = val_ev * 23.060548867
+            rows.append(row)
         except Exception as e:
             print(f"    Warning: calculation failed at {geometry.distance_angstrom} Å: {e}")
     return rows
