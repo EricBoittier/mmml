@@ -69,10 +69,17 @@ settings:
     calculator: {disable_physnet_point_coulomb: true}
 
   mixed_baseline:
+    # peptide_water_ml_cutoff_A bounds ml_pep_water to nearby waters only --
+    # without it, every core-water pair is scored densely each step (no
+    # neighbor-list capacity limit, unlike mm_nonbonded's padded pair list),
+    # which made this setting ~30-40x slower per step than water_box on the
+    # real cluster (see README.md "Real-run status"). 6.0 A matches
+    # mixed_core_vdw's existing value.
     system: peptide_water
     n_waters: 20
     box_size: 20.0
     checkpoint: base
+    peptide_water_ml_cutoff_A: 6.0
     seeds: [1, 2]
 
   mixed_older_epoch:
@@ -80,6 +87,7 @@ settings:
     n_waters: 20
     box_size: 20.0
     checkpoint: older_epoch
+    peptide_water_ml_cutoff_A: 6.0
 
   mixed_damping_sigma:
     system: peptide_water
@@ -87,6 +95,7 @@ settings:
     box_size: 20.0
     checkpoint: base
     calculator: {electrostatics_damping_sigma: 1.0}
+    peptide_water_ml_cutoff_A: 6.0
 
   mixed_core_vdw:
     # Also exercises vdw_core's repulsive wall between the ML peptide core
