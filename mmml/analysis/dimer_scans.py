@@ -65,15 +65,21 @@ def geometric_centroid(atoms: Atoms) -> np.ndarray:
 
 
 def centered_atoms(atoms: Atoms, *, center: str = "centroid") -> Atoms:
-    """Return a copy translated so the selected center is at the origin."""
+    """Return a copy translated so the selected center is at the origin.
+
+    *center* may be ``'centroid'`` (default), ``'com'`` (centre of mass), or
+    ``'none'`` to skip centring (returns a plain copy).
+    """
 
     centered = atoms.copy()
+    if center == "none":
+        return centered
     if center == "centroid":
         origin = geometric_centroid(centered)
     elif center == "com":
         origin = np.asarray(centered.get_center_of_mass(), dtype=np.float64)
     else:
-        raise ValueError("center must be 'centroid' or 'com'")
+        raise ValueError("center must be 'centroid', 'com', or 'none'")
     centered.translate(-origin)
     return centered
 
@@ -185,10 +191,14 @@ def build_rigid_dimer_2d(
     center: str = "centroid",
     mol_id_array: str = "mol_id",
 ) -> tuple[Atoms, tuple[np.ndarray, np.ndarray]]:
-    """Place two rigid monomers at a fixed separation distance and transverse offset."""
+    """Place two rigid monomers at a fixed separation distance and transverse offset.
+
+    Pass ``center='none'`` when *monomer_a* and *monomer_b* are already centred
+    and pre-oriented (e.g. from :func:`mmml.analysis.dimer_molecules.orient_molecule`).
+    """
     direction = normalized_vector(axis, name="axis")
     trans_direction = normalized_vector(transverse_axis, name="transverse_axis")
-    
+
     monomer_a_centered = centered_atoms(monomer_a, center=center)
     monomer_b_centered = centered_atoms(monomer_b, center=center)
     
