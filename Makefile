@@ -1,4 +1,4 @@
-.PHONY: help install install-gpu install-dev install-all clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
+.PHONY: help install install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -11,6 +11,8 @@ help:
 	@echo "  make install-gpu-cuda12 - Install with uv (GPU/CUDA 12)"
 	@echo "  make install-dev      - Install with development dependencies"
 	@echo "  make install-all      - Install all optional dependencies"
+	@echo "  make install-all-offline-cuda13 - Offline install, all extras, CUDA 13 (dedupes cuda12 plugin)"
+	@echo "  make install-all-offline-cuda12 - Offline install, all extras, CUDA 12 (dedupes cuda13 plugin)"
 	@echo ""
 	@echo "Micromamba:"
 	@echo "  make micromamba-create     - Create micromamba environment (CPU)"
@@ -89,6 +91,20 @@ install-dev:
 
 install-all:
 	uv sync --extra all
+
+# Offline installs: use only the local uv cache / already-downloaded wheels
+# (no network access), then strip any leftover jax-cuda12/cuda13 plugin from
+# the *other* CUDA major version. uv sync alone won't remove those if they
+# were pip-installed manually in a previous session — mixing both plugins
+# in one venv makes JAX fail with CUDA_ERROR_UNKNOWN even though nvidia-smi
+# and cupy see the GPU fine.
+install-all-offline-cuda13:
+	uv sync --offline --extra all-cuda13
+	.venv/bin/pip uninstall -y jax-cuda12-pjrt jax-cuda12-plugin 2>/dev/null || true
+
+install-all-offline-cuda12:
+	uv sync --offline --extra all-cuda12
+	.venv/bin/pip uninstall -y jax-cuda13-pjrt jax-cuda13-plugin 2>/dev/null || true
 
 # ==============================================================================
 # Micromamba environments
