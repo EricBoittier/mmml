@@ -15,7 +15,7 @@ mmml md-system --help
 usage: mmml md-system [-h]
                       [--setup {free_nve,free_nvt,free_thermalize,pbc_nve,pbc_nvt,pbc_thermalize,pbc_npt,lambda_ti,pycharmm_minimize,pycharmm_full,all}]
                       [--backend {auto,ase,jaxmd,pycharmm}]
-                      [--checkpoint CHECKPOINT]
+                      [--checkpoint CHECKPOINT] [--jaxmd-unified]
                       [--electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA]
                       [--output-dir OUTPUT_DIR] [--job-name JOB_NAME]
                       [--jobs-dir JOBS_DIR] [--template-pdb TEMPLATE_PDB]
@@ -289,6 +289,11 @@ options:
                         MD.
   --checkpoint CHECKPOINT
                         Model checkpoint path.
+  --jaxmd-unified       EXPERIMENTAL: run --backend jaxmd through the unified
+                        mmml.md pipeline (mmml.cli.run.md_system_unified)
+                        instead of the legacy md_pbc_suite.jaxmd inline loop.
+                        Only supports the packmol composition builder; see
+                        docs/md-cg-unification-design.md for scope and status.
   --electrostatics-damping-sigma ELECTROSTATICS_DAMPING_SIGMA
                         Override learned-charge Coulomb erf damping sigma in
                         Angstrom; set 0 to disable.

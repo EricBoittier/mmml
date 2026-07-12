@@ -81,7 +81,13 @@ def main() -> None:
     args.markdown.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     if n_failed:
-        raise SystemExit(f"{n_failed} setting(s) failed; see results/summary.md")
+        # Don't raise SystemExit: the failures are already visible as ❌ rows
+        # in the report just written, and a non-zero exit here would cause
+        # Snakemake to delete summary.csv/summary.md as "failed job" output.
+        print(
+            f"warning: {n_failed} setting(s) failed; see {args.markdown}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

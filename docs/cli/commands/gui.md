@@ -15,6 +15,7 @@ mmml gui --help
 usage: mmml gui [-h] [--data-dir DATA_DIR | --file FILE] [--port PORT]
                 [--host HOST] [--dev] [--no-browser]
                 [--model-params MODEL_PARAMS] [--model-config MODEL_CONFIG]
+                [--enable-runner] [--runner-cwd RUNNER_CWD]
 
 Start the MMML molecular viewer server
 
@@ -36,6 +37,13 @@ options:
   --model-config MODEL_CONFIG
                         Optional path to model config JSON for hidden-state
                         inspection
+  --enable-runner       Enable the job runner: launch and live-stream `mmml md-
+                        system` runs on this host via /api/jobs (SSE). Intended
+                        for remote/HPC use behind an SSH port-forward. Executes
+                        subprocesses, so keep it off public networks.
+  --runner-cwd RUNNER_CWD
+                        Working directory that runner jobs launch from (default:
+                        --data-dir or cwd)
 
 Examples: # Use current directory as data dir; load files from file browser mmml
 gui # Serve all molecular files from a specific directory mmml gui --data-dir
