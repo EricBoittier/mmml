@@ -4,8 +4,17 @@ import e3x
 import jax
 import jax.numpy as jnp
 import numpy as np
+from ase import Atoms
 
-from mmml.models.mbd import E3xMBDModel, mbd_energy_and_forces, qdo_pairwise_dispersion
+from mmml.models.mbd import (
+    HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM,
+    HARTREE_TO_EV,
+    E3xMBDModel,
+    atoms_to_mbd_batch,
+    mbd_energy_and_forces,
+    predict_mbd_from_atoms,
+    qdo_pairwise_dispersion,
+)
 from scripts.cache_qcml_mbd_orbax import preprocess_examples
 from scripts.train_qcml_mbd import (
     bucket_indices,
@@ -88,6 +97,38 @@ def test_mbd_model_outputs_positive_properties_and_conservative_forces() -> None
     assert np.all(np.asarray(output["c6_coefficients"]) > 0)
     assert np.all(np.asarray(output["polarizabilities"]) > 0)
     np.testing.assert_allclose(forces.sum(axis=0), 0.0, atol=1e-6)
+
+
+def test_mbd_ase_prediction_shapes_and_unit_conversions() -> None:
+    atoms = Atoms(
+        "OH2",
+        positions=[
+            [0.0, 0.0, 0.0],
+            [0.9572, 0.0, 0.0],
+            [-0.2399872, 0.927297, 0.0],
+        ],
+    )
+    model = E3xMBDModel(features=4, num_iterations=1, num_basis_functions=3)
+    batch = atoms_to_mbd_batch(atoms)
+    variables = model.init(jax.random.key(0), **batch)
+
+    prediction = predict_mbd_from_atoms(model, variables["params"], atoms)
+
+    assert np.isscalar(prediction["energy_hartree"])
+    assert prediction["forces_hartree_bohr"].shape == (3, 3)
+    assert prediction["forces_ev_angstrom"].shape == (3, 3)
+    assert prediction["polarizabilities_bohr3"].shape == (3,)
+    assert prediction["c6_native"].shape == (3,)
+    np.testing.assert_allclose(
+        prediction["energy_ev"],
+        prediction["energy_hartree"] * HARTREE_TO_EV,
+        rtol=1e-12,
+    )
+    np.testing.assert_allclose(
+        prediction["forces_ev_angstrom"],
+        prediction["forces_hartree_bohr"] * HARTREE_PER_BOHR_TO_EV_PER_ANGSTROM,
+        rtol=1e-12,
+    )
 
 
 def test_mbd_training_cache_limit() -> None:
