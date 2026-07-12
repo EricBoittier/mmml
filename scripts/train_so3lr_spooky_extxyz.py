@@ -626,6 +626,36 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
             f"{jax.local_devices()}"
         )
 
+    # Resolve restart path and load model architecture config if restarting/resuming
+    restart_path = resolve_restart_path(args)
+    if restart_path is not None:
+        config_path = restart_path.parent / "run_config.json"
+        if config_path.exists():
+            print(f"Loading model configuration from {config_path}")
+            with config_path.open("r") as fh:
+                saved_config = json.load(fh)
+            arch_params = [
+                "features",
+                "max_degree",
+                "num_iterations",
+                "num_basis_functions",
+                "cutoff",
+                "max_atomic_number",
+                "n_res",
+                "predict_charges",
+                "no_zbl",
+                "efa",
+                "use_energy_bias",
+                "electrostatics_damping_sigma",
+            ]
+            for param in arch_params:
+                if param in saved_config:
+                    current_val = getattr(args, param)
+                    saved_val = saved_config[param]
+                    if current_val != saved_val:
+                        print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
+                        setattr(args, param, saved_val)
+
     model = create_model(args, max_atoms=max_atoms)
     state = init_state(model, data, train_buckets, args)
     workdir = Path(args.workdir).resolve()
@@ -648,7 +678,6 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         state = _initialize_from_checkpoint(
             Path(args.init_checkpoint).expanduser().resolve(), state
         )
-    restart_path = resolve_restart_path(args)
     if restart_path is not None:
         state, restored_epoch, restored_metrics = _restore_state_from_checkpoint(
             restart_path, state
