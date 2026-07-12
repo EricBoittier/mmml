@@ -310,7 +310,8 @@ def pair_energy_multipole_au(
     octupole_b_bohr: np.ndarray,
     *,
     softening_bohr: float = 0.0,
-) -> float:
+    return_components: bool = False,
+) -> float | dict[str, float]:
     """Symmetric multipole-multipole pair interaction in Hartree (up to rank 3).
 
     ``R`` points from A to B. The formula is the atomic-unit interaction of two
@@ -386,7 +387,22 @@ def pair_energy_multipole_au(
             + 236.25 * np.dot(O_a_rr, O_b_rr) * inv_r11
             - 288.75 * O_a_rrr * O_b_rrr * inv_r13)
 
-    return float(e_00 + e_01 + e_11 + e_02 + e_12 + e_22 + e_03 + e_13 + e_23 + e_33)
+    total = float(e_00 + e_01 + e_11 + e_02 + e_12 + e_22 + e_03 + e_13 + e_23 + e_33)
+    if return_components:
+        return {
+            "0-0": float(e_00),
+            "0-1": float(e_01),
+            "1-1": float(e_11),
+            "0-2": float(e_02),
+            "1-2": float(e_12),
+            "2-2": float(e_22),
+            "0-3": float(e_03),
+            "1-3": float(e_13),
+            "2-3": float(e_23),
+            "3-3": float(e_33),
+            "total": total,
+        }
+    return total
 
 
 def pair_energy_charge_dipole_au(
@@ -435,6 +451,7 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
         origin: str = "nuclear_charge_centroid",
         mol_id_array: str = "mol_id",
         softening_bohr: float = 0.0,
+        max_ell: int = 3,
         **kwargs: Any,
     ):
         super().__init__(**kwargs)
@@ -447,6 +464,7 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
         self.origin = origin
         self.mol_id_array = mol_id_array
         self.softening_bohr = float(softening_bohr)
+        self.max_ell = int(max_ell)
         self._predict = jax.jit(self._predict_impl)
 
     def _predict_impl(self, batch: dict[str, jax.Array]) -> jax.Array:
@@ -527,11 +545,24 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
         dipoles = np.asarray(prediction["dipoles_bohr"], dtype=np.float64)
         quadrupoles = np.asarray(prediction["quadrupoles_bohr"], dtype=np.float64)
         octupoles = np.asarray(prediction["octupoles_bohr"], dtype=np.float64)
+
+        # Mask moments based on max_ell
+        if self.max_ell < 3:
+            octupoles = np.zeros_like(octupoles)
+        if self.max_ell < 2:
+            quadrupoles = np.zeros_like(quadrupoles)
+        if self.max_ell < 1:
+            dipoles = np.zeros_like(dipoles)
+        if self.max_ell < 0:
+            charges = np.zeros_like(charges)
+
         energy_hartree = 0.0
         pair_rows = []
+        pair_component_rows_ha = []
+        pair_component_rows_ev = []
         for i in range(len(charges)):
             for j in range(i + 1, len(charges)):
-                pair_energy = pair_energy_multipole_au(
+                components = pair_energy_multipole_au(
                     origins[i],
                     charges[i],
                     dipoles[i],
@@ -543,14 +574,68 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
                     quadrupoles[j],
                     octupoles[j],
                     softening_bohr=self.softening_bohr,
+                    return_components=True,
                 )
+                pair_energy = components["total"]
                 energy_hartree += pair_energy
                 pair_rows.append((i, j, pair_energy, pair_energy * HARTREE_TO_EV))
+                
+                pair_comp_ha = {"pair": (i, j), **components}
+                pair_comp_ev = {"pair": (i, j)}
+                for key, val in components.items():
+                    pair_comp_ev[key] = val * HARTREE_TO_EV
+                pair_component_rows_ha.append(pair_comp_ha)
+                pair_component_rows_ev.append(pair_comp_ev)
+
+        # Calculate potentials at origins decomposed by component
+        n_fragments = len(charges)
+        potentials_au = np.zeros((n_fragments, 4), dtype=np.float64)
+        for i in range(n_fragments):
+            for j in range(n_fragments):
+                if i == j:
+                    continue
+                r_vec = origins[i] - origins[j]
+                r2 = np.dot(r_vec, r_vec) + self.softening_bohr**2
+                r_val = np.sqrt(r2)
+                inv_r = 1.0 / max(r_val, 1e-12)
+                
+                # l=0
+                pot_0 = charges[j] * inv_r
+                # l=1
+                p_r = np.dot(dipoles[j], r_vec)
+                pot_1 = p_r * inv_r**3
+                # l=2
+                Q_r = quadrupoles[j] @ r_vec
+                r_Q_r = np.dot(r_vec, Q_r)
+                pot_2 = 1.5 * r_Q_r * inv_r**5
+                # l=3
+                O_r = np.tensordot(octupoles[j], r_vec, axes=(2, 0))
+                O_rr = O_r @ r_vec
+                O_rrr = np.dot(O_rr, r_vec)
+                pot_3 = 2.5 * O_rrr * inv_r**7
+                
+                potentials_au[i, 0] += pot_0
+                potentials_au[i, 1] += pot_1
+                potentials_au[i, 2] += pot_2
+                potentials_au[i, 3] += pot_3
 
         self.results["energy"] = energy_hartree * HARTREE_TO_EV
         self.results["energy_hartree"] = energy_hartree
         self.results["pair_energies"] = pair_rows
-        self.results.update(prediction)
+        self.results["pair_energies_by_component_hartree"] = pair_component_rows_ha
+        self.results["pair_energies_by_component_ev"] = pair_component_rows_ev
+        self.results["pair_energies_by_component"] = pair_component_rows_ev
+        self.results["potentials_at_origins_au"] = potentials_au
+        self.results["potentials_at_origins_v"] = potentials_au * AU_POTENTIAL_TO_V
+        
+        masked_prediction = {
+            **prediction,
+            "charges": charges,
+            "dipoles_bohr": dipoles,
+            "quadrupoles_bohr": quadrupoles,
+            "octupoles_bohr": octupoles,
+        }
+        self.results.update(masked_prediction)
 
 
 def field_on_slice(
