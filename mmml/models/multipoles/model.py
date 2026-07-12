@@ -101,6 +101,7 @@ class E3xMultipoleModel(nn.Module):
 
     features: int = 64
     max_degree: int = 3
+    target_degree: int | None = None
     num_iterations: int = 3
     num_basis_functions: int = 16
     cutoff: float = 6.0
