@@ -34,6 +34,7 @@ from mmml.utils.ase_structure_plot import (
     SCALE_BOX as _SCALE_BOX,
     SCALE_CRYSTAL as _SCALE_CRYSTAL,
     SCALE_MONOMER as _SCALE_MONOMER,
+    SCALE_PEPTIDE_ML as _SCALE_PEPTIDE_ML,
     SCALE_TRIALANINE_BOX as _SCALE_TRIALANINE_BOX,
     SCALE_TRIALANINE_PEPTIDE as _SCALE_TRIALANINE_PEPTIDE,
     save_structure_figure as _save_structure_figure,
@@ -239,6 +240,96 @@ def figure_trialanine_peptide_zoom(out: Path) -> None:
     )
 
 
+# ML core / ML shell / MM shell — the three roles in the mixed-system energy
+# decomposition (docs §11 "Mixed-system (ML core + MM/ML solvent) support").
+_MIXED_ROLE_COLORS = {
+    "core": "#059669",   # ml_intra: ML-scored peptide intramolecular energy
+    "near": "#2563eb",   # ml_pep_water: ML dimer energy, core <-> nearby water
+    "far": "#d97706",    # mm_nonbonded / vdw_core: classical MM, far water
+}
+
+
+def _mixed_system_atoms(*, near_cutoff_A: float, far_cutoff_A: float | None):
+    """Real TRIA + TIP3 snapshot (``examples/atoms.pdb``, 42-atom core + 200
+    waters), split into core / ML-shell / MM-shell water by O-to-core-COM
+    distance. ``far_cutoff_A=None`` keeps every remaining water as MM shell.
+    """
+    import ase.io
+    import numpy as np
+    from matplotlib.colors import to_rgb
+
+    full = ase.io.read(str(REPO / "examples" / "atoms.pdb"))
+    n_core = 42
+    pos = full.get_positions()
+    com = pos[:n_core].mean(axis=0)
+
+    water_o = list(range(n_core, len(full), 3))
+    dist = {o: float(np.linalg.norm(pos[o] - com)) for o in water_o}
+    near_o = [o for o in water_o if dist[o] <= near_cutoff_A]
+    if far_cutoff_A is None:
+        far_o = [o for o in water_o if dist[o] > near_cutoff_A]
+    else:
+        far_o = [o for o in water_o if near_cutoff_A < dist[o] <= far_cutoff_A]
+
+    keep: list[int] = list(range(n_core))
+    role = [0] * n_core
+    for o in near_o:
+        keep.extend([o, o + 1, o + 2])
+        role.extend([1, 1, 1])
+    for o in far_o:
+        keep.extend([o, o + 1, o + 2])
+        role.extend([2, 2, 2])
+
+    sub = full[keep]
+    palette = [
+        to_rgb(_MIXED_ROLE_COLORS["core"]),
+        to_rgb(_MIXED_ROLE_COLORS["near"]),
+        to_rgb(_MIXED_ROLE_COLORS["far"]),
+    ]
+    atom_colors = np.array([palette[r] for r in role])
+    return sub, atom_colors, len(near_o), len(far_o)
+
+
+def figure_mixed_system_zoom(out: Path) -> None:
+    """Pedagogical crop: core + ML-shell water + a thin MM-shell ring."""
+    atoms, atom_colors, n_near, n_far = _mixed_system_atoms(
+        near_cutoff_A=8.0, far_cutoff_A=13.0
+    )
+    _save_structure_figure(
+        atoms,
+        out,
+        title=f"Mixed ML/MM energy: TRIA core + {n_near} ML-shell + {n_far} MM-shell waters",
+        rotation="20x,12y,0z",
+        scale=_SCALE_PEPTIDE_ML,
+        atom_colors=atom_colors,
+        legend_entries=[
+            ("ML core — ml_intra", _MIXED_ROLE_COLORS["core"]),
+            ("ML shell ≤8 Å — ml_pep_water", _MIXED_ROLE_COLORS["near"]),
+            ("MM shell 8–13 Å — mm_nonbonded", _MIXED_ROLE_COLORS["far"]),
+        ],
+    )
+
+
+def figure_mixed_system_overview(out: Path) -> None:
+    """Same coloring over the full solvated box (all 200 TIP3 waters)."""
+    atoms, atom_colors, n_near, n_far = _mixed_system_atoms(
+        near_cutoff_A=8.0, far_cutoff_A=None
+    )
+    _save_structure_figure(
+        atoms,
+        out,
+        title=f"Full mixed-system box: TRIA core + {n_near} ML-shell + {n_far} MM waters",
+        rotation="20x,55y,0z",
+        scale=_SCALE_TRIALANINE_BOX,
+        atom_colors=atom_colors,
+        legend_entries=[
+            ("ML core", _MIXED_ROLE_COLORS["core"]),
+            ("ML shell ≤8 Å", _MIXED_ROLE_COLORS["near"]),
+            ("MM >8 Å", _MIXED_ROLE_COLORS["far"]),
+        ],
+    )
+
+
 def figure_trialanine_build_pipeline(out: Path) -> None:
     """Schematic build steps for ``build_trialanine_water_box_in_charmm``."""
     import matplotlib.pyplot as plt
@@ -350,6 +441,8 @@ def generate(*, check: bool = False) -> int:
         STRUCT / "build-crystal.png": "build_crystal",
         STRUCT / "trialanine-water-box.png": "trialanine_box",
         STRUCT / "trialanine-peptide-zoom.png": "trialanine_peptide",
+        STRUCT / "mixed-system-zoom.png": "mixed_system_zoom",
+        STRUCT / "mixed-system-overview.png": "mixed_system_overview",
         PLOTS / "liquid-box-density-ladder.png": "liquid_box",
         PLOTS / "structure-builder-sizes.png": "workflow",
         PLOTS / "trialanine-build-pipeline.png": "trialanine_pipeline",
@@ -363,6 +456,8 @@ def generate(*, check: bool = False) -> int:
         "trialanine_box": lambda p: figure_trialanine_water_box(p),
         "trialanine_peptide": lambda p: figure_trialanine_peptide_zoom(p),
         "trialanine_pipeline": lambda p: figure_trialanine_build_pipeline(p),
+        "mixed_system_zoom": lambda p: figure_mixed_system_zoom(p),
+        "mixed_system_overview": lambda p: figure_mixed_system_overview(p),
     }
 
     changed = 0

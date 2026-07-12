@@ -767,13 +767,20 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                 "use_energy_bias",
                 "electrostatics_damping_sigma",
             ]
+            parser = build_parser()
             for param in arch_params:
-                if param in saved_config:
-                    current_val = getattr(args, param)
-                    saved_val = saved_config[param]
-                    if current_val != saved_val:
-                        print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
-                        setattr(args, param, saved_val)
+                if param not in saved_config:
+                    continue
+                current_val = getattr(args, param)
+                if current_val != parser.get_default(param):
+                    # User explicitly passed a non-default value on the CLI; an
+                    # explicit flag (e.g. turning --predict-charges on to add a
+                    # new head) always wins over the checkpoint's saved config.
+                    continue
+                saved_val = saved_config[param]
+                if current_val != saved_val:
+                    print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
+                    setattr(args, param, saved_val)
 
     if restart_path is not None and args.optimizer != "adamw":
         raise ValueError(

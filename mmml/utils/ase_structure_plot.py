@@ -76,12 +76,17 @@ def draw_orthographic_structure(
     show_unit_cell: int,
     radii: float = 0.88,
     charmm_image_tags: "np.ndarray | None" = None,
+    atom_colors: "np.ndarray | None" = None,
     writer: "Matplotlib | None" = None,
 ) -> "Matplotlib":
     """Orthographic ASE view: bonds under atoms, equal aspect, styled patches.
 
     When ``charmm_image_tags`` is set (0 = primary, 1 = IMAGE translation), image
     sites are drawn in orange at lower opacity; primaries use Jmol element colors.
+
+    ``atom_colors`` is an (N, 3) array of per-atom RGB triples that overrides
+    the default Jmol element colors — e.g. to color atoms by *role* (ML core /
+    ML shell / MM region) rather than by element, for architecture diagrams.
 
     Pass an existing ``writer`` (e.g. after drawing cell outlines) to reuse the
     same projection.
@@ -99,6 +104,7 @@ def draw_orthographic_structure(
             ax,
             rotation=rotation,
             radii=radii,
+            colors=atom_colors,
             scale=scale,
             show_unit_cell=show_unit_cell,
             auto_bbox_size=1.1,
@@ -157,9 +163,18 @@ def save_structure_figure(
     title: str,
     rotation: str = "25x,15y,0z",
     scale: float = SCALE_MONOMER,
+    atom_colors: "np.ndarray | None" = None,
+    legend_entries: "list[tuple[str, str]] | None" = None,
 ) -> Path:
-    """Write a PNG with orthographic ASE projection and covalent bonds."""
+    """Write a PNG with orthographic ASE projection and covalent bonds.
+
+    ``atom_colors`` / ``legend_entries`` support role-colored (rather than
+    element-colored) diagrams: pass an (N, 3) RGB array plus a
+    ``[(label, hex_color), ...]`` legend to color-code e.g. an ML-scored core
+    vs. an ML-shell vs. an MM region.
+    """
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -179,6 +194,7 @@ def save_structure_figure(
         rotation=rotation,
         scale=scale,
         show_unit_cell=show_cell,
+        atom_colors=atom_colors,
     )
     ax.set_title(
         title,
@@ -187,6 +203,29 @@ def save_structure_figure(
         color=style["title_color"],
         pad=10,
     )
+    if legend_entries:
+        handles = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                linestyle="",
+                markersize=9,
+                markerfacecolor=color,
+                markeredgecolor=style["atom_edge"],
+                markeredgewidth=0.65,
+                label=label,
+            )
+            for label, color in legend_entries
+        ]
+        ax.legend(
+            handles=handles,
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.06),
+            ncol=len(handles),
+            fontsize=9,
+            frameon=False,
+        )
     fig.tight_layout()
     fig.savefig(
         out,
