@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Run the molecular dimer scan campaign with learned multipoles, MBD, and xTB."""
+"""Run the molecular dimer scan campaign with learned multipoles, MBD, xTB,
+SpookyNet, and (optionally) CHARMM/CGenFF — all sharing one distance/offset
+grid per pair so every backend lands in a single combined CSV.
+
+The distance grid is chosen per pair: a cheap geometry-only sweep
+(``find_safe_min_distance``) locates where fragment atoms actually stop
+overlapping (on-axis, offset=0) and anchors the grid there, instead of using
+one fixed floor that's unsafe for bulky/asymmetric pairs (e.g. ACE+ACE needs
+~5 Å before atoms clear) and wasteful for compact ones.
+"""
 
 import argparse
 import os
@@ -16,18 +25,142 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 from mmml.analysis.dimer_molecules import (
     MOLECULES,
+    ORIENTED_MONOMERS,
     PAIR_SCAN_CONFIG,
     make_oriented_scan_geometries,
 )
 from mmml.analysis.dimer_scans import (
     evaluate_scan,
     evaluate_scan_monomer_decomposed,
+    find_safe_min_distance,
     make_xtb_calculator,
+    min_fragment_contact_distance,
     molecule_pair_labels,
 )
 from mmml.models.mbd import QCMLMBDCalculator
 from mmml.models.multipoles import LearnedMolecularMultipoleElectrostatics
 from mmml.models.spookynet_calc import SpookyNetCalculator
+
+EV_TO_KCAL_MOL = 23.060548867
+
+# Residue name mapping + explicit geometries/atom-order for CHARMM PSF construction
+# (bypasses CHARMM's IC-build code, which is unstable for these small monomers).
+CHARMM_RESIDUES = {
+    "DCM": "DCM",
+    "ACE": "ACO",
+    "BENZ": "BENZ",
+    "TIP3": "TIP3",
+    "MEOH": "MEOH",
+}
+
+
+def _charmm_residue_geometries() -> dict:
+    return {
+        "DCM": (
+            MOLECULES["DCM"].positions[[0, 3, 4, 1, 2]],
+            ["C", "H1", "H2", "CL1", "CL2"],
+            np.array([6, 1, 1, 17, 17]),
+        ),
+        "ACO": (
+            MOLECULES["ACE"].positions[[3, 0, 1, 2, 4, 5, 6, 7, 8, 9]],
+            ["O1", "C1", "C2", "C3", "H21", "H22", "H23", "H31", "H32", "H33"],
+            np.array([8, 6, 6, 6, 1, 1, 1, 1, 1, 1]),
+        ),
+        "BENZ": (
+            MOLECULES["BENZ"].positions[[0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]],
+            ["CG", "HG", "CD1", "HD1", "CD2", "HD2", "CE1", "HE1", "CE2", "HE2", "CZ", "HZ"],
+            np.array([6, 1, 6, 1, 6, 1, 6, 1, 6, 1, 6, 1]),
+        ),
+        "TIP3": (
+            MOLECULES["TIP3"].positions[[0, 1, 2]],
+            ["OH2", "H1", "H2"],
+            np.array([8, 1, 1]),
+        ),
+        "MEOH": (
+            MOLECULES["MEOH"].positions[[0, 1, 2, 3, 4, 5]],
+            ["CB", "OG", "HG1", "HB1", "HB2", "HB3"],
+            np.array([6, 8, 1, 1, 1, 1]),
+        ),
+    }
+
+
+def _init_charmm():
+    """Import + quiet-initialize PyCHARMM. Returns the helper callables needed below."""
+    import pycharmm
+
+    pycharmm.settings.set_bomb_level(-5)
+
+    from mmml.cli.run.md_pbc_suite.ase import _build_cluster_from_composition
+    from mmml.interfaces.pycharmmInterface.import_pycharmm import pycharmm_quiet
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import charmm_energy_row
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        setup_default_nbonds,
+        sync_charmm_positions,
+    )
+
+    pycharmm_quiet()
+    return _build_cluster_from_composition, setup_default_nbonds, sync_charmm_positions, charmm_energy_row
+
+
+def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]:
+    """Evaluate a scan's geometries with CHARMM/CGenFF (PSF built once per pair)."""
+    build_cluster, setup_nbonds, sync_positions, energy_row = charmm_fns
+    res_a = CHARMM_RESIDUES[label_a]
+    res_b = CHARMM_RESIDUES[label_b]
+    build_cluster(
+        composition=[(res_a, 1), (res_b, 1)],
+        spacing=5.0,
+        residue_geometries=_charmm_residue_geometries(),
+    )
+    setup_nbonds()
+
+    import pycharmm
+
+    rows: list[dict] = []
+    for geom in geometries:
+        try:
+            sync_positions(geom.atoms.positions)
+            pycharmm.lingo.charmm_script("ENER")
+            terms = energy_row()
+            elec = float(terms.get("ELEC", np.nan))
+            vdw = float(terms.get("VDW", np.nan))
+            tot = float(terms.get("ENER", np.nan))
+            rows.append(
+                {
+                    "molecule_a": label_a,
+                    "molecule_b": label_b,
+                    "distance_angstrom": geom.distance_angstrom,
+                    "offset_angstrom": geom.offset_angstrom,
+                    "energy_ev": tot / EV_TO_KCAL_MOL,
+                    "energy_kcal_mol": tot,
+                    "backend": "charmm",
+                    "charmm_ELEC_kcal": elec,
+                    "charmm_VDW_kcal": vdw,
+                    "min_contact_angstrom": min_fragment_contact_distance(geom.atoms, geom.fragments),
+                }
+            )
+        except Exception as e:
+            print(f"    Warning: CHARMM failed at d={geom.distance_angstrom} Å offset={geom.offset_angstrom} Å: {e}")
+    return rows
+
+
+def build_pair_distance_grid(
+    label_a: str, label_b: str, *, min_contact: float = 1.5,
+    n_near: int = 11, n_far: int = 8, near_span: float = 2.5, far_span: float = 9.5,
+) -> tuple[np.ndarray, float]:
+    """Per-pair distance grid anchored to where fragment atoms actually clear contact."""
+    cfg = PAIR_SCAN_CONFIG[(label_a, label_b)]
+    monomers = ORIENTED_MONOMERS[(label_a, label_b)]
+    safe_d = find_safe_min_distance(
+        monomers["a"], monomers["b"],
+        transverse_axis=cfg["transverse_axis"], min_contact=min_contact,
+    )
+    d_start = max(2.0, safe_d - 0.75)  # a bit before the safe point to still show the repulsive wall onset
+    distances = np.concatenate([
+        np.linspace(d_start, d_start + near_span, n_near),
+        np.linspace(d_start + near_span + 0.5, d_start + far_span, n_far),
+    ])
+    return distances, safe_d
 
 
 def main():
@@ -52,6 +185,17 @@ def main():
         help="Path to a SpookyNet JSON checkpoint (params + config)",
     )
     parser.add_argument(
+        "--with-charmm",
+        action="store_true",
+        help="Also evaluate CHARMM/CGenFF energies (requires pycharmm)",
+    )
+    parser.add_argument(
+        "--min-contact",
+        type=float,
+        default=1.5,
+        help="Contact distance (Å) used to anchor each pair's distance grid (default 1.5)",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("results/dimer_scan_campaign"),
@@ -66,7 +210,7 @@ def main():
 
     # 1. Initialize calculators
     print("Initializing calculators...")
-    
+
     use_multipole = False
     multipole_calc = None
     if args.multipole_checkpoint is not None:
@@ -120,27 +264,38 @@ def main():
     except Exception as e:
         print(f"  xTB calculator not available: {e}. Skipping xTB backend.")
 
-    if not (use_multipole or use_mbd or use_xtb or use_spookynet):
+    use_charmm = False
+    charmm_fns = None
+    if args.with_charmm:
+        try:
+            charmm_fns = _init_charmm()
+            use_charmm = True
+            print("  CHARMM/CGenFF initialized successfully.")
+        except Exception as e:
+            print(f"  Error initializing CHARMM: {e}")
+            sys.exit(1)
+
+    if not (use_multipole or use_mbd or use_xtb or use_spookynet or use_charmm):
         print("No backends are available or enabled. Exiting.")
         sys.exit(0)
 
-    # Distance grid: fine spacing near contact (asymptotics), coarser at long range
-    distances = np.concatenate([
-        np.linspace(2.5, 5.0, 11),   # close-range: 2.5–5.0 Å in 0.25 Å steps
-        np.linspace(5.5, 12.0, 8),   # long-range: 5.5–12.0 Å in ~0.93 Å steps
-    ])
     labels = list(MOLECULES.keys())
     pairs = molecule_pair_labels(labels, include_homodimers=True)
 
-    print(f"Will scan {len(pairs)} unique pairs × {len(distances)} distances × up to 5 offsets (2D).")
+    print(f"Will scan {len(pairs)} unique pairs (per-pair distance grid, up to 5 offsets, 2D).")
 
     results = []
 
     for idx, (label_a, label_b) in enumerate(pairs, 1):
         pair_cfg = PAIR_SCAN_CONFIG[(label_a, label_b)]
         offsets = pair_cfg["offsets_angstrom"]
+        distances, safe_d = build_pair_distance_grid(label_a, label_b, min_contact=args.min_contact)
         print(f"[{idx}/{len(pairs)}] {label_a}+{label_b}: {pair_cfg['description']}")
-        print(f"  {len(distances)} distances × {len(offsets)} offsets = {len(distances)*len(offsets)} geometries")
+        print(
+            f"  safe contact clears at d≈{safe_d:.2f} Å (offset=0) — grid spans "
+            f"{distances.min():.2f}–{distances.max():.2f} Å"
+        )
+        print(f"  {len(distances)} distances × {len(offsets)} offsets = {len(distances) * len(offsets)} geometries")
         geometries = list(make_oriented_scan_geometries(label_a, label_b, distances, offsets))
 
         # Evaluate Multipoles
@@ -197,6 +352,14 @@ def main():
                 results.extend(xtb_rows)
             except Exception as e:
                 print(f"    Error: {e}")
+
+        # Evaluate CHARMM/CGenFF
+        if use_charmm:
+            print("  Evaluating CHARMM/CGenFF...")
+            if label_a not in CHARMM_RESIDUES or label_b not in CHARMM_RESIDUES:
+                print(f"    Skipping: no CHARMM residue mapping for {label_a}/{label_b}")
+            else:
+                results.extend(evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns))
 
     df = pd.DataFrame(results)
     csv_path = args.output_dir / "scan_results.csv"

@@ -271,6 +271,39 @@ def min_fragment_contact_distance(
     return float(dmat.min())
 
 
+def find_safe_min_distance(
+    monomer_a: Atoms,
+    monomer_b: Atoms,
+    *,
+    axis: Sequence[float] = (0.0, 0.0, 1.0),
+    transverse_axis: Sequence[float] = (0.0, 1.0, 0.0),
+    min_contact: float = 1.5,
+    search_range: tuple[float, float] = (1.5, 8.0),
+    step: float = 0.1,
+) -> float:
+    """Smallest on-axis (offset=0) centre-to-centre distance clearing *min_contact*.
+
+    A scan's ``distance_angstrom`` is anchor-to-anchor, not atom-to-atom, so a
+    single fixed distance floor is either unsafe for bulky/asymmetric pairs
+    (atoms overlapping) or wasteful for compact ones (many scanned points
+    sitting deep in an already-known-clashing region). This does a cheap
+    geometry-only sweep (no energy evaluation) to find where fragment atoms
+    actually stop overlapping, so a scan grid can be anchored per pair.
+    Returns *search_range[1]* if no distance in range clears the threshold.
+    """
+    d = search_range[0]
+    while d <= search_range[1] + 1e-9:
+        atoms, fragments = build_rigid_dimer_2d(
+            monomer_a, monomer_b,
+            distance_angstrom=d, offset_angstrom=0.0,
+            axis=axis, transverse_axis=transverse_axis, center="none",
+        )
+        if min_fragment_contact_distance(atoms, fragments) >= min_contact:
+            return float(d)
+        d += step
+    return float(search_range[1])
+
+
 def evaluate_scan(
     geometries: Iterable[DimerGeometry],
     calculator_factory,
