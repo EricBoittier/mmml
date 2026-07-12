@@ -8,6 +8,7 @@ import pytest
 
 from mmml.models.multipoles import (
     AU_FIELD_TO_V_PER_ANGSTROM,
+    BOHR_TO_ANGSTROM,
     E3xDipoleModel,
     E3xMultipoleModel,
     E3xOctupoleModel,
@@ -473,7 +474,7 @@ def test_molecular_multipole_field_slice_units_and_direction() -> None:
         np.zeros((1, 3)),
         plane="xy",
         center_bohr=[0.0, 0.0, 0.0],
-        extent_angstrom=2.0,
+        extent_angstrom=2.0 * BOHR_TO_ANGSTROM,
         n_grid=3,
         softening_bohr=0.0,
     )

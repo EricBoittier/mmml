@@ -14,6 +14,7 @@ from .representations import (
 )
 from .electrostatics import (
     AU_FIELD_TO_V_PER_ANGSTROM,
+    BOHR_TO_ANGSTROM,
     HARTREE_TO_EV,
     LearnedMolecularMultipoleElectrostatics,
     field_on_slice,
@@ -23,6 +24,7 @@ from .electrostatics import (
 
 __all__ = [
     "AU_FIELD_TO_V_PER_ANGSTROM",
+    "BOHR_TO_ANGSTROM",
     "E3xDegreeMultipoleModel",
     "E3xDipoleModel",
     "E3xMultipoleModel",
