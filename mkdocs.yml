@@ -119,6 +119,7 @@ nav:
       - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
       - Cross-backend handoff: handoff.md
       - Remote MD runs + live streaming: remote-md-streaming.md
+      - PyCHARMM + MM/ML capabilities checklist: md-cg-capabilities-checklist.md
       - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
       - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
