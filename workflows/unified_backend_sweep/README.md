@@ -95,12 +95,18 @@ setting fails with `FileNotFoundError: packmol not found for this platform`,
 run `bash ../../scripts/rebuild_packmol.sh` once from the repo root (installs
 to `mmml/generate/packmol/packmol`) before resubmitting.
 
-**Transient XLA compile races:** two CPU-JIT-heavy jobs (mainly `jaxmd_npt`)
-landing on the *same* node at the same time have been observed to fail with
-`JaxRuntimeError: INTERNAL: Failed to materialize symbols: ...`. This is a
-concurrency issue in the CPU XLA backend under load, not a bug in this
-workflow — `profiles/slurm(-cpu)` set `retries: 2`, which clears it on a fresh
-node allocation.
+**`jaxmd_npt` fails deterministically on this cluster:** all three `jaxmd_npt`
+settings fail with `JaxRuntimeError: INTERNAL: Failed to materialize symbols:
+...` on every attempt observed so far — across both the `gpu` and `short`
+(CPU) partitions, and across five distinct nodes (gpu05, gpu07, gpu13, gpu26,
+plus a `short`-partition node). This rules out job co-location on a shared
+node as the cause (an earlier hypothesis); `retries: 2` in
+`profiles/slurm(-cpu)` does **not** clear it. This looks like an incompatibility
+between the NPT jax-md compiled graph and this cluster's XLA/jaxlib build,
+not a transient concurrency race — treat `jaxmd_npt` as unsupported on
+pc-studix until root-caused. The other four backends (`jaxmd_min`,
+`jaxmd_nve`, `jaxmd_nvt`, `rigid_mc`) complete reliably (12/15 settings pass
+each sweep, with `jaxmd_npt`'s 3 seeds being the only failures).
 
 ### CPU jobs
 
