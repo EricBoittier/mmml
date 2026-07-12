@@ -107,20 +107,26 @@ With all of that fixed:
   `active_group_slots`/`active_group_mask` auto-wiring exists in
   `assemble.py` for `ml_core_group`-kind `NeighborRequest`s — see the "Mixed
   system support checklist" in `docs/md-cg-unification-design.md` §11 for
-  that as an open item). **Actual fix applied**: `n_waters` dropped from 20
-  to 8 (2.5x fewer vmapped ML forward passes per step — the only lever that
-  really cuts `ml_pep_water`'s cost today) and `n_steps` dropped from 10000
-  to 2000 for all `peptide_water` settings (still 100x the local smoke
-  test's 20 steps, and `record_every=100` still gives 20 recorded energy
-  samples). `peptide_water_ml_cutoff_A` is kept on every mixed setting
-  because it's still the physically correct choice, just not a speed fix.
+  that as an open item). **Fix applied, in two rounds, both measured against
+  the real cluster rather than assumed:**
+  1. `n_waters` dropped 20→8 (2.5x fewer vmapped ML forward passes/step —
+     the only lever that actually cuts `ml_pep_water`'s cost) and `n_steps`
+     dropped 10000→2000. **This still hit the 240 min Slurm walltime and was
+     killed with `TIMEOUT`** — a local 20-step check at `n_waters=8` took
+     197 s (~9.85 s/step, even past JIT compile; unlike the small
+     `water_box` case, `ml_pep_water`'s cost scales ~linearly with steps, it
+     is not compile-dominated). 2000 steps × ~9.85 s/step ≈ 5.5 h, consistent
+     with the observed timeout.
+  2. `n_steps` cut again, 2000→200 (~33 min at the measured per-step rate,
+     comfortably inside the 240 min budget).
+  `peptide_water_ml_cutoff_A` is kept on every mixed setting because it's
+  still the physically correct choice, not because it helps runtime.
 - This validates the mixed-system code path itself (builder, term
   composition, calculator variants) end-to-end on the real cluster. The
-  reduced-scale config above (`n_waters=8`, `n_steps=2000`) is intended to
-  actually complete within the existing walltime budget — that run has not
-  yet been executed/confirmed as of this writing; do that before trusting
-  the mixed-system energy traces to exist in `results/summary.md`. Wiring
-  real neighbor-list support for `ml_core_group` terms (so
-  `peptide_water_ml_cutoff_A` becomes a genuine speed lever, not just an
-  energy correction) remains open future work if larger `n_waters`/`n_steps`
-  mixed runs are needed.
+  `n_steps=200` config above is intended to actually complete within budget;
+  confirm in `results/summary.md` before trusting it. Getting back to
+  10000-step (or even 2000-step) mixed-system traces needs either much more
+  walltime budgeted per job, or (better) wiring real neighbor-list support
+  for `ml_core_group` terms so `peptide_water_ml_cutoff_A` becomes a genuine
+  per-step compute reduction instead of just an energy correction — tracked
+  as open work in `docs/md-cg-unification-design.md` §11.
