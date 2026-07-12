@@ -32,6 +32,9 @@ FIELDS = [
     "energy_std_ev",
     "energy_drift_ev",
     "energy_max_abs_deviation_ev",
+    "energy_fluctuation_std_ev",
+    "energy_trend_ev_per_frame",
+    "energy_trend_total_ev",
     "elapsed_seconds",
     "error",
 ]
@@ -65,8 +68,12 @@ def main() -> None:
     lines = [
         "# Mixed-system / calculator sweep (10000-step NVE)",
         "",
+        "Fluctuation/trend (not the bare endpoint delta `energy_drift_ev`) is the",
+        "recommended read on conservation quality -- see "
+        "`mmml.md.results.energy_drift_metrics` and `docs/plotting-style-guide.md`.",
+        "",
         "| setting | seed | system | status | frames | E0 (eV) | Efinal (eV) | "
-        "std (eV) | max|dev| (eV) | elapsed (s) |",
+        "fluctuation std (eV) | trend (eV/frame) | elapsed (s) |",
         "|---|---:|---|:---:|---:|---:|---:|---:|---:|---:|",
     ]
     n_failed = sum(1 for row in rows if not row["completed"])
@@ -75,7 +82,7 @@ def main() -> None:
         lines.append(
             f"| {row['setting']} | {row['seed']} | {row['system']} | {status_icon} | "
             f"{row['n_frames']} | {row['energy_initial_ev']} | {row['energy_final_ev']} | "
-            f"{row['energy_std_ev']} | {row['energy_max_abs_deviation_ev']} | "
+            f"{row['energy_fluctuation_std_ev']} | {row['energy_trend_ev_per_frame']} | "
             f"{row['elapsed_seconds']} |"
         )
     lines.append("")
