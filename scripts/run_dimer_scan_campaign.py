@@ -14,105 +14,18 @@ import pandas as pd
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
-from ase import Atoms
-
+from mmml.analysis.dimer_molecules import (
+    MOLECULES,
+    PAIR_SCAN_CONFIG,
+    make_oriented_scan_geometries,
+)
 from mmml.analysis.dimer_scans import (
-    distance_scan_geometries,
     evaluate_scan,
     make_xtb_calculator,
     molecule_pair_labels,
 )
 from mmml.models.mbd import QCMLMBDCalculator
 from mmml.models.multipoles import LearnedMolecularMultipoleElectrostatics
-
-# Monomer registry from notebooks/qcml_dimer_scan_prototype.py
-MOLECULES = {
-    "DCM": {
-        "atoms": Atoms(
-            "CCl2H2",
-            positions=[
-                [0.000, 0.000, 0.000],
-                [1.760, 0.000, 0.000],
-                [-1.760, 0.000, 0.000],
-                [0.000, 0.950, 0.720],
-                [0.000, -0.950, 0.720],
-            ],
-        ),
-    },
-    "ACE": {
-        "atoms": Atoms(
-            "C3OH6",
-            positions=[
-                [0.000, 0.000, 0.000],
-                [1.520, 0.000, 0.000],
-                [-1.520, 0.000, 0.000],
-                [0.000, 1.220, 0.000],
-                [2.050, 0.900, 0.000],
-                [2.050, -0.450, 0.780],
-                [2.050, -0.450, -0.780],
-                [-2.050, 0.900, 0.000],
-                [-2.050, -0.450, 0.780],
-                [-2.050, -0.450, -0.780],
-            ],
-        ),
-    },
-    "BENZ": {
-        "atoms": Atoms(
-            "C6H6",
-            positions=[
-                [1.397, 0.000, 0.000],
-                [0.699, 1.210, 0.000],
-                [-0.699, 1.210, 0.000],
-                [-1.397, 0.000, 0.000],
-                [-0.699, -1.210, 0.000],
-                [0.699, -1.210, 0.000],
-                [2.480, 0.000, 0.000],
-                [1.240, 2.148, 0.000],
-                [-1.240, 2.148, 0.000],
-                [-2.480, 0.000, 0.000],
-                [-1.240, -2.148, 0.000],
-                [1.240, -2.148, 0.000],
-            ],
-        ),
-    },
-    "TIP3": {
-        "atoms": Atoms(
-            "OH2",
-            positions=[
-                [0.000000, 0.000000, 0.000000],
-                [0.957200, 0.000000, 0.000000],
-                [-0.239987, 0.926627, 0.000000],
-            ],
-        ),
-    },
-    "MEOH": {
-        "atoms": Atoms(
-            "COH4",
-            positions=[
-                [0.000, 0.000, 0.000],
-                [1.430, 0.000, 0.000],
-                [1.770, 0.910, 0.000],
-                [-0.540, 0.900, 0.000],
-                [-0.540, -0.450, 0.780],
-                [-0.540, -0.450, -0.780],
-            ],
-        ),
-    },
-}
-
-
-def make_pair_scan(label_a: str, label_b: str, distances: np.ndarray) -> list:
-    return list(
-        distance_scan_geometries(
-            MOLECULES[label_a]["atoms"],
-            MOLECULES[label_b]["atoms"],
-            distances,
-            pair=(label_a, label_b),
-            axis=(1.0, 0.0, 0.0),
-            center="centroid",
-            mol_id_array="mol_id",
-        )
-    )
 
 
 def main():
@@ -190,18 +103,24 @@ def main():
         print("No backends are available or enabled. Exiting.")
         sys.exit(0)
 
-    # Define spacing grids
-    distances = np.linspace(3.0, 12.0, 19)
+    # Distance grid: fine spacing near contact (asymptotics), coarser at long range
+    distances = np.concatenate([
+        np.linspace(2.5, 5.0, 11),   # close-range: 2.5–5.0 Å in 0.25 Å steps
+        np.linspace(5.5, 12.0, 8),   # long-range: 5.5–12.0 Å in ~0.93 Å steps
+    ])
     labels = list(MOLECULES.keys())
     pairs = molecule_pair_labels(labels, include_homodimers=True)
 
-    print(f"Will scan {len(pairs)} unique pairs across {len(distances)} distances.")
+    print(f"Will scan {len(pairs)} unique pairs × {len(distances)} distances × up to 5 offsets (2D).")
 
     results = []
 
     for idx, (label_a, label_b) in enumerate(pairs, 1):
-        print(f"[{idx}/{len(pairs)}] Scanning {label_a} + {label_b}...")
-        geometries = make_pair_scan(label_a, label_b, distances)
+        pair_cfg = PAIR_SCAN_CONFIG[(label_a, label_b)]
+        offsets = pair_cfg["offsets_angstrom"]
+        print(f"[{idx}/{len(pairs)}] {label_a}+{label_b}: {pair_cfg['description']}")
+        print(f"  {len(distances)} distances × {len(offsets)} offsets = {len(distances)*len(offsets)} geometries")
+        geometries = list(make_oriented_scan_geometries(label_a, label_b, distances, offsets))
 
         # Evaluate Multipoles
         if use_multipole:
