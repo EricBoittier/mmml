@@ -101,7 +101,12 @@ settings:
 slurm:
   partition: short   # CPU partition: no CUDA jaxlib on this cluster's venv
   runtime_min: 240
-  mem_mb_per_cpu: 2000
+  # peptide_water (mixed ML-core + MM/ML-water) settings OOM'd at 2000
+  # (8 GB total with cpus_per_task=4) -- CHARMM + the ML model + the larger
+  # (60-atom) system need more headroom than the plain water_box settings.
+  # node09-14 (the AVX2-capable generation this workflow is constrained to)
+  # have 30 GB total each; 6000 (24 GB) leaves margin for the OS/other jobs.
+  mem_mb_per_cpu: 6000
   cpus_per_task: 4
   nodes: 1
   ntasks: 1
