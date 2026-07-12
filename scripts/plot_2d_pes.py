@@ -206,7 +206,7 @@ def plot_2d_pes_for_pair(
         df_be = flag_clashing_geometries(df_be, min_contact=min_contact)
         n_clash = int(df_be["is_clash"].sum())
         df_clash = df_be[df_be["is_clash"]]
-        df_be = df_be[~df_be["is_clash"]]
+        df_be = df_be[~df_be["is_clash"]].copy()
         if df_be.empty:
             ax.set_visible(False)
             if ax_min is not None:
@@ -222,6 +222,29 @@ def plot_2d_pes_for_pair(
 
         df_be["E_int"] = df_be["energy_kcal_mol"] - ref
 
+        # A fixed geometric contact cutoff can still miss backend-specific
+        # energetic blow-ups; catch those directly from E_int via a robust
+        # (MAD-based) outlier test and exclude them the same way.
+        df_be = flag_energy_outliers(df_be, "E_int")
+        n_outlier = int(df_be["is_energy_outlier"].sum())
+        df_outlier = df_be[df_be["is_energy_outlier"]]
+        df_be = df_be[~df_be["is_energy_outlier"]]
+        if df_be.empty:
+            ax.set_visible(False)
+            if ax_min is not None:
+                ax_min.set_visible(False)
+            continue
+
+        # Colour range from the *clean* raw scatter (not the clipped/
+        # interpolated grid, whose spline can amplify a residual repulsive
+        # wall): a percentile so a handful of remaining steep points can't
+        # blow out the whole scale, with a floor for near-flat surfaces.
+        vmax = robust_color_vmax(df_be["E_int"].to_numpy(), ceiling=energy_clip_kcal)
+        # Clip bound for interpolation stability only — kept a bit above vmax
+        # so genuine (non-outlier) structure near the edge of the colour
+        # range isn't itself washed out by the clip.
+        clip_bound = min(energy_clip_kcal, max(vmax * 2.0, 1.0))
+
         dist_vals = np.sort(df_be["distance_angstrom"].unique())
         off_vals  = np.sort(df_be["offset_angstrom"].unique())
 
@@ -229,11 +252,13 @@ def plot_2d_pes_for_pair(
 
         if len(dist_vals) < 2 or len(off_vals) < 2:
             # Fall back to scatter only
+            norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
             sc = ax.scatter(
                 df_be["distance_angstrom"],
                 df_be["offset_angstrom"],
-                c=df_be["E_int"].clip(-energy_clip_kcal, energy_clip_kcal),
+                c=df_be["E_int"],
                 cmap=BACKEND_CMAPS.get(backend, "RdBu_r"),
+                norm=norm,
                 s=80,
                 edgecolors="k",
                 linewidths=0.4,
@@ -254,20 +279,21 @@ def plot_2d_pes_for_pair(
             D = pivot.columns.values
             O = pivot.index.values
 
-            # Clip extremes before interpolation
-            Z_clipped = np.clip(Z, -energy_clip_kcal, energy_clip_kcal)
+            # Clip extremes before interpolation (numerical stability only —
+            # the colour range itself is set by vmax below, computed from
+            # clean unclipped data)
+            Z_clipped = np.clip(Z, -clip_bound, clip_bound)
 
             try:
                 spline = RectBivariateSpline(O, D, Z_clipped, kx=min(3, len(O)-1), ky=min(3, len(D)-1))
                 D_fine = np.linspace(D.min(), D.max(), n_grid)
                 O_fine = np.linspace(O.min(), O.max(), n_grid)
                 Z_fine = spline(O_fine, D_fine)
-                Z_fine = np.clip(Z_fine, -energy_clip_kcal, energy_clip_kcal)
+                Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
             except Exception:
                 D_fine, O_fine = D, O
                 Z_fine = Z_clipped
 
-            vmax = min(energy_clip_kcal, np.percentile(np.abs(Z_fine), 95))
             norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
 
             cmap = BACKEND_CMAPS.get(backend, "RdBu_r")
@@ -311,14 +337,23 @@ def plot_2d_pes_for_pair(
             ax.axvline(d, color="k", lw=0.5, ls=":", alpha=0.35, zorder=0)
 
         if n_clash:
-            # Show excluded (unphysically close-contact) geometries as red X's,
-            # outside the interpolated surface / colour-scale statistics.
+            # Excluded on geometric grounds (unphysically close atom-atom contact).
             ax.scatter(
                 df_clash["distance_angstrom"],
                 df_clash["offset_angstrom"],
                 marker="x", c="red", s=40, linewidths=1.2, zorder=6,
                 label=f"{n_clash} clashing (<{min_contact:.1f} Å contact)",
             )
+        if n_outlier:
+            # Excluded on energetic grounds (robust outlier in E_int even
+            # though the geometric contact cutoff didn't flag it).
+            ax.scatter(
+                df_outlier["distance_angstrom"],
+                df_outlier["offset_angstrom"],
+                marker="+", c="darkorange", s=50, linewidths=1.4, zorder=6,
+                label=f"{n_outlier} energy outlier",
+            )
+        if n_clash or n_outlier:
             ax.legend(fontsize=6, loc="lower right", framealpha=0.7)
 
         ax.set_xlabel("Centre distance / Å")
