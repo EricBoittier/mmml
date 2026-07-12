@@ -8,7 +8,9 @@ from ase.calculators.calculator import Calculator, all_changes
 from mmml.analysis.dimer_scans import (
     assign_mol_id,
     build_rigid_dimer,
+    build_rigid_dimer_2d,
     distance_scan_geometries,
+    distance_scan_geometries_2d,
     evaluate_scan,
     geometric_centroid,
     make_xtb_calculator,

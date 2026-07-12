@@ -306,14 +306,54 @@ def main():
                 )
                 df_ml_shifted = merged_ml
 
+        # LaTeX labels mapping for spherical harmonics component symbols
+        LATEX_LABELS = {
+            "comp_0-0": r"$E_{0,0}\ (q-q)$",
+            "comp_0-1": r"$E_{0,1}\ (q-\mu)$",
+            "comp_1-1": r"$E_{1,1}\ (\mu-\mu)$",
+            "comp_0-2": r"$E_{0,2}\ (q-\Theta)$",
+            "comp_1-2": r"$E_{1,2}\ (\mu-\Theta)$",
+            "comp_2-2": r"$E_{2,2}\ (\Theta-\Theta)$",
+            "comp_0-3": r"$E_{0,3}\ (q-\Omega)$",
+            "comp_1-3": r"$E_{1,3}\ (\mu-\Omega)$",
+            "comp_2-3": r"$E_{2,3}\ (\Theta-\Omega)$",
+            "comp_3-3": r"$E_{3,3}\ (\Omega-\Omega)$",
+        }
+
         # Helper function to plot standardized/scaled lines on left axis
-        def plot_standardized_line(ax, x, y, label, marker, color, linestyle="-"):
+        # Excludes close range points (< 3.8 A) and positive repulsions (y > 0.0) from mean/std scaling determination
+        def plot_standardized_line(ax, x, y, label, marker, color, well_scaled_list, comp_key=None, linestyle="-"):
             if len(y) == 0:
                 return None
-            mean = np.mean(y)
-            std = np.std(y) if np.std(y) > 0 else 1.0
+            
+            # Exclude close range points and positive repulsion points from scaling determination
+            mask = (x >= 3.8) & (y <= 0.0)
+            y_well = y[mask]
+            if len(y_well) > 0:
+                mean = np.mean(y_well)
+                std = np.std(y_well) if np.std(y_well) > 0 else 1.0
+            else:
+                y_well_fallback = y[x >= 3.8]
+                if len(y_well_fallback) > 0:
+                    mean = np.mean(y_well_fallback)
+                    std = np.std(y_well_fallback) if np.std(y_well_fallback) > 0 else 1.0
+                else:
+                    mean = np.mean(y)
+                    std = np.std(y) if np.std(y) > 0 else 1.0
+                
             y_scaled = (y - mean) / std
-            ax.plot(x, y_scaled, marker=marker, color=color, linestyle=linestyle, label=label)
+            
+            display_label = label
+            if comp_key is not None and comp_key in LATEX_LABELS:
+                display_label = LATEX_LABELS[comp_key]
+                
+            ax.plot(x, y_scaled, marker=marker, color=color, linestyle=linestyle, label=display_label)
+            
+            well_scaled = y_scaled[x >= 3.8]
+            if len(well_scaled) > 0:
+                # Exclude extreme repulsions in well region
+                well_scaled_list.extend(well_scaled[well_scaled < 10.0].values)
+                
             return y.values
 
         # Helper function to setup twin axis on the right showing raw kcal/mol scale
@@ -324,9 +364,6 @@ def main():
             ax_twin.plot(x, raw_y, alpha=0.0) # invisible line to set scaling
             ax_twin.set_ylabel(label, color="gray", fontsize=8)
             ax_twin.tick_params(axis='y', labelcolor='gray', labelsize=8)
-
-        # Set standardized limits for zoomed-in well shapes
-        ylim = (-2.5, 1.8)
 
         # Create a 2x3 grid of subplots
         fig, axes = plt.subplots(2, 3, figsize=(15, 9.5))
@@ -388,12 +425,13 @@ def main():
         # Panel 2: Low-order Electrostatic components (Top-Middle)
         ax_low = axes[0, 1]
         if has_mp:
+            well_scaled = []
             raw_ref = None
             for k, color in [("0-0", "blue"), ("0-1", "cyan"), ("1-1", "navy")]:
                 col = f"comp_{k}_kcal_mol_shifted"
                 if col in df_mp.columns:
                     raw_val = plot_standardized_line(
-                        ax_low, df_mp["distance_angstrom"], df_mp[col], f"comp {k}", "o", color
+                        ax_low, df_mp["distance_angstrom"], df_mp[col], f"comp {k}", "o", color, well_scaled, comp_key=f"comp_{k}"
                     )
                     if raw_val is not None:
                         raw_ref = raw_val
@@ -402,7 +440,10 @@ def main():
                 ax_low.set_ylabel("Standardized Scale", fontsize=9)
                 ax_low.axhline(0.0, color="gray", linestyle="--", linewidth=0.8)
                 ax_low.legend(frameon=False, fontsize=8)
-                ax_low.set_ylim(ylim)
+                if well_scaled:
+                    ymin, ymax = min(well_scaled), max(well_scaled)
+                    pad = 0.15 * (ymax - ymin) if ymax > ymin else 1.0
+                    ax_low.set_ylim(ymin - pad - 0.2, ymax + pad + 0.2)
                 setup_twin_axis(ax_low, df_mp["distance_angstrom"], raw_ref, "Raw comp 1-1 / kcal mol$^{-1}$")
             else:
                 ax_low.text(0.5, 0.5, "Components N/A", ha="center", va="center")
@@ -412,6 +453,7 @@ def main():
         # Panel 3: Higher-order Electrostatic components (Top-Right)
         ax_high = axes[0, 2]
         if has_mp:
+            well_scaled = []
             raw_ref = None
             comps = [
                 ("0-2", "green"),
@@ -426,7 +468,7 @@ def main():
                 col = f"comp_{k}_kcal_mol_shifted"
                 if col in df_mp.columns:
                     raw_val = plot_standardized_line(
-                        ax_high, df_mp["distance_angstrom"], df_mp[col], f"comp {k}", "o", color
+                        ax_high, df_mp["distance_angstrom"], df_mp[col], f"comp {k}", "o", color, well_scaled, comp_key=f"comp_{k}"
                     )
                     if raw_val is not None:
                         raw_ref = raw_val
@@ -435,7 +477,10 @@ def main():
                 ax_high.set_ylabel("Standardized Scale", fontsize=9)
                 ax_high.axhline(0.0, color="gray", linestyle="--", linewidth=0.8)
                 ax_high.legend(frameon=False, fontsize=8)
-                ax_high.set_ylim(ylim)
+                if well_scaled:
+                    ymin, ymax = min(well_scaled), max(well_scaled)
+                    pad = 0.15 * (ymax - ymin) if ymax > ymin else 1.0
+                    ax_high.set_ylim(ymin - pad - 0.2, ymax + pad + 0.2)
                 setup_twin_axis(ax_high, df_mp["distance_angstrom"], raw_ref, "Raw comp 2-2 / kcal mol$^{-1}$")
             else:
                 ax_high.text(0.5, 0.5, "Components N/A", ha="center", va="center")
@@ -445,21 +490,25 @@ def main():
         # Panel 4: Total Electrostatics comparison (Bottom-Left)
         ax_elec = axes[1, 0]
         if has_mp or has_ch:
+            well_scaled = []
             raw_mp = None
             if has_mp:
                 raw_mp = plot_standardized_line(
-                    ax_elec, df_mp["distance_angstrom"], df_mp["interaction_energy"], "Learned Multipoles", "o", "blue"
+                    ax_elec, df_mp["distance_angstrom"], df_mp["interaction_energy"], "Learned Multipoles", "o", "blue", well_scaled
                 )
             if has_ch:
                 plot_standardized_line(
-                    ax_elec, df_ch["distance_angstrom"], df_ch["charmm_ELEC_shifted"], "CGenFF ELEC", "s", "cyan"
+                    ax_elec, df_ch["distance_angstrom"], df_ch["charmm_ELEC_shifted"], "CGenFF ELEC", "s", "cyan", well_scaled
                 )
             ax_elec.set_title("Total Electrostatics (scaled)", fontsize=10)
             ax_elec.set_xlabel("Center distance / Å", fontsize=9)
             ax_elec.set_ylabel("Standardized Scale", fontsize=9)
             ax_elec.axhline(0.0, color="gray", linestyle="--", linewidth=0.8)
             ax_elec.legend(frameon=False, fontsize=8)
-            ax_elec.set_ylim(ylim)
+            if well_scaled:
+                ymin, ymax = min(well_scaled), max(well_scaled)
+                pad = 0.15 * (ymax - ymin) if ymax > ymin else 1.0
+                ax_elec.set_ylim(ymin - pad - 0.2, ymax + pad + 0.2)
             if raw_mp is not None:
                 setup_twin_axis(ax_elec, df_mp["distance_angstrom"], raw_mp, "Raw ELEC / kcal mol$^{-1}$")
         else:
@@ -468,21 +517,25 @@ def main():
         # Panel 5: Total Dispersion comparison (Bottom-Middle)
         ax_disp = axes[1, 1]
         if has_mbd or has_ch:
+            well_scaled = []
             raw_mbd = None
             if has_mbd:
                 raw_mbd = plot_standardized_line(
-                    ax_disp, df_mbd["distance_angstrom"], df_mbd["interaction_energy"], "Learned MBD", "o", "green"
+                    ax_disp, df_mbd["distance_angstrom"], df_mbd["interaction_energy"], "Learned MBD", "o", "green", well_scaled
                 )
             if has_ch:
                 plot_standardized_line(
-                    ax_disp, df_ch["distance_angstrom"], df_ch["charmm_VDW_shifted"], "CGenFF VDW", "s", "lightgreen"
+                    ax_disp, df_ch["distance_angstrom"], df_ch["charmm_VDW_shifted"], "CGenFF VDW", "s", "lightgreen", well_scaled
                 )
             ax_disp.set_title("Total Dispersion (scaled)", fontsize=10)
             ax_disp.set_xlabel("Center distance / Å", fontsize=9)
             ax_disp.set_ylabel("Standardized Scale", fontsize=9)
             ax_disp.axhline(0.0, color="gray", linestyle="--", linewidth=0.8)
             ax_disp.legend(frameon=False, fontsize=8)
-            ax_disp.set_ylim(ylim)
+            if well_scaled:
+                ymin, ymax = min(well_scaled), max(well_scaled)
+                pad = 0.15 * (ymax - ymin) if ymax > ymin else 1.0
+                ax_disp.set_ylim(ymin - pad - 0.2, ymax + pad + 0.2)
             if raw_mbd is not None:
                 setup_twin_axis(ax_disp, df_mbd["distance_angstrom"], raw_mbd, "Raw VDW / kcal mol$^{-1}$")
         else:
@@ -490,20 +543,21 @@ def main():
 
         # Panel 6: Total Interaction comparison (Bottom-Right)
         ax_tot = axes[1, 2]
+        well_scaled = []
         raw_tot = None
         if has_ml and df_ml_shifted is not None:
             raw_tot = plot_standardized_line(
-                ax_tot, df_ml_shifted["distance_angstrom"], df_ml_shifted["total_ml_shifted"], "ML Total (Multipoles+MBD)", "o", "crimson"
+                ax_tot, df_ml_shifted["distance_angstrom"], df_ml_shifted["total_ml_shifted"], "ML Total (Multipoles+MBD)", "o", "crimson", well_scaled
             )
 
         if has_xtb:
             plot_standardized_line(
-                ax_tot, df_xtb["distance_angstrom"], df_xtb["interaction_energy"], "xTB GFN2", "^", "orange"
+                ax_tot, df_xtb["distance_angstrom"], df_xtb["interaction_energy"], "xTB GFN2", "^", "orange", well_scaled
             )
 
         if has_ch:
             plot_standardized_line(
-                ax_tot, df_ch["distance_angstrom"], df_ch["interaction_energy"], "CGenFF Total", "s", "black"
+                ax_tot, df_ch["distance_angstrom"], df_ch["interaction_energy"], "CGenFF Total", "s", "black", well_scaled
             )
 
         ax_tot.set_title("Total Interaction Energy (scaled)", fontsize=10, fontweight="bold")
@@ -511,7 +565,10 @@ def main():
         ax_tot.set_ylabel("Standardized Scale", fontsize=9)
         ax_tot.axhline(0.0, color="gray", linestyle="--", linewidth=0.8)
         ax_tot.legend(frameon=False, fontsize=8)
-        ax_tot.set_ylim(ylim)
+        if well_scaled:
+            ymin, ymax = min(well_scaled), max(well_scaled)
+            pad = 0.15 * (ymax - ymin) if ymax > ymin else 1.0
+            ax_tot.set_ylim(ymin - pad - 0.2, ymax + pad + 0.2)
         if raw_tot is not None:
             setup_twin_axis(ax_tot, df_ml_shifted["distance_angstrom"], raw_tot, "Raw Total / kcal mol$^{-1}$")
 

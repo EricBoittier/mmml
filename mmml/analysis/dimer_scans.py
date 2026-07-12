@@ -24,6 +24,7 @@ class DimerGeometry:
     distance_angstrom: float
     atoms: Atoms
     fragments: tuple[np.ndarray, np.ndarray]
+    offset_angstrom: float = 0.0
 
 
 def molecule_pair_labels(
@@ -173,6 +174,75 @@ def distance_scan_geometries(
         )
 
 
+def build_rigid_dimer_2d(
+    monomer_a: Atoms,
+    monomer_b: Atoms,
+    *,
+    distance_angstrom: float,
+    offset_angstrom: float = 0.0,
+    axis: Sequence[float] = (1.0, 0.0, 0.0),
+    transverse_axis: Sequence[float] = (0.0, 1.0, 0.0),
+    center: str = "centroid",
+    mol_id_array: str = "mol_id",
+) -> tuple[Atoms, tuple[np.ndarray, np.ndarray]]:
+    """Place two rigid monomers at a fixed separation distance and transverse offset."""
+    direction = normalized_vector(axis, name="axis")
+    trans_direction = normalized_vector(transverse_axis, name="transverse_axis")
+    
+    monomer_a_centered = centered_atoms(monomer_a, center=center)
+    monomer_b_centered = centered_atoms(monomer_b, center=center)
+    
+    # Translate A and B along the separation axis
+    monomer_a_centered.translate(-0.5 * float(distance_angstrom) * direction)
+    monomer_b_centered.translate(0.5 * float(distance_angstrom) * direction)
+    
+    # Apply transverse displacement/offset to monomer B
+    monomer_b_centered.translate(float(offset_angstrom) * trans_direction)
+    
+    combined = monomer_a_centered + monomer_b_centered
+    combined = assign_mol_id(
+        combined,
+        [len(monomer_a_centered), len(monomer_b_centered)],
+        array_name=mol_id_array,
+    )
+    fragments = fragment_index_arrays([len(monomer_a_centered), len(monomer_b_centered)])
+    return combined, (fragments[0], fragments[1])
+
+
+def distance_scan_geometries_2d(
+    monomer_a: Atoms,
+    monomer_b: Atoms,
+    distances_angstrom: Iterable[float],
+    offsets_angstrom: Iterable[float],
+    *,
+    pair: tuple[str, str] = ("A", "B"),
+    axis: Sequence[float] = (1.0, 0.0, 0.0),
+    transverse_axis: Sequence[float] = (0.0, 1.0, 0.0),
+    center: str = "centroid",
+    mol_id_array: str = "mol_id",
+) -> Iterator[DimerGeometry]:
+    """Yield rigid dimer geometries over a center-to-center distance and offset scan."""
+    for offset_angstrom in offsets_angstrom:
+        for distance_angstrom in distances_angstrom:
+            atoms, fragments = build_rigid_dimer_2d(
+                monomer_a,
+                monomer_b,
+                distance_angstrom=float(distance_angstrom),
+                offset_angstrom=float(offset_angstrom),
+                axis=axis,
+                transverse_axis=transverse_axis,
+                center=center,
+                mol_id_array=mol_id_array,
+            )
+            yield DimerGeometry(
+                pair=pair,
+                distance_angstrom=float(distance_angstrom),
+                offset_angstrom=float(offset_angstrom),
+                atoms=atoms,
+                fragments=fragments,
+            )
+
+
 def evaluate_scan(
     geometries: Iterable[DimerGeometry],
     calculator_factory,
@@ -189,6 +259,7 @@ def evaluate_scan(
                 "molecule_a": geometry.pair[0],
                 "molecule_b": geometry.pair[1],
                 "distance_angstrom": geometry.distance_angstrom,
+                "offset_angstrom": geometry.offset_angstrom,
                 "energy_ev": energy_ev,
                 "energy_kcal_mol": energy_ev * 23.060548867,
             }
