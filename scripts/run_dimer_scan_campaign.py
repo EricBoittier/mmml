@@ -190,6 +190,11 @@ def main():
         help="Also evaluate CHARMM/CGenFF energies (requires pycharmm)",
     )
     parser.add_argument(
+        "--skip-xtb",
+        action="store_true",
+        help="Don't evaluate xTB, even if available (e.g. it's being run separately elsewhere)",
+    )
+    parser.add_argument(
         "--min-contact",
         type=float,
         default=1.5,
@@ -257,12 +262,15 @@ def main():
 
     # Check for xTB
     use_xtb = False
-    try:
-        xtb_calc = make_xtb_calculator(method="GFN2-xTB")
-        use_xtb = True
-        print("  xTB calculator initialized successfully.")
-    except Exception as e:
-        print(f"  xTB calculator not available: {e}. Skipping xTB backend.")
+    if args.skip_xtb:
+        print("  --skip-xtb passed. Skipping xTB backend.")
+    else:
+        try:
+            xtb_calc = make_xtb_calculator(method="GFN2-xTB")
+            use_xtb = True
+            print("  xTB calculator initialized successfully.")
+        except Exception as e:
+            print(f"  xTB calculator not available: {e}. Skipping xTB backend.")
 
     use_charmm = False
     charmm_fns = None
