@@ -265,11 +265,19 @@ def main():
     )
     args = parser.parse_args()
 
-    orca_exe = args.orca_exe or __import__("os").environ.get("ORCA", "orca")
+    orca_exe_requested = args.orca_exe or __import__("os").environ.get("ORCA", "orca")
     import shutil
-    if shutil.which(orca_exe) is None:
-        print(f"ORCA executable not found: {orca_exe!r}. Load the ORCA module or pass --orca-exe.")
+    orca_exe = shutil.which(orca_exe_requested)
+    if orca_exe is None:
+        print(f"ORCA executable not found: {orca_exe_requested!r}. Load the ORCA module or pass --orca-exe.")
         sys.exit(1)
+    # ORCA requires the *full absolute pathname* when running in parallel
+    # (%pal nprocs > 1) — it re-execs itself using this exact string for the
+    # worker processes, so a bare "orca" resolved only for existence-checking
+    # isn't enough; every single point would fail with "ORCA_MAIN: For
+    # parallel runs ORCA has to be called with full pathname".
+    orca_exe = str(Path(orca_exe).resolve())
+    print(f"Using ORCA executable: {orca_exe}")
 
     basis_slug = args.basis.lower().replace("-", "").replace("*", "s").replace("(", "").replace(")", "").replace(",", "")
     cp_suffix = "_cp" if not args.no_counterpoise else ""

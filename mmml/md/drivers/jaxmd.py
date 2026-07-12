@@ -229,10 +229,24 @@ class JaxmdDriver:
                 next_record = min(completed + self.record_every, ensemble.n_steps)
 
         frames = [np.asarray(f) for f in frames]
+        # Z (atomic numbers) and box are needed downstream to reconstruct ASE
+        # Atoms for structural analysis (bonds/angles/dihedrals/RDF via
+        # mmml.utils.plotting.trajectory_structure) without re-running the
+        # simulation -- topology is static per run, so saving it once here is
+        # cheap and avoids every analysis script needing to rebuild the system.
         path = Path(self.output_path) if self.output_path is not None else None
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(path, positions=np.asarray(frames), energies=np.asarray(energies))
+            npz_kwargs: dict[str, Any] = dict(
+                positions=np.asarray(frames),
+                energies=np.asarray(energies),
+                Z=np.asarray(system.Z),
+            )
+            if box is not None and not is_npt:
+                npz_kwargs["box"] = np.asarray(box)
+            if is_npt:
+                npz_kwargs["boxes"] = np.asarray(boxes)
+            np.savez(path, **npz_kwargs)
 
         metadata: dict[str, Any] = {
             "steps": completed,
