@@ -127,6 +127,8 @@ def main() -> int:
         # custom sampler/driver must not be passed here for either path.
         traj = assemble_and_run(run_config, system=system, ctx=ctx)
 
+        from mmml.md.results import energy_drift_metrics
+
         energies = np.asarray(traj.metadata["energies"], dtype=float)
         finite = bool(np.all(np.isfinite(energies)))
         status.update(
@@ -137,6 +139,7 @@ def main() -> int:
                 "energy_final_ev": float(energies[-1]),
                 "energy_drift_ev": float(energies[-1] - energies[0]),
                 "energy_max_abs_ev": float(np.max(np.abs(energies))),
+                **energy_drift_metrics(energies),
             }
         )
         if sampler == "rigid":

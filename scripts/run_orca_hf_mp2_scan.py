@@ -346,13 +346,24 @@ def main():
         )
 
         for method in args.methods:
-            backend_name = f"{method.lower()}_{basis_slug}{cp_suffix}"
-            print(f"  Evaluating {method}/{args.basis}{' (counterpoise)' if not args.no_counterpoise else ''}...")
+            method_slug = method.lower().replace("-", "")
+            disp_suffix = f"_{args.dispersion.lower()}" if args.dispersion != "none" else ""
+            backend_name = f"{method_slug}_{basis_slug}{disp_suffix}{cp_suffix}"
+            extras = " ".join(
+                filter(None, [
+                    "RIJCOSX" if args.rijcosx else "",
+                    args.aux_basis or "",
+                    args.dispersion if args.dispersion != "none" else "",
+                    "(counterpoise)" if not args.no_counterpoise else "",
+                ])
+            )
+            print(f"  Evaluating {method}/{args.basis} {extras}...")
             rows = evaluate_orca_scan(
                 geometries, label_a, label_b,
                 method=method, basis=args.basis, counterpoise=not args.no_counterpoise,
                 pal=args.pal, maxcore=args.maxcore, orca_exe=orca_exe, backend_name=backend_name,
                 skip_keys=seen_keys,
+                aux_basis=args.aux_basis, dispersion=args.dispersion, rijcosx=args.rijcosx,
             )
             results.extend(rows)
             seen_keys.update(
