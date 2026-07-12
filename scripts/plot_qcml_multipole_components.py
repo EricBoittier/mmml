@@ -70,6 +70,41 @@ def load_scale_vector(path: Path | None, max_degree: int = 3) -> np.ndarray:
     return np.asarray(values, dtype=np.float64)
 
 
+def resolve_scale_json(path: Path | None, checkpoint: Path) -> Path | None:
+    """Resolve scale JSON before expensive prediction work starts."""
+    candidates = []
+    if path is not None:
+        expanded = path.expanduser()
+        if expanded.exists():
+            return expanded
+        candidates.extend(
+            [
+                expanded.with_name("target_scale.json"),
+                expanded.with_name("target_rms.json"),
+            ]
+        )
+        for candidate in candidates:
+            if candidate.exists():
+                print(
+                    f"Scale JSON not found at {expanded}; using {candidate} instead",
+                    flush=True,
+                )
+                return candidate
+        tried = "\n  ".join(str(candidate) for candidate in [expanded, *candidates])
+        raise FileNotFoundError(
+            "Could not find scale JSON before prediction. Tried:\n"
+            f"  {tried}\n"
+            "Use --scale-json <run_dir>/target_scale.json, omit --scale-json, "
+            "or rerun without --normalize-by-scale."
+        )
+
+    run_dir = checkpoint.expanduser().parent
+    for candidate in (run_dir / "target_scale.json", run_dir / "target_rms.json"):
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def identity_limits(target: np.ndarray, prediction: np.ndarray) -> tuple[float, float]:
     low = float(min(np.min(target), np.min(prediction)))
     high = float(max(np.max(target), np.max(prediction)))
@@ -367,8 +402,11 @@ def main() -> None:
     args = parser.parse_args()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    scale_json = resolve_scale_json(args.scale_json, args.checkpoint)
+    scale_vector = load_scale_vector(scale_json)
+    if scale_json is not None:
+        print(f"Using scale JSON: {scale_json}", flush=True)
     target, prediction, indices, num_atoms = collect_predictions(args)
-    scale_vector = load_scale_vector(args.scale_json)
     metrics = component_metrics(target, prediction, scale_vector)
     write_metrics(args.output_dir, metrics)
 
@@ -386,7 +424,7 @@ def main() -> None:
         "num_structures": int(len(target)),
         "num_plot_points": int(len(plot_indices)),
         "normalized_by_scale": bool(args.normalize_by_scale),
-        "scale_json": str(args.scale_json) if args.scale_json else None,
+        "scale_json": str(scale_json) if scale_json else None,
     }
     (args.output_dir / "summary.json").write_text(
         json.dumps(summary, indent=2, sort_keys=True),
