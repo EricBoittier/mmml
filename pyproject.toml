@@ -77,6 +77,7 @@ openfe-interface = []
 plotting = [
     "asciichartpy>=1.5.25",
     "polars",
+    "cmap>=0.3.0",
 ]
 
 # Neighbor-list validation (Vesin reference oracle; not required at runtime)

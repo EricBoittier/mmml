@@ -298,3 +298,44 @@ along a scan coordinate) and `plot_1d_slices_by_offset.py`'s per-slice
 minimum-energy-geometry inset are the reference patterns for combining a
 structure drawing with an energy curve in one figure — reuse those, don't
 re-derive the atom-rendering logic for a new script.
+
+**As an overlay, not just a neighboring panel**: `render_dimer_atoms` takes
+an `ax` directly, so it can be drawn into an `ax.inset_axes(...)` placed
+right over the point on a curve it corresponds to (e.g. the minimum of a
+dimer scan), rather than in a separate side-by-side figure the reader has
+to cross-reference by hand — see
+[`scripts/render_chart_type_gallery.py::ase_atoms_overlay`](https://github.com/EricBoittier/mmml/blob/main/scripts/render_chart_type_gallery.py)
+and the rendered example in
+[`docs/plot-style-gallery.md`](plot-style-gallery.md) "ASE Atoms as an
+overlay on a data plot".
+
+## Colormaps
+
+Prefer the [`cmap`](https://cmap-docs.readthedocs.io) library (`uv add
+--optional plotting cmap`, already in `pyproject.toml`'s `plotting` extra)
+over hand-picking a matplotlib colormap by name — it bundles 1500+ registered
+colormaps including cmocean, Fabio Crameri's scientific colormaps, and
+ColorBrewer, several of which (`crameri:batlow`, `crameri:vik`,
+`cmocean:haline`, `cmocean:balance`) are specifically designed to be
+perceptually uniform and colorblind-safe, unlike matplotlib's legacy maps
+(`jet`, `rainbow` — never use these, they imply false discontinuities in
+continuous data).
+
+```python
+import cmap
+mpl_cmap = cmap.Colormap("crameri:batlow").to_mpl()  # feed straight to plt/ax
+```
+
+- **Sequential** data (magnitude only, e.g. a distance or density): a single
+  perceptually-uniform ramp — `viridis`, `cmocean:haline`, `crameri:batlow`.
+- **Diverging** data (a meaningful zero/center, e.g. energy relative to a
+  reference): a two-hue ramp through a neutral midpoint —
+  `cmocean:balance`, `crameri:vik`. Never a diverging map for
+  strictly-positive data (it implies a sign change that isn't there).
+- **Discrete/categorical** bins: ColorBrewer's `colorbrewer:*` maps render as
+  visibly stepped bands rather than a smooth ramp — that's correct for truly
+  binned data, not a bug; don't reach for one when the underlying quantity
+  is actually continuous.
+
+See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Colormaps (via the
+`cmap` library)" for a rendered side-by-side comparison.

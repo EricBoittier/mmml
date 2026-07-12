@@ -11,6 +11,7 @@ different preset for comparison.
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -20,10 +21,45 @@ from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 (registers 3d projection)
 from mmml.utils.plotting.styles import apply_plot_style, legend_outside, seed_symbol
 
 STYLE_NAME = "icml"
-OUT_DIR = Path(__file__).resolve().parents[1] / "docs" / "plot-style-gallery-assets"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+OUT_DIR = REPO_ROOT / "docs" / "plot-style-gallery-assets"
 RNG = np.random.default_rng(0)
 
 _SYSTEM_COLORS = {"water_box": "#1A5276", "peptide_water": "#943126"}
+
+
+def _load_plot_utils():
+    """Import scripts/plot_utils.py::render_dimer_atoms by path (not a package)."""
+    spec = importlib.util.spec_from_file_location("plot_utils", REPO_ROOT / "scripts" / "plot_utils.py")
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _water_dimer():
+    """A small hand-placed water dimer (2 x H2O) as an ASE Atoms for rendering demos."""
+    from ase import Atoms
+
+    numbers = [8, 1, 1, 8, 1, 1]
+    positions = [
+        [0.00, 0.00, 0.00], [0.76, 0.59, 0.00], [-0.76, 0.59, 0.00],
+        [0.00, 2.90, 0.10], [0.60, 3.50, -0.30], [-0.60, 3.30, 0.55],
+    ]
+    fragments = (np.array([0, 1, 2]), np.array([3, 4, 5]))
+    return Atoms(numbers=numbers, positions=positions), fragments
+
+
+def _mpl_cmap(name: str):
+    """Resolve a colormap name through the `cmap` library when available
+    (cmocean/crameri/colorbrewer/etc.), falling back to matplotlib's own
+    registry for plain names -- see docs/plotting-style-guide.md "Colormaps"."""
+    try:
+        import cmap as cmap_lib
+
+        return cmap_lib.Colormap(name).to_mpl()
+    except ImportError:
+        return name
 
 
 def radial_plot(out: Path) -> None:
@@ -297,6 +333,134 @@ def energy_term_diagram(out: Path) -> None:
     plt.close(fig)
 
 
+def ase_atoms_overlay(out: Path) -> None:
+    """ASE Atoms structure rendered as an inset *on top of* a data plot.
+
+    Reuses `scripts/plot_utils.py::render_dimer_atoms` (the good precedent
+    from the SpookyNet dimer-scan figures) rather than re-deriving atom
+    rendering -- see docs/plotting-style-guide.md "Rendering ASE Atoms".
+    Tufte principle: put the structure where the eye already is (right next
+    to the energy value it corresponds to) instead of a separate figure the
+    reader has to cross-reference by hand.
+    """
+    plot_utils = _load_plot_utils()
+    atoms, fragments = _water_dimer()
+
+    r = np.linspace(2.0, 6.0, 60)
+    energy = 4.0 * ((2.9 / r) ** 12 - (2.9 / r) ** 6)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(r, energy, color="#1A5276", linewidth=2.8)
+    ax.axhline(0, color="#999999", linewidth=0.8, linestyle=":")
+    ax.set_xlabel("O···O distance (Å)")
+    ax.set_ylabel("interaction energy (kcal/mol)")
+    ax.set_title("Water-dimer scan with structure overlay")
+
+    # Inset axes hold the ASE-atoms render directly over the minimum, where
+    # the reader's eye already is -- not a separate side-by-side figure.
+    r_min = r[np.argmin(energy)]
+    e_min = energy.min()
+    inset = ax.inset_axes([0.58, 0.55, 0.38, 0.38])
+    plot_utils.render_dimer_atoms(inset, atoms, fragments, rotation="15x,10y,0z")
+    ax.annotate("", xy=(r_min, e_min), xytext=(r_min + 0.9, e_min + 2.5),
+                arrowprops={"arrowstyle": "->", "color": "#666666", "linewidth": 1.2})
+
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def colormap_gallery(out: Path) -> None:
+    """The same 2D field rendered under several colormaps from the `cmap`
+    library (cmocean/crameri/colorbrewer/...), for direct comparison.
+
+    Tufte principle: color should encode magnitude *faithfully* -- several
+    of these (crameri's `batlow`, cmocean's `haline`) are specifically
+    designed to be perceptually uniform and colorblind-safe, unlike a
+    rainbow map that implies false discontinuities in the data.
+    """
+    x = np.linspace(2.5, 6.0, 80)
+    y = np.linspace(-2.5, 2.5, 80)
+    xx, yy = np.meshgrid(x, y)
+    zz = 4.0 * ((2.9 / xx) ** 12 - (2.9 / xx) ** 6) + 0.2 * yy**2
+
+    names = [
+        ("viridis", "viridis (matplotlib default, perceptually uniform)"),
+        ("cmocean:haline", "cmocean:haline (oceanographic sequential)"),
+        ("cmocean:balance", "cmocean:balance (diverging, zero-centered)"),
+        ("crameri:batlow", "crameri:batlow (colorblind-safe sequential)"),
+        ("crameri:vik", "crameri:vik (colorblind-safe diverging)"),
+        ("colorbrewer:RdYlBu_11", "colorbrewer:RdYlBu (classic diverging)"),
+    ]
+    fig, axes = plt.subplots(2, 3, figsize=(13, 8))
+    for ax, (name, label) in zip(axes.flat, names):
+        im = ax.pcolormesh(xx, yy, zz, cmap=_mpl_cmap(name), shading="gouraud")
+        ax.set_title(label, fontsize=11)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        fig.colorbar(im, ax=ax, shrink=0.8)
+    fig.suptitle("Same field, different colormaps (via the cmap library)")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def hist2d(out: Path) -> None:
+    """2D histogram of two correlated variables (bond length vs. angle).
+
+    Tufte principle: for many overlapping points, binned density (not a
+    scatter of thousands of translucent dots) is the honest representation
+    -- a scatter would just be a saturated blob past a few hundred points.
+    """
+    n = 20000
+    bond = RNG.normal(0.96, 0.02, n) + 0.01 * RNG.standard_normal(n)
+    angle = 104.5 + 15 * (bond - 0.96) / 0.02 + RNG.normal(0, 3.5, n)
+
+    fig, ax = plt.subplots(figsize=(7, 5.5))
+    h = ax.hist2d(bond, angle, bins=60, cmap=_mpl_cmap("cmocean:dense"))
+    fig.colorbar(h[3], ax=ax, label="count")
+    ax.set_xlabel("O–H bond length (Å)")
+    ax.set_ylabel("H–O–H angle (°)")
+    ax.set_title("2D histogram: bond length vs. angle")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def histogram_timeseries(out: Path) -> None:
+    """A time-resolved distribution: x = frame, y = value bin, color =
+    local density (a "kymograph" of the trace's own histogram over time).
+
+    Tufte principle: this is the small-multiples idea taken to its limit --
+    instead of N separate histograms side by side (one per time window),
+    stack them as columns of one image, so a drift in the *distribution*
+    (not just the mean) is visible as a single continuous shape rather than
+    something you'd have to notice across many separate panels.
+    """
+    n_frames, n_windows = 2000, 80
+    frames = np.arange(n_frames)
+    energy = -75.0 + 0.3 * np.sin(frames / 80) + RNG.normal(0, 0.05, n_frames)
+    energy += np.linspace(0, 0.15, n_frames)  # slow drift, on top of the oscillation
+
+    bins = np.linspace(energy.min(), energy.max(), 50)
+    window_edges = np.linspace(0, n_frames, n_windows + 1).astype(int)
+    density = np.zeros((len(bins) - 1, n_windows))
+    for i in range(n_windows):
+        chunk = energy[window_edges[i]:window_edges[i + 1]]
+        density[:, i], _ = np.histogram(chunk, bins=bins, density=True)
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    im = ax.pcolormesh(window_edges[:-1], bins[:-1], density, cmap=_mpl_cmap("cmocean:thermal"),
+                        shading="nearest")
+    fig.colorbar(im, ax=ax, label="local probability density")
+    ax.set_xlabel("recorded frame")
+    ax.set_ylabel("energy (eV)")
+    ax.set_title("Histogram time series: how the value distribution drifts")
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     apply_plot_style(STYLE_NAME)
@@ -310,6 +474,10 @@ def main() -> None:
         "chart_small_multiples": small_multiples,
         "chart_range_frame": range_frame_scatter,
         "chart_diagram": energy_term_diagram,
+        "chart_ase_overlay": ase_atoms_overlay,
+        "chart_colormaps": colormap_gallery,
+        "chart_hist2d": hist2d,
+        "chart_histogram_timeseries": histogram_timeseries,
     }
     for name, fn in renders.items():
         out = OUT_DIR / f"{name}.png"

@@ -168,6 +168,58 @@ elements they describe rather than pulled out into a legend.
 
 ![diagram](plot-style-gallery-assets/chart_diagram.png)
 
+### ASE Atoms as an overlay on a data plot
+
+Not a separate figure next to the data — an `ax.inset_axes()` holding
+[`scripts/plot_utils.py::render_dimer_atoms`](https://github.com/EricBoittier/mmml/blob/main/scripts/plot_utils.py)'s
+ball-and-stick render, placed directly over the point on the curve it
+corresponds to. Tufte principle: put the explanation where the eye already
+is, not somewhere the reader has to cross-reference by hand. This is the
+"good ASE Atoms plot" precedent (jmol element colors, depth-cued alpha,
+within-fragment-only bonds) applied as an overlay rather than its own panel
+— see `docs/plotting-style-guide.md` "Rendering ASE Atoms".
+
+![ASE atoms overlay](plot-style-gallery-assets/chart_ase_overlay.png)
+
+### Colormaps (via the `cmap` library)
+
+The same 2D field under six colormaps — `viridis` (matplotlib's own
+perceptually-uniform default) alongside picks from
+[`cmap`](https://cmap-docs.readthedocs.io) (`pip`/`uv` package, added to the
+`plotting` extra in `pyproject.toml`), which bundles cmocean, Fabio Crameri's
+scientific colormaps, ColorBrewer, and more — over 1500 registered names.
+`crameri:batlow`/`crameri:vik` and `cmocean:haline`/`cmocean:balance` are
+specifically designed to be perceptually uniform and colorblind-safe;
+`colorbrewer:RdYlBu` renders as visibly discrete bands here because
+ColorBrewer's diverging maps are categorical by design, not a bug — a good
+illustration of continuous vs. binned color encoding being genuinely
+different choices, not just taste.
+
+![colormaps](plot-style-gallery-assets/chart_colormaps.png)
+
+```python
+import cmap
+cmap.Colormap("cmocean:haline").to_mpl()  # -> a normal matplotlib Colormap
+```
+
+### 2D histogram
+
+Binned density instead of an overlapping scatter of 20,000 points — past a
+few hundred points a scatter is just a saturated blob; the histogram is the
+honest representation of where the mass actually is.
+
+![2D histogram](plot-style-gallery-assets/chart_hist2d.png)
+
+### Histogram time series ("kymograph")
+
+Small multiples taken to their limit: instead of N separate histograms (one
+per time window) shown side by side, each becomes one column of a single
+image (x = time, y = value bin, color = local density). A drift in the
+*distribution* — not just the mean — becomes one continuous shape instead of
+something you'd have to notice by comparing many separate panels.
+
+![histogram time series](plot-style-gallery-assets/chart_histogram_timeseries.png)
+
 ## How to pick
 
 ```python
