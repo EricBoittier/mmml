@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+import warnings
 from pathlib import Path
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from ase.visualize.plot import plot_atoms
 from matplotlib import cm
 from matplotlib.colors import TwoSlopeNorm
 from scipy.interpolate import RectBivariateSpline
@@ -31,9 +33,13 @@ from scipy.interpolate import RectBivariateSpline
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO_ROOT))
 
+from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, ORIENTED_MONOMERS
+from mmml.analysis.dimer_scans import build_rigid_dimer_2d
 from plot_utils import (
     BACKEND_CMAPS,
     BACKEND_LABELS,
+    MIN_SAFE_CONTACT_ANGSTROM,
+    flag_clashing_geometries,
     load_and_enrich,
     ordered_backends,
 )
@@ -48,6 +54,53 @@ mpl.rcParams.update(
         "text.usetex": False,
     }
 )
+
+
+def _atoms_snapshot(label_a: str, label_b: str, distance: float, offset: float) -> object:
+    """Build an ASE Atoms object for a given geometry."""
+    pair = (label_a, label_b)
+    if pair not in ORIENTED_MONOMERS:
+        pair = (label_b, label_a)
+        if pair not in ORIENTED_MONOMERS:
+            return None
+    monomers = ORIENTED_MONOMERS[pair]
+    cfg = PAIR_SCAN_CONFIG[pair]
+    atoms, _ = build_rigid_dimer_2d(
+        monomers["a"],
+        monomers["b"],
+        distance_angstrom=distance,
+        offset_angstrom=offset,
+        axis=(0, 0, 1),
+        transverse_axis=cfg["transverse_axis"],
+        center="none",
+    )
+    return atoms
+
+
+def _plot_atoms_filmstrip(
+    ax, label_a: str, label_b: str, distances: np.ndarray, n_snap: int = 5
+) -> None:
+    """Render a row of ASE atoms snapshots spanning the scanned distance range."""
+    ax.set_axis_off()
+    dist_sorted = np.sort(np.unique(distances))
+    if len(dist_sorted) == 0:
+        return
+    n_snap = min(n_snap, len(dist_sorted))
+    idx = np.linspace(0, len(dist_sorted) - 1, n_snap).round().astype(int)
+    snap_distances = [dist_sorted[i] for i in sorted(set(idx))]
+    n_snap = len(snap_distances)
+    for j, d in enumerate(snap_distances):
+        inset = ax.inset_axes([j / n_snap, 0.0, 1 / n_snap, 1.0])
+        inset.set_axis_off()
+        try:
+            atoms_snap = _atoms_snapshot(label_a, label_b, d, 0.0)
+            if atoms_snap is not None:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    plot_atoms(atoms_snap, inset, rotation="0x,0y,0z", radii=0.4)
+        except Exception:
+            pass
+        inset.set_title(f"{d:.2f} Å", fontsize=7, pad=1)
 
 
 def _reference_energy(series: pd.Series, ref_dist: float | None = None) -> pd.Series:
@@ -68,19 +121,23 @@ def plot_2d_pes_for_pair(
     out_dir: Path,
     n_grid: int = 80,
     energy_clip_kcal: float = 5.0,
+    min_contact: float = MIN_SAFE_CONTACT_ANGSTROM,
+    show_atoms: bool = True,
 ) -> None:
     """Render a 2D PES heatmap for one (pair, backend) set."""
     n_be = len(backends)
     if n_be == 0:
         return
 
-    fig, axes = plt.subplots(
-        1, n_be,
-        figsize=(5.5 * n_be, 5.5),
-        constrained_layout=True,
-    )
-    if n_be == 1:
-        axes = [axes]
+    fig = plt.figure(figsize=(5.5 * n_be, 6.4 if show_atoms else 5.5), constrained_layout=True)
+    if show_atoms:
+        gs = fig.add_gridspec(2, n_be, height_ratios=[1, 4.5])
+        ax_film = fig.add_subplot(gs[0, :])
+        axes = [fig.add_subplot(gs[1, i]) for i in range(n_be)]
+    else:
+        gs = fig.add_gridspec(1, n_be)
+        ax_film = None
+        axes = [fig.add_subplot(gs[0, i]) for i in range(n_be)]
 
     pair_tag = f"{label_a}_{label_b}"
     fig.suptitle(
@@ -89,8 +146,21 @@ def plot_2d_pes_for_pair(
         fontweight="bold",
     )
 
+    if ax_film is not None:
+        all_distances = df_pair["distance_angstrom"].to_numpy()
+        _plot_atoms_filmstrip(ax_film, label_a, label_b, all_distances)
+        ax_film.set_title("Reaction coordinate (offset=0)", fontsize=9)
+
     for ax, backend in zip(axes, backends):
         df_be = df_pair[df_pair["backend"] == backend].copy()
+        if df_be.empty:
+            ax.set_visible(False)
+            continue
+
+        df_be = flag_clashing_geometries(df_be, min_contact=min_contact)
+        n_clash = int(df_be["is_clash"].sum())
+        df_clash = df_be[df_be["is_clash"]]
+        df_be = df_be[~df_be["is_clash"]]
         if df_be.empty:
             ax.set_visible(False)
             continue
@@ -182,6 +252,17 @@ def plot_2d_pes_for_pair(
                 c="w", s=15, edgecolors="k", linewidths=0.3, zorder=4,
             )
 
+        if n_clash:
+            # Show excluded (unphysically close-contact) geometries as red X's,
+            # outside the interpolated surface / colour-scale statistics.
+            ax.scatter(
+                df_clash["distance_angstrom"],
+                df_clash["offset_angstrom"],
+                marker="x", c="red", s=40, linewidths=1.2, zorder=6,
+                label=f"{n_clash} clashing (<{min_contact:.1f} Å contact)",
+            )
+            ax.legend(fontsize=6, loc="lower right", framealpha=0.7)
+
         ax.set_xlabel("Centre distance / Å")
         ax.set_ylabel("Lateral offset / Å")
         ax.set_title(BACKEND_LABELS.get(backend, backend))
@@ -214,6 +295,20 @@ def main() -> None:
         "--n-grid", type=int, default=80,
         help="Interpolation grid resolution (default 80)",
     )
+    parser.add_argument(
+        "--min-contact", type=float, default=MIN_SAFE_CONTACT_ANGSTROM,
+        help=(
+            "Exclude geometries whose fragment atoms are closer than this "
+            f"(Å) from the colour scale/interpolation (default {MIN_SAFE_CONTACT_ANGSTROM}). "
+            "distance_angstrom is an anchor-to-anchor separation, not atom-atom, "
+            "so nominally 'close' scan points can have overlapping atoms."
+        ),
+    )
+    parser.add_argument(
+        "--no-atoms",
+        action="store_true",
+        help="Skip the ASE atoms reaction-coordinate filmstrip panel",
+    )
     args = parser.parse_args()
 
     df = load_and_enrich(args.csv)
@@ -230,6 +325,7 @@ def main() -> None:
         plot_2d_pes_for_pair(
             df_pair, label_a, label_b, backends, args.output_dir,
             n_grid=args.n_grid, energy_clip_kcal=args.energy_clip,
+            min_contact=args.min_contact, show_atoms=not args.no_atoms,
         )
 
     print(f"\nAll 2D PES plots saved to {args.output_dir}")

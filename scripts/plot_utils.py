@@ -101,10 +101,12 @@ def add_combined_backend(df: pd.DataFrame) -> pd.DataFrame:
 
     merged["backend"] = "multipoles_mbd"
 
-    # Carry component columns from multipole rows (same geometry, additive)
-    comp_cols = [c for c in df_mp.columns if c.startswith("comp_")]
-    if comp_cols:
-        df_mp_comp = df_mp[_JOIN_KEYS + comp_cols]
+    # Carry component + contact-distance columns from multipole rows (same geometry)
+    carry_cols = [c for c in df_mp.columns if c.startswith("comp_")]
+    if "min_contact_angstrom" in df_mp.columns:
+        carry_cols.append("min_contact_angstrom")
+    if carry_cols:
+        df_mp_comp = df_mp[_JOIN_KEYS + carry_cols]
         merged = merged.merge(df_mp_comp, on=_JOIN_KEYS, how="left")
 
     # Carry charmm-specific columns as NaN so concat works
@@ -122,6 +124,31 @@ def load_and_enrich(csv_path) -> pd.DataFrame:
         print("No 'offset_angstrom' column — adding 0.0 (treating as 1D scan).")
         df["offset_angstrom"] = 0.0
     return add_combined_backend(df)
+
+
+MIN_SAFE_CONTACT_ANGSTROM = 1.2
+
+
+def flag_clashing_geometries(
+    df: pd.DataFrame, min_contact: float = MIN_SAFE_CONTACT_ANGSTROM
+) -> pd.DataFrame:
+    """Mark scan rows whose fragments are at an unphysically close contact.
+
+    ``distance_angstrom`` is measured between each monomer's chemically
+    motivated anchor point, not its centroid or van der Waals surface — so a
+    nominal "close" scan distance can put atoms from opposite fragments on
+    top of each other (e.g. ACE+ACE needs ~5.25 Å center-to-center before
+    fragment atoms stop overlapping). Those points produce huge, backend-
+    dependent repulsive energies that dominate colour scales and make
+    cross-backend comparisons meaningless. Adds a boolean ``is_clash``
+    column; does not drop rows (caller decides whether to filter/mask).
+    """
+    df = df.copy()
+    if "min_contact_angstrom" in df.columns:
+        df["is_clash"] = df["min_contact_angstrom"] < min_contact
+    else:
+        df["is_clash"] = False
+    return df
 
 
 def ordered_backends(df: pd.DataFrame, requested: list[str] | None = None) -> list[str]:

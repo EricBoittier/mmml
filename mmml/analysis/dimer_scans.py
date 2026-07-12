@@ -253,6 +253,24 @@ def distance_scan_geometries_2d(
             )
 
 
+def min_fragment_contact_distance(
+    atoms: Atoms, fragments: tuple[np.ndarray, np.ndarray]
+) -> float:
+    """Closest atom-atom distance between the two dimer fragments (Å).
+
+    ``distance_angstrom`` in a scan is measured between each monomer's
+    chemically-motivated anchor point, not its centroid or van der Waals
+    surface — so for bulky/asymmetric molecules a nominal "close" scan
+    distance can put atoms on opposite fragments on top of each other. This
+    is the actual physical separation to check before trusting energies near
+    the bottom of a distance grid.
+    """
+    pos = atoms.get_positions()
+    idx_a, idx_b = fragments
+    dmat = np.linalg.norm(pos[idx_a][:, None, :] - pos[idx_b][None, :, :], axis=-1)
+    return float(dmat.min())
+
+
 def evaluate_scan(
     geometries: Iterable[DimerGeometry],
     calculator_factory,
@@ -272,6 +290,9 @@ def evaluate_scan(
                 "offset_angstrom": geometry.offset_angstrom,
                 "energy_ev": energy_ev,
                 "energy_kcal_mol": energy_ev * 23.060548867,
+                "min_contact_angstrom": min_fragment_contact_distance(
+                    geometry.atoms, geometry.fragments
+                ),
             }
             if hasattr(atoms.calc, "results") and "pair_energies_by_component" in atoms.calc.results:
                 comp_list = atoms.calc.results["pair_energies_by_component"]
@@ -335,6 +356,9 @@ def evaluate_scan_monomer_decomposed(
                     "comp_Eb_kcal_mol": e_b_ev * 23.060548867,
                     "comp_Eint_ev": e_int_ev,
                     "comp_Eint_kcal_mol": e_int_ev * 23.060548867,
+                    "min_contact_angstrom": min_fragment_contact_distance(
+                        geometry.atoms, geometry.fragments
+                    ),
                 }
             )
         except Exception as e:
