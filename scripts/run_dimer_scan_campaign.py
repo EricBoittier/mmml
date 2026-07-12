@@ -147,8 +147,18 @@ def evaluate_charmm_scan(geometries, label_a, label_b, charmm_fns) -> list[dict]
 def build_pair_distance_grid(
     label_a: str, label_b: str, *, min_contact: float = 1.5,
     n_near: int = 11, n_far: int = 8, near_span: float = 2.5, far_span: float = 9.5,
+    close_floor: float | None = None, n_close: int = 6,
 ) -> tuple[np.ndarray, float]:
-    """Per-pair distance grid anchored to where fragment atoms actually clear contact."""
+    """Per-pair distance grid anchored to where fragment atoms actually clear contact.
+
+    If *close_floor* is given, extra points are prepended from *close_floor*
+    up to the grid's normal (safe) start — deliberately probing distances
+    where fragment atoms overlap for at least some backends. Useful for
+    diagnosing whether a backend without a repulsive-wall term (e.g. a bare
+    electrostatic multipole/MBD model) has a real bounded minimum or just
+    keeps favouring ever-closer contact; other backends (xTB, CHARMM) will
+    likely produce huge/clash-filtered energies there, which is expected.
+    """
     cfg = PAIR_SCAN_CONFIG[(label_a, label_b)]
     monomers = ORIENTED_MONOMERS[(label_a, label_b)]
     safe_d = find_safe_min_distance(
@@ -160,6 +170,9 @@ def build_pair_distance_grid(
         np.linspace(d_start, d_start + near_span, n_near),
         np.linspace(d_start + near_span + 0.5, d_start + far_span, n_far),
     ])
+    if close_floor is not None and close_floor < d_start:
+        close_pts = np.linspace(close_floor, d_start, n_close, endpoint=False)
+        distances = np.concatenate([close_pts, distances])
     return distances, safe_d
 
 
@@ -199,6 +212,23 @@ def main():
         type=float,
         default=1.5,
         help="Contact distance (Å) used to anchor each pair's distance grid (default 1.5)",
+    )
+    parser.add_argument(
+        "--close-floor",
+        type=float,
+        default=None,
+        help=(
+            "Extend each pair's grid inward to this centre-to-centre distance (Å), "
+            "below the normal safe-contact start. Probes whether backends without a "
+            "repulsive-wall term (multipoles/MBD) have a real minimum or diverge "
+            "unbounded at close range; other backends will likely be clash-filtered there."
+        ),
+    )
+    parser.add_argument(
+        "--n-close",
+        type=int,
+        default=6,
+        help="Number of extra points between --close-floor and the normal grid start (default 6)",
     )
     parser.add_argument(
         "--output-dir",
@@ -297,7 +327,10 @@ def main():
     for idx, (label_a, label_b) in enumerate(pairs, 1):
         pair_cfg = PAIR_SCAN_CONFIG[(label_a, label_b)]
         offsets = pair_cfg["offsets_angstrom"]
-        distances, safe_d = build_pair_distance_grid(label_a, label_b, min_contact=args.min_contact)
+        distances, safe_d = build_pair_distance_grid(
+            label_a, label_b, min_contact=args.min_contact,
+            close_floor=args.close_floor, n_close=args.n_close,
+        )
         print(f"[{idx}/{len(pairs)}] {label_a}+{label_b}: {pair_cfg['description']}")
         print(
             f"  safe contact clears at d≈{safe_d:.2f} Å (offset=0) — grid spans "
