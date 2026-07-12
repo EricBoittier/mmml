@@ -120,11 +120,14 @@ def main():
     parser.add_argument(
         "--multipole-checkpoint",
         type=Path,
-        required=True,
+        default=None,
         help="Path to multipoles model checkpoint folder",
     )
     parser.add_argument(
-        "--mbd-checkpoint", type=Path, required=True, help="Path to MBD model checkpoint folder"
+        "--mbd-checkpoint",
+        type=Path,
+        default=None,
+        help="Path to MBD model checkpoint folder",
     )
     parser.add_argument("--max-ell", type=int, default=3, help="Maximum multipole rank (0-3)")
     parser.add_argument(
@@ -142,24 +145,37 @@ def main():
 
     # 1. Initialize calculators
     print("Initializing calculators...")
-    try:
-        multipole_calc = LearnedMolecularMultipoleElectrostatics(
-            checkpoint=args.multipole_checkpoint,
-            max_ell=args.max_ell,
-            origin="nuclear_charge_centroid",
-            softening_bohr=0.5,
-        )
-        print("  Learned multipole calculator initialized successfully.")
-    except Exception as e:
-        print(f"  Error loading multipole model: {e}")
-        sys.exit(1)
+    
+    use_multipole = False
+    multipole_calc = None
+    if args.multipole_checkpoint is not None:
+        try:
+            multipole_calc = LearnedMolecularMultipoleElectrostatics(
+                checkpoint=args.multipole_checkpoint,
+                max_ell=args.max_ell,
+                origin="nuclear_charge_centroid",
+                softening_bohr=0.5,
+            )
+            use_multipole = True
+            print("  Learned multipole calculator initialized successfully.")
+        except Exception as e:
+            print(f"  Error loading multipole model: {e}")
+            sys.exit(1)
+    else:
+        print("  No multipole checkpoint provided. Skipping multipole backend.")
 
-    try:
-        mbd_calc = QCMLMBDCalculator(checkpoint=args.mbd_checkpoint)
-        print("  Learned MBD calculator initialized successfully.")
-    except Exception as e:
-        print(f"  Error loading MBD model: {e}")
-        sys.exit(1)
+    use_mbd = False
+    mbd_calc = None
+    if args.mbd_checkpoint is not None:
+        try:
+            mbd_calc = QCMLMBDCalculator(checkpoint=args.mbd_checkpoint)
+            use_mbd = True
+            print("  Learned MBD calculator initialized successfully.")
+        except Exception as e:
+            print(f"  Error loading MBD model: {e}")
+            sys.exit(1)
+    else:
+        print("  No MBD checkpoint provided. Skipping MBD backend.")
 
     # Check for xTB
     use_xtb = False
@@ -169,6 +185,10 @@ def main():
         print("  xTB calculator initialized successfully.")
     except Exception as e:
         print(f"  xTB calculator not available: {e}. Skipping xTB backend.")
+
+    if not (use_multipole or use_mbd or use_xtb):
+        print("No backends are available or enabled. Exiting.")
+        sys.exit(0)
 
     # Define spacing grids
     distances = np.linspace(3.0, 12.0, 19)
@@ -184,24 +204,26 @@ def main():
         geometries = make_pair_scan(label_a, label_b, distances)
 
         # Evaluate Multipoles
-        print(f"  Evaluating learned multipole (max_ell={args.max_ell})...")
-        try:
-            mp_rows = evaluate_scan(geometries, lambda: multipole_calc)
-            for r in mp_rows:
-                r["backend"] = "learned_multipole"
-            results.extend(mp_rows)
-        except Exception as e:
-            print(f"    Error: {e}")
+        if use_multipole:
+            print(f"  Evaluating learned multipole (max_ell={args.max_ell})...")
+            try:
+                mp_rows = evaluate_scan(geometries, lambda: multipole_calc)
+                for r in mp_rows:
+                    r["backend"] = "learned_multipole"
+                results.extend(mp_rows)
+            except Exception as e:
+                print(f"    Error: {e}")
 
         # Evaluate MBD
-        print("  Evaluating learned MBD...")
-        try:
-            mbd_rows = evaluate_scan(geometries, lambda: mbd_calc)
-            for r in mbd_rows:
-                r["backend"] = "learned_mbd"
-            results.extend(mbd_rows)
-        except Exception as e:
-            print(f"    Error: {e}")
+        if use_mbd:
+            print("  Evaluating learned MBD...")
+            try:
+                mbd_rows = evaluate_scan(geometries, lambda: mbd_calc)
+                for r in mbd_rows:
+                    r["backend"] = "learned_mbd"
+                results.extend(mbd_rows)
+            except Exception as e:
+                print(f"    Error: {e}")
 
         # Evaluate xTB
         if use_xtb:
