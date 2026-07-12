@@ -295,11 +295,14 @@ def plot_2d_pes_for_pair(
 
             try:
                 Z_fine = griddata(points, values, (Dg, Og), method="linear")
-                if np.isnan(Z_fine).any():
-                    Z_nearest = griddata(points, values, (Dg, Og), method="nearest")
-                    Z_fine = np.where(np.isnan(Z_fine), Z_nearest, Z_fine)
             except Exception:
-                Z_fine = griddata(points, values, (Dg, Og), method="nearest")
+                Z_fine = np.full(Dg.shape, np.nan)
+            # Cells outside the convex hull of the *clean* points come back as
+            # NaN — deliberately left as gaps rather than flat-filled by
+            # nearest-neighbour extrapolation. A flat fill previously let the
+            # global-minimum search land in a region with zero real data
+            # (e.g. right where the clash/outlier filters had stripped every
+            # point), reporting a fabricated minimum at an excluded geometry.
             Z_fine = np.clip(Z_fine, -clip_bound, clip_bound)
 
             norm = TwoSlopeNorm(vcenter=0, vmin=-vmax, vmax=vmax)
@@ -322,16 +325,23 @@ def plot_2d_pes_for_pair(
             cb = plt.colorbar(im, ax=ax, shrink=0.85)
             cb.set_label("$E_{int}$ / kcal mol$^{-1}$", fontsize=9)
 
-            # Mark minimum
-            min_idx = np.unravel_index(np.argmin(Z_fine), Z_fine.shape)
-            min_d, min_o, min_e = D_fine[min_idx[1]], O_fine[min_idx[0]], Z_fine[min_idx]
-            ax.plot(
-                min_d, min_o,
-                "*", color="gold", markersize=14, markeredgecolor="k", markeredgewidth=0.5,
-                label=f"min {min_e:.2f} kcal/mol",
-                zorder=5,
-            )
-            ax.legend(fontsize=7, loc="upper right", framealpha=0.7)
+            # Mark minimum (NaN-aware: gaps outside the clean-data hull must
+            # never win the search)
+            if np.all(np.isnan(Z_fine)):
+                min_idx = None
+            else:
+                min_idx = np.unravel_index(np.nanargmin(Z_fine), Z_fine.shape)
+            if min_idx is None:
+                min_d = min_o = min_e = None
+            else:
+                min_d, min_o, min_e = D_fine[min_idx[1]], O_fine[min_idx[0]], Z_fine[min_idx]
+                ax.plot(
+                    min_d, min_o,
+                    "*", color="gold", markersize=14, markeredgecolor="k", markeredgewidth=0.5,
+                    label=f"min {min_e:.2f} kcal/mol",
+                    zorder=5,
+                )
+                ax.legend(fontsize=7, loc="upper right", framealpha=0.7)
 
             # Data point dots
             ax.scatter(
