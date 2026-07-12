@@ -100,8 +100,15 @@ class SpookyNetCalculator(Calculator):
         z = np.asarray(atoms.get_atomic_numbers(), dtype=np.int32)
         pos = np.asarray(atoms.get_positions(), dtype=np.float32)
         if pad:
+            # Scatter padded "ghost" atoms far apart from real atoms and from
+            # each other. Stacking them all at the origin makes pad-pad and
+            # real-pad pairwise distances exactly (or near) zero, which blows
+            # up 1/r terms (e.g. ZBL repulsion) to inf/NaN *before* masking
+            # is applied (0 * inf = NaN survives the mask).
+            far = 1.0e4 + 100.0 * np.arange(pad, dtype=np.float32)
+            pad_pos = np.stack([far, np.zeros(pad, dtype=np.float32), np.zeros(pad, dtype=np.float32)], axis=1)
             z = np.concatenate([z, np.zeros(pad, dtype=np.int32)])
-            pos = np.concatenate([pos, np.zeros((pad, 3), dtype=np.float32)], axis=0)
+            pos = np.concatenate([pos, pad_pos], axis=0)
 
         dst_idx, src_idx = e3x.ops.sparse_pairwise_indices(self.max_atoms)
         atom_mask = (z > 0).astype(np.float32)
