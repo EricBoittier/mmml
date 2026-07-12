@@ -201,14 +201,19 @@ def make_xtb_calculator(
     method: str = "GFN2-xTB",
     **kwargs,
 ) -> Calculator:
-    """Create an ASE xTB calculator when the optional ``xtb`` package exists."""
+    """Create an ASE xTB calculator when the optional ``xtb`` or ``tblite`` package exists."""
 
     try:
         from xtb.ase.calculator import XTB
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            "xTB ASE support is not installed. Install the optional xtb-python "
-            "package in the runtime environment, then rerun this backend."
-        ) from exc
-    return XTB(method=method, **kwargs)
+        return XTB(method=method, **kwargs)
+    except ModuleNotFoundError:
+        try:
+            from tblite.ase import TBLite
+            tblite_method = method.lower().replace("-xtb", "")
+            return TBLite(method=tblite_method, **kwargs)
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                "Neither xTB nor tblite ASE support is installed. Install one of "
+                "the optional packages (xtb-python or tblite) in the runtime environment."
+            ) from exc
 
