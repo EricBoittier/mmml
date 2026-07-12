@@ -49,8 +49,10 @@ rule run_setting:
         # Broadwell (E5-2630v4, has AVX2/FMA/BMI2). polars (a transitive
         # pycharmm import) requires AVX2 and crashes hard (no Python
         # traceback -- SIGILL under the hood) on the older nodes. Constrain
-        # to the newer generation rather than letting Slurm pick freely.
-        slurm_extra=lambda wildcards: f"--constraint={slurm_value('constraint', 'E5-2630v4')}",
+        # to the newer generation via the plugin's dedicated `constraint`
+        # resource (NOT slurm_extra -- the plugin rejects -C/--constraint
+        # there since it manages node constraints itself).
+        constraint=lambda wildcards: str(slurm_value("constraint", "E5-2630v4")),
     shell:
         """
         set -euo pipefail
