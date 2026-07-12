@@ -71,6 +71,103 @@ specifically, while regular text stays DejaVu.
 
 ![editorial_cm](plot-style-gallery-assets/editorial_cm.png)
 
+## Chart types (not just fonts)
+
+Same style (`"icml"`), different chart *forms* — regenerate with
+`python scripts/render_chart_type_gallery.py`. Each one names the specific
+Tufte principle it demonstrates, since "in line with Tufte's teachings" is
+about more than axis minimalism — several of his central ideas (small
+multiples, the range-frame, data-ink ratio, redundant encoding) are concrete,
+nameable techniques, not just "make it clean." Use these to judge whether a
+*form*, not just a font, fits before committing to it for a real figure.
+
+### Radial (polar)
+
+A circular histogram of a periodic quantity (dihedral angle). Use the
+geometry the data actually has — an angle wraps around; forcing it onto a
+linear 0-360° axis hides the wraparound at the boundary.
+
+![radial](plot-style-gallery-assets/chart_radial.png)
+
+### 3D surface
+
+A dimer PES as an explicit 3D surface. Included because it was asked for,
+but flagged honestly: 3D is data-ink-*expensive* (occlusion, projection
+distortion, no way to read exact values) — Tufte generally preferred 2D +
+color/contour for exactly this reason. The `matshow` and `range_frame`
+panels below are the better-Tufte alternative for two-variable-vs-response
+data of this kind.
+
+![3d surface](plot-style-gallery-assets/chart_3d_surface.png)
+
+### XY scatter with confidence interval
+
+A fitted trend with a shaded 95% CI band, raw points still visible
+underneath. The band carries the uncertainty; no per-point error bars
+cluttering every marker.
+
+![scatter with CI](plot-style-gallery-assets/chart_scatter_ci.png)
+
+### Time series with distributions above and below
+
+Not seaborn's `jointplot` (marginals top+right, sharing the plot's
+*x*-axis) — here the two extra panels sit above and below the middle one
+and share its **y-axis** instead, showing how the value distribution itself
+shifts between the first and second half of a run. Two related
+distributions placed for direct visual comparison, Tufte's small-multiples
+idea applied to margins instead of a legend/caption.
+
+![time series with marginals](plot-style-gallery-assets/chart_timeseries_marginals.png)
+
+### Lollipop chart
+
+A thin stem + a dot instead of a filled bar — the most literal data-ink-ratio
+win in this gallery: nearly all of a bar's ink minus the fill, for the same
+information (position along the stem = value). See `docs/plotting-style-guide.md`
+"Overlaid semi-transparent bars, not more panels" for the sibling rule about
+when *not* to add another panel instead.
+
+![lollipop](plot-style-gallery-assets/chart_lollipop.png)
+
+### Matrix heatmap (`matshow`)
+
+A pairwise atom-distance matrix. Color encodes magnitude directly on the
+(i, j) grid the data already has — no need to invent x/y positions for it
+the way a scatter would.
+
+![matshow](plot-style-gallery-assets/chart_matshow.png)
+
+### Small multiples
+
+Tufte's signature form, by name: many small, identically-scaled panels, with
+almost all chart furniture (ticks, boxes, axis labels) stripped since the
+*shape* is the point, not reading an exact value off any one panel. Compare
+directly to the “everything overlaid in one legend-heavy panel” approach
+used in `workflows/*/scripts/plot_results.py` — small multiples is the
+alternative worth considering when a sweep has few enough series to lay out
+as a grid.
+
+![small multiples](plot-style-gallery-assets/chart_small_multiples.png)
+
+### Range-frame
+
+Tufte's own named contribution (*The Visual Display of Quantitative
+Information*): axis lines span only the data's actual range, not an
+arbitrary origin-anchored box, with ticks only at min/median/max. Worth
+calling out explicitly since it's a specific technique, not a generic
+"minimalist" choice.
+
+![range frame](plot-style-gallery-assets/chart_range_frame.png)
+
+### Schematic diagram
+
+Not a data plot — boxes + thin connecting lines for composition/flow (here:
+how `HybridEnergy` sums its terms). Same principle applies to diagrams as to
+charts: no drop shadows/gradients/3D bevels, labels placed directly on the
+elements they describe rather than pulled out into a legend.
+
+![diagram](plot-style-gallery-assets/chart_diagram.png)
+
 ## How to pick
 
 ```python
