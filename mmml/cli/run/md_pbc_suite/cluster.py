@@ -269,6 +269,7 @@ def build_minimized_monomer_for_packmol(
     reset_block()
     prepare_charmm_vacuum()
     read_cgenff_toppar(enable_drude=False)
+    pycharmm.settings.set_bomb_level(-5)
     read.sequence_string(residue)
     gen.new_segment(seg_name="CLST", setup_ic=True)
     ic_prm_fill(replace_all=True)

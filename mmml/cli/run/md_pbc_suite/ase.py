@@ -126,6 +126,8 @@ def _generate_residue_with_make_res_recipe(
     _reset_pycharmm_system()
     prepare_charmm_vacuum()
     _read_cgenff_toppar()
+    import pycharmm
+    pycharmm.settings.set_bomb_level(-5)
     read.sequence_string(residue)
     gen.new_segment(seg_name="TMP", setup_ic=True)
     from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
@@ -744,10 +746,12 @@ def _build_cluster_from_composition(
     cube_side: float | None = None,
     radius: float | None = None,
     seed: int | None = None,
+    residue_geometries: dict[str, tuple[np.ndarray, list[str], np.ndarray]] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     # Build monomer templates once; do not call make-res again after the cluster PSF
     # (_generate_residue_with_make_res_recipe resets CHARMM and deletes the cluster).
-    residue_geometries = _residue_geometries_for_composition(composition)
+    if residue_geometries is None:
+        residue_geometries = _residue_geometries_for_composition(composition)
     z, atom_names, atoms_per_list, ordered_residue_names = _build_cluster_psf_from_composition(
         composition,
         residue_geometries=residue_geometries,
