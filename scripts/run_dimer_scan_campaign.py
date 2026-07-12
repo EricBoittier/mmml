@@ -21,11 +21,13 @@ from mmml.analysis.dimer_molecules import (
 )
 from mmml.analysis.dimer_scans import (
     evaluate_scan,
+    evaluate_scan_monomer_decomposed,
     make_xtb_calculator,
     molecule_pair_labels,
 )
 from mmml.models.mbd import QCMLMBDCalculator
 from mmml.models.multipoles import LearnedMolecularMultipoleElectrostatics
+from mmml.models.spookynet_calc import SpookyNetCalculator
 
 
 def main():
@@ -43,6 +45,12 @@ def main():
         help="Path to MBD model checkpoint folder",
     )
     parser.add_argument("--max-ell", type=int, default=3, help="Maximum multipole rank (0-3)")
+    parser.add_argument(
+        "--spookynet-checkpoint",
+        type=Path,
+        default=None,
+        help="Path to a SpookyNet JSON checkpoint (params + config)",
+    )
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -90,6 +98,19 @@ def main():
     else:
         print("  No MBD checkpoint provided. Skipping MBD backend.")
 
+    use_spookynet = False
+    spookynet_calc = None
+    if args.spookynet_checkpoint is not None:
+        try:
+            spookynet_calc = SpookyNetCalculator(checkpoint=args.spookynet_checkpoint)
+            use_spookynet = True
+            print("  SpookyNet calculator initialized successfully.")
+        except Exception as e:
+            print(f"  Error loading SpookyNet model: {e}")
+            sys.exit(1)
+    else:
+        print("  No SpookyNet checkpoint provided. Skipping spookynet/spookynet_hybrid backends.")
+
     # Check for xTB
     use_xtb = False
     try:
@@ -99,7 +120,7 @@ def main():
     except Exception as e:
         print(f"  xTB calculator not available: {e}. Skipping xTB backend.")
 
-    if not (use_multipole or use_mbd or use_xtb):
+    if not (use_multipole or use_mbd or use_xtb or use_spookynet):
         print("No backends are available or enabled. Exiting.")
         sys.exit(0)
 
@@ -141,6 +162,28 @@ def main():
                 for r in mbd_rows:
                     r["backend"] = "learned_mbd"
                 results.extend(mbd_rows)
+            except Exception as e:
+                print(f"    Error: {e}")
+
+        # Evaluate SpookyNet (raw dimer energy)
+        if use_spookynet:
+            print("  Evaluating SpookyNet...")
+            try:
+                sn_rows = evaluate_scan(geometries, lambda: spookynet_calc)
+                for r in sn_rows:
+                    r["backend"] = "spookynet"
+                results.extend(sn_rows)
+            except Exception as e:
+                print(f"    Error: {e}")
+
+            print("  Evaluating SpookyNet hybrid (dimer/monomer decomposition)...")
+            try:
+                sn_hybrid_rows = evaluate_scan_monomer_decomposed(
+                    geometries, lambda: spookynet_calc
+                )
+                for r in sn_hybrid_rows:
+                    r["backend"] = "spookynet_hybrid"
+                results.extend(sn_hybrid_rows)
             except Exception as e:
                 print(f"    Error: {e}")
 

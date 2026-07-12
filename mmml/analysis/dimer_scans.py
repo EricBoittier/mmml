@@ -286,6 +286,62 @@ def evaluate_scan(
     return rows
 
 
+def evaluate_scan_monomer_decomposed(
+    geometries: Iterable[DimerGeometry],
+    calculator_factory,
+) -> list[dict[str, float | str]]:
+    """Evaluate a scan with the dimer/monomer energy decomposition.
+
+    For each geometry, computes the dimer energy ``E_dimer`` and the two
+    isolated-monomer energies ``Ea``, ``Eb`` (monomer atoms taken at their
+    dimer-geometry positions, using ``geometry.fragments``) with the same
+    calculator. Reports the interaction energy ``E_int = E_dimer - Ea - Eb``
+    alongside the reconstructed total ``E_int + Ea + Eb`` (== ``E_dimer``) as
+    ``energy_ev`` / ``energy_kcal_mol``, so downstream consumers get both the
+    absolute energy and its monomer decomposition (``comp_Ea_ev``,
+    ``comp_Eb_ev``, ``comp_Eint_ev`` and ``_kcal_mol`` counterparts).
+    """
+
+    rows: list[dict[str, float | str]] = []
+    for geometry in geometries:
+        atoms = geometry.atoms.copy()
+        idx_a, idx_b = geometry.fragments
+        atoms_a = geometry.atoms[idx_a].copy()
+        atoms_b = geometry.atoms[idx_b].copy()
+        try:
+            atoms.calc = calculator_factory()
+            e_dimer_ev = float(atoms.get_potential_energy())
+
+            atoms_a.calc = calculator_factory()
+            e_a_ev = float(atoms_a.get_potential_energy())
+
+            atoms_b.calc = calculator_factory()
+            e_b_ev = float(atoms_b.get_potential_energy())
+
+            e_int_ev = e_dimer_ev - e_a_ev - e_b_ev
+            e_hybrid_ev = e_int_ev + e_a_ev + e_b_ev
+
+            rows.append(
+                {
+                    "molecule_a": geometry.pair[0],
+                    "molecule_b": geometry.pair[1],
+                    "distance_angstrom": geometry.distance_angstrom,
+                    "offset_angstrom": geometry.offset_angstrom,
+                    "energy_ev": e_hybrid_ev,
+                    "energy_kcal_mol": e_hybrid_ev * 23.060548867,
+                    "comp_Ea_ev": e_a_ev,
+                    "comp_Ea_kcal_mol": e_a_ev * 23.060548867,
+                    "comp_Eb_ev": e_b_ev,
+                    "comp_Eb_kcal_mol": e_b_ev * 23.060548867,
+                    "comp_Eint_ev": e_int_ev,
+                    "comp_Eint_kcal_mol": e_int_ev * 23.060548867,
+                }
+            )
+        except Exception as e:
+            print(f"    Warning: calculation failed at {geometry.distance_angstrom} Å: {e}")
+    return rows
+
+
 def make_xtb_calculator(
     *,
     method: str = "GFN2-xTB",

@@ -19,6 +19,8 @@ BACKEND_LABELS: dict[str, str] = {
     "multipoles_mbd":    "Multipoles + MBD",
     "xtb_gfn2":          "GFN2-xTB",
     "charmm":            "CGenFF",
+    "spookynet":         "SpookyNet",
+    "spookynet_hybrid":  "SpookyNet Hybrid ML",
 }
 
 BACKEND_COLORS: dict[str, str] = {
@@ -27,6 +29,8 @@ BACKEND_COLORS: dict[str, str] = {
     "multipoles_mbd":    "#2ca02c",   # green — combined model
     "xtb_gfn2":          "#59a14f",
     "charmm":            "#e15759",
+    "spookynet":         "#b07aa1",
+    "spookynet_hybrid":  "#9c755f",
 }
 
 BACKEND_CMAPS: dict[str, str] = {
@@ -35,6 +39,8 @@ BACKEND_CMAPS: dict[str, str] = {
     "multipoles_mbd":    "PRGn_r",
     "xtb_gfn2":          "RdYlGn_r",
     "charmm":            "seismic",
+    "spookynet":         "BrBG_r",
+    "spookynet_hybrid":  "PuOr",
 }
 
 # Canonical ordering for legend / subplot layout
@@ -42,6 +48,8 @@ BACKEND_ORDER: list[str] = [
     "multipoles_mbd",
     "learned_multipole",
     "learned_mbd",
+    "spookynet_hybrid",
+    "spookynet",
     "xtb_gfn2",
     "charmm",
 ]
