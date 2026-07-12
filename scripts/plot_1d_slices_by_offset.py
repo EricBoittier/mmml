@@ -139,26 +139,27 @@ def plot_slices_for_pair(
         df_be = df_pair[df_pair["backend"] == backend].copy()
         ax_atoms, ax_scaled, ax_raw = axes[row_idx]
 
-        # ── Panel 1: ASE atoms at smallest and largest offset, equilibrium distance ──
-        if show_atoms and cfg is not None:
-            # show the on-axis geometry at ~5 Å
-            snap_dist = 5.0
-            try:
-                atoms_on = _atoms_snapshot(label_a, label_b, snap_dist, 0.0)
-                atoms_off = _atoms_snapshot(label_a, label_b, snap_dist, offsets[-1])
-                if atoms_on is not None:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore")
-                        plot_atoms(atoms_on, ax_atoms, rotation="0x,0y,0z", radii=0.4)
-                if atoms_off is not None:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore")
-                        plot_atoms(atoms_off, ax_atoms, rotation="0x,0y,0z",
-                                   radii=0.25, colors=["#ff000033"] * len(atoms_off))
-            except Exception:
-                pass
+        # ── Panel 1: filmstrip of ASE atoms along the reaction coordinate (offset=0) ──
         ax_atoms.set_axis_off()
-        ax_atoms.set_title(f"{backend}\n(offset 0 & max, d=5 Å)", fontsize=8)
+        if show_atoms and cfg is not None:
+            dist_vals_row = sorted(df_be["distance_angstrom"].unique())
+            n_snap = min(4, len(dist_vals_row)) or 1
+            snap_idx = np.linspace(0, len(dist_vals_row) - 1, n_snap).round().astype(int)
+            snap_distances = [dist_vals_row[i] for i in sorted(set(snap_idx))]
+            n_snap = len(snap_distances)
+            for j, snap_dist in enumerate(snap_distances):
+                inset = ax_atoms.inset_axes([j / n_snap, 0.15, 1 / n_snap, 0.7])
+                inset.set_axis_off()
+                try:
+                    atoms_snap = _atoms_snapshot(label_a, label_b, snap_dist, 0.0)
+                    if atoms_snap is not None:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            plot_atoms(atoms_snap, inset, rotation="0x,0y,0z", radii=0.4)
+                except Exception:
+                    pass
+                inset.set_title(f"{snap_dist:.1f} Å", fontsize=6, pad=1)
+        ax_atoms.set_title(f"{backend}\nreaction coordinate (offset=0)", fontsize=8)
 
         # ── Panels 2 & 3: scaled and raw energy curves ──
         ax_scaled.axhline(0, color="gray", lw=0.6, ls=":")
