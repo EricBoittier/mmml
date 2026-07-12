@@ -105,7 +105,8 @@ cmake -S "$PACKMOL_SRC" -B "$BUILD_DIR" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$BUILD_DIR/install" \
   -DCMAKE_Fortran_COMPILER="$FC" \
-  -DCMAKE_Fortran_FLAGS_RELEASE:STRING="-O2 -DNDEBUG"
+  -DCMAKE_Fortran_FLAGS_RELEASE:STRING="-O2 -DNDEBUG" \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
 echo "Building packmol ..."
 cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
