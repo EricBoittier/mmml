@@ -23,9 +23,20 @@ from mmml.analysis.dimer_scans import (
     molecule_pair_labels,
     normalized_vector,
 )
+from mmml.analysis.dimer_molecules import (
+    MOLECULES,
+    ORIENTED_MONOMERS,
+    PAIR_SCAN_CONFIG,
+    make_oriented_scan_geometries,
+    orient_molecule,
+    rotation_matrix_align_to_z,
+)
 
 __all__ = [
     "DimerGeometry",
+    "MOLECULES",
+    "ORIENTED_MONOMERS",
+    "PAIR_SCAN_CONFIG",
     "align_npz_arrays",
     "assign_mol_id",
     "build_rigid_dimer",
@@ -40,8 +51,11 @@ __all__ = [
     "evaluate_scan",
     "fragment_index_arrays",
     "geometric_centroid",
+    "make_oriented_scan_geometries",
     "make_xtb_calculator",
     "molecule_pair_labels",
     "normalized_vector",
+    "orient_molecule",
+    "rotation_matrix_align_to_z",
     "write_comparison_report",
 ]
