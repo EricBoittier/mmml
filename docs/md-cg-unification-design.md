@@ -863,7 +863,27 @@ system with a real ML checkpoint.
 **Validation depth**
 - [x] 10000-step NVE energy trace (100 recorded samples via `JaxmdDriver`'s
       default `record_every=100`) per setting — enough to see real
-      conservation behavior, not just a 2-3 point endpoint delta.
+      conservation behavior, not just a 2-3 point endpoint delta. **Fully
+      achieved for all 6 `water_box` settings** on the real cluster
+      (pc-studix, 2026-07-12); **not yet achieved for the mixed
+      `peptide_water` settings** — see below.
+- [~] Mixed-system (`peptide_water`) settings ran clean for ~3 real hours on
+      the cluster with no crash (confirmed via `ps` on each compute node:
+      steady CPU usage, stable memory) but were intentionally cancelled
+      before their 10000 steps completed, rather than waiting an estimated
+      15-20+ hours. Root cause of the slowdown: most mixed settings don't set
+      `ml_pep_water`'s `interaction_cutoff_A`, so it scores every core-water
+      pair densely each step (no neighbor-list capacity limit, unlike
+      `mm_nonbonded`'s padded pair list) — ~30-40x slower per step than the
+      water-box case. This validates the mixed-system code path
+      end-to-end (builder, term composition, calculator variants all ran
+      without error) but does **not** yet produce a complete mixed-system
+      energy trace. See `workflows/mixed_calculator_sweep/README.md`
+      "Real-run status" for the full incident log (packmol binary
+      clobbered with a macOS build, AVX2-vs-non-AVX2 node split, OOM at the
+      original memory budget, Snakemake driver dying on SSH disconnect —
+      all fixed). Follow-up: set `interaction_cutoff_A` on every mixed
+      setting (not just `mixed_core_vdw`) and/or budget more walltime.
 - [ ] NVT/NPT for mixed systems — `mixed_calculator_sweep` only runs NVE;
       `jaxmd_npt`'s deterministic cluster-specific failure (documented in
       `workflows/unified_backend_sweep/README.md`) would need root-causing

@@ -72,3 +72,41 @@ so Snakemake doesn't delete the report on a per-setting failure (see
 - `ml_pep_water`'s core↔water assignment is fixed at build time — there is no
   dynamic re-assignment of a water from ML-scored to MM-scored as it moves
   across the interaction cutoff during dynamics.
+
+## Real-run status (2026-07-12, pc-studix)
+
+All 12 settings were submitted to the real cluster and hit (and had fixed,
+in order): a packmol binary clobbered with a macOS build (rebuilt as Linux
+ELF via `scripts/rebuild_packmol.sh`), `short`-partition nodes silently
+mixing Ivy Bridge (no AVX2, crashes `polars` with no traceback) and Broadwell
+(AVX2) hardware (constrained to the latter via Snakemake's `constraint`
+resource), `peptide_water` settings OOM-ing at the original
+`mem_mb_per_cpu=2000` (bumped to 6000), and the driving Snakemake process
+itself dying twice when its SSH session dropped (now run inside `tmux` on
+the cluster to survive disconnects).
+
+With all of that fixed:
+- **All 6 `water_box` settings completed for real** (10000 steps, 101
+  recorded frames each) — see `results/summary.md` on the cluster for the
+  actual energy traces. `water_baseline/seed_1` took ~324 s.
+- **The 6 `peptide_water` (mixed ML-core + MM/ML-water) settings ran clean
+  for ~3 hours with no crash** — CPU/memory usage confirmed healthy and
+  steadily active (not hung) via `ps` on each compute node — but were
+  intentionally cancelled before completing all 10000 steps rather than
+  waiting out the full run. Extrapolating from a local 20-step smoke test,
+  a full 10000-step mixed run is on the order of **15-20+ hours** on this
+  hardware, ~30-40x slower per step than the plain water box. The likely
+  driver: `mixed_baseline`/`mixed_older_epoch`/`mixed_damping_sigma` don't
+  set `peptide_water_ml_cutoff_A`, so `ml_pep_water` scores *every*
+  core-water pair densely each step rather than through a neighbor list —
+  `mm_nonbonded`'s padded pair list has no equivalent capacity limit here.
+  **Action for a real production mixed-system run:** always set
+  `peptide_water_ml_cutoff_A` (as `mixed_core_vdw` does) to bound the dimer
+  pair count, and/or reduce `n_waters` or `n_steps` to a budget that matches
+  available walltime.
+- This validates the mixed-system code path itself (builder, term
+  composition, calculator variants) end-to-end on the real cluster; it does
+  not yet produce a complete 10000-step mixed-system energy trace. A
+  follow-up run with `peptide_water_ml_cutoff_A` set on every mixed setting
+  (not just `mixed_core_vdw`) and/or a longer walltime budget is needed for
+  that.
