@@ -2,7 +2,12 @@
 """Plot 2D potential energy surfaces as heatmaps/contour plots.
 
 For each (pair, backend) combination, interpolates the discrete (distance, offset)
-grid onto a smooth surface and renders contour + scatter plots.
+grid onto a smooth surface and renders contour + scatter plots. Each figure
+combines three linked views of the same pair: a reaction-coordinate filmstrip
+of ball-and-stick geometries (bonds + depth transparency), the 2D interaction-
+energy heatmap per backend (with dashed guide lines tying it back to the
+filmstrip distances), and a highlighted render of the located minimum per
+backend. Optionally overlays a force-arrow field on the geometries.
 
 Input CSV must have columns:
     molecule_a, molecule_b, distance_angstrom, offset_angstrom,
@@ -12,6 +17,9 @@ Usage
 -----
     python scripts/plot_2d_pes.py --csv results/dimer_scan_campaign/scan_results_new.csv
     python scripts/plot_2d_pes.py --csv foo.csv --backends xtb_gfn2 charmm
+    python scripts/plot_2d_pes.py --csv foo.csv --forces-backend xtb
+    python scripts/plot_2d_pes.py --csv foo.csv --forces-backend spookynet \\
+        --forces-checkpoint examples/sppoky-epoch-0010_params.json
 """
 
 from __future__ import annotations
@@ -25,8 +33,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from ase.visualize.plot import plot_atoms
-from matplotlib import cm
 from matplotlib.colors import TwoSlopeNorm
 from scipy.interpolate import RectBivariateSpline
 
@@ -42,6 +48,7 @@ from plot_utils import (
     flag_clashing_geometries,
     load_and_enrich,
     ordered_backends,
+    render_dimer_atoms,
 )
 
 mpl.rcParams.update(
@@ -56,16 +63,18 @@ mpl.rcParams.update(
 )
 
 
-def _atoms_snapshot(label_a: str, label_b: str, distance: float, offset: float) -> object:
-    """Build an ASE Atoms object for a given geometry."""
+def _atoms_snapshot(
+    label_a: str, label_b: str, distance: float, offset: float
+) -> tuple[object, tuple[np.ndarray, np.ndarray]] | tuple[None, None]:
+    """Build an ASE Atoms object (+ fragment index arrays) for a given geometry."""
     pair = (label_a, label_b)
     if pair not in ORIENTED_MONOMERS:
         pair = (label_b, label_a)
         if pair not in ORIENTED_MONOMERS:
-            return None
+            return None, None
     monomers = ORIENTED_MONOMERS[pair]
     cfg = PAIR_SCAN_CONFIG[pair]
-    atoms, _ = build_rigid_dimer_2d(
+    atoms, fragments = build_rigid_dimer_2d(
         monomers["a"],
         monomers["b"],
         distance_angstrom=distance,
@@ -74,33 +83,55 @@ def _atoms_snapshot(label_a: str, label_b: str, distance: float, offset: float) 
         transverse_axis=cfg["transverse_axis"],
         center="none",
     )
-    return atoms
+    return atoms, fragments
+
+
+def _forces_for(atoms, calc) -> np.ndarray | None:
+    """Compute forces for *atoms* with *calc*, returning None on failure."""
+    if atoms is None or calc is None:
+        return None
+    try:
+        probe = atoms.copy()
+        probe.calc = calc
+        return np.asarray(probe.get_forces())
+    except Exception as e:
+        print(f"    Warning: force evaluation failed: {e}")
+        return None
 
 
 def _plot_atoms_filmstrip(
-    ax, label_a: str, label_b: str, distances: np.ndarray, n_snap: int = 5
-) -> None:
-    """Render a row of ASE atoms snapshots spanning the scanned distance range."""
+    ax, label_a: str, label_b: str, distances: np.ndarray, n_snap: int = 5,
+    forces_calc=None, forces_label: str | None = None,
+) -> list[float]:
+    """Render a row of ball-and-stick snapshots spanning the scanned distances.
+
+    Returns the list of distances actually rendered, so callers can draw
+    matching guide lines on the heatmap panels below.
+    """
     ax.set_axis_off()
     dist_sorted = np.sort(np.unique(distances))
     if len(dist_sorted) == 0:
-        return
+        return []
     n_snap = min(n_snap, len(dist_sorted))
     idx = np.linspace(0, len(dist_sorted) - 1, n_snap).round().astype(int)
     snap_distances = [dist_sorted[i] for i in sorted(set(idx))]
     n_snap = len(snap_distances)
     for j, d in enumerate(snap_distances):
         inset = ax.inset_axes([j / n_snap, 0.0, 1 / n_snap, 1.0])
-        inset.set_axis_off()
-        try:
-            atoms_snap = _atoms_snapshot(label_a, label_b, d, 0.0)
-            if atoms_snap is not None:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    plot_atoms(atoms_snap, inset, rotation="0x,0y,0z", radii=0.4)
-        except Exception:
-            pass
-        inset.set_title(f"{d:.2f} Å", fontsize=7, pad=1)
+        atoms_snap, fragments = _atoms_snapshot(label_a, label_b, d, 0.0)
+        forces = _forces_for(atoms_snap, forces_calc)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            render_dimer_atoms(
+                inset, atoms_snap, fragments,
+                forces=forces, title=f"{d:.2f} Å",
+            )
+    if forces_calc is not None and forces_label:
+        ax.text(
+            0.5, -0.05, f"Force field: {forces_label}",
+            transform=ax.transAxes, ha="center", va="top", fontsize=6.5, color="crimson",
+        )
+    return snap_distances
 
 
 def _reference_energy(series: pd.Series, ref_dist: float | None = None) -> pd.Series:
@@ -123,21 +154,27 @@ def plot_2d_pes_for_pair(
     energy_clip_kcal: float = 5.0,
     min_contact: float = MIN_SAFE_CONTACT_ANGSTROM,
     show_atoms: bool = True,
+    forces_calc=None,
+    forces_label: str | None = None,
 ) -> None:
     """Render a 2D PES heatmap for one (pair, backend) set."""
     n_be = len(backends)
     if n_be == 0:
         return
 
-    fig = plt.figure(figsize=(5.5 * n_be, 6.4 if show_atoms else 5.5), constrained_layout=True)
+    n_rows = 3 if show_atoms else 1
+    height = (1.1 + 4.5 + 1.7) if show_atoms else 5.5
+    fig = plt.figure(figsize=(5.5 * n_be, height), constrained_layout=True)
     if show_atoms:
-        gs = fig.add_gridspec(2, n_be, height_ratios=[1, 4.5])
+        gs = fig.add_gridspec(n_rows, n_be, height_ratios=[1.1, 4.5, 1.7])
         ax_film = fig.add_subplot(gs[0, :])
         axes = [fig.add_subplot(gs[1, i]) for i in range(n_be)]
+        axes_min = [fig.add_subplot(gs[2, i]) for i in range(n_be)]
     else:
         gs = fig.add_gridspec(1, n_be)
         ax_film = None
         axes = [fig.add_subplot(gs[0, i]) for i in range(n_be)]
+        axes_min = [None] * n_be
 
     pair_tag = f"{label_a}_{label_b}"
     fig.suptitle(
@@ -146,15 +183,22 @@ def plot_2d_pes_for_pair(
         fontweight="bold",
     )
 
+    snap_distances: list[float] = []
     if ax_film is not None:
         all_distances = df_pair["distance_angstrom"].to_numpy()
-        _plot_atoms_filmstrip(ax_film, label_a, label_b, all_distances)
+        snap_distances = _plot_atoms_filmstrip(
+            ax_film, label_a, label_b, all_distances,
+            forces_calc=forces_calc, forces_label=forces_label,
+        )
         ax_film.set_title("Reaction coordinate (offset=0)", fontsize=9)
 
-    for ax, backend in zip(axes, backends):
+    for col, (ax, backend) in enumerate(zip(axes, backends)):
+        ax_min = axes_min[col]
         df_be = df_pair[df_pair["backend"] == backend].copy()
         if df_be.empty:
             ax.set_visible(False)
+            if ax_min is not None:
+                ax_min.set_visible(False)
             continue
 
         df_be = flag_clashing_geometries(df_be, min_contact=min_contact)
@@ -163,6 +207,8 @@ def plot_2d_pes_for_pair(
         df_be = df_be[~df_be["is_clash"]]
         if df_be.empty:
             ax.set_visible(False)
+            if ax_min is not None:
+                ax_min.set_visible(False)
             continue
 
         # Reference energy at largest distance, offset=0 (on-axis)
@@ -177,6 +223,8 @@ def plot_2d_pes_for_pair(
         dist_vals = np.sort(df_be["distance_angstrom"].unique())
         off_vals  = np.sort(df_be["offset_angstrom"].unique())
 
+        min_d = min_o = min_e = None
+
         if len(dist_vals) < 2 or len(off_vals) < 2:
             # Fall back to scatter only
             sc = ax.scatter(
@@ -189,6 +237,9 @@ def plot_2d_pes_for_pair(
                 linewidths=0.4,
             )
             plt.colorbar(sc, ax=ax, label="$E_{int}$ / kcal mol$^{-1}$")
+            if not df_be.empty:
+                best = df_be.loc[df_be["E_int"].idxmin()]
+                min_d, min_o, min_e = best["distance_angstrom"], best["offset_angstrom"], best["E_int"]
         else:
             # Pivot to grid and interpolate
             pivot = df_be.pivot_table(
@@ -237,10 +288,11 @@ def plot_2d_pes_for_pair(
 
             # Mark minimum
             min_idx = np.unravel_index(np.argmin(Z_fine), Z_fine.shape)
+            min_d, min_o, min_e = D_fine[min_idx[1]], O_fine[min_idx[0]], Z_fine[min_idx]
             ax.plot(
-                D_fine[min_idx[1]], O_fine[min_idx[0]],
+                min_d, min_o,
                 "*", color="gold", markersize=14, markeredgecolor="k", markeredgewidth=0.5,
-                label=f"min {Z_fine[min_idx]:.2f} kcal/mol",
+                label=f"min {min_e:.2f} kcal/mol",
                 zorder=5,
             )
             ax.legend(fontsize=7, loc="upper right", framealpha=0.7)
@@ -251,6 +303,10 @@ def plot_2d_pes_for_pair(
                 df_be["offset_angstrom"],
                 c="w", s=15, edgecolors="k", linewidths=0.3, zorder=4,
             )
+
+        # Guide lines linking this heatmap back to the filmstrip snapshots above
+        for d in snap_distances:
+            ax.axvline(d, color="k", lw=0.5, ls=":", alpha=0.35, zorder=0)
 
         if n_clash:
             # Show excluded (unphysically close-contact) geometries as red X's,
@@ -267,10 +323,39 @@ def plot_2d_pes_for_pair(
         ax.set_ylabel("Lateral offset / Å")
         ax.set_title(BACKEND_LABELS.get(backend, backend))
 
+        # Highlighted render of the located minimum
+        if ax_min is not None:
+            if min_d is not None:
+                atoms_min, fragments_min = _atoms_snapshot(label_a, label_b, float(min_d), float(min_o))
+                forces_min = _forces_for(atoms_min, forces_calc)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    render_dimer_atoms(
+                        ax_min, atoms_min, fragments_min, forces=forces_min,
+                        title=f"minimum: d={min_d:.2f} Å, off={min_o:.2f} Å\nE={min_e:.2f} kcal/mol",
+                        title_fontsize=7.5,
+                    )
+            else:
+                ax_min.set_axis_off()
+
     out_path = out_dir / f"{pair_tag}_2d_pes.png"
     fig.savefig(out_path, bbox_inches="tight")
     plt.close(fig)
     print(f"  Saved: {out_path.name}")
+
+
+def _build_forces_calc(backend: str | None, checkpoint: Path | None):
+    if backend is None or backend == "none":
+        return None, None
+    if backend == "xtb":
+        from mmml.analysis.dimer_scans import make_xtb_calculator
+        return make_xtb_calculator(method="GFN2-xTB"), "GFN2-xTB"
+    if backend == "spookynet":
+        if checkpoint is None:
+            raise ValueError("--forces-checkpoint is required for --forces-backend spookynet")
+        from mmml.models.spookynet_calc import SpookyNetCalculator
+        return SpookyNetCalculator(checkpoint=checkpoint), "SpookyNet"
+    raise ValueError(f"Unknown forces backend: {backend}")
 
 
 def main() -> None:
@@ -307,7 +392,19 @@ def main() -> None:
     parser.add_argument(
         "--no-atoms",
         action="store_true",
-        help="Skip the ASE atoms reaction-coordinate filmstrip panel",
+        help="Skip the ASE atoms reaction-coordinate filmstrip + minimum-geometry panels",
+    )
+    parser.add_argument(
+        "--forces-backend",
+        choices=["none", "xtb", "spookynet"],
+        default="none",
+        help="Overlay a force-arrow field on the rendered geometries using this calculator",
+    )
+    parser.add_argument(
+        "--forces-checkpoint",
+        type=Path,
+        default=None,
+        help="Checkpoint path for --forces-backend spookynet",
     )
     args = parser.parse_args()
 
@@ -316,6 +413,8 @@ def main() -> None:
 
     all_backends = ordered_backends(df, args.backends)
     backends = all_backends
+
+    forces_calc, forces_label = _build_forces_calc(args.forces_backend, args.forces_checkpoint)
 
     pairs = df[["molecule_a", "molecule_b"]].drop_duplicates().values
     print(f"Plotting 2D PES for {len(pairs)} pairs × {len(backends)} backends...")
@@ -326,6 +425,7 @@ def main() -> None:
             df_pair, label_a, label_b, backends, args.output_dir,
             n_grid=args.n_grid, energy_clip_kcal=args.energy_clip,
             min_contact=args.min_contact, show_atoms=not args.no_atoms,
+            forces_calc=forces_calc, forces_label=forces_label,
         )
 
     print(f"\nAll 2D PES plots saved to {args.output_dir}")

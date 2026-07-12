@@ -8,8 +8,12 @@ individual components.
 
 from __future__ import annotations
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from ase.data import covalent_radii
+from ase.data.colors import jmol_colors
+from ase.io.utils import rotate as _ase_rotate
+from matplotlib.patches import Circle
 
 # ── Backend metadata ─────────────────────────────────────────────────────────
 
@@ -149,6 +153,99 @@ def flag_clashing_geometries(
     else:
         df["is_clash"] = False
     return df
+
+
+# ── Molecule rendering (bonds, depth transparency, optional force field) ────
+
+def render_dimer_atoms(
+    ax,
+    atoms,
+    fragments: tuple[np.ndarray, np.ndarray] | None = None,
+    *,
+    rotation: str = "15x,-20y,0z",
+    radii_scale: float = 0.42,
+    bond_cutoff_scale: float = 1.15,
+    depth_alpha_range: tuple[float, float] = (0.4, 1.0),
+    forces=None,
+    force_scale: float = 1.5,
+    force_color: str = "crimson",
+    title: str | None = None,
+    title_fontsize: float = 7,
+) -> None:
+    """Ball-and-stick render of an ASE ``Atoms`` object onto *ax*.
+
+    Draws covalent bonds (restricted to within-fragment pairs when
+    *fragments* is given, so close intermolecular contacts don't render as
+    spurious bonds) and depth-cues atoms with per-atom alpha so overlapping
+    monomers in a dimer stay legible. If *forces* (N, 3) is given, overlays a
+    2D-projected force-arrow field using the same camera rotation.
+    """
+    ax.set_axis_off()
+    ax.set_aspect("equal")
+    if title:
+        ax.set_title(title, fontsize=title_fontsize, pad=1)
+    if atoms is None or len(atoms) == 0:
+        return
+
+    pos = atoms.get_positions()
+    Z = atoms.get_atomic_numbers()
+    n = len(atoms)
+
+    R = _ase_rotate(rotation)
+    proj = pos @ R
+    x, y, z = proj[:, 0], proj[:, 1], proj[:, 2]
+
+    zmin, zmax = z.min(), z.max()
+    depth_t = np.zeros(n) if zmax - zmin < 1e-9 else (z - zmin) / (zmax - zmin)
+    alphas = depth_alpha_range[0] + depth_t * (depth_alpha_range[1] - depth_alpha_range[0])
+
+    radii = covalent_radii[Z] * radii_scale
+    colors = jmol_colors[Z]
+
+    frag_id = np.zeros(n, dtype=int)
+    if fragments is not None:
+        for fi, idx in enumerate(fragments):
+            frag_id[np.asarray(idx)] = fi
+
+    # Bonds (behind atoms): within-fragment atom pairs closer than the
+    # covalent-radius-sum cutoff. Restricting to same-fragment pairs avoids
+    # drawing a "bond" for two monomers simply pushed close together.
+    dmat = np.linalg.norm(pos[:, None, :] - pos[None, :, :], axis=-1)
+    cutoff = bond_cutoff_scale * (covalent_radii[Z][:, None] + covalent_radii[Z][None, :])
+    bonded = (dmat > 1e-6) & (dmat <= cutoff)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if not bonded[i, j]:
+                continue
+            if fragments is not None and frag_id[i] != frag_id[j]:
+                continue
+            ax.plot(
+                [x[i], x[j]], [y[i], y[j]],
+                color="#3a3a3a", lw=1.6, alpha=float(min(alphas[i], alphas[j])),
+                zorder=1, solid_capstyle="round",
+            )
+
+    # Atoms, back-to-front so nearer atoms occlude farther ones correctly.
+    for rank, i in enumerate(np.argsort(z)):
+        ax.add_patch(
+            Circle(
+                (x[i], y[i]), radii[i],
+                facecolor=colors[i], edgecolor="k", linewidth=0.4,
+                alpha=float(alphas[i]), zorder=2 + rank * 0.001,
+            )
+        )
+
+    if forces is not None:
+        f_proj = np.asarray(forces) @ R
+        ax.quiver(
+            x, y, f_proj[:, 0], f_proj[:, 1],
+            color=force_color, scale_units="xy", angles="xy",
+            scale=1.0 / force_scale, width=0.01, zorder=10, alpha=0.9,
+        )
+
+    pad = (radii.max() if len(radii) else 1.0) * 2.2
+    ax.set_xlim(x.min() - pad, x.max() + pad)
+    ax.set_ylim(y.min() - pad, y.max() + pad)
 
 
 def ordered_backends(df: pd.DataFrame, requested: list[str] | None = None) -> list[str]:

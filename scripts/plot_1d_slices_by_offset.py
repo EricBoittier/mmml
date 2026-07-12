@@ -24,7 +24,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from ase.visualize.plot import plot_atoms
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
@@ -38,6 +37,7 @@ from plot_utils import (
     BACKEND_LABELS,
     load_and_enrich,
     ordered_backends,
+    render_dimer_atoms,
 )
 
 mpl.rcParams.update(
@@ -69,16 +69,18 @@ def _scale_series(y: np.ndarray, x: np.ndarray, min_dist: float = 3.8) -> np.nda
     return (y - mu) / sigma
 
 
-def _atoms_snapshot(label_a: str, label_b: str, distance: float, offset: float) -> object:
-    """Build an ASE Atoms object for a given geometry."""
+def _atoms_snapshot(
+    label_a: str, label_b: str, distance: float, offset: float
+) -> tuple[object, tuple[np.ndarray, np.ndarray]] | tuple[None, None]:
+    """Build an ASE Atoms object (+ fragment index arrays) for a given geometry."""
     pair = (label_a, label_b)
     if pair not in ORIENTED_MONOMERS:
         pair = (label_b, label_a)
         if pair not in ORIENTED_MONOMERS:
-            return None
+            return None, None
     monomers = ORIENTED_MONOMERS[pair]
     cfg = PAIR_SCAN_CONFIG[pair]
-    atoms, _ = build_rigid_dimer_2d(
+    atoms, fragments = build_rigid_dimer_2d(
         monomers["a"],
         monomers["b"],
         distance_angstrom=distance,
@@ -87,7 +89,7 @@ def _atoms_snapshot(label_a: str, label_b: str, distance: float, offset: float) 
         transverse_axis=cfg["transverse_axis"],
         center="none",
     )
-    return atoms
+    return atoms, fragments
 
 
 def plot_slices_for_pair(
@@ -149,16 +151,13 @@ def plot_slices_for_pair(
             n_snap = len(snap_distances)
             for j, snap_dist in enumerate(snap_distances):
                 inset = ax_atoms.inset_axes([j / n_snap, 0.15, 1 / n_snap, 0.7])
-                inset.set_axis_off()
-                try:
-                    atoms_snap = _atoms_snapshot(label_a, label_b, snap_dist, 0.0)
-                    if atoms_snap is not None:
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore")
-                            plot_atoms(atoms_snap, inset, rotation="0x,0y,0z", radii=0.4)
-                except Exception:
-                    pass
-                inset.set_title(f"{snap_dist:.1f} Å", fontsize=6, pad=1)
+                atoms_snap, fragments = _atoms_snapshot(label_a, label_b, snap_dist, 0.0)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    render_dimer_atoms(
+                        inset, atoms_snap, fragments, title=f"{snap_dist:.1f} Å",
+                        title_fontsize=6,
+                    )
         ax_atoms.set_title(f"{backend}\nreaction coordinate (offset=0)", fontsize=8)
 
         # ── Panels 2 & 3: scaled and raw energy curves ──
