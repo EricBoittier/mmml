@@ -221,15 +221,22 @@ def matshow_heatmap(out: Path) -> None:
 
     Tufte principle: color encodes magnitude directly on the natural (i, j)
     grid the data already has -- no need to invent x/y positions the way a
-    scatter would.
+    scatter would. Distance is strictly positive (no natural zero to
+    diverge around), so this uses the house **sequential** default
+    (`crameri:lipari`), not a diverging map -- see
+    docs/plotting-style-guide.md "Colormaps" for why the earlier version of
+    this exact panel (diverging `RdBu_r` on positive-only distances) was a
+    real mismatch, not just a style choice.
     """
+    from mmml.utils.plotting.styles import default_cmap
+
     n = 24
     rng_positions = RNG.uniform(0, 10, size=(n, 3))
     diff = rng_positions[:, None, :] - rng_positions[None, :, :]
     dist = np.linalg.norm(diff, axis=-1)
 
     fig, ax = plt.subplots(figsize=(6.5, 5.5))
-    im = ax.matshow(dist, cmap="RdBu_r", vmin=0, vmax=dist.max())
+    im = ax.matshow(dist, cmap=default_cmap("sequential"), vmin=0, vmax=dist.max())
     ax.xaxis.set_ticks_position("bottom")
     ax.set_xlabel("atom index")
     ax.set_ylabel("atom index")

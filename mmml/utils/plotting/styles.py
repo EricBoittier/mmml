@@ -19,6 +19,10 @@ __all__ = [
     "legend_outside",
     "seed_symbol",
     "SEED_DICE",
+    "default_cmap",
+    "DEFAULT_SEQUENTIAL_CMAP",
+    "DEFAULT_DIVERGING_CMAP",
+    "DEFAULT_CYCLIC_CMAP",
 ]
 
 
@@ -562,6 +566,41 @@ PLOT_STYLES: dict[str, PlotStyle] = {
 }
 
 DEFAULT_PLOT_STYLE = "google"
+
+# House colormap defaults -- chosen from a rendered shortlist, see
+# docs/plot-style-gallery.md "Colormap picks: choosing defaults". Perceptually
+# uniform/colorblind-safe where possible; muted rather than high-saturation
+# per the "quiet" Tufte-aligned house look.
+DEFAULT_SEQUENTIAL_CMAP = "crameri:lipari"
+DEFAULT_DIVERGING_CMAP = "contrib:pampa"
+DEFAULT_CYCLIC_CMAP = "cmocean:phase"
+
+
+def default_cmap(kind: str):
+    """Resolve one of the house colormap defaults to a matplotlib Colormap.
+
+    ``kind`` is one of ``"sequential"``, ``"diverging"``, ``"cyclic"`` --
+    see docs/plotting-style-guide.md "Colormaps" for when to use which, and
+    never use a diverging map on strictly-positive data or vice versa.
+    Requires the optional ``cmap`` library (``pip install cmap`` / the
+    ``plotting`` extra); raises with an explicit message if missing rather
+    than silently falling back to an unrelated matplotlib colormap.
+    """
+    names = {
+        "sequential": DEFAULT_SEQUENTIAL_CMAP,
+        "diverging": DEFAULT_DIVERGING_CMAP,
+        "cyclic": DEFAULT_CYCLIC_CMAP,
+    }
+    if kind not in names:
+        raise ValueError(f"kind must be one of {sorted(names)}; got {kind!r}")
+    try:
+        import cmap as cmap_lib
+    except ImportError as exc:
+        raise ImportError(
+            "default_cmap() requires the 'cmap' library -- install the "
+            "'plotting' extra (uv sync --extra plotting) or `pip install cmap`."
+        ) from exc
+    return cmap_lib.Colormap(names[kind]).to_mpl()
 
 _STYLE_ALIASES = {
     "default": DEFAULT_PLOT_STYLE,

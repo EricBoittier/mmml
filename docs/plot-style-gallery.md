@@ -259,12 +259,22 @@ dihedral-angle radial histogram earlier in this gallery.
 | `yorick:stern` | misc (HDR) | Only for genuinely high-dynamic-range data (one sharp feature over a broad faint background) — not a general sequential substitute |
 | `cmocean:phase` | cyclic | The house default for any periodic quantity (angles, phases) |
 
-My recommendation, if a single default per category is needed: **`crameri:lipari`**
-(sequential) and **`cmocean:diff`** (diverging) for the most Tufte-aligned
-"quiet," perceptually-uniform defaults; **`cmocean:phase`** for cyclic (no
-real competing candidate in the shortlist). `contrib:pampa` and
-`cmocean:delta` are the strongest alternates if a bit more visual punch is
-wanted over `diff`'s muted look.
+**Decided.** House defaults, wired into
+[`mmml.utils.plotting.styles.default_cmap(kind)`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py):
+
+- **Sequential**: `crameri:lipari`
+- **Diverging**: `contrib:pampa`
+- **Cyclic**: `cmocean:phase`
+
+```python
+from mmml.utils.plotting.styles import default_cmap
+
+ax.pcolormesh(xx, yy, zz, cmap=default_cmap("sequential"))
+```
+
+`default_cmap` raises a clear `ImportError` (not a silent fallback to an
+unrelated matplotlib colormap) if the optional `cmap` library isn't
+installed — `uv sync --extra plotting` or `pip install cmap`.
 
 ## How to pick
 

@@ -321,21 +321,43 @@ perceptually uniform and colorblind-safe, unlike matplotlib's legacy maps
 (`jet`, `rainbow` — never use these, they imply false discontinuities in
 continuous data).
 
+**House defaults** (chosen from a rendered shortlist — see
+[`docs/plot-style-gallery.md`](plot-style-gallery.md) "Colormap picks"),
+wired into `mmml.utils.plotting.styles.default_cmap(kind)`:
+
 ```python
-import cmap
-mpl_cmap = cmap.Colormap("crameri:batlow").to_mpl()  # feed straight to plt/ax
+from mmml.utils.plotting.styles import default_cmap
+
+ax.pcolormesh(xx, yy, zz, cmap=default_cmap("sequential"))  # -> crameri:lipari
+ax.pcolormesh(xx, yy, zz, cmap=default_cmap("diverging"))   # -> contrib:pampa
+ax.pcolormesh(xx, yy, zz, cmap=default_cmap("cyclic"))      # -> cmocean:phase
 ```
 
-- **Sequential** data (magnitude only, e.g. a distance or density): a single
-  perceptually-uniform ramp — `viridis`, `cmocean:haline`, `crameri:batlow`.
-- **Diverging** data (a meaningful zero/center, e.g. energy relative to a
-  reference): a two-hue ramp through a neutral midpoint —
-  `cmocean:balance`, `crameri:vik`. Never a diverging map for
-  strictly-positive data (it implies a sign change that isn't there).
+Use `default_cmap(kind)` rather than hand-picking a name, so a future change
+to the house default only needs updating in one place:
+
+- **Sequential** (magnitude only, e.g. a distance or density — strictly
+  positive, no natural zero): `default_cmap("sequential")` →
+  `crameri:lipari`, perceptually-uniform and colorblind-safe.
+- **Diverging** (a meaningful zero/center, e.g. energy relative to a
+  reference): `default_cmap("diverging")` → `contrib:pampa`, muted rather
+  than high-saturation, so it doesn't compete with the data. Never use a
+  diverging map on strictly-positive data (it implies a sign change that
+  isn't there) — a real bug fixed in
+  `scripts/render_chart_type_gallery.py::matshow_heatmap`, which originally
+  used a diverging map on a positive-only distance matrix.
+- **Cyclic** (a periodic quantity, e.g. a dihedral angle or phase):
+  `default_cmap("cyclic")` → `cmocean:phase` — the value at 0° and 360°
+  must render as the *same* color, which only a cyclic map guarantees.
 - **Discrete/categorical** bins: ColorBrewer's `colorbrewer:*` maps render as
   visibly stepped bands rather than a smooth ramp — that's correct for truly
   binned data, not a bug; don't reach for one when the underlying quantity
   is actually continuous.
 
-See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Colormaps (via the
-`cmap` library)" for a rendered side-by-side comparison.
+`default_cmap` requires the optional `cmap` library (`uv sync --extra
+plotting` / `pip install cmap`) and raises a clear `ImportError` if it's
+missing, rather than silently substituting an unrelated matplotlib colormap.
+
+See [`docs/plot-style-gallery.md`](plot-style-gallery.md) "Colormap picks:
+choosing defaults" for the rendered comparison these defaults were chosen
+from.
