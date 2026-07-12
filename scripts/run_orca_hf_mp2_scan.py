@@ -183,10 +183,13 @@ def evaluate_orca_scan(
 
         tag = f"{label_a}_{label_b}_{geom.distance_angstrom:.3f}_{geom.offset_angstrom:.3f}_"
         try:
+            common = dict(
+                method=method, basis=basis, pal=pal, maxcore=maxcore, orca_exe=orca_exe,
+                aux_basis=aux_basis, dispersion=dispersion, rijcosx=rijcosx,
+            )
             e_dimer = _energy_for(
                 symbols, positions, np.zeros(n, dtype=bool),
-                method=method, basis=basis, pal=pal, maxcore=maxcore,
-                orca_exe=orca_exe, tmp_prefix=f"orca_{tag}dimer_",
+                tmp_prefix=f"orca_{tag}dimer_", **common,
             )
 
             if counterpoise:
@@ -195,13 +198,11 @@ def evaluate_orca_scan(
                 # basis functions sit exactly where the real atoms are.
                 e_a = _energy_for(
                     symbols, positions, ~mask_a,
-                    method=method, basis=basis, pal=pal, maxcore=maxcore,
-                    orca_exe=orca_exe, tmp_prefix=f"orca_{tag}ghostB_",
+                    tmp_prefix=f"orca_{tag}ghostB_", **common,
                 )
                 e_b = _energy_for(
                     symbols, positions, mask_a,
-                    method=method, basis=basis, pal=pal, maxcore=maxcore,
-                    orca_exe=orca_exe, tmp_prefix=f"orca_{tag}ghostA_",
+                    tmp_prefix=f"orca_{tag}ghostA_", **common,
                 )
             else:
                 # Isolated monomer energies don't depend on separation/offset
@@ -210,15 +211,13 @@ def evaluate_orca_scan(
                     isolated_cache["A"] = _energy_for(
                         [symbols[i] for i in idx_a], positions[idx_a],
                         np.zeros(len(idx_a), dtype=bool),
-                        method=method, basis=basis, pal=pal, maxcore=maxcore,
-                        orca_exe=orca_exe, tmp_prefix=f"orca_{label_a}_{label_b}_isoA_",
+                        tmp_prefix=f"orca_{label_a}_{label_b}_isoA_", **common,
                     )
                 if "B" not in isolated_cache:
                     isolated_cache["B"] = _energy_for(
                         [symbols[i] for i in idx_b], positions[idx_b],
                         np.zeros(len(idx_b), dtype=bool),
-                        method=method, basis=basis, pal=pal, maxcore=maxcore,
-                        orca_exe=orca_exe, tmp_prefix=f"orca_{label_a}_{label_b}_isoB_",
+                        tmp_prefix=f"orca_{label_a}_{label_b}_isoB_", **common,
                     )
                 e_a = isolated_cache["A"]
                 e_b = isolated_cache["B"]
