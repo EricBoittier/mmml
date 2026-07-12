@@ -1,4 +1,4 @@
-.PHONY: help install install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
+.PHONY: help install install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks docs-build docs-strict docs-pdf docs-serve
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -13,6 +13,7 @@ help:
 	@echo "  make install-all      - Install all optional dependencies"
 	@echo "  make install-all-offline-cuda13 - Offline install, all extras, CUDA 13 (dedupes cuda12 plugin)"
 	@echo "  make install-all-offline-cuda12 - Offline install, all extras, CUDA 12 (dedupes cuda13 plugin)"
+	@echo "  make install-jupyter-kernel - Register this venv as a Jupyter kernel (name: mmml)"
 	@echo ""
 	@echo "Micromamba:"
 	@echo "  make micromamba-create     - Create micromamba environment (CPU)"
@@ -262,6 +263,13 @@ dev-setup: install-dev
 
 notebook:
 	uv run jupyter lab
+
+# Register this venv as a Jupyter kernel (e.g. for a cluster-wide JupyterHub)
+# so it shows up as "mmml" in the kernel picker without activating the venv.
+install-jupyter-kernel:
+	uv sync --extra notebooks
+	.venv/bin/python -m ipykernel install --user --name mmml --display-name "mmml (.venv)"
+	@echo "Registered kernel 'mmml (.venv)' — refresh Jupyter's kernel list to see it."
 
 # ==============================================================================
 # CHARMM setup
