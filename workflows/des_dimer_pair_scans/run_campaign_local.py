@@ -8,9 +8,15 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-# Add scripts directory to path
-_SCRIPTS = Path(__file__).resolve().parent / "scripts"
-sys.path.insert(0, str(_SCRIPTS))
+# Add repository root and scripts directory to path
+_WORKFLOW_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = _WORKFLOW_ROOT.parents[1]
+_SCRIPTS = _WORKFLOW_ROOT / "scripts"
+
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
 from scan_lib import load_config, iter_pairs, output_dir
 

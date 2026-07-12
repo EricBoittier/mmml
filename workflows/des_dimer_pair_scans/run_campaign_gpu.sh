@@ -28,6 +28,7 @@ fi
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-1}"
+export PYTHONPATH="${REPO_ROOT}:${PYTHONPATH:-}"
 
 # Default to running 4 parallel pairs
 JOBS="${1:-4}"
