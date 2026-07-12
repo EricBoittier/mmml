@@ -266,6 +266,8 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
 
 
 def restore_cached_data(cache_path: Path) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    print(f"Restoring Orbax data cache: {cache_path}", flush=True)
+    start = time.time()
     restored = ocp.PyTreeCheckpointer().restore(cache_path)
     data = {
         key: np.asarray(value)
@@ -277,7 +279,48 @@ def restore_cached_data(cache_path: Path) -> tuple[dict[str, np.ndarray], dict[s
         for key, value in restored.items()
         if key.startswith("metadata_")
     }
+    print(
+        "Restored cache in "
+        f"{time.time() - start:.1f} s: "
+        f"{int(np.asarray(metadata.get('metadata_n_structures', len(data['N'])))):,} structures, "
+        f"{int(np.asarray(metadata.get('metadata_n_atoms_total', len(data['R'])))):,} atoms",
+        flush=True,
+    )
     return data, metadata
+
+
+def limit_cached_data(
+    data: dict[str, np.ndarray],
+    metadata: dict[str, Any],
+    max_structures: int | None,
+) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
+    """Limit a restored flat cache to the first ``max_structures`` molecules."""
+    if max_structures is None:
+        return data, metadata
+    if max_structures <= 0:
+        raise ValueError("max_eval_structures must be positive")
+    current = int(np.asarray(data["N"]).reshape(-1).shape[0])
+    limit = min(max_structures, current)
+    offsets = np.asarray(data["mol_offsets"], dtype=np.int64)
+    atom_limit = int(offsets[limit])
+    limited = dict(data)
+    for key in ("R", "Z", "F"):
+        limited[key] = data[key][:atom_limit]
+    for key in ("E", "N", "Q", "S", "D"):
+        limited[key] = data[key][:limit]
+    limited["mol_offsets"] = offsets[: limit + 1]
+    updated_metadata = dict(metadata)
+    updated_metadata["metadata_n_structures"] = np.asarray(limit, dtype=np.int64)
+    updated_metadata["metadata_n_atoms_total"] = np.asarray(atom_limit, dtype=np.int64)
+    updated_metadata["metadata_max_atoms"] = np.asarray(
+        int(np.max(limited["N"])) if limit else 0,
+        dtype=np.int32,
+    )
+    print(
+        f"Limited evaluation cache to {limit:,} structures and {atom_limit:,} atoms",
+        flush=True,
+    )
+    return limited, updated_metadata
 
 
 
@@ -457,17 +500,33 @@ def evaluate_dataset(
         return step_functions[batch_size]
 
     replicated_params = jax_utils.replicate(params, devices=devices)
-    batches = iter_device_batches_eval(
+    batch_plan = list(iter_device_batches_eval(
         buckets,
         per_device_batch_size=args.batch_size_per_device,
         max_pairs_per_device=args.max_pairs_per_device,
         n_devices=args.num_devices,
+    ))
+    if args.max_eval_batches is not None:
+        batch_plan = batch_plan[: args.max_eval_batches]
+    planned_structures = int(sum(np.sum(is_real) for _, is_real in batch_plan))
+    print(
+        "Evaluation plan: "
+        f"{len(batch_plan):,} batches, {planned_structures:,} real structures, "
+        f"{len(step_functions)} compiled shapes initially",
+        flush=True,
     )
     
-    for device_indices, is_real in batches:
+    for batch_number, (device_indices, is_real) in enumerate(batch_plan, start=1):
         batch_size = int(device_indices.shape[1])
         bucket_atoms = int(n_atoms[device_indices[0, 0]])
         eval_step = eval_step_for_batch_size(batch_size)
+        if batch_number == 1 or batch_number % args.progress_every == 0:
+            print(
+                f"  eval batch {batch_number:,}/{len(batch_plan):,}: "
+                f"n_atoms={bucket_atoms}, per_device_batch={batch_size}, "
+                f"seen={total_structures:,}",
+                flush=True,
+            )
         
         batch = stack_device_batches(data, device_indices)
         predictions = eval_step(replicated_params, batch)
@@ -546,6 +605,16 @@ def main() -> None:
     parser.add_argument("--max-pairs-per-device", type=int, default=18000)
     parser.add_argument("--num-devices", type=int, default=1)
     parser.add_argument("--output", help="Optional path to write JSON evaluation summary")
+    parser.add_argument(
+        "--max-eval-structures",
+        type=int,
+        help=(
+            "Limit evaluation to the first N structures after restoring the cache. "
+            "For faster cache restore, prefer --max-structures, which creates a smaller cache."
+        ),
+    )
+    parser.add_argument("--max-eval-batches", type=int, help="Stop after this many evaluation batches")
+    parser.add_argument("--progress-every", type=int, default=100, help="Print progress every N eval batches")
     
     # Matching cache/parsing options
     parser.add_argument("--force-recache", action="store_true", help="Overwrite existing matching data cache")
@@ -599,6 +668,7 @@ def main() -> None:
         print(f"\n--- Processing dataset: {extxyz_file.name} ---")
         cache_path = cache_extxyz_to_orbax(args, extxyz_file)
         data, metadata = restore_cached_data(cache_path)
+        data, metadata = limit_cached_data(data, metadata, args.max_eval_structures)
         
         max_atoms = int(np.max(np.asarray(data["N"]).reshape(-1)))
         
