@@ -7,7 +7,7 @@ correction, so it doesn't happen again.
 
 ## The one module to import
 
-[`mmml/utils/plotting/styles.py`](../mmml/utils/plotting/styles.py) defines the
+[`mmml/utils/plotting/styles.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py) defines the
 house `PlotStyle` presets and is the single source of truth for fonts, colors,
 and line weights. Use it at the top of any new plotting script:
 
@@ -96,7 +96,7 @@ semantic. If the only answer is "it's next in the list," fix it.
 ## Legends live outside the plot
 
 **A legend never overlaps the data.** Use
-[`mmml.utils.plotting.styles.legend_outside(target, side="auto", **kwargs)`](../mmml/utils/plotting/styles.py)
+[`mmml.utils.plotting.styles.legend_outside(target, side="auto", **kwargs)`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py)
 instead of `axis.legend(loc="best", ...)`.
 
 **Which side depends on the figure's longest dimension, not a fixed default:**
@@ -144,7 +144,7 @@ if titles or labels are cramped, then re-render and look again.
 When a repeated label would otherwise shrink to fit (e.g. "(seed 3)" tacked
 onto a dozen x-tick labels), replace it with a symbol instead of making the
 text smaller. House convention:
-[`mmml.utils.plotting.styles.seed_symbol(seed)`](../mmml/utils/plotting/styles.py)
+[`mmml.utils.plotting.styles.seed_symbol(seed)`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/styles.py)
 returns a filled-dot count — `seed_symbol(1) == "●"`, `seed_symbol(3) ==
 "●●●"` — instead of the text `"(seed 3)"`. (Unicode die faces U+2680-2685
 were tried first and rejected: they render as generic missing-glyph boxes on
@@ -219,7 +219,7 @@ wall-clock seconds) that wouldn't overlay meaningfully.
 both sweep workflows) is misleading: it can be large purely from single-frame
 noise in an otherwise-flat trace, or small while the trace trends steadily in
 one direction between two coincidentally-close endpoints. Use
-[`mmml.md.results.energy_drift_metrics`](../mmml/md/results.py) instead, which
+[`mmml.md.results.energy_drift_metrics`](https://github.com/EricBoittier/mmml/blob/main/mmml/md/results.py) instead, which
 reports:
 
 - `energy_fluctuation_std_ev` — std over the *whole* trace (the noise floor).
@@ -238,7 +238,7 @@ endpoints.
 
 ## Structural analysis (bonds/angles/dihedrals/RDF)
 
-Don't re-derive these — [`mmml/utils/plotting/trajectory_structure.py`](../mmml/utils/plotting/trajectory_structure.py)
+Don't re-derive these — [`mmml/utils/plotting/trajectory_structure.py`](https://github.com/EricBoittier/mmml/blob/main/mmml/utils/plotting/trajectory_structure.py)
 already has them, operating on `Sequence[ase.Atoms]`:
 
 - `element_pair_rdfs(frames, r_max=8.0, bins=160)` — periodic RDF per element
@@ -275,7 +275,7 @@ different styling.
 
 For drawing actual molecular geometry (not a data curve) — e.g. a dimer
 snapshot alongside an energy-scan plot — reuse
-[`scripts/plot_utils.py::render_dimer_atoms`](../scripts/plot_utils.py),
+[`scripts/plot_utils.py::render_dimer_atoms`](https://github.com/EricBoittier/mmml/blob/main/scripts/plot_utils.py),
 the good precedent already in the repo (used by the SpookyNet dimer-scan
 figures in `scripts/plot_1d_slices_by_offset.py` and `scripts/plot_2d_pes.py`):
 

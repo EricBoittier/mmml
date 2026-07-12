@@ -124,6 +124,9 @@ nav:
       - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
       - Trajectory free-energy surfaces: trajectory-free-energy-surfaces.md
+      - MD sweep plotting improvements: md-sweep-plotting-improvements.md
+      - Plotting style guide: plotting-style-guide.md
+      - Plot style gallery: plot-style-gallery.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
