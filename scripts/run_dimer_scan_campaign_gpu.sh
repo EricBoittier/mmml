@@ -13,7 +13,8 @@ echo "Initializing environment from ${REPO_ROOT}..." >&2
 
 # Load modules on scicore if command -v module is available
 if command -v module >/dev/null 2>&1; then
-  module load GCC/14.2.0 OpenMPI/5.0.7-GCC-14.2.0 CMake/3.31.3-GCCcore-14.2.0 2>/dev/null || true
+  module load GCC/14.2.0 OpenMPI/5.0.7-GCC-14.2.0 CMake/3.31.3-GCCcore-14.2.0 2>/dev/null || \
+  module load GCC OpenMPI CMake 2>/dev/null || true
 fi
 
 # Resolve environment python and variables
