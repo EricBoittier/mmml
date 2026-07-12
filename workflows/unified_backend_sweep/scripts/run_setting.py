@@ -117,6 +117,7 @@ def main() -> int:
             ensemble=ensemble,
             backend="jaxmd",
             sampler=sampler,
+            output_dir=output_dir,
             seed=args.seed,
         )
 

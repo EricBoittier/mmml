@@ -84,16 +84,25 @@ def _xyz_block(symbols: list[str], positions: np.ndarray, ghost_mask: np.ndarray
     return "\n".join(lines)
 
 
-def _render_input(method: str, basis: str, pal: int, maxcore: int, xyz_block: str) -> str:
-    return "\n".join(
-        [
-            f"! {method} {basis} TightSCF",
-            f"%pal nprocs {pal} end",
-            f"%maxcore {maxcore}",
-            xyz_block,
-            "",
-        ]
-    )
+def _render_input(
+    method: str, basis: str, pal: int, maxcore: int, xyz_block: str,
+    *, aux_basis: str | None = None, dispersion: str | None = None, rijcosx: bool = False,
+) -> str:
+    # Double-hybrids (B2PLYP, DSD-BLYP, PWPB95, ...) are a DFT-SCF plus a
+    # perturbative MP2-like correlation correction — RIJCOSX + an auxiliary
+    # ("/C") basis is the standard way to make that correction cheap (often
+    # cheaper than canonical MP2), and an empirical dispersion correction
+    # (D3BJ) matters a lot for these weak-interaction scans since the bare
+    # double-hybrid correlation alone tends to underbind.
+    simple_line = f"! {method} {basis} TightSCF"
+    if aux_basis:
+        simple_line += f" {aux_basis}"
+    if rijcosx:
+        simple_line += " RIJCOSX"
+    if dispersion and dispersion.lower() != "none":
+        simple_line += f" {dispersion}"
+    lines = [simple_line, f"%pal nprocs {pal} end", f"%maxcore {maxcore}", xyz_block, ""]
+    return "\n".join(lines)
 
 
 def _run_orca_energy(orca_exe: str, inp_text: str, workdir: Path) -> float:
@@ -120,10 +129,12 @@ def _run_orca_energy(orca_exe: str, inp_text: str, workdir: Path) -> float:
 def _energy_for(
     symbols: list[str], positions: np.ndarray, ghost_mask: np.ndarray,
     *, method: str, basis: str, pal: int, maxcore: int, orca_exe: str, tmp_prefix: str,
+    aux_basis: str | None = None, dispersion: str | None = None, rijcosx: bool = False,
 ) -> float:
     inp_text = _render_input(
         method, basis, pal, maxcore,
         _xyz_block(symbols, positions, ghost_mask, charge=0, multiplicity=1),
+        aux_basis=aux_basis, dispersion=dispersion, rijcosx=rijcosx,
     )
     with tempfile.TemporaryDirectory(prefix=tmp_prefix) as tmp:
         return _run_orca_energy(orca_exe, inp_text, Path(tmp))
@@ -152,6 +163,7 @@ def evaluate_orca_scan(
     method: str, basis: str, counterpoise: bool,
     pal: int, maxcore: int, orca_exe: str, backend_name: str,
     skip_keys: set[tuple] | None = None,
+    aux_basis: str | None = None, dispersion: str | None = None, rijcosx: bool = False,
 ) -> list[dict]:
     rows: list[dict] = []
     isolated_cache: dict[str, float] = {}

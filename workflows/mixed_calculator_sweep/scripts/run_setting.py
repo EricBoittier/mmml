@@ -164,6 +164,8 @@ def main() -> int:
 
         traj = assemble_and_run(run_config, system=system, ctx=ctx, term_kwargs=term_kwargs)
 
+        from mmml.md.results import energy_drift_metrics
+
         energies = np.asarray(traj.metadata["energies"], dtype=float)
         finite = bool(np.all(np.isfinite(energies)))
         status.update(
@@ -176,6 +178,7 @@ def main() -> int:
                 "energy_std_ev": float(energies.std()),
                 "energy_drift_ev": float(energies[-1] - energies[0]),
                 "energy_max_abs_deviation_ev": float(np.max(np.abs(energies - energies.mean()))),
+                **energy_drift_metrics(energies),
             }
         )
         if not finite:
