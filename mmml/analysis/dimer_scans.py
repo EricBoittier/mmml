@@ -183,16 +183,19 @@ def evaluate_scan(
     for geometry in geometries:
         atoms = geometry.atoms.copy()
         atoms.calc = calculator_factory()
-        energy_ev = float(atoms.get_potential_energy())
-        rows.append(
-            {
-                "molecule_a": geometry.pair[0],
-                "molecule_b": geometry.pair[1],
-                "distance_angstrom": geometry.distance_angstrom,
-                "energy_ev": energy_ev,
-                "energy_kcal_mol": energy_ev * 23.060548867,
-            }
-        )
+        try:
+            energy_ev = float(atoms.get_potential_energy())
+            rows.append(
+                {
+                    "molecule_a": geometry.pair[0],
+                    "molecule_b": geometry.pair[1],
+                    "distance_angstrom": geometry.distance_angstrom,
+                    "energy_ev": energy_ev,
+                    "energy_kcal_mol": energy_ev * 23.060548867,
+                }
+            )
+        except Exception as e:
+            print(f"    Warning: calculation failed at {geometry.distance_angstrom} Å: {e}")
     return rows
 
 
@@ -209,8 +212,7 @@ def make_xtb_calculator(
     except ModuleNotFoundError:
         try:
             from tblite.ase import TBLite
-            tblite_method = method.lower().replace("-xtb", "")
-            return TBLite(method=tblite_method, **kwargs)
+            return TBLite(method=method, **kwargs)
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(
                 "Neither xTB nor tblite ASE support is installed. Install one of "
