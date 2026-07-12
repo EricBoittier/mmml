@@ -865,17 +865,20 @@ system with a real ML checkpoint.
       default `record_every=100`) per setting — enough to see real
       conservation behavior, not just a 2-3 point endpoint delta. **Fully
       achieved for all 6 `water_box` settings** on the real cluster
-      (pc-studix, 2026-07-12); **not yet achieved for the mixed
-      `peptide_water` settings** — see below.
-- [~] Mixed-system (`peptide_water`) settings ran clean for ~3 real hours on
-      the cluster with no crash (confirmed via `ps` on each compute node:
-      steady CPU usage, stable memory) but were intentionally cancelled
-      before their 10000 steps completed (`water_baseline` finished all
-      10000 steps in ~324s in the same window; the mixed settings, at
-      `n_waters=20`, hadn't finished after ~10800s — at least ~33x slower).
-      **Root cause, verified against the term's source** (not just inferred
-      from timing): `ml_pep_water`'s `interaction_cutoff_A` does **not**
-      reduce its per-step cost — checked directly in
+      (pc-studix, 2026-07-12). **For the 6 mixed `peptide_water` settings,
+      achieved at a reduced scale** (`n_waters=8`, `n_steps=200`, 3 recorded
+      samples) after two rounds of measured-not-guessed downsizing — see
+      below; **12/12 settings completed**, confirmed in
+      `results/summary.md` on the cluster.
+- [x] Mixed-system (`peptide_water`) settings: the first attempt
+      (`n_waters=20`, `n_steps=10000`) ran clean for ~3 real hours with no
+      crash (confirmed via `ps`: steady CPU usage, stable memory) but was
+      intentionally cancelled — `water_baseline` finished all 10000 steps in
+      ~324s in the same window, while the mixed settings hadn't finished
+      after ~10800s, at least ~33x slower. **Root cause, verified against
+      the term's source** (not just inferred from timing):
+      `ml_pep_water`'s `interaction_cutoff_A` does **not** reduce its
+      per-step cost — checked directly in
       `mmml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn`,
       every core-water dimer is vmapped through the ML model *every step*
       regardless of the cutoff; the cutoff only applies a post-hoc energy
@@ -883,19 +886,36 @@ system with a real ML checkpoint.
       `mm_nonbonded`, no neighbor-list-style pruning exists for this term
       yet (no `active_group_slots`/`active_group_mask` auto-wiring in
       `assemble.py` for `ml_core_group`-kind `NeighborRequest`s — tracked as
-      an open item below). **Actual fix applied**: reduced `n_waters` 20→8
-      (fewer vmapped dimers/step — the only real lever today) and `n_steps`
-      10000→2000 for all `peptide_water` settings in
-      `workflows/mixed_calculator_sweep/config.yaml`; `interaction_cutoff_A`
-      is kept (still physically correct) but is no longer claimed as a speed
-      fix. This validates the mixed-system code path end-to-end (builder,
-      term composition, calculator variants all ran without error) but the
-      reduced-scale config has not yet been re-run/confirmed complete on
-      the cluster as of this writing. See
-      `workflows/mixed_calculator_sweep/README.md` "Real-run status" for
-      the full incident log (packmol binary clobbered with a macOS build,
-      AVX2-vs-non-AVX2 node split, OOM at the original memory budget,
-      Snakemake driver dying on SSH disconnect — all fixed).
+      an open item below). **Fix, in two measured rounds**: (1) `n_waters`
+      20→8 + `n_steps` 10000→2000 — still hit the 240 min Slurm walltime
+      (`TIMEOUT`); a local 20-step check at `n_waters=8` measured ~9.85s/step
+      even past JIT compile (this term's cost scales ~linearly with steps,
+      unlike the compile-dominated `water_box` case), so 2000 steps ≈ 5.5h,
+      consistent with the timeout. (2) `n_steps` cut again to 200 (~33 min
+      at the measured rate) — **this completed successfully, 12/12**.
+      `interaction_cutoff_A` is kept (still physically correct) but is not a
+      speed fix. See `workflows/mixed_calculator_sweep/README.md` "Real-run
+      status" for the full incident log (packmol binary clobbered with a
+      macOS build — recurred 3 times across this session with no identified
+      cause, AVX2-vs-non-AVX2 node split, OOM at the original memory budget,
+      Snakemake driver dying on SSH disconnect, now run in `tmux` — all
+      fixed or mitigated).
+- [x] Found via this same real run: `mixed_core_vdw` showed a genuine
+      initial-configuration energy blow-up (`energy_initial_ev ≈ 1.7M`,
+      vs. the other mixed settings' ~-500 to -560 eV range) at step 0,
+      before any dynamics, relaxing to a sane value within ~100 steps as NVE
+      forces fling the clashing atoms apart. Root cause: this workflow runs
+      raw NVE directly from the packmol-built geometry with no minimization
+      step first; `vdw_core`'s repulsive wall is steep at short range, and
+      packmol's placement tolerance (2.0 Å) can leave a close initial
+      core-water contact that only `vdw_core` (not the other mixed settings,
+      which lack that term) punishes severely. Fix for a real production run
+      using `vdw_core`: minimize first (e.g. the `fire → nvt → nve` chain
+      `examples/cg_jaxmd_unified.py` already implements) rather than starting
+      dynamics straight from the raw placement. Not yet fixed in
+      `mixed_calculator_sweep` itself (documented as a known caveat in its
+      README instead, since fixing it means adding a minimization phase to
+      `scripts/run_setting.py`, out of scope for this validation pass).
 - [ ] Real neighbor-list support for `ml_core_group`-kind terms (wiring
       `active_group_slots`/`active_group_mask` through `assemble.py`'s
       auto-wiring, mirroring the `intermolecular` kind) so

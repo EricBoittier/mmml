@@ -121,12 +121,28 @@ With all of that fixed:
      comfortably inside the 240 min budget).
   `peptide_water_ml_cutoff_A` is kept on every mixed setting because it's
   still the physically correct choice, not because it helps runtime.
-- This validates the mixed-system code path itself (builder, term
-  composition, calculator variants) end-to-end on the real cluster. The
-  `n_steps=200` config above is intended to actually complete within budget;
-  confirm in `results/summary.md` before trusting it. Getting back to
-  10000-step (or even 2000-step) mixed-system traces needs either much more
-  walltime budgeted per job, or (better) wiring real neighbor-list support
-  for `ml_core_group` terms so `peptide_water_ml_cutoff_A` becomes a genuine
-  per-step compute reduction instead of just an energy correction — tracked
-  as open work in `docs/md-cg-unification-design.md` §11.
+- **`n_steps=200` completed successfully: 12/12 settings, confirmed in
+  `results/summary.md` on the cluster.** This validates the mixed-system
+  code path end-to-end (builder, term composition, calculator variants) on
+  real cluster hardware. Getting back to 10000-step (or even 2000-step)
+  mixed-system traces needs either much more walltime budgeted per job, or
+  (better) wiring real neighbor-list support for `ml_core_group` terms so
+  `peptide_water_ml_cutoff_A` becomes a genuine per-step compute reduction
+  instead of just an energy correction — tracked as open work in
+  `docs/md-cg-unification-design.md` §11.
+- **`mixed_core_vdw` shows a real initial-configuration blow-up, not a bug in
+  the sweep**: `energy_initial_ev = 1,725,689` (vs. the other mixed
+  settings' ~-500 to -560 eV range) at step 0, before any dynamics, then
+  relaxes to a sane `-416.6 eV` within the first ~100 steps as NVE forces
+  fling the clashing atoms apart. Root cause: this workflow runs raw NVE
+  directly from the packmol-built geometry, with **no minimization step
+  first**. `vdw_core`'s repulsive wall is very steep at short range, and
+  packmol's placement tolerance (2.0 Å) is loose enough to leave a close
+  initial core-water contact that only `vdw_core` (not the other mixed
+  settings, which lack that term) punishes this severely — `ml_pep_water`
+  alone is smoother near contact. The other 4 `peptide_water` settings and
+  all 6 `water_box` settings show sane, bounded energy traces throughout.
+  **Fix for a real production run using `vdw_core`:** minimize (e.g. a short
+  FIRE phase, as `examples/cg_jaxmd_unified.py`'s `fire → nvt → nve` chain
+  already does) before running NVE/NVT, rather than starting dynamics
+  straight from the raw packmol placement.
