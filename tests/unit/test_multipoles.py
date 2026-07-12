@@ -7,11 +7,14 @@ import numpy as np
 import pytest
 
 from mmml.models.multipoles import (
+    AU_FIELD_TO_V_PER_ANGSTROM,
     E3xDipoleModel,
     E3xMultipoleModel,
     E3xOctupoleModel,
     E3xQuadrupoleModel,
+    field_on_slice,
     irrep_blocks_to_traceless,
+    pair_energy_charge_dipole_au,
 )
 from scripts.cache_qcml_multipoles_orbax import preprocess_examples
 from scripts.analyze_qcml_multipoles import error_metrics, generate_report
@@ -408,3 +411,77 @@ def test_analysis_metrics_and_report_outputs(tmp_path) -> None:
     assert (tmp_path / "scatter_cartesian_l3.png").exists()
     assert (tmp_path / "error_distributions.png").exists()
     assert (tmp_path / "error_vs_num_atoms.png").exists()
+
+
+def test_molecular_multipole_electrostatics_charge_sign_and_units() -> None:
+    energy_hartree = pair_energy_charge_dipole_au(
+        [0.0, 0.0, 0.0],
+        1.0,
+        [0.0, 0.0, 0.0],
+        [2.0, 0.0, 0.0],
+        -1.0,
+        [0.0, 0.0, 0.0],
+    )
+
+    assert energy_hartree == pytest.approx(-0.5)
+
+
+def test_molecular_multipole_electrostatics_charge_dipole_sign() -> None:
+    energy = pair_energy_charge_dipole_au(
+        [0.0, 0.0, 0.0],
+        1.0,
+        [0.0, 0.0, 0.0],
+        [2.0, 0.0, 0.0],
+        0.0,
+        [1.0, 0.0, 0.0],
+    )
+
+    assert energy == pytest.approx(-0.25)
+
+
+def test_molecular_multipole_electrostatics_dipole_dipole_signs() -> None:
+    origin_a = np.array([0.0, 0.0, 0.0])
+    origin_b = np.array([2.0, 0.0, 0.0])
+    x_dipole = np.array([1.0, 0.0, 0.0])
+    y_dipole = np.array([0.0, 1.0, 0.0])
+
+    head_to_tail = pair_energy_charge_dipole_au(
+        origin_a,
+        0.0,
+        x_dipole,
+        origin_b,
+        0.0,
+        x_dipole,
+    )
+    side_by_side = pair_energy_charge_dipole_au(
+        origin_a,
+        0.0,
+        y_dipole,
+        origin_b,
+        0.0,
+        y_dipole,
+    )
+
+    assert head_to_tail == pytest.approx(-0.25)
+    assert side_by_side == pytest.approx(0.125)
+
+
+def test_molecular_multipole_field_slice_units_and_direction() -> None:
+    grid = field_on_slice(
+        np.array([[0.0, 0.0, 0.0]]),
+        np.array([1.0]),
+        np.zeros((1, 3)),
+        plane="xy",
+        center_bohr=[0.0, 0.0, 0.0],
+        extent_angstrom=2.0,
+        n_grid=3,
+        softening_bohr=0.0,
+    )
+
+    field = grid["field_au"][1, 2]
+    np.testing.assert_allclose(field, np.array([1.0, 0.0, 0.0]), atol=1e-12)
+    np.testing.assert_allclose(
+        grid["field_v_per_angstrom"][1, 2],
+        np.array([AU_FIELD_TO_V_PER_ANGSTROM, 0.0, 0.0]),
+        atol=1e-12,
+    )
