@@ -38,6 +38,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover - exercised only without 
     ) from exc
 
 from mmml.models.multipoles.model import E3xMultipoleModel
+from mmml.models.multipoles.representations import irrep_blocks_to_traceless
 from scripts.train_qcml_multipoles import TrainConfig
 
 ANGSTROM_TO_BOHR = 1.0 / Bohr
@@ -192,6 +193,88 @@ def atoms_fragment_to_model_batch(
     }
 
 
+def _point_multipole_potential_field_au(
+    points_bohr: np.ndarray,
+    origins_bohr: np.ndarray,
+    charges: np.ndarray,
+    dipoles_bohr: np.ndarray,
+    quadrupoles_bohr: np.ndarray | None = None,
+    octupoles_bohr: np.ndarray | None = None,
+    *,
+    exclude_index: int | None = None,
+    softening_bohr: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Potential and electric field from point multipole sources (up to rank 3).
+
+    Potential is in Hartree/e. Electric field is in atomic units,
+    Hartree/(e*bohr).
+    """
+    points = np.asarray(points_bohr, dtype=np.float64)
+    origins = np.asarray(origins_bohr, dtype=np.float64)
+    charges = np.asarray(charges, dtype=np.float64).reshape(-1)
+    dipoles = np.asarray(dipoles_bohr, dtype=np.float64)
+    n_sources = len(origins)
+
+    if quadrupoles_bohr is None:
+        quadrupoles = np.zeros((n_sources, 3, 3), dtype=np.float64)
+    else:
+        quadrupoles = np.asarray(quadrupoles_bohr, dtype=np.float64)
+
+    if octupoles_bohr is None:
+        octupoles = np.zeros((n_sources, 3, 3, 3), dtype=np.float64)
+    else:
+        octupoles = np.asarray(octupoles_bohr, dtype=np.float64)
+
+    potential = np.zeros(points.shape[0], dtype=np.float64)
+    field = np.zeros((points.shape[0], 3), dtype=np.float64)
+    softening2 = float(softening_bohr) ** 2
+    for source_index in range(n_sources):
+        if exclude_index is not None and source_index == exclude_index:
+            continue
+        origin = origins[source_index]
+        charge = charges[source_index]
+        dipole = dipoles[source_index]
+        quadrupole = quadrupoles[source_index]
+        octupole = octupoles[source_index]
+
+        displacement = points - origin[None, :]
+        r2 = np.sum(displacement * displacement, axis=1) + softening2
+        r = np.sqrt(r2)
+        inv_r = 1.0 / np.maximum(r, 1e-12)
+        inv_r3 = inv_r**3
+        inv_r5 = inv_r**5
+        inv_r7 = inv_r**7
+        inv_r9 = inv_r**9
+
+        # Dot products and contractions with displacement
+        mu_dot_r = displacement @ dipole
+        Q_r = displacement @ quadrupole
+        r_Q_r = np.sum(displacement * Q_r, axis=1)
+        O_r = np.tensordot(displacement, octupole, axes=(1, 2))
+        O_rr = np.sum(O_r * displacement[:, :, None], axis=1)
+        O_rrr = np.sum(O_rr * displacement, axis=1)
+
+        # Potential terms
+        potential += charge * inv_r + mu_dot_r * inv_r3 + 1.5 * r_Q_r * inv_r5 + 2.5 * O_rrr * inv_r7
+
+        # Field terms (E = -grad V)
+        field += charge * displacement * inv_r3[:, None]
+        field += (
+            3.0 * displacement * mu_dot_r[:, None] * inv_r5[:, None]
+            - dipole[None, :] * inv_r3[:, None]
+        )
+        field += (
+            7.5 * displacement * r_Q_r[:, None] * inv_r7[:, None]
+            - 3.0 * Q_r * inv_r5[:, None]
+        )
+        field += (
+            17.5 * displacement * O_rrr[:, None] * inv_r9[:, None]
+            - 7.5 * O_rr * inv_r7[:, None]
+        )
+
+    return potential, field
+
+
 def _point_charge_dipole_potential_field_au(
     points_bohr: np.ndarray,
     origins_bohr: np.ndarray,
@@ -201,35 +284,109 @@ def _point_charge_dipole_potential_field_au(
     exclude_index: int | None = None,
     softening_bohr: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Potential and electric field from point charge+dipole sources.
+    """Potential and electric field from point charge+dipole sources."""
+    return _point_multipole_potential_field_au(
+        points_bohr,
+        origins_bohr,
+        charges,
+        dipoles_bohr,
+        None,
+        None,
+        exclude_index=exclude_index,
+        softening_bohr=softening_bohr,
+    )
 
-    Potential is in Hartree/e. Electric field is in atomic units,
-    Hartree/(e*bohr).
+
+def pair_energy_multipole_au(
+    origin_a_bohr: np.ndarray,
+    charge_a: float,
+    dipole_a_bohr: np.ndarray,
+    quadrupole_a_bohr: np.ndarray,
+    octupole_a_bohr: np.ndarray,
+    origin_b_bohr: np.ndarray,
+    charge_b: float,
+    dipole_b_bohr: np.ndarray,
+    quadrupole_b_bohr: np.ndarray,
+    octupole_b_bohr: np.ndarray,
+    *,
+    softening_bohr: float = 0.0,
+) -> float:
+    """Symmetric multipole-multipole pair interaction in Hartree (up to rank 3).
+
+    ``R`` points from A to B. The formula is the atomic-unit interaction of two
+    point multipole objects (charge + dipole + quadrupole + octupole).
     """
-    points = np.asarray(points_bohr, dtype=np.float64)
-    origins = np.asarray(origins_bohr, dtype=np.float64)
-    charges = np.asarray(charges, dtype=np.float64).reshape(-1)
-    dipoles = np.asarray(dipoles_bohr, dtype=np.float64)
-    potential = np.zeros(points.shape[0], dtype=np.float64)
-    field = np.zeros((points.shape[0], 3), dtype=np.float64)
-    softening2 = float(softening_bohr) ** 2
-    for source_index, (origin, charge, dipole) in enumerate(zip(origins, charges, dipoles, strict=True)):
-        if exclude_index is not None and source_index == exclude_index:
-            continue
-        displacement = points - origin[None, :]
-        r2 = np.sum(displacement * displacement, axis=1) + softening2
-        r = np.sqrt(r2)
-        inv_r = 1.0 / np.maximum(r, 1e-12)
-        inv_r3 = inv_r**3
-        inv_r5 = inv_r**5
-        mu_dot_r = displacement @ dipole
-        potential += charge * inv_r + mu_dot_r * inv_r3
-        field += charge * displacement * inv_r3[:, None]
-        field += (
-            3.0 * displacement * mu_dot_r[:, None] * inv_r5[:, None]
-            - dipole[None, :] * inv_r3[:, None]
-        )
-    return potential, field
+    r_vec = np.asarray(origin_b_bohr, dtype=np.float64) - np.asarray(origin_a_bohr, dtype=np.float64)
+    r2 = float(np.dot(r_vec, r_vec) + softening_bohr**2)
+    r = max(np.sqrt(r2), 1e-12)
+    inv_r = 1.0 / r
+    inv_r3 = inv_r**3
+    inv_r5 = inv_r**5
+    inv_r7 = inv_r**7
+    inv_r9 = inv_r**9
+    inv_r11 = inv_r**11
+    inv_r13 = inv_r**13
+
+    # Dipole contractions
+    p_a_r = float(np.dot(dipole_a_bohr, r_vec))
+    p_b_r = float(np.dot(dipole_b_bohr, r_vec))
+
+    # Quadrupole contractions with r
+    Q_a_r = np.asarray(quadrupole_a_bohr, dtype=np.float64) @ r_vec
+    Q_b_r = np.asarray(quadrupole_b_bohr, dtype=np.float64) @ r_vec
+    r_Q_a_r = float(np.dot(r_vec, Q_a_r))
+    r_Q_b_r = float(np.dot(r_vec, Q_b_r))
+
+    # Octupole contractions with r
+    oct_a = np.asarray(octupole_a_bohr, dtype=np.float64)
+    oct_b = np.asarray(octupole_b_bohr, dtype=np.float64)
+    O_a_r = np.tensordot(oct_a, r_vec, axes=(2, 0))
+    O_b_r = np.tensordot(oct_b, r_vec, axes=(2, 0))
+    O_a_rr = O_a_r @ r_vec
+    O_b_rr = O_b_r @ r_vec
+    O_a_rrr = float(np.dot(O_a_rr, r_vec))
+    O_b_rrr = float(np.dot(O_b_rr, r_vec))
+
+    # 1. Monopole-Monopole (0-0)
+    e_00 = charge_a * charge_b * inv_r
+
+    # 2. Monopole-Dipole (0-1)
+    e_01 = (charge_b * p_a_r - charge_a * p_b_r) * inv_r3
+
+    # 3. Dipole-Dipole (1-1)
+    e_11 = (np.dot(dipole_a_bohr, dipole_b_bohr) * inv_r3 - 3.0 * p_a_r * p_b_r * inv_r5)
+
+    # 4. Monopole-Quadrupole (0-2)
+    e_02 = 1.5 * (charge_b * r_Q_a_r + charge_a * r_Q_b_r) * inv_r5
+
+    # 5. Dipole-Quadrupole (1-2)
+    e_12 = (3.0 * (np.dot(dipole_b_bohr, Q_a_r) - np.dot(dipole_a_bohr, Q_b_r)) * inv_r5
+            - 7.5 * (r_Q_a_r * p_b_r - r_Q_b_r * p_a_r) * inv_r7)
+
+    # 6. Quadrupole-Quadrupole (2-2)
+    e_22 = (1.5 * np.sum(quadrupole_a_bohr * quadrupole_b_bohr) * inv_r5
+            - 15.0 * np.dot(Q_a_r, Q_b_r) * inv_r7
+            + 26.25 * r_Q_a_r * r_Q_b_r * inv_r9)
+
+    # 7. Monopole-Octupole (0-3)
+    e_03 = 2.5 * (charge_b * O_a_rrr - charge_a * O_b_rrr) * inv_r7
+
+    # 8. Dipole-Octupole (1-3)
+    e_13 = (7.5 * (np.dot(dipole_b_bohr, O_a_rr) + np.dot(dipole_a_bohr, O_b_rr)) * inv_r7
+            - 17.5 * (O_a_rrr * p_b_r + O_b_rrr * p_a_r) * inv_r9)
+
+    # 9. Quadrupole-Octupole (2-3)
+    e_23 = (7.5 * (np.sum(quadrupole_b_bohr * O_a_r) - np.sum(quadrupole_a_bohr * O_b_r)) * inv_r7
+            - 52.5 * (np.dot(O_a_rr, Q_b_r) - np.dot(O_b_rr, Q_a_r)) * inv_r9
+            + 78.75 * (O_a_rrr * r_Q_b_r - O_b_rrr * r_Q_a_r) * inv_r11)
+
+    # 10. Octupole-Octupole (3-3)
+    e_33 = (2.5 * np.sum(oct_a * oct_b) * inv_r7
+            - 52.5 * np.sum(O_a_r * O_b_r) * inv_r9
+            + 236.25 * np.dot(O_a_rr, O_b_rr) * inv_r11
+            - 288.75 * O_a_rrr * O_b_rrr * inv_r13)
+
+    return float(e_00 + e_01 + e_11 + e_02 + e_12 + e_22 + e_03 + e_13 + e_23 + e_33)
 
 
 def pair_energy_charge_dipole_au(
@@ -242,31 +399,19 @@ def pair_energy_charge_dipole_au(
     *,
     softening_bohr: float = 0.0,
 ) -> float:
-    """Symmetric q+dipole pair interaction in Hartree.
-
-    ``R`` points from A to B. The formula is the atomic-unit interaction of two
-    point monopole+dipole objects:
-
-        qA qB / R
-        + qB muA.R / R^3 - qA muB.R / R^3
-        + muA.muB / R^3 - 3 (muA.R)(muB.R) / R^5
-    """
-    r_vec = np.asarray(origin_b_bohr, dtype=np.float64) - np.asarray(origin_a_bohr, dtype=np.float64)
-    r2 = float(np.dot(r_vec, r_vec) + softening_bohr**2)
-    r = max(np.sqrt(r2), 1e-12)
-    inv_r = 1.0 / r
-    inv_r3 = inv_r**3
-    inv_r5 = inv_r**5
-    mu_a = np.asarray(dipole_a_bohr, dtype=np.float64)
-    mu_b = np.asarray(dipole_b_bohr, dtype=np.float64)
-    mu_a_r = float(np.dot(mu_a, r_vec))
-    mu_b_r = float(np.dot(mu_b, r_vec))
-    return float(
-        charge_a * charge_b * inv_r
-        + charge_b * mu_a_r * inv_r3
-        - charge_a * mu_b_r * inv_r3
-        + float(np.dot(mu_a, mu_b)) * inv_r3
-        - 3.0 * mu_a_r * mu_b_r * inv_r5
+    """Symmetric q+dipole pair interaction in Hartree."""
+    return pair_energy_multipole_au(
+        origin_a_bohr,
+        charge_a,
+        dipole_a_bohr,
+        np.zeros((3, 3)),
+        np.zeros((3, 3, 3)),
+        origin_b_bohr,
+        charge_b,
+        dipole_b_bohr,
+        np.zeros((3, 3)),
+        np.zeros((3, 3, 3)),
+        softening_bohr=softening_bohr,
     )
 
 
@@ -357,6 +502,7 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
             origins.append(origin_bohr)
             multipoles.append(np.asarray(self._predict(batch), dtype=np.float64))
         multipoles_array = np.asarray(multipoles, dtype=np.float64)
+        tensors = irrep_blocks_to_traceless(multipoles_array)
         return {
             "fragments": fragments,
             "origins_bohr": np.asarray(origins, dtype=np.float64),
@@ -364,6 +510,8 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
             "multipoles": multipoles_array,
             "charges": multipoles_array[:, 0],
             "dipoles_bohr": multipoles_array[:, 1:4],
+            "quadrupoles_bohr": np.asarray(tensors["l2_quadrupole_tensor"], dtype=np.float64),
+            "octupoles_bohr": np.asarray(tensors["l3_octupole_tensor"], dtype=np.float64),
         }
 
     def calculate(
@@ -377,17 +525,23 @@ class LearnedMolecularMultipoleElectrostatics(Calculator):
         origins = np.asarray(prediction["origins_bohr"], dtype=np.float64)
         charges = np.asarray(prediction["charges"], dtype=np.float64)
         dipoles = np.asarray(prediction["dipoles_bohr"], dtype=np.float64)
+        quadrupoles = np.asarray(prediction["quadrupoles_bohr"], dtype=np.float64)
+        octupoles = np.asarray(prediction["octupoles_bohr"], dtype=np.float64)
         energy_hartree = 0.0
         pair_rows = []
         for i in range(len(charges)):
             for j in range(i + 1, len(charges)):
-                pair_energy = pair_energy_charge_dipole_au(
+                pair_energy = pair_energy_multipole_au(
                     origins[i],
                     charges[i],
                     dipoles[i],
+                    quadrupoles[i],
+                    octupoles[i],
                     origins[j],
                     charges[j],
                     dipoles[j],
+                    quadrupoles[j],
+                    octupoles[j],
                     softening_bohr=self.softening_bohr,
                 )
                 energy_hartree += pair_energy
@@ -403,6 +557,8 @@ def field_on_slice(
     origins_bohr: np.ndarray,
     charges: np.ndarray,
     dipoles_bohr: np.ndarray,
+    quadrupoles_bohr: np.ndarray | None = None,
+    octupoles_bohr: np.ndarray | None = None,
     *,
     plane: str = "xy",
     center_bohr: Sequence[float] | None = None,
@@ -434,11 +590,13 @@ def field_on_slice(
         points[:, 1] += u.reshape(-1)
         points[:, 2] += v.reshape(-1)
         component_indices = (1, 2)
-    potential, field = _point_charge_dipole_potential_field_au(
+    potential, field = _point_multipole_potential_field_au(
         points,
         origins_bohr,
         charges,
         dipoles_bohr,
+        quadrupoles_bohr,
+        octupoles_bohr,
         softening_bohr=softening_bohr,
     )
     return {
@@ -461,6 +619,8 @@ def field_on_line(
     origins_bohr: np.ndarray,
     charges: np.ndarray,
     dipoles_bohr: np.ndarray,
+    quadrupoles_bohr: np.ndarray | None = None,
+    octupoles_bohr: np.ndarray | None = None,
     *,
     axis: str = "x",
     center_bohr: Sequence[float] | None = None,
@@ -499,11 +659,13 @@ def field_on_line(
     coordinate_bohr = np.linspace(-half_extent_bohr, half_extent_bohr, n_points)
     points = np.tile(center[None, :], (n_points, 1))
     points[:, axis_index] += coordinate_bohr
-    potential, field = _point_charge_dipole_potential_field_au(
+    potential, field = _point_multipole_potential_field_au(
         points,
         origins_bohr,
         charges,
         dipoles_bohr,
+        quadrupoles_bohr,
+        octupoles_bohr,
         softening_bohr=softening_bohr,
     )
     return {
@@ -526,6 +688,8 @@ def plot_field_line_scan(
     origins_bohr: np.ndarray,
     charges: np.ndarray,
     dipoles_bohr: np.ndarray,
+    quadrupoles_bohr: np.ndarray | None = None,
+    octupoles_bohr: np.ndarray | None = None,
     *,
     axis: str = "x",
     extent_angstrom: float = 12.0,
@@ -541,6 +705,8 @@ def plot_field_line_scan(
         origins_bohr,
         charges,
         dipoles_bohr,
+        quadrupoles_bohr,
+        octupoles_bohr,
         axis=axis,
         extent_angstrom=extent_angstrom,
         n_points=n_points,
@@ -577,7 +743,7 @@ def plot_field_line_scan(
             plot_axis.axvline(source_coordinate, color="0.2", alpha=0.25, linewidth=1.0)
         plot_axis.set_xlabel(f"{axis} scan coordinate [Å]")
 
-    figure.suptitle("Learned molecular q+dipole electrostatic line scan", fontsize=13)
+    figure.suptitle("Learned molecular multipole electrostatic line scan", fontsize=13)
     if output is not None:
         figure.savefig(Path(output).expanduser(), dpi=180)
     return figure
@@ -587,6 +753,8 @@ def plot_field_summary(
     origins_bohr: np.ndarray,
     charges: np.ndarray,
     dipoles_bohr: np.ndarray,
+    quadrupoles_bohr: np.ndarray | None = None,
+    octupoles_bohr: np.ndarray | None = None,
     *,
     planes: Sequence[str] = ("xy", "xz", "yz"),
     extent_angstrom: float = 8.0,
@@ -610,6 +778,8 @@ def plot_field_summary(
             origins_bohr,
             charges,
             dipoles_bohr,
+            quadrupoles_bohr,
+            octupoles_bohr,
             plane=plane,
             extent_angstrom=extent_angstrom,
             n_grid=n_grid,
@@ -675,7 +845,7 @@ def plot_field_summary(
                 linewidths=0.5,
             )
 
-    figure.suptitle("Learned molecular q+dipole electrostatic field", fontsize=14)
+    figure.suptitle("Learned molecular multipole electrostatic field", fontsize=14)
     if output is not None:
         figure.savefig(Path(output).expanduser(), dpi=180)
     return figure

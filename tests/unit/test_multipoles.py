@@ -15,11 +15,13 @@ from mmml.models.multipoles import (
     E3xMultipoleModel,
     E3xOctupoleModel,
     E3xQuadrupoleModel,
+    _point_multipole_potential_field_au,
     field_on_line,
     field_on_slice,
     fragment_indices_from_atoms,
     irrep_blocks_to_traceless,
     pair_energy_charge_dipole_au,
+    pair_energy_multipole_au,
 )
 from scripts.cache_qcml_multipoles_orbax import preprocess_examples
 from scripts.analyze_qcml_multipoles import error_metrics, generate_report
@@ -548,3 +550,46 @@ def test_molecular_multipole_field_line_scan_units_and_direction() -> None:
         np.array([-AU_FIELD_TO_V_PER_ANGSTROM, AU_FIELD_TO_V_PER_ANGSTROM]),
         atol=1e-12,
     )
+
+
+def test_pair_energy_multipole_quadrupole_quadrupole() -> None:
+    energy = pair_energy_multipole_au(
+        [0.0, 0.0, 0.0],
+        0.0,
+        [0.0, 0.0, 0.0],
+        np.diag([2.0, -1.0, -1.0]),
+        np.zeros((3, 3, 3)),
+        [2.0, 0.0, 0.0],
+        0.0,
+        [0.0, 0.0, 0.0],
+        np.diag([-1.0, 2.0, -1.0]),
+        np.zeros((3, 3, 3)),
+    )
+    assert energy == pytest.approx(-0.84375)
+
+
+def test_pair_energy_multipole_octupole_octupole() -> None:
+    def make_traceless_oct():
+        t = np.zeros((3, 3, 3))
+        t[0, 0, 0] = 1.0
+        t[0, 1, 1] = t[1, 0, 1] = t[1, 1, 0] = -0.5
+        t[0, 2, 2] = t[2, 0, 2] = t[2, 2, 0] = -0.5
+        return t
+
+    oct_a = make_traceless_oct()
+    oct_b = make_traceless_oct()
+
+    energy = pair_energy_multipole_au(
+        [0.0, 0.0, 0.0],
+        0.0,
+        [0.0, 0.0, 0.0],
+        np.zeros((3, 3)),
+        oct_a,
+        [3.0, 0.0, 0.0],
+        0.0,
+        [0.0, 0.0, 0.0],
+        np.zeros((3, 3)),
+        oct_b,
+    )
+    assert energy == pytest.approx(-125.0 / 2187.0)
+
