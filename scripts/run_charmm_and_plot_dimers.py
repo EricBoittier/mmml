@@ -16,82 +16,12 @@ sys.path.insert(0, str(_REPO_ROOT))
 from ase import Atoms
 from ase.visualize.plot import plot_atoms
 
+from mmml.analysis.dimer_molecules import (
+    MOLECULES,
+    PAIR_SCAN_CONFIG,
+    make_oriented_scan_geometries,
+)
 from mmml.analysis.dimer_scans import build_rigid_dimer, distance_scan_geometries
-
-# Monomer registry
-MOLECULES = {
-    "DCM": {
-        "atoms": Atoms(
-            "CCl2H2",
-            positions=[
-                [0.000, 0.000, 0.000],
-                [1.760, 0.000, 0.000],
-                [-1.760, 0.000, 0.000],
-                [0.000, 0.950, 0.720],
-                [0.000, -0.950, 0.720],
-            ],
-        ),
-    },
-    "ACE": {
-        "atoms": Atoms(
-            "C3OH6",
-            positions=[
-                [0.000, 0.000, 0.000],
-                [1.520, 0.000, 0.000],
-                [-1.520, 0.000, 0.000],
-                [0.000, 1.220, 0.000],
-                [2.050, 0.900, 0.000],
-                [2.050, -0.450, 0.780],
-                [2.050, -0.450, -0.780],
-                [-2.050, 0.900, 0.000],
-                [-2.050, -0.450, 0.780],
-                [-2.050, -0.450, -0.780],
-            ],
-        ),
-    },
-    "BENZ": {
-        "atoms": Atoms(
-            "C6H6",
-            positions=[
-                [1.397, 0.000, 0.000],
-                [0.699, 1.210, 0.000],
-                [-0.699, 1.210, 0.000],
-                [-1.397, 0.000, 0.000],
-                [-0.699, -1.210, 0.000],
-                [0.699, -1.210, 0.000],
-                [2.480, 0.000, 0.000],
-                [1.240, 2.148, 0.000],
-                [-1.240, 2.148, 0.000],
-                [-2.480, 0.000, 0.000],
-                [-1.240, -2.148, 0.000],
-                [1.240, -2.148, 0.000],
-            ],
-        ),
-    },
-    "TIP3": {
-        "atoms": Atoms(
-            "OH2",
-            positions=[
-                [0.000000, 0.000000, 0.000000],
-                [0.957200, 0.000000, 0.000000],
-                [-0.239987, 0.926627, 0.000000],
-            ],
-        ),
-    },
-    "MEOH": {
-        "atoms": Atoms(
-            "COH4",
-            positions=[
-                [0.000, 0.000, 0.000],
-                [1.430, 0.000, 0.000],
-                [1.770, 0.910, 0.000],
-                [-0.540, 0.900, 0.000],
-                [-0.540, -0.450, 0.780],
-                [-0.540, -0.450, -0.780],
-            ],
-        ),
-    },
-}
 
 MAP_RESIDUES = {
     "DCM": "DCM",
@@ -102,18 +32,9 @@ MAP_RESIDUES = {
 }
 
 
-def make_pair_scan(label_a: str, label_b: str, distances: np.ndarray) -> list:
-    return list(
-        distance_scan_geometries(
-            MOLECULES[label_a]["atoms"],
-            MOLECULES[label_b]["atoms"],
-            distances,
-            pair=(label_a, label_b),
-            axis=(1.0, 0.0, 0.0),
-            center="centroid",
-            mol_id_array="mol_id",
-        )
-    )
+def make_pair_scan(label_a: str, label_b: str, distances: np.ndarray, offsets=None) -> list:
+    """Build oriented 2D scan geometries for a pair."""
+    return list(make_oriented_scan_geometries(label_a, label_b, distances, offsets))
 
 
 def main():
