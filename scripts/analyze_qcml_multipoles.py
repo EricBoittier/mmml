@@ -27,7 +27,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from mmml.data.orbax_shards import partition_shards
-from mmml.models.multipoles import E3xMultipoleModel, irrep_blocks_to_traceless
+from mmml.models.multipoles import (
+    E3xDegreeMultipoleModel,
+    E3xMultipoleModel,
+    irrep_blocks_to_traceless,
+)
 try:
     from scripts.train_qcml_multipoles import (
         TrainConfig,
@@ -68,10 +72,21 @@ def load_model(checkpoint: Path) -> tuple[E3xMultipoleModel, Any]:
     raw_config = json.loads(config_path.read_text(encoding="utf-8"))
     valid_fields = {field.name for field in fields(TrainConfig)}
     model_config = {key: value for key, value in raw_config.items() if key in valid_fields}
-    TrainConfig(**model_config)
+    config = TrainConfig(**model_config)
     restored = ocp.PyTreeCheckpointer().restore(checkpoint)
     if "params" not in restored:
         raise KeyError(f"Checkpoint {checkpoint} does not contain params")
+    if config.target_degree is not None:
+        return E3xDegreeMultipoleModel(
+            target_degree=config.target_degree,
+            features=config.features,
+            num_iterations=config.num_iterations,
+            num_basis_functions=config.num_basis_functions,
+            cutoff=config.cutoff,
+            compose_from_atomic=config.compose_dipole_from_atomic,
+            enforce_total_charge=config.enforce_total_charge,
+        ), restored["params"]
+    model_config.pop("target_degree", None)
     return E3xMultipoleModel(**model_config), restored["params"]
 
 

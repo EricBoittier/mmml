@@ -19,13 +19,14 @@ import orbax.checkpoint as ocp
 from flax.training import train_state
 
 from mmml.data.orbax_shards import partition_shards
-from mmml.models.multipoles import E3xMultipoleModel
+from mmml.models.multipoles import E3xDegreeMultipoleModel, E3xMultipoleModel
 
 
 @dataclass(frozen=True)
 class TrainConfig:
     features: int = 64
     max_degree: int = 3
+    target_degree: int | None = None
     num_iterations: int = 3
     num_basis_functions: int = 16
     cutoff: float = 6.0
@@ -100,8 +101,10 @@ def parse_degree_weights(value: str | Sequence[float], max_degree: int = 3) -> n
         raise argparse.ArgumentTypeError(
             f"Expected {expected} comma-separated degree weights, got {len(weights)}"
         )
-    if any(weight <= 0.0 for weight in weights):
-        raise argparse.ArgumentTypeError("Degree weights must be positive")
+    if any(weight < 0.0 for weight in weights):
+        raise argparse.ArgumentTypeError("Degree weights must be non-negative")
+    if not any(weight > 0.0 for weight in weights):
+        raise argparse.ArgumentTypeError("At least one degree weight must be positive")
     return np.asarray(weights, dtype=np.float32)
 
 
@@ -584,7 +587,7 @@ def multipole_loss(
 
 
 def create_state(
-    model: E3xMultipoleModel,
+    model: E3xMultipoleModel | E3xDegreeMultipoleModel,
     batch: dict[str, jax.Array],
     seed: int,
     learning_rate: float,
@@ -619,7 +622,7 @@ _MODEL_INPUT_KEYS = (
 
 
 def build_steps(
-    model: E3xMultipoleModel,
+    model: E3xMultipoleModel | E3xDegreeMultipoleModel,
     batch_size: int,
     target_rms: np.ndarray | jax.Array | None = None,
     degree_weights: np.ndarray | jax.Array | None = None,
@@ -777,6 +780,12 @@ def main() -> None:
     parser.add_argument("--num-basis-functions", type=int, default=16)
     parser.add_argument("--cutoff", type=float, default=6.0)
     parser.add_argument(
+        "--target-degree",
+        type=int,
+        choices=(1, 2, 3),
+        help="Train an independent degree-specific model for l=1, l=2, or l=3.",
+    )
+    parser.add_argument(
         "--compose-dipole-from-atomic",
         action="store_true",
         help="Predict atomic charges/dipoles and compose molecular l0/l1 from them.",
@@ -874,10 +883,24 @@ def main() -> None:
         num_iterations=args.num_iterations,
         num_basis_functions=args.num_basis_functions,
         cutoff=args.cutoff,
+        target_degree=args.target_degree,
         compose_dipole_from_atomic=args.compose_dipole_from_atomic,
         enforce_total_charge=args.enforce_total_charge,
     )
-    model = E3xMultipoleModel(**asdict(config))
+    if args.target_degree is None:
+        model_kwargs = asdict(config)
+        model_kwargs.pop("target_degree", None)
+        model = E3xMultipoleModel(**model_kwargs)
+    else:
+        model = E3xDegreeMultipoleModel(
+            target_degree=args.target_degree,
+            features=args.features,
+            num_iterations=args.num_iterations,
+            num_basis_functions=args.num_basis_functions,
+            cutoff=args.cutoff,
+            compose_from_atomic=args.compose_dipole_from_atomic,
+            enforce_total_charge=args.enforce_total_charge,
+        )
     initial_indices, initial_mask, initial_max_atoms = next(
         iter_bucket_batches(training_buckets, args.batch_size)
     )

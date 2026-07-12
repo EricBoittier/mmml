@@ -15,6 +15,12 @@ def _degree_slice(degree: int) -> tuple[int, int]:
     return start, start + 2 * degree + 1
 
 
+def _pack_single_degree(degree_irrep: jnp.ndarray, degree: int) -> jnp.ndarray:
+    start, stop = _degree_slice(degree)
+    packed = jnp.zeros((degree_irrep.shape[0], 16), dtype=degree_irrep.dtype)
+    return packed.at[:, start:stop].set(degree_irrep)
+
+
 class _E3xMultipoleBackbone(nn.Module):
     """Shared E3x atom-wise equivariant encoder/readout."""
 
@@ -315,6 +321,7 @@ class E3xDegreeMultipoleModel(nn.Module):
             return {
                 "degree": degree_irrep,
                 "multipole": degree_irrep,
+                "multipoles": _pack_single_degree(degree_irrep, self.target_degree),
                 "atomic_charges": atomic_charges,
                 "raw_atomic_charges": raw_atomic_charges,
                 "atomic_dipoles": atomic_dipoles,
@@ -331,6 +338,7 @@ class E3xDegreeMultipoleModel(nn.Module):
         return {
             "degree": degree_irrep,
             "multipole": degree_irrep,
+            "multipoles": _pack_single_degree(degree_irrep, self.target_degree),
             "atomic_degree_irreps": packed_atomic_irreps[:, start:stop],
         }
 
