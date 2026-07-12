@@ -33,6 +33,7 @@ Requires the ``orca`` executable on PATH (or set ``$ORCA`` / pass
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import tempfile
@@ -46,12 +47,32 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 from mmml.analysis.dimer_molecules import PAIR_SCAN_CONFIG, make_oriented_scan_geometries
 from mmml.analysis.dimer_scans import min_fragment_contact_distance
-from mmml.interfaces.qc_backends.orca_qm import parse_orca_out_energy
 from scripts.run_dimer_scan_campaign import build_pair_distance_grid
 
 HARTREE_TO_EV = 27.211386245988
 EV_TO_KCAL_MOL = 23.060548867
 HARTREE_TO_KCAL_MOL = HARTREE_TO_EV * EV_TO_KCAL_MOL
+
+# Deliberately not imported from mmml.interfaces.qc_backends.orca_qm: that
+# module transitively imports mmml.interfaces.pycharmmInterface.import_pycharmm,
+# which does a *module-level* `import pycharmm` (+ MPI init) whenever
+# libcharmm.so is present on the system — completely unrelated to this
+# ORCA-only script, but it would silently drag in the same CHARMM/MPI
+# dependency (and its Slurm-PMI failure mode) that this script has nothing
+# to do with. Kept minimal and self-contained instead.
+_ENERGY_PATTERNS = (
+    re.compile(r"FINAL SINGLE POINT ENERGY\s+(-?\d+\.\d+)"),
+    re.compile(r"Total Energy\s+:\s+(-?\d+\.\d+)"),
+)
+
+
+def parse_orca_out_energy(text: str) -> float | None:
+    """Extract the final single-point energy (Hartree) from ORCA stdout/output."""
+    for pattern in _ENERGY_PATTERNS:
+        matches = pattern.findall(text)
+        if matches:
+            return float(matches[-1])
+    return None
 
 
 def _xyz_block(symbols: list[str], positions: np.ndarray, ghost_mask: np.ndarray, charge: int, multiplicity: int) -> str:
