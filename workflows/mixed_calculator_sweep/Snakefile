@@ -44,6 +44,13 @@ rule run_setting:
         cpus_per_task=lambda wildcards: int(slurm_value("cpus_per_task", 4)),
         mem_mb_per_cpu=lambda wildcards: int(slurm_value("mem_mb_per_cpu", 2000)),
         slurm_partition=lambda wildcards: str(slurm_value("partition", "short")),
+        # `short` mixes two hardware generations (sinfo AVAIL_FEATURES):
+        # node01-08 are Ivy Bridge (E5-2650v2, no AVX2) and node09-14 are
+        # Broadwell (E5-2630v4, has AVX2/FMA/BMI2). polars (a transitive
+        # pycharmm import) requires AVX2 and crashes hard (no Python
+        # traceback -- SIGILL under the hood) on the older nodes. Constrain
+        # to the newer generation rather than letting Slurm pick freely.
+        slurm_extra=lambda wildcards: f"--constraint={slurm_value('constraint', 'E5-2630v4')}",
     shell:
         """
         set -euo pipefail
