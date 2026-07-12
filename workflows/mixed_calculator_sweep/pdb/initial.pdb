@@ -1,0 +1,45 @@
+REMARK   DATE:     7/13/26      0:44:57      CREATED BY USER: ericboittier            
+ATOM      1  CAY TRIA    1       5.252   2.938   4.532  1.00  0.00      PEPT
+ATOM      2  HY1 TRIA    1       5.487   3.282   3.503  1.00  0.00      PEPT
+ATOM      3  HY2 TRIA    1       5.837   2.021   4.756  1.00  0.00      PEPT
+ATOM      4  HY3 TRIA    1       5.541   3.733   5.253  1.00  0.00      PEPT
+ATOM      5  CY  TRIA    1       3.804   2.660   4.662  1.00  0.00      PEPT
+ATOM      6  OY  TRIA    1       3.169   3.120   5.600  1.00  0.00      PEPT
+ATOM      7  N1  TRIA    1       3.324   1.720   3.839  1.00  0.00      PEPT
+ATOM      8  HN1 TRIA    1       3.906   1.362   3.110  1.00  0.00      PEPT
+ATOM      9  CA1 TRIA    1       1.938   1.334   3.695  1.00  0.00      PEPT
+ATOM     10  HA1 TRIA    1       1.687   0.639   4.526  1.00  0.00      PEPT
+ATOM     11  CB1 TRIA    1       0.935   2.513   3.667  1.00  0.00      PEPT
+ATOM     12 HB11 TRIA    1       1.240   3.257   2.902  1.00  0.00      PEPT
+ATOM     13 HB21 TRIA    1       0.921   3.026   4.653  1.00  0.00      PEPT
+ATOM     14 HB31 TRIA    1      -0.097   2.171   3.452  1.00  0.00      PEPT
+ATOM     15  C1  TRIA    1       1.853   0.570   2.387  1.00  0.00      PEPT
+ATOM     16  O1  TRIA    1       2.865   0.425   1.709  1.00  0.00      PEPT
+ATOM     17  N2  TRIA    1       0.786  -0.241   2.225  1.00  0.00      PEPT
+ATOM     18  HN2 TRIA    1       0.050  -0.208   2.889  1.00  0.00      PEPT
+ATOM     19  CA2 TRIA    1       0.663  -1.262   1.195  1.00  0.00      PEPT
+ATOM     20  HA2 TRIA    1      -0.368  -1.665   1.302  1.00  0.00      PEPT
+ATOM     21  CB2 TRIA    1       1.624  -2.442   1.480  1.00  0.00      PEPT
+ATOM     22 HB12 TRIA    1       1.422  -3.292   0.793  1.00  0.00      PEPT
+ATOM     23 HB22 TRIA    1       2.681  -2.126   1.346  1.00  0.00      PEPT
+ATOM     24 HB32 TRIA    1       1.495  -2.795   2.524  1.00  0.00      PEPT
+ATOM     25  C2  TRIA    1       0.744  -0.814  -0.272  1.00  0.00      PEPT
+ATOM     26  O2  TRIA    1       0.510  -1.697  -1.092  1.00  0.00      PEPT
+ATOM     27  N3  TRIA    1       0.085   0.324  -0.545  1.00  0.00      PEPT
+ATOM     28  HN3 TRIA    1      -0.722   0.025  -1.041  1.00  0.00      PEPT
+ATOM     29  CA3 TRIA    1       0.660   1.392  -1.352  1.00  0.00      PEPT
+ATOM     30  HA3 TRIA    1      -0.200   1.997  -1.717  1.00  0.00      PEPT
+ATOM     31  CB3 TRIA    1       1.360   0.863  -2.630  1.00  0.00      PEPT
+ATOM     32 HB13 TRIA    1       0.673   0.204  -3.202  1.00  0.00      PEPT
+ATOM     33 HB23 TRIA    1       1.674   1.702  -3.285  1.00  0.00      PEPT
+ATOM     34 HB33 TRIA    1       2.264   0.272  -2.366  1.00  0.00      PEPT
+ATOM     35  C3  TRIA    1       1.585   2.344  -0.583  1.00  0.00      PEPT
+ATOM     36  O3  TRIA    1       2.789   2.375  -0.807  1.00  0.00      PEPT
+ATOM     37  NT  TRIA    1       1.054   3.407   0.052  1.00  0.00      PEPT
+ATOM     38  HNT TRIA    1       1.727   4.062   0.383  1.00  0.00      PEPT
+ATOM     39  CAT TRIA    1      -0.340   3.615   0.382  1.00  0.00      PEPT
+ATOM     40  HT1 TRIA    1      -0.782   2.702   0.842  1.00  0.00      PEPT
+ATOM     41  HT2 TRIA    1      -0.925   3.879  -0.527  1.00  0.00      PEPT
+ATOM     42  HT3 TRIA    1      -0.440   4.450   1.111  1.00  0.00      PEPT
+TER      43      TRIA     1
+END

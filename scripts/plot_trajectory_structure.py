@@ -67,6 +67,12 @@ def plot_internal(data, output: Path) -> None:
     groups = ((data.bonds, "Bond lengths", "Å", 40), (data.angles, "Angles", "degrees", 45),
               (data.dihedrals, "Dihedrals", "degrees", 72))
     for axis, (coordinates, title, unit, bins) in zip(axes, groups):
+        if not coordinates:
+            # e.g. dihedrals for a pure-water system (no 4-atom chains)
+            axis.set_title(f"{title} (0 coordinates)")
+            axis.text(0.5, 0.5, "none found", ha="center", va="center", transform=axis.transAxes)
+            axis.set_xlabel(unit)
+            continue
         all_values = np.concatenate(list(coordinates.values()))
         axis.hist(all_values, bins=bins, density=True, alpha=0.8)
         axis.set_title(f"{title} ({len(coordinates)} coordinates)")
