@@ -42,37 +42,80 @@ def load_summary(results_dir: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path) -> Path:
-    settings = sorted({row["setting"] for row in rows})
-    color_of = {s: _COLORS[i % len(_COLORS)] for i, s in enumerate(settings)}
-
-    fig, ax = plt.subplots(figsize=(9, 5.5))
-    plotted_any = False
+def _outlier_settings(rows: list[dict[str, str]], results_dir: Path, threshold_ev: float = 1000.0) -> set[str]:
+    """Settings whose |E - E[0]| ever exceeds threshold -- plotted on their own axis."""
+    outliers = set()
     for row in rows:
         if row["completed"] != "True":
             continue
         traj_path = results_dir / row["setting"] / f"seed_{row['seed']}" / "trajectory.npz"
         if not traj_path.is_file():
             continue
-        data = np.load(traj_path)
-        energies = np.asarray(data["energies"], dtype=float)
+        energies = np.asarray(np.load(traj_path)["energies"], dtype=float)
+        if energies.size and np.max(np.abs(energies - energies[0])) > threshold_ev:
+            outliers.add(row["setting"])
+    return outliers
+
+
+def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path) -> Path:
+    """ΔE(frame) = E(frame) - E(frame=0) per (setting, seed).
+
+    Plotting relative to each trace's own starting energy puts water_box
+    (~-75 eV) and peptide_water (~-500 to -560 eV, or the mixed_core_vdw
+    outlier's ~1.7M eV -- see README.md/docs §11) on one comparable axis.
+    Settings whose energy swings by >1000 eV (i.e. mixed_core_vdw's
+    documented initial-configuration blow-up) get their own panel so they
+    don't squash the rest of the (well-behaved) traces to a flat line.
+    """
+    settings = sorted({row["setting"] for row in rows})
+    color_of = {s: _COLORS[i % len(_COLORS)] for i, s in enumerate(settings)}
+    outliers = _outlier_settings(rows, results_dir)
+
+    fig, (ax_main, ax_outlier) = plt.subplots(
+        2, 1, figsize=(9, 8), gridspec_kw={"height_ratios": [2, 1]}
+    )
+    plotted_main = plotted_outlier = False
+    for row in rows:
+        if row["completed"] != "True":
+            continue
+        traj_path = results_dir / row["setting"] / f"seed_{row['seed']}" / "trajectory.npz"
+        if not traj_path.is_file():
+            continue
+        energies = np.asarray(np.load(traj_path)["energies"], dtype=float)
         frames = np.arange(len(energies))
+        delta = energies - energies[0]
         label = f"{row['setting']} (seed {row['seed']})"
+        ax = ax_outlier if row["setting"] in outliers else ax_main
         ax.plot(
-            frames, energies, marker="o", markersize=3, linewidth=1.2,
+            frames, delta, marker="o", markersize=3, linewidth=1.2,
             color=color_of[row["setting"]], alpha=0.85, label=label,
         )
-        plotted_any = True
+        if ax is ax_main:
+            plotted_main = True
+        else:
+            plotted_outlier = True
 
-    if not plotted_any:
-        ax.text(0.5, 0.5, "no trajectory.npz found", ha="center", va="center",
-                 transform=ax.transAxes)
+    if not (plotted_main or plotted_outlier):
+        ax_main.text(0.5, 0.5, "no trajectory.npz found", ha="center", va="center",
+                      transform=ax_main.transAxes)
 
-    ax.set_xlabel("recorded frame (every record_every steps)")
-    ax.set_ylabel("energy (eV)")
-    ax.set_title("Mixed-system / calculator sweep — energy traces")
-    ax.legend(fontsize=7, ncol=2, loc="best", framealpha=0.9)
-    ax.grid(alpha=0.3)
+    ax_main.set_ylabel(r"$E(t) - E(0)$ (eV)")
+    ax_main.set_title("Energy traces relative to each run's initial frame")
+    ax_main.legend(fontsize=7, ncol=2, loc="best", framealpha=0.9)
+    ax_main.grid(alpha=0.3)
+
+    ax_outlier.set_xlabel("recorded frame (every record_every steps)")
+    ax_outlier.set_ylabel(r"$E(t) - E(0)$ (eV)")
+    if outliers:
+        ax_outlier.set_title(
+            f"Large-swing settings (own axis): {', '.join(sorted(outliers))}"
+        )
+        ax_outlier.legend(fontsize=7, loc="best", framealpha=0.9)
+    else:
+        ax_outlier.set_title("No settings exceeded the 1000 eV outlier threshold")
+    ax_outlier.grid(alpha=0.3)
+
+    fig.tight_layout()
     fig.savefig(out, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out
