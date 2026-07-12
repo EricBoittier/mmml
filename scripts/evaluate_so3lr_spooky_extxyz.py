@@ -43,14 +43,22 @@ from mmml.models.physnetjax.physnetjax.training.spooky_training import (
 DIPOLE_KEY_ALIASES = (
     "dipole",
     "dipoles",
+    "Dipole",
     "D",
     "Dxyz",
     "D_xyz",
+    "dxyz",
+    "DXYZ",
     "dipole_moment",
     "dipole_moments",
-    "mu",
-    "muxyz",
+    "dipole_vector",
     "molecular_dipole",
+    "molecular_dipole_moment",
+    "total_dipole",
+    "mu",
+    "Mu",
+    "muxyz",
+    "mu_xyz",
 )
 
 
@@ -158,14 +166,33 @@ def _candidate_vector_keys(requested_key: str) -> tuple[str, ...]:
     return tuple(keys)
 
 
+def _find_exact_or_casefold_key(mapping: dict[str, Any], key: str) -> str | None:
+    if key in mapping:
+        return key
+    key_lower = key.lower()
+    for actual_key in mapping:
+        if actual_key.lower() == key_lower:
+            return actual_key
+    return None
+
+
 def _find_vector_key(atoms, requested_key: str, size: int) -> str | None:
     for key in _candidate_vector_keys(requested_key):
-        if key in atoms.info:
-            _vector_from_raw(atoms.info[key], key, size)
-            return key
-        if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
-            _vector_from_raw(atoms.calc.results[key], key, size)
-            return key
+        info_key = _find_exact_or_casefold_key(atoms.info, key)
+        if info_key is not None:
+            _vector_from_raw(atoms.info[info_key], info_key, size)
+            return info_key
+        calc_results = getattr(atoms.calc, "results", {}) if atoms.calc is not None else {}
+        calc_key = _find_exact_or_casefold_key(calc_results, key)
+        if calc_key is not None:
+            _vector_from_raw(calc_results[calc_key], calc_key, size)
+            return calc_key
+        array_key = _find_exact_or_casefold_key(atoms.arrays, key)
+        if array_key is not None:
+            value = np.asarray(atoms.arrays[array_key])
+            if value.reshape(-1).size == size:
+                _vector_from_raw(value, array_key, size)
+                return array_key
     return None
 
 
@@ -188,7 +215,19 @@ def _get_vector_from_atoms(
         )
     if key in atoms.info:
         return _vector_from_raw(atoms.info[key], key, size), key
-    return _vector_from_raw(atoms.calc.results[key], key, size), key
+    calc_results = getattr(atoms.calc, "results", {}) if atoms.calc is not None else {}
+    if key in calc_results:
+        return _vector_from_raw(calc_results[key], key, size), key
+    return _vector_from_raw(atoms.arrays[key], key, size), key
+
+
+def _format_first_structure_keys(atoms) -> str:
+    calc_results = getattr(atoms.calc, "results", {}) if atoms.calc is not None else {}
+    return (
+        f"info keys: {sorted(atoms.info)}; "
+        f"array keys: {sorted(atoms.arrays)}; "
+        f"calculator result keys: {sorted(calc_results)}"
+    )
 
 
 def _get_energy(atoms, key: str, structure_index: int, default: float = 0.0) -> float:
@@ -249,10 +288,16 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
     ) or args.forces_key == "forces"
     
     dipole_key = _find_vector_key(first_structure, args.dipole_key, 3)
-    has_dipole = dipole_key is not None
-    if has_dipole and dipole_key != args.dipole_key:
+    if dipole_key is not None and dipole_key != args.dipole_key:
         print(
             f"Using dipole key alias '{dipole_key}' for requested key '{args.dipole_key}'",
+            flush=True,
+        )
+    elif dipole_key is None:
+        print(
+            "No dipole vector found in first structure. "
+            f"Tried aliases: {', '.join(_candidate_vector_keys(args.dipole_key))}. "
+            f"{_format_first_structure_keys(first_structure)}",
             flush=True,
         )
 
@@ -264,6 +309,7 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
     charges: list[float] = []
     spins: list[float] = []
     dipoles: list[np.ndarray] = []
+    dipole_masks: list[bool] = []
     offsets = [0]
 
     print(f"Reading extxyz: {extxyz}")
@@ -288,16 +334,21 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
         else:
             energies.append(0.0)
             
-        if has_dipole:
-            dipole, _ = _get_vector_from_atoms(
-                atoms,
-                args.dipole_key,
-                3,
-                default=np.zeros(3, dtype=np.float64),
-            )
-            dipoles.append(dipole)
-        else:
-            dipoles.append(np.zeros(3, dtype=np.float64))
+        dipole, used_dipole_key = _get_vector_from_atoms(
+            atoms,
+            args.dipole_key,
+            3,
+            default=np.zeros(3, dtype=np.float64),
+        )
+        if used_dipole_key is not None and dipole_key is None:
+            dipole_key = used_dipole_key
+            if dipole_key != args.dipole_key:
+                print(
+                    f"Using dipole key alias '{dipole_key}' for requested key '{args.dipole_key}'",
+                    flush=True,
+                )
+        dipoles.append(dipole)
+        dipole_masks.append(used_dipole_key is not None)
             
         natoms.append(n_atoms)
         charge = _get_info_scalar(atoms.info, args.charge_key, args.default_charge)
@@ -324,14 +375,16 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
         "Q": np.asarray(charges, dtype=np.float64).reshape(-1, 1),
         "S": np.asarray(spins, dtype=np.float64).reshape(-1, 1),
         "D": np.asarray(dipoles, dtype=np.float64).reshape(-1, 3),
+        "D_mask": np.asarray(dipole_masks, dtype=bool).reshape(-1, 1),
     }
     data["metadata_n_structures"] = np.asarray(len(energies), dtype=np.int64)
     data["metadata_n_atoms_total"] = np.asarray(offsets[-1], dtype=np.int64)
     data["metadata_max_atoms"] = np.asarray(max(natoms), dtype=np.int32)
     data["metadata_has_energy"] = np.asarray(has_energy, dtype=bool)
     data["metadata_has_forces"] = np.asarray(has_forces, dtype=bool)
-    data["metadata_has_dipole"] = np.asarray(has_dipole, dtype=bool)
+    data["metadata_has_dipole"] = np.asarray(any(dipole_masks), dtype=bool)
     data["metadata_dipole_key"] = np.asarray(dipole_key or "", dtype="<U32")
+    data["metadata_n_dipoles"] = np.asarray(int(np.sum(dipole_masks)), dtype=np.int64)
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Saving Orbax data cache: {cache_path}")
@@ -385,8 +438,9 @@ def limit_cached_data(
     limited = dict(data)
     for key in ("R", "Z", "F"):
         limited[key] = data[key][:atom_limit]
-    for key in ("E", "N", "Q", "S", "D"):
-        limited[key] = data[key][:limit]
+    for key in ("E", "N", "Q", "S", "D", "D_mask"):
+        if key in data:
+            limited[key] = data[key][:limit]
     limited["mol_offsets"] = offsets[: limit + 1]
     updated_metadata = dict(metadata)
     updated_metadata["metadata_n_structures"] = np.asarray(limit, dtype=np.int64)
@@ -454,6 +508,10 @@ def stack_device_batches(
     for i, batch in enumerate(batches):
         indices = device_indices[i]
         batch["D"] = jnp.asarray(data["D"][indices], dtype=jnp.float32)
+        batch["D_mask"] = jnp.asarray(
+            data.get("D_mask", np.ones_like(data["Q"], dtype=bool))[indices],
+            dtype=jnp.bool_,
+        )
         batch["Q_total"] = jnp.asarray(data["Q"][indices], dtype=jnp.float32)
     stacked: dict[str, Any] = {}
     for key in batches[0]:
@@ -515,6 +573,7 @@ def make_eval_steps(model: SpookyPhysNet, args: argparse.Namespace, devices: lis
         if predict_charges:
             res["D_pred"] = out["dipoles"].reshape(batch["D"].shape)
             res["D_ref"] = batch["D"]
+            res["D_mask"] = batch["D_mask"]
             res["Q_pred"] = out["sum_charges"].reshape(batch["Q_total"].shape)
             res["Q_ref"] = batch["Q_total"]
         return res
@@ -568,6 +627,7 @@ def evaluate_dataset(
     predict_charges = args.predict_charges
     dipole_sae = 0.0
     dipole_sse = 0.0
+    dipole_count = 0
     charge_sae = 0.0
     charge_sse = 0.0
 
@@ -635,9 +695,12 @@ def evaluate_dataset(
             if has_dipole:
                 D_pred = np.asarray(predictions["D_pred"]).reshape(is_real_np.shape[0], is_real_np.shape[1], 3)
                 D_ref = np.asarray(predictions["D_ref"]).reshape(is_real_np.shape[0], is_real_np.shape[1], 3)
-                dipole_errors = np.abs(D_pred[is_real_np] - D_ref[is_real_np])
+                D_mask = np.asarray(predictions.get("D_mask", np.ones((*is_real_np.shape, 1), dtype=bool))).reshape(is_real_np.shape)
+                dipole_real = is_real_np & D_mask
+                dipole_errors = np.abs(D_pred[dipole_real] - D_ref[dipole_real])
                 dipole_sae += float(np.sum(dipole_errors))
                 dipole_sse += float(np.sum(dipole_errors**2))
+                dipole_count += int(np.sum(dipole_real))
             
             Q_pred = np.asarray(predictions["Q_pred"]).reshape(is_real_np.shape)
             Q_ref = np.asarray(predictions["Q_ref"]).reshape(is_real_np.shape)
@@ -662,8 +725,8 @@ def evaluate_dataset(
         
     if predict_charges:
         if has_dipole:
-            metrics["dipole_mae"] = dipole_sae / max(1, total_structures * 3)
-            metrics["dipole_rmse"] = math.sqrt(dipole_sse / max(1, total_structures * 3))
+            metrics["dipole_mae"] = dipole_sae / max(1, dipole_count * 3)
+            metrics["dipole_rmse"] = math.sqrt(dipole_sse / max(1, dipole_count * 3))
         else:
             metrics["dipole_mae"] = float('nan')
             metrics["dipole_rmse"] = float('nan')

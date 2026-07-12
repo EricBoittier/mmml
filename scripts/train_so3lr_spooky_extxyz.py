@@ -47,14 +47,22 @@ from mmml.models.physnetjax.physnetjax.training.spooky_training import (
 DIPOLE_KEY_ALIASES = (
     "dipole",
     "dipoles",
+    "Dipole",
     "D",
     "Dxyz",
     "D_xyz",
+    "dxyz",
+    "DXYZ",
     "dipole_moment",
     "dipole_moments",
-    "mu",
-    "muxyz",
+    "dipole_vector",
     "molecular_dipole",
+    "molecular_dipole_moment",
+    "total_dipole",
+    "mu",
+    "Mu",
+    "muxyz",
+    "mu_xyz",
 )
 
 
@@ -143,14 +151,33 @@ def _candidate_vector_keys(requested_key: str) -> tuple[str, ...]:
     return tuple(keys)
 
 
+def _find_exact_or_casefold_key(mapping: Mapping[str, Any], key: str) -> str | None:
+    if key in mapping:
+        return key
+    key_lower = key.lower()
+    for actual_key in mapping:
+        if actual_key.lower() == key_lower:
+            return actual_key
+    return None
+
+
 def _find_vector_key(atoms, requested_key: str, size: int) -> str | None:
     for key in _candidate_vector_keys(requested_key):
-        if key in atoms.info:
-            _vector_from_raw(atoms.info[key], key, size)
-            return key
-        if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
-            _vector_from_raw(atoms.calc.results[key], key, size)
-            return key
+        info_key = _find_exact_or_casefold_key(atoms.info, key)
+        if info_key is not None:
+            _vector_from_raw(atoms.info[info_key], info_key, size)
+            return info_key
+        calc_results = getattr(atoms.calc, "results", {}) if atoms.calc is not None else {}
+        calc_key = _find_exact_or_casefold_key(calc_results, key)
+        if calc_key is not None:
+            _vector_from_raw(calc_results[calc_key], calc_key, size)
+            return calc_key
+        array_key = _find_exact_or_casefold_key(atoms.arrays, key)
+        if array_key is not None:
+            value = np.asarray(atoms.arrays[array_key])
+            if value.reshape(-1).size == size:
+                _vector_from_raw(value, array_key, size)
+                return array_key
     return None
 
 
@@ -165,7 +192,10 @@ def _get_vector_from_atoms(atoms, requested_key: str, size: int) -> tuple[np.nda
         )
     if key in atoms.info:
         return _vector_from_raw(atoms.info[key], key, size), key
-    return _vector_from_raw(atoms.calc.results[key], key, size), key
+    calc_results = getattr(atoms.calc, "results", {}) if atoms.calc is not None else {}
+    if key in calc_results:
+        return _vector_from_raw(calc_results[key], key, size), key
+    return _vector_from_raw(atoms.arrays[key], key, size), key
 
 
 def _get_energy(atoms, key: str, structure_index: int) -> float:
@@ -287,11 +317,14 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
     data["metadata_n_structures"] = np.asarray(len(energies), dtype=np.int64)
     data["metadata_n_atoms_total"] = np.asarray(offsets[-1], dtype=np.int64)
     data["metadata_max_atoms"] = np.asarray(max(natoms), dtype=np.int32)
-    data["metadata_dipole_key"] = np.asarray(resolved_dipole_key or "", dtype="<U32")
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Saving Orbax data cache: {cache_path}")
     _orbax_save(cache_path, data, force=True)
+    # orbax/tensorstore can't serialize string-dtype arrays, so the resolved
+    # dipole key is recorded in a plain JSON sidecar instead of the pytree.
+    with (cache_path / "metadata.json").open("w") as fh:
+        json.dump({"dipole_key": resolved_dipole_key or ""}, fh)
     print(
         "Cached "
         f"{len(energies):,} structures, {offsets[-1]:,} atoms, "
