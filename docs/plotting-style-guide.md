@@ -32,14 +32,21 @@ colors = comparison_colors(style, n=len(settings))  # fixed categorical order
 
 | Preset | When |
 |---|---|
-| `"tufte"` | **Default for sweep/analysis figures meant to be read, not just glanced at** (energy traces, RDFs, bond/angle histograms, anything going in a writeup) — large serif type (`axes.labelsize=15`, `axes.titlesize=17` bold), thick lines (`lines.linewidth=2.8`), LaTeX-style math via `mathtext.fontset="stix"` (no TeX install needed — `r"$E(t) - E(0)$"` just works), no top/right spine, faint dotted grid. Used by both `workflows/*/scripts/plot_results.py` and `plot_structure.py`. |
-| `"nature"` (alias `"pub"`/`"publication"`) | Compact journal-figure alternative when `"tufte"`'s larger type doesn't fit a multi-panel grid — sans-serif, `axes.labelsize=9`. |
+| `"editorial_dejavu_sans"` / `"editorial_dejavu_serif"` / `"editorial_stix"` / `"editorial_cm"` | **Default family for sweep/analysis figures meant to be read, not just glanced at** (energy traces, RDFs, bond/angle histograms, anything going in a writeup) — large type (`axes.labelsize=15`, `axes.titlesize=17` bold), thick lines (`lines.linewidth=2.8`), LaTeX-style math via `mathtext.fontset` (no TeX install needed — `r"$E(t) - E(0)$"` just works), no top/right spine, faint dotted grid. The four variants share this **same axis/spacing treatment** and differ only in typeface — see [`docs/plot-style-gallery.md`](plot-style-gallery.md) for a rendered side-by-side comparison before picking one. Used by both `workflows/*/scripts/plot_results.py` and `plot_structure.py` (currently defaulted to `editorial_dejavu_serif`, pending a final pick). |
+| `"nature"` (alias `"pub"`/`"publication"`) | Compact journal-figure alternative when the editorial family's larger type doesn't fit a multi-panel grid — sans-serif, `axes.labelsize=9`. |
 | `"google"` (module default) | Training-curve dashboards (loss/lr curves) — this is what most existing training-plot scripts assume implicitly. |
 | `"mpl_classic"` | Quick throwaway diagnostics where house branding doesn't matter. |
 | `"xmgrace"` / `"tron"` | Not for new work — legacy/novelty presets. |
 
 Run `mmml.utils.plotting.styles.list_plot_styles()` to see all registered
 names/aliases.
+
+**On the name**: these are *not* "the Tufte style" — Tufte described a set of
+principles (data-ink ratio, redundant encoding instead of decoration, small
+multiples), not one font or palette, so no single preset should claim his
+name. `"tufte"` still resolves as a backward-compat alias (→
+`editorial_stix`) since an earlier pass mistakenly registered it that way,
+but new code should name the `editorial_*` variant directly.
 
 ## Semantic color, not palette index
 
@@ -75,6 +82,11 @@ Concrete house examples (both from `workflows/*/scripts/plot_results.py`):
   already does this correctly via `ase.data.colors.jmol_colors` — an O atom
   is the same red everywhere because "oxygen" is the semantic category, not
   because oxygen happened to be plotted first.
+- **Coordinate-type coloring** (`plot_internal` in the same file): bonds,
+  angles, and dihedrals are three different physical quantities (different
+  stiffness, different units) and each gets its own fixed color
+  (`_COORDINATE_TYPE_COLORS`) — they should never all render as the same
+  default blue just because no one assigned them a color explicitly.
 
 When in doubt: if you can name *why* a series has the color it has (its
 system, its physics, its pass/fail status) in one short phrase, it's
@@ -83,7 +95,7 @@ semantic. If the only answer is "it's next in the list," fix it.
 ## Figure conventions (from real precedent, not invented)
 
 - **DPI**: `150` for a quick per-run diagnostic plot regenerated often;
-  `200` for `"tufte"`-styled sweep figures (`workflows/*/scripts/plot_results.py`);
+  `200` for `editorial_*`-styled sweep figures (`workflows/*/scripts/plot_results.py`);
   `300` for anything meant to be read very closely or reused in a writeup
   (RDFs, bond/angle/dihedral histograms — see
   `scripts/plot_trajectory_structure.py`'s `plot_rdfs`/`plot_internal`, both
