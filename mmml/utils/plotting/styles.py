@@ -276,8 +276,6 @@ _EDITORIAL_RC_DEJAVU_SERIF = _editorial_rc(
     family="serif", serif=["DejaVu Serif"], mathtext_fontset="dejavuserif")
 _EDITORIAL_RC_STIX = _editorial_rc(
     family="serif", serif=["STIXGeneral", "DejaVu Serif"], mathtext_fontset="stix")
-_EDITORIAL_RC_STIXSANS = _editorial_rc(
-    family="sans-serif", sans=["STIXGeneral", "DejaVu Sans"], mathtext_fontset="stixsans")
 _EDITORIAL_RC_CM = _editorial_rc(
     family="serif", serif=["DejaVu Serif"], mathtext_fontset="cm")
 
@@ -410,14 +408,6 @@ PLOT_STYLES: dict[str, PlotStyle] = {
         "editorial_stix",
         "Editorial axes in STIX serif (journal-typeset feel; was previously called 'tufte').",
         colors=_EDITORIAL_COLORS, rc_params=_EDITORIAL_RC_STIX,
-        comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
-        train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
-        text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},
-    ),
-    "editorial_stixsans": _style(
-        "editorial_stixsans",
-        "Editorial axes in STIX Sans (humanist sans, softer than DejaVu Sans).",
-        colors=_EDITORIAL_COLORS, rc_params=_EDITORIAL_RC_STIXSANS,
         comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
         train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
         text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},

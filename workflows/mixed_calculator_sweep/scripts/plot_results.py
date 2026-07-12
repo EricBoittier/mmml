@@ -19,7 +19,7 @@ since ``run_setting.py`` passes ``output_dir``) to produce:
 
 **Color is semantic, not palette-index**: every setting is colored by its
 *system* (``water_box`` = deep blue "MM only", ``peptide_water`` = brick red
-"mixed ML/MM") using the house "tufte" style's `train`/`valid` roles, not an
+"mixed ML/MM") using the house "editorial" style family's `train`/`valid` roles, not an
 arbitrary per-series hue — see docs/plotting-style-guide.md "Semantic color,
 not palette index". Individual settings within a system share that color but
 get a distinct marker shape, so identity is still readable without inventing
@@ -38,7 +38,7 @@ import numpy as np
 from mmml.md.results import energy_drift_metrics
 from mmml.utils.plotting.styles import apply_plot_style
 
-_STYLE_NAME = "tufte"
+_STYLE_NAME = "editorial_dejavu_serif"  # swap freely -- see docs/plot-style-gallery.md
 
 # Semantic system -> color (see module docstring). Not palette-index colors.
 _SYSTEM_COLORS = {"water_box": "#1A5276", "peptide_water": "#943126"}

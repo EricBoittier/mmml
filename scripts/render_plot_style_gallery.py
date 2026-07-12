@@ -72,7 +72,6 @@ def main() -> None:
         "editorial_dejavu_sans",
         "editorial_dejavu_serif",
         "editorial_stix",
-        "editorial_stixsans",
         "editorial_cm",
     ]
     for name in variants:

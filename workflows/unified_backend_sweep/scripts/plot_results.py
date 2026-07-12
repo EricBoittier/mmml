@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 
 from mmml.utils.plotting.styles import apply_plot_style
 
-_STYLE_NAME = "tufte"
+_STYLE_NAME = "editorial_dejavu_serif"  # swap freely -- see docs/plot-style-gallery.md
 
 _BACKEND_COLORS = {
     "jaxmd_min": "#5D6D7E",   # neutral gray -- deterministic minimization

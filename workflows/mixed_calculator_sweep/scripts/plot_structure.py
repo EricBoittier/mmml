@@ -24,12 +24,12 @@ import numpy as np
 from ase import Atoms
 
 from mmml.utils.plotting.styles import apply_plot_style
-
-_STYLE_NAME = "tufte"
 from mmml.utils.plotting.trajectory_structure import (
     element_pair_rdfs,
     internal_coordinate_distributions,
 )
+
+_STYLE_NAME = "editorial_dejavu_serif"  # swap freely -- see docs/plot-style-gallery.md
 
 
 def _load_reference_plotting_module(repo_root: Path):

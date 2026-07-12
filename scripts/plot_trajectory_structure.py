@@ -62,11 +62,21 @@ def plot_rdfs(radii, rdfs, output: Path) -> None:
     plt.close(figure)
 
 
+# Each coordinate TYPE is a different physical quantity (bonds: stiffest,
+# ~pm fluctuations; angles: intermediate; dihedrals: often near-free
+# rotation) -- give each its own semantic color rather than reusing one
+# default blue for all three (see docs/plotting-style-guide.md "Semantic
+# color, not palette index"). Matches the colors used for the same three
+# categories in docs/plot-style-gallery-assets (scripts/render_plot_style_gallery.py).
+_COORDINATE_TYPE_COLORS = {"Bond lengths": "#1A5276", "Angles": "#B9770E", "Dihedrals": "#1E8449"}
+
+
 def plot_internal(data, output: Path) -> None:
     figure, axes = plt.subplots(1, 3, figsize=(15, 4.5))
     groups = ((data.bonds, "Bond lengths", "Å", 40), (data.angles, "Angles", "degrees", 45),
               (data.dihedrals, "Dihedrals", "degrees", 72))
     for axis, (coordinates, title, unit, bins) in zip(axes, groups):
+        color = _COORDINATE_TYPE_COLORS[title]
         if not coordinates:
             # e.g. dihedrals for a pure-water system (no 4-atom chains)
             axis.set_title(f"{title} (0 coordinates)")
@@ -74,7 +84,7 @@ def plot_internal(data, output: Path) -> None:
             axis.set_xlabel(unit)
             continue
         all_values = np.concatenate(list(coordinates.values()))
-        axis.hist(all_values, bins=bins, density=True, alpha=0.8)
+        axis.hist(all_values, bins=bins, density=True, alpha=0.8, color=color)
         axis.set_title(f"{title} ({len(coordinates)} coordinates)")
         axis.set_xlabel(unit)
         axis.set_ylabel("Probability density")
