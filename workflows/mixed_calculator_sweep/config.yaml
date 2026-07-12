@@ -74,19 +74,21 @@ settings:
   # -- every core-water dimer is still run through the ML model every step
   # (vmapped, no neighbor-list-style pruning like mm_nonbonded's padded pair
   # list); the cutoff only applies a post-hoc energy switching weight. So it
-  # affects physics (zeroing far-water contributions), not runtime. It's kept
-  # below because it's still the physically correct choice, but the ACTUAL
-  # fix for the ~3-real-hour-and-still-running-at-n_waters=20 slowdown seen
-  # on pc-studix (see README.md "Real-run status") is fewer dimers per step:
-  # n_waters dropped 20 -> 8 (2.5x fewer vmapped ML forward passes/step) and
-  # n_steps dropped 10000 -> 2000 (still 100x the local smoke test's 20
-  # steps, and record_every=100 still gives 20 recorded energy samples) so a
-  # production run fits the existing walltime/hardware budget honestly,
-  # rather than re-claiming a fix that doesn't touch the actual bottleneck.
+  # affects physics (zeroing far-water contributions), not runtime. Kept
+  # below because it's still the physically correct choice, not a speed fix.
+  #
+  # n_steps history (measured, not guessed): 20000 -> TIMEOUT (>3h, cancelled
+  # manually); n_waters 20->8 + n_steps 10000->2000 -> STILL TIMEOUT at the
+  # 240 min budget (a local 20-step check took 197s, i.e. ~9.85 s/step even
+  # past JIT compile -- ml_pep_water's per-step cost scales ~linearly with
+  # steps, it is not compile-dominated like the small water_box case).
+  # 2000 * ~10s/step ~= 5.5h, consistent with the observed timeout.
+  # n_steps cut again to 200 (~9.85s/step * 200 ~= 33 min, comfortably inside
+  # the 240 min budget) to get an actually-completing mixed-system run.
   mixed_baseline:
     system: peptide_water
     n_waters: 8
-    n_steps: 2000
+    n_steps: 200
     box_size: 20.0
     checkpoint: base
     peptide_water_ml_cutoff_A: 6.0
@@ -95,7 +97,7 @@ settings:
   mixed_older_epoch:
     system: peptide_water
     n_waters: 8
-    n_steps: 2000
+    n_steps: 200
     box_size: 20.0
     checkpoint: older_epoch
     peptide_water_ml_cutoff_A: 6.0
@@ -103,7 +105,7 @@ settings:
   mixed_damping_sigma:
     system: peptide_water
     n_waters: 8
-    n_steps: 2000
+    n_steps: 200
     box_size: 20.0
     checkpoint: base
     calculator: {electrostatics_damping_sigma: 1.0}
@@ -114,7 +116,7 @@ settings:
     # and any water outside ml_pep_water's own interaction cutoff.
     system: peptide_water
     n_waters: 8
-    n_steps: 2000
+    n_steps: 200
     box_size: 20.0
     checkpoint: base
     peptide_water_ml_cutoff_A: 6.0
