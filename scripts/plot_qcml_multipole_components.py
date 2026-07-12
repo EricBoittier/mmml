@@ -196,6 +196,8 @@ def component_metrics(
     target: np.ndarray,
     prediction: np.ndarray,
     scale_vector: np.ndarray,
+    *,
+    metric_max_normalized_target: float | None = None,
 ) -> list[dict[str, Any]]:
     rows = []
     for meta in component_metadata():
@@ -213,24 +215,63 @@ def component_metrics(
             if denominator
             else float("nan")
         )
-        rows.append(
-            {
-                **meta,
-                "scale": scale,
-                "target_mean": float(np.mean(target_values)),
-                "target_std": float(np.std(target_values)),
-                "target_q01": float(np.quantile(target_values, 0.01)),
-                "target_q99": float(np.quantile(target_values, 0.99)),
-                "prediction_mean": float(np.mean(prediction_values)),
-                "prediction_std": float(np.std(prediction_values)),
-                "bias": float(np.mean(error)),
-                "mae": float(np.mean(np.abs(error))),
-                "rmse": float(np.sqrt(np.mean(np.square(error)))),
-                "normalized_mae": float(np.mean(np.abs(normalized_error))),
-                "normalized_rmse": float(np.sqrt(np.mean(np.square(normalized_error)))),
-                "correlation": correlation,
-            }
-        )
+        row = {
+            **meta,
+            "scale": scale,
+            "target_mean": float(np.mean(target_values)),
+            "target_std": float(np.std(target_values)),
+            "target_q01": float(np.quantile(target_values, 0.01)),
+            "target_q99": float(np.quantile(target_values, 0.99)),
+            "target_abs_q95": float(np.quantile(np.abs(target_values), 0.95)),
+            "target_abs_q99": float(np.quantile(np.abs(target_values), 0.99)),
+            "prediction_mean": float(np.mean(prediction_values)),
+            "prediction_std": float(np.std(prediction_values)),
+            "bias": float(np.mean(error)),
+            "mae": float(np.mean(np.abs(error))),
+            "rmse": float(np.sqrt(np.mean(np.square(error)))),
+            "normalized_mae": float(np.mean(np.abs(normalized_error))),
+            "normalized_rmse": float(np.sqrt(np.mean(np.square(normalized_error)))),
+            "correlation": correlation,
+        }
+        if metric_max_normalized_target is not None:
+            inlier = np.abs(target_values) <= metric_max_normalized_target * scale
+            row["metric_max_normalized_target"] = float(metric_max_normalized_target)
+            row["inlier_fraction"] = float(np.mean(inlier))
+            row["inlier_count"] = int(np.sum(inlier))
+            if np.any(inlier):
+                inlier_error = error[inlier]
+                inlier_normalized_error = normalized_error[inlier]
+                inlier_target = target_values[inlier]
+                inlier_prediction = prediction_values[inlier]
+                inlier_centered_target = inlier_target - np.mean(inlier_target)
+                inlier_centered_prediction = inlier_prediction - np.mean(inlier_prediction)
+                inlier_denominator = (
+                    np.linalg.norm(inlier_centered_target)
+                    * np.linalg.norm(inlier_centered_prediction)
+                )
+                row["inlier_bias"] = float(np.mean(inlier_error))
+                row["inlier_mae"] = float(np.mean(np.abs(inlier_error)))
+                row["inlier_rmse"] = float(np.sqrt(np.mean(np.square(inlier_error))))
+                row["inlier_normalized_mae"] = float(np.mean(np.abs(inlier_normalized_error)))
+                row["inlier_normalized_rmse"] = float(
+                    np.sqrt(np.mean(np.square(inlier_normalized_error)))
+                )
+                row["inlier_correlation"] = (
+                    float(
+                        np.dot(inlier_centered_target, inlier_centered_prediction)
+                        / inlier_denominator
+                    )
+                    if inlier_denominator
+                    else float("nan")
+                )
+            else:
+                row["inlier_bias"] = float("nan")
+                row["inlier_mae"] = float("nan")
+                row["inlier_rmse"] = float("nan")
+                row["inlier_normalized_mae"] = float("nan")
+                row["inlier_normalized_rmse"] = float("nan")
+                row["inlier_correlation"] = float("nan")
+        rows.append(row)
     return rows
 
 
@@ -331,13 +372,24 @@ def plot_all_components(
     prediction: np.ndarray,
     plot_indices: np.ndarray,
     unit: str,
+    scale_vector: np.ndarray,
+    plot_max_normalized_target: float | None,
 ) -> None:
     component_dir = output_dir / "components"
     component_dir.mkdir(parents=True, exist_ok=True)
     for meta in component_metadata():
         index = meta["index"]
-        target_values = target[plot_indices, index]
-        prediction_values = prediction[plot_indices, index]
+        component_indices = plot_indices
+        if plot_max_normalized_target is not None:
+            component_scale = float(scale_vector[index])
+            component_indices = component_indices[
+                np.abs(target[component_indices, index])
+                <= plot_max_normalized_target * component_scale
+            ]
+        target_values = target[component_indices, index]
+        prediction_values = prediction[component_indices, index]
+        if not len(target_values):
+            continue
         plot_component_parity(
             component_dir / f"xy_{meta['name']}.png",
             target_values,
@@ -353,14 +405,40 @@ def plot_all_components(
             unit,
         )
     for degree in range(4):
-        plot_degree_grid(
-            output_dir / f"xy_grid_l{degree}.png",
-            target,
-            prediction,
-            degree,
-            plot_indices,
-            unit,
+        metas = [meta for meta in component_metadata() if meta["degree"] == degree]
+        columns = min(len(metas), 4)
+        rows = int(np.ceil(len(metas) / columns))
+        figure, axes = plt.subplots(
+            rows,
+            columns,
+            figsize=(4 * columns, 4 * rows),
+            squeeze=False,
+            constrained_layout=True,
         )
+        for axis, meta in zip(axes.flat, metas, strict=False):
+            index = meta["index"]
+            component_indices = plot_indices
+            if plot_max_normalized_target is not None:
+                component_scale = float(scale_vector[index])
+                component_indices = component_indices[
+                    np.abs(target[component_indices, index])
+                    <= plot_max_normalized_target * component_scale
+                ]
+            if not len(component_indices):
+                axis.axis("off")
+                continue
+            target_values = target[component_indices, index]
+            prediction_values = prediction[component_indices, index]
+            axis.scatter(target_values, prediction_values, s=4, alpha=0.25, rasterized=True)
+            limits = identity_limits(target_values, prediction_values)
+            axis.plot(limits, limits, color="black", linewidth=1, linestyle="--")
+            axis.set(xlim=limits, ylim=limits, title=meta["name"])
+            axis.set_xlabel(f"Reference [{unit}]")
+            axis.set_ylabel(f"Prediction [{unit}]")
+        for axis in axes.flat[len(metas):]:
+            axis.axis("off")
+        figure.savefig(output_dir / f"xy_grid_l{degree}.png", dpi=180)
+        plt.close(figure)
 
 
 def write_npz(
@@ -397,6 +475,23 @@ def main() -> None:
     parser.add_argument("--max-plot-points", type=int, default=50000)
     parser.add_argument("--scale-json", type=Path)
     parser.add_argument("--normalize-by-scale", action="store_true")
+    parser.add_argument(
+        "--metric-max-normalized-target",
+        type=float,
+        help=(
+            "Also report inlier_* metrics using points with "
+            "abs(target_component) <= this value * component scale."
+        ),
+    )
+    parser.add_argument(
+        "--plot-max-normalized-target",
+        type=float,
+        help=(
+            "For XY/error plots, omit points with abs(target_component) above "
+            "this value times the component scale. Metrics remain unfiltered "
+            "except for optional inlier_* columns."
+        ),
+    )
     parser.add_argument("--unit", default="QCML native")
     parser.add_argument("--save-npz", action="store_true")
     args = parser.parse_args()
@@ -407,14 +502,28 @@ def main() -> None:
     if scale_json is not None:
         print(f"Using scale JSON: {scale_json}", flush=True)
     target, prediction, indices, num_atoms = collect_predictions(args)
-    metrics = component_metrics(target, prediction, scale_vector)
+    metrics = component_metrics(
+        target,
+        prediction,
+        scale_vector,
+        metric_max_normalized_target=args.metric_max_normalized_target,
+    )
     write_metrics(args.output_dir, metrics)
 
     plot_target = target / scale_vector if args.normalize_by_scale else target
     plot_prediction = prediction / scale_vector if args.normalize_by_scale else prediction
     unit = "normalized by target scale" if args.normalize_by_scale else args.unit
     plot_indices = select_plot_points(len(target), args.max_plot_points, args.seed)
-    plot_all_components(args.output_dir, plot_target, plot_prediction, plot_indices, unit)
+    plot_scale_vector = np.ones_like(scale_vector) if args.normalize_by_scale else scale_vector
+    plot_all_components(
+        args.output_dir,
+        plot_target,
+        plot_prediction,
+        plot_indices,
+        unit,
+        plot_scale_vector,
+        args.plot_max_normalized_target,
+    )
     if args.save_npz:
         write_npz(args.output_dir, target, prediction, indices, num_atoms)
 
@@ -424,6 +533,8 @@ def main() -> None:
         "num_structures": int(len(target)),
         "num_plot_points": int(len(plot_indices)),
         "normalized_by_scale": bool(args.normalize_by_scale),
+        "metric_max_normalized_target": args.metric_max_normalized_target,
+        "plot_max_normalized_target": args.plot_max_normalized_target,
         "scale_json": str(scale_json) if scale_json else None,
     }
     (args.output_dir / "summary.json").write_text(
