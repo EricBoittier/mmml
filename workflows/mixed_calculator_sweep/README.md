@@ -93,20 +93,34 @@ With all of that fixed:
   for ~3 hours with no crash** — CPU/memory usage confirmed healthy and
   steadily active (not hung) via `ps` on each compute node — but were
   intentionally cancelled before completing all 10000 steps rather than
-  waiting out the full run. Extrapolating from a local 20-step smoke test,
-  a full 10000-step mixed run is on the order of **15-20+ hours** on this
-  hardware, ~30-40x slower per step than the plain water box. The likely
-  driver: `mixed_baseline`/`mixed_older_epoch`/`mixed_damping_sigma` don't
-  set `peptide_water_ml_cutoff_A`, so `ml_pep_water` scores *every*
-  core-water pair densely each step rather than through a neighbor list —
-  `mm_nonbonded`'s padded pair list has no equivalent capacity limit here.
-  **Action for a real production mixed-system run:** always set
-  `peptide_water_ml_cutoff_A` (as `mixed_core_vdw` does) to bound the dimer
-  pair count, and/or reduce `n_waters` or `n_steps` to a budget that matches
-  available walltime.
+  waiting out the full run: at that point `water_baseline` had already
+  finished 10000 steps in ~324 s, while the mixed settings (at `n_waters=20`)
+  hadn't finished after ~10800 s and counting — at least ~33x slower.
+  **Root cause, verified by reading the term's implementation** (not just
+  inferred from timing): `ml_pep_water`'s `interaction_cutoff_A` does **not**
+  reduce its per-step cost — checked directly in
+  `mmml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn`,
+  every core-water dimer is vmapped through the ML model *every step*
+  regardless of the cutoff; the cutoff only applies a post-hoc energy
+  switching weight (correct physics, zero runtime effect). Unlike
+  `mm_nonbonded`, there is no neighbor-list-style pruning for this term (no
+  `active_group_slots`/`active_group_mask` auto-wiring exists in
+  `assemble.py` for `ml_core_group`-kind `NeighborRequest`s — see the "Mixed
+  system support checklist" in `docs/md-cg-unification-design.md` §11 for
+  that as an open item). **Actual fix applied**: `n_waters` dropped from 20
+  to 8 (2.5x fewer vmapped ML forward passes per step — the only lever that
+  really cuts `ml_pep_water`'s cost today) and `n_steps` dropped from 10000
+  to 2000 for all `peptide_water` settings (still 100x the local smoke
+  test's 20 steps, and `record_every=100` still gives 20 recorded energy
+  samples). `peptide_water_ml_cutoff_A` is kept on every mixed setting
+  because it's still the physically correct choice, just not a speed fix.
 - This validates the mixed-system code path itself (builder, term
-  composition, calculator variants) end-to-end on the real cluster; it does
-  not yet produce a complete 10000-step mixed-system energy trace. A
-  follow-up run with `peptide_water_ml_cutoff_A` set on every mixed setting
-  (not just `mixed_core_vdw`) and/or a longer walltime budget is needed for
-  that.
+  composition, calculator variants) end-to-end on the real cluster. The
+  reduced-scale config above (`n_waters=8`, `n_steps=2000`) is intended to
+  actually complete within the existing walltime budget — that run has not
+  yet been executed/confirmed as of this writing; do that before trusting
+  the mixed-system energy traces to exist in `results/summary.md`. Wiring
+  real neighbor-list support for `ml_core_group` terms (so
+  `peptide_water_ml_cutoff_A` becomes a genuine speed lever, not just an
+  energy correction) remains open future work if larger `n_waters`/`n_steps`
+  mixed runs are needed.

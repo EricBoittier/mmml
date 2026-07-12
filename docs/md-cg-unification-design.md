@@ -870,20 +870,38 @@ system with a real ML checkpoint.
 - [~] Mixed-system (`peptide_water`) settings ran clean for ~3 real hours on
       the cluster with no crash (confirmed via `ps` on each compute node:
       steady CPU usage, stable memory) but were intentionally cancelled
-      before their 10000 steps completed, rather than waiting an estimated
-      15-20+ hours. Root cause of the slowdown: most mixed settings don't set
-      `ml_pep_water`'s `interaction_cutoff_A`, so it scores every core-water
-      pair densely each step (no neighbor-list capacity limit, unlike
-      `mm_nonbonded`'s padded pair list) — ~30-40x slower per step than the
-      water-box case. This validates the mixed-system code path
-      end-to-end (builder, term composition, calculator variants all ran
-      without error) but does **not** yet produce a complete mixed-system
-      energy trace. See `workflows/mixed_calculator_sweep/README.md`
-      "Real-run status" for the full incident log (packmol binary
-      clobbered with a macOS build, AVX2-vs-non-AVX2 node split, OOM at the
-      original memory budget, Snakemake driver dying on SSH disconnect —
-      all fixed). Follow-up: set `interaction_cutoff_A` on every mixed
-      setting (not just `mixed_core_vdw`) and/or budget more walltime.
+      before their 10000 steps completed (`water_baseline` finished all
+      10000 steps in ~324s in the same window; the mixed settings, at
+      `n_waters=20`, hadn't finished after ~10800s — at least ~33x slower).
+      **Root cause, verified against the term's source** (not just inferred
+      from timing): `ml_pep_water`'s `interaction_cutoff_A` does **not**
+      reduce its per-step cost — checked directly in
+      `mmml/interfaces/jaxmdInterface/hybrid_energy.py::make_peptide_water_ml_energy_fn`,
+      every core-water dimer is vmapped through the ML model *every step*
+      regardless of the cutoff; the cutoff only applies a post-hoc energy
+      switching weight (correct physics, zero runtime effect). Unlike
+      `mm_nonbonded`, no neighbor-list-style pruning exists for this term
+      yet (no `active_group_slots`/`active_group_mask` auto-wiring in
+      `assemble.py` for `ml_core_group`-kind `NeighborRequest`s — tracked as
+      an open item below). **Actual fix applied**: reduced `n_waters` 20→8
+      (fewer vmapped dimers/step — the only real lever today) and `n_steps`
+      10000→2000 for all `peptide_water` settings in
+      `workflows/mixed_calculator_sweep/config.yaml`; `interaction_cutoff_A`
+      is kept (still physically correct) but is no longer claimed as a speed
+      fix. This validates the mixed-system code path end-to-end (builder,
+      term composition, calculator variants all ran without error) but the
+      reduced-scale config has not yet been re-run/confirmed complete on
+      the cluster as of this writing. See
+      `workflows/mixed_calculator_sweep/README.md` "Real-run status" for
+      the full incident log (packmol binary clobbered with a macOS build,
+      AVX2-vs-non-AVX2 node split, OOM at the original memory budget,
+      Snakemake driver dying on SSH disconnect — all fixed).
+- [ ] Real neighbor-list support for `ml_core_group`-kind terms (wiring
+      `active_group_slots`/`active_group_mask` through `assemble.py`'s
+      auto-wiring, mirroring the `intermolecular` kind) so
+      `peptide_water_ml_cutoff_A` becomes a genuine per-step compute
+      reduction rather than only an energy-switching weight. Needed before
+      larger `n_waters`/`n_steps` mixed-system runs are tractable.
 - [ ] NVT/NPT for mixed systems — `mixed_calculator_sweep` only runs NVE;
       `jaxmd_npt`'s deterministic cluster-specific failure (documented in
       `workflows/unified_backend_sweep/README.md`) would need root-causing
