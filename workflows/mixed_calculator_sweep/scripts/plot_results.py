@@ -36,9 +36,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from mmml.md.results import energy_drift_metrics
-from mmml.utils.plotting.styles import apply_plot_style
+from mmml.utils.plotting.styles import apply_plot_style, legend_outside
 
-_STYLE_NAME = "editorial_dejavu_serif"  # swap freely -- see docs/plot-style-gallery.md
+_STYLE_NAME = "icml"  # see docs/plot-style-gallery.md
 
 # Semantic system -> color (see module docstring). Not palette-index colors.
 _SYSTEM_COLORS = {"water_box": "#1A5276", "peptide_water": "#943126"}
@@ -124,7 +124,9 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
 
     ax_main.set_ylabel(r"$E(t) - E(0)$  (eV)")
     ax_main.set_title(r"Energy traces relative to $E(0)$  (dashed = trend fit, band = $\pm\sigma$)")
-    ax_main.legend(fontsize=10, ncol=2, loc="best", framealpha=0.85, edgecolor="#CCCCCC")
+    # Outside the axes (never over the data) -- with this many settings the
+    # legend is long, and reads like a table (color+marker -> setting name).
+    legend_outside(ax_main, fontsize=10)
 
     ax_outlier.set_xlabel("recorded frame (every record_every steps)")
     ax_outlier.set_ylabel(r"$E(t) - E(0)$  (eV)")
@@ -132,7 +134,7 @@ def plot_energy_traces(rows: list[dict[str, str]], results_dir: Path, out: Path)
         ax_outlier.set_title(
             f"Large-swing settings (own axis): {', '.join(sorted(outliers))}"
         )
-        ax_outlier.legend(fontsize=10, loc="best", framealpha=0.85, edgecolor="#CCCCCC")
+        legend_outside(ax_outlier, fontsize=10)
     else:
         ax_outlier.set_title("No settings exceeded the 1000 eV outlier threshold")
 
@@ -189,7 +191,7 @@ def plot_summary_bars(rows: list[dict[str, str]], results_dir: Path, out: Path) 
     from matplotlib.patches import Patch
     handles = [Patch(facecolor=c, edgecolor="#222222", label=_SYSTEM_LABELS[s])
                for s, c in _SYSTEM_COLORS.items()]
-    ax_fluct.legend(handles=handles, loc="upper left", fontsize=11, framealpha=0.85, edgecolor="#CCCCCC")
+    legend_outside(ax_fluct, handles=handles, fontsize=11)
 
     fig.tight_layout()
     fig.savefig(out, dpi=200, bbox_inches="tight")

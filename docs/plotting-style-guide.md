@@ -32,8 +32,9 @@ colors = comparison_colors(style, n=len(settings))  # fixed categorical order
 
 | Preset | When |
 |---|---|
-| `"editorial_dejavu_sans"` / `"editorial_dejavu_serif"` / `"editorial_stix"` / `"editorial_cm"` | **Default family for sweep/analysis figures meant to be read, not just glanced at** (energy traces, RDFs, bond/angle histograms, anything going in a writeup) — large type (`axes.labelsize=15`, `axes.titlesize=17` bold), thick lines (`lines.linewidth=2.8`), LaTeX-style math via `mathtext.fontset` (no TeX install needed — `r"$E(t) - E(0)$"` just works), no top/right spine, faint dotted grid. The four variants share this **same axis/spacing treatment** and differ only in typeface — see [`docs/plot-style-gallery.md`](plot-style-gallery.md) for a rendered side-by-side comparison before picking one. Used by both `workflows/*/scripts/plot_results.py` and `plot_structure.py` (currently defaulted to `editorial_dejavu_serif`, pending a final pick). |
-| `"nature"` (alias `"pub"`/`"publication"`) | Compact journal-figure alternative when the editorial family's larger type doesn't fit a multi-panel grid — sans-serif, `axes.labelsize=9`. |
+| `"icml"` | **Default for sweep/analysis figures** (energy traces, RDFs, bond/angle histograms, anything going in a writeup) — clean sans-serif, muted "seaborn deep"-style categorical colors (`#4C72B0`/`#DD8452`/`#55A868`/...), moderate type (`axes.labelsize=13`), no top/right spine. The closest preset to a modern ML-conference (ICML/NeurIPS) figure — less soft/rounded than `"google"`, less serif/journal than the `editorial_*` family. Pairs with `legend_outside()` (see below). Used by `workflows/*/scripts/plot_results.py` and `plot_structure.py`. |
+| `"editorial_dejavu_sans"` / `"editorial_dejavu_serif"` / `"editorial_stix"` / `"editorial_cm"` | An alternative "read from across the room" family (e.g. a talk slide) — large type (`axes.labelsize=15`, `axes.titlesize=17` bold), thick lines (`lines.linewidth=2.8`), LaTeX-style math via `mathtext.fontset`, no top/right spine, faint dotted grid. The four variants share this axis/spacing treatment and differ only in typeface — see [`docs/plot-style-gallery.md`](plot-style-gallery.md) for a rendered comparison. |
+| `"nature"` (alias `"pub"`/`"publication"`) | Compact journal-figure alternative when `"icml"`'s or the editorial family's type doesn't fit a dense multi-panel grid — sans-serif, `axes.labelsize=9`. |
 | `"google"` (module default) | Training-curve dashboards (loss/lr curves) — this is what most existing training-plot scripts assume implicitly. |
 | `"mpl_classic"` | Quick throwaway diagnostics where house branding doesn't matter. |
 | `"xmgrace"` / `"tron"` | Not for new work — legacy/novelty presets. |
@@ -91,6 +92,30 @@ Concrete house examples (both from `workflows/*/scripts/plot_results.py`):
 When in doubt: if you can name *why* a series has the color it has (its
 system, its physics, its pass/fail status) in one short phrase, it's
 semantic. If the only answer is "it's next in the list," fix it.
+
+## Legends live outside the plot
+
+**A legend never overlaps the data.** Use
+[`mmml.utils.plotting.styles.legend_outside(axis, **kwargs)`](../mmml/utils/plotting/styles.py)
+instead of `axis.legend(loc="best", ...)`:
+
+```python
+from mmml.utils.plotting.styles import legend_outside
+
+legend_outside(ax, fontsize=10)                       # positional labels already on the plotted lines
+legend_outside(ax, handles=handles, fontsize=11)       # explicit handles (e.g. Patch legend)
+```
+
+This places the legend to the right of the axes (`bbox_to_anchor=(1.02, 1.0),
+loc="upper left"`), never covering a data point regardless of where the data
+happens to sit. Because it's outside, **it's free to grow long** — a
+12-setting sweep's legend reads like a small table (marker/color → setting
+name) rather than needing to be trimmed to fit inside the plot. Don't
+economize on legend entries to make them fit inside the axes; if the legend
+needs to be big, let it be big outside instead.
+
+`fig.savefig(..., bbox_inches="tight")` (already the house convention) picks
+up the external legend automatically — no extra figure-size tuning needed.
 
 ## Figure conventions (from real precedent, not invented)
 
@@ -184,3 +209,31 @@ frames = [
 `plot_rdfs`, `plot_internal`, `plot_hydrogen_bond_timeseries`, etc. — reuse
 its plotting functions directly rather than re-plotting the same arrays with
 different styling.
+
+## Rendering ASE `Atoms` (molecule structure drawings)
+
+For drawing actual molecular geometry (not a data curve) — e.g. a dimer
+snapshot alongside an energy-scan plot — reuse
+[`scripts/plot_utils.py::render_dimer_atoms`](../scripts/plot_utils.py),
+the good precedent already in the repo (used by the SpookyNet dimer-scan
+figures in `scripts/plot_1d_slices_by_offset.py` and `scripts/plot_2d_pes.py`):
+
+- Atom size from `ase.data.covalent_radii` (scaled by `radii_scale`), color
+  from `ase.data.colors.jmol_colors` — the same "semantic color" principle
+  as the RDF element coloring above, applied to the atoms themselves.
+- Camera angle as an `ase.io.utils.rotate`-style string (e.g.
+  `"15x,-20y,0z"`), projected to 2D — not a fixed top-down view.
+- Bonds drawn as lines only within a fragment (same-monomer atom pairs
+  closer than `bond_cutoff_scale * (sum of covalent radii)`), so
+  intermolecular contacts in a dimer aren't mistaken for bonds.
+- Atoms drawn back-to-front (sorted by projected depth) with per-atom alpha
+  as a depth cue, so overlapping monomers stay legible instead of a flat
+  jumble.
+- Optional force-arrow overlay via `ax.quiver`, projected through the same
+  rotation matrix as the atoms.
+
+`plot_2d_pes.py`'s `_plot_atoms_filmstrip` (a strip of geometry snapshots
+along a scan coordinate) and `plot_1d_slices_by_offset.py`'s per-slice
+minimum-energy-geometry inset are the reference patterns for combining a
+structure drawing with an energy curve in one figure — reuse those, don't
+re-derive the atom-rendering logic for a new script.

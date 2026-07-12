@@ -29,9 +29,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from mmml.utils.plotting.styles import apply_plot_style
+from mmml.utils.plotting.styles import apply_plot_style, legend_outside
 
-_STYLE_NAME = "editorial_dejavu_serif"  # swap freely -- see docs/plot-style-gallery.md
+_STYLE_NAME = "icml"  # see docs/plot-style-gallery.md
 
 _BACKEND_COLORS = {
     "jaxmd_min": "#5D6D7E",   # neutral gray -- deterministic minimization
@@ -93,7 +93,7 @@ def plot_summary_bars(rows: list[dict[str, str]], out: Path) -> Path:
 
     from matplotlib.patches import Patch
     handles = [Patch(facecolor=c, edgecolor="#222222", label=b) for b, c in _BACKEND_COLORS.items()]
-    ax_fluct.legend(handles=handles, loc="best", fontsize=10, ncol=2, framealpha=0.85, edgecolor="#CCCCCC")
+    legend_outside(ax_fluct, handles=handles, fontsize=10)
 
     fig.tight_layout()
     fig.savefig(out, dpi=200, bbox_inches="tight")

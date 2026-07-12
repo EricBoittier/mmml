@@ -1,10 +1,30 @@
 # Plot style gallery
 
-Renders of the same example figure under each `editorial_*` font variant
-(`mmml.utils.plotting.styles`), so a typeface can be picked by eye instead of
-from a description. All four share the **same axes/spacing treatment** —
-large type, thick lines, no top/right spine, faint grid — only the font
-differs. Regenerate with `python scripts/render_plot_style_gallery.py`.
+Renders of the same example figure under each registered style
+(`mmml.utils.plotting.styles`), so a look can be picked by eye instead of
+from a description. Regenerate with `python scripts/render_plot_style_gallery.py`.
+
+Every example also demonstrates the **legend-outside-the-plot** rule (see
+`docs/plotting-style-guide.md` "Legends live outside the plot") via
+`legend_outside(ax)` — never overlapping the data, and free to grow long
+(reads like a small table of series → color/marker) without crowding
+anything.
+
+**Current pick: `"icml"`** — clean sans-serif, muted "seaborn deep"-style
+categorical colors, moderate (not oversized) type; the closest preset to a
+modern ML-conference figure. This is what `workflows/*/scripts/plot_results.py`
+and `plot_structure.py` use by default now.
+
+## `icml`
+
+![icml](plot-style-gallery-assets/icml.png)
+
+## The `editorial_*` family (large-type/thick-line/no-spine variants)
+
+These four share the **same axes/spacing treatment** — large type, thick
+lines, no top/right spine, faint grid — only the font differs. Kept in the
+gallery as an alternative "read from across the room" look for a different
+kind of figure (e.g. a talk slide) than `"icml"`'s conference-paper density.
 
 **Note on naming**: these were previously grouped under one preset literally
 called `"tufte"`. That was a category error — Tufte described *principles*
@@ -56,14 +76,13 @@ specifically, while regular text stays DejaVu.
 ```python
 from mmml.utils.plotting.styles import apply_plot_style
 
-apply_plot_style("editorial_dejavu_serif")  # or _dejavu_sans / _stix / _cm
+apply_plot_style("icml")  # or editorial_dejavu_serif / _dejavu_sans / _stix / _cm
 ```
 
-Update `_STYLE_NAME` in `workflows/*/scripts/plot_results.py` and
-`plot_structure.py` to whichever is chosen (currently defaulted to
-`editorial_dejavu_serif` pending a decision) — see
-[`docs/plotting-style-guide.md`](plotting-style-guide.md) for the rest of
-the convention (semantic color, DPI, uncertainty shading).
+`_STYLE_NAME` in `workflows/*/scripts/plot_results.py` and `plot_structure.py`
+is currently `"icml"` — see [`docs/plotting-style-guide.md`](plotting-style-guide.md)
+for the rest of the convention (semantic color, DPI, uncertainty shading,
+legends outside).
 
 (There was a 5th candidate, `editorial_stixsans`, dropped from the gallery:
 matplotlib has no real "STIX Sans" font bundled, so it silently fell back to

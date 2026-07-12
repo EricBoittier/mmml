@@ -16,6 +16,7 @@ __all__ = [
     "get_plot_style",
     "list_plot_styles",
     "comparison_colors",
+    "legend_outside",
 ]
 
 
@@ -280,6 +281,66 @@ _EDITORIAL_RC_CM = _editorial_rc(
     family="serif", serif=["DejaVu Serif"], mathtext_fontset="cm")
 
 
+# ICML/NeurIPS-paper-figure vibe: clean sans-serif, moderate (not oversized)
+# type, muted "seaborn deep"-style categorical colors, legend meant to live
+# OUTSIDE the axes (see legend_outside() below) rather than overlapping data.
+# This is the closest preset to a modern ML-conference plot: less soft/round
+# than "google", less serif/journal than the editorial_* family.
+_ICML_COLORS = {
+    "train": "#4C72B0",   # muted blue
+    "valid": "#DD8452",   # muted orange
+    "best": "#55A868",    # muted green
+    "accent": "#C44E52",  # muted red
+    "lr": "#8172B2",      # muted purple
+    "muted": "#937860",   # muted brown
+}
+_ICML_RC = {
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+    "axes.edgecolor": "#444444",
+    "axes.linewidth": 1.0,
+    "axes.labelsize": 13,
+    "axes.titlesize": 14,
+    "axes.titleweight": "bold",
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "axes.grid": True,
+    "grid.alpha": 0.25,
+    "grid.linestyle": "-",
+    "grid.linewidth": 0.6,
+    "grid.color": "#DDDDDD",
+    "axes.axisbelow": True,
+    "legend.framealpha": 0.95,
+    "legend.fontsize": 11,
+    "legend.edgecolor": "#CCCCCC",
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Helvetica Neue", "Arial", "DejaVu Sans"],
+    "font.size": 12,
+    "mathtext.fontset": "dejavusans",
+    "lines.linewidth": 2.4,
+    "lines.solid_capstyle": "round",
+    "lines.markersize": 7,
+    "patch.linewidth": 1.0,
+    "savefig.dpi": 200,
+}
+
+
+def legend_outside(axis, *, ncol: int = 1, **kwargs: Any):
+    """Place a legend outside the axes (right-hand side), per house convention.
+
+    Legends must never overlap plotted data -- see
+    docs/plotting-style-guide.md "Legends live outside the plot". A legend
+    placed this way is also free to grow large (many entries, long labels)
+    without crowding the data, so it can double as a compact table when
+    useful (e.g. one row per setting with its color/marker as the row key).
+    """
+    return axis.legend(
+        loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0, ncol=ncol, **kwargs
+    )
+
+
 # Classic matplotlib defaults (pre-seaborn era feel).
 _MPL_CLASSIC_COLORS = {
     "train": "#1f77b4",
@@ -419,6 +480,15 @@ PLOT_STYLES: dict[str, PlotStyle] = {
         comparison_palette=("#1A5276", "#943126", "#B9770E", "#1E8449", "#6C3483", "#5D6D7E"),
         train_linewidth=2.8, valid_linewidth=3.2, best_marker_edge="#222222", best_marker_size=160.0,
         text_box={"boxstyle": "round", "facecolor": "#FBFBF8", "edgecolor": "#999999", "alpha": 0.95},
+    ),
+    "icml": _style(
+        "icml",
+        "ICML/NeurIPS-paper vibe: clean sans-serif, muted categorical colors, "
+        "legend meant to live outside the axes (see legend_outside()).",
+        colors=_ICML_COLORS, rc_params=_ICML_RC,
+        comparison_palette=("#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B2", "#937860"),
+        train_linewidth=2.4, valid_linewidth=2.6, best_marker_edge="#333333", best_marker_size=130.0,
+        text_box={"boxstyle": "round", "facecolor": "#FAFAFA", "edgecolor": "#CCCCCC", "alpha": 0.95},
     ),
     "mpl_classic": _style(
         "mpl_classic",

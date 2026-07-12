@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Render the same example figure under every 'editorial_*' font variant.
+"""Render the same example figure under every registered style variant.
 
 Produces docs/plot-style-gallery-assets/<style>.png for each style so
 docs/plot-style-gallery.md can show them side by side -- lets a human pick a
-typeface by eye rather than from a description. See
-docs/plotting-style-guide.md "Semantic color, not palette index" for the
-non-font parts of the convention (these examples also demonstrate it: each
-data *type* -- bonds/angles/dihedrals -- gets its own color, not one blue
-reused three times).
+look by eye rather than from a description. Also demonstrates two other
+house rules from docs/plotting-style-guide.md: "Semantic color, not palette
+index" (bonds/angles/dihedrals each get their own color, not one blue reused
+three times) and "Legends live outside the plot" (via legend_outside()).
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
-from mmml.utils.plotting.styles import apply_plot_style, get_plot_style
+from mmml.utils.plotting.styles import apply_plot_style, get_plot_style, legend_outside
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "docs" / "plot-style-gallery-assets"
 
@@ -41,7 +40,7 @@ def _example_figure(style_name: str) -> plt.Figure:
     ax_trace.set_xlabel("recorded frame")
     ax_trace.set_ylabel(r"$E(t) - E(0)$  (eV)")
     ax_trace.set_title(r"Energy trace: $\Delta E = E(t) - E(0)$")
-    ax_trace.legend(fontsize=10, loc="best")
+    legend_outside(ax_trace, fontsize=10)
 
     # Each coordinate TYPE gets its own semantic color -- not one blue reused
     # for bonds/angles/dihedrals (the mistake this gallery/fix addresses).
@@ -59,7 +58,7 @@ def _example_figure(style_name: str) -> plt.Figure:
     ax2.set_yticks([])
     lines1, labels1 = ax_hist.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
-    ax_hist.legend(lines1 + lines2, labels1 + labels2, fontsize=9, loc="upper right")
+    legend_outside(ax2, handles=lines1 + lines2, labels=labels1 + labels2, fontsize=9)
 
     fig.suptitle(f'Style: "{style_name}"', y=1.03)
     fig.tight_layout()
@@ -73,6 +72,7 @@ def main() -> None:
         "editorial_dejavu_serif",
         "editorial_stix",
         "editorial_cm",
+        "icml",
     ]
     for name in variants:
         plt.rcdefaults()
