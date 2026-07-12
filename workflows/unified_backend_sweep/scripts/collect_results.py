@@ -64,8 +64,14 @@ def main() -> None:
     lines = [
         "# Unified mmml.md backend sweep",
         "",
-        "| backend | seed | status | frames | E0 (eV) | Efinal (eV) | drift (eV) | acceptance | elapsed (s) |",
-        "|---|---:|:---:|---:|---:|---:|---:|---:|---:|",
+        "This smoke test only records 2-3 frames per setting (see README's",
+        '"What backend means here"), so `fluctuation`/`trend` below are much',
+        "less statistically meaningful than in `mixed_calculator_sweep`'s",
+        "100-sample traces -- treat them as a coarse sanity check only.",
+        "",
+        "| backend | seed | status | frames | E0 (eV) | Efinal (eV) | "
+        "fluctuation std (eV) | trend (eV/frame) | acceptance | elapsed (s) |",
+        "|---|---:|:---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     n_backends = len({row["backend"] for row in rows})
     n_failed = sum(1 for row in rows if not row["completed"])
@@ -74,7 +80,8 @@ def main() -> None:
         lines.append(
             f"| {row['backend']} | {row['seed']} | {status_icon} | {row['n_frames']} | "
             f"{row['energy_initial_ev']} | {row['energy_final_ev']} | "
-            f"{row['energy_drift_ev']} | {row['acceptance_ratio']} | {row['elapsed_seconds']} |"
+            f"{row['energy_fluctuation_std_ev']} | {row['energy_trend_ev_per_frame']} | "
+            f"{row['acceptance_ratio']} | {row['elapsed_seconds']} |"
         )
     lines.append("")
     lines.append(
