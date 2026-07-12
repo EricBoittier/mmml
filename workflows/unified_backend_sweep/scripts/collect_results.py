@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
-"""Aggregate per-(backend, seed) status.json files into a summary table."""
+"""Aggregate per-(backend, seed) status.json files into a summary table.
+
+Always exits 0 once the summary is written: per-setting failures are already
+visible as ❌ rows in the report (that IS the collection succeeding at its
+job), and Snakemake deletes a rule's declared outputs when its shell command
+exits non-zero -- a non-zero exit here would silently discard the very report
+meant to surface the failures, undermining `snakemake --keep-going`.
+"""
 
 from __future__ import annotations
 
 import argparse
 import csv
 import json
+import sys
 from pathlib import Path
 
 FIELDS = [

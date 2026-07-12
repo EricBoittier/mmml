@@ -122,6 +122,7 @@ nav:
       - md-system / cg_jaxmd unification (design): md-cg-unification-design.md
       - md-system / cg_jaxmd unification (handoff): md-cg-unification-handoff.md
       - Long-range solver tutorial: long-range-solver-tutorial.md
+      - Trajectory free-energy surfaces: trajectory-free-energy-surfaces.md
   - MLpot:
       - Cutoffs, regions & LR solvers: hybrid-potential-regions.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
@@ -133,6 +134,7 @@ nav:
       - Spatial ML MPI: mlpot-spatial-mpi.md
   - PyCHARMM & cluster:
       - Periodic boundaries (IMAGE super system): pbc-super-system.md
+      - PyCHARMM C API (box and pressure): pycharmm-c-api-pbc-box-pressure.md
       - MPI operations: pycharmm-mpi.md
       - Threading & launchers: pycharmm-threading.md
       - FFTW for CHARMM: fftw-build.md
