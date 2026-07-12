@@ -63,27 +63,27 @@ def main():
     # Reconstruct residue_geometries directly from MOLECULES to bypass CHARMM's unstable IC build code
     residue_geometries = {
         "DCM": (
-            MOLECULES["DCM"]["atoms"].positions[[0, 3, 4, 1, 2]],
+            MOLECULES["DCM"].positions[[0, 3, 4, 1, 2]],
             ["C", "H1", "H2", "CL1", "CL2"],
             np.array([6, 1, 1, 17, 17]),
         ),
         "ACO": (
-            MOLECULES["ACE"]["atoms"].positions[[3, 0, 1, 2, 4, 5, 6, 7, 8, 9]],
+            MOLECULES["ACE"].positions[[3, 0, 1, 2, 4, 5, 6, 7, 8, 9]],
             ["O1", "C1", "C2", "C3", "H21", "H22", "H23", "H31", "H32", "H33"],
             np.array([8, 6, 6, 6, 1, 1, 1, 1, 1, 1]),
         ),
         "BENZ": (
-            MOLECULES["BENZ"]["atoms"].positions[[0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]],
+            MOLECULES["BENZ"].positions[[0, 6, 1, 7, 2, 8, 3, 9, 4, 10, 5, 11]],
             ["CG", "HG", "CD1", "HD1", "CD2", "HD2", "CE1", "HE1", "CE2", "HE2", "CZ", "HZ"],
             np.array([6, 1, 6, 1, 6, 1, 6, 1, 6, 1, 6, 1]),
         ),
         "TIP3": (
-            MOLECULES["TIP3"]["atoms"].positions[[0, 1, 2]],
+            MOLECULES["TIP3"].positions[[0, 1, 2]],
             ["OH2", "H1", "H2"],
             np.array([8, 1, 1]),
         ),
         "MEOH": (
-            MOLECULES["MEOH"]["atoms"].positions[[0, 1, 2, 3, 4, 5]],
+            MOLECULES["MEOH"].positions[[0, 1, 2, 3, 4, 5]],
             ["CB", "OG", "HG1", "HB1", "HB2", "HB3"],
             np.array([6, 8, 1, 1, 1, 1]),
         ),
@@ -112,11 +112,15 @@ def main():
     print(f"Loading JAX data from {csv_path}...")
     df_jax = pd.read_csv(csv_path)
 
-    # We will compute CHARMM energies for all unique pairs in the input CSV
-    unique_pairs = df_jax.groupby(["molecule_a", "molecule_b"]).groups.keys()
-    distances = np.unique(df_jax["distance_angstrom"].values)
+    # Support both 1D (no offset) and 2D (with offset) CSVs
+    if "offset_angstrom" not in df_jax.columns:
+        df_jax["offset_angstrom"] = 0.0
 
-    print(f"Found {len(unique_pairs)} pairs across {len(distances)} distances in JAX results.")
+    unique_pairs = list(df_jax.groupby(["molecule_a", "molecule_b"]).groups.keys())
+    n_dist = df_jax["distance_angstrom"].nunique()
+    n_off  = df_jax["offset_angstrom"].nunique()
+
+    print(f"Found {len(unique_pairs)} pairs × {n_dist} distances × {n_off} offsets in JAX results.")
 
     charmm_rows = []
 
@@ -125,7 +129,7 @@ def main():
         res_a = MAP_RESIDUES[label_a]
         res_b = MAP_RESIDUES[label_b]
 
-        # 1. Build cluster PSF and topology
+        # 1. Build cluster PSF and topology (once per pair)
         try:
             _build_cluster_from_composition(
                 composition=[(res_a, 1), (res_b, 1)],
@@ -137,30 +141,36 @@ def main():
             print(f"  Error setting up PSF for {label_a} + {label_b}: {e}")
             continue
 
-        # 2. Evaluate for each distance
-        geometries = make_pair_scan(label_a, label_b, distances)
+        # 2. Get all unique (distance, offset) combinations for this pair
+        df_this = df_jax[(df_jax["molecule_a"] == label_a) & (df_jax["molecule_b"] == label_b)]
+        geom_keys = df_this[["distance_angstrom", "offset_angstrom"]].drop_duplicates().values
+        offsets = sorted(df_this["offset_angstrom"].unique())
+        distances_arr = sorted(df_this["distance_angstrom"].unique())
+
+        geometries = make_pair_scan(label_a, label_b, distances_arr, offsets)
         for geom in geometries:
             try:
                 sync_charmm_positions(geom.atoms.positions)
                 pycharmm.lingo.charmm_script("ENER")
                 terms = charmm_energy_row()
                 elec = float(terms.get("ELEC", np.nan))
-                vdw = float(terms.get("VDW", np.nan))
-                tot = float(terms.get("ENER", np.nan))
+                vdw  = float(terms.get("VDW",  np.nan))
+                tot  = float(terms.get("ENER", np.nan))
                 charmm_rows.append(
                     {
-                        "molecule_a": label_a,
-                        "molecule_b": label_b,
-                        "distance_angstrom": geom.distance_angstrom,
-                        "energy_ev": tot * 0.0433641153,  # kcal/mol to eV
-                        "energy_kcal_mol": tot,
-                        "backend": "charmm",
-                        "charmm_ELEC_kcal": elec,
-                        "charmm_VDW_kcal": vdw,
+                        "molecule_a":          label_a,
+                        "molecule_b":          label_b,
+                        "distance_angstrom":   geom.distance_angstrom,
+                        "offset_angstrom":     geom.offset_angstrom,
+                        "energy_ev":           tot * 0.0433641153,
+                        "energy_kcal_mol":     tot,
+                        "backend":             "charmm",
+                        "charmm_ELEC_kcal":    elec,
+                        "charmm_VDW_kcal":     vdw,
                     }
                 )
             except Exception as e:
-                print(f"  Error at {geom.distance_angstrom} Å: {e}")
+                print(f"  Error at d={geom.distance_angstrom} Å offset={geom.offset_angstrom} Å: {e}")
 
     # Combine CHARMM results with original JAX results
     df_charmm = pd.DataFrame(charmm_rows)
