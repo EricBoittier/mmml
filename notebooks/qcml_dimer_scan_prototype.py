@@ -172,8 +172,8 @@ example_geometries[0]
 
 # %%
 PATHS = {
-    "multipole_checkpoint": Path("~/qcml_runs/multipoles_restart_YYYYMMDD/epoch-0100").expanduser(),
-    "mbd_checkpoint": Path("~/qcml_runs/mbd_restart_YYYYMMDD/epoch-0100").expanduser(),
+    "multipole_checkpoint": Path("~/qcml_runs/multipoles_restart_20260711-100037/epoch-0100").expanduser(),
+    "mbd_checkpoint": Path("~/qcml_runs/mbd_restart_20260711-100037/epoch-0100").expanduser(),
     "spooky_params": sorted(Path("examples").glob("sppoky-epoch-*_params.json")),
 }
 
