@@ -74,12 +74,14 @@ def _make_dcm() -> Atoms:
     )
 
 
+# IMPORTANT: the ordering here must match the key order in PAIR_SCAN_CONFIG
+# so that molecule_pair_labels() generates pairs in the correct direction.
 MOLECULES: dict[str, Atoms] = {
+    "DCM":  _make_dcm(),
+    "ACE":  _make_ace(),
+    "BENZ": _make_benz(),
     "TIP3": _make_tip3(),
     "MEOH": _make_meoh(),
-    "BENZ": _make_benz(),
-    "ACE":  _make_ace(),
-    "DCM":  _make_dcm(),
 }
 
 
@@ -369,6 +371,10 @@ def make_oriented_scan_geometries(
     If *offsets_angstrom* is ``None``, uses the config defaults (2D scan).
     Pass ``[0.0]`` for a 1D on-axis scan only.
 
+    The lookup is **symmetric**: if ``(label_a, label_b)`` is not in the
+    config but ``(label_b, label_a)`` is, the roles are swapped automatically
+    so the result is still physically correct (just with A/B swapped).
+
     Parameters
     ----------
     label_a, label_b:
@@ -381,8 +387,17 @@ def make_oriented_scan_geometries(
     from mmml.analysis.dimer_scans import distance_scan_geometries_2d
 
     pair = (label_a, label_b)
+    swapped = False
     if pair not in PAIR_SCAN_CONFIG:
-        raise KeyError(f"Pair {pair!r} not in PAIR_SCAN_CONFIG.")
+        reversed_pair = (label_b, label_a)
+        if reversed_pair in PAIR_SCAN_CONFIG:
+            pair = reversed_pair
+            swapped = True
+        else:
+            raise KeyError(
+                f"Pair {(label_a, label_b)!r} not in PAIR_SCAN_CONFIG "
+                f"(tried both orderings)."
+            )
 
     cfg = PAIR_SCAN_CONFIG[pair]
     monomers = ORIENTED_MONOMERS[pair]
@@ -390,12 +405,17 @@ def make_oriented_scan_geometries(
     if offsets_angstrom is None:
         offsets_angstrom = cfg["offsets_angstrom"]
 
+    # When the pair was swapped, swap the monomer roles too
+    mon_a = monomers["b"] if swapped else monomers["a"]
+    mon_b = monomers["a"] if swapped else monomers["b"]
+    out_pair = (label_a, label_b)  # always report in the requested order
+
     yield from distance_scan_geometries_2d(
-        monomers["a"],
-        monomers["b"],
+        mon_a,
+        mon_b,
         distances_angstrom,
         offsets_angstrom,
-        pair=pair,
+        pair=out_pair,
         axis=(0.0, 0.0, 1.0),           # approach along Z
         transverse_axis=cfg["transverse_axis"],
         center="none",                   # monomers already centred and oriented
