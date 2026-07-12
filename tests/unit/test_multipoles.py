@@ -636,9 +636,9 @@ def test_calculator_max_ell_and_components(monkeypatch) -> None:
         max_ell=1,
     )
 
-    dummy_multipoles = np.zeros((1, 16))
-    dummy_multipoles[0, 0] = 1.0
-    dummy_multipoles[0, 1:4] = [0.1, 0.2, 0.3]
+    dummy_multipoles = np.zeros(16)
+    dummy_multipoles[0] = 1.0
+    dummy_multipoles[1:4] = [0.1, 0.2, 0.3]
     calc._predict = MagicMock(return_value=dummy_multipoles)
 
     atoms = Atoms("He4", positions=[[0, 0, 0], [0, 0, 1], [2, 0, 0], [2, 0, 1]])
