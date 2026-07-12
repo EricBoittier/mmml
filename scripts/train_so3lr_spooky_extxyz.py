@@ -44,6 +44,19 @@ from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
 
+DIPOLE_KEY_ALIASES = (
+    "dipole",
+    "dipoles",
+    "D",
+    "Dxyz",
+    "D_xyz",
+    "dipole_moment",
+    "dipole_moments",
+    "mu",
+    "muxyz",
+    "molecular_dipole",
+)
+
 
 @dataclass(frozen=True)
 class CacheMeta:
@@ -59,7 +72,7 @@ class CacheMeta:
     default_charge: float
     default_spin: float
     max_structures: int | None
-    cache_version: int = 2
+    cache_version: int = 3
 
 
 def _cache_name(meta: CacheMeta) -> str:
@@ -110,13 +123,49 @@ def _get_info_scalar(info: dict[str, Any], key: str, default: float) -> float:
     raise ValueError(f"Expected scalar '{key}', got shape {array.shape}")
 
 
-def _get_info_vector(info: dict[str, Any], key: str, size: int) -> np.ndarray:
-    if key not in info:
-        raise KeyError(f"Structure lacks required info key '{key}'")
-    value = np.asarray(info[key], dtype=np.float64).reshape(-1)
+def _vector_from_raw(value_raw: Any, key: str, size: int) -> np.ndarray:
+    if isinstance(value_raw, str):
+        text = value_raw.replace(",", " ").replace("[", " ").replace("]", " ")
+        value = np.fromstring(text, sep=" ", dtype=np.float64)
+    else:
+        value = np.asarray(value_raw, dtype=np.float64)
+    value = value.reshape(-1)
     if value.size != size:
         raise ValueError(f"Expected '{key}' with {size} values, got shape {value.shape}")
     return value
+
+
+def _candidate_vector_keys(requested_key: str) -> tuple[str, ...]:
+    keys = [requested_key]
+    for alias in DIPOLE_KEY_ALIASES:
+        if alias not in keys:
+            keys.append(alias)
+    return tuple(keys)
+
+
+def _find_vector_key(atoms, requested_key: str, size: int) -> str | None:
+    for key in _candidate_vector_keys(requested_key):
+        if key in atoms.info:
+            _vector_from_raw(atoms.info[key], key, size)
+            return key
+        if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
+            _vector_from_raw(atoms.calc.results[key], key, size)
+            return key
+    return None
+
+
+def _get_vector_from_atoms(atoms, requested_key: str, size: int) -> tuple[np.ndarray, str]:
+    key = _find_vector_key(atoms, requested_key, size)
+    if key is None:
+        aliases = ", ".join(_candidate_vector_keys(requested_key))
+        raise KeyError(
+            f"Structure lacks vector key '{requested_key}'. Tried aliases: {aliases}; "
+            f"info keys: {sorted(atoms.info)}; "
+            f"calculator result keys: {sorted(getattr(atoms.calc, 'results', {}))}"
+        )
+    if key in atoms.info:
+        return _vector_from_raw(atoms.info[key], key, size), key
+    return _vector_from_raw(atoms.calc.results[key], key, size), key
 
 
 def _get_energy(atoms, key: str, structure_index: int) -> float:
@@ -184,6 +233,7 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
     spins: list[float] = []
     dipoles: list[np.ndarray] = []
     offsets = [0]
+    resolved_dipole_key: str | None = None
 
     print(f"Reading extxyz: {extxyz}")
     for i, atoms in enumerate(iread(extxyz, index=":")):
@@ -198,7 +248,16 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
         z_parts.append(atoms.get_atomic_numbers().astype(np.int32, copy=False))
         f_parts.append(_get_forces(atoms, args.forces_key, i))
         energies.append(_get_energy(atoms, args.energy_key, i))
-        dipoles.append(_get_info_vector(atoms.info, args.dipole_key, 3))
+        dipole, used_dipole_key = _get_vector_from_atoms(atoms, args.dipole_key, 3)
+        if resolved_dipole_key is None:
+            resolved_dipole_key = used_dipole_key
+            if resolved_dipole_key != args.dipole_key:
+                print(
+                    f"Using dipole key alias '{resolved_dipole_key}' "
+                    f"for requested key '{args.dipole_key}'",
+                    flush=True,
+                )
+        dipoles.append(dipole)
         natoms.append(n_atoms)
         charge = _get_info_scalar(atoms.info, args.charge_key, args.default_charge)
         charges.append(charge)
@@ -228,6 +287,7 @@ def cache_extxyz_to_orbax(args: argparse.Namespace) -> Path:
     data["metadata_n_structures"] = np.asarray(len(energies), dtype=np.int64)
     data["metadata_n_atoms_total"] = np.asarray(offsets[-1], dtype=np.int64)
     data["metadata_max_atoms"] = np.asarray(max(natoms), dtype=np.int32)
+    data["metadata_dipole_key"] = np.asarray(resolved_dipole_key or "", dtype="<U32")
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Saving Orbax data cache: {cache_path}")
@@ -453,13 +513,32 @@ def init_state(
     )
     tx = optax.chain(
         optax.clip_by_global_norm(args.clip_global_norm),
-        optax.adamw(args.learning_rate, weight_decay=args.weight_decay),
+        build_optimizer(args),
     )
     return train_state.TrainState.create(
         apply_fn=model.apply,
         params=variables,
         tx=tx,
     )
+
+
+def build_optimizer(args: argparse.Namespace) -> optax.GradientTransformation:
+    if args.optimizer == "adamw":
+        return optax.adamw(args.learning_rate, weight_decay=args.weight_decay)
+    if args.optimizer == "muon":
+        from optax.contrib import muon
+
+        return muon(
+            learning_rate=args.learning_rate,
+            beta=args.muon_beta,
+            weight_decay=args.weight_decay,
+            nesterov=True,
+            adam_b1=args.muon_adam_b1,
+            adam_b2=args.muon_adam_b2,
+            adam_weight_decay=args.weight_decay,
+            adam_learning_rate=args.muon_adam_lr,
+        )
+    raise ValueError(f"Unknown optimizer: {args.optimizer}")
 
 
 def _epoch_number_from_path(path: Path) -> int:
@@ -627,9 +706,16 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
         )
 
     # Resolve restart path and load model architecture config if restarting/resuming
+    # or warm-starting from a checkpoint (--init-checkpoint), so architecture-sensitive
+    # settings like electrostatics_damping_sigma stay consistent with the source run
+    # (and thus with any simulation using the same checkpoint) even when swapping the
+    # optimizer for a warm restart.
     restart_path = resolve_restart_path(args)
-    if restart_path is not None:
-        config_path = restart_path.parent / "run_config.json"
+    source_checkpoint = restart_path
+    if source_checkpoint is None and args.init_checkpoint is not None:
+        source_checkpoint = Path(args.init_checkpoint).expanduser().resolve()
+    if source_checkpoint is not None:
+        config_path = source_checkpoint.parent / "run_config.json"
         if config_path.exists():
             print(f"Loading model configuration from {config_path}")
             with config_path.open("r") as fh:
@@ -655,6 +741,14 @@ def train(args: argparse.Namespace, cache_path: Path) -> None:
                     if current_val != saved_val:
                         print(f"  Overriding {param}: {current_val} -> {saved_val} (from checkpoint config)")
                         setattr(args, param, saved_val)
+
+    if restart_path is not None and args.optimizer != "adamw":
+        raise ValueError(
+            f"--restart/--auto-resume replays the checkpoint's optimizer state, which "
+            f"is only compatible with the optimizer it was saved with. To switch to "
+            f"'{args.optimizer}' as a warm restart, use --init-checkpoint {restart_path} "
+            f"instead (loads params only, initializes fresh optimizer state)."
+        )
 
     model = create_model(args, max_atoms=max_atoms)
     state = init_state(model, data, train_buckets, args)
@@ -851,6 +945,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--steps-per-epoch", type=int, default=None)
     parser.add_argument("--valid-steps", type=int, default=100)
     parser.add_argument("--save-every", type=int, default=1)
+    parser.add_argument(
+        "--optimizer",
+        choices=("adamw", "muon"),
+        default="adamw",
+        help=(
+            "Optimizer for 2D+ weight matrices. 'muon' orthogonalizes matrix "
+            "updates via Newton-Schulz and routes non-matrix params (biases, "
+            "embeddings) through AdamW internally. Muon's opt_state is not "
+            "compatible with an AdamW checkpoint's opt_state; use "
+            "--init-checkpoint (not --restart) to warm-start params only when "
+            "switching optimizers."
+        ),
+    )
+    parser.add_argument("--muon-beta", type=float, default=0.95, help="Muon momentum decay")
+    parser.add_argument(
+        "--muon-adam-lr",
+        type=float,
+        default=None,
+        help="Learning rate for Muon's internal AdamW branch (non-matrix params); defaults to --learning-rate",
+    )
+    parser.add_argument("--muon-adam-b1", type=float, default=0.9)
+    parser.add_argument("--muon-adam-b2", type=float, default=0.999)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--clip-global-norm", type=float, default=10.0)

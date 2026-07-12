@@ -40,6 +40,19 @@ from mmml.models.physnetjax.physnetjax.training.spooky_training import (
     build_spooky_batch_from_flat_data,
 )
 
+DIPOLE_KEY_ALIASES = (
+    "dipole",
+    "dipoles",
+    "D",
+    "Dxyz",
+    "D_xyz",
+    "dipole_moment",
+    "dipole_moments",
+    "mu",
+    "muxyz",
+    "molecular_dipole",
+)
+
 
 @dataclass(frozen=True)
 class CacheMeta:
@@ -55,7 +68,7 @@ class CacheMeta:
     default_charge: float
     default_spin: float
     max_structures: int | None
-    cache_version: int = 2
+    cache_version: int = 3
 
 
 def _cache_name(meta: CacheMeta) -> str:
@@ -125,6 +138,59 @@ def _get_info_vector(info: dict[str, Any], key: str, size: int, default: np.ndar
     return value
 
 
+def _vector_from_raw(value_raw: Any, key: str, size: int) -> np.ndarray:
+    if isinstance(value_raw, str):
+        text = value_raw.replace(",", " ").replace("[", " ").replace("]", " ")
+        value = np.fromstring(text, sep=" ", dtype=np.float64)
+    else:
+        value = np.asarray(value_raw, dtype=np.float64)
+    value = value.reshape(-1)
+    if value.size != size:
+        raise ValueError(f"Expected '{key}' with {size} values, got shape {value.shape}")
+    return value
+
+
+def _candidate_vector_keys(requested_key: str) -> tuple[str, ...]:
+    keys = [requested_key]
+    for alias in DIPOLE_KEY_ALIASES:
+        if alias not in keys:
+            keys.append(alias)
+    return tuple(keys)
+
+
+def _find_vector_key(atoms, requested_key: str, size: int) -> str | None:
+    for key in _candidate_vector_keys(requested_key):
+        if key in atoms.info:
+            _vector_from_raw(atoms.info[key], key, size)
+            return key
+        if atoms.calc is not None and key in getattr(atoms.calc, "results", {}):
+            _vector_from_raw(atoms.calc.results[key], key, size)
+            return key
+    return None
+
+
+def _get_vector_from_atoms(
+    atoms,
+    requested_key: str,
+    size: int,
+    *,
+    default: np.ndarray | None = None,
+) -> tuple[np.ndarray, str | None]:
+    key = _find_vector_key(atoms, requested_key, size)
+    if key is None:
+        if default is not None:
+            return default, None
+        aliases = ", ".join(_candidate_vector_keys(requested_key))
+        raise KeyError(
+            f"Structure lacks vector key '{requested_key}'. Tried aliases: {aliases}; "
+            f"info keys: {sorted(atoms.info)}; "
+            f"calculator result keys: {sorted(getattr(atoms.calc, 'results', {}))}"
+        )
+    if key in atoms.info:
+        return _vector_from_raw(atoms.info[key], key, size), key
+    return _vector_from_raw(atoms.calc.results[key], key, size), key
+
+
 def _get_energy(atoms, key: str, structure_index: int, default: float = 0.0) -> float:
     try:
         if key in atoms.info:
@@ -182,7 +248,13 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
         first_structure.calc is not None and args.forces_key in getattr(first_structure.calc, "results", {})
     ) or args.forces_key == "forces"
     
-    has_dipole = args.dipole_key in first_structure.info
+    dipole_key = _find_vector_key(first_structure, args.dipole_key, 3)
+    has_dipole = dipole_key is not None
+    if has_dipole and dipole_key != args.dipole_key:
+        print(
+            f"Using dipole key alias '{dipole_key}' for requested key '{args.dipole_key}'",
+            flush=True,
+        )
 
     r_parts: list[np.ndarray] = []
     z_parts: list[np.ndarray] = []
@@ -217,7 +289,13 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
             energies.append(0.0)
             
         if has_dipole:
-            dipoles.append(_get_info_vector(atoms.info, args.dipole_key, 3, default=np.zeros(3, dtype=np.float64)))
+            dipole, _ = _get_vector_from_atoms(
+                atoms,
+                args.dipole_key,
+                3,
+                default=np.zeros(3, dtype=np.float64),
+            )
+            dipoles.append(dipole)
         else:
             dipoles.append(np.zeros(3, dtype=np.float64))
             
@@ -253,6 +331,7 @@ def cache_extxyz_to_orbax(args: argparse.Namespace, extxyz_file: Path) -> Path:
     data["metadata_has_energy"] = np.asarray(has_energy, dtype=bool)
     data["metadata_has_forces"] = np.asarray(has_forces, dtype=bool)
     data["metadata_has_dipole"] = np.asarray(has_dipole, dtype=bool)
+    data["metadata_dipole_key"] = np.asarray(dipole_key or "", dtype="<U32")
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     print(f"Saving Orbax data cache: {cache_path}")
