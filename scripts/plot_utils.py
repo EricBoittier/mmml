@@ -22,6 +22,7 @@ BACKEND_LABELS: dict[str, str] = {
     "learned_mbd":       "MBD",
     "multipoles_mbd":    "Multipoles + MBD",
     "xtb_gfn2":          "GFN2-xTB",
+    "dftb3_d4":         "DFTB3-D4/3ob-3-1",
     "charmm":            "CGenFF",
     "spookynet":         "SpookyNet",
     "spookynet_hybrid":  "SpookyNet Hybrid ML",
@@ -32,10 +33,10 @@ BACKEND_LABELS: dict[str, str] = {
     "b2plyp_def2svp_d3bj_cp":   "B2PLYP-D3BJ/def2-SVP (CP)",
     "dsdblyp_def2svp_d3bj_cp":  "DSD-BLYP-D3BJ/def2-SVP (CP)",
     "pwpb95_def2svp_d3bj_cp":   "PWPB95-D3BJ/def2-SVP (CP)",
-    "hf_def2svp_gpu4pyscf_cp": "HF (GPU4PySCF, CP)",
-    "mp2_def2svp_gpu4pyscf_cp": "MP2 (GPU4PySCF, CP)",
-    "pbe0_def2svp_gpu4pyscf_cp": "PBE0 (GPU4PySCF, CP)",
-    "pbe0_def2svp_gpu4pyscf_d3bj_cp": "PBE0-D3BJ (GPU4PySCF, CP)",
+    "hf_def2svp_gpu4pyscf_cp": "HF/def2-SVP (GPU4PySCF)",
+    "mp2_def2svp_gpu4pyscf_cp": "MP2/def2-SVP (GPU4PySCF)",
+    "pbe0_def2svp_gpu4pyscf_cp": "PBE0/def2-SVP (GPU4PySCF)",
+    "pbe0_def2svp_gpu4pyscf_d3bj_cp": "PBE0-D3BJ/def2-SVP (GPU4PySCF)",
 }
 
 BACKEND_COLORS: dict[str, str] = {
@@ -43,6 +44,7 @@ BACKEND_COLORS: dict[str, str] = {
     "learned_mbd":       "#f28e2b",
     "multipoles_mbd":    "#2ca02c",   # green — combined model
     "xtb_gfn2":          "#59a14f",
+    "dftb3_d4":         "#edc948",
     "charmm":            "#e15759",
     "spookynet":         "#b07aa1",
     "spookynet_hybrid":  "#9c755f",
@@ -64,6 +66,7 @@ BACKEND_CMAPS: dict[str, str] = {
     "learned_mbd":       "PuOr_r",
     "multipoles_mbd":    "PRGn_r",
     "xtb_gfn2":          "RdYlGn_r",
+    "dftb3_d4":         "YlOrBr_r",
     "charmm":            "seismic",
     "spookynet":         "BrBG_r",
     "spookynet_hybrid":  "PuOr",
@@ -88,6 +91,7 @@ BACKEND_ORDER: list[str] = [
     "spookynet",
     "spookynet_hybrid",
     "xtb_gfn2",
+    "dftb3_d4",
     "charmm",
     "mp2_def2svp_gpu4pyscf_cp",
     "hf_def2svp_gpu4pyscf_cp",

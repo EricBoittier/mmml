@@ -62,6 +62,22 @@ from mmml.utils.plotting.styles import apply_plot_style
 
 MAX_COLS = 4
 
+# Figure identifiers used throughout the dimer-scan set; TIP3–TIP3 is (AA).
+MONOMER_FIGURE_KEYS = {
+    "TIP3": "A",
+    "MEOH": "B",
+    "ACE": "C",
+    "DCM": "D",
+    "BENZ": "E",
+}
+
+PANEL_LABELS = {
+    "mp2_def2svp_gpu4pyscf_cp": "MP2/def2-SVP",
+    "hf_def2svp_gpu4pyscf_cp": "HF/def2-SVP",
+    "pbe0_def2svp_gpu4pyscf_cp": "PBE0/def2-SVP",
+    "pbe0_def2svp_gpu4pyscf_d3bj_cp": "PBE0-D3BJ/def2-SVP",
+}
+
 COORD1_COLOR = "0.25"
 COORD2_COLOR = "0.25"
 
@@ -342,10 +358,10 @@ def plot_2d_pes_for_pair(
         row_offset, col_offset = 0, 0
 
     pair_tag = f"{label_a}_{label_b}"
+    pair_key = f"{MONOMER_FIGURE_KEYS.get(label_a, label_a[0])}{MONOMER_FIGURE_KEYS.get(label_b, label_b[0])}"
     fig.suptitle(
-        f"2D PES: {label_a} + {label_b}",
-        fontsize=13,
-        fontweight="bold",
+        f"({pair_key}) 2D PES: {label_a} + {label_b}",
+        x=0.015, y=0.99, ha="left", fontsize=13, fontweight="bold",
     )
 
     snap_distances: list[float] = []
@@ -537,11 +553,19 @@ def plot_2d_pes_for_pair(
         for d in snap_distances:
             ax.axvline(d, color="k", lw=0.5, ls=":", alpha=0.35, zorder=0)
 
+        # A minimum can lie exactly on c=0.  Nudge its marker into the surface
+        # so the full star remains visible rather than being clipped by the axis.
+        if min_d is not None and min_o is not None and np.isfinite(min_e):
+            ylo, yhi = ax.get_ylim()
+            star_c = max(float(min_o), ylo + 0.045 * (yhi - ylo))
+            ax.plot(min_d, star_c, "*", color="gold", markersize=13,
+                    markeredgecolor="k", markeredgewidth=0.5, zorder=5, clip_on=False)
+
         ax.set_xlabel(r"$d$ / Å")
         ax.set_ylabel(r"$c$ / Å")
-        ax.set_title(BACKEND_LABELS.get(backend, backend), loc="left", fontsize=11)
+        ax.set_title(PANEL_LABELS.get(backend, BACKEND_LABELS.get(backend, backend)), loc="left", fontsize=13)
         if min_e is not None and np.isfinite(min_e):
-            ax.set_title(rf"$E_{{\mathrm{{min}}}}={min_e:.2f}$", loc="right", fontsize=7)
+            ax.set_title(rf"$E_{{\mathrm{{min}}}}={min_e:.2f}$", loc="right", fontsize=13)
 
         # Highlighted render of the located minimum, overlaid directly on the
         # surface as a small inset anchored near its actual (d, offset)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the molecular dimer scan campaign with learned multipoles, MBD, xTB,
-SpookyNet, and (optionally) CHARMM/CGenFF — all sharing one distance/offset
-grid per pair so every backend lands in a single combined CSV.
+SpookyNet, optional DFTB3-D4, and (optionally) CHARMM/CGenFF — all sharing one
+distance/offset grid per pair so every backend lands in a single combined CSV.
 
 The distance grid is chosen per pair: a cheap geometry-only sweep
 (``find_safe_min_distance``) locates where fragment atoms actually stop
@@ -33,6 +33,7 @@ from mmml.analysis.dimer_scans import (
     evaluate_scan,
     evaluate_scan_monomer_decomposed,
     find_safe_min_distance,
+    make_dftb3_d4_calculator,
     make_xtb_calculator,
     min_fragment_contact_distance,
     molecule_pair_labels,
@@ -209,6 +210,34 @@ def main():
         ),
     )
     parser.add_argument(
+        "--spookynet-mbd-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Override the MBD checkpoint used alongside --spookynet-checkpoint. "
+            "By default, if the SpookyNet checkpoint was trained with a frozen "
+            "MBD correction (scripts/train_so3lr_spooky_extxyz.py --mbd-checkpoint), "
+            "that same path (as recorded in the checkpoint's own config) is used "
+            "automatically — this only needs setting if that recorded path doesn't "
+            "exist on this machine, or to force a different MBD checkpoint."
+        ),
+    )
+    parser.add_argument(
+        "--spookynet-no-mbd",
+        action="store_true",
+        help=(
+            "Force Spooky-only evaluation even if the checkpoint's config references "
+            "an MBD correction (e.g. to isolate/debug the Spooky component alone). "
+            "Note this will NOT match how the checkpoint was actually trained."
+        ),
+    )
+    parser.add_argument(
+        "--spookynet-mbd-weight",
+        type=float,
+        default=None,
+        help="Override the MBD correction weight (default: use the value recorded in the checkpoint's config)",
+    )
+    parser.add_argument(
         "--with-charmm",
         action="store_true",
         help="Also evaluate CHARMM/CGenFF energies (requires pycharmm)",
@@ -217,6 +246,26 @@ def main():
         "--skip-xtb",
         action="store_true",
         help="Don't evaluate xTB, even if available (e.g. it's being run separately elsewhere)",
+    )
+    parser.add_argument(
+        "--with-dftb3-d4",
+        action="store_true",
+        help=(
+            "Evaluate DFTB3-D4 through the external DFTB+ executable using "
+            "the 3ob-3-1 Slater-Koster parameter set."
+        ),
+    )
+    parser.add_argument(
+        "--dftb-sk-dir",
+        type=Path,
+        default=None,
+        help="Path to the 3ob-3-1 Slater-Koster directory (required with --with-dftb3-d4)",
+    )
+    parser.add_argument(
+        "--dftb-command",
+        type=str,
+        default="dftb+",
+        help="DFTB+ executable to run (default: dftb+)",
     )
     parser.add_argument(
         "--min-contact",
@@ -292,7 +341,11 @@ def main():
     spookynet_calc = None
     if args.spookynet_checkpoint is not None:
         try:
-            spookynet_calc = SpookyNetCalculator(checkpoint=args.spookynet_checkpoint)
+            spookynet_calc = SpookyNetCalculator(
+                checkpoint=args.spookynet_checkpoint,
+                mbd_checkpoint=(False if args.spookynet_no_mbd else args.spookynet_mbd_checkpoint),
+                mbd_weight=args.spookynet_mbd_weight,
+            )
             use_spookynet = True
             print("  SpookyNet calculator initialized successfully.")
         except Exception as e:
@@ -324,7 +377,24 @@ def main():
             print(f"  Error initializing CHARMM: {e}")
             sys.exit(1)
 
-    if not (use_multipole or use_mbd or use_xtb or use_spookynet or use_charmm):
+    use_dftb3_d4 = False
+    dftb3_d4_calc = None
+    if args.with_dftb3_d4:
+        if args.dftb_sk_dir is None:
+            parser.error("--with-dftb3-d4 requires --dftb-sk-dir pointing to 3ob-3-1")
+        try:
+            dftb3_d4_calc = make_dftb3_d4_calculator(
+                slako_dir=args.dftb_sk_dir,
+                workdir=args.output_dir / "_dftb3_d4_work",
+                command=args.dftb_command,
+            )
+            use_dftb3_d4 = True
+            print("  DFTB3-D4 calculator initialized successfully.")
+        except Exception as e:
+            print(f"  Error initializing DFTB3-D4: {e}")
+            sys.exit(1)
+
+    if not (use_multipole or use_mbd or use_xtb or use_spookynet or use_charmm or use_dftb3_d4):
         print("No backends are available or enabled. Exiting.")
         sys.exit(0)
 
@@ -406,6 +476,19 @@ def main():
                 for r in xtb_rows:
                     r["backend"] = "xtb_gfn2"
                 results.extend(xtb_rows)
+            except Exception as e:
+                print(f"    Error: {e}")
+
+        # Evaluate DFTB3-D4.  As for xTB, the plotting workflow obtains the
+        # interaction energy by referencing every offset curve to its largest
+        # separation, so retain the raw total energy in the standard columns.
+        if use_dftb3_d4:
+            print("  Evaluating DFTB3-D4 (3ob-3-1)...")
+            try:
+                dftb_rows = evaluate_scan(geometries, lambda: dftb3_d4_calc)
+                for r in dftb_rows:
+                    r["backend"] = "dftb3_d4"
+                results.extend(dftb_rows)
             except Exception as e:
                 print(f"    Error: {e}")
 

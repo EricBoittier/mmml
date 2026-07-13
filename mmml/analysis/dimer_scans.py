@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from itertools import combinations, combinations_with_replacement
+from pathlib import Path
+import shutil
 
 import numpy as np
 from ase import Atoms
@@ -419,3 +421,69 @@ def make_xtb_calculator(
                 "the optional packages (xtb-python or tblite) in the runtime environment."
             ) from exc
 
+
+def make_dftb3_d4_calculator(
+    *,
+    slako_dir: str | Path,
+    workdir: str | Path,
+    command: str = "dftb+",
+) -> Calculator:
+    """Create an ASE-backed DFTB3-D4 calculator for molecular dimers.
+
+    This mirrors the DFTB+ recipe's DFTB3/3ob-3-1 + D4 setup.  DFTB+ itself
+    and the 3ob Slater--Koster files are external runtime assets: keeping them
+    optional avoids making the regular scan environment depend on a Fortran
+    executable or a large parameter-data download.
+
+    ``workdir`` is deliberately explicit because the DFTB+ file-I/O interface
+    writes ``dftb_in.hsd``, ``geo_end.gen``, and result files on every call.
+    The campaign evaluates one geometry at a time, so one reusable directory
+    is sufficient and prevents those transient files from polluting the repo.
+    """
+
+    executable = shutil.which(command)
+    if executable is None:
+        raise FileNotFoundError(
+            f"DFTB+ executable {command!r} was not found on PATH. "
+            "Install DFTB+ or pass its executable with --dftb-command."
+        )
+
+    slako_path = Path(slako_dir).expanduser().resolve()
+    if not slako_path.is_dir():
+        raise FileNotFoundError(
+            f"DFTB3 Slater--Koster directory does not exist: {slako_path}. "
+            "Point --dftb-sk-dir at the 3ob-3-1 directory."
+        )
+
+    # Fail before the scan when the minimal element set used in this campaign
+    # cannot be represented.  3ob-3-1 also supplies Cl, needed by DCM.
+    required = ("H-H.skf", "C-C.skf", "O-O.skf", "Cl-Cl.skf")
+    missing = [name for name in required if not (slako_path / name).is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"{slako_path} is not a complete 3ob-3-1 directory; missing: "
+            + ", ".join(missing)
+        )
+
+    from ase.calculators.dftb import Dftb
+
+    scratch = Path(workdir).expanduser().resolve()
+    scratch.mkdir(parents=True, exist_ok=True)
+    # The DFTD4 constants are the DFTB+ recipe values for DFTB3/3ob-3-1.
+    return Dftb(
+        label=str(scratch / "dftb3_d4"),
+        command=f"{executable} > PREFIX.out",
+        slako_dir=str(slako_path),
+        Hamiltonian_SCC="Yes",
+        Hamiltonian_SCCTolerance=1.0e-8,
+        Hamiltonian_ThirdOrderFull="Yes",
+        Hamiltonian_HCorrection_="Damping",
+        Hamiltonian_HCorrection_Exponent=4.0,
+        Hamiltonian_Dispersion_="DFTD4",
+        Hamiltonian_Dispersion_s6=1.0,
+        Hamiltonian_Dispersion_s9=0.0,
+        Hamiltonian_Dispersion_s8=0.4727337,
+        Hamiltonian_Dispersion_a1=0.5467502,
+        Hamiltonian_Dispersion_a2=4.4955068,
+        ParserOptions_ParserVersion=10,
+    )

@@ -13,6 +13,7 @@ from mmml.analysis.dimer_scans import (
     distance_scan_geometries_2d,
     evaluate_scan,
     geometric_centroid,
+    make_dftb3_d4_calculator,
     make_xtb_calculator,
     molecule_pair_labels,
 )
@@ -104,6 +105,7 @@ def test_evaluate_scan_uses_calculator_factory():
             "offset_angstrom": 0.0,
             "energy_ev": 0.5,
             "energy_kcal_mol": pytest.approx(11.5302744335),
+            "min_contact_angstrom": 2.0,
         }
     ]
 
@@ -112,3 +114,27 @@ def test_make_xtb_calculator_when_optional_dependency_is_available():
     pytest.importorskip("xtb", reason="xTB optional dependency is not installed")
     calculator = make_xtb_calculator()
     assert calculator is not None
+
+
+def test_make_dftb3_d4_calculator_uses_recipe_settings(tmp_path):
+    """The optional DFTB+ wrapper must preserve the DFTB3-D4 recipe inputs."""
+    executable = tmp_path / "dftb+"
+    executable.write_text("#!/bin/sh\n")
+    executable.chmod(0o755)
+
+    sk_dir = tmp_path / "3ob-3-1"
+    sk_dir.mkdir()
+    for name in ("H-H.skf", "C-C.skf", "O-O.skf", "Cl-Cl.skf"):
+        (sk_dir / name).touch()
+
+    calculator = make_dftb3_d4_calculator(
+        command=str(executable),
+        slako_dir=sk_dir,
+        workdir=tmp_path / "scratch",
+    )
+
+    assert calculator.parameters["Hamiltonian_SCC"] == "Yes"
+    assert calculator.parameters["Hamiltonian_ThirdOrderFull"] == "Yes"
+    assert calculator.parameters["Hamiltonian_Dispersion_"] == "DFTD4"
+    assert calculator.parameters["Hamiltonian_Dispersion_a2"] == pytest.approx(4.4955068)
+    assert calculator.directory == str(tmp_path / "scratch")
