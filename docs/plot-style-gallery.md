@@ -474,7 +474,54 @@ See [`docs/plotting-style-guide.md`](plotting-style-guide.md) "Tables:
 LaTeX-typeset `booktabs`" for why, and when to fall back to
 `booktabs_table()`.
 
-### Colormaps for a figure with several panels
+## Fields as parametric surfaces
+
+Where the multipole *triangle* above shows the coefficients as an abstract
+(l, m) mosaic, these show the **field those coefficients produce** in real
+space — the same parametric-surface idea as the torus, but the natural surface
+here is a sphere around each source. Regenerate with
+`python scripts/render_multipole_field_gallery.py`
+(`mmml.utils.plotting.multipoles`).
+
+### Multipole surfaces: one deformed sphere per source
+
+Each source's angular electrostatic potential is sampled on a probe sphere and
+wrapped back onto it — radius bulges with `|V|`, colour is the signed potential.
+A bare charge is a round, one-colour sphere; a dipole shows the familiar +/-
+lobes; a quadrupole is four-lobed. The potential is signed, so colour is
+**diverging** about zero (`default_cmap("diverging")`), the same rule as the
+Ramachandran difference plot.
+
+![multipole surfaces](plot-style-gallery-assets/chart_multipole_surfaces.png)
+
+### The field itself: potential contours + streamlines
+
+When you want the field of the *whole* set rather than per-source lobes,
+`plot_field_slice` lays a grid on a plane through the sources and draws filled
+potential contours (diverging, real zero) under electric-field streamlines. It
+wraps the existing physics in
+`mmml.models.multipoles.electrostatics._point_multipole_potential_field_au`;
+nothing new is computed, only drawn.
+
+![multipole field slice](plot-style-gallery-assets/chart_multipole_field.png)
+
+### Extending the language to the MBD term
+
+The learned MBD dispersion model predicts a per-atom polarizability and C6
+coefficient — both strictly positive, so **sequential** colour, not diverging.
+`plot_mbd_surfaces` draws one sphere per atom (radius ~ `α^(1/3)`, the
+polarizability volume; colour = C6), the dispersion analogue of the multipole
+surfaces. Rendered here from the real trained checkpoint on a water cluster:
+oxygens come out large and high-C6, hydrogens small and low.
+
+![mbd polarizability surfaces](plot-style-gallery-assets/chart_mbd_polarizability_surfaces.png)
+
+And the `-Σ C6/r^6` dispersion potential on a plane, the sequential counterpart
+to the electrostatic field slice above:
+
+![mbd dispersion field](plot-style-gallery-assets/chart_mbd_dispersion_field.png)
+
+## Colormaps for a figure with several panels
 
 A figure with more than one sequential (or diverging) panel — one per
 physical quantity — should not reuse a single colormap for all of them; that
